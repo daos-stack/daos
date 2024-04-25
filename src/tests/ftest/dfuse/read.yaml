@@ -1,8 +1,7 @@
 hosts:
   test_servers: 1
-
-timeout: 360
-
+  test_clients: 1
+timeout: 900
 server_config:
   name: daos_server
   engines_per_host: 1
@@ -15,9 +14,10 @@ server_config:
           class: ram
           scm_mount: /mnt/daos
   system_ram_reserved: 1
-
 pool:
-  size: 300MB
-
+  size: 1G
 container:
+  type: POSIX
   control_method: daos
+dfuse:
+  disable_wb_cache: true
