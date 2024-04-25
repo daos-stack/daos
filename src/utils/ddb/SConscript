@@ -5,9 +5,6 @@ def scons():
     """Execute build"""
     Import('env', 'prereqs')
 
-    if not prereqs.server_requested():
-        return
-
     denv = env.Clone()
 
     libs = ['vos', 'daos_common_pmem', 'abt', 'gurt', 'uuid', 'bio', 'cart']
@@ -41,12 +38,12 @@ def scons():
 
     # Because ddb is so heavily dependent on VOS, allow it to have some internal
     # knowledge of it.
-    denv.AppendUnique(CPPPATH=[Dir('../vos/').srcnode()])
-    denv.AppendUnique(CPPPATH=[Dir('../vos/')])
+    denv.AppendUnique(CPPPATH=[Dir('../../vos/').srcnode()])
+    denv.AppendUnique(CPPPATH=[Dir('../../vos/')])
     # Also need some internal knowledge of bio to read the bio header from the
     # blob stores
-    denv.AppendUnique(CPPPATH=[Dir('../bio/').srcnode()])
-    denv.AppendUnique(CPPPATH=[Dir('../bio/')])
+    denv.AppendUnique(CPPPATH=[Dir('../../bio/').srcnode()])
+    denv.AppendUnique(CPPPATH=[Dir('../../bio/')])
 
     prereqs.require(denv, 'argobots', 'protobufc', 'pmdk', 'spdk')
 

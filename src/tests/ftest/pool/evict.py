@@ -208,6 +208,7 @@ class PoolEvictTest(TestWithServers):
             try:
                 containers[index].write_objects()
                 if failure_expected:
+                    containers[index].skip_cleanup()
                     self.fail(
                         "Pool {} was evicted, but write_objects worked!".format(index))
             except DaosTestError as error:
@@ -215,6 +216,7 @@ class PoolEvictTest(TestWithServers):
                     msg = "Pool # {}: write_objects failed as expected.\n\t{}".format(
                         index, error)
                     self.log.info(msg)
+                    containers[index].skip_cleanup()
                 else:
                     self.fail("Pool # {} write_objects failed! {}".format(index, error))
 

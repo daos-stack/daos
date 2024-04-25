@@ -168,7 +168,7 @@ def scons():
                             "-L$BUILD_DIR/src/gurt "
                             "-L$BUILD_DIR/src/cart "
                             "-L$BUILD_DIR/src/common "
-                            "-L$BUILD_DIR/src/ddb "
+                            "-L$BUILD_DIR/src/utils/ddb "
                             "-L$SPDK_PREFIX/lib "
                             "-L$OFI_PREFIX/lib $_RPATH")
     # Explicitly link RTE & SPDK libs for CGO access
