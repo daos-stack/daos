@@ -20,7 +20,7 @@ class DFusePreReadTest(DfuseTestBase):
             Ensure that pre-read feature is working.
 
         Read one large file entirely using pre-read.  Read a second smaller file to ensure that
-        the first file leave the flag enabled.
+        the first file leaves the flag enabled.
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
