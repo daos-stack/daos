@@ -77,6 +77,6 @@ class DFuseBashdcacheTest(DfuseTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=pil4dfs,dfs
-        :avocado: tags=DFuseFdTest,test_bashdcache_pil4dfs
+        :avocado: tags=DFuseBashdcacheTest,test_bashdcache_pil4dfs
         """
         self.run_bash_dcache_pil4dfs()
