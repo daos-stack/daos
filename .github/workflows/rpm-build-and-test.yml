@@ -67,7 +67,7 @@ jobs:
         if: false
         run: echo
 
-  Call-RPM-Build:
+  Build-RPM:
     name: Build RPM
     needs: variables
     permissions:
@@ -82,12 +82,20 @@ jobs:
       LEAP15_VERSION: ${{ needs.variables.outputs.LEAP15_VERSION }}
       PACKAGING_DIR: ${{ needs.variables.outputs.PACKAGING_DIR}}
 
+  Debug:
+    name: Debug outputs
+    runs-on: [self-hosted, wolf]
+    needs: [Build-RPM]
+    steps:
+      - name: debug
+        run: echo ${{ needs.Build-RPM.outputs.run-gha }}
+
   Calc-functional-matrix:
     name: Calculate Functional Testing Matrix
     runs-on: [self-hosted, wolf]
-    needs: Call-RPM-Build
+    needs: Build-RPM
     if: |
-        (needs.Call-RPM-Build.outputs.run-gha == 'true' ||
+        (needs.Build-RPM.outputs.run-gha == 'true' ||
          github.event_name == 'workflow_dispatch') &&
         ((!cancelled()) || success() || failure())
     outputs:
@@ -100,7 +108,7 @@ jobs:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
         with:
-          commit-message: ${{ needs.Call-RPM-Build.outputs.dequoted-commit-message }}
+          commit-message: ${{ needs.Build-RPM.outputs.dequoted-commit-message }}
       - name: Calculate Functional Testing Matrix
         id: matrix
         run: |  # do not use the non-| format for this script
@@ -170,14 +178,14 @@ jobs:
       checks: write
       pull-requests: write
     timeout-minutes: 7200
-    needs: [Calc-functional-matrix, Call-RPM-Build]
+    needs: [Calc-functional-matrix, Build-RPM]
     strategy:
       matrix:
         distro: ${{ fromJSON(needs.Calc-functional-matrix.outputs.matrix) }}
       fail-fast: false
     # https://github.com/actions/runner/issues/491#issuecomment-926924523
     if: |
-        (needs.Call-RPM-Build.outputs.run-gha == 'true' ||
+        (needs.Build-RPM.outputs.run-gha == 'true' ||
          github.event_name == 'workflow_dispatch') &&
         needs.Calc-functional-matrix.outputs.matrix != '[]' &&
         (!cancelled()) &&
@@ -188,7 +196,7 @@ jobs:
       PRAGMA_SUFFIX: -vm
       OPERATIONS_EMAIL: brian.murrell@intel.com
       TEST_RPMS: true
-      COMMIT_MESSAGE: ${{ needs.Call-RPM-Build.outputs.commit-message }}
+      COMMIT_MESSAGE: ${{ needs.Build-RPM.outputs.commit-message }}
       JENKINS_URL: https://build.hpdd.intel.com/
       REPOSITORY_URL: https://repo.dc.hpdd.intel.com/
       REMOVE_EXISTING_RPMS: false
@@ -227,7 +235,7 @@ jobs:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
         with:
-          commit-message: ${{ needs.Call-RPM-Build.outputs.dequoted-commit-message }}
+          commit-message: ${{ needs.Build-RPM.outputs.dequoted-commit-message }}
       - name: Set variables
         run: |
             set -eux
@@ -364,9 +372,9 @@ jobs:
   Calc-functional-hardware-matrix:
     name: Calculate Functional Hardware Testing Matrix
     runs-on: [self-hosted, wolf]
-    needs: Call-RPM-Build
+    needs: Build-RPM
     if: |
-        (needs.Call-RPM-Build.outputs.run-gha == 'true' ||
+        (needs.Build-RPM.outputs.run-gha == 'true' ||
          github.event_name == 'workflow_dispatch') &&
         ((!cancelled()) || success() || failure())
     env:
@@ -382,7 +390,7 @@ jobs:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
         with:
-          commit-message: ${{ needs.Call-RPM-Build.outputs.dequoted-commit-message }}
+          commit-message: ${{ needs.Build-RPM.outputs.dequoted-commit-message }}
       - name: Calculate Functional Testing Matrix
         id: matrix
         run: |  # do not use the non-| format for this script
@@ -440,14 +448,14 @@ jobs:
       pull-requests: write
     timeout-minutes: 7200
     needs: [Calc-functional-hardware-matrix,
-            Call-RPM-Build, Functional]
+            Build-RPM, Functional]
     strategy:
       matrix:
         stage: ${{ fromJSON(needs.Calc-functional-hardware-matrix.outputs.matrix) }}
       fail-fast: false
     # https://github.com/actions/runner/issues/491#issuecomment-926924523
     if: |
-        (needs.Call-RPM-Build.outputs.run-gha == 'true' ||
+        (needs.Build-RPM.outputs.run-gha == 'true' ||
          github.event_name == 'workflow_dispatch') &&
         needs.Calc-functional-hardware-matrix.outputs.matrix != '[]' &&
         (!cancelled()) &&
@@ -460,7 +468,7 @@ jobs:
       PRAGMA_SUFFIX: -vm
       OPERATIONS_EMAIL: brian.murrell@intel.com
       TEST_RPMS: true
-      COMMIT_MESSAGE: ${{ needs.Call-RPM-Build.outputs.commit-message }}
+      COMMIT_MESSAGE: ${{ needs.Build-RPM.outputs.commit-message }}
       JENKINS_URL: https://build.hpdd.intel.com/
       REPOSITORY_URL: https://repo.dc.hpdd.intel.com/
       REMOVE_EXISTING_RPMS: false
@@ -494,7 +502,7 @@ jobs:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
         with:
-          commit-message: ${{ needs.Call-RPM-Build.outputs.dequoted-commit-message }}
+          commit-message: ${{ needs.Build-RPM.outputs.dequoted-commit-message }}
       - name: Set variables
         run: |
             STAGE_TAGS="hw"
