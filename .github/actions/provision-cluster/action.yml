@@ -39,6 +39,7 @@ runs:
       shell: bash
       run: |
         . ci/gha_functions.sh
+        set -x
         inst_repos="${{ env.CP_PR_REPOS }} ${{ github.event.inputs.pr-repos }}"
         if [ -n "${{ github.event.inputs.rpm-test-version }}" ]; then
             rpm_test_version="${{ github.event.inputs.rpm-test-version }}"
