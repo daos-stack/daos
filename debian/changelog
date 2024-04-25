@@ -9,7 +9,6 @@ daos (2.5.101-3) unstable; urgency=medium
   * Updated pydaos install process
 
  -- Ashley M. Pittman <ashley.m.pittman@intel.com>  Thu, 04 Apr 2024 09:15:00 -0800
->>>>>>> master
 
 daos (2.5.101-2) unstable; urgency=medium
   [ Jan Michalski ]
