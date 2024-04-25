@@ -72,7 +72,7 @@ jobs:
     needs: variables
     permissions:
       statuses: write
-    uses: daos-stack/daos/.github/workflows/rpm-build.yml@bmurrell/gha
+    uses: daos-stack/argobots/.github/workflows/rpm-build.yml@bmurrell/gha
     secrets: inherit
     with:
       NAME: ${{ needs.variables.outputs.NAME }}
