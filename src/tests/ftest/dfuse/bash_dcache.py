@@ -34,12 +34,14 @@ cat ${dir_name}/${file_name}
 
 
 class DFuseBashdcacheTest(DfuseTestBase):
+    # pylint: disable=wrong-spelling-in-comment
     """Base Bashdcache test class.
 
     :avocado: recursive
     """
 
     def test_bash_dcache_pil4dfs(self):
+        # pylint: disable=wrong-spelling-in-comment
         """Run a shell script which creates dir and file, then removes them and recreates.
 
         This attempts to replicate the way that configure scripts repeating creating & removing
@@ -70,10 +72,10 @@ class DFuseBashdcacheTest(DfuseTestBase):
         result = run_remote(self.log, self.hostlist_clients, env_str + cmd)
         if not result.passed:
             self.fail(f'"{cmd}" failed on {result.failed_hosts}')
-        if (result.output[0].stdout[0][:5] != "Hello"):
+        if result.output[0].stdout[0][:5] != "Hello":
             self.fail(f'"{cmd}" failed on {result.failed_hosts}. Unexpected output.')
 
-        # Turn on dcache in bash
+        # Turn on directory caching in bash
         env_str = env_str + "export D_IL_NO_DCACHE_BASH=0; "
 
         result = run_remote(self.log, self.hostlist_clients, env_str + cmd)
