@@ -194,8 +194,8 @@ chunk_cb(struct dfuse_event *ev)
 
 	if (cd->rc == 0 && (ev->de_len != CHUNK_SIZE)) {
 		cd->rc = EIO;
-		DS_WARN(cd->rc, "Unexpected short read expected %i got %zi", CHUNK_SIZE,
-			ev->de_len);
+		DS_WARN(cd->rc, "Unexpected short read bucket %d (%#zx) expected %i got %zi",
+			cd->bucket, (off_t)cd->bucket * CHUNK_SIZE, CHUNK_SIZE, ev->de_len);
 	}
 
 	daos_event_fini(&ev->de_ev);
@@ -317,8 +317,6 @@ chunk_read(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
 	int                       slot;
 	bool                      submit = false;
 	bool                      rcb;
-
-	last = position + ((position + (K128 - 1)) & -K128);
 
 	if (len != K128)
 		return false;
@@ -459,9 +457,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 		}
 	}
 
-	if (oh->doh_ie->ie_dfs->dfc_data_timeout != 0 &&
-	    ((atomic_fetch_add(&oh->doh_ie->ie_il_count, 0) == 0)) &&
-	    chunk_read(req, len, position, oh))
+	if (chunk_read(req, len, position, oh))
 		return;
 
 	eqt = pick_eqt(dfuse_info);

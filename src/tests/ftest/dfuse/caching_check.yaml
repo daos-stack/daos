@@ -31,3 +31,8 @@ ior:
 dfuse:
   disable_caching: true
   disable_wb_caching: true
+  client:
+    env_vars:
+      - D_LOG_MASK=INFO,DFUSE=DEBUG,DFS=DEBUG
+      - DD_MASK=ALL
+      - DD_SUBSYS=ALL
