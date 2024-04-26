@@ -34,14 +34,14 @@ cat ${dir_name}/${file_name}
 
 
 class DFuseBashdcacheTest(DfuseTestBase):
-    # pylint: disable=wrong-spelling-in-comment
+    # pylint: disable=wrong-spelling-in-docstring
     """Base "Bashdcache" test class.
 
     :avocado: recursive
     """
 
     def test_bash_dcache_pil4dfs(self):
-        # pylint: disable=wrong-spelling-in-comment
+        # pylint: disable=wrong-spelling-in-docstring
         """Run a shell script which creates dir and file, then removes them and recreates.
 
         This attempts to replicate the way that configure scripts repeating creating & removing
