@@ -173,7 +173,7 @@ log_stderr_pipe(int fd)
 #define FI_ATTR_MAX_ARGS 16
 
 static int
-run_cmd(const char *command, int *outputfd)
+run_cmd(char *command, int *outputfd)
 {
 	int  rc       = 0;
 	int  child_rc = 0;
@@ -182,16 +182,12 @@ run_cmd(const char *command, int *outputfd)
 	int  stderrfd[2];
 	bool log_stderr;
  	char *saveptr;
-	char *base_command;
-	char command_args[strlen(command)+1];
 	char *args[FI_ATTR_MAX_ARGS];
 	int arg_cnt = 0;
 
-	strcpy(command_args, command);
 	D_DEBUG(DB_TEST, "dmg cmd: %s\n", command);
 
-        args[arg_cnt] = strtok_r(command_args, " ", &saveptr);
-	base_command = args[arg_cnt];
+        args[arg_cnt] = strtok_r(command, " ", &saveptr);
         do {
                 args[++arg_cnt] = strtok_r(NULL, " ", &saveptr);
         } while(args[arg_cnt] != NULL && arg_cnt <= FI_ATTR_MAX_ARGS);
@@ -237,7 +233,7 @@ run_cmd(const char *command, int *outputfd)
 		close(stdoutfd[1]);
 		close(stderrfd[1]);
 
-		rc = execvp(base_command, args);
+		rc = execvp(args[0], args);
 		if (rc == -1)
 			_exit(errno);
 		_exit(rc);
