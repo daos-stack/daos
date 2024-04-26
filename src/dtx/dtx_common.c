@@ -2318,6 +2318,9 @@ dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 	int	cnt;
 	int	rc = 0;
 
+	D_DEBUG(DB_IO, "Enter %s sync against epoch "DF_U64"\n",
+		oid != NULL ? "obj" : "sys", epoch);
+
 	while (dtx_cont_opened(cont)) {
 		struct dtx_entry	**dtes = NULL;
 		struct dtx_cos_key	 *dcks = NULL;
@@ -2349,6 +2352,9 @@ dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 
 	if (rc == 0 && oid != NULL && dtx_cont_opened(cont))
 		rc = vos_dtx_mark_sync(cont->sc_hdl, *oid, epoch);
+
+	D_DEBUG(DB_IO, "Exit %s sync against epoch "DF_U64": rc = %d\n",
+		oid != NULL ? "obj" : "sys", epoch, rc);
 
 	return rc;
 }

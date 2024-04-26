@@ -675,8 +675,9 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, b
 		}
 	}
 
-	D_DEBUG(DB_MD, "Start DTX resync (%s) scan for "DF_UUID"/"DF_UUID" with ver %u\n",
-		block ? "block" : "non-block", DP_UUID(po_uuid), DP_UUID(co_uuid), ver);
+	D_DEBUG(DB_MD, "Start DTX resync (%s) scan for "DF_UUID"/"DF_UUID" with ver %u "
+		"discard_ver %u, epoch "DF_U64"\n", block ? "block" : "non-block",
+		DP_UUID(po_uuid), DP_UUID(co_uuid), ver, dra.discard_version, dra.epoch);
 
 	rc = ds_cont_iter(po_hdl, co_uuid, dtx_iter_cb, &dra, VOS_ITER_DTX, 0);
 

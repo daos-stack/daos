@@ -339,6 +339,9 @@ struct dtx_common_args {
 	int			  dca_committed;
 	d_rank_t		  dca_rank;
 	uint32_t		  dca_tgtid;
+	uint64_t		  dca_create;
+	uint64_t		  dca_begin;
+	uint64_t		  dca_end;
 	struct ds_cont_child	 *dca_cont;
 	struct dtx_id		  dca_dti_inline;
 	struct dtx_id		 *dca_dtis;
@@ -594,6 +597,11 @@ dtx_rpc_helper(struct dss_chore *chore, bool is_reentrance)
 	int			 rc;
 	int			 i;
 
+	dca->dca_begin = daos_gettime_coarse();
+	if (unlikely(dca->dca_begin - dca->dca_create > 60))
+		D_WARN("Prep reg DTX RPC count %d, took too long: %u\n",
+		       dca->dca_count, (unsigned int)(dca->dca_begin - dca->dca_create));
+
 	if (is_reentrance) {
 		D_DEBUG(DB_TRACE, "%p: skip to send\n", &dca->dca_chore);
 		goto send;
@@ -649,6 +657,7 @@ done:
 		dca->dca_dra.dra_result = rc;
 	D_CDEBUG(rc < 0, DLOG_ERR, DB_TRACE, "%p: DTX RPC chore for %u done: %d\n", chore,
 		 dca->dca_dra.dra_opc, rc);
+	dca->dca_end = daos_gettime_coarse();
 	if (dca->dca_chore_eventual != ABT_EVENTUAL_NULL) {
 		rc = ABT_eventual_set(dca->dca_chore_eventual, NULL, 0);
 		D_ASSERTF(rc == ABT_SUCCESS, "ABT_eventual_set: %d\n", rc);
@@ -698,6 +707,7 @@ dtx_rpc_prep(struct ds_cont_child *cont,d_list_t *dti_list,  struct dtx_entry **
 		}
 	}
 
+	dca->dca_create = daos_gettime_coarse();
 	/* Use helper ULT to handle DTX RPC if there are enough helper XS. */
 	if (dss_has_enough_helper()) {
 		rc = ABT_eventual_create(0, &dca->dca_chore_eventual);
@@ -725,6 +735,12 @@ dtx_rpc_post(struct dtx_common_args *dca, int ret, bool keep_head)
 	if (dca->dca_chore_eventual != ABT_EVENTUAL_NULL) {
 		rc = ABT_eventual_wait(dca->dca_chore_eventual, NULL);
 		D_ASSERTF(rc == ABT_SUCCESS, "ABT_eventual_wait: %d\n", rc);
+
+		if (unlikely(dca->dca_end - dca->dca_create > 60))
+			D_WARN("Process reg DTX RPC count %d, took too long: "
+			       DF_U64"/"DF_U64"/"DF_U64"\n", dca->dca_count,
+			       dca->dca_create, dca->dca_begin, dca->dca_end);
+
 		rc = ABT_eventual_free(&dca->dca_chore_eventual);
 		D_ASSERTF(rc == ABT_SUCCESS, "ABT_eventual_free: %d\n", rc);
 	}
@@ -762,6 +778,8 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 	   struct dtx_cos_key *dcks, int count)
 {
 	struct dtx_common_args	 dca;
+	uint64_t		 t1;
+	uint64_t		 t2;
 	struct dtx_req_args	*dra = &dca.dca_dra;
 	bool			*rm_cos = NULL;
 	bool			 cos = false;
@@ -769,7 +787,12 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 	int			 rc1 = 0;
 	int			 i;
 
+	t1 = daos_gettime_coarse();
 	rc = dtx_rpc_prep(cont, NULL, dtes, count, DTX_COMMIT, 0, NULL, NULL, NULL, &dca);
+	t2 = daos_gettime_coarse();
+	if (unlikely(t2 - t1 > 60))
+		D_WARN("Commit reg DTX "DF_DTI", count %d, took too long (%u) when prep: rc = %d\n",
+		       DP_DTI(&dtes[0]->dte_xid), count, (unsigned int)(t2 - t1), rc);
 
 	/*
 	 * NOTE: Before committing the DTX on remote participants, we cannot remove the active
@@ -782,7 +805,13 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 	 *
 	 * Some RPC may has been sent, so need to wait even if dtx_rpc_prep hit failure.
 	 */
+
 	rc = dtx_rpc_post(&dca, rc, false);
+	t1 = daos_gettime_coarse();
+	if (unlikely(t1 - t2 > 60))
+		D_WARN("Commit reg DTX "DF_DTI", count %d, took too long (%u) when post: rc = %d\n",
+		       DP_DTI(&dtes[0]->dte_xid), count, (unsigned int)(t1 - t2), rc);
+
 	if (rc > 0 || rc == -DER_NONEXIST || rc == -DER_EXCLUDED || rc == -DER_OOG)
 		rc = 0;
 
@@ -1372,6 +1401,9 @@ struct dtx_coll_rpc_args {
 	uint32_t		 dcra_committed;
 	uint32_t		 dcra_completed:1;
 	int			 dcra_result;
+	uint64_t		 dcra_create;
+	uint64_t		 dcra_begin;
+	uint64_t		 dcra_end;
 	ABT_future		 dcra_future;
 };
 
@@ -1391,6 +1423,7 @@ dtx_coll_rpc_cb(const struct crt_cb_info *cb_info)
 		dcra->dcra_committed = dco->dco_misc;
 	}
 
+	dcra->dcra_end = daos_gettime_coarse();
 	dcra->dcra_completed = 1;
 	rc = ABT_future_set(dcra->dcra_future, NULL);
 	D_ASSERTF(rc == ABT_SUCCESS,
@@ -1433,6 +1466,7 @@ dtx_coll_rpc(struct dtx_coll_rpc_args *dcra)
 out:
 	if (rc != 0 && !dcra->dcra_completed) {
 		dcra->dcra_result = rc;
+		dcra->dcra_end = daos_gettime_coarse();
 		dcra->dcra_completed = 1;
 		ABT_future_set(dcra->dcra_future, NULL);
 	}
@@ -1446,7 +1480,14 @@ dtx_coll_rpc_helper(struct dss_chore *chore, bool is_reentrance)
 	struct dtx_coll_rpc_args	*dcra;
 	int				 rc;
 
+	D_ASSERT(!is_reentrance);
+
 	dcra = container_of(chore, struct dtx_coll_rpc_args, dcra_chore);
+	dcra->dcra_begin = daos_gettime_coarse();
+	if (unlikely(dcra->dcra_begin - dcra->dcra_create > 60))
+		D_WARN("Prep coll DTX "DF_DTI" took too long %u\n",
+		       DP_DTI(&dcra->dcra_xid),
+		       (unsigned int)(dcra->dcra_begin - dcra->dcra_create));
 
 	rc = dtx_coll_rpc(dcra);
 
@@ -1478,6 +1519,7 @@ dtx_coll_rpc_prep(struct ds_cont_child *cont, struct dtx_coll_entry *dce, uint32
 		return dss_abterr2der(rc);
 	}
 
+	dcra->dcra_create = daos_gettime_coarse();
 	if (dss_has_enough_helper()) {
 		rc = dss_chore_delegate(&dcra->dcra_chore, dtx_coll_rpc_helper);
 	} else {
@@ -1497,6 +1539,10 @@ dtx_coll_rpc_post(struct dtx_coll_rpc_args *dcra, int ret)
 	D_CDEBUG(rc != ABT_SUCCESS, DLOG_ERR, DB_TRACE,
 		 "Collective DTX wait req for opc %u, future %p done, rc %d, result %d\n",
 		 dcra->dcra_opc, dcra->dcra_future, rc, dcra->dcra_result);
+	if (unlikely(dcra->dcra_end - dcra->dcra_create > 60))
+		D_WARN("Process coll DTX "DF_DTI" RPC took too long: "DF_U64"/"DF_U64"/"DF_U64"\n",
+		       DP_DTI(&dcra->dcra_xid),
+		       dcra->dcra_create, dcra->dcra_begin, dcra->dcra_end);
 	ABT_future_free(&dcra->dcra_future);
 
 	return ret != 0 ? ret : dcra->dcra_result;
@@ -1507,12 +1553,16 @@ dtx_coll_commit(struct ds_cont_child *cont, struct dtx_coll_entry *dce, struct d
 {
 	struct dtx_coll_rpc_args	 dcra = { 0 };
 	int				*results = NULL;
+	uint64_t			 t1;
+	uint64_t			 t2;
 	uint32_t			 committed = 0;
 	int				 len;
 	int				 rc = 0;
 	int				 rc1 = 0;
 	int				 rc2 = 0;
 	int				 i;
+
+	t1 = daos_gettime_coarse();
 
 	if (dce->dce_ranks != NULL)
 		rc = dtx_coll_rpc_prep(cont, dce, DTX_COLL_COMMIT, 0, &dcra);
@@ -1534,6 +1584,11 @@ dtx_coll_commit(struct ds_cont_child *cont, struct dtx_coll_entry *dce, struct d
 		}
 		D_FREE(results);
 	}
+
+	t2 = daos_gettime_coarse();
+	if (unlikely(t2 - t1 > 60))
+		D_WARN("Commit coll DTX "DF_DTI", took too long (%u) when prep: rc = %d\n",
+		       DP_DTI(&dce->dce_xid), (unsigned int)(t2 - t1), rc);
 
 	if (dce->dce_ranks != NULL) {
 		rc = dtx_coll_rpc_post(&dcra, rc);

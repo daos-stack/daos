@@ -282,8 +282,8 @@ dtx_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 							    DAE_MBS_OFF(dae));
 	}
 
-	D_DEBUG(DB_IO, "DTX iterator fetch the one "DF_DTI"\n",
-		DP_DTI(&DAE_XID(dae)));
+	D_DEBUG(DB_IO, "DTX iterator fetch the one "DF_DTI", ver %u, flags %x, epoch "DF_U64"\n",
+		DP_DTI(&DAE_XID(dae)), DAE_VER(dae), DAE_FLAGS(dae), DAE_EPOCH(dae));
 
 	return 0;
 }
