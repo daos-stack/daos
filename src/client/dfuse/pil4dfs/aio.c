@@ -36,8 +36,10 @@ struct d_aio_eq {
 	_Atomic uint64_t n_op_done;
 };
 
+/* The max number of event queues dedicated to AIO */
+#define MAX_NUM_EQ_AIO  (16)
 /* list of EQs dedicated for aio contexts. */
-static struct d_aio_eq aio_eq_list[MAX_EQ];
+static struct d_aio_eq aio_eq_list[MAX_NUM_EQ_AIO];
 /* The accumulated sum of iodepth for all created aio contexts. It is introduced to distribute IO
  * requests from aio context evenly over available EQs and minimize the chances EQs are used by
  * multiple aio contexts.
@@ -172,6 +174,8 @@ create_ev_eq_for_aio(d_aio_ctx_t *aio_ctx)
 	D_MUTEX_LOCK(&d_lock_aio_eqs_g);
 	num_aio_eq_free   = (int)d_eq_count_max - (int)d_eq_count - (int)d_aio_eq_count_g;
 	num_aio_eq_create = min(aio_ctx->depth, num_aio_eq_free);
+	num_aio_eq_create = min(num_aio_eq_create, MAX_NUM_EQ_AIO - d_aio_eq_count_g);
+
 	if (num_aio_eq_create > 0) {
 		/* allocate EQs for aio context*/
 		for (i = 0; i < num_aio_eq_create; i++) {
