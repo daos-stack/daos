@@ -38,7 +38,6 @@ static const char      *crt_env_names[] = {
     "OFI_INTERFACE",
     "OFI_DOMAIN",
     "CRT_CREDIT_EP_CTX",
-    "CRT_CTX_SHARE_ADDR",
     "CRT_CTX_NUM",
     "D_FI_CONFIG",
     "FI_UNIVERSE_SIZE",
@@ -191,7 +190,6 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	       bool primary, crt_init_options_t *opt)
 
 {
-	bool		set_sep = false;
 	uint32_t	ctx_num = 0;
 	uint32_t	max_expect_size = 0;
 	uint32_t	max_unexpect_size = 0;
@@ -226,10 +224,6 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 
 	D_DEBUG(DB_ALL, "Max number of contexts set to %d\n", max_num_ctx);
 
-	d_getenv_bool("CRT_CTX_SHARE_ADDR", &set_sep);
-	if (set_sep)
-		D_WARN("Unsupported SEP mode requested. Unset CRT_CTX_SHARE_ADDR\n");
-
 	if (opt && opt->cio_sep_override && opt->cio_use_sep)
 		D_WARN("Unsupported SEP mode requested in init options\n");
 
@@ -242,7 +236,7 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	prov_data->cpg_inited = true;
 	prov_data->cpg_provider = provider;
 	prov_data->cpg_ctx_num = 0;
-	prov_data->cpg_sep_mode = set_sep;
+	prov_data->cpg_sep_mode = false;
 	prov_data->cpg_contig_ports = true;
 	prov_data->cpg_ctx_max_num = max_num_ctx;
 	prov_data->cpg_max_exp_size = max_expect_size;
@@ -256,8 +250,8 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	prov_data->cpg_num_remote_tags = 1;
 	prov_data->cpg_last_remote_tag = 0;
 
-	D_DEBUG(DB_ALL, "prov_idx: %d primary: %d sep_mode: %d sizes: (%d/%d) max_ctx: %d\n",
-		provider, primary, set_sep, max_expect_size, max_unexpect_size, max_num_ctx);
+	D_DEBUG(DB_ALL, "prov_idx: %d primary: %d sizes: (%d/%d) max_ctx: %d\n",
+		provider, primary, max_expect_size, max_unexpect_size, max_num_ctx);
 
 	D_INIT_LIST_HEAD(&prov_data->cpg_ctx_list);
 
@@ -550,14 +544,6 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 	/* Avoid applying same settings multiple times */
 	if (g_prov_settings_applied[prov] == true)
 		return;
-
-	/* rxm and verbs providers only works with regular EP */
-	if (prov != CRT_PROV_OFI_SOCKETS &&
-	    crt_provider_is_sep(primary, prov)) {
-		D_WARN("set CRT_CTX_SHARE_ADDR as 1 is invalid "
-		       "for current provider, ignoring it.\n");
-		crt_provider_set_sep(prov, primary, false);
-	}
 
 	if (prov == CRT_PROV_OFI_VERBS_RXM ||
 	    prov == CRT_PROV_OFI_TCP_RXM) {
