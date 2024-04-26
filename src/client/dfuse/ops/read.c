@@ -314,7 +314,7 @@ chunk_read(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
 	bool                      submit = false;
 	bool                      rcb    = false;
 
-	last = position = (position + (K128 - 1)) & -K128;
+	last = position + ((position + (K128 - 1)) & -K128);
 
 	if (len != K128)
 		return false;
