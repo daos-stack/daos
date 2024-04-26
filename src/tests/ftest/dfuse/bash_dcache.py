@@ -35,7 +35,7 @@ cat ${dir_name}/${file_name}
 
 class DFuseBashdcacheTest(DfuseTestBase):
     # pylint: disable=wrong-spelling-in-comment
-    """Base Bashdcache test class.
+    """Base "Bashdcache" test class.
 
     :avocado: recursive
     """
@@ -45,7 +45,7 @@ class DFuseBashdcacheTest(DfuseTestBase):
         """Run a shell script which creates dir and file, then removes them and recreates.
 
         This attempts to replicate the way that configure scripts repeating creating & removing
-        files under conftest.dir in bash.
+        files under "conftest.dir" in bash.
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
