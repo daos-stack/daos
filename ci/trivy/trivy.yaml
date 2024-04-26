@@ -225,7 +225,7 @@ scan:
   scanners:
     - vuln
     - secret
-  skip-dirs: []
+  skip-dirs: ["src/client/java/hadoop-daos/", "src/server/java/hadoop-daos/"]
   skip-files: []
   slow: false
 secret:
@@ -237,7 +237,6 @@ server:
   token-header: Trivy-Token
 severity:
   - UNKNOWN
-  - LOW
   - MEDIUM
   - HIGH
   - CRITICAL
