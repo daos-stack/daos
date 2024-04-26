@@ -337,8 +337,8 @@ class ObjectMetadata(TestWithServers):
         """JIRA ID: DAOS-15628.
 
         Test Description:
-            Test to verify no IO happens after metadata is full when svc_ops_disabled.
-
+            Test to verify number of resources that can be created until metadata is full,
+            when svc_ops disabled.
         Use Cases:
             1. Create pool with properties svc_ops_enabled:0.
             2. Create container until no space.
@@ -356,10 +356,11 @@ class ObjectMetadata(TestWithServers):
         """JIRA ID: DAOS-15628.
 
         Test Description:
-            Test to verify no IO happens after metadata is full when svc_ops_enabled.
+            Test to verify number of resources that can be created until metadata is full,
+            when svc_ops_enabled.
 
         Use Cases:
-            1. Create pool with properties svc_ops_enabledd:1.
+            1. Create pool with properties svc_ops_enabled:1.
                and run dummy metadata workload to fill up svc ops.
             2. Create container until no space.
             3. Verify number of container within limit.
