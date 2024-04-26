@@ -12,9 +12,9 @@ from typing import List, Dict, Tuple, Any
 PARSER = argparse.ArgumentParser()
 PARSER.add_argument("--prefix", type=str, default='test')
 PARSER.add_argument("--block", type=str, default='Functional Hardware Medium')
-PARSER.add_argument("--riv_pr", type=int, required=True)
+PARSER.add_argument("--riv", type=str, required=True)
 PARSER.add_argument("--riv_jids", type=str, required=True)
-PARSER.add_argument("--ref_pr", type=int, required=True)
+PARSER.add_argument("--ref", type=str, required=True)
 PARSER.add_argument("--ref_jids", type=str, required=True)
 
 
@@ -27,9 +27,9 @@ BLOCK_NAMES_FILTER = [
 ]
 
 
-def je_load(pr: int, jid=None, what=None, tree=None):
+def je_load(pr: str, jid=None, what=None, tree=None):
     """Fetch something from Jenkins and return as native type."""
-    url = f"{JENKINS_HOME}/job/daos/job/PR-{pr}"
+    url = f"{JENKINS_HOME}/job/daos/job/{pr}"
     if jid:
         url += f"/{jid}"
         if what:
@@ -41,7 +41,7 @@ def je_load(pr: int, jid=None, what=None, tree=None):
             return json.load(f)
 
 
-def get_runner(pr: int, jid: int) -> str:
+def get_runner(pr: str, jid: int) -> str:
     data = je_load(pr, jid)
     for action in data['actions']:
         # Filter out the non-parameters object
@@ -58,6 +58,8 @@ def include_block(block_names: List[str]) -> bool:
     if len(block_names) != len(BLOCK_NAMES_FILTER):
         return False
     for name, name_filter in zip(block_names, BLOCK_NAMES_FILTER):
+        if name == 'Test': # accept both 'Test' and 'Test Hardware'
+            continue
         if name != name_filter:
             return False
     return True
@@ -113,7 +115,7 @@ def get_test_config(case_name: str) -> str:
         return case_name
 
 
-def get_tests_failed(pr: int, jid: int, hashes: Dict) -> Tuple[List[str], Dict]:
+def get_tests_failed(pr: str, jid: int, hashes: Dict) -> Tuple[List[str], Dict]:
     data = je_load(pr, jid, what='testReport')
     failed = []
     for suite in data['suites']:
@@ -123,7 +125,7 @@ def get_tests_failed(pr: int, jid: int, hashes: Dict) -> Tuple[List[str], Dict]:
             if case['className'] == 'Hardware':
                 continue
             # Include only failed tests
-            if case['status'] != 'FAILED':
+            if case['status'] in ['PASSED', 'SKIPPED', 'FIXED']:
                 continue
             test_class, test_tag = get_test_class_and_tag(case['name'])
             test_cfg = get_test_config(case['name'])
@@ -155,12 +157,12 @@ def sequence_to_list(seq: str) -> List[int]:
     return output
 
 
-def count_fails(pr: int, jids: List[int], role: str, hashes: Dict) -> Dict:
+def count_fails(pr: str, jids: List[int], role: str, hashes: Dict) -> Dict:
     runner = None
     fail_count = {}
     builds = {}
     for jid in jids:
-        print(f'Parsing PR-{pr} Build #{jid}')
+        print(f'Parsing {pr} Build #{jid}')
         runner_new = get_runner(pr, jid)
         if runner is None:
             runner = runner_new
@@ -219,10 +221,10 @@ def main():
     riv_jids = sequence_to_list(args.riv_jids)
     ref_jids = sequence_to_list(args.ref_jids)
     hashes = {}
-    riv = count_fails(args.riv_pr, riv_jids, 'riv', hashes)
-    ref = count_fails(args.ref_pr, ref_jids, 'ref', hashes)
-    riv['meta'][f'PR-{args.riv_pr}'] = args.riv_jids
-    ref['meta'][f'PR-{args.ref_pr}'] = args.ref_jids
+    riv = count_fails(args.riv, riv_jids, 'riv', hashes)
+    ref = count_fails(args.ref, ref_jids, 'ref', hashes)
+    riv['meta'][args.riv] = args.riv_jids
+    ref['meta'][args.ref] = args.ref_jids
     dump(hashes, f'{args.prefix}_hashes')
     dump(riv, f'{args.prefix}_riv')
     dump(ref, f'{args.prefix}_ref')
