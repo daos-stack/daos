@@ -262,7 +262,6 @@ static int data_init(int server, crt_init_options_t *opt)
 	uint32_t	mem_pin_enable = 0;
 	uint32_t	is_secondary;
 	char*		ucx_ib_fork_init = NULL;
-	char*		ucx_log_level = NULL;
 	uint32_t        post_init = CRT_HG_POST_INIT, post_incr = CRT_HG_POST_INCR;
 	int		rc = 0;
 
@@ -324,10 +323,6 @@ static int data_init(int server, crt_init_options_t *opt)
 
 	d_getenv_uint("D_QUOTA_RPCS", &crt_gdata.cg_rpc_quota);
 
-	d_agetenv_str(&ucx_log_level, "UCX_LOG_LEVEL");
-	if (!ucx_log_level)
-		d_setenv("UCX_LOG_LEVEL", "error", 1);
-
 	/* Must be set on the server when using UCX
          * also on client to allow daos_test/suite system out of dmg to succeed,
          * will not affect OFI */
@@ -336,8 +331,12 @@ static int data_init(int server, crt_init_options_t *opt)
 		D_INFO("UCX_IB_FORK_INIT was set to %s in the environment\n", ucx_ib_fork_init);
 	else if (server)
 		d_setenv("UCX_IB_FORK_INIT", "no", 1);
+	else if (!server)
+		d_setenv("UCX_IB_FORK_INIT", "yes", 1);
+
 	if (!server)
 		d_setenv("UCX_RCACHE_PURGE_ON_FORK", "n", 1);
+	}
 
 	/* This is a workaround for CART-871 if universe size is not set */
 	d_getenv_uint("FI_UNIVERSE_SIZE", &fi_univ_size);
