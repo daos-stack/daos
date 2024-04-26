@@ -128,6 +128,9 @@ class VerifyPoolSpace(TestWithServers):
         command = f"df -BG --output={','.join(fields)} | grep -E '{'|'.join(scm_mounts)}'"
         result = run_remote(self.log, self.server_managers[0].hosts, command, stderr=True)
         if not result.passed:
+            self.log.debug('########## DEBUG ##########')
+            run_remote(self.log, result.failed_hosts, 'df -a')
+            self.log.debug('########## DEBUG ##########')
             self.fail('Error collecting system level daos mount information')
         for data in result.output:
             for line in data.stdout:
