@@ -192,8 +192,12 @@ chunk_cb(struct dfuse_event *ev)
 
 	cd->rc = ev->de_ev.ev_error;
 
-	if (ev->de_len != CHUNK_SIZE)
+	if (cd->rc == 0 && (ev->de_len != CHUNK_SIZE)) {
 		cd->rc = EIO;
+		DS_WARN(cd->rc, "Unexpected short read expected %i got %zi", CHUNK_SIZE,
+			ev->de_len);
+	}
+
 	daos_event_fini(&ev->de_ev);
 
 	do {
@@ -312,7 +316,7 @@ chunk_read(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
 	int                       bucket;
 	int                       slot;
 	bool                      submit = false;
-	bool                      rcb    = false;
+	bool                      rcb;
 
 	last = position + ((position + (K128 - 1)) & -K128);
 
@@ -375,6 +379,8 @@ found:
 		 * required.  For now this is safe but will maintain all previously read events
 		 * in memory.
 		 */
+		rcb = true;
+
 		D_MUTEX_LOCK(&rc_lock);
 		if (cd->complete) {
 			cd->done[slot] = true;
@@ -387,14 +393,16 @@ found:
 
 		if (ev) {
 			if (cd->rc != 0) {
-				DFUSE_REPLY_ERR_RAW(oh, req, cd->rc);
+				/* Don't pass fuse an error here, rather return false and the read
+				 * will be tried over the network.
+				 */
+				rcb = false;
 			} else {
 				DFUSE_TRA_DEBUG(oh, "%#zx-%#zx read", position,
 						position + K128 - 1);
 				DFUSE_REPLY_BUFQ(oh, req, ev->de_iov.iov_buf + (slot * K128), K128);
 			}
 		}
-		rcb = true;
 	}
 
 	return rcb;
