@@ -336,7 +336,6 @@ static int data_init(int server, crt_init_options_t *opt)
 
 	if (!server)
 		d_setenv("UCX_RCACHE_PURGE_ON_FORK", "n", 1);
-	}
 
 	/* This is a workaround for CART-871 if universe size is not set */
 	d_getenv_uint("FI_UNIVERSE_SIZE", &fi_univ_size);
