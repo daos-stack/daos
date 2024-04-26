@@ -1643,6 +1643,49 @@ out:
 	return rc;
 }
 
+int
+dmg_server_set_logmasks(const char *dmg_config_file, const char *masks, const char *streams,
+			const char *subsystems)
+{
+	int                 argcount = 0;
+	char              **args     = NULL;
+	struct json_object *dmg_out  = NULL;
+	int                 rc       = 0;
+
+	/* engine log_mask */
+	if (masks != NULL) {
+		args = cmd_push_arg(args, &argcount, " --masks=%s", masks);
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	/* DD_MASK environment variable (aka streams) */
+	if (streams != NULL) {
+		args = cmd_push_arg(args, &argcount, " --streams=%s", streams);
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	/* DD_SUBSYS environment variable */
+	if (subsystems != NULL) {
+		args = cmd_push_arg(args, &argcount, " --subsystems=%s", subsystems);
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	/* If none of masks, streams, subsystems are specified, restore original engine config */
+	rc = daos_dmg_json_pipe("server set-logmasks", dmg_config_file, args, argcount, &dmg_out);
+	if (rc != 0)
+		D_ERROR("dmg failed\n");
+
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+
+	cmd_free_args(args, argcount);
+out:
+	return rc;
+}
+
 const char *
 daos_target_state_enum_to_str(int state)
 {
