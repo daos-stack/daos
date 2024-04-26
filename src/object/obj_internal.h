@@ -22,6 +22,7 @@
 #include <daos/object.h>
 #include <daos/cont_props.h>
 #include <daos/container.h>
+#include <daos/tls.h>
 
 #include "obj_rpc.h"
 #include "obj_ec.h"
@@ -41,7 +42,8 @@ struct obj_io_context;
 extern bool	cli_bypass_rpc;
 /** Switch of server-side IO dispatch */
 extern unsigned int	srv_io_mode;
-extern unsigned int	obj_coll_punch_thd;
+extern unsigned int	obj_coll_thd;
+extern btr_ops_t	dbtree_coll_ops;
 
 /* Whether check redundancy group validation when DTX resync. */
 extern bool	tx_verify_rdg;
@@ -103,6 +105,12 @@ struct dc_object {
 	unsigned int		 cob_shards_nr;
 	unsigned int		 cob_grp_size;
 	unsigned int		 cob_grp_nr;
+	/* The max rank# on which some object shard exists. */
+	uint32_t		 cob_min_rank;
+	/* The min rank# on which some object shard exists. */
+	uint32_t		 cob_max_rank;
+	/* How many ranks on which some object shard resides. */
+	uint32_t		 cob_rank_nr;
 	/**
 	 * The array for the latest time (in second) of
 	 * being asked to fetch from leader.
@@ -275,6 +283,11 @@ struct shard_rw_args {
 	struct obj_reasb_req	*reasb_req;
 };
 
+struct coll_sparse_targets {
+	struct btr_root		 cst_tree_root;
+	daos_handle_t		 cst_tree_hdl;
+};
+
 struct coll_oper_args {
 	struct shard_auxi_args	 coa_auxi;
 	int			 coa_dct_nr;
@@ -282,14 +295,18 @@ struct coll_oper_args {
 	uint32_t		 coa_max_dct_sz;
 	uint8_t			 coa_max_shard_nr;
 	uint8_t			 coa_max_bitmap_sz;
-	uint8_t			 coa_for_modify:1;
+	uint8_t			 coa_for_modify:1,
+				 coa_sparse:1;
 	uint8_t			 coa_target_nr;
 	/*
 	 * The target ID for the top four healthy shards.
 	 * Please check comment for DTX_COLL_INLINE_TARGETS.
 	 */
 	uint32_t		 coa_targets[DTX_COLL_INLINE_TARGETS];
-	struct daos_coll_target	*coa_dcts;
+	union {
+		struct daos_coll_target		*coa_dcts;
+		struct coll_sparse_targets	*coa_tree;
+	};
 };
 
 struct shard_punch_args {
@@ -454,7 +471,8 @@ struct obj_auxi_args {
 					 cond_fetch_split:1,
 					 reintegrating:1,
 					 tx_renew:1,
-					 rebuilding:1;
+					 rebuilding:1,
+					 for_migrate:1;
 	/* request flags. currently only: ORF_RESEND */
 	uint32_t			 flags;
 	uint32_t			 specified_shard;
@@ -592,6 +610,87 @@ struct dc_obj_verify_args {
 	uint32_t			 current_shard;
 	struct dc_obj_verify_cursor	 cursor;
 };
+
+/*
+ * Report latency on a per-I/O size.
+ * Buckets starts at [0; 256B[ and are increased by power of 2
+ * (i.e. [256B; 512B[, [512B; 1KB[) up to [4MB; infinity[
+ * Since 4MB = 2^22 and 256B = 2^8, this means
+ * (22 - 8 + 1) = 15 buckets plus the 4MB+ bucket, so
+ * 16 buckets in total.
+ */
+#define NR_LATENCY_BUCKETS 16
+
+struct dc_obj_tls {
+	/** Measure update/fetch latency based on I/O size (type = gauge) */
+	struct d_tm_node_t *cot_update_lat[NR_LATENCY_BUCKETS];
+	struct d_tm_node_t *cot_fetch_lat[NR_LATENCY_BUCKETS];
+
+	/** Measure per-operation latency in us (type = gauge) */
+	struct d_tm_node_t *cot_op_lat[OBJ_PROTO_CLI_COUNT];
+	/** Count number of per-opcode active requests (type = gauge) */
+	struct d_tm_node_t *cot_op_active[OBJ_PROTO_CLI_COUNT];
+};
+
+int
+obj_latency_tm_init(uint32_t opc, int tgt_id, struct d_tm_node_t **tm, char *op, char *desc,
+		    bool server);
+extern struct daos_module_key dc_obj_module_key;
+
+static inline struct dc_obj_tls *
+dc_obj_tls_get()
+{
+	struct daos_thread_local_storage *dtls;
+
+	dtls = dc_tls_get(dc_obj_module_key.dmk_tags);
+	D_ASSERT(dtls != NULL);
+	return daos_module_key_get(dtls, &dc_obj_module_key);
+}
+
+struct obj_pool_metrics {
+	/** Count number of total per-opcode requests (type = counter) */
+	struct d_tm_node_t *opm_total[OBJ_PROTO_CLI_COUNT];
+	/** Total number of bytes fetched (type = counter) */
+	struct d_tm_node_t *opm_fetch_bytes;
+	/** Total number of bytes updated (type = counter) */
+	struct d_tm_node_t *opm_update_bytes;
+
+	/** Total number of silently restarted updates (type = counter) */
+	struct d_tm_node_t *opm_update_restart;
+	/** Total number of resent update operations (type = counter) */
+	struct d_tm_node_t *opm_update_resent;
+	/** Total number of retry update operations (type = counter) */
+	struct d_tm_node_t *opm_update_retry;
+	/** Total number of EC full-stripe update operations (type = counter) */
+	struct d_tm_node_t *opm_update_ec_full;
+	/** Total number of EC partial update operations (type = counter) */
+	struct d_tm_node_t *opm_update_ec_partial;
+};
+
+void
+obj_metrics_free(void *data);
+int
+obj_metrics_count(void);
+void *
+obj_metrics_alloc_internal(const char *path, int tgt_id, bool server);
+
+static inline unsigned int
+lat_bucket(uint64_t size)
+{
+	int nr;
+
+	if (size <= 256)
+		return 0;
+
+	/** return number of leading zero-bits */
+	nr = __builtin_clzl(size - 1);
+
+	/** >4MB, return last bucket */
+	if (nr < 42)
+		return NR_LATENCY_BUCKETS - 1;
+
+	return 56 - nr;
+}
 
 static inline int
 dc_cont2uuid(struct dc_cont *dc_cont, uuid_t *hdl_uuid, uuid_t *uuid)
@@ -732,6 +831,12 @@ obj_retry_error(int err)
 	       err == -DER_CHKPT_BUSY || err == -DER_OVERLOAD_RETRY || daos_crt_network_error(err);
 }
 
+static inline bool
+obj_retriable_migrate(int err)
+{
+	return err == -DER_CSUM || err == -DER_NVME_IO;
+}
+
 static inline daos_handle_t
 obj_ptr2hdl(struct dc_object *obj)
 {
@@ -815,6 +920,18 @@ struct obj_io_context {
 				 ioc_lost_reply:1,
 				 ioc_fetch_snap:1;
 };
+
+static inline void
+obj_ptr2shards(struct dc_object *obj, uint32_t *start_shard, uint32_t *shard_nr,
+	       uint32_t *grp_nr)
+{
+	*start_shard = 0;
+	*shard_nr = obj->cob_shards_nr;
+	*grp_nr = obj->cob_shards_nr / obj_get_grp_size(obj);
+
+	D_ASSERTF(*grp_nr == obj->cob_grp_nr, "Unmatched grp nr for "DF_OID": %u/%u\n",
+		  DP_OID(obj->cob_md.omd_id), *grp_nr, obj->cob_grp_nr);
+}
 
 static inline uint64_t
 obj_dkey2hash(daos_obj_id_t oid, daos_key_t *dkey)
@@ -939,6 +1056,9 @@ void obj_class_fini(void);
 #define COLL_DISP_WIDTH_MIN	8
 #define COLL_DISP_WIDTH_DIF	4
 
+#define OBJ_COLL_THD_MIN	COLL_DISP_WIDTH_DEF
+#define COLL_BTREE_ORDER	COLL_DISP_WIDTH_DEF
+
 struct obj_query_merge_args {
 	struct daos_oclass_attr	*oqma_oca;
 	daos_unit_oid_t		 oqma_oid;
@@ -984,14 +1104,15 @@ dc_tx_hdl2epoch_and_pmv(daos_handle_t th, struct dtx_epoch *epoch,
 			uint32_t *pmv);
 
 /* cli_coll.c */
+bool
+obj_need_coll(struct dc_object *obj, uint32_t *start_shard, uint32_t *shard_nr,
+	      uint32_t *grp_nr);
+
 int
 obj_coll_oper_args_init(struct coll_oper_args *coa, struct dc_object *obj, bool for_modify);
 
 void
 obj_coll_oper_args_fini(struct coll_oper_args *coa);
-
-int
-obj_coll_oper_args_collapse(struct coll_oper_args *coa, uint32_t *size);
 
 int
 obj_coll_prep_one(struct coll_oper_args *coa, struct dc_object *obj,

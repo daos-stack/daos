@@ -93,7 +93,7 @@ start_one(struct dfuse_tm *dtm)
 		D_GOTO(out, rc);
 	}
 
-	pthread_setname_np(dt->dt_id, "fuse worker");
+	pthread_setname_np(dt->dt_id, "dfuse worker");
 
 	d_list_add(&dt->dt_threads, &dtm->tm_threads);
 
@@ -133,6 +133,8 @@ dfuse_loop(struct dfuse_info *dfuse_info)
 	/* sem_wait() is interruptible */
 	while (!fuse_session_exited(dfuse_info->di_session))
 		sem_wait(&dtm->tm_finish);
+
+	DFUSE_TRA_INFO(dtm, "Session has completed, commencing shutdown");
 
 	atomic_store_relaxed(&dtm->tm_exit, true);
 

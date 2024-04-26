@@ -3976,7 +3976,6 @@ obj_local_query(struct obj_tgt_query_args *otqa, struct obj_io_context *ioc, dao
 	uint64_t			 stripe_size = 0;
 	daos_epoch_t			 max_epoch = 0;
 	daos_recx_t			 recx = { 0 };
-	int				 allow_failure_cnt;
 	int				 succeeds;
 	int				 rc = 0;
 	int				 i;
@@ -3990,9 +3989,12 @@ obj_local_query(struct obj_tgt_query_args *otqa, struct obj_io_context *ioc, dao
 		stripe_size = obj_ec_stripe_rec_nr(&ioc->ioc_oca);
 	}
 
+	otqa->otqa_shard = shards[0];
+
 	if (otqa->otqa_need_copy) {
 		oqma.oqma_oca = &ioc->ioc_oca;
 		oqma.oqma_oid = oid;
+		oqma.oqma_oid.id_shard = shards[0];
 		oqma.oqma_in_dkey = otqa->otqa_in_dkey;
 		oqma.oqma_tgt_dkey = &otqa->otqa_dkey_copy;
 		oqma.oqma_tgt_akey = &otqa->otqa_akey_copy;
@@ -4005,7 +4007,7 @@ obj_local_query(struct obj_tgt_query_args *otqa, struct obj_io_context *ioc, dao
 		oqma.oqma_src_map_ver = map_ver;
 	}
 
-	for (i = 0, allow_failure_cnt = 0, succeeds = 0; i < count; i++ ) {
+	for (i = 0, succeeds = 0; i < count; i++ ) {
 		if (api_flags & DAOS_GET_DKEY) {
 			if (otqa->otqa_need_copy)
 				p_dkey = &dkey;
@@ -4048,7 +4050,6 @@ again:
 		if (rc == -DER_NONEXIST) {
 			if (otqa->otqa_need_copy && otqa->otqa_max_epoch < *p_epoch)
 				otqa->otqa_max_epoch = *p_epoch;
-			allow_failure_cnt++;
 			continue;
 		}
 
@@ -4099,8 +4100,8 @@ again:
 		}
 	}
 
-	if (allow_failure_cnt > 0 && rc == 0 && succeeds == 0)
-		rc = -DER_NONEXIST;
+	if (rc == -DER_NONEXIST && succeeds > 0)
+		rc = 0;
 
 out:
 	if (rc == -DER_NONEXIST && otqa->otqa_need_copy && !otqa->otqa_keys_allocated) {
@@ -4911,12 +4912,6 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 
 	rc = ds_cpd_handle_one_wrap(rpc, dcsh, dcde, dcsr, ioc, dth);
 
-	/* For the case of only containing read sub operations, we will
-	 * generate DTX entry for DTX recovery.
-	 */
-	if (rc == 0 && dth->dth_modification_cnt == 0)
-		rc = vos_dtx_attach(dth, true, false);
-
 	rc = dtx_end(dth, ioc->ioc_coc, rc);
 
 out:
@@ -5653,7 +5648,6 @@ again1:
 			/* TODO: Also recovery the epoch uncertainty. */
 			break;
 		case -DER_NONEXIST:
-			rc = 0;
 			break;
 		default:
 			D_GOTO(out, rc);

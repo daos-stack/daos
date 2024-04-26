@@ -67,7 +67,7 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 	if (arg->myrank == 0) {
 		char		*env;
 		int		 size_gb;
-		daos_size_t	 nvme_size;
+		daos_size_t	 nvme_size = 0;
 		d_rank_list_t	 *rank_list = NULL;
 
 		d_agetenv_str(&env, "POOL_SCM_SIZE");
@@ -492,8 +492,10 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 			return rc;
 		}
 
+		print_message("waiting for rebuild, ver %u, sec %u, err %d, state %d,"
+			      "fail_rank %d\n", rstat->rs_version, rstat->rs_seconds,
+			      rstat->rs_errno, rstat->rs_state, rstat->rs_fail_rank);
 		if (rstat->rs_state == DRS_IN_PROGRESS) {
-			print_message("waiting for rebuild\n");
 			sleep(1);
 			continue;
 		}
@@ -641,6 +643,7 @@ free:
 		d_rank_list_free(arg->pool.svc);
 	if (arg->pool.alive_svc)
 		d_rank_list_free(arg->pool.alive_svc);
+	D_FREE(arg->pool.label);
 	D_FREE(arg);
 	*state = NULL;
 	return 0;
@@ -1387,11 +1390,35 @@ int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
 	return -DER_TIMEDOUT;
 }
 
+static void
+test_set_engine_fail_loc_int(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_loc, bool verbose)
+{
+	int rc;
+
+	assert(fail_loc == 0 ||
+	       (fail_loc & (DAOS_FAIL_ONCE | DAOS_FAIL_SOME | DAOS_FAIL_ALWAYS)) != 0);
+
+	if (arg->myrank != 0)
+		return;
+
+	if (verbose) {
+		if (engine_rank == CRT_NO_RANK)
+			print_message("setting fail_loc to " DF_X64 " on all engine ranks\n",
+				      fail_loc);
+		else
+			print_message("setting fail_loc to " DF_X64 " on engine rank %u\n",
+				      fail_loc, engine_rank);
+	}
+
+	rc = daos_debug_set_params(arg->group, engine_rank, DMG_KEY_FAIL_LOC, fail_loc, 0, NULL);
+	assert_rc_equal(rc, 0);
+}
+
 /**
  * If this is client rank 0, set fail_loc to \a fail_loc on \a engine_rank. The
  * caller must eventually set fail_loc to 0 on these engines, even when using
  * DAOS_FAIL_ONCE.
- * 
+ *
  * \param[in]	arg		test state
  * \param[in]	engine_rank	rank of an engine or CRT_NO_RANK (i.e., all
  *				engines)
@@ -1402,22 +1429,25 @@ int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
 void
 test_set_engine_fail_loc(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_loc)
 {
-	int rc;
+	test_set_engine_fail_loc_int(arg, engine_rank, fail_loc, true /* verbose */);
+}
 
-	assert(fail_loc == 0 ||
-	       (fail_loc & (DAOS_FAIL_ONCE | DAOS_FAIL_SOME | DAOS_FAIL_ALWAYS)) != 0);
-
-	if (arg->myrank != 0)
-		return;
-
-	if (engine_rank == CRT_NO_RANK)
-		print_message("setting fail_loc to " DF_X64 " on all engine ranks\n", fail_loc);
-	else
-		print_message("setting fail_loc to " DF_X64 " on engine rank %u\n", fail_loc,
-			      engine_rank);
-
-	rc = daos_debug_set_params(arg->group, engine_rank, DMG_KEY_FAIL_LOC, fail_loc, 0, NULL);
-	assert_rc_equal(rc, 0);
+/**
+ * If this is client rank 0, set fail_loc to \a fail_loc on \a engine_rank. The
+ * caller must eventually set fail_loc to 0 on these engines, even when using
+ * DAOS_FAIL_ONCE.
+ *
+ * \param[in]	arg		test state
+ * \param[in]	engine_rank	rank of an engine or CRT_NO_RANK (i.e., all
+ *				engines)
+ * \param[in]	fail_loc	fail_loc, which must either be 0 or include one
+ *				of DAOS_FAIL_ONCE, DAOS_FAIL_SOME, or
+ *				DAOS_FAIL_ALWAYS)
+ */
+void
+test_set_engine_fail_loc_quiet(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_loc)
+{
+	test_set_engine_fail_loc_int(arg, engine_rank, fail_loc, false /* verbose */);
 }
 
 /**

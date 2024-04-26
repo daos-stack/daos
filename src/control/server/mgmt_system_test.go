@@ -95,10 +95,9 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 	}{
 		"Server uses verbs + Infiniband": {
 			clientNetworkHint: &mgmtpb.ClientNetHint{
-				Provider:        "ofi+verbs",
-				CrtCtxShareAddr: 1,
-				CrtTimeout:      10,
-				NetDevClass:     uint32(hardware.Infiniband),
+				Provider:    "ofi+verbs",
+				CrtTimeout:  10,
+				NetDevClass: uint32(hardware.Infiniband),
 			},
 			req: &mgmtpb.GetAttachInfoReq{
 				Sys:      build.DefaultSystemName,
@@ -106,19 +105,20 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 			},
 			expResp: &mgmtpb.GetAttachInfoResp{
 				ClientNetHint: &mgmtpb.ClientNetHint{
-					Provider:        "ofi+verbs",
-					CrtCtxShareAddr: 1,
-					CrtTimeout:      10,
-					NetDevClass:     uint32(hardware.Infiniband),
+					Provider:    "ofi+verbs",
+					CrtTimeout:  10,
+					NetDevClass: uint32(hardware.Infiniband),
 				},
 				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 					{
-						Rank: msReplica.Rank.Uint32(),
-						Uri:  msReplica.FabricURI,
+						Rank:    msReplica.Rank.Uint32(),
+						Uri:     msReplica.PrimaryFabricURI,
+						NumCtxs: 0,
 					},
 					{
-						Rank: nonReplica.Rank.Uint32(),
-						Uri:  nonReplica.FabricURI,
+						Rank:    nonReplica.Rank.Uint32(),
+						Uri:     nonReplica.PrimaryFabricURI,
+						NumCtxs: 1,
 					},
 				},
 				MsRanks:     []uint32{0},
@@ -128,10 +128,9 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 		},
 		"Server uses TCP sockets + Ethernet": {
 			clientNetworkHint: &mgmtpb.ClientNetHint{
-				Provider:        "ofi+tcp",
-				CrtCtxShareAddr: 0,
-				CrtTimeout:      5,
-				NetDevClass:     uint32(hardware.Ether),
+				Provider:    "ofi+tcp",
+				CrtTimeout:  5,
+				NetDevClass: uint32(hardware.Ether),
 			},
 			req: &mgmtpb.GetAttachInfoReq{
 				Sys:      build.DefaultSystemName,
@@ -139,19 +138,20 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 			},
 			expResp: &mgmtpb.GetAttachInfoResp{
 				ClientNetHint: &mgmtpb.ClientNetHint{
-					Provider:        "ofi+tcp",
-					CrtCtxShareAddr: 0,
-					CrtTimeout:      5,
-					NetDevClass:     uint32(hardware.Ether),
+					Provider:    "ofi+tcp",
+					CrtTimeout:  5,
+					NetDevClass: uint32(hardware.Ether),
 				},
 				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 					{
-						Rank: msReplica.Rank.Uint32(),
-						Uri:  msReplica.FabricURI,
+						Rank:    msReplica.Rank.Uint32(),
+						Uri:     msReplica.PrimaryFabricURI,
+						NumCtxs: 0,
 					},
 					{
-						Rank: nonReplica.Rank.Uint32(),
-						Uri:  nonReplica.FabricURI,
+						Rank:    nonReplica.Rank.Uint32(),
+						Uri:     nonReplica.PrimaryFabricURI,
+						NumCtxs: 1,
 					},
 				},
 				MsRanks:     []uint32{0},
@@ -161,10 +161,9 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 		},
 		"older client (AllRanks: false)": {
 			clientNetworkHint: &mgmtpb.ClientNetHint{
-				Provider:        "ofi+tcp",
-				CrtCtxShareAddr: 0,
-				CrtTimeout:      5,
-				NetDevClass:     uint32(hardware.Ether),
+				Provider:    "ofi+tcp",
+				CrtTimeout:  5,
+				NetDevClass: uint32(hardware.Ether),
 			},
 			req: &mgmtpb.GetAttachInfoReq{
 				Sys:      build.DefaultSystemName,
@@ -172,15 +171,14 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 			},
 			expResp: &mgmtpb.GetAttachInfoResp{
 				ClientNetHint: &mgmtpb.ClientNetHint{
-					Provider:        "ofi+tcp",
-					CrtCtxShareAddr: 0,
-					CrtTimeout:      5,
-					NetDevClass:     uint32(hardware.Ether),
+					Provider:    "ofi+tcp",
+					CrtTimeout:  5,
+					NetDevClass: uint32(hardware.Ether),
 				},
 				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 					{
 						Rank: msReplica.Rank.Uint32(),
-						Uri:  msReplica.FabricURI,
+						Uri:  msReplica.PrimaryFabricURI,
 					},
 				},
 				MsRanks:     []uint32{0},
@@ -211,7 +209,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 			if _, err := tc.svc.membership.Add(nonReplica); err != nil {
 				t.Fatal(err)
 			}
-			tc.svc.clientNetworkHint = tc.clientNetworkHint
+			tc.svc.clientNetworkHint = []*mgmtpb.ClientNetHint{tc.clientNetworkHint}
 			gotResp, gotErr := tc.svc.GetAttachInfo(test.Context(t), tc.req)
 			if gotErr != nil {
 				t.Fatalf("unexpected error: %+v\n", gotErr)
@@ -470,7 +468,7 @@ func mockMember(t *testing.T, r, a int32, s string) *system.Member {
 	uri := fmt.Sprintf("tcp://%s", addr)
 
 	m := system.MockMemberFullSpec(t, ranklist.Rank(r), test.MockUUID(r), uri, addr, state)
-	m.FabricContexts = uint32(r)
+	m.PrimaryFabricContexts = uint32(r)
 	m.FaultDomain = fd
 	m.Incarnation = uint64(r)
 
@@ -1060,11 +1058,13 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 		emptyDb        bool
 		ranks          string
 		hosts          string
+		clientNetHints []*mgmtpb.ClientNetHint
 		expMembers     []*mgmtpb.SystemMember
 		expRanks       string
 		expAbsentHosts string
 		expAbsentRanks string
 		expErrMsg      string
+		expProviders   []string
 	}{
 		"nil req": {
 			nilReq:    true,
@@ -1177,6 +1177,60 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 			emptyDb:   true,
 			expErrMsg: system.ErrRaftUnavail.Error(),
 		},
+		"use clientNetHint for providers": {
+			clientNetHints: []*mgmtpb.ClientNetHint{
+				{
+					Provider: "prov1",
+				},
+				{
+					Provider: "prov2",
+				},
+				{
+					Provider: "prov3",
+				},
+			},
+			expProviders: []string{"prov1", "prov2", "prov3"},
+			expMembers: []*mgmtpb.SystemMember{
+				{
+					Rank: 0, Addr: test.MockHostAddr(1).String(),
+					Uuid:  test.MockUUID(0),
+					State: stateString(system.MemberStateErrored), Info: "couldn't ping",
+					FaultDomain: "/",
+				},
+				{
+					Rank: 1, Addr: test.MockHostAddr(1).String(),
+					Uuid: test.MockUUID(1),
+					// transition to "ready" illegal
+					State:       stateString(system.MemberStateStopping),
+					FaultDomain: "/",
+				},
+				{
+					Rank: 2, Addr: test.MockHostAddr(2).String(),
+					Uuid:        test.MockUUID(2),
+					State:       stateString(system.MemberStateUnresponsive),
+					FaultDomain: "/",
+				},
+				{
+					Rank: 3, Addr: test.MockHostAddr(2).String(),
+					Uuid:        test.MockUUID(3),
+					State:       stateString(system.MemberStateJoined),
+					FaultDomain: "/",
+				},
+				{
+					Rank: 4, Addr: test.MockHostAddr(3).String(),
+					Uuid:        test.MockUUID(4),
+					State:       stateString(system.MemberStateStarting),
+					FaultDomain: "/",
+				},
+				{
+					Rank: 5, Addr: test.MockHostAddr(3).String(),
+					Uuid:        test.MockUUID(5),
+					State:       stateString(system.MemberStateStopped),
+					FaultDomain: "/",
+				},
+			},
+			expRanks: "0-5",
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -1194,6 +1248,7 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 
 			svc := newTestMgmtSvc(t, log)
 			svc.membership = svc.membership.WithTCPResolver(mockResolver)
+			svc.clientNetworkHint = tc.clientNetHints
 
 			ctx, cancel := context.WithTimeout(test.Context(t), 50*time.Millisecond)
 			defer cancel()
@@ -1228,13 +1283,17 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 			}
 
 			cmpOpts := append(test.DefaultCmpOpts(),
-				protocmp.IgnoreFields(&mgmtpb.SystemMember{}, "last_update"),
+				protocmp.IgnoreFields(&mgmtpb.SystemMember{},
+					"last_update", "fault_domain", "fabric_uri", "fabric_contexts", "incarnation"),
 			)
 			if diff := cmp.Diff(tc.expMembers, gotResp.Members, cmpOpts...); diff != "" {
-				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
+				t.Errorf("unexpected results (-want, +got)\n%s\n", diff)
 			}
 			test.AssertEqual(t, tc.expAbsentHosts, gotResp.Absenthosts, "absent hosts")
 			test.AssertEqual(t, tc.expAbsentRanks, gotResp.Absentranks, "absent ranks")
+			if diff := cmp.Diff(tc.expProviders, gotResp.Providers); diff != "" {
+				t.Errorf("unexpected results (-want, +got)\n%s\n", diff)
+			}
 		})
 	}
 }
@@ -1866,7 +1925,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 	curMember := mockMember(t, 0, 0, "excluded")
 	newMember := mockMember(t, 1, 1, "joined")
 	newProviderMember := mockMember(t, 1, 1, "joined")
-	newProviderMember.FabricURI = fmt.Sprintf("verbs://%s", test.MockHostAddr(1))
+	newProviderMember.PrimaryFabricURI = fmt.Sprintf("verbs://%s", test.MockHostAddr(1))
 
 	for name, tc := range map[string]struct {
 		req      *mgmtpb.JoinReq
@@ -1912,13 +1971,14 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 				Rank:        curMember.Rank.Uint32(),
 				Uuid:        curMember.UUID.String(),
 				Incarnation: curMember.Incarnation + 1,
+				Uri:         curMember.PrimaryFabricURI,
 			},
 			expGuReq: &mgmtpb.GroupUpdateReq{
 				MapVersion: 3,
 				Engines: []*mgmtpb.GroupUpdateReq_Engine{
 					{
 						Rank:        curMember.Rank.Uint32(),
-						Uri:         newMember.FabricURI, // update URI
+						Uri:         curMember.PrimaryFabricURI, // update URI
 						Incarnation: curMember.Incarnation + 1,
 					},
 				},
@@ -1935,13 +1995,14 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 				Rank:        uint32(ranklist.NilRank),
 				Uuid:        curMember.UUID.String(),
 				Incarnation: curMember.Incarnation + 1,
+				Uri:         curMember.PrimaryFabricURI,
 			},
 			expGuReq: &mgmtpb.GroupUpdateReq{
 				MapVersion: 3,
 				Engines: []*mgmtpb.GroupUpdateReq_Engine{
 					{
 						Rank:        curMember.Rank.Uint32(),
-						Uri:         newMember.FabricURI, // update URI
+						Uri:         curMember.PrimaryFabricURI, // update URI
 						Incarnation: curMember.Incarnation + 1,
 					},
 				},
@@ -1957,7 +2018,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 			req: &mgmtpb.JoinReq{
 				Rank:        curMember.Rank.Uint32(),
 				Uuid:        curMember.UUID.String(),
-				Uri:         newProviderMember.FabricURI,
+				Uri:         newProviderMember.PrimaryFabricURI,
 				Incarnation: curMember.Incarnation + 1,
 			},
 			expGuReq: &mgmtpb.GroupUpdateReq{
@@ -1965,7 +2026,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 				Engines: []*mgmtpb.GroupUpdateReq_Engine{
 					{
 						Rank:        curMember.Rank.Uint32(),
-						Uri:         newProviderMember.FabricURI, // update URI
+						Uri:         newProviderMember.PrimaryFabricURI, // update URI
 						Incarnation: curMember.Incarnation + 1,
 					},
 				},
@@ -1983,7 +2044,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 					// rank 0 is excluded, so shouldn't be in the map
 					{
 						Rank:        newMember.Rank.Uint32(),
-						Uri:         newMember.FabricURI,
+						Uri:         newMember.PrimaryFabricURI,
 						Incarnation: newMember.Incarnation,
 					},
 				},
@@ -2044,13 +2105,13 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 				tc.req.Addr = newMember.Addr.String()
 			}
 			if tc.req.Uri == "" {
-				tc.req.Uri = newMember.FabricURI
+				tc.req.Uri = newMember.PrimaryFabricURI
 			}
 			if tc.req.SrvFaultDomain == "" {
 				tc.req.SrvFaultDomain = newMember.FaultDomain.String()
 			}
 			if tc.req.Nctxs == 0 {
-				tc.req.Nctxs = newMember.FabricContexts
+				tc.req.Nctxs = newMember.PrimaryFabricContexts
 			}
 			if tc.req.Incarnation == 0 {
 				tc.req.Incarnation = newMember.Incarnation

@@ -141,18 +141,19 @@ func (cfg *Server) WithClientEnvVars(envVars []string) *Server {
 	return cfg
 }
 
-// WithCrtCtxShareAddr sets the top-level CrtCtxShareAddr.
-func (cfg *Server) WithCrtCtxShareAddr(addr uint32) *Server {
-	cfg.Fabric.CrtCtxShareAddr = addr
+// WithCrtTimeout sets the top-level CrtTimeout.
+func (cfg *Server) WithCrtTimeout(timeout uint32) *Server {
+	cfg.Fabric.CrtTimeout = timeout
 	for _, engine := range cfg.Engines {
 		engine.Fabric.Update(cfg.Fabric)
 	}
 	return cfg
 }
 
-// WithCrtTimeout sets the top-level CrtTimeout.
-func (cfg *Server) WithCrtTimeout(timeout uint32) *Server {
-	cfg.Fabric.CrtTimeout = timeout
+// WithNumSecondaryEndpoints sets the number of network endpoints for each engine's secondary
+// provider.
+func (cfg *Server) WithNumSecondaryEndpoints(nr []int) *Server {
+	cfg.Fabric.NumSecondaryEndpoints = nr
 	for _, engine := range cfg.Engines {
 		engine.Fabric.Update(cfg.Fabric)
 	}
@@ -352,6 +353,11 @@ func (cfg *Server) Load() error {
 
 	if !daos.SystemNameIsValid(cfg.SystemName) {
 		return errors.Errorf("invalid system name: %q", cfg.SystemName)
+	}
+
+	// TODO multiprovider: Remove when multiprovider is enabled
+	if cfg.Fabric.GetNumProviders() > 1 {
+		return errors.Errorf("fabric provider string %q includes more than one provider", cfg.Fabric.Provider)
 	}
 
 	// Update server config based on legacy parameters.
@@ -747,7 +753,7 @@ func (cfg *Server) validateMultiEngineConfig(log logging.Logger) error {
 	seenScmClsIdx := -1
 
 	for idx, engine := range cfg.Engines {
-		fabricConfig := fmt.Sprintf("fabric:%s-%s-%d",
+		fabricConfig := fmt.Sprintf("fabric:%q-%q-%q",
 			engine.Fabric.Provider,
 			engine.Fabric.Interface,
 			engine.Fabric.InterfacePort)

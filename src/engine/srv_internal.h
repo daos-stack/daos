@@ -69,6 +69,15 @@ struct mem_stats {
 	uint64_t		ms_current;
 };
 
+/* See dss_chore. */
+struct dss_chore_queue {
+	d_list_t   chq_list;
+	bool       chq_stop;
+	ABT_mutex  chq_mutex;
+	ABT_cond   chq_cond;
+	ABT_thread chq_ult;
+};
+
 /** Per-xstream configuration data */
 struct dss_xstream {
 	char			dx_name[DSS_XS_NAME_LEN];
@@ -94,6 +103,7 @@ struct dss_xstream {
 	unsigned int		dx_timeout;
 	bool			dx_main_xs;	/* true for main XS */
 	bool			dx_comm;	/* true with cart context */
+	bool			dx_iofw;	/* true for DSS_XS_IOFW XS */
 	bool			dx_dsc_started;	/* DSC progress ULT started */
 	struct mem_stats	dx_mem_stats;	/* memory usages stats on this xstream */
 #ifdef ULT_MMAP_STACK
@@ -102,6 +112,7 @@ struct dss_xstream {
 #endif
 	bool			dx_progress_started;	/* Network poll started */
 	int                     dx_tag;                 /** tag for xstream */
+	struct dss_chore_queue	dx_chore_queue;
 };
 
 /** Engine module's metrics */
@@ -314,10 +325,6 @@ sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 	return dss_abterr2der(rc);
 }
 
-/* tls.c */
-void dss_tls_fini(struct dss_thread_local_storage *dtls);
-struct dss_thread_local_storage *dss_tls_init(int tag, int xs_id, int tgt_id);
-
 /* server_iv.c */
 void ds_iv_init(void);
 void ds_iv_fini(void);
@@ -375,5 +382,10 @@ dss_xstream_has_nvme(struct dss_xstream *dx)
 
 	return false;
 }
+
+int dss_chore_queue_init(struct dss_xstream *dx);
+int dss_chore_queue_start(struct dss_xstream *dx);
+void dss_chore_queue_stop(struct dss_xstream *dx);
+void dss_chore_queue_fini(struct dss_xstream *dx);
 
 #endif /* __DAOS_SRV_INTERNAL__ */

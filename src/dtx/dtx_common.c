@@ -698,8 +698,10 @@ dtx_batched_commit(void *arg)
 		struct dtx_stat		 stat = { 0 };
 		int			 sleep_time = 50; /* ms */
 
-		if (d_list_empty(&dmi->dmi_dtx_batched_cont_open_list))
+		if (d_list_empty(&dmi->dmi_dtx_batched_cont_open_list)) {
+			sleep_time = 500;
 			goto check;
+		}
 
 		if (DAOS_FAIL_CHECK(DAOS_DTX_NO_BATCHED_CMT) ||
 		    DAOS_FAIL_CHECK(DAOS_DTX_NO_COMMITTABLE))
@@ -804,11 +806,6 @@ dtx_epoch_bound(struct dtx_epoch *epoch)
 	return limit;
 }
 
-/** VOS reserves highest two minor epoch values for internal use so we must
- *  limit the number of dtx sub modifications to avoid conflict.
- */
-#define DTX_SUB_MOD_MAX	(((uint16_t)-1) - 2)
-
 static void
 dtx_shares_init(struct dtx_handle *dth)
 {
@@ -881,11 +878,13 @@ dtx_handle_reinit(struct dtx_handle *dth)
  * Init local dth handle.
  */
 static int
-dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
-		bool leader, uint16_t sub_modification_cnt, uint32_t pm_ver,
-		daos_unit_oid_t *leader_oid, struct dtx_id *dti_cos, int dti_cos_cnt,
-		uint32_t flags, struct dtx_memberships *mbs, struct dtx_handle *dth)
+dtx_handle_init(struct dtx_id *dti, daos_handle_t xoh, struct dtx_epoch *epoch, bool leader,
+		uint16_t sub_modification_cnt, uint32_t pm_ver, daos_unit_oid_t *leader_oid,
+		struct dtx_id *dti_cos, int dti_cos_cnt, uint32_t flags,
+		struct dtx_memberships *mbs, struct dtx_handle *dth)
 {
+	int rc;
+
 	if (sub_modification_cnt > DTX_SUB_MOD_MAX) {
 		D_ERROR("Too many modifications in a single transaction:"
 			"%u > %u\n", sub_modification_cnt, DTX_SUB_MOD_MAX);
@@ -895,10 +894,15 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 
 	dtx_shares_init(dth);
 
-	dth->dth_xid = *dti;
-	dth->dth_coh = coh;
+	if (flags & DTX_LOCAL) {
+		dth->dth_xid.dti_hlc = 1;
+		dth->dth_poh         = xoh;
+	} else {
+		dth->dth_xid        = *dti;
+		dth->dth_leader_oid = *leader_oid;
+		dth->dth_coh        = xoh;
+	}
 
-	dth->dth_leader_oid = *leader_oid;
 	dth->dth_ver = pm_ver;
 	dth->dth_refs = 1;
 	dth->dth_mbs = mbs;
@@ -918,6 +922,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 	dth->dth_aborted = 0;
 	dth->dth_already = 0;
 	dth->dth_need_validation = 0;
+	dth->dth_local              = (flags & DTX_LOCAL) ? 1 : 0;
 
 	dth->dth_dti_cos = dti_cos;
 	dth->dth_dti_cos_count = dti_cos_cnt;
@@ -938,23 +943,38 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 
 	dth->dth_dkey_hash = 0;
 
-	if (daos_is_zero_dti(dti))
-		return 0;
+	if (!(flags & DTX_LOCAL)) {
+		if (daos_is_zero_dti(dti))
+			return 0;
 
-	if (!dtx_epoch_chosen(epoch)) {
-		D_ERROR("initializing DTX "DF_DTI" with invalid epoch: value="
-			DF_U64" first="DF_U64" flags=%x\n",
-			DP_DTI(dti), epoch->oe_value, epoch->oe_first,
-			epoch->oe_flags);
-		return -DER_INVAL;
+		if (!dtx_epoch_chosen(epoch)) {
+			D_ERROR("initializing DTX " DF_DTI " with invalid epoch: value=" DF_U64
+				" first=" DF_U64 " flags=%x\n",
+				DP_DTI(dti), epoch->oe_value, epoch->oe_first, epoch->oe_flags);
+			return -DER_INVAL;
+		}
+		dth->dth_epoch       = epoch->oe_value;
+		dth->dth_epoch_bound = dtx_epoch_bound(epoch);
 	}
-	dth->dth_epoch = epoch->oe_value;
-	dth->dth_epoch_bound = dtx_epoch_bound(epoch);
 
-	if (dth->dth_modification_cnt == 0)
-		return 0;
+	rc = vos_dtx_rsrvd_init(dth);
+	if (rc != 0) {
+		D_ERROR("Failed to allocate space for scm reservations: rc=" DF_RC "\n", DP_RC(rc));
+		return rc;
+	}
 
-	return vos_dtx_rsrvd_init(dth);
+	if (flags & DTX_LOCAL) {
+		rc = vos_dtx_local_begin(dth, xoh);
+		if (rc) {
+			goto error;
+		}
+	}
+
+	return 0;
+
+error:
+	vos_dtx_rsrvd_fini(dth);
+	return rc;
 }
 
 static int
@@ -1308,6 +1328,21 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 		D_ASSERTF(0, "Unexpected DTX "DF_DTI" status %d\n", DP_DTI(&dth->dth_xid), status);
 	}
 
+	/*
+	 * Even if the transaction modifies nothing locally, we still need to store
+	 * it persistently. Otherwise, the subsequent DTX resync may not find it as
+	 * to regard it as failed transaction and abort it.
+	 */
+	if (result == 0 && !dth->dth_active && !dth->dth_prepared &&
+	    (dth->dth_dist || dth->dth_modification_cnt > 0)) {
+		result = vos_dtx_attach(dth, true, dth->dth_ent != NULL ? true : false);
+		if (unlikely(result < 0)) {
+			D_ERROR(DF_UUID": Fail to persistently store DTX "DF_DTI": "DF_RC"\n",
+				DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid), DP_RC(result));
+			goto abort;
+		}
+	}
+
 	if (dth->dth_prepared || dtx_batched_ult_max == 0) {
 		dth->dth_sync = 1;
 		goto sync;
@@ -1427,17 +1462,13 @@ out:
 		result = 0;
 
 	if (!daos_is_zero_dti(&dth->dth_xid)) {
-		if (result < 0) {
-			/* 1. Drop partial modification for distributed transaction.
-			 * 2. Remove the pinned DTX entry.
-			 */
-			if (!aborted)
-				vos_dtx_cleanup(dth, true);
+		/* Drop partial modification and remove the pinned DTX entry. */
+		if (result < 0 && !aborted && dth->dth_modification_cnt > 0)
+			vos_dtx_cleanup(dth, true);
 
-			/* For solo DTX, just let client retry for DER_AGAIN case. */
-			if (result == -DER_AGAIN && dth->dth_solo)
-				result = -DER_INPROGRESS;
-		}
+		/* For solo DTX, just let client retry for DER_AGAIN case. */
+		if (result == -DER_AGAIN && dth->dth_solo)
+			result = -DER_INPROGRESS;
 
 		vos_dtx_rsrvd_fini(dth);
 		vos_dtx_detach(dth);
@@ -1471,7 +1502,7 @@ out:
 /**
  * Prepare the DTX handle in DRAM.
  *
- * \param coh		[IN]	Container handle.
+ * \param xoh		[IN]	Container handle or pool handle.
  * \param dti		[IN]	The DTX identifier.
  * \param epoch		[IN]	Epoch for the DTX.
  * \param sub_modification_cnt
@@ -1487,11 +1518,10 @@ out:
  * \return			Zero on success, negative value if error.
  */
 int
-dtx_begin(daos_handle_t coh, struct dtx_id *dti,
-	  struct dtx_epoch *epoch, uint16_t sub_modification_cnt,
-	  uint32_t pm_ver, daos_unit_oid_t *leader_oid,
-	  struct dtx_id *dti_cos, int dti_cos_cnt, uint32_t flags,
-	  struct dtx_memberships *mbs, struct dtx_handle **p_dth)
+dtx_begin(daos_handle_t xoh, struct dtx_id *dti, struct dtx_epoch *epoch,
+	  uint16_t sub_modification_cnt, uint32_t pm_ver, daos_unit_oid_t *leader_oid,
+	  struct dtx_id *dti_cos, int dti_cos_cnt, uint32_t flags, struct dtx_memberships *mbs,
+	  struct dtx_handle **p_dth)
 {
 	struct dtx_handle	*dth;
 	int			 rc;
@@ -1500,15 +1530,21 @@ dtx_begin(daos_handle_t coh, struct dtx_id *dti,
 	if (dth == NULL)
 		return -DER_NOMEM;
 
-	rc = dtx_handle_init(dti, coh, epoch, false, sub_modification_cnt, pm_ver,
-			     leader_oid, dti_cos, dti_cos_cnt, flags, mbs, dth);
-	if (rc == 0 && sub_modification_cnt > 0)
+	rc = dtx_handle_init(dti, xoh, epoch, false, sub_modification_cnt, pm_ver, leader_oid,
+			     dti_cos, dti_cos_cnt, flags, mbs, dth);
+	if (rc == 0 && sub_modification_cnt > 0 && !(flags & DTX_LOCAL))
 		rc = vos_dtx_attach(dth, false, false);
 
-	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub modification %d, ver %u, "
-		"epoch "DF_X64", dti_cos_cnt %d, flags %x: "DF_RC"\n",
-		DP_DTI(dti), sub_modification_cnt,
-		dth->dth_ver, epoch->oe_value, dti_cos_cnt, flags, DP_RC(rc));
+	if (flags & DTX_LOCAL) {
+		D_DEBUG(DB_IO, "Start local DTX sub modification %d, ver %u, flags %x: " DF_RC "\n",
+			sub_modification_cnt, dth->dth_ver, flags, DP_RC(rc));
+	} else {
+		D_DEBUG(DB_IO,
+			"Start DTX " DF_DTI " sub modification %d, ver %u, epoch " DF_X64
+			", dti_cos_cnt %d, flags %x: " DF_RC "\n",
+			DP_DTI(dti), sub_modification_cnt, dth->dth_ver, epoch->oe_value,
+			dti_cos_cnt, flags, DP_RC(rc));
+	}
 
 	if (rc != 0)
 		D_FREE(dth);
@@ -1527,6 +1563,21 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 
 	if (daos_is_zero_dti(&dth->dth_xid))
 		goto out;
+
+	if (dth->dth_local) {
+		result = vos_dtx_local_end(dth, result);
+		D_DEBUG(DB_IO, "Stop the local transaction ver %u: " DF_RC "\n", dth->dth_ver,
+			DP_RC(result));
+		goto fini;
+	}
+
+	/*
+	 * Even if the transaction modifies nothing locally, we still need to store
+	 * it persistently. Otherwise, the subsequent DTX resync may not find it as
+	 * to regard it as failed transaction and abort it.
+	 */
+	if (result == 0 && !dth->dth_active && (dth->dth_dist || dth->dth_modification_cnt > 0))
+		result = vos_dtx_attach(dth, true, dth->dth_ent != NULL ? true : false);
 
 	if (result < 0) {
 		if (dth->dth_dti_cos_count > 0 && !dth->dth_cos_done) {
@@ -1549,17 +1600,16 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 				dth->dth_cos_done = 1;
 		}
 
-		/* 1. Drop partial modification for distributed transaction.
-		 * 2. Remove the pinned DTX entry.
-		 */
-		vos_dtx_cleanup(dth, true);
+		/* Drop partial modification and remove the pinned DTX entry. */
+		if (dth->dth_modification_cnt > 0)
+			vos_dtx_cleanup(dth, true);
+
+		D_DEBUG(DB_IO, "Stop the DTX " DF_DTI " ver %u, dkey %lu: " DF_RC "\n",
+			DP_DTI(&dth->dth_xid), dth->dth_ver, (unsigned long)dth->dth_dkey_hash,
+			DP_RC(result));
 	}
 
-	D_DEBUG(DB_IO,
-		"Stop the DTX "DF_DTI" ver %u, dkey %lu: "DF_RC"\n",
-		DP_DTI(&dth->dth_xid), dth->dth_ver,
-		(unsigned long)dth->dth_dkey_hash, DP_RC(result));
-
+fini:
 	D_ASSERTF(result <= 0, "unexpected return value %d\n", result);
 
 	vos_dtx_rsrvd_fini(dth);
@@ -1606,6 +1656,7 @@ dtx_flush_on_close(struct dss_module_info *dmi, struct dtx_batched_cont_args *db
 		if (unlikely(total > stat.dtx_committable_count)) {
 			D_WARN("Some DTX in CoS cannot be committed: %lu/%lu\n",
 			       (unsigned long)total, (unsigned long)stat.dtx_committable_count);
+			dtx_free_committable(dtes, dcks, dce, cnt);
 			D_GOTO(out, rc = -DER_MISC);
 		}
 
@@ -1945,10 +1996,16 @@ dtx_handle_resend(daos_handle_t coh,  struct dtx_id *dti,
  */
 #define DTX_EXEC_STEP_LENGTH	DTX_THRESHOLD_COUNT
 
-struct dtx_ult_arg {
+struct dtx_chore {
+	struct dss_chore		 chore;
 	dtx_sub_func_t			 func;
 	void				*func_arg;
 	struct dtx_leader_handle	*dlh;
+
+	/* Chore-internal state variables */
+	uint32_t			 i;
+	uint32_t			 j;
+	uint32_t			 k;
 };
 
 static void
@@ -2003,20 +2060,34 @@ dtx_sub_comp_cb(struct dtx_leader_handle *dlh, int idx, int rc)
 		  idx, tgt->st_rank, tgt->st_tgt_idx, tgt->st_flags, rc);
 }
 
-static void
-dtx_leader_exec_ops_ult(void *arg)
+static enum dss_chore_status
+dtx_leader_exec_ops_chore(struct dss_chore *chore, bool is_reentrance)
 {
-	struct dtx_ult_arg		*ult_arg = arg;
-	struct dtx_leader_handle	*dlh = ult_arg->dlh;
+	struct dtx_chore		*dtx_chore = container_of(chore, struct dtx_chore, chore);
+	struct dtx_leader_handle	*dlh = dtx_chore->dlh;
 	struct dtx_sub_status		*sub;
 	struct daos_shard_tgt		*tgt;
-	uint32_t			 i;
-	uint32_t			 j;
-	uint32_t			 k;
 	int				 rc = 0;
 
-	for (i = dlh->dlh_forward_idx, j = 0, k = 0; j < dlh->dlh_forward_cnt; i++, j++) {
-		sub = &dlh->dlh_subs[i];
+	/*
+	 * If this is the first entrance, initialize the chore-internal state
+	 * variables.
+	 */
+	if (is_reentrance) {
+		D_DEBUG(DB_TRACE, "%p: resume: i=%u j=%u k=%u forward_cnt=%u\n", chore,
+			dtx_chore->i, dtx_chore->j, dtx_chore->k, dlh->dlh_forward_cnt);
+		dtx_chore->i++;
+		dtx_chore->j++;
+	} else {
+		D_DEBUG(DB_TRACE, "%p: initialize: forward_idx=%u forward_cnt=%u\n", chore,
+			dlh->dlh_forward_idx, dlh->dlh_forward_cnt);
+		dtx_chore->i = dlh->dlh_forward_idx;
+		dtx_chore->j = 0;
+		dtx_chore->k = 0;
+	}
+
+	for (; dtx_chore->j < dlh->dlh_forward_cnt; dtx_chore->i++, dtx_chore->j++) {
+		sub = &dlh->dlh_subs[dtx_chore->i];
 		tgt = &sub->dss_tgt;
 
 		if (dlh->dlh_normal_sub_done == 0) {
@@ -2024,7 +2095,7 @@ dtx_leader_exec_ops_ult(void *arg)
 			sub->dss_comp = 0;
 
 			if (unlikely(tgt->st_flags & DTF_DELAY_FORWARD)) {
-				dtx_sub_comp_cb(dlh, i, 0);
+				dtx_sub_comp_cb(dlh, dtx_chore->i, 0);
 				continue;
 			}
 		} else {
@@ -2036,33 +2107,35 @@ dtx_leader_exec_ops_ult(void *arg)
 		}
 
 		if (tgt->st_rank == DAOS_TGT_IGNORE ||
-		    (i == daos_fail_value_get() && DAOS_FAIL_CHECK(DAOS_DTX_SKIP_PREPARE))) {
+		    (dtx_chore->i == daos_fail_value_get() &&
+		     DAOS_FAIL_CHECK(DAOS_DTX_SKIP_PREPARE))) {
 			if (dlh->dlh_normal_sub_done == 0 || tgt->st_flags & DTF_DELAY_FORWARD)
-				dtx_sub_comp_cb(dlh, i, 0);
+				dtx_sub_comp_cb(dlh, dtx_chore->i, 0);
 			continue;
 		}
 
-		rc = ult_arg->func(dlh, ult_arg->func_arg, i, dtx_sub_comp_cb);
+		rc = dtx_chore->func(dlh, dtx_chore->func_arg, dtx_chore->i, dtx_sub_comp_cb);
 		if (rc != 0) {
 			if (sub->dss_comp == 0)
-				dtx_sub_comp_cb(dlh, i, rc);
+				dtx_sub_comp_cb(dlh, dtx_chore->i, rc);
 			break;
 		}
 
 		/* Yield to avoid holding CPU for too long time. */
-		if ((++k) % DTX_RPC_YIELD_THD == 0)
-			ABT_thread_yield();
+		if (++(dtx_chore->k) % DTX_RPC_YIELD_THD == 0)
+			return DSS_CHORE_YIELD;
 	}
 
 	if (rc != 0) {
-		for (i++, j++; j < dlh->dlh_forward_cnt; i++, j++) {
-			sub = &dlh->dlh_subs[i];
+		for (dtx_chore->i++, dtx_chore->j++; dtx_chore->j < dlh->dlh_forward_cnt;
+		     dtx_chore->i++, dtx_chore->j++) {
+			sub = &dlh->dlh_subs[dtx_chore->i];
 			tgt = &sub->dss_tgt;
 
 			if (dlh->dlh_normal_sub_done == 0 || tgt->st_flags & DTF_DELAY_FORWARD) {
 				sub->dss_result = 0;
 				sub->dss_comp = 0;
-				dtx_sub_comp_cb(dlh, i, 0);
+				dtx_sub_comp_cb(dlh, dtx_chore->i, 0);
 			}
 		}
 	}
@@ -2072,6 +2145,8 @@ dtx_leader_exec_ops_ult(void *arg)
 	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed [%u, %u), for delay %s: %d\n",
 		  dlh->dlh_forward_idx, dlh->dlh_forward_idx + dlh->dlh_forward_cnt,
 		  dlh->dlh_normal_sub_done == 1 ? "yes" : "no", rc);
+
+	return DSS_CHORE_DONE;
 }
 
 /**
@@ -2081,15 +2156,15 @@ int
 dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 		    dtx_agg_cb_t agg_cb, int allow_failure, void *func_arg)
 {
-	struct dtx_ult_arg	ult_arg;
+	struct dtx_chore	dtx_chore;
 	int			sub_cnt = dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt;
 	int			rc = 0;
 	int			local_rc = 0;
 	int			remote_rc = 0;
 
-	ult_arg.func = func;
-	ult_arg.func_arg = func_arg;
-	ult_arg.dlh = dlh;
+	dtx_chore.func = func;
+	dtx_chore.func_arg = func_arg;
+	dtx_chore.dlh = dlh;
 
 	dlh->dlh_result = 0;
 	dlh->dlh_allow_failure = allow_failure;
@@ -2124,17 +2199,10 @@ again:
 		D_GOTO(out, rc = dss_abterr2der(rc));
 	}
 
-	/*
-	 * NOTE: Ideally, we probably should create ULT for each shard, but for performance
-	 *	 reasons, let's only create one for all remote targets for now. Moreover,
-	 *	 we assume that func does not require deep stacks to forward the remote
-	 *	 requests (dtx_leader_exec_ops_ult does not execute the local part of func).
-	 */
-	rc = dss_ult_create(dtx_leader_exec_ops_ult, &ult_arg, DSS_XS_IOFW,
-			    dss_get_module_info()->dmi_tgt_id, 0, NULL);
+	rc = dss_chore_delegate(&dtx_chore.chore, dtx_leader_exec_ops_chore);
 	if (rc != 0) {
-		D_ERROR("ult create failed [%u, %u] (2): "DF_RC"\n",
-			dlh->dlh_forward_idx, dlh->dlh_forward_cnt, DP_RC(rc));
+		DL_ERROR(rc, "chore create failed [%u, %u] (2)", dlh->dlh_forward_idx,
+			 dlh->dlh_forward_cnt);
 		ABT_future_free(&dlh->dlh_future);
 		goto out;
 	}
@@ -2210,11 +2278,9 @@ exec:
 	/* The ones without DELAY flag will be skipped when scan the targets array. */
 	dlh->dlh_forward_cnt = dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt;
 
-	/* See also the dss_ult_create above. */
-	rc = dss_ult_create(dtx_leader_exec_ops_ult, &ult_arg, DSS_XS_IOFW,
-			    dss_get_module_info()->dmi_tgt_id, 0, NULL);
+	rc = dss_chore_delegate(&dtx_chore.chore, dtx_leader_exec_ops_chore);
 	if (rc != 0) {
-		D_ERROR("ult create failed (4): "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "chore create failed (4)");
 		ABT_future_free(&dlh->dlh_future);
 		goto out;
 	}

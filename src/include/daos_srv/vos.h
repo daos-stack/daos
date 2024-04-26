@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -226,6 +226,32 @@ int
 vos_dtx_cache_reset(daos_handle_t coh, bool force);
 
 /**
+ * Initialize local transaction.
+ *
+ * Note: This entry point is not meant to be used directly. Please use dtx_begin instead.
+ *
+ * \param dth	[IN]	Local DTX handle.
+ * \param poh	[IN]	Pool handle.
+ *
+ * \return	Zero on success, negative value if error.
+ */
+int
+vos_dtx_local_begin(struct dtx_handle *dth, daos_handle_t poh);
+
+/**
+ * Finalize local transaction if no error happened in the meantime.
+ *
+ * Note: This entry point is not meant to be used directly. Please use dtx_end instead.
+ *
+ * \param dth		[IN]	Local DTX handle.
+ * \param result	[IN]	The current result of the transaction.
+ *
+ * \return	Zero on success, negative value if error.
+ */
+int
+vos_dtx_local_end(struct dtx_handle *dth, int result);
+
+/**
  * Initialize the environment for a VOS instance
  * Must be called once before starting a VOS instance
  *
@@ -237,6 +263,9 @@ vos_dtx_cache_reset(daos_handle_t coh, bool force);
  */
 int
 vos_self_init(const char *db_path, bool use_sys_db, int tgt_id);
+
+int
+vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool nvme_init);
 
 /**
  * Finalize the environment for a VOS instance
@@ -264,14 +293,15 @@ vos_self_fini(void);
  * \param blob_sz[IN]	Size of blob for the pool
  * \param wal_sz [IN]	Size of WAL blob for the pool
  * \param flags [IN]	Pool open flags (see vos_pool_open_flags)
+ * \param version[IN]	Pool version (0 for default version)
  * \param poh	[OUT]	Returned pool handle if not NULL
  *
  * \return              Zero on success, negative value if error
  */
 int
-vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz,
-		   daos_size_t blob_sz, daos_size_t wal_sz,
-		   unsigned int flags, daos_handle_t *poh);
+vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t blob_sz,
+		   daos_size_t wal_sz, unsigned int flags, uint32_t version, daos_handle_t *poh);
+
 /**
  * Create a Versioning Object Storage Pool (VOSP), and open it if \a poh is not
  * NULL
@@ -281,13 +311,14 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz,
  * \param scm_sz [IN]	Size of SCM for the pool
  * \param blob_sz[IN]	Size of blob for the pool
  * \param flags [IN]	Pool open flags (see vos_pool_open_flags)
+ * \param version[IN]	Pool version (0 for default version)
  * \param poh	[OUT]	Returned pool handle if not NULL
  *
  * \return              Zero on success, negative value if error
  */
 int
-vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
-		daos_size_t blob_sz, unsigned int flags, daos_handle_t *poh);
+vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t blob_sz,
+		unsigned int flags, uint32_t version, daos_handle_t *poh);
 
 /**
  * Kill a VOS pool before destroy

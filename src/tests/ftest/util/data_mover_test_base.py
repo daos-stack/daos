@@ -17,9 +17,8 @@ from exception_utils import CommandFailure
 from general_utils import create_string_buffer, get_log_file
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
-from pydaos.raw import DaosContainer, DaosObj, IORequest, str_to_c_uuid
+from pydaos.raw import DaosObj, IORequest
 from run_utils import run_remote
-from test_utils_container import TestContainer
 
 
 class DataMoverTestBase(IorTestBase, MdtestBase):
@@ -355,35 +354,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.pool.append(pool)
 
         return pool
-
-    def get_cont(self, pool, cont):
-        """Get an existing container.
-
-        Args:
-            pool (TestPool): pool to open the container in.
-            cont (str): container uuid or label.
-
-        Returns:
-            TestContainer: the container object
-
-        """
-        # Query the container for existence and to get the uuid from a label
-        query_response = self.daos_cmd.container_query(pool=pool.uuid, cont=cont)['response']
-        cont_uuid = query_response['container_uuid']
-
-        cont_label = query_response.get('container_label')
-
-        # Create a TestContainer and DaosContainer instance
-        container = TestContainer(pool, daos_command=self.daos_cmd)
-        container.container = DaosContainer(pool.context)
-        container.container.uuid = str_to_c_uuid(cont_uuid)
-        container.container.poh = pool.pool.handle
-        container.uuid = container.container.get_uuid_str()
-        container.update_params(label=cont_label, type=query_response['container_type'])
-        container.control_method.update(
-            self.params.get('control_method', container.namespace, container.control_method.value))
-
-        return container
 
     def parse_create_cont_label(self, output):
         """Parse a uuid or label from create container output.
@@ -987,7 +957,11 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 result = self.dserialize_cmd.run(processes1, self.job_manager, ppn1, env)
                 result = self.ddeserialize_cmd.run(processes2, self.job_manager, ppn2, env)
             elif self.tool == "FS_COPY":
-                result = self.fs_copy_cmd.run()
+                if expected_rc != 0:
+                    with self.daos_cmd.no_exception():
+                        result = self.fs_copy_cmd.run()
+                else:
+                    result = self.fs_copy_cmd.run()
             elif self.tool == "CONT_CLONE":
                 result = self.cont_clone_cmd.run()
             else:

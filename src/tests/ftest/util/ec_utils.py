@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -111,7 +111,7 @@ class ErasureCodeIor(ServerFillUp):
         """Create the container for EC object."""
         # Get container params
         self.ec_container = self.get_container(
-            self.pool, create=False, daos_command=self.get_daos_command(), oclass=oclass)
+            self.pool, create=False, daos=self.get_daos_command(), oclass=oclass)
 
         # update object class for container create, if supplied explicitly.
         ec_object = get_data_parity_number(self.log, oclass)
@@ -280,6 +280,10 @@ class ErasureCodeSingle(TestWithServers):
             oclass (str): object class for creating the container.
         """
         self.container.append(self.get_container(self.pool, create=False, oclass=oclass))
+        if self.container[-1].control_method.value == \
+                self.container[-1].USE_DAOS and self.container[-1].oclass.value:
+            self.container[-1].oclass.update(self.container[-1].oclass.value.replace("OC_", ""),
+                                             "container.oclass")
 
         # Get the Parity count for setting the container RF property.
         ec_object = get_data_parity_number(self.log, oclass)

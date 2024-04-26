@@ -25,6 +25,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/hashicorp/raft"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
@@ -34,6 +35,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 	. "github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/checker"
 )
 
 func waitForLeadership(ctx context.Context, t *testing.T, db *Database, gained bool) {
@@ -60,7 +62,7 @@ func TestSystem_Database_filterMembers(t *testing.T) {
 	memberStates := []MemberState{
 		MemberStateUnknown, MemberStateAwaitFormat, MemberStateStarting,
 		MemberStateReady, MemberStateJoined, MemberStateStopping, MemberStateStopped,
-		MemberStateExcluded, MemberStateErrored, MemberStateUnresponsive,
+		MemberStateExcluded, MemberStateErrored, MemberStateUnresponsive, MemberStateAdminExcluded,
 	}
 
 	for i, ms := range memberStates {
@@ -102,6 +104,13 @@ func TestSystem_Database_filterMembers(t *testing.T) {
 				if matches[i].State != ms {
 					t.Fatalf("filtered member %d doesn't match requested state (%s != %s)", i, matches[i].State, ms)
 				}
+			}
+		},
+		"nonexcluded filter": func(t *testing.T) {
+			matches := db.filterMembers(NonExcludedMemberFilter)
+			matchLen := len(matches)
+			if matchLen != len(memberStates)-4 {
+				t.Fatalf("expected %d members to match; got %d", len(memberStates)-4, matchLen)
 			}
 		},
 	} {
@@ -226,6 +235,7 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 	maxRanks := 2048
 	maxPools := 1024
 	maxAttrs := 4096
+	maxFindings := 512
 
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
@@ -280,6 +290,18 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 		(*fsm)(db0).Apply(rl)
 	}
 
+	for i := 0; i < maxFindings; i++ {
+		f := checker.MockFinding(i)
+		data, err := createRaftUpdate(raftOpAddCheckerFinding, f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rl := &raft.Log{
+			Data: data,
+		}
+		(*fsm)(db0).Apply(rl)
+	}
+
 	attrs := make(map[string]string)
 	for i := 0; i < maxAttrs; i++ {
 		attrs[fmt.Sprintf("prop%04d", i)] = fmt.Sprintf("value%04d", i)
@@ -313,6 +335,7 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 		cmpopts.IgnoreUnexported(dbData{}, Member{}, PoolServiceStorage{}),
 		cmpopts.IgnoreFields(dbData{}, "RWMutex"),
 		cmpopts.IgnoreFields(PoolServiceStorage{}, "Mutex"),
+		protocmp.Transform(),
 	}
 	if diff := cmp.Diff(db0.data, db1.data, cmpOpts...); diff != "" {
 		t.Fatalf("db differs after restore (-want, +got):\n%s\n", diff)
@@ -915,14 +938,38 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 			expGroupMap: &GroupMap{
 				Version: 11,
 				RankEntries: map[Rank]RankEntry{
-					0:  {URI: MockControlAddr(t, 0).String()},
-					2:  {URI: MockControlAddr(t, 2).String()},
-					3:  {URI: MockControlAddr(t, 3).String()},
-					4:  {URI: MockControlAddr(t, 4).String()},
-					5:  {URI: MockControlAddr(t, 5).String()},
-					6:  {URI: MockControlAddr(t, 6).String()},
-					9:  {URI: MockControlAddr(t, 9).String()},
-					10: {URI: MockControlAddr(t, 10).String()},
+					0: {
+						PrimaryURI:     MockControlAddr(t, 0).String(),
+						NumPrimaryCtxs: 0,
+					},
+					2: {
+						PrimaryURI:     MockControlAddr(t, 2).String(),
+						NumPrimaryCtxs: 2,
+					},
+					3: {
+						PrimaryURI:     MockControlAddr(t, 3).String(),
+						NumPrimaryCtxs: 3,
+					},
+					4: {
+						PrimaryURI:     MockControlAddr(t, 4).String(),
+						NumPrimaryCtxs: 4,
+					},
+					5: {
+						PrimaryURI:     MockControlAddr(t, 5).String(),
+						NumPrimaryCtxs: 5,
+					},
+					6: {
+						PrimaryURI:     MockControlAddr(t, 6).String(),
+						NumPrimaryCtxs: 6,
+					},
+					9: {
+						PrimaryURI:     MockControlAddr(t, 9).String(),
+						NumPrimaryCtxs: 9,
+					},
+					10: {
+						PrimaryURI:     MockControlAddr(t, 10).String(),
+						NumPrimaryCtxs: 10,
+					},
 				},
 			},
 		},
@@ -931,8 +978,14 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 			expGroupMap: &GroupMap{
 				Version: 2,
 				RankEntries: map[Rank]RankEntry{
-					0: {URI: MockControlAddr(t, 0).String()},
-					1: {URI: MockControlAddr(t, 1).String()},
+					0: {
+						PrimaryURI:     MockControlAddr(t, 0).String(),
+						NumPrimaryCtxs: 0,
+					},
+					1: {
+						PrimaryURI:     MockControlAddr(t, 1).String(),
+						NumPrimaryCtxs: 1,
+					},
 				},
 				MSRanks: []Rank{1},
 			},
@@ -944,7 +997,43 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 			expGroupMap: &GroupMap{
 				Version: 2,
 				RankEntries: map[Rank]RankEntry{
-					0: {URI: MockControlAddr(t, 0).String()},
+					0: {
+						PrimaryURI:     MockControlAddr(t, 0).String(),
+						NumPrimaryCtxs: 0,
+					},
+				},
+			},
+		},
+		"secondary URIs": {
+			members: []*Member{
+				{
+					Rank:                  2,
+					UUID:                  uuid.MustParse(test.MockUUID(2)),
+					PrimaryFabricURI:      MockControlAddr(t, 2).String(),
+					PrimaryFabricContexts: 8,
+					SecondaryFabricURIs: []string{
+						MockControlAddr(t, 3).String(),
+						MockControlAddr(t, 4).String(),
+					},
+					SecondaryFabricContexts: []uint32{4, 6},
+					Addr:                    MockControlAddr(t, 2),
+					State:                   MemberStateJoined,
+					FaultDomain:             MustCreateFaultDomain(),
+					LastUpdate:              time.Now(),
+				},
+			},
+			expGroupMap: &GroupMap{
+				Version: 1,
+				RankEntries: map[Rank]RankEntry{
+					2: {
+						PrimaryURI:     MockControlAddr(t, 2).String(),
+						NumPrimaryCtxs: 8,
+						SecondaryURIs: []string{
+							MockControlAddr(t, 3).String(),
+							MockControlAddr(t, 4).String(),
+						},
+						NumSecondaryCtxs: []uint32{4, 6},
+					},
 				},
 			},
 		},

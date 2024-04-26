@@ -279,7 +279,6 @@ vos_meta_flush_post(daos_handle_t fh, int err)
 {
 	struct bio_desc	*biod = (struct bio_desc *)fh.cookie;
 
-	D_ASSERT(err == 0);
 	err = bio_iod_post(biod, err);
 	bio_iod_free(biod);
 	if (err) {
@@ -291,17 +290,72 @@ vos_meta_flush_post(daos_handle_t fh, int err)
 			if (err != 0)
 				D_ERROR("Failed to raise SIGKILL: %d\n", errno);
 		}
-		err = 0;
 	}
 
 	return err;
 }
 
+#define VOS_WAL_DIR	"vos_wal"
+
+void
+vos_wal_metrics_init(struct vos_wal_metrics *vw_metrics, const char *path, int tgt_id)
+{
+	int	rc;
+
+	/* Initialize metrics for WAL stats */
+	rc = d_tm_add_metric(&vw_metrics->vwm_wal_sz, D_TM_STATS_GAUGE, "WAL tx size",
+			     "bytes", "%s/%s/wal_sz/tgt_%d", path, VOS_WAL_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create WAL size telemetry: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&vw_metrics->vwm_wal_qd, D_TM_STATS_GAUGE, "WAL tx QD",
+			     "commits", "%s/%s/wal_qd/tgt_%d", path, VOS_WAL_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create WAL QD telemetry: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&vw_metrics->vwm_wal_waiters, D_TM_STATS_GAUGE, "WAL waiters",
+			     "transactions", "%s/%s/wal_waiters/tgt_%d", path, VOS_WAL_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create WAL waiters telemetry: "DF_RC"\n", DP_RC(rc));
+
+	/* Initialize metrics for WAL replay */
+	rc = d_tm_add_metric(&vw_metrics->vwm_replay_count, D_TM_COUNTER, "Number of WAL replays",
+			     NULL, "%s/%s/replay_count/tgt_%u", path, VOS_WAL_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'replay_count' telemetry: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&vw_metrics->vwm_replay_size, D_TM_GAUGE, "WAL replay size", "bytes",
+			     "%s/%s/replay_size/tgt_%u", path, VOS_WAL_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'replay_size' telemetry: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&vw_metrics->vwm_replay_time, D_TM_GAUGE, "WAL replay time", "us",
+			     "%s/%s/replay_time/tgt_%u", path, VOS_WAL_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'replay_time' telemetry: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&vw_metrics->vwm_replay_tx, D_TM_COUNTER,
+			     "Number of replayed transactions", NULL,
+			     "%s/%s/replay_transactions/tgt_%u", path, VOS_WAL_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'replay_transactions' telemetry: "DF_RC"\n", DP_RC(rc));
+
+
+	rc = d_tm_add_metric(&vw_metrics->vwm_replay_ent, D_TM_COUNTER,
+			     "Number of replayed log entries", NULL,
+			     "%s/%s/replay_entries/tgt_%u", path, VOS_WAL_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'replay_entries' telemetry: "DF_RC"\n", DP_RC(rc));
+}
+
 static inline int
 vos_wal_reserve(struct umem_store *store, uint64_t *tx_id)
 {
-	struct bio_wal_info wal_info;
-	struct vos_pool    *pool;
+	struct bio_wal_info	wal_info;
+	struct vos_pool		*pool;
+	struct bio_wal_stats	ws = { 0 };
+	struct vos_wal_metrics	*vwm;
+	int			rc;
 
 	pool = store->vos_priv;
 
@@ -318,18 +372,26 @@ vos_wal_reserve(struct umem_store *store, uint64_t *tx_id)
 
 reserve:
 	D_ASSERT(store && store->stor_priv != NULL);
-	return bio_wal_reserve(store->stor_priv, tx_id);
+	vwm = (struct vos_wal_metrics *)store->stor_stats;
+	rc = bio_wal_reserve(store->stor_priv, tx_id, (vwm != NULL) ? &ws : NULL);
+	if (rc == 0 && vwm != NULL)
+		d_tm_set_gauge(vwm->vwm_wal_waiters, ws.ws_waiters);
+
+	return rc;
 }
 
 static inline int
 vos_wal_commit(struct umem_store *store, struct umem_wal_tx *wal_tx, void *data_iod)
 {
-	struct bio_wal_info wal_info;
-	struct vos_pool    *pool;
-	int                 rc;
+	struct bio_wal_info	wal_info;
+	struct vos_pool		*pool;
+	struct bio_wal_stats	ws = { 0 };
+	struct vos_wal_metrics	*vwm;
+	int			rc;
 
 	D_ASSERT(store && store->stor_priv != NULL);
-	rc = bio_wal_commit(store->stor_priv, wal_tx, data_iod);
+	vwm = (struct vos_wal_metrics *)store->stor_stats;
+	rc = bio_wal_commit(store->stor_priv, wal_tx, data_iod, (vwm != NULL) ? &ws : NULL);
 	if (rc) {
 		DL_ERROR(rc, "WAL commit failed.");
 		/*
@@ -349,12 +411,15 @@ vos_wal_commit(struct umem_store *store, struct umem_wal_tx *wal_tx, void *data_
 			if (rc != 0)
 				D_ERROR("Failed to raise SIGKILL: %d\n", errno);
 		}
-		rc = 0;
+		store->store_faulty = true;
+	} else if (vwm != NULL) {
+		d_tm_set_gauge(vwm->vwm_wal_sz, ws.ws_size);
+		d_tm_set_gauge(vwm->vwm_wal_qd, ws.ws_qd);
 	}
 
 	pool = store->vos_priv;
 	if (unlikely(pool == NULL))
-		return rc; /** In case there is any race for checkpoint init. */
+		return 0; /** In case there is any race for checkpoint init. */
 
 	/** Update checkpoint state after commit in case there is an active checkpoint waiting
 	 *  for this commit to finish.
@@ -364,7 +429,7 @@ vos_wal_commit(struct umem_store *store, struct umem_wal_tx *wal_tx, void *data_
 	pool->vp_update_cb(pool->vp_chkpt_arg, wal_info.wi_commit_id, wal_info.wi_used_blks,
 			   wal_info.wi_tot_blks);
 
-	return rc;
+	return 0;
 }
 
 static inline int
@@ -382,13 +447,13 @@ vos_wal_replay(struct umem_store *store,
 
 	/* VOS file rehydration metrics */
 	if (store->stor_stats != NULL && rc >= 0) {
-		struct vos_rh_metrics *vrm = (struct vos_rh_metrics *)store->stor_stats;
+		struct vos_wal_metrics *vwm = (struct vos_wal_metrics *)store->stor_stats;
 
-		d_tm_set_gauge(vrm->vrh_size, wrs.wrs_sz);
-		d_tm_set_gauge(vrm->vrh_time, wrs.wrs_tm);
-		d_tm_inc_counter(vrm->vrh_entries, wrs.wrs_entries);
-		d_tm_inc_counter(vrm->vrh_tx_cnt, wrs.wrs_tx_cnt);
-		d_tm_inc_counter(vrm->vrh_count, 1);
+		d_tm_inc_counter(vwm->vwm_replay_count, 1);
+		d_tm_set_gauge(vwm->vwm_replay_size, wrs.wrs_sz);
+		d_tm_set_gauge(vwm->vwm_replay_time, wrs.wrs_tm);
+		d_tm_inc_counter(vwm->vwm_replay_tx, wrs.wrs_tx_cnt);
+		d_tm_inc_counter(vwm->vwm_replay_ent, wrs.wrs_entries);
 	}
 	return rc;
 }
@@ -716,7 +781,7 @@ vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned 
 	if (metrics != NULL) {
 		struct vos_pool_metrics	*vpm = (struct vos_pool_metrics *)metrics;
 
-		store.stor_stats = &vpm->vp_rh_metrics;
+		store.stor_stats = &vpm->vp_wal_metrics;
 	}
 
 umem_open:
@@ -939,15 +1004,15 @@ static int pool_open(void *ph, struct vos_pool_df *pool_df,
 		     unsigned int flags, void *metrics, daos_handle_t *poh);
 
 int
-vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz,
-		   daos_size_t nvme_sz, daos_size_t wal_sz,
-		   unsigned int flags, daos_handle_t *poh)
+vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t nvme_sz,
+		   daos_size_t wal_sz, unsigned int flags, uint32_t version, daos_handle_t *poh)
 {
 	struct umem_pool	*ph;
 	struct umem_attr	 uma = {0};
 	struct umem_instance	 umem = {0};
 	struct vos_pool_df	*pool_df;
 	struct bio_blob_hdr	 blob_hdr;
+	uint32_t		 vea_compat = 0;
 	daos_handle_t		 hdl;
 	struct d_uuid		 ukey;
 	struct vos_pool		*pool = NULL;
@@ -956,8 +1021,15 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	if (!path || uuid_is_null(uuid) || daos_file_is_dax(path))
 		return -DER_INVAL;
 
-	D_DEBUG(DB_MGMT, "Pool Path: %s, size: "DF_U64":"DF_U64", "
-		"UUID: "DF_UUID"\n", path, scm_sz, nvme_sz, DP_UUID(uuid));
+	if (version == 0)
+		version = POOL_DF_VERSION;
+	else if (version < POOL_DF_VER_1 || version > POOL_DF_VERSION)
+		return -DER_INVAL;
+
+	D_DEBUG(DB_MGMT,
+		"Pool Path: %s, size: " DF_U64 ":" DF_U64 ", "
+		"UUID: " DF_UUID ", version: %u\n",
+		path, scm_sz, nvme_sz, DP_UUID(uuid), version);
 
 	if (flags & VOS_POF_SMALL)
 		flags |= VOS_POF_EXCL;
@@ -1029,7 +1101,7 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	if (DAOS_FAIL_CHECK(FLC_POOL_DF_VER))
 		pool_df->pd_version = 0;
 	else
-		pool_df->pd_version = POOL_DF_VERSION;
+		pool_df->pd_version = version;
 
 	gc_init_pool(&umem, pool_df);
 end:
@@ -1057,10 +1129,15 @@ end:
 	blob_hdr.bbh_hdr_sz = VOS_BLOB_HDR_BLKS;
 	uuid_copy(blob_hdr.bbh_pool, uuid);
 
+	/* Determine VEA compatibility bits */
+	/* TODO: only enable bitmap for large pool size */
+	if (version >= VOS_POOL_DF_2_6)
+		vea_compat |= VEA_COMPAT_FEATURE_BITMAP;
+
 	/* Format SPDK blob*/
 	rc = vea_format(&umem, vos_txd_get(flags & VOS_POF_SYSDB), &pool_df->pd_vea_df,
 			VOS_BLK_SZ, VOS_BLOB_HDR_BLKS, nvme_sz, vos_blob_format_cb,
-			&blob_hdr, false);
+			&blob_hdr, false, vea_compat);
 	if (rc) {
 		D_ERROR("Format blob error for pool:"DF_UUID". "DF_RC"\n",
 			DP_UUID(uuid), DP_RC(rc));
@@ -1086,11 +1163,11 @@ close:
 }
 
 int
-vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
-		daos_size_t nvme_sz, unsigned int flags, daos_handle_t *poh)
+vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t nvme_sz,
+		unsigned int flags, uint32_t version, daos_handle_t *poh)
 {
 	/* create vos pool with default WAL size */
-	return vos_pool_create_ex(path, uuid, scm_sz, nvme_sz, 0, flags, poh);
+	return vos_pool_create_ex(path, uuid, scm_sz, nvme_sz, 0, flags, version, poh);
 }
 
 /**
@@ -1382,7 +1459,8 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 				vos_pool_decref(pool);
 				return -DER_BUSY;
 			}
-			if ((flags & VOS_POF_EXCL) || pool->vp_excl) {
+			if (!(flags & VOS_POF_FOR_CHECK_QUERY) &&
+			    ((flags & VOS_POF_EXCL) || pool->vp_excl)) {
 				vos_pool_decref(pool);
 				return -DER_BUSY;
 			}
@@ -1460,11 +1538,14 @@ vos_pool_upgrade(daos_handle_t poh, uint32_t version)
 
 	pool_df = pool->vp_pool_df;
 
-	if (version == pool_df->pd_version)
+	if (version <= pool_df->pd_version) {
+		D_INFO(DF_UUID ": Ignore pool durable format upgrade from version %u to %u\n",
+		       DP_UUID(pool->vp_id), pool_df->pd_version, version);
 		return 0;
+	}
 
-	D_DEBUG(DB_MGMT, "Attempting upgrade pool durable format from %d to %d\n",
-		pool_df->pd_version, version);
+	D_INFO(DF_UUID ": Attempting pool durable format upgrade from %d to %d\n",
+	       DP_UUID(pool->vp_id), pool_df->pd_version, version);
 	D_ASSERTF(version > pool_df->pd_version && version <= POOL_DF_VERSION,
 		  "Invalid pool upgrade version %d, current version is %d\n", version,
 		  pool_df->pd_version);
@@ -1550,6 +1631,13 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo)
 	D_ASSERT(pinfo != NULL);
 	pinfo->pif_cont_nr = pool_df->pd_cont_nr;
 	pinfo->pif_gc_stat = pool->vp_gc_stat_global;
+
+	/*
+	 * NOTE: The chk_pool_info::cpi_statistics contains the inconsistency statistics during
+	 *	 phase range [CSP_DTX_RESYNC, CSP_AGGREGATION] for the pool shard on the target.
+	 *	 Related information will be filled in subsequent CR project milestone.
+	 */
+	memset(&pinfo->pif_chk, 0, sizeof(pinfo->pif_chk));
 
 	rc = vos_space_query(pool, &pinfo->pif_space, true);
 	if (rc)

@@ -22,12 +22,11 @@
 #include <daos/btree_class.h>
 #include <daos/common.h>
 #include <daos/placement.h>
+#include <daos/tls.h>
 #include "srv_internal.h"
 #include "drpc_internal.h"
 #include <gurt/telemetry_common.h>
 #include <gurt/telemetry_producer.h>
-
-#include <daos.h> /* for daos_init() */
 
 #define MAX_MODULE_OPTIONS	64
 #if BUILD_PIPELINE
@@ -35,6 +34,7 @@
 #else
 #define MODULE_LIST	"vos,rdb,rsvc,security,mgmt,dtx,pool,cont,obj,rebuild"
 #endif
+#define MODS_LIST_CHK	"vos,rdb,rsvc,security,mgmt,dtx,pool,cont,obj,rebuild,chk"
 
 /** List of modules to load */
 static char		modules[MAX_MODULE_OPTIONS + 1];
@@ -45,7 +45,7 @@ static char		modules[MAX_MODULE_OPTIONS + 1];
 static unsigned int	nr_threads;
 
 /** DAOS system name (corresponds to crt group ID) */
-static char	       *daos_sysname = DAOS_DEFAULT_SYS_NAME;
+char                    daos_sysname[DAOS_SYS_NAME_MAX + 1] = DAOS_DEFAULT_SYS_NAME;
 
 /** Storage node hostname */
 char		        dss_hostname[DSS_HOSTNAME_MAX_LEN];
@@ -91,8 +91,17 @@ unsigned int		dss_storage_tiers = 2;
 /** Flag to indicate Arbogots is initialized */
 static bool dss_abt_init;
 
+/** Start daos_engine under check mode. */
+static bool dss_check_mode;
+
 /* stream used to dump ABT infos and ULTs stacks */
 static FILE *abt_infos;
+
+bool
+engine_in_check(void)
+{
+	return dss_check_mode;
+}
 
 d_rank_t
 dss_self_rank(void)
@@ -619,14 +628,14 @@ server_id_cb(uint32_t *tid, uint64_t *uid)
 	}
 
 	if (tid != NULL) {
-		struct dss_thread_local_storage *dtc;
-		struct dss_module_info *dmi;
+		struct daos_thread_local_storage *dtc;
+		struct daos_module_info          *dmi;
 		int index = daos_srv_modkey.dmk_index;
 
-		/* Avoid assertion in dss_module_key_get() */
+		/* Avoid assertion in daos_module_key_get() */
 		dtc = dss_tls_get();
 		if (dtc != NULL && index >= 0 && index < DAOS_MODULE_KEYS_NR &&
-		    dss_module_keys[index] == &daos_srv_modkey) {
+		    daos_get_module_key(index) == &daos_srv_modkey) {
 			dmi = dss_get_module_info();
 			if (dmi != NULL)
 				*tid = dmi->dmi_xs_id;
@@ -711,28 +720,20 @@ server_init(int argc, char *argv[])
 		D_GOTO(exit_mod_init, rc);
 	D_INFO("Network successfully initialized\n");
 
-	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
-		rc = daos_init();
-		if (rc) {
-			D_ERROR("daos_init (client) failed, rc: "DF_RC"\n",
-				DP_RC(rc));
-			D_GOTO(exit_crt, rc);
-		}
-		D_INFO("Client stack enabled\n");
-	} else {
-		rc = daos_hhash_init();
-		if (rc) {
-			D_ERROR("daos_hhash_init failed, rc: "DF_RC"\n",
-				DP_RC(rc));
-			D_GOTO(exit_crt, rc);
-		}
-		rc = pl_init();
-		if (rc != 0) {
-			daos_hhash_fini();
-			goto exit_crt;
-		}
-		D_INFO("handle hash table and placement initialized\n");
+	rc = daos_hhash_init();
+	if (rc != 0) {
+		D_ERROR("daos_hhash_init failed, rc: "DF_RC"\n",
+			DP_RC(rc));
+		D_GOTO(exit_crt, rc);
 	}
+
+	rc = pl_init();
+	if (rc != 0) {
+		daos_hhash_fini();
+		goto exit_crt;
+	}
+	D_INFO("handle hash table and placement initialized\n");
+
 	/* server-side uses D_HTYPE_PTR handle */
 	d_hhash_set_ptrtype(daos_ht.dht_hhash);
 
@@ -781,7 +782,7 @@ server_init(int argc, char *argv[])
 		goto exit_srv_init;
 	}
 
-	rc = drpc_notify_ready();
+	rc = drpc_notify_ready(dss_check_mode);
 	if (rc != 0) {
 		D_ERROR("Failed to notify daos_server: "DF_RC"\n", DP_RC(rc));
 		goto exit_init_state;
@@ -789,9 +790,11 @@ server_init(int argc, char *argv[])
 
 	server_init_state_wait(DSS_INIT_STATE_SET_UP);
 
-	rc = crt_register_event_cb(dss_crt_event_cb, NULL);
-	if (rc)
-		D_GOTO(exit_init_state, rc);
+	if (!dss_check_mode) {
+		rc = crt_register_event_cb(dss_crt_event_cb, NULL);
+		if (rc != 0)
+			D_GOTO(exit_init_state, rc);
+	}
 
 	rc = crt_register_hlc_error_cb(dss_crt_hlc_error_cb, NULL);
 	if (rc)
@@ -825,12 +828,8 @@ exit_nvme_init:
 exit_mod_loaded:
 	ds_iv_fini();
 	dss_module_unload_all();
-	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
-		daos_fini();
-	} else {
-		pl_fini();
-		daos_hhash_fini();
-	}
+	pl_fini();
+	daos_hhash_fini();
 exit_crt:
 	crt_finalize();
 exit_mod_init:
@@ -858,7 +857,8 @@ server_fini(bool force)
 	 * xstreams won't start shutting down until we call dss_srv_fini below.
 	 */
 	dss_srv_set_shutting_down();
-	crt_unregister_event_cb(dss_crt_event_cb, NULL);
+	if (!dss_check_mode)
+		crt_unregister_event_cb(dss_crt_event_cb, NULL);
 	D_INFO("unregister event callbacks done\n");
 	/*
 	 * Cleaning up modules needs to create ULTs on other xstreams; must be
@@ -884,12 +884,8 @@ server_fini(bool force)
 	 * Client stuff finalization needs be done after all ULTs drained
 	 * in dss_srv_fini().
 	 */
-	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
-		daos_fini();
-	} else {
-		pl_fini();
-		daos_hhash_fini();
-	}
+	pl_fini();
+	daos_hhash_fini();
 	D_INFO("daos_fini() or pl_fini() done\n");
 	crt_finalize();
 	D_INFO("crt_finalize() done\n");
@@ -945,6 +941,8 @@ Options:\n\
       Passes the configured hugepage size(2MB or 1GB)\n\
   --storage_tiers=ntiers, -T ntiers\n\
       Number of storage tiers\n\
+  --check, -C\n\
+      Start engine with check mode, global consistency check\n\
   --help, -h\n\
       Print this description\n",
 		prog, prog, modules, daos_sysname, dss_storage_path,
@@ -984,22 +982,32 @@ parse(int argc, char **argv)
 		{ "instance_idx",	required_argument,	NULL,	'I' },
 		{ "bypass_health_chk",	no_argument,		NULL,	'b' },
 		{ "storage_tiers",	required_argument,	NULL,	'T' },
+		{ "check",		no_argument,		NULL,	'C' },
 		{ NULL,			0,			NULL,	0}
 	};
 	int	rc = 0;
 	int	c;
+	bool	spec_mod = false;
+
+	dss_check_mode = false;
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:H:t:s:x:I:bT:",
+	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:H:t:s:x:I:bT:C",
 				opts, NULL)) != -1) {
 		switch (c) {
 		case 'm':
+			if (dss_check_mode) {
+				printf("'-c|--modules' option is ignored under check mode\n");
+				break;
+			}
+
 			if (strlen(optarg) > MAX_MODULE_OPTIONS) {
 				rc = -DER_INVAL;
 				usage(argv[0], stderr);
 				break;
 			}
+			spec_mod = true;
 			snprintf(modules, sizeof(modules), "%s", optarg);
 			break;
 		case 'c':
@@ -1015,16 +1023,19 @@ parse(int argc, char **argv)
 		case 'f':
 			rc = arg_strtoul(optarg, &dss_core_offset, "\"-f\"");
 			break;
-		case 'g':
-			if (strnlen(optarg, DAOS_SYS_NAME_MAX + 1) >
-			    DAOS_SYS_NAME_MAX) {
-				printf("DAOS system name must be at most "
-				       "%d bytes\n", DAOS_SYS_NAME_MAX);
+		case 'g': {
+			size_t sys_len = strnlen(optarg, DAOS_SYS_NAME_MAX + 1);
+
+			if (sys_len > DAOS_SYS_NAME_MAX) {
+				printf("DAOS system name must be at most %d bytes\n",
+				       DAOS_SYS_NAME_MAX);
 				rc = -DER_INVAL;
 				break;
 			}
-			daos_sysname = optarg;
+			memcpy(daos_sysname, optarg, sys_len);
+			daos_sysname[sys_len] = '\0';
 			break;
+		}
 		case 's':
 			dss_storage_path = optarg;
 			break;
@@ -1059,6 +1070,14 @@ parse(int argc, char **argv)
 				printf("Requires 1 to 4 tiers\n");
 				rc = -DER_INVAL;
 			}
+			break;
+		case 'C':
+			dss_check_mode = true;
+			if (spec_mod) {
+				printf("'-c|--modules' option is ignored under check mode\n");
+				spec_mod = false;
+			}
+			snprintf(modules, sizeof(modules), "%s", MODS_LIST_CHK);
 			break;
 		default:
 			usage(argv[0], stderr);

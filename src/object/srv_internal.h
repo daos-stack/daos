@@ -40,8 +40,11 @@ struct migrate_pool_tls {
 	 * should provide the pool/handle uuid
 	 */
 	uuid_t			mpt_poh_uuid;
-	uuid_t			mpt_coh_uuid;
 	daos_handle_t		mpt_pool_hdl;
+
+	/* container handle list for the migrate pool */
+	uuid_t			mpt_coh_uuid;
+	d_list_t		mpt_cont_hdl_list;
 
 	/* Container/objects to be migrated will be attached to the tree */
 	daos_handle_t		mpt_root_hdl;
@@ -66,17 +69,15 @@ struct migrate_pool_tls {
 	/* Max epoch for the migration, used for migrate fetch RPC */
 	uint64_t		mpt_max_eph;
 
-	/* The ULT number generated on the xstream */
-	uint64_t		mpt_generated_ult;
+	/* The ULT number on each target xstream, which actually refer
+	 * back to the item within mpt_obj/dkey_ult_cnts array.
+	 */
+	ATOMIC uint32_t		*mpt_tgt_obj_ult_cnt;
+	ATOMIC uint32_t		*mpt_tgt_dkey_ult_cnt;
 
-	/* The ULT number executed on the xstream */
-	uint64_t		mpt_executed_ult;
-
-	/* The ULT number generated for object on the xstream */
-	uint64_t		mpt_obj_generated_ult;
-
-	/* The ULT number executed on the xstream */
-	uint64_t		mpt_obj_executed_ult;
+	/* ULT count array from all targets, obj: enumeration, dkey:fetch/update */
+	ATOMIC uint32_t		*mpt_obj_ult_cnts;
+	ATOMIC uint32_t		*mpt_dkey_ult_cnts;
 
 	/* reference count for the structure */
 	uint64_t		mpt_refcount;
@@ -88,7 +89,7 @@ struct migrate_pool_tls {
 	uint64_t		mpt_inflight_max_size;
 	ABT_cond		mpt_inflight_cond;
 	ABT_mutex		mpt_inflight_mutex;
-	int			mpt_inflight_max_ult;
+	uint32_t		mpt_inflight_max_ult;
 	uint32_t		mpt_opc;
 
 	ABT_cond		mpt_init_cond;
@@ -100,8 +101,16 @@ struct migrate_pool_tls {
 	/* migrate leader ULT */
 	unsigned int		mpt_ult_running:1,
 				mpt_init_tls:1,
-				mpt_init_failed:1,
 				mpt_fini:1;
+
+	/* migration init error */
+	int			mpt_init_err;
+};
+
+struct migrate_cont_hdl {
+	uuid_t		mch_uuid;
+	daos_handle_t	mch_hdl;
+	d_list_t	mch_list;
 };
 
 struct obj_bulk_args {
@@ -145,36 +154,6 @@ struct obj_tgt_punch_args {
 void
 migrate_pool_tls_destroy(struct migrate_pool_tls *tls);
 
-/*
- * Report latency on a per-I/O size.
- * Buckets starts at [0; 256B[ and are increased by power of 2
- * (i.e. [256B; 512B[, [512B; 1KB[) up to [4MB; infinity[
- * Since 4MB = 2^22 and 256B = 2^8, this means
- * (22 - 8 + 1) = 15 buckets plus the 4MB+ bucket, so
- * 16 buckets in total.
- */
-#define NR_LATENCY_BUCKETS 16
-
-struct obj_pool_metrics {
-	/** Count number of total per-opcode requests (type = counter) */
-	struct d_tm_node_t	*opm_total[OBJ_PROTO_CLI_COUNT];
-	/** Total number of bytes fetched (type = counter) */
-	struct d_tm_node_t	*opm_fetch_bytes;
-	/** Total number of bytes updated (type = counter) */
-	struct d_tm_node_t	*opm_update_bytes;
-
-	/** Total number of silently restarted updates (type = counter) */
-	struct d_tm_node_t	*opm_update_restart;
-	/** Total number of resent update operations (type = counter) */
-	struct d_tm_node_t	*opm_update_resent;
-	/** Total number of retry update operations (type = counter) */
-	struct d_tm_node_t	*opm_update_retry;
-	/** Total number of EC full-stripe update operations (type = counter) */
-	struct d_tm_node_t	*opm_update_ec_full;
-	/** Total number of EC partial update operations (type = counter) */
-	struct d_tm_node_t	*opm_update_ec_partial;
-};
-
 struct obj_tls {
 	d_sg_list_t		ot_echo_sgl;
 	d_list_t		ot_pool_list;
@@ -204,24 +183,6 @@ static inline struct obj_tls *
 obj_tls_get()
 {
 	return dss_module_key_get(dss_tls_get(), &obj_module_key);
-}
-
-static inline unsigned int
-lat_bucket(uint64_t size)
-{
-	int nr;
-
-	if (size <= 256)
-		return 0;
-
-	/** return number of leading zero-bits */
-	nr =  __builtin_clzl(size - 1);
-
-	/** >4MB, return last bucket */
-	if (nr < 42)
-		return NR_LATENCY_BUCKETS - 1;
-
-	return 56 - nr;
 }
 
 enum latency_type {
