@@ -10,6 +10,7 @@
 #ifndef __DC_MGMT_H__
 #define __DC_MGMT_H__
 
+#include <sys/types.h>
 #include <daos/common.h>
 #include <daos/tse.h>
 #include <daos_types.h>
@@ -35,7 +36,6 @@ struct dc_mgmt_sys_info {
 	char		provider[DAOS_SYS_INFO_STRING_MAX + 1];
 	char		interface[DAOS_SYS_INFO_STRING_MAX + 1];
 	char		domain[DAOS_SYS_INFO_STRING_MAX + 1];
-	uint32_t	crt_ctx_share_addr;
 	uint32_t	crt_timeout;
 	int32_t		srv_srx_set;
 	d_rank_list_t  *ms_ranks;
@@ -71,6 +71,9 @@ int dc_mgmt_net_get_num_srv_ranks(void);
 
 int dc_mgmt_get_sys_info(const char *sys, struct daos_sys_info **info);
 void dc_mgmt_put_sys_info(struct daos_sys_info *info);
+
+int
+     dc_mgmt_tm_register(const char *sys, const char *jobid, key_t shm_key, uid_t *owner_uid);
 
 int dc_get_attach_info(const char *name, bool all_ranks,
 		       struct dc_mgmt_sys_info *info,

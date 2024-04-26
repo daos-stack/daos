@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -28,6 +28,14 @@ import (
 
 const defaultConfigFile = "daos_server.yml"
 
+var errJSONOutputNotSupported = errors.New("this subcommand does not support JSON output")
+
+type baseScanCmd struct {
+	cmdutil.JSONOutputCmd `json:"-"`
+	cmdutil.LogCmd        `json:"-"`
+	optCfgCmd             `json:"-"`
+}
+
 type execTestFn func() error
 
 type mainOpts struct {
@@ -42,19 +50,23 @@ type mainOpts struct {
 	Syslog  bool `long:"syslog" description:"Enable logging to syslog"`
 
 	// Define subcommands
-	SCM           scmStorageCmd          `command:"scm" description:"Perform tasks related to locally-attached SCM storage"`
-	NVMe          nvmeStorageCmd         `command:"nvme" description:"Perform tasks related to locally-attached NVMe storage"`
-	LegacyStorage legacyStorageCmd       `command:"storage" description:"Perform tasks related to locally-attached storage (deprecated, use scm or nvme instead)"`
-	Start         startCmd               `command:"start" description:"Start daos_server"`
-	Network       networkCmd             `command:"network" description:"Perform network device scan based on fabric provider"`
-	Version       versionCmd             `command:"version" description:"Print daos_server version"`
-	MgmtSvc       msCmdRoot              `command:"ms" description:"Perform tasks related to management service replicas"`
-	DumpTopo      hwprov.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
-	Support       supportCmd             `command:"support" description:"Perform debug tasks to help support team"`
-	Config        configCmd              `command:"config" alias:"cfg" description:"Perform tasks related to configuration of hardware on the local server"`
+	SCM      scmStorageCmd          `command:"scm" description:"Perform tasks related to locally-attached SCM storage"`
+	NVMe     nvmeStorageCmd         `command:"nvme" description:"Perform tasks related to locally-attached NVMe storage"`
+	Start    startCmd               `command:"start" description:"Start daos_server"`
+	Network  networkCmd             `command:"network" description:"Perform network device scan based on fabric provider"`
+	Version  versionCmd             `command:"version" description:"Print daos_server version"`
+	MgmtSvc  msCmdRoot              `command:"ms" description:"Perform tasks related to management service replicas"`
+	DumpTopo hwprov.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
+	Support  supportCmd             `command:"support" description:"Perform debug tasks to help support team"`
+	Config   configCmd              `command:"config" alias:"cfg" description:"Perform tasks related to configuration of hardware on the local server"`
 
 	// Allow a set of tests to be run before executing commands.
 	preExecTests []execTestFn
+
+	// provide helpers for various initialization stages
+	netInitHelper  initNetworkCmdFn
+	nvmeInitHelper initNvmeCmdFn
+	scmInitHelper  initScmCmdFn
 }
 
 type versionCmd struct {
@@ -93,10 +105,14 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 			return errors.Errorf("unexpected commandline arguments: %v", cmdArgs)
 		}
 
-		if jsonCmd, ok := cmd.(cmdutil.JSONOutputter); ok && opts.JSON {
-			jsonCmd.EnableJSONOutput(os.Stdout, &wroteJSON)
-			// disable output on stdout other than JSON
-			log.ClearLevel(logging.LogLevelInfo)
+		if opts.JSON {
+			if jsonCmd, ok := cmd.(cmdutil.JSONOutputter); ok {
+				jsonCmd.EnableJSONOutput(os.Stdout, &wroteJSON)
+				// disable output on stdout other than JSON
+				log.ClearLevel(logging.LogLevelInfo)
+			} else {
+				return errJSONOutputNotSupported
+			}
 		}
 
 		switch cmd.(type) {
@@ -132,6 +148,24 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 			logCmd.SetLog(log)
 		}
 
+		if netInitCmd, ok := cmd.(interface{ initWith(initNetworkCmdFn) error }); ok {
+			if err := netInitCmd.initWith(opts.netInitHelper); err != nil {
+				return err
+			}
+		}
+
+		if scmInitCmd, ok := cmd.(interface{ initWith(initScmCmdFn) error }); ok {
+			if err := scmInitCmd.initWith(opts.scmInitHelper); err != nil {
+				return err
+			}
+		}
+
+		if nvmeInitCmd, ok := cmd.(interface{ initWith(initNvmeCmdFn) error }); ok {
+			if err := nvmeInitCmd.initWith(opts.nvmeInitHelper); err != nil {
+				return err
+			}
+		}
+
 		if cfgCmd, ok := cmd.(cfgLoader); ok {
 			if opts.ConfigPath == "" {
 				log.Debugf("Using build config directory %q", build.ConfigDir)
@@ -139,7 +173,8 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 			}
 
 			if err := cfgCmd.loadConfig(opts.ConfigPath); err != nil {
-				return errors.Wrapf(err, "failed to load config from %s", cfgCmd.configPath())
+				return errors.Wrapf(err, "failed to load config from %s",
+					cfgCmd.configPath())
 			}
 			if _, err := os.Stat(opts.ConfigPath); err == nil {
 				log.Infof("DAOS Server config loaded from %s", cfgCmd.configPath())
@@ -180,6 +215,9 @@ func main() {
 				return pbin.CheckHelper(log, pbin.DaosPrivHelperName)
 			},
 		},
+		netInitHelper:  initNetworkCmd,
+		nvmeInitHelper: initNvmeCmd,
+		scmInitHelper:  initScmCmd,
 	}
 
 	if err := parseOpts(os.Args[1:], &opts, log); err != nil {

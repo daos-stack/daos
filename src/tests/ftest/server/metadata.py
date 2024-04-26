@@ -324,7 +324,8 @@ class ObjectMetadata(TestWithServers):
         self.log.info("Phase 2: passed")
 
         # Do not destroy containers in teardown (destroy pool while metadata rdb is full)
-        self.container = None
+        for container in self.container:
+            container.skip_cleanup()
         self.log.info("Leaving pool metadata rdb full (containers will not be destroyed)")
         self.log.info("Test passed")
 

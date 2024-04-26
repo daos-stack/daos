@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -94,16 +94,24 @@ class NvmePoolCapacity(TestWithServers):
             self.log.info("Running test %s", loop_count)
             offset = loop_count * num_pool
             for val in range(offset, offset + num_pool):
-                self.pool.append(self.get_pool(namespace="/run/pool_qty_{}/*".format(num_pool),
-                                 properties="reclaim:disabled"))
+                self.pool.append(
+                    self.get_pool(
+                        namespace="/run/pool_qty_{}/*".format(num_pool),
+                        properties="reclaim:disabled"))
 
                 display_string = "pool{} space at the Beginning".format(val)
                 self.pool[-1].display_pool_daos_space(display_string)
                 nvme_size_begin[val] = self.pool[-1].get_pool_free_space("NVME")
-                # To be fixed by DAOS-12974
+                threads = []
+                # Create containers with threads because we'll be creating many containers, which
+                # will take too long if we create them serially.
                 for _ in range(num_cont):
-                    # self.get_container(self.pool[-1])
-                    pass
+                    kwargs = {"pool": self.pool[-1]}
+                    threads.append(threading.Thread(target=self.get_container, kwargs=kwargs))
+                for thread in threads:
+                    thread.start()
+                for thread in threads:
+                    thread.join()
 
             m_leak = 0
 
@@ -213,4 +221,4 @@ class NvmePoolCapacity(TestWithServers):
         time.sleep(5)
         # Run Create/delete pool/container
         self.log.info("Running Test Case 3: Pool/Cont Create/Destroy")
-        self.run_test_create_delete(10, 50, 20)
+        self.run_test_create_delete(10, 50, 2)
