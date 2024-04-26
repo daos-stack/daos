@@ -90,7 +90,7 @@ class DfuseFind(TestWithServers):
         needles = self.params.get("needles", '/run/find_cmd/*')
         temp_dfs_path = ""
 
-        dfuses = []
+        dfuse_list = []
         containers = []
 
         pool = self.get_pool(connect=False)
@@ -109,8 +109,7 @@ class DfuseFind(TestWithServers):
             return self._run_find_test(test_root, samples, cont_count, needles)
 
         try:
-            mount_dirs = self._setup_containers(pool, dfs_path, cont_count, dfuses, containers)
-
+            mount_dirs = self._setup_containers(pool, dfs_path, cont_count, dfuse_list, containers)
             daos_stats = _run_find_test(dfs_path, mount_dirs)
 
             if challenger_path:
@@ -124,9 +123,11 @@ class DfuseFind(TestWithServers):
             self.log.error("FindCmd Test Failed: %s", str(error))
             raise
         finally:
-            self._teardown_dfuse(dfuses)
-            self.destroy_containers(containers)
-            self.pool.destroy()
+            for dfuse in dfuse_list:
+                dfuse.stop()
+            for container in containers:
+                container.destroy()
+            pool.destroy()
 
             if challenger_path:
                 self._run_cmd("rm -rf {0}".format(challenger_path))
@@ -192,7 +193,7 @@ class DfuseFind(TestWithServers):
 
         return profiler
 
-    def _setup_containers(self, pool, dfs_path, cont_count, dfuses, containers):
+    def _setup_containers(self, pool, dfs_path, cont_count, dfuse_list, containers):
         """
         Setup as many containers as the test requested. Return the paths where
         the containers were mounted.
@@ -205,7 +206,7 @@ class DfuseFind(TestWithServers):
             self.log.info("Creating container Pool UUID: %s Con UUID: %s", pool, container)
             dfuse = get_dfuse(self, self.hostlist_clients)
             start_dfuse(self, dfuse, pool, container, mount_dir=mount_dir)
-            dfuses.append(dfuse)
+            dfuse_list.append(dfuse)
             containers.append(container)
             mount_dirs.append(dfuse.mount_dir.value)
 
@@ -239,11 +240,6 @@ class DfuseFind(TestWithServers):
         result = run_remote(self.log, self.hostlist_clients, cmd, timeout=180)
         if not result.passed:
             self.fail(f"Error running '{cmd}' on {result.failed_hosts}")
-
-    def _teardown_dfuse(self, dfuses):
-        """Unmount all the containers that were created for the test"""
-        for dfuse in dfuses:
-            dfuse.stop()
 
     def _setup_challenger(self, test_path, directories):
         """Create the paths where the directory trees of the challenger will be created."""
