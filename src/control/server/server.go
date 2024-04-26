@@ -410,13 +410,12 @@ func (srv *server) setupGrpc() error {
 	clientNetHints := make([]*mgmtpb.ClientNetHint, 0, len(providers))
 	for i, p := range providers {
 		clientNetHints = append(clientNetHints, &mgmtpb.ClientNetHint{
-			Provider:        p,
-			CrtCtxShareAddr: srv.cfg.Fabric.CrtCtxShareAddr,
-			CrtTimeout:      srv.cfg.Fabric.CrtTimeout,
-			NetDevClass:     uint32(srv.netDevClass[i]),
-			SrvSrxSet:       srxSetting,
-			ProviderIdx:     uint32(i),
-			EnvVars:         srv.cfg.ClientEnvVars,
+			Provider:    p,
+			CrtTimeout:  srv.cfg.Fabric.CrtTimeout,
+			NetDevClass: uint32(srv.netDevClass[i]),
+			SrvSrxSet:   srxSetting,
+			ProviderIdx: uint32(i),
+			EnvVars:     srv.cfg.ClientEnvVars,
 		})
 	}
 	srv.mgmtSvc.clientNetworkHint = clientNetHints

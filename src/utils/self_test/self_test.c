@@ -1248,7 +1248,6 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "      This option sets the following env vars through a running daos_agent.\n"
 	       "         - D_INTERFACE\n"
 	       "         - D_PROVIDER\n"
-	       "         - CRT_CTX_SHARE_ADDR\n"
 	       "         - D_DOMAIN\n"
 	       "         - CRT_TIMEOUT\n",
 	       prog_name, UINT32_MAX,
