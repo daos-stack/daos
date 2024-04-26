@@ -166,6 +166,7 @@ func (p *Provider) MountControlMetadata() error {
 
 	if !p.engineStorage.ControlMetadata.HasPath() {
 		// If there's no control metadata path, we use SCM for control metadata
+		p.log.Debug("mounting SCM for control metadata")
 		return p.MountScm()
 	}
 
@@ -189,6 +190,7 @@ func (p *Provider) ControlMetadataIsMounted() (bool, error) {
 	p.log.Debugf("control metadata config: %+v", p.engineStorage.ControlMetadata)
 	if !p.engineStorage.ControlMetadata.HasPath() {
 		// If there's no control metadata path, we use SCM for control metadata
+		p.log.Debug("checking if SCM is mounted")
 		return p.ScmIsMounted()
 	}
 
@@ -197,6 +199,7 @@ func (p *Provider) ControlMetadataIsMounted() (bool, error) {
 		return false, nil
 	}
 
+	p.log.Debug("checking if control metadata directory is mounted")
 	return p.Sys.IsMounted(p.engineStorage.ControlMetadata.Path)
 }
 
@@ -251,7 +254,7 @@ func (p *Provider) GetScmUsage() (*ScmMountPoint, error) {
 func (p *Provider) ScmIsMounted() (bool, error) {
 	cfg, err := p.GetScmConfig()
 	if err != nil {
-		return false, err
+		return false, errors.Wrap(err, "getting SCM config")
 	}
 	return p.Sys.IsMounted(cfg.Scm.MountPoint)
 }

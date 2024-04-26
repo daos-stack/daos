@@ -167,6 +167,7 @@ func (ei *EngineInstance) WriteSuperblock() error {
 // from storage.
 func (ei *EngineInstance) ReadSuperblock() error {
 	if err := ei.MountMetadata(); err != nil {
+		ei.log.Errorf("unable to mount metadata device: %s", err.Error())
 		return errors.Wrap(err, "failed to mount control metadata device")
 	}
 
