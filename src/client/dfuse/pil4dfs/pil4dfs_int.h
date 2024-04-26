@@ -10,6 +10,8 @@
 #ifndef PIL4DFS_INT_H
 #define PIL4DFS_INT_H
 
+#include "dfs_dcache.h"
+
 #define MAX_MMAP_BLOCK      (64)
 #define MAX_OPENED_FILE     (2048)
 #define MAX_OPENED_FILE_M1  ((MAX_OPENED_FILE)-1)
@@ -32,63 +34,62 @@
 
 /* structure allocated for a FD for a file */
 struct file_obj {
-	struct dfs_mt *dfs_mt;
-	dfs_obj_t     *file;
-	dfs_obj_t     *parent;
-	int            open_flag;
-	int            ref_count;
-	unsigned int   st_ino;
-	int            idx_mmap;
-	off_t          offset;
-	char          *path;
-	char           item_name[DFS_MAX_NAME];
+	struct dfs_mt     *dfs_mt;
+	dfs_obj_t         *file;
+	struct dcache_rec *parent;
+	int                open_flag;
+	int                ref_count;
+	unsigned int       st_ino;
+	int                idx_mmap;
+	off_t              offset;
+	char              *path;
+	char               item_name[DFS_MAX_NAME];
 };
 
 /* structure allocated for a FD for a dir */
 struct dir_obj {
-	int            fd;
-	uint32_t       num_ents;
-	dfs_obj_t     *dir;
-	long int       offset;
-	struct dfs_mt *dfs_mt;
-	int            open_flag;
-	int            ref_count;
-	unsigned int   st_ino;
-	daos_anchor_t  anchor;
+	int              fd;
+	uint32_t         num_ents;
+	dfs_obj_t       *dir;
+	long int         offset;
+	struct dfs_mt   *dfs_mt;
+	int              open_flag;
+	int              ref_count;
+	unsigned int     st_ino;
+	daos_anchor_t    anchor;
 	/* path and ents will be allocated together dynamically since they are large. */
-	char          *path;
-	struct dirent *ents;
+	char            *path;
+	struct dirent   *ents;
 };
 
 struct mmap_obj {
 	/* The base address of this memory block */
-	char  *addr;
-	size_t length;
+	char            *addr;
+	size_t           length;
 	/* the size of file. It is needed when write back to storage. */
-	size_t file_size;
-	int    prot;
-	int    flags;
+	size_t           file_size;
+	int              prot;
+	int              flags;
 	/* The fd used when mmap is called */
-	int    fd;
+	int              fd;
 	/* num_pages = length / page_size */
-	int    num_pages;
-	int    num_dirty_pages;
-	off_t  offset;
+	int              num_pages;
+	int              num_dirty_pages;
+	off_t            offset;
 	/* An array to indicate whether a page is updated or not */
-	bool  *updated;
+	bool            *updated;
 };
 
 /* structure allocated for dfs container */
 struct dfs_mt {
-	dfs_t               *dfs;
-	daos_handle_t        poh;
-	daos_handle_t        coh;
-	struct d_hash_table *dfs_dir_hash;
-	int                  len_fs_root;
-
-	_Atomic uint32_t     inited;
-	char                *pool, *cont;
-	char                *fs_root;
+	dfs_t           *dfs;
+	daos_handle_t    poh;
+	daos_handle_t    coh;
+	dfs_dcache_t    *dcache;
+	int              len_fs_root;
+	_Atomic uint32_t inited;
+	char            *pool, *cont;
+	char            *fs_root;
 };
 
 #endif

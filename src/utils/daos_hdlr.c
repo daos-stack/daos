@@ -531,10 +531,10 @@ file_chmod(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *path, m
 	/* Unset any unsupported mode bits. We track these errors so they can
 	 * be surfaced to the user at the end of the copy operation.
 	 */
-	if (!ignore_unsup && mode & (S_ISVTX | S_ISGID | S_ISUID)) {
+	if (!ignore_unsup && mode & S_ISVTX) {
 		(*num_chmod_enotsup)++;
 	}
-	mode &= ~(S_ISVTX | S_ISGID | S_ISUID);
+	mode &= ~S_ISVTX;
 
 	if (file_dfs->type == POSIX) {
 		rc = chmod(path, mode);
@@ -845,8 +845,9 @@ out:
 }
 
 static int
-fs_copy(struct cmd_args_s *ap, struct file_dfs *src_file_dfs, struct file_dfs *dst_file_dfs,
-	const char *src_path, const char *dst_path, bool ignore_unsup, struct fs_copy_stats *num)
+fs_copy(struct cmd_args_s *ap, struct dm_args *ca, struct file_dfs *src_file_dfs,
+	struct file_dfs *dst_file_dfs, const char *src_path, const char *dst_path,
+	bool ignore_unsup, struct fs_copy_stats *num)
 {
 	int		rc = 0;
 	struct stat	src_stat;
@@ -896,6 +897,43 @@ fs_copy(struct cmd_args_s *ap, struct file_dfs *src_file_dfs, struct file_dfs *d
 			if (tmp_path == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 			dst_path = tmp_path;
+		}
+	}
+
+	/* Make sure the source and destination are not the same.
+	 * Make sure the source is not a subpath of the destination. */
+	if ((src_file_dfs->type == POSIX && dst_file_dfs->type == POSIX) ||
+	    (src_file_dfs->type == DAOS && dst_file_dfs->type == DAOS &&
+	     strcmp(ca->src_pool, ca->dst_pool) == 0 && strcmp(ca->src_cont, ca->dst_cont) == 0)) {
+		if (strcmp(src_path, dst_path) == 0) {
+			rc = -DER_INVAL;
+			DH_PERROR_DER(ap, rc, "source and destination are the same");
+			D_GOTO(out, rc);
+		}
+		if (S_ISDIR(src_stat.st_mode)) {
+			int  src_path_len;
+			int  dst_path_len;
+			bool src_is_subpath;
+
+			/* If src_path ends with / and dst_path starts with the full src_path,
+			 * then src_path is a subpath of dst_path.
+			 * If src_path doesn't end with / then it's only a subpath if equal
+			 * to dst_path and dst_path ends with / */
+			src_path_len = strlen(src_path);
+			dst_path_len = strlen(dst_path);
+			if (src_path[src_path_len - 1] == '/') {
+				src_is_subpath = (strncmp(src_path, dst_path, src_path_len) == 0);
+			} else {
+				src_is_subpath =
+				    (strncmp(src_path, dst_path, src_path_len) == 0 &&
+				     dst_path_len > src_path_len && dst_path[src_path_len] == '/');
+			}
+
+			if (src_is_subpath) {
+				rc = -DER_INVAL;
+				DH_PERROR_DER(ap, rc, "cannot copy a directory into itself");
+				D_GOTO(out, rc);
+			}
 		}
 	}
 
@@ -1867,6 +1905,8 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 		DH_PERROR_DER(ap, rc, "failed to parse destination path");
 		D_GOTO(out, rc);
 	}
+	if (dst_file_dfs.type == POSIX)
+		ap->fs_copy_posix = true;
 
 	rc = dm_connect(ap, is_posix_copy, &src_file_dfs, &dst_file_dfs, ca,
 			ap->sysname, ap->dst, &src_cont_info, &dst_cont_info);
@@ -1875,14 +1915,12 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc);
 	}
 
-	rc = fs_copy(ap, &src_file_dfs, &dst_file_dfs, src_str, dst_str, ap->ignore_unsup, num);
+	rc = fs_copy(ap, ca, &src_file_dfs, &dst_file_dfs, src_str, dst_str, ap->ignore_unsup, num);
 	if (rc != 0) {
 		DH_PERROR_DER(ap, rc, "fs copy failed");
 		D_GOTO(out_disconnect, rc);
 	}
 
-	if (dst_file_dfs.type == POSIX)
-		ap->fs_copy_posix = true;
 out_disconnect:
 	/* umount dfs, close conts, and disconnect pools */
 	rc2 = dm_disconnect(ap, is_posix_copy, ca, &src_file_dfs, &dst_file_dfs);

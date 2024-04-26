@@ -14,7 +14,7 @@ import (
 )
 
 /*
- #cgo CFLAGS: -I${SRCDIR}/../../../ddb/
+ #cgo CFLAGS: -I${SRCDIR}/../../../utils/ddb/
  #cgo LDFLAGS: -lddb -lgurt
 
  #include <ddb.h>

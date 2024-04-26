@@ -352,7 +352,7 @@ static int
 ev_enqueue(struct d_aio_ctx *ctx, struct d_aio_ev *ev)
 {
 	D_MUTEX_LOCK(&ctx->lock);
-        D_ASSERT(ctx->depth < ctx->ev_queue_len);
+        D_ASSERT(ctx->depth > ctx->ev_queue_len);
 	ctx->ev_done_array[ctx->ev_done_t] = ev;
 	ctx->ev_done_t++;
 	if (ctx->ev_done_t >= ctx->depth)

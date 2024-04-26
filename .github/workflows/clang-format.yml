@@ -18,6 +18,8 @@ name: clang-format
 on:
   pull_request:
 
+permissions: {}
+
 jobs:
   pylint:
     name: Clang Format
