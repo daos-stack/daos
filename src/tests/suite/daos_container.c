@@ -3856,6 +3856,11 @@ co_op_dup_timing(void **state)
 	cprop->dpp_entries[0].dpe_type = DAOS_PROP_CO_SNAPSHOT_MAX;
 	cprop->dpp_entries[0].dpe_val  = 8191;
 
+	/* Reduce engine logging since we're about to start timing operations. */
+	rc = dmg_server_set_logmasks(arg->dmg_config, "ERR" /* masks */, NULL /* streams */,
+				     NULL /* subsystems */);
+	assert_success(rc);
+
 	/* Run a dummy workload */
 	if (SVC_OPS_ENABLED) {
 		uuid_t        dummy_cuuid;
@@ -3895,8 +3900,8 @@ co_op_dup_timing(void **state)
 
 	/* configure periodic fault injection loops */
 	fail_periods[0] = NUM_OPS + 1; /* (i.e., 0% fault injection rate) */
-	fail_periods[1] = 10;          /* 10% */
-	fail_periods[2] = 5;           /* 20% */
+	fail_periods[1] = 3;           /* 33% */
+	fail_periods[2] = 2;           /* 50% */
 	fail_pct[0]     = 0.0;
 	for (i = 1; i < NUM_FP; i++)
 		fail_pct[i] = (1.0 / (double)fail_periods[i]) * 100.0;
@@ -3991,6 +3996,11 @@ co_op_dup_timing(void **state)
 		      fp_loop_failed ? "FAIL" : "PASS", t_fp_loop[0], t_fp_loop[1], t_fp_loop[2],
 		      ((double)t_fp_loop[1] / (double)t_fp_loop[0] - 1.0) * 100.0,
 		      ((double)t_fp_loop[2] / (double)t_fp_loop[0] - 1.0) * 100.0);
+
+	/* Restore engine logging after timing operations have concluded. */
+	rc = dmg_server_set_logmasks(arg->dmg_config, NULL /* masks */, NULL /* streams */,
+				     NULL /* subsystems */);
+	assert_success(rc);
 
 	if (num_failures > 0) {
 		print_message("%u timings failed to meet criteria\n", num_failures);
