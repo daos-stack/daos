@@ -147,11 +147,13 @@ class DdbTest(RecoveryTestBase):
         self.add_container(pool=self.pool)
 
         # Find the vos file name. e.g., /mnt/daos0/<pool_uuid>/vos-0.
+        vos_file = self.get_vos_file_path(pool=self.pool)
+        if vos_file == None:
+            self.fail("vos file wasn't found in {}/{}".format(scm_mount, self.pool.uuid.lower()))
         scm_mount = self.server_managers[0].get_config_value("scm_mount")
         ddb_command = DdbCommand(
             server_host=NodeSet(self.hostlist_servers[0]), path=self.bin,
-            mount_point=scm_mount, pool_uuid=self.pool.uuid,
-            vos_file=self.get_vos_file_path(pool=self.pool))
+            mount_point=scm_mount, pool_uuid=self.pool.uuid, vos_file=vos_file)
 
         errors = []
 
@@ -344,6 +346,8 @@ class DdbTest(RecoveryTestBase):
 
         # 3. Find the vos file name.
         vos_file = self.get_vos_file_path(pool=self.pool)
+        if vos_file == None:
+            self.fail("vos file wasn't found in {}/{}".format(scm_mount, self.pool.uuid.lower()))
         host = NodeSet(self.hostlist_servers[0])
         scm_mount = self.server_managers[0].get_config_value("scm_mount")
         ddb_command = DdbCommand(
@@ -487,6 +491,8 @@ class DdbTest(RecoveryTestBase):
 
         # 4. Find the vos file name.
         vos_file = self.get_vos_file_path(pool=self.pool)
+        if vos_file == None:
+            self.fail("vos file wasn't found in {}/{}".format(scm_mount, self.pool.uuid.lower()))
         host = NodeSet(self.hostlist_servers[0])
         scm_mount = self.server_managers[0].get_config_value("scm_mount")
         ddb_command = DdbCommand(
@@ -576,6 +582,8 @@ class DdbTest(RecoveryTestBase):
 
         # 4. Find the vos file name.
         vos_file = self.get_vos_file_path(pool=self.pool)
+        if vos_file == None:
+            self.fail("vos file wasn't found in {}/{}".format(scm_mount, self.pool.uuid.lower()))
         host = NodeSet(self.hostlist_servers[0])
         scm_mount = self.server_managers[0].get_config_value("scm_mount")
         ddb_command = DdbCommand(
