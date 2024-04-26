@@ -12,19 +12,24 @@ from run_utils import run_remote
 
 SCRIPT = """#!/bin/bash
 
-#!/bin/bash
-
 dir_name="dir00"
 file_name="file00"
 
-rm -rf ${dir_name}
 mkdir ${dir_name}
 echo "Hello" > ${dir_name}/${file_name}
+# The dir should be cached now.
+
 rm -rf ${dir_name}
+# The dir is removed by a child process. Current bash is not aware of it.
+# The cached dir record is out of date.
 
 mkdir ${dir_name}
+
 echo "Hello" > ${dir_name}/${file_name}
+# With out of date cached dir record, a file with wrong path is created.
+
 cat ${dir_name}/${file_name}
+# The file previously created has wrong path. "cat" should fail.
 """
 
 
@@ -34,11 +39,16 @@ class DFuseBashdcacheTest(DfuseTestBase):
     :avocado: recursive
     """
 
-    def run_bash_dcache_pil4dfs(self):
+    def test_bash_dcache_pil4dfs(self):
         """Run a shell script which creates dir and file, then removes them and recreates.
 
         This attempts to replicate the way that configure scripts repeating creating & removing
         files under conftest.dir in bash.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=pil4dfs,dfs
+        :avocado: tags=DFuseBashdcacheTest,test_bash_dcache_pil4dfs
         """
 
         lib_path = os.path.join(self.prefix, "lib64", "libpil4dfs.so")
@@ -60,6 +70,8 @@ class DFuseBashdcacheTest(DfuseTestBase):
         result = run_remote(self.log, self.hostlist_clients, env_str + cmd)
         if not result.passed:
             self.fail(f'"{cmd}" failed on {result.failed_hosts}')
+        if (result.output[0].stdout[0][:5] != "Hello"):
+            self.fail(f'"{cmd}" failed on {result.failed_hosts}. Unexpected output.')
 
         # Turn on dcache in bash
         env_str = env_str + "export D_IL_NO_DCACHE_BASH=0; "
@@ -67,16 +79,3 @@ class DFuseBashdcacheTest(DfuseTestBase):
         result = run_remote(self.log, self.hostlist_clients, env_str + cmd)
         if result.passed:
             self.fail(f'"{cmd}" failed on {result.failed_hosts}')
-
-    def test_bash_dcache_pil4dfs(self):
-        """
-
-        Test Description:
-            Test a typical I/O pattern accessing conftest.dir in configure scripts.
-
-        :avocado: tags=all,full_regression
-        :avocado: tags=vm
-        :avocado: tags=pil4dfs,dfs
-        :avocado: tags=DFuseBashdcacheTest,test_bashdcache_pil4dfs
-        """
-        self.run_bash_dcache_pil4dfs()
