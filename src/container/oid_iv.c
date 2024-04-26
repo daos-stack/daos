@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -32,6 +32,7 @@ struct oid_iv_entry {
 	/** protect the entry */
 	ABT_mutex		lock;
 	void			*current_req;
+	bool                     current_req_retry;
 };
 
 /** Priv data in the iv layer */
@@ -85,15 +86,21 @@ oid_iv_ent_refresh(struct ds_iv_entry *iv_entry, struct ds_iv_key *key,
 
 	D_ASSERT(priv);
 	num_oids = priv->num_oids;
-	D_DEBUG(DB_MD, "%u: ON REFRESH %zu\n", dss_self_rank(), num_oids);
+	D_DEBUG(DB_MD, "%u: ON REFRESH: num_oids = %zu, REF_RC = " DF_RC "\n", dss_self_rank(),
+		num_oids, DP_RC(ref_rc));
 	D_ASSERT(num_oids != 0);
 
 	entry = iv_entry->iv_value.sg_iovs[0].iov_buf;
 	D_ASSERT(entry != NULL);
 
 	/** if iv op failed, just release the entry lock acquired in update */
-	if (ref_rc != 0)
+	if (ref_rc != 0) {
+		/** if retrying request, we do not increase oids */
+		entry->current_req_retry = true;
 		goto out;
+	} else {
+		entry->current_req_retry = false;
+	}
 
 	avail = &entry->rg;
 	oids = src->sg_iovs[0].iov_buf;
@@ -129,12 +136,9 @@ oid_iv_ent_update(struct ds_iv_entry *ns_entry, struct ds_iv_key *iv_key,
 	int			rc;
 
 	D_ASSERT(priv != NULL);
-
 	entry = ns_entry->iv_value.sg_iovs[0].iov_buf;
 	rc = ABT_mutex_trylock(entry->lock);
-	/* For retry requests, from _iv_op(), the lock may not be released
-	 * in some cases.
-	 */
+	/** For retry requests, from _iv_op(), the lock may not be released in some cases. */
 	if (rc == ABT_ERR_MUTEX_LOCKED && entry->current_req != src)
 		return -DER_BUSY;
 
@@ -144,7 +148,8 @@ oid_iv_ent_update(struct ds_iv_entry *ns_entry, struct ds_iv_key *iv_key,
 	oids = src->sg_iovs[0].iov_buf;
 	num_oids = oids->num_oids;
 
-	D_DEBUG(DB_TRACE, "%u: ON UPDATE, num_oids = %zu\n", myrank, num_oids);
+	D_DEBUG(DB_MD, "%u: ON UPDATE, num_oids = %zu, priv = %zu\n", myrank, num_oids,
+		priv->num_oids);
 	D_DEBUG(DB_MD, "%u: ENTRY NUM OIDS = %zu, oid = %" PRIu64 "\n",
 		myrank, avail->num_oids, avail->oid);
 
@@ -179,21 +184,21 @@ oid_iv_ent_update(struct ds_iv_entry *ns_entry, struct ds_iv_key *iv_key,
 		priv->num_oids = 0;
 		/** release entry lock */
 		ABT_mutex_unlock(entry->lock);
-
 		return 0;
 	}
 
-	/** increase the number of oids requested before forwarding */
-	if (num_oids < OID_BLOCK)
-		oids->num_oids = OID_BLOCK;
-	else
-		oids->num_oids = (num_oids / OID_BLOCK) * OID_BLOCK * 2;
+	/** increase the number of oids requested before forwarding (if not a retry) */
+	if (entry->current_req_retry == false) {
+		if (num_oids < OID_BLOCK)
+			oids->num_oids = OID_BLOCK;
+		else
+			oids->num_oids = (num_oids / OID_BLOCK) * OID_BLOCK * 2;
+	}
 
 	/** Keep track of how much this node originally requested */
 	priv->num_oids = num_oids;
 
-	D_DEBUG(DB_TRACE, "%u: IDs not available, FORWARD %zu oids\n",
-		myrank, oids->num_oids);
+	D_DEBUG(DB_MD, "%u: IDs not available, FORWARD %zu oids\n", myrank, oids->num_oids);
 
 	/** entry->lock will be released in on_refresh() */
 	return -DER_IVCB_FORWARD;
@@ -208,12 +213,11 @@ oid_iv_ent_get(struct ds_iv_entry *entry, void **_priv)
 {
 	struct oid_iv_priv	*priv;
 
-	D_DEBUG(DB_TRACE, "%u: OID GET\n", dss_self_rank());
+	D_DEBUG(DB_MD, "%u: OID GET\n", dss_self_rank());
 
 	D_ALLOC_PTR(priv);
 	if (priv == NULL)
 		return -DER_NOMEM;
-
 	*_priv = priv;
 	return 0;
 }
@@ -222,7 +226,7 @@ static void
 oid_iv_ent_put(struct ds_iv_entry *entry, void *priv)
 {
 	D_ASSERT(priv != NULL);
-	D_DEBUG(DB_TRACE, "%u: ON PUT\n", dss_self_rank());
+	D_DEBUG(DB_MD, "%u: ON PUT\n", dss_self_rank());
 	D_FREE(priv);
 }
 

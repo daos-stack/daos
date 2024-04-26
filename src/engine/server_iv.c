@@ -482,8 +482,8 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 				     priv_entry ? priv_entry->priv : NULL);
 	}
 	if (rc != 0) {
-		D_DEBUG(DB_MD, "key id %d update failed: rc = %d\n",
-			key.class_id, rc);
+		D_DEBUG(DB_MD, "key id %d update failed: rc = " DF_RC "\n", key.class_id,
+			DP_RC(rc));
 		D_GOTO(output, rc);
 	}
 
