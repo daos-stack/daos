@@ -191,6 +191,9 @@ chunk_cb(struct dfuse_event *ev)
 	fuse_req_t              req;
 
 	cd->rc = ev->de_ev.ev_error;
+
+	if (ev->de_len != CHUNK_SIZE)
+		cd->rc = EIO;
 	daos_event_fini(&ev->de_ev);
 
 	do {
@@ -246,13 +249,14 @@ chunk_cb(struct dfuse_event *ev)
  * Returns true on success.
  */
 static bool
-chunk_fetch(fuse_req_t req, struct dfuse_obj_hdl *oh, struct read_chunk_data *cd, int bucket,
-	    int slot, struct dfuse_inode_entry *ie)
+chunk_fetch(fuse_req_t req, struct dfuse_obj_hdl *oh, struct read_chunk_data *cd, int slot)
 {
-	struct dfuse_info  *dfuse_info = fuse_req_userdata(req);
-	struct dfuse_event *ev;
-	struct dfuse_eq    *eqt;
-	int                 rc;
+	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
+	struct dfuse_inode_entry *ie         = oh->doh_ie;
+	struct dfuse_event       *ev;
+	struct dfuse_eq          *eqt;
+	int                       rc;
+	daos_off_t                position = cd->bucket * CHUNK_SIZE;
 
 	eqt = pick_eqt(dfuse_info);
 
@@ -262,12 +266,10 @@ chunk_fetch(fuse_req_t req, struct dfuse_obj_hdl *oh, struct read_chunk_data *cd
 		return false;
 	}
 
-	ev->de_iov.iov_len  = CHUNK_SIZE;
-	ev->de_req          = req;
-	ev->de_cd           = cd;
-	ev->de_sgl.sg_nr    = 1;
-	ev->de_req_len      = CHUNK_SIZE;
-	ev->de_req_position = CHUNK_SIZE * bucket;
+	ev->de_iov.iov_len = CHUNK_SIZE;
+	ev->de_req         = req;
+	ev->de_cd          = cd;
+	ev->de_sgl.sg_nr   = 1;
 
 	ev->de_complete_cb = chunk_cb;
 
@@ -276,7 +278,7 @@ chunk_fetch(fuse_req_t req, struct dfuse_obj_hdl *oh, struct read_chunk_data *cd
 	cd->reqs[slot] = req;
 	cd->ohs[slot]  = oh;
 
-	rc = dfs_read(ie->ie_dfs->dfs_ns, ie->ie_obj, &ev->de_sgl, ev->de_req_position, &ev->de_len,
+	rc = dfs_read(ie->ie_dfs->dfs_ns, ie->ie_obj, &ev->de_sgl, position, &ev->de_len,
 		      &ev->de_ev);
 	if (rc != 0)
 		goto err;
@@ -359,7 +361,7 @@ found:
 
 	if (submit) {
 		DFUSE_TRA_DEBUG(oh, "submit for bucket %d[%d]", bucket, slot);
-		rcb = chunk_fetch(req, oh, cd, bucket, slot, ie);
+		rcb = chunk_fetch(req, oh, cd, slot);
 	} else {
 		struct dfuse_event *ev = NULL;
 
@@ -449,7 +451,9 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 		}
 	}
 
-	if (oh->doh_ie->ie_dfs->dfc_data_timeout != 0 && chunk_read(req, len, position, oh))
+	if (oh->doh_ie->ie_dfs->dfc_data_timeout != 0 &&
+	    ((atomic_fetch_add(&oh->doh_ie->ie_il_count, 0) == 0)) &&
+	    chunk_read(req, len, position, oh))
 		return;
 
 	eqt = pick_eqt(dfuse_info);
