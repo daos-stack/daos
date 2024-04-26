@@ -47,6 +47,7 @@ class ContainerListConsolidationTest(RecoveryTestBase):
         self.log_step("Create a pool and a container")
         pool = self.get_pool(connect=False)
         container = self.get_container(pool=pool)
+        expected_uuid = container.uuid.lower()
 
         # 2. Inject fault to cause orphan container.
         self.log_step("Inject fault to cause orphan container.")
@@ -85,7 +86,6 @@ class ContainerListConsolidationTest(RecoveryTestBase):
 
         # UUID if found. Verify that it's the container UUID of the container we created.
         actual_uuid = match.group(1)
-        expected_uuid = container.uuid.lower()
         if actual_uuid != expected_uuid:
             msg = "Unexpected container UUID! Expected = {}; Actual = {}".format(
                 expected_uuid, actual_uuid)
