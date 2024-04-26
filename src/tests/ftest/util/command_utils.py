@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -9,7 +9,6 @@ import json
 import os
 import re
 import signal
-import sys
 import time
 from datetime import datetime
 from getpass import getuser
@@ -167,24 +166,6 @@ class ExecutableCommand(CommandWithParameters):
 
         """
         return command_as_user(self.with_bind, self.run_user, self.env)
-
-    @property
-    def with_python(self):
-        """Get the command string with bind_cores and sudo, but not env exports executed by python.
-
-        Returns:
-            str: the command string with bind_cores and sudo executed by python
-        """
-        return " ".join([sys.executable, command_as_user(self.with_bind, self.run_user)])
-
-    @property
-    def with_python_and_env(self):
-        """Get the command string with bind_cores and sudo, and env exports executed by python.
-
-        Returns:
-            str: the command string with bind_cores, sudo, and env exports executed by python
-        """
-        return " ".join([sys.executable, command_as_user(self.with_bind, self.run_user, self.env)])
 
     @contextlib.contextmanager
     def no_exception(self):

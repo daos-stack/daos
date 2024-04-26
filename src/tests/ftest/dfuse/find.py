@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2021-2023 Intel Corporation.
+  (C) Copyright 2021-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -221,7 +221,7 @@ class DfuseFind(TestWithServers):
             dir_tree.subdirs.value = subdirs
             dir_tree.files.value = files_per_node
             dir_tree.needles.value = needles
-            dir_tree.prefix.value = "t{:05d}_".format(count)
+            dir_tree.prefix.value = f"t{count:05d}_"
             count += 1
 
             self.log.info("Populating: %s", path)

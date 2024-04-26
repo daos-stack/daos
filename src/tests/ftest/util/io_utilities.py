@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -12,7 +12,6 @@ from logging import getLogger
 
 from command_utils import ExecutableCommand
 from command_utils_base import FormattedParameter
-from exception_utils import CommandFailure
 from general_utils import DaosTestError, get_random_bytes
 from pydaos.raw import DaosApiError
 from run_utils import run_remote
@@ -523,7 +522,7 @@ class DirectoryTreeCommand(ExecutableCommand):
         path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
         super().__init__(namespace, "directory_tree.py", path)
 
-        # verify_perms.py options
+        # directory_tree.py options
         self.path = FormattedParameter("--path {}")
         self.height = FormattedParameter("--height {}")
         self.subdirs = FormattedParameter("--subdirs {}")
@@ -543,4 +542,4 @@ class DirectoryTreeCommand(ExecutableCommand):
             RemoteCommandResult: result from run_remote
         """
         self.log.info('Running directory_tree.py on %s', str(self.hosts))
-        return run_remote(self.log, self.hosts, self.with_python_and_env, timeout=self.timeout)
+        return run_remote(self.log, self.hosts, self.with_exports, timeout=self.timeout)

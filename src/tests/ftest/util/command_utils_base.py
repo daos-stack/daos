@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
+import sys
 from logging import getLogger
 
 import yaml
@@ -478,6 +479,10 @@ class CommandWithParameters(ObjectWithParameters):
         super().__init__(namespace)
         self._command = command
         self._path = path
+        self._python = None
+        if self.command.endswith('.py'):
+            # Run python scripts with the python command
+            self._python = sys.executable
 
     @property
     def command(self):
@@ -499,7 +504,10 @@ class CommandWithParameters(ObjectWithParameters):
         """
         # Join all the parameters that have been assigned a value with the
         # path and the command to create the command string
-        command = [os.path.join(self._path, self._command)]
+        command = []
+        if self._python:
+            command.append(self._python)
+        command.append(os.path.join(self._path, self._command))
         for name in self.get_str_param_names():
             value = str(getattr(self, name))
             if value != "":
