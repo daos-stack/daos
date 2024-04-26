@@ -13,3 +13,4 @@ tabulate
 wheel
 openpyxl
 pandas
+pygithub
