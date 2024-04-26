@@ -270,7 +270,7 @@ chunk_fetch(fuse_req_t req, struct dfuse_obj_hdl *oh, struct read_chunk_data *cd
 	ev->de_req         = req;
 	ev->de_cd          = cd;
 	ev->de_sgl.sg_nr   = 1;
-
+	ev->de_len         = 0;
 	ev->de_complete_cb = chunk_cb;
 
 	cd->ev         = ev;
