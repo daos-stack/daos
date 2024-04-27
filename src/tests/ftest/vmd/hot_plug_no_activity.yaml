@@ -1,7 +1,7 @@
 hosts:
   # wolf
   # test_servers: 1
-  # CI
+  # Aurora/CI
   test_servers: 2
 
 timeout: 300
@@ -15,13 +15,20 @@ timeout: 300
 #       targets: 4
 #       nr_xs_helpers: 0
 #       storage:
+#         # PMEM
 #         0:
 #           class: dcpm
 #           scm_mount: /mnt/daos0
 #           scm_list: [/dev/pmem0]
+#         # MD-on-SSD
+#         # 0:
+#         #   class: ram
+#         #   scm_mount: /mnt/daos0
+#         #   scm_size: 5
 #         1:
 #           class: nvme
-#           bdev_list: ["0000:5d:05.5"]
+#           bdev_list: ["0000:5d:05.5"]  # wolf-313
+#           # bdev_roles: [wal, data, meta]
 #       spdk_rpc_server:
 #         enable: true
 #         sock_addr: /var/tmp/spdk_0.sock
@@ -58,10 +65,15 @@ pool:
 container:
   type: POSIX
   control_method: daos
+  properties: rd_fac:1
 
 ior:
   flags: -v -W -w
   api: DFS
-  transfer_size: 1M
-  block_size: 1G
-  dfs_oclass: SX
+  transfer_size: 1G
+  block_size: 5G
+  # wolf
+  # dfs_oclass: SX
+  # CI
+  dfs_oclass: RP_2GX
+  dfs_dir_oclass: RP_2GX
