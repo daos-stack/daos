@@ -217,13 +217,13 @@ pipeline {
                      defaultValue: false,
                      description: 'Do not build RPM packages for EL 8')
         booleanParam(name: 'CI_RPM_el9_NOBUILD',
-                     defaultValue: false,
+                     defaultValue: true,
                      description: 'Do not build RPM packages for EL 9')
         booleanParam(name: 'CI_RPM_leap15_NOBUILD',
-                     defaultValue: false,
+                     defaultValue: true,
                      description: 'Do not build RPM packages for Leap 15')
         booleanParam(name: 'CI_DEB_Ubuntu20_NOBUILD',
-                     defaultValue: false,
+                     defaultValue: true,
                      description: 'Do not build DEB packages for Ubuntu 20')
         booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
                      defaultValue: false,
@@ -291,10 +291,10 @@ pipeline {
                defaultValue: 'ci_nlt_1',
                description: 'Label to use for NLT tests')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
-               defaultValue: 'ci_nvme5',
+               defaultValue: 'ci_vmd5',
                description: 'Label to use for the Functional Hardware Medium (MD on SSD) stages')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL',
-               defaultValue: 'ci_nvme5',
+               defaultValue: 'ci_vmd5',
                description: 'Label to use for 5 node Functional Hardware Medium Verbs Provider (MD on SSD) stages')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL',
                defaultValue: 'ci_ofed5',
