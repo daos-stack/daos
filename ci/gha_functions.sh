@@ -77,7 +77,7 @@ get_test_tags() {
 
 
 get_commit_pragmas() {
-    sed -Ene 's/^([-[:alnum:]]+): *([-\._ [:alnum:]]+)$/\1 \2/p' | while read -r a b; do
+    sed -Ene 's/^([-[:alnum:]]+): *([-\._, [:alnum:]]+)$/\1 \2/p' | while read -r a b; do
         echo -n "${a//-/_}" | tr '[:lower:]' '[:upper:]'
         # escape special characters in the value
         echo "=$b" | sed -e 's/\([<> ]\)/\\\1/g'
