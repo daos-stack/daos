@@ -12,7 +12,7 @@ runs:
       with:
         ref: ${{ github.event.pull_request.head.sha }}
     - run: . ci/gha_functions.sh;
-           echo "${{ inputs.commit-message }}" |
+           echo '${{ inputs.commit-message }}' |
              sed -e "s/'/'\"'\"'/g" |
              get_commit_pragmas |
              sed -e 's/^/CP_/' >> $GITHUB_ENV
