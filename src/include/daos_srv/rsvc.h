@@ -133,23 +133,24 @@ enum ds_rsvc_start_mode {
 };
 
 int ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, uint64_t caller_term,
-		  enum ds_rsvc_start_mode mode, size_t size, d_rank_list_t *replicas, void *arg);
+		  enum ds_rsvc_start_mode mode, size_t size, uint32_t vos_df_version,
+		  d_rank_list_t *replicas, void *arg);
 int ds_rsvc_stop(enum ds_rsvc_class_id class, d_iov_t *id, uint64_t caller_term, bool destroy);
 int ds_rsvc_stop_all(enum ds_rsvc_class_id class);
 int ds_rsvc_stop_leader(enum ds_rsvc_class_id class, d_iov_t *id,
 			struct rsvc_hint *hint);
 int ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id, const uuid_t dbid,
 		       const d_rank_list_t *ranks, uint64_t caller_term,
-		       enum ds_rsvc_start_mode mode, bool bootstrap, size_t size);
+		       enum ds_rsvc_start_mode mode, bool bootstrap, size_t size,
+		       uint32_t vos_df_version);
 int ds_rsvc_dist_stop(enum ds_rsvc_class_id class, d_iov_t *id, const d_rank_list_t *ranks,
 		      d_rank_list_t *excluded, uint64_t caller_term, bool destroy);
 enum ds_rsvc_state ds_rsvc_get_state(struct ds_rsvc *svc);
 void ds_rsvc_set_state(struct ds_rsvc *svc, enum ds_rsvc_state state);
-int ds_rsvc_add_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks,
-			   size_t size);
-int ds_rsvc_add_replicas(enum ds_rsvc_class_id class, d_iov_t *id,
-			 d_rank_list_t *ranks, size_t size,
-			 struct rsvc_hint *hint);
+int ds_rsvc_add_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks, size_t size,
+			   uint32_t vos_df_version);
+int ds_rsvc_add_replicas(enum ds_rsvc_class_id class, d_iov_t *id, d_rank_list_t *ranks,
+			 size_t size, uint32_t vos_df_version, struct rsvc_hint *hint);
 int ds_rsvc_remove_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks);
 int ds_rsvc_remove_replicas(enum ds_rsvc_class_id class, d_iov_t *id, d_rank_list_t *ranks,
 			    struct rsvc_hint *hint);

@@ -138,7 +138,7 @@ class DmgStorageQuery(ControlTestBase):
         targets = self.server_managers[-1].get_config_value('targets')
 
         # Create pool and get the storage smd information, then verify info
-        self.prepare_pool()
+        self.add_pool()
         pool_info = get_storage_query_pool_info(self.dmg, verbose=True)
 
         # Check the dmg storage query list-pools output for inaccuracies
