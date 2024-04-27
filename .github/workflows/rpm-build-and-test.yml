@@ -82,16 +82,6 @@ jobs:
       LEAP15_VERSION: ${{ needs.variables.outputs.LEAP15_VERSION }}
       PACKAGING_DIR: ${{ needs.variables.outputs.PACKAGING_DIR}}
 
-  Debug:
-    name: Debug outputs
-    runs-on: [self-hosted, wolf]
-    needs: [Build-RPM]
-    steps:
-      - name: debug run-gha
-        run: echo ${{ needs.Build-RPM.outputs.run-gha }}
-      - name: debug cp-test-tag
-        run: echo ${{ needs.Build-RPM.outputs.cp-test-tag }}
-
   Calc-functional-matrix:
     name: Calculate Functional Testing Matrix
     runs-on: [self-hosted, wolf]
