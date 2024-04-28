@@ -23,11 +23,16 @@
 /* the number of EQs for aio contexts. (d_aio_eq_count_g + d_eq_count) <= d_eq_count_max */
 uint16_t                 d_aio_eq_count_g;
 
+extern _Atomic bool      d_daos_inited;
+extern bool              d_compatible_mode;
 extern pthread_mutex_t   d_lock_aio_eqs_g;
 extern uint16_t          d_eq_count_max;
 extern uint16_t          d_eq_count;
 extern bool              d_hook_enabled;
 extern struct file_obj  *d_file_list[MAX_OPENED_FILE];
+
+extern int
+d_get_fd_redirected(int fd);
 
 struct d_aio_eq {
 	daos_handle_t    eq;
@@ -140,6 +145,10 @@ io_setup(int maxevents, io_context_t *ctxp)
 		return -daos_der2errno(rc);
 	}
 
+	if (!d_daos_inited)
+		/* daos_init() is not called yet. Call create_ev_eq_for_aio() inside io_submit() */
+		return 0;
+
 	/* assume all io requests are over DFS for now. */
 	rc = create_ev_eq_for_aio(aio_ctx_obj);
 	if (rc) {
@@ -241,53 +250,68 @@ io_submit(io_context_t ctx, long nr, struct iocb *ios[])
 	int              rc, rc2;
 	short            op;
 	long int         aio_eq_count_local;
+	int             *fd_directed = NULL;
 
 	if (next_io_submit == NULL) {
 		next_io_submit = dlsym(RTLD_NEXT, "io_submit");
 		D_ASSERT(next_io_submit != NULL);
 	}
 	if (!d_hook_enabled)
-		return next_io_submit(ctx_real, nr, ios);
+		goto org;
 	io_depth = aio_ctx_obj->depth;
 	if (io_depth == 0)
-		return next_io_submit(ctx_real, nr, ios);
+		goto org;
 	if (nr > io_depth)
 		nr = io_depth;
 
+	D_ALLOC_ARRAY(fd_directed, nr);
+	if (fd_directed == NULL)
+		D_GOTO(err, rc = ENOMEM);
+
 	n_op_dfs = 0;
 	for (i = 0; i < nr; i++) {
-		if (ios[i]->aio_fildes >= FD_FILE_BASE)
+		fd_directed[i] = d_get_fd_redirected(ios[i]->aio_fildes);
+		if (fd_directed[i] >= FD_FILE_BASE)
 			n_op_dfs++;
 
 		op = ios[i]->aio_lio_opcode;
 		/* only support IO_CMD_PREAD and IO_CMD_PWRITE */
 		if (op != IO_CMD_PREAD && op != IO_CMD_PWRITE) {
 			DS_ERROR(EINVAL, "io_submit only supports PREAD and PWRITE for now");
-			return (-EINVAL);
+			D_GOTO(err, rc = EINVAL);
 		}
 	}
 	if (n_op_dfs == 0)
-		return next_io_submit(ctx_real, nr, ios);
+		goto org;
 
 	if (n_op_dfs != nr) {
-		DS_ERROR(EINVAL, "io_submit() does not support mixed non-dfs and dfs files yet");
-		return (-EINVAL);
+		if (d_compatible_mode)
+			goto org;
+		DS_ERROR(EINVAL, "io_submit() does not support mixed non-dfs and dfs files yet in"
+			 " regular mode");
+		D_GOTO(err, rc = EINVAL);
+	}
+
+	if (!aio_ctx_obj->inited) {
+		rc = create_ev_eq_for_aio(aio_ctx_obj);
+		if (rc)
+			D_GOTO(err, rc);
 	}
 
 	aio_eq_count_local = d_aio_eq_count_g;
 	for (i = 0; i < nr; i++) {
 		op         = ios[i]->aio_lio_opcode;
-		fd         = ios[i]->aio_fildes - FD_FILE_BASE;
+		fd         = fd_directed[i] - FD_FILE_BASE;
 		idx_aio_eq = (aio_ctx_obj->first_eq + i) % aio_eq_count_local;
 
 		D_ALLOC_PTR(ctx_ev);
 		if (ctx_ev == NULL)
-			return i ? i : (-ENOMEM);
+			D_GOTO(err_loop, rc = ENOMEM);
 
 		rc = daos_event_init(&ctx_ev->ev, aio_eq_list[idx_aio_eq].eq, NULL);
 		if (rc) {
 			DL_ERROR(rc, "daos_event_init() failed");
-			D_GOTO(err, rc = daos_der2errno(rc));
+			D_GOTO(err_loop, rc = daos_der2errno(rc));
 		}
 		d_iov_set(&iov, (void *)ios[i]->u.c.buf, ios[i]->u.c.nbytes);
 		sgl.sg_nr     = 1;
@@ -302,7 +326,7 @@ io_submit(io_context_t ctx, long nr, struct iocb *ios[])
 				rc2 = daos_event_fini(&ctx_ev->ev);
 				if (rc2)
 					DL_ERROR(rc2, "daos_event_fini() failed");
-				D_GOTO(err, rc);
+				D_GOTO(err_loop, rc);
 			}
 		}
 		if (op == IO_CMD_PWRITE) {
@@ -312,17 +336,27 @@ io_submit(io_context_t ctx, long nr, struct iocb *ios[])
 				rc2 = daos_event_fini(&ctx_ev->ev);
 				if (rc2)
 					DL_ERROR(rc2, "daos_event_fini() failed");
-				D_GOTO(err, rc);
+				D_GOTO(err_loop, rc);
 			}
 		}
 		atomic_fetch_add_relaxed(&aio_ctx_obj->num_op_submitted, 1);
 		atomic_fetch_add_relaxed(&aio_eq_list[idx_aio_eq].n_op_queued, 1);
 	}
 
+	D_FREE(fd_directed);
 	return nr;
 
+org:
+	D_FREE(fd_directed);
+	return next_io_submit(ctx_real, nr, ios);
+
 err:
+	D_FREE(fd_directed);
+	return (-rc);
+
+err_loop:
 	D_FREE(ctx_ev);
+	D_FREE(fd_directed);
 
 	return i ? i : (-rc);
 }

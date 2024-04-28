@@ -144,19 +144,19 @@ static bool             is_bash;
  */
 static bool             no_dcache_in_bash = true;
 
-/* "compatible_mode" is a bool to control whether passing open(), openat(), and opendir() to dfuse
+/* "d_compatible_mode" is a bool to control whether passing open(), openat(), and opendir() to dfuse
  * all the time to avoid using fake fd. Env variable "D_IL_COMPATIBLE=1" will set it true. This
  * can increase the compatibility of libpil4dfs with degraded performance in open(), openat(),
  * and opendir().
  */
-static bool             compatible_mode;
+bool                    d_compatible_mode;
 static long int         page_size;
 
 #define DAOS_INIT_NOT_RUNNING 0
 #define DAOS_INIT_RUNNING     1
 
 static long int         daos_initing;
-static _Atomic bool     daos_inited;
+_Atomic bool            d_daos_inited;
 static bool             daos_debug_inited;
 static int              num_dfs;
 static struct dfs_mt    dfs_list[MAX_DAOS_MT];
@@ -930,7 +930,7 @@ child_hdlr(void)
 	int rc;
 
 	/* daos is not initialized yet */
-	if (atomic_load_relaxed(&daos_inited) == false)
+	if (atomic_load_relaxed(&d_daos_inited) == false)
 		return;
 
 	rc = daos_eq_lib_reset_after_fork();
@@ -971,7 +971,7 @@ consume_low_fd(void)
 	int rc = 0;
 	int fd_dup;
 
-	if (atomic_load_relaxed(&daos_inited) == true)
+	if (atomic_load_relaxed(&d_daos_inited) == true)
 		return 0;
 
 	D_MUTEX_LOCK(&lock_reserve_fd);
@@ -1118,7 +1118,7 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 
 	if (idx_dfs >= 0) {
 		/* trying to avoid lock as much as possible */
-		if (atomic_load_relaxed(&daos_inited) == false) {
+		if (atomic_load_relaxed(&d_daos_inited) == false) {
 			uint64_t status_old = DAOS_INIT_NOT_RUNNING;
 			bool     rc_cmp_swap;
 
@@ -1159,7 +1159,7 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 				D_MUTEX_UNLOCK(&lock_eqh);
 			}
 
-			atomic_store_relaxed(&daos_inited, true);
+			atomic_store_relaxed(&d_daos_inited, true);
 			atomic_fetch_add_relaxed(&daos_init_cnt, 1);
 
 			status_old = DAOS_INIT_RUNNING;
@@ -1705,14 +1705,14 @@ free_map(int idx)
 	D_MUTEX_UNLOCK(&lock_mmap);
 }
 
-static int
-get_fd_redirected(int fd)
+int
+d_get_fd_redirected(int fd)
 {
 	int i, fd_ret = fd;
 
 	if (fd >= FD_FILE_BASE)
 		return fd;
-	if (compatible_mode) {
+	if (d_compatible_mode) {
 		d_list_t     *rlink;
 		int           fd_kernel = fd;
 		struct ht_fd *fd_ht_obj;
@@ -1875,7 +1875,7 @@ check_path_with_dirfd(int dirfd, char **full_path_out, const char *rel_path, int
 
 	*error = 0;
 	*full_path_out = NULL;
-	dirfd_directed = get_fd_redirected(dirfd);
+	dirfd_directed = d_get_fd_redirected(dirfd);
 
 	if (dirfd_directed >= FD_DIR_BASE) {
 		len_str = asprintf(full_path_out, "%s/%s",
@@ -1987,7 +1987,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	}
 
 	/* Always rely on fuse for open() to avoid a fake fd */
-	if (compatible_mode) {
+	if (d_compatible_mode) {
 		struct ht_fd *fd_ht_obj = NULL;
 		int           fd_fake   = 0;
 
@@ -2321,9 +2321,9 @@ new_close_common(int (*next_close)(int fd), int fd)
 	if (!d_hook_enabled)
 		return next_close(fd);
 
-	if (compatible_mode && fd < FD_FILE_BASE) {
+	if (d_compatible_mode && fd < FD_FILE_BASE) {
 		remove_fd_compatible(fd);
-		if (fd < DAOS_MIN_FD && daos_inited) {
+		if (fd < DAOS_MIN_FD && d_daos_inited) {
 			rc = dup2(fd_dummy, fd);
 			if (rc != -1)
 				return 0;
@@ -2333,7 +2333,7 @@ new_close_common(int (*next_close)(int fd), int fd)
 		return next_close(fd);
 	}
 
-	fd_directed = get_fd_redirected(fd);
+	fd_directed = d_get_fd_redirected(fd);
 	if (fd_directed >= FD_DIR_BASE) {
 		/* directory */
 		free_dirfd(fd_directed - FD_DIR_BASE);
@@ -2445,11 +2445,11 @@ read_comm(ssize_t (*next_read)(int fd, void *buf, size_t size), int fd, void *bu
 	if (!d_hook_enabled)
 		return next_read(fd, buf, size);
 
-	if (is_bash && fd <= 2 && compatible_mode)
+	if (is_bash && fd <= 2 && d_compatible_mode)
 		/* special cases to handle bash/sh */
 		return next_read(fd, buf, size);
 
-	fd_directed = get_fd_redirected(fd);
+	fd_directed = d_get_fd_redirected(fd);
 	if (fd_directed >= FD_FILE_BASE) {
 		rc = pread_over_dfs(fd_directed - FD_FILE_BASE, buf, size,
 				    d_file_list[fd_directed - FD_FILE_BASE]->offset);
@@ -2488,7 +2488,7 @@ pread(int fd, void *buf, size_t size, off_t offset)
 	if (!d_hook_enabled)
 		return next_pread(fd, buf, size, offset);
 
-	fd_directed = get_fd_redirected(fd);
+	fd_directed = d_get_fd_redirected(fd);
 	if (fd_directed < FD_FILE_BASE)
 		return next_pread(fd, buf, size, offset);
 
@@ -2598,11 +2598,11 @@ write_comm(ssize_t (*next_write)(int fd, const void *buf, size_t size), int fd, 
 	if (!d_hook_enabled)
 		return next_write(fd, buf, size);
 
-	if (is_bash && fd <= 2 && compatible_mode)
+	if (is_bash && fd <= 2 && d_compatible_mode)
 		/* special cases to handle bash/sh */
 		return next_write(fd, buf, size);
 
-	fd_directed = get_fd_redirected(fd);
+	fd_directed = d_get_fd_redirected(fd);
 	if (fd_directed >= FD_FILE_BASE) {
 		rc = pwrite_over_dfs(fd_directed - FD_FILE_BASE, buf, size,
 				     d_file_list[fd_directed - FD_FILE_BASE]->offset);
@@ -2641,7 +2641,7 @@ pwrite(int fd, const void *buf, size_t size, off_t offset)
 	if (!d_hook_enabled)
 		return next_pwrite(fd, buf, size, offset);
 
-	fd_directed = get_fd_redirected(fd);
+	fd_directed = d_get_fd_redirected(fd);
 	if (fd_directed < FD_FILE_BASE)
 		return next_pwrite(fd, buf, size, offset);
 
@@ -2836,7 +2836,7 @@ readv(int fd, const struct iovec *iov, int iovcnt)
 	if (!d_hook_enabled)
 		return next_readv(fd, iov, iovcnt);
 
-	fd_directed = get_fd_redirected(fd);
+	fd_directed = d_get_fd_redirected(fd);
 	if (fd_directed < FD_FILE_BASE)
 		return next_readv(fd, iov, iovcnt);
 
@@ -2861,7 +2861,7 @@ writev(int fd, const struct iovec *iov, int iovcnt)
 	if (!d_hook_enabled)
 		return next_writev(fd, iov, iovcnt);
 
-	fd_directed = get_fd_redirected(fd);
+	fd_directed = d_get_fd_redirected(fd);
 	if (fd_directed < FD_FILE_BASE)
 		return next_writev(fd, iov, iovcnt);
 
@@ -2881,7 +2881,7 @@ new_fxstat(int vers, int fd, struct stat *buf)
 	if (!d_hook_enabled)
 		return next_fxstat(vers, fd, buf);
 
-	fd_directed = get_fd_redirected(fd);
+	fd_directed = d_get_fd_redirected(fd);
 	if (fd_directed < FD_FILE_BASE)
 		return next_fxstat(vers, fd, buf);
 
@@ -2918,7 +2918,7 @@ fstat(int fd, struct stat *buf)
 	if (!d_hook_enabled)
 		return next_fstat(fd, buf);
 
-	fd_directed = get_fd_redirected(fd);
+	fd_directed = d_get_fd_redirected(fd);
 	if (fd_directed < FD_FILE_BASE)
 		return next_fstat(fd, buf);
 
@@ -2978,7 +2978,7 @@ new_xstat(int ver, const char *path, struct stat *stat_buf)
 		rc = dfs_lookup_rel(dfs_mt->dfs, drec2obj(parent), item_name, O_RDONLY, &obj, &mode,
 				    stat_buf);
 	}
-	if ((rc == ENOTSUP || rc == EIO) && compatible_mode)
+	if ((rc == ENOTSUP || rc == EIO) && d_compatible_mode)
 		goto out_org;
 
 	stat_buf->st_mode = mode;
@@ -3002,7 +3002,7 @@ out_err:
 	if (parent != NULL)
 		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
-	if ((rc == EIO || rc == EINVAL) && compatible_mode)
+	if ((rc == EIO || rc == EINVAL) && d_compatible_mode)
 		return next_xstat(ver, path, stat_buf);
 	errno = rc;
 	return (-1);
@@ -3050,7 +3050,7 @@ out_err:
 	if (parent != NULL)
 		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
-	if ((rc == EIO || rc == EINVAL) && compatible_mode)
+	if ((rc == EIO || rc == EINVAL) && d_compatible_mode)
 		return libc_lxstat(ver, path, stat_buf);
 	errno = rc;
 	return (-1);
@@ -3251,15 +3251,15 @@ lseek_comm(off_t (*next_lseek)(int fd, off_t offset, int whence), int fd, off_t 
 	if (!d_hook_enabled)
 		return next_lseek(fd, offset, whence);
 
-	if (is_bash && fd <= 2 && compatible_mode)
+	if (is_bash && fd <= 2 && d_compatible_mode)
 		/* special cases to handle bash/sh */
 		return next_lseek(fd, offset, whence);
 
-	fd_directed = get_fd_redirected(fd);
+	fd_directed = d_get_fd_redirected(fd);
 	if (fd_directed < FD_FILE_BASE)
 		return next_lseek(fd, offset, whence);
 	/* seekdir() will handle by the following. */
-	if (fd < FD_FILE_BASE && fd_directed >= FD_DIR_BASE && compatible_mode)
+	if (fd < FD_FILE_BASE && fd_directed >= FD_DIR_BASE && d_compatible_mode)
 		return next_lseek(fd, offset, whence);
 
 	atomic_fetch_add_relaxed(&num_seek, 1);
@@ -3377,7 +3377,7 @@ fstatfs(int fd, struct statfs *sfs)
 	if (!d_hook_enabled)
 		return next_fstatfs(fd, sfs);
 
-	fd_directed = get_fd_redirected(fd);
+	fd_directed = d_get_fd_redirected(fd);
 	if (fd_directed < FD_FILE_BASE)
 		return next_fstatfs(fd, sfs);
 
@@ -3504,7 +3504,7 @@ opendir(const char *path)
 	}
 
 	/* Always rely on fuse for opendir() to avoid a fake dir fd */
-	if (compatible_mode) {
+	if (d_compatible_mode) {
 		dirp_kernel = next_opendir(path);
 		if (dirp_kernel == NULL)
 			D_GOTO(out_err_ret, rc = errno);
@@ -3564,7 +3564,7 @@ opendir(const char *path)
 		D_GOTO(out_err, rc = ENAMETOOLONG);
 	}
 
-	if (compatible_mode) {
+	if (d_compatible_mode) {
 		/* add fd kernel to hash table */
 		D_ALLOC_PTR(fd_ht_obj);
 		if (fd_ht_obj == NULL) {
@@ -3614,10 +3614,10 @@ fdopendir(int fd)
 	}
 	if (!d_hook_enabled)
 		return next_fdopendir(fd);
-	fd_directed = get_fd_redirected(fd);
+	fd_directed = d_get_fd_redirected(fd);
 	if (fd_directed < FD_DIR_BASE)
 		return next_fdopendir(fd_directed);
-	if (fd < FD_FILE_BASE && fd_directed >= FD_DIR_BASE && compatible_mode)
+	if (fd < FD_FILE_BASE && fd_directed >= FD_DIR_BASE && d_compatible_mode)
 		return next_fdopendir(fd);
 
 	atomic_fetch_add_relaxed(&num_opendir, 1);
@@ -3754,7 +3754,7 @@ closedir(DIR *dirp)
 		return next_closedir(dirp);
 	fd = dirfd(dirp);
 
-	if (compatible_mode && fd < FD_FILE_BASE) {
+	if (d_compatible_mode && fd < FD_FILE_BASE) {
 		d_list_t     *rlink;
 		int           real_fd = fd;
 
@@ -3956,7 +3956,7 @@ new_readdir(DIR *dirp)
 
 	if (!d_hook_enabled)
 		return next_readdir(dirp);
-	fd_directed = get_fd_redirected(dirfd(dirp));
+	fd_directed = d_get_fd_redirected(dirfd(dirp));
 	if (fd_directed < FD_FILE_BASE)
 		return next_readdir(dirp);
 
@@ -3966,7 +3966,7 @@ new_readdir(DIR *dirp)
 		errno = EINVAL;
 		return NULL;
 	}
-	if (compatible_mode)
+	if (d_compatible_mode)
 		/* dirp is from Linux kernel */
 		mydir = dir_list[fd_directed - FD_DIR_BASE];
 	atomic_fetch_add_relaxed(&num_readdir, 1);
@@ -4305,7 +4305,7 @@ reset_daos_env_before_exec(void)
 	if (context_reset) {
 		destroy_all_eqs();
 		daos_eq_lib_fini();
-		daos_inited       = false;
+		d_daos_inited     = false;
 		daos_debug_inited = false;
 		context_reset     = false;
 	}
@@ -4918,7 +4918,7 @@ isatty(int fd)
 	}
 	if (!d_hook_enabled)
 		return next_isatty(fd);
-	fd_directed = get_fd_redirected(fd);
+	fd_directed = d_get_fd_redirected(fd);
 	if (fd_directed >= FD_FILE_BASE) {
 		/* non-terminal */
 		errno = ENOTTY;
@@ -5089,7 +5089,7 @@ fchdir(int dirfd)
 	if (!d_hook_enabled)
 		return next_fchdir(dirfd);
 
-	fd_directed = get_fd_redirected(dirfd);
+	fd_directed = d_get_fd_redirected(dirfd);
 	if (fd_directed < FD_DIR_BASE)
 		return next_fchdir(dirfd);
 
@@ -5252,11 +5252,11 @@ fsync(int fd)
 	if (!d_hook_enabled)
 		return next_fsync(fd);
 
-	fd_directed = get_fd_redirected(fd);
+	fd_directed = d_get_fd_redirected(fd);
 	if (fd_directed < FD_FILE_BASE)
 		return next_fsync(fd);
 
-	if (fd < FD_DIR_BASE && compatible_mode)
+	if (fd < FD_DIR_BASE && d_compatible_mode)
 		return next_fsync(fd);
 
 	/* errno = ENOTSUP;
@@ -5276,7 +5276,7 @@ ftruncate(int fd, off_t length)
 	}
 	if (!d_hook_enabled)
 		return next_ftruncate(fd, length);
-	fd_directed = get_fd_redirected(fd);
+	fd_directed = d_get_fd_redirected(fd);
 	if (fd_directed < FD_FILE_BASE)
 		return next_ftruncate(fd, length);
 
@@ -5437,7 +5437,7 @@ fchmod(int fd, mode_t mode)
 
 	if (!d_hook_enabled)
 		return next_fchmod(fd, mode);
-	fd_directed = get_fd_redirected(fd);
+	fd_directed = d_get_fd_redirected(fd);
 	if (fd_directed < FD_FILE_BASE)
 		return next_fchmod(fd, mode);
 
@@ -5794,7 +5794,7 @@ futimens(int fd, const struct timespec times[2])
 	}
 	if (!d_hook_enabled)
 		return next_futimens(fd, times);
-	fd_directed = get_fd_redirected(fd);
+	fd_directed = d_get_fd_redirected(fd);
 	if (fd_directed < FD_FILE_BASE)
 		return next_futimens(fd, times);
 
@@ -5844,7 +5844,7 @@ new_fcntl(int fd, int cmd, ...)
 	param = va_arg(arg, int);
 	va_end(arg);
 
-	if (fd < FD_FILE_BASE && compatible_mode)
+	if (fd < FD_FILE_BASE && d_compatible_mode)
 		return libc_fcntl(fd, cmd, param);
 
 	switch (cmd) {
@@ -5860,7 +5860,7 @@ new_fcntl(int fd, int cmd, ...)
 	case F_NOTIFY:
 	case F_SETPIPE_SZ:
 	case F_ADD_SEALS:
-		fd_directed = get_fd_redirected(fd);
+		fd_directed = d_get_fd_redirected(fd);
 
 		if (!d_hook_enabled)
 			return libc_fcntl(fd, cmd, param);
@@ -5950,10 +5950,10 @@ ioctl(int fd, unsigned long request, ...)
 		return 0;
 	}
 
-	if (fd < FD_FILE_BASE && compatible_mode)
+	if (fd < FD_FILE_BASE && d_compatible_mode)
 		return next_ioctl(fd, request, param);
 
-	fd_directed = get_fd_redirected(fd);
+	fd_directed = d_get_fd_redirected(fd);
 	if (fd_directed < FD_FILE_BASE)
 		return next_ioctl(fd, request, param);
 
@@ -5973,7 +5973,7 @@ dup(int oldfd)
 	}
 	if (!d_hook_enabled)
 		return next_dup(oldfd);
-	fd_directed = get_fd_redirected(oldfd);
+	fd_directed = d_get_fd_redirected(oldfd);
 	if (fd_directed >= FD_FILE_BASE)
 		return new_fcntl(oldfd, F_DUPFD, 0);
 
@@ -5994,7 +5994,7 @@ dup2(int oldfd, int newfd)
 	if (!d_hook_enabled)
 		return next_dup2(oldfd, newfd);
 
-	if (compatible_mode) {
+	if (d_compatible_mode) {
 		struct ht_fd *fd_ht_obj = NULL;
 		int           fd_fake   = -1;
 
@@ -6005,7 +6005,7 @@ dup2(int oldfd, int newfd)
 		fd_kernel = next_dup2(oldfd, newfd);
 		if (fd_kernel < 0)
 			return (-1);
-		fd_directed = get_fd_redirected(oldfd);
+		fd_directed = d_get_fd_redirected(oldfd);
 		if (fd_directed < FD_FILE_BASE) {
 			return fd_kernel;
 		} else if (fd_directed < FD_DIR_BASE) {
@@ -6132,7 +6132,7 @@ new_dup3(int oldfd, int newfd, int flags)
 	if (!d_hook_enabled)
 		return libc_dup3(oldfd, newfd, flags);
 
-	if (get_fd_redirected(oldfd) < FD_FILE_BASE && get_fd_redirected(newfd) < FD_FILE_BASE)
+	if (d_get_fd_redirected(oldfd) < FD_FILE_BASE && d_get_fd_redirected(newfd) < FD_FILE_BASE)
 		return libc_dup3(oldfd, newfd, flags);
 
 	/* Ignore flags now. Need more work later to handle flags, e.g., O_CLOEXEC */
@@ -6149,7 +6149,7 @@ new_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 	if (!d_hook_enabled)
 		return next_mmap(addr, length, prot, flags, fd, offset);
 
-	fd_directed = get_fd_redirected(fd);
+	fd_directed = d_get_fd_redirected(fd);
 	if (fd_directed < FD_FILE_BASE)
 		return next_mmap(addr, length, prot, flags, fd, offset);
 
@@ -6283,10 +6283,10 @@ posix_fadvise(int fd, off_t offset, off_t len, int advice)
 	}
 	if (!d_hook_enabled)
 		return next_posix_fadvise(fd, offset, len, advice);
-	if (fd < FD_FILE_BASE && compatible_mode)
+	if (fd < FD_FILE_BASE && d_compatible_mode)
 		return next_posix_fadvise(fd, offset, len, advice);
 
-	fd_directed = get_fd_redirected(fd);
+	fd_directed = d_get_fd_redirected(fd);
 	if (fd_directed < FD_FILE_BASE)
 		return next_posix_fadvise(fd, offset, len, advice);
 
@@ -6317,10 +6317,10 @@ flock(int fd, int operation)
 	if (!d_hook_enabled)
 		return next_flock(fd, operation);
 
-	fd_directed = get_fd_redirected(fd);
+	fd_directed = d_get_fd_redirected(fd);
 	if (fd_directed < FD_FILE_BASE)
 		return next_flock(fd, operation);
-	if (compatible_mode && fd < FD_FILE_BASE)
+	if (d_compatible_mode && fd < FD_FILE_BASE)
 		return next_flock(fd, operation);
 
 	/* We output the message only if env "D_IL_REPORT" is set. */
@@ -6341,9 +6341,9 @@ fallocate(int fd, int mode, off_t offset, off_t len)
 	}
 	if (!d_hook_enabled)
 		return next_fallocate(fd, mode, offset, len);
-	if (fd < FD_FILE_BASE && compatible_mode)
+	if (fd < FD_FILE_BASE && d_compatible_mode)
 		return next_fallocate(fd, mode, offset, len);
-	fd_directed = get_fd_redirected(fd);
+	fd_directed = d_get_fd_redirected(fd);
 	if (fd_directed < FD_FILE_BASE)
 		return next_fallocate(fd, mode, offset, len);
 
@@ -6365,9 +6365,9 @@ posix_fallocate(int fd, off_t offset, off_t len)
 	}
 	if (!d_hook_enabled)
 		return next_posix_fallocate(fd, offset, len);
-	if (fd < FD_FILE_BASE && compatible_mode)
+	if (fd < FD_FILE_BASE && d_compatible_mode)
 		return next_posix_fallocate(fd, offset, len);
-	fd_directed = get_fd_redirected(fd);
+	fd_directed = d_get_fd_redirected(fd);
 	if (fd_directed < FD_FILE_BASE)
 		return next_posix_fallocate(fd, offset, len);
 
@@ -6389,9 +6389,9 @@ posix_fallocate64(int fd, off64_t offset, off64_t len)
 	}
 	if (!d_hook_enabled)
 		return next_posix_fallocate64(fd, offset, len);
-	if (fd < FD_FILE_BASE && compatible_mode)
+	if (fd < FD_FILE_BASE && d_compatible_mode)
 		return next_posix_fallocate64(fd, offset, len);
-	fd_directed = get_fd_redirected(fd);
+	fd_directed = d_get_fd_redirected(fd);
 	if (fd_directed < FD_FILE_BASE)
 		return next_posix_fallocate64(fd, offset, len);
 
@@ -6413,9 +6413,9 @@ tcgetattr(int fd, void *termios_p)
 	}
 	if (!d_hook_enabled)
 		return next_tcgetattr(fd, termios_p);
-	if (fd < FD_FILE_BASE && compatible_mode)
+	if (fd < FD_FILE_BASE && d_compatible_mode)
 		return next_tcgetattr(fd, termios_p);
-	fd_directed = get_fd_redirected(fd);
+	fd_directed = d_get_fd_redirected(fd);
 	if (fd_directed < FD_FILE_BASE)
 		return next_tcgetattr(fd, termios_p);
 
@@ -6654,12 +6654,12 @@ init_myhook(void)
 	enforce_exec_env = false;
 	d_getenv_bool("D_IL_ENFORCE_EXEC_ENV", &enforce_exec_env);
 
-	compatible_mode = false;
-	d_getenv_bool("D_IL_COMPATIBLE", &compatible_mode);
+	d_compatible_mode = false;
+	d_getenv_bool("D_IL_COMPATIBLE", &d_compatible_mode);
 
 	d_getenv_bool("D_IL_NO_DCACHE_BASH", &no_dcache_in_bash);
 
-	if (compatible_mode) {
+	if (d_compatible_mode) {
 		rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_MUTEX |
 					 D_HASH_FT_LRU, 6, NULL, &fd_hash_ops, &fd_hash);
 		if (rc != 0) {
@@ -6764,7 +6764,7 @@ init_myhook(void)
 
 	register_a_hook("libc", "fcntl", (void *)new_fcntl, (long int *)(&libc_fcntl));
 
-	if (compatible_mode == false) {
+	if (d_compatible_mode == false) {
 		register_a_hook("libc", "mmap", (void *)new_mmap, (long int *)(&next_mmap));
 		register_a_hook("libc", "munmap", (void *)new_munmap, (long int *)(&next_munmap));
 	}
@@ -6896,7 +6896,7 @@ finalize_myhook(void)
 		destroy_all_eqs();
 	}
 
-	if (compatible_mode) {
+	if (d_compatible_mode) {
 		/* Free record left in fd hash table then destroy it */
 		while (1) {
 			rlink = d_hash_rec_first(fd_hash);
@@ -7039,7 +7039,7 @@ finalize_dfs(void)
 		D_FREE(dfs_list[i].cont);
 	}
 
-	if (atomic_load_relaxed(&daos_inited)) {
+	if (atomic_load_relaxed(&d_daos_inited)) {
 		uint32_t init_cnt, j;
 
 		free_reserved_low_fd();
