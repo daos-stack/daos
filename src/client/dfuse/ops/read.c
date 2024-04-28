@@ -132,7 +132,7 @@ struct read_chunk_data {
 	struct dfuse_obj_hdl *ohs[8];
 	bool                  done[8];
 	d_list_t              list;
-	int                   bucket;
+	uint64_t              bucket;
 	bool                  complete;
 	struct dfuse_eq      *eqt;
 	bool                  exiting;
@@ -194,8 +194,8 @@ chunk_cb(struct dfuse_event *ev)
 
 	if (cd->rc == 0 && (ev->de_len != CHUNK_SIZE)) {
 		cd->rc = EIO;
-		DS_WARN(cd->rc, "Unexpected short read bucket %d (%#zx) expected %i got %zi",
-			cd->bucket, (off_t)cd->bucket * CHUNK_SIZE, CHUNK_SIZE, ev->de_len);
+		DS_WARN(cd->rc, "Unexpected short read bucket %ld (%#zx) expected %i got %zi",
+			cd->bucket, cd->bucket * CHUNK_SIZE, CHUNK_SIZE, ev->de_len);
 	}
 
 	daos_event_fini(&ev->de_ev);
@@ -313,7 +313,7 @@ chunk_read(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
 	struct read_chunk_core   *cc;
 	struct read_chunk_data   *cd;
 	off_t                     last;
-	int                       bucket;
+	uint64_t                  bucket;
 	int                       slot;
 	bool                      submit = false;
 	bool                      rcb;
@@ -334,8 +334,8 @@ chunk_read(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
 
 	slot = (position / K128) % 8;
 
-	DFUSE_TRA_DEBUG(oh, "read bucket %#zx-%#zx last %#zx size %#zx bucket %d slot %d", position,
-			position + len - 1, last, ie->ie_stat.st_size, bucket, slot);
+	DFUSE_TRA_DEBUG(oh, "read bucket %#zx-%#zx last %#zx size %#zx bucket %ld slot %d",
+			position, position + len - 1, last, ie->ie_stat.st_size, bucket, slot);
 
 	D_MUTEX_LOCK(&rc_lock);
 	if (ie->ie_chunk == NULL) {
@@ -362,7 +362,7 @@ found:
 	D_MUTEX_UNLOCK(&rc_lock);
 
 	if (submit) {
-		DFUSE_TRA_DEBUG(oh, "submit for bucket %d[%d]", bucket, slot);
+		DFUSE_TRA_DEBUG(oh, "submit for bucket %ld[%d]", bucket, slot);
 		rcb = chunk_fetch(req, oh, cd, slot);
 	} else {
 		struct dfuse_event *ev = NULL;
