@@ -36,7 +36,6 @@ struct dc_mgmt_sys_info {
 	char		provider[DAOS_SYS_INFO_STRING_MAX + 1];
 	char		interface[DAOS_SYS_INFO_STRING_MAX + 1];
 	char		domain[DAOS_SYS_INFO_STRING_MAX + 1];
-	uint32_t	crt_ctx_share_addr;
 	uint32_t	crt_timeout;
 	int32_t		srv_srx_set;
 	d_rank_list_t  *ms_ranks;
