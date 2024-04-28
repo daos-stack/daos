@@ -573,6 +573,22 @@ int dmg_system_reint_rank(const char *dmg_config_file, d_rank_t rank);
  */
 int dmg_system_exclude_rank(const char *dmg_config_file, d_rank_t rank);
 
+/**
+ * Dynamically change engine logging.
+ *
+ * \param dmg_config_file.
+ *			[IN]	DMG config file.
+ * \param masks		[IN]	log_mask setting.
+ *				If NULL, reset to the value set in server configuration file.
+ * \param streams	[IN]	DD_MASK environment engine variable value.
+ * \param subsystems	[IN]	DD_SUBSYS environment engine variable value.
+ *				If NULL, reset to the value set in server configuration file.
+ *
+ */
+int
+dmg_server_set_logmasks(const char *dmg_config_file, const char *masks, const char *streams,
+			const char *subsystems);
+
 const char *daos_target_state_enum_to_str(int state);
 
 /* Used to easily setup data needed for tests */
