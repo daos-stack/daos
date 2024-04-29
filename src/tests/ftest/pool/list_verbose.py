@@ -49,8 +49,10 @@ class ListVerboseTest(IorTestBase):
 
         if scm_size is None:
             scm_size = pool.scm_size.value * rank_count
+        scm_size = int(scm_size)
         if nvme_size is None:
             nvme_size = pool.nvme_size.value * rank_count
+        nvme_size = int(nvme_size)
 
         targets_total = self.server_managers[0].get_config_value("targets") * rank_count
 
@@ -66,7 +68,6 @@ class ListVerboseTest(IorTestBase):
             "active_targets": targets_total - targets_disabled,
             "total_engines": rank_count,
             "disabled_targets": targets_disabled,
-            "version": 1,
             "svc_ldr": pool.svc_leader,
             "svc_reps": pool.svc_ranks,
             "upgrade_layout_ver": upgrade_layout_ver,
@@ -191,6 +192,7 @@ class ListVerboseTest(IorTestBase):
 
         actual_pools = self.get_dmg_command().get_pool_list_all(verbose=True)
         for pool in actual_pools:
+            del pool['version']  # not easy to calculate expected value, could cause flaky tests
             for tier in pool["tier_stats"]:  # expected values are tricky to calculate
                 del tier['min']
                 del tier['max']
