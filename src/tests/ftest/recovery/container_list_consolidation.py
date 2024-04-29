@@ -70,7 +70,6 @@ class ContainerListConsolidationTest(RecoveryTestBase):
         if vos_file:
             # We're using a PMEM cluster.
             scm_mount = self.server_managers[0].get_config_value("scm_mount")
-            vos_file = self.get_vos_file_path(pool=pool)
             if vos_file is None:
                 self.fail("vos file wasn't found in {}/{}".format(scm_mount, pool.uuid.lower()))
             ddb_command = DdbCommand(
@@ -84,7 +83,7 @@ class ContainerListConsolidationTest(RecoveryTestBase):
                 self.fail("Unexpected output from ddb command, unable to parse.")
             self.log.info("Container UUID from ddb ls = %s", match.group(1))
 
-            # UUID if found. Verify that it's the container UUID of the container we created.
+            # UUID is found. Verify that it's the container UUID of the container we created.
             actual_uuid = match.group(1)
             if actual_uuid != expected_uuid:
                 msg = "Unexpected container UUID! Expected = {}; Actual = {}".format(
@@ -150,3 +149,7 @@ class ContainerListConsolidationTest(RecoveryTestBase):
             self.log.error(error)
         finally:
             report_errors(test=self, errors=errors)
+
+        # Remove container object so that tearDown will not try to destroy the non-existent
+        # container.
+        container.skip_cleanup()
