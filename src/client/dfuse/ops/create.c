@@ -98,16 +98,16 @@ _dfuse_mode_update(fuse_req_t req, struct dfuse_inode_entry *parent, mode_t *_mo
 }
 
 void
-dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
-		const char *name, mode_t mode, struct fuse_file_info *fi)
+dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name, mode_t mode,
+		struct fuse_file_info *fi)
 {
-	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	const struct fuse_ctx		*ctx = fuse_req_ctx(req);
-	struct dfuse_inode_entry	*ie = NULL;
-	struct dfuse_obj_hdl		*oh = NULL;
-	struct fuse_file_info		fi_out = {0};
-	struct dfuse_cont		*dfs = parent->ie_dfs;
-	int				rc;
+	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
+	const struct fuse_ctx    *ctx        = fuse_req_ctx(req);
+	struct dfuse_inode_entry *ie         = NULL;
+	struct dfuse_obj_hdl     *oh         = NULL;
+	struct fuse_file_info     fi_out     = {0};
+	struct dfuse_cont        *dfs        = parent->ie_dfs;
+	int                       rc;
 
 	DFUSE_TRA_DEBUG(parent, "Parent:%#lx '%s'", parent->ie_stat.st_ino, name);
 
@@ -129,7 +129,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	/* Upgrade fd permissions from O_WRONLY to O_RDWR if wb caching is
 	 * enabled so the kernel can do read-modify-write
 	 */
-	if (parent->ie_dfs->dfc_data_timeout != 0 && fs_handle->dpi_info->di_wb_cache &&
+	if (parent->ie_dfs->dfc_data_timeout != 0 && dfuse_info->di_wb_cache &&
 	    (fi->flags & O_ACCMODE) == O_WRONLY) {
 		DFUSE_TRA_DEBUG(parent, "Upgrading fd to O_RDRW");
 		fi->flags &= ~O_ACCMODE;
@@ -156,12 +156,12 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_stat.st_uid = ctx->uid;
 	ie->ie_stat.st_gid = ctx->gid;
 
-	dfuse_ie_init(ie);
-	dfuse_open_handle_init(oh, ie);
+	dfuse_ie_init(dfuse_info, ie);
+	dfuse_open_handle_init(dfuse_info, oh, ie);
 
 	oh->doh_linear_read = false;
 
-	if (!fs_handle->dpi_info->di_multi_user) {
+	if (!dfuse_info->di_multi_user) {
 		rc = _dfuse_mode_update(req, parent, &mode);
 		if (rc != 0)
 			D_GOTO(err, rc);
@@ -174,7 +174,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (rc)
 		D_GOTO(err, rc);
 
-	dfuse_cache_evict_dir(fs_handle, parent);
+	dfuse_cache_evict_dir(dfuse_info, parent);
 
 	/** duplicate the file handle for the fuse handle */
 	rc = dfs_dup(dfs->dfs_ns, oh->doh_obj, O_RDWR, &ie->ie_obj);
@@ -213,13 +213,13 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
 
 	/* Return the new inode data, and keep the parent ref */
-	dfuse_reply_entry(fs_handle, ie, &fi_out, true, req);
+	dfuse_reply_entry(dfuse_info, ie, &fi_out, true, req);
 
 	return;
 release:
 	dfs_release(oh->doh_obj);
 err:
 	DFUSE_REPLY_ERR_RAW(parent, req, rc);
-	D_FREE(oh);
-	D_FREE(ie);
+	dfuse_oh_free(dfuse_info, oh);
+	dfuse_ie_free(dfuse_info, ie);
 }

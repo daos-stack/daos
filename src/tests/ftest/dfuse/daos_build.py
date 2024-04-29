@@ -208,7 +208,7 @@ class DaosBuild(DfuseTestBase):
 
         cmds = ['python3 -m venv {}/venv'.format(mount_dir),
                 'git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
-                'git -C {} checkout release/2.4'.format(build_dir),
+                'git -C {} checkout google/2.4'.format(build_dir),
                 'git -C {} submodule init'.format(build_dir),
                 'git -C {} submodule update'.format(build_dir),
                 'python3 -m pip install pip --upgrade',
@@ -218,8 +218,7 @@ class DaosBuild(DfuseTestBase):
                 'daos filesystem evict {}'.format(build_dir),
                 'daos filesystem query {}'.format(mount_dir),
                 'scons -C {} --jobs {}'.format(build_dir, intercept_jobs),
-                'scons -C {} --jobs {} install'.format(build_dir, intercept_jobs),
-                'daos filesystem query {}'.format(mount_dir)]
+                'scons -C {} --jobs {} install'.format(build_dir, intercept_jobs)]
         for cmd in cmds:
             command = '{};{}'.format(preload_cmd, cmd)
             # Use a short timeout for most commands, but vary the build timeout based on dfuse mode.

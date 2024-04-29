@@ -169,14 +169,11 @@ dfuse_bg(struct dfuse_info *dfuse_info)
  * Returns true on success, false on failure.
  */
 int
-dfuse_launch_fuse(struct dfuse_projection_info *fs_handle, struct fuse_args *args)
+dfuse_launch_fuse(struct dfuse_info *dfuse_info, struct fuse_args *args)
 {
-	struct dfuse_info		*dfuse_info;
-	int				rc;
+	int rc;
 
-	dfuse_info = fs_handle->dpi_info;
-
-	dfuse_info->di_session = fuse_session_new(args, &dfuse_ops, sizeof(dfuse_ops), fs_handle);
+	dfuse_info->di_session = fuse_session_new(args, &dfuse_ops, sizeof(dfuse_ops), dfuse_info);
 	if (dfuse_info->di_session == NULL) {
 		DFUSE_TRA_ERROR(dfuse_info, "Could not create fuse session");
 		return -DER_INVAL;
@@ -379,39 +376,38 @@ check_fd_mountpoint(const char *mountpoint)
 int
 main(int argc, char **argv)
 {
-	struct dfuse_projection_info *fs_handle                              = NULL;
-	struct dfuse_info            *dfuse_info                             = NULL;
-	struct dfuse_pool            *dfp                                    = NULL;
-	struct dfuse_cont            *dfs                                    = NULL;
-	struct duns_attr_t            duns_attr                              = {};
-	uuid_t                        cont_uuid                              = {};
-	char                          pool_name[DAOS_PROP_LABEL_MAX_LEN + 1] = {};
-	char                          cont_name[DAOS_PROP_LABEL_MAX_LEN + 1] = {};
-	int                           c;
-	int                           rc;
-	int                           rc2;
-	char                         *path              = NULL;
-	bool                          have_thread_count = false;
-	int                           pos_index         = 0;
+	struct dfuse_info *dfuse_info                             = NULL;
+	struct dfuse_pool *dfp                                    = NULL;
+	struct dfuse_cont *dfs                                    = NULL;
+	struct duns_attr_t duns_attr                              = {};
+	uuid_t             cont_uuid                              = {};
+	char               pool_name[DAOS_PROP_LABEL_MAX_LEN + 1] = {};
+	char               cont_name[DAOS_PROP_LABEL_MAX_LEN + 1] = {};
+	int                c;
+	int                rc;
+	int                rc2;
+	char              *path              = NULL;
+	bool               have_thread_count = false;
+	int                pos_index         = 0;
 
-	struct option                 long_options[] = {{"mountpoint", required_argument, 0, 'm'},
-							{"multi-user", no_argument, 0, 'M'},
-							{"path", required_argument, 0, 'P'},
-							{"pool", required_argument, 0, 'p'},
-							{"container", required_argument, 0, 'c'},
-							{"sys-name", required_argument, 0, 'G'},
-							{"singlethread", no_argument, 0, 'S'},
-							{"thread-count", required_argument, 0, 't'},
-							{"eq-count", required_argument, 0, 'e'},
-							{"foreground", no_argument, 0, 'f'},
-							{"enable-caching", no_argument, 0, 'E'},
-							{"enable-wb-cache", no_argument, 0, 'F'},
-							{"disable-caching", no_argument, 0, 'A'},
-							{"disable-wb-cache", no_argument, 0, 'B'},
-							{"options", required_argument, 0, 'o'},
-							{"version", no_argument, 0, 'v'},
-							{"help", no_argument, 0, 'h'},
-							{0, 0, 0, 0}};
+	struct option      long_options[] = {{"mountpoint", required_argument, 0, 'm'},
+					     {"multi-user", no_argument, 0, 'M'},
+					     {"path", required_argument, 0, 'P'},
+					     {"pool", required_argument, 0, 'p'},
+					     {"container", required_argument, 0, 'c'},
+					     {"sys-name", required_argument, 0, 'G'},
+					     {"singlethread", no_argument, 0, 'S'},
+					     {"thread-count", required_argument, 0, 't'},
+					     {"eq-count", required_argument, 0, 'e'},
+					     {"foreground", no_argument, 0, 'f'},
+					     {"enable-caching", no_argument, 0, 'E'},
+					     {"enable-wb-cache", no_argument, 0, 'F'},
+					     {"disable-caching", no_argument, 0, 'A'},
+					     {"disable-wb-cache", no_argument, 0, 'B'},
+					     {"options", required_argument, 0, 'o'},
+					     {"version", no_argument, 0, 'v'},
+					     {"help", no_argument, 0, 'h'},
+					     {0, 0, 0, 0}};
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
@@ -422,9 +418,9 @@ main(int argc, char **argv)
 		D_GOTO(out_debug, rc = -DER_NOMEM);
 
 	dfuse_info->di_threaded = true;
-	dfuse_info->di_caching = true;
+	dfuse_info->di_caching  = true;
 	dfuse_info->di_wb_cache = true;
-	dfuse_info->di_equeue_count = 1;
+	dfuse_info->di_eq_count = 1;
 
 	while (1) {
 		c = getopt_long(argc, argv, "Mm:St:o:fhv", long_options, NULL);
@@ -473,7 +469,7 @@ main(int argc, char **argv)
 			dfuse_info->di_thread_count = 2;
 			break;
 		case 'e':
-			dfuse_info->di_equeue_count = atoi(optarg);
+			dfuse_info->di_eq_count = atoi(optarg);
 			break;
 		case 't':
 			dfuse_info->di_thread_count = atoi(optarg);
@@ -568,7 +564,7 @@ main(int argc, char **argv)
 	}
 
 	/* Reserve one thread for each daos event queue */
-	dfuse_info->di_thread_count -= dfuse_info->di_equeue_count;
+	dfuse_info->di_thread_count -= dfuse_info->di_eq_count;
 
 	if (dfuse_info->di_thread_count < 1) {
 		printf("Dfuse needs at least one fuse thread.\n");
@@ -596,7 +592,7 @@ main(int argc, char **argv)
 
 	DFUSE_TRA_ROOT(dfuse_info, "dfuse_info");
 
-	rc = dfuse_fs_init(dfuse_info, &fs_handle);
+	rc = dfuse_fs_init(dfuse_info);
 	if (rc != 0)
 		D_GOTO(out_fini, rc);
 
@@ -678,34 +674,34 @@ main(int argc, char **argv)
 	}
 
 	/* Connect to a pool. */
-	rc = dfuse_pool_connect(fs_handle, pool_name, &dfp);
+	rc = dfuse_pool_connect(dfuse_info, pool_name, &dfp);
 	if (rc != 0) {
 		printf("Failed to connect to pool: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
 	}
 
 	if (cont_name[0] && uuid_parse(cont_name, cont_uuid) < 0)
-		rc = dfuse_cont_open_by_label(fs_handle, dfp, cont_name, &dfs);
+		rc = dfuse_cont_open_by_label(dfuse_info, dfp, cont_name, &dfs);
 	else
-		rc = dfuse_cont_open(fs_handle, dfp, &cont_uuid, &dfs);
+		rc = dfuse_cont_open(dfuse_info, dfp, &cont_uuid, &dfs);
 	if (rc != 0) {
 		printf("Failed to connect to container: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(out_pool, rc = daos_errno2der(rc));
 	}
 
-	rc = dfuse_fs_start(fs_handle, dfs);
+	rc = dfuse_fs_start(dfuse_info, dfs);
 	if (rc != -DER_SUCCESS)
 		D_GOTO(out_cont, rc);
 
 	/* The container created by dfuse_cont_open() will have taken a ref on the pool, so drop the
 	 * initial one.
 	 */
-	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);
+	d_hash_rec_decref(&dfuse_info->di_pool_table, &dfp->dfp_entry);
 
-	rc = dfuse_fs_stop(fs_handle);
+	rc = dfuse_fs_stop(dfuse_info);
 
 	/* Remove all inodes from the hash tables */
-	rc2 = dfuse_fs_fini(fs_handle);
+	rc2 = dfuse_fs_fini(dfuse_info);
 	if (rc == -DER_SUCCESS)
 		rc = rc2;
 	fuse_session_destroy(dfuse_info->di_session);
@@ -713,13 +709,19 @@ main(int argc, char **argv)
 out_cont:
 	d_hash_rec_decref(&dfp->dfp_cont_table, &dfs->dfs_entry);
 out_pool:
-	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);
+	d_hash_rec_decref(&dfuse_info->di_pool_table, &dfp->dfp_entry);
 out_daos:
-	rc2 = dfuse_fs_fini(fs_handle);
+	rc2 = dfuse_fs_fini(dfuse_info);
 	if (rc == -DER_SUCCESS)
 		rc = rc2;
 out_fini:
-	D_FREE(fs_handle);
+	if (dfuse_info) {
+		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_inode_count) == 0);
+		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_fh_count) == 0);
+		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_pool_count) == 0);
+		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_container_count) == 0);
+	}
+
 	DFUSE_TRA_DOWN(dfuse_info);
 	daos_fini();
 out_debug:
