@@ -324,7 +324,7 @@ class PoolSecurityTestBase(TestWithServers):
         daos_cmd = self.get_daos_command()
         with daos_cmd.no_exception():
             if action.lower() == "write":
-                container = self.get_container(pool, create=False, daos_command=daos_cmd)
+                container = self.get_container(pool, create=False, daos=daos_cmd)
                 result = container.create()
             elif action.lower() == "read":
                 result = daos_cmd.pool_query(pool.identifier)

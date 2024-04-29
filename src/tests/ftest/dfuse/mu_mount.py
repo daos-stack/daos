@@ -12,7 +12,10 @@ from run_utils import command_as_user, run_remote
 
 
 class DfuseMUMount(DfuseTestBase):
-    """Verifies multi-user dfuse mounting"""
+    """Verifies multi-user dfuse mounting
+
+    :avocado: recursive
+    """
 
     def test_dfuse_mu_mount_basic(self):
         """JIRA ID: DAOS-6540, DAOS-8135.
