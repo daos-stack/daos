@@ -46,12 +46,14 @@ class ContainerListConsolidationTest(RecoveryTestBase):
         self.log_step("Create a pool and a container")
         pool = self.get_pool(connect=False)
         container = self.get_container(pool=pool)
+        expected_uuid = container.uuid.lower()
 
         self.log_step("Inject fault to cause orphan container.")
         daos_command = self.get_daos_command()
         daos_command.faults_container(
             pool=pool.identifier, cont=container.identifier,
             location="DAOS_CHK_CONT_ORPHAN")
+        container.skip_cleanup()
 
         self.log_step("Check that the container doesn't appear with daos command.")
         pool_list = daos_command.pool_list_containers(pool=pool.identifier)
@@ -84,7 +86,6 @@ class ContainerListConsolidationTest(RecoveryTestBase):
 
             # UUID if found. Verify that it's the container UUID of the container we created.
             actual_uuid = match.group(1)
-            expected_uuid = container.uuid.lower()
             if actual_uuid != expected_uuid:
                 msg = "Unexpected container UUID! Expected = {}; Actual = {}".format(
                     expected_uuid, actual_uuid)
