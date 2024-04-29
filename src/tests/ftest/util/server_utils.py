@@ -468,7 +468,7 @@ class DaosServerManager(SubprocessManager):
         cmd.run_user = "daos_server"
         cmd.debug.value = False
         cmd.set_command(("support", "collect-log"),
-                        "config"=get_default_config_file("server"), **kwargs)
+                        config=get_default_config_file("server"), **kwargs)
         self.log.info("Support collect-log on servers: %s", str(cmd))
         return run_remote(
             self.log, self._hosts, cmd.with_exports, timeout=self.collect_log_timeout.value)
