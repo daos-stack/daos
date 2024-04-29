@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -21,9 +21,9 @@ struct program_args {
 	bool  pa_write_mode;
 	bool  pa_get_help;
 };
-
+#define DB_PATH_LEN 64
 struct vos_file_parts {
-	char		vf_db_path[64];
+	char		vf_db_path[DB_PATH_LEN];
 	uuid_t		vf_pool_uuid;
 	char		vf_vos_file[16];
 	uint32_t	vf_target_idx;
