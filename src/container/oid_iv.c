@@ -31,8 +31,7 @@ struct oid_iv_entry {
 	struct oid_iv_range	rg;
 	/** protect the entry */
 	ABT_mutex		lock;
-	void			*current_req;
-	bool                     current_req_retry;
+	void                   *current_req;
 };
 
 /** Priv data in the iv layer */
@@ -79,7 +78,7 @@ oid_iv_ent_refresh(struct ds_iv_entry *iv_entry, struct ds_iv_key *key,
 	struct oid_iv_range	*avail;
 
 	if (src == NULL) {
-		D_DEBUG(DB_TRACE, "delete entry iv_entry %p\n", iv_entry);
+		D_DEBUG(DB_MD, "delete entry iv_entry %p\n", iv_entry);
 		iv_entry->iv_to_delete = 1;
 		return 0;
 	}
@@ -94,13 +93,8 @@ oid_iv_ent_refresh(struct ds_iv_entry *iv_entry, struct ds_iv_key *key,
 	D_ASSERT(entry != NULL);
 
 	/** if iv op failed, just release the entry lock acquired in update */
-	if (ref_rc != 0) {
-		/** if retrying request, we do not increase oids */
-		entry->current_req_retry = true;
+	if (ref_rc != 0)
 		goto out;
-	} else {
-		entry->current_req_retry = false;
-	}
 
 	avail = &entry->rg;
 	oids = src->sg_iovs[0].iov_buf;
@@ -172,7 +166,7 @@ oid_iv_ent_update(struct ds_iv_entry *ns_entry, struct ds_iv_key *iv_key,
 	}
 
 	if (avail->num_oids >= num_oids) {
-		D_DEBUG(DB_TRACE, "%u: IDs available\n", myrank);
+		D_DEBUG(DB_MD, "%u: IDs available\n", myrank);
 		/** set the oid value in the iv value */
 		oids->oid = avail->oid;
 		oids->num_oids = num_oids;
@@ -182,17 +176,22 @@ oid_iv_ent_update(struct ds_iv_entry *ns_entry, struct ds_iv_key *iv_key,
 		avail->oid += num_oids;
 
 		priv->num_oids = 0;
-		/** release entry lock */
 		ABT_mutex_unlock(entry->lock);
 		return 0;
 	}
 
 	/** increase the number of oids requested before forwarding (if not a retry) */
-	if (entry->current_req_retry == false) {
+	if (oids->req_rank != dss_self_rank()) {
 		if (num_oids < OID_BLOCK)
 			oids->num_oids = OID_BLOCK;
 		else
 			oids->num_oids = (num_oids / OID_BLOCK) * OID_BLOCK * 2;
+		D_DEBUG(DB_MD, "%u: req rank = %u OID IV update: INCREASING num_oids %zu\n",
+			dss_self_rank(), oids->req_rank, oids->num_oids);
+	} else {
+		D_DEBUG(DB_MD, "%u: req rank = %u OID IV update, using SAME num_oids %zu\n",
+			dss_self_rank(), oids->req_rank, oids->req_num_oids);
+		oids->num_oids = oids->req_num_oids;
 	}
 
 	/** Keep track of how much this node originally requested */
@@ -321,9 +320,8 @@ oid_iv_reserve(void *ns, uuid_t po_uuid, uuid_t co_uuid, uint64_t num_oids, d_sg
 	struct oid_iv_range	*oids;
 	int		rc;
 
-	D_DEBUG(DB_TRACE, "%d: OID alloc CUUID "DF_UUIDF"/"DF_UUIDF" num_oids %"
-		PRIu64"\n", dss_self_rank(), DP_UUID(po_uuid), DP_UUID(co_uuid),
-		num_oids);
+	D_DEBUG(DB_MD, "%d: OID alloc CUUID " DF_UUIDF "/" DF_UUIDF " num_oids %" PRIu64 "\n",
+		dss_self_rank(), DP_UUID(po_uuid), DP_UUID(co_uuid), num_oids);
 
 	memset(&key, 0, sizeof(key));
 	key.class_id = IV_OID;
@@ -334,6 +332,8 @@ oid_iv_reserve(void *ns, uuid_t po_uuid, uuid_t co_uuid, uint64_t num_oids, d_sg
 
 	oids = value->sg_iovs[0].iov_buf;
 	oids->num_oids = num_oids;
+	oids->req_rank     = dss_self_rank();
+	oids->req_num_oids = num_oids;
 
 	rc = ds_iv_update(ns, &key, value, 0, CRT_IV_SYNC_NONE,
 			  CRT_IV_SYNC_BIDIRECTIONAL, true /* retry */);
