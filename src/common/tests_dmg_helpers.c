@@ -1333,6 +1333,9 @@ dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 				json_object_to_json_string(val1));
 
 			if (json_object_object_get_ex(val1, "smd_info", &smd_info)) {
+				if (smd_info == NULL)
+					continue;
+
 				if (!json_object_object_get_ex(
 					smd_info, "devices", &smd_dev)) {
 					D_ERROR("unable to extract devices\n");
