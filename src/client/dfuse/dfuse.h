@@ -1111,8 +1111,11 @@ dfuse_compute_inode(struct dfuse_cont *dfs,
 void
 dfuse_cache_evict_dir(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie);
 
-/* Free any read chunk data for an inode */
-void
+/* Free any read chunk data for an inode.
+ *
+ * Returns true if feature was used.
+ */
+bool
 read_chunk_close(struct dfuse_inode_entry *ie);
 
 /* Metadata caching functions. */

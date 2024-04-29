@@ -110,7 +110,7 @@ pick_eqt(struct dfuse_info *dfuse_info)
 	return &dfuse_info->di_eqt[eqt_idx % dfuse_info->di_eq_count];
 }
 
-/* Readahead and coalescing
+/* Chunk read and coalescing
  *
  * This code attempts to predict application and kernel I/O patterns and preemptively read file
  * data ahead of when it's requested.
@@ -120,7 +120,14 @@ pick_eqt(struct dfuse_info *dfuse_info)
  * are received and read an entire buffers worth, then for future requests the data should already
  * be in cache.
  *
- * TODO: Ensure that the linear_read flag remains set correctly by this code.
+ * This code is entered when caching is enabled and reads are correctly size/aligned and not in the
+ * last CHUNK_SIZE of a file.  When open then the inode contains a single read_chunk_core pointer
+ * and this contains a list of read_chunk_data entries, one for each bucket.  Buckets where all
+ * slots have been requested are remove from the list and closed when the last request is completed.
+ *
+ * TODO: Currently there is no code to remove partially read buckets from the list so reading
+ * one slot every chunk would leave the entire file contents in memory until close and mean long
+ * list traversal times.
  */
 
 #define K128       (1024 * 128)
@@ -130,20 +137,21 @@ struct read_chunk_data {
 	struct dfuse_event   *ev;
 	fuse_req_t            reqs[8];
 	struct dfuse_obj_hdl *ohs[8];
-	bool                  done[8];
 	d_list_t              list;
 	uint64_t              bucket;
-	bool                  complete;
 	struct dfuse_eq      *eqt;
-	bool                  exiting;
 	int                   rc;
+	int                   entered;
+	ATOMIC int            exited;
+	bool                  exiting;
+	bool                  complete;
 };
 
 struct read_chunk_core {
 	d_list_t entries;
 };
 
-/* Global lock for all readahead operations.  Each inode has a struct read_chunk_core * entry
+/* Global lock for all chunk read operations.  Each inode has a struct read_chunk_core * entry
  * which is checked for NULL and set whilst holding this lock.  Each read_chunk_core then has
  * a list of read_chunk_data and again, this lock protects all lists on all inodes.  This avoids
  * the need for a per-inode lock which for many files would consume considerable memory but does
@@ -162,15 +170,20 @@ chunk_free(struct read_chunk_data *cd)
 
 /* Called when the last open file handle on a inode is closed.  This needs to free everything which
  * is complete and for anything that isn't flag it for deletion in the callback.
+ *
+ * Returns true if the feature was used.
  */
-void
+bool
 read_chunk_close(struct dfuse_inode_entry *ie)
 {
 	struct read_chunk_data *cd, *cdn;
+	bool                    rcb = false;
 
 	D_MUTEX_LOCK(&rc_lock);
 	if (!ie->ie_chunk)
 		goto out;
+
+	rcb = true;
 
 	d_list_for_each_entry_safe(cd, cdn, &ie->ie_chunk->entries, list) {
 		if (cd->complete) {
@@ -182,6 +195,7 @@ read_chunk_close(struct dfuse_inode_entry *ie)
 	D_FREE(ie->ie_chunk);
 out:
 	D_MUTEX_UNLOCK(&rc_lock);
+	return rcb;
 }
 
 static void
@@ -189,6 +203,7 @@ chunk_cb(struct dfuse_event *ev)
 {
 	struct read_chunk_data *cd = ev->de_cd;
 	fuse_req_t              req;
+	bool                    done = false;
 
 	cd->rc = ev->de_ev.ev_error;
 
@@ -202,8 +217,6 @@ chunk_cb(struct dfuse_event *ev)
 
 	do {
 		int i;
-		int done_count = 0;
-
 		req = 0;
 
 		D_MUTEX_LOCK(&rc_lock);
@@ -219,18 +232,10 @@ chunk_cb(struct dfuse_event *ev)
 			if (cd->reqs[i]) {
 				req         = cd->reqs[i];
 				cd->reqs[i] = 0;
-				cd->done[i] = true;
 				break;
-			} else if (cd->done[i]) {
-				done_count++;
 			}
 		}
 
-		if (done_count == 8) {
-			D_ASSERT(!req);
-			d_slab_release(cd->eqt->de_read_slab, cd->ev);
-			cd->ev = NULL;
-		}
 		D_MUTEX_UNLOCK(&rc_lock);
 
 		if (req) {
@@ -244,8 +249,16 @@ chunk_cb(struct dfuse_event *ev)
 				DFUSE_REPLY_BUFQ(cd->ohs[i], req, ev->de_iov.iov_buf + (i * K128),
 						 K128);
 			}
+
+			if (atomic_fetch_add_relaxed(&cd->exited, 1) == 7)
+				done = true;
 		}
-	} while (req);
+	} while (req && !done);
+
+	if (done) {
+		d_slab_release(cd->eqt->de_read_slab, cd->ev);
+		D_FREE(cd);
+	}
 }
 
 /* Submut a read to dfs.
@@ -347,18 +360,26 @@ chunk_read(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
 	cc = ie->ie_chunk;
 
 	d_list_for_each_entry(cd, &cc->entries, list)
-		if (cd->bucket == bucket)
+		if (cd->bucket == bucket) {
+			/* Remove from list to re-add again later. */
+			d_list_del(&cd->list);
 			goto found;
+		}
 
 	D_ALLOC_PTR(cd);
 	if (cd == NULL)
 		goto err;
 
-	d_list_add_tail(&cd->list, &cc->entries);
 	cd->bucket = bucket;
 	submit     = true;
 
 found:
+
+	if (++cd->entered < 8) {
+		/* Put on front of list for efficient searching */
+		d_list_add(&cd->list, &cc->entries);
+	}
+
 	D_MUTEX_UNLOCK(&rc_lock);
 
 	if (submit) {
@@ -367,21 +388,15 @@ found:
 	} else {
 		struct dfuse_event *ev = NULL;
 
-		/* Not check if this read request is complete or not yet, if it isn't then just
+		/* Now check if this read request is complete or not yet, if it isn't then just
 		 * save req in the right slot however if it is then reply here.  After the call to
 		 * DFUSE_REPLY_* then no reference is held on either the open file or the inode so
-		 * at that point they could be closed, so decided if ev needs to be released whilst
-		 * holding the lock and keep a copy of all data structures needed.
-		 *
-		 * TODO: Implement this in a safe way.  A reference count on ev is probably
-		 * required.  For now this is safe but will maintain all previously read events
-		 * in memory.
+		 * at that point they could be closed.
 		 */
 		rcb = true;
 
 		D_MUTEX_LOCK(&rc_lock);
 		if (cd->complete) {
-			cd->done[slot] = true;
 			ev             = cd->ev;
 		} else {
 			cd->reqs[slot] = req;
@@ -399,6 +414,10 @@ found:
 				DFUSE_TRA_DEBUG(oh, "%#zx-%#zx read", position,
 						position + K128 - 1);
 				DFUSE_REPLY_BUFQ(oh, req, ev->de_iov.iov_buf + (slot * K128), K128);
+			}
+			if (atomic_fetch_add_relaxed(&cd->exited, 1) == 7) {
+				d_slab_release(cd->eqt->de_read_slab, cd->ev);
+				D_FREE(cd);
 			}
 		}
 	}

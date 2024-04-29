@@ -32,7 +32,7 @@ class DfuseCachingCheck(IorTestBase):
             higher than with caching disabled.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=vm
+        :avocado: tags=hw,medium
         :avocado: tags=daosio,dfuse
         :avocado: tags=DfuseCachingCheck,test_dfuse_caching_check
         """

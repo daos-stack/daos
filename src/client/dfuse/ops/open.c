@@ -209,7 +209,8 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	}
 	oc = atomic_fetch_sub_relaxed(&oh->doh_ie->ie_open_count, 1);
 	if (oc == 1) {
-		read_chunk_close(oh->doh_ie);
+		if (read_chunk_close(oh->doh_ie))
+			oh->doh_linear_read = true;
 	}
 
 	if (oh->doh_evict_on_close) {
