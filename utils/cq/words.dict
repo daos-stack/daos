@@ -166,6 +166,8 @@ dsync
 dtx
 eg
 enablement
+endian
+endianness
 endswith
 enospace
 enum

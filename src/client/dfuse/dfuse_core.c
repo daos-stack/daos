@@ -1579,6 +1579,8 @@ dfuse_fs_start(struct dfuse_info *dfuse_info, struct dfuse_cont *dfs)
 	}
 
 err_threads:
+	dfuse_info->di_shutdown = true;
+
 	for (int i = 0; i < dfuse_info->di_eq_count; i++) {
 		struct dfuse_eq *eqt = &dfuse_info->di_eqt[i];
 
