@@ -715,7 +715,7 @@ class TestWithServers(TestWithoutServers):
 
         # The server config name should be obtained from each ServerManager
         # object, but some tests still use this TestWithServers attribute.
-        self.server_group = self.params.get("name", "/server_config/", "daos_server")
+        self.server_group = self.params.get("name", "/run/server_config/*", "daos_server")
 
         # The optional namespace for the server configuration test yaml parameters.
         self.server_config_namespace = self.params.get("server_config_namespace", "/run/setup/*")
