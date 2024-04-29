@@ -139,7 +139,7 @@ daos_init(void)
 {
 	struct d_fault_attr_t *d_fault_init;
 	struct d_fault_attr_t *d_fault_mem = NULL;
-	struct d_fault_attr_t d_fault_mem_saved;
+	struct d_fault_attr_t  d_fault_mem_saved;
 	int rc;
 
 	D_MUTEX_LOCK(&module_lock);
@@ -188,19 +188,24 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_agent, rc);
 
+	/** get and cache attach info of default system */
+	rc = dc_mgmt_cache_attach_info(NULL);
+	if (rc != 0)
+		D_GOTO(out_job, rc);
+
 	/**
 	 * get CaRT configuration (see mgmtModule.handleGetAttachInfo for the
 	 * handling of NULL system names)
 	 */
 	rc = dc_mgmt_net_cfg(NULL);
 	if (rc != 0)
-		D_GOTO(out_job, rc);
+		D_GOTO(out_attach, rc);
 
 	/** set up event queue */
 	rc = daos_eq_lib_init();
 	if (rc != 0) {
 		D_ERROR("failed to initialize eq_lib: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_job, rc);
+		D_GOTO(out_attach, rc);
 	}
 
 	/**
@@ -256,6 +261,8 @@ out_pl:
 	pl_fini();
 out_eq:
 	daos_eq_lib_fini();
+out_attach:
+	dc_mgmt_drop_attach_info();
 out_job:
 	dc_job_fini();
 out_agent:
@@ -313,6 +320,7 @@ daos_fini(void)
 			DF_RC"\n", DP_RC(rc));
 
 	dc_tm_fini();
+	dc_mgmt_drop_attach_info();
 	dc_agent_fini();
 	dc_job_fini();
 
