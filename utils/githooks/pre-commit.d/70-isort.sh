@@ -10,6 +10,13 @@ set -ue
 
 _print_githook_header "isort"
 
+py_files=$(_git_diff_cached_files "*.py SConstruct *SConscript")
+
+if [ -z "$py_files" ]; then
+    echo "No python changes. Skipping"
+    exit 0
+fi
+
 if ! command -v isort > /dev/null 2>&1; then
     echo "isort not installed. Install isort command to improve pre-commit checks:"
     echo "  python3 -m pip install -r ./utils/cq/requirements.txt"
@@ -23,8 +30,7 @@ fi
 
 echo "Checking if python imports are sorted"
 
-isort_args=(--jobs 8 .)
-if ! isort --check-only "${isort_args[@]}"; then
-    echo "  isort check failed, run 'isort ${isort_args[*]}' to fix."
+if ! echo "$py_files" | xargs -r isort --check-only --jobs 8; then
+    echo "  isort check failed, run 'isort --jobs 8 .' to fix."
     exit 1
 fi
