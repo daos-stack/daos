@@ -828,7 +828,6 @@ init_pool(const char *label, uuid_t uuid, uint64_t capas, const char *grp,
 	/** sy_info.provider */
 	/** sy_info.interface */
 	/** sy_info.domain */
-	/** sy_info.crt_ctx_share_addr */
 	/** sy_info.crt_timeout */
 
 	rc = rsvc_client_init(&pool->dp_client, NULL);

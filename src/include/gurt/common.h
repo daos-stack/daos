@@ -401,7 +401,7 @@ d_realpath(const char *path, char *resolved_path) _dalloc_;
 #define D_SPIN_INIT(x, y)	__D_PTHREAD_INIT(pthread_spin_init, x, y)
 #define D_RWLOCK_INIT(x, y)	__D_PTHREAD_INIT(pthread_rwlock_init, x, y)
 
-#ifdef DAOS_BUILD_RELEASE
+#if defined(DAOS_BUILD_RELEASE) || defined(__COVERITY__)
 
 #define D_MUTEX_LOCK(x)    __D_PTHREAD(pthread_mutex_lock, x)
 #define D_RWLOCK_WRLOCK(x) __D_PTHREAD(pthread_rwlock_wrlock, x)

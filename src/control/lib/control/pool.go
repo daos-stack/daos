@@ -1138,34 +1138,38 @@ func processSCMSpaceStats(log debugLogger, filterRank filterRankFn, scmNamespace
 func processNVMeSpaceStats(log debugLogger, filterRank filterRankFn, nvmeControllers storage.NvmeControllers, rankNVMeFreeSpace rankFreeSpaceMap) error {
 	for _, controller := range nvmeControllers {
 		for _, smdDevice := range controller.SmdDevices {
+			msgDev := fmt.Sprintf("SMD device %s (rank %d, ctrlr %s)", smdDevice.UUID,
+				smdDevice.Rank, controller.PciAddr)
+
 			if !smdDevice.Roles.IsEmpty() && (smdDevice.Roles.OptionBits&storage.BdevRoleData) == 0 {
-				log.Debugf("Skipping SMD device %s (rank %d, ctrlr %s) not used for storing data",
-					smdDevice.UUID, smdDevice.Rank, controller.PciAddr)
+				log.Debugf("Skipping %s, not used for storing data", msgDev)
 				continue
 			}
 
-			if controller.NvmeState != storage.NvmeStateNormal {
-				return errors.Errorf("SMD device %s (rank %d, ctrlr %s) not usable (device state %q)",
-					smdDevice.UUID, smdDevice.Rank, controller.PciAddr, controller.NvmeState.String())
+			if controller.NvmeState == storage.NvmeStateNew {
+				log.Debugf("Skipping %s, not used as in NEW state", msgDev)
 				continue
+			}
+			if controller.NvmeState != storage.NvmeStateNormal {
+				return errors.Errorf("%s not usable as in %s state", msgDev,
+					controller.NvmeState.String())
 			}
 
 			if !filterRank(smdDevice.Rank) {
-				log.Debugf("Skipping SMD device %s (rank %d, ctrlr %s) not in ranklist",
-					smdDevice.UUID, smdDevice.Rank, controller.PciAddr)
+				log.Debugf("Skipping %s, not in ranklist", msgDev)
 				continue
 			}
 
 			if _, exists := rankNVMeFreeSpace[smdDevice.Rank]; !exists {
-				return errors.Errorf("Rank %d without SCM device and at least one SMD device %s (rank %d, ctrlr %s)",
-					smdDevice.Rank, smdDevice.UUID, smdDevice.Rank, controller.PciAddr)
+				return errors.Errorf("Rank %d without SCM device and at least one %s",
+					smdDevice.Rank, msgDev)
 			}
 
 			rankNVMeFreeSpace[smdDevice.Rank] += smdDevice.UsableBytes
 
-			log.Debugf("Added SMD device %s (rank %d, ctrlr %s) is usable: device state=%q, smd-size=%d ctrlr-total-free=%d",
-				smdDevice.UUID, smdDevice.Rank, controller.PciAddr, controller.NvmeState.String(),
-				smdDevice.UsableBytes, rankNVMeFreeSpace[smdDevice.Rank])
+			log.Debugf("Added %s as usable: device state=%q, smd-size=%d ctrlr-total-free=%d",
+				msgDev, controller.NvmeState.String(), smdDevice.UsableBytes,
+				rankNVMeFreeSpace[smdDevice.Rank])
 		}
 	}
 

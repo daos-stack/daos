@@ -37,7 +37,6 @@ type FabricConfig struct {
 	InterfacePort   int    `yaml:"fabric_iface_port,omitempty" cmdEnv:"D_PORT,nonzero"`
 	NumaNodeIndex   uint   `yaml:"-"`
 	BypassHealthChk *bool  `yaml:"bypass_health_chk,omitempty" cmdLongFlag:"--bypass_health_chk" cmdShortFlag:"-b"`
-	CrtCtxShareAddr uint32 `yaml:"crt_ctx_share_addr,omitempty" cmdEnv:"CRT_CTX_SHARE_ADDR"`
 	CrtTimeout      uint32 `yaml:"crt_timeout,omitempty" cmdEnv:"CRT_TIMEOUT"`
 	// NumSecondaryEndpoints configures the number of cart endpoints per secondary provider.
 	NumSecondaryEndpoints []int  `yaml:"secondary_provider_endpoints,omitempty" cmdLongFlag:"--nr_sec_ctx,nonzero" cmdShortFlag:"-S,nonzero"`
@@ -142,9 +141,6 @@ func (fc *FabricConfig) Update(other FabricConfig) {
 	}
 	if fc.InterfacePort == 0 {
 		fc.InterfacePort = other.InterfacePort
-	}
-	if fc.CrtCtxShareAddr == 0 {
-		fc.CrtCtxShareAddr = other.CrtCtxShareAddr
 	}
 	if fc.CrtTimeout == 0 {
 		fc.CrtTimeout = other.CrtTimeout
@@ -587,12 +583,6 @@ func (c *Config) WithFabricNumaNodeIndex(nodeIndex uint) *Config {
 // WithBypassHealthChk sets the NVME health check bypass for this instance
 func (c *Config) WithBypassHealthChk(bypass *bool) *Config {
 	c.Fabric.BypassHealthChk = bypass
-	return c
-}
-
-// WithCrtCtxShareAddr defines the CRT_CTX_SHARE_ADDR for this instance
-func (c *Config) WithCrtCtxShareAddr(addr uint32) *Config {
-	c.Fabric.CrtCtxShareAddr = addr
 	return c
 }
 
