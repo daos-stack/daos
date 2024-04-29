@@ -5004,13 +5004,14 @@ def run_in_fg(server, conf, args):
 
     # Set to False to run dfuse without a pool.
     pool_on_cmd_line = True
+    cont_on_cmd_line = True
 
     if not container:
         container = create_cont(conf, pool, label=label, ctype="POSIX")
 
         # Only set the container cache attributes when the container is initially created so they
         # can be modified later.
-        cont_attrs = {'dfuse-data-cache': False,
+        cont_attrs = {'dfuse-data-cache': 120,
                       'dfuse-attr-time': 67,
                       'dfuse-dentry-time': 19,
                       'dfuse-dentry-dir-time': 31,
@@ -5026,6 +5027,9 @@ def run_in_fg(server, conf, args):
     if pool_on_cmd_line:
         dargs['pool'] = pool.uuid
 
+    if cont_on_cmd_line:
+        dargs["container"] = container
+
     dfuse = DFuse(server,
                   conf,
                   **dargs)
@@ -5034,7 +5038,11 @@ def run_in_fg(server, conf, args):
     dfuse.start()
 
     if pool_on_cmd_line:
-        t_dir = join(dfuse.dir, container)
+        if cont_on_cmd_line:
+            t_dir = dfuse.dir
+        else:
+            t_dir = join(dfuse.dir, container)
+
     else:
         t_dir = join(dfuse.dir, pool.uuid, container)
 

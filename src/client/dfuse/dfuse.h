@@ -136,7 +136,7 @@ struct dfuse_inode_entry;
  * this buffer is kept as long as it's needed but released as soon as possible, either on error or
  * when EOF is returned to the kernel.  If it's still present on release then it's freed then.
  */
-struct dfuse_read_ahead {
+struct dfuse_pre_read {
 	pthread_mutex_t     dra_lock;
 	struct dfuse_event *dra_ev;
 	int                 dra_rc;
@@ -149,7 +149,7 @@ struct dfuse_obj_hdl {
 	/** the DFS object handle.  Not created for directories. */
 	dfs_obj_t                *doh_obj;
 
-	struct dfuse_read_ahead  *doh_readahead;
+	struct dfuse_pre_read    *doh_readahead;
 
 	/** the inode entry for the file */
 	struct dfuse_inode_entry *doh_ie;
@@ -405,6 +405,7 @@ struct dfuse_event {
 	union {
 		struct dfuse_obj_hdl     *de_oh;
 		struct dfuse_inode_entry *de_ie;
+		struct read_chunk_data   *de_cd;
 	};
 	off_t  de_req_position; /**< The file position requested by fuse */
 	union {
@@ -1011,6 +1012,8 @@ struct dfuse_inode_entry {
 
 	/* Entry on the evict list */
 	d_list_t                  ie_evict_entry;
+
+	struct read_chunk_core   *ie_chunk;
 };
 
 /* Flush write-back cache writes to a inode.  It does this by waiting for and then releasing an
@@ -1107,6 +1110,13 @@ dfuse_compute_inode(struct dfuse_cont *dfs,
  */
 void
 dfuse_cache_evict_dir(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie);
+
+/* Free any read chunk data for an inode.
+ *
+ * Returns true if feature was used.
+ */
+bool
+read_chunk_close(struct dfuse_inode_entry *ie);
 
 /* Metadata caching functions. */
 
