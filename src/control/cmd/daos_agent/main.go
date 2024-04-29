@@ -20,6 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -112,6 +113,17 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			logCmd.SetLog(log)
 		}
 
+		daosLogMask := daos.DefaultErrorMask
+		if opts.Debug {
+			log.SetLevel(logging.LogLevelTrace)
+			daosLogMask = daos.DefaultDebugMask
+		}
+		fini, err := daos.InitLogging(daosLogMask)
+		if err != nil {
+			return err
+		}
+		defer fini()
+
 		if jsonCmd, ok := cmd.(cmdutil.JSONOutputter); ok && opts.JSON {
 			jsonCmd.EnableJSONOutput(os.Stdout, &wroteJSON)
 			// disable output on stdout other than JSON
@@ -194,7 +206,6 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			return errors.Wrap(err, "Unable to load Certificate Data")
 		}
 
-		var err error
 		if cfg.AccessPoints, err = common.ParseHostList(cfg.AccessPoints, cfg.ControlPort); err != nil {
 			return errors.Wrap(err, "Failed to parse config access_points")
 		}

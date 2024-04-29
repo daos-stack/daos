@@ -25,6 +25,8 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/telemetry"
+	"github.com/daos-stack/daos/src/control/lib/telemetry/promexp"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -40,6 +42,7 @@ type mgmtModule struct {
 	ctlInvoker     control.Invoker
 	cache          *InfoCache
 	monitor        *procMon
+	cliMetricsSrc  *promexp.ClientSource
 	useDefaultNUMA bool
 
 	numaGetter hardware.ProcessNUMAProvider
@@ -71,6 +74,8 @@ func (mod *mgmtModule) HandleCall(ctx context.Context, session *drpc.Session, me
 	switch method {
 	case drpc.MethodGetAttachInfo:
 		return mod.handleGetAttachInfo(ctx, req, cred.Pid)
+	case drpc.MethodSetupClientTelemetry:
+		return mod.handleSetupClientTelemetry(ctx, req, cred)
 	case drpc.MethodNotifyPoolConnect:
 		return nil, mod.handleNotifyPoolConnect(ctx, req, cred.Pid)
 	case drpc.MethodNotifyPoolDisconnect:
@@ -212,6 +217,33 @@ func (mod *mgmtModule) getAttachInfoResp(ctx context.Context, sys string) (*mgmt
 
 func (mod *mgmtModule) getFabricInterface(ctx context.Context, numaNode int, netDevClass hardware.NetDevClass, provider string) (*FabricInterface, error) {
 	return mod.cache.GetFabricDevice(ctx, numaNode, netDevClass, provider)
+}
+
+func (mod *mgmtModule) handleSetupClientTelemetry(ctx context.Context, reqb []byte, cred *unix.Ucred) ([]byte, error) {
+	if len(reqb) == 0 {
+		return nil, errors.New("empty request")
+	}
+
+	pbReq := new(mgmtpb.ClientTelemetryReq)
+	if err := proto.Unmarshal(reqb, pbReq); err != nil {
+		return nil, drpc.UnmarshalingPayloadFailure()
+	}
+	if pbReq.Jobid == "" {
+		return nil, errors.New("empty jobid")
+	}
+	if pbReq.ShmKey == 0 {
+		return nil, errors.New("unset shm key")
+	}
+	if cred == nil {
+		return nil, errors.New("nil user credentials")
+	}
+
+	if err := telemetry.SetupClientRoot(ctx, pbReq.Jobid, int(cred.Pid), int(pbReq.ShmKey)); err != nil {
+		return nil, err
+	}
+	resp := &mgmtpb.ClientTelemetryResp{AgentUid: int32(unix.Getuid())}
+	mod.log.Tracef("%d: %s", cred.Pid, pblog.Debug(resp))
+	return proto.Marshal(resp)
 }
 
 func (mod *mgmtModule) handleNotifyPoolConnect(ctx context.Context, reqb []byte, pid int32) error {

@@ -364,9 +364,9 @@ wait_all_exited(struct dss_xstream *dx, struct dss_module_info *dmi)
 static void
 dss_srv_handler(void *arg)
 {
-	struct dss_xstream		*dx = (struct dss_xstream *)arg;
-	struct dss_thread_local_storage	*dtc;
-	struct dss_module_info		*dmi;
+	struct dss_xstream               *dx = (struct dss_xstream *)arg;
+	struct daos_thread_local_storage *dtc;
+	struct dss_module_info           *dmi;
 	int				 rc;
 	bool                             track_mem     = false;
 	bool				 signal_caller = true;
@@ -1300,7 +1300,7 @@ dss_srv_fini(bool force)
 		vos_standalone_tls_fini();
 		/* fall through */
 	case XD_INIT_TLS_REG:
-		pthread_key_delete(dss_tls_key);
+		ds_tls_key_delete();
 		/* fall through */
 	case XD_INIT_ULT_BARRIER:
 		ABT_cond_free(&xstream_data.xd_ult_barrier);
@@ -1402,7 +1402,7 @@ dss_srv_init(void)
 	xstream_data.xd_init_step = XD_INIT_ULT_BARRIER;
 
 	/* register xstream-local storage key */
-	rc = pthread_key_create(&dss_tls_key, NULL);
+	rc = ds_tls_key_create();
 	if (rc) {
 		rc = dss_abterr2der(rc);
 		D_ERROR("Failed to register storage key: "DF_RC"\n", DP_RC(rc));

@@ -14,7 +14,9 @@
 #include <daos/pool_map.h>
 #include <daos/rpc.h>
 #include <daos/checksum.h>
-#include "obj_rpc.h"
+#include <daos/metrics.h>
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 #include "obj_internal.h"
 
 static inline struct dc_obj_layout *
@@ -104,6 +106,7 @@ struct rw_cb_args {
 	daos_iom_t		*maps;
 	crt_endpoint_t		tgt_ep;
 	struct shard_rw_args	*shard_args;
+	uint64_t                 send_time;
 };
 
 static struct dcs_layout *
@@ -886,6 +889,99 @@ unlock:
 	return rc;
 }
 
+daos_size_t
+obj_get_fetch_size(struct rw_cb_args *arg)
+{
+	struct obj_rw_out *orwo;
+	daos_size_t        size = 0;
+
+	orwo = crt_reply_get(arg->rpc);
+
+	if (orwo->orw_sgls.ca_count > 0) {
+		/* inline transfer */
+		size =
+		    daos_sgls_packed_size(orwo->orw_sgls.ca_arrays, orwo->orw_sgls.ca_count, NULL);
+	} else if (arg->rwaa_sgls != NULL) {
+		/* bulk transfer */
+		daos_size_t *replied_sizes = orwo->orw_data_sizes.ca_arrays;
+		int          i;
+
+		for (i = 0; i < orwo->orw_data_sizes.ca_count; i++)
+			size += replied_sizes[i];
+	}
+
+	return size;
+}
+
+static void
+obj_shard_update_metrics_begin(crt_rpc_t *rpc)
+{
+	struct dc_obj_tls *tls;
+	int                opc;
+
+	if (!daos_client_metric)
+		return;
+
+	tls = dc_obj_tls_get();
+	D_ASSERT(tls != NULL);
+	opc = opc_get(rpc->cr_opc);
+	d_tm_inc_gauge(tls->cot_op_active[opc], 1);
+}
+
+static void
+obj_shard_update_metrics_end(crt_rpc_t *rpc, uint64_t send_time, void *arg, int ret)
+{
+	struct dc_obj_tls       *tls;
+	struct rw_cb_args       *rw_args;
+	struct dc_pool          *pool;
+	struct obj_rw_in        *orw;
+	struct d_tm_node_t      *lat = NULL;
+	struct obj_pool_metrics *opm = NULL;
+	daos_size_t              size;
+	uint64_t                 time;
+	int                      opc;
+
+	if (!daos_client_metric || ret != 0)
+		return;
+	tls = dc_obj_tls_get();
+	D_ASSERT(tls != NULL);
+	opc = opc_get(rpc->cr_opc);
+	orw = crt_req_get(rpc);
+	d_tm_dec_gauge(tls->cot_op_active[opc], 1);
+	/**
+	 * Measure latency of successful I/O only.
+	 * Use bit shift for performance and tolerate some inaccuracy.
+	 */
+	time = daos_get_ntime() - send_time;
+	time >>= 10;
+
+	switch (opc) {
+	case DAOS_OBJ_RPC_UPDATE:
+	case DAOS_OBJ_RPC_FETCH:
+		rw_args = arg;
+		pool    = rw_args->shard_args->auxi.obj_auxi->obj->cob_pool;
+		D_ASSERT(pool != NULL);
+		opm = pool->dp_metrics[DAOS_OBJ_MODULE];
+		D_ASSERTF(opm != NULL, "pool %p\n", pool);
+		if (opc == DAOS_OBJ_RPC_UPDATE) {
+			size = daos_sgls_packed_size(rw_args->rwaa_sgls, orw->orw_nr, NULL);
+			d_tm_inc_counter(opm->opm_update_bytes, size);
+			lat = tls->cot_update_lat[lat_bucket(size)];
+		} else {
+			size = obj_get_fetch_size(rw_args);
+			lat  = tls->cot_fetch_lat[lat_bucket(size)];
+			d_tm_inc_counter(opm->opm_fetch_bytes, size);
+		}
+		break;
+	default:
+		lat = tls->cot_op_lat[opc];
+		break;
+	}
+
+	if (lat != NULL)
+		d_tm_set_gauge(lat, time);
+}
+
 static int
 dc_rw_cb(tse_task_t *task, void *arg)
 {
@@ -1191,10 +1287,15 @@ dc_rw_cb(tse_task_t *task, void *arg)
 out:
 	if (rc == -DER_CSUM && opc == DAOS_OBJ_RPC_FETCH)
 		dc_shard_csum_report(task, &rw_args->tgt_ep, rw_args->rpc);
+
+	obj_shard_update_metrics_end(rw_args->rpc, rw_args->send_time, rw_args,
+				     ret == 0 ? rc : ret);
+
 	crt_req_decref(rw_args->rpc);
 
 	if (ret == 0 || obj_retry_error(rc))
 		ret = rc;
+
 	return ret;
 }
 
@@ -1362,7 +1463,9 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	rw_args.co = shard->do_co;
 	rw_args.shard_args = args;
 	/* remember the sgl to copyout the data inline for fetch */
-	rw_args.rwaa_sgls = (opc == DAOS_OBJ_RPC_FETCH) ? sgls : NULL;
+	rw_args.rwaa_sgls = sgls;
+	rw_args.send_time = daos_client_metric ? daos_get_ntime() : 0;
+	obj_shard_update_metrics_begin(req);
 	if (args->reasb_req && args->reasb_req->orr_recov) {
 		rw_args.maps = NULL;
 		orw->orw_flags |= ORF_EC_RECOV;
@@ -1421,6 +1524,7 @@ out:
 struct obj_punch_cb_args {
 	crt_rpc_t	*rpc;
 	unsigned int	*map_ver;
+	uint64_t         send_time;
 };
 
 static int
@@ -1436,7 +1540,10 @@ obj_shard_punch_cb(tse_task_t *task, void *data)
 		*cb_args->map_ver = obj_reply_map_version_get(rpc);
 	}
 
+	obj_shard_update_metrics_end(cb_args->rpc, cb_args->send_time, cb_args, task->dt_result);
+
 	crt_req_decref(rpc);
+
 	return task->dt_result;
 }
 
@@ -1480,6 +1587,8 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	crt_req_addref(req);
 	cb_args.rpc = req;
 	cb_args.map_ver = &args->pa_auxi.map_ver;
+	cb_args.send_time = daos_client_metric ? daos_get_ntime() : 0;
+	obj_shard_update_metrics_begin(req);
 	rc = tse_task_register_comp_cb(task, obj_shard_punch_cb, &cb_args,
 				       sizeof(cb_args));
 	if (rc != 0)
@@ -1540,6 +1649,7 @@ struct obj_enum_args {
 	d_iov_t			*csum;
 	struct dtx_epoch	*epoch;
 	daos_handle_t		*th;
+	uint64_t                 send_time;
 };
 
 /**
@@ -1858,10 +1968,15 @@ out:
 		crt_bulk_free(oei->oei_bulk);
 	if (oei->oei_kds_bulk != NULL)
 		crt_bulk_free(oei->oei_kds_bulk);
+
+	obj_shard_update_metrics_end(enum_args->rpc, enum_args->send_time, enum_args,
+				     ret == 0 ? rc : ret);
+
 	crt_req_decref(enum_args->rpc);
 
 	if (ret == 0 || obj_retry_error(rc))
 		ret = rc;
+
 	return ret;
 }
 
@@ -2007,6 +2122,8 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	enum_args.eaa_recxs = args->la_recxs;
 	enum_args.epoch = &args->la_auxi.epoch;
 	enum_args.th = &obj_args->th;
+	enum_args.send_time       = daos_client_metric ? daos_get_ntime() : 0;
+	obj_shard_update_metrics_begin(req);
 	rc = tse_task_register_comp_cb(task, dc_enumerate_cb, &enum_args,
 				       sizeof(enum_args));
 	if (rc != 0)
@@ -2038,6 +2155,7 @@ struct obj_query_key_cb_args {
 	struct dc_obj_shard	*shard;
 	struct dtx_epoch	epoch;
 	daos_handle_t		th;
+	uint64_t                 send_time;
 };
 
 static void
@@ -2235,6 +2353,7 @@ set_max_epoch:
 	D_SPIN_UNLOCK(&cb_args->obj->cob_spin);
 
 out:
+	obj_shard_update_metrics_end(rpc, cb_args->send_time, cb_args, rc);
 	crt_req_decref(rpc);
 	if (ret == 0 || obj_retry_error(rc))
 		ret = rc;
@@ -2285,6 +2404,8 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint
 	cb_args.epoch		= *epoch;
 	cb_args.th		= th;
 	cb_args.max_epoch	= max_epoch;
+	cb_args.send_time       = daos_client_metric ? daos_get_ntime() : 0;
+	obj_shard_update_metrics_begin(req);
 
 	rc = tse_task_register_comp_cb(task, obj_shard_query_key_cb, &cb_args, sizeof(cb_args));
 	if (rc != 0)
@@ -2328,6 +2449,7 @@ struct obj_shard_sync_cb_args {
 	crt_rpc_t	*rpc;
 	daos_epoch_t	*epoch;
 	uint32_t	*map_ver;
+	uint64_t         send_time;
 };
 
 static int
@@ -2377,6 +2499,8 @@ obj_shard_sync_cb(tse_task_t *task, void *data)
 		oso->oso_epoch, oso->oso_map_version);
 
 out:
+	obj_shard_update_metrics_end(rpc, cb_args->send_time, cb_args, rc);
+
 	crt_req_decref(rpc);
 	return rc;
 }
@@ -2418,10 +2542,11 @@ dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		D_GOTO(out, rc);
 
 	crt_req_addref(req);
-	cb_args.rpc	= req;
-	cb_args.epoch	= args->sa_epoch;
-	cb_args.map_ver = &args->sa_auxi.map_ver;
-
+	cb_args.rpc       = req;
+	cb_args.epoch     = args->sa_epoch;
+	cb_args.map_ver   = &args->sa_auxi.map_ver;
+	cb_args.send_time = daos_client_metric ? daos_get_ntime() : 0;
+	obj_shard_update_metrics_begin(req);
 	rc = tse_task_register_comp_cb(task, obj_shard_sync_cb, &cb_args,
 				       sizeof(cb_args));
 	if (rc != 0)
@@ -2455,8 +2580,9 @@ struct obj_k2a_args {
 	unsigned int		*eaa_map_ver;
 	struct dtx_epoch	*epoch;
 	daos_handle_t		*th;
-	daos_anchor_t		*anchor;
-	uint32_t		shard;
+	daos_anchor_t           *anchor;
+	uint64_t                 send_time;
+	uint32_t                 shard;
 };
 
 static int
@@ -2511,6 +2637,8 @@ dc_k2a_cb(tse_task_t *task, void *arg)
 	enum_anchor_copy(k2a_args->anchor, &oko->oko_anchor);
 	dc_obj_shard2anchor(k2a_args->anchor, k2a_args->shard);
 out:
+	obj_shard_update_metrics_end(k2a_args->rpc, k2a_args->send_time, k2a_args,
+				     ret == 0 ? rc : ret);
 	if (k2a_args->eaa_obj != NULL)
 		obj_shard_decref(k2a_args->eaa_obj);
 	crt_req_decref(k2a_args->rpc);
@@ -2584,6 +2712,8 @@ dc_obj_shard_key2anchor(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	cb_args.th = &obj_args->th;
 	cb_args.anchor = args->ka_anchor;
 	cb_args.shard = obj_shard->do_shard_idx;
+	cb_args.send_time   = daos_client_metric ? daos_get_ntime() : 0;
+	obj_shard_update_metrics_begin(req);
 	rc = tse_task_register_comp_cb(task, dc_k2a_cb, &cb_args, sizeof(cb_args));
 	if (rc != 0)
 		D_GOTO(out_eaa, rc);

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -157,6 +157,7 @@ func (m MgmtMethod) String() string {
 		MethodPoolGetProp:          "PoolGetProp",
 		MethodPoolUpgrade:          "PoolUpgrade",
 		MethodLedManage:            "LedManage",
+		MethodSetupClientTelemetry: "SetupClientTelemetry",
 	}[m]; ok {
 		return s
 	}
@@ -244,6 +245,8 @@ const (
 	MethodPoolUpgrade MgmtMethod = C.DRPC_METHOD_MGMT_POOL_UPGRADE
 	// MethodLedManage defines a method to manage a VMD device LED state
 	MethodLedManage MgmtMethod = C.DRPC_METHOD_MGMT_LED_MANAGE
+	// MethodSetupClientTelemetry defines a method to setup client telemetry
+	MethodSetupClientTelemetry MgmtMethod = C.DRPC_METHOD_MGMT_SETUP_CLIENT_TELEM
 )
 
 type srvMethod int32
