@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -482,7 +482,7 @@ class CommandWithParameters(ObjectWithParameters):
         self._python = None
         if self.command.endswith('.py'):
             # Run python scripts with the python command
-            self._python = sys.executable
+            self._python = os.path.basename(sys.executable)
 
     @property
     def command(self):
