@@ -7,11 +7,11 @@ import os
 import random
 import string
 
-import general_utils
 from apricot import TestWithServers
 from dfuse_utils import get_dfuse, start_dfuse
 from exception_utils import CommandFailure
 from io_utilities import DirectoryTreeCommand
+from profiler_utils import SimpleProfiler
 from run_utils import run_remote
 
 
@@ -166,7 +166,7 @@ class DfuseFind(TestWithServers):
         the directory forest. If the number of files located does not match
         the number of expected files. The test fails.
         """
-        profiler = general_utils.SimpleProfiler()
+        profiler = SimpleProfiler()
         profiler.set_logger(self.log)
 
         def _search_needles(file_name, sample_tag, expected_res):
