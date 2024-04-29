@@ -111,7 +111,7 @@ class ErasureCodeIor(ServerFillUp):
         """Create the container for EC object."""
         # Get container params
         self.ec_container = self.get_container(
-            self.pool, create=False, daos_command=self.get_daos_command(), oclass=oclass)
+            self.pool, create=False, daos=self.get_daos_command(), oclass=oclass)
 
         # update object class for container create, if supplied explicitly.
         ec_object = get_data_parity_number(self.log, oclass)

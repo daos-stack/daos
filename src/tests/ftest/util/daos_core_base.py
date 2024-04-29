@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,9 +8,7 @@ import os
 import shutil
 
 from apricot import TestWithServers
-from avocado import fail_on
 from cmocka_utils import CmockaUtils
-from exception_utils import CommandFailure
 from general_utils import get_log_file
 from job_manager_utils import get_job_manager
 from test_utils_pool import POOL_TIMEOUT_INCREMENT
@@ -52,52 +50,6 @@ class DaosCoreBase(TestWithServers):
         """
         path = "/".join(["/run/daos_tests", name, "*"])
         return self.params.get(self.get_test_name(), path, default)
-
-    @fail_on(CommandFailure)
-    def start_server_managers(self, force=False):
-        """Start the daos_server processes on each specified list of hosts.
-
-        Enable scalable endpoint if requested with a test-specific
-        'scalable_endpoint' yaml parameter.
-
-        Args:
-            force (bool, optional): whether or not to force starting the
-                servers. Defaults to False.
-
-        Returns:
-            bool: whether or not to force the starting of the agents
-
-        """
-        # Enable scalable endpoint (if requested) prior to starting the servers
-        scalable_endpoint = self.get_test_param("scalable_endpoint")
-        if scalable_endpoint:
-            for server_mgr in self.server_managers:
-                for engine_params in server_mgr.manager.job.yaml.engine_params:
-                    # Number of CaRT contexts should equal or be greater than
-                    # the number of DAOS targets
-                    targets = engine_params.get_value("targets")
-
-                    # Convert the list of variable assignments into a dictionary
-                    # of variable names and their values
-                    env_vars = engine_params.get_value("env_vars")
-                    env_dict = {
-                        item.split("=")[0]: item.split("=")[1]
-                        for item in env_vars}
-                    env_dict["CRT_CTX_SHARE_ADDR"] = "1"
-                    env_dict["COVFILE"] = "/tmp/test.cov"
-                    env_dict["D_LOG_FILE_APPEND_PID"] = "1"
-                    env_dict["D_LOG_FILE_APPEND_RANK"] = "1"
-                    if "CRT_CTX_NUM" not in env_dict or \
-                            int(env_dict["CRT_CTX_NUM"]) < int(targets):
-                        env_dict["CRT_CTX_NUM"] = str(targets)
-                    engine_params.set_value("crt_ctx_share_addr", 1)
-                    engine_params.set_value(
-                        "env_vars",
-                        ["=".join(items) for items in list(env_dict.items())]
-                    )
-
-        # Start the servers
-        return super().start_server_managers(force=force)
 
     def run_subtest(self):
         """Run daos_test with a subtest argument."""
