@@ -94,8 +94,9 @@ oid_iv_ent_refresh(struct ds_iv_entry *iv_entry, struct ds_iv_key *key,
 	D_ASSERT(entry != NULL);
 
 	/** if iv op failed, just release the entry lock acquired in update */
-	if (ref_rc != 0) {
+	if (daos_rpc_retryable_rc(ref_rc) || ref_rc == -DER_BUSY) {
 		/** if retrying request, we do not increase oids */
+		D_DEBUG(DB_MD, "%u: ON REFRESH setting req_retry flag\n", dss_self_rank());
 		entry->current_req_retry = true;
 		goto out;
 	} else {
