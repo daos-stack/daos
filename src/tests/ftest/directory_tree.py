@@ -11,6 +11,7 @@ import sys
 import tempfile
 from argparse import ArgumentParser
 
+# pylint: disable=import-error,no-name-in-module
 from util.logger_utils import get_console_handler
 
 
