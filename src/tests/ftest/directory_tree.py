@@ -191,12 +191,18 @@ def _populate_dir_tree(path, height, subdirs_per_node, files_per_node, needles, 
 def main():
     """Run the program."""
     parser = ArgumentParser(prog='directory_tree.py', description='Create a directory tree')
-    parser.add_argument('-p', '--path', type=str, help='path for the directory tree')
-    parser.add_argument('-h', '--height', type=int, help='height of the directory tree')
-    parser.add_argument('-s', '--subdirs', type=int, help='number of subdirectories per directory')
-    parser.add_argument('-f', '--files', type=int, help='number of files created per directory')
-    parser.add_argument('-n', '--needles', type=int, help='number of files in the bottom directory')
-    parser.add_argument('-pr', '--prefix', type=str, help='bottom directory file prefix')
+    parser.add_argument(
+        '--path', type=str, required=True, help='path for the directory tree')
+    parser.add_argument(
+        '--height', type=int, default=1, help='height of the directory tree')
+    parser.add_argument(
+        '--subdirs', type=int, default=1, help='number of subdirectories per directory')
+    parser.add_argument(
+        '--files', type=int, default=1, help='number of files created per directory')
+    parser.add_argument(
+        '--needles', type=int, default=1, help='number of files in the bottom directory')
+    parser.add_argument(
+        '--prefix', type=str, required=True, help='bottom directory file prefix')
     args = parser.parse_args()
 
     try:
