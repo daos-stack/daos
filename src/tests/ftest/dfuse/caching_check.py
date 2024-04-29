@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2019-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -32,7 +32,7 @@ class DfuseCachingCheck(IorTestBase):
             higher than with caching disabled.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=vm
         :avocado: tags=daosio,dfuse
         :avocado: tags=DfuseCachingCheck,test_dfuse_caching_check
         """
