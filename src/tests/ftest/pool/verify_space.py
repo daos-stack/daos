@@ -221,7 +221,6 @@ class VerifyPoolSpace(TestWithServers):
             'hosts': self.hostlist_clients,
             'path': self.workdir,
             'slots': None,
-            'group': self.server_group,
             'processes': None,
             'ppn': 8,
             'namespace': '/run/ior/*',

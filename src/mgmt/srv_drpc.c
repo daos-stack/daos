@@ -2850,12 +2850,15 @@ ds_chk_prob_free(Mgmt__CheckInconsistPolicy **policies, uint32_t policy_nr)
 #define ALL_CHK_POLICY	CHK__CHECK_INCONSIST_CLASS__CIC_UNKNOWN
 
 static int
-ds_chk_prop_cb(void *buf, struct chk_policy *policies, int cnt, uint32_t flags)
+ds_chk_prop_cb(void *buf, uint32_t policies[], int cnt, uint32_t flags)
 {
 	Mgmt__CheckInconsistPolicy	**ply = NULL;
 	Mgmt__CheckPropResp		 *resp = buf;
 	int				  rc = 0;
 	int				  i = 0;
+
+	D_ASSERTF(cnt <= ALL_CHK_POLICY, "Too many inconsistency policies %u/%u\n",
+		  cnt, ALL_CHK_POLICY);
 
 	D_ALLOC_ARRAY(ply, cnt);
 	if (ply == NULL)
@@ -2867,11 +2870,8 @@ ds_chk_prop_cb(void *buf, struct chk_policy *policies, int cnt, uint32_t flags)
 			D_GOTO(out, rc = -DER_NOMEM);
 
 		mgmt__check_inconsist_policy__init(ply[i]);
-		if (policies[i].cp_class == 0 && cnt == ALL_CHK_POLICY)
-			ply[i]->inconsist_cas = i;
-		else
-			ply[i]->inconsist_cas = policies[i].cp_class;
-		ply[i]->inconsist_act = policies[i].cp_action;
+		ply[i]->inconsist_cas = i;
+		ply[i]->inconsist_act = policies[i];
 	}
 
 
