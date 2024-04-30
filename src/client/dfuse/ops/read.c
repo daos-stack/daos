@@ -97,6 +97,7 @@ dfuse_readahead_reply(fuse_req_t req, size_t len, off_t position, struct dfuse_o
 				position + reply_len - 1, position + reply_len, position + len - 1);
 	}
 
+	DFUSE_IE_STAT_ADD(oh->doh_ie, DS_PRE_READ);
 	DFUSE_REPLY_BUFQ(oh, req, oh->doh_readahead->dra_ev->de_iov.iov_buf + position, reply_len);
 	return true;
 }
@@ -470,10 +471,8 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 		replied = dfuse_readahead_reply(req, len, position, oh);
 		D_MUTEX_UNLOCK(&oh->doh_readahead->dra_lock);
 
-		if (replied) {
-			DFUSE_IE_STAT_ADD(oh->doh_ie, DS_PRE_READ);
+		if (replied)
 			return;
-		}
 	}
 
 	if (chunk_read(req, len, position, oh))
