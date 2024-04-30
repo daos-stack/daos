@@ -10,7 +10,7 @@ set -ue
 
 _print_githook_header "isort"
 
-py_files=$(_git_diff_cached_files "*.py SConstruct *SConscript")
+py_files=$(_git_diff_cached_files "*.py SConstruct */SConscript")
 
 if [ -z "$py_files" ]; then
     echo "No python changes. Skipping"
