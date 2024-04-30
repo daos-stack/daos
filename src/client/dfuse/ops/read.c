@@ -398,7 +398,7 @@ found:
 
 		D_MUTEX_LOCK(&rc_lock);
 		if (cd->complete) {
-			ev             = cd->ev;
+			ev = cd->ev;
 		} else {
 			cd->reqs[slot] = req;
 			cd->ohs[slot]  = oh;
