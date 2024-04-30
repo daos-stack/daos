@@ -57,8 +57,7 @@ static const char      *crt_env_names[] = {
     "DAOS_SIGNAL_REGISTER",
     "D_CLIENT_METRICS_ENABLE",
     "D_CLIENT_METRICS_RETAIN",
-    "D_CLIENT_METRICS_DUMP_PATH",
-
+    "D_CLIENT_METRICS_DUMP_DIR",
 };
 
 static void

@@ -7,6 +7,7 @@ import os
 
 from apricot import TestWithServers
 from dfuse_utils import get_dfuse, start_dfuse
+from host_utils import get_local_host
 from run_utils import run_remote
 
 
@@ -60,7 +61,8 @@ class DfuseBashCmd(TestWithServers):
         container = self.get_container(pool)
 
         self.log_step('Starting dfuse')
-        dfuse = get_dfuse(self, self.hostlist_clients)
+        dfuse_hosts = get_local_host()
+        dfuse = get_dfuse(self, dfuse_hosts)
         params = {'mount_dir': f'/tmp/{pool.identifier}_daos_dfuse'}
         if il_lib is not None:
             params['disable_caching'] = True
@@ -132,7 +134,7 @@ class DfuseBashCmd(TestWithServers):
         ]
         for cmd in commands:
             self.log_step(f'Running command: {cmd}')
-            result = run_remote(self.log, self.hostlist_clients, env_str + cmd)
+            result = run_remote(self.log, dfuse_hosts, env_str + cmd)
             if not result.passed:
                 self.fail(f'"{cmd}" failed on {result.failed_hosts}')
         self.log.info('Test passed')

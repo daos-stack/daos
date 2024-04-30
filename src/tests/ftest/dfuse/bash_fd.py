@@ -9,6 +9,7 @@ import stat
 
 from apricot import TestWithServers
 from dfuse_utils import get_dfuse, start_dfuse
+from host_utils import get_local_host
 from run_utils import run_remote
 
 OUTER = """#!/bin/bash
@@ -104,7 +105,8 @@ class DFuseFdTest(TestWithServers):
         container = self.get_container(pool)
 
         self.log_step('Starting dfuse')
-        dfuse = get_dfuse(self, self.hostlist_clients)
+        dfuse_hosts = get_local_host()
+        dfuse = get_dfuse(self, dfuse_hosts)
         start_dfuse(self, dfuse, pool, container)
         fuse_root_dir = dfuse.mount_dir.value
 
@@ -121,7 +123,7 @@ class DFuseFdTest(TestWithServers):
         cmd = f"cd {fuse_root_dir}; ./bash_fd_outer.sh"
 
         self.log_step('Executing the \'bash_fd_outer.sh\' script')
-        result = run_remote(self.log, self.hostlist_clients, env_str + cmd)
+        result = run_remote(self.log, dfuse_hosts, env_str + cmd)
         if not result.passed:
             self.fail(f'"{cmd}" failed on {result.failed_hosts}')
 

@@ -171,17 +171,29 @@ func newMockDrpcClient(cfg *mockDrpcClientConfig) *mockDrpcClient {
 // setupMockDrpcClientBytes sets up the dRPC client for the mgmtSvc to return
 // a set of bytes as a response.
 func setupMockDrpcClientBytes(svc *mgmtSvc, respBytes []byte, err error) {
-	mi := svc.harness.instances[0]
+	setMockDrpcClient(svc, getMockDrpcClientBytes(respBytes, err))
+}
+
+func getMockDrpcClientBytes(respBytes []byte, err error) *mockDrpcClient {
 	cfg := &mockDrpcClientConfig{}
 	cfg.setSendMsgResponse(drpc.Status_SUCCESS, respBytes, err)
-	mi.(*EngineInstance).setDrpcClient(newMockDrpcClient(cfg))
+	return newMockDrpcClient(cfg)
 }
 
 // setupMockDrpcClient sets up the dRPC client for the mgmtSvc to return
 // a valid protobuf message as a response.
 func setupMockDrpcClient(svc *mgmtSvc, resp proto.Message, err error) {
+	setMockDrpcClient(svc, getMockDrpcClient(resp, err))
+}
+
+func getMockDrpcClient(resp proto.Message, err error) *mockDrpcClient {
 	respBytes, _ := proto.Marshal(resp)
-	setupMockDrpcClientBytes(svc, respBytes, err)
+	return getMockDrpcClientBytes(respBytes, err)
+}
+
+func setMockDrpcClient(svc *mgmtSvc, mdc *mockDrpcClient) {
+	mi := svc.harness.instances[0]
+	mi.(*EngineInstance).setDrpcClient(mdc)
 }
 
 // newTestEngine returns an EngineInstance configured for testing.

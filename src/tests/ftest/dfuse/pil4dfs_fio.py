@@ -62,18 +62,6 @@ class Pil4dfsFio(TestWithServers):
         self.log.info("Creating container")
         return self.get_container(pool)
 
-    def _destroy_container(self):
-        """Destroy DAOS POSIX container previously created"""
-        if self.container is not None:
-            self.log.debug("Destroying container %s", str(self.container))
-            self.destroy_containers(self.container)
-            self.container = None
-
-        if self.pool is not None:
-            self.log.debug("Destroying pool %s", str(self.pool))
-            self.destroy_pools(self.pool)
-            self.pool = None
-
     def _get_bandwidth(self, fio_result, rw):
         """Returns FIO bandwidth of a given I/O pattern
 
@@ -157,7 +145,8 @@ class Pil4dfsFio(TestWithServers):
             "global", "cpus_allowed", self.fio_cpus_allowed,
             f"fio --name=global --cpus_allowed={self.fio_cpus_allowed}")
         # NOTE DFS ioengine options must come after the ioengine that defines them is selected.
-        fio_cmd.update("job", "pool", pool.uuid, f"fio --name=job --pool={pool.uuid}")
+        fio_cmd.update(
+            "job", "pool", container.pool.uuid, f"fio --name=job --pool={container.pool.uuid}")
         fio_cmd.update("job", "cont", container.uuid, f"fio --name=job --cont={container.uuid}")
         fio_cmd.hosts = self.hostlist_clients
 

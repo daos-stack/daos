@@ -9,6 +9,7 @@ import os
 
 from apricot import TestWithServers
 from dfuse_utils import get_dfuse, start_dfuse
+from host_utils import get_local_host
 
 
 class DfuseEnospace(TestWithServers):
@@ -35,13 +36,15 @@ class DfuseEnospace(TestWithServers):
         :avocado: tags=daosio,dfuse
         :avocado: tags=DfuseEnospace,test_dfuse_enospace
         """
+        dfuse_hosts = get_local_host()
+
         # Create a pool, container and start dfuse.
         self.log_step('Creating a single pool with a POSIX container')
         pool = self.get_pool(connect=False)
         container = self.get_container(pool)
 
         self.log_step('Starting dfuse')
-        dfuse = get_dfuse(self, self.hostlist_clients)
+        dfuse = get_dfuse(self, dfuse_hosts)
         start_dfuse(self, dfuse, pool, container)
 
         # create large file and perform write to it so that if goes out of

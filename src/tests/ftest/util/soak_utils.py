@@ -899,7 +899,7 @@ def cleanup_dfuse(self):
         "do kill $pid",
         "done'"]
     cmd2 = [
-        "/usr/bin/bash -c 'for dir in $(find /tmp/daos_dfuse/)",
+        "/usr/bin/bash -c 'for dir in $(find /tmp/soak_dfuse_*/)",
         "do fusermount3 -uz $dir",
         "rm -rf $dir",
         "done'"]
