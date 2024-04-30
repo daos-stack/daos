@@ -170,8 +170,10 @@ log_stderr_pipe(int fd)
 	D_FREE(full_msg);
 }
 
+#define FI_ATTR_MAX_ARGS 16
+
 static int
-run_cmd(const char *command, int *outputfd)
+run_cmd(char *command, int *outputfd)
 {
 	int  rc       = 0;
 	int  child_rc = 0;
@@ -179,9 +181,18 @@ run_cmd(const char *command, int *outputfd)
 	int  stdoutfd[2];
 	int  stderrfd[2];
 	bool log_stderr;
+ 	char *saveptr;
+	char *args[FI_ATTR_MAX_ARGS];
+	int arg_cnt = 0;
 
 	D_DEBUG(DB_TEST, "dmg cmd: %s\n", command);
 
+        args[arg_cnt] = strtok_r(command, " ", &saveptr);
+        do {
+                args[++arg_cnt] = strtok_r(NULL, " ", &saveptr);
+        } while(args[arg_cnt] != NULL && arg_cnt <= FI_ATTR_MAX_ARGS);
+
+	args[++arg_cnt] = NULL;
 	log_stderr = is_stderr_logging_enabled();
 	if (log_stderr)
 		D_DEBUG(DB_TEST, "dmg stderr output will be logged\n");
@@ -222,7 +233,7 @@ run_cmd(const char *command, int *outputfd)
 		close(stdoutfd[1]);
 		close(stderrfd[1]);
 
-		rc = system(command);
+		rc = execvp(args[0], args);
 		if (rc == -1)
 			_exit(errno);
 		_exit(rc);

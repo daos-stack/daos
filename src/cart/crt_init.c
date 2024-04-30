@@ -18,48 +18,42 @@ struct crt_plugin_gdata crt_plugin_gdata;
 static bool		g_prov_settings_applied[CRT_PROV_COUNT];
 
 /* List of the environment variables used in CaRT */
-static const char      *crt_env_names[] = {
-    "D_PROVIDER",
-    "D_INTERFACE",
-    "D_DOMAIN",
-    "D_PORT",
-    "CRT_PHY_ADDR_STR",
-    "D_LOG_STDERR_IN_LOG",
-    "D_LOG_SIZE",
-    "D_LOG_FILE",
-    "D_LOG_FILE_APPEND_PID",
-    "D_LOG_MASK",
-    "DD_MASK",
-    "DD_STDERR",
-    "DD_SUBSYS",
-    "CRT_TIMEOUT",
-    "CRT_ATTACH_INFO_PATH",
-    "OFI_PORT",
-    "OFI_INTERFACE",
-    "OFI_DOMAIN",
-    "CRT_CREDIT_EP_CTX",
-    "CRT_CTX_SHARE_ADDR",
-    "CRT_CTX_NUM",
-    "D_FI_CONFIG",
-    "FI_UNIVERSE_SIZE",
-    "CRT_ENABLE_MEM_PIN",
-    "FI_OFI_RXM_USE_SRX",
-    "D_LOG_FLUSH",
-    "CRT_MRC_ENABLE",
-    "CRT_SECONDARY_PROVIDER",
-    "D_PROVIDER_AUTH_KEY",
-    "D_PORT_AUTO_ADJUST",
-    "D_POLL_TIMEOUT",
-    "D_LOG_FILE_APPEND_RANK",
-    "D_QUOTA_RPCS",
-    "D_POST_INIT",
-    "D_POST_INCR",
-    "DAOS_SIGNAL_REGISTER",
-    "D_CLIENT_METRICS_ENABLE",
-    "D_CLIENT_METRICS_RETAIN",
-    "D_CLIENT_METRICS_DUMP_PATH",
-
-};
+static const char      *crt_env_names[] = {"D_PROVIDER",
+					   "D_INTERFACE",
+					   "D_DOMAIN",
+					   "D_PORT",
+					   "CRT_PHY_ADDR_STR",
+					   "D_LOG_STDERR_IN_LOG",
+					   "D_LOG_SIZE",
+					   "D_LOG_FILE",
+					   "D_LOG_FILE_APPEND_PID",
+					   "D_LOG_MASK",
+					   "DD_MASK",
+					   "DD_STDERR",
+					   "DD_SUBSYS",
+					   "CRT_TIMEOUT",
+					   "CRT_ATTACH_INFO_PATH",
+					   "OFI_PORT",
+					   "OFI_INTERFACE",
+					   "OFI_DOMAIN",
+					   "CRT_CREDIT_EP_CTX",
+					   "CRT_CTX_SHARE_ADDR",
+					   "CRT_CTX_NUM",
+					   "D_FI_CONFIG",
+					   "FI_UNIVERSE_SIZE",
+					   "CRT_ENABLE_MEM_PIN",
+					   "FI_OFI_RXM_USE_SRX",
+					   "D_LOG_FLUSH",
+					   "CRT_MRC_ENABLE",
+					   "CRT_SECONDARY_PROVIDER",
+					   "D_PROVIDER_AUTH_KEY",
+					   "D_PORT_AUTO_ADJUST",
+					   "D_POLL_TIMEOUT",
+					   "D_LOG_FILE_APPEND_RANK",
+					   "D_QUOTA_RPCS",
+					   "D_POST_INIT",
+					   "D_POST_INCR",
+					   "DAOS_SIGNAL_REGISTER"};
 
 static void
 crt_lib_init(void) __attribute__((__constructor__));
@@ -204,8 +198,8 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 		return rc;
 
 	if (crt_is_service()) {
-		ctx_num		= CRT_SRV_CONTEXT_NUM;
-		max_num_ctx	= CRT_SRV_CONTEXT_NUM;
+		ctx_num = CRT_SRV_CONTEXT_NUM;
+		max_num_ctx = CRT_SRV_CONTEXT_NUM;
 	} else {
 		/* Only limit the number of contexts for clients */
 		d_getenv_uint("CRT_CTX_NUM", &ctx_num);
@@ -220,18 +214,12 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 
 	if (max_num_ctx > CRT_SRV_CONTEXT_NUM)
 		max_num_ctx = CRT_SRV_CONTEXT_NUM;
+
 	/* To be able to run on VMs */
 	if (max_num_ctx < CRT_SRV_CONTEXT_NUM_MIN)
 		max_num_ctx = CRT_SRV_CONTEXT_NUM_MIN;
 
 	D_DEBUG(DB_ALL, "Max number of contexts set to %d\n", max_num_ctx);
-
-	d_getenv_bool("CRT_CTX_SHARE_ADDR", &set_sep);
-	if (set_sep)
-		D_WARN("Unsupported SEP mode requested. Unset CRT_CTX_SHARE_ADDR\n");
-
-	if (opt && opt->cio_sep_override && opt->cio_use_sep)
-		D_WARN("Unsupported SEP mode requested in init options\n");
 
 	if (opt && opt->cio_use_expected_size)
 		max_expect_size = opt->cio_max_expected_size;
@@ -273,7 +261,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	uint32_t	fi_univ_size = 0;
 	uint32_t	mem_pin_enable = 0;
 	uint32_t	is_secondary;
-	char		ucx_ib_fork_init = 0;
+	char*		ucx_ib_fork_init = NULL;
 	uint32_t        post_init = CRT_HG_POST_INIT, post_incr = CRT_HG_POST_INCR;
 	int		rc = 0;
 
@@ -335,17 +323,19 @@ static int data_init(int server, crt_init_options_t *opt)
 
 	d_getenv_uint("D_QUOTA_RPCS", &crt_gdata.cg_rpc_quota);
 
-	/* Must be set on the server when using UCX, will not affect OFI */
-	d_getenv_char("UCX_IB_FORK_INIT", &ucx_ib_fork_init);
-	if (ucx_ib_fork_init) {
-		if (server) {
-			D_INFO("UCX_IB_FORK_INIT was set to %c, setting to n\n", ucx_ib_fork_init);
-		} else {
-			D_INFO("UCX_IB_FORK_INIT was set to %c on client\n", ucx_ib_fork_init);
-		}
-	}
-	if (server)
-		d_setenv("UCX_IB_FORK_INIT", "n", 1);
+	/* Must be set on the server when using UCX
+         * also on client to allow daos_test/suite system out of dmg to succeed,
+         * will not affect OFI */
+	d_agetenv_str(&ucx_ib_fork_init, "UCX_IB_FORK_INIT");
+	if (ucx_ib_fork_init)
+		D_INFO("UCX_IB_FORK_INIT was set to %s in the environment\n", ucx_ib_fork_init);
+	else if (server)
+		d_setenv("UCX_IB_FORK_INIT", "no", 1);
+	else if (!server)
+		d_setenv("UCX_IB_FORK_INIT", "yes", 1);
+
+	if (!server)
+		d_setenv("UCX_RCACHE_PURGE_ON_FORK", "n", 1);
 
 	/* This is a workaround for CART-871 if universe size is not set */
 	d_getenv_uint("FI_UNIVERSE_SIZE", &fi_univ_size);
