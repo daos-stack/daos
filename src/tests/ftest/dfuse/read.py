@@ -160,7 +160,9 @@ class DFuseReadTest(DfuseTestBase):
 
         print(f"Test caused {write_calls} write and {read_calls} reads calls")
 
-        self.assertEqual(data["statistics"].get("read", 0), 0, "Did not expect any read calls")
+        self.assertEqual(
+            data["statistics"].get("read", 0), 0, "Did not expect any read calls"
+        )
 
         cmd = f"daos filesystem evict {fuse_root_dir}/test_file"
         result = run_remote(self.log, self.hostlist_clients, cmd)
@@ -184,5 +186,8 @@ class DFuseReadTest(DfuseTestBase):
 
         data2 = self.dfuse.get_stats()
 
-        self.assertEqual(data["statistics"].get("read", 0), data2["statistics"].get("read", 0), "Did not expect more read calls")
-
+        self.assertEqual(
+            data["statistics"].get("read", 0),
+            data2["statistics"].get("read", 0),
+            "Did not expect more read calls",
+        )
