@@ -142,8 +142,6 @@ daos_tests:
     test_daos_ec_io: -l"EC_4P2G1"
     test_daos_rebuild_ec: -s5
     test_daos_md_replication: -s5
-  scalable_endpoint:
-    test_daos_degraded_mode: true
   stopped_ranks:
     test_daos_degraded_mode: [5, 6, 7]
     test_daos_oid_allocator: [6, 7]

@@ -78,7 +78,8 @@ class MdtestBase(DfuseTestBase):
         if self.container is None:
             self.container = self.get_mdtest_container(self.pool)
         # set Mdtest params
-        self.mdtest_cmd.set_daos_params(self.server_group, self.pool, self.container.identifier)
+        self.mdtest_cmd.update_params(
+            dfs_pool=self.pool.identifier, dfs_cont=self.container.identifier)
 
         # start dfuse if api is POSIX
         if self.mdtest_cmd.api.value == "POSIX":
@@ -93,8 +94,10 @@ class MdtestBase(DfuseTestBase):
         if self.subprocess:
             return out
 
-        # reset self.container if dfs_destroy is True
+        # reset self.container if dfs_destroy is True or None.
         if self.mdtest_cmd.dfs_destroy.value is True:
+            self.container.skip_cleanup()
+            # Need to set self.container to None to force a creation of a new container
             self.container = None
         self.stop_dfuse()
 

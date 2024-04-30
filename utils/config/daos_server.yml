@@ -99,13 +99,6 @@
 #provider: ofi+verbs;ofi_rxm
 #
 #
-## CART: Whether to enable share address in the network stack
-## (also known as scalable endpoint)
-## parameters shared with client.
-#
-#crt_ctx_share_addr: 0
-#
-#
 ## CART: global RPC timeout
 ## parameters shared with client.
 #

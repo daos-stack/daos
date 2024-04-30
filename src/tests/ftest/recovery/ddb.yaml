@@ -9,7 +9,10 @@ server_config:
   engines:
     0:
       targets: 1
-      storage: auto
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
   system_ram_reserved: 1
 
 # In CI, all tests in ddb.py are ran in a single launch.py execution. In that case, the
