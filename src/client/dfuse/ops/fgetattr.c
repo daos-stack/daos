@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -28,7 +28,7 @@ dfuse_cb_getattr_cb(struct dfuse_event *ev)
 		 */
 		if ((ie->ie_stat.st_size != ie->ie_dc.stat.st_size) ||
 		    (d_timediff_ns(&ie->ie_stat.st_mtim, &ie->ie_dc.stat.st_mtim) != 0)) {
-			DFUSE_TRA_INFO(ie, "Invalidating data cache");
+			DFUSE_TRA_DEBUG(ie, "Invalidating data cache");
 			dfuse_dcache_evict(ie);
 		}
 	}
