@@ -1264,8 +1264,6 @@ class _Component():
                 lib_paths.append(full_path)
                 # will adjust this to be a relative rpath later
                 env.AppendUnique(RPATH_FULL=[full_path])
-                # For binaries run during build
-                env.AppendENVPath("LD_LIBRARY_PATH", full_path)
 
             # Ensure RUNPATH is used rather than RPATH.  RPATH is deprecated
             # and this allows LD_LIBRARY_PATH to override RPATH

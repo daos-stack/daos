@@ -1020,6 +1020,10 @@ libpil4dfs intercepting summary for ops on DFS:
 [op_sum ]  5003
 ```
 
+### Turn on compatible mode in libpil4dfs
+Fake file descriptor (FD) is used in regular mode in libpil4dfs.so for efficiency. open() returns fake fd to applications. In cases of some APIs are not intercepted, applications could crash with the error "Bad File Descriptor". Compatible mode is provided to work around such situations.
+Setting env "D_IL_COMPATIBLE=1" turns on compatible mode. Kernel fd allocated by dfuse instead of fake fd will be returned to applications. This mode provides better compatibility with degraded performance in open, openat, and opendir, etc. Please start dfuse with "--disable-caching" to disable caching before using compatible mode.
+
 ### Child Process Inheritance
 
 Normally child processes inherit environmental variables from parent processes. In rare cases, e.g.
