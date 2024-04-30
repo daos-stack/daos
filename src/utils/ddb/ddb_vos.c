@@ -1743,7 +1743,7 @@ sync_cb(struct ddbs_sync_info *info, void *cb_args)
 	rc = smd_pool_del_tgt(pool_id, info->dsi_hdr->bbh_vos_id, st);
 	if (!SUCCESS(rc))
 		/* Ignore error for now ... might not exist*/
-		D_WARN("delete target failed: "DF_RC"\n", DP_RC(rc));
+		D_WARN("delete target failed: " DF_RC "\n", DP_RC(rc));
 
 	rc = smd_pool_add_tgt(pool_id, info->dsi_hdr->bbh_vos_id,
 			      info->dsi_hdr->bbh_blob_id, st, blob_size);

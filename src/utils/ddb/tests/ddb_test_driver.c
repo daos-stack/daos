@@ -208,9 +208,9 @@ int
 ddb_test_pool_setup(struct dt_vos_pool_ctx *tctx)
 {
 	int			 rc;
-	uint64_t		 size = (1ULL << 30);
+	uint64_t                 size      = (1ULL << 30);
 	char			*pool_uuid = "12345678-1234-1234-1234-123456789012";
-	int			 mkdir_result;
+	int                      mkdir_result;
 
 	if (strlen(tctx->dvt_pmem_file) == 0) {
 		char dir[64] = {0};

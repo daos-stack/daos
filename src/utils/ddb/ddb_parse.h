@@ -23,7 +23,7 @@ struct program_args {
 };
 #define DB_PATH_LEN 64
 struct vos_file_parts {
-	char		vf_db_path[DB_PATH_LEN];
+	char            vf_db_path[DB_PATH_LEN];
 	uuid_t		vf_pool_uuid;
 	char		vf_vos_file[16];
 	uint32_t	vf_target_idx;
