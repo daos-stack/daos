@@ -442,6 +442,7 @@ func (srv *server) registerEvents() {
 
 			if err := srv.mgmtSvc.updateFabricProviders([]string{srv.cfg.Fabric.Provider}, srv.pubSub); err != nil {
 				srv.log.Errorf(err.Error())
+				return err
 			}
 
 			srv.mgmtSvc.startLeaderLoops(ctx)
