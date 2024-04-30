@@ -93,7 +93,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 
 	var clientMetricSource *promexp.ClientSource
 	if cmd.cfg.TelemetryExportEnabled() {
-		if clientMetricSource, err = promexp.NewClientSource(ctx); err != nil {
+		if ctx, clientMetricSource, err = promexp.NewClientSource(ctx); err != nil {
 			return errors.Wrap(err, "unable to create client metrics source")
 		}
 		telemetryStart := time.Now()
