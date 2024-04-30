@@ -274,7 +274,7 @@ class DaosBuild(TestWithServers):
                 run_remote(self.log, self.hostlist_clients, 'cat {}/config.log'.format(build_dir),
                            timeout=30)
             if il_lib is not None:
-                self.fail('{} over dfuse with il in mode {}.\n'.format(fail_type, cache_mode))
+                self.fail(f'{fail_type} over dfuse with il in mode {cache_mode}')
             else:
                 self.fail(f'{fail_type} over dfuse in mode {cache_mode}')
 

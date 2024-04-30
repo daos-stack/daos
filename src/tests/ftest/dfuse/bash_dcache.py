@@ -7,7 +7,8 @@
 import os
 import stat
 
-from dfuse_test_base import DfuseTestBase
+from apricot import TestWithServers
+from dfuse_utils import get_dfuse, start_dfuse
 from run_utils import run_remote
 
 SCRIPT = """#!/bin/bash
@@ -33,7 +34,7 @@ cat ${dir_name}/${file_name}
 """
 
 
-class DFuseBashdcacheTest(DfuseTestBase):
+class DFuseBashdcacheTest(TestWithServers):
     # pylint: disable=wrong-spelling-in-docstring
     """Base "Bashdcache" test class.
 
@@ -58,11 +59,11 @@ class DFuseBashdcacheTest(DfuseTestBase):
 
         pool = self.get_pool(connect=False)
         container = self.get_container(pool)
-        self.start_dfuse(self.hostlist_clients, pool, container)
+        dfuse = get_dfuse(self, self.hostlist_clients)
+        start_dfuse(self, dfuse, self.pool, container)
+        fuse_root_dir = dfuse.mount_dir.value
 
-        fuse_root_dir = self.dfuse.mount_dir.value
-
-        with open(os.path.join(fuse_root_dir, "sh_dcache.sh"), "w") as fd:
+        with open(os.path.join(fuse_root_dir, "sh_dcache.sh"), "w", encoding="utf-8") as fd:
             fd.write(SCRIPT)
 
         os.chmod(os.path.join(fuse_root_dir, "sh_dcache.sh"), stat.S_IXUSR | stat.S_IRUSR)
