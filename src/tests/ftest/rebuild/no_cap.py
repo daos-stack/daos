@@ -56,7 +56,7 @@ class RbldNoCapacity(TestWithServers):
         err_pool_full = -1007
 
         # Create a pool and container
-        self.prepare_pool()
+        self.add_pool()
         self.add_container(self.pool)
         self.container.open()
 

@@ -18,12 +18,14 @@ from avocado.utils.distro import detect
 from command_utils_base import EnvironmentVariables
 from daos_racer_utils import DaosRacerCommand
 from data_mover_utils import DcpCommand, FsCopy
-from dfuse_utils import Dfuse
+from dfuse_utils import get_dfuse
 from dmg_utils import get_storage_query_device_info
 from duns_utils import format_path
+from exception_utils import CommandFailure
 from fio_utils import FioCommand
-from general_utils import (DaosTestError, get_host_data, get_log_file, get_random_bytes,
-                           get_random_string, list_to_str, pcmd, run_command, run_pcmd)
+from general_utils import (DaosTestError, check_ping, check_ssh, get_host_data, get_log_file,
+                           get_random_bytes, get_random_string, list_to_str, pcmd, run_command,
+                           run_pcmd, wait_for_result)
 from ior_utils import IorCommand
 from job_manager_utils import Mpirun
 from macsio_util import MacsioCommand
@@ -31,7 +33,7 @@ from mdtest_utils import MdtestCommand
 from oclass_utils import extract_redundancy_factor
 from pydaos.raw import DaosApiError, DaosSnapshot
 from run_utils import run_remote
-from test_utils_container import TestContainer
+from test_utils_container import add_container
 
 H_LOCK = threading.Lock()
 
@@ -239,8 +241,7 @@ def get_daos_server_logs(self):
         try:
             run_command(" ".join(command), timeout=600)
         except DaosTestError as error:
-            raise SoakTestError(
-                "<<FAILED: daos logs file from {} not copied>>".format(hosts)) from error
+            raise SoakTestError(f"<<FAILED: daos logs file from {hosts} not copied>>") from error
 
 
 def run_monitor_check(self):
@@ -348,10 +349,7 @@ def launch_snapshot(self, pool, name):
         "<<<PASS %s: %s started at %s>>>", self.loop, name, time.ctime())
     status = True
     # Create container
-    container = TestContainer(pool)
-    container.namespace = "/run/container_reserved/*"
-    container.get_params(self)
-    container.create()
+    container = add_container(self, pool, namespace="/run/container_reserved/*")
     container.open()
     obj_cls = self.params.get(
         "object_class", '/run/container_reserved/*')
@@ -459,6 +457,136 @@ def launch_vmd_identify_check(self, name, results, args):
     self.log.info("<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
 
 
+def launch_reboot(self, pools, name, results, args):
+    """Execute server unexpected reboot.
+
+    Args:
+        self (obj): soak obj
+        pools (TestPool): list of TestPool obj
+        name (str): name of dmg subcommand
+        results (queue): multiprocessing queue
+        args (queue): multiprocessing queue
+    """
+    # Harasser is run in two parts REBOOT and then REBOOT_REINTEGRATE
+    # REBOOT test steps
+    # shutdown random node
+    # wait for node to reboot
+    # If node rebooted ok wait for rebuild on both pool to complete
+    # Update multiprocessing queue with results and args
+    # REBOOT_REINTEGRATE test steps
+    # if REBOOT completed ok then
+    # Issue systemctl restart daos_server
+    # Verify that all ranks are joined
+    # If all ranks "joined", issue reintegrate for all pool on all ranks and wait for
+    #    rebuild to complete
+    # Update multiprocessing queue with results and args
+    status = False
+    params = {}
+    ranks = None
+    if name == "REBOOT":
+        reboot_host = self.random.choice(self.hostlist_servers)
+        ranklist = self.server_managers[0].get_host_ranks(reboot_host)
+        ranks = ",".join(str(rank) for rank in ranklist)
+        # init the status dictionary
+        params = {"name": name,
+                  "status": status,
+                  "vars": {"host": reboot_host, "ranks": ranklist}}
+        self.log.info(
+            "<<<PASS %s: %s started on ranks %s at %s >>>\n", self.loop, name, ranks, time.ctime())
+        # reboot host in 1 min
+        result = run_remote(self.log, reboot_host, "sudo shutdown -r +1")
+        if result.passed:
+            status = True
+        else:
+            self.log.error(f"<<<FAILED:{name} - {reboot_host} failed to issue reboot")
+            status = False
+
+        if not wait_for_result(self.log, check_ping, 90, 5, True, host=reboot_host,
+                               expected_ping=False, cmd_timeout=60, verbose=True):
+            self.log.error(f"<<<FAILED:{name} - {reboot_host} failed to reboot")
+            status = False
+
+        if status:
+            rebuild_status = True
+            for pool in pools:
+                rebuild_status &= wait_for_pool_rebuild(self, pool, name)
+            status = rebuild_status
+
+    elif name == "REBOOT_REINTEGRATE" and self.harasser_results["REBOOT"]:
+        reboot_host = self.harasser_args["REBOOT"]["host"]
+        ranklist = self.harasser_args["REBOOT"]["ranks"]
+        ranks = ",".join(str(rank) for rank in ranklist)
+        self.log.info("<<<PASS %s: %s started on host %s at %s>>>\n", self.loop, name, reboot_host,
+                      time.ctime())
+        status = True
+        self.dmg_command.system_query()
+        # wait for node to complete rebooting
+        if not wait_for_result(self.log, check_ping, 60, 5, True, host=reboot_host,
+                               expected_ping=True, cmd_timeout=60, verbose=True):
+            self.log.error(f"<<<FAILED:{name} - {reboot_host} failed to reboot")
+            status = False
+        if not wait_for_result(self.log, check_ssh, 120, 2, True, hosts=reboot_host,
+                               cmd_timeout=30, verbose=True):
+            self.log.error(f"<<<FAILED:{name} - {reboot_host} failed to reboot")
+            status = False
+        if status:
+            # issue a restart
+            self.log.info("<<<PASS %s: Issue systemctl restart daos_server on %s at %s>>>\n",
+                          self.loop, name, reboot_host, time.ctime())
+            cmd_results = run_remote(self.log, reboot_host, "sudo systemctl restart daos_server")
+            if cmd_results.passed:
+                self.dmg_command.system_query()
+                for pool in pools:
+                    self.dmg_command.pool_query(pool.identifier)
+                # wait server to be started
+                try:
+                    self.dmg_command.system_start(ranks=ranks)
+                except CommandFailure as error:
+                    self.log.error("<<<FAILED:dmg system start failed", exc_info=error)
+                    status = False
+                for pool in pools:
+                    self.dmg_command.pool_query(pool.identifier)
+                self.dmg_command.system_query()
+            else:
+                self.log.error("<<<FAILED:systemctl start daos_server failed")
+                status = False
+        if status:
+            # reintegrate ranks
+            reintegrate_status = True
+            for pool in pools:
+                for rank in ranklist:
+                    try:
+                        pool.reintegrate(rank)
+                        status = True
+                    except TestFail as error:
+                        self.log.error(
+                            f"<<<FAILED: dmg pool {pool.identifier} reintegrate failed on rank"
+                            "{rank}", exc_info=error)
+                        status = False
+                    reintegrate_status &= status
+                    if reintegrate_status:
+                        reintegrate_status &= wait_for_pool_rebuild(self, pool, name)
+                        status = reintegrate_status
+                    else:
+                        status = False
+    else:
+        self.log.error("<<<PASS %s: %s failed due to REBOOT failure >>>", self.loop, name)
+        status = False
+
+    params = {"name": name,
+              "status": status,
+              "vars": {"host": reboot_host, "ranks": ranklist}}
+    if not status:
+        self.log.error("<<< %s failed - check logs for failure data>>>", name)
+    self.dmg_command.system_query()
+    self.harasser_job_done(params)
+    results.put(self.harasser_results)
+    args.put(self.harasser_args)
+    self.log.info("Harasser results: %s", self.harasser_results)
+    self.log.info("Harasser args: %s", self.harasser_args)
+    self.log.info("<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
+
+
 def launch_extend(self, pool, name, results, args):
     """Execute dmg extend ranks.
 
@@ -475,14 +603,13 @@ def launch_extend(self, pool, name, results, args):
 
     if self.selected_host:
         ranklist = self.server_managers[0].get_host_ranks(self.selected_host)
-
+        ranks = ",".join(str(rank) for rank in ranklist)
         # init the status dictionary
         params = {"name": name,
                   "status": status,
                   "vars": {"host": self.selected_host, "ranks": ranks}}
         self.log.info(
             "<<<PASS %s: %s started on ranks %s at %s >>>\n", self.loop, name, ranks, time.ctime())
-        ranks = ",".join(str(rank) for rank in ranklist)
         try:
             pool.extend(ranks)
             status = True
@@ -497,6 +624,7 @@ def launch_extend(self, pool, name, results, args):
               "vars": {"host": self.selected_host, "ranks": ranks}}
     if not status:
         self.log.error("<<< %s failed - check logs for failure data>>>", name)
+    self.dmg_command.system_query()
     self.harasser_job_done(params)
     results.put(self.harasser_results)
     args.put(self.harasser_args)
@@ -630,7 +758,7 @@ def launch_server_stop_start(self, pools, name, results, args):
                 self.log.error("<<<FAILED:dmg system stop failed", exc_info=error)
                 status = False
             time.sleep(30)
-            if not drain:
+            if not drain and status:
                 rebuild_status = True
                 for pool in pools:
                     rebuild_status &= wait_for_pool_rebuild(self, pool, name)
@@ -706,16 +834,15 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
 
     Args:
         self (obj): soak obj
-        pool (obj):             TestPool obj
+        pool (obj): TestPool obj
 
-    Returns dfuse(obj):         Dfuse obj
-            cmd(list):          list of dfuse commands to add to job script
+    Returns dfuse(obj): Dfuse obj
+            cmd(list): list of dfuse commands to add to job script
     """
     # Get Dfuse params
-    dfuse = Dfuse(self.hostlist_clients, self.tmp)
-    dfuse.namespace = os.path.join(os.sep, "run", job_spec, "dfuse", "*")
+    namespace = os.path.join(os.sep, "run", job_spec, "dfuse", "*")
+    dfuse = get_dfuse(self, self.hostlist_clients, namespace)
     dfuse.bind_cores = self.params.get("cores", dfuse.namespace, None)
-    dfuse.get_params(self)
     # update dfuse params; mountpoint for each container
     unique = get_random_string(5, self.used)
     self.used.append(unique)
@@ -846,7 +973,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None,
                 container = self.container[-1]
             else:
                 container = cont
-            ior_cmd.set_daos_params(self.server_group, pool, container.identifier)
+            ior_cmd.set_daos_params(pool, container.identifier)
             log_name = "{}_{}_{}_{}_{}_{}_{}_{}".format(
                 job_spec.replace("/", "_"), api, b_size, t_size,
                 file_dir_oclass[0], nodesperjob * ppn, nodesperjob, ppn)
@@ -1015,9 +1142,8 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
             mdtest_cmd.dfs_oclass.update(file_dir_oclass[0])
             mdtest_cmd.dfs_dir_oclass.update(file_dir_oclass[1])
             add_containers(self, pool, file_dir_oclass[0], file_dir_oclass[1])
-            mdtest_cmd.set_daos_params(
-                self.server_group, pool,
-                self.container[-1].identifier)
+            mdtest_cmd.update_params(
+                dfs_pool=pool.identifier, dfs_cont=self.container[-1].identifier)
             log_name = "{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
                 job_spec, api, write_bytes, read_bytes, depth,
                 file_dir_oclass[0], nodesperjob * ppn, nodesperjob,

@@ -1251,6 +1251,7 @@ dfuse_ie_init(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 	atomic_init(&ie->ie_open_count, 0);
 	atomic_init(&ie->ie_open_write_count, 0);
 	atomic_init(&ie->ie_il_count, 0);
+	atomic_init(&ie->ie_linear_read, true);
 	atomic_fetch_add_relaxed(&dfuse_info->di_inode_count, 1);
 	D_INIT_LIST_HEAD(&ie->ie_evict_entry);
 	D_RWLOCK_INIT(&ie->ie_wlock, 0);
@@ -1301,17 +1302,17 @@ dfuse_event_init(void *arg, void *handle)
 }
 
 static bool
-dfuse_read_event_reset(void *arg)
+dfuse_read_event_size(void *arg, size_t size)
 {
 	struct dfuse_event *ev = arg;
 	int                 rc;
 
 	if (ev->de_iov.iov_buf == NULL) {
-		D_ALLOC_NZ(ev->de_iov.iov_buf, DFUSE_MAX_READ);
+		D_ALLOC_NZ(ev->de_iov.iov_buf, size);
 		if (ev->de_iov.iov_buf == NULL)
 			return false;
 
-		ev->de_iov.iov_buf_len = DFUSE_MAX_READ;
+		ev->de_iov.iov_buf_len = size;
 		ev->de_sgl.sg_iovs     = &ev->de_iov;
 		ev->de_sgl.sg_nr       = 1;
 	}
@@ -1322,6 +1323,18 @@ dfuse_read_event_reset(void *arg)
 	}
 
 	return true;
+}
+
+static bool
+dfuse_pre_read_event_reset(void *arg)
+{
+	return dfuse_read_event_size(arg, DFUSE_MAX_PRE_READ);
+}
+
+static bool
+dfuse_read_event_reset(void *arg)
+{
+	return dfuse_read_event_size(arg, DFUSE_MAX_READ);
 }
 
 static bool
@@ -1365,6 +1378,10 @@ dfuse_fs_start(struct dfuse_info *dfuse_info, struct dfuse_cont *dfs)
 						.sr_reset   = dfuse_read_event_reset,
 						.sr_release = dfuse_event_release,
 						POOL_TYPE_INIT(dfuse_event, de_list)};
+	struct d_slab_reg         pre_read_slab = {.sr_init    = dfuse_event_init,
+						   .sr_reset   = dfuse_pre_read_event_reset,
+						   .sr_release = dfuse_event_release,
+						   POOL_TYPE_INIT(dfuse_event, de_list)};
 	struct d_slab_reg         write_slab = {.sr_init    = dfuse_event_init,
 						.sr_reset   = dfuse_write_event_reset,
 						.sr_release = dfuse_event_release,
@@ -1470,15 +1487,27 @@ dfuse_fs_start(struct dfuse_info *dfuse_info, struct dfuse_cont *dfs)
 		if (rc != -DER_SUCCESS)
 			D_GOTO(err_threads, rc);
 
-		rc = d_slab_register(&dfuse_info->di_slab, &write_slab, eqt, &eqt->de_write_slab);
+		rc = d_slab_register(&dfuse_info->di_slab, &pre_read_slab, eqt,
+				     &eqt->de_pre_read_slab);
 		if (rc != -DER_SUCCESS)
 			D_GOTO(err_threads, rc);
+
+		d_slab_restock(eqt->de_read_slab);
+		d_slab_restock(eqt->de_pre_read_slab);
+
+		if (!dfuse_info->di_read_only) {
+			rc = d_slab_register(&dfuse_info->di_slab, &write_slab, eqt,
+					     &eqt->de_write_slab);
+			if (rc != -DER_SUCCESS)
+				D_GOTO(err_threads, rc);
+			d_slab_restock(eqt->de_write_slab);
+		}
 
 		rc = pthread_create(&eqt->de_thread, NULL, dfuse_progress_thread, eqt);
 		if (rc != 0)
 			D_GOTO(err_threads, rc = daos_errno2der(rc));
 
-		pthread_setname_np(eqt->de_thread, "progress");
+		pthread_setname_np(eqt->de_thread, "dfuse progress");
 	}
 
 	rc = dfuse_launch_fuse(dfuse_info, &args);
@@ -1488,6 +1517,8 @@ dfuse_fs_start(struct dfuse_info *dfuse_info, struct dfuse_cont *dfs)
 	}
 
 err_threads:
+	dfuse_info->di_shutdown = true;
+
 	for (int i = 0; i < dfuse_info->di_eq_count; i++) {
 		struct dfuse_eq *eqt = &dfuse_info->di_eqt[i];
 

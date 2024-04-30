@@ -22,12 +22,11 @@
 #include <daos/btree_class.h>
 #include <daos/common.h>
 #include <daos/placement.h>
+#include <daos/tls.h>
 #include "srv_internal.h"
 #include "drpc_internal.h"
 #include <gurt/telemetry_common.h>
 #include <gurt/telemetry_producer.h>
-
-#include <daos.h> /* for daos_init() */
 
 #define MAX_MODULE_OPTIONS	64
 #if BUILD_PIPELINE
@@ -46,7 +45,7 @@ static char		modules[MAX_MODULE_OPTIONS + 1];
 static unsigned int	nr_threads;
 
 /** DAOS system name (corresponds to crt group ID) */
-static char	       *daos_sysname = DAOS_DEFAULT_SYS_NAME;
+char                   *daos_sysname = DAOS_DEFAULT_SYS_NAME;
 
 /** Storage node hostname */
 char		        dss_hostname[DSS_HOSTNAME_MAX_LEN];
@@ -629,14 +628,14 @@ server_id_cb(uint32_t *tid, uint64_t *uid)
 	}
 
 	if (tid != NULL) {
-		struct dss_thread_local_storage *dtc;
-		struct dss_module_info *dmi;
+		struct daos_thread_local_storage *dtc;
+		struct daos_module_info          *dmi;
 		int index = daos_srv_modkey.dmk_index;
 
-		/* Avoid assertion in dss_module_key_get() */
+		/* Avoid assertion in daos_module_key_get() */
 		dtc = dss_tls_get();
 		if (dtc != NULL && index >= 0 && index < DAOS_MODULE_KEYS_NR &&
-		    dss_module_keys[index] == &daos_srv_modkey) {
+		    daos_get_module_key(index) == &daos_srv_modkey) {
 			dmi = dss_get_module_info();
 			if (dmi != NULL)
 				*tid = dmi->dmi_xs_id;
@@ -1024,16 +1023,16 @@ parse(int argc, char **argv)
 		case 'f':
 			rc = arg_strtoul(optarg, &dss_core_offset, "\"-f\"");
 			break;
-		case 'g':
-			if (strnlen(optarg, DAOS_SYS_NAME_MAX + 1) >
-			    DAOS_SYS_NAME_MAX) {
-				printf("DAOS system name must be at most "
-				       "%d bytes\n", DAOS_SYS_NAME_MAX);
+		case 'g': {
+			if (strnlen(optarg, DAOS_SYS_NAME_MAX + 1) > DAOS_SYS_NAME_MAX) {
+				printf("DAOS system name must be at most %d bytes\n",
+				       DAOS_SYS_NAME_MAX);
 				rc = -DER_INVAL;
 				break;
 			}
 			daos_sysname = optarg;
 			break;
+		}
 		case 's':
 			dss_storage_path = optarg;
 			break;

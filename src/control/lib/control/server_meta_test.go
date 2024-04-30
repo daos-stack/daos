@@ -38,7 +38,7 @@ func mockSmdQueryMap(t *testing.T, mocks ...*mockSmdResp) HostStorageMap {
 
 	for _, mock := range mocks {
 		hss := &HostStorageSet{
-			HostSet: mockHostSet(t, mock.Hosts),
+			HostSet: MockHostSet(t, mock.Hosts),
 			HostStorage: &HostStorage{
 				SmdInfo: mock.SmdInfo,
 			},

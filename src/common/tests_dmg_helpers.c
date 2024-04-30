@@ -1332,8 +1332,10 @@ dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 			D_DEBUG(DB_TEST, "key1:\"%s\",val1=%s\n", key1,
 				json_object_to_json_string(val1));
 
-			json_object_object_get_ex(val1, "smd_info", &smd_info);
-			if (smd_info != NULL) {
+			if (json_object_object_get_ex(val1, "smd_info", &smd_info)) {
+				if (smd_info == NULL)
+					continue;
+
 				if (!json_object_object_get_ex(
 					smd_info, "devices", &smd_dev)) {
 					D_ERROR("unable to extract devices\n");
@@ -1473,10 +1475,11 @@ dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 			D_ERROR("unable to extract ctrlr details from JSON\n");
 			D_GOTO(out_json, rc = -DER_INVAL);
 		}
-		json_object_object_get_ex(ctrlr_info, "health_stats", &health_stats);
-		if (health_stats != NULL) {
-			json_object_object_get_ex(health_stats, stats, &tmp);
-			strcpy(stats, json_object_to_json_string(tmp));
+		if (json_object_object_get_ex(ctrlr_info, "health_stats", &health_stats)) {
+			if (health_stats != NULL) {
+				if (json_object_object_get_ex(health_stats, stats, &tmp))
+					strcpy(stats, json_object_to_json_string(tmp));
+			}
 		}
 	}
 
@@ -1628,6 +1631,49 @@ int dmg_system_exclude_rank(const char *dmg_config_file, d_rank_t rank)
 
 	cmd_free_args(args, argcount);
 
+out:
+	return rc;
+}
+
+int
+dmg_server_set_logmasks(const char *dmg_config_file, const char *masks, const char *streams,
+			const char *subsystems)
+{
+	int                 argcount = 0;
+	char              **args     = NULL;
+	struct json_object *dmg_out  = NULL;
+	int                 rc       = 0;
+
+	/* engine log_mask */
+	if (masks != NULL) {
+		args = cmd_push_arg(args, &argcount, " --masks=%s", masks);
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	/* DD_MASK environment variable (aka streams) */
+	if (streams != NULL) {
+		args = cmd_push_arg(args, &argcount, " --streams=%s", streams);
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	/* DD_SUBSYS environment variable */
+	if (subsystems != NULL) {
+		args = cmd_push_arg(args, &argcount, " --subsystems=%s", subsystems);
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	/* If none of masks, streams, subsystems are specified, restore original engine config */
+	rc = daos_dmg_json_pipe("server set-logmasks", dmg_config_file, args, argcount, &dmg_out);
+	if (rc != 0)
+		D_ERROR("dmg failed\n");
+
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+
+	cmd_free_args(args, argcount);
 out:
 	return rc;
 }
