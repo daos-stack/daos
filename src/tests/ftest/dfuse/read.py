@@ -108,6 +108,11 @@ class DFuseReadTest(DfuseTestBase):
         """
         Test Description:
             Run a simple Write/Read test to check for read caching.
+
+        Write a file, then read from it and verify that there were no reads at the dfuse level.
+
+        Evict the file, read from it twice and verify the second read comes from cache.
+
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=dfuse,dfs
@@ -144,12 +149,6 @@ class DFuseReadTest(DfuseTestBase):
             self.fail(f'"{cmd}" failed on {result.failed_hosts}')
 
         cmd = f"dd if={fuse_root_dir}/test_file of=/dev/zero count=16 bs=1M"
-
-        result = run_remote(self.log, self.hostlist_clients, cmd)
-        if not result.passed:
-            self.fail(f'"{cmd}" failed on {result.failed_hosts}')
-
-        cmd = f"daos filesystem query --json {fuse_root_dir}"
         result = run_remote(self.log, self.hostlist_clients, cmd)
         if not result.passed:
             self.fail(f'"{cmd}" failed on {result.failed_hosts}')
@@ -161,4 +160,29 @@ class DFuseReadTest(DfuseTestBase):
 
         print(f"Test caused {write_calls} write and {read_calls} reads calls")
 
-        assert read_calls == 0, data
+        self.assertEqual(data["statistics"].get("read", 0), 0, "Did not expect any read calls")
+
+        cmd = f"daos filesystem evict {fuse_root_dir}/test_file"
+        result = run_remote(self.log, self.hostlist_clients, cmd)
+        if not result.passed:
+            self.fail(f'"{cmd}" failed on {result.failed_hosts}')
+
+        cmd = f"dd if={fuse_root_dir}/test_file of=/dev/zero count=16 bs=1M"
+        result = run_remote(self.log, self.hostlist_clients, cmd)
+        if not result.passed:
+            self.fail(f'"{cmd}" failed on {result.failed_hosts}')
+
+        data = self.dfuse.get_stats()
+
+        self.assertGreater(
+            data["statistics"].get("read", 0), 0, "expected non-zero pre read"
+        )
+
+        result = run_remote(self.log, self.hostlist_clients, cmd)
+        if not result.passed:
+            self.fail(f'"{cmd}" failed on {result.failed_hosts}')
+
+        data2 = self.dfuse.get_stats()
+
+        self.assertEqual(data["statistics"].get("read", 0), data2["statistics"].get("read", 0), "Did not expect more read calls")
+
