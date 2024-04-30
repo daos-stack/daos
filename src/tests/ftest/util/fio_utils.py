@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2019-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -401,3 +401,9 @@ class FioCommand(ExecutableCommand):
             self.steadystate = FormattedParameter("--steadystate={}")
             self.steadystate_duration = FormattedParameter("--steadystate_duration={}")
             self.steadystate_ramp_time = FormattedParameter("--steadystate_ramp_time={}")
+
+            # NOTE DFS ioengine options must come after the ioengine that defines them is selected.
+            self.pool = FormattedParameter("--pool={}")
+            self.cont = FormattedParameter("--cont={}")
+            self.chunk_size = FormattedParameter("--chunk_size={}")
+            self.object_class = FormattedParameter("--object_class={}")

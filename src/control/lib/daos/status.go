@@ -105,6 +105,8 @@ const (
 	BadTarget Status = -C.DER_BAD_TARGET
 	// GroupVersionMismatch indicates that group versions didn't match
 	GroupVersionMismatch Status = -C.DER_GRPVER
+	// MercuryFatalError indicates a fatal (non-retryable) Mercury error
+	MercuryFatalError Status = -C.DER_HG_FATAL
 	// NoService indicates the pool service is not up and didn't process the pool request
 	NoService Status = -C.DER_NO_SERVICE
 )

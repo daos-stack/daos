@@ -765,7 +765,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             self.ior_cmd.api.update("DFS", display_api)
             self.ior_cmd.test_file.update(path, display_test_file)
             if pool:
-                self.ior_cmd.set_daos_params(self.server_group, pool, cont_uuid or None)
+                self.ior_cmd.set_daos_params(pool, cont_uuid or None)
 
     def run_ior_with_params(self, param_type, path, pool=None, cont=None,
                             path_suffix=None, flags=None, display=True,
@@ -827,9 +827,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             self.mdtest_cmd.api.update("DFS", display_api)
             self.mdtest_cmd.test_dir.update(path, display_test_dir)
             if pool and cont_uuid:
-                self.mdtest_cmd.set_daos_params(self.server_group, pool, cont_uuid)
+                self.mdtest_cmd.update_params(dfs_pool=pool.identifier, dfs_cont=cont_uuid)
             elif pool:
-                self.mdtest_cmd.set_daos_params(self.server_group, pool, None)
+                self.mdtest_cmd.update_params(dfs_pool=pool.identifier, dfs_cont=None)
 
     def run_mdtest_with_params(self, param_type, path, pool=None, cont=None,
                                flags=None, display=True):
