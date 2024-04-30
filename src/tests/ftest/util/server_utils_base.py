@@ -238,10 +238,10 @@ class DaosServerCommand(YamlCommand):
             """Create an ms subcommand object.
 
             Args:
-                default_config (str, optional): default yaml config file
+                default_config (str, optional): default yaml config file. Defaults to None.
             """
             super().__init__("/run/daos_server/ms/*", "ms")
-            self.config = FormattedParameter("--config={}", default_config)
+            self._default_config = default_config
 
         def get_sub_command_class(self):
             """Get the daos_server ms sub command object."""
@@ -250,28 +250,37 @@ class DaosServerCommand(YamlCommand):
             #   restore  Restore the management service from a snapshot
             #   status   Show status of the local management service replica
             if self.sub_command.value == "recover":
-                self.sub_command_class = self.RecoverSubCommand()
+                self.sub_command_class = self.RecoverSubCommand(self._default_config)
             elif self.sub_command.value == "restore":
-                self.sub_command_class = self.RestoreSubCommand()
+                self.sub_command_class = self.RestoreSubCommand(self._default_config)
             elif self.sub_command.value == "status":
-                self.sub_command_class = self.StatusSubCommand()
+                self.sub_command_class = self.StatusSubCommand(self._default_config)
 
         class RecoverSubCommand(CommandWithSubCommand):
             """Defines an object for the daos_server ms recover command."""
 
-            def __init__(self):
-                """Create a ms recover subcommand object."""
+            def __init__(self, default_config=None):
+                """Create a ms recover subcommand object.
+
+                Args:
+                    default_config (str, optional): default yaml config file. Defaults to None.
+                """
                 super().__init__("/run/daos_server/ms/recover/*", "recover")
 
                 # daos_server ms recover command options:
                 #   -f, --force     Don't prompt for confirmation
                 self.force = FormattedParameter("--force", False)
+                self.config = FormattedParameter("--config={}", default_config)
 
         class RestoreSubCommand(CommandWithSubCommand):
             """Defines an object for the daos_server ms restore command."""
 
-            def __init__(self):
-                """Create a ms restore subcommand object."""
+            def __init__(self, default_config=None):
+                """Create a ms restore subcommand object.
+
+                Args:
+                    default_config (str, optional): default yaml config file. Defaults to None.
+                """
                 super().__init__("/run/daos_server/ms/restore/*", "restore")
 
                 # daos_server ms restore command options:
@@ -279,13 +288,19 @@ class DaosServerCommand(YamlCommand):
                 #   -p, --path=     Path to snapshot file
                 self.force = FormattedParameter("--force", False)
                 self.path = FormattedParameter("--path={}")
+                self.config = FormattedParameter("--config={}", default_config)
 
         class StatusSubCommand(CommandWithSubCommand):
             """Defines an object for the daos_server ms status command."""
 
-            def __init__(self):
-                """Create a ms status subcommand object."""
+            def __init__(self, default_config=None):
+                """Create a ms status subcommand object.
+
+                Args:
+                    default_config (str, optional): default yaml config file. Defaults to None.
+                """
                 super().__init__("/run/daos_server/ms/status/*", "status")
+                self.config = FormattedParameter("--config={}", default_config)
 
     class NetworkSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server network sub command."""
@@ -294,11 +309,10 @@ class DaosServerCommand(YamlCommand):
             """Create a network subcommand object.
 
             Args:
-                default_config (str, optional): default yaml config file
+                default_config (str, optional): default yaml config file. Defaults to None.
             """
-            super().__init__(
-                "/run/daos_server/network/*", "network")
-            self.config = FormattedParameter("--config={}", default_config)
+            super().__init__("/run/daos_server/network/*", "network")
+            self._default_config = default_config
 
         def get_sub_command_class(self):
             """Get the daos_server network sub command object."""
@@ -306,15 +320,19 @@ class DaosServerCommand(YamlCommand):
             #   list  List all known OFI providers that are understood by 'scan'
             #   scan  Scan for network interface devices on local server
             if self.sub_command.value == "scan":
-                self.sub_command_class = self.ScanSubCommand()
+                self.sub_command_class = self.ScanSubCommand(self._default_config)
             else:
                 self.sub_command_class = None
 
         class ScanSubCommand(CommandWithSubCommand):
             """Defines an object for the daos_server network scan command."""
 
-            def __init__(self):
-                """Create a network scan subcommand object."""
+            def __init__(self, default_config=None):
+                """Create a network scan subcommand object.
+
+                Args:
+                    default_config (str, optional): default yaml config file. Defaults to None.
+                """
                 super().__init__("/run/daos_server/network/scan/*", "scan")
 
                 # daos_server network scan command options:
@@ -325,18 +343,18 @@ class DaosServerCommand(YamlCommand):
                 #                   providers.  Overrides --provider
                 self.provider = FormattedParameter("--provider={}")
                 self.all = FormattedParameter("--all", False)
+                self.config = FormattedParameter("--config={}", default_config)
 
     class StartSubCommand(CommandWithParameters):
         """Defines an object representing a daos_server start sub command."""
 
-        def __init__(self, default_config):
+        def __init__(self, default_config=None):
             """Create a start subcommand object.
 
             Args:
-                default_config (str, optional): default yaml config file
+                default_config (str, optional): default yaml config file. Defaults to None.
             """
             super().__init__("/run/daos_server/start/*", "start")
-            self.config = FormattedParameter("--config={}", default_config)
 
             # daos_server start command options:
             #   --port=                 Port for the gRPC management interface
@@ -364,18 +382,19 @@ class DaosServerCommand(YamlCommand):
             self.sock_dir = FormattedParameter("--socket_dir={}")
             self.insecure = FormattedParameter("--insecure", False)
             self.recreate = FormattedParameter("--recreate-superblocks", False)
+            self.config = FormattedParameter("--config={}", default_config)
 
     class NvmeSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server nvme sub command."""
 
-        def __init__(self, default_config):
+        def __init__(self, default_config=None):
             """Create a daos_server nvme subcommand object.
 
             Args:
-                default_config (str, optional): default yaml config file
+                default_config (str, optional): default yaml config file. Defaults to None.
             """
             super().__init__("/run/daos_server/nvme/*", "nvme")
-            self.config = FormattedParameter("--config={}", default_config)
+            self._default_config = default_config
 
         def get_sub_command_class(self):
             """Get the daos_server nvme sub command object."""
@@ -384,19 +403,23 @@ class DaosServerCommand(YamlCommand):
             #   reset    Reset NVMe SSDs for use by OS
             #   scan     Scan NVMe SSDs
             if self.sub_command.value == "prepare":
-                self.sub_command_class = self.PrepareSubCommand()
+                self.sub_command_class = self.PrepareSubCommand(self._default_config)
             elif self.sub_command.value == "reset":
-                self.sub_command_class = self.ResetSubCommand()
+                self.sub_command_class = self.ResetSubCommand(self._default_config)
             elif self.sub_command.value == "scan":
-                self.sub_command_class = self.ScanSubCommand()
+                self.sub_command_class = self.ScanSubCommand(self._default_config)
             else:
                 self.sub_command_class = None
 
         class PrepareSubCommand(CommandWithSubCommand):
             """Defines an object for the daos_server nvme prepare command."""
 
-            def __init__(self):
-                """Create a daos_server nvme prepare subcommand object."""
+            def __init__(self, default_config=None):
+                """Create a daos_server nvme prepare subcommand object.
+
+                Args:
+                    default_config (str, optional): default yaml config file
+                """
                 super().__init__("/run/daos_server/nvme/prepare/*", "prepare")
 
                 # daos_server nvme prepare command options:
@@ -416,12 +439,17 @@ class DaosServerCommand(YamlCommand):
                 self.hugepages = FormattedParameter("--hugepages={}")
                 self.target_user = FormattedParameter("--target-user={}")
                 self.disable_vfio = FormattedParameter("--disable-vfio", False)
+                self.config = FormattedParameter("--config={}", default_config)
 
         class ResetSubCommand(CommandWithSubCommand):
             """Defines an object for the daos_server nvme reset command."""
 
-            def __init__(self):
-                """Create a daos_server nvme reset subcommand object."""
+            def __init__(self, default_config=None):
+                """Create a daos_server nvme reset subcommand object.
+
+                Args:
+                    default_config (str, optional): default yaml config file
+                """
                 super().__init__("/run/daos_server/nvme/reset/*", "reset")
 
                 # daos_server nvme reset command options:
@@ -438,12 +466,17 @@ class DaosServerCommand(YamlCommand):
                 self.pci_block_list = FormattedParameter("--pci-block-list={}")
                 self.target_user = FormattedParameter("--target-user={}")
                 self.disable_vfio = FormattedParameter("--disable-vfio", False)
+                self.config = FormattedParameter("--config={}", default_config)
 
         class ScanSubCommand(CommandWithSubCommand):
             """Defines an object for the daos_server nvme scan command."""
 
-            def __init__(self):
-                """Create a daos_server nvme scan subcommand object."""
+            def __init__(self, default_config=None):
+                """Create a daos_server nvme scan subcommand object.
+
+                Args:
+                    default_config (str, optional): default yaml config file
+                """
                 super().__init__(
                     "/run/daos_server/nvme/scan/*", "scan")
 
@@ -454,18 +487,19 @@ class DaosServerCommand(YamlCommand):
                 self.helper_log_file = FormattedParameter("--helper-log-file={}")
                 self.ignore_config = FormattedParameter("--ignore-config", False)
                 self.disable_vmd = FormattedParameter("--disable-vmd", False)
+                self.config = FormattedParameter("--config={}", default_config)
 
     class ScmSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server scm sub command."""
 
-        def __init__(self, default_config):
+        def __init__(self, default_config=None):
             """Create a daos_server scm subcommand object.
 
             Args:
-                default_config (str, optional): default yaml config file
+                default_config (str, optional): default yaml config file. Defaults to None.
             """
             super().__init__("/run/daos_server/scm/*", "scm")
-            self.config = FormattedParameter("--config={}", default_config)
+            self._default_config = default_config
 
         def get_sub_command_class(self):
             """Get the daos_server scm sub command object."""
@@ -474,19 +508,23 @@ class DaosServerCommand(YamlCommand):
             #   reset    Reset SCM devices that have been used with DAOS
             #   scan     Scan SCM devices
             if self.sub_command.value == "prepare":
-                self.sub_command_class = self.PrepareSubCommand()
+                self.sub_command_class = self.PrepareSubCommand(self._default_config)
             elif self.sub_command.value == "reset":
-                self.sub_command_class = self.ResetSubCommand()
+                self.sub_command_class = self.ResetSubCommand(self._default_config)
             elif self.sub_command.value == "scan":
-                self.sub_command_class = self.ScanSubCommand()
+                self.sub_command_class = self.ScanSubCommand(self._default_config)
             else:
                 self.sub_command_class = None
 
         class PrepareSubCommand(CommandWithSubCommand):
             """Defines an object for the daos_server scm prepare command."""
 
-            def __init__(self):
-                """Create a daos_server scm prepare subcommand object."""
+            def __init__(self, default_config=None):
+                """Create a daos_server scm prepare subcommand object.
+
+                Args:
+                    default_config (str, optional): default yaml config file. Defaults to None.
+                """
                 super().__init__("/run/daos_server/scm/prepare/*", "prepare")
 
                 # daos_server scm prepare command options:
@@ -502,12 +540,17 @@ class DaosServerCommand(YamlCommand):
                 self.socket = FormattedParameter("--socket={}")
                 self.scm_ns_per_socket = FormattedParameter("--scm-ns-per-socket={}")
                 self.force = FormattedParameter("--force", False)
+                self.config = FormattedParameter("--config={}", default_config)
 
         class ResetSubCommand(CommandWithSubCommand):
             """Defines an object for the daos_server scm reset command."""
 
-            def __init__(self):
-                """Create a daos_server scm reset subcommand object."""
+            def __init__(self, default_config=None):
+                """Create a daos_server scm reset subcommand object.
+
+                Args:
+                    default_config (str, optional): default yaml config file. Defaults to None.
+                """
                 super().__init__("/run/daos_server/scm/reset/*", "reset")
 
                 # daos_server scm reset command options:
@@ -521,44 +564,54 @@ class DaosServerCommand(YamlCommand):
                 self.ignore_config = FormattedParameter("--ignore-config", False)
                 self.socket = FormattedParameter("--socket={}")
                 self.force = FormattedParameter("--force", False)
+                self.config = FormattedParameter("--config={}", default_config)
 
         class ScanSubCommand(CommandWithSubCommand):
             """Defines an object for the daos_server scm scan command."""
 
-            def __init__(self):
-                """Create a daos_server scm scan subcommand object."""
+            def __init__(self, default_config=None):
+                """Create a daos_server scm scan subcommand object.
+
+                Args:
+                    default_config (str, optional): default yaml config file. Defaults to None.
+                """
                 super().__init__("/run/daos_server/scm/scan/*", "scan")
 
                 # daos_server scm scan command option:
                 #   --helper-log-file=   Log file location for debug from daos_admin binary
                 self.helper_log_file = FormattedParameter("--helper-log-file={}")
+                self.config = FormattedParameter("--config={}", default_config)
 
     class SupportSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server support sub command."""
 
-        def __init__(self, default_config):
+        def __init__(self, default_config=None):
             """Create a support subcommand object.
 
             Args:
-                default_config (str, optional): default yaml config file
+                default_config (str, optional): default yaml config file. Defaults to None.
             """
             super().__init__("/run/daos_server/support/*", "support")
-            self.config = FormattedParameter("--config={}", default_config)
+            self._default_config = default_config
 
         def get_sub_command_class(self):
             """Get the daos_server support sub command object."""
             # Available sub-commands:
             #   collect-log  Collect logs on servers
             if self.sub_command.value == "collect-log":
-                self.sub_command_class = self.CollectLogSubCommand()
+                self.sub_command_class = self.CollectLogSubCommand(self._default_config)
             else:
                 self.sub_command_class = None
 
         class CollectLogSubCommand(CommandWithSubCommand):
             """Defines an object for the daos_server support collect-log command."""
 
-            def __init__(self):
-                """Create a support collect-log subcommand object."""
+            def __init__(self, default_config=None):
+                """Create a support collect-log subcommand object.
+
+                Args:
+                    default_config (str, optional): default yaml config file. Defaults to None.
+                """
                 super().__init__(
                     "/run/daos_server/support/collect-log/*", "collect-log")
 
@@ -573,6 +626,7 @@ class DaosServerCommand(YamlCommand):
                 self.archive = FormattedParameter("--archive", False)
                 self.extra_logs_dir = FormattedParameter("--extra-logs-dir={}")
                 self.target_host = FormattedParameter("--target-host={}")
+                self.config = FormattedParameter("--config={}", default_config)
 
     class VersionSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server version sub command."""
