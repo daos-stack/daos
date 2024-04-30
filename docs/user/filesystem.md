@@ -1031,16 +1031,27 @@ scons, envs are striped off when calling execve().  It might be useful to force 
 set in child processes by setting env "D_IL_ENFORCE_EXEC_ENV=1". This flag is 0 if not set.
 
 
-### Change dir cache timeout with env
+### Directory caching
 
-Directory caching is employed for better performance.  The default timeout is 60 seconds.  User can
-change it if necessary.  The unit is second and an integer should be provided.
-```
-$ export D_IL_DCACHE_TIMEOUT=5
-```
+To improve performance, directories are cached in a hash table.  The size of this hash table could
+be changed, thanks to the following environment variable:
+* `D_IL_DCACHE_SIZE_BITS`: power 2 number of buckets of the hash table (default value of 16).
+
+A garbage collector is periodically triggered to remove the stalled entries from the hash table.
+The behavior of this garbage collector can be configured thanks to the following environment
+variables:
+* `D_IL_DCACHE_REC_TIMEOUT`: define the lifetime in seconds of an entry of the hash table (default
+  value of 60).
+* `D_IL_DCACHE_GC_RECLAIM_MAX`: define the maximal number of entries which can be reclaimed per
+  garbgage collection iteration (default value of 1000).
+* `D_IL_DCACHE_GC_PERIOD`: define the triggering time period in seconds of the garbage collector
+  (default value of 120).
 
 !!! note
-    The directory cache can be deactivated with setting a timeout of 0 second.
+    * The directory cache can be deactivated with setting a value of 0 to the
+      `D_IL_DCACHE_REC_TIMEOUT` environment variable.
+    * The garbage collector can be deactivated with setting a value of 0 to the
+      `D_IL_DCACHE_GC_PERIOD` environment variable.
 
 ### Limitations of libpil4dfs
 

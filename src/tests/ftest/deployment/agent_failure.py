@@ -33,7 +33,7 @@ class AgentFailure(IorTestBase):
         """
         ior_cmd = IorCommand()
         ior_cmd.get_params(self)
-        ior_cmd.set_daos_params(self.server_group, self.pool, self.container.identifier)
+        ior_cmd.set_daos_params(self.pool, self.container.identifier)
         testfile = os.path.join(os.sep, file_name)
         ior_cmd.update_params(test_file=testfile)
 
