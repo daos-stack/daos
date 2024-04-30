@@ -21,7 +21,7 @@ class DaosSystemQuery(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=control,daos_cmd
-        :avocado: tags=DaosSystemQuery,daos_system_query,test_daos_system_query
+        :avocado: tags=DaosSystemQuery,test_daos_system_query
         """
         daos_cmd = self.get_daos_command()
 

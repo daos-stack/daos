@@ -3,8 +3,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import json
 import os
+import shutil
 import site
 
 from ClusterShell.NodeSet import NodeSet
@@ -18,61 +18,25 @@ class TestEnvironmentException(Exception):
     """Exception for launch.py execution."""
 
 
-def _get_build_environment(logger, build_vars_file):
-    """Obtain DAOS build environment variables from the .build_vars.json file.
-
-    Args:
-        logger (Logger): logger for the messages produced by this method
-        build_vars_file (str): the full path to the DAOS build_vars.json file
-
-    Raises:
-        TestEnvironmentException: if there is an error obtaining the DAOS build environment
-
-    Returns:
-        str: The prefix of the DAOS install.
-        None: If the file is not present.
-    """
-    logger.debug("Obtaining DAOS build environment from %s", build_vars_file)
-    try:
-        with open(build_vars_file, encoding="utf-8") as vars_file:
-            return json.load(vars_file)["PREFIX"]
-
-    except FileNotFoundError:
-        return None
-
-    except Exception as error:      # pylint: disable=broad-except
-        raise TestEnvironmentException("Error obtaining build environment:", str(error)) from error
-
-
-def _update_path(logger, build_vars_file):
+def _update_path(daos_prefix):
     """Update the PATH environment variable for functional testing.
 
     Args:
-        logger (Logger): logger for the messages produced by this method
-        build_vars_file (str): the full path to the DAOS build_vars.json file
+        daos_prefix (str): daos install prefix
 
-    Raises:
-        TestEnvironmentException: if there is an error obtaining the DAOS build environment
     """
-    base_dir = _get_build_environment(logger, build_vars_file)
+    parts = os.environ.get("PATH").split(":")
 
-    path = os.environ.get("PATH")
-
-    parts = path.split(":")
-
-    # If a custom prefix is used for the daos installation then prepend that to the path so that
-    # any binaries provided are picked up from there, else do not modify the path.
-    if base_dir:
-        bin_dir = os.path.join(base_dir, "bin")
-        sbin_dir = os.path.join(base_dir, "sbin")
-
+    # Insert bin and sbin at the beginning of PATH if prefix is not /usr
+    if daos_prefix != os.path.join(os.sep, "usr"):
+        bin_dir = os.path.join(daos_prefix, "bin")
+        sbin_dir = os.path.join(daos_prefix, "sbin")
         parts.insert(0, bin_dir)
         parts.insert(0, sbin_dir)
 
     # /usr/sbin is not setup on non-root user for CI nodes.
     # SCM formatting tool mkfs.ext4 is located under /usr/sbin directory.
     usr_sbin = os.path.join(os.sep, "usr", "sbin")
-
     if usr_sbin not in parts:
         parts.append(usr_sbin)
 
@@ -142,6 +106,7 @@ class TestEnvironment():
         'insecure_mode': 'DAOS_TEST_INSECURE_MODE',
         'bullseye_src': 'DAOS_TEST_BULLSEYE_SRC',
         'bullseye_file': 'COVFILE',
+        'daos_prefix': 'DAOS_TEST_PREFIX'
     }
 
     def __init__(self):
@@ -176,23 +141,25 @@ class TestEnvironment():
             self.insecure_mode = insecure_mode
 
         if self.log_dir is None:
-            self.log_dir = self.default_log_dir()
+            self.log_dir = self._default_log_dir()
         if self.shared_dir is None:
-            self.shared_dir = self.default_shared_dir()
+            self.shared_dir = self._default_shared_dir()
         if self.app_dir is None:
-            self.app_dir = self.default_app_dir()
+            self.app_dir = self._default_app_dir()
         if self.user_dir is None:
-            self.user_dir = self.default_user_dir()
+            self.user_dir = self._default_user_dir()
         if self.interface is None:
-            self.interface = self.default_interface(logger, all_hosts)
+            self.interface = self._default_interface(logger, all_hosts)
         if self.provider is None:
-            self.provider = self.default_provider(logger, servers)
+            self.provider = self._default_provider(logger, servers)
         if self.insecure_mode is None:
-            self.insecure_mode = self.default_insecure_mode()
+            self.insecure_mode = self._default_insecure_mode()
         if self.bullseye_src is None:
-            self.bullseye_src = self.default_bullseye_src()
+            self.bullseye_src = self._default_bullseye_src()
         if self.bullseye_file is None:
-            self.bullseye_file = self.default_bullseye_file()
+            self.bullseye_file = self._default_bullseye_file()
+        if self.daos_prefix is None:
+            self.daos_prefix = self._default_daos_prefix(logger)
 
     def __set_value(self, key, value):
         """Set the test environment variable.
@@ -224,7 +191,7 @@ class TestEnvironment():
         """
         self.__set_value('app_dir', value)
 
-    def default_app_dir(self):
+    def _default_app_dir(self):
         """Get the default application directory path.
 
         Returns:
@@ -269,7 +236,7 @@ class TestEnvironment():
         self.__set_value('log_dir', value)
 
     @staticmethod
-    def default_log_dir():
+    def _default_log_dir():
         """Get the default local log directory path.
 
         Returns:
@@ -296,7 +263,7 @@ class TestEnvironment():
         self.__set_value('shared_dir', value)
 
     @staticmethod
-    def default_shared_dir():
+    def _default_shared_dir():
         """Get the default shared log directory path.
 
         Returns:
@@ -322,7 +289,7 @@ class TestEnvironment():
         """
         self.__set_value('user_dir', value)
 
-    def default_user_dir(self):
+    def _default_user_dir(self):
         """Get the default user directory path.
 
         Returns:
@@ -348,7 +315,7 @@ class TestEnvironment():
         """
         self.__set_value('interface', value)
 
-    def default_interface(self, logger, hosts):
+    def _default_interface(self, logger, hosts):
         """Get the default interface.
 
         Args:
@@ -394,7 +361,7 @@ class TestEnvironment():
         else:
             self.__set_value('provider', value)
 
-    def default_provider(self, logger, hosts):
+    def _default_provider(self, logger, hosts):
         """Get the default provider.
 
         Args:
@@ -463,7 +430,7 @@ class TestEnvironment():
         self.__set_value('insecure_mode', value)
 
     @staticmethod
-    def default_insecure_mode():
+    def _default_insecure_mode():
         """Get the default insecure mode.
 
         Returns:
@@ -490,7 +457,7 @@ class TestEnvironment():
         self.__set_value('bullseye_src', value)
 
     @staticmethod
-    def default_bullseye_src():
+    def _default_bullseye_src():
         """Get the default bullseye source file.
 
         Returns:
@@ -517,13 +484,57 @@ class TestEnvironment():
         self.__set_value('bullseye_file', value)
 
     @staticmethod
-    def default_bullseye_file():
+    def _default_bullseye_file():
         """Get the default bullseye file.
 
         Returns:
             str: the default bullseye file
         """
         return os.path.join(os.sep, "tmp", "test.cov")
+
+    @property
+    def daos_prefix(self):
+        """Get the daos_prefix.
+
+        Returns:
+            str: the daos_prefix
+        """
+        return os.environ.get(self.__ENV_VAR_MAP['daos_prefix'])
+
+    @daos_prefix.setter
+    def daos_prefix(self, value):
+        """Set the daos_prefix.
+
+        Args:
+            value (str, bool): the daos_prefix
+        """
+        self.__set_value('daos_prefix', value)
+
+    def _default_daos_prefix(self, logger):
+        """Get the default daos_prefix.
+
+        Args:
+            logger (Logger): logger for the messages produced by this method
+
+        Raises:
+            TestEnvironmentException: if there is an error obtaining the default daos_prefix
+
+        Returns:
+            str: the default daos_prefix
+        """
+        if logger is None:
+            return None
+
+        logger.debug(
+            "Detecting daos_prefix for %s - %s not set",
+            self.daos_prefix, self.__ENV_VAR_MAP['daos_prefix'])
+
+        daos_bin_path = shutil.which('daos')
+        if not daos_bin_path:
+            raise TestEnvironmentException("Failed to find installed daos!")
+
+        # E.g. /usr/bin/daos -> /usr
+        return os.path.dirname(os.path.dirname(daos_bin_path))
 
 
 def set_test_environment(logger, test_env=None, servers=None, clients=None, provider=None,
@@ -551,15 +562,14 @@ def set_test_environment(logger, test_env=None, servers=None, clients=None, prov
     logger.debug("Setting up the test environment variables")
 
     if test_env:
-        # Update the PATH environment variable
-        build_vars_file = os.path.join(
-            os.path.dirname(os.path.realpath(__file__)), "..", "..", "..", ".build_vars.json")
-        _update_path(logger, build_vars_file)
-
-        # Get the default fabric interface and provider
+        # Get the default fabric interface, provider, and daos prefix
         test_env.set_defaults(logger, servers, clients, provider, insecure_mode)
         logger.info("Testing with interface:   %s", test_env.interface)
         logger.info("Testing with provider:    %s", test_env.provider)
+        logger.info("Testing with daos_prefix: %s", test_env.daos_prefix)
+
+        # Update the PATH environment variable
+        _update_path(test_env.daos_prefix)
 
         if details:
             details["interface"] = test_env.interface
