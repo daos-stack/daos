@@ -317,14 +317,19 @@ class TestRunner():
         self.local_host = get_local_host()
 
     def prepare(self, logger, test_log_file, test, repeat, user_create, slurm_setup, control_host,
-                partition_hosts):
+                partition_hosts, clear_mounts):
         """Prepare the test for execution.
 
         Args:
             logger (Logger): logger for the messages produced by this method
+            test_log_file (str): the log file for this test
             test (TestInfo): the test information
             repeat (str): the test repetition sequence, e.g. '1/10'
             user_create (bool): whether to create extra test users defined by the test
+            slurm_setup (bool): whether to setup slurm before running the test
+            control_host (NodeSet): slurm control hosts
+            partition_hosts (NodeSet): slurm partition hosts
+            clear_mounts (str): filter used to match the mount points to remove before the test
 
         Returns:
             int: status code: 0 = success, 128 = failure
@@ -351,6 +356,11 @@ class TestRunner():
 
         # Setup additional test users
         status = self._user_setup(logger, test, user_create)
+        if status:
+            return status
+
+        # Remove existing mount points on each test host
+        status = self._clear_mount_points(logger, test, clear_mounts)
         if status:
             return status
 
@@ -457,9 +467,9 @@ class TestRunner():
         Args:
             logger (Logger): logger for the messages produced by this method
             test (TestInfo): the test information
-            slurm_setup (bool):
-            control_host (NodeSet):
-            partition_hosts (NodeSet):
+            slurm_setup (bool): whether to setup slurm before running the test
+            control_host (NodeSet): slurm control hosts
+            partition_hosts (NodeSet): slurm partition hosts
 
         Returns:
             int: status code: 0 = success, 128 = failure
@@ -588,6 +598,39 @@ class TestRunner():
                 self.test_result.fail_test(logger, "Prepare", str(error), sys.exc_info())
                 return 128
 
+        return 0
+
+    def _clear_mount_points(self, logger, test, mount_filter):
+        """Remove existing mount points on each test host.
+
+        Args:
+            logger (Logger): logger for the messages produced by this method
+            test (TestInfo): the test information
+            mount_filter (str): filter used to match the mount points to remove before the test
+
+        Returns:
+            int: status code: 0 = success, 128 = failure
+        """
+        if mount_filter is None:
+            return 0
+
+        logger.debug("-" * 80)
+        hosts = test.host_info.all_hosts
+        logger.debug("Clearing existing mount points matching '%s' on %s:", mount_filter, hosts)
+        command = f" df --type=tmpfs --output=target | grep -E {mount_filter}"
+        find_result = run_remote(logger, hosts, command)
+        for data in find_result.output:
+            if not data.passed:
+                continue
+            commands = []
+            for line in data.stdout:
+                commands.append(f"sudo umount -f {line}")
+                commands.append(f"sudo rm -fr {line}")
+            for command in commands:
+                if not run_remote(logger, hosts, command).passed:
+                    message = "Error clearing existing mount points"
+                    self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
+                    return 128
         return 0
 
     @staticmethod
@@ -1036,15 +1079,17 @@ class TestGroup():
         run_local(logger, f"ls -al '{self._test_env.app_dir}'")
         return 0
 
-    def run_tests(self, logger, result, repeat, setup, sparse, fail_fast, stop_daos, archive,
+    def run_tests(self, logger, result, repeat, slurm_setup, sparse, fail_fast, stop_daos, archive,
                   rename, jenkins_log, core_files, threshold, user_create, code_coverage,
-                  job_results_dir, logdir):
+                  job_results_dir, logdir, clear_mounts):
         # pylint: disable=too-many-arguments
         """Run all the tests.
 
         Args:
             logger (Logger): logger for the messages produced by this method
-            mode (str): launch mode
+            result (Results): object tracking the result of the test
+            repeat (int): number of times to repeat the test
+            slurm_setup (bool): whether to setup slurm before running the test
             sparse (bool): whether or not to display the shortened avocado test output
             fail_fast (bool): whether or not to fail the avocado run command upon the first failure
             stop_daos (bool): whether or not to stop daos servers/clients after the test
@@ -1055,6 +1100,9 @@ class TestGroup():
             threshold (str): optional upper size limit for test log files
             user_create (bool): whether to create extra test users defined by the test
             code_coverage (CodeCoverage): bullseye code coverage
+            job_results_dir (str): avocado job-results directory
+            logdir (str): base directory in which to place the log file
+            clear_mounts (str): filter used to match the mount points to remove before each test
 
         Returns:
             int: status code indicating any issues running tests
@@ -1084,8 +1132,8 @@ class TestGroup():
 
                 # Prepare the hosts to run the tests
                 step_status = runner.prepare(
-                    logger, test_log_file, test, loop, user_create, setup, self._control,
-                    self._partition_hosts)
+                    logger, test_log_file, test, loop, user_create, slurm_setup, self._control,
+                    self._partition_hosts, clear_mounts)
                 if step_status:
                     # Do not run this test - update its failure status to interrupted
                     return_code |= step_status

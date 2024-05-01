@@ -370,7 +370,7 @@ class Launch():
             logger, self.result, self.repeat, self.slurm_setup, args.sparse, args.failfast,
             not args.disable_stop_daos, args.archive, args.rename, args.jenkinslog, core_files,
             args.logs_threshold, args.user_create, code_coverage, self.job_results_dir,
-            self.logdir)
+            self.logdir, args.clear_mounts)
 
         # Convert the test status to a launch.py status
         status |= summarize_run(logger, self.mode, test_status)
@@ -507,6 +507,12 @@ def main():
         "-a", "--archive",
         action="store_true",
         help="archive host log files in the avocado job-results directory")
+    parser.add_argument(
+        "-c", "--clear_mounts",
+        action="store",
+        default=None,
+        type=str,
+        help="filter used to match the mount points to remove before running each test")
     parser.add_argument(
         "-dsd", "--disable_stop_daos",
         action="store_true",
@@ -705,6 +711,7 @@ def main():
         args.slurm_install = True
         args.slurm_setup = True
         args.user_create = True
+        args.clear_mounts = "/mnt/daos"
 
     # Setup the Launch object
     launch = Launch(args.name, args.mode, args.slurm_install, args.slurm_setup)
