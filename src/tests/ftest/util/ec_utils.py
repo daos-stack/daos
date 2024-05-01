@@ -13,7 +13,7 @@ from daos_utils import DaosCommand
 from dfuse_utils import get_dfuse, start_dfuse
 from exception_utils import CommandFailure
 from fio_test_base import FioBase
-from general_utils import DaosTestError, run_pcmd
+from general_utils import DaosTestError
 from mdtest_test_base import MdtestBase
 from nvme_utils import ServerFillUp
 from pydaos.raw import DaosApiError
@@ -485,34 +485,15 @@ class ErasureCodeFio(FioBase):
         self.add_pool()
         self.out_queue = queue.Queue()
 
-    def stop_job_managers(self):
-        """Cleanup dfuse in case of test failure."""
-        error_list = []
-        dfuse_cleanup_cmd = ["pkill dfuse --signal KILL",
-                             "fusermount3 -uz {}".format(self.dfuse.mount_dir.value)]
-
-        for cmd in dfuse_cleanup_cmd:
-            results = run_pcmd(self.hostlist_clients, cmd)
-            for result in results:
-                if result["exit_status"] != 0:
-                    error_list.append("Errors detected during cleanup cmd %s on node %s",
-                                      cmd, str(result["hosts"]))
-                    error_list.extend(super().stop_job_managers())
-        return error_list
-
-    def write_single_fio_dataset(self, pool, results):
+    def write_single_fio_dataset(self, mount_dir, results):
         """Run Fio Benchmark.
 
         Args:
-            pool (TestPool): a daos pool
+            mount_dir (str): directory to use with the fio command
             results (queue): queue for returning thread results
         """
         try:
-            container = self.get_container(pool)
-            container.set_attr(attrs={'dfuse-direct-io-disable': 'on'})
-            dfuse = get_dfuse(self, self.hostlist_clients)
-            start_dfuse(self, dfuse, pool, container)
-            self.fio_cmd.update_directory(dfuse.mount_dir.value)
+            self.fio_cmd.update_directory(mount_dir)
             self.execute_fio()
             if results is not None:
                 results.put("PASS")
@@ -524,14 +505,23 @@ class ErasureCodeFio(FioBase):
     def start_online_fio(self, pool):
         """Run Fio operation with thread in background.
 
+        Trigger the server failure while Fio is running
+
         Args:
             pool (TestPool): a daos pool
 
-        Trigger the server failure while Fio is running
+        Returns:
+            TestContainer: the container used to run fio
         """
+        container = self.get_container(pool)
+        container.set_attr(attrs={'dfuse-direct-io-disable': 'on'})
+        dfuse = get_dfuse(self, self.hostlist_clients)
+        start_dfuse(self, dfuse, pool, container)
+
         # Create the Fio run thread
-        job = threading.Thread(target=self.write_single_fio_dataset,
-                               kwargs={"pool": pool, "results": self.out_queue})
+        job = threading.Thread(
+            target=self.write_single_fio_dataset,
+            kwargs={"mount_dir": dfuse.mount_dir.value, "results": self.out_queue})
 
         # Launch the Fio thread
         job.start()
@@ -552,6 +542,8 @@ class ErasureCodeFio(FioBase):
         while not self.out_queue.empty():
             if self.out_queue.get() == "FAIL":
                 self.fail("FAIL")
+
+        return container
 
     def check_aggregation_status(self, quick_check=True, attempt=20):
         """EC Aggregation triggered status.

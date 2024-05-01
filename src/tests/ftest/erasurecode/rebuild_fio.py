@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2019-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -42,7 +42,7 @@ class EcodFioRebuild(ErasureCodeFio):
             # Enabled on-line rebuild for the test
             self.set_online_rebuild = True
         # 2.b Write the Fio data and kill server if rebuild_mode is on-line
-        self.start_online_fio(self.pool)
+        container = self.start_online_fio(self.pool)
 
         # 3. Get initial total free space (scm+nvme)
         self.log_step("Get initial total free space (scm+nvme)")
@@ -82,7 +82,7 @@ class EcodFioRebuild(ErasureCodeFio):
 
         # 6. Adding unlink option for final read command
         self.log_step("Adding unlink option for final read command")
-        if int(self.container.properties.value.split(":")[1]) == 1:
+        if int(container.properties.value.split(":")[1]) == 1:
             self.fio_cmd._jobs['test'].unlink.value = 1
 
         # 7. Read and verify the original data.
@@ -92,7 +92,7 @@ class EcodFioRebuild(ErasureCodeFio):
 
         # 8. If RF is 2 kill one more server and validate the data is not corrupted.
         self.log_step("If RF is 2 kill one more server and validate the data is not corrupted.")
-        if int(self.container.properties.value.split(":")[1]) == 2:
+        if int(container.properties.value.split(":")[1]) == 2:
             self.fio_cmd._jobs['test'].unlink.value = 1
             self.log.info("RF is 2,So kill another server and verify data")
             # Kill one more server rank
