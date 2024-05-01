@@ -889,7 +889,7 @@ func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineA
 			continue
 		} else if engineCfg.ServiceThreadCore != nil {
 			log.Infof("first_core setting ignored on engine %d", idx)
-
+			engineCfg.ServiceThreadCore = nil
 		}
 
 		numaAffinity, err := detectEngineAffinity(log, engineCfg, affSources...)
