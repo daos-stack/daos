@@ -480,7 +480,7 @@ class EngineYamlParameters(YamlParameters):
         #   log_file:               map to D_LOG_FILE env
         #   env_vars:               influences DAOS I/O Engine behavior
         self.targets = BasicParameter(None, 8)
-        self.first_core = BasicParameter(None)
+        self.first_core = BasicParameter(None, 0)
         self.nr_xs_helpers = BasicParameter(None, 4)
         self.fabric_iface = BasicParameter(None, default_interface)
         self.fabric_iface_port = BasicParameter(None, default_port)
