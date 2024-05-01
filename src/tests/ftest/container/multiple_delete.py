@@ -45,7 +45,7 @@ class MultipleContainerDelete(IorTestBase):
         for loop in range(50):
             self.log.info("Create-Write-Destroy Iteration %d", loop)
             self.create_cont()
-            self.ior_cmd.set_daos_params(self.server_group, self.pool, self.container.identifier)
+            self.ior_cmd.set_daos_params(self.pool, self.container.identifier)
             # If the transfer size is less than 4K, the objects are
             # inserted into SCM and anything greater goes to SSD
             self.run_ior_with_pool(create_cont=False)

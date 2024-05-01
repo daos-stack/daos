@@ -442,6 +442,7 @@ func (srv *server) registerEvents() {
 
 			if err := srv.mgmtSvc.updateFabricProviders([]string{srv.cfg.Fabric.Provider}, srv.pubSub); err != nil {
 				srv.log.Errorf(err.Error())
+				return err
 			}
 
 			srv.mgmtSvc.startLeaderLoops(ctx)
@@ -574,12 +575,6 @@ func Start(log logging.Logger, cfg *config.Server) error {
 	if err != nil {
 		return err
 	}
-
-	hwprovFini, err := hwprov.Init(log)
-	if err != nil {
-		return err
-	}
-	defer hwprovFini()
 
 	if err := waitFabricReady(ctx, log, cfg); err != nil {
 		return err
