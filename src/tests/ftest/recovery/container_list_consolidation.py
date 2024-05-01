@@ -70,8 +70,6 @@ class ContainerListConsolidationTest(RecoveryTestBase):
         if vos_file:
             # We're using a PMEM cluster.
             scm_mount = self.server_managers[0].get_config_value("scm_mount")
-            if vos_file is None:
-                self.fail("vos file wasn't found in {}/{}".format(scm_mount, pool.uuid.lower()))
             ddb_command = DdbCommand(
                 server_host=NodeSet(self.hostlist_servers[0]), path=self.bin,
                 mount_point=scm_mount, pool_uuid=pool.uuid, vos_file=vos_file)
