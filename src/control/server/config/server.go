@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -868,8 +868,13 @@ func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineA
 
 	// Detect legacy mode by checking if first_core is being used.
 	legacyMode := false
-	for _, engineCfg := range cfg.Engines {
+	for idx, engineCfg := range cfg.Engines {
 		if engineCfg.ServiceThreadCore != nil {
+			if *engineCfg.ServiceThreadCore == 0 && engineCfg.PinnedNumaNode != nil {
+				log.Infof("first_core setting on engine %d ignored", idx)
+				engineCfg.ServiceThreadCore = nil
+				continue
+			}
 			legacyMode = true
 			break
 		}

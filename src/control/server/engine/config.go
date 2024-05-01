@@ -289,7 +289,7 @@ func (c *Config) ReadLogSubsystems() (string, error) {
 
 // Validate ensures that the configuration meets minimum standards.
 func (c *Config) Validate() error {
-	if c.PinnedNumaNode != nil && c.ServiceThreadCore != nil {
+	if c.PinnedNumaNode != nil && c.ServiceThreadCore != nil && *c.ServiceThreadCore != 0 {
 		return errors.New("cannot specify both pinned_numa_node and first_core")
 	}
 
@@ -370,7 +370,7 @@ func IsNUMAMismatch(err error) bool {
 // SetNUMAAffinity sets the NUMA affinity for the engine,
 // if not already set in the configuration.
 func (c *Config) SetNUMAAffinity(node uint) error {
-	if c.PinnedNumaNode != nil && c.ServiceThreadCore != nil {
+	if c.PinnedNumaNode != nil && c.ServiceThreadCore != nil && *c.ServiceThreadCore != 0 {
 		return errors.New("cannot set both NUMA node and service core")
 	}
 
