@@ -176,7 +176,6 @@ class ServerFillUp(IorTestBase):
 
         # For IOR Read operation update the read only flag from yaml file.
         if 'Auto_Read' in operation or operation == "Read":
-            # create_cont = False
             self.ior_local_cmd.flags.value = self.ior_read_flags
 
         self.ior_local_cmd.set_daos_params(self.pool, None)
