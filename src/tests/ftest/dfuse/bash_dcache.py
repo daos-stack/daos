@@ -62,7 +62,7 @@ class DFuseBashdcacheTest(TestWithServers):
         container = self.get_container(pool)
         dfuse_hosts = get_local_host()
         dfuse = get_dfuse(self, dfuse_hosts)
-        start_dfuse(self, dfuse, self.pool, container)
+        start_dfuse(self, dfuse, pool, container)
         fuse_root_dir = dfuse.mount_dir.value
 
         with open(os.path.join(fuse_root_dir, "sh_dcache.sh"), "w", encoding="utf-8") as fd:

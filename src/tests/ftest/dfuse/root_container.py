@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -86,7 +86,7 @@ class RootContainerTest(TestWithServers):
             pool = self.get_pool(connect=False)
             for jdx in range(cont_count):
                 cont_name = f"/cont_{idx}{jdx}"
-                sub_cont = str(mount_dir.value + cont_name)
+                sub_cont = str(mount_dir + cont_name)
                 self.get_container(pool=pool, path=sub_cont)
                 self.insert_files_and_verify(
                     hosts, os.path.join(mount_dir, cont_name), tmp_file_count, tmp_file_name,

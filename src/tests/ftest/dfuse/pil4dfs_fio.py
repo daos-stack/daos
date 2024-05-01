@@ -91,7 +91,7 @@ class Pil4dfsFio(TestWithServers):
 
         self.log_step("Mounting DFuse mount point")
         dfuse = get_dfuse(self, self.hostlist_clients)
-        start_dfuse(self, dfuse, self.pool, container)
+        start_dfuse(self, dfuse, container.pool, container)
         self.log.debug("Mounted DFuse mount point %s", str(dfuse))
 
         fio_cmd = FioCommand()
