@@ -19,10 +19,14 @@ class DFuseReadTest(TestWithServers):
         """
         Test Description:
             Ensure that pre-read feature is working.
+
+        Read one large file entirely using pre-read.  Read a second smaller file to ensure that
+        the first file leaves the flag enabled.
+
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=dfuse
-        :avocado: tags=DFuseReadTest,test_dfuse_pre_read
+        :avocado: tags=DFusePreReadTest,test_dfuse_pre_read
         """
 
         pool = self.get_pool(connect=False)
@@ -57,6 +61,12 @@ class DFuseReadTest(TestWithServers):
         if not result.passed:
             self.fail(f'"{cmd}" failed on {result.failed_hosts}')
 
+        # Create the second, smaller file.
+        cmd = f"dd if=/dev/zero of={fuse_root_dir}/td/test_file2 count=1 bs=1k"
+        result = run_remote(self.log, self.hostlist_clients, cmd)
+        if not result.passed:
+            self.fail(f'"{cmd}" failed on {result.failed_hosts}')
+
         # Instruct dfuse to forget the directory and therefore file.
         cmd = f"daos fs evict {fuse_root_dir}/td"
         result = run_remote(self.log, self.hostlist_clients, cmd)
@@ -78,7 +88,7 @@ class DFuseReadTest(TestWithServers):
         )
 
         # Now read the file, and check it's read.
-        cmd = f"dd if={fuse_root_dir}/td/test_file of=/dev/zero count=16 bs=128k"
+        cmd = f"dd if={fuse_root_dir}/td/test_file of=/dev/zero count=1 bs=2M"
         result = run_remote(self.log, self.hostlist_clients, cmd)
         if not result.passed:
             self.fail(f'"{cmd}" failed on {result.failed_hosts}')
@@ -96,4 +106,23 @@ class DFuseReadTest(TestWithServers):
             "pre read does not match read",
         )
 
-        self.assertEqual(data["inodes"], 3, "expected 3 inodes in cache")
+        # Now read the smaller file, and check it's read.
+        cmd = f"dd if={fuse_root_dir}/td/test_file2 of=/dev/zero bs=1"
+        result = run_remote(self.log, self.hostlist_clients, cmd)
+        if not result.passed:
+            self.fail(f'"{cmd}" failed on {result.failed_hosts}')
+
+        data = dfuse.get_stats()
+
+        # pre_read requests are a subset of reads so for this test we should verify that they are
+        # equal, and non-zero.
+        self.assertGreater(
+            data["statistics"].get("pre_read", 0), 0, "expected non-zero pre read"
+        )
+        self.assertEqual(
+            data["statistics"].get("pre_read"),
+            data["statistics"].get("read", 0),
+            "pre read does not match read",
+        )
+
+        self.assertEqual(data["inodes"], 4, "expected 4 inodes in cache")
