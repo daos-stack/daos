@@ -141,15 +141,6 @@ func (cfg *Server) WithClientEnvVars(envVars []string) *Server {
 	return cfg
 }
 
-// WithCrtCtxShareAddr sets the top-level CrtCtxShareAddr.
-func (cfg *Server) WithCrtCtxShareAddr(addr uint32) *Server {
-	cfg.Fabric.CrtCtxShareAddr = addr
-	for _, engine := range cfg.Engines {
-		engine.Fabric.Update(cfg.Fabric)
-	}
-	return cfg
-}
-
 // WithCrtTimeout sets the top-level CrtTimeout.
 func (cfg *Server) WithCrtTimeout(timeout uint32) *Server {
 	cfg.Fabric.CrtTimeout = timeout

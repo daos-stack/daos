@@ -6,6 +6,7 @@
 import avocado
 from data_mover_test_base import DataMoverTestBase
 from pydaos.raw import DaosApiError
+from test_utils_container import get_existing_container
 
 
 class DmvrObjSmallTest(DataMoverTestBase):
@@ -77,7 +78,7 @@ class DmvrObjSmallTest(DataMoverTestBase):
         cont2_label = self.parse_create_cont_label(result.stdout_text)
 
         # Verify data in cont2
-        cont2 = self.get_cont(pool1, cont2_label)
+        cont2 = get_existing_container(self, pool1, cont2_label)
         self.dataset_verify(
             obj_list, cont2,
             self.num_objs, self.num_dkeys, self.num_akeys_single,
@@ -94,7 +95,7 @@ class DmvrObjSmallTest(DataMoverTestBase):
             "DAOS_UUID", None, pool2, None)
         cont3_label = self.parse_create_cont_label(result.stdout_text)
         # Verify data in cont3
-        cont3 = self.get_cont(pool2, cont3_label)
+        cont3 = get_existing_container(self, pool2, cont3_label)
         self.dataset_verify(
             obj_list, cont3,
             self.num_objs, self.num_dkeys, self.num_akeys_single,

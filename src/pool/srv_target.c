@@ -432,7 +432,7 @@ pool_child_recreate(struct ds_pool_child *child)
 	}
 
 	rc = vos_pool_create(path, child->spc_uuid, 0, pool_info->spi_blob_sz[SMD_DEV_TYPE_DATA],
-			     0, NULL);
+			     0, 0 /* version */, NULL);
 	if (rc)
 		DL_ERROR(rc, DF_UUID": Create VOS pool failed.", DP_UUID(child->spc_uuid));
 
@@ -2038,7 +2038,7 @@ update_vos_prop_on_targets(void *in)
 		goto out;
 
 	/** If necessary, upgrade the vos pool format */
-	df_version = ds_pool_get_vos_pool_df_version(pool->sp_global_version);
+	df_version = ds_pool_get_vos_df_version(pool->sp_global_version);
 	if (df_version == 0) {
 		ret = -DER_NO_PERM;
 		DL_ERROR(ret, DF_UUID ": pool global version %u no longer supported",

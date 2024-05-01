@@ -1020,11 +1020,38 @@ libpil4dfs intercepting summary for ops on DFS:
 [op_sum ]  5003
 ```
 
+### Turn on compatible mode in libpil4dfs
+Fake file descriptor (FD) is used in regular mode in libpil4dfs.so for efficiency. open() returns fake fd to applications. In cases of some APIs are not intercepted, applications could crash with the error "Bad File Descriptor". Compatible mode is provided to work around such situations.
+Setting env "D_IL_COMPATIBLE=1" turns on compatible mode. Kernel fd allocated by dfuse instead of fake fd will be returned to applications. This mode provides better compatibility with degraded performance in open, openat, and opendir, etc. Please start dfuse with "--disable-caching" to disable caching before using compatible mode.
+
 ### Child Process Inheritance
 
 Normally child processes inherit environmental variables from parent processes. In rare cases, e.g.
 scons, envs are striped off when calling execve().  It might be useful to force pil4dfs related env
 set in child processes by setting env "D_IL_ENFORCE_EXEC_ENV=1". This flag is 0 if not set.
+
+
+### Directory caching
+
+To improve performance, directories are cached in a hash table.  The size of this hash table could
+be changed, thanks to the following environment variable:
+* `D_IL_DCACHE_SIZE_BITS`: power 2 number of buckets of the hash table (default value of 16).
+
+A garbage collector is periodically triggered to remove the stalled entries from the hash table.
+The behavior of this garbage collector can be configured thanks to the following environment
+variables:
+* `D_IL_DCACHE_REC_TIMEOUT`: define the lifetime in seconds of an entry of the hash table (default
+  value of 60).
+* `D_IL_DCACHE_GC_RECLAIM_MAX`: define the maximal number of entries which can be reclaimed per
+  garbgage collection iteration (default value of 1000).
+* `D_IL_DCACHE_GC_PERIOD`: define the triggering time period in seconds of the garbage collector
+  (default value of 120).
+
+!!! note
+    * The directory cache can be deactivated with setting a value of 0 to the
+      `D_IL_DCACHE_REC_TIMEOUT` environment variable.
+    * The garbage collector can be deactivated with setting a value of 0 to the
+      `D_IL_DCACHE_GC_PERIOD` environment variable.
 
 ### Limitations of libpil4dfs
 

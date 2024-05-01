@@ -304,7 +304,7 @@ obj_layout_create(struct dc_object *obj, unsigned int mode, bool refresh)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	obj->cob_md.omd_ver = dc_pool_get_version(pool);
+	obj->cob_md.omd_ver = pool_map_get_version(map->pl_poolmap);
 	obj->cob_md.omd_pdom_lvl = dc_obj_get_pdom(obj);
 	obj->cob_md.omd_fdom_lvl = dc_obj_get_redun_lvl(obj);
 	obj->cob_md.omd_pda = dc_obj_get_pda(obj);

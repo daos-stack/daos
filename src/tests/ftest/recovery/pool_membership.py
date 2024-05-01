@@ -332,8 +332,7 @@ class PoolMembershipTest(IorTestBase):
 
         # 2. Write some data with IOR using SX.
         self.log_step("Write some data with IOR.")
-        self.ior_cmd.set_daos_params(
-            self.server_group, self.pool, self.container.identifier)
+        self.ior_cmd.set_daos_params(self.pool, self.container.identifier)
         self.run_ior_with_pool(create_pool=False, create_cont=False)
 
         # 3. Stop servers.

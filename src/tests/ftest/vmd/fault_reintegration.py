@@ -141,7 +141,6 @@ class NvmeFaultReintegrate(TestWithServers):
             "hosts": self.hostlist_clients,
             "path": self.workdir,
             "slots": None,
-            "group": self.server_group,
             "pool": self.pool,
             "container": self.container,
             "processes": self.params.get("np", "/run/ior/client_processes/*"),
