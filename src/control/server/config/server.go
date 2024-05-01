@@ -871,6 +871,7 @@ func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineA
 	for _, engineCfg := range cfg.Engines {
 		if engineCfg.ServiceThreadCore != nil {
 			if *engineCfg.ServiceThreadCore == 0 && engineCfg.PinnedNumaNode != nil {
+				// Both are set but we don't know yet which to use
 				continue
 			}
 			legacyMode = true
