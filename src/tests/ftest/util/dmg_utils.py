@@ -271,6 +271,7 @@ class DmgCommand(DmgCommandBase):
                 Defaults to None.
             health (bool, optional): Include device health in response.
                 Defaults to false.
+            uuid (str, optional): device UUID. Defaults to None.
 
         Raises:
             CommandFailure: if the dmg storage query list-devices command fails.

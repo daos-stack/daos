@@ -669,7 +669,7 @@ func TestControl_SmdManage(t *testing.T) {
 				HostStorage: mockSmdQueryMap(t, &mockSmdResp{Hosts: "host-0"}),
 			},
 		},
-		"set-faulty; drpc failure": {
+		"set-faulty; rank failure": {
 			req: &SmdManageReq{
 				Operation: SetFaultyOp,
 				IDs:       test.MockUUID(1),
@@ -716,7 +716,7 @@ func TestControl_SmdManage(t *testing.T) {
 				HostStorage: mockSmdQueryMap(t, &mockSmdResp{Hosts: "host-0"}),
 			},
 		},
-		"dev-replace; drpc failure": {
+		"dev-replace; rank failure": {
 			req: &SmdManageReq{
 				Operation:   DevReplaceOp,
 				IDs:         test.MockUUID(2),
@@ -784,7 +784,7 @@ func TestControl_SmdManage(t *testing.T) {
 				}),
 			},
 		},
-		"led-identify; drpc failure": {
+		"led-identify; rank failure": {
 			req: &SmdManageReq{
 				Operation: LedBlinkOp,
 				IDs:       test.MockUUID(1),
