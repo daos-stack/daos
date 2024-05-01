@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -281,15 +281,13 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         # start to fill up.
         self.log.info('--Filling 75% of the current SCM free space--')
         containers.append(self.create_container())
-        self.start_ior_load(
-            container=containers[-1], storage='SCM', operation="Auto_Write", percent=75)
+        self.start_ior_load(containers[-1], 'SCM', "Auto_Write", 75)
         self.log.info(self.pool.pool_percentage_used())
 
         # Fill 50% of current SCM free space. Aggregation is Enabled so NVMe space will
         # continue to fill up.
         containers.append(self.create_container())
-        self.start_ior_load(
-            container=containers[-1], storage='SCM', operation="Auto_Write", percent=50)
+        self.start_ior_load(containers[-1], 'SCM', "Auto_Write", 50)
         self.log.info(self.pool.pool_percentage_used())
 
         # Fill 60% of current SCM free space. This time, NVMe will be Full so data will
@@ -298,9 +296,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         self.log.info('--Filling 60% of the current SCM free space--')
         try:
             containers.append(self.create_container())
-            self.start_ior_load(
-                container=containers[-1], storage='SCM', operation="Auto_Write", percent=60,
-                log_file=log_file)
+            self.start_ior_load(containers[-1], 'SCM', "Auto_Write", 60, log_file)
         except TestFail:
             self.log.info('Test is expected to fail because of DER_NOSPACE')
         else:
@@ -419,8 +415,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
 
         # Run last IO
         self.create_container()
-        self.start_ior_load(
-            container=self.nvme_local_cont, storage='SCM', operation="Auto_Write", percent=1)
+        self.start_ior_load(self.nvme_local_cont, 'SCM', "Auto_Write", 1)
 
     def test_enospace_time_with_bg(self):
         """Jira ID: DAOS-4756.
@@ -483,8 +478,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
 
         # Run last IO
         self.create_container()
-        self.start_ior_load(
-            container=self.nvme_local_cont, storage='SCM', operation="Auto_Write", percent=1)
+        self.start_ior_load(self.nvme_local_cont, 'SCM', "Auto_Write", 1)
 
     @skipForTicket("DAOS-8896")
     def test_performance_storage_full(self):
@@ -506,12 +500,9 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         self.log.info(self.pool.pool_percentage_used())
         # Write First
         self.create_container()
-        self.start_ior_load(
-            container=self.nvme_local_cont, storage='SCM', operation="Auto_Write", percent=1)
+        self.start_ior_load(self.nvme_local_cont, 'SCM', "Auto_Write", 1)
         # Read the baseline data set
-        self.create_container()
-        self.start_ior_load(
-            container=self.nvme_local_cont, storage='SCM', operation='Auto_Read', percent=1)
+        self.start_ior_load(self.nvme_local_cont, 'SCM', 'Auto_Read', 1)
         max_mib_baseline = float(self.ior_matrix[0][int(IorMetrics.MAX_MIB)])
         baseline_cont_uuid = self.ior_cmd.dfs_cont.value
         self.log.info("IOR Baseline Read MiB %s", max_mib_baseline)
@@ -521,9 +512,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
 
         # Read the same container which was written at the beginning.
         self.container.uuid = baseline_cont_uuid
-        self.create_container()
-        self.start_ior_load(
-            container=self.nvme_local_cont, storage='SCM', operation='Auto_Read', percent=1)
+        self.start_ior_load(self.nvme_local_cont, 'SCM', 'Auto_Read', 1)
         max_mib_latest = float(self.ior_matrix[0][int(IorMetrics.MAX_MIB)])
         self.log.info("IOR Latest Read MiB %s", max_mib_latest)
 
@@ -565,8 +554,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             self.log.info("-------enospc_no_aggregation Loop--------- %d", _loop)
             # Fill 75% of SCM pool
             containers.append(self.create_container())
-            self.start_ior_load(
-                container=containers[-1], storage='SCM', operation="Auto_Write", percent=40)
+            self.start_ior_load(containers[-1], 'SCM', "Auto_Write", 40)
 
             self.log.info(self.pool.pool_percentage_used())
 
@@ -574,9 +562,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             try:
                 # Fill 10% more to SCM ,which should Fail because no SCM space
                 containers.append(self.create_container())
-                self.start_ior_load(
-                    container=containers[-1], storage='SCM', operation="Auto_Write", percent=40,
-                    log_file=log_file)
+                self.start_ior_load(containers[-1], 'SCM', "Auto_Write", 40, log_file)
             except TestFail:
                 self.log.info('Expected to fail because of DER_NOSPACE')
             else:
@@ -610,5 +596,4 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
 
         # Run last IO
         self.create_container()
-        self.start_ior_load(
-            container=self.nvme_local_cont, storage='SCM', operation="Auto_Write", percent=1)
+        self.start_ior_load(self.nvme_local_cont, 'SCM', "Auto_Write", 1)

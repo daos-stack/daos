@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -69,9 +69,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                     self.ior_cmd.repetitions.update(self.ior_test_repetitions)
                     self.log.info(self.pool.pool_percentage_used())
                     self.create_container()
-                    self.start_ior_load(
-                        container=self.nvme_local_cont, storage='NVMe', operation="Auto_Write",
-                        percent=pool_fillup)
+                    self.start_ior_load(self.nvme_local_cont, 'NVMe', "Auto_Write", pool_fillup)
                     self.log.info(self.pool.pool_percentage_used())
                 else:
                     self.run_ior_thread("Write", oclass, test_seq)
@@ -172,10 +170,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
             self.pool = pool
             if data:
                 if pool_fillup > 0:
-                    self.create_container()
-                    self.start_ior_load(
-                        container=self.nvme_local_cont, storage='NVMe', operation='Auto_Read',
-                        percent=pool_fillup)
+                    self.start_ior_load(self.nvme_local_cont, 'NVMe', 'Auto_Read', pool_fillup)
                 else:
                     self.run_ior_thread("Read", oclass, test_seq)
                     self.run_mdtest_thread(oclass)
