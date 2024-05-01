@@ -203,26 +203,13 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
                 "Number of errors %s (%s) is > 0: got=%d",
                 c_err_to_str(error), error, errors_count[error])
 
-    def delete_all_containers(self):
-        """Delete all the containers."""
-        # List all the container
-        kwargs = {"pool": self.pool.uuid}
-        data = self.daos_cmd.container_list(**kwargs)
-        containers = [uuid_label["uuid"] for uuid_label in data["response"]]
-
-        # Destroy all the containers
-        for _cont in containers:
-            kwargs["cont"] = _cont
-            kwargs["force"] = True
-            self.daos_cmd.container_destroy(**kwargs)
-
     def verify_background_job(self):
         """Function to verify that no background jobs have failed during the test."""
         for _result in self.test_result:
             if "FAIL" in _result:
                 self.fail("One of the Background IOR job failed")
 
-    def ior_bg_thread(self, event):
+    def ior_bg_thread(self, event, container):
         """Start IOR Background thread.
 
         This will write small data set and keep reading it in loop until it fails or main program
@@ -230,6 +217,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
 
         Args:
             event(obj): Event indicator to stop IOR read.
+            TestContainer: container used to run IOR
         """
         self.log.info('----Starting background IOR load----')
 
@@ -246,9 +234,6 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
 
         # Define the job manager for the IOR command
         job_manager = get_job_manager(self, job=ior_bg_cmd)
-
-        # create container
-        container = self.get_container(self.pool)
 
         job_manager.job.dfs_cont.update(container.uuid)
         env = ior_bg_cmd.get_default_env(str(job_manager))
@@ -285,18 +270,26 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
 
         Args:
             log_file (str): name prefix of the log files to check.
+
+        Returns:
+            list: a list of TestContainer objects created to run IOR
         """
+        containers = []
         self.log.info('----Starting main IOR load----')
 
         # Fill 75% of current SCM free space. Aggregation is Enabled so NVMe space will
         # start to fill up.
         self.log.info('--Filling 75% of the current SCM free space--')
-        self.start_ior_load(storage='SCM', operation="Auto_Write", percent=75)
+        containers.append(self.create_container())
+        self.start_ior_load(
+            container=containers[-1], storage='SCM', operation="Auto_Write", percent=75)
         self.log.info(self.pool.pool_percentage_used())
 
         # Fill 50% of current SCM free space. Aggregation is Enabled so NVMe space will
         # continue to fill up.
-        self.start_ior_load(storage='SCM', operation="Auto_Write", percent=50)
+        containers.append(self.create_container())
+        self.start_ior_load(
+            container=containers[-1], storage='SCM', operation="Auto_Write", percent=50)
         self.log.info(self.pool.pool_percentage_used())
 
         # Fill 60% of current SCM free space. This time, NVMe will be Full so data will
@@ -304,8 +297,10 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         # command is expected to fail with DER_NOSPACE.
         self.log.info('--Filling 60% of the current SCM free space--')
         try:
+            containers.append(self.create_container())
             self.start_ior_load(
-                storage='SCM', operation="Auto_Write", percent=60, log_file=log_file)
+                container=containers[-1], storage='SCM', operation="Auto_Write", percent=60,
+                log_file=log_file)
         except TestFail:
             self.log.info('Test is expected to fail because of DER_NOSPACE')
         else:
@@ -332,6 +327,8 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             )
             self.fail(msg)
 
+        return containers
+
     def run_enospace_with_bg_job(self, log_file):
         """Check DER_ENOSPACE occurs when storage space is filled.
 
@@ -340,17 +337,21 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
 
         Args:
             log_file (str): name prefix of the log files to check.
+
+        Returns:
+            list: a list of TestContainer objects created to run IOR
         """
+        containers = [self.get_container(self.pool)]
+
         # Start the IOR Background thread which will write small data set and
         # read in loop, until storage space is full.
-        job = threading.Thread(target=self.ior_bg_thread)
         stop_ior_read = threading.Event()
-        job = threading.Thread(target=self.ior_bg_thread, args=[stop_ior_read])
+        job = threading.Thread(target=self.ior_bg_thread, args=[stop_ior_read, containers[-1]])
         job.daemon = True
         job.start()
 
         # Run IOR in Foreground
-        self.run_enospace_foreground(log_file)
+        containers.extend(self.run_enospace_foreground(log_file))
 
         # Stop running ior reads in the ior_bg_thread thread
         stop_ior_read.set()
@@ -360,6 +361,8 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
 
         # Verify the background job result has no FAIL for any IOR run
         self.verify_background_job()
+
+        return containers
 
     def test_enospace_lazy_with_bg(self):
         """Jira ID: DAOS-4756.
@@ -408,14 +411,16 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             self.log.info("-------enospc_lazy_fg Loop--------- %d", _loop)
             # Run IOR to fill the pool.
             log_file = f"-loop_{_loop}".join(os.path.splitext(self.client_log))
-            self.run_enospace_foreground(log_file)
-            # Delete all the containers
-            self.delete_all_containers()
+            for container in self.run_enospace_foreground(log_file):
+                # Delete all the containers
+                container.destroy()
             # Delete container will take some time to release the space
             time.sleep(60)
 
         # Run last IO
-        self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)
+        self.create_container()
+        self.start_ior_load(
+            container=self.nvme_local_cont, storage='SCM', operation="Auto_Write", percent=1)
 
     def test_enospace_time_with_bg(self):
         """Jira ID: DAOS-4756.
@@ -470,14 +475,16 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             self.log.info(self.pool.pool_percentage_used())
             # Run IOR to fill the pool.
             log_file = f"-loop_{_loop}".join(os.path.splitext(self.client_log))
-            self.run_enospace_with_bg_job(log_file)
-            # Delete all the containers
-            self.delete_all_containers()
+            for container in self.run_enospace_with_bg_job(log_file):
+                # Delete all the containers
+                container.destroy()
             # Delete container will take some time to release the space
             time.sleep(60)
 
         # Run last IO
-        self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)
+        self.create_container()
+        self.start_ior_load(
+            container=self.nvme_local_cont, storage='SCM', operation="Auto_Write", percent=1)
 
     @skipForTicket("DAOS-8896")
     def test_performance_storage_full(self):
@@ -498,9 +505,13 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         # Write the IOR Baseline and get the Read BW for later comparison.
         self.log.info(self.pool.pool_percentage_used())
         # Write First
-        self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)
+        self.create_container()
+        self.start_ior_load(
+            container=self.nvme_local_cont, storage='SCM', operation="Auto_Write", percent=1)
         # Read the baseline data set
-        self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1)
+        self.create_container()
+        self.start_ior_load(
+            container=self.nvme_local_cont, storage='SCM', operation='Auto_Read', percent=1)
         max_mib_baseline = float(self.ior_matrix[0][int(IorMetrics.MAX_MIB)])
         baseline_cont_uuid = self.ior_cmd.dfs_cont.value
         self.log.info("IOR Baseline Read MiB %s", max_mib_baseline)
@@ -510,7 +521,9 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
 
         # Read the same container which was written at the beginning.
         self.container.uuid = baseline_cont_uuid
-        self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1)
+        self.create_container()
+        self.start_ior_load(
+            container=self.nvme_local_cont, storage='SCM', operation='Auto_Read', percent=1)
         max_mib_latest = float(self.ior_matrix[0][int(IorMetrics.MAX_MIB)])
         self.log.info("IOR Latest Read MiB %s", max_mib_latest)
 
@@ -538,6 +551,8 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         :avocado: tags=nvme,der_enospace,enospc_no_aggregation
         :avocado: tags=NvmeEnospace,test_enospace_no_aggregation
         """
+        containers = []
+
         # pylint: disable=attribute-defined-outside-init
         # pylint: disable=too-many-branches
         self.log.info(self.pool.pool_percentage_used())
@@ -549,15 +564,19 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         for _loop in range(10):
             self.log.info("-------enospc_no_aggregation Loop--------- %d", _loop)
             # Fill 75% of SCM pool
-            self.start_ior_load(storage='SCM', operation="Auto_Write", percent=40)
+            containers.append(self.create_container())
+            self.start_ior_load(
+                container=containers[-1], storage='SCM', operation="Auto_Write", percent=40)
 
             self.log.info(self.pool.pool_percentage_used())
 
             log_file = f"-loop_{_loop}".join(os.path.splitext(self.client_log))
             try:
                 # Fill 10% more to SCM ,which should Fail because no SCM space
+                containers.append(self.create_container())
                 self.start_ior_load(
-                    storage='SCM', operation="Auto_Write", percent=40, log_file=log_file)
+                    container=containers[-1], storage='SCM', operation="Auto_Write", percent=40,
+                    log_file=log_file)
             except TestFail:
                 self.log.info('Expected to fail because of DER_NOSPACE')
             else:
@@ -568,7 +587,9 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             self.verify_enospace_log(log_file)
 
             # Delete all the containers
-            self.delete_all_containers()
+            for container in containers:
+                # Delete all the containers
+                container.destroy()
 
             # Wait for the SCM space to be released. (Usage goes below 60%)
             scm_released = False
@@ -588,4 +609,6 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
                 self.fail(msg)
 
         # Run last IO
-        self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)
+        self.create_container()
+        self.start_ior_load(
+            container=self.nvme_local_cont, storage='SCM', operation="Auto_Write", percent=1)

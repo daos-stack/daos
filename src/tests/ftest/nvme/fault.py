@@ -40,7 +40,8 @@ class NvmeFault(ServerFillUp):
 
         # Create the IOR threads
         self.log_step('Creating a thread to run I/O (ior)')
-        ior_thread = self.create_ior_thread(operation="Auto_Write", percent=pool_capacity)
+        self.create_container()
+        ior_thread = self.create_ior_thread(self.nvme_local_cont, "Auto_Write", pool_capacity)
 
         # Set NVMe device faulty during IO
         self.log_step('Waiting 60 seconds before setting any devices faulty')

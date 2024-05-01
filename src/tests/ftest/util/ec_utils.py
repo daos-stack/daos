@@ -163,7 +163,7 @@ class ErasureCodeIor(ServerFillUp):
         self.update_ior_cmd_with_pool(create_cont=False)
 
         # Start IOR Write
-        self.start_ior_load(storage, operation, percent, create_cont=False)
+        self.start_ior_load(self.nvme_local_cont, storage, operation, percent)
 
         # Store the container UUID for future reading
         self.cont_uuid.append(self.ior_local_cmd.dfs_cont.value)
@@ -203,7 +203,7 @@ class ErasureCodeIor(ServerFillUp):
         self.nvme_local_cont.uuid = self.cont_uuid[self.cont_number]
 
         # Start IOR Read
-        self.start_ior_load(storage, operation, percent, create_cont=False)
+        self.start_ior_load(self.nvme_local_cont, storage, operation, percent)
 
     def ior_read_dataset(self, storage='NVMe', operation="Read", percent=1, parity=1):
         """Read IOR data and verify for different EC object and different sizes.

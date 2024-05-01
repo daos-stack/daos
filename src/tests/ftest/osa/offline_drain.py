@@ -69,7 +69,10 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
                     self.ior_cmd.dfs_dir_oclass.update(oclass)
                     self.ior_default_flags = self.ior_w_flags
                     self.log.info(self.pool.pool_percentage_used())
-                    self.start_ior_load(storage='NVMe', operation="Auto_Write", percent=pool_fillup)
+                    self.create_container()
+                    self.start_ior_load(
+                        container=self.nvme_local_cont, storage='NVMe', operation="Auto_Write",
+                        percent=pool_fillup)
                     self.log.info(self.pool.pool_percentage_used())
                 else:
                     self.run_ior_thread("Write", oclass, test_seq)
@@ -138,7 +141,10 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
             pool[val].display_pool_daos_space(display_string)
             if data:
                 if pool_fillup > 0:
-                    self.start_ior_load(storage='NVMe', operation='Auto_Read', percent=pool_fillup)
+                    self.create_container()
+                    self.start_ior_load(
+                        container=self.nvme_local_cont, storage='NVMe', operation='Auto_Read',
+                        percent=pool_fillup)
                 else:
                     self.run_ior_thread("Read", oclass, test_seq)
                     self.run_mdtest_thread(oclass)
