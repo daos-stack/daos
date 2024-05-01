@@ -13,7 +13,6 @@ server_config:
     0:
       targets: 8
       nr_xs_helpers: 4
-      first_core: 0
       pinned_numa_node: 0
       fabric_iface: ib0
       fabric_iface_port: 31317
@@ -30,7 +29,6 @@ server_config:
     1:
       targets: 8
       nr_xs_helpers: 4
-      first_core: 0
       pinned_numa_node: 1
       fabric_iface: ib1
       fabric_iface_port: 31417

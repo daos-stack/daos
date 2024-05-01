@@ -647,7 +647,6 @@ transport_config:
 engines:
 - targets: 12
   nr_xs_helpers: 2
-  first_core: 0
   log_file: ` + engineLog0 + `
   storage:
   - class: dcpm
@@ -666,7 +665,6 @@ engines:
   pinned_numa_node: 0
 - targets: 6
   nr_xs_helpers: 0
-  first_core: 0
   log_file: ` + engineLog1 + `
   storage:
   - class: dcpm
@@ -710,7 +708,6 @@ transport_config:
 engines:
 - targets: 12
   nr_xs_helpers: 2
-  first_core: 0
   log_file: ` + targetTestDir + ` /dir1/invalid_engine0.log
   storage:
   - class: dcpm
@@ -729,7 +726,6 @@ engines:
   pinned_numa_node: 0
 - targets: 6
   nr_xs_helpers: 0
-  first_core: 0
   log_file: ` + targetTestDir + ` /dir1/invalid_engine1.log
   storage:
   - class: dcpm
