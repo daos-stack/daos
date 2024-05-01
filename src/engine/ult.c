@@ -385,7 +385,8 @@ sched_ult2xs_multisocket(int xs_type, int tgt_id)
 			target = (socket * dss_tgt_per_numa_nr) +
 				 (tgt_id + offload) % dss_tgt_per_numa_nr;
 			offload = target + 17; /* Seed next selection */
-			return DSS_MAIN_XS_ID(target);
+			target  = DSS_MAIN_XS_ID(target);
+			goto check;
 		}
 		return DSS_XS_SELF;
 	}
@@ -395,6 +396,8 @@ sched_ult2xs_multisocket(int xs_type, int tgt_id)
 	target  = base + ((offload + tgt_id) % dss_offload_per_numa_nr);
 	offload = target + 17; /* Seed next selection */
 
+check:
+	D_ASSERT(target < DSS_XS_NR_TOTAL && target >= dss_sys_xs_nr);
 	return target;
 }
 
@@ -417,10 +420,8 @@ sched_ult2xs(int xs_type, int tgt_id)
 	case DSS_XS_DRPC:
 		return 2;
 	case DSS_XS_IOFW:
-		if (dss_numa_nr > 1) {
-			xs_id = sched_ult2xs_multisocket(xs_type, tgt_id);
-			break;
-		}
+		if (dss_numa_nr > 1)
+			return sched_ult2xs_multisocket(xs_type, tgt_id);
 		if (!dss_helper_pool) {
 			if (dss_tgt_offload_xs_nr > 0)
 				xs_id = DSS_MAIN_XS_ID(tgt_id) + 1;
@@ -459,10 +460,8 @@ sched_ult2xs(int xs_type, int tgt_id)
 			xs_id = (DSS_MAIN_XS_ID(tgt_id) + 1) % dss_tgt_nr;
 		break;
 	case DSS_XS_OFFLOAD:
-		if (dss_numa_nr > 1) {
+		if (dss_numa_nr > 1)
 			xs_id = sched_ult2xs_multisocket(xs_type, tgt_id);
-			break;
-		}
 		if (!dss_helper_pool) {
 			if (dss_tgt_offload_xs_nr > 0)
 				xs_id = DSS_MAIN_XS_ID(tgt_id) + dss_tgt_offload_xs_nr / dss_tgt_nr;
