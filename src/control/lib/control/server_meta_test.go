@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -688,6 +688,19 @@ func TestControl_SmdManage(t *testing.T) {
 				HostStorage: mockSmdQueryMap(t, &mockSmdResp{Hosts: "host-0"}),
 			},
 		},
+		"dev-replace with > 1 host": {
+			req: &SmdManageReq{
+				unaryRequest: unaryRequest{
+					request: request{
+						HostList: mockHostList("one", "two"),
+					},
+				},
+				Operation:   DevReplaceOp,
+				IDs:         test.MockUUID(2),
+				ReplaceUUID: test.MockUUID(1),
+			},
+			expErr: errors.New("> 1 host"),
+		},
 		// dev-replace API calls do not return SMD info.
 		"dev-replace": {
 			req: &SmdManageReq{
@@ -726,6 +739,11 @@ func TestControl_SmdManage(t *testing.T) {
 		// LED manage API calls return SMD info.
 		"led-identify": {
 			req: &SmdManageReq{
+				unaryRequest: unaryRequest{
+					request: request{
+						HostList: mockHostList("one", "two"),
+					},
+				},
 				Operation: LedBlinkOp,
 				IDs:       test.MockUUID(1),
 			},

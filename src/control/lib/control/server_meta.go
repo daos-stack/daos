@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -34,6 +34,16 @@ const (
 	LedBlinkOp
 	LedResetOp
 )
+
+func (smo SmdManageOpcode) String() string {
+	return map[SmdManageOpcode]string{
+		SetFaultyOp:  "set-faulty",
+		DevReplaceOp: "dev-replace",
+		LedCheckOp:   "led-check",
+		LedBlinkOp:   "led-blink",
+		LedResetOp:   "led-reset",
+	}[smo]
+}
 
 type (
 	// SmdPool contains the per-server components of a DAOS pool.
@@ -141,6 +151,17 @@ func (sr *SmdResp) addHostQueryResponse(hr *HostResponse, faultyOnly bool) error
 	}
 
 	return nil
+}
+
+func (sr *SmdResp) ResultCount() int {
+	if sr == nil {
+		return 0
+	}
+
+	nrErrs := sr.HostErrorsResp.GetHostErrors().ErrorCount()
+	nrHS := sr.HostStorage.HostCount()
+
+	return nrErrs + nrHS
 }
 
 // SmdQuery concurrently performs per-server metadata operations across all
@@ -340,13 +361,14 @@ func SmdManage(ctx context.Context, rpcClient UnaryInvoker, req *SmdManageReq) (
 		return ctlpb.NewCtlSvcClient(conn).SmdManage(ctx, pbReq)
 	})
 
-	if req.Operation == SetFaultyOp {
+	if req.Operation == SetFaultyOp || req.Operation == DevReplaceOp {
 		reqHosts, err := getRequestHosts(DefaultConfig(), req)
 		if err != nil {
 			return nil, err
 		}
 		if len(reqHosts) > 1 {
-			return nil, errors.New("cannot perform SetFaulty operation on > 1 host")
+			return nil, errors.Errorf("cannot perform %s operation on > 1 host",
+				req.Operation)
 		}
 	}
 
