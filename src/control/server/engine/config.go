@@ -248,7 +248,6 @@ type Config struct {
 	SocketDir         string         `yaml:"-" cmdLongFlag:"--socket_dir" cmdShortFlag:"-d"`
 	LogMask           string         `yaml:"log_mask,omitempty" cmdEnv:"D_LOG_MASK"`
 	LogFile           string         `yaml:"log_file,omitempty" cmdEnv:"D_LOG_FILE"`
-	LegacyStorage     LegacyStorage  `yaml:",inline,omitempty"`
 	Storage           storage.Config `yaml:",inline,omitempty"`
 	Fabric            FabricConfig   `yaml:",inline"`
 	EnvVars           []string       `yaml:"env_vars,omitempty"`

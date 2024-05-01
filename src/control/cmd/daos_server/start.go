@@ -20,18 +20,17 @@ type serverStarter func(logging.Logger, *config.Server) error
 type startCmd struct {
 	cmdutil.LogCmd
 	cfgCmd
-	start               serverStarter
-	Port                uint16  `short:"p" long:"port" description:"Port for the gRPC management interfect to listen on"`
-	MountPath           string  `short:"s" long:"storage" description:"Storage path"`
-	Modules             *string `short:"m" long:"modules" description:"List of server modules to load"`
-	Targets             uint16  `short:"t" long:"targets" description:"Number of targets to use (default use all cores)"`
-	NrXsHelpers         *uint16 `short:"x" long:"xshelpernr" description:"Number of helper XS per VOS target"`
-	FirstCore           uint16  `short:"f" long:"firstcore" default:"0" description:"Index of first core for service thread"`
-	Group               string  `short:"g" long:"group" description:"Server group name"`
-	SocketDir           string  `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_engine sockets"`
-	Insecure            bool    `short:"i" long:"insecure" description:"Allow for insecure connections"`
-	RecreateSuperblocks bool    `long:"recreate-superblocks" description:"Recreate missing superblocks rather than failing"`
-	AutoFormat          bool    `long:"auto-format" description:"Automatically format storage on server start to bring-up engines without requiring dmg storage format command"`
+	start       serverStarter
+	Port        uint16  `short:"p" long:"port" description:"Port for the gRPC management interfect to listen on"`
+	MountPath   string  `short:"s" long:"storage" description:"Storage path"`
+	Modules     *string `short:"m" long:"modules" description:"List of server modules to load"`
+	Targets     uint16  `short:"t" long:"targets" description:"Number of targets to use (default use all cores)"`
+	NrXsHelpers *uint16 `short:"x" long:"xshelpernr" description:"Number of helper XS per VOS target"`
+	FirstCore   uint16  `short:"f" long:"firstcore" default:"0" description:"Index of first core for service thread"`
+	Group       string  `short:"g" long:"group" description:"Server group name"`
+	SocketDir   string  `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_engine sockets"`
+	Insecure    bool    `short:"i" long:"insecure" description:"Allow for insecure connections"`
+	AutoFormat  bool    `long:"auto-format" description:"Automatically format storage on server start to bring-up engines without requiring dmg storage format command"`
 }
 
 func (cmd *startCmd) setCLIOverrides() error {
@@ -61,9 +60,6 @@ func (cmd *startCmd) setCLIOverrides() error {
 	}
 	if cmd.Modules != nil {
 		cmd.config.WithModules(*cmd.Modules)
-	}
-	if cmd.RecreateSuperblocks {
-		cmd.Notice("--recreate-superblocks is deprecated and no longer needed to use externally-managed tmpfs")
 	}
 
 	for _, srv := range cmd.config.Engines {

@@ -76,9 +76,6 @@ type Server struct {
 
 	Path string `yaml:"-"` // path to config file
 
-	// Legacy config file parameters stored in a separate struct.
-	Legacy ServerLegacy `yaml:",inline"`
-
 	// Behavior flags
 	AutoFormat bool `yaml:"-"`
 }
@@ -358,11 +355,6 @@ func (cfg *Server) Load() error {
 	// TODO multiprovider: Remove when multiprovider is enabled
 	if cfg.Fabric.GetNumProviders() > 1 {
 		return errors.Errorf("fabric provider string %q includes more than one provider", cfg.Fabric.Provider)
-	}
-
-	// Update server config based on legacy parameters.
-	if err := updateFromLegacyParams(cfg); err != nil {
-		return errors.Wrap(err, "updating config from legacy parameters")
 	}
 
 	// propagate top-level settings to engine configs
@@ -645,12 +637,6 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 		}
 	}()
 
-	// The config file format no longer supports "servers"
-	if len(cfg.Legacy.Servers) > 0 {
-		return errors.New("\"servers\" server config file parameter is deprecated, use " +
-			"\"engines\" instead")
-	}
-
 	// Set DisableVMD reference if unset in config file.
 	if cfg.DisableVMD == nil {
 		cfg.WithDisableVMD(false)
@@ -713,7 +699,6 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 	for idx, ec := range cfg.Engines {
 		ec.Storage.ControlMetadata = cfg.Metadata
 		ec.Storage.EngineIdx = uint(idx)
-		ec.ConvertLegacyStorage(log, idx)
 		ec.Fabric.Update(cfg.Fabric)
 
 		if err := ec.Validate(); err != nil {
