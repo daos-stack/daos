@@ -580,7 +580,6 @@ transport_config:
 engines:
 - targets: 12
   nr_xs_helpers: 2
-  first_core: 0
   log_file: /tmp/daos_engine.0.log
   storage:
   - class: dcpm
@@ -599,7 +598,6 @@ engines:
   pinned_numa_node: 0
 - targets: 6
   nr_xs_helpers: 0
-  first_core: 0
   log_file: /tmp/daos_engine.1.log
   storage:
   - class: dcpm
