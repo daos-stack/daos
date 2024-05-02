@@ -10,7 +10,7 @@ from cont_security_test_base import ContSecurityTestBase
 from pool_security_test_base import PoolSecurityTestBase
 
 
-class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
+class DaosContainerSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
     # pylint: disable=too-few-public-methods,too-many-ancestors
     """Test daos_container user acls.
 
@@ -56,7 +56,7 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=security,container,container_acl,cont_user_sec,cont_group_sec,cont_sec
-        :avocado: tags=DaosContainterSecurityTest,test_container_user_acl
+        :avocado: tags=DaosContainerSecurityTest,test_container_user_acl
         """
 
         # (1)Setup
