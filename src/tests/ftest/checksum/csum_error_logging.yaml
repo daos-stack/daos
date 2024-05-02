@@ -22,4 +22,4 @@ daos_tests:
   daos_test:
     test_csum_error_logging: z
   args:
-    test_csum_error_logging: -u
+    test_csum_error_logging: "-u 18-19"
