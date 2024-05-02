@@ -103,7 +103,7 @@ class EcodFioRebuild(FioBase):
             rank_to_kill = server_count - 2
             self.log_step(f"Kill one more server rank {rank_to_kill} when RF=2")
             self.fio_cmd._jobs['test'].unlink.value = 1         # pylint: disable=protected-access
-            self.server_managers[0].stop_ranks(rank_to_kill, self.d_log, force=True)
+            self.server_managers[0].stop_ranks([rank_to_kill], self.d_log, force=True)
 
             # Read and verify the original data.
             self.log_step(f"Verify the data is not corrupted after stopping rank {rank_to_kill}.")
