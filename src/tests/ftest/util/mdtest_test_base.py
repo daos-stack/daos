@@ -7,7 +7,7 @@
 import os
 
 from apricot import TestWithServers
-from dfuse_utils import get_dfuse, start_dfuse, stop_dfuse
+from dfuse_utils import get_dfuse, start_dfuse
 from exception_utils import CommandFailure
 from job_manager_utils import get_job_manager
 from mdtest_utils import MdtestCommand
@@ -110,7 +110,8 @@ class MdtestBase(TestWithServers):
             self.container = None
 
         if self.dfuse is not None:
-            stop_dfuse(self, self.dfuse)
+            self.dfuse.stop()
+            self.dfuse = None
 
         return out
 

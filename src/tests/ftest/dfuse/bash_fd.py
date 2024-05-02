@@ -115,14 +115,14 @@ class DFuseFdTest(TestWithServers):
             fd.write(INNER)
         os.chmod(os.path.join(fuse_root_dir, "bash_fd_inner.sh"), stat.S_IXUSR | stat.S_IRUSR)
 
-        self.log_step('Setting up the \'bash_fd_outer.sh\' script')
+        self.log_step("Setting up the 'bash_fd_outer.sh' script")
         with open(os.path.join(fuse_root_dir, "bash_fd_outer.sh"), "w", encoding="utf-8") as fd:
             fd.write(OUTER)
         os.chmod(os.path.join(fuse_root_dir, "bash_fd_outer.sh"), stat.S_IXUSR | stat.S_IRUSR)
 
         cmd = f"cd {fuse_root_dir}; ./bash_fd_outer.sh"
 
-        self.log_step('Executing the \'bash_fd_outer.sh\' script')
+        self.log_step("Executing the 'bash_fd_outer.sh' script")
         result = run_remote(self.log, dfuse_hosts, env_str + cmd)
         if not result.passed:
             self.fail(f'"{cmd}" failed on {result.failed_hosts}')

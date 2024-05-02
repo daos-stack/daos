@@ -10,7 +10,7 @@ import os
 from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
 from cpu_utils import CpuInfo
-from dfuse_utils import get_dfuse, start_dfuse, stop_dfuse
+from dfuse_utils import get_dfuse, start_dfuse
 from fio_utils import FioCommand
 from general_utils import bytes_to_human
 
@@ -118,9 +118,7 @@ class Pil4dfsFio(TestWithServers):
             bws[rw] = self._get_bandwidth(result, rw)
             self.log.debug("DFuse bandwidths for %s: %s", rw, bws[rw])
 
-        errors = stop_dfuse(self, dfuse)
-        if errors:
-            self.fail(errors[0])
+        dfuse.stop()
         container.destroy()
         container.pool.destroy()
 

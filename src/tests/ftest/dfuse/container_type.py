@@ -1,12 +1,12 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
-from dfuse_utils import get_dfuse, start_dfuse, stop_dfuse
+from dfuse_utils import get_dfuse, start_dfuse
 
 
 class DfuseContainerCheck(TestWithServers):
@@ -40,7 +40,7 @@ class DfuseContainerCheck(TestWithServers):
         pool = self.get_pool(connect=False)
 
         for cont_type in cont_types:
-            description = f"{cont_type if cont_type == 'POSIX' else 'default'}"
+            description = f"{cont_type if cont_type == 'POSIX' else 'non-POSIX'}"
             # Get container params
             self.log_step(f'Creating a {description} container')
             container = self.get_container(pool, create=False)
@@ -69,7 +69,7 @@ class DfuseContainerCheck(TestWithServers):
                 self.log_step(f'Verifying dfuse is running with a {description} container')
                 dfuse.check_running()
                 self.log_step(f'Stopping dfuse with a {description} container')
-                stop_dfuse(self, dfuse)
+                dfuse.stop()
 
             # Destroy the container for next iteration
             self.log_step(f'Destroying a {description} container')
