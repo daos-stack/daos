@@ -360,10 +360,14 @@ func (mod *mgmtModule) handleSetupClientTelemetry(ctx context.Context, reqb []by
 		return nil, errors.New("nil user credentials")
 	}
 
-	if err := telemetry.SetupClientRoot(ctx, pbReq.Jobid, int(cred.Pid), int(pbReq.ShmKey)); err != nil {
-		return nil, err
-	}
 	resp := &mgmtpb.ClientTelemetryResp{AgentUid: int32(unix.Getuid())}
+	if err := telemetry.SetupClientRoot(ctx, pbReq.Jobid, int(cred.Pid), int(pbReq.ShmKey)); err != nil {
+		if cause, ok := errors.Cause(err).(daos.Status); ok {
+			resp.Status = int32(cause)
+		} else {
+			return nil, err
+		}
+	}
 	mod.log.Tracef("%d: %s", cred.Pid, pblog.Debug(resp))
 	return proto.Marshal(resp)
 }
