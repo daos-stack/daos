@@ -10,7 +10,7 @@ from dfuse_utils import get_dfuse, start_dfuse
 from run_utils import run_remote
 
 
-class DFuseReadTest(TestWithServers):
+class DFusePreReadTest(TestWithServers):
     """Base ReadTest test class.
     :avocado: recursive
     """
