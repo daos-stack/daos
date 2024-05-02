@@ -1096,8 +1096,13 @@ retry:
 		 */
 		D_INFO("ns %u retry for class %d opc %d rank %u/%u: " DF_RC "\n", ns->iv_ns_id,
 		       key->class_id, opc, key->rank, ns->iv_master_rank, DP_RC(rc));
-		/* sleep 1sec and retry */
-		dss_sleep(1000);
+		if (key->class_id == IV_OID) {
+			/* sleep 1msec and retry */
+			dss_sleep(1);
+		} else {
+			/* sleep 1sec and retry */
+			dss_sleep(1000);
+		}
 		goto retry;
 	}
 
