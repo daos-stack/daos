@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2023 Intel Corporation.
+// (C) Copyright 2018-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -43,6 +43,7 @@ message JoinReq {
 	uint64 incarnation = 9; 	// rank incarnation
 	repeated string secondary_uris = 10; // URIs for any secondary providers
 	repeated uint32 secondary_nctxs = 11; // CaRT context count for each secondary provider
+	bool check_mode = 12; 		// rank started in check mode
 }
 
 message JoinResp {
@@ -51,6 +52,7 @@ message JoinResp {
 	enum State {
 		IN = 0;		// Server in the system.
 		OUT = 1;	// Server excluded from the system.
+		CHECK = 2;	// Server should start in checker mode.
 	}
 	State state = 3;	// Server state in the system map.
 	string faultDomain = 4; // Fault domain for the instance
@@ -77,9 +79,9 @@ message GetAttachInfoReq {
 }
 
 message ClientNetHint {
-	string provider = 1;		// CaRT OFI provider
-	string interface = 2;		// CaRT OFI_INTERFACE
-	string domain = 3;		// CaRT OFI_DOMAIN for given OFI_INTERFACE
+	string provider = 1;		// CaRT provider
+	string interface = 2;		// CaRT D_INTERFACE
+	string domain = 3;		// CaRT D_DOMAIN for given D_INTERFACE
 	uint32 crt_ctx_share_addr = 4;	// CaRT CRT_CTX_SHARE_ADDR
 	uint32 crt_timeout = 5;		// CaRT CRT_TIMEOUT
 	uint32 net_dev_class = 6;	// ARP protocol hardware identifier of the
@@ -132,4 +134,17 @@ message PoolMonitorReq {
 	string poolUUID = 2;	// Pool UUID associated with the Pool Handle
 	string poolHandleUUID = 3; // Pool Handle UUID for the connection
 	string jobid = 4;	// Job ID to associate instance with.
+}
+
+message ClientTelemetryReq
+{
+	string sys     = 1; // DAOS system identifier
+	string jobid   = 2; // Job ID used for client telemetry
+	int32  shm_key = 3; // Client's shared memory segment key
+}
+
+message ClientTelemetryResp
+{
+	int32 status    = 1; // DAOS status code
+	int32 agent_uid = 2; // UID of agent process
 }

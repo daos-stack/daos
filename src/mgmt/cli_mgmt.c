@@ -23,6 +23,9 @@
 #include "rpc.h"
 #include <errno.h>
 #include <stdlib.h>
+#include <sys/ipc.h>
+
+char agent_sys_name[DAOS_SYS_NAME_MAX + 1] = DAOS_DEFAULT_SYS_NAME;
 
 int
 dc_cp(tse_task_t *task, void *data)
@@ -221,6 +224,34 @@ dc_put_attach_info(struct dc_mgmt_sys_info *info, Mgmt__GetAttachInfoResp *resp)
 	return put_attach_info(info, resp);
 }
 
+static int
+get_env_deprecated(char **val, const char *new_env, const char *old_env)
+{
+	char *new = NULL;
+	char *old = NULL;
+	int   rc_new;
+	int   rc_old;
+
+	rc_new = d_agetenv_str(&new, new_env);
+	rc_old = d_agetenv_str(&old, old_env);
+
+	if (rc_new == 0) {
+		if (rc_old == 0)
+			D_WARN("Both %s and %s are set! Deprecated %s (%s) will be ignored\n",
+			       new_env, old_env, old_env, old);
+		*val = new;
+		return 0;
+	}
+
+	if (rc_old == 0) {
+		D_INFO("%s is deprecated, upgrade your environment to use %s instead\n", old_env,
+		       new_env);
+		*val = old;
+		return 0;
+	}
+
+	return rc_new;
+}
 /*
  * Get the attach info (i.e., rank URIs) for name. To avoid duplicating the
  * rank URIs, we return the GetAttachInfo response directly. Callers are
@@ -238,8 +269,8 @@ get_attach_info(const char *name, bool all_ranks, struct dc_mgmt_sys_info *info,
 	size_t			 reqb_size;
 	Drpc__Call		*dreq;
 	Drpc__Response		*dresp;
-	char                    *ofi_interface = NULL;
-	char                    *ofi_domain    = NULL;
+	char                    *interface = NULL;
+	char                    *domain    = NULL;
 	int			 rc;
 
 	D_DEBUG(DB_MGMT, "getting attach info for %s\n", name);
@@ -255,17 +286,17 @@ get_attach_info(const char *name, bool all_ranks, struct dc_mgmt_sys_info *info,
 		D_GOTO(out, rc);
 	}
 
-	if (d_agetenv_str(&ofi_interface, "OFI_INTERFACE") == 0)
-		D_INFO("Using client provided OFI_INTERFACE: %s\n", ofi_interface);
+	if (get_env_deprecated(&interface, "D_INTERFACE", "OFI_INTERFACE") == 0)
+		D_INFO("Using environment-provided interface: %s\n", interface);
 
-	if (d_agetenv_str(&ofi_domain, "OFI_DOMAIN") == 0)
-		D_INFO("Using client provided OFI_DOMAIN: %s\n", ofi_domain);
+	if (get_env_deprecated(&domain, "D_DOMAIN", "OFI_DOMAIN") == 0)
+		D_INFO("Using environment-provided domain: %s\n", domain);
 
 	/* Prepare the GetAttachInfo request. */
 	req.sys = (char *)name;
 	req.all_ranks = all_ranks;
-	req.interface = ofi_interface;
-	req.domain    = ofi_domain;
+	req.interface = interface;
+	req.domain    = domain;
 	reqb_size = mgmt__get_attach_info_req__get_packed_size(&req);
 	D_ALLOC(reqb, reqb_size);
 	if (reqb == NULL) {
@@ -313,6 +344,14 @@ get_attach_info(const char *name, bool all_ranks, struct dc_mgmt_sys_info *info,
 	rc = fill_sys_info(resp, info);
 	if (rc != 0)
 		goto out_resp;
+
+	/** set the agent system info to be the default one */
+	if (name == NULL) {
+		if (copy_str(agent_sys_name, resp->sys)) {
+			rc = -DER_INVAL;
+			goto out_resp;
+		}
+	}
 	*respp = resp;
 
 out_resp:
@@ -324,8 +363,8 @@ out_dreq:
 	/* This also frees reqb via dreq->body.data. */
 	drpc_call_free(dreq);
 out_ctx:
-	d_freeenv_str(&ofi_interface);
-	d_freeenv_str(&ofi_domain);
+	d_freeenv_str(&interface);
+	d_freeenv_str(&domain);
 	drpc_close(ctx);
 out:
 	return rc;
@@ -463,7 +502,7 @@ _split_env(char *env, char **name, char **value)
 int dc_mgmt_net_cfg(const char *name)
 {
 	int                      rc;
-	char                    *crt_phy_addr_str;
+	char                    *provider;
 	char                    *crt_ctx_share_addr = NULL;
 	char                    *cli_srx_set        = NULL;
 	char                    *crt_timeout        = NULL;
@@ -504,8 +543,8 @@ int dc_mgmt_net_cfg(const char *name)
 	g_num_serv_ranks = resp->n_rank_uris;
 	D_INFO("Setting number of server ranks to %d\n", g_num_serv_ranks);
 	/* These two are always set */
-	crt_phy_addr_str = info.provider;
-	rc               = d_setenv("CRT_PHY_ADDR_STR", crt_phy_addr_str, 1);
+	provider = info.provider;
+	rc               = d_setenv("D_PROVIDER", provider, 1);
 	if (rc != 0)
 		D_GOTO(cleanup, rc = d_errno2der(errno));
 
@@ -556,11 +595,12 @@ int dc_mgmt_net_cfg(const char *name)
 	}
 
 	/* client-provided iface/domain were already taken into account by agent */
-	rc = d_setenv("OFI_INTERFACE", info.interface, 1);
+	/* TODO: These should be set in crt_init_options_t instead of env */
+	rc = d_setenv("D_INTERFACE", info.interface, 1);
 	if (rc != 0)
 		D_GOTO(cleanup, rc = d_errno2der(errno));
 
-	rc = d_setenv("OFI_DOMAIN", info.domain, 1);
+	rc = d_setenv("D_DOMAIN", info.domain, 1);
 	if (rc != 0)
 		D_GOTO(cleanup, rc = d_errno2der(errno));
 
@@ -572,9 +612,9 @@ int dc_mgmt_net_cfg(const char *name)
 	D_INFO("Network interface: %s, Domain: %s\n", info.interface, info.domain);
 	D_DEBUG(DB_MGMT,
 		"CaRT initialization with:\n"
-		"\tCRT_PHY_ADDR_STR: %s, CRT_CTX_SHARE_ADDR: %s, CRT_TIMEOUT: %s, "
+		"\tD_PROVIDER: %s, CRT_CTX_SHARE_ADDR: %s, CRT_TIMEOUT: %s, "
 		"CRT_SECONDARY_PROVIDER: %s\n",
-		crt_phy_addr_str, crt_ctx_share_addr, crt_timeout, buf);
+		provider, crt_ctx_share_addr, crt_timeout, buf);
 
 cleanup:
 	d_freeenv_str(&crt_timeout);
@@ -917,7 +957,7 @@ int
 dc_mgmt_sys_attach(const char *name, struct dc_mgmt_sys **sysp)
 {
 	if (name == NULL)
-		name = DAOS_DEFAULT_SYS_NAME;
+		name = agent_sys_name;
 
 	return sys_attach(name, sysp);
 }
@@ -1132,6 +1172,90 @@ dc_mgmt_pool_find(struct dc_mgmt_sys *sys, const char *label, uuid_t puuid,
 
 decref:
 	crt_req_decref(rpc);
+	return rc;
+}
+
+int
+dc_mgmt_tm_register(const char *sys, const char *jobid, key_t shm_key, uid_t *owner_uid)
+{
+	struct drpc_alloc          alloc = PROTO_ALLOCATOR_INIT(alloc);
+	struct drpc               *ctx;
+	Mgmt__ClientTelemetryReq   req = MGMT__CLIENT_TELEMETRY_REQ__INIT;
+	Mgmt__ClientTelemetryResp *resp;
+	uint8_t                   *reqb;
+	size_t                     reqb_size;
+	Drpc__Call                *dreq;
+	Drpc__Response            *dresp;
+	int                        rc;
+
+	if (owner_uid == NULL)
+		return -DER_INVAL;
+
+	/* Connect to daos_agent. */
+	D_ASSERT(dc_agent_sockpath != NULL);
+	rc = drpc_connect(dc_agent_sockpath, &ctx);
+	if (rc != -DER_SUCCESS) {
+		DL_ERROR(rc, "failed to connect to %s ", dc_agent_sockpath);
+		D_GOTO(out, 0);
+	}
+
+	req.sys     = (char *)sys;
+	req.jobid   = dc_jobid;
+	req.shm_key = shm_key;
+
+	reqb_size = mgmt__client_telemetry_req__get_packed_size(&req);
+	D_ALLOC(reqb, reqb_size);
+	if (reqb == NULL) {
+		D_GOTO(out_ctx, rc = -DER_NOMEM);
+	}
+	mgmt__client_telemetry_req__pack(&req, reqb);
+
+	rc = drpc_call_create(ctx, DRPC_MODULE_MGMT, DRPC_METHOD_MGMT_SETUP_CLIENT_TELEM, &dreq);
+	if (rc != 0) {
+		D_FREE(reqb);
+		goto out_ctx;
+	}
+	dreq->body.len  = reqb_size;
+	dreq->body.data = reqb;
+
+	/* Make the call and get the response. */
+	rc = drpc_call(ctx, R_SYNC, dreq, &dresp);
+	if (rc != 0) {
+		DL_ERROR(rc, "Sending client telemetry setup request failed");
+		goto out_dreq;
+	}
+	if (dresp->status != DRPC__STATUS__SUCCESS) {
+		D_ERROR("Client telemetry setup request unsuccessful: %d\n", dresp->status);
+		rc = -DER_UNINIT;
+		goto out_dresp;
+	}
+
+	resp = mgmt__client_telemetry_resp__unpack(&alloc.alloc, dresp->body.len, dresp->body.data);
+	if (alloc.oom)
+		D_GOTO(out_dresp, rc = -DER_NOMEM);
+	if (resp == NULL) {
+		D_ERROR("failed to unpack SetupClientTelemetry response\n");
+		rc = -DER_NOMEM;
+		goto out_dresp;
+	}
+	if (resp->status != 0) {
+		D_ERROR("SetupClientTelemetry(%s) failed: " DF_RC "\n", req.sys,
+			DP_RC(resp->status));
+		rc = resp->status;
+		goto out_resp;
+	}
+
+	*owner_uid = resp->agent_uid;
+
+out_resp:
+	mgmt__client_telemetry_resp__free_unpacked(resp, &alloc.alloc);
+out_dresp:
+	drpc_response_free(dresp);
+out_dreq:
+	drpc_call_free(dreq);
+out_ctx:
+	drpc_close(ctx);
+out:
 	return rc;
 }
 

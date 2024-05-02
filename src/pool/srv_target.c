@@ -185,6 +185,9 @@ start_gc_ult(struct ds_pool_child *child)
 	D_ASSERT(child != NULL);
 	D_ASSERT(child->spc_gc_req == NULL);
 
+	D_DEBUG(DB_MGMT, DF_UUID"[%d]: starting GC ULT\n",
+		DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
+
 	sched_req_attr_init(&attr, SCHED_REQ_GC, &child->spc_uuid);
 	attr.sra_flags = SCHED_REQ_FL_NO_DELAY;
 
@@ -470,47 +473,62 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 
 	D_FREE(path);
 
-	if (rc) {
-		DL_CDEBUG(rc == -DER_NVME_IO, DB_MGMT, DLOG_ERR, rc,
-			  DF_UUID": Open VOS pool failed.", DP_UUID(child->spc_uuid));
-		goto out;
+	if (rc != 0) {
+		if (rc != -DER_NONEXIST) {
+			DL_CDEBUG(rc == -DER_NVME_IO, DB_MGMT, DLOG_ERR, rc,
+				  DF_UUID": Open VOS pool failed.", DP_UUID(child->spc_uuid));
+			goto out;
+		}
+
+		D_WARN("Lost pool "DF_UUIDF" shard %u on rank %u.\n",
+		       DP_UUID(child->spc_uuid), info->dmi_tgt_id, dss_self_rank());
+		/*
+		 * Ignore the failure to allow subsequent logic (such as DAOS check)
+		 * to handle the trouble.
+		 */
+		child->spc_no_storage = 1;
+		goto done;
 	}
 
-	rc = start_gc_ult(child);
-	if (rc != 0)
-		goto out_close;
+	if (!engine_in_check()) {
+		rc = start_gc_ult(child);
+		if (rc != 0)
+			goto out_close;
 
-	rc = start_flush_ult(child);
-	if (rc != 0)
-		goto out_gc;
+		rc = start_flush_ult(child);
+		if (rc != 0)
+			goto out_gc;
+
+		rc = ds_start_scrubbing_ult(child);
+		if (rc != 0)
+			goto out_flush;
+	}
 
 	rc = ds_start_chkpt_ult(child);
 	if (rc != 0)
-		goto out_flush;
-
-	rc = ds_start_scrubbing_ult(child);
-	if (rc != 0)
-		goto out_chkpt;
+		goto out_scrub;
 
 	/* Start all containers */
 	rc = ds_cont_child_start_all(child);
 	if (rc)
 		goto out_cont;
 
+done:
 	*child->spc_state = POOL_CHILD_STARTED;
 	return 0;
 
 out_cont:
 	ds_cont_child_stop_all(child);
-	ds_stop_scrubbing_ult(child);
-out_chkpt:
 	ds_stop_chkpt_ult(child);
+out_scrub:
+	ds_stop_scrubbing_ult(child);
 out_flush:
 	stop_flush_ult(child);
 out_gc:
 	stop_gc_ult(child);
 out_close:
-	vos_pool_close(child->spc_hdl);
+	if (likely(!child->spc_no_storage))
+		vos_pool_close(child->spc_hdl);
 out:
 	*child->spc_state = POOL_CHILD_NEW;
 	return rc;
@@ -568,11 +586,16 @@ pool_child_stop(struct ds_pool_child *child)
 	D_DEBUG(DB_MGMT, DF_UUID": Stopping pool child.\n", DP_UUID(child->spc_uuid));
 
 	*child->spc_state = POOL_CHILD_STOPPING;
+
+	if (unlikely(child->spc_no_storage))
+		goto wait;
+
 	/* First stop all the ULTs who might need to hold ds_pool_child (or ds_cont_child) */
 	ds_cont_child_stop_all(child);
 	D_ASSERT(d_list_empty(&child->spc_cont_list));
 	ds_stop_scrubbing_ult(child);
 
+wait:
 	/* Wait for all references dropped */
 	if (child->spc_ref > 0) {
 		D_DEBUG(DB_MGMT, DF_UUID": Wait on pool child refs (%d) dropping.\n",
@@ -582,6 +605,9 @@ pool_child_stop(struct ds_pool_child *child)
 		ABT_eventual_reset(child->spc_ref_eventual);
 	}
 	D_DEBUG(DB_MGMT, DF_UUID": Pool child refs dropped.\n", DP_UUID(child->spc_uuid));
+
+	if (unlikely(child->spc_no_storage))
+		goto done;
 
 	/* Stop all pool child owned ULTs which doesn't hold ds_pool_child reference */
 	ds_stop_chkpt_ult(child);
@@ -594,6 +620,7 @@ pool_child_stop(struct ds_pool_child *child)
 	vos_pool_close(child->spc_hdl);
 	child->spc_hdl = DAOS_HDL_INVAL;
 
+done:
 	D_DEBUG(DB_MGMT, DF_UUID": Pool child stopped.\n", DP_UUID(child->spc_uuid));
 	*child->spc_state = POOL_CHILD_NEW;
 	return 0;
@@ -1093,6 +1120,105 @@ pool_fetch_hdls_ult_abort(struct ds_pool *pool)
 	D_INFO(DF_UUID": fetch hdls ULT aborted\n", DP_UUID(pool->sp_uuid));
 }
 
+static int
+ds_pool_chk_post_one(void *varg)
+{
+	struct pool_child_lookup_arg	*arg = varg;
+	struct ds_pool_child		*child = NULL;
+	int				 rc = 0;
+
+	/* The pool shard must has been opened. */
+	child = ds_pool_child_lookup(arg->pla_uuid);
+	if (child == NULL)
+		D_GOTO(out, rc = -DER_NONEXIST);
+
+	D_ASSERT(*child->spc_state == POOL_CHILD_STARTED);
+
+	if (unlikely(child->spc_no_storage))
+		D_GOTO(out, rc = 0);
+
+	rc = start_gc_ult(child);
+	if (rc != 0)
+		goto out;
+
+	rc = start_flush_ult(child);
+	if (rc != 0)
+		goto out;
+
+	rc = ds_start_scrubbing_ult(child);
+	if (rc != 0)
+		goto out;
+
+	rc = ds_cont_chk_post(child);
+
+out:
+	if (child != NULL) {
+		if (rc != 0) {
+			ds_stop_scrubbing_ult(child);
+			stop_flush_ult(child);
+			stop_gc_ult(child);
+		}
+
+		ds_pool_child_put(child);
+	}
+
+	return rc;
+}
+
+int
+ds_pool_chk_post(uuid_t uuid)
+{
+	struct ds_pool			*pool = NULL;
+	struct daos_llink		*llink = NULL;
+	struct pool_child_lookup_arg	 collective_arg = { 0 };
+	int				 rc = 0;
+
+	D_ASSERT(engine_in_check());
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+
+	D_DEBUG(DB_MGMT, "Post handle pool starting for "DF_UUIDF" after DAOS check: "DF_RC"\n",
+		DP_UUID(uuid), DP_RC(rc));
+
+	/* The pool must has been opened. */
+	rc = daos_lru_ref_hold(pool_cache, (void *)uuid, sizeof(uuid_t),
+			       NULL /* create_args */, &llink);
+	if (rc != 0)
+		goto out;
+
+	pool = pool_obj(llink);
+	if (pool->sp_stopping)
+		D_GOTO(out, rc = -DER_SHUTDOWN);
+
+	pool->sp_fetch_hdls = 1;
+	pool_fetch_hdls_ult(pool);
+
+	rc = ds_pool_start_ec_eph_query_ult(pool);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to start ec eph query ult: "DF_RC"\n",
+			DP_UUID(uuid), DP_RC(rc));
+		goto out;
+	}
+
+	collective_arg.pla_uuid = uuid;
+	rc = dss_thread_collective(ds_pool_chk_post_one, &collective_arg, 0);
+
+out:
+	if (pool != NULL) {
+		if (rc != 0) {
+			ds_pool_tgt_ec_eph_query_abort(pool);
+			pool_fetch_hdls_ult_abort(pool);
+		}
+
+		daos_lru_ref_release(pool_cache, &pool->sp_entry);
+	}
+
+	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
+		 "Post handle pool started for "DF_UUIDF" after DAOS check: "DF_RC"\n",
+		 DP_UUID(uuid), DP_RC(rc));
+
+	return rc;
+}
+
 /*
  * Start a pool. Must be called on the system xstream. Hold the ds_pool object
  * till ds_pool_stop. Only for mgmt and pool modules.
@@ -1142,20 +1268,23 @@ ds_pool_start(uuid_t uuid)
 
 	pool = pool_obj(llink);
 
-	rc = dss_ult_create(pool_fetch_hdls_ult, pool, DSS_XS_SYS,
-			    0, DSS_DEEP_STACK_SZ, NULL);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create fetch ult: %d\n",
-			DP_UUID(uuid), rc);
-		D_GOTO(failure_pool, rc);
-	}
+	if (!engine_in_check()) {
+		rc = dss_ult_create(pool_fetch_hdls_ult, pool, DSS_XS_SYS, 0,
+				    DSS_DEEP_STACK_SZ, NULL);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to create fetch ult: "DF_RC"\n",
+				DP_UUID(uuid), DP_RC(rc));
+			D_GOTO(failure_pool, rc);
+		}
 
-	pool->sp_fetch_hdls = 1;
-	rc = ds_pool_start_ec_eph_query_ult(pool);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to start ec eph query ult: %d\n",
-			DP_UUID(uuid), rc);
-		D_GOTO(failure_ult, rc);
+		pool->sp_fetch_hdls = 1;
+
+		rc = ds_pool_start_ec_eph_query_ult(pool);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to start ec eph query ult: "DF_RC"\n",
+				DP_UUID(uuid), DP_RC(rc));
+			D_GOTO(failure_ult, rc);
+		}
 	}
 
 	ds_iv_ns_start(pool->sp_iv_ns);
@@ -1678,7 +1807,7 @@ update_pool_group(struct ds_pool *pool, struct pool_map *map)
 	D_DEBUG(DB_MD, DF_UUID": %u -> %u\n", DP_UUID(pool->sp_uuid), version,
 		pool_map_get_version(map));
 
-	rc = map_ranks_init(map, POOL_GROUP_MAP_STATES, &ranks);
+	rc = map_ranks_init(map, DC_POOL_GROUP_MAP_STATES, &ranks);
 	if (rc != 0)
 		return rc;
 
@@ -1896,6 +2025,9 @@ update_vos_prop_on_targets(void *in)
 	child = ds_pool_child_lookup(pool->sp_uuid);
 	if (child == NULL)
 		return -DER_NONEXIST;	/* no child created yet? */
+
+	if (unlikely(child->spc_no_storage))
+		D_GOTO(out, ret = 0);
 
 	ret = vos_pool_ctl(child->spc_hdl, VOS_PO_CTL_SET_DATA_THRESH, &pool->sp_data_thresh);
 	if (ret)

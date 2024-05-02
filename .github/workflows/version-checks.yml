@@ -8,6 +8,8 @@ on:
     paths:
       - 'utils/cq/requirements.txt'
 
+permissions: {}
+
 jobs:
   upgrade-check:
     name: Check for updates
@@ -19,6 +21,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - name: Install extra python packages
         run: python3 -m pip install --requirement utils/cq/requirements.txt
       - name: Check ${{ matrix.package }} version

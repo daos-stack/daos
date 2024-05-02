@@ -113,14 +113,14 @@ ior_smoke:
     - '64M'
   repetitions: 1
   transfer_size:
-    - '4k'
+    - '32k'
     - '128k'
     - '1m'
   segment_count: 1
   dfs_oclass:
     - ["EC_2P1GX", "RP_2GX"]
   dfuse:
-    mount_dir: "/tmp/daos_dfuse/ior/"
+    mount_dir: "/tmp/soak_dfuse_ior/"
     disable_caching: true
     thread_count: 8
     cores: '0-7'
@@ -134,7 +134,7 @@ fio_smoke:
     - global
     - test
   global:
-    directory: "/tmp/daos_dfuse/fio/"
+    directory: "/tmp/soak_dfuse_fio/"
     ioengine: 'libaio'
     thread: 1
     group_reporting: 1
@@ -145,6 +145,7 @@ fio_smoke:
   numjobs: 1
   soak:
     blocksize:
+      - '4K'
       - '1M'
     size:
       - '1G'
@@ -154,7 +155,7 @@ fio_smoke:
     oclass:
       - ["EC_2P1GX", "RP_2GX"]
   dfuse:
-    mount_dir: "/tmp/daos_dfuse/fio/"
+    mount_dir: "/tmp/soak_dfuse_fio/"
     disable_caching: true
     thread_count: 8
     cores: '0-7'
@@ -171,9 +172,9 @@ vpic_smoke:
     - POSIX
     - POSIX-LIBIOIL
     - POSIX-LIBPIL4DFS
-  workdir: "/tmp/daos_dfuse/vpic/"
+  workdir: "/tmp/soak_dfuse_vpic/"
   dfuse:
-    mount_dir: "/tmp/daos_dfuse/vpic/"
+    mount_dir: "/tmp/soak_dfuse_vpic/"
     disable_caching: true
     thread_count: 8
     cores: '0-7'
@@ -190,9 +191,9 @@ lammps_smoke:
     - POSIX
     - POSIX-LIBIOIL
     - POSIX-LIBPIL4DFS
-  workdir: "/tmp/daos_dfuse/lammps/"
+  workdir: "/tmp/soak_dfuse_lammps/"
   dfuse:
-    mount_dir: "/tmp/daos_dfuse/lammps/"
+    mount_dir: "/tmp/soak_dfuse_lammps/"
     disable_caching: true
     thread_count: 8
     cores: '0-7'
@@ -225,7 +226,7 @@ mdtest_smoke:
     - ["EC_2P1G1", "RP_2G1"]
   dfs_destroy: false
   dfuse:
-    mount_dir: "/tmp/daos_dfuse/mdtest/"
+    mount_dir: "/tmp/soak_dfuse_mdtest/"
     disable_caching: true
     thread_count: 8
     cores: '0-7'
@@ -249,7 +250,7 @@ macsio_smoke:
   oclass:
     - ["EC_2P1GX", "RP_2GX"]
   dfuse:
-    mount_dir: "/tmp/daos_dfuse/macsio/"
+    mount_dir: "/tmp/soak_dfuse_macsio/"
     disable_caching: true
     thread_count: 8
     cores: '0-7'
@@ -272,7 +273,7 @@ datamover_smoke:
     transfer_size:
       - 1M
     block_size:
-      - 1M
+      - 4G
     test_file: "daos:/testFile"
     dfs_destroy: false
   ior_read:
@@ -283,7 +284,7 @@ datamover_smoke:
     transfer_size:
       - 1M
     block_size:
-      - 1M
+      - 4G
     test_file: "daos:/testFile"
     dfs_destroy: false
 hdf5_vol:

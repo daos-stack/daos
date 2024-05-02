@@ -638,7 +638,7 @@ query_dfs_mount(const char *path)
 	return idx;
 }
 
-/* Discover fuse mount points from env DAOS_MOUNT_POINT.
+/* Discover fuse mount points from env D_IL_MOUNT_POINT.
  * Return 0 for success. A non-zero value means something wrong in setting
  * and the caller will call abort() to terminate current application.
  */
@@ -651,10 +651,10 @@ discover_daos_mount_with_env(void)
 	char  *container = NULL;
 	size_t len_fs_root, len_pool, len_container;
 
-	/* Add the mount if env DAOS_MOUNT_POINT is set. */
-	rc = d_agetenv_str(&fs_root, "DAOS_MOUNT_POINT");
+	/* Add the mount if env D_IL_MOUNT_POINT is set. */
+	rc = d_agetenv_str(&fs_root, "D_IL_MOUNT_POINT");
 	if (fs_root == NULL)
-		/* env DAOS_MOUNT_POINT is undefined, return success (0) */
+		/* env D_IL_MOUNT_POINT is undefined, return success (0) */
 		D_GOTO(out, rc = 0);
 
 	if (num_dfs >= MAX_DAOS_MT) {
@@ -675,31 +675,31 @@ discover_daos_mount_with_env(void)
 	/* Not found in existing list, then append this new mount point. */
 	len_fs_root = strnlen(fs_root, DFS_MAX_PATH);
 	if (len_fs_root >= DFS_MAX_PATH) {
-		D_FATAL("DAOS_MOUNT_POINT is too long.\n");
+		D_FATAL("D_IL_MOUNT_POINT is too long.\n");
 		D_GOTO(out, rc = ENAMETOOLONG);
 	}
 
-	d_agetenv_str(&pool, "DAOS_POOL");
+	d_agetenv_str(&pool, "D_IL_POOL");
 	if (pool == NULL) {
-		D_FATAL("DAOS_POOL is not set.\n");
+		D_FATAL("D_IL_POOL is not set.\n");
 		D_GOTO(out, rc = EINVAL);
 	}
 
 	len_pool = strnlen(pool, DAOS_PROP_MAX_LABEL_BUF_LEN);
 	if (len_pool >= DAOS_PROP_MAX_LABEL_BUF_LEN) {
-		D_FATAL("DAOS_POOL is too long.\n");
+		D_FATAL("D_IL_POOL is too long.\n");
 		D_GOTO(out, rc = ENAMETOOLONG);
 	}
 
-	rc = d_agetenv_str(&container, "DAOS_CONTAINER");
+	rc = d_agetenv_str(&container, "D_IL_CONTAINER");
 	if (container == NULL) {
-		D_FATAL("DAOS_CONTAINER is not set.\n");
+		D_FATAL("D_IL_CONTAINER is not set.\n");
 		D_GOTO(out, rc = EINVAL);
 	}
 
 	len_container = strnlen(container, DAOS_PROP_MAX_LABEL_BUF_LEN);
 	if (len_container >= DAOS_PROP_MAX_LABEL_BUF_LEN) {
-		D_FATAL("DAOS_CONTAINER is too long.\n");
+		D_FATAL("D_IL_CONTAINER is too long.\n");
 		D_GOTO(out, rc = ENAMETOOLONG);
 	}
 
@@ -1947,6 +1947,11 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 
 	if (!is_target_path)
 		goto org_func;
+	if (oflags & O_CREAT && (oflags & O_DIRECTORY || oflags & O_PATH)) {
+		/* Create a dir is not supported. */
+		errno = ENOENT;
+		return (-1);
+	}
 
 	if (oflags & __O_TMPFILE) {
 		if (!parent && (strncmp(item_name, "/", 2) == 0))
@@ -1977,10 +1982,11 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 		if ((S_IXUSR & mode_parent) == 0 || (S_IWUSR & mode_parent) == 0)
 			D_GOTO(out_error, rc = EACCES);
 	}
-	/* file/dir should be handled by DFS */
+	/* file handled by DFS */
 	if (oflags & O_CREAT) {
-		rc = dfs_open(dfs_mt->dfs, parent, item_name, mode | S_IFREG, oflags & (~O_APPEND),
-			      0, 0, NULL, &dfs_obj);
+		/* clear the bits for types first. mode in open() only contains permission info. */
+		rc = dfs_open(dfs_mt->dfs, parent, item_name, (mode & (~S_IFMT)) | S_IFREG,
+			      oflags & (~O_APPEND), 0, 0, NULL, &dfs_obj);
 		mode_query = S_IFREG;
 	} else if (!parent && (strncmp(item_name, "/", 2) == 0)) {
 		rc =
@@ -3739,7 +3745,7 @@ out_readdir:
 /* This is the number of environmental variables that would be forced to set in child process.
  * "LD_PRELOAD" is a special case and it is not included in the list.
  */
-static char  *env_list[] = {"D_IL_REPORT", "DAOS_MOUNT_POINT", "DAOS_POOL", "DAOS_CONTAINER",
+static char  *env_list[] = {"D_IL_REPORT", "D_IL_MOUNT_POINT", "D_IL_POOL", "D_IL_CONTAINER",
 			    "D_IL_MAX_EQ", "D_LOG_FILE", "D_IL_ENFORCE_EXEC_ENV",  "DD_MASK",
 			    "DD_SUBSYS", "D_LOG_MASK"};
 
