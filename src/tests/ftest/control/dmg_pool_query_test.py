@@ -35,7 +35,7 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=dmg,pool_query,basic,control
+        :avocado: tags=dmg,pool_query,basic,control,pool
         :avocado: tags=DmgPoolQueryTest,test_pool_query_basic
         """
         self.log.info("==>   Verify dmg output against expected output:")
@@ -66,7 +66,7 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
             "total_engines": self.params.get("total_engines", path="/run/exp_vals/*"),
             "disabled_targets": self.params.get("disabled_targets", path="/run/exp_vals/*"),
             "version": self.params.get("version", path="/run/exp_vals/*"),
-            "leader": self.params.get("leader", path="/run/exp_vals/*"),
+            "svc_ldr": self.params.get("leader", path="/run/exp_vals/*"),
             "tier_stats": [
                 {
                     "media_type": "scm",
@@ -105,7 +105,7 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=dmg,pool_query,basic,control
+        :avocado: tags=dmg,pool_query,basic,control,pool
         :avocado: tags=DmgPoolQueryTest,test_pool_query_inputs
         """
         # Get test UUIDs
@@ -152,7 +152,7 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=dmg,pool_query,basic,control
+        :avocado: tags=dmg,pool_query,basic,control,pool
         :avocado: tags=DmgPoolQueryTest,test_pool_query_ior
         """
         # Store original pool info
