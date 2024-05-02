@@ -717,10 +717,10 @@ obj_shard_update_metrics_end(crt_rpc_t *rpc, uint64_t send_time, void *arg, int 
 		if (opc == DAOS_OBJ_RPC_UPDATE) {
 			size = daos_sgls_packed_size(rw_args->rwaa_sgls, orw->orw_nr, NULL);
 			d_tm_inc_counter(opm->opm_update_bytes, size);
-			lat = tls->cot_update_lat[lat_bucket(size)];
+			lat = tls->cot_update_lat[d_tm_io_lat_bucket(size)];
 		} else {
 			size = obj_get_fetch_size(rw_args);
-			lat  = tls->cot_fetch_lat[lat_bucket(size)];
+			lat  = tls->cot_fetch_lat[d_tm_io_lat_bucket(size)];
 			d_tm_inc_counter(opm->opm_fetch_bytes, size);
 		}
 		break;

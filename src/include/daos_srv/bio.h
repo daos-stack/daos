@@ -682,8 +682,7 @@ int bio_iod_try_prep(struct bio_desc *biod, unsigned int type, void *bulk_ctxt,
 int bio_iod_post(struct bio_desc *biod, int err);
 
 /* Asynchronous bio_iod_post(), don't wait NVMe I/O completion */
-int
-bio_iod_post_async(struct bio_desc *biod, int err, uint64_t *post_latency);
+int bio_iod_post_async(struct bio_desc *biod, int err);
 
 /*
  * Helper function to copy data between SG lists of io descriptor and user

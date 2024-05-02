@@ -23,6 +23,7 @@
 #include <daos/cont_props.h>
 #include <daos/container.h>
 #include <daos/tls.h>
+#include <gurt/telemetry_common.h>
 
 #include "obj_rpc.h"
 #include "obj_ec.h"
@@ -611,20 +612,10 @@ struct dc_obj_verify_args {
 	struct dc_obj_verify_cursor	 cursor;
 };
 
-/*
- * Report latency on a per-I/O size.
- * Buckets starts at [0; 256B[ and are increased by power of 2
- * (i.e. [256B; 512B[, [512B; 1KB[) up to [4MB; infinity[
- * Since 4MB = 2^22 and 256B = 2^8, this means
- * (22 - 8 + 1) = 15 buckets plus the 4MB+ bucket, so
- * 16 buckets in total.
- */
-#define NR_LATENCY_BUCKETS 16
-
 struct dc_obj_tls {
 	/** Measure update/fetch latency based on I/O size (type = gauge) */
-	struct d_tm_node_t *cot_update_lat[NR_LATENCY_BUCKETS];
-	struct d_tm_node_t *cot_fetch_lat[NR_LATENCY_BUCKETS];
+	struct d_tm_node_t *cot_update_lat[D_TM_IO_LAT_BUCKETS_NR];
+	struct d_tm_node_t *cot_fetch_lat[D_TM_IO_LAT_BUCKETS_NR];
 
 	/** Measure per-operation latency in us (type = gauge) */
 	struct d_tm_node_t *cot_op_lat[OBJ_PROTO_CLI_COUNT];
@@ -673,24 +664,6 @@ int
 obj_metrics_count(void);
 void *
 obj_metrics_alloc_internal(const char *path, int tgt_id, bool server);
-
-static inline unsigned int
-lat_bucket(uint64_t size)
-{
-	int nr;
-
-	if (size <= 256)
-		return 0;
-
-	/** return number of leading zero-bits */
-	nr = __builtin_clzl(size - 1);
-
-	/** >4MB, return last bucket */
-	if (nr < 42)
-		return NR_LATENCY_BUCKETS - 1;
-
-	return 56 - nr;
-}
 
 static inline int
 dc_cont2uuid(struct dc_cont *dc_cont, uuid_t *hdl_uuid, uuid_t *uuid)

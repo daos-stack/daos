@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1029,7 +1029,7 @@ bio_wal_commit(struct bio_meta_context *mc, struct umem_wal_tx *tx, struct bio_d
 	biod->bd_completion = wal_completion;
 	biod->bd_comp_arg = &wal_tx;
 
-	rc = bio_iod_post_async(biod, 0, NULL);
+	rc = bio_iod_post_async(biod, 0);
 	if (rc)
 		D_ERROR("WAL commit failed. "DF_RC"\n", DP_RC(rc));
 
@@ -1039,11 +1039,6 @@ out:
 	free_data_csum(&dc_arr);
 	if (biod != NULL)
 		bio_iod_free(biod);
-
-	if (biod_data != NULL && biod_data->bd_async_post == 1 &&
-	    biod_data->bd_post_latency != NULL)
-		*biod_data->bd_post_latency = daos_get_ntime() - *biod_data->bd_post_latency;
-
 	return rc;
 }
 

@@ -17,6 +17,16 @@
 #define D_TM_SHARED_MEMORY_KEY		0x10242048
 #define D_TM_SHARED_MEMORY_SIZE		(1024 * 1024)
 
+/*
+ * Report latency on a per-I/O size.
+ * Buckets starts at [0; 256B[ and are increased by power of 2
+ * (i.e. [256B; 512B[, [512B; 1KB[) up to [4MB; infinity[
+ * Since 4MB = 2^22 and 256B = 2^8, this means
+ * (22 - 8 + 1) = 15 buckets plus the 4MB+ bucket, so
+ * 16 buckets in total.
+ */
+#define D_TM_IO_LAT_BUCKETS_NR          16
+
 /**
  * The following definitions are suggested strings for units that may be used
  * when explicitly calling d_tm_add_metric() to initialize a metric before use.
@@ -250,6 +260,27 @@ struct d_tm_nodeList_t {
 #define D_TM_METRIC_SIZE (sizeof(struct d_tm_node_t) + sizeof(struct d_tm_metric_t) + \
 			  D_TM_MAX_DESC_LEN + D_TM_MAX_NAME_LEN + D_TM_MAX_UNIT_LEN + \
 			  sizeof(struct d_tm_stats_t))
+
+/*
+ * Return the bucket index of an IO latency metric.
+ */
+static inline unsigned int
+d_tm_io_lat_bucket(uint64_t size)
+{
+	int nr;
+
+	if (size <= 256)
+		return 0;
+
+	/** return number of leading zero-bits */
+	nr = __builtin_clzl(size - 1);
+
+	/** >4MB, return last bucket */
+	if (nr < 42)
+		return D_TM_IO_LAT_BUCKETS_NR - 1;
+
+	return 56 - nr;
+}
 
 /** Context for a telemetry instance */
 struct d_tm_context;

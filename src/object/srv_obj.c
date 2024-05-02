@@ -1681,7 +1681,9 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 	if (rc == -DER_CSUM)
 		obj_log_csum_err();
 post:
-	rc = bio_iod_post_async(biod, rc, &bio_post_latency);
+	time = daos_get_ntime();
+	rc = bio_iod_post_async(biod, rc);
+	bio_post_latency = daos_get_ntime() - time;
 out:
 	/* The DTX has been aborted during long time bulk data transfer. */
 	if (unlikely(dth->dth_aborted))
@@ -2226,7 +2228,7 @@ obj_update_sensors(struct obj_io_context *ioc, int err)
 	switch (opc) {
 	case DAOS_OBJ_RPC_UPDATE:
 		d_tm_inc_counter(opm->opm_update_bytes, ioc->ioc_io_size);
-		lat = tls->ot_update_lat[lat_bucket(ioc->ioc_io_size)];
+		lat = tls->ot_update_lat[d_tm_io_lat_bucket(ioc->ioc_io_size)];
 		orw = crt_req_get(ioc->ioc_rpc);
 		if (orw->orw_iod_array.oia_iods != NULL)
 			obj_ec_metrics_process(&orw->orw_iod_array, ioc);
@@ -2234,11 +2236,11 @@ obj_update_sensors(struct obj_io_context *ioc, int err)
 		break;
 	case DAOS_OBJ_RPC_TGT_UPDATE:
 		d_tm_inc_counter(opm->opm_update_bytes, ioc->ioc_io_size);
-		lat = tls->ot_tgt_update_lat[lat_bucket(ioc->ioc_io_size)];
+		lat = tls->ot_tgt_update_lat[d_tm_io_lat_bucket(ioc->ioc_io_size)];
 		break;
 	case DAOS_OBJ_RPC_FETCH:
 		d_tm_inc_counter(opm->opm_fetch_bytes, ioc->ioc_io_size);
-		lat = tls->ot_fetch_lat[lat_bucket(ioc->ioc_io_size)];
+		lat = tls->ot_fetch_lat[d_tm_io_lat_bucket(ioc->ioc_io_size)];
 		break;
 	default:
 		lat = tls->ot_op_lat[opc];

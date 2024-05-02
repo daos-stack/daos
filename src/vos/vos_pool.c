@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -300,7 +300,9 @@ vos_meta_flush_post(daos_handle_t fh, int err)
 void
 vos_wal_metrics_init(struct vos_wal_metrics *vw_metrics, const char *path, int tgt_id)
 {
-	int	rc;
+	unsigned int bucket_max = 256;
+	int          i;
+	int          rc;
 
 	/* Initialize metrics for WAL stats */
 	rc = d_tm_add_metric(&vw_metrics->vwm_wal_sz, D_TM_STATS_GAUGE, "WAL tx size",
@@ -317,6 +319,33 @@ vos_wal_metrics_init(struct vos_wal_metrics *vw_metrics, const char *path, int t
 			     "transactions", "%s/%s/wal_waiters/tgt_%d", path, VOS_WAL_DIR, tgt_id);
 	if (rc)
 		D_WARN("Failed to create WAL waiters telemetry: "DF_RC"\n", DP_RC(rc));
+
+	for (i = 0; i < D_TM_IO_LAT_BUCKETS_NR; i++) {
+		char *desc = "WAL commit latency";
+		char *unit = "us";
+
+		if (bucket_max < 1024) /** B */
+			rc = d_tm_add_metric(&vw_metrics->vwm_wal_lat[i], D_TM_STATS_GAUGE, desc,
+					     unit, "%s/%s/wal_lat/%uB/tgt_%d", path, VOS_WAL_DIR,
+					     bucket_max, tgt_id);
+		else if (bucket_max < 1024 * 1024) /** KB */
+			rc = d_tm_add_metric(&vw_metrics->vwm_wal_lat[i], D_TM_STATS_GAUGE, desc,
+					     unit, "%s/%s/wal_lat/%uKB/tgt_%d", path, VOS_WAL_DIR,
+					     bucket_max / 1024, tgt_id);
+		else if (bucket_max <= 1024 * 1024 * 4) /** MB */
+			rc = d_tm_add_metric(&vw_metrics->vwm_wal_lat[i], D_TM_STATS_GAUGE, desc,
+					     unit, "%s/%s/wal_lat/%uMB/tgt_%d", path, VOS_WAL_DIR,
+					     bucket_max / (1024 * 1024), tgt_id);
+		else /** >4MB */
+			rc = d_tm_add_metric(&vw_metrics->vwm_wal_lat[i], D_TM_STATS_GAUGE, desc,
+					     unit, "%s/%s/wal_lat/GT4MB/tgt_%d", path, VOS_WAL_DIR,
+					     tgt_id);
+		if (rc)
+			D_WARN("Failed to create WAL commit latency telemetry: " DF_RC "\n",
+			       DP_RC(rc));
+
+		bucket_max <<= 1;
+	}
 
 	/* Initialize metrics for WAL replay */
 	rc = d_tm_add_metric(&vw_metrics->vwm_replay_count, D_TM_COUNTER, "Number of WAL replays",
@@ -383,15 +412,18 @@ reserve:
 static inline int
 vos_wal_commit(struct umem_store *store, struct umem_wal_tx *wal_tx, void *data_iod)
 {
-	struct bio_wal_info	wal_info;
-	struct vos_pool		*pool;
-	struct bio_wal_stats	ws = { 0 };
-	struct vos_wal_metrics	*vwm;
-	int			rc;
+	struct bio_wal_info     wal_info;
+	struct vos_pool        *pool;
+	struct bio_wal_stats    ws = {0};
+	struct vos_wal_metrics *vwm;
+	uint64_t                time;
+	int                     rc;
 
 	D_ASSERT(store && store->stor_priv != NULL);
 	vwm = (struct vos_wal_metrics *)store->stor_stats;
+	time = daos_get_ntime();
 	rc = bio_wal_commit(store->stor_priv, wal_tx, data_iod, (vwm != NULL) ? &ws : NULL);
+	time = daos_get_ntime() - time;
 	if (rc) {
 		DL_ERROR(rc, "WAL commit failed.");
 		/*
@@ -415,6 +447,7 @@ vos_wal_commit(struct umem_store *store, struct umem_wal_tx *wal_tx, void *data_
 	} else if (vwm != NULL) {
 		d_tm_set_gauge(vwm->vwm_wal_sz, ws.ws_size);
 		d_tm_set_gauge(vwm->vwm_wal_qd, ws.ws_qd);
+		d_tm_set_gauge(vwm->vwm_wal_lat[d_tm_io_lat_bucket(ws.ws_size)], time);
 	}
 
 	pool = store->vos_priv;

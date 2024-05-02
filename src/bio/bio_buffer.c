@@ -1529,10 +1529,8 @@ out:
 }
 
 int
-bio_iod_post_async(struct bio_desc *biod, int err, uint64_t *post_latency)
+bio_iod_post_async(struct bio_desc *biod, int err)
 {
-	int rc;
-
 	/* Async post is for UPDATE only */
 	if (biod->bd_type != BIO_IOD_TYPE_UPDATE)
 		goto out;
@@ -1547,18 +1545,9 @@ bio_iod_post_async(struct bio_desc *biod, int err, uint64_t *post_latency)
 	if (biod->bd_nvme_bytes > bio_max_async_sz)
 		goto out;
 
-	biod->bd_async_post   = 1;
-	biod->bd_post_latency = post_latency;
+	biod->bd_async_post = 1;
 out:
-	if (post_latency != NULL)
-		*post_latency = daos_get_ntime();
-
-	rc = bio_iod_post(biod, err);
-
-	if (post_latency != NULL && biod->bd_async_post != 1)
-		*post_latency = daos_get_ntime() - *post_latency;
-
-	return rc;
+	return bio_iod_post(biod, err);
 }
 
 int
