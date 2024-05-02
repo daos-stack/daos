@@ -2228,7 +2228,7 @@ obj_update_sensors(struct obj_io_context *ioc, int err)
 	switch (opc) {
 	case DAOS_OBJ_RPC_UPDATE:
 		d_tm_inc_counter(opm->opm_update_bytes, ioc->ioc_io_size);
-		lat = tls->ot_update_lat[d_tm_io_lat_bucket(ioc->ioc_io_size)];
+		lat = tls->ot_update_lat[lat_bucket(ioc->ioc_io_size)];
 		orw = crt_req_get(ioc->ioc_rpc);
 		if (orw->orw_iod_array.oia_iods != NULL)
 			obj_ec_metrics_process(&orw->orw_iod_array, ioc);
@@ -2236,11 +2236,11 @@ obj_update_sensors(struct obj_io_context *ioc, int err)
 		break;
 	case DAOS_OBJ_RPC_TGT_UPDATE:
 		d_tm_inc_counter(opm->opm_update_bytes, ioc->ioc_io_size);
-		lat = tls->ot_tgt_update_lat[d_tm_io_lat_bucket(ioc->ioc_io_size)];
+		lat = tls->ot_tgt_update_lat[lat_bucket(ioc->ioc_io_size)];
 		break;
 	case DAOS_OBJ_RPC_FETCH:
 		d_tm_inc_counter(opm->opm_fetch_bytes, ioc->ioc_io_size);
-		lat = tls->ot_fetch_lat[d_tm_io_lat_bucket(ioc->ioc_io_size)];
+		lat = tls->ot_fetch_lat[lat_bucket(ioc->ioc_io_size)];
 		break;
 	default:
 		lat = tls->ot_op_lat[opc];

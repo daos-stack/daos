@@ -98,7 +98,7 @@ obj_latency_tm_init(uint32_t opc, int tgt_id, struct d_tm_node_t **tm, char *op,
 	int          i;
 	int          rc = 0;
 
-	for (i = 0; i < D_TM_IO_LAT_BUCKETS_NR; i++) {
+	for (i = 0; i < NR_LATENCY_BUCKETS; i++) {
 		char *path;
 
 		if (server) {

@@ -164,19 +164,19 @@ struct obj_tls {
 	struct d_tm_node_t	*ot_op_active[OBJ_PROTO_CLI_COUNT];
 
 	/** Measure update/fetch latency based on I/O size (type = gauge) */
-	struct d_tm_node_t      *ot_update_lat[D_TM_IO_LAT_BUCKETS_NR];
-	struct d_tm_node_t      *ot_fetch_lat[D_TM_IO_LAT_BUCKETS_NR];
+	struct d_tm_node_t	*ot_update_lat[NR_LATENCY_BUCKETS];
+	struct d_tm_node_t	*ot_fetch_lat[NR_LATENCY_BUCKETS];
 
-	struct d_tm_node_t      *ot_tgt_update_lat[D_TM_IO_LAT_BUCKETS_NR];
+	struct d_tm_node_t	*ot_tgt_update_lat[NR_LATENCY_BUCKETS];
 
-	struct d_tm_node_t      *ot_update_bulk_lat[D_TM_IO_LAT_BUCKETS_NR];
-	struct d_tm_node_t      *ot_fetch_bulk_lat[D_TM_IO_LAT_BUCKETS_NR];
+	struct d_tm_node_t	*ot_update_bulk_lat[NR_LATENCY_BUCKETS];
+	struct d_tm_node_t	*ot_fetch_bulk_lat[NR_LATENCY_BUCKETS];
 
-	struct d_tm_node_t      *ot_update_vos_lat[D_TM_IO_LAT_BUCKETS_NR];
-	struct d_tm_node_t      *ot_fetch_vos_lat[D_TM_IO_LAT_BUCKETS_NR];
+	struct d_tm_node_t	*ot_update_vos_lat[NR_LATENCY_BUCKETS];
+	struct d_tm_node_t	*ot_fetch_vos_lat[NR_LATENCY_BUCKETS];
 
-	struct d_tm_node_t      *ot_update_bio_lat[D_TM_IO_LAT_BUCKETS_NR];
-	struct d_tm_node_t      *ot_fetch_bio_lat[D_TM_IO_LAT_BUCKETS_NR];
+	struct d_tm_node_t	*ot_update_bio_lat[NR_LATENCY_BUCKETS];
+	struct d_tm_node_t	*ot_fetch_bio_lat[NR_LATENCY_BUCKETS];
 };
 
 static inline struct obj_tls *
@@ -202,13 +202,13 @@ obj_update_latency(uint32_t opc, uint32_t type, uint64_t latency, uint64_t io_si
 	if (opc == DAOS_OBJ_RPC_FETCH) {
 		switch (type) {
 		case BULK_LATENCY:
-			lat = tls->ot_fetch_bulk_lat[d_tm_io_lat_bucket(io_size)];
+			lat = tls->ot_fetch_bulk_lat[lat_bucket(io_size)];
 			break;
 		case BIO_LATENCY:
-			lat = tls->ot_fetch_bio_lat[d_tm_io_lat_bucket(io_size)];
+			lat = tls->ot_fetch_bio_lat[lat_bucket(io_size)];
 			break;
 		case VOS_LATENCY:
-			lat = tls->ot_fetch_vos_lat[d_tm_io_lat_bucket(io_size)];
+			lat = tls->ot_fetch_vos_lat[lat_bucket(io_size)];
 			break;
 		default:
 			D_ASSERT(0);
@@ -216,13 +216,13 @@ obj_update_latency(uint32_t opc, uint32_t type, uint64_t latency, uint64_t io_si
 	} else if (opc == DAOS_OBJ_RPC_UPDATE || opc == DAOS_OBJ_RPC_TGT_UPDATE) {
 		switch (type) {
 		case BULK_LATENCY:
-			lat = tls->ot_update_bulk_lat[d_tm_io_lat_bucket(io_size)];
+			lat = tls->ot_update_bulk_lat[lat_bucket(io_size)];
 			break;
 		case BIO_LATENCY:
-			lat = tls->ot_update_bio_lat[d_tm_io_lat_bucket(io_size)];
+			lat = tls->ot_update_bio_lat[lat_bucket(io_size)];
 			break;
 		case VOS_LATENCY:
-			lat = tls->ot_update_vos_lat[d_tm_io_lat_bucket(io_size)];
+			lat = tls->ot_update_vos_lat[lat_bucket(io_size)];
 			break;
 		default:
 			D_ASSERT(0);
