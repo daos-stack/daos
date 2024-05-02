@@ -448,6 +448,8 @@ struct bio_desc {
 	unsigned int		 bd_type;
 	/* Total bytes landed to data blob */
 	unsigned int		 bd_nvme_bytes;
+	/* I/O latency */
+	uint64_t                *bd_post_latency;
 	/* Flags */
 	unsigned int		 bd_buffer_prep:1,
 				 bd_dma_issued:1,

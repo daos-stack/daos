@@ -1681,9 +1681,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 	if (rc == -DER_CSUM)
 		obj_log_csum_err();
 post:
-	time = daos_get_ntime();
-	rc = bio_iod_post_async(biod, rc);
-	bio_post_latency = daos_get_ntime() - time;
+	rc = bio_iod_post_async(biod, rc, &bio_post_latency);
 out:
 	/* The DTX has been aborted during long time bulk data transfer. */
 	if (unlikely(dth->dth_aborted))
