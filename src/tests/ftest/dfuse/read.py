@@ -153,12 +153,6 @@ class DFuseReadTest(DfuseTestBase):
 
         self.load_dfuse(self.hostlist_clients, None)
 
-        self.dfuse.disable_wb_cache.value = True
-
-        self.dfuse.env["D_LOG_MASK"] = "INFO,DFUSE=DEBUG"
-        self.dfuse.env["DD_MASK"] = "ALL"
-        self.dfuse.env["DD_SUBSYS"] = "ALL"
-
         cont_attrs = {}
 
         cont_attrs["dfuse-data-cache"] = "1h"
@@ -183,11 +177,6 @@ class DFuseReadTest(DfuseTestBase):
             self.fail(f'"{cmd}" failed on {result.failed_hosts}')
 
         data = self.dfuse.get_stats()
-
-        read_calls = data["statistics"].get("read", 0)
-        write_calls = data["statistics"].get("write")
-
-        print(f"Test caused {write_calls} write and {read_calls} reads calls")
 
         self.assertEqual(
             data["statistics"].get("read", 0), 0, "Did not expect any read calls"

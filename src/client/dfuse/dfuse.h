@@ -1027,7 +1027,6 @@ struct dfuse_inode_entry {
 		bool            valid;
 		ATOMIC uint32_t active;
 		struct timespec last_update;
-
 		sem_t           sem;
 	} ie_dc;
 
