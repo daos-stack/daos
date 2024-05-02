@@ -104,6 +104,7 @@ dc_pool_metrics_alloc(uuid_t pool_uuid, struct dc_pool_metrics **metrics_p)
 	if (rc != 0) {
 		D_WARN(DF_UUID ": failed to create metrics dir for pool: " DF_RC "\n",
 		       DP_UUID(metrics->dp_uuid), DP_RC(rc));
+		D_FREE(metrics);
 		return rc;
 	}
 

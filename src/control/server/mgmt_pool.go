@@ -895,6 +895,19 @@ func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReinteg
 	if err != nil {
 		return nil, err
 	}
+
+	r := ranklist.Rank(req.Rank)
+
+	m, err := svc.membership.Get(r)
+	if err != nil {
+		return nil, err
+	}
+
+	if m.State&system.AvailableMemberFilter == 0 {
+		invalid := []ranklist.Rank{r}
+		return nil, FaultPoolInvalidRanks(invalid)
+	}
+
 	req.Tierbytes = ps.Storage.PerRankTierStorage
 
 	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolReintegrate, req)

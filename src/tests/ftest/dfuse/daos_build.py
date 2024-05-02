@@ -241,7 +241,8 @@ class DaosBuild(DfuseTestBase):
                 'daos filesystem evict {}'.format(build_dir),
                 'daos filesystem query {}'.format(mount_dir),
                 'scons -C {} --jobs {}'.format(build_dir, build_jobs),
-                'scons -C {} --jobs {} install'.format(build_dir, build_jobs),
+                'scons -C {} --jobs {} install --implicit-deps-unchanged'.format(build_dir,
+                                                                                 build_jobs),
                 'daos filesystem query {}'.format(mount_dir)]
         for cmd in cmds:
             command = '{};{}'.format(preload_cmd, cmd)
