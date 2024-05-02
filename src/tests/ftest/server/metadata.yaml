@@ -39,8 +39,7 @@ daos_server:
   pattern_timeout: 120
 pool:
   svcn: 5
-  tier_ratio: 50
-  size: 2G
+  scm_size: 1G
   control_method: dmg
   properties: svc_ops_enabled:1,svc_ops_entry_age:150
 container:
