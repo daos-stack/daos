@@ -261,3 +261,4 @@ class OSAOfflineParallelTest(OSAUtils):
         # object class testing. We are testing S1 apart from RP_2G1.
         self.run_offline_parallel_test(1, data=True,
                                        oclass=self.test_oclass[0])
+
