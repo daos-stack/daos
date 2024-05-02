@@ -227,7 +227,7 @@ struct vos_wal_metrics {
 	struct d_tm_node_t *vwm_wal_sz;       /* WAL size for single tx */
 	struct d_tm_node_t *vwm_wal_qd;       /* WAL transaction queue depth */
 	struct d_tm_node_t *vwm_wal_waiters;  /* Waiters for WAL reclaiming */
-	struct d_tm_node_t *vwm_wal_lat;      /* WAL commit latency */
+	struct d_tm_node_t *vwm_wal_dur;      /* WAL commit duration */
 	struct d_tm_node_t *vwm_replay_size;  /* WAL replay size in bytes */
 	struct d_tm_node_t *vwm_replay_time;  /* WAL replay time in us */
 	struct d_tm_node_t *vwm_replay_count; /* Total replay count */
