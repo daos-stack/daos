@@ -86,7 +86,6 @@ class NvmePoolExclude(OSAUtils):
                     "hosts": self.hostlist_clients,
                     "path": self.workdir,
                     "slots": None,
-                    "group": self.server_group,
                     "pool": pool[val],
                     "container": self.cont_list[-1],
                     "processes": self.params.get("np", "/run/ior/client_processes/*"),
