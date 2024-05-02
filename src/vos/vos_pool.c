@@ -395,10 +395,10 @@ vos_wal_commit(struct umem_store *store, struct umem_wal_tx *wal_tx, void *data_
 	int                     rc;
 
 	D_ASSERT(store && store->stor_priv != NULL);
-	vwm  = (struct vos_wal_metrics *)store->stor_stats;
+	vwm = (struct vos_wal_metrics *)store->stor_stats;
 	if (vwm != NULL)
 		d_tm_mark_duration_start(vwm->vwm_wal_dur, D_TM_CLOCK_REALTIME);
-	rc   = bio_wal_commit(store->stor_priv, wal_tx, data_iod, (vwm != NULL) ? &ws : NULL);
+	rc = bio_wal_commit(store->stor_priv, wal_tx, data_iod, (vwm != NULL) ? &ws : NULL);
 	if (vwm != NULL)
 		d_tm_mark_duration_end(vwm->vwm_wal_dur);
 	if (rc) {

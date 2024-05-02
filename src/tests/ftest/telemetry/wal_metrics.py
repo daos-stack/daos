@@ -4,7 +4,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
-from functools import reduce
 
 from ior_utils import write_data
 from telemetry_test_base import TestWithTelemetry
@@ -42,11 +41,8 @@ class WalMetrics(TestWithTelemetry):
             'Collect WAL commit metrics after creating a pool (dmg telemetry metrics query)')
         ranges = self.telemetry.collect_data(wal_metrics)
         for metric in list(ranges):
-            if (reduce(lambda acc, val: acc or val in metric, ['_sz', '_dur'], False)
-                    and reduce(
-                        lambda acc, val: acc and not metric.endswith(val),
-                        ['_mean', '_stddev'],
-                        True)):
+            if (('_sz' in metric or '_dur' in metric)
+                    and not metric.endswith('_mean') and not metric.endswith('_stddev')):
                 for label in ranges[metric]:
                     if self.server_managers[0].manager.job.using_control_metadata:
                         # The min/max/actual values of the size and duration metrics should be
