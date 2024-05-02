@@ -148,7 +148,7 @@ class TelemetryUtils():
         *_gen_stats_metrics("engine_pool_vos_wal_wal_sz"),
         *_gen_stats_metrics("engine_pool_vos_wal_wal_qd"),
         *_gen_stats_metrics("engine_pool_vos_wal_wal_waiters"),
-        *_gen_stats_metrics("engine_pool_vos_wal_wal_lat")]
+        *_gen_stats_metrics("engine_pool_vos_wal_wal_dur")]
     ENGINE_POOL_VOS_WAL_REPLAY_METRICS = [
         "engine_pool_vos_wal_replay_count",
         "engine_pool_vos_wal_replay_entries",
