@@ -140,7 +140,6 @@ pick_eqt(struct dfuse_info *dfuse_info)
  * list traversal times.
  */
 
-#define K128       (1024 * 128)
 #define CHUNK_SIZE (1024 * 1024)
 
 struct read_chunk_data {
