@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -622,15 +622,14 @@ class TestRunner():
         for data in find_result.output:
             if not data.passed:
                 continue
-            commands = []
             for line in data.stdout:
-                commands.append(f"sudo umount -f {line}")
-                commands.append(f"sudo rm -fr {line}")
-            for command in commands:
-                if not run_remote(logger, hosts, command).passed:
-                    message = "Error clearing existing mount points"
-                    self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
-                    return 128
+                logger.debug("Clearing mount point %s on %s:", line, data.hosts)
+                commands = [f"sudo umount -f {line}", f"sudo rm -fr {line}"]
+                for command in commands:
+                    if not run_remote(logger, data.hosts, command).passed:
+                        message = "Error clearing existing mount points"
+                        self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
+                        return 128
         return 0
 
     @staticmethod
