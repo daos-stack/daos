@@ -136,7 +136,7 @@ struct dfuse_inode_entry;
  * this buffer is kept as long as it's needed but released as soon as possible, either on error or
  * when EOF is returned to the kernel.  If it's still present on release then it's freed then.
  */
-struct dfuse_read_ahead {
+struct dfuse_pre_read {
 	pthread_mutex_t     dra_lock;
 	struct dfuse_event *dra_ev;
 	int                 dra_rc;
@@ -149,7 +149,7 @@ struct dfuse_obj_hdl {
 	/** the DFS object handle.  Not created for directories. */
 	dfs_obj_t                *doh_obj;
 
-	struct dfuse_read_ahead  *doh_readahead;
+	struct dfuse_pre_read    *doh_readahead;
 
 	/** the inode entry for the file */
 	struct dfuse_inode_entry *doh_ie;

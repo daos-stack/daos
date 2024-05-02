@@ -899,7 +899,7 @@ def cleanup_dfuse(self):
         "do kill $pid",
         "done'"]
     cmd2 = [
-        "/usr/bin/bash -c 'for dir in $(find /tmp/daos_dfuse/)",
+        "/usr/bin/bash -c 'for dir in $(find /tmp/soak_dfuse_*/)",
         "do fusermount3 -uz $dir",
         "rm -rf $dir",
         "done'"]
@@ -973,7 +973,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None,
                 container = self.container[-1]
             else:
                 container = cont
-            ior_cmd.set_daos_params(self.server_group, pool, container.identifier)
+            ior_cmd.set_daos_params(pool, container.identifier)
             log_name = "{}_{}_{}_{}_{}_{}_{}_{}".format(
                 job_spec.replace("/", "_"), api, b_size, t_size,
                 file_dir_oclass[0], nodesperjob * ppn, nodesperjob, ppn)
@@ -1142,9 +1142,8 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
             mdtest_cmd.dfs_oclass.update(file_dir_oclass[0])
             mdtest_cmd.dfs_dir_oclass.update(file_dir_oclass[1])
             add_containers(self, pool, file_dir_oclass[0], file_dir_oclass[1])
-            mdtest_cmd.set_daos_params(
-                self.server_group, pool,
-                self.container[-1].identifier)
+            mdtest_cmd.update_params(
+                dfs_pool=pool.identifier, dfs_cont=self.container[-1].identifier)
             log_name = "{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
                 job_spec, api, write_bytes, read_bytes, depth,
                 file_dir_oclass[0], nodesperjob * ppn, nodesperjob,

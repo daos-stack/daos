@@ -165,8 +165,7 @@ class IorTestBase(DfuseTestBase):
             self.pool.connect()
             self.create_cont()
         # Update IOR params with the pool and container params
-        self.ior_cmd.set_daos_params(self.server_group, self.pool,
-                                     self.container.uuid)
+        self.ior_cmd.set_daos_params(self.pool, self.container.uuid)
 
     def get_ior_job_manager_command(self):
         """Get the MPI job manager command for IOR.
