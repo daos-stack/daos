@@ -28,7 +28,7 @@ class ContinuesAfterStop(IorTestBase):
         """
         ior_cmd = IorCommand(namespace=namespace)
         ior_cmd.get_params(self)
-        ior_cmd.set_daos_params(self.server_group, pool, container.identifier)
+        ior_cmd.set_daos_params(pool, container.identifier)
         testfile = os.path.join(os.sep, "test_file_1")
         ior_cmd.test_file.update(testfile)
         manager = get_job_manager(test=self, job=ior_cmd, subprocess=self.subprocess)
