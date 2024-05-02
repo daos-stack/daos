@@ -13,8 +13,6 @@ PARSER = argparse.ArgumentParser()
 PARSER.add_argument("--prefix", type=str, default='test')
 PARSER.add_argument("--block", type=str, default='Functional Hardware Medium')
 PARSER.add_argument("--fault", type=str, required=True)
-PARSER.add_argument("--build", type=str, required=True)
-PARSER.add_argument("--jids", type=str, required=False)
 
 
 JENKINS_HOME = "https://build.hpdd.intel.com/job/daos-stack"
@@ -146,9 +144,9 @@ def sequence_to_list(seq: str) -> List[int]:
     return output
 
 
-def monitor_fault(build: str, jids: List[int], fault: str) -> Dict:
+def monitor_fault(build: str, jids: List[int], fault: str, meta: Dict) -> Tuple[Dict, Dict]:
     builds = {}
-    summary = {}
+    summary = meta.get('summary', {})
     for jid in jids:
         print(f'Parsing {build} Build #{jid}')
         get_test_results(build, jid, fault, builds)
@@ -157,15 +155,10 @@ def monitor_fault(build: str, jids: List[int], fault: str) -> Dict:
         sum = summary.get(result, 0)
         summary[result] = sum + 1
     meta = {
-        'total': len(jids),
-        'block_names_filer': BLOCK_NAMES_FILTER,
+        'total': len(jids) + meta.get('total', 0),
         'summary': summary
     }
-    output = {
-        'meta': meta,
-        'builds': builds
-    }
-    return output
+    return meta, builds
 
 
 def dump(data: Any, name: str) -> None:
@@ -192,16 +185,18 @@ def main():
             jobs.append(int(name[3:]))
     jobs.sort(reverse=True)
     dump(jobs, f'{args.prefix}_jobs')
-    # for job in jobs:
-    # if args.jids is None:
-    #     jids = build_get_all_jids(args.build)
-    #     jids_str = ','.join([str(jid) for jid in jids])
-    # else:
-    #     jids_str = args.jids
-    #     jids = sequence_to_list(jids_str)
-    # data = monitor_fault(args.build, jids, args.fault)
-    # data['meta'][args.build] = jids_str
-    # dump(data, f'{args.prefix}_data')
+    meta = {}
+    results = {}
+    for job in jobs:
+        build = f'PR-{job}'
+        jids = build_get_all_jids(build)
+        meta, result = monitor_fault(build, jids, args.fault, meta)
+        results[build] = result
+    data = {
+        'meta': meta,
+        'results': results
+    }
+    dump(data, f'{args.prefix}_data')
 
 
 if __name__ == "__main__":
