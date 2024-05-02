@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -633,20 +633,28 @@ type PoolQueryCmd struct {
 	poolCmd
 	ShowEnabledRanks  bool `short:"e" long:"show-enabled" description:"Show engine unique identifiers (ranks) which are enabled"`
 	ShowDisabledRanks bool `short:"b" long:"show-disabled" description:"Show engine unique identifiers (ranks) which are disabled"`
+	HealthOnly        bool `short:"t" long:"health-only" description:"Only perform pool health related queries"`
 }
 
 // Execute is run when PoolQueryCmd subcommand is activated
 func (cmd *PoolQueryCmd) Execute(args []string) error {
 	req := &control.PoolQueryReq{
-		ID: cmd.PoolID().String(),
+		ID:        cmd.PoolID().String(),
+		QueryMask: daos.DefaultPoolQueryMask,
 	}
 
+	if cmd.HealthOnly {
+		if !cmd.ShowEnabledRanks {
+			cmd.ShowDisabledRanks = true // enable for health queries
+		}
+		req.QueryMask.SetQuerySpace(false)
+	}
 	// TODO (DAOS-10250) The two options should not be incompatible (i.e. engine limitation)
 	if cmd.ShowEnabledRanks && cmd.ShowDisabledRanks {
 		return errIncompatFlags("show-enabled-ranks", "show-disabled-ranks")
 	}
-	req.IncludeEnabledRanks = cmd.ShowEnabledRanks
-	req.IncludeDisabledRanks = cmd.ShowDisabledRanks
+	req.QueryMask.SetQueryEnabledEngines(cmd.ShowEnabledRanks)
+	req.QueryMask.SetQueryDisabledEngines(cmd.ShowDisabledRanks)
 
 	resp, err := control.PoolQuery(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 
@@ -662,6 +670,8 @@ func (cmd *PoolQueryCmd) Execute(args []string) error {
 	if err := pretty.PrintPoolQueryResponse(resp, &bld); err != nil {
 		return err
 	}
+
+	cmd.Debugf("Pool query options: %s", resp.PoolInfo.QueryMask)
 	cmd.Info(bld.String())
 	return nil
 }
