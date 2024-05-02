@@ -1176,8 +1176,7 @@ dmg_pool_list(const char *dmg_config_file, const char *group,
 		goto out_json;
 	}
 
-	json_object_object_get_ex(dmg_out, "pools", &pool_list);
-	if (pool_list == NULL)
+	if (!json_object_object_get_ex(dmg_out, "pools", &pool_list) || pool_list == NULL)
 		*npools = 0;
 	else
 		*npools = json_object_array_length(pool_list);
