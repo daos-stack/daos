@@ -104,6 +104,7 @@ dc_pool_metrics_alloc(uuid_t pool_uuid, struct dc_pool_metrics **metrics_p)
 	if (rc != 0) {
 		D_WARN(DF_UUID ": failed to create metrics dir for pool: " DF_RC "\n",
 		       DP_UUID(metrics->dp_uuid), DP_RC(rc));
+		D_FREE(metrics);
 		return rc;
 	}
 
@@ -828,7 +829,6 @@ init_pool(const char *label, uuid_t uuid, uint64_t capas, const char *grp,
 	/** sy_info.provider */
 	/** sy_info.interface */
 	/** sy_info.domain */
-	/** sy_info.crt_ctx_share_addr */
 	/** sy_info.crt_timeout */
 
 	rc = rsvc_client_init(&pool->dp_client, NULL);

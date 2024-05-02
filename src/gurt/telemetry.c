@@ -2887,8 +2887,11 @@ d_tm_add_ephemeral_dir(struct d_tm_node_t **node, size_t size_bytes,
 	d_tm_unlock_shmem();
 	return 0;
 fail_sync:
-	d_tm_del_ephemeral_dir(path);
-	goto fail_unlock; /* shmem will be closed/destroyed already */
+	d_tm_unlock_shmem();
+	rc = d_tm_del_ephemeral_dir(path);
+	if (unlikely(rc != 0))
+		DL_ERROR(rc, "failed to remove ephemeral dir @ %s", path);
+	goto fail; /* shmem will be closed/destroyed already */
 fail_attach:
 	close_shmem_for_key(ctx, key, true);
 	goto fail_unlock; /* shmem will be closed/destroyed already */

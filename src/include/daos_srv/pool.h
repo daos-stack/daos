@@ -37,6 +37,7 @@ struct ds_pool_svc;
 
 /* age of an entry in svc_ops KVS before it may be evicted */
 #define DEFAULT_SVC_OPS_ENTRY_AGE_SEC_MAX 300ULL
+
 /*
  * Pool object
  *

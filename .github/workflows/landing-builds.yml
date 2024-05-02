@@ -12,8 +12,8 @@ on:
       - 'utils/docker/Dockerfile.*'
       - 'utils/scripts/install-*.sh'
       - 'utils/scripts/helpers/*'
-      - utils/ci
-      - ci
+      - utils/ci/**
+      - ci/**
       - requirements-build.txt
       - requirements-utest.txt
 

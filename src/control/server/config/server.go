@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -138,15 +138,6 @@ func (cfg *Server) WithFabricAuthKey(key string) *Server {
 // WithClientEnvVars sets the environment variables to be sent to the client.
 func (cfg *Server) WithClientEnvVars(envVars []string) *Server {
 	cfg.ClientEnvVars = envVars
-	return cfg
-}
-
-// WithCrtCtxShareAddr sets the top-level CrtCtxShareAddr.
-func (cfg *Server) WithCrtCtxShareAddr(addr uint32) *Server {
-	cfg.Fabric.CrtCtxShareAddr = addr
-	for _, engine := range cfg.Engines {
-		engine.Fabric.Update(cfg.Fabric)
-	}
 	return cfg
 }
 
