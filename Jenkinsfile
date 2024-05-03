@@ -114,7 +114,7 @@ pipeline {
                description: 'Distribution to use for CI Hardware Tests')
         booleanParam(name: 'CI_medium_TEST',
                      defaultValue: true,
-                     description: 'Run the CI Functional Hardware Medium test stages')
+                     description: 'Run the CI Functional Hardware Medium TCP/UCX test stages')
         booleanParam(name: 'CI_medium-tcp-provider_TEST',
                      defaultValue: true,
                      description: 'Run the CI Functional Hardware Medium TCP Provider test stage')
@@ -123,19 +123,25 @@ pipeline {
                      description: 'Run the CI Functional Hardware Medium UCX Provider test stage')
         booleanParam(name: 'CI_large_TEST',
                      defaultValue: true,
-                     description: 'Run the CI Functional Hardware Large test stages')
-        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
+                     description: 'Run the CI Functional Hardware Large TCP/UCX test stages')
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_TCP_LABEL',
                defaultValue: 'ci_nvme5',
-               description: 'Label to use for 5 node Functional Hardware Medium stages')
+               description: 'Label to use for 5 node Functional Hardware Medium TCP stage')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_TCP_PROVIDER_LABEL',
                defaultValue: 'ci_nvme5',
                description: 'Label to use for 5 node Functional Hardware Medium TCP Provider stage')
-        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL',
-               defaultValue: 'ci_nvme5',
-               description: 'Label to use for 5 node Functional Hardware Medium UCX Provider stage')
-        string(name: 'FUNCTIONAL_HARDWARE_LARGE_LABEL',
+        string(name: 'FUNCTIONAL_HARDWARE_LARGE_TCP_LABEL',
                defaultValue: 'ci_nvme9',
-               description: 'Label to use for 9 node Functional Hardware Large stages')
+               description: 'Label to use for 9 node Functional Hardware Large TCP stage')
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_UCX_LABEL',
+               defaultValue: 'ci_ofed5',
+               description: 'Label to use for 5 node Functional Hardware Medium UCX stage')
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL',
+               defaultValue: 'ci_ofed5',
+               description: 'Label to use for 5 node Functional Hardware Medium UCX Provider stage')
+        string(name: 'FUNCTIONAL_HARDWARE_LARGE_UCX_LABEL',
+               defaultValue: 'ci_ofed9',
+               description: 'Label to use for 9 node Functional Hardware Large UCX stage')
         string(name: 'CI_BUILD_DESCRIPTION',
                defaultValue: '',
                description: 'A description of the build')
@@ -190,26 +196,12 @@ pipeline {
                             name: 'Functional Hardware Medium TCP',
                             pragma_suffix: '-hw-medium',
                             base_branch: params.BaseBranch,
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_TCP_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'test_setup',
                             nvme: 'auto',
                             provider: cachedCommitPragma('Test-provider-tcp', params.TestProviderTCP),
-                            run_if_pr: true,
-                            run_if_landing: false,
-                            job_status: job_status_internal
-                        ),
-                        'Functional Hardware Medium UCX': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium UCX',
-                            pragma_suffix: '-hw-medium',
-                            base_branch: params.BaseBranch,
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
-                            next_version: next_version,
-                            stage_tags: 'hw,medium,-provider',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'test_setup',
-                            nvme: 'auto',
-                            provider: cachedCommitPragma('Test-provider-ucx', params.TestProviderUCX),
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
@@ -228,6 +220,34 @@ pipeline {
                             run_if_landing: false,
                             job_status: job_status_internal
                         ),
+                        'Functional Hardware Large TCP': getFunctionalTestStage(
+                            name: 'Functional Hardware Large TCP',
+                            pragma_suffix: '-hw-large',
+                            base_branch: params.BaseBranch,
+                            label: params.FUNCTIONAL_HARDWARE_LARGE_TCP_LABEL,
+                            next_version: next_version,
+                            stage_tags: 'hw,large',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'test_setup',
+                            default_nvme: 'auto',
+                            provider: cachedCommitPragma('Test-provider-tcp', params.TestProviderTCP),
+                            run_if_pr: true,
+                            run_if_landing: false,
+                            job_status: job_status_internal
+                        ),
+                        'Functional Hardware Medium UCX': getFunctionalTestStage(
+                            name: 'Functional Hardware Medium UCX',
+                            pragma_suffix: '-hw-medium',
+                            base_branch: params.BaseBranch,
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_LABEL,
+                            next_version: next_version,
+                            stage_tags: 'hw,medium,-provider',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'test_setup',
+                            nvme: 'auto',
+                            provider: cachedCommitPragma('Test-provider-ucx', params.TestProviderUCX),
+                            run_if_pr: true,
+                            run_if_landing: false,
+                            job_status: job_status_internal
+                        ),
                         'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium UCX Provider',
                             pragma_suffix: '-hw-medium-ucx-provider',
@@ -242,25 +262,11 @@ pipeline {
                             run_if_landing: false,
                             job_status: job_status_internal
                         ),
-                        'Functional Hardware Large TCP': getFunctionalTestStage(
-                            name: 'Functional Hardware Large TCP',
-                            pragma_suffix: '-hw-large',
-                            base_branch: params.BaseBranch,
-                            label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
-                            next_version: next_version,
-                            stage_tags: 'hw,large',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'test_setup',
-                            default_nvme: 'auto',
-                            provider: cachedCommitPragma('Test-provider-tcp', params.TestProviderTCP),
-                            run_if_pr: true,
-                            run_if_landing: false,
-                            job_status: job_status_internal
-                        ),
                         'Functional Hardware Large UCX': getFunctionalTestStage(
                             name: 'Functional Hardware Large UCX',
                             pragma_suffix: '-hw-large',
                             base_branch: params.BaseBranch,
-                            label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
+                            label: params.FUNCTIONAL_HARDWARE_LARGE_UCX_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'test_setup',
