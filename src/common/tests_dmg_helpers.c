@@ -1176,8 +1176,7 @@ dmg_pool_list(const char *dmg_config_file, const char *group,
 		goto out_json;
 	}
 
-	json_object_object_get_ex(dmg_out, "pools", &pool_list);
-	if (pool_list == NULL)
+	if (!json_object_object_get_ex(dmg_out, "pools", &pool_list) || pool_list == NULL)
 		*npools = 0;
 	else
 		*npools = json_object_array_length(pool_list);
@@ -1332,8 +1331,10 @@ dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 			D_DEBUG(DB_TEST, "key1:\"%s\",val1=%s\n", key1,
 				json_object_to_json_string(val1));
 
-			json_object_object_get_ex(val1, "smd_info", &smd_info);
-			if (smd_info != NULL) {
+			if (json_object_object_get_ex(val1, "smd_info", &smd_info)) {
+				if (smd_info == NULL)
+					continue;
+
 				if (!json_object_object_get_ex(
 					smd_info, "devices", &smd_dev)) {
 					D_ERROR("unable to extract devices\n");

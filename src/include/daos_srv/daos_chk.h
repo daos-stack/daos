@@ -71,7 +71,7 @@ typedef int (*chk_query_head_cb_t)(uint32_t ins_status, uint32_t ins_phase,
 
 typedef int (*chk_query_pool_cb_t)(struct chk_query_pool_shard *shard, uint32_t idx, void *buf);
 
-typedef int (*chk_prop_cb_t)(void *buf, struct chk_policy *policies, int cnt, uint32_t flags);
+typedef int (*chk_prop_cb_t)(void *buf, uint32_t policies[], int cnt, uint32_t flags);
 
 int chk_leader_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
 		     struct chk_policy *policies, int pool_nr, uuid_t pools[],

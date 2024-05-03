@@ -247,8 +247,7 @@ class ParallelIo(FioBase, IorTestBase):
 
                 # run ior on all containers
                 self.ior_cmd.test_file.update(os.path.join(dfuse_cont_dir, 'testfile'))
-                self.ior_cmd.set_daos_params(
-                    self.server_group, pool, self.container[cont_num].identifier)
+                self.ior_cmd.set_daos_params(pool, self.container[cont_num].identifier)
                 thread = threading.Thread(
                     target=self.run_ior,
                     args=(self.get_ior_job_manager_command(), processes, None,
