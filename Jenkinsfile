@@ -213,9 +213,9 @@ pipeline {
                             job_status: job_status_internal
                         ),
                         'Functional Hardware Medium TCP Provider': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium Verbs Provider',
-                            pragma_suffix: '-hw-medium-verbs-provider',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
+                            name: 'Functional Hardware Medium TCP Provider',
+                            pragma_suffix: '-hw-medium-tcp-provider',
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_TCP_PROVIDER_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'test_daos_management',
