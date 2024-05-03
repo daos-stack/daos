@@ -7,7 +7,6 @@ import os
 import threading
 import time
 
-from apricot import skipForTicket
 from avocado.core.exceptions import TestFail
 from daos_utils import DaosCommand
 from exception_utils import CommandFailure
@@ -479,7 +478,6 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         # Run last IO
         self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)
 
-    @skipForTicket("DAOS-8896")
     def test_performance_storage_full(self):
         """Jira ID: DAOS-4756.
 
