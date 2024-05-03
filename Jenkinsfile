@@ -142,7 +142,6 @@ pipeline {
                 stage('Get Commit Message') {
                     steps {
                         pragmasToEnv()
-                        update_default_commit_pragmas()
                     }
                 }
                 stage('Determine Release Branch') {
