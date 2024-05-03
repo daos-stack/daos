@@ -41,6 +41,11 @@ struct d_aio_eq {
 	_Atomic uint64_t n_op_done;
 };
 
+typedef struct d_aio_req_args {
+	d_iov_t	    iov;
+	d_sg_list_t sgl;
+}d_aio_req_args_t;
+
 /* The max number of event queues dedicated to AIO */
 #define MAX_NUM_EQ_AIO  (16)
 /* list of EQs dedicated for aio contexts. */
@@ -229,20 +234,26 @@ err:
 	return daos_der2errno(rc);
 }
 
+static int
+aio_req_cb(void *args, daos_event_t *ev, int ret)
+{
+	D_FREE(args);
+	return 0;
+}
+
 int
 io_submit(io_context_t ctx, long nr, struct iocb *ios[])
 {
-	d_aio_ctx_t     *aio_ctx_obj = (d_aio_ctx_t *)ctx;
-	io_context_t     ctx_real    = aio_ctx_obj->ctx;
-	daos_size_t      read_size   = 0;
-	d_iov_t          iov         = {};
-	d_sg_list_t      sgl         = {};
-	struct d_aio_ev *ctx_ev      = NULL;
-	int              i, n_op_dfs, fd, io_depth;
-	int              idx_aio_eq;
-	int              rc, rc2;
-	short            op;
-	int             *fd_directed = NULL;
+	d_aio_ctx_t      *aio_ctx_obj = (d_aio_ctx_t *)ctx;
+	io_context_t      ctx_real    = aio_ctx_obj->ctx;
+	daos_size_t       read_size   = 0;
+	struct d_aio_ev  *ctx_ev      = NULL;
+	d_aio_req_args_t *req_args;
+	int               i, n_op_dfs, fd, io_depth;
+	int               idx_aio_eq;
+	int               rc, rc2;
+	short             op;
+	int              *fd_directed = NULL;
 
 	if (next_io_submit == NULL) {
 		next_io_submit = dlsym(RTLD_NEXT, "io_submit");
@@ -304,15 +315,20 @@ io_submit(io_context_t ctx, long nr, struct iocb *ios[])
 			DL_ERROR(rc, "daos_event_init() failed");
 			D_GOTO(err_loop, rc = daos_der2errno(rc));
 		}
-		d_iov_set(&iov, (void *)ios[i]->u.c.buf, ios[i]->u.c.nbytes);
-		sgl.sg_nr     = 1;
-		sgl.sg_iovs   = &iov;
 		ctx_ev->piocb = ios[i];
 		/* EQs are shared by contexts. Need to save ctx when polling EQs. */
 		ctx_ev->ctx = aio_ctx_obj;
+		D_ALLOC_PTR(req_args);
+		if (req_args == NULL)
+			D_GOTO(err_loop, rc = ENOMEM);
+		d_iov_set(&req_args->iov, (void *)ios[i]->u.c.buf, ios[i]->u.c.nbytes);
+		req_args->sgl.sg_nr     = 1;
+		req_args->sgl.sg_iovs   = &req_args->iov;
+
 		if (op == IO_CMD_PREAD) {
-			rc = dfs_read(d_file_list[fd]->dfs_mt->dfs, d_file_list[fd]->file, &sgl,
-				      ios[i]->u.c.offset, &read_size, &ctx_ev->ev);
+			daos_event_register_comp_cb(&ctx_ev->ev, aio_req_cb, req_args);
+			rc = dfs_read(d_file_list[fd]->dfs_mt->dfs, d_file_list[fd]->file,
+				      &req_args->sgl, ios[i]->u.c.offset, &read_size, &ctx_ev->ev);
 			if (rc) {
 				rc2 = daos_event_fini(&ctx_ev->ev);
 				if (rc2)
@@ -321,8 +337,9 @@ io_submit(io_context_t ctx, long nr, struct iocb *ios[])
 			}
 		}
 		if (op == IO_CMD_PWRITE) {
-			rc = dfs_write(d_file_list[fd]->dfs_mt->dfs, d_file_list[fd]->file, &sgl,
-				       ios[i]->u.c.offset, &ctx_ev->ev);
+			daos_event_register_comp_cb(&ctx_ev->ev, aio_req_cb, req_args);
+			rc = dfs_write(d_file_list[fd]->dfs_mt->dfs, d_file_list[fd]->file,
+				       &req_args->sgl, ios[i]->u.c.offset, &ctx_ev->ev);
 			if (rc) {
 				rc2 = daos_event_fini(&ctx_ev->ev);
 				if (rc2)
