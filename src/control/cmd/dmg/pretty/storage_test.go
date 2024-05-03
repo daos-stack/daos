@@ -1738,3 +1738,151 @@ host1
 		})
 	}
 }
+
+func TestPretty_PrintSmdManageResp(t *testing.T) {
+	for name, tc := range map[string]struct {
+		op        control.SmdManageOpcode
+		printOpts PrintConfigOption
+		resp      *control.SmdResp
+		expStdout string
+		expStderr string
+		expErr    error
+	}{
+		"bad opcode": {
+			resp:   new(control.SmdResp),
+			expErr: errors.New("unsupported opcode"),
+		},
+		"empty response": {
+			op:        control.SetFaultyOp,
+			resp:      new(control.SmdResp),
+			expStdout: ``,
+		},
+		"server error": {
+			op: control.DevReplaceOp,
+			resp: &control.SmdResp{
+				HostErrorsResp: control.MockHostErrorsResp(t,
+					&control.MockHostError{
+						Hosts: "host1",
+						Error: "failed",
+					}),
+			},
+			expStderr: "dev-replace operation failed on host1: failed\n",
+		},
+		"one success; one fail": {
+			op: control.SetFaultyOp,
+			resp: &control.SmdResp{
+				HostErrorsResp: control.MockHostErrorsResp(t,
+					&control.MockHostError{
+						Hosts: "host1",
+						Error: "engine-0: drpc fails, engine-1: updated",
+					}),
+				HostStorage: control.MockHostStorageMap(t,
+					&control.MockStorageScan{
+						Hosts: "host2",
+					}),
+			},
+			expErr: errors.New("unexpected number of results"),
+		},
+		"two successes": {
+			op: control.DevReplaceOp,
+			resp: &control.SmdResp{
+				HostStorage: control.MockHostStorageMap(t,
+					&control.MockStorageScan{
+						Hosts: "host[1-2]",
+					}),
+			},
+			expErr: errors.New("unexpected number of results"),
+		},
+		"two failures": {
+			op: control.SetFaultyOp,
+			resp: &control.SmdResp{
+				HostErrorsResp: control.MockHostErrorsResp(t,
+					&control.MockHostError{
+						Hosts: "host[1-2]",
+						Error: "engine-0: drpc fails, engine-1: not ready",
+					}),
+			},
+			expErr: errors.New("unexpected number of results"),
+		},
+		"multiple scan entries in map": {
+			op: control.DevReplaceOp,
+			resp: &control.SmdResp{
+				HostStorage: control.MockHostStorageMap(t,
+					&control.MockStorageScan{
+						Hosts:    "host[1-2]",
+						HostScan: control.MockServerScanResp(t, "standard"),
+					},
+					&control.MockStorageScan{
+						Hosts:    "host[3-4]",
+						HostScan: control.MockServerScanResp(t, "noStorage"),
+					}),
+			},
+			expErr: errors.New("unexpected number of results"),
+		},
+		"single success": {
+			op: control.SetFaultyOp,
+			resp: &control.SmdResp{
+				HostStorage: control.MockHostStorageMap(t,
+					&control.MockStorageScan{
+						Hosts: "host1",
+					}),
+			},
+			expStdout: "set-faulty operation performed successfully on the following " +
+				"host: host1\n",
+		},
+		"two successes; led-check": {
+			op:        control.LedCheckOp,
+			printOpts: PrintOnlyLEDInfo(),
+			resp: &control.SmdResp{
+				HostStorage: func() control.HostStorageMap {
+					hsm := make(control.HostStorageMap)
+					sd := &storage.SmdDevice{
+						UUID: test.MockUUID(1),
+						Ctrlr: storage.NvmeController{
+							PciAddr:  test.MockPCIAddr(1),
+							LedState: storage.LedStateNormal,
+						},
+					}
+					hss := &control.HostStorageSet{
+						HostSet: control.MockHostSet(t, "host[1-2]"),
+						HostStorage: &control.HostStorage{
+							SmdInfo: &control.SmdInfo{
+								Devices: []*storage.SmdDevice{sd},
+							},
+						},
+					}
+					hk, err := hss.HostStorage.HashKey()
+					if err != nil {
+						t.Fatal(err)
+					}
+					hsm[hk] = hss
+					return hsm
+				}(),
+			},
+			expStdout: `
+---------
+host[1-2]
+---------
+  Devices
+    TrAddr:0000:01:00.0 [UUID:00000001-0001-0001-0001-000000000001] LED:OFF
+`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var out, outErr strings.Builder
+
+			gotErr := PrintSmdManageResp(tc.op, tc.resp, &out, &outErr, tc.printOpts)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if gotErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expStdout, "\n"), out.String()); diff != "" {
+				t.Fatalf("unexpected print output (-want, +got):\n%s\n", diff)
+			}
+			if diff := cmp.Diff(strings.TrimLeft(tc.expStderr, "\n"), outErr.String()); diff != "" {
+				t.Fatalf("unexpected print output (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
