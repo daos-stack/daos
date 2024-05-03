@@ -588,7 +588,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Mon Apr 08 2024 Lei Huang <lei.huang@intel.com> 2.5.101-5
+* Fri May 03 2024 Lei Huang <lei.huang@intel.com> 2.5.101-5
 - Add libaio as a dependent package
 
 * Fri Apr 05 2024 Fan Yong <fan.yong@intel.com> 2.5.101-4

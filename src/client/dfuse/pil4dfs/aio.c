@@ -301,10 +301,10 @@ io_submit(io_context_t ctx, long nr, struct iocb *ios[])
 			D_GOTO(err, rc);
 	}
 
+	idx_aio_eq = aio_ctx_obj->idx_eq;
 	for (i = 0; i < nr; i++) {
-		op         = ios[i]->aio_lio_opcode;
-		fd         = fd_directed[i] - FD_FILE_BASE;
-		idx_aio_eq = aio_ctx_obj->idx_eq;
+		op = ios[i]->aio_lio_opcode;
+		fd = fd_directed[i] - FD_FILE_BASE;
 
 		D_ALLOC_PTR(ctx_ev);
 		if (ctx_ev == NULL)
@@ -326,7 +326,11 @@ io_submit(io_context_t ctx, long nr, struct iocb *ios[])
 		req_args->sgl.sg_iovs   = &req_args->iov;
 
 		if (op == IO_CMD_PREAD) {
-			daos_event_register_comp_cb(&ctx_ev->ev, aio_req_cb, req_args);
+			rc = daos_event_register_comp_cb(&ctx_ev->ev, aio_req_cb, req_args);
+			if (rc) {
+				DL_ERROR(rc, "daos_event_register_comp_cb() failed");
+				D_GOTO(err_loop, rc);
+			}
 			rc = dfs_read(d_file_list[fd]->dfs_mt->dfs, d_file_list[fd]->file,
 				      &req_args->sgl, ios[i]->u.c.offset, &read_size, &ctx_ev->ev);
 			if (rc) {
@@ -337,7 +341,11 @@ io_submit(io_context_t ctx, long nr, struct iocb *ios[])
 			}
 		}
 		if (op == IO_CMD_PWRITE) {
-			daos_event_register_comp_cb(&ctx_ev->ev, aio_req_cb, req_args);
+			rc = daos_event_register_comp_cb(&ctx_ev->ev, aio_req_cb, req_args);
+			if (rc) {
+				DL_ERROR(rc, "daos_event_register_comp_cb() failed");
+				D_GOTO(err_loop, rc);
+			}
 			rc = dfs_write(d_file_list[fd]->dfs_mt->dfs, d_file_list[fd]->file,
 				       &req_args->sgl, ios[i]->u.c.offset, &ctx_ev->ev);
 			if (rc) {
