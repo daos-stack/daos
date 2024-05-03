@@ -15,9 +15,24 @@
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
 
+/* groovylint-disable-next-line CompileStatic */
+job_status_internal = [:]
+
+// groovylint-disable-next-line MethodParameterTypeRequired, NoDef
+void job_status_update(String name=env.STAGE_NAME, def value=currentBuild.currentResult) {
+    jobStatusUpdate(job_status_internal, name, value)
+}
+
+// groovylint-disable-next-line MethodParameterTypeRequired, NoDef
+void job_step_update(def value=currentBuild.currentResult) {
+    // job_status_update(env.STAGE_NAME, value)
+    jobStatusUpdate(job_status_internal, env.STAGE_NAME, value)
+}
+
 // Should try to figure this out automatically
 /* groovylint-disable-next-line CompileStatic, VariableName */
 String base_branch = 'master'
+
 // For master, this is just some wildly high number
 next_version = '1000'
 
