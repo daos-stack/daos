@@ -389,3 +389,4 @@ class PoolListConsolidationTest(RecoveryTestBase):
         self.pool.skip_cleanup()
 
         report_errors(test=self, errors=errors)
+
