@@ -43,6 +43,7 @@ pool:
 
 container:
   control_method: daos
+  register_cleanup: False  # Skip teardown destroy. Test manually destroys containers.
   type: POSIX
 ior:
   api: "DFS"
