@@ -499,8 +499,8 @@ class TelemetryUtils():
             info[host] = []
             try:
                 data = self.dmg.telemetry_metrics_list(host=host)
-            except CommandFailure as e:
-                self.log.error("Failed to list metrics on %s: %s", host, e)
+            except CommandFailure as err:
+                self.log.error("Failed to list metrics on %s: %s", host, err)
                 continue
             if "response" in data:
                 if "available_metric_sets" in data["response"]:
@@ -566,8 +566,8 @@ class TelemetryUtils():
             info[host] = {}
             try:
                 data = self.dmg.telemetry_metrics_query(host=host, metrics=name)
-            except CommandFailure as e:
-                self.log.error("Failed to get metrics for %s: %s", host, e)
+            except CommandFailure as err:
+                self.log.error("Failed to get metrics for %s: %s", host, err)
                 continue
             if "response" in data:
                 if "metric_sets" in data["response"]:

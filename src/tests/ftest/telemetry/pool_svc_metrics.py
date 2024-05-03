@@ -22,7 +22,7 @@ class PoolServiceMetrics(TestWithTelemetry):
         """Collect the pool service metric values.
 
         Args:
-            pool_uuid: The UUID of the pool to collect metrics from.
+            pool_uuid (str): The UUID of the pool to collect metrics from.
 
         Returns:
             dict: A dict of the current pool service leader's metrics.
@@ -37,20 +37,16 @@ class PoolServiceMetrics(TestWithTelemetry):
             pm = {}
             for hm in host_metrics.values():
                 for k, v in hm.items():
-                    if 'metrics' not in v:
+                    try:
+                        for m in v['metrics']:
+                            if m['labels']['pool'].casefold() != str(pool_uuid).casefold():
+                                continue
+                            rank = m['labels']['rank']
+                            if rank not in pm:
+                                pm[rank] = {}
+                            pm[rank][k] = m['value']
+                    except KeyError:
                         continue
-                    for m in v['metrics']:
-                        if 'labels' not in m:
-                            continue
-                        if 'pool' not in m['labels'] or \
-                                m['labels']['pool'].casefold() != str(pool_uuid).casefold():
-                            continue
-                        if 'rank' not in m['labels']:
-                            continue
-                        rank = m['labels']['rank']
-                        if rank not in pm:
-                            pm[rank] = {}
-                        pm[rank][k] = m['value']
             return pm
 
         metrics_list = ",".join(self.telemetry.ENGINE_POOL_SVC_METRICS)
@@ -96,14 +92,21 @@ class PoolServiceMetrics(TestWithTelemetry):
         if failed_ranks:
             self.fail(f"Rank {restart_rank} didn't stop!")
 
-        self.log_step("Wait for rank exclusion to show up in the telemetry.")
-        metrics = self.collect_svc_telemetry(pool.uuid)
-        while True:
-            if MAP_VERSION_METRIC in metrics and metrics[MAP_VERSION_METRIC] > 1:
-                break
-
-            time.sleep(5)
+        def _wait_for_telemetry(test):
             metrics = self.collect_svc_telemetry(pool.uuid)
+            while True:
+                try:
+                    if test(metrics):
+                        return metrics
+                except KeyError:
+                    continue
+
+                self.log.info("waiting for pool telemetry to update")
+                time.sleep(5)
+                metrics = self.collect_svc_telemetry(pool.uuid)
+
+        self.log_step("Wait for rank exclusion to show up in the telemetry.")
+        metrics = _wait_for_telemetry(lambda m: m[MAP_VERSION_METRIC] > 1)
 
         self.log_step("Verify that the pool service telemetry has updated.")
         self.assertTrue(metrics[DEGRADED_RANKS_METRIC] == 1,
@@ -122,12 +125,6 @@ class PoolServiceMetrics(TestWithTelemetry):
         pool.reintegrate(restart_rank)
 
         self.log_step("Wait for reintegration to show up in the telemetry.")
-        metrics = self.collect_svc_telemetry(pool.uuid)
-        while True:
-            if DEGRADED_RANKS_METRIC in metrics and metrics[DEGRADED_RANKS_METRIC] == 0:
-                break
-
-            time.sleep(5)
-            metrics = self.collect_svc_telemetry(pool.uuid)
+        metrics = _wait_for_telemetry(lambda m: m[DEGRADED_RANKS_METRIC] == 0)
 
         self.log_step("Test passed.")
