@@ -1238,8 +1238,8 @@ dc_mgmt_tm_register(const char *sys, const char *jobid, key_t shm_key, uid_t *ow
 		goto out_dresp;
 	}
 	if (resp->status != 0) {
-		D_ERROR("SetupClientTelemetry(%s) failed: " DF_RC "\n", req.sys,
-			DP_RC(resp->status));
+		if (resp->status != -DER_UNINIT) /* not necessarily an error */
+			DL_ERROR(resp->status, "SetupClientTelemetry() failed");
 		rc = resp->status;
 		goto out_resp;
 	}
