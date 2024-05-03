@@ -78,9 +78,12 @@ pipeline {
                description: 'Test-repeat to use for this run.  Specifies the number of times to ' +
                             'repeat each functional test. CAUTION: only use in combination with ' +
                             'a reduced number of tests specified with the TestTag parameter.')
-        string(name: 'TestProvider',
+        string(name: 'TestProviderTCP',
                defaultValue: 'ofi+tcp',
                description: 'Provider to use for the Functional Hardware Medium/Large stages of this run (i.e. ofi+tcp)')
+        string(name: 'TestProviderUCX',
+               defaultValue: 'ucx+ud_x',
+               description: 'Provider to use for the Functional Hardware Medium/Large stages of this run (i.e. ucx+ud_x, ucx+dc_x)')
         string(name: 'BaseBranch',
                defaultValue: base_branch,
                description: 'The base branch to run testing against (i.e. master, or a PR\'s branch)')
@@ -96,22 +99,28 @@ pipeline {
                description: 'Distribution to use for CI Hardware Tests')
         booleanParam(name: 'CI_medium_TEST',
                      defaultValue: true,
-                     description: 'Run the CI Functional Hardware Medium test stage')
+                     description: 'Run the CI Functional Hardware Medium test stages')
         booleanParam(name: 'CI_medium-tcp-provider_TEST',
                      defaultValue: true,
                      description: 'Run the CI Functional Hardware Medium TCP Provider test stage')
+        booleanParam(name: 'CI_medium-ucx-provider_TEST',
+                     defaultValue: true,
+                     description: 'Run the CI Functional Hardware Medium UCX Provider test stage')
         booleanParam(name: 'CI_large_TEST',
                      defaultValue: true,
-                     description: 'Run the CI Functional Hardware Large test stage')
+                     description: 'Run the CI Functional Hardware Large test stages')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
                defaultValue: 'ci_nvme5',
-               description: 'Label to use for 5 node Functional Hardware Medium stage')
+               description: 'Label to use for 5 node Functional Hardware Medium stages')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_TCP_PROVIDER_LABEL',
                defaultValue: 'ci_nvme5',
                description: 'Label to use for 5 node Functional Hardware Medium TCP Provider stage')
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL',
+               defaultValue: 'ci_nvme5',
+               description: 'Label to use for 5 node Functional Hardware Medium UCX Provider stage')
         string(name: 'FUNCTIONAL_HARDWARE_LARGE_LABEL',
                defaultValue: 'ci_nvme9',
-               description: 'Label to use for 9 node Functional Hardware Large stage')
+               description: 'Label to use for 9 node Functional Hardware Large stages')
         string(name: 'CI_BUILD_DESCRIPTION',
                defaultValue: '',
                description: 'A description of the build')
@@ -127,9 +136,23 @@ pipeline {
                 }
             }
         }
-        stage('Get Commit Message') {
-            steps {
-                pragmasToEnv()
+        stage('Prepare Environment Variables') {
+            // TODO: Could/should these be moved to the environment block?
+            parallel {
+                stage('Get Commit Message') {
+                    steps {
+                        pragmasToEnv()
+                        update_default_commit_pragmas()
+                    }
+                }
+                stage('Determine Release Branch') {
+                    steps {
+                        script {
+                            env.RELEASE_BRANCH = releaseBranch()
+                            echo 'Release branch == ' + env.RELEASE_BRANCH
+                        }
+                    }
+                }
             }
         }
         stage('Cancel Previous Builds') {
@@ -146,83 +169,97 @@ pipeline {
                 beforeAgent true
                 expression { !skipStage() }
             }
-            parallel {
-                stage('Functional Hardware Medium') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        // 4 node cluster with 2 IB/node + 1 test control node
-                        label params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL
-                    }
-                    steps {
-                        // Need to get back onto base_branch for ci/
-                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
-                                    branch: env.BaseBranch,
-                                    withSubmodules: true
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, "tests-internal"),
-                                       test_function: 'runTestFunctionalV2'
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                        }
-                    }
-                } // stage('Functional Hardware Medium')
-                stage('Functional Hardware Medium TCP Provider') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        // 4 node cluster with 2 IB/node + 1 test control node
-                        label params.FUNCTIONAL_HARDWARE_MEDIUM_TCP_PROVIDER_LABEL
-                    }
-                    steps {
-                        // Need to get back onto base_branch for ci/
-                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
-                                    branch: env.BaseBranch,
-                                    withSubmodules: true
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, "tests-internal"),
-                                       test_function: 'runTestFunctionalV2'
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                        }
-                    }
-                } // stage('Functional Hardware Medium TCP Provider')
-                stage('Functional Hardware Large') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        // 8+ node cluster with 1 IB/node + 1 test control node
-                        label params.FUNCTIONAL_HARDWARE_LARGE_LABEL
-                    }
-                    steps {
-                        // Need to get back onto base_branch for ci/
-                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
-                                    branch: env.BaseBranch,
-                                    withSubmodules: true
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, "tests-internal"),
-                                       test_function: 'runTestFunctionalV2'
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                        }
-                    }
-                } // stage('Functional Hardware Large')
-            } // parallel
+            steps {
+                script {
+                    parallel(
+                        'Functional Hardware Medium TCP': getFunctionalTestStage(
+                            name: 'Functional Hardware Medium TCP',
+                            pragma_suffix: '-hw-medium',
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
+                            next_version: next_version,
+                            stage_tags: 'hw,medium,-provider',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'test_setup',
+                            nvme: 'auto',
+                            provider: cachedCommitPragma('Test-provider-tcp', params.TestProviderTCP),
+                            run_if_pr: true,
+                            run_if_landing: false,
+                            job_status: job_status_internal
+                        ),
+                        'Functional Hardware Medium UCX': getFunctionalTestStage(
+                            name: 'Functional Hardware Medium UCX',
+                            pragma_suffix: '-hw-medium',
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
+                            next_version: next_version,
+                            stage_tags: 'hw,medium,-provider',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'test_setup',
+                            nvme: 'auto',
+                            provider: cachedCommitPragma('Test-provider-ucx', params.TestProviderUCX),
+                            run_if_pr: true,
+                            run_if_landing: false,
+                            job_status: job_status_internal
+                        ),
+                        'Functional Hardware Medium TCP Provider': getFunctionalTestStage(
+                            name: 'Functional Hardware Medium Verbs Provider',
+                            pragma_suffix: '-hw-medium-verbs-provider',
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
+                            next_version: next_version,
+                            stage_tags: 'hw,medium,provider',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'test_daos_management',
+                            default_nvme: 'auto',
+                            provider: cachedCommitPragma('Test-provider-tcp', params.TestProviderTCP),
+                            run_if_pr: true,
+                            run_if_landing: false,
+                            job_status: job_status_internal
+                        ),
+                        'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
+                            name: 'Functional Hardware Medium UCX Provider',
+                            pragma_suffix: '-hw-medium-ucx-provider',
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
+                            next_version: next_version,
+                            stage_tags: 'hw,medium,provider',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'test_daos_management',
+                            default_nvme: 'auto',
+                            provider: cachedCommitPragma('Test-provider-ucx', params.TestProviderUCX),
+                            run_if_pr: true,
+                            run_if_landing: false,
+                            job_status: job_status_internal
+                        ),
+                        'Functional Hardware Large TCP': getFunctionalTestStage(
+                            name: 'Functional Hardware Large TCP',
+                            pragma_suffix: '-hw-large',
+                            label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
+                            next_version: next_version,
+                            stage_tags: 'hw,large',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'test_setup',
+                            default_nvme: 'auto',
+                            provider: cachedCommitPragma('Test-provider-tcp', params.TestProviderTCP),
+                            run_if_pr: true,
+                            run_if_landing: false,
+                            job_status: job_status_internal
+                        ),
+                        'Functional Hardware Large UCX': getFunctionalTestStage(
+                            name: 'Functional Hardware Large UCX',
+                            pragma_suffix: '-hw-large',
+                            label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
+                            next_version: next_version,
+                            stage_tags: 'hw,large',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'test_setup',
+                            default_nvme: 'auto',
+                            provider: cachedCommitPragma('Test-provider-ucx', params.TestProviderUCX),
+                            run_if_pr: true,
+                            run_if_landing: false,
+                            job_status: job_status_internal
+                        ),
+                    )
+                }
+            }
         } // stage('Test')
     } //stages
     post {
+        always {
+            job_status_update('final_status')
+            jobStatusWrite(job_status_internal)
+        }
         unsuccessful {
             notifyBrokenBranch branches: target_branch
         }
