@@ -453,10 +453,11 @@ def __arg_type_mount_point(val):
         str: the mount point
     """
     try:
-        if val.startswith(os.sep):
-            return val
+        if not val.startswith(os.sep):
+            raise ValueError(f'Mount point does not start with {os.sep}')
     except Exception as err:  # pylint: disable=broad-except
         raise ArgumentTypeError(f'Invalid mount point: {val}') from err
+    return val
 
 
 def main():
