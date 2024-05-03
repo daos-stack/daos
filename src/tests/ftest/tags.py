@@ -57,7 +57,7 @@ class FtestTagMap():
         for item in self.__mapping.items():
             yield deepcopy(item)
 
-    def methods(self):
+    def __methods(self):
         """Get a mapping of methods to tags.
 
         Yields:
@@ -140,7 +140,7 @@ class FtestTagMap():
         """
         tests1 = set(self.__tags_to_tests(tags1))
         tests2 = set(self.__tags_to_tests(tags2))
-        return tests1.issubset(tests2)
+        return tests1 and tests2 and tests1.issubset(tests2)
 
     def __tags_to_tests(self, tags):
         """Convert a list of tags to the tests they would run.
@@ -149,7 +149,7 @@ class FtestTagMap():
             tags (list): list of sets of tags
         """
         tests = []
-        for method_name, test_tags in self.methods():
+        for method_name, test_tags in self.__methods():
             for tag_set in tags:
                 if tag_set.issubset(test_tags):
                     tests.append(method_name)
@@ -524,6 +524,37 @@ def test_tags_util(verbose=False):
     assert tag_map._FtestTagMap__tags_to_tests(
         [set(['foo1']), set(['foo2'])]) == ['test_1', 'test_2']
     assert tag_map._FtestTagMap__tags_to_tests([set(['foo1', 'class_1'])]) == ['test_1']
+
+    print_step('__methods')
+    assert list(tag_map._FtestTagMap__methods()) == [
+        ('test_1', {'class_1', 'test_1', 'foo1'}), ('test_2', {'class_2', 'test_2', 'foo2'})]
+
+    print_step('unique_tags')
+    assert tag_map.unique_tags() == set(['class_1', 'test_1', 'foo1', 'class_2', 'test_2', 'foo2'])
+    assert tag_map.unique_tags(exclude=['/foo1']) == set(['class_2', 'test_2', 'foo2'])
+    assert tag_map.unique_tags(exclude=['/foo2']) == set(['class_1', 'test_1', 'foo1'])
+    assert tag_map.unique_tags(exclude=['/foo1', '/foo2']) == set()
+
+    print_step('minimal_tags')
+    assert tag_map.minimal_tags('/foo1') == set(['class_1'])
+    assert tag_map.minimal_tags('/foo2') == set(['class_2'])
+
+    print_step('is_test_subset')
+    assert tag_map.is_test_subset([set(['test_1'])], [set(['test_1'])])
+    assert tag_map.is_test_subset([set(['test_1'])], [set(['class_1'])])
+    assert tag_map.is_test_subset([set(['test_1', 'foo1'])], [set(['class_1'])])
+    assert not tag_map.is_test_subset([set(['test_1'])], [set(['test_2'])])
+    assert not tag_map.is_test_subset([set(['test_1'])], [set(['class_2'])])
+    assert not tag_map.is_test_subset([set(['test_1', 'foo1'])], [set(['class_2'])])
+    assert not tag_map.is_test_subset([set(['test_1']), set(['test_2'])], [set(['class_1'])])
+    assert tag_map.is_test_subset([set(['class_2'])], [set(['test_1']), set(['test_2'])])
+    assert not tag_map.is_test_subset([set(['fake'])], [set(['class_2'])])
+
+    print_step('__init__')
+    # Just a smoke test to verify the map can parse real files
+    tag_map = FtestTagMap(all_python_files(FTEST_DIR))
+    expected_tags = set(['test_harness_config', 'test_ior_small', 'test_dfuse_mu_perms'])
+    assert len(tag_map.unique_tags().intersection(expected_tags)) == len(expected_tags)
 
     print('Ftest Tags Utility Unit Tests PASSED')
 
