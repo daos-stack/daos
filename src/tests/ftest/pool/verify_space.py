@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2023 Intel Corporation.
+  (C) Copyright 2023-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -265,8 +265,9 @@ class VerifyPoolSpace(TestWithServers):
 
         # (5) Write various amounts of data to the multiple pools on rank 1
         #  - System free space should not change
+        #  Skip container destroy for inaccessible pool later
         for index, block_size in enumerate(('200M', '2G', '7G')):
-            container = self.get_container(pools[1 + index])
+            container = self.get_container(pools[1 + index], register_cleanup=False)
             self._write_data(description, ior_kwargs, container, block_size)
             data_label = f'{description} after writing data using a {block_size} block size'
             self._check_pool_size(
@@ -284,7 +285,8 @@ class VerifyPoolSpace(TestWithServers):
 
         # (7) Write various amounts of data to the single pool on ranks 1 & 2
         #  - System free space should not change
-        container = self.get_container(pools[4])
+        #  Skip container destroy for inaccessible pool later
+        container = self.get_container(pools[4], register_cleanup=False)
         for block_size in ('13G', '3G', '300M'):
             self._write_data(description, ior_kwargs, container, block_size)
             data_label = f'{description} after writing data using a {block_size} block size'
