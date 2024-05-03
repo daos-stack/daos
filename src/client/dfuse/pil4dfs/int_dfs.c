@@ -1788,8 +1788,12 @@ get_fd_redirected(int fd)
 {
 	int i, fd_ret = fd;
 
+	if (atomic_load_relaxed(&daos_inited) == false)
+		return fd;
+
 	if (fd >= FD_FILE_BASE)
 		return fd;
+
 	if (compatible_mode) {
 		d_list_t     *rlink;
 		int           fd_kernel = fd;
