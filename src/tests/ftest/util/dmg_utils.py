@@ -263,7 +263,7 @@ class DmgCommand(DmgCommandBase):
         return self._get_json_result(
             ("storage", "set", "nvme-faulty"), uuid=uuid, force=force)
 
-    def storage_query_list_devices(self, rank=None, health=False):
+    def storage_query_list_devices(self, rank=None, health=False, uuid=None):
         """Get the result of the 'dmg storage query list-devices' command.
 
         Args:
@@ -271,6 +271,7 @@ class DmgCommand(DmgCommandBase):
                 Defaults to None.
             health (bool, optional): Include device health in response.
                 Defaults to false.
+            uuid (str, optional): device UUID. Defaults to None.
 
         Raises:
             CommandFailure: if the dmg storage query list-devices command fails.
@@ -279,7 +280,9 @@ class DmgCommand(DmgCommandBase):
             dict: the dmg json command output converted to a python dictionary
 
         """
-        return self._get_json_result(("storage", "query", "list-devices"), rank=rank, health=health)
+        return self._get_json_result(
+            ("storage", "query", "list-devices"), rank=rank, health=health,
+            uuid=uuid)
 
     def storage_query_list_pools(self, uuid=None, rank=None, verbose=False):
         """Get the result of the 'dmg storage query list-pools' command.
