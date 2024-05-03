@@ -3,7 +3,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
 
 
@@ -20,7 +20,6 @@ class FaultDomain(TestWithServers):
         self.setup_start_servers = False
         super().setUp()
 
-    @skipForTicket("DAOS-7919")
     def test_pools_in_different_domains(self):
         """This aims to:
             Be able to configure daos servers using different fault domains.
