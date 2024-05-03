@@ -329,7 +329,7 @@ class TestRunner():
             slurm_setup (bool): whether to setup slurm before running the test
             control_host (NodeSet): slurm control hosts
             partition_hosts (NodeSet): slurm partition hosts
-            clear_mounts (str): filter used to match the mount points to remove before the test
+            clear_mounts (list): mount points to remove before the test
 
         Returns:
             int: status code: 0 = success, 128 = failure
@@ -600,24 +600,24 @@ class TestRunner():
 
         return 0
 
-    def _clear_mount_points(self, logger, test, mount_filter):
+    def _clear_mount_points(self, logger, test, clear_mounts):
         """Remove existing mount points on each test host.
 
         Args:
             logger (Logger): logger for the messages produced by this method
             test (TestInfo): the test information
-            mount_filter (str): filter used to match the mount points to remove before the test
+            clear_mounts (list): mount points to remove before the test
 
         Returns:
             int: status code: 0 = success, 128 = failure
         """
-        if mount_filter is None:
+        if not clear_mounts:
             return 0
 
         logger.debug("-" * 80)
         hosts = test.host_info.all_hosts
-        logger.debug("Clearing existing mount points matching '%s' on %s:", mount_filter, hosts)
-        command = f" df --type=tmpfs --output=target | grep -E {mount_filter}"
+        logger.debug("Clearing existing mount points on %s: %s", hosts, clear_mounts)
+        command = f" df --type=tmpfs --output=target | grep -E '^({'|'.join(clear_mounts)})$'"
         find_result = run_remote(logger, hosts, command)
         for data in find_result.output:
             if not data.passed:
@@ -1101,7 +1101,7 @@ class TestGroup():
             code_coverage (CodeCoverage): bullseye code coverage
             job_results_dir (str): avocado job-results directory
             logdir (str): base directory in which to place the log file
-            clear_mounts (str): filter used to match the mount points to remove before each test
+            clear_mounts (list): mount points to remove before each test
 
         Returns:
             int: status code indicating any issues running tests

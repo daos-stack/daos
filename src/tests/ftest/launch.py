@@ -438,6 +438,27 @@ def __arg_type_find_size(val):
     return val
 
 
+def __arg_type_mount_point(val):
+    """Parse a mount point argument.
+
+    The mount point does not need to exist on this host.
+
+    Args:
+        val (str): the mount point to parse
+
+    Raises:
+        ArgumentTypeError: if the value is not a string starting with '/'
+
+    Returns:
+        str: the mount point
+    """
+    try:
+        if val.startswith(os.sep):
+            return val
+    except Exception as err:  # pylint: disable=broad-except
+        raise ArgumentTypeError(f'Invalid mount point: {val}') from err
+
+
 def main():
     """Launch DAOS functional tests."""
     # Parse the command line arguments
@@ -509,10 +530,10 @@ def main():
         help="archive host log files in the avocado job-results directory")
     parser.add_argument(
         "-c", "--clear_mounts",
-        action="store",
-        default=None,
-        type=str,
-        help="filter used to match the mount points to remove before running each test")
+        action="append",
+        default=[],
+        type=__arg_type_mount_point,
+        help="mount points to remove before running each test")
     parser.add_argument(
         "-dsd", "--disable_stop_daos",
         action="store_true",
@@ -711,7 +732,9 @@ def main():
         args.slurm_install = True
         args.slurm_setup = True
         args.user_create = True
-        args.clear_mounts = "/mnt/daos"
+        args.clear_mounts.append("/mnt/daos")
+        args.clear_mounts.append("/mnt/daos0")
+        args.clear_mounts.append("/mnt/daos1")
 
     # Setup the Launch object
     launch = Launch(args.name, args.mode, args.slurm_install, args.slurm_setup)
