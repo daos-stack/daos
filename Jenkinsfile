@@ -189,6 +189,7 @@ pipeline {
                         'Functional Hardware Medium TCP': getFunctionalTestStage(
                             name: 'Functional Hardware Medium TCP',
                             pragma_suffix: '-hw-medium',
+                            base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,medium,-provider',
@@ -202,6 +203,7 @@ pipeline {
                         'Functional Hardware Medium UCX': getFunctionalTestStage(
                             name: 'Functional Hardware Medium UCX',
                             pragma_suffix: '-hw-medium',
+                            base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,medium,-provider',
@@ -215,6 +217,7 @@ pipeline {
                         'Functional Hardware Medium TCP Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium TCP Provider',
                             pragma_suffix: '-hw-medium-tcp-provider',
+                            base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_TCP_PROVIDER_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,medium,provider',
@@ -228,6 +231,7 @@ pipeline {
                         'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium UCX Provider',
                             pragma_suffix: '-hw-medium-ucx-provider',
+                            base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,medium,provider',
@@ -241,6 +245,7 @@ pipeline {
                         'Functional Hardware Large TCP': getFunctionalTestStage(
                             name: 'Functional Hardware Large TCP',
                             pragma_suffix: '-hw-large',
+                            base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,large',
@@ -254,6 +259,7 @@ pipeline {
                         'Functional Hardware Large UCX': getFunctionalTestStage(
                             name: 'Functional Hardware Large UCX',
                             pragma_suffix: '-hw-large',
+                            base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,large',
