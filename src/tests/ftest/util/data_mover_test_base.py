@@ -1022,9 +1022,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             pool2 = self.get_pool()
             # Use dfuse as a shared intermediate for serialize + deserialize
             dfuse_cont = self.get_container(pool, oclass=self.ior_cmd.dfs_oclass.value)
-            dfuse = get_dfuse(self, self.dfuse_hosts)
-            start_dfuse(self, dfuse, pool, dfuse_cont)
-            self.serial_tmp_dir = dfuse.mount_dir.value
+            self.dfuse = get_dfuse(self, self.dfuse_hosts)
+            start_dfuse(self, self.dfuse, pool, dfuse_cont)
+            self.serial_tmp_dir = self.dfuse.mount_dir.value
 
             # Serialize/Deserialize container 1 to a new cont2 in pool2
             result = self.run_datamover(

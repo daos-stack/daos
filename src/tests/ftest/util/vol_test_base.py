@@ -1,5 +1,5 @@
 """
-(C) Copyright 2020-2023 Intel Corporation.
+(C) Copyright 2020-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -48,8 +48,8 @@ class VolTestBase(TestWithServers):
             check_results=["FAILED", "stderr"])
 
         env = EnvironmentVariables()
-        env["DAOS_POOL"] = "{}".format(self.pool.uuid)
-        env["DAOS_CONT"] = "{}".format(self.container.uuid)
+        env["DAOS_POOL"] = "{}".format(pool.uuid)
+        env["DAOS_CONT"] = "{}".format(container.uuid)
         env["HDF5_VOL_CONNECTOR"] = "daos"
         env["HDF5_PLUGIN_PATH"] = "{}".format(plugin_path)
         job_manager.assign_hosts(self.hostlist_clients)

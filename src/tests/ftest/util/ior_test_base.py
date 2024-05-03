@@ -1,5 +1,5 @@
 """
-(C) Copyright 2018-2023 Intel Corporation.
+(C) Copyright 2018-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -10,6 +10,7 @@ from ClusterShell.NodeSet import NodeSet
 from dfuse_utils import get_dfuse, start_dfuse
 from exception_utils import CommandFailure
 from general_utils import get_random_string, pcmd
+from host_utils import get_local_host
 from ior_utils import IorCommand
 from job_manager_utils import get_job_manager
 
@@ -116,6 +117,10 @@ class IorTestBase(TestWithServers):
 
         # start dfuse if api is POSIX or HDF5 with vol connector
         if (self.ior_cmd.api.value == "POSIX" or plugin_path) and not self.dfuse:
+            # Use the local host for dfuse if not defined
+            if not self.hostlist_clients:
+                self.hostlist_clients = get_local_host()
+
             # Initialize dfuse instance
             self.dfuse = get_dfuse(self, self.hostlist_clients)
             # Default mount_dir to value in dfuse instance
