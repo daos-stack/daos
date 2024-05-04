@@ -32,13 +32,13 @@ server_config:
       fabric_iface_port: 31417
       log_file: daos_server_1.log
       storage: auto
-        # 0:
-        #   class: dcpm
-        #   scm_mount: /mnt/daos1
-        #   scm_list: [/dev/pmem1]
-        # 1:
-        #   class: nvme
-        #   bdev_list: ["0000:d7:05.5"]  # wolf-313
+      # 0:
+      #   class: dcpm
+      #   scm_mount: /mnt/daos1
+      #   scm_list: [/dev/pmem1]
+      # 1:
+      #   class: nvme
+      #   bdev_list: ["0000:d7:05.5"]  # wolf-313
 
 pool:
   size: 10%
