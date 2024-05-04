@@ -121,5 +121,6 @@ def scons():
     denv.Install('$PREFIX/lib/daos/TESTING/tests', simple_dfs)
     denv.Install('$PREFIX/lib/daos/TESTING/tests', simple_obj)
 
+
 if __name__ == "SCons.Script":
     scons()

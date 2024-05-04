@@ -87,7 +87,7 @@ class Simple(TestWithServers):
         """
         test_name = "simple_dfs"
 
-        # This test reuires a pool and a container.
+        # This test requires a pool and a container.
         pool = self.get_pool(connect=False)
         container = self.get_container(pool=pool)
 
