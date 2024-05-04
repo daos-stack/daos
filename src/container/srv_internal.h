@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -108,6 +108,8 @@ struct cont {
 struct oid_iv_range {
 	uint64_t	oid;
 	daos_size_t	num_oids;
+	daos_size_t     req_num_oids;
+	d_rank_t        req_rank;
 };
 
 /* Container IV structure */
