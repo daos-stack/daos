@@ -1,0 +1,48 @@
+hosts:
+  test_servers: 1
+
+timeout: 300
+
+server_config:
+  name: daos_server
+  engines_per_host: 2
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      # wolf-313
+      # fabric_iface: eth0
+      fabric_iface_port: 31317
+      log_file: daos_server_0.log
+      storage: auto
+      #   0:
+      #     class: dcpm
+      #     scm_mount: /mnt/daos0
+      #     scm_list: [/dev/pmem0]
+      #   1:
+      #     class: nvme
+      #     bdev_list: ["0000:5d:05.5"]  # wolf-313
+    1:
+      targets: 4
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      # wolf-313
+      # fabric_iface: eth0
+      fabric_iface_port: 31417
+      log_file: daos_server_1.log
+      storage: auto
+        # 0:
+        #   class: dcpm
+        #   scm_mount: /mnt/daos1
+        #   scm_list: [/dev/pmem1]
+        # 1:
+        #   class: nvme
+        #   bdev_list: ["0000:d7:05.5"]  # wolf-313
+
+pool:
+  size: 10%
+
+container:
+  type: POSIX
+  control_method: daos
