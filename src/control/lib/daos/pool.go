@@ -62,7 +62,7 @@ type (
 		DisabledTargets  uint32               `json:"disabled_targets"`
 		Version          uint32               `json:"version"`
 		ServiceLeader    uint32               `json:"svc_ldr"`
-		ServiceReplicas  []ranklist.Rank      `json:"svc_reps"`
+		ServiceReplicas  []ranklist.Rank      `json:"svc_reps,omitempty"`
 		Rebuild          *PoolRebuildStatus   `json:"rebuild"`
 		TierStats        []*StorageUsageStats `json:"tier_stats"`
 		EnabledRanks     *ranklist.RankSet    `json:"-"`

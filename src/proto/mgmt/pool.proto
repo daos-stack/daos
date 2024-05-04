@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -237,6 +237,7 @@ message PoolQueryResp {
 	uint32 upgrade_layout_ver = 16; // latest pool global version to upgrade
 	PoolServiceState state = 17; // pool state
 	uint32 svc_ldr = 18; // current raft leader (2.6+)
+	repeated uint32 svc_reps = 19; // service replica ranks
 }
 
 message PoolProperty {

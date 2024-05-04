@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1798,6 +1798,8 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp.active_targets = pool_info.pi_space.ps_ntargets;
 	resp.total_engines = pool_info.pi_nnodes;
 	resp.svc_ldr = pool_info.pi_leader;
+	resp.svc_reps         = req->svc_ranks;
+	resp.n_svc_reps       = req->n_svc_ranks;
 	resp.version = pool_info.pi_map_ver;
 	resp.enabled_ranks = (req->include_enabled_ranks) ? range_list_str : "";
 	resp.disabled_ranks = (req->include_disabled_ranks) ? range_list_str : "";

@@ -245,12 +245,16 @@ func convertPoolInfo(pinfo *C.daos_pool_info_t) (*daos.PoolInfo, error) {
 	poolInfo.TotalEngines = uint32(pinfo.pi_nnodes)
 	poolInfo.ServiceLeader = uint32(pinfo.pi_leader)
 	poolInfo.Version = uint32(pinfo.pi_map_ver)
+	poolInfo.State = daos.PoolServiceStateReady
+	if poolInfo.DisabledTargets > 0 {
+		poolInfo.State = daos.PoolServiceStateDegraded
+	}
 
+	poolInfo.Rebuild = convertPoolRebuildStatus(&pinfo.pi_rebuild_st)
 	poolInfo.TierStats = []*daos.StorageUsageStats{
 		convertPoolSpaceInfo(&pinfo.pi_space, C.DAOS_MEDIA_SCM),
 		convertPoolSpaceInfo(&pinfo.pi_space, C.DAOS_MEDIA_NVME),
 	}
-	poolInfo.Rebuild = convertPoolRebuildStatus(&pinfo.pi_rebuild_st)
 
 	return poolInfo, nil
 }
