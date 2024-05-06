@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -19,8 +19,8 @@ from ClusterShell.NodeSet import NodeSet
 from command_utils_base import (BasicParameter, CommandWithParameters, EnvironmentVariables,
                                 LogParameter, ObjectWithParameters)
 from exception_utils import CommandFailure
-from general_utils import (DaosTestError, change_file_owner, check_file_exists, create_directory,
-                           distribute_files, get_file_listing, get_job_manager_class,
+from file_utils import change_file_owner, check_file_exists, create_directory, distribute_files
+from general_utils import (DaosTestError, get_file_listing, get_job_manager_class,
                            get_subprocess_stdout, run_command, run_pcmd)
 from run_utils import command_as_user
 from user_utils import get_primary_group
@@ -1006,17 +1006,15 @@ class YamlCommand(SubProcessCommand):
                 data = yaml.get_certificate_data(
                     yaml.get_attribute_names(LogParameter))
                 for name in data:
-                    create_directory(
-                        hosts, name, verbose=False, raise_exception=False)
+                    create_directory(hosts, name, verbose=False)
                     for file_name in data[name]:
                         src_file = os.path.join(source, file_name)
                         dst_file = os.path.join(name, file_name)
                         self.log.debug("  %s -> %s", src_file, dst_file)
                         result = distribute_files(
-                            hosts, src_file, dst_file, mkdir=False,
-                            verbose=False, raise_exception=False, sudo=True,
+                            hosts, src_file, dst_file, mkdir=False, verbose=False, sudo=True,
                             owner=self.certificate_owner)
-                        if result.exit_status != 0:
+                        if not result.passed:
                             self.log.info(
                                 "    WARNING: %s copy failed on %s:\n%s",
                                 dst_file, hosts, result)
@@ -1049,14 +1047,11 @@ class YamlCommand(SubProcessCommand):
                 self.log.info(
                     "Copying %s yaml configuration file to %s on %s",
                     self.temporary_file, self.yaml.filename, hosts)
-                try:
-                    distribute_files(
-                        hosts, self.temporary_file, self.yaml.filename,
-                        verbose=False, sudo=True)
-                except DaosTestError as error:
+                result = distribute_files(
+                    hosts, self.temporary_file, self.yaml.filename, verbose=False, sudo=True)
+                if not result.passed:
                     raise CommandFailure(
-                        "ERROR: Copying yaml configuration file to {}: "
-                        "{}".format(hosts, error)) from error
+                        f"ERROR: Copying yaml configuration file to {result.failed_hosts}")
 
     def verify_socket_directory(self, user, hosts):
         """Verify the domain socket directory is present and owned by this user.
@@ -1074,20 +1069,22 @@ class YamlCommand(SubProcessCommand):
             directory = self.get_user_file()
             self.log.info(
                 "Verifying %s socket directory: %s", self.command, directory)
-            status, nodes = check_file_exists(hosts, directory, user)
-            if not status:
+            result = check_file_exists(hosts, directory, user)
+            if not result.passed:
                 self.log.info(
                     "%s: creating socket directory %s for user %s on %s",
-                    self.command, directory, user, nodes)
-                try:
-                    create_directory(nodes, directory, sudo=True)
-                    change_file_owner(nodes, directory, user, get_primary_group(user), sudo=True)
-                except DaosTestError as error:
+                    self.command, directory, user, result.failed_hosts)
+                mkdir_result = create_directory(result.failed_hosts, directory, sudo=True)
+                if not mkdir_result.passed:
                     raise CommandFailure(
-                        "{}: error setting up missing socket directory {} for "
-                        "user {} on {}:\n{}".format(
-                            self.command, directory, user, nodes,
-                            error)) from error
+                        f"{self.command}: creating socket directory {directory} for user {user} on "
+                        f"{mkdir_result.failed_hosts}")
+                chown_result = change_file_owner(
+                    mkdir_result.failed_hosts, directory, user, get_primary_group(user), sudo=True)
+                if not chown_result.passed:
+                    raise CommandFailure(
+                        f"{self.command}: changing socket directory {directory} ownership for user "
+                        f"{user} on {chown_result.failed_hosts}")
 
     def get_user_file(self):
         """Get the file defined in the yaml file that must be owned by the user.

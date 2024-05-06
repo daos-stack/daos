@@ -9,7 +9,8 @@ from collections import OrderedDict
 
 from cmocka_utils import CmockaUtils
 from dfuse_test_base import DfuseTestBase
-from general_utils import create_directory, get_log_file
+from file_utils import create_directory
+from general_utils import get_log_file
 from job_manager_utils import get_job_manager
 
 
@@ -78,7 +79,9 @@ class DaosCoreTestDfuse(DfuseTestBase):
         else:
             # Bypass, simply create a remote directory and use that.
             mount_dir = '/tmp/dfuse-test'
-            create_directory(self.hostlist_clients, mount_dir)
+            result = create_directory(self.hostlist_clients, mount_dir)
+            if not result.passed:
+                self.fail(f"Error creating directory {mount_dir} on {result.failed_hosts}")
 
         cmocka_utils = CmockaUtils(
             self.hostlist_clients, "dfuse", self.outputdir, self.test_dir, self.log)
@@ -116,7 +119,9 @@ class DaosCoreTestDfuse(DfuseTestBase):
         else:
             # make D_IL_MOUNT_POINT different from mount_dir so it tests a non-DAOS filesystem
             dummy_dir = '/tmp/dummy'
-            create_directory(self.hostlist_clients, dummy_dir)
+            result = create_directory(self.hostlist_clients, dummy_dir)
+            if not result.passed:
+                self.fail(f"Error creating directory {dummy_dir} on {result.failed_hosts}")
             daos_test_env['D_IL_MOUNT_POINT'] = dummy_dir
         if cache_mode != 'writeback':
             command.append('--metadata')

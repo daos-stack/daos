@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -536,3 +536,153 @@ def stop_processes(log, hosts, pattern, verbose=True, timeout=60, exclude=None, 
     if processes_running:
         log.debug("Processes still running on %s that match: %s", processes_running, pattern_match)
     return processes_detected, processes_running
+
+
+class LocalTask():
+    """Mock ClusterShell.Task to all subprocess.run() to return a RemoteCommandResult."""
+
+    def __init__(self):
+        """Initialize a LocalTask object."""
+        self._host = gethostname().split(".")[0]
+        self._command_output = {}
+        self._return_codes = {}
+        self._timeout_hosts = set()
+
+    def _reset(self):
+        """Reset the command results."""
+        self._command_output = {}
+        self._return_codes = {}
+        self._timeout_hosts.clear()
+
+    def run(self, command, timeout=None):
+        """Run the command locally.
+
+        Args:
+            command (str): command to run.
+            timeout (int, optional): number of seconds to wait for the command to complete.
+                Defaults to None.
+        """
+        self._reset()
+        kwargs = {
+            "encoding": "utf-8",
+            "shell": False,
+            "check": False,
+            "timeout": timeout,
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.STDOUT,
+        }
+        try:
+            # pylint: disable=subprocess-run-check
+            result = subprocess.run(shlex.split(command), **kwargs)     # nosec
+            self._add_command_output('stdout', result.stdout)
+            self._add_command_output('stderr', result.stderr)
+            self._return_codes[result.returncode] = [self._host]
+
+        except subprocess.TimeoutExpired:
+            # Raised if command times out
+            self._add_command_output('stdout', result.stdout)
+            self._add_command_output('stderr', result.stderr)
+            self._timeout_hosts.add(self._host)
+
+        except KeyboardInterrupt as error:
+            # User Ctrl-C
+            stdout = f"Command '{command}' interrupted by user\n" + str(error)
+            self._add_command_output('stdout', stdout)
+            self._add_command_output('stderr', None)
+            self._return_codes[1] = [self._host]
+
+        except Exception as error:      # pylint: disable=broad-except
+            # Catch all
+            stdout = f"Command '{command}' encountered unknown error\n" + str(error)
+            self._add_command_output('stdout', str(error))
+            self._add_command_output('stderr', None)
+            self._return_codes[1] = [self._host]
+
+    def _add_command_output(self, output_type, output):
+        """Add the specified command output.
+
+        Args:
+            output_type (str): 'stdout' or 'stderr'
+            output (str): command output
+        """
+        self._command_output[output_type] = {}
+        if output:
+            self._command_output[output_type][self._host] = output
+
+    def iter_retcodes(self):
+        """Iterate over return codes.
+
+        Yields:
+            tuple: return code, hosts
+        """
+        for rc, hosts in self._return_codes.items():
+            yield rc, hosts
+
+    def iter_keys_timeout(self):
+        """Iterate over timed out keys.
+
+        Yields:
+            str: timed out hosts
+        """
+        yield from self._timeout_hosts
+
+    def iter_buffers(self, match_keys=None):
+        """Iterate over stdout.
+
+        Args:
+            match_keys (list, optional): filter to apply to stdout. Defaults to None.
+
+        Yields:
+            tuple: stdout, hosts
+        """
+        for host, output in self._command_output['stdout'].items():
+            if not match_keys or host in match_keys:
+                yield output, [host]
+
+    def iter_errors(self, match_keys=None):
+        """Iterate over stderr.
+
+        Args:
+            match_keys (list, optional): filter to apply to stderr. Defaults to None.
+
+        Yields:
+            tuple: stderr, hosts
+        """
+        for host, output in self._command_output['stderr'].items():
+            if not match_keys or host in match_keys:
+                yield output, [host]
+
+
+def run_command(log, command, verbose=True, timeout=None):
+    """Run the command on the local host.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        command (str): command from which to obtain the output
+        capture_output(bool, optional): whether or not to include the command output in the
+            subprocess.CompletedProcess.stdout returned by this method. Defaults to True.
+        verbose (bool, optional): if set log the output of the command (capture_output must also be
+            set). Defaults to True.
+        timeout (int, optional): number of seconds to wait for the command to complete.
+            Defaults to None.
+
+    Returns:
+        RemoteCommandResult: a grouping of the command results from the same hosts with the same
+            return status
+    """
+    task = LocalTask()
+    if verbose:
+        if timeout is None:
+            log.debug("Running locally without a timeout: %s", command)
+        else:
+            log.debug("Running locally with a %s second timeout: %s", timeout, command)
+    task.run(command=command, timeout=timeout)
+    results = RemoteCommandResult(command, task)
+    if verbose:
+        results.log_output(log)
+    else:
+        # Always log any failed commands
+        for data in results.output:
+            if not data.passed:
+                log_result_data(log, data)
+    return results
