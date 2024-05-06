@@ -191,4 +191,3 @@ class OSAOnlineDrain(OSAUtils):
         """
         self.log.info("Online Drain : With Mdtest")
         self.run_online_drain_test(1, app_name="mdtest")
-
