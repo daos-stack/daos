@@ -33,7 +33,7 @@ dc_debug_set_params(tse_task_t *task)
 	int				rc;
 
 	args = dc_task_get_args(task);
-	rc = dc_mgmt_sys_attach(args->grp, &cp_arg.sys);
+	rc   = dc_mgmt_sys_attach(args->grp, &cp_arg.sys);
 	if (rc != 0) {
 		D_ERROR("failed to attach to grp %s, rc "DF_RC"\n", args->grp,
 			DP_RC(rc));

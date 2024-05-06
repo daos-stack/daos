@@ -43,7 +43,7 @@ static char		modules[MAX_MODULE_OPTIONS + 1];
 static unsigned int	nr_threads;
 
 /** DAOS system name (corresponds to crt group ID) */
-static char	       *daos_sysname = DAOS_DEFAULT_SYS_NAME;
+char                   *daos_sysname = DAOS_DEFAULT_SYS_NAME;
 
 /** Storage node hostname */
 char		        dss_hostname[DSS_HOSTNAME_MAX_LEN];
@@ -1030,16 +1030,16 @@ parse(int argc, char **argv)
 		case 'f':
 			rc = arg_strtoul(optarg, &dss_core_offset, "\"-f\"");
 			break;
-		case 'g':
-			if (strnlen(optarg, DAOS_SYS_NAME_MAX + 1) >
-			    DAOS_SYS_NAME_MAX) {
-				printf("DAOS system name must be at most "
-				       "%d bytes\n", DAOS_SYS_NAME_MAX);
+		case 'g': {
+			if (strnlen(optarg, DAOS_SYS_NAME_MAX + 1) > DAOS_SYS_NAME_MAX) {
+				printf("DAOS system name must be at most %d bytes\n",
+				       DAOS_SYS_NAME_MAX);
 				rc = -DER_INVAL;
 				break;
 			}
 			daos_sysname = optarg;
 			break;
+		}
 		case 's':
 			dss_storage_path = optarg;
 			break;
