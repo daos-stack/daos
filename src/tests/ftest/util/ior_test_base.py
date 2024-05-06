@@ -151,8 +151,9 @@ class IorTestBase(TestWithServers):
                                fail_on_warning=fail_on_warning,
                                out_queue=out_queue, env=env)
         finally:
-            if stop_dfuse:
+            if stop_dfuse and self.dfuse:
                 self.dfuse.stop()
+                self.dfuse = None
 
         return out
 
