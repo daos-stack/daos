@@ -410,13 +410,12 @@ func (srv *server) setupGrpc() error {
 	clientNetHints := make([]*mgmtpb.ClientNetHint, 0, len(providers))
 	for i, p := range providers {
 		clientNetHints = append(clientNetHints, &mgmtpb.ClientNetHint{
-			Provider:        p,
-			CrtCtxShareAddr: srv.cfg.Fabric.CrtCtxShareAddr,
-			CrtTimeout:      srv.cfg.Fabric.CrtTimeout,
-			NetDevClass:     uint32(srv.netDevClass[i]),
-			SrvSrxSet:       srxSetting,
-			ProviderIdx:     uint32(i),
-			EnvVars:         srv.cfg.ClientEnvVars,
+			Provider:    p,
+			CrtTimeout:  srv.cfg.Fabric.CrtTimeout,
+			NetDevClass: uint32(srv.netDevClass[i]),
+			SrvSrxSet:   srxSetting,
+			ProviderIdx: uint32(i),
+			EnvVars:     srv.cfg.ClientEnvVars,
 		})
 	}
 	srv.mgmtSvc.clientNetworkHint = clientNetHints
@@ -443,6 +442,7 @@ func (srv *server) registerEvents() {
 
 			if err := srv.mgmtSvc.updateFabricProviders([]string{srv.cfg.Fabric.Provider}, srv.pubSub); err != nil {
 				srv.log.Errorf(err.Error())
+				return err
 			}
 
 			srv.mgmtSvc.startLeaderLoops(ctx)
@@ -575,12 +575,6 @@ func Start(log logging.Logger, cfg *config.Server) error {
 	if err != nil {
 		return err
 	}
-
-	hwprovFini, err := hwprov.Init(log)
-	if err != nil {
-		return err
-	}
-	defer hwprovFini()
 
 	if err := waitFabricReady(ctx, log, cfg); err != nil {
 		return err
