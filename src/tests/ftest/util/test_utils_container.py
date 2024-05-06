@@ -43,8 +43,7 @@ def add_container(test, pool, namespace=CONT_NAMESPACE, create=True, daos=None, 
         container.update_params(**params)
     if create:
         container.create()
-    if container.register_cleanup.value is True:
-        test.register_cleanup(remove_container, test=test, container=container)
+    test.register_cleanup(remove_container, test=test, container=container)
     return container
 
 
@@ -371,8 +370,6 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         self.daos_timeout = BasicParameter(None)
         self.label = BasicParameter(None, "TestContainer")
         self.label_generator = label_generator
-
-        self.register_cleanup = BasicParameter(True)  # call register_cleanup by default
 
         self.container = None
         self.uuid = None

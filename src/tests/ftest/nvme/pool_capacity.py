@@ -104,9 +104,8 @@ class NvmePoolCapacity(TestWithServers):
                 threads = []
                 # Create containers with threads because we'll be creating many containers, which
                 # will take too long if we create them serially.
-                # Skip register_cleanup for these to save teardown time.
                 for _ in range(num_cont):
-                    kwargs = {"pool": self.pool[-1], "register_cleanup": False}
+                    kwargs = {"pool": self.pool[-1]}
                     threads.append(threading.Thread(target=self.get_container, kwargs=kwargs))
                 for thread in threads:
                     thread.start()
