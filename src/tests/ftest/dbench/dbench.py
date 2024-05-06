@@ -59,3 +59,4 @@ class DbenchTest(DfuseTestBase):
         self.container.destroy()
         # destroy pool
         self.pool.destroy()
+
