@@ -94,7 +94,7 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
                     "size": self.params.get("total", path="/run/exp_vals/scm/*")
                 },
                 {
-                    "media_type": "NVME",
+                    "tier_name": "NVME",
                     "size": self.params.get("total", path="/run/exp_vals/nvme/*")
                 }
             ]
