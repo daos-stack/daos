@@ -215,4 +215,3 @@ class WalMetrics(TestWithTelemetry):
             self.fail('WAL replay metrics verification failed after check pointing completion')
 
         self.log_step('Test passed')
-
