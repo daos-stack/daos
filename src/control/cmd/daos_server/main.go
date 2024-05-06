@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path"
 
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
@@ -41,7 +40,6 @@ type execTestFn func() error
 type mainOpts struct {
 	AllowProxy bool `long:"allow-proxy" description:"Allow proxy configuration via environment"`
 	// Minimal set of top-level options
-	ConfigPath string `short:"o" long:"config" description:"Server config file path"`
 	// TODO(DAOS-3129): This should be -d, but it conflicts with the start
 	// subcommand's -d flag when we default to running it.
 	Debug   bool `short:"b" long:"debug" description:"Enable debug output"`
@@ -167,27 +165,23 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 		}
 
 		if cfgCmd, ok := cmd.(cfgLoader); ok {
-			if opts.ConfigPath == "" {
-				log.Debugf("Using build config directory %q", build.ConfigDir)
-				opts.ConfigPath = path.Join(build.ConfigDir, defaultConfigFile)
+			if optCfgCmd, ok := cmd.(optionalCfgLoader); ok {
+				optCfgCmd.setOptional()
 			}
 
-			if err := cfgCmd.loadConfig(opts.ConfigPath); err != nil {
+			if err := cfgCmd.loadConfig(); err != nil {
 				return errors.Wrapf(err, "failed to load config from %s",
 					cfgCmd.configPath())
-			}
-			if _, err := os.Stat(opts.ConfigPath); err == nil {
+			} else if cfgCmd.configPath() != "" {
 				log.Infof("DAOS Server config loaded from %s", cfgCmd.configPath())
-			}
 
-			if ovrCmd, ok := cfgCmd.(cliOverrider); ok {
-				if err := ovrCmd.setCLIOverrides(); err != nil {
-					return errors.Wrap(err, "failed to set CLI config overrides")
+				if ovrCmd, ok := cfgCmd.(cliOverrider); ok {
+					if err := ovrCmd.setCLIOverrides(); err != nil {
+						return errors.Wrap(err,
+							"failed to set CLI config overrides")
+					}
 				}
 			}
-		} else if opts.ConfigPath != "" {
-			return errors.Errorf("DAOS Server config filepath has been supplied but " +
-				"this command will not use it")
 		}
 
 		if err := cmd.Execute(cmdArgs); err != nil {

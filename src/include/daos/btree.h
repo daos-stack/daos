@@ -340,6 +340,9 @@ typedef struct {
 	 *			cannot make inplace change, should call
 	 *			rec_free() to release the original record
 	 *			and rec_alloc() to create a new record.
+	 *		1
+	 *			cannot make inplace change, but rec_free()
+	 *			and rec_alloc() for replacing are done.
 	 *		-ve	error code
 	 */
 	int		(*to_rec_update)(struct btr_instance *tins,
