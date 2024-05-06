@@ -264,6 +264,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
                 create_cont=False,
                 intercept=intercept,
                 display_space=False,
+                stop_dfuse=False
             )
             ior_metrics = self.ior_cmd.get_ior_metrics(ior_output)
             for metrics in ior_metrics:

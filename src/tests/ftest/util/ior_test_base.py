@@ -50,6 +50,10 @@ class IorTestBase(TestWithServers):
         self.subprocess = self.params.get("subprocess", '/run/ior/*', False)
         self.ior_timeout = self.params.get("ior_timeout", '/run/ior/*', None)
 
+        # Use the local host as a client for hostfile/dfuse if the client list is empty
+        if not self.hostlist_clients:
+            self.hostlist_clients = get_local_host()
+
     def create_pool(self):
         """Create a TestPool object to use with ior."""
         # Get the pool params and create a pool
@@ -74,9 +78,10 @@ class IorTestBase(TestWithServers):
         return self.container
 
     def run_ior_with_pool(self, intercept=None, display_space=True, test_file_suffix="",
-                          test_file="daos:/testFile", create_pool=True, create_cont=True,
-                          plugin_path=None, timeout=None, fail_on_warning=False, mount_dir=None,
-                          out_queue=None, env=None):
+                          test_file="daos:/testFile", create_pool=True,
+                          create_cont=True, stop_dfuse=True, plugin_path=None,
+                          timeout=None, fail_on_warning=False,
+                          mount_dir=None, out_queue=None, env=None):
         # pylint: disable=too-many-arguments
         """Execute ior with optional overrides for ior flags and object_class.
 
@@ -95,6 +100,8 @@ class IorTestBase(TestWithServers):
             create_pool (bool, optional): If it is true, create pool and
                 container else just run the ior. Defaults to True.
             create_cont (bool, optional): Create new container. Default is True
+            stop_dfuse (bool, optional): Stop dfuse after ior command is
+                finished. Default is True.
             plugin_path (str, optional): HDF5 vol connector library path.
                 This will enable dfuse (xattr) working directory which is
                 needed to run vol connector for DAOS. Default is None.
@@ -117,10 +124,6 @@ class IorTestBase(TestWithServers):
 
         # start dfuse if api is POSIX or HDF5 with vol connector
         if (self.ior_cmd.api.value == "POSIX" or plugin_path) and not self.dfuse:
-            # Use the local host for dfuse if not defined
-            if not self.hostlist_clients:
-                self.hostlist_clients = get_local_host()
-
             # Initialize dfuse instance
             self.dfuse = get_dfuse(self, self.hostlist_clients)
             # Default mount_dir to value in dfuse instance
@@ -141,9 +144,17 @@ class IorTestBase(TestWithServers):
         self.ior_cmd.test_file.update("".join([test_file, test_file_suffix]))
         job_manager = self.get_ior_job_manager_command()
         job_manager.timeout = timeout
-        return self.run_ior(
-            job_manager, self.processes, intercept=intercept, display_space=display_space,
-            plugin_path=plugin_path, fail_on_warning=fail_on_warning, out_queue=out_queue, env=env)
+        try:
+            out = self.run_ior(job_manager, self.processes,
+                               intercept=intercept,
+                               display_space=display_space, plugin_path=plugin_path,
+                               fail_on_warning=fail_on_warning,
+                               out_queue=out_queue, env=env)
+        finally:
+            if stop_dfuse:
+                self.dfuse.stop()
+
+        return out
 
     def update_ior_cmd_with_pool(self, create_cont=True):
         """Update ior_cmd with pool.

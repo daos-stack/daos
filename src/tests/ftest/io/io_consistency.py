@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
@@ -48,7 +48,7 @@ class IoConsistency(IorTestBase):
             if api_flag[0] == "POSIX":
                 # if api is POSIX do not create new pool and container.
                 # Also do not stop dfuse when ior command is complete.
-                self.run_ior_with_pool(create_pool=False)
+                self.run_ior_with_pool(create_pool=False, stop_dfuse=False)
             else:
                 self.run_ior_with_pool()
 

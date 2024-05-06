@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2023 Intel Corporation.
+  (C) Copyright 2023-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -565,9 +565,11 @@ class UpgradeDowngradeBase(IorTestBase):
         if ior_api in ("DFS", "POSIX"):
             self.log.info("(3.a)==Run non-HDF5 IOR write and read.")
             self.ior_cmd.flags.update(iorflags_write)
-            self.run_ior_with_pool(timeout=ior_timeout, create_pool=True, create_cont=True)
+            self.run_ior_with_pool(
+                timeout=ior_timeout, create_pool=True, create_cont=True, stop_dfuse=False)
             self.ior_cmd.flags.update(iorflags_read)
-            self.run_ior_with_pool(timeout=ior_timeout, create_pool=False, create_cont=False)
+            self.run_ior_with_pool(
+                timeout=ior_timeout, create_pool=False, create_cont=False, stop_dfuse=False)
 
         # (3.b)ior hdf5
         elif ior_api == "HDF5":
@@ -576,11 +578,11 @@ class UpgradeDowngradeBase(IorTestBase):
             self.ior_cmd.flags.update(iorflags_write)
             self.run_ior_with_pool(
                 plugin_path=hdf5_plugin_path, mount_dir=mount_dir,
-                timeout=ior_timeout, create_pool=True, create_cont=True)
+                timeout=ior_timeout, create_pool=True, create_cont=True, stop_dfuse=False)
             self.ior_cmd.flags.update(iorflags_read)
             self.run_ior_with_pool(
                 plugin_path=hdf5_plugin_path, mount_dir=mount_dir,
-                timeout=ior_timeout, create_pool=False, create_cont=False)
+                timeout=ior_timeout, create_pool=False, create_cont=False, stop_dfuse=False)
         else:
             self.fail("##(3)Unsupported IOR api {}".format(ior_api))
 
@@ -644,12 +646,13 @@ class UpgradeDowngradeBase(IorTestBase):
         self.log.info("(7.3)====Verifying container data IOR read.")
         if ior_api == "DFS":
             self.log.info("(7.a)==Run IOR DFS read verification.")
-            self.run_ior_with_pool(timeout=ior_timeout, create_pool=False, create_cont=False)
+            self.run_ior_with_pool(
+                timeout=ior_timeout, create_pool=False, create_cont=False, stop_dfuse=False)
         elif ior_api == "HDF5":
             self.log.info("(7.b)==Run IOR HDF5 read verification.")
             self.run_ior_with_pool(
                 plugin_path=hdf5_plugin_path, mount_dir=mount_dir,
-                timeout=ior_timeout, create_pool=False, create_cont=False)
+                timeout=ior_timeout, create_pool=False, create_cont=False, stop_dfuse=False)
         else:
             self.log.info("(7.c)==Run Symlink check after upgraded.")
             result = run_pcmd(
