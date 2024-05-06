@@ -140,7 +140,7 @@ def check_ioctl_def(context, ctype):
     context.Message(f'Checking if fuse ioctl is type {ctype} ')
 
     # pylint: disable-next=consider-using-f-string
-    src = """#include <fuse3/fuse_lowlevel.h>
+    src = """#include <fused/fuse_lowlevel.h>
 
 extern void
 my_ioctl (fuse_req_t req, fuse_ino_t ino, %s cmd,
@@ -173,22 +173,6 @@ def configure_fuse(cenv):
         Exit(2)
 
     check.Finish()
-
-
-def find_static_fuse(cenv):
-    """Find and copy static fuse library"""
-
-    fuse_prefix = '/usr'
-    if os.path.exists(cenv.subst('$FUSE_PREFIX')):
-        fuse_prefix = cenv.subst('$FUSE_PREFIX')
-
-    for path in ['lib64', 'lib/x86_64-linux-gnu', 'lib']:
-        fuselib = os.path.join(fuse_prefix, path, "libfuse3.a")
-        if os.path.exists(fuselib):
-            return [File(fuselib)]
-
-    print("Could not find libfuse3.a")
-    return []
 
 
 def scons():
@@ -229,14 +213,8 @@ def scons():
     cenv.AppendUnique(LIBS=['dfs', 'duns'])
 
     cenv.require('hwloc')
-    if cenv.get('STATIC_FUSE'):
-        cenv.require('fuse', headers_only=True)
-        static_fuse = find_static_fuse(cenv)
-        extra_libs = ['dl']
-    else:
-        cenv.require('fuse')
-        static_fuse = []
-        extra_libs = ['dl']
+    cenv.require('fused')
+    extra_libs = ['dl']
 
     configure_fuse(cenv)
 
@@ -246,7 +224,7 @@ def scons():
     for src in OPS_SRC:
         dfuse_obj += cenv.Object(os.path.join('ops', f'{src}.c'))
     cenv.AppendUnique(LIBS=['gurt'] + extra_libs)
-    dfuse_bin = cenv.d_program('dfuse/dfuse', common + dfuse_obj + static_fuse)
+    dfuse_bin = cenv.d_program('dfuse/dfuse', common + dfuse_obj)
 
     Default(dfuse_bin)
 

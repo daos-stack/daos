@@ -6,7 +6,7 @@
 
 #include <pthread.h>
 
-#include <fuse3/fuse_lowlevel.h>
+#include <fused/fuse_lowlevel.h>
 #define D_LOGFAC DD_FAC(dfuse)
 #include "dfuse.h"
 
