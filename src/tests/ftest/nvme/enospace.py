@@ -589,4 +589,3 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
 
         # Run last IO
         self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)
-
