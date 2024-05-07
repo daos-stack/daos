@@ -7,12 +7,12 @@
 import os
 import re
 
+from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
-from dfuse_test_base import DfuseTestBase
-from dfuse_utils import Pil4dfsDcacheCmd
+from dfuse_utils import Pil4dfsDcacheCmd, get_dfuse, start_dfuse
 
 
-class Pil4dfsDcache(DfuseTestBase):
+class Pil4dfsDcache(TestWithServers):
     """Test class Description: Runs set of unit test on pil4dfs directory cache.
 
     :avocado: recursive
@@ -357,15 +357,21 @@ class Pil4dfsDcache(DfuseTestBase):
         super().setUp()
 
     def _mount_dfuse(self):
-        """Mount a DFuse mount point."""
+        """Mount a DFuse mount point.
+
+        Returns:
+            Dfuse: a Dfuse object
+        """
         self.log.info("Creating DAOS pool")
-        self.add_pool()
+        pool = self.get_pool()
 
         self.log.info("Creating DAOS container")
-        self.add_container(self.pool)
+        container = self.get_container(pool)
 
         self.log.info("Mounting DFuse mount point")
-        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
+        dfuse = get_dfuse(self, self.hostlist_clients)
+        start_dfuse(self, dfuse, pool, container)
+        return dfuse
 
     def _update_cmd_env(self, env, mnt, **kwargs):
         """Update the Pil4dfsDcacheCmd command environment.
@@ -446,12 +452,12 @@ class Pil4dfsDcache(DfuseTestBase):
         :avocado: tags=Pil4dfsDcache,test_pil4dfs_dcache_enabled
         """
         self.log_step("Mount a DFuse mount point")
-        self._mount_dfuse()
+        dfuse = self._mount_dfuse()
 
         self.log.info("Running pil4dfs_dcache command")
         hostname = self.hostlist_clients[0]
         host = NodeSet(hostname)
-        mnt = self.dfuse.mount_dir.value
+        mnt = dfuse.mount_dir.value
         cmd = Pil4dfsDcacheCmd(host, self.prefix)
         self._update_cmd_env(cmd.env, mnt)
 
@@ -480,12 +486,12 @@ class Pil4dfsDcache(DfuseTestBase):
         :avocado: tags=Pil4dfsDcache,test_pil4dfs_dcache_disabled
         """
         self.log_step("Mount a DFuse mount point")
-        self._mount_dfuse()
+        dfuse = self._mount_dfuse()
 
         self.log.info("Running pil4dfs_dcache command")
         hostname = self.hostlist_clients[0]
         host = NodeSet(hostname)
-        mnt = self.dfuse.mount_dir.value
+        mnt = dfuse.mount_dir.value
         cmd = Pil4dfsDcacheCmd(host, self.prefix)
         env_kwargs = {"D_IL_DCACHE_REC_TIMEOUT": 0}
         self._update_cmd_env(cmd.env, mnt, **env_kwargs)
@@ -515,12 +521,12 @@ class Pil4dfsDcache(DfuseTestBase):
         :avocado: tags=Pil4dfsDcache,test_pil4dfs_dcache_gc_disabled
         """
         self.log_step("Mount a DFuse mount point")
-        self._mount_dfuse()
+        dfuse = self._mount_dfuse()
 
         self.log_step("Run pil4dfs_dcache command")
         hostname = self.hostlist_clients[0]
         host = NodeSet(hostname)
-        mnt = self.dfuse.mount_dir.value
+        mnt = dfuse.mount_dir.value
         cmd = Pil4dfsDcacheCmd(host, self.prefix)
         env_kwargs = {"D_IL_DCACHE_GC_PERIOD": 0}
         self._update_cmd_env(cmd.env, mnt, **env_kwargs)
