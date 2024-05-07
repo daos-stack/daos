@@ -3,14 +3,16 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+
+from apricot import TestWithServers
 from command_utils_base import CommandFailure
-from dfuse_test_base import DfuseTestBase
+from dfuse_utils import get_dfuse, start_dfuse
 from general_utils import get_log_file, list_to_str
 from job_manager_utils import get_job_manager
 from macsio_util import MacsioCommand
 
 
-class MacsioTest(DfuseTestBase):
+class MacsioTest(TestWithServers):
     """Test class Description: Runs a basic MACSio test.
 
     :avocado: recursive
@@ -43,7 +45,7 @@ class MacsioTest(DfuseTestBase):
 
         return macsio
 
-    def run_macsio(self, macsio, processes, plugin=None, slots=None, working_dir=None):
+    def run_macsio(self, macsio, hosts, processes, plugin=None, slots=None, working_dir=None):
         """Run the macsio test.
 
         Parameters for the macsio command are obtained from the test yaml file,
@@ -51,6 +53,7 @@ class MacsioTest(DfuseTestBase):
 
         Args:
             macsio (MacsioCommand): object defining the macsio command
+            hosts (NodeSet): hosts on which to run macsio
             processes (int): total number of processes to use to run macsio
             plugin (str, optional): plugin path to use with DAOS VOL connector
             slots (int, optional): slots per host to specify in the hostfile. Defaults to None.
@@ -68,7 +71,7 @@ class MacsioTest(DfuseTestBase):
             env["HDF5_PLUGIN_PATH"] = str(plugin)
         job_manager = get_job_manager(self)
         job_manager.job = macsio
-        job_manager.assign_hosts(self.hostlist_clients, self.workdir, slots)
+        job_manager.assign_hosts(hosts, self.workdir, slots)
         job_manager.assign_processes(processes)
         job_manager.assign_environment(env)
         job_manager.working_dir.value = working_dir
@@ -80,7 +83,7 @@ class MacsioTest(DfuseTestBase):
 
         except CommandFailure as error:
             self.log.error("MACSio Failed: %s", str(error))
-            self.fail("MACSio Failed.\n")
+            self.fail("MACSio Failed")
 
         return result
 
@@ -103,18 +106,21 @@ class MacsioTest(DfuseTestBase):
         processes = self.params.get("processes", "/run/macsio/*", len(self.hostlist_clients))
 
         # Create a pool
+        self.log_step('Create a single pool')
         pool = self.get_pool()
         pool.display_pool_daos_space()
 
         # Create a container
+        self.log_step('Create a single container')
         container = self.get_container(pool)
 
         # Run macsio
-        self.log.info("Running MACSio")
+        self.log_step("Running MACSio")
         macsio = self.get_macsio_command(pool.uuid, list_to_str(pool.svc_ranks), container.uuid)
-        status = macsio.check_results(self.run_macsio(macsio, processes), self.hostlist_clients)
-        if status:
-            self.log.info("Test passed")
+        result = self.run_macsio(macsio, self.hostlist_clients, processes)
+        if not macsio.check_results(result, self.hostlist_clients):
+            self.fail("MACSio failed")
+        self.log.info("Test passed")
 
     def test_macsio_daos_vol(self):
         """JIRA ID: DAOS-4983.
@@ -136,23 +142,30 @@ class MacsioTest(DfuseTestBase):
         processes = self.params.get("processes", "/run/macsio/*", len(self.hostlist_clients))
 
         # Create a pool
+        self.log_step('Create a single pool')
         pool = self.get_pool()
         pool.display_pool_daos_space()
 
         # Create a container
+        self.log_step('Create a single container')
         container = self.get_container(pool)
 
         # Create dfuse mount point
-        self.start_dfuse(self.hostlist_clients, pool, container)
+        self.log_step('Starting dfuse')
+        dfuse = get_dfuse(self, self.hostlist_clients)
+        start_dfuse(self, dfuse, pool, container)
 
         # VOL needs to run from a file system that supports xattr.  Currently
         # nfs does not have this attribute so it was recommended to create and
         # use a dfuse dir and run vol tests from there.
+        # self.job_manager.working_dir.value = dfuse.mount_dir.value
+
         # Run macsio
-        self.log.info("Running MACSio with DAOS VOL connector")
+        self.log_step("Running MACSio with DAOS VOL connector")
         macsio = self.get_macsio_command(pool.uuid, list_to_str(pool.svc_ranks), container.uuid)
-        status = macsio.check_results(
-            self.run_macsio(macsio, processes, plugin_path, self.dfuse.mount_dir.value),
-            self.hostlist_clients)
-        if status:
-            self.log.info("Test passed")
+        result = self.run_macsio(
+            macsio, self.hostlist_clients, processes, plugin_path,
+            working_dir=dfuse.mount_dir.value)
+        if not macsio.check_results(result, self.hostlist_clients):
+            self.fail("MACSio failed")
+        self.log.info("Test passed")

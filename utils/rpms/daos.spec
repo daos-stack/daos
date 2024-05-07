@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.5.101
-Release:       4%{?relval}%{?dist}
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -65,6 +65,7 @@ BuildRequires: protobuf-c-devel
 BuildRequires: lz4-devel
 BuildRequires: capstone-devel
 %endif
+BuildRequires: libaio-devel
 BuildRequires: spdk-devel >= 22.01.2
 %if (0%{?rhel} >= 8)
 BuildRequires: isa-l-devel
@@ -587,6 +588,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri May 03 2024 Lei Huang <lei.huang@intel.com> 2.5.101-5
+- Add libaio as a dependent package
+
 * Fri Apr 05 2024 Fan Yong <fan.yong@intel.com> 2.5.101-4
 - Catastrophic Recovery
 

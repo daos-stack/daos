@@ -71,7 +71,7 @@ class NvmeIoVerification(IorTestBase):
                     self.ior_cmd.block_size.update(ior_block_size)
                 container = self.get_container(self.pool)
                 container.open()  # Workaround for pydaos handles
-                self.ior_cmd.set_daos_params(self.server_group, self.pool, container.identifier)
+                self.ior_cmd.set_daos_params(self.pool, container.identifier)
                 self.run_ior(job_manager, ior_processes)
 
                 # Verify IOR consumed the expected amount from the pool
@@ -136,7 +136,7 @@ class NvmeIoVerification(IorTestBase):
                 else:
                     self.ior_cmd.block_size.update(ior_block_size)
                 container = self.get_container(self.pool)
-                self.ior_cmd.set_daos_params(self.server_group, self.pool, container.identifier)
+                self.ior_cmd.set_daos_params(self.pool, container.identifier)
                 self.run_ior(job_manager, ior_processes)
 
                 # Stop all servers
