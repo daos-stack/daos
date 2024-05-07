@@ -88,12 +88,6 @@ class DmvrSerialSmall(DataMoverTestBase):
             self.num_objs, self.num_dkeys, self.num_akeys_single,
             self.num_akeys_array, self.akey_sizes, self.akey_extents)
 
-        # Must destroy before closing pools
-        cont1.destroy()
-        cont2.destroy()
-        pool1.disconnect()
-        pool2.disconnect()
-
     @avocado.fail_on(DaosApiError)
     def test_dm_serial_small_dserialize(self):
         """
