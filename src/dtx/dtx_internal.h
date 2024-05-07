@@ -249,7 +249,6 @@ int dtx_handle_reinit(struct dtx_handle *dth);
 void dtx_batched_commit(void *arg);
 void dtx_aggregation_main(void *arg);
 int start_dtx_reindex_ult(struct ds_cont_child *cont);
-void stop_dtx_reindex_ult(struct ds_cont_child *cont);
 void dtx_merge_check_result(int *tgt, int src);
 int dtx_leader_get(struct ds_pool *pool, struct dtx_memberships *mbs,
 		   daos_unit_oid_t *oid, uint32_t version, struct pool_target **p_tgt);
