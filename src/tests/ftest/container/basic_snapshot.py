@@ -55,7 +55,6 @@ class BasicSnapshot(TestWithServers):
         datasize = len(thedata) + 1
         dkey = b"dkey"
         akey = b"akey"
-
         try:
             obj = container.container.write_an_obj(thedata, datasize, dkey, akey, obj_cls=obj_cls)
             obj.close()
@@ -63,7 +62,6 @@ class BasicSnapshot(TestWithServers):
             snapshot = DaosSnapshot(self.context)
             snapshot.create(container.container.coh)
             self.log.info("Wrote an object and created a snapshot")
-
         except DaosApiError as error:
             self.fail("Test failed during the initial object write.\n{0}".format(error))
 

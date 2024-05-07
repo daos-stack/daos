@@ -432,7 +432,7 @@ pool_child_recreate(struct ds_pool_child *child)
 	}
 
 	rc = vos_pool_create(path, child->spc_uuid, 0, pool_info->spi_blob_sz[SMD_DEV_TYPE_DATA],
-			     0, NULL);
+			     0, 0 /* version */, NULL);
 	if (rc)
 		DL_ERROR(rc, DF_UUID": Create VOS pool failed.", DP_UUID(child->spc_uuid));
 
@@ -1807,7 +1807,7 @@ update_pool_group(struct ds_pool *pool, struct pool_map *map)
 	D_DEBUG(DB_MD, DF_UUID": %u -> %u\n", DP_UUID(pool->sp_uuid), version,
 		pool_map_get_version(map));
 
-	rc = map_ranks_init(map, POOL_GROUP_MAP_STATES, &ranks);
+	rc = map_ranks_init(map, DC_POOL_GROUP_MAP_STATES, &ranks);
 	if (rc != 0)
 		return rc;
 
@@ -2038,7 +2038,7 @@ update_vos_prop_on_targets(void *in)
 		goto out;
 
 	/** If necessary, upgrade the vos pool format */
-	df_version = ds_pool_get_vos_pool_df_version(pool->sp_global_version);
+	df_version = ds_pool_get_vos_df_version(pool->sp_global_version);
 	if (df_version == 0) {
 		ret = -DER_NO_PERM;
 		DL_ERROR(ret, DF_UUID ": pool global version %u no longer supported",
@@ -2530,7 +2530,8 @@ ds_pool_tgt_discard_ult(void *data)
 
 	ex_status = PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN |
 		    PO_COMP_ST_DOWN | PO_COMP_ST_NEW;
-	ds_pool_thread_collective(arg->pool_uuid, ex_status, pool_child_discard, arg, 0);
+	ds_pool_thread_collective(arg->pool_uuid, ex_status, pool_child_discard, arg,
+				  DSS_ULT_DEEP_STACK);
 
 	pool->sp_need_discard = 0;
 	pool->sp_discard_status = rc;

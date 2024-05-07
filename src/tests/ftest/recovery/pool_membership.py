@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2023 Intel Corporation.
+  (C) Copyright 2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -78,9 +78,9 @@ class PoolMembershipTest(IorTestBase):
 
         Jira ID: DAOS-11734
 
-        :avocado: tags=all,pr
+        :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,pool_membership
+        :avocado: tags=recovery,cat_recov,pool_membership
         :avocado: tags=PoolMembershipTest,test_orphan_pool_shard
         """
         # 1. Create a pool.
@@ -247,9 +247,9 @@ class PoolMembershipTest(IorTestBase):
 
         Jira ID: DAOS-11736
 
-        :avocado: tags=all,pr
+        :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,pool_membership
+        :avocado: tags=recovery,cat_recov,pool_membership
         :avocado: tags=PoolMembershipTest,test_dangling_pool_map
         """
         # 1. Create a pool.
@@ -317,9 +317,9 @@ class PoolMembershipTest(IorTestBase):
 
         Jira ID: DAOS-11735
 
-        :avocado: tags=all,pr
+        :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,pool_membership
+        :avocado: tags=recovery,cat_recov,pool_membership
         :avocado: tags=PoolMembershipTest,test_dangling_rank_entry
         """
         targets = self.params.get("targets", "/run/server_config/engines/0/*")
@@ -332,8 +332,7 @@ class PoolMembershipTest(IorTestBase):
 
         # 2. Write some data with IOR using SX.
         self.log_step("Write some data with IOR.")
-        self.ior_cmd.set_daos_params(
-            self.server_group, self.pool, self.container.identifier)
+        self.ior_cmd.set_daos_params(self.pool, self.container.identifier)
         self.run_ior_with_pool(create_pool=False, create_cont=False)
 
         # 3. Stop servers.

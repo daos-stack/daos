@@ -4,8 +4,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from apricot import TestWithServers
-from test_utils_container import add_container
-from test_utils_pool import add_pool
 
 
 class ListContainerTest(TestWithServers):
@@ -33,7 +31,7 @@ class ListContainerTest(TestWithServers):
         """
         # Create containers and store the container UUIDs and labels
         for _ in range(count):
-            container = add_container(self, pool, create=False)
+            container = self.get_container(pool, create=False)
             result = container.create()
             expected_uuids_labels.append(
                 (result["response"]["container_uuid"], result["response"]["container_label"]))
@@ -48,7 +46,7 @@ class ListContainerTest(TestWithServers):
 
         self.assertEqual(
             expected_uuids_labels, actual_uuids_labels,
-            "Containuer UUIDs and labels from list do not match those from create")
+            "Container UUIDs and labels from list do not match those from create")
 
     def test_list_containers(self):
         """Jira ID: DAOS-3629
@@ -66,7 +64,7 @@ class ListContainerTest(TestWithServers):
         """
         expected_uuids_labels1 = []
         pool = []
-        pool.append(add_pool(self, connect=False))
+        pool.append(self.get_pool(connect=False))
 
         # 1. Create 1 container and list.
         self.create_list(1, pool[0], expected_uuids_labels1)
@@ -78,8 +76,8 @@ class ListContainerTest(TestWithServers):
         self.create_list(98, pool[0], expected_uuids_labels1)
 
         # 4. Create 2 additional pools and create 10 containers in each pool.
-        pool.append(add_pool(self, connect=False))
-        pool.append(add_pool(self, connect=False))
+        pool.append(self.get_pool(connect=False))
+        pool.append(self.get_pool(connect=False))
 
         # Create 10 containers in pool 2 and verify.
         expected_uuids_labels2 = []

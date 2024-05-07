@@ -73,13 +73,14 @@ class ObjFetchBadParam(TestWithServers):
 
             # expecting this to fail with -1002
             container.container.read_an_obj(data_size, dkey, akey, obj)
-            self.fail("Test was expected to return a -1002 but it has not.\n")
+            self.fail("Test did not detect the expected -1002 error.")
 
         except DaosApiError as error:
             if '-1002' not in str(error):
                 self.log.info(error)
                 self.log.info(traceback.format_exc())
-                self.fail("Test was expected to get -1002 but it has not.\n")
+                self.fail("Test did not detect the expected -1002 error.")
+            self.log.info("Test detected the expected -1002 error.")
         finally:
             container.container.oh = saved_oh
 
@@ -103,13 +104,14 @@ class ObjFetchBadParam(TestWithServers):
         try:
             # now try it with a bad dkey, expecting this to fail with -1003
             container.container.read_an_obj(data_size, None, akey, obj)
-            self.fail("Test was expected to return a -1003 but it has not.\n")
+            self.fail("Test did not detect the expected -1003 error.")
 
         except DaosApiError as error:
             if '-1003' not in str(error):
                 self.log.info(error)
                 self.log.info(traceback.format_exc())
-                self.fail("Test was expected to get -1003 but it has not.\n")
+                self.fail("Test did not detect the expected -1003 error.")
+            self.log.info("Test detected the expected -1003 error.")
 
         try:
             # now try it with a null SGL (iod_size is not set)
@@ -118,16 +120,19 @@ class ObjFetchBadParam(TestWithServers):
         except DaosApiError as error:
             self.log.info(error)
             self.log.info(traceback.format_exc())
-            self.fail("Test was expected to pass but failed !\n")
+            self.fail("Test was expected to pass but failed!")
 
         try:
             # now try it with a null iod, expecting this to fail with -1003
             test_hints = ['iodnull']
             container.container.read_an_obj(data_size, dkey, akey, obj, test_hints)
-            self.fail("Test was expected to return a -1003 but it has not.")
+            self.fail("Test did not detect the expected -1003 error.")
 
         except DaosApiError as error:
             if '-1003' not in str(error):
                 self.log.info(error)
                 self.log.info(traceback.format_exc())
-                self.fail("Test was expected to get -1003 but it has not.")
+                self.fail("Test did not detect the expected -1003 error.")
+            self.log.info("Test detected the expected -1003 error.")
+
+        self.log.info('Test passed')

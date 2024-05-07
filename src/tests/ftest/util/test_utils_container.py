@@ -29,7 +29,7 @@ def add_container(test, pool, namespace=CONT_NAMESPACE, create=True, daos=None, 
             Defaults to CONT_NAMESPACE.
         create (bool, optional): should the container be created. Defaults to True.
         daos (DaosCommand, optional): daos command object used to create the container.
-            Defaults to self.get_daos_command()
+            Defaults to calling test.get_daos_command().
 
     Returns:
         TestContainer: the new container object
@@ -43,7 +43,8 @@ def add_container(test, pool, namespace=CONT_NAMESPACE, create=True, daos=None, 
         container.update_params(**params)
     if create:
         container.create()
-    test.register_cleanup(remove_container, test=test, container=container)
+    if container.register_cleanup.value is True:
+        test.register_cleanup(remove_container, test=test, container=container)
     return container
 
 
@@ -58,7 +59,7 @@ def remove_container(test, container):
         list: a list of any errors detected when removing the container
     """
     error_list = []
-    test.test_log.info("Destroying container %s", container.identifier)
+    test.test_log.info("Destroying container %s", str(container))
 
     # Ensure messages are logged
     container.silent.value = False
@@ -73,8 +74,8 @@ def remove_container(test, container):
     try:
         container.destroy(force=1)
     except (DaosApiError, TestFail) as error:
-        test.test_log.info("  {}".format(error))
-        error_list.append("Error destroying container {}: {}".format(container.identifier, error))
+        test.test_log.info(f'  {str(error)}')
+        error_list.append(f'Error destroying container {container.identifier}: {str(error)}')
 
     # Restore raising exceptions for any failed command
     if exit_status_exception is False:
@@ -97,19 +98,13 @@ def get_existing_container(test, pool, container_id, daos=None, namespace=CONT_N
 
     Returns:
         TestContainer: the container object
-
     """
     if not daos:
         daos = test.get_daos_command()
 
-    # Query the container for existence and to get the uuid from a label
-    query_response = daos.container_query(pool=pool.uuid, cont=container_id)['response']
-
     # Create a TestContainer object from an existing container uuid.
-    container = add_container(
-        test, pool, namespace, False, daos, label=query_response.get('container_label'),
-        type=query_response.get('container_type'))
-    container.replicate(query_response['container_uuid'])
+    container = add_container(test, pool, namespace, False, daos)
+    container.create(query_id=container_id)
 
     return container
 
@@ -260,7 +255,7 @@ class TestContainerData():
             "akey": akey,
             "obj": self.obj,
             "txn": txn,
-            "test_hints": test_hints
+            "test_hints": test_hints,
         }
         try:
             if data_array_size > 0:
@@ -303,7 +298,7 @@ class TestContainerData():
                 "akey": record_info["akey"],
                 "dkey": record_info["dkey"],
                 "txn": txn,
-                "test_hints": test_hints
+                "test_hints": test_hints,
             }
             try:
                 if isinstance(data, list):
@@ -337,7 +332,7 @@ class TestContainerData():
 class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
     """A class for functional testing of DaosContainer objects."""
 
-    def __init__(self, pool, daos_command=None, label_generator=None, namespace=CONT_NAMESPACE):
+    def __init__(self, pool, daos_command, label_generator=None, namespace=CONT_NAMESPACE):
         """Create a TestContainer object.
 
         Args:
@@ -360,7 +355,7 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         # for enabling different container properties
         self.input_params = DaosInputParams()
 
-        # Optional daos command object to use with the USE_DAOS control method
+        # The daos command object to use with the USE_DAOS control method
         self.daos = daos_command
 
         # Optional daos command argument values to use with the USE_DAOS control
@@ -376,6 +371,8 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         self.daos_timeout = BasicParameter(None)
         self.label = BasicParameter(None, "TestContainer")
         self.label_generator = label_generator
+
+        self.register_cleanup = BasicParameter(True, True)  # call register_cleanup by default
 
         self.container = None
         self.uuid = None
@@ -448,7 +445,6 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
 
     def skip_cleanup(self):
         """Prevent container from being removed during cleanup.
-
         Useful for corner case tests where the container no longer exists due to a pool destroy.
         """
         self.container = None
@@ -459,11 +455,14 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
 
     @fail_on(DaosApiError)
     @fail_on(CommandFailure)
-    def create(self, con_in=None):
+    def create(self, con_in=None, query_id=None):
         """Create a container.
 
         Args:
             con_in (optional): to be defined. Defaults to None.
+            query_id (str, optional): container uuid or label which if specified will be used to
+                find an existing container through a daos query. Defaults to None which will use a
+                create command to populate this object.
 
         Returns:
             dict: the daos json command output converted to a python dictionary
@@ -479,7 +478,13 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         self.container = DaosContainer(self.pool.context)
         result = None
 
-        if self.control_method.value == self.USE_API:
+        if query_id:
+            # Get an existing container with the daos query command
+            kwargs = {"pool": self.pool.identifier, "cont": query_id}
+            self._log_method("daos.container_query", kwargs)
+            result = self.daos.container_query(**kwargs)
+
+        elif self.control_method.value == self.USE_API:
             # pydaos.raw doesn't support create with a label
             if not self.silent.value:
                 self.log.info("Ignoring label for container created with API")
@@ -506,9 +511,6 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
             self._call_method(self.container.create, kwargs)
 
         else:
-            # Disconnect the pool if connected
-            self.pool.disconnect()
-
             # Create a container with the daos command
             kwargs = {
                 "pool": self.pool.identifier,
@@ -523,14 +525,20 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
                 "acl_file": self.acl_file.value,
                 "label": self.label.value
             }
-
             self._log_method("daos.container_create", kwargs)
+            result = self.daos.container_create(**kwargs)
+
+        if result:
             try:
-                result = self.daos.container_create(**kwargs)
                 if result["status"] != 0:
                     # The command failed but no exception was raised, so let the caller handle
                     return result
                 uuid = result["response"]["container_uuid"]
+
+                # Update if these values exist
+                self.label.update(result["response"].get("container_label"))
+                self.type.update(result["response"].get("container_type"))
+
             except KeyError as error:
                 raise CommandFailure("Error: Unexpected daos container create output") from error
             # Populate the empty DaosContainer object with the properties of the
@@ -686,9 +694,6 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
                     status = True
 
                 else:
-                    # Disconnect the pool if connected
-                    self.pool.disconnect()
-
                     # Destroy the container with the daos command
                     kwargs["pool"] = self.pool.identifier
                     kwargs["sys_name"] = self.pool.name.value

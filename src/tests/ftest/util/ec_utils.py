@@ -11,7 +11,6 @@ import time
 from apricot import TestWithServers
 from daos_utils import DaosCommand
 from exception_utils import CommandFailure
-from fio_test_base import FioBase
 from general_utils import DaosTestError
 from mdtest_test_base import MdtestBase
 from nvme_utils import ServerFillUp
@@ -110,7 +109,8 @@ class ErasureCodeIor(ServerFillUp):
     def ec_container_create(self, oclass):
         """Create the container for EC object."""
         # Get container params
-        self.ec_container = self.get_container(self.pool, create=False, oclass=oclass)
+        self.ec_container = self.get_container(
+            self.pool, create=False, daos=self.get_daos_command(), oclass=oclass)
 
         # update object class for container create, if supplied explicitly.
         ec_object = get_data_parity_number(self.log, oclass)
@@ -279,6 +279,10 @@ class ErasureCodeSingle(TestWithServers):
             oclass (str): object class for creating the container.
         """
         self.container.append(self.get_container(self.pool, create=False, oclass=oclass))
+        if self.container[-1].control_method.value == \
+                self.container[-1].USE_DAOS and self.container[-1].oclass.value:
+            self.container[-1].oclass.update(self.container[-1].oclass.value.replace("OC_", ""),
+                                             "container.oclass")
 
         # Get the Parity count for setting the container RF property.
         ec_object = get_data_parity_number(self.log, oclass)
@@ -457,81 +461,3 @@ class ErasureCodeMdtest(MdtestBase):
         while not self.out_queue.empty():
             if self.out_queue.get() == "Mdtest Failed":
                 self.fail("FAIL")
-
-
-class ErasureCodeFio(FioBase):
-    """Class to use for EC testing with Fio Benchmark."""
-
-    def __init__(self, *args, **kwargs):
-        """Initialize a FioBase object."""
-        super().__init__(*args, **kwargs)
-        self.server_count = None
-        self.set_online_rebuild = False
-        self.rank_to_kill = None
-
-    def setUp(self):
-        """Set up each test case."""
-        super().setUp()
-        engine_count = self.server_managers[0].get_config_value("engines_per_host")
-        self.server_count = len(self.hostlist_servers) * engine_count
-
-        # Create Pool
-        self.add_pool()
-        self.out_queue = queue.Queue()
-
-    def write_single_fio_dataset(self, results):
-        """Run Fio Benchmark.
-
-        Args:
-            results (queue): queue for returning thread results
-        """
-        try:
-            self.execute_fio(stop_dfuse=False)
-            if results is not None:
-                results.put("PASS")
-        except (CommandFailure, DaosApiError, DaosTestError):
-            if results is not None:
-                results.put("FAIL")
-                raise
-
-    def start_online_fio(self):
-        """Run Fio operation with thread in background.
-
-        Trigger the server failure while Fio is running
-        """
-        # Create the Fio run thread
-        job = threading.Thread(target=self.write_single_fio_dataset,
-                               kwargs={"results": self.out_queue})
-
-        # Launch the Fio thread
-        job.start()
-
-        # Kill the server rank while IO operation in progress
-        if self.set_online_rebuild:
-            time.sleep(30)
-            # Kill the server rank
-            if self.rank_to_kill is not None:
-                self.server_managers[0].stop_ranks([self.rank_to_kill],
-                                                   self.d_log,
-                                                   force=True)
-
-        # Wait to finish the thread
-        job.join()
-
-        # Verify the queue result and make sure test has no failure
-        while not self.out_queue.empty():
-            if self.out_queue.get() == "FAIL":
-                self.fail("FAIL")
-
-    def check_aggregation_status(self, quick_check=True, attempt=20):
-        """EC Aggregation triggered status.
-
-        Args:
-            quick_check (bool): Return immediately when Aggregation starts for any storage type.
-            attempt (int): Number of attempts to do pool query at interval of 5 seconds.
-                        default is 20 attempts.
-
-        Returns:
-            dict: Storage Aggregation stats SCM/NVMe True/False.
-        """
-        return check_aggregation_status(self.log, self.pool, quick_check, attempt)

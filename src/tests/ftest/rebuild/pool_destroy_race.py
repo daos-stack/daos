@@ -94,3 +94,5 @@ class RbldPoolDestroyWithIO(TestWithServers):
         pool = add_pool(self)
         self.log_step('Verify the space was reclaimed')
         pool.query()
+
+        self.test_log.debug("Test Passed.")

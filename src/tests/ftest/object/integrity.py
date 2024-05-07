@@ -174,6 +174,8 @@ class ObjectDataValidation(TestWithServers):
 
         container.container.close_tx(new_transaction2)
 
+        self.log.info('Test passed')
+
     @avocado.fail_on(DaosApiError)
     def test_single_object_validation(self):
         """
@@ -234,6 +236,8 @@ class ObjectDataValidation(TestWithServers):
                 record_index = record_index + 1
                 if record_index == len(record_length):
                     record_index = 0
+
+        self.log.info('Test passed')
 
     @avocado.fail_on(DaosApiError)
     def test_array_object_validation(self):
@@ -306,3 +310,5 @@ class ObjectDataValidation(TestWithServers):
                 record_index = record_index + 1
                 if record_index == len(record_length):
                     record_index = 0
+
+        self.log.info('Test passed')

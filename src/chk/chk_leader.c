@@ -1396,7 +1396,7 @@ chk_leader_start_pool_svc(struct chk_pool_rec *cpr)
 
 	rc = ds_rsvc_dist_start(DS_RSVC_CLASS_POOL, &psid, cpr->cpr_uuid, ranks, RDB_NIL_TERM,
 				cpr->cpr_healthy ? DS_RSVC_START : DS_RSVC_DICTATE,
-				false /* bootstrap */, 0 /* size */);
+				false /* bootstrap */, 0 /* size */, 0 /* vos_df_version */);
 
 out:
 	d_rank_list_free(ranks);
@@ -3385,8 +3385,7 @@ chk_leader_prop(chk_prop_cb_t prop_cb, void *buf)
 {
 	struct chk_property	*prop = &chk_leader->ci_prop;
 
-	return prop_cb(buf, (struct chk_policy *)prop->cp_policies,
-		       CHK_POLICY_MAX - 1, prop->cp_flags);
+	return prop_cb(buf, prop->cp_policies, CHK_POLICY_MAX - 1, prop->cp_flags);
 }
 
 static int

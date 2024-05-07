@@ -304,7 +304,7 @@ obj_layout_create(struct dc_object *obj, unsigned int mode, bool refresh)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	obj->cob_md.omd_ver = dc_pool_get_version(pool);
+	obj->cob_md.omd_ver = pool_map_get_version(map->pl_poolmap);
 	obj->cob_md.omd_pdom_lvl = dc_obj_get_pdom(obj);
 	obj->cob_md.omd_fdom_lvl = dc_obj_get_redun_lvl(obj);
 	obj->cob_md.omd_pda = dc_obj_get_pda(obj);
@@ -4723,6 +4723,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 		 */
 		obj_auxi->io_retry = 1;
 		if (obj_auxi->no_retry ||
+		    (obj_auxi->for_migrate && !obj_retriable_migrate(task->dt_result)) ||
 		    (obj_auxi->spec_shard && (task->dt_result == -DER_INPROGRESS ||
 		     task->dt_result == -DER_TX_BUSY || task->dt_result == -DER_EXCLUDED ||
 		     task->dt_result == -DER_CSUM)))
@@ -5547,7 +5548,7 @@ dc_obj_fetch_task(tse_task_t *task)
 	}
 	if (args->extra_flags & DIOF_FOR_MIGRATION) {
 		obj_auxi->flags |= ORF_FOR_MIGRATION;
-		obj_auxi->no_retry = 1;
+		obj_auxi->for_migrate = 1;
 	}
 	if (args->extra_flags & DIOF_FOR_EC_AGG)
 		obj_auxi->flags |= ORF_FOR_EC_AGG;

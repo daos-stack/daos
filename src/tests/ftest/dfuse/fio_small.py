@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+from dfuse_utils import get_dfuse, start_dfuse
 from fio_test_base import FioBase
 
 
@@ -37,4 +38,10 @@ class FioSmall(FioBase):
         :avocado: tags=dfuse,fio,checksum,tx
         :avocado: tags=FioSmall,test_fio_small
         """
+        pool = self.get_pool(connect=False)
+        container = self.get_container(pool)
+        container.set_attr(attrs={'dfuse-direct-io-disable': 'on'})
+        dfuse = get_dfuse(self, self.hostlist_clients)
+        start_dfuse(self, dfuse, pool, container)
+        self.fio_cmd.update_directory(dfuse.mount_dir.value)
         self.execute_fio()

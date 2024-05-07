@@ -64,15 +64,12 @@ class CreateManyDkeys(TestWithServers):
             val = ioreq.single_fetch(c_dkey, c_akey, len(the_data) + 1)
             exp_value = val.value.decode("utf-8")
             if the_data != exp_value:
-                self.fail("ERROR: Data mismatch for dkey = {0}, akey={1}, "
-                          "Expected Value={2} and Received Value={3}\n"
-                          .format("dkey {0}".format(key),
-                                  "akey {0}".format(key),
-                                  the_data,
-                                  exp_value))
+                self.log.debug("Expected Value: %s", the_data)
+                self.log.debug("Received Value: %s", exp_value)
+                self.fail("ERROR: Data mismatch for dkey='dkey {key}', akey='akey {key}'")
 
             if key > last_key:
-                print("veried: {}".format(key))
+                print("verified: {}".format(key))
                 sys.stdout.flush()
                 last_key = key + inc
 
@@ -103,3 +100,5 @@ class CreateManyDkeys(TestWithServers):
         # do it again, which should verify the first container
         # was truly destroyed because a second round won't fit otherwise
         self.write_a_bunch_of_values(pool, no_of_dkeys)
+
+        self.log.info('Test passed')

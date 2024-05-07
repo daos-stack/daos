@@ -477,7 +477,7 @@ class DestroyTests(TestWithServers):
         self.assertTrue(
             exception_detected, "No exception when deleting a connected pool")
 
-    def test_forced_destroy_connected(self):
+    def test_force_destroy_connected(self):
         """Forcibly destroy pool with connected client.
 
         Test destroying a pool that has a connected client with force == true.
@@ -486,7 +486,7 @@ class DestroyTests(TestWithServers):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_destroy
-        :avocado: tags=DestroyTests,test_forced_destroy_connected
+        :avocado: tags=DestroyTests,test_force_destroy_connected
         """
         hostlist_servers = self.hostlist_servers[0:1]
 

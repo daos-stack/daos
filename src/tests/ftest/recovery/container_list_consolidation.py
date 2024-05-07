@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2023 Intel Corporation.
+  (C) Copyright 2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -38,15 +38,16 @@ class ContainerListConsolidationTest(RecoveryTestBase):
 
         Jira ID: DAOS-12287
 
-        :avocado: tags=all,pr
-        :avocado: tags=vm
-        :avocado: tags=recovery,container_list_consolidation
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=recovery,cat_recov,container_list_consolidation
         :avocado: tags=ContainerListConsolidationTest,test_orphan_container
         """
         # 1. Create a pool and a container.
         self.log_step("Create a pool and a container")
         pool = self.get_pool(connect=False)
         container = self.get_container(pool=pool)
+        expected_uuid = container.uuid.lower()
 
         # 2. Inject fault to cause orphan container.
         self.log_step("Inject fault to cause orphan container.")
@@ -54,6 +55,7 @@ class ContainerListConsolidationTest(RecoveryTestBase):
         daos_command.faults_container(
             pool=pool.identifier, cont=container.identifier,
             location="DAOS_CHK_CONT_ORPHAN")
+        container.skip_cleanup()
 
         # 3. Check that the container doesn't appear with daos command.
         self.log_step("Check that the container doesn't appear with daos command.")
@@ -84,7 +86,6 @@ class ContainerListConsolidationTest(RecoveryTestBase):
 
         # UUID if found. Verify that it's the container UUID of the container we created.
         actual_uuid = match.group(1)
-        expected_uuid = container.uuid.lower()
         if actual_uuid != expected_uuid:
             msg = "Unexpected container UUID! Expected = {}; Actual = {}".format(
                 expected_uuid, actual_uuid)

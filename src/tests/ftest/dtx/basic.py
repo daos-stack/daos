@@ -98,3 +98,5 @@ class BasicTxTest(TestWithServers):
             print(excep)
             print(traceback.format_exc())
             self.fail("Test was expected to pass but it failed.\n")
+
+        self.log.info('Test passed')
