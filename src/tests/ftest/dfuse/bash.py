@@ -5,11 +5,13 @@
 """
 import os
 
-from dfuse_test_base import DfuseTestBase
+from apricot import TestWithServers
+from dfuse_utils import get_dfuse, start_dfuse
+from host_utils import get_local_host
 from run_utils import run_remote
 
 
-class Cmd(DfuseTestBase):
+class DfuseBashCmd(TestWithServers):
     """Base Cmd test class.
 
     :avocado: recursive
@@ -54,29 +56,31 @@ class Cmd(DfuseTestBase):
             env_str = ""
 
         # Create a pool if one does not already exist.
-        self.add_pool(connect=False)
-        self.add_container(self.pool)
-        mount_dir = f"/tmp/{self.pool.identifier}_daos_dfuse"
-        self.start_dfuse(self.hostlist_clients, self.pool, self.container, mount_dir=mount_dir)
-        if il_lib is not None:
-            # unmount dfuse and mount again with caching disabled
-            self.dfuse.unmount(tries=1)
-            self.dfuse.update_params(disable_caching=True)
-            self.dfuse.update_params(disable_wb_cache=True)
-            self.dfuse.run()
+        self.log_step('Creating a single pool and container')
+        pool = self.get_pool(connect=False)
+        container = self.get_container(pool)
 
-        fuse_root_dir = self.dfuse.mount_dir.value
+        self.log_step('Starting dfuse')
+        dfuse_hosts = get_local_host()
+        dfuse = get_dfuse(self, dfuse_hosts)
+        params = {'mount_dir': f'/tmp/{pool.identifier}_daos_dfuse'}
+        if il_lib is not None:
+            params['disable_caching'] = True
+            params['disable_wb_cache'] = True
+        start_dfuse(self, dfuse, pool, container, **params)
+
+        fuse_root_dir = dfuse.mount_dir.value
         abs_dir_path = os.path.join(fuse_root_dir, "test")
         abs_file_path1 = os.path.join(abs_dir_path, "testfile1.txt")
         abs_file_path2 = os.path.join(abs_dir_path, "testfile2.txt")
 
-        with open(os.path.join(fuse_root_dir, "src.c"), "w") as fd:
+        with open(os.path.join(fuse_root_dir, "src.c"), "w", encoding="utf-8") as fd:
             fd.write('#include <stdio.h>\n\nint main(void) {\nprintf("Hello World!");\n}\n')
         link_name = os.path.join(fuse_root_dir, "link_c")
 
-        with open(os.path.join(fuse_root_dir, "src_a.c"), "w") as fd:
+        with open(os.path.join(fuse_root_dir, "src_a.c"), "w", encoding="utf-8") as fd:
             fd.write('#include <stdio.h>\n\nvoid fun_a(void) {\nprintf("fun_a()");\n}\n')
-        with open(os.path.join(fuse_root_dir, "src_b.c"), "w") as fd:
+        with open(os.path.join(fuse_root_dir, "src_b.c"), "w", encoding="utf-8") as fd:
             fd.write('#include <stdio.h>\n\nvoid fun_b(void) {\nprintf("fun_b()");\n}\n')
         # list of commands to be executed.
         commands = [
@@ -132,16 +136,11 @@ class Cmd(DfuseTestBase):
             f'curl "https://www.google.com" -o {fuse_root_dir}/download.html',
         ]
         for cmd in commands:
-            result = run_remote(self.log, self.hostlist_clients, env_str + cmd)
+            self.log_step(f'Running command: {cmd}')
+            result = run_remote(self.log, dfuse_hosts, env_str + cmd)
             if not result.passed:
                 self.fail(f'"{cmd}" failed on {result.failed_hosts}')
-
-        # stop dfuse
-        self.stop_dfuse()
-        # destroy container
-        self.container.destroy()
-        # destroy pool
-        self.pool.destroy()
+        self.log.info('Test passed')
 
     def test_bashcmd(self):
         """
@@ -154,7 +153,7 @@ class Cmd(DfuseTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=dfuse,dfs
-        :avocado: tags=Cmd,test_bashcmd
+        :avocado: tags=DfuseBashCmd,test_bashcmd
         """
         self.run_bashcmd()
 
@@ -168,8 +167,8 @@ class Cmd(DfuseTestBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
-        :avocado: tags=dfuse,il,dfs
-        :avocado: tags=Cmd,test_bashcmd_ioil
+        :avocado: tags=dfuse,dfs,ioil
+        :avocado: tags=DfuseBashCmd,test_bashcmd_ioil
         """
         self.run_bashcmd(il_lib="libioil.so")
 
@@ -183,7 +182,7 @@ class Cmd(DfuseTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=dfuse,pil4dfs,dfs
-        :avocado: tags=Cmd,test_bashcmd_pil4dfs
+        :avocado: tags=dfuse,dfs,pil4dfs
+        :avocado: tags=DfuseBashCmd,test_bashcmd_pil4dfs
         """
         self.run_bashcmd(il_lib="libpil4dfs.so")
