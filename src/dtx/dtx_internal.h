@@ -207,7 +207,7 @@ struct dtx_coll_prep_args {
 struct dtx_pool_metrics {
 	struct d_tm_node_t	*dpm_batched_degree;
 	struct d_tm_node_t	*dpm_batched_total;
-	struct d_tm_node_t	*dpm_total[DTX_PROTO_SRV_RPC_COUNT];
+	struct d_tm_node_t	*dpm_total[DTX_PROTO_SRV_RPC_COUNT + 1];
 };
 
 /*
@@ -291,6 +291,7 @@ enum dtx_status_handle_result {
 
 enum dtx_rpc_flags {
 	DRF_INITIAL_LEADER	= (1 << 0),
+	DRF_SYNC_COMMIT		= (1 << 1),
 };
 
 enum dtx_cos_flags {
