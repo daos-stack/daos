@@ -1,5 +1,5 @@
 """
-(C) Copyright 2018-2023 Intel Corporation.
+(C) Copyright 2018-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -596,7 +596,9 @@ class DestroyTests(TestWithServers):
             self.pool.destroy(disconnect=0, recursive=1)
         except TestFail as result:
             exception_detected = True
-            self.log.info("Unexpected exception - destroying pool with containers: %s", str(result))
+            self.log.info(
+                "Unexpected exception - destroying pool with containers: %s",
+                str(result))
         finally:
             # Prevent attempting to delete container in tearDown() after pool has been destroyed.
             self.container.skip_cleanup()

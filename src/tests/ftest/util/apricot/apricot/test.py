@@ -1737,6 +1737,7 @@ class TestWithServers(TestWithoutServers):
 
         Returns:
             TestPool: the created test pool object.
+
         """
         return add_pool(self, namespace, create, connect, dmg, **params)
 

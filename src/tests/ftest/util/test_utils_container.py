@@ -543,34 +543,15 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
                 raise CommandFailure("Error: Unexpected daos container create output") from error
             # Populate the empty DaosContainer object with the properties of the
             # container created with daos container create.
-            self._update_api_container(uuid)
+            self.container.uuid = str_to_c_uuid(uuid)
+            self.container.attached = 1
+            self.container.poh = self.pool.pool.handle
 
         self.uuid = self.container.get_uuid_str()
         if not self.silent.value:
             self.log.info("  Created container %s", str(self))
 
         return result
-
-    def _update_api_container(self, uuid):
-        """Update the DaosContainer object with data from a non-API created container.
-
-        Args:
-            uuid (str): the existing container UUID.
-        """
-        self.container.uuid = str_to_c_uuid(uuid)
-        self.container.attached = 1
-        self.container.poh = self.pool.pool.handle
-
-    def replicate(self, uuid):
-        """Update this object to represent an already created container.
-
-        Args:
-            uuid (str): the existing container UUID.
-        """
-        self.destroy()
-        self.container = DaosContainer(self.pool.context)
-        self._update_api_container(uuid)
-        self.uuid = self.container.get_uuid_str()
 
     @fail_on(CommandFailure)
     def create_snap(self, *args, **kwargs):
