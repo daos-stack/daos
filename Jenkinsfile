@@ -115,10 +115,10 @@ pipeline {
         booleanParam(name: 'CI_medium_TEST',
                      defaultValue: true,
                      description: 'Run the CI Functional Hardware Medium TCP/UCX test stages')
-        booleanParam(name: 'CI_medium-tcp-provider_TEST',
+        booleanParam(name: 'CI_medium_tcp_provider_TEST',
                      defaultValue: true,
                      description: 'Run the CI Functional Hardware Medium TCP Provider test stage')
-        booleanParam(name: 'CI_medium-ucx-provider_TEST',
+        booleanParam(name: 'CI_medium_ucx_provider_TEST',
                      defaultValue: true,
                      description: 'Run the CI Functional Hardware Medium UCX Provider test stage')
         booleanParam(name: 'CI_large_TEST',
