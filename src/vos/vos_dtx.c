@@ -871,7 +871,8 @@ out:
 	if (rc != 0)
 		D_FREE(dce);
 
-	if (rm_cos != NULL && (rc == 0 || rc == -DER_NONEXIST))
+	if (rm_cos != NULL &&
+	    (rc == 0 || rc == -DER_NONEXIST || (rc == -DER_ALREADY && dae == NULL)))
 		*rm_cos = true;
 
 	return rc;
