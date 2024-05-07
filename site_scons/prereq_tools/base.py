@@ -521,7 +521,7 @@ class PreReqComponent():
         # argobots is not really needed by client but it's difficult to separate
         common_reqs = ['ucx', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid', 'crypto', 'protobufc',
                        'lz4', 'isal', 'isal_crypto']
-        client_reqs = ['fuse', 'json-c', 'capstone']
+        client_reqs = ['fuse', 'json-c', 'capstone', 'aio']
         server_reqs = ['argobots', 'pmdk', 'spdk', 'ipmctl']
         test_reqs = ['cmocka']
 
