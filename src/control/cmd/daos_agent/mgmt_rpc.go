@@ -9,7 +9,6 @@ package main
 import (
 	"net"
 	"strings"
-	"sync"
 
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -18,11 +17,11 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	pblog "github.com/daos-stack/daos/src/control/common/proto"
-	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
+	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
@@ -35,16 +34,13 @@ import (
 // Management Service proxy, handling dRPCs sent by libdaos by forwarding them
 // to MS.
 type mgmtModule struct {
-	attachInfoMutex sync.RWMutex
-	fabricMutex     sync.RWMutex
-
 	log            logging.Logger
 	sys            string
 	ctlInvoker     control.Invoker
 	cache          *InfoCache
 	monitor        *procMon
 	cliMetricsSrc  *promexp.ClientSource
-	useDefaultNUMA bool
+	useDefaultNUMA atm.Bool
 
 	numaGetter  hardware.ProcessNUMAProvider
 	providerIdx uint
@@ -96,7 +92,7 @@ func (mod *mgmtModule) ID() drpc.ModuleID {
 	return drpc.ModuleMgmt
 }
 
-// handleGetAttachInfo invokes the GetAttachInfo dRPC.  The agent determines the
+// handleGetAttachInfo invokes the GetAttachInfo gRPC.  The agent determines the
 // NUMA node for the client process based on its PID.  Then based on the
 // server's provider, chooses a matching network interface and domain from the
 // client machine that has the same NUMA affinity.  It is considered an error if
@@ -163,14 +159,14 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 }
 
 func (mod *mgmtModule) getNUMANode(ctx context.Context, pid int32) (uint, error) {
-	if mod.useDefaultNUMA {
+	if mod.useDefaultNUMA.IsTrue() {
 		return 0, nil
 	}
 
 	numaNode, err := mod.numaGetter.GetNUMANodeIDForPID(ctx, pid)
 	if errors.Is(err, hardware.ErrNoNUMANodes) {
 		mod.log.Debug("system is not NUMA-aware")
-		mod.useDefaultNUMA = true
+		mod.useDefaultNUMA.SetTrue()
 		return 0, nil
 	} else if err != nil {
 		return 0, errors.Wrapf(err, "failed to get NUMA node ID for pid %d", pid)
@@ -180,13 +176,20 @@ func (mod *mgmtModule) getNUMANode(ctx context.Context, pid int32) (uint, error)
 }
 
 func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, req *mgmtpb.GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error) {
-	rawResp, err := mod.getAttachInfoResp(ctx, req.Sys)
+	// First, grab the attachinfo response as returned by the server.
+	// NB: The server response must not be modified outside of the cache, to
+	// avoid thread safety issues.
+	srvResp, err := mod.cache.GetAttachInfo(ctx, req.Sys)
 	if err != nil {
 		mod.log.Errorf("failed to fetch AttachInfo: %s", err.Error())
 		return nil, err
 	}
 
-	resp, err := mod.selectAttachInfo(ctx, rawResp, req.Interface, req.Domain)
+	// Next, choose the attachinfo response for this client, which may depend on
+	// which provider the client is using. In the default single-provider case,
+	// the unmodified server response is returned. In a multi-provider scenario,
+	// a new response will be constructed from the secondary provider attachinfo.
+	selectedResp, err := mod.selectAttachInfo(ctx, srvResp, req.Interface, req.Domain)
 	if err != nil {
 		return nil, err
 	}
@@ -194,46 +197,55 @@ func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, req *mgm
 	// Requested fabric interface/domain behave as a simple override. If we weren't able to
 	// validate them, we return them to the user with the understanding that perhaps the user
 	// knows what they're doing.
-	iface := req.Interface
-	domain := req.Domain
+	respIface := req.Interface
+	respDomain := req.Domain
 	if req.Interface == "" {
 		fabricIF, err := mod.getFabricInterface(ctx, &FabricIfaceParams{
 			NUMANode: numaNode,
-			DevClass: hardware.NetDevClass(resp.ClientNetHint.NetDevClass),
-			Provider: resp.ClientNetHint.Provider,
+			DevClass: hardware.NetDevClass(selectedResp.ClientNetHint.NetDevClass),
+			Provider: selectedResp.ClientNetHint.Provider,
 		})
 		if err != nil {
 			mod.log.Errorf("failed to fetch fabric interface of type %s: %s",
-				hardware.NetDevClass(resp.ClientNetHint.NetDevClass), err.Error())
+				hardware.NetDevClass(selectedResp.ClientNetHint.NetDevClass), err.Error())
 			return nil, err
 		}
 
-		iface = fabricIF.Name
-		domain = fabricIF.Domain
+		respIface = fabricIF.Name
+		respDomain = fabricIF.Domain
 	}
 
-	resp.ClientNetHint.Interface = iface
-	resp.ClientNetHint.Domain = iface
-	if domain != "" {
-		resp.ClientNetHint.Domain = domain
-		mod.log.Tracef("D_DOMAIN for %s has been detected as: %s",
-			resp.ClientNetHint.Interface, resp.ClientNetHint.Domain)
+	if respDomain != "" {
+		mod.log.Tracef("D_DOMAIN for %s has been detected as: %s", respIface, respDomain)
+	} else {
+		respDomain = respIface
 	}
 
-	return resp, nil
-}
-
-func (mod *mgmtModule) getAttachInfoResp(ctx context.Context, sys string) (*mgmtpb.GetAttachInfoResp, error) {
-	ctlResp, err := mod.cache.GetAttachInfo(ctx, sys)
-	if err != nil {
-		return nil, err
+	// Finally, if necessary, construct a new response to return to the client,
+	// since we may not modify the server response.
+	// NB: We could use proto.Clone() here, but there is a performance
+	// penalty due to the use of reflection.
+	if selectedResp.ClientNetHint.Interface == respIface &&
+		selectedResp.ClientNetHint.Domain == respDomain {
+		return selectedResp, nil
+	} else {
+		return &mgmtpb.GetAttachInfoResp{
+			RankUris: selectedResp.RankUris,
+			MsRanks:  selectedResp.MsRanks,
+			ClientNetHint: &mgmtpb.ClientNetHint{
+				Provider:    selectedResp.ClientNetHint.Provider,
+				Interface:   respIface,
+				Domain:      respDomain,
+				CrtTimeout:  selectedResp.ClientNetHint.CrtTimeout,
+				NetDevClass: selectedResp.ClientNetHint.NetDevClass,
+				SrvSrxSet:   selectedResp.ClientNetHint.SrvSrxSet,
+				EnvVars:     selectedResp.ClientNetHint.EnvVars,
+				ProviderIdx: selectedResp.ClientNetHint.ProviderIdx,
+			},
+			DataVersion: selectedResp.DataVersion,
+			Sys:         selectedResp.Sys,
+		}, nil
 	}
-
-	resp := new(mgmtpb.GetAttachInfoResp)
-	if err := convert.Types(ctlResp, resp); err != nil {
-		return nil, err
-	}
-	return resp, nil
 }
 
 func (mod *mgmtModule) selectAttachInfo(ctx context.Context, srvResp *mgmtpb.GetAttachInfoResp, iface, domain string) (*mgmtpb.GetAttachInfoResp, error) {
@@ -319,6 +331,8 @@ func (mod *mgmtModule) selectSecondaryAttachInfo(srvResp *mgmtpb.GetAttachInfoRe
 		RankUris:      uris,
 		MsRanks:       srvResp.MsRanks,
 		ClientNetHint: hint,
+		DataVersion:   srvResp.DataVersion,
+		Sys:           srvResp.Sys,
 	}, nil
 }
 

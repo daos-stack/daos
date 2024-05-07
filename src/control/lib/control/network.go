@@ -250,10 +250,8 @@ func (gair *GetAttachInfoResp) String() string {
 	)
 }
 
-// GetAttachInfo makes a request to the current MS leader in order to learn
-// the PSRs (rank/uri mapping) for the DAOS cluster. This information is used
-// by DAOS clients in order to make connections to DAOS servers over the storage fabric.
-func GetAttachInfo(ctx context.Context, rpcClient UnaryInvoker, req *GetAttachInfoReq) (*GetAttachInfoResp, error) {
+// GetAttachInfoRaw returns the AttachInfo response without a conversion from protobuf.
+func GetAttachInfoRaw(ctx context.Context, rpcClient UnaryInvoker, req *GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).GetAttachInfo(ctx, &mgmtpb.GetAttachInfoReq{
 			Sys:      req.getSystem(rpcClient),
@@ -270,6 +268,26 @@ func GetAttachInfo(ctx context.Context, rpcClient UnaryInvoker, req *GetAttachIn
 		return nil, err
 	}
 
+	msg, err := ur.getMSResponse()
+	if err != nil {
+		return nil, err
+	}
+	resp, ok := msg.(*mgmtpb.GetAttachInfoResp)
+	if !ok {
+		return nil, errors.Errorf("received unexpected response: %+v", msg)
+	}
+	return resp, nil
+}
+
+// GetAttachInfo makes a request to the current MS leader in order to learn
+// the PSRs (rank/uri mapping) for the DAOS cluster. This information is used
+// by DAOS clients in order to make connections to DAOS servers over the storage fabric.
+func GetAttachInfo(ctx context.Context, rpcClient UnaryInvoker, req *GetAttachInfoReq) (*GetAttachInfoResp, error) {
+	raw, err := GetAttachInfoRaw(ctx, rpcClient, req)
+	if err != nil {
+		return nil, err
+	}
+
 	gair := new(GetAttachInfoResp)
-	return gair, convertMSResponse(ur, gair)
+	return gair, convert.Types(raw, gair)
 }

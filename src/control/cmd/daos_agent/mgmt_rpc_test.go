@@ -21,12 +21,12 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
+	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
@@ -46,11 +46,11 @@ func hostResps(resps ...*mgmtpb.GetAttachInfoResp) []*control.HostResponse {
 
 func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 	testSys := "test_sys"
-	testResp := &control.GetAttachInfoResp{
-		System:       "dontcare",
-		ServiceRanks: []*control.PrimaryServiceRank{{Rank: 1, Uri: "my uri"}},
-		MSRanks:      []uint32{0, 1, 2, 3},
-		ClientNetHint: control.ClientNetworkHint{
+	testResp := &mgmtpb.GetAttachInfoResp{
+		Sys:      "dontcare",
+		RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{{Rank: 1, Uri: "my uri"}},
+		MsRanks:  []uint32{0, 1, 2, 3},
+		ClientNetHint: &mgmtpb.ClientNetHint{
 			Provider:    "ofi+tcp",
 			NetDevClass: uint32(hardware.Ether),
 		},
@@ -83,12 +83,9 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		return bytes
 	}
 
-	respWith := func(in *control.GetAttachInfoResp, iface, domain string) *mgmtpb.GetAttachInfoResp {
+	respWith := func(in *mgmtpb.GetAttachInfoResp, iface, domain string) *mgmtpb.GetAttachInfoResp {
 		t.Helper()
-		out := new(mgmtpb.GetAttachInfoResp)
-		if err := convert.Types(in, out); err != nil {
-			t.Fatal(err)
-		}
+		out := proto.Clone(in).(*mgmtpb.GetAttachInfoResp)
 		out.ClientNetHint.Interface = iface
 		out.ClientNetHint.Domain = domain
 		return out
@@ -119,7 +116,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		},
 		"getAttachInfo fails": {
 			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{Sys: testSys}),
-			mockGetAttachInfo: func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
+			mockGetAttachInfo: func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error) {
 				return nil, errors.New("mock GetAttachInfo")
 			},
 			expErr: errors.New("mock GetAttachInfo"),
@@ -148,21 +145,21 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		},
 		"incompatible error": {
 			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{}),
-			mockGetAttachInfo: func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
+			mockGetAttachInfo: func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error) {
 				return nil, &fault.Fault{Code: code.ServerWrongSystem}
 			},
 			expResp: &mgmtpb.GetAttachInfoResp{Status: int32(daos.ControlIncompatible)},
 		},
 		"bad cert error": {
 			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{}),
-			mockGetAttachInfo: func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
+			mockGetAttachInfo: func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error) {
 				return nil, &fault.Fault{Code: code.SecurityInvalidCert}
 			},
 			expResp: &mgmtpb.GetAttachInfoResp{Status: int32(daos.BadCert)},
 		},
 		"MS connection error": {
 			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{}),
-			mockGetAttachInfo: func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
+			mockGetAttachInfo: func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error) {
 				return nil, errors.Errorf("unable to contact the %s", build.ManagementServiceName)
 			},
 			expResp: &mgmtpb.GetAttachInfoResp{Status: int32(daos.Unreachable)},
@@ -179,7 +176,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 			}
 
 			if tc.mockGetAttachInfo == nil {
-				tc.mockGetAttachInfo = func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
+				tc.mockGetAttachInfo = func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error) {
 					return testResp, nil
 				}
 			}
@@ -272,7 +269,7 @@ func TestAgent_mgmtModule_getAttachInfo_Parallel(t *testing.T) {
 			nf.getAddrInterface = mockGetAddrInterface
 			return nf, nil
 		},
-		mockGetAttachInfo: control.GetAttachInfo,
+		mockGetAttachInfo: control.GetAttachInfoRaw,
 	})
 
 	mod := &mgmtModule{
@@ -347,7 +344,7 @@ func TestAgent_mgmtModule_getNUMANode(t *testing.T) {
 
 			mod := &mgmtModule{
 				log:            log,
-				useDefaultNUMA: tc.useDefaultNUMA,
+				useDefaultNUMA: atm.NewBool(tc.useDefaultNUMA),
 				numaGetter:     tc.numaGetter,
 			}
 
@@ -380,7 +377,7 @@ func TestAgent_mgmtModule_RefreshCache(t *testing.T) {
 		"nothing cached": {
 			getInfoCache: func(log logging.Logger) *InfoCache {
 				return newTestInfoCache(t, log, testInfoCacheParams{
-					mockGetAttachInfo: func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
+					mockGetAttachInfo: func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error) {
 						return nil, errors.New("shouldn't call getAttachInfo")
 					},
 					mockScanFabric: func(_ context.Context, _ ...string) (*NUMAFabric, error) {

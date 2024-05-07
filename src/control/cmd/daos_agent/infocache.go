@@ -18,6 +18,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/cache"
 	"github.com/daos-stack/daos/src/control/lib/control"
@@ -32,7 +33,7 @@ const (
 	fabricKey     = "NUMAFabric"
 )
 
-type getAttachInfoFn func(ctx context.Context, rpcClient control.UnaryInvoker, req *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error)
+type getAttachInfoFn func(ctx context.Context, rpcClient control.UnaryInvoker, req *control.GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error)
 type fabricScanFn func(ctx context.Context, providers ...string) (*NUMAFabric, error)
 
 // NewInfoCache creates a new InfoCache with appropriate parameters set.
@@ -42,7 +43,7 @@ func NewInfoCache(ctx context.Context, log logging.Logger, client control.UnaryI
 		ignoreIfaces:    cfg.ExcludeFabricIfaces,
 		client:          client,
 		cache:           cache.NewItemCache(log),
-		getAttachInfoCb: control.GetAttachInfo,
+		getAttachInfoCb: control.GetAttachInfoRaw,
 		fabricScan:      getFabricScanFn(log, cfg, hwprov.DefaultFabricScanner(log)),
 		netIfaces:       net.Interfaces,
 		devClassGetter:  hwprov.DefaultNetDevClassProvider(log),
@@ -80,11 +81,13 @@ func getFabricScanFn(log logging.Logger, cfg *Config, scanner *hardware.FabricSc
 }
 
 type cacheItem struct {
-	sync.Mutex
+	sync.RWMutex
 	lastCached      time.Time
 	refreshInterval time.Duration
 }
 
+// isStale returns true if the cache item is stale.
+// NB: Should be run under a lock to protect lastCached.
 func (ci *cacheItem) isStale() bool {
 	if ci.refreshInterval == 0 {
 		return false
@@ -92,6 +95,8 @@ func (ci *cacheItem) isStale() bool {
 	return ci.lastCached.Add(ci.refreshInterval).Before(time.Now())
 }
 
+// isCached returns true if the cache item is cached.
+// NB: Should be run under at least a read lock to protect lastCached.
 func (ci *cacheItem) isCached() bool {
 	return !ci.lastCached.Equal(time.Time{})
 }
@@ -101,7 +106,7 @@ type cachedAttachInfo struct {
 	fetch        getAttachInfoFn
 	system       string
 	rpcClient    control.UnaryInvoker
-	lastResponse *control.GetAttachInfoResp
+	lastResponse *mgmtpb.GetAttachInfoResp
 }
 
 func newCachedAttachInfo(refreshInterval time.Duration, system string, rpcClient control.UnaryInvoker, fetchFn getAttachInfoFn) *cachedAttachInfo {
@@ -130,16 +135,30 @@ func (ci *cachedAttachInfo) Key() string {
 	return sysAttachInfoKey(ci.system)
 }
 
-// NeedsRefresh checks whether the cached data needs to be refreshed.
-func (ci *cachedAttachInfo) NeedsRefresh() bool {
+// needsRefresh checks whether the cached data needs to be refreshed.
+func (ci *cachedAttachInfo) needsRefresh() bool {
 	if ci == nil {
 		return false
 	}
 	return !ci.isCached() || ci.isStale()
 }
 
-// Refresh contacts the remote management server and refreshes the GetAttachInfo cache.
-func (ci *cachedAttachInfo) Refresh(ctx context.Context) error {
+// RefreshIfNeeded refreshes the cached data if it needs to be refreshed.
+func (ci *cachedAttachInfo) RefreshIfNeeded(ctx context.Context) (func(), bool, error) {
+	if ci == nil {
+		return cache.NoopRelease, false, errors.New("cachedAttachInfo is nil")
+	}
+
+	ci.Lock()
+	if ci.needsRefresh() {
+		return ci.Unlock, true, ci.refresh(ctx)
+	}
+	return ci.Unlock, false, nil
+}
+
+// refresh implements the actual refresh logic.
+// NB: Should be run under a lock.
+func (ci *cachedAttachInfo) refresh(ctx context.Context) error {
 	if ci == nil {
 		return errors.New("cachedAttachInfo is nil")
 	}
@@ -155,13 +174,23 @@ func (ci *cachedAttachInfo) Refresh(ctx context.Context) error {
 	return nil
 }
 
+// Refresh contacts the remote management server and refreshes the GetAttachInfo cache.
+func (ci *cachedAttachInfo) Refresh(ctx context.Context) (func(), error) {
+	if ci == nil {
+		return cache.NoopRelease, errors.New("cachedAttachInfo is nil")
+	}
+
+	ci.Lock()
+	return ci.Unlock, ci.refresh(ctx)
+}
+
 type cachedFabricInfo struct {
 	cacheItem
 	fetch       fabricScanFn
 	lastResults *NUMAFabric
 }
 
-func newCachedFabricInfo(log logging.Logger, fetchFn fabricScanFn) *cachedFabricInfo {
+func newCachedFabricInfo(_ logging.Logger, fetchFn fabricScanFn) *cachedFabricInfo {
 	return &cachedFabricInfo{
 		fetch: fetchFn,
 	}
@@ -172,17 +201,31 @@ func (cfi *cachedFabricInfo) Key() string {
 	return fabricKey
 }
 
-// NeedsRefresh indicates that the fabric information does not need to be refreshed unless it has
+// needsRefresh indicates that the fabric information does not need to be refreshed unless it has
 // never been populated.
-func (cfi *cachedFabricInfo) NeedsRefresh() bool {
+func (cfi *cachedFabricInfo) needsRefresh() bool {
 	if cfi == nil {
 		return false
 	}
 	return !cfi.isCached()
 }
 
-// Refresh scans the hardware for information about the fabric devices and caches the result.
-func (cfi *cachedFabricInfo) Refresh(ctx context.Context) error {
+// RefreshIfNeeded refreshes the cached fabric information if it needs to be refreshed.
+func (cfi *cachedFabricInfo) RefreshIfNeeded(ctx context.Context) (func(), bool, error) {
+	if cfi == nil {
+		return cache.NoopRelease, false, errors.New("cachedFabricInfo is nil")
+	}
+
+	cfi.Lock()
+	if cfi.needsRefresh() {
+		return cfi.Unlock, true, cfi.refresh(ctx)
+	}
+	return cfi.Unlock, false, nil
+}
+
+// refresh implements the actual refresh logic.
+// NB: Should be run under a lock.
+func (cfi *cachedFabricInfo) refresh(ctx context.Context) error {
 	if cfi == nil {
 		return errors.New("cachedFabricInfo is nil")
 	}
@@ -195,6 +238,16 @@ func (cfi *cachedFabricInfo) Refresh(ctx context.Context) error {
 	cfi.lastResults = results
 	cfi.lastCached = time.Now()
 	return nil
+}
+
+// Refresh scans the hardware for information about the fabric devices and caches the result.
+func (cfi *cachedFabricInfo) Refresh(ctx context.Context) (func(), error) {
+	if cfi == nil {
+		return cache.NoopRelease, errors.New("cachedFabricInfo is nil")
+	}
+
+	cfi.Lock()
+	return cfi.Unlock, cfi.refresh(ctx)
 }
 
 // InfoCache is a cache for the results of expensive operations needed by the agent.
@@ -298,7 +351,7 @@ func (c *InfoCache) EnableStaticFabricCache(ctx context.Context, nf *NUMAFabric)
 	c.EnableFabricCache()
 }
 
-func (c *InfoCache) getAttachInfo(ctx context.Context, rpcClient control.UnaryInvoker, req *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
+func (c *InfoCache) getAttachInfo(ctx context.Context, rpcClient control.UnaryInvoker, req *control.GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error) {
 	if c == nil {
 		return nil, errors.New("InfoCache is nil")
 	}
@@ -316,7 +369,7 @@ func (c *InfoCache) getAttachInfo(ctx context.Context, rpcClient control.UnaryIn
 
 // addTelemetrySettings modifies the response by adding telemetry settings
 // before returning it.
-func (c *InfoCache) addTelemetrySettings(resp *control.GetAttachInfoResp) {
+func (c *InfoCache) addTelemetrySettings(resp *mgmtpb.GetAttachInfoResp) {
 	if c == nil || resp == nil {
 		return
 	}
@@ -334,7 +387,7 @@ func (c *InfoCache) addTelemetrySettings(resp *control.GetAttachInfoResp) {
 }
 
 // GetAttachInfo fetches the attach info from the cache, and refreshes if necessary.
-func (c *InfoCache) GetAttachInfo(ctx context.Context, sys string) (*control.GetAttachInfoResp, error) {
+func (c *InfoCache) GetAttachInfo(ctx context.Context, sys string) (*mgmtpb.GetAttachInfoResp, error) {
 	if c == nil {
 		return nil, errors.New("InfoCache is nil")
 	}
@@ -349,46 +402,33 @@ func (c *InfoCache) GetAttachInfo(ctx context.Context, sys string) (*control.Get
 	}
 	createItem := func() (cache.Item, error) {
 		c.log.Debugf("cache miss for %s", sysAttachInfoKey(sys))
-		cai := newCachedAttachInfo(c.attachInfoRefresh, sys, c.client, c.getAttachInfo)
-		return cai, nil
+		return newCachedAttachInfo(c.attachInfoRefresh, sys, c.client, c.getAttachInfo), nil
 	}
 
 	item, release, err := c.cache.GetOrCreate(ctx, sysAttachInfoKey(sys), createItem)
-	defer release()
 	if err != nil {
 		return nil, errors.Wrap(err, "getting attach info from cache")
 	}
+	defer release()
 
 	cai, ok := item.(*cachedAttachInfo)
 	if !ok {
 		return nil, errors.Errorf("unexpected attach info data type %T", item)
 	}
 
-	return copyGetAttachInfoResp(cai.lastResponse), nil
+	// NB: We're now leaving the safety of the lock taken in GetOrCreate()!
+	// The item itself (e.g. the lastResponse field) should not be accessed
+	// again unless at least a read lock has been acquired. The value of
+	// lastResponse returned here is a pointer to a protobuf message, and
+	// as long as that message's fields are only read by callers, it's safe
+	// to access concurrently. It should be noted that a pointer to a new
+	// message could be stored after a handler has received the previous pointer
+	// and that handler might return the older version of the message. Not
+	// too much we can do about that without a massive performance hit, though.
+	return cai.lastResponse, nil
 }
 
-func copyGetAttachInfoResp(orig *control.GetAttachInfoResp) *control.GetAttachInfoResp {
-	if orig == nil {
-		return nil
-	}
-
-	cp := new(control.GetAttachInfoResp)
-	*cp = *orig
-
-	// Copy slices instead of using original pointers
-	cp.MSRanks = make([]uint32, len(orig.MSRanks))
-	_ = copy(cp.MSRanks, orig.MSRanks)
-	cp.ServiceRanks = make([]*control.PrimaryServiceRank, len(orig.ServiceRanks))
-	_ = copy(cp.ServiceRanks, orig.ServiceRanks)
-
-	if orig.ClientNetHint.EnvVars != nil {
-		cp.ClientNetHint.EnvVars = make([]string, len(orig.ClientNetHint.EnvVars))
-		_ = copy(cp.ClientNetHint.EnvVars, orig.ClientNetHint.EnvVars)
-	}
-	return cp
-}
-
-func (c *InfoCache) getAttachInfoRemote(ctx context.Context, sys string) (*control.GetAttachInfoResp, error) {
+func (c *InfoCache) getAttachInfoRemote(ctx context.Context, sys string) (*mgmtpb.GetAttachInfoResp, error) {
 	c.log.Debug("GetAttachInfo not cached, fetching directly from MS")
 	// Ask the MS for _all_ info, regardless of pbReq.AllRanks, so that the
 	// cache can serve future "pbReq.AllRanks == true" requests.
