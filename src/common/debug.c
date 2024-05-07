@@ -331,4 +331,21 @@ daos_de2str(const char *de)
 	return "<entry too long>";
 }
 
+char *
+daos_path2str(const char *path)
+{
+	int i;
+
+	if (!path)
+		return "<NULL>";
+
+	for (i = 0; i < PATH_MAX; i++) {
+		if (path[i] == '\0')
+			return (char *)path;
+		if (!isprint(path[i]) || path[i] == '\'')
+			return "<not printable>";
+	}
+	return "<path too long>";
+}
+
 #endif

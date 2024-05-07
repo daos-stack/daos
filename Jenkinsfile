@@ -136,6 +136,19 @@ void rpm_test_post(String stage_name, String node) {
     job_status_update()
 }
 
+/**
+ * Update default commit pragmas based on files modified.
+ */
+Map update_default_commit_pragmas() {
+    String default_pragmas_str = sh(script: 'ci/gen_commit_pragmas.py --target origin/' + target_branch,
+                                    returnStdout: true).trim()
+    println("pragmas from gen_commit_pragmas.py:")
+    println(default_pragmas_str)
+    if (default_pragmas_str) {
+        updatePragmas(default_pragmas_str, false)
+    }
+}
+
 pipeline {
     agent { label 'lightweight' }
 
@@ -329,6 +342,7 @@ pipeline {
                 stage('Get Commit Message') {
                     steps {
                         pragmasToEnv()
+                        update_default_commit_pragmas()
                     }
                 }
                 stage('Determine Release Branch') {

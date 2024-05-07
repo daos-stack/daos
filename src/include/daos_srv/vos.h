@@ -287,38 +287,41 @@ vos_self_fini(void);
  * Create a Versioning Object Storage Pool (VOSP), and open it if \a poh is not
  * NULL
  *
- * \param path		[IN] Path of the memory pool
- * \param uuid		[IN] Pool UUID
- * \param scm_sz	[IN] Size of SCM for the pool
- * \param data_blob_sz	[IN] Size of Data blob for the pool
- * \param wal_sz	[IN] Size of WAL blob for the pool
- * \param meta_blob_sz	[IN] Size of Meta blob for the pool
- * \param flags	[IN] Pool open flags (see vos_pool_open_flags)
- * \param poh		[OUT] Returned pool handle if not NULL
+ * \param path	[IN]	Path of the memory pool
+ * \param uuid	[IN]    Pool UUID
+ * \param scm_sz [IN]	Size of SCM for the pool
+ * \param data_sz[IN]	Size of data blob for the pool
+ * \param wal_sz [IN]	Size of WAL blob for the pool
+ * \param meta_sz[IN]	Size of Meta blob for the pool
+ * \param flags [IN]	Pool open flags (see vos_pool_open_flags)
+ * \param version[IN]	Pool version (0 for default version)
+ * \param poh	[OUT]	Returned pool handle if not NULL
  *
  * \return              Zero on success, negative value if error
  */
 int
-vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t data_blob_sz,
-		   daos_size_t wal_sz, daos_size_t meta_blob_sz, unsigned int flags,
+vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t data_sz,
+		   daos_size_t wal_sz, daos_size_t meta_sz, unsigned int flags, uint32_t version,
 		   daos_handle_t *poh);
+
 /**
  * Create a Versioning Object Storage Pool (VOSP), and open it if \a poh is not
  * NULL
  *
- * \param path		[IN] Path of the memory pool
- * \param uuid		[IN] Pool UUID
- * \param scm_sz	[IN] Size of SCM for the pool
- * \param data_blob_sz	[IN] Size of Data blob for the pool
- * \param meta_blob_sz	[IN] Size of Meta blob for the pool
- * \param flags	[IN] Pool open flags (see vos_pool_open_flags)
- * \param poh		[OUT] Returned pool handle if not NULL
+ * \param path	[IN]	Path of the memory pool
+ * \param uuid	[IN]    Pool UUID
+ * \param scm_sz [IN]	Size of SCM for the pool
+ * \param data_sz[IN]	Size of data blob for the pool
+ * \param meta_sz[IN]	Size of Meta blob for the pool
+ * \param flags [IN]	Pool open flags (see vos_pool_open_flags)
+ * \param version[IN]	Pool version (0 for default version)
+ * \param poh	[OUT]	Returned pool handle if not NULL
  *
  * \return              Zero on success, negative value if error
  */
 int
-vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t data_blob_sz,
-		daos_size_t meta_blob_sz, unsigned int flags, daos_handle_t *poh);
+vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t data_sz,
+		daos_size_t meta_sz, unsigned int flags, uint32_t version, daos_handle_t *poh);
 
 /**
  * Kill a VOS pool before destroy

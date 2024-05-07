@@ -1096,13 +1096,15 @@ static int pool_open(void *ph, struct vos_pool_df *pool_df,
 
 int
 vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t nvme_sz,
-		   daos_size_t wal_sz, daos_size_t meta_sz, unsigned int flags, daos_handle_t *poh)
+		   daos_size_t wal_sz, daos_size_t meta_sz, unsigned int flags, uint32_t version,
+		   daos_handle_t *poh)
 {
 	struct umem_pool	*ph;
 	struct umem_attr	 uma = {0};
 	struct umem_instance	 umem = {0};
 	struct vos_pool_df	*pool_df;
 	struct bio_blob_hdr	 blob_hdr;
+	uint32_t		 vea_compat = 0;
 	daos_handle_t		 hdl;
 	struct d_uuid		 ukey;
 	struct vos_pool		*pool = NULL;
@@ -1111,8 +1113,15 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_
 	if (!path || uuid_is_null(uuid) || daos_file_is_dax(path))
 		return -DER_INVAL;
 
-	D_DEBUG(DB_MGMT, "Pool Path: %s, size: "DF_U64":"DF_U64" (meta: "DF_U64"), "
-		"UUID: "DF_UUID"\n", path, scm_sz, nvme_sz, meta_sz, DP_UUID(uuid));
+	if (version == 0)
+		version = POOL_DF_VERSION;
+	else if (version < POOL_DF_VER_1 || version > POOL_DF_VERSION)
+		return -DER_INVAL;
+
+	D_DEBUG(DB_MGMT,
+		"Pool Path: %s, size: " DF_U64 ":" DF_U64 ":" DF_U64 ", "
+		"UUID: " DF_UUID ", version: %u\n",
+		path, scm_sz, nvme_sz, meta_sz, DP_UUID(uuid), version);
 
 	if (flags & VOS_POF_SMALL)
 		flags |= VOS_POF_EXCL;
@@ -1185,7 +1194,7 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_
 	if (DAOS_FAIL_CHECK(FLC_POOL_DF_VER))
 		pool_df->pd_version = 0;
 	else
-		pool_df->pd_version = POOL_DF_VERSION;
+		pool_df->pd_version = version;
 
 	gc_init_pool(&umem, pool_df);
 end:
@@ -1213,10 +1222,15 @@ end:
 	blob_hdr.bbh_hdr_sz = VOS_BLOB_HDR_BLKS;
 	uuid_copy(blob_hdr.bbh_pool, uuid);
 
+	/* Determine VEA compatibility bits */
+	/* TODO: only enable bitmap for large pool size */
+	if (version >= VOS_POOL_DF_2_6)
+		vea_compat |= VEA_COMPAT_FEATURE_BITMAP;
+
 	/* Format SPDK blob*/
 	rc = vea_format(&umem, vos_txd_get(flags & VOS_POF_SYSDB), &pool_df->pd_vea_df,
 			VOS_BLK_SZ, VOS_BLOB_HDR_BLKS, nvme_sz, vos_blob_format_cb,
-			&blob_hdr, false);
+			&blob_hdr, false, vea_compat);
 	if (rc) {
 		D_ERROR("Format blob error for pool:"DF_UUID". "DF_RC"\n",
 			DP_UUID(uuid), DP_RC(rc));
@@ -1242,11 +1256,11 @@ close:
 }
 
 int
-vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t nvme_sz,
-		daos_size_t meta_sz, unsigned int flags, daos_handle_t *poh)
+vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t data_sz,
+		daos_size_t meta_sz, unsigned int flags, uint32_t version, daos_handle_t *poh)
 {
 	/* create vos pool with default WAL size */
-	return vos_pool_create_ex(path, uuid, scm_sz, nvme_sz, 0, meta_sz, flags, poh);
+	return vos_pool_create_ex(path, uuid, scm_sz, data_sz, 0, meta_sz, flags, version, poh);
 }
 
 /**
@@ -1617,11 +1631,14 @@ vos_pool_upgrade(daos_handle_t poh, uint32_t version)
 
 	pool_df = pool->vp_pool_df;
 
-	if (version == pool_df->pd_version)
+	if (version <= pool_df->pd_version) {
+		D_INFO(DF_UUID ": Ignore pool durable format upgrade from version %u to %u\n",
+		       DP_UUID(pool->vp_id), pool_df->pd_version, version);
 		return 0;
+	}
 
-	D_DEBUG(DB_MGMT, "Attempting upgrade pool durable format from %d to %d\n",
-		pool_df->pd_version, version);
+	D_INFO(DF_UUID ": Attempting pool durable format upgrade from %d to %d\n",
+	       DP_UUID(pool->vp_id), pool_df->pd_version, version);
 	D_ASSERTF(version > pool_df->pd_version && version <= POOL_DF_VERSION,
 		  "Invalid pool upgrade version %d, current version is %d\n", version,
 		  pool_df->pd_version);

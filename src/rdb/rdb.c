@@ -20,19 +20,16 @@
 static int rdb_open_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid,
 			     uint64_t caller_term, struct rdb_cbs *cbs, void *arg,
 			     struct rdb **dbp);
-static int
-rdb_chkptd_start(struct rdb *db);
-static void
-rdb_chkptd_stop(struct rdb *db);
 
 /**
- * Create an RDB replica at \a path with \a uuid, \a size, and \a replicas, and
- * open it with \a cbs and \a arg.
+ * Create an RDB replica at \a path with \a uuid, \a caller_term, \a size,
+ * \a vos_df_version, and \a replicas, and open it with \a cbs and \a arg.
  *
  * \param[in]	path		replica path
  * \param[in]	uuid		database UUID
  * \param[in]	caller_term	caller term if not RDB_NIL_TERM (see rdb_open)
  * \param[in]	size		replica size in bytes
+ * \param[in]	vos_df_version	version of VOS durable format
  * \param[in]	replicas	list of replica ranks
  * \param[in]	cbs		callbacks (not copied)
  * \param[in]	arg		argument for cbs
@@ -40,7 +37,7 @@ rdb_chkptd_stop(struct rdb *db);
  */
 int
 rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t size,
-	   const d_rank_list_t *replicas, struct rdb_cbs *cbs, void *arg,
+	   uint32_t vos_df_version, const d_rank_list_t *replicas, struct rdb_cbs *cbs, void *arg,
 	   struct rdb_storage **storagep)
 {
 	daos_handle_t	pool;
@@ -51,16 +48,18 @@ rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t siz
 	int		rc;
 
 	D_DEBUG(DB_MD,
-		DF_UUID ": creating db %s with %u replicas: caller_term=" DF_X64 " size=" DF_U64,
-		DP_UUID(uuid), path, replicas == NULL ? 0 : replicas->rl_nr, caller_term, size);
+		DF_UUID ": creating db %s with %u replicas: caller_term=" DF_X64 " size=" DF_U64
+			" vos_df_version=%u\n",
+		DP_UUID(uuid), path, replicas == NULL ? 0 : replicas->rl_nr, caller_term, size,
+		vos_df_version);
 
 	/*
 	 * Create and open a VOS pool. RDB pools specify VOS_POF_SMALL for
 	 * basic system memory reservation and VOS_POF_EXCL for concurrent
 	 * access protection.
 	 */
-	rc = vos_pool_create(path, (unsigned char *)uuid, size, 0 /* nvme_sz */, 0 /* meta_sz */,
-			     VOS_POF_SMALL | VOS_POF_EXCL | VOS_POF_RDB, &pool);
+	rc = vos_pool_create(path, (unsigned char *)uuid, size, 0 /* data_sz */, 0 /* meta_sz */,
+			     VOS_POF_SMALL | VOS_POF_EXCL | VOS_POF_RDB, vos_df_version, &pool);
 	if (rc != 0)
 		goto out;
 	ABT_thread_yield();
@@ -75,8 +74,7 @@ rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t siz
 
 	/* Initialize the layout version. */
 	d_iov_set(&value, &version, sizeof(version));
-	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_version,
-			   &value);
+	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_version, &value, NULL /* vtx */);
 	if (rc != 0)
 		goto out_mc_hdl;
 
@@ -90,7 +88,7 @@ rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t siz
 	 * rdb_start() checks this attribute when starting a DB.
 	 */
 	d_iov_set(&value, (void *)uuid, sizeof(uuid_t));
-	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_uuid, &value);
+	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_uuid, &value, NULL /* vtx */);
 	if (rc != 0)
 		goto out_mc_hdl;
 
@@ -228,6 +226,9 @@ rdb_lookup(const uuid_t uuid)
 		return NULL;
 	return rdb_obj(entry);
 }
+
+static int rdb_chkptd_start(struct rdb *db);
+static void rdb_chkptd_stop(struct rdb *db);
 
 /*
  * If created successfully, the new DB handle will consume pool and mc, which

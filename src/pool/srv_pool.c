@@ -45,11 +45,11 @@
 #define PS_OPS_PER_SEC                            4096
 
 /*
- * Return the corresponding VOS pool DF version or 0 if pool_global_version is
- * not supported.
+ * Return the corresponding VOS DF version or 0 if pool_global_version is not
+ * supported.
  */
 uint32_t
-ds_pool_get_vos_pool_df_version(uint32_t pool_global_version)
+ds_pool_get_vos_df_version(uint32_t pool_global_version)
 {
 	if (pool_global_version >= 3)
 		return VOS_POOL_DF_2_6;
@@ -995,7 +995,8 @@ ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
 
 	d_iov_set(&psid, (void *)pool_uuid, sizeof(uuid_t));
 	rc = ds_rsvc_dist_start(DS_RSVC_CLASS_POOL, &psid, pool_uuid, ranks, RDB_NIL_TERM,
-				DS_RSVC_CREATE, true /* bootstrap */, ds_rsvc_get_md_cap());
+				DS_RSVC_CREATE, true /* bootstrap */, ds_rsvc_get_md_cap(),
+				0 /* vos_df_version */);
 	if (rc != 0)
 		D_GOTO(out_ranks, rc);
 
@@ -1584,6 +1585,7 @@ ds_pool_svc_load(struct rdb_tx *tx, uuid_t uuid, rdb_path_t *root, uint32_t *glo
 			DP_UUID(uuid), DP_RC(rc));
 		goto out;
 	}
+	D_INFO(DF_UUID ": layout version %u\n", DP_UUID(uuid), global_version);
 	version_exists = true;
 
 	/**
@@ -2238,7 +2240,7 @@ start_one(uuid_t uuid, void *varg)
 
 	d_iov_set(&id, uuid, sizeof(uuid_t));
 	ds_rsvc_start(DS_RSVC_CLASS_POOL, &id, uuid, RDB_NIL_TERM, DS_RSVC_START /* mode */,
-		      0 /* size */, NULL /* replicas */, NULL /* arg */);
+		      0 /* size */, 0 /* vos_df_version */, NULL /* replicas */, NULL /* arg */);
 	return 0;
 }
 
@@ -6534,12 +6536,12 @@ pool_svc_reconf_ult(void *varg)
 	struct pool_svc_reconf_arg *arg    = reconf->psc_arg;
 	struct pool_svc            *svc;
 	struct pool_map            *map;
-	d_rank_list_t              *current;
+	d_rank_list_t              *pre;
 	d_rank_list_t              *to_add;
 	d_rank_list_t              *to_remove;
-	d_rank_list_t *new;
-	uint64_t rdb_nbytes = 0;
-	int      rc;
+	d_rank_list_t              *post;
+	uint64_t                    rdb_nbytes = 0;
+	int                         rc;
 
 	svc = container_of(reconf, struct pool_svc, ps_reconf_sched);
 
@@ -6564,7 +6566,7 @@ pool_svc_reconf_ult(void *varg)
 		}
 	}
 
-	rc = rdb_get_ranks(svc->ps_rsvc.s_db, &current);
+	rc = rdb_get_ranks(svc->ps_rsvc.s_db, &pre);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to get pool service replica ranks: "DF_RC"\n",
 			DP_UUID(svc->ps_uuid), DP_RC(rc));
@@ -6581,7 +6583,7 @@ pool_svc_reconf_ult(void *varg)
 
 	if (arg->sca_map == NULL)
 		ABT_rwlock_rdlock(svc->ps_pool->sp_lock);
-	rc = ds_pool_plan_svc_reconfs(svc->ps_svc_rf, map, current, dss_self_rank(),
+	rc = ds_pool_plan_svc_reconfs(svc->ps_svc_rf, map, pre, dss_self_rank(),
 				      arg->sca_sync_remove /* filter_only */, &to_add, &to_remove);
 	if (arg->sca_map == NULL)
 		ABT_rwlock_unlock(svc->ps_pool->sp_lock);
@@ -6591,9 +6593,8 @@ pool_svc_reconf_ult(void *varg)
 		goto out_cur;
 	}
 
-	D_DEBUG(DB_MD, DF_UUID": svc_rf=%d current=%u to_add=%u to_remove=%u\n",
-		DP_UUID(svc->ps_uuid), svc->ps_svc_rf, current->rl_nr, to_add->rl_nr,
-		to_remove->rl_nr);
+	D_DEBUG(DB_MD, DF_UUID ": svc_rf=%d pre=%u to_add=%u to_remove=%u\n", DP_UUID(svc->ps_uuid),
+		svc->ps_svc_rf, pre->rl_nr, to_add->rl_nr, to_remove->rl_nr);
 
 	/*
 	 * Ignore the return values from the "add" and "remove" calls here. If
@@ -6604,7 +6605,12 @@ pool_svc_reconf_ult(void *varg)
 	 * membership changes to the MS.
 	 */
 	if (!arg->sca_sync_remove && to_add->rl_nr > 0) {
-		ds_rsvc_add_replicas_s(&svc->ps_rsvc, to_add, rdb_nbytes);
+		uint32_t vos_df_version;
+
+		vos_df_version = ds_pool_get_vos_df_version(svc->ps_global_version);
+		D_ASSERTF(vos_df_version != 0, DF_UUID ": vos_df_version=0 global_version=%u\n",
+			  DP_UUID(svc->ps_uuid), svc->ps_global_version);
+		ds_rsvc_add_replicas_s(&svc->ps_rsvc, to_add, rdb_nbytes, vos_df_version);
 		if (reconf->psc_canceled) {
 			rc = -DER_OP_CANCELED;
 			goto out_to_add_remove;
@@ -6638,15 +6644,16 @@ pool_svc_reconf_ult(void *varg)
 		d_rank_list_free(tmp);
 	}
 
-	if (rdb_get_ranks(svc->ps_rsvc.s_db, &new) == 0) {
-		if (svc->ps_force_notify || !d_rank_list_identical(new, current)) {
+	if (rdb_get_ranks(svc->ps_rsvc.s_db, &post) == 0) {
+		if (svc->ps_force_notify || !d_rank_list_identical(post, pre)) {
 			int rc_tmp;
 
 			/*
 			 * Send RAS event to control-plane over dRPC to indicate
 			 * change in pool service replicas.
 			 */
-			rc_tmp = ds_notify_pool_svc_update(&svc->ps_uuid, new, svc->ps_rsvc.s_term);
+			rc_tmp = ds_notify_pool_svc_update(&svc->ps_uuid, post,
+							   svc->ps_rsvc.s_term);
 			if (rc_tmp == 0)
 				svc->ps_force_notify = false;
 			else
@@ -6654,7 +6661,7 @@ pool_svc_reconf_ult(void *varg)
 					 DP_UUID(svc->ps_uuid));
 		}
 
-		d_rank_list_free(new);
+		d_rank_list_free(post);
 	}
 	if (reconf->psc_canceled) {
 		rc = -DER_OP_CANCELED;
@@ -6675,7 +6682,7 @@ out_to_add_remove:
 	d_rank_list_free(to_remove);
 	d_rank_list_free(to_add);
 out_cur:
-	d_rank_list_free(current);
+	d_rank_list_free(pre);
 out:
 	/* Do not yield between the D_FREE and the sched_end. */
 	D_FREE(reconf->psc_arg);
@@ -6999,7 +7006,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 	 * if there's another PS replica, or reject it.
 	 */
 	node = pool_map_find_node_by_rank(map, dss_self_rank());
-	if (node == NULL || !(node->do_comp.co_status & POOL_SVC_MAP_STATES)) {
+	if (node == NULL || !(node->do_comp.co_status & DC_POOL_SVC_MAP_STATES)) {
 		d_rank_list_t *replicas;
 
 		rc = rdb_get_ranks(svc->ps_rsvc.s_db, &replicas);
@@ -7993,7 +8000,7 @@ ds_pool_ranks_get_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = -DER_INVAL);
 
 	/* Get available ranks */
-	rc = ds_pool_get_ranks(in->prgi_op.pi_uuid, POOL_GROUP_MAP_STATES, &out_ranks);
+	rc = ds_pool_get_ranks(in->prgi_op.pi_uuid, DC_POOL_GROUP_MAP_STATES, &out_ranks);
 	if (rc != 0) {
 		D_ERROR(DF_UUID ": get ranks failed, " DF_RC "\n",
 			DP_UUID(in->prgi_op.pi_uuid), DP_RC(rc));
@@ -8433,8 +8440,15 @@ ds_pool_replicas_update_handler(crt_rpc_t *rpc)
 
 	switch (opc_get(rpc->cr_opc)) {
 	case POOL_REPLICAS_ADD:
-		rc = ds_rsvc_add_replicas(DS_RSVC_CLASS_POOL, &id, ranks,
-					  ds_rsvc_get_md_cap(), &out->pmo_hint);
+		/*
+		 * Before starting to use this unused RPC, we need to fix the
+		 * arguments passed to ds_rsvc_add_replicas. The size argument
+		 * might need to be retrieved from an existing replica; the
+		 * vos_df_version argument needs to be determined somehow.
+		 */
+		D_ASSERTF(false, "code fixes required before use");
+		rc = ds_rsvc_add_replicas(DS_RSVC_CLASS_POOL, &id, ranks, ds_rsvc_get_md_cap(),
+					  0 /* vos_df_version */, &out->pmo_hint);
 		break;
 
 	case POOL_REPLICAS_REMOVE:
@@ -8948,7 +8962,7 @@ ds_pool_svc_upgrade_vos_pool(struct ds_pool *pool)
 	uint32_t        df_version;
 	int             rc;
 
-	df_version = ds_pool_get_vos_pool_df_version(pool->sp_global_version);
+	df_version = ds_pool_get_vos_df_version(pool->sp_global_version);
 	if (df_version == 0) {
 		rc = -DER_NO_PERM;
 		DL_ERROR(rc, DF_UUID ": pool global version %u no longer supported",
