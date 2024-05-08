@@ -383,14 +383,14 @@ sched_ult2xs_multisocket(int xs_type, int tgt_id)
 			/* Keep the old forwarding behavior, but NUMA aware */
 			target = (socket * dss_tgt_per_numa_nr) +
 				 (tgt_id + offload) % dss_tgt_per_numa_nr;
-			target  = DSS_MAIN_XS_ID(target);
+			target = DSS_MAIN_XS_ID(target);
 			goto check;
 		}
 		return DSS_XS_SELF;
 	}
 
-	base    = dss_sys_xs_nr + dss_tgt_nr + (socket * dss_offload_per_numa_nr);
-	target  = base + ((offload + tgt_id) % dss_offload_per_numa_nr);
+	base   = dss_sys_xs_nr + dss_tgt_nr + (socket * dss_offload_per_numa_nr);
+	target = base + ((offload + tgt_id) % dss_offload_per_numa_nr);
 
 check:
 	D_ASSERT(target < DSS_XS_NR_TOTAL && target >= dss_sys_xs_nr);
