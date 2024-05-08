@@ -1,11 +1,12 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 
 import security_test_base as secTestBase
+from agent_utils import include_local_host
 from cont_security_test_base import ContSecurityTestBase
 from pool_security_test_base import PoolSecurityTestBase
 
@@ -16,6 +17,10 @@ class DaosContainerSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
 
     :avocado: recursive
     """
+
+    def _get_acl_file_name(self):
+        return os.path.join(self.tmp, self.params.get("acl_file_name", "/run/container_acl/*",
+                                                      "cont_test_acl.txt"))
 
     def test_container_user_acl(self):
         """
@@ -70,12 +75,10 @@ class DaosContainerSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
         property_name, property_value = self.params.get(
             "property", "/run/container_acl/*")
         secTestBase.add_del_user(
-            self.hostlist_clients, "useradd", new_test_user)
+            include_local_host(self.hostlist_clients), "useradd", new_test_user)
         secTestBase.add_del_user(
-            self.hostlist_clients, "groupadd", new_test_group)
-        acl_file_name = os.path.join(
-            self.tmp, self.params.get(
-                "acl_file_name", "/run/container_acl/*", "cont_test_acl.txt"))
+            include_local_host(self.hostlist_clients), "groupadd", new_test_group)
+        acl_file_name = self._get_acl_file_name()
         test_user = self.params.get(
             "testuser", "/run/container_acl/daos_user/*")
         test_user_type = secTestBase.get_user_type(test_user)
@@ -205,3 +208,43 @@ class DaosContainerSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
             self.hostlist_clients, "userdel", new_test_user)
         secTestBase.add_del_user(
             self.hostlist_clients, "groupdel", new_test_group)
+
+    def test_container_set_owner_no_check(self):
+        """
+        Description:
+            Verify that daos container set-owner --no-check flag ignores missing user.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=security,container,container_acl,cont_user_sec,cont_group_sec,cont_sec
+        :avocado: tags=DaosContainerSecurityTest,test_container_set_owner_no_check
+        """
+        fake_user = "fakeuser"
+        fake_grp = "fakegroup"
+        der_nonexist = '-1005'
+
+        # Set up an ACL that will allow us to reclaim the container
+        acl_file_name = self._get_acl_file_name()
+        acl_entries = [
+            secTestBase.acl_entry("user", self.current_user, "rwdaAtTo"),
+        ]
+        secTestBase.create_acl_file(acl_file_name, acl_entries)
+
+        # Set up the pool and container.
+        self.add_pool()
+        self.container = self.create_container_with_daos(self.pool, None, acl_file_name)
+
+        # Attempt to change ownership to a fake user
+        with self.container.no_exception():
+            result = self.container.set_owner(user=fake_user, group=None)
+        self.verify_daos_pool_cont_result(result, "set owner to fake user", "fail", der_nonexist)
+
+        # Attempt to change ownership to fake group
+        with self.container.no_exception():
+            result = self.container.set_owner(user=None, group=fake_grp)
+        self.verify_daos_pool_cont_result(result, "set owner to fake group", "fail", der_nonexist)
+
+        # Allow changing to fake user and group with no-check
+        with self.container.no_exception():
+            result = self.container.set_owner(user=fake_user, group=fake_grp, no_check=True)
+        self.verify_daos_pool_cont_result(result, "set owner with no-check", "pass", None)
