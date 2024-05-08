@@ -291,10 +291,10 @@ pipeline {
         booleanParam(name: 'CI_medium_TEST',
                      defaultValue: false,
                      description: 'Run the Functional Hardware Medium test stage')
-        booleanParam(name: 'CI_medium-verbs-provider_TEST',
+        booleanParam(name: 'CI_medium_verbs_provider_TEST',
                      defaultValue: false,
                      description: 'Run the Functional Hardware Medium Verbs Provider test stage')
-        booleanParam(name: 'CI_medium-ucx-provider_TEST',
+        booleanParam(name: 'CI_medium_ucx_provider_TEST',
                      defaultValue: false,
                      description: 'Run the Functional Hardware Medium UCX Provider test stage')
         booleanParam(name: 'CI_large_TEST',
