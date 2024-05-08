@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -185,7 +185,6 @@ int ds_cont_close_by_pool_hdls(uuid_t pool_uuid, uuid_t *pool_hdls,
 			       int n_pool_hdls, crt_context_t ctx);
 int ds_cont_local_close(uuid_t cont_hdl_uuid);
 
-int ds_cont_chk_post(struct ds_pool_child *pool_child);
 int ds_cont_child_start_all(struct ds_pool_child *pool_child);
 void ds_cont_child_stop_all(struct ds_pool_child *pool_child);
 

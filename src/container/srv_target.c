@@ -895,7 +895,7 @@ cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 			DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id);
 		rc = -DER_SHUTDOWN;
 	} else if (!cont_child_started(cont_child)) {
-		if (!engine_in_check()) {
+		if (!ds_pool_skip_for_check(pool_child->spc_pool)) {
 			rc = cont_start_agg(cont_child);
 			if (rc != 0)
 				goto out;
@@ -950,58 +950,6 @@ ds_cont_child_start_all(struct ds_pool_child *pool_child)
 	rc = vos_iterate(&iter_param, VOS_ITER_COUUID, false, &anchors,
 			 cont_child_start_cb, NULL, (void *)pool_child, NULL);
 	return rc;
-}
-
-static int
-cont_child_chk_post_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
-		       vos_iter_param_t *iter_param, void *data, unsigned *acts)
-{
-	struct dsm_tls		*tls = dsm_tls_get();
-	struct ds_pool_child	*pool_child = data;
-	struct ds_cont_child	*cont_child = NULL;
-	int			 rc = 0;
-
-	/* The container shard must has been opened. */
-	rc = cont_child_lookup(tls->dt_cont_cache, entry->ie_couuid,
-			       pool_child->spc_uuid, false /* create */, &cont_child);
-	if (rc != 0)
-		goto out;
-
-	if (cont_child->sc_stopping || !cont_child_started(cont_child))
-		D_GOTO(out, rc = -DER_SHUTDOWN);
-
-	rc = cont_start_agg(cont_child);
-	if (rc != 0)
-		goto out;
-
-	rc = dtx_cont_register(cont_child);
-
-out:
-	if (cont_child != NULL) {
-		if (rc != 0)
-			cont_stop_agg(cont_child);
-
-		ds_cont_child_put(cont_child);
-	}
-
-	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
-		 "[%d]: Post handle container "DF_CONTF" start after DAOS check: "DF_RC"\n",
-		 dss_get_module_info()->dmi_tgt_id,
-		 DP_CONT(pool_child->spc_uuid, entry->ie_couuid), DP_RC(rc));
-
-	return rc;
-}
-
-int
-ds_cont_chk_post(struct ds_pool_child *pool_child)
-{
-	vos_iter_param_t	iter_param = { 0 };
-	struct vos_iter_anchors	anchors = { 0 };
-
-	iter_param.ip_hdl = pool_child->spc_hdl;
-
-	return vos_iterate(&iter_param, VOS_ITER_COUUID, false, &anchors,
-			   cont_child_chk_post_cb, NULL, (void *)pool_child, NULL);
 }
 
 /* ds_cont_hdl ****************************************************************/

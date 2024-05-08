@@ -490,7 +490,7 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 		goto done;
 	}
 
-	if (!engine_in_check()) {
+	if (!ds_pool_skip_for_check(child->spc_pool)) {
 		rc = start_gc_ult(child);
 		if (rc != 0)
 			goto out_close;
@@ -627,9 +627,10 @@ done:
 }
 
 int
-ds_pool_child_stop(uuid_t pool_uuid)
+ds_pool_child_stop(uuid_t pool_uuid, bool free)
 {
 	struct ds_pool_child	*child;
+	int			 rc;
 
 	child = pool_child_lookup_noref(pool_uuid);
 	if (child == NULL) {
@@ -637,7 +638,11 @@ ds_pool_child_stop(uuid_t pool_uuid)
 		return -DER_NONEXIST;
 	}
 
-	return pool_child_stop(child);
+	rc = pool_child_stop(child);
+	if (rc == 0 && free)
+		pool_child_free(child);
+
+	return rc;
 }
 
 struct pool_child_lookup_arg {
@@ -1120,111 +1125,12 @@ pool_fetch_hdls_ult_abort(struct ds_pool *pool)
 	D_INFO(DF_UUID": fetch hdls ULT aborted\n", DP_UUID(pool->sp_uuid));
 }
 
-static int
-ds_pool_chk_post_one(void *varg)
-{
-	struct pool_child_lookup_arg	*arg = varg;
-	struct ds_pool_child		*child = NULL;
-	int				 rc = 0;
-
-	/* The pool shard must has been opened. */
-	child = ds_pool_child_lookup(arg->pla_uuid);
-	if (child == NULL)
-		D_GOTO(out, rc = -DER_NONEXIST);
-
-	D_ASSERT(*child->spc_state == POOL_CHILD_STARTED);
-
-	if (unlikely(child->spc_no_storage))
-		D_GOTO(out, rc = 0);
-
-	rc = start_gc_ult(child);
-	if (rc != 0)
-		goto out;
-
-	rc = start_flush_ult(child);
-	if (rc != 0)
-		goto out;
-
-	rc = ds_start_scrubbing_ult(child);
-	if (rc != 0)
-		goto out;
-
-	rc = ds_cont_chk_post(child);
-
-out:
-	if (child != NULL) {
-		if (rc != 0) {
-			ds_stop_scrubbing_ult(child);
-			stop_flush_ult(child);
-			stop_gc_ult(child);
-		}
-
-		ds_pool_child_put(child);
-	}
-
-	return rc;
-}
-
-int
-ds_pool_chk_post(uuid_t uuid)
-{
-	struct ds_pool			*pool = NULL;
-	struct daos_llink		*llink = NULL;
-	struct pool_child_lookup_arg	 collective_arg = { 0 };
-	int				 rc = 0;
-
-	D_ASSERT(engine_in_check());
-	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
-
-	D_DEBUG(DB_MGMT, "Post handle pool starting for "DF_UUIDF" after DAOS check: "DF_RC"\n",
-		DP_UUID(uuid), DP_RC(rc));
-
-	/* The pool must has been opened. */
-	rc = daos_lru_ref_hold(pool_cache, (void *)uuid, sizeof(uuid_t),
-			       NULL /* create_args */, &llink);
-	if (rc != 0)
-		goto out;
-
-	pool = pool_obj(llink);
-	if (pool->sp_stopping)
-		D_GOTO(out, rc = -DER_SHUTDOWN);
-
-	pool->sp_fetch_hdls = 1;
-	pool_fetch_hdls_ult(pool);
-
-	rc = ds_pool_start_ec_eph_query_ult(pool);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to start ec eph query ult: "DF_RC"\n",
-			DP_UUID(uuid), DP_RC(rc));
-		goto out;
-	}
-
-	collective_arg.pla_uuid = uuid;
-	rc = dss_thread_collective(ds_pool_chk_post_one, &collective_arg, 0);
-
-out:
-	if (pool != NULL) {
-		if (rc != 0) {
-			ds_pool_tgt_ec_eph_query_abort(pool);
-			pool_fetch_hdls_ult_abort(pool);
-		}
-
-		daos_lru_ref_release(pool_cache, &pool->sp_entry);
-	}
-
-	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
-		 "Post handle pool started for "DF_UUIDF" after DAOS check: "DF_RC"\n",
-		 DP_UUID(uuid), DP_RC(rc));
-
-	return rc;
-}
-
 /*
  * Start a pool. Must be called on the system xstream. Hold the ds_pool object
  * till ds_pool_stop. Only for mgmt and pool modules.
  */
 int
-ds_pool_start(uuid_t uuid)
+ds_pool_start(uuid_t uuid, bool aft_chk)
 {
 	struct ds_pool			*pool;
 	struct daos_llink		*llink;
@@ -1243,6 +1149,14 @@ ds_pool_start(uuid_t uuid)
 		pool = pool_obj(llink);
 		if (pool->sp_stopping) {
 			D_ERROR(DF_UUID": stopping isn't done yet\n",
+				DP_UUID(uuid));
+			rc = -DER_BUSY;
+		} else if (unlikely(aft_chk)) {
+			/*
+			 * Someone still references the pool after CR check
+			 * that blocks pool (re)start for full pool service.
+			 */
+			D_ERROR(DF_UUID": someone still references the pool after CR check\n",
 				DP_UUID(uuid));
 			rc = -DER_BUSY;
 		}
@@ -1268,7 +1182,12 @@ ds_pool_start(uuid_t uuid)
 
 	pool = pool_obj(llink);
 
-	if (!engine_in_check()) {
+	if (aft_chk)
+		pool->sp_cr_checked = 1;
+	else
+		pool->sp_cr_checked = 0;
+
+	if (!ds_pool_skip_for_check(pool)) {
 		rc = dss_ult_create(pool_fetch_hdls_ult, pool, DSS_XS_SYS, 0,
 				    DSS_DEEP_STACK_SZ, NULL);
 		if (rc != 0) {
