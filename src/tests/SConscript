@@ -115,11 +115,11 @@ def scons():
     libs_client = ['daos_tests', 'daos', 'daos_common', 'cart', 'gurt', 'uuid', 'dfs']
 
     # simple_array = denv.d_program('simple_array', 'simple_array.c', LIBS=libs_client)
-    simple_obj = denv.d_program('simple_obj', 'simple_obj.c', LIBS=libs_client)
     simple_dfs = denv.d_program('simple_dfs', 'simple_dfs.c', LIBS=libs_client)
+    # simple_obj = denv.d_program('simple_obj', 'simple_obj.c', LIBS=libs_client)
     # denv.Install('$PREFIX/lib/daos/TESTING/tests', simple_array)
     denv.Install('$PREFIX/lib/daos/TESTING/tests', simple_dfs)
-    denv.Install('$PREFIX/lib/daos/TESTING/tests', simple_obj)
+    # denv.Install('$PREFIX/lib/daos/TESTING/tests', simple_obj)
 
 
 if __name__ == "SCons.Script":
