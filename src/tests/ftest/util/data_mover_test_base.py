@@ -247,7 +247,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             cmd = f"sudo mount -t tmpfs none '{path}' -o size={mount_dir_size}"
             if not run_remote(self.log, self.hostlist_clients, cmd).passed:
                 self.fail(f"Failed to mount directory {path}")
-            self.register_cleanup(cleanup_mounted_path, hosts=self.hostfile_clients, path=path)
+            self.register_cleanup(
+                cleanup_mounted_path, test=self, hosts=self.hostfile_clients, path=path)
 
         return path
 

@@ -401,9 +401,13 @@ class Test(avocadoTest):
 
         """
         errors = []
+        self.log.debug("Register: %s cleanup methods detected", len(self._cleanup_methods))
         while self._cleanup_methods:
             try:
                 cleanup = self._cleanup_methods.pop()
+                self.log.debug(
+                    "[%s] Register: Calling cleanup method %s(%s)",
+                    len(self._cleanup_methods) + 1, cleanup["method"], cleanup["kwargs"])
                 errors.extend(cleanup["method"](**cleanup["kwargs"]))
             except Exception as error:      # pylint: disable=broad-except
                 if str(error) == "Test interrupted by SIGTERM":
@@ -422,8 +426,8 @@ class Test(avocadoTest):
         """
         self._cleanup_methods.append({"method": method, "kwargs": kwargs})
         self.log.debug(
-            "Register: Adding calling %s(%s) during tearDown()",
-            method.__name__, dict_to_str(kwargs))
+            "[%s] Register: Adding calling %s(%s) during tearDown()",
+            len(self._cleanup_methods), method.__name__, dict_to_str(kwargs))
 
     def increment_timeout(self, increment):
         """Increase the avocado runner timeout configuration settings by the provided value.
