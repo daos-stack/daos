@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -86,7 +86,7 @@ def add_job_manager(test, class_name, job, subprocess, mpi_type, timeout):
         job_manager.tmpdir_base.update(test.test_dir, "tmpdir_base")
 
     # Add a step to stop this job manager when the test completes
-    test.register_cleanup(stop_job_manager, test, job_manager)
+    test.register_cleanup(stop_job_manager, test=test, job_manager=job_manager)
 
     return job_manager
 
