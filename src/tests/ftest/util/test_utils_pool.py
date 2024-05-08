@@ -219,6 +219,7 @@ class TestPool(TestDaosApiBase):
         self.pool = None
         self.info = None
         self.svc_ranks = None
+        self.svc_leader = None
         self.connected = False
         # Flag to allow the non-create operations to use UUID. e.g., if you want
         # to destroy the pool with UUID, set this to False, then call destroy().
@@ -431,6 +432,7 @@ class TestPool(TestDaosApiBase):
             self.svc_ranks = [
                 int(self.pool.svc.rl_ranks[index])
                 for index in range(self.pool.svc.rl_nr)]
+            self.svc_leader = int(data["leader"])
 
     @fail_on(DaosApiError)
     def connect(self, permission=2):
@@ -1019,7 +1021,7 @@ class TestPool(TestDaosApiBase):
             rank_result = self.query_targets(rank=rank, target_idx=target_idx)
             for target, target_info in enumerate(rank_result['response']['Infos']):
                 rank_target_tier_space[rank][target] = {}
-                for tier in target_info['Space']:
+                for tier in target_info['space']:
                     rank_target_tier_space[rank][target][tier['media_type']] = {
                         'total': tier['total'],
                         'free': tier['free'],

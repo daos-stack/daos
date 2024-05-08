@@ -3244,7 +3244,7 @@ const ProtobufCMessageDescriptor mgmt__pool_rebuild_status__descriptor =
   (ProtobufCMessageInit) mgmt__pool_rebuild_status__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_query_resp__field_descriptors[16] = {
+static const ProtobufCFieldDescriptor mgmt__pool_query_resp__field_descriptors[18] = {
     {
 	"status", 1, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_INT32, 0, /* quantifier_offset */
 	offsetof(Mgmt__PoolQueryResp, status), NULL, NULL, 0,         /* flags */
@@ -3337,6 +3337,17 @@ static const ProtobufCFieldDescriptor mgmt__pool_query_resp__field_descriptors[1
 	0,            /* flags */
 	0, NULL, NULL /* reserved1,reserved2, etc */
     },
+    {
+	"svc_ldr", 18, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32, 0, /* quantifier_offset */
+	offsetof(Mgmt__PoolQueryResp, svc_ldr), NULL, NULL, 0,           /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"svc_reps", 19, PROTOBUF_C_LABEL_REPEATED, PROTOBUF_C_TYPE_UINT32,
+	offsetof(Mgmt__PoolQueryResp, n_svc_reps), offsetof(Mgmt__PoolQueryResp, svc_reps), NULL,
+	NULL, 0,      /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
 };
 static const unsigned mgmt__pool_query_resp__field_indices_by_name[] = {
     4,  /* field[4] = active_targets */
@@ -3349,6 +3360,8 @@ static const unsigned mgmt__pool_query_resp__field_indices_by_name[] = {
     6,  /* field[6] = rebuild */
     15, /* field[15] = state */
     0,  /* field[0] = status */
+    16, /* field[16] = svc_ldr */
+    17, /* field[17] = svc_reps */
     7,  /* field[7] = tier_stats */
     12, /* field[12] = total_engines */
     3,  /* field[3] = total_targets */
@@ -3357,7 +3370,7 @@ static const unsigned mgmt__pool_query_resp__field_indices_by_name[] = {
     8,  /* field[8] = version */
 };
 static const ProtobufCIntRange mgmt__pool_query_resp__number_ranges[2 + 1] = {
-    {1, 0}, {10, 8}, {0, 16}};
+    {1, 0}, {10, 8}, {0, 18}};
 const ProtobufCMessageDescriptor mgmt__pool_query_resp__descriptor = {
     PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
     "mgmt.PoolQueryResp",
@@ -3365,7 +3378,7 @@ const ProtobufCMessageDescriptor mgmt__pool_query_resp__descriptor = {
     "Mgmt__PoolQueryResp",
     "mgmt",
     sizeof(Mgmt__PoolQueryResp),
-    16,
+    18,
     mgmt__pool_query_resp__field_descriptors,
     mgmt__pool_query_resp__field_indices_by_name,
     2,

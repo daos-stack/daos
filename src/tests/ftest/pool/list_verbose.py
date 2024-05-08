@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -49,8 +49,10 @@ class ListVerboseTest(IorTestBase):
 
         if scm_size is None:
             scm_size = pool.scm_size.value * rank_count
+        scm_size = int(scm_size)
         if nvme_size is None:
             nvme_size = pool.nvme_size.value * rank_count
+        nvme_size = int(nvme_size)
 
         targets_total = self.server_managers[0].get_config_value("targets") * rank_count
 
@@ -59,17 +61,36 @@ class ListVerboseTest(IorTestBase):
         upgrade_layout_ver = p_query["response"]["upgrade_layout_ver"]
 
         return {
+            "state": state,
             "uuid": pool.uuid.lower(),
             "label": pool.label.value,
+            "total_targets": targets_total,
+            "active_targets": targets_total - targets_disabled,
+            "total_engines": rank_count,
+            "disabled_targets": targets_disabled,
+            "svc_ldr": pool.svc_leader,
             "svc_reps": pool.svc_ranks,
-            "targets_total": targets_total,
-            "targets_disabled": targets_disabled,
             "upgrade_layout_ver": upgrade_layout_ver,
             "pool_layout_ver": pool_layout_ver,
-            "query_error_msg": "",
-            "query_status_msg": "",
-            "state": "Ready",
-            "svc_ldr": 0,
+            "rebuild": {
+                "status": 0,
+                "state": rebuild_state,
+                "objects": 0,
+                "records": 0
+            },
+            # NB: tests should not expect min/max/mean values
+            "tier_stats": [
+                {
+                    "total": scm_size,
+                    "free": scm_free,
+                    "media_type": "scm",
+                },
+                {
+                    "total": nvme_size,
+                    "free": nvme_free,
+                    "media_type": "nvme",
+                },
+            ],
             "usage": [
                 {
                     "tier_name": "SCM",
@@ -171,6 +192,12 @@ class ListVerboseTest(IorTestBase):
         expected_pools = []
 
         actual_pools = self.get_dmg_command().get_pool_list_all(verbose=True)
+        for pool in actual_pools:
+            del pool['version']  # not easy to calculate expected value, could cause flaky tests
+            for tier in pool["tier_stats"]:  # expected values are tricky to calculate
+                del tier['min']
+                del tier['max']
+                del tier['mean']
 
         # Get free and imbalance from actual so that we can use them in expected.
         free_data = self.get_scm_nvme_free_imbalance(actual_pools)

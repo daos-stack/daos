@@ -33,6 +33,7 @@ exp_vals:
   disabled_targets: 0
   version: 1
   leader: 0
+  replicas: [0]
   scm:
     total: 16000024576
   nvme:

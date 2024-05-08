@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -29,7 +29,6 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 func Test_Dmg_PoolTierRatioFlag(t *testing.T) {
@@ -1097,7 +1096,7 @@ func TestDmg_PoolListCmd_Errors(t *testing.T) {
 					{
 						Uuid:    test.MockUUID(1),
 						SvcReps: []uint32{1, 3, 5, 8},
-						State:   system.PoolServiceStateReady.String(),
+						State:   daos.PoolServiceStateReady.String(),
 					},
 				},
 			},
