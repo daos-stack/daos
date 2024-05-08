@@ -8,6 +8,7 @@ import uuid
 from os.path import join
 
 from data_mover_test_base import DataMoverTestBase
+from dfuse_utils import get_dfuse, start_dfuse
 from duns_utils import format_path
 
 
@@ -60,7 +61,8 @@ class DmvrNegativeTest(DataMoverTestBase):
         self.set_tool("DCP")
 
         # Start dfuse to hold all pools/containers
-        self.start_dfuse(self.dfuse_hosts)
+        dfuse = get_dfuse(self, self.dfuse_hosts)
+        start_dfuse(self, dfuse)
 
         # Create a test pool
         pool1 = self.create_pool()
@@ -69,7 +71,7 @@ class DmvrNegativeTest(DataMoverTestBase):
         uns_cont = self.get_container(pool1)
 
         # Create a test container
-        cont1_path = join(self.dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns1')
+        cont1_path = join(dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns1')
         cont1 = self.get_container(pool1, path=cont1_path)
 
         # Create test files
@@ -209,7 +211,8 @@ class DmvrNegativeTest(DataMoverTestBase):
         self.set_tool("FS_COPY")
 
         # Start dfuse to hold all pools/containers
-        self.start_dfuse(self.dfuse_hosts)
+        dfuse = get_dfuse(self, self.dfuse_hosts)
+        start_dfuse(self, dfuse)
 
         # Create a test pool
         pool1 = self.create_pool()
@@ -218,7 +221,7 @@ class DmvrNegativeTest(DataMoverTestBase):
         uns_cont = self.get_container(pool1)
 
         # Create a test container
-        cont1_path = join(self.dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns1')
+        cont1_path = join(dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns1')
         cont1 = self.get_container(pool1, path=cont1_path)
 
         # Create test files
