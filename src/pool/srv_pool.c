@@ -2033,6 +2033,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	if (rc == -DER_OP_CANCELED) {
 		DL_INFO(rc, DF_UUID": not scheduling pool service reconfiguration",
 			DP_UUID(svc->ps_uuid));
+		rc = 0;
 	} else if (rc != 0) {
 		DL_ERROR(rc, DF_UUID": failed to schedule pool service reconfiguration",
 			 DP_UUID(svc->ps_uuid));
@@ -2041,7 +2042,10 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 
 	rc = pool_svc_schedule(svc, &svc->ps_rfcheck_sched, pool_svc_rfcheck_ult, NULL /* arg */,
 			       false /* for_chk */);
-	if (rc != 0) {
+	if (rc == -DER_OP_CANCELED) {
+		DL_INFO(rc, DF_UUID ": not scheduling RF check", DP_UUID(svc->ps_uuid));
+		rc = 0;
+	} else if (rc != 0) {
 		DL_ERROR(rc, DF_UUID": failed to schedule RF check", DP_UUID(svc->ps_uuid));
 		goto out;
 	}
@@ -6843,6 +6847,7 @@ out:
 	D_DEBUG(DB_MD, DF_UUID": end: "DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
 }
 
+/* If returning 0, this function must have scheduled func(arg). */
 static int
 pool_svc_schedule(struct pool_svc *svc, struct pool_svc_sched *sched, void (*func)(void *),
 		  void *arg, bool for_chk)
@@ -6854,7 +6859,7 @@ pool_svc_schedule(struct pool_svc *svc, struct pool_svc_sched *sched, void (*fun
 
 	if (!for_chk && engine_in_check()) {
 		D_DEBUG(DB_MD, DF_UUID": end: skip in check mode\n", DP_UUID(svc->ps_uuid));
-		return 0;
+		return -DER_OP_CANCELED;
 	}
 
 	/*
@@ -7228,9 +7233,11 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 
 	rc = pool_svc_schedule_reconf(svc, NULL /* map */, map_version, false /* sync_remove */,
 				      false /* for_chk */);
-	if (rc != 0)
+	if (rc != 0) {
 		DL_INFO(rc, DF_UUID": failed to schedule pool service reconfiguration",
 			DP_UUID(svc->ps_uuid));
+		rc = 0;
+	}
 
 	if (opc == MAP_EXCLUDE) {
 		rc = pool_svc_schedule(svc, &svc->ps_rfcheck_sched, pool_svc_rfcheck_ult,
