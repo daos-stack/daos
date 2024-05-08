@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -29,7 +29,7 @@ type startCmd struct {
 	Modules             *string `short:"m" long:"modules" description:"List of server modules to load"`
 	Targets             uint16  `short:"t" long:"targets" description:"Number of targets to use (default use all cores)"`
 	NrXsHelpers         *uint16 `short:"x" long:"xshelpernr" description:"Number of helper XS per VOS target"`
-	FirstCore           uint16  `short:"f" long:"firstcore" default:"0" description:"Index of first core for service thread"`
+	FirstCore           *uint16 `short:"f" long:"firstcore" description:"Index of first core for service thread"`
 	Group               string  `short:"g" long:"group" description:"Server group name"`
 	SocketDir           string  `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_engine sockets"`
 	Insecure            bool    `short:"i" long:"insecure" description:"Allow for insecure connections"`
@@ -76,8 +76,8 @@ func (cmd *startCmd) setCLIOverrides() error {
 		if cmd.NrXsHelpers != nil {
 			srv.WithHelperStreamCount(int(*cmd.NrXsHelpers))
 		}
-		if cmd.FirstCore > 0 {
-			srv.WithServiceThreadCore(int(cmd.FirstCore))
+		if cmd.FirstCore != nil {
+			srv.WithServiceThreadCore(int(*cmd.FirstCore))
 		}
 	}
 

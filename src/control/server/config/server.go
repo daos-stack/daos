@@ -863,7 +863,11 @@ func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineA
 	// Detect legacy mode by checking if first_core is being used.
 	legacyMode := false
 	for _, engineCfg := range cfg.Engines {
-		if engineCfg.ServiceThreadCore != 0 {
+		if engineCfg.ServiceThreadCore != nil {
+			if *engineCfg.ServiceThreadCore == 0 && engineCfg.PinnedNumaNode != nil {
+				// Both are set but we don't know yet which to use
+				continue
+			}
 			legacyMode = true
 			break
 		}
@@ -872,9 +876,15 @@ func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineA
 	// Fail if any engine has an explicit pin and non-zero first_core.
 	for idx, engineCfg := range cfg.Engines {
 		if legacyMode {
+			if engineCfg.PinnedNumaNode != nil {
+				log.Infof("pinned_numa_node setting ignored on engine %d", idx)
+				engineCfg.PinnedNumaNode = nil
+			}
 			log.Debugf("setting legacy core allocation algorithm on engine %d", idx)
-			engineCfg.PinnedNumaNode = nil
 			continue
+		} else if engineCfg.ServiceThreadCore != nil {
+			log.Infof("first_core setting ignored on engine %d", idx)
+			engineCfg.ServiceThreadCore = nil
 		}
 
 		numaAffinity, err := detectEngineAffinity(log, engineCfg, affSources...)

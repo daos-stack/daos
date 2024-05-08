@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -322,6 +322,34 @@ dss_thread_collective(int (*func)(void *), void *arg, unsigned int flags)
 	return dss_collective_internal(func, arg, true, flags);
 }
 
+static inline uint32_t
+sched_ult2xs_multisocket(int xs_type, int tgt_id)
+{
+	static __thread uint32_t offload;
+	uint32_t                 socket = tgt_id / dss_tgt_per_numa_nr;
+	uint32_t                 base;
+	uint32_t                 target;
+
+	if (dss_tgt_offload_xs_nr == 0) {
+		if (xs_type == DSS_XS_IOFW && dss_forward_neighbor) {
+			/* Keep the old forwarding behavior, but NUMA aware */
+			target = (socket * dss_tgt_per_numa_nr) +
+				 (tgt_id + offload) % dss_tgt_per_numa_nr;
+			target = DSS_MAIN_XS_ID(target);
+			goto check;
+		}
+		return DSS_XS_SELF;
+	}
+
+	base   = dss_sys_xs_nr + dss_tgt_nr + (socket * dss_offload_per_numa_nr);
+	target = base + ((offload + tgt_id) % dss_offload_per_numa_nr);
+
+check:
+	D_ASSERT(target < DSS_XS_NR_TOTAL && target >= dss_sys_xs_nr);
+	offload = target + 17; /* Seed next selection */
+	return target;
+}
+
 /* ============== ULT create functions =================================== */
 
 static inline int
@@ -341,6 +369,8 @@ sched_ult2xs(int xs_type, int tgt_id)
 	case DSS_XS_DRPC:
 		return 2;
 	case DSS_XS_IOFW:
+		if (dss_numa_nr > 1)
+			return sched_ult2xs_multisocket(xs_type, tgt_id);
 		if (!dss_helper_pool) {
 			if (dss_tgt_offload_xs_nr > 0)
 				xs_id = DSS_MAIN_XS_ID(tgt_id) + 1;
@@ -379,6 +409,8 @@ sched_ult2xs(int xs_type, int tgt_id)
 			xs_id = (DSS_MAIN_XS_ID(tgt_id) + 1) % dss_tgt_nr;
 		break;
 	case DSS_XS_OFFLOAD:
+		if (dss_numa_nr > 1)
+			xs_id = sched_ult2xs_multisocket(xs_type, tgt_id);
 		if (!dss_helper_pool) {
 			if (dss_tgt_offload_xs_nr > 0)
 				xs_id = DSS_MAIN_XS_ID(tgt_id) + dss_tgt_offload_xs_nr / dss_tgt_nr;
