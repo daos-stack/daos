@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -32,6 +32,7 @@ struct pool_metrics {
 	struct d_tm_node_t      *open_handles;
 	struct d_tm_node_t      *total_targets;
 	struct d_tm_node_t      *disabled_targets;
+	struct d_tm_node_t      *draining_targets;
 	struct d_tm_node_t      *total_ranks;
 	struct d_tm_node_t      *degraded_ranks;
 };

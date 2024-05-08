@@ -1834,7 +1834,9 @@ pool_svc_check_node_status(struct pool_svc *svc)
 static int
 pool_svc_update_map_metrics(uuid_t uuid, struct pool_map *map, struct pool_metrics *metrics)
 {
+	unsigned int   num_total    = 0;
 	unsigned int   num_enabled  = 0;
+	unsigned int   num_draining = 0;
 	unsigned int   num_disabled = 0;
 	d_rank_list_t *ranks;
 	int            rc;
@@ -1849,16 +1851,23 @@ pool_svc_update_map_metrics(uuid_t uuid, struct pool_map *map, struct pool_metri
 	}
 	d_tm_set_gauge(metrics->disabled_targets, num_disabled);
 
-	rc = pool_map_find_upin_tgts(map, NULL, &num_enabled);
+	rc = pool_map_find_tgts_by_state(map, PO_COMP_ST_DRAIN, NULL, &num_draining);
 	if (rc != 0) {
-		DL_ERROR(rc, DF_UUID ": failed to get upin targets", DP_UUID(uuid));
+		DL_ERROR(rc, DF_UUID ": failed to get draining targets", DP_UUID(uuid));
 		D_GOTO(out, rc);
 	}
-	d_tm_set_gauge(metrics->total_targets, num_enabled + num_disabled);
+	d_tm_set_gauge(metrics->draining_targets, num_draining);
+
+	rc = pool_map_find_tgts_by_state(map, -1, NULL, &num_total);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": failed to get total targets", DP_UUID(uuid));
+		D_GOTO(out, rc);
+	}
+	d_tm_set_gauge(metrics->total_targets, num_total);
 
 	rc = pool_map_get_ranks(uuid, map, false, &ranks);
 	if (rc != 0) {
-		DL_ERROR(rc, DF_UUID ": failed to get disabled ranks", DP_UUID(uuid));
+		DL_ERROR(rc, DF_UUID ": failed to get degraded ranks", DP_UUID(uuid));
 		D_GOTO(out, rc);
 	}
 	num_disabled = ranks->rl_nr;
@@ -1868,12 +1877,11 @@ pool_svc_update_map_metrics(uuid_t uuid, struct pool_map *map, struct pool_metri
 	rc = pool_map_get_ranks(uuid, map, true, &ranks);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID ": failed to get enabled ranks", DP_UUID(uuid));
-		D_GOTO(out_ranks, rc);
+		D_GOTO(out, rc);
 	}
 	num_enabled = ranks->rl_nr;
 	d_tm_set_gauge(metrics->total_ranks, num_enabled + num_disabled);
 
-out_ranks:
 	d_rank_list_free(ranks);
 out:
 	return rc;
@@ -1896,16 +1904,10 @@ pool_svc_step_up_metrics(struct pool_svc *svc, d_rank_t leader, uint32_t map_ver
 			 struct pool_buf *map_buf)
 {
 	struct pool_map     *map;
-	struct pool_metrics *metrics;
+	struct pool_metrics *metrics = svc->ps_pool->sp_metrics[DAOS_POOL_MODULE];
 	struct rdb_tx        tx;
 	uint64_t             handle_count = 0;
 	int                  rc;
-
-	metrics = svc->ps_pool->sp_metrics[DAOS_POOL_MODULE];
-	if (metrics == NULL) {
-		D_ERROR(DF_UUID ": no metrics found!\n", DP_UUID(svc->ps_uuid));
-		D_GOTO(out, rc = 0);
-	}
 
 	rc = pool_map_create(map_buf, map_version, &map);
 	if (rc != 0) {
@@ -1918,8 +1920,8 @@ pool_svc_step_up_metrics(struct pool_svc *svc, d_rank_t leader, uint32_t map_ver
 
 	rc = pool_svc_update_map_metrics(svc->ps_uuid, map, metrics);
 	if (rc != 0) {
-		DL_ERROR(rc, DF_UUID ": failed to update pool metrics", DP_UUID(svc->ps_uuid));
-		D_GOTO(out_map, rc);
+		DL_WARN(rc, DF_UUID ": failed to update pool metrics", DP_UUID(svc->ps_uuid));
+		rc = 0; /* not fatal */
 	}
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
@@ -1946,13 +1948,7 @@ out:
 static void
 pool_svc_step_down_metrics(struct pool_svc *svc)
 {
-	struct pool_metrics *metrics;
-
-	metrics = svc->ps_pool->sp_metrics[DAOS_POOL_MODULE];
-	if (metrics == NULL) {
-		D_ERROR(DF_UUID ": no metrics found in step down cb!\n", DP_UUID(svc->ps_uuid));
-		return;
-	}
+	struct pool_metrics *metrics = svc->ps_pool->sp_metrics[DAOS_POOL_MODULE];
 
 	/* NB: zero these out to indicate that this rank is not leader */
 	d_tm_set_gauge(metrics->service_leader, 0);
@@ -2172,8 +2168,7 @@ pool_svc_map_dist_cb(struct ds_rsvc *rsvc, uint32_t *version)
 	*version = map_version;
 
 	metrics = svc->ps_pool->sp_metrics[DAOS_POOL_MODULE];
-	if (metrics != NULL)
-		d_tm_set_counter(metrics->map_version, map_version);
+	d_tm_set_counter(metrics->map_version, map_version);
 out:
 	if (map_buf != NULL)
 		D_FREE(map_buf);
@@ -3974,8 +3969,7 @@ pool_disconnect_hdls(struct rdb_tx *tx, struct pool_svc *svc, uuid_t *hdl_uuids,
 		D_GOTO(out, rc);
 
 	metrics = svc->ps_pool->sp_metrics[DAOS_POOL_MODULE];
-	if (metrics != NULL)
-		d_tm_dec_gauge(metrics->open_handles, n_hdl_uuids);
+	d_tm_dec_gauge(metrics->open_handles, n_hdl_uuids);
 out:
 	if (rc == 0)
 		D_INFO(DF_UUID": success\n", DP_UUID(svc->ps_uuid));
@@ -7249,7 +7243,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 	rc = pool_svc_update_map_metrics(svc->ps_uuid, map,
 					 svc->ps_pool->sp_metrics[DAOS_POOL_MODULE]);
 	if (rc != 0) {
-		DL_ERROR(rc, DF_UUID ": failed to update pool metrics", DP_UUID(svc->ps_uuid));
+		DL_WARN(rc, DF_UUID ": failed to update pool metrics", DP_UUID(svc->ps_uuid));
 		rc = 0; /* not fatal */
 	}
 

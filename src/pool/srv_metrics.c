@@ -88,12 +88,18 @@ ds_pool_metrics_alloc(const char *path, int tgt_id)
 	rc = d_tm_add_metric(&metrics->degraded_ranks, D_TM_GAUGE, "Pool storage ranks (degraded)",
 			     NULL, "%s/svc/degraded_ranks", path);
 	if (rc != 0)
-		DL_WARN(rc, "Failed to create pool excluded_ranks metric");
+		DL_WARN(rc, "Failed to create pool degraded_ranks metric");
 
 	rc = d_tm_add_metric(&metrics->total_targets, D_TM_GAUGE, "Pool storage targets (total)",
 			     NULL, "%s/svc/total_targets", path);
 	if (rc != 0)
 		DL_WARN(rc, "Failed to create pool total_targets metric");
+
+	rc = d_tm_add_metric(&metrics->draining_targets, D_TM_GAUGE,
+			     "Pool storage targets (draining)", NULL, "%s/svc/draining_targets",
+			     path);
+	if (rc != 0)
+		DL_WARN(rc, "Failed to create pool draining_targets metric");
 
 	rc = d_tm_add_metric(&metrics->disabled_targets, D_TM_GAUGE,
 			     "Pool storage targets (disabled)", NULL, "%s/svc/disabled_targets",
