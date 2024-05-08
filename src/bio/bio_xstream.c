@@ -151,7 +151,7 @@ bio_spdk_env_init(void)
 	int                  rc;
 
 	/* Only print error and more severe to stderr. */
-	spdk_log_set_print_level(SPDK_LOG_ERROR);
+	spdk_log_set_print_level(SPDK_LOG_DEBUG);
 
 	spdk_env_opts_init(&opts);
 	opts.name = "daos_engine";
@@ -1543,6 +1543,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 	struct bio_xs_blobstore	*bxb;
 	struct bio_blobstore	*bbs;
 	struct bio_bdev		*d_bdev;
+	struct spdk_rpc_opts	 rpc_opts;
 	char			 th_name[32];
 	int			 rc = 0;
 	enum smd_dev_type	 st;
@@ -1630,7 +1631,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 			if ((!nvme_glb.bd_rpc_srv_addr) || (strlen(nvme_glb.bd_rpc_srv_addr) == 0))
 				nvme_glb.bd_rpc_srv_addr = SPDK_DEFAULT_RPC_ADDR;
 
-			rc = spdk_rpc_initialize(nvme_glb.bd_rpc_srv_addr);
+			rc = spdk_rpc_initialize(nvme_glb.bd_rpc_srv_addr, &rpc_opts);
 			if (rc != 0) {
 				D_ERROR("failed to start SPDK JSON-RPC server at %s, "DF_RC"\n",
 					nvme_glb.bd_rpc_srv_addr, DP_RC(daos_errno2der(-rc)));
