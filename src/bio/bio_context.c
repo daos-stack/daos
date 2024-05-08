@@ -457,7 +457,8 @@ int bio_mc_destroy(struct bio_xs_context *xs_ctxt, uuid_t pool_id, enum bio_mc_f
 
 static int
 bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz,
-		enum smd_dev_type st, enum bio_mc_flags flags, spdk_blob_id *blob_id)
+		enum smd_dev_type st, enum bio_mc_flags flags, spdk_blob_id *blob_id,
+		uint64_t scm_sz)
 {
 	struct blob_msg_arg		 bma = { 0 };
 	struct blob_cp_arg		*ba = &bma.bma_cp_arg;
@@ -541,9 +542,10 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz,
 						     blob_sz);
 			else
 				rc = smd_pool_add_tgt(uuid, xs_ctxt->bxc_tgt_id, ba->bca_id, st,
-						      blob_sz);
+						      blob_sz, scm_sz);
 		} else {
-			rc = smd_pool_add_tgt(uuid, xs_ctxt->bxc_tgt_id, ba->bca_id, st, blob_sz);
+			rc = smd_pool_add_tgt(uuid, xs_ctxt->bxc_tgt_id, ba->bca_id, st, blob_sz,
+					      0);
 		}
 
 		if (rc != 0) {
@@ -627,7 +629,7 @@ default_wal_sz(uint64_t meta_sz)
 	return wal_sz;
 }
 
-int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_sz,
+int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t scm_sz, uint64_t meta_sz,
 		  uint64_t wal_sz, uint64_t data_sz, enum bio_mc_flags flags)
 {
 	int			 rc = 0, rc1;
@@ -642,7 +644,7 @@ int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_
 	if (data_sz > 0 && bio_nvme_configured(SMD_DEV_TYPE_DATA)) {
 		D_ASSERT(!(flags & BIO_MC_FL_RDB));
 		rc = bio_blob_create(pool_id, xs_ctxt, data_sz, SMD_DEV_TYPE_DATA, flags,
-				     &data_blobid);
+				     &data_blobid, 0);
 		if (rc)
 			return rc;
 	}
@@ -656,9 +658,24 @@ int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_
 			meta_sz, default_cluster_sz());
 		rc = -DER_INVAL;
 		goto delete_data;
+	} else if (meta_sz < scm_sz) {
+		D_ERROR("Meta blob size("DF_U64") is less than scm size("DF_U64")\n",
+			meta_sz, scm_sz);
+		rc = -DER_INVAL;
+		goto delete_data;
+	} else if (scm_sz == meta_sz) {
+		scm_sz = 0;
 	}
 
-	rc = bio_blob_create(pool_id, xs_ctxt, meta_sz, SMD_DEV_TYPE_META, flags, &meta_blobid);
+	if (scm_sz != 0 && (flags & BIO_MC_FL_RDB)) {
+		D_ERROR("RDB doesn't allow scm_sz("DF_U64") != meta_sz("DF_U64")\n",
+			scm_sz, meta_sz);
+		rc = -DER_INVAL;
+		goto delete_data;
+	}
+
+	rc = bio_blob_create(pool_id, xs_ctxt, meta_sz, SMD_DEV_TYPE_META, flags, &meta_blobid,
+			     scm_sz);
 	if (rc)
 		goto delete_data;
 
@@ -671,7 +688,7 @@ int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_
 	if (wal_sz == 0 || wal_sz < default_cluster_sz())
 		wal_sz = default_wal_sz(meta_sz);
 
-	rc = bio_blob_create(pool_id, xs_ctxt, wal_sz, SMD_DEV_TYPE_WAL, flags, &wal_blobid);
+	rc = bio_blob_create(pool_id, xs_ctxt, wal_sz, SMD_DEV_TYPE_WAL, flags, &wal_blobid, 0);
 	if (rc)
 		goto delete_meta;
 

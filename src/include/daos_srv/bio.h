@@ -941,6 +941,7 @@ enum bio_mc_flags {
  *
  * \param[in]	xs_ctxt		Per-xstream NVMe context
  * \param[in]	pool_id		Pool UUID
+ * \param[in]	scm_sz		VOS file size in bytes
  * \param[in]	meta_sz		Meta blob size in bytes
  * \param[in]	wal_sz		WAL blob in bytes
  * \param[in]	data_sz		Data blob in bytes
@@ -948,8 +949,8 @@ enum bio_mc_flags {
  *
  * \return			Zero on success, negative value on error.
  */
-int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_sz,
-		  uint64_t wal_sz, uint64_t data_sz, enum bio_mc_flags flags);
+int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t scm_sz,
+		  uint64_t meta_sz, uint64_t wal_sz, uint64_t data_sz, enum bio_mc_flags flags);
 
 /*
  * Destroy Meta/Data/WAL blobs
