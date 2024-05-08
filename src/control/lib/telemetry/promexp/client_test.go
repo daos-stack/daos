@@ -131,8 +131,8 @@ func TestPromExp_NewClientCollector(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			ctx := test.MustLogContext(t, log)
-			cs, err := NewClientSource(ctx)
+			parent := test.MustLogContext(t, log)
+			ctx, cs, err := NewClientSource(parent)
 			if err != nil {
 				t.Fatal(err)
 			}
