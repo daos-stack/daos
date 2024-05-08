@@ -39,8 +39,6 @@ from test_utils_container import CONT_NAMESPACE, add_container
 from test_utils_pool import POOL_NAMESPACE, LabelGenerator, add_pool
 from write_host_file import write_host_file
 
-CONT_NAMESPACE = "/run/container/*"
-
 
 def skipForTicket(ticket):  # pylint: disable=invalid-name
     """Skip a test with a comment about a ticket."""
