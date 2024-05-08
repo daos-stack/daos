@@ -9,6 +9,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -29,12 +30,10 @@ type jsonCmdTest struct {
 	expErr     error
 }
 
-func runJSONCmdTests(t *testing.T, log *logging.LeveledLogger, cmdTests []jsonCmdTest) {
-	t.Helper()
-
+func runJSONCmdTests(t *testing.T, log *logging.LeveledLogger, buf fmt.Stringer, cmdTests []jsonCmdTest) {
 	for _, tc := range cmdTests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Helper()
+			defer test.ShowBufferOnFailure(t, buf)
 
 			// Replace os.Stdout so that we can verify the generated output.
 			var result bytes.Buffer

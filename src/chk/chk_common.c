@@ -1238,6 +1238,8 @@ out_lock:
 out_init:
 	if (rc == 0)
 		*p_ins = ins;
+	else
+		D_FREE(ins);
 
 	return rc;
 }

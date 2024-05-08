@@ -737,8 +737,8 @@ self_only(d_rank_list_t *replicas)
 
 static int
 start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, uint64_t term,
-      enum ds_rsvc_start_mode mode, size_t size, d_rank_list_t *replicas, void *arg,
-      struct ds_rsvc **svcp)
+      enum ds_rsvc_start_mode mode, size_t size, uint32_t vos_df_version, d_rank_list_t *replicas,
+      void *arg, struct ds_rsvc **svcp)
 {
 	struct rdb_storage     *storage;
 	struct ds_rsvc	       *svc = NULL;
@@ -750,8 +750,8 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, uint64_t term,
 	svc->s_ref++;
 
 	if (mode == DS_RSVC_CREATE)
-		rc = rdb_create(svc->s_db_path, svc->s_db_uuid, term, size, replicas, &rsvc_rdb_cbs,
-				svc, &storage);
+		rc = rdb_create(svc->s_db_path, svc->s_db_uuid, term, size, vos_df_version,
+				replicas, &rsvc_rdb_cbs, svc, &storage);
 	else
 		rc = rdb_open(svc->s_db_path, svc->s_db_uuid, term, &rsvc_rdb_cbs, svc, &storage);
 	if (rc != 0)
@@ -884,6 +884,7 @@ ds_rsvc_stop_nodb(enum ds_rsvc_class_id class, d_iov_t *id)
  * \param[in]	caller_term	caller term if not RDB_NIL_TERM (see rdb_open)
  * \param[in]	mode		mode of starting the replicated service
  * \param[in]	size		replica size in bytes
+ * \param[in]	vos_df_version	version of VOS durable format
  * \param[in]	replicas	optional initial membership
  * \param[in]	arg		argument for cbs.sc_bootstrap
  *
@@ -893,7 +894,8 @@ ds_rsvc_stop_nodb(enum ds_rsvc_class_id class, d_iov_t *id)
  */
 int
 ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, uint64_t caller_term,
-	      enum ds_rsvc_start_mode mode, size_t size, d_rank_list_t *replicas, void *arg)
+	      enum ds_rsvc_start_mode mode, size_t size, uint32_t vos_df_version,
+	      d_rank_list_t *replicas, void *arg)
 {
 	struct ds_rsvc		*svc = NULL;
 	d_list_t		*entry;
@@ -933,7 +935,8 @@ ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, uint64_t
 		}
 	}
 
-	rc = start(class, id, db_uuid, caller_term, mode, size, replicas, arg, &svc);
+	rc = start(class, id, db_uuid, caller_term, mode, size, vos_df_version, replicas, arg,
+		   &svc);
 	if (rc != 0)
 		goto out;
 
@@ -1151,12 +1154,13 @@ ds_rsvc_stop_leader(enum ds_rsvc_class_id class, d_iov_t *id,
 }
 
 int
-ds_rsvc_add_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks, size_t size)
+ds_rsvc_add_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks, size_t size,
+		       uint32_t vos_df_version)
 {
 	int	rc;
 
 	rc = ds_rsvc_dist_start(svc->s_class, &svc->s_id, svc->s_db_uuid, ranks, svc->s_term,
-				DS_RSVC_CREATE, false /* bootstrap */, size);
+				DS_RSVC_CREATE, false /* bootstrap */, size, vos_df_version);
 
 	/* TODO: Attempt to only add replicas that were successfully started */
 	if (rc != 0)
@@ -1185,8 +1189,8 @@ ds_rsvc_set_state(struct ds_rsvc *svc, enum ds_rsvc_state state)
 }
 
 int
-ds_rsvc_add_replicas(enum ds_rsvc_class_id class, d_iov_t *id,
-		     d_rank_list_t *ranks, size_t size, struct rsvc_hint *hint)
+ds_rsvc_add_replicas(enum ds_rsvc_class_id class, d_iov_t *id, d_rank_list_t *ranks, size_t size,
+		     uint32_t vos_df_version, struct rsvc_hint *hint)
 {
 	struct ds_rsvc	*svc;
 	int		 rc;
@@ -1194,7 +1198,7 @@ ds_rsvc_add_replicas(enum ds_rsvc_class_id class, d_iov_t *id,
 	rc = ds_rsvc_lookup_leader(class, id, &svc, hint);
 	if (rc != 0)
 		return rc;
-	rc = ds_rsvc_add_replicas_s(svc, ranks, size);
+	rc = ds_rsvc_add_replicas_s(svc, ranks, size, vos_df_version);
 	ds_rsvc_set_hint(svc, hint);
 	ds_rsvc_put_leader(svc);
 	return rc;
@@ -1282,11 +1286,12 @@ bcast_create(crt_opcode_t opc, bool filter_invert, d_rank_list_t *filter_ranks,
  * \param[in]	mode		mode of starting the replicated service
  * \param[in]	bootstrap	create with an initial list of replicas if \a mode is DS_RSVC_CREATE
  * \param[in]	size		size of each replica in bytes if \a mode is DS_RSVC_CREATE
+ * \param[in]	vos_df_version	version of VOS durable format if \a mode is DS_RSVC_CREATE
  */
 int
 ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id, const uuid_t dbid,
 		   const d_rank_list_t *ranks, uint64_t caller_term, enum ds_rsvc_start_mode mode,
-		   bool bootstrap, size_t size)
+		   bool bootstrap, size_t size, uint32_t vos_df_version)
 {
 	crt_rpc_t		*rpc;
 	struct rsvc_start_in	*in;
@@ -1311,6 +1316,7 @@ ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id, const uuid_t dbid,
 	if (mode == DS_RSVC_CREATE && bootstrap)
 		in->sai_flags |= RDB_AF_BOOTSTRAP;
 	in->sai_size = size;
+	in->sai_vos_df_version = vos_df_version;
 	in->sai_term = caller_term;
 	in->sai_ranks = (d_rank_list_t *)ranks;
 
@@ -1357,8 +1363,8 @@ ds_rsvc_start_handler(crt_rpc_t *rpc)
 	}
 
 	rc = ds_rsvc_start(in->sai_class, &in->sai_svc_id, in->sai_db_uuid, in->sai_term,
-			   in->sai_mode, in->sai_size, bootstrap ? in->sai_ranks : NULL,
-			   NULL /* arg */);
+			   in->sai_mode, in->sai_size, in->sai_vos_df_version,
+			   bootstrap ? in->sai_ranks : NULL, NULL /* arg */);
 	if (rc == -DER_ALREADY)
 		rc = 0;
 

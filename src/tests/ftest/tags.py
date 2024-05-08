@@ -13,6 +13,8 @@ from collections import defaultdict
 from copy import deepcopy
 from pathlib import Path
 
+import yaml
+
 THIS_FILE = os.path.realpath(__file__)
 FTEST_DIR = os.path.dirname(THIS_FILE)
 
@@ -87,64 +89,44 @@ class FtestTagMap():
                     unique_tags.update(tags)
         return unique_tags
 
-    def minimal_tags(self, include_paths=None):
-        """Get the minimal tags representing files in the mapping.
-
-        This computes an approximate minimal - not the absolute minimal.
+    def minimal_tags(self, path):
+        """Get the minimal tags representing a path in the mapping.
 
         Args:
-            include_paths (list, optional): path(s) to include in the mapping.
-                Defaults to None, which includes all paths
+            path (str): path to get tags for
 
         Returns:
-            list: list of sets of tags
+            set: set of avocado tag strings
+
+        Raises:
+            KeyError: if path is not in the mapping
         """
-        include_paths = list(map(self.__norm_path, include_paths or []))
+        file_path = self.__norm_path(path)
+        if file_path not in self.__mapping:
+            raise KeyError(f'Invalid path: {path}')
 
-        minimal_sets = []
+        # Keep track of recommended tags for each method
+        recommended = set()
+        for class_name, functions in self.__mapping[file_path].items():
+            for function_name, tags in functions.items():
+                # Try the class name and function name first
+                if class_name in tags:
+                    recommended.add(class_name)
+                    continue
+                if function_name in tags:
+                    recommended.add(function_name)
+                    continue
+                # Try using a set of tags globally unique to this test.
+                # Shouldn't get here since all tests are tagged with their class and method names,
+                # but it could happen if the tag lint check is currently failing.
+                globally_unique_tags = tags - self.unique_tags(exclude=file_path)
+                if globally_unique_tags and globally_unique_tags.issubset(tags):
+                    recommended.add(','.join(sorted(globally_unique_tags)))
+                    continue
+                # Fallback to just using all of this test's tags
+                recommended.add(','.join(sorted(tags)))
 
-        for file_path, classes in self.__mapping.items():
-            if include_paths and file_path not in include_paths:
-                continue
-            # Keep track of recommended tags for each method
-            file_recommended = []
-            for class_name, functions in classes.items():
-                for function_name, tags in functions.items():
-                    # Try the class name and function name first
-                    if class_name in tags:
-                        file_recommended.append(set([class_name]))
-                        continue
-                    if function_name in tags:
-                        file_recommended.append(set([function_name]))
-                        continue
-                    # Try using a set of tags globally unique to this test
-                    globally_unique_tags = tags - self.unique_tags(exclude=file_path)
-                    if globally_unique_tags and globally_unique_tags.issubset(tags):
-                        file_recommended.append(globally_unique_tags)
-                        continue
-                    # Fallback to just using all of this test's tags
-                    file_recommended.append(tags)
-
-            if not file_recommended:
-                continue
-
-            # If all functions in the file have a common set of tags, use that set
-            file_recommended_intersection = set.intersection(*file_recommended)
-            if file_recommended_intersection:
-                minimal_sets.append(file_recommended_intersection)
-                continue
-
-            # Otherwise, use tags unique to each function
-            file_recommended_unique = []
-            for tags in file_recommended:
-                if tags not in file_recommended_unique:
-                    file_recommended_unique.append(tags)
-            minimal_sets.extend(file_recommended_unique)
-
-        # Combine the minimal sets into a single set representing what avocado expects
-        avocado_set = set(','.join(tags) for tags in minimal_sets)
-
-        return avocado_set
+        return recommended
 
     def is_test_subset(self, tags1, tags2):
         """Determine whether a set of tags is a subset with respect to tests.
@@ -399,10 +381,80 @@ def files_to_tags(paths):
     """
     # Get tags for ftest paths
     ftest_tag_map = FtestTagMap(all_python_files(FTEST_DIR))
-    ftest_tag_set = ftest_tag_map.minimal_tags(paths)
 
-    # Future work will also get recommended tags for non-ftest files
-    return ftest_tag_set
+    tag_config = read_tag_config()
+    all_tags = set()
+
+    for path in paths:
+        for _pattern, _config in tag_config.items():
+            if re.search(rf'{_pattern}', path):
+                if _config['handler'] == 'FtestTagMap':
+                    # Special ftest handling
+                    try:
+                        all_tags.update(ftest_tag_map.minimal_tags(path))
+                    except KeyError:
+                        # Use default from config
+                        all_tags.update(_config['tags'].split(' '))
+                elif _config['handler'] == 'direct':
+                    # Use direct tags from config
+                    all_tags.update(_config['tags'].split(' '))
+                else:
+                    raise ValueError(f'Invalid handler: {_config["handler"]}')
+
+                if _config["stop_on_match"]:
+                    # Don't process further entries for this path
+                    break
+
+    return all_tags
+
+
+def read_tag_config():
+    """Read tags.yaml.
+
+    Also validates the config as read.
+
+    Returns:
+        dict: the config
+
+    Raises:
+        TypeError: If config types are invalid
+        ValueError: If config values are invalid
+    """
+    with open(os.path.join(FTEST_DIR, 'tags.yaml'), 'r') as file:
+        config = yaml.safe_load(file.read())
+
+    for key, val in config.items():
+        _type = type(val)
+        if _type not in (str, dict):
+            raise TypeError(f'Expected {str} or {dict}, not {_type}')
+        if _type == str:
+            # Expand shorthand to dict
+            config[key] = {'tags': val}
+
+        # Check for invalid config options
+        extra_keys = set(config[key].keys()) - set(['tags', 'handler', 'stop_on_match'])
+        if extra_keys:
+            raise ValueError(f'Unsupported keys in config: {", ".join(extra_keys)}')
+
+        # Set default handler and check for invalid values
+        if 'handler' not in config[key]:
+            config[key]['handler'] = 'direct'
+        elif config[key]['handler'] not in ('direct', 'FtestTagMap'):
+            raise ValueError(f'Invalid handler: {config[key]["handler"]}')
+
+        # Set default stop_on_match and check for invalid values
+        if 'stop_on_match' not in config[key]:
+            config[key]['stop_on_match'] = False
+        elif not isinstance(config[key]['stop_on_match'], bool):
+            raise ValueError(f'Invalid stop_on_match: {config[key]["stop_on_match"]}')
+
+        # Check for missing or invalid tags
+        if 'tags' not in config[key]:
+            raise ValueError(f'Missing tags for {key}')
+        if not isinstance(config[key]['tags'], str):
+            raise TypeError(f'Expected {str} for tags, not {type(config[key]["tags"])}')
+
+    return config
 
 
 def run_list(paths):

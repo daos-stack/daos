@@ -107,7 +107,7 @@ vts_ctx_init(struct vos_test_ctx *tcx, size_t psize)
 	uuid_generate_time_safe(tcx->tc_co_uuid);
 
 	/* specify @psize as both NVMe size and SCM size */
-	rc = vos_pool_create(tcx->tc_po_name, tcx->tc_po_uuid, psize, psize, 0,
+	rc = vos_pool_create(tcx->tc_po_name, tcx->tc_po_uuid, psize, psize, 0, 0 /* version */,
 			     &tcx->tc_po_hdl);
 	if (rc) {
 		print_error("vpool create %s failed with error : %d\n",
@@ -268,8 +268,8 @@ pool_init(struct credit_context *tsc)
 
 	/* Use pool size as blob size for this moment. */
 	if (tsc_create_pool(tsc)) {
-		rc = vos_pool_create(pmem_file, tsc->tsc_pool_uuid, 0,
-				     tsc->tsc_nvme_size, 0, &poh);
+		rc = vos_pool_create(pmem_file, tsc->tsc_pool_uuid, 0, tsc->tsc_nvme_size, 0,
+				     0 /* version */, &poh);
 		if (rc)
 			goto out;
 	} else {
