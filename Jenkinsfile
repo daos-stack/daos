@@ -14,6 +14,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
+@Library(value="pipeline-lib@pahender/DAOS-15772_pl") _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -112,18 +113,24 @@ pipeline {
         string(name: 'CI_HARDWARE_DISTRO',
                defaultValue: '',
                description: 'Distribution to use for CI Hardware Tests')
-        booleanParam(name: 'CI_medium_TEST',
+        booleanParam(name: 'CI_medium_tcp_TEST',
                      defaultValue: true,
-                     description: 'Run the CI Functional Hardware Medium TCP/UCX test stages')
+                     description: 'Run the CI Functional Hardware Medium TCP test stages')
         booleanParam(name: 'CI_medium_tcp_provider_TEST',
                      defaultValue: true,
                      description: 'Run the CI Functional Hardware Medium TCP Provider test stage')
+        booleanParam(name: 'CI_large_tcp_TEST',
+                     defaultValue: true,
+                     description: 'Run the CI Functional Hardware Large TCP test stages')
+        booleanParam(name: 'CI_medium_ucx_TEST',
+                     defaultValue: true,
+                     description: 'Run the CI Functional Hardware Medium UCX test stages')
         booleanParam(name: 'CI_medium_ucx_provider_TEST',
                      defaultValue: true,
                      description: 'Run the CI Functional Hardware Medium UCX Provider test stage')
-        booleanParam(name: 'CI_large_TEST',
+        booleanParam(name: 'CI_large_ucx_TEST',
                      defaultValue: true,
-                     description: 'Run the CI Functional Hardware Large TCP/UCX test stages')
+                     description: 'Run the CI Functional Hardware Large UCX test stages')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_TCP_LABEL',
                defaultValue: 'ci_nvme5',
                description: 'Label to use for 5 node Functional Hardware Medium TCP stage')
@@ -194,7 +201,7 @@ pipeline {
                     parallel(
                         'Functional Hardware Medium TCP': getFunctionalTestStage(
                             name: 'Functional Hardware Medium TCP',
-                            pragma_suffix: '-hw-medium',
+                            pragma_suffix: '-hw-medium-tcp',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_TCP_LABEL,
                             next_version: next_version,
@@ -222,7 +229,7 @@ pipeline {
                         ),
                         'Functional Hardware Large TCP': getFunctionalTestStage(
                             name: 'Functional Hardware Large TCP',
-                            pragma_suffix: '-hw-large',
+                            pragma_suffix: '-hw-large-tcp',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_LARGE_TCP_LABEL,
                             next_version: next_version,
@@ -236,7 +243,7 @@ pipeline {
                         ),
                         'Functional Hardware Medium UCX': getFunctionalTestStage(
                             name: 'Functional Hardware Medium UCX',
-                            pragma_suffix: '-hw-medium',
+                            pragma_suffix: '-hw-medium-ucx',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_LABEL,
                             next_version: next_version,
@@ -244,6 +251,7 @@ pipeline {
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'test_create_max_pool',
                             nvme: 'auto',
                             provider: cachedCommitPragma('Test-provider-ucx', params.TestProviderUCX),
+                            other_packages: 'mercury-ucx',
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
@@ -258,13 +266,14 @@ pipeline {
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'test_daos_management',
                             default_nvme: 'auto',
                             provider: cachedCommitPragma('Test-provider-ucx', params.TestProviderUCX),
+                            other_packages: 'mercury-ucx',
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
                         ),
                         'Functional Hardware Large UCX': getFunctionalTestStage(
                             name: 'Functional Hardware Large UCX',
-                            pragma_suffix: '-hw-large',
+                            pragma_suffix: '-hw-large-ucx',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_LARGE_UCX_LABEL,
                             next_version: next_version,
@@ -272,6 +281,7 @@ pipeline {
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'test_daos_dfs_sys',
                             default_nvme: 'auto',
                             provider: cachedCommitPragma('Test-provider-ucx', params.TestProviderUCX),
+                            other_packages: 'mercury-ucx',
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
