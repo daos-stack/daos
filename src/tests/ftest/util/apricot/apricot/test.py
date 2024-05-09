@@ -407,7 +407,8 @@ class Test(avocadoTest):
                 cleanup = self._cleanup_methods.pop()
                 self.log.debug(
                     "[%s] Register: Calling cleanup method %s(%s)",
-                    len(self._cleanup_methods) + 1, cleanup["method"], cleanup["kwargs"])
+                    len(self._cleanup_methods) + 1, cleanup["method"].__name__,
+                    dict_to_str(cleanup["kwargs"]))
                 errors.extend(cleanup["method"](**cleanup["kwargs"]))
             except Exception as error:      # pylint: disable=broad-except
                 if str(error) == "Test interrupted by SIGTERM":
