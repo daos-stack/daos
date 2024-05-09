@@ -1539,23 +1539,6 @@ bmem_allot_mb_evictable_v2(struct umem_instance *umm, int flags)
 	return dav_allot_mb_evictable_v2(pop, flags);
 }
 
-static uint32_t
-bmem_get_mb_from_offset_v2(struct umem_instance *umm, umem_off_t umoff)
-{
-	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool->up_priv;
-	uint64_t   off = umem_off2offset(umoff);
-
-	return dav_off2mb_v2(pop, off);
-}
-
-static umem_off_t
-bmem_get_mb_base_offset_v2(struct umem_instance *umm, uint32_t mb_id)
-{
-	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool->up_priv;
-
-	return dav_mb2baseoff_v2(pop, mb_id);
-}
-
 static umem_ops_t bmem_v2_ops = {
 	.mo_tx_free            = bmem_tx_free_v2,
 	.mo_tx_alloc           = bmem_tx_alloc_v2,
@@ -1575,8 +1558,6 @@ static umem_ops_t bmem_v2_ops = {
 	.mo_atomic_free        = bmem_atomic_free_v2,
 	.mo_atomic_flush       = bmem_atomic_flush_v2,
 	.mo_allot_evictable_mb = bmem_allot_mb_evictable_v2,
-	.mo_get_mb_from_offset = bmem_get_mb_from_offset_v2,
-	.mo_get_mb_base_offset = bmem_get_mb_base_offset_v2,
 	.mo_tx_add_callback    = umem_tx_add_cb,
 };
 
@@ -2112,7 +2093,16 @@ umem_cache_offisloaded(struct umem_store *store, umem_off_t offset)
 	struct umem_cache *cache = store->cache;
 	struct umem_page  *page  = cache_off2page(cache, offset);
 
-	return (page->pg_info != NULL);
+	return ((page->pg_info != NULL) && page->pg_info->pi_loaded);
+}
+
+bool
+umem_cache_offispinned(struct umem_store *store, umem_off_t offset)
+{
+	struct umem_cache *cache = store->cache;
+	struct umem_page  *page  = cache_off2page(cache, offset);
+
+	return ((page->pg_info != NULL) && page->pg_info->pi_ref);
 }
 
 /* Convert MD-blob offset to memory pointer */
@@ -2249,7 +2239,7 @@ umem_cache_free(struct umem_store *store)
 static inline unsigned int
 cache_mode(struct umem_cache *cache)
 {
-	return (cache->ca_max_ne_pages == cache->ca_mem_pages) ? 1 : 2;
+	return cache->ca_mode;
 }
 
 static inline struct umem_page_info *
@@ -2286,7 +2276,7 @@ umem_cache_alloc(struct umem_store *store, uint32_t page_sz, uint32_t md_pgs, ui
 	unsigned int		 page_shift, bmap_sz;
 	uint64_t		*bmap;
 	void			*cur_addr = base;
-	int			 idx, rc = 0;
+	int			 idx, cmode = 1, rc = 0;
 
 	D_ASSERT(store != NULL);
 	D_ASSERT(base != NULL);
@@ -2309,9 +2299,8 @@ umem_cache_alloc(struct umem_store *store, uint32_t page_sz, uint32_t md_pgs, ui
 	if (mem_pgs == 0) {	/* Phase 1 mode */
 		mem_pgs = md_pgs;
 		max_ne_pgs = md_pgs;
-	} else {
-		D_ASSERT(mem_pgs >= (max_ne_pgs + UMEM_CACHE_MIN_EVICTABLE_PAGES));
-	}
+	} else
+		cmode = 2;
 
 	bmap_sz = (1 << (page_shift - UMEM_CACHE_CHUNK_SZ_SHIFT - UMEM_CHUNK_IDX_SHIFT));
 
@@ -2337,6 +2326,7 @@ umem_cache_alloc(struct umem_store *store, uint32_t page_sz, uint32_t md_pgs, ui
 	cache->ca_evictable_fn	= is_evictable_fn;
 	cache->ca_evtcb_fn      = evtcb_fn;
 	cache->ca_fn_arg        = fn_arg;
+	cache->ca_mode          = cmode;
 
 	D_INIT_LIST_HEAD(&cache->ca_pgs_free);
 	D_INIT_LIST_HEAD(&cache->ca_pgs_dirty);
@@ -3189,13 +3179,15 @@ evict:
 static inline bool
 need_reserve(struct umem_cache *cache, uint32_t extra_pgs)
 {
-	uint32_t	page_nr;
+	uint32_t	page_nr = 0;
 
-	/* Few free pages are always reserved for potential non-evictable zone grow */
-	D_ASSERT(cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE] <= cache->ca_max_ne_pages);
-	page_nr = cache->ca_max_ne_pages - cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE];
-	if (page_nr > UMEM_CACHE_RSRVD_PAGES)
-		page_nr = UMEM_CACHE_RSRVD_PAGES;
+	if (!cache->ca_early_boot) {
+		/* Few free pages are always reserved for potential non-evictable zone grow */
+		D_ASSERT(cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE] <= cache->ca_max_ne_pages);
+		page_nr = cache->ca_max_ne_pages - cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE];
+		if (page_nr > UMEM_CACHE_RSRVD_PAGES)
+			page_nr = UMEM_CACHE_RSRVD_PAGES;
+	}
 	page_nr += extra_pgs;
 
 	if (page_nr == 0)
@@ -3421,6 +3413,36 @@ error:
 
 #define UMEM_PAGES_ON_STACK	16
 
+void
+umem_cache_set_early_boot(struct umem_store *store, bool mode)
+{
+	struct umem_cache *cache = store->cache;
+
+	cache->ca_early_boot = mode;
+}
+
+void
+umem_cache_update_nonevictable_stats(struct umem_store *store)
+{
+	struct umem_cache     *cache = store->cache;
+	int                    cnt   = 0;
+	int                    idx;
+	struct umem_page_info *pinfo;
+
+	pinfo = (struct umem_page_info *)&cache->ca_pages[cache->ca_md_pages];
+	for (idx = 0; idx < cache->ca_mem_pages; idx++) {
+		if (pinfo[idx].pi_mapped == 0)
+			continue;
+
+		if (!is_id_evictable(cache, pinfo[idx].pi_pg_id)) {
+			d_list_del_init(&pinfo[idx].pi_lru_link);
+			d_list_add_tail(&pinfo[idx].pi_lru_link, &cache->ca_pgs_lru[0]);
+			cnt++;
+		}
+	}
+	cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE] = cnt;
+}
+
 int
 umem_cache_map(struct umem_store *store, struct umem_cache_range *ranges, int range_nr)
 {
@@ -3573,6 +3595,26 @@ umem_cache_reserve(struct umem_store *store)
 	}
 
 	return rc;
+}
+
+uint32_t
+umem_get_mb_from_offset(struct umem_instance *umm, umem_off_t off)
+{
+	uint32_t           page_id;
+	struct umem_cache *cache = umm->umm_pool->up_store.cache;
+
+	page_id = cache_off2id(cache, off);
+	if (is_id_evictable(cache, page_id))
+		return page_id;
+	return 0;
+}
+
+umem_off_t
+umem_get_mb_base_offset(struct umem_instance *umm, uint32_t id)
+{
+	struct umem_cache *cache = umm->umm_pool->up_store.cache;
+
+	return cache_id2off(cache, id);
 }
 
 #endif

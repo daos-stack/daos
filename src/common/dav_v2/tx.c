@@ -1869,19 +1869,36 @@ dav_allot_mb_evictable_v2(dav_obj_t *pop, int flags)
 		return 0;
 	}
 
-	umem_cache_reserve(pop->do_store);
 	return mb_id;
 }
 
-DAV_FUNC_EXPORT uint32_t
-dav_off2mb_v2(dav_obj_t *pop, uint64_t offset)
+/*
+ * obj_realloc -- (internal) reallocate zinfo object
+ */
+int
+obj_realloc(dav_obj_t *pop, uint64_t *offp, size_t *sizep, size_t size)
 {
-	D_ASSERT(OBJ_OFF_IS_VALID(pop, offset));
-	return heap_off2mbid(pop->do_heap, offset);
-}
+	struct operation_context *ctx;
+	struct carg_realloc       carg;
+	int                       ret;
 
-DAV_FUNC_EXPORT uint32_t
-dav_mb2baseoff_v2(dav_obj_t *pop, uint32_t mb_id)
-{
-	return heap_mbid2baseoff(pop->do_heap, mb_id);
+	DAV_DBG("pop %p size %zu", pop, size);
+
+	carg.ptr         = (*offp == 0) ? 0 : OBJ_OFF_TO_PTR(pop, *offp);
+	carg.old_size    = *sizep;
+	carg.new_size    = size;
+	carg.user_type   = 0;
+	carg.constructor = NULL;
+	carg.zero_init   = 1;
+	carg.arg         = NULL;
+
+	ctx = pop->external;
+	operation_start(ctx);
+
+	operation_add_entry(ctx, sizep, size, ULOG_OPERATION_SET);
+
+	ret = palloc_operation(pop->do_heap, *offp, offp, size, constructor_zrealloc_root, &carg, 0,
+			       0, 0, 0, ctx);
+
+	return ret;
 }

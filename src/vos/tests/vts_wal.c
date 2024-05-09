@@ -622,13 +622,21 @@ setup_wal_io(void **state)
 
 static struct io_test_args test_args;
 
+#define MDTEST_META_BLOB_SIZE (256 * 1024 * 1024)
+#define MDTEST_VOS_SIZE       (160 * 1024 * 1024)
+#define MDTEST_MB_SIZE        (16 * 1024 * 1024)
+#define MDTEST_MB_CNT         (MDTEST_META_BLOB_SIZE / MDTEST_MB_SIZE)
+#define MDTEST_MB_VOS_CNT     (MDTEST_VOS_SIZE / MDTEST_MB_SIZE)
+#define MDTEST_MAX_NEMB_CNT   (MDTEST_MB_VOS_CNT * 8 / 10)
+#define MDTEST_MAX_EMB_CNT    (MDTEST_MB_CNT - MDTEST_MAX_NEMB_CNT)
+
 static int
 setup_mb_io(void **state)
 {
 	int rc;
 
 	memset(&test_args, 0, sizeof(test_args));
-	rc     = vts_ctx_init_ex(&test_args.ctx, 320 * 1024 * 1024, 512 * 1024 * 1024);
+	rc     = vts_ctx_init_ex(&test_args.ctx, MDTEST_VOS_SIZE, MDTEST_META_BLOB_SIZE);
 	*state = (void *)&test_args;
 	return rc;
 }
@@ -1333,7 +1341,7 @@ checkpoint_fn(void *arg)
 
 static void
 alloc_bucket_to_full(struct umem_instance *umm, struct bucket_alloc_info *ainfo,
-		     void (*chkpt_fn)(void *arg), void *arg)
+		     void (*chkpt_fn)(void *arg), void                   *arg)
 {
 	umem_off_t              umoff, prev_umoff;
 	size_t                  alloc_size = 512;
@@ -1342,34 +1350,41 @@ alloc_bucket_to_full(struct umem_instance *umm, struct bucket_alloc_info *ainfo,
 	struct umem_pin_handle *p_hdl;
 	uint32_t                id = ainfo->mb_id;
 
-	ainfo->alloc_size = alloc_size;
+	if (ainfo->alloc_size)
+		alloc_size = ainfo->alloc_size;
+	else
+		ainfo->alloc_size = alloc_size;
 
 	rg.cr_off  = umem_get_mb_base_offset(umm, id);
 	rg.cr_size = 1;
 	assert_true(umem_cache_pin(&umm->umm_pool->up_store, &rg, 1, 0, &p_hdl) == 0);
 
 	if (UMOFF_IS_NULL(ainfo->start_umoff)) {
-		ainfo->start_umoff =
-		    umem_atomic_alloc_from_bucket(umm, alloc_size, UMEM_TYPE_ANY, id);
+		umem_tx_begin(umm, NULL);
+		ainfo->start_umoff = umem_alloc_from_bucket(umm, alloc_size, id);
+		umem_tx_commit(umm);
 		assert_false(UMOFF_IS_NULL(ainfo->start_umoff));
 		ainfo->num_allocs++;
 		assert_true(umem_get_mb_from_offset(umm, ainfo->start_umoff) == id);
+		prev_umoff = ainfo->start_umoff;
+		ptr        = (umem_off_t *)umem_off2ptr(umm, prev_umoff);
+		*ptr       = UMOFF_NULL;
+	} else
+		prev_umoff = ainfo->start_umoff;
+
+	while (true) {
+		ptr   = (umem_off_t *)umem_off2ptr(umm, prev_umoff);
+		umoff = *ptr;
+		if (UMOFF_IS_NULL(umoff))
+			break;
+		prev_umoff = umoff;
 	}
-	prev_umoff = ainfo->start_umoff;
-	ptr        = (umem_off_t *)umem_off2ptr(umm, prev_umoff);
-	*ptr       = UMOFF_NULL;
 
 	while (1) {
 		umem_tx_begin(umm, NULL);
 		umoff = umem_alloc_from_bucket(umm, alloc_size, id);
-		if (id != 0)
-			assert_false(UMOFF_IS_NULL(umoff));
-		else if (UMOFF_IS_NULL(umoff)) {
-			umem_tx_abort(umm, 1);
-			break;
-		}
 
-		if (umem_get_mb_from_offset(umm, umoff) != id) {
+		if (UMOFF_IS_NULL(umoff) || (umem_get_mb_from_offset(umm, umoff) != id)) {
 			umem_tx_abort(umm, 1);
 			break;
 		}
@@ -1438,7 +1453,7 @@ wal_mb_utilization_tests(void **state)
 	struct io_test_args     *arg = *state;
 	struct vos_container    *cont;
 	struct umem_instance    *umm;
-	struct bucket_alloc_info ainfo[70]; /* With 1GB pool only 64 buckets are possible. */
+	struct bucket_alloc_info ainfo[MDTEST_MB_CNT + 1];
 	uint32_t                 id;
 	int                      i, j;
 	int                      mb_reuse = 0;
@@ -1446,29 +1461,31 @@ wal_mb_utilization_tests(void **state)
 	cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
 	umm  = vos_cont2umm(cont);
 
-	for (i = 0; i < 10; i++) {
+	assert_true(MDTEST_MAX_EMB_CNT >= 8);
+	for (i = 0; i < MDTEST_MAX_EMB_CNT - 1; i++) {
 		/* Create an MB and fill it with allocs */
 		ainfo[i].mb_id       = umem_allot_mb_evictable(umm, 0);
 		ainfo[i].num_allocs  = 0;
 		ainfo[i].start_umoff = UMOFF_NULL;
+		ainfo[i].alloc_size  = 0;
 		assert_true(ainfo[i].mb_id != 0);
 		alloc_bucket_to_full(umm, &ainfo[i], checkpoint_fn, &arg->ctx.tc_po_hdl);
 	}
 
 	/* Free 5% of space for MB 2 */
-	free_bucket_by_pct(umm, &ainfo[2], 5, checkpoint_fn, &arg->ctx.tc_po_hdl); /* 90+ */
+	free_bucket_by_pct(umm, &ainfo[0], 5, checkpoint_fn, &arg->ctx.tc_po_hdl); /* 90+ */
 	/* Free 30% of space for MB 3 */
-	free_bucket_by_pct(umm, &ainfo[3], 30, checkpoint_fn, &arg->ctx.tc_po_hdl); /* 30-75 */
+	free_bucket_by_pct(umm, &ainfo[1], 30, checkpoint_fn, &arg->ctx.tc_po_hdl); /* 30-75 */
 	/* Free 80% of space for MB 4 */
-	free_bucket_by_pct(umm, &ainfo[4], 80, checkpoint_fn, &arg->ctx.tc_po_hdl); /* 0-30 */
+	free_bucket_by_pct(umm, &ainfo[2], 80, checkpoint_fn, &arg->ctx.tc_po_hdl); /* 0-30 */
 	/* Free 15% of space for MB 5 */
-	free_bucket_by_pct(umm, &ainfo[5], 20, checkpoint_fn, &arg->ctx.tc_po_hdl); /* 75-90 */
+	free_bucket_by_pct(umm, &ainfo[3], 20, checkpoint_fn, &arg->ctx.tc_po_hdl); /* 75-90 */
 	/* Free 10% of space for MB 6 */
-	free_bucket_by_pct(umm, &ainfo[6], 18, checkpoint_fn, &arg->ctx.tc_po_hdl); /* 75-90 */
+	free_bucket_by_pct(umm, &ainfo[4], 18, checkpoint_fn, &arg->ctx.tc_po_hdl); /* 75-90 */
 	/* Free 50% of space for MB 7 */
-	free_bucket_by_pct(umm, &ainfo[7], 50, checkpoint_fn, &arg->ctx.tc_po_hdl); /* 30-75 */
+	free_bucket_by_pct(umm, &ainfo[5], 50, checkpoint_fn, &arg->ctx.tc_po_hdl); /* 30-75 */
 	/* Free 90% of space for MB 8 */
-	free_bucket_by_pct(umm, &ainfo[8], 90, NULL, NULL); /* 0-30 */
+	free_bucket_by_pct(umm, &ainfo[6], 90, NULL, NULL); /* 0-30 */
 
 	wal_pool_refill(arg);
 	cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
@@ -1476,44 +1493,44 @@ wal_mb_utilization_tests(void **state)
 
 	/* Allocator should return mb with utilization 30%-75% */
 	id = umem_allot_mb_evictable(umm, 0);
-	print_message("obtained id %d, expected is %d\n", id, ainfo[3].mb_id);
-	assert_true(id == ainfo[3].mb_id);
-	alloc_bucket_to_full(umm, &ainfo[3], checkpoint_fn, &arg->ctx.tc_po_hdl);
-	id = umem_allot_mb_evictable(umm, 0);
-	print_message("obtained id %d, expected is %d\n", id, ainfo[7].mb_id);
-	assert_true(id == ainfo[7].mb_id);
-	alloc_bucket_to_full(umm, &ainfo[7], checkpoint_fn, &arg->ctx.tc_po_hdl);
-
-	/* Next preference should be 75%-90% */
+	print_message("obtained id %d, expected is %d\n", id, ainfo[1].mb_id);
+	assert_true(id == ainfo[1].mb_id);
+	alloc_bucket_to_full(umm, &ainfo[1], checkpoint_fn, &arg->ctx.tc_po_hdl);
 	id = umem_allot_mb_evictable(umm, 0);
 	print_message("obtained id %d, expected is %d\n", id, ainfo[5].mb_id);
 	assert_true(id == ainfo[5].mb_id);
 	alloc_bucket_to_full(umm, &ainfo[5], checkpoint_fn, &arg->ctx.tc_po_hdl);
+
+	/* Next preference should be 75%-90% */
+	id = umem_allot_mb_evictable(umm, 0);
+	print_message("obtained id %d, expected is %d\n", id, ainfo[3].mb_id);
+	assert_true(id == ainfo[3].mb_id);
+	alloc_bucket_to_full(umm, &ainfo[3], checkpoint_fn, &arg->ctx.tc_po_hdl);
+	id = umem_allot_mb_evictable(umm, 0);
+	print_message("obtained id %d, expected is %d\n", id, ainfo[4].mb_id);
+	assert_true(id == ainfo[4].mb_id);
+	alloc_bucket_to_full(umm, &ainfo[4], checkpoint_fn, &arg->ctx.tc_po_hdl);
+
+	/* Next preference should be 0%-30% */
+	id = umem_allot_mb_evictable(umm, 0);
+	print_message("obtained id %d, expected is %d\n", id, ainfo[2].mb_id);
+	assert_true(id == ainfo[2].mb_id);
+	alloc_bucket_to_full(umm, &ainfo[2], checkpoint_fn, &arg->ctx.tc_po_hdl);
 	id = umem_allot_mb_evictable(umm, 0);
 	print_message("obtained id %d, expected is %d\n", id, ainfo[6].mb_id);
 	assert_true(id == ainfo[6].mb_id);
 	alloc_bucket_to_full(umm, &ainfo[6], checkpoint_fn, &arg->ctx.tc_po_hdl);
 
-	/* Next preference should be 0%-30% */
-	id = umem_allot_mb_evictable(umm, 0);
-	print_message("obtained id %d, expected is %d\n", id, ainfo[4].mb_id);
-	assert_true(id == ainfo[4].mb_id);
-	alloc_bucket_to_full(umm, &ainfo[4], checkpoint_fn, &arg->ctx.tc_po_hdl);
-	id = umem_allot_mb_evictable(umm, 0);
-	print_message("obtained id %d, expected is %d\n", id, ainfo[8].mb_id);
-	assert_true(id == ainfo[8].mb_id);
-	alloc_bucket_to_full(umm, &ainfo[8], checkpoint_fn, &arg->ctx.tc_po_hdl);
-
 	/* Next is to create a new memory bucket. */
 	id = umem_allot_mb_evictable(umm, 0);
-	for (i = 0; i < 10; i++)
+	for (i = 0; i < MDTEST_MAX_EMB_CNT - 1; i++)
 		assert_true(id != ainfo[i].mb_id);
 	print_message("obtained id %d\n", id);
 
 	/* If there are no more new evictable mb available it should return
 	 * one with 90% or more utilization.
 	 */
-	for (i = 10; i < 32; i++) {
+	for (i = MDTEST_MAX_EMB_CNT - 1; i < MDTEST_MB_CNT + 1; i++) {
 		id = umem_allot_mb_evictable(umm, 0);
 		for (j = 0; j < i; j++) {
 			if (id == ainfo[j].mb_id) {
@@ -1527,15 +1544,13 @@ wal_mb_utilization_tests(void **state)
 		ainfo[i].mb_id       = id;
 		ainfo[i].num_allocs  = 0;
 		ainfo[i].start_umoff = UMOFF_NULL;
+		ainfo[i].alloc_size  = 0;
 		assert_true(ainfo[i].mb_id != 0);
 		alloc_bucket_to_full(umm, &ainfo[i], checkpoint_fn, &arg->ctx.tc_po_hdl);
 	}
 
-	/* Max non evictable mbs is 80% of mempages => 320M/16M * 0.8 = 16
-	 * Max evictable mbs is pool size - size of non evictable mbs => 512M/16M - 16 = 16
-	 */
 	print_message("evictable memory buckets created = %d\n", i);
-	assert_true(i == 16);
+	assert_true(i == MDTEST_MAX_EMB_CNT);
 }
 
 #define ZONE_MAX_SIZE (16 * 1024 * 1024)
@@ -1547,7 +1562,7 @@ wal_mb_emb_evicts_emb(void **state)
 	struct vos_container    *cont;
 	struct umem_instance    *umm;
 	int                      i, j, po;
-	struct bucket_alloc_info ainfo[30];
+	struct bucket_alloc_info ainfo[MDTEST_MB_CNT + 1];
 	uint32_t                 id;
 
 	cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
@@ -1557,22 +1572,23 @@ wal_mb_emb_evicts_emb(void **state)
 	ainfo[0].mb_id       = 0;
 	ainfo[0].num_allocs  = 0;
 	ainfo[0].start_umoff = UMOFF_NULL;
+	ainfo[0].alloc_size  = 0;
 	alloc_bucket_to_full(umm, &ainfo[0], checkpoint_fn, &arg->ctx.tc_po_hdl);
 
 	/*
-	 * validate whether non-evictable mbs have actually consumed 16 buckets.
+	 * validate whether non-evictable mbs have actually consumed MDTEST_MAX_NEMB_CNT
 	 */
 	print_message("allocations in non-evictable mbs = %u\n", ainfo[0].num_allocs);
 	print_message("space used in non-evictable mbs = %u\n",
 		      ainfo[0].num_allocs * ainfo[0].alloc_size);
 	po = (ainfo[0].num_allocs * ainfo[0].alloc_size + ZONE_MAX_SIZE - 1) / ZONE_MAX_SIZE;
-	assert_true(po == 16);
+	assert_true(po == MDTEST_MAX_NEMB_CNT);
 
 	/* Now free few allocation to support spill */
 	free_bucket_by_pct(umm, &ainfo[0], 20, checkpoint_fn, &arg->ctx.tc_po_hdl);
 
-	/* Create and fill 30 evictable memory buckets. */
-	for (i = 1; i < 30; i++) {
+	/* Create and fill MDTEST_MB_CNT evictable memory buckets. */
+	for (i = 1; i < MDTEST_MB_CNT + 1; i++) {
 		/* Create an MB and fill it with allocs */
 		id = umem_allot_mb_evictable(umm, 0);
 		for (j = 0; j < i; j++) {
@@ -1584,16 +1600,12 @@ wal_mb_emb_evicts_emb(void **state)
 		ainfo[i].mb_id       = id;
 		ainfo[i].num_allocs  = 0;
 		ainfo[i].start_umoff = UMOFF_NULL;
+		ainfo[i].alloc_size  = 0;
 		assert_true(ainfo[i].mb_id != 0);
 		alloc_bucket_to_full(umm, &ainfo[i], checkpoint_fn, &arg->ctx.tc_po_hdl);
 	}
 out:
-	/*
-	 * With pool size of 512M and cache size of 320M, 16 buckets is used by evictable
-	 * mbs and 16 by non-evictable mbs. The below assert confirms that non-evictable
-	 * mbs have not consumed more buckets.
-	 */
-	assert_true(i == 17);
+	assert_true(i == MDTEST_MAX_EMB_CNT + 1);
 
 	/* Validate and free all allocations in evictable MBs */
 	for (j = 0; j < i; j++)
@@ -1607,14 +1619,14 @@ wal_mb_nemb_evicts_emb(void **state)
 	struct vos_container    *cont;
 	struct umem_instance    *umm;
 	int                      i, j, po;
-	struct bucket_alloc_info ainfo[30];
+	struct bucket_alloc_info ainfo[MDTEST_MB_CNT + 1];
 	uint32_t                 id;
 
 	cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
 	umm  = vos_cont2umm(cont);
 
 	/* Create and fill evictable memory buckets. */
-	for (i = 1; i < 30; i++) {
+	for (i = 1; i < MDTEST_MB_CNT + 1; i++) {
 		/* Create an MB and fill it with allocs */
 		id = umem_allot_mb_evictable(umm, 0);
 		for (j = 1; j < i; j++) {
@@ -1626,35 +1638,268 @@ wal_mb_nemb_evicts_emb(void **state)
 		ainfo[i].mb_id       = id;
 		ainfo[i].num_allocs  = 0;
 		ainfo[i].start_umoff = UMOFF_NULL;
+		ainfo[i].alloc_size  = 0;
 		assert_true(ainfo[i].mb_id != 0);
 		alloc_bucket_to_full(umm, &ainfo[i], checkpoint_fn, &arg->ctx.tc_po_hdl);
 	}
 out:
-	/*
-	 * With pool size of 512M and cache size of 320M, 16 buckets is used by evictable
-	 * mbs and 16 by non-evictable mbs. The below assert confirms that non-evictable
-	 * mbs have not consumed more buckets.
-	 */
-	assert_true(i == 17);
+	assert_true(i == MDTEST_MAX_EMB_CNT + 1);
 
 	/* Fill non-evictable buckets. */
 	ainfo[0].mb_id       = 0;
 	ainfo[0].num_allocs  = 0;
 	ainfo[0].start_umoff = UMOFF_NULL;
+	ainfo[0].alloc_size  = 0;
 	alloc_bucket_to_full(umm, &ainfo[0], checkpoint_fn, &arg->ctx.tc_po_hdl);
 
 	/*
-	 * validate whether non-evictable mbs have actually consumed 16 buckets.
+	 * validate whether non-evictable mbs have actually consumed MDTEST_MAX_NEMB_CNT buckets.
 	 */
 	print_message("allocations in non-evictable mbs = %u\n", ainfo[0].num_allocs);
 	print_message("space used in non-evictable mbs = %u\n",
 		      ainfo[0].num_allocs * ainfo[0].alloc_size);
 	po = (ainfo[0].num_allocs * ainfo[0].alloc_size + ZONE_MAX_SIZE - 1) / ZONE_MAX_SIZE;
-	assert_true(po == 16);
+	assert_true(po == MDTEST_MAX_NEMB_CNT);
 
 	/* Validate and free all allocations in evictable MBs */
 	for (j = 0; j < i; j++)
 		free_bucket_by_pct(umm, &ainfo[j], 100, checkpoint_fn, &arg->ctx.tc_po_hdl);
+}
+
+static int
+umoff_in_freelist(umem_off_t *free_list, int cnt, umem_off_t umoff, bool clear)
+{
+	int i;
+
+	for (i = 0; i < cnt; i++)
+		if (umoff == free_list[i])
+			break;
+
+	if (i < cnt) {
+		if (clear)
+			free_list[i] = UMOFF_NULL;
+		return 1;
+	}
+	return 0;
+}
+
+static void
+wal_umempobj_block_reuse_internal(void **state, int restart)
+{
+	struct io_test_args     *arg = *state;
+	struct vos_container    *cont;
+	struct umem_instance    *umm;
+	umem_off_t               umoff, next_umoff, nnext_umoff;
+	umem_off_t              *ptr_cur, *ptr_next;
+	umem_off_t              *free_list[MDTEST_MB_CNT + 1];
+	umem_off_t              *free_list_bk[MDTEST_MB_CNT + 1];
+	int                      free_num[MDTEST_MB_CNT + 1];
+	struct bucket_alloc_info ainfo[MDTEST_MB_CNT + 1];
+	int                      i, j, cnt, rc, num, total_frees;
+	struct umem_pin_handle  *p_hdl;
+	struct umem_cache_range  rg = {0};
+	uint64_t                 space_used_before, space_used_after;
+
+	cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
+	umm  = vos_cont2umm(cont);
+
+	/* Allocate from NE Buckets. It should use 80% 360M i.e, 16 buckets */
+	ainfo[0].mb_id       = 0;
+	ainfo[0].num_allocs  = 0;
+	ainfo[0].start_umoff = UMOFF_NULL;
+	ainfo[0].alloc_size  = 512;
+	alloc_bucket_to_full(umm, &ainfo[0], checkpoint_fn, &arg->ctx.tc_po_hdl);
+
+	/* Allocate from Evictable Buckets. */
+	for (i = 1; i <= MDTEST_MAX_EMB_CNT; i++) {
+		/* Create an MB and fill it with allocs */
+		ainfo[i].mb_id       = umem_allot_mb_evictable(umm, 0);
+		ainfo[i].num_allocs  = 0;
+		ainfo[i].start_umoff = UMOFF_NULL;
+		ainfo[i].alloc_size  = 512;
+		assert_true(ainfo[i].mb_id != 0);
+		alloc_bucket_to_full(umm, &ainfo[i], checkpoint_fn, &arg->ctx.tc_po_hdl);
+	}
+
+	/* Free few allocations from each NE bucket */
+	umem_tx_begin(umm, NULL);
+	umoff       = ainfo[0].start_umoff;
+	num         = ainfo[0].num_allocs;
+	free_num[0] = num / 10000;
+	cnt         = 0;
+	D_ALLOC_ARRAY(free_list[0], free_num[0]);
+	for (j = 1; j <= num; j++) {
+		ptr_cur    = (umem_off_t *)umem_off2ptr(umm, umoff);
+		next_umoff = *ptr_cur;
+		if ((j % 10000) == 0) {
+			if (UMOFF_IS_NULL(next_umoff))
+				break;
+			ptr_next    = (umem_off_t *)umem_off2ptr(umm, next_umoff);
+			nnext_umoff = *ptr_next;
+			umem_tx_add_ptr(umm, ptr_cur, sizeof(umoff));
+			*ptr_cur = nnext_umoff;
+			umem_free(umm, next_umoff);
+			print_message("id=0:Freeing offset %lu\n", next_umoff);
+			ainfo->num_allocs--;
+			free_list[0][cnt++] = next_umoff;
+			umoff               = nnext_umoff;
+		} else
+			umoff = next_umoff;
+		if (UMOFF_IS_NULL(umoff))
+			break;
+	}
+	umem_tx_commit(umm);
+	assert_true(cnt == free_num[0]);
+	print_message("id=0:Total frees %d\n", cnt);
+
+	/* Free few allocations from each E bucket */
+	for (i = 1; i <= MDTEST_MAX_EMB_CNT; i++) {
+		rg.cr_off  = umem_get_mb_base_offset(umm, ainfo[i].mb_id);
+		rg.cr_size = 1;
+		rc         = umem_cache_pin(&umm->umm_pool->up_store, &rg, 1, 0, &p_hdl);
+		assert_true(rc == 0);
+
+		umem_tx_begin(umm, NULL);
+		umoff       = ainfo[i].start_umoff;
+		num         = ainfo[i].num_allocs;
+		free_num[i] = num / 10000;
+		cnt         = 0;
+		D_ALLOC_ARRAY(free_list[i], free_num[i]);
+		for (j = 1; j <= num; j++) {
+			ptr_cur    = (umem_off_t *)umem_off2ptr(umm, umoff);
+			next_umoff = *ptr_cur;
+			if ((j % 10000) == 0) {
+				if (UMOFF_IS_NULL(next_umoff))
+					break;
+				ptr_next    = (umem_off_t *)umem_off2ptr(umm, next_umoff);
+				nnext_umoff = *ptr_next;
+				umem_tx_add_ptr(umm, ptr_cur, sizeof(umoff));
+				*ptr_cur = nnext_umoff;
+				umem_free(umm, next_umoff);
+				print_message("id=%d:Freeing offset %lu\n", i, next_umoff);
+				ainfo->num_allocs--;
+				free_list[i][cnt++] = next_umoff;
+				umoff               = nnext_umoff;
+			} else
+				umoff = next_umoff;
+			if (UMOFF_IS_NULL(umoff))
+				break;
+		}
+		umem_tx_commit(umm);
+		umem_cache_unpin(&umm->umm_pool->up_store, p_hdl);
+		assert_true(cnt == free_num[i]);
+		print_message("id=%d:Total frees %d\n", ainfo[i].mb_id, cnt);
+	}
+
+	/* restart with or without checkpoint */
+	if (restart) {
+		wal_pool_refill(arg);
+		cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
+		umm  = vos_cont2umm(cont);
+	}
+
+	for (i = 0; i < MDTEST_MAX_EMB_CNT + 1; i++) {
+		D_ALLOC_ARRAY(free_list_bk[i], free_num[i]);
+		memcpy(free_list_bk[i], free_list[i], free_num[i] * sizeof(umem_off_t));
+	}
+
+	/* Allocate from NE Buckets and it should reuse the previous freed blocks */
+	for (j = 0; j < free_num[0]; j++) {
+		umem_tx_begin(umm, NULL);
+		umoff = umem_alloc(umm, ainfo[0].alloc_size);
+		umem_tx_commit(umm);
+		assert_true(!UMOFF_IS_NULL(umoff));
+		assert_true(umoff_in_freelist(free_list[0], free_num[0], umoff, true));
+	}
+
+	/* New allocation should fail */
+	umem_tx_begin(umm, NULL);
+	umoff = umem_alloc(umm, ainfo[0].alloc_size);
+	umem_tx_abort(umm, 1);
+	assert_true(UMOFF_IS_NULL(umoff));
+
+	/* Allocate from E Buckets and it should reuse the previous freed blocks */
+	for (i = 1; i <= MDTEST_MAX_EMB_CNT; i++) {
+		rg.cr_off  = umem_get_mb_base_offset(umm, ainfo[i].mb_id);
+		rg.cr_size = 1;
+		rc         = umem_cache_pin(&umm->umm_pool->up_store, &rg, 1, 0, &p_hdl);
+		assert_true(rc == 0);
+
+		for (j = 0; j < free_num[i]; j++) {
+			umem_tx_begin(umm, NULL);
+			umoff = umem_alloc_from_bucket(umm, ainfo[i].alloc_size, ainfo[i].mb_id);
+			assert_true(!UMOFF_IS_NULL(umoff));
+			umem_tx_commit(umm);
+			assert_true(umoff_in_freelist(free_list[i], free_num[i], umoff, true));
+		}
+		umem_tx_begin(umm, NULL);
+		/* New allocation should fail */
+		umoff = umem_alloc(umm, ainfo[i].alloc_size);
+		umem_tx_abort(umm, 1);
+		assert_true(UMOFF_IS_NULL(umoff));
+		print_message("Finished reallocating for id = %d\n", ainfo[i].mb_id);
+		umem_cache_unpin(&umm->umm_pool->up_store, p_hdl);
+	}
+
+	/* Free the allocated memory to see whether they are properly accounted */
+	rc = umempobj_get_heapusage(umm->umm_pool, &space_used_before);
+	if (rc) {
+		print_message("Failed to get heap usage\n");
+		assert_true(rc == 0);
+	}
+	for (j = 0; j < free_num[0]; j++)
+		umem_atomic_free(umm, free_list_bk[0][j]);
+	D_FREE(free_list[0]);
+	D_FREE(free_list_bk[0]);
+
+	total_frees = free_num[0];
+
+	for (i = 1; i <= MDTEST_MAX_EMB_CNT; i++) {
+		rg.cr_off  = umem_get_mb_base_offset(umm, ainfo[i].mb_id);
+		rg.cr_size = 1;
+		rc         = umem_cache_pin(&umm->umm_pool->up_store, &rg, 1, 0, &p_hdl);
+		assert_true(rc == 0);
+
+		for (j = 0; j < free_num[i]; j++) {
+			umoff = umem_atomic_free(umm, free_list_bk[i][j]);
+		}
+		umem_cache_unpin(&umm->umm_pool->up_store, p_hdl);
+		total_frees += free_num[i];
+		D_FREE(free_list[i]);
+		D_FREE(free_list_bk[i]);
+	}
+	rc = umempobj_get_heapusage(umm->umm_pool, &space_used_after);
+	if (rc) {
+		print_message("Failed to get heap usage\n");
+		assert_true(rc == 0);
+	}
+	print_message("Space usage: before free %lu, after free %lu, expected %lu\n",
+		      space_used_before, space_used_after, (space_used_before - total_frees * 512));
+	assert_true(space_used_after <= (space_used_before - total_frees * 512));
+}
+
+void
+wal_umempobj_block_reuse(void **state)
+{
+	wal_umempobj_block_reuse_internal(state, 0);
+}
+
+void
+wal_umempobj_replay_block_reuse(void **state)
+{
+	wal_umempobj_block_reuse_internal(state, 1);
+}
+
+void
+wal_umempobj_chkpt_block_reuse(void **state)
+{
+	struct io_test_args *arg = *state;
+
+	arg->checkpoint = true;
+	arg->no_replay  = true;
+	wal_umempobj_block_reuse_internal(state, 1);
+	arg->checkpoint = false;
+	arg->no_replay  = false;
 }
 
 static const struct CMUnitTest wal_tests[] = {
@@ -1691,6 +1936,11 @@ static const struct CMUnitTest wal_MB_tests[] = {
      teardown_mb_io},
     {"WAL33: UMEM MB EMB eviction by NEMB expansion Test", wal_mb_nemb_evicts_emb, setup_mb_io,
      teardown_mb_io},
+    {"WAL34: UMEM MB garbage collection", wal_umempobj_block_reuse, setup_mb_io, teardown_mb_io},
+    {"WAL35: UMEM MB checkpoint restart garbage collection", wal_umempobj_chkpt_block_reuse,
+     setup_mb_io, teardown_mb_io},
+    {"WAL36: UMEM MB restart replay garbage collection", wal_umempobj_replay_block_reuse,
+     setup_mb_io, teardown_mb_io},
 };
 
 int

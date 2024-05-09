@@ -18,6 +18,7 @@
 #include "palloc.h"
 #include "mo_wal.h"
 #include "obj.h"
+#include "tx.h"
 
 #define	DAV_HEAP_INIT	0x1
 #define MEGABYTE	((uintptr_t)1 << 20)
@@ -33,7 +34,7 @@ is_zone_evictable(void *arg, uint32_t zid)
 }
 
 static int
-uc_evt_callback(int evt_type, void *arg, uint32_t zid)
+dav_uc_callback(int evt_type, void *arg, uint32_t zid)
 {
 	struct dav_obj *hdl = (struct dav_obj *)arg;
 	struct zone    *z   = ZID_TO_ZONE(&hdl->do_heap->layout_info, zid);
@@ -46,10 +47,14 @@ uc_evt_callback(int evt_type, void *arg, uint32_t zid)
 			if (On_memcheck)
 				palloc_heap_vg_zone_open(hdl->do_heap, zid, 1);
 #endif
+			D_ASSERT(z->header.flags & ZONE_EVICTABLE_MB);
+			heap_mbrt_setmb_usage(hdl->do_heap, zid, z->header.sp_usage);
 		}
 		break;
 	case UMEM_CACHE_EVENT_PGEVICT:
-		VALGRIND_DO_DESTROY_MEMPOOL(z);
+		if (hdl->do_booted) {
+			VALGRIND_DO_DESTROY_MEMPOOL(z);
+		}
 		break;
 	default:
 		D_ERROR("Unknown umem cache event type in callback");
@@ -60,11 +65,12 @@ uc_evt_callback(int evt_type, void *arg, uint32_t zid)
 static dav_obj_t *
 dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct umem_store *store)
 {
-	dav_obj_t *hdl = NULL;
+	dav_obj_t              *hdl = NULL;
 	void                   *mmap_base;
 	int                     err = 0;
-	int        rc;
+	int                     rc;
 	struct heap_zone_limits hzl;
+	struct zone            *z0;
 
 	hzl = heap_get_zone_limits(store->stor_size, scm_sz);
 
@@ -85,8 +91,8 @@ dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct
 		       scm_sz, ZONE_MAX_SIZE);
 
 	if (hzl.nzones_heap < hzl.nzones_cache)
-		D_WARN("scm size %lu exceeds metablob size %lu, some scm will be unused",
-		       scm_sz, store->stor_size);
+		D_WARN("scm size %lu exceeds metablob size %lu, some scm will be unused", scm_sz,
+		       store->stor_size);
 
 	mmap_base = mmap(NULL, scm_sz, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 	if (mmap_base == MAP_FAILED)
@@ -111,7 +117,7 @@ dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct
 	} else {
 		rc = umem_cache_alloc(store, UMEM_CACHE_PAGE_SZ, hzl.nzones_heap, hzl.nzones_cache,
 				      hzl.nzones_ne_max, 4096, mmap_base, is_zone_evictable,
-				      uc_evt_callback, hdl);
+				      dav_uc_callback, hdl);
 		if (rc != 0) {
 			D_ERROR("Could not allocate page cache: rc=" DF_RC "\n", DP_RC(rc));
 			err = daos_der2errno(rc);
@@ -149,34 +155,23 @@ dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct
 	heap_set_stats_ptr(hdl->do_heap, &hdl->do_stats->persistent);
 
 	if (!(flags & DAV_HEAP_INIT)) {
-		rc = heap_load_non_evictable_zones(hdl->do_heap, hdl->do_store);
+		rc = heap_zone_load(hdl->do_heap, 0);
 		if (rc) {
 			err = rc;
 			goto out2;
 		}
 		D_ASSERT(store != NULL);
-		rc = hdl->do_store->stor_ops->so_wal_replay(hdl->do_store, dav_wal_replay_cb, hdl);
+		rc = dav_wal_replay(hdl, hzl.nzones_cache);
 		if (rc) {
 			err = daos_der2errno(rc);
 			goto out2;
 		}
 	}
 
-#if VG_MEMCHECK_ENABLED
-	if (On_memcheck)
-		palloc_heap_vg_open(hdl->do_heap, 1);
-#endif
-
 	rc = dav_create_clogs(hdl);
 	if (rc) {
 		err = rc;
 		heap_cleanup(hdl->do_heap);
-		goto out2;
-	}
-
-	rc = heap_update_mbrt_post_boot(hdl->do_heap);
-	if (rc) {
-		err = rc;
 		goto out2;
 	}
 
@@ -186,9 +181,59 @@ dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct
 		err = ENOMEM;
 		goto out2;
 	}
-	heap_ensure_zone0_loaded(hdl->do_heap);
+	rc = heap_ensure_zone0_initialized(hdl->do_heap);
+	if (rc) {
+		lw_tx_end(hdl, NULL);
+		D_ERROR("Failed to initialize zone0, rc = %d", daos_errno2der(rc));
+		goto out2;
+	}
 	lw_tx_end(hdl, NULL);
-	umem_cache_reserve(hdl->do_store);
+
+	z0 = ZID_TO_ZONE(&hdl->do_heap->layout_info, 0);
+	if (z0->header.zone0_zinfo_off) {
+		D_ASSERT(z0->header.zone0_zinfo_size);
+		D_ASSERT(OFFSET_TO_ZID(z0->header.zone0_zinfo_off) == 0);
+
+		rc = heap_update_mbrt_zinfo(hdl->do_heap, false);
+		if (rc) {
+			D_ERROR("Failed to update mbrt with zinfo errno = %d", rc);
+			err = rc;
+			goto out2;
+		}
+
+		rc = heap_load_nonevictable_zones(hdl->do_heap);
+		if (rc) {
+			D_ERROR("Failed to load required zones during boot, errno= %d", rc);
+			err = rc;
+			goto out2;
+		}
+	} else {
+		D_ASSERT(z0->header.zone0_zinfo_size == 0);
+		rc = lw_tx_begin(hdl);
+		if (rc) {
+			D_ERROR("lw_tx_begin failed with err %d\n", rc);
+			err = ENOMEM;
+			goto out2;
+		}
+		rc = obj_realloc(hdl, &z0->header.zone0_zinfo_off, &z0->header.zone0_zinfo_size,
+				 heap_zinfo_get_size(hzl.nzones_heap));
+		if (rc != 0) {
+			lw_tx_end(hdl, NULL);
+			D_ERROR("Failed to setup zinfo");
+			goto out2;
+		}
+		rc = heap_update_mbrt_zinfo(hdl->do_heap, true);
+		if (rc) {
+			D_ERROR("Failed to update mbrt with zinfo errno = %d", rc);
+			err = rc;
+			goto out2;
+		}
+		lw_tx_end(hdl, NULL);
+	}
+#if VG_MEMCHECK_ENABLED
+	if (On_memcheck)
+		palloc_heap_vg_open(hdl->do_heap, 1);
+#endif
 
 	hdl->do_booted = 1;
 

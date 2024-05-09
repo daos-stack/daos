@@ -209,6 +209,10 @@ struct umem_cache {
 	void            *ca_base;
 	/** Offset of first page */
 	uint32_t         ca_base_off;
+	/** Cache Mode */
+	uint32_t         ca_mode;
+	/** Early boot mode */
+	uint32_t         ca_early_boot;
 	/** Total MD pages */
 	uint32_t         ca_md_pages;
 	/** Total memory pages in cache */
@@ -295,7 +299,7 @@ umem_cache_alloc(struct umem_store *store, uint32_t page_sz, uint32_t md_pgs, ui
 int
 umem_cache_free(struct umem_store *store);
 
-/** Check MD-blob offset is already mapped onto umem cache.
+/** Check MD-blob offset is already loaded onto umem cache.
  *
  * \param[in]	store	The umem store
  * \param[in]	offset	MD-blob offset to be converted
@@ -304,6 +308,16 @@ umem_cache_free(struct umem_store *store);
  */
 bool
 umem_cache_offisloaded(struct umem_store *store, umem_off_t offset);
+
+/** Check MD-blob offset is already pinned onto umem cache.
+ *
+ * \param[in]	store	The umem store
+ * \param[in]	offset	MD-blob offset to be converted
+ *
+ * \return	true or false
+ */
+bool
+umem_cache_offispinned(struct umem_store *store, umem_off_t offset);
 
 /** Check ptr is a valid memory pointer in the umem cache.
  *
@@ -334,6 +348,16 @@ umem_cache_off2ptr(struct umem_store *store, umem_off_t offset);
  */
 umem_off_t
 umem_cache_ptr2off(struct umem_store *store, const void *ptr);
+
+/** Update stats for nonevictable pages. This routine is called after
+ *  WAL replay and the evictability of all pages are determined.
+ *
+ * \param[in]	store	The umem store
+ *
+ * \return      None
+ */
+void
+umem_cache_update_nonevictable_stats(struct umem_store *store);
 
 struct umem_cache_range {
 	umem_off_t  cr_off;
@@ -458,6 +482,17 @@ umem_cache_wait_cb_t(void *arg, uint64_t chkpt_tx, uint64_t *committed_tx);
 int
 umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, void *arg,
 		      uint64_t *chkpt_id, struct umem_cache_chkpt_stats *chkpt_stats);
+
+/** Inform umem cache that the heap is in early boot mode or not.
+ *
+ * This function is called by allocator during wal replay to skip certain checks and
+ * actions within the umem cache.
+ *
+ * \param[in]	store		The umem store
+ * \param[in]	early		The early boot mode
+ */
+void
+umem_cache_set_early_boot(struct umem_store *store, bool early);
 
 #endif /*DAOS_PMEM_BUILD*/
 
@@ -771,22 +806,6 @@ typedef struct {
 	 * \param flags	   [IN]	 flags for MB selection criteria. Currently unused.
 	 */
 	uint32_t (*mo_allot_evictable_mb)(struct umem_instance *umm, int flags);
-
-	/**
-	 * returns the memory bucket associated with offset umoff
-	 *
-	 * \param umm	   [IN]	 umem class instance.
-	 * \param umoff	   [IN]	 umem offset
-	 */
-	uint32_t (*mo_get_mb_from_offset)(struct umem_instance *umm, umem_off_t umoff);
-
-	/**
-	 * returns base offset for the memory bucket
-	 *
-	 * \param umm	   [IN]	 umem class instance.
-	 * \param mb_id	   [IN]	 memory bucket id.
-	 */
-	umem_off_t (*mo_get_mb_base_offset)(struct umem_instance *umm, uint32_t mb_id);
 
 #endif
 	/**
@@ -1167,14 +1186,8 @@ umem_allot_mb_evictable(struct umem_instance *umm, int flags)
  * \return id > 0, id of evictable memory bucket.
  *         id = 0, Memory bucket is non-evictable.
  */
-static inline uint32_t
-umem_get_mb_from_offset(struct umem_instance *umm, umem_off_t off)
-{
-	if (umm->umm_ops->mo_get_mb_from_offset)
-		return umm->umm_ops->mo_get_mb_from_offset(umm, off);
-	else
-		return 0;
-}
+uint32_t
+umem_get_mb_from_offset(struct umem_instance *umm, umem_off_t off);
 
 /**
  * Get base offset of the memory bucket
@@ -1185,14 +1198,8 @@ umem_get_mb_from_offset(struct umem_instance *umm, umem_off_t off)
  * \return off > 0, base offset of evictable memory bucket.
  *         off = 0, base offset of non-evictable memory bucket.
  */
-static inline umem_off_t
-umem_get_mb_base_offset(struct umem_instance *umm, uint32_t mb_id)
-{
-	if (umm->umm_ops->mo_get_mb_base_offset)
-		return umm->umm_ops->mo_get_mb_base_offset(umm, mb_id);
-	else
-		return 0;
-}
+umem_off_t
+umem_get_mb_base_offset(struct umem_instance *umm, uint32_t mb_id);
 
 /*********************************************************************************/
 

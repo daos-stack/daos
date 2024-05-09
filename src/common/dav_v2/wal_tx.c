@@ -426,50 +426,60 @@ struct umem_wal_tx_ops dav_wal_tx_ops = {
 	.wtx_act_next = wal_tx_act_next,
 };
 
-/*
- * For Phase 2, WAL replay should additionally ensure the following:
- * 1. Evictable MBs are loaded as needed.
- * 2. Newly created MBs are detected and MBR, zone exhausted count are
- *    updated accordingly.
- * 3. Updates to space usage of evictable MBs are reflected in MBRT.
- */
-static inline void *
-dav_wal_replay_heap_off2ptr(struct umem_store *store, struct palloc_heap *heap, uint64_t off)
-{
-	uint32_t                z_id = OFFSET_TO_ZID(off);
-	struct umem_cache_range rg   = {0};
-	int                     rc;
+struct dav_wal_replay_cache {
+	uint64_t                last_txid;
+	int                     capacity;
+	int                     cur_pos;
+	struct umem_pin_handle *pinhdl[];
+};
 
-	rg.cr_off  = GET_ZONE_OFFSET(z_id);
-	rg.cr_size = ((store->stor_size - rg.cr_off) > ZONE_MAX_SIZE)
-			 ? ZONE_MAX_SIZE
-			 : (store->stor_size - rg.cr_off);
-	rc         = umem_cache_load(store, &rg, 1, 0);
-	D_ASSERT(rc == 0);
-	heap_update_zones_exhausted(heap, z_id);
+static inline void *
+dav_wal_replay_heap_off2ptr(dav_obj_t *dav_hdl, uint64_t off)
+{
+	uint32_t                     z_id = OFFSET_TO_ZID(off);
+	struct umem_cache_range      rg   = {0};
+	int                          rc;
+	struct umem_store           *store = dav_hdl->do_store;
+	struct dav_wal_replay_cache *dwrc  = (struct dav_wal_replay_cache *)dav_hdl->do_cb_wa;
+	struct umem_pin_handle      *pin_handle;
+
+	if (!umem_cache_offispinned(store, off)) {
+		rg.cr_off  = GET_ZONE_OFFSET(z_id);
+		rg.cr_size = ((store->stor_size - rg.cr_off) > ZONE_MAX_SIZE)
+				 ? ZONE_MAX_SIZE
+				 : (store->stor_size - rg.cr_off);
+		rc         = umem_cache_pin(store, &rg, 1, 0, &pin_handle);
+		if (rc) {
+			D_ERROR("Failed to load pages to umem cache");
+			errno = daos_der2errno(rc);
+			return NULL;
+		}
+		D_ASSERT(dwrc->capacity > dwrc->cur_pos);
+		dwrc->pinhdl[dwrc->cur_pos++] = pin_handle;
+	}
 	return umem_cache_off2ptr(store, off);
 }
 
 static inline void
-track_zone_hdr_update(struct palloc_heap *heap, uint64_t off, void *src, daos_size_t size)
+dav_wal_replay_check_txid(dav_obj_t *dav_hdl, uint64_t tx_id)
 {
-	struct zone_header *hdr  = (struct zone_header *)src;
-	uint32_t            z_id = OFFSET_TO_ZID(off);
-	struct mbrt        *mb;
+	struct dav_wal_replay_cache *dwrc  = (struct dav_wal_replay_cache *)dav_hdl->do_cb_wa;
+	struct umem_store           *store = dav_hdl->do_store;
+	int                          i;
 
-	if (IS_ZONE_HDR_OFFSET(off)) {
-		/*zone_headers are atomically updated */
-		D_ASSERT(size == sizeof(struct zone_header));
-		D_ASSERT(hdr->magic == ZONE_HEADER_MAGIC);
-		if (!(hdr->flags & ZONE_EVICTABLE_MB))
-			heap_mbrt_setmb_nonevictable(heap, z_id);
-		else if (!heap_mbrt_ismb_initialized(heap, z_id)) {
-			mb = heap_mbrt_setup_mb(heap, z_id);
-			D_ASSERT(mb != NULL);
-			heap_mbrt_setmb_evictable(heap, mb);
-		}
-	} else if ((IS_ZONE_HDR_USAGE_OFFSET(off)) && (heap_mbrt_ismb_evictable(heap, z_id)))
-		heap_mbrt_setmb_usage(heap, z_id, hdr->sp_usage);
+	if (tx_id == dwrc->last_txid)
+		return;
+
+	if (dwrc->last_txid)
+		umem_cache_commit(store, dwrc->last_txid);
+
+	for (i = 0; i < dwrc->cur_pos; i++)
+		umem_cache_unpin(store, dwrc->pinhdl[i]);
+
+	dwrc->cur_pos   = 0;
+	dwrc->last_txid = tx_id;
+
+	return;
 }
 
 int
@@ -484,6 +494,7 @@ dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *arg)
 	dav_obj_t         *dav_hdl = arg;
 	struct umem_store *store   = dav_hdl->do_store;
 
+	dav_wal_replay_check_txid(dav_hdl, tx_id);
 	switch (act->ac_opc) {
 	case UMEM_ACT_COPY:
 		D_DEBUG(DB_TRACE,
@@ -494,8 +505,11 @@ dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *arg)
 		off  = act->ac_copy.addr;
 		src = (void *)&act->ac_copy.payload;
 		size = act->ac_copy.size;
-		track_zone_hdr_update(dav_hdl->do_heap, off, src, size);
-		dst = dav_wal_replay_heap_off2ptr(store, dav_hdl->do_heap, off);
+		dst  = dav_wal_replay_heap_off2ptr(dav_hdl, off);
+		if (dst == NULL) {
+			rc = daos_errno2der(errno);
+			goto out;
+		}
 		memcpy(dst, src, size);
 		break;
 	case UMEM_ACT_ASSIGN:
@@ -505,7 +519,11 @@ dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *arg)
 			act->ac_assign.addr / PAGESIZE, act->ac_assign.addr % PAGESIZE,
 			act->ac_assign.size);
 		off = act->ac_assign.addr;
-		dst  = dav_wal_replay_heap_off2ptr(store, dav_hdl->do_heap, off);
+		dst = dav_wal_replay_heap_off2ptr(dav_hdl, off);
+		if (dst == NULL) {
+			rc = daos_errno2der(errno);
+			goto out;
+		}
 		size = act->ac_assign.size;
 		ASSERT_rt(size == 1 || size == 2 || size == 4);
 		src = &act->ac_assign.val;
@@ -518,7 +536,11 @@ dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *arg)
 			act->ac_set.addr / PAGESIZE, act->ac_set.addr % PAGESIZE,
 			act->ac_set.size, act->ac_set.val);
 		off = act->ac_set.addr;
-		dst  = dav_wal_replay_heap_off2ptr(store, dav_hdl->do_heap, off);
+		dst = dav_wal_replay_heap_off2ptr(dav_hdl, off);
+		if (dst == NULL) {
+			rc = daos_errno2der(errno);
+			goto out;
+		}
 		size = act->ac_set.size;
 		val = act->ac_set.val;
 		memset(dst, val, size);
@@ -532,7 +554,11 @@ dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *arg)
 			act->ac_op_bits.pos, act->ac_op_bits.num);
 		off = act->ac_op_bits.addr;
 		size = sizeof(uint64_t);
-		p    = (uint64_t *)dav_wal_replay_heap_off2ptr(store, dav_hdl->do_heap, off);
+		p    = dav_wal_replay_heap_off2ptr(dav_hdl, off);
+		if (p == NULL) {
+			rc = daos_errno2der(errno);
+			goto out;
+		}
 		num = act->ac_op_bits.num;
 		pos = act->ac_op_bits.pos;
 		ASSERT_rt((pos >= 0) && (pos + num) <= 64);
@@ -550,5 +576,32 @@ dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *arg)
 	if (rc == 0)
 		rc = umem_cache_touch(store, tx_id, off, size);
 
+out:
+	return rc;
+}
+
+int
+dav_wal_replay(dav_obj_t *hdl, uint32_t mem_pages)
+{
+	int                          rc;
+	struct dav_wal_replay_cache *dwrc;
+
+	umem_cache_set_early_boot(hdl->do_store, true);
+	D_ALLOC(hdl->do_cb_wa,
+		sizeof(struct dav_wal_replay_cache) + sizeof(struct umem_pin_handle *) * mem_pages);
+	if (hdl->do_cb_wa == NULL) {
+		D_ERROR("Failed to allocate for pinhdl_vec");
+		rc = ENOMEM;
+		goto out;
+	}
+	dwrc           = (struct dav_wal_replay_cache *)hdl->do_cb_wa;
+	dwrc->capacity = mem_pages;
+
+	rc = hdl->do_store->stor_ops->so_wal_replay(hdl->do_store, dav_wal_replay_cb, hdl);
+	dav_wal_replay_check_txid(hdl, (-1UL));
+	D_FREE(hdl->do_cb_wa);
+
+out:
+	umem_cache_set_early_boot(hdl->do_store, false);
 	return rc;
 }

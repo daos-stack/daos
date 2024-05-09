@@ -300,27 +300,4 @@ dav_get_heap_stats_v2(dav_obj_t *pop, struct dav_heap_stats *st);
 uint32_t
 dav_allot_mb_evictable_v2(dav_obj_t *pop, int flags);
 
-/**
- * Get the memory bucket id associated with the offset.
- *
- * \param[in]           pop             pool handle
- * \param[in]           offset          offset in the pool.
- *
- * \return id > 0, mbid of evictable memory bucket
- *         id = 0, non-evictable memory bucket
- */
-uint32_t
-dav_off2mb_v2(dav_obj_t *pop, uint64_t offset);
-
-/**
- * Get the base offset associated with the memory bucket.
- *
- * \param[in]           pop             pool handle
- * \param[in]           mb_id           offset in the pool.
- *
- * \return off > 0, evictable memory bucket
- *         off = 0, non-evictable memory bucket
- */
-uint32_t
-dav_mb2baseoff_v2(dav_obj_t *pop, uint32_t mb_id);
 #endif /* __DAOS_COMMON_DAV_V2_H */

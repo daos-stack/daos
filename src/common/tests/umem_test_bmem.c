@@ -28,7 +28,7 @@
 #include <daos/tests_lib.h>
 #include "utest_common.h"
 
-#define POOL_SIZE ((1024 * 1024  * 1024ULL))
+#define POOL_SIZE ((256 * 1024 * 1024ULL))
 
 struct test_arg {
 	struct utest_context	*ta_utx;
@@ -165,20 +165,20 @@ wal_replay(struct umem_store *store,
 }
 
 struct umem_store_ops _store_ops_v2 = {
-	.so_waitqueue_create  = waitqueue_create,
-	.so_waitqueue_destroy = waitqueue_destroy,
-	.so_waitqueue_wait    = waitqueue_wait,
-	.so_waitqueue_wakeup  = waitqueue_wakeup,
-	.so_load              = store_load,
-	.so_read              = store_read,
-	.so_write             = store_write,
-	.so_flush_prep        = store_flush_prep,
-	.so_flush_copy        = store_flush_copy,
-	.so_flush_post        = store_flush_post,
-	.so_wal_reserv        = _persist_reserv,
-	.so_wal_submit        = _persist_submit,
-	.so_wal_replay        = wal_replay,
-	.so_wal_id_cmp        = wal_id_cmp,
+    .so_waitqueue_create  = waitqueue_create,
+    .so_waitqueue_destroy = waitqueue_destroy,
+    .so_waitqueue_wait    = waitqueue_wait,
+    .so_waitqueue_wakeup  = waitqueue_wakeup,
+    .so_load              = store_load,
+    .so_read              = store_read,
+    .so_write             = store_write,
+    .so_flush_prep        = store_flush_prep,
+    .so_flush_copy        = store_flush_copy,
+    .so_flush_post        = store_flush_post,
+    .so_wal_reserv        = _persist_reserv,
+    .so_wal_submit        = _persist_submit,
+    .so_wal_replay        = wal_replay,
+    .so_wal_id_cmp        = wal_id_cmp,
 };
 
 struct umem_store ustore_v2 = {.stor_size  = POOL_SIZE * 2,
@@ -2459,8 +2459,7 @@ test_umempobj_nemb_usage(void **state)
 		*ptr       = prev_umoff;
 		prev_umoff = umoff;
 	}
-	/* 50% nemb when heap size and cache size are same */
-	assert_int_equal(num, 8);
+	assert_int_equal(num, 16);
 	print_message("Number of allocations is %d\n", num);
 
 	for (--num;; num--) {
@@ -2510,7 +2509,7 @@ main(int argc, char **argv)
 	     teardown_pmem},
 	    {"BMEM015a: Test tx defer free publish/cancel", test_tx_bucket_dfree_publish_cancel,
 	     setup_pmem, teardown_pmem},
-	    {NULL, NULL, NULL, NULL} };
+	    {NULL, NULL, NULL, NULL}};
 
 	static const struct CMUnitTest v2_tests[] = {
 	    {"BMEM001: Test atomic alloc/free", test_atomic_alloc, setup_pmem_v2, teardown_pmem},
@@ -2554,7 +2553,7 @@ main(int argc, char **argv)
 	    {"BMEM021: Test umempobj create small size", test_umempobj_create_smallsize, NULL,
 	     NULL},
 	    {"BMEM022: Test umempobj non_evictable MB usage", test_umempobj_nemb_usage, NULL, NULL},
-	    {NULL, NULL, NULL, NULL} };
+	    {NULL, NULL, NULL, NULL}};
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)

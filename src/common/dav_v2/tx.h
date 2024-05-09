@@ -19,4 +19,7 @@ struct mo_ops;
  */
 int tx_create_wal_entry(struct ulog_entry_base *e, void *arg, const struct mo_ops *p_ops);
 
+int
+obj_realloc(dav_obj_t *pop, uint64_t *offp, size_t *sizep, size_t size);
+
 #endif

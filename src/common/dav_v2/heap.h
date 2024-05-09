@@ -37,14 +37,11 @@ int
 heap_check(void *heap_start, uint64_t heap_size);
 int
 heap_create_alloc_class_buckets(struct palloc_heap *heap, struct alloc_class *c);
-
 int
 heap_mbrt_update_alloc_class_buckets(struct palloc_heap *heap, struct mbrt *mb,
 				     struct alloc_class *c);
 int
 heap_extend(struct palloc_heap *heap, struct bucket *defb, size_t size);
-int
-heap_load_non_evictable_zones(struct palloc_heap *heap, struct umem_store *store);
 void
 heap_mbrt_setmb_evictable(struct palloc_heap *heap, struct mbrt *mb);
 bool
@@ -60,15 +57,20 @@ heap_mbrt_incrmb_usage(struct palloc_heap *heap, uint32_t zone_id, int size);
 struct mbrt *
 heap_mbrt_setup_mb(struct palloc_heap *heap, uint32_t zone_id);
 int
-heap_update_mbrt_post_boot(struct palloc_heap *heap);
+heap_mbrt_mb_reclaim_garbage(struct palloc_heap *heap, uint32_t zid);
 int
-heap_ensure_zone0_loaded(struct palloc_heap *heap);
-void
-heap_update_zones_exhausted(struct palloc_heap *heap, uint32_t zid);
+heap_ensure_zone0_initialized(struct palloc_heap *heap);
+int
+heap_zone_load(struct palloc_heap *heap, uint32_t zid);
+int
+heap_load_nonevictable_zones(struct palloc_heap *heap);
+int
+heap_update_mbrt_zinfo(struct palloc_heap *heap, bool init);
+size_t
+heap_zinfo_get_size(uint32_t nzones);
 
 struct alloc_class *
 heap_get_best_class(struct palloc_heap *heap, size_t size);
-
 struct bucket *
 mbrt_bucket_acquire(struct mbrt *mb, uint8_t class_id);
 void
@@ -132,18 +134,15 @@ heap_mbrt_log_alloc_failure(struct palloc_heap *heap, uint32_t zone_id);
 int
 heap_get_evictable_mb(struct palloc_heap *heap, uint32_t *zone_id);
 
-uint32_t
-heap_off2mbid(struct palloc_heap *heap, uint64_t offset);
-
-uint64_t
-heap_mbid2baseoff(struct palloc_heap *heap, uint32_t mb_id);
-
 struct heap_zone_limits {
 	unsigned nzones_heap;
 	unsigned nzones_cache;
 	unsigned nzones_ne_max;
 	unsigned nzones_e_max;
 };
+
+uint32_t
+heap_off2mbid(struct palloc_heap *heap, uint64_t offset);
 
 struct heap_zone_limits
 heap_get_zone_limits(uint64_t heap_size, uint64_t cache_size);

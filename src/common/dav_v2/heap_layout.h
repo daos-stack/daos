@@ -109,10 +109,12 @@ struct zone_header {
 	uint32_t magic;
 	uint32_t size_idx;
 	uint32_t flags;
-	uint32_t spare_1;
+	uint32_t spare1;
+	uint64_t zone0_zinfo_size;
+	uint64_t zone0_zinfo_off;
 	uint64_t reserved[2];
 	uint64_t sp_usage;
-	uint8_t  spare[3552];
+	uint8_t  spare[3536];
 };
 
 struct zone {
