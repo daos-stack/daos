@@ -578,10 +578,12 @@ dc_mgmt_net_cfg(const char *name, crt_init_options_t *crt_info)
 
 	/* Allow client env overrides for these three */
 	d_agetenv_str(&crt_timeout, "CRT_TIMEOUT");
-	if (!crt_timeout)
+	if (!crt_timeout) {
 		crt_info->cio_crt_timeout = info->crt_timeout;
-	else
+	} else {
+		crt_info->cio_crt_timeout = atoi(crt_timeout);
 		D_DEBUG(DB_MGMT, "Using client provided CRT_TIMEOUT: %s\n", crt_timeout);
+	}
 
 	sprintf(buf, "%d", info->provider_idx);
 	rc = d_setenv("CRT_SECONDARY_PROVIDER", buf, 1);
@@ -592,25 +594,24 @@ dc_mgmt_net_cfg(const char *name, crt_init_options_t *crt_info)
 	if (NULL == crt_info->cio_provider)
 		D_GOTO(cleanup, rc = -DER_NOMEM);
 	D_STRNDUP(crt_info->cio_interface, info->interface, DAOS_SYS_INFO_STRING_MAX);
-	if (NULL == crt_info->cio_interface) {
-		D_FREE(crt_info->cio_provider);
+	if (NULL == crt_info->cio_interface)
 		D_GOTO(cleanup, rc = -DER_NOMEM);
-	}
 	D_STRNDUP(crt_info->cio_domain, info->domain, DAOS_SYS_INFO_STRING_MAX);
-	if (NULL == crt_info->cio_domain) {
-		D_FREE(crt_info->cio_provider);
-		D_FREE(crt_info->cio_interface);
+	if (NULL == crt_info->cio_domain)
 		D_GOTO(cleanup, rc = -DER_NOMEM);
-	}
 
 	D_INFO("Network interface: %s, Domain: %s\n", info->interface, info->domain);
 	D_DEBUG(DB_MGMT,
 		"CaRT initialization with:\n"
-		"\tD_PROVIDER: %s, CRT_TIMEOUT: %s, "
-		"CRT_SECONDARY_PROVIDER: %s\n",
-		crt_info->cio_provider, crt_timeout, buf);
+		"\tD_PROVIDER: %s, CRT_TIMEOUT: %d, CRT_SECONDARY_PROVIDER: %s\n",
+		crt_info->cio_provider, crt_info->cio_crt_timeout, buf);
 
 cleanup:
+	if (rc) {
+		D_FREE(crt_info->cio_provider);
+		D_FREE(crt_info->cio_provider);
+		D_FREE(crt_info->cio_interface);
+	}
 	d_freeenv_str(&crt_timeout);
 	d_freeenv_str(&cli_srx_set);
 
