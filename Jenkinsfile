@@ -152,13 +152,13 @@ pipeline {
         booleanParam(name: 'CI_medium_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium test stage')
-        booleanParam(name: 'CI_medium-md-on-ssd_TEST',
+        booleanParam(name: 'CI_medium_md_on_ssd_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium MD on SSD test stage')
         booleanParam(name: 'CI_large_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Large test stage')
-        booleanParam(name: 'CI_large-md-on-ssd_TEST',
+        booleanParam(name: 'CI_large_md_on_ssd_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Large MD on SSD test stage')
         string(name: 'FUNCTIONAL_VM_LABEL',
@@ -366,7 +366,7 @@ pipeline {
                         ),
                         'Functional Hardware Large MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Large MD on SSD',
-                            pragma_suffix: '-hw-large',
+                            pragma_suffix: '-hw-large-md-on-ssd',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_LARGE_MD_ON_SSD_LABEL,
                             next_version: next_version,
