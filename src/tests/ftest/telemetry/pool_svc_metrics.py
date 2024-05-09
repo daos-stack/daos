@@ -99,7 +99,7 @@ class PoolServiceMetrics(TestWithTelemetry):
                     if test(metrics):
                         return metrics
                 except KeyError:
-                    continue
+                    pass
 
                 self.log.info("waiting for pool telemetry to update")
                 time.sleep(5)
