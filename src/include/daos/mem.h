@@ -159,6 +159,8 @@ struct umem_store {
 	int			 store_type;
 	/* standalone store */
 	bool			 store_standalone;
+	/* backend SSD is in faulty state */
+	bool			 store_faulty;
 };
 
 struct umem_slab_desc {

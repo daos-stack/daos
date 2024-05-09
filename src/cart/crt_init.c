@@ -18,42 +18,47 @@ struct crt_plugin_gdata crt_plugin_gdata;
 static bool		g_prov_settings_applied[CRT_PROV_COUNT];
 
 /* List of the environment variables used in CaRT */
-static const char      *crt_env_names[] = {"D_PROVIDER",
-					   "D_INTERFACE",
-					   "D_DOMAIN",
-					   "D_PORT",
-					   "CRT_PHY_ADDR_STR",
-					   "D_LOG_STDERR_IN_LOG",
-					   "D_LOG_SIZE",
-					   "D_LOG_FILE",
-					   "D_LOG_FILE_APPEND_PID",
-					   "D_LOG_MASK",
-					   "DD_MASK",
-					   "DD_STDERR",
-					   "DD_SUBSYS",
-					   "CRT_TIMEOUT",
-					   "CRT_ATTACH_INFO_PATH",
-					   "OFI_PORT",
-					   "OFI_INTERFACE",
-					   "OFI_DOMAIN",
-					   "CRT_CREDIT_EP_CTX",
-					   "CRT_CTX_SHARE_ADDR",
-					   "CRT_CTX_NUM",
-					   "D_FI_CONFIG",
-					   "FI_UNIVERSE_SIZE",
-					   "CRT_ENABLE_MEM_PIN",
-					   "FI_OFI_RXM_USE_SRX",
-					   "D_LOG_FLUSH",
-					   "CRT_MRC_ENABLE",
-					   "CRT_SECONDARY_PROVIDER",
-					   "D_PROVIDER_AUTH_KEY",
-					   "D_PORT_AUTO_ADJUST",
-					   "D_POLL_TIMEOUT",
-					   "D_LOG_FILE_APPEND_RANK",
-					   "D_QUOTA_RPCS",
-					   "D_POST_INIT",
-					   "D_POST_INCR",
-					   "DAOS_SIGNAL_REGISTER"};
+static const char      *crt_env_names[] = {
+    "D_PROVIDER",
+    "D_INTERFACE",
+    "D_DOMAIN",
+    "D_PORT",
+    "CRT_PHY_ADDR_STR",
+    "D_LOG_STDERR_IN_LOG",
+    "D_LOG_SIZE",
+    "D_LOG_FILE",
+    "D_LOG_FILE_APPEND_PID",
+    "D_LOG_MASK",
+    "DD_MASK",
+    "DD_STDERR",
+    "DD_SUBSYS",
+    "CRT_TIMEOUT",
+    "CRT_ATTACH_INFO_PATH",
+    "OFI_PORT",
+    "OFI_INTERFACE",
+    "OFI_DOMAIN",
+    "CRT_CREDIT_EP_CTX",
+    "CRT_CTX_SHARE_ADDR",
+    "CRT_CTX_NUM",
+    "D_FI_CONFIG",
+    "FI_UNIVERSE_SIZE",
+    "CRT_ENABLE_MEM_PIN",
+    "FI_OFI_RXM_USE_SRX",
+    "D_LOG_FLUSH",
+    "CRT_MRC_ENABLE",
+    "CRT_SECONDARY_PROVIDER",
+    "D_PROVIDER_AUTH_KEY",
+    "D_PORT_AUTO_ADJUST",
+    "D_POLL_TIMEOUT",
+    "D_LOG_FILE_APPEND_RANK",
+    "D_QUOTA_RPCS",
+    "D_POST_INIT",
+    "D_POST_INCR",
+    "DAOS_SIGNAL_REGISTER",
+    "D_CLIENT_METRICS_ENABLE",
+    "D_CLIENT_METRICS_RETAIN",
+    "D_CLIENT_METRICS_DUMP_DIR",
+};
 
 static void
 crt_lib_init(void) __attribute__((__constructor__));
@@ -185,7 +190,6 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	       bool primary, crt_init_options_t *opt)
 
 {
-	bool		share_addr = false;
 	bool		set_sep = false;
 	uint32_t	ctx_num = 0;
 	uint32_t	max_expect_size = 0;
@@ -198,42 +202,35 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	if (rc != 0)
 		return rc;
 
-	/* Set max number of contexts. Defaults to the number of cores */
-	ctx_num = 0;
-	d_getenv_uint("CRT_CTX_NUM", &ctx_num);
-	if (opt)
-		max_num_ctx = ctx_num ? ctx_num : max(crt_gdata.cg_num_cores, opt->cio_ctx_max_num);
-	else
-		max_num_ctx = ctx_num ? ctx_num : crt_gdata.cg_num_cores;
+	if (crt_is_service()) {
+		ctx_num		= CRT_SRV_CONTEXT_NUM;
+		max_num_ctx	= CRT_SRV_CONTEXT_NUM;
+	} else {
+		/* Only limit the number of contexts for clients */
+		d_getenv_uint("CRT_CTX_NUM", &ctx_num);
+
+		/* Default setting to the number of cores */
+		if (opt)
+			max_num_ctx = ctx_num ? ctx_num :
+				      max(crt_gdata.cg_num_cores, opt->cio_ctx_max_num);
+		else
+			max_num_ctx = ctx_num ? ctx_num : crt_gdata.cg_num_cores;
+	}
 
 	if (max_num_ctx > CRT_SRV_CONTEXT_NUM)
 		max_num_ctx = CRT_SRV_CONTEXT_NUM;
-
 	/* To be able to run on VMs */
 	if (max_num_ctx < CRT_SRV_CONTEXT_NUM_MIN)
 		max_num_ctx = CRT_SRV_CONTEXT_NUM_MIN;
 
 	D_DEBUG(DB_ALL, "Max number of contexts set to %d\n", max_num_ctx);
 
-	/* Assume for now this option is only available for a primary provider */
-	if (primary) {
-		if (opt && opt->cio_sep_override) {
-			if (opt->cio_use_sep) {
-				set_sep = true;
-				max_num_ctx = opt->cio_ctx_max_num;
-			}
-		} else {
-			share_addr = false;
+	d_getenv_bool("CRT_CTX_SHARE_ADDR", &set_sep);
+	if (set_sep)
+		D_WARN("Unsupported SEP mode requested. Unset CRT_CTX_SHARE_ADDR\n");
 
-			d_getenv_bool("CRT_CTX_SHARE_ADDR", &share_addr);
-			if (share_addr) {
-				set_sep = true;
-				ctx_num = 0;
-				d_getenv_uint("CRT_CTX_NUM", &ctx_num);
-				max_num_ctx = ctx_num;
-			}
-		}
-	}
+	if (opt && opt->cio_sep_override && opt->cio_use_sep)
+		D_WARN("Unsupported SEP mode requested in init options\n");
 
 	if (opt && opt->cio_use_expected_size)
 		max_expect_size = opt->cio_max_expected_size;
@@ -601,6 +598,12 @@ crt_protocol_info_free(struct crt_protocol_info *protocol_info)
 	crt_hg_free_protocol_info((struct na_protocol_info *)protocol_info);
 }
 
+static inline void
+warn_deprecated(const char *old_env, const char *new_env)
+{
+	D_WARN("Usage of %s is deprecated. Set %s instead\n", old_env, new_env);
+}
+
 int
 crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 {
@@ -700,8 +703,11 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			provider = opt->cio_provider;
 		else {
 			d_agetenv_str(&provider_env, "D_PROVIDER");
-			if (provider_env == NULL)
+			if (provider_env == NULL) {
 				d_agetenv_str(&provider_env, CRT_PHY_ADDR_ENV);
+				if (provider_env != NULL)
+					warn_deprecated(CRT_PHY_ADDR_ENV, "D_PROVIDER");
+			}
 			provider = provider_env;
 		}
 
@@ -711,6 +717,8 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			d_agetenv_str(&interface_env, "D_INTERFACE");
 			if (interface_env == NULL) {
 				d_agetenv_str(&interface_env, "OFI_INTERFACE");
+				if (interface_env != NULL)
+					warn_deprecated("OFI_INTERFACE", "D_INTERFACE");
 			}
 			interface = interface_env;
 		}
@@ -719,8 +727,11 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			domain = opt->cio_domain;
 		else {
 			d_agetenv_str(&domain_env, "D_DOMAIN");
-			if (domain_env == NULL)
+			if (domain_env == NULL) {
 				d_agetenv_str(&domain_env, "OFI_DOMAIN");
+				if (domain_env != NULL)
+					warn_deprecated("OFI_DOMAIN", "D_DOMAIN");
+			}
 			domain = domain_env;
 		}
 
@@ -728,8 +739,11 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			port = opt->cio_port;
 		else {
 			d_agetenv_str(&port_env, "D_PORT");
-			if (port_env == NULL)
+			if (port_env == NULL) {
 				d_agetenv_str(&port_env, "OFI_PORT");
+				if (port_env != NULL)
+					warn_deprecated("OFI_PORT", "D_PORT");
+			}
 			port = port_env;
 		}
 

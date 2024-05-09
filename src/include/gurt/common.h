@@ -402,7 +402,7 @@ d_realpath(const char *path, char *resolved_path) _dalloc_;
 #define D_SPIN_INIT(x, y)	__D_PTHREAD_INIT(pthread_spin_init, x, y)
 #define D_RWLOCK_INIT(x, y)	__D_PTHREAD_INIT(pthread_rwlock_init, x, y)
 
-#ifdef DAOS_BUILD_RELEASE
+#if defined(DAOS_BUILD_RELEASE) || defined(__COVERITY__)
 
 #define D_MUTEX_LOCK(x)    __D_PTHREAD(pthread_mutex_lock, x)
 #define D_RWLOCK_WRLOCK(x) __D_PTHREAD(pthread_rwlock_wrlock, x)
@@ -472,6 +472,7 @@ int d_rank_list_copy(d_rank_list_t *dst, d_rank_list_t *src);
 void d_rank_list_shuffle(d_rank_list_t *rank_list);
 void d_rank_list_sort(d_rank_list_t *rank_list);
 bool d_rank_list_find(d_rank_list_t *rank_list, d_rank_t rank, int *idx);
+void d_rank_list_del_at(d_rank_list_t *list, int idx);
 int d_rank_list_del(d_rank_list_t *rank_list, d_rank_t rank);
 bool d_rank_list_identical(d_rank_list_t *rank_list1,
 			   d_rank_list_t *rank_list2);

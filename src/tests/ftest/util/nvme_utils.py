@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -7,7 +7,6 @@ import re
 import threading
 import time
 
-from avocado import fail_on
 from avocado.core.exceptions import TestFail
 from dmg_utils import get_dmg_response, get_storage_query_device_uuids
 from exception_utils import CommandFailure
@@ -22,25 +21,24 @@ def get_device_ids(dmg, servers):
 
     Args:
         dmg (DmgCommand): a DmgCommand class instance.
-        servers (list): list of server hosts.
+        servers (NodeSet): set of server hosts.
 
     Raises:
         CommandFailure: if there is an error obtaining the NVMe Device ID
 
     Returns:
-        devices (dictionary): Device UUID for servers.
-
+        devices (dict): a dictionary of host keys with dictionary values of uuid keys and device
+            attribute values
     """
-    devices = {}
-    for host in servers:
-        dmg.hostlist = host
-        devices[host] = []
-        for uuid_list in get_storage_query_device_uuids(dmg).values():
-            devices[host].extend(uuid_list)
-    return devices
+    device_ids = {}
+    for host_port, uuid_dict in get_storage_query_device_uuids(dmg).items():
+        host = host_port.split(':')[0]
+        if host in servers:
+            device_ids[host] = uuid_dict
+    return device_ids
 
 
-def set_device_faulty(test, dmg, server, uuid, pool=None, **kwargs):
+def set_device_faulty(test, dmg, server, uuid, pool=None, has_sys_xs=False, **kwargs):
     """Set the device faulty and optionally wait for rebuild to complete.
 
     Args:
@@ -50,6 +48,7 @@ def set_device_faulty(test, dmg, server, uuid, pool=None, **kwargs):
         uuid (str): the device UUID
         pool (TestPool, optional): pool used to wait for rebuild to start/complete if specified.
             Defaults to None.
+        has_sys_xs (bool, optional): the device's has_sys_xs property value. Defaults to False.
         kwargs (dict, optional): named arguments to pass to the DmgCommand.storage_set_faulty.
 
     Returns:
@@ -61,7 +60,13 @@ def set_device_faulty(test, dmg, server, uuid, pool=None, **kwargs):
     try:
         response = get_dmg_response(dmg.storage_set_faulty, **kwargs)
     except CommandFailure as error:
-        test.fail(str(error))
+        if not has_sys_xs:
+            test.fail(str(error))
+
+    # Update the expected status of the any stopped/excluded ranks
+    if has_sys_xs:
+        ranks = [test.server_managers[-1].ranks[server]]
+        test.server_managers[-1].update_expected_states(ranks, ["stopped", "excluded"])
 
     # Add a tearDown method to reset the faulty device
     test.register_cleanup(reset_fault_device, dmg=dmg, server=server, uuid=uuid)
@@ -108,15 +113,9 @@ class ServerFillUp(IorTestBase):
     def __init__(self, *args, **kwargs):
         """Initialize a IorTestBase object."""
         super().__init__(*args, **kwargs)
-        self.capacity = 1
-        self.no_of_servers = 1
-        self.no_of_drives = 1
         self.pool = None
-        self.dmg = None
-        self.set_faulty_device = False
+        self.dmg_command = None
         self.set_online_rebuild = False
-        self.scm_fill = False
-        self.nvme_fill = False
         self.ior_matrix = None
         self.ior_local_cmd = None
         self.result = []
@@ -154,7 +153,7 @@ class ServerFillUp(IorTestBase):
 
         self.nvme_local_cont.create()
 
-    def start_ior_thread(self, create_cont, operation, log_file=None):
+    def start_ior_thread(self, create_cont, operation, percent, storage_type, log_file=None):
         """Start IOR write/read threads and wait until all threads are finished.
 
         Args:
@@ -163,6 +162,8 @@ class ServerFillUp(IorTestBase):
                 Write/WriteRead: It will Write or Write/Read base on IOR parameter in yaml file.
                 Auto_Write/Auto_Read: It will calculate the IOR block size based on requested
                                         storage % to be fill.
+            percent (int): % of storage capacity to fil
+            storage_type (str): storage type to base the % of storage capacity to fil: 'scm'|'nvme'
             log_file (str, optional): log file. Defaults to None.
         """
         # IOR flag can Write/Read based on test yaml
@@ -170,7 +171,7 @@ class ServerFillUp(IorTestBase):
 
         # Calculate the block size based on server % to fill up.
         if 'Auto' in operation:
-            block_size = self.calculate_ior_block_size()
+            block_size = self.calculate_ior_block_size(percent, storage_type)
             self.ior_local_cmd.block_size.update('{}'.format(block_size))
 
         # For IOR Read operation update the read only flag from yaml file.
@@ -178,7 +179,7 @@ class ServerFillUp(IorTestBase):
             create_cont = False
             self.ior_local_cmd.flags.value = self.ior_read_flags
 
-        self.ior_local_cmd.set_daos_params(self.server_group, self.pool, None)
+        self.ior_local_cmd.set_daos_params(self.pool, None)
         self.ior_local_cmd.test_file.update('/testfile')
 
         # Created new container or use the existing container for reading
@@ -204,17 +205,21 @@ class ServerFillUp(IorTestBase):
         except (CommandFailure, TestFail) as error:
             self.result.append("FAIL - {}".format(error))
 
-    def calculate_ior_block_size(self):
+    def calculate_ior_block_size(self, percent, storage_type):
         """Calculate IOR Block size to fill up the Server.
+
+        Args:
+            percent (int): % of storage capacity to fil
+            storage_type (str): storage type to base the % of storage capacity to fil: 'scm'|'nvme'
 
         Returns:
             block_size(int): IOR Block size
 
         """
-        if self.scm_fill:
+        if storage_type.lower() == 'scm':
             free_space = self.pool.get_pool_daos_space()["s_total"][0]
             self.ior_local_cmd.transfer_size.value = self.ior_scm_xfersize
-        elif self.nvme_fill:
+        elif storage_type.lower() == 'nvme':
             free_space = self.pool.get_pool_daos_space()["s_total"][1]
             self.ior_local_cmd.transfer_size.value = self.ior_nvme_xfersize
         else:
@@ -223,7 +228,7 @@ class ServerFillUp(IorTestBase):
         # Get the block size based on the capacity to be filled. For example
         # If nvme_free_space is 100G and to fill 50% of capacity.
         # Formula : (107374182400 / 100) * 50.This will give 50%(50G) of space to be filled.
-        _tmp_block_size = (free_space / 100) * self.capacity
+        _tmp_block_size = (free_space / 100) * percent
 
         # Check the IOR object type to calculate the correct block size.
         _replica = re.findall(r'_(.+?)G', self.ior_local_cmd.dfs_oclass.value)
@@ -255,19 +260,6 @@ class ServerFillUp(IorTestBase):
             self.ior_local_cmd.transfer_size.value))
 
         return block_size
-
-    @fail_on(CommandFailure)
-    def set_device_faulty_loop(self):
-        """Set devices to Faulty one by one and wait for rebuild to complete."""
-        # Get the device ids from all servers and try to eject the disks
-        device_ids = get_device_ids(self.dmg, self.hostlist_servers)
-
-        # no_of_servers and no_of_drives can be set from test yaml. 1 Server, 1 Drive = Remove
-        # single drive from single server
-        for num in range(0, self.no_of_servers):
-            server = self.hostlist_servers[num]
-            for disk_id in range(0, self.no_of_drives):
-                set_device_faulty(self, self.dmg, server, device_ids[server][disk_id], self.pool)
 
     def get_max_storage_sizes(self, percentage=96):
         """Get the maximum pool sizes for the current server configuration.
@@ -341,60 +333,96 @@ class ServerFillUp(IorTestBase):
         Fill up based on percent amount given using IOR.
 
         Args:
-            storage (string): SCM or NVMe, by default it will fill NVMe.
+            storage (str): storage type to base the % of storage capacity to fil: 'scm'|'nvme'
             operation (string): Write/Read operation
-            percent (int): % of storage to be filled
+            percent (int): % of storage capacity to fil
             create_cont (bool): To create the new container for IOR
             log_file (str, optional): log file. Defaults to None.
         """
-        kill_rank_job = []
-        kill_target_job = []
         self.result.clear()
-        self.capacity = percent
-        # Fill up NVMe by default
-        self.nvme_fill = 'NVMe' in storage
-        self.scm_fill = 'SCM' in storage
 
         # Create the IOR threads
-        job = threading.Thread(
-            target=self.start_ior_thread,
-            kwargs={"create_cont": create_cont, "operation": operation, "log_file": log_file})
-        # Launch the IOR thread
-        job.start()
-
-        # Set NVMe device faulty if it's set
-        if self.set_faulty_device:
-            time.sleep(60)
-            # Set the device faulty
-            self.set_device_faulty_loop()
+        ior_thread = self.create_ior_thread(create_cont, operation, percent, storage, log_file)
 
         # Kill the server rank while IOR in progress
         if self.set_online_rebuild:
             time.sleep(30)
+
             # Kill the server rank in BG thread
-            for _id, _rank in enumerate(self.rank_to_kill):
-                kill_rank_job.append(threading.Thread(target=self.kill_rank_thread,
-                                                      kwargs={"rank": _rank}))
-                kill_rank_job[_id].start()
+            rank_threads = self.create_kill_rank_threads(self.rank_to_kill)
 
-            # Kill the target from rank in BG thread
-            for _id, (key, value) in enumerate(self.pool_exclude.items()):
-                kill_target_job.append(threading.Thread(target=self.exclude_target_thread,
-                                                        kwargs={"rank": key, "target": value}))
-                kill_target_job[_id].start()
+            # Exclude the target from rank in BG thread
+            exclude_threads = self.create_exclude_target_threads(self.pool_exclude)
 
-            # Wait for server kill thread to finish
-            for _kill_rank in kill_rank_job:
-                _kill_rank.join()
+            # Wait for server kill threads to finish
+            for thread in rank_threads:
+                thread.join()
 
-            # Wait for rank kill thread to finish
-            for _kill_tgt in kill_target_job:
-                _kill_tgt.join()
+            # Wait for target exclude threads to finish
+            for thread in exclude_threads:
+                thread.join()
 
         # Wait to finish the IOR thread
-        job.join()
+        ior_thread.join()
 
         # Verify if any test failed for any IOR run
         for test_result in self.result:
             if "FAIL" in test_result:
                 self.fail(test_result)
+
+    def create_ior_thread(self, create_cont=True, operation="WriteRead", percent=1,
+                          storage_type='nvme', log_file=None):
+        """Create the IOR thread.
+
+        Args:
+            create_cont (bool): To create the new container for IOR
+            operation (string): Write/Read operation
+            percent (int): % of storage capacity to fil
+            storage_type (str): storage type to base the % of storage capacity to fil: 'scm'|'nvme'
+            log_file (str, optional): log file. Defaults to None.
+
+        Returns:
+            Thread: a Thread object running self.start_ior_thread()
+        """
+        thread = threading.Thread(
+            target=self.start_ior_thread,
+            kwargs={
+                "create_cont": create_cont,
+                "operation": operation,
+                "percent": percent,
+                "storage_type": storage_type,
+                "log_file": log_file})
+        thread.start()
+        return thread
+
+    def create_kill_rank_threads(self, ranks_to_kill):
+        """Create threads to kill each server rank specified.
+
+        Args:
+            ranks_to_kill (list): list of server rank integers to kill
+
+        Returns:
+            list: a list of Thread objects running self.kill_rank_thread()
+        """
+        threads = []
+        for rank in ranks_to_kill:
+            threads.append(threading.Thread(target=self.kill_rank_thread, kwargs={"rank": rank}))
+            threads[-1].start()
+        return threads
+
+    def create_exclude_target_threads(self, targets_to_exclude):
+        """Create threads to exclude each target specified.
+
+        Args:
+            targets_to_exclude (dict): dictionary of rank key and target values to exclude
+
+        Returns:
+            list: a list of Thread objects running self.exclude_target_thread()
+        """
+        threads = []
+        for rank, target in targets_to_exclude.items():
+            threads.append(
+                threading.Thread(
+                    target=self.exclude_target_thread, kwargs={"rank": rank, "target": target}))
+            threads[-1].start()
+        return threads

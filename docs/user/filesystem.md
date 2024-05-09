@@ -46,24 +46,41 @@ The DFS API closely represents the POSIX API. The API includes operations to:
 
 ### POSIX Compliance
 
-The following features from POSIX are not supported:
+POSIX support in DAOS comes with the following limitations:
 
-* Hard links
+* Hard links are currently not supported.
+* Flock operations are not supported (maybe at dfuse local node level only).
 * mmap support with MAP\_SHARED will be consistent from single client only and only when data
   caching is enabled. Note that this is supported through DFUSE only (i.e. not through the DFS API).
   The dfuse-data-cache=otoc container attribute allows this without enabling other caching.
-* Char devices, block devices, sockets and pipes
-* User/group quotas
-* setuid(), setgid() programs, supplementary groups, POSIX ACLs are not supported
-  within the DFS namespace.
-* [access/change/modify] time not updated appropriately, potentially on close only.
-* Flock (maybe at dfuse local node level only)
-* Block size in stat buf is not accurate (no account for holes, extended attributes)
-* Various parameters reported via statfs like number of blocks, files,
-  free/available space
-* POSIX permissions inside an encapsulated namespace
-  * Still enforced at the DAOS pool/container level
-  * Effectively means that all files belong to the same "project"
+* Char devices, block devices, sockets and pipes are not supported.
+* User/group quotas are not supported.
+* Access time (atime) is always the greater between the change and modify time.
+* Block size in stat buf is not accurate (no account for holes, extended attributes).
+* Various parameters reported via statfs like number of blocks, files, free/available space are not
+  accurate.
+* O\_APPEND mode for files is not supported. When O\_APPEND is used on file open with dfuse, the
+  file open will not return an unsupported error and will be consistent only on the local node
+  (dfuse instance) where this operation was executed. This means if O\_APPEND is used over dfuse
+  with multiple dfuse instances, the appends to the file are not consistent and may corrupt the
+  file.
+* The sticky bit, POSIX ACLs, and supplementary groups are not supported.
+* While set\_uid/gid bits are stored by libdfs on setattr and returned on getattr, it is up to
+  the caller (e.g. fuse in the case of dfuse) to implement support for setuid/gid binaries since
+  libdfs does not provide any interface to execute binaries.
+* POSIX permissions are only stored and enforced at the DFS level and provided for convenience
+  purposes. Security of access to the DFS container should be properly set at the DAOS pool and/or
+  container level using DAOS ACLs. This means that a user should not rely on those POSIX permissions
+  for securing access to their data since it can be bypassed by the DAOS lower level API if the user
+  has ACL access to the container.
+* Open-unlink semantics: This occurs when a client obtains an open handle on an object (file or
+  directory), and accesses that object (reads/writes data or create other files), while another
+  client removes that object that the other client has opened from under it. In DAOS, we don't track
+  object open handles as that would be very expensive, and so in such conflicting cases, the worst
+  case scenario is the lost/leaked space that is written to those orphan objects that have been
+  unlinked from the namespace. DAOS implements a file system checker that can be used to either
+  relink those orphaned objects back in a lost+found directory or remove them from the container to
+  reclaim the space.
 
 !!! note
     DFS directories do not include the `.` (current directory) and `..` (parent directory)
@@ -91,15 +108,7 @@ accessed in balanced mode only. If the container was created with relaxed mode,
 it can be accessed in relaxed or balanced mode. In either mode, there is a
 consistency semantic issue that is not properly handled:
 
-* Open-unlink semantics: This occurs when a client obtains an open handle on an
-  object (file or directory), and accesses that object (reads/writes data or
-  create other files), while another client removes that object that the other
-  client has opened from under it. In DAOS, we don't track object open handles
-  as that would be very expensive, and so in such conflicting cases, the worst
-  case scenario is the lost/leaked space that is written to those orphan objects
-  that have been unlinked from the namespace.
-
-Other consistency issues are handled differently between the two consistency mode:
+Other consistency issues are handled differently between the two consistency modes:
 
 * Same Operation Executed Concurrently (Supported in both Relaxed and Balanced
   Mode): For example, clients try to create or remove the same file
@@ -145,7 +154,7 @@ DFuse will launch one thread per available core by default, limited to 16 if not
 constrained by a taskset. This can be
 changed by the `--thread-count` option. To change the cores that DFuse runs on
 use kernel level tasksets which will bind DFuse to a subset of cores. This can be
-done via the `tasket` or `numactl` programs or similar. If doing this then DFuse
+done via the `taskset` or `numactl` programs or similar. If doing this then DFuse
 will again launch one thread per available core by default.  Many metadata
 operations will block a thread until completed so if restricting DFuse to a small
 number of cores then overcommiting via the `--thread-count` option may be desirable.
@@ -935,7 +944,8 @@ the unified namespace integration.
 
 libpil4dfs is similar to libioil, but it intercepts not only read/write, but also
 metadata related functions. This provides similar performance as using native DFS
-with POSIX interface.
+with POSIX interface. libpil4dfs can be used in conjunction with dfuse or without
+a dfuse mountpoint.
 
 ### Using libpil4dfs with dfuse
 
@@ -958,6 +968,30 @@ Example:
 ```
 $ LD_PRELOAD=/usr/lib64/libpil4dfs.so mdtest -a POSIX -z 0 -F -C -i 1 -n 1667 -e 4096 -d /scratch_fs/dfuse/ -w 4096
 ```
+
+### Using libpil4dfs without dfuse
+
+When no dfuse mountpoint is specified, several environment variables must be set to
+tell libpil4dfs what POSIX container to mount where in the namespace:
+
+* `D_IL_POOL` must be set to the pool label where the container to be mounted resides
+* `D_IL_CONTAINER` must be set to the label of the POSIX container to be mounted
+* `D_IL_MOUNT_POINT` shall be set to the path in the local namespace where the container
+  should be mounted
+
+Please find below an example with an (empty) POSIX container mounted on the fly by pil4dfs under /tmp
+
+```
+$ ls /tmp
+daos_agent.log  runtime-root  systemd-private-6bcc82c125b84f88b78f4f52b848d0d2-chronyd.service-5LAQe4  tmpjsonlogdir.a3L8Gv
+$ LD_PRELOAD=/usr/lib64/libpil4dfs.so D_IL_POOL=tank D_IL_CONTAINER=mycont D_IL_MOUNT_POINT=/tmp ls /tmp
+$
+```
+
+!!! warning
+    The operation mode without dfuse has a lot of limitations and is not recommended for
+    production use.
+
 ### Print an interception summary
 
 If the `D_IL_REPORT` environment variable is set then the interception library will
@@ -986,26 +1020,60 @@ libpil4dfs intercepting summary for ops on DFS:
 [op_sum ]  5003
 ```
 
-### Force pil4dfs related env set in child processes when calling execve and its variants
-Normally child processes inherit environmental variables from parent processes. In rare cases, e.g. scons, envs are striped off when calling execve(). It might be useful to force pil4dfs related env set in child processes by setting env "D_IL_ENFORCE_EXEC_ENV=1". This flag is 0 if not set.
+### Turn on compatible mode in libpil4dfs
+Fake file descriptor (FD) is used in regular mode in libpil4dfs.so for efficiency. open() returns fake fd to applications. In cases of some APIs are not intercepted, applications could crash with the error "Bad File Descriptor". Compatible mode is provided to work around such situations.
+Setting env "D_IL_COMPATIBLE=1" turns on compatible mode. Kernel fd allocated by dfuse instead of fake fd will be returned to applications. This mode provides better compatibility with degraded performance in open, openat, and opendir, etc. Please start dfuse with "--disable-caching" to disable caching before using compatible mode.
 
-### Limitations of using libpil4dfs
-Stability issues: This is a preview version. Some features are not implemented yet. Many APIs are involved in libpil4dfs. There may be bugs, uncovered/not intercepted functions, etc. 
+### Child Process Inheritance
 
-Current code was developed and tested on x86_64. We do have ongoing work to port the library to Arm64, but we have not tested on Arm64 yet.
+Normally child processes inherit environmental variables from parent processes. In rare cases, e.g.
+scons, envs are striped off when calling execve().  It might be useful to force pil4dfs related env
+set in child processes by setting env "D_IL_ENFORCE_EXEC_ENV=1". This flag is 0 if not set.
 
-Large overhead for small tasks due to slow daos_init() (order of hundreds of milliseconds)
 
-Not working for statically linked executable
+### Directory caching
 
-dfuse is still required to handle some operations that libpil4dfs does not supported yet.
+To improve performance, directories are cached in a hash table.  The size of this hash table could
+be changed, thanks to the following environment variable:
+* `D_IL_DCACHE_SIZE_BITS`: power 2 number of buckets of the hash table (default value of 16).
 
-Support for multiple pool and containers within a singled dfuse mountpoint is not there yet (each container accessed should be mounted separately), i.e. no UNS support (concerns about the overhead of getfattr())
+A garbage collector is periodically triggered to remove the stalled entries from the hash table.
+The behavior of this garbage collector can be configured thanks to the following environment
+variables:
+* `D_IL_DCACHE_REC_TIMEOUT`: define the lifetime in seconds of an entry of the hash table (default
+  value of 60).
+* `D_IL_DCACHE_GC_RECLAIM_MAX`: define the maximal number of entries which can be reclaimed per
+  garbgage collection iteration (default value of 1000).
+* `D_IL_DCACHE_GC_PERIOD`: define the triggering time period in seconds of the garbage collector
+  (default value of 120).
 
-No support of creating a process with the executable and shared object files stored on DAOS yet
+!!! note
+    * The directory cache can be deactivated with setting a value of 0 to the
+      `D_IL_DCACHE_REC_TIMEOUT` environment variable.
+    * The garbage collector can be deactivated with setting a value of 0 to the
+      `D_IL_DCACHE_GC_PERIOD` environment variable.
 
-No support for applications using fork yet
+### Limitations of libpil4dfs
+
+Libpil4dfs is a available as a preview. Some features are not implemented yet. Many APIs are
+involved in libpil4dfs. There may be bugs, uncovered/not intercepted functions, etc.
+
+Libpil4dfs suffers from the following limitations:
+
+* Current code was developed and tested on x86_64. We do have ongoing work to port the library to Arm64,
+  but we have not tested on Arm64 yet.
+* Large overhead for small tasks due to slow daos_init() (order of hundreds of milliseconds)
+* Not working for statically linked executable
+* dfuse is still required to handle some operations that libpil4dfs does not supported yet.
+* Support for multiple pool and containers within a singled dfuse mountpoint is not there yet
+  (each container accessed should be mounted separately), i.e. no UNS support (concerns about
+  the overhead of getfattr())
+* No support of creating a process with the executable and shared object files stored on DAOS yet
+* No support for applications using fork yet
+* DFS (dfs_open / dfs_lookup) does not support O_APPEND currently. We allow O_APPEND flag in open
+  in libpil4dfs to support bash scripts like configure. Currently, we only query file size one time
+  when opening the file, then set file pointer to the end of the file. We DO NOT move file pointer
+  to the end of the file in all following write to avoid expensive stat. Further work is required
+  for rigorous O_APPEND support.
 
 Those unsupported features are still available through dfuse.
-
-DFS (dfs_open / dfs_lookup) does not support O_APPEND currently. We allow O_APPEND flag in open in libpil4dfs to support bash scripts like configure. Currently, we only query file size one time when opening the file, then set file pointer to the end of the file. We DO NOT move file pointer to the end of the file in all following write to avoid expensive stat. Further work is required for rigorous O_APPEND support.

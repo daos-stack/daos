@@ -1587,7 +1587,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_req__field_descriptors[1
     offsetof(Mgmt__PoolCreateReq, faultdomains),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -1623,7 +1623,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_req__field_descriptors[1
     offsetof(Mgmt__PoolCreateReq, tierratio),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -1647,7 +1647,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_req__field_descriptors[1
     offsetof(Mgmt__PoolCreateReq, ranks),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -1659,7 +1659,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_req__field_descriptors[1
     offsetof(Mgmt__PoolCreateReq, tierbytes),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -1726,12 +1726,12 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_resp__field_descriptors[
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "leader",
+    "svc_ldr",
     2,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__PoolCreateResp, leader),
+    offsetof(Mgmt__PoolCreateResp, svc_ldr),
     NULL,
     NULL,
     0,             /* flags */
@@ -1746,7 +1746,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_resp__field_descriptors[
     offsetof(Mgmt__PoolCreateResp, svc_reps),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -1758,7 +1758,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_resp__field_descriptors[
     offsetof(Mgmt__PoolCreateResp, tgt_ranks),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -1770,7 +1770,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_resp__field_descriptors[
     offsetof(Mgmt__PoolCreateResp, tier_bytes),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -1787,9 +1787,9 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_resp__field_descriptors[
   },
 };
 static const unsigned mgmt__pool_create_resp__field_indices_by_name[] = {
-  1,   /* field[1] = leader */
   5,   /* field[5] = meta_blob_bytes */
   0,   /* field[0] = status */
+  1,   /* field[1] = svc_ldr */
   2,   /* field[2] = svc_reps */
   3,   /* field[3] = tgt_ranks */
   4,   /* field[4] = tier_bytes */
@@ -1861,7 +1861,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_destroy_req__field_descriptors[
     offsetof(Mgmt__PoolDestroyReq, svc_ranks),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -1977,7 +1977,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_evict_req__field_descriptors[7]
     offsetof(Mgmt__PoolEvictReq, svc_ranks),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -2156,7 +2156,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_exclude_req__field_descriptors[
     offsetof(Mgmt__PoolExcludeReq, targetidx),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -2168,7 +2168,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_exclude_req__field_descriptors[
     offsetof(Mgmt__PoolExcludeReq, svc_ranks),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
@@ -2284,7 +2284,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_drain_req__field_descriptors[5]
     offsetof(Mgmt__PoolDrainReq, targetidx),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -2296,7 +2296,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_drain_req__field_descriptors[5]
     offsetof(Mgmt__PoolDrainReq, svc_ranks),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
@@ -2400,7 +2400,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_extend_req__field_descriptors[7
     offsetof(Mgmt__PoolExtendReq, ranks),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -2412,7 +2412,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_extend_req__field_descriptors[7
     offsetof(Mgmt__PoolExtendReq, svc_ranks),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -2424,7 +2424,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_extend_req__field_descriptors[7
     offsetof(Mgmt__PoolExtendReq, tierbytes),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -2436,7 +2436,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_extend_req__field_descriptors[7
     offsetof(Mgmt__PoolExtendReq, faultdomains),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -2504,7 +2504,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_extend_resp__field_descriptors[
     offsetof(Mgmt__PoolExtendResp, tier_bytes),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -2592,7 +2592,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_reintegrate_req__field_descript
     offsetof(Mgmt__PoolReintegrateReq, targetidx),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -2604,7 +2604,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_reintegrate_req__field_descript
     offsetof(Mgmt__PoolReintegrateReq, svc_ranks),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -2616,7 +2616,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_reintegrate_req__field_descript
     offsetof(Mgmt__PoolReintegrateReq, tierbytes),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -2772,7 +2772,7 @@ static const ProtobufCFieldDescriptor mgmt__list_pools_resp__pool__field_descrip
     offsetof(Mgmt__ListPoolsResp__Pool, svc_reps),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -2926,7 +2926,7 @@ static const ProtobufCFieldDescriptor mgmt__list_cont_req__field_descriptors[3] 
     offsetof(Mgmt__ListContReq, svc_ranks),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
@@ -3079,7 +3079,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_query_req__field_descriptors[5]
     offsetof(Mgmt__PoolQueryReq, svc_ranks),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -3689,7 +3689,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_set_prop_req__field_descriptors
     offsetof(Mgmt__PoolSetPropReq, svc_ranks),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
@@ -3804,7 +3804,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_get_prop_req__field_descriptors
     offsetof(Mgmt__PoolGetPropReq, svc_ranks),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
@@ -3920,7 +3920,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_upgrade_req__field_descriptors[
     offsetof(Mgmt__PoolUpgradeReq, svc_ranks),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
@@ -4034,7 +4034,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_query_target_req__field_descrip
     offsetof(Mgmt__PoolQueryTargetReq, targets),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -4046,7 +4046,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_query_target_req__field_descrip
     offsetof(Mgmt__PoolQueryTargetReq, svc_ranks),
     NULL,
     NULL,
-    0,             /* flags */
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };

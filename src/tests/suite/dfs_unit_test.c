@@ -1493,7 +1493,7 @@ dfs_test_chown(void **state)
 	rc = dfs_stat(dfs_mt, NULL, filename_file1, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_uid, geteuid());
-	assert_int_equal(stbuf.st_uid, getegid());
+	assert_int_equal(stbuf.st_gid, getegid());
 
 	/* Now do a create with uid/gid set */
 	stbuf2.st_uid = 14;

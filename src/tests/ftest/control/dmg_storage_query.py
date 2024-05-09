@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -138,7 +138,7 @@ class DmgStorageQuery(ControlTestBase):
         targets = self.server_managers[-1].get_config_value('targets')
 
         # Create pool and get the storage smd information, then verify info
-        self.prepare_pool()
+        self.add_pool()
         pool_info = get_storage_query_pool_info(self.dmg, verbose=True)
 
         # Check the dmg storage query list-pools output for inaccuracies
@@ -227,17 +227,34 @@ class DmgStorageQuery(ControlTestBase):
         :avocado: tags=control,dmg,storage_query,basic
         :avocado: tags=DmgStorageQuery,test_dmg_storage_query_device_state
         """
+        expect_failed_engine = False
+
         # Get device info and check state is NORMAL
         device_info = get_storage_query_device_info(self.dmg)
         self.check_dev_state(device_info, "NORMAL")
 
         # Set device to faulty state and check that it's in FAULTY state
         for device in device_info:
+            if str(device['has_sys_xs']).lower() == 'true':
+                # Setting a SysXS device faulty will kill the engine
+                self.log.debug("Expecting server to die after setting SysXS device faulty")
+                for manager in self.server_managers:
+                    manager.update_expected_states(0, ["Errored"])
+                expect_failed_engine = True
             try:
                 self.dmg.storage_set_faulty(uuid=device['uuid'])
             except CommandFailure:
                 self.fail("Error setting the faulty state for {}".format(device['uuid']))
 
         # Check that devices are in FAULTY state
-        device_info = get_storage_query_device_info(self.dmg)
-        self.check_dev_state(device_info, "EVICTED")
+        try:
+            device_info = get_storage_query_device_info(self.dmg)
+            self.check_dev_state(device_info, "EVICTED")
+        except CommandFailure as error:
+            if not expect_failed_engine:
+                raise
+            if "DAOS I/O Engine instance not started or not responding on dRPC" not in str(error):
+                self.log.debug(error)
+                self.fail("dmg storage query list-devices failed for an unexpected reason")
+
+        self.log.info("Test passed")

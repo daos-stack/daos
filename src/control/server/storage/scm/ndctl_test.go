@@ -158,7 +158,7 @@ func TestNdctl_getNamespaces(t *testing.T) {
 
 			commands = nil // reset to initial values between tests
 
-			cr, err := newCmdRunner(log, nil, mockRun, mockLookPath)
+			cr, err := newCmdRunner(log, mockRun, mockLookPath)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -238,7 +238,7 @@ func TestNdctl_getNdctlRegions(t *testing.T) {
 
 			commands = nil // reset to initial values between tests
 
-			cr, err := newCmdRunner(log, nil, mockRun, mockLookPath)
+			cr, err := newCmdRunner(log, mockRun, mockLookPath)
 			if err != nil {
 				t.Fatal(err)
 			}

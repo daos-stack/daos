@@ -126,6 +126,9 @@ class Cmd(DfuseTestBase):
             'fio --readwrite=randwrite --name=test --size="2M" --directory '
             f'{fuse_root_dir}/ --bs=1M --numjobs="4" --ioengine=psync '
             "--group_reporting --exitall_on_error --continue_on_error=none",
+            'fio --readwrite=randwrite --name=test --size="2M" --directory '
+            f'{fuse_root_dir}/ --bs=1M --numjobs="1" --ioengine=libaio --iodepth=4'
+            '--group_reporting --exitall_on_error --continue_on_error=none',
             f'curl "https://www.google.com" -o {fuse_root_dir}/download.html',
         ]
         for cmd in commands:

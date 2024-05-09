@@ -56,7 +56,7 @@ class IorCrash(IorTestBase):
         # Create pool and container
         self.pool = self.get_pool(connect=False)
         self.container = self.get_container(self.pool)
-        self.ior_cmd.set_daos_params(self.server_group, self.pool, self.container.identifier)
+        self.ior_cmd.set_daos_params(self.pool, self.container.identifier)
 
         # Don't check subprocess status, since output is buffered and can't be read in real time
         self.ior_cmd.pattern = None

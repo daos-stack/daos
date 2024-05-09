@@ -11,6 +11,8 @@ defaults:
   run:
     shell: bash --noprofile --norc -ueo pipefail {0}
 
+permissions: {}
+
 jobs:
   Test-gha-functions:
     name: Tests in ci/gha_functions.sh

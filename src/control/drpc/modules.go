@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -157,6 +157,7 @@ func (m MgmtMethod) String() string {
 		MethodPoolGetProp:          "PoolGetProp",
 		MethodPoolUpgrade:          "PoolUpgrade",
 		MethodLedManage:            "LedManage",
+		MethodSetupClientTelemetry: "SetupClientTelemetry",
 	}[m]; ok {
 		return s
 	}
@@ -240,10 +241,22 @@ const (
 	MethodNotifyExit MgmtMethod = C.DRPC_METHOD_MGMT_NOTIFY_EXIT
 	// MethodPoolGetProp defines a method for getting pool properties
 	MethodPoolGetProp MgmtMethod = C.DRPC_METHOD_MGMT_POOL_GET_PROP
+	// MethodCheckerStart defines a method for starting the checker
+	MethodCheckerStart MgmtMethod = C.DRPC_METHOD_MGMT_CHK_START
+	// MethodCheckerStop defines a method for stopping the checker
+	MethodCheckerStop MgmtMethod = C.DRPC_METHOD_MGMT_CHK_STOP
+	// MethodCheckerQuery defines a method for getting the checker status
+	MethodCheckerQuery MgmtMethod = C.DRPC_METHOD_MGMT_CHK_QUERY
+	// MethodCheckerProp defines a method for getting the checker properties
+	MethodCheckerProp MgmtMethod = C.DRPC_METHOD_MGMT_CHK_PROP
+	// MethodCheckerAction defines a method for specifying a checker action
+	MethodCheckerAction MgmtMethod = C.DRPC_METHOD_MGMT_CHK_ACT
 	// MethodPoolUpgrade defines a method for upgrade pool
 	MethodPoolUpgrade MgmtMethod = C.DRPC_METHOD_MGMT_POOL_UPGRADE
 	// MethodLedManage defines a method to manage a VMD device LED state
 	MethodLedManage MgmtMethod = C.DRPC_METHOD_MGMT_LED_MANAGE
+	// MethodSetupClientTelemetry defines a method to setup client telemetry
+	MethodSetupClientTelemetry MgmtMethod = C.DRPC_METHOD_MGMT_SETUP_CLIENT_TELEM
 )
 
 type srvMethod int32
@@ -287,6 +300,14 @@ const (
 	MethodPoolFindByLabel srvMethod = C.DRPC_METHOD_SRV_POOL_FIND_BYLABEL
 	// MethodClusterEvent notifies of a cluster event in the I/O Engine.
 	MethodClusterEvent srvMethod = C.DRPC_METHOD_SRV_CLUSTER_EVENT
+	// MethodCheckerListPools requests the list of pools from the MS
+	MethodCheckerListPools srvMethod = C.DRPC_METHOD_CHK_LIST_POOL
+	// MethodCheckerRegisterPool registers a pool with the MS
+	MethodCheckerRegisterPool srvMethod = C.DRPC_METHOD_CHK_REG_POOL
+	// MethodCheckerDeregisterPool deregisters a pool with the MS
+	MethodCheckerDeregisterPool srvMethod = C.DRPC_METHOD_CHK_DEREG_POOL
+	// MethodCheckerReport reports a checker finding to the MS
+	MethodCheckerReport srvMethod = C.DRPC_METHOD_CHK_REPORT
 )
 
 type securityMethod int32

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1188,11 +1188,16 @@ policy_fifo_enqueue(struct dss_xstream *dx, struct sched_request *req,
 
 	D_ASSERT(attr->sra_type < SCHED_REQ_TYPE_MAX);
 	/*
-	 * If @sra_enqueue_id is not zero, this is a resent RPC, it will
-	 * be inserted to sorted heap instead of fifo list.
+	 * The initial motivation behind this change is to utilize the heap
+	 * exclusively for sorted resent RPCs and the FIFO list for regular
+	 * fetch and update requests. This strategic allocation aims to avoid
+	 * potential performance impacts that could result from maintaining a
+	 * heap in the critical hot path.
 	 */
-	if (attr->sra_enqueue_id)
+	if (attr->sra_flags & SCHED_REQ_FL_RESENT) {
+		D_ASSERT(attr->sra_enqueue_id > 0);
 		return d_binheap_insert(&info->si_heap, &req->sr_node);
+	}
 
 	d_list_add_tail(&req->sr_link, &info->si_fifo_list);
 
@@ -1389,6 +1394,8 @@ sched_req_enqueue(struct dss_xstream *dx, struct sched_req_attr *attr,
 
 	if (attr->sra_enqueue_id == 0)
 		attr->sra_enqueue_id = ++info->si_cur_id;
+	else
+		attr->sra_flags |= SCHED_REQ_FL_RESENT;
 
 	/*
 	 * A RPC flow control mechanism is introduced to avoid RPC timeout when the
@@ -1496,9 +1503,8 @@ sched_req_sleep(struct sched_request *req, uint32_t msecs)
 static void
 req_wakeup_internal(struct dss_xstream *dx, struct sched_request *req)
 {
-	D_ASSERT(req != NULL);
 	/* The request is not in sleep */
-	if (req->sr_wakeup_time == 0)
+	if (req == NULL || req->sr_wakeup_time == 0)
 		return;
 
 	D_ASSERT(req->sr_in_heap == 0);
@@ -1656,8 +1662,8 @@ sched_stop(struct dss_xstream *dx)
 	process_all(dx);
 }
 
-void
-sched_cond_wait(ABT_cond cond, ABT_mutex mutex)
+static void
+cond_wait(ABT_cond cond, ABT_mutex mutex, bool for_business)
 {
 	struct dss_xstream	*dx = dss_current_xstream();
 	struct sched_info	*info = &dx->dx_sched_info;
@@ -1666,6 +1672,20 @@ sched_cond_wait(ABT_cond cond, ABT_mutex mutex)
 	ABT_cond_wait(cond, mutex);
 	D_ASSERT(info->si_wait_cnt > 0);
 	info->si_wait_cnt -= 1;
+	if (for_business)
+		info->si_stats.ss_busy_ts = info->si_cur_ts;
+}
+
+void
+sched_cond_wait(ABT_cond cond, ABT_mutex mutex)
+{
+	cond_wait(cond, mutex, false /* for_business */);
+}
+
+void
+sched_cond_wait_for_business(ABT_cond cond, ABT_mutex mutex)
+{
+	cond_wait(cond, mutex, true /* for_business */);
 }
 
 uint64_t
