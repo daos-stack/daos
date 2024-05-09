@@ -609,8 +609,8 @@ dc_mgmt_net_cfg(const char *name, crt_init_options_t *crt_info)
 cleanup:
 	if (rc) {
 		D_FREE(crt_info->cio_provider);
-		D_FREE(crt_info->cio_provider);
 		D_FREE(crt_info->cio_interface);
+		D_FREE(crt_info->cio_domain);
 	}
 	d_freeenv_str(&crt_timeout);
 	d_freeenv_str(&cli_srx_set);
