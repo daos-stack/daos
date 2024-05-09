@@ -39,10 +39,10 @@ if (!env.CHANGE_ID &&
 pipeline {
     agent { label 'lightweight' }
 
-    triggers {
-        /* groovylint-disable-next-line AddEmptyString */
-        cron(env.BRANCH_NAME == 'provider-testing-tcp' ? 'TZ=UTC\n0 2 * * 6' : '')
-    }
+    // triggers {
+    //     /* groovylint-disable-next-line AddEmptyString */
+    //     cron(env.BRANCH_NAME == 'provider-testing-tcp' ? 'TZ=UTC\n0 2 * * 6' : '')
+    // }
 
     environment {
         BULLSEYE = credentials('bullseye_license_key')
