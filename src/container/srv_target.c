@@ -174,9 +174,8 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 		 * see pool_iv_pre_sync(), the IV fetch from the following
 		 * ds_cont_csummer_init() will fail anyway.
 		 */
-		D_DEBUG(DB_EPC, DF_CONT": skip aggregation "
-			"No pool map yet or stopping %d\n",
-			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+		D_DEBUG(DB_EPC, DF_CONT ": skip %s aggregation: No pool map yet or stopping %d\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), vos_agg ? "VOS" : "EC",
 			pool->sp_stopping);
 		return false;
 	}
@@ -207,15 +206,17 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 	if (cont->sc_props.dcp_dedup_enabled ||
 	    cont->sc_props.dcp_compress_enabled ||
 	    cont->sc_props.dcp_encrypt_enabled) {
-		D_DEBUG(DB_EPC, DF_CONT": skip aggregation for "
-			"deduped/compressed/encrypted container\n",
-			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
+		D_DEBUG(DB_EPC,
+			DF_CONT ": skip %s aggregation for deduped/compressed/encrypted"
+				" container\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), vos_agg ? "VOS" : "EC");
 		return false;
 	}
 
 	/* snapshot list isn't fetched yet */
 	if (cont->sc_aggregation_max == 0) {
-		D_DEBUG(DB_EPC, "No aggregation before snapshots fetched\n");
+		D_DEBUG(DB_EPC, "No %s aggregation before snapshots fetched\n",
+			vos_agg ? "VOS" : "EC");
 		/* fetch snapshot list */
 		if (dss_get_module_info()->dmi_tgt_id == 0)
 			ds_cont_tgt_snapshots_refresh(cont->sc_pool->spc_uuid,
@@ -238,8 +239,8 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 
 	if (pool->sp_reclaim == DAOS_RECLAIM_LAZY && dss_xstream_is_busy() &&
 	    sched_req_space_check(req) == SCHED_SPACE_PRESS_NONE) {
-		D_DEBUG(DB_EPC, "Pool reclaim strategy is lazy, service is "
-			"busy and no space pressure\n");
+		D_DEBUG(DB_EPC, "Pool reclaim strategy is lazy, service is busy and no space"
+				" pressure\n");
 		return false;
 	}
 
@@ -450,9 +451,9 @@ cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 	struct sched_request	*req = cont2req(cont, param->ap_vos_agg);
 	int			 rc = 0;
 
-	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregation ULT started\n",
-		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-		dmi->dmi_tgt_id);
+	D_DEBUG(DB_EPC, DF_CONT "[%d]: %s Aggregation ULT started\n",
+		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), dmi->dmi_tgt_id,
+		param->ap_vos_agg ? "VOS" : "EC");
 
 	if (req == NULL)
 		goto out;
@@ -474,8 +475,9 @@ cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 			break;	/* pool destroyed */
 		} else if (rc < 0) {
 			DL_CDEBUG(rc == -DER_BUSY, DB_EPC, DLOG_ERR, rc,
-				  DF_CONT ": VOS aggregate failed",
-				  DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
+				  DF_CONT ": %s aggregate failed",
+				  DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+				  param->ap_vos_agg ? "VOS" : "EC");
 		} else if (sched_req_space_check(req) != SCHED_SPACE_PRESS_NONE) {
 			/* Don't sleep too long when there is space pressure */
 			msecs = 2ULL * 100;
@@ -487,9 +489,9 @@ next:
 		sched_req_sleep(req, msecs);
 	}
 out:
-	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregation ULT stopped\n",
-		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-		dmi->dmi_tgt_id);
+	D_DEBUG(DB_EPC, DF_CONT "[%d]: %s Aggregation ULT stopped\n",
+		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), dmi->dmi_tgt_id,
+		param->ap_vos_agg ? "VOS" : "EC");
 }
 
 static int
