@@ -1463,8 +1463,7 @@ out:
 
 	if (!daos_is_zero_dti(&dth->dth_xid)) {
 		/* Drop partial modification and remove the pinned DTX entry. */
-		if (result < 0 && result != -DER_AGAIN && !aborted && !dth->dth_solo &&
-		    dth->dth_modification_cnt > 0)
+		if (result < 0 && !aborted && dth->dth_modification_cnt > 0)
 			vos_dtx_cleanup(dth, true);
 
 		/* For solo DTX, just let client retry for DER_AGAIN case. */
@@ -1716,6 +1715,10 @@ start_dtx_reindex_ult(struct ds_cont_child *cont)
 	while (cont->sc_dtx_reindex_abort)
 		ABT_thread_yield();
 
+	if (cont->sc_stopping)
+		return -DER_SHUTDOWN;
+
+	cont->sc_dtx_delay_reset = 0;
 	if (cont->sc_dtx_reindex)
 		return 0;
 
@@ -1733,7 +1736,7 @@ start_dtx_reindex_ult(struct ds_cont_child *cont)
 }
 
 void
-stop_dtx_reindex_ult(struct ds_cont_child *cont)
+stop_dtx_reindex_ult(struct ds_cont_child *cont, bool force)
 {
 	/* DTX reindex has been done or not has not been started. */
 	if (!cont->sc_dtx_reindex)
@@ -1743,9 +1746,15 @@ stop_dtx_reindex_ult(struct ds_cont_child *cont)
 	if (dtx_cont_opened(cont))
 		return;
 
-	/* Do not stop DTX reindex if DTX resync is still in-progress. */
-	if (cont->sc_dtx_resyncing)
+	/*
+	 * For non-force case, do not stop DTX re-index if DTX resync
+	 * is in-progress. Related DTX resource will be released after
+	 * DTX resync globally done (via rebuild scanning).
+	 */
+	if (unlikely(cont->sc_dtx_resyncing && !force)) {
+		cont->sc_dtx_delay_reset = 1;
 		return;
+	}
 
 	cont->sc_dtx_reindex_abort = 1;
 
@@ -1905,7 +1914,7 @@ dtx_cont_open(struct ds_cont_child *cont)
 }
 
 void
-dtx_cont_close(struct ds_cont_child *cont)
+dtx_cont_close(struct ds_cont_child *cont, bool force)
 {
 	struct dss_module_info		*dmi = dss_get_module_info();
 	struct dtx_batched_pool_args	*dbpa;
@@ -1920,7 +1929,7 @@ dtx_cont_close(struct ds_cont_child *cont)
 
 		d_list_for_each_entry(dbca, &dbpa->dbpa_cont_list, dbca_pool_link) {
 			if (dbca->dbca_cont == cont) {
-				stop_dtx_reindex_ult(cont);
+				stop_dtx_reindex_ult(cont, force);
 				d_list_del(&dbca->dbca_sys_link);
 				d_list_add_tail(&dbca->dbca_sys_link,
 						&dmi->dmi_dtx_batched_cont_close_list);
@@ -1928,8 +1937,12 @@ dtx_cont_close(struct ds_cont_child *cont)
 
 				/* If nobody reopen the container during dtx_flush_on_close,
 				 * then reset DTX table in VOS to release related resources.
+				 *
+				 * For non-force case, do not reset DTX table if DTX resync
+				 * is in-progress to avoid redoing DTX re-index. We will do
+				 * that after DTX resync done globally.
 				 */
-				if (!dtx_cont_opened(cont))
+				if (likely(!dtx_cont_opened(cont) && cont->sc_dtx_delay_reset == 0))
 					vos_dtx_cache_reset(cont->sc_hdl, false);
 				return;
 			}

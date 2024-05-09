@@ -1,12 +1,14 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import traceback
 
 from apricot import TestWithServers
-from pydaos.raw import DaosApiError, DaosContainer, DaosObjId
+from pydaos.raw import DaosApiError, DaosObjId
+from test_utils_container import add_container
+from test_utils_pool import add_pool
 
 
 class ObjOpenBadParam(TestWithServers):
@@ -16,46 +18,59 @@ class ObjOpenBadParam(TestWithServers):
 
     :avocado: recursive
     """
-    def setUp(self):
-        super().setUp()
-        self.prepare_pool()
 
+    def create_container(self):
+        """Initialize a pool and container.
+
+        Returns:
+            TestContainer: the created container
+        """
+        self.log_step('Creating a pool')
+        pool = add_pool(self)
+
+        self.log_step('Creating a container')
+        return add_container(self, pool)
+
+    def populate_container(self, container):
+        """Populate a container with data.
+
+        Args:
+            container (TestContainer): the container to populate with data
+
+        Returns:
+            DaosObj: the object containing the data
+        """
+        data = b"a string that I want to stuff into an object"
+        data_size = len(data) + 1
+        dkey = b"this is the dkey"
+        akey = b"this is the akey"
+
+        self.log_step('Populating the container with data')
+        container.open()
+        obj = container.container.write_an_obj(data, data_size, dkey, akey, obj_cls=1)
+        read = container.container.read_an_obj(data_size, dkey, akey, obj)
+        if data not in read.value:
+            self.log.info("data: %s", data)
+            self.log.info("read: %s", read.value)
+            self.fail("Error reading back container data, test failed during the initial setup")
+        return obj
+
+    def verify_object_open(self, obj, case, code):
+        """Attempt to open an object with a bad object handle.
+
+        Args:
+            obj (DaosObj): the object to open
+            case (str): test case description
+            code (str): expected error code
+        """
+        self.log_step(f'Attempt to open an object {case}, expecting {code}')
         try:
-            # create a container
-            self.container = DaosContainer(self.context)
-            self.container.create(self.pool.pool.handle)
-
-            # now open it
-            self.container.open()
-
-            # create an object and write some data into it
-            thedata = b"a string that I want to stuff into an object"
-            self.datasize = len(thedata) + 1
-            self.dkey = b"this is the dkey"
-            self.akey = b"this is the akey"
-            self.obj = self.container.write_an_obj(thedata,
-                                                   self.datasize,
-                                                   self.dkey,
-                                                   self.akey,
-                                                   obj_cls=1)
-
-            thedata2 = self.container.read_an_obj(self.datasize, self.dkey,
-                                                  self.akey, self.obj)
-            if thedata not in thedata2.value:
-                self.log.info("thedata:  %s", thedata)
-                self.log.info("thedata2: %s", thedata2.value)
-                err_str = "Error reading back data, test failed during the " \
-                          "initial setup."
-                self.d_log.error(err_str)
-                self.fail(err_str)
-
-            # setup leaves object in open state, so closing to start clean
-            self.obj.close()
-
-        except DaosApiError as excep:
-            print(excep)
-            print(traceback.format_exc())
-            self.fail("Test failed during the initial setup.")
+            obj.open()
+        except DaosApiError as error:
+            if code not in str(error):
+                self.d_log.error(f"Object open {case} expecting {code} but not seen")
+                self.d_log.error(traceback.format_exc())
+                self.fail(f"Object open {case} expecting {code} but not seen")
 
     def test_bad_obj_handle(self):
         """JIRA ID: DAOS-1320
@@ -67,18 +82,15 @@ class ObjOpenBadParam(TestWithServers):
         :avocado: tags=object
         :avocado: tags=ObjOpenBadParam,test_bad_obj_handle
         """
-        saved_handle = self.obj.obj_handle
-        self.obj.obj_handle = 8675309
-
+        container = self.create_container()
+        obj = self.populate_container(container)
+        saved_handle = obj.obj_handle
         try:
-            self.obj.open()
-        except DaosApiError as excep:
-            if '-1002' not in str(excep):
-                self.d_log.error("test expected a -1002 but did not get it")
-                self.d_log.error(traceback.format_exc())
-                self.fail("test expected a -1002 but did not get it")
+            obj.obj_handle = 8675309
+            self.verify_object_open(obj, 'with a garbage object handle', '-1002')
         finally:
-            self.obj.obj_handle = saved_handle
+            obj.obj_handle = saved_handle
+        self.log.info('Test passed')
 
     def test_invalid_container_handle(self):
         """JIRA ID: DAOS-1320
@@ -91,18 +103,15 @@ class ObjOpenBadParam(TestWithServers):
         :avocado: tags=object
         :avocado: tags=ObjOpenBadParam,test_invalid_container_handle
         """
-        saved_coh = self.container.coh
-        self.container.coh = 8675309
-
+        container = self.create_container()
+        obj = self.populate_container(container)
+        saved_coh = container.container.coh
         try:
-            self.obj.open()
-        except DaosApiError as excep:
-            if '-1002' not in str(excep):
-                self.d_log.error("test expected a -1002 but did not get it")
-                self.d_log.error(traceback.format_exc())
-                self.fail("test expected a -1002 but did not get it")
+            container.container.coh = 8675309
+            self.verify_object_open(obj, 'with a garbage container handle', '-1002')
         finally:
-            self.container.coh = saved_coh
+            container.container.coh = saved_coh
+        self.log.info('Test passed')
 
     def test_closed_container_handle(self):
         """JIRA ID: DAOS-1320
@@ -115,17 +124,11 @@ class ObjOpenBadParam(TestWithServers):
         :avocado: tags=object
         :avocado: tags=ObjOpenBadParam,test_closed_container_handle
         """
-        self.container.close()
-
-        try:
-            self.obj.open()
-        except DaosApiError as excep:
-            if '-1002' not in str(excep):
-                self.d_log.error("test expected a -1002 but did not get it")
-                self.d_log.error(traceback.format_exc())
-                self.fail("test expected a -1002 but did not get it")
-        finally:
-            self.container.open()
+        container = self.create_container()
+        obj = self.populate_container(container)
+        container.close()
+        self.verify_object_open(obj, 'with a closed container handle', '-1002')
+        self.log.info('Test passed')
 
     def test_pool_handle_as_obj_handle(self):
         """Test ID: DAOS-1320
@@ -139,18 +142,15 @@ class ObjOpenBadParam(TestWithServers):
         :avocado: tags=object
         :avocado: tags=ObjOpenBadParam,test_pool_handle_as_obj_handle
         """
-        saved_oh = self.obj.obj_handle
-        self.obj.obj_handle = self.pool.pool.handle
-
+        container = self.create_container()
+        obj = self.populate_container(container)
+        saved_handle = obj.obj_handle
         try:
-            self.obj.open()
-        except DaosApiError as excep:
-            if '-1002' not in str(excep):
-                self.d_log.error("test expected a -1002 but did not get it")
-                self.d_log.error(traceback.format_exc())
-                self.fail("test expected a -1002 but did not get it")
+            obj.obj_handle = container.pool.pool.handle
+            self.verify_object_open(obj, 'with a object handle matching the pool handle', '-1002')
         finally:
-            self.obj.obj_handle = saved_oh
+            obj.obj_handle = saved_handle
+        self.log.info('Test passed')
 
     def test_null_ranklist(self):
         """JIRA ID: DAOS-1320
@@ -163,18 +163,15 @@ class ObjOpenBadParam(TestWithServers):
         :avocado: tags=object
         :avocado: tags=ObjOpenBadParam,test_null_ranklist
         """
-        # null rl
-        saved_rl = self.obj.tgt_rank_list
-        self.obj.tgt_rank_list = None
+        container = self.create_container()
+        obj = self.populate_container(container)
+        saved_rank_list = obj.tgt_rank_list
         try:
-            self.obj.open()
-        except DaosApiError as excep:
-            if '-1003' not in str(excep):
-                self.d_log.error("test expected a -1003 but did not get it")
-                self.d_log.error(traceback.format_exc())
-                self.fail("test expected a -1003 but did not get it")
+            obj.tgt_rank_list = None
+            self.verify_object_open(obj, 'with a null object rank list', '-1003')
         finally:
-            self.obj.tgt_rank_list = saved_rl
+            obj.tgt_rank_list = saved_rank_list
+        self.log.info('Test passed')
 
     def test_null_oid(self):
         """JIRA ID: DAOS-1320
@@ -187,18 +184,15 @@ class ObjOpenBadParam(TestWithServers):
         :avocado: tags=object
         :avocado: tags=ObjOpenBadParam,test_null_oid
         """
-        # null oid
-        saved_oid = self.obj.c_oid
-        self.obj.c_oid = DaosObjId(0, 0)
+        container = self.create_container()
+        obj = self.populate_container(container)
+        saved_oid = obj.c_oid
         try:
-            self.obj.open()
-        except DaosApiError as excep:
-            if '-1003' not in str(excep):
-                self.d_log.error("Test expected a -1003 but did not get it")
-                self.d_log.error(traceback.format_exc())
-                self.fail("test expected a -1003 but did not get it")
+            obj.c_oid = DaosObjId(0, 0)
+            self.verify_object_open(obj, 'with a null object id', '-1003')
         finally:
-            self.obj.c_oid = saved_oid
+            obj.c_oid = saved_oid
+        self.log.info('Test passed')
 
     def test_null_tgts(self):
         """JIRA ID: DAOS-1320
@@ -211,18 +205,15 @@ class ObjOpenBadParam(TestWithServers):
         :avocado: tags=object
         :avocado: tags=ObjOpenBadParam,test_null_tgts
         """
-        # null tgts
-        saved_ctgts = self.obj.c_tgts
-        self.obj.c_tgts = 0
+        container = self.create_container()
+        obj = self.populate_container(container)
+        saved_ctgts = obj.c_tgts
         try:
-            self.obj.open()
-        except DaosApiError as excep:
-            if '-1003' not in str(excep):
-                self.d_log.error("Test expected a -1003 but did not get it")
-                self.d_log.error(traceback.format_exc())
-                self.fail("test expected a -1003 but did not get it")
+            obj.c_tgts = 0
+            self.verify_object_open(obj, 'in a container with null tgt', '-1003')
         finally:
-            self.obj.c_tgts = saved_ctgts
+            obj.c_tgts = saved_ctgts
+        self.log.info('Test passed')
 
     def test_null_attrs(self):
         """JIRA ID: DAOS-1320
@@ -235,15 +226,12 @@ class ObjOpenBadParam(TestWithServers):
         :avocado: tags=object
         :avocado: tags=ObjOpenBadParam,test_null_attrs
         """
-        # null attr
-        saved_attr = self.obj.attr
-        self.obj.attr = 0
+        container = self.create_container()
+        obj = self.populate_container(container)
+        saved_attr = obj.attr
         try:
-            self.obj.open()
-        except DaosApiError as excep:
-            if '-1003' not in str(excep):
-                self.d_log.error("test expected a -1003 but did not get it")
-                self.d_log.error(traceback.format_exc())
-                self.fail("test expected a -1003 but did not get it")
+            obj.attr = 0
+            self.verify_object_open(obj, 'in a container with null object attributes', '-1003')
         finally:
-            self.obj.attr = saved_attr
+            obj.attr = saved_attr
+        self.log.info('Test passed')

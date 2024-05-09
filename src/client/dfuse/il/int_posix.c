@@ -802,7 +802,9 @@ child_hdlr(void)
 {
 	int rc;
 
-	daos_eq_lib_reset_after_fork();
+	rc = daos_eq_lib_reset_after_fork();
+	if (rc)
+		DL_WARN(rc, "daos_eq_lib_init() failed in child process");
 	daos_dti_reset();
 	ioil_eqh = ioil_iog.iog_main_eqh = DAOS_HDL_INVAL;
 	rc = daos_eq_create(&ioil_eqh);

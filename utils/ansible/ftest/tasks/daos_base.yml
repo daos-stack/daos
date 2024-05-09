@@ -37,13 +37,28 @@
     mode: '0755'
     recurse: true
 
-- name: Create MPI module configuration file
+- name: Copy bash script enable-coredumps.sh
   remote_user: root
-  file:
-    src: "{{ daos_openmpi_module_path }}"
-    path: /etc/modulefiles/mpi/mlnx_openmpi-x86_64
-    state: link
+  copy:
+    src: file/enable-coredumps.sh
+    dest: /root/enable-coredumps.sh
     owner: root
     group: root
-    mode: '0755'
-    force: true
+    mode: '0644'
+
+- name: Enable CORE dump
+  remote_user: root
+  command: /bin/bash /root/enable-coredumps.sh
+
+- name: Copy bash script configure-nofile.sh
+  remote_user: root
+  copy:
+    src: file/configure-nofile.sh
+    dest: /root/configure-nofile.sh
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Configure Number of Open Files
+  remote_user: root
+  command: /bin/bash /root/configure-nofile.sh

@@ -41,11 +41,11 @@ server_config:
       storage: auto
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
-  size: 75%
+  size: 90%
   rebuild_timeout: 600
   pool_query_timeout: 120
 pool_reserved:
-  size: 10%
+  size: 5%
   rebuild_timeout: 600
   pool_query_timeout: 120
 container:
