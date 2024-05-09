@@ -1305,9 +1305,7 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 			expResp: &ctlpb.SmdManageResp{
 				Ranks: []*ctlpb.SmdManageResp_RankResp{
 					{
-						Results: []*ctlpb.SmdManageResp_Result{
-							{Device: pbFaultDev(1)},
-						},
+						Results: []*ctlpb.SmdManageResp_Result{{}},
 					},
 				},
 			},
@@ -1344,10 +1342,8 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 			expResp: &ctlpb.SmdManageResp{
 				Ranks: []*ctlpb.SmdManageResp_RankResp{
 					{
-						Rank: 1,
-						Results: []*ctlpb.SmdManageResp_Result{
-							{Device: pbFaultDev(1)},
-						},
+						Rank:    1,
+						Results: []*ctlpb.SmdManageResp_Result{{}},
 					},
 				},
 			},
@@ -1397,9 +1393,7 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 			expResp: &ctlpb.SmdManageResp{
 				Ranks: []*ctlpb.SmdManageResp_RankResp{
 					{
-						Results: []*ctlpb.SmdManageResp_Result{
-							{Device: pbNormDev(2)},
-						},
+						Results: []*ctlpb.SmdManageResp_Result{{}},
 					},
 				},
 			},
@@ -1437,9 +1431,7 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 			expResp: &ctlpb.SmdManageResp{
 				Ranks: []*ctlpb.SmdManageResp_RankResp{
 					{
-						Results: []*ctlpb.SmdManageResp_Result{
-							{Device: pbNormDev(2)},
-						},
+						Results: []*ctlpb.SmdManageResp_Result{{}},
 					},
 				},
 			},
@@ -1468,9 +1460,7 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 			expResp: &ctlpb.SmdManageResp{
 				Ranks: []*ctlpb.SmdManageResp_RankResp{
 					{
-						Results: []*ctlpb.SmdManageResp_Result{
-							{Device: pbNormDev(2)},
-						},
+						Results: []*ctlpb.SmdManageResp_Result{{}},
 					},
 				},
 			},
@@ -1506,7 +1496,6 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 					{
 						Results: []*ctlpb.SmdManageResp_Result{
 							{
-								Device: pbNormDev(1),
 								Status: int32(daos.TimedOut),
 							},
 						},
@@ -1542,7 +1531,6 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 					{
 						Results: []*ctlpb.SmdManageResp_Result{
 							{
-								Device: pbNormDev(1),
 								Status: int32(daos.Busy),
 							},
 						},

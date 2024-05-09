@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/dustin/go-humanize"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
@@ -176,27 +177,34 @@ func PrintStorageFormatMap(hsm control.HostStorageMap, out io.Writer, opts ...Pr
 	return nil
 }
 
+// NVMe controller namespace ID (NSID) should only be displayed if >= 1. Zero value should be
+// ignored in display output.
 func printSmdDevice(dev *storage.SmdDevice, iw io.Writer, opts ...PrintConfigOption) error {
 	fc := getPrintConfig(opts...)
 
+	trAddr := fmt.Sprintf("TrAddr:%s", dev.Ctrlr.PciAddr)
+	nsID := fmt.Sprintf("NSID:%d", dev.CtrlrNamespaceID)
+	uid := fmt.Sprintf("UUID:%s", dev.UUID)
+	led := fmt.Sprintf("LED:%s", dev.Ctrlr.LedState)
+
 	if fc.LEDInfoOnly {
-		if _, err := fmt.Fprintf(iw, "TrAddr:%s NSID:%d", dev.Ctrlr.PciAddr,
-			dev.CtrlrNamespaceID); err != nil {
-			return err
+		out := trAddr
+		if dev.CtrlrNamespaceID > 0 {
+			out = fmt.Sprintf("%s %s", out, nsID)
 		}
 		if dev.UUID != "" {
-			if _, err := fmt.Fprintf(iw, " [UUID:%s]", dev.UUID); err != nil {
-				return err
-			}
+			out = fmt.Sprintf("%s [%s]", out, uid)
 		}
-		if _, err := fmt.Fprintf(iw, " LED:%s\n", dev.Ctrlr.LedState); err != nil {
-			return err
-		}
-		return nil
+
+		_, err := fmt.Fprintf(iw, "%s %s\n", out, led)
+		return err
 	}
 
-	if _, err := fmt.Fprintf(iw, "UUID:%s [TrAddr:%s NSID:%d]\n", dev.UUID, dev.Ctrlr.PciAddr,
-		dev.CtrlrNamespaceID); err != nil {
+	out := fmt.Sprintf("%s [%s", uid, trAddr)
+	if dev.CtrlrNamespaceID > 0 {
+		out = fmt.Sprintf("%s %s", out, nsID)
+	}
+	if _, err := fmt.Fprintf(iw, "%s]\n", out); err != nil {
 		return err
 	}
 
@@ -286,4 +294,35 @@ func PrintSmdInfoMap(omitDevs, omitPools bool, hsm control.HostStorageMap, out i
 	}
 
 	return w.Err
+}
+
+// PrintSmdManageResp generates a human-readable representation of the supplied response.
+func PrintSmdManageResp(op control.SmdManageOpcode, resp *control.SmdResp, out, outErr io.Writer, opts ...PrintConfigOption) error {
+	switch op {
+	case control.SetFaultyOp, control.DevReplaceOp:
+		if resp.ResultCount() > 1 {
+			return errors.Errorf("smd-manage %s: unexpected number of results, "+
+				"want %d got %d", op, 1, resp.ResultCount())
+		}
+
+		hem := resp.GetHostErrors()
+		if len(hem) > 0 {
+			for errStr, hostSet := range hem {
+				fmt.Fprintln(outErr, fmt.Sprintf("%s operation failed on %s: %s",
+					op, hostSet.HostSet, errStr))
+			}
+			return nil
+		}
+
+		return PrintHostStorageSuccesses(fmt.Sprintf("%s operation performed", op),
+			resp.HostStorage, out)
+	case control.LedCheckOp, control.LedBlinkOp, control.LedResetOp:
+		if err := PrintResponseErrors(resp, outErr, opts...); err != nil {
+			return err
+		}
+
+		return PrintSmdInfoMap(false, true, resp.HostStorage, out, opts...)
+	default:
+		return errors.Errorf("unsupported opcode %d", op)
+	}
 }

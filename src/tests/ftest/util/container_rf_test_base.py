@@ -180,6 +180,9 @@ class ContRedundancyFactor(RebuildTestBase):
                 self.execute_pool_verify(" after rebuild")
                 self.log.info("==>(7)Check for container data if the container is healthy.")
                 self.verify_container_data()
+            else:
+                self.container.close()
+                self.container.skip_cleanup()
             self.log.info("Test passed")
         elif mode == "cont_rf_enforcement":
             self.log.info("Container rd_fac test passed")

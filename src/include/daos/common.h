@@ -156,6 +156,9 @@ char *DP_UUID(const void *uuid);
 #define DF_DE        "de[%zi]"
 #define DP_DE(_de)   strnlen(_de, NAME_MAX)
 
+#define DF_PATH        "path[%zi]"
+#define DP_PATH(_path) strnlen((_path), PATH_MAX)
+
 #else
 
 char *
@@ -169,6 +172,12 @@ daos_de2str(const char *de);
 
 #define DF_DE       "de'%s'"
 #define DP_DE(_de)  daos_de2str(_de)
+
+char *
+daos_path2str(const char *path);
+
+#define DF_PATH        "path'%s'"
+#define DP_PATH(_path) daos_path2str(_path)
 
 #endif
 
