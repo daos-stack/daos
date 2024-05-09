@@ -29,6 +29,9 @@ def get_job_manager(test, class_name=None, job=None, subprocess=None, mpi_type=N
         - the test yaml arguments (if no arguments are provided)
         - default values (if no arguments are provided and there are no test yaml entries)
 
+    Use this method to ensure the cleanup of processes started by JobManager.run() are handled in
+    the correct order in the test tearDown() method.
+
     Args:
         test (Test): avocado Test object
         class_name (str, optional): JobManager class name. Defaults to None.
@@ -68,6 +71,9 @@ def get_job_manager(test, class_name=None, job=None, subprocess=None, mpi_type=N
 def add_job_manager(test, class_name, job, subprocess, mpi_type, timeout):
     """Add a new JobManager object to the test.
 
+    Use this method to ensure the cleanup of processes started by JobManager.run() are handled in
+    the correct order in the test tearDown() method.
+
     Args:
         test (Test): the test to which the job manager will be added
         class_name (_type_): _description_
@@ -84,29 +90,25 @@ def add_job_manager(test, class_name, job, subprocess, mpi_type, timeout):
     job_manager.timeout = timeout
     if mpi_type == "openmpi" and hasattr(job_manager, "tmpdir_base"):
         job_manager.tmpdir_base.update(test.test_dir, "tmpdir_base")
-
-    # Add a step to stop this job manager when the test completes
-    test.register_cleanup(stop_job_manager, test=test, job_manager=job_manager)
-
+    job_manager.register_cleanup_method = test.register_cleanup
     return job_manager
 
 
-def stop_job_manager(test, job_manager):
+def stop_job_manager(job_manager):
     """Stop the job manager being run by the test.
 
     Args:
-        test (Test): the test to which the job manager was added
         job_manager (JobManager): the job manager to stop
 
     Returns:
         list: a list of any errors detected when stopping the job manager
     """
     error_list = []
-    test.log.info("Stopping %s job manager: %s", job_manager.command, job_manager)
+    job_manager.log.info("Stopping %s job manager: %s", job_manager.command, job_manager)
     try:
         job_manager.stop()
     except Exception as error:      # pylint: disable=broad-except
-        test.log.error("Error stopping %s job manager: %s", job_manager.command, error)
+        job_manager.log.error("Error stopping %s job manager: %s", job_manager.command, error)
         error_list.append(f"Error detected stopping {job_manager.command} job manager")
     return error_list
 
@@ -129,6 +131,7 @@ class JobManager(ExecutableCommand):
         super().__init__(namespace, command, path, subprocess)
         self.job = job
         self._hosts = NodeSet()
+        self.register_cleanup_method = None
 
     @property
     def hosts(self):
@@ -280,6 +283,22 @@ class JobManager(ExecutableCommand):
         # hosts.  If this value is not returned, indicate there are remote
         # processes running by returning a "R" state.
         return "R" if 1 not in results or len(results) > 1 else None
+
+    def run(self, raise_exception=None):
+        """Run the command.
+
+        Args:
+            raise_exception (bool, optional): whether or not to raise an exception if the command
+                fails. This overrides the self.exit_status_exception
+                setting if defined. Defaults to None.
+
+        Raises:
+            CommandFailure: if there is an error running the command
+        """
+        if callable(self.register_cleanup_method):
+            # Stop any running processes started by this job manager when the test completes
+            self.register_cleanup_method(stop_job_manager, job_manager=self)
+        super().run(raise_exception)
 
     def stop(self):
         """Stop the subprocess command and kill any job processes running on hosts.
