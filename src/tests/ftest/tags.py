@@ -58,13 +58,13 @@ class FtestTagMap():
             yield deepcopy(item)
 
     def __methods(self):
-        """Get a mapping of methods to tags.
+        """Iterate over each method name and its tags.
 
         Yields:
             (str, set): method name and tags
         """
-        for _, classes in self.__mapping.items():
-            for _, methods in classes.items():
+        for classes in self.__mapping.values():
+            for methods in classes.values():
                 for method_name, tags in methods.items():
                     yield (method_name, tags)
 
