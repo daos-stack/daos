@@ -112,12 +112,13 @@ class VerifyPoolSpace(TestWithServers):
         except CommandFailure as error:
             self.fail(f'IOR write to {description} failed, {error}')
 
-    def _get_system_pool_size(self, description, scm_mounts):
+    def _get_system_pool_size(self, description, scm_mounts, server_hosts):
         """Get the pool size information from the df system command.
 
         Args:
             description (str): pool description
             scm_mounts (list): mount points used by the engine ranks
+            server_hosts (NodeSet): hosts running servers from which to collect the mount sizes
 
         Returns:
             dict: the df command information per server rank
@@ -126,7 +127,7 @@ class VerifyPoolSpace(TestWithServers):
         self.log_step(f'Collect system-level DAOS mount information for {description}')
         fields = ('source', 'size', 'used', 'avail', 'pcent', 'target')
         command = f"df -BG --output={','.join(fields)} | grep -E '{'|'.join(scm_mounts)}'"
-        result = run_remote(self.log, self.server_managers[0].hosts, command, stderr=True)
+        result = run_remote(self.log, server_hosts, command, stderr=True)
         if not result.passed:
             self.log.debug('########## DEBUG ##########')
             run_remote(self.log, result.failed_hosts, 'df -a')
@@ -139,7 +140,7 @@ class VerifyPoolSpace(TestWithServers):
                     for rank in self.server_managers[0].get_host_ranks(data.hosts):
                         system_pool_size[rank] = {
                             field: info[index] for index, field in enumerate(fields)}
-        if len(system_pool_size) != len(self.server_managers[0].hosts):
+        if len(system_pool_size) != len(server_hosts):
             self.fail(f'Error obtaining system pool data for all hosts: {system_pool_size}')
         return system_pool_size
 
@@ -179,17 +180,19 @@ class VerifyPoolSpace(TestWithServers):
         if not overall:
             self.fail(f"Error detected in system pools size for {pool_size[-1]['label']}")
 
-    def _check_pool_size(self, description, pool_size, scm_mounts, compare_methods):
+    def _check_pool_size(self, description, pool_size, scm_mounts, server_hosts, compare_methods):
         """Check the system pool size information reports as expected.
 
         Args:
             description (str): pool description
             pool_size (list): the list of pool size information
             scm_mounts (list): mount points used by the engine ranks
+            server_hosts (NodeSet): hosts running servers from which to collect the mount sizes
             compare_methods (list): a list of compare methods to execute per rank
         """
         pool_size.append(
-            {'label': description, 'data': self._get_system_pool_size(description, scm_mounts)})
+            {'label': description,
+             'data': self._get_system_pool_size(description, scm_mounts, server_hosts)})
         self._compare_system_pool_size(pool_size, compare_methods)
 
     def test_verify_pool_space(self):
@@ -231,12 +234,14 @@ class VerifyPoolSpace(TestWithServers):
         }
         pools = []
         pool_size = []
+        server_hosts = self.server_managers[0].hosts.copy()
 
         # (1) Collect initial system information
         #  - System available space should equal the free space
         description = 'initial configuration w/o pools'
         self._check_pool_size(
-            description, pool_size, scm_mounts, [compare_initial, compare_initial, compare_initial])
+            description, pool_size, scm_mounts, server_hosts,
+            [compare_initial, compare_initial, compare_initial])
         dmg.storage_query_usage()
 
         # (2) Create a single pool on a rank 0
@@ -244,7 +249,8 @@ class VerifyPoolSpace(TestWithServers):
         description = 'a single pool on rank 0'
         pools.extend(self._create_pools(description, [0]))
         self._check_pool_size(
-            description, pool_size, scm_mounts, [compare_reduced, compare_equal, compare_equal])
+            description, pool_size, scm_mounts, server_hosts,
+            [compare_reduced, compare_equal, compare_equal])
         self._query_pool_size(description, pools[0:1])
 
         # (3) Write various amounts of data to the single pool on a single engine
@@ -254,7 +260,8 @@ class VerifyPoolSpace(TestWithServers):
             self._write_data(description, ior_kwargs, container, block_size)
             data_label = f'{description} after writing data using a {block_size} block size'
             self._check_pool_size(
-                data_label, pool_size, scm_mounts, [compare_equal, compare_equal, compare_equal])
+                data_label, pool_size, scm_mounts, server_hosts,
+                [compare_equal, compare_equal, compare_equal])
             self._query_pool_size(data_label, pools[0:1])
         dmg.storage_query_usage()
 
@@ -263,7 +270,8 @@ class VerifyPoolSpace(TestWithServers):
         description = 'multiple pools on rank 1'
         pools.extend(self._create_pools(description, ['1_a', '1_b', '1_c']))
         self._check_pool_size(
-            description, pool_size, scm_mounts, [compare_equal, compare_reduced, compare_equal])
+            description, pool_size, scm_mounts, server_hosts,
+            [compare_equal, compare_reduced, compare_equal])
         self._query_pool_size(description, pools[1:4])
 
         # (5) Write various amounts of data to the multiple pools on rank 1
@@ -274,7 +282,8 @@ class VerifyPoolSpace(TestWithServers):
             self._write_data(description, ior_kwargs, container, block_size)
             data_label = f'{description} after writing data using a {block_size} block size'
             self._check_pool_size(
-                data_label, pool_size, scm_mounts, [compare_equal, compare_equal, compare_equal])
+                data_label, pool_size, scm_mounts, server_hosts,
+                [compare_equal, compare_equal, compare_equal])
             self._query_pool_size(data_label, pools[1 + index:2 + index])
         dmg.storage_query_usage()
 
@@ -294,7 +303,8 @@ class VerifyPoolSpace(TestWithServers):
             self._write_data(description, ior_kwargs, container, block_size)
             data_label = f'{description} after writing data using a {block_size} block size'
             self._check_pool_size(
-                data_label, pool_size, scm_mounts, [compare_equal, compare_equal, compare_equal])
+                data_label, pool_size, scm_mounts, server_hosts,
+                [compare_equal, compare_equal, compare_equal])
             self._query_pool_size(data_label, pools[4:5])
         dmg.storage_query_usage()
 
@@ -303,7 +313,8 @@ class VerifyPoolSpace(TestWithServers):
         description = 'a single pool on all ranks'
         pools.extend(self._create_pools(description, ['0_1_2']))
         self._check_pool_size(
-            description, pool_size, scm_mounts, [compare_reduced, compare_reduced, compare_reduced])
+            description, pool_size, scm_mounts, server_hosts,
+            [compare_reduced, compare_reduced, compare_reduced])
         self._query_pool_size(description, pools[5:6])
 
         # (9) Write various amounts of data to the single pool on all ranks
@@ -313,19 +324,25 @@ class VerifyPoolSpace(TestWithServers):
             self._write_data(description, ior_kwargs, container, block_size)
             data_label = f'{description} after writing data using a {block_size} block size'
             self._check_pool_size(
-                data_label, pool_size, scm_mounts, [compare_equal, compare_equal, compare_equal])
+                data_label, pool_size, scm_mounts, server_hosts,
+                [compare_equal, compare_equal, compare_equal])
             self._query_pool_size(data_label, pools[5:6])
         dmg.storage_query_usage()
 
         # (10) Stop one of the servers for a pool spanning many servers
+        #  - With MD on SSD the control plane will unmount /mnt/daos0 when the rank is stopped
         description = 'all pools after stopping rank 1'
         self.log_step(f'Checking {description}', True)
         self.server_managers[0].stop_ranks([1], self.d_log)
         status = self.server_managers[0].verify_expected_states()
         if not status['expected']:
             self.fail("Rank 1 was not stopped")
+        if self.server_managers[0].manager.job.using_control_metadata:
+            # Don't checking the mount point size on the host where the rank was stopped
+            server_hosts.remove(self.server_managers[0].ranks[1])
         self._check_pool_size(
-            description, pool_size, scm_mounts, [compare_equal, compare_equal, compare_equal])
+            description, pool_size, scm_mounts, server_hosts,
+            [compare_equal, compare_equal, compare_equal])
         for index, pool in enumerate(pools):
             self.log_step(
                 ' '.join(['Query pool information for', str(pool), 'after stopping rank 1']))
