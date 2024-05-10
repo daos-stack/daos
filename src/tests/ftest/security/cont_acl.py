@@ -195,7 +195,7 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
             "update", secTestBase.acl_entry("user", "OWNER", p_permission))
         self.verify_cont_delete(self.container, expect)
         if expect == "pass":  # Container deleted
-            self.container = None
+            self.container.skip_cleanup()
 
         # (8)Cleanup
         # Restore pool permissions in case they were altered

@@ -331,6 +331,13 @@ func (svc *mgmtSvc) SystemCheckQuery(ctx context.Context, req *mgmtpb.CheckQuery
 		req.Shallow = true
 	}
 
+	uuids := common.NewStringSet(req.Uuids...)
+	wantUUID := func(uuid string) bool {
+		return len(uuids) == 0 || uuids.Has(uuid)
+	}
+
+	reports := []*chkpb.CheckReport{}
+
 	if !req.Shallow {
 		dResp, err := svc.makePoolCheckerCall(ctx, drpc.MethodCheckerQuery, req)
 		if err != nil {
@@ -340,16 +347,29 @@ func (svc *mgmtSvc) SystemCheckQuery(ctx context.Context, req *mgmtpb.CheckQuery
 		if err = proto.Unmarshal(dResp.Body, resp); err != nil {
 			return nil, errors.Wrap(err, "unmarshal CheckQuery response")
 		}
+
+		for _, r := range resp.Reports {
+			if wantUUID(r.PoolUuid) {
+				reports = append(reports, r)
+			}
+		}
 	}
 
+	// Collect saved older reports
 	cfList, err := svc.sysdb.GetCheckerFindings(req.GetSeqs()...)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, f := range cfList {
-		resp.Reports = append(resp.Reports, &f.CheckReport)
+		if wantUUID(f.PoolUuid) {
+			reports = append(reports, &f.CheckReport)
+		}
 	}
+	sort.Slice(reports, func(i, j int) bool {
+		return reports[i].Seq < reports[j].Seq
+	})
+	resp.Reports = reports
 
 	return resp, nil
 }

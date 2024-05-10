@@ -835,13 +835,16 @@ cr_cont_create(void **state, struct test_pool *pool, struct test_cont *cont, int
 	char		 uuid_str[DAOS_UUID_STR_SIZE];
 	test_arg_t	*arg = *state;
 	daos_prop_t	*prop = NULL;
+	mode_t		 saved;
 	daos_handle_t	 coh;
 	int		 fd;
 	int		 rc;
 	int		 rc1;
 
+	saved = umask(0);
 	strncpy(cont->label, "/tmp/cr_cont_XXXXXX", sizeof(cont->label) - 1);
 	fd = mkstemp(cont->label);
+	umask(saved);
 	if (fd < 0) {
 		print_message("CR: cont generate label failed: %s\n", strerror(errno));
 		return d_errno2der(errno);

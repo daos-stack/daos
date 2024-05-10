@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1797,7 +1797,9 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp.disabled_targets = pool_info.pi_ndisabled;
 	resp.active_targets = pool_info.pi_space.ps_ntargets;
 	resp.total_engines = pool_info.pi_nnodes;
-	resp.leader = pool_info.pi_leader;
+	resp.svc_ldr = pool_info.pi_leader;
+	resp.svc_reps         = req->svc_ranks;
+	resp.n_svc_reps       = req->n_svc_ranks;
 	resp.version = pool_info.pi_map_ver;
 	resp.enabled_ranks = (req->include_enabled_ranks) ? range_list_str : "";
 	resp.disabled_ranks = (req->include_disabled_ranks) ? range_list_str : "";
@@ -2850,12 +2852,15 @@ ds_chk_prob_free(Mgmt__CheckInconsistPolicy **policies, uint32_t policy_nr)
 #define ALL_CHK_POLICY	CHK__CHECK_INCONSIST_CLASS__CIC_UNKNOWN
 
 static int
-ds_chk_prop_cb(void *buf, struct chk_policy *policies, int cnt, uint32_t flags)
+ds_chk_prop_cb(void *buf, uint32_t policies[], int cnt, uint32_t flags)
 {
 	Mgmt__CheckInconsistPolicy	**ply = NULL;
 	Mgmt__CheckPropResp		 *resp = buf;
 	int				  rc = 0;
 	int				  i = 0;
+
+	D_ASSERTF(cnt <= ALL_CHK_POLICY, "Too many inconsistency policies %u/%u\n",
+		  cnt, ALL_CHK_POLICY);
 
 	D_ALLOC_ARRAY(ply, cnt);
 	if (ply == NULL)
@@ -2867,11 +2872,8 @@ ds_chk_prop_cb(void *buf, struct chk_policy *policies, int cnt, uint32_t flags)
 			D_GOTO(out, rc = -DER_NOMEM);
 
 		mgmt__check_inconsist_policy__init(ply[i]);
-		if (policies[i].cp_class == 0 && cnt == ALL_CHK_POLICY)
-			ply[i]->inconsist_cas = i;
-		else
-			ply[i]->inconsist_cas = policies[i].cp_class;
-		ply[i]->inconsist_act = policies[i].cp_action;
+		ply[i]->inconsist_cas = i;
+		ply[i]->inconsist_act = policies[i];
 	}
 
 

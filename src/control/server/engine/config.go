@@ -37,7 +37,6 @@ type FabricConfig struct {
 	InterfacePort   int    `yaml:"fabric_iface_port,omitempty" cmdEnv:"D_PORT,nonzero"`
 	NumaNodeIndex   uint   `yaml:"-"`
 	BypassHealthChk *bool  `yaml:"bypass_health_chk,omitempty" cmdLongFlag:"--bypass_health_chk" cmdShortFlag:"-b"`
-	CrtCtxShareAddr uint32 `yaml:"crt_ctx_share_addr,omitempty" cmdEnv:"CRT_CTX_SHARE_ADDR"`
 	CrtTimeout      uint32 `yaml:"crt_timeout,omitempty" cmdEnv:"CRT_TIMEOUT"`
 	// NumSecondaryEndpoints configures the number of cart endpoints per secondary provider.
 	NumSecondaryEndpoints []int  `yaml:"secondary_provider_endpoints,omitempty" cmdLongFlag:"--nr_sec_ctx,nonzero" cmdShortFlag:"-S,nonzero"`
@@ -143,9 +142,6 @@ func (fc *FabricConfig) Update(other FabricConfig) {
 	if fc.InterfacePort == 0 {
 		fc.InterfacePort = other.InterfacePort
 	}
-	if fc.CrtCtxShareAddr == 0 {
-		fc.CrtCtxShareAddr = other.CrtCtxShareAddr
-	}
 	if fc.CrtTimeout == 0 {
 		fc.CrtTimeout = other.CrtTimeout
 	}
@@ -247,7 +243,7 @@ type Config struct {
 	Modules           string         `yaml:"modules,omitempty" cmdLongFlag:"--modules" cmdShortFlag:"-m"`
 	TargetCount       int            `yaml:"targets,omitempty" cmdLongFlag:"--targets,nonzero" cmdShortFlag:"-t,nonzero"`
 	HelperStreamCount int            `yaml:"nr_xs_helpers" cmdLongFlag:"--xshelpernr" cmdShortFlag:"-x"`
-	ServiceThreadCore int            `yaml:"first_core" cmdLongFlag:"--firstcore,nonzero" cmdShortFlag:"-f,nonzero"`
+	ServiceThreadCore *int           `yaml:"first_core,omitempty" cmdLongFlag:"--firstcore" cmdShortFlag:"-f"`
 	SystemName        string         `yaml:"-" cmdLongFlag:"--group" cmdShortFlag:"-g"`
 	SocketDir         string         `yaml:"-" cmdLongFlag:"--socket_dir" cmdShortFlag:"-d"`
 	LogMask           string         `yaml:"log_mask,omitempty" cmdEnv:"D_LOG_MASK"`
@@ -293,7 +289,7 @@ func (c *Config) ReadLogSubsystems() (string, error) {
 
 // Validate ensures that the configuration meets minimum standards.
 func (c *Config) Validate() error {
-	if c.PinnedNumaNode != nil && c.ServiceThreadCore != 0 {
+	if c.PinnedNumaNode != nil && c.ServiceThreadCore != nil && *c.ServiceThreadCore != 0 {
 		return errors.New("cannot specify both pinned_numa_node and first_core")
 	}
 
@@ -306,7 +302,7 @@ func (c *Config) Validate() error {
 	if c.HelperStreamCount < 0 {
 		return errNegative("helper stream count")
 	}
-	if c.ServiceThreadCore < 0 {
+	if c.ServiceThreadCore != nil && *c.ServiceThreadCore < 0 {
 		return errNegative("service thread core index")
 	}
 	if c.MemSize < 0 {
@@ -374,7 +370,7 @@ func IsNUMAMismatch(err error) bool {
 // SetNUMAAffinity sets the NUMA affinity for the engine,
 // if not already set in the configuration.
 func (c *Config) SetNUMAAffinity(node uint) error {
-	if c.PinnedNumaNode != nil && c.ServiceThreadCore != 0 {
+	if c.PinnedNumaNode != nil && c.ServiceThreadCore != nil && *c.ServiceThreadCore != 0 {
 		return errors.New("cannot set both NUMA node and service core")
 	}
 
@@ -590,12 +586,6 @@ func (c *Config) WithBypassHealthChk(bypass *bool) *Config {
 	return c
 }
 
-// WithCrtCtxShareAddr defines the CRT_CTX_SHARE_ADDR for this instance
-func (c *Config) WithCrtCtxShareAddr(addr uint32) *Config {
-	c.Fabric.CrtCtxShareAddr = addr
-	return c
-}
-
 // WithCrtTimeout defines the CRT_TIMEOUT for this instance
 func (c *Config) WithCrtTimeout(timeout uint32) *Config {
 	c.Fabric.CrtTimeout = timeout
@@ -622,7 +612,7 @@ func (c *Config) WithHelperStreamCount(count int) *Config {
 
 // WithServiceThreadCore sets the core index to be used for running DAOS service threads.
 func (c *Config) WithServiceThreadCore(idx int) *Config {
-	c.ServiceThreadCore = idx
+	c.ServiceThreadCore = &idx
 	return c
 }
 
