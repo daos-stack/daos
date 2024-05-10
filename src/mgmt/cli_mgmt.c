@@ -517,10 +517,10 @@ _split_env(char *env, char **name, char **value)
  * via the get_attach_info() dRPC.
  * Configure the client's local environment with these parameters
  */
-int dc_mgmt_net_cfg(const char *name)
+int
+dc_mgmt_net_cfg(const char *name, crt_init_options_t *crt_info)
 {
 	int                      rc;
-	char                    *provider;
 	char                    *cli_srx_set        = NULL;
 	char                    *crt_timeout        = NULL;
 	char                     buf[SYS_INFO_BUF_SIZE];
@@ -554,11 +554,6 @@ int dc_mgmt_net_cfg(const char *name)
 	/* Save number of server ranks */
 	g_num_serv_ranks = resp->n_rank_uris;
 	D_INFO("Setting number of server ranks to %d\n", g_num_serv_ranks);
-	/* These two are always set */
-	provider         = info->provider;
-	rc               = d_setenv("D_PROVIDER", provider, 1);
-	if (rc != 0)
-		D_GOTO(cleanup, rc = d_errno2der(errno));
 
 	/* If the server has set this, the client must use the same value. */
 	if (info->srv_srx_set != -1) {
@@ -584,42 +579,39 @@ int dc_mgmt_net_cfg(const char *name)
 	/* Allow client env overrides for these three */
 	d_agetenv_str(&crt_timeout, "CRT_TIMEOUT");
 	if (!crt_timeout) {
-		rc = asprintf(&crt_timeout, "%d", info->crt_timeout);
-		if (rc < 0) {
-			crt_timeout = NULL;
-			D_GOTO(cleanup, rc = -DER_NOMEM);
-		}
-		D_INFO("setenv CRT_TIMEOUT=%s\n", crt_timeout);
-		rc = d_setenv("CRT_TIMEOUT", crt_timeout, 1);
-		if (rc != 0)
-			D_GOTO(cleanup, rc = d_errno2der(errno));
+		crt_info->cio_crt_timeout = info->crt_timeout;
 	} else {
+		crt_info->cio_crt_timeout = atoi(crt_timeout);
 		D_DEBUG(DB_MGMT, "Using client provided CRT_TIMEOUT: %s\n", crt_timeout);
 	}
-
-	/* client-provided iface/domain were already taken into account by agent */
-	/* TODO: These should be set in crt_init_options_t instead of env */
-	rc = d_setenv("D_INTERFACE", info->interface, 1);
-	if (rc != 0)
-		D_GOTO(cleanup, rc = d_errno2der(errno));
-
-	rc = d_setenv("D_DOMAIN", info->domain, 1);
-	if (rc != 0)
-		D_GOTO(cleanup, rc = d_errno2der(errno));
 
 	sprintf(buf, "%d", info->provider_idx);
 	rc = d_setenv("CRT_SECONDARY_PROVIDER", buf, 1);
 	if (rc != 0)
 		D_GOTO(cleanup, rc = d_errno2der(errno));
 
+	D_STRNDUP(crt_info->cio_provider, info->provider, DAOS_SYS_INFO_STRING_MAX);
+	if (NULL == crt_info->cio_provider)
+		D_GOTO(cleanup, rc = -DER_NOMEM);
+	D_STRNDUP(crt_info->cio_interface, info->interface, DAOS_SYS_INFO_STRING_MAX);
+	if (NULL == crt_info->cio_interface)
+		D_GOTO(cleanup, rc = -DER_NOMEM);
+	D_STRNDUP(crt_info->cio_domain, info->domain, DAOS_SYS_INFO_STRING_MAX);
+	if (NULL == crt_info->cio_domain)
+		D_GOTO(cleanup, rc = -DER_NOMEM);
+
 	D_INFO("Network interface: %s, Domain: %s\n", info->interface, info->domain);
 	D_DEBUG(DB_MGMT,
 		"CaRT initialization with:\n"
-		"\tD_PROVIDER: %s, CRT_TIMEOUT: %s, "
-		"CRT_SECONDARY_PROVIDER: %s\n",
-		provider, crt_timeout, buf);
+		"\tD_PROVIDER: %s, CRT_TIMEOUT: %d, CRT_SECONDARY_PROVIDER: %s\n",
+		crt_info->cio_provider, crt_info->cio_crt_timeout, buf);
 
 cleanup:
+	if (rc) {
+		D_FREE(crt_info->cio_provider);
+		D_FREE(crt_info->cio_interface);
+		D_FREE(crt_info->cio_domain);
+	}
 	d_freeenv_str(&crt_timeout);
 	d_freeenv_str(&cli_srx_set);
 
