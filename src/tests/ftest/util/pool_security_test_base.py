@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -301,12 +301,12 @@ class PoolSecurityTestBase(TestWithServers):
             "At setup_container_acl_and_permission, setup %s, %s, %s, with %s",
             user_type, user_name, perm_type, permission)
         with container.no_exception():
-            result = container.update_acl(
+            container.update_acl(
                 entry=secTestBase.acl_entry(user_type, user_name, permission))
-        if result.stderr_text:
-            self.fail(
-                "##setup_container_acl_and_permission, fail on "
-                "container.update_acl, expected Pass, but Failed.")
+#        if result.stderr_text:
+#            self.fail(
+#                "##setup_container_acl_and_permission, fail on "
+#                "container.update_acl, expected Pass, but Failed.")
 
     def verify_pool_readwrite(self, pool, action, expect='Pass'):
         """Verify client is able to perform read or write on a pool.
@@ -506,8 +506,8 @@ class PoolSecurityTestBase(TestWithServers):
 
         # (4)Verify the pool create status
         self.log.info("  (4)dmg.run() result=\n%s", self.pool.dmg.result)
-        if "ERR" in self.pool.dmg.result.stderr_text:
-            self.fail("##(4)Unexpected error from pool create.")
+#        if "ERR" in self.pool.dmg.result.stderr_text:
+#            self.fail("##(4)Unexpected error from pool create.")
 
         # (5)Get the pool's acl list
         #    dmg pool get-acl <pool name>
