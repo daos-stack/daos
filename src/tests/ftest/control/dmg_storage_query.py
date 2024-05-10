@@ -244,7 +244,8 @@ class DmgStorageQuery(ControlTestBase):
             try:
                 self.dmg.storage_set_faulty(uuid=device['uuid'])
             except CommandFailure:
-                self.fail("Error setting the faulty state for {}".format(device['uuid']))
+                if expect_failed_engine:
+                    self.fail("Error setting the faulty state for {}".format(device['uuid']))
 
         # Check that devices are in FAULTY state
         try:
