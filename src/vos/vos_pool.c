@@ -873,6 +873,9 @@ pool_hop_free(struct d_ulink *hlink)
 	D_ASSERT(pool->vp_opened == 0);
 	D_ASSERT(!gc_have_pool(pool));
 
+	if (pool->vp_dtx_array != NULL)
+		lrua_array_free(pool->vp_dtx_array);
+
 	if (pool->vp_vea_info != NULL)
 		vea_unload(pool->vp_vea_info);
 
@@ -1324,6 +1327,11 @@ lock_pool_memory(struct vos_pool *pool)
 		pool->vp_umm.umm_base);
 }
 
+static const struct lru_callbacks lru_pool_cbs = {
+	.lru_on_alloc = vos_lru_alloc_track,
+	.lru_on_free = vos_lru_free_track,
+};
+
 /*
  * If successful, this function consumes ph, and closes it upon any error.
  * So the caller shall not close ph in any case.
@@ -1363,6 +1371,15 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 		D_GOTO(failed, rc);
 	}
 
+	pool->vp_sysdb = !!(flags & VOS_POF_SYSDB);
+	rc = lrua_array_alloc(&pool->vp_dtx_array, DTX_ARRAY_LEN, DTX_ARRAY_NR,
+			      sizeof(struct vos_dtx_act_ent), LRU_FLAG_REUSE_UNIQUE,
+			      &lru_pool_cbs, vos_tls_get(pool->vp_sysdb));
+	if (rc != 0) {
+		D_ERROR("Failed to create DTX active LRU array: rc = "DF_RC"\n", DP_RC(rc));
+		D_GOTO(failed, rc);
+	}
+
 	/* Cache container table btree hdl */
 	rc = dbtree_open_inplace_ex(&pool_df->pd_cont_root, &pool->vp_uma,
 				    DAOS_HDL_INVAL, pool, &pool->vp_cont_th);
@@ -1398,7 +1415,6 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 
 	/* Insert the opened pool to the uuid hash table */
 	uuid_copy(ukey.uuid, pool_df->pd_id);
-	pool->vp_sysdb = !!(flags & VOS_POF_SYSDB);
 	rc = pool_link(pool, &ukey, poh);
 	if (rc) {
 		D_ERROR("Error inserting into vos DRAM hash\n");
