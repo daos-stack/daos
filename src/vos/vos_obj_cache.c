@@ -287,13 +287,14 @@ vos_obj_op_conflict(struct vos_object *obj, uint64_t flags, uint32_t intent, boo
 	if (obj->obj_discard) {
 		/** Mutually exclusive with create, discard and aggregation */
 		if (create || discard || agg) {
-			D_INFO("Conflict detected, discard already running on object\n");
+			D_DEBUG(DB_EPC, "Conflict detected, discard already running on object\n");
 			return true;
 		}
 	} else if (obj->obj_aggregate) {
 		/** Mutually exclusive with discard */
 		if (discard || agg) {
-			D_INFO("Conflict detected, aggregation already running on object\n");
+			D_DEBUG(DB_EPC,
+				"Conflict detected, aggregation already running on object\n");
 			return true;
 		}
 	}
