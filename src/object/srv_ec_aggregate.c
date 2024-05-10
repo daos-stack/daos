@@ -2645,15 +2645,11 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		goto update_hae;
 	}
 
-	rc = vos_aggregate_enter(cont->sc_hdl, epr);
-	if (rc)
-		goto update_hae;
-
 	iter_param.ip_hdl		= cont->sc_hdl;
 	iter_param.ip_epr.epr_lo	= epr->epr_lo;
 	iter_param.ip_epr.epr_hi	= epr->epr_hi;
 	iter_param.ip_epc_expr		= VOS_IT_EPC_RR;
-	iter_param.ip_flags		= VOS_IT_RECX_VISIBLE;
+	iter_param.ip_flags             = VOS_IT_RECX_VISIBLE | VOS_IT_FOR_AGG;
 	iter_param.ip_recx.rx_idx	= 0ULL;
 	iter_param.ip_recx.rx_nr	= ~PARITY_INDICATOR;
 	iter_param.ip_filter_cb		= agg_filter;
@@ -2661,8 +2657,17 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 
 	agg_reset_entry(&ec_agg_param->ap_agg_entry, NULL, NULL);
 
+retry:
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
 			 agg_iterate_pre_cb, agg_iterate_post_cb, ec_agg_param, NULL);
+	if (rc == -DER_BUSY) {
+		/** Hit an object conflict VOS aggregation or discard.   Rather than exiting, let's
+		 * yield and try again.
+		 */
+		D_DEBUG(DB_EPC, "EC agg hit conflict with VOS agg or discard, retrying...");
+		ec_aggregate_yield(ec_agg_param);
+		goto retry;
+	}
 
 	/* Post_cb may not being executed in some cases */
 	agg_clear_extents(&ec_agg_param->ap_agg_entry);
@@ -2680,8 +2685,6 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		D_ASSERT(cont->sc_ec_agg_req != NULL);
 		sched_req_sleep(cont->sc_ec_agg_req, 5 * 1000);
 	}
-
-	vos_aggregate_exit(cont->sc_hdl);
 
 update_hae:
 	if (rc == 0) {

@@ -544,7 +544,7 @@ obj_reclaim(struct pl_map *map, uint32_t layout_ver, uint32_t new_layout_ver,
 		/* Inform the iterator and delete the object */
 		*acts |= VOS_ITER_CB_DELETE;
 		rc = vos_discard(param->ip_hdl, &oid, &discard_epr, NULL, NULL);
-		if (rc != -DER_UPDATE_AGAIN && rc != -DER_BUSY && rc != -DER_INPROGRESS)
+		if (rc != -DER_BUSY && rc != -DER_INPROGRESS)
 			break;
 
 		D_DEBUG(DB_REBUILD, "retry by "DF_RC"/"DF_UOID"\n",

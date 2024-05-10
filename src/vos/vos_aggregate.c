@@ -2483,6 +2483,10 @@ aggregate_enter(struct vos_container *cont, int agg_mode, daos_epoch_range_t *ep
 	struct vos_agg_metrics	*vam = agg_cont2metrics(cont);
 	int			 rc;
 
+	/** TODO: Now that we have per object mutual exclusion, perhaps we can
+	 * remove the top level mutual exclusion.  Keep it for now to avoid too
+	 * much change at once.
+	 */
 	switch (agg_mode) {
 	default:
 		D_ASSERT(0);
@@ -2692,15 +2696,16 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	merge_window_init(&ad->ad_agg_param.ap_window);
 	ad->ad_agg_param.ap_flags = flags;
 
-	ad->ad_iter_param.ip_flags |= VOS_IT_FOR_PURGE;
+	ad->ad_iter_param.ip_flags |= VOS_IT_FOR_PURGE | VOS_IT_FOR_AGG;
 retry:
 	rc = vos_iterate(&ad->ad_iter_param, VOS_ITER_OBJ, true, &ad->ad_anchors,
 			 vos_aggregate_pre_cb, vos_aggregate_post_cb,
 			 &ad->ad_agg_param, NULL);
-	if (rc == -DER_UPDATE_AGAIN) {
+	if (rc == -DER_BUSY) {
 		/** Hit a conflict with obj_discard.   Rather than exiting, let's
 		 * yield and try again.
 		 */
+		D_DEBUG(DB_EPC, "VOS aggregation hit a conflict, retrying after yield");
 		close_merge_window(&ad->ad_agg_param.ap_window, rc);
 		vos_aggregate_yield(&ad->ad_agg_param);
 		goto retry;
@@ -2752,8 +2757,7 @@ int
 vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
 	    int (*yield_func)(void *arg), void *yield_arg)
 {
-	struct vos_container	*cont = vos_hdl2cont(coh);
-	struct vos_object	*obj;
+	struct vos_container    *cont = vos_hdl2cont(coh);
 	struct agg_data		*ad;
 	int			 type = VOS_ITER_OBJ;
 	int			 rc;
@@ -2768,22 +2772,9 @@ vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
 	if (ad == NULL)
 		return -DER_NOMEM;
 
-	if (oidp != NULL) {
-		rc = vos_obj_discard_hold(vos_obj_cache_current(cont->vc_pool->vp_sysdb),
-					  cont, *oidp, &obj);
-		if (rc != 0) {
-			if (rc == -DER_NONEXIST)
-				rc = 0;
-			goto free_agg_data;
-		}
-
-		D_ASSERT(obj != NULL);
-		D_ASSERT(obj->obj_discard);
-	}
-
 	rc = aggregate_enter(cont, mode, epr);
 	if (rc != 0)
-		goto release_obj;
+		goto exit;
 
 	if (oidp != NULL) {
 		D_DEBUG(DB_EPC, "Discard "DF_UOID" epr "DF_X64"-"DF_X64"\n", DP_UOID(*oidp),
@@ -2818,16 +2809,21 @@ vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
 	ad->ad_agg_param.ap_yield_arg = yield_arg;
 
 	ad->ad_iter_param.ip_flags |= VOS_IT_FOR_DISCARD;
+retry:
 	rc = vos_iterate(&ad->ad_iter_param, type, true, &ad->ad_anchors, vos_aggregate_pre_cb,
 			 vos_aggregate_post_cb, &ad->ad_agg_param, NULL);
+	if (rc == -DER_BUSY) {
+		/** Hit an object conflict with EC aggregation.   Rather than exiting, let's
+		 * yield and try again.
+		 */
+		D_DEBUG(DB_EPC, "Discard hit a conflict, retrying after yield");
+		vos_aggregate_yield(&ad->ad_agg_param);
+		goto retry;
+	}
 
 	aggregate_exit(cont, mode);
 
-release_obj:
-	if (oidp != NULL)
-		vos_obj_discard_release(vos_obj_cache_current(cont->vc_pool->vp_sysdb), obj);
-
-free_agg_data:
+exit:
 	D_FREE(ad);
 
 	return rc;

@@ -2268,7 +2268,7 @@ obj_discard_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		/* Inform the iterator and delete the object */
 		*acts |= VOS_ITER_CB_DELETE;
 		rc = vos_discard(param->ip_hdl, &ent->ie_oid, &epr, NULL, NULL);
-		if (rc != -DER_UPDATE_AGAIN && rc != -DER_BUSY && rc != -DER_INPROGRESS)
+		if (rc != -DER_BUSY && rc != -DER_INPROGRESS)
 			break;
 
 		D_DEBUG(DB_REBUILD, "retry by "DF_RC"/"DF_UOID"\n",

@@ -38,6 +38,7 @@
 		case -DER_TX_RESTART:                                                              \
 		case -DER_INPROGRESS:                                                              \
 		case -DER_UPDATE_AGAIN:                                                            \
+		case -DER_BUSY:                                                                    \
 		case -DER_EXIST:                                                                   \
 		case -DER_NONEXIST:                                                                \
 			__is_err = false;                                                          \
@@ -56,6 +57,7 @@
 		case -DER_TX_RESTART:                                                              \
 		case -DER_INPROGRESS:                                                              \
 		case -DER_UPDATE_AGAIN:                                                            \
+		case -DER_BUSY:                                                                    \
 		case -DER_EXIST:                                                                   \
 		case -DER_NONEXIST:                                                                \
 			__is_err = false;                                                          \
@@ -1064,8 +1066,11 @@ struct vos_iterator {
 	vos_iter_type_t		 it_type;
 	enum vos_iter_state	 it_state;
 	uint32_t		 it_ref_cnt;
+	/** Note: it_for_agg is only set at object level as it's only used for
+	 * mutual exclusion between aggregation and object discard.
+	 */
 	uint32_t it_from_parent : 1, it_for_purge : 1, it_for_discard : 1, it_for_migration : 1,
-	    it_show_uncommitted : 1, it_ignore_uncommitted : 1, it_for_sysdb : 1;
+	    it_show_uncommitted : 1, it_ignore_uncommitted : 1, it_for_sysdb : 1, it_for_agg : 1;
 };
 
 /* Auxiliary structure for passing information between parent and nested
