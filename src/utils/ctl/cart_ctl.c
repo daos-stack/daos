@@ -219,7 +219,7 @@ ctl_parse_fi_attr(char *arg_str, struct crt_ctl_fi_attr_set_in *fi_attr_in)
 	} else {
 		fi_attr_in->fa_probability_y = strtoull(tokens[3], NULL, 10);
 		if (fi_attr_in->fa_probability_y == 0)
-			goto error_out;
+			fi_attr_in->fa_probability_y = 1000;
 		idx = 4;
 	}
 	fi_attr_in->fa_err_code = strtoull(tokens[idx], NULL, 10);
