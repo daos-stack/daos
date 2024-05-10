@@ -1954,6 +1954,7 @@ pool_svc_step_down_metrics(struct pool_svc *svc)
 	d_tm_set_gauge(metrics->service_leader, 0);
 	d_tm_set_counter(metrics->map_version, 0);
 	d_tm_set_gauge(metrics->open_handles, 0);
+	d_tm_set_gauge(metrics->draining_targets, 0);
 	d_tm_set_gauge(metrics->disabled_targets, 0);
 	d_tm_set_gauge(metrics->total_targets, 0);
 	d_tm_set_gauge(metrics->degraded_ranks, 0);

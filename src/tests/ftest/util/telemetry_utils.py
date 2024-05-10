@@ -158,6 +158,7 @@ class TelemetryUtils():
     ENGINE_POOL_SVC_METRICS = [
         "engine_pool_svc_degraded_ranks",
         "engine_pool_svc_disabled_targets",
+        "engine_pool_svc_draining_targets",
         "engine_pool_svc_leader",
         "engine_pool_svc_map_version",
         "engine_pool_svc_open_pool_handles",
