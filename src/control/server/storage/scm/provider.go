@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -252,7 +252,8 @@ func (p *Provider) CheckFormat(req storage.ScmFormatRequest) (*storage.ScmFormat
 	switch fsType {
 	case system.FsTypeExt4:
 		if mntptMissing {
-			return nil, FaultTargetFsMissingMountpoint(req.Mountpoint)
+			return nil, storage.FaultDeviceWithFsNoMountpoint(req.Dcpm.Device,
+				req.Mountpoint)
 		}
 		res.Mountable = true
 	case system.FsTypeNone:

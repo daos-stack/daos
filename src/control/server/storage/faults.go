@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -102,7 +102,24 @@ func FaultConfigRamdiskUnderMinMem(confSize, memRamdiskMin uint64) *fault.Fault 
 	)
 }
 
+// FaultDeviceWithFsNoMountpoint creates a Fault for the case where a mount device is missing
+// respective target location.
+func FaultDeviceWithFsNoMountpoint(dev, tgt string) *fault.Fault {
+	return storageFault(
+		code.StorageDeviceWithFsNoMountpoint,
+		fmt.Sprintf("filesystem on device %s but mount-point path %s does not exist", dev,
+			tgt),
+		"check the mount-point path exists and if not create it before trying again",
+	)
+}
+
 var (
+	// FaultTargetAlreadyMounted represents an error where the target was already mounted.
+	FaultTargetAlreadyMounted = storageFault(
+		code.StorageTargetAlreadyMounted,
+		"request included already-mounted mount target (cannot double-mount)",
+		"unmount the target and retry the operation")
+
 	// FaultScmNoPMem represents an error where no PMem modules exist.
 	FaultScmNoPMem = storageFault(
 		code.ScmNoPMem,
@@ -236,12 +253,6 @@ var (
 		code.BdevNoIOMMU,
 		"IOMMU capability is required to access NVMe devices but no IOMMU capability detected",
 		"enable IOMMU per the DAOS Admin Guide")
-
-	// FaultTargetAlreadyMounted represents an error where the target was already mounted.
-	FaultTargetAlreadyMounted = storageFault(
-		code.StorageTargetAlreadyMounted,
-		"request included already-mounted mount target (cannot double-mount)",
-		"unmount the target and retry the operation")
 )
 
 // FaultPathAccessDenied represents an error where a mount point or device path for

@@ -8,6 +8,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"github.com/dustin/go-humanize"
@@ -16,6 +17,7 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -77,6 +79,8 @@ func createPublishFormatRequiredFunc(publish func(*events.RASEvent), hostname st
 }
 
 func (ei *EngineInstance) checkScmNeedFormat(mdFmtNeeded bool) (bool, error) {
+	msgIdx := fmt.Sprintf("instance %d", ei.Index())
+
 	cfg, err := ei.storage.GetScmConfig()
 	if err != nil {
 		return false, err
@@ -96,7 +100,7 @@ func (ei *EngineInstance) checkScmNeedFormat(mdFmtNeeded bool) (bool, error) {
 		if !mdFmtNeeded {
 			err := ei.storage.FormatScm(true)
 			if err != nil {
-				return false, errors.Wrapf(err, "instance %d: format ramdisk", idx)
+				return false, errors.Wrapf(err, "%s: format ramdisk", msgIdx)
 			}
 
 			return false, nil
@@ -107,7 +111,7 @@ func (ei *EngineInstance) checkScmNeedFormat(mdFmtNeeded bool) (bool, error) {
 
 	scmFmtNeeded, err := ei.storage.ScmNeedsFormat()
 	if err != nil {
-		if fault.IsFaultCode(err, code.StorageTargetFsMissingMountpoint) {
+		if fault.IsFaultCode(err, code.StorageDeviceWithFsNoMountpoint) {
 			return false, err
 		}
 		ei.log.Errorf("%s: failed to check storage formatting: %s", msgIdx, err)
