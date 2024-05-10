@@ -148,6 +148,8 @@ parse_rank_string(char *arg_str, d_rank_t *ranks, int *num_ranks)
 		return;
 	}
 
+	D_DEBUG(DB_TRACE, "arg_str %s\n", arg_str);
+
 	token = strtok_r(arg_str, ",", &saveptr);
 	while (token != NULL) {
 
