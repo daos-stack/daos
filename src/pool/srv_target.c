@@ -2530,7 +2530,8 @@ ds_pool_tgt_discard_ult(void *data)
 
 	ex_status = PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN |
 		    PO_COMP_ST_DOWN | PO_COMP_ST_NEW;
-	ds_pool_thread_collective(arg->pool_uuid, ex_status, pool_child_discard, arg, 0);
+	ds_pool_thread_collective(arg->pool_uuid, ex_status, pool_child_discard, arg,
+				  DSS_ULT_DEEP_STACK);
 
 	pool->sp_need_discard = 0;
 	pool->sp_discard_status = rc;

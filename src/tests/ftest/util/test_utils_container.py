@@ -255,7 +255,6 @@ class TestContainerData():
             "akey": akey,
             "obj": self.obj,
             "txn": txn,
-            "test_hints": test_hints,
         }
         try:
             if data_array_size > 0:
@@ -265,6 +264,7 @@ class TestContainerData():
                 read_data = container.container.read_an_array(**kwargs)
             else:
                 kwargs["size"] = data_size
+                kwargs["test_hints"] = test_hints
                 self._log_method("read_an_obj", kwargs)
                 read_data = container.container.read_an_obj(**kwargs)
         except DaosApiError as error:
@@ -372,7 +372,7 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         self.label = BasicParameter(None, "TestContainer")
         self.label_generator = label_generator
 
-        self.register_cleanup = BasicParameter(True)  # call register_cleanup by default
+        self.register_cleanup = BasicParameter(True, True)  # call register_cleanup by default
 
         self.container = None
         self.uuid = None
