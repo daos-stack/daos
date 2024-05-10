@@ -263,7 +263,7 @@ class DmgCommand(DmgCommandBase):
         return self._get_json_result(
             ("storage", "set", "nvme-faulty"), uuid=uuid, force=force)
 
-    def storage_query_list_devices(self, rank=None, health=False):
+    def storage_query_list_devices(self, rank=None, health=False, uuid=None):
         """Get the result of the 'dmg storage query list-devices' command.
 
         Args:
@@ -271,6 +271,7 @@ class DmgCommand(DmgCommandBase):
                 Defaults to None.
             health (bool, optional): Include device health in response.
                 Defaults to false.
+            uuid (str, optional): device UUID. Defaults to None.
 
         Raises:
             CommandFailure: if the dmg storage query list-devices command fails.
@@ -279,7 +280,9 @@ class DmgCommand(DmgCommandBase):
             dict: the dmg json command output converted to a python dictionary
 
         """
-        return self._get_json_result(("storage", "query", "list-devices"), rank=rank, health=health)
+        return self._get_json_result(
+            ("storage", "query", "list-devices"), rank=rank, health=health,
+            uuid=uuid)
 
     def storage_query_list_pools(self, uuid=None, rank=None, verbose=False):
         """Get the result of the 'dmg storage query list-pools' command.
@@ -628,6 +631,7 @@ class DmgCommand(DmgCommandBase):
         data["status"] = output["status"]
         data["uuid"] = output["response"]["uuid"]
         data["svc"] = ",".join([str(svc) for svc in output["response"]["svc_reps"]])
+        data["leader"] = output["response"]["svc_ldr"]
         data["ranks"] = ",".join([str(r) for r in output["response"]["tgt_ranks"]])
         data["scm_per_rank"] = output["response"]["tier_bytes"][0]
         data["nvme_per_rank"] = output["response"]["tier_bytes"][1]
@@ -659,7 +663,7 @@ class DmgCommand(DmgCommandBase):
         #         "total_engines": 1,
         #         "disabled_targets": 0,
         #         "version": 1,
-        #         "leader": 0,
+        #         "svc_ldr": 0,
         #         "rebuild": {
         #             "status": 0,
         #             "state": "idle",
@@ -835,10 +839,8 @@ class DmgCommand(DmgCommandBase):
         #             "svc_reps": [
         #             0
         #             ],
-        #             "targets_total": 8,
-        #             "targets_disabled": 0,
-        #             "query_error_msg": "",
-        #             "query_status_msg": "",
+        #             "total_targets": 8,
+        #             "disabled_targets": 0,
         #             "usage": [
         #             {
         #                 "tier_name": "SCM",

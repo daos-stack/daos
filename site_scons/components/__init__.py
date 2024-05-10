@@ -369,12 +369,16 @@ def define_components(reqs):
     os_name = dist[0].split()[0]
     if os_name == 'Ubuntu':
         capstone_pkg = 'libcapstone-dev'
+        libaio_pkg = 'libaio-dev'
     elif os_name == 'openSUSE':
         capstone_pkg = 'libcapstone-devel'
+        libaio_pkg = 'libaio-devel'
     else:
         capstone_pkg = 'capstone-devel'
+        libaio_pkg = 'libaio-devel'
     reqs.define('capstone', libs=['capstone'], headers=['capstone/capstone.h'],
                 package=capstone_pkg)
+    reqs.define('aio', libs=['aio'], headers=['libaio.h'], package=libaio_pkg)
 
 
 __all__ = ['define_components']

@@ -161,6 +161,8 @@ jobs:
 
   Build-RPM:
     name: Build RPM
+    permissions:
+      statuses: write
     runs-on: [self-hosted, docker]
     needs: [Create-symlinks, Import-commit-pragmas, Calc-rpm-build-matrix]
     if: needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
@@ -192,6 +194,8 @@ jobs:
       DISTRO_NAME:
       DISTRO_VERSION:
       CP_LEAP15_VERSION:
+      COMMIT_STATUS_DISTRO_VERSION:
+      FVERSION:
     steps:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
@@ -203,6 +207,7 @@ jobs:
                     CHROOT_NAME="rocky+epel-8-x86_64"
                     DISTRO_NAME="EL"
                     DISTRO_VERSION="${{ env.EL8_BUILD_VERSION }}"
+                    COMMIT_STATUS_DISTRO_VERSION="8"
                     ;;
                 'el9')
                     CHROOT_NAME="rocky+epel-9-x86_64"
@@ -224,6 +229,7 @@ jobs:
             echo "BUILD_CHROOT=/var/lib/mock/$CHROOT_NAME-${{ github.run_id }}/" >> $GITHUB_ENV
             echo "STAGE_NAME=Build RPM on $DISTRO_NAME $DISTRO_VERSION" >> $GITHUB_ENV
             echo "FVERSION=$FVERSION" >> $GITHUB_ENV
+            echo "COMMIT_STATUS_DISTRO_VERSION=$COMMIT_STATUS_DISTRO_VERSION" >> $GITHUB_ENV
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -297,6 +303,12 @@ jobs:
         with:
           name: ${{ env.DISTRO_NAME }} ${{ env.DISTRO_VERSION }} RPM repository
           path: ${{ env.REPO_PATH}}${{ github.run_number }}/artifact/artifacts/${{ env.TARGET }}
+      - name: Update commit status
+        uses: ouzi-dev/commit-status-updater@v2
+        with:
+          # yamllint disable-line rule:line-length
+          name: 'build/Build RPM on ${{ env.DISTRO_NAME }} ${{ env.COMMIT_STATUS_DISTRO_VERSION && env.COMMIT_STATUS_DISTRO_VERSION || env.DISTRO_VERSION }}'
+          status: "${{ job.status }}"
 
   Calc-functional-matrix:
     name: Calculate Functional Testing Matrix
@@ -358,6 +370,7 @@ jobs:
     name: Functional Testing
     runs-on: [self-hosted, wolf]
     permissions:
+      statuses: write
       # https://github.com/EnricoMi/publish-unit-test-result-action#permissions
       checks: write
       pull-requests: write
@@ -403,6 +416,9 @@ jobs:
       STAGE_NAME:
       QUEUE_URL:
       LABEL:
+      DISTRO_NAME:
+      DISTRO_VERSION:
+      COMMIT_STATUS_DISTRO_VERSION:
     steps:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
@@ -532,6 +548,12 @@ jobs:
         with:
           name: ${{ env.STAGE_NAME }} test-results
           path: ${{ env.STAGE_NAME }}/**/results.xml
+      - name: Update commit status
+        uses: ouzi-dev/commit-status-updater@v2
+        with:
+          # yamllint disable-line rule:line-length
+          name: 'test/Functional on ${{ env.DISTRO_NAME }} ${{ env.COMMIT_STATUS_DISTRO_VERSION && env.COMMIT_STATUS_DISTRO_VERSION || env.DISTRO_VERSION }}'
+          status: "${{ job.status }}"
 
   Calc-functional-hardware-matrix:
     name: Calculate Functional Hardware Testing Matrix
@@ -593,6 +615,7 @@ jobs:
     name: Functional Testing on Hardware
     runs-on: [self-hosted, wolf]
     permissions:
+      statuses: write
       # https://github.com/EnricoMi/publish-unit-test-result-action#permissions
       checks: write
       pull-requests: write
@@ -637,6 +660,7 @@ jobs:
       STAGE_NAME:
       QUEUE_URL:
       LABEL:
+      COMMIT_STATUS_DISTRO_VERSION:
     steps:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
@@ -758,3 +782,8 @@ jobs:
         with:
           name: ${{ env.STAGE_NAME }} test-results
           path: ${{ env.STAGE_NAME }}/**/results.xml
+      - name: Update commit status
+        uses: ouzi-dev/commit-status-updater@v2
+        with:
+          name: 'test/Functional Hardware ${{ matrix.stage }}'
+          status: "${{ job.status }}"

@@ -2933,7 +2933,7 @@ chk_engine_pool_start(uint64_t gen, uuid_t uuid, uint32_t phase, uint32_t flags)
 		D_GOTO(put, rc = (rc == -DER_NONEXIST ? 1 : rc));
 
 	if (cbk->cb_phase < phase) {
-		cbk->cb_phase = cbk->cb_phase;
+		cbk->cb_phase = phase;
 		/* QUEST: How to estimate the left time? */
 		cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__CSP_DONE - cbk->cb_phase;
 		rc = chk_bk_update_pool(cbk, uuid_str);

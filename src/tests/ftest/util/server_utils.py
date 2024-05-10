@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -132,7 +132,7 @@ class DaosServerManager(SubprocessManager):
 
         # Parameters to set storage prepare and format timeout
         self.storage_prepare_timeout = BasicParameter(None, 40)
-        self.storage_format_timeout = BasicParameter(None, 40)
+        self.storage_format_timeout = BasicParameter(None, 64)
         self.storage_reset_timeout = BasicParameter(None, 120)
         self.collect_log_timeout = BasicParameter(None, 120)
 
@@ -467,9 +467,9 @@ class DaosServerManager(SubprocessManager):
         cmd = DaosServerCommand(self.manager.job.command_path)
         cmd.run_user = "daos_server"
         cmd.debug.value = False
-        cmd.config.value = get_default_config_file("server")
-        self.log.info("Support collect-log on servers: %s", str(cmd))
+        kwargs['config'] = get_default_config_file("server")
         cmd.set_command(("support", "collect-log"), **kwargs)
+        self.log.info("Support collect-log on servers: %s", str(cmd))
         return run_remote(
             self.log, self._hosts, cmd.with_exports, timeout=self.collect_log_timeout.value)
 
@@ -477,7 +477,7 @@ class DaosServerManager(SubprocessManager):
         """Display server hosts memory info."""
         self.log.debug("#" * 80)
         self.log.debug("<SERVER> Collection debug memory info")
-        run_remote(self.log, self._hosts, "free -m")
+        run_remote(self.log, self._hosts, "free -m && df -h --type=tmpfs")
         run_remote(self.log, self._hosts, "ps -eo size,pid,user,command --sort -size | head -n 6")
         self.log.debug("#" * 80)
 
@@ -719,6 +719,9 @@ class DaosServerManager(SubprocessManager):
 
             # Make sure the mount directory belongs to non-root user
             self.set_scm_mount_ownership()
+
+        # Collective memory usage after stop.
+        self.display_memory_info()
 
         # Report any errors after all stop actions have been attempted
         if messages:
