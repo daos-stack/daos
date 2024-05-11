@@ -85,6 +85,15 @@ type AioCreateParams struct {
 
 func (_ AioCreateParams) isSpdkSubsystemConfigParams() {}
 
+// UringCreateParams specifies details for a storage.ConfUringCreate method.
+type UringCreateParams struct {
+	BlockSize  uint64 `json:"block_size"`
+	DeviceName string `json:"name"`
+	Filename   string `json:"filename"`
+}
+
+func (acp UringCreateParams) isSpdkSubsystemConfigParams() {}
+
 // HotplugBusidRangeParams specifies details for a storage.ConfSetHotplugBusidRange method.
 type HotplugBusidRangeParams struct {
 	Begin uint8 `json:"begin"`
@@ -213,6 +222,16 @@ func getAioKdevCreateMethod(name, path string) *SpdkSubsystemConfig {
 	}
 }
 
+func getUringCreateMethod(name, path string) *SpdkSubsystemConfig {
+	return &SpdkSubsystemConfig{
+		Method: storage.ConfBdevUringCreate,
+		Params: UringCreateParams{
+			DeviceName: fmt.Sprintf("URING_%s", name),
+			Filename:   path,
+		},
+	}
+}
+
 func getSpdkConfigMethods(req *storage.BdevWriteConfigRequest) (sscs []*SpdkSubsystemConfig) {
 	for _, tier := range req.TierProps {
 		var f configMethodGetter
@@ -224,6 +243,8 @@ func getSpdkConfigMethods(req *storage.BdevWriteConfigRequest) (sscs []*SpdkSubs
 			f = getAioFileCreateMethod
 		case storage.ClassKdev:
 			f = getAioKdevCreateMethod
+		case storage.ClassUring:
+			f = getUringCreateMethod
 		}
 
 		for index, dev := range tier.DeviceList.Devices() {

@@ -91,7 +91,7 @@ func (c *Class) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 	class := Class(tmp)
 	switch class {
-	case ClassDcpm, ClassRam, ClassNvme, ClassFile, ClassKdev:
+	case ClassDcpm, ClassRam, ClassNvme, ClassFile, ClassKdev, ClassUring:
 		*c = class
 	default:
 		return errors.Errorf("unsupported storage class %q", tmp)
@@ -111,6 +111,7 @@ const (
 	ClassNvme Class = "nvme"
 	ClassKdev Class = "kdev"
 	ClassFile Class = "file"
+	ClassUring Class = "uring"
 )
 
 type TierConfig struct {
@@ -135,7 +136,7 @@ func (tc *TierConfig) IsSCM() bool {
 
 func (tc *TierConfig) IsBdev() bool {
 	switch tc.Class {
-	case ClassNvme, ClassFile, ClassKdev:
+	case ClassNvme, ClassFile, ClassKdev, ClassUring:
 		return true
 	default:
 		return false
@@ -985,6 +986,7 @@ func (bc *BdevConfig) Validate(class Class) error {
 			return err
 		}
 	case ClassKdev:
+	case ClassUring:
 		if err := bc.checkNonEmptyDevList(class); err != nil {
 			return err
 		}
@@ -994,7 +996,7 @@ func (bc *BdevConfig) Validate(class Class) error {
 			return errors.New("bdev_class nvme requires valid PCI addresses in bdev_list")
 		}
 	default:
-		return errors.Errorf("bdev_class value %q not supported (valid: nvme/kdev/file)", class)
+		return errors.Errorf("bdev_class value %q not supported (valid: nvme/kdev/file/uring)", class)
 	}
 
 	return nil
@@ -1159,6 +1161,8 @@ func (c *Config) Validate() error {
 		c.VosEnv = "NVME"
 	case ClassFile, ClassKdev:
 		c.VosEnv = "AIO"
+	case ClassUring:
+		c.VosEnv = "URING"
 	}
 
 	var nvmeConfigRoot string

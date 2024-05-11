@@ -41,6 +41,7 @@ apt-get install \
     libssl-dev \
     libtool-bin \
     libunwind-dev \
+    liburing-dev \
     libyaml-dev \
     locales \
     maven \

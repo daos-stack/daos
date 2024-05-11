@@ -398,6 +398,7 @@
 #    # - "nvme" for NVMe SSDs (preferred option), bdev_size ignored
 #    # - "file" to emulate a NVMe SSD with a regular file
 #    # - "kdev" to use a kernel block device, bdev_size ignored
+#    # - "uring" to use the IO_uring interface to a kernel block device
 #    # Immutable after running "dmg storage format".
 #
 #    class: nvme

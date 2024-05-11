@@ -42,6 +42,7 @@ dnf --nodocs install \
     libtool \
     libtool-ltdl-devel \
     libunwind-devel \
+    liburing-devel \
     libuuid-devel \
     libyaml-devel \
     Lmod \
