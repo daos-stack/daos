@@ -292,7 +292,8 @@ class VerifyPoolSpace(TestWithServers):
         description = 'a single pool on ranks 1 & 2'
         pools.extend(self._create_pools(description, ['1_2']))
         self._check_pool_size(
-            description, pool_size, scm_mounts, [compare_equal, compare_reduced, compare_reduced])
+            description, pool_size, scm_mounts, server_hosts,
+            [compare_equal, compare_reduced, compare_reduced])
         self._query_pool_size(description, pools[4:5])
 
         # (7) Write various amounts of data to the single pool on ranks 1 & 2
