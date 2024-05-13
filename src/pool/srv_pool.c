@@ -3698,12 +3698,7 @@ out_lock:
 	if (prop)
 		daos_prop_free(prop);
 out_svc:
-	/*
-	 * NOTE: For ds_pool_skip_for_check() true case, after PS restart, current rank may be not
-	 *	 PS leader, do not set the hint under such case (rc == -DER_BUSY && nhandles == 0).
-	 */
-	if (rc != -DER_BUSY || nhandles != 0)
-		ds_rsvc_set_hint(&svc->ps_rsvc, &out->pco_op.po_hint);
+	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pco_op.po_hint);
 	pool_svc_put_leader(svc);
 out:
 	if ((rc == 0) && !dup_op && fi_pass_noreply) {
