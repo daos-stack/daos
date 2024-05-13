@@ -2483,61 +2483,28 @@ aggregate_enter(struct vos_container *cont, int agg_mode, daos_epoch_range_t *ep
 	struct vos_agg_metrics	*vam = agg_cont2metrics(cont);
 	int			 rc;
 
-	/** TODO: Now that we have per object mutual exclusion, perhaps we can
-	 * remove the top level mutual exclusion.  Keep it for now to avoid too
-	 * much change at once.
-	 */
 	switch (agg_mode) {
 	default:
 		D_ASSERT(0);
 		break;
 	case AGG_MODE_DISCARD:
 		if (cont->vc_in_discard) {
-			D_ERROR(DF_CONT": Already in discard epr["DF_U64", "DF_U64"]\n",
+			D_ERROR(DF_CONT ": Already in discard epr[" DF_U64 ", " DF_U64 "]\n",
 				DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
 				cont->vc_epr_discard.epr_lo, cont->vc_epr_discard.epr_hi);
 			return -DER_BUSY;
 		}
-
-		if (cont->vc_obj_discard_count != 0) {
-			D_ERROR(DF_CONT ": In object discard epr[" DF_U64 ", " DF_U64 "]\n",
-				DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
-				cont->vc_epr_discard.epr_lo, cont->vc_epr_discard.epr_hi);
-			return -DER_BUSY;
-		}
-
-		if (cont->vc_in_aggregation && cont->vc_epr_aggregation.epr_hi >= epr->epr_lo) {
-			D_ERROR(DF_CONT": Aggregate epr["DF_U64", "DF_U64"], "
-				"discard epr["DF_U64", "DF_U64"]\n",
-				DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
-				cont->vc_epr_aggregation.epr_lo,
-				cont->vc_epr_aggregation.epr_hi,
-				epr->epr_lo, epr->epr_hi);
-			return -DER_BUSY;
-		}
-
 		cont->vc_in_discard = 1;
 		cont->vc_epr_discard = *epr;
 		break;
 	case AGG_MODE_AGGREGATE:
 		if (cont->vc_in_aggregation) {
-			D_DEBUG(DB_EPC, DF_CONT": Already in aggregation epr["DF_U64", "DF_U64"]\n",
+			D_DEBUG(DB_EPC,
+				DF_CONT ": Already in aggregation epr[" DF_U64 ", " DF_U64 "]\n",
 				DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
 				cont->vc_epr_aggregation.epr_lo, cont->vc_epr_aggregation.epr_hi);
 			return -DER_BUSY;
 		}
-
-		if (cont->vc_in_discard &&
-		    cont->vc_epr_discard.epr_lo <= epr->epr_hi) {
-			D_ERROR(DF_CONT": Discard epr["DF_U64", "DF_U64"], "
-				"aggregation epr["DF_U64", "DF_U64"]\n",
-				DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
-				cont->vc_epr_discard.epr_lo,
-				cont->vc_epr_discard.epr_hi,
-				epr->epr_lo, epr->epr_hi);
-			return -DER_BUSY;
-		}
-
 		cont->vc_in_aggregation = 1;
 		cont->vc_epr_aggregation = *epr;
 
@@ -2546,18 +2513,6 @@ aggregate_enter(struct vos_container *cont, int agg_mode, daos_epoch_range_t *ep
 
 		break;
 	case AGG_MODE_OBJ_DISCARD:
-		/** Theoretically, this could overlap with vos_discard as well
-		 * as aggregation but it makes the logic in vos_obj_hold more
-		 * complicated so defer for now and just disallow it. We can
-		 * conflict with aggregation, however without issues.
-		 */
-		if (cont->vc_in_discard) {
-			D_ERROR(DF_CONT ": Already in discard epr[" DF_U64 ", " DF_U64 "]\n",
-				DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
-				cont->vc_epr_discard.epr_lo, cont->vc_epr_discard.epr_hi);
-			return -DER_BUSY;
-		}
-
 		cont->vc_obj_discard_count++;
 		break;
 	}
