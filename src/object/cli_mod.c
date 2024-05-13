@@ -188,6 +188,7 @@ dc_obj_init(void)
 
 	obj_coll_thd = OBJ_COLL_THD_MIN;
 	d_getenv_uint("DAOS_OBJ_COLL_THD", &obj_coll_thd);
+	obj_coll_thd = 0;
 	if (obj_coll_thd == 0) {
 		D_INFO("Disable collective operation.\n");
 	} else {

@@ -56,13 +56,13 @@
 		0, ver == 9 ? &CQF_obj_key_enum : &CQF_obj_key_enum_v10,\
 		ds_obj_enum_handler, NULL, "obj_enum")			\
 	X(DAOS_OBJ_RPC_PUNCH,						\
-		0, ver == 9 ? &CQF_obj_punch : &CQF_obj_punch_v10,	\
+		0, &CQF_obj_punch,	\
 		ds_obj_punch_handler, NULL, "obj_punch")		\
 	X(DAOS_OBJ_RPC_PUNCH_DKEYS,					\
-		0, ver == 9 ? &CQF_obj_punch : &CQF_obj_punch_v10,	\
+		0, &CQF_obj_punch,	\
 		ds_obj_punch_handler, NULL, "dkey_punch")		\
 	X(DAOS_OBJ_RPC_PUNCH_AKEYS,					\
-		0, ver == 9 ? &CQF_obj_punch : &CQF_obj_punch_v10,	\
+		0, &CQF_obj_punch,	\
 		ds_obj_punch_handler, NULL, "akey_punch")		\
 	X(DAOS_OBJ_RPC_QUERY_KEY,					\
 		0, ver == 9 ? &CQF_obj_query_key :			\
@@ -75,13 +75,13 @@
 		0, ver == 9 ? &CQF_obj_rw : &CQF_obj_rw_v10,		\
 		ds_obj_tgt_update_handler, NULL, "tgt_update")		\
 	X(DAOS_OBJ_RPC_TGT_PUNCH,					\
-		0, ver == 9 ? &CQF_obj_punch : &CQF_obj_punch_v10,	\
+		0, &CQF_obj_punch,	\
 		ds_obj_tgt_punch_handler, NULL, "tgt_punch")		\
 	X(DAOS_OBJ_RPC_TGT_PUNCH_DKEYS,					\
-		0, ver == 9 ? &CQF_obj_punch : &CQF_obj_punch_v10,	\
+		0, &CQF_obj_punch,	\
 		ds_obj_tgt_punch_handler, NULL, "tgt_dkey_punch")	\
 	X(DAOS_OBJ_RPC_TGT_PUNCH_AKEYS,					\
-		0, ver == 9 ? &CQF_obj_punch : &CQF_obj_punch_v10,	\
+		0, &CQF_obj_punch,	\
 		ds_obj_tgt_punch_handler, NULL, "tgt_akey_punch")	\
 	X(DAOS_OBJ_RPC_MIGRATE,						\
 		0, &CQF_obj_migrate,					\
