@@ -187,7 +187,6 @@ class PoolListConsolidationTest(RecoveryTestBase):
 
         Returns:
             list: Error list.
-
         """
         hosts = list(set(self.server_managers[0].ranks.values()))
         nodeset_hosts = NodeSet.fromlist(hosts)
