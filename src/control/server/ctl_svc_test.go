@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -66,6 +66,7 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 		})
 		if started {
 			ei.ready.SetTrue()
+			ei.setDrpcSocket("/dontcare")
 		}
 		if err := cs.harness.AddInstance(ei); err != nil {
 			t.Fatal(err)

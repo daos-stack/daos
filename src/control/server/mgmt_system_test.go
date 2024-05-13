@@ -199,7 +199,10 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 			if err := harness.AddInstance(srv); err != nil {
 				t.Fatal(err)
 			}
-			srv.setDrpcClient(newMockDrpcClient(nil))
+
+			srv.getDrpcClientFn = func(s string) drpc.DomainSocketClient {
+				return newMockDrpcClient(nil)
+			}
 			harness.started.SetTrue()
 
 			db := raft.MockDatabaseWithAddr(t, log, msReplica.Addr)
@@ -2031,7 +2034,8 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 			}
 			peerCtx := peer.NewContext(test.Context(t), &peer.Peer{Addr: peerAddr})
 
-			setupMockDrpcClient(svc, tc.guResp, nil)
+			mdc := getMockDrpcClient(tc.guResp, nil)
+			setupSvcDrpcClient(svc, 0, mdc)
 
 			gotResp, gotErr := svc.Join(peerCtx, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
@@ -2047,8 +2051,6 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 				return
 			}
 
-			ei := svc.harness.instances[0].(*EngineInstance)
-			mdc := ei._drpcClient.(*mockDrpcClient)
 			gotGuReq := new(mgmtpb.GroupUpdateReq)
 			calls := mdc.calls.get()
 			// wait for GroupUpdate

@@ -58,12 +58,13 @@ type EngineInstance struct {
 	onStorageReady  []onStorageReadyFn
 	onReady         []onReadyFn
 	onInstanceExit  []onInstanceExitFn
+	getDrpcClientFn func(string) drpc.DomainSocketClient
 
 	sync.RWMutex
 	// these must be protected by a mutex in order to
 	// avoid racy access.
+	_drpcSocket string
 	_cancelCtx  context.CancelFunc
-	_drpcClient drpc.DomainSocketClient
 	_superblock *Superblock
 	_lastErr    error // populated when harness receives signal
 }
@@ -162,11 +163,7 @@ func (ei *EngineInstance) Index() uint32 {
 func (ei *EngineInstance) removeSocket() error {
 	fMsg := fmt.Sprintf("removing instance %d socket file", ei.Index())
 
-	dc, err := ei.getDrpcClient()
-	if err != nil {
-		return errors.Wrap(err, fMsg)
-	}
-	engineSock := dc.GetSocketPath()
+	engineSock := ei.getDrpcSocket()
 
 	if err := checkDrpcClientSocketPath(engineSock); err != nil {
 		return errors.Wrap(err, fMsg)
