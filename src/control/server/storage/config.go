@@ -587,17 +587,17 @@ func (sc *ScmConfig) Validate(class Class) error {
 	switch class {
 	case ClassDcpm:
 		if sc.RamdiskSize > 0 {
-			return errors.New("scm_size may not be set when scm_class is dcpm")
+			return errors.New("scm_size may not be set when class is dcpm")
 		}
 		if len(sc.DeviceList) == 0 {
-			return errors.New("scm_list must be set when scm_class is dcpm")
+			return errors.New("scm_list must be set when class is dcpm")
 		}
 		if sc.DisableHugepages {
-			return errors.New("scm_hugepages_disabled may not be set when scm_class is dcpm")
+			return errors.New("scm_hugepages_disabled may not be set when class is dcpm")
 		}
 	case ClassRam:
 		if len(sc.DeviceList) > 0 {
-			return errors.New("scm_list may not be set when scm_class is ram")
+			return errors.New("scm_list may not be set when class is ram")
 		}
 		// Note: RAM-disk size can be auto-sized so allow if zero.
 		if sc.RamdiskSize != 0 {
@@ -954,8 +954,7 @@ type BdevConfig struct {
 
 func (bc *BdevConfig) checkNonZeroDevFileSize(class Class) error {
 	if bc.FileSize == 0 {
-		return errors.Errorf("bdev_class %s requires non-zero bdev_size",
-			class)
+		return errors.Errorf("class %s requires non-zero bdev_size", class)
 	}
 
 	return nil
@@ -963,8 +962,7 @@ func (bc *BdevConfig) checkNonZeroDevFileSize(class Class) error {
 
 func (bc *BdevConfig) checkNonEmptyDevList(class Class) error {
 	if bc.DeviceList == nil || bc.DeviceList.Len() == 0 {
-		return errors.Errorf("bdev_class %s requires non-empty bdev_list",
-			class)
+		return errors.Errorf("class %s requires non-empty bdev_list", class)
 	}
 
 	return nil
@@ -991,10 +989,10 @@ func (bc *BdevConfig) Validate(class Class) error {
 	case ClassNvme:
 		// NB: We are specifically checking that the embedded PCIAddressSet is non-empty.
 		if bc.DeviceList == nil || bc.DeviceList.PCIAddressSet.Len() == 0 {
-			return errors.New("bdev_class nvme requires valid PCI addresses in bdev_list")
+			return errors.New("class nvme requires valid PCI addresses in bdev_list")
 		}
 	default:
-		return errors.Errorf("bdev_class value %q not supported (valid: nvme/kdev/file)", class)
+		return errors.Errorf("class value %q not supported (valid: nvme/kdev/file)", class)
 	}
 
 	return nil

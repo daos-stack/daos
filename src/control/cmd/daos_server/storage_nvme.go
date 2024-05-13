@@ -78,10 +78,6 @@ func updateNVMePrepReqFromConfig(log logging.Logger, cfg *config.Server, req *st
 		return nil
 	}
 
-	for idx, ec := range cfg.Engines {
-		ec.ConvertLegacyStorage(log, idx)
-	}
-
 	if cfg.DisableHugepages {
 		return errors.New("hugepage usage has been disabled in the config file")
 	}
