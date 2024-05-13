@@ -7,14 +7,15 @@
 import json
 import os
 
+from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
 from cpu_utils import CpuInfo
-from dfuse_test_base import DfuseTestBase
+from dfuse_utils import get_dfuse, start_dfuse
 from fio_utils import FioCommand
 from general_utils import bytes_to_human
 
 
-class Pil4dfsFio(DfuseTestBase):
+class Pil4dfsFio(TestWithServers):
     """Test class Description: Runs Fio with in small config.
 
     :avocado: recursive
@@ -26,7 +27,6 @@ class Pil4dfsFio(DfuseTestBase):
         """Initialize a FioPil4dfs object."""
         super().__init__(*args, **kwargs)
 
-        self.fio_cmd = None
         self.fio_params = {"thread": "", "blocksize": "", "size": ""}
         self.fio_numjobs = 0
         self.fio_cpus_allowed = ""
@@ -57,24 +57,10 @@ class Pil4dfsFio(DfuseTestBase):
     def _create_container(self):
         """Created a DAOS POSIX container"""
         self.log.info("Creating pool")
-        self.assertIsNone(self.pool, "Unexpected pool before starting test")
-        self.add_pool()
+        pool = self.get_pool()
 
         self.log.info("Creating container")
-        self.assertIsNone(self.container, "Unexpected container before starting test")
-        self.add_container(self.pool)
-
-    def _destroy_container(self):
-        """Destroy DAOS POSIX container previously created"""
-        if self.container is not None:
-            self.log.debug("Destroying container %s", str(self.container))
-            self.destroy_containers(self.container)
-            self.container = None
-
-        if self.pool is not None:
-            self.log.debug("Destroying pool %s", str(self.pool))
-            self.destroy_pools(self.pool)
-            self.pool = None
+        return self.get_container(pool)
 
     def _get_bandwidth(self, fio_result, rw):
         """Returns FIO bandwidth of a given I/O pattern
@@ -101,42 +87,40 @@ class Pil4dfsFio(DfuseTestBase):
             dict: Read and Write bandwidths of the FIO command.
 
         """
-        self._create_container()
-        self.log.info("Mounting DFuse mount point")
-        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
-        self.log.debug("Mounted DFuse mount point %s", str(self.dfuse))
+        container = self._create_container()
 
-        self.fio_cmd = FioCommand()
-        self.fio_cmd.get_params(self)
-        self.fio_cmd.update(
-            "global", "directory", self.dfuse.mount_dir.value,
-            f"fio --name=global --directory={self.dfuse.mount_dir.value}")
-        self.fio_cmd.update("global", "ioengine", "psync", "fio --name=global --ioengine='psync'")
-        self.fio_cmd.update(
+        self.log_step("Mounting DFuse mount point")
+        dfuse = get_dfuse(self, self.hostlist_clients)
+        start_dfuse(self, dfuse, container.pool, container)
+        self.log.debug("Mounted DFuse mount point %s", str(dfuse))
+
+        fio_cmd = FioCommand()
+        fio_cmd.get_params(self)
+        fio_cmd.update_directory(dfuse.mount_dir.value)
+        fio_cmd.update("global", "ioengine", "psync", "fio --name=global --ioengine='psync'")
+        fio_cmd.update(
             "global", "numjobs", self.fio_numjobs,
             f"fio --name=global --numjobs={self.fio_numjobs}")
-        self.fio_cmd.update(
+        fio_cmd.update(
             "global", "cpus_allowed", self.fio_cpus_allowed,
             f"fio --name=global --cpus_allowed={self.fio_cpus_allowed}")
-        self.fio_cmd.env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
-        self.fio_cmd.hosts = self.hostlist_clients
+        fio_cmd.env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
+        fio_cmd.hosts = self.hostlist_clients
 
         bws = {}
         for rw in Pil4dfsFio._FIO_RW_NAMES:
-            self.fio_cmd.update("job", "rw", rw, f"fio --name=job --rw={rw}")
+            fio_cmd.update("job", "rw", rw, f"fio --name=job --rw={rw}")
 
             params = ", ".join(f"{name}={value}" for name, value in self.fio_params.items())
             self.log.info("Running FIO command: rw=%s, %s", rw, params)
-            self.log.debug(
-                "FIO command: LD_PRELOAD=%s %s", self.fio_cmd.env['LD_PRELOAD'], str(self.fio_cmd))
-            result = self.fio_cmd.run()
+            self.log.debug("FIO command: LD_PRELOAD=%s %s", fio_cmd.env['LD_PRELOAD'], str(fio_cmd))
+            result = fio_cmd.run()
             bws[rw] = self._get_bandwidth(result, rw)
             self.log.debug("DFuse bandwidths for %s: %s", rw, bws[rw])
 
-        if self.dfuse is not None:
-            self.log.debug("Stopping DFuse mount point %s", str(self.dfuse))
-            self.stop_dfuse()
-            self._destroy_container()
+        dfuse.stop()
+        container.destroy()
+        container.pool.destroy()
 
         return bws
 
@@ -147,38 +131,36 @@ class Pil4dfsFio(DfuseTestBase):
             dict: Read and Write bandwidths of the FIO command.
 
         """
-        self._create_container()
+        container = self._create_container()
 
-        self.fio_cmd = FioCommand()
-        self.fio_cmd.get_params(self)
-        self.fio_cmd.update("global", "ioengine", "dfs", "fio --name=global --ioengine='dfs'")
-        self.fio_cmd.update(
+        fio_cmd = FioCommand()
+        fio_cmd.get_params(self)
+        fio_cmd.update("global", "ioengine", "dfs", "fio --name=global --ioengine='dfs'")
+        fio_cmd.update(
             "global", "numjobs", self.fio_numjobs,
             f"fio --name=global --numjobs={self.fio_numjobs}")
-        self.fio_cmd.update(
+        fio_cmd.update(
             "global", "cpus_allowed", self.fio_cpus_allowed,
             f"fio --name=global --cpus_allowed={self.fio_cpus_allowed}")
         # NOTE DFS ioengine options must come after the ioengine that defines them is selected.
-        self.fio_cmd.update(
-            "job", "pool", self.pool.uuid,
-            f"fio --name=job --pool={self.pool.uuid}")
-        self.fio_cmd.update(
-            "job", "cont", self.container.uuid,
-            f"fio --name=job --cont={self.container.uuid}")
-        self.fio_cmd.hosts = self.hostlist_clients
+        fio_cmd.update(
+            "job", "pool", container.pool.uuid, f"fio --name=job --pool={container.pool.uuid}")
+        fio_cmd.update("job", "cont", container.uuid, f"fio --name=job --cont={container.uuid}")
+        fio_cmd.hosts = self.hostlist_clients
 
         bws = {}
         for rw in Pil4dfsFio._FIO_RW_NAMES:
-            self.fio_cmd.update("job", "rw", rw, f"fio --name=job --rw={rw}")
+            fio_cmd.update("job", "rw", rw, f"fio --name=job --rw={rw}")
 
             params = ", ".join(f"{name}={value}" for name, value in self.fio_params.items())
             self.log.info("Running FIO command: rw=%s, %s", rw, params)
-            self.log.debug("FIO command: %s", str(self.fio_cmd))
-            result = self.fio_cmd.run()
+            self.log.debug("FIO command: %s", str(fio_cmd))
+            result = fio_cmd.run()
             bws[rw] = self._get_bandwidth(result, rw)
             self.log.debug("DFS bandwidths for %s: %s", rw, bws[rw])
 
-        self._destroy_container()
+        container.destroy()
+        container.pool.destroy()
 
         return bws
 

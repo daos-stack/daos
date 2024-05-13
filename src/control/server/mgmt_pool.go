@@ -299,7 +299,7 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 			return nil, errors.Wrap(err, "query on already-created pool failed")
 		}
 
-		resp.SvcLdr = qr.Leader
+		resp.SvcLdr = qr.SvcLdr
 		resp.SvcReps = ranklist.RanksToUint32(ps.Replicas)
 		resp.TgtRanks = ranklist.RanksToUint32(ps.Storage.CreationRanks())
 		resp.TierBytes = ps.Storage.PerRankTierStorage
@@ -938,6 +938,9 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal PoolQuery response")
 	}
+
+	// Preserve compatibility with pre-2.6 callers.
+	resp.Leader = resp.SvcLdr
 
 	return resp, nil
 }

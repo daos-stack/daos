@@ -114,6 +114,13 @@ dtx_metrics_alloc(const char *path, int tgt_id)
 			D_WARN("Failed to create DTX RPC cnt metric for %s: "
 			       DF_RC"\n", dtx_opc_to_str(opc), DP_RC(rc));
 	}
+
+	rc = d_tm_add_metric(&metrics->dpm_total[DTX_PROTO_SRV_RPC_COUNT], D_TM_COUNTER,
+			     "total number of processed sync DTX_COMMIT", "ops",
+			     "%s/ops/sync_dtx_commit/tgt_%u", path, tgt_id);
+	if (rc != DER_SUCCESS)
+		D_WARN("Failed to create sync DTX_COMMIT RPC cnt metric: "DF_RC"\n", DP_RC(rc));
+
 	return metrics;
 }
 
@@ -149,7 +156,7 @@ dtx_handler(crt_rpc_t *rpc)
 	uint32_t		 vers[DTX_REFRESH_MAX] = { 0 };
 	uint32_t		 opc = opc_get(rpc->cr_opc);
 	uint32_t		 committed = 0;
-	uint32_t		*flags;
+	uint32_t		*flags = NULL;
 	int			*ptr;
 	int			 count = DTX_YIELD_CYCLE;
 	int			 i = 0;
@@ -192,15 +199,23 @@ dtx_handler(crt_rpc_t *rpc)
 			i += count;
 		}
 
-		d_tm_inc_counter(dpm->dpm_batched_total,
-				 din->di_dtx_array.ca_count);
-		rc1 = d_tm_get_counter(NULL, &ent_cnt, dpm->dpm_batched_total);
-		D_ASSERT(rc1 == DER_SUCCESS);
+		if (din->di_flags.ca_count > 0)
+			flags = din->di_flags.ca_arrays;
 
-		rc1 = d_tm_get_counter(NULL, &opc_cnt, dpm->dpm_total[opc]);
-		D_ASSERT(rc1 == DER_SUCCESS);
+		if (flags != NULL && (*flags & DRF_SYNC_COMMIT)) {
+			D_ASSERT(din->di_dtx_array.ca_count == 1);
+			d_tm_inc_counter(dpm->dpm_total[DTX_PROTO_SRV_RPC_COUNT], 1);
+		} else {
+			d_tm_inc_counter(dpm->dpm_batched_total,
+					 din->di_dtx_array.ca_count);
+			rc1 = d_tm_get_counter(NULL, &ent_cnt, dpm->dpm_batched_total);
+			D_ASSERT(rc1 == DER_SUCCESS);
 
-		d_tm_set_gauge(dpm->dpm_batched_degree, ent_cnt / (opc_cnt + 1));
+			rc1 = d_tm_get_counter(NULL, &opc_cnt, dpm->dpm_total[opc]);
+			D_ASSERT(rc1 == DER_SUCCESS);
+
+			d_tm_set_gauge(dpm->dpm_batched_degree, ent_cnt / (opc_cnt + 1));
+		}
 
 		break;
 	}

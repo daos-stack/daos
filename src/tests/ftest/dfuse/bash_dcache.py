@@ -7,7 +7,9 @@
 import os
 import stat
 
-from dfuse_test_base import DfuseTestBase
+from apricot import TestWithServers
+from dfuse_utils import get_dfuse, start_dfuse
+from host_utils import get_local_host
 from run_utils import run_remote
 
 SCRIPT = """#!/bin/bash
@@ -33,7 +35,7 @@ cat ${dir_name}/${file_name}
 """
 
 
-class DFuseBashdcacheTest(DfuseTestBase):
+class DFuseBashdcacheTest(TestWithServers):
     # pylint: disable=wrong-spelling-in-docstring
     """Base "Bashdcache" test class.
 
@@ -58,18 +60,19 @@ class DFuseBashdcacheTest(DfuseTestBase):
 
         pool = self.get_pool(connect=False)
         container = self.get_container(pool)
-        self.start_dfuse(self.hostlist_clients, pool, container)
+        dfuse_hosts = get_local_host()
+        dfuse = get_dfuse(self, dfuse_hosts)
+        start_dfuse(self, dfuse, pool, container)
+        fuse_root_dir = dfuse.mount_dir.value
 
-        fuse_root_dir = self.dfuse.mount_dir.value
-
-        with open(os.path.join(fuse_root_dir, "sh_dcache.sh"), "w") as fd:
+        with open(os.path.join(fuse_root_dir, "sh_dcache.sh"), "w", encoding="utf-8") as fd:
             fd.write(SCRIPT)
 
         os.chmod(os.path.join(fuse_root_dir, "sh_dcache.sh"), stat.S_IXUSR | stat.S_IRUSR)
 
         cmd = f"cd {fuse_root_dir}; ./sh_dcache.sh"
 
-        result = run_remote(self.log, self.hostlist_clients, env_str + cmd)
+        result = run_remote(self.log, dfuse_hosts, env_str + cmd)
         if not result.passed:
             self.fail(f'"{cmd}" failed on {result.failed_hosts}')
         if result.output[0].stdout[0][:5] != "Hello":
@@ -78,6 +81,6 @@ class DFuseBashdcacheTest(DfuseTestBase):
         # Turn on directory caching in bash
         env_str = env_str + "export D_IL_NO_DCACHE_BASH=0; "
 
-        result = run_remote(self.log, self.hostlist_clients, env_str + cmd)
+        result = run_remote(self.log, dfuse_hosts, env_str + cmd)
         if result.passed:
             self.fail(f'"{cmd}" failed on {result.failed_hosts}')
