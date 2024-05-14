@@ -130,7 +130,7 @@ class OSAUtils(MdtestBase, IorTestBase):
                       sudo rm -rf /mnt/daos{}/{}/vos-*". \
                       format(ip_addr, port_val, self.pool.uuid)
             else:
-                cmd = None  # To appeas pylint
+                cmd = None  # To appease pylint
                 self.fail("Not supported engine per server configuration")
             run_command(cmd)
 

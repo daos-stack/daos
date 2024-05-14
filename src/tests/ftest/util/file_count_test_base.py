@@ -26,13 +26,13 @@ class FileCountTestBase(IorTestBase, MdtestBase):
         # Create a container and add it to the overall list of containers
         container = self.get_container(self.pool, create=False)
         # don't include oclass in daos cont cmd; include rd_fac based on the class
-        properties = container.properties.value
         if oclass:
+            properties = container.properties.value
             container.oclass.update(oclass)
             redundancy_factor = extract_redundancy_factor(oclass)
             rd_fac = 'rd_fac:{}'.format(str(redundancy_factor))
             properties = (",").join(filter(None, [properties, rd_fac]))
-        container.properties.update(properties)
+            container.properties.update(properties)
         container.create()
 
         return container
