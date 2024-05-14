@@ -24,7 +24,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
-	. "github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -37,7 +37,6 @@ const (
 	verbsExample     = "../../../../utils/config/examples/daos_server_verbs.yml"
 	mdOnSSDExample   = "../../../../utils/config/examples/daos_server_mdonssd.yml"
 	defaultConfig    = "../../../../utils/config/daos_server.yml"
-	legacyConfig     = "../../../../utils/config/examples/daos_server_unittests.yml"
 )
 
 var (
@@ -151,9 +150,9 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
-			testDir, cleanup := CreateTestDir(t)
+			testDir, cleanup := test.CreateTestDir(t)
 			defer cleanup()
 			testFile := filepath.Join(testDir, "test.yml")
 
@@ -169,7 +168,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 				err = configA.Validate(log)
 			}
 
-			CmpErr(t, tt.expErr, err)
+			test.CmpErr(t, tt.expErr, err)
 			if tt.expErr != nil {
 				return
 			}
@@ -218,7 +217,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 }
 
 func TestServerConfig_Constructed(t *testing.T) {
-	testDir, cleanup := CreateTestDir(t)
+	testDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
 	// First, load a config based on the server config with all options uncommented.
@@ -406,7 +405,7 @@ func TestServerConfig_updateServerConfig(t *testing.T) {
 
 func TestServerConfig_MDonSSD_Constructed(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	mdOnSSDCfg, err := mockConfigFromFile(t, mdOnSSDExample)
 	if err != nil {
@@ -469,7 +468,7 @@ func TestServerConfig_MDonSSD_Constructed(t *testing.T) {
 }
 
 func TestServerConfig_Validation(t *testing.T) {
-	testDir, cleanup := CreateTestDir(t)
+	testDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
 	// First, load a config based on the server config with all options uncommented.
@@ -950,7 +949,7 @@ func TestServerConfig_Validation(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			if tt.extraConfig == nil {
 				tt.extraConfig = noopExtra
@@ -961,7 +960,7 @@ func TestServerConfig_Validation(t *testing.T) {
 
 			log.Debugf("baseCfg metadata: %+v", cfg.Metadata)
 
-			CmpErr(t, tt.expErr, cfg.Validate(log))
+			test.CmpErr(t, tt.expErr, cfg.Validate(log))
 			if tt.expErr != nil || tt.expConfig == nil {
 				return
 			}
@@ -974,7 +973,7 @@ func TestServerConfig_Validation(t *testing.T) {
 }
 
 func TestServerConfig_SetNrHugepages(t *testing.T) {
-	testDir, cleanup := CreateTestDir(t)
+	testDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
 	// First, load a config based on the server config with all options uncommented.
@@ -1100,7 +1099,7 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			// Apply test case changes to basic config
 			cfg := tc.extraConfig(baseCfg(t, testFile))
@@ -1109,19 +1108,19 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 				HugepageSizeKiB: 2048,
 			}
 
-			CmpErr(t, tc.expErr, cfg.SetNrHugepages(log, mi))
+			test.CmpErr(t, tc.expErr, cfg.SetNrHugepages(log, mi))
 			if tc.expErr != nil {
 				return
 			}
 
-			AssertEqual(t, tc.expNrHugepages, cfg.NrHugepages,
+			test.AssertEqual(t, tc.expNrHugepages, cfg.NrHugepages,
 				"unexpected number of hugepages set in config")
 		})
 	}
 }
 
 func TestServerConfig_SetRamdiskSize(t *testing.T) {
-	testDir, cleanup := CreateTestDir(t)
+	testDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
 	// First, load a config based on the server config with all options uncommented.
@@ -1283,7 +1282,7 @@ func TestServerConfig_SetRamdiskSize(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			// Apply test case changes to basic config
 			cfg := tc.extraConfig(baseCfg(t, testFile))
@@ -1297,7 +1296,7 @@ func TestServerConfig_SetRamdiskSize(t *testing.T) {
 				MemTotalKiB:     int(val),
 			}
 
-			CmpErr(t, tc.expErr, cfg.SetRamdiskSize(log, mi))
+			test.CmpErr(t, tc.expErr, cfg.SetRamdiskSize(log, mi))
 			if tc.expErr != nil {
 				return
 			}
@@ -1313,7 +1312,7 @@ func TestServerConfig_SetRamdiskSize(t *testing.T) {
 				if scmTiers[0].Class != storage.ClassRam {
 					t.Fatal("expected scm tier to have class RAM")
 				}
-				AssertEqual(t, tc.expRamdiskSize, int(scmTiers[0].Scm.RamdiskSize),
+				test.AssertEqual(t, tc.expRamdiskSize, int(scmTiers[0].Scm.RamdiskSize),
 					"unexpected ramdisk size set in config")
 			}
 		})
@@ -1341,6 +1340,8 @@ func replaceLine(r io.Reader, w io.Writer, oldTxt, newTxt string) (int, error) {
 }
 
 func replaceFile(t *testing.T, name, oldTxt, newTxt string) {
+	t.Helper()
+
 	// open original file
 	f, err := os.Open(name)
 	if err != nil {
@@ -1361,7 +1362,7 @@ func replaceFile(t *testing.T, name, oldTxt, newTxt string) {
 		t.Fatal(err)
 	}
 	if linesChanged == 0 {
-		t.Fatalf("no recurrences of %q in file %q", oldTxt, name)
+		t.Fatalf("no occurrences of %q in file %q", oldTxt, name)
 	}
 
 	// make sure the tmp file was successfully written to
@@ -1401,32 +1402,13 @@ func TestServerConfig_Parsing(t *testing.T) {
 	}
 
 	// load a config based on the server config with all options uncommented.
-	loadFromDefaultFile := func(t *testing.T, testDir string, matchText, replaceText []string) (*Server, error) {
+	loadFromFile := func(t *testing.T, testDir string, matchText, replaceText []string) (*Server, error) {
 		t.Helper()
 
 		defaultConfigFile := filepath.Join(testDir, sConfigUncomment)
 		uncommentServerConfig(t, defaultConfigFile)
 
 		return cfgFromFile(t, defaultConfigFile, matchText, replaceText)
-	}
-
-	// load a config file with a legacy storage config
-	loadFromLegacyFile := func(t *testing.T, testDir string, matchText, replaceText []string) (*Server, error) {
-		t.Helper()
-
-		lcp := strings.Split(legacyConfig, "/")
-		testLegacyConfigFile := filepath.Join(testDir, lcp[len(lcp)-1])
-		CopyFile(t, legacyConfig, testLegacyConfigFile)
-
-		return cfgFromFile(t, testLegacyConfigFile, matchText, replaceText)
-	}
-
-	loadFromFile := func(t *testing.T, testDir string, matchText, replaceText []string, legacy bool) (*Server, error) {
-		if legacy {
-			return loadFromLegacyFile(t, testDir, matchText, replaceText)
-		}
-
-		return loadFromDefaultFile(t, testDir, matchText, replaceText)
 	}
 
 	for name, tt := range map[string]struct {
@@ -1445,11 +1427,6 @@ func TestServerConfig_Parsing(t *testing.T) {
 			outTxt:      "engine:",
 			expParseErr: errors.New("field engine not found"),
 		},
-		"use legacy servers conf directive rather than engines": {
-			inTxt:          "engines:",
-			outTxt:         "servers:",
-			expValidateErr: errors.New("use \"engines\" instead"),
-		},
 		"duplicates in bdev_list from config": {
 			extraConfig: func(c *Server) *Server {
 				return c.WithEngines(
@@ -1462,7 +1439,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 								WithScmMountPoint("/mnt/daos/2"),
 							storage.NewTierConfig().
 								WithStorageClass("nvme").
-								WithBdevDeviceList(MockPCIAddr(1), MockPCIAddr(1)),
+								WithBdevDeviceList(test.MockPCIAddr(1), test.MockPCIAddr(1)),
 						).
 						WithTargetCount(8))
 			},
@@ -1486,117 +1463,25 @@ func TestServerConfig_Parsing(t *testing.T) {
 				return nil
 			},
 		},
-		"specify legacy servers conf directive in addition to engines": {
-			inTxt:  "engines:",
-			outTxt: "servers:",
-			extraConfig: func(c *Server) *Server {
-				var nilEngineConfig *engine.Config
-				return c.WithEngines(nilEngineConfig)
-			},
-			expValidateErr: errors.New("use \"engines\" instead"),
+		"no bdev_list": {
+			inTxt:          "    bdev_list: [\"0000:81:00.0\", \"0000:82:00.0\"]  # generate regular nvme.conf",
+			outTxt:         "",
+			expValidateErr: errors.New("valid PCI addresses"),
 		},
-		"legacy storage; empty bdev_list": {
-			legacyStorage: true,
-			expCheck: func(c *Server) error {
-				nr := len(c.Engines[0].Storage.Tiers)
-				if nr != 1 {
-					return errors.Errorf("want 1 storage tier, got %d", nr)
-				}
-				return nil
-			},
+		"no bdev_class": {
+			inTxt:          "    class: nvme",
+			outTxt:         "",
+			expValidateErr: errors.New("no storage class"),
 		},
-		"legacy storage; no bdev_list": {
-			legacyStorage: true,
-			inTxt:         "    bdev_list: []",
-			outTxt:        "",
-			expCheck: func(c *Server) error {
-				nr := len(c.Engines[0].Storage.Tiers)
-				if nr != 1 {
-					return errors.Errorf("want 1 storage tier, got %d", nr)
-				}
-				return nil
-			},
-		},
-		"legacy storage; no bdev_class": {
-			legacyStorage: true,
-			inTxt:         "    bdev_class: nvme",
-			outTxt:        "",
-			expCheck: func(c *Server) error {
-				nr := len(c.Engines[0].Storage.Tiers)
-				if nr != 1 {
-					return errors.Errorf("want 1 storage tier, got %d", nr)
-				}
-				return nil
-			},
-		},
-		"legacy storage; non-empty bdev_list": {
-			legacyStorage: true,
-			inTxt:         "    bdev_list: []",
-			outTxt:        "    bdev_list: [0000:80:00.0]",
-			expCheck: func(c *Server) error {
-				nr := len(c.Engines[0].Storage.Tiers)
-				if nr != 2 {
-					return errors.Errorf("want 2 storage tiers, got %d", nr)
-				}
-				return nil
-			},
-		},
-		"legacy storage; non-empty bdev_busid_range": {
-			legacyStorage: true,
-			inTxtList: []string{
-				"    bdev_list: []", "    bdev_busid_range: \"\"",
-			},
-			outTxtList: []string{
-				"    bdev_list: [0000:80:00.0]", "    bdev_busid_range: \"0x00-0x80\"",
-			},
-			expCheck: func(c *Server) error {
-				nr := len(c.Engines[0].Storage.Tiers)
-				if nr != 2 {
-					return errors.Errorf("want 2 storage tiers, got %d", nr)
-				}
-				want := storage.MustNewBdevBusRange("0x00-0x80")
-				got := c.Engines[0].Storage.Tiers.BdevConfigs()[0].Bdev.BusidRange
-				if want.String() != got.String() {
-					return errors.Errorf("want %s bus-id range, got %s", want, got)
-				}
-				return nil
-			},
-		},
-		"legacy storage; empty bdev_list; hugepages disabled": {
-			legacyStorage: true,
-			inTxt:         "telemetry_port: 9191",
-			outTxt:        "disable_hugepages: true",
+		"non-empty bdev_list; hugepages disabled": {
+			inTxt:  "disable_hugepages: false",
+			outTxt: "disable_hugepages: true",
 			expCheck: func(c *Server) error {
 				if !c.DisableHugepages {
 					return errors.Errorf("expected hugepages to be disabled")
 				}
 				return nil
 			},
-		},
-		"legacy vmd enable": {
-			inTxt:  "disable_vmd: true",
-			outTxt: "enable_vmd: true",
-			expCheck: func(c *Server) error {
-				if *c.DisableVMD != false {
-					return errors.Errorf("expected vmd to be not disabled")
-				}
-				return nil
-			},
-		},
-		"legacy vmd disable": {
-			inTxt:  "disable_vmd: true",
-			outTxt: "enable_vmd: false",
-			expCheck: func(c *Server) error {
-				if *c.DisableVMD != true {
-					return errors.Errorf("expected vmd to be disabled")
-				}
-				return nil
-			},
-		},
-		"legacy vmd disable; current vmd enable": {
-			inTxt:       "disable_vfio: true",
-			outTxt:      "enable_vmd: true",
-			expParseErr: FaultConfigVMDSettingDuplicate,
 		},
 		"check default system_ram_reserved": {
 			inTxt:  "system_ram_reserved: 5",
@@ -1612,9 +1497,9 @@ func TestServerConfig_Parsing(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
-			testDir, cleanup := CreateTestDir(t)
+			testDir, cleanup := test.CreateTestDir(t)
 			defer cleanup()
 
 			if tt.extraConfig == nil {
@@ -1636,14 +1521,14 @@ func TestServerConfig_Parsing(t *testing.T) {
 				tt.outTxtList = []string{tt.outTxt}
 			}
 
-			config, errParse := loadFromFile(t, testDir, tt.inTxtList, tt.outTxtList, tt.legacyStorage)
-			CmpErr(t, tt.expParseErr, errParse)
+			config, errParse := loadFromFile(t, testDir, tt.inTxtList, tt.outTxtList)
+			test.CmpErr(t, tt.expParseErr, errParse)
 			if tt.expParseErr != nil {
 				return
 			}
 
 			config = tt.extraConfig(config)
-			CmpErr(t, tt.expValidateErr, config.Validate(log))
+			test.CmpErr(t, tt.expValidateErr, config.Validate(log))
 
 			if tt.expCheck != nil {
 				if err := tt.expCheck(config); err != nil {
@@ -1663,7 +1548,7 @@ func TestServerConfig_RelativeWorkingPath(t *testing.T) {
 		"path does not exist": {expErrMsg: "no such file or directory"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			testDir, cleanup := CreateTestDir(t)
+			testDir, cleanup := test.CreateTestDir(t)
 			defer cleanup()
 			testFile := filepath.Join(testDir, "test.yml")
 
@@ -1811,13 +1696,14 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass(storage.ClassNvme.String()).
-						WithBdevDeviceList(MockPCIAddr(1)),
+						WithBdevDeviceList(test.MockPCIAddr(1)),
 				),
 			configB: configB().
 				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass(storage.ClassNvme.String()).
-						WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(1)),
+						WithBdevDeviceList(test.MockPCIAddr(2),
+							test.MockPCIAddr(1)),
 				),
 			expErr: FaultConfigOverlappingBdevDeviceList(1, 0),
 		},
@@ -1826,13 +1712,15 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass(storage.ClassNvme.String()).
-						WithBdevDeviceList(MockPCIAddr(1), MockPCIAddr(2)),
+						WithBdevDeviceList(test.MockPCIAddr(1),
+							test.MockPCIAddr(2)),
 				),
 			configB: configB().
 				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass(storage.ClassNvme.String()).
-						WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(1)),
+						WithBdevDeviceList(test.MockPCIAddr(2),
+							test.MockPCIAddr(1)),
 				),
 			expErr: errors.New("engine 1 overlaps with entries in engine 0"),
 		},
@@ -1852,38 +1740,39 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass(storage.ClassNvme.String()).
-						WithBdevDeviceList(MockPCIAddr(1)),
+						WithBdevDeviceList(test.MockPCIAddr(1)),
 				),
 			configB: configB().
 				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass(storage.ClassNvme.String()).
-						WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(3)),
+						WithBdevDeviceList(test.MockPCIAddr(2),
+							test.MockPCIAddr(3)),
 				),
 			expLog: "engine 1 has 2 but engine 0 has 1",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			conf := DefaultServer().
 				WithFabricProvider("test").
 				WithEngines(tc.configA, tc.configB)
 
 			gotErr := conf.Validate(log)
-			CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 
 			if tc.expLog != "" {
 				hasEntry := strings.Contains(buf.String(), tc.expLog)
-				AssertTrue(t, hasEntry, "expected entries not found in log")
+				test.AssertTrue(t, hasEntry, "expected entries not found in log")
 			}
 		})
 	}
 }
 
 func TestServerConfig_SaveActiveConfig(t *testing.T) {
-	testDir, cleanup := CreateTestDir(t)
+	testDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
 	t.Logf("test dir: %s", testDir)
@@ -1903,13 +1792,13 @@ func TestServerConfig_SaveActiveConfig(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			cfg := DefaultServer().WithSocketDir(tc.cfgPath)
 
 			cfg.SaveActiveConfig(log)
 
-			AssertTrue(t, strings.Contains(buf.String(), tc.expLogOut),
+			test.AssertTrue(t, strings.Contains(buf.String(), tc.expLogOut),
 				fmt.Sprintf("expected %q in %q", tc.expLogOut, buf.String()))
 		})
 	}
@@ -1967,15 +1856,15 @@ func TestConfig_detectEngineAffinity(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			detected, err := detectEngineAffinity(log, tc.cfg, tc.affSrcSet...)
-			CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}
 
-			AssertEqual(t, tc.expDetected, detected,
+			test.AssertEqual(t, tc.expDetected, detected,
 				"unexpected detected numa node")
 		})
 	}
@@ -2015,16 +1904,16 @@ func TestConfig_SetNUMAAffinity(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			err := tc.cfg.SetNUMAAffinity(tc.setNUMA)
-			CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}
 
-			AssertEqual(t, tc.expNUMA, *tc.cfg.PinnedNumaNode,
+			test.AssertEqual(t, tc.expNUMA, *tc.cfg.PinnedNumaNode,
 				"unexpected pinned numa node")
-			AssertEqual(t, tc.expNUMA, tc.cfg.Fabric.NumaNodeIndex,
+			test.AssertEqual(t, tc.expNUMA, tc.cfg.Fabric.NumaNodeIndex,
 				"unexpected numa node in fabric config")
-			AssertEqual(t, tc.expNUMA, tc.cfg.Storage.NumaNodeIndex,
+			test.AssertEqual(t, tc.expNUMA, tc.cfg.Storage.NumaNodeIndex,
 				"unexpected numa node in storage config")
 		})
 	}
@@ -2195,7 +2084,7 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 			fabNumaSet := make([]int, 0, len(tc.expFabNumas))
 
 			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.affSrcSet == nil {
 				tc.affSrcSet = []EngineAffinityFn{
@@ -2205,7 +2094,7 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 			}
 
 			gotErr := tc.cfg.SetEngineAffinities(log, tc.affSrcSet...)
-			CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}

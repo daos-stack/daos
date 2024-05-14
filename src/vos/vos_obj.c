@@ -2652,12 +2652,15 @@ vos_obj_iter_empty(struct vos_iterator *iter)
 		D_ASSERT(0);
 		return -DER_INVAL;
 	case VOS_ITER_DKEY:
+		/* fall through */
 	case VOS_ITER_AKEY:
 		if (oiter->it_flags & VOS_IT_DKEY_EV)
 			evt = true;
+		/* fall through */
 	case VOS_ITER_SINGLE:
 		if (!evt)
 			return dbtree_iter_empty(oiter->it_hdl);
+		/* fall through */
 	case VOS_ITER_RECX:
 		return evt_iter_empty(oiter->it_hdl);
 	}
