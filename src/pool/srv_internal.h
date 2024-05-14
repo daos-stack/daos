@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -28,6 +28,16 @@ struct pool_metrics {
 	struct d_tm_node_t	*query_total;
 	struct d_tm_node_t	*query_space_total;
 	struct d_tm_node_t	*evict_total;
+
+	/* service metrics */
+	struct d_tm_node_t      *service_leader;
+	struct d_tm_node_t      *map_version;
+	struct d_tm_node_t      *open_handles;
+	struct d_tm_node_t      *total_targets;
+	struct d_tm_node_t      *disabled_targets;
+	struct d_tm_node_t      *draining_targets;
+	struct d_tm_node_t      *total_ranks;
+	struct d_tm_node_t      *degraded_ranks;
 };
 
 /* Pool thread-local storage */

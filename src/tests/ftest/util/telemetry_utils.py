@@ -9,6 +9,7 @@ import re
 from logging import getLogger
 
 from ClusterShell.NodeSet import NodeSet
+from exception_utils import CommandFailure
 
 
 def _gen_stats_metrics(basename):
@@ -141,6 +142,15 @@ class TelemetryUtils():
     ENGINE_POOL_VOS_SPACE_METRICS = [
         "engine_pool_vos_space_nvme_used",
         "engine_pool_vos_space_scm_used"]
+    ENGINE_POOL_SVC_METRICS = [
+        "engine_pool_svc_degraded_ranks",
+        "engine_pool_svc_disabled_targets",
+        "engine_pool_svc_draining_targets",
+        "engine_pool_svc_leader",
+        "engine_pool_svc_map_version",
+        "engine_pool_svc_open_pool_handles",
+        "engine_pool_svc_total_ranks",
+        "engine_pool_svc_total_targets"]
     ENGINE_POOL_METRICS = ENGINE_POOL_ACTION_METRICS +\
         ENGINE_POOL_BLOCK_ALLOCATOR_METRICS +\
         ENGINE_POOL_CHECKPOINT_METRICS +\
@@ -149,7 +159,8 @@ class TelemetryUtils():
         ENGINE_POOL_OPS_METRICS +\
         ENGINE_POOL_SCRUBBER_METRICS +\
         ENGINE_POOL_VOS_AGGREGATION_METRICS +\
-        ENGINE_POOL_VOS_SPACE_METRICS
+        ENGINE_POOL_VOS_SPACE_METRICS + \
+        ENGINE_POOL_SVC_METRICS
     ENGINE_EVENT_METRICS = [
         "engine_events_dead_ranks",
         "engine_events_last_event_ts",
@@ -472,8 +483,12 @@ class TelemetryUtils():
         host_list = hosts or self.hosts
         self.log.info("Listing telemetry metrics from %s", host_list)
         for host in host_list:
-            data = self.dmg.telemetry_metrics_list(host=host)
             info[host] = []
+            try:
+                data = self.dmg.telemetry_metrics_list(host=host)
+            except CommandFailure as err:
+                self.log.error("Failed to list metrics on %s: %s", host, err)
+                continue
             if "response" in data:
                 if "available_metric_sets" in data["response"]:
                     for entry in data["response"]["available_metric_sets"]:
@@ -535,8 +550,12 @@ class TelemetryUtils():
         host_list = hosts or self.hosts
         self.log.info("Querying telemetry metric %s from %s", name, host_list)
         for host in host_list:
-            data = self.dmg.telemetry_metrics_query(host=host, metrics=name)
             info[host] = {}
+            try:
+                data = self.dmg.telemetry_metrics_query(host=host, metrics=name)
+            except CommandFailure as err:
+                self.log.error("Failed to get metrics for %s: %s", host, err)
+                continue
             if "response" in data:
                 if "metric_sets" in data["response"]:
                     for entry in data["response"]["metric_sets"]:
