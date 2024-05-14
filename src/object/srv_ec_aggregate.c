@@ -2688,7 +2688,7 @@ retry:
 		d_tm_inc_counter(opm->opm_ec_agg_blocked, 1);
 		blocks++;
 		/** Warn once if it goes over 20 times */
-		D_CDEBUG(blocks == 20, D_WARN, DB_EPC,
+		D_CDEBUG(blocks == 20, DLOG_WARN, DB_EPC,
 			 "EC agg hit conflict with VOS agg or discard (nr=%d), retrying...\n",
 			 blocks);
 		ec_aggregate_yield(ec_agg_param);

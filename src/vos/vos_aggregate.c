@@ -2711,7 +2711,7 @@ retry:
 			d_tm_inc_counter(vam->vam_agg_blocked, 1);
 		blocks++;
 		/** Warn once if it goes over 20 times */
-		D_CDEBUG(blocks == 20, D_WARN, DB_EPC,
+		D_CDEBUG(blocks == 20, DLOG_WARN, DB_EPC,
 			 "VOS aggrregation hit conflict (nr=%d), retrying...\n", blocks);
 		close_merge_window(&ad->ad_agg_param.ap_window, rc);
 		vos_aggregate_yield(&ad->ad_agg_param);
@@ -2825,7 +2825,7 @@ retry:
 		 */
 		blocks++;
 		/** Warn once if it goes over 20 times */
-		D_CDEBUG(blocks == 20, D_WARN, DB_EPC,
+		D_CDEBUG(blocks == 20, DLOG_WARN, DB_EPC,
 			 "VOS discard hit conflict (nr=%d), retrying...\n", blocks);
 		if (vam && vam->vam_discard_blocked)
 			d_tm_inc_counter(vam->vam_discard_blocked, 1);
