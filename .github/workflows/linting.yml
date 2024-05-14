@@ -167,9 +167,14 @@ jobs:
     name: Linting Summary
     runs-on: ubuntu-22.04
     needs: [isort, shell-check, log-check, ftest-tags, flake8-lint, doxygen, pylint, codespell]
-    if: ${{ ! success() }}
+    if: ${{ always() && !cancelled() }}
     steps:
       - name: Check if any job failed
         run: |
-          echo "One or more jobs did not succeed"
-          exit 1
+          if [[ "$(echo "${{ join(needs.*.result, ' ') }}" \
+                | tr -s ' ' '\n' | sort -u)" == "success" ]]; then
+            echo "All jobs succeeded"
+          else
+            echo "One or more jobs did not succeed"
+            exit 1
+          fi
