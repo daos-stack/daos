@@ -36,8 +36,8 @@ class DaosContainerOwnerTest(ContSecurityTestBase, PoolSecurityTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=security,container,container_acl,cont_user_sec,cont_group_sec,cont_sec
-        :avocado: tags=DaosContainerSecurityTest,test_container_set_owner_no_check
+        :avocado: tags=security,container,cont_sec,cont_set_owner
+        :avocado: tags=DaosContainerOwnerTest,test_container_set_owner_no_check
         :avocado: tags=test_container_set_owner_no_check_non_posix
         """
         fake_user = "fakeuser"
@@ -81,7 +81,7 @@ class DaosContainerOwnerTest(ContSecurityTestBase, PoolSecurityTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=security,container,container_acl,cont_sec
+        :avocado: tags=security,container,cont_sec,cont_set_owner
         :avocado: tags=DaosContainerOwnerTest,test_container_set_owner_no_check
         :avocado: tags=test_container_set_owner_no_check_posix
         """
