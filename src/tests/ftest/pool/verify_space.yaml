@@ -1,7 +1,9 @@
 hosts:
   test_servers: 3
   test_clients: 1
-timeout: 700
+
+timeout: 600
+
 server_config:
   # Test will require code changes if more than one rank/engine per host
   engines_per_host: 1
@@ -9,27 +11,36 @@ server_config:
     0:
       storage: auto
   system_ram_reserved: 1
+
 pool_rank_0:
   size: 100G
   target_list: [0]
+
 pool_rank_1_a:
   size: 75G
   target_list: [1]
+
 pool_rank_1_b:
   size: 85G
   target_list: [1]
+
 pool_rank_1_c:
   size: 95G
   target_list: [1]
+
 pool_rank_1_2:
   size: 200G
   target_list: [1, 2]
+
 pool_rank_0_1_2:
   size: 175G
   target_list: [0, 1, 2]
+
 container:
   type: POSIX
   control_method: daos
+  register_cleanup: False
+
 ior:
   api: DFS
   dfs_chunk: 1048576
