@@ -110,7 +110,6 @@ static daos_handle_t          eq_list[MAX_EQ];
 uint16_t                      d_eq_count_max;
 uint16_t                      d_eq_count;
 static uint16_t               eq_idx;
-extern uint16_t               d_aio_eq_count_g;
 
 /* Configuration of the Garbage Collector */
 static uint32_t               dcache_size_bits;
@@ -236,8 +235,6 @@ static pthread_mutex_t lock_dirfd;
 static pthread_mutex_t lock_mmap;
 static pthread_mutex_t lock_fd_dup2ed;
 static pthread_mutex_t lock_eqh;
-
-pthread_mutex_t        d_lock_aio_eqs_g;
 
 /* store ! umask to apply on mode when creating file to honor system umask */
 static mode_t          mode_not_umask;
@@ -504,9 +501,6 @@ register_handler(int sig, struct sigaction *old_handler);
 
 static void
 print_summary(void);
-
-extern void
-d_free_aio_ctx(void);
 
 static int       num_fd_dup2ed;
 struct fd_dup2   fd_dup2_list[MAX_FD_DUP2ED];
@@ -6711,9 +6705,6 @@ init_myhook(void)
 	if (rc)
 		return;
 
-	rc = D_MUTEX_INIT(&d_lock_aio_eqs_g, NULL);
-	if (rc)
-		return;
 	rc = D_MUTEX_INIT(&lock_eqh, NULL);
 	if (rc)
 		return;
@@ -6884,9 +6875,6 @@ destroy_all_eqs(void)
 {
 	int i, rc;
 
-	/** destroy EQs created for aio */
-	d_free_aio_ctx();
-
 	/** destroy EQs created by threads */
 	for (i = 0; i < d_eq_count; i++) {
 		rc = daos_eq_destroy(eq_list[i], 0);
@@ -6939,7 +6927,6 @@ finalize_myhook(void)
 
 		finalize_dfs();
 
-		D_MUTEX_DESTROY(&d_lock_aio_eqs_g);
 		D_MUTEX_DESTROY(&lock_eqh);
 		D_MUTEX_DESTROY(&lock_reserve_fd);
 		D_MUTEX_DESTROY(&lock_dfs);
@@ -7103,9 +7090,9 @@ get_eqh(daos_handle_t *eqh)
 
 	rc = pthread_mutex_lock(&lock_eqh);
 	/** create a new EQ if the EQ pool is not full; otherwise round robin EQ use from pool */
-	if (d_eq_count >= (d_eq_count_max - d_aio_eq_count_g)) {
+	if (d_eq_count >= d_eq_count_max) {
 		td_eqh = eq_list[eq_idx++];
-		if (eq_idx == (d_eq_count_max - d_aio_eq_count_g))
+		if (eq_idx == d_eq_count_max)
 			eq_idx = 0;
 	} else {
 		rc = daos_eq_create(&td_eqh);
