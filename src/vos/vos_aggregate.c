@@ -2636,6 +2636,7 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	      int (*yield_func)(void *arg), void *yield_arg, uint32_t flags)
 {
 	struct vos_container	*cont = vos_hdl2cont(coh);
+	struct vos_agg_metrics  *vam  = agg_cont2metrics(cont);
 	struct agg_data		*ad;
 	uint64_t		 feats;
 	daos_epoch_t		 agg_write;
@@ -2705,6 +2706,8 @@ retry:
 		/** Hit a conflict with obj_discard.   Rather than exiting, let's
 		 * yield and try again.
 		 */
+		if (vam && vam->vam_agg_blocked)
+			d_tm_inc_counter(vam->vam_agg_blocked, 1);
 		D_DEBUG(DB_EPC, "VOS aggregation hit a conflict, retrying after yield");
 		close_merge_window(&ad->ad_agg_param.ap_window, rc);
 		vos_aggregate_yield(&ad->ad_agg_param);
@@ -2744,8 +2747,6 @@ free_agg_data:
 	D_FREE(ad);
 
 	if (rc < 0) {
-		struct vos_agg_metrics *vam = agg_cont2metrics(cont);
-
 		if (vam && vam->vam_fail_count)
 			d_tm_inc_counter(vam->vam_fail_count, 1);
 	}
@@ -2758,6 +2759,7 @@ vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
 	    int (*yield_func)(void *arg), void *yield_arg)
 {
 	struct vos_container    *cont = vos_hdl2cont(coh);
+	struct vos_agg_metrics  *vam  = agg_cont2metrics(cont);
 	struct agg_data		*ad;
 	int			 type = VOS_ITER_OBJ;
 	int			 rc;
@@ -2816,6 +2818,8 @@ retry:
 		/** Hit an object conflict with EC aggregation.   Rather than exiting, let's
 		 * yield and try again.
 		 */
+		if (vam && vam->vam_discard_blocked)
+			d_tm_inc_counter(vam->vam_discard_blocked, 1);
 		D_DEBUG(DB_EPC, "Discard hit a conflict, retrying after yield");
 		vos_aggregate_yield(&ad->ad_agg_param);
 		goto retry;

@@ -187,6 +187,8 @@ struct vos_agg_metrics {
 	struct d_tm_node_t	*vam_merge_recs;	/* Total merged EV records */
 	struct d_tm_node_t	*vam_merge_size;	/* Total merged size */
 	struct d_tm_node_t	*vam_fail_count;	/* Aggregation failed */
+	struct d_tm_node_t      *vam_agg_blocked;       /* Aggregation waiting for discard */
+	struct d_tm_node_t      *vam_discard_blocked;   /* Discard waiting for aggregation */
 };
 
 struct vos_gc_metrics {

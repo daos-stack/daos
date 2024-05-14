@@ -2608,6 +2608,7 @@ static int
 cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		     uint32_t flags, struct agg_param *agg_param)
 {
+	struct obj_pool_metrics  *opm;
 	struct ec_agg_param	 *ec_agg_param = agg_param->ap_data;
 	vos_iter_param_t	 iter_param = { 0 };
 	struct vos_iter_anchors  anchors = { 0 };
@@ -2658,16 +2659,8 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	agg_reset_entry(&ec_agg_param->ap_agg_entry, NULL, NULL);
 
 retry:
-	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
-			 agg_iterate_pre_cb, agg_iterate_post_cb, ec_agg_param, NULL);
-	if (rc == -DER_BUSY) {
-		/** Hit an object conflict VOS aggregation or discard.   Rather than exiting, let's
-		 * yield and try again.
-		 */
-		D_DEBUG(DB_EPC, "EC agg hit conflict with VOS agg or discard, retrying...");
-		ec_aggregate_yield(ec_agg_param);
-		goto retry;
-	}
+	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors, agg_iterate_pre_cb,
+			 agg_iterate_post_cb, ec_agg_param, NULL);
 
 	/* Post_cb may not being executed in some cases */
 	agg_clear_extents(&ec_agg_param->ap_agg_entry);
@@ -2684,6 +2677,17 @@ retry:
 		 */
 		D_ASSERT(cont->sc_ec_agg_req != NULL);
 		sched_req_sleep(cont->sc_ec_agg_req, 5 * 1000);
+	}
+
+	if (rc == -DER_BUSY) {
+		/** Hit an object conflict VOS aggregation or discard.   Rather than exiting, let's
+		 * yield and try again.
+		 */
+		opm = cont->sc_pool->spc_metrics[DAOS_OBJ_MODULE];
+		d_tm_inc_counter(opm->opm_ec_agg_blocked, 1);
+		D_DEBUG(DB_EPC, "EC agg hit conflict with VOS agg or discard, retrying...");
+		ec_aggregate_yield(ec_agg_param);
+		goto retry;
 	}
 
 update_hae:
