@@ -8,8 +8,7 @@ set -eu -o pipefail
 IFS=' ' read -r -a add_bases <<< "${1:-}"
 origin=origin
 mapfile -t all_bases < <(echo "master"
-                         git branch -r | sed -ne "/\(^  $origin\\/release\\/2.[4-9]\|\
-                                                     ^  $origin\\/release\\/[3-9]\)/s/^  $origin\\///p")
+                         git branch -r | sed -ne "/^  $origin\\/release\\/\(2.[4-9]\|[3-9]\)/s/^  $origin\\///p")
 all_bases+=("${add_bases[@]}")
 TARGET="master"
 min_diff=-1
