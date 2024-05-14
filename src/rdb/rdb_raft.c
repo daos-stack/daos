@@ -1119,7 +1119,6 @@ out:
 /* See rdb_raft_log_offer_single. */
 #define RDB_RAFT_ENTRY_NVOPS 2
 
-/* If entry == NULL, the caller doesn't want to apply the entry. */
 static int
 rdb_raft_entry_count_vops(struct rdb *db, raft_entry_t *entry)
 {
