@@ -130,8 +130,8 @@ jobs:
     name: Pylint check
     runs-on: ubuntu-22.04
     steps:
-      - name: force failure
-        run: exit 1
+      - name: sleep for long time
+        run: sleep 600
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
         with:
