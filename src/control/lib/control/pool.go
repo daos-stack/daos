@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"os/user"
 	"sort"
 	"strconv"
 	"strings"
@@ -30,7 +31,6 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/security/auth"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -52,22 +52,19 @@ func checkUUID(uuidStr string) error {
 
 // formatNameGroup converts system names to principals, If user or group is not
 // provided, the effective user and/or effective group will be used.
-func formatNameGroup(ext auth.UserExt, usr string, grp string) (string, string, error) {
+func formatNameGroup(usr string, grp string) (string, string, error) {
 	if usr == "" || grp == "" {
-		eUsr, err := ext.Current()
+		eUsr, err := user.Current()
 		if err != nil {
 			return "", "", err
 		}
 
 		if usr == "" {
-			usr = eUsr.Username()
+			usr = eUsr.Username
 		}
 		if grp == "" {
-			gid, err := eUsr.Gid()
-			if err != nil {
-				return "", "", err
-			}
-			eGrp, err := ext.LookupGroupID(gid)
+			gid := eUsr.Gid
+			eGrp, err := user.LookupGroupId(gid)
 			if err != nil {
 				return "", "", err
 			}
@@ -154,7 +151,7 @@ func (pcr *PoolCreateReq) MarshalJSON() ([]byte, error) {
 // request, filling in any missing fields with reasonable defaults.
 func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err error) {
 	// ensure pool ownership is set up correctly
-	in.User, in.UserGroup, err = formatNameGroup(&auth.External{}, in.User, in.UserGroup)
+	in.User, in.UserGroup, err = formatNameGroup(in.User, in.UserGroup)
 	if err != nil {
 		return
 	}

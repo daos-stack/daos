@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,14 +8,13 @@ package auth
 
 import (
 	"errors"
-	"fmt"
 	"os/user"
 	"syscall"
 	"testing"
 
 	"google.golang.org/protobuf/proto"
 
-	. "github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/security"
 )
 
@@ -29,7 +28,7 @@ func expectAuthSysErrorForToken(t *testing.T, badToken *Token, expectedErrorMess
 		t.Error("Expected a nil AuthSys")
 	}
 
-	CmpErr(t, errors.New(expectedErrorMessage), err)
+	test.CmpErr(t, errors.New(expectedErrorMessage), err)
 }
 
 // AuthSysFromAuthToken tests
@@ -82,30 +81,61 @@ func TestAuthSysFromAuthToken_SucceedsWithGoodToken(t *testing.T) {
 		t.Fatal("Got a nil AuthSys")
 	}
 
-	AssertEqual(t, authSys.GetStamp(), originalAuthSys.GetStamp(),
+	test.AssertEqual(t, authSys.GetStamp(), originalAuthSys.GetStamp(),
 		"Stamps don't match")
-	AssertEqual(t, authSys.GetMachinename(), originalAuthSys.GetMachinename(),
+	test.AssertEqual(t, authSys.GetMachinename(), originalAuthSys.GetMachinename(),
 		"Machinenames don't match")
-	AssertEqual(t, authSys.GetUser(), originalAuthSys.GetUser(),
+	test.AssertEqual(t, authSys.GetUser(), originalAuthSys.GetUser(),
 		"Owners don't match")
-	AssertEqual(t, authSys.GetGroup(), originalAuthSys.GetGroup(),
+	test.AssertEqual(t, authSys.GetGroup(), originalAuthSys.GetGroup(),
 		"Groups don't match")
-	AssertEqual(t, len(authSys.GetGroups()), len(originalAuthSys.GetGroups()),
+	test.AssertEqual(t, len(authSys.GetGroups()), len(originalAuthSys.GetGroups()),
 		"Group lists aren't the same length")
-	AssertEqual(t, authSys.GetSecctx(), originalAuthSys.GetSecctx(),
+	test.AssertEqual(t, authSys.GetSecctx(), originalAuthSys.GetSecctx(),
 		"Secctx don't match")
 }
 
-// AuthSysRequestFromCreds tests
-
-func TestAuthSysRequestFromCreds_failsIfDomainInfoNil(t *testing.T) {
-	result, err := AuthSysRequestFromCreds(&MockExt{}, nil, nil)
-
-	if result != nil {
-		t.Error("Expected a nil request")
+func testHostnameFn(expErr error, hostname string) func() (string, error) {
+	return func() (string, error) {
+		if expErr != nil {
+			return "", expErr
+		}
+		return hostname, nil
 	}
+}
 
-	ExpectError(t, err, "No credentials supplied", "")
+func testUserFn(expErr error, userName string) func(string) (*user.User, error) {
+	return func(uid string) (*user.User, error) {
+		if expErr != nil {
+			return nil, expErr
+		}
+		return &user.User{
+			Uid:      uid,
+			Gid:      uid,
+			Username: userName,
+		}, nil
+	}
+}
+
+func testGroupFn(expErr error, groupName string) func(string) (*user.Group, error) {
+	return func(gid string) (*user.Group, error) {
+		if expErr != nil {
+			return nil, expErr
+		}
+		return &user.Group{
+			Gid:  gid,
+			Name: groupName,
+		}, nil
+	}
+}
+
+func testGroupNamesFn(expErr error, groupNames ...string) func() ([]string, error) {
+	return func() ([]string, error) {
+		if expErr != nil {
+			return nil, expErr
+		}
+		return groupNames, nil
+	}
 }
 
 func getTestCreds(uid uint32, gid uint32) *security.DomainInfo {
@@ -116,44 +146,10 @@ func getTestCreds(uid uint32, gid uint32) *security.DomainInfo {
 	return security.InitDomainInfo(creds, "test")
 }
 
-func TestAuthSysRequestFromCreds_returnsAuthSys(t *testing.T) {
-	ext := &MockExt{}
-	uid := uint32(15)
-	gid := uint32(2001)
-	gids := []uint32{1, 2, 3}
-	expectedUser := "myuser"
-	expectedGroup := "mygroup"
-	expectedGroupList := []string{"group1", "group2", "group3"}
-	creds := getTestCreds(uid, gid)
+func verifyCredential(t *testing.T, cred *Credential, expHostname, expUserPrinc, expGroupPrinc string, expGroupPrincs ...string) {
+	t.Helper()
 
-	ext.LookupUserIDResult = &MockUser{
-		username: expectedUser,
-		groupIDs: gids,
-	}
-	ext.LookupGroupIDResults = []*user.Group{
-		{
-			Name: expectedGroup,
-		},
-	}
-
-	for _, grp := range expectedGroupList {
-		ext.LookupGroupIDResults = append(ext.LookupGroupIDResults,
-			&user.Group{
-				Name: grp,
-			})
-	}
-
-	result, err := AuthSysRequestFromCreds(ext, creds, nil)
-
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("Credential was nil")
-	}
-
-	token := result.GetToken()
+	token := cred.GetToken()
 	if token == nil {
 		t.Fatal("Token was nil")
 	}
@@ -163,111 +159,128 @@ func TestAuthSysRequestFromCreds_returnsAuthSys(t *testing.T) {
 	}
 
 	authsys := &Sys{}
-	err = proto.Unmarshal(token.GetData(), authsys)
+	err := proto.Unmarshal(token.GetData(), authsys)
 	if err != nil {
 		t.Fatal("Failed to unmarshal token data")
 	}
 
-	if authsys.GetUser() != expectedUser+"@" {
+	if authsys.GetMachinename() != expHostname {
+		t.Errorf("AuthSys had bad hostname: %v", authsys.GetMachinename())
+	}
+
+	if authsys.GetUser() != expUserPrinc {
 		t.Errorf("AuthSys had bad username: %v", authsys.GetUser())
 	}
 
-	if authsys.GetGroup() != expectedGroup+"@" {
+	if authsys.GetGroup() != expGroupPrinc {
 		t.Errorf("AuthSys had bad group name: %v", authsys.GetGroup())
 	}
 
 	for i, group := range authsys.GetGroups() {
-		if group != expectedGroupList[i]+"@" {
+		if group != expGroupPrincs[i] {
 			t.Errorf("AuthSys had bad group in list (idx %v): %v", i, group)
 		}
 	}
 }
 
-func TestAuthSysRequestFromCreds_UidLookupFails(t *testing.T) {
-	ext := &MockExt{}
-	uid := uint32(15)
-	creds := getTestCreds(uid, 500)
+func TestAuth_GetSignedCred(t *testing.T) {
+	testHostname := "test-host.domain.foo"
+	testUsername := "test-user"
+	testGroup := "test-group"
+	testGroupList := []string{"group1", "group2", "group3"}
 
-	ext.LookupUserIDErr = errors.New("LookupUserID test error")
-	expectedErr := fmt.Errorf("Failed to lookup uid %v: %v", uid,
-		ext.LookupUserIDErr)
-
-	result, err := AuthSysRequestFromCreds(ext, creds, nil)
-
-	if result != nil {
-		t.Error("Expected a nil result")
+	expectedHostname := "test-host"
+	expectedUser := testUsername + "@"
+	expectedGroup := testGroup + "@"
+	expectedGroupList := make([]string, len(testGroupList))
+	for i, group := range testGroupList {
+		expectedGroupList[i] = group + "@"
 	}
 
-	if err == nil {
-		t.Fatal("Expected an error")
-	}
-
-	if err.Error() != expectedErr.Error() {
-		t.Errorf("Expected error '%v', got '%v'", expectedErr, err)
-	}
-}
-
-func TestAuthSysRequestFromCreds_GidLookupFails(t *testing.T) {
-	ext := &MockExt{}
-	gid := uint32(205)
-	creds := getTestCreds(12, gid)
-
-	ext.LookupUserIDResult = &MockUser{
-		username: "user@",
-		groupIDs: []uint32{1, 2},
-	}
-
-	ext.LookupGroupIDErr = errors.New("LookupGroupID test error")
-	expectedErr := fmt.Errorf("Failed to lookup gid %v: %v", gid,
-		ext.LookupGroupIDErr)
-
-	result, err := AuthSysRequestFromCreds(ext, creds, nil)
-
-	if result != nil {
-		t.Error("Expected a nil result")
-	}
-
-	if err == nil {
-		t.Fatal("Expected an error")
-	}
-
-	if err.Error() != expectedErr.Error() {
-		t.Errorf("Expected error '%v', got '%v'", expectedErr, err)
-	}
-}
-
-func TestAuthSysRequestFromCreds_GroupIDListFails(t *testing.T) {
-	ext := &MockExt{}
-	creds := getTestCreds(12, 15)
-	testUser := &MockUser{
-		username: "user@",
-		groupIDs: []uint32{1, 2},
-	}
-
-	ext.LookupUserIDResult = testUser
-
-	ext.LookupGroupIDResults = []*user.Group{
-		{
-			Name: "group@",
+	for name, tc := range map[string]struct {
+		req    *CredentialRequest
+		expErr error
+	}{
+		"nil request": {
+			req:    nil,
+			expErr: errors.New("is nil"),
 		},
+		"nil DomainInfo": {
+			req:    &CredentialRequest{},
+			expErr: errors.New("No domain info supplied"),
+		},
+		"bad hostname": {
+			req: func() *CredentialRequest {
+				req := NewCredentialRequest(getTestCreds(1, 2), nil)
+				req.getHostnameFn = testHostnameFn(errors.New("bad hostname"), "")
+				return req
+			}(),
+			expErr: errors.New("bad hostname"),
+		},
+		"bad uid": {
+			req: func() *CredentialRequest {
+				req := NewCredentialRequest(getTestCreds(1, 2), nil)
+				req.getUserFn = testUserFn(errors.New("bad uid"), "")
+				return req
+			}(),
+			expErr: errors.New("bad uid"),
+		},
+		"bad gid": {
+			req: func() *CredentialRequest {
+				req := NewCredentialRequest(getTestCreds(1, 2), nil)
+				req.getGroupFn = testGroupFn(errors.New("bad gid"), "")
+				return req
+			}(),
+			expErr: errors.New("bad gid"),
+		},
+		"bad group IDs": {
+			req: func() *CredentialRequest {
+				req := NewCredentialRequest(getTestCreds(1, 2), nil)
+				req.getGroupIdsFn = testGroupNamesFn(errors.New("bad group IDs"))
+				return req
+			}(),
+			expErr: errors.New("bad group IDs"),
+		},
+		"bad group names": {
+			req: func() *CredentialRequest {
+				req := NewCredentialRequest(getTestCreds(1, 2), nil)
+				req.getGroupNamesFn = testGroupNamesFn(errors.New("bad group names"))
+				return req
+			}(),
+			expErr: errors.New("bad group names"),
+		},
+		"valid": {
+			req: func() *CredentialRequest {
+				req := NewCredentialRequest(getTestCreds(1, 2), nil)
+				req.getHostnameFn = testHostnameFn(nil, testHostname)
+				req.getUserFn = testUserFn(nil, testUsername)
+				req.getGroupFn = testGroupFn(nil, testGroup)
+				req.getGroupNamesFn = testGroupNamesFn(nil, testGroupList...)
+				return req
+			}(),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cred, gotErr := GetSignedCredential(tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			verifyCredential(t, cred, expectedHostname, expectedUser, expectedGroup, expectedGroupList...)
+		})
+	}
+}
+
+func TestAuth_CredentialRequestOverrides(t *testing.T) {
+	req := NewCredentialRequest(getTestCreds(1, 2), nil)
+	req.getHostnameFn = testHostnameFn(nil, "test-host")
+	req.WithUserAndGroup("test-user", "test-group", "test-secondary")
+
+	cred, err := GetSignedCredential(req)
+	if err != nil {
+		t.Fatalf("Failed to get credential: %s", err)
 	}
 
-	testUser.groupIDErr = errors.New("GroupIDs test error")
-	expectedErr := fmt.Errorf("Failed to get group IDs for user %v: %v",
-		testUser.username,
-		testUser.groupIDErr)
-
-	result, err := AuthSysRequestFromCreds(ext, creds, nil)
-
-	if result != nil {
-		t.Error("Expected a nil result")
-	}
-
-	if err == nil {
-		t.Fatal("Expected an error")
-	}
-
-	if err.Error() != expectedErr.Error() {
-		t.Errorf("Expected error '%v', got '%v'", expectedErr, err)
-	}
+	verifyCredential(t, cred, "test-host", "test-user@", "test-group@", "test-secondary@")
 }
