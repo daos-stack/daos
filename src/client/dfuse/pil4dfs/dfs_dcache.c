@@ -684,7 +684,7 @@ dcache_find_insert_act(dfs_dcache_t *dcache, char *path, size_t path_len, dcache
 
 	rc_gc = gc_reclaim(dcache);
 	if (rc_gc != 0)
-		DS_WARN(rc_gc, "Garbage collection of dir cache failed");
+		DL_WARN(rc_gc, "Garbage collection of dir cache failed");
 
 out:
 	D_FREE(key);

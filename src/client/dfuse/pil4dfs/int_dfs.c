@@ -3762,6 +3762,17 @@ closedir(DIR *dirp)
 	}
 	if (!d_hook_enabled)
 		return next_closedir(dirp);
+
+	_Pragma("GCC diagnostic push")
+	_Pragma("GCC diagnostic ignored \"-Wnonnull-compare\"")
+	/* Check whether dirp is NULL or not since application provides dirp */
+	if (!dirp) {
+		D_DEBUG(DB_ANY, "dirp is NULL in closedir(): %d (%s)\n", EINVAL, strerror(EINVAL));
+		errno = EINVAL;
+		return (-1);
+	}
+	_Pragma("GCC diagnostic pop")
+
 	fd = dirfd(dirp);
 
 	if (d_compatible_mode && fd < FD_FILE_BASE) {
@@ -3775,16 +3786,6 @@ closedir(DIR *dirp)
 			return next_closedir(dirp);
 		}
 	}
-
-	_Pragma("GCC diagnostic push")
-	_Pragma("GCC diagnostic ignored \"-Wnonnull-compare\"")
-	/* Check whether dirp is NULL or not since application provides dirp */
-	if (!dirp) {
-		D_DEBUG(DB_ANY, "dirp is NULL in closedir(): %d (%s)\n", EINVAL, strerror(EINVAL));
-		errno = EINVAL;
-		return (-1);
-	}
-	_Pragma("GCC diagnostic pop")
 
 	if (fd >= FD_DIR_BASE) {
 		free_dirfd(fd - FD_DIR_BASE);
@@ -4255,6 +4256,7 @@ setup_fd_0_1_2(void)
 	if (num_fd_dup2ed == 0)
 		return 0;
 
+	D_MUTEX_LOCK(&lock_fd_dup2ed);
 	for (i = 0; i < MAX_FD_DUP2ED; i++) {
 		/* only check fd 0, 1, and 2 */
 		if (fd_dup2_list[i].fd_src >= 0 && fd_dup2_list[i].fd_src <= 2) {
@@ -4266,9 +4268,10 @@ setup_fd_0_1_2(void)
 			/* get a real fd from kernel */
 			fd_tmp = libc_open(d_file_list[idx]->path, open_flag);
 			if (fd_tmp < 0) {
+				error_save = errno;
 				fprintf(stderr, "Error: open %s failed. %d (%s)\n",
 					d_file_list[idx]->path, errno, strerror(errno));
-				return errno;
+				D_GOTO(err, error_save);
 			}
 			/* using dup2() to make sure we get desired fd */
 			fd_new = dup2(fd_tmp, fd);
@@ -4277,7 +4280,7 @@ setup_fd_0_1_2(void)
 				fprintf(stderr, "Error: dup2 failed. %d (%s)\n", errno,
 					strerror(errno));
 				libc_close(fd_tmp);
-				return error_save;
+				D_GOTO(err, error_save);
 			}
 			libc_close(fd_tmp);
 			if (libc_lseek(fd, offset, SEEK_SET) == -1) {
@@ -4285,11 +4288,16 @@ setup_fd_0_1_2(void)
 				fprintf(stderr, "Error: lseek failed to set offset. %d (%s)\n",
 					errno, strerror(errno));
 				libc_close(fd);
-				return error_save;
+				D_GOTO(err, error_save);
 			}
 		}
 	}
+	D_MUTEX_UNLOCK(&lock_fd_dup2ed);
 	return 0;
+
+err:
+	D_MUTEX_UNLOCK(&lock_fd_dup2ed);
+	return error_save;
 }
 
 static int
@@ -6747,7 +6755,7 @@ init_myhook(void)
 	dcache_gc_reclaim_max = DCACHE_GC_RECLAIM_MAX;
 	rc = d_getenv_uint32_t("D_IL_DCACHE_GC_RECLAIM_MAX", &dcache_gc_reclaim_max);
 	if (rc != -DER_SUCCESS && rc != -DER_NONEXIST)
-		DS_WARN(rc, "'D_IL_DCACHE_GC_RECLAIM_MAX' env variable could not be used");
+		DL_WARN(rc, "'D_IL_DCACHE_GC_RECLAIM_MAX' env variable could not be used");
 	if (dcache_gc_reclaim_max == 0) {
 		D_WARN("'D_IL_DCACHE_GC_RECLAIM_MAX' env variable could not be used: value == 0.");
 		dcache_gc_reclaim_max = DCACHE_GC_RECLAIM_MAX;
