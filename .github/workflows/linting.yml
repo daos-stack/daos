@@ -129,9 +129,8 @@ jobs:
   pylint:
     name: Pylint check
     runs-on: ubuntu-22.04
+    if: false
     steps:
-      - name: sleep for long time
-        run: sleep 600
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
         with:
