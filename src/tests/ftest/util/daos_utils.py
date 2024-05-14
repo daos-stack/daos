@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -592,7 +592,8 @@ class DaosCommand(DaosCommandBase):
         return self._get_json_result(
             ("container", "get-prop"), pool=pool, cont=cont, prop=props)
 
-    def container_set_owner(self, pool, cont, user, group, no_check=False):
+    def container_set_owner(self, pool, cont, user=None, group=None, uid=None, gid=None,
+                            no_check=False):
         """Call daos container set-owner.
 
         Args:
@@ -600,6 +601,8 @@ class DaosCommand(DaosCommandBase):
             cont (str): container UUID or label
             user (str): New-user who will own the container.
             group (str): New-group who will own the container.
+            uid (int): with no_check=True, UID to use for user on POSIX container
+            gid (int): with no_check=True, GID to use for group on POSIX container
             no_check (bool): Skip checking if user and group exist locally
 
         Returns:
@@ -612,7 +615,7 @@ class DaosCommand(DaosCommandBase):
         """
         return self._get_result(
             ("container", "set-owner"),
-            pool=pool, cont=cont, user=user, group=group, no_check=no_check)
+            pool=pool, cont=cont, user=user, group=group, uid=uid, gid=gid, no_check=no_check)
 
     def container_set_attr(self, pool, cont, attrs, sys_name=None):
         """Call daos container set-attr.

@@ -18,6 +18,18 @@ free_ace_list(char **str, size_t str_count)
 		D_FREE(str[i]);
 	D_FREE(str);
 }
+
+uid_t
+invalid_uid(void)
+{
+	return (uid_t)-1;
+}
+
+gid_t
+invalid_gid(void)
+{
+	return (gid_t)-1;
+}
 */
 import "C"
 import (
@@ -361,8 +373,10 @@ type containerSetOwnerCmd struct {
 	existingContainerCmd
 
 	User    string `long:"user" short:"u" description:"user who will own the container"`
+	Uid     *int   `long:"uid" description:"with --no-check, specify a uid for POSIX container ownership"`
 	Group   string `long:"group" short:"g" description:"group who will own the container"`
-	NoCheck bool   `long:"no-check" description:"for non-POSIX containers, don't check whether the user/group exists on the local system"`
+	Gid     *int   `long:"gid" description:"with --no-check, specify a gid for POSIX container ownership"`
+	NoCheck bool   `long:"no-check" description:"don't check whether the user/group exists on the local system"`
 }
 
 func (cmd *containerSetOwnerCmd) Execute(args []string) error {
@@ -414,14 +428,35 @@ func (cmd *containerSetOwnerCmd) Execute(args []string) error {
 
 	lType := C.get_dpe_val(&entries[0])
 	if lType == C.DAOS_PROP_CO_LAYOUT_POSIX {
+		uid := C.invalid_uid()
+		gid := C.invalid_gid()
 		if cmd.NoCheck {
-			return errors.New("--no-check is not compatible with POSIX containers")
+			if cmd.User != "" {
+				if cmd.Uid == nil {
+					return errors.New("POSIX container requires --uid to use --no-check")
+				}
+				uid = C.uid_t(*cmd.Uid)
+			}
+
+			if cmd.Group != "" {
+				if cmd.Gid == nil {
+					return errors.New("POSIX container requires --gid to use --no-check")
+				}
+				gid = C.gid_t(*cmd.Gid)
+			}
+		} else if cmd.Uid != nil || cmd.Gid != nil {
+			return errors.New("--no-check is required to use the --uid and --gid options")
 		}
 
-		if err := dfsError(C.dfs_cont_set_owner(ap.cont, user, group)); err != nil {
-			return errors.Wrapf(err, "%s failed", fsOpString((ap.fs_op)))
+		if err := dfsError(C.dfs_cont_set_owner(ap.cont, user, uid, group, gid)); err != nil {
+			return errors.Wrapf(err, "failed to set owner for POSIX container %s",
+				cmd.ContainerID())
 		}
 	} else {
+		if cmd.Uid != nil || cmd.Gid != nil {
+			return errors.New("--uid and --gid options apply for POSIX containers only")
+		}
+
 		var rc C.int
 		if cmd.NoCheck {
 			rc = C.daos_cont_set_owner_no_check(ap.cont, user, group, nil)

@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -438,6 +438,8 @@ class DaosCommandBase(CommandWithSubCommand):
                 super().__init__("set-owner")
                 self.user = FormattedParameter("--user={}")
                 self.group = FormattedParameter("--group={}")
+                self.uid = FormattedParameter("--uid={}")
+                self.gid = FormattedParameter("--gid={}")
                 self.no_check = FormattedParameter("--no-check", False)
 
         class SetPropSubCommand(CommonContainerSubCommand):
