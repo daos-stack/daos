@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,14 +11,17 @@ import (
 	"crypto"
 	"crypto/x509"
 	"encoding/pem"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	"gopkg.in/yaml.v2"
+
+	"github.com/daos-stack/daos/src/control/common/test"
 )
 
 func InsecureTC() *TransportConfig {
@@ -349,6 +352,103 @@ func TestSecurity_DefaultTransportConfigs(t *testing.T) {
 				CertificateConfig{},
 			)); diff != "" {
 				t.Fatalf("(want-, got+)\n %s", diff)
+			}
+		})
+	}
+}
+
+func TestSecurity_ClientUserMap(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfgYaml string
+		expMap  ClientUserMap
+		expErr  error
+	}{
+		"empty": {},
+		"defaultKey": {
+			cfgYaml: fmt.Sprintf(`
+%d:
+  user: whoops
+`, defaultMapKey),
+			expErr: errors.New("reserved"),
+		},
+		"invalid uid (negative)": {
+			cfgYaml: `
+-1:
+  user: whoops
+`,
+			expErr: errors.New("invalid uid"),
+		},
+		"invalid uid (words)": {
+			cfgYaml: `
+blah:
+  user: whoops
+`,
+			expErr: errors.New("invalid uid"),
+		},
+		"invalid mapped user": {
+			cfgYaml: `
+1234:
+user: whoops
+`,
+			expErr: errors.New("unmarshal error"),
+		},
+		"good": {
+			cfgYaml: `
+default:
+  user: banana
+  group: rama
+  groups: [ding, dong]
+1234:
+  user: abc
+  group: def
+  groups: [yabba, dabba, doo]
+5678:
+  user: ghi
+  group: jkl
+  groups: [mno, pqr, stu]
+`,
+			expMap: ClientUserMap{
+				defaultMapKey: {
+					User:   "banana",
+					Group:  "rama",
+					Groups: []string{"ding", "dong"},
+				},
+				1234: {
+					User:   "abc",
+					Group:  "def",
+					Groups: []string{"yabba", "dabba", "doo"},
+				},
+				5678: {
+					User:   "ghi",
+					Group:  "jkl",
+					Groups: []string{"mno", "pqr", "stu"},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var result ClientUserMap
+			err := yaml.Unmarshal([]byte(tc.cfgYaml), &result)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+			if diff := cmp.Diff(tc.expMap, result); diff != "" {
+				t.Fatalf("unexpected ClientUserMap (-want, +got)\n %s", diff)
+			}
+
+			for uid, exp := range tc.expMap {
+				gotUser := result.Lookup(uid)
+				if diff := cmp.Diff(exp.User, gotUser.User); diff != "" {
+					t.Fatalf("unexpected User (-want, +got)\n %s", diff)
+				}
+			}
+
+			if expDefUser, found := tc.expMap[defaultMapKey]; found {
+				gotDefUser := result.Lookup(1234567)
+				if diff := cmp.Diff(expDefUser, gotDefUser); diff != "" {
+					t.Fatalf("unexpected DefaultUser (-want, +got)\n %s", diff)
+				}
 			}
 		})
 	}
