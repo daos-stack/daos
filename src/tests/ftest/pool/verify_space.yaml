@@ -1,7 +1,7 @@
 hosts:
   test_servers: 3
   test_clients: 1
-timeout: 700
+timeout: 600
 server_config:
   # Test will require code changes if more than one rank/engine per host
   engines_per_host: 1
