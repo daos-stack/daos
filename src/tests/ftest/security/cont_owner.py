@@ -3,8 +3,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import os
-
 import security_test_base as secTestBase
 from cont_security_test_base import ContSecurityTestBase
 from pool_security_test_base import PoolSecurityTestBase
@@ -63,7 +61,7 @@ class DaosContainerOwnerTest(ContSecurityTestBase, PoolSecurityTestBase):
             result = self.container.set_owner(user=fake_user, uid=123, no_check=True)
         self.verify_daos_pool_cont_result(result, "set owner with uid", "fail",
                                           'for POSIX containers only')
-        
+
         # Using GID not allowed for non-POSIX
         with self.container.no_exception():
             result = self.container.set_owner(group=fake_grp, gid=123, no_check=True)
@@ -116,7 +114,7 @@ class DaosContainerOwnerTest(ContSecurityTestBase, PoolSecurityTestBase):
         # No-check flag missing, but uid/gid supplied
         with self.container.no_exception():
             result = self.container.set_owner(user=fake_user, uid=123, group=fake_grp, gid=456)
-        self.verify_daos_pool_cont_result(result, "set owner with uid/gid without no-check", "fail", 
+        self.verify_daos_pool_cont_result(result, "set owner with uid/gid without no-check", "fail",
                                           '--no-check is required')
 
         # Supply new uid and gid with --no-check
