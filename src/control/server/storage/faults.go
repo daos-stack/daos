@@ -107,8 +107,8 @@ func FaultConfigRamdiskUnderMinMem(confSize, memRamdiskMin uint64) *fault.Fault 
 func FaultDeviceWithFsNoMountpoint(dev, tgt string) *fault.Fault {
 	return storageFault(
 		code.StorageDeviceWithFsNoMountpoint,
-		fmt.Sprintf("filesystem on device %s but mount-point path %s does not exist", dev,
-			tgt),
+		fmt.Sprintf("filesystem exists on device %s but mount-point path %s does not exist",
+			dev, tgt),
 		"check the mount-point path exists and if not create it before trying again",
 	)
 }

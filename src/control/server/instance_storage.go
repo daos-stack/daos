@@ -78,17 +78,15 @@ func createPublishFormatRequiredFunc(publish func(*events.RASEvent), hostname st
 	}
 }
 
-func (ei *EngineInstance) checkScmNeedFormat(mdFmtNeeded bool) (bool, error) {
+func (ei *EngineInstance) checkScmNeedFormat() (bool, error) {
 	msgIdx := fmt.Sprintf("instance %d", ei.Index())
 
-	cfg, err := ei.storage.GetScmConfig()
-	if err != nil {
-		return false, err
-	}
-	ramdiskScm := cfg.Class == "ram"
-
 	if ei.storage.ControlMetadataPathConfigured() {
-		if !ramdiskScm {
+		cfg, err := ei.storage.GetScmConfig()
+		if err != nil {
+			return false, err
+		}
+		if cfg.Class != "ram" {
 			return false, storage.FaultBdevConfigRolesWithDCPM
 		}
 		if !ei.storage.BdevRoleMetaConfigured() {
@@ -96,20 +94,10 @@ func (ei *EngineInstance) checkScmNeedFormat(mdFmtNeeded bool) (bool, error) {
 		}
 		ei.log.Debugf("scm class is ram and bdev role meta configured")
 
-		// Always reformat ramdisk in MD-on-SSD mode if control metadata intact.
-		if !mdFmtNeeded {
-			err := ei.storage.FormatScm(true)
-			if err != nil {
-				return false, errors.Wrapf(err, "%s: format ramdisk", msgIdx)
-			}
-
-			return false, nil
-		}
-
 		return true, nil
 	}
 
-	scmFmtNeeded, err := ei.storage.ScmNeedsFormat()
+	needsScmFormat, err := ei.storage.ScmNeedsFormat()
 	if err != nil {
 		if fault.IsFaultCode(err, code.StorageDeviceWithFsNoMountpoint) {
 			return false, err
@@ -119,7 +107,7 @@ func (ei *EngineInstance) checkScmNeedFormat(mdFmtNeeded bool) (bool, error) {
 		return true, nil
 	}
 
-	return scmFmtNeeded, nil
+	return needsScmFormat, nil
 }
 
 // awaitStorageReady blocks until instance has storage available and ready to be used.
@@ -141,11 +129,19 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context) error {
 	}
 	ei.log.Debugf("%s: needsMetaFormat: %t", msgIdx, needsMetaFormat)
 
-	needsScmFormat, err := ei.checkScmNeedFormat(needsMetaFormat)
+	needsScmFormat, err := ei.checkScmNeedFormat()
 	if err != nil {
 		return err
 	}
 	ei.log.Debugf("%s: needsScmFormat: %t", msgIdx, needsScmFormat)
+
+	// Always reformat ramdisk in MD-on-SSD mode if control metadata intact.
+	if ei.storage.ControlMetadataPathConfigured() && !needsMetaFormat {
+		if err := ei.storage.FormatScm(true); err != nil {
+			return errors.Wrapf(err, "%s: format ramdisk", msgIdx)
+		}
+		needsScmFormat = false
+	}
 
 	if !needsMetaFormat && !needsScmFormat {
 		ei.log.Debugf("%s: no SCM format required; checking for superblock", msgIdx)
