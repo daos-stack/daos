@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -93,6 +93,7 @@ class CriticalIntegrationWithoutServers(TestWithoutServers):
         result_client_server = daos_server_version_list[0] == dmg_version_list[0]
 
         # libfabric version check
+        # pylint: disable-next=unsupported-binary-operation
         all_nodes = self.hostlist_servers | self.hostlist_clients
         libfabric_version_cmd = "clush -S -b -w {} {}/fi_info --version".format(
             all_nodes, libfabric_path)

@@ -374,8 +374,11 @@ class ErasureCodeSingle(TestWithServers):
     def start_online_single_operation(self, operation, parity=1):
         """Do Write/Read operation with single data type.
 
+        Raises:
+            ValueError: if operation is invalid
+
         Args:
-            operation (str): Write/Read operation
+            operation (str): WRITE or READ operation
         """
         # Create the single data Write/Read threads
         if operation == 'WRITE':
@@ -385,6 +388,8 @@ class ErasureCodeSingle(TestWithServers):
             job = threading.Thread(target=self.read_single_type_dataset,
                                    kwargs={"results": self.out_queue,
                                            "parity": parity})
+        else:
+            raise ValueError(f'Invalid operation: {operation}')
 
         # Launch the single data write/read thread
         job.start()
