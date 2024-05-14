@@ -3,6 +3,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import os
+
 import security_test_base as secTestBase
 from cont_security_test_base import ContSecurityTestBase
 from pool_security_test_base import PoolSecurityTestBase
@@ -17,7 +19,7 @@ class DaosContainerOwnerTest(ContSecurityTestBase, PoolSecurityTestBase):
 
     def _create_cont_with_acl(self, cont_type):
         # Set up an ACL that will allow us to reclaim the container
-        acl_file_name = "cont_test_owner_acl.txt"
+        acl_file_name = os.path.join(self.tmp, "cont_test_owner_acl.txt")
         acl_entries = [
             secTestBase.acl_entry("user", self.current_user, "rwdaAtTo"),
         ]
