@@ -2643,6 +2643,7 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	bool			 has_agg_write;
 	int			 rc;
 	bool			 run_agg = false;
+	int                      blocks  = 0;
 
 	D_DEBUG(DB_TRACE, "epr: %lu -> %lu\n", epr->epr_lo, epr->epr_hi);
 	D_ASSERT(epr != NULL);
@@ -2708,7 +2709,10 @@ retry:
 		 */
 		if (vam && vam->vam_agg_blocked)
 			d_tm_inc_counter(vam->vam_agg_blocked, 1);
-		D_DEBUG(DB_EPC, "VOS aggregation hit a conflict, retrying after yield");
+		blocks++;
+		/** Warn once if it goes over 20 times */
+		D_CDEBUG(blocks == 20, D_WARN, DB_EPC,
+			 "VOS aggrregation hit conflict (nr=%d), retrying...\n", blocks);
 		close_merge_window(&ad->ad_agg_param.ap_window, rc);
 		vos_aggregate_yield(&ad->ad_agg_param);
 		goto retry;
@@ -2764,6 +2768,7 @@ vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
 	int			 type = VOS_ITER_OBJ;
 	int			 rc;
 	int			 mode = oidp == NULL ? AGG_MODE_DISCARD : AGG_MODE_OBJ_DISCARD;
+	int                      blocks = 0;
 
 	D_ASSERT(epr != NULL);
 	D_ASSERTF(epr->epr_lo <= epr->epr_hi,
@@ -2818,9 +2823,12 @@ retry:
 		/** Hit an object conflict with EC aggregation.   Rather than exiting, let's
 		 * yield and try again.
 		 */
+		blocks++;
+		/** Warn once if it goes over 20 times */
+		D_CDEBUG(blocks == 20, D_WARN, DB_EPC,
+			 "VOS discard hit conflict (nr=%d), retrying...\n", blocks);
 		if (vam && vam->vam_discard_blocked)
 			d_tm_inc_counter(vam->vam_discard_blocked, 1);
-		D_DEBUG(DB_EPC, "Discard hit a conflict, retrying after yield");
 		vos_aggregate_yield(&ad->ad_agg_param);
 		goto retry;
 	}

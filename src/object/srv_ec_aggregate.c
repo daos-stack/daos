@@ -2613,6 +2613,7 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	vos_iter_param_t	 iter_param = { 0 };
 	struct vos_iter_anchors  anchors = { 0 };
 	int			 rc = 0;
+	int                       blocks       = 0;
 
 	/*
 	 * Avoid calling into vos_aggregate() when aborting aggregation
@@ -2685,7 +2686,11 @@ retry:
 		 */
 		opm = cont->sc_pool->spc_metrics[DAOS_OBJ_MODULE];
 		d_tm_inc_counter(opm->opm_ec_agg_blocked, 1);
-		D_DEBUG(DB_EPC, "EC agg hit conflict with VOS agg or discard, retrying...");
+		blocks++;
+		/** Warn once if it goes over 20 times */
+		D_CDEBUG(blocks == 20, D_WARN, DB_EPC,
+			 "EC agg hit conflict with VOS agg or discard (nr=%d), retrying...\n",
+			 blocks);
 		ec_aggregate_yield(ec_agg_param);
 		goto retry;
 	}
