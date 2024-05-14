@@ -1119,102 +1119,7 @@ out:
 /* See rdb_raft_log_offer_single. */
 #define RDB_RAFT_ENTRY_NVOPS 2
 
-/*
- * Must invoke no more than RDB_RAFT_ENTRY_NVOPS VOS TX operations directly
- * (i.e., not including those invoked by rdb_tx_apply and
- * rdb_raft_update_node).
- */
-static int
-rdb_raft_log_offer_single(struct rdb *db, raft_entry_t *entry, uint64_t index, rdb_vos_tx_t vtx)
-{
-	d_iov_t			keys[2];
-	d_iov_t			values[2];
-	struct rdb_entry	header;
-	int			n = 0;
-	bool			crit;
-	int			rc;
-
-	D_ASSERTF(index == db->d_lc_record.dlr_tail, DF_U64" == "DF_U64"\n",
-		  index, db->d_lc_record.dlr_tail);
-
-	/*
-	 * If this is an rdb_tx entry, apply it. Note that the updates involved
-	 * won't become visible to queries until entry index is committed.
-	 * (Implicit queries resulted from rdb_kvs cache lookups won't happen
-	 * until the TX releases the locks for the updates after the
-	 * rdb_tx_commit() call returns.)
-	 */
-	if (entry->type == RAFT_LOGTYPE_NORMAL) {
-		rc = rdb_tx_apply(db, index, entry->data.buf, entry->data.len,
-				  rdb_raft_lookup_result(db, index), &crit, vtx);
-		if (rc != 0) {
-			DL_ERROR(rc, DF_DB ": failed to apply entry " DF_U64, DP_DB(db), index);
-			return rc;
-		}
-	} else if (raft_entry_is_cfg_change(entry)) {
-		crit = true;
-		rc = rdb_raft_update_node(db, index, entry, vtx);
-		if (rc != 0) {
-			DL_ERROR(rc, DF_DB ": failed to update replicas " DF_U64, DP_DB(db), index);
-			return rc;
-		}
-	} else {
-		D_ERROR(DF_DB": unknown entry "DF_U64" type: %d\n", DP_DB(db), index, entry->type);
-		return -DER_IO;
-	}
-
-	/*
-	 * Persist the header and the data (if nonempty). Discard the unused
-	 * entry->id.
-	 */
-	header.dre_term = entry->term;
-	header.dre_type = entry->type;
-	header.dre_size = entry->data.len;
-	keys[n] = rdb_lc_entry_header;
-	d_iov_set(&values[n], &header, sizeof(header));
-	n++;
-	if (entry->data.len > 0) {
-		keys[n] = rdb_lc_entry_data;
-		d_iov_set(&values[n], entry->data.buf, entry->data.len);
-		n++;
-	}
-	rc = rdb_lc_update(db->d_lc, index, RDB_LC_ATTRS, crit, n, keys, values, vtx);
-	if (rc != 0) {
-		DL_ERROR(rc, DF_DB ": failed to persist entry " DF_U64, DP_DB(db), index);
-		return rc;
-	}
-
-	/* Replace entry->data.buf with the data's persistent memory address. */
-	if (entry->data.len > 0) {
-		d_iov_set(&values[0], NULL, entry->data.len);
-		rc = rdb_lc_lookup(db->d_lc, index, RDB_LC_ATTRS, &rdb_lc_entry_data, &values[0]);
-		if (rc != 0) {
-			DL_ERROR(rc, DF_DB ": failed to look up entry " DF_U64 " data", DP_DB(db),
-				 index);
-			return rc;
-		}
-		entry->data.buf = values[0].iov_buf;
-	} else {
-		entry->data.buf = NULL;
-	}
-
-	/* Update the log tail. See the log tail assertion above. */
-	db->d_lc_record.dlr_tail++;
-	d_iov_set(&values[0], &db->d_lc_record, sizeof(db->d_lc_record));
-	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_lc, &values[0], vtx);
-	if (rc != 0) {
-		DL_ERROR(rc, DF_DB ": failed to update log tail " DF_U64, DP_DB(db),
-			 db->d_lc_record.dlr_tail);
-		db->d_lc_record.dlr_tail--;
-		return rc;
-	}
-
-	D_DEBUG(DB_TRACE, DF_DB": appended entry "DF_U64": term=%ld type=%s buf=%p len=%u\n",
-		DP_DB(db), index, entry->term, rdb_raft_entry_type_str(entry->type),
-		entry->data.buf, entry->data.len);
-	return 0;
-}
-
+/* If entry == NULL, the caller doesn't want to apply the entry. */
 static int
 rdb_raft_entry_count_vops(struct rdb *db, raft_entry_t *entry)
 {
@@ -1241,13 +1146,175 @@ rdb_raft_entry_count_vops(struct rdb *db, raft_entry_t *entry)
 	return count;
 }
 
+/*
+ * Must invoke no more than RDB_RAFT_ENTRY_NVOPS VOS TX operations directly
+ * (i.e., not including those invoked by rdb_tx_apply and
+ * rdb_raft_update_node) per VOS TX.
+ */
 static int
-rdb_raft_cb_log_offer(raft_server_t *raft, void *arg, raft_entry_t *entries,
-		      raft_index_t index, int *n_entries)
+rdb_raft_log_offer_single(struct rdb *db, raft_entry_t *entry, uint64_t index)
 {
-	struct rdb     *db = arg;
-	int		i;
-	int		rc = 0;
+	rdb_vos_tx_t     vtx;
+	bool             skip_tx_apply = false;
+	d_iov_t          keys[2];
+	d_iov_t          values[2];
+	struct rdb_entry header;
+	int              n;
+	bool             crit = true;
+	bool             dirtied_tail;
+	bool             dirtied_kvss;
+	int              rc;
+
+retry:
+	/* Initialize or reset per TX variables. */
+	dirtied_tail = false;
+	dirtied_kvss = false;
+
+	/* Begin a VOS TX. */
+	if (skip_tx_apply) {
+		D_ASSERTF(entry->type == RAFT_LOGTYPE_NORMAL, "%d == %d\n", entry->type,
+			  RAFT_LOGTYPE_NORMAL);
+		rc = RDB_RAFT_ENTRY_NVOPS;
+	} else {
+		rc = rdb_raft_entry_count_vops(db, entry);
+		if (rc < 0) {
+			DL_ERROR(rc, DF_DB ": failed to count VOS operations for entry %ld",
+				 DP_DB(db), index);
+			return rc;
+		}
+	}
+	rc = rdb_vos_tx_begin(db, rc /* nvops */, &vtx);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_DB ": failed to begin VOS TX for entry %ld", DP_DB(db), index);
+		return rc;
+	}
+
+	/*
+	 * Update the log tail. To get the same minor epoch for all MC updates
+	 * across different VOS TXs, we update the MC first.
+	 */
+	D_ASSERTF(index == db->d_lc_record.dlr_tail, DF_U64 " == " DF_U64 "\n", index,
+		  db->d_lc_record.dlr_tail);
+	db->d_lc_record.dlr_tail = index + 1;
+	dirtied_tail = true;
+	d_iov_set(&values[0], &db->d_lc_record, sizeof(db->d_lc_record));
+	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_lc, &values[0], vtx);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_DB ": failed to update log tail " DF_U64, DP_DB(db),
+			 db->d_lc_record.dlr_tail);
+		goto out_vtx;
+	}
+
+	if (entry->type == RAFT_LOGTYPE_NORMAL) {
+		if (!skip_tx_apply) {
+			/*
+			 * If this is an rdb_tx entry, apply it. Note that the updates involved
+			 * won't become visible to queries until entry index is committed.
+			 * (Implicit queries resulted from rdb_kvs cache lookups won't happen
+			 * until the TX releases the locks for the updates after the
+			 * rdb_tx_commit() call returns.)
+			 */
+			rc = rdb_tx_apply(db, index, entry->data.buf, entry->data.len,
+					  rdb_raft_lookup_result(db, index), &crit, vtx);
+			if (rc == RDB_TX_APPLY_ERR_DETERMINISTIC) {
+				/*
+				 * We must abort VOS TX to discard any partial application of the
+				 * entry, and begin a new VOS TX to store the entry without applying
+				 * it. The new VOS TX will reuse crit.
+				 */
+				D_DEBUG(DB_TRACE, DF_DB ": deterministic error for entry %ld\n",
+					DP_DB(db), index);
+				rc = -DER_AGAIN;
+				skip_tx_apply = true;
+				goto out_vtx;
+			} else if (rc != 0) {
+				DL_ERROR(rc, DF_DB ": failed to apply entry " DF_U64, DP_DB(db),
+					 index);
+				goto out_vtx;
+			}
+			dirtied_kvss = true;
+		}
+	} else if (raft_entry_is_cfg_change(entry)) {
+		rc = rdb_raft_update_node(db, index, entry, vtx);
+		if (rc != 0) {
+			DL_ERROR(rc, DF_DB ": failed to update replicas " DF_U64, DP_DB(db), index);
+			goto out_vtx;
+		}
+	} else {
+		D_ERROR(DF_DB ": unknown entry " DF_U64 " type: %d\n", DP_DB(db), index,
+			entry->type);
+		rc = -DER_IO;
+		goto out_vtx;
+	}
+
+	/*
+	 * Persist the header and the data (if nonempty). Discard the unused
+	 * entry->id.
+	 */
+	n = 0;
+	header.dre_term = entry->term;
+	header.dre_type = entry->type;
+	header.dre_size = entry->data.len;
+	keys[n] = rdb_lc_entry_header;
+	d_iov_set(&values[n], &header, sizeof(header));
+	n++;
+	if (entry->data.len > 0) {
+		keys[n] = rdb_lc_entry_data;
+		d_iov_set(&values[n], entry->data.buf, entry->data.len);
+		n++;
+	}
+	rc = rdb_lc_update(db->d_lc, index, RDB_LC_ATTRS, crit, n, keys, values, vtx);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_DB ": failed to persist entry " DF_U64, DP_DB(db), index);
+		goto out_vtx;
+	}
+
+	/* Replace entry->data.buf with the data's persistent memory address. */
+	if (entry->data.len > 0) {
+		d_iov_set(&values[0], NULL, entry->data.len);
+		rc = rdb_lc_lookup(db->d_lc, index, RDB_LC_ATTRS, &rdb_lc_entry_data, &values[0]);
+		if (rc != 0) {
+			DL_ERROR(rc, DF_DB ": failed to look up entry " DF_U64 " data", DP_DB(db),
+				 index);
+			goto out_vtx;
+		}
+		entry->data.buf = values[0].iov_buf;
+	} else {
+		entry->data.buf = NULL;
+	}
+
+out_vtx:
+	/* End the VOS TX. If there's an error, revert all cache changes. */
+	rc = rdb_vos_tx_end(db, vtx, rc);
+	if (rc != 0) {
+		if (dirtied_kvss)
+			rdb_kvs_cache_evict(db->d_kvss);
+		if (dirtied_tail)
+			db->d_lc_record.dlr_tail = index;
+		if (rc == -DER_AGAIN && skip_tx_apply) {
+			D_DEBUG(DB_TRACE, DF_DB ": aborted before retrying entry %ld\n", DP_DB(db),
+				index);
+			goto retry;
+		} else {
+			DL_ERROR(rc, DF_DB ": failed to end VOS TX for entry %ld", DP_DB(db),
+				 index);
+			return rc;
+		}
+	}
+
+	D_DEBUG(DB_TRACE, DF_DB ": appended entry %ld: term=%ld type=%s buf=%p len=%u\n", DP_DB(db),
+		index, entry->term, rdb_raft_entry_type_str(entry->type), entry->data.buf,
+		entry->data.len);
+	return 0;
+}
+
+static int
+rdb_raft_cb_log_offer(raft_server_t *raft, void *arg, raft_entry_t *entries, raft_index_t index,
+		      int *n_entries)
+{
+	struct rdb *db = arg;
+	int         i;
+	int         rc = 0;
 
 	if (!db->d_raft_loaded)
 		return 0;
@@ -1259,29 +1326,9 @@ rdb_raft_cb_log_offer(raft_server_t *raft, void *arg, raft_entry_t *entries,
 	 * batching TXs, we can optimize this process further.
 	 */
 	for (i = 0; i < *n_entries; i++) {
-		rdb_vos_tx_t vtx;
-
-		rc = rdb_raft_entry_count_vops(db, &entries[i]);
-		if (rc < 0) {
-			DL_ERROR(rc, DF_DB ": failed to count VOS operations", DP_DB(db));
+		rc = rdb_raft_log_offer_single(db, &entries[i], index + i);
+		if (rc != 0)
 			break;
-		}
-
-		rc = rdb_vos_tx_begin(db, rc, &vtx);
-		if (rc != 0) {
-			DL_ERROR(rc, DF_DB ": failed to begin VOS TX for entry %ld", DP_DB(db),
-				 index);
-			break;
-		}
-
-		rc = rdb_raft_log_offer_single(db, &entries[i], index + i, vtx);
-
-		rc = rdb_vos_tx_end(db, vtx, rc);
-		if (rc != 0) {
-			DL_ERROR(rc, DF_DB ": failed to end VOS TX for entry %ld", DP_DB(db),
-				 index);
-			break;
-		}
 	}
 	*n_entries = i;
 
@@ -2399,10 +2446,9 @@ rdb_raft_load_entry(struct rdb *db, uint64_t index)
 		return rdb_raft_rc(rc);
 	}
 
-	D_DEBUG(DB_TRACE,
-		DF_DB": loaded entry "DF_U64": term=%ld type=%d buf=%p "
-		"len=%u\n", DP_DB(db), index, entry.term, entry.type,
-		entry.data.buf, entry.data.len);
+	D_DEBUG(DB_TRACE, DF_DB ": loaded entry " DF_U64 ": term=%ld type=%s buf=%p len=%u\n",
+		DP_DB(db), index, entry.term, rdb_raft_entry_type_str(entry.type), entry.data.buf,
+		entry.data.len);
 	return 0;
 }
 
@@ -2848,6 +2894,14 @@ rdb_raft_load(struct rdb *db)
 	rc = rdb_raft_load_lc(db);
 	if (rc != 0)
 		goto out;
+
+	D_DEBUG(DB_MD,
+		DF_DB ": term=" DF_U64 " vote=%d lc.uuid=" DF_UUID " lc.base=" DF_U64
+		      " lc.base_term=" DF_U64 " lc.tail=" DF_U64 " lc.aggregated=" DF_U64
+		      " lc.term=" DF_U64 " lc.seq=" DF_U64 "\n",
+		DP_DB(db), term, vote, DP_UUID(db->d_lc_record.dlr_uuid), db->d_lc_record.dlr_base,
+		db->d_lc_record.dlr_base_term, db->d_lc_record.dlr_tail,
+		db->d_lc_record.dlr_aggregated, db->d_lc_record.dlr_term, db->d_lc_record.dlr_seq);
 
 	db->d_raft_loaded = true;
 out:
