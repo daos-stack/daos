@@ -561,7 +561,7 @@ class SoakTestBase(TestWithServers):
         self.used = []
         self.mpi_module = self.params.get("mpi_module", "/run/*", default="mpi/mpich-x86_64")
         self.mpi_module_use = self.params.get(
-            "module_use", "/run/*", default="/usr/share/modulefiles")
+            "mpi_module_use", "/run/*", default="/usr/share/modulefiles")
         enable_sudo = self.params.get("enable_sudo", "/run/*", default=True)
         test_to = self.params.get(self.test_id, os.path.join(test_param, "test_timeout", "*"))
         self.test_name = self.params.get("name", test_param + "*")
