@@ -20,7 +20,7 @@ source ci/provisioning/post_provision_config_common_functions.sh
 source ci/junit.sh
 
 
-: "${MLNX_VER_NUM:=24.04-0.6.6.0-4.18.0}"
+: "${MLNX_VER_NUM:=24.04-0.6.6.0}"
 
 : "${DISTRO:=EL_7}"
 DSL_REPO_var="DAOS_STACK_${DISTRO}_LOCAL_REPO"
