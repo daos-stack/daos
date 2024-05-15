@@ -27,8 +27,19 @@ const defaultMetadataPath = "/mnt/daos"
 type SystemProvider interface {
 	system.IsMountedProvider
 	system.MountProvider
+	system.UnmountProvider
+	Chmod(string, os.FileMode) error
+	Chown(string, int, int) error
+	Getegid() int
+	Geteuid() int
+	Getfs(string) (string, error)
+	GetfsType(path string) (*system.FsType, error)
 	GetfsUsage(string) (uint64, uint64, error)
+	Mkdir(string, os.FileMode) error
 	Mkfs(system.MkfsReq) error
+	ReadFile(string) ([]byte, error)
+	RemoveAll(string) error
+	Stat(string) (os.FileInfo, error)
 }
 
 // Provider provides storage specific capabilities.

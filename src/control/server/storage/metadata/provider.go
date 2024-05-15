@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,17 +17,6 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/mount"
 	"github.com/pkg/errors"
 )
-
-// SystemProvider provides operating system capabilities.
-type SystemProvider interface {
-	system.IsMountedProvider
-	system.MountProvider
-	Mkfs(req system.MkfsReq) error
-	Getfs(device string) (string, error)
-	Chown(string, int, int) error
-	Stat(string) (os.FileInfo, error)
-	GetFsType(path string) (*system.FsType, error)
-}
 
 const defaultDevFS = "ext4"
 

@@ -1,4 +1,3 @@
-//
 // (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -44,22 +43,12 @@ type (
 		UpdateFirmware(deviceUID string, firmwarePath string) error
 	}
 
-	// SystemProvider defines a set of methods to be implemented by a provider
-	// of SCM-specific system capabilities.
-	SystemProvider interface {
-		Mkfs(system.MkfsReq) error
-		Getfs(device string) (string, error)
-		Stat(string) (os.FileInfo, error)
-		Chmod(string, os.FileMode) error
-		Chown(string, int, int) error
-	}
-
 	// Provider encapsulates configuration and logic for
 	// providing SCM management and interrogation.
 	Provider struct {
 		log     logging.Logger
 		backend Backend
-		sys     SystemProvider
+		sys     storage.SystemProvider
 		mounter storage.MountProvider
 	}
 )
@@ -98,7 +87,7 @@ func DefaultProvider(log logging.Logger) *Provider {
 }
 
 // NewProvider returns an initialized *Provider.
-func NewProvider(log logging.Logger, backend Backend, sys SystemProvider, mounter storage.MountProvider) *Provider {
+func NewProvider(log logging.Logger, backend Backend, sys storage.SystemProvider, mounter storage.MountProvider) *Provider {
 	p := &Provider{
 		log:     log,
 		backend: backend,
@@ -173,7 +162,7 @@ func (p *Provider) prepare(req storage.ScmPrepareRequest, scan scanFn) (*storage
 		if len(scanResp.Namespaces) > 0 {
 			for _, ns := range scanResp.Namespaces {
 				nsDev := "/dev/" + ns.BlockDevice
-				isMounted, err := p.IsMounted(nsDev)
+				isMounted, err := p.sys.IsMounted(nsDev)
 				if err != nil {
 					if os.IsNotExist(errors.Cause(err)) {
 						continue
@@ -221,7 +210,7 @@ func (p *Provider) CheckFormat(req storage.ScmFormatRequest) (*storage.ScmFormat
 
 	mntptMissing := false
 
-	isMounted, err := p.IsMounted(req.Mountpoint)
+	isMounted, err := p.sys.IsMounted(req.Mountpoint)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return nil, err
@@ -476,15 +465,4 @@ func (p *Provider) Unmount(req storage.ScmMountRequest) (*storage.MountResponse,
 	return p.mounter.Unmount(storage.MountRequest{
 		Target: req.Target,
 	})
-}
-
-// Stat probes the specified path and returns os level file info.
-func (p *Provider) Stat(path string) (os.FileInfo, error) {
-	return p.sys.Stat(path)
-}
-
-// IsMounted checks to see if the target device or directory is mounted and
-// returns flag to specify whether mounted or a relevant fault.
-func (p *Provider) IsMounted(target string) (bool, error) {
-	return p.mounter.IsMounted(target)
 }
