@@ -67,15 +67,15 @@ The inventory should also contain a set of mandatory and optional variables.
   sub-cluster.
 - **daos\_source\_dir**: mandatory variable only used by the node of the *daos\_dev* group defining
   the path of the directory containing the DAOS source code.
+- **daos\_ofi\_provider**: optional variable (default value: ofi+tcp;ofi_rxm) defining the network
+  provider to be used by the DAOS engines.  It also defines which network rpms driver to install
+  (e.g. ib mellanox driver).
 - **daos\_ofi\_interface**: optional variable only used by the node of the daos\_dev group defining
   the network interface to use.  When this variable is not defined, the network interface is
   arbitrarily selected by DAOS.
 - **daos\_hugepages\_nb**: optional variable (default value: 4096) only used by the nodes of the
-  *daos\_servers* group defining the number of hugepages to be allocated by the linux kernel.
-- **daos\_avocado\_version**: optional variable (default value: "2.4.3") only used by the node of
-  the *daos\_dev* group defining the version of *avocado* to install.
-- **daos\_avocado\_framework\_version**: optional variable (default value: "82.1") only used by the
-  node of the *daos\_dev* group defining the version of *avocado\_framework* to install.
+  *daos\_servers* group.  This variable defines the number of hugepages to be allocated by the linux
+  kernel.
 
 Different file format (e.g. YAML, INI, etc.) and file tree structure are supported to define an
 ansible inventory.  The following simple ansible inventory describe for example in one YAML file
@@ -155,30 +155,10 @@ defined in the inventory. Usage of these two scripts will be detailed in the fol
 ## Installing DAOS Binaries
 
 Building and installing binaries could be done thanks to the generated bash script `daos-make.sh`.
-This last script supports several options and the two sub-commands `install` and `update`.
+This last script supports several options alllowing such as building dependencies or not.
 
 More details on the supported options could be found with running the command with the `--help`
 option.
-
-The `install` sub-command should be used to install/reinstall from scratch all the DAOS binaries and
-their dependencies such as the *spdk* or the *mercury* libraries. For example, the *foo* user could
-use the following command line to install or reinstall the DAOS binaries and its dependencides into
-the `/home/foo/daos/install` directory.
-
-```bash
-/home/foo/daos/daos-make.sh -v -j 32 -f install
-```
-
-When the previous *install* step has been done and the DAOS source code tests have been updated, the
-DAOS binaries could be build and reinstalled thanks to the `update` sub-command.  This last one
-should be far quicker than a full reinstall.
-
-```bash
-/home/foo/daos/daos-make.sh -v -j 32 update
-```
-
-> :bulb: The option `-j 32` (i.e. one per core) seems to be a good compromise between compilation
-> reliability and speed.
 
 ## Launching Functional Tests
 
@@ -191,7 +171,6 @@ with running the command with the `--help` option.
 
 After successfully installing the DAOS binaries and dependencies, the user *foo* could run all the
 test(s) with the tag `hello_world` thanks to the following command line.
-
 
 ```bash
 /home/foo/daos/daos-launch.sh -v -- --nvme=auto  hello_world

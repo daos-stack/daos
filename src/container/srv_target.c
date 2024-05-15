@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -815,6 +815,10 @@ cont_child_stop(struct ds_cont_child *cont_child)
 	 * never be started at all
 	 */
 	cont_child->sc_stopping = 1;
+
+	/* Stop DTX reindex by force. */
+	stop_dtx_reindex_ult(cont_child, true);
+
 	if (cont_child_started(cont_child)) {
 		D_DEBUG(DB_MD, DF_CONT"[%d]: Stopping container\n",
 			DP_CONT(cont_child->sc_pool->spc_uuid,
@@ -895,14 +899,16 @@ cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 			DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id);
 		rc = -DER_SHUTDOWN;
 	} else if (!cont_child_started(cont_child)) {
-		rc = cont_start_agg(cont_child);
-		if (rc != 0)
-			goto out;
+		if (!ds_pool_skip_for_check(pool_child->spc_pool)) {
+			rc = cont_start_agg(cont_child);
+			if (rc != 0)
+				goto out;
 
-		rc = dtx_cont_register(cont_child);
-		if (rc != 0) {
-			cont_stop_agg(cont_child);
-			goto out;
+			rc = dtx_cont_register(cont_child);
+			if (rc != 0) {
+				cont_stop_agg(cont_child);
+				goto out;
+			}
 		}
 
 		d_list_add_tail(&cont_child->sc_link, &pool_child->spc_cont_list);
@@ -1197,10 +1203,6 @@ cont_child_destroy_one(void *vin)
 			ABT_cond_wait(cont->sc_dtx_resync_cond, cont->sc_mutex);
 		ABT_mutex_unlock(cont->sc_mutex);
 
-		/* Give chance to DTX reindex ULT for exit. */
-		while (unlikely(cont->sc_dtx_reindex))
-			ABT_thread_yield();
-
 		/* Make sure checksum scrubbing has stopped */
 		ABT_mutex_lock(cont->sc_mutex);
 		if (cont->sc_scrubbing) {
@@ -1290,7 +1292,9 @@ ds_cont_tgt_destroy_handler(crt_rpc_t *rpc)
 	D_DEBUG(DB_MD, DF_CONT": handling rpc %p\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc);
 
-	rc = ds_cont_tgt_destroy(in->tdi_pool_uuid, in->tdi_uuid);
+	if (!DAOS_FAIL_CHECK(DAOS_CHK_CONT_ORPHAN))
+		rc = ds_cont_tgt_destroy(in->tdi_pool_uuid, in->tdi_uuid);
+
 	out->tdo_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p %d " DF_RC "\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc, out->tdo_rc, DP_RC(rc));
@@ -1602,7 +1606,7 @@ err_dtx:
 		  DF_UUID": %d\n", DP_UUID(cont_uuid), hdl->sch_cont->sc_open);
 
 	hdl->sch_cont->sc_open--;
-	dtx_cont_close(hdl->sch_cont);
+	dtx_cont_close(hdl->sch_cont, true);
 
 err_cont:
 	if (daos_handle_is_valid(poh)) {
@@ -1736,7 +1740,7 @@ cont_close_hdl(uuid_t cont_hdl_uuid)
 		D_ASSERT(cont_child->sc_open > 0);
 		cont_child->sc_open--;
 		if (cont_child->sc_open == 0)
-			dtx_cont_close(cont_child);
+			dtx_cont_close(cont_child, false);
 
 		D_DEBUG(DB_MD, DF_CONT": closed (%d): hdl="DF_UUID"\n",
 			DP_CONT(cont_child->sc_pool->spc_uuid, cont_child->sc_uuid),
@@ -1767,8 +1771,13 @@ ds_cont_tgt_close(uuid_t pool_uuid, uuid_t hdl_uuid)
 
 	uuid_copy(arg.uuid, hdl_uuid);
 
-	return ds_pool_thread_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
-					 PO_COMP_ST_DOWNOUT, cont_close_one_hdl, &arg, 0);
+	/*
+	 * The container might be opened when the target is up, but changed to down when closing.
+	 * We need to attempt to close down/downout targets regardless; it won't take any action
+	 * if it was not opened before. Failure to properly close it will result in container
+	 * destruction failing with EBUSY. (See DAOS-15514)
+	 */
+	return ds_pool_thread_collective(pool_uuid, 0, cont_close_one_hdl, &arg, 0);
 }
 
 struct xstream_cont_query {
@@ -1982,9 +1991,16 @@ ds_cont_tgt_snapshots_update(uuid_t pool_uuid, uuid_t cont_uuid,
 	D_DEBUG(DB_EPC, DF_UUID": refreshing snapshots %d\n",
 		DP_UUID(cont_uuid), snap_count);
 
-	return ds_pool_task_collective(pool_uuid,
-				       PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
-				       cont_snap_update_one, &args, false);
+	/*
+	 * Before initiating the rebuild scan, the iv snap fetch function
+	 * will be invoked. This action may prompt a collective call to up targets
+	 * whose containers have not yet been created. Therefore, we should skip
+	 * the up targets in this scenario. The target property will be updated
+	 * upon initiating container aggregation.
+	 */
+	return ds_pool_task_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
+				       PO_COMP_ST_DOWNOUT | PO_COMP_ST_UP,
+				       cont_snap_update_one, &args, 0);
 }
 
 void

@@ -759,10 +759,7 @@ class DaosServer():
         self._yaml_file.write(yaml.dump(scyaml, encoding='utf-8'))
         self._yaml_file.flush()
 
-        cmd = [daos_server, f'--config={self._yaml_file.name}', 'start', '--insecure']
-
-        if self.conf.args.no_root:
-            cmd.append('--recreate-superblocks')
+        cmd = [daos_server, 'start', f'--config={self._yaml_file.name}', '--insecure']
 
         # pylint: disable=consider-using-with
         self._sp = subprocess.Popen(cmd, env=plain_env)
@@ -2081,10 +2078,13 @@ class PosixTests():
         """Test container object class options"""
         container = create_cont(self.conf, self.pool, ctype="POSIX", label='oclass_test',
                                 oclass='S1', dir_oclass='S2', file_oclass='S4')
-        run_daos_cmd(self.conf,
-                     ['container', 'query',
-                      self.pool.id(), container.id()],
-                     show_stdout=True)
+        rc = run_daos_cmd(self.conf,
+                          ['container', 'query',
+                           self.pool.id(), container.id()],
+                          show_stdout=True, use_json=True)
+        print(rc)
+        assert rc.returncode == 0
+        assert rc.json['response']['object_class'] == 'S1'
 
         dfuse = DFuse(self.server, self.conf, container=container)
         dfuse.use_valgrind = False

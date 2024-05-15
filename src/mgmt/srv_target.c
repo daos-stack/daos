@@ -252,16 +252,84 @@ ds_mgmt_tgt_pool_iterate(int (*cb)(uuid_t uuid, void *arg), void *arg)
 	return common_pool_iterate(dss_storage_path, cb, arg);
 }
 
-static int
-newborn_pool_iterate(int (*cb)(uuid_t uuid, void *arg), void *arg)
+int
+ds_mgmt_newborn_pool_iterate(int (*cb)(uuid_t uuid, void *arg), void *arg)
 {
 	return common_pool_iterate(newborns_path, cb, arg);
 }
 
-static int
-zombie_pool_iterate(int (*cb)(uuid_t uuid, void *arg), void *arg)
+int
+ds_mgmt_zombie_pool_iterate(int (*cb)(uuid_t uuid, void *arg), void *arg)
 {
 	return common_pool_iterate(zombies_path, cb, arg);
+}
+
+static int
+ds_mgmt_pool_exist_internal(uuid_t uuid, const char *dir, const char *fname, int *idx, char **out)
+{
+	char	*path = NULL;
+	int	 rc;
+
+	rc = path_gen(uuid, dss_storage_path, fname, idx, &path);
+	if (rc != 0)
+		goto out;
+
+	rc = access(path, F_OK);
+	if (rc >= 0)
+		D_GOTO(out, rc = 1);
+
+	if (errno == ENOENT)
+		D_GOTO(out, rc = 0);
+
+	D_ERROR("Failed to check existence for "DF_UUID" with name %s, idx %d: "DF_RC"\n",
+		DP_UUID(uuid), fname != NULL ? fname : "<null>", idx != NULL ? *idx : -1,
+		DP_RC(rc));
+
+out:
+	if (rc > 0 && out != NULL)
+		*out = path;
+	else
+		D_FREE(path);
+	return rc;
+}
+
+int
+ds_mgmt_pool_exist(uuid_t uuid)
+{
+	int	rc;
+
+	rc = ds_mgmt_pool_exist_internal(uuid, dss_storage_path, NULL, NULL, NULL);
+	if (rc != 0)
+		goto out;
+
+	rc = ds_mgmt_pool_exist_internal(uuid, newborns_path, NULL, NULL, NULL);
+	if (rc != 0)
+		goto out;
+
+	rc = ds_mgmt_pool_exist_internal(uuid, zombies_path, NULL, NULL, NULL);
+
+out:
+	return rc;
+}
+
+int
+ds_mgmt_tgt_pool_exist(uuid_t uuid, char **path)
+{
+	int	tid = dss_get_module_info()->dmi_tgt_id;
+	int	rc;
+
+	rc = ds_mgmt_pool_exist_internal(uuid, dss_storage_path, VOS_FILE, &tid, path);
+	if (rc != 0)
+		goto out;
+
+	rc = ds_mgmt_pool_exist_internal(uuid, newborns_path, VOS_FILE, &tid, path);
+	if (rc != 0)
+		goto out;
+
+	rc = ds_mgmt_pool_exist_internal(uuid, zombies_path, VOS_FILE, &tid, path);
+
+out:
+	return rc;
 }
 
 struct dead_pool {
@@ -350,7 +418,7 @@ cleanup_leftover_pools(bool zombie_only)
 
 	D_INIT_LIST_HEAD(&dead_list);
 
-	rc = zombie_pool_iterate(cleanup_leftover_cb, &dead_list);
+	rc = ds_mgmt_zombie_pool_iterate(cleanup_leftover_cb, &dead_list);
 	if (rc)
 		D_ERROR("failed to delete SPDK blobs for ZOMBIES pools: "
 			"%d, will try again\n", rc);
@@ -359,7 +427,7 @@ cleanup_leftover_pools(bool zombie_only)
 	if (zombie_only)
 		return;
 
-	rc = newborn_pool_iterate(cleanup_leftover_cb, &dead_list);
+	rc = ds_mgmt_newborn_pool_iterate(cleanup_leftover_cb, &dead_list);
 	if (rc)
 		D_ERROR("failed to delete SPDK blobs for NEWBORNS pools: "
 			"%d, will try again\n", rc);
@@ -666,8 +734,8 @@ tgt_vos_create_one(void *varg)
 	if (rc)
 		return rc;
 
-	rc = vos_pool_create(path, (unsigned char *)vpa->vpa_uuid,
-			     vpa->vpa_scm_size, vpa->vpa_nvme_size, 0, NULL);
+	rc = vos_pool_create(path, (unsigned char *)vpa->vpa_uuid, vpa->vpa_scm_size,
+			     vpa->vpa_nvme_size, 0, 0 /* version */, NULL);
 	if (rc)
 		D_ERROR(DF_UUID": failed to init vos pool %s: %d\n",
 			DP_UUID(vpa->vpa_uuid), path, rc);
@@ -1144,7 +1212,7 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 	tc_out->tc_ranks.ca_arrays = rank;
 	tc_out->tc_ranks.ca_count  = 1;
 
-	rc = ds_pool_start(tc_in->tc_pool_uuid);
+	rc = ds_pool_start(tc_in->tc_pool_uuid, false);
 	if (rc) {
 		D_ERROR(DF_UUID": failed to start pool: "DF_RC"\n",
 			DP_UUID(tc_in->tc_pool_uuid), DP_RC(rc));
@@ -1314,6 +1382,15 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 	ABT_mutex_unlock(pooltgts->dpt_mutex);
 	D_DEBUG(DB_MGMT, DF_UUID": ready to destroy targets\n",
 		DP_UUID(td_in->td_pool_uuid));
+
+	if (engine_in_check()) {
+		rc = chk_engine_pool_stop(td_in->td_pool_uuid, true);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to stop check engine on pool: "DF_RC"\n",
+				DP_UUID(td_in->td_pool_uuid), DP_RC(rc));
+			goto out;
+		}
+	}
 
 	/*
 	 * If there is a local PS replica, its RDB file will be deleted later
@@ -1493,4 +1570,49 @@ ds_mgmt_tgt_map_update_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 
 	out_result->tm_rc += out_source->tm_rc;
 	return 0;
+}
+
+/**
+ * RPC handler for pool shard destroy
+ */
+void
+ds_mgmt_hdlr_tgt_shard_destroy(crt_rpc_t *req)
+{
+	struct mgmt_tgt_shard_destroy_in	*tsdi;
+	struct mgmt_tgt_shard_destroy_out	*tsdo;
+	char					*path = NULL;
+	int					 rc = 0;
+
+	tsdi = crt_req_get(req);
+	tsdo = crt_reply_get(req);
+
+	/*
+	 * The being destroyed one must be down or downout, or not in the pool map.
+	 * It is the RPC sponsor (PS leader)'s duty to guarantee that. Need not to
+	 * stop the pool service.
+	 */
+
+	rc = ds_pool_child_stop(tsdi->tsdi_pool_uuid, true);
+	if (rc != 0 && rc != -DER_NONEXIST)
+		goto out;
+
+	rc = ds_mgmt_tgt_file(tsdi->tsdi_pool_uuid, VOS_FILE, &tsdi->tsdi_shard_idx, &path);
+	if (rc == 0) {
+		rc = unlink(path);
+		if (rc < 0) {
+			if (errno == ENOENT)
+				rc = 0;
+			else
+				rc = daos_errno2der(errno);
+		}
+
+		D_FREE(path);
+	}
+
+out:
+	D_DEBUG(DB_MGMT, "Processed rpc %p to destroy pool "DF_UUIDF" shard %u: "DF_RC"\n",
+		req, DP_UUID(tsdi->tsdi_pool_uuid), tsdi->tsdi_shard_idx, DP_RC(rc));
+
+	tsdo->tsdo_rc = rc;
+	crt_reply_send(req);
 }

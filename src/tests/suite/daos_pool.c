@@ -760,10 +760,11 @@ pool_op_retry(void **state)
 
 	/* TODO: implement dup op detection in ds_pool_update_handler()? */
 #if 0
-	test_set_engine_fail_loc(arg, info.pi_leader, DAOS_MD_OP_PASS_NOREPLY | DAOS_FAIL_ONCE);
+	test_set_engine_fail_loc(arg, leader_rank, DAOS_MD_OP_PASS_NOREPLY | DAOS_FAIL_ALWAYS);
 	print_message("draining rank %d target idx 0 ... ", info.pi_leader);
 	rc = dmg_pool_drain(arg->dmg_config, arg->pool.pool_uuid, arg->group, info.pi_leader, 0);
 	assert_rc_equal(rc, 0);
+	test_set_engine_fail_loc(arg, leader_rank, 0);
 	print_message("success\n");
 #endif
 
@@ -797,20 +798,24 @@ pool_op_retry(void **state)
 	assert_rc_equal(rc, -DER_MISC);
 	print_message("success\n");
 
-	/* pool update ACL entry failure committed, "lost" reply - duplicate RPC retry */
-	test_set_engine_fail_loc(arg, leader_rank, DAOS_MD_OP_FAIL_NOREPLY | DAOS_FAIL_ONCE);
+	/* pool update ACL entry failure committed, "lost" reply - duplicate RPC retry.
+	 * NB: with dmg, fail until cleared (in case control plane "retries")
+	 */
+	test_set_engine_fail_loc(arg, leader_rank, DAOS_MD_OP_FAIL_NOREPLY | DAOS_FAIL_ALWAYS);
 	print_message("test-fail update pool ACL with entry=%s (retry / dup rpc detection)... ",
 		      ace);
 	rc = dmg_pool_update_ace(arg->dmg_config, arg->pool.pool_uuid, arg->group, ace);
 	assert_rc_equal(rc, -DER_MISC);
+	test_set_engine_fail_loc(arg, leader_rank, 0);
 	print_message("success\n");
 
 	/* pool delete ACL entry failure committed, "lost" reply - duplicate RPC retry */
-	test_set_engine_fail_loc(arg, leader_rank, DAOS_MD_OP_FAIL_NOREPLY | DAOS_FAIL_ONCE);
+	test_set_engine_fail_loc(arg, leader_rank, DAOS_MD_OP_FAIL_NOREPLY | DAOS_FAIL_ALWAYS);
 	print_message("test-fail delete pool ACL with principal=%s (retry / dup rpc detection)... ",
 		      principal);
 	rc = dmg_pool_delete_ace(arg->dmg_config, arg->pool.pool_uuid, arg->group, principal);
 	assert_rc_equal(rc, -DER_MISC);
+	test_set_engine_fail_loc(arg, leader_rank, 0);
 	print_message("success\n");
 
 	/* pool set prop failure committed, "lost" reply - duplicate RPC retry */
@@ -821,10 +826,11 @@ pool_op_retry(void **state)
 	print_message("success\n");
 
 	/* pool evict failure committed, "lost" reply - duplicate RPC retry */
-	test_set_engine_fail_loc(arg, leader_rank, DAOS_MD_OP_FAIL_NOREPLY | DAOS_FAIL_ONCE);
+	test_set_engine_fail_loc(arg, leader_rank, DAOS_MD_OP_FAIL_NOREPLY | DAOS_FAIL_ALWAYS);
 	print_message("test-fail to evict pool handles (retry / dup rpc detection)... ");
 	rc = dmg_pool_evict(arg->dmg_config, arg->pool.pool_uuid, arg->group);
 	assert_rc_equal(rc, -DER_MISC);
+	test_set_engine_fail_loc(arg, leader_rank, 0);
 	print_message("success\n");
 
 	/* pool disconnect failure committed, "lost" reply - duplicate RPC retry */

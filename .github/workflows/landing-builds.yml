@@ -12,10 +12,12 @@ on:
       - 'utils/docker/Dockerfile.*'
       - 'utils/scripts/install-*.sh'
       - 'utils/scripts/helpers/*'
-      - utils/ci
-      - ci
+      - utils/ci/**
+      - ci/**
       - requirements-build.txt
       - requirements-utest.txt
+
+permissions: {}
 
 jobs:
 
@@ -86,6 +88,10 @@ jobs:
     name: Run DAOS/NLT tests
     needs: Prepare
     runs-on: ubuntu-22.04
+    permissions:
+      # https://github.com/EnricoMi/publish-unit-test-result-action#permissions
+      checks: write
+      pull-requests: write
     strategy:
       matrix:
         distro: [ubuntu]

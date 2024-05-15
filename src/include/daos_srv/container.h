@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -67,6 +67,7 @@ struct ds_cont_child {
 	uint32_t		 sc_dtx_resyncing:1,
 				 sc_dtx_reindex:1,
 				 sc_dtx_reindex_abort:1,
+				 sc_dtx_delay_reset:1,
 				 sc_dtx_registered:1,
 				 sc_props_fetched:1,
 				 sc_stopping:1,
@@ -264,5 +265,15 @@ typedef int(*cont_rdb_iter_cb_t)(uuid_t pool_uuid, uuid_t cont_uuid, struct rdb_
 int ds_cont_rdb_iterate(struct cont_svc *svc, cont_rdb_iter_cb_t iter_cb, void *cb_arg);
 int ds_cont_rf_check(uuid_t pool_uuid, uuid_t cont_uuid, struct rdb_tx *tx);
 
+int ds_cont_existence_check(struct cont_svc *svc, uuid_t uuid, daos_prop_t **prop);
+
+int ds_cont_destroy_orphan(struct cont_svc *svc, uuid_t uuid);
+
+int ds_cont_iterate_labels(struct cont_svc *svc, rdb_iterate_cb_t cb, void *arg);
+
+int ds_cont_set_label(struct cont_svc *svc, uuid_t uuid, daos_prop_t *prop_in,
+		      daos_prop_t *prop_old, bool for_svc);
+
 int ds_cont_fetch_ec_agg_boundary(void *ns, uuid_t cont_uuid);
+
 #endif /* ___DAOS_SRV_CONTAINER_H_ */

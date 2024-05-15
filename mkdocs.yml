@@ -8,7 +8,7 @@ repo_name: daos-stack/daos
 repo_url: https://github.com/daos-stack/daos
 # edit_uri: blob/release/2.6/docs/
 edit_uri: blob/master/docs/
-copyright: Copyright 2016-2023 Intel Corporation
+copyright: Copyright 2016-2024 Intel Corporation
 
 # Theme
 theme:
@@ -55,18 +55,11 @@ markdown_extensions:
 
 # Page tree
 nav:
-  - Intro:
-      - 'index.md'
-      - 'Community Wiki': 'https://wiki.daos.io/'
-      - 'Community Roadmap': 'https://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
-      - 'Community Mailing list': 'https://daos.groups.io/g/daos'
-      - 'DAOS in the Cloud': 'cloud/index.md'
-      - 'Issue tracker': 'https://jira.daos.io/'
   - Release Information:
+      - 'index.md'
       - 'Release Notes v2.5': 'release/release_notes.md'
       - 'Support Matrix v2.5': 'release/support_matrix.md'
       - 'Upgrading to v2.5': 'release/upgrading.md'
-      - 'Roadmap': 'https://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
   - Overview:
       - 'Architecture': 'overview/architecture.md'
       - 'Storage Model': 'overview/storage.md'
