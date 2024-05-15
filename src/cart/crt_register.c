@@ -572,7 +572,7 @@ out:
 
 int
 crt_proto_query_int(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, uint32_t *ver, int count,
-		    crt_proto_query_cb_t cb, void *arg, crt_context_t ctx)
+		    uint32_t timeout, crt_proto_query_cb_t cb, void *arg, crt_context_t ctx)
 {
 	crt_rpc_t			*rpc_req = NULL;
 	crt_context_t			 crt_ctx;
@@ -629,7 +629,7 @@ crt_proto_query_int(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, uint32_t *ver
 	proto_query->pq_user_arg = arg;
 	proto_query->pq_coq->coq_base = base_opc;
 
-	rc = crt_req_set_timeout(rpc_req, 5);
+	rc = crt_req_set_timeout(rpc_req, timeout);
 	/** Should only fail if invalid parameter */
 	D_ASSERT(rc == 0);
 
@@ -654,17 +654,17 @@ out:
 }
 
 int
-crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
-		uint32_t *ver, int count, crt_proto_query_cb_t cb, void *arg)
+crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, uint32_t *ver, int count,
+		uint32_t timeout, crt_proto_query_cb_t cb, void *arg)
 {
-	return crt_proto_query_int(tgt_ep, base_opc, ver, count, cb, arg, NULL);
+	return crt_proto_query_int(tgt_ep, base_opc, ver, count, timeout, cb, arg, NULL);
 }
 
 int
 crt_proto_query_with_ctx(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, uint32_t *ver, int count,
-			 crt_proto_query_cb_t cb, void *arg, crt_context_t ctx)
+			 uint32_t timeout, crt_proto_query_cb_t cb, void *arg, crt_context_t ctx)
 {
-	return crt_proto_query_int(tgt_ep, base_opc, ver, count, cb, arg, ctx);
+	return crt_proto_query_int(tgt_ep, base_opc, ver, count, timeout, cb, arg, ctx);
 }
 
 /* local operation, query if base_opc with version number ver is registered. */
