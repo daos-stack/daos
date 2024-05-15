@@ -27,6 +27,7 @@
 #include <abt.h>
 #include <cart/iv.h>
 #include <daos/checksum.h>
+#include <daos_srv/rebuild.h>
 
 /* Standard max length of addresses e.g. URI, PCI */
 #define ADDR_STR_MAX_LEN 128
@@ -686,8 +687,10 @@ struct ds_migrate_status {
 };
 
 int
-ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver, uint32_t generation,
+ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver, unsigned int generation,
+			daos_rebuild_opc_t op, uint32_t leader_rank, uint64_t leader_term,
 			struct ds_migrate_status *dms);
+
 int
 ds_object_migrate_send(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_uuid,
 		       uuid_t cont_hdl_uuid, int tgt_id, uint32_t version, unsigned int generation,
