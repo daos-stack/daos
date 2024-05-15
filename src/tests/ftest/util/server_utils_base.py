@@ -370,8 +370,6 @@ class DaosServerCommand(YamlCommand):
             #   --socket_dir=           Location for all daos_server and
             #                           daos_engine sockets
             #   --insecure              allow for insecure connections
-            #   --recreate-superblocks  recreate missing superblocks rather than
-            #                           failing
             self.port = FormattedParameter("--port={}")
             self.storage = FormattedParameter("--storage={}")
             self.modules = FormattedParameter("--modules={}")
@@ -381,7 +379,6 @@ class DaosServerCommand(YamlCommand):
             self.group = FormattedParameter("--group={}")
             self.sock_dir = FormattedParameter("--socket_dir={}")
             self.insecure = FormattedParameter("--insecure", False)
-            self.recreate = FormattedParameter("--recreate-superblocks", False)
             self.config = FormattedParameter("--config={}", default_config)
 
     class NvmeSubCommand(CommandWithSubCommand):

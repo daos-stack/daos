@@ -761,9 +761,6 @@ class DaosServer():
 
         cmd = [daos_server, 'start', f'--config={self._yaml_file.name}', '--insecure']
 
-        if self.conf.args.no_root:
-            cmd.append('--recreate-superblocks')
-
         # pylint: disable=consider-using-with
         self._sp = subprocess.Popen(cmd, env=plain_env)
 
