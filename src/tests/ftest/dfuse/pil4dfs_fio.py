@@ -80,8 +80,11 @@ class Pil4dfsFio(TestWithServers):
         fio_json = json.loads(fio_stdout)
         return fio_json["jobs"][0][rw]['bw_bytes']
 
-    def _run_fio_dfuse(self):
-        """Run and return the result of running FIO over a DFuse mount point.
+    def _run_fio_pil4dfs(self, ioengine):
+        """Run and return the result of running FIO with the PIL4DFS interception library.
+
+        Args:
+            ioengine (str): Name of the IO engine to use.
 
         Returns:
             dict: Read and Write bandwidths of the FIO command.
@@ -89,15 +92,14 @@ class Pil4dfsFio(TestWithServers):
         """
         container = self._create_container()
 
-        self.log_step("Mounting DFuse mount point")
+        self.log.info("Mounting DFuse mount point")
         dfuse = get_dfuse(self, self.hostlist_clients)
         start_dfuse(self, dfuse, container.pool, container)
-        self.log.debug("Mounted DFuse mount point %s", str(dfuse))
 
         fio_cmd = FioCommand()
         fio_cmd.get_params(self)
         fio_cmd.update_directory(dfuse.mount_dir.value)
-        fio_cmd.update("global", "ioengine", "psync", "fio --name=global --ioengine='psync'")
+        fio_cmd.update("global", "ioengine", ioengine, f"fio --name=global --ioengine='{ioengine}'")
         fio_cmd.update(
             "global", "numjobs", self.fio_numjobs,
             f"fio --name=global --numjobs={self.fio_numjobs}")
@@ -111,12 +113,11 @@ class Pil4dfsFio(TestWithServers):
         for rw in Pil4dfsFio._FIO_RW_NAMES:
             fio_cmd.update("job", "rw", rw, f"fio --name=job --rw={rw}")
 
-            params = ", ".join(f"{name}={value}" for name, value in self.fio_params.items())
-            self.log.info("Running FIO command: rw=%s, %s", rw, params)
             self.log.debug("FIO command: LD_PRELOAD=%s %s", fio_cmd.env['LD_PRELOAD'], str(fio_cmd))
             result = fio_cmd.run()
             bws[rw] = self._get_bandwidth(result, rw)
-            self.log.debug("DFuse bandwidths for %s: %s", rw, bws[rw])
+            self.log.info(
+                "FIO bandwidths with PIL4DFS: ioengine=%s, rw=%s, bw=%s", ioengine, rw, bws[rw])
 
         dfuse.stop()
         container.destroy()
@@ -152,12 +153,10 @@ class Pil4dfsFio(TestWithServers):
         for rw in Pil4dfsFio._FIO_RW_NAMES:
             fio_cmd.update("job", "rw", rw, f"fio --name=job --rw={rw}")
 
-            params = ", ".join(f"{name}={value}" for name, value in self.fio_params.items())
-            self.log.info("Running FIO command: rw=%s, %s", rw, params)
             self.log.debug("FIO command: %s", str(fio_cmd))
             result = fio_cmd.run()
             bws[rw] = self._get_bandwidth(result, rw)
-            self.log.debug("DFS bandwidths for %s: %s", rw, bws[rw])
+            self.log.info("FIO bandwidths with DFS: rw=%s, bw=%s", rw, bws[rw])
 
         container.destroy()
         container.pool.destroy()
@@ -168,9 +167,11 @@ class Pil4dfsFio(TestWithServers):
         """Jira ID: DAOS-14657.
 
         Test Description:
-            Run FIO over DFUSE mount point with PIL4DFS interception library
+            Run FIO with psync ioengine and the PIL4DFS interception library
+            Run FIO with libaio ioengine and the PIL4DFS interception library
             Run FIO with DFS ioengine
-            Check bandwidth consistency
+            Check bandwidth consistency of FIO with psync ioengine and DFS ioengine
+            Check bandwidth consistency of FIO with libaio ioengine and DFS ioengine
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
@@ -182,22 +183,26 @@ class Pil4dfsFio(TestWithServers):
             bw_deltas[name] = self.params.get(
                 name.lower(), "/run/test_pil4dfs_vs_dfs/bw_deltas/*", 0)
 
-        self.log_step("Running FIO with DFuse")
-        dfuse_bws = self._run_fio_dfuse()
+        dfuse_bws = {}
+        for ioengine in ['psync', 'libaio']:
+            self.log_step(f"Running FIO with {ioengine} and the PIL4DFS interception library")
+            dfuse_bws[ioengine] = self._run_fio_pil4dfs(ioengine)
 
         self.log_step("Running FIO with DFS")
         dfs_bws = self._run_fio_dfs()
 
-        self.log_step("Comparing FIO bandwidths of DFuse and DFS")
-        for rw in Pil4dfsFio._FIO_RW_NAMES:
-            delta = abs(dfuse_bws[rw] - dfs_bws[rw]) * 100 / max(dfuse_bws[rw], dfs_bws[rw])
-            self.log.debug(
-                "Comparing %s bandwidths: delta=%.2f%%, DFuse=%s (%iB), DFS=%s (%iB)",
-                rw, delta, bytes_to_human(dfuse_bws[rw]), dfuse_bws[rw],
-                bytes_to_human(dfs_bws[rw]), dfs_bws[rw])
-            if bw_deltas[rw] <= delta:
-                self.log.info(
-                    "FIO %s bandwidth difference should be < %i%%: got=%.2f%%",
-                    rw, bw_deltas[rw], delta)
+        for ioengine in ['psync', 'libaio']:
+            self.log_step(f"Comparing FIO bandwidths of DFuse with {ioengine} ioengine and DFS")
+            for rw in Pil4dfsFio._FIO_RW_NAMES:
+                delta = abs(dfuse_bws[ioengine][rw] - dfs_bws[rw]) * 100
+                delta /= max(dfuse_bws[ioengine][rw], dfs_bws[rw])
+                self.log.debug(
+                    "Comparing %s bandwidths: delta=%.2f%%, DFuse=%s (%iB), DFS=%s (%iB)",
+                    rw, delta, bytes_to_human(dfuse_bws[ioengine][rw]), dfuse_bws[ioengine][rw],
+                    bytes_to_human(dfs_bws[rw]), dfs_bws[rw])
+                if bw_deltas[rw] <= delta:
+                    self.log.info(
+                        "FIO %s bandwidth difference should be < %i%%: got=%.2f%%",
+                        rw, bw_deltas[rw], delta)
 
         self.log_step("Test passed")
