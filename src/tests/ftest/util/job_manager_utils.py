@@ -294,11 +294,15 @@ class JobManager(ExecutableCommand):
 
         Raises:
             CommandFailure: if there is an error running the command
+
+        Returns:
+            CmdResult: result of the command
         """
         if callable(self.register_cleanup_method):
             # Stop any running processes started by this job manager when the test completes
+            # pylint: disable=not-callable
             self.register_cleanup_method(stop_job_manager, job_manager=self)
-        super().run(raise_exception)
+        return super().run(raise_exception)
 
     def stop(self):
         """Stop the subprocess command and kill any job processes running on hosts.
