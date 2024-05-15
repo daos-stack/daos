@@ -37,6 +37,8 @@ struct crt_protocol_info {
  * If the same value can be set via ENV variable as well as
  * a field, the field takes the precedence.
  */
+// ALEXMOD - add missing cio options (to match existing envariables) for 2.8?
+//
 typedef struct crt_init_options {
 	/**
 	 * Global RPC timeout.
@@ -103,6 +105,12 @@ typedef int		crt_status_t;
  */
 typedef d_string_t	crt_group_id_t;
 
+// ALEXMOD - should we bump these?
+// Note: We should look if we can lower them down. 
+// Look into using linux constants
+//
+// On this we should also tie constants between cart and daos together.
+
 /** max length of the group ID string including the trailing '\0' */
 #define CRT_GROUP_ID_MAX_LEN	(64)
 
@@ -136,8 +144,12 @@ typedef struct {
 /** CaRT context handle */
 typedef void *crt_context_t;
 
+// ALEXMOD remove crt_phy_addr_t type / rename
+
 /** Physical address string, e.g., "bmi+tcp://localhost:3344". */
 typedef d_string_t crt_phy_addr_t;
+
+// ALEXMOD - remove deprecated envs like this
 #define CRT_PHY_ADDR_ENV	"CRT_PHY_ADDR_STR"
 
 /**

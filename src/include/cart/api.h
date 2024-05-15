@@ -369,6 +369,13 @@ crt_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 int
 crt_req_set_endpoint(crt_rpc_t *req, crt_endpoint_t *tgt_ep);
 
+// ALEXMOD - today once rpc is sent out it cannot be re-used with a different endpoint
+// and instead has to be deleted/re-created. Consider for 2.8 
+
+// Notes: There might be issue with not knowing whether rpc is fully completed and can be
+// reused, so we need to be careful.
+
+
 /**
  * Set the timeout value for an RPC request.
  *
@@ -474,6 +481,10 @@ crt_req_get(crt_rpc_t *rpc)
 	return rpc->cr_input;
 }
 
+
+// ALEXMOD -- we keep adding header accessor functions 
+// consider adding crt_req_info_get/set() apis instead
+
 /**
  * Return originator/source rank
  *
@@ -549,6 +560,7 @@ crt_reply_get(crt_rpc_t *rpc)
 int
 crt_req_abort(crt_rpc_t *req);
 
+
 /**
  * Abort all in-flight RPC requests targeting rank
  *
@@ -569,6 +581,13 @@ crt_rank_abort(d_rank_t rank);
 int
 crt_rank_abort_all(crt_group_t *grp);
 
+
+//ALEXMOD - remove crt_ep_abort(). it has 2 uses inside of cart today
+//
+//
+// Notes: we need to create local tests using these apis just to see the behavior under differen tproviders and scenarios.
+// Something weird happening at times with aborts, with the behavior not quite what is expected. revisit later
+//
 /**
  * DEPRECATED:
  *
@@ -662,6 +681,16 @@ crt_ep_abort(crt_endpoint_t *ep);
 #define CRT_GEN_GET_TYPE(seq) BOOST_PP_SEQ_ELEM(0, seq)
 #define CRT_GEN_GET_NAME(seq) BOOST_PP_SEQ_ELEM(1, seq)
 #define CRT_GEN_GET_KIND(seq) BOOST_PP_SEQ_ELEM(2, seq)
+
+
+// ALEXMOD - Do we want to consider any changes to how we marshall/unmarshall params to the rpc?
+// e.g. using saveptr and zero copy. multiple issues to address
+// consider in the context of not having to allocate variable sized incoming rpc struct on each rpc
+
+// Note: [jerome] This is perhaps too much here, overcomplicated.
+// saveptr stuff is probably different issue, related but diff
+//
+//
 
 /* convert constructed name into proper name */
 #define crt_proc_struct BOOST_PP_RPAREN() BOOST_PP_CAT BOOST_PP_LPAREN() \
@@ -957,6 +986,28 @@ crt_rpc_srv_register(crt_opcode_t opc, uint32_t flags,
  * CRT bulk APIs.
  ******************************************************************************/
 
+// ALEXMOD - not a cart feature as such, but sometihng to consider -- multi-segment bulks if provider supports
+
+// Notes: its far goal at this point.
+
+-----------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 /**
  * Create a bulk handle
  *
@@ -1111,6 +1162,15 @@ crt_bulk_get_sgnum(crt_bulk_t bulk_hdl, unsigned int *bulk_sgnum);
  */
 int
 crt_bulk_abort(crt_context_t crt_ctx, crt_bulk_opid_t opid);
+
+// ALEXMOD - Also to consider:
+// - bulk timeouts
+// - bulk tracking
+// - how does the bulk abort above even work?:)
+
+
+// Note: how bulk retransmission/abort can lead to floods in daos layer today.
+// n
 
 /******************************************************************************
  * CRT group definition and collective APIs.
@@ -1928,6 +1988,12 @@ crt_register_hlc_error_cb(crt_hlc_error_cb event_handler, void *arg);
 int
 crt_proto_register(struct crt_proto_format *cpf);
 
+
+// ALEXMOD - automatic protocol resolution for 2.8?
+//
+// Notes: Need to consider additional modules and the impact of them having multiple versions.
+// Perhaps then consider ofr 2.8
+//
 /**
  * query tgt_ep if it has registered base_opc with version.
  *
@@ -2054,6 +2120,8 @@ int crt_self_uri_get(int tag, char **uri);
  */
 int crt_self_incarnation_get(uint64_t *incarnation);
 
+
+// ALEXMOD - group_info_get/set are not used or implemented
 /**
  * Retrieve group information containing ranks and associated uris
  *
@@ -2116,6 +2184,11 @@ int crt_group_view_create(crt_group_id_t grpid, crt_group_t **ret_grp);
  *                              on failure.
  */
 int crt_group_view_destroy(crt_group_t *grp);
+
+// ALEXMOD - revisit whole PSR model. Do we even need PSRs or some other method?
+//
+//
+
 
 /**
  * Specify rank to be a PSR for the provided group
