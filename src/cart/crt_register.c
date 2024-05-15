@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -628,6 +628,10 @@ crt_proto_query_int(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, uint32_t *ver
 	proto_query->pq_user_cb = cb;
 	proto_query->pq_user_arg = arg;
 	proto_query->pq_coq->coq_base = base_opc;
+
+	rc = crt_req_set_timeout(rpc_req, 5);
+	/** Should only fail if invalid parameter */
+	D_ASSERT(rc == 0);
 
 	rc = crt_req_send(rpc_req, proto_query_cb, proto_query);
 	if (rc != 0)
