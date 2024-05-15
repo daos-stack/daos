@@ -165,7 +165,7 @@ jobs:
     name: Linting Summary
     runs-on: ubuntu-22.04
     needs: [isort, shell-check, log-check, ftest-tags, flake8-lint, doxygen, pylint, codespell]
-    if: ${{ !cancelled() }}
+    if: (!cancelled())
     steps:
       - name: Check if any job failed
         run: |
