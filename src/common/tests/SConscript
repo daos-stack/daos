@@ -40,6 +40,8 @@ def scons():
                         LIBS=['daos_common_pmem', 'gurt', 'cmocka'])
     tenv.d_test_program('checksum_timing', 'checksum_timing.c', LIBS=['daos_common', 'gurt'])
     tenv.d_test_program('compress_timing', 'compress_timing.c', LIBS=['daos_common', 'gurt'])
+    tenv.d_test_program('rsvc_tests', ['rsvc_tests.c', '../rsvc.c'],
+                        LIBS=['daos_common', 'gurt', 'cmocka'])
 
     unit_env = tenv.Clone()
     unit_env.AppendUnique(OBJPREFIX='utest_')
@@ -77,11 +79,6 @@ def scons():
     unit_env.d_test_program('drpc_tests',
                             source=['drpc_tests.c', '../drpc.c', '../drpc.pb-c.c', mock_test_utils],
                             LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
-
-#    Depends('rsvc_tests', common_mock_ld_script)
-#    unit_env.d_test_program('rsvc_tests',
-#                            source=['rsvc_tests.c', '../rsvc.c'],
-#                            LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
 
 
 if __name__ == "SCons.Script":
