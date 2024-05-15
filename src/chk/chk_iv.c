@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2022-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -213,10 +213,10 @@ chk_iv_update(void *ns, struct chk_iv *iv, uint32_t shortcut, uint32_t sync_mode
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
 		 "CHK iv "DF_X64"/"DF_X64" on rank %u, phase %u, ins_status %u, "
-		 "pool_status %u, to_leader %s, from_psl %s, destroyed %s: rc = %d\n",
+		 "pool_status %u, to_leader %s, from_psl %s: rc = %d\n",
 		 iv->ci_gen, iv->ci_seq, iv->ci_rank, iv->ci_phase, iv->ci_ins_status,
 		 iv->ci_pool_status, iv->ci_to_leader ? "yes" : "no",
-		 iv->ci_from_psl ? "yes" : "no", iv->ci_pool_destroyed ? "yes" : "no", rc);
+		 iv->ci_from_psl ? "yes" : "no", rc);
 
 	return rc;
 }
