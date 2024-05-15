@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -67,6 +67,7 @@ struct ds_cont_child {
 	uint32_t		 sc_dtx_resyncing:1,
 				 sc_dtx_reindex:1,
 				 sc_dtx_reindex_abort:1,
+				 sc_dtx_delay_reset:1,
 				 sc_dtx_registered:1,
 				 sc_props_fetched:1,
 				 sc_stopping:1,

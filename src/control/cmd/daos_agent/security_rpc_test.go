@@ -73,7 +73,7 @@ func setupTestUnixConn(t *testing.T) (*net.UnixConn, func()) {
 	return newConn, cleanup
 }
 
-func getClientConn(t *testing.T, path string) *drpc.ClientConnection {
+func getClientConn(t *testing.T, path string) drpc.DomainSocketClient {
 	client := drpc.NewClientConnection(path)
 	if err := client.Connect(test.Context(t)); err != nil {
 		t.Fatalf("Failed to connect: %v", err)

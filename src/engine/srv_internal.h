@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -124,36 +124,49 @@ struct engine_metrics {
 	struct d_tm_node_t	*meminfo;
 };
 
+struct dss_numa_info {
+	/** numa index for this node */
+	int            ni_idx;
+	/** Number of cores in this node */
+	int            ni_core_nr;
+	/** Allocation bitmap for this numa node */
+	hwloc_bitmap_t ni_coremap;
+};
+
 extern struct engine_metrics dss_engine_metrics;
 
 #define DSS_HOSTNAME_MAX_LEN	255
 
 /** Server node hostname */
-extern char		dss_hostname[];
+extern char                  dss_hostname[];
 /** Server node topology */
-extern hwloc_topology_t	dss_topo;
+extern hwloc_topology_t      dss_topo;
 /** core depth of the topology */
-extern int		dss_core_depth;
+extern int                   dss_core_depth;
 /** number of physical cores, w/o hyper-threading */
-extern int		dss_core_nr;
+extern int                   dss_core_nr;
 /** start offset index of the first core for service XS */
-extern unsigned int	dss_core_offset;
+extern unsigned int          dss_core_offset;
 /** NUMA node to bind to */
-extern int		dss_numa_node;
-/** bitmap describing core allocation */
-extern hwloc_bitmap_t	core_allocation_bitmap;
-/** a copy of the NUMA node object in the topology */
-extern hwloc_obj_t	numa_obj;
-/** number of cores in the given NUMA node */
-extern int		dss_num_cores_numa_node;
-/** Number of offload XS */
-extern unsigned int	dss_tgt_offload_xs_nr;
+extern int                   dss_numa_node;
+/** Number of active numa nodes (only > 1 if multi-socket mode is enabled) */
+extern int                   dss_numa_nr;
 /** number of system XS */
 extern unsigned int	dss_sys_xs_nr;
 /** Number of secondary cart context XS */
 extern unsigned int	dss_sec_xs_nr;
 /** Flag of helper XS as a pool */
-extern bool		dss_helper_pool;
+extern bool                  dss_helper_pool;
+/** Cached numa information */
+extern struct dss_numa_info *dss_numa;
+/** Forward I/O work to neighbor */
+extern bool                  dss_forward_neighbor;
+/** Number of offload XS */
+extern unsigned int          dss_tgt_offload_xs_nr;
+/** Number of offload per socket */
+extern unsigned int          dss_offload_per_numa_nr;
+/** Number of target per socket */
+extern unsigned int          dss_tgt_per_numa_nr;
 
 /** Shadow dss_get_module_info */
 struct dss_module_info *get_module_info(void);
@@ -344,33 +357,6 @@ void ds_iv_fini(void);
 			   ((tgt_id) * ((dss_tgt_offload_xs_nr /\
 			      dss_tgt_nr) + 1) + dss_sys_xs_nr))
 
-
-/**
- * get the VOS target ID of xstream.
- *
- * \param[in]	xs_id	xstream ID
- *
- * \return		VOS target ID (-1 for system XS).
- */
-static inline int
-dss_xs2tgt(int xs_id)
-{
-	D_ASSERTF(xs_id >= 0 && xs_id < DSS_XS_NR_TOTAL,
-		  "invalid xs_id %d, dss_tgt_nr %d, "
-		  "dss_tgt_offload_xs_nr %d.\n",
-		  xs_id, dss_tgt_nr, dss_tgt_offload_xs_nr);
-	if (dss_helper_pool) {
-		if (xs_id < dss_sys_xs_nr ||
-		    xs_id >= dss_sys_xs_nr + dss_tgt_nr)
-			return -1;
-		return xs_id - dss_sys_xs_nr;
-	}
-
-	if (xs_id < dss_sys_xs_nr)
-		return -1;
-	return (xs_id - dss_sys_xs_nr) /
-	       (dss_tgt_offload_xs_nr / dss_tgt_nr + 1);
-}
 
 static inline bool
 dss_xstream_has_nvme(struct dss_xstream *dx)

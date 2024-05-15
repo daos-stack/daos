@@ -41,11 +41,11 @@ server_config:
       storage: auto
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
-  size: 75%
+  size: 90%
 pool_reserved:
-  size: 10%
+  size: 5%
 pool_racer:
-  size: 10%
+  size: 5%
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
@@ -116,6 +116,7 @@ ior_smoke:
     - '32k'
     - '128k'
     - '1m'
+    - '4k'
   segment_count: 1
   dfs_oclass:
     - ["EC_2P1GX", "RP_2GX"]

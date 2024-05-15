@@ -78,10 +78,6 @@ func updateNVMePrepReqFromConfig(log logging.Logger, cfg *config.Server, req *st
 		return nil
 	}
 
-	for idx, ec := range cfg.Engines {
-		ec.ConvertLegacyStorage(log, idx)
-	}
-
 	if cfg.DisableHugepages {
 		return errors.New("hugepage usage has been disabled in the config file")
 	}
@@ -213,12 +209,7 @@ func processNVMePrepReq(log logging.Logger, cfg *config.Server, iommuChecker har
 func prepareNVMe(req storage.BdevPrepareRequest, cmd *nvmeCmd) error {
 	cmd.Debug("Prepare locally-attached NVMe storage...")
 
-	cfgParam := cmd.config
-	if cmd.IgnoreConfig {
-		cfgParam = nil
-	}
-
-	if err := processNVMePrepReq(cmd.Logger, cfgParam, cmd, &req); err != nil {
+	if err := processNVMePrepReq(cmd.Logger, cmd.config, cmd, &req); err != nil {
 		return errors.Wrap(err, "processing request parameters")
 	}
 
@@ -289,12 +280,7 @@ func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd) error {
 		cmd.Debugf("%s: %d removed", msg, resp.NrHugepagesRemoved)
 	}
 
-	cfgParam := cmd.config
-	if cmd.IgnoreConfig {
-		cfgParam = nil
-	}
-
-	if err := processNVMePrepReq(cmd.Logger, cfgParam, cmd, &resetReq); err != nil {
+	if err := processNVMePrepReq(cmd.Logger, cmd.config, cmd, &resetReq); err != nil {
 		return errors.Wrap(err, "processing request parameters")
 	}
 
@@ -358,7 +344,7 @@ func (cmd *scanNVMeCmd) getVMDState() bool {
 		return false
 	}
 
-	return cmd.IgnoreConfig || isVMDEnabled(cmd.config)
+	return isVMDEnabled(cmd.config)
 }
 
 func scanNVMe(cmd *scanNVMeCmd) (_ *storage.BdevScanResponse, errOut error) {
@@ -368,7 +354,7 @@ func scanNVMe(cmd *scanNVMeCmd) (_ *storage.BdevScanResponse, errOut error) {
 
 	req := storage.BdevScanRequest{}
 
-	if !cmd.IgnoreConfig && cmd.config != nil {
+	if cmd.config != nil {
 		req.DeviceList = nvmeBdevsFromCfg(cmd.config)
 		if req.DeviceList.Len() > 0 {
 			cmd.Debugf("applying devices filter derived from config file: %s",
@@ -406,7 +392,7 @@ func scanNVMe(cmd *scanNVMeCmd) (_ *storage.BdevScanResponse, errOut error) {
 }
 
 func (cmd *scanNVMeCmd) Execute(_ []string) (err error) {
-	cmd.Debugf("executing scan nvme comhand: %+v", cmd)
+	cmd.Debugf("executing scan nvme command: %+v", cmd)
 
 	resp, err := scanNVMe(cmd)
 	if err != nil {

@@ -27,6 +27,9 @@
 
 char agent_sys_name[DAOS_SYS_NAME_MAX + 1] = DAOS_DEFAULT_SYS_NAME;
 
+static struct dc_mgmt_sys_info info_g;
+static Mgmt__GetAttachInfoResp *resp_g;
+
 int
 dc_cp(tse_task_t *task, void *data)
 {
@@ -172,7 +175,6 @@ fill_sys_info(Mgmt__GetAttachInfoResp *resp, struct dc_mgmt_sys_info *info)
 		D_NOTE("No system name in GetAttachInfo. Agent may be out of date with libdaos\n");
 	}
 
-	info->crt_ctx_share_addr = hint->crt_ctx_share_addr;
 	info->crt_timeout = hint->crt_timeout;
 	info->srv_srx_set = hint->srv_srx_set;
 
@@ -194,9 +196,9 @@ fill_sys_info(Mgmt__GetAttachInfoResp *resp, struct dc_mgmt_sys_info *info)
 
 	D_DEBUG(DB_MGMT,
 		"GetAttachInfo Provider: %s, Interface: %s, Domain: %s,"
-		"CRT_CTX_SHARE_ADDR: %u, CRT_TIMEOUT: %u, "
+		"CRT_TIMEOUT: %u, "
 		"FI_OFI_RXM_USE_SRX: %d, CRT_SECONDARY_PROVIDER: %d\n",
-		info->provider, info->interface, info->domain, info->crt_ctx_share_addr,
+		info->provider, info->interface, info->domain,
 		info->crt_timeout, info->srv_srx_set, info->provider_idx);
 
 	return 0;
@@ -224,6 +226,12 @@ dc_put_attach_info(struct dc_mgmt_sys_info *info, Mgmt__GetAttachInfoResp *resp)
 	return put_attach_info(info, resp);
 }
 
+void
+dc_mgmt_drop_attach_info(void)
+{
+	return put_attach_info(&info_g, resp_g);
+}
+
 static int
 get_env_deprecated(char **val, const char *new_env, const char *old_env)
 {
@@ -240,6 +248,7 @@ get_env_deprecated(char **val, const char *new_env, const char *old_env)
 			D_WARN("Both %s and %s are set! Deprecated %s (%s) will be ignored\n",
 			       new_env, old_env, old_env, old);
 		*val = new;
+		d_freeenv_str(&old);
 		return 0;
 	}
 
@@ -247,11 +256,13 @@ get_env_deprecated(char **val, const char *new_env, const char *old_env)
 		D_INFO("%s is deprecated, upgrade your environment to use %s instead\n", old_env,
 		       new_env);
 		*val = old;
+		d_freeenv_str(&new);
 		return 0;
 	}
 
 	return rc_new;
 }
+
 /*
  * Get the attach info (i.e., rank URIs) for name. To avoid duplicating the
  * rank URIs, we return the GetAttachInfo response directly. Callers are
@@ -263,9 +274,9 @@ get_attach_info(const char *name, bool all_ranks, struct dc_mgmt_sys_info *info,
 {
 	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
 	struct drpc		*ctx;
-	Mgmt__GetAttachInfoReq	 req = MGMT__GET_ATTACH_INFO_REQ__INIT;
-	Mgmt__GetAttachInfoResp	*resp;
+	Mgmt__GetAttachInfoReq   req = MGMT__GET_ATTACH_INFO_REQ__INIT;
 	uint8_t			*reqb;
+	Mgmt__GetAttachInfoResp *resp;
 	size_t			 reqb_size;
 	Drpc__Call		*dreq;
 	Drpc__Response		*dresp;
@@ -321,8 +332,7 @@ get_attach_info(const char *name, bool all_ranks, struct dc_mgmt_sys_info *info,
 		rc = -DER_MISC;
 		goto out_dresp;
 	}
-	resp = mgmt__get_attach_info_resp__unpack(&alloc.alloc, dresp->body.len,
-						  dresp->body.data);
+	resp = mgmt__get_attach_info_resp__unpack(&alloc.alloc, dresp->body.len, dresp->body.data);
 	if (alloc.oom)
 		D_GOTO(out_dresp, rc = -DER_NOMEM);
 	if (resp == NULL) {
@@ -368,10 +378,18 @@ out:
 }
 
 int
-dc_get_attach_info(const char *name, bool all_ranks,
-		   struct dc_mgmt_sys_info *info,
-		   Mgmt__GetAttachInfoResp **respp) {
+dc_get_attach_info(const char *name, bool all_ranks, struct dc_mgmt_sys_info *info,
+		   Mgmt__GetAttachInfoResp **respp)
+{
 	return get_attach_info(name, all_ranks, info, respp);
+}
+
+int
+dc_mgmt_cache_attach_info(const char *name)
+{
+	if (name != NULL && strcmp(name, agent_sys_name) != 0)
+		return -DER_INVAL;
+	return get_attach_info(name, true, &info_g, &resp_g);
 }
 
 static void
@@ -496,21 +514,15 @@ _split_env(char *env, char **name, char **value)
  * via the get_attach_info() dRPC.
  * Configure the client's local environment with these parameters
  */
-int dc_mgmt_net_cfg(const char *name)
+int
+dc_mgmt_net_cfg(const char *name, crt_init_options_t *crt_info)
 {
 	int                      rc;
-	char                    *provider;
-	char                    *crt_ctx_share_addr = NULL;
 	char                    *cli_srx_set        = NULL;
 	char                    *crt_timeout        = NULL;
 	char                     buf[SYS_INFO_BUF_SIZE];
-	struct dc_mgmt_sys_info  info;
-	Mgmt__GetAttachInfoResp *resp;
-
-	/* Query the agent for the CaRT network configuration parameters */
-	rc = get_attach_info(name, true /* all_ranks */, &info, &resp);
-	if (rc != 0)
-		return rc;
+	struct dc_mgmt_sys_info *info = &info_g;
+	Mgmt__GetAttachInfoResp *resp = resp_g;
 
 	if (resp->client_net_hint != NULL && resp->client_net_hint->n_env_vars > 0) {
 		int i;
@@ -539,24 +551,10 @@ int dc_mgmt_net_cfg(const char *name)
 	/* Save number of server ranks */
 	g_num_serv_ranks = resp->n_rank_uris;
 	D_INFO("Setting number of server ranks to %d\n", g_num_serv_ranks);
-	/* These two are always set */
-	provider = info.provider;
-	rc               = d_setenv("D_PROVIDER", provider, 1);
-	if (rc != 0)
-		D_GOTO(cleanup, rc = d_errno2der(errno));
-
-	rc = asprintf(&crt_ctx_share_addr, "%d", info.crt_ctx_share_addr);
-	if (rc < 0) {
-		crt_ctx_share_addr = NULL;
-		D_GOTO(cleanup, rc = -DER_NOMEM);
-	}
-	rc = d_setenv("CRT_CTX_SHARE_ADDR", crt_ctx_share_addr, 1);
-	if (rc != 0)
-		D_GOTO(cleanup, rc = d_errno2der(errno));
 
 	/* If the server has set this, the client must use the same value. */
-	if (info.srv_srx_set != -1) {
-		rc = asprintf(&cli_srx_set, "%d", info.srv_srx_set);
+	if (info->srv_srx_set != -1) {
+		rc = asprintf(&cli_srx_set, "%d", info->srv_srx_set);
 		if (rc < 0) {
 			cli_srx_set = NULL;
 			D_GOTO(cleanup, rc = -DER_NOMEM);
@@ -578,78 +576,60 @@ int dc_mgmt_net_cfg(const char *name)
 	/* Allow client env overrides for these three */
 	d_agetenv_str(&crt_timeout, "CRT_TIMEOUT");
 	if (!crt_timeout) {
-		rc = asprintf(&crt_timeout, "%d", info.crt_timeout);
-		if (rc < 0) {
-			crt_timeout = NULL;
-			D_GOTO(cleanup, rc = -DER_NOMEM);
-		}
-		D_INFO("setenv CRT_TIMEOUT=%s\n", crt_timeout);
-		rc = d_setenv("CRT_TIMEOUT", crt_timeout, 1);
-		if (rc != 0)
-			D_GOTO(cleanup, rc = d_errno2der(errno));
+		crt_info->cio_crt_timeout = info->crt_timeout;
 	} else {
+		crt_info->cio_crt_timeout = atoi(crt_timeout);
 		D_DEBUG(DB_MGMT, "Using client provided CRT_TIMEOUT: %s\n", crt_timeout);
 	}
 
-	/* client-provided iface/domain were already taken into account by agent */
-	/* TODO: These should be set in crt_init_options_t instead of env */
-	rc = d_setenv("D_INTERFACE", info.interface, 1);
-	if (rc != 0)
-		D_GOTO(cleanup, rc = d_errno2der(errno));
-
-	rc = d_setenv("D_DOMAIN", info.domain, 1);
-	if (rc != 0)
-		D_GOTO(cleanup, rc = d_errno2der(errno));
-
-	sprintf(buf, "%d", info.provider_idx);
+	sprintf(buf, "%d", info->provider_idx);
 	rc = d_setenv("CRT_SECONDARY_PROVIDER", buf, 1);
 	if (rc != 0)
 		D_GOTO(cleanup, rc = d_errno2der(errno));
 
-	D_INFO("Network interface: %s, Domain: %s\n", info.interface, info.domain);
+	D_STRNDUP(crt_info->cio_provider, info->provider, DAOS_SYS_INFO_STRING_MAX);
+	if (NULL == crt_info->cio_provider)
+		D_GOTO(cleanup, rc = -DER_NOMEM);
+	D_STRNDUP(crt_info->cio_interface, info->interface, DAOS_SYS_INFO_STRING_MAX);
+	if (NULL == crt_info->cio_interface)
+		D_GOTO(cleanup, rc = -DER_NOMEM);
+	D_STRNDUP(crt_info->cio_domain, info->domain, DAOS_SYS_INFO_STRING_MAX);
+	if (NULL == crt_info->cio_domain)
+		D_GOTO(cleanup, rc = -DER_NOMEM);
+
+	D_INFO("Network interface: %s, Domain: %s\n", info->interface, info->domain);
 	D_DEBUG(DB_MGMT,
 		"CaRT initialization with:\n"
-		"\tD_PROVIDER: %s, CRT_CTX_SHARE_ADDR: %s, CRT_TIMEOUT: %s, "
-		"CRT_SECONDARY_PROVIDER: %s\n",
-		provider, crt_ctx_share_addr, crt_timeout, buf);
+		"\tD_PROVIDER: %s, CRT_TIMEOUT: %d, CRT_SECONDARY_PROVIDER: %s\n",
+		crt_info->cio_provider, crt_info->cio_crt_timeout, buf);
 
 cleanup:
+	if (rc) {
+		D_FREE(crt_info->cio_provider);
+		D_FREE(crt_info->cio_interface);
+		D_FREE(crt_info->cio_domain);
+	}
 	d_freeenv_str(&crt_timeout);
 	d_freeenv_str(&cli_srx_set);
-	d_freeenv_str(&crt_ctx_share_addr);
-	put_attach_info(&info, resp);
 
 	return rc;
 }
 
 int dc_mgmt_net_cfg_check(const char *name)
 {
-	int rc;
 	char *cli_srx_set;
-	struct dc_mgmt_sys_info info;
-	Mgmt__GetAttachInfoResp *resp;
-
-	/* Query the agent for the CaRT network configuration parameters */
-	rc = get_attach_info(name, true /* all_ranks */, &info, &resp);
-	if (rc != 0)
-		return rc;
 
 	/* Client may not set it if the server hasn't. */
-	if (info.srv_srx_set == -1) {
+	if (info_g.srv_srx_set == -1) {
 		d_agetenv_str(&cli_srx_set, "FI_OFI_RXM_USE_SRX");
 		if (cli_srx_set) {
 			D_ERROR("Client set FI_OFI_RXM_USE_SRX to %s, "
 				"but server is unset!\n", cli_srx_set);
 			d_freeenv_str(&cli_srx_set);
-			rc = -DER_INVAL;
-			goto out;
+			return -DER_INVAL;
 		}
 	}
-	rc = 0;
-
-out:
-	put_attach_info(&info, resp);
-	return rc;
+	return 0;
 }
 
 static int send_monitor_request(struct dc_pool *pool, int request_type)
@@ -842,7 +822,8 @@ attach(const char *name, struct dc_mgmt_sys **sysp)
 {
 	struct dc_mgmt_sys	*sys;
 	crt_group_t		*group;
-	Mgmt__GetAttachInfoResp	*resp;
+	Mgmt__GetAttachInfoResp *resp;
+	bool			 need_free_resp = false;
 	int			 rc;
 
 	D_DEBUG(DB_MGMT, "attaching to system '%s'\n", name);
@@ -870,21 +851,32 @@ attach(const char *name, struct dc_mgmt_sys **sysp)
 		goto out;
 	}
 
-	rc = get_attach_info(name, true /* all_ranks */, &sys->sy_info, &resp);
-	if (rc != 0)
-		goto err_sys;
+	if (strcmp(name, agent_sys_name) != 0 || !resp_g) {
+		need_free_resp = true;
+		rc = get_attach_info(name, true /* all_ranks */, &sys->sy_info, &resp);
+		if (rc != 0)
+			goto err_sys;
+	} else {
+		resp = resp_g;
+		rc   = fill_sys_info(resp, &sys->sy_info);
+		if (rc != 0)
+			goto err_sys;
+	}
 
 	rc = attach_group(name, &sys->sy_info, resp, &sys->sy_group);
 	if (rc != 0)
 		goto err_info;
 
-	free_get_attach_info_resp(resp);
+	if (need_free_resp)
+		free_get_attach_info_resp(resp);
 out:
 	*sysp = sys;
 	return 0;
 
 err_info:
-	put_attach_info(&sys->sy_info, resp);
+	d_rank_list_free(sys->sy_info.ms_ranks);
+	if (need_free_resp)
+		free_get_attach_info_resp(resp);
 err_sys:
 	D_FREE(sys);
 err:
@@ -955,7 +947,6 @@ dc_mgmt_sys_attach(const char *name, struct dc_mgmt_sys **sysp)
 {
 	if (name == NULL)
 		name = agent_sys_name;
-
 	return sys_attach(name, sysp);
 }
 
@@ -1236,8 +1227,8 @@ dc_mgmt_tm_register(const char *sys, const char *jobid, key_t shm_key, uid_t *ow
 		goto out_dresp;
 	}
 	if (resp->status != 0) {
-		D_ERROR("SetupClientTelemetry(%s) failed: " DF_RC "\n", req.sys,
-			DP_RC(resp->status));
+		if (resp->status != -DER_UNINIT) /* not necessarily an error */
+			DL_ERROR(resp->status, "SetupClientTelemetry() failed");
 		rc = resp->status;
 		goto out_resp;
 	}

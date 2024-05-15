@@ -101,8 +101,10 @@ struct migrate_pool_tls {
 	/* migrate leader ULT */
 	unsigned int		mpt_ult_running:1,
 				mpt_init_tls:1,
-				mpt_init_failed:1,
 				mpt_fini:1;
+
+	/* migration init error */
+	int			mpt_init_err;
 };
 
 struct migrate_cont_hdl {

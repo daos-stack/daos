@@ -57,8 +57,7 @@ static const char      *crt_env_names[] = {
     "DAOS_SIGNAL_REGISTER",
     "D_CLIENT_METRICS_ENABLE",
     "D_CLIENT_METRICS_RETAIN",
-    "D_CLIENT_METRICS_DUMP_PATH",
-
+    "D_CLIENT_METRICS_DUMP_DIR",
 };
 
 static void
@@ -208,8 +207,8 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 		return rc;
 
 	if (crt_is_service()) {
-		ctx_num = CRT_SRV_CONTEXT_NUM;
-		max_num_ctx = CRT_SRV_CONTEXT_NUM;
+		ctx_num		= CRT_SRV_CONTEXT_NUM;
+		max_num_ctx	= CRT_SRV_CONTEXT_NUM;
 	} else {
 		/* Only limit the number of contexts for clients */
 		d_getenv_uint("CRT_CTX_NUM", &ctx_num);
@@ -224,12 +223,18 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 
 	if (max_num_ctx > CRT_SRV_CONTEXT_NUM)
 		max_num_ctx = CRT_SRV_CONTEXT_NUM;
-
 	/* To be able to run on VMs */
 	if (max_num_ctx < CRT_SRV_CONTEXT_NUM_MIN)
 		max_num_ctx = CRT_SRV_CONTEXT_NUM_MIN;
 
 	D_DEBUG(DB_ALL, "Max number of contexts set to %d\n", max_num_ctx);
+
+	d_getenv_bool("CRT_CTX_SHARE_ADDR", &set_sep);
+	if (set_sep)
+		D_WARN("Unsupported SEP mode requested. Unset CRT_CTX_SHARE_ADDR\n");
+
+	if (opt && opt->cio_sep_override && opt->cio_use_sep)
+		D_WARN("Unsupported SEP mode requested in init options\n");
 
 	if (opt && opt->cio_use_expected_size)
 		max_expect_size = opt->cio_max_expected_size;
