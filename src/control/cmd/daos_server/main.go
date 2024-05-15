@@ -28,6 +28,8 @@ import (
 
 const defaultConfigFile = "daos_server.yml"
 
+var errJSONOutputNotSupported = errors.New("this subcommand does not support JSON output")
+
 type execTestFn func() error
 
 type mainOpts struct {
@@ -51,6 +53,7 @@ type mainOpts struct {
 	MgmtSvc       msCmdRoot              `command:"ms" description:"Perform tasks related to management service replicas"`
 	DumpTopo      hwprov.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
 	Config        configCmd              `command:"config" alias:"cfg" description:"Perform tasks related to configuration of hardware on the local server"`
+	Support       supportCmd             `command:"support" description:"Perform debug tasks to help support team"`
 
 	// Allow a set of tests to be run before executing commands.
 	preExecTests []execTestFn
@@ -92,10 +95,14 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 			return errors.Errorf("unexpected commandline arguments: %v", cmdArgs)
 		}
 
-		if jsonCmd, ok := cmd.(cmdutil.JSONOutputter); ok && opts.JSON {
-			jsonCmd.EnableJSONOutput(os.Stdout, &wroteJSON)
-			// disable output on stdout other than JSON
-			log.ClearLevel(logging.LogLevelInfo)
+		if opts.JSON {
+			if jsonCmd, ok := cmd.(cmdutil.JSONOutputter); ok {
+				jsonCmd.EnableJSONOutput(os.Stdout, &wroteJSON)
+				// disable output on stdout other than JSON
+				log.ClearLevel(logging.LogLevelInfo)
+			} else {
+				return errJSONOutputNotSupported
+			}
 		}
 
 		switch cmd.(type) {

@@ -45,6 +45,7 @@ GO_CONTROL_FILES = common/proto/shared/ranks.pb.go\
 		   common/proto/ctl/storage_scm.pb.go\
 		   common/proto/ctl/ctl.pb.go\
 		   common/proto/ctl/network.pb.go\
+                   common/proto/ctl/support.pb.go\
 		   common/proto/ctl/firmware.pb.go\
 		   common/proto/ctl/ranks.pb.go\
 		   common/proto/srv/srv.pb.go\
@@ -82,10 +83,11 @@ $(PROTOC_GEN_GO): $(PROTOC)
 	[ -d $(GOPATH)/src/$(PROTOC_GEN_GO_IMP) ] &&\
 		cd $(GOPATH)/src/$(PROTOC_GEN_GO_IMP) &&\
 		git checkout master || true
-	go get -u $(PROTOC_GEN_GO_IMP) &&\
-	cd $(GOPATH)/src/$(PROTOC_GEN_GO_IMP) &&\
-	git checkout $(PROTOC_GEN_GO_TAG) &&\
-	go install $(PROTOC_GEN_GO_IMP)
+#	go get -u $(PROTOC_GEN_GO_IMP) &&\
+#	cd $(GOPATH)/src/$(PROTOC_GEN_GO_IMP) &&\
+#	git checkout $(PROTOC_GEN_GO_TAG) &&\
+	go install $(PROTOC_GEN_GO_IMP)@$(PROTOC_GEN_GO_TAG)
+
 
 PROTOC_GEN_GO_GRPC_PKG := google.golang.org/grpc
 PROTOC_GEN_GO_GRPC_IMP := $(PROTOC_GEN_GO_GRPC_PKG)/cmd/protoc-gen-go-grpc
@@ -183,6 +185,12 @@ $(DAOS_ROOT)/src/mgmt/server.pb-c.h: $(PROTO_SOURCE_DIR)/ctl/server.proto
 	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
 
 $(DAOS_ROOT)/src/mgmt/server.pb-c.c: $(PROTO_SOURCE_DIR)/ctl/server.proto
+	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
+
+$(DAOS_ROOT)/src/mgmt/support.pb-c.h: $(PROTO_SOURCE_DIR)/ctl/support.proto
+	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
+
+$(DAOS_ROOT)/src/mgmt/support.pb-c.c: $(PROTO_SOURCE_DIR)/ctl/support.proto
 	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
 
 $(DAOS_ROOT)/src/tests/drpc/%.pb-c.h: $(PROTO_SOURCE_DIR)/test/%.proto
