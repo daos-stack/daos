@@ -169,8 +169,7 @@ jobs:
     steps:
       - name: Check if any job failed
         run: |
-          if [[ "$(echo "${{ join(needs.*.result, ' ') }}" \
-                | tr -s ' ' '\n' | sort -u)" == "success" ]]; then
+          if [[ -z "$(echo "${{ join(needs.*.result, '') }}" | sed -e 's/success//g')" ]]; then
             echo "All jobs succeeded"
           else
             echo "One or more jobs did not succeed"
