@@ -224,14 +224,15 @@ struct vos_space_metrics {
 
 /* VOS Pool metrics for WAL */
 struct vos_wal_metrics {
-	struct d_tm_node_t      *vwm_wal_sz;		/* WAL size for single tx */
-	struct d_tm_node_t      *vwm_wal_qd;		/* WAL transaction queue depth */
-	struct d_tm_node_t      *vwm_wal_waiters;	/* Waiters for WAL reclaiming */
-	struct d_tm_node_t	*vwm_replay_size;	/* WAL replay size in bytes */
-	struct d_tm_node_t	*vwm_replay_time;	/* WAL replay time in us */
-	struct d_tm_node_t	*vwm_replay_count;	/* Total replay count */
-	struct d_tm_node_t	*vwm_replay_tx;		/* Total replayed TX count */
-	struct d_tm_node_t	*vwm_replay_ent;	/* Total replayed entry count */
+	struct d_tm_node_t *vwm_wal_sz;       /* WAL size for single tx */
+	struct d_tm_node_t *vwm_wal_qd;       /* WAL transaction queue depth */
+	struct d_tm_node_t *vwm_wal_waiters;  /* Waiters for WAL reclaiming */
+	struct d_tm_node_t *vwm_wal_dur;      /* WAL commit duration */
+	struct d_tm_node_t *vwm_replay_size;  /* WAL replay size in bytes */
+	struct d_tm_node_t *vwm_replay_time;  /* WAL replay time in us */
+	struct d_tm_node_t *vwm_replay_count; /* Total replay count */
+	struct d_tm_node_t *vwm_replay_tx;    /* Total replayed TX count */
+	struct d_tm_node_t *vwm_replay_ent;   /* Total replayed entry count */
 };
 
 void vos_wal_metrics_init(struct vos_wal_metrics *vw_metrics, const char *path, int tgt_id);

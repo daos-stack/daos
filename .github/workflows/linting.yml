@@ -70,7 +70,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
       - name: Check DAOS ftest tags.
-        run: \[ ! -x src/tests/ftest/tags.py \] || ./src/tests/ftest/tags.py lint
+        run: \[ ! -x src/tests/ftest/tags.py \] || ./src/tests/ftest/tags.py lint --verbose
 
   flake8-lint:
     runs-on: ubuntu-22.04
