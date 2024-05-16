@@ -111,8 +111,6 @@ class DfuseSpaceCheck(IorTestBase):
         self.create_cont()
         dfuse = get_dfuse(self, self.hostlist_clients)
         start_dfuse(self, dfuse, self.pool, self.container)
-        # DEBUG: Query pool info
-        self.pool.query()
 
         # get nvme space before write
         self.initial_space = self.get_nvme_free_space()
@@ -125,30 +123,20 @@ class DfuseSpaceCheck(IorTestBase):
             large_file, self.block_size, dd_count)
         self.execute_cmd(write_dd_cmd, False)
 
-        # DEBUG: Query pool info
-        self.pool.query()
-
         # Remove the file
         self.execute_cmd('rm -rf {}'.format(large_file))
 
         # Wait for aggregation to complete
         self.wait_for_aggregation()
 
-        # DEBUG: Query pool info
-        self.pool.query()
 
         # Disable aggregation
         self.log.info("Disabling aggregation")
         self.pool.set_property("reclaim", "disabled")
 
-        # DEBUG: Query pool info
-        self.pool.query()
 
         # Write small files until we run out of space
         file_count1 = self.write_multiple_files(dfuse)
-
-        # DEBUG: Query pool info
-        self.pool.query()
 
         # Enable aggregation
         self.log.info("Enabling aggregation")
@@ -160,9 +148,6 @@ class DfuseSpaceCheck(IorTestBase):
         # Wait for aggregation to complete after file removal
         self.wait_for_aggregation()
 
-        # DEBUG: Query pool info
-        self.pool.query()
-
         # Disable aggregation
         self.log.info("Disabling aggregation")
         self.pool.set_property("reclaim", "disabled")
@@ -170,15 +155,10 @@ class DfuseSpaceCheck(IorTestBase):
         # Write small files again until we run out of space and verify we wrote the same amount
         file_count2 = self.write_multiple_files(dfuse)
 
-        # DEBUG: Query pool info
-        self.pool.query()
-
         self.log.info('file_count1 = %s', file_count1)
         self.log.info('file_count2 = %s', file_count2)
         self.assertEqual(
             file_count2, file_count1,
             'Space was not returned. Expected to write the same number of files')
 
-        # DEBUG: Query pool info
-        self.pool.query()
 
