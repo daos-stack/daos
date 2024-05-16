@@ -24,10 +24,24 @@ const (
 )
 
 type (
+	// SystemProvider provides operating system capabilities.
+	SystemProvider interface {
+		system.IsMountedProvider
+		system.MountProvider
+		system.UnmountProvider
+		Chmod(string, os.FileMode) error
+		Chown(string, int, int) error
+		Getegid() int
+		Geteuid() int
+		Mkdir(string, os.FileMode) error
+		RemoveAll(string) error
+		Stat(string) (os.FileInfo, error)
+	}
+
 	// Provider provides methods to interact with a generic storage device.
 	Provider struct {
 		log logging.Logger
-		sys storage.SystemProvider
+		sys SystemProvider
 	}
 )
 
@@ -37,7 +51,7 @@ func DefaultProvider(log logging.Logger) *Provider {
 }
 
 // NewProvider returns an initialized *Provider.
-func NewProvider(log logging.Logger, sys storage.SystemProvider) *Provider {
+func NewProvider(log logging.Logger, sys SystemProvider) *Provider {
 	p := &Provider{
 		log: log,
 		sys: sys,

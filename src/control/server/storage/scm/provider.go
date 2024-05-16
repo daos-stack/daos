@@ -43,12 +43,19 @@ type (
 		UpdateFirmware(deviceUID string, firmwarePath string) error
 	}
 
+	// SystemProvider provides operating system capabilities.
+	SystemProvider interface {
+		Chown(string, int, int) error
+		Getfs(string) (string, error)
+		Mkfs(system.MkfsReq) error
+	}
+
 	// Provider encapsulates configuration and logic for
 	// providing SCM management and interrogation.
 	Provider struct {
 		log     logging.Logger
 		backend Backend
-		sys     storage.SystemProvider
+		sys     SystemProvider
 		mounter storage.MountProvider
 	}
 )
@@ -87,7 +94,7 @@ func DefaultProvider(log logging.Logger) *Provider {
 }
 
 // NewProvider returns an initialized *Provider.
-func NewProvider(log logging.Logger, backend Backend, sys storage.SystemProvider, mounter storage.MountProvider) *Provider {
+func NewProvider(log logging.Logger, backend Backend, sys SystemProvider, mounter storage.MountProvider) *Provider {
 	p := &Provider{
 		log:     log,
 		backend: backend,
@@ -162,7 +169,7 @@ func (p *Provider) prepare(req storage.ScmPrepareRequest, scan scanFn) (*storage
 		if len(scanResp.Namespaces) > 0 {
 			for _, ns := range scanResp.Namespaces {
 				nsDev := "/dev/" + ns.BlockDevice
-				isMounted, err := p.sys.IsMounted(nsDev)
+				isMounted, err := p.mounter.IsMounted(nsDev)
 				if err != nil {
 					if os.IsNotExist(errors.Cause(err)) {
 						continue
@@ -210,7 +217,7 @@ func (p *Provider) CheckFormat(req storage.ScmFormatRequest) (*storage.ScmFormat
 
 	mntptMissing := false
 
-	isMounted, err := p.sys.IsMounted(req.Mountpoint)
+	isMounted, err := p.mounter.IsMounted(req.Mountpoint)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return nil, err

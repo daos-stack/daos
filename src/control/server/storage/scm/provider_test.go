@@ -233,7 +233,7 @@ func TestProvider_Prepare(t *testing.T) {
 
 			// Verify namespaces get unmounted on reset.
 			for _, ns := range tc.scanResp.Namespaces {
-				isMounted, err := p.IsMounted("/dev/" + ns.BlockDevice)
+				isMounted, err := p.mounter.IsMounted("/dev/" + ns.BlockDevice)
 				if err != nil {
 					t.Fatal(err)
 				}

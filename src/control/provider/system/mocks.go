@@ -54,7 +54,9 @@ type (
 		GeteuidRes      int
 		GetegidRes      int
 		MkdirErr        error
+		RealMkdir       bool
 		RemoveAllErr    error
+		RealRemoveAll   bool
 	}
 
 	// MockSysProvider gives a mock SystemProvider implementation.
@@ -227,12 +229,18 @@ func (msp *MockSysProvider) Getegid() int {
 
 // Mkdir creates a new directory with the specified name and permission
 // bits (before umask).
-func (msp *MockSysProvider) Mkdir(_ string, _ os.FileMode) error {
+func (msp *MockSysProvider) Mkdir(path string, flags os.FileMode) error {
+	if msp.cfg.RealMkdir {
+		return os.Mkdir(path, flags)
+	}
 	return msp.cfg.MkdirErr
 }
 
 // RemoveAll removes path and any children it contains.
 func (msp *MockSysProvider) RemoveAll(path string) error {
+	if msp.cfg.RealRemoveAll {
+		return os.RemoveAll(path)
+	}
 	return msp.cfg.RemoveAllErr
 }
 

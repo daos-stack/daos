@@ -215,6 +215,12 @@ func TestMetadata_Provider_Format(t *testing.T) {
 			testDir, cleanupTestDir := test.CreateTestDir(t)
 			defer cleanupTestDir()
 
+			if tc.sysCfg == nil {
+				tc.sysCfg = new(system.MockSysConfig)
+			}
+			tc.sysCfg.RealMkdir = true
+			tc.sysCfg.RealRemoveAll = true
+
 			// Point the paths at the testdir
 			if tc.req.RootPath != "" {
 				tc.req.RootPath = filepath.Join(testDir, tc.req.RootPath)
@@ -239,7 +245,8 @@ func TestMetadata_Provider_Format(t *testing.T) {
 
 			var p *Provider
 			if !tc.nilProv {
-				p = NewProvider(log, system.NewMockSysProvider(log, tc.sysCfg), storage.NewMockMountProvider(tc.mountCfg))
+				p = NewProvider(log, system.NewMockSysProvider(log, tc.sysCfg),
+					storage.NewMockMountProvider(tc.mountCfg))
 			}
 
 			err := p.Format(tc.req)
