@@ -2216,6 +2216,22 @@ obj_iod_sgl_valid(daos_obj_id_t oid, unsigned int nr, daos_iod_t *iods,
 				return -DER_INVAL;
 			}
 		}
+		if (sgls != NULL && sgls[i].sg_nr > 0) {
+			d_sg_list_t	*sg = &sgls[i];
+			d_iov_t		*iov;
+
+			for (j = 0; j < sg->sg_nr; j++) {
+				iov = sg->sg_iovs + j;
+				if (iov == NULL || (iov->iov_buf_len > 0 && iov->iov_buf == NULL)) {
+					if (iov == NULL)
+						D_ERROR("Bad iov - j %d, NULL iov\n", j);
+					else
+						D_ERROR("Bad iov - j %d, NULL iov_buf, "
+							"bul_len %zu\n", j, iov->iov_buf_len);
+					return -DER_INVAL;
+				}
+			}
+		}
 
 		switch (iods[i].iod_type) {
 		default:
