@@ -129,11 +129,9 @@ class DfuseSpaceCheck(IorTestBase):
         # Wait for aggregation to complete
         self.wait_for_aggregation()
 
-
         # Disable aggregation
         self.log.info("Disabling aggregation")
         self.pool.set_property("reclaim", "disabled")
-
 
         # Write small files until we run out of space
         file_count1 = self.write_multiple_files(dfuse)
@@ -160,5 +158,3 @@ class DfuseSpaceCheck(IorTestBase):
         self.assertEqual(
             file_count2, file_count1,
             'Space was not returned. Expected to write the same number of files')
-
-
