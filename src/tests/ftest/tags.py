@@ -262,7 +262,7 @@ def sorted_tags(tags):
     return new_tags
 
 
-def run_linter(paths=None):
+def run_linter(paths=None, verbose=False):
     """Run the ftest tag linter.
 
     Args:
@@ -307,17 +307,21 @@ def run_linter(paths=None):
     non_unique_classes = list(name for name, num in all_classes.items() if num > 1)
     non_unique_methods = list(name for name, num in all_methods.items() if num > 1)
 
-    print('ftest tag lint')
+    def _print_verbose(*args):
+        if verbose:
+            print(*args)
+
+    _print_verbose('ftest tag lint')
 
     def _error_handler(_list, message, required=True):
         """Exception handler for each class of failure."""
         _list_len = len(_list)
         req_str = '(required)' if required else '(optional)'
-        print(f'  {req_str} {_list_len} {message}')
+        _print_verbose(f'  {req_str} {_list_len} {message}')
         if _list_len == 0:
             return None
         for _test in _list:
-            print(f'    {_test}')
+            _print_verbose(f'    {_test}')
         if _list_len > 3:
             remaining = _list_len - 3
             _list = _list[:3] + [f"... (+{remaining})"]
@@ -556,7 +560,7 @@ def main():
 
     if args.command == "lint":
         try:
-            run_linter(args.paths)
+            run_linter(args.paths, args.verbose)
         except LintFailure as err:
             print(err)
             sys.exit(1)
