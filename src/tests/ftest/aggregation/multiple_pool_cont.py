@@ -104,8 +104,7 @@ class DaosAggregationMultiPoolCont(IorTestBase):
                                                          container.identifier)
                     try:
                         result = run_ior(self, job_manager, ior_log, self.hostlist_clients,
-                                         self.workdir, None, self.server_group,
-                                         container.pool, container,
+                                         self.workdir, None, container.pool, container,
                                          self.processes)
                         self.log.info(result)
                     except CommandFailure as error:

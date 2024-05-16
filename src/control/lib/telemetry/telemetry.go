@@ -374,7 +374,7 @@ func InitClientRoot(ctx context.Context) (context.Context, error) {
 	return initClientRoot(ctx, ClientJobRootID)
 }
 
-// Init initializes the telemetry bindings
+// Init initializes the DAOS telemetry consumer library.
 func Init(parent context.Context, id uint32) (context.Context, error) {
 	if parent == nil {
 		return nil, errors.New("nil parent context")
@@ -431,6 +431,10 @@ func addEphemeralDir(path string, shmSize uint64) error {
 // segment linked into the agent-managed tree.
 func SetupClientRoot(ctx context.Context, jobid string, pid, shm_key int) error {
 	log := logging.FromContext(ctx)
+
+	if _, err := getHandle(ctx); err != nil {
+		return errors.Wrap(daos.NotInit, "client telemetry library not initialized")
+	}
 
 	if err := addEphemeralDir(jobid, ClientJobMax*C.D_TM_METRIC_SIZE); err != nil {
 		if err != daos.Exists {

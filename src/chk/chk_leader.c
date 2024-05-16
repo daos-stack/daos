@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2022-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -315,8 +315,6 @@ chk_leader_post_repair(struct chk_instance *ins, struct chk_pool_rec *cpr,
 			iv.ci_ins_status = ins->ci_bk.cb_ins_status;
 			iv.ci_phase = cbk->cb_phase;
 			iv.ci_pool_status = cbk->cb_pool_status;
-			if (cpr->cpr_destroyed)
-				iv.ci_pool_destroyed = 1;
 
 			/* Synchronously notify the engines that check on the pool got failure. */
 			rc = chk_iv_update(ins->ci_iv_ns, &iv, CRT_IV_SHORTCUT_NONE,
@@ -945,7 +943,8 @@ out:
 	 * to fix related inconsistency), then notify check engines to remove related
 	 * pool record and bookmark.
 	 */
-	chk_leader_post_repair(ins, cpr, &result, rc <= 0, cpr->cpr_skip ? true : false);
+	chk_leader_post_repair(ins, cpr, &result, rc <= 0,
+			       cpr->cpr_skip && !cpr->cpr_destroyed ? true : false);
 
 	return result;
 }
@@ -1867,13 +1866,14 @@ chk_leader_pool_mbs_one(struct chk_pool_rec *cpr)
 {
 	struct rsvc_client	 client = { 0 };
 	crt_endpoint_t		 ep = { 0 };
-	struct rsvc_hint	 hint = { 0 };
+	struct rsvc_hint	 svc_hint = { 0 };
 	struct chk_instance	*ins = cpr->cpr_ins;
 	struct chk_bookmark	*cbk = &ins->ci_bk;
 	d_rank_list_t		*ps_ranks = NULL;
 	struct chk_pool_shard	*cps;
 	struct ds_pool_clue	*clue;
 	uint32_t		 interval;
+	int			 svc_rc = 0;
 	int			 rc = 0;
 	int			 rc1;
 	int			 i = 0;
@@ -1925,9 +1925,9 @@ again:
 	rc = chk_pool_mbs_remote(ep.ep_rank, CHK__CHECK_SCAN_PHASE__CSP_POOL_MBS, cbk->cb_gen,
 				 cpr->cpr_uuid, cpr->cpr_label, cpr->cpr_label_seq,
 				 cpr->cpr_delay_label ? CMF_REPAIR_LABEL : 0,
-				 cpr->cpr_shard_nr, cpr->cpr_mbs, &hint);
+				 cpr->cpr_shard_nr, cpr->cpr_mbs, &svc_rc, &svc_hint);
 
-	rc1 = rsvc_client_complete_rpc(&client, &ep, rc, rc, &hint);
+	rc1 = rsvc_client_complete_rpc(&client, &ep, rc, svc_rc, &svc_hint);
 	if (rc1 == RSVC_CLIENT_RECHOOSE ||
 	    (rc1 == RSVC_CLIENT_PROCEED && daos_rpc_retryable_rc(rc))) {
 		dss_sleep(interval);
@@ -3385,8 +3385,7 @@ chk_leader_prop(chk_prop_cb_t prop_cb, void *buf)
 {
 	struct chk_property	*prop = &chk_leader->ci_prop;
 
-	return prop_cb(buf, (struct chk_policy *)prop->cp_policies,
-		       CHK_POLICY_MAX - 1, prop->cp_flags);
+	return prop_cb(buf, prop->cp_policies, CHK_POLICY_MAX - 1, prop->cp_flags);
 }
 
 static int

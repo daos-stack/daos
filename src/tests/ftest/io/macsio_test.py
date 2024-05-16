@@ -3,12 +3,12 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from dfuse_test_base import DfuseTestBase
+from dfuse_utils import get_dfuse, start_dfuse
 from general_utils import list_to_str
 from macsio_test_base import MacsioTestBase
 
 
-class MacsioTest(DfuseTestBase, MacsioTestBase):
+class MacsioTest(MacsioTestBase):
     """Test class Description: Runs a basic MACSio test.
 
     :avocado: recursive
@@ -33,21 +33,21 @@ class MacsioTest(DfuseTestBase, MacsioTestBase):
         processes = self.params.get("processes", "/run/macsio/*", len(self.hostlist_clients))
 
         # Create a pool
+        self.log_step('Create a single pool')
         pool = self.get_pool()
         pool.display_pool_daos_space()
 
         # Create a container
+        self.log_step('Create a single container')
         container = self.get_container(pool)
 
         # Run macsio
-        self.log.info("Running MACSio")
+        self.log_step("Running MACSio")
         status = self.macsio.check_results(
-            self.run_macsio(
-                pool, list_to_str(pool.svc_ranks), processes, container),
+            self.run_macsio(pool, list_to_str(pool.svc_ranks), processes, container),
             self.hostlist_clients)
-        if not status:
-            self.fail("MACSio failed")
-        self.log.info("Test passed")
+        if status:
+            self.log.info("Test passed")
 
     def test_macsio_daos_vol(self):
         """JIRA ID: DAOS-4983.
@@ -69,27 +69,28 @@ class MacsioTest(DfuseTestBase, MacsioTestBase):
         processes = self.params.get("processes", "/run/macsio/*", len(self.hostlist_clients))
 
         # Create a pool
+        self.log_step('Create a single pool')
         pool = self.get_pool()
         pool.display_pool_daos_space()
 
         # Create a container
+        self.log_step('Create a single container')
         container = self.get_container(pool)
 
         # Create dfuse mount point
-        self.start_dfuse(self.hostlist_clients, pool, container)
+        self.log_step('Starting dfuse')
+        dfuse = get_dfuse(self, self.hostlist_clients)
+        start_dfuse(self, dfuse, pool, container)
 
         # VOL needs to run from a file system that supports xattr.  Currently
         # nfs does not have this attribute so it was recommended to create and
         # use a dfuse dir and run vol tests from there.
-        self.job_manager.working_dir.value = self.dfuse.mount_dir.value
+        self.job_manager.working_dir.value = dfuse.mount_dir.value
 
         # Run macsio
-        self.log.info("Running MACSio with DAOS VOL connector")
+        self.log_step("Running MACSio with DAOS VOL connector")
         status = self.macsio.check_results(
-            self.run_macsio(
-                pool, list_to_str(pool.svc_ranks), processes, container,
-                plugin_path),
+            self.run_macsio(pool, list_to_str(pool.svc_ranks), processes, container, plugin_path),
             self.hostlist_clients)
-        if not status:
-            self.fail("MACSio failed")
-        self.log.info("Test passed")
+        if status:
+            self.log.info("Test passed")

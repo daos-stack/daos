@@ -21,6 +21,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/ui"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -408,16 +409,21 @@ func (cmd *PoolListCmd) Execute(_ []string) (errOut error) {
 		NoQuery: cmd.NoQuery,
 	}
 
-	initialResp, err := control.ListPools(cmd.MustLogCtx(), cmd.ctlInvoker, req)
+	resp, err := control.ListPools(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
 		return err // control api returned an error, disregard response
 	}
 
 	// If rebuild-only pools requested, list the pools which has been rebuild only
 	// and not in idle state, otherwise list all the pools.
-	resp := new(control.ListPoolsResp)
-	if err := updateListPoolsResponse(resp, initialResp, cmd.RebuildOnly); err != nil {
-		return err
+	if cmd.RebuildOnly {
+		filtered := resp.Pools[:0] // reuse backing array
+		for _, p := range resp.Pools {
+			if p.Rebuild != nil && p.Rebuild.State != daos.PoolRebuildStateIdle {
+				filtered = append(filtered, p)
+			}
+		}
+		resp.Pools = filtered
 	}
 
 	if cmd.JSONOutputEnabled() {
@@ -436,17 +442,6 @@ func (cmd *PoolListCmd) Execute(_ []string) (errOut error) {
 	cmd.Infof("%s", out.String())
 
 	return resp.Errors()
-}
-
-// Update the pool list, which has been rebuild and not in idle state.
-func updateListPoolsResponse(finalResp *control.ListPoolsResp, resp *control.ListPoolsResp, rebuildOnly bool) error {
-	for _, pool := range resp.Pools {
-		if !rebuildOnly || pool.RebuildState != "idle" {
-			finalResp.Pools = append(finalResp.Pools, pool)
-		}
-	}
-
-	return nil
 }
 
 type PoolID struct {

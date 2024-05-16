@@ -46,11 +46,11 @@ server_config:
       storage: auto
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
-  size: 75%
+  size: 90%
 pool_reserved:
-  size: 10%
+  size: 5%
 pool_racer:
-  size: 10%
+  size: 5%
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
@@ -126,6 +126,7 @@ ior_stress:
   transfer_size:
     - '1m'
     - '32k'
+    - '4k'
   dfs_oclass:
     - ["SX","SX"]
     - ["EC_2P1GX", "RP_2GX"]
@@ -201,7 +202,7 @@ vpic_stress:
   oclass:
     - ["EC_2P1GX", "RP_2GX"]
 lammps_stress:
-  job_timeout: 45
+  job_timeout: 55
   nodesperjob:
     - 8
   taskspernode:

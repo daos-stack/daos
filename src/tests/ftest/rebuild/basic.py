@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -23,10 +23,10 @@ class RbldBasic(TestWithServers):
         """
         # Get the test parameters
         pools = []
-        self.container = []
+        containers = []
         for _ in range(pool_quantity):
             pools.append(self.get_pool(create=False))
-            self.container.append(self.get_container(pools[-1], create=False))
+            containers.append(self.get_container(pools[-1], create=False))
         rank = self.params.get("rank", "/run/testparams/*")
         obj_class = self.params.get("object_class", "/run/testparams/*")
 
@@ -54,12 +54,12 @@ class RbldBasic(TestWithServers):
         # Create containers in each pool and fill them with data
         rs_obj_nr = []
         rs_rec_nr = []
-        for container in self.container:
+        for container in containers:
             container.create()
             container.write_objects(rank, obj_class)
 
         # Determine how many objects will need to be rebuilt
-        for container in self.container:
+        for container in containers:
             target_rank_lists = container.get_target_rank_lists(" prior to rebuild")
             rebuild_qty = container.get_target_rank_count(rank, target_rank_lists)
             rs_obj_nr.append(rebuild_qty)
@@ -100,11 +100,10 @@ class RbldBasic(TestWithServers):
         self.assertTrue(status, "Error confirming pool info after rebuild")
 
         # Verify the data after rebuild
-        for index, pool in enumerate(pools):
-            self.container[index].set_prop(prop="status", value="healthy")
-            if self.container[index].object_qty.value != 0:
-                self.assertTrue(
-                    self.container[index].read_objects(), "Data verification error after rebuild")
+        for container in containers:
+            container.set_prop(prop="status", value="healthy")
+            if container.object_qty.value != 0:
+                self.assertTrue(container.read_objects(), "Data verification error after rebuild")
         self.log.info("Test Passed")
 
     def test_simple_rebuild(self):
@@ -118,7 +117,7 @@ class RbldBasic(TestWithServers):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=rebuild,pool,rebuild_tests,daos_cmd
+        :avocado: tags=rebuild,pool,daos_cmd
         :avocado: tags=RbldBasic,test_simple_rebuild
         """
         self.run_rebuild_test(1)
@@ -134,7 +133,7 @@ class RbldBasic(TestWithServers):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=rebuild,pool,rebuild_tests
+        :avocado: tags=rebuild,pool
         :avocado: tags=RbldBasic,test_multipool_rebuild
         """
-        self.run_rebuild_test(self.params.get("quantity", "/run/testparams/*"))
+        self.run_rebuild_test(self.params.get("pool_quantity", "/run/testparams/*"))

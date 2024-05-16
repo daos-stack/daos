@@ -6,13 +6,14 @@
 
 import os
 
-from dfuse_test_base import DfuseTestBase
+from apricot import TestWithServers
+from dfuse_utils import get_dfuse, start_dfuse
 from exception_utils import CommandFailure
 from job_manager_utils import get_job_manager
 from mdtest_utils import MdtestCommand
 
 
-class MdtestBase(DfuseTestBase):
+class MdtestBase(TestWithServers):
     """Base mdtest class.
 
     :avocado: recursive
@@ -26,6 +27,13 @@ class MdtestBase(DfuseTestBase):
         self.ppn = None
         self.hostfile_clients_slots = None
         self.subprocess = False
+
+        # We should not be using these as class level variables, but are needed until the
+        # execute_mdtest() method can be redesigned to pass in these arguments instead of
+        # optionally defining them
+        self.pool = None
+        self.container = None
+        self.dfuse = None
 
     def setUp(self):
         """Set up each test case."""
@@ -78,11 +86,13 @@ class MdtestBase(DfuseTestBase):
         if self.container is None:
             self.container = self.get_mdtest_container(self.pool)
         # set Mdtest params
-        self.mdtest_cmd.set_daos_params(self.server_group, self.pool, self.container.identifier)
+        self.mdtest_cmd.update_params(
+            dfs_pool=self.pool.identifier, dfs_cont=self.container.identifier)
 
         # start dfuse if api is POSIX
         if self.mdtest_cmd.api.value == "POSIX":
-            self.start_dfuse(self.hostlist_clients, self.pool, self.container)
+            self.dfuse = get_dfuse(self, self.hostlist_clients)
+            start_dfuse(self, self.dfuse, self.pool, self.container)
             self.mdtest_cmd.test_dir.update(self.dfuse.mount_dir.value)
 
         # Run Mdtest
@@ -98,7 +108,10 @@ class MdtestBase(DfuseTestBase):
             self.container.skip_cleanup()
             # Need to set self.container to None to force a creation of a new container
             self.container = None
-        self.stop_dfuse()
+
+        if self.dfuse is not None:
+            self.dfuse.stop()
+            self.dfuse = None
 
         return out
 

@@ -1377,7 +1377,7 @@ duns_set_sys_name(struct duns_attr_t *attrp, const char *sys)
 {
 	if (attrp == NULL)
 		return EINVAL;
-	D_STRNDUP(attrp->da_sys, sys, DAOS_SYS_NAME_MAX_LEN);
+	D_STRNDUP(attrp->da_sys, sys, DAOS_SYS_NAME_MAX);
 	if (attrp->da_sys == NULL)
 		return ENOMEM;
 

@@ -58,7 +58,8 @@ void dc_mgmt_sys_detach(struct dc_mgmt_sys *sys);
 ssize_t dc_mgmt_sys_encode(struct dc_mgmt_sys *sys, void *buf, size_t cap);
 ssize_t dc_mgmt_sys_decode(void *buf, size_t len, struct dc_mgmt_sys **sysp);
 
-int dc_mgmt_net_cfg(const char *name);
+int
+     dc_mgmt_net_cfg(const char *name, crt_init_options_t *crt_info);
 int dc_mgmt_net_cfg_check(const char *name);
 int dc_mgmt_get_pool_svc_ranks(struct dc_mgmt_sys *sys, const uuid_t puuid,
 			       d_rank_list_t **svcranksp);
@@ -68,18 +69,12 @@ int dc_mgmt_notify_pool_connect(struct dc_pool *pool);
 int dc_mgmt_notify_pool_disconnect(struct dc_pool *pool);
 int dc_mgmt_notify_exit(void);
 int dc_mgmt_net_get_num_srv_ranks(void);
-
 int dc_mgmt_get_sys_info(const char *sys, struct daos_sys_info **info);
 void dc_mgmt_put_sys_info(struct daos_sys_info *info);
-
-int
-     dc_mgmt_tm_register(const char *sys, const char *jobid, key_t shm_key, uid_t *owner_uid);
-
-int dc_get_attach_info(const char *name, bool all_ranks,
-		       struct dc_mgmt_sys_info *info,
+int dc_get_attach_info(const char *name, bool all_ranks, struct dc_mgmt_sys_info *info,
 		       Mgmt__GetAttachInfoResp **respp);
-
-void dc_put_attach_info(struct dc_mgmt_sys_info *info,
-			Mgmt__GetAttachInfoResp *resp);
-
+void dc_put_attach_info(struct dc_mgmt_sys_info *info, Mgmt__GetAttachInfoResp *resp);
+int dc_mgmt_cache_attach_info(const char *name);
+void dc_mgmt_drop_attach_info(void);
+int dc_mgmt_tm_register(const char *sys, const char *jobid, key_t shm_key, uid_t *owner_uid);
 #endif

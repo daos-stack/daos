@@ -12,6 +12,7 @@ from os.path import join
 from command_utils_base import BasicParameter, EnvironmentVariables
 from data_mover_utils import (ContClone, DcpCommand, DdeserializeCommand, DserializeCommand,
                               DsyncCommand, FsCopy, uuid_from_obj)
+from dfuse_utils import get_dfuse, start_dfuse
 from duns_utils import format_path
 from exception_utils import CommandFailure
 from general_utils import create_string_buffer, get_log_file
@@ -762,7 +763,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             self.ior_cmd.api.update("DFS", display_api)
             self.ior_cmd.test_file.update(path, display_test_file)
             if pool:
-                self.ior_cmd.set_daos_params(self.server_group, pool, cont_uuid or None)
+                self.ior_cmd.set_daos_params(pool, cont_uuid or None)
 
     def run_ior_with_params(self, param_type, path, pool=None, cont=None,
                             path_suffix=None, flags=None, display=True,
@@ -824,9 +825,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             self.mdtest_cmd.api.update("DFS", display_api)
             self.mdtest_cmd.test_dir.update(path, display_test_dir)
             if pool and cont_uuid:
-                self.mdtest_cmd.set_daos_params(self.server_group, pool, cont_uuid)
+                self.mdtest_cmd.update_params(dfs_pool=pool.identifier, dfs_cont=cont_uuid)
             elif pool:
-                self.mdtest_cmd.set_daos_params(self.server_group, pool, None)
+                self.mdtest_cmd.update_params(dfs_pool=pool.identifier, dfs_cont=None)
 
     def run_mdtest_with_params(self, param_type, path, pool=None, cont=None,
                                flags=None, display=True):
@@ -993,8 +994,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             tool (str): specify the tool name to be used
             pool (TestPool): source pool object
             cont (TestContainer): source container object
-            create_dataset (bool): boolean to create initial set of
-                                   data using ior. Defaults to False.
+            create_dataset (bool, optional): boolean to create initial set of data using ior.
+                Defaults to False.
         """
         # Set the tool to use
         self.set_tool(tool)
@@ -1019,7 +1020,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             pool2 = self.get_pool()
             # Use dfuse as a shared intermediate for serialize + deserialize
             dfuse_cont = self.get_container(pool, oclass=self.ior_cmd.dfs_oclass.value)
-            self.start_dfuse(self.dfuse_hosts, pool, dfuse_cont)
+            self.dfuse = get_dfuse(self, self.dfuse_hosts)
+            start_dfuse(self, self.dfuse, pool, dfuse_cont)
             self.serial_tmp_dir = self.dfuse.mount_dir.value
 
             # Serialize/Deserialize container 1 to a new cont2 in pool2

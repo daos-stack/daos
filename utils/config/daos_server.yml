@@ -324,7 +324,7 @@
 #  # For best performance, it is necessary that the fabric_iface of this engine
 #  # resides on the same NUMA node as the first_core.
 #  #
-#  # Optional parameter; set either this option non-zero or pinned_numa_node but not both.
+#  # Optional parameter; set either this option or pinned_numa_node but not both.
 #
 #  first_core: 0
 #
@@ -488,7 +488,7 @@
 #  # For best performance, it is necessary that the fabric_iface of this engine
 #  # resides on the same NUMA node as the first_core.
 #  #
-#  # Optional parameter; set either this option non-zero or pinned_numa_node but not both.
+#  # Optional parameter; set either this option or pinned_numa_node but not both.
 #
 #  first_core: 22
 #

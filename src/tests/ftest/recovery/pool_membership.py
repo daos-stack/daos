@@ -214,7 +214,7 @@ class PoolMembershipTest(IorTestBase):
                 "Checker didn't fix orphan pool shard! msg = {}".format(query_msg))
 
         # 8. Disable the checker.
-        self.log_step("Disable and start the checker.")
+        self.log_step("Disable checker.")
         dmg_command.check_disable()
 
         # 9. Call dmg storage query usage to verify that the pool usage is back to the
@@ -288,7 +288,7 @@ class PoolMembershipTest(IorTestBase):
                 "Checker didn't fix orphan pool shard! msg = {}".format(query_msg))
 
         # 6. Disable the checker.
-        self.log_step("Disable and start the checker.")
+        self.log_step("Disable checker.")
         dmg_command.check_disable()
 
         # 7. Verify that the pool has one less target.
@@ -332,8 +332,7 @@ class PoolMembershipTest(IorTestBase):
 
         # 2. Write some data with IOR using SX.
         self.log_step("Write some data with IOR.")
-        self.ior_cmd.set_daos_params(
-            self.server_group, self.pool, self.container.identifier)
+        self.ior_cmd.set_daos_params(self.pool, self.container.identifier)
         self.run_ior_with_pool(create_pool=False, create_cont=False)
 
         # 3. Stop servers.

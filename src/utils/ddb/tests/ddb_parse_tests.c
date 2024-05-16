@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2022-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -40,7 +40,6 @@ assert_parsed_fail(const char *str)
 	int			rc;
 
 	rc = ddb_str2argv_create(str, &parse_args);
-	ddb_str2argv_free(&parse_args);
 	assert_rc_equal(-DER_INVAL, rc);
 }
 
