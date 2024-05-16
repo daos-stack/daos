@@ -315,7 +315,7 @@ class PoolListConsolidationTest(RecoveryTestBase):
                 break
             except TestFail as error:
                 msg = (f"## Container create failed after running checker! "
-                    f"error = {error}")
+                       f"error = {error}")
                 self.log.debug(msg)
 
         if not cont_create_success:
