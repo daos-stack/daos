@@ -600,38 +600,6 @@ class TestRunner():
 
         return 0
 
-    def _clear_mount_points(self, logger, test, clear_mounts):
-        """Remove existing mount points on each test host.
-
-        Args:
-            logger (Logger): logger for the messages produced by this method
-            test (TestInfo): the test information
-            clear_mounts (list): mount points to remove before the test
-
-        Returns:
-            int: status code: 0 = success, 128 = failure
-        """
-        if not clear_mounts:
-            return 0
-
-        logger.debug("-" * 80)
-        hosts = test.host_info.all_hosts
-        logger.debug("Clearing existing mount points on %s: %s", hosts, clear_mounts)
-        command = f" df --type=tmpfs --output=target | grep -E '^({'|'.join(clear_mounts)})$'"
-        find_result = run_remote(logger, hosts, command)
-        for data in find_result.output:
-            if not data.passed:
-                continue
-            for line in data.stdout:
-                logger.debug("Clearing mount point %s on %s:", line, data.hosts)
-                commands = [f"sudo umount -f {line}", f"sudo rm -fr {line}"]
-                for command in commands:
-                    if not run_remote(logger, data.hosts, command).passed:
-                        message = "Error clearing existing mount points"
-                        self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
-                        return 128
-        return 0
-
     @staticmethod
     def _query_create_group(logger, hosts, group, create=False):
         """Query and optionally create a group on remote hosts.
@@ -704,6 +672,120 @@ class TestRunner():
         test_env = TestEnvironment()
         if not useradd(logger, hosts, user, gid, test_env.user_dir, True).passed:
             raise LaunchException(f'Error creating user {user}')
+
+    def _clear_mount_points(self, logger, test, clear_mounts):
+        """Remove existing mount points on each test host.
+
+        Args:
+            logger (Logger): logger for the messages produced by this method
+            test (TestInfo): the test information
+            clear_mounts (list): mount points to remove before the test
+
+        Returns:
+            int: status code: 0 = success, 128 = failure
+        """
+        if not clear_mounts:
+            return 0
+
+        logger.debug("-" * 80)
+        hosts = test.host_info.all_hosts
+        logger.debug("Clearing existing mount points on %s: %s", hosts, clear_mounts)
+        command = f" df --type=tmpfs --output=target | grep -E '^({'|'.join(clear_mounts)})$'"
+        find_result = run_remote(logger, hosts, command)
+        mount_point_hosts = {}
+        shared_memory_hosts = NodeSet()
+        for data in find_result.output:
+            if not data.passed:
+                continue
+            for line in data.stdout:
+                if line not in mount_point_hosts:
+                    mount_point_hosts[line] = NodeSet()
+                mount_point_hosts[line].add(data.hosts)
+                shared_memory_hosts.add(data.hosts)
+
+        for mount_point, mount_hosts in mount_point_hosts.items():
+            if not self._remove_super_blocks(logger, mount_hosts, mount_point):
+                message = "Error removing superblocks for existing mount points"
+                self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
+                return 128
+
+        if shared_memory_hosts:
+            if not self._remove_shared_memory_segments(logger, shared_memory_hosts):
+                message = "Error removing shared memory segments for existing mount points"
+                self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
+                return 128
+
+        for mount_point, mount_hosts in mount_point_hosts.items():
+            if not self._remove_mount_point(logger, mount_hosts, mount_point):
+                message = "Error removing existing mount points"
+                self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
+                return 128
+
+        return 0
+
+    def _remove_super_blocks(self, logger, hosts, mount_point):
+        """Remove the super blocks from the specified mount point.
+
+        Args:
+            logger (Logger): logger for the messages produced by this method
+            hosts (NodeSet): hosts on which to remove the super blocks
+            mount_point (str): mount point from which to remove the super blocks
+
+        Returns:
+            bool: True if successful; False otherwise
+        """
+        logger.debug("Clearing existing shared memory segments on %s", hosts)
+        command = f"sudo rm -fr {mount_point}/*"
+        return run_remote(logger, hosts, command).passed
+
+    def _remove_shared_memory_segments(self, logger, hosts):
+        """Remove existing shared memory segments.
+
+        Args:
+            logger (Logger): logger for the messages produced by this method
+            hosts (NodeSet): hosts on which to remove the shared memory segments
+
+        Returns:
+            bool: True if successful; False otherwise
+        """
+        logger.debug("Clearing existing shared memory segments on %s", hosts)
+        result = run_remote(logger, hosts, "ipcs -m")
+        for data in result.output:
+            if not data.passed:
+                continue
+            for line in data.stdout:
+                info = re.split(r"\s+", line)
+                if not info[0].startswith("0x"):
+                    # Skip processing lines not listing a shared memory segment
+                    continue
+                if len(info) < 3 or not info[2].startswith("daos"):
+                    # Skip processing shared memory segments w/o a daos owner
+                    continue
+                if len(info) > 6 and info[6] == "dest":
+                    # Skip processing shared memory segments already marked to be destroyed
+                    continue
+                logger.debug("Clearing shared memory segment %s on %s:", info[0], data.hosts)
+                if not run_remote(logger, data.hosts, f"sudo ipcrm -M {info[0]}").passed:
+                    return False
+        return True
+
+    def _remove_mount_point(self, logger, hosts, mount_point):
+        """Remove the mount point.
+
+        Args:
+            logger (Logger): logger for the messages produced by this method
+            hosts (NodeSet): hosts on which to remove the mount point
+            mount_point (str): mount point from which to remove the mount point
+
+        Returns:
+            bool: True if successful; False otherwise
+        """
+        logger.debug("Clearing mount point %s on %s:", mount_point, hosts)
+        commands = [f"sudo umount -f {mount_point}", f"sudo rm -fr {mount_point}"]
+        for command in commands:
+            if not run_remote(logger, hosts, command).passed:
+                return False
+        return True
 
     def _generate_certs(self, logger):
         """Generate the certificates for the test.
