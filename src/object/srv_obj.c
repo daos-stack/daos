@@ -2847,16 +2847,15 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		if (rc == 0) {
 			rc = obj_local_rw(rpc, &ioc, dth);
 			if (rc != 0)
-				DL_CDEBUG(
-					rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
-					     (rc == -DER_EXIST &&
-					      (orw->orw_api_flags & (DAOS_COND_DKEY_INSERT |
-								     DAOS_COND_AKEY_INSERT))) ||
-					     (rc == -DER_NONEXIST &&
-					      (orw->orw_api_flags & (DAOS_COND_DKEY_UPDATE |
-								     DAOS_COND_AKEY_UPDATE))),
-					     DB_IO, DLOG_ERR, rc, DF_UOID " local write failed",
-					     DP_UOID(orw->orw_oid));
+				DL_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
+					      (rc == -DER_EXIST &&
+					       (orw->orw_api_flags &
+						(DAOS_COND_DKEY_INSERT | DAOS_COND_AKEY_INSERT))) ||
+					      (rc == -DER_NONEXIST &&
+					       (orw->orw_api_flags &
+						(DAOS_COND_DKEY_UPDATE | DAOS_COND_AKEY_UPDATE))),
+					  DB_IO, DLOG_ERR, rc, DF_UOID " local write failed",
+					  DP_UOID(orw->orw_oid));
 			rc = dtx_end(dth, ioc.ioc_coc, rc);
 		}
 
