@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -9,6 +9,14 @@
 #include <gurt/common.h>
 #include "ddb_common.h"
 #include "ddb_parse.h"
+
+void
+safe_strcat(char *dst, const char *src, size_t dst_size)
+{
+	size_t remaining_space = dst_size - strlen(dst) - 1; // Subtract 1 for null terminator
+
+	strncat(dst, src, remaining_space);
+}
 
 int
 vos_path_parse(const char *path, struct vos_file_parts *vos_file_parts)
@@ -29,8 +37,8 @@ vos_path_parse(const char *path, struct vos_file_parts *vos_file_parts)
 	while (tok != NULL && rc != 0) {
 		rc = uuid_parse(tok, vos_file_parts->vf_pool_uuid);
 		if (!SUCCESS(rc)) {
-			strcat(vos_file_parts->vf_db_path, "/");
-			strcat(vos_file_parts->vf_db_path, tok);
+			safe_strcat(vos_file_parts->vf_db_path, "/", DB_PATH_LEN);
+			safe_strcat(vos_file_parts->vf_db_path, tok, DB_PATH_LEN);
 		}
 		tok = strtok(NULL, "/");
 	}
@@ -83,14 +91,16 @@ ddb_str2argv_create(const char *buf, struct argv_parsed *parse_args)
 	parse_args->ap_argv = we->we_wordv;
 	parse_args->ap_ctx = we;
 
-	return rc;
+	return 0;
 }
 
 void
 ddb_str2argv_free(struct argv_parsed *parse_args)
 {
-	wordfree(parse_args->ap_ctx);
-	D_FREE(parse_args->ap_ctx);
+	if (parse_args->ap_ctx != NULL) {
+		wordfree(parse_args->ap_ctx);
+		D_FREE(parse_args->ap_ctx);
+	}
 }
 
 int
