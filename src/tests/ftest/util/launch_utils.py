@@ -9,6 +9,7 @@ import os
 import re
 import sys
 import time
+from getpass import getuser
 from pathlib import Path
 
 from ClusterShell.NodeSet import NodeSet
@@ -734,7 +735,7 @@ class TestRunner():
         Returns:
             bool: True if successful; False otherwise
         """
-        logger.debug("Clearing existing shared memory segments on %s", hosts)
+        logger.debug("Clearing existing super blocks on %s", hosts)
         command = f"sudo rm -fr {mount_point}/*"
         return run_remote(logger, hosts, command).passed
 
@@ -749,6 +750,7 @@ class TestRunner():
             bool: True if successful; False otherwise
         """
         logger.debug("Clearing existing shared memory segments on %s", hosts)
+        owners = [user[:10] for user in ("daos_server", getuser())]
         result = run_remote(logger, hosts, "ipcs -m")
         for data in result.output:
             if not data.passed:
@@ -758,11 +760,16 @@ class TestRunner():
                 if not info[0].startswith("0x"):
                     # Skip processing lines not listing a shared memory segment
                     continue
-                if len(info) < 3 or not info[2].startswith("daos"):
+                if len(info) < 3 or not info[2] not in owners:
                     # Skip processing shared memory segments w/o a daos owner
+                    logger.debug(
+                        "Not clearing shared memory segment %s due to %s owner not in %s",
+                        info[0], info[2], owners)
                     continue
                 if len(info) > 6 and info[6] == "dest":
                     # Skip processing shared memory segments already marked to be destroyed
+                    logger.debug(
+                        "Not clearing shared memory segment %s due to %s status", info[0], info[6])
                     continue
                 logger.debug("Clearing shared memory segment %s on %s:", info[0], data.hosts)
                 if not run_remote(logger, data.hosts, f"sudo ipcrm -M {info[0]}").passed:
