@@ -126,6 +126,7 @@ ior_stress:
   transfer_size:
     - '1m'
     - '32k'
+    - '4k'
   dfs_oclass:
     - ["SX","SX"]
     - ["EC_2P1GX", "RP_2GX"]
@@ -201,7 +202,7 @@ vpic_stress:
   oclass:
     - ["EC_2P1GX", "RP_2GX"]
 lammps_stress:
-  job_timeout: 45
+  job_timeout: 55
   nodesperjob:
     - 8
   taskspernode:
