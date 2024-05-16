@@ -78,6 +78,10 @@
 unsigned int	dss_sec_xs_nr;
 /** Number of offload XS */
 unsigned int	dss_tgt_offload_xs_nr;
+/** Number of offload per socket */
+unsigned int            dss_offload_per_numa_nr;
+/** Number of target per socket */
+unsigned int            dss_tgt_per_numa_nr;
 /** Number of target (XS set) per engine */
 unsigned int	dss_tgt_nr;
 /** Number of system XS */
@@ -454,6 +458,25 @@ xs_id2type(unsigned int xs_id)
 		return DSS_XS_IOFW;
 	else
 		return DSS_XS_OFFLOAD;
+}
+
+/* Get target ID from xstream ID */
+static inline int
+xs_id2tgt(int xs_id)
+{
+	unsigned int helper_per_tgt;
+	unsigned int xs_type = xs_id2type(xs_id);
+
+	if (xs_type != DSS_XS_VOS && xs_type != DSS_XS_IOFW)
+		return -1;
+
+	if (dss_helper_pool)
+		return xs_id - dss_sys_xs_nr;
+
+	helper_per_tgt = dss_tgt_offload_xs_nr / dss_tgt_nr;
+	D_ASSERT(helper_per_tgt == 0 || helper_per_tgt == 1 || helper_per_tgt == 2);
+
+	return (xs_id - dss_sys_xs_nr) / (helper_per_tgt + 1);
 }
 
 static inline bool
@@ -870,7 +893,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int tag, int xs_id)
 	dx->dx_main_xs	= (xs_type == DSS_XS_VOS);
 	dx->dx_dsc_started = false;
 
-	dx->dx_tgt_id = dss_xs2tgt(xs_id);
+	dx->dx_tgt_id = xs_id2tgt(xs_id);
 	/**
 	 * Generate name for each xstreams so that they can be easily identified
 	 * and monitored independently (e.g. via ps(1))
@@ -1150,8 +1173,8 @@ ca_reuse_core(struct core_assignment *ca, unsigned int xs_id, unsigned int assig
 static inline bool
 insufficient_cores()
 {
-	if (numa_obj)
-		return (dss_num_cores_numa_node < DSS_XS_NR_TOTAL);
+	if (dss_numa && dss_numa_node != -1)
+		return (dss_numa[dss_numa_node].ni_core_nr < DSS_XS_NR_TOTAL);
 	else
 		return (dss_core_nr < DSS_XS_NR_TOTAL);
 }
@@ -1160,10 +1183,12 @@ static int
 dss_start_xs_id(int tag, int xs_id, struct core_assignment *ca)
 {
 	hwloc_obj_t	obj;
+	int		tgt;
 	int		rc;
 	unsigned	idx;
 	unsigned int	xs_type;
 	char		*cpuset;
+	struct dss_numa_info *ninfo;
 
 	/*
 	 * Rules for assigning cores to xstreams:
@@ -1175,11 +1200,36 @@ dss_start_xs_id(int tag, int xs_id, struct core_assignment *ca)
 	 * - SEC xstreams use dedicated cores when possible, otherwise, share cores
 	 *   with IOFW and OFFLOAD.
 	 */
-	D_DEBUG(DB_TRACE, "start xs_id called for %d.  ", xs_id);
+	D_DEBUG(DB_TRACE, "start xs_id called for %d.", xs_id);
 
 	xs_type = xs_id2type(xs_id);
 	/* if we are NUMA aware, use the NUMA information */
-	if (numa_obj) {
+	if (dss_numa) {
+		if (dss_numa_node == -1) {
+			tgt = xs_id2tgt(xs_id);
+			if (xs_type == DSS_XS_SYS || xs_type == DSS_XS_DRPC) {
+				/** Put the system and DRPC on numa 0 */
+				ninfo = &dss_numa[0];
+			} else if (xs_type == DSS_XS_SWIM) {
+				/** Put swim on first core of numa 1, core 0 */
+				ninfo = &dss_numa[1];
+			} else if (xs_type == DSS_XS_VOS) {
+				/** Split I/O targets evenly among numa nodes */
+				ninfo = &dss_numa[tgt / dss_tgt_per_numa_nr];
+			} else if (xs_type == DSS_XS_IOFW || xs_type == DSS_XS_OFFLOAD ||
+				   xs_type == DSS_XS_SEC) {
+				/** Split helper & secondary xstreams evenly among numa nodes */
+				tgt   = xs_id - dss_sys_xs_nr - dss_tgt_nr;
+				ninfo = &dss_numa[tgt / dss_offload_per_numa_nr];
+			} else {
+				D_ASSERTF(0, "Invalid XS type %u\n", xs_type);
+			}
+
+			D_DEBUG(DB_TRACE, "Using numa node %d for XS %d\n", ninfo->ni_idx, xs_id);
+		} else {
+			ninfo = &dss_numa[dss_numa_node];
+		}
+
 		if (xs_type == DSS_XS_DRPC && insufficient_cores()) {
 			idx = ca_reuse_core(ca, xs_id, DSS_XS_SYS);
 		} else if (xs_type == DSS_XS_SEC && insufficient_cores()) {
@@ -1189,24 +1239,14 @@ dss_start_xs_id(int tag, int xs_id, struct core_assignment *ca)
 			}
 			idx = ca_reuse_core(ca, xs_id, DSS_XS_IOFW);
 		} else {
-			idx = hwloc_bitmap_first(core_allocation_bitmap);
+			idx = hwloc_bitmap_first(ninfo->ni_coremap);
 			if (idx == -1) {
 				D_ERROR("No core available for XS: %d", xs_id);
 				return -DER_INVAL;
 			}
 			D_DEBUG(DB_TRACE, "Choosing next available core index %d.", idx);
-			hwloc_bitmap_clr(core_allocation_bitmap, idx);
+			hwloc_bitmap_clr(ninfo->ni_coremap, idx);
 		}
-
-		obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, idx);
-		if (obj == NULL) {
-			D_PRINT("Null core returned by hwloc\n");
-			return -DER_INVAL;
-		}
-
-		hwloc_bitmap_asprintf(&cpuset, obj->cpuset);
-		D_DEBUG(DB_TRACE, "Using CPU set %s\n", cpuset);
-		free(cpuset);
 	} else {
 		D_DEBUG(DB_TRACE, "Using non-NUMA aware core allocation\n");
 		/* MOD operation on 'dss_core_nr' to support oversubscribe, see dss_tgt_nr_get() */
@@ -1246,13 +1286,18 @@ dss_start_xs_id(int tag, int xs_id, struct core_assignment *ca)
 			D_ASSERTF(0, "Invalid XS type: %u\n", xs_type);
 			return -DER_INVAL;
 		}
+	}
 
-		obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, idx);
-		if (obj == NULL) {
-			D_ERROR("Null core returned by hwloc for XS %d\n",
-				xs_id);
-			return -DER_INVAL;
-		}
+	obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, idx);
+	if (obj == NULL) {
+		D_PRINT("Null core returned by hwloc\n");
+		return -DER_INVAL;
+	}
+
+	if (D_LOG_ENABLED(DB_TRACE)) {
+		hwloc_bitmap_asprintf(&cpuset, obj->cpuset);
+		D_DEBUG(DB_TRACE, "Using CPU set %s for XS %d\n", cpuset, xs_id);
+		free(cpuset);
 	}
 	ca_assign(ca, xs_type, idx);
 
@@ -1316,9 +1361,8 @@ dss_xstreams_init(void)
 		dss_core_nr, dss_tgt_nr);
 
 	if (dss_numa_node != -1) {
-		D_DEBUG(DB_TRACE,
-			"Detected %d cores on NUMA node %d\n",
-			dss_num_cores_numa_node, dss_numa_node);
+		D_DEBUG(DB_TRACE, "Detected %d cores on NUMA node %d\n",
+			dss_numa[dss_numa_node].ni_core_nr, dss_numa_node);
 	}
 
 	xstream_data.xd_xs_nr = DSS_XS_NR_TOTAL;

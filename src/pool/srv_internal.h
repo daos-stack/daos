@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -25,6 +25,16 @@ struct pool_metrics {
 	struct d_tm_node_t	*query_total;
 	struct d_tm_node_t	*query_space_total;
 	struct d_tm_node_t	*evict_total;
+
+	/* service metrics */
+	struct d_tm_node_t      *service_leader;
+	struct d_tm_node_t      *map_version;
+	struct d_tm_node_t      *open_handles;
+	struct d_tm_node_t      *total_targets;
+	struct d_tm_node_t      *disabled_targets;
+	struct d_tm_node_t      *draining_targets;
+	struct d_tm_node_t      *total_ranks;
+	struct d_tm_node_t      *degraded_ranks;
 };
 
 /* Pool thread-local storage */
@@ -133,7 +143,7 @@ struct pool_map_refresh_ult_arg {
  */
 void ds_pool_rsvc_class_register(void);
 void ds_pool_rsvc_class_unregister(void);
-uint32_t ds_pool_get_vos_pool_df_version(uint32_t pool_global_version);
+uint32_t ds_pool_get_vos_df_version(uint32_t pool_global_version);
 char *ds_pool_svc_rdb_path(const uuid_t pool_uuid);
 int ds_pool_svc_load(struct rdb_tx *tx, uuid_t uuid, rdb_path_t *root, uint32_t *global_version_out,
 		     struct pool_buf **map_buf_out, uint32_t *map_version_out);

@@ -10,7 +10,7 @@ This section describes some of the common tasks handled by admins at a high leve
 4. Generate certificate files.
 5. Copy one of the example configs from `utils/config/examples` to
 `/etc/daos` and adjust it based on the environment. E.g., `access_points`,
-`bdev_class`.
+`class`.
 6. Check that the directory where the log files will be created exists. E.g.,
 `control_log_file`, `log_file` field in `engines` section.
 7. Start `daos_server`.
@@ -38,7 +38,7 @@ to server hosts and `daos-client` to client hosts.
 4. Generate certificate files and distribute them to all the hosts.
 5. Copy one of the example configs from `utils/config/examples` to
 `/etc/daos` of one of the server hosts and adjust it based on the environment.
-E.g., `access_points`, `bdev_class`.
+E.g., `access_points`, `class`.
 6. Check that the directory where the log files will be created exists. E.g.,
 `control_log_file`, `log_file` field in `engines` section.
 7. Start `daos_server`.

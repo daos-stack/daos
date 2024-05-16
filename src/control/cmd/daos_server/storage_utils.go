@@ -84,10 +84,6 @@ func storageCmdInit(cmd *baseScanCmd) (*server.StorageControlService, error) {
 	return scs, nil
 }
 
-type scmSocketCmd struct {
-	SocketID *uint `long:"socket" description:"Perform PMem namespace operations on the socket identified by this ID (defaults to all sockets). PMem region operations will be performed across all sockets."`
-}
-
 type nvmeCmd struct {
 	baseScanCmd     `json:"-"`
 	helperLogCmd    `json:"-"`
@@ -97,7 +93,7 @@ type nvmeCmd struct {
 
 func (cmd *nvmeCmd) initWith(initFn initNvmeCmdFn) error {
 	var err error
-	cmd.ctlSvc, err = initFn(cmd)
+	cmd.ctlSvc, cmd.config, err = initFn(cmd)
 	if err != nil {
 		return err
 	}
@@ -105,16 +101,25 @@ func (cmd *nvmeCmd) initWith(initFn initNvmeCmdFn) error {
 	return nil
 }
 
-type initNvmeCmdFn func(cmd *nvmeCmd) (*server.StorageControlService, error)
+type initNvmeCmdFn func(cmd *nvmeCmd) (*server.StorageControlService, *config.Server, error)
 
-func initNvmeCmd(cmd *nvmeCmd) (*server.StorageControlService, error) {
+func initNvmeCmd(cmd *nvmeCmd) (*server.StorageControlService, *config.Server, error) {
 	if err := cmd.setHelperLogFile(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	cmd.setIOMMUChecker(hwprov.DefaultIOMMUDetector(cmd.Logger).IsIOMMUEnabled)
 
-	return storageCmdInit(&cmd.baseScanCmd)
+	scs, err := storageCmdInit(&cmd.baseScanCmd)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return scs, cmd.config, nil
+}
+
+type scmSocketCmd struct {
+	SocketID *uint `long:"socket" description:"Perform PMem namespace operations on the socket identified by this ID (defaults to all sockets). PMem region operations will be performed across all sockets."`
 }
 
 type scmCmd struct {
@@ -126,7 +131,7 @@ type scmCmd struct {
 
 func (cmd *scmCmd) initWith(initFn initScmCmdFn) error {
 	var err error
-	cmd.ctlSvc, err = initFn(cmd)
+	cmd.ctlSvc, cmd.config, err = initFn(cmd)
 	if err != nil {
 		return err
 	}
@@ -210,23 +215,17 @@ func getSockFromCfg(log logging.Logger, cfg *config.Server, affSrc config.Engine
 	return nil
 }
 
-type initScmCmdFn func(cmd *scmCmd) (*server.StorageControlService, error)
+type initScmCmdFn func(cmd *scmCmd) (*server.StorageControlService, *config.Server, error)
 
-func initScmCmd(cmd *scmCmd) (*server.StorageControlService, error) {
+func initScmCmd(cmd *scmCmd) (*server.StorageControlService, *config.Server, error) {
 	if err := cmd.setHelperLogFile(); err != nil {
-		return nil, err
-	}
-	if cmd.IgnoreConfig {
-		cmd.config = nil
-	} else if cmd.config != nil && cmd.SocketID == nil {
-		// Read SocketID from config if not set explicitly in command.
-		affSrc, err := getAffinitySource(cmd.MustLogCtx(), cmd.Logger, cmd.config)
-		if err != nil {
-			cmd.Error(err.Error())
-		} else {
-			cmd.SocketID = getSockFromCfg(cmd.Logger, cmd.config, affSrc)
-		}
+		return nil, nil, err
 	}
 
-	return storageCmdInit(&cmd.baseScanCmd)
+	scs, err := storageCmdInit(&cmd.baseScanCmd)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return scs, cmd.config, nil
 }

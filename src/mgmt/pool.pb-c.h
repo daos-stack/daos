@@ -825,7 +825,7 @@ struct  _Mgmt__PoolQueryResp
    */
   uint32_t version;
   /*
-   * current raft leader
+   * current raft leader (2.4)
    */
   uint32_t leader;
   /*
@@ -852,11 +852,23 @@ struct  _Mgmt__PoolQueryResp
    * pool state
    */
   Mgmt__PoolServiceState state;
+  /*
+   * current raft leader (2.6+)
+   */
+  uint32_t                  svc_ldr;
+  /*
+   * service replica ranks
+   */
+  size_t                    n_svc_reps;
+  uint32_t                 *svc_reps;
 };
-#define MGMT__POOL_QUERY_RESP__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_resp__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, 0,NULL, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, MGMT__POOL_SERVICE_STATE__Creating }
-
+#define MGMT__POOL_QUERY_RESP__INIT                                                                \
+  {                                                                                                \
+	  PROTOBUF_C_MESSAGE_INIT(&mgmt__pool_query_resp__descriptor)                              \
+	  , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, 0, \
+	      NULL, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0,  \
+	      0, MGMT__POOL_SERVICE_STATE__Creating, 0, 0, NULL                                    \
+  }
 
 typedef enum {
   MGMT__POOL_PROPERTY__VALUE__NOT_SET = 0,

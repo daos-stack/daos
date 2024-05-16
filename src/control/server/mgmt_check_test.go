@@ -131,7 +131,7 @@ func TestServer_mgmtSvc_SystemCheckStart(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		createMS    func(*testing.T, logging.Logger) *mgmtSvc
-		setupDrpc   func(*testing.T, *mgmtSvc)
+		getMockDrpc func() *mockDrpcClient
 		req         *mgmtpb.CheckStartReq
 		expResp     *mgmtpb.CheckStartResp
 		expErr      error
@@ -170,8 +170,8 @@ func TestServer_mgmtSvc_SystemCheckStart(t *testing.T) {
 			expErr: errors.New("unmarshal checker policies"),
 		},
 		"dRPC fails": {
-			setupDrpc: func(t *testing.T, ms *mgmtSvc) {
-				setupMockDrpcClient(ms, nil, errors.New("mock dRPC"))
+			getMockDrpc: func() *mockDrpcClient {
+				return getMockDrpcClient(nil, errors.New("mock dRPC"))
 			},
 			req: &mgmtpb.CheckStartReq{
 				Sys: "daos_server",
@@ -181,8 +181,8 @@ func TestServer_mgmtSvc_SystemCheckStart(t *testing.T) {
 			expPolicies: testPolicies,
 		},
 		"bad resp": {
-			setupDrpc: func(t *testing.T, ms *mgmtSvc) {
-				setupMockDrpcClientBytes(ms, []byte("garbage"), nil)
+			getMockDrpc: func() *mockDrpcClient {
+				return getMockDrpcClientBytes([]byte("garbage"), nil)
 			},
 			req: &mgmtpb.CheckStartReq{
 				Sys: "daos_server",
@@ -192,8 +192,8 @@ func TestServer_mgmtSvc_SystemCheckStart(t *testing.T) {
 			expPolicies: testPolicies,
 		},
 		"request failed": {
-			setupDrpc: func(t *testing.T, ms *mgmtSvc) {
-				setupMockDrpcClient(ms, &mgmt.CheckStartResp{Status: int32(daos.MiscError)}, nil)
+			getMockDrpc: func() *mockDrpcClient {
+				return getMockDrpcClient(&mgmt.CheckStartResp{Status: int32(daos.MiscError)}, nil)
 			},
 			req: &mgmtpb.CheckStartReq{
 				Sys: "daos_server",
@@ -215,9 +215,9 @@ func TestServer_mgmtSvc_SystemCheckStart(t *testing.T) {
 				Sys:   "daos_server",
 				Flags: uint32(chkpb.CheckFlag_CF_RESET),
 			},
-			setupDrpc: func(t *testing.T, ms *mgmtSvc) {
+			getMockDrpc: func() *mockDrpcClient {
 				// engine returns status > 0 to indicate reset
-				setupMockDrpcClient(ms, &mgmt.CheckStartResp{Status: 1}, nil)
+				return getMockDrpcClient(&mgmt.CheckStartResp{Status: 1}, nil)
 			},
 			expResp:     &mgmtpb.CheckStartResp{},
 			expFindings: []*checker.Finding{},
@@ -229,9 +229,9 @@ func TestServer_mgmtSvc_SystemCheckStart(t *testing.T) {
 				Flags: uint32(chkpb.CheckFlag_CF_RESET),
 				Uuids: []string{uuids[0], uuids[2]},
 			},
-			setupDrpc: func(t *testing.T, ms *mgmtSvc) {
+			getMockDrpc: func() *mockDrpcClient {
 				// engine returns status > 0 to indicate reset
-				setupMockDrpcClient(ms, &mgmt.CheckStartResp{Status: 1}, nil)
+				return getMockDrpcClient(&mgmt.CheckStartResp{Status: 1}, nil)
 			},
 			expResp: &mgmtpb.CheckStartResp{},
 			expFindings: []*checker.Finding{
@@ -283,12 +283,13 @@ func TestServer_mgmtSvc_SystemCheckStart(t *testing.T) {
 			}
 			svc := tc.createMS(t, log)
 
-			if tc.setupDrpc == nil {
-				tc.setupDrpc = func(t *testing.T, ms *mgmtSvc) {
-					setupMockDrpcClient(ms, &mgmtpb.CheckStartResp{}, nil)
+			if tc.getMockDrpc == nil {
+				tc.getMockDrpc = func() *mockDrpcClient {
+					return getMockDrpcClient(&mgmtpb.CheckStartResp{}, nil)
 				}
 			}
-			tc.setupDrpc(t, svc)
+			mockDrpc := tc.getMockDrpc()
+			setupSvcDrpcClient(svc, 0, mockDrpc)
 
 			resp, err := svc.SystemCheckStart(test.Context(t), tc.req)
 
@@ -310,15 +311,6 @@ func TestServer_mgmtSvc_SystemCheckStart(t *testing.T) {
 			}
 
 			// Check contents of drpc payload
-			ei, ok := svc.harness.instances[0].(*EngineInstance)
-			if !ok {
-				t.Fatalf("bad engine instance type %T", svc.harness.instances[0])
-			}
-			mockDrpc, ok := ei._drpcClient.(*mockDrpcClient)
-			if !ok {
-				t.Fatalf("bad drpc client type type %T", ei._drpcClient)
-			}
-
 			drpcInput := new(mgmtpb.CheckStartReq)
 			calls := mockDrpc.calls.get()
 			if len(calls) == 0 {
@@ -636,6 +628,214 @@ func TestServer_mgmtSvc_SystemCheckSetPolicy(t *testing.T) {
 				t.Fatal(err)
 			}
 			if diff := cmp.Diff(tc.expPolicies, policies.ToSlice(), cmpopts.IgnoreUnexported(mgmtpb.CheckInconsistPolicy{})); diff != "" {
+				t.Fatalf("want-, got+:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestServer_mgmtSvc_SystemCheckQuery(t *testing.T) {
+	uuids := testPoolUUIDs(3)
+	testFindingsMS := []*chkpb.CheckReport{}
+	testFindingsDrpc := []*chkpb.CheckReport{}
+	drpcPools := []*mgmtpb.CheckQueryPool{}
+	for i, uuid := range uuids {
+		testFindingsMS = append(testFindingsMS, &chkpb.CheckReport{
+			Seq:      uint64(i + 1),
+			Class:    chkpb.CheckInconsistClass_CIC_CONT_BAD_LABEL,
+			Action:   chkpb.CheckInconsistAction_CIA_TRUST_MS,
+			PoolUuid: uuid,
+		})
+
+		testFindingsDrpc = append(testFindingsDrpc, &chkpb.CheckReport{
+			Seq:      uint64(i + 1 + len(uuids)),
+			Class:    chkpb.CheckInconsistClass_CIC_POOL_NONEXIST_ON_ENGINE,
+			Action:   chkpb.CheckInconsistAction_CIA_TRUST_MS,
+			PoolUuid: uuid,
+		})
+
+		drpcPools = append(drpcPools, &mgmtpb.CheckQueryPool{
+			Uuid:   uuid,
+			Status: chkpb.CheckPoolStatus(i),
+			Phase:  chkpb.CheckScanPhase(i),
+		})
+	}
+
+	drpcResp := &mgmtpb.CheckQueryResp{
+		InsStatus: chkpb.CheckInstStatus_CIS_RUNNING,
+		InsPhase:  chkpb.CheckScanPhase_CSP_AGGREGATION,
+		Pools:     drpcPools,
+		Reports:   testFindingsDrpc,
+	}
+
+	for name, tc := range map[string]struct {
+		createMS  func(*testing.T, logging.Logger) *mgmtSvc
+		setupDrpc func(*testing.T, *mgmtSvc)
+		req       *mgmtpb.CheckQueryReq
+		expResp   *mgmtpb.CheckQueryResp
+		expErr    error
+	}{
+		"not MS replica": {
+			createMS: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				svc := newTestMgmtSvc(t, log)
+				svc.sysdb = raft.MockDatabaseWithCfg(t, log, &raft.DatabaseConfig{
+					SystemName: build.DefaultSystemName,
+					Replicas:   []*net.TCPAddr{{IP: net.IP{111, 222, 1, 1}}},
+				})
+				return svc
+			},
+			req: &mgmtpb.CheckQueryReq{
+				Sys: "daos_server",
+			},
+			expErr: errors.New("replica"),
+		},
+		"checker is not enabled": {
+			createMS: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				return testSvcWithMemberState(t, log, system.MemberStateCheckerStarted, uuids)
+			},
+			req: &mgmtpb.CheckQueryReq{
+				Sys: "daos_server",
+			},
+			expErr: checker.FaultCheckerNotEnabled,
+		},
+		"bad member states": {
+			createMS: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				return testSvcCheckerEnabled(t, log, system.MemberStateJoined, uuids)
+			},
+			req: &mgmtpb.CheckQueryReq{
+				Sys: "daos_server",
+			},
+			expErr: errors.New("expected states"),
+		},
+		"dRPC fails": {
+			setupDrpc: func(t *testing.T, ms *mgmtSvc) {
+				setupMockDrpcClient(ms, nil, errors.New("mock dRPC"))
+			},
+			req: &mgmtpb.CheckQueryReq{
+				Sys: "daos_server",
+			},
+			expErr: errors.New("mock dRPC"),
+		},
+		"bad resp": {
+			setupDrpc: func(t *testing.T, ms *mgmtSvc) {
+				setupMockDrpcClientBytes(ms, []byte("garbage"), nil)
+			},
+			req: &mgmtpb.CheckQueryReq{
+				Sys: "daos_server",
+			},
+			expErr: errors.New("unmarshal CheckQuery response"),
+		},
+		"success": {
+			req: &mgmtpb.CheckQueryReq{
+				Sys: "daos_server",
+			},
+			expResp: &mgmtpb.CheckQueryResp{
+				InsStatus: chkpb.CheckInstStatus_CIS_RUNNING,
+				InsPhase:  chkpb.CheckScanPhase_CSP_AGGREGATION,
+				Pools:     drpcPools,
+				Reports:   append(testFindingsMS, testFindingsDrpc...),
+			},
+		},
+		"shallow": {
+			req: &mgmtpb.CheckQueryReq{
+				Sys:     "daos_server",
+				Shallow: true,
+			},
+			setupDrpc: func(t *testing.T, ms *mgmtSvc) {
+				setupMockDrpcClient(ms, nil, errors.New("shouldn't call dRPC"))
+			},
+			expResp: &mgmtpb.CheckQueryResp{
+				Reports: testFindingsMS,
+			},
+		},
+		"request sequence numbers": {
+			req: &mgmtpb.CheckQueryReq{
+				Sys:  "daos_server",
+				Seqs: []uint64{2, 3},
+			},
+			setupDrpc: func(t *testing.T, ms *mgmtSvc) {
+				setupMockDrpcClient(ms, nil, errors.New("shouldn't call dRPC"))
+			},
+			expResp: &mgmtpb.CheckQueryResp{
+				Reports: []*chkpb.CheckReport{
+					testFindingsMS[1],
+					testFindingsMS[2],
+				},
+			},
+		},
+		"request invalid sequence number": {
+			req: &mgmtpb.CheckQueryReq{
+				Sys:  "daos_server",
+				Seqs: []uint64{2, 3, 25},
+			},
+			setupDrpc: func(t *testing.T, ms *mgmtSvc) {
+				setupMockDrpcClient(ms, nil, errors.New("shouldn't call dRPC"))
+			},
+			expErr: errors.New("not found"),
+		},
+		"request all uuids": {
+			req: &mgmtpb.CheckQueryReq{
+				Sys:   "daos_server",
+				Uuids: uuids,
+			},
+			expResp: &mgmtpb.CheckQueryResp{
+				InsStatus: chkpb.CheckInstStatus_CIS_RUNNING,
+				InsPhase:  chkpb.CheckScanPhase_CSP_AGGREGATION,
+				Pools:     drpcPools,
+				Reports:   append(testFindingsMS, testFindingsDrpc...),
+			},
+		},
+		"filter uuids": {
+			req: &mgmtpb.CheckQueryReq{
+				Sys:   "daos_server",
+				Uuids: []string{uuids[0], uuids[2]},
+			},
+			expResp: &mgmtpb.CheckQueryResp{
+				InsStatus: chkpb.CheckInstStatus_CIS_RUNNING,
+				InsPhase:  chkpb.CheckScanPhase_CSP_AGGREGATION,
+				Pools:     drpcPools,
+				Reports: []*chkpb.CheckReport{
+					testFindingsMS[0],
+					testFindingsMS[2],
+					testFindingsDrpc[0],
+					testFindingsDrpc[2],
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			if tc.createMS == nil {
+				tc.createMS = func(t *testing.T, log logging.Logger) *mgmtSvc {
+					svc := testSvcCheckerEnabled(t, log, system.MemberStateCheckerStarted, uuids)
+					for _, f := range testFindingsMS {
+						if err := svc.sysdb.AddCheckerFinding(&checker.Finding{CheckReport: *f}); err != nil {
+							t.Fatalf("unable to add finding %+v: %s", f, err.Error())
+						}
+					}
+					return svc
+				}
+			}
+			svc := tc.createMS(t, log)
+
+			if tc.setupDrpc == nil {
+				tc.setupDrpc = func(t *testing.T, ms *mgmtSvc) {
+					setupMockDrpcClient(ms, drpcResp, nil)
+				}
+			}
+			tc.setupDrpc(t, svc)
+
+			resp, err := svc.SystemCheckQuery(test.Context(t), tc.req)
+
+			test.CmpErr(t, tc.expErr, err)
+			if diff := cmp.Diff(tc.expResp, resp,
+				cmpopts.IgnoreUnexported(
+					mgmtpb.CheckQueryResp{},
+					mgmtpb.CheckQueryPool{},
+					chkpb.CheckReport{}),
+			); diff != "" {
 				t.Fatalf("want-, got+:\n%s", diff)
 			}
 		})

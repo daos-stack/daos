@@ -1436,7 +1436,7 @@ const ProtobufCMessageDescriptor mgmt__get_attach_info_req__descriptor =
   (ProtobufCMessageInit) mgmt__get_attach_info_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__client_net_hint__field_descriptors[9] =
+static const ProtobufCFieldDescriptor mgmt__client_net_hint__field_descriptors[8] =
 {
   {
     "provider",
@@ -1471,18 +1471,6 @@ static const ProtobufCFieldDescriptor mgmt__client_net_hint__field_descriptors[9
     offsetof(Mgmt__ClientNetHint, domain),
     NULL,
     &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "crt_ctx_share_addr",
-    4,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__ClientNetHint, crt_ctx_share_addr),
-    NULL,
-    NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
@@ -1548,20 +1536,20 @@ static const ProtobufCFieldDescriptor mgmt__client_net_hint__field_descriptors[9
   },
 };
 static const unsigned mgmt__client_net_hint__field_indices_by_name[] = {
-  3,   /* field[3] = crt_ctx_share_addr */
-  4,   /* field[4] = crt_timeout */
+  3,   /* field[3] = crt_timeout */
   2,   /* field[2] = domain */
-  7,   /* field[7] = env_vars */
+  6,   /* field[6] = env_vars */
   1,   /* field[1] = interface */
-  5,   /* field[5] = net_dev_class */
+  4,   /* field[4] = net_dev_class */
   0,   /* field[0] = provider */
-  8,   /* field[8] = provider_idx */
-  6,   /* field[6] = srv_srx_set */
+  7,   /* field[7] = provider_idx */
+  5,   /* field[5] = srv_srx_set */
 };
-static const ProtobufCIntRange mgmt__client_net_hint__number_ranges[1 + 1] =
+static const ProtobufCIntRange mgmt__client_net_hint__number_ranges[2 + 1] =
 {
   { 1, 0 },
-  { 0, 9 }
+  { 5, 3 },
+  { 0, 8 }
 };
 const ProtobufCMessageDescriptor mgmt__client_net_hint__descriptor =
 {
@@ -1571,10 +1559,10 @@ const ProtobufCMessageDescriptor mgmt__client_net_hint__descriptor =
   "Mgmt__ClientNetHint",
   "mgmt",
   sizeof(Mgmt__ClientNetHint),
-  9,
+  8,
   mgmt__client_net_hint__field_descriptors,
   mgmt__client_net_hint__field_indices_by_name,
-  1,  mgmt__client_net_hint__number_ranges,
+  2,  mgmt__client_net_hint__number_ranges,
   (ProtobufCMessageInit) mgmt__client_net_hint__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
