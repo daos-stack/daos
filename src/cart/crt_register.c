@@ -629,12 +629,10 @@ crt_proto_query_int(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, uint32_t *ver
 	proto_query->pq_user_arg = arg;
 	proto_query->pq_coq->coq_base = base_opc;
 
-	if (timeout != 0) {
-		if (timeout < crt_gdata.cg_timeout) {
-			rc = crt_req_set_timeout(rpc_req, timeout);
-			/** Should only fail if invalid parameter */
-			D_ASSERT(rc == 0);
-		}
+	if (timeout != 0 && timeout < crt_gdata.cg_timeout) {
+		rc = crt_req_set_timeout(rpc_req, timeout);
+		/** Should only fail if invalid parameter */
+		D_ASSERT(rc == 0);
 	}
 
 	rc = crt_req_send(rpc_req, proto_query_cb, proto_query);
