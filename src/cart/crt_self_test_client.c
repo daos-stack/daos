@@ -360,7 +360,7 @@ static void send_next_rpc(struct st_cb_args *cb_args, int skip_inc_complete)
 		local_endpt.ep_rank = endpt_ptr->rank;
 		local_endpt.ep_tag = endpt_ptr->tag;
 
-		/* Re-use payload data memory, set arguments */
+		/* reuse payload data memory, set arguments */
 		cb_args->rep_idx = local_rep;
 
 		/*
@@ -519,7 +519,7 @@ abort:
  * max_inflight_rpcs, passing into the callback data pointer for each one its
  * own private pointer to the slot it can use in the arguments array. Each
  * time the callback is called (and needs to generate another RPC), it can
- * re-use the previous slot allocated to it as callback data for the RPC it is
+ * reuse the previous slot allocated to it as callback data for the RPC it is
  * just now creating.
  */
 static void

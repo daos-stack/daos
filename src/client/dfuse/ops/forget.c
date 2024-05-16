@@ -11,22 +11,23 @@ static void
 dfuse_forget_one(struct dfuse_info *dfuse_info, fuse_ino_t ino, uintptr_t nlookup)
 {
 	struct dfuse_inode_entry *ie;
-	int                       rc;
+	uint32_t                  old_ref;
 
-	/* One additional reference is needed because the rec_find() itself acquires one */
-	nlookup++;
+	ie = dfuse_inode_lookup_nf(dfuse_info, ino);
 
-	ie = dfuse_inode_lookup(dfuse_info, ino);
-	if (!ie) {
-		DFUSE_TRA_WARNING(dfuse_info, "Unable to find ref for %#lx %lu", ino, nlookup);
-		return;
-	}
+	/* dfuse_inode_lookup_nf does not hold a ref so decref by nlookup -1 using atomics and
+	 * then a single decref at the end which may result in the inode being freed.
+	 */
 
-	DFUSE_TRA_DEBUG(ie, "inode %#lx count %lu", ino, nlookup);
+	nlookup--;
 
-	rc = d_hash_rec_ndecref(&dfuse_info->dpi_iet, nlookup, &ie->ie_htl);
-	if (rc != -DER_SUCCESS)
-		DFUSE_TRA_ERROR(dfuse_info, "Invalid refcount %lu on %p", nlookup, ie);
+	old_ref = atomic_fetch_sub_relaxed(&ie->ie_ref, nlookup);
+
+	D_ASSERT(old_ref > nlookup);
+
+	DFUSE_TRA_DEBUG(ie, "inode %#lx count %u -> %lu", ino, old_ref, old_ref - nlookup - 1);
+
+	d_hash_rec_decref(&dfuse_info->dpi_iet, &ie->ie_htl);
 }
 
 void

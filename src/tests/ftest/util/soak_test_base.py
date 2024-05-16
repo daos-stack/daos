@@ -1,36 +1,34 @@
 """
-(C) Copyright 2019-2023 Intel Corporation.
+(C) Copyright 2019-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+import multiprocessing
 import os
+import random
+import socket
+import threading
 import time
 from datetime import datetime, timedelta
-import multiprocessing
-import threading
-import random
 from filecmp import cmp
 from getpass import getuser
-import socket
 
+import slurm_utils
+from agent_utils import include_local_host
 from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
-from agent_utils import include_local_host
 from exception_utils import CommandFailure
 from general_utils import journalctl_time
 from host_utils import get_local_host
-import slurm_utils
-from dmg_utils import DmgCommand
-from run_utils import run_local, run_remote, RunException
-from soak_utils import ddhhmmss_format, add_pools, \
-    launch_snapshot, launch_exclude_reintegrate, launch_extend, \
-    create_ior_cmdline, cleanup_dfuse, create_fio_cmdline, \
-    build_job_script, SoakTestError, launch_server_stop_start, get_harassers, \
-    create_racer_cmdline, run_event_check, run_monitor_check, \
-    create_mdtest_cmdline, reserved_file_copy, run_metrics_check, \
-    get_journalctl, get_daos_server_logs, create_macsio_cmdline, \
-    create_app_cmdline, create_dm_cmdline, launch_vmd_identify_check
+from run_utils import RunException, run_local, run_remote
+from soak_utils import (SoakTestError, add_pools, build_job_script, cleanup_dfuse,
+                        create_app_cmdline, create_dm_cmdline, create_fio_cmdline,
+                        create_ior_cmdline, create_macsio_cmdline, create_mdtest_cmdline,
+                        create_racer_cmdline, ddhhmmss_format, get_daos_server_logs, get_harassers,
+                        get_journalctl, launch_exclude_reintegrate, launch_extend, launch_reboot,
+                        launch_server_stop_start, launch_snapshot, launch_vmd_identify_check,
+                        reserved_file_copy, run_event_check, run_metrics_check, run_monitor_check)
 
 
 class SoakTestBase(TestWithServers):
@@ -74,9 +72,11 @@ class SoakTestBase(TestWithServers):
         self.slurm_exclude_servers = True
         self.control = get_local_host()
         self.enable_il = False
+        self.selected_host = None
         self.enable_remote_logging = False
         self.soak_log_dir = None
         self.soak_dir = None
+        self.enable_scrubber = False
 
     def setUp(self):
         """Define test setup to be done."""
@@ -94,7 +94,7 @@ class SoakTestBase(TestWithServers):
         self.sharedsoak_dir = self.tmp + "/soak"
         self.sharedsoaktest_dir = self.sharedsoak_dir + "/pass" + str(self.loop)
         # Initialize dmg cmd
-        self.dmg_command = DmgCommand(self.bin)
+        self.dmg_command = self.get_dmg_command()
         # Fail if slurm partition is not defined
         # NOTE: Slurm reservation and partition are created before soak runs.
         # CI uses partition=daos_client and no reservation.
@@ -140,8 +140,7 @@ class SoakTestBase(TestWithServers):
                 run_local(self.log, cmd, timeout=120)
             except RunException as error:
                 # Exception was raised due to a non-zero exit status
-                errors.append("Failed to cancel jobs {}: {}".format(
-                    self.failed_job_id_list, error))
+                errors.append(f"Failed to cancel jobs {self.failed_job_id_list}: {error}")
         if self.all_failed_jobs:
             errors.append("SOAK FAILED: The following jobs failed {} ".format(
                 " ,".join(str(j_id) for j_id in self.all_failed_jobs)))
@@ -169,7 +168,7 @@ class SoakTestBase(TestWithServers):
         try:
             get_daos_server_logs(self)
         except SoakTestError as error:
-            errors.append("<<FAILED: Failed to gather server logs {}>>".format(error))
+            errors.append(f"<<FAILED: Failed to gather server logs {error}>>")
         # Gather journalctl logs
         hosts = list(set(self.hostlist_servers))
         since = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.start_time))
@@ -250,6 +249,16 @@ class SoakTestBase(TestWithServers):
             name = "VMD_LED_CHECK"
             params = (self, name, results, args)
             job = multiprocessing.Process(target=method, args=params, name=name)
+        elif harasser == "reboot":
+            method = launch_reboot
+            name = "REBOOT"
+            params = (self, pool, name, results, args)
+            job = multiprocessing.Process(target=method, args=params, name=name)
+        elif harasser == "reboot-reintegrate":
+            method = launch_reboot
+            name = "REBOOT_REINTEGRATE"
+            params = (self, pool, name, results, args)
+            job = multiprocessing.Process(target=method, args=params, name=name)
         else:
             raise SoakTestError(f"<<FAILED: Harasser {harasser} is not supported. ")
 
@@ -262,9 +271,8 @@ class SoakTestBase(TestWithServers):
             self.log.error("<< ERROR: harasser %s is alive, failed to join>>", job.name)
             if name not in ["REBUILD", "SNAPSHOT"]:
                 job.terminate()
-                status_msg = "<<FAILED: {} has been terminated.".format(name)
-            raise SoakTestError(
-                "<<FAILED: Soak failed while running {} . ".format(name))
+                status_msg = f"<<FAILED: {name} has been terminated."
+            raise SoakTestError(f"<<FAILED: Soak failed while running {name}")
         if name not in ["REBUILD", "SNAPSHOT"]:
             self.harasser_results = results.get()
             self.harasser_args = args.get()
@@ -272,8 +280,7 @@ class SoakTestBase(TestWithServers):
         self.log.info("Harasser results: %s", self.harasser_results)
         self.log.info("Harasser args: %s", self.harasser_args)
         if not self.harasser_results[name.upper()]:
-            status_msg = "<< HARASSER {} FAILED in pass {} at {}>> ".format(
-                name, self.loop, time.ctime())
+            status_msg = f"<< HARASSER {name} FAILED in pass {self.loop} at {time.ctime()}>>"
             self.log.error(status_msg)
         return status_msg
 
@@ -336,9 +343,8 @@ class SoakTestBase(TestWithServers):
                     elif "datamover" in job:
                         commands = create_dm_cmdline(self, job, pool, ppn, npj)
                     else:
-                        raise SoakTestError(
-                            "<<FAILED: Job {} is not supported. ".format(job))
-                    jobscript = build_job_script(self, commands, job, npj)
+                        raise SoakTestError(f"<<FAILED: Job {job} is not supported. ")
+                    jobscript = build_job_script(self, commands, job, npj, ppn)
                     job_cmdlist.extend(jobscript)
         return job_cmdlist
 
@@ -376,9 +382,9 @@ class SoakTestBase(TestWithServers):
                 job_id_list.append(int(job_id))
             else:
                 # one of the jobs failed to queue; exit on first fail for now.
-                err_msg = "Slurm failed to submit job for {}".format(script)
+                err_msg = f"Slurm failed to submit job for {script}"
                 job_id_list = []
-                raise SoakTestError("<<FAILED:  Soak {}: {}>>".format(self.test_name, err_msg))
+                raise SoakTestError(f"<<FAILED:  Soak {self.test_name}: {err_msg}>>")
         return job_id_list
 
     def job_completion(self, job_id_list):
@@ -414,7 +420,7 @@ class SoakTestBase(TestWithServers):
                         time.ctime())
                     for job in job_id_list:
                         if not slurm_utils.cancel_jobs(self.log, self.control, int(job)).passed:
-                            self.fail("Error canceling Job {}".format(job))
+                            self.fail(f"Error canceling Job {job}")
                 # monitor events every 15 min
                 if datetime.now() > check_time:
                     run_monitor_check(self)
@@ -565,6 +571,8 @@ class SoakTestBase(TestWithServers):
         self.sudo_cmd = "sudo" if enable_sudo else ""
         self.enable_remote_logging = self.params.get(
             "enable_remote_logging", os.path.join(test_param, "*"), False)
+        self.enable_scrubber = self.params.get(
+            "enable_scrubber", os.path.join(test_param, "*"), False)
         if harassers:
             run_harasser = True
             self.log.info("<< Initial harasser list = %s>>", harassers)
@@ -631,7 +639,10 @@ class SoakTestBase(TestWithServers):
                 self.harasser_results = {}
                 self.harassers, self.offline_harassers = get_harassers(harasser)
             if not single_test_pool and "extend-pool" in self.harassers + self.offline_harassers:
-                ranks = self.server_managers[0].get_host_ranks(self.hostlist_servers[:-1])
+                # create a pool excluding the ranks from the selected host
+                self.selected_host = self.random.choice(self.hostlist_servers)
+                ranks = self.server_managers[0].get_host_ranks(
+                    self.hostlist_servers - NodeSet(self.selected_host))
                 add_pools(self, ["pool_jobs"], ranks)
             elif not single_test_pool:
                 add_pools(self, ["pool_jobs"])

@@ -125,6 +125,7 @@ func MockDatabaseWithCfg(t *testing.T, log logging.Logger, dbCfg *DatabaseConfig
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	db.raft.setSvc(newMockRaftService(&mockRaftServiceConfig{
 		State: raft.Leader,
 	}, (*fsm)(db)))

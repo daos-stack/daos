@@ -1,20 +1,18 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 import time
 
+import oclass_utils
 from avocado.core.exceptions import TestFail
-
+from exception_utils import CommandFailure
 from ior_test_base import IorTestBase
+from ior_utils import IorMetrics
 from mdtest_test_base import MdtestBase
 from mdtest_utils import MdtestMetrics
-from general_utils import get_subprocess_stdout
-from ior_utils import IorMetrics
-import oclass_utils
-from exception_utils import CommandFailure
 
 
 class PerformanceTestBase(IorTestBase, MdtestBase):
@@ -218,9 +216,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         if pool:
             funcs.append(pool.set_query_data)
         if container:
-            funcs.append(
-                lambda: self.log.info(
-                    self.daos_cmd.container_query(container.pool.identifier, container.uuid)))
+            funcs.append(container.query)
 
         first_error = None
         for func in funcs:
@@ -255,45 +251,21 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
             return False
         return True
 
-    def restart_servers(self):
-        """Restart the servers."""
-        self.log.info("Restarting servers")
-        self.dmg_cmd.system_stop(True)
-        if self.dmg_cmd.result.exit_status != 0:
-            self.fail("Failed to stop servers")
-        time.sleep(5)
-        self.dmg_cmd.system_start()
-        if self.dmg_cmd.result.exit_status != 0:
-            self.fail("Failed to start servers")
-        self.server_managers[0].detect_engine_start()
-
-    def _run_performance_ior_single(self, stop_rank_s=None, intercept=None):
+    def _run_performance_ior_single(self, intercept=None):
         """Run a single IOR execution.
 
         Args:
-            stop_rank_s (float, optional): stop a rank this many seconds after starting IOR.
-                Default is None, which does not stop a rank.
             intercept (str, optional): path to interception library.
 
         """
-        # Always run as a subprocess so we can stop ranks during IO
-        self.subprocess = True
-
-        self.run_ior_with_pool(
-            create_pool=False,
-            create_cont=False,
-            intercept=intercept,
-            display_space=False,
-            stop_dfuse=False
-        )
-        if stop_rank_s is not None:
-            time.sleep(stop_rank_s)
-            self.server_managers[0].stop_random_rank(self.d_log, force=True, exclude_ranks=[0])
-        ior_returncode = self.job_manager.process.wait()
         try:
-            if ior_returncode != 0:
-                self.fail("IOR failed")
-            ior_output = get_subprocess_stdout(self.job_manager.process)
+            ior_output = self.run_ior_with_pool(
+                create_pool=False,
+                create_cont=False,
+                intercept=intercept,
+                display_space=False,
+                stop_dfuse=False
+            )
             ior_metrics = self.ior_cmd.get_ior_metrics(ior_output)
             for metrics in ior_metrics:
                 if metrics[0] == "write":
@@ -310,9 +282,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
             # Try this even if IOR failed because it could give us useful info
             self.verify_system_status(self.pool, self.container)
 
-    def run_performance_ior(self, namespace=None, use_intercept=True, stop_delay_write=None,
-                            stop_delay_read=None, num_iterations=1,
-                            restart_between_iterations=True):
+    def run_performance_ior(self, namespace=None, use_intercept=True):
         """Run an IOR performance test.
 
         Write and Read are ran separately.
@@ -322,26 +292,8 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
                 Defaults to None, which uses default IOR namespace.
             use_intercept (bool, optional): whether to use the interception library with dfuse.
                 Defaults to True.
-            stop_delay_write (float, optional): fraction of stonewall time after which to stop a
-                rank during write phase. Must be between 0 and 1. Default is None.
-            stop_delay_read (float, optional): fraction of stonewall time after which to stop a
-                rank during read phase. Must be between 0 and 1. Default is None.
-            num_iterations (int, optional): number of times to run the tests.
-                Default is 1.
-            restart_between_iterations (int, optional): whether to restart the servers between
-                iterations. Default is True.
 
         """
-        if stop_delay_write is not None and (stop_delay_write < 0 or stop_delay_write > 1):
-            self.fail("stop_delay_write must be between 0 and 1")
-        if stop_delay_read is not None and (stop_delay_read < 0 or stop_delay_read > 1):
-            self.fail("stop_delay_read must be between 0 and 1")
-        if stop_delay_write is not None and stop_delay_read is not None:
-            # This isn't straightforward, because stopping a rank during write degrades
-            # performance, so read tries to read the same number of bytes as write,
-            # but might finish before the rank is stopped.
-            self.fail("stop_delay_write and stop_delay_read cannot be used together")
-
         if namespace is not None:
             self.ior_cmd.namespace = namespace
             self.ior_cmd.get_params(self)
@@ -351,13 +303,6 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
             intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
         else:
             intercept = None
-
-        # Calculate both stop delays upfront since read phase will remove stonewall
-        stop_rank_write_s = stop_rank_read_s = None
-        if stop_delay_write and self.ior_cmd.sw_deadline.value:
-            stop_rank_write_s = stop_delay_write * self.ior_cmd.sw_deadline.value
-        if stop_delay_read and self.ior_cmd.sw_deadline.value:
-            stop_rank_read_s = stop_delay_read * self.ior_cmd.sw_deadline.value
 
         # Save write and read params for switching
         write_flags = self.params.get("write_flags", self.ior_cmd.namespace)
@@ -377,7 +322,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         # Set the container redundancy factor to match the oclass
         cont_rf = oclass_utils.extract_redundancy_factor(self.ior_cmd.dfs_oclass.value)
 
-        # Create pool and container upfront for flexibility and so rank stop timing is accurate
+        # Create pool and container upfront for flexibility
         self.pool = self.get_pool(connect=False)
         params = {}
         if self.ior_cmd.dfs_oclass.value:
@@ -392,50 +337,37 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         self.container.create()
         self.update_ior_cmd_with_pool(False)
 
-        for iteration in range(num_iterations):
-            if restart_between_iterations and iteration > 0:
-                self.restart_servers()
+        self.log_step("Running IOR write")
+        self.ior_cmd.flags.update(write_flags)
+        self._run_performance_ior_single(intercept)
 
-            self.log.info("Running IOR write (%s)", str(iteration))
-            self.ior_cmd.flags.update(write_flags)
-            self._run_performance_ior_single(stop_rank_write_s, intercept)
+        # Manually stop dfuse after ior write completes
+        if self.dfuse:
+            self.dfuse.stop()
+            self.dfuse = None
 
-            # Manually stop dfuse after ior write completes
-            self.stop_dfuse()
+        # Wait between write and read
+        self.phase_barrier()
 
-            # Wait for rebuild if we stopped a rank
-            if stop_rank_write_s:
-                self.pool.wait_for_rebuild_to_end()
+        self.log_step("Running IOR read")
+        self.ior_cmd.flags.update(read_flags)
+        self._run_performance_ior_single(intercept)
 
-            # Wait between write and read
-            self.phase_barrier()
-
-            self.log.info("Running IOR read (%s)", str(iteration))
-            self.ior_cmd.flags.update(read_flags)
-            self._run_performance_ior_single(stop_rank_read_s, intercept)
-
-            # Manually stop dfuse after ior read completes
-            self.stop_dfuse()
-
-            # Wait for rebuild if we stopped a rank
-            if stop_rank_read_s:
-                self.pool.wait_for_rebuild_to_end()
+        # Manually stop dfuse after ior read completes
+        if self.dfuse:
+            self.dfuse.stop()
+            self.dfuse = None
 
         self._log_daos_metrics()
 
-    def run_performance_mdtest(self, namespace=None, stop_delay=None):
+    def run_performance_mdtest(self, namespace=None):
         """Run an MDTest performance test.
 
         Args:
             namespace (str, optional): namespace for MDTest parameters in the yaml.
                 Defaults to None, which uses default MDTest namespace.
-            stop_delay (float, optional): fraction of stonewall time after which to stop a
-                rank. Must be between 0 and 1. Defaults to None.
 
         """
-        if stop_delay is not None and (stop_delay < 0 or stop_delay > 1):
-            self.fail("stop_delay must be between 0 and 1")
-
         if namespace is not None:
             self.mdtest_cmd.namespace = namespace
             self.mdtest_cmd.get_params(self)
@@ -445,8 +377,6 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         # dfs_dir_oclass and dfs_oclass. This needs more work to get good results on non-DFS.
         if self.mdtest_cmd.api.value not in ('DFS', 'POSIX'):
             self.fail("Only DFS API supported")
-
-        stop_rank_s = (stop_delay or 0) * (self.mdtest_cmd.stonewall_timer.value or 0)
 
         self._log_performance_params("MDTEST")
 
@@ -485,20 +415,10 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         # Never let execute_mdtest automatically destroy the container
         self.mdtest_cmd.dfs_destroy.update(False)
 
-        # Always run as a subprocess so we can stop ranks during IO
-        self.subprocess = True
-
         self.log.info("Running MDTEST")
-        self.execute_mdtest(display_space=False)
-        if stop_rank_s:
-            time.sleep(stop_rank_s)
-            self.server_managers[0].stop_random_rank(self.d_log, force=True, exclude_ranks=[0])
-        mdtest_returncode = self.job_manager.process.wait()
         try:
-            if mdtest_returncode != 0:
-                self.fail("mdtest failed")
-            mdtest_output = get_subprocess_stdout(self.job_manager.process)
-            mdtest_metrics = MdtestMetrics(mdtest_output)
+            mdtest_result = self.execute_mdtest(display_space=False)
+            mdtest_metrics = MdtestMetrics(mdtest_result.stdout_text)
             if not mdtest_metrics:
                 self.fail("Failed to get mdtest metrics")
             log_list = []
@@ -522,10 +442,8 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
             self.verify_system_status(self.pool, self.container)
 
         # Manually stop dfuse after mdtest completes
-        self.stop_dfuse()
-
-        # Wait for rebuild if we stopped a rank
-        if stop_rank_s:
-            self.pool.wait_for_rebuild_to_end()
+        if self.dfuse:
+            self.dfuse.stop()
+            self.dfuse = None
 
         self._log_daos_metrics()

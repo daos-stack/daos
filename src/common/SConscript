@@ -9,7 +9,7 @@ COMMON_FILES = ['debug.c', 'mem.c', 'fail_loc.c', 'lru.c',
                 'dedup.c', 'profile.c', 'compression.c', 'compression_isal.c',
                 'compression_qat.c', 'multihash.c', 'multihash_isal.c',
                 'cipher.c', 'cipher_isal.c', 'qat.c', 'fault_domain.c',
-                'policy.c']
+                'tls.c', 'metrics.c']
 
 
 def build_daos_common(denv, client):
@@ -37,11 +37,9 @@ def build_daos_common(denv, client):
         libname = 'daos_common_pmem'
         benv.require('pmdk', 'argobots')
 
-    if benv["STACK_MMAP"] == 1:
-        common_libs.extend(['abt'])
-        stack_mmap_files = ['stack_mmap.c']
-        benv.require('argobots')
-        benv.Append(CCFLAGS=['-DULT_MMAP_STACK'])
+        if benv["STACK_MMAP"] == 1:
+            stack_mmap_files = ['stack_mmap.c']
+            benv.Append(CCFLAGS=['-DULT_MMAP_STACK'])
 
     common = benv.d_library(libname, COMMON_FILES + dav_src + ad_mem_files + stack_mmap_files,
                             LIBS=common_libs)
@@ -58,16 +56,7 @@ def scons():
     base_env.d_add_build_rpath()
     env.d_add_build_rpath()
 
-    # Hack alert, the argobots headers are required but the shared
-    # library isn't so add the dependency so the include path
-    # is correct, but set _libs to [] so that the library isn't
-    # linked in.
-    env.require('argobots')
-
-    # Arm can build ISA-L
-    env.require('isal', 'isal_crypto')
-
-    denv = env.Clone(LIBS=[])
+    denv = env.Clone()
     # generated protoc header should really move to this directory.
     denv.AppendUnique(CPPPATH=[Dir("../include/daos").srcnode()])
     denv.require('isal', 'isal_crypto', 'protobufc')
@@ -89,7 +78,7 @@ def scons():
         return
 
     tlibenv = env.Clone(LIBS=[])
-    tlibenv.require('isal', 'isal_crypto', 'protobufc')
+    tlibenv.require('argobots', 'isal', 'isal_crypto', 'protobufc')
     tlibenv.AppendUnique(LIBS=['cart', 'gurt', 'lz4', 'json-c'])
 
     tests_lib = tlibenv.d_library('daos_tests', ['tests_lib.c', 'tests_dmg_helpers.c'])

@@ -19,7 +19,7 @@
  * that will be reserved for no other mapping and prevented to be accessed.
  * The stacks are managed as a pool, using the mmap_stack_desc_t struct
  * being located at the bottom (upper addresses) of each stack and being
- * linked as a list upon ULT exit for future re-use by a new ULT, based on
+ * linked as a list upon ULT exit for future reuse by a new ULT, based on
  * the requested stack size.
  * The free stacks list is drained upon a certain number of free stacks or
  * upon a certain percentage of free stacks.

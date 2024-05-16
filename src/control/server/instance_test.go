@@ -10,7 +10,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"testing"
 
@@ -46,33 +45,6 @@ func getTestEngineInstance(log logging.Logger) *EngineInstance {
 	runner := engine.NewRunner(log, cfg)
 	storage := storage.MockProvider(log, 0, &cfg.Storage, nil, nil, nil, nil)
 	return NewEngineInstance(log, storage, nil, runner)
-}
-
-func getTestBioErrorReq(t *testing.T, sockPath string, idx uint32, tgt int32, unmap bool, read bool, write bool) *srvpb.BioErrorReq {
-	return &srvpb.BioErrorReq{
-		DrpcListenerSock: sockPath,
-		InstanceIdx:      idx,
-		TgtId:            tgt,
-		UnmapErr:         unmap,
-		ReadErr:          read,
-		WriteErr:         write,
-	}
-}
-
-func TestServer_Instance_BioError(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
-
-	instance := getTestEngineInstance(log)
-
-	req := getTestBioErrorReq(t, "/tmp/instance_test.sock", 0, 0, false, false, true)
-
-	instance.BioErrorNotify(req)
-
-	expectedOut := "detected blob I/O error"
-	if !strings.Contains(buf.String(), expectedOut) {
-		t.Fatal("No I/O error notification detected")
-	}
 }
 
 func TestServer_Instance_WithHostFaultDomain(t *testing.T) {
@@ -189,6 +161,7 @@ type (
 		Index               uint32
 		Started             atm.Bool
 		Ready               atm.Bool
+		CheckerMode         atm.Bool
 		LocalState          system.MemberState
 		RemoveSuperblockErr error
 		SetupRankErr        error
@@ -214,6 +187,10 @@ func NewMockInstance(cfg *MockInstanceConfig) *MockInstance {
 
 func DefaultMockInstance() *MockInstance {
 	return NewMockInstance(nil)
+}
+
+func (mi *MockInstance) SetCheckerMode(enabled bool) {
+	mi.cfg.CheckerMode.Store(enabled)
 }
 
 func (mi *MockInstance) CallDrpc(_ context.Context, _ drpc.Method, _ proto.Message) (*drpc.Response, error) {
@@ -248,7 +225,7 @@ func (mi *MockInstance) RemoveSuperblock() error {
 	return mi.cfg.RemoveSuperblockErr
 }
 
-func (mi *MockInstance) Run(_ context.Context, _ bool) {}
+func (mi *MockInstance) Run(_ context.Context) {}
 
 func (mi *MockInstance) SetupRank(_ context.Context, _ ranklist.Rank, _ uint32) error {
 	return mi.cfg.SetupRankErr
@@ -288,7 +265,6 @@ func (mi *MockInstance) isAwaitingFormat() bool {
 
 func (mi *MockInstance) NotifyDrpcReady(_ *srvpb.NotifyReadyReq) {}
 func (mi *MockInstance) NotifyStorageReady()                     {}
-func (mi *MockInstance) BioErrorNotify(_ *srvpb.BioErrorReq)     {}
 
 func (mi *MockInstance) GetBioHealth(context.Context, *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
 	return nil, nil
@@ -308,4 +284,12 @@ func (mi *MockInstance) StorageFormatSCM(context.Context, bool) *ctlpb.ScmMountR
 
 func (mi *MockInstance) GetStorage() *storage.Provider {
 	return nil
+}
+
+func (mi *MockInstance) Debugf(format string, args ...interface{}) {
+	return
+}
+
+func (mi *MockInstance) Tracef(format string, args ...interface{}) {
+	return
 }

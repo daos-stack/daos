@@ -376,11 +376,7 @@ struct evt_entry_array {
 	/** Maximum size of array */
 	uint32_t			 ea_max;
 	/** Number of bytes per index */
-	uint32_t			 ea_inob;
-	/** Index of first delete record, valid if ea_delete_nr != 0 */
-	uint32_t			 ea_first_delete;
-	/** Number of delete records */
-	uint32_t			 ea_delete_nr;
+	uint32_t                         ea_inob;
 	/* Small array of embedded entries */
 	struct evt_list_entry		 ea_embedded_ents[0];
 };
@@ -576,9 +572,9 @@ int evt_destroy(daos_handle_t toh);
  * It returns if all input credits are consumed or the tree is empty, in the
  * later case, it also destroys the evtree.
  *
- * \param toh		[IN]	 Tree open handle.
- * \param credits	[IN/OUT] Input and returned drain credits
- * \param destroyed	[OUT]	 Tree is empty and destroyed
+ * \param[in] toh		Tree open handle.
+ * \param[in,out] credits	Input and returned drain credits
+ * \param[out] destroyed	Tree is empty and destroyed
  */
 int evt_drain(daos_handle_t toh, int *credits, bool *destroyed);
 

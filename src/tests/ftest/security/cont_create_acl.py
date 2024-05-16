@@ -42,18 +42,18 @@ class CreateContainterACLTest(ContSecurityTestBase):
         # Getting the default ACL list
         expected_acl = generate_acl_file("default", acl_args)
 
-        # 1. Create a pool and obtain its UUID
+        # 1. Create a pool
         self.log.info("===> Creating a pool with no ACL file passed")
-        pool_uuid = self.create_pool_with_dmg()
+        pool = self.get_pool()
 
         # 2. Create a container with no ACL file passed
         self.log.info("===> Creating a container with no ACL file passed")
-        self.container_uuid = self.create_container_with_daos(self.pool)
+        container = self.create_container_with_daos(pool)
 
-        if not self.container_uuid:
+        if not container:
             self.fail("    An expected container could not be created")
 
-        cont_acl = self.get_container_acl_list(pool_uuid, self.container_uuid)
+        cont_acl = self.get_container_acl_list(container)
         if not self.compare_acl_lists(cont_acl, expected_acl):
             self.fail("    ACL permissions mismatch:\n\t \
                       Container ACL: {}\n\tExpected ACL: {}".format(cont_acl, expected_acl))
@@ -62,12 +62,9 @@ class CreateContainterACLTest(ContSecurityTestBase):
 
         # 3. Destroy the container
         self.log.info("===> Destroying the container")
-        result = self.destroy_containers(self.container)
+        result = self.destroy_containers(container)
         if result:
-            self.fail("    Unable to destroy container '{}'".format(
-                self.container_uuid))
-        else:
-            self.container_uuid = None
+            self.fail("    Unable to destroy container {}".format(str(container)))
 
         # Create a valid ACL file
         self.log.info("===> Generating a valid ACL file")
@@ -75,13 +72,12 @@ class CreateContainterACLTest(ContSecurityTestBase):
 
         # 4. Create a container with a valid ACL file passed
         self.log.info("===> Creating a container with an ACL file passed")
-        self.container_uuid = self.create_container_with_daos(
-            self.pool, "valid")
+        container = self.create_container_with_daos(pool, "valid")
 
-        if not self.container_uuid:
+        if not container:
             self.fail("    An expected container could not be created")
 
-        cont_acl = self.get_container_acl_list(pool_uuid, self.container_uuid, True)
+        cont_acl = self.get_container_acl_list(container, True)
         if not self.compare_acl_lists(cont_acl, expected_acl):
             self.fail("    ACL permissions mismatch:\n\t \
                       Container ACL: {}\n\tExpected ACL:  {}".format(cont_acl, expected_acl))
@@ -90,12 +86,9 @@ class CreateContainterACLTest(ContSecurityTestBase):
 
         # 5. Destroy the container
         self.log.info("===> Destroying the container")
-        result = self.destroy_containers(self.container)
+        result = self.destroy_containers(container)
         if result:
-            self.fail("    Unable to destroy container '{}'".format(
-                self.container_uuid))
-        else:
-            self.container_uuid = None
+            self.fail("    Unable to destroy container {}".format(str(container)))
 
         # Create an invalid ACL file
         self.log.info("===> Generating an invalid ACL file")
@@ -103,13 +96,10 @@ class CreateContainterACLTest(ContSecurityTestBase):
 
         # 6. Create a container with an invalid ACL file passed
         self.log.info("===> Creating a container with invalid ACL file passed")
-        self.container_uuid = self.create_container_with_daos(
-            self.pool, "invalid")
+        container = self.create_container_with_daos(pool, "invalid")
 
-        if self.container_uuid:
-            self.fail(
-                "    Did not expect the container '{}' to be created".format(
-                    self.container_uuid))
+        if container:
+            self.fail("Did not expect the container {} to be created".format(str(container)))
 
         # 7. Cleanup environment
         self.log.info("===> Cleaning the environment")

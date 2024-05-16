@@ -72,9 +72,9 @@ enum daos_pool_props {
 	 */
 	DAOS_PROP_PO_EC_CELL_SZ,
 	/**
-	 * Media selection policy
+	 * Bdev threshold size
 	 */
-	DAOS_PROP_PO_POLICY,
+	DAOS_PROP_PO_DATA_THRESH,
 	/**
 	 * Pool redundancy factor.
 	 */
@@ -135,6 +135,10 @@ enum daos_pool_props {
 	DAOS_PROP_PO_CHECKPOINT_THRESH,
 	/** Reintegration mode for pool, data_sync|no_data_sync default is data_sync*/
 	DAOS_PROP_PO_REINT_MODE,
+	/** Metadata duplicate operations detection enabled (1) or disabled (0) */
+	DAOS_PROP_PO_SVC_OPS_ENABLED,
+	/** Metadata duplicate operations SVC_OPS KVS max entry age (seconds), default 300 */
+	DAOS_PROP_PO_SVC_OPS_ENTRY_AGE,
 	DAOS_PROP_PO_MAX,
 };
 
@@ -244,16 +248,21 @@ enum {
 };
 
 #define DAOS_PROP_PO_CHECKPOINT_MODE_DEFAULT   DAOS_CHECKPOINT_TIMED
-#define DAOS_PROP_PO_CHECKPOINT_FREQ_DEFAULT   5  /* 5 seconds */
-#define DAOS_PROP_PO_CHECKPOINT_FREQ_MIN       1  /* 1 seconds */
+#define DAOS_PROP_PO_CHECKPOINT_FREQ_DEFAULT   5         /* 5 seconds */
+#define DAOS_PROP_PO_CHECKPOINT_FREQ_MIN       1         /* 1 seconds */
 #define DAOS_PROP_PO_CHECKPOINT_FREQ_MAX       (1 << 20) /* 1 million seconds */
-#define DAOS_PROP_PO_CHECKPOINT_THRESH_DEFAULT 50 /* 50 % WAL capacity */
-#define DAOS_PROP_PO_CHECKPOINT_THRESH_MAX     75 /* 75 % WAL capacity */
-#define DAOS_PROP_PO_CHECKPOINT_THRESH_MIN     10 /* 10 % WAL capacity */
+#define DAOS_PROP_PO_CHECKPOINT_THRESH_DEFAULT 50        /* 50 % WAL capacity */
+#define DAOS_PROP_PO_CHECKPOINT_THRESH_MAX     75        /* 75 % WAL capacity */
+#define DAOS_PROP_PO_CHECKPOINT_THRESH_MIN     10        /* 10 % WAL capacity */
+#define DAOS_PROP_PO_SVC_OPS_ENABLED_DEFAULT   1         /* true: enabled by default */
+#define DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_DEFAULT 300       /* 300 seconds */
+#define DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_MIN     60        /* 60 seconds */
+#define DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_MAX     600       /* 600 seconds */
 
 /** self healing strategy bits */
 #define DAOS_SELF_HEAL_AUTO_EXCLUDE	(1U << 0)
 #define DAOS_SELF_HEAL_AUTO_REBUILD	(1U << 1)
+#define DAOS_SELF_HEAL_DELAY_REBUILD	(1U << 2)
 
 /**
  * DAOS container property types
@@ -601,37 +610,23 @@ daos_label_is_valid(const char *label)
 	}
 
 	/** Check to see if it could be a valid UUID */
-	if (maybe_uuid && strnlen(label, 36) == 36) {
-		bool		is_uuid = true;
-		const char	*p;
-
-		/** Implement the check directly to avoid uuid_parse() overhead */
-		for (i = 0, p = label; i < 36; i++, p++) {
-			if (i == 8 || i == 13 || i == 18 || i == 23) {
-				if (*p != '-') {
-					is_uuid = false;
-					break;
-				}
-				continue;
-			}
-			if (!isxdigit(*p)) {
-				is_uuid = false;
-				break;
-			}
-		}
-
-		if (is_uuid)
-			return false;
-	}
+	if (maybe_uuid && daos_is_valid_uuid_string(label))
+		return false;
 
 	return true;
 }
 
-/** max length of the policy string */
-#define DAOS_PROP_POLICYSTR_MAX_LEN	(127)
+/* default data threshold size of 4KiB */
+#define DAOS_PROP_PO_DATA_THRESH_DEFAULT (1UL << 12)
 
-/* default policy string */
-#define DAOS_PROP_POLICYSTR_DEFAULT	"type=io_size"
+/* For the case of no label is set for the pool. */
+#define DAOS_PROP_NO_PO_LABEL		"pool_label_not_set"
+
+/* Default container label */
+#define DEFAULT_CONT_LABEL		"container_label_not_set"
+
+/* For the case of no label is set for the container. */
+#define DAOS_PROP_NO_CO_LABEL		DEFAULT_CONT_LABEL
 
 /**
  * Check if DAOS pool performance domain string is valid, string

@@ -247,10 +247,22 @@
    ...
 }
 {
+   Tcp provider
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   ...
+   fun:sendmsg
+   fun:ofi_sockapi_sendv_socket
+   fun:ofi_bsock_sendv
+   ...
+   fun:fi_senddata
+   ...
+}
+{
    Tcp provider with ofi rxm
    Memcheck:Param
    sendmsg(msg.msg_iov[1])
-   obj:*
+   ...
    fun:ofi_bsock_sendv
    ...
    fun:fi_tsend
@@ -260,6 +272,7 @@
    Tcp provider with ofi rxm 2
    Memcheck:Param
    sendmsg(msg.msg_iov[2])
+   ...
    fun:sendmsg
    fun:ofi_sockapi_sendv_socket
    fun:ofi_bsock_sendv
@@ -382,4 +395,16 @@
    fun:pwrite
    ...
    fun:mdb_txn_commit
+}
+{
+   go_runtime_syscall_param
+   Memcheck:Param
+   write(buf)
+   fun:runtime/internal/syscall.Syscall6
+}
+{
+   go ShadowSet race
+   Memcheck:Value8
+   fun:_ZN6__tsan9ShadowSetEPNS_9RawShadowES1_S0_
+   fun:racecall
 }

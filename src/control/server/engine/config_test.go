@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -546,6 +547,10 @@ func TestConfig_Validation(t *testing.T) {
 	}
 }
 
+func multiProviderString(comp ...string) string {
+	return strings.Join(comp, MultiProviderSeparator)
+}
+
 func TestConfig_FabricValidation(t *testing.T) {
 	for name, tc := range map[string]struct {
 		cfg    FabricConfig
@@ -580,6 +585,71 @@ func TestConfig_FabricValidation(t *testing.T) {
 			},
 			expErr: errors.New("fabric_iface_port"),
 		},
+		"success": {
+			cfg: FabricConfig{
+				Provider:      "foo",
+				Interface:     "bar",
+				InterfacePort: 42,
+			},
+		},
+		"multi provider/interface/port ok": {
+			cfg: FabricConfig{
+				Provider:      multiProviderString("foo", "bar"),
+				Interface:     multiProviderString("baz", "net"),
+				InterfacePort: 42,
+			},
+		},
+		"mismatched num providers": {
+			cfg: FabricConfig{
+				Provider:      "foo",
+				Interface:     multiProviderString("baz", "net"),
+				InterfacePort: 42,
+			},
+			expErr: errors.New("same number"),
+		},
+		"mismatched num interfaces": {
+			cfg: FabricConfig{
+				Provider:      multiProviderString("foo", "bar"),
+				Interface:     "baz",
+				InterfacePort: 42,
+			},
+			expErr: errors.New("same number"),
+		},
+		"nr secondary ctxs less than 1": {
+			cfg: FabricConfig{
+				Provider:              multiProviderString("foo", "bar"),
+				Interface:             multiProviderString("baz", "net"),
+				InterfacePort:         42,
+				NumSecondaryEndpoints: []int{0},
+			},
+			expErr: errors.New("must be > 0"),
+		},
+		"nr secondary ctxs okay": {
+			cfg: FabricConfig{
+				Provider:              multiProviderString("foo", "bar", "baz"),
+				Interface:             multiProviderString("net0", "net1", "net2"),
+				InterfacePort:         42,
+				NumSecondaryEndpoints: []int{1, 2},
+			},
+		},
+		"too many nr secondary ctxs": {
+			cfg: FabricConfig{
+				Provider:              multiProviderString("foo", "bar", "baz"),
+				Interface:             multiProviderString("net0", "net1", "net2"),
+				InterfacePort:         42,
+				NumSecondaryEndpoints: []int{1, 2, 3},
+			},
+			expErr: errors.New("must have one value for each"),
+		},
+		"too few nr secondary ctxs": {
+			cfg: FabricConfig{
+				Provider:              multiProviderString("foo", "bar", "baz"),
+				Interface:             multiProviderString("net0", "net1", "net2"),
+				InterfacePort:         42,
+				NumSecondaryEndpoints: []int{1},
+			},
+			expErr: errors.New("must have one value for each"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotErr := tc.cfg.Validate()
@@ -590,26 +660,25 @@ func TestConfig_FabricValidation(t *testing.T) {
 
 func TestConfig_ToCmdVals(t *testing.T) {
 	var (
-		mountPoint      = "/mnt/test"
-		provider        = "test+foo"
-		interfaceName   = "ib0"
-		modules         = "foo,bar,baz"
-		systemName      = "test-system"
-		socketDir       = "/var/run/foo"
-		logMask         = "LOG_MASK_VALUE"
-		logFile         = "/path/to/log"
-		cfgPath         = "/path/to/nvme.conf"
-		interfacePort   = 20
-		targetCount     = 4
-		helperCount     = 1
-		serviceCore     = 8
-		index           = 2
-		pinnedNumaNode  = uint(1)
-		bypass          = true
-		crtCtxShareAddr = uint32(1)
-		crtTimeout      = uint32(30)
-		memSize         = 8192
-		hugepageSz      = 2
+		mountPoint     = "/mnt/test"
+		provider       = "test+foo"
+		interfaceName  = "ib0"
+		modules        = "foo,bar,baz"
+		systemName     = "test-system"
+		socketDir      = "/var/run/foo"
+		logMask        = "LOG_MASK_VALUE"
+		logFile        = "/path/to/log"
+		cfgPath        = "/path/to/nvme.conf"
+		interfacePort  = 20
+		targetCount    = 4
+		helperCount    = 1
+		serviceCore    = 8
+		index          = 2
+		pinnedNumaNode = uint(1)
+		bypass         = true
+		crtTimeout     = uint32(30)
+		memSize        = 8192
+		hugepageSz     = 2
 	)
 	cfg := MockConfig().
 		WithStorage(
@@ -630,7 +699,6 @@ func TestConfig_ToCmdVals(t *testing.T) {
 		WithLogFile(logFile).
 		WithLogMask(logMask).
 		WithSystemName(systemName).
-		WithCrtCtxShareAddr(crtCtxShareAddr).
 		WithCrtTimeout(crtTimeout).
 		WithMemSize(memSize).
 		WithHugepageSize(hugepageSz).
@@ -655,13 +723,12 @@ func TestConfig_ToCmdVals(t *testing.T) {
 		"-H", strconv.Itoa(hugepageSz),
 	}
 	wantEnv := []string{
-		"OFI_INTERFACE=" + interfaceName,
-		"OFI_PORT=" + strconv.Itoa(interfacePort),
-		"CRT_PHY_ADDR_STR=" + provider,
+		"D_INTERFACE=" + interfaceName,
+		"D_PORT=" + strconv.Itoa(interfacePort),
+		"D_PROVIDER=" + provider,
 		"D_LOG_FILE=" + logFile,
 		"D_LOG_MASK=" + logMask,
 		"CRT_TIMEOUT=" + strconv.FormatUint(uint64(crtTimeout), 10),
-		"CRT_CTX_SHARE_ADDR=" + strconv.FormatUint(uint64(crtCtxShareAddr), 10),
 		"FI_OFI_RXM_USE_SRX=0",
 	}
 
@@ -679,6 +746,221 @@ func TestConfig_ToCmdVals(t *testing.T) {
 	}
 	if diff := cmp.Diff(wantEnv, gotEnv, defConfigCmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got):\n%s", diff)
+	}
+}
+
+func TestFabricConfig_GetProviders(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg          *FabricConfig
+		expProviders []string
+		expErr       error
+	}{
+		"nil": {
+			expErr: errors.New("nil"),
+		},
+		"empty": {
+			cfg:    &FabricConfig{},
+			expErr: errors.New("provider not set"),
+		},
+		"single": {
+			cfg: &FabricConfig{
+				Provider: "p1",
+			},
+			expProviders: []string{"p1"},
+		},
+		"multi": {
+			cfg: &FabricConfig{
+				Provider: multiProviderString("p1", "p2", "p3"),
+			},
+			expProviders: []string{"p1", "p2", "p3"},
+		},
+		"excessive whitespace": {
+			cfg: &FabricConfig{
+				Provider: multiProviderString(" ", " p1 ", "  p2 ", "p3"),
+			},
+			expProviders: []string{"p1", "p2", "p3"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			providers, err := tc.cfg.GetProviders()
+
+			test.CmpErr(t, tc.expErr, err)
+			if diff := cmp.Diff(tc.expProviders, providers); diff != "" {
+				t.Fatalf("(-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestFabricConfig_GetNumProviders(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg    *FabricConfig
+		expNum int
+	}{
+		"nil": {},
+		"empty": {
+			cfg: &FabricConfig{},
+		},
+		"single": {
+			cfg: &FabricConfig{
+				Provider: "p1",
+			},
+			expNum: 1,
+		},
+		"multi": {
+			cfg: &FabricConfig{
+				Provider: multiProviderString("p1", "p2", "p3", "p4"),
+			},
+			expNum: 4,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.AssertEqual(t, tc.expNum, tc.cfg.GetNumProviders(), "")
+		})
+	}
+}
+
+func TestFabricConfig_GetPrimaryProvider(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg         *FabricConfig
+		expProvider string
+		expErr      error
+	}{
+		"nil": {
+			expErr: errors.New("nil"),
+		},
+		"empty": {
+			cfg:    &FabricConfig{},
+			expErr: errors.New("provider not set"),
+		},
+		"single": {
+			cfg: &FabricConfig{
+				Provider: "p1",
+			},
+			expProvider: "p1",
+		},
+		"multi": {
+			cfg: &FabricConfig{
+				Provider: multiProviderString("p1", "p2", "p3"),
+			},
+			expProvider: "p1",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			provider, err := tc.cfg.GetPrimaryProvider()
+
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expProvider, provider, "")
+		})
+	}
+}
+
+func TestFabricConfig_GetInterfaces(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg           *FabricConfig
+		expInterfaces []string
+		expErr        error
+	}{
+		"nil": {
+			expErr: errors.New("nil"),
+		},
+		"empty": {
+			cfg:    &FabricConfig{},
+			expErr: errors.New("fabric_iface not set"),
+		},
+		"single": {
+			cfg: &FabricConfig{
+				Interface: "net1",
+			},
+			expInterfaces: []string{"net1"},
+		},
+		"multi": {
+			cfg: &FabricConfig{
+				Interface: multiProviderString("net1", "net2", "net3"),
+			},
+			expInterfaces: []string{"net1", "net2", "net3"},
+		},
+		"excessive whitespace": {
+			cfg: &FabricConfig{
+				Interface: multiProviderString(" net1  ", "", "    net2", "net3", ""),
+			},
+			expInterfaces: []string{"net1", "net2", "net3"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			interfaces, err := tc.cfg.GetInterfaces()
+
+			test.CmpErr(t, tc.expErr, err)
+			if diff := cmp.Diff(tc.expInterfaces, interfaces); diff != "" {
+				t.Fatalf("(-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestFabricConfig_GetPrimaryInterface(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg          *FabricConfig
+		expInterface string
+		expErr       error
+	}{
+		"nil": {
+			expErr: errors.New("nil"),
+		},
+		"empty": {
+			cfg:    &FabricConfig{},
+			expErr: errors.New("fabric_iface not set"),
+		},
+		"single": {
+			cfg: &FabricConfig{
+				Interface: "net1",
+			},
+			expInterface: "net1",
+		},
+		"multi": {
+			cfg: &FabricConfig{
+				Interface: multiProviderString("net0", "net1", "net2", "net3"),
+			},
+			expInterface: "net0",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			iface, err := tc.cfg.GetPrimaryInterface()
+
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expInterface, iface, "")
+		})
+	}
+}
+
+func TestFabricConfig_GetInterfacePorts(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg      *FabricConfig
+		expPorts []int
+		expErr   error
+	}{
+		"nil": {
+			expErr: errors.New("nil"),
+		},
+		"empty": {
+			cfg:    &FabricConfig{},
+			expErr: errors.New("fabric_iface_port not set"),
+		},
+		"single": {
+			cfg: &FabricConfig{
+				InterfacePort: 1234,
+			},
+			expPorts: []int{1234},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ports, err := tc.cfg.GetInterfacePorts()
+
+			test.CmpErr(t, tc.expErr, err)
+			if diff := cmp.Diff(tc.expPorts, ports); diff != "" {
+				t.Fatalf("(-want, +got):\n%s", diff)
+			}
+		})
 	}
 }
 
@@ -710,7 +992,6 @@ func TestConfig_EnvVarConflict(t *testing.T) {
 			wantEnv := []string{
 				"D_LOG_MASK=" + tc.expEnvMask,
 				"CRT_TIMEOUT=0",
-				"CRT_CTX_SHARE_ADDR=0",
 				"FI_OFI_RXM_USE_SRX=1",
 			}
 
@@ -740,61 +1021,77 @@ func TestFabricConfig_Update(t *testing.T) {
 		"update": {
 			fc: &FabricConfig{},
 			new: FabricConfig{
-				Provider:        "provider",
-				Interface:       "iface",
-				InterfacePort:   9999,
-				CrtCtxShareAddr: 2,
-				CrtTimeout:      60,
-				DisableSRX:      true,
+				Provider:              "provider",
+				Interface:             "iface",
+				InterfacePort:         9999,
+				CrtTimeout:            60,
+				DisableSRX:            true,
+				NumSecondaryEndpoints: []int{1},
 			},
 			expResult: &FabricConfig{
-				Provider:        "provider",
-				Interface:       "iface",
-				InterfacePort:   9999,
-				CrtCtxShareAddr: 2,
-				CrtTimeout:      60,
-				DisableSRX:      true,
+				Provider:              "provider",
+				Interface:             "iface",
+				InterfacePort:         9999,
+				CrtTimeout:            60,
+				DisableSRX:            true,
+				NumSecondaryEndpoints: []int{1},
 			},
 		},
 		"don't unset fields": {
 			fc: &FabricConfig{
-				Provider:        "provider",
-				Interface:       "iface",
-				InterfacePort:   9999,
-				CrtCtxShareAddr: 2,
-				CrtTimeout:      60,
-				DisableSRX:      true,
+				Provider:              "provider",
+				Interface:             "iface",
+				InterfacePort:         9999,
+				CrtTimeout:            60,
+				DisableSRX:            true,
+				NumSecondaryEndpoints: []int{1},
 			},
 			new: FabricConfig{},
 			expResult: &FabricConfig{
-				Provider:        "provider",
-				Interface:       "iface",
-				InterfacePort:   9999,
-				CrtCtxShareAddr: 2,
-				CrtTimeout:      60,
-				DisableSRX:      true,
+				Provider:              "provider",
+				Interface:             "iface",
+				InterfacePort:         9999,
+				CrtTimeout:            60,
+				DisableSRX:            true,
+				NumSecondaryEndpoints: []int{1},
 			},
 		},
 		"update mixed": {
 			fc: &FabricConfig{
-				CrtCtxShareAddr: 2,
-				CrtTimeout:      60,
+				CrtTimeout: 60,
 			},
 			new: FabricConfig{
-				Provider:        "provider",
-				Interface:       "iface",
-				InterfacePort:   9999,
-				CrtCtxShareAddr: 15,
-				CrtTimeout:      120,
-				DisableSRX:      true,
+				Provider:      "provider",
+				Interface:     "iface",
+				InterfacePort: 9999,
+				CrtTimeout:    120,
+				DisableSRX:    true,
 			},
 			expResult: &FabricConfig{
-				Provider:        "provider",
-				Interface:       "iface",
-				InterfacePort:   9999,
-				CrtCtxShareAddr: 2,
-				CrtTimeout:      60,
-				DisableSRX:      true,
+				Provider:      "provider",
+				Interface:     "iface",
+				InterfacePort: 9999,
+				CrtTimeout:    60,
+				DisableSRX:    true,
+			},
+		},
+		"default secondary ctx": {
+			fc: &FabricConfig{},
+			new: FabricConfig{
+				Provider: multiProviderString("one", "two", "three"),
+			},
+			expResult: &FabricConfig{
+				Provider:              multiProviderString("one", "two", "three"),
+				NumSecondaryEndpoints: []int{1, 1},
+			},
+		},
+		"no secondary ctx": {
+			fc: &FabricConfig{},
+			new: FabricConfig{
+				Provider: "one",
+			},
+			expResult: &FabricConfig{
+				Provider: "one",
 			},
 		},
 	} {

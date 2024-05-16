@@ -63,6 +63,7 @@ Uncomment
 VMD
 XUnitResult
 acl
+adminexcluded
 akey
 akeys
 allocator
@@ -100,6 +101,7 @@ centric
 chdir
 checksum
 chgrp
+chk
 chmod
 chown
 chowned
@@ -129,13 +131,13 @@ datamover
 dataset
 dbench
 dcp
+ddb
 ddict
 dealloc
 debian
 debuginfo
 defusedxml
 del
-dependances
 deps
 dereference
 dereferencing
@@ -163,6 +165,8 @@ dsync
 dtx
 eg
 enablement
+endian
+endianness
 endswith
 enospace
 enum
@@ -172,10 +176,12 @@ epcrange
 epilog
 errored
 ethernet
+fallocate
 fchmod
 fcntl
 filename
 filesystem
+findall
 findcmd
 fini
 fio
@@ -198,6 +204,7 @@ groupadd
 groupname
 grp
 hackery
+hexdump
 hfi
 hostfile
 hostlist
@@ -215,12 +222,15 @@ iface
 indata
 infiniband
 init
+inode
+inodes
 interoperability
 io
 iod
 iodepth
 ioengine
 ior
+ioreqs
 iotype
 iov
 ip
@@ -234,6 +244,7 @@ junit
 kds
 kv
 kwargs
+launchable
 ldflags
 len
 libaio
@@ -253,6 +264,7 @@ logfile
 logfiles
 logmasks
 lseek
+lsblk
 lspci
 lua
 lustre
@@ -312,6 +324,7 @@ params
 patchelf
 pci
 pda
+parallelized
 pdesc
 perf
 performant
@@ -328,9 +341,11 @@ posix
 postfix
 pparent
 ppn
+pragmas
 prebuild
 prebuilding
 prebuilt
+predefine
 preload
 prepend
 prepended
@@ -347,6 +362,7 @@ ps
 puuid
 py
 pydaos
+pytest
 ramdisk
 randrw
 ranklist
@@ -363,6 +379,7 @@ recurse
 redistributions
 refactor
 repo
+reproducibility
 returncode
 rf
 rmdir
@@ -372,6 +389,7 @@ rpaths
 rpc
 rpms
 rsvc
+rsync
 runtime
 runuser
 rw
@@ -439,6 +457,7 @@ testdata
 testFile
 testname
 testrunner
+testsuites
 tgt
 timestamp
 timestamps
@@ -458,12 +477,14 @@ uint
 umount
 umounting
 unicode
+uninterruptible
 unittest
 unlink
 unlinked
 unlinking
 unmangle
 unmount
+unordered
 unwritable
 uri
 url
@@ -480,11 +501,13 @@ uuidstr
 valgrind
 vendored
 ver
+versa
 versioned
 vm
 vos
 wildcard
 wipefs
+xargs
 xattr
 xattrs
 xfer

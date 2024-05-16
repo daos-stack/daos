@@ -509,11 +509,9 @@ ds_mgmt_group_update_handler(struct mgmt_grp_up_in *in)
 }
 
 int
-ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
-		    d_rank_list_t *targets, size_t scm_size,
-		    size_t nvme_size, daos_prop_t *prop,
-		    d_rank_list_t **svcp, int nr_domains,
-		    uint32_t *domains)
+ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev, d_rank_list_t *targets,
+		    size_t scm_size, size_t nvme_size, daos_prop_t *prop, d_rank_list_t **svcp,
+		    int domains_nr, uint32_t *domains, size_t meta_blob_size)
 {
 	return 0;
 }
@@ -613,4 +611,43 @@ mock_ds_mgmt_dev_set_faulty_setup(void)
 {
 	ds_mgmt_dev_set_faulty_return = 0;
 	uuid_clear(ds_mgmt_dev_set_faulty_uuid);
+}
+
+int
+ds_mgmt_check_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
+		    Mgmt__CheckInconsistPolicy **policies, int pool_nr, char **pools,
+		    uint32_t flags, int phase)
+{
+	return 0;
+}
+
+int
+ds_mgmt_check_stop(int pool_nr, char **pools)
+{
+	return 0;
+}
+
+int
+ds_mgmt_check_query(int pool_nr, char **pools, chk_query_head_cb_t head_cb,
+		    chk_query_pool_cb_t pool_cb, void *buf)
+{
+	return 0;
+}
+
+int
+ds_mgmt_check_prop(chk_prop_cb_t prop_cb, void *buf)
+{
+	return 0;
+}
+
+int
+ds_mgmt_check_act(uint64_t seq, uint32_t act, bool for_all)
+{
+	return 0;
+}
+
+bool
+ds_mgmt_check_enabled(void)
+{
+	return true;
 }

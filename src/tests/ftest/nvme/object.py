@@ -1,15 +1,13 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import avocado
-
-from pydaos.raw import DaosApiError
-
 from apricot import TestWithServers
-from thread_manager import ThreadManager
 from general_utils import report_errors
+from pydaos.raw import DaosApiError
+from thread_manager import ThreadManager
 
 
 class NvmeObject(TestWithServers):
@@ -66,7 +64,7 @@ class NvmeObject(TestWithServers):
         # read written objects and verify
         container.read_objects()
 
-    def test_runner(self, namespace, record_size, array_size, thread_per_size=4):
+    def run_test(self, namespace, record_size, array_size, thread_per_size=4):
         """Perform simultaneous writes of varying record size to a container.
 
         Args:
@@ -145,7 +143,7 @@ class NvmeObject(TestWithServers):
         :avocado: tags=NvmeObject,test_nvme_object_single_pool
         """
         # perform multiple object writes to a single pool
-        self.test_runner("/run/pool_1/*", self.record_size[:-1], 0, self.array_size)
+        self.run_test("/run/pool_1/*", self.record_size[:-1], 0, self.array_size)
         report_errors(self, self.errors)
 
     @avocado.fail_on(DaosApiError)
@@ -167,7 +165,7 @@ class NvmeObject(TestWithServers):
         :avocado: tags=NvmeObject,test_nvme_object_multiple_pools
         """
         # thread to perform simultaneous object writes to multiple pools
-        runner_manager = ThreadManager(self.test_runner, self.get_remaining_time() - 30)
+        runner_manager = ThreadManager(self.run_test, self.get_remaining_time() - 30)
         runner_manager.add(
             namespace='/run/pool_1/*', record_size=self.record_size, array_size=self.array_size)
         runner_manager.add(
@@ -180,6 +178,6 @@ class NvmeObject(TestWithServers):
                 self.errors.append(result.result)
         report_errors(self, self.errors)
 
-        # run the test_runner after cleaning up all the pools for large nvme_pool size
-        self.test_runner("/run/pool_3/*", self.record_size, self.array_size)
+        # run again after cleaning up all the pools for large nvme_pool size
+        self.run_test("/run/pool_3/*", self.record_size, self.array_size)
         report_errors(self, self.errors)

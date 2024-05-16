@@ -67,12 +67,13 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 	if (arg->myrank == 0) {
 		char		*env;
 		int		 size_gb;
-		daos_size_t	 nvme_size;
+		daos_size_t	 nvme_size = 0;
 		d_rank_list_t	 *rank_list = NULL;
 
-		env = getenv("POOL_SCM_SIZE");
+		d_agetenv_str(&env, "POOL_SCM_SIZE");
 		if (env) {
 			size_gb = atoi(env);
+			d_freeenv_str(&env);
 			if (size_gb != 0)
 				outpool->pool_size =
 					(daos_size_t)size_gb << 30;
@@ -85,9 +86,10 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 		 * Set env POOL_NVME_SIZE to overwrite the default NVMe size.
 		 */
 		nvme_size = outpool->pool_size * 4;
-		env = getenv("POOL_NVME_SIZE");
+		d_agetenv_str(&env, "POOL_NVME_SIZE");
 		if (env) {
 			size_gb = atoi(env);
+			d_freeenv_str(&env);
 			nvme_size = (daos_size_t)size_gb << 30;
 		}
 
@@ -490,8 +492,10 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 			return rc;
 		}
 
+		print_message("waiting for rebuild, ver %u, sec %u, err %d, state %d,"
+			      "fail_rank %d\n", rstat->rs_version, rstat->rs_seconds,
+			      rstat->rs_errno, rstat->rs_state, rstat->rs_fail_rank);
 		if (rstat->rs_state == DRS_IN_PROGRESS) {
-			print_message("waiting for rebuild\n");
 			sleep(1);
 			continue;
 		}
@@ -639,6 +643,7 @@ free:
 		d_rank_list_free(arg->pool.svc);
 	if (arg->pool.alive_svc)
 		d_rank_list_free(arg->pool.alive_svc);
+	D_FREE(arg->pool.label);
 	D_FREE(arg);
 	*state = NULL;
 	return 0;
@@ -966,8 +971,8 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 		rank = arg->srv_nnodes - disable_nodes - 1;
 
 	arg->srv_disabled_ntgts += tgts_per_node;
-	if (d_rank_in_rank_list(svc, rank))
-		svc->rl_nr--;
+	rc = d_rank_list_del(svc, rank);
+	assert_rc_equal(rc, 0);
 	print_message("\tKilling rank %d (total of %d with %d already "
 		      "disabled, svc->rl_nr %d)!\n", rank, arg->srv_ntgts,
 		       arg->srv_disabled_ntgts - 1, svc->rl_nr);
@@ -1383,4 +1388,118 @@ int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
 	};
 
 	return -DER_TIMEDOUT;
+}
+
+static void
+test_set_engine_fail_loc_int(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_loc, bool verbose)
+{
+	int rc;
+
+	assert(fail_loc == 0 ||
+	       (fail_loc & (DAOS_FAIL_ONCE | DAOS_FAIL_SOME | DAOS_FAIL_ALWAYS)) != 0);
+
+	if (arg->myrank != 0)
+		return;
+
+	if (verbose) {
+		if (engine_rank == CRT_NO_RANK)
+			print_message("setting fail_loc to " DF_X64 " on all engine ranks\n",
+				      fail_loc);
+		else
+			print_message("setting fail_loc to " DF_X64 " on engine rank %u\n",
+				      fail_loc, engine_rank);
+	}
+
+	rc = daos_debug_set_params(arg->group, engine_rank, DMG_KEY_FAIL_LOC, fail_loc, 0, NULL);
+	assert_rc_equal(rc, 0);
+}
+
+/**
+ * If this is client rank 0, set fail_loc to \a fail_loc on \a engine_rank. The
+ * caller must eventually set fail_loc to 0 on these engines, even when using
+ * DAOS_FAIL_ONCE.
+ *
+ * \param[in]	arg		test state
+ * \param[in]	engine_rank	rank of an engine or CRT_NO_RANK (i.e., all
+ *				engines)
+ * \param[in]	fail_loc	fail_loc, which must either be 0 or include one
+ *				of DAOS_FAIL_ONCE, DAOS_FAIL_SOME, or
+ *				DAOS_FAIL_ALWAYS)
+ */
+void
+test_set_engine_fail_loc(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_loc)
+{
+	test_set_engine_fail_loc_int(arg, engine_rank, fail_loc, true /* verbose */);
+}
+
+/**
+ * If this is client rank 0, set fail_loc to \a fail_loc on \a engine_rank. The
+ * caller must eventually set fail_loc to 0 on these engines, even when using
+ * DAOS_FAIL_ONCE.
+ *
+ * \param[in]	arg		test state
+ * \param[in]	engine_rank	rank of an engine or CRT_NO_RANK (i.e., all
+ *				engines)
+ * \param[in]	fail_loc	fail_loc, which must either be 0 or include one
+ *				of DAOS_FAIL_ONCE, DAOS_FAIL_SOME, or
+ *				DAOS_FAIL_ALWAYS)
+ */
+void
+test_set_engine_fail_loc_quiet(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_loc)
+{
+	test_set_engine_fail_loc_int(arg, engine_rank, fail_loc, false /* verbose */);
+}
+
+/**
+ * If this is client rank 0, set fail_value to \a fail_value on \a engine_rank.
+ * 
+ * \param[in]	arg		test state
+ * \param[in]	engine_rank	rank of an engine or CRT_NO_RANK (i.e., all
+ *				engines)
+ * \param[in]	fail_value	fail_value
+ */
+void
+test_set_engine_fail_value(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_value)
+{
+	int rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	if (engine_rank == CRT_NO_RANK)
+		print_message("setting fail_value to " DF_X64 " on all engine ranks\n", fail_value);
+	else
+		print_message("setting fail_value to " DF_X64 " on engine rank %u\n", fail_value,
+			      engine_rank);
+
+	rc = daos_debug_set_params(arg->group, engine_rank, DMG_KEY_FAIL_VALUE, fail_value, 0,
+				   NULL);
+	assert_rc_equal(rc, 0);
+}
+
+
+/**
+ * If this is client rank 0, set fail_num to \a fail_num on \a engine_rank.
+ * 
+ * \param[in]	arg		test state
+ * \param[in]	engine_rank	rank of an engine or CRT_NO_RANK (i.e., all
+ *				engines)
+ * \param[in]	fail_num	fail_num
+ */
+void
+test_set_engine_fail_num(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_num)
+{
+	int rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	if (engine_rank == CRT_NO_RANK)
+		print_message("setting fail_num to " DF_X64 " on all engine ranks\n", fail_num);
+	else
+		print_message("setting fail_num to " DF_X64 " on engine rank %u\n", fail_num,
+			      engine_rank);
+
+	rc = daos_debug_set_params(arg->group, engine_rank, DMG_KEY_FAIL_NUM, fail_num, 0, NULL);
+	assert_rc_equal(rc, 0);
 }

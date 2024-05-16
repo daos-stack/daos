@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -58,11 +58,13 @@ obj_lop_alloc(void *key, unsigned int ksize, void *args,
 	struct vos_object	*obj;
 	struct obj_lru_key	*lkey;
 	struct vos_container	*cont;
+	struct vos_tls		*tls;
 	int			 rc;
 
 	cont = (struct vos_container *)args;
 	D_ASSERT(cont != NULL);
 
+	tls = vos_tls_get(cont->vc_pool->vp_sysdb);
 	lkey = (struct obj_lru_key *)key;
 	D_ASSERT(lkey != NULL);
 
@@ -74,7 +76,7 @@ obj_lop_alloc(void *key, unsigned int ksize, void *args,
 		D_GOTO(failed, rc = -DER_NOMEM);
 
 	init_object(obj, lkey->olk_oid, cont);
-
+	d_tm_inc_gauge(tls->vtl_obj_cnt, 1);
 	*llink_p = &obj->obj_llink;
 	rc = 0;
 failed:
@@ -123,10 +125,13 @@ static void
 obj_lop_free(struct daos_llink *llink)
 {
 	struct vos_object	*obj;
+	struct vos_tls		*tls;
 
 	D_DEBUG(DB_TRACE, "lru free callback for vos_obj_cache\n");
 
 	obj = container_of(llink, struct vos_object, obj_llink);
+	tls = vos_tls_get(obj->obj_cont->vc_pool->vp_sysdb);
+	d_tm_dec_gauge(tls->vtl_obj_cnt, 1);
 	clean_object(obj);
 	D_FREE(obj);
 }
@@ -349,7 +354,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 
 	if (intent == DAOS_INTENT_KILL && !(flags & VOS_OBJ_KILL_DKEY)) {
 		if (obj != &obj_local) {
-			if (vos_obj_refcount(obj) > 2)
+			if (!daos_lru_is_last_user(&obj->obj_llink))
 				D_GOTO(failed, rc = -DER_BUSY);
 
 			vos_obj_evict(occ, obj);

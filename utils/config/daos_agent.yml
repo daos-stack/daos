@@ -26,6 +26,27 @@
 # default: 10001
 #port: 10001
 
+## Enable HTTP endpoint for remote telemetry collection.
+# Note that enabling the endpoint automatically enables
+# client telemetry collection.
+#
+## default endpoint state: disabled
+## default endpoint port: 9192
+#telemetry_port: 9192
+
+## Enable client telemetry for all DAOS clients.
+# If false, clients will need to optionally enable telemetry by setting
+# the D_CLIENT_METRICS_ENABLE environment variable to true.
+#
+## default: false
+#telemetry_enabled: true
+
+## Retain client telemetry for a period of time after the client
+# process exits.
+#
+## default 0 (do not retain telemetry after client exit)
+#telemetry_retain: 1m
+
 ## Transport Credentials Specifying certificates to secure communications
 #
 #transport_config:
@@ -65,7 +86,14 @@
 ## Note that this implies that stopping or restarting the agent will result
 ## in interruption of DAOS I/O for any local DAOS client processes that have
 ## an open pool handle.
-# disable_auto_evict: true
+## default: false
+#disable_auto_evict: true
+
+## If enabled, the agent will evict any open pool handles associated with this machine on agent
+## startup. This allows the servers to reclaim resources that may not have been properly cleaned
+## up in the event of an agent or machine crash.
+## default: false
+#enable_evict_on_start: true
 
 ## Disable the agent's internal caches. If set to true, the agent will query the
 ## server access point and local hardware data every time a client requests

@@ -49,22 +49,6 @@ struct pl_map_ops {
 				  uint32_t *tgt_rank,
 				  uint32_t *shard_id,
 				  unsigned int array_size);
-	int (*o_obj_find_reint)(struct pl_map *map,
-				uint32_t layout_gl_version,
-				struct daos_obj_md *md,
-				struct daos_obj_shard_md *shard_md,
-				uint32_t reint_ver,
-				uint32_t *tgt_rank,
-				uint32_t *shard_id,
-				unsigned int array_size);
-	int (*o_obj_find_addition)(struct pl_map *map,
-				   uint32_t layout_gl_version,
-				   struct daos_obj_md *md,
-				   struct daos_obj_shard_md *shard_md,
-				   uint32_t reint_ver,
-				   uint32_t *tgt_rank,
-				   uint32_t *shard_id,
-				   unsigned int array_size);
 };
 
 unsigned int pl_obj_shard2grp_head(struct daos_obj_shard_md *shard_md,
@@ -85,12 +69,33 @@ struct failed_shard {
 	uint32_t        fs_shard_idx;
 	uint32_t        fs_fseq;
 	uint32_t        fs_tgt_id;
+	uint16_t	fs_rank;
+	uint8_t		fs_index;
 	uint8_t         fs_status;
 };
 
 #define	DF_FAILEDSHARD "shard_idx: %d, fseq: %d, tgt_id: %d, status: %d"
 #define	DP_FAILEDSHARD(x) (x).fs_shard_idx, (x).fs_fseq, \
 			(x).fs_tgt_id, (x).fs_status
+
+/**
+ * layout_gen_mode indicate how the layout is generated:
+ *
+ * PRE_REBUILD means the targets statuses need to be converted to the original
+ * status before rebuild, for example UP --> NEW, DOWN --> UPIN, during layout
+ * generation.
+ *
+ * CURRENT means the target status will not change during layout generation.
+ *
+ * POST_REBUILD means the targets statuses need to be converted to the status
+ * after rebuild finished, for example UP --> UPIN, DOWN --> DOWNOUT, during
+ * layout generation.
+ */
+enum layout_gen_mode {
+	PRE_REBUILD	= 0,
+	CURRENT		= 1,
+	POST_REBUILD	= 2,
+};
 
 /**
  * This is useful for jump_map placement to pseudorandomly permute input keys
@@ -136,9 +141,9 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 
 int
 determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
-		       bool spare_avail, d_list_t *remap_list, uint32_t allow_status,
-		       struct failed_shard *f_shard, struct pl_obj_shard *l_shard,
-		       bool *extending);
+		       bool spare_avail, d_list_t *remap_list, uint32_t allow_version,
+		       enum layout_gen_mode gen_mode, struct failed_shard *f_shard,
+		       struct pl_obj_shard *l_shard, bool *is_extending);
 
 int
 spec_place_rank_get(unsigned int *pos, daos_obj_id_t oid,
@@ -148,6 +153,10 @@ int
 pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list);
 
 bool
-need_remap_comp(struct pool_component *comp, uint32_t allow_status);
+is_comp_avaible(struct pool_component *comp, uint32_t allow_version,
+		enum layout_gen_mode gen_mode);
+bool
+need_remap_comp(struct pool_component *comp, uint32_t allow_status,
+		enum layout_gen_mode gen_mode);
 
 #endif /* __PL_MAP_H__ */

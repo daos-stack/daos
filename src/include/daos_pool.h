@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,6 +14,11 @@
 #if defined(__cplusplus)
 extern "C" {
 #endif
+
+#include <inttypes.h>
+#include <uuid/uuid.h>
+
+#include <daos_prop.h>
 
 /** Type of storage target */
 typedef enum {
@@ -204,8 +209,6 @@ struct daos_pool_cont_info2 {
 	/** Reserved for future use: container properties, other information, etc. */
 	void				*pci_reserved[2];
 };
-
-#define DAOS_SYS_NAME_MAX_LEN 127
 
 /**
  * Connect to the DAOS pool identified by \a pool, a label or UUID string.

@@ -193,22 +193,21 @@ drpc_progress_context_is_valid(struct drpc_progress_context *ctx)
 static int
 drpc_progress_context_accept(struct drpc_progress_context *ctx)
 {
-	struct drpc		*session;
-	struct drpc_list	*session_node;
-
-	session = drpc_accept(ctx->listener_ctx);
-	if (session == NULL) {
-		/*
-		 * Any failure to accept is weird and surprising
-		 */
-		D_ERROR("Failed to accept new drpc connection\n");
-		return -DER_MISC;
-	}
+	struct drpc      *session;
+	struct drpc_list *session_node;
+	int               rc;
 
 	D_ALLOC_PTR(session_node);
 	if (session_node == NULL) {
-		D_FREE(session);
 		return -DER_NOMEM;
+	}
+
+	rc = drpc_accept(ctx->listener_ctx, &session);
+	if (rc != -DER_SUCCESS) {
+		/* Any failure to accept is weird and surprising */
+		DL_ERROR(rc, "Failed to accept new drpc connection");
+		D_FREE(session_node);
+		return rc;
 	}
 
 	session_node->ctx = session;

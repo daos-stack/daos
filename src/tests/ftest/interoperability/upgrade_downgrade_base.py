@@ -3,17 +3,17 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-import os
-import traceback
-import random
 import base64
+import os
+import random
 import time
+import traceback
 
-from pydaos.raw import DaosApiError
-from general_utils import get_random_bytes, pcmd, run_pcmd
 from agent_utils import include_local_host
 from command_utils_base import CommandFailure
+from general_utils import get_random_bytes, pcmd, run_pcmd
 from ior_test_base import IorTestBase
+from pydaos.raw import DaosApiError
 
 
 class UpgradeDowngradeBase(IorTestBase):

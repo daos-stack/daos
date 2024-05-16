@@ -8,6 +8,7 @@ server_config:
   engines:
     0:
       storage: auto
+  system_ram_reserved: 32
 pool:
   control_method: dmg
   size: 90%

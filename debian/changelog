@@ -1,3 +1,88 @@
+daos (2.5.101-5) unstable; urgency=medium
+  [ Lei Huang ]
+  * Add libaio as a dependent package
+
+ -- Lei Huang <lei.huang@intel.com> Fri, 03 May 2024 16:40:00 -0600
+
+daos (2.5.101-4) unstable; urgency=medium
+  [ Fan Yong ]
+  * NOOP change to keep in parity with RPM version
+
+ -- Fan Yong <fan.yong@intel.com>  Fri, 05 Apr 2024 09:30:00 +0900
+
+daos (2.5.101-3) unstable; urgency=medium
+  [ Ashley M. Pittman ]
+  * Updated pydaos install process
+
+ -- Ashley M. Pittman <ashley.m.pittman@intel.com>  Thu, 04 Apr 2024 09:15:00 -0800
+
+daos (2.5.101-2) unstable; urgency=medium
+  [ Jan Michalski ]
+  * Add dtx_tests to the server-tests package
+
+ -- Jan Michalski <jan.michalski@intel.com>  Mon, 18 Mar 2024 21:30:00 +0000
+
+daos (2.5.101-1) unstable; urgency=medium
+  [ Phillip Henderson ]
+  * Bump version to 2.5.101
+
+ -- Phillip Henderson <phillip.henderson@intel.com>  Fri, 15 Mar 2024 02:10:00 -0500
+
+daos (2.5.100-16) unstable; urgency=medium
+  [ Li Wei ]
+  * Update raft to 0.11.0-1416.g12dbc15
+
+ -- Li Wei <wei.g.li@intel.com>  Tue, 27 Feb 2024 11:13:00 +0900
+
+daos (2.5.100-15) unstable; urgency=medium
+  [ Ryon Jensen ]
+  * NOOP change to keep in parity with RPM version
+
+ -- Ryon Jensen <ryon.jensen@intel.com>  Mon, 12 Feb 2024 11:16:00 -0700
+
+daos (2.5.100-14) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * NOOP change to keep in parity with RPM version
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Tue, 09 Jan 2024 13:59:01 -0500
+
+daos (2.5.100-13) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Update for EL 8.8 and Leap 15.5
+  * Update raft to 0.10.1-2.411.gefa15f4
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Wed, 06 Dec 2023 08:54:56 -0500
+
+daos (2.5.100-12) unstable; urgency=medium
+  [ Tomasz Gromadzki ]
+  * Update PMDK to 2.0.0
+    * Remove libpmemblk from dependencies.
+    * Start using BUILD_EXAMPLES=n and BUILD_BENCHMARKS=n instead of patches.
+    * Stop using BUILD_RPMEM=n (removed) and NDCTL_DISABLE=y (invalid).
+    * Point https://github.com/pmem/pmdk as the main PMDK reference source.
+    NOTE: PMDK upgrade to 2.0.0 does not affect any API call used by DAOS.
+          libpmemobj (and libpmem) API stays unchanged.
+
+ -- Tomasz Gromadzki <tomasz.gromadzki@intel.com>  Fri, 17 Nov 2023 12:52:00 -0400
+
+  [ Jerome Soumagne ]
+  * Bump mercury min version to 2.3.1
+
+ -- Jerome Soumagne <jerome.soumagne@intel.com>  Wed, 15 Nov 2023 10:30:00 -0600
+
+daos (2.5.100-10) unstable; urgency=medium
+  [ Phillip Henderson ]
+  * Move verify_perms.py location
+
+ -- Phillip Henderson <phillip.henderson@intel.com>  Fri, 03 Nov 2023 04:17:00 -0500
+
+daos (2.5.100-9) unstable; urgency=medium
+
+  [ Brian J. Murrell ]
+  * NOOP change to keep in parity with RPM version
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Wed, 23 Aug 2023 15:02:44 -0400
+
 daos (2.5.100-8) unstable; urgency=medium
 
   [ Brian J. Murrell ]

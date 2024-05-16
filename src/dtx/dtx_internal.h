@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -22,16 +22,31 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
-#define DAOS_DTX_VERSION	3
+#define DAOS_DTX_VERSION	4
+
+/** VOS reserves highest two minor epoch values for internal use so we must
+ *  limit the number of dtx sub modifications to avoid conflict.
+ */
+#define DTX_SUB_MOD_MAX         (((uint16_t)-1) - 2)
 
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
-#define DTX_PROTO_SRV_RPC_LIST						\
-	X(DTX_COMMIT, 0, &CQF_dtx, dtx_handler, NULL, "dtx_commit")	\
-	X(DTX_ABORT, 0, &CQF_dtx, dtx_handler, NULL, "dtx_abort")	\
-	X(DTX_CHECK, 0, &CQF_dtx, dtx_handler, NULL, "dtx_check")	\
-	X(DTX_REFRESH, 0, &CQF_dtx, dtx_handler, NULL, "dtx_refresh")
+#define DTX_PROTO_SRV_RPC_LIST							\
+	X(DTX_COMMIT,		0,	&CQF_dtx,	dtx_handler,		\
+	  NULL,			"dtx_commit")					\
+	X(DTX_ABORT,		0,	&CQF_dtx,	dtx_handler,		\
+	  NULL,			"dtx_abort")					\
+	X(DTX_CHECK,		0,	&CQF_dtx,	dtx_handler,		\
+	  NULL,			"dtx_check")					\
+	X(DTX_REFRESH,		0,	&CQF_dtx,	dtx_handler,		\
+	  NULL,			"dtx_refresh")					\
+	X(DTX_COLL_COMMIT,	0,	&CQF_dtx_coll,	dtx_coll_handler,	\
+	  &dtx_coll_commit_co_ops, "dtx_coll_commit")				\
+	X(DTX_COLL_ABORT,	0,	&CQF_dtx_coll,	dtx_coll_handler,	\
+	  &dtx_coll_abort_co_ops, "dtx_coll_abort")				\
+	X(DTX_COLL_CHECK,	0,	&CQF_dtx_coll,	dtx_coll_handler,	\
+	  &dtx_coll_check_co_ops, "dtx_coll_check")
 
 #define X(a, b, c, d, e, f) a,
 enum dtx_operation {
@@ -55,6 +70,27 @@ enum dtx_operation {
 	((int32_t)		(do_sub_rets)		CRT_ARRAY)
 
 CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
+
+/*
+ * DTX collective RPC input fields
+ * dci_hints is sparse array, one per engine, sorted against the rank ID.
+ * It can hold more than 19K engines inline RPC body.
+ */
+#define DAOS_ISEQ_COLL_DTX						\
+	((uuid_t)		(dci_po_uuid)		CRT_VAR)	\
+	((uuid_t)		(dci_co_uuid)		CRT_VAR)	\
+	((struct dtx_id)	(dci_xid)		CRT_VAR)	\
+	((uint32_t)		(dci_version)		CRT_VAR)	\
+	((uint32_t)		(dci_padding)		CRT_VAR)	\
+	((uint64_t)		(dci_epoch)		CRT_VAR)	\
+	((uint8_t)		(dci_hints)		CRT_ARRAY)
+
+/* DTX collective RPC output fields */
+#define DAOS_OSEQ_COLL_DTX						\
+	((int32_t)		(dco_status)		CRT_VAR)	\
+	((uint32_t)		(dco_misc)		CRT_VAR)
+
+CRT_RPC_DECLARE(dtx_coll, DAOS_ISEQ_COLL_DTX, DAOS_OSEQ_COLL_DTX);
 
 #define DTX_YIELD_CYCLE		(DTX_THRESHOLD_COUNT >> 3)
 
@@ -149,10 +185,29 @@ extern uint32_t dtx_batched_ult_max;
  */
 #define DTX_INLINE_MBS_SIZE		512
 
+/*
+ * The branch ratio for the KNOMIAL tree when bcast collective DTX RPC (commit/abort/check)
+ * to related engines. Based on the experience, the value which is not less than 4 may give
+ * relative better performance, cannot be too large (such as more than 10).
+ */
+#define DTX_COLL_TREE_WIDTH		8
+
+extern struct crt_corpc_ops	dtx_coll_commit_co_ops;
+extern struct crt_corpc_ops	dtx_coll_abort_co_ops;
+extern struct crt_corpc_ops	dtx_coll_check_co_ops;
+
+struct dtx_coll_prep_args {
+	struct dtx_coll_entry	*dcpa_dce;
+	crt_rpc_t		*dcpa_rpc;
+	daos_unit_oid_t		 dcpa_oid;
+	ABT_future		 dcpa_future;
+	int			 dcpa_result;
+};
+
 struct dtx_pool_metrics {
 	struct d_tm_node_t	*dpm_batched_degree;
 	struct d_tm_node_t	*dpm_batched_total;
-	struct d_tm_node_t	*dpm_total[DTX_PROTO_SRV_RPC_COUNT];
+	struct d_tm_node_t	*dpm_total[DTX_PROTO_SRV_RPC_COUNT + 1];
 };
 
 /*
@@ -160,6 +215,7 @@ struct dtx_pool_metrics {
  */
 struct dtx_tls {
 	struct d_tm_node_t	*dt_committable;
+	struct d_tm_node_t	*dt_dtx_leader_total;
 	uint64_t		 dt_agg_gen;
 	uint32_t		 dt_batched_ult_cnt;
 };
@@ -193,32 +249,37 @@ int dtx_handle_reinit(struct dtx_handle *dth);
 void dtx_batched_commit(void *arg);
 void dtx_aggregation_main(void *arg);
 int start_dtx_reindex_ult(struct ds_cont_child *cont);
-void stop_dtx_reindex_ult(struct ds_cont_child *cont);
+void dtx_merge_check_result(int *tgt, int src);
+int dtx_leader_get(struct ds_pool *pool, struct dtx_memberships *mbs,
+		   daos_unit_oid_t *oid, uint32_t version, struct pool_target **p_tgt);
 
 /* dtx_cos.c */
 int dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
 			  daos_unit_oid_t *oid, daos_epoch_t epoch,
-			  struct dtx_entry ***dtes, struct dtx_cos_key **dcks);
-int dtx_add_cos(struct ds_cont_child *cont, struct dtx_entry *dte,
-		daos_unit_oid_t *oid, uint64_t dkey_hash,
-		daos_epoch_t epoch, uint32_t flags);
+			  struct dtx_entry ***dtes, struct dtx_cos_key **dcks,
+			  struct dtx_coll_entry **p_dce);
+int dtx_add_cos(struct ds_cont_child *cont, void *entry, daos_unit_oid_t *oid,
+		uint64_t dkey_hash, daos_epoch_t epoch, uint32_t flags);
 int dtx_del_cos(struct ds_cont_child *cont, struct dtx_id *xid,
 		daos_unit_oid_t *oid, uint64_t dkey_hash);
 uint64_t dtx_cos_oldest(struct ds_cont_child *cont);
 
 /* dtx_rpc.c */
-int dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
-	       struct dtx_cos_key *dcks, int count);
 int dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte,
 	      daos_epoch_t epoch);
-
+int dtx_coll_check(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoch_t epoch);
 int dtx_refresh_internal(struct ds_cont_child *cont, int *check_count, d_list_t *check_list,
 			 d_list_t *cmt_list, d_list_t *abt_list, d_list_t *act_list, bool for_io);
-int dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte,
-			  daos_epoch_t epoch, int *tgt_array, int *err);
+int dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_unit_oid_t oid,
+			  uint64_t dkey_hash, daos_epoch_t epoch, int *tgt_array, int *err);
 
-int dtx_leader_get(struct ds_pool *pool, struct dtx_memberships *mbs,
-		   struct pool_target **p_tgt);
+/* dtx_coll.c */
+void dtx_coll_prep_ult(void *arg);
+int dtx_coll_prep(uuid_t po_uuid, daos_unit_oid_t oid, struct dtx_id *xid,
+		  struct dtx_memberships *mbs, uint32_t my_tgtid, uint32_t dtx_ver,
+		  uint32_t pm_ver, bool for_check, bool need_hint, struct dtx_coll_entry **p_dce);
+int dtx_coll_local_exec(uuid_t po_uuid, uuid_t co_uuid, struct dtx_id *xid, daos_epoch_t epoch,
+			uint32_t opc, uint32_t bitmap_sz, uint8_t *bitmap, int **p_results);
 
 enum dtx_status_handle_result {
 	DSHR_NEED_COMMIT	= 1,
@@ -230,6 +291,18 @@ enum dtx_status_handle_result {
 
 enum dtx_rpc_flags {
 	DRF_INITIAL_LEADER	= (1 << 0),
+	DRF_SYNC_COMMIT		= (1 << 1),
+};
+
+enum dtx_cos_flags {
+	DCF_SHARED		= (1 << 0),
+	/* Some DTX (such as for the distributed transaction across multiple
+	 * RDGs, or for EC object modification) need to be committed via DTX
+	 * RPC instead of piggyback via other dispatched update/punch RPC.
+	 */
+	DCF_EXP_CMT		= (1 << 1),
+	/* For collective DTX. */
+	DCF_COLL		= (1 << 2),
 };
 
 #endif /* __DTX_INTERNAL_H__ */

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -22,12 +22,11 @@
 #include <daos/btree_class.h>
 #include <daos/common.h>
 #include <daos/placement.h>
+#include <daos/tls.h>
 #include "srv_internal.h"
 #include "drpc_internal.h"
 #include <gurt/telemetry_common.h>
 #include <gurt/telemetry_producer.h>
-
-#include <daos.h> /* for daos_init() */
 
 #define MAX_MODULE_OPTIONS	64
 #if BUILD_PIPELINE
@@ -35,6 +34,7 @@
 #else
 #define MODULE_LIST	"vos,rdb,rsvc,security,mgmt,dtx,pool,cont,obj,rebuild"
 #endif
+#define MODS_LIST_CHK	"vos,rdb,rsvc,security,mgmt,dtx,pool,cont,obj,rebuild,chk"
 
 /** List of modules to load */
 static char		modules[MAX_MODULE_OPTIONS + 1];
@@ -45,7 +45,7 @@ static char		modules[MAX_MODULE_OPTIONS + 1];
 static unsigned int	nr_threads;
 
 /** DAOS system name (corresponds to crt group ID) */
-static char	       *daos_sysname = DAOS_DEFAULT_SYS_NAME;
+char                   *daos_sysname = DAOS_DEFAULT_SYS_NAME;
 
 /** Storage node hostname */
 char		        dss_hostname[DSS_HOSTNAME_MAX_LEN];
@@ -74,15 +74,18 @@ hwloc_topology_t	dss_topo;
 int			dss_core_depth;
 /** number of physical cores, w/o hyperthreading */
 int			dss_core_nr;
-/** start offset index of the first core for service XS */
-unsigned int		dss_core_offset;
+/** start offset index of the first core for service XS.  Init to -1 so we can
+ * detect when it is explicitly set and disable multi-socket mode.
+ */
+unsigned int            dss_core_offset = -1;
 /** NUMA node to bind to */
 int			dss_numa_node = -1;
-hwloc_bitmap_t	core_allocation_bitmap;
-/** a copy of the NUMA node object in the topology */
-hwloc_obj_t		numa_obj;
-/** number of cores in the given NUMA node */
-int			dss_num_cores_numa_node;
+/** Forward I/O work to neighbor */
+bool                    dss_forward_neighbor;
+/** Cached numa information */
+struct dss_numa_info   *dss_numa;
+/** Number of active numa nodes, multi-socket mode only */
+int                     dss_numa_nr = 1;
 /** Module facility bitmask */
 static uint64_t		dss_mod_facs;
 /** Number of storage tiers: 2 for SCM and NVMe */
@@ -91,8 +94,17 @@ unsigned int		dss_storage_tiers = 2;
 /** Flag to indicate Arbogots is initialized */
 static bool dss_abt_init;
 
+/** Start daos_engine under check mode. */
+static bool dss_check_mode;
+
 /* stream used to dump ABT infos and ULTs stacks */
 static FILE *abt_infos;
+
+bool
+engine_in_check(void)
+{
+	return dss_check_mode;
+}
 
 d_rank_t
 dss_self_rank(void)
@@ -296,16 +308,65 @@ out:
 	return 0;
 }
 
+static bool
+dss_multi_socket_check(bool oversub, int numa_nr)
+{
+	/** Keep this simple and disallow some configurations */
+	if (oversub) {
+		D_INFO("Oversubscription requested, bypassing multi-socket mode\n");
+		return false;
+	}
+
+	if (dss_numa_node != -1) {
+		D_INFO("Numa node specified, running in single socket mode\n");
+		return false;
+	}
+
+	if (numa_nr < 2) {
+		D_INFO("No NUMA found, bypassing multi-socket mode\n");
+		return false;
+	}
+
+	if ((dss_tgt_offload_xs_nr % numa_nr) != 0) {
+		D_INFO("Uneven split of helpers on sockets, bypassing multi-socket mode\n");
+		return false;
+	}
+
+	if ((dss_tgt_nr % numa_nr) != 0) {
+		D_INFO("Uneven split of targets on sockets, bypassing multi-socket mode\n");
+		return false;
+	}
+
+	return true;
+}
+
 static int
-dss_topo_init()
+dss_legacy_mode(bool oversub)
+{
+	D_PRINT("Using legacy core allocation algorithm\n");
+	if (dss_core_offset >= dss_core_nr) {
+		D_ERROR("invalid dss_core_offset %u (set by \"-f\" option), should within "
+			"range [0, %u]\n",
+			dss_core_offset, dss_core_nr - 1);
+		return -DER_INVAL;
+	}
+
+	return dss_tgt_nr_check(dss_core_nr, dss_tgt_nr, oversub);
+}
+
+static int
+dss_topo_init(void)
 {
 	int		depth;
 	int		numa_node_nr;
-	int		num_cores_visited;
-	char		*cpuset;
+	int             num_cores_visited;
 	int		k;
+	int             numa_node;
+	int             rc = 0;
+	hwloc_obj_t     numa_obj;
 	hwloc_obj_t	corenode;
 	bool            tgt_oversub = false;
+	bool            multi_socket = false;
 
 	hwloc_topology_init(&dss_topo);
 	hwloc_topology_load(dss_topo);
@@ -315,70 +376,101 @@ dss_topo_init()
 	depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_NUMANODE);
 	numa_node_nr = hwloc_get_nbobjs_by_depth(dss_topo, depth);
 	d_getenv_bool("DAOS_TARGET_OVERSUBSCRIBE", &tgt_oversub);
+	d_getenv_bool("DAOS_FORWARD_NEIGHBOR", &dss_forward_neighbor);
 	dss_tgt_nr = nr_threads;
 
-	/* if no NUMA node was specified, or NUMA data unavailable */
-	/* fall back to the legacy core allocation algorithm */
-	if (dss_numa_node == -1 || numa_node_nr <= 0) {
-		D_PRINT("Using legacy core allocation algorithm\n");
-		if (dss_core_offset >= dss_core_nr) {
-			D_ERROR("invalid dss_core_offset %u (set by \"-f\" option), should within "
-				"range [0, %u]\n",
-				dss_core_offset, dss_core_nr - 1);
-			return -DER_INVAL;
-		}
-
-		return dss_tgt_nr_check(dss_core_nr, dss_tgt_nr, tgt_oversub);
+	/** Set to -1 initially so we can detect when it's set explicitly to
+	 * maintain mode consistency between engines where one sets it to 0.
+	 */
+	if (dss_core_offset == -1) {
+		dss_core_offset = 0;
+		if (dss_multi_socket_check(tgt_oversub, numa_node_nr))
+			multi_socket = true;
+	} else {
+		D_INFO("Core offset specified, running in single socket mode\n");
 	}
+
+	/* Fall back to legacy mode if no socket was specified and
+	 * multi-socket mode is not possible or NUMA data is unavailable
+	 */
+	if ((!multi_socket && dss_numa_node == -1) || numa_node_nr <= 0)
+		return dss_legacy_mode(tgt_oversub);
 
 	if (dss_numa_node > numa_node_nr) {
 		D_ERROR("Invalid NUMA node selected. Must be no larger than %d\n", numa_node_nr);
 		return -DER_INVAL;
 	}
 
-	numa_obj = hwloc_get_obj_by_depth(dss_topo, depth, dss_numa_node);
-	if (numa_obj == NULL) {
-		D_ERROR("NUMA node %d was not found in the topology\n", dss_numa_node);
-		return -DER_INVAL;
-	}
+	D_ALLOC_ARRAY(dss_numa, numa_node_nr);
+	if (dss_numa == NULL)
+		return -DER_NOMEM;
 
-	/* create an empty bitmap, then set each bit as we */
-	/* find a core that matches */
-	core_allocation_bitmap = hwloc_bitmap_alloc();
-	if (core_allocation_bitmap == NULL) {
-		D_ERROR("Unable to allocate core allocation bitmap\n");
-		return -DER_INVAL;
-	}
+	for (numa_node = 0; numa_node < numa_node_nr; numa_node++) {
+		dss_numa[numa_node].ni_idx = numa_node;
+		numa_obj                   = hwloc_get_obj_by_depth(dss_topo, depth, numa_node);
+		if (numa_obj == NULL) {
+			D_ERROR("NUMA node %d was not found in the topology\n", numa_node);
+			D_GOTO(failed, rc = -DER_INVAL);
+		}
 
-	dss_num_cores_numa_node = 0;
-	num_cores_visited = 0;
+		/* create an empty bitmap, then set each bit as we */
+		/* find a core that matches */
+		dss_numa[numa_node].ni_coremap = hwloc_bitmap_alloc();
+		if (dss_numa[numa_node].ni_coremap == NULL) {
+			D_ERROR("Unable to allocate core allocation bitmap\n");
+			D_GOTO(failed, rc = -DER_INVAL);
+		}
 
-	for (k = 0; k < dss_core_nr; k++) {
-		corenode = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, k);
-		if (corenode == NULL)
-			continue;
-		if (hwloc_bitmap_isincluded(corenode->cpuset,
-					    numa_obj->cpuset) != 0) {
-			if (num_cores_visited++ >= dss_core_offset) {
-				hwloc_bitmap_set(core_allocation_bitmap, k);
-				hwloc_bitmap_asprintf(&cpuset,
-						      corenode->cpuset);
+		dss_numa[numa_node].ni_core_nr = 0;
+		num_cores_visited              = 0;
+
+		for (k = 0; k < dss_core_nr; k++) {
+			corenode = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, k);
+			if (corenode == NULL)
+				continue;
+			if (hwloc_bitmap_isincluded(corenode->cpuset, numa_obj->cpuset) != 0) {
+				if (num_cores_visited++ >= dss_core_offset)
+					hwloc_bitmap_set(dss_numa[numa_node].ni_coremap, k);
+				dss_numa[numa_node].ni_core_nr++;
 			}
-			dss_num_cores_numa_node++;
+		}
+		if (multi_socket && numa_node > 0 &&
+		    dss_numa[numa_node].ni_core_nr != dss_numa[numa_node - 1].ni_core_nr) {
+			D_INFO("Non-uniform numa nodes, bypassing multi-socket mode\n");
+			D_FREE(dss_numa);
+			return dss_legacy_mode(false);
 		}
 	}
-	hwloc_bitmap_asprintf(&cpuset, core_allocation_bitmap);
-	free(cpuset);
 
-	if (dss_core_offset >= dss_num_cores_numa_node) {
+	if (multi_socket) {
+		/** In this mode, we simply save the topology for later use but
+		 * still use all of the cores.
+		 */
+		D_PRINT("Using Multi-socket NUMA core allocation algorithm\n");
+		dss_numa_nr             = numa_node_nr;
+		dss_offload_per_numa_nr = dss_tgt_offload_xs_nr / dss_numa_nr;
+		dss_tgt_per_numa_nr     = dss_tgt_nr / dss_numa_nr;
+		return dss_tgt_nr_check(dss_core_nr, dss_tgt_nr, tgt_oversub);
+	}
+
+	if (dss_core_offset >= dss_numa[dss_numa_node].ni_core_nr) {
 		D_ERROR("invalid dss_core_offset %d (set by \"-f\" option), should within range "
 			"[0, %d]\n",
-			dss_core_offset, dss_num_cores_numa_node - 1);
+			dss_core_offset, dss_numa[dss_numa_node].ni_core_nr - 1);
 		return -DER_INVAL;
 	}
 	D_PRINT("Using NUMA core allocation algorithm\n");
 
-	return dss_tgt_nr_check(dss_num_cores_numa_node, dss_tgt_nr, tgt_oversub);
+	return dss_tgt_nr_check(dss_numa[dss_numa_node].ni_core_nr, dss_tgt_nr, tgt_oversub);
+failed:
+	D_FREE(dss_numa);
+	return rc;
+}
+
+static void
+dss_topo_fini(void)
+{
+	D_FREE(dss_numa);
 }
 
 static ABT_mutex		server_init_state_mutex;
@@ -432,14 +524,15 @@ dss_init_state_set(enum dss_init_state state)
 static int
 abt_max_num_xstreams(void)
 {
-	char   *env;
+	unsigned num_xstreams = 0;
 
-	env = getenv("ABT_MAX_NUM_XSTREAMS");
-	if (env == NULL)
-		env = getenv("ABT_ENV_MAX_NUM_XSTREAMS");
-	if (env != NULL)
-		return atoi(env);
-	return 0;
+	if (d_isenv_def("ABT_MAX_NUM_XSTREAMS"))
+		d_getenv_uint("ABT_MAX_NUM_XSTREAMS", &num_xstreams);
+	else
+		d_getenv_uint("ABT_ENV_MAX_NUM_XSTREAMS", &num_xstreams);
+	D_ASSERT(num_xstreams <= INT_MAX);
+
+	return num_xstreams;
 }
 
 static int
@@ -454,7 +547,7 @@ set_abt_max_num_xstreams(int n)
 	if (value == NULL)
 		return -DER_NOMEM;
 	D_INFO("Setting %s to %s\n", name, value);
-	rc = setenv(name, value, 1 /* overwrite */);
+	rc = d_setenv(name, value, 1 /* overwrite */);
 	D_FREE(value);
 	if (rc != 0)
 		return daos_errno2der(errno);
@@ -618,14 +711,14 @@ server_id_cb(uint32_t *tid, uint64_t *uid)
 	}
 
 	if (tid != NULL) {
-		struct dss_thread_local_storage *dtc;
-		struct dss_module_info *dmi;
+		struct daos_thread_local_storage *dtc;
+		struct daos_module_info          *dmi;
 		int index = daos_srv_modkey.dmk_index;
 
-		/* Avoid assertion in dss_module_key_get() */
+		/* Avoid assertion in daos_module_key_get() */
 		dtc = dss_tls_get();
 		if (dtc != NULL && index >= 0 && index < DAOS_MODULE_KEYS_NR &&
-		    dss_module_keys[index] == &daos_srv_modkey) {
+		    daos_get_module_key(index) == &daos_srv_modkey) {
 			dmi = dss_get_module_info();
 			if (dmi != NULL)
 				*tid = dmi->dmi_xs_id;
@@ -678,7 +771,6 @@ server_init(int argc, char *argv[])
 		       DP_RC(rc));
 
 	metrics = &dss_engine_metrics;
-
 	/** Report timestamp when engine was started */
 	d_tm_record_timestamp(metrics->started_time);
 
@@ -711,28 +803,20 @@ server_init(int argc, char *argv[])
 		D_GOTO(exit_mod_init, rc);
 	D_INFO("Network successfully initialized\n");
 
-	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
-		rc = daos_init();
-		if (rc) {
-			D_ERROR("daos_init (client) failed, rc: "DF_RC"\n",
-				DP_RC(rc));
-			D_GOTO(exit_crt, rc);
-		}
-		D_INFO("Client stack enabled\n");
-	} else {
-		rc = daos_hhash_init();
-		if (rc) {
-			D_ERROR("daos_hhash_init failed, rc: "DF_RC"\n",
-				DP_RC(rc));
-			D_GOTO(exit_crt, rc);
-		}
-		rc = pl_init();
-		if (rc != 0) {
-			daos_hhash_fini();
-			goto exit_crt;
-		}
-		D_INFO("handle hash table and placement initialized\n");
+	rc = daos_hhash_init();
+	if (rc != 0) {
+		D_ERROR("daos_hhash_init failed, rc: "DF_RC"\n",
+			DP_RC(rc));
+		D_GOTO(exit_crt, rc);
 	}
+
+	rc = pl_init();
+	if (rc != 0) {
+		daos_hhash_fini();
+		goto exit_crt;
+	}
+	D_INFO("handle hash table and placement initialized\n");
+
 	/* server-side uses D_HTYPE_PTR handle */
 	d_hhash_set_ptrtype(daos_ht.dht_hhash);
 
@@ -781,7 +865,7 @@ server_init(int argc, char *argv[])
 		goto exit_srv_init;
 	}
 
-	rc = drpc_notify_ready();
+	rc = drpc_notify_ready(dss_check_mode);
 	if (rc != 0) {
 		D_ERROR("Failed to notify daos_server: "DF_RC"\n", DP_RC(rc));
 		goto exit_init_state;
@@ -789,9 +873,11 @@ server_init(int argc, char *argv[])
 
 	server_init_state_wait(DSS_INIT_STATE_SET_UP);
 
-	rc = crt_register_event_cb(dss_crt_event_cb, NULL);
-	if (rc)
-		D_GOTO(exit_init_state, rc);
+	if (!dss_check_mode) {
+		rc = crt_register_event_cb(dss_crt_event_cb, NULL);
+		if (rc != 0)
+			D_GOTO(exit_init_state, rc);
+	}
 
 	rc = crt_register_hlc_error_cb(dss_crt_hlc_error_cb, NULL);
 	if (rc)
@@ -811,7 +897,7 @@ server_init(int argc, char *argv[])
 		DAOS_VERSION, getpid(), dss_self_rank(), dss_tgt_nr,
 		dss_tgt_offload_xs_nr, dss_core_offset, dss_hostname);
 
-	if (numa_obj)
+	if (dss_numa && dss_numa_node != -1)
 		D_PRINT("Using NUMA node: %d", dss_numa_node);
 
 	return 0;
@@ -825,12 +911,8 @@ exit_nvme_init:
 exit_mod_loaded:
 	ds_iv_fini();
 	dss_module_unload_all();
-	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
-		daos_fini();
-	} else {
-		pl_fini();
-		daos_hhash_fini();
-	}
+	pl_fini();
+	daos_hhash_fini();
 exit_crt:
 	crt_finalize();
 exit_mod_init:
@@ -842,6 +924,7 @@ exit_drpc_fini:
 exit_metrics_init:
 	dss_engine_metrics_fini();
 	d_tm_fini();
+	/* dss_topo_fini cleans itself if it fails */
 exit_debug_init:
 	daos_debug_fini();
 	return rc;
@@ -858,7 +941,8 @@ server_fini(bool force)
 	 * xstreams won't start shutting down until we call dss_srv_fini below.
 	 */
 	dss_srv_set_shutting_down();
-	crt_unregister_event_cb(dss_crt_event_cb, NULL);
+	if (!dss_check_mode)
+		crt_unregister_event_cb(dss_crt_event_cb, NULL);
 	D_INFO("unregister event callbacks done\n");
 	/*
 	 * Cleaning up modules needs to create ULTs on other xstreams; must be
@@ -884,12 +968,8 @@ server_fini(bool force)
 	 * Client stuff finalization needs be done after all ULTs drained
 	 * in dss_srv_fini().
 	 */
-	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
-		daos_fini();
-	} else {
-		pl_fini();
-		daos_hhash_fini();
-	}
+	pl_fini();
+	daos_hhash_fini();
 	D_INFO("daos_fini() or pl_fini() done\n");
 	crt_finalize();
 	D_INFO("crt_finalize() done\n");
@@ -903,6 +983,8 @@ server_fini(bool force)
 	D_INFO("dss_engine_metrics_fini() done\n");
 	d_tm_fini();
 	D_INFO("d_tm_fini() done\n");
+	dss_topo_fini();
+	D_INFO("dss_top_fini() done\n");
 	daos_debug_fini();
 	D_INFO("daos_debug_fini() done\n");
 }
@@ -945,6 +1027,8 @@ Options:\n\
       Passes the configured hugepage size(2MB or 1GB)\n\
   --storage_tiers=ntiers, -T ntiers\n\
       Number of storage tiers\n\
+  --check, -C\n\
+      Start engine with check mode, global consistency check\n\
   --help, -h\n\
       Print this description\n",
 		prog, prog, modules, daos_sysname, dss_storage_path,
@@ -984,22 +1068,32 @@ parse(int argc, char **argv)
 		{ "instance_idx",	required_argument,	NULL,	'I' },
 		{ "bypass_health_chk",	no_argument,		NULL,	'b' },
 		{ "storage_tiers",	required_argument,	NULL,	'T' },
+		{ "check",		no_argument,		NULL,	'C' },
 		{ NULL,			0,			NULL,	0}
 	};
 	int	rc = 0;
 	int	c;
+	bool	spec_mod = false;
+
+	dss_check_mode = false;
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:H:t:s:x:I:bT:",
+	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:H:t:s:x:I:bT:C",
 				opts, NULL)) != -1) {
 		switch (c) {
 		case 'm':
+			if (dss_check_mode) {
+				printf("'-c|--modules' option is ignored under check mode\n");
+				break;
+			}
+
 			if (strlen(optarg) > MAX_MODULE_OPTIONS) {
 				rc = -DER_INVAL;
 				usage(argv[0], stderr);
 				break;
 			}
+			spec_mod = true;
 			snprintf(modules, sizeof(modules), "%s", optarg);
 			break;
 		case 'c':
@@ -1015,16 +1109,16 @@ parse(int argc, char **argv)
 		case 'f':
 			rc = arg_strtoul(optarg, &dss_core_offset, "\"-f\"");
 			break;
-		case 'g':
-			if (strnlen(optarg, DAOS_SYS_NAME_MAX + 1) >
-			    DAOS_SYS_NAME_MAX) {
-				printf("DAOS system name must be at most "
-				       "%d bytes\n", DAOS_SYS_NAME_MAX);
+		case 'g': {
+			if (strnlen(optarg, DAOS_SYS_NAME_MAX + 1) > DAOS_SYS_NAME_MAX) {
+				printf("DAOS system name must be at most %d bytes\n",
+				       DAOS_SYS_NAME_MAX);
 				rc = -DER_INVAL;
 				break;
 			}
 			daos_sysname = optarg;
 			break;
+		}
 		case 's':
 			dss_storage_path = optarg;
 			break;
@@ -1060,6 +1154,14 @@ parse(int argc, char **argv)
 				rc = -DER_INVAL;
 			}
 			break;
+		case 'C':
+			dss_check_mode = true;
+			if (spec_mod) {
+				printf("'-c|--modules' option is ignored under check mode\n");
+				spec_mod = false;
+			}
+			snprintf(modules, sizeof(modules), "%s", MODS_LIST_CHK);
+			break;
 		default:
 			usage(argv[0], stderr);
 			rc = -DER_INVAL;
@@ -1069,109 +1171,6 @@ parse(int argc, char **argv)
 	}
 
 	return 0;
-}
-
-struct sigaction old_handlers[_NSIG];
-
-static int
-daos_register_sighand(int signo, void (*handler) (int, siginfo_t *, void *))
-{
-	struct sigaction	act = {0};
-	int			rc;
-
-	if ((signo < 0) || (signo >= _NSIG)) {
-		D_ERROR("invalid signo %d to register\n", signo);
-		return -DER_INVAL;
-	}
-
-	act.sa_flags = SA_SIGINFO;
-	act.sa_sigaction = handler;
-
-	/* register new and save old handler */
-	rc = sigaction(signo, &act, &old_handlers[signo]);
-	if (rc != 0) {
-		D_ERROR("sigaction() failure registering new and reading "
-			"old %d signal handler\n", signo);
-		return rc;
-	}
-	return 0;
-}
-
-#define PRINT_ERROR(...)                                                                           \
-	do {                                                                                       \
-		fprintf(stderr, __VA_ARGS__);                                                      \
-		D_ERROR(__VA_ARGS__);                                                              \
-	} while (0)
-
-/** This should be safe on Linux since tls is allocated on thread creation */
-#define MAX_BT_ENTRIES 256
-static __thread void *bt[MAX_BT_ENTRIES];
-
-static void
-print_backtrace(int signo, siginfo_t *info, void *p)
-{
-	int   bt_size, rc;
-
-	PRINT_ERROR("*** Process %d received signal %d ***\n", getpid(), signo);
-
-	if (info != NULL) {
-		PRINT_ERROR("Associated errno: %s (%d)\n", strerror(info->si_errno),
-			    info->si_errno);
-
-		/* XXX we could get more signal/fault specific details from
-		 * info->si_code decode
-		 */
-
-		switch (signo) {
-		case SIGILL:
-		case SIGFPE:
-			PRINT_ERROR("Failing at address: %p\n", info->si_addr);
-			break;
-		case SIGSEGV:
-		case SIGBUS:
-			PRINT_ERROR("Failing for address: %p\n", info->si_addr);
-			break;
-		}
-	} else {
-		PRINT_ERROR("siginfo is NULL, additional information unavailable\n");
-	}
-
-	/* since we mainly handle fatal signals here, flush the log to not
-	 * risk losing any debug traces
-	 */
-	d_log_sync();
-
-	bt_size = backtrace(bt, MAX_BT_ENTRIES);
-	if (bt_size == MAX_BT_ENTRIES)
-		fprintf(stderr, "backtrace may have been truncated\n");
-	if (bt_size > 1) /* start at 1 to ignore this frame */
-		backtrace_symbols_fd(&bt[1], bt_size - 1, fileno(stderr));
-	else
-		fprintf(stderr, "No useful backtrace available");
-
-	/* re-register old handler */
-	rc = sigaction(signo, &old_handlers[signo], NULL);
-	if (rc != 0) {
-		D_ERROR("sigaction() failure registering new and reading old "
-			"%d signal handler\n", signo);
-		/* XXX it is weird, we may end-up in a loop handling same
-		 * signal with this handler if we return
-		 */
-		exit(EXIT_FAILURE);
-	}
-
-	/* XXX we may choose to forget about old handler and simply register
-	 * signal again as SIG_DFL and raise it for corefile creation
-	 */
-	if (old_handlers[signo].sa_sigaction != NULL ||
-	    old_handlers[signo].sa_handler != SIG_IGN) {
-		/* XXX will old handler get accurate siginfo_t/ucontext_t ?
-		 * we may prefer to call it with the same params we got ?
-		 */
-		raise(signo);
-	}
-
-	memset(&old_handlers[signo], 0, sizeof(struct sigaction));
 }
 
 int
@@ -1202,12 +1201,8 @@ main(int argc, char **argv)
 	}
 
 	/* register our own handler for faults and abort()/assert() */
-	/* errors are harmless */
-	daos_register_sighand(SIGILL, print_backtrace);
-	daos_register_sighand(SIGFPE, print_backtrace);
-	daos_register_sighand(SIGBUS, print_backtrace);
-	daos_register_sighand(SIGSEGV, print_backtrace);
-	daos_register_sighand(SIGABRT, print_backtrace);
+	d_signal_stack_enable(true);
+	d_signal_register();
 
 	/** server initialization */
 	rc = server_init(argc, argv);

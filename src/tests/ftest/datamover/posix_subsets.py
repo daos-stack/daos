@@ -3,9 +3,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from os.path import join
 import re
+from os.path import join
+
 from data_mover_test_base import DataMoverTestBase
+from dfuse_utils import get_dfuse, start_dfuse
 
 
 class DmvrPosixSubsets(DataMoverTestBase):
@@ -48,7 +50,8 @@ class DmvrPosixSubsets(DataMoverTestBase):
         self.set_tool(tool)
 
         # Start dfuse to hold all pools/containers
-        self.start_dfuse(self.dfuse_hosts)
+        dfuse = get_dfuse(self, self.dfuse_hosts)
+        start_dfuse(self, dfuse)
 
         # Create 1 pool
         pool1 = self.create_pool()
@@ -56,13 +59,12 @@ class DmvrPosixSubsets(DataMoverTestBase):
         # create dfuse containers to test copying to dfuse subdirectories
         dfuse_cont1 = self.get_container(pool1)
         dfuse_cont2 = self.get_container(pool1)
-        dfuse_src_dir = join(self.dfuse.mount_dir.value, pool1.uuid, dfuse_cont1.uuid)
+        dfuse_src_dir = join(dfuse.mount_dir.value, pool1.uuid, dfuse_cont1.uuid)
         # Create a special container to hold UNS entries
         uns_cont = self.get_container(pool1)
 
         # Create two test containers
-        container1_path = join(
-            self.dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns1')
+        container1_path = join(dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns1')
         container1 = self.get_container(pool1, path=container1_path)
         container2 = self.get_container(pool1)
 
@@ -127,7 +129,7 @@ class DmvrPosixSubsets(DataMoverTestBase):
 
             dfuse_dst_dir = self.new_posix_test_path(
                 create=False,
-                parent=join(self.dfuse.mount_dir.value, pool1.uuid, dfuse_cont2.uuid))
+                parent=join(dfuse.mount_dir.value, pool1.uuid, dfuse_cont2.uuid))
             copy_list.append([
                 "copy_subsets (dfuse root to new dfuse dir)",
                 ["POSIX", dfuse_src_dir, None, None],
@@ -164,8 +166,7 @@ class DmvrPosixSubsets(DataMoverTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dcp,dfuse,dfs,ior
-        :avocado: tags=dm_posix_subsets,dm_posix_subsets_dcp
-        :avocado: tags=test_dm_posix_subsets_dcp
+        :avocado: tags=DmvrPosixSubsets,test_dm_posix_subsets_dcp
         """
         self.run_dm_posix_subsets("DCP")
 
@@ -177,7 +178,6 @@ class DmvrPosixSubsets(DataMoverTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=datamover,daos_fs_copy,dfuse,dfs,ior,daos_cmd
-        :avocado: tags=dm_posix_subsets,dm_posix_subsets_fs_copy
-        :avocado: tags=test_dm_posix_subsets_fs_copy
+        :avocado: tags=DmvrPosixSubsets,test_dm_posix_subsets_fs_copy
         """
         self.run_dm_posix_subsets("FS_COPY")

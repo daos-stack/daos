@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,6 +15,8 @@
 #if defined(__cplusplus)
 extern "C" {
 #endif
+
+#include <daos_types.h>
 
 /** Flags for daos_tx_open */
 enum {

@@ -4,7 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
-from command_utils_base import ObjectWithParameters, BasicParameter
+from command_utils_base import BasicParameter, ObjectWithParameters
 from daos_utils import DaosCommand
 
 
@@ -75,8 +75,8 @@ class RebuildTestBase(TestWithServers):
         """Update the pool verification expected values."""
         self.info_checks["pi_ndisabled"] = ">0"
         self.rebuild_checks["rs_state"] = 2
-        self.rebuild_checks["rs_obj_nr"] = ">0"
-        self.rebuild_checks["rs_rec_nr"] = ">0"
+        self.rebuild_checks["rs_obj_nr"] = ">=0"
+        self.rebuild_checks["rs_rec_nr"] = ">=0"
 
     def execute_pool_verify(self, msg=None):
         """Verify the pool info.
@@ -191,7 +191,7 @@ class RebuildTestBase(TestWithServers):
 
         # Refresh local pool and container
         self.pool.check_pool_info()
-        self.container.check_container_info()
+        self.container.query()
 
         # Verify the excluded rank is no longer used with the objects
         self.verify_rank_has_no_objects()

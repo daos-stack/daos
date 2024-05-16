@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,6 +19,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
@@ -88,6 +89,7 @@ type (
 	UnaryInvoker interface {
 		sysGetter
 		debugLogger
+		GetComponent() build.Component
 		InvokeUnaryRPC(ctx context.Context, req UnaryRequest) (*UnaryResponse, error)
 		InvokeUnaryRPCAsync(ctx context.Context, req UnaryRequest) (HostResponseChan, error)
 	}
@@ -122,13 +124,21 @@ type (
 	// Client implements the Invoker interface and should be provided to
 	// API methods to invoke RPCs.
 	Client struct {
-		config *Config
-		log    debugLogger
+		config    *Config
+		log       debugLogger
+		component build.Component
 	}
 
 	// ClientOption defines the signature for functional Client options.
 	ClientOption func(c *Client)
 )
+
+// WithClientComponent sets the client's component.
+func WithClientComponent(comp build.Component) ClientOption {
+	return func(c *Client) {
+		c.component = comp
+	}
+}
 
 // WithClientLogger sets the client's debugLogger.
 func WithClientLogger(log debugLogger) ClientOption {
@@ -171,6 +181,11 @@ func DefaultClient() *Client {
 	)
 }
 
+// GetComponent returns the client's component.
+func (c *Client) GetComponent() build.Component {
+	return c.component
+}
+
 // SetConfig sets the client configuration for an
 // existing Client.
 func (c *Client) SetConfig(cfg *Config) {
@@ -196,7 +211,10 @@ func (c *Client) Debugf(fmtStr string, args ...interface{}) {
 func (c *Client) dialOptions() ([]grpc.DialOption, error) {
 	opts := []grpc.DialOption{
 		streamErrorInterceptor(),
-		unaryErrorInterceptor(),
+		grpc.WithChainUnaryInterceptor(
+			unaryErrorInterceptor(),
+			unaryVersionedComponentInterceptor(c.GetComponent()),
+		),
 		grpc.FailOnNonTempDialError(true),
 	}
 

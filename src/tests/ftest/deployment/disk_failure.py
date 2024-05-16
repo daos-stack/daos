@@ -9,12 +9,11 @@ import time
 
 from avocado import fail_on
 from ClusterShell.NodeSet import NodeSet
-
-from dmg_utils import get_storage_query_device_info, get_dmg_response
+from dmg_utils import get_dmg_response, get_storage_query_device_info
 from exception_utils import CommandFailure
 from general_utils import list_to_str
-from test_utils_pool import add_pool
 from osa_utils import OSAUtils
+from test_utils_pool import add_pool
 
 
 class DiskFailureTest(OSAUtils):

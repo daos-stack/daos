@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -41,7 +41,6 @@ type Provider struct {
 	metadata      MetadataProvider
 	scm           ScmProvider
 	bdev          BdevProvider
-	bdevCache     BdevScanResponse
 	vmdEnabled    bool
 }
 
@@ -186,11 +185,11 @@ func (p *Provider) ControlMetadataIsMounted() (bool, error) {
 		return false, errors.New("nil provider")
 	}
 
-	p.log.Debugf("control metadata config: %+v", p.engineStorage.ControlMetadata)
 	if !p.engineStorage.ControlMetadata.HasPath() {
 		// If there's no control metadata path, we use SCM for control metadata
 		return p.ScmIsMounted()
 	}
+	p.log.Debugf("control metadata config: %+v", p.engineStorage.ControlMetadata)
 
 	if p.engineStorage.ControlMetadata.DevicePath == "" {
 		p.log.Debug("no metadata device defined")
@@ -284,7 +283,7 @@ func (p *Provider) MountScm() error {
 		return errors.New(ScmMsgClassNotSupported)
 	}
 
-	p.log.Debugf("attempting to mount existing SCM dir %s\n", cfg.Scm.MountPoint)
+	p.log.Debugf("attempting to mount SCM dir %s\n", cfg.Scm.MountPoint)
 
 	res, err := p.scm.Mount(req)
 	if err != nil {
@@ -427,6 +426,7 @@ func (p *Provider) PrepareBdevs(req BdevPrepareRequest) (*BdevPrepareResponse, e
 
 	if err == nil && resp != nil && !req.CleanHugepagesOnly {
 		p.vmdEnabled = resp.VMDPrepared
+		p.log.Debugf("setting vmd=%v on storage provider", p.vmdEnabled)
 	}
 	return resp, err
 }
@@ -471,14 +471,15 @@ func BdevFormatRequestFromConfig(log logging.Logger, cfg *TierConfig) (BdevForma
 
 // BdevTierFormatResult contains details of a format operation result.
 type BdevTierFormatResult struct {
-	Tier   int
-	Error  error
-	Result *BdevFormatResponse
+	Tier        int
+	DeviceRoles BdevRoles
+	Error       error
+	Result      *BdevFormatResponse
 }
 
 // FormatBdevTiers formats all the Bdev tiers in the engine storage
 // configuration.
-func (p *Provider) FormatBdevTiers() (results []BdevTierFormatResult) {
+func (p *Provider) FormatBdevTiers(ctrlrs NvmeControllers) (results []BdevTierFormatResult) {
 	bdevCfgs := p.engineStorage.Tiers.BdevConfigs()
 	results = make([]BdevTierFormatResult, len(bdevCfgs))
 
@@ -491,20 +492,21 @@ func (p *Provider) FormatBdevTiers() (results []BdevTierFormatResult) {
 		p.log.Infof("Instance %d: starting format of %s block devices %v",
 			p.engineIndex, cfg.Class, cfg.Bdev.DeviceList)
 
-		results[i].Tier = cfg.Tier
 		req, err := BdevFormatRequestFromConfig(p.log, cfg)
 		if err != nil {
 			results[i].Error = err
 			p.log.Errorf("Instance %d: format failed (%s)", err)
 			continue
 		}
+		req.ScannedBdevs = ctrlrs
 
 		p.RLock()
-		req.BdevCache = &p.bdevCache
 		req.VMDEnabled = p.vmdEnabled
 		results[i].Result, results[i].Error = p.bdev.Format(req)
 		p.RUnlock()
 
+		results[i].Tier = cfg.Tier
+		results[i].DeviceRoles = cfg.Bdev.DeviceRoles
 		if err := results[i].Error; err != nil {
 			p.log.Errorf("Instance %d: format failed (%s)", err)
 			continue
@@ -573,6 +575,7 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 		TierProps:        []BdevTierProperties{},
 		AccelProps:       cfg.AccelProps,
 		SpdkRpcSrvProps:  cfg.SpdkRpcSrvProps,
+		AutoFaultyProps:  cfg.AutoFaultyProps,
 	}
 
 	for idx, tier := range cfg.Tiers.BdevConfigs() {
@@ -594,7 +597,7 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 
 // WriteNvmeConfig creates an NVMe config file which describes what devices
 // should be used by a DAOS engine process.
-func (p *Provider) WriteNvmeConfig(ctx context.Context, log logging.Logger) error {
+func (p *Provider) WriteNvmeConfig(ctx context.Context, log logging.Logger, ctrlrs NvmeControllers) error {
 	p.RLock()
 	vmdEnabled := p.vmdEnabled
 	engineIndex := p.engineIndex
@@ -606,16 +609,10 @@ func (p *Provider) WriteNvmeConfig(ctx context.Context, log logging.Logger) erro
 	if err != nil {
 		return errors.Wrap(err, "creating write config request")
 	}
-	if req == nil {
-		return errors.New("BdevWriteConfigRequestFromConfig returned nil request")
-	}
+	req.ScannedBdevs = ctrlrs
 
 	log.Infof("Writing NVMe config file for engine instance %d to %q", engineIndex,
 		req.ConfigOutputPath)
-
-	p.RLock()
-	defer p.RUnlock()
-	req.BdevCache = &p.bdevCache
 
 	_, err = p.bdev.WriteConfig(*req)
 
@@ -628,88 +625,6 @@ type BdevTierScanResult struct {
 	Result *BdevScanResponse
 }
 
-type scanFn func(BdevScanRequest) (*BdevScanResponse, error)
-
-func scanBdevTiers(log logging.Logger, vmdEnabled, direct bool, cfg *Config, cache *BdevScanResponse, scan scanFn) ([]BdevTierScanResult, error) {
-	if cfg == nil {
-		return nil, errors.New("nil storage config")
-	}
-	if cfg.Tiers == nil {
-		return nil, errors.New("nil storage config tiers")
-	}
-
-	bdevs := cfg.GetBdevs()
-	if bdevs.Len() == 0 {
-		return nil, errors.New("scanBdevTiers should not be called if no bdevs in config")
-	}
-
-	var bsr BdevScanResponse
-	scanOrCache := "scanned"
-	if direct {
-		req := BdevScanRequest{
-			DeviceList: bdevs,
-			VMDEnabled: vmdEnabled,
-		}
-		resp, err := scan(req)
-		if err != nil {
-			return nil, err
-		}
-		bsr = *resp
-	} else {
-		if cache == nil {
-			cache = &BdevScanResponse{}
-		}
-		bsr = *cache
-		scanOrCache = "cached"
-	}
-	log.Debugf("bdevs in cfg: %s, %s: %+v", bdevs, scanOrCache, bsr)
-
-	// Build slice of bdevs-per-tier from the entire scan response.
-
-	bdevCfgs := cfg.Tiers.BdevConfigs()
-	results := make([]BdevTierScanResult, 0, len(bdevCfgs))
-	resultBdevCount := 0
-	for _, bc := range bdevCfgs {
-		if bc.Bdev.DeviceList.Len() == 0 {
-			continue
-		}
-		fbsr, err := filterBdevScanResponse(bc.Bdev.DeviceList, &bsr)
-		if err != nil {
-			return nil, errors.Wrapf(err, "filter scan cache for tier-%d", bc.Tier)
-		}
-		results = append(results, BdevTierScanResult{
-			Tier: bc.Tier, Result: fbsr,
-		})
-
-		// Keep tally of total number of controllers added to results.
-		cpas, err := fbsr.Controllers.Addresses()
-		if err != nil {
-			return nil, errors.Wrap(err, "get controller pci addresses")
-		}
-		cpas, err = cpas.BackingToVMDAddresses()
-		if err != nil {
-			return nil, errors.Wrap(err, "convert backing device to vmd domain addresses")
-		}
-		resultBdevCount += cpas.Len()
-	}
-
-	if resultBdevCount != bdevs.Len() {
-		log.Noticef("Unexpected scan results, wanted %d controllers got %d", bdevs.Len(),
-			resultBdevCount)
-	}
-
-	return results, nil
-}
-
-// ScanBdevTiers scans all Bdev tiers in the provider's engine storage configuration.
-// If direct is set to true, bypass cache to retrieve up-to-date details.
-func (p *Provider) ScanBdevTiers(direct bool) (results []BdevTierScanResult, err error) {
-	p.RLock()
-	defer p.RUnlock()
-
-	return scanBdevTiers(p.log, p.vmdEnabled, direct, p.engineStorage, &p.bdevCache, p.bdev.Scan)
-}
-
 // ScanBdevs calls into bdev storage provider to scan SSDs, always bypassing cache.
 // Function should not be called when engines have been started and SSDs have been claimed by SPDK.
 func (p *Provider) ScanBdevs(req BdevScanRequest) (*BdevScanResponse, error) {
@@ -720,37 +635,15 @@ func (p *Provider) ScanBdevs(req BdevScanRequest) (*BdevScanResponse, error) {
 	return p.bdev.Scan(req)
 }
 
-func (p *Provider) GetBdevCache() BdevScanResponse {
-	p.RLock()
-	defer p.RUnlock()
-
-	return p.bdevCache
-}
-
-// SetBdevCache stores given scan response in provider bdev cache.
-func (p *Provider) SetBdevCache(resp BdevScanResponse) error {
-	p.Lock()
-	defer p.Unlock()
-
-	// Enumerate scan results and filter out any controllers not specified in provider's engine
-	// storage config.
-	fResp, err := filterBdevScanResponse(p.engineStorage.GetBdevs(), &resp)
-	if err != nil {
-		return errors.Wrap(err, "filtering scan response before caching")
-	}
-
-	p.log.Debugf("setting bdev cache in storage provider for engine %d: %v", p.engineIndex,
-		fResp.Controllers)
-	p.bdevCache = *fResp
-	p.vmdEnabled = resp.VMDEnabled
-
-	return nil
-}
-
 // WithVMDEnabled enables VMD on storage provider.
-func (p *Provider) WithVMDEnabled() *Provider {
-	p.vmdEnabled = true
+func (p *Provider) WithVMDEnabled(b bool) *Provider {
+	p.vmdEnabled = b
 	return p
+}
+
+// IsVMDEnabled queries whether VMD is enabled on storage provider.
+func (p *Provider) IsVMDEnabled() bool {
+	return p.vmdEnabled
 }
 
 func (p *Provider) BdevRoleMetaConfigured() bool {

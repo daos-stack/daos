@@ -20,28 +20,21 @@
 # -*- coding: utf-8 -*-
 """Classes for building external prerequisite components"""
 
+import configparser
+import datetime
+import errno
+import json
 # pylint: disable=too-many-lines
 import os
-from copy import deepcopy
-import sys
-import json
-import datetime
-import traceback
-import errno
 import shutil
 import subprocess  # nosec
-import configparser
-from SCons.Variables import BoolVariable
-from SCons.Variables import EnumVariable
-from SCons.Variables import ListVariable
-from SCons.Variables import PathVariable
-from SCons.Script import Dir
-from SCons.Script import Exit
-from SCons.Script import GetOption
-from SCons.Script import SetOption
-from SCons.Script import WhereIs
-from SCons.Script import BUILD_TARGETS
+import sys
+import traceback
+from copy import deepcopy
+
 from SCons.Errors import InternalError
+from SCons.Script import BUILD_TARGETS, Dir, Exit, GetOption, SetOption, WhereIs
+from SCons.Variables import BoolVariable, EnumVariable, ListVariable, PathVariable
 
 
 class DownloadFailure(Exception):
@@ -449,8 +442,9 @@ class PreReqComponent():
                               PathVariable.PathIsDirCreate))
         opts.Add('USE_INSTALLED', 'Comma separated list of preinstalled dependencies', 'none')
         opts.Add(('MPI_PKG', 'Specifies name of pkg-config to load for MPI', None))
-        opts.Add(BoolVariable('FIRMWARE_MGMT', 'Build in device firmware management.', 0))
-        opts.Add(BoolVariable('STACK_MMAP', 'Allocate ABT ULTs stacks with mmap()', 0))
+        opts.Add(BoolVariable('FIRMWARE_MGMT', 'Build in device firmware management.', False))
+        opts.Add(BoolVariable('STACK_MMAP', 'Allocate ABT ULTs stacks with mmap()', False))
+        opts.Add(BoolVariable('STATIC_FUSE', "Build with static libfuse library", False))
         opts.Add(EnumVariable('BUILD_TYPE', "Set the build type", 'release',
                               ['dev', 'debug', 'release'], ignorecase=1))
         opts.Add(EnumVariable('TARGET_TYPE', "Set the prerequisite type", 'default',
@@ -525,10 +519,10 @@ class PreReqComponent():
     def run_build(self, opts):
         """Build and dependencies"""
         # argobots is not really needed by client but it's difficult to separate
-        common_reqs = ['argobots', 'ucx', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid',
-                       'crypto', 'protobufc', 'lz4', 'isal', 'isal_crypto']
-        client_reqs = ['fuse', 'json-c', 'capstone']
-        server_reqs = ['pmdk', 'spdk', 'ipmctl']
+        common_reqs = ['ucx', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid', 'crypto', 'protobufc',
+                       'lz4', 'isal', 'isal_crypto']
+        client_reqs = ['fuse', 'json-c', 'capstone', 'aio']
+        server_reqs = ['argobots', 'pmdk', 'spdk', 'ipmctl']
         test_reqs = ['cmocka']
 
         reqs = []
@@ -679,7 +673,7 @@ class PreReqComponent():
         self.__build_info.save('.build_vars.json')
 
     def __parse_build_deps(self):
-        """Parse the build dependances command line flag"""
+        """Parse the build dependencies command line flag"""
         build_deps = GetOption('build_deps')
         if build_deps in ('yes', 'only'):
             self.download_deps = True
@@ -1125,6 +1119,11 @@ class _Component():
 
         return
 
+    def _print(self, msg):
+        if GetOption('silent'):
+            return
+        print(msg)
+
     def has_missing_targets(self, env):
         """Check for expected build targets (e.g. libraries or headers)"""
         # pylint: disable=too-many-return-statements
@@ -1151,7 +1150,7 @@ class _Component():
             print('help set')
             return True
 
-        print(f"Checking targets for component '{self.name}'")
+        self._print(f"Checking targets for component '{self.name}'")
 
         config = env.Configure()
         config_cb = self.key_words.get("config_cb", None)
@@ -1244,7 +1243,6 @@ class _Component():
 
     def set_environment(self, env, needed_libs):
         """Modify the specified construction environment to build with the external component"""
-
         if self.skip_arch:
             return
 
@@ -1266,8 +1264,6 @@ class _Component():
                 lib_paths.append(full_path)
                 # will adjust this to be a relative rpath later
                 env.AppendUnique(RPATH_FULL=[full_path])
-                # For binaries run during build
-                env.AppendENVPath("LD_LIBRARY_PATH", full_path)
 
             # Ensure RUNPATH is used rather than RPATH.  RPATH is deprecated
             # and this allows LD_LIBRARY_PATH to override RPATH
@@ -1334,7 +1330,9 @@ class _Component():
         rpath = ["$$ORIGIN"]
         norigin = []
         comp_path = self.component_prefix
-        if not comp_path or comp_path.startswith("/usr"):
+        if not comp_path:
+            return
+        if comp_path.startswith('/usr') and '/prereq/' not in comp_path:
             return
         if not os.path.exists(comp_path):
             return

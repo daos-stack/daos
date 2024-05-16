@@ -41,17 +41,14 @@ static struct crt_corpc_ops ds_mgmt_hdlr_tgt_map_update_co_ops = {
 /* Define for cont_rpcs[] array population below.
  * See MGMT_PROTO_*_RPC_LIST macro definition
  */
-#define X(a, b, c, d, e)	\
-{				\
-	.dr_opc       = a,	\
-	.dr_hdlr      = d,	\
-	.dr_corpc_ops = e,	\
-}
+#define X(a, b, c, d, e)                                                                           \
+	{                                                                                          \
+	    .dr_opc       = a,                                                                     \
+	    .dr_hdlr      = d,                                                                     \
+	    .dr_corpc_ops = e,                                                                     \
+	},
 
-static struct daos_rpc_handler mgmt_handlers[] = {
-	MGMT_PROTO_CLI_RPC_LIST,
-	MGMT_PROTO_SRV_RPC_LIST,
-};
+static struct daos_rpc_handler mgmt_handlers[] = {MGMT_PROTO_CLI_RPC_LIST MGMT_PROTO_SRV_RPC_LIST};
 
 #undef X
 
@@ -152,6 +149,21 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		break;
 	case DRPC_METHOD_MGMT_LED_MANAGE:
 		ds_mgmt_drpc_dev_manage_led(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_CHK_START:
+		ds_mgmt_drpc_check_start(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_CHK_STOP:
+		ds_mgmt_drpc_check_stop(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_CHK_QUERY:
+		ds_mgmt_drpc_check_query(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_CHK_PROP:
+		ds_mgmt_drpc_check_prop(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_CHK_ACT:
+		ds_mgmt_drpc_check_act(drpc_req, drpc_resp);
 		break;
 	default:
 		drpc_resp->status = DRPC__STATUS__UNKNOWN_METHOD;

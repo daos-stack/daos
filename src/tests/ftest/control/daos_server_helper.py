@@ -3,9 +3,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import getpass
 import os
 import stat
-import getpass
 
 from apricot import TestWithServers
 from server_utils import ServerFailed

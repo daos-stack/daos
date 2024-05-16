@@ -9,7 +9,7 @@ from agent_utils import include_local_host
 from command_utils import ExecutableCommand
 from command_utils_base import EnvironmentVariables
 from exception_utils import CommandFailure
-from results_utils import TestName, TestResult, Results, Job, create_xml
+from results_utils import Job, Results, TestName, TestResult, create_xml
 from run_utils import get_clush_command, run_local, run_remote
 
 
@@ -90,7 +90,8 @@ class CmockaUtils():
             ExecutableCommand: the object setup to run the command
 
         """
-        keywords = ["Process received signal", "stack smashing detected", "End of error message"]
+        keywords = ["Process received signal", "stack smashing detected", "End of error message",
+                    "buffer overflow detected"]
         return ExecutableCommand(namespace=None, command=command, check_results=keywords)
 
     def run_cmocka_test(self, test, command):

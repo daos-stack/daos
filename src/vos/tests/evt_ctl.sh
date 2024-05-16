@@ -1,7 +1,6 @@
 #!/bin/bash
 
-if [ "$USE_VALGRIND" = "memcheck" ]; then
-    VCMD="valgrind --leak-check=full --show-reachable=yes --error-limit=no \
+if [ "$USE_VALGRIND" = "memcheck" ]; then VCMD="valgrind --leak-check=full --show-reachable=yes --error-limit=no \
           --suppressions=${VALGRIND_SUPP} --error-exitcode=42 --xml=yes \
           --xml-file=unit-test-evt_ctl-%p.memcheck.xml"
 elif [ "$USE_VALGRIND" = "pmemcheck" ]; then
@@ -10,7 +9,7 @@ fi
 
 cwd=$(dirname "$0")
 DAOS_DIR=$(cd "${cwd}/../../.." && echo "$PWD")
-#shellcheck disable=SC1090
+# shellcheck disable=SC1091
 source "$DAOS_DIR/.build_vars.sh"
 EVT_CTL="$SL_PREFIX/bin/evt_ctl"
 
@@ -167,6 +166,9 @@ cmd+=" -C o:5 -a 0-1@1:ab -a 1-2@2:cd -a 3-4@3:bc -a 5-7@4:def -a 6-8@5:xyz"
 cmd+=" -a 1-2@6:aa -a 4-7@7:abcd -b -2 -r 0-5@8 -b -2 -r 0-5@3 -b -2 -D"
 cmd+=" -C o:4 -a 0-5@1.1:abcdef -a 5-10@1.2:fedcba -a 5-7@1.3:foo -r 2-8@0-1"
 cmd+=" -l0-10@0-10:c -r 7-9@0-1 -l0-10@0-10:C -b -2 -D"
+cmd+=" -C o:15 -a 0-5@1.1:abcdef -a 1-2@1.2:ff -a 3-5@1.14:abc -a -3-4@1.14:ab"
+cmd+=" -a 3-5@1.14:abc -a 2-4@1.16384:vab -a 3-4@1.16384:ab -a 3-3@1.16384:a"
+cmd+=" -b -2 -D"
 echo "$cmd"
 eval "$cmd"
 result="${PIPESTATUS[0]}"

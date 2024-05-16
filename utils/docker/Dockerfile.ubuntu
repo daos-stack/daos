@@ -1,8 +1,9 @@
-# Copyright 2018-2023 Intel Corporation
+# Copyright 2018-2024 Intel Corporation
 # All rights reserved.
 #
-# 'recipe' for Docker to build an image of Ubuntu-based
-# environment for building the DAOS project.
+# 'recipe' for Docker to build an image of Ubuntu-based environment for building the DAOS project.
+#
+# This should support the most recent interim and LTS version (at the time of any DAOS release).
 #
 
 # Pull base image
@@ -20,8 +21,6 @@ COPY ./utils/scripts/install-ubuntu.sh /tmp/install.sh
 RUN echo "APT::Get::Assume-Yes \"true\";" > /etc/apt/apt.conf.d/no-prompt
 RUN echo "APT::Install-Recommends \"false\";" > /etc/apt/apt.conf.d/no-recommends
 RUN apt-get update && \
-    apt-get install apt-utils software-properties-common gpg gpg-agent && \
-    add-apt-repository ppa:longsleep/golang-backports && \
     apt-get upgrade && \
     chmod +x /tmp/install.sh && \
     /tmp/install.sh && \
@@ -33,7 +32,7 @@ RUN locale-gen en_US.UTF-8
 RUN update-alternatives --set \
     java /usr/lib/jvm/java-8-openjdk-*/jre/bin/java
 
-ARG UID=1000
+ARG UID=5000
 
 # Add DAOS users
 RUN useradd --no-log-init --uid $UID --user-group --create-home --shell /bin/bash \
@@ -55,11 +54,9 @@ ENV PATH=/home/daos/venv/bin:$PATH
 ENV VIRTUAL_ENV=/home/daos/venv/
 
 # Install latest versions of python tools.
-# wheel is needed first to avoid a warning when installing pyyaml.
-COPY requirements.txt .
+COPY requirements-build.txt requirements-utest.txt ./
 RUN python3 -m pip --no-cache-dir install --upgrade pip && \
-    python3 -m pip --no-cache-dir install wheel && \
-    python3 -m pip --no-cache-dir install --requirement requirements.txt
+    python3 -m pip --no-cache-dir install -r requirements-build.txt -r requirements-utest.txt
 
 WORKDIR /home/daos/pre
 RUN mkdir -p /home/daos/pre/site_scons/prereq_tools /home/daos/pre/site_scons/components
@@ -100,7 +97,7 @@ USER daos_server:daos_server
 LABEL DAOS=true
 
 WORKDIR /home/daos/daos/
-COPY --chown=daos_server:daos_server VERSION LICENSE ftest.sh SConstruct .clang-format ./
+COPY --chown=daos_server:daos_server VERSION LICENSE ftest.sh SConstruct requirements-ftest.txt .clang-format ./
 COPY --chown=daos_server:daos_server site_scons site_scons
 COPY --chown=daos_server:daos_server utils utils
 COPY --chown=daos_server:daos_server src src

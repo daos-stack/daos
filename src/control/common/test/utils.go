@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -26,6 +26,8 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/testing/protocmp"
+
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 // AssertTrue asserts b is true
@@ -128,6 +130,10 @@ func CmpErrBool(want, got error) bool {
 // CmpErr compares two errors for equality or at least close similarity in their messages.
 func CmpErr(t *testing.T, want, got error) {
 	t.Helper()
+
+	if want != nil && want.Error() == "" {
+		t.Fatal("comparison with empty error will always return true, don't do it")
+	}
 
 	if !CmpErrBool(want, got) {
 		t.Fatalf("unexpected error\n(wanted: %v, got: %v)", want, got)
@@ -406,5 +412,16 @@ func Context(t *testing.T) context.Context {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
+	return ctx
+}
+
+// MustLogContext returns a context containing the supplied logger.
+// Canceled when the test is done.
+func MustLogContext(t *testing.T, log logging.Logger) context.Context {
+	t.Helper()
+	ctx, err := logging.ToContext(Context(t), log)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return ctx
 }

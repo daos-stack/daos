@@ -81,9 +81,9 @@ func TestTelemetry_GetDuration(t *testing.T) {
 					fmt.Sprintf("difference %d too big (expected less than %d)", diff, maxDiff))
 
 				// Just make sure the stats were set to something
-				test.AssertTrue(t, result.FloatMin() > 0, "FloatMin() failed")
-				test.AssertTrue(t, result.FloatMax() > 0, "FloatMax() failed")
-				test.AssertTrue(t, result.FloatSum() > 0, "FloatSum() failed")
+				test.AssertTrue(t, result.Min() > 0, "Min() failed")
+				test.AssertTrue(t, result.Max() > 0, "Max() failed")
+				test.AssertTrue(t, result.Sum() > 0, "Sum() failed")
 				test.AssertTrue(t, result.Mean() > 0, "Mean() failed")
 
 				test.AssertEqual(t, 0.0, result.StdDev(), "StdDev() failed")

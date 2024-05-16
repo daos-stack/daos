@@ -19,7 +19,7 @@
 
 #include "smd.pb-c.h"
 
-#define BIO_DEV_TYPE_VMD	"vmd"
+#define BIO_BLOB_HDR_MAGIC	(0xb0b51ed5)
 #define BIO_DMA_PAGE_SHIFT	12	/* 4K */
 #define BIO_DMA_PAGE_SZ		(1UL << BIO_DMA_PAGE_SHIFT)
 #define BIO_XS_CNT_MAX		BIO_MAX_VOS_TGT_CNT /* Max VOS xstreams per blobstore */
@@ -110,9 +110,6 @@ struct bio_dma_stats {
 	struct d_tm_node_t	*bds_queued_iods;
 	struct d_tm_node_t	*bds_grab_errs;
 	struct d_tm_node_t	*bds_grab_retries;
-	struct d_tm_node_t	*bds_wal_sz;
-	struct d_tm_node_t	*bds_wal_qd;
-	struct d_tm_node_t	*bds_wal_waiters;
 };
 
 /*
@@ -280,6 +277,7 @@ struct bio_dev_health {
 	void		       *bdh_intel_smart_buf; /*Intel SMART attributes*/
 	uint64_t		bdh_stat_age;
 	unsigned int		bdh_inflights;
+	unsigned int		bdh_stopping:1;
 	uint16_t		bdh_vendor_id; /* PCI vendor ID */
 
 	/**
@@ -376,6 +374,7 @@ struct bio_xs_blobstore {
 	struct bio_blobstore	*bxb_blobstore;
 	/* All I/O contexts for this xstream blobstore */
 	d_list_t		 bxb_io_ctxts;
+	bool			 bxb_ready;
 };
 
 /* Per-xstream NVMe context */
@@ -384,14 +383,14 @@ struct bio_xs_context {
 	struct spdk_thread	*bxc_thread;
 	struct bio_xs_blobstore	*bxc_xs_blobstores[SMD_DEV_TYPE_MAX];
 	struct bio_dma_buffer	*bxc_dma_buf;
-	unsigned int		 bxc_ready:1,		/* xstream setup finished */
-				 bxc_self_polling;	/* for standalone VOS */
+	unsigned int		 bxc_self_polling:1;	/* for standalone VOS */
 };
 
 /* Per VOS instance I/O context */
 struct bio_io_context {
 	d_list_t		 bic_link; /* link to bxb_io_ctxts */
 	struct spdk_blob	*bic_blob;
+	spdk_blob_id		 bic_blob_id;
 	struct bio_xs_blobstore	*bic_xs_blobstore;
 	struct bio_xs_context	*bic_xs_ctxt;
 	uint32_t		 bic_inflight_dmas;
@@ -539,6 +538,7 @@ extern struct bio_faulty_criteria	glb_criteria;
 /* bio_xstream.c */
 extern bool		bio_scm_rdma;
 extern bool		bio_spdk_inited;
+extern bool                             bio_vmd_enabled;
 extern unsigned int	bio_chk_sz;
 extern unsigned int	bio_chk_cnt_max;
 extern unsigned int	bio_numa_node;
@@ -655,8 +655,18 @@ int bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state);
 int fill_in_traddr(struct bio_dev_info *b_info, char *dev_name);
 
 /* bio_config.c */
-int bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts, int *roles);
-int bio_set_hotplug_filter(const char *nvme_conf);
-int bio_read_accel_props(const char *nvme_conf);
-int bio_read_rpc_srv_settings(const char *nvme_conf, bool *enable, const char **sock_addr);
+int
+bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts, int *roles,
+		      bool *vmd_enabled);
+int
+bio_set_hotplug_filter(const char *nvme_conf);
+int
+bio_read_accel_props(const char *nvme_conf);
+int
+bio_read_rpc_srv_settings(const char *nvme_conf, bool *enable, const char **sock_addr);
+int
+bio_read_auto_faulty_criteria(const char *nvme_conf, bool *enable, uint32_t *max_io_errs,
+			      uint32_t *max_csum_errs);
+int
+bio_decode_bdev_params(struct bio_dev_info *b_info, const void *json, int json_size);
 #endif /* __BIO_INTERNAL_H__ */

@@ -304,14 +304,14 @@ struct ad_maxheap_node {
 	/** unusable padding bytes in groups */
 	int			mh_frag_size;
 	uint32_t		mh_arena_id;
-	unsigned int		mh_in_tree:1,
-	/**
-	 * Arena is inactive, it's set to true when any type of group failed to allocate memory
-	 * and create more groups.
-	 * XXX: this is not enough, we should save failed allocatoin counter in matrics and
-	 * set arenea as full only if it encounters multiple failures.
-	 */
-				mh_inactive:1;
+	unsigned int            mh_in_tree : 1,
+	    /**
+	     * Arena is inactive, it's set to true when any type of group failed to allocate memory
+	     * and create more groups.
+	     * XXX: this is not enough, we should save failed allocatoin counter in metrics and
+	     * set arenea as full only if it encounters multiple failures.
+	     */
+	    mh_inactive                    : 1;
 };
 
 /** DRAM blob open handle */

@@ -3,14 +3,14 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-import time
-import tempfile
+import codecs
 import json
 import os
-import struct
-import codecs
-import subprocess  # nosec
 import shlex
+import struct
+import subprocess  # nosec
+import tempfile
+import time
 import traceback
 
 from cart_utils import CartTest

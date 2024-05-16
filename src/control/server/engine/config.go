@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,23 +18,113 @@ import (
 )
 
 const (
-	maxHelperStreamCount = 2
-	envLogMasks          = "D_LOG_MASK"
-	envLogDbgStreams     = "DD_MASK"
-	envLogSubsystems     = "DD_SUBSYS"
+	maxHelperStreamCount         = 2
+	numPrimaryProviders          = 1
+	defaultNumSecondaryEndpoints = 1
+
+	// MultiProviderSeparator delineates between providers in a multi-provider config.
+	MultiProviderSeparator = ","
+
+	envLogMasks      = "D_LOG_MASK"
+	envLogDbgStreams = "DD_MASK"
+	envLogSubsystems = "DD_SUBSYS"
 )
 
 // FabricConfig encapsulates networking fabric configuration.
 type FabricConfig struct {
-	Provider        string `yaml:"provider,omitempty" cmdEnv:"CRT_PHY_ADDR_STR"`
-	Interface       string `yaml:"fabric_iface,omitempty" cmdEnv:"OFI_INTERFACE"`
-	InterfacePort   int    `yaml:"fabric_iface_port,omitempty" cmdEnv:"OFI_PORT,nonzero"`
+	Provider        string `yaml:"provider,omitempty" cmdEnv:"D_PROVIDER"`
+	Interface       string `yaml:"fabric_iface,omitempty" cmdEnv:"D_INTERFACE"`
+	InterfacePort   int    `yaml:"fabric_iface_port,omitempty" cmdEnv:"D_PORT,nonzero"`
 	NumaNodeIndex   uint   `yaml:"-"`
 	BypassHealthChk *bool  `yaml:"bypass_health_chk,omitempty" cmdLongFlag:"--bypass_health_chk" cmdShortFlag:"-b"`
-	CrtCtxShareAddr uint32 `yaml:"crt_ctx_share_addr,omitempty" cmdEnv:"CRT_CTX_SHARE_ADDR"`
 	CrtTimeout      uint32 `yaml:"crt_timeout,omitempty" cmdEnv:"CRT_TIMEOUT"`
-	DisableSRX      bool   `yaml:"disable_srx,omitempty" cmdEnv:"FI_OFI_RXM_USE_SRX,invertBool,intBool"`
-	AuthKey         string `yaml:"fabric_auth_key,omitempty" cmdEnv:"D_PROVIDER_AUTH_KEY"`
+	// NumSecondaryEndpoints configures the number of cart endpoints per secondary provider.
+	NumSecondaryEndpoints []int  `yaml:"secondary_provider_endpoints,omitempty" cmdLongFlag:"--nr_sec_ctx,nonzero" cmdShortFlag:"-S,nonzero"`
+	DisableSRX            bool   `yaml:"disable_srx,omitempty" cmdEnv:"FI_OFI_RXM_USE_SRX,invertBool,intBool"`
+	AuthKey               string `yaml:"fabric_auth_key,omitempty" cmdEnv:"D_PROVIDER_AUTH_KEY"`
+}
+
+// GetPrimaryProvider parses the primary provider from the Provider string.
+func (fc *FabricConfig) GetPrimaryProvider() (string, error) {
+	providers, err := fc.GetProviders()
+	if err != nil {
+		return "", err
+	}
+
+	return providers[0], nil
+}
+
+// GetProviders parses the Provider string to one or more providers.
+func (fc *FabricConfig) GetProviders() ([]string, error) {
+	if fc == nil {
+		return nil, errors.New("FabricConfig is nil")
+	}
+
+	providers := splitMultiProviderStr(fc.Provider)
+	if len(providers) == 0 {
+		return nil, errors.New("provider not set")
+	}
+
+	return providers, nil
+}
+
+func splitMultiProviderStr(str string) []string {
+	strs := strings.Split(str, MultiProviderSeparator)
+	result := make([]string, 0)
+	for _, s := range strs {
+		trimmed := strings.TrimSpace(s)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+
+	return result
+}
+
+// GetNumProviders gets the number of fabric providers configured.
+func (fc *FabricConfig) GetNumProviders() int {
+	providers, err := fc.GetProviders()
+	if err != nil {
+		return 0
+	}
+	return len(providers)
+}
+
+// GetPrimaryInterface parses the primary fabric interface from the Interface string.
+func (fc *FabricConfig) GetPrimaryInterface() (string, error) {
+	interfaces, err := fc.GetInterfaces()
+	if err != nil {
+		return "", err
+	}
+
+	return interfaces[0], nil
+}
+
+// GetInterfaces parses the Interface string into one or more interfaces.
+func (fc *FabricConfig) GetInterfaces() ([]string, error) {
+	if fc == nil {
+		return nil, errors.New("FabricConfig is nil")
+	}
+
+	interfaces := splitMultiProviderStr(fc.Interface)
+	if len(interfaces) == 0 {
+		return nil, errors.New("fabric_iface not set")
+	}
+
+	return interfaces, nil
+}
+
+// GetInterfacePorts parses the InterfacePort string to one or more ports.
+func (fc *FabricConfig) GetInterfacePorts() ([]int, error) {
+	if fc == nil {
+		return nil, errors.New("FabricConfig is nil")
+	}
+
+	if fc.InterfacePort == 0 {
+		return nil, errors.New("fabric_iface_port not set")
+	}
+
+	return []int{fc.InterfacePort}, nil
 }
 
 // Update fills in any missing fields from the provided FabricConfig.
@@ -52,9 +142,6 @@ func (fc *FabricConfig) Update(other FabricConfig) {
 	if fc.InterfacePort == 0 {
 		fc.InterfacePort = other.InterfacePort
 	}
-	if fc.CrtCtxShareAddr == 0 {
-		fc.CrtCtxShareAddr = other.CrtCtxShareAddr
-	}
 	if fc.CrtTimeout == 0 {
 		fc.CrtTimeout = other.CrtTimeout
 	}
@@ -64,22 +151,63 @@ func (fc *FabricConfig) Update(other FabricConfig) {
 	if fc.AuthKey == "" {
 		fc.AuthKey = other.AuthKey
 	}
+	if len(fc.NumSecondaryEndpoints) == 0 {
+		fc.setNumSecondaryEndpoints(other.NumSecondaryEndpoints)
+	}
+}
+
+func (fc *FabricConfig) setNumSecondaryEndpoints(other []int) {
+	if len(other) == 0 {
+		// Set defaults
+		numSecProv := fc.GetNumProviders() - numPrimaryProviders
+		for i := 0; i < numSecProv; i++ {
+			other = append(other, defaultNumSecondaryEndpoints)
+		}
+	}
+	fc.NumSecondaryEndpoints = other
 }
 
 // Validate ensures that the configuration meets minimum standards.
 func (fc *FabricConfig) Validate() error {
-	switch {
-	case fc.Provider == "":
+	numProv := fc.GetNumProviders()
+	if numProv == 0 {
 		return errors.New("provider not set")
-	case fc.Interface == "":
-		return errors.New("fabric_iface not set")
-	case fc.InterfacePort == 0:
-		return errors.New("fabric_iface_port not set")
-	case fc.InterfacePort < 0:
-		return errors.New("fabric_iface_port cannot be negative")
-	default:
-		return nil
 	}
+
+	interfaces, err := fc.GetInterfaces()
+	if err != nil {
+		return err
+	}
+
+	ports, err := fc.GetInterfacePorts()
+	if err != nil {
+		return err
+	}
+
+	for _, p := range ports {
+		if p < 0 {
+			return errors.New("fabric_iface_port cannot be negative")
+		}
+	}
+
+	if len(interfaces) != numProv { // TODO SRS-31: check num ports when multiprovider fully enabled: || len(ports) != numProv {
+		return errors.Errorf("provider, fabric_iface and fabric_iface_port must include the same number of items delimited by %q", MultiProviderSeparator)
+	}
+
+	numSecProv := numProv - numPrimaryProviders
+	if numSecProv > 0 {
+		if len(fc.NumSecondaryEndpoints) != 0 && len(fc.NumSecondaryEndpoints) != numSecProv {
+			return errors.New("secondary_provider_endpoints must have one value for each secondary provider")
+		}
+
+		for _, nrCtx := range fc.NumSecondaryEndpoints {
+			if nrCtx < 1 {
+				return errors.Errorf("all values in secondary_provider_endpoints must be > 0")
+			}
+		}
+	}
+
+	return nil
 }
 
 // GetAuthKeyEnv returns the environment variable string for the auth key.
@@ -115,12 +243,11 @@ type Config struct {
 	Modules           string         `yaml:"modules,omitempty" cmdLongFlag:"--modules" cmdShortFlag:"-m"`
 	TargetCount       int            `yaml:"targets,omitempty" cmdLongFlag:"--targets,nonzero" cmdShortFlag:"-t,nonzero"`
 	HelperStreamCount int            `yaml:"nr_xs_helpers" cmdLongFlag:"--xshelpernr" cmdShortFlag:"-x"`
-	ServiceThreadCore int            `yaml:"first_core" cmdLongFlag:"--firstcore,nonzero" cmdShortFlag:"-f,nonzero"`
+	ServiceThreadCore *int           `yaml:"first_core,omitempty" cmdLongFlag:"--firstcore" cmdShortFlag:"-f"`
 	SystemName        string         `yaml:"-" cmdLongFlag:"--group" cmdShortFlag:"-g"`
 	SocketDir         string         `yaml:"-" cmdLongFlag:"--socket_dir" cmdShortFlag:"-d"`
 	LogMask           string         `yaml:"log_mask,omitempty" cmdEnv:"D_LOG_MASK"`
 	LogFile           string         `yaml:"log_file,omitempty" cmdEnv:"D_LOG_FILE"`
-	LegacyStorage     LegacyStorage  `yaml:",inline,omitempty"`
 	Storage           storage.Config `yaml:",inline,omitempty"`
 	Fabric            FabricConfig   `yaml:",inline"`
 	EnvVars           []string       `yaml:"env_vars,omitempty"`
@@ -129,6 +256,7 @@ type Config struct {
 	Index             uint32         `yaml:"-" cmdLongFlag:"--instance_idx" cmdShortFlag:"-I"`
 	MemSize           int            `yaml:"-" cmdLongFlag:"--mem_size" cmdShortFlag:"-r"`
 	HugepageSz        int            `yaml:"-" cmdLongFlag:"--hugepage_size" cmdShortFlag:"-H"`
+	CheckerEnabled    bool           `yaml:"-" cmdLongFlag:"--checker" cmdShortFlag:"-C"`
 }
 
 // NewConfig returns an I/O Engine config.
@@ -160,7 +288,7 @@ func (c *Config) ReadLogSubsystems() (string, error) {
 
 // Validate ensures that the configuration meets minimum standards.
 func (c *Config) Validate() error {
-	if c.PinnedNumaNode != nil && c.ServiceThreadCore != 0 {
+	if c.PinnedNumaNode != nil && c.ServiceThreadCore != nil && *c.ServiceThreadCore != 0 {
 		return errors.New("cannot specify both pinned_numa_node and first_core")
 	}
 
@@ -173,7 +301,7 @@ func (c *Config) Validate() error {
 	if c.HelperStreamCount < 0 {
 		return errNegative("helper stream count")
 	}
-	if c.ServiceThreadCore < 0 {
+	if c.ServiceThreadCore != nil && *c.ServiceThreadCore < 0 {
 		return errNegative("service thread core index")
 	}
 	if c.MemSize < 0 {
@@ -241,7 +369,7 @@ func IsNUMAMismatch(err error) bool {
 // SetNUMAAffinity sets the NUMA affinity for the engine,
 // if not already set in the configuration.
 func (c *Config) SetNUMAAffinity(node uint) error {
-	if c.PinnedNumaNode != nil && c.ServiceThreadCore != 0 {
+	if c.PinnedNumaNode != nil && c.ServiceThreadCore != nil && *c.ServiceThreadCore != 0 {
 		return errors.New("cannot set both NUMA node and service core")
 	}
 
@@ -457,15 +585,15 @@ func (c *Config) WithBypassHealthChk(bypass *bool) *Config {
 	return c
 }
 
-// WithCrtCtxShareAddr defines the CRT_CTX_SHARE_ADDR for this instance
-func (c *Config) WithCrtCtxShareAddr(addr uint32) *Config {
-	c.Fabric.CrtCtxShareAddr = addr
-	return c
-}
-
 // WithCrtTimeout defines the CRT_TIMEOUT for this instance
 func (c *Config) WithCrtTimeout(timeout uint32) *Config {
 	c.Fabric.CrtTimeout = timeout
+	return c
+}
+
+// WithNumSecondaryEndpoints sets the number of network endpoints for each secondary provider.
+func (c *Config) WithNumSecondaryEndpoints(nr []int) *Config {
+	c.Fabric.NumSecondaryEndpoints = nr
 	return c
 }
 
@@ -483,7 +611,7 @@ func (c *Config) WithHelperStreamCount(count int) *Config {
 
 // WithServiceThreadCore sets the core index to be used for running DAOS service threads.
 func (c *Config) WithServiceThreadCore(idx int) *Config {
-	c.ServiceThreadCore = idx
+	c.ServiceThreadCore = &idx
 	return c
 }
 
@@ -540,6 +668,14 @@ func (c *Config) WithStorageAccelProps(name string, mask storage.AccelOptionBits
 func (c *Config) WithStorageSpdkRpcSrvProps(enable bool, sockAddr string) *Config {
 	c.Storage.SpdkRpcSrvProps.Enable = enable
 	c.Storage.SpdkRpcSrvProps.SockAddr = sockAddr
+	return c
+}
+
+// WithStorageAutoFaultyCriteria specifies NVMe auto-faulty settings in the I/O Engine.
+func (c *Config) WithStorageAutoFaultyCriteria(enable bool, maxIoErrs, maxCsumErrs uint32) *Config {
+	c.Storage.AutoFaultyProps.Enable = enable
+	c.Storage.AutoFaultyProps.MaxIoErrs = maxIoErrs
+	c.Storage.AutoFaultyProps.MaxCsumErrs = maxCsumErrs
 	return c
 }
 

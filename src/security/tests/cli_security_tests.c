@@ -18,7 +18,6 @@
 #include <daos/common.h>
 #include <daos/drpc.h>
 #include <daos/drpc_modules.h>
-#include <daos/drpc.pb-c.h>
 #include <daos/agent.h>
 #include <daos/security.h>
 #include <string.h>

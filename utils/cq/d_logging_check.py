@@ -13,10 +13,10 @@ if fixes are being applied.
 
 import argparse
 import inspect
-import sys
-import re
 import io
 import os
+import re
+import sys
 
 ARGS = None
 
@@ -33,6 +33,7 @@ class FileLine():
         # Striped text
         self._code = line.strip()
         self.modified = False
+        self.warnings = False
         self.corrected = False
 
     def startswith(self, string):
@@ -88,6 +89,7 @@ class FileLine():
     def warning(self, msg):
         """Show a warning"""
         print(f'{self._fo.fname}:{self._lineno} {msg}')
+        self.warnings = True
         if ARGS.github:
             fn_name = inspect.stack()[1].function
             fn_name = fn_name.replace('_', '-')
@@ -127,14 +129,16 @@ class FileParser:
 PREFIXES = ['D_ERROR', 'D_WARN', 'D_INFO', 'D_NOTE', 'D_ALERT', 'D_CRIT', 'D_FATAT', 'D_EMIT',
             'D_TRACE_INFO', 'D_TRACE_NOTE', 'D_TRACE_WARN', 'D_TRACE_ERROR', 'D_TRACE_ALERT',
             'D_TRACE_CRIT', 'D_TRACE_FATAL', 'D_TRACE_EMIT', 'RPC_TRACE', 'RPC_ERROR',
-            'VOS_TX_LOG_FAIL', 'VOS_TX_TRACE_FAIL', 'D_DEBUG']
+            'VOS_TX_LOG_FAIL', 'VOS_TX_TRACE_FAIL', 'D_DEBUG', 'D_CDEBUG', 'IV_DBG']
 
 # Logging macros where a new-line is always added.
 PREFIXES_NNL = ['DFUSE_LOG_WARNING', 'DFUSE_LOG_ERROR', 'DFUSE_LOG_DEBUG', 'DFUSE_LOG_INFO',
                 'DFUSE_TRA_WARNING', 'DFUSE_TRA_ERROR', 'DFUSE_TRA_DEBUG', 'DFUSE_TRA_INFO',
-                'DH_PERROR_SYS', 'DH_PERROR_DER',
-                'DL_ERROR', 'DHL_ERROR', 'DHL_WARN', 'DL_WARN', 'DL_INFO', 'DHL_INFO']
+                'DH_PERROR_SYS', 'DH_PERROR_DER', 'DL_CDEBUG', 'PRINT_ERROR']
 
+for prefix in ['DL', 'DHL', 'DS', 'DHS']:
+    for suffix in ['ERROR', 'WARN', 'INFO']:
+        PREFIXES_NNL.append(f'{prefix}_{suffix}')
 
 PREFIXES_ALL = PREFIXES.copy()
 PREFIXES_ALL.extend(PREFIXES_NNL)
@@ -149,6 +153,7 @@ class AllChecks():
         self._output = io.StringIO()
         self.modified = False
         self.corrected = False
+        self.warnings = False
 
     def run_all_checks(self):
         """Run everything
@@ -183,12 +188,15 @@ class AllChecks():
             self.check_df_rc(line)
             self.remove_trailing_period(line)
             self.check_quote(line)
+            self.check_failed(line)
 
             line.write(self._output)
             if line.modified:
                 self.modified = True
             if line.corrected:
                 self.corrected = True
+            if line.warnings:
+                self.warnings = True
 
     def save(self, fname):
         """Save new file to file"""
@@ -369,6 +377,23 @@ class AllChecks():
         if new_code != code:
             line.correct(new_code)
 
+    def check_failed(self, line):
+        """Check for 'Failed' with uppercase F
+
+        Lots of message are of the form 'function() failed' but some use Failed.
+        """
+        code = line.raw()
+
+        if 'Failed' not in code:
+            return
+        if '"Failed' in code:
+            return
+        if 'Failed to' in code:
+            return
+
+        print(code)
+        line.note('Failed')
+
 
 def one_entry(fname):
     """Process one path entry
@@ -394,7 +419,7 @@ def one_entry(fname):
         checks.save(fname)
         return False
 
-    if checks.modified and not ARGS.fix:
+    if (checks.modified and not ARGS.fix) or checks.warnings:
         return True
     return False
 
@@ -415,7 +440,8 @@ def main():
 
     for fname in ARGS.files:
         if os.path.isfile(fname):
-            one_entry(fname)
+            if one_entry(fname):
+                unfixed_errors = True
         else:
             for root, dirs, files in os.walk(fname):
                 for name in files:
@@ -426,7 +452,7 @@ def main():
                 if root == 'src/control' and 'vendor' in dirs:
                     dirs.remove('vendor')
     if unfixed_errors:
-        print('Required fixes not applied')
+        print('Required fixes or warnings not resolved')
         sys.exit(1)
 
 

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -20,6 +20,7 @@
 #include "pool.pb-c.h"
 #include "cont.pb-c.h"
 #include "server.pb-c.h"
+#include "check.pb-c.h"
 #include "srv_internal.h"
 #include "drpc_internal.h"
 
@@ -399,7 +400,7 @@ static int pool_create_fill_resp(Mgmt__PoolCreateResp *resp, uuid_t uuid, d_rank
 		D_GOTO(out, rc);
 	}
 
-	resp->leader = pool_info.pi_leader;
+	resp->svc_ldr = pool_info.pi_leader;
 
 	rc = rank_list_to_uint32_array(enabled_ranks, &resp->tgt_ranks, &resp->n_tgt_ranks);
 	if (rc != 0) {
@@ -471,11 +472,10 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			D_GOTO(out, rc = -DER_NOMEM);
 	}
 
-	rc = uuid_parse(req->uuid, pool_uuid);
-	if (rc != 0) {
-		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", req->uuid,
-			DP_RC(rc));
-		D_GOTO(out, rc = -DER_INVAL);
+	if (uuid_parse(req->uuid, pool_uuid) != 0) {
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Pool UUID is invalid");
+		goto out;
 	}
 	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(pool_uuid));
 
@@ -497,7 +497,8 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	/* Ranks to allocate targets (in) & svc for pool replicas (out). */
 	rc = ds_mgmt_create_pool(pool_uuid, req->sys, "pmem", targets,
 				 req->tierbytes[DAOS_MEDIA_SCM], req->tierbytes[DAOS_MEDIA_NVME],
-				 prop, &svc, req->n_faultdomains, req->faultdomains);
+				 prop, &svc, req->n_faultdomains, req->faultdomains,
+				 req->meta_blob_size);
 	if (rc != 0) {
 		D_ERROR("failed to create pool: "DF_RC"\n", DP_RC(rc));
 		goto out;
@@ -557,11 +558,10 @@ ds_mgmt_drpc_pool_destroy(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_INFO("Received request to destroy pool %s\n", req->id);
 
-	rc = uuid_parse(req->id, uuid);
-	if (rc != 0) {
-		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", req->id,
-			DP_RC(rc));
-		D_GOTO(out, rc = -DER_INVAL);
+	if (uuid_parse(req->id, uuid) != 0) {
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Pool UUID is invalid");
+		goto out;
 	}
 
 	/*
@@ -629,11 +629,10 @@ ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_INFO("Received request to evict pool connections %s\n", req->id);
 
-	rc = uuid_parse(req->id, uuid);
-	if (rc != 0) {
-		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", req->id,
-			DP_RC(rc));
-		D_GOTO(out, rc = -DER_INVAL);
+	if (uuid_parse(req->id, uuid) != 0) {
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Pool UUID is invalid");
+		goto out;
 	}
 
 	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
@@ -647,11 +646,10 @@ ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			D_GOTO(out, rc = -DER_NOMEM);
 		}
 		for (i = 0; i < req->n_handles; i++) {
-			rc = uuid_parse(req->handles[i], handles[i]);
-			if (rc != 0) {
-				D_ERROR("Unable to parse handle UUID %s: "
-				DF_RC"\n", req->id, DP_RC(rc));
-				D_GOTO(out_free, rc = -DER_INVAL);
+			if (uuid_parse(req->handles[i], handles[i]) != 0) {
+				rc = -DER_INVAL;
+				DL_ERROR(rc, "Handle UUID is invalid");
+				goto out_free;
 			}
 		}
 		n_handles = req->n_handles;
@@ -703,11 +701,10 @@ pool_change_target_state(char *id, d_rank_list_t *svc_ranks, size_t n_targetidx,
 	int				rc, i;
 
 	num_addrs = (n_targetidx > 0) ? n_targetidx : 1;
-	rc = uuid_parse(id, uuid);
-	if (rc != 0) {
-		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", id,
-			DP_RC(rc));
-		return -DER_INVAL;
+	if (uuid_parse(id, uuid) != 0) {
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Pool UUID is invalid");
+		return rc;
 	}
 
 	rc = pool_target_addr_list_alloc(num_addrs, &target_addr_list);
@@ -870,10 +867,9 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		nvme_bytes = req->tierbytes[DAOS_MEDIA_NVME];
 	}
 
-	rc = uuid_parse(req->id, uuid);
-	if (rc != 0) {
-		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", req->id,
-			DP_RC(rc));
+	if (uuid_parse(req->id, uuid) != 0) {
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Pool UUID is invalid");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -1002,10 +998,10 @@ void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	rc = uuid_parse(req->id, uuid);
-	if (rc != 0) {
-		D_ERROR("Couldn't parse '%s' to UUID\n", req->id);
-		D_GOTO(out, rc = -DER_INVAL);
+	if (uuid_parse(req->id, uuid) != 0) {
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Pool UUID is invalid");
+		goto out;
 	}
 
 	D_INFO(DF_UUID": received request to set pool properties\n",
@@ -1071,11 +1067,10 @@ ds_mgmt_drpc_pool_upgrade(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_INFO("Received request to upgrade pool %s\n", req->id);
 
-	rc = uuid_parse(req->id, uuid);
-	if (rc != 0) {
-		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", req->id,
-			DP_RC(rc));
-		D_GOTO(out, rc = -DER_INVAL);
+	if (uuid_parse(req->id, uuid) != 0) {
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Pool UUID is invalid");
+		goto out;
 	}
 
 	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
@@ -1221,10 +1216,10 @@ void ds_mgmt_drpc_pool_get_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	rc = uuid_parse(req->id, uuid);
-	if (rc != 0) {
-		D_ERROR("Couldn't parse '%s' to UUID\n", req->id);
-		D_GOTO(out, rc = -DER_INVAL);
+	if (uuid_parse(req->id, uuid) != 0) {
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Pool UUID is invalid");
+		goto out;
 	}
 
 	D_INFO(DF_UUID": received request to get pool properties\n",
@@ -1391,8 +1386,9 @@ ds_mgmt_drpc_pool_get_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_INFO("Received request to get ACL for pool %s\n", req->id);
 
 	if (uuid_parse(req->id, pool_uuid) != 0) {
-		D_ERROR("Couldn't parse '%s' to UUID\n", req->id);
-		D_GOTO(out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Pool UUID is invalid");
+		goto out;
 	}
 
 	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
@@ -1443,8 +1439,9 @@ get_params_from_modify_acl_req(Drpc__Call *drpc_req, uuid_t uuid_out,
 	}
 
 	if (uuid_parse(req->id, uuid_out) != 0) {
-		D_ERROR("Couldn't parse UUID\n");
-		D_GOTO(out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "UUID is invalid");
+		goto out;
 	}
 
 	rc = daos_acl_from_strs((const char **)req->entries, req->n_entries, acl_out);
@@ -1560,8 +1557,9 @@ ds_mgmt_drpc_pool_delete_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 
 	if (uuid_parse(req->id, pool_uuid) != 0) {
-		D_ERROR("Couldn't parse UUID\n");
-		D_GOTO(out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Pool UUID is invalid");
+		goto out;
 	}
 
 	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
@@ -1621,8 +1619,9 @@ ds_mgmt_drpc_pool_list_cont(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	/* resp.containers, n_containers are NULL/0 */
 
 	if (uuid_parse(req->id, req_uuid) != 0) {
-		D_ERROR("Failed to parse pool uuid %s\n", req->id);
-		D_GOTO(out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Pool UUID is invalid");
+		goto out;
 	}
 
 	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
@@ -1763,8 +1762,9 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_INFO("Received request to query DAOS pool %s\n", req->id);
 
 	if (uuid_parse(req->id, uuid) != 0) {
-		D_ERROR("Failed to parse pool uuid %s\n", req->id);
-		D_GOTO(out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Pool UUID is invalid");
+		goto out;
 	}
 
 	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
@@ -1797,7 +1797,9 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp.disabled_targets = pool_info.pi_ndisabled;
 	resp.active_targets = pool_info.pi_space.ps_ntargets;
 	resp.total_engines = pool_info.pi_nnodes;
-	resp.leader = pool_info.pi_leader;
+	resp.svc_ldr = pool_info.pi_leader;
+	resp.svc_reps         = req->svc_ranks;
+	resp.n_svc_reps       = req->n_svc_ranks;
 	resp.version = pool_info.pi_map_ver;
 	resp.enabled_ranks = (req->include_enabled_ranks) ? range_list_str : "";
 	resp.disabled_ranks = (req->include_disabled_ranks) ? range_list_str : "";
@@ -1873,8 +1875,9 @@ ds_mgmt_drpc_pool_query_targets(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_INFO("Received request to query DAOS pool %s, %zu targets\n", req->id, req->n_targets);
 
 	if (uuid_parse(req->id, uuid) != 0) {
-		D_ERROR("Failed to parse pool uuid %s\n", req->id);
-		D_GOTO(out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Pool UUID is invalid");
+		goto out;
 	}
 
 	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
@@ -1962,6 +1965,27 @@ out:
 }
 
 void
+ds_mgmt_smd_free_dev(Ctl__SmdDevice *dev)
+{
+	D_FREE(dev->uuid);
+	D_FREE(dev->tgt_ids);
+	if (dev->ctrlr != NULL) {
+		D_FREE(dev->ctrlr->model);
+		D_FREE(dev->ctrlr->serial);
+		D_FREE(dev->ctrlr->pci_addr);
+		D_FREE(dev->ctrlr->fw_rev);
+		D_FREE(dev->ctrlr->vendor_id);
+		D_FREE(dev->ctrlr->pci_dev_type);
+		if (dev->ctrlr->namespaces != NULL) {
+			D_FREE(dev->ctrlr->namespaces[0]);
+			D_FREE(dev->ctrlr->namespaces);
+			dev->ctrlr->namespaces   = NULL;
+			dev->ctrlr->n_namespaces = 0;
+		}
+	}
+}
+
+void
 ds_mgmt_drpc_smd_list_devs(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
@@ -2016,12 +2040,7 @@ ds_mgmt_drpc_smd_list_devs(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	for (i = 0; i < resp->n_devices; i++) {
 		if (resp->devices[i] != NULL) {
-			if (resp->devices[i]->uuid != NULL)
-				D_FREE(resp->devices[i]->uuid);
-			if (resp->devices[i]->tgt_ids != NULL)
-				D_FREE(resp->devices[i]->tgt_ids);
-			if (resp->devices[i]->tr_addr != NULL)
-				D_FREE(resp->devices[i]->tr_addr);
+			ds_mgmt_smd_free_dev(resp->devices[i]);
 			D_FREE(resp->devices[i]);
 		}
 	}
@@ -2133,11 +2152,10 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	ctl__bio_health_resp__init(resp);
 
 	if (strlen(req->dev_uuid) != 0) {
-		rc = uuid_parse(req->dev_uuid, uuid);
-		if (rc != 0) {
-			D_ERROR("Unable to parse device UUID %s: "DF_RC"\n",
-				req->dev_uuid, DP_RC(rc));
-			D_GOTO(out, rc = -DER_INVAL);
+		if (uuid_parse(req->dev_uuid, uuid) != 0) {
+			rc = -DER_INVAL;
+			DL_ERROR(rc, "Device UUID is invalid");
+			goto out;
 		}
 	} else
 		uuid_clear(uuid); /* need to set uuid = NULL */
@@ -2245,8 +2263,7 @@ drpc_dev_manage_free(Ctl__DevManageResp *resp)
 {
 	if (resp != NULL) {
 		if (resp->device != NULL) {
-			if (resp->device->uuid != NULL)
-				D_FREE(resp->device->uuid);
+			ds_mgmt_smd_free_dev(resp->device);
 			D_FREE(resp->device);
 		}
 		D_FREE(resp);
@@ -2282,8 +2299,9 @@ ds_mgmt_drpc_dev_set_faulty(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	ctl__dev_manage_resp__init(resp);
 
 	if (uuid_parse(req->uuid, dev_uuid) != 0) {
-		D_ERROR("Device UUID (%s) is invalid\n", req->uuid);
-		D_GOTO(pack_resp, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Device UUID is invalid");
+		goto pack_resp;
 	}
 
 	rc = ds_mgmt_dev_set_faulty(dev_uuid, resp);
@@ -2379,13 +2397,15 @@ ds_mgmt_drpc_dev_replace(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp->device->uuid = NULL;
 
 	if (uuid_parse(req->old_dev_uuid, old_uuid) != 0) {
-		D_ERROR("Old device UUID (%s) is invalid\n", req->old_dev_uuid);
-		D_GOTO(pack_resp, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Old device UUID is invalid");
+		goto pack_resp;
 	}
 
 	if (uuid_parse(req->new_dev_uuid, new_uuid) != 0) {
-		D_ERROR("New device UUID (%s) is invalid\n", req->new_dev_uuid);
-		D_GOTO(pack_resp, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "New device UUID is invalid");
+		goto pack_resp;
 	}
 
 	/* TODO DAOS-6283: Implement no-reint device replacement option */
@@ -2448,13 +2468,15 @@ ds_mgmt_drpc_cont_set_owner(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_INFO("Received request to change container owner\n");
 
 	if (uuid_parse(req->contuuid, cont_uuid) != 0) {
-		D_ERROR("Container UUID is invalid\n");
-		D_GOTO(out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Container UUID is invalid");
+		goto out;
 	}
 
 	if (uuid_parse(req->pooluuid, pool_uuid) != 0) {
-		D_ERROR("Pool UUID is invalid\n");
-		D_GOTO(out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Pool UUID is invalid");
+		goto out;
 	}
 
 	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
@@ -2481,4 +2503,477 @@ out:
 	}
 
 	mgmt__cont_set_owner_req__free_unpacked(req, &alloc.alloc);
+}
+
+/*
+ * NOTE: It is the control plane to choose the check leader and generate the rank list.
+ *	 There are some requirements for the rank list:
+ *	 1. There are no repeated ranks in the list.
+ *	 2. Better to sort ranks in the list that will much speedup searching rank in the list.
+ */
+void
+ds_mgmt_drpc_check_start(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Mgmt__CheckStartReq	*req = NULL;
+	Mgmt__CheckStartResp	 resp = MGMT__CHECK_START_RESP__INIT;
+	uint8_t			*body;
+	size_t			 len;
+	int			 rc = 0;
+
+	if (!ds_mgmt_check_enabled()) {
+		D_ERROR("Not in check mode\n");
+		drpc_resp->status = DRPC__STATUS__UNKNOWN_MODULE;
+		return;
+	}
+
+	req = mgmt__check_start_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
+	if (alloc.oom || req == NULL) {
+		D_ERROR("Failed to unpack req (start check)\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		return;
+	}
+
+	D_INFO("Received request to start check\n");
+
+	rc = ds_mgmt_check_start(req->n_ranks, req->ranks, req->n_policies, req->policies,
+				 req->n_uuids, req->uuids, req->flags, -1 /* phase */);
+	if (rc < 0)
+		D_ERROR("Failed to start check: "DF_RC"\n", DP_RC(rc));
+
+	resp.status = rc;
+	len = mgmt__check_start_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		D_ERROR("Failed to allocate response body (start check)\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+	} else {
+		mgmt__check_start_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__check_start_req__free_unpacked(req, &alloc.alloc);
+}
+
+/*
+ * It is the control plane's duty to guarantee that if the check leader is still available,
+ * then the CHK_STOP dRPC needs to be sent to the check leader.
+ */
+void
+ds_mgmt_drpc_check_stop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Mgmt__CheckStopReq	*req = NULL;
+	Mgmt__CheckStopResp	 resp = MGMT__CHECK_STOP_RESP__INIT;
+	uint8_t			*body;
+	size_t			 len;
+	int			 rc = 0;
+
+	if (!ds_mgmt_check_enabled()) {
+		D_ERROR("Not in check mode\n");
+		drpc_resp->status = DRPC__STATUS__UNKNOWN_MODULE;
+		return;
+	}
+
+	req = mgmt__check_stop_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
+	if (alloc.oom || req == NULL) {
+		D_ERROR("Failed to unpack req (stop check)\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		return;
+	}
+
+	D_INFO("Received request to stop check\n");
+
+	rc = ds_mgmt_check_stop(req->n_uuids, req->uuids);
+	if (rc != 0)
+		D_ERROR("Failed to stop check: "DF_RC"\n", DP_RC(rc));
+
+	resp.status = rc;
+	len = mgmt__check_stop_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		D_ERROR("Failed to allocate response body (stop check)\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+	} else {
+		mgmt__check_stop_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__check_stop_req__free_unpacked(req, &alloc.alloc);
+}
+
+static void
+ds_chk_query_free(Mgmt__CheckQueryResp *resp)
+{
+	Mgmt__CheckQueryPool	*pool;
+	Mgmt__CheckQueryTarget	*target;
+	int			 i;
+	int			 j;
+
+	D_FREE(resp->inconsistency);
+	D_FREE(resp->time);
+
+	if (resp->pools != NULL) {
+		for (i = 0; i < resp->n_pools; i++) {
+			pool = resp->pools[i];
+			if (pool == NULL)
+				break;
+
+			D_FREE(pool->uuid);
+			D_FREE(pool->inconsistency);
+			D_FREE(pool->time);
+			if (pool->targets != NULL) {
+				for (j = 0; j < pool->n_targets; j++) {
+					target = pool->targets[j];
+					if (target == NULL)
+						break;
+
+					D_FREE(target->inconsistency);
+					D_FREE(target->time);
+
+					D_FREE(target);
+				}
+
+				D_FREE(pool->targets);
+			}
+
+			D_FREE(pool);
+		}
+
+		D_FREE(resp->pools);
+	}
+}
+
+static int
+ds_chk_copy_inconsistency(Mgmt__CheckQueryInconsist **dst, struct chk_statistics *src)
+{
+	int	rc = 0;
+
+	D_ALLOC_PTR(*dst);
+	if (*dst == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	mgmt__check_query_inconsist__init(*dst);
+	(*dst)->total = src->cs_total;
+	(*dst)->repaired = src->cs_repaired;
+	(*dst)->ignored = src->cs_ignored;
+	(*dst)->failed = src->cs_failed;
+
+out:
+	return rc;
+}
+
+static int
+ds_chk_copy_time(Mgmt__CheckQueryTime **dst, struct chk_time *src)
+{
+	int	rc = 0;
+
+	D_ALLOC_PTR(*dst);
+	if (*dst == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	mgmt__check_query_time__init(*dst);
+	(*dst)->start_time = src->ct_start_time;
+	(*dst)->misc_time = src->ct_stop_time;
+
+out:
+	return rc;
+}
+
+static int
+ds_chk_query_head_cb(uint32_t ins_status, uint32_t ins_phase, struct chk_statistics *inconsistency,
+		     struct chk_time *time, size_t n_pools, void *buf)
+{
+	Mgmt__CheckQueryResp	*resp = buf;
+	int			 rc = 0;
+
+	resp->ins_status = ins_status;
+	resp->ins_phase = ins_phase;
+
+	rc = ds_chk_copy_inconsistency(&resp->inconsistency, inconsistency);
+	if (resp->inconsistency == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = ds_chk_copy_time(&resp->time, time);
+	if (resp->time == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	D_ALLOC_ARRAY(resp->pools, n_pools);
+	if (resp->pools == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	resp->n_pools = n_pools;
+
+out:
+	if (rc != 0)
+		ds_chk_query_free(resp);
+
+	return rc;
+}
+
+static int
+ds_chk_query_pool_cb(struct chk_query_pool_shard *shard, uint32_t idx, void *buf)
+{
+	Mgmt__CheckQueryResp	*resp = buf;
+	Mgmt__CheckQueryPool	*pool;
+	Mgmt__CheckQueryTarget	*target;
+	int			 rc;
+	int			 i;
+
+	D_ALLOC_PTR(pool);
+	if (pool == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	mgmt__check_query_pool__init(pool);
+	resp->pools[idx] = pool;
+	D_ASPRINTF(pool->uuid, DF_UUIDF, DP_UUID(shard->cqps_uuid));
+	if (pool->uuid == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	pool->status = shard->cqps_status;
+	pool->phase = shard->cqps_phase;
+	rc = ds_chk_copy_inconsistency(&pool->inconsistency, &shard->cqps_statistics);
+	if (pool->inconsistency == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = ds_chk_copy_time(&pool->time, &shard->cqps_time);
+	if (pool->time == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	D_ALLOC_ARRAY(pool->targets, shard->cqps_target_nr);
+	if (pool->targets == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	pool->n_targets = shard->cqps_target_nr;
+	for (i = 0; i < shard->cqps_target_nr; i++) {
+		D_ALLOC_PTR(target);
+		if (target == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		mgmt__check_query_target__init(target);
+		pool->targets[i] = target;
+		target->rank = shard->cqps_targets[i].cqt_rank;
+		target->target = shard->cqps_targets[i].cqt_tgt;
+		target->status = shard->cqps_targets[i].cqt_ins_status;
+		rc = ds_chk_copy_inconsistency(&target->inconsistency,
+					       &shard->cqps_targets[i].cqt_statistics);
+		if (target->inconsistency == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		rc = ds_chk_copy_time(&target->time, &shard->cqps_targets[i].cqt_time);
+		if (target->time == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+out:
+	if (rc != 0)
+		ds_chk_query_free(resp);
+
+	return rc;
+}
+
+/*
+ * NOTE: One pool may have M pool shards on M daos engines. Each of them has each own status and
+ *	 summary in the qurey result. They have the same UUID and contiguous each other. Control
+ *	 plane can decide how to show them to the admin based on the qurey option.
+ *
+ *	 Similarly, each pool shard may have N vos target on the engine. Then there will be M * N
+ *	 vos targets for the whole pool. Each of them has each own check summary in qurey result.
+ *	 It is the control plane's duty to re-organize related result before showing to the admin.
+ *
+ *	 If some required pool is absence in the qurey result, then means that it does not exist.
+ *
+ *	 On the other hand, it is the control plane's duty to guarantee that if the check leader
+ *	 is still available, the CHK_QUERY dRPC needs to be sent to the check leader. Otherwise,
+ *	 the query result may be not inaccurate.
+ */
+void
+ds_mgmt_drpc_check_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	struct drpc_alloc		 alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Mgmt__CheckQueryReq		*req = NULL;
+	Mgmt__CheckQueryResp		 resp = MGMT__CHECK_QUERY_RESP__INIT;
+	uuid_t				*pools = NULL;
+	uint8_t				*body;
+	size_t				 len;
+	int				 rc = 0;
+
+	if (!ds_mgmt_check_enabled()) {
+		D_ERROR("Not in check mode\n");
+		drpc_resp->status = DRPC__STATUS__UNKNOWN_MODULE;
+		return;
+	}
+
+	req = mgmt__check_query_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
+	if (alloc.oom || req == NULL) {
+		D_ERROR("Failed to unpack req (query check)\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		return;
+	}
+
+	D_INFO("Received request to query check\n");
+
+	rc = ds_mgmt_check_query(req->n_uuids, req->uuids, ds_chk_query_head_cb,
+				 ds_chk_query_pool_cb, &resp);
+	if (rc != 0)
+		D_ERROR("Failed to query check: "DF_RC"\n", DP_RC(rc));
+
+	resp.req_status = rc;
+	len = mgmt__check_query_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		D_ERROR("Failed to allocate response body (query check)\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+	} else {
+		mgmt__check_query_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	D_FREE(pools);
+	ds_chk_query_free(&resp);
+	mgmt__check_query_req__free_unpacked(req, &alloc.alloc);
+}
+
+static void
+ds_chk_prob_free(Mgmt__CheckInconsistPolicy **policies, uint32_t policy_nr)
+{
+	int	i;
+
+	if (policies != NULL) {
+		for (i = 0; i < policy_nr; i++)
+			D_FREE(policies[i]);
+		D_FREE(policies);
+	}
+}
+
+#define ALL_CHK_POLICY	CHK__CHECK_INCONSIST_CLASS__CIC_UNKNOWN
+
+static int
+ds_chk_prop_cb(void *buf, uint32_t policies[], int cnt, uint32_t flags)
+{
+	Mgmt__CheckInconsistPolicy	**ply = NULL;
+	Mgmt__CheckPropResp		 *resp = buf;
+	int				  rc = 0;
+	int				  i = 0;
+
+	D_ASSERTF(cnt <= ALL_CHK_POLICY, "Too many inconsistency policies %u/%u\n",
+		  cnt, ALL_CHK_POLICY);
+
+	D_ALLOC_ARRAY(ply, cnt);
+	if (ply == NULL)
+		return -DER_NOMEM;
+
+	for (i = 0; i < cnt; i++) {
+		D_ALLOC(ply[i], sizeof(*ply[i]));
+		if (ply[i] == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		mgmt__check_inconsist_policy__init(ply[i]);
+		ply[i]->inconsist_cas = i;
+		ply[i]->inconsist_act = policies[i];
+	}
+
+
+out:
+	if (rc != 0) {
+		ds_chk_prob_free(ply, i);
+	} else {
+		resp->policies = ply;
+		resp->n_policies = cnt;
+		resp->flags = flags;
+	}
+
+	return rc;
+}
+
+void
+ds_mgmt_drpc_check_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	struct drpc_alloc		 alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Mgmt__CheckPropReq		*req = NULL;
+	Mgmt__CheckPropResp		 resp = MGMT__CHECK_PROP_RESP__INIT;
+	uint8_t				*body;
+	size_t				 len;
+	int				 rc = 0;
+
+	if (!ds_mgmt_check_enabled()) {
+		D_ERROR("Not in check mode\n");
+		drpc_resp->status = DRPC__STATUS__UNKNOWN_MODULE;
+		return;
+	}
+
+	req = mgmt__check_prop_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
+	if (alloc.oom || req == NULL) {
+		D_ERROR("Failed to unpack req (get property for check)\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		return;
+	}
+
+	D_INFO("Received request to get property for check\n");
+
+	rc = ds_mgmt_check_prop(ds_chk_prop_cb, &resp);
+	if (rc != 0)
+		D_ERROR("Failed to set get property for check: "DF_RC"\n", DP_RC(rc));
+
+	resp.status = rc;
+	len = mgmt__check_prop_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		D_ERROR("Failed to allocate response body (get property for check)\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+	} else {
+		mgmt__check_prop_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	ds_chk_prob_free(resp.policies, resp.n_policies);
+	mgmt__check_prop_req__free_unpacked(req, &alloc.alloc);
+}
+
+void
+ds_mgmt_drpc_check_act(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Mgmt__CheckActReq	*req = NULL;
+	Mgmt__CheckActResp	 resp = MGMT__CHECK_ACT_RESP__INIT;
+	uint8_t			*body;
+	size_t			 len;
+	int			 rc = 0;
+
+	if (!ds_mgmt_check_enabled()) {
+		D_ERROR("Not in check mode\n");
+		drpc_resp->status = DRPC__STATUS__UNKNOWN_MODULE;
+		return;
+	}
+
+	req = mgmt__check_act_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
+	if (alloc.oom || req == NULL) {
+		D_ERROR("Failed to unpack req (set action for check)\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		return;
+	}
+
+	D_INFO("Received request to set action for check\n");
+
+	rc = ds_mgmt_check_act(req->seq, req->act, req->for_all);
+	if (rc != 0)
+		D_ERROR("Failed to set action for check: "DF_RC"\n", DP_RC(rc));
+
+	resp.status = rc;
+	len = mgmt__check_act_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		D_ERROR("Failed to allocate response body (set action for check)\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+	} else {
+		mgmt__check_act_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__check_act_req__free_unpacked(req, &alloc.alloc);
 }

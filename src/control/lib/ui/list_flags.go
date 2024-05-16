@@ -73,6 +73,7 @@ func (f *HostSetFlag) UnmarshalFlag(fv string) error {
 	return nil
 }
 
+// MarshalFlag implements the go-flags.Marshaler interface.
 func (f *HostSetFlag) MarshalJSON() ([]byte, error) {
 	return []byte(f.String()), nil
 }

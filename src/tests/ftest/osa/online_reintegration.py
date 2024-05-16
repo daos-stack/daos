@@ -3,15 +3,15 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
+import queue
 import random
 import threading
-import queue
+import time
 
-from test_utils_pool import add_pool
-from write_host_file import write_host_file
 from daos_racer_utils import DaosRacerCommand
 from osa_utils import OSAUtils
+from test_utils_pool import add_pool
+from write_host_file import write_host_file
 
 
 class OSAOnlineReintegration(OSAUtils):
@@ -31,7 +31,7 @@ class OSAOnlineReintegration(OSAUtils):
         self.ior_test_sequence = self.params.get("ior_test_sequence", '/run/ior/iorflags/*')
         self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
         # Recreate the client hostfile without slots defined
-        self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir, None)
+        self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir)
         self.pool = None
         self.ds_racer_queue = queue.Queue()
         self.daos_racer = None

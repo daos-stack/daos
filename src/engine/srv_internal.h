@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -9,6 +9,7 @@
 #include <daos_srv/daos_engine.h>
 #include <daos/stack_mmap.h>
 #include <gurt/telemetry_common.h>
+#include <gurt/heap.h>
 
 /**
  * Argobots ULT pools for different tasks, NET_POLL & NVME_POLL
@@ -32,6 +33,7 @@ struct sched_stats {
 	struct d_tm_node_t	*ss_sq_len;		/* Sleep queue length */
 	struct d_tm_node_t	*ss_cycle_duration;	/* Cycle duration (ms) */
 	struct d_tm_node_t	*ss_cycle_size;		/* Total ULTs in a cycle */
+	struct d_tm_node_t	*ss_total_reject;	/* Total Rejected requests */
 	uint64_t		 ss_busy_ts;		/* Last busy timestamp (ms) */
 	uint64_t		 ss_watchdog_ts;	/* Last watchdog print ts (ms) */
 	void			*ss_last_unit;		/* Last executed unit */
@@ -41,6 +43,7 @@ struct sched_info {
 	uint64_t		 si_cur_ts;	/* Current timestamp (ms) */
 	uint64_t		 si_cur_seq;	/* Current schedule sequence */
 	uint64_t		 si_ult_start;	/* Start time of last executed unit */
+	uint64_t		 si_cur_id;	/* Current sequence ID for incoming RPC */
 	void			*si_ult_func;	/* Function addr of last executed unit */
 	struct sched_stats	 si_stats;	/* Sched stats */
 	d_list_t		 si_idle_list;	/* All unused requests */
@@ -48,10 +51,31 @@ struct sched_info {
 	d_list_t		 si_fifo_list;	/* All IO requests in FIFO */
 	d_list_t		 si_purge_list;	/* Stale sched_pool_info */
 	struct d_hash_table	*si_pool_hash;	/* All sched_pool_info */
-	uint32_t		 si_req_cnt;	/* Total inuse request count */
+	struct d_binheap	 si_heap;	/* All retried RPC */
+	/* Total inuse request count */
+	uint32_t		 si_total_req_cnt;
+	/* Request count for each type of inuse request */
+	uint32_t		 si_req_cnt[SCHED_REQ_MAX];
 	int			 si_sleep_cnt;	/* Sleeping request count */
 	int			 si_wait_cnt;	/* Long wait request count */
+	/* Number of kicked requests for each type in current cycle */
+	uint32_t		 si_kicked_req_cnt[SCHED_REQ_MAX];
 	unsigned int		 si_stop:1;
+};
+
+struct mem_stats {
+	struct d_tm_node_t	*ms_total_usage;	/* Total memory usage (bytes) */
+	struct d_tm_node_t	*ms_mallinfo;		/* memory allocate information */
+	uint64_t		ms_current;
+};
+
+/* See dss_chore. */
+struct dss_chore_queue {
+	d_list_t   chq_list;
+	bool       chq_stop;
+	ABT_mutex  chq_mutex;
+	ABT_cond   chq_cond;
+	ABT_thread chq_ult;
 };
 
 /** Per-xstream configuration data */
@@ -79,13 +103,16 @@ struct dss_xstream {
 	unsigned int		dx_timeout;
 	bool			dx_main_xs;	/* true for main XS */
 	bool			dx_comm;	/* true with cart context */
+	bool			dx_iofw;	/* true for DSS_XS_IOFW XS */
 	bool			dx_dsc_started;	/* DSC progress ULT started */
+	struct mem_stats	dx_mem_stats;	/* memory usages stats on this xstream */
 #ifdef ULT_MMAP_STACK
 	/* per-xstream pool/list of free stacks */
 	struct stack_pool	*dx_sp;
 #endif
 	bool			dx_progress_started;	/* Network poll started */
 	int                     dx_tag;                 /** tag for xstream */
+	struct dss_chore_queue	dx_chore_queue;
 };
 
 /** Engine module's metrics */
@@ -95,6 +122,16 @@ struct engine_metrics {
 	struct d_tm_node_t	*rank_id;
 	struct d_tm_node_t	*dead_rank_events;
 	struct d_tm_node_t	*last_event_time;
+	struct d_tm_node_t	*meminfo;
+};
+
+struct dss_numa_info {
+	/** numa index for this node */
+	int            ni_idx;
+	/** Number of cores in this node */
+	int            ni_core_nr;
+	/** Allocation bitmap for this numa node */
+	hwloc_bitmap_t ni_coremap;
 };
 
 extern struct engine_metrics dss_engine_metrics;
@@ -102,29 +139,33 @@ extern struct engine_metrics dss_engine_metrics;
 #define DSS_HOSTNAME_MAX_LEN	255
 
 /** Server node hostname */
-extern char		dss_hostname[];
+extern char                  dss_hostname[];
 /** Server node topology */
-extern hwloc_topology_t	dss_topo;
+extern hwloc_topology_t      dss_topo;
 /** core depth of the topology */
-extern int		dss_core_depth;
+extern int                   dss_core_depth;
 /** number of physical cores, w/o hyper-threading */
-extern int		dss_core_nr;
+extern int                   dss_core_nr;
 /** start offset index of the first core for service XS */
-extern unsigned int	dss_core_offset;
+extern unsigned int          dss_core_offset;
 /** NUMA node to bind to */
-extern int		dss_numa_node;
-/** bitmap describing core allocation */
-extern hwloc_bitmap_t	core_allocation_bitmap;
-/** a copy of the NUMA node object in the topology */
-extern hwloc_obj_t	numa_obj;
-/** number of cores in the given NUMA node */
-extern int		dss_num_cores_numa_node;
-/** Number of offload XS */
-extern unsigned int	dss_tgt_offload_xs_nr;
+extern int                   dss_numa_node;
+/** Number of active numa nodes (only > 1 if multi-socket mode is enabled) */
+extern int                   dss_numa_nr;
 /** number of system XS */
-extern unsigned int	dss_sys_xs_nr;
+extern unsigned int          dss_sys_xs_nr;
 /** Flag of helper XS as a pool */
-extern bool		dss_helper_pool;
+extern bool                  dss_helper_pool;
+/** Cached numa information */
+extern struct dss_numa_info *dss_numa;
+/** Forward I/O work to neighbor */
+extern bool                  dss_forward_neighbor;
+/** Number of offload XS */
+extern unsigned int          dss_tgt_offload_xs_nr;
+/** Number of offload per socket */
+extern unsigned int          dss_offload_per_numa_nr;
+/** Number of target per socket */
+extern unsigned int          dss_tgt_per_numa_nr;
 
 /** Shadow dss_get_module_info */
 struct dss_module_info *get_module_info(void);
@@ -150,6 +191,8 @@ void dss_dump_ABT_state(FILE *fp);
 void dss_xstreams_open_barrier(void);
 struct dss_xstream *dss_get_xstream(int stream_id);
 int dss_xstream_cnt(void);
+void dss_mem_total_alloc_track(void *arg, daos_size_t bytes);
+void dss_mem_total_free_track(void *arg, daos_size_t bytes);
 
 /* srv_metrics.c */
 int dss_engine_metrics_init(void);
@@ -295,10 +338,6 @@ sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 	return dss_abterr2der(rc);
 }
 
-/* tls.c */
-void dss_tls_fini(struct dss_thread_local_storage *dtls);
-struct dss_thread_local_storage *dss_tls_init(int tag, int xs_id, int tgt_id);
-
 /* server_iv.c */
 void ds_iv_init(void);
 void ds_iv_fini(void);
@@ -356,5 +395,10 @@ dss_xstream_has_nvme(struct dss_xstream *dx)
 
 	return false;
 }
+
+int dss_chore_queue_init(struct dss_xstream *dx);
+int dss_chore_queue_start(struct dss_xstream *dx);
+void dss_chore_queue_stop(struct dss_xstream *dx);
+void dss_chore_queue_fini(struct dss_xstream *dx);
 
 #endif /* __DAOS_SRV_INTERNAL__ */

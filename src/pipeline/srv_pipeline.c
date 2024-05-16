@@ -13,7 +13,7 @@
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/bio.h>
-#include "daos_api.h"
+#include <daos_api.h>
 #include "pipeline_rpc.h"
 #include "pipeline_internal.h"
 
@@ -100,9 +100,8 @@ pipeline_fetch_record(daos_handle_t vos_coh, daos_unit_oid_t oid, struct vos_ite
 	/** fetching record */
 	rc = vos_fetch_begin(vos_coh, oid, epr.epr_hi, d_key, nr_iods, iods, 0, NULL, &ioh, NULL);
 	if (rc) {
-		D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_NONEXIST || rc == -DER_TX_RESTART,
-			 DB_IO, DLOG_ERR, "Fetch begin for " DF_UOID " failed: " DF_RC "\n",
-			 DP_UOID(oid), DP_RC(rc));
+		DL_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_NONEXIST || rc == -DER_TX_RESTART,
+			  DB_IO, DLOG_ERR, rc, "Fetch begin for " DF_UOID " failed", DP_UOID(oid));
 		D_GOTO(out, rc);
 	}
 	biod = vos_ioh2desc(ioh);
@@ -115,8 +114,8 @@ pipeline_fetch_record(daos_handle_t vos_coh, daos_unit_oid_t oid, struct vos_ite
 	if (rc) {
 		if (rc == -DER_OVERFLOW)
 			rc = -DER_REC2BIG;
-		D_CDEBUG(rc == -DER_REC2BIG, DLOG_DBG, DLOG_ERR,
-			 DF_UOID " data transfer failed, rc " DF_RC "", DP_UOID(oid), DP_RC(rc));
+		DL_CDEBUG(rc == -DER_REC2BIG, DLOG_DBG, DLOG_ERR, rc,
+			  DF_UOID " data transfer failed", DP_UOID(oid));
 		/** D_GOTO(post, rc); */
 	}
 	/**post:*/
@@ -124,10 +123,9 @@ pipeline_fetch_record(daos_handle_t vos_coh, daos_unit_oid_t oid, struct vos_ite
 out:
 	rc1 = vos_fetch_end(ioh, &io_size, rc);
 	if (rc1 != 0) {
-		D_CDEBUG(rc1 == -DER_REC2BIG || rc1 == -DER_INPROGRESS || rc1 == -DER_TX_RESTART ||
-			 rc1 == -DER_EXIST || rc1 == -DER_NONEXIST || rc1 == -DER_ALREADY,
-			 DLOG_DBG, DLOG_ERR, DF_UOID " %s end failed: " DF_RC "\n", DP_UOID(oid),
-			 "Fetch", DP_RC(rc1));
+		DL_CDEBUG(rc1 == -DER_REC2BIG || rc1 == -DER_INPROGRESS || rc1 == -DER_TX_RESTART ||
+			      rc1 == -DER_EXIST || rc1 == -DER_NONEXIST || rc1 == -DER_ALREADY,
+			  DLOG_DBG, DLOG_ERR, rc, DF_UOID " Fetch end failed", DP_UOID(oid));
 		if (rc == 0)
 			rc = rc1;
 	}

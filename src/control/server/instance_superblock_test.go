@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -56,7 +56,7 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 	}
 
 	for _, e := range h.Instances() {
-		if err := e.(*EngineInstance).createSuperblock(false); err != nil {
+		if err := e.(*EngineInstance).createSuperblock(); err != nil {
 			t.Fatal(err)
 		}
 	}

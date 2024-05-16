@@ -12,6 +12,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/build"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/common/test"
@@ -50,59 +53,70 @@ func inList(c Component, compList []Component) bool {
 func TestSecurity_ComponentHasAccess(t *testing.T) {
 	allComponents := []Component{ComponentUndefined, ComponentAdmin, ComponentAgent, ComponentServer}
 	testCases := map[string][]Component{
-		"/ctl.CtlSvc/StorageScan":              {ComponentAdmin},
-		"/ctl.CtlSvc/StorageFormat":            {ComponentAdmin},
-		"/ctl.CtlSvc/StorageNvmeRebind":        {ComponentAdmin},
-		"/ctl.CtlSvc/StorageNvmeAddDevice":     {ComponentAdmin},
-		"/ctl.CtlSvc/NetworkScan":              {ComponentAdmin},
-		"/ctl.CtlSvc/CollectLog":               {ComponentAdmin},
-		"/ctl.CtlSvc/FirmwareQuery":            {ComponentAdmin},
-		"/ctl.CtlSvc/FirmwareUpdate":           {ComponentAdmin},
-		"/ctl.CtlSvc/SmdQuery":                 {ComponentAdmin},
-		"/ctl.CtlSvc/SmdManage":                {ComponentAdmin},
-		"/ctl.CtlSvc/SetEngineLogMasks":        {ComponentAdmin},
-		"/ctl.CtlSvc/PrepShutdownRanks":        {ComponentServer},
-		"/ctl.CtlSvc/StopRanks":                {ComponentServer},
-		"/ctl.CtlSvc/ResetFormatRanks":         {ComponentServer},
-		"/ctl.CtlSvc/StartRanks":               {ComponentServer},
-		"/mgmt.MgmtSvc/Join":                   {ComponentServer},
-		"/mgmt.MgmtSvc/ClusterEvent":           {ComponentServer},
-		"/mgmt.MgmtSvc/LeaderQuery":            {ComponentAdmin},
-		"/mgmt.MgmtSvc/SystemQuery":            {ComponentAdmin},
-		"/mgmt.MgmtSvc/SystemStop":             {ComponentAdmin},
-		"/mgmt.MgmtSvc/SystemErase":            {ComponentAdmin},
-		"/mgmt.MgmtSvc/SystemStart":            {ComponentAdmin},
-		"/mgmt.MgmtSvc/SystemExclude":          {ComponentAdmin},
-		"/mgmt.MgmtSvc/PoolCreate":             {ComponentAdmin},
-		"/mgmt.MgmtSvc/PoolDestroy":            {ComponentAdmin},
-		"/mgmt.MgmtSvc/PoolQuery":              {ComponentAdmin},
-		"/mgmt.MgmtSvc/PoolQueryTarget":        {ComponentAdmin},
-		"/mgmt.MgmtSvc/PoolSetProp":            {ComponentAdmin},
-		"/mgmt.MgmtSvc/PoolGetProp":            {ComponentAdmin},
-		"/mgmt.MgmtSvc/PoolGetACL":             {ComponentAdmin},
-		"/mgmt.MgmtSvc/PoolOverwriteACL":       {ComponentAdmin},
-		"/mgmt.MgmtSvc/PoolUpdateACL":          {ComponentAdmin},
-		"/mgmt.MgmtSvc/PoolDeleteACL":          {ComponentAdmin},
-		"/mgmt.MgmtSvc/PoolExclude":            {ComponentAdmin},
-		"/mgmt.MgmtSvc/PoolDrain":              {ComponentAdmin},
-		"/mgmt.MgmtSvc/PoolReintegrate":        {ComponentAdmin},
-		"/mgmt.MgmtSvc/PoolEvict":              {ComponentAdmin, ComponentAgent},
-		"/mgmt.MgmtSvc/PoolExtend":             {ComponentAdmin},
-		"/mgmt.MgmtSvc/GetAttachInfo":          {ComponentAgent},
-		"/mgmt.MgmtSvc/ListPools":              {ComponentAdmin},
-		"/mgmt.MgmtSvc/ListContainers":         {ComponentAdmin},
-		"/mgmt.MgmtSvc/ContSetOwner":           {ComponentAdmin},
-		"/mgmt.MgmtSvc/SystemCleanup":          {ComponentAdmin},
-		"/mgmt.MgmtSvc/PoolUpgrade":            {ComponentAdmin},
-		"/mgmt.MgmtSvc/SystemSetAttr":          {ComponentAdmin},
-		"/mgmt.MgmtSvc/SystemGetAttr":          {ComponentAdmin},
-		"/mgmt.MgmtSvc/SystemSetProp":          {ComponentAdmin},
-		"/mgmt.MgmtSvc/SystemGetProp":          {ComponentAdmin},
-		"/RaftTransport/AppendEntries":         {ComponentServer},
-		"/RaftTransport/AppendEntriesPipeline": {ComponentServer},
-		"/RaftTransport/RequestVote":           {ComponentServer},
-		"/RaftTransport/TimeoutNow":            {ComponentServer},
-		"/RaftTransport/InstallSnapshot":       {ComponentServer},
+		"/ctl.CtlSvc/StorageScan":                {ComponentAdmin},
+		"/ctl.CtlSvc/StorageFormat":              {ComponentAdmin},
+		"/ctl.CtlSvc/StorageNvmeRebind":          {ComponentAdmin},
+		"/ctl.CtlSvc/StorageNvmeAddDevice":       {ComponentAdmin},
+		"/ctl.CtlSvc/NetworkScan":                {ComponentAdmin},
+		"/ctl.CtlSvc/CollectLog":                 {ComponentAdmin},
+		"/ctl.CtlSvc/FirmwareQuery":              {ComponentAdmin},
+		"/ctl.CtlSvc/FirmwareUpdate":             {ComponentAdmin},
+		"/ctl.CtlSvc/SmdQuery":                   {ComponentAdmin},
+		"/ctl.CtlSvc/SmdManage":                  {ComponentAdmin},
+		"/ctl.CtlSvc/SetEngineLogMasks":          {ComponentAdmin},
+		"/ctl.CtlSvc/PrepShutdownRanks":          {ComponentServer},
+		"/ctl.CtlSvc/StopRanks":                  {ComponentServer},
+		"/ctl.CtlSvc/ResetFormatRanks":           {ComponentServer},
+		"/ctl.CtlSvc/StartRanks":                 {ComponentServer},
+		"/mgmt.MgmtSvc/Join":                     {ComponentServer},
+		"/mgmt.MgmtSvc/ClusterEvent":             {ComponentServer},
+		"/mgmt.MgmtSvc/LeaderQuery":              {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemQuery":              {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemStop":               {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemErase":              {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemStart":              {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemExclude":            {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolCreate":               {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolDestroy":              {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolQuery":                {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolQueryTarget":          {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolSetProp":              {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolGetProp":              {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolGetACL":               {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolOverwriteACL":         {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolUpdateACL":            {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolDeleteACL":            {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolExclude":              {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolDrain":                {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolReintegrate":          {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolEvict":                {ComponentAdmin, ComponentAgent},
+		"/mgmt.MgmtSvc/PoolExtend":               {ComponentAdmin},
+		"/mgmt.MgmtSvc/GetAttachInfo":            {ComponentAgent},
+		"/mgmt.MgmtSvc/ListPools":                {ComponentAdmin},
+		"/mgmt.MgmtSvc/ListContainers":           {ComponentAdmin},
+		"/mgmt.MgmtSvc/ContSetOwner":             {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemCleanup":            {ComponentAdmin, ComponentAgent},
+		"/mgmt.MgmtSvc/SystemCheckEnable":        {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemCheckDisable":       {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemCheckStart":         {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemCheckStop":          {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemCheckQuery":         {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemCheckSetPolicy":     {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemCheckGetPolicy":     {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemCheckRepair":        {ComponentAdmin},
+		"/mgmt.MgmtSvc/FaultInjectReport":        {ComponentAdmin},
+		"/mgmt.MgmtSvc/FaultInjectPoolFault":     {ComponentAdmin},
+		"/mgmt.MgmtSvc/FaultInjectMgmtPoolFault": {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolUpgrade":              {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemSetAttr":            {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemGetAttr":            {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemSetProp":            {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemGetProp":            {ComponentAdmin},
+		"/RaftTransport/AppendEntries":           {ComponentServer},
+		"/RaftTransport/AppendEntriesPipeline":   {ComponentServer},
+		"/RaftTransport/RequestVote":             {ComponentServer},
+		"/RaftTransport/TimeoutNow":              {ComponentServer},
+		"/RaftTransport/InstallSnapshot":         {ComponentServer},
 	}
 
 	var missing []string
@@ -215,6 +229,59 @@ func TestSecurity_AuthorizedRpcsAreValid(t *testing.T) {
 			if len(invalid) > 0 {
 				t.Fatalf("authorized RPCs without server methods (remove from methodAuthorizations):\n%s", strings.Join(invalid, "\n"))
 			}
+		})
+	}
+}
+
+func TestSecurity_MethodToCompnent(t *testing.T) {
+	for name, tc := range map[string]struct {
+		method  string
+		authMap map[string][]Component
+		expComp build.Component
+		expErr  error
+	}{
+		"method maps to an unknown component": {
+			method: "/unknown",
+			expErr: errors.New("does not map"),
+		},
+		"method maps to 0 components": {
+			method: "/zero",
+			authMap: map[string][]Component{
+				"/zero": nil,
+			},
+			expErr: errors.New("does not map"),
+		},
+		"method maps to 2 components": {
+			method: "/two",
+			authMap: map[string][]Component{
+				"/two": {ComponentAdmin, ComponentAgent},
+			},
+			expErr: errors.New("multiple authorized"),
+		},
+		"method maps to 1 component": {
+			method: "/one",
+			authMap: map[string][]Component{
+				"/one": {ComponentServer},
+			},
+			expComp: build.ComponentServer,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var gotComp build.Component
+			var gotErr error
+
+			if tc.authMap != nil {
+				gotComp, gotErr = methodToComponent(tc.method, tc.authMap)
+			} else {
+				gotComp, gotErr = MethodToComponent(tc.method)
+			}
+
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			test.AssertEqual(t, tc.expComp, gotComp, "unexpected component")
 		})
 	}
 }

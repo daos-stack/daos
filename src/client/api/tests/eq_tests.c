@@ -1242,8 +1242,8 @@ eq_ut_setup(void **state)
 {
 	int rc;
 
-	setenv("OFI_INTERFACE", "lo", 1);
-	setenv("D_PROVIDER", "ofi+tcp", 1);
+	d_setenv("D_INTERFACE", "lo", 1);
+	d_setenv("D_PROVIDER", "ofi+tcp", 1);
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0) {
@@ -1257,7 +1257,7 @@ eq_ut_setup(void **state)
 		return rc;
 	}
 
-	rc = daos_eq_lib_init();
+	rc = daos_eq_lib_init(daos_crt_init_opt_get(false, 1));
 	if (rc != 0) {
 		print_error("Failed daos_eq_lib_init: %d\n", rc);
 		return rc;

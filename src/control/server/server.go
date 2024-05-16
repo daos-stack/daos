@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"os/user"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -37,6 +38,26 @@ import (
 	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
+func genFiAffFn(fis *hardware.FabricInterfaceSet) config.EngineAffinityFn {
+	return func(l logging.Logger, e *engine.Config) (uint, error) {
+		iface, err := e.Fabric.GetPrimaryInterface()
+		if err != nil {
+			return 0, err
+		}
+
+		prov, err := e.Fabric.GetPrimaryProvider()
+		if err != nil {
+			return 0, err
+		}
+
+		fi, err := fis.GetInterfaceOnNetDevice(iface, prov)
+		if err != nil {
+			return 0, err
+		}
+		return fi.NUMANode, nil
+	}
+}
+
 // non-exported package-scope function variable for mocking in unit tests
 var osSetenv = os.Setenv
 
@@ -60,8 +81,15 @@ func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricI
 	}
 
 	for _, ec := range cfg.Engines {
-		if err := checkFabricInterface(ec.Fabric.Interface, lookupNetIF); err != nil {
+		fabricIFs, err := ec.Fabric.GetInterfaces()
+		if err != nil {
 			return err
+		}
+
+		for _, iface := range fabricIFs {
+			if err := checkFabricInterface(iface, lookupNetIF); err != nil {
+				return err
+			}
 		}
 
 		if err := updateFabricEnvars(log, ec, fis); err != nil {
@@ -78,10 +106,20 @@ func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricI
 	return nil
 }
 
-func processFabricProvider(cfg *config.Server) {
-	if shouldAppendRXM(cfg.Fabric.Provider) {
-		cfg.WithFabricProvider(cfg.Fabric.Provider + ";ofi_rxm")
+func processFabricProvider(cfg *config.Server) error {
+	providers, err := cfg.Fabric.GetProviders()
+	if err != nil {
+		return err
 	}
+
+	for i, p := range providers {
+		if shouldAppendRXM(p) {
+			providers[i] = p + ";ofi_rxm"
+		}
+	}
+
+	cfg.WithFabricProvider(strings.Join(providers, engine.MultiProviderSeparator))
+	return nil
 }
 
 func shouldAppendRXM(provider string) bool {
@@ -96,7 +134,7 @@ type server struct {
 	runningUser *user.User
 	faultDomain *system.FaultDomain
 	ctlAddr     *net.TCPAddr
-	netDevClass hardware.NetDevClass
+	netDevClass []hardware.NetDevClass
 	listener    net.Listener
 
 	harness      *EngineHarness
@@ -188,6 +226,7 @@ func (srv *server) createServices(ctx context.Context) (err error) {
 	cliCfg := control.DefaultConfig()
 	cliCfg.TransportConfig = srv.cfg.TransportConfig
 	rpcClient := control.NewClient(
+		control.WithClientComponent(build.ComponentServer),
 		control.WithConfig(cliCfg),
 		control.WithClientLogger(srv.log))
 
@@ -282,8 +321,12 @@ func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config
 		return control.SystemJoin(ctxIn, srv.mgmtSvc.rpcClient, req)
 	}
 
-	engine := NewEngineInstance(srv.log, storage.DefaultProvider(srv.log, idx, &cfg.Storage), joinFn,
-		engine.NewRunner(srv.log, cfg)).WithHostFaultDomain(srv.harness.faultDomain)
+	sp := storage.DefaultProvider(srv.log, idx, &cfg.Storage).
+		WithVMDEnabled(srv.ctlSvc.storage.IsVMDEnabled())
+
+	engine := NewEngineInstance(srv.log, sp, joinFn, engine.NewRunner(srv.log, cfg)).
+		WithHostFaultDomain(srv.harness.faultDomain)
+
 	if idx == 0 {
 		configureFirstEngine(ctx, engine, srv.sysdb, joinFn)
 	}
@@ -307,27 +350,14 @@ func (srv *server) addEngines(ctx context.Context) error {
 		return err
 	}
 
-	// Retrieve NVMe device details (before engines are started) so static details can be
-	// recovered by the engine storage provider(s) during scan even if devices are in use.
-	nvmeScanResp, err := scanBdevStorage(srv)
-	if err != nil {
-		return err
-	}
-
 	if len(srv.cfg.Engines) == 0 {
 		return nil
 	}
 
-	nrEngineBdevsIdx := -1
-	nrEngineBdevs := -1
 	for i, c := range srv.cfg.Engines {
 		engine, err := srv.createEngine(ctx, i, c)
 		if err != nil {
 			return errors.Wrap(err, "creating engine instances")
-		}
-
-		if err := setEngineBdevs(engine, nvmeScanResp, &nrEngineBdevsIdx, &nrEngineBdevs); err != nil {
-			return errors.Wrap(err, "setting engine bdevs")
 		}
 
 		registerEngineEventCallbacks(srv, engine, &allStarted)
@@ -371,14 +401,25 @@ func (srv *server) setupGrpc() error {
 	if err != nil {
 		return err
 	}
-	srv.mgmtSvc.clientNetworkHint = &mgmtpb.ClientNetHint{
-		Provider:        srv.cfg.Fabric.Provider,
-		CrtCtxShareAddr: srv.cfg.Fabric.CrtCtxShareAddr,
-		CrtTimeout:      srv.cfg.Fabric.CrtTimeout,
-		NetDevClass:     uint32(srv.netDevClass),
-		SrvSrxSet:       srxSetting,
-		EnvVars:         srv.cfg.ClientEnvVars,
+
+	providers, err := srv.cfg.Fabric.GetProviders()
+	if err != nil {
+		return err
 	}
+
+	clientNetHints := make([]*mgmtpb.ClientNetHint, 0, len(providers))
+	for i, p := range providers {
+		clientNetHints = append(clientNetHints, &mgmtpb.ClientNetHint{
+			Provider:    p,
+			CrtTimeout:  srv.cfg.Fabric.CrtTimeout,
+			NetDevClass: uint32(srv.netDevClass[i]),
+			SrvSrxSet:   srxSetting,
+			ProviderIdx: uint32(i),
+			EnvVars:     srv.cfg.ClientEnvVars,
+		})
+	}
+	srv.mgmtSvc.clientNetworkHint = clientNetHints
+
 	mgmtpb.RegisterMgmtSvcServer(srv.grpcServer, srv.mgmtSvc)
 
 	tSec, err := security.DialOptionForTransportConfig(srv.cfg.TransportConfig)
@@ -398,6 +439,12 @@ func (srv *server) registerEvents() {
 	srv.sysdb.OnLeadershipGained(
 		func(ctx context.Context) error {
 			srv.log.Infof("MS leader running on %s", srv.hostname)
+
+			if err := srv.mgmtSvc.updateFabricProviders([]string{srv.cfg.Fabric.Provider}, srv.pubSub); err != nil {
+				srv.log.Errorf(err.Error())
+				return err
+			}
+
 			srv.mgmtSvc.startLeaderLoops(ctx)
 			registerLeaderSubscriptions(srv)
 			srv.log.Debugf("requesting immediate GroupUpdate after leader change")
@@ -466,6 +513,14 @@ func (srv *server) start(ctx context.Context) error {
 	}()
 
 	srv.mgmtSvc.startAsyncLoops(ctx)
+
+	if srv.cfg.AutoFormat {
+		srv.log.Notice("--auto flag set on server start so formatting storage now")
+		if _, err := srv.ctlSvc.StorageFormat(ctx, &ctlpb.StorageFormatReq{}); err != nil {
+			return errors.WithMessage(err, "attempting to auto format")
+		}
+	}
+
 	return errors.Wrapf(srv.harness.Start(ctx, srv.sysdb, srv.cfg),
 		"%s harness exited", build.ControlPlaneName)
 }
@@ -473,7 +528,11 @@ func (srv *server) start(ctx context.Context) error {
 func waitFabricReady(ctx context.Context, log logging.Logger, cfg *config.Server) error {
 	ifaces := make([]string, 0, len(cfg.Engines))
 	for _, eng := range cfg.Engines {
-		ifaces = append(ifaces, eng.Fabric.Interface)
+		engIfaces, err := eng.Fabric.GetInterfaces()
+		if err != nil {
+			return err
+		}
+		ifaces = append(ifaces, engIfaces...)
 	}
 
 	// Skip wait if no fabric interfaces specified in config.
@@ -490,16 +549,6 @@ func waitFabricReady(ctx context.Context, log logging.Logger, cfg *config.Server
 	}
 
 	return nil
-}
-
-func genFiAffFn(fis *hardware.FabricInterfaceSet) config.EngineAffinityFn {
-	return func(l logging.Logger, e *engine.Config) (uint, error) {
-		fi, err := fis.GetInterfaceOnNetDevice(e.Fabric.Interface, e.Fabric.Provider)
-		if err != nil {
-			return 0, err
-		}
-		return fi.NUMANode, nil
-	}
 }
 
 func lookupIF(name string) (netInterface, error) {
@@ -522,11 +571,10 @@ func Start(log logging.Logger, cfg *config.Server) error {
 	ctx, shutdown := context.WithCancel(context.Background())
 	defer shutdown()
 
-	hwprovFini, err := hwprov.Init(log)
+	providers, err := cfg.Fabric.GetProviders()
 	if err != nil {
 		return err
 	}
-	defer hwprovFini()
 
 	if err := waitFabricReady(ctx, log, cfg); err != nil {
 		return err
@@ -534,7 +582,7 @@ func Start(log logging.Logger, cfg *config.Server) error {
 
 	scanner := hwprov.DefaultFabricScanner(log)
 
-	fis, err := scanner.Scan(ctx, cfg.Fabric.Provider)
+	fis, err := scanner.Scan(ctx, providers...)
 	if err != nil {
 		return errors.Wrap(err, "scan fabric")
 	}

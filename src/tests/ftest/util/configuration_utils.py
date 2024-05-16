@@ -3,12 +3,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from logging import getLogger
 import re
+from logging import getLogger
 
 from command_utils_base import BasicParameter, ObjectWithParameters
 from general_utils import get_host_data
-
 
 DATA_ERROR = "[ERROR]"
 

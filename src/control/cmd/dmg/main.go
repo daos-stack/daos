@@ -127,8 +127,10 @@ type cliOptions struct {
 	Cont           ContCmd        `command:"container" alias:"cont" description:"Perform tasks related to DAOS containers"`
 	Version        versionCmd     `command:"version" description:"Print dmg version"`
 	Telemetry      telemCmd       `command:"telemetry" alias:"telem" description:"Perform telemetry operations"`
-	firmwareOption                // build with tag "firmware" to enable
+	Check          checkCmdRoot   `command:"check" description:"Check system health"`
 	ManPage        cmdutil.ManCmd `command:"manpage" hidden:"true"`
+	faultsCmdRoot                 // compiled out for release builds
+	firmwareOption                // build with tag "firmware" to enable
 }
 
 type versionCmd struct {
@@ -302,6 +304,7 @@ func main() {
 
 	ctlInvoker := control.NewClient(
 		control.WithClientLogger(log),
+		control.WithClientComponent(build.ComponentAdmin),
 	)
 
 	if err := parseOpts(os.Args[1:], &opts, ctlInvoker, log); err != nil {

@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
 """Wrapper script for calling pylint"""
 
-import os
-import sys
-import re
-from collections import Counter
-import tempfile
-import subprocess  # nosec
 import argparse
 import json
+import os
+import re
+import subprocess  # nosec
+import sys
+import tempfile
+from collections import Counter
+
 for arg in sys.argv:
     if arg.startswith('--import='):
         sys.path.append(arg[9:])
 try:
+    from pylint.constants import full_version
     from pylint.lint import Run
     from pylint.reporters.collecting_reporter import CollectingReporter
-    from pylint.constants import full_version
 except ImportError:
 
     if os.path.exists('venv'):
@@ -23,9 +24,9 @@ except ImportError:
                                      f'python{sys.version_info.major}.{sys.version_info.minor}',
                                      'site-packages'))
         try:
+            from pylint.constants import full_version
             from pylint.lint import Run
             from pylint.reporters.collecting_reporter import CollectingReporter
-            from pylint.constants import full_version
         except ImportError:
             print('detected venv unusable, install pylint to enable this check')
             sys.exit(0)
@@ -424,9 +425,10 @@ sys.path.append('site_scons')"""
                 if word_is_allowed(word, code):
                     continue
 
-            # Inserting code can cause wrong-module-order.
-            if scons and msg.msg_id == 'C0411' and 'from SCons.Script import' in msg.msg:
-                continue
+            # Inserting code can cause wrong-import-order.
+            if scons and msg.msg_id == 'C0411':
+                if 'from SCons.Script import' in msg.msg or 'SCons.Script.*' in msg.msg:
+                    continue
 
             failed = True
 
@@ -545,10 +547,6 @@ def main():
     if args.version:
         print(full_version)
         sys.exit(0)
-
-    if args.diff:
-        print('This option is no longer used')
-        sys.exit(1)
 
     rc_tmp = None
 

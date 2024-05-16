@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -53,7 +53,7 @@ rsvc_client_init(struct rsvc_client *client, const d_rank_list_t *ranks)
 			return -DER_NOMEM;
 	}
 	rsvc_client_reset_leader(client);
-	client->sc_next = 0;
+	client->sc_next = -1;
 	return 0;
 }
 
@@ -78,28 +78,55 @@ rsvc_client_fini(struct rsvc_client *client)
 int
 rsvc_client_choose(struct rsvc_client *client, crt_endpoint_t *ep)
 {
-	int chosen = -1;
+	int chosen;
 
 	D_DEBUG(DB_MD, DF_CLI"\n", DP_CLI(client));
+
+	if (client->sc_ranks->rl_nr == 0) {
+		D_DEBUG(DB_MD, "replica list empty\n");
+		return -DER_NOTREPLICA;
+	}
+
 	if (client->sc_leader_known && client->sc_leader_aliveness > 0) {
 		chosen = client->sc_leader_index;
-	} else if (client->sc_ranks->rl_nr > 0) {
+	} else {
+		if (client->sc_next < 0)
+			client->sc_next = d_rand() % client->sc_ranks->rl_nr;
 		chosen = client->sc_next;
 		/* The hintless search is a round robin of all replicas. */
 		client->sc_next++;
 		client->sc_next %= client->sc_ranks->rl_nr;
 	}
 
-	if (chosen == -1) {
-		D_DEBUG(DB_MD, "replica list empty\n");
-		return -DER_NOTREPLICA;
-	} else {
-		D_ASSERTF(chosen >= 0 && chosen < client->sc_ranks->rl_nr,
-			  "%d\n", chosen);
-		ep->ep_rank = client->sc_ranks->rl_ranks[chosen];
-	}
+	D_ASSERTF(chosen >= 0 && chosen < client->sc_ranks->rl_nr, "chosen=%d\n", chosen);
+	ep->ep_rank = client->sc_ranks->rl_ranks[chosen];
 	ep->ep_tag = 0;
 	return 0;
+}
+
+static void
+rsvc_client_delete_rank_at(struct rsvc_client *client, int index)
+{
+	D_DEBUG(DB_MD, "deleting at %d (rank %u): " DF_CLI "\n", index,
+		client->sc_ranks->rl_ranks[index], DP_CLI(client));
+
+	d_rank_list_del_at(client->sc_ranks, index);
+
+	if (client->sc_leader_known) {
+		if (client->sc_leader_index == index)
+			rsvc_client_reset_leader(client);
+		else if (client->sc_leader_index > index)
+			client->sc_leader_index--;
+	}
+
+	if (client->sc_next == index) {
+		if (client->sc_ranks->rl_nr > 0)
+			client->sc_next %= client->sc_ranks->rl_nr;
+		else
+			client->sc_next = -1;
+	} else if (client->sc_next > index) {
+		client->sc_next--;
+	}
 }
 
 /* Process an error without leadership hint. */
@@ -107,32 +134,18 @@ static void
 rsvc_client_process_error(struct rsvc_client *client, int rc,
 			  const crt_endpoint_t *ep)
 {
-	int leader_index = client->sc_leader_index;
-
 	if (rc == -DER_OOG || rc == -DER_NOTREPLICA) {
 		int pos;
-		bool found;
-		d_rank_list_t *rl = client->sc_ranks;
 
-		rsvc_client_reset_leader(client);
-		found = daos_rank_list_find(rl, ep->ep_rank, &pos);
-		if (!found) {
-			D_DEBUG(DB_MD, "rank %u not found in list of replicas",
-				ep->ep_rank);
+		if (!d_rank_list_find(client->sc_ranks, ep->ep_rank, &pos)) {
+			D_DEBUG(DB_MD, "rank %u not found in list of replicas", ep->ep_rank);
 			return;
 		}
-		rl->rl_nr--;
-		if (pos < rl->rl_nr) {
-			memmove(&rl->rl_ranks[pos], &rl->rl_ranks[pos + 1],
-				(rl->rl_nr - pos) * sizeof(*rl->rl_ranks));
-			client->sc_next = pos;
-		} else {
-			client->sc_next = 0;
-		}
-		D_ERROR("removed rank %u from replica list due to "DF_RC"\n",
-			ep->ep_rank, DP_RC(rc));
+		rsvc_client_delete_rank_at(client, pos);
+		D_ERROR("removed rank %u from replica list due to " DF_RC "\n", ep->ep_rank,
+			DP_RC(rc));
 	} else if (client->sc_leader_known && client->sc_leader_aliveness > 0 &&
-		   ep->ep_rank == client->sc_ranks->rl_ranks[leader_index]) {
+		   ep->ep_rank == client->sc_ranks->rl_ranks[client->sc_leader_index]) {
 		/* A leader stepping up may briefly reply NOTLEADER with hint.
 		 * "Give up" but "bump aliveness" in rsvc_client_process_hint().
 		 */
@@ -145,10 +158,12 @@ rsvc_client_process_error(struct rsvc_client *client, int rc,
 			 * Gave up this leader. Start the hintless
 			 * search.
 			 */
-			D_DEBUG(DB_MD, "give up leader rank %u\n",
-				ep->ep_rank);
-			client->sc_next = client->sc_leader_index + 1;
-			client->sc_next %= client->sc_ranks->rl_nr;
+			D_DEBUG(DB_MD, "give up leader rank %u\n", ep->ep_rank);
+			client->sc_next = d_rand() % client->sc_ranks->rl_nr;
+			if (client->sc_next == client->sc_leader_index) {
+				client->sc_next++;
+				client->sc_next %= client->sc_ranks->rl_nr;
+			}
 		}
 	}
 }
@@ -300,6 +315,25 @@ rsvc_client_complete_rpc(struct rsvc_client *client, const crt_endpoint_t *ep,
 					 ep);
 		return RSVC_CLIENT_PROCEED;
 	}
+}
+
+/**
+ * Subtract certain ranks from \a client. This function calls \a cb for every
+ * rank in \a client. If \a cb returns true for a rank, the rank is deleted from
+ * \a client.
+ *
+ * \param[in,out]	client	client state
+ * \param[in]		cb	callback that decides if a rank shall be deleted
+ * \param[in]		arg	argument for \a cb
+ */
+void
+rsvc_client_subtract(struct rsvc_client *client, rsvc_client_subtract_cb cb, void *arg)
+{
+	int i;
+
+	for (i = 0; i < client->sc_ranks->rl_nr; i++)
+		if (cb(client->sc_ranks->rl_ranks[i], arg))
+			rsvc_client_delete_rank_at(client, i);
 }
 
 static const uint32_t rsvc_client_buf_magic = 0x23947e2f;

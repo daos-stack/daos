@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1091,7 +1091,7 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 	locked = false;
 
 	if (rc != -DER_TX_RESTART) {
-		delay = dc_obj_retry_delay(task, rc, &tx->tx_retry_cnt, &tx->tx_inprogress_cnt);
+		delay = dc_obj_retry_delay(task, rc, &tx->tx_retry_cnt, &tx->tx_inprogress_cnt, 0);
 		rc1 = tse_task_reinit_with_delay(task, delay);
 		if (rc1 != 0) {
 			D_ERROR("Failed to reinit task %p: %d, %d\n", task, rc1, rc);
@@ -1635,7 +1635,28 @@ dc_tx_dump(struct dc_tx *tx)
 		tx->tx_tgts_bulk.dcb_size, tx->tx_tgts_bulk.dcb_bulk);
 }
 
-/* The calculted CPD RPC sub-requests size may be some larger than the real case, no matter. */
+static inline bool
+dc_tx_cpd_body_need_bulk(size_t size)
+{
+	/*
+	 * NOTE: For 2.2 (DAOS_OBJ_VERSION is 8) and older release, we do not support to
+	 *	 transfer for large CPD RPC body via RDMA.
+	 */
+	return dc_obj_proto_version > 8 && size >= DAOS_BULK_LIMIT;
+}
+
+static inline size_t
+dc_tx_cpd_adjust_size(size_t size)
+{
+	/* Lower layer (mercury) need some additional space to pack related payload into
+	 * RPC body (or specified buffer) via related proc interfaces, usually that will
+	 * not exceed 1/10 of the payload. We can make some relative large estimation if
+	 * we do not exactly know the real size now.
+	 */
+	return size * 11 / 10;
+}
+
+/* The calculated CPD RPC sub-requests size may be some larger than the real case, no matter. */
 static size_t
 dc_tx_cpd_sub_reqs_size(struct daos_cpd_sub_req *dcsr, int count)
 {
@@ -1696,7 +1717,17 @@ dc_tx_cpd_sub_reqs_size(struct daos_cpd_sub_req *dcsr, int count)
 				size += sizeof(*oia->oia_offs) * oia->oia_iod_nr;
 
 			if (dcu->dcu_flags & ORF_CPD_BULK)
-				size += sizeof(*dcu->dcu_bulks) * dcsr->dcsr_nr;
+				/*
+				 * NOTE: In object layer, we cannot exactly know how large the
+				 *	 bulk handle will be in lower layer network (mercury).
+				 *	 The lower layer "struct hg_bulk" is opaque to object.
+				 *	 Its current size in packing is 187 bytes, but it may
+				 *	 be changed in future (who knowns). So here, we use it
+				 *	 as estimation and preserve more space via subsequent
+				 *	 dc_tx_cpd_adjust_size. Please check hg_proc_hg_bulk_t
+				 *	 for detail.
+				 */
+				size += 187 * dcsr->dcsr_nr;
 			else
 				size += daos_sgls_packed_size(dcsr->dcsr_sgls, dcsr->dcsr_nr, NULL);
 			break;
@@ -1707,36 +1738,17 @@ dc_tx_cpd_sub_reqs_size(struct daos_cpd_sub_req *dcsr, int count)
 			}
 			break;
 		case DCSO_PUNCH_AKEY:
-			for (j = 0; j < dcsr->dcsr_nr; j++)
+			for (j = 0; j < dcsr->dcsr_nr; j++) {
+				size += sizeof(dcsr->dcsr_punch.dcp_akeys[j]);
 				size += dcsr->dcsr_punch.dcp_akeys[j].iov_buf_len;
+			}
 			break;
 		default:
 			break;
 		}
 	}
 
-	return size;
-}
-
-static inline bool
-dc_tx_cpd_body_need_bulk(size_t size)
-{
-	/*
-	 * NOTE: For 2.2 (DAOS_OBJ_VERSION is 8) and older release, we do not support to
-	 *	 transfer for large CPD RPC body via RDMA.
-	 */
-	return dc_obj_proto_version > 8 && size >= DAOS_BULK_LIMIT;
-}
-
-static inline size_t
-dc_tx_cpd_adjust_size(size_t size)
-{
-	/* Lower layer (mercury) need some additional space to pack related payload into
-	 * RPC body (or specified buffer) via related proc interfaces, usually that will
-	 * not exceed 1/10 of the payload. We can make some relative large estimation if
-	 * we do not exactly know the real size now.
-	 */
-	return size * 11 / 10;
+	return dc_tx_cpd_adjust_size(size);
 }
 
 static int
@@ -1778,6 +1790,7 @@ dc_tx_cpd_pack_sub_reqs(struct dc_tx *tx, tse_task_t *task, size_t size)
 	int			 rc;
 	int			 i;
 
+again:
 	D_ALLOC(buf, size);
 	if (buf == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
@@ -1798,13 +1811,28 @@ dc_tx_cpd_pack_sub_reqs(struct dc_tx *tx, tse_task_t *task, size_t size)
 	}
 
 	used = crp_proc_get_size_used(tx->tx_crt_proc);
-	D_ASSERTF(used <= size, "Input buffer size %ld is too small for real case %ld\n",
-		  size, used);
+	if (unlikely(used > size)) {
+		D_DEBUG(DB_TRACE, "Former estimated size %ld is too small, enlarge it to %ld\n",
+			size, used);
+		size = used;
 
+		D_GOTO(out, rc = -DER_AGAIN);
+	}
+
+	/* The @buf will be attached to tx->tx_reqs_bulk.dcb_iov and released via dc_tx_cleanup. */
 	rc = dc_tx_cpd_body_bulk(&tx->tx_reqs, &tx->tx_reqs_bulk, task, buf, used, req_cnt,
 				 DCST_BULK_REQ);
 
 out:
+	if (rc != 0) {
+		crt_proc_destroy(tx->tx_crt_proc);
+		tx->tx_crt_proc = NULL;
+		D_FREE(buf);
+
+		if (rc == -DER_AGAIN)
+			goto again;
+	}
+
 	return rc;
 }
 
@@ -2074,7 +2102,6 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	 * Let's try to pack them inline the CPD RPC body firstly.
 	 */
 	size = dc_tx_cpd_sub_reqs_size(tx->tx_req_cache + start, req_cnt);
-	size = dc_tx_cpd_adjust_size(size);
 
 	if (dc_tx_cpd_body_need_bulk(body_size + size)) {
 		rc = dc_tx_cpd_pack_sub_reqs(tx, task, size);
@@ -2278,7 +2305,7 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx, daos_tx_commit_t *args)
 
 	uuid_copy(oci->oci_pool_uuid, tx->tx_pool->dp_pool);
 	oci->oci_map_ver = tx->tx_pm_ver;
-	oci->oci_flags = ORF_CPD_LEADER;
+	oci->oci_flags = ORF_LEADER;
 	if (tx->tx_set_resend && !tx->tx_renew)
 		oci->oci_flags |= ORF_RESEND;
 	tx->tx_renew = 0;
@@ -2607,7 +2634,12 @@ dc_tx_restart(tse_task_t *task)
 			/*
 			 * Reinitialize task with a delay to implement the
 			 * backoff and call dc_tx_restart_end below.
+			 *
+			 * We don't need to get an extra tx reference, because
+			 * the reinitialized task must acquire tx->tx_lock
+			 * first.
 			 */
+			tse_task_set_priv_internal(task, tx);
 			rc = tse_task_reinit_with_delay(task, backoff);
 			if (rc != 0) {
 				/* Skip the backoff. */
@@ -2616,8 +2648,6 @@ dc_tx_restart(tse_task_t *task)
 				goto out_tx_lock;
 			}
 			D_MUTEX_UNLOCK(&tx->tx_lock);
-			/* Pass our tx reference to task. */
-			tse_task_set_priv_internal(task, tx);
 			return 0;
 		}
 
@@ -3501,6 +3531,8 @@ dc_tx_attach(daos_handle_t th, struct dc_object *obj, enum obj_rpc_opc opc, tse_
 				    fe->nr != 1 ? fe->iods : (void *)&fe->iods[0].iod_name);
 		break;
 	}
+	case DAOS_OBJ_RPC_COLL_QUERY:
+		/* Fall through. */
 	case DAOS_OBJ_RPC_QUERY_KEY: {
 		daos_obj_query_key_t	*qu = dc_task_get_args(task);
 		daos_key_t		*dkey;
@@ -3588,9 +3620,9 @@ again:
 	/* dc_tx_restart_begin() will trigger dc_tx_cleanup() internally, let's re-attach. */
 	rc = dc_tx_attach(th, obj, opc, tx->tx_orig_task, *backoff, false);
 
-	D_CDEBUG(rc != 0, DLOG_ERR, DB_IO,
-		 "Restart convert task %p with DTX " DF_DTI ", pm_ver %u, backoff %u: rc = %d\n",
-		 tx->tx_orig_task, DP_DTI(&tx->tx_id), tx->tx_pm_ver, *backoff, rc);
+	DL_CDEBUG(rc != 0, DLOG_ERR, DB_IO, rc,
+		  "Restart convert task %p with DTX " DF_DTI ", pm_ver %u, backoff %u",
+		  tx->tx_orig_task, DP_DTI(&tx->tx_id), tx->tx_pm_ver, *backoff);
 
 	if (unlikely(rc == -DER_TX_RESTART))
 		goto again;

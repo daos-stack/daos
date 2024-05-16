@@ -47,7 +47,7 @@ limit the number of event queue being created in their applications or IO middle
 top of DAOS. Alternatively, an event can be created without an event queue, and be tracked
 individually. In this case, and for blocking operations, an internal global task scheduler and
 network context is used instead for the independent ones that would be created for an event
-queue. Once an event is completed, it can re-used for another DAOS API call to minimize the need for
+queue. Once an event is completed, it can be reused for another DAOS API call to minimize the need for
 event creation and allocations inside the DAOS library.
 
 ## Task Engine Integration

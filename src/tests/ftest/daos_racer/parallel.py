@@ -6,8 +6,8 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 from apricot import TestWithServers
-from exception_utils import CommandFailure
 from daos_racer_utils import DaosRacerCommand
+from exception_utils import CommandFailure
 
 
 class DaosRacerParallelTest(TestWithServers):

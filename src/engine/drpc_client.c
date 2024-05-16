@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -155,7 +155,7 @@ dss_drpc_call(int32_t module, int32_t method, void *req, size_t req_size,
 
 /* Notify daos_server that we are ready (e.g., to receive dRPC requests). */
 int
-drpc_notify_ready(void)
+drpc_notify_ready(bool check_mode)
 {
 	Srv__NotifyReadyReq	req = SRV__NOTIFY_READY_REQ__INIT;
 	uint8_t		       *reqb;
@@ -177,6 +177,7 @@ drpc_notify_ready(void)
 	req.drpclistenersock = drpc_listener_socket_path;
 	req.instanceidx = dss_instance_idx;
 	req.ntgts = dss_tgt_nr;
+	req.check_mode = check_mode;
 
 	reqb_size = srv__notify_ready_req__get_packed_size(&req);
 	D_ALLOC(reqb, reqb_size);
@@ -200,56 +201,6 @@ out_reqb:
 out_uri:
 	D_FREE(req.uri);
 out:
-	return rc;
-}
-
-/*
- * Notify daos_server that there has been a I/O error. This function doesn't
- * Argobots-schedule.
- */
-int
-ds_notify_bio_error(int media_err_type, int tgt_id)
-{
-	Srv__BioErrorReq	 bioerr_req = SRV__BIO_ERROR_REQ__INIT;
-	uint8_t			*req;
-	size_t			 req_size;
-	int			 rc;
-
-	rc = crt_self_uri_get(0 /* tag */, &bioerr_req.uri);
-	if (rc != 0)
-		return rc;
-
-	/* TODO: add checksum error */
-	if (media_err_type == MET_UNMAP)
-		bioerr_req.unmaperr = true;
-	else if (media_err_type == MET_WRITE)
-		bioerr_req.writeerr = true;
-	else if (media_err_type == MET_READ)
-		bioerr_req.readerr = true;
-	bioerr_req.tgtid = tgt_id;
-	bioerr_req.instanceidx = dss_instance_idx;
-	bioerr_req.drpclistenersock = drpc_listener_socket_path;
-
-	req_size = srv__bio_error_req__get_packed_size(&bioerr_req);
-	D_ALLOC(req, req_size);
-	if (req == NULL)
-		D_GOTO(out_uri, rc = -DER_NOMEM);
-	srv__bio_error_req__pack(&bioerr_req, req);
-
-	/*
-	 * Do not wait for the response, so that we don't Argobots-schedule or
-	 * pthread-block.
-	 */
-	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_BIO_ERR, req,
-			   req_size, DSS_DRPC_NO_RESP, NULL /* resp */);
-	if (rc != 0)
-		goto out_req;
-
-out_req:
-	D_FREE(req);
-out_uri:
-	D_FREE(bioerr_req.uri);
-
 	return rc;
 }
 
@@ -387,11 +338,10 @@ ds_pool_find_bylabel(d_const_string_t label, uuid_t pool_uuid,
 		D_GOTO(out_resp, rc = frsp->status);
 	}
 
-	rc = uuid_parse(frsp->uuid, pool_uuid);
-	if (rc != 0) {
-		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", frsp->uuid,
-			DP_RC(rc));
-		D_GOTO(out_resp, rc = -DER_IO);
+	if (uuid_parse(frsp->uuid, pool_uuid) != 0) {
+		rc = -DER_IO;
+		DL_ERROR(rc, "Pool UUID is invalid");
+		goto out_resp;
 	}
 
 	ranks = uint32_array_to_rank_list(frsp->svcreps,

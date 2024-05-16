@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,8 +7,10 @@
 #include <errno.h>
 #include <getopt.h>
 #include <dlfcn.h>
+#include <fcntl.h>
 #include <fuse3/fuse.h>
 #include <fuse3/fuse_lowlevel.h>
+#include <string.h>
 
 #include <sys/types.h>
 #include <hwloc.h>
@@ -17,9 +19,9 @@
 
 #include "dfuse.h"
 
-#include "daos_fs.h"
-#include "daos_api.h"
-#include "daos_uns.h"
+#include <daos_fs.h>
+#include <daos_api.h>
+#include <daos_uns.h>
 
 #include <gurt/common.h>
 /* Signal handler for SIGCHLD, it doesn't need to do anything, but it's
@@ -169,12 +171,13 @@ dfuse_bg(struct dfuse_info *dfuse_info)
 int
 dfuse_launch_fuse(struct dfuse_info *dfuse_info, struct fuse_args *args)
 {
-	int rc;
+	int       rc;
 
-	dfuse_info->di_session = fuse_session_new(args, &dfuse_ops, sizeof(dfuse_ops), dfuse_info);
+	dfuse_info->di_session = dfuse_session_new(args, dfuse_info);
 	if (dfuse_info->di_session == NULL) {
-		DFUSE_TRA_ERROR(dfuse_info, "Could not create fuse session");
-		return -DER_INVAL;
+		rc = -DER_INVAL;
+		DHL_ERROR(dfuse_info, rc, "Could not create fuse session");
+		return rc;
 	}
 
 	/* This is used by the fault injection testing to simulate starting dfuse and test the
@@ -192,6 +195,10 @@ dfuse_launch_fuse(struct dfuse_info *dfuse_info, struct fuse_args *args)
 		return -DER_INVAL;
 	}
 
+	rc = ival_thread_start(dfuse_info);
+	if (rc != 0)
+		D_GOTO(umount, rc = daos_errno2der(rc));
+
 	rc = dfuse_send_to_fg(0);
 	if (rc != -DER_SUCCESS)
 		DFUSE_TRA_ERROR(dfuse_info, "Error sending signal to fg: "DF_RC, DP_RC(rc));
@@ -202,8 +209,9 @@ dfuse_launch_fuse(struct dfuse_info *dfuse_info, struct fuse_args *args)
 	else
 		rc = fuse_session_loop(dfuse_info->di_session);
 	if (rc != 0)
-		DFUSE_TRA_ERROR(dfuse_info,
-				"Fuse loop exited with return code: %d (%s)", rc, strerror(rc));
+		DHS_ERROR(dfuse_info, rc, "Fuse loop exited");
+
+umount:
 
 	fuse_session_unmount(dfuse_info->di_session);
 
@@ -212,23 +220,37 @@ dfuse_launch_fuse(struct dfuse_info *dfuse_info, struct fuse_args *args)
 
 #define DF_POOL_PREFIX "pool="
 #define DF_CONT_PREFIX "container="
+#define DF_RO          "ro"
+#define DF_MULTI       "multi_user"
 
 /* Extract options for pool and container from fstab style mount options. */
 static void
-parse_mount_option(char *mnt_string, char *pool_name, char *cont_name)
+parse_mount_option(char *mnt_string, struct dfuse_info *dfuse_info, char *pool_name,
+		   char *cont_name)
 {
-	char *tok;
+	char *tok = NULL;
 	char *token;
 
 	while ((token = strtok_r(mnt_string, ",", &tok))) {
 		mnt_string = NULL;
 
+		if (strncmp(token, DF_RO, sizeof(DF_RO) - 1) == 0) {
+			dfuse_info->di_read_only = true;
+			break;
+		}
+		if (strncmp(token, DF_MULTI, sizeof(DF_MULTI) - 1) == 0) {
+			dfuse_info->di_multi_user = true;
+			break;
+		}
 		if (strncmp(token, DF_POOL_PREFIX, sizeof(DF_POOL_PREFIX) - 1) == 0) {
 			strncpy(pool_name, &token[sizeof(DF_POOL_PREFIX) - 1],
 				DAOS_PROP_LABEL_MAX_LEN);
-		} else if (strncmp(token, DF_CONT_PREFIX, sizeof(DF_CONT_PREFIX) - 1) == 0) {
+			break;
+		}
+		if (strncmp(token, DF_CONT_PREFIX, sizeof(DF_CONT_PREFIX) - 1) == 0) {
 			strncpy(cont_name, &token[sizeof(DF_CONT_PREFIX) - 1],
 				DAOS_PROP_LABEL_MAX_LEN);
+			break;
 		}
 	}
 }
@@ -239,9 +261,7 @@ show_version(char *name)
 	fprintf(stdout, "%s version %s, libdaos %d.%d.%d\n", name, DAOS_VERSION,
 		DAOS_API_VERSION_MAJOR, DAOS_API_VERSION_MINOR, DAOS_API_VERSION_FIX);
 	fprintf(stdout, "Using fuse %s\n", fuse_pkgversion());
-#if HAVE_CACHE_READDIR
 	fprintf(stdout, "Kernel readdir support enabled\n");
-#endif
 };
 
 static void
@@ -259,7 +279,7 @@ show_help(char *name)
 	    "	   --path=<path>	Path to load UNS pool/container data\n"
 	    "	   --sys-name=STR	DAOS system name context for servers\n"
 	    "\n"
-	    "	-S --singlethread	Single threaded\n"
+	    "	-S --singlethread	Single threaded (deprecated)\n"
 	    "	-t --thread-count=count	Total number of threads to use\n"
 	    "	-e --eq-count=count	Number of event queues to use\n"
 	    "	-f --foreground		Run in foreground\n"
@@ -270,6 +290,7 @@ show_help(char *name)
 	    "	-o options		mount style options string\n"
 	    "\n"
 	    "	   --multi-user		Run dfuse in multi user mode\n"
+	    "	   --read-only		Mount dfuse read-only\n"
 	    "\n"
 	    "	-h --help		Show this help\n"
 	    "	-v --version		Show version\n"
@@ -280,7 +301,7 @@ show_help(char *name)
 	    "Alternatively, the mountpoint directory can also be specified with the -m or\n"
 	    "--mountpoint= option but this usage is deprecated.\n"
 	    "\n"
-	    "The DAOS pool and container can be specified in several different ways"
+	    "The DAOS pool and container can be specified in several different ways\n"
 	    "(only one way of specifying the pool and container should be used):\n"
 	    "* The DAOS pool and container can be explicitly specified on the command line\n"
 	    "  as positional arguments, using either UUIDs or labels. This is the most\n"
@@ -311,20 +332,22 @@ show_help(char *name)
 	    "\n"
 	    "Threading and resource usage:\n"
 	    "dfuse has two types of threads: fuse threads which accept and process requests from\n"
-	    "the kernel, and progress threads which complete asynchronous read/write operations.\n"
+	    "the kernel, and progress threads which complete asynchronous read/write and some\n"
+	    "metadata operations.\n"
 	    "Each asynchronous progress thread uses one DAOS event queue to consume additional\n"
 	    "network resources. As all metadata operations are blocking, the level of concurrency\n"
 	    "in dfuse is limited by the number of fuse threads.\n"
-	    "By default, the total thread count is one per available core to allow maximum\n"
-	    "throughput. If hyperthreading is enabled, then one thread per hyperthread core\n"
-	    "is used. This can be modified in two ways: Reducing the number of available\n"
-	    "cores by running dfuse in a cpuset via numactl or similar tools,\n"
+	    "By default, the total thread count is controlled by the number available cores,\n"
+	    "if dfuse is not restricted via a cpuset it will use a maximum of 16 cores, however\n"
+	    "if a cpuset is active it will use the entire cpuset\n"
+	    "If hyperthreading is enabled, then one thread per hyperthread core is used. This can\n"
+	    "be modified in two ways: Reducing the number of available cores by running dfuse in\n"
+	    "a cpuset via numactl or similar tools,\n"
 	    "or by using the --thread-count, --eq-count or --singlethread options:\n"
 	    "* The --thread-count option controls the total number of threads.\n"
 	    "* Increasing the --eq-count option at a fixed --thread-count will reduce the number\n"
 	    "  of fuse threads accordingly. The default value for --eq-count is 1.\n"
-	    "* The --singlethread mode will use one thread for handling fuse requests and a\n"
-	    "  second thread for a single event queue, for a total of two threads.\n"
+	    "dfuse will also always run one main thread and one invalidation thread\n"
 	    "\n"
 	    "If dfuse is running in background mode (the default unless launched via mpirun)\n"
 	    "then it will stay in the foreground until the mount is registered with the\n"
@@ -349,6 +372,35 @@ show_help(char *name)
 	    name, DAOS_VERSION);
 }
 
+/*
+ * Checks whether a mountpoint path is a valid file descriptor.
+ *
+ * Returns the file descriptor on success, -1 on failure.
+ */
+static int
+check_fd_mountpoint(const char *mountpoint)
+{
+	int fd  = -1;
+	int len = 0;
+	int fd_flags;
+	int res;
+
+	res = sscanf(mountpoint, "/dev/fd/%u%n", &fd, &len);
+	if (res != 1) {
+		return -1;
+	}
+	if (len != strnlen(mountpoint, NAME_MAX)) {
+		return -1;
+	}
+
+	fd_flags = fcntl(fd, F_GETFD);
+	if (fd_flags == -1) {
+		return -1;
+	}
+
+	return fd;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -356,7 +408,6 @@ main(int argc, char **argv)
 	struct dfuse_pool *dfp                                    = NULL;
 	struct dfuse_cont *dfs                                    = NULL;
 	struct duns_attr_t duns_attr                              = {};
-	uuid_t             cont_uuid                              = {};
 	char               pool_name[DAOS_PROP_LABEL_MAX_LEN + 1] = {};
 	char               cont_name[DAOS_PROP_LABEL_MAX_LEN + 1] = {};
 	int                c;
@@ -380,10 +431,13 @@ main(int argc, char **argv)
 					     {"enable-wb-cache", no_argument, 0, 'F'},
 					     {"disable-caching", no_argument, 0, 'A'},
 					     {"disable-wb-cache", no_argument, 0, 'B'},
+					     {"read-only", no_argument, 0, 'r'},
 					     {"options", required_argument, 0, 'o'},
 					     {"version", no_argument, 0, 'v'},
 					     {"help", no_argument, 0, 'h'},
 					     {0, 0, 0, 0}};
+
+	d_signal_stack_enable(true);
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
@@ -399,7 +453,7 @@ main(int argc, char **argv)
 	dfuse_info->di_eq_count = 1;
 
 	while (1) {
-		c = getopt_long(argc, argv, "Mm:St:o:fhv", long_options, NULL);
+		c = getopt_long(argc, argv, "Mm:St:o:fhe:v", long_options, NULL);
 
 		if (c == -1)
 			break;
@@ -454,8 +508,11 @@ main(int argc, char **argv)
 		case 'f':
 			dfuse_info->di_foreground = true;
 			break;
+		case 'r':
+			dfuse_info->di_read_only = true;
+			break;
 		case 'o':
-			parse_mount_option(optarg, pool_name, cont_name);
+			parse_mount_option(optarg, dfuse_info, pool_name, cont_name);
 			break;
 		case 'h':
 			show_help(argv[0]);
@@ -491,7 +548,7 @@ main(int argc, char **argv)
 		}
 	}
 
-	if (!dfuse_info->di_foreground && getenv("PMIX_RANK")) {
+	if (!dfuse_info->di_foreground && d_isenv_def("PMIX_RANK")) {
 		DFUSE_TRA_WARNING(dfuse_info,
 				  "Not running in background under orterun");
 		dfuse_info->di_foreground = true;
@@ -584,8 +641,7 @@ main(int argc, char **argv)
 		}
 
 		rc = duns_resolve_path(path, &path_attr);
-		DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() on path: %d (%s)", rc,
-			       strerror(rc));
+		DHS_INFO(dfuse_info, rc, "duns_resolve_path() on path");
 		if (rc == ENOENT) {
 			printf("Attr path does not exist\n");
 			D_GOTO(out_daos, rc = daos_errno2der(rc));
@@ -629,8 +685,18 @@ main(int argc, char **argv)
 		duns_destroy_attr(&duns_attr);
 
 	} else if (rc == ENOENT) {
-		printf("Mount point does not exist\n");
-		D_GOTO(out_daos, rc = daos_errno2der(rc));
+		/* In order to allow FUSE daemons to run without privileges, libfuse
+		 * allows the caller to open /dev/fuse and pass the file descriptor by
+		 * specifying /dev/fd/N as the mountpoint. In some cases, realpath may
+		 * fail for these paths.
+		 */
+		int fd = check_fd_mountpoint(dfuse_info->di_mountpoint);
+		if (fd < 0) {
+			DFUSE_TRA_WARNING(dfuse_info, "Mount point is not a valid file descriptor");
+			printf("Mount point does not exist\n");
+			D_GOTO(out_daos, rc = daos_errno2der(rc));
+		}
+		DFUSE_LOG_INFO("Mounting FUSE file descriptor %d", fd);
 	} else if (rc == ENOTCONN) {
 		printf("Stale mount point, run fusermount3 and retry\n");
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
@@ -640,17 +706,14 @@ main(int argc, char **argv)
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
 	}
 
-	/* Connect to a pool. */
-	rc = dfuse_pool_connect(dfuse_info, pool_name, &dfp);
+	/* Connect to a pool */
+	rc = dfuse_pool_connect(dfuse_info, pool_name[0] ? pool_name : NULL, &dfp);
 	if (rc != 0) {
 		printf("Failed to connect to pool: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
 	}
 
-	if (cont_name[0] && uuid_parse(cont_name, cont_uuid) < 0)
-		rc = dfuse_cont_open_by_label(dfuse_info, dfp, cont_name, &dfs);
-	else
-		rc = dfuse_cont_open(dfuse_info, dfp, &cont_uuid, &dfs);
+	rc = dfuse_cont_open(dfuse_info, dfp, cont_name[0] ? cont_name : NULL, &dfs);
 	if (rc != 0) {
 		printf("Failed to connect to container: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(out_pool, rc = daos_errno2der(rc));
@@ -674,15 +737,19 @@ main(int argc, char **argv)
 	fuse_session_destroy(dfuse_info->di_session);
 	goto out_fini;
 out_cont:
-	d_hash_rec_decref(&dfp->dfp_cont_table, &dfs->dfs_entry);
+	d_hash_rec_decref(dfp->dfp_cont_table, &dfs->dfs_entry);
 out_pool:
+	dfuse_info->di_shutdown = true;
 	d_hash_rec_decref(&dfuse_info->di_pool_table, &dfp->dfp_entry);
 out_daos:
+	ival_thread_stop();
+	ival_fini();
+
 	rc2 = dfuse_fs_fini(dfuse_info);
 	if (rc == -DER_SUCCESS)
 		rc = rc2;
 out_fini:
-	if (dfuse_info) {
+	if (dfuse_info && rc == -DER_SUCCESS) {
 		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_inode_count) == 0);
 		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_fh_count) == 0);
 		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_pool_count) == 0);
@@ -693,7 +760,7 @@ out_fini:
 	daos_fini();
 out_debug:
 	D_FREE(dfuse_info);
-	DFUSE_LOG_INFO("Exiting with status %d", rc);
+	DL_INFO(rc, "Exiting with status");
 	daos_debug_fini();
 out:
 	dfuse_send_to_fg(rc);

@@ -3,16 +3,15 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
 import os
 import threading
+import time
 
 from ClusterShell.NodeSet import NodeSet
-
+from command_utils_base import CommandFailure
+from general_utils import report_errors
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
-from general_utils import report_errors
-from command_utils_base import CommandFailure
 from job_manager_utils import get_job_manager
 from run_utils import stop_processes
 
@@ -46,7 +45,7 @@ class ServerRankFailure(IorTestBase):
         ior_cmd.get_params(self)
 
         # Standard IOR prep sequence.
-        ior_cmd.set_daos_params(self.server_group, pool, container.identifier)
+        ior_cmd.set_daos_params(pool, container.identifier)
         ior_cmd.update_params(test_file=os.path.join(os.sep, file_name))
 
         manager = get_job_manager(

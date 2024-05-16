@@ -4,13 +4,13 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 
-import os
 import copy
+import os
 import sys
 
-from storage_estimator.vos_structures import VosObject, AKey, DKey, Container, \
-    VosValue, Overhead, ValType, KeyType
 from storage_estimator.util import CommonBase, ObjectClass
+from storage_estimator.vos_structures import (AKey, Container, DKey, KeyType, Overhead, ValType,
+                                              VosObject, VosValue)
 
 
 class FileInfo():

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -26,6 +26,7 @@
 #include <daos_srv/smd.h>
 #include <daos_srv/vos.h>
 #include <gurt/list.h>
+#include <gurt/telemetry_producer.h>
 #include "drpc_internal.h"
 #include "srv_internal.h"
 
@@ -74,6 +75,10 @@
 #define DRPC_XS_NR	(1)
 /** Number of offload XS */
 unsigned int	dss_tgt_offload_xs_nr;
+/** Number of offload per socket */
+unsigned int            dss_offload_per_numa_nr;
+/** Number of target per socket */
+unsigned int            dss_tgt_per_numa_nr;
 /** Number of target (XS set) per engine */
 unsigned int	dss_tgt_nr;
 /** Number of system XS */
@@ -276,6 +281,11 @@ dss_rpc_hdlr(crt_context_t *ctx, void *hdlr_arg,
 
 	if (DAOS_FAIL_CHECK(DAOS_FAIL_LOST_REQ))
 		return 0;
+
+	rc = crt_req_get_timeout(rpc, &attr.sra_timeout);
+	D_ASSERT(rc == 0);
+	/* convert it to msec */
+	attr.sra_timeout *= 1000;
 	/*
 	 * The mod_id for the RPC originated from CART is 0xfe, and 'module'
 	 * will be NULL for this case.
@@ -289,7 +299,20 @@ dss_rpc_hdlr(crt_context_t *ctx, void *hdlr_arg,
 		attr.sra_type = SCHED_REQ_ANONYM;
 	}
 
-	return sched_req_enqueue(dx, &attr, real_rpc_hdlr, rpc);
+	rc = sched_req_enqueue(dx, &attr, real_rpc_hdlr, rpc);
+	if (rc != -DER_OVERLOAD_RETRY)
+		return rc;
+
+	if (module != NULL && module->sm_mod_ops != NULL &&
+	    module->sm_mod_ops->dms_set_req != NULL) {
+		rc = module->sm_mod_ops->dms_set_req(rpc, &attr);
+		if (rc == -DER_OVERLOAD_RETRY)
+			return crt_reply_send(rpc);
+	}
+	/*
+	 * No RPC protocol to return hint, just return timeout.
+	 */
+	return -DER_TIMEDOUT;
 }
 
 static void
@@ -353,6 +376,7 @@ wait_all_exited(struct dss_xstream *dx, struct dss_module_info *dmi)
 	D_DEBUG(DB_TRACE, "XS(%d) drained ULTs.\n", dx->dx_xs_id);
 }
 
+#define D_MEMORY_TRACK_ENV "D_MEMORY_TRACK"
 /*
  * The server handler ULT first sets CPU affinity, initialize the per-xstream
  * TLS, CRT(comm) context, NVMe context, creates the long-run ULTs (GC & NVMe
@@ -362,15 +386,22 @@ wait_all_exited(struct dss_xstream *dx, struct dss_module_info *dmi)
 static void
 dss_srv_handler(void *arg)
 {
-	struct dss_xstream		*dx = (struct dss_xstream *)arg;
-	struct dss_thread_local_storage	*dtc;
-	struct dss_module_info		*dmi;
+	struct dss_xstream               *dx = (struct dss_xstream *)arg;
+	struct daos_thread_local_storage *dtc;
+	struct dss_module_info           *dmi;
 	int				 rc;
+	bool				 track_mem = false;
 	bool				 signal_caller = true;
+	bool				 with_chore_queue = dx->dx_iofw && !dx->dx_main_xs;
 
 	rc = dss_xstream_set_affinity(dx);
 	if (rc)
 		goto signal;
+
+	d_getenv_bool(D_MEMORY_TRACK_ENV, &track_mem);
+	if (unlikely(track_mem))
+		d_set_alloc_track_cb(dss_mem_total_alloc_track, dss_mem_total_free_track,
+				     &dx->dx_mem_stats);
 
 	/* initialize xstream-local storage */
 	dtc = dss_tls_init(dx->dx_tag, dx->dx_xs_id, dx->dx_tgt_id);
@@ -492,6 +523,16 @@ dss_srv_handler(void *arg)
 		}
 	}
 
+	if (with_chore_queue) {
+		rc = dss_chore_queue_start(dx);
+		if (rc != 0) {
+			DL_ERROR(rc, "failed to start chore queue");
+			ABT_future_set(dx->dx_shutdown, dx);
+			wait_all_exited(dx, dmi);
+			goto nvme_fini;
+		}
+	}
+
 	dmi->dmi_xstream = dx;
 	ABT_mutex_lock(xstream_data.xd_mutex);
 	/* initialized everything for the ULT, notify the creator */
@@ -537,6 +578,9 @@ dss_srv_handler(void *arg)
 
 	if (dx->dx_comm)
 		dx->dx_progress_started = false;
+
+	if (with_chore_queue)
+		dss_chore_queue_stop(dx);
 
 	wait_all_exited(dx, dmi);
 	if (dmi->dmi_dp) {
@@ -643,6 +687,46 @@ dss_xstream_free(struct dss_xstream *dx)
 	D_FREE(dx);
 }
 
+static void
+dss_mem_stats_init(struct mem_stats *stats, int xs_id)
+{
+	int rc;
+
+	rc = d_tm_add_metric(&stats->ms_total_usage, D_TM_GAUGE,
+			     "Total memory usage", "byte", "mem/total_mem/xs_%u", xs_id);
+	if (rc)
+		D_WARN("Failed to create memory telemetry: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&stats->ms_mallinfo, D_TM_MEMINFO,
+			     "Total memory arena", "", "mem/meminfo/xs_%u", xs_id);
+	if (rc)
+		D_WARN("Failed to create memory telemetry: "DF_RC"\n", DP_RC(rc));
+	stats->ms_current = 0;
+}
+
+void
+dss_mem_total_alloc_track(void *arg, daos_size_t bytes)
+{
+	struct mem_stats *stats = arg;
+
+	D_ASSERT(arg != NULL);
+
+	d_tm_inc_gauge(stats->ms_total_usage, bytes);
+	/* Only retrieve mallocinfo every 10 allocation */
+	if ((stats->ms_current++ % 10) == 0)
+		d_tm_record_meminfo(stats->ms_mallinfo);
+}
+
+void
+dss_mem_total_free_track(void *arg, daos_size_t bytes)
+{
+	struct mem_stats *stats = arg;
+
+	D_ASSERT(arg != NULL);
+
+	d_tm_dec_gauge(stats->ms_total_usage, bytes);
+}
+
 /**
  * Start one xstream.
  *
@@ -707,6 +791,8 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int tag, int xs_id)
 	} else {
 		dx->dx_main_xs	= (xs_id >= dss_sys_xs_nr) && (xs_offset == 0);
 	}
+	/* See the DSS_XS_IOFW case in sched_ult2xs. */
+	dx->dx_iofw = xs_id >= dss_sys_xs_nr && (!dx->dx_main_xs || dss_tgt_offload_xs_nr == 0);
 	dx->dx_dsc_started = false;
 
 	/**
@@ -735,12 +821,20 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int tag, int xs_id)
 		D_GOTO(out_dx, rc);
 	}
 
+	rc = dss_chore_queue_init(dx);
+	if (rc != 0) {
+		DL_ERROR(rc, "initialize chore queue fails");
+		goto out_sched;
+	}
+
+	dss_mem_stats_init(&dx->dx_mem_stats, xs_id);
+
 	/** start XS, ABT rank 0 is reserved for the primary xstream */
 	rc = ABT_xstream_create_with_rank(dx->dx_sched, xs_id + 1,
 					  &dx->dx_xstream);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("create xstream fails %d\n", rc);
-		D_GOTO(out_sched, rc = dss_abterr2der(rc));
+		D_GOTO(out_chore_queue, rc = dss_abterr2der(rc));
 	}
 
 	rc = ABT_thread_attr_create(&attr);
@@ -789,6 +883,8 @@ out_xstream:
 		ABT_thread_attr_free(&attr);
 	ABT_xstream_join(dx->dx_xstream);
 	ABT_xstream_free(&dx->dx_xstream);
+out_chore_queue:
+	dss_chore_queue_fini(dx);
 out_sched:
 	dss_sched_fini(dx);
 out_dx:
@@ -848,6 +944,7 @@ dss_xstreams_fini(bool force)
 		dx = xstream_data.xd_xs_ptrs[i];
 		if (dx == NULL)
 			continue;
+		dss_chore_queue_fini(dx);
 		dss_sched_fini(dx);
 		dss_xstream_free(dx);
 		xstream_data.xd_xs_ptrs[i] = NULL;
@@ -889,37 +986,58 @@ static int
 dss_start_xs_id(int tag, int xs_id)
 {
 	hwloc_obj_t	obj;
+	int                   tgt;
 	int		rc;
 	int		xs_core_offset;
-	unsigned	idx;
+	unsigned int          idx;
 	char		*cpuset;
+	struct dss_numa_info *ninfo;
+	bool                  clear = false;
 
-	D_DEBUG(DB_TRACE, "start xs_id called for %d.  ", xs_id);
+	D_DEBUG(DB_TRACE, "start xs_id called for %d.\n", xs_id);
 	/* if we are NUMA aware, use the NUMA information */
-	if (numa_obj) {
-		idx = hwloc_bitmap_first(core_allocation_bitmap);
+	if (dss_numa) {
+		if (dss_numa_node == -1) {
+			tgt = dss_xs2tgt(xs_id);
+			if (xs_id == 1) {
+				/** Put swim on first core of numa 1, core 0 */
+				ninfo = &dss_numa[1];
+			} else if (tgt != -1) {
+				/** Split I/O targets evenly among numa nodes */
+				ninfo = &dss_numa[tgt / dss_tgt_per_numa_nr];
+			} else if (xs_id > 2) {
+				/** Split helper xstreams evenly among numa nodes */
+				tgt   = xs_id - dss_sys_xs_nr - dss_tgt_nr;
+				ninfo = &dss_numa[tgt / dss_offload_per_numa_nr];
+			} else {
+				/** Put the system and DRPC on numa 0, core 0 */
+				ninfo = &dss_numa[0];
+			}
+
+			D_DEBUG(DB_TRACE, "Using numa node %d for XS %d\n", ninfo->ni_idx, xs_id);
+
+			if (xs_id != 0)
+				clear = true;
+		} else {
+			ninfo = &dss_numa[dss_numa_node];
+			if (xs_id > 1 || (xs_id == 0 && dss_core_nr > dss_tgt_nr))
+				clear = true;
+		}
+
+		idx = hwloc_bitmap_first(ninfo->ni_coremap);
 		if (idx == -1) {
 			D_ERROR("No core available for XS: %d\n", xs_id);
 			return -DER_INVAL;
 		}
-		D_DEBUG(DB_TRACE,
-			"Choosing next available core index %d.", idx);
+		D_DEBUG(DB_TRACE, "Choosing next available core index %d on numa %d.\n", idx,
+			ninfo->ni_idx);
 		/*
 		 * All system XS will reuse the first XS' core, but
 		 * the SWIM and DRPC XS will use separate core if enough cores
 		 */
-		if (xs_id > 1 || (xs_id == 0 && dss_core_nr > dss_tgt_nr))
-			hwloc_bitmap_clr(core_allocation_bitmap, idx);
+		if (clear)
+			hwloc_bitmap_clr(ninfo->ni_coremap, idx);
 
-		obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, idx);
-		if (obj == NULL) {
-			D_PRINT("Null core returned by hwloc\n");
-			return -DER_INVAL;
-		}
-
-		hwloc_bitmap_asprintf(&cpuset, obj->cpuset);
-		D_DEBUG(DB_TRACE, "Using CPU set %s\n", cpuset);
-		free(cpuset);
 	} else {
 		D_DEBUG(DB_TRACE, "Using non-NUMA aware core allocation\n");
 		/*
@@ -932,14 +1050,19 @@ dss_start_xs_id(int tag, int xs_id)
 			xs_core_offset = (dss_core_nr > dss_tgt_nr) ? 1 : 0;
 		else
 			xs_core_offset = 0;
-		obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth,
-					     (xs_core_offset + dss_core_offset)
-					     % dss_core_nr);
-		if (obj == NULL) {
-			D_ERROR("Null core returned by hwloc for XS %d\n",
-				xs_id);
-			return -DER_INVAL;
-		}
+		idx = (xs_core_offset + dss_core_offset) % dss_core_nr;
+	}
+
+	obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, idx);
+	if (obj == NULL) {
+		D_PRINT("Null core returned by hwloc\n");
+		return -DER_INVAL;
+	}
+
+	if (D_LOG_ENABLED(DB_TRACE)) {
+		hwloc_bitmap_asprintf(&cpuset, obj->cpuset);
+		D_DEBUG(DB_TRACE, "Using CPU set %s for XS %d\n", cpuset, xs_id);
+		free(cpuset);
 	}
 
 	rc = dss_start_one_xstream(obj->cpuset, tag, xs_id);
@@ -969,7 +1092,7 @@ dss_xstreams_init(void)
 		D_INFO("ULT mmap()'ed stack allocation is disabled.\n");
 #endif
 
-	d_getenv_int("DAOS_SCHED_RELAX_INTVL", &sched_relax_intvl);
+	d_getenv_uint("DAOS_SCHED_RELAX_INTVL", &sched_relax_intvl);
 	if (sched_relax_intvl == 0 ||
 	    sched_relax_intvl > SCHED_RELAX_INTVL_MAX) {
 		D_WARN("Invalid relax interval %u, set to default %u msecs.\n",
@@ -980,18 +1103,19 @@ dss_xstreams_init(void)
 		       sched_relax_intvl);
 	}
 
-	env = getenv("DAOS_SCHED_RELAX_MODE");
+	d_agetenv_str(&env, "DAOS_SCHED_RELAX_MODE");
 	if (env) {
 		sched_relax_mode = sched_relax_str2mode(env);
 		if (sched_relax_mode == SCHED_RELAX_MODE_INVALID) {
 			D_WARN("Invalid relax mode [%s]\n", env);
 			sched_relax_mode = SCHED_RELAX_MODE_NET;
 		}
+		d_freeenv_str(&env);
 	}
 	D_INFO("CPU relax mode is set to [%s]\n",
 	       sched_relax_mode2str(sched_relax_mode));
 
-	d_getenv_int("DAOS_SCHED_UNIT_RUNTIME_MAX", &sched_unit_runtime_max);
+	d_getenv_uint("DAOS_SCHED_UNIT_RUNTIME_MAX", &sched_unit_runtime_max);
 	d_getenv_bool("DAOS_SCHED_WATCHDOG_ALL", &sched_watchdog_all);
 
 	/* start the execution streams */
@@ -1000,9 +1124,8 @@ dss_xstreams_init(void)
 		dss_core_nr, dss_tgt_nr);
 
 	if (dss_numa_node != -1) {
-		D_DEBUG(DB_TRACE,
-			"Detected %d cores on NUMA node %d\n",
-			dss_num_cores_numa_node, dss_numa_node);
+		D_DEBUG(DB_TRACE, "Detected %d cores on NUMA node %d\n",
+			dss_numa[dss_numa_node].ni_core_nr, dss_numa_node);
 	}
 
 	xstream_data.xd_xs_nr = DSS_XS_NR_TOTAL;
@@ -1146,12 +1269,12 @@ dss_acc_offload(struct dss_acc_task *at_args)
 	return rc;
 }
 
-/*
+/**
  * Set parameters on the server.
  *
- * param key_id [IN]		key id
- * param value [IN]		the value of the key.
- * param value_extra [IN]	the extra value of the key.
+ * \param[in] key_id		key id
+ * \param[in] value		the value of the key.
+ * \param[in] value_extra	the extra value of the key.
  *
  * return	0 if setting succeeds.
  *              negative errno if fails.
@@ -1224,7 +1347,7 @@ dss_srv_fini(bool force)
 		vos_standalone_tls_fini();
 		/* fall through */
 	case XD_INIT_TLS_REG:
-		pthread_key_delete(dss_tls_key);
+		ds_tls_key_delete();
 		/* fall through */
 	case XD_INIT_ULT_BARRIER:
 		ABT_cond_free(&xstream_data.xd_ult_barrier);
@@ -1321,7 +1444,7 @@ dss_srv_init(void)
 	xstream_data.xd_init_step = XD_INIT_ULT_BARRIER;
 
 	/* register xstream-local storage key */
-	rc = pthread_key_create(&dss_tls_key, NULL);
+	rc = ds_tls_key_create();
 	if (rc) {
 		rc = dss_abterr2der(rc);
 		D_ERROR("Failed to register storage key: "DF_RC"\n", DP_RC(rc));

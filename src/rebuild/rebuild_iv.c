@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -98,8 +98,9 @@ rebuild_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	d_rank_t	  rank;
 	int		  rc;
 
-	D_DEBUG(DB_REBUILD, "rank %d master rank %d\n", src_iv->riv_rank,
-		src_iv->riv_master_rank);
+	D_DEBUG(DB_REBUILD, "rank %d master rank %d term "DF_U64" gen %u dtx resync %u\n",
+		src_iv->riv_rank, src_iv->riv_master_rank, src_iv->riv_leader_term,
+		src_iv->riv_rebuild_gen, src_iv->riv_dtx_resyc_version);
 
 	if (src_iv->riv_master_rank == -1)
 		return -DER_NOTLEADER;
@@ -168,15 +169,13 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	struct rebuild_iv *src_iv = src->sg_iovs[0].iov_buf;
 	int rc = 0;
 
-	rpt = rpt_lookup(src_iv->riv_pool_uuid, src_iv->riv_ver,
+	rpt = rpt_lookup(src_iv->riv_pool_uuid, -1, src_iv->riv_ver,
 			 src_iv->riv_rebuild_gen);
 	if (rpt == NULL)
 		return 0;
 
-	if (rpt->rt_leader_term != src_iv->riv_leader_term) {
-		rpt_put(rpt);
-		return 0;
-	}
+	if (rpt->rt_leader_term != src_iv->riv_leader_term)
+		goto out;
 
 	uuid_copy(dst_iv->riv_pool_uuid, src_iv->riv_pool_uuid);
 	dst_iv->riv_master_rank = src_iv->riv_master_rank;
@@ -203,7 +202,7 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		rpt->rt_global_scan_done = dst_iv->riv_global_scan_done;
 		if (rpt->rt_global_dtx_resync_version < rpt->rt_rebuild_ver &&
 		    dst_iv->riv_global_dtx_resyc_version >= rpt->rt_rebuild_ver) {
-			D_INFO(DF_UUID" global/iv/rebuild_ver %u/%u/%u signal wait cond\n",
+			D_INFO(DF_UUID " global/iv/rebuild_ver %u/%u/%u signal wait cond\n",
 			       DP_UUID(src_iv->riv_pool_uuid), rpt->rt_global_dtx_resync_version,
 			       dst_iv->riv_global_dtx_resyc_version, rpt->rt_rebuild_ver);
 			ABT_mutex_lock(rpt->rt_lock);
@@ -211,10 +210,10 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			ABT_mutex_unlock(rpt->rt_lock);
 		}
 		rpt->rt_global_dtx_resync_version = dst_iv->riv_global_dtx_resyc_version;
-
-		rpt_put(rpt);
 	}
 
+out:
+	rpt_put(rpt);
 	return rc;
 }
 
@@ -280,9 +279,7 @@ rebuild_iv_update(void *ns, struct rebuild_iv *iv, unsigned int shortcut,
 	key.class_id = IV_REBUILD;
 	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0, retry);
 	if (rc)
-		D_CDEBUG(daos_quiet_error(rc), DB_REBUILD, DLOG_ERR, "iv update failed "DF_RC"\n",
-			 DP_RC(rc));
-
+		DL_CDEBUG(daos_quiet_error(rc), DB_REBUILD, DLOG_ERR, rc, "iv update failed");
 	return rc;
 }
 

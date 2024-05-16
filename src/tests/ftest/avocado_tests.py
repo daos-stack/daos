@@ -5,6 +5,7 @@
 """
 
 import time
+
 from apricot import Test
 
 

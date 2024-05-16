@@ -2,7 +2,11 @@
 
 # Common cleanup for running after a functional test
 
-set -ex
+set -eux
+
+if [ -z "${NODELIST:-}" ]; then
+    exit 0
+fi
 
 if $TEST_RPMS; then
     # now collect up the logs and store them like non-RPM test does
@@ -19,11 +23,14 @@ rm -rf install/lib/daos/TESTING/ftest/avocado/job-results/*/*/html/
 # jenkins build artifacts
 rm -f install/lib/daos/TESTING/ftest/avocado/job-results/latest
 
-arts="$arts$(ls ./*daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
+arts="${arts:-}$(ls ./*daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
 arts="$arts$(ls -d \
    install/lib/daos/TESTING/ftest/avocado/job-results/* 2>/dev/null)" && \
   arts="$arts"$'\n'
 if [ -n "$arts" ]; then
     # shellcheck disable=SC2046,SC2086
     mv $(echo $arts | tr '\n' ' ') "${STAGE_NAME}/"
+    hostname
+    pwd
+    find "${STAGE_NAME}/" -type f
 fi

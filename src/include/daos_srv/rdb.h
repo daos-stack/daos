@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -57,6 +57,7 @@
  * purposes, have their own rules described separately in the API documentation
  * of rdb_tx_begin_local.) Ending a TX without committing it discards all its
  * updates. Ending a query-only TX without committing is fine at the moment.
+ * rdb_tx_discard() will, without ending the TX, discard the updates made so far.
  *
  * A query sees all (conflicting) updates committed (successfully) before its
  * rdb_tx_begin(). It may or may not see updates committed after its
@@ -115,14 +116,37 @@ struct rdb_storage;
 
 struct rdb_cbs;
 
+/**
+ * Database clue returned by rdb_glance
+ *
+ * Since most fields expose raft/rdb internals that are not required for normal
+ * RDB usage, we will not attempt to explain them fully here.
+ */
+struct rdb_clue {
+	/* Raft clue */
+	uint64_t	bcl_term;	/**< term */
+	int		bcl_vote;	/**< vote */
+	d_rank_t	bcl_self;	/**< self rank */
+	uint64_t	bcl_last_index;	/**< index of last entry */
+	uint64_t	bcl_last_term;	/**< term of last entry */
+	uint64_t	bcl_base_index;	/**< index of base (i.e., snapshot) */
+	uint64_t	bcl_base_term;	/**< term of base (i.e., snapshot) */
+	d_rank_list_t  *bcl_replicas;	/**< replicas at last index */
+
+	/* Database clue */
+	uint64_t	bcl_oid_next;	/**< next OID */
+};
+
 /** Database storage methods */
 int rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t size,
-	       const d_rank_list_t *replicas, struct rdb_cbs *cbs, void *arg,
-	       struct rdb_storage **storagep);
+	       uint32_t vos_df_version, const d_rank_list_t *replicas, struct rdb_cbs *cbs,
+	       void *arg, struct rdb_storage **storagep);
 int rdb_open(const char *path, const uuid_t uuid, uint64_t caller_term, struct rdb_cbs *cbs,
 	     void *arg, struct rdb_storage **storagep);
 void rdb_close(struct rdb_storage *storage);
 int rdb_destroy(const char *path, const uuid_t uuid);
+int rdb_glance(struct rdb_storage *storage, struct rdb_clue *clue);
+int rdb_dictate(struct rdb_storage *storage);
 
 /** Database (opaque) */
 struct rdb;
@@ -164,9 +188,11 @@ int rdb_campaign(struct rdb *db);
 bool rdb_is_leader(struct rdb *db, uint64_t *term);
 int rdb_get_leader(struct rdb *db, uint64_t *term, d_rank_t *rank);
 int rdb_get_ranks(struct rdb *db, d_rank_list_t **ranksp);
+int rdb_get_size(struct rdb *db, size_t *sizep);
 int rdb_add_replicas(struct rdb *db, d_rank_list_t *replicas);
 int rdb_remove_replicas(struct rdb *db, d_rank_list_t *replicas);
 int rdb_ping(struct rdb *db, uint64_t caller_term);
+int rdb_upgrade_vos_pool(struct rdb *db, uint32_t df_version);
 
 /**
  * Path (opaque)
@@ -204,8 +230,9 @@ d_iov_t		prefix ## name = {					\
 
 /** KVS classes */
 enum rdb_kvs_class {
-	RDB_KVS_GENERIC,	/**< hash-ordered byte-stream keys */
-	RDB_KVS_INTEGER		/**< numerically-ordered uint64_t keys */
+	RDB_KVS_GENERIC, /**< hash-ordered byte-stream keys */
+	RDB_KVS_INTEGER, /**< numerically-ordered uint64_t keys */
+	RDB_KVS_LEXICAL  /**< lexically-ordered byte-stream keys */
 };
 
 /** KVS attributes */
@@ -236,6 +263,7 @@ struct rdb_tx {
 /** TX methods */
 int rdb_tx_begin(struct rdb *db, uint64_t term, struct rdb_tx *tx);
 int rdb_tx_begin_local(struct rdb_storage *storage, struct rdb_tx *tx);
+void rdb_tx_discard(struct rdb_tx *tx);
 int rdb_tx_commit(struct rdb_tx *tx);
 void rdb_tx_end(struct rdb_tx *tx);
 

@@ -4,27 +4,27 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
-from logging import getLogger
+import contextlib
+import json
+import os
+import re
+import signal
+import time
 from datetime import datetime
 from getpass import getuser
-import re
-import time
-import signal
-import os
-import json
+from logging import getLogger
 
 from avocado.utils import process
 from ClusterShell.NodeSet import NodeSet
-
-from command_utils_base import \
-    BasicParameter, CommandWithParameters, EnvironmentVariables, LogParameter, ObjectWithParameters
+from command_utils_base import (BasicParameter, CommandWithParameters, EnvironmentVariables,
+                                LogParameter, ObjectWithParameters)
 from exception_utils import CommandFailure
-from general_utils import check_file_exists, \
-    run_command, DaosTestError, get_job_manager_class, create_directory, \
-    distribute_files, change_file_owner, get_file_listing, run_pcmd, \
-    get_subprocess_stdout
-from user_utils import get_primary_group
+from general_utils import (DaosTestError, change_file_owner, check_file_exists, create_directory,
+                           distribute_files, get_file_listing, get_job_manager_class,
+                           get_subprocess_stdout, run_command, run_pcmd)
 from run_utils import command_as_user
+from user_utils import get_primary_group
+from yaml_utils import get_yaml_data
 
 
 class ExecutableCommand(CommandWithParameters):
@@ -166,6 +166,26 @@ class ExecutableCommand(CommandWithParameters):
 
         """
         return command_as_user(self.with_bind, self.run_user, self.env)
+
+    @contextlib.contextmanager
+    def no_exception(self):
+        """Temporarily disable raising exceptions for failed commands."""
+        original_value = self.exit_status_exception
+        self.exit_status_exception = False
+        yield
+        self.exit_status_exception = original_value
+
+    @contextlib.contextmanager
+    def as_user(self, user):
+        """Temporarily run commands as a different user.
+
+        Args:
+            user (str): the user to temporarily run as
+        """
+        original_value = self.run_user
+        self.run_user = user
+        yield
+        self.run_user = original_value
 
     def run(self, raise_exception=None):
         """Run the command.
@@ -871,6 +891,15 @@ class YamlCommand(SubProcessCommand):
 
         """
         return ".".join((self._command, "service"))
+
+    @property
+    def yaml_data(self):
+        """Get the yaml config file contents as a dictionary.
+
+        Returns:
+            dict: the yaml config file contents as a dictionary
+        """
+        return get_yaml_data(self.temporary_file)
 
     def get_params(self, test):
         """Get values for the daos command and its yaml config file.

@@ -5,8 +5,8 @@
 """
 import os
 
-from general_utils import pcmd, run_pcmd
 from control_test_base import ControlTestBase
+from general_utils import pcmd, run_pcmd
 
 
 class DmgStorageScanSCMTest(ControlTestBase):

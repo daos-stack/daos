@@ -19,12 +19,13 @@
 # SOFTWARE.
 """Wrapper for Modules so we can load an MPI before builds or tests"""
 
-import os
-import sys
 import errno
-import subprocess  # nosec
+import os
 import shutil
+import subprocess  # nosec
+import sys
 from subprocess import PIPE, Popen  # nosec
+
 import distro
 
 
@@ -36,7 +37,7 @@ class _env_module():  # pylint: disable=invalid-name
                 "openmpi": ['mpi/mlnx_openmpi-x86_64', 'mpi/openmpi3-x86_64',
                             'gnu-openmpi', 'mpi/openmpi-x86_64']}
 
-    def __init__(self):
+    def __init__(self, silent=False):
         """Load Modules for initializing environment variables"""
         # Leap 15's lmod-lua doesn't include the usual module path
         # in it's MODULEPATH, for some unknown reason
@@ -44,6 +45,7 @@ class _env_module():  # pylint: disable=invalid-name
                                              os.path.join(os.sep, "usr", "share", "modulefiles"),
                                              os.path.join(os.sep, "etc", "modulefiles")]
                                             + os.environ.get("MODULEPATH", "").split(":"))
+        self._silent = silent
         self._module_load = self._init_mpi_module()
 
     def _module_func(self, command, *arguments):  # pylint: disable=no-self-use
@@ -56,7 +58,8 @@ class _env_module():  # pylint: disable=invalid-name
 
         # pylint: disable=consider-using-with
         try:
-            print(f"Going to run {cmd}")
+            if not self._silent:
+                print(' '.join(cmd))
             proc = Popen(cmd, stdout=PIPE, stderr=PIPE)
         except OSError as error:
             if error.errno == errno.ENOENT:
@@ -81,11 +84,11 @@ class _env_module():  # pylint: disable=invalid-name
         # return _mlstatus, stderr.decode() # pylint: disable=undefined-variable
 
     def _init_mpi_module(self):
-        """init mpi module function"""
+        """Init mpi module function"""
         return self._mpi_module
 
     def _mpi_module(self, mpi):
-        """attempt to load the requested module"""
+        """Attempt to load the requested module"""
         load = []
         unload = []
 
@@ -109,16 +112,17 @@ class _env_module():  # pylint: disable=invalid-name
                 self._module_func('unload', to_unload)
 
         for to_load in load:
-            print(f"Trying to load {to_load}")
-            if self._module_func('is-avail', to_load)[0] and \
-               self._module_func('load', to_load)[0]:
-                print(f'Loaded {to_load}')
+            if not self._silent:
+                print(f"Trying to load {to_load}")
+            if self._module_func('is-avail', to_load)[0] and self._module_func('load', to_load)[0]:
+                if not self._silent:
+                    print(f'Loaded {to_load}')
                 return True
 
         return False
 
     def _mpi_module_old(self, mpi):
-        """attempt to load the requested module"""
+        """Attempt to load the requested module"""
         load = []
         for key, value in self._mpi_map.items():
             if key == mpi:
@@ -162,7 +166,7 @@ class _env_module():  # pylint: disable=invalid-name
         return True
 
     def show_avail(self):
-        """list available modules"""
+        """List available modules"""
         try:
             status, output = self._module_func('avail')
             if not status:
@@ -172,12 +176,12 @@ class _env_module():  # pylint: disable=invalid-name
         return output
 
     def get_map(self, key):
-        """return the mpi map"""
+        """Return the mpi map"""
         return self._mpi_map[key]
 
 
-def load_mpi(mpi):
-    """global function to load MPI into os.environ"""
+def load_mpi(mpi, silent=False):
+    """Global function to load MPI into os.environ"""
     # On Ubuntu, MPI stacks use alternatives and need root to change their
     # pointer, so just verify that the desired MPI is loaded
     if distro.id() == "ubuntu":
@@ -201,19 +205,19 @@ def load_mpi(mpi):
         return False
 
     if _env_module.env_module_init is None:
-        _env_module.env_module_init = _env_module()
+        _env_module.env_module_init = _env_module(silent)
     return _env_module.env_module_init.load_mpi(mpi)
 
 
 def show_avail():
-    """global function to show the available modules"""
+    """Global function to show the available modules"""
     if _env_module.env_module_init is None:
         _env_module.env_module_init = _env_module()
     return _env_module.env_module_init.show_avail()
 
 
 def get_module_list(key):
-    """global function to show the modules that map to a key"""
+    """Global function to show the modules that map to a key"""
     if _env_module.env_module_init is None:
         _env_module.env_module_init = _env_module()
     return _env_module.env_module_init.get_map(key)

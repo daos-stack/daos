@@ -4,8 +4,8 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 
-from storage_estimator.explorer import AverageFS
 from storage_estimator.dfs_sb import get_dfs_inode_akey
+from storage_estimator.explorer import AverageFS
 from storage_estimator.util import ProcessBase
 
 FILE_SIZES = ['4k', '64k', '128k', '256k', '512k', '768k', '1m', '8m', '64m',

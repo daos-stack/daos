@@ -225,8 +225,8 @@ sts_ctx_pool_init(struct sts_context *ctx)
 	}
 
 	/* Use pool size as blob size for this moment. */
-	rc = vos_pool_create(pmem_file, ctx->tsc_pool_uuid, 0,
-			     ctx->tsc_nvme_size, 0, &poh);
+	rc = vos_pool_create(pmem_file, ctx->tsc_pool_uuid, 0, ctx->tsc_nvme_size, 0,
+			     0 /* version */, &poh);
 	assert_success(rc);
 
 	ctx->tsc_poh = poh;
@@ -881,6 +881,84 @@ multiple_overlapping_extents(void **state)
 	assert_success(sts_ctx_fetch(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey", 3));
 }
 
+void *scrub_wrapper_thread(void *arg) {
+	struct sts_context *ctx = (struct sts_context *)arg;
+	sts_ctx_do_scrub(ctx);
+	return NULL;
+}
+
+/*
+ * The following is a test to make sure can switch from lazy to timed, even when the system is
+ * not idle for a long time.
+ * - Start the scrubber in lazy mode and set the 'system' to idle so that
+ *   the pool starts to scrub.
+ * - In a separate thread run the vos_scrub_pool.
+ * - On the first yield/sleep call the system will be set to busy. (It should get into the
+ *   is idle check and will stay there because the system is busy.)
+ * - Change the scrub mode to timed. This should get the scrubber out of the
+ *   "is idle" check.
+ *
+ * The first two of the following functions will force the system to appear busy after
+ * they are called.
+ */
+
+int
+mock_sleep_changes_to_be_busy(void *args, uint32_t msec)
+{
+	fake_is_idle_result = false;
+	/* don't actually need to sleep any */
+	return 0;
+}
+
+static int
+mock_yield_changes_to_be_busy(void *arg)
+{
+	fake_is_idle_result = false;
+	return 0;
+}
+
+static void
+scrubber_doesnot_get_stuck_in_lazy_mode(void **state)
+{
+	struct sts_context *ctx = *state;
+
+	/* Insert some data */
+	sts_ctx_update(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey0", 1, true);
+	sts_ctx_update(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey1", 1, true);
+	sts_ctx_update(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey2", 1, true);
+
+	/* start in lazy mode */
+	ctx->tsc_pool.sp_scrub_mode = DAOS_SCRUB_MODE_LAZY;
+
+	/*
+	 * system is starts in idle so that the pool will begin to be scrubbed, but then after
+	 * first yield/sleep call it will be switched to busy.
+	 */
+	ctx->tsc_is_idle_fn = fake_is_idle;
+	fake_is_idle_result = true;
+	ctx->tsc_sleep_fn = mock_sleep_changes_to_be_busy;
+	ctx->tsc_yield_fn = mock_yield_changes_to_be_busy;
+
+	/** Run vos_scrub_pool in a separate thread so can change the mode while it's running */
+	pthread_t scrub_thread_id;
+	if (pthread_create(&scrub_thread_id, NULL, &scrub_wrapper_thread, ctx) != 0)
+		fail();
+
+	/* Give the pool time to start being scrubbed */
+	sleep(1);
+
+	/*
+	 * Now the pool will be stuck in a loop until the system becomes IDLE again ... or until
+	 * mode is changed to TIMED, or OFF
+	 */
+	ctx->tsc_pool.sp_scrub_mode = DAOS_SCRUB_MODE_TIMED;
+	ctx->tsc_pool.sp_scrub_freq_sec = 1;
+
+	/* Wait for the thread to finish which should be pretty quick once scrub mode is TIMED */
+	if (pthread_join(scrub_thread_id, NULL) != 0)
+		fail();
+}
+
 static int
 sts_setup(void **state)
 {
@@ -955,6 +1033,8 @@ static const struct CMUnitTest scrubbing_tests[] = {
 	   multiple_overlapping_extents),
 	TS("CSUM_SCRUBBING_13: Evict pool target when threshold is exceeded",
 	   drain_target),
+	TS("CSUM_SCRUBBING_14: Scrubber doesn't get stuck in lazy mode when system is busy and "
+	   "mode is changed to TIMED", scrubber_doesnot_get_stuck_in_lazy_mode),
 };
 
 int

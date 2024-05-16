@@ -1,8 +1,9 @@
 hosts:
   test_servers: 1
+  test_clients: 1
 timeout: 80
 server_config:
-  name: daos_server
+  name: other_dserver  # Use a non-default name
   engines_per_host: 1
   engines:
     0:
@@ -14,5 +15,8 @@ server_config:
       log_mask: DEBUG,MEM=ERR
       env_vars:
         - DD_MASK=mgmt
-      storage: auto
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
   system_ram_reserved: 1

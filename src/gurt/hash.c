@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -903,9 +903,11 @@ d_hash_table_traverse(struct d_hash_table *htable, d_hash_traverse_cb_t cb,
 	}
 
 	for (idx = 0; idx < nr && !rc; idx++) {
+		d_list_t *linkn;
+
 		bucket = &htable->ht_buckets[idx];
 		ch_bucket_lock(htable, idx, true);
-		d_list_for_each(link, &bucket->hb_head) {
+		d_list_for_each_safe(link, linkn, &bucket->hb_head) {
 			rc = cb(link, arg);
 			if (rc)
 				break;
@@ -946,6 +948,12 @@ d_hash_table_destroy_inplace(struct d_hash_table *htable, bool force)
 	uint32_t		 nr = 1U << htable->ht_bits;
 	uint32_t		 i;
 	int			 rc = 0;
+
+	if (htable->ht_buckets == NULL) {
+		rc = -DER_UNINIT;
+		DHL_ERROR(htable, rc, "d_hash_table not initialized (NULL buckets)");
+		D_GOTO(out, 0);
+	}
 
 	for (i = 0; i < nr; i++) {
 		bucket = &htable->ht_buckets[i];

@@ -4,11 +4,11 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from collections import defaultdict
-import yaml
 
+import yaml
 from apricot import TestWithServers
-from exception_utils import CommandFailure
 from dmg_utils import DmgCommand
+from exception_utils import CommandFailure
 
 
 class ConfigGenerateOutput(TestWithServers):
@@ -23,7 +23,7 @@ class ConfigGenerateOutput(TestWithServers):
         """Initialize a ConfigGenerateOutput object."""
         super().__init__(*args, **kwargs)
 
-        self.def_provider = "ofi+tcp;ofi_rxm"
+        self.def_provider = "ofi+tcp"
 
         # Data structure that store expected values.
         self.numa_node_to_pci_addrs = defaultdict(set)

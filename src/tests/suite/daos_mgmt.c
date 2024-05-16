@@ -162,22 +162,6 @@ setup_manypools(void **state)
 	return setup_pools(state, npools);
 }
 
-/* zero out uuids, free svc rank lists in pool info returned by DAOS API */
-static void
-clean_pool_info(daos_size_t npools, daos_mgmt_pool_info_t *pools) {
-	int	i;
-
-	if (pools) {
-		for (i = 0; i < npools; i++) {
-			uuid_clear(pools[i].mgpi_uuid);
-			if (pools[i].mgpi_svc) {
-				d_rank_list_free(pools[i].mgpi_svc);
-				pools[i].mgpi_svc = NULL;
-			}
-		}
-	}
-}
-
 /* Search for pool information in pools created in setup (mgmt_lp_args)
  * Match pool UUID and service replica ranks.
  * Return matching index or -1 if no match.
@@ -366,13 +350,7 @@ pool_create_and_destroy_retry(void **state)
 	if (arg->myrank != 0)
 		return;
 
-	print_message("setting DAOS_POOL_CREATE_FAIL_CORPC ... ");
-	rc = daos_debug_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
-				  DAOS_POOL_CREATE_FAIL_CORPC | DAOS_FAIL_ONCE,
-				  0, NULL);
-	assert_rc_equal(rc, 0);
-	print_message("success\n");
-
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_POOL_CREATE_FAIL_CORPC | DAOS_FAIL_ONCE);
 	print_message("creating pool synchronously ... ");
 	rc = dmg_pool_create(dmg_config_file,
 			     geteuid(), getegid(),
@@ -383,18 +361,13 @@ pool_create_and_destroy_retry(void **state)
 	assert_rc_equal(rc, 0);
 	print_message("success uuid = "DF_UUIDF"\n", DP_UUID(uuid));
 
-	print_message("setting DAOS_POOL_DESTROY_FAIL_CORPC ... ");
-	rc = daos_debug_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
-				  DAOS_POOL_DESTROY_FAIL_CORPC | DAOS_FAIL_ONCE,
-				  0, NULL);
-	assert_success(rc);
-	print_message("success\n");
-
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_POOL_DESTROY_FAIL_CORPC | DAOS_FAIL_ONCE);
 	print_message("destroying pool synchronously ... ");
 	rc = dmg_pool_destroy(dmg_config_file, uuid, arg->group, 1);
 	assert_rc_equal(rc, 0);
-
 	print_message("success\n");
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
 }
 
 static void
@@ -440,6 +413,90 @@ get_sys_info_test(void **state)
 	daos_mgmt_put_sys_info(info);
 }
 
+/*
+ * A pool service who steps down from the UP_EMPTY state shall not leak
+ * map_distd. This is a regression test for DAOS-14138.
+ */
+static void
+pool_create_steps_down_from_up_empty(void **state)
+{
+	test_arg_t   *arg = *state;
+	uuid_t        uuid;
+	d_rank_list_t svc;
+	d_rank_t      rank;
+	int           rc;
+
+	FAULT_INJECTION_REQUIRED();
+
+	if (arg->myrank != 0)
+		return;
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_POOL_CREATE_FAIL_STEP_UP | DAOS_FAIL_ONCE);
+
+	/*
+	 * Request a single PS replica so that this replica will step up again
+	 * after stepping down. The assertion on s_map_distd in init_map_distd
+	 * would fail if we had leaked map_distd during the step down process.
+	 */
+	print_message("creating pool synchronously ... ");
+	rank = -1;
+	svc.rl_ranks = &rank;
+	svc.rl_nr = 1;
+	rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL /* tgts */,
+			     256 * 1024 * 1024 /* minimal size */, 0 /* nvme size */,
+			     NULL /* prop */, &svc, uuid);
+	assert_rc_equal(rc, 0);
+	print_message("success uuid = "DF_UUIDF"\n", DP_UUID(uuid));
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
+
+	print_message("destroying pool synchronously ... ");
+	rc = dmg_pool_destroy(dmg_config_file, uuid, arg->group, 1);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+}
+
+/*
+ * Each engine shall disconnect all local connections when destroying a pool.
+ */
+static void
+pool_destroy_disconnect_all(void **state)
+{
+	test_arg_t   *arg = *state;
+	uuid_t        uuid;
+	char	      uuid_str[37];
+	int           rc;
+
+	FAULT_INJECTION_REQUIRED();
+
+	if (arg->myrank != 0)
+		return;
+
+	print_message("creating pool synchronously ... ");
+	rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL /* tgts */,
+			     256 * 1024 * 1024 /* minimal size */, 0 /* nvme size */,
+			     NULL /* prop */, arg->pool.svc, uuid);
+	assert_rc_equal(rc, 0);
+	print_message("success uuid = "DF_UUIDF"\n", DP_UUID(uuid));
+
+	uuid_unparse_lower(uuid, uuid_str);
+	rc = daos_pool_connect(uuid_str, arg->group, DAOS_PC_RW, &arg->pool.poh,
+			       NULL /* pool info */, NULL /* ev */);
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_POOL_EVICT_FAIL | DAOS_FAIL_ONCE);
+
+	print_message("destroying pool synchronously ... ");
+	rc = dmg_pool_destroy(dmg_config_file, uuid, arg->group, 1);
+	/*
+	 * TODO: This only triggers the pool_tgt_disconnect_all code path, but
+	 * can't verify that the pool is completed destroyed.
+	 */
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
+}
+
 static const struct CMUnitTest tests[] = {
 	{ "MGMT1: create/destroy pool on all tgts",
 	  pool_create_all, async_disable, test_case_teardown},
@@ -453,6 +510,10 @@ static const struct CMUnitTest tests[] = {
 	  pool_create_and_destroy_retry, async_disable, test_case_teardown},
 	{ "MGMT6: daos_mgmt_get_sys_info",
 	  get_sys_info_test, async_disable, test_case_teardown},
+	{ "MGMT7: create: PS steps down from UP_EMPTY",
+	  pool_create_steps_down_from_up_empty, async_disable, test_case_teardown},
+	{ "MGMT8: pool destroy disconnect all",
+	  pool_destroy_disconnect_all, async_disable, test_case_teardown}
 };
 
 static int

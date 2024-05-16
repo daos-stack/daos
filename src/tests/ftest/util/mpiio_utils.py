@@ -3,9 +3,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from sys import version_info
-from command_utils_base import FormattedParameter
+
 from command_utils import ExecutableCommand
+from command_utils_base import FormattedParameter
 
 
 class LLNLCommand(ExecutableCommand):
@@ -31,15 +31,6 @@ class Mpi4pyCommand(ExecutableCommand):
             path (str): path to the macsio command.
         """
         super().__init__("/run/mpi4py/*", "test_io_daos.py", path)
-
-    def __str__(self):
-        """Return the command with all of its defined parameters as a string.
-
-        Returns:
-            str: the command with all the defined parameters
-
-        """
-        return " ".join(["python{}".format(version_info.major), super().__str__()])
 
 
 class RomioCommand(ExecutableCommand):

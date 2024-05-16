@@ -3,14 +3,13 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from logging import getLogger
-from time import sleep
-from threading import Lock
 from collections import defaultdict
+from logging import getLogger
+from threading import Lock
+from time import sleep
 
+from command_utils_base import BasicParameter, ObjectWithParameters
 from pydaos.raw import DaosApiError
-
-from command_utils_base import ObjectWithParameters, BasicParameter
 
 
 class CallbackHandler():

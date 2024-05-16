@@ -4,7 +4,9 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from os.path import join
+
 from data_mover_test_base import DataMoverTestBase
+from dfuse_utils import get_dfuse, start_dfuse
 from exception_utils import CommandFailure
 
 
@@ -61,7 +63,8 @@ class DmvrPosixMetaEntry(DataMoverTestBase):
         test_desc = self.test_id + " (preserve={})".format(str(preserve_on))
 
         # Start dfuse to hold all pools/containers
-        self.start_dfuse(self.dfuse_hosts)
+        dfuse = get_dfuse(self, self.dfuse_hosts)
+        start_dfuse(self, dfuse)
 
         # Create 1 pool
         pool1 = self.create_pool()
@@ -70,7 +73,7 @@ class DmvrPosixMetaEntry(DataMoverTestBase):
         cont1 = self.get_container(pool1)
         daos_src_path = self.new_daos_test_path(False)
         dfuse_src_path = "{}/{}/{}{}".format(
-            self.dfuse.mount_dir.value, pool1.uuid, cont1.uuid, daos_src_path)
+            dfuse.mount_dir.value, pool1.uuid, cont1.uuid, daos_src_path)
         self.create_data(dfuse_src_path)
 
         # Create 1 source posix path with test data
@@ -83,7 +86,7 @@ class DmvrPosixMetaEntry(DataMoverTestBase):
         # DAOS -> DAOS
         daos_dst_path = self.new_daos_test_path(False)
         dfuse_dst_path = "{}/{}/{}{}".format(
-            self.dfuse.mount_dir.value, pool1.uuid, cont1.uuid, daos_dst_path)
+            dfuse.mount_dir.value, pool1.uuid, cont1.uuid, daos_dst_path)
         self.run_datamover(
             test_desc + "(DAOS->DAOS)",
             "DAOS", daos_src_path, pool1, cont1,
@@ -104,7 +107,7 @@ class DmvrPosixMetaEntry(DataMoverTestBase):
         # POSIX -> DAOS
         daos_dst_path = self.new_daos_test_path(False)
         dfuse_dst_path = "{}/{}/{}{}".format(
-            self.dfuse.mount_dir.value, pool1.uuid, cont1.uuid, daos_dst_path)
+            dfuse.mount_dir.value, pool1.uuid, cont1.uuid, daos_dst_path)
         self.run_datamover(
             test_desc + "(POSIX->DAOS)",
             "POSIX", posix_src_path, None, None,

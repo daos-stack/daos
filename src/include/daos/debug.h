@@ -47,6 +47,7 @@
 	ACTION(drpc,      drpc,      arg)	\
 	ACTION(security,  security,  arg)	\
 	ACTION(dtx,       dtx,       arg)	\
+	ACTION(chk,       chk,       arg)	\
 	ACTION(dfuse,     dfuse,     arg)	\
 	ACTION(il,        il,        arg)	\
 	ACTION(csum,      csum,      arg)	\

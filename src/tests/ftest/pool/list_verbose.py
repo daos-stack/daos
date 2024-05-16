@@ -1,17 +1,17 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from ior_test_base import IorTestBase
 from general_utils import report_errors
+from ior_test_base import IorTestBase
 
 
 class ListVerboseTest(IorTestBase):
     """DAOS-8267: Test class for dmg pool list --verbose tests.
 
     Verify all fields of dmg pool list --verbose; Label, UUID, SvcReps, SCM
-    Size, SCM Used, SCM Imbalance, NVME Size, NVME Used, NVME Imbalance, and Disabled.
+    Size, SCM Used, SCM Imbalance, NVMe Size, NVMe Used, NVMe Imbalance, and Disabled.
 
     Control plane test and not the underlying algorithm test. Assume that a
     single non-zero output verifies all other non-zero output. e.g., if we can
@@ -23,7 +23,8 @@ class ListVerboseTest(IorTestBase):
 
     def create_expected(self, pool, scm_free, nvme_free, scm_imbalance,
                         nvme_imbalance, targets_disabled=0, scm_size=None,
-                        nvme_size=None):
+                        nvme_size=None, state=None, rebuild_state=None):
+        # pylint: disable=too-many-arguments
         """Create expected dmg pool list output to compare against the actual.
 
         Args:
@@ -36,6 +37,8 @@ class ListVerboseTest(IorTestBase):
                 Defaults to 0.
             scm_size (int, optional): SCM size to fill in the output. Defaults to None.
             nvme_size (int, optional): NVMe size to fill in the output. Defaults to None.
+            state (str, optional): Expected pool state. Defaults to None.
+            rebuild_state (str, optional): Expected pool rebuild state. Defaults to None.
 
         Returns:
             dict: Expected in the same format of actual.
@@ -46,8 +49,10 @@ class ListVerboseTest(IorTestBase):
 
         if scm_size is None:
             scm_size = pool.scm_size.value * rank_count
+        scm_size = int(scm_size)
         if nvme_size is None:
             nvme_size = pool.nvme_size.value * rank_count
+        nvme_size = int(nvme_size)
 
         targets_total = self.server_managers[0].get_config_value("targets") * rank_count
 
@@ -56,17 +61,36 @@ class ListVerboseTest(IorTestBase):
         upgrade_layout_ver = p_query["response"]["upgrade_layout_ver"]
 
         return {
+            "state": state,
             "uuid": pool.uuid.lower(),
             "label": pool.label.value,
+            "total_targets": targets_total,
+            "active_targets": targets_total - targets_disabled,
+            "total_engines": rank_count,
+            "disabled_targets": targets_disabled,
+            "svc_ldr": pool.svc_leader,
             "svc_reps": pool.svc_ranks,
-            "targets_total": targets_total,
-            "targets_disabled": targets_disabled,
             "upgrade_layout_ver": upgrade_layout_ver,
             "pool_layout_ver": pool_layout_ver,
-            "query_error_msg": "",
-            "query_status_msg": "",
-            "state": "Ready",
-            "svc_ldr": 0,
+            "rebuild": {
+                "status": 0,
+                "state": rebuild_state,
+                "objects": 0,
+                "records": 0
+            },
+            # NB: tests should not expect min/max/mean values
+            "tier_stats": [
+                {
+                    "total": scm_size,
+                    "free": scm_free,
+                    "media_type": "scm",
+                },
+                {
+                    "total": nvme_size,
+                    "free": nvme_free,
+                    "media_type": "nvme",
+                },
+            ],
             "usage": [
                 {
                     "tier_name": "SCM",
@@ -79,8 +103,7 @@ class ListVerboseTest(IorTestBase):
                     "size": nvme_size,
                     "free": nvme_free,
                     "imbalance": nvme_imbalance
-                }
-            ]
+                }],
         }
 
     @staticmethod
@@ -146,7 +169,7 @@ class ListVerboseTest(IorTestBase):
             threshold, diff)
         self.assertTrue(diff < threshold, msg)
 
-    def verify_pool_lists(self, targets_disabled, scm_size, nvme_size):
+    def verify_pool_lists(self, targets_disabled, scm_size, nvme_size, state, rebuild_state):
         """Call dmg pool list and verify.
 
         self.pool should be a list. The elements of the inputs should
@@ -156,6 +179,8 @@ class ListVerboseTest(IorTestBase):
             targets_disabled (list): List of targets disabled for pools.
             scm_size (list): List of SCM size for pools.
             nvme_size (list): List of NVMe size for pools.
+            state (list): List of pool state for pools.
+            rebuild_state (list): List of pool rebuild state for pools.
 
         Returns:
             list: a list of dictionaries containing information for each pool from the dmg
@@ -166,6 +191,12 @@ class ListVerboseTest(IorTestBase):
         expected_pools = []
 
         actual_pools = self.get_dmg_command().get_pool_list_all(verbose=True)
+        for pool in actual_pools:
+            del pool['version']  # not easy to calculate expected value, could cause flaky tests
+            for tier in pool["tier_stats"]:  # expected values are tricky to calculate
+                del tier['min']
+                del tier['max']
+                del tier['mean']
 
         # Get free and imbalance from actual so that we can use them in expected.
         free_data = self.get_scm_nvme_free_imbalance(actual_pools)
@@ -193,12 +224,16 @@ class ListVerboseTest(IorTestBase):
                     nvme_imbalance=pool_free_data["nvme_imbalance"],
                     targets_disabled=targets_disabled[index],
                     scm_size=pool_free_data["scm_size"],
-                    nvme_size=nvme_size[index]))
+                    nvme_size=nvme_size[index],
+                    state=state[index],
+                    rebuild_state=rebuild_state[index]))
 
         # Sort pools by UUID.
         actual_pools.sort(key=lambda item: item.get("uuid"))
         expected_pools.sort(key=lambda item: item.get("uuid"))
 
+        self.log.info("actual_pools: %s", actual_pools)
+        self.log.info("expected_pools: %s", expected_pools)
         self.assertListEqual(expected_pools, actual_pools)
 
         # For convenience.
@@ -210,7 +245,7 @@ class ListVerboseTest(IorTestBase):
 
         Args:
             pool_dict (dict): Pool info from list pool.
-            storage (str): SCM or NVME.
+            storage (str): SCM or NVMe.
         """
         free = 0
         imbalance = 0
@@ -242,32 +277,43 @@ class ListVerboseTest(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=pool
-        :avocado: tags=list_verbose,list_verbose_basic,test_fields_basic
+        :avocado: tags=ListVerboseTest,test_fields_basic
         """
         self.pool = []
 
         # 1. Create first pool with a given SCM and NVMe size.
+        self.log_step("Create first pool")
         self.pool.append(self.get_pool(namespace="/run/pool_basic_1/*"))
 
         # 2. Verify the fields of pool 1.
+        self.log_step("Verify the field of first pool")
         targets_disabled = [0]
         scm_size = [None]
         nvme_size = [None]
+        state = ["Ready"]
+        rebuild_state = ["idle"]
         self.verify_pool_lists(
-            targets_disabled=targets_disabled, scm_size=scm_size, nvme_size=nvme_size)
+            targets_disabled=targets_disabled, scm_size=scm_size, nvme_size=nvme_size,
+            state=state, rebuild_state=rebuild_state)
 
         # 3. Create second pool.
+        self.log_step("Create second pool")
         self.pool.append(self.get_pool(namespace="/run/pool_basic_2/*"))
 
         # 4. Verify the fields for both pools.
         # Fill in the expected target and size and pass them into verify_pool_lists.
+        self.log_step("Verify the field of second pool")
         targets_disabled.append(0)
         scm_size.append(None)
         nvme_size.append(None)
+        state.append("Ready")
+        rebuild_state.append("idle")
         self.verify_pool_lists(
-            targets_disabled=targets_disabled, scm_size=scm_size, nvme_size=nvme_size)
+            targets_disabled=targets_disabled, scm_size=scm_size, nvme_size=nvme_size,
+            state=state, rebuild_state=rebuild_state)
 
         # 5. Exclude target 7 in rank 1 of pool 1.
+        self.log_step("Exclude target 7 in rank 1 of pool 1")
         self.pool[0].exclude(ranks=[1], tgt_idx="7")
 
         # Sizes are reduced by 1/8.
@@ -275,14 +321,20 @@ class ListVerboseTest(IorTestBase):
         reduced_nvme_size = self.pool[0].nvme_size.value * 0.875
 
         # 6. Verify the fields for both pools with expected disabled and size.
+        self.log_step("Verify the fields for both pools with expected disabled and size")
         targets_disabled[0] = 1
         scm_size[0] = reduced_scm_size
         nvme_size[0] = reduced_nvme_size
+        state[0] = "Degraded"
+        rebuild_state[0] = "busy"
+
         self.verify_pool_lists(
-            targets_disabled=targets_disabled, scm_size=scm_size, nvme_size=nvme_size)
+            targets_disabled=targets_disabled, scm_size=scm_size, nvme_size=nvme_size,
+            state=state, rebuild_state=rebuild_state)
 
         # 7-11. Destroy and verify until the pools are gone.
         while self.pool:
+            self.log_step("Destroy and verify until the pools are gone")
             self.pool[-1].destroy()
             self.pool.pop()
 
@@ -292,13 +344,14 @@ class ListVerboseTest(IorTestBase):
             nvme_size.pop()
 
             self.verify_pool_lists(
-                targets_disabled=targets_disabled, scm_size=scm_size, nvme_size=nvme_size)
+                targets_disabled=targets_disabled, scm_size=scm_size, nvme_size=nvme_size,
+                state=state, rebuild_state=rebuild_state)
 
     def verify_used_imbalance(self, storage):
         """Verification steps for test_used_imbalance.
 
         Args:
-            storage (str): NVME or SCM.
+            storage (str): NVMe or SCM.
 
         Returns:
             list: Errors.
@@ -317,8 +370,11 @@ class ListVerboseTest(IorTestBase):
         # 2. Verify the pool created.
         targets_disabled = [0]
         scm_size = [None]
+        state = ["Ready"]
+        rebuild_state = ["idle"]
         actual_pools_before = self.verify_pool_lists(
-            targets_disabled=targets_disabled, scm_size=scm_size, nvme_size=nvme_size)
+            targets_disabled=targets_disabled, scm_size=scm_size, nvme_size=nvme_size,
+            state=state, rebuild_state=rebuild_state)
 
         # 3. Store free.
         free_before, _ = self.get_free_imbalance(actual_pools_before[0], storage)
@@ -335,7 +391,8 @@ class ListVerboseTest(IorTestBase):
         # 6. Verify all fields except free and imbalance. Free and imbalance are
         # obtained from actual.
         actual_pools_after = self.verify_pool_lists(
-            targets_disabled=targets_disabled, scm_size=scm_size, nvme_size=nvme_size)
+            targets_disabled=targets_disabled, scm_size=scm_size, nvme_size=nvme_size,
+            state=state, rebuild_state=rebuild_state)
 
         # Obtain the new free and imbalance.
         free_after, imbalance_after = self.get_free_imbalance(
@@ -377,10 +434,10 @@ class ListVerboseTest(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=pool
-        :avocado: tags=list_verbose,list_verbose_imbalance,test_used_imbalance
+        :avocado: tags=ListVerboseTest,test_used_imbalance
         """
         errors = []
-        self.log.debug("---------- NVME test ----------")
+        self.log.debug("---------- NVMe test ----------")
         errors.extend(self.verify_used_imbalance("NVME"))
         self.log.debug("---------- SCM test ----------")
         errors.extend(self.verify_used_imbalance("SCM"))

@@ -58,7 +58,7 @@ struct daos_event_private {
 	unsigned int		is_errno:1;
 
 	unsigned int		evx_flags;
-	daos_ev_status_t	evx_status;
+	ATOMIC daos_ev_status_t	evx_status;
 
 	struct daos_event_private *evx_parent;
 

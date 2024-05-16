@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,7 +14,7 @@
 #include <math.h>
 
 #include "crt_utils.h"
-#include "daos_errno.h"
+#include <daos_errno.h>
 
 #include <daos/agent.h>
 #include <daos/mgmt.h>
@@ -1246,10 +1246,9 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "  --use-daos-agent-env\n"
 	       "      Short version: -u\n"
 	       "      This option sets the following env vars through a running daos_agent.\n"
-	       "         - OFI_INTERFACE\n"
-	       "         - CRT_PHY_ADDR_STR\n"
-	       "         - CRT_CTX_SHARE_ADDR\n"
-	       "         - OFI_DOMAIN\n"
+	       "         - D_INTERFACE\n"
+	       "         - D_PROVIDER\n"
+	       "         - D_DOMAIN\n"
 	       "         - CRT_TIMEOUT\n",
 	       prog_name, UINT32_MAX,
 	       CRT_SELF_TEST_AUTO_BULK_THRESH, msg_sizes_str, rep_count,
@@ -1827,34 +1826,35 @@ int main(int argc, char *argv[])
 	}
 
 	if (use_daos_agent_vars == false) {
-		char *env;
 		char *attach_path;
+		char *attach_path_env = NULL;
 
-		env = getenv("CRT_PHY_ADDR_STR");
-		if (env == NULL) {
-			printf("Error: provider (CRT_PHY_ADDR_STR) is not set\n");
-			printf("Example: export CRT_PHY_ADDR_STR='ofi+tcp'\n");
+		if (!d_isenv_def("D_PROVIDER")) {
+			printf("Error: provider (D_PROVIDER) is not set\n");
+			printf("Example: export D_PROVIDER='ofi+tcp'\n");
 			D_GOTO(cleanup, ret = -DER_INVAL);
 		}
 
-		env = getenv("OFI_INTERFACE");
-		if (env == NULL) {
-			printf("Error: interface (OFI_INTERFACE) is not set\n");
-			printf("Example: export OFI_INTERFACE=eth0\n");
+		if (!d_isenv_def("D_INTERFACE")) {
+			printf("Error: interface (D_INTERFACE) is not set\n");
+			printf("Example: export D_INTERFACE=eth0\n");
 			D_GOTO(cleanup, ret = -DER_INVAL);
 		}
 
 		if (attach_info_path)
 			attach_path = attach_info_path;
 		else {
-			attach_path = getenv("CRT_ATTACH_INFO_PATH");
+			d_agetenv_str(&attach_path_env, "CRT_ATTACH_INFO_PATH");
+			attach_path = attach_path_env;
 			if (!attach_path)
 				attach_path = "/tmp";
 		}
+		D_ASSERT(attach_path != NULL);
 
 		printf("Warning: running without daos_agent connection (-u option); "
 		       "Using attachment file %s/%s.attach_info_tmp instead\n",
 		       attach_path, dest_name ? dest_name : default_dest_name);
+		d_freeenv_str(&attach_path_env);
 	}
 
 	/******************** Parse message sizes argument ********************/

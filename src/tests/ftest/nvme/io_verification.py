@@ -4,10 +4,9 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import avocado
-
-from pydaos.raw import DaosApiError
-from ior_test_base import IorTestBase
 from dmg_utils import check_system_query_status
+from ior_test_base import IorTestBase
+from pydaos.raw import DaosApiError
 
 
 class NvmeIoVerification(IorTestBase):
@@ -79,7 +78,7 @@ class NvmeIoVerification(IorTestBase):
                     self.ior_cmd.block_size.update(self.ior_block_size)
                 container = self.get_container(self.pool)
                 container.open()  # Workaround for pydaos handles
-                self.ior_cmd.set_daos_params(self.server_group, self.pool, container.identifier)
+                self.ior_cmd.set_daos_params(self.pool, container.identifier)
                 self.run_ior(self.job_manager, self.ior_processes)
 
                 # Verify IOR consumed the expected amount from the pool
@@ -137,7 +136,7 @@ class NvmeIoVerification(IorTestBase):
                 else:
                     self.ior_cmd.block_size.update(self.ior_block_size)
                 container = self.get_container(self.pool)
-                self.ior_cmd.set_daos_params(self.server_group, self.pool, container.identifier)
+                self.ior_cmd.set_daos_params(self.pool, container.identifier)
                 self.run_ior(self.job_manager, self.ior_processes)
 
                 # Stop all servers

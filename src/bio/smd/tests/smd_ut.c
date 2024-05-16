@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -448,50 +448,25 @@ static void
 ut_dev_replace(void **state)
 {
 	struct smd_dev_info	*dev_info, *tmp_dev;
-	struct smd_pool_info	*pool_info, *tmp_pool;
-	uuid_t			 dev_id3, pool_id1, pool_id2;
-	d_list_t		 pool_list, dev_list;
-	uint64_t		 blob_id;
-	int			 i, rc, pool_cnt = 0, dev_cnt = 0;
+	uuid_t			 dev_id3;
+	d_list_t		 dev_list;
+	int			 rc, dev_cnt = 0;
 
 	uuid_generate(dev_id3);
-	uuid_generate(pool_id1);
-	uuid_generate(pool_id2);
-
-	/* Assign pools, they were unassigned in prior pool test */
-	for (i = 0; i < 4; i++) {
-		rc = smd_pool_add_tgt(pool_id1, i, i << 10, SMD_DEV_TYPE_DATA, 100);
-		assert_rc_equal(rc, 0);
-
-		rc = smd_pool_add_tgt(pool_id2, i, i << 20, SMD_DEV_TYPE_DATA, 200);
-		assert_rc_equal(rc, 0);
-	}
-
-	D_INIT_LIST_HEAD(&pool_list);
-	rc = smd_pool_list(&pool_list, &pool_cnt);
-	assert_rc_equal(rc, 0);
-	assert_int_equal(pool_cnt, 2);
-
-	/* Assign different blobs to dev1's targets 0, 1, 2 */
-	d_list_for_each_entry(pool_info, &pool_list, spi_link) {
-		pool_info->spi_blobs[SMD_DEV_TYPE_DATA][0] = 555;
-		pool_info->spi_blobs[SMD_DEV_TYPE_DATA][1] = 666;
-		pool_info->spi_blobs[SMD_DEV_TYPE_DATA][2] = 777;
-	}
 
 	/* Replace dev1 with dev3 without marking dev1 as faulty */
-	rc = smd_dev_replace(dev_id1, dev_id3, &pool_list);
+	rc = smd_dev_replace(dev_id1, dev_id3, smd_dev_type2role(SMD_DEV_TYPE_DATA));
 	assert_rc_equal(rc, -DER_INVAL);
 
 	rc = smd_dev_set_state(dev_id1, SMD_DEV_FAULTY);
 	assert_rc_equal(rc, 0);
 
 	/* Replace dev1 with dev2 */
-	rc = smd_dev_replace(dev_id1, dev_id2, &pool_list);
+	rc = smd_dev_replace(dev_id1, dev_id2, smd_dev_type2role(SMD_DEV_TYPE_DATA));
 	assert_rc_equal(rc, -DER_INVAL);
 
 	/* Replace dev1 with dev3 */
-	rc = smd_dev_replace(dev_id1, dev_id3, &pool_list);
+	rc = smd_dev_replace(dev_id1, dev_id3, smd_dev_type2role(SMD_DEV_TYPE_DATA));
 	assert_rc_equal(rc, 0);
 
 	/* Verify device after replace */
@@ -510,22 +485,6 @@ ut_dev_replace(void **state)
 
 		d_list_del(&dev_info->sdi_link);
 		smd_dev_free_info(dev_info);
-	}
-
-	/* Verify blob IDs after device replace */
-	d_list_for_each_entry_safe(pool_info, tmp_pool, &pool_list, spi_link) {
-		for (i = 0; i < 3; i++) {
-			rc = smd_pool_get_blob(pool_info->spi_id, i, SMD_DEV_TYPE_DATA, &blob_id);
-			assert_rc_equal(rc, 0);
-			if (i == 0)
-				assert_int_equal(blob_id, 555);
-			else if (i == 1)
-				assert_int_equal(blob_id, 666);
-			else
-				assert_int_equal(blob_id, 777);
-		}
-		d_list_del(&pool_info->spi_link);
-		smd_pool_free_info(pool_info);
 	}
 }
 
