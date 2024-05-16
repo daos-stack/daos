@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -405,24 +405,34 @@ crt_self_test_close_session_handler(crt_rpc_t *rpc_req)
 	D_ASSERT(args != NULL);
 	session_id = *args;
 
-	/******************** LOCK: g_all_session_lock (w) ********************/
 	D_RWLOCK_WRLOCK(&g_all_session_lock);
 
-	/* Find the session if it exists */
-	del_session = find_session(session_id, &prev);
-	if (del_session == NULL) {
-		D_ERROR("Self-test session %ld not found\n", session_id);
-		goto send_rpc;
+	if (session_id == -1) {
+		struct st_session *cur = g_session_list;
+
+		while (cur != NULL) {
+			del_session = cur;
+			cur = cur->next;
+			D_WARN("Force-closing selftest session:%ld\n", del_session->session_id);
+			decref_session(del_session);
+		}
+	} else {
+		/* Find the session if it exists */
+		del_session = find_session(session_id, &prev);
+		if (del_session == NULL) {
+			D_ERROR("Self-test session %ld not found\n", session_id);
+			D_RWLOCK_UNLOCK(&g_all_session_lock);
+			goto send_rpc;
+		}
+
+		/* Remove the session from the list of active sessions */
+		*prev = del_session->next;
+
+		/* addref in crt_self_test_open_session_handler */
+		decref_session(del_session);
 	}
 
-	/* Remove the session from the list of active sessions */
-	*prev = del_session->next;
-
 	D_RWLOCK_UNLOCK(&g_all_session_lock);
-	/******************* UNLOCK: g_all_session_lock *******************/
-
-	/* addref in crt_self_test_open_session_handler */
-	decref_session(del_session);
 
 send_rpc:
 
