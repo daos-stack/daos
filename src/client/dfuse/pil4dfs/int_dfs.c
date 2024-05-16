@@ -6755,7 +6755,7 @@ init_myhook(void)
 	dcache_gc_reclaim_max = DCACHE_GC_RECLAIM_MAX;
 	rc = d_getenv_uint32_t("D_IL_DCACHE_GC_RECLAIM_MAX", &dcache_gc_reclaim_max);
 	if (rc != -DER_SUCCESS && rc != -DER_NONEXIST)
-		DL_WARN(rc, "'D_IL_DCACHE_GC_RECLAIM_MAX' env variable could not be used");
+		DS_WARN(rc, "'D_IL_DCACHE_GC_RECLAIM_MAX' env variable could not be used");
 	if (dcache_gc_reclaim_max == 0) {
 		D_WARN("'D_IL_DCACHE_GC_RECLAIM_MAX' env variable could not be used: value == 0.");
 		dcache_gc_reclaim_max = DCACHE_GC_RECLAIM_MAX;
