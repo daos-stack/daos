@@ -81,11 +81,6 @@ var (
 		"fault domain callback executed but did not generate output",
 		"specify a valid fault domain callback script ('fault_cb' parameter) and restart the control server",
 	)
-	FaultConfigTooManyLayersInFaultDomain = serverConfigFault(
-		code.ServerConfigFaultDomainTooManyLayers,
-		"the fault domain path may have a maximum of 2 levels below the root",
-		"update either the fault domain ('fault_path' parameter) or callback script ('fault_cb' parameter) and restart the control server",
-	)
 	FaultConfigHugepagesDisabledWithBdevs = serverConfigFault(
 		code.ServerConfigHugepagesDisabledWithBdevs,
 		"hugepages cannot be disabled if bdevs have been specified in config",

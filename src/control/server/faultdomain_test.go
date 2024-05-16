@@ -115,11 +115,11 @@ func TestServer_getFaultDomain(t *testing.T) {
 			},
 			expErr: config.FaultConfigFaultDomainInvalid(errors.New("at least one domain level is required")),
 		},
-		"too many layers": { // TODO DAOS-6353: change when arbitrary layers supported
+		"many layers": {
 			cfg: &config.Server{
-				FaultPath: "/rack1/grp1/host0",
+				FaultPath: "/dc-folsom/building10/room123/rack1/grp1/host0",
 			},
-			expErr: config.FaultConfigTooManyLayersInFaultDomain,
+			expResult: "/dc-folsom/building10/room123/rack1/grp1/host0",
 		},
 		"cfg fault callback": {
 			cfg: &config.Server{
@@ -235,7 +235,7 @@ func TestServer_getFaultDomainFromCallback(t *testing.T) {
 	createFaultCBScriptFile(t, invalidScriptPath, 0755, "some junk")
 
 	multiLayerScriptPath := filepath.Join(tmpDir, "multilayer.sh")
-	createFaultCBScriptFile(t, multiLayerScriptPath, 0755, "/one/two/three")
+	createFaultCBScriptFile(t, multiLayerScriptPath, 0755, "/one/two/three/four/five/six")
 
 	rootScriptPath := filepath.Join(tmpDir, "rootdomain.sh")
 	createFaultCBScriptFile(t, rootScriptPath, 0755, "/")
@@ -290,9 +290,9 @@ func TestServer_getFaultDomainFromCallback(t *testing.T) {
 			scriptPath: rootScriptPath,
 			expErr:     config.FaultConfigFaultDomainInvalid(errors.New("at least one domain level is required")),
 		},
-		"script returned fault domain with too many layers": { // TODO DAOS-6353: change when multiple layers supported
+		"fault domain with many layers": {
 			scriptPath: multiLayerScriptPath,
-			expErr:     config.FaultConfigTooManyLayersInFaultDomain,
+			expResult:  "/one/two/three/four/five/six",
 		},
 		"no arbitrary shell commands allowed": {
 			scriptPath: "echo \"my dog has fleas\"",

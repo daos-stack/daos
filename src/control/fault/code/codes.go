@@ -183,7 +183,7 @@ const (
 	ServerConfigFaultCallbackFailed
 	ServerConfigBothFaultPathAndCb
 	ServerConfigFaultCallbackEmpty
-	ServerConfigFaultDomainTooManyLayers
+	serverConfigFaultReserved // removed
 	ServerConfigNrHugepagesOutOfRange
 	ServerConfigHugepagesDisabledWithBdevs
 	ServerConfigVMDSettingDuplicate

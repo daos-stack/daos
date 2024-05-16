@@ -60,10 +60,6 @@ func newFaultDomainFromConfig(domainStr string) (*system.FaultDomain, error) {
 	if fd.NumLevels() == 0 {
 		return nil, config.FaultConfigFaultDomainInvalid(errors.New("at least one domain level is required"))
 	}
-	// TODO DAOS-6353: remove when multiple layers supported
-	if fd.NumLevels() > 2 {
-		return nil, config.FaultConfigTooManyLayersInFaultDomain
-	}
 	return fd, nil
 }
 
