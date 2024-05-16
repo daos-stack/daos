@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -38,7 +38,7 @@ func mockSmdQueryMap(t *testing.T, mocks ...*mockSmdResp) HostStorageMap {
 
 	for _, mock := range mocks {
 		hss := &HostStorageSet{
-			HostSet: mockHostSet(t, mock.Hosts),
+			HostSet: MockHostSet(t, mock.Hosts),
 			HostStorage: &HostStorage{
 				SmdInfo: mock.SmdInfo,
 			},
@@ -445,6 +445,13 @@ func TestControl_packPBSmdManageReq(t *testing.T) {
 			},
 			expErr: errors.New("invalid UUID"),
 		},
+		"set-faulty; multiple ids": {
+			req: &SmdManageReq{
+				Operation: SetFaultyOp,
+				IDs:       fmt.Sprintf(test.MockUUID(1), test.MockPCIAddr(1)),
+			},
+			expErr: errors.New("invalid UUID"),
+		},
 		"set-faulty": {
 			req: &SmdManageReq{
 				Operation: SetFaultyOp,
@@ -487,6 +494,14 @@ func TestControl_packPBSmdManageReq(t *testing.T) {
 					},
 				},
 			},
+		},
+		"dev-replace; multiple ids": {
+			req: &SmdManageReq{
+				Operation:   DevReplaceOp,
+				IDs:         fmt.Sprintf(test.MockUUID(1), test.MockPCIAddr(1)),
+				ReplaceUUID: test.MockUUID(2),
+			},
+			expErr: errors.New("invalid UUID"),
 		},
 		"dev-replace": {
 			req: &SmdManageReq{
@@ -640,9 +655,96 @@ func TestControl_SmdManage(t *testing.T) {
 			},
 			expErr: errors.New("> 1 host"),
 		},
+		// set-faulty API calls do not return SMD info.
 		"set-faulty": {
 			req: &SmdManageReq{
 				Operation: SetFaultyOp,
+				IDs:       test.MockUUID(1),
+			},
+			mic: newMockInvokerWRankResps(&ctlpb.SmdManageResp_RankResp{
+				Rank:    0,
+				Results: []*ctlpb.SmdManageResp_Result{{}},
+			}),
+			expResp: &SmdResp{
+				HostStorage: mockSmdQueryMap(t, &mockSmdResp{Hosts: "host-0"}),
+			},
+		},
+		"set-faulty; rank failure": {
+			req: &SmdManageReq{
+				Operation: SetFaultyOp,
+				IDs:       test.MockUUID(1),
+			},
+			mic: newMockInvokerWRankResps(&ctlpb.SmdManageResp_RankResp{
+				Rank: 0,
+				Results: []*ctlpb.SmdManageResp_Result{
+					{Status: int32(daos.Busy)},
+				},
+			}),
+			expResp: &SmdResp{
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{
+					Hosts: "host-0",
+					Error: "rank 0: DER_BUSY(-1012): Device or resource busy",
+				}),
+				HostStorage: mockSmdQueryMap(t, &mockSmdResp{Hosts: "host-0"}),
+			},
+		},
+		"dev-replace with > 1 host": {
+			req: &SmdManageReq{
+				unaryRequest: unaryRequest{
+					request: request{
+						HostList: mockHostList("one", "two"),
+					},
+				},
+				Operation:   DevReplaceOp,
+				IDs:         test.MockUUID(2),
+				ReplaceUUID: test.MockUUID(1),
+			},
+			expErr: errors.New("> 1 host"),
+		},
+		// dev-replace API calls do not return SMD info.
+		"dev-replace": {
+			req: &SmdManageReq{
+				Operation:   DevReplaceOp,
+				IDs:         test.MockUUID(2),
+				ReplaceUUID: test.MockUUID(1),
+			},
+			mic: newMockInvokerWRankResps(&ctlpb.SmdManageResp_RankResp{
+				Rank:    0,
+				Results: []*ctlpb.SmdManageResp_Result{{}},
+			}),
+			expResp: &SmdResp{
+				HostStorage: mockSmdQueryMap(t, &mockSmdResp{Hosts: "host-0"}),
+			},
+		},
+		"dev-replace; rank failure": {
+			req: &SmdManageReq{
+				Operation:   DevReplaceOp,
+				IDs:         test.MockUUID(2),
+				ReplaceUUID: test.MockUUID(1),
+			},
+			mic: newMockInvokerWRankResps(&ctlpb.SmdManageResp_RankResp{
+				Rank: 0,
+				Results: []*ctlpb.SmdManageResp_Result{
+					{Status: int32(daos.Busy)},
+				},
+			}),
+			expResp: &SmdResp{
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{
+					Hosts: "host-0",
+					Error: "rank 0: DER_BUSY(-1012): Device or resource busy",
+				}),
+				HostStorage: mockSmdQueryMap(t, &mockSmdResp{Hosts: "host-0"}),
+			},
+		},
+		// LED manage API calls return SMD info.
+		"led-identify": {
+			req: &SmdManageReq{
+				unaryRequest: unaryRequest{
+					request: request{
+						HostList: mockHostList("one", "two"),
+					},
+				},
+				Operation: LedBlinkOp,
 				IDs:       test.MockUUID(1),
 			},
 			mic: newMockInvokerWRankResps(&ctlpb.SmdManageResp_RankResp{
@@ -682,9 +784,9 @@ func TestControl_SmdManage(t *testing.T) {
 				}),
 			},
 		},
-		"set-faulty; drpc failure": {
+		"led-identify; rank failure": {
 			req: &SmdManageReq{
-				Operation: SetFaultyOp,
+				Operation: LedBlinkOp,
 				IDs:       test.MockUUID(1),
 			},
 			mic: newMockInvokerWRankResps(&ctlpb.SmdManageResp_RankResp{
@@ -745,7 +847,8 @@ func TestControl_SmdManage(t *testing.T) {
 				for _, sqr := range gotResp.HostStorage {
 					hs := tc.expResp.HostStorage
 					keys := hs.Keys()
-					if len(keys) == 0 {
+					si := sqr.HostStorage.SmdInfo
+					if len(keys) == 0 || si == nil || si.Devices == nil {
 						continue
 					}
 					for i, gotDev := range sqr.HostStorage.SmdInfo.Devices {

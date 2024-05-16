@@ -363,7 +363,7 @@ MINIMAL_ENV = ('HOME', 'TERM', 'SSH_AUTH_SOCK', 'http_proxy', 'https_proxy', 'PK
 
 # Environment variables that are also kept when LD_PRELOAD is set.
 PRELOAD_ENV = ('LD_PRELOAD', 'D_LOG_FILE', 'DAOS_AGENT_DRPC_DIR', 'D_LOG_MASK', 'DD_MASK',
-               'DD_SUBSYS', 'D_IL_MAX_EQ')
+               'DD_SUBSYS', 'D_IL_MAX_EQ', 'D_IL_ENFORCE_EXEC_ENV', 'D_IL_COMPATIBLE')
 
 
 def scons():
@@ -480,9 +480,8 @@ def scons():
     prereqs.save_build_info()
     # also install to $PREFIX/lib to work with existing avocado test code
     if prereqs.test_requested():
-        env.Install('$PREFIX/lib/daos', ['.build_vars.sh', '.build_vars.json'])
         env.Install('$PREFIX/lib/daos/TESTING/ftest/util', ['site_scons/env_modules.py'])
-        env.Install('$PREFIX/lib/daos/TESTING/ftest/', ['ftest.sh'])
+        env.Install('$PREFIX/lib/daos/TESTING/ftest/', ['ftest.sh', "requirements-ftest.txt"])
 
     env.Install("$PREFIX/lib64/daos", "VERSION")
 

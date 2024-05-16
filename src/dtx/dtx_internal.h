@@ -24,6 +24,11 @@
  */
 #define DAOS_DTX_VERSION	4
 
+/** VOS reserves highest two minor epoch values for internal use so we must
+ *  limit the number of dtx sub modifications to avoid conflict.
+ */
+#define DTX_SUB_MOD_MAX         (((uint16_t)-1) - 2)
+
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
@@ -202,7 +207,7 @@ struct dtx_coll_prep_args {
 struct dtx_pool_metrics {
 	struct d_tm_node_t	*dpm_batched_degree;
 	struct d_tm_node_t	*dpm_batched_total;
-	struct d_tm_node_t	*dpm_total[DTX_PROTO_SRV_RPC_COUNT];
+	struct d_tm_node_t	*dpm_total[DTX_PROTO_SRV_RPC_COUNT + 1];
 };
 
 /*
@@ -244,7 +249,6 @@ int dtx_handle_reinit(struct dtx_handle *dth);
 void dtx_batched_commit(void *arg);
 void dtx_aggregation_main(void *arg);
 int start_dtx_reindex_ult(struct ds_cont_child *cont);
-void stop_dtx_reindex_ult(struct ds_cont_child *cont);
 void dtx_merge_check_result(int *tgt, int src);
 int dtx_leader_get(struct ds_pool *pool, struct dtx_memberships *mbs,
 		   daos_unit_oid_t *oid, uint32_t version, struct pool_target **p_tgt);
@@ -287,6 +291,7 @@ enum dtx_status_handle_result {
 
 enum dtx_rpc_flags {
 	DRF_INITIAL_LEADER	= (1 << 0),
+	DRF_SYNC_COMMIT		= (1 << 1),
 };
 
 enum dtx_cos_flags {

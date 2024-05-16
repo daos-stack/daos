@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -185,11 +185,11 @@ func (p *Provider) ControlMetadataIsMounted() (bool, error) {
 		return false, errors.New("nil provider")
 	}
 
-	p.log.Debugf("control metadata config: %+v", p.engineStorage.ControlMetadata)
 	if !p.engineStorage.ControlMetadata.HasPath() {
 		// If there's no control metadata path, we use SCM for control metadata
 		return p.ScmIsMounted()
 	}
+	p.log.Debugf("control metadata config: %+v", p.engineStorage.ControlMetadata)
 
 	if p.engineStorage.ControlMetadata.DevicePath == "" {
 		p.log.Debug("no metadata device defined")
@@ -283,7 +283,7 @@ func (p *Provider) MountScm() error {
 		return errors.New(ScmMsgClassNotSupported)
 	}
 
-	p.log.Debugf("attempting to mount existing SCM dir %s\n", cfg.Scm.MountPoint)
+	p.log.Debugf("attempting to mount SCM dir %s\n", cfg.Scm.MountPoint)
 
 	res, err := p.scm.Mount(req)
 	if err != nil {

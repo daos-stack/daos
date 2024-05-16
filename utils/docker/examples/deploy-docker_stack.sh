@@ -1,9 +1,10 @@
 #!/bin/bash
 
 # set -x
-set -e -o pipefail
+set -u -e -o pipefail
 
-CWD="$(realpath "${0%/*}")"
+CWD="$(realpath "${0%}")"
+CWD="${CWD%/*}"
 
 set -a
 # shellcheck disable=SC1091

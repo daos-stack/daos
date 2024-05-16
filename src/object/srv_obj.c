@@ -3989,9 +3989,12 @@ obj_local_query(struct obj_tgt_query_args *otqa, struct obj_io_context *ioc, dao
 		stripe_size = obj_ec_stripe_rec_nr(&ioc->ioc_oca);
 	}
 
+	otqa->otqa_shard = shards[0];
+
 	if (otqa->otqa_need_copy) {
 		oqma.oqma_oca = &ioc->ioc_oca;
 		oqma.oqma_oid = oid;
+		oqma.oqma_oid.id_shard = shards[0];
 		oqma.oqma_in_dkey = otqa->otqa_in_dkey;
 		oqma.oqma_tgt_dkey = &otqa->otqa_dkey_copy;
 		oqma.oqma_tgt_akey = &otqa->otqa_akey_copy;
@@ -4908,12 +4911,6 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 		goto out;
 
 	rc = ds_cpd_handle_one_wrap(rpc, dcsh, dcde, dcsr, ioc, dth);
-
-	/* For the case of only containing read sub operations, we will
-	 * generate DTX entry for DTX recovery.
-	 */
-	if (rc == 0 && dth->dth_modification_cnt == 0)
-		rc = vos_dtx_attach(dth, true, false);
 
 	rc = dtx_end(dth, ioc->ioc_coc, rc);
 

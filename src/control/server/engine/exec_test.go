@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -141,7 +141,7 @@ func TestRunnerNormalExit(t *testing.T) {
 	// verify that bad user env is scrubbed
 	os.Setenv("FI_VERBS_PREFER_XRC", "1")
 	// verify that allowed user env gets overridden by config
-	os.Setenv("OFI_INTERFACE", "bob0")
+	os.Setenv("D_INTERFACE", "bob0")
 	// verify that allowed user env without a config override is passed through
 	allowedUserEnv := "MOOD"
 	allowedUserVal := "happy"
@@ -151,14 +151,13 @@ func TestRunnerNormalExit(t *testing.T) {
 	defer test.ShowBufferOnFailure(t, buf)
 
 	cfg := MockConfig().
-		WithEnvPassThrough(testModeVar, "OFI_INTERFACE", allowedUserEnv, "LD_LIBRARY_PATH").
+		WithEnvPassThrough(testModeVar, "D_INTERFACE", allowedUserEnv, "LD_LIBRARY_PATH").
 		WithTargetCount(42).
 		WithHelperStreamCount(1).
 		WithFabricInterface("qib0").
 		WithLogMask("DEBUG,MGMT=DEBUG,RPC=ERR,MEM=ERR").
 		WithPinnedNumaNode(1).
 		WithBypassHealthChk(&bypass).
-		WithCrtCtxShareAddr(1).
 		WithCrtTimeout(30).
 		WithStorage(
 			storage.NewTierConfig().
@@ -182,9 +181,8 @@ func TestRunnerNormalExit(t *testing.T) {
 	var gotArgs string
 	env := []string{
 		"FI_OFI_RXM_USE_SRX=1",
-		"CRT_CTX_SHARE_ADDR=1",
 		"CRT_TIMEOUT=30",
-		"OFI_INTERFACE=qib0",
+		"D_INTERFACE=qib0",
 		"D_LOG_MASK=DEBUG,MGMT=DEBUG,RPC=ERR,MEM=ERR",
 		allowedUserEnv + "=" + allowedUserVal,
 	}
