@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
     SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -90,6 +90,7 @@ class RbldWidelyStriped(MdtestBase):
         # start 2nd mdtest job in the background
         self.log.info(">> Running the first mdtest job in the background")
         self.subprocess = True
+        job_manager = self.get_mdtest_job_manager_command(self.manager)
         self.execute_mdtest(job_manager=job_manager)
 
         # Kill rank[5] in the middle of mdtest run and wait for rebuild to complete

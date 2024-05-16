@@ -65,6 +65,7 @@ class RebuildMdtest(MdtestBase):
         times["read_start"] = datetime.now()
         self.mdtest_cmd.update_params(flags=read_flags)
         self.subprocess = True  # run mdtest in the background
+        job_manager = self.get_mdtest_job_manager_command(self.manager)
         self.execute_mdtest(display_space=False, job_manager=job_manager)
         self.log.info("Sleeping 5 seconds for mdtest to start")
         time.sleep(5)
