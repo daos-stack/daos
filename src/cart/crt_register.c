@@ -579,6 +579,7 @@ crt_proto_query_int(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, uint32_t *ver
 	struct crt_proto_query_in	*rpc_req_input;
 	struct proto_query_t		*proto_query = NULL;
 	uint32_t			*tmp_array = NULL;
+	uint32_t                         default_timeout;
 	int				 rc = DER_SUCCESS;
 
 	if (ver == NULL) {
@@ -629,10 +630,19 @@ crt_proto_query_int(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, uint32_t *ver
 	proto_query->pq_user_arg = arg;
 	proto_query->pq_coq->coq_base = base_opc;
 
-	if (timeout != 0 && timeout < crt_gdata.cg_timeout) {
-		rc = crt_req_set_timeout(rpc_req, timeout);
+	if (timeout != 0) {
+		/** The global timeout may be overwritten by the per context timeout
+		 * so let's use the API to get the actual setting.
+		 */
+		rc = crt_req_get_timeout(rpc_req, &default_timeout);
 		/** Should only fail if invalid parameter */
 		D_ASSERT(rc == 0);
+
+		if (timeout < default_timeout) {
+			rc = crt_req_set_timeout(rpc_req, timeout);
+			/** Should only fail if invalid parameter */
+			D_ASSERT(rc == 0);
+		}
 	}
 
 	rc = crt_req_send(rpc_req, proto_query_cb, proto_query);
