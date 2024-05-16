@@ -54,9 +54,6 @@
 #include "hook.h"
 #include "pil4dfs_int.h"
 
-/* Workaround for build with some compilers. To be after all includes. */
-#undef strncmp
-
 /* useful in strncmp() and strndup() */
 #define STR_AND_SIZE(s)    s, sizeof(s)
 /* useful in strncmp() to check whether a string start with a target string. Not including \0 */
@@ -666,7 +663,7 @@ discover_dfuse_mounts(void)
 			abort();
 		}
 		pt_dfs_mt = &dfs_list[num_dfs];
-		if (strncmp(fs_entry->mnt_type, STR_AND_SIZE(MNT_TYPE_FUSE)) == 0) {
+		if (memcmp(fs_entry->mnt_type, STR_AND_SIZE(MNT_TYPE_FUSE)) == 0) {
 			pt_dfs_mt->dcache      = NULL;
 			pt_dfs_mt->len_fs_root = strnlen(fs_entry->mnt_dir, DFS_MAX_PATH);
 			if (pt_dfs_mt->len_fs_root >= DFS_MAX_PATH) {
@@ -1064,9 +1061,9 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 	}
 
 	/* handle special cases. Needed to work with git. */
-	if ((strncmp(szInput, STR_AND_SIZE_M1("http://")) == 0) ||
-	    (strncmp(szInput, STR_AND_SIZE_M1("https://")) == 0) ||
-	    (strncmp(szInput, STR_AND_SIZE_M1("git://")) == 0)) {
+	if ((memcmp(szInput, STR_AND_SIZE_M1("http://")) == 0) ||
+	    (memcmp(szInput, STR_AND_SIZE_M1("https://")) == 0) ||
+	    (memcmp(szInput, STR_AND_SIZE_M1("git://")) == 0)) {
 		*is_target_path = 0;
 		return 0;
 	}
@@ -4124,7 +4121,7 @@ pre_envp(char *const envp[], char ***new_envp)
 	} else {
 		while (envp[num_entry]) {
 			/* scan the env in env_list[] to check whether they exist or not */
-			if (strncmp(envp[num_entry], STR_AND_SIZE_M1("LD_PRELOAD")) == 0 &&
+			if (memcmp(envp[num_entry], STR_AND_SIZE_M1("LD_PRELOAD")) == 0 &&
 			    preload_included == false) {
 				preload_included = true;
 				idx_preload      = num_entry;
@@ -4140,7 +4137,7 @@ pre_envp(char *const envp[], char ***new_envp)
 				if (!env_set[i])
 					continue;
 				if (!env_found[i]) {
-					if (strncmp(envp[num_entry], STR_AND_SIZE_M1(env_list[i]))
+					if (memcmp(envp[num_entry], STR_AND_SIZE_M1(env_list[i]))
 					    == 0) {
 						env_found[i] = true;
 						num_entry_found++;
