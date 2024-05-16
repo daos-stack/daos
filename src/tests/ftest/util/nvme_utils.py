@@ -65,6 +65,9 @@ def set_device_faulty(test, dmg, server, uuid, pool=None, has_sys_xs=False, **kw
 
     # Update the expected status of the any stopped/excluded ranks
     if has_sys_xs:
+        test.log.debug(
+            "Expecting ranks on %s to be excluded due to excluding sys_xs storage device: %s",
+            server, test.server_managers[-1].ranks)
         ranks = [test.server_managers[-1].ranks[server]]
         test.server_managers[-1].update_expected_states(ranks, ["stopped", "excluded"])
 
