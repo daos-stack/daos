@@ -6,7 +6,7 @@
 # pylint: disable=too-many-lines
 
 import os
-import random
+import random  # nosec
 import re
 import sys
 from ast import literal_eval
