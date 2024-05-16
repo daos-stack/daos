@@ -702,7 +702,10 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						cfg.setSendMsgResponseList(t, mock)
 					}
 				}
-				srv.setDrpcClient(newMockDrpcClient(cfg))
+				mdc := newMockDrpcClient(cfg)
+				srv.getDrpcClientFn = func(s string) drpc.DomainSocketClient {
+					return mdc
+				}
 				srv.ready.SetTrue()
 			}
 			if tc.harnessStopped {
@@ -1577,7 +1580,10 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 						cfg.setSendMsgResponseList(t, mock)
 					}
 				}
-				ei.setDrpcClient(newMockDrpcClient(cfg))
+				mdc := newMockDrpcClient(cfg)
+				ei.getDrpcClientFn = func(s string) drpc.DomainSocketClient {
+					return mdc
+				}
 				ei.ready.SetTrue()
 			}
 			if tc.harnessStopped {
