@@ -187,6 +187,7 @@ class PoolListConsolidationTest(RecoveryTestBase):
 
         Returns:
             list: Error list.
+
         """
         hosts = list(set(self.server_managers[0].ranks.values()))
         nodeset_hosts = NodeSet.fromlist(hosts)
@@ -254,7 +255,7 @@ class PoolListConsolidationTest(RecoveryTestBase):
 
         1. Create a pool with --nsvc=3. Rank 0, 1, and 2 will be pool service replicas.
         2. Stop servers.
-        3. Remove /mnt/daos/<pool_uuid>/rdb-pool from rank 0 and 2.
+        3. Remove <scm_mount>/<pool_uuid>/rdb-pool from rank 0 and 2.
         4. Start servers.
         5. Run DAOS checker under kinds of mode.
         6. Try creating a container. The pool can be started now, so create should succeed.
@@ -268,16 +269,22 @@ class PoolListConsolidationTest(RecoveryTestBase):
         :avocado: tags=recovery,cat_recov,pool_list_consolidation
         :avocado: tags=PoolListConsolidationTest,test_lost_majority_ps_replicas
         """
-        # 1. Create a pool with --nsvc=3.
+        self.log_step("Create a pool with --nsvc=3.")
         self.pool = self.get_pool(svcn=3)
 
-        # 2. Stop servers.
+        self.log_step("Stop servers")
         dmg_command = self.get_dmg_command()
         dmg_command.system_stop()
 
-        # 3. Remove /mnt/daos/<pool_uuid>/rdb-pool from two ranks.
-        rdb_pool_path = f"/mnt/daos0/{self.pool.uuid.lower()}/rdb-pool"
-        command = f"sudo rm /mnt/daos0/{self.pool.uuid.lower()}/rdb-pool"
+        self.log_step("Remove <scm_mount>/<pool_uuid>/rdb-pool from two ranks.")
+        if not self.get_vos_file_path(pool=self.pool):
+            msg = "MD-on-SSD cluster. Mount point is removed by control plane after system stop."
+            self.log.info(msg)
+            # return results in PASS.
+            return
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
+        rdb_pool_path = f"{scm_mount}/{self.pool.uuid.lower()}/rdb-pool"
+        command = f"sudo rm {scm_mount}/{self.pool.uuid.lower()}/rdb-pool"
         hosts = list(set(self.server_managers[0].ranks.values()))
         count = 0
         for host in hosts:
@@ -290,15 +297,15 @@ class PoolListConsolidationTest(RecoveryTestBase):
                 if count > 1:
                     break
 
-        # 4. Start servers.
+        self.log_step("Start servers.")
         dmg_command.system_start()
 
+        self.log_step("Run DAOS checker under kinds of mode.")
         errors = []
-        # 5. Run DAOS checker under kinds of mode.
         errors = self.chk_dist_checker(
             inconsistency="corrupted pool without quorum")
 
-        # 6. Try creating a container. It should succeed.
+        self.log_step("Try creating a container. It should succeed.")
         cont_create_success = False
         for _ in range(5):
             time.sleep(5)
@@ -308,14 +315,15 @@ class PoolListConsolidationTest(RecoveryTestBase):
                 break
             except TestFail as error:
                 msg = (f"## Container create failed after running checker! "
-                       f"error = {error}")
+                    f"error = {error}")
                 self.log.debug(msg)
 
         if not cont_create_success:
             errors.append("Container create failed after running checker!")
 
-        # 7. Show that rdb-pool are recovered. i.e., at least three out of four ranks
-        # should have rdb-pool.
+        msg = ("Show that rdb-pool are recovered. i.e., at least three out of four ranks should "
+               "have rdb-pool.")
+        self.log_step(msg)
         hosts = list(set(self.server_managers[0].ranks.values()))
         count = 0
         for host in hosts:
@@ -337,7 +345,7 @@ class PoolListConsolidationTest(RecoveryTestBase):
 
         1. Create a pool.
         2. Stop servers.
-        3. Remove /mnt/daos0/<pool_uuid>/rdb-pool from all ranks.
+        3. Remove <scm_mount>/<pool_uuid>/rdb-pool from all ranks.
         4. Start servers.
         5. Run DAOS checker under kinds of mode.
         6. Check that the pool does not appear with dmg pool list.
@@ -350,17 +358,23 @@ class PoolListConsolidationTest(RecoveryTestBase):
         :avocado: tags=recovery,cat_recov,pool_list_consolidation
         :avocado: tags=PoolListConsolidationTest,test_lost_all_rdb
         """
-        # 1. Create a pool.
+        self.log_step("Create a pool.")
         self.pool = self.get_pool()
 
-        # 2. Stop servers.
+        self.log_step("Stop servers.")
         dmg_command = self.get_dmg_command()
         dmg_command.system_stop()
 
-        # 3. Remove /mnt/daos/<pool_uuid>/rdb-pool from all ranks.
+        self.log_step("Remove <scm_mount>/<pool_uuid>/rdb-pool from all ranks.")
+        if not self.get_vos_file_path(pool=self.pool):
+            msg = "MD-on-SSD cluster. Mount point is removed by control plane after system stop."
+            self.log.info(msg)
+            # return results in PASS.
+            return
         hosts = list(set(self.server_managers[0].ranks.values()))
         nodeset_hosts = NodeSet.fromlist(hosts)
-        command = f"sudo rm /mnt/daos0/{self.pool.uuid.lower()}/rdb-pool"
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
+        command = f"sudo rm {scm_mount}/{self.pool.uuid.lower()}/rdb-pool"
         remove_result = pcmd(hosts=nodeset_hosts, command=command)
         success_nodes = remove_result[0]
         if nodeset_hosts != success_nodes:
@@ -369,19 +383,20 @@ class PoolListConsolidationTest(RecoveryTestBase):
             self.fail(msg)
 
         # 4. Start servers.
+        self.log_step("Start servers.")
         dmg_command.system_start()
 
+        self.log_step("Run DAOS checker under kinds of mode.")
         errors = []
-        # 5. Run DAOS checker under kinds of mode.
         errors = self.chk_dist_checker(
             inconsistency="corrupted pool without quorum")
 
-        # 6. Check that the pool does not appear with dmg pool list.
+        self.log_step("Check that the pool does not appear with dmg pool list.")
         pools = dmg_command.get_pool_list_all()
         if pools:
             errors.append(f"Pool still exists after running checker! {pools}")
 
-        # 7. Verify that the pool directory was removed from the mount point.
+        self.log_step("Verify that the pool directory was removed from the mount point.")
         errors = self.verify_pool_dir_removed(errors=errors)
 
         # Don't try to destroy the pool during tearDown.
