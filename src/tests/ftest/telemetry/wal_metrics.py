@@ -136,7 +136,7 @@ class WalMetrics(TestWithTelemetry):
         :avocado: tags=telemetry
         :avocado: tags=WalMetrics,test_wal_checkpoint_metrics
         """
-        frequency = 5
+        frequency = 10
         wal_metrics = list(self.telemetry.ENGINE_POOL_CHECKPOINT_METRICS)
 
         self.log_step('Creating a pool with check pointing disabled (dmg pool create)')
