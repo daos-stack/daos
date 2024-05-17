@@ -9,3 +9,5 @@ yamllint==1.35.1
 codespell==2.2.6
 # Used by ci/jira_query.py which pip installs it standalone.
 jira
+# Used by ftest/tags.py
+yaml
