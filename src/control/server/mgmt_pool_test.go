@@ -143,7 +143,8 @@ func TestServer_MgmtSvc_PoolCreateAlreadyExists(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			svc := newTestMgmtSvc(t, log)
-			setupMockDrpcClient(svc, tc.queryResp, tc.queryErr)
+			mdc := getMockDrpcClient(tc.queryResp, tc.queryErr)
+			setupSvcDrpcClient(svc, 0, mdc)
 			if _, err := svc.membership.Add(system.MockMember(t, 1, system.MemberStateJoined)); err != nil {
 				t.Fatal(err)
 			}
@@ -377,7 +378,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				// dRPC call returns junk in the message body
 				badBytes := makeBadBytes(42)
 
-				setupMockDrpcClientBytes(svc, badBytes, err)
+				setupSvcDrpcClient(svc, 0, getMockDrpcClientBytes(badBytes, err))
 			},
 			expErr: errors.New("unmarshal"),
 		},
@@ -492,6 +493,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				mp := storage.NewProvider(log, 0, &engineCfg.Storage,
 					nil, nil, nil, nil)
 				srv := NewEngineInstance(log, mp, nil, r)
+				srv.setDrpcSocket("/dontcare")
 				srv.ready.SetTrue()
 
 				harness := NewEngineHarness(log)
@@ -563,7 +565,7 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 
 	dc := newMockDrpcClient(&mockDrpcClientConfig{IsConnectedBool: true})
 	dc.cfg.setSendMsgResponse(drpc.Status_SUCCESS, nil, nil)
-	mgmtSvc.harness.instances[0].(*EngineInstance)._drpcClient = dc
+	mgmtSvc.harness.instances[0].(*EngineInstance).getDrpcClientFn = func(s string) drpc.DomainSocketClient { return dc }
 
 	for _, m := range []*system.Member{
 		system.MockMember(t, 0, system.MemberStateJoined),
@@ -955,7 +957,8 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 					setupMockDrpcClient(tc.mgmtSvc, tc.expResp, tc.expErr)
 				}
 			}
-			tc.setupMockDrpc(tc.mgmtSvc, tc.expErr)
+			mdc := getMockDrpcClient(tc.expResp, tc.expErr)
+			setupSvcDrpcClient(tc.mgmtSvc, 0, mdc)
 
 			if tc.req != nil && tc.req.Sys == "" {
 				tc.req.Sys = build.DefaultSystemName
@@ -991,7 +994,7 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 
 			if tc.expDrpcReq != nil {
 				gotReq := new(mgmtpb.PoolDestroyReq)
-				if err := proto.Unmarshal(getLastMockCall(tc.mgmtSvc).Body, gotReq); err != nil {
+				if err := proto.Unmarshal(getLastMockCall(mdc).Body, gotReq); err != nil {
 					t.Fatal(err)
 				}
 				if diff := cmp.Diff(tc.expDrpcReq, gotReq, cmpOpts...); diff != "" {
@@ -1000,7 +1003,7 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 			}
 			if tc.expDrpcEvReq != nil {
 				gotReq := new(mgmtpb.PoolEvictReq)
-				if err := proto.Unmarshal(getLastMockCall(tc.mgmtSvc).Body, gotReq); err != nil {
+				if err := proto.Unmarshal(getLastMockCall(mdc).Body, gotReq); err != nil {
 					t.Fatal(err)
 				}
 				if diff := cmp.Diff(tc.expDrpcEvReq, gotReq, cmpOpts...); diff != "" {
@@ -1009,7 +1012,7 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 			}
 			if tc.expDrpcListContReq != nil {
 				gotReq := new(mgmtpb.ListContReq)
-				if err := proto.Unmarshal(getLastMockCall(tc.mgmtSvc).Body, gotReq); err != nil {
+				if err := proto.Unmarshal(getLastMockCall(mdc).Body, gotReq); err != nil {
 					t.Fatal(err)
 				}
 				if diff := cmp.Diff(tc.expDrpcListContReq, gotReq, cmpOpts...); diff != "" {
@@ -1072,7 +1075,7 @@ func TestServer_MgmtSvc_PoolExtend(t *testing.T) {
 				// dRPC call returns junk in the message body
 				badBytes := makeBadBytes(42)
 
-				setupMockDrpcClientBytes(svc, badBytes, err)
+				setupSvcDrpcClient(svc, 0, getMockDrpcClientBytes(badBytes, err))
 			},
 			expErr: errors.New("unmarshal"),
 		},
@@ -1098,7 +1101,7 @@ func TestServer_MgmtSvc_PoolExtend(t *testing.T) {
 
 			if tc.setupMockDrpc == nil {
 				tc.setupMockDrpc = func(svc *mgmtSvc, err error) {
-					setupMockDrpcClient(tc.mgmtSvc, tc.expResp, tc.expErr)
+					setupSvcDrpcClient(svc, 0, getMockDrpcClient(tc.expResp, tc.expErr))
 				}
 			}
 			tc.setupMockDrpc(tc.mgmtSvc, tc.expErr)
@@ -1174,7 +1177,7 @@ func TestServer_MgmtSvc_PoolDrain(t *testing.T) {
 				// dRPC call returns junk in the message body
 				badBytes := makeBadBytes(42)
 
-				setupMockDrpcClientBytes(svc, badBytes, err)
+				setupSvcDrpcClient(svc, 0, getMockDrpcClientBytes(badBytes, err))
 			},
 			expErr: errors.New("unmarshal"),
 		},
@@ -1198,7 +1201,7 @@ func TestServer_MgmtSvc_PoolDrain(t *testing.T) {
 
 			if tc.setupMockDrpc == nil {
 				tc.setupMockDrpc = func(svc *mgmtSvc, err error) {
-					setupMockDrpcClient(tc.mgmtSvc, tc.expResp, tc.expErr)
+					setupSvcDrpcClient(svc, 0, getMockDrpcClient(tc.expResp, tc.expErr))
 				}
 			}
 			tc.setupMockDrpc(tc.mgmtSvc, tc.expErr)
@@ -1266,7 +1269,7 @@ func TestServer_MgmtSvc_PoolEvict(t *testing.T) {
 				// dRPC call returns junk in the message body
 				badBytes := makeBadBytes(42)
 
-				setupMockDrpcClientBytes(svc, badBytes, err)
+				setupSvcDrpcClient(svc, 0, getMockDrpcClientBytes(badBytes, err))
 			},
 			expErr: errors.New("unmarshal"),
 		},
@@ -1290,7 +1293,7 @@ func TestServer_MgmtSvc_PoolEvict(t *testing.T) {
 
 			if tc.setupMockDrpc == nil {
 				tc.setupMockDrpc = func(svc *mgmtSvc, err error) {
-					setupMockDrpcClient(tc.mgmtSvc, tc.expResp, tc.expErr)
+					setupSvcDrpcClient(svc, 0, getMockDrpcClient(tc.expResp, tc.expErr))
 				}
 			}
 			tc.setupMockDrpc(tc.mgmtSvc, tc.expErr)
@@ -1425,7 +1428,7 @@ func TestPoolGetACL_Success(t *testing.T) {
 			Entries: []string{"A::OWNER@:rw", "A:g:GROUP@:r"},
 		},
 	}
-	setupMockDrpcClient(svc, expectedResp, nil)
+	setupSvcDrpcClient(svc, 0, getMockDrpcClient(expectedResp, nil))
 
 	resp, err := svc.PoolGetACL(test.Context(t), newTestGetACLReq())
 
@@ -1446,7 +1449,7 @@ func TestPoolGetACL_DrpcFailed(t *testing.T) {
 	svc := newTestMgmtSvc(t, log)
 	addTestPools(t, svc.sysdb, mockUUID)
 	expectedErr := errors.New("mock error")
-	setupMockDrpcClient(svc, nil, expectedErr)
+	setupSvcDrpcClient(svc, 0, getMockDrpcClient(nil, expectedErr))
 
 	resp, err := svc.PoolGetACL(test.Context(t), newTestGetACLReq())
 
@@ -1466,7 +1469,7 @@ func TestPoolGetACL_BadDrpcResp(t *testing.T) {
 	// dRPC call returns junk in the message body
 	badBytes := makeBadBytes(12)
 
-	setupMockDrpcClientBytes(svc, badBytes, nil)
+	setupSvcDrpcClient(svc, 0, getMockDrpcClientBytes(badBytes, nil))
 
 	resp, err := svc.PoolGetACL(test.Context(t), newTestGetACLReq())
 
@@ -1509,7 +1512,7 @@ func TestPoolOverwriteACL_DrpcFailed(t *testing.T) {
 	svc := newTestMgmtSvc(t, log)
 	addTestPools(t, svc.sysdb, mockUUID)
 	expectedErr := errors.New("mock error")
-	setupMockDrpcClient(svc, nil, expectedErr)
+	setupSvcDrpcClient(svc, 0, getMockDrpcClient(nil, expectedErr))
 
 	resp, err := svc.PoolOverwriteACL(test.Context(t), newTestModifyACLReq())
 
@@ -1529,7 +1532,7 @@ func TestPoolOverwriteACL_BadDrpcResp(t *testing.T) {
 	// dRPC call returns junk in the message body
 	badBytes := makeBadBytes(16)
 
-	setupMockDrpcClientBytes(svc, badBytes, nil)
+	setupSvcDrpcClient(svc, 0, getMockDrpcClientBytes(badBytes, nil))
 
 	resp, err := svc.PoolOverwriteACL(test.Context(t), newTestModifyACLReq())
 
@@ -1553,7 +1556,7 @@ func TestPoolOverwriteACL_Success(t *testing.T) {
 			Entries: []string{"A::OWNER@:rw", "A:g:GROUP@:r"},
 		},
 	}
-	setupMockDrpcClient(svc, expectedResp, nil)
+	setupSvcDrpcClient(svc, 0, getMockDrpcClient(expectedResp, nil))
 
 	resp, err := svc.PoolOverwriteACL(test.Context(t), newTestModifyACLReq())
 
@@ -1589,7 +1592,7 @@ func TestPoolUpdateACL_DrpcFailed(t *testing.T) {
 	svc := newTestMgmtSvc(t, log)
 	addTestPools(t, svc.sysdb, mockUUID)
 	expectedErr := errors.New("mock error")
-	setupMockDrpcClient(svc, nil, expectedErr)
+	setupSvcDrpcClient(svc, 0, getMockDrpcClient(nil, expectedErr))
 
 	resp, err := svc.PoolUpdateACL(test.Context(t), newTestModifyACLReq())
 
@@ -1609,7 +1612,7 @@ func TestPoolUpdateACL_BadDrpcResp(t *testing.T) {
 	// dRPC call returns junk in the message body
 	badBytes := makeBadBytes(16)
 
-	setupMockDrpcClientBytes(svc, badBytes, nil)
+	setupSvcDrpcClient(svc, 0, getMockDrpcClientBytes(badBytes, nil))
 
 	resp, err := svc.PoolUpdateACL(test.Context(t), newTestModifyACLReq())
 
@@ -1633,7 +1636,7 @@ func TestPoolUpdateACL_Success(t *testing.T) {
 			Entries: []string{"A::OWNER@:rw", "A:g:GROUP@:r"},
 		},
 	}
-	setupMockDrpcClient(svc, expectedResp, nil)
+	setupSvcDrpcClient(svc, 0, getMockDrpcClient(expectedResp, nil))
 
 	resp, err := svc.PoolUpdateACL(test.Context(t), newTestModifyACLReq())
 
@@ -1677,7 +1680,7 @@ func TestPoolDeleteACL_DrpcFailed(t *testing.T) {
 	svc := newTestMgmtSvc(t, log)
 	addTestPools(t, svc.sysdb, mockUUID)
 	expectedErr := errors.New("mock error")
-	setupMockDrpcClient(svc, nil, expectedErr)
+	setupSvcDrpcClient(svc, 0, getMockDrpcClient(nil, expectedErr))
 
 	resp, err := svc.PoolDeleteACL(test.Context(t), newTestDeleteACLReq())
 
@@ -1697,7 +1700,7 @@ func TestPoolDeleteACL_BadDrpcResp(t *testing.T) {
 	// dRPC call returns junk in the message body
 	badBytes := makeBadBytes(16)
 
-	setupMockDrpcClientBytes(svc, badBytes, nil)
+	setupSvcDrpcClient(svc, 0, getMockDrpcClientBytes(badBytes, nil))
 
 	resp, err := svc.PoolDeleteACL(test.Context(t), newTestDeleteACLReq())
 
@@ -1721,7 +1724,7 @@ func TestPoolDeleteACL_Success(t *testing.T) {
 			Entries: []string{"A::OWNER@:rw", "A:G:readers@:r"},
 		},
 	}
-	setupMockDrpcClient(svc, expectedResp, nil)
+	setupSvcDrpcClient(svc, 0, getMockDrpcClient(expectedResp, nil))
 
 	resp, err := svc.PoolDeleteACL(test.Context(t), newTestDeleteACLReq())
 
@@ -1787,7 +1790,7 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 				// dRPC call returns junk in the message body
 				badBytes := makeBadBytes(42)
 
-				setupMockDrpcClientBytes(svc, badBytes, err)
+				setupSvcDrpcClient(svc, 0, getMockDrpcClientBytes(badBytes, err))
 			},
 			expErr: errors.New("unmarshal"),
 		},
@@ -1818,7 +1821,7 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 
 			if tc.setupMockDrpc == nil {
 				tc.setupMockDrpc = func(svc *mgmtSvc, err error) {
-					setupMockDrpcClient(tc.mgmtSvc, tc.expResp, tc.expErr)
+					setupSvcDrpcClient(svc, 0, getMockDrpcClient(tc.expResp, tc.expErr))
 				}
 			}
 			tc.setupMockDrpc(tc.mgmtSvc, tc.expErr)
@@ -1841,22 +1844,17 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 	}
 }
 
-func getLastMockCall(svc *mgmtSvc) *drpc.Call {
-	mi := svc.harness.instances[0].(*EngineInstance)
-	if mi == nil || mi._drpcClient == nil {
-		return nil
-	}
-
-	return mi._drpcClient.(*mockDrpcClient).SendMsgInputCall
+func getLastMockCall(mdc *mockDrpcClient) *drpc.Call {
+	return mdc.SendMsgInputCall
 }
 
 func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 	for name, tc := range map[string]struct {
-		setupMockDrpc func(_ *mgmtSvc, _ error)
-		drpcResp      *mgmtpb.PoolSetPropResp
-		req           *mgmtpb.PoolSetPropReq
-		expDrpcReq    *mgmtpb.PoolSetPropReq
-		expErr        error
+		getMockDrpc func(error) *mockDrpcClient
+		drpcResp    *mgmtpb.PoolSetPropResp
+		req         *mgmtpb.PoolSetPropReq
+		expDrpcReq  *mgmtpb.PoolSetPropReq
+		expErr      error
 	}{
 		"wrong system": {
 			req:    &mgmtpb.PoolSetPropReq{Id: mockUUID, Sys: "bad"},
@@ -1872,11 +1870,11 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 					},
 				},
 			},
-			setupMockDrpc: func(svc *mgmtSvc, err error) {
+			getMockDrpc: func(err error) *mockDrpcClient {
 				// dRPC call returns junk in the message body
 				badBytes := makeBadBytes(42)
 
-				setupMockDrpcClientBytes(svc, badBytes, err)
+				return getMockDrpcClientBytes(badBytes, err)
 			},
 			expErr: errors.New("unmarshal"),
 		},
@@ -1961,12 +1959,14 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 			if tc.req.Id != mockUUID {
 				addTestPools(t, ms.sysdb, tc.req.Id)
 			}
-			if tc.setupMockDrpc == nil {
-				tc.setupMockDrpc = func(svc *mgmtSvc, err error) {
-					setupMockDrpcClient(svc, tc.drpcResp, tc.expErr)
+
+			if tc.getMockDrpc == nil {
+				tc.getMockDrpc = func(err error) *mockDrpcClient {
+					return getMockDrpcClient(tc.drpcResp, err)
 				}
 			}
-			tc.setupMockDrpc(ms, tc.expErr)
+			mdc := tc.getMockDrpc(tc.expErr)
+			setupSvcDrpcClient(ms, 0, mdc)
 
 			if tc.req != nil && tc.req.Sys == "" {
 				tc.req.Sys = build.DefaultSystemName
@@ -1978,7 +1978,7 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 			}
 
 			lastReq := new(mgmtpb.PoolSetPropReq)
-			if err := proto.Unmarshal(getLastMockCall(ms).Body, lastReq); err != nil {
+			if err := proto.Unmarshal(getLastMockCall(mdc).Body, lastReq); err != nil {
 				t.Fatal(err)
 			}
 			if diff := cmp.Diff(tc.expDrpcReq, lastReq, test.DefaultCmpOpts()...); diff != "" {
@@ -2013,7 +2013,7 @@ func TestServer_MgmtSvc_PoolGetProp(t *testing.T) {
 				// dRPC call returns junk in the message body
 				badBytes := makeBadBytes(42)
 
-				setupMockDrpcClientBytes(svc, badBytes, err)
+				setupSvcDrpcClient(svc, 0, getMockDrpcClientBytes(badBytes, err))
 			},
 			expErr: errors.New("unmarshal"),
 		},
@@ -2046,7 +2046,7 @@ func TestServer_MgmtSvc_PoolGetProp(t *testing.T) {
 			}
 			if tc.setupMockDrpc == nil {
 				tc.setupMockDrpc = func(svc *mgmtSvc, err error) {
-					setupMockDrpcClient(svc, tc.drpcResp, tc.expErr)
+					setupSvcDrpcClient(svc, 0, getMockDrpcClient(tc.drpcResp, tc.expErr))
 				}
 			}
 			tc.setupMockDrpc(ms, tc.expErr)
@@ -2108,7 +2108,7 @@ func TestServer_MgmtSvc_PoolUpgrade(t *testing.T) {
 				// dRPC call returns junk in the message body
 				badBytes := makeBadBytes(42)
 
-				setupMockDrpcClientBytes(svc, badBytes, err)
+				setupSvcDrpcClient(svc, 0, getMockDrpcClientBytes(badBytes, err))
 			},
 			expErr: errors.New("unmarshal"),
 		},
@@ -2132,7 +2132,7 @@ func TestServer_MgmtSvc_PoolUpgrade(t *testing.T) {
 
 			if tc.setupMockDrpc == nil {
 				tc.setupMockDrpc = func(svc *mgmtSvc, err error) {
-					setupMockDrpcClient(tc.mgmtSvc, tc.expResp, tc.expErr)
+					setupSvcDrpcClient(svc, 0, getMockDrpcClient(tc.expResp, tc.expErr))
 				}
 			}
 			tc.setupMockDrpc(tc.mgmtSvc, tc.expErr)
