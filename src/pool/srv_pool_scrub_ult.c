@@ -245,7 +245,7 @@ drain_pool_target(uuid_t pool_uuid, d_rank_t rank, uint32_t target)
 	target_list.pta_addrs = &addr;
 
 	rc = dsc_pool_svc_update_target_state(pool_uuid, &out_ranks,
-					      daos_getmtime_coarse() + 60 * 1000, &target_list,
+					      daos_getmtime_coarse() + 5 * 60 * 1000, &target_list,
 					      PO_COMP_ST_DRAIN);
 	if (rc != DER_SUCCESS)
 		D_ERROR("pool target update status failed: "DF_RC"\n", DP_RC(rc));

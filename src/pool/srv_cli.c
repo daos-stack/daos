@@ -611,7 +611,8 @@ pool_evict_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 	int                    rc  = out->pvo_op.po_rc;
 
 	if (rc != 0)
-		DL_ERROR(rc, DF_UUID ": pool destroy failed to evict handles", DP_UUID(pool_uuid));
+		DL_ERROR(rc, DF_UUID ": POOL_EVICT failed: destroy=%u force=%u", DP_UUID(pool_uuid),
+			 arg->pea_destroy, arg->pea_force);
 	if (arg->pea_count != NULL)
 		*arg->pea_count = out->pvo_n_hdls_evicted;
 	return rc;
@@ -656,8 +657,7 @@ dsc_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadli
 		.pea_count	= count
 	};
 
-	D_DEBUG(DB_MGMT, DF_UUID ": Destroy pool (force: %d), inspect/evict handles\n",
-		DP_UUID(pool_uuid), force);
+	D_DEBUG(DB_MGMT, DF_UUID ": destroy=%u force=%u\n", DP_UUID(pool_uuid), destroy, force);
 	return dsc_pool_svc_call(pool_uuid, ranks, &pool_evict_cbs, &arg, deadline);
 }
 
@@ -932,7 +932,7 @@ static struct dsc_pool_svc_call_cbs pool_drain_cbs = {
 int
 dsc_pool_svc_update_target_state(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline,
 				 struct pool_target_addr_list *target_addrs,
-				 pool_comp_state_t             state)
+				 pool_comp_state_t state)
 {
 	struct pool_update_target_state_arg arg = {
 		.puta_target_addrs	= target_addrs,
