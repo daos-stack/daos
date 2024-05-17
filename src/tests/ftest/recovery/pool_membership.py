@@ -3,7 +3,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import os
 import time
 
 from ClusterShell.NodeSet import NodeSet
