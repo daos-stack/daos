@@ -19,9 +19,9 @@ class WalMetrics(TestWithTelemetry):
     def test_wal_commit_metrics(self):
         """JIRA ID: DAOS-11626.
 
-        The WAL commit metrics is per-pool metrics, it includes 'wal_sz', 'wal_qd' and 'wal_waiters'
-        (see vos_metrics_alloc() in src/vos/vos_common.c). WAL commit metrics are updated on each
-        local transaction (for example, transaction for a update request, etc.)
+        The WAL commit metrics is per-pool metrics, it includes 'wal_sz', 'wal_qd', 'wal_waiters'
+        and 'wal_dur' (see vos_metrics_alloc() in src/vos/vos_common.c). WAL commit metrics are
+        updated on each local transaction (for example, transaction for a update request, etc.)
 
         Test steps:
         1) Create a pool
@@ -41,10 +41,12 @@ class WalMetrics(TestWithTelemetry):
             'Collect WAL commit metrics after creating a pool (dmg telemetry metrics query)')
         ranges = self.telemetry.collect_data(wal_metrics)
         for metric in list(ranges):
-            if '_sz' in metric and not metric.endswith('_mean') and not metric.endswith('_stddev'):
+            if (('_sz' in metric or '_dur' in metric)
+                    and not metric.endswith('_mean') and not metric.endswith('_stddev')):
                 for label in ranges[metric]:
                     if self.server_managers[0].manager.job.using_control_metadata:
-                        # The min/max/actual size should be greater than 0 for MD on SSD
+                        # The min/max/actual values of the size and duration metrics should be
+                        # greater than 0 for MD on SSD
                         ranges[metric][label] = [1]
                     else:
                         ranges[metric][label] = [0, 0]

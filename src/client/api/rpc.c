@@ -115,8 +115,7 @@ query_cb(struct crt_proto_query_cb_info *cb_info)
 
 	if (daos_rpc_retryable_rc(cb_info->pq_rc)) {
 		rproto->ep.ep_rank = (rproto->ep.ep_rank + 1) % rproto->nr_ranks;
-		if (rproto->timeout < 30)
-			rproto->timeout *= 2;
+		rproto->timeout += 3;
 		rc = crt_proto_query_with_ctx(&rproto->ep, rproto->base_opc, rproto->ver_array,
 					      rproto->array_size, rproto->timeout, query_cb, rproto,
 					      daos_get_crt_ctx());
