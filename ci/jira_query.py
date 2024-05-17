@@ -4,11 +4,11 @@
 import json
 import os
 import random
+import re
 import string
 import sys
 import time
 import urllib
-import re
 
 import jira
 
@@ -175,7 +175,8 @@ def main():
             elif str(version) in ('2.4 Community Release'):
                 rv_priority = 3
 
-            # If Required for Version is in the correct format, generate a corresponding GitHub label
+            # If Required for Version is in the correct format,
+            # generate a corresponding GitHub label
             version_match = REQ_VERSION_REGEX.match(str(version))
             if version_match:
                 version_number = version_match.groups()[0]
