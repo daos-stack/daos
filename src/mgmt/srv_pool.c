@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -657,7 +657,7 @@ ds_mgmt_tgt_pool_shard_destroy(uuid_t pool_uuid, int shard_idx, d_rank_t rank)
 
 	tgt_ep.ep_grp = NULL;
 	tgt_ep.ep_rank = rank;
-	tgt_ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
+	tgt_ep.ep_tag = daos_rpc_tag(DAOS_REQ_TGT, shard_idx);
 
 	opc = DAOS_RPC_OPCODE(MGMT_TGT_SHARD_DESTROY, DAOS_MGMT_MODULE,
 			      DAOS_MGMT_VERSION);

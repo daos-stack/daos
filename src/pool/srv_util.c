@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1702,7 +1702,7 @@ manage_target(bool start)
 		if (start)
 			rc = ds_pool_child_start(pool_info->spi_id, true);
 		else
-			rc = ds_pool_child_stop(pool_info->spi_id);
+			rc = ds_pool_child_stop(pool_info->spi_id, false);
 
 		if (rc < 0) {
 			DL_ERROR(rc, DF_UUID": Failed to %s pool child.",

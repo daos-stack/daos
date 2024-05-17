@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -318,6 +318,11 @@ vos_wal_metrics_init(struct vos_wal_metrics *vw_metrics, const char *path, int t
 	if (rc)
 		D_WARN("Failed to create WAL waiters telemetry: "DF_RC"\n", DP_RC(rc));
 
+	rc = d_tm_add_metric(&vw_metrics->vwm_wal_dur, D_TM_DURATION, "WAL commit duration", NULL,
+			     "%s/%s/wal_dur/tgt_%d", path, VOS_WAL_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create WAL commit duration telemetry: " DF_RC "\n", DP_RC(rc));
+
 	/* Initialize metrics for WAL replay */
 	rc = d_tm_add_metric(&vw_metrics->vwm_replay_count, D_TM_COUNTER, "Number of WAL replays",
 			     NULL, "%s/%s/replay_count/tgt_%u", path, VOS_WAL_DIR, tgt_id);
@@ -383,15 +388,19 @@ reserve:
 static inline int
 vos_wal_commit(struct umem_store *store, struct umem_wal_tx *wal_tx, void *data_iod)
 {
-	struct bio_wal_info	wal_info;
-	struct vos_pool		*pool;
-	struct bio_wal_stats	ws = { 0 };
-	struct vos_wal_metrics	*vwm;
-	int			rc;
+	struct bio_wal_info     wal_info;
+	struct vos_pool        *pool;
+	struct bio_wal_stats    ws = {0};
+	struct vos_wal_metrics *vwm;
+	int                     rc;
 
 	D_ASSERT(store && store->stor_priv != NULL);
 	vwm = (struct vos_wal_metrics *)store->stor_stats;
+	if (vwm != NULL)
+		d_tm_mark_duration_start(vwm->vwm_wal_dur, D_TM_CLOCK_REALTIME);
 	rc = bio_wal_commit(store->stor_priv, wal_tx, data_iod, (vwm != NULL) ? &ws : NULL);
+	if (vwm != NULL)
+		d_tm_mark_duration_end(vwm->vwm_wal_dur);
 	if (rc) {
 		DL_ERROR(rc, "WAL commit failed.");
 		/*

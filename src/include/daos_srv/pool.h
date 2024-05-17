@@ -82,8 +82,11 @@ struct ds_pool {
 	 */
 	uuid_t			sp_srv_cont_hdl;
 	uuid_t			sp_srv_pool_hdl;
-	uint32_t sp_stopping : 1, sp_fetch_hdls : 1, sp_disable_rebuild : 1, sp_need_discard : 1;
-
+	uint32_t		sp_stopping:1,
+				sp_cr_checked:1,
+				sp_fetch_hdls:1,
+				sp_need_discard:1,
+				sp_disable_rebuild:1;
 	/* pool_uuid + map version + leader term + rebuild generation define a
 	 * rebuild job.
 	 */
@@ -252,7 +255,7 @@ void ds_pool_child_put(struct ds_pool_child *child);
 /* Start ds_pool child */
 int ds_pool_child_start(uuid_t pool_uuid, bool recreate);
 /* Stop ds_pool_child */
-int ds_pool_child_stop(uuid_t pool_uuid);
+int ds_pool_child_stop(uuid_t pool_uuid, bool free);
 /* Query pool child state */
 uint32_t ds_pool_child_state(uuid_t pool_uuid, uint32_t tgt_id);
 
@@ -272,9 +275,9 @@ int ds_pool_tgt_finish_rebuild(uuid_t pool_uuid, struct pool_target_id_list *lis
 int ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 			   unsigned int map_version);
 
-int ds_pool_chk_post(uuid_t uuid);
-int ds_pool_start_with_svc(uuid_t uuid);
-int ds_pool_start(uuid_t uuid);
+bool ds_pool_skip_for_check(struct ds_pool *pool);
+int ds_pool_start_after_check(uuid_t uuid);
+int ds_pool_start(uuid_t uuid, bool aft_chk);
 void ds_pool_stop(uuid_t uuid);
 int dsc_pool_svc_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uint64_t deadline, int ntargets,
 			const d_rank_list_t *rank_list, int ndomains, const uint32_t *domains);
