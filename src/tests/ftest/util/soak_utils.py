@@ -853,7 +853,7 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
         self.test_name + "_" + name + "_`hostname -s`_"
         "" + "${SLURM_JOB_ID}_" + "daos_dfuse.log")
     dfuse_env = f"export D_LOG_FILE_APPEND_PID=1;export D_LOG_MASK=ERR;export D_LOG_FILE={dfuselog}"
-    module_load = f"module load {self.mpi_module}"
+    module_load = f"module use {self.mpi_module_use};module load {self.mpi_module}"
 
     dfuse_start_cmds = [
         "clush -S -w $SLURM_JOB_NODELIST \"mkdir -p {}\"".format(dfuse.mount_dir.value),
@@ -982,7 +982,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None,
                 + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
             env = ior_cmd.get_default_env("mpirun", log_file=daos_log)
             env["D_LOG_FILE_APPEND_PID"] = "1"
-            sbatch_cmds = [f"module load {self.mpi_module}"]
+            sbatch_cmds = [f"module use {self.mpi_module_use}", f"module load {self.mpi_module}"]
             # include dfuse cmdlines
             if api in ["HDF5-VOL", "POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
                 dfuse, dfuse_start_cmdlist = start_dfuse(
@@ -1064,7 +1064,7 @@ def create_macsio_cmdline(self, job_spec, pool, ppn, nodesperjob):
             env["D_LOG_FILE"] = get_log_file(daos_log or f"{macsio.command}_daos.log")
             env["D_LOG_FILE_APPEND_PID"] = "1"
             env["DAOS_UNS_PREFIX"] = format_path(macsio.daos_pool, macsio.daos_cont)
-            sbatch_cmds = [f"module load {self.mpi_module}"]
+            sbatch_cmds = [f"module use {self.mpi_module_use}", f"module load {self.mpi_module}"]
             mpirun_cmd = Mpirun(macsio, mpi_type=self.mpi_module)
             mpirun_cmd.get_params(self)
             mpirun_cmd.assign_processes(nodesperjob * ppn)
@@ -1153,7 +1153,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                 + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
             env = mdtest_cmd.get_default_env("mpirun", log_file=daos_log)
             env["D_LOG_FILE_APPEND_PID"] = "1"
-            sbatch_cmds = [f"module load {self.mpi_module}"]
+            sbatch_cmds = [f"module use {self.mpi_module_use}", f"module load {self.mpi_module}"]
             # include dfuse cmdlines
             if api in ["POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
                 dfuse, dfuse_start_cmdlist = start_dfuse(
@@ -1327,6 +1327,7 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
     commands = []
     app_params = os.path.join(os.sep, "run", job_spec, "*")
     mpi_module = self.params.get("module", app_params, self.mpi_module)
+    mpi_module_use = self.params.get("module_use", app_params, self.mpi_module_use)
     api_list = self.params.get("api", app_params, default=["DFS"])
     apps_dir = os.environ["DAOS_TEST_APP_DIR"]
     # Update DAOS_TEST_APP_DIR if used in the cmdline param in yaml
@@ -1348,7 +1349,7 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
     oclass_list = self.params.get("oclass", app_params)
     for file_oclass, dir_oclass in oclass_list:
         for api in api_list:
-            sbatch_cmds = [f"module load {mpi_module}"]
+            sbatch_cmds = [f"module use {mpi_module_use}", f"module load {mpi_module}"]
             if not self.enable_il and api in ["POSIX-LIBIOIL", "POSIX-LIBPIL4DFS"]:
                 continue
             add_containers(self, pool, file_oclass, dir_oclass)
