@@ -1626,7 +1626,10 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				} else {
 					t.Fatal("drpc response mocks unpopulated")
 				}
-				te.setDrpcClient(newMockDrpcClient(dcc))
+				cli := newMockDrpcClient(dcc)
+				te.getDrpcClientFn = func(string) drpc.DomainSocketClient {
+					return cli
+				}
 				te._superblock.Rank = ranklist.NewRankPtr(uint32(idx + 1))
 				for _, tc := range te.storage.GetBdevConfigs() {
 					tc.Bdev.DeviceRoles.OptionBits = storage.OptionBits(storage.BdevRoleAll)
