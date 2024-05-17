@@ -657,6 +657,10 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 	cont->sc_dtx_cos_hdl = DAOS_HDL_INVAL;
 	D_INIT_LIST_HEAD(&cont->sc_link);
 	D_INIT_LIST_HEAD(&cont->sc_open_hdls);
+	cont->sc_dtx_committable_count = 0;
+	cont->sc_dtx_committable_coll_count = 0;
+	D_INIT_LIST_HEAD(&cont->sc_dtx_cos_list);
+	D_INIT_LIST_HEAD(&cont->sc_dtx_coll_list);
 
 	*link = &cont->sc_list;
 	return 0;
