@@ -496,6 +496,7 @@ class EngineYamlParameters(YamlParameters):
             "DAOS_SCHED_WATCHDOG_ALL=1",
             "DD_MASK=mgmt,io,md,epc,rebuild",
             "ABT_THREAD_STACKSIZE=32768",
+            "PMEMOBJ_CONF=sds.at_create=0",
         ]
         default_env_vars.extend(self.REQUIRED_ENV_VARS["common"])
         for name in self._provider.split(";"):
