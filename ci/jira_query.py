@@ -8,6 +8,7 @@ import string
 import sys
 import time
 import urllib
+import re
 
 import jira
 
@@ -39,7 +40,10 @@ VALID_TICKET_PREFIX = ('DAOS', 'CORCI', 'SRE')
 FIELDS = 'summary,status,labels,customfield_10044,customfield_10045'
 
 # Labels in GitHub which this script will set/clear based on the logic below.
-MANAGED_LABELS = ('release-2.2', 'release-2.4', 'priority')
+MANAGED_LABELS_REGEX = re.compile(r'^(priority)|(release-(\d+\.\d+))$')
+
+# Required version Jira labels that the script will generate GitHub labels from
+REQ_VERSION_REGEX = re.compile(r'(^\d+\.\d+) Community Release$')
 
 
 def set_output(key, value):
@@ -171,10 +175,11 @@ def main():
             elif str(version) in ('2.4 Community Release'):
                 rv_priority = 3
 
-            if str(version) in ('2.2 Community Release'):
-                gh_label.add('release-2.2')
-            if str(version) in ('2.4 Community Release'):
-                gh_label.add('release-2.4')
+            # If Required for Version is in the correct format, generate a corresponding GitHub label
+            version_match = REQ_VERSION_REGEX.match(str(version))
+            if version_match:
+                version_number = version_match.groups()[0]
+                gh_label.add(f'release-{version_number}')
 
         # If a PR does not otherwise have priority then use custom values from above.
         if priority is None and not pr_data['base']['ref'].startswith('release'):
@@ -207,7 +212,8 @@ def main():
     to_remove = []
     for label in pr_data['labels']:
         name = label['name']
-        if name in MANAGED_LABELS and name not in gh_label:
+        label_match = MANAGED_LABELS_REGEX.match(name)
+        if label_match and name not in gh_label:
             to_remove.append(name)
     if to_remove:
         set_output('label-clear', '\n'.join(to_remove))
