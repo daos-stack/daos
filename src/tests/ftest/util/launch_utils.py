@@ -9,7 +9,6 @@ import os
 import re
 import sys
 import time
-from getpass import getuser
 from pathlib import Path
 
 from ClusterShell.NodeSet import NodeSet
@@ -26,6 +25,8 @@ from util.slurm_utils import create_partition, delete_partition, show_partition
 from util.storage_utils import StorageException, StorageInfo
 from util.user_utils import get_group_id, get_user_groups, groupadd, useradd, userdel
 from util.yaml_utils import YamlUpdater, get_yaml_data
+
+D_TM_SHARED_MEMORY_KEY = 0x10242048
 
 
 class LaunchException(Exception):
@@ -694,7 +695,6 @@ class TestRunner():
         command = f" df --type=tmpfs --output=target | grep -E '^({'|'.join(clear_mounts)})$'"
         find_result = run_remote(logger, hosts, command)
         mount_point_hosts = {}
-        shared_memory_hosts = NodeSet()
         for data in find_result.output:
             if not data.passed:
                 continue
@@ -702,7 +702,6 @@ class TestRunner():
                 if line not in mount_point_hosts:
                     mount_point_hosts[line] = NodeSet()
                 mount_point_hosts[line].add(data.hosts)
-                shared_memory_hosts.add(data.hosts)
 
         for mount_point, mount_hosts in mount_point_hosts.items():
             if not self._remove_super_blocks(logger, mount_hosts, mount_point):
@@ -710,11 +709,10 @@ class TestRunner():
                 self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
                 return 128
 
-        if shared_memory_hosts:
-            if not self._remove_shared_memory_segments(logger, shared_memory_hosts):
-                message = "Error removing shared memory segments for existing mount points"
-                self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
-                return 128
+        if not self._remove_shared_memory_segments(logger, hosts):
+            message = "Error removing shared memory segments for existing mount points"
+            self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
+            return 128
 
         for mount_point, mount_hosts in mount_point_hosts.items():
             if not self._remove_mount_point(logger, mount_hosts, mount_point):
@@ -750,26 +748,15 @@ class TestRunner():
             bool: True if successful; False otherwise
         """
         logger.debug("Clearing existing shared memory segments on %s", hosts)
-        owners = [user[:10] for user in ("daos_server", getuser())]
+        daos_engine_keys = [hex(D_TM_SHARED_MEMORY_KEY + index) for index in range(4)]
         result = run_remote(logger, hosts, "ipcs -m")
         for data in result.output:
             if not data.passed:
                 continue
             for line in data.stdout:
                 info = re.split(r"\s+", line)
-                if not info[0].startswith("0x"):
+                if not info[0] in daos_engine_keys:
                     # Skip processing lines not listing a shared memory segment
-                    continue
-                if len(info) < 3 or not info[2] not in owners:
-                    # Skip processing shared memory segments w/o a daos owner
-                    logger.debug(
-                        "Not clearing shared memory segment %s due to %s owner not in %s",
-                        info[0], info[2], owners)
-                    continue
-                if len(info) > 6 and info[6] == "dest":
-                    # Skip processing shared memory segments already marked to be destroyed
-                    logger.debug(
-                        "Not clearing shared memory segment %s due to %s status", info[0], info[6])
                     continue
                 logger.debug("Clearing shared memory segment %s on %s:", info[0], data.hosts)
                 if not run_remote(logger, data.hosts, f"sudo ipcrm -M {info[0]}").passed:
