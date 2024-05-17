@@ -8,6 +8,7 @@ import threading
 import time
 
 from avocado.core.exceptions import TestFail
+from ClusterShell.NodeSet import NodeSet
 from dmg_utils import get_dmg_response, get_storage_query_device_uuids
 from exception_utils import CommandFailure
 from ior_test_base import IorTestBase
@@ -65,10 +66,11 @@ def set_device_faulty(test, dmg, server, uuid, pool=None, has_sys_xs=False, **kw
 
     # Update the expected status of the any stopped/excluded ranks
     if has_sys_xs:
+        rank_hosts = test.server_managers[-1].ranks
+        ranks = [rank for rank, host in rank_hosts.items() if host in NodeSet(server)]
         test.log.debug(
-            "Expecting ranks on %s to be excluded due to excluding sys_xs storage device: %s",
-            server, test.server_managers[-1].ranks)
-        ranks = [test.server_managers[-1].ranks[server]]
+            "Expecting ranks %s on %s to be excluded due to excluding sys_xs storage device: %s",
+            ranks, server, rank_hosts)
         test.server_managers[-1].update_expected_states(ranks, ["stopped", "excluded"])
 
     # Add a tearDown method to reset the faulty device
