@@ -750,17 +750,22 @@ class TestRunner():
         logger.debug("Clearing existing shared memory segments on %s", hosts)
         daos_engine_keys = [hex(D_TM_SHARED_MEMORY_KEY + index) for index in range(4)]
         result = run_remote(logger, hosts, "ipcs -m")
+        keys_per_host = {}
         for data in result.output:
             if not data.passed:
                 continue
             for line in data.stdout:
                 info = re.split(r"\s+", line)
-                if not info[0] in daos_engine_keys:
+                if info[0] not in daos_engine_keys:
                     # Skip processing lines not listing a shared memory segment
                     continue
-                logger.debug("Clearing shared memory segment %s on %s:", info[0], data.hosts)
-                if not run_remote(logger, data.hosts, f"sudo ipcrm -M {info[0]}").passed:
-                    return False
+                if info[0] not in keys_per_host:
+                    keys_per_host[info[0]] = NodeSet()
+                keys_per_host[info[0]].add(data.hosts)
+        for key, key_hosts in keys_per_host.items():
+            logger.debug("Clearing shared memory segment %s on %s:", key, key_hosts)
+            if not run_remote(logger, key_hosts, f"sudo ipcrm -M {key}").passed:
+                return False
         return True
 
     def _remove_mount_point(self, logger, hosts, mount_point):
