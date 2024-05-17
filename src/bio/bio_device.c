@@ -385,12 +385,114 @@ struct pci_dev_opts {
 	int                  status;
 };
 
+/*
+ * Following macros are derived from linux/pci_regs.h, however,
+ * we can't simply include that header here, as there is no such
+ * file for non-Linux platform.
+ */
+#define PCI_CAPABILITY_LIST 0x34
+#define PCI_CAP_ID_VNDR     0x09
+// #define PCI_CAP_ID_MSIX		0x11
+
+/* This is the PCI capability header: */
+struct pci_cap {
+	__u8   cap_vndr;   /* Generic PCI field: PCI_CAP_ID_VNDR */
+	__u8   cap_next;   /* Generic PCI field: next ptr. */
+	__u8   cap_len;    /* Generic PCI field: capability length */
+	__u8   cfg_type;   /* Identifies the structure. */
+	__u8   bar;        /* Where to find it. */
+	__u8   padding[3]; /* Pad to full dword. */
+	__le32 offset;     /* Offset within bar. */
+	__le32 length;     /* Length of the structure, in bytes. */
+};
+
+static int
+read_caps(struct spdk_pci_device *pci_dev)
+{
+	uint8_t        pos;
+	struct pci_cap cap;
+	int            ret;
+
+	D_INFO("trying to read capabilities from pci device\n");
+	ret = spdk_pci_device_cfg_read(pci_dev, &pos, 1, PCI_CAPABILITY_LIST);
+	if (ret < 0) {
+		D_ERROR("failed to read pci capability list\n");
+		return ret;
+	}
+
+	while (pos) {
+		ret = spdk_pci_device_cfg_read(pci_dev, &cap, sizeof(cap), pos);
+		if (ret < 0) {
+			D_ERROR("failed to read pci cap at pos: %" PRIx8 "\n", pos);
+			break;
+		}
+
+		//		if (cap.cap_vndr == PCI_CAP_ID_MSIX) {
+		//			hw->use_msix = 1;
+		//		}
+
+		//		if (cap.cap_vndr != PCI_CAP_ID_VNDR) {
+		//			//D_DEBUG(DB_MGMT,
+		//			D_INFO(
+		//				 "[%2"PRIx8"] skipping non VNDR cap id:
+		//%02"PRIx8"\n", 				 pos, cap.cap_vndr);
+		//goto next;
+		//		}
+
+		// D_DEBUG(DB_MGMT,
+		D_INFO("[%2" PRIx8 "] cfg type: %" PRIu8 ", bar: %" PRIu8 ", offset: %04" PRIx32
+		       ", "
+		       "len: %" PRIu32 "\n",
+		       pos, cap.cfg_type, cap.bar, cap.offset, cap.length);
+
+		//		switch (cap.cfg_type) {
+		//		case VIRTIO_PCI_CAP_COMMON_CFG:
+		//			hw->common_cfg = get_cfg_addr(hw, &cap);
+		//			break;
+		//		case VIRTIO_PCI_CAP_NOTIFY_CFG:
+		//			spdk_pci_device_cfg_read(hw->pci_dev,
+		//&hw->notify_off_multiplier, 						 4, pos +
+		// sizeof(cap)); 			hw->notify_base = get_cfg_addr(hw, &cap);
+		// break; 		case VIRTIO_PCI_CAP_DEVICE_CFG:
+		// hw->dev_cfg
+		// =
+		// get_cfg_addr(hw, &cap); 			break; 		case
+		// VIRTIO_PCI_CAP_ISR_CFG: 			hw->isr = get_cfg_addr(hw, &cap);
+		// break;
+		//		}
+
+		// next:
+		pos = cap.cap_next;
+	}
+	//
+	//	if (hw->common_cfg == NULL || hw->notify_base == NULL ||
+	//	    hw->dev_cfg == NULL    || hw->isr == NULL) {
+	//		SPDK_DEBUGLOG(virtio_pci, "no modern virtio pci device found.\n");
+	//		if (ret < 0) {
+	//			return ret;
+	//		} else {
+	//			return -EINVAL;
+	//		}
+	//	}
+	//
+	//	SPDK_DEBUGLOG(virtio_pci, "found modern virtio pci device.\n");
+	//
+	//	SPDK_DEBUGLOG(virtio_pci, "common cfg mapped at: %p\n", hw->common_cfg);
+	//	SPDK_DEBUGLOG(virtio_pci, "device cfg mapped at: %p\n", hw->dev_cfg);
+	//	SPDK_DEBUGLOG(virtio_pci, "isr cfg mapped at: %p\n", hw->isr);
+	//	SPDK_DEBUGLOG(virtio_pci, "notify base: %p, notify off multiplier: %u\n",
+	//		      hw->notify_base, hw->notify_off_multiplier);
+	//
+	return 0;
+}
+
 static void
 pci_device_cb(void *ctx, struct spdk_pci_device *pci_device)
 {
 	struct pci_dev_opts *opts = ctx;
 	const char          *device_type;
 	int                  len;
+	int                  rc;
 
 	if (opts->status != 0)
 		return;
@@ -421,6 +523,12 @@ pci_device_cb(void *ctx, struct spdk_pci_device *pci_device)
 	if (*opts->pci_type == NULL) {
 		opts->status = -DER_NOMEM;
 		return;
+	}
+
+	rc = read_caps(pci_device);
+	if (rc != 0) {
+		D_ERROR("Unable to read capabilities for device (%s)\n", spdk_strerror(-rc));
+		opts->status = -DER_INVAL;
 	}
 }
 
