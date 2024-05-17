@@ -277,12 +277,15 @@ class PoolListConsolidationTest(RecoveryTestBase):
         dmg_command.system_stop()
 
         self.log_step("Remove <scm_mount>/<pool_uuid>/rdb-pool from two ranks.")
-        if not self.get_vos_file_path(pool=self.pool):
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
+        scm_mount_result = check_file_exists(
+            hosts=self.hostlist_servers, filename=scm_mount, directory=True)
+        if not scm_mount_result[0]:
             msg = "MD-on-SSD cluster. Mount point is removed by control plane after system stop."
             self.log.info(msg)
+            dmg_command.system_start()
             # return results in PASS.
             return
-        scm_mount = self.server_managers[0].get_config_value("scm_mount")
         rdb_pool_path = f"{scm_mount}/{self.pool.uuid.lower()}/rdb-pool"
         command = f"sudo rm {scm_mount}/{self.pool.uuid.lower()}/rdb-pool"
         hosts = list(set(self.server_managers[0].ranks.values()))
@@ -366,14 +369,17 @@ class PoolListConsolidationTest(RecoveryTestBase):
         dmg_command.system_stop()
 
         self.log_step("Remove <scm_mount>/<pool_uuid>/rdb-pool from all ranks.")
-        if not self.get_vos_file_path(pool=self.pool):
-            msg = "MD-on-SSD cluster. Mount point is removed by control plane after system stop."
-            self.log.info(msg)
-            # return results in PASS.
-            return
         hosts = list(set(self.server_managers[0].ranks.values()))
         nodeset_hosts = NodeSet.fromlist(hosts)
         scm_mount = self.server_managers[0].get_config_value("scm_mount")
+        scm_mount_result = check_file_exists(
+            hosts=self.hostlist_servers, filename=scm_mount, directory=True)
+        if not scm_mount_result[0]:
+            msg = "MD-on-SSD cluster. Mount point is removed by control plane after system stop."
+            self.log.info(msg)
+            dmg_command.system_start()
+            # return results in PASS.
+            return
         command = f"sudo rm {scm_mount}/{self.pool.uuid.lower()}/rdb-pool"
         remove_result = pcmd(hosts=nodeset_hosts, command=command)
         success_nodes = remove_result[0]
