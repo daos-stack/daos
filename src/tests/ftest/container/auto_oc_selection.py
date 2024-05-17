@@ -3,9 +3,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from avocado.core.exceptions import TestFail
-
 from apricot import TestWithServers
+from avocado.core.exceptions import TestFail
 
 
 class AutoOCSelectionTest(TestWithServers):
@@ -32,7 +31,7 @@ class AutoOCSelectionTest(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=container,dfs
-        :avocado: tags=oc_selection,test_oc_selection
+        :avocado: tags=AutoOCSelectionTest,test_oc_selection
         """
         self.add_pool()
 

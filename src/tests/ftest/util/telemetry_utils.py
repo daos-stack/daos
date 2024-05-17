@@ -1,16 +1,37 @@
 """
-(C) Copyright 2021-2023 Intel Corporation.
+(C) Copyright 2021-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from logging import getLogger
+# pylint: disable=too-many-lines
+import copy
 import re
+from logging import getLogger
+
 from ClusterShell.NodeSet import NodeSet
+from exception_utils import CommandFailure
+
+
+def _gen_stats_metrics(basename):
+    """Return a list of stats metrics for a given basename."""
+    metrics = [
+        "max",
+        "mean",
+        "min",
+        "samples",
+        "stddev",
+        "sum",
+        "sumsquares",
+    ]
+
+    base = [basename]
+    base.extend([basename + "_" + metric for metric in metrics])
+    return base
 
 
 class TelemetryUtils():
     # pylint: disable=too-many-nested-blocks
-    """Defines a object used to verify telemetry information."""
+    """Defines an object used to verify server telemetry information."""
 
     # Define a set of patterns that shouldn't be used for comparisons.
     METRIC_EXCLUDE_PATTERNS = [
@@ -23,29 +44,64 @@ class TelemetryUtils():
         "engine_pool_ops_cont_create",
         "engine_pool_ops_cont_destroy",
         "engine_pool_ops_cont_query"]
-    ENGINE_POOL_METRICS = [
+    ENGINE_POOL_ACTION_METRICS = [
+        "engine_pool_resent",
+        "engine_pool_restarted",
+        "engine_pool_retry",
+        "engine_pool_started_at",
+        "engine_pool_xferred_fetch",
+        "engine_pool_xferred_update"]
+    ENGINE_POOL_BLOCK_ALLOCATOR_METRICS = [
+        "engine_pool_block_allocator_alloc_hint",
+        "engine_pool_block_allocator_alloc_large",
+        "engine_pool_block_allocator_alloc_small",
+        "engine_pool_block_allocator_frags_aging",
+        "engine_pool_block_allocator_frags_large",
+        "engine_pool_block_allocator_frags_small",
+        "engine_pool_block_allocator_free_blks"]
+    ENGINE_POOL_CHECKPOINT_METRICS = [
+        *_gen_stats_metrics("engine_pool_checkpoint_dirty_chunks"),
+        *_gen_stats_metrics("engine_pool_checkpoint_dirty_pages"),
+        *_gen_stats_metrics("engine_pool_checkpoint_duration"),
+        *_gen_stats_metrics("engine_pool_checkpoint_iovs_copied"),
+        *_gen_stats_metrics("engine_pool_checkpoint_wal_purged")]
+    ENGINE_POOL_EC_UPDATE_METRICS = [
+        "engine_pool_EC_update_full_stripe",
+        "engine_pool_EC_update_partial"]
+    ENGINE_POOL_ENTRIES_METRICS = [
         "engine_pool_entries_dtx_batched_degree",
-        "engine_pool_entries_dtx_batched_total",
-        "engine_pool_ops_akey_enum",
-        "engine_pool_ops_akey_punch",
+        "engine_pool_entries_dtx_batched_total"]
+    ENGINE_POOL_OPS_AKEY_ENUM_METRICS = "engine_pool_ops_akey_enum"
+    ENGINE_POOL_OPS_DKEY_ENUM_METRICS = "engine_pool_ops_dkey_enum"
+    ENGINE_POOL_OPS_AKEY_PUNCH_METRICS = "engine_pool_ops_akey_punch"
+    ENGINE_POOL_OPS_DKEY_PUNCH_METRICS = "engine_pool_ops_dkey_punch"
+    ENGINE_POOL_OPS_TGT_AKEY_PUNCH_METRICS = "engine_pool_ops_tgt_akey_punch"
+    ENGINE_POOL_OPS_TGT_DKEY_PUNCH_METRICS = "engine_pool_ops_tgt_dkey_punch"
+    ENGINE_POOL_OPS_METRICS = [
+        ENGINE_POOL_OPS_AKEY_ENUM_METRICS,
+        ENGINE_POOL_OPS_DKEY_ENUM_METRICS,
+        ENGINE_POOL_OPS_AKEY_PUNCH_METRICS,
+        ENGINE_POOL_OPS_DKEY_PUNCH_METRICS,
         "engine_pool_ops_compound",
-        "engine_pool_ops_dkey_enum",
-        "engine_pool_ops_dkey_punch",
         "engine_pool_ops_dtx_abort",
         "engine_pool_ops_dtx_check",
+        "engine_pool_ops_dtx_coll_abort",
+        "engine_pool_ops_dtx_coll_check",
+        "engine_pool_ops_dtx_coll_commit",
         "engine_pool_ops_dtx_commit",
         "engine_pool_ops_dtx_refresh",
         "engine_pool_ops_ec_agg",
         "engine_pool_ops_ec_rep",
         "engine_pool_ops_fetch",
         "engine_pool_ops_key_query",
+        "engine_pool_ops_key2anchor",
         "engine_pool_ops_migrate",
         "engine_pool_ops_obj_enum",
         "engine_pool_ops_obj_punch",
         "engine_pool_ops_obj_sync",
         "engine_pool_ops_recx_enum",
-        "engine_pool_ops_tgt_akey_punch",
-        "engine_pool_ops_tgt_dkey_punch",
+        ENGINE_POOL_OPS_TGT_AKEY_PUNCH_METRICS,
+        ENGINE_POOL_OPS_TGT_DKEY_PUNCH_METRICS,
         "engine_pool_ops_tgt_punch",
         "engine_pool_ops_tgt_update",
         "engine_pool_ops_update",
@@ -53,10 +109,8 @@ class TelemetryUtils():
         "engine_pool_ops_pool_disconnect",
         "engine_pool_ops_pool_evict",
         "engine_pool_ops_pool_query",
-        "engine_pool_ops_pool_query_space",
-        "engine_pool_resent",
-        "engine_pool_restarted",
-        "engine_pool_retry",
+        "engine_pool_ops_pool_query_space"]
+    ENGINE_POOL_SCRUBBER_METRICS = [
         "engine_pool_scrubber_busy_time",
         "engine_pool_scrubber_bytes_scrubbed_current",
         "engine_pool_scrubber_bytes_scrubbed_prev",
@@ -68,14 +122,10 @@ class TelemetryUtils():
         "engine_pool_scrubber_csums_total",
         "engine_pool_scrubber_next_csum_scrub",
         "engine_pool_scrubber_next_tree_scrub",
-        "engine_pool_scrubber_prev_duration",
-        "engine_pool_scrubber_prev_duration_max",
-        "engine_pool_scrubber_prev_duration_mean",
-        "engine_pool_scrubber_prev_duration_min",
-        "engine_pool_scrubber_prev_duration_stddev",
+        *_gen_stats_metrics("engine_pool_scrubber_prev_duration"),
         "engine_pool_scrubber_scrubber_started",
-        "engine_pool_scrubber_scrubs_completed",
-        "engine_pool_started_at",
+        "engine_pool_scrubber_scrubs_completed"]
+    ENGINE_POOL_VOS_AGGREGATION_METRICS = [
         "engine_pool_vos_aggregation_akey_deleted",
         "engine_pool_vos_aggregation_akey_scanned",
         "engine_pool_vos_aggregation_akey_skipped",
@@ -85,31 +135,48 @@ class TelemetryUtils():
         "engine_pool_vos_aggregation_dkey_deleted",
         "engine_pool_vos_aggregation_dkey_scanned",
         "engine_pool_vos_aggregation_dkey_skipped",
-        "engine_pool_vos_aggregation_epr_duration",
-        "engine_pool_vos_aggregation_epr_duration_max",
-        "engine_pool_vos_aggregation_epr_duration_mean",
-        "engine_pool_vos_aggregation_epr_duration_min",
-        "engine_pool_vos_aggregation_epr_duration_stddev",
+        *_gen_stats_metrics("engine_pool_vos_aggregation_epr_duration"),
         "engine_pool_vos_aggregation_merged_recs",
         "engine_pool_vos_aggregation_merged_size",
         "engine_pool_vos_aggregation_obj_deleted",
         "engine_pool_vos_aggregation_obj_scanned",
         "engine_pool_vos_aggregation_obj_skipped",
-        "engine_pool_vos_aggregation_uncommitted",
+        "engine_pool_vos_aggregation_uncommitted"]
+    ENGINE_POOL_VOS_SPACE_METRICS = [
         "engine_pool_vos_space_nvme_used",
-        "engine_pool_vos_space_scm_used",
-        "engine_pool_xferred_fetch",
-        "engine_pool_xferred_update",
-        "engine_pool_EC_update_full_stripe",
-        "engine_pool_EC_update_partial",
-        "engine_pool_block_allocator_alloc_hint",
-        "engine_pool_block_allocator_alloc_large",
-        "engine_pool_block_allocator_alloc_small",
-        "engine_pool_block_allocator_frags_aging",
-        "engine_pool_block_allocator_frags_large",
-        "engine_pool_block_allocator_frags_small",
-        "engine_pool_block_allocator_free_blks",
-        "engine_pool_ops_key2anchor"]
+        "engine_pool_vos_space_scm_used"]
+    ENGINE_POOL_VOS_WAL_METRICS = [
+        *_gen_stats_metrics("engine_pool_vos_wal_wal_sz"),
+        *_gen_stats_metrics("engine_pool_vos_wal_wal_qd"),
+        *_gen_stats_metrics("engine_pool_vos_wal_wal_waiters"),
+        *_gen_stats_metrics("engine_pool_vos_wal_wal_dur")]
+    ENGINE_POOL_VOS_WAL_REPLAY_METRICS = [
+        "engine_pool_vos_wal_replay_count",
+        "engine_pool_vos_wal_replay_entries",
+        "engine_pool_vos_wal_replay_size",
+        "engine_pool_vos_wal_replay_time",
+        "engine_pool_vos_wal_replay_transactions"]
+    ENGINE_POOL_SVC_METRICS = [
+        "engine_pool_svc_degraded_ranks",
+        "engine_pool_svc_disabled_targets",
+        "engine_pool_svc_draining_targets",
+        "engine_pool_svc_leader",
+        "engine_pool_svc_map_version",
+        "engine_pool_svc_open_pool_handles",
+        "engine_pool_svc_total_ranks",
+        "engine_pool_svc_total_targets"]
+    ENGINE_POOL_METRICS = ENGINE_POOL_ACTION_METRICS +\
+        ENGINE_POOL_BLOCK_ALLOCATOR_METRICS +\
+        ENGINE_POOL_CHECKPOINT_METRICS +\
+        ENGINE_POOL_EC_UPDATE_METRICS +\
+        ENGINE_POOL_ENTRIES_METRICS +\
+        ENGINE_POOL_OPS_METRICS +\
+        ENGINE_POOL_SCRUBBER_METRICS +\
+        ENGINE_POOL_VOS_AGGREGATION_METRICS +\
+        ENGINE_POOL_VOS_SPACE_METRICS + \
+        ENGINE_POOL_VOS_WAL_METRICS + \
+        ENGINE_POOL_VOS_WAL_REPLAY_METRICS +\
+        ENGINE_POOL_SVC_METRICS
     ENGINE_EVENT_METRICS = [
         "engine_events_dead_ranks",
         "engine_events_last_event_ts",
@@ -120,16 +187,9 @@ class TelemetryUtils():
         "engine_sched_relax_time",
         "engine_sched_wait_queue",
         "engine_sched_sleep_queue",
-        "engine_sched_cycle_duration",
-        "engine_sched_cycle_duration_max",
-        "engine_sched_cycle_duration_mean",
-        "engine_sched_cycle_duration_min",
-        "engine_sched_cycle_duration_stddev",
-        "engine_sched_cycle_size",
-        "engine_sched_cycle_size_max",
-        "engine_sched_cycle_size_mean",
-        "engine_sched_cycle_size_min",
-        "engine_sched_cycle_size_stddev"]
+        "engine_sched_total_reject",
+        *_gen_stats_metrics("engine_sched_cycle_duration"),
+        *_gen_stats_metrics("engine_sched_cycle_size")]
     ENGINE_DMABUFF_METRICS = [
         "engine_dmabuff_total_chunks",
         "engine_dmabuff_used_chunks_io",
@@ -139,314 +199,111 @@ class TelemetryUtils():
         "engine_dmabuff_active_reqs",
         "engine_dmabuff_queued_reqs",
         "engine_dmabuff_grab_errs",
-        "engine_dmabuff_grab_retries",
-        "engine_dmabuff_grab_retries_max",
-        "engine_dmabuff_grab_retries_mean",
-        "engine_dmabuff_grab_retries_min",
-        "engine_dmabuff_grab_retries_stddev",
-        "engine_dmabuff_wal_sz",
-        "engine_dmabuff_wal_sz_max",
-        "engine_dmabuff_wal_sz_mean",
-        "engine_dmabuff_wal_sz_min",
-        "engine_dmabuff_wal_sz_stddev",
-        "engine_dmabuff_wal_qd",
-        "engine_dmabuff_wal_qd_max",
-        "engine_dmabuff_wal_qd_mean",
-        "engine_dmabuff_wal_qd_min",
-        "engine_dmabuff_wal_qd_stddev",
-        "engine_dmabuff_wal_waiters",
-        "engine_dmabuff_wal_waiters_max",
-        "engine_dmabuff_wal_waiters_mean",
-        "engine_dmabuff_wal_waiters_min",
-        "engine_dmabuff_wal_waiters_stddev"]
-    ENGINE_IO_DTX_COMMITTABLE_METRICS = [
-        "engine_io_dtx_committable",
-        "engine_io_dtx_committable_max",
-        "engine_io_dtx_committable_mean",
-        "engine_io_dtx_committable_min",
-        "engine_io_dtx_committable_stddev"]
-    ENGINE_IO_DTX_COMMITTED_METRICS = [
-        "engine_io_dtx_committed",
-        "engine_io_dtx_committed_max",
-        "engine_io_dtx_committed_mean",
-        "engine_io_dtx_committed_min",
-        "engine_io_dtx_committed_stddev"]
-    ENGINE_IO_LATENCY_FETCH_METRICS = [
-        "engine_io_latency_fetch",
-        "engine_io_latency_fetch_max",
-        "engine_io_latency_fetch_mean",
-        "engine_io_latency_fetch_min",
-        "engine_io_latency_fetch_stddev"]
-    ENGINE_IO_LATENCY_BULK_FETCH_METRICS = [
-        "engine_io_latency_bulk_fetch",
-        "engine_io_latency_bulk_fetch_max",
-        "engine_io_latency_bulk_fetch_mean",
-        "engine_io_latency_bulk_fetch_min",
-        "engine_io_latency_bulk_fetch_stddev"]
-    ENGINE_IO_LATENCY_VOS_FETCH_METRICS = [
-        "engine_io_latency_vos_fetch",
-        "engine_io_latency_vos_fetch_max",
-        "engine_io_latency_vos_fetch_mean",
-        "engine_io_latency_vos_fetch_min",
-        "engine_io_latency_vos_fetch_stddev"]
-    ENGINE_IO_LATENCY_BIO_FETCH_METRICS = [
-        "engine_io_latency_bio_fetch",
-        "engine_io_latency_bio_fetch_max",
-        "engine_io_latency_bio_fetch_mean",
-        "engine_io_latency_bio_fetch_min",
-        "engine_io_latency_bio_fetch_stddev"]
-    ENGINE_IO_LATENCY_UPDATE_METRICS = [
-        "engine_io_latency_update",
-        "engine_io_latency_update_max",
-        "engine_io_latency_update_mean",
-        "engine_io_latency_update_min",
-        "engine_io_latency_update_stddev"]
-    ENGINE_IO_LATENCY_TGT_UPDATE_METRICS = [
-        "engine_io_latency_tgt_update",
-        "engine_io_latency_tgt_update_max",
-        "engine_io_latency_tgt_update_mean",
-        "engine_io_latency_tgt_update_min",
-        "engine_io_latency_tgt_update_stddev"]
-    ENGINE_IO_LATENCY_BULK_UPDATE_METRICS = [
-        "engine_io_latency_bulk_update",
-        "engine_io_latency_bulk_update_max",
-        "engine_io_latency_bulk_update_mean",
-        "engine_io_latency_bulk_update_min",
-        "engine_io_latency_bulk_update_stddev"]
-    ENGINE_IO_LATENCY_VOS_UPDATE_METRICS = [
-        "engine_io_latency_vos_update",
-        "engine_io_latency_vos_update_max",
-        "engine_io_latency_vos_update_mean",
-        "engine_io_latency_vos_update_min",
-        "engine_io_latency_vos_update_stddev"]
-    ENGINE_IO_LATENCY_BIO_UPDATE_METRICS = [
-        "engine_io_latency_bio_update",
-        "engine_io_latency_bio_update_max",
-        "engine_io_latency_bio_update_mean",
-        "engine_io_latency_bio_update_min",
-        "engine_io_latency_bio_update_stddev"]
-    ENGINE_IO_OPS_AKEY_ENUM_METRICS = [
-        "engine_io_ops_akey_enum_active",
-        "engine_io_ops_akey_enum_active_max",
-        "engine_io_ops_akey_enum_active_mean",
-        "engine_io_ops_akey_enum_active_min",
-        "engine_io_ops_akey_enum_active_stddev"]
-    ENGINE_IO_OPS_AKEY_ENUM_LATENCY_METRICS = [
-        "engine_io_ops_akey_enum_latency",
-        "engine_io_ops_akey_enum_latency_max",
-        "engine_io_ops_akey_enum_latency_mean",
-        "engine_io_ops_akey_enum_latency_min",
-        "engine_io_ops_akey_enum_latency_stddev"]
-    ENGINE_IO_OPS_AKEY_PUNCH_ACTIVE_METRICS = [
-        "engine_io_ops_akey_punch_active",
-        "engine_io_ops_akey_punch_active_max",
-        "engine_io_ops_akey_punch_active_mean",
-        "engine_io_ops_akey_punch_active_min",
-        "engine_io_ops_akey_punch_active_stddev"]
-    ENGINE_IO_OPS_AKEY_PUNCH_LATENCY_METRICS = [
-        "engine_io_ops_akey_punch_latency",
-        "engine_io_ops_akey_punch_latency_max",
-        "engine_io_ops_akey_punch_latency_mean",
-        "engine_io_ops_akey_punch_latency_min",
-        "engine_io_ops_akey_punch_latency_stddev"]
-    ENGINE_IO_OPS_COMPOUND_ACTIVE_METRICS = [
-        "engine_io_ops_compound_active",
-        "engine_io_ops_compound_active_max",
-        "engine_io_ops_compound_active_mean",
-        "engine_io_ops_compound_active_min",
-        "engine_io_ops_compound_active_stddev"]
-    ENGINE_IO_OPS_COMPOUND_LATENCY_METRICS = [
-        "engine_io_ops_compound_latency",
-        "engine_io_ops_compound_latency_max",
-        "engine_io_ops_compound_latency_mean",
-        "engine_io_ops_compound_latency_min",
-        "engine_io_ops_compound_latency_stddev"]
-    ENGINE_IO_OPS_DKEY_ENUM_ACTIVE_METRICS = [
-        "engine_io_ops_dkey_enum_active",
-        "engine_io_ops_dkey_enum_active_max",
-        "engine_io_ops_dkey_enum_active_mean",
-        "engine_io_ops_dkey_enum_active_min",
-        "engine_io_ops_dkey_enum_active_stddev"]
-    ENGINE_IO_OPS_DKEY_ENUM_LATENCY_METRICS = [
-        "engine_io_ops_dkey_enum_latency",
-        "engine_io_ops_dkey_enum_latency_max",
-        "engine_io_ops_dkey_enum_latency_mean",
-        "engine_io_ops_dkey_enum_latency_min",
-        "engine_io_ops_dkey_enum_latency_stddev"]
-    ENGINE_IO_OPS_DKEY_PUNCH_ACTIVE_METRICS = [
-        "engine_io_ops_dkey_punch_active",
-        "engine_io_ops_dkey_punch_active_max",
-        "engine_io_ops_dkey_punch_active_mean",
-        "engine_io_ops_dkey_punch_active_min",
-        "engine_io_ops_dkey_punch_active_stddev"]
-    ENGINE_IO_OPS_DKEY_PUNCH_LATENCY_METRICS = [
-        "engine_io_ops_dkey_punch_latency",
-        "engine_io_ops_dkey_punch_latency_max",
-        "engine_io_ops_dkey_punch_latency_mean",
-        "engine_io_ops_dkey_punch_latency_min",
-        "engine_io_ops_dkey_punch_latency_stddev"]
-    ENGINE_IO_OPS_EC_AGG_ACTIVE_METRICS = [
-        "engine_io_ops_ec_agg_active",
-        "engine_io_ops_ec_agg_active_max",
-        "engine_io_ops_ec_agg_active_mean",
-        "engine_io_ops_ec_agg_active_min",
-        "engine_io_ops_ec_agg_active_stddev"]
-    ENGINE_IO_OPS_EC_AGG_LATENCY_METRICS = [
-        "engine_io_ops_ec_agg_latency",
-        "engine_io_ops_ec_agg_latency_max",
-        "engine_io_ops_ec_agg_latency_mean",
-        "engine_io_ops_ec_agg_latency_min",
-        "engine_io_ops_ec_agg_latency_stddev"]
-    ENGINE_IO_OPS_EC_REP_ACTIVE_METRICS = [
-        "engine_io_ops_ec_rep_active",
-        "engine_io_ops_ec_rep_active_max",
-        "engine_io_ops_ec_rep_active_mean",
-        "engine_io_ops_ec_rep_active_min",
-        "engine_io_ops_ec_rep_active_stddev"]
-    ENGINE_IO_OPS_EC_REP_LATENCY_METRICS = [
-        "engine_io_ops_ec_rep_latency",
-        "engine_io_ops_ec_rep_latency_max",
-        "engine_io_ops_ec_rep_latency_mean",
-        "engine_io_ops_ec_rep_latency_min",
-        "engine_io_ops_ec_rep_latency_stddev"]
-    ENGINE_IO_OPS_FETCH_ACTIVE_METRICS = [
-        "engine_io_ops_fetch_active",
-        "engine_io_ops_fetch_active_max",
-        "engine_io_ops_fetch_active_mean",
-        "engine_io_ops_fetch_active_min",
-        "engine_io_ops_fetch_active_stddev"]
-    ENGINE_IO_OPS_KEY_QUERY_ACTIVE_METRICS = [
-        "engine_io_ops_key_query_active",
-        "engine_io_ops_key_query_active_max",
-        "engine_io_ops_key_query_active_mean",
-        "engine_io_ops_key_query_active_min",
-        "engine_io_ops_key_query_active_stddev"]
-    ENGINE_IO_OPS_KEY_QUERY_LATENCY_METRICS = [
-        "engine_io_ops_key_query_latency",
-        "engine_io_ops_key_query_latency_max",
-        "engine_io_ops_key_query_latency_mean",
-        "engine_io_ops_key_query_latency_min",
-        "engine_io_ops_key_query_latency_stddev"]
-    ENGINE_IO_OPS_KEY2ANCHOR_ACTIVE_METRICS = [
-        "engine_io_ops_key2anchor_active",
-        "engine_io_ops_key2anchor_active_max",
-        "engine_io_ops_key2anchor_active_mean",
-        "engine_io_ops_key2anchor_active_min",
-        "engine_io_ops_key2anchor_active_stddev"]
-    ENGINE_IO_OPS_KEY2ANCHOR_LATENCY_METRICS = [
-        "engine_io_ops_key2anchor_latency",
-        "engine_io_ops_key2anchor_latency_max",
-        "engine_io_ops_key2anchor_latency_mean",
-        "engine_io_ops_key2anchor_latency_min",
-        "engine_io_ops_key2anchor_latency_stddev"]
-    ENGINE_IO_OPS_MIGRATE_ACTIVE_METRICS = [
-        "engine_io_ops_migrate_active",
-        "engine_io_ops_migrate_active_max",
-        "engine_io_ops_migrate_active_mean",
-        "engine_io_ops_migrate_active_min",
-        "engine_io_ops_migrate_active_stddev"]
-    ENGINE_IO_OPS_MIGRATE_LATENCY_METRICS = [
-        "engine_io_ops_migrate_latency",
-        "engine_io_ops_migrate_latency_max",
-        "engine_io_ops_migrate_latency_mean",
-        "engine_io_ops_migrate_latency_min",
-        "engine_io_ops_migrate_latency_stddev"]
-    ENGINE_IO_OPS_OBJ_ENUM_ACTIVE_METRICS = [
-        "engine_io_ops_obj_enum_active",
-        "engine_io_ops_obj_enum_active_max",
-        "engine_io_ops_obj_enum_active_mean",
-        "engine_io_ops_obj_enum_active_min",
-        "engine_io_ops_obj_enum_active_stddev"]
-    ENGINE_IO_OPS_OBJ_ENUM_LATENCY_METRICS = [
-        "engine_io_ops_obj_enum_latency",
-        "engine_io_ops_obj_enum_latency_max",
-        "engine_io_ops_obj_enum_latency_mean",
-        "engine_io_ops_obj_enum_latency_min",
-        "engine_io_ops_obj_enum_latency_stddev"]
-    ENGINE_IO_OPS_OBJ_PUNCH_ACTIVE_METRICS = [
-        "engine_io_ops_obj_punch_active",
-        "engine_io_ops_obj_punch_active_max",
-        "engine_io_ops_obj_punch_active_mean",
-        "engine_io_ops_obj_punch_active_min",
-        "engine_io_ops_obj_punch_active_stddev"]
-    ENGINE_IO_OPS_OBJ_PUNCH_LATENCY_METRICS = [
-        "engine_io_ops_obj_punch_latency",
-        "engine_io_ops_obj_punch_latency_max",
-        "engine_io_ops_obj_punch_latency_mean",
-        "engine_io_ops_obj_punch_latency_min",
-        "engine_io_ops_obj_punch_latency_stddev"]
-    ENGINE_IO_OPS_OBJ_SYNC_ACTIVE_METRICS = [
-        "engine_io_ops_obj_sync_active",
-        "engine_io_ops_obj_sync_active_max",
-        "engine_io_ops_obj_sync_active_mean",
-        "engine_io_ops_obj_sync_active_min",
-        "engine_io_ops_obj_sync_active_stddev"]
-    ENGINE_IO_OPS_OBJ_SYNC_LATENCY_METRICS = [
-        "engine_io_ops_obj_sync_latency",
-        "engine_io_ops_obj_sync_latency_max",
-        "engine_io_ops_obj_sync_latency_mean",
-        "engine_io_ops_obj_sync_latency_min",
-        "engine_io_ops_obj_sync_latency_stddev"]
-    ENGINE_IO_OPS_RECX_ENUM_ACTIVE_METRICS = [
-        "engine_io_ops_recx_enum_active",
-        "engine_io_ops_recx_enum_active_max",
-        "engine_io_ops_recx_enum_active_mean",
-        "engine_io_ops_recx_enum_active_min",
-        "engine_io_ops_recx_enum_active_stddev"]
-    ENGINE_IO_OPS_RECX_ENUM_LATENCY_METRICS = [
-        "engine_io_ops_recx_enum_latency",
-        "engine_io_ops_recx_enum_latency_max",
-        "engine_io_ops_recx_enum_latency_mean",
-        "engine_io_ops_recx_enum_latency_min",
-        "engine_io_ops_recx_enum_latency_stddev"]
-    ENGINE_IO_OPS_TGT_AKEY_PUNCH_ACTIVE_METRICS = [
-        "engine_io_ops_tgt_akey_punch_active",
-        "engine_io_ops_tgt_akey_punch_active_max",
-        "engine_io_ops_tgt_akey_punch_active_mean",
-        "engine_io_ops_tgt_akey_punch_active_min",
-        "engine_io_ops_tgt_akey_punch_active_stddev"]
-    ENGINE_IO_OPS_TGT_AKEY_PUNCH_LATENCY_METRICS = [
-        "engine_io_ops_tgt_akey_punch_latency",
-        "engine_io_ops_tgt_akey_punch_latency_max",
-        "engine_io_ops_tgt_akey_punch_latency_mean",
-        "engine_io_ops_tgt_akey_punch_latency_min",
-        "engine_io_ops_tgt_akey_punch_latency_stddev"]
-    ENGINE_IO_OPS_TGT_DKEY_PUNCH_ACTIVE_METRICS = [
-        "engine_io_ops_tgt_dkey_punch_active",
-        "engine_io_ops_tgt_dkey_punch_active_max",
-        "engine_io_ops_tgt_dkey_punch_active_mean",
-        "engine_io_ops_tgt_dkey_punch_active_min",
-        "engine_io_ops_tgt_dkey_punch_active_stddev"]
-    ENGINE_IO_OPS_TGT_DKEY_PUNCH_LATENCY_METRICS = [
-        "engine_io_ops_tgt_dkey_punch_latency",
-        "engine_io_ops_tgt_dkey_punch_latency_max",
-        "engine_io_ops_tgt_dkey_punch_latency_mean",
-        "engine_io_ops_tgt_dkey_punch_latency_min",
-        "engine_io_ops_tgt_dkey_punch_latency_stddev"]
-    ENGINE_IO_OPS_TGT_PUNCH_ACTIVE_METRICS = [
-        "engine_io_ops_tgt_punch_active",
-        "engine_io_ops_tgt_punch_active_max",
-        "engine_io_ops_tgt_punch_active_mean",
-        "engine_io_ops_tgt_punch_active_min",
-        "engine_io_ops_tgt_punch_active_stddev"]
-    ENGINE_IO_OPS_TGT_PUNCH_LATENCY_METRICS = [
-        "engine_io_ops_tgt_punch_latency",
-        "engine_io_ops_tgt_punch_latency_max",
-        "engine_io_ops_tgt_punch_latency_mean",
-        "engine_io_ops_tgt_punch_latency_min",
-        "engine_io_ops_tgt_punch_latency_stddev"]
-    ENGINE_IO_OPS_TGT_UPDATE_ACTIVE_METRICS = [
-        "engine_io_ops_tgt_update_active",
-        "engine_io_ops_tgt_update_active_max",
-        "engine_io_ops_tgt_update_active_mean",
-        "engine_io_ops_tgt_update_active_min",
-        "engine_io_ops_tgt_update_active_stddev"]
-    ENGINE_IO_OPS_UPDATE_ACTIVE_METRICS = [
-        "engine_io_ops_update_active",
-        "engine_io_ops_update_active_max",
-        "engine_io_ops_update_active_mean",
-        "engine_io_ops_update_active_min",
-        "engine_io_ops_update_active_stddev"]
+        *_gen_stats_metrics("engine_dmabuff_grab_retries")]
+    ENGINE_IO_DTX_COMMITTABLE_METRICS = \
+        _gen_stats_metrics("engine_io_dtx_committable")
+    ENGINE_IO_DTX_COMMITTED_METRICS = \
+        _gen_stats_metrics("engine_io_dtx_committed")
+    ENGINE_IO_LATENCY_FETCH_METRICS = \
+        _gen_stats_metrics("engine_io_latency_fetch")
+    ENGINE_IO_LATENCY_BULK_FETCH_METRICS = \
+        _gen_stats_metrics("engine_io_latency_bulk_fetch")
+    ENGINE_IO_LATENCY_VOS_FETCH_METRICS = \
+        _gen_stats_metrics("engine_io_latency_vos_fetch")
+    ENGINE_IO_LATENCY_BIO_FETCH_METRICS = \
+        _gen_stats_metrics("engine_io_latency_bio_fetch")
+    ENGINE_IO_LATENCY_UPDATE_METRICS = \
+        _gen_stats_metrics("engine_io_latency_update")
+    ENGINE_IO_LATENCY_TGT_UPDATE_METRICS = \
+        _gen_stats_metrics("engine_io_latency_tgt_update")
+    ENGINE_IO_LATENCY_BULK_UPDATE_METRICS = \
+        _gen_stats_metrics("engine_io_latency_bulk_update")
+    ENGINE_IO_LATENCY_VOS_UPDATE_METRICS = \
+        _gen_stats_metrics("engine_io_latency_vos_update")
+    ENGINE_IO_LATENCY_BIO_UPDATE_METRICS = \
+        _gen_stats_metrics("engine_io_latency_bio_update")
+    ENGINE_IO_OPS_AKEY_ENUM_METRICS = \
+        _gen_stats_metrics("engine_io_ops_akey_enum_active")
+    ENGINE_IO_OPS_AKEY_ENUM_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_akey_enum_latency")
+    ENGINE_IO_OPS_AKEY_PUNCH_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_akey_punch_active")
+    ENGINE_IO_OPS_AKEY_PUNCH_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_akey_punch_latency")
+    ENGINE_IO_OPS_COMPOUND_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_compound_active")
+    ENGINE_IO_OPS_COMPOUND_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_compound_latency")
+    ENGINE_IO_OPS_DKEY_ENUM_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_dkey_enum_active")
+    ENGINE_IO_OPS_DKEY_ENUM_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_dkey_enum_latency")
+    ENGINE_IO_OPS_DKEY_PUNCH_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_dkey_punch_active")
+    ENGINE_IO_OPS_DKEY_PUNCH_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_dkey_punch_latency")
+    ENGINE_IO_OPS_EC_AGG_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_ec_agg_active")
+    ENGINE_IO_OPS_EC_AGG_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_ec_agg_latency")
+    ENGINE_IO_OPS_EC_REP_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_ec_rep_active")
+    ENGINE_IO_OPS_EC_REP_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_ec_rep_latency")
+    ENGINE_IO_OPS_FETCH_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_fetch_active")
+    ENGINE_IO_OPS_KEY_QUERY_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_key_query_active")
+    ENGINE_IO_OPS_KEY_QUERY_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_key_query_latency")
+    ENGINE_IO_OPS_KEY2ANCHOR_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_key2anchor_active")
+    ENGINE_IO_OPS_KEY2ANCHOR_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_key2anchor_latency")
+    ENGINE_IO_OPS_MIGRATE_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_migrate_active")
+    ENGINE_IO_OPS_MIGRATE_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_migrate_latency")
+    ENGINE_IO_OPS_OBJ_COLL_PUNCH_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_obj_coll_punch_active")
+    ENGINE_IO_OPS_OBJ_COLL_PUNCH_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_obj_coll_punch_latency")
+    ENGINE_IO_OPS_OBJ_COLL_QUERY_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_obj_coll_query_active")
+    ENGINE_IO_OPS_OBJ_COLL_QUERY_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_obj_coll_query_latency")
+    ENGINE_IO_OPS_OBJ_ENUM_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_obj_enum_active")
+    ENGINE_IO_OPS_OBJ_ENUM_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_obj_enum_latency")
+    ENGINE_IO_OPS_OBJ_PUNCH_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_obj_punch_active")
+    ENGINE_IO_OPS_OBJ_PUNCH_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_obj_punch_latency")
+    ENGINE_IO_OPS_OBJ_SYNC_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_obj_sync_active")
+    ENGINE_IO_OPS_OBJ_SYNC_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_obj_sync_latency")
+    ENGINE_IO_OPS_RECX_ENUM_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_recx_enum_active")
+    ENGINE_IO_OPS_RECX_ENUM_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_recx_enum_latency")
+    ENGINE_IO_OPS_TGT_AKEY_PUNCH_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_tgt_akey_punch_active")
+    ENGINE_IO_OPS_TGT_AKEY_PUNCH_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_tgt_akey_punch_latency")
+    ENGINE_IO_OPS_TGT_DKEY_PUNCH_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_tgt_dkey_punch_active")
+    ENGINE_IO_OPS_TGT_DKEY_PUNCH_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_tgt_dkey_punch_latency")
+    ENGINE_IO_OPS_TGT_PUNCH_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_tgt_punch_active")
+    ENGINE_IO_OPS_TGT_PUNCH_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_tgt_punch_latency")
+    ENGINE_IO_OPS_TGT_UPDATE_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_tgt_update_active")
+    ENGINE_IO_OPS_UPDATE_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_update_active")
     ENGINE_IO_METRICS = ENGINE_IO_DTX_COMMITTABLE_METRICS +\
         ENGINE_IO_DTX_COMMITTED_METRICS +\
         ENGINE_IO_LATENCY_FETCH_METRICS +\
@@ -479,6 +336,10 @@ class TelemetryUtils():
         ENGINE_IO_OPS_KEY2ANCHOR_LATENCY_METRICS +\
         ENGINE_IO_OPS_MIGRATE_ACTIVE_METRICS +\
         ENGINE_IO_OPS_MIGRATE_LATENCY_METRICS +\
+        ENGINE_IO_OPS_OBJ_COLL_PUNCH_ACTIVE_METRICS +\
+        ENGINE_IO_OPS_OBJ_COLL_PUNCH_LATENCY_METRICS +\
+        ENGINE_IO_OPS_OBJ_COLL_QUERY_ACTIVE_METRICS +\
+        ENGINE_IO_OPS_OBJ_COLL_QUERY_LATENCY_METRICS +\
         ENGINE_IO_OPS_OBJ_ENUM_ACTIVE_METRICS +\
         ENGINE_IO_OPS_OBJ_ENUM_LATENCY_METRICS +\
         ENGINE_IO_OPS_OBJ_PUNCH_ACTIVE_METRICS +\
@@ -496,8 +357,10 @@ class TelemetryUtils():
         ENGINE_IO_OPS_TGT_UPDATE_ACTIVE_METRICS +\
         ENGINE_IO_OPS_UPDATE_ACTIVE_METRICS
     ENGINE_NET_METRICS = [
+        "engine_net_glitch",
         "engine_net_failed_addr",
         "engine_net_req_timeout",
+        *_gen_stats_metrics("engine_net_swim_delay"),
         "engine_net_uri_lookup_timeout",
         "engine_net_uri_lookup_other",
         "engine_net_uri_lookup_self"]
@@ -557,6 +420,13 @@ class TelemetryUtils():
         ENGINE_NVME_RELIABILITY_METRICS +\
         ENGINE_NVME_CRIT_WARN_METRICS +\
         ENGINE_NVME_INTEL_VENDOR_METRICS
+    ENGINE_MEM_USAGE_METRICS = [
+        "engine_mem_vos_dtx_cmt_ent_48",
+        "engine_mem_vos_vos_obj_360",
+        "engine_mem_vos_vos_lru_size",
+        "engine_mem_dtx_dtx_leader_handle_360"]
+    ENGINE_MEM_TOTAL_USAGE_METRICS = [
+        "engine_mem_total_mem"]
 
     def __init__(self, dmg, servers):
         """Create a TelemetryUtils object.
@@ -569,6 +439,7 @@ class TelemetryUtils():
         self.log = getLogger(__name__)
         self.dmg = dmg
         self.hosts = NodeSet.fromlist(servers)
+        self._data = MetricData()
 
     def get_all_server_metrics_names(self, server, with_pools=False):
         """Get all the telemetry metrics names for this server.
@@ -587,6 +458,8 @@ class TelemetryUtils():
         all_metrics_names.extend(self.ENGINE_NET_METRICS)
         all_metrics_names.extend(self.ENGINE_RANK_METRICS)
         all_metrics_names.extend(self.ENGINE_DMABUFF_METRICS)
+        all_metrics_names.extend(self.ENGINE_MEM_USAGE_METRICS)
+        all_metrics_names.extend(self.ENGINE_MEM_TOTAL_USAGE_METRICS)
         if with_pools:
             all_metrics_names.extend(self.ENGINE_POOL_METRICS)
             all_metrics_names.extend(self.ENGINE_CONTAINER_METRICS)
@@ -614,7 +487,7 @@ class TelemetryUtils():
                 return True
         return False
 
-    def list_metrics(self):
+    def list_metrics(self, hosts=None):
         """List the available metrics for each host.
 
         Returns:
@@ -622,10 +495,15 @@ class TelemetryUtils():
 
         """
         info = {}
-        self.log.info("Listing telemetry metrics from %s", self.hosts)
-        for host in self.hosts:
-            data = self.dmg.telemetry_metrics_list(host=host)
+        host_list = hosts or self.hosts
+        self.log.info("Listing telemetry metrics from %s", host_list)
+        for host in host_list:
             info[host] = []
+            try:
+                data = self.dmg.telemetry_metrics_list(host=host)
+            except CommandFailure as err:
+                self.log.error("Failed to list metrics on %s: %s", host, err)
+                continue
             if "response" in data:
                 if "available_metric_sets" in data["response"]:
                     for entry in data["response"]["available_metric_sets"]:
@@ -633,7 +511,46 @@ class TelemetryUtils():
                             info[host].append(entry["name"])
         return info
 
-    def get_metrics(self, name):
+    def collect_data(self, names, hosts=None):
+        """Collect telemetry data for the specified metrics.
+
+        Args:
+            names (list): list of metric names
+
+        Returns:
+            dict: dictionary of metric values keyed by the metric name and combination of metric
+                labels and values, e.g.
+                    <metric_name>: {
+                        <label_1:label_1_value,label_2:label_2_value,...>: <value_1>,
+                        <label_1:label_1_value,label_2:label_2_value,...>: <value_2>,
+                        ...
+                    },
+                    ...
+        """
+        host_list = hosts or self.hosts
+        self.log.info("Collecting telemetry data from %s", host_list)
+        return self._data.collect(self.log, names, host_list, self.dmg)
+
+    def display_data(self):
+        """Display the telemetry metric values."""
+        return self._data.display(self.log)
+
+    def verify_data(self, ranges):
+        """Verify the telemetry metric values.
+
+        Args:
+            ranges (dict): dictionary of min/max lists for each metric to be verified, e.g.
+                {
+                    <metric_a>: [10],       <--- will verify value of <metric_a> is at least 10
+                    <metric_b>: [0, 9]      <--- will verify value of <metric_b> is between 0-9
+                }
+
+        Returns:
+            bool: True if all metric values are within the ranges specified; False otherwise
+        """
+        return self._data.verify(self.log, ranges)
+
+    def get_metrics(self, name, hosts=None):
         """Obtain the specified metric information for each host.
 
         Args:
@@ -645,10 +562,15 @@ class TelemetryUtils():
 
         """
         info = {}
-        self.log.info("Querying telemetry metric %s from %s", name, self.hosts)
-        for host in self.hosts:
-            data = self.dmg.telemetry_metrics_query(host=host, metrics=name)
+        host_list = hosts or self.hosts
+        self.log.info("Querying telemetry metric %s from %s", name, host_list)
+        for host in host_list:
             info[host] = {}
+            try:
+                data = self.dmg.telemetry_metrics_query(host=host, metrics=name)
+            except CommandFailure as err:
+                self.log.error("Failed to get metrics for %s: %s", host, err)
+                continue
             if "response" in data:
                 if "metric_sets" in data["response"]:
                     for entry in data["response"]["metric_sets"]:
@@ -835,7 +757,7 @@ class TelemetryUtils():
         """Get the NVMe telemetry metrics.
 
         Args:
-            specific_metrics(list): list of specific NVMe metrics
+            specific_metrics (list): list of specific NVMe metrics
 
         Returns:
             dict: dictionary of dictionaries of NVMe metric names and
@@ -912,3 +834,494 @@ class TelemetryUtils():
                     self.log.info("    %-12s %-4s %s %s",
                                   host, rank, value, invalid)
         return status
+
+
+class ClientTelemetryUtils(TelemetryUtils):
+    """Defines an object used to verify server and client telemetry information."""
+
+    CLIENT_EVENT_METRICS = [
+        "client_started_at"]
+    CLIENT_POOL_ACTION_METRICS = [
+        "client_pool_resent",
+        "client_pool_restarted",
+        "client_pool_retry",
+        "client_pool_xferred_fetch",
+        "client_pool_xferred_update"]
+    CLIENT_POOL_OPS_METRICS = [
+        "client_pool_ops_akey_enum",
+        "client_pool_ops_akey_punch",
+        "client_pool_ops_compound",
+        "client_pool_ops_dkey_enum",
+        "client_pool_ops_dkey_punch",
+        "client_pool_ops_ec_agg",
+        "client_pool_ops_ec_rep",
+        "client_pool_ops_fetch",
+        "client_pool_ops_key2anchor",
+        "client_pool_ops_key_query",
+        "client_pool_ops_migrate",
+        "client_pool_ops_obj_coll_punch",
+        "client_pool_ops_obj_coll_query",
+        "client_pool_ops_obj_enum",
+        "client_pool_ops_obj_punch",
+        "client_pool_ops_obj_sync",
+        "client_pool_ops_recx_enum",
+        "client_pool_ops_tgt_akey_punch",
+        "client_pool_ops_tgt_dkey_punch",
+        "client_pool_ops_tgt_punch",
+        "client_pool_ops_tgt_update",
+        "client_pool_ops_update"]
+    CLIENT_POOL_EC_UPDATE_METRICS = [
+        "client_pool_EC_update_full_stripe",
+        "client_pool_EC_update_partial"]
+    CLIENT_POOL_METRICS = CLIENT_POOL_ACTION_METRICS +\
+        CLIENT_POOL_OPS_METRICS +\
+        CLIENT_POOL_EC_UPDATE_METRICS
+    CLIENT_IO_LATENCY_FETCH_METRICS = \
+        _gen_stats_metrics("client_io_latency_fetch")
+    CLIENT_IO_LATENCY_UPDATE_METRICS = \
+        _gen_stats_metrics("client_io_latency_update")
+    CLIENT_IO_OPS_AKEY_ENUM_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_akey_enum_active")
+    CLIENT_IO_OPS_AKEY_ENUM_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_akey_enum_latency")
+    CLIENT_IO_OPS_AKEY_PUNCH_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_akey_punch_active")
+    CLIENT_IO_OPS_AKEY_PUNCH_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_akey_punch_latency")
+    CLIENT_IO_OPS_COMPOUND_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_compound_active")
+    CLIENT_IO_OPS_COMPOUND_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_compound_latency")
+    CLIENT_IO_OPS_DKEY_ENUM_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_dkey_enum_active")
+    CLIENT_IO_OPS_DKEY_ENUM_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_dkey_enum_latency")
+    CLIENT_IO_OPS_DKEY_PUNCH_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_dkey_punch_active")
+    CLIENT_IO_OPS_DKEY_PUNCH_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_dkey_punch_latency")
+    CLIENT_IO_OPS_EC_AGG_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_ec_agg_active")
+    CLIENT_IO_OPS_EC_AGG_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_ec_agg_latency")
+    CLIENT_IO_OPS_EC_REP_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_ec_rep_active")
+    CLIENT_IO_OPS_EC_REP_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_ec_rep_latency")
+    CLIENT_IO_OPS_FETCH_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_fetch_active")
+    CLIENT_IO_OPS_KEY2ANCHOR_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_key2anchor_active")
+    CLIENT_IO_OPS_KEY2ANCHOR_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_key2anchor_latency")
+    CLIENT_IO_OPS_KEY_QUERY_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_key_query_active")
+    CLIENT_IO_OPS_KEY_QUERY_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_key_query_latency")
+    CLIENT_IO_OPS_MIGRATE_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_migrate_active")
+    CLIENT_IO_OPS_MIGRATE_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_migrate_latency")
+    CLIENT_IO_OPS_OBJ_COLL_PUNCH_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_obj_coll_punch_active")
+    CLIENT_IO_OPS_OBJ_COLL_PUNCH_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_obj_coll_punch_latency")
+    CLIENT_IO_OPS_OBJ_COLL_QUERY_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_obj_coll_query_active")
+    CLIENT_IO_OPS_OBJ_COLL_QUERY_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_obj_coll_query_latency")
+    CLIENT_IO_OPS_OBJ_ENUM_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_obj_enum_active")
+    CLIENT_IO_OPS_OBJ_ENUM_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_obj_enum_latency")
+    CLIENT_IO_OPS_OBJ_PUNCH_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_obj_punch_active")
+    CLIENT_IO_OPS_OBJ_PUNCH_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_obj_punch_latency")
+    CLIENT_IO_OPS_OBJ_punch_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_obj_sync_active")
+    CLIENT_IO_OPS_OBJ_SYNC_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_obj_sync_latency")
+    CLIENT_IO_OPS_RECX_ENUM_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_recx_enum_active")
+    CLIENT_IO_OPS_RECX_ENUM_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_recx_enum_latency")
+    CLIENT_IO_OPS_TGT_AKEY_PUNCH_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_tgt_akey_punch_active")
+    CLIENT_IO_OPS_TGT_AKEY_PUNCH_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_tgt_akey_punch_latency")
+    CLIENT_IO_OPS_TGT_DKEY_PUNCH_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_tgt_dkey_punch_active")
+    CLIENT_IO_OPS_TGT_DKEY_PUNCH_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_tgt_dkey_punch_latency")
+    CLIENT_IO_OPS_TGT_PUNCH_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_tgt_punch_active")
+    CLIENT_IO_OPS_TGT_PUNCH_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_tgt_punch_latency")
+    CLIENT_IO_OPS_TGT_UPDATE_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_tgt_update_active")
+    CLIENT_IO_OPS_UPDATE_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_update_active")
+    CLIENT_IO_METRICS = CLIENT_IO_LATENCY_FETCH_METRICS +\
+        CLIENT_IO_LATENCY_UPDATE_METRICS +\
+        CLIENT_IO_OPS_AKEY_ENUM_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_AKEY_ENUM_LATENCY_METRICS +\
+        CLIENT_IO_OPS_AKEY_PUNCH_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_AKEY_PUNCH_LATENCY_METRICS +\
+        CLIENT_IO_OPS_COMPOUND_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_COMPOUND_LATENCY_METRICS +\
+        CLIENT_IO_OPS_DKEY_ENUM_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_DKEY_ENUM_LATENCY_METRICS +\
+        CLIENT_IO_OPS_DKEY_PUNCH_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_DKEY_PUNCH_LATENCY_METRICS +\
+        CLIENT_IO_OPS_EC_AGG_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_EC_AGG_LATENCY_METRICS +\
+        CLIENT_IO_OPS_EC_REP_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_EC_REP_LATENCY_METRICS +\
+        CLIENT_IO_OPS_FETCH_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_KEY2ANCHOR_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_KEY2ANCHOR_LATENCY_METRICS +\
+        CLIENT_IO_OPS_KEY_QUERY_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_KEY_QUERY_LATENCY_METRICS +\
+        CLIENT_IO_OPS_MIGRATE_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_MIGRATE_LATENCY_METRICS +\
+        CLIENT_IO_OPS_OBJ_COLL_PUNCH_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_OBJ_COLL_PUNCH_LATENCY_METRICS +\
+        CLIENT_IO_OPS_OBJ_COLL_QUERY_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_OBJ_COLL_QUERY_LATENCY_METRICS +\
+        CLIENT_IO_OPS_OBJ_ENUM_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_OBJ_ENUM_LATENCY_METRICS +\
+        CLIENT_IO_OPS_OBJ_PUNCH_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_OBJ_PUNCH_LATENCY_METRICS +\
+        CLIENT_IO_OPS_OBJ_punch_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_OBJ_SYNC_LATENCY_METRICS +\
+        CLIENT_IO_OPS_RECX_ENUM_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_RECX_ENUM_LATENCY_METRICS +\
+        CLIENT_IO_OPS_TGT_AKEY_PUNCH_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_TGT_AKEY_PUNCH_LATENCY_METRICS +\
+        CLIENT_IO_OPS_TGT_DKEY_PUNCH_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_TGT_DKEY_PUNCH_LATENCY_METRICS +\
+        CLIENT_IO_OPS_TGT_PUNCH_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_TGT_PUNCH_LATENCY_METRICS +\
+        CLIENT_IO_OPS_TGT_UPDATE_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_UPDATE_ACTIVE_METRICS
+
+    def __init__(self, dmg, servers, clients):
+        """Create a ClientTelemetryUtils object.
+
+        Args:
+            dmg (DmgCommand): the DmgCommand object configured to communicate
+                with the servers
+            servers (list): a list of server host names
+            clients (list): a list of client host names
+        """
+        super().__init__(dmg, servers)
+        self.clients = NodeSet.fromlist(clients)
+
+    def get_all_client_metrics_names(self, with_pools=False):
+        """Get all the telemetry metrics names for this client.
+
+        Args:
+            with_pools (bool): if True, include pool metrics in the results
+
+        Returns:
+            list: all of the telemetry metrics names for this client
+
+        """
+        all_metrics_names = list(self.CLIENT_EVENT_METRICS)
+        all_metrics_names.extend(self.CLIENT_IO_METRICS)
+        if with_pools:
+            all_metrics_names.extend(self.CLIENT_POOL_METRICS)
+
+        return all_metrics_names
+
+    def list_client_metrics(self):
+        """List the available metrics for each host.
+
+        Returns:
+            dict: a dictionary of host keys linked to a list of metric names
+
+        """
+        return super().list_metrics(hosts=self.clients)
+
+    def collect_client_data(self, names):
+        """Collect telemetry data for the specified metrics.
+
+        Args:
+            names (list): list of metric names
+
+        Returns:
+            dict: dictionary of metric values keyed by the metric name and combination of metric
+                labels and values, e.g.
+                    <metric_name>: {
+                        <label_1:label_1_value,label_2:label_2_value,...>: <value_1>,
+                        <label_1:label_1_value,label_2:label_2_value,...>: <value_2>,
+                        ...
+                    },
+                    ...
+        """
+        return super().collect_data(names, hosts=self.clients)
+
+    def get_client_metrics(self, name):
+        """Obtain the specified metric information for each host.
+
+        Args:
+            name (str): Comma-separated list of metric names to query.
+
+        Returns:
+            dict: a dictionary of host keys linked to metric data for each
+                metric name specified
+
+        """
+        return super().get_metrics(name, hosts=self.clients)
+
+
+class MetricData():
+    """Defines a object used to collect, display, and verify telemetry metric data."""
+
+    def __init__(self):
+        """Initialize a MetricData object."""
+        self._data = {}
+        self._display = {'data': {}, 'labels': set(), 'widths': {}}
+
+    def collect(self, log, names, hosts, dmg):
+        """Collect telemetry data for the specified metrics.
+
+        Args:
+            log (logger): logger for the messages produced by this method
+            names (list): list of metric names
+            hosts (NodeSet): set of servers from which to collect the telemetry metrics
+            dmg (DmgCommand): the DmgCommand object configured to communicate with the servers
+
+        Returns:
+            dict: dictionary of metric values keyed by the metric name and combination of metric
+                labels and values, e.g.
+                    <metric_name>: {
+                        <label_1:label_1_value,label_2:label_2_value,...>: <value_1>,
+                        <label_1:label_1_value,label_2:label_2_value,...>: <value_2>,
+                        ...
+                    },
+                    ...
+        """
+        info = self._get_metrics(log, ','.join(names), hosts, dmg)
+        self._data = self._get_data(names, info)
+        return copy.deepcopy(self._data)
+
+    def display(self, log):
+        """Display the telemetry metric values.
+
+        Args:
+            log (logger): logger for the messages produced by this method
+        """
+        self._set_display()
+        columns = ['metric'] + self._display['labels'] + ['value']
+        format_str = '  '.join([f"%-{self._display['widths'][name]}s" for name in columns])
+
+        log.info('-' * 80)
+        log.info('Telemetry Metric Information')
+        log.info(format_str, *[name.title() for name in columns])
+        log.info(format_str, *['-' * self._display['widths'][name] for name in columns])
+        for metric in sorted(self._display['data']):
+            for value, labels_list in self._display['data'][metric].items():
+                for labels in labels_list:
+                    log.info(format_str, metric, *self._label_values(labels), value)
+
+    def verify(self, log, ranges):
+        """Verify the telemetry metric values.
+
+        Args:
+            log (logger): logger for the messages produced by this method
+            ranges (dict): dictionary of expected metric value ranges with a minimum metric key and
+                optional label key to at least a minimum metric value and optional maximum metric
+                value, e.g.
+                    {<metric>: <min_value>} or
+                    {<metric>: [<min_value>]} or
+                    {<metric>: [<min_value>, <max_value>]} or
+                    {<metric>: {<label>: <min_value>}} or
+                    {<metric>: {<label>: [<min_value>]}} or
+                    {<metric>: {<label>: [<min_value>, <max_value>]}}
+
+        Returns:
+            bool: True if all metric values are within the ranges specified; False otherwise
+        """
+        status = self._set_display(ranges)
+        columns = ['metric'] + self._display['labels'] + ['value', 'check']
+        format_str = '  '.join([f"%-{self._display['widths'][name]}s" for name in columns])
+
+        log.info('-' * 80)
+        log.info('Telemetry Metric Verification')
+        log.info(format_str, *[name.title() for name in columns])
+        log.info(format_str, *['-' * self._display['widths'][name] for name in columns])
+        for metric in sorted(self._display['data']):
+            for value, labels in self._display['data'][metric].items():
+                for label in labels:
+                    log.info(
+                        format_str, metric, *self._label_values(label), value,
+                        *self._label_values(label, ['check']))
+        return status
+
+    def _get_metrics(self, log, names, hosts, dmg):
+        """Obtain the specified metric information for each host.
+
+        Args:
+            log (logger): logger for the messages produced by this method
+            names (str): Comma-separated list of metric names to query.
+            hosts (NodeSet): set of servers from which to collect the telemetry metrics
+            dmg (DmgCommand): the DmgCommand object configured to communicate with the servers
+
+        Returns:
+            dict: a dictionary of host keys linked to metric data for each metric name specified
+        """
+        info = {}
+        log.info('Querying telemetry metric %s from %s', names, hosts)
+        for host in hosts:
+            data = dmg.telemetry_metrics_query(host=host, metrics=names)
+            info[host] = {}
+            if 'response' in data:
+                if 'metric_sets' in data['response']:
+                    for entry in data['response']['metric_sets']:
+                        info[host][entry['name']] = {
+                            'description': entry['description'],
+                            'metrics': entry['metrics']
+                        }
+        return info
+
+    def _get_data(self, names, info):
+        """Get the telemetry metric data values.
+
+        Values are stored per metric name with common label information (e.g. rank, target, pool,
+        etc.) stored as NodeSets.
+
+        Args:
+            names (list): list of metric names
+            info (dict): a dictionary of host keys linked to metric data for each metric name
+
+        Returns:
+            dict: dictionary of metric values keyed by the metric name and combination of metric
+                labels and values, e.g.
+                    <metric_name>: {
+                        <label_1:label_1_value,label_2:label_2_value,...>: <value_1>,
+                        <label_1:label_1_value,label_2:label_2_value,...>: <value_2>,
+                        ...
+                    },
+                    ...
+        """
+        data = {}
+        for name in names:
+            for host, metrics in info.items():
+                if name not in data:
+                    data[name] = {}
+                for metric in metrics[name]['metrics']:
+                    if 'labels' not in metric or 'value' not in metric:
+                        continue
+                    labels = [f'host:{host}']
+                    for key, value in metric['labels'].items():
+                        labels.append(":".join([str(key), str(value)]))
+                    label_key = ",".join(sorted(labels))
+                    data[name][label_key] = metric['value']
+        return data
+
+    def _set_display(self, compare=None):
+        """Set the data to display along with the column labels and widths.
+
+        Args:
+            compare (dict, optional): dictionary of expected metric value ranges with a minimum
+                metric key and optional label key to at least a minimum metric value and optional
+                maximum metric value. Defaults to None.
+
+        Returns:
+            bool: True if all the comparisons passed; False otherwise
+        """
+        status = True
+        self._display['data'] = {}
+        unique_labels = set()
+        all_widths = {name: [len(name)] for name in ['metric', 'value', 'check']}
+        for metric in sorted(self._data):
+            self._display['data'][metric] = {}
+            all_widths['metric'].append(len(metric))
+            for combined_label, value in self._data[metric].items():
+                if value not in self._display['data'][metric]:
+                    # self._display['data'][metric][value] = {}
+                    self._display['data'][metric][value] = []
+                all_widths['value'].append(len(str(value)))
+                combined_label = self._add_check_label(combined_label, metric, compare, value)
+
+                # For now just list all the labels with this metric value w/o condensing
+                self._display['data'][metric][value].append({})
+
+                for label_entry in combined_label.split(','):
+                    label_name, label_value = label_entry.split(':')
+                    if label_name != 'check':
+                        unique_labels.add(label_name)
+                    elif 'Fail' in label_value:
+                        status = False
+                    self._display['data'][metric][value][-1][label_name] = label_value
+                    # if label_name not in self._display['data'][metric][value]:
+                    #     self._display['data'][metric][value][label_name] = NodeSet()
+                    # self._display['data'][metric][value][label_name].add(label_value)
+                    if label_name not in all_widths:
+                        all_widths[label_name] = []
+                    all_widths[label_name].append(len(str(label_name)))
+                    all_widths[label_name].append(
+                        len(str(self._display['data'][metric][value][-1][label_name])))
+        self._display['labels'] = sorted(unique_labels)
+        self._display['widths'] = {name: max(value) for name, value in all_widths.items()}
+        return status
+
+    def _label_values(self, label_data, names=None):
+        """Get the values for each telemetry metric label.
+
+        Args:
+            label_data (dict): dictionary of label names and values from which to generate a list of
+                values
+            names (list, optional): list of label names to include. If not specified
+                self._display['labels'] is used.
+
+        Returns:
+            list: list of values for each telemetry metric label
+        """
+        label_values = []
+        if names is None:
+            names = self._display['labels']
+        for name in names:
+            if name in label_data:
+                label_values.append(label_data[name])
+            else:
+                label_values.append('-')
+        return label_values
+
+    def _add_check_label(self, label, metric, compare, value):
+        """Add a 'check' label to the provided label indicating if the value is in the range.
+
+        Args:
+            label (str): current label (an optional key in the compare dictionary)
+            metric (str): metric name (a key in the compare dictionary)
+            compare (dict): dictionary of expected metric value ranges with a minimum metric key and
+                optional label key to at least a minimum metric value and optional maximum metric
+                value, e.g.
+                    {<metric>: <min_value>} or
+                    {<metric>: [<min_value>]} or
+                    {<metric>: [<min_value>, <max_value>]} or
+                    {<metric>: {<label>: <min_value>}} or
+                    {<metric>: {<label>: [<min_value>]}} or
+                    {<metric>: {<label>: [<min_value>, <max_value>]}}
+            value (int): current value to compare
+
+        Returns:
+            str: the current label with a added entry for the check result
+        """
+        def _validate_range(_value, _range):
+            if not isinstance(_range, (list, tuple)):
+                if _value < _range:
+                    return f'Fail (<{_range})'
+            elif len(_range) > 1 and _value > _range[1]:
+                return f'Fail (>{_range[1]})'
+            elif len(_range) > 0 and _value < _range[0]:
+                return f'Fail (<{_range[0]})'
+            return 'Pass'
+
+        if compare is None or metric not in compare:
+            return label + ',check:Pass'
+        if label not in compare[metric]:
+            return label + f',check:{_validate_range(value, compare[metric])}'
+        return label + f',check:{_validate_range(value, compare[metric][label])}'

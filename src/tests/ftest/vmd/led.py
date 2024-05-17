@@ -6,7 +6,6 @@
 import time
 
 from avocado import fail_on
-
 from dmg_utils import get_storage_query_device_uuids
 from exception_utils import CommandFailure
 from nvme_utils import set_device_faulty
@@ -83,7 +82,8 @@ class VmdLedStatus(OSAUtils):
         :avocado: tags=VmdLedStatus,test_vmd_led_status
         """
         host_uuids = get_storage_query_device_uuids(self.dmg)
-        for hosts, uuid_list in host_uuids.items():
+        for hosts, uuid_dict in host_uuids.items():
+            uuid_list = sorted(uuid_dict.keys())
             self.log.info("Devices on hosts %s: %s", hosts, uuid_list)
             for uuid in uuid_list:
                 led_identify_result = self.run_vmd_led_identify(uuid)
@@ -103,7 +103,8 @@ class VmdLedStatus(OSAUtils):
         :avocado: tags=VmdLedStatus,test_vmd_led_faulty
         """
         host_uuids = get_storage_query_device_uuids(self.dmg)
-        for hosts, uuid_list in host_uuids.items():
+        for hosts, uuid_dict in host_uuids.items():
+            uuid_list = sorted(uuid_dict.keys())
             self.log.info("Devices on hosts %s: %s", hosts, uuid_list)
             for uuid in uuid_list:
                 resp = set_device_faulty(self, self.dmg, hosts.split(':')[0], uuid)
@@ -121,7 +122,8 @@ class VmdLedStatus(OSAUtils):
         :avocado: tags=VmdLedStatus,test_disk_failure_recover
         """
         host_uuids = get_storage_query_device_uuids(self.dmg)
-        for hosts, uuid_list in host_uuids.items():
+        for hosts, uuid_dict in host_uuids.items():
+            uuid_list = sorted(uuid_dict.keys())
             self.log.info("Devices on hosts %s: %s", hosts, uuid_list)
             self.log.info("First device on hosts %s: %s", hosts, uuid_list[0])
             resp = set_device_faulty(self, self.dmg, hosts.split(':')[0], uuid_list[0])

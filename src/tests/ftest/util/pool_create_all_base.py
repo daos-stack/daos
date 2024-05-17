@@ -1,13 +1,14 @@
 """
-(C) Copyright 2022-2023 Intel Corporation.
+(C) Copyright 2022-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import sys
-
-from avocado.core.exceptions import TestFail
+import time
 
 from apricot import TestWithServers
+from avocado.core.exceptions import TestFail
+from command_utils_base import CommandFailure
 from general_utils import bytes_to_human
 
 
@@ -51,8 +52,8 @@ class PoolCreateAllTestBase(TestWithServers):
             host_size += len(host_storage["hosts"].split(','))
 
             scm_bytes = 0
-            for scm_devices in host_storage["storage"]["scm_namespaces"]:
-                scm_bytes += scm_devices["mount"]["usable_bytes"]
+            for scm_device in host_storage["storage"]["scm_namespaces"]:
+                scm_bytes += scm_device["mount"]["usable_bytes"]
             scm_engine_bytes = min(scm_engine_bytes, scm_bytes)
 
             if host_storage["storage"]["nvme_devices"] is None:
@@ -60,10 +61,8 @@ class PoolCreateAllTestBase(TestWithServers):
 
             nvme_bytes = 0
             for nvme_device in host_storage["storage"]["nvme_devices"]:
-                if nvme_device["smd_devices"] is None:
-                    continue
-                for smd_device in nvme_device["smd_devices"]:
-                    if smd_device["dev_state"] == "NORMAL":
+                if nvme_device["dev_state"] == "NORMAL":
+                    for smd_device in (nvme_device["smd_devices"] or []):
                         nvme_bytes += smd_device["usable_bytes"]
             nvme_engine_bytes = min(nvme_engine_bytes, nvme_bytes)
 
@@ -73,6 +72,26 @@ class PoolCreateAllTestBase(TestWithServers):
             nvme_engine_bytes = 0
 
         return host_size * scm_engine_bytes, host_size * nvme_engine_bytes
+
+    def find_hosts_low_scm(self, min_ratio):
+        """Returns list of hosts with available SCM storage below min_ratio.
+
+        Args:
+            min_ratio (int): Minimal storage of available SCM.
+
+        Returns:
+            list: List of host storage tuple without enough available SCM storage.
+        """
+        result = self.dmg.storage_query_usage()
+        hosts = []
+        for host_storage in result["response"]["HostStorage"].values():
+            for scm_device in host_storage["storage"]["scm_namespaces"]:
+                avail_ratio = scm_device["mount"]["avail_bytes"] * 100
+                avail_ratio /= scm_device["mount"]["total_bytes"]
+                if avail_ratio < min_ratio:
+                    hosts.append((host_storage["hosts"], scm_device["mount"]["path"], avail_ratio))
+
+        return hosts
 
     def check_pool_full_storage(self, scm_delta_bytes, nvme_delta_bytes=None, ranks=None):
         """Check the creation of one pool with all the storage capacity.
@@ -200,7 +219,6 @@ class PoolCreateAllTestBase(TestWithServers):
             nvme_delta_bytes (int, optional): Allowed difference of the NVMe pool storage.  Defaults
                 to None.
         """
-
         self.add_pool_qty(pool_count, namespace="/run/pool/*", create=False)
 
         first_pool_size = None
@@ -214,6 +232,38 @@ class PoolCreateAllTestBase(TestWithServers):
             self.log.info(
                 "Pool %d created: scm_size=%d, nvme_size=%d", index, *pool_size)
             self.pool[index].destroy()
+
+            # Creating a pool immediately after destroy intermittently causes an error during the
+            # create. Wait for a few seconds and check that the pool was destroyed.
+            count = 0
+            while True:
+                self.log.info("Wait for a few seconds for the pool to be destroyed...")
+                time.sleep(5)
+                try:
+                    self.dmg.pool_query(pool=self.pool[index].identifier)
+                    self.log.info(
+                        "Pool query worked. Pool hasn't been destroyed. Try again. %d", count)
+                    count += 1
+                except CommandFailure as error:
+                    self.log.info("Pool query failed. Pool should have been destroyed. %s", error)
+                    break
+
+            self.log.info("Checking SCM available storage")
+            timeout = 3
+            while timeout > 0:
+                hosts = self.find_hosts_low_scm(90)
+                if not hosts:
+                    break
+                for it in hosts:
+                    self.log.info(
+                        "Find hosts without enough available SCM: "
+                        "timeout=%is, hosts=%s, path=%s, ratio=%f%%",
+                        timeout, *it)
+                time.sleep(1)
+                timeout -= 1
+            self.assertNotEqual(
+                0, timeout,
+                "Destroying pool did not restore available SCM storage space")
 
             if first_pool_size is None:
                 first_pool_size = pool_size
@@ -254,11 +304,10 @@ class PoolCreateAllTestBase(TestWithServers):
                 engine.  Defaults to None.
         """
         self.log.info("Retrieving available size")
-        result = self.server_managers[0].dmg.storage_query_usage()
+        result = self.dmg.storage_query_usage()
 
         scm_used_bytes = [sys.maxsize, 0]
-        if nvme_delta_bytes is not None:
-            nvme_used_bytes = [sys.maxsize, 0]
+        nvme_used_bytes = [sys.maxsize, 0]
         for host_storage in result["response"]["HostStorage"].values():
             scm_bytes = 0
             for scm_devices in host_storage["storage"]["scm_namespaces"]:
@@ -274,11 +323,10 @@ class PoolCreateAllTestBase(TestWithServers):
 
             nvme_bytes = 0
             for nvme_device in host_storage["storage"]["nvme_devices"]:
-                for smd_device in nvme_device["smd_devices"]:
-                    if smd_device["dev_state"] != "NORMAL":
-                        continue
-                    nvme_bytes += smd_device["total_bytes"]
-                    nvme_bytes -= smd_device["avail_bytes"]
+                if nvme_device["dev_state"] == "NORMAL":
+                    for smd_device in (nvme_device["smd_devices"] or []):
+                        nvme_bytes += smd_device["total_bytes"]
+                        nvme_bytes -= smd_device["avail_bytes"]
             if nvme_bytes < nvme_used_bytes[0]:
                 nvme_used_bytes[0] = nvme_bytes
             if nvme_bytes > nvme_used_bytes[1]:

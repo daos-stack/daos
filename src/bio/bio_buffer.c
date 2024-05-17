@@ -185,20 +185,6 @@ dma_metrics_init(struct bio_dma_buffer *bdb, int tgt_id)
 	if (rc)
 		D_WARN("Failed to create grab_retries telemetry: "DF_RC"\n", DP_RC(rc));
 
-	rc = d_tm_add_metric(&stats->bds_wal_sz, D_TM_STATS_GAUGE, "WAL tx size",
-			     "bytes", "dmabuff/wal_sz/tgt_%d", tgt_id);
-	if (rc)
-		D_WARN("Failed to create WAL size telemetry: "DF_RC"\n", DP_RC(rc));
-
-	rc = d_tm_add_metric(&stats->bds_wal_qd, D_TM_STATS_GAUGE, "WAL tx QD",
-			     "commits", "dmabuff/wal_qd/tgt_%d", tgt_id);
-	if (rc)
-		D_WARN("Failed to create WAL QD telemetry: "DF_RC"\n", DP_RC(rc));
-
-	rc = d_tm_add_metric(&stats->bds_wal_waiters, D_TM_STATS_GAUGE, "WAL waiters",
-			     "transactions", "dmabuff/wal_waiters/tgt_%d", tgt_id);
-	if (rc)
-		D_WARN("Failed to create WAL waiters telemetry: "DF_RC"\n", DP_RC(rc));
 }
 
 struct bio_dma_buffer *
@@ -536,37 +522,51 @@ copy_one(struct bio_desc *biod, struct bio_iov *biov, void *data)
 	return -DER_REC2BIG;
 }
 
-static int
-iterate_biov(struct bio_desc *biod,
-	     int (*cb_fn)(struct bio_desc *, struct bio_iov *, void *data),
-	     void *data)
+static void
+copy_one_setup(struct bio_desc *biod, int idx, void *data)
 {
-	int i, j, rc = 0;
+	struct bio_copy_args *arg = data;
 
-	for (i = 0; i < biod->bd_sgl_cnt; i++) {
+	D_ASSERT(idx < arg->ca_sgl_cnt);
+	arg->ca_sgl_idx = idx;
+	arg->ca_iov_idx = 0;
+	arg->ca_iov_off = 0;
+	if (biod->bd_type == BIO_IOD_TYPE_FETCH)
+		arg->ca_sgls[idx].sg_nr_out = 0;
+}
+
+static void
+map_one_setup(struct bio_desc *biod, int idx, void *data)
+{
+	struct bio_bulk_args *arg = data;
+
+	arg->ba_sgl_idx = idx;
+}
+
+static int
+iterate_biov(struct bio_desc *biod, int (*cb_fn)(struct bio_desc *, struct bio_iov *, void *data),
+	     void            *data)
+{
+	void (*prep_fn)(struct bio_desc *, int, void *) = NULL;
+	int rc                                          = 0;
+
+	if (data != NULL) {
+		if (cb_fn == copy_one)
+			prep_fn = copy_one_setup;
+		else if (cb_fn == bulk_map_one)
+			prep_fn = map_one_setup;
+	}
+
+	for (int i = 0; i < biod->bd_sgl_cnt; i++) {
 		struct bio_sglist *bsgl = &biod->bd_sgls[i];
 
-		if (data != NULL) {
-			if (cb_fn == copy_one) {
-				struct bio_copy_args *arg = data;
-
-				D_ASSERT(i < arg->ca_sgl_cnt);
-				arg->ca_sgl_idx = i;
-				arg->ca_iov_idx = 0;
-				arg->ca_iov_off = 0;
-				if (biod->bd_type == BIO_IOD_TYPE_FETCH)
-					arg->ca_sgls[i].sg_nr_out = 0;
-			} else if (cb_fn == bulk_map_one) {
-				struct bio_bulk_args *arg = data;
-
-				arg->ba_sgl_idx = i;
-			}
-		}
+		if (prep_fn)
+			prep_fn(biod, i, data);
 
 		if (bsgl->bs_nr_out == 0)
 			continue;
 
-		for (j = 0; j < bsgl->bs_nr_out; j++) {
+		for (int j = 0; j < bsgl->bs_nr_out; j++) {
 			struct bio_iov *biov = &bsgl->bs_iovs[j];
 
 			rc = cb_fn(biod, biov, data);

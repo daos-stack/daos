@@ -6,6 +6,12 @@
 
 package security
 
+import (
+	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/build"
+)
+
 // Component represents the DAOS component being granted authorization.
 type Component int
 
@@ -22,59 +28,88 @@ func (c Component) String() string {
 
 // methodAuthorizations is the map for checking which components are authorized to make the specific method call.
 var methodAuthorizations = map[string][]Component{
-	"/ctl.CtlSvc/StorageScan":              {ComponentAdmin},
-	"/ctl.CtlSvc/StorageFormat":            {ComponentAdmin},
-	"/ctl.CtlSvc/StorageNvmeRebind":        {ComponentAdmin},
-	"/ctl.CtlSvc/StorageNvmeAddDevice":     {ComponentAdmin},
-	"/ctl.CtlSvc/NetworkScan":              {ComponentAdmin},
-	"/ctl.CtlSvc/CollectLog":               {ComponentAdmin},
-	"/ctl.CtlSvc/FirmwareQuery":            {ComponentAdmin},
-	"/ctl.CtlSvc/FirmwareUpdate":           {ComponentAdmin},
-	"/ctl.CtlSvc/SmdQuery":                 {ComponentAdmin},
-	"/ctl.CtlSvc/SmdManage":                {ComponentAdmin},
-	"/ctl.CtlSvc/SetEngineLogMasks":        {ComponentAdmin},
-	"/ctl.CtlSvc/PrepShutdownRanks":        {ComponentServer},
-	"/ctl.CtlSvc/StopRanks":                {ComponentServer},
-	"/ctl.CtlSvc/ResetFormatRanks":         {ComponentServer},
-	"/ctl.CtlSvc/StartRanks":               {ComponentServer},
-	"/mgmt.MgmtSvc/Join":                   {ComponentServer},
-	"/mgmt.MgmtSvc/ClusterEvent":           {ComponentServer},
-	"/mgmt.MgmtSvc/LeaderQuery":            {ComponentAdmin},
-	"/mgmt.MgmtSvc/SystemQuery":            {ComponentAdmin},
-	"/mgmt.MgmtSvc/SystemErase":            {ComponentAdmin},
-	"/mgmt.MgmtSvc/SystemStart":            {ComponentAdmin},
-	"/mgmt.MgmtSvc/SystemStop":             {ComponentAdmin},
-	"/mgmt.MgmtSvc/SystemExclude":          {ComponentAdmin},
-	"/mgmt.MgmtSvc/PoolCreate":             {ComponentAdmin},
-	"/mgmt.MgmtSvc/PoolDestroy":            {ComponentAdmin},
-	"/mgmt.MgmtSvc/PoolQuery":              {ComponentAdmin},
-	"/mgmt.MgmtSvc/PoolQueryTarget":        {ComponentAdmin},
-	"/mgmt.MgmtSvc/PoolSetProp":            {ComponentAdmin},
-	"/mgmt.MgmtSvc/PoolGetProp":            {ComponentAdmin},
-	"/mgmt.MgmtSvc/PoolGetACL":             {ComponentAdmin},
-	"/mgmt.MgmtSvc/PoolOverwriteACL":       {ComponentAdmin},
-	"/mgmt.MgmtSvc/PoolUpdateACL":          {ComponentAdmin},
-	"/mgmt.MgmtSvc/PoolDeleteACL":          {ComponentAdmin},
-	"/mgmt.MgmtSvc/PoolExclude":            {ComponentAdmin},
-	"/mgmt.MgmtSvc/PoolDrain":              {ComponentAdmin},
-	"/mgmt.MgmtSvc/PoolReintegrate":        {ComponentAdmin},
-	"/mgmt.MgmtSvc/PoolEvict":              {ComponentAdmin, ComponentAgent},
-	"/mgmt.MgmtSvc/PoolExtend":             {ComponentAdmin},
-	"/mgmt.MgmtSvc/GetAttachInfo":          {ComponentAgent},
-	"/mgmt.MgmtSvc/ListPools":              {ComponentAdmin},
-	"/mgmt.MgmtSvc/ListContainers":         {ComponentAdmin},
-	"/mgmt.MgmtSvc/ContSetOwner":           {ComponentAdmin},
-	"/mgmt.MgmtSvc/SystemCleanup":          {ComponentAdmin},
-	"/mgmt.MgmtSvc/PoolUpgrade":            {ComponentAdmin},
-	"/mgmt.MgmtSvc/SystemSetAttr":          {ComponentAdmin},
-	"/mgmt.MgmtSvc/SystemGetAttr":          {ComponentAdmin},
-	"/mgmt.MgmtSvc/SystemSetProp":          {ComponentAdmin},
-	"/mgmt.MgmtSvc/SystemGetProp":          {ComponentAdmin},
-	"/RaftTransport/AppendEntries":         {ComponentServer},
-	"/RaftTransport/AppendEntriesPipeline": {ComponentServer},
-	"/RaftTransport/RequestVote":           {ComponentServer},
-	"/RaftTransport/TimeoutNow":            {ComponentServer},
-	"/RaftTransport/InstallSnapshot":       {ComponentServer},
+	"/ctl.CtlSvc/StorageScan":                {ComponentAdmin},
+	"/ctl.CtlSvc/StorageFormat":              {ComponentAdmin},
+	"/ctl.CtlSvc/StorageNvmeRebind":          {ComponentAdmin},
+	"/ctl.CtlSvc/StorageNvmeAddDevice":       {ComponentAdmin},
+	"/ctl.CtlSvc/NetworkScan":                {ComponentAdmin},
+	"/ctl.CtlSvc/CollectLog":                 {ComponentAdmin},
+	"/ctl.CtlSvc/FirmwareQuery":              {ComponentAdmin},
+	"/ctl.CtlSvc/FirmwareUpdate":             {ComponentAdmin},
+	"/ctl.CtlSvc/SmdQuery":                   {ComponentAdmin},
+	"/ctl.CtlSvc/SmdManage":                  {ComponentAdmin},
+	"/ctl.CtlSvc/SetEngineLogMasks":          {ComponentAdmin},
+	"/ctl.CtlSvc/PrepShutdownRanks":          {ComponentServer},
+	"/ctl.CtlSvc/StopRanks":                  {ComponentServer},
+	"/ctl.CtlSvc/ResetFormatRanks":           {ComponentServer},
+	"/ctl.CtlSvc/StartRanks":                 {ComponentServer},
+	"/mgmt.MgmtSvc/Join":                     {ComponentServer},
+	"/mgmt.MgmtSvc/ClusterEvent":             {ComponentServer},
+	"/mgmt.MgmtSvc/LeaderQuery":              {ComponentAdmin},
+	"/mgmt.MgmtSvc/SystemQuery":              {ComponentAdmin},
+	"/mgmt.MgmtSvc/SystemErase":              {ComponentAdmin},
+	"/mgmt.MgmtSvc/SystemStart":              {ComponentAdmin},
+	"/mgmt.MgmtSvc/SystemStop":               {ComponentAdmin},
+	"/mgmt.MgmtSvc/SystemExclude":            {ComponentAdmin},
+	"/mgmt.MgmtSvc/PoolCreate":               {ComponentAdmin},
+	"/mgmt.MgmtSvc/PoolDestroy":              {ComponentAdmin},
+	"/mgmt.MgmtSvc/PoolQuery":                {ComponentAdmin},
+	"/mgmt.MgmtSvc/PoolQueryTarget":          {ComponentAdmin},
+	"/mgmt.MgmtSvc/PoolSetProp":              {ComponentAdmin},
+	"/mgmt.MgmtSvc/PoolGetProp":              {ComponentAdmin},
+	"/mgmt.MgmtSvc/PoolGetACL":               {ComponentAdmin},
+	"/mgmt.MgmtSvc/PoolOverwriteACL":         {ComponentAdmin},
+	"/mgmt.MgmtSvc/PoolUpdateACL":            {ComponentAdmin},
+	"/mgmt.MgmtSvc/PoolDeleteACL":            {ComponentAdmin},
+	"/mgmt.MgmtSvc/PoolExclude":              {ComponentAdmin},
+	"/mgmt.MgmtSvc/PoolDrain":                {ComponentAdmin},
+	"/mgmt.MgmtSvc/PoolReintegrate":          {ComponentAdmin},
+	"/mgmt.MgmtSvc/PoolEvict":                {ComponentAdmin, ComponentAgent},
+	"/mgmt.MgmtSvc/PoolExtend":               {ComponentAdmin},
+	"/mgmt.MgmtSvc/GetAttachInfo":            {ComponentAgent},
+	"/mgmt.MgmtSvc/ListPools":                {ComponentAdmin},
+	"/mgmt.MgmtSvc/ListContainers":           {ComponentAdmin},
+	"/mgmt.MgmtSvc/ContSetOwner":             {ComponentAdmin},
+	"/mgmt.MgmtSvc/SystemCleanup":            {ComponentAdmin, ComponentAgent},
+	"/mgmt.MgmtSvc/SystemCheckEnable":        {ComponentAdmin},
+	"/mgmt.MgmtSvc/SystemCheckDisable":       {ComponentAdmin},
+	"/mgmt.MgmtSvc/SystemCheckStart":         {ComponentAdmin},
+	"/mgmt.MgmtSvc/SystemCheckStop":          {ComponentAdmin},
+	"/mgmt.MgmtSvc/SystemCheckQuery":         {ComponentAdmin},
+	"/mgmt.MgmtSvc/SystemCheckSetPolicy":     {ComponentAdmin},
+	"/mgmt.MgmtSvc/SystemCheckGetPolicy":     {ComponentAdmin},
+	"/mgmt.MgmtSvc/SystemCheckRepair":        {ComponentAdmin},
+	"/mgmt.MgmtSvc/FaultInjectReport":        {ComponentAdmin},
+	"/mgmt.MgmtSvc/FaultInjectPoolFault":     {ComponentAdmin},
+	"/mgmt.MgmtSvc/FaultInjectMgmtPoolFault": {ComponentAdmin},
+	"/mgmt.MgmtSvc/PoolUpgrade":              {ComponentAdmin},
+	"/mgmt.MgmtSvc/SystemSetAttr":            {ComponentAdmin},
+	"/mgmt.MgmtSvc/SystemGetAttr":            {ComponentAdmin},
+	"/mgmt.MgmtSvc/SystemSetProp":            {ComponentAdmin},
+	"/mgmt.MgmtSvc/SystemGetProp":            {ComponentAdmin},
+	"/RaftTransport/AppendEntries":           {ComponentServer},
+	"/RaftTransport/AppendEntriesPipeline":   {ComponentServer},
+	"/RaftTransport/RequestVote":             {ComponentServer},
+	"/RaftTransport/TimeoutNow":              {ComponentServer},
+	"/RaftTransport/InstallSnapshot":         {ComponentServer},
+}
+
+func methodToComponent(method string, methodAuthorizations map[string][]Component) (build.Component, error) {
+	comps, found := methodAuthorizations[method]
+	if !found || len(comps) == 0 {
+		return build.ComponentAny, errors.Errorf("method %q does not map to a known authorized component", method)
+	} else if len(comps) > 1 {
+		// In this case, the caller must explicitly set the component and cannot
+		// rely on this helper to resolve it.
+		return build.ComponentAny, errors.Errorf("method %q maps to multiple authorized components", method)
+	}
+
+	return build.Component(comps[0].String()), nil
+}
+
+// MethodToComponent resolves a gRPC method string to a build.Component.
+func MethodToComponent(method string) (build.Component, error) {
+	return methodToComponent(method, methodAuthorizations)
 }
 
 // HasAccess check if the given component has access to method given in FullMethod

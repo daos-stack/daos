@@ -26,6 +26,11 @@ RDB_STRING_KEY(ds_pool_prop_, owner);
 RDB_STRING_KEY(ds_pool_prop_, owner_group);
 RDB_STRING_KEY(ds_pool_prop_, connectable);
 RDB_STRING_KEY(ds_pool_prop_, nhandles);
+RDB_STRING_KEY(ds_pool_prop_, svc_ops);
+RDB_STRING_KEY(ds_pool_prop_, svc_ops_enabled);
+RDB_STRING_KEY(ds_pool_prop_, svc_ops_max);
+RDB_STRING_KEY(ds_pool_prop_, svc_ops_num);
+RDB_STRING_KEY(ds_pool_prop_, svc_ops_age);
 
 /** pool handle KVS */
 RDB_STRING_KEY(ds_pool_prop_, handles);
@@ -35,7 +40,7 @@ RDB_STRING_KEY(ds_pool_prop_, ec_pda);
 RDB_STRING_KEY(ds_pool_prop_, rp_pda);
 RDB_STRING_KEY(ds_pool_prop_, perf_domain);
 RDB_STRING_KEY(ds_pool_attr_, user);
-RDB_STRING_KEY(ds_pool_prop_, policy);
+RDB_STRING_KEY(ds_pool_prop_, data_thresh);
 RDB_STRING_KEY(ds_pool_prop_, global_version);
 RDB_STRING_KEY(ds_pool_prop_, upgrade_status);
 RDB_STRING_KEY(ds_pool_prop_, upgrade_global_version);
@@ -99,8 +104,8 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
 	.dpe_val  = DAOS_PROP_PO_RP_PDA_DEFAULT,
     },
     {
-	.dpe_type = DAOS_PROP_PO_POLICY,
-	.dpe_str  = DAOS_PROP_POLICYSTR_DEFAULT,
+	.dpe_type = DAOS_PROP_PO_DATA_THRESH,
+	.dpe_val  = DAOS_PROP_PO_DATA_THRESH_DEFAULT,
     },
     {
 	.dpe_type = DAOS_PROP_PO_GLOBAL_VERSION,
@@ -150,7 +155,14 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
 	.dpe_type = DAOS_PROP_PO_REINT_MODE,
 	.dpe_val  = DAOS_PROP_PO_REINT_MODE_DEFAULT,
     },
-};
+    {
+	.dpe_type = DAOS_PROP_PO_SVC_OPS_ENABLED,
+	.dpe_val  = DAOS_PROP_PO_SVC_OPS_ENABLED_DEFAULT,
+    },
+    {
+	.dpe_type = DAOS_PROP_PO_SVC_OPS_ENTRY_AGE,
+	.dpe_val  = DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_DEFAULT,
+    }};
 
 daos_prop_t pool_prop_default = {
 	.dpp_nr		= DAOS_PROP_PO_NUM,

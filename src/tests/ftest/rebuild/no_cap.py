@@ -5,8 +5,9 @@
 '''
 
 from time import sleep, time
+
 from apricot import TestWithServers
-from general_utils import get_random_bytes, DaosTestError
+from general_utils import DaosTestError, get_random_bytes
 from test_utils_container import TestContainerData
 
 
@@ -40,7 +41,7 @@ class RbldNoCapacity(TestWithServers):
             Full fill pool and verify pool by query after rebuild.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,medium,md_on_ssd
         :avocado: tags=pool,rebuild,no_cap
         :avocado: tags=RbldNoCapacity,test_rebuild_no_capacity
         """
@@ -55,7 +56,7 @@ class RbldNoCapacity(TestWithServers):
         err_pool_full = -1007
 
         # Create a pool and container
-        self.prepare_pool()
+        self.add_pool()
         self.add_container(self.pool)
         self.container.open()
 

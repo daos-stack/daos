@@ -79,6 +79,15 @@ func (hss *HostStorageSet) String() string {
 	return fmt.Sprintf("hosts %s, storage %+v", hss.HostSet, hss.HostStorage)
 }
 
+// Len returns the number of hosts in set with this host storage.
+func (hss *HostStorageSet) Len() int {
+	if hss == nil {
+		return 0
+	}
+
+	return hss.HostSet.Count()
+}
+
 // NewHostStorageSet returns an initialized HostStorageSet for the given
 // host address and HostStorage configuration.
 func NewHostStorageSet(hostAddr string, hs *HostStorage) (*HostStorageSet, error) {
@@ -135,13 +144,21 @@ func (hsm HostStorageMap) Keys() []uint64 {
 	return keys
 }
 
+// HostCount returns a count of hosts in map.
+func (hsm HostStorageMap) HostCount() (nrHosts int) {
+	for _, set := range hsm {
+		nrHosts += set.Len()
+	}
+
+	return nrHosts
+}
+
 type (
 	// StorageScanReq contains the parameters for a storage scan request.
 	StorageScanReq struct {
 		unaryRequest
 		Usage      bool
 		NvmeHealth bool
-		NvmeMeta   bool
 		NvmeBasic  bool
 	}
 
@@ -237,10 +254,10 @@ func StorageScan(ctx context.Context, rpcClient UnaryInvoker, req *StorageScanRe
 				Usage: req.Usage,
 			},
 			Nvme: &ctlpb.ScanNvmeReq{
-				Health: req.NvmeHealth,
-				// NVMe meta option will populate usage statistics
-				Meta:  req.NvmeMeta || req.Usage,
 				Basic: req.NvmeBasic,
+				// Health and meta details required to populate usage statistics.
+				Health: req.NvmeHealth || req.Usage,
+				Meta:   req.Usage,
 			},
 		})
 	})
@@ -306,6 +323,13 @@ func (sfr *StorageFormatResp) addHostResponse(hr *HostResponse) (err error) {
 			hs.NvmeDevices = append(hs.NvmeDevices, &storage.NvmeController{
 				Info:    info,
 				PciAddr: nr.GetPciAddr(),
+				SmdDevices: []*storage.SmdDevice{
+					{
+						Roles: storage.BdevRoles{
+							storage.OptionBits(nr.RoleBits),
+						},
+					},
+				},
 			})
 		default:
 			if err := ctlStateToErr(nr.GetState()); err != nil {

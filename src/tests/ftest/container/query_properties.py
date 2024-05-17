@@ -5,10 +5,10 @@
 '''
 import ctypes
 
-from pydaos.raw import daos_cref, DaosApiError, conversion, DaosContPropEnum
-
 from apricot import TestWithServers
-from test_utils_container import TestContainer
+from pydaos.raw import DaosApiError, DaosContPropEnum, conversion, daos_cref
+from test_utils_container import add_container
+from test_utils_pool import add_pool
 
 
 class QueryPropertiesTest(TestWithServers):
@@ -36,13 +36,12 @@ class QueryPropertiesTest(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=container
-        :avocado: tags=query_properties,test_query_properties
+        :avocado: tags=QueryPropertiesTest,test_query_properties
         """
         errors = []
 
-        self.add_pool()
-        self.container = TestContainer(pool=self.pool)
-        self.container.get_params(self)
+        pool = add_pool(self)
+        container = add_container(self, pool, create=False)
 
         # Prepare DaosContProperties. Update some items from default. These are
         # properties that determine the values, not the actual values. The actual values
@@ -67,10 +66,10 @@ class QueryPropertiesTest(TestWithServers):
         ]
 
         # Create container with the DaosContProperties.
-        self.container.create(con_in=con_in)
+        container.create(con_in=con_in)
 
         # Open the container.
-        self.container.open(pool_handle=self.pool.pool.handle)
+        container.open(pool_handle=pool.pool.handle)
 
         # Prepare the DaosProperty data structure that stores the values that are
         # configured based on the properties we used during create. Here, we create
@@ -101,13 +100,13 @@ class QueryPropertiesTest(TestWithServers):
             DaosContPropEnum.DAOS_PROP_CO_CSUM_CHUNK_SIZE.value)
 
         try:
-            cont_info = self.container.container.query(cont_prop=cont_prop)
+            cont_info = container.container.query(cont_prop=cont_prop)
         except DaosApiError as error:
             self.log.info("Container query error! %s", error)
 
         # Sanity check that query isn't broken.
         uuid_query = conversion.c_uuid_to_str(cont_info.ci_uuid)
-        uuid_create = self.container.container.get_uuid_str()
+        uuid_create = container.container.get_uuid_str()
         if uuid_query != uuid_create:
             msg = ("Container UUID obtained after create and after query don't match! "
                    "Create: {}, Query: {}".format(uuid_create, uuid_query))

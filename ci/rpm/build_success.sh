@@ -7,8 +7,7 @@ set -uex
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 ci_envs="$mydir/../parse_ci_envs.sh"
 if [ -e "${ci_envs}" ]; then
-  # at some point we want to use: shellcheck source=ci/parse_ci_envs.sh
-  # shellcheck disable=SC1091
+  # shellcheck source=parse_ci_envs.sh
   source "${ci_envs}"
 fi
 
@@ -44,5 +43,3 @@ fi
 fi)
 
 createrepo "$artdir"
-rpm -qRp "$artdir"/daos-server-*.x86_64.rpm |
-  sed -ne '/mercury/s/.* >= //p' > "${TARGET}-required-mercury-rpm-version"

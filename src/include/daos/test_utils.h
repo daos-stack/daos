@@ -12,7 +12,6 @@
 #define __DAOS_TEST_UTILS_H__
 
 #include <daos/drpc.h>
-#include <daos/drpc.pb-c.h>
 
 /*
  * drpc unit test utilities

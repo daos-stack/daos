@@ -1095,7 +1095,6 @@ func (cmd *containerCloneCmd) Execute(_ []string) error {
 	}
 
 	// Compat with old-style output
-	cmd.Infof("Successfully created container %s", C.GoString(&ap.dm_args.dst_cont[0]))
 	cmd.Infof("Successfully copied to destination container %s", C.GoString(&ap.dm_args.dst_cont[0]))
 
 	return nil

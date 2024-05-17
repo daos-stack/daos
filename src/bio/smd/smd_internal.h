@@ -45,9 +45,4 @@ void smd_db_lock(void);
 void smd_db_unlock(void);
 bool smd_db_ready(void);
 
-/* smd_pool.c */
-int
-smd_pool_replace_blobs_locked(struct smd_pool_info *info, int tgt_cnt,
-			      uint32_t *tgts);
-
 #endif /** __SMD_INTERNAL_H__ */

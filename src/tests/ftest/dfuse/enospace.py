@@ -4,13 +4,15 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-import os
 import errno
+import os
 
-from dfuse_test_base import DfuseTestBase
+from apricot import TestWithServers
+from dfuse_utils import get_dfuse, start_dfuse
+from host_utils import get_local_host
 
 
-class DfuseEnospace(DfuseTestBase):
+class DfuseEnospace(TestWithServers):
     """Dfuse ENOSPC File base class.
 
     :avocado: recursive
@@ -34,15 +36,22 @@ class DfuseEnospace(DfuseTestBase):
         :avocado: tags=daosio,dfuse
         :avocado: tags=DfuseEnospace,test_dfuse_enospace
         """
+        dfuse_hosts = get_local_host()
+
         # Create a pool, container and start dfuse.
-        self.add_pool(connect=False)
-        self.add_container(self.pool)
-        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
+        self.log_step('Creating a single pool with a POSIX container')
+        pool = self.get_pool(connect=False)
+        container = self.get_container(pool)
+
+        self.log_step('Starting dfuse')
+        dfuse = get_dfuse(self, dfuse_hosts)
+        start_dfuse(self, dfuse, pool, container)
 
         # create large file and perform write to it so that if goes out of
         # space.
-        target_file = os.path.join(self.dfuse.mount_dir.value, "file.txt")
+        target_file = os.path.join(dfuse.mount_dir.value, 'file.txt')
 
+        self.log_step('Write to file until an error occurs')
         with open(target_file, 'wb', buffering=0) as fd:
 
             # Use a write size of 128.  On EL 8 this could be 1MiB, however older kernels
@@ -75,3 +84,5 @@ class DfuseEnospace(DfuseTestBase):
         except OSError as error:
             if error.errno != errno.ENOSPC:
                 raise
+
+        self.log.info('Test passed')

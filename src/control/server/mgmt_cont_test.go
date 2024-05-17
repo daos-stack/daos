@@ -24,7 +24,8 @@ import (
 )
 
 const (
-	mockUUID = "11111111-1111-1111-1111-111111111111"
+	mockUUID    = "11111111-1111-1111-1111-111111111111"
+	badMockUUID = "00000000-1111-1111-1111-111111111111"
 )
 
 func makeBadBytes(count int) (badBytes []byte) {
@@ -91,7 +92,7 @@ func TestMgmt_ListContainers(t *testing.T) {
 		},
 		"drpc error": {
 			setupDrpc: func(t *testing.T, svc *mgmtSvc) {
-				setupMockDrpcClient(svc, nil, errors.New("mock drpc"))
+				setupSvcDrpcClient(svc, 0, getMockDrpcClient(nil, errors.New("mock drpc")))
 			},
 			req:    validListContReq(),
 			expErr: errors.New("mock drpc"),
@@ -99,23 +100,24 @@ func TestMgmt_ListContainers(t *testing.T) {
 		"bad drpc resp": {
 			setupDrpc: func(t *testing.T, svc *mgmtSvc) {
 				badBytes := makeBadBytes(16)
-				setupMockDrpcClientBytes(svc, badBytes, nil)
+				setupSvcDrpcClient(svc, 0, getMockDrpcClientBytes(badBytes, nil))
 			},
 			req:    validListContReq(),
 			expErr: errors.New("unmarshal"),
 		},
 		"success; zero containers": {
 			setupDrpc: func(t *testing.T, svc *mgmtSvc) {
-				setupMockDrpcClient(svc, &mgmtpb.ListContResp{}, nil)
+				setupSvcDrpcClient(svc, 0, getMockDrpcClient(&mgmtpb.ListContResp{}, nil))
 			},
 			req:     validListContReq(),
 			expResp: &mgmtpb.ListContResp{},
 		},
 		"success; multiple containers": {
 			setupDrpc: func(t *testing.T, svc *mgmtSvc) {
-				setupMockDrpcClient(svc, &mgmtpb.ListContResp{
-					Containers: multiConts,
-				}, nil)
+				setupSvcDrpcClient(svc, 0,
+					getMockDrpcClient(&mgmtpb.ListContResp{
+						Containers: multiConts,
+					}, nil))
 			},
 			req: validListContReq(),
 			expResp: &mgmtpb.ListContResp{
@@ -190,7 +192,7 @@ func TestMgmt_ContSetOwner(t *testing.T) {
 		},
 		"drpc error": {
 			setupDrpc: func(t *testing.T, svc *mgmtSvc) {
-				setupMockDrpcClient(svc, nil, errors.New("mock drpc"))
+				setupSvcDrpcClient(svc, 0, getMockDrpcClient(nil, errors.New("mock drpc")))
 			},
 			req:    validContSetOwnerReq(),
 			expErr: errors.New("mock drpc"),
@@ -198,14 +200,14 @@ func TestMgmt_ContSetOwner(t *testing.T) {
 		"bad drpc resp": {
 			setupDrpc: func(t *testing.T, svc *mgmtSvc) {
 				badBytes := makeBadBytes(16)
-				setupMockDrpcClientBytes(svc, badBytes, nil)
+				setupSvcDrpcClient(svc, 0, getMockDrpcClientBytes(badBytes, nil))
 			},
 			req:    validContSetOwnerReq(),
 			expErr: errors.New("unmarshal"),
 		},
 		"success": {
 			setupDrpc: func(t *testing.T, svc *mgmtSvc) {
-				setupMockDrpcClient(svc, &mgmtpb.ContSetOwnerResp{}, nil)
+				setupSvcDrpcClient(svc, 0, getMockDrpcClient(&mgmtpb.ContSetOwnerResp{}, nil))
 			},
 			req: validContSetOwnerReq(),
 			expResp: &mgmtpb.ContSetOwnerResp{

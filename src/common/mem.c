@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -61,7 +61,7 @@ umempobj_settings_init(bool md_on_ssd)
 		return rc;
 	}
 
-	d_getenv_int("DAOS_MD_ON_SSD_MODE", &md_mode);
+	d_getenv_uint("DAOS_MD_ON_SSD_MODE", &md_mode);
 
 	switch (md_mode) {
 	case DAOS_MD_BMEM:
@@ -1195,10 +1195,8 @@ bmem_atomic_copy(struct umem_instance *umm, void *dest, const void *src,
 	if (hint == UMEM_RESERVED_MEM) {
 		memcpy(dest, src, len);
 		return dest;
-	} else if (hint == UMEM_COMMIT_IMMEDIATE) {
+	} else { /* UMEM_COMMIT_IMMEDIATE */
 		return dav_memcpy_persist(pop, dest, src, len);
-	} else { /* UMEM_COMMIT_DEFER */
-		return dav_memcpy_persist_relaxed(pop, dest, src, len);
 	}
 }
 
@@ -2077,11 +2075,12 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 	d_list_t                     free_list;
 	d_list_t                     waiting_list;
 	int                          i;
-	int                          rc;
+	int                          rc = 0;
 	int                          inflight = 0;
 	int                          pages_scanned = 0;
 	int                          dchunks_copied = 0;
 	int                          iovs_used = 0;
+	int			     nr_copying_pgs = 0;
 
 	if (cache == NULL)
 		return 0; /* TODO: When SMD is supported outside VOS, this will be an error */
@@ -2117,6 +2116,7 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 		pinfo->pi_waiting = 1;
 		if (store->stor_ops->so_wal_id_cmp(store, pinfo->pi_last_inflight, chkpt_id) > 0)
 			chkpt_id = pinfo->pi_last_inflight;
+		nr_copying_pgs++;
 	}
 
 	do {
@@ -2159,10 +2159,31 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 				pinfo->pi_last_checkpoint = pinfo->pi_last_inflight;
 			}
 
+			/*
+			 * DAV allocator uses valgrind macros to mark certain portions of
+			 * heap as no access for user. Prevent valgrind from reporting
+			 * invalid read while checkpointing these address ranges.
+			 */
+			if (DAOS_ON_VALGRIND) {
+				d_sg_list_t  *sgl = &chkpt_data->cd_sg_list;
+
+				for (i = 0; i < sgl->sg_nr; i++)
+					VALGRIND_DISABLE_ADDR_ERROR_REPORTING_IN_RANGE(
+						sgl->sg_iovs[i].iov_buf, sgl->sg_iovs[i].iov_len);
+			}
+
 			rc = store->stor_ops->so_flush_copy(chkpt_data->cd_fh,
 							    &chkpt_data->cd_sg_list);
 			/** If this fails, it means invalid argument, so assertion here is fine */
 			D_ASSERT(rc == 0);
+
+			if (DAOS_ON_VALGRIND) {
+				d_sg_list_t  *sgl = &chkpt_data->cd_sg_list;
+
+				for (i = 0; i < sgl->sg_nr; i++)
+					VALGRIND_ENABLE_ADDR_ERROR_REPORTING_IN_RANGE(
+						sgl->sg_iovs[i].iov_buf, sgl->sg_iovs[i].iov_len);
+			}
 
 			for (i = 0; i < chkpt_data->cd_nr_pages; i++) {
 				pinfo             = chkpt_data->cd_pages[i];
@@ -2184,15 +2205,20 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 		if (chkpt_data == NULL)
 			continue;
 
-		D_ASSERT(store->stor_ops->so_wal_id_cmp(store, committed_tx,
-							chkpt_data->cd_max_tx) >= 0);
+		/* WAL commit failed due to faulty SSD */
+		if (store->stor_ops->so_wal_id_cmp(store, committed_tx,
+						   chkpt_data->cd_max_tx) < 0) {
+			D_ASSERT(store->store_faulty);
+			D_ERROR("WAL commit failed. "DF_X64" < "DF_X64"\n", committed_tx,
+				chkpt_data->cd_max_tx);
+			rc = -DER_NVME_IO;
+		}
 
 		/** Since the flush API only allows one at a time, let's just do one at a time
 		 *  before copying another page.  We can revisit this later if the API allows
 		 *  to pass more than one fh.
 		 */
-		rc         = store->stor_ops->so_flush_post(chkpt_data->cd_fh, 0);
-		D_ASSERT(rc == 0);
+		rc = store->stor_ops->so_flush_post(chkpt_data->cd_fh, rc);
 		for (i = 0; i < chkpt_data->cd_nr_pages; i++) {
 			pinfo = chkpt_data->cd_pages[i];
 			if (pinfo->pi_last_inflight != pinfo->pi_last_checkpoint)
@@ -2207,6 +2233,13 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 		iovs_used      += chkpt_data->cd_sg_list.sg_nr_out;
 		d_list_add(&chkpt_data->cd_link, &free_list);
 
+		if (rc != 0 || (DAOS_FAIL_CHECK(DAOS_MEM_FAIL_CHECKPOINT) &&
+		    pages_scanned >= nr_copying_pgs / 2)) {
+			d_list_move(&cache->ca_pgs_copying, &cache->ca_pgs_dirty);
+			rc = -DER_AGAIN;
+			break;
+		}
+
 	} while (inflight != 0 || !d_list_empty(&cache->ca_pgs_copying));
 
 	D_FREE(chkpt_data_all);
@@ -2218,6 +2251,6 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 		stats->uccs_nr_iovs    = iovs_used;
 	}
 
-	return 0;
+	return rc;
 }
 #endif

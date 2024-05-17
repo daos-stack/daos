@@ -5,7 +5,7 @@
 """Build libgurt"""
 
 SRC = ['debug.c', 'dlog.c', 'hash.c', 'misc.c', 'heap.c', 'errno.c',
-       'fault_inject.c', 'slab.c', 'telemetry.c', 'hlc.c', 'hlct.c']
+       'fault_inject.c', 'slab.c', 'telemetry.c', 'hlc.c', 'hlct.c', 'signals.c']
 
 
 def scons():

@@ -9,9 +9,9 @@ Code to handle clang-format when used in the build.
 This is used by scons to reformat automatically generated header files to be readable, but also
 outside of scons by the clang-format commit hook to check the version.
 """
-import subprocess  # nosec
-import re
 import os
+import re
+import subprocess  # nosec
 import sys
 
 from SCons.Builder import Builder
@@ -100,15 +100,6 @@ def _preprocess_emitter(source, target, env):
     return target, source
 
 
-def _ch_emitter(source, target, **_kw):
-    """generate target list for check header builder"""
-    target = []
-    for src in source:
-        (base, _ext) = os.path.splitext(src.abspath)
-        target.append(f"{base}_check_header$OBJSUFFIX")
-    return target, source
-
-
 def main():
     """Check for a supported version of clang-format"""
     supported = _supports_correct_style(WhereIs('clang-format'))
@@ -136,14 +127,9 @@ def generate(env):
 
     # Only handle C for now
     preprocess = Builder(generator=_pp_gen, emitter=_preprocess_emitter)
-    # Workaround for SCons issue #2757.   Avoid using Configure for internal headers
-    check_header = Builder(action='$CCCOM', emitter=_ch_emitter)
 
     if not env["BUILDERS"].get("Preprocess", False):
         env.Append(BUILDERS={"Preprocess": preprocess})
-
-    if not env["BUILDERS"].get("CheckHeader", False):
-        env.Append(BUILDERS={"CheckHeader": check_header})
 
 
 def exists(_env):

@@ -4,8 +4,7 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithoutServers
-
-from run_utils import run_remote, command_as_user
+from run_utils import command_as_user, run_remote
 from user_utils import get_group_id, get_user_groups
 
 

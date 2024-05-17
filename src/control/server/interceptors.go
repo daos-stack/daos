@@ -116,7 +116,7 @@ var selfServerComponent = func() *build.VersionedComponent {
 	return self
 }()
 
-func checkVersion(ctx context.Context, self *build.VersionedComponent, req interface{}) error {
+func checkVersion(ctx context.Context, log logging.Logger, self *build.VersionedComponent, req interface{}) error {
 	// If we can't determine our own version, then there's no
 	// checking to be done.
 	if self.Version.IsZero() {
@@ -127,33 +127,58 @@ func checkVersion(ctx context.Context, self *build.VersionedComponent, req inter
 	// are most stringent for server/server communication. We have
 	// to set a default because this security component lookup
 	// will fail if certificates are disabled.
-	buildComponent := build.ComponentServer
+	otherComponent := build.ComponentServer
+	otherVersion := build.MustNewVersion("0.0.0")
 	secComponent, err := componentFromContext(ctx)
 	if err == nil {
-		buildComponent = build.Component(secComponent.String())
+		otherComponent = build.Component(secComponent.String())
 	}
 	isInsecure := status.Code(err) == codes.Unauthenticated
 
-	otherVersion := build.MustNewVersion("0.0.0")
-	if sReq, ok := req.(interface{ GetSys() string }); ok {
-		comps := strings.Split(sReq.GetSys(), "-")
-		if len(comps) > 1 {
-			if ver, err := build.NewVersion(comps[len(comps)-1]); err == nil {
-				otherVersion = ver
-			}
+	fromHeaders, err := build.FromContext(ctx)
+	if err != nil && err != build.ErrNoCtxMetadata {
+		return errors.Wrap(err, "failed to extract peer component/version from headers")
+	}
+
+	// Prefer the new header-based component/version mechanism.
+	// If we are in secure mode, verify that the component presented
+	// in the header matches the certificate's component.
+	if fromHeaders != nil {
+		otherVersion = fromHeaders.Version
+		if isInsecure {
+			otherComponent = fromHeaders.Component
+		} else if otherComponent != fromHeaders.Component {
+			return status.Errorf(codes.PermissionDenied,
+				"component mismatch (req: %q != cert: %q)", fromHeaders.Component, otherComponent)
 		}
 	} else {
-		// If the request message type does not implement GetSys(), then
-		// there is no version to check. We leave message compatibility
-		// to lower layers.
-		return nil
+		// If we did not receive a version via request header, then we need to fall back
+		// to trying to pick it out of the overloaded system name field.
+		//
+		// TODO (DAOS-14336): Remove this once the compatibility window has closed (e.g. for 2.8+).
+		if sReq, ok := req.(interface{ GetSys() string }); ok {
+			comps := strings.Split(sReq.GetSys(), "-")
+			if len(comps) > 1 {
+				if ver, err := build.NewVersion(comps[len(comps)-1]); err == nil {
+					otherVersion = ver
+				}
+			}
+		} else {
+			// If the request message type does not implement GetSys(), then
+			// there is no version to check. We leave message compatibility
+			// to lower layers.
+			return nil
+		}
+
+		// If we're running without certificates and we didn't receive a component
+		// via headers, then we have to enforce the strictest compatibility requirements,
+		// i.e. exact same version.
+		if isInsecure && !self.Version.Equals(otherVersion) {
+			return FaultNoCompatibilityInsecure(self.Version, otherVersion)
+		}
 	}
 
-	if isInsecure && !self.Version.Equals(otherVersion) {
-		return FaultNoCompatibilityInsecure(self.Version, otherVersion)
-	}
-
-	other, err := build.NewVersionedComponent(buildComponent, otherVersion.String())
+	other, err := build.NewVersionedComponent(otherComponent, otherVersion.String())
 	if err != nil {
 		other = &build.VersionedComponent{
 			Component: "unknown",
@@ -163,18 +188,22 @@ func checkVersion(ctx context.Context, self *build.VersionedComponent, req inter
 	}
 
 	if err := build.CheckCompatibility(self, other); err != nil {
+		log.Errorf("%s is incompatible with %s", other, self)
 		return FaultIncompatibleComponents(self, other)
 	}
 
+	log.Debugf("%s is compatible with %s", other, self)
 	return nil
 }
 
-func unaryVersionInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-	if err := checkVersion(ctx, selfServerComponent, req); err != nil {
-		return nil, errors.Wrapf(err, "version check failed for %T", req)
-	}
+func unaryVersionInterceptor(log logging.Logger) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		if err := checkVersion(ctx, log, selfServerComponent, req); err != nil {
+			return nil, errors.Wrapf(err, "version check failed for %T", req)
+		}
 
-	return handler(ctx, req)
+		return handler(ctx, req)
+	}
 }
 
 func unaryErrorInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {

@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
 """Wrapper script for calling pylint"""
 
-import os
-import sys
-import re
-from collections import Counter
-import tempfile
-import subprocess  # nosec
 import argparse
 import json
+import os
+import re
+import subprocess  # nosec
+import sys
+import tempfile
+from collections import Counter
+
 for arg in sys.argv:
     if arg.startswith('--import='):
         sys.path.append(arg[9:])
 try:
+    from pylint.constants import full_version
     from pylint.lint import Run
     from pylint.reporters.collecting_reporter import CollectingReporter
-    from pylint.constants import full_version
 except ImportError:
 
     if os.path.exists('venv'):
@@ -23,9 +24,9 @@ except ImportError:
                                      f'python{sys.version_info.major}.{sys.version_info.minor}',
                                      'site-packages'))
         try:
+            from pylint.constants import full_version
             from pylint.lint import Run
             from pylint.reporters.collecting_reporter import CollectingReporter
-            from pylint.constants import full_version
         except ImportError:
             print('detected venv unusable, install pylint to enable this check')
             sys.exit(0)
@@ -87,8 +88,8 @@ class WrapScript():
         new_lineno = 1
         scons_header = False
 
-        def _remap_count():
-            for iline in range(new_lineno, new_lineno + added):
+        def _remap_count(_added):
+            for iline in range(new_lineno, new_lineno + _added):
                 self.line_map[iline] = old_lineno - 1
 
         for line in infile.readlines():
@@ -107,7 +108,7 @@ class WrapScript():
                     newvar = var.strip("\",     '")
                     variables.append(newvar)
                 added = self.write_variables(outfile, match.group(1), variables)
-                _remap_count()
+                _remap_count(added)
                 new_lineno += added
 
             match = re.search(r'^(\s*)Export\(.(.*).\)', line)
@@ -122,7 +123,7 @@ class WrapScript():
                     newvar = var.strip("\",     '")
                     variables.append(newvar)
                 added = self.read_variables(outfile, match.group(1), variables)
-                _remap_count()
+                _remap_count(added)
                 new_lineno += added
 
             if not scons_header:
@@ -133,7 +134,7 @@ class WrapScript():
                 # not universally correct it should be correct for all flake clean code.
                 if line.strip() == '':
                     added = self.write_header(outfile)
-                    _remap_count()
+                    _remap_count(added)
                     new_lineno += added
                     scons_header = True
 
@@ -424,9 +425,10 @@ sys.path.append('site_scons')"""
                 if word_is_allowed(word, code):
                     continue
 
-            # Inserting code can cause wrong-module-order.
-            if scons and msg.msg_id == 'C0411' and 'from SCons.Script import' in msg.msg:
-                continue
+            # Inserting code can cause wrong-import-order.
+            if scons and msg.msg_id == 'C0411':
+                if 'from SCons.Script import' in msg.msg or 'SCons.Script.*' in msg.msg:
+                    continue
 
             failed = True
 
@@ -545,10 +547,6 @@ def main():
     if args.version:
         print(full_version)
         sys.exit(0)
-
-    if args.diff:
-        print('This option is no longer used')
-        sys.exit(1)
 
     rc_tmp = None
 

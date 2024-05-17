@@ -8,7 +8,7 @@ post_provision_config_nodes() {
     #                 ompi argobots cart daos daos-client dpdk      \
     #                 fuse-libs libisa-l libpmemobj mercury mpich   \
     #                 pmix protobuf-c spdk libfabric libpmem        \
-    #                 libpmemblk munge-libs munge slurm             \
+    #                 munge-libs munge slurm                        \
     #                 slurm-example-configs slurmctld slurm-slurmmd
     #fi
     codename=$(lsb_release -s -c)
@@ -48,9 +48,7 @@ post_provision_config_nodes() {
         fi
     fi
 
-    apt-get -y install avocado python3-avocado-plugins-output-html   \
-                       python3-avocado-plugins-varianter-yaml-to-mux \
-                       lsb-core
+    apt-get -y install lsb-core
 
     # shellcheck disable=2086
     if [ -n "$INST_RPMS" ] &&
@@ -62,10 +60,6 @@ post_provision_config_nodes() {
         done
         return "$rc"
     fi
-
-    # temporary hack until Python 3 is supported by Functional testing
-    # possible TODO: support testing non-RPM testing
-    sed -ie '1s/2/3/' /usr/lib/daos/TESTING/ftest/launch.py
 
     # change the default shell to bash -- we write a lot of bash
     chsh -s /bin/bash

@@ -7,7 +7,7 @@
 #define __DFUSE_IOCTL_H__
 
 #include <asm/ioctl.h>
-#include "daos.h"
+#include <daos.h>
 
 #define DFUSE_IOCTL_TYPE         0xA3 /* Arbitrary "unique" type of the IOCTL */
 #define DFUSE_IOCTL_REPLY_BASE   0xC1 /* Number of the IOCTL.  Also arbitrary */
@@ -28,6 +28,7 @@
 #define DFUSE_IOCTL_R_DFUSE_USER (DFUSE_IOCTL_REPLY_BASE + 9)
 #define DFUSE_COUNT_QUERY_CMD    (DFUSE_IOCTL_REPLY_BASE + 10)
 #define DFUSE_IOCTL_EVICT_NR     (DFUSE_IOCTL_REPLY_BASE + 11)
+#define DFUSE_IOCTL_STAT_NR      (DFUSE_IOCTL_REPLY_BASE + 12)
 
 /** Metadada caching is enabled for this file */
 #define DFUSE_IOCTL_FLAGS_MCACHE (0x1)
@@ -66,7 +67,13 @@ struct dfuse_mem_query {
 	uint64_t pool_count;
 	uint64_t container_count;
 	ino_t    ino;
+	uint32_t stat_count;
 	bool     found;
+};
+
+struct dfuse_stat {
+	uint64_t value;
+	char     name[16];
 };
 
 /* Defines the IOCTL command to get the object ID for a open file */

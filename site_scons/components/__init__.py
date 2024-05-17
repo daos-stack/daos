@@ -21,9 +21,10 @@
 """Defines common components used by HPDD projects"""
 
 import platform
+
 import distro
-from SCons.Script import GetOption
 from prereq_tools import GitRepoRetriever
+from SCons.Script import GetOption
 
 # Check if this is an ARM platform
 PROCESSOR = platform.machine()
@@ -58,7 +59,7 @@ class InstalledComps():
             self.installed.append(name)
             return True
 
-        if not GetOption('help'):
+        if not GetOption('help') and not GetOption('silent'):
             print(f'Using build version of {name}')
         self.not_installed.append(name)
         return False
@@ -90,12 +91,14 @@ def check(reqs, name, built_str, installed_str=""):
 
 def ofi_config(config):
     """Check ofi version"""
-    print('Checking for libfabric > 1.11...', end=' ')
+    if not GetOption('silent'):
+        print('Checking for libfabric > 1.11...', end=' ')
     code = """#include <rdma/fabric.h>
 _Static_assert(FI_MAJOR_VERSION == 1 && FI_MINOR_VERSION >= 11,
                "libfabric must be >= 1.11");"""
     rc = config.TryCompile(code, ".c")
-    print('yes' if rc else 'no')
+    if not GetOption('silent'):
+        print('yes' if rc else 'no')
     return rc
 
 
@@ -132,6 +135,7 @@ def define_mercury(reqs):
                 libs=['fabric'],
                 config_cb=ofi_config,
                 headers=['rdma/fabric.h'],
+                pkgconfig='libfabric',
                 package='libfabric-devel' if inst(reqs, 'ofi') else None,
                 patch_rpath=['lib'],
                 build_env={'CFLAGS': "-fstack-usage"})
@@ -183,12 +187,6 @@ def define_mercury(reqs):
         mercury_build.append('-DMERCURY_ENABLE_DEBUG:BOOL=ON')
     else:
         mercury_build.append('-DMERCURY_ENABLE_DEBUG:BOOL=OFF')
-
-    mercury_build.extend(check(reqs,
-                               'ofi',
-                               ['-DOFI_INCLUDE_DIR:PATH=$OFI_PREFIX/include',
-                                '-DOFI_LIBRARY:FILEPATH=$OFI_PREFIX/lib/libfabric.so'],
-                               []))
 
     reqs.define('mercury',
                 retriever=GitRepoRetriever('https://github.com/mercury-hpc/mercury.git', True),
@@ -268,9 +266,9 @@ def define_components(reqs):
                 retriever=GitRepoRetriever('https://github.com/pmem/pmdk.git'),
                 commands=[['make',
                            'all',
-                           'BUILD_RPMEM=n',
                            'NDCTL_ENABLE=n',
-                           'NDCTL_DISABLE=y',
+                           'BUILD_EXAMPLES=n',
+                           'BUILD_BENCHMARKS=n',
                            'DOC=n',
                            'EXTRA_CFLAGS="-Wno-error"',
                            'install',
@@ -301,7 +299,14 @@ def define_components(reqs):
                 headers=['abt.h'])
 
     reqs.define('fuse', libs=['fuse3'], defines=['FUSE_USE_VERSION=35'],
-                headers=['fuse3/fuse.h'], package='fuse3-devel')
+                retriever=GitRepoRetriever('https://github.com/libfuse/libfuse.git'),
+                commands=[['meson', 'setup', '--prefix=$FUSE_PREFIX', '-Ddisable-mtab=True',
+                           '-Dudevrulesdir=$FUSE_PREFIX/udev', '-Dutils=False',
+                           '--default-library', 'both', '../fuse'],
+                          ['ninja', 'install']],
+                headers=['fuse3/fuse.h'],
+                required_progs=['libtoolize', 'ninja', 'meson'],
+                out_of_src_build=True)
 
     # Tell SPDK which CPU to optimize for, by default this is native which works well unless you
     # are relocating binaries across systems, for example in CI under GitHub actions etc.  There
@@ -364,12 +369,16 @@ def define_components(reqs):
     os_name = dist[0].split()[0]
     if os_name == 'Ubuntu':
         capstone_pkg = 'libcapstone-dev'
+        libaio_pkg = 'libaio-dev'
     elif os_name == 'openSUSE':
         capstone_pkg = 'libcapstone-devel'
+        libaio_pkg = 'libaio-devel'
     else:
         capstone_pkg = 'capstone-devel'
+        libaio_pkg = 'libaio-devel'
     reqs.define('capstone', libs=['capstone'], headers=['capstone/capstone.h'],
                 package=capstone_pkg)
+    reqs.define('aio', libs=['aio'], headers=['libaio.h'], package=libaio_pkg)
 
 
 __all__ = ['define_components']

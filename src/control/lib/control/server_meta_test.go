@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -22,6 +22,12 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
+var defMockCtrlr = storage.NvmeController{
+	PciAddr:   test.MockPCIAddr(1),
+	NvmeState: storage.NvmeStateNormal,
+	LedState:  storage.LedStateIdentify,
+}
+
 type mockSmdResp struct {
 	Hosts   string
 	SmdInfo *SmdInfo
@@ -32,7 +38,7 @@ func mockSmdQueryMap(t *testing.T, mocks ...*mockSmdResp) HostStorageMap {
 
 	for _, mock := range mocks {
 		hss := &HostStorageSet{
-			HostSet: mockHostSet(t, mock.Hosts),
+			HostSet: MockHostSet(t, mock.Hosts),
 			HostStorage: &HostStorage{
 				SmdInfo: mock.SmdInfo,
 			},
@@ -162,32 +168,31 @@ func TestControl_SmdQuery(t *testing.T) {
 		"list devices": {
 			mic: newMockInvokerWRankResps([]*ctlpb.SmdQueryResp_RankResp{
 				{
-					Rank: 0,
-					Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
+					Devices: []*ctlpb.SmdDevice{
 						{
-							Details: &ctlpb.SmdDevice{
-								TrAddr:   test.MockPCIAddr(1),
-								Uuid:     test.MockUUID(0),
-								TgtIds:   []int32{1024, 1, 1, 2, 2, 3, 3},
+							Uuid:   test.MockUUID(0),
+							TgtIds: []int32{1024, 1, 1, 2, 2, 3, 3},
+							Ctrlr: &ctlpb.NvmeController{
+								PciAddr:  test.MockPCIAddr(1),
 								DevState: devStateNormal,
 								LedState: ledStateNormal,
-								RoleBits: storage.BdevRoleAll,
 							},
+							RoleBits: storage.BdevRoleAll,
 						},
 					},
 				},
 				{
 					Rank: 1,
-					Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
+					Devices: []*ctlpb.SmdDevice{
 						{
-							Details: &ctlpb.SmdDevice{
-								TrAddr:   test.MockPCIAddr(1),
-								Uuid:     test.MockUUID(1),
-								TgtIds:   []int32{0},
+							Uuid:   test.MockUUID(1),
+							TgtIds: []int32{0},
+							Ctrlr: &ctlpb.NvmeController{
+								PciAddr:  test.MockPCIAddr(1),
 								DevState: devStateFaulty,
 								LedState: ledStateFault,
-								RoleBits: storage.BdevRoleData,
 							},
+							RoleBits: storage.BdevRoleData,
 						},
 					},
 				},
@@ -199,24 +204,28 @@ func TestControl_SmdQuery(t *testing.T) {
 					SmdInfo: &SmdInfo{
 						Devices: []*storage.SmdDevice{
 							{
-								TrAddr:    test.MockPCIAddr(1),
 								UUID:      test.MockUUID(0),
 								Rank:      ranklist.Rank(0),
 								TargetIDs: []int32{1, 2, 3},
-								NvmeState: storage.NvmeStateNormal,
-								LedState:  storage.LedStateNormal,
+								Ctrlr: storage.NvmeController{
+									PciAddr:   test.MockPCIAddr(1),
+									NvmeState: storage.NvmeStateNormal,
+									LedState:  storage.LedStateNormal,
+								},
 								Roles: storage.BdevRoles{
 									storage.OptionBits(storage.BdevRoleAll),
 								},
 								HasSysXS: true,
 							},
 							{
-								TrAddr:    test.MockPCIAddr(1),
 								UUID:      test.MockUUID(1),
 								Rank:      ranklist.Rank(1),
 								TargetIDs: []int32{0},
-								NvmeState: storage.NvmeStateFaulty,
-								LedState:  storage.LedStateFaulty,
+								Ctrlr: storage.NvmeController{
+									PciAddr:   test.MockPCIAddr(1),
+									NvmeState: storage.NvmeStateFaulty,
+									LedState:  storage.LedStateFaulty,
+								},
 								Roles: storage.BdevRoles{
 									storage.OptionBits(storage.BdevRoleData),
 								},
@@ -229,13 +238,12 @@ func TestControl_SmdQuery(t *testing.T) {
 		},
 		"list devices; missing led state": {
 			mic: newMockInvokerWRankResps(&ctlpb.SmdQueryResp_RankResp{
-				Rank: 0,
-				Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
+				Devices: []*ctlpb.SmdDevice{
 					{
-						Details: &ctlpb.SmdDevice{
-							TrAddr:   test.MockPCIAddr(2),
-							Uuid:     test.MockUUID(1),
-							TgtIds:   []int32{1, 2, 3},
+						Uuid:   test.MockUUID(1),
+						TgtIds: []int32{1, 2, 3},
+						Ctrlr: &ctlpb.NvmeController{
+							PciAddr:  test.MockPCIAddr(2),
 							DevState: devStateNew,
 							LedState: ledStateUnknown,
 						},
@@ -249,12 +257,14 @@ func TestControl_SmdQuery(t *testing.T) {
 					SmdInfo: &SmdInfo{
 						Devices: []*storage.SmdDevice{
 							{
-								TrAddr:    test.MockPCIAddr(2),
 								Rank:      ranklist.Rank(0),
 								TargetIDs: []int32{1, 2, 3},
 								UUID:      test.MockUUID(1),
-								NvmeState: storage.NvmeStateNew,
-								LedState:  storage.LedStateUnknown,
+								Ctrlr: storage.NvmeController{
+									PciAddr:   test.MockPCIAddr(2),
+									NvmeState: storage.NvmeStateNew,
+									LedState:  storage.LedStateUnknown,
+								},
 							},
 						},
 						Pools: make(map[string][]*SmdPool),
@@ -266,12 +276,12 @@ func TestControl_SmdQuery(t *testing.T) {
 			mic: newMockInvokerWRankResps(
 				&ctlpb.SmdQueryResp_RankResp{
 					Rank: 1,
-					Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
+					Devices: []*ctlpb.SmdDevice{
 						{
-							Details: &ctlpb.SmdDevice{
-								TrAddr:   test.MockPCIAddr(1),
-								Uuid:     test.MockUUID(1),
-								TgtIds:   []int32{1, 2, 3},
+							Uuid:   test.MockUUID(1),
+							TgtIds: []int32{1, 2, 3},
+							Ctrlr: &ctlpb.NvmeController{
+								PciAddr:  test.MockPCIAddr(1),
 								DevState: devStateFaulty,
 								LedState: ledStateUnknown,
 							},
@@ -279,13 +289,12 @@ func TestControl_SmdQuery(t *testing.T) {
 					},
 				},
 				&ctlpb.SmdQueryResp_RankResp{
-					Rank: 0,
-					Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
+					Devices: []*ctlpb.SmdDevice{
 						{
-							Details: &ctlpb.SmdDevice{
-								TrAddr:   test.MockPCIAddr(2),
-								Uuid:     test.MockUUID(3),
-								TgtIds:   []int32{4, 5, 6},
+							Uuid:   test.MockUUID(3),
+							TgtIds: []int32{4, 5, 6},
+							Ctrlr: &ctlpb.NvmeController{
+								PciAddr:  test.MockPCIAddr(2),
 								DevState: devStateNormal,
 								LedState: ledStateUnknown,
 							},
@@ -300,12 +309,14 @@ func TestControl_SmdQuery(t *testing.T) {
 					SmdInfo: &SmdInfo{
 						Devices: []*storage.SmdDevice{
 							{
-								TrAddr:    test.MockPCIAddr(1),
 								UUID:      test.MockUUID(1),
 								Rank:      ranklist.Rank(1),
 								TargetIDs: []int32{1, 2, 3},
-								NvmeState: storage.NvmeStateFaulty,
-								LedState:  storage.LedStateUnknown,
+								Ctrlr: storage.NvmeController{
+									PciAddr:   test.MockPCIAddr(1),
+									NvmeState: storage.NvmeStateFaulty,
+									LedState:  storage.LedStateUnknown,
+								},
 							},
 						},
 						Pools: make(map[string][]*SmdPool),
@@ -315,29 +326,28 @@ func TestControl_SmdQuery(t *testing.T) {
 		},
 		"device health": {
 			mic: newMockInvokerWRankResps(&ctlpb.SmdQueryResp_RankResp{
-				Rank: 0,
-				Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
+				Devices: []*ctlpb.SmdDevice{
 					{
-						Details: &ctlpb.SmdDevice{
-							TrAddr:   test.MockPCIAddr(1),
-							Uuid:     test.MockUUID(1),
-							TgtIds:   []int32{1, 2, 3},
-							LedState: ledStateIdentify,
+						Uuid:   test.MockUUID(1),
+						TgtIds: []int32{1, 2, 3},
+						Ctrlr: &ctlpb.NvmeController{
+							PciAddr:  test.MockPCIAddr(1),
 							DevState: devStateNormal,
-						},
-						Health: &ctlpb.BioHealthResp{
-							DevUuid:            test.MockUUID(1),
-							Temperature:        2,
-							MediaErrs:          3,
-							BioReadErrs:        4,
-							BioWriteErrs:       5,
-							BioUnmapErrs:       6,
-							ChecksumErrs:       7,
-							TempWarn:           true,
-							AvailSpareWarn:     true,
-							ReadOnlyWarn:       true,
-							DevReliabilityWarn: true,
-							VolatileMemWarn:    true,
+							LedState: ledStateIdentify,
+							HealthStats: &ctlpb.BioHealthResp{
+								DevUuid:            test.MockUUID(1),
+								Temperature:        2,
+								MediaErrs:          3,
+								BioReadErrs:        4,
+								BioWriteErrs:       5,
+								BioUnmapErrs:       6,
+								ChecksumErrs:       7,
+								TempWarn:           true,
+								AvailSpareWarn:     true,
+								ReadOnlyWarn:       true,
+								DevReliabilityWarn: true,
+								VolatileMemWarn:    true,
+							},
 						},
 					},
 				},
@@ -349,24 +359,26 @@ func TestControl_SmdQuery(t *testing.T) {
 					SmdInfo: &SmdInfo{
 						Devices: []*storage.SmdDevice{
 							{
-								TrAddr:    test.MockPCIAddr(1),
 								UUID:      test.MockUUID(1),
 								Rank:      ranklist.Rank(0),
 								TargetIDs: []int32{1, 2, 3},
-								NvmeState: storage.NvmeStateNormal,
-								LedState:  storage.LedStateIdentify,
-								Health: &storage.NvmeHealth{
-									Temperature:     2,
-									MediaErrors:     3,
-									ReadErrors:      4,
-									WriteErrors:     5,
-									UnmapErrors:     6,
-									ChecksumErrors:  7,
-									TempWarn:        true,
-									AvailSpareWarn:  true,
-									ReadOnlyWarn:    true,
-									ReliabilityWarn: true,
-									VolatileWarn:    true,
+								Ctrlr: storage.NvmeController{
+									PciAddr:   test.MockPCIAddr(1),
+									NvmeState: storage.NvmeStateNormal,
+									LedState:  storage.LedStateIdentify,
+									HealthStats: &storage.NvmeHealth{
+										Temperature:     2,
+										MediaErrors:     3,
+										ReadErrors:      4,
+										WriteErrors:     5,
+										UnmapErrors:     6,
+										ChecksumErrors:  7,
+										TempWarn:        true,
+										AvailSpareWarn:  true,
+										ReadOnlyWarn:    true,
+										ReliabilityWarn: true,
+										VolatileWarn:    true,
+									},
 								},
 							},
 						},
@@ -433,6 +445,13 @@ func TestControl_packPBSmdManageReq(t *testing.T) {
 			},
 			expErr: errors.New("invalid UUID"),
 		},
+		"set-faulty; multiple ids": {
+			req: &SmdManageReq{
+				Operation: SetFaultyOp,
+				IDs:       fmt.Sprintf(test.MockUUID(1), test.MockPCIAddr(1)),
+			},
+			expErr: errors.New("invalid UUID"),
+		},
 		"set-faulty": {
 			req: &SmdManageReq{
 				Operation: SetFaultyOp,
@@ -475,6 +494,14 @@ func TestControl_packPBSmdManageReq(t *testing.T) {
 					},
 				},
 			},
+		},
+		"dev-replace; multiple ids": {
+			req: &SmdManageReq{
+				Operation:   DevReplaceOp,
+				IDs:         fmt.Sprintf(test.MockUUID(1), test.MockPCIAddr(1)),
+				ReplaceUUID: test.MockUUID(2),
+			},
+			expErr: errors.New("invalid UUID"),
 		},
 		"dev-replace": {
 			req: &SmdManageReq{
@@ -628,7 +655,21 @@ func TestControl_SmdManage(t *testing.T) {
 			},
 			expErr: errors.New("> 1 host"),
 		},
+		// set-faulty API calls do not return SMD info.
 		"set-faulty": {
+			req: &SmdManageReq{
+				Operation: SetFaultyOp,
+				IDs:       test.MockUUID(1),
+			},
+			mic: newMockInvokerWRankResps(&ctlpb.SmdManageResp_RankResp{
+				Rank:    0,
+				Results: []*ctlpb.SmdManageResp_Result{{}},
+			}),
+			expResp: &SmdResp{
+				HostStorage: mockSmdQueryMap(t, &mockSmdResp{Hosts: "host-0"}),
+			},
+		},
+		"set-faulty; rank failure": {
 			req: &SmdManageReq{
 				Operation: SetFaultyOp,
 				IDs:       test.MockUUID(1),
@@ -636,13 +677,88 @@ func TestControl_SmdManage(t *testing.T) {
 			mic: newMockInvokerWRankResps(&ctlpb.SmdManageResp_RankResp{
 				Rank: 0,
 				Results: []*ctlpb.SmdManageResp_Result{
+					{Status: int32(daos.Busy)},
+				},
+			}),
+			expResp: &SmdResp{
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{
+					Hosts: "host-0",
+					Error: "rank 0: DER_BUSY(-1012): Device or resource busy",
+				}),
+				HostStorage: mockSmdQueryMap(t, &mockSmdResp{Hosts: "host-0"}),
+			},
+		},
+		"dev-replace with > 1 host": {
+			req: &SmdManageReq{
+				unaryRequest: unaryRequest{
+					request: request{
+						HostList: mockHostList("one", "two"),
+					},
+				},
+				Operation:   DevReplaceOp,
+				IDs:         test.MockUUID(2),
+				ReplaceUUID: test.MockUUID(1),
+			},
+			expErr: errors.New("> 1 host"),
+		},
+		// dev-replace API calls do not return SMD info.
+		"dev-replace": {
+			req: &SmdManageReq{
+				Operation:   DevReplaceOp,
+				IDs:         test.MockUUID(2),
+				ReplaceUUID: test.MockUUID(1),
+			},
+			mic: newMockInvokerWRankResps(&ctlpb.SmdManageResp_RankResp{
+				Rank:    0,
+				Results: []*ctlpb.SmdManageResp_Result{{}},
+			}),
+			expResp: &SmdResp{
+				HostStorage: mockSmdQueryMap(t, &mockSmdResp{Hosts: "host-0"}),
+			},
+		},
+		"dev-replace; rank failure": {
+			req: &SmdManageReq{
+				Operation:   DevReplaceOp,
+				IDs:         test.MockUUID(2),
+				ReplaceUUID: test.MockUUID(1),
+			},
+			mic: newMockInvokerWRankResps(&ctlpb.SmdManageResp_RankResp{
+				Rank: 0,
+				Results: []*ctlpb.SmdManageResp_Result{
+					{Status: int32(daos.Busy)},
+				},
+			}),
+			expResp: &SmdResp{
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{
+					Hosts: "host-0",
+					Error: "rank 0: DER_BUSY(-1012): Device or resource busy",
+				}),
+				HostStorage: mockSmdQueryMap(t, &mockSmdResp{Hosts: "host-0"}),
+			},
+		},
+		// LED manage API calls return SMD info.
+		"led-identify": {
+			req: &SmdManageReq{
+				unaryRequest: unaryRequest{
+					request: request{
+						HostList: mockHostList("one", "two"),
+					},
+				},
+				Operation: LedBlinkOp,
+				IDs:       test.MockUUID(1),
+			},
+			mic: newMockInvokerWRankResps(&ctlpb.SmdManageResp_RankResp{
+				Rank: 0,
+				Results: []*ctlpb.SmdManageResp_Result{
 					{
 						Device: &ctlpb.SmdDevice{
-							TrAddr:   test.MockPCIAddr(1),
-							Uuid:     test.MockUUID(1),
-							TgtIds:   []int32{1024, 1, 1, 2, 2, 3, 3},
-							LedState: ledStateIdentify,
-							DevState: devStateNormal,
+							Uuid:   test.MockUUID(1),
+							TgtIds: []int32{1024, 1, 1, 2, 2, 3, 3},
+							Ctrlr: &ctlpb.NvmeController{
+								PciAddr:  test.MockPCIAddr(1),
+								LedState: ledStateIdentify,
+								DevState: devStateNormal,
+							},
 							RoleBits: storage.BdevRoleAll,
 						},
 					},
@@ -654,12 +770,10 @@ func TestControl_SmdManage(t *testing.T) {
 					SmdInfo: &SmdInfo{
 						Devices: []*storage.SmdDevice{
 							{
-								TrAddr:    test.MockPCIAddr(1),
 								UUID:      test.MockUUID(1),
 								Rank:      ranklist.Rank(0),
 								TargetIDs: []int32{1, 2, 3},
-								NvmeState: storage.NvmeStateNormal,
-								LedState:  storage.LedStateIdentify,
+								Ctrlr:     defMockCtrlr,
 								Roles: storage.BdevRoles{
 									storage.OptionBits(storage.BdevRoleAll),
 								},
@@ -670,9 +784,9 @@ func TestControl_SmdManage(t *testing.T) {
 				}),
 			},
 		},
-		"set-faulty; drpc failure": {
+		"led-identify; rank failure": {
 			req: &SmdManageReq{
-				Operation: SetFaultyOp,
+				Operation: LedBlinkOp,
 				IDs:       test.MockUUID(1),
 			},
 			mic: newMockInvokerWRankResps(&ctlpb.SmdManageResp_RankResp{
@@ -681,7 +795,9 @@ func TestControl_SmdManage(t *testing.T) {
 					{
 						Status: int32(daos.Busy),
 						Device: &ctlpb.SmdDevice{
-							TrAddr: test.MockPCIAddr(1),
+							Ctrlr: &ctlpb.NvmeController{
+								PciAddr: test.MockPCIAddr(1),
+							},
 						},
 					},
 				},
@@ -697,8 +813,10 @@ func TestControl_SmdManage(t *testing.T) {
 					SmdInfo: &SmdInfo{
 						Devices: []*storage.SmdDevice{
 							{
-								TrAddr:    test.MockPCIAddr(1),
 								TargetIDs: []int32{},
+								Ctrlr: storage.NvmeController{
+									PciAddr: test.MockPCIAddr(1),
+								},
 							},
 						},
 					},
@@ -729,7 +847,8 @@ func TestControl_SmdManage(t *testing.T) {
 				for _, sqr := range gotResp.HostStorage {
 					hs := tc.expResp.HostStorage
 					keys := hs.Keys()
-					if len(keys) == 0 {
+					si := sqr.HostStorage.SmdInfo
+					if len(keys) == 0 || si == nil || si.Devices == nil {
 						continue
 					}
 					for i, gotDev := range sqr.HostStorage.SmdInfo.Devices {

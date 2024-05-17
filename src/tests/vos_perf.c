@@ -27,6 +27,7 @@
 #include <daos/stack_mmap.h>
 
 uint64_t	ts_flags;
+bool                    ts_flat = false;
 
 char		ts_pmem_path[PATH_MAX - 32];
 char		ts_pmem_file[PATH_MAX];
@@ -278,10 +279,12 @@ iter_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type, vos_ite
 	if (ppa->pa_verbose) {
 		switch (type) {
 		case VOS_ITER_DKEY:
-			D_PRINT("\tdkey ="DF_KEY"\n", DP_KEY(&entry->ie_key));
+			D_PRINT("\tdkey =" DF_KEY ", epoch=" DF_X64 ".%d\n", DP_KEY(&entry->ie_key),
+				entry->ie_epoch, entry->ie_minor_epc);
 			break;
 		case VOS_ITER_AKEY:
-			D_PRINT("\takey ="DF_KEY"\n", DP_KEY(&entry->ie_key));
+			D_PRINT("\takey =" DF_KEY ", epoch=" DF_X64 ".%d\n", DP_KEY(&entry->ie_key),
+				entry->ie_epoch, entry->ie_minor_epc);
 			break;
 		case VOS_ITER_SINGLE:
 			D_PRINT("\tsingv="DF_U64" bytes\n", entry->ie_rsize);
@@ -321,7 +324,8 @@ obj_iter_records(daos_unit_oid_t oid, struct pf_param *ppa)
 	TS_TIME_START(&ppa->pa_duration, start);
 	if (ppa->pa_verbose)
 		D_PRINT("Iteration dkeys in "DF_UOID"\n", DP_UOID(oid));
-	rc = vos_iterate(&param, VOS_ITER_DKEY, true, &anchors, iter_cb, NULL, ppa, NULL);
+	rc = vos_iterate(&param, VOS_ITER_DKEY, ppa->pa_iter.recurse, &anchors, iter_cb, NULL, ppa,
+			 NULL);
 	TS_TIME_END(&ppa->pa_duration, start);
 	return rc;
 }
@@ -553,7 +557,7 @@ pf_query(struct pf_test *ts, struct pf_param *param)
 {
 	int rc;
 
-	if (ts_flags != DAOS_OT_DKEY_UINT64) {
+	if (ts_flags != DAOS_OT_DKEY_UINT64 && ts_flags != DAOS_OT_ARRAY_BYTE) {
 		fprintf(stderr, "Integer dkeys required for query test (-i)\n");
 		return -1;
 	}
@@ -606,6 +610,10 @@ pf_parse_iterate_cb(char *str, struct pf_param *pa, char **strp)
 		pa->pa_iter.visible = true;
 		str++;
 		break;
+	case 's':
+		pa->pa_iter.recurse = false;
+		str++;
+		break;
 	}
 	*strp = str;
 	return 0;
@@ -614,6 +622,7 @@ pf_parse_iterate_cb(char *str, struct pf_param *pa, char **strp)
 static int
 pf_parse_iterate(char *str, struct pf_param *pa, char **strp)
 {
+	pa->pa_iter.recurse = true;
 	return pf_parse_common(str, pa, pf_parse_iterate_cb, strp);
 }
 
@@ -722,14 +731,15 @@ ts_yes_or_no(bool value)
 }
 
 const char perf_vos_usage[] = "\n"
-"-D pathname\n"
-"	Full path name of the directory where to store the VOS file(s).\n\n"
-"-z	Use zero copy API.\n\n"
-"-i	Use integer dkeys.  Required if running QUERY test.\n\n"
-"-I	Use constant akey.  Required for QUERY test.\n\n"
-"-x	Run each test in an ABT ULT.\n\n"
-"Examples:\n"
-"	$ vos_perf -s 1024k -A -R 'U U;o=4k;s=4k V'\n";
+			      "-D pathname\n"
+			      "	Full path name of the directory where to store the VOS file(s).\n\n"
+			      "-z	Use zero copy API.\n\n"
+			      "-i	Use integer dkeys.  Required if running QUERY test.\n\n"
+			      "-I	Use constant akey.  Required for QUERY test.\n\n"
+			      "-f	Use a flat DKEY object type\n\n"
+			      "-x	Run each test in an ABT ULT.\n\n"
+			      "Examples:\n"
+			      "	$ vos_perf -s 1024k -A -R 'U U;o=4k;s=4k V'\n";
 
 static void
 ts_print_usage(void)
@@ -743,15 +753,16 @@ ts_print_usage(void)
 }
 
 const struct option perf_vos_opts[] = {
-	{ "dir",	required_argument,	NULL,	'D' },
-	{ "zcopy",	no_argument,		NULL,	'z' },
-	{ "int_dkey",	no_argument,		NULL,	'i' },
-	{ "const_akey",	no_argument,		NULL,	'I' },
-	{ "abt_ult",	no_argument,		NULL,	'x' },
-	{ NULL,		0,			NULL,	0   },
+    {"dir", required_argument, NULL, 'D'},
+    {"zcopy", no_argument, NULL, 'z'},
+    {"int_dkey", no_argument, NULL, 'i'},
+    {"flat_dkey", no_argument, NULL, 'f'},
+    {"const_akey", no_argument, NULL, 'I'},
+    {"abt_ult", no_argument, NULL, 'x'},
+    {NULL, 0, NULL, 0},
 };
 
-const char perf_vos_optstr[] = "D:ziIx";
+const char perf_vos_optstr[] = "D:zifIx";
 
 int
 main(int argc, char **argv)
@@ -805,6 +816,12 @@ main(int argc, char **argv)
 			ts_flags = DAOS_OT_DKEY_UINT64;
 			ts_dkey_prefix = NULL;
 			break;
+		case 'f':
+			ts_flat        = true;
+			ts_dkey_prefix = NULL;
+			/** Flat dkey implies const_akey */
+			ts_const_akey = true;
+			break;
 		case 'I':
 			ts_const_akey = true;
 			break;
@@ -817,6 +834,14 @@ main(int argc, char **argv)
 
 	if (ts_const_akey)
 		ts_akey_p_dkey = 1;
+
+	if (ts_flat) {
+		if (ts_single)
+			ts_flags = DAOS_OT_KV_HASHED;
+		else
+			ts_flags = DAOS_OT_ARRAY_BYTE;
+		ts_dkey_prefix = NULL;
+	}
 
 	if (!cmds) {
 		D_PRINT("Please provide command string\n");

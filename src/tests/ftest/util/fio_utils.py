@@ -1,14 +1,13 @@
 """
-  (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2019-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from ClusterShell.NodeSet import NodeSet
-
-from run_utils import run_remote
-from command_utils_base import BasicParameter, FormattedParameter, CommandWithParameters
-from exception_utils import CommandFailure
 from command_utils import ExecutableCommand
+from command_utils_base import BasicParameter, CommandWithParameters, FormattedParameter
+from exception_utils import CommandFailure
+from run_utils import run_remote
 
 
 class FioCommand(ExecutableCommand):
@@ -135,6 +134,14 @@ class FioCommand(ExecutableCommand):
             getattr(self._jobs[job_name], param_name).update(value, description)
         else:
             self.log.error("Invalid job name: %s", job_name)
+
+    def update_directory(self, directory):
+        """Helper method for setting Fio directory command line option.
+
+        Args:
+            directory (str): fio directory argument value
+        """
+        self.update("global", "directory", directory, "fio --name=global --directory")
 
     @property
     def command_with_params(self):
@@ -394,3 +401,9 @@ class FioCommand(ExecutableCommand):
             self.steadystate = FormattedParameter("--steadystate={}")
             self.steadystate_duration = FormattedParameter("--steadystate_duration={}")
             self.steadystate_ramp_time = FormattedParameter("--steadystate_ramp_time={}")
+
+            # NOTE DFS ioengine options must come after the ioengine that defines them is selected.
+            self.pool = FormattedParameter("--pool={}")
+            self.cont = FormattedParameter("--cont={}")
+            self.chunk_size = FormattedParameter("--chunk_size={}")
+            self.object_class = FormattedParameter("--object_class={}")

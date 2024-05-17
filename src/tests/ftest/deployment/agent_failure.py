@@ -3,16 +3,15 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
 import os
 import threading
+import time
 
 from ClusterShell.NodeSet import NodeSet
-
+from command_utils_base import CommandFailure
+from general_utils import get_journalctl, journalctl_time, report_errors
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
-from general_utils import report_errors, get_journalctl, journalctl_time
-from command_utils_base import CommandFailure
 from job_manager_utils import get_job_manager
 from run_utils import stop_processes
 
@@ -34,7 +33,7 @@ class AgentFailure(IorTestBase):
         """
         ior_cmd = IorCommand()
         ior_cmd.get_params(self)
-        ior_cmd.set_daos_params(self.server_group, self.pool, self.container.identifier)
+        ior_cmd.set_daos_params(self.pool, self.container.identifier)
         testfile = os.path.join(os.sep, file_name)
         ior_cmd.update_params(test_file=testfile)
 
@@ -46,8 +45,7 @@ class AgentFailure(IorTestBase):
             mpi_type="mpich")
         manager.assign_hosts(clients_nodeset, self.workdir, self.hostfile_clients_slots)
         ppn = self.params.get("ppn", '/run/ior/client_processes/*')
-        manager.ppn.update(ppn, 'mpirun.ppn')
-        manager.processes.update(None, 'mpirun.np')
+        manager.assign_processes(ppn=ppn)
 
         try:
             ior_output = manager.run()

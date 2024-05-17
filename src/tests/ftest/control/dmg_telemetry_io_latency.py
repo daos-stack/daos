@@ -4,11 +4,11 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+from general_utils import report_errors
 from ior_test_base import IorTestBase
+from oclass_utils import extract_redundancy_factor
 from telemetry_test_base import TestWithTelemetry
 from telemetry_utils import TelemetryUtils
-from oclass_utils import extract_redundancy_factor
-from general_utils import report_errors
 
 
 def convert_to_number(size):
@@ -172,8 +172,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
                 self.log.info("<<< Start ior %s transfer_size=%s", operation, transfer_size)
                 self.ior_cmd.transfer_size.update(transfer_size)
                 self.ior_cmd.flags.update(flags)
-                self.ior_cmd.set_daos_params(
-                    self.server_group, self.pool, self.container[-1].identifier)
+                self.ior_cmd.set_daos_params(self.pool, self.container[-1].identifier)
                 # Run ior command
                 ior_results = self.run_ior_with_pool(
                     timeout=200, create_pool=False, create_cont=False)

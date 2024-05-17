@@ -515,7 +515,7 @@ crt_proto_register_internal(struct crt_proto_format *cpf)
 
 	/* validate base_opc is in range */
 	/* TODO: This doesn't make any sense, a XOR used as a truth value is
-	 * just checking equlity so only one mask would be allowed here
+	 * just checking equality so only one mask would be allowed here
 	 */
 	if (cpf->cpf_base ^ CRT_PROTO_BASEOPC_MASK) {
 		D_ERROR("Invalid base_opc: %#x.\n", cpf->cpf_base);

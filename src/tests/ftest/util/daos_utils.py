@@ -7,7 +7,7 @@ import re
 import traceback
 
 from daos_utils_base import DaosCommandBase
-from general_utils import list_to_str, dict_to_str
+from general_utils import dict_to_str, list_to_str
 
 
 class DaosCommand(DaosCommandBase):
@@ -369,6 +369,23 @@ class DaosCommand(DaosCommandBase):
             ("pool", "list-attrs"), pool=pool, sys_name=sys_name,
             verbose=verbose)
 
+    def pool_list_containers(self, pool, sys_name=None):
+        """List containers in the pool.
+
+        Args:
+            pool (str): pool label or UUID
+            sys_name (str): DAOS system name. Defaults to None.
+
+        Returns:
+            dict: JSON output
+
+        Raises:
+            CommandFailure: if the daos pool list-containers command fails.
+
+        """
+        return self._get_json_result(
+            ("pool", "list-containers"), pool=pool, sys_name=sys_name)
+
     def container_query(self, pool, cont, sys_name=None):
         """Query a container.
 
@@ -623,7 +640,7 @@ class DaosCommand(DaosCommandBase):
         Args:
             pool (str): pool UUID or label
             cont (str): container UUID or label
-            attr (str): attribute name
+            attr (str/list): single attribute name or list of names
             sys_name (str, optional): DAOS system name context for servers.
                 Defaults to None.
 
@@ -634,29 +651,10 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos get-attr command fails.
 
         """
+        if isinstance(attr, (list, tuple)):
+            attr = list_to_str(attr, ",")
         return self._get_json_result(
             ("container", "get-attr"), pool=pool, cont=cont, attr=attr, sys_name=sys_name)
-
-    def container_get_attrs(self, pool, cont, attrs, sys_name=None):
-        """Call daos container get-attr for multiple attributes.
-
-        Args:
-            pool (str): Pool UUID.
-            cont (str): Container UUID.
-            attrs (list): Attribute names.
-            sys_name (str, optional): DAOS system name context for servers.
-                Defaults to None.
-
-        Returns:
-            dict: the daos json command output converted to a python dictionary
-
-        Raises:
-            CommandFailure: if the daos get-attr command fails.
-
-        """
-        return self._get_json_result(
-            ("container", "get-attr"), pool=pool, cont=cont,
-            attr=list_to_str(attrs, ","), sys_name=sys_name)
 
     def container_list_attrs(self, pool, cont, sys_name=None, verbose=False):
         """Call daos container list-attrs.
@@ -678,6 +676,25 @@ class DaosCommand(DaosCommandBase):
         return self._get_json_result(
             ("container", "list-attrs"), pool=pool, cont=cont, sys_name=sys_name,
             verbose=verbose)
+
+    def container_list_objects(self, pool, cont, sys_name=None):
+        """Call daos container list-objects.
+
+        Args:
+            pool (str): Pool UUID or label
+            cont (str): Container UUID or label
+            sys_name (str, optional): DAOS system name context for servers.
+                Defaults to None.
+
+        Returns:
+            dict: the daos json command output converted to a python dictionary
+
+        Raises:
+            CommandFailure: if the daos container list-objects command fails.
+
+        """
+        return self._get_json_result(
+            ("container", "list-objects"), pool=pool, cont=cont, sys_name=sys_name)
 
     def container_create_snap(self, pool, cont, snap_name=None, epoch=None,
                               sys_name=None):
@@ -804,6 +821,30 @@ class DaosCommand(DaosCommandBase):
             self.log.error(vals)
 
         return data
+
+    def faults_container(self, pool, cont, location, sys_name=None, path=None, rank=None,
+                         frequency=None):
+        """Inject fault to a container.
+
+        Args:
+            pool (str): pool label or UUID
+            cont (str): container name or UUID
+            location (str): Fault injection location
+            sys_name (str): DAOS system name. Defaults to None.
+            path (str): unified namespace path. Defaults to None.
+            rank (str): Rank to inject fault on (default: 4294967295). Defaults to None.
+            frequency (str): Fault injection frequency (default: once). Defaults to None.
+
+        Returns:
+            dict: JSON output
+
+        Raises:
+            CommandFailure: if the command fails.
+
+        """
+        return self._get_json_result(
+            ("faults", "container"), pool=pool, cont=cont, location=location,
+            sys_name=sys_name, path=path, rank=rank, frequency=frequency)
 
     def filesystem_copy(self, src, dst, preserve_props=None):
         """Copy a POSIX container or path to another POSIX container or path.

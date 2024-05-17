@@ -6,15 +6,15 @@
 import os
 import time
 from collections import defaultdict
-from ClusterShell.NodeSet import NodeSet
 
+from ClusterShell.NodeSet import NodeSet
+from command_utils_base import CommandFailure
+from dmg_utils import check_system_query_status
+from general_utils import report_errors, run_pcmd
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
-from general_utils import report_errors, run_pcmd
-from command_utils_base import CommandFailure
 from job_manager_utils import get_job_manager
 from network_utils import update_network_interface
-from dmg_utils import check_system_query_status
 
 
 class NetworkFailureTest(IorTestBase):
@@ -38,7 +38,7 @@ class NetworkFailureTest(IorTestBase):
             self.log.debug("Call ip link set before tearDown.")
             if self.network_down_host:
                 update_network_interface(
-                    interface=self.interface, state="up", hosts=self.network_down_host,
+                    self.log, interface=self.interface, state="up", hosts=self.network_down_host,
                     errors=error_list)
         return error_list
 
@@ -64,7 +64,7 @@ class NetworkFailureTest(IorTestBase):
         ior_cmd.get_params(self)
 
         # Standard IOR prep sequence.
-        ior_cmd.set_daos_params(self.server_group, pool, container.identifier)
+        ior_cmd.set_daos_params(pool, container.identifier)
         ior_cmd.test_file.update(os.path.join(os.sep, file_name))
 
         manager = get_job_manager(
@@ -206,7 +206,7 @@ class NetworkFailureTest(IorTestBase):
         if self.test_env == "ci":
             # wolf
             update_network_interface(
-                interface=self.interface, state="down", hosts=self.network_down_host,
+                self.log, interface=self.interface, state="down", hosts=self.network_down_host,
                 errors=errors)
         else:
             # Aurora. Manually run the command.
@@ -228,7 +228,7 @@ class NetworkFailureTest(IorTestBase):
         if self.test_env == "ci":
             # wolf
             update_network_interface(
-                interface=self.interface, state="up", hosts=self.network_down_host,
+                self.log, interface=self.interface, state="up", hosts=self.network_down_host,
                 errors=errors)
         else:
             # Aurora. Manually run the command.
@@ -392,7 +392,7 @@ class NetworkFailureTest(IorTestBase):
         # wolf
         if self.test_env == "ci":
             update_network_interface(
-                interface=self.interface, state="down", hosts=self.network_down_host,
+                self.log, interface=self.interface, state="down", hosts=self.network_down_host,
                 errors=errors)
         else:
             # Aurora. Manually run the command.
@@ -431,7 +431,7 @@ class NetworkFailureTest(IorTestBase):
         if self.test_env == "ci":
             # wolf
             update_network_interface(
-                interface=self.interface, state="up", hosts=self.network_down_host,
+                self.log, interface=self.interface, state="up", hosts=self.network_down_host,
                 errors=errors)
         else:
             # Aurora. Manually run the command.

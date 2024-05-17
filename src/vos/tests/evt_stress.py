@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Run evt_ctl with a specific pattern that causes a segfault with the default sort algorithm"""
+import argparse
+import json
 import os
 from os.path import join
-import json
-import argparse
 
 
 class EVTStress():

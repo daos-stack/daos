@@ -23,7 +23,7 @@ class MdtestSmall(MdtestBase):
             Run MDTest with various APIs and configurations.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,medium,md_on_ssd
         :avocado: tags=mdtest,checksum,dfs,dfuse
         :avocado: tags=MdtestSmall,test_mdtest_small
         """

@@ -9,6 +9,21 @@
 #include <daos_srv/evtree.h>
 #include "vos_internal.h"
 
+/** Upper two bits are reserved. On disk, this will be (uint16_t)-2)
+ *  for backward compatibility reasons.
+ *  For the upper bits,
+ *  00 means distributed transaction write
+ *  11 is reserved for max normal write and removal records
+ *  01 is reserved for rebuild writes
+ *  10 is reserved for future use
+ *
+ *  When converting to not durable values, we want all rebuild records to be
+ *  greater than any normal write records.  So, we use a smaller value here.
+ */
+#define EVT_TX_MINOR_MAX_DF   ((uint16_t)-2)
+#define EVT_REBUILD_MINOR_MIN (VOS_SUB_OP_MAX + 1)
+#define EVT_REBUILD_MINOR_MAX (EVT_REBUILD_MINOR_MIN + VOS_SUB_OP_MAX)
+
 /**
  * Tree node types.
  * NB: a node can be both root and leaf.

@@ -1,13 +1,14 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 import time
 
-from ior_test_base import IorTestBase
 from dmg_utils import check_system_query_status
+from general_utils import wait_for_result
+from ior_test_base import IorTestBase
 
 
 class IorCrash(IorTestBase):
@@ -15,19 +16,18 @@ class IorCrash(IorTestBase):
         Verify DAOS server does not need to be restarted when an application crashes.
     :avocado: recursive
     """
+    def verify_cont_handles(self, expected_handles=1):
+        """Verify number of container handles. If needed, perform multiple queries (with delay).
 
-    def setUp(self):
-        """Set up test before executing."""
-        super().setUp()
-        self.dmg = self.get_dmg_command()
+        Args:
+            expected_handles (int): expected number of container handles. Defaults to 1.
 
-    def cont_nhandles_match(self, exp_nhandles=1, attempts=5, delay_sec=2):
-        """Verify container number of handles. If needed, perform multiple queries (with delay)."""
-        for _ in range(attempts):
-            if self.container.check_container_info(ci_nhandles=exp_nhandles):
-                return True
-            time.sleep(delay_sec)
-        return False
+        Returns:
+            bool: whether expected matches actual
+        """
+        return wait_for_result(
+            self.log, self.container.verify_query, timeout=10, delay=2,
+            expected_response={'num_handles': expected_handles})
 
     def test_ior_crash(self):
         """Jira ID: DAOS-4332.
@@ -51,10 +51,12 @@ class IorCrash(IorTestBase):
         :avocado: tags=daosio,ior,dfs
         :avocado: tags=IorCrash,test_ior_crash
         """
+        dmg = self.get_dmg_command()
+
         # Create pool and container
         self.pool = self.get_pool(connect=False)
         self.container = self.get_container(self.pool)
-        self.ior_cmd.set_daos_params(self.server_group, self.pool, self.container.identifier)
+        self.ior_cmd.set_daos_params(self.pool, self.container.identifier)
 
         # Don't check subprocess status, since output is buffered and can't be read in real time
         self.ior_cmd.pattern = None
@@ -65,13 +67,13 @@ class IorCrash(IorTestBase):
         self.stop_ior()
 
         # Verify engines did not crash
-        scan_info = self.dmg.system_query(verbose=True)
+        scan_info = dmg.system_query(verbose=True)
         if not check_system_query_status(scan_info):
             self.fail("One or more engines crashed")
 
         # Verify container handle opened by ior is closed (by daos_agent after ior crash).
         # Expect to find one open handle now (a handle opened for this check)
-        self.assertTrue(self.cont_nhandles_match(), "Error confirming container info nhandles")
+        self.assertTrue(self.verify_cont_handles(), "Error confirming container info nhandles")
 
         # Run IOR and crash it in the middle of Read.
         # Must wait for Write to complete first.
@@ -81,21 +83,23 @@ class IorCrash(IorTestBase):
         self.stop_ior()
 
         # Verify engines did not crash
-        scan_info = self.dmg.system_query(verbose=True)
+        scan_info = dmg.system_query(verbose=True)
         if not check_system_query_status(scan_info):
             self.fail("One or more engines crashed")
 
         # Verify container handle opened by ior is closed (by daos_agent after ior crash).
-        self.assertTrue(self.cont_nhandles_match(), "Error confirming container info nhandles")
+        self.assertTrue(self.verify_cont_handles(), "Error confirming container info nhandles")
 
         # Run IOR and verify it completes successfully
         self.run_ior_with_pool(create_pool=False, create_cont=False)
 
         # Verify engines did not crash
-        scan_info = self.dmg.system_query(verbose=True)
+        scan_info = dmg.system_query(verbose=True)
         if not check_system_query_status(scan_info):
             self.fail("One or more engines crashed")
 
         # Verify container handle opened by ior is closed (by ior before its graceful exit)
-        self.assertTrue(self.cont_nhandles_match(attempts=1, delay_sec=0),
+        # Give ior some time to get started and open the container!
+        # And, expect 2 open handles, one for this container open/query, and another for ior itself
+        self.assertTrue(self.verify_cont_handles(expected_handles=2),
                         "Error confirming container info nhandles")

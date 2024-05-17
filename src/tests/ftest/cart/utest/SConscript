@@ -4,7 +4,8 @@
 #
 """Unit tests"""
 
-TEST_SRC = ['test_linkage.cpp', 'utest_hlc.c', 'utest_swim.c', 'utest_portnumber.c']
+TEST_SRC = ['test_linkage.cpp', 'utest_hlc.c', 'utest_swim.c',
+            'utest_portnumber.c', 'utest_protocol.c']
 LIBPATH = [Dir('../../'), Dir('../../../gurt')]
 
 
@@ -25,9 +26,7 @@ def scons():
     test_env.AppendUnique(RPATH_FULL=LIBPATH)
 
     for test in TEST_SRC:
-        flags = []
-        testprog = test_env.d_test_program(source=[test, cart_targets, swim_targets, gurt_targets],
-                                           LINKFLAGS=flags)
+        testprog = test_env.d_test_program(source=[test, cart_targets, swim_targets, gurt_targets])
         Default(testprog)
 
 

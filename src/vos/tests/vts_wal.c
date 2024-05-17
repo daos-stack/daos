@@ -65,6 +65,8 @@ struct wal_test_args {
 	char	*wta_clone;
 	void	*wta_buf;
 	int	 wta_buf_sz;
+	bool	 wta_no_replay;
+	bool	 wta_checkpoint;
 };
 
 static int
@@ -249,9 +251,27 @@ compare_pool_info(vos_pool_info_t *info1, vos_pool_info_t *info2)
 	return 0;
 }
 
+static void
+wait_cb(void *arg, uint64_t chkpt_tx, uint64_t *committed_tx)
+{
+	uint64_t *committed_id = arg;
+
+	*committed_tx = *committed_id;
+	return;
+}
+
+static void
+update_cb(void *arg, uint64_t id, uint32_t used_blocks, uint32_t total_blocks)
+{
+	uint64_t *committed_id = arg;
+
+	*committed_id = id;
+	return;
+}
+
 /* Create pool & cont, clear content in tmpfs, open pool by meta blob loading & WAL replay */
 static void
-wal_tst_01(void **state)
+wal_tst_pool_cont(void **state)
 {
 	struct wal_test_args	*arg = *state;
 	char			*pool_name;
@@ -272,7 +292,7 @@ wal_tst_01(void **state)
 	assert_int_equal(rc, 0);
 
 	/* Create pool: Create meta & WAL blobs, write meta & WAL header */
-	rc = vos_pool_create(pool_name, pool_id, 0, VPOOL_1G, 0, NULL);
+	rc = vos_pool_create(pool_name, pool_id, 0, VPOOL_1G, 0, 0 /* version */, NULL);
 	assert_int_equal(rc, 0);
 
 	/* Create cont: write WAL */
@@ -286,12 +306,27 @@ wal_tst_01(void **state)
 	rc = vos_pool_query(poh, &pool_info1);
 	assert_rc_equal(rc, 0);
 
+	/* checkpoint pool */
+	if (arg->wta_checkpoint) {
+		struct umem_store	*store;
+		uint64_t		 committed_id;
+
+		vos_pool_checkpoint_init(poh, update_cb, wait_cb, &committed_id, &store);
+		rc = vos_pool_checkpoint(poh);
+		assert_rc_equal(rc, 0);
+		vos_pool_checkpoint_fini(poh);
+	}
+
 	rc = vos_pool_close(poh);
 	assert_int_equal(rc, 0);
 
 	/* Restore pool content from the empty clone */
 	rc = restore_pool(arg, pool_name);
 	assert_int_equal(rc, 0);
+
+	/* disable WAL replay to verify checkpoint works as expected */
+	if (arg->wta_no_replay)
+		daos_fail_loc_set(DAOS_WAL_NO_REPLAY | DAOS_FAIL_ALWAYS);
 
 	/* Open pool: Open meta & WAL blobs, load meta & WAL header, replay WAL */
 	rc = vos_pool_open(pool_name, pool_id, 0, &poh);
@@ -330,11 +365,12 @@ wal_tst_01(void **state)
 
 /* Re-open pool */
 static void
-wal_pool_refill(struct vos_test_ctx *tcx)
+wal_pool_refill(struct io_test_args *arg)
 {
 	daos_handle_t		poh, coh;
 	vos_pool_info_t		pool_info1 = { 0 }, pool_info2 = { 0 };
 	int			rc;
+	struct vos_test_ctx	*tcx = &arg->ctx;
 
 	rc = vos_cont_close(tcx->tc_co_hdl);
 	assert_rc_equal(rc, 0);
@@ -345,10 +381,42 @@ wal_pool_refill(struct vos_test_ctx *tcx)
 	rc = vos_pool_query(poh, &pool_info1);
 	assert_rc_equal(rc, 0);
 
+	/* checkpoint pool if needed */
+	if (arg->checkpoint || arg->fail_checkpoint) {
+		struct umem_store	*store;
+		uint64_t		 committed_id;
+
+		vos_pool_checkpoint_init(poh, update_cb, wait_cb, &committed_id, &store);
+		if (arg->fail_checkpoint) {
+			daos_fail_loc_set(DAOS_MEM_FAIL_CHECKPOINT | DAOS_FAIL_ALWAYS);
+			rc = vos_pool_checkpoint(poh);
+			assert_rc_equal(rc, -DER_AGAIN);
+		} else {
+			rc = vos_pool_checkpoint(poh);
+			assert_rc_equal(rc, 0);
+		}
+		vos_pool_checkpoint_fini(poh);
+	}
+
 	/* Close pool: Flush meta & WAL header, close meta & WAL blobs */
 	rc = vos_pool_close(poh);
 	assert_rc_equal(rc, 0);
 	tcx->tc_step = TCX_NONE;
+
+	if (arg->no_replay) {
+		D_ASSERT(arg->fail_checkpoint == false);
+		D_ASSERT(arg->checkpoint == true);
+		daos_fail_loc_set(DAOS_WAL_NO_REPLAY | DAOS_FAIL_ALWAYS);
+	}
+
+	if (arg->fail_replay) {
+		daos_fail_loc_set(DAOS_WAL_FAIL_REPLAY | DAOS_FAIL_ALWAYS);
+		daos_fail_value_set(1000);
+		poh = DAOS_HDL_INVAL;
+		rc = vos_pool_open(tcx->tc_po_name, tcx->tc_po_uuid, 0, &poh);
+		assert_rc_equal(rc, -DER_AGAIN);
+		daos_fail_loc_set(0);
+	}
 
 	/* Open pool: Open meta & WAL blobs, load meta & WAL header, replay WAL */
 	poh = DAOS_HDL_INVAL;
@@ -419,7 +487,7 @@ wal_kv_basic(void **state)
 		     &recx, buf_l[1]);
 
 	/* Re-open pool and repaly WAL */
-	wal_pool_refill(&arg->ctx);
+	wal_pool_refill(arg);
 
 	/* Verify all values */
 	epoch = epc_lo;
@@ -496,7 +564,7 @@ wal_kv_large(void **state)
 	assert_rc_equal(rc, 0);
 
 	/* Re-open pool and repaly WAL */
-	wal_pool_refill(&arg->ctx);
+	wal_pool_refill(arg);
 
 	/* Verify all values */
 	umm = &vos_hdl2cont(tcx->tc_co_hdl)->vc_pool->vp_umm;
@@ -648,7 +716,7 @@ wal_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 
 	/* Refill VOS file from WAL: reopen pool & container */
 	if (refill)
-		wal_pool_refill(&arg->ctx);
+		wal_pool_refill(arg);
 
 	/* Verify reconstructed data */
 	if (fetch) {
@@ -732,6 +800,8 @@ wal_io_multiple_updates(void **state)
 	int			 i, j, rc = 0;
 
 	num_keys = WAL_IO_MULTI_KEYS;
+	if (arg->fail_checkpoint)
+		num_keys = WAL_IO_MULTI_KEYS * 4;
 
 	D_ALLOC_NZ(update_buf, UPDATE_BUF_SIZE * num_keys);
 	assert_rc_equal(!!update_buf, true);
@@ -764,7 +834,7 @@ wal_io_multiple_updates(void **state)
 		}
 
 		/* Refill VOS file from WAL: reopen pool & container */
-		wal_pool_refill(&arg->ctx);
+		wal_pool_refill(arg);
 
 		/* Fetch/verify */
 		up = update_buf;
@@ -782,6 +852,9 @@ wal_io_multiple_updates(void **state)
 			ak += UPDATE_AKEY_SIZE;
 			dk += UPDATE_DKEY_SIZE;
 		}
+
+		if (arg->fail_replay || arg->fail_checkpoint)
+			break;
 	}
 	D_FREE(update_buf);
 	D_FREE(fetch_buf);
@@ -881,7 +954,7 @@ wal_io_query_key_punch_update(void **state)
 	assert_int_equal(*(uint64_t *)dkey.iov_buf, 12);
 
 	/* Refill VOS file from WAL: reopen pool & container */
-	wal_pool_refill(&arg->ctx);
+	wal_pool_refill(arg);
 
 	/* Verify */
 	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid,
@@ -1016,7 +1089,7 @@ wal_objs_update_and_fetch(struct io_test_args *arg, daos_epoch_t epoch)
 		}
 		/* Refill VOS file from WAL: reopen pool & container */
 		if (oidx == 0)
-			wal_pool_refill(&arg->ctx);
+			wal_pool_refill(arg);
 	}
 
 	wal_key = 1;
@@ -1107,13 +1180,89 @@ wal_io_multiple_objects_ovwr(void **state)
 	}
 }
 
+static int
+wal02_setup(void **state)
+{
+	struct wal_test_args	*arg = *state;
+
+	arg->wta_no_replay = true;
+	arg->wta_checkpoint = true;
+
+	return 0;
+}
+
+static int
+wal02_teardown(void **state)
+{
+	struct wal_test_args	*arg = *state;
+
+	arg->wta_no_replay = false;
+	arg->wta_checkpoint = false;
+	daos_fail_loc_set(0);
+
+	return 0;
+}
+
+static int
+wal12_setup(void **state)
+{
+	struct io_test_args	*arg = *state;
+
+	arg->no_replay = true;
+	arg->checkpoint = true;
+
+	return 0;
+}
+
+static int
+wal_kv_teardown(void **state)
+{
+	struct io_test_args	*arg = *state;
+
+	arg->no_replay = false;
+	arg->checkpoint = false;
+	arg->fail_replay = false;
+	arg->fail_checkpoint = false;
+	daos_fail_value_set(0);
+	daos_fail_loc_set(0);
+
+	return 0;
+}
+
+static int
+wal13_setup(void **state)
+{
+	struct io_test_args	*arg = *state;
+
+	arg->fail_replay = true;
+
+	return 0;
+}
+
+static int
+wal14_setup(void **state)
+{
+	struct io_test_args	*arg = *state;
+
+	arg->fail_checkpoint = true;
+	arg->checkpoint = true;
+
+	return 0;
+}
+
 static const struct CMUnitTest wal_tests[] = {
-    {"WAL01: Basic pool/cont create/destroy test", wal_tst_01, NULL, NULL},
+    {"WAL01: Basic pool/cont create/destroy test", wal_tst_pool_cont, NULL, NULL},
+    {"WAL02: Basic pool/cont create/destroy test with checkpointing", wal_tst_pool_cont,
+      wal02_setup, wal02_teardown},
 };
 
 static const struct CMUnitTest wal_kv_basic_tests[] = {
     {"WAL10: Basic SV/EV small/large update/fetch/verify", wal_kv_basic, NULL, NULL},
     {"WAL11: Basic SV/EV large TX update/fetch/verify", wal_kv_large, NULL, NULL},
+    {"WAL12: Basic SV/EV small/large update/fetch/verify checkpoint", wal_kv_basic,
+     wal12_setup, wal_kv_teardown},
+    {"WAL13: Interrupt replay", wal_io_multiple_updates, wal13_setup, wal_kv_teardown},
+    {"WAL13: Interrupt checkpoint", wal_io_multiple_updates, wal14_setup, wal_kv_teardown},
 };
 
 static const struct CMUnitTest wal_io_tests[] = {

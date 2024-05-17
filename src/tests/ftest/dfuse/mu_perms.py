@@ -1,22 +1,24 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
-from itertools import product
-import time
 import re
+import time
+from itertools import product
 
+from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
-
-from dfuse_test_base import DfuseTestBase
-from dfuse_utils import get_dfuse, start_dfuse, VerifyPermsCommand
+from dfuse_utils import VerifyPermsCommand, get_dfuse, start_dfuse
+from run_utils import command_as_user, run_remote
 from user_utils import get_chown_command
-from run_utils import run_remote, command_as_user
 
 
-class DfuseMUPerms(DfuseTestBase):
-    """Verify dfuse multi-user basic permissions."""
+class DfuseMUPerms(TestWithServers):
+    """Verify dfuse multi-user basic permissions.
+
+    :avocado: recursive
+    """
 
     def test_dfuse_mu_perms(self):
         """Jira ID: DAOS-10854.
@@ -64,17 +66,17 @@ class DfuseMUPerms(DfuseTestBase):
         # Create a container as dfuse_user
         daos_command = self.get_daos_command()
         daos_command.run_user = dfuse_user
-        cont = self.get_container(pool, daos_command=daos_command)
+        cont = self.get_container(pool, daos=daos_command)
 
         # Run dfuse as dfuse_user
         dfuse = get_dfuse(self, client)
         dfuse.run_user = dfuse_user
-        start_dfuse(self, dfuse, pool=pool, container=cont)
+        start_dfuse(self, dfuse, pool, cont)
 
         # Verify each permission mode and entry type
         for _mode, _type in product(('simple', 'real'), ('file', 'dir')):
             path = os.path.join(dfuse.mount_dir.value, 'test_' + _type)
-            self.log.info('Verifying %s %s permissions on %s', _mode, _type, path)
+            self.log_step(f'Verifying {_mode} {_type} permissions on {path}')
             verify_perms_cmd.update_params(path=path, create_type=_type, verify_mode=_mode)
             verify_perms_cmd.run()
             self.log.info('Passed %s %s permissions on %s', _mode, _type, path)
@@ -91,7 +93,7 @@ class DfuseMUPerms(DfuseTestBase):
         # Verify real permissions
         for _type in ('file', 'dir'):
             path = os.path.join(sub_dir, 'test_' + _type)
-            self.log.info('Verifying real %s permissions on %s', _type, path)
+            self.log_step(f'Verifying real {_type} permissions on {path}')
             verify_perms_cmd.update_params(path=path, create_type=_type, verify_mode='real')
             verify_perms_cmd.run()
             self.log.info('Passed real %s permissions on %s', _type, path)
@@ -109,13 +111,12 @@ class DfuseMUPerms(DfuseTestBase):
         # Verify real permissions
         for _type in ('file', 'dir'):
             path = os.path.join(sub_dir, 'test_' + _type)
-            self.log.info('Verifying real %s permissions on %s', _type, path)
+            self.log_step(f'Verifying real {_type} permissions on {path}')
             verify_perms_cmd.update_params(path=path, create_type=_type, verify_mode='real')
             verify_perms_cmd.run()
             self.log.info('Passed real %s permissions on %s', _type, path)
 
-        # Stop dfuse instances. Needed until containers are cleaned up with with register_cleanup
-        dfuse.stop()
+        self.log.info('Test passed')
 
     def _create_dir_and_chown(self, client, path, create_as, owner, group=None):
         """Create a directory and give some user and group ownership.
@@ -128,21 +129,21 @@ class DfuseMUPerms(DfuseTestBase):
             group (str): group to give ownership to
 
         """
-        self.log.info('Creating directory: %s', path)
+        self.log_step('Creating directory: %s', path)
         command = command_as_user('mkdir ' + path, create_as)
         if not run_remote(self.log, client, command).passed:
-            self.fail('Failed to create directory: {}'.format(path))
+            self.fail(f'Failed to create directory: {path}')
 
         if group:
-            self.log.info('Giving ownership to %s:%s', owner, group)
+            self.log_step(f'Giving ownership to {owner}:{group}')
         else:
-            self.log.info('Giving ownership to %s', owner)
+            self.log_step(f'Giving ownership to {owner}')
         command = command_as_user(get_chown_command(user=owner, group=group, file=path), 'root')
         if not run_remote(self.log, client, command).passed:
-            self.fail('Failed to give ownership to {}'.format(owner))
-        command = command_as_user('stat {}'.format(path), owner)
+            self.fail(f'Failed to give ownership to {owner}')
+        command = command_as_user(f'stat {path}', owner)
         if not run_remote(self.log, client, command).passed:
-            self.fail('Failed to stat {}'.format(path))
+            self.fail(f'Failed to stat {path}')
 
     def test_dfuse_mu_perms_cache(self):
         """Jira ID: DAOS-10858.
@@ -190,7 +191,7 @@ class DfuseMUPerms(DfuseTestBase):
         # Create a container as dfuse_user
         daos_command = self.get_daos_command()
         daos_command.run_user = dfuse_user
-        cont = self.get_container(pool, daos_command=daos_command)
+        cont = self.get_container(pool, daos=daos_command)
 
         self.log.info('Setting dfuse cache time to %s', cache_time)
         cont.set_attr(attrs={
@@ -246,9 +247,7 @@ class DfuseMUPerms(DfuseTestBase):
                 path=dfuse2_entry_path, verify_mode='real', perms='000', no_chmod=True)
             verify_perms_cmd.run()
 
-        # Stop dfuse instances. Needed until containers are cleaned up with with register_cleanup
-        dfuse1.stop()
-        dfuse2.stop()
+        self.log.info('Test passed')
 
     def run_test_il(self, il_lib=None):
         """Jira ID: DAOS-10857.
@@ -288,7 +287,7 @@ class DfuseMUPerms(DfuseTestBase):
         # Create a container as dfuse_user
         daos_command = self.get_daos_command()
         daos_command.run_user = dfuse_user
-        cont = self.get_container(pool, daos_command=daos_command)
+        cont = self.get_container(pool, daos=daos_command)
 
         # Run dfuse as dfuse_user
         dfuse = get_dfuse(self, self.hostlist_clients)
@@ -348,7 +347,7 @@ class DfuseMUPerms(DfuseTestBase):
             dfuse_entry_path = os.path.join(dfuse.mount_dir.value, entry_type)
             create_cmd = 'touch' if entry_type == 'file' else 'mkdir'
 
-            self.log.info('Creating a test %s in dfuse', entry_type)
+            self.log_step('Creating a test %s in dfuse', entry_type)
             command = command_as_user('{} "{}"'.format(create_cmd, dfuse_entry_path), dfuse_user)
             if not run_remote(self.log, self.hostlist_clients, command).passed:
                 self.fail('Failed to create test {}'.format(entry_type))
@@ -357,7 +356,7 @@ class DfuseMUPerms(DfuseTestBase):
 
             # Revoke POSIX permissions
             posix_perms = {'file': '600', 'dir': '600'}[entry_type]
-            self.log.info('Setting %s POSIX permissions to %s', entry_type, posix_perms)
+            self.log_step(f'Setting {entry_type} POSIX permissions to {posix_perms}')
             command = command_as_user(
                 'chmod {} "{}"'.format(posix_perms, dfuse_entry_path), dfuse_user)
             if not run_remote(self.log, self.hostlist_clients, command).passed:
@@ -366,14 +365,14 @@ class DfuseMUPerms(DfuseTestBase):
             # Without pool/container ACLs, access is based on POSIX perms,
             # which the user also doesn't have
             verify_perms_cmd.update_params(perms=posix_perms)
-            self.log.info('Verify - no perms - not using IL')
+            self.log_step('Verify - no perms - not using IL')
             _verify(use_il=False, expected_il_messages=0, expect_der_no_perm=False)
-            self.log.info('Verify - no perms - using IL')
-            _verify(use_il=True, expected_il_messages=1, expect_der_no_perm=False)
+            self.log_step('Verify - no perms - using IL')
+            _verify(use_il=True, expected_il_messages=2, expect_der_no_perm=False)
 
             # Give the user POSIX perms
             posix_perms = {'file': '606', 'dir': '505'}[entry_type]
-            self.log.info('Setting %s POSIX permissions to %s', entry_type, posix_perms)
+            self.log_step(f'Setting {entry_type} POSIX permissions to {posix_perms}')
             command = command_as_user(
                 'chmod {} "{}"'.format(posix_perms, dfuse_entry_path), dfuse_user)
             if not run_remote(self.log, self.hostlist_clients, command).passed:
@@ -381,26 +380,26 @@ class DfuseMUPerms(DfuseTestBase):
 
             # With POSIX perms only, access is based on POSIX perms whether using IL or not
             verify_perms_cmd.update_params(perms=posix_perms)
-            self.log.info('Verify - POSIX perms only - not using IL')
+            self.log_step('Verify - POSIX perms only - not using IL')
             _verify(use_il=False, expected_il_messages=0, expect_der_no_perm=False)
-            self.log.info('Verify - POSIX perms only - using IL')
-            _verify(use_il=True, expected_il_messages=1, expect_der_no_perm=True)
+            self.log_step('Verify - POSIX perms only - using IL')
+            _verify(use_il=True, expected_il_messages=2, expect_der_no_perm=True)
 
             # Give the user pool/container ACL perms
-            self.log.info('Giving %s pool "r" ACL permissions', other_user)
+            self.log_step('Giving %s pool "r" ACL permissions', other_user)
             pool.update_acl(use_acl=False, entry="A::{}@:r".format(other_user))
-            self.log.info('Giving %s container "rwt" ACL permissions', other_user)
+            self.log_step('Giving %s container "rwt" ACL permissions', other_user)
             cont.update_acl(entry="A::{}@:rwt".format(other_user))
 
             # With POSIX perms and ACLs, open is based on POSIX, but IO is based on ACLs
-            self.log.info('Verify - POSIX and ACL perms - not using IL')
+            self.log_step('Verify - POSIX and ACL perms - not using IL')
             _verify(use_il=False, expected_il_messages=0, expect_der_no_perm=False)
-            self.log.info('Verify - POSIX and ACL perms - using IL')
-            _verify(use_il=True, expected_il_messages=2, expect_der_no_perm=False)
+            self.log_step('Verify - POSIX and ACL perms - using IL')
+            _verify(use_il=True, expected_il_messages=4, expect_der_no_perm=False)
 
             # Revoke POSIX permissions
             posix_perms = {'file': '600', 'dir': '00'}[entry_type]
-            self.log.info('Setting %s POSIX permissions to %s', entry_type, posix_perms)
+            self.log_step(f'Setting {entry_type} POSIX permissions to {posix_perms}')
             command = command_as_user(
                 'chmod {} "{}"'.format(posix_perms, dfuse_entry_path), dfuse_user)
             if not run_remote(self.log, self.hostlist_clients, command).passed:
@@ -408,13 +407,10 @@ class DfuseMUPerms(DfuseTestBase):
 
             # Without POSIX permissions, pool/container ACLs don't matter since open requires POSIX
             verify_perms_cmd.update_params(perms=posix_perms)
-            self.log.info('Verify - ACLs only - not using IL')
+            self.log_step('Verify - ACLs only - not using IL')
             _verify(use_il=False, expected_il_messages=0, expect_der_no_perm=False)
-            self.log.info('Verify - ACLs only - using IL')
-            _verify(use_il=True, expected_il_messages=1, expect_der_no_perm=False)
-
-        # Stop dfuse instances. Needed until containers are cleaned up with with register_cleanup
-        dfuse.stop()
+            self.log_step('Verify - ACLs only - using IL')
+            _verify(use_il=True, expected_il_messages=2, expect_der_no_perm=False)
 
     def test_dfuse_mu_perms_ioil(self):
         """
@@ -424,6 +420,7 @@ class DfuseMUPerms(DfuseTestBase):
         :avocado: tags=DfuseMUPerms,test_dfuse_mu_perms_ioil
         """
         self.run_test_il(il_lib='libioil.so')
+        self.log.info('Test passed')
 
     def test_dfuse_mu_perms_pil4dfs(self):
         """
@@ -433,3 +430,4 @@ class DfuseMUPerms(DfuseTestBase):
         :avocado: tags=DfuseMUPerms,test_dfuse_mu_perms_pil4dfs
         """
         self.run_test_il(il_lib='libpil4dfs.so')
+        self.log.info('Test passed')

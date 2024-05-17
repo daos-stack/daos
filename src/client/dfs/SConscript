@@ -5,24 +5,29 @@ def configure_lustre(denv):
     """Do Lustre configure checks"""
     if GetOption('help') or GetOption('clean'):
         return denv
+
+    def _print(msg):
+        if not GetOption('silent'):
+            print(msg)
+
     # If Lustre installed build a Lustre-aware libduns
     conf = Configure(denv)
     gotversion = False
     if not conf.CheckLibWithHeader('lustreapi', 'linux/lustre/lustre_user.h',
                                    'c'):
-        print("No installed Lustre version detected")
+        _print("No installed Lustre version detected")
     else:
-        print("Installed Lustre version detected")
+        _print("Installed Lustre version detected")
         if not conf.CheckFunc('llapi_unlink_foreign'):
-            print("Lustre version is not compatible")
+            _print("Lustre version is not compatible")
         else:
-            print("Lustre version is compatible")
+            _print("Lustre version is compatible")
             gotversion = True
     if gotversion is True:
-        print("Building with Lustre bindings.")
+        _print("Building with Lustre bindings.")
         denv.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
     else:
-        print("Not building with Lustre bindings.")
+        _print("Not building with Lustre bindings.")
     return conf.Finish()
 
 
@@ -38,7 +43,8 @@ def scons():
 
     libraries = ['daos_common', 'daos', 'uuid', 'gurt']
 
-    dfs_src = ['dfs.c', 'dfs_sys.c', 'dfs_internal.c']
+    dfs_src = ['common.c', 'cont.c', 'dir.c', 'file.c', 'io.c', 'lookup.c', 'mnt.c', 'obj.c',
+               'pipeline.c', 'readdir.c', 'rename.c', 'xattr.c', 'dfs_sys.c']
     dfs = denv.d_library('dfs', dfs_src, LIBS=libraries)
     denv.Install('$PREFIX/lib64/', dfs)
 

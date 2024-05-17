@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -23,6 +23,18 @@ D_CASSERT((uint32_t)VOS_VIS_FLAG_COVERED == (uint32_t)EVT_COVERED);
 D_CASSERT((uint32_t)VOS_VIS_FLAG_VISIBLE == (uint32_t)EVT_VISIBLE);
 D_CASSERT((uint32_t)VOS_VIS_FLAG_PARTIAL == (uint32_t)EVT_PARTIAL);
 D_CASSERT((uint32_t)VOS_VIS_FLAG_LAST == (uint32_t)EVT_LAST);
+
+static inline bool
+is_fake_iter(struct vos_obj_iter *oiter)
+{
+	return (oiter->it_flags & (VOS_IT_DKEY_EV | VOS_IT_DKEY_SV)) != 0;
+}
+
+static inline bool
+fake_iter_child_is_array(struct vos_obj_iter *oiter)
+{
+	return (oiter->it_flags & VOS_IT_DKEY_EV) != 0;
+}
 
 bool vos_dkey_punch_propagate;
 
@@ -342,8 +354,10 @@ punch_dkey:
 	vos_ilog_fetch_finish(&info->ki_dkey);
 	vos_ilog_fetch_finish(&info->ki_akey);
 
-	if (daos_handle_is_valid(toh))
-		key_tree_release(toh, 0);
+	if (daos_handle_is_valid(toh)) {
+		D_ASSERT(krec != NULL);
+		key_tree_release(toh, (krec->kr_bmap & KREC_BF_EVT) != 0);
+	}
 
 	D_FREE(info);
 
@@ -418,7 +432,19 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (oid.id_shard % 3 == 1 && DAOS_FAIL_CHECK(DAOS_DTX_FAIL_IO))
 		return -DER_IO;
 
-	if (dtx_is_valid_handle(dth)) {
+	cont = vos_hdl2cont(coh);
+
+	if (vos_obj_skip_akey_supported(cont, oid) && dkey != NULL && akeys != NULL) {
+		D_ERROR("Akey punch is not supported when no akey exists: " DF_UOID "\n",
+			DP_UOID(oid));
+
+		return -DER_INVAL;
+	}
+
+	if (dth && dth->dth_local)
+		++dth->dth_op_seq;
+
+	if (dtx_is_real_handle(dth)) {
 		epr.epr_hi = dth->dth_epoch;
 		bound = MAX(dth->dth_epoch_bound, dth->dth_epoch);
 	} else {
@@ -429,7 +455,11 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	D_DEBUG(DB_IO, "Punch "DF_UOID", epoch "DF_X64"\n",
 		DP_UOID(oid), epr.epr_hi);
 
-	cont = vos_hdl2cont(coh);
+	rc = vos_tgt_health_check(cont);
+	if (rc) {
+		DL_ERROR(rc, DF_UOID": Reject punch due to faulty NVMe.", DP_UOID(oid));
+		return rc;
+	}
 
 	if (dtx_is_valid_handle(dth)) {
 		if (akey_nr) {
@@ -474,7 +504,9 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 		rc = vos_dtx_commit_internal(cont, dth->dth_dti_cos,
 					     dth->dth_dti_cos_count, 0, NULL, daes, dces);
-		if (rc <= 0)
+		if (rc < 0)
+			goto reset;
+		if (rc == 0)
 			D_FREE(daes);
 	}
 
@@ -535,8 +567,13 @@ reset:
 		vos_ts_set_update(ts_set, epr.epr_hi);
 	}
 
-	if (rc == 0)
+	if (rc == 0) {
 		vos_ts_set_wupdate(ts_set, epr.epr_hi);
+
+		if (dtx_is_valid_handle(dth) && dth->dth_local) {
+			rc = vos_insert_oid(dth, cont, &oid);
+		}
+	}
 
 	rc = vos_tx_end(cont, dth, NULL, NULL, true, NULL, rc);
 	if (dtx_is_valid_handle(dth)) {
@@ -554,6 +591,12 @@ reset:
 	D_FREE(dces);
 	vos_ts_set_free(ts_set);
 
+	if (rc == 0) {
+		rc = vos_tgt_health_check(cont);
+		if (rc)
+			DL_ERROR(rc, "Fail punch due to faulty NVMe.");
+	}
+
 	return rc;
 }
 
@@ -562,8 +605,10 @@ vos_obj_key2anchor(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, dao
 		   daos_anchor_t *anchor)
 {
 	struct vos_container  *cont;
+	struct vos_krec_df    *krec = NULL;
 	struct daos_lru_cache *occ;
 	int                    rc;
+	int                    flags = 0;
 	struct vos_object     *obj;
 	daos_epoch_range_t     epr = {0, DAOS_EPOCH_MAX};
 	daos_handle_t          toh;
@@ -598,9 +643,16 @@ vos_obj_key2anchor(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, dao
 		goto out;
 	}
 
+	/** If the dkey has no akey, this will enable the operation to succeed */
+	if (vos_obj_skip_akey_supported(obj->obj_cont, obj->obj_id)) {
+		flags |= SUBTR_FLAT;
+		if (daos_is_array(obj->obj_id.id_pub))
+			flags |= SUBTR_EVT;
+	}
+
 	/** Otherwise, we need to find the dkey to convert the akey to the anchor */
-	rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY, dkey, 0, DAOS_INTENT_DEFAULT, NULL,
-			      &toh, NULL);
+	rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY, dkey, flags, DAOS_INTENT_DEFAULT,
+			      &krec, &toh, NULL);
 	if (rc) {
 		if (rc == -DER_NONEXIST) {
 			daos_anchor_set_eof(anchor);
@@ -611,12 +663,19 @@ vos_obj_key2anchor(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, dao
 		D_GOTO(out, rc);
 	}
 
-	rc = dbtree_key2anchor(toh, akey, anchor);
+	if (krec->kr_bmap & KREC_BF_NO_AKEY) {
+		/** There is no akey tree to query.  In accordance with the design to fake it for
+		 *  iterators, let's create a fake anchor
+		 */
+		vos_fake_anchor_create(anchor);
+	} else {
+		rc = dbtree_key2anchor(toh, akey, anchor);
+	}
 	D_DEBUG(DB_TRACE,
 		"oid=" DF_UOID " dkey=" DF_KEY " akey=" DF_KEY " to anchor: rc=" DF_RC "\n",
 		DP_UOID(oid), DP_KEY(dkey), DP_KEY(akey), DP_RC(rc));
 
-	key_tree_release(toh, false);
+	key_tree_release(toh, (krec->kr_bmap & KREC_BF_EVT) != 0);
 out:
 	vos_obj_release(occ, obj, false);
 
@@ -769,14 +828,17 @@ out:
 }
 
 static int
-key_ilog_prepare(struct vos_obj_iter *oiter, daos_handle_t toh, int key_type,
-		 daos_key_t *key, int flags, daos_handle_t *sub_toh,
+key_ilog_prepare(struct vos_obj_iter *oiter, daos_handle_t toh, int key_type, daos_key_t *key,
+		 int flags, daos_handle_t *sub_toh, struct vos_krec_df **krecp,
 		 daos_epoch_range_t *epr, struct vos_punch_record *punched,
 		 struct vos_ilog_info *info, struct vos_ts_set *ts_set)
 {
 	struct vos_krec_df	*krec = NULL;
 	struct vos_object	*obj = oiter->it_obj;
 	int			 rc;
+
+	if (krecp != NULL)
+		*krecp = NULL;
 
 	rc = key_tree_prepare(obj, toh, key_type, key, flags,
 			      vos_iter_intent(&oiter->it_iter), &krec,
@@ -799,11 +861,31 @@ key_ilog_prepare(struct vos_obj_iter *oiter, daos_handle_t toh, int key_type,
 				       &info->ii_prior_punch))
 		*punched = info->ii_prior_punch;
 
+	if (krecp != NULL)
+		*krecp = krec;
+
 	return 0;
 fail:
 	if (sub_toh)
 		key_tree_release(*sub_toh, flags & SUBTR_EVT);
 	return rc;
+}
+
+static inline int
+key_ilog_prepare_dkey(struct vos_obj_iter *oiter, daos_key_t *key, daos_handle_t *sub_toh,
+		      struct vos_krec_df **krecp, struct vos_ts_set *ts_set)
+{
+	struct vos_object *obj   = oiter->it_obj;
+	int                flags = 0;
+
+	if (vos_obj_skip_akey_supported(obj->obj_cont, obj->obj_id)) {
+		flags |= SUBTR_FLAT;
+		if (daos_is_array(obj->obj_id.id_pub))
+			flags |= SUBTR_EVT;
+	}
+
+	return key_ilog_prepare(oiter, obj->obj_toh, VOS_BTR_DKEY, key, flags, sub_toh, krecp,
+				&oiter->it_epr, &oiter->it_punched, &oiter->it_ilog_info, ts_set);
 }
 
 /**
@@ -934,6 +1016,7 @@ key_iter_fetch_root(struct vos_obj_iter *oiter, vos_iter_type_t type,
 		    struct vos_iter_info *info)
 {
 	struct vos_object	*obj = oiter->it_obj;
+	struct evt_desc_cbs      cbs;
 	struct vos_krec_df	*krec;
 	struct vos_rec_bundle	 rbund;
 	d_iov_t			 keybuf;
@@ -968,10 +1051,43 @@ key_iter_fetch_root(struct vos_obj_iter *oiter, vos_iter_type_t type,
 		if ((krec->kr_bmap & KREC_BF_EVT) == 0)
 			return -DER_NONEXIST;
 		info->ii_evt = &krec->kr_evt;
-	} else {
+	} else if (type == VOS_ITER_SINGLE || (krec->kr_bmap & KREC_BF_NO_AKEY) == 0) {
 		if ((krec->kr_bmap & KREC_BF_BTR) == 0)
 			return -DER_NONEXIST;
 		info->ii_btr = &krec->kr_btr;
+	} else {
+		D_ASSERTF(type == VOS_ITER_AKEY, "type = %d\n", type);
+		D_ASSERTF(krec->kr_bmap & KREC_BF_NO_AKEY, "krec->kr_bmap = %x\n", krec->kr_bmap);
+		/** For fake akey, we open the subtree and store it in the
+		 * iterator handle.  For nested case, go ahead and open the
+		 * subtree
+		 */
+		if (krec->kr_bmap & KREC_BF_EVT) {
+			vos_evt_desc_cbs_init(&cbs, vos_obj2pool(obj), vos_cont2hdl(obj->obj_cont));
+			rc = evt_open(&krec->kr_evt, info->ii_uma, &cbs, &info->ii_tree_hdl);
+			if (rc) {
+				D_DEBUG(DB_TRACE,
+					"Failed to open tree for nested iterator:"
+					" rc = " DF_RC "\n",
+					DP_RC(rc));
+				return rc;
+			}
+			info->ii_fake_akey_flag = VOS_IT_DKEY_EV;
+		} else {
+			rc = dbtree_open_inplace_ex(&krec->kr_btr, info->ii_uma,
+						    vos_cont2hdl(obj->obj_cont), vos_obj2pool(obj),
+						    &info->ii_tree_hdl);
+			if (rc) {
+				D_DEBUG(DB_TRACE,
+					"Failed to open tree for nested iterator:"
+					" rc = " DF_RC "\n",
+					DP_RC(rc));
+				return rc;
+			}
+			info->ii_fake_akey_flag = VOS_IT_DKEY_SV;
+		}
+		info->ii_ilog_info = &oiter->it_ilog_info;
+		info->ii_dkey_krec = krec;
 	}
 
 	return 0;
@@ -992,67 +1108,7 @@ key_iter_copy(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 	return 0;
 }
 
-/**
- * Check if the current entry can match the iterator condition, this function
- * returns VOS_ITER_CB_NONE for true, returns VOS_ITER_CB_SKIP if further
- * operation is required.
- */
-static int
-key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent, daos_anchor_t *anchor,
-	       uint32_t flags)
-{
-	struct vos_object	*obj = oiter->it_obj;
-	daos_epoch_range_t	*epr = &oiter->it_epr;
-	struct vos_ilog_info	 info;
-	daos_handle_t		 toh;
-	int			 rc;
-
-	rc = key_iter_fetch(oiter, ent, anchor, true, flags);
-	if (rc != 0) {
-		VOS_TX_TRACE_FAIL(rc, "Failed to fetch the entry: "DF_RC"\n", DP_RC(rc));
-		return rc;
-	}
-
-	if ((oiter->it_iter.it_type == VOS_ITER_AKEY) ||
-	    (oiter->it_akey.iov_buf == NULL)) /* dkey w/o akey as condition */
-		return VOS_ITER_CB_NONE;
-
-	/* else: has akey as condition */
-	if (epr->epr_lo != epr->epr_hi || (oiter->it_flags & VOS_IT_PUNCHED)) {
-		D_ERROR("Cannot support epoch range for conditional iteration "
-			"because it is not clearly defined.\n");
-		return -DER_INVAL; /* XXX simplify it for now */
-	}
-
-	rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY,
-			      &ent->ie_key, 0, vos_iter_intent(&oiter->it_iter),
-			      NULL, &toh, NULL);
-	if (rc != 0) {
-		D_DEBUG(DB_IO, "can't load the akey tree: "DF_RC"\n",
-			DP_RC(rc));
-		return rc;
-	}
-
-	vos_ilog_fetch_init(&info);
-	rc = key_ilog_prepare(oiter, toh, VOS_BTR_AKEY, &oiter->it_akey, 0,
-			      NULL, NULL, NULL, &info, NULL);
-	if (rc == 0)
-		rc = VOS_ITER_CB_NONE;
-
-	if (rc == -DER_NONEXIST)
-		rc = VOS_ITER_CB_SKIP;
-
-	vos_ilog_fetch_finish(&info);
-	key_tree_release(toh, false);
-
-	return rc;
-}
-
-/**
- * Check if the current item can match the provided condition (with the
- * giving a-key). If the item can't match the condition, this function
- * traverses the tree until a matched item is found.
- */
+/** Check the current key */
 static int
 key_iter_match_probe(struct vos_obj_iter *oiter, daos_anchor_t *anchor, uint32_t flags)
 {
@@ -1060,21 +1116,8 @@ key_iter_match_probe(struct vos_obj_iter *oiter, daos_anchor_t *anchor, uint32_t
 	int					rc;
 
 retry:
-	rc = key_iter_match(oiter, &entry, anchor, flags);
-	switch (rc) {
-	default:
-		/** Either there is an error, we aborted the iterator, or
-		 *  the callback imposed a yield and we need to tell upper
-		 *  layer to re-probe
-		 */
-		break;
-	case VOS_ITER_CB_NONE:
-		/* already match the condition, no further operation */
-		rc = 0;
-		break;
-	case VOS_ITER_CB_SKIP:
-		flags = 0;
-		/* move to the next tree record */
+	rc = key_iter_fetch(oiter, &entry, anchor, true, flags);
+	if (rc == VOS_ITER_CB_SKIP) {
 		rc = dbtree_iter_next(oiter->it_hdl);
 		if (rc == 0)
 			goto retry;
@@ -1093,6 +1136,7 @@ key_iter_probe(struct vos_obj_iter *oiter, daos_anchor_t *anchor, uint32_t flags
 	int	rc;
 
 	next_opc = (flags & VOS_ITER_PROBE_NEXT) ? BTR_PROBE_GT : BTR_PROBE_GE;
+
 	rc = dbtree_iter_probe(oiter->it_hdl,
 			       vos_anchor_is_zero(anchor) ? BTR_PROBE_FIRST : next_opc,
 			       vos_iter_intent(&oiter->it_iter),
@@ -1123,11 +1167,9 @@ out:
  * Iterator for the d-key tree.
  */
 static int
-dkey_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *akey)
+dkey_iter_prepare(struct vos_obj_iter *oiter)
 {
 	int	rc;
-
-	oiter->it_akey = *akey;
 
 	rc = dbtree_iter_prepare(oiter->it_obj->obj_toh, 0, &oiter->it_hdl);
 
@@ -1142,17 +1184,31 @@ akey_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 		  struct vos_ts_set *ts_set)
 {
 	daos_handle_t		 toh;
-	int			 rc;
+	struct vos_krec_df      *krec = NULL;
+	int                      rc;
 
-	rc = key_ilog_prepare(oiter, oiter->it_obj->obj_toh, VOS_BTR_DKEY, dkey,
-			      0, &toh, &oiter->it_epr, &oiter->it_punched,
-			      &oiter->it_ilog_info, ts_set);
+	rc = key_ilog_prepare_dkey(oiter, dkey, &toh, &krec, ts_set);
 	if (rc != 0)
 		goto failed;
 
-	/* see BTR_ITER_EMBEDDED for the details */
-	rc = dbtree_iter_prepare(toh, BTR_ITER_EMBEDDED, &oiter->it_hdl);
-	key_tree_release(toh, false);
+	if (krec->kr_bmap & KREC_BF_NO_AKEY) {
+		/** In such case, toh will refer to a child tree so we an
+		 * initialize its iterator in such case as it is needed.
+		 * We also set the type of the tree here so we know what
+		 * type of nested iterator we need to use.
+		 */
+		oiter->it_hdl = toh;
+		if (krec->kr_bmap & KREC_BF_EVT)
+			oiter->it_flags |= VOS_IT_DKEY_EV;
+		else
+			oiter->it_flags |= VOS_IT_DKEY_SV;
+		oiter->it_fake_akey = 0;
+		oiter->it_dkey_krec = krec;
+	} else {
+		/* see BTR_ITER_EMBEDDED for the details */
+		rc = dbtree_iter_prepare(toh, BTR_ITER_EMBEDDED, &oiter->it_hdl);
+		key_tree_release(toh, false);
+	}
 
 	if (rc == 0)
 		return 0;
@@ -1186,22 +1242,25 @@ static int
 singv_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 		   daos_key_t *akey)
 {
-	struct vos_object	*obj = oiter->it_obj;
+	struct vos_krec_df      *krec = NULL;
 	daos_handle_t		 ak_toh;
 	daos_handle_t		 sv_toh;
 	int			 rc;
 
-	rc = key_ilog_prepare(oiter, obj->obj_toh, VOS_BTR_DKEY, dkey, 0,
-			      &ak_toh, &oiter->it_epr, &oiter->it_punched,
-			      &oiter->it_ilog_info, NULL);
+	rc = key_ilog_prepare_dkey(oiter, dkey, &ak_toh, &krec, NULL);
 	if (rc != 0)
 		return rc;
 
-	rc = key_ilog_prepare(oiter, ak_toh, VOS_BTR_AKEY, akey, 0, &sv_toh,
-			      &oiter->it_epr, &oiter->it_punched,
-			      &oiter->it_ilog_info, NULL);
-	if (rc != 0)
-		D_GOTO(failed_1, rc);
+	if (krec->kr_bmap & KREC_BF_NO_AKEY) {
+		sv_toh = ak_toh;
+		ak_toh = DAOS_HDL_INVAL;
+	} else {
+		rc = key_ilog_prepare(oiter, ak_toh, VOS_BTR_AKEY, akey, 0, &sv_toh, NULL,
+				      &oiter->it_epr, &oiter->it_punched, &oiter->it_ilog_info,
+				      NULL);
+		if (rc != 0)
+			D_GOTO(failed_1, rc);
+	}
 
 	/* see BTR_ITER_EMBEDDED for the details */
 	rc = dbtree_iter_prepare(sv_toh, BTR_ITER_EMBEDDED, &oiter->it_hdl);
@@ -1210,7 +1269,8 @@ singv_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 			DP_RC(rc));
 	key_tree_release(sv_toh, false);
  failed_1:
-	key_tree_release(ak_toh, false);
+	if (daos_handle_is_valid(ak_toh))
+		key_tree_release(ak_toh, false);
 	return rc;
 }
 
@@ -1445,12 +1505,15 @@ D_CASSERT((int)VOS_IT_RECX_COVERED == (int)EVT_ITER_COVERED);
 D_CASSERT((int)VOS_IT_RECX_VISIBLE == (int)EVT_ITER_VISIBLE);
 D_CASSERT((int)VOS_IT_RECX_SKIP_HOLES == (int)EVT_ITER_SKIP_HOLES);
 
-static uint32_t
-recx_get_flags(struct vos_obj_iter *oiter)
+static inline uint32_t
+recx_get_flags(struct vos_obj_iter *oiter, bool embed)
 {
-	uint32_t options = EVT_ITER_EMBEDDED;
+	uint32_t options   = 0;
 	uint32_t vis_flags = oiter->it_flags & (VOS_IT_RECX_COVERED |
 						VOS_IT_RECX_SKIP_HOLES);
+
+	if (embed)
+		options |= EVT_ITER_EMBEDDED;
 
 	options |= vis_flags;
 	if (oiter->it_flags & VOS_IT_RECX_REVERSE)
@@ -1486,24 +1549,27 @@ static int
 recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 		  daos_key_t *akey, struct vos_ts_set *ts_set)
 {
-	struct vos_object	*obj = oiter->it_obj;
+	struct vos_krec_df      *krec   = NULL;
 	struct evt_filter	 filter = {0};
 	daos_handle_t		 ak_toh;
 	daos_handle_t		 rx_toh;
 	int			 rc;
 	uint32_t		 options;
 
-	rc = key_ilog_prepare(oiter, obj->obj_toh, VOS_BTR_DKEY, dkey, 0,
-			      &ak_toh, &oiter->it_epr, &oiter->it_punched,
-			      &oiter->it_ilog_info, ts_set);
+	rc = key_ilog_prepare_dkey(oiter, dkey, &ak_toh, &krec, ts_set);
 	if (rc != 0)
 		return rc;
 
-	rc = key_ilog_prepare(oiter, ak_toh, VOS_BTR_AKEY, akey, SUBTR_EVT,
-			      &rx_toh, &oiter->it_epr, &oiter->it_punched,
-			      &oiter->it_ilog_info, ts_set);
-	if (rc != 0)
-		D_GOTO(failed, rc);
+	if (krec->kr_bmap & KREC_BF_NO_AKEY) {
+		rx_toh = ak_toh;
+		ak_toh = DAOS_HDL_INVAL;
+	} else {
+		rc = key_ilog_prepare(oiter, ak_toh, VOS_BTR_AKEY, akey, SUBTR_EVT, &rx_toh, NULL,
+				      &oiter->it_epr, &oiter->it_punched, &oiter->it_ilog_info,
+				      ts_set);
+		if (rc != 0)
+			D_GOTO(failed, rc);
+	}
 
 	recx2filter(&filter, &oiter->it_recx);
 	filter.fr_epr.epr_lo = oiter->it_epr.epr_lo;
@@ -1511,7 +1577,7 @@ recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 	filter.fr_epoch = oiter->it_epr.epr_hi;
 	filter.fr_punch_epc = oiter->it_punched.pr_epc;
 	filter.fr_punch_minor_epc = oiter->it_punched.pr_minor_epc;
-	options = recx_get_flags(oiter);
+	options                   = recx_get_flags(oiter, true);
 	rc = evt_iter_prepare(rx_toh, options, &filter,
 			      &oiter->it_hdl);
 	if (rc != 0) {
@@ -1520,7 +1586,8 @@ recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 	}
 	key_tree_release(rx_toh, true);
  failed:
-	key_tree_release(ak_toh, false);
+	if (daos_handle_is_valid(ak_toh))
+		key_tree_release(ak_toh, false);
 	return rc;
 }
 static int
@@ -1693,7 +1760,7 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 		break;
 
 	case VOS_ITER_DKEY:
-		rc = dkey_iter_prepare(oiter, &param->ip_akey);
+		rc = dkey_iter_prepare(oiter);
 		break;
 
 	case VOS_ITER_AKEY:
@@ -1723,34 +1790,68 @@ done:
 }
 
 int
-vos_obj_iter_nested_tree_fetch(struct vos_iterator *iter, vos_iter_type_t type,
-			       struct vos_iter_info *info)
+vos_obj_dkey_iter_nested_tree_fetch(struct vos_iterator *iter, vos_iter_type_t type,
+				    struct vos_iter_info *info)
 {
 	struct vos_obj_iter	*oiter = vos_iter2oiter(iter);
 	int			 rc = 0;
 
-	switch (iter->it_type) {
-	default:
-		D_ASSERT(0);
-	case VOS_ITER_RECX:
-	case VOS_ITER_SINGLE:
-		D_ERROR("Iterator type has no subtree\n");
+	if (unlikely(type != VOS_ITER_AKEY)) {
+		D_ERROR("Invalid nested iterator type for "
+			"VOS_ITER_DKEY: %d\n",
+			type);
 		return -DER_INVAL;
-	case VOS_ITER_DKEY:
-		if (type != VOS_ITER_AKEY) {
-			D_ERROR("Invalid nested iterator type for "
-				"VOS_ITER_DKEY: %d\n", type);
-			return -DER_INVAL;
-		}
-		break;
-	case VOS_ITER_AKEY:
-		if (type != VOS_ITER_RECX &&
-		    type != VOS_ITER_SINGLE) {
-			D_ERROR("Invalid nested iterator type for "
-				"VOS_ITER_AKEY: %d\n", type);
-			return -DER_INVAL;
-		}
-	};
+	}
+
+	rc = key_iter_fetch_root(oiter, type, info);
+
+	if (rc != 0) {
+		D_DEBUG(DB_TRACE,
+			"Failed to fetch and initialize cursor "
+			"subtree: rc=" DF_RC "\n",
+			DP_RC(rc));
+		return rc;
+	}
+
+	info->ii_obj = oiter->it_obj;
+
+	return 0;
+}
+
+int
+vos_obj_akey_iter_nested_tree_fetch(struct vos_iterator *iter, vos_iter_type_t type,
+				    struct vos_iter_info *info)
+{
+	struct vos_obj_iter *oiter = vos_iter2oiter(iter);
+	int                  rc    = 0;
+
+	if (unlikely(type != VOS_ITER_RECX && type != VOS_ITER_SINGLE)) {
+		D_ERROR("Invalid nested iterator type for "
+			"VOS_ITER_AKEY: %d\n",
+			type);
+		return -DER_INVAL;
+	}
+
+	if (is_fake_iter(oiter)) {
+		info->ii_vea_info = oiter->it_obj->obj_cont->vc_pool->vp_vea_info;
+		info->ii_uma      = vos_obj2uma(oiter->it_obj);
+
+		info->ii_epr        = oiter->it_epr;
+		info->ii_punched    = oiter->it_punched;
+		info->ii_filter_cb  = oiter->it_iter.it_filter_cb;
+		info->ii_filter_arg = oiter->it_iter.it_filter_arg;
+
+		if (vos_epc_punched(info->ii_punched.pr_epc, info->ii_punched.pr_minor_epc,
+				    &oiter->it_ilog_info.ii_prior_punch))
+			info->ii_punched = oiter->it_ilog_info.ii_prior_punch;
+
+		info->ii_tree_hdl = oiter->it_hdl;
+		/** Tells the prepare that it should use the handle to prepare
+		 * the nested tree handle to prepare nested iterator
+		 */
+		info->ii_fake_akey_flag = oiter->it_flags & (VOS_IT_DKEY_SV | VOS_IT_DKEY_EV);
+		goto out;
+	}
 
 	rc = key_iter_fetch_root(oiter, type, info);
 
@@ -1760,13 +1861,22 @@ vos_obj_iter_nested_tree_fetch(struct vos_iterator *iter, vos_iter_type_t type,
 		return rc;
 	}
 
+out:
 	info->ii_obj = oiter->it_obj;
 
 	return 0;
 }
 
+int
+vos_obj_invalid_iter_nested_tree_fetch(struct vos_iterator *iter, vos_iter_type_t type,
+				       struct vos_iter_info *info)
+{
+	D_ERROR("Iterator type has no subtree\n");
+	return -DER_INVAL;
+}
+
 static int
-nested_dkey_iter_init(struct vos_obj_iter *oiter, struct vos_iter_info *info)
+dkey_nested_iter_init(struct vos_obj_iter *oiter, struct vos_iter_info *info)
 {
 	int			 rc;
 	struct vos_container	*cont = vos_hdl2cont(info->ii_hdl);
@@ -1799,7 +1909,7 @@ nested_dkey_iter_init(struct vos_obj_iter *oiter, struct vos_iter_info *info)
 
 	info->ii_punched = oiter->it_obj->obj_ilog_info.ii_prior_punch;
 
-	rc = dkey_iter_prepare(oiter, info->ii_akey);
+	rc = dkey_iter_prepare(oiter);
 
 	if (rc != 0)
 		goto failed;
@@ -1811,31 +1921,23 @@ failed:
 	return rc;
 }
 
-int
-vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
-			 struct vos_iterator **iter_pp)
+static inline int
+nested_prep_common_init(struct vos_container *cont, struct vos_obj_iter **oiterp,
+			struct vos_iter_info *info)
 {
-	struct vos_object	*obj = info->ii_obj;
-	struct vos_obj_iter	*oiter;
-	struct vos_container	*vos_cont;
+	struct vos_obj_iter     *oiter;
 	struct dtx_handle	*dth;
-	daos_epoch_t		 bound;
-	struct evt_desc_cbs	 cbs;
-	struct evt_filter	 filter = {0};
-	daos_handle_t		 toh;
-	int			 rc = 0;
-	uint32_t		 options;
+	daos_epoch_t             bound;
 
-	if (type != VOS_ITER_DKEY)
-		vos_cont = obj->obj_cont;
-	else
-		vos_cont = vos_hdl2cont(info->ii_hdl);
-	dth = vos_dth_get(vos_cont->vc_pool->vp_sysdb);
+	*oiterp = NULL;
+
 	D_ALLOC_PTR(oiter);
 	if (oiter == NULL)
 		return -DER_NOMEM;
 
+	*oiterp = oiter;
 	vos_ilog_fetch_init(&oiter->it_ilog_info);
+	dth                          = vos_dth_get(cont->vc_pool->vp_sysdb);
 	bound = dtx_is_valid_handle(dth) ? dth->dth_epoch_bound :
 		info->ii_epr.epr_hi;
 	oiter->it_iter.it_bound = MAX(bound, info->ii_epr.epr_hi);
@@ -1844,63 +1946,94 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 	oiter->it_iter.it_filter_arg = info->ii_filter_arg;
 	oiter->it_punched = info->ii_punched;
 	oiter->it_epc_expr = info->ii_epc_expr;
-	oiter->it_flags = info->ii_flags;
-	if (type != VOS_ITER_DKEY)
-		oiter->it_obj = obj;
+	oiter->it_flags              = info->ii_flags;
 	if (info->ii_flags & VOS_IT_FOR_PURGE)
 		oiter->it_iter.it_for_purge = 1;
 	if (info->ii_flags & VOS_IT_FOR_DISCARD)
 		oiter->it_iter.it_for_discard = 1;
 	if (info->ii_flags & VOS_IT_FOR_MIGRATION)
 		oiter->it_iter.it_for_migration = 1;
-	if (vos_cont->vc_pool->vp_sysdb)
+	if (cont->vc_pool->vp_sysdb)
 		oiter->it_iter.it_for_sysdb = 1;
 
-	switch (type) {
-	default:
-		D_ERROR("unknown iterator type %d.\n", type);
-		rc = -DER_INVAL;
-		goto failed;
+	return 0;
+}
 
-	case VOS_ITER_DKEY:
-		rc = nested_dkey_iter_init(oiter, info);
-		if (rc != 0)
-			goto failed;
-		goto success;
-	case VOS_ITER_AKEY:
-	case VOS_ITER_SINGLE:
-		rc = dbtree_open_inplace_ex(info->ii_btr, info->ii_uma,
-					vos_cont2hdl(obj->obj_cont),
-					vos_obj2pool(obj), &toh);
-		if (rc) {
-			D_DEBUG(DB_TRACE, "Failed to open tree for iterator:"
-				" rc = "DF_RC"\n", DP_RC(rc));
-			goto failed;
-		}
-		rc = dbtree_iter_prepare(toh, BTR_ITER_EMBEDDED,
-					 &oiter->it_hdl);
-		break;
+static inline void
+nested_prep_common_abort(struct vos_obj_iter *oiter)
+{
+	vos_ilog_fetch_finish(&oiter->it_ilog_info);
+	D_FREE(oiter);
+}
 
-	case VOS_ITER_RECX:
-		vos_evt_desc_cbs_init(&cbs, vos_obj2pool(obj),
-				      vos_cont2hdl(obj->obj_cont));
-		rc = evt_open(info->ii_evt, info->ii_uma, &cbs, &toh);
-		if (rc) {
-			D_DEBUG(DB_TRACE, "Failed to open tree for iterator:"
-				" rc = "DF_RC"\n", DP_RC(rc));
-			goto failed;
-		}
-		recx2filter(&filter, &info->ii_recx);
-		filter.fr_epr.epr_lo = oiter->it_epr.epr_lo;
-		filter.fr_epr.epr_hi = oiter->it_iter.it_bound;
-		filter.fr_epoch = oiter->it_epr.epr_hi;
-		filter.fr_punch_epc = oiter->it_punched.pr_epc;
-		filter.fr_punch_minor_epc = oiter->it_punched.pr_minor_epc;
-		options = recx_get_flags(oiter);
-		rc = evt_iter_prepare(toh, options, &filter, &oiter->it_hdl);
-		break;
+static int
+vos_obj_dkey_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
+			      struct vos_iterator **iter_pp)
+{
+	struct vos_obj_iter *oiter;
+	int                  rc = 0;
+
+	if (type != VOS_ITER_DKEY) {
+		D_ERROR("Unexpected type: %d\n", type);
+		return -DER_INVAL;
 	}
-	key_tree_release(toh, type == VOS_ITER_RECX);
+
+	rc = nested_prep_common_init(vos_hdl2cont(info->ii_hdl), &oiter, info);
+	if (rc != 0)
+		return rc;
+
+	rc = dkey_nested_iter_init(oiter, info);
+	if (rc == 0) {
+		*iter_pp = &oiter->it_iter;
+		return 0;
+	}
+
+	nested_prep_common_abort(oiter);
+	return rc;
+}
+
+static int
+vos_obj_akey_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
+			      struct vos_iterator **iter_pp)
+{
+	struct vos_object   *obj = info->ii_obj;
+	struct vos_obj_iter *oiter;
+	daos_handle_t        toh;
+	int                  rc = 0;
+
+	if (type != VOS_ITER_AKEY) {
+		D_ERROR("Unexpected type: %d\n", type);
+		return -DER_INVAL;
+	}
+
+	rc = nested_prep_common_init(obj->obj_cont, &oiter, info);
+
+	oiter->it_obj = obj;
+
+	if (info->ii_fake_akey_flag) {
+		/** In this case, we already opened the subtree so just store it
+		 * in the iterator handle for future use.
+		 */
+		vos_ilog_copy_info(&oiter->it_ilog_info, info->ii_ilog_info);
+		oiter->it_hdl = info->ii_tree_hdl;
+		oiter->it_flags |= info->ii_fake_akey_flag;
+		oiter->it_fake_akey = 0;
+		oiter->it_dkey_krec = info->ii_dkey_krec;
+		goto success;
+	}
+
+	rc = dbtree_open_inplace_ex(info->ii_btr, info->ii_uma, vos_cont2hdl(obj->obj_cont),
+				    vos_obj2pool(obj), &toh);
+	if (rc) {
+		D_DEBUG(DB_TRACE,
+			"Failed to open tree for iterator:"
+			" rc = " DF_RC "\n",
+			DP_RC(rc));
+		goto failed;
+	}
+	rc = dbtree_iter_prepare(toh, BTR_ITER_EMBEDDED, &oiter->it_hdl);
+
+	key_tree_release(toh, false);
 
 	if (rc != 0) {
 		D_DEBUG(DB_TRACE, "Failed to prepare iterator: rc = "DF_RC"\n",
@@ -1911,9 +2044,132 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 success:
 	*iter_pp = &oiter->it_iter;
 	return 0;
+
 failed:
-	vos_ilog_fetch_finish(&oiter->it_ilog_info);
-	D_FREE(oiter);
+	nested_prep_common_abort(oiter);
+	return rc;
+}
+
+static int
+vos_obj_iter_sv_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
+			    struct vos_iterator **iter_pp)
+{
+	struct vos_object   *obj = info->ii_obj;
+	struct vos_obj_iter *oiter;
+	daos_handle_t        toh;
+	int                  flags = BTR_ITER_EMBEDDED;
+	int                  rc    = 0;
+
+	if (type != VOS_ITER_SINGLE) {
+		D_ERROR("Unexpected type: %d\n", type);
+		return -DER_INVAL;
+	}
+
+	rc = nested_prep_common_init(obj->obj_cont, &oiter, info);
+
+	oiter->it_obj = obj;
+	if (info->ii_fake_akey_flag) {
+		D_ASSERTF(info->ii_fake_akey_flag == VOS_IT_DKEY_SV, "Invalid value for flag: %x\n",
+			  info->ii_fake_akey_flag);
+		toh = info->ii_tree_hdl;
+		/* Don't use embedded iterator here because we may not be the
+		 * only nested iterator
+		 */
+		flags = 0;
+		goto prepare;
+	}
+
+	rc = dbtree_open_inplace_ex(info->ii_btr, info->ii_uma, vos_cont2hdl(obj->obj_cont),
+				    vos_obj2pool(obj), &toh);
+	if (rc) {
+		D_DEBUG(DB_TRACE,
+			"Failed to open tree for iterator:"
+			" rc = " DF_RC "\n",
+			DP_RC(rc));
+		goto failed;
+	}
+prepare:
+	rc = dbtree_iter_prepare(toh, flags, &oiter->it_hdl);
+
+	if (info->ii_fake_akey_flag == 0)
+		key_tree_release(toh, false);
+
+	if (rc != 0) {
+		D_DEBUG(DB_TRACE, "Failed to prepare iterator: rc = " DF_RC "\n", DP_RC(rc));
+		goto failed;
+	}
+
+	*iter_pp = &oiter->it_iter;
+	return 0;
+
+failed:
+	nested_prep_common_abort(oiter);
+	return rc;
+}
+
+static int
+vos_obj_ev_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
+			    struct vos_iterator **iter_pp)
+{
+	struct vos_object   *obj = info->ii_obj;
+	struct vos_obj_iter *oiter;
+	struct evt_desc_cbs  cbs;
+	struct evt_filter    filter = {0};
+	daos_handle_t        toh;
+	bool                 embed = true;
+	int                  rc    = 0;
+	uint32_t             options;
+
+	if (type != VOS_ITER_RECX) {
+		D_ERROR("Unexpected type: %d\n", type);
+		return -DER_INVAL;
+	}
+
+	rc = nested_prep_common_init(obj->obj_cont, &oiter, info);
+
+	oiter->it_obj = obj;
+
+	if (info->ii_fake_akey_flag) {
+		D_ASSERTF(info->ii_fake_akey_flag == VOS_IT_DKEY_EV, "Invalid value for flag: %x\n",
+			  info->ii_fake_akey_flag);
+		toh = info->ii_tree_hdl;
+		/* We may not be the only nested iterator so don't use embedded
+		 * iterator here
+		 */
+		embed = false;
+		goto prepare;
+	}
+
+	vos_evt_desc_cbs_init(&cbs, vos_obj2pool(obj), vos_cont2hdl(obj->obj_cont));
+	rc = evt_open(info->ii_evt, info->ii_uma, &cbs, &toh);
+	if (rc) {
+		D_DEBUG(DB_TRACE,
+			"Failed to open tree for iterator:"
+			" rc = " DF_RC "\n",
+			DP_RC(rc));
+		goto failed;
+	}
+prepare:
+	recx2filter(&filter, &info->ii_recx);
+	filter.fr_epr.epr_lo      = oiter->it_epr.epr_lo;
+	filter.fr_epr.epr_hi      = oiter->it_iter.it_bound;
+	filter.fr_epoch           = oiter->it_epr.epr_hi;
+	filter.fr_punch_epc       = oiter->it_punched.pr_epc;
+	filter.fr_punch_minor_epc = oiter->it_punched.pr_minor_epc;
+	options                   = recx_get_flags(oiter, embed);
+	rc                        = evt_iter_prepare(toh, options, &filter, &oiter->it_hdl);
+	if (info->ii_fake_akey_flag == 0)
+		key_tree_release(toh, type == VOS_ITER_RECX);
+
+	if (rc != 0) {
+		D_DEBUG(DB_TRACE, "Failed to prepare iterator: rc = " DF_RC "\n", DP_RC(rc));
+		goto failed;
+	}
+
+	*iter_pp = &oiter->it_iter;
+	return 0;
+failed:
+	nested_prep_common_abort(oiter);
 	return rc;
 }
 
@@ -1935,6 +2191,13 @@ vos_obj_iter_fini(struct vos_iterator *iter)
 
 	case VOS_ITER_DKEY:
 	case VOS_ITER_AKEY:
+		if (is_fake_iter(oiter)) {
+			/** In fake akey iterator, we use the subtree handle, so
+			 * release it here.
+			 */
+			key_tree_release(oiter->it_hdl, fake_iter_child_is_array(oiter));
+			break;
+		}
 	case VOS_ITER_SINGLE:
 		rc = dbtree_iter_finish(oiter->it_hdl);
 		break;
@@ -1960,70 +2223,160 @@ vos_obj_iter_fini(struct vos_iterator *iter)
 }
 
 int
-vos_obj_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t flags)
+vos_obj_dkey_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t flags)
 {
 	struct vos_obj_iter *oiter = vos_iter2oiter(iter);
 
-	switch (iter->it_type) {
-	default:
-		D_ASSERT(0);
-		return -DER_INVAL;
+	D_ASSERTF(iter->it_type == VOS_ITER_DKEY, "type is %d\n", iter->it_type);
 
-	case VOS_ITER_DKEY:
-	case VOS_ITER_AKEY:
-		return key_iter_probe(oiter, anchor, flags);
+	return key_iter_probe(oiter, anchor, flags);
+}
 
-	case VOS_ITER_SINGLE:
-		return singv_iter_probe(oiter, anchor, flags);
+int
+vos_obj_akey_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t flags)
+{
+	struct vos_obj_iter *oiter = vos_iter2oiter(iter);
 
-	case VOS_ITER_RECX:
-		return recx_iter_probe(oiter, anchor);
+	D_ASSERTF(iter->it_type == VOS_ITER_AKEY, "type is %d\n", iter->it_type);
+
+	if (is_fake_iter(oiter)) {
+		if (vos_anchor_is_zero(anchor) || (flags & VOS_ITER_PROBE_NEXT) == 0) {
+			oiter->it_fake_akey = '0';
+			return 0;
+		}
+		/** Indicate we are done iterating */
+		oiter->it_fake_akey = 0;
+		return -DER_NONEXIST;
 	}
+
+	return key_iter_probe(oiter, anchor, flags);
+}
+
+int
+vos_obj_sv_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t flags)
+{
+	struct vos_obj_iter *oiter = vos_iter2oiter(iter);
+
+	D_ASSERTF(iter->it_type == VOS_ITER_SINGLE, "type is %d\n", iter->it_type);
+
+	return singv_iter_probe(oiter, anchor, flags);
+}
+
+int
+vos_obj_ev_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t flags)
+{
+	struct vos_obj_iter *oiter = vos_iter2oiter(iter);
+
+	D_ASSERTF(iter->it_type == VOS_ITER_RECX, "type is %d\n", iter->it_type);
+
+	return recx_iter_probe(oiter, anchor);
 }
 
 static int
-vos_obj_iter_next(struct vos_iterator *iter, daos_anchor_t *anchor)
+vos_obj_dkey_iter_next(struct vos_iterator *iter, daos_anchor_t *anchor)
 {
 	struct vos_obj_iter *oiter = vos_iter2oiter(iter);
 
-	switch (iter->it_type) {
-	default:
-		D_ASSERT(0);
-		return -DER_INVAL;
+	D_ASSERTF(iter->it_type == VOS_ITER_DKEY, "type is %d\n", iter->it_type);
 
-	case VOS_ITER_DKEY:
-	case VOS_ITER_AKEY:
-		return key_iter_next(oiter, anchor);
-
-	case VOS_ITER_SINGLE:
-		return singv_iter_next(oiter);
-
-	case VOS_ITER_RECX:
-		return recx_iter_next(oiter);
-	}
+	return key_iter_next(oiter, anchor);
 }
 
 static int
-vos_obj_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
-		   daos_anchor_t *anchor)
+vos_obj_akey_iter_next(struct vos_iterator *iter, daos_anchor_t *anchor)
 {
 	struct vos_obj_iter *oiter = vos_iter2oiter(iter);
 
-	switch (iter->it_type) {
-	default:
-		D_ASSERT(0);
-		return -DER_INVAL;
-
-	case VOS_ITER_DKEY:
-	case VOS_ITER_AKEY:
-		return key_iter_fetch(oiter, it_entry, anchor, false, 0);
-
-	case VOS_ITER_SINGLE:
-		return singv_iter_fetch(oiter, it_entry, anchor);
-
-	case VOS_ITER_RECX:
-		return recx_iter_fetch(oiter, it_entry, anchor);
+	D_ASSERTF(iter->it_type == VOS_ITER_AKEY, "type is %d\n", iter->it_type);
+	if (is_fake_iter(oiter)) {
+		/** Indicate we are done iterating */
+		oiter->it_fake_akey = 0;
+		return -DER_NONEXIST;
 	}
+
+	return key_iter_next(oiter, anchor);
+}
+
+static int
+vos_obj_sv_iter_next(struct vos_iterator *iter, daos_anchor_t *anchor)
+{
+	struct vos_obj_iter *oiter = vos_iter2oiter(iter);
+
+	D_ASSERTF(iter->it_type == VOS_ITER_SINGLE, "type is %d\n", iter->it_type);
+	return singv_iter_next(oiter);
+}
+
+static int
+vos_obj_ev_iter_next(struct vos_iterator *iter, daos_anchor_t *anchor)
+{
+	struct vos_obj_iter *oiter = vos_iter2oiter(iter);
+
+	D_ASSERTF(iter->it_type == VOS_ITER_RECX, "type is %d\n", iter->it_type);
+	return recx_iter_next(oiter);
+}
+
+static int
+vos_obj_dkey_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
+			daos_anchor_t *anchor)
+{
+	struct vos_obj_iter *oiter = vos_iter2oiter(iter);
+
+	D_ASSERTF(iter->it_type == VOS_ITER_DKEY, "type is %d\n", iter->it_type);
+
+	return key_iter_fetch(oiter, it_entry, anchor, false, 0);
+}
+
+static int
+vos_obj_akey_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
+			daos_anchor_t *anchor)
+{
+	struct vos_obj_iter *oiter = vos_iter2oiter(iter);
+
+	D_ASSERTF(iter->it_type == VOS_ITER_AKEY, "type is %d\n", iter->it_type);
+	if (is_fake_iter(oiter)) {
+		D_ASSERTF(oiter->it_fake_akey == '0', "Must probe before fetch");
+		if (anchor != NULL)
+			vos_fake_anchor_create(anchor);
+		if (fake_iter_child_is_array(oiter))
+			it_entry->ie_child_type = VOS_ITER_RECX;
+		else
+			it_entry->ie_child_type = VOS_ITER_SINGLE;
+		it_entry->ie_vis_flags = VOS_VIS_FLAG_VISIBLE;
+		if (oiter->it_ilog_info.ii_create == 0) {
+			/* The key has no visible subtrees so mark it covered */
+			it_entry->ie_vis_flags = VOS_VIS_FLAG_COVERED;
+		}
+
+		it_entry->ie_epoch     = oiter->it_epr.epr_hi;
+		it_entry->ie_punch     = oiter->it_ilog_info.ii_next_punch;
+		it_entry->ie_obj_punch = oiter->it_obj->obj_ilog_info.ii_next_punch;
+		/** Use the dkey for this */
+		vos_ilog_last_update(&oiter->it_dkey_krec->kr_ilog, VOS_TS_TYPE_DKEY,
+				     &it_entry->ie_last_update, !!oiter->it_iter.it_for_sysdb);
+		d_iov_set(&it_entry->ie_key, &oiter->it_fake_akey, sizeof(oiter->it_fake_akey));
+
+		return 0;
+	}
+
+	return key_iter_fetch(oiter, it_entry, anchor, false, 0);
+}
+
+static int
+vos_obj_sv_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry, daos_anchor_t *anchor)
+{
+	struct vos_obj_iter *oiter = vos_iter2oiter(iter);
+
+	D_ASSERTF(iter->it_type == VOS_ITER_SINGLE, "type is %d\n", iter->it_type);
+	return singv_iter_fetch(oiter, it_entry, anchor);
+}
+
+static int
+vos_obj_ev_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry, daos_anchor_t *anchor)
+{
+	struct vos_obj_iter *oiter = vos_iter2oiter(iter);
+
+	D_ASSERTF(iter->it_type == VOS_ITER_RECX, "type is %d\n", iter->it_type);
+	return recx_iter_fetch(oiter, it_entry, anchor);
 }
 
 static int
@@ -2187,6 +2540,9 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard)
 		  iter->it_type == VOS_ITER_DKEY,
 		  "Aggregation only supported on keys\n");
 
+	if (is_fake_iter(oiter))
+		return 0; /** Defer this decision to the dkey iterator */
+
 	rc = key_iter_fetch_helper(oiter, &rbund, &key, NULL);
 	D_ASSERTF(rc != -DER_NONEXIST,
 		  "Iterator should probe before aggregation\n");
@@ -2246,6 +2602,8 @@ vos_obj_iter_process(struct vos_iterator *iter, vos_iter_proc_op_t op,
 			return -DER_INVAL;
 		case VOS_ITER_DKEY:
 		case VOS_ITER_AKEY:
+			if (is_fake_iter(oiter))
+				return 0;
 		case VOS_ITER_SINGLE:
 			return obj_iter_delete(oiter, args);
 		case VOS_ITER_RECX:
@@ -2267,6 +2625,7 @@ static int
 vos_obj_iter_empty(struct vos_iterator *iter)
 {
 	struct vos_obj_iter *oiter = vos_iter2oiter(iter);
+	bool                 evt   = false;
 
 	if (daos_handle_is_inval(oiter->it_hdl))
 		return -DER_NO_HDL;
@@ -2276,25 +2635,70 @@ vos_obj_iter_empty(struct vos_iterator *iter)
 		D_ASSERT(0);
 		return -DER_INVAL;
 	case VOS_ITER_DKEY:
+		/* fall through */
 	case VOS_ITER_AKEY:
+		if (oiter->it_flags & VOS_IT_DKEY_EV)
+			evt = true;
+		/* fall through */
 	case VOS_ITER_SINGLE:
-		return dbtree_iter_empty(oiter->it_hdl);
+		if (!evt)
+			return dbtree_iter_empty(oiter->it_hdl);
+		/* fall through */
 	case VOS_ITER_RECX:
 		return evt_iter_empty(oiter->it_hdl);
 	}
 }
 
-struct vos_iter_ops	vos_obj_iter_ops = {
-	.iop_prepare		= vos_obj_iter_prep,
-	.iop_nested_tree_fetch	= vos_obj_iter_nested_tree_fetch,
-	.iop_nested_prepare	= vos_obj_iter_nested_prep,
-	.iop_finish		= vos_obj_iter_fini,
-	.iop_probe		= vos_obj_iter_probe,
-	.iop_next		= vos_obj_iter_next,
-	.iop_fetch		= vos_obj_iter_fetch,
-	.iop_copy		= vos_obj_iter_copy,
-	.iop_process		= vos_obj_iter_process,
-	.iop_empty		= vos_obj_iter_empty,
+struct vos_iter_ops vos_obj_dkey_iter_ops = {
+    .iop_prepare           = vos_obj_iter_prep,
+    .iop_nested_tree_fetch = vos_obj_dkey_iter_nested_tree_fetch,
+    .iop_nested_prepare    = vos_obj_dkey_iter_nested_prep,
+    .iop_finish            = vos_obj_iter_fini,
+    .iop_probe             = vos_obj_dkey_iter_probe,
+    .iop_next              = vos_obj_dkey_iter_next,
+    .iop_fetch             = vos_obj_dkey_iter_fetch,
+    .iop_copy              = vos_obj_iter_copy,
+    .iop_process           = vos_obj_iter_process,
+    .iop_empty             = vos_obj_iter_empty,
+};
+
+struct vos_iter_ops vos_obj_akey_iter_ops = {
+    .iop_prepare           = vos_obj_iter_prep,
+    .iop_nested_tree_fetch = vos_obj_akey_iter_nested_tree_fetch,
+    .iop_nested_prepare    = vos_obj_akey_iter_nested_prep,
+    .iop_finish            = vos_obj_iter_fini,
+    .iop_probe             = vos_obj_akey_iter_probe,
+    .iop_next              = vos_obj_akey_iter_next,
+    .iop_fetch             = vos_obj_akey_iter_fetch,
+    .iop_copy              = vos_obj_iter_copy,
+    .iop_process           = vos_obj_iter_process,
+    .iop_empty             = vos_obj_iter_empty,
+};
+
+struct vos_iter_ops vos_obj_sv_iter_ops = {
+    .iop_prepare           = vos_obj_iter_prep,
+    .iop_nested_tree_fetch = vos_obj_invalid_iter_nested_tree_fetch,
+    .iop_nested_prepare    = vos_obj_iter_sv_nested_prep,
+    .iop_finish            = vos_obj_iter_fini,
+    .iop_probe             = vos_obj_sv_iter_probe,
+    .iop_next              = vos_obj_sv_iter_next,
+    .iop_fetch             = vos_obj_sv_iter_fetch,
+    .iop_copy              = vos_obj_iter_copy,
+    .iop_process           = vos_obj_iter_process,
+    .iop_empty             = vos_obj_iter_empty,
+};
+
+struct vos_iter_ops vos_obj_ev_iter_ops = {
+    .iop_prepare           = vos_obj_iter_prep,
+    .iop_nested_tree_fetch = vos_obj_invalid_iter_nested_tree_fetch,
+    .iop_nested_prepare    = vos_obj_ev_iter_nested_prep,
+    .iop_finish            = vos_obj_iter_fini,
+    .iop_probe             = vos_obj_ev_iter_probe,
+    .iop_next              = vos_obj_ev_iter_next,
+    .iop_fetch             = vos_obj_ev_iter_fetch,
+    .iop_copy              = vos_obj_iter_copy,
+    .iop_process           = vos_obj_iter_process,
+    .iop_empty             = vos_obj_iter_empty,
 };
 /**
  * @} vos_obj_iters

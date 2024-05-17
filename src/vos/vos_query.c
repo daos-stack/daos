@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -503,6 +503,9 @@ open_and_query_key(struct open_query *query, daos_key_t *key,
 		toh = &query->qt_akey_toh;
 		to_open = query->qt_akey_root;
 		tclass = VOS_BTR_AKEY;
+
+		if (query->qt_flags & VOS_FLAT_DKEY)
+			return 0;
 	}
 
 	if (daos_handle_is_valid(*toh)) {
@@ -548,13 +551,17 @@ open_and_query_key(struct open_query *query, daos_key_t *key,
 			return rc;
 	}
 
-	if (tree_type == VOS_GET_DKEY) {
+	if (tree_type == VOS_GET_DKEY && (rbund.rb_krec->kr_bmap & KREC_BF_NO_AKEY) == 0) {
 		query->qt_akey_root = &rbund.rb_krec->kr_btr;
 	} else if ((rbund.rb_krec->kr_bmap & KREC_BF_EVT) == 0) {
 		if (query->qt_flags & VOS_GET_RECX)
 			return -DER_NONEXIST;
 	} else {
 		query->qt_recx_root = &rbund.rb_krec->kr_evt;
+		if (tree_type == VOS_GET_DKEY)
+			query->qt_flags |= VOS_FLAT_DKEY;
+		else
+			query->qt_flags &= ~VOS_FLAT_DKEY;
 	}
 
 	return 0;

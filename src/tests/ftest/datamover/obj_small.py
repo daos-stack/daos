@@ -3,10 +3,10 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from pydaos.raw import DaosApiError
 import avocado
-
 from data_mover_test_base import DataMoverTestBase
+from pydaos.raw import DaosApiError
+from test_utils_container import get_existing_container
 
 
 class DmvrObjSmallTest(DataMoverTestBase):
@@ -78,7 +78,7 @@ class DmvrObjSmallTest(DataMoverTestBase):
         cont2_label = self.parse_create_cont_label(result.stdout_text)
 
         # Verify data in cont2
-        cont2 = self.get_cont(pool1, cont2_label)
+        cont2 = get_existing_container(self, pool1, cont2_label)
         self.dataset_verify(
             obj_list, cont2,
             self.num_objs, self.num_dkeys, self.num_akeys_single,
@@ -95,18 +95,11 @@ class DmvrObjSmallTest(DataMoverTestBase):
             "DAOS_UUID", None, pool2, None)
         cont3_label = self.parse_create_cont_label(result.stdout_text)
         # Verify data in cont3
-        cont3 = self.get_cont(pool2, cont3_label)
+        cont3 = get_existing_container(self, pool2, cont3_label)
         self.dataset_verify(
             obj_list, cont3,
             self.num_objs, self.num_dkeys, self.num_akeys_single,
             self.num_akeys_array, self.akey_sizes, self.akey_extents)
-
-        # Must destroy before closing pools
-        cont1.destroy()
-        cont2.destroy()
-        cont3.destroy()
-        pool1.disconnect()
-        pool2.disconnect()
 
     @avocado.fail_on(DaosApiError)
     def test_dm_obj_small_dcp(self):
@@ -116,7 +109,7 @@ class DmvrObjSmallTest(DataMoverTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dcp
-        :avocado: tags=dm_obj_small,dm_obj_small_dcp,test_dm_obj_small_dcp
+        :avocado: tags=DmvrObjSmallTest,test_dm_obj_small_dcp
         """
         self.run_dm_obj_small("DCP")
 
@@ -128,6 +121,6 @@ class DmvrObjSmallTest(DataMoverTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=datamover,daos_cont_clone,daos_cmd
-        :avocado: tags=dm_obj_small,dm_obj_small_cont_clone,test_dm_obj_small_cont_clone
+        :avocado: tags=DmvrObjSmallTest,test_dm_obj_small_cont_clone
         """
         self.run_dm_obj_small("CONT_CLONE")

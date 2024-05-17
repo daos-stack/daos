@@ -1,13 +1,9 @@
 """Common DAOS build functions"""
 import os
 
-from SCons.Subst import Literal
-from SCons.Script import Dir
-from SCons.Script import GetOption
-from SCons.Script import WhereIs
-from SCons.Script import Depends
-from SCons.Script import Exit
 from env_modules import load_mpi
+from SCons.Script import Depends, Dir, Exit, GetOption, WhereIs
+from SCons.Subst import Literal
 
 libraries = {}
 missing = set()
@@ -68,10 +64,15 @@ def _add_build_rpath(env, pathin="."):
     path = Dir(pathin).path
     env.AppendUnique(LINKFLAGS=[f'-Wl,-rpath-link={path}'])
     env.AppendENVPath('CGO_LDFLAGS', f'-Wl,-rpath-link={path}', sep=' ')
+
+
+def _enable_ld_path(env, part_list):
+    """Add a build directory to LD_LIBRARY_PATH"""
     # We actually run installed binaries from the build area to generate
     # man pages.  In such cases, we need LD_LIBRARY_PATH set to pick up
     # the dependencies
-    env.AppendENVPath("LD_LIBRARY_PATH", path)
+    for part in part_list:
+        env.AppendENVPath("LD_LIBRARY_PATH", os.path.join(env["BUILD_DIR"], "src", part))
 
 
 def _known_deps(env, **kwargs):
@@ -224,6 +225,10 @@ def _configure_mpi(self):
     if GetOption('help'):
         return None
 
+    def _print(msg):
+        if not GetOption('silent'):
+            print(msg)
+
     env = self.Clone()
 
     env['CXX'] = None
@@ -233,19 +238,20 @@ def _configure_mpi(self):
         return env
 
     for mpi in ['openmpi', 'mpich']:
-        if not load_mpi(mpi):
+        if not load_mpi(mpi, GetOption('silent')):
             continue
         if _find_mpicc(env):
-            print(f'{mpi} is installed')
+            _print(f'{mpi} is installed')
             return env
-        print(f'No {mpi} installed and/or loaded')
-    print("No MPI installed")
+        _print(f'No {mpi} installed and/or loaded')
+    _print("No MPI installed")
     return None
 
 
 def generate(env):
     """Add daos specific methods to environment"""
     env.AddMethod(_add_build_rpath, 'd_add_build_rpath')
+    env.AddMethod(_enable_ld_path, 'd_enable_ld_path')
     env.AddMethod(_configure_mpi, 'd_configure_mpi')
     env.AddMethod(_run_command, 'd_run_command')
     env.AddMethod(_add_rpaths, 'd_add_rpaths')

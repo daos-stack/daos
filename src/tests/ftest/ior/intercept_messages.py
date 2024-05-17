@@ -4,8 +4,9 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-import re
 import os
+import re
+
 from ior_test_base import IorTestBase
 
 

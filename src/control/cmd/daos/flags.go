@@ -99,7 +99,7 @@ func (f *ChunkSizeFlag) UnmarshalFlag(fv string) error {
 
 	size, err := humanize.ParseBytes(fv)
 	if err != nil {
-		return err
+		return errors.Errorf("invalid chunk-size %q", fv)
 	}
 	f.Size = C.uint64_t(size)
 

@@ -21,7 +21,7 @@ server_config:
       log_file: daos_server1.log
       storage: auto
 pool:
-  scm_size: 1G
+  scm_size: 2G
 container:
   type: POSIX
   control_method: daos

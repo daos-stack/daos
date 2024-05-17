@@ -142,7 +142,7 @@ typedef int (*crt_iv_on_update_cb_t)(crt_iv_namespace_t ivns,
  * \param[in] ivns		the local handle of the IV namespace
  * \param[in] iv_key		key of the IV
  * \param[in] cb		a callback which must be called or scheduled by
- *				the user in order to compelete the handling of
+ *				the user in order to complete the handling of
  *				the crt_iv_fetch() request.
  * \param[in] cb_arg		arguments for \a cb.
  *
@@ -165,7 +165,7 @@ typedef void (*crt_iv_pre_fetch_cb_t)(crt_iv_namespace_t ivns,
  * \param[in] ivns		the local handle of the IV namespace
  * \param[in] iv_key		key of the IV
  * \param[in] cb		a callback which must be called or scheduled by
- *				the user in order to compelete the handling of
+ *				the user in order to complete the handling of
  *				the crt_iv_update() request.
  * \param[in] cb_arg		arguments for \a cb.
  */
@@ -184,7 +184,7 @@ typedef void (*crt_iv_pre_update_cb_t)(crt_iv_namespace_t ivns,
  * \param[in] ivns		the local handle of the IV namespace
  * \param[in] iv_key		key of the IV
  * \param[in] cb		a callback which must be called or scheduled by
- *				the user in order to compelete the handling of
+ *				the user in order to complete the handling of
  *				the crt_iv_sync() request.
  * \param[in] cb_arg		arguments for \a cb.
  */
@@ -239,6 +239,7 @@ typedef int (*crt_iv_on_hash_cb_t)(crt_iv_namespace_t ivns,
 typedef enum {
 	CRT_IV_PERM_READ = 0x1,
 	CRT_IV_PERM_WRITE = 0x2,
+	CRT_IV_NO_ALLOC = 0x4,
 } crt_iv_perm_t;
 
 /**

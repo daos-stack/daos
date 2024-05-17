@@ -76,7 +76,7 @@ message BioHealthResp {
 }
 
 enum NvmeDevState {
-	UNKNOWN   = 0; // Device state is unknown, zer6o value
+	UNKNOWN   = 0; // Device state is unknown, zero value
 	NORMAL    = 1; // Device is in a normal operational state
 	NEW       = 2; // Device is new and is not yet in-use
 	EVICTED   = 3; // Device is faulty and has been evicted
@@ -84,21 +84,42 @@ enum NvmeDevState {
 }
 
 enum LedState {
-	OFF = 0;		// Equivalent to SPDK_VMD_LED_STATE_OFF
+	NA = 0;			// Equivalent to SPDK_VMD_LED_STATE_UNKNOWN	(VMD not enabled)
 	QUICK_BLINK = 1;	// Equivalent to SPDK_VMD_LED_STATE_IDENTIFY	(4Hz blink)
 	ON = 2;			// Equivalent to SPDK_VMD_LED_STATE_FAULT	(solid on)
 	SLOW_BLINK = 3;		// Equivalent to SPDK_VMD_LED_STATE_REBUILD	(1Hz blink)
-	NA = 4;			// Equivalent to SPDK_VMD_LED_STATE_UNKNOWN	(VMD not enabled)
+	OFF = 4;		// Equivalent to SPDK_VMD_LED_STATE_OFF
+}
+
+// NvmeController represents an NVMe Controller (SSD).
+message NvmeController {
+	// Namespace represents a namespace created on an NvmeController.
+	message Namespace {
+		uint32 id = 1;			// namespace id
+		uint64 size = 2;		// device capacity in bytes
+		string ctrlr_pci_addr = 3;	// parent controller PCI address
+	}
+
+	string model = 1;			// model name
+	string serial = 2;			// serial number
+	string pci_addr = 3;			// pci address
+	string fw_rev = 4;			// firmware revision
+	int32 socket_id = 5;			// NUMA socket ID
+	BioHealthResp health_stats = 6;		// controller's health stats
+	repeated Namespace namespaces = 7;	// controller's namespaces
+	repeated SmdDevice smd_devices = 8;     // controller's blobstores
+	NvmeDevState dev_state = 9;		// NVMe device operational state
+	LedState led_state = 10;		// NVMe device LED state
+	string pci_dev_type = 11;		// PCI device type, vmd or pci
+	string vendor_id = 12;			// controller's vendor ID
 }
 
 // SmdDevice represents a DAOS BIO device, identified by a UUID written into a label stored on a
 // SPDK blobstore created on a NVMe namespace. Multiple SmdDevices may exist per NVMe controller.
 message SmdDevice {
+	reserved 3,4,5;
 	string uuid = 1;		// UUID of blobstore
 	repeated int32 tgt_ids = 2;	// VOS target IDs
-	string tr_addr = 3;		// Transport address of blobstore
-	NvmeDevState dev_state = 4;	// NVMe device state
-	LedState led_state = 5;		// LED state
 	uint64 total_bytes = 6;		// blobstore clusters total bytes
 	uint64 avail_bytes = 7;		// Available RAW storage for data
 	uint64 cluster_size = 8;	// blobstore cluster size in bytes
@@ -109,6 +130,8 @@ message SmdDevice {
 	uint64 rdb_size = 13;		// Size of the RDB blob
 	uint64 rdb_wal_size = 14;	// Size of the RDB WAL blob
 	uint64 usable_bytes = 15;	// Effective storage available for data
+	NvmeController ctrlr = 16;	// Backing NVMe controller of SMD device
+	uint32 ctrlr_namespace_id = 17;	// NVMe namespace id hosting SMD blobstore
 }
 
 message SmdDevReq {}
@@ -139,10 +162,6 @@ message SmdQueryReq {
 }
 
 message SmdQueryResp {
-	message SmdDeviceWithHealth {
-		SmdDevice details = 1;
-		BioHealthResp health = 2; // optional BIO health
-	}
 	message Pool {
 		string uuid = 1; // UUID of VOS pool
 		repeated int32 tgt_ids = 2; // VOS target IDs
@@ -150,7 +169,7 @@ message SmdQueryResp {
 	}
 	message RankResp {
 		uint32 rank = 1; // rank to which this response corresponds
-		repeated SmdDeviceWithHealth devices = 2; // List of devices on the rank
+		repeated SmdDevice devices = 2; // List of devices on the rank
 		repeated Pool pools = 3; // List of pools on the rank
 	}
 	int32 status = 1; // DAOS error code

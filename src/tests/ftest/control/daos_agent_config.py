@@ -3,8 +3,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from apricot import TestWithServers
 from agent_utils import include_local_host
+from apricot import TestWithServers
 from exception_utils import CommandFailure
 
 

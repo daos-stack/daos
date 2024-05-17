@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -20,15 +20,13 @@
 #include <daos/lru.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/bio.h>
-#include <daos_srv/policy.h>
 #include <daos_srv/vos.h>
 #include "vos_tls.h"
 #include "vos_layout.h"
 #include "vos_ilog.h"
 #include "vos_obj.h"
 
-#define VOS_MINOR_EPC_MAX (VOS_SUB_OP_MAX + 1)
-D_CASSERT(VOS_MINOR_EPC_MAX == EVT_MINOR_EPC_MAX);
+#define VOS_MINOR_EPC_MAX EVT_MINOR_EPC_MAX
 
 #define VOS_TX_LOG_FAIL(rc, ...)			\
 	do {						\
@@ -186,6 +184,19 @@ struct vos_agg_metrics {
 	struct d_tm_node_t	*vam_del_ev;		/* Deleted EV records */
 	struct d_tm_node_t	*vam_merge_recs;	/* Total merged EV records */
 	struct d_tm_node_t	*vam_merge_size;	/* Total merged size */
+	struct d_tm_node_t	*vam_fail_count;	/* Aggregation failed */
+};
+
+struct vos_gc_metrics {
+	struct d_tm_node_t *vgm_duration;  /* Duration of each gc scan */
+	struct d_tm_node_t *vgm_cont_del;  /* containers reclaimed */
+	struct d_tm_node_t *vgm_obj_del;   /* objects reclaimed */
+	struct d_tm_node_t *vgm_dkey_del;  /* dkeys reclaimed */
+	struct d_tm_node_t *vgm_akey_del;  /* akeys reclaimed */
+	struct d_tm_node_t *vgm_ev_del;    /* EV records reclaimed */
+	struct d_tm_node_t *vgm_sv_del;    /* SV records reclaimed */
+	struct d_tm_node_t *vgm_slack_cnt; /* Slack mode count */
+	struct d_tm_node_t *vgm_tight_cnt; /* Tight mode count */
 };
 
 /*
@@ -200,28 +211,39 @@ struct vos_chkpt_metrics {
 };
 
 void vos_chkpt_metrics_init(struct vos_chkpt_metrics *vc_metrics, const char *path, int tgt_id);
+void
+vos_gc_metrics_init(struct vos_gc_metrics *vc_metrics, const char *path, int tgt_id);
 
 struct vos_space_metrics {
 	struct d_tm_node_t	*vsm_scm_used;		/* SCM space used */
 	struct d_tm_node_t	*vsm_nvme_used;		/* NVMe space used */
+	struct d_tm_node_t      *vsm_scm_total;         /* SCM space total */
+	struct d_tm_node_t      *vsm_nvme_total;        /* NVMe space total */
 	uint64_t		 vsm_last_update_ts;	/* Timeout counter */
 };
 
-/* VOS Pool metrics for vos file rehydration */
-struct vos_rh_metrics {
-	struct d_tm_node_t	*vrh_size;		/* WAL replay size */
-	struct d_tm_node_t	*vrh_time;		/* WAL replay time */
-	struct d_tm_node_t	*vrh_count;		/* Total replay count */
-	struct d_tm_node_t	*vrh_entries;		/* Total replayed entry count */
-	struct d_tm_node_t	*vrh_tx_cnt;		/* Total replayed TX count */
+/* VOS Pool metrics for WAL */
+struct vos_wal_metrics {
+	struct d_tm_node_t *vwm_wal_sz;       /* WAL size for single tx */
+	struct d_tm_node_t *vwm_wal_qd;       /* WAL transaction queue depth */
+	struct d_tm_node_t *vwm_wal_waiters;  /* Waiters for WAL reclaiming */
+	struct d_tm_node_t *vwm_wal_dur;      /* WAL commit duration */
+	struct d_tm_node_t *vwm_replay_size;  /* WAL replay size in bytes */
+	struct d_tm_node_t *vwm_replay_time;  /* WAL replay time in us */
+	struct d_tm_node_t *vwm_replay_count; /* Total replay count */
+	struct d_tm_node_t *vwm_replay_tx;    /* Total replayed TX count */
+	struct d_tm_node_t *vwm_replay_ent;   /* Total replayed entry count */
 };
+
+void vos_wal_metrics_init(struct vos_wal_metrics *vw_metrics, const char *path, int tgt_id);
 
 struct vos_pool_metrics {
 	void			*vp_vea_metrics;
 	struct vos_agg_metrics	 vp_agg_metrics;
+	struct vos_gc_metrics    vp_gc_metrics;
 	struct vos_space_metrics vp_space_metrics;
 	struct vos_chkpt_metrics vp_chkpt_metrics;
-	struct vos_rh_metrics	 vp_rh_metrics;
+	struct vos_wal_metrics	 vp_wal_metrics;
 	/* TODO: add more metrics for VOS */
 };
 
@@ -255,6 +277,8 @@ struct vos_pool {
 	/** btr handle for the container table */
 	daos_handle_t		vp_cont_th;
 	/** GC statistics of this pool */
+	struct vos_gc_stat       vp_gc_stat_global;
+	/** GC per slice statistics of this pool */
 	struct vos_gc_stat	vp_gc_stat;
 	/** link chain on vos_tls::vtl_gc_pools */
 	d_list_t		vp_gc_link;
@@ -278,10 +302,10 @@ struct vos_pool {
 	void                    *vp_chkpt_arg;
 	/* The count of committed DTXs for the whole pool. */
 	uint32_t		 vp_dtx_committed_count;
-	/** Tiering policy */
-	struct policy_desc_t	vp_policy_desc;
+	/** Data threshold size */
+	uint32_t		 vp_data_thresh;
 	/** Space (in percentage) reserved for rebuild */
-	unsigned int		vp_space_rb;
+	unsigned int		 vp_space_rb;
 };
 
 /**
@@ -335,6 +359,7 @@ struct vos_container {
 	 * * transaction with older epoch must have been committed.
 	 */
 	daos_epoch_t		vc_solo_dtx_epoch;
+
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
 				vc_in_discard:1,
@@ -386,6 +411,7 @@ struct vos_dtx_act_ent {
 					 dae_maybe_shared:1,
 					 /* Need validation on leader before commit/committable. */
 					 dae_need_validation:1,
+					 dae_need_release:1,
 					 dae_preparing:1,
 					 dae_prepared:1;
 };
@@ -564,7 +590,10 @@ vos_feats_agg_time_update(daos_epoch_t epoch, uint64_t *feats)
 
 /** Iterator ops for objects and OIDs */
 extern struct vos_iter_ops vos_oi_iter_ops;
-extern struct vos_iter_ops vos_obj_iter_ops;
+extern struct vos_iter_ops vos_obj_dkey_iter_ops;
+extern struct vos_iter_ops vos_obj_akey_iter_ops;
+extern struct vos_iter_ops vos_obj_sv_iter_ops;
+extern struct vos_iter_ops vos_obj_ev_iter_ops;
 extern struct vos_iter_ops vos_cont_iter_ops;
 extern struct vos_iter_ops vos_dtx_iter_ops;
 
@@ -1036,13 +1065,8 @@ struct vos_iterator {
 	vos_iter_type_t		 it_type;
 	enum vos_iter_state	 it_state;
 	uint32_t		 it_ref_cnt;
-	uint32_t		 it_from_parent:1,
-				 it_for_purge:1,
-				 it_for_discard:1,
-				 it_for_migration:1,
-				 it_show_uncommitted:1,
-				 it_ignore_uncommitted:1,
-				 it_for_sysdb:1;
+	uint32_t it_from_parent : 1, it_for_purge : 1, it_for_discard : 1, it_for_migration : 1,
+	    it_show_uncommitted : 1, it_ignore_uncommitted : 1, it_for_sysdb : 1;
 };
 
 /* Auxiliary structure for passing information between parent and nested
@@ -1056,6 +1080,8 @@ struct vos_iter_info {
 		struct evt_root	*ii_evt;
 		/* Pointer to btree for nested iterator */
 		struct btr_root	*ii_btr;
+		/** Open tree handle for nested iterator */
+		daos_handle_t    ii_tree_hdl;
 		/* oid to hold */
 		daos_unit_oid_t	 ii_oid;
 	};
@@ -1065,7 +1091,8 @@ struct vos_iter_info {
 	struct vea_space_info	*ii_vea_info;
 	/* Reference to vos object, set in iop_tree_prepare. */
 	struct vos_object	*ii_obj;
-	d_iov_t			*ii_akey; /* conditional akey */
+	/** for fake akey, pass the parent ilog info */
+	struct vos_ilog_info    *ii_ilog_info;
 	/** address range (RECX); rx_nr == 0 means entire range (0:~0ULL) */
 	daos_recx_t              ii_recx;
 	daos_epoch_range_t	 ii_epr;
@@ -1078,7 +1105,9 @@ struct vos_iter_info {
 	vos_it_epc_expr_t	 ii_epc_expr;
 	/** iterator flags */
 	uint32_t		 ii_flags;
-
+	struct vos_krec_df      *ii_dkey_krec;
+	/** Indicate this is a fake akey and which type */
+	uint32_t                 ii_fake_akey_flag;
 };
 
 /** function table for vos iterator */
@@ -1137,14 +1166,35 @@ vos_hdl2iter(daos_handle_t hdl)
 	return (struct vos_iterator *)hdl.cookie;
 }
 
+/** Internal bit for initializing iterator from open tree handle */
+#define VOS_IT_KEY_TREE (1 << 31)
+/** Ensure there is no overlap with public iterator flags (defined in
+ *  src/include/daos_srv/vos_types.h).
+ */
+D_CASSERT((VOS_IT_KEY_TREE & VOS_IT_MASK) == 0);
+
+/** Special internal marker for fake akey. If set, it_hdl will point
+ *  at krec of the dkey.  We just need a struct as a placeholder
+ *  to keep iterator presenting an akey to the caller.  This adds
+ *  some small complication to VOS iterator but simplifies rebuild
+ *  and other entities that use it. This flag must not conflict with
+ *  other iterator flags.
+ */
+#define VOS_IT_DKEY_SV (1 << 30)
+#define VOS_IT_DKEY_EV (1 << 29)
+D_CASSERT((VOS_IT_DKEY_SV & VOS_IT_MASK) == 0);
+D_CASSERT((VOS_IT_DKEY_EV & VOS_IT_MASK) == 0);
+
 /** iterator for dkey/akey/recx */
 struct vos_obj_iter {
 	/* public part of the iterator */
 	struct vos_iterator	 it_iter;
 	/** Incarnation log entries for current iterator */
 	struct vos_ilog_info	 it_ilog_info;
-	/** handle of iterator */
-	daos_handle_t		 it_hdl;
+	/** For flat akey, this will open value tree handle and either
+	 * VOS_IT_DKEY_SV or VOS_IT_DKEY_EV will be set.
+	 */
+	daos_handle_t            it_hdl;
 	/** condition of the iterator: epoch logic expression */
 	vos_it_epc_expr_t	 it_epc_expr;
 	/** iterator flags */
@@ -1152,13 +1202,15 @@ struct vos_obj_iter {
 	/** condition of the iterator: epoch range */
 	daos_epoch_range_t	 it_epr;
 	/** highest epoch where parent obj/key was punched */
-	struct vos_punch_record	 it_punched;
-	/** condition of the iterator: attribute key */
-	daos_key_t		 it_akey;
+	struct vos_punch_record  it_punched;
 	/* reference on the object */
 	struct vos_object	*it_obj;
 	/** condition of the iterator: extent range */
 	daos_recx_t              it_recx;
+	/** For fake akey, save the dkey krec as well */
+	struct vos_krec_df      *it_dkey_krec;
+	/** Store the fake akey */
+	char                     it_fake_akey;
 };
 
 static inline struct vos_obj_iter *
@@ -1195,8 +1247,10 @@ tree_rec_bundle2iov(struct vos_rec_bundle *rbund, d_iov_t *iov)
 }
 
 enum {
-	SUBTR_CREATE	= (1 << 0),	/**< may create the subtree */
-	SUBTR_EVT	= (1 << 1),	/**< subtree is evtree */
+	SUBTR_CREATE  = (1 << 0), /**< may create the subtree */
+	SUBTR_EVT     = (1 << 1), /**< subtree is evtree */
+	SUBTR_FLAT    = (1 << 2), /**< use flat kv on create */
+	SUBTR_NO_OPEN = (1 << 3), /**< Don't initialize the subtree if the key is flat */
 };
 
 /* vos_common.c */
@@ -1261,8 +1315,7 @@ umem_off_t
 vos_reserve_scm(struct vos_container *cont, struct umem_rsrvd_act *rsrvd_scm,
 		daos_size_t size);
 int
-vos_publish_scm(struct vos_container *cont, struct umem_rsrvd_act *rsrvd_scm,
-		bool publish);
+vos_publish_scm(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_scm, bool publish);
 int
 vos_reserve_blocks(struct vos_container *cont, d_list_t *rsrvd_nvme,
 		   daos_size_t size, enum vos_io_stream ios, uint64_t *off);
@@ -1375,13 +1428,6 @@ vos_obj_iter_check_punch(daos_handle_t ih);
  */
 int
 vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard);
-
-/** Internal bit for initializing iterator from open tree handle */
-#define VOS_IT_KEY_TREE	(1 << 31)
-/** Ensure there is no overlap with public iterator flags (defined in
- *  src/include/daos_srv/vos_types.h).
- */
-D_CASSERT((VOS_IT_KEY_TREE & VOS_IT_MASK) == 0);
 
 /** Internal vos iterator API for iterating through keys using an
  *  open tree handle to initialize the iterator
@@ -1525,13 +1571,6 @@ void
 vos_report_layout_incompat(const char *type, int version, int min_version,
 			   int max_version, uuid_t *uuid);
 
-#define VOS_NOTIFY_RAS_EVENTF(...)			\
-	do {						\
-		if (ds_notify_ras_eventf == NULL)	\
-			break;				\
-		ds_notify_ras_eventf(__VA_ARGS__);	\
-	} while (0)					\
-
 static inline int
 vos_offload_exec(int (*func)(void *), void *arg)
 {
@@ -1550,12 +1589,6 @@ vos_exec(void (*func)(void *), void *arg)
 	func(arg);
 
 	return 0;
-}
-
-static inline bool
-umoff_is_null(umem_off_t umoff)
-{
-	return umoff == UMOFF_NULL;
 }
 
 /* vos_csum_recalc.c */
@@ -1722,8 +1755,82 @@ vos_flush_wal_header(struct vos_pool *vp)
 	return 0;
 }
 
+/*
+ * Check if the NVMe context of a VOS target is healthy.
+ *
+ * \param[in] coh	VOS container
+ *
+ * \return		0		: VOS target is healthy
+ *			-DER_NVME_IO	: VOS target is faulty
+ */
+static inline int
+vos_tgt_health_check(struct vos_container *cont)
+{
+	D_ASSERT(cont != NULL);
+	D_ASSERT(cont->vc_pool != NULL);
+
+	if (cont->vc_pool->vp_sysdb)
+		return 0;
+
+	return bio_xsctxt_health_check(vos_xsctxt_get());
+}
+
 int
 vos_oi_upgrade_layout_ver(struct vos_container *cont, daos_unit_oid_t oid,
 			  uint32_t layout_ver);
+
+void vos_lru_free_track(void *arg, daos_size_t size);
+void vos_lru_alloc_track(void *arg, daos_size_t size);
+
+static inline bool
+vos_obj_skip_akey_supported(struct vos_container *cont, daos_unit_oid_t oid)
+{
+	struct vos_pool *pool = vos_cont2pool(cont);
+
+	if ((pool->vp_feats & VOS_POOL_FEAT_FLAT_DKEY) == 0)
+		return false;
+
+	if (daos_is_array(oid.id_pub) || daos_is_kv(oid.id_pub))
+		return true;
+
+	return false;
+}
+
+/** For flat trees, we sometimes need a fake akey anchor */
+static inline void
+vos_fake_anchor_create(daos_anchor_t *anchor)
+{
+	memset(&anchor->da_buf[0], 0, sizeof(anchor->da_buf));
+	anchor->da_type = DAOS_ANCHOR_TYPE_HKEY;
+}
+
+static inline bool
+vos_io_scm(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size, enum vos_io_stream ios)
+{
+	if (pool->vp_vea_info == NULL)
+		return true;
+
+	if (pool->vp_data_thresh == 0)
+		return true;
+
+	if (size < pool->vp_data_thresh)
+		return true;
+
+	return false;
+}
+
+/**
+ * Insert object ID and its parent container into the array of objects touched by the ongoing
+ * local transaction.
+ *
+ * \param[in] dth	DTX handle for ongoing local transaction
+ * \param[in] cont	VOS container
+ * \param[in] oid	Object ID
+ *
+ * \return		0		: Success.
+ *			-DER_NOMEM	: Run out of the volatile memory.
+ */
+int
+vos_insert_oid(struct dtx_handle *dth, struct vos_container *cont, daos_unit_oid_t *oid);
 
 #endif /* __VOS_INTERNAL_H__ */

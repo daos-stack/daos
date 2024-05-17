@@ -35,9 +35,11 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
         the values are weighted according to the number of timeout rpc and resent update rpc.
 
         Note:
-            There is not yet a telemetry counter defining the number of failing fetch operations.
-            However, the number of timeout_ops should be at least equal to the number of fetch which
-            have failed and thus have been redo one or more times.
+            The extra network traffic needed to manage transient errors could not be accurately
+            predicted and thus the returned intervals could be invalid when such errors are
+            occurring.  Moreover, there is not yet a telemetry counter defining the number of
+            failing fetch operations.  However, the number of timeout_ops should be at least equal
+            to the number of fetch which have failed and thus have been redo one or more times.
 
         Args:
             timeout_ops (int): Total number of timed out RPC requests.
@@ -78,7 +80,7 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
                 ),
                 "engine_pool_xferred_fetch": (
                     ops_number * self.ior_cmd.transfer_size.value,
-                    (ops_number + timeout_ops + 1) * self.ior_cmd.transfer_size.value
+                    (ops_number + timeout_ops + 2) * self.ior_cmd.transfer_size.value
                 ),
                 "engine_pool_xferred_update": (
                     3 * ops_number * self.ior_cmd.transfer_size.value,
@@ -161,6 +163,7 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
         # collect second set of pool metric data after read/write
         metrics_end = self.get_metrics(metric_names)
 
+        # Compute the number of operations done
         metrics = {}
         for name in metric_names:
             metrics[name] = metrics_end[name] - metrics_init[name]
@@ -168,9 +171,16 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
                 "Successfully retrieve metric: %s=%d (init=%d, end=%d)",
                 name, metrics[name], metrics_init[name], metrics_end[name])
 
-        # perform verification check
+        # Check if transient networking occurred during the test.
         timeout_ops = metrics["engine_net_req_timeout"]
         resent_ops = metrics["engine_pool_resent"]
+        if timeout_ops > 0 or resent_ops > 0:
+            self.log.info(
+                "Transient networking errors occurred during the test which could lead "
+                "to false positive: timeout_ops=%d, resent_ops=%d",
+                timeout_ops, resent_ops)
+
+        # perform verification check
         expected_values = self.get_expected_value_range(timeout_ops, resent_ops)
         for name in expected_values:
             val = metrics[name]

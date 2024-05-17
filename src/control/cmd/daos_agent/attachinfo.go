@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,7 +7,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 
@@ -21,8 +20,10 @@ import (
 type dumpAttachInfoCmd struct {
 	configCmd
 	ctlInvokerCmd
+	cmdutil.LogCmd
 	cmdutil.JSONOutputCmd
-	Output string `short:"o" long:"output" default:"stdout" description:"Dump output to this location"`
+	Output      string `short:"o" long:"output" default:"stdout" description:"Dump output to this location"`
+	ProviderIdx *uint  // TODO SRS-31: Enable with multiprovider functionality: `short:"n" long:"provider_idx" description:"Index of provider to fetch (if multiple)"`
 }
 
 func (cmd *dumpAttachInfoCmd) Execute(_ []string) error {
@@ -36,7 +37,7 @@ func (cmd *dumpAttachInfoCmd) Execute(_ []string) error {
 		out = f
 	}
 
-	ctx := context.Background()
+	ctx := cmd.MustLogCtx()
 	req := &control.GetAttachInfoReq{
 		AllRanks: true,
 	}
@@ -50,10 +51,21 @@ func (cmd *dumpAttachInfoCmd) Execute(_ []string) error {
 		return cmd.OutputJSON(resp, err)
 	}
 
+	providerIdx := cmd.cfg.ProviderIdx
+	if cmd.ProviderIdx != nil {
+		providerIdx = *cmd.ProviderIdx
+	}
+
+	ranks, err := getServiceRanksForProviderIdx(resp, providerIdx)
+	if err != nil {
+		return err
+	}
+
 	system := cmd.cfg.SystemName
 	if resp.System != "" {
 		system = resp.System
 	}
+
 	/**
 	 * cart/crt_group.c:crt_group_config_save()
 	 *
@@ -77,11 +89,37 @@ func (cmd *dumpAttachInfoCmd) Execute(_ []string) error {
 	 */
 	ew := txtfmt.NewErrWriter(out)
 	fmt.Fprintf(ew, "name %s\n", system)
-	fmt.Fprintf(ew, "size %d\n", len(resp.ServiceRanks))
+	fmt.Fprintf(ew, "size %d\n", len(ranks))
 	fmt.Fprintln(ew, "all")
-	for _, psr := range resp.ServiceRanks {
+	for _, psr := range ranks {
 		fmt.Fprintf(ew, "%d %s\n", psr.Rank, psr.Uri)
 	}
 
 	return ew.Err
+}
+
+func getServiceRanksForProviderIdx(inResp *control.GetAttachInfoResp, idx uint) ([]*control.PrimaryServiceRank, error) {
+	if idx == 0 {
+		// Primary provider
+		return inResp.ServiceRanks, nil
+	}
+
+	secIdx := int(idx) - 1
+	if secIdx < 0 || secIdx >= len(inResp.AlternateClientNetHints) {
+		return nil, errors.Errorf("provider index must be in range 0 <= idx <= %d", len(inResp.AlternateClientNetHints))
+	}
+
+	hint := inResp.AlternateClientNetHints[secIdx]
+	ranks := make([]*control.PrimaryServiceRank, 0)
+	for _, r := range inResp.AlternateServiceRanks {
+		if r.ProviderIdx == hint.ProviderIdx {
+			ranks = append(ranks, r)
+		}
+	}
+
+	if len(ranks) == 0 {
+		return nil, errors.Errorf("no ranks for provider %q (idx %d)", hint.Provider, idx)
+	}
+
+	return ranks, nil
 }

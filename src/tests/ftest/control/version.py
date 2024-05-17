@@ -3,11 +3,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-import re
 import json
+import re
 
 from apricot import TestWithServers
-from general_utils import run_pcmd, report_errors, append_error
+from general_utils import append_error, report_errors, run_pcmd
 from server_utils_base import DaosServerCommandRunner
 
 

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,20 +15,34 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
+	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/telemetry"
 	"github.com/daos-stack/daos/src/control/logging"
 )
+
+func hostResps(resps ...*mgmtpb.GetAttachInfoResp) []*control.HostResponse {
+	result := []*control.HostResponse{}
+	for _, r := range resps {
+		result = append(result, &control.HostResponse{
+			Message: r,
+		})
+	}
+	return result
+}
 
 func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 	testSys := "test_sys"
@@ -276,7 +290,10 @@ func TestAgent_mgmtModule_getAttachInfo_Parallel(t *testing.T) {
 		go func(n int) {
 			defer wg.Done()
 
-			_, err := mod.getAttachInfo(test.Context(t), 0, sysName)
+			_, err := mod.getAttachInfo(test.Context(t), 0,
+				&mgmtpb.GetAttachInfoReq{
+					Sys: sysName,
+				})
 			if err != nil {
 				panic(errors.Wrapf(err, "thread %d", n))
 			}
@@ -385,6 +402,119 @@ func TestAgent_mgmtModule_RefreshCache(t *testing.T) {
 			err := mod.RefreshCache(test.Context(t))
 
 			test.CmpErr(t, tc.expErr, err)
+		})
+	}
+}
+
+func TestAgent_handleSetupClientTelemetry(t *testing.T) {
+	testCreds := &unix.Ucred{
+		Uid: 123,
+		Gid: 456,
+	}
+	testSysName := "test-sys"
+	testJobID := "test-job"
+	testShmKey := int32(42)
+
+	for name, tc := range map[string]struct {
+		clientBytes []byte
+		clientReq   *mgmtpb.ClientTelemetryReq
+		clientCred  *unix.Ucred
+		expResp     *mgmtpb.ClientTelemetryResp
+		expErr      error
+	}{
+		"nil client request": {
+			clientReq:  nil,
+			clientCred: testCreds,
+			expErr:     errors.New("empty request"),
+		},
+		"garbage client request": {
+			clientBytes: []byte("invalid"),
+			clientCred:  testCreds,
+			expErr:      drpc.UnmarshalingPayloadFailure(),
+		},
+		"unset jobid": {
+			clientReq: &mgmtpb.ClientTelemetryReq{
+				Sys:    testSysName,
+				Jobid:  "",
+				ShmKey: testShmKey,
+			},
+			clientCred: testCreds,
+			expErr:     errors.New("empty jobid"),
+		},
+		"unset shm key": {
+			clientReq: &mgmtpb.ClientTelemetryReq{
+				Sys:    testSysName,
+				Jobid:  testJobID,
+				ShmKey: 0,
+			},
+			clientCred: testCreds,
+			expErr:     errors.New("unset shm key"),
+		},
+		"nil user creds": {
+			clientReq: &mgmtpb.ClientTelemetryReq{
+				Sys:    testSysName,
+				Jobid:  testJobID,
+				ShmKey: testShmKey,
+			},
+			clientCred: nil,
+			expErr:     errors.New("nil user credentials"),
+		},
+		"success": {
+			clientReq: &mgmtpb.ClientTelemetryReq{
+				Sys:    testSysName,
+				Jobid:  testJobID,
+				ShmKey: testShmKey,
+			},
+			clientCred: testCreds,
+			expResp: &mgmtpb.ClientTelemetryResp{
+				AgentUid: int32(unix.Getuid()),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mod := &mgmtModule{
+				log: log,
+			}
+
+			var reqBytes []byte
+			if len(tc.clientBytes) > 0 {
+				reqBytes = tc.clientBytes
+			} else {
+				var err error
+				reqBytes, err = proto.Marshal(tc.clientReq)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			testID := uint32(telemetry.NextTestID(telemetry.AgentIDBase))
+			telemetry.InitTestMetricsProducer(t, int(testID), 2048)
+			defer telemetry.CleanupTestMetricsProducer(t)
+
+			parent := test.MustLogContext(t, log)
+			ctx, err := telemetry.Init(parent, testID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer telemetry.Fini()
+
+			gotResp, gotErr := mod.handleSetupClientTelemetry(ctx, reqBytes, tc.clientCred)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			expRespBytes, err := proto.Marshal(tc.expResp)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(expRespBytes, gotResp, protocmp.Transform()); diff != "" {
+				t.Fatalf("-want, +got:\n%s", diff)
+			}
 		})
 	}
 }

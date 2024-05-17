@@ -117,7 +117,9 @@ extern "C" {
 	/** Invalid user/group permissions.*/                                                      \
 	ACTION(DER_SHMEM_PERMS, Unable to access shared memory segment due to incompatible user or group permissions) \
 	/** Fatal (non-retry-able) transport layer mercury error */                                \
-	ACTION(DER_HG_FATAL, Fatal transport layer mercury error)
+	ACTION(DER_HG_FATAL, Fatal transport layer mercury error)                                  \
+	/** Quota limit reached on the requested resource */                                       \
+	ACTION(DER_QUOTA_LIMIT, Quota limit reached)
 	/** TODO: add more error numbers */
 
 /** Preprocessor macro defining DAOS errno values and internal definition of d_errstr */
@@ -205,11 +207,12 @@ extern "C" {
 	ACTION(DER_NVME_IO, NVMe I / O error)                                                      \
 	ACTION(DER_NO_CERT, Unable to access one or more certificates)                             \
 	ACTION(DER_BAD_CERT, Invalid x509 certificate)                                             \
-	ACTION(DER_VOS_PARTIAL_UPDATE, VOS partial update error)                                   \
+	ACTION(DER_VOS_PARTIAL_UPDATE, Same epoch partial overwrite of VOS array value disallowed) \
 	ACTION(DER_CHKPT_BUSY, Page is temporarily read only due to checkpointing)                 \
-	ACTION(DER_DIV_BY_ZERO,	Division by zero)
-
-/* clang-format on */
+	ACTION(DER_DIV_BY_ZERO,	Division by zero)						   \
+	/** Target is overload, retry RPC */							   \
+	ACTION(DER_OVERLOAD_RETRY, "retry later because of overloaded service")			   \
+	ACTION(DER_NOT_RESUME, Cannot resume former DAOS check instance)
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\

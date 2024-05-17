@@ -1,25 +1,30 @@
 #!/bin/bash
-# shellcheck disable=SC1000-SC9999
+# shellcheck disable=all # Jinja2 template can not be parsed with shellcheck
 
-set -o pipefail
+set -u -o pipefail
 
-VERSION=0.3
-CWD="$(realpath "$(dirname $0)")"
-declare -A VALID_CMDS=([install]=true [update]=true)
+VERSION=0.4
+CWD="$(realpath "${0%}")"
+CWD="${CWD%/*}"
 
 DAOS_INSTALL_DIR="{{ daos_runtime_dir }}/install"
+DAOS_VENV_DIR="{{ daos_runtime_dir }}/virtualenvs"
 DAOS_SOURCE_DIR="{{ daos_source_dir }}"
 SERVERS_LIST="{{ groups["daos_servers"] | join(',') }}"
 {% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
 CLIENTS_LIST="{{ groups["daos_clients"] | join(',') }}"
 {% endif %}
 
-SCONS_EXE=scons-3
+SCONS_EXE=scons
+SSH_EXE=ssh
 CLUSH_EXE=clush
+NODESET_EXE=nodeset
 MODULE_EXE=module
 CMAKE_EXE=cmake3
 MAKE_EXE=make
 WGET_EXE=wget
+PYTHON_EXE=python3.11
+PIP_EXE=pip
 
 CLUSH_OPTS="-bL -S"
 
@@ -51,7 +56,10 @@ TRACE_LEVEL_VERBOSE=1
 TRACE_LEVEL_DEBUG=2
 TRACE_LEVEL=$TRACE_LEVEL_STANDARD
 
+DAOS_BUILD_DEPS=false
+DAOS_BUILD_TYPE=debug
 JOBS_NB=1
+FORCE_INSTALL=false
 
 function debug
 {
@@ -97,6 +105,7 @@ function fatal
 
 function check_cmds
 {
+	hash -r
 	for cmd in $@
 	do
 		{ hash $cmd > "/dev/null" 2>&1 ; } || { fatal "$cmd command not installed" ; }
@@ -106,7 +115,7 @@ function check_cmds
 function usage
 {
 	cat <<- EOF
-		usage: daos-make.sh [OPTIONS] CMD
+		usage: daos-make.sh [OPTIONS]
 
 		Build and install DAOS for running avocado functional tests
 
@@ -116,17 +125,16 @@ function usage
 		       --vol-daos <path>	Path of vol-daos source tree
 		       --mpifileutils <path>    Path of mpi file utils source tree
 		       --ior <path>             Path of ior file utils source tree
+		       --fio <path>             Path of fio file utils source tree
+		   -b, --build-type <type>      DAOS build type: debug, release or dev
+		   -d, --deps                   Build DAOS dependencies
 		   -j, --jobs <job>             Allow N jobs at once; one job with no arg
-		   -f, --force                  Overwrite the current install of DAOS
+		   -f, --force                  Overwrite the current install of DAOS and deps
 		   -h, --help                   Show this help message and exit
 		   -V, --version                Show version number
 		   -q, --quiet                  Quiet mode
 		   -v, --verbose                Verbose mode
 		   -D, --debug                  Debug mode
-
-		Commands:
-		   install                      Build and install DAOS
-		   update                       Update current install of DAOS
 	EOF
 }
 
@@ -140,7 +148,7 @@ function run
 	fi
 }
 
-OPTIONS=$(getopt -o "j:fhVvDq" --long "mpich:,hdf5:,vol-daos:,mpifileutils:,ior:,jobs:,force,help,version,verbose,debug,quiet" -- "$@") || exit 1
+OPTIONS=$(getopt -o "b:dj:fhVvDq" --long "mpich:,hdf5:,vol-daos:,mpifileutils:,ior:,fio:,build-type:,deps,jobs:,force,help,version,verbose,debug,quiet" -- "$@") || exit 1
 eval set -- "$OPTIONS"
 while true
 do
@@ -150,6 +158,9 @@ do
 		--vol-daos) VOL_DAOS_PATH="$2" ; shift 2 ;;
 		--mpifileutils) MPI_FILE_UTILS_PATH="$2" ; shift 2 ;;
 		--ior) IOR_PATH="$2" ; shift 2 ;;
+		--fio) FIO_PATH="$2" ; shift 2 ;;
+		-b|--build-type) DAOS_BUILD_TYPE="$2" ; shift 2 ;;
+		-d|--deps) DAOS_BUILD_DEPS=true ; shift 1 ;;
 		-j|--jobs) JOBS_NB="$2" ; shift 2 ;;
 		-f|--force) FORCE_INSTALL=true ; shift 1;;
 		-h|--help) usage ; exit 0;;
@@ -162,32 +173,29 @@ do
 	esac
 done
 
-[[ $1 ]] || fatal "Command not defined: use install or update"
-CMD="$1"
-[[ ${VALID_CMDS[$CMD]} == true ]] || fatal "Invalid command \"$CMD\": use install or update"
-
-check_cmds $SCONS_EXE $MODULE_EXE $CLUSH_EXE $WGET_EXE $MAKE_EXE $CMAKE_EXE
+check_cmds $SSH_EXE $WGET_EXE $CLUSH_EXE $NODESET_EXE $MODULE_EXE $MAKE_EXE $CMAKE_EXE
 
 set -e
 
-info "Mount of home partition"
+info "Checking of home partition"
 {% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
-run $CLUSH_EXE $CLUSH_OPTS -l root -w $CLIENTS_LIST -w $SERVERS_LIST mountpoint --quiet "$HOME"
+for host in $($NODESET_EXE -e $CLIENTS_LIST $SERVERS_LIST)
 {% else %}
-run $CLUSH_EXE $CLUSH_OPTS -w $SERVERS_LIST mountpoint --quiet "$HOME"
+for host in $($NODESET_EXE -e $SERVERS_LIST)
 {% endif %}
-
-for dir in "$DAOS_INSTALL_DIR" "$DAOS_SOURCE_DIR/build"
 do
-	if [[ -d "$dir" && "$CMD" == install ]]; then
-		[[ -n "$FORCE_INSTALL" ]] || fatal "DAOS already installed: use install --force or update."
-		info "Removing old DAOS install directory $dir"
+	run $SSH_EXE root@$host mountpoint --quiet "$HOME" || fatal "Home directory '$home' not mounted on $host"
+done
+
+if "$FORCE_INSTALL" ; then
+	for dir in "$DAOS_INSTALL_DIR" "$DAOS_VENV_DIR" "$DAOS_SOURCE_DIR/build"
+	do
+		info "Removing old DAOS directory $dir"
 		if ! run /bin/rm -fr "$dir" ; then
 			fatal "Old install directory $dir could not be removed"
 		fi
-
-	fi
-done
+	done
+fi
 
 if [[ ! -d "$DAOS_INSTALL_DIR" ]] ; then
 	info "Creating DAOS install directory $DAOS_INSTALL_DIR"
@@ -196,21 +204,52 @@ if [[ ! -d "$DAOS_INSTALL_DIR" ]] ; then
 	fi
 fi
 
-cd "$DAOS_SOURCE_DIR"
-SCONS_OPTS="-j $JOBS_NB --implicit-deps-changed"
-case $CMD in
-	install) SCONS_OPTS="$SCONS_OPTS --build-deps=yes --config=force" ;;
-	update) SCONS_OPTS="$SCONS_OPTS --build-deps=no" ;;
-	*) fatal "Unexpected case" ;;
-esac
-
-info "Building and installing DAOS from source tree $PWD to $DAOS_INSTALL_DIR"
-if ! run env MPI_PKG=any "$SCONS_EXE" BUILD_TYPE=debug PREFIX="$DAOS_INSTALL_DIR" install $SCONS_OPTS ; then
-	fatal "DAOS could not be properly build and/or installed"
+if [[ ! -d "$DAOS_VENV_DIR" ]] ; then
+	info "Creating DAOS python virtualenv directory $DAOS_VENV_DIR"
+	if ! run mkdir -p "$DAOS_VENV_DIR" ; then
+		fatal "DAOS python virtualenv directory $DAOS_VENV_DIR could not be created"
+	fi
 fi
 
+if [[ ! -f "$DAOS_VENV_DIR/bin/activate" ]] ; then
+	info "Creating DAOS python virtualenv $DAOS_VENV_DIR"
+	run $PYTHON_EXE -m venv "$DAOS_VENV_DIR"
+fi
+info "Installing DAOS python virtualenv $DAOS_VENV_DIR"
+source "$DAOS_VENV_DIR/bin/activate"
+run $PIP_EXE install --upgrade pip
+run $PIP_EXE install -r "$DAOS_SOURCE_DIR/requirements.txt"
+
+SCONS_OPTS="--directory="$DAOS_SOURCE_DIR" --jobs=$JOBS_NB"
+
+if "$DAOS_BUILD_DEPS" ; then
+	info "Building DAOS dependencies from source tree $DAOS_SOURCE_DIR"
+	if ! run "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" PREFIX="$DAOS_INSTALL_DIR" $SCONS_OPTS --build-deps=only ; then
+		fatal "DAOS dependencies could not be properly build"
+	fi
+fi
+
+info "Building DAOS from source tree $DAOS_SOURCE_DIR"
+# NOTE Dependencies will not be build as 'no' is default value of the --build-deps option
+if ! run env MPI_PKG=any "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" PREFIX="$DAOS_INSTALL_DIR" $SCONS_OPTS ; then
+	fatal "DAOS could not be properly build"
+fi
+
+info "Installing DAOS to $DAOS_INSTALL_DIR"
+source "$DAOS_VENV_DIR/bin/activate"
+if ! run "$SCONS_EXE" install $SCONS_OPTS ; then
+	fatal "DAOS could not be properly installed"
+fi
+
+deactivate
+
 info "Finalizing install of ftest setup scripts"
-run ln -vfs "$DAOS_SOURCE_DIR/.build_vars.sh" "$DAOS_SOURCE_DIR/utils/sl/.build_vars-Linux.sh"
+for file_path in "$DAOS_SOURCE_DIR"/.build_vars*
+do
+	file_name=$(basename $file_path)
+	rm -fv "$DAOS_INSTALL_DIR/lib/daos/$file_name"
+	run cp -av "$file_path" "$DAOS_INSTALL_DIR/lib/daos/$file_name"
+done
 
 info "Finalizing spdk install"
 for item in $(find "$DAOS_INSTALL_DIR/share/daos" -type f)
@@ -242,14 +281,14 @@ run $CLUSH_EXE $CLUSH_OPTS -l root -w $SERVERS_LIST rm -f /etc/ld.so.cache
 run $CLUSH_EXE $CLUSH_OPTS -l root -w $SERVERS_LIST ldconfig
 {% endif %}
 
-if [[ $MPICH_PATH ]] ; then
+if [[ ${MPICH_PATH:+x} ]] ; then
 	info "Building and installing MPICH from source tree $MPICH_PATH to $DAOS_INSTALL_DIR"
 
 	if [[ ! -f "$MPICH_PATH/mpich-doxygen.in" ]] ; then
 		fatal "Invalid MPICH directory: path=$MPICH_PATH"
 	fi
 
-	if [[ "$CMD" == install && -n "$FORCE_INSTALL" ]] ; then
+	if "$FORCE_INSTALL" ; then
 		info "Removing old MPICH install"
 		if ! run rm -fr "$MPICH_PATH/build" "$MPICH_PATH/configure" ; then
 			fatal "Old install of MPICH could not be removed"
@@ -336,24 +375,24 @@ if [[ $MPICH_PATH ]] ; then
 		mkdir -p /usr/share/modulefiles/mpi
 		ln -fs "$DAOS_INSTALL_DIR/share/modulefiles/mpich-x86_64" /usr/share/modulefiles/mpi/mpich-x86_64
 		EOF
-	} | run $CLUSH_EXE $CLUSH_OPTS -l root -w $CLIENTS_LIST bash -s
+	} | run $CLUSH_EXE $CLUSH_OPTS -l root -w $CLIENTS_LIST -w $SERVERS_LIST bash -s
 fi
 
-if [[ $HDF5_PATH ]] ; then
+if [[ ${HDF5_PATH:+x} ]] ; then
 	info "Building and installing HDF5 from source tree $HDF5_PATH to $DAOS_INSTALL_DIR"
 
 	if [[ ! -f "$HDF5_PATH/config/libhdf5.pc.in" ]] ; then
 		fatal "Invalid HDF5 directory: path=$HDF5_PATH"
 	fi
 
-	if [[ "$CMD" == install && -n "$FORCE_INSTALL" ]] ; then
+	if "$FORCE_INSTALL" ; then
 		info "Removing old HDF5 install"
 		if ! run rm -fr "$HDF5_PATH/build" "$HDF5_PATH/configure" ; then
 			fatal "Old install of HDF5 could not be removed"
 		fi
 	fi
 
-	$MODULE_EXE load mpi/mpich-x86_64
+	run $MODULE_EXE load mpi/mpich-x86_64
 
 	if [[ ! -f "$HDF5_PATH/configure" ]] ; then
 		pushd "$HDF5_PATH" > /dev/null
@@ -382,21 +421,21 @@ if [[ $HDF5_PATH ]] ; then
 	popd > /dev/null
 fi
 
-if [[ $VOL_DAOS_PATH ]] ; then
+if [[ ${VOL_DAOS_PATH:+x} ]] ; then
 	info "Building and installing DAOS HDF5 Volume from source tree $VOL_DAOS_PATH to $DAOS_INSTALL_DIR"
 
 	if [[ ! -f "$VOL_DAOS_PATH/CMake/hdf5_vol_daos.pc.in" ]] ; then
 		fatal "Invalid DAOS HDF5 Volume directory: path=$VOL_DAOS_PATH"
 	fi
 
-	if [[ "$CMD" == install && -n "$FORCE_INSTALL" ]] ; then
+	if "$FORCE_INSTALL" ; then
 		info "Removing old DAOS HDF5 Volume install"
 		if ! run rm -fr "$VOL_DAOS_PATH/build" ; then
 			fatal "Old install of HDF5 could not be removed"
 		fi
 	fi
 
-	$MODULE_EXE load mpi/mpich-x86_64
+	run $MODULE_EXE load mpi/mpich-x86_64
 
 	run mkdir -p "$VOL_DAOS_PATH/build"
 	pushd "$VOL_DAOS_PATH/build" > /dev/null
@@ -428,21 +467,21 @@ if [[ $VOL_DAOS_PATH ]] ; then
 	popd > /dev/null
 fi
 
-if [[ $MPI_FILE_UTILS_PATH ]] ; then
+if [[ ${MPI_FILE_UTILS_PATH:+x} ]] ; then
 	info "Building and installing MPI File Utils from source tree $MPI_FILE_UTILS_PATH to $DAOS_INSTALL_DIR"
 
 	if [[ ! -f "$MPI_FILE_UTILS_PATH/mpifileutils.spec" ]] ; then
 		fatal "Invalid MPI File Utils directory: path=$MPI_FILE_UTILS_PATH"
 	fi
 
-	if [[ "$CMD" == install && -n "$FORCE_INSTALL" ]] ; then
+	if "$FORCE_INSTALL" ; then
 		info "Removing old MPI File Utils install"
 		if ! run rm -fr "$MPI_FILE_UTILS_PATH/deps" "$MPI_FILE_UTILS_PATH/build" "$MPI_FILE_UTILS_PATH/configure" ; then
 			fatal "Old install of MPI File Utils could not be removed"
 		fi
 	fi
 
-	$MODULE_EXE load mpi/mpich-x86_64
+	run $MODULE_EXE load mpi/mpich-x86_64
 
 	run mkdir -p "$MPI_FILE_UTILS_PATH/deps" "$MPI_FILE_UTILS_PATH/build"
 
@@ -499,21 +538,21 @@ if [[ $MPI_FILE_UTILS_PATH ]] ; then
 	popd > /dev/null
 fi
 
-if [[ $IOR_PATH ]] ; then
+if [[ ${IOR_PATH:+x} ]] ; then
 	info "Building and installing IOR from source tree $IOR_PATH to $DAOS_INSTALL_DIR"
 
 	if [[ ! -f "$IOR_PATH/src/ior.c" ]] ; then
 		fatal "Invalid IOR directory: path=$IOR_PATH"
 	fi
 
-	if [[ "$CMD" == install && -n "$FORCE_INSTALL" ]] ; then
+	if "$FORCE_INSTALL" ; then
 		info "Removing old IOR install"
 		if ! run rm -fr "$IOR_PATH/build" "$IOR_PATH/configure" ; then
 			fatal "Old install of IOR could not be removed"
 		fi
 	fi
 
-	$MODULE_EXE load mpi/mpich-x86_64
+	run $MODULE_EXE load mpi/mpich-x86_64
 
 	if [[ ! -f "$IOR_PATH/configure" ]] ; then
 		pushd "$IOR_PATH" > /dev/null
@@ -537,6 +576,52 @@ if [[ $IOR_PATH ]] ; then
 	run env CFLAGS="-g -O0" make -j $(nproc) install
 
 	popd > /dev/null
+fi
+
+if [[ ${FIO_PATH:+x} ]] ; then
+	info "Building and installing FIO from source tree $FIO_PATH to $DAOS_INSTALL_DIR"
+
+	if [[ ! -f "$FIO_PATH/fio.c" ]] ; then
+		fatal "Invalid FIO: path=$FIO_PATH"
+	fi
+
+	if "$FORCE_INSTALL" ; then
+		info "Removing old FIO install"
+		if ! run rm -fr "$FIO_PATH/build" ; then
+			fatal "Old install of FIO could not be removed"
+		fi
+	fi
+
+	run mkdir -p "$FIO_PATH/build"
+	pushd "$FIO_PATH/build" > /dev/null
+
+	if [[ ! -f "$FIO_PATH/build/Makefile" ]] ; then
+		run env CFLAGS="-I$DAOS_INSTALL_DIR/include" LDFLAGS="-L$DAOS_INSTALL_DIR/lib64" ../configure --prefix="$DAOS_INSTALL_DIR"
+	fi
+
+	run env CFLAGS="-g -O0" make -j $(nproc) install
+
+	popd > /dev/null
+
+	pushd "$FIO_PATH/doc" > /dev/null
+
+	FIO_VENV_DIR="$FIO_PATH/build/virtualenvs"
+	if [[ ! -f "$FIO_VENV_DIR/bin/activate" ]] ; then
+		info "Creating FIO python virtualenv $FIO_VENV_DIR"
+		run $PYTHON_EXE -m venv "$FIO_VENV_DIR"
+	fi
+
+	info "Installing FIO python virtualenv $FIO_VENV_DIR"
+	source "$FIO_VENV_DIR/bin/activate"
+	run $PIP_EXE install --upgrade pip
+	run $PIP_EXE install sphinx
+
+	run make man
+	run install -v output/man/fio.1 $DAOS_INSTALL_DIR/man/man1/fio.1
+
+	deactivate
+
+	popd
 fi
 
 info "Updating dynamic linker configuration"

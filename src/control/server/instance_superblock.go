@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -85,11 +85,11 @@ func (ei *EngineInstance) hasSuperblock() bool {
 	return ei.getSuperblock() != nil
 }
 
-// NeedsSuperblock indicates whether or not the instance appears
+// needsSuperblock indicates whether or not the instance appears
 // to need a superblock to be created in order to start.
 //
 // Should not be called if SCM format is required.
-func (ei *EngineInstance) NeedsSuperblock() (bool, error) {
+func (ei *EngineInstance) needsSuperblock() (bool, error) {
 	if ei.hasSuperblock() {
 		ei.log.Debugf("instance %d has no superblock set", ei.Index())
 		return false, nil
@@ -111,16 +111,16 @@ func (ei *EngineInstance) NeedsSuperblock() (bool, error) {
 }
 
 // createSuperblock creates instance superblock if needed.
-func (ei *EngineInstance) createSuperblock(recreate bool) error {
+func (ei *EngineInstance) createSuperblock() error {
 	if ei.IsStarted() {
 		return errors.Errorf("can't create superblock: instance %d already started", ei.Index())
 	}
 
-	needsSuperblock, err := ei.NeedsSuperblock() // scm format completed by now
+	needsSuperblock, err := ei.needsSuperblock() // scm format completed by now
 	if !needsSuperblock {
 		return nil
 	}
-	if err != nil && !recreate {
+	if err != nil {
 		return err
 	}
 

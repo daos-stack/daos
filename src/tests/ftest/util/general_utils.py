@@ -5,136 +5,30 @@
 """
 # pylint: disable=too-many-lines
 
-from logging import getLogger
-import os
-import re
-import random
-import string
-import time
 import ctypes
 import math
+import os
+import random
+import re
+import string
+import time
+from datetime import datetime
 from getpass import getuser
 from importlib import import_module
+from logging import getLogger
 from socket import gethostname
-from datetime import datetime
 
 from avocado.core.settings import settings
 from avocado.core.version import MAJOR
 from avocado.utils import process
-from ClusterShell.Task import task_self
 from ClusterShell.NodeSet import NodeSet
-
+from ClusterShell.Task import task_self
+from run_utils import RunException, get_clush_command, run_local, run_remote
 from user_utils import get_chown_command, get_primary_group
-from run_utils import get_clush_command, run_remote, run_local, RunException
 
 
 class DaosTestError(Exception):
     """DAOS API exception class."""
-
-
-class SimpleProfiler():
-    """Simple profiler class.
-
-    Counts the number of times a function is called and measure its execution
-    time.
-    """
-
-    def __init__(self):
-        """Initialize a SimpleProfiler object."""
-        self._stats = {}
-        self._logger = getLogger()
-
-    def clean(self):
-        """Clean the metrics collect so far."""
-        self._stats = {}
-
-    def run(self, fun, tag, *args, **kwargs):
-        """Run a function and update its stats.
-
-        Args:
-            fun (function): Function to be executed
-            args  (tuple): Argument list
-            kwargs (dict): variable-length named arguments
-        """
-        self._logger.info("Running function: %s()", fun.__name__)
-
-        start_time = time.time()
-
-        ret = fun(*args, **kwargs)
-
-        end_time = time.time()
-        elapsed_time = end_time - start_time
-        self._logger.info(
-            "Execution time: %s", self._pretty_time(elapsed_time))
-
-        if tag not in self._stats:
-            self._stats[tag] = [0, []]
-
-        self._stats[tag][0] += 1
-        self._stats[tag][1].append(elapsed_time)
-
-        return ret
-
-    def get_stat(self, tag):
-        """Retrieve the stats of a function.
-
-        Args:
-            tag (str): Tag to be query
-
-        Returns:
-            tuple: A tuple of the fastest (max), slowest (min), and average
-                execution times.
-
-        """
-        data = self._stats.get(tag, [0, []])
-
-        return self._calculate_metrics(data[1])
-
-    def set_logger(self, fun):
-        """Assign the function to be used for logging.
-
-        Set the function that will be used to print the elapsed time on each
-        function call. If this value is not set, the profiling will be
-        performed silently.
-
-        Parameters:
-            fun (function): Function to be used for logging.
-
-        """
-        self._logger = fun
-
-    def print_stats(self):
-        """Print all the stats collected so far.
-
-        If the logger has not been set, the stats will be printed by using the
-        built-in print function.
-        """
-        self._logger.info("{0:20} {1:5} {2:10} {3:10} {4:10}".format(
-            "Function Tag", "Hits", "Max", "Min", "Average"))
-
-        for fname, data in list(self._stats.items()):
-            max_time, min_time, avg_time = self._calculate_metrics(data[1])
-            self._logger.info(
-                "{0:20} {1:5} {2:10} {3:10} {4:10}".format(
-                    fname,
-                    data[0],
-                    self._pretty_time(max_time),
-                    self._pretty_time(min_time),
-                    self._pretty_time(avg_time)))
-
-    @classmethod
-    def _pretty_time(cls, ftime):
-        """Convert to pretty time string."""
-        return time.strftime("%H:%M:%S", time.gmtime(ftime))
-
-    @classmethod
-    def _calculate_metrics(cls, data):
-        """Calculate the maximum, minimum and average values of a given list."""
-        max_time = max(data)
-        min_time = min(data)
-        avg_time = sum(data) / len(data) if data else 0
-
-        return max_time, min_time, avg_time
 
 
 def human_to_bytes(size):
@@ -147,32 +41,24 @@ def human_to_bytes(size):
         DaosTestError: when an invalid human readable size value is provided
 
     Returns:
-        int: value translated to bytes.
+        int|float: value translated to bytes.
 
     """
-    conversion_sizes = ("", "k", "m", "g", "t", "p", "e")
-    conversion = {
-        1000: ["{}b".format(item) for item in conversion_sizes],
-        1024: ["{}ib".format(item) for item in conversion_sizes],
-    }
-    match = re.findall(r"([0-9.]+)\s*([a-zA-Z]+|)", size)
+    conversion = {}
+    for index, unit in enumerate(('', 'k', 'm', 'g', 't', 'p', 'e')):
+        conversion[unit] = 1000 ** index
+        conversion[f'{unit}b'] = 1000 ** index
+        conversion[f'{unit}ib'] = 1024 ** index
     try:
-        multiplier = 1
-        if match[0][1]:
-            multiplier = -1
-            unit = match[0][1].lower()
-            for item, units in conversion.items():
-                if unit in units:
-                    multiplier = item ** units.index(unit)
-                    break
-            if multiplier == -1:
-                raise DaosTestError(
-                    "Invalid unit detected, not in {}: {}".format(
-                        conversion[1000] + conversion[1024][1:], unit))
-        value = float(match[0][0]) * multiplier
-    except IndexError as error:
-        raise DaosTestError(
-            "Invalid human readable size format: {}".format(size)) from error
+        match = re.findall(r'([0-9.]+)\s*([a-zA-Z]+|)', str(size))
+        number = match[0][0]
+        unit = match[0][1].lower()
+    except (TypeError, IndexError) as error:
+        raise DaosTestError(f'Invalid human readable size format: {size}') from error
+    try:
+        value = float(number) * conversion[unit]
+    except KeyError as error:
+        raise DaosTestError(f'Invalid unit detected, not in {conversion.keys()}: {unit}') from error
     return int(value) if value.is_integer() else value
 
 
@@ -648,26 +534,6 @@ def check_file_exists(hosts, filename, user=None, directory=False,
     return len(missing_file) == 0, missing_file
 
 
-def check_for_pool(host, uuid):
-    """Check if pool folder exist on server.
-
-    Args:
-        host (NodeSet): Server host name
-        uuid (str): Pool uuid to check if exists
-
-    Returns:
-        bool: True if pool folder exists, False otherwise
-
-    """
-    pool_dir = "/mnt/daos/{}".format(uuid)
-    result = check_file_exists(host, pool_dir, directory=True, sudo=True)
-    if result[0]:
-        print("{} exists on {}".format(pool_dir, host))
-    else:
-        print("{} does not exist on {}".format(pool_dir, host))
-    return result[0]
-
-
 def process_host_list(hoststr):
     """
     Convert a slurm style host string into a list of individual hosts.
@@ -751,30 +617,6 @@ def get_random_bytes(length, exclude=None, encoding="utf-8"):
 
     """
     return get_random_string(length, exclude).encode(encoding)
-
-
-def check_pool_files(log, hosts, uuid):
-    """Check if pool files exist on the specified list of hosts.
-
-    Args:
-        log (logging): logging object used to display messages
-        hosts (NodeSet): list of hosts
-        uuid (str): uuid file name to look for in /mnt/daos.
-
-    Returns:
-        bool: True if the files for this pool exist on each host; False
-            otherwise
-
-    """
-    status = True
-    log.info("Checking for pool data on %s", hosts)
-    pool_files = [uuid, "superblock"]
-    for filename in ["/mnt/daos/{}".format(item) for item in pool_files]:
-        result = check_file_exists(hosts, filename, sudo=True)
-        if not result[0]:
-            log.error("%s: %s not found", result[1], filename)
-            status = False
-    return status
 
 
 def join(joiner, *args):
@@ -897,20 +739,6 @@ def get_log_file(name):
     return os.path.join(os.environ.get("DAOS_TEST_LOG_DIR", "/tmp"), name)
 
 
-def check_uuid_format(uuid):
-    """Check for a correct UUID format.
-
-    Args:
-        uuid (str): Pool or Container UUID.
-
-    Returns:
-        bool: status of valid or invalid uuid
-
-    """
-    pattern = re.compile("([0-9a-fA-F-]+)")
-    return bool(len(uuid) == 36 and pattern.match(uuid))
-
-
 def get_numeric_list(numeric_range):
     """Convert a string of numeric ranges into an expanded list of integers.
 
@@ -962,35 +790,30 @@ def get_remote_file_size(host, file_name):
     return int(result.stdout_text)
 
 
-def error_count(error, hostlist, log_file):
-    """Count the number of specific ERRORs found in the log file.
-
-    This function also returns a count of the other ERRORs from same log file.
+def get_errors_count(hostlist, file_glob):
+    """Count the number of errors found in log files.
 
     Args:
-        error (str): DAOS error to look for in .log file. for example -1007
         hostlist (list): System list to looks for an error.
-        log_file (str): Log file name (server/client log).
+        file_glob (str): Glob pattern of the log file to parse.
 
     Returns:
-        tuple: a tuple of the count of errors matching the specified error type
-            and the count of other errors (int, int)
+        dict: A dictionary of the count of errors.
 
     """
     # Get the Client side Error from client_log file.
-    requested_error_count = 0
-    other_error_count = 0
-    command = 'cat {} | grep \" ERR \"'.format(get_log_file(log_file))
-    results = run_pcmd(hostlist, command, False, None, None)
-    for result in results:
-        for line in result["stdout"]:
-            if 'ERR' in line:
-                if error in line:
-                    requested_error_count += 1
-                else:
-                    other_error_count += 1
+    cmd = "cat {} | sed -n -E -e ".format(get_log_file(file_glob))
+    cmd += r"'/^.+[[:space:]]ERR[[:space:]].+[[:space:]]DER_[^(]+\([^)]+\).+$/"
+    cmd += r"s/^.+[[:space:]]DER_[^(]+\((-[[:digit:]]+)\).+$/\1/p'"
+    results = run_pcmd(hostlist, cmd, False, None, None)
+    errors_count = {}
+    for error_str in sum([result["stdout"] for result in results], []):
+        error = int(error_str)
+        if error not in errors_count:
+            errors_count[error] = 0
+        errors_count[error] += 1
 
-    return requested_error_count, other_error_count
+    return errors_count
 
 
 def get_module_class(name, module):

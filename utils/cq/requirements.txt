@@ -1,9 +1,11 @@
-# Packages needed to pylint code.  Most of these are needed for test rather than build.
-# 94.0 is reporting a couple of errors so stick on 93.
-avocado-framework<94
-avocado-framework-plugin-result-html<94
-avocado-framework-plugin-varianter-yaml-to-mux<94
-clustershell
-paramiko
+# Packages which are used by linting but not required for build or test.
 pyenchant
-pylint
+## flake8 6 removed --diff option which breaks flake precommit hook.
+## https://github.com/pycqa/flake8/issues/1389 https://github.com/PyCQA/flake8/pull/1720
+flake8<6.0.0
+isort==5.13.2
+pylint==3.2.0
+yamllint==1.35.1
+codespell==2.2.6
+# Used by ci/jira_query.py which pip installs it standalone.
+jira

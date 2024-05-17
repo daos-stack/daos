@@ -22,6 +22,7 @@ CA_HOME="${1:-.}/daosCA"
 PRIVATE="${CA_HOME}/private"
 CERTS="${CA_HOME}/certs"
 CLIENTS="${CERTS}/clients"
+# shellcheck disable=SC2128
 CONFIGS="$(dirname "${BASH_SOURCE}")"
 
 function setup_directories () {

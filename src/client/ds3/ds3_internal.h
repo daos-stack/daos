@@ -10,9 +10,9 @@
 #define __DAOS_S3_INTERNAL_H__
 
 #include <fcntl.h>
-#include "daos.h"
-#include "daos_fs.h"
-#include "daos_s3.h"
+#include <daos.h>
+#include <daos_fs.h>
+#include <daos_s3.h>
 #include <daos/event.h>
 
 #define METADATA_BUCKET        "_METADATA"

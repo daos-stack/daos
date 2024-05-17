@@ -16,11 +16,16 @@ case "$ID_LIKE" in
     *suse*)
         OPENMPI_RPM=openmpi3
         OPENMPI=gnu-openmpi
+        export MODULEPATH=/usr/share/modules
         ;;
 esac
 
+if [ -n "$DAOS_PKG_VERSION" ]; then
+    DAOS_PKG_VERSION="-${DAOS_PKG_VERSION}"
+fi
+
 set -uex
-sudo $YUM -y install daos-client-"${DAOS_PKG_VERSION}"
+sudo $YUM -y install daos-client"$DAOS_PKG_VERSION"
 if rpm -q daos-server; then
   echo "daos-server RPM should not be installed as a dependency of daos-client"
   exit 1
@@ -31,7 +36,7 @@ if ! sudo $YUM -y history undo last; then
     exit 1
 fi
 sudo $YUM -y erase "$OPENMPI_RPM"
-sudo $YUM -y install daos-client-tests-"${DAOS_PKG_VERSION}"
+sudo $YUM -y install daos-client-tests"$DAOS_PKG_VERSION"
 if rpm -q "$OPENMPI_RPM"; then
   echo "$OPENMPI_RPM RPM should not be installed as a dependency of daos-client-tests"
   exit 1
@@ -45,7 +50,7 @@ if ! sudo $YUM -y history undo last; then
     $YUM history
     exit 1
 fi
-sudo $YUM -y install daos-server-tests-"${DAOS_PKG_VERSION}"
+sudo $YUM -y install daos-server-tests"$DAOS_PKG_VERSION"
 if rpm -q "$OPENMPI_RPM"; then
   echo "$OPENMPI_RPM RPM should not be installed as a dependency of daos-server-tests"
   exit 1
@@ -59,7 +64,7 @@ if ! sudo $YUM -y history undo last; then
     $YUM history
     exit 1
 fi
-sudo $YUM -y install --exclude ompi daos-client-tests-openmpi-"${DAOS_PKG_VERSION}"
+sudo $YUM -y install --exclude ompi daos-client-tests-openmpi"$DAOS_PKG_VERSION"
 if ! rpm -q daos-client; then
   echo "daos-client RPM should be installed as a dependency of daos-client-tests-openmpi"
   exit 1
@@ -77,13 +82,13 @@ if ! sudo $YUM -y history undo last; then
     $YUM history
     exit 1
 fi
-sudo $YUM -y install daos-server-"${DAOS_PKG_VERSION}"
+sudo $YUM -y install daos-server"$DAOS_PKG_VERSION"
 if rpm -q daos-client; then
   echo "daos-client RPM should not be installed as a dependency of daos-server"
   exit 1
 fi
 
-sudo $YUM -y install --exclude ompi daos-client-tests-openmpi-"${DAOS_PKG_VERSION}"
+sudo $YUM -y install --exclude ompi daos-client-tests-openmpi"$DAOS_PKG_VERSION"
 
 me=$(whoami)
 for dir in server agent; do
@@ -94,20 +99,31 @@ done
 sudo mkdir /tmp/daos_sockets
 sudo chmod 0755 /tmp/daos_sockets
 sudo chown "$me:$me" /tmp/daos_sockets
-sudo mkdir -p /mnt/daos
-sudo mount -t tmpfs -o size=16777216k tmpfs /mnt/daos
 
 FTEST=/usr/lib/daos/TESTING/ftest
-sudo PYTHONPATH="$FTEST/util"                               \
-     $FTEST/config_file_gen.py -n "$HOSTNAME"               \
-                               -a /etc/daos/daos_agent.yml  \
-                               -s /etc/daos/daos_server.yml
+
+python3 -m venv venv
+# shellcheck disable=SC1091
+source venv/bin/activate
+pip install --upgrade pip
+pip install -r $FTEST/requirements-ftest.txt
+
 sudo PYTHONPATH="$FTEST/util"                        \
-     $FTEST/config_file_gen.py -n "$HOSTNAME"        \
-                               -d /etc/daos/daos.yml
+     "${VIRTUAL_ENV}"/bin/python $FTEST/config_file_gen.py -n "$HOSTNAME" \
+        -a /etc/daos/daos_agent.yml -s /etc/daos/daos_server.yml
+sudo bash -c 'echo "system_ram_reserved: 4" >> /etc/daos/daos_server.yml'
+sudo PYTHONPATH="$FTEST/util"                        \
+     "${VIRTUAL_ENV}"/bin/python $FTEST/config_file_gen.py \
+     -n "$HOSTNAME" -d /etc/daos/daos_control.yml
 cat /etc/daos/daos_server.yml
 cat /etc/daos/daos_agent.yml
-cat /etc/daos/daos.yml
+cat /etc/daos/daos_control.yml
+
+# python3.6 does not like deactivate with -u set, later versions are OK with it however.
+set +u
+deactivate
+set -u
+
 if ! module load "$OPENMPI"; then
     echo "Unable to load OpenMPI module: $OPENMPI"
     module avail
@@ -115,21 +131,43 @@ if ! module load "$OPENMPI"; then
     exit 1
 fi
 
-coproc SERVER { exec daos_server --debug start -t 1 --recreate-superblocks; } 2>&1
+export POOL_NVME_SIZE=0
+
+coproc SERVER { exec daos_server --debug start -t 1; } 2>&1
 trap 'set -x; kill -INT $SERVER_PID' EXIT
 line=""
-while [[ "$line" != *started\ on\ rank\ 0* ]]; do
-  if ! read -r -t 60 line <&"${SERVER[0]}"; then
-      rc=${PIPESTATUS[0]}
-      if [ "$rc" = "142" ]; then
-          echo "Timed out waiting for output from the server"
-      else
-          echo "Error reading the output from the server: $rc"
-      fi
-      exit "$rc"
-  fi
-  echo "Server stdout: $line"
+stdout=()
+deadline=$((SECONDS+300))
+while [[ $line != *started\ on\ rank\ 0* ]] && [ "$SECONDS" -lt "$deadline" ]; do
+    if ! read -r -t 60 line <&"${SERVER[0]}"; then
+        rc=${PIPESTATUS[0]}
+        if [ "$rc" = "142" ]; then
+            echo "Timed out waiting for output from the server"
+        else
+            echo "Error reading the output from the server: $rc"
+        fi
+        echo "Server output:"
+        export IFS=$'\n'
+        echo "${stdout[*]}"
+        exit "$rc"
+    fi
+    echo "Server stdout: $line"
+    stdout+=("$line")
+    if [[ $line == SCM\ format\ required\ on\ instance\ * ]]; then
+        dmg storage format -l "$HOSTNAME" --force
+        if ! dmg system query -v; then
+            sleep 5
+            dmg system query -v || true
+        fi
+    fi
 done
+if [ "$SECONDS" -ge "$deadline" ]; then
+    echo "Timed out waiting for server to start"
+    echo "Server output:"
+    export IFS=$'\n'
+    echo "${stdout[*]}"
+    exit 1
+fi
 echo "Server started!"
 coproc AGENT { exec daos_agent --debug; } 2>&1
 trap 'set -x; kill -INT $AGENT_PID $SERVER_PID' EXIT

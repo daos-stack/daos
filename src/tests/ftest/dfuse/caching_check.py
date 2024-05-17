@@ -4,9 +4,9 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+from general_utils import percent_change
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand, IorMetrics
-from general_utils import percent_change
 
 
 class DfuseCachingCheck(IorTestBase):
@@ -43,34 +43,34 @@ class DfuseCachingCheck(IorTestBase):
         # update flag
         self.ior_cmd.update_params(flags=flags[0])
 
-        # run ior to write to the dfuse mount point
+        self.log_step('Write to the dfuse mount point')
         self.run_ior_with_pool(fail_on_warning=False, stop_dfuse=False)
 
-        # update ior flag to read
+        self.log_step('Get baseline read performance from dfuse with caching disabled')
         self.ior_cmd.update_params(flags=flags[1])
-        # run ior to read and store the read performance
         base_read_arr = []
         out = self.run_ior_with_pool(fail_on_warning=False, stop_dfuse=False)
         base_read_arr.append(IorCommand.get_ior_metrics(out))
-        # run ior again to read with caching disabled and store performance
         out = self.run_ior_with_pool(fail_on_warning=False, stop_dfuse=False)
         base_read_arr.append(IorCommand.get_ior_metrics(out))
 
         # the index of max_mib
         max_mib = IorMetrics.MAX_MIB
 
-        # unmount dfuse and mount again with caching enabled
+        self.log_step('Re-mount dfuse with caching enabled')
         self.dfuse.unmount(tries=1)
         self.dfuse.update_params(disable_caching=False)
         self.dfuse.run()
-        # run ior to obtain first read performance after mount
+
+        self.log_step('Get first read performance with caching enabled')
         out = self.run_ior_with_pool(fail_on_warning=False, stop_dfuse=False)
         base_read_arr.append(IorCommand.get_ior_metrics(out))
-        # run ior again to obtain second read performance with caching enabled
-        # second read should be multiple times greater than first read
+
+        self.log_step('Get cached read performance')
         out = self.run_ior_with_pool(fail_on_warning=False)
         with_caching = IorCommand.get_ior_metrics(out)
-        # verify cached read performance is multiple times greater than without caching
+
+        self.log_step('Verify cached read performance is greater than first read')
         # Log all the values first, then do the assert so that failures can be checked easily.
         for base_read in base_read_arr:
             actual_change = percent_change(base_read[0][max_mib], with_caching[0][max_mib])

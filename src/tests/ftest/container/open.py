@@ -6,9 +6,8 @@
 import traceback
 import uuid
 
-from avocado.core.exceptions import TestFail
-
 from apricot import TestWithServers
+from avocado.core.exceptions import TestFail
 
 RESULT_PASS = "PASS"  # nosec
 RESULT_FAIL = "FAIL"
@@ -46,7 +45,7 @@ class OpenContainerTest(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=container
-        :avocado: tags=container_open,test_container_open
+        :avocado: tags=OpenContainerTest,test_container_open
         """
         self.pool = []
         self.container = []

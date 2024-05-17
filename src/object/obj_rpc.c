@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -492,52 +492,6 @@ crt_proc_struct_obj_iod_array(crt_proc_t proc, crt_proc_op_t proc_op,
 }
 
 static int
-crt_proc_d_sg_list_t(crt_proc_t proc, crt_proc_op_t proc_op, d_sg_list_t *p)
-{
-	int		i;
-	int		rc;
-
-	if (FREEING(proc_op)) {
-		/* NB: don't need free in crt_proc_d_iov_t() */
-		D_FREE(p->sg_iovs);
-		return 0;
-	}
-
-	rc = crt_proc_uint32_t(proc, proc_op, &p->sg_nr);
-	if (unlikely(rc))
-		return rc;
-
-	rc = crt_proc_uint32_t(proc, proc_op, &p->sg_nr_out);
-	if (unlikely(rc))
-		return rc;
-
-	if (p->sg_nr == 0)
-		return 0;
-
-	switch (proc_op) {
-	case CRT_PROC_DECODE:
-		D_ALLOC_ARRAY(p->sg_iovs, p->sg_nr);
-		if (p->sg_iovs == NULL)
-			return -DER_NOMEM;
-		/* fall through to fill sg_iovs */
-	case CRT_PROC_ENCODE:
-		for (i = 0; i < p->sg_nr; i++) {
-			rc = crt_proc_d_iov_t(proc, proc_op, &p->sg_iovs[i]);
-			if (unlikely(rc)) {
-				if (DECODING(proc_op))
-					D_FREE(p->sg_iovs);
-				return rc;
-			}
-		}
-		break;
-	default:
-		return -DER_INVAL;
-	}
-
-	return rc;
-}
-
-static int
 crt_proc_struct_daos_shard_tgt(crt_proc_t proc, crt_proc_op_t proc_op,
 			       struct daos_shard_tgt *p)
 {
@@ -547,11 +501,55 @@ crt_proc_struct_daos_shard_tgt(crt_proc_t proc, crt_proc_op_t proc_op,
 /* For compounded RPC. */
 
 static int
+crt_proc_struct_dtx_mbs(crt_proc_t proc, crt_proc_op_t proc_op,
+			uint32_t mbs_max_size, struct dtx_memberships **p_mbs)
+{
+	struct dtx_memberships	*mbs = NULL;
+	uint32_t		 size = 0;
+	int			 rc;
+
+	if (FREEING(proc_op)) {
+		D_FREE(*p_mbs);
+		return 0;
+	}
+
+	if (ENCODING(proc_op)) {
+		mbs = *p_mbs;
+		size = sizeof(*mbs) + mbs->dm_data_size;
+	}
+
+	/* Pack the size of mbs to help decode case. */
+	rc = crt_proc_uint32_t(proc, proc_op, &size);
+	if (unlikely(rc))
+		return rc;
+
+	D_ASSERT(size != 0);
+
+	if (DECODING(proc_op)) {
+		/* Allocate enough buffer to hold delay filled bitmap and targets information. */
+		D_ALLOC(mbs, size < mbs_max_size ? mbs_max_size : size);
+		if (mbs == NULL)
+			return -DER_NOMEM;
+	}
+
+	rc = crt_proc_memcpy(proc, proc_op, mbs, size);
+	if (unlikely(rc)) {
+		if (DECODING(proc_op))
+			D_FREE(mbs);
+		return rc;
+	}
+
+	if (DECODING(proc_op))
+		*p_mbs = mbs;
+
+	return 0;
+}
+
+static int
 crt_proc_struct_daos_cpd_sub_head(crt_proc_t proc, crt_proc_op_t proc_op,
 				  struct daos_cpd_sub_head *dcsh, bool mbs)
 {
-	uint32_t	size = 0;
-	int		rc;
+	int	rc;
 
 	if (FREEING(proc_op)) {
 		if (mbs)
@@ -575,30 +573,7 @@ crt_proc_struct_daos_cpd_sub_head(crt_proc_t proc, crt_proc_op_t proc_op,
 	if (!mbs)
 		return 0;
 
-	if (ENCODING(proc_op))
-		/* Pack the size of dcsh->dcsh_mbs to help decode case. */
-		size = sizeof(*dcsh->dcsh_mbs) + dcsh->dcsh_mbs->dm_data_size;
-
-	rc = crt_proc_uint32_t(proc, proc_op, &size);
-	if (unlikely(rc))
-		return rc;
-
-	D_ASSERT(size != 0);
-
-	if (DECODING(proc_op)) {
-		D_ALLOC(dcsh->dcsh_mbs, size);
-		if (dcsh->dcsh_mbs == NULL)
-			return -DER_NOMEM;
-	}
-
-	rc = crt_proc_memcpy(proc, proc_op, dcsh->dcsh_mbs, size);
-	if (unlikely(rc)) {
-		if (DECODING(proc_op))
-			D_FREE(dcsh->dcsh_mbs);
-		return rc;
-	}
-
-	return 0;
+	return crt_proc_struct_dtx_mbs(proc, proc_op, 0, &dcsh->dcsh_mbs);
 }
 
 static int
@@ -894,11 +869,6 @@ crt_proc_struct_daos_cpd_bulk(crt_proc_t proc, crt_proc_op_t proc_op,
 			return rc;
 	}
 
-	if (FREEING(proc_op)) {
-		D_FREE(dcb->dcb_bulk);
-		return 0;
-	}
-
 	rc = crt_proc_uint32_t(proc, proc_op, &dcb->dcb_size);
 	if (unlikely(rc))
 		return rc;
@@ -916,6 +886,9 @@ crt_proc_struct_daos_cpd_bulk(crt_proc_t proc, crt_proc_op_t proc_op,
 	rc = crt_proc_crt_bulk_t(proc, proc_op, dcb->dcb_bulk);
 	if (unlikely(rc))
 		return rc;
+
+	if (FREEING(proc_op))
+		D_FREE(dcb->dcb_bulk);
 
 	/* The other fields will not be packed on-wire. */
 
@@ -1075,16 +1048,225 @@ out:
 	return rc;
 }
 
+static int
+crt_proc_struct_daos_req_comm_in(crt_proc_t proc, crt_proc_op_t proc_op,
+				 struct daos_req_comm_in *drci)
+{
+	int	rc;
+	int	i;
+
+	rc = crt_proc_uint32_t(proc, proc_op, &drci->req_in_uid);
+	if (unlikely(rc))
+		return rc;
+	rc = crt_proc_uint32_t(proc, proc_op, &drci->req_in_gid);
+	if (unlikely(rc))
+		return rc;
+	rc = crt_proc_uint32_t(proc, proc_op, &drci->req_in_projid);
+	if (unlikely(rc))
+		return rc;
+	rc = crt_proc_uint64_t(proc, proc_op, &drci->req_in_enqueue_id);
+	if (unlikely(rc))
+		return rc;
+	for (i = 0; i < 4; i++) {
+		rc = crt_proc_uint64_t(proc, proc_op, &drci->req_in_paddings[i]);
+		if (rc)
+			return rc;
+	}
+	rc = crt_proc_d_string_t(proc, proc_op, &drci->req_in_addr);
+	if (unlikely(rc))
+		return rc;
+	rc = crt_proc_d_string_t(proc, proc_op, &drci->req_in_jobid);
+	if (unlikely(rc))
+		return rc;
+
+	return rc;
+}
+
+static int
+crt_proc_struct_daos_req_comm_out(crt_proc_t proc, crt_proc_op_t proc_op,
+				  struct daos_req_comm_out *drco)
+{
+	int	i;
+	int	rc;
+
+	rc = crt_proc_uint64_t(proc, proc_op, &drco->req_out_enqueue_id);
+	if (unlikely(rc))
+		return rc;
+	for (i = 0; i < 4; i++) {
+		rc = crt_proc_uint64_t(proc, proc_op, &drco->req_out_paddings[i]);
+		if (unlikely(rc))
+			return rc;
+	}
+
+	return 0;
+}
+
+static int
+crt_proc_struct_obj_dtx_mbs(crt_proc_t proc, crt_proc_op_t proc_op,
+			    struct obj_dtx_mbs *odm)
+{
+	int	rc;
+
+	rc = crt_proc_struct_dtx_id(proc, proc_op, &odm->odm_xid);
+	if (unlikely(rc))
+		return rc;
+
+	rc = crt_proc_uint32_t(proc, proc_op, &odm->odm_mbs_max_sz);
+	if (unlikely(rc))
+		return rc;
+
+	rc = crt_proc_uint32_t(proc, proc_op, &odm->odm_padding);
+	if (unlikely(rc))
+		return rc;
+
+	return crt_proc_struct_dtx_mbs(proc, proc_op, odm->odm_mbs_max_sz, &odm->odm_mbs);
+}
+
+static int
+crt_proc_struct_daos_coll_shard(crt_proc_t proc, crt_proc_op_t proc_op, struct daos_coll_shard *dcs)
+{
+	int	rc = 0;
+	int	i;
+
+	if (FREEING(proc_op)) {
+		if (dcs->dcs_buf != &dcs->dcs_inline)
+			D_FREE(dcs->dcs_buf);
+		return 0;
+	}
+
+	rc = crt_proc_uint16_t(proc, proc_op, &dcs->dcs_nr);
+	if (unlikely(rc))
+		return rc;
+
+	rc = crt_proc_uint16_t(proc, proc_op, &dcs->dcs_cap);
+	if (unlikely(rc))
+		return rc;
+
+	rc = crt_proc_uint32_t(proc, proc_op, &dcs->dcs_inline);
+	if (unlikely(rc))
+		return rc;
+
+	if (DECODING(proc_op))
+		dcs->dcs_cap = dcs->dcs_nr;
+
+	if (dcs->dcs_nr <= 1) {
+		if (DECODING(proc_op))
+			dcs->dcs_buf = &dcs->dcs_inline;
+		return 0;
+	}
+
+	if (DECODING(proc_op)) {
+		D_ALLOC_ARRAY(dcs->dcs_buf, dcs->dcs_nr);
+		if (dcs->dcs_buf == NULL)
+			return -DER_NOMEM;
+	}
+
+	for (i = 0; i < dcs->dcs_nr; i++) {
+		rc = crt_proc_uint32_t(proc, proc_op, &dcs->dcs_buf[i]);
+		if (unlikely(rc))
+			goto out;
+	}
+
+out:
+	if (unlikely(rc) && DECODING(proc_op) && dcs->dcs_buf != &dcs->dcs_inline)
+		D_FREE(dcs->dcs_buf);
+	return rc;
+}
+
+int
+crt_proc_struct_daos_coll_target(crt_proc_t proc, crt_proc_op_t proc_op, struct daos_coll_target *dct)
+{
+	int	rc;
+	int	i;
+
+	rc = crt_proc_uint32_t(proc, proc_op, &dct->dct_rank);
+	if (unlikely(rc))
+		return rc;
+
+	rc = crt_proc_uint8_t(proc, proc_op, &dct->dct_bitmap_sz);
+	if (unlikely(rc))
+		return rc;
+
+	rc = crt_proc_uint8_t(proc, proc_op, &dct->dct_max_shard);
+	if (unlikely(rc))
+		return rc;
+
+	rc = crt_proc_uint8_t(proc, proc_op, &dct->dct_tgt_nr);
+	if (unlikely(rc))
+		return rc;
+
+	rc = crt_proc_uint8_t(proc, proc_op, &dct->dct_tgt_cap);
+	if (unlikely(rc))
+		return rc;
+
+	if (DECODING(proc_op)) {
+		D_ALLOC(dct->dct_bitmap, dct->dct_bitmap_sz);
+		if (dct->dct_bitmap == NULL)
+			return -DER_NOMEM;
+
+		/* When decode, allocate enough buffer to avoid some XS accessing invalid DRAM. */
+		D_ALLOC_ARRAY(dct->dct_shards, dct->dct_bitmap_sz << 3);
+		if (dct->dct_shards == NULL)
+			goto out;
+	}
+
+	rc = crt_proc_memcpy(proc, proc_op, dct->dct_bitmap, dct->dct_bitmap_sz);
+	if (unlikely(rc))
+		goto out;
+
+	for (i = 0; i <= dct->dct_max_shard; i++) {
+		rc = crt_proc_struct_daos_coll_shard(proc, proc_op, &dct->dct_shards[i]);
+		if (unlikely(rc))
+			goto out;
+	}
+
+	/* Skip empty dct_tgt_ids. */
+	if (unlikely(dct->dct_tgt_cap == 0 || dct->dct_tgt_nr == 0))
+		goto out;
+
+	if (FREEING(proc_op))
+		goto out;
+
+	if (DECODING(proc_op)) {
+		D_ALLOC_ARRAY(dct->dct_tgt_ids, dct->dct_tgt_nr);
+		if (dct->dct_tgt_ids == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	for (i = 0; i < dct->dct_tgt_nr; i++) {
+		rc = crt_proc_uint32_t(proc, proc_op, &dct->dct_tgt_ids[i]);
+		if (unlikely(rc))
+			goto out;
+	}
+
+out:
+	if (FREEING(proc_op) || (unlikely(rc) && DECODING(proc_op))) {
+		D_FREE(dct->dct_bitmap);
+		D_FREE(dct->dct_shards);
+		D_FREE(dct->dct_tgt_ids);
+	}
+
+	return rc;
+}
+
 CRT_RPC_DEFINE(obj_rw, DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
+CRT_RPC_DEFINE(obj_rw_v10, DAOS_ISEQ_OBJ_RW_V10, DAOS_OSEQ_OBJ_RW_V10)
 CRT_RPC_DEFINE(obj_key_enum, DAOS_ISEQ_OBJ_KEY_ENUM, DAOS_OSEQ_OBJ_KEY_ENUM)
+CRT_RPC_DEFINE(obj_key_enum_v10, DAOS_ISEQ_OBJ_KEY_ENUM_V10, DAOS_OSEQ_OBJ_KEY_ENUM_V10)
 CRT_RPC_DEFINE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
+CRT_RPC_DEFINE(obj_punch_v10, DAOS_ISEQ_OBJ_PUNCH_V10, DAOS_OSEQ_OBJ_PUNCH_V10)
 CRT_RPC_DEFINE(obj_query_key, DAOS_ISEQ_OBJ_QUERY_KEY, DAOS_OSEQ_OBJ_QUERY_KEY)
+CRT_RPC_DEFINE(obj_query_key_v10, DAOS_ISEQ_OBJ_QUERY_KEY_V10, DAOS_OSEQ_OBJ_QUERY_KEY_V10)
 CRT_RPC_DEFINE(obj_sync, DAOS_ISEQ_OBJ_SYNC, DAOS_OSEQ_OBJ_SYNC)
+CRT_RPC_DEFINE(obj_sync_v10, DAOS_ISEQ_OBJ_SYNC_V10, DAOS_OSEQ_OBJ_SYNC_V10)
 CRT_RPC_DEFINE(obj_migrate, DAOS_ISEQ_OBJ_MIGRATE, DAOS_OSEQ_OBJ_MIGRATE)
 CRT_RPC_DEFINE(obj_ec_agg, DAOS_ISEQ_OBJ_EC_AGG, DAOS_OSEQ_OBJ_EC_AGG)
 CRT_RPC_DEFINE(obj_cpd, DAOS_ISEQ_OBJ_CPD, DAOS_OSEQ_OBJ_CPD)
 CRT_RPC_DEFINE(obj_ec_rep, DAOS_ISEQ_OBJ_EC_REP, DAOS_OSEQ_OBJ_EC_REP)
 CRT_RPC_DEFINE(obj_key2anchor, DAOS_ISEQ_OBJ_KEY2ANCHOR, DAOS_OSEQ_OBJ_KEY2ANCHOR)
+CRT_RPC_DEFINE(obj_key2anchor_v10, DAOS_ISEQ_OBJ_KEY2ANCHOR_V10, DAOS_OSEQ_OBJ_KEY2ANCHOR_V10)
+CRT_RPC_DEFINE(obj_coll_punch, DAOS_ISEQ_OBJ_COLL_PUNCH, DAOS_OSEQ_OBJ_COLL_PUNCH)
+CRT_RPC_DEFINE(obj_coll_query, DAOS_ISEQ_OBJ_COLL_QUERY, DAOS_OSEQ_OBJ_COLL_QUERY)
 
 /* Define for obj_proto_rpc_fmt[] array population below.
  * See OBJ_PROTO_*_RPC_LIST macro definition
@@ -1097,25 +1279,29 @@ CRT_RPC_DEFINE(obj_key2anchor, DAOS_ISEQ_OBJ_KEY2ANCHOR, DAOS_OSEQ_OBJ_KEY2ANCHO
 	.prf_co_ops  = NULL,	\
 },
 
-static struct crt_proto_rpc_format obj_proto_rpc_fmt[] = {
-	OBJ_PROTO_CLI_RPC_LIST
+static struct crt_proto_rpc_format obj_proto_rpc_fmt_v9[] = {
+	OBJ_PROTO_CLI_RPC_LIST(9)
+};
+
+static struct crt_proto_rpc_format obj_proto_rpc_fmt_v10[] = {
+	OBJ_PROTO_CLI_RPC_LIST(10)
 };
 
 #undef X
 
-struct crt_proto_format obj_proto_fmt_0 = {
+struct crt_proto_format obj_proto_fmt_v9 = {
 	.cpf_name  = "daos-object",
 	.cpf_ver   = DAOS_OBJ_VERSION - 1,
-	.cpf_count = ARRAY_SIZE(obj_proto_rpc_fmt),
-	.cpf_prf   = obj_proto_rpc_fmt,
+	.cpf_count = ARRAY_SIZE(obj_proto_rpc_fmt_v9),
+	.cpf_prf   = obj_proto_rpc_fmt_v9,
 	.cpf_base  = DAOS_RPC_OPCODE(0, DAOS_OBJ_MODULE, 0)
 };
 
-struct crt_proto_format obj_proto_fmt_1 = {
+struct crt_proto_format obj_proto_fmt_v10 = {
 	.cpf_name  = "daos-object",
 	.cpf_ver   = DAOS_OBJ_VERSION,
-	.cpf_count = ARRAY_SIZE(obj_proto_rpc_fmt),
-	.cpf_prf   = obj_proto_rpc_fmt,
+	.cpf_count = ARRAY_SIZE(obj_proto_rpc_fmt_v10),
+	.cpf_prf   = obj_proto_rpc_fmt_v10,
 	.cpf_base  = DAOS_RPC_OPCODE(0, DAOS_OBJ_MODULE, 0)
 };
 
@@ -1162,6 +1348,12 @@ obj_reply_set_status(crt_rpc_t *rpc, int status)
 	case DAOS_OBJ_RPC_EC_REPLICATE:
 		((struct obj_ec_rep_out *)reply)->er_status = status;
 		break;
+	case DAOS_OBJ_RPC_COLL_PUNCH:
+		((struct obj_coll_punch_out *)reply)->ocpo_ret = status;
+		break;
+	case DAOS_OBJ_RPC_COLL_QUERY:
+		((struct obj_coll_query_out *)reply)->ocqo_ret = status;
+		break;
 	default:
 		D_ASSERT(0);
 	}
@@ -1201,6 +1393,10 @@ obj_reply_get_status(crt_rpc_t *rpc)
 		return ((struct obj_cpd_out *)reply)->oco_ret;
 	case DAOS_OBJ_RPC_EC_REPLICATE:
 		return ((struct obj_ec_rep_out *)reply)->er_status;
+	case DAOS_OBJ_RPC_COLL_PUNCH:
+		return ((struct obj_coll_punch_out *)reply)->ocpo_ret;
+	case DAOS_OBJ_RPC_COLL_QUERY:
+		return ((struct obj_coll_query_out *)reply)->ocqo_ret;
 	default:
 		D_ASSERT(0);
 	}
@@ -1250,6 +1446,12 @@ obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version)
 	case DAOS_OBJ_RPC_EC_REPLICATE:
 		((struct obj_ec_rep_out *)reply)->er_map_ver = map_version;
 		break;
+	case DAOS_OBJ_RPC_COLL_PUNCH:
+		((struct obj_coll_punch_out *)reply)->ocpo_map_version = map_version;
+		break;
+	case DAOS_OBJ_RPC_COLL_QUERY:
+		((struct obj_coll_query_out *)reply)->ocqo_map_version = map_version;
+		break;
 	default:
 		D_ASSERT(0);
 	}
@@ -1285,6 +1487,10 @@ obj_reply_map_version_get(crt_rpc_t *rpc)
 		return ((struct obj_sync_out *)reply)->oso_map_version;
 	case DAOS_OBJ_RPC_CPD:
 		return ((struct obj_cpd_out *)reply)->oco_map_version;
+	case DAOS_OBJ_RPC_COLL_PUNCH:
+		return ((struct obj_coll_punch_out *)reply)->ocpo_map_version;
+	case DAOS_OBJ_RPC_COLL_QUERY:
+		return ((struct obj_coll_query_out *)reply)->ocqo_map_version;
 	default:
 		D_ASSERT(0);
 	}

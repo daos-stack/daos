@@ -775,6 +775,29 @@ storage:
 	}
 }
 
+func TestStorage_BdevDeviceRoles_String(t *testing.T) {
+	for name, tc := range map[string]struct {
+		bits   OptionBits
+		expOut string
+	}{
+		"empty": {
+			bits:   OptionBits(0),
+			expOut: "NA",
+		},
+		"all": {
+			bits:   OptionBits(BdevRoleAll),
+			expOut: "data,meta,wal",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			bdr := BdevRoles{OptionBits: tc.bits}
+			if diff := cmp.Diff(bdr.String(), tc.expOut); diff != "" {
+				t.Fatalf("bad output (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestStorage_AccelProps_FromYAML(t *testing.T) {
 	for name, tc := range map[string]struct {
 		input    string

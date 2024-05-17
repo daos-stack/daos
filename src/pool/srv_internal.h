@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,9 +16,6 @@
 #include <daos_security.h>
 #include <gurt/telemetry_common.h>
 
-/* Map status of ranks that make up the pool group */
-#define POOL_GROUP_MAP_STATUS (PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN)
-
 /**
  * Global pool metrics
  */
@@ -28,6 +25,16 @@ struct pool_metrics {
 	struct d_tm_node_t	*query_total;
 	struct d_tm_node_t	*query_space_total;
 	struct d_tm_node_t	*evict_total;
+
+	/* service metrics */
+	struct d_tm_node_t      *service_leader;
+	struct d_tm_node_t      *map_version;
+	struct d_tm_node_t      *open_handles;
+	struct d_tm_node_t      *total_targets;
+	struct d_tm_node_t      *disabled_targets;
+	struct d_tm_node_t      *draining_targets;
+	struct d_tm_node_t      *total_ranks;
+	struct d_tm_node_t      *degraded_ranks;
 };
 
 /* Pool thread-local storage */
@@ -59,7 +66,7 @@ struct pool_iv_prop {
 	char		pip_label[DAOS_PROP_MAX_LABEL_BUF_LEN];
 	char		pip_owner[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
 	char		pip_owner_grp[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
-	char		pip_policy_str[DAOS_PROP_POLICYSTR_MAX_LEN];
+	uint64_t	pip_data_thresh;
 	uint64_t	pip_space_rb;
 	uint64_t	pip_self_heal;
 	uint64_t	pip_scrub_mode;
@@ -83,6 +90,8 @@ struct pool_iv_prop {
 	uint32_t	pip_svc_list_offset;
 	uint32_t	pip_perf_domain;
 	uint32_t	pip_reint_mode;
+	uint32_t         pip_svc_ops_enabled;
+	uint32_t         pip_svc_ops_entry_age;
 	char		pip_iv_buf[0];
 };
 
@@ -134,30 +143,67 @@ struct pool_map_refresh_ult_arg {
  */
 void ds_pool_rsvc_class_register(void);
 void ds_pool_rsvc_class_unregister(void);
+uint32_t ds_pool_get_vos_df_version(uint32_t pool_global_version);
+char *ds_pool_svc_rdb_path(const uuid_t pool_uuid);
+int ds_pool_svc_load(struct rdb_tx *tx, uuid_t uuid, rdb_path_t *root, uint32_t *global_version_out,
+		     struct pool_buf **map_buf_out, uint32_t *map_version_out);
 int ds_pool_start_all(void);
 int ds_pool_stop_all(void);
 int ds_pool_hdl_is_from_srv(struct ds_pool *pool, uuid_t hdl);
+int ds_pool_svc_upgrade_vos_pool(struct ds_pool *pool);
 void ds_pool_create_handler(crt_rpc_t *rpc);
-void ds_pool_connect_handler_v4(crt_rpc_t *rpc);
+void
+     ds_pool_connect_handler_v6(crt_rpc_t *rpc);
 void ds_pool_connect_handler_v5(crt_rpc_t *rpc);
-void ds_pool_disconnect_handler(crt_rpc_t *rpc);
-void ds_pool_query_handler_v4(crt_rpc_t *rpc);
+void
+ds_pool_disconnect_handler_v6(crt_rpc_t *rpc);
+void
+ds_pool_disconnect_handler_v5(crt_rpc_t *rpc);
+void
+     ds_pool_query_handler_v6(crt_rpc_t *rpc);
 void ds_pool_query_handler_v5(crt_rpc_t *rpc);
 void ds_pool_prop_get_handler(crt_rpc_t *rpc);
 void ds_pool_prop_set_handler(crt_rpc_t *rpc);
 void ds_pool_acl_update_handler(crt_rpc_t *rpc);
 void ds_pool_acl_delete_handler(crt_rpc_t *rpc);
-void ds_pool_update_handler(crt_rpc_t *rpc);
+void
+ds_pool_update_handler_v6(crt_rpc_t *rpc);
+void
+     ds_pool_update_handler_v5(crt_rpc_t *rpc);
 void ds_pool_extend_handler(crt_rpc_t *rpc);
 void ds_pool_evict_handler(crt_rpc_t *rpc);
-void ds_pool_svc_stop_handler(crt_rpc_t *rpc);
-void ds_pool_attr_list_handler(crt_rpc_t *rpc);
-void ds_pool_attr_get_handler(crt_rpc_t *rpc);
-void ds_pool_attr_set_handler(crt_rpc_t *rpc);
-void ds_pool_attr_del_handler(crt_rpc_t *rpc);
-void ds_pool_list_cont_handler(crt_rpc_t *rpc);
-void ds_pool_filter_cont_handler(crt_rpc_t *rpc);
-void ds_pool_query_info_handler(crt_rpc_t *rpc);
+void
+ds_pool_svc_stop_handler_v6(crt_rpc_t *rpc);
+void
+ds_pool_svc_stop_handler_v5(crt_rpc_t *rpc);
+void
+ds_pool_attr_list_handler_v6(crt_rpc_t *rpc);
+void
+ds_pool_attr_list_handler_v5(crt_rpc_t *rpc);
+void
+ds_pool_attr_get_handler_v6(crt_rpc_t *rpc);
+void
+ds_pool_attr_get_handler_v5(crt_rpc_t *rpc);
+void
+ds_pool_attr_set_handler_v6(crt_rpc_t *rpc);
+void
+ds_pool_attr_set_handler_v5(crt_rpc_t *rpc);
+void
+ds_pool_attr_del_handler_v6(crt_rpc_t *rpc);
+void
+ds_pool_attr_del_handler_v5(crt_rpc_t *rpc);
+void
+ds_pool_list_cont_handler_v6(crt_rpc_t *rpc);
+void
+ds_pool_list_cont_handler_v5(crt_rpc_t *rpc);
+void
+ds_pool_filter_cont_handler_v6(crt_rpc_t *rpc);
+void
+ds_pool_filter_cont_handler_v5(crt_rpc_t *rpc);
+void
+ds_pool_query_info_handler_v6(crt_rpc_t *rpc);
+void
+     ds_pool_query_info_handler_v5(crt_rpc_t *rpc);
 void ds_pool_ranks_get_handler(crt_rpc_t *rpc);
 void ds_pool_upgrade_handler(crt_rpc_t *rpc);
 
@@ -166,9 +212,9 @@ void ds_pool_upgrade_handler(crt_rpc_t *rpc);
  */
 int ds_pool_cache_init(void);
 void ds_pool_cache_fini(void);
+int ds_pool_lookup_internal(const uuid_t uuid, struct ds_pool **pool);
 int ds_pool_hdl_hash_init(void);
 void ds_pool_hdl_hash_fini(void);
-void ds_pool_hdl_delete_all(void);
 void ds_pool_tgt_disconnect_handler(crt_rpc_t *rpc);
 int ds_pool_tgt_disconnect_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				      void *priv);
@@ -186,7 +232,7 @@ void ds_pool_tgt_discard_handler(crt_rpc_t *rpc);
  */
 bool ds_pool_map_rank_up(struct pool_map *map, d_rank_t rank);
 int ds_pool_plan_svc_reconfs(int svc_rf, struct pool_map *map, d_rank_list_t *replicas,
-			     d_rank_t self, d_rank_list_t **to_add_out,
+			     d_rank_t self, bool filter_only, d_rank_list_t **to_add_out,
 			     d_rank_list_t **to_remove_out);
 int ds_pool_transfer_map_buf(struct pool_buf *map_buf, uint32_t map_version,
 			     crt_rpc_t *rpc, crt_bulk_t remote_bulk,
@@ -211,10 +257,6 @@ int ds_pool_iv_srv_hdl_update(struct ds_pool *pool, uuid_t pool_hdl_uuid,
 int ds_pool_iv_srv_hdl_invalidate(struct ds_pool *pool);
 int ds_pool_iv_conn_hdl_fetch(struct ds_pool *pool);
 int ds_pool_iv_conn_hdl_invalidate(struct ds_pool *pool, uuid_t hdl_uuid);
-
-int ds_pool_iv_srv_hdl_fetch_non_sys(struct ds_pool *pool,
-				     uuid_t *srv_cont_hdl,
-				     uuid_t *srv_pool_hdl);
 
 /*
  * srv_metrics.c

@@ -97,6 +97,57 @@ void   ctl__bio_health_resp__free_unpacked
   assert(message->base.descriptor == &ctl__bio_health_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   ctl__nvme_controller__namespace__init
+                     (Ctl__NvmeController__Namespace         *message)
+{
+  static const Ctl__NvmeController__Namespace init_value = CTL__NVME_CONTROLLER__NAMESPACE__INIT;
+  *message = init_value;
+}
+void   ctl__nvme_controller__init
+                     (Ctl__NvmeController         *message)
+{
+  static const Ctl__NvmeController init_value = CTL__NVME_CONTROLLER__INIT;
+  *message = init_value;
+}
+size_t ctl__nvme_controller__get_packed_size
+                     (const Ctl__NvmeController *message)
+{
+  assert(message->base.descriptor == &ctl__nvme_controller__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t ctl__nvme_controller__pack
+                     (const Ctl__NvmeController *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &ctl__nvme_controller__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t ctl__nvme_controller__pack_to_buffer
+                     (const Ctl__NvmeController *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &ctl__nvme_controller__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Ctl__NvmeController *
+       ctl__nvme_controller__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Ctl__NvmeController *)
+     protobuf_c_message_unpack (&ctl__nvme_controller__descriptor,
+                                allocator, len, data);
+}
+void   ctl__nvme_controller__free_unpacked
+                     (Ctl__NvmeController *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &ctl__nvme_controller__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 void   ctl__smd_device__init
                      (Ctl__SmdDevice         *message)
 {
@@ -372,12 +423,6 @@ void   ctl__smd_query_req__free_unpacked
     return;
   assert(message->base.descriptor == &ctl__smd_query_req__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
-}
-void   ctl__smd_query_resp__smd_device_with_health__init
-                     (Ctl__SmdQueryResp__SmdDeviceWithHealth         *message)
-{
-  static const Ctl__SmdQueryResp__SmdDeviceWithHealth init_value = CTL__SMD_QUERY_RESP__SMD_DEVICE_WITH_HEALTH__INIT;
-  *message = init_value;
 }
 void   ctl__smd_query_resp__pool__init
                      (Ctl__SmdQueryResp__Pool         *message)
@@ -1393,7 +1438,252 @@ const ProtobufCMessageDescriptor ctl__bio_health_resp__descriptor =
   (ProtobufCMessageInit) ctl__bio_health_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor ctl__smd_device__field_descriptors[15] =
+static const ProtobufCFieldDescriptor ctl__nvme_controller__namespace__field_descriptors[3] =
+{
+  {
+    "id",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__NvmeController__Namespace, id),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "size",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT64,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__NvmeController__Namespace, size),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "ctrlr_pci_addr",
+    3,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__NvmeController__Namespace, ctrlr_pci_addr),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned ctl__nvme_controller__namespace__field_indices_by_name[] = {
+  2,   /* field[2] = ctrlr_pci_addr */
+  0,   /* field[0] = id */
+  1,   /* field[1] = size */
+};
+static const ProtobufCIntRange ctl__nvme_controller__namespace__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 3 }
+};
+const ProtobufCMessageDescriptor ctl__nvme_controller__namespace__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "ctl.NvmeController.Namespace",
+  "Namespace",
+  "Ctl__NvmeController__Namespace",
+  "ctl",
+  sizeof(Ctl__NvmeController__Namespace),
+  3,
+  ctl__nvme_controller__namespace__field_descriptors,
+  ctl__nvme_controller__namespace__field_indices_by_name,
+  1,  ctl__nvme_controller__namespace__number_ranges,
+  (ProtobufCMessageInit) ctl__nvme_controller__namespace__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor ctl__nvme_controller__field_descriptors[12] =
+{
+  {
+    "model",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__NvmeController, model),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "serial",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__NvmeController, serial),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "pci_addr",
+    3,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__NvmeController, pci_addr),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "fw_rev",
+    4,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__NvmeController, fw_rev),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "socket_id",
+    5,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__NvmeController, socket_id),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "health_stats",
+    6,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_MESSAGE,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__NvmeController, health_stats),
+    &ctl__bio_health_resp__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "namespaces",
+    7,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(Ctl__NvmeController, n_namespaces),
+    offsetof(Ctl__NvmeController, namespaces),
+    &ctl__nvme_controller__namespace__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "smd_devices",
+    8,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(Ctl__NvmeController, n_smd_devices),
+    offsetof(Ctl__NvmeController, smd_devices),
+    &ctl__smd_device__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "dev_state",
+    9,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_ENUM,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__NvmeController, dev_state),
+    &ctl__nvme_dev_state__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "led_state",
+    10,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_ENUM,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__NvmeController, led_state),
+    &ctl__led_state__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "pci_dev_type",
+    11,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__NvmeController, pci_dev_type),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "vendor_id",
+    12,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__NvmeController, vendor_id),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned ctl__nvme_controller__field_indices_by_name[] = {
+  8,   /* field[8] = dev_state */
+  3,   /* field[3] = fw_rev */
+  5,   /* field[5] = health_stats */
+  9,   /* field[9] = led_state */
+  0,   /* field[0] = model */
+  6,   /* field[6] = namespaces */
+  2,   /* field[2] = pci_addr */
+  10,   /* field[10] = pci_dev_type */
+  1,   /* field[1] = serial */
+  7,   /* field[7] = smd_devices */
+  4,   /* field[4] = socket_id */
+  11,   /* field[11] = vendor_id */
+};
+static const ProtobufCIntRange ctl__nvme_controller__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 12 }
+};
+const ProtobufCMessageDescriptor ctl__nvme_controller__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "ctl.NvmeController",
+  "NvmeController",
+  "Ctl__NvmeController",
+  "ctl",
+  sizeof(Ctl__NvmeController),
+  12,
+  ctl__nvme_controller__field_descriptors,
+  ctl__nvme_controller__field_indices_by_name,
+  1,  ctl__nvme_controller__number_ranges,
+  (ProtobufCMessageInit) ctl__nvme_controller__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor ctl__smd_device__field_descriptors[14] =
 {
   {
     "uuid",
@@ -1415,42 +1705,6 @@ static const ProtobufCFieldDescriptor ctl__smd_device__field_descriptors[15] =
     offsetof(Ctl__SmdDevice, n_tgt_ids),
     offsetof(Ctl__SmdDevice, tgt_ids),
     NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "tr_addr",
-    3,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__SmdDevice, tr_addr),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "dev_state",
-    4,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_ENUM,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__SmdDevice, dev_state),
-    &ctl__nvme_dev_state__descriptor,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "led_state",
-    5,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_ENUM,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__SmdDevice, led_state),
-    &ctl__led_state__descriptor,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
@@ -1575,28 +1829,52 @@ static const ProtobufCFieldDescriptor ctl__smd_device__field_descriptors[15] =
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "ctrlr",
+    16,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_MESSAGE,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__SmdDevice, ctrlr),
+    &ctl__nvme_controller__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "ctrlr_namespace_id",
+    17,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__SmdDevice, ctrlr_namespace_id),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned ctl__smd_device__field_indices_by_name[] = {
-  6,   /* field[6] = avail_bytes */
-  7,   /* field[7] = cluster_size */
-  3,   /* field[3] = dev_state */
-  4,   /* field[4] = led_state */
-  10,   /* field[10] = meta_size */
-  11,   /* field[11] = meta_wal_size */
-  8,   /* field[8] = rank */
-  12,   /* field[12] = rdb_size */
-  13,   /* field[13] = rdb_wal_size */
-  9,   /* field[9] = role_bits */
+  3,   /* field[3] = avail_bytes */
+  4,   /* field[4] = cluster_size */
+  12,   /* field[12] = ctrlr */
+  13,   /* field[13] = ctrlr_namespace_id */
+  7,   /* field[7] = meta_size */
+  8,   /* field[8] = meta_wal_size */
+  5,   /* field[5] = rank */
+  9,   /* field[9] = rdb_size */
+  10,   /* field[10] = rdb_wal_size */
+  6,   /* field[6] = role_bits */
   1,   /* field[1] = tgt_ids */
-  5,   /* field[5] = total_bytes */
-  2,   /* field[2] = tr_addr */
-  14,   /* field[14] = usable_bytes */
+  2,   /* field[2] = total_bytes */
+  11,   /* field[11] = usable_bytes */
   0,   /* field[0] = uuid */
 };
-static const ProtobufCIntRange ctl__smd_device__number_ranges[1 + 1] =
+static const ProtobufCIntRange ctl__smd_device__number_ranges[2 + 1] =
 {
   { 1, 0 },
-  { 0, 15 }
+  { 6, 2 },
+  { 0, 14 }
 };
 const ProtobufCMessageDescriptor ctl__smd_device__descriptor =
 {
@@ -1606,10 +1884,10 @@ const ProtobufCMessageDescriptor ctl__smd_device__descriptor =
   "Ctl__SmdDevice",
   "ctl",
   sizeof(Ctl__SmdDevice),
-  15,
+  14,
   ctl__smd_device__field_descriptors,
   ctl__smd_device__field_indices_by_name,
-  1,  ctl__smd_device__number_ranges,
+  2,  ctl__smd_device__number_ranges,
   (ProtobufCMessageInit) ctl__smd_device__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
@@ -1905,57 +2183,6 @@ const ProtobufCMessageDescriptor ctl__smd_query_req__descriptor =
   (ProtobufCMessageInit) ctl__smd_query_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor ctl__smd_query_resp__smd_device_with_health__field_descriptors[2] =
-{
-  {
-    "details",
-    1,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_MESSAGE,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__SmdQueryResp__SmdDeviceWithHealth, details),
-    &ctl__smd_device__descriptor,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "health",
-    2,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_MESSAGE,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__SmdQueryResp__SmdDeviceWithHealth, health),
-    &ctl__bio_health_resp__descriptor,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-};
-static const unsigned ctl__smd_query_resp__smd_device_with_health__field_indices_by_name[] = {
-  0,   /* field[0] = details */
-  1,   /* field[1] = health */
-};
-static const ProtobufCIntRange ctl__smd_query_resp__smd_device_with_health__number_ranges[1 + 1] =
-{
-  { 1, 0 },
-  { 0, 2 }
-};
-const ProtobufCMessageDescriptor ctl__smd_query_resp__smd_device_with_health__descriptor =
-{
-  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "ctl.SmdQueryResp.SmdDeviceWithHealth",
-  "SmdDeviceWithHealth",
-  "Ctl__SmdQueryResp__SmdDeviceWithHealth",
-  "ctl",
-  sizeof(Ctl__SmdQueryResp__SmdDeviceWithHealth),
-  2,
-  ctl__smd_query_resp__smd_device_with_health__field_descriptors,
-  ctl__smd_query_resp__smd_device_with_health__field_indices_by_name,
-  1,  ctl__smd_query_resp__smd_device_with_health__number_ranges,
-  (ProtobufCMessageInit) ctl__smd_query_resp__smd_device_with_health__init,
-  NULL,NULL,NULL    /* reserved[123] */
-};
 static const ProtobufCFieldDescriptor ctl__smd_query_resp__pool__field_descriptors[3] =
 {
   {
@@ -2041,7 +2268,7 @@ static const ProtobufCFieldDescriptor ctl__smd_query_resp__rank_resp__field_desc
     PROTOBUF_C_TYPE_MESSAGE,
     offsetof(Ctl__SmdQueryResp__RankResp, n_devices),
     offsetof(Ctl__SmdQueryResp__RankResp, devices),
-    &ctl__smd_query_resp__smd_device_with_health__descriptor,
+    &ctl__smd_device__descriptor,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
@@ -2570,49 +2797,55 @@ const ProtobufCMessageDescriptor ctl__smd_manage_resp__descriptor =
   (ProtobufCMessageInit) ctl__smd_manage_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCEnumValue ctl__nvme_dev_state__enum_values_by_number[5] = {
-    {"UNKNOWN", "CTL__NVME_DEV_STATE__UNKNOWN", 0},
-    {"NORMAL", "CTL__NVME_DEV_STATE__NORMAL", 1},
-    {"NEW", "CTL__NVME_DEV_STATE__NEW", 2},
-    {"EVICTED", "CTL__NVME_DEV_STATE__EVICTED", 3},
-    {"UNPLUGGED", "CTL__NVME_DEV_STATE__UNPLUGGED", 4},
+static const ProtobufCEnumValue ctl__nvme_dev_state__enum_values_by_number[5] =
+{
+  { "UNKNOWN", "CTL__NVME_DEV_STATE__UNKNOWN", 0 },
+  { "NORMAL", "CTL__NVME_DEV_STATE__NORMAL", 1 },
+  { "NEW", "CTL__NVME_DEV_STATE__NEW", 2 },
+  { "EVICTED", "CTL__NVME_DEV_STATE__EVICTED", 3 },
+  { "UNPLUGGED", "CTL__NVME_DEV_STATE__UNPLUGGED", 4 },
 };
-static const ProtobufCIntRange       ctl__nvme_dev_state__value_ranges[]         = {{0, 0}, {0, 5}};
-static const ProtobufCEnumValueIndex ctl__nvme_dev_state__enum_values_by_name[5] = {
-    {"EVICTED", 3}, {"NEW", 2}, {"NORMAL", 1}, {"UNKNOWN", 0}, {"UNPLUGGED", 4},
+static const ProtobufCIntRange ctl__nvme_dev_state__value_ranges[] = {
+{0, 0},{0, 5}
 };
-const ProtobufCEnumDescriptor ctl__nvme_dev_state__descriptor = {
-    PROTOBUF_C__ENUM_DESCRIPTOR_MAGIC,
-    "ctl.NvmeDevState",
-    "NvmeDevState",
-    "Ctl__NvmeDevState",
-    "ctl",
-    5,
-    ctl__nvme_dev_state__enum_values_by_number,
-    5,
-    ctl__nvme_dev_state__enum_values_by_name,
-    1,
-    ctl__nvme_dev_state__value_ranges,
-    NULL,
-    NULL,
-    NULL,
-    NULL /* reserved[1234] */
+static const ProtobufCEnumValueIndex ctl__nvme_dev_state__enum_values_by_name[5] =
+{
+  { "EVICTED", 3 },
+  { "NEW", 2 },
+  { "NORMAL", 1 },
+  { "UNKNOWN", 0 },
+  { "UNPLUGGED", 4 },
+};
+const ProtobufCEnumDescriptor ctl__nvme_dev_state__descriptor =
+{
+  PROTOBUF_C__ENUM_DESCRIPTOR_MAGIC,
+  "ctl.NvmeDevState",
+  "NvmeDevState",
+  "Ctl__NvmeDevState",
+  "ctl",
+  5,
+  ctl__nvme_dev_state__enum_values_by_number,
+  5,
+  ctl__nvme_dev_state__enum_values_by_name,
+  1,
+  ctl__nvme_dev_state__value_ranges,
+  NULL,NULL,NULL,NULL   /* reserved[1234] */
 };
 static const ProtobufCEnumValue ctl__led_state__enum_values_by_number[5] =
 {
-  { "OFF", "CTL__LED_STATE__OFF", 0 },
+  { "NA", "CTL__LED_STATE__NA", 0 },
   { "QUICK_BLINK", "CTL__LED_STATE__QUICK_BLINK", 1 },
   { "ON", "CTL__LED_STATE__ON", 2 },
   { "SLOW_BLINK", "CTL__LED_STATE__SLOW_BLINK", 3 },
-  { "NA", "CTL__LED_STATE__NA", 4 },
+  { "OFF", "CTL__LED_STATE__OFF", 4 },
 };
 static const ProtobufCIntRange ctl__led_state__value_ranges[] = {
 {0, 0},{0, 5}
 };
 static const ProtobufCEnumValueIndex ctl__led_state__enum_values_by_name[5] =
 {
-  { "NA", 4 },
-  { "OFF", 0 },
+  { "NA", 0 },
+  { "OFF", 4 },
   { "ON", 2 },
   { "QUICK_BLINK", 1 },
   { "SLOW_BLINK", 3 },

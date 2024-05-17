@@ -2,6 +2,9 @@ hosts:
   test_servers: 7
   test_clients: 1
 timeout: 1200
+agent_config:
+  cache_expiration: 1
+  #disable_caching: true
 server_config:
   name: daos_server
   crt_timeout: 60
@@ -18,15 +21,14 @@ testparams:
 pool:
   scm_size: 10G
   nvme_size: 60G
-  svcn: 5
-  control_method: dmg
   rebuild_timeout: 240
   pool_query_timeout: 60
+  properties: rd_fac:2
 container:
   type: POSIX
   control_method: daos
   oclass: RP_3G1
-  properties: "rd_fac:2"
+  properties: rd_fac:2
 mdtest:
   api: DFS
   client_processes:

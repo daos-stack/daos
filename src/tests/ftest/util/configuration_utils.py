@@ -1,14 +1,13 @@
 """
-  (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2019-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from logging import getLogger
 import re
+from logging import getLogger
 
 from command_utils_base import BasicParameter, ObjectWithParameters
 from general_utils import get_host_data
-
 
 DATA_ERROR = "[ERROR]"
 
@@ -453,10 +452,12 @@ class Configuration():
                 # Multiple configuration-specific matching paths for the key -
                 # no other way to determine which value to use
                 multiple_matches = True
+                value = None
         else:
             # Multiple matching paths w/o an active configuration for the key -
             # no way to determine which value to use
             multiple_matches = True
+            value = None
 
         # Report an AvocadoParam-style exception for multiple key matches
         if multiple_matches:

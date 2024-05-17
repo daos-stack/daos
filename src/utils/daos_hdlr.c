@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -32,12 +32,12 @@
 #include <daos/debug.h>
 #include <daos/object.h>
 
-#include "daos_types.h"
-#include "daos_api.h"
-#include "daos_fs.h"
-#include "daos_uns.h"
-#include "daos_prop.h"
-#include "daos_fs_sys.h"
+#include <daos_types.h>
+#include <daos_api.h>
+#include <daos_fs.h>
+#include <daos_uns.h>
+#include <daos_prop.h>
+#include <daos_fs_sys.h>
 
 #include "daos_hdlr.h"
 
@@ -523,10 +523,18 @@ file_close(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *file)
 }
 
 static int
-file_chmod(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *path,
-	   mode_t mode)
+file_chmod(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *path, mode_t mode,
+	   bool ignore_unsup, uint64_t *num_chmod_enotsup)
 {
 	int rc = 0;
+
+	/* Unset any unsupported mode bits. We track these errors so they can
+	 * be surfaced to the user at the end of the copy operation.
+	 */
+	if (!ignore_unsup && mode & S_ISVTX) {
+		(*num_chmod_enotsup)++;
+	}
+	mode &= ~S_ISVTX;
 
 	if (file_dfs->type == POSIX) {
 		rc = chmod(path, mode);
@@ -547,12 +555,9 @@ file_chmod(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *path,
 }
 
 static int
-fs_copy_file(struct cmd_args_s *ap,
-	     struct file_dfs *src_file_dfs,
-	     struct file_dfs *dst_file_dfs,
-	     struct stat *src_stat,
-	     const char *src_path,
-	     const char *dst_path)
+fs_copy_file(struct cmd_args_s *ap, struct file_dfs *src_file_dfs, struct file_dfs *dst_file_dfs,
+	     struct stat *src_stat, const char *src_path, const char *dst_path, bool ignore_unsup,
+	     uint64_t *num_chmod_enotsup)
 {
 	int src_flags		= O_RDONLY;
 	int dst_flags		= O_CREAT | O_TRUNC | O_WRONLY;
@@ -603,7 +608,8 @@ fs_copy_file(struct cmd_args_s *ap,
 	}
 
 	/* set perms on destination to original source perms */
-	rc = file_chmod(ap, dst_file_dfs, dst_path, src_stat->st_mode);
+	rc = file_chmod(ap, dst_file_dfs, dst_path, src_stat->st_mode, ignore_unsup,
+			num_chmod_enotsup);
 	if (rc != 0) {
 		rc = daos_errno2der(rc);
 		DH_PERROR_DER(ap, rc, "updating dst file permissions failed");
@@ -704,12 +710,8 @@ out_copy_symlink:
 }
 
 static int
-fs_copy_dir(struct cmd_args_s *ap,
-	    struct file_dfs *src_file_dfs,
-	    struct file_dfs *dst_file_dfs,
-	    struct stat *src_stat,
-	    const char *src_path,
-	    const char *dst_path,
+fs_copy_dir(struct cmd_args_s *ap, struct file_dfs *src_file_dfs, struct file_dfs *dst_file_dfs,
+	    struct stat *src_stat, const char *src_path, const char *dst_path, bool ignore_unsup,
 	    struct fs_copy_stats *num)
 {
 	DIR			*src_dir = NULL;
@@ -783,9 +785,9 @@ fs_copy_dir(struct cmd_args_s *ap,
 
 		switch (next_src_stat.st_mode & S_IFMT) {
 		case S_IFREG:
-			rc = fs_copy_file(ap, src_file_dfs, dst_file_dfs,
-					  &next_src_stat, next_src_path,
-					  next_dst_path);
+			rc = fs_copy_file(ap, src_file_dfs, dst_file_dfs, &next_src_stat,
+					  next_src_path, next_dst_path, ignore_unsup,
+					  &num->num_chmod_enotsup);
 			if ((rc != 0) && (rc != -DER_EXIST))
 				D_GOTO(out, rc);
 			num->num_files++;
@@ -800,7 +802,7 @@ fs_copy_dir(struct cmd_args_s *ap,
 			break;
 		case S_IFDIR:
 			rc = fs_copy_dir(ap, src_file_dfs, dst_file_dfs, &next_src_stat,
-					 next_src_path, next_dst_path, num);
+					 next_src_path, next_dst_path, ignore_unsup, num);
 			if ((rc != 0) && (rc != -DER_EXIST))
 				D_GOTO(out, rc);
 			num->num_dirs++;
@@ -815,7 +817,8 @@ fs_copy_dir(struct cmd_args_s *ap,
 	}
 
 	/* set original source perms on directories after copying */
-	rc = file_chmod(ap, dst_file_dfs, dst_path, src_stat->st_mode);
+	rc = file_chmod(ap, dst_file_dfs, dst_path, src_stat->st_mode, ignore_unsup,
+			&num->num_chmod_enotsup);
 	if (rc != 0) {
 		rc = daos_errno2der(rc);
 		DH_PERROR_DER(ap, rc, "updating destination permissions failed on '%s'", dst_path);
@@ -842,12 +845,9 @@ out:
 }
 
 static int
-fs_copy(struct cmd_args_s *ap,
-	struct file_dfs *src_file_dfs,
-	struct file_dfs *dst_file_dfs,
-	const char *src_path,
-	const char *dst_path,
-	struct fs_copy_stats *num)
+fs_copy(struct cmd_args_s *ap, struct dm_args *ca, struct file_dfs *src_file_dfs,
+	struct file_dfs *dst_file_dfs, const char *src_path, const char *dst_path,
+	bool ignore_unsup, struct fs_copy_stats *num)
 {
 	int		rc = 0;
 	struct stat	src_stat;
@@ -900,16 +900,53 @@ fs_copy(struct cmd_args_s *ap,
 		}
 	}
 
+	/* Make sure the source and destination are not the same.
+	 * Make sure the source is not a subpath of the destination. */
+	if ((src_file_dfs->type == POSIX && dst_file_dfs->type == POSIX) ||
+	    (src_file_dfs->type == DAOS && dst_file_dfs->type == DAOS &&
+	     strcmp(ca->src_pool, ca->dst_pool) == 0 && strcmp(ca->src_cont, ca->dst_cont) == 0)) {
+		if (strcmp(src_path, dst_path) == 0) {
+			rc = -DER_INVAL;
+			DH_PERROR_DER(ap, rc, "source and destination are the same");
+			D_GOTO(out, rc);
+		}
+		if (S_ISDIR(src_stat.st_mode)) {
+			int  src_path_len;
+			int  dst_path_len;
+			bool src_is_subpath;
+
+			/* If src_path ends with / and dst_path starts with the full src_path,
+			 * then src_path is a subpath of dst_path.
+			 * If src_path doesn't end with / then it's only a subpath if equal
+			 * to dst_path and dst_path ends with / */
+			src_path_len = strlen(src_path);
+			dst_path_len = strlen(dst_path);
+			if (src_path[src_path_len - 1] == '/') {
+				src_is_subpath = (strncmp(src_path, dst_path, src_path_len) == 0);
+			} else {
+				src_is_subpath =
+				    (strncmp(src_path, dst_path, src_path_len) == 0 &&
+				     dst_path_len > src_path_len && dst_path[src_path_len] == '/');
+			}
+
+			if (src_is_subpath) {
+				rc = -DER_INVAL;
+				DH_PERROR_DER(ap, rc, "cannot copy a directory into itself");
+				D_GOTO(out, rc);
+			}
+		}
+	}
+
 	switch (src_stat.st_mode & S_IFMT) {
 	case S_IFREG:
-		rc = fs_copy_file(ap, src_file_dfs, dst_file_dfs, &src_stat, src_path,
-				  dst_path);
+		rc = fs_copy_file(ap, src_file_dfs, dst_file_dfs, &src_stat, src_path, dst_path,
+				  ignore_unsup, &num->num_chmod_enotsup);
 		if (rc == 0)
 			num->num_files++;
 		break;
 	case S_IFDIR:
-		rc = fs_copy_dir(ap, src_file_dfs, dst_file_dfs, &src_stat, src_path,
-				 dst_path, num);
+		rc = fs_copy_dir(ap, src_file_dfs, dst_file_dfs, &src_stat, src_path, dst_path,
+				 ignore_unsup, num);
 		if (rc == 0)
 			num->num_dirs++;
 		break;
@@ -1368,29 +1405,36 @@ dm_connect(struct cmd_args_s *ap,
 	   daos_cont_info_t *dst_cont_info)
 {
 	/* check source pool/conts */
-	int				rc = 0;
-	struct duns_attr_t		dattr = {0};
-	dfs_attr_t			attr = {0};
-	daos_prop_t			*props = NULL;
-	int				rc2;
-	bool				status_healthy;
+	int                rc    = 0;
+	struct duns_attr_t dattr = {0};
+	dfs_attr_t         attr  = {0};
+	daos_prop_t       *props = NULL;
+	int                rc2;
+	bool               status_healthy;
+	unsigned int       src_cont_flags;
+
+	/* DFS only needs R. For daos API we need W for snapshot create */
+	if (is_posix_copy)
+		src_cont_flags = DAOS_COO_RO;
+	else
+		src_cont_flags = DAOS_COO_RW;
 
 	/* open src pool, src cont, and mount dfs */
 	if (src_file_dfs->type == DAOS) {
-		rc = daos_pool_connect(ca->src_pool, sysname, DAOS_PC_RW, &ca->src_poh, NULL, NULL);
+		rc = daos_pool_connect(ca->src_pool, sysname, DAOS_PC_RO, &ca->src_poh, NULL, NULL);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "failed to connect to source pool");
 			D_GOTO(err, rc);
 		}
-		rc = daos_cont_open(ca->src_poh, ca->src_cont, DAOS_COO_RW, &ca->src_coh,
+		rc = daos_cont_open(ca->src_poh, ca->src_cont, src_cont_flags, &ca->src_coh,
 				    src_cont_info, NULL);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "failed to open source container");
 			D_GOTO(err, rc);
 		}
 		if (is_posix_copy) {
-			rc = dfs_sys_mount(ca->src_poh, ca->src_coh, O_RDWR,
-					   DFS_SYS_NO_LOCK, &src_file_dfs->dfs_sys);
+			rc = dfs_sys_mount(ca->src_poh, ca->src_coh, O_RDONLY, DFS_SYS_NO_LOCK,
+					   &src_file_dfs->dfs_sys);
 			if (rc != 0) {
 				rc = daos_errno2der(rc);
 				DH_PERROR_DER(ap, rc, "Failed to mount DFS filesystem on source");
@@ -1570,6 +1614,7 @@ dm_connect(struct cmd_args_s *ap,
 				DH_PERROR_DER(ap, rc, "failed to open container");
 				D_GOTO(err, rc);
 			}
+			fprintf(ap->outstream, "Successfully created container %s\n", ca->dst_cont);
 		}
 		if (is_posix_copy) {
 			rc = dfs_sys_mount(ca->dst_poh, ca->dst_coh, O_RDWR, DFS_SYS_NO_LOCK,
@@ -1741,6 +1786,9 @@ dm_parse_path(struct file_dfs *file, char *path, size_t path_len, char (*pool_st
 			strncpy(path, dattr.da_rel_path, path_len);
 	} else if (rc == ENOMEM) {
 		D_GOTO(out, rc);
+	} else if (strncmp(path, "daos://", 7) == 0) {
+		/* Error, since we expect a DAOS path */
+		D_GOTO(out, rc);
 	} else {
 		/* If basename does not exist yet then duns_resolve_path will fail even if
 		 * dirname is a UNS path
@@ -1774,9 +1822,6 @@ dm_parse_path(struct file_dfs *file, char *path, size_t path_len, char (*pool_st
 			snprintf(*cont_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_cont);
 		} else if (rc == ENOMEM) {
 			/* TODO: Take this path of rc != ENOENT? */
-			D_GOTO(out, rc);
-		} else if (strncmp(path, "daos://", 7) == 0) {
-			/* Error, since we expect a DAOS path */
 			D_GOTO(out, rc);
 		} else {
 			/* not a DAOS path, set type to POSIX,
@@ -1860,6 +1905,8 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 		DH_PERROR_DER(ap, rc, "failed to parse destination path");
 		D_GOTO(out, rc);
 	}
+	if (dst_file_dfs.type == POSIX)
+		ap->fs_copy_posix = true;
 
 	rc = dm_connect(ap, is_posix_copy, &src_file_dfs, &dst_file_dfs, ca,
 			ap->sysname, ap->dst, &src_cont_info, &dst_cont_info);
@@ -1868,14 +1915,12 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc);
 	}
 
-	rc = fs_copy(ap, &src_file_dfs, &dst_file_dfs, src_str, dst_str, num);
+	rc = fs_copy(ap, ca, &src_file_dfs, &dst_file_dfs, src_str, dst_str, ap->ignore_unsup, num);
 	if (rc != 0) {
 		DH_PERROR_DER(ap, rc, "fs copy failed");
 		D_GOTO(out_disconnect, rc);
 	}
 
-	if (dst_file_dfs.type == POSIX)
-		ap->fs_copy_posix = true;
 out_disconnect:
 	/* umount dfs, close conts, and disconnect pools */
 	rc2 = dm_disconnect(ap, is_posix_copy, ca, &src_file_dfs, &dst_file_dfs);
@@ -2429,11 +2474,14 @@ out:
 }
 
 int
-dfuse_count_query(struct cmd_args_s *ap)
+dfuse_cont_query(struct cmd_args_s *ap)
 {
 	struct dfuse_mem_query query = {};
 	int                    rc    = -DER_SUCCESS;
 	int                    fd;
+	struct dfuse_stat     *stat   = NULL;
+	uint64_t               tstats = 0;
+	int                    i;
 
 	fd = open(ap->path, O_NOFOLLOW, O_RDONLY);
 	if (fd < 0) {
@@ -2451,7 +2499,7 @@ dfuse_count_query(struct cmd_args_s *ap)
 		if (rc == ENOTTY) {
 			rc = -DER_MISC;
 		} else {
-			DH_PERROR_SYS(ap, rc, "ioctl failed");
+			DH_PERROR_SYS(ap, rc, "query ioctl failed");
 			rc = daos_errno2der(errno);
 		}
 		goto close;
@@ -2462,17 +2510,48 @@ dfuse_count_query(struct cmd_args_s *ap)
 	ap->dfuse_mem.pool_count      = query.pool_count;
 	ap->dfuse_mem.container_count = query.container_count;
 	ap->dfuse_mem.found           = query.found;
+	ap->dfuse_mem.stat_count      = query.stat_count;
 
+	D_ALLOC_ARRAY(stat, query.stat_count);
+	if (stat == NULL)
+		D_GOTO(close, rc = -DER_NOMEM);
+
+	rc = ioctl(fd,
+		   (int)_IOC(_IOC_READ, DFUSE_IOCTL_TYPE, DFUSE_IOCTL_STAT_NR,
+			     sizeof(struct dfuse_stat) * query.stat_count),
+		   stat);
+	if (rc < 0) {
+		rc = errno;
+		if (rc == ENOTTY) {
+			rc = -DER_MISC;
+		} else {
+			DH_PERROR_SYS(ap, rc, "stat ioctl failed");
+			rc = daos_errno2der(errno);
+		}
+		goto close;
+	}
+	for (i = 0; i < query.stat_count; i++)
+		tstats += stat[i].value;
+
+	for (i = 0; i < query.stat_count; i++)
+		if (stat[i].value != 0)
+			fprintf(ap->outstream, "%16s: %5.1f%% (%ld)\n", stat[i].name,
+				(double)stat[i].value / tstats * 100, stat[i].value);
+
+	ap->dfuse_stat = stat;
 close:
 	close(fd);
+	if (rc != 0)
+		D_FREE(stat);
 	return rc;
 }
 
 /* Dfuse cache evict (and helper).
  * Open a path and make a ioctl call for dfuse to evict it.  IF the path is the root then dfuse
  * cannot do this so perform the same over all the top-level directory entries instead.
+ *
+ * Always closes fd.
  */
-
 static int
 dfuse_evict_helper(int fd, struct dfuse_mem_query *query)
 {
@@ -2483,6 +2562,7 @@ dfuse_evict_helper(int fd, struct dfuse_mem_query *query)
 	dir = fdopendir(fd);
 	if (dir == 0) {
 		rc = errno;
+		close(fd);
 		return rc;
 	}
 
@@ -2533,6 +2613,7 @@ dfuse_evict(struct cmd_args_s *ap)
 
 	if (buf.st_ino == 1) {
 		rc = dfuse_evict_helper(fd, &query);
+		fd = -1;
 		if (rc != 0) {
 			DH_PERROR_SYS(ap, rc, "Unable to traverse root");
 			rc = daos_errno2der(rc);
@@ -2561,6 +2642,7 @@ out:
 	ap->dfuse_mem.container_count = query.container_count;
 
 close:
-	close(fd);
+	if (fd >= 0)
+		close(fd);
 	return rc;
 }

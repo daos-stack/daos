@@ -8,8 +8,7 @@ hosts:
 orterun:
   allow_run_as_root: true
 # This timeout must be longer than the test_timeout param (+15minutes)
-# 12 hour test
-timeout: 12H15M
+timeout: 24H30M
 setup:
   start_servers: true
   start_agents: true
@@ -17,7 +16,7 @@ server_config:
   name: daos_server
   control_log_mask: INFO
   control_log_file: daos_control0.log
-  crt_timeout: 60
+  crt_timeout: 120
   engines_per_host: 2
   engines:
     0:
@@ -25,27 +24,29 @@ server_config:
       nr_xs_helpers: 2
       fabric_iface_port: 31317
       log_file: daos_server0.log
-      log_mask: ERR
+      log_mask: INFO
       env_vars:
         - FI_UNIVERSE_SIZE=16383
+        - DD_MASK=rebuild
       storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 2
       fabric_iface_port: 31417
       log_file: daos_server1.log
-      log_mask: ERR
+      log_mask: INFO
       env_vars:
         - FI_UNIVERSE_SIZE=16383
+        - DD_MASK=rebuild
       storage: auto
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
-  size: 75%
-  rebuild_timeout: 480
+  size: 90%
+  rebuild_timeout: 600
   pool_query_timeout: 120
 pool_reserved:
-  size: 10%
-  rebuild_timeout: 480
+  size: 5%
+  rebuild_timeout: 600
   pool_query_timeout: 120
 container:
   type: POSIX
@@ -54,9 +55,9 @@ container:
   daos_timeout: 30
 container_reserved:
   type: POSIX
-  properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:1
-  file_oclass: EC_2P1GX
-  dir_oclass: RP_2GX
+  properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:2
+  file_oclass: EC_2P2GX
+  dir_oclass: RP_3GX
   control_method: daos
   daos_timeout: 30
 # test_params - Defines the type of test to run and how long it runs
@@ -76,8 +77,8 @@ soak_harassers:
   # harasser test timeout in hours
   single_test_pool: false
   test_timeout:
-    test_soak_online_harassers: 12
-    test_soak_offline_harassers: 12
+    test_soak_online_harassers: 24
+    test_soak_offline_harassers: 24
   # maximum timeout for a single job in test in minutes
   joblist:
     - ior_harasser
@@ -91,19 +92,22 @@ soak_harassers:
       - server-stop_server-reintegrate-offline
       - extend-pool-offline
       # - vmd-identify-check-offline
+      - reboot_reboot-reintegrate-offline
     test_soak_online_harassers:
       - exclude_reintegrate
       - server-stop_server-start
       - server-stop_server-reintegrate
       - extend-pool
       # - vmd-identify-check
-  harasser_to: 600
+      - reboot_reboot-reintegrate
+  harasser_to: 1200
   # drain rank from all pools before stopping server
   enable_drain: true
   # continue test if container destroy fails
   ignore_soak_errors: true
   enable_intercept_lib: false
   enable_remote_logging: false
+  enable_scrubber: false
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
@@ -130,24 +134,25 @@ ior_harasser:
     - '64M'
   repetitions: 1
   transfer_size:
-    - '4k'
+    - '32k'
     - '1m'
+    - '4k'
   segment_count: 1
   dfs_oclass:
-    - ["EC_2P1GX", "RP_2GX"]
+    - ["EC_2P2GX", "RP_3GX"]
     - ["EC_4P2GX", "RP_3GX"]
   dfuse:
-    mount_dir: "/tmp/daos_dfuse/ior"
+    mount_dir: "/tmp/soak_dfuse_ior"
     disable_caching: true
 fio_harasser:
   api:
     - POSIX
-  job_timeout: 20
+  job_timeout: 30
   names:
     - global
     - test
   global:
-    directory: "/tmp/daos_dfuse/fio/"
+    directory: "/tmp/soak_dfuse_fio/"
     ioengine: 'libaio'
     thread: 1
     group_reporting: 1
@@ -158,6 +163,7 @@ fio_harasser:
     numjobs: 1
   soak:
     blocksize:
+      - '4K'
       - '1M'
     size:
       - '1G'
@@ -165,14 +171,14 @@ fio_harasser:
       - 'rw'
       - 'randrw'
     oclass:
-      - ["EC_2P1GX", "RP_2GX"]
+      - ["EC_2P2GX", "RP_3GX"]
       - ["EC_4P2GX", "RP_3GX"]
   dfuse:
-    mount_dir: "/tmp/daos_dfuse/fio/"
+    mount_dir: "/tmp/soak_dfuse_fio/"
     disable_caching: true
 mdtest_harasser:
   # maximum timeout for a single job in test in minutes
-  job_timeout: 20
+  job_timeout: 30
   nodesperjob:
     - 1
     - 4
@@ -196,11 +202,11 @@ mdtest_harasser:
     - 10
     - 0
   dfs_oclass:
-    - ["EC_2P1G1", "RP_2G1"]
-    - ["EC_4P2GX", "RP_3G1"]
+    - ["EC_2P2G1", "RP_3G1"]
+    - ["EC_4P2G1", "RP_3G1"]
   dfs_destroy: false
   dfuse:
-    mount_dir: "/tmp/daos_dfuse/mdtest/"
+    mount_dir: "/tmp/soak_dfuse_mdtest/"
     disable_caching: true
 hdf5_vol:
   plugin_path: "/usr/lib64/mpich/lib"

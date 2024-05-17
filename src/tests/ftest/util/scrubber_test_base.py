@@ -5,8 +5,8 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import threading
 
-from scrubber_utils import ScrubberUtils
 from ior_test_base import IorTestBase
+from scrubber_utils import ScrubberUtils
 
 
 class TestWithScrubber(IorTestBase):
@@ -81,7 +81,7 @@ class TestWithScrubber(IorTestBase):
             self.add_pool()
         self.add_container(pool=self.pool, create=False)
         if pool_prop is None:
-            pool_prop = "scrub:timed,scrub-freq:1"
+            pool_prop = "scrub:timed,scrub_freq:1"
         if cont_prop is None:
             cont_prop = "cksum:crc16"
         for prop_val in pool_prop.split(","):

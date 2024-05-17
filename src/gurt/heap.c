@@ -286,8 +286,8 @@ d_binheap_destroy(struct d_binheap *h)
  * Obtains a double pointer to a heap node, given its index into the binary
  * tree.
  *
- * \param h [in]	The binary heap instance
- * \param idx [in]	The requested node's index
+ * \param[in] h		The binary heap instance
+ * \param[in] idx	The requested node's index
  *
  * \return		valid-pointer A double pointer to a heap pointer entry
  */
@@ -340,8 +340,8 @@ d_binheap_find(struct d_binheap *h, uint32_t idx)
 /**
  * Moves a node upwards, towards the root of the binary tree.
  *
- * \param h [in]	The heap
- * \param e [in]	The node
+ * \param[in] h		The heap
+ * \param[in] e		The node
  *
  * \return		1 the position of \a e in the tree was changed at least
  *			once;
@@ -386,8 +386,8 @@ d_binheap_bubble(struct d_binheap *h, struct d_binheap_node *e)
 /**
  * Moves a node downwards, towards the last level of the binary tree.
  *
- * \param h [IN]	The heap
- * \param e [IN]	The node
+ * \param[in] h		The heap
+ * \param[in] e		The node
  *
  * \return		1 The position of \a e in the tree was changed at least
  *			once;

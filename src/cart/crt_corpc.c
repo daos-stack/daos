@@ -57,8 +57,8 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
 		rpc_priv->crp_flags |= CRT_RPC_FLAG_COLL;
 		if (co_info->co_grp_priv->gp_primary)
 			rpc_priv->crp_flags |= CRT_RPC_FLAG_PRIMARY_GRP;
-		if (flags & CRT_RPC_FLAG_FILTER_INVERT)
-			rpc_priv->crp_flags |= CRT_RPC_FLAG_FILTER_INVERT;
+		rpc_priv->crp_flags |= flags & (CRT_RPC_FLAG_FILTER_INVERT |
+						CRT_RPC_FLAG_CO_FAILOUT);
 
 		co_hdr->coh_grpid = grp_priv->gp_pub.cg_grpid;
 		co_hdr->coh_filter_ranks = co_info->co_filter_ranks;
@@ -244,13 +244,12 @@ crt_corpc_free_chained_bulk(crt_bulk_t bulk_hdl)
 		D_GOTO(out, rc);
 	}
 
-	for (i = 0; i < seg_num; i++)
-		D_FREE(iovs[i].iov_buf);
-
 	rc = crt_bulk_free(bulk_hdl);
 	if (rc != 0)
 		D_ERROR("crt_bulk_free failed: "DF_RC"\n", DP_RC(rc));
 
+	for (i = 0; i < seg_num; i++)
+		D_FREE(iovs[i].iov_buf);
 out:
 	D_FREE(iovs);
 	return rc;
@@ -907,6 +906,11 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 	}
 
 forward_done:
+	if (rc != 0 && rpc_priv->crp_flags & CRT_RPC_FLAG_CO_FAILOUT) {
+		crt_corpc_complete(rpc_priv);
+		goto out;
+	}
+
 	/* NOOP bcast (no child and root excluded) */
 	if (co_info->co_child_num == 0 && co_info->co_root_excluded)
 		crt_corpc_complete(rpc_priv);

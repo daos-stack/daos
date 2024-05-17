@@ -8,19 +8,16 @@
 # pylint: disable=consider-using-f-string
 
 import ctypes
-import threading
-import os
-import inspect
-import sys
-import time
 import enum
+import inspect
+import os
+import sys
+import threading
+import time
 
 from .. import pydaos_shim  # pylint: disable=relative-beyond-top-level
-
-from . import daos_cref
-from . import conversion
 from .. import DaosClient
-
+from . import conversion, daos_cref
 
 DaosObjClass = enum.Enum(
     "DaosObjClass",
@@ -52,7 +49,6 @@ class DaosPool():
         self.glob = None
         self.svc = None
         self.pool_info = None
-        self.target_info = None
 
     def get_uuid_str(self):
         """Retrieve pool's UUID as Python string."""
@@ -199,29 +195,6 @@ class DaosPool():
         event = daos_cref.DaosEvent()
         params = [self.handle, None, ctypes.byref(self.pool_info), None,
                   event]
-        thread = threading.Thread(target=daos_cref.async_worker,
-                                  args=(func,
-                                        params,
-                                        self.context,
-                                        cb_func,
-                                        self))
-        thread.start()
-        return None
-
-    def target_query(self, tgt, rank, cb_func=None):
-        """Query information of storage targets within a DAOS pool."""
-        self.target_info = daos_cref.TargetInfo()
-        func = self.context.get_function('query-target')
-
-        if cb_func is None:
-            ret = func(self.handle, tgt, rank, ctypes.byref(self.target_info),
-                       None)
-            if ret != 0:
-                raise DaosApiError("Pool query returned non-zero. RC: {0}".format(ret))
-            return self.target_info
-
-        event = daos_cref.DaosEvent()
-        params = [self.handle, tgt, rank, ctypes.byref(self.target_info), event]
         thread = threading.Thread(target=daos_cref.async_worker,
                                   args=(func,
                                         params,

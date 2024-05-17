@@ -54,6 +54,7 @@ RPM_BUILD_OPTIONS := $(BUILD_DEFINES)
 GIT_DIFF_EXCLUDES := $(PATCH_EXCLUDE_FILES:%=':!%')
 endif
 
+FVERSION         ?= latest
 COMMON_RPM_ARGS  := --define "_topdir $$PWD/_topdir" $(BUILD_DEFINES)
 SPEC             := $(shell if [ -f $(NAME)-$(DISTRO_BASE).spec ]; then echo $(NAME)-$(DISTRO_BASE).spec; else echo $(NAME).spec; fi)
 VERSION           = $(eval VERSION := $(shell rpm $(COMMON_RPM_ARGS) --specfile --qf '%{version}\n' $(SPEC) | sed -n '1p'))$(VERSION)
@@ -65,10 +66,16 @@ RPMS              = $(eval RPMS := $(addsuffix .rpm,$(addprefix _topdir/RPMS/x86
 DEB_TOP          := _topdir/BUILD
 DEB_BUILD        := $(DEB_TOP)/$(NAME)-$(VERSION)
 DEB_TARBASE      := $(DEB_TOP)/$(DEB_NAME)_$(VERSION)
-SOURCE           ?= $(eval SOURCE := $(shell CHROOT_NAME=$(CHROOT_NAME) $(SPECTOOL) $(COMMON_RPM_ARGS) -S -l $(SPEC) | sed -e 2,\$$d -e 's/\#/\\\#/g' -e 's/.*:  *//'))$(SOURCE)
-PATCHES          ?= $(eval PATCHES := $(shell CHROOT_NAME=$(CHROOT_NAME) $(SPECTOOL) $(COMMON_RPM_ARGS) -l $(SPEC) | sed -ne 1d -e 's/.*:  *//' -e 's/.*\///' -e '/\.patch/p'))$(PATCHES)
+REAL_SOURCE      ?= $(eval REAL_SOURCE := $(shell CHROOT_NAME=$(CHROOT_NAME) $(SPECTOOL) $(COMMON_RPM_ARGS) -S -l $(SPEC) | sed -e 2,\$$d -e 's/\#/\\\#/g' -e 's/Source.*:  *//'))$(REAL_SOURCE)
+ifeq ($(ID_LIKE),debian)
+ifneq ($(DEB_SOURCE),)
+SOURCE           ?= $(DEB_SOURCE)
+endif
+endif
+SOURCE           ?= $(REAL_SOURCE)
+PATCHES          ?= $(eval PATCHES := $(shell CHROOT_NAME=$(CHROOT_NAME) $(SPECTOOL) $(COMMON_RPM_ARGS) -l $(SPEC) | sed -ne 1d -e '/already present/d' -e 's/.*:  *//' -e 's/.*\///' -e '/\.patch/p'))$(PATCHES)
 OTHER_SOURCES    := $(eval OTHER_SOURCES := $(shell CHROOT_NAME=$(CHROOT_NAME) $(SPECTOOL) $(COMMON_RPM_ARGS) -l $(SPEC) | sed -ne 1d -e '/already present/d' -e '/^Patch.*:/d' -e 's/Source.*:  *//' -e 's/.*\///' -e p))$(OTHER_SOURCES)
-SOURCES          := $(addprefix _topdir/SOURCES/,$(notdir $(SOURCE)) $(PATCHES) $(OTHER_SOURCES))
+SOURCES          := $(addprefix _topdir/SOURCES/,$(notdir $(SOURCE) $(OTHER_SOURCES)) $(PATCHES))
 ifeq ($(ID_LIKE),debian)
 DEBS             := $(addsuffix _$(VERSION)-1_amd64.deb,$(shell sed -n '/-udeb/b; s,^Package:[[:blank:]],$(DEB_TOP)/,p' $(TOPDIR)/debian/control))
 DEB_PREV_RELEASE := $(shell cd $(TOPDIR) && dpkg-parsechangelog -S version)
@@ -155,9 +162,9 @@ ifeq ($(DL_NAME),)
 DL_NAME = $(NAME)
 endif
 
-$(notdir $(SOURCE)): $(SPEC) $(CALLING_MAKEFILE)
+$(notdir $(SOURCE) $(OTHER_SOURCES) $(REAL_SOURCE)): $(SPEC) $(CALLING_MAKEFILE)
 	# TODO: need to clean up old ones
-	$(SPECTOOL) -g $(SPEC)
+	$(SPECTOOL) $(COMMON_RPM_ARGS) -g $(SPEC)
 
 $(DEB_TOP)/%: % | $(DEB_TOP)/
 
@@ -182,27 +189,29 @@ $(DEB_TOP)/.patched: $(PATCHES) check-env deb_detar | \
 	$(DEB_BUILD)/debian/
 	mkdir -p ${DEB_BUILD}/debian/patches
 	mkdir -p $(DEB_TOP)/patches
-	for f in $(PATCHES); do \
-          rm -f $(DEB_TOP)/patches/*; \
-	  if git mailsplit -o$(DEB_TOP)/patches < "$$f" ;then \
-	      fn=$$(basename "$$f"); \
-	      for f1 in $(DEB_TOP)/patches/*;do \
-	        [ -e "$$f1" ] || continue; \
-	        f1n=$$(basename "$$f1"); \
-	        echo "$${fn}_$${f1n}" >> $(DEB_BUILD)/debian/patches/series ; \
-	        mv "$$f1" $(DEB_BUILD)/debian/patches/$${fn}_$${f1n}; \
-	      done; \
-	  else \
-	    fb=$$(basename "$$f"); \
-	    cp "$$f" $(DEB_BUILD)/debian/patches/ ; \
-	    echo "$$fb" >> $(DEB_BUILD)/debian/patches/series ; \
-	    if ! grep -q "^Description:\|^Subject:" "$$f" ;then \
-	      sed -i '1 iSubject: Auto added patch' \
-	        "$(DEB_BUILD)/debian/patches/$$fb" ;fi ; \
-	    if ! grep -q "^Origin:\|^Author:\|^From:" "$$f" ;then \
-	      sed -i '1 iOrigin: other' \
-	        "$(DEB_BUILD)/debian/patches/$$fb" ;fi ; \
-	  fi ; \
+	for f in $(PATCHES); do                                              \
+          rm -f $(DEB_TOP)/patches/*;                                    \
+	  if git mailsplit -o$(DEB_TOP)/patches < "$$f"; then                \
+	      fn=$$(basename "$$f");                                         \
+	      for f1 in $(DEB_TOP)/patches/*;do                              \
+	        [ -e "$$f1" ] || continue;                                   \
+	        f1n=$$(basename "$$f1");                                     \
+	        echo "$${fn}_$${f1n}" >> $(DEB_BUILD)/debian/patches/series; \
+	        mv "$$f1" $(DEB_BUILD)/debian/patches/$${fn}_$${f1n};        \
+	      done;                                                          \
+	  else                                                               \
+	    fb=$$(basename "$$f");                                           \
+	    cp "$$f" $(DEB_BUILD)/debian/patches/;                           \
+	    echo "$$fb" >> $(DEB_BUILD)/debian/patches/series;               \
+	    if ! grep -q "^Description:\|^Subject:" "$$f"; then              \
+	      sed -i '1 iSubject: Auto added patch'                          \
+	        "$(DEB_BUILD)/debian/patches/$$fb";                          \
+		fi;                                                              \
+	    if ! grep -q "^Origin:\|^Author:\|^From:" "$$f"; then            \
+	      sed -i '1 iOrigin: other'                                      \
+	        "$(DEB_BUILD)/debian/patches/$$fb";                          \
+		fi;                                                              \
+	  fi;                                                                \
 	done
 	touch $@
 
@@ -355,12 +364,14 @@ chrootbuild: $(SRPM) $(CALLING_MAKEFILE)
 	LOCAL_REPOS='$(LOCAL_REPOS)'                            \
 	ARTIFACTORY_URL="$(ARTIFACTORY_URL)"                    \
 	DISTRO_VERSION="$(DISTRO_VERSION)"                      \
+	PACKAGE="$(NAME)"                                       \
 	TARGET="$<"                                             \
 	packaging/rpm_chrootbuild
 endif
 
 podman_chrootbuild:
 	if ! podman build --build-arg REPO_FILE_URL=$(REPO_FILE_URL) \
+	                  --build-arg FVERSION=$(FVERSION)           \
 	                  -t $(subst +,-,$(CHROOT_NAME))-chrootbuild \
 	                  -f packaging/Dockerfile.mockbuild .; then  \
 		echo "Container build failed";                           \
@@ -378,7 +389,9 @@ podman_chrootbuild:
 	                                 exit 1;                                                                                        \
 	                             fi;                                                                                                \
 	                             rpmlint $$(ls /var/lib/mock/$(CHROOT_NAME)/result/*.rpm |                                          \
-	                                 grep -v -e debuginfo -e debugsource -e src.rpm)'
+	                                 grep -v -e debuginfo -e debugsource -e src.rpm)'; then                                         \
+		exit 1;                                                                                                                 \
+	fi
 
 docker_chrootbuild:
 	if ! $(DOCKER) build --build-arg UID=$$(id -u) -t chrootbuild   \
@@ -467,6 +480,9 @@ show_rpms:
 
 show_source:
 	@echo '$(SOURCE)'
+
+show_real_source:
+	@echo '$(REAL_SOURCE)'
 
 show_patches:
 	@echo '$(PATCHES)'
