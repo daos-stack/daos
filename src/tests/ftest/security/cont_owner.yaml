@@ -1,7 +1,7 @@
 hosts:
   test_servers: 1
   test_clients: 1
-timeout: 1200
+timeout: 180
 server_config:
   name: daos_server
   port: 10001
@@ -17,6 +17,6 @@ server_config:
           scm_size: 4
   system_ram_reserved: 1
 pool:
-  scm_size: 138374182
+  size: 1G
 container:
   control_method: daos

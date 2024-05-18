@@ -1256,13 +1256,13 @@ dfs_get_size_by_oid(dfs_t *dfs, daos_obj_id_t oid, daos_size_t chunk_size, daos_
 	return daos_der2errno(rc);
 }
 
-static bool
+inline static bool
 is_uid_invalid(uid_t uid)
 {
 	return uid == (uid_t)-1;
 }
 
-static bool
+inline static bool
 is_gid_invalid(gid_t gid)
 {
 	return gid == (gid_t)-1;
