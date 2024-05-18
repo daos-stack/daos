@@ -280,12 +280,7 @@ class PoolListConsolidationTest(RecoveryTestBase):
         scm_mount = self.server_managers[0].get_config_value("scm_mount")
         scm_mount_result = check_file_exists(
             hosts=self.hostlist_servers, filename=scm_mount, directory=True)
-        if not scm_mount_result[0]:
-            msg = "MD-on-SSD cluster. Mount point is removed by control plane after system stop."
-            self.log.info(msg)
-            dmg_command.system_start()
-            # return results in PASS.
-            return
+        self.log.debug(f"## scm_mount_result[0] = {scm_mount_result[0]}")
         rdb_pool_path = f"{scm_mount}/{self.pool.uuid.lower()}/rdb-pool"
         command = f"sudo rm {scm_mount}/{self.pool.uuid.lower()}/rdb-pool"
         hosts = list(set(self.server_managers[0].ranks.values()))
@@ -293,12 +288,21 @@ class PoolListConsolidationTest(RecoveryTestBase):
         for host in hosts:
             node = NodeSet(host)
             check_out = check_file_exists(hosts=node, filename=rdb_pool_path, sudo=True)
+            self.log.debug(f"## check_out[0] = {check_out[0]}")
             if check_out[0]:
                 pcmd(hosts=node, command=command)
                 self.log.info("rm rdb-pool from %s", str(node))
                 count += 1
                 if count > 1:
                     break
+        self.log.debug(f"## count = {count}")
+        if count == 0:
+            msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
+                   "after system stop.")
+            self.log.info(msg)
+            dmg_command.system_start()
+            # return results in PASS.
+            return
 
         self.log_step("Start servers.")
         dmg_command.system_start()
@@ -372,15 +376,19 @@ class PoolListConsolidationTest(RecoveryTestBase):
         hosts = list(set(self.server_managers[0].ranks.values()))
         nodeset_hosts = NodeSet.fromlist(hosts)
         scm_mount = self.server_managers[0].get_config_value("scm_mount")
-        scm_mount_result = check_file_exists(
-            hosts=self.hostlist_servers, filename=scm_mount, directory=True)
-        if not scm_mount_result[0]:
-            msg = "MD-on-SSD cluster. Mount point is removed by control plane after system stop."
+        self.log.debug(f"## self.hostlist_servers = {self.hostlist_servers}")
+        self.log.debug(f"## nodeset_host = {str(nodeset_hosts)}")
+        rdb_pool_path = f"{scm_mount}/{self.pool.uuid.lower()}/rdb-pool"
+        rdb_pool_out = check_file_exists(hosts=nodeset_hosts, filename=rdb_pool_path, sudo=True)
+        self.log.debug(f"## rdb_pool_out[0] = {rdb_pool_out[0]}")
+        if not rdb_pool_out[0]:
+            msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
+                   "after system stop.")
             self.log.info(msg)
             dmg_command.system_start()
             # return results in PASS.
             return
-        command = f"sudo rm {scm_mount}/{self.pool.uuid.lower()}/rdb-pool"
+        command = f"sudo rm {rdb_pool_path}"
         remove_result = pcmd(hosts=nodeset_hosts, command=command)
         success_nodes = remove_result[0]
         if nodeset_hosts != success_nodes:

@@ -136,10 +136,13 @@ class PoolMembershipTest(IorTestBase):
         self.log_step("Stop servers.")
         self.server_managers[0].system_stop()
 
-        scm_mount_result = check_file_exists(
-            hosts=self.hostlist_servers, filename=src_mount, directory=True)
-        if not scm_mount_result[0]:
-            msg = "MD-on-SSD cluster. Mount point is removed by control plane after system stop."
+        pool_directory = f"{src_mount}/{pool.uuid.lower()}"
+        pool_directory_result = check_file_exists(
+            hosts=self.hostlist_servers, filename=pool_directory, directory=True)
+        self.log.debug(f"## pool_dir_result[0] = {pool_directory_result[0]}")
+        if not pool_directory_result[0]:
+            msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
+                   "after system stop.")
             self.log.info(msg)
             dmg_command.system_start()
             # return results in PASS.
@@ -271,15 +274,17 @@ class PoolMembershipTest(IorTestBase):
         self.log_step("Manually remove /<scm_mount>/<pool_uuid>/vos-0 from rank 0 node.")
         rank_0_host = NodeSet(self.server_managers[0].get_host(0))
         scm_mount = self.server_managers[0].get_config_value("scm_mount")
-        scm_mount_result = check_file_exists(
-            hosts=self.hostlist_servers, filename=scm_mount, directory=True)
-        if not scm_mount_result[0]:
-            msg = "MD-on-SSD cluster. Mount point is removed by control plane after system stop."
+        vos_0_path = f"{scm_mount}/{pool.uuid.lower()}/vos-0"
+        vos_0_result = check_file_exists(hosts=self.hostlist_servers, filename=vos_0_path)
+        self.log.debug(f"## vos_0_result[0] = {vos_0_result[0]}")
+        if not vos_0_result[0]:
+            msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
+                   "after system stop.")
             self.log.info(msg)
             dmg_command.system_start()
             # return results in PASS.
             return
-        rm_cmd = f"sudo rm {scm_mount}/{pool.uuid.lower()}/vos-0"
+        rm_cmd = f"sudo rm {vos_0_path}"
         if not run_remote(log=self.log, hosts=rank_0_host, command=rm_cmd).passed:
             self.fail(f"Following command failed on {rank_0_host}! {rm_cmd}")
 
@@ -353,15 +358,18 @@ class PoolMembershipTest(IorTestBase):
         self.log_step("Remove pool directory from one of the mount points.")
         rank_1_host = NodeSet(self.server_managers[0].get_host(1))
         scm_mount = self.server_managers[0].get_config_value("scm_mount")
-        scm_mount_result = check_file_exists(
-            hosts=self.hostlist_servers, filename=scm_mount, directory=True)
-        if not scm_mount_result[0]:
-            msg = "MD-on-SSD cluster. Mount point is removed by control plane after system stop."
+        pool_directory = f"{scm_mount}/{self.pool.uuid.lower()}"
+        pool_directory_result = check_file_exists(
+            hosts=self.hostlist_servers, filename=pool_directory, directory=True)
+        self.log.debug(f"## pool_directory_result[0] = {pool_directory_result[0]}")
+        if not pool_directory_result[0]:
+            msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
+                   "after system stop.")
             self.log.info(msg)
             dmg_command.system_start()
             # return results in PASS.
             return
-        rm_cmd = f"sudo rm -rf {scm_mount}/{self.pool.uuid.lower()}"
+        rm_cmd = f"sudo rm -rf {pool_directory}"
         if not run_remote(log=self.log, hosts=rank_1_host, command=rm_cmd).passed:
             self.fail(f"Following command failed on {rank_1_host}! {rm_cmd}")
 
