@@ -21,6 +21,7 @@
 #include <daos/tests_lib.h>
 #include <daos_test.h>
 #include <daos/dts.h>
+#include <daos_srv/vos.h>
 #include "perf_internal.h"
 
 daos_size_t	ts_scm_size  = (2ULL << 30);	/* default pool SCM size */
@@ -234,8 +235,8 @@ akey_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 	sgl->sg_nr_out = 0;
 
 	D_ASSERT(ts_update_or_fetch_fn != NULL);
-	rc = ts_update_or_fetch_fn(obj_idx, op_type, cred, *epoch,
-				   !!param->pa_rw.verify, &param->pa_duration);
+	rc = ts_update_or_fetch_fn(obj_idx, op_type, cred, *epoch, !!param->pa_rw.verify,
+				   &param->pa_duration, param->pa_rw.flags);
 	if (rc != 0) {
 		fprintf(stderr, "%s failed. rc=%d, epoch=%"PRIu64"\n",
 			op_type == TS_DO_FETCH ? "Fetch" : "Update",
@@ -497,6 +498,11 @@ pf_parse_rw_cb(char *str, struct pf_param *param, char **strp)
 			param->pa_rw.offset = val;
 		else
 			param->pa_rw.size = val;
+		break;
+	case 'r':
+		str++;
+		param->pa_rw.flags = VOS_OF_REBUILD;
+		printf("Rebuild test\n");
 		break;
 	}
 	*strp = str;
