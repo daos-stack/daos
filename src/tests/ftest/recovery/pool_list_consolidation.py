@@ -189,10 +189,9 @@ class PoolListConsolidationTest(RecoveryTestBase):
             list: Error list.
 
         """
-        hosts = list(set(self.server_managers[0].ranks.values()))
-        nodeset_hosts = NodeSet.fromlist(hosts)
         pool_path = f"/mnt/daos0/{self.pool.uuid.lower()}"
-        check_out = check_file_exists(hosts=nodeset_hosts, filename=pool_path)
+        check_out = check_file_exists(
+            hosts=self.hostlist_servers, filename=pool_path, directory=True)
         if check_out[0]:
             msg = f"Pool path still exists! Node without pool path = {check_out[1]}"
             errors.append(msg)
@@ -278,9 +277,6 @@ class PoolListConsolidationTest(RecoveryTestBase):
 
         self.log_step("Remove <scm_mount>/<pool_uuid>/rdb-pool from two ranks.")
         scm_mount = self.server_managers[0].get_config_value("scm_mount")
-        scm_mount_result = check_file_exists(
-            hosts=self.hostlist_servers, filename=scm_mount, directory=True)
-        self.log.debug(f"## scm_mount_result[0] = {scm_mount_result[0]}")
         rdb_pool_path = f"{scm_mount}/{self.pool.uuid.lower()}/rdb-pool"
         command = f"sudo rm {scm_mount}/{self.pool.uuid.lower()}/rdb-pool"
         hosts = list(set(self.server_managers[0].ranks.values()))
@@ -288,14 +284,12 @@ class PoolListConsolidationTest(RecoveryTestBase):
         for host in hosts:
             node = NodeSet(host)
             check_out = check_file_exists(hosts=node, filename=rdb_pool_path, sudo=True)
-            self.log.debug(f"## check_out[0] = {check_out[0]}")
             if check_out[0]:
                 pcmd(hosts=node, command=command)
                 self.log.info("rm rdb-pool from %s", str(node))
                 count += 1
                 if count > 1:
                     break
-        self.log.debug(f"## count = {count}")
         if count == 0:
             msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
                    "after system stop.")
@@ -373,14 +367,10 @@ class PoolListConsolidationTest(RecoveryTestBase):
         dmg_command.system_stop()
 
         self.log_step("Remove <scm_mount>/<pool_uuid>/rdb-pool from all ranks.")
-        hosts = list(set(self.server_managers[0].ranks.values()))
-        nodeset_hosts = NodeSet.fromlist(hosts)
         scm_mount = self.server_managers[0].get_config_value("scm_mount")
-        self.log.debug(f"## self.hostlist_servers = {self.hostlist_servers}")
-        self.log.debug(f"## nodeset_host = {str(nodeset_hosts)}")
         rdb_pool_path = f"{scm_mount}/{self.pool.uuid.lower()}/rdb-pool"
-        rdb_pool_out = check_file_exists(hosts=nodeset_hosts, filename=rdb_pool_path, sudo=True)
-        self.log.debug(f"## rdb_pool_out[0] = {rdb_pool_out[0]}")
+        rdb_pool_out = check_file_exists(
+            hosts=self.hostlist_servers, filename=rdb_pool_path, sudo=True)
         if not rdb_pool_out[0]:
             msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
                    "after system stop.")
@@ -389,10 +379,10 @@ class PoolListConsolidationTest(RecoveryTestBase):
             # return results in PASS.
             return
         command = f"sudo rm {rdb_pool_path}"
-        remove_result = pcmd(hosts=nodeset_hosts, command=command)
+        remove_result = pcmd(hosts=self.hostlist_servers, command=command)
         success_nodes = remove_result[0]
-        if nodeset_hosts != success_nodes:
-            msg = (f"Failed to remove rdb-pool! All = {nodeset_hosts}, "
+        if self.hostlist_servers != success_nodes:
+            msg = (f"Failed to remove rdb-pool! All = {self.hostlist_servers}, "
                    f"Success = {success_nodes}")
             self.fail(msg)
 

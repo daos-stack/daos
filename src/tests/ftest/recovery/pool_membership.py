@@ -139,7 +139,6 @@ class PoolMembershipTest(IorTestBase):
         pool_directory = f"{src_mount}/{pool.uuid.lower()}"
         pool_directory_result = check_file_exists(
             hosts=self.hostlist_servers, filename=pool_directory, directory=True)
-        self.log.debug(f"## pool_dir_result[0] = {pool_directory_result[0]}")
         if not pool_directory_result[0]:
             msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
                    "after system stop.")
@@ -276,7 +275,6 @@ class PoolMembershipTest(IorTestBase):
         scm_mount = self.server_managers[0].get_config_value("scm_mount")
         vos_0_path = f"{scm_mount}/{pool.uuid.lower()}/vos-0"
         vos_0_result = check_file_exists(hosts=self.hostlist_servers, filename=vos_0_path)
-        self.log.debug(f"## vos_0_result[0] = {vos_0_result[0]}")
         if not vos_0_result[0]:
             msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
                    "after system stop.")
@@ -361,7 +359,6 @@ class PoolMembershipTest(IorTestBase):
         pool_directory = f"{scm_mount}/{self.pool.uuid.lower()}"
         pool_directory_result = check_file_exists(
             hosts=self.hostlist_servers, filename=pool_directory, directory=True)
-        self.log.debug(f"## pool_directory_result[0] = {pool_directory_result[0]}")
         if not pool_directory_result[0]:
             msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
                    "after system stop.")
