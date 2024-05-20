@@ -76,9 +76,6 @@ type Server struct {
 
 	Path string `yaml:"-"` // path to config file
 
-	// Legacy config file parameters stored in a separate struct.
-	Legacy ServerLegacy `yaml:",inline"`
-
 	// Behavior flags
 	AutoFormat bool `yaml:"-"`
 }
@@ -358,11 +355,6 @@ func (cfg *Server) Load() error {
 	// TODO multiprovider: Remove when multiprovider is enabled
 	if cfg.Fabric.GetNumProviders() > 1 {
 		return errors.Errorf("fabric provider string %q includes more than one provider", cfg.Fabric.Provider)
-	}
-
-	// Update server config based on legacy parameters.
-	if err := updateFromLegacyParams(cfg); err != nil {
-		return errors.Wrap(err, "updating config from legacy parameters")
 	}
 
 	// propagate top-level settings to engine configs
@@ -645,12 +637,6 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 		}
 	}()
 
-	// The config file format no longer supports "servers"
-	if len(cfg.Legacy.Servers) > 0 {
-		return errors.New("\"servers\" server config file parameter is deprecated, use " +
-			"\"engines\" instead")
-	}
-
 	// Set DisableVMD reference if unset in config file.
 	if cfg.DisableVMD == nil {
 		cfg.WithDisableVMD(false)
@@ -713,7 +699,6 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 	for idx, ec := range cfg.Engines {
 		ec.Storage.ControlMetadata = cfg.Metadata
 		ec.Storage.EngineIdx = uint(idx)
-		ec.ConvertLegacyStorage(log, idx)
 		ec.Fabric.Update(cfg.Fabric)
 
 		if err := ec.Validate(); err != nil {
@@ -869,7 +854,11 @@ func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineA
 	// Detect legacy mode by checking if first_core is being used.
 	legacyMode := false
 	for _, engineCfg := range cfg.Engines {
-		if engineCfg.ServiceThreadCore != 0 {
+		if engineCfg.ServiceThreadCore != nil {
+			if *engineCfg.ServiceThreadCore == 0 && engineCfg.PinnedNumaNode != nil {
+				// Both are set but we don't know yet which to use
+				continue
+			}
 			legacyMode = true
 			break
 		}
@@ -878,9 +867,15 @@ func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineA
 	// Fail if any engine has an explicit pin and non-zero first_core.
 	for idx, engineCfg := range cfg.Engines {
 		if legacyMode {
+			if engineCfg.PinnedNumaNode != nil {
+				log.Infof("pinned_numa_node setting ignored on engine %d", idx)
+				engineCfg.PinnedNumaNode = nil
+			}
 			log.Debugf("setting legacy core allocation algorithm on engine %d", idx)
-			engineCfg.PinnedNumaNode = nil
 			continue
+		} else if engineCfg.ServiceThreadCore != nil {
+			log.Infof("first_core setting ignored on engine %d", idx)
+			engineCfg.ServiceThreadCore = nil
 		}
 
 		numaAffinity, err := detectEngineAffinity(log, engineCfg, affSources...)

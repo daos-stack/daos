@@ -1409,18 +1409,18 @@ When the command is run, the pmem kernel devices created on SCM/PMem regions are
 formatted and mounted based on the parameters provided in the server config file.
 
 - `scm_mount` specifies the location of the mountpoint to create.
-- `scm_class` can be set to `ram` to use a tmpfs in the situation that no SCM/PMem
+- `class` can be set to `ram` to use a tmpfs in the situation that no SCM/PMem
   is available (`scm_size` dictates the size of tmpfs in GB), when set to `dcpm` the device
   specified under `scm_list` will be mounted at `scm_mount` path.
 
 ### NVMe Format
 
 When the command is run, NVMe SSDs are formatted and set up to be used by DAOS
-based on the parameters provided in the server config file.
+based on the parameters provided in the server config file engine storage sections.
 
-`bdev_class` can be set to `nvme` to use actual NVMe devices with SPDK for DAOS
+`class` can be set to `nvme` to use actual NVMe devices with SPDK for DAOS
 storage.
-Other `bdev_class` values can be used for emulation of NVMe storage as specified
+Other `class` values can be used for emulation of NVMe storage as specified
 in the server config file.
 `bdev_list` identifies devices to use with a list of PCI addresses (this can be
 populated after viewing results from `storage scan` command).

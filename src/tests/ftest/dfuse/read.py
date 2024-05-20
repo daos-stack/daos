@@ -5,11 +5,12 @@
 
 import time
 
-from dfuse_test_base import DfuseTestBase
+from apricot import TestWithServers
+from dfuse_utils import get_dfuse, start_dfuse
 from run_utils import run_remote
 
 
-class DFusePreReadTest(DfuseTestBase):
+class DFusePreReadTest(TestWithServers):
     """Base ReadTest test class.
     :avocado: recursive
     """
@@ -31,7 +32,7 @@ class DFusePreReadTest(DfuseTestBase):
         pool = self.get_pool(connect=False)
         container = self.get_container(pool)
 
-        self.load_dfuse(self.hostlist_clients, None)
+        dfuse = get_dfuse(self, self.hostlist_clients)
 
         cont_attrs = {}
 
@@ -42,9 +43,9 @@ class DFusePreReadTest(DfuseTestBase):
 
         container.set_attr(attrs=cont_attrs)
 
-        self.start_dfuse(self.hostlist_clients, pool, container)
+        start_dfuse(self, dfuse, pool, container)
 
-        fuse_root_dir = self.dfuse.mount_dir.value
+        fuse_root_dir = dfuse.mount_dir.value
 
         # make a directory to run the test from.  Pre-read is based on previous access to a
         # directory so this needs to be evicted after the write and before the test so the
@@ -77,7 +78,7 @@ class DFusePreReadTest(DfuseTestBase):
         time.sleep(1)
 
         # Sample the stats, later on we'll check this.
-        data = self.dfuse.get_stats()
+        data = dfuse.get_stats()
 
         # Check that the inode has been evicted, and there's been no reads so far.
         self.assertEqual(data["inodes"], 1, "Incorrect number of active nodes")
@@ -92,7 +93,7 @@ class DFusePreReadTest(DfuseTestBase):
         if not result.passed:
             self.fail(f'"{cmd}" failed on {result.failed_hosts}')
 
-        data = self.dfuse.get_stats()
+        data = dfuse.get_stats()
 
         # pre_read requests are a subset of reads so for this test we should verify that they are
         # equal, and non-zero.
@@ -111,7 +112,7 @@ class DFusePreReadTest(DfuseTestBase):
         if not result.passed:
             self.fail(f'"{cmd}" failed on {result.failed_hosts}')
 
-        data = self.dfuse.get_stats()
+        data = dfuse.get_stats()
 
         # pre_read requests are a subset of reads so for this test we should verify that they are
         # equal, and non-zero.

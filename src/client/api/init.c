@@ -148,6 +148,7 @@ daos_init(void)
 	struct d_fault_attr_t *d_fault_init;
 	struct d_fault_attr_t *d_fault_mem = NULL;
 	struct d_fault_attr_t  d_fault_mem_saved;
+	crt_init_options_t    *crt_info;
 	int rc;
 
 	D_MUTEX_LOCK(&module_lock);
@@ -201,16 +202,20 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_job, rc);
 
+	crt_info = daos_crt_init_opt_get(false, 1);
 	/**
 	 * get CaRT configuration (see mgmtModule.handleGetAttachInfo for the
 	 * handling of NULL system names)
 	 */
-	rc = dc_mgmt_net_cfg(NULL);
+	rc = dc_mgmt_net_cfg(NULL, crt_info);
 	if (rc != 0)
 		D_GOTO(out_attach, rc);
 
 	/** set up event queue */
-	rc = daos_eq_lib_init();
+	rc = daos_eq_lib_init(crt_info);
+	D_FREE(crt_info->cio_provider);
+	D_FREE(crt_info->cio_interface);
+	D_FREE(crt_info->cio_domain);
 	if (rc != 0) {
 		D_ERROR("failed to initialize eq_lib: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_attach, rc);

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -219,9 +219,14 @@ func (p *Provider) CheckFormat(req storage.ScmFormatRequest) (*storage.ScmFormat
 		Formatted:  true,
 	}
 
+	mntptMissing := false
+
 	isMounted, err := p.IsMounted(req.Mountpoint)
-	if err != nil && !os.IsNotExist(err) {
-		return nil, err
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return nil, err
+		}
+		mntptMissing = true
 	}
 	if isMounted {
 		res.Mounted = true
@@ -246,6 +251,10 @@ func (p *Provider) CheckFormat(req storage.ScmFormatRequest) (*storage.ScmFormat
 
 	switch fsType {
 	case system.FsTypeExt4:
+		if mntptMissing {
+			return nil, storage.FaultDeviceWithFsNoMountpoint(req.Dcpm.Device,
+				req.Mountpoint)
+		}
 		res.Mountable = true
 	case system.FsTypeNone:
 		res.Formatted = false

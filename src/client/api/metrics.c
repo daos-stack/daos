@@ -21,13 +21,20 @@
 #include <gurt/telemetry_producer.h>
 
 #define INIT_JOB_NUM 1024
-bool daos_client_metric        = false;
-bool daos_client_metric_retain = false;
+bool daos_client_metric;
+bool daos_client_metric_retain;
 
 #define MAX_IDS_SIZE(num) (num * D_TM_METRIC_SIZE)
 /* The client side metrics structure looks like
  * root/job_id/pid/....
  */
+
+static int
+shm_key(pid_t pid)
+{
+	/* Set the key based on our pid so that it can be easily found. */
+	return pid - D_TM_SHARED_MEMORY_KEY;
+}
 
 static int
 shm_chown(key_t key, uid_t new_owner)
@@ -60,24 +67,31 @@ shm_chown(key_t key, uid_t new_owner)
 }
 
 static int
-init_managed_root(const char *name, pid_t pid, int flags)
+init_root(const char *name, pid_t pid, int flags)
 {
 	uid_t agent_uid;
 	key_t key;
 	int   rc;
 
-	/* Set the key based on our pid so that it can be easily found. */
-	key = pid - D_TM_SHARED_MEMORY_KEY;
+	key = shm_key(pid);
 	rc  = d_tm_init_with_name(key, MAX_IDS_SIZE(INIT_JOB_NUM), flags, name);
 	if (rc != 0) {
 		DL_ERROR(rc, "failed to initialize root for %s.", name);
 		return rc;
 	}
 
+	/* If the metrics will not be retained, don't register them with the agent. */
+	if (!daos_client_metric_retain)
+		goto skip_agent;
+
 	/* Request that the agent adds our segment into the tree. */
 	rc = dc_mgmt_tm_register(NULL, dc_jobid, pid, &agent_uid);
 	if (rc != 0) {
-		DL_ERROR(rc, "client telemetry setup failed.");
+		if (rc == -DER_UNINIT && d_isenv_def(DAOS_CLIENT_METRICS_DUMP_DIR)) {
+			D_INFO("telemetry dump dir set -- proceeding without agent management.\n");
+			goto skip_agent;
+		}
+		DL_ERROR(rc, "client telemetry failed to register with agent.");
 		return rc;
 	}
 
@@ -85,10 +99,11 @@ init_managed_root(const char *name, pid_t pid, int flags)
 	D_INFO("setting shm segment 0x%x to be owned by uid %d\n", pid, agent_uid);
 	rc = shm_chown(pid, agent_uid);
 	if (rc != 0) {
-		DL_ERROR(rc, "failed to chown shm segment.");
+		DL_ERROR(rc, "failed to chown shm segment for agent management.");
 		return rc;
 	}
 
+skip_agent:
 	return 0;
 }
 
@@ -120,7 +135,7 @@ dc_tm_init(void)
 		metrics_tag |= D_TM_RETAIN_SHMEM;
 
 	snprintf(root_name, sizeof(root_name), "%d", pid);
-	rc = init_managed_root(root_name, pid, metrics_tag);
+	rc = init_root(root_name, pid, metrics_tag);
 	if (rc != 0) {
 		DL_ERROR(rc, "failed to initialize client telemetry");
 		D_GOTO(out, rc);
@@ -155,7 +170,6 @@ dump_tm_file(const char *dump_dir)
 {
 	struct d_tm_context *ctx;
 	struct d_tm_node_t  *root;
-	char                 telem_path[D_TM_MAX_NAME_LEN] = {0};
 	char                 file_path[1024]               = {0};
 	pid_t                pid                           = getpid();
 	uint32_t             filter;
@@ -200,14 +214,13 @@ dump_tm_file(const char *dump_dir)
 	filter = D_TM_COUNTER | D_TM_DURATION | D_TM_TIMESTAMP | D_TM_MEMINFO |
 		 D_TM_TIMER_SNAPSHOT | D_TM_GAUGE | D_TM_STATS_GAUGE;
 
-	ctx = d_tm_open(DC_TM_JOB_ROOT_ID);
+	ctx = d_tm_open(shm_key(pid));
 	if (ctx == NULL)
 		D_GOTO(close, rc = -DER_NOMEM);
 
-	snprintf(telem_path, sizeof(telem_path), "%s/%u", dc_jobid, pid);
-	root = d_tm_find_metric(ctx, telem_path);
+	root = d_tm_get_root(ctx);
 	if (root == NULL) {
-		D_INFO("No metrics found at: '%s'\n", telem_path);
+		D_ERROR("No metrics found for dump.\n");
 		D_GOTO(close_ctx, rc = -DER_NONEXIST);
 	}
 

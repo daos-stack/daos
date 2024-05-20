@@ -7,11 +7,12 @@
 import os
 import time
 
-from dfuse_test_base import DfuseTestBase
+from apricot import TestWithServers
+from dfuse_utils import get_dfuse, start_dfuse
 from run_utils import run_remote
 
 
-class DaosBuild(DfuseTestBase):
+class DaosBuild(TestWithServers):
     """Build DAOS over dfuse.
 
     :avocado: recursive
@@ -132,8 +133,9 @@ class DaosBuild(DfuseTestBase):
     def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
         """Run an actual test from above."""
         # Create a pool, container and start dfuse.
-        self.add_pool(connect=False)
-        self.add_container(self.pool)
+        self.log_step('Creating a single pool and container')
+        pool = self.get_pool(connect=False)
+        container = self.get_container(pool)
 
         cont_attrs = {}
 
@@ -165,7 +167,7 @@ class DaosBuild(DfuseTestBase):
                 build_jobs = 5 * 2
             remote_env['D_IL_MAX_EQ'] = '0'
 
-        self.load_dfuse(self.hostlist_clients, dfuse_namespace)
+        dfuse = get_dfuse(self, self.hostlist_clients, dfuse_namespace)
 
         if cache_mode == 'writeback':
             cont_attrs['dfuse-data-cache'] = '1m'
@@ -174,44 +176,44 @@ class DaosBuild(DfuseTestBase):
             cont_attrs['dfuse-ndentry-time'] = cache_time
         elif cache_mode == 'writethrough':
             if il_lib is not None:
-                build_time *= 6
+                build_time *= 2
             cont_attrs['dfuse-data-cache'] = '1m'
             cont_attrs['dfuse-attr-time'] = cache_time
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
-            self.dfuse.disable_wb_cache.value = True
+            dfuse.disable_wb_cache.value = True
         elif cache_mode == 'metadata':
             cont_attrs['dfuse-data-cache'] = '1m'
             cont_attrs['dfuse-attr-time'] = cache_time
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
-            self.dfuse.disable_wb_cache.value = True
+            dfuse.disable_wb_cache.value = True
         elif cache_mode == 'data':
             build_time *= 2
             cont_attrs['dfuse-data-cache'] = '1m'
             cont_attrs['dfuse-attr-time'] = '0'
             cont_attrs['dfuse-dentry-time'] = '0'
             cont_attrs['dfuse-ndentry-time'] = '0'
-            self.dfuse.disable_wb_cache.value = True
+            dfuse.disable_wb_cache.value = True
         elif cache_mode == 'nocache':
-            build_time *= 5
+            build_time *= 4
             cont_attrs['dfuse-data-cache'] = 'off'
             cont_attrs['dfuse-attr-time'] = '0'
             cont_attrs['dfuse-dentry-time'] = '0'
             cont_attrs['dfuse-ndentry-time'] = '0'
-            self.dfuse.disable_wb_cache.value = True
-            self.dfuse.disable_caching.value = True
+            dfuse.disable_wb_cache.value = True
+            dfuse.disable_caching.value = True
         else:
-            self.fail('Invalid cache_mode: {}'.format(cache_mode))
+            self.fail(f'Invalid cache_mode: {cache_mode}')
 
-        self.container.set_attr(attrs=cont_attrs)
+        self.log_step('Starting dfuse')
+        container.set_attr(attrs=cont_attrs)
+        start_dfuse(self, dfuse, pool, container)
 
-        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
-
-        mount_dir = self.dfuse.mount_dir.value
+        mount_dir = dfuse.mount_dir.value
         build_dir = os.path.join(mount_dir, 'daos')
 
-        remote_env['PATH'] = '{}:$PATH'.format(os.path.join(mount_dir, 'venv', 'bin'))
+        remote_env['PATH'] = f"{os.path.join(mount_dir, 'venv', 'bin')}:$PATH"
         remote_env['VIRTUAL_ENV'] = os.path.join(mount_dir, 'venv')
         remote_env['COVFILE'] = os.environ['COVFILE']
 
@@ -226,7 +228,7 @@ class DaosBuild(DfuseTestBase):
                 remote_env['D_IL_COMPATIBLE'] = '1'
                 remote_env['D_IL_MAX_EQ'] = '0'
 
-        envs = ['export {}={}'.format(env, value) for env, value in remote_env.items()]
+        envs = [f'export {env}={value}' for env, value in remote_env.items()]
 
         preload_cmd = ';'.join(envs)
 
@@ -250,6 +252,7 @@ class DaosBuild(DfuseTestBase):
             timeout = 10 * 60
             if cmd.startswith('scons'):
                 timeout = build_time * 60
+            self.log_step(f'Running \'{cmd}\' with a {timeout}s timeout')
             start = time.time()
             result = run_remote(
                 self.log, self.hostlist_clients, command, verbose=True, timeout=timeout)
@@ -272,6 +275,8 @@ class DaosBuild(DfuseTestBase):
                 run_remote(self.log, self.hostlist_clients, 'cat {}/config.log'.format(build_dir),
                            timeout=30)
             if il_lib is not None:
-                self.fail('{} over dfuse with il in mode {}.\n'.format(fail_type, cache_mode))
+                self.fail(f'{fail_type} over dfuse with il in mode {cache_mode}')
             else:
-                self.fail('{} over dfuse in mode {}.\n'.format(fail_type, cache_mode))
+                self.fail(f'{fail_type} over dfuse in mode {cache_mode}')
+
+        self.log.info('Test passed')

@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+import glob
 import os
 import site
 
@@ -27,7 +28,7 @@ class LlnlMpi4py(MpiioTests):
         """
         test_repo = self.params.get(name, '/run/test_repo/')
         # DAOS-15602: Always check the python3-6 install for test sources.
-        for packages in site.getsitepackages() + ["/usr/lib64/python3.6/site-packages"]:
+        for packages in site.getsitepackages() + glob.glob("/usr/lib64/python3.*/site-packages"):
             test_path = os.path.join(packages, test_repo)
             if os.path.exists(test_path):
                 return test_path
