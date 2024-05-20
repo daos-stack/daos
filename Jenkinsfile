@@ -72,7 +72,7 @@ pipeline {
 
     triggers {
         /* groovylint-disable-next-line AddEmptyString */
-        cron(env.BRANCH_NAME == 'weekly-testing' ? 'TZ=UTC\n0 0 * * 6' : '')
+        cron(env.BRANCH_NAME == 'weekly-2.6-testing' ? 'TZ=UTC\n0 6 * * 6' : '')
     }
 
     environment {
@@ -114,7 +114,7 @@ pipeline {
                defaultValue: '',
                description: 'Package version to use instead of latest. example: 1.3.103-1, 1.2-2')
         string(name: 'BaseBranch',
-               defaultValue: 'master',
+               defaultValue: 'release/2.6',
                description: 'The base branch to run daily-testing against (i.e. master, or a PR\'s branch)')
         // TODO: add parameter support for per-distro CI_PR_REPOS
         string(name: 'CI_PR_REPOS',
