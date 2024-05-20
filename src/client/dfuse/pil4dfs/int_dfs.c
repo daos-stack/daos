@@ -4318,6 +4318,8 @@ reset_daos_env_before_exec(void)
 		d_daos_inited     = false;
 		daos_debug_inited = false;
 		context_reset     = false;
+		/* all IO requests go through dfuse */
+		d_hook_enabled    = false;
 	}
 	return 0;
 }
