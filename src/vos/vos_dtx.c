@@ -2718,7 +2718,7 @@ vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch)
 				       sizeof(obj->obj_df->vo_sync), UMEM_COMMIT_IMMEDIATE);
 	}
 
-	vos_obj_release(occ, obj, false);
+	vos_obj_release(occ, obj, 0, false);
 	return 0;
 }
 
