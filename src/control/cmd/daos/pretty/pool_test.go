@@ -32,6 +32,7 @@ func TestPretty_PrintPoolInfo(t *testing.T) {
 			expPrintStr: fmt.Sprintf(`
 Pool %s, ntarget=0, disabled=0, leader=0, version=0, state=Creating
 Pool health info:
+- No rebuild status available.
 `, uuid.Nil.String()),
 		},
 		"normal response": {

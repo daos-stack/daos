@@ -644,17 +644,18 @@ func (cmd *PoolQueryCmd) Execute(args []string) error {
 	}
 
 	if cmd.HealthOnly {
-		if !cmd.ShowEnabledRanks {
-			cmd.ShowDisabledRanks = true // enable for health queries
-		}
-		req.QueryMask.SetQuerySpace(false)
+		req.QueryMask = daos.HealthOnlyPoolQueryMask
 	}
 	// TODO (DAOS-10250) The two options should not be incompatible (i.e. engine limitation)
 	if cmd.ShowEnabledRanks && cmd.ShowDisabledRanks {
 		return errIncompatFlags("show-enabled-ranks", "show-disabled-ranks")
 	}
-	req.QueryMask.SetQueryEnabledEngines(cmd.ShowEnabledRanks)
-	req.QueryMask.SetQueryDisabledEngines(cmd.ShowDisabledRanks)
+	if cmd.ShowEnabledRanks {
+		req.QueryMask.SetOptions(daos.PoolQueryOptionEnabledEngines)
+	}
+	if cmd.ShowDisabledRanks {
+		req.QueryMask.SetOptions(daos.PoolQueryOptionDisabledEngines)
+	}
 
 	resp, err := control.PoolQuery(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 

@@ -101,59 +101,70 @@ type (
 	PoolQueryMask C.uint64_t
 )
 
-// DefaultPoolQueryMask defines the default pool query mask.
-const DefaultPoolQueryMask = PoolQueryMask(^uint64(0) &^ (C.DPI_ENGINES_ENABLED | C.DPI_ENGINES_DISABLED))
+const (
+	// DefaultPoolQueryMask defines the default pool query mask.
+	DefaultPoolQueryMask = PoolQueryMask(^uint64(0) &^ (C.DPI_ENGINES_ENABLED | C.DPI_ENGINES_DISABLED))
+	// HealthOnlyPoolQueryMask defines the mask for health-only queries.
+	HealthOnlyPoolQueryMask = PoolQueryMask(^uint64(0) &^ (C.DPI_ENGINES_ENABLED | C.DPI_SPACE))
+
+	// PoolQueryOptionSpace retrieves storage space usage as part of the pool query.
+	PoolQueryOptionSpace = "space"
+	// PoolQueryOptionRebuild retrieves pool rebuild status as part of the pool query.
+	PoolQueryOptionRebuild = "rebuild"
+	// PoolQueryOptionEnabledEngines retrieves enabled engines as part of the pool query.
+	PoolQueryOptionEnabledEngines = "enabled_engines"
+	// PoolQueryOptionDisabledEngines retrieves disabled engines as part of the pool query.
+	PoolQueryOptionDisabledEngines = "disabled_engines"
+)
 
 var poolQueryOptMap = map[C.int]string{
-	C.DPI_SPACE:            "space",
-	C.DPI_REBUILD_STATUS:   "rebuild",
-	C.DPI_ENGINES_ENABLED:  "enabled_engines",
-	C.DPI_ENGINES_DISABLED: "disabled_engines",
+	C.DPI_SPACE:            PoolQueryOptionSpace,
+	C.DPI_REBUILD_STATUS:   PoolQueryOptionRebuild,
+	C.DPI_ENGINES_ENABLED:  PoolQueryOptionEnabledEngines,
+	C.DPI_ENGINES_DISABLED: PoolQueryOptionDisabledEngines,
 }
 
-// SetQueryAll sets the pool query mask to include all pool query options.
-func (pqm *PoolQueryMask) SetQueryAll(enabled bool) {
-	if enabled {
-		*pqm = PoolQueryMask(^uint64(0)) // DPI_ALL is -1
-	} else {
-		*pqm = 0
+func resolvePoolQueryOpt(name string) (C.int, error) {
+	for opt, optName := range poolQueryOptMap {
+		if name == optName {
+			return opt, nil
+		}
 	}
+	return 0, errors.Errorf("invalid pool query option: %q", name)
 }
 
-// SetQuerySpace toggles the pool space query option.
-func (pqm *PoolQueryMask) SetQuerySpace(enabled bool) {
-	if enabled {
-		*pqm |= PoolQueryMask(C.DPI_SPACE)
-	} else {
-		*pqm &^= PoolQueryMask(C.DPI_SPACE)
+// SetOptions sets the pool query mask to include the specified options.
+func (pqm *PoolQueryMask) SetOptions(optNames ...string) error {
+	for _, optName := range optNames {
+		if opt, err := resolvePoolQueryOpt(optName); err != nil {
+			return err
+		} else {
+			*pqm |= PoolQueryMask(opt)
+		}
 	}
+	return nil
 }
 
-// SetQueryRebuild toggles the pool rebuild query option.
-func (pqm *PoolQueryMask) SetQueryRebuild(enabled bool) {
-	if enabled {
-		*pqm |= PoolQueryMask(C.DPI_REBUILD_STATUS)
-	} else {
-		*pqm &^= PoolQueryMask(C.DPI_REBUILD_STATUS)
+// ClearOptions clears the pool query mask of the specified options.
+func (pqm *PoolQueryMask) ClearOptions(optNames ...string) error {
+	for _, optName := range optNames {
+		if opt, err := resolvePoolQueryOpt(optName); err != nil {
+			return err
+		} else {
+			*pqm &^= PoolQueryMask(opt)
+		}
 	}
+	return nil
 }
 
-// SetQueryEnabledEngines toggles the engines enabled query option.
-func (pqm *PoolQueryMask) SetQueryEnabledEngines(enabled bool) {
-	if enabled {
-		*pqm |= PoolQueryMask(C.DPI_ENGINES_ENABLED)
-	} else {
-		*pqm &^= PoolQueryMask(C.DPI_ENGINES_ENABLED)
-	}
+// SetAll sets the pool query mask to include all pool query options.
+func (pqm *PoolQueryMask) SetAll() {
+	*pqm = PoolQueryMask(^uint64(0)) // DPI_ALL is -1
 }
 
-// SetQueryDisabledEngines toggles the engines disabled query option.
-func (pqm *PoolQueryMask) SetQueryDisabledEngines(enabled bool) {
-	if enabled {
-		*pqm |= PoolQueryMask(C.DPI_ENGINES_DISABLED)
-	} else {
-		*pqm &^= PoolQueryMask(C.DPI_ENGINES_DISABLED)
-	}
+// ClearAll clears the pool query mask of all pool query options.
+func (pqm *PoolQueryMask) ClearAll() {
+	*pqm = 0
 }
 
 // HasOption returns true if the pool query mask includes the specified option.

@@ -60,9 +60,11 @@ func PrintPoolInfo(pi *daos.PoolInfo, out io.Writer) error {
 		} else {
 			fmt.Fprintf(w, "- Rebuild failed, status=%d\n", pi.Rebuild.Status)
 		}
+	} else {
+		fmt.Fprintln(w, "- No rebuild status available.")
 	}
 
-	if pi.QueryMask.HasOption("space") && pi.TierStats != nil {
+	if pi.QueryMask.HasOption(daos.PoolQueryOptionSpace) && pi.TierStats != nil {
 		fmt.Fprintln(w, "Pool space info:")
 		fmt.Fprintf(w, "- Target(VOS) count:%d\n", pi.ActiveTargets)
 		for tierIdx, tierStats := range pi.TierStats {

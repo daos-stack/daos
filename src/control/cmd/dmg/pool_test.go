@@ -974,7 +974,7 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.PoolQueryReq{
 					ID:        "12345678-1234-1234-1234-1234567890ab",
-					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) { qm.SetQueryEnabledEngines(true) }),
+					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) { qm.SetOptions(daos.PoolQueryOptionEnabledEngines) }),
 				}),
 			}, " "),
 			nil,
@@ -985,7 +985,7 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.PoolQueryReq{
 					ID:        "12345678-1234-1234-1234-1234567890ab",
-					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) { qm.SetQueryEnabledEngines(true) }),
+					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) { qm.SetOptions(daos.PoolQueryOptionEnabledEngines) }),
 				}),
 			}, " "),
 			nil,
@@ -996,7 +996,7 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.PoolQueryReq{
 					ID:        "12345678-1234-1234-1234-1234567890ab",
-					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) { qm.SetQueryDisabledEngines(true) }),
+					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) { qm.SetOptions(daos.PoolQueryOptionDisabledEngines) }),
 				}),
 			}, " "),
 			nil,
@@ -1007,7 +1007,7 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.PoolQueryReq{
 					ID:        "12345678-1234-1234-1234-1234567890ab",
-					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) { qm.SetQueryDisabledEngines(true) }),
+					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) { qm.SetOptions(daos.PoolQueryOptionDisabledEngines) }),
 				}),
 			}, " "),
 			nil,
@@ -1018,7 +1018,7 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.PoolQueryReq{
 					ID:        "12345678-1234-1234-1234-1234567890ab",
-					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) { qm.SetQueryDisabledEngines(true); qm.SetQuerySpace(false) }),
+					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) { *qm = daos.HealthOnlyPoolQueryMask }),
 				}),
 			}, " "),
 			nil,
