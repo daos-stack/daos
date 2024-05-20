@@ -7,17 +7,22 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"net"
 	"os/user"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/cache"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
@@ -28,7 +33,7 @@ func TestAgentSecurityModule_ID(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	mod := NewSecurityModule(log, nil)
+	mod := NewSecurityModule(log, defaultTestSecurityConfig())
 
 	test.AssertEqual(t, mod.ID(), drpc.ModuleSecurityAgent, "wrong drpc module")
 }
@@ -49,7 +54,7 @@ func TestAgentSecurityModule_BadMethod(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	mod := NewSecurityModule(log, nil)
+	mod := NewSecurityModule(log, defaultTestSecurityConfig())
 	method, err := mod.ID().GetMethod(-1)
 	if method != nil {
 		t.Errorf("Expected no method, got %+v", method)
@@ -166,7 +171,8 @@ func TestAgentSecurityModule_RequestCreds_BadConfig(t *testing.T) {
 
 	// Empty TransportConfig is incomplete
 	mod := NewSecurityModule(log, &securityConfig{
-		transport: &security.TransportConfig{},
+		transport:   &security.TransportConfig{},
+		credentials: &security.CredentialConfig{},
 	})
 	respBytes, err := callRequestCreds(mod, t, log, conn)
 
@@ -186,7 +192,7 @@ func TestAgentSecurityModule_RequestCreds_BadUid(t *testing.T) {
 	defer cleanup()
 
 	mod := NewSecurityModule(log, defaultTestSecurityConfig())
-	mod.signCredential = func(_ *auth.CredentialRequest) (*auth.Credential, error) {
+	mod.signCredential = func(_ context.Context, _ *auth.CredentialRequest) (*auth.Credential, error) {
 		return nil, errors.New("LookupUserID")
 	}
 	respBytes, err := callRequestCreds(mod, t, log, conn)
@@ -198,11 +204,12 @@ func TestAgentSecurityModule_RequestCreds_BadUid(t *testing.T) {
 	expectCredResp(t, respBytes, int32(daos.MiscError), false)
 }
 
+type signCredentialResp struct {
+	cred *auth.Credential
+	err  error
+}
+
 func TestAgent_SecurityRPC_getCredential(t *testing.T) {
-	type response struct {
-		cred *auth.Credential
-		err  error
-	}
 	testCred := &auth.Credential{
 		Token:  &auth.Token{Flavor: auth.Flavor_AUTH_SYS, Data: []byte("test-token")},
 		Origin: "test-origin",
@@ -227,13 +234,13 @@ func TestAgent_SecurityRPC_getCredential(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		secCfg    *securityConfig
-		responses []response
+		responses []signCredentialResp
 		expBytes  []byte
 		expErr    error
 	}{
 		"lookup miss": {
 			secCfg: defaultTestSecurityConfig(),
-			responses: []response{
+			responses: []signCredentialResp{
 				{
 					cred: nil,
 					err:  user.UnknownUserIdError(unix.Getuid()),
@@ -251,7 +258,7 @@ func TestAgent_SecurityRPC_getCredential(t *testing.T) {
 				}
 				return cfg
 			}(),
-			responses: []response{
+			responses: []signCredentialResp{
 				{
 					cred: nil,
 					err:  user.UnknownUserIdError(unix.Getuid()),
@@ -273,7 +280,7 @@ func TestAgent_SecurityRPC_getCredential(t *testing.T) {
 				}
 				return cfg
 			}(),
-			responses: []response{
+			responses: []signCredentialResp{
 				{
 					cred: nil,
 					err:  user.UnknownUserIdError(unix.Getuid()),
@@ -295,9 +302,9 @@ func TestAgent_SecurityRPC_getCredential(t *testing.T) {
 			defer cleanup()
 
 			mod := NewSecurityModule(log, tc.secCfg)
-			mod.signCredential = func() func(req *auth.CredentialRequest) (*auth.Credential, error) {
+			mod.signCredential = func() func(_ context.Context, req *auth.CredentialRequest) (*auth.Credential, error) {
 				var idx int
-				return func(req *auth.CredentialRequest) (*auth.Credential, error) {
+				return func(_ context.Context, req *auth.CredentialRequest) (*auth.Credential, error) {
 					defer func() {
 						if idx < len(tc.responses)-1 {
 							idx++
@@ -315,6 +322,99 @@ func TestAgent_SecurityRPC_getCredential(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.expBytes, respBytes); diff != "" {
 				t.Errorf("unexpected response (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestAgent_SecurityCachedCredentials(t *testing.T) {
+	cred0 := &auth.Credential{
+		Token:  &auth.Token{Flavor: auth.Flavor_AUTH_SYS, Data: []byte("user,group1,group2")},
+		Origin: "test-origin",
+	}
+	cred1 := &auth.Credential{
+		Token:  &auth.Token{Flavor: auth.Flavor_AUTH_SYS, Data: []byte("user,group1,group3")},
+		Origin: "test-origin",
+	}
+
+	for name, tc := range map[string]struct {
+		lifetime  time.Duration
+		req       *auth.CredentialRequest
+		responses []signCredentialResp
+		exp       *auth.Credential
+	}{
+		"cache hit": {
+			lifetime: time.Second,
+			req: &auth.CredentialRequest{
+				DomainInfo: security.InitDomainInfo(&syscall.Ucred{Uid: 1234, Gid: 5678}, ""),
+			},
+			responses: []signCredentialResp{
+				{
+					cred: cred0,
+					err:  nil,
+				},
+				{
+					cred: cred1,
+					err:  nil,
+				},
+			},
+			exp: cred0,
+		},
+		"expired entry": {
+			lifetime: time.Nanosecond,
+			req: &auth.CredentialRequest{
+				DomainInfo: security.InitDomainInfo(&syscall.Ucred{Uid: 1234, Gid: 5678}, ""),
+			},
+			responses: []signCredentialResp{
+				{
+					cred: cred0,
+					err:  nil,
+				},
+				{
+					cred: cred1,
+					err:  nil,
+				},
+			},
+			exp: cred1,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			cache := &credentialCache{
+				log:          log,
+				cache:        cache.NewItemCache(log),
+				credLifetime: tc.lifetime,
+				cacheMissFn: func() func(_ context.Context, req *auth.CredentialRequest) (*auth.Credential, error) {
+					var idx int
+					return func(_ context.Context, req *auth.CredentialRequest) (*auth.Credential, error) {
+						defer func() {
+							if idx < len(tc.responses)-1 {
+								idx++
+							}
+						}()
+						t.Logf("returning response %d: %+v", idx, tc.responses[idx])
+						return tc.responses[idx].cred, tc.responses[idx].err
+					}
+				}(),
+			}
+
+			// Prime the cache with a single entry.
+			_, err := cache.getSignedCredential(test.Context(t), tc.req)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			// Request a second time with the same credentials.
+			cred, err := cache.getSignedCredential(test.Context(t), tc.req)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			cmpOpts := cmp.Options{
+				protocmp.Transform(),
+			}
+			if diff := cmp.Diff(tc.exp, cred, cmpOpts...); diff != "" {
+				t.Errorf("unexpected credential (-want +got):\n%s", diff)
 			}
 		})
 	}

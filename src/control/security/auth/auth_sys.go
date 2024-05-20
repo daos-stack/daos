@@ -8,6 +8,7 @@ package auth
 
 import (
 	"bytes"
+	"context"
 	"crypto"
 	"os"
 	"os/user"
@@ -17,6 +18,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 )
 
@@ -213,7 +215,7 @@ func (r *CredentialRequest) WithUserAndGroup(userStr, groupStr string, groupStrs
 
 // GetSignedCredential returns a credential based on the provided domain info and
 // signing key.
-func GetSignedCredential(req *CredentialRequest) (*Credential, error) {
+func GetSignedCredential(ctx context.Context, req *CredentialRequest) (*Credential, error) {
 	if req == nil {
 		return nil, errors.Errorf("%T is nil", req)
 	}
@@ -274,6 +276,7 @@ func GetSignedCredential(req *CredentialRequest) (*Credential, error) {
 		Verifier: &verifierToken,
 		Origin:   "agent"}
 
+	logging.FromContext(ctx).Tracef("%s: successfully signed credential", req.DomainInfo)
 	return &credential, nil
 }
 

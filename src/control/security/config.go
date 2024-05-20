@@ -94,6 +94,7 @@ func (cm ClientUserMap) Lookup(uid uint32) *MappedClientUser {
 // CredentialConfig contains configuration details for managing user
 // credentials.
 type CredentialConfig struct {
+	CacheLifetime time.Duration `yaml:"cache_lifetime,omitempty"`
 	ClientUserMap ClientUserMap `yaml:"client_user_map,omitempty"`
 }
 

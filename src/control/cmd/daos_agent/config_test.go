@@ -47,6 +47,7 @@ disable_caching: true
 cache_expiration: 30
 disable_auto_evict: true
 credential_config:
+  cache_lifetime: 10m
   client_user_map:
     1000:
       user: frodo
@@ -140,6 +141,7 @@ transport_config:
 				CacheExpiration:  refreshMinutes(30 * time.Minute),
 				DisableAutoEvict: true,
 				CredentialConfig: &security.CredentialConfig{
+					CacheLifetime: time.Minute * 10,
 					ClientUserMap: map[uint32]*security.MappedClientUser{
 						1000: {
 							User:   "frodo",
