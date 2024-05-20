@@ -347,8 +347,8 @@ class Launch():
             group.update_test_yaml(
                 logger, args.scm_size, args.scm_mount, args.extra_yaml,
                 args.timeout_multiplier, args.override, args.verbose, args.include_localhost)
-        except (RunException, YamlException):
-            message = "Error modifying the test yaml files"
+        except (RunException, YamlException) as e:
+            message = "Error modifying the test yaml files: {}".format(e)
             status |= self.get_exit_status(1, message, "Setup", sys.exc_info())
         except StorageException:
             message = "Error detecting storage information for test yaml files"

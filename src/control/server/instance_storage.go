@@ -8,6 +8,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"github.com/dustin/go-humanize"
@@ -15,6 +16,8 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -75,58 +78,82 @@ func createPublishFormatRequiredFunc(publish func(*events.RASEvent), hostname st
 	}
 }
 
-// awaitStorageReady blocks until instance has storage available and ready to be used.
-func (ei *EngineInstance) awaitStorageReady(ctx context.Context) error {
-	idx := ei.Index()
+func (ei *EngineInstance) checkScmNeedFormat() (bool, error) {
+	msgIdx := fmt.Sprintf("instance %d", ei.Index())
 
-	if ei.IsStarted() {
-		return errors.Errorf("can't wait for storage: instance %d already started", idx)
+	if ei.storage.ControlMetadataPathConfigured() {
+		cfg, err := ei.storage.GetScmConfig()
+		if err != nil {
+			return false, err
+		}
+		if cfg.Class != "ram" {
+			return false, storage.FaultBdevConfigRolesWithDCPM
+		}
+		if !ei.storage.BdevRoleMetaConfigured() {
+			return false, storage.FaultBdevConfigControlMetadataNoRoles
+		}
+		ei.log.Debugf("scm class is ram and bdev role meta configured")
+
+		return true, nil
 	}
-
-	ei.log.Infof("Checking %s instance %d storage ...", build.DataPlaneName, idx)
-
-	needsMetaFormat, err := ei.storage.ControlMetadataNeedsFormat()
-	if err != nil {
-		ei.log.Errorf("failed to check control metadata storage formatting: %s", err)
-		needsMetaFormat = true
-	}
-	ei.log.Debugf("needsMetaFormat: %t", needsMetaFormat)
 
 	needsScmFormat, err := ei.storage.ScmNeedsFormat()
 	if err != nil {
-		ei.log.Errorf("instance %d: failed to check storage formatting: %s", idx, err)
-		needsScmFormat = true
-	}
-	ei.log.Debugf("needsScmFormat: %t", needsScmFormat)
+		if fault.IsFaultCode(err, code.StorageDeviceWithFsNoMountpoint) {
+			return false, err
+		}
+		ei.log.Errorf("%s: failed to check storage formatting: %s", msgIdx, err)
 
-	if !needsMetaFormat && ei.storage.ControlMetadataPathConfigured() {
-		cfg, err := ei.storage.GetScmConfig()
-		if err != nil {
-			return err
+		return true, nil
+	}
+
+	return needsScmFormat, nil
+}
+
+// awaitStorageReady blocks until instance has storage available and ready to be used.
+func (ei *EngineInstance) awaitStorageReady(ctx context.Context) error {
+	idx := ei.Index()
+	msgIdx := fmt.Sprintf("instance %d", idx)
+
+	if ei.IsStarted() {
+		return errors.Errorf("can't wait for storage: %s already started", msgIdx)
+	}
+
+	ei.log.Infof("Checking %s %s storage ...", build.DataPlaneName, msgIdx)
+
+	needsMetaFormat, err := ei.storage.ControlMetadataNeedsFormat()
+	if err != nil {
+		ei.log.Errorf("%s: failed to check control metadata storage formatting: %s",
+			msgIdx, err)
+		needsMetaFormat = true
+	}
+	ei.log.Debugf("%s: needsMetaFormat: %t", msgIdx, needsMetaFormat)
+
+	needsScmFormat, err := ei.checkScmNeedFormat()
+	if err != nil {
+		return err
+	}
+	ei.log.Debugf("%s: needsScmFormat: %t", msgIdx, needsScmFormat)
+
+	// Always reformat ramdisk in MD-on-SSD mode if control metadata intact.
+	if ei.storage.ControlMetadataPathConfigured() && !needsMetaFormat {
+		if err := ei.storage.FormatScm(true); err != nil {
+			return errors.Wrapf(err, "%s: format ramdisk", msgIdx)
 		}
-		if (cfg.Class == "ram") && ei.storage.BdevRoleMetaConfigured() {
-			ei.log.Debugf("scm class is ram and bdev role meta configured")
-			err := ei.storage.FormatScm(true)
-			if err != nil {
-				ei.log.Errorf("instance %d: failed to setup the scm: %s", idx, err)
-			} else {
-				ei.log.Debugf("remounted scm")
-				needsScmFormat = false
-			}
-		}
+		needsScmFormat = false
 	}
 
 	if !needsMetaFormat && !needsScmFormat {
-		ei.log.Debugf("instance %d: no SCM format required; checking for superblock", idx)
+		ei.log.Debugf("%s: no SCM format required; checking for superblock", msgIdx)
 		needsSuperblock, err := ei.needsSuperblock()
 		if err != nil {
-			ei.log.Errorf("instance %d: failed to check instance superblock: %s", idx, err)
+			ei.log.Errorf("%s: failed to check instance superblock: %s", msgIdx, err)
 		}
 		if !needsSuperblock {
-			ei.log.Debugf("instance %d: superblock not needed", idx)
+			ei.log.Debugf("%s: superblock not needed", msgIdx)
 			return nil
 		}
-		ei.log.Debugf("instance %d: superblock needed", idx)
+		ei.log.Debugf("%s: superblock needed", msgIdx)
 	}
 
 	// by this point we need superblock and possibly scm format
@@ -134,7 +161,7 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context) error {
 	if !needsScmFormat {
 		formatType = "Metadata"
 	}
-	ei.log.Infof("%s format required on instance %d", formatType, idx)
+	ei.log.Infof("%s format required on %s", formatType, msgIdx)
 
 	ei.waitFormat.SetTrue()
 	// After we know that the instance is awaiting format, fire off
@@ -147,9 +174,9 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context) error {
 
 	select {
 	case <-ctx.Done():
-		ei.log.Infof("%s instance %d storage not ready: %s", build.DataPlaneName, idx, ctx.Err())
+		ei.log.Infof("%s %s storage not ready: %s", build.DataPlaneName, msgIdx, ctx.Err())
 	case <-ei.storageReady:
-		ei.log.Infof("%s instance %d storage ready", build.DataPlaneName, idx)
+		ei.log.Infof("%s %s storage ready", build.DataPlaneName, msgIdx)
 	}
 
 	ei.waitFormat.SetFalse()

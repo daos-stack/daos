@@ -1970,6 +1970,8 @@ crt_proto_register(struct crt_proto_format *cpf);
  * \param[in] base_opc         the base opcode for the protocol
  * \param[in] ver              array of protocol version
  * \param[in] count            number of elements in ver
+ * \param[in] timeout          Timeout in seconds, ignored if 0 or greater than
+ *                             default timeout
  * \param[in] cb               completion callback. crt_proto_query() internally
  *                             sends an RPC to \a tgt_ep. \a cb will be called
  *                             upon completion of that RPC. The highest protocol
@@ -1983,8 +1985,8 @@ crt_proto_register(struct crt_proto_format *cpf);
  *                             failure.
  */
 int
-crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
-		uint32_t *ver, int count, crt_proto_query_cb_t cb, void *arg);
+crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, uint32_t *ver, int count,
+		uint32_t timeout, crt_proto_query_cb_t cb, void *arg);
 
 /**
  * query tgt_ep if it has registered base_opc with version using a user provided cart context.
@@ -1993,6 +1995,8 @@ crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
  * \param[in] base_opc         the base opcode for the protocol
  * \param[in] ver              array of protocol version
  * \param[in] count            number of elements in ver
+ * \param[in] timeout          Timeout in seconds, ignored if 0 or greater than
+ *                             default timeout
  * \param[in] cb               completion callback. crt_proto_query() internally
  *                             sends an RPC to \a tgt_ep. \a cb will be called
  *                             upon completion of that RPC. The highest protocol
@@ -2007,7 +2011,7 @@ crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
  */
 int
 crt_proto_query_with_ctx(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, uint32_t *ver, int count,
-			 crt_proto_query_cb_t cb, void *arg, crt_context_t ctx);
+			 uint32_t timeout, crt_proto_query_cb_t cb, void *arg, crt_context_t ctx);
 /**
  * Set self rank.
  *

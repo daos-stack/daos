@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -52,8 +52,8 @@ class BadQueryTest(TestWithServers):
         self.add_pool()
 
         # trash the pool handle value
+        handle_sav = self.pool.pool.handle
         if not handle == 'VALID':
-            handle_sav = self.pool.pool.handle
             self.pool.pool.handle = handle
 
         try:

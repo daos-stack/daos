@@ -293,6 +293,7 @@ func TestProvider_CheckFormat(t *testing.T) {
 		"isMounted fails": {
 			mountPoint:   goodMountPoint,
 			isMountedErr: errors.New("is mounted check failed"),
+			expErr:       errors.New("is mounted check failed"),
 		},
 		"mountpoint doesn't exist": {
 			mountPoint:   goodMountPoint,
@@ -301,6 +302,18 @@ func TestProvider_CheckFormat(t *testing.T) {
 				Mountpoint: goodMountPoint,
 				Formatted:  false,
 			},
+		},
+		"mountpoint doesn't exist; dcpm has expected fs": {
+			request: &storage.ScmFormatRequest{
+				Mountpoint: "/missing/dir",
+				Dcpm: &storage.DeviceParams{
+					Device: goodDevice,
+				},
+			},
+			getFsStr:     system.FsTypeExt4,
+			isMountedErr: os.ErrNotExist,
+			expErr: storage.FaultDeviceWithFsNoMountpoint(goodDevice,
+				"/missing/dir"),
 		},
 		"already mounted": {
 			mountPoint:     goodMountPoint,
@@ -319,6 +332,7 @@ func TestProvider_CheckFormat(t *testing.T) {
 				},
 			},
 			getFsErr: errors.New("getfs failed"),
+			expErr:   errors.New("getfs failed"),
 		},
 		"already formatted; not mountable": {
 			request: &storage.ScmFormatRequest{
@@ -390,15 +404,11 @@ func TestProvider_CheckFormat(t *testing.T) {
 				}
 			}
 			res, err := p.CheckFormat(*req)
-			if err != nil {
-				switch errors.Cause(err) {
-				case tc.isMountedErr, tc.getFsErr,
-					tc.expErr:
-					return
-				default:
-					t.Fatal(err)
-				}
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
 			}
+
 			cmpRes(t, tc.expResponse, res)
 		})
 	}

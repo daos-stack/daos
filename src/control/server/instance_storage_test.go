@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -205,6 +205,7 @@ func TestIOEngineInstance_MountScmDevice(t *testing.T) {
 
 func TestEngineInstance_NeedsScmFormat(t *testing.T) {
 	const (
+		dev            = "/dev/foo"
 		goodMountPoint = "/mnt/daos"
 	)
 	var (
@@ -218,7 +219,7 @@ func TestEngineInstance_NeedsScmFormat(t *testing.T) {
 			storage.NewTierConfig().
 				WithStorageClass(storage.ClassDcpm.String()).
 				WithScmMountPoint(goodMountPoint).
-				WithScmDeviceList("/dev/foo"),
+				WithScmDeviceList(dev),
 		)
 	)
 
@@ -284,6 +285,7 @@ func TestEngineInstance_NeedsScmFormat(t *testing.T) {
 				IsMountedErr: os.ErrNotExist,
 				GetfsStr:     "ext4",
 			},
+			expErr:         storage.FaultDeviceWithFsNoMountpoint(dev, goodMountPoint),
 			expNeedsFormat: false,
 		},
 		"check dcpm fails (IsMounted fails)": {
