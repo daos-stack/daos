@@ -186,13 +186,6 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 
 	D_ASSERT(proto_ver == DAOS_OBJ_VERSION || proto_ver == DAOS_OBJ_VERSION - 1);
 
-	/*
-	 * Proto v9 doesn't support hint return cart timeout for retry
-	 * skip RPC rejections for them.
-	 */
-	if (proto_ver == 9)
-		attr->sra_flags |= SCHED_REQ_FL_NO_REJECT;
-
 	/* Extract hint from RPC */
 	attr->sra_enqueue_id = 0;
 
@@ -210,6 +203,7 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 		sched_req_attr_init(attr, obj_rpc_is_update(rpc) ?
 				    SCHED_REQ_UPDATE : SCHED_REQ_FETCH,
 				    &orw->orw_pool_uuid);
+		attr->sra_flags |= SCHED_REQ_FL_FORCE_ENQUEUE;
 		break;
 	}
 	case DAOS_OBJ_RPC_MIGRATE: {
@@ -217,6 +211,7 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 
 		attr->sra_enqueue_id = omi->om_comm_in.req_in_enqueue_id;
 		sched_req_attr_init(attr, SCHED_REQ_MIGRATE, &omi->om_pool_uuid);
+		attr->sra_flags |= SCHED_REQ_FL_FORCE_ENQUEUE;
 		break;
 	}
 	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
@@ -286,14 +281,14 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 		struct obj_ec_agg_in *ea = crt_req_get(rpc);
 
 		attr->sra_enqueue_id = ea->ea_comm_in.req_in_enqueue_id;
-		sched_req_attr_init(attr, SCHED_REQ_MIGRATE, &ea->ea_pool_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_UPDATE, &ea->ea_pool_uuid);
 		break;
 	}
 	case DAOS_OBJ_RPC_EC_REPLICATE: {
 		struct obj_ec_rep_in *er = crt_req_get(rpc);
 
 		attr->sra_enqueue_id = er->er_comm_in.req_in_enqueue_id;
-		sched_req_attr_init(attr, SCHED_REQ_MIGRATE, &er->er_pool_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_UPDATE, &er->er_pool_uuid);
 		break;
 	}
 	case DAOS_OBJ_RPC_CPD: {
@@ -321,6 +316,13 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 		rc = -DER_NOSYS;
 		break;
 	}
+
+	/*
+	 * Proto v9 doesn't support hint return cart timeout for retry
+	 * skip RPC rejections for them.
+	 */
+	if (proto_ver == 9)
+		attr->sra_flags |= SCHED_REQ_FL_NO_REJECT;
 
 	return rc;
 }

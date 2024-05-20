@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -126,6 +126,8 @@ struct daos_req_comm_in {
 	uint32_t	req_in_gid;
 	/** Request project ID, reserved for NRS */
 	uint32_t	req_in_projid;
+	/* padding reserved */
+	uint32_t	req_in_padding0;
 	/** Enqueue ID of the request on the server side, for server overloaded retry */
 	uint64_t	req_in_enqueue_id;
 	/** Reserved for future extension */

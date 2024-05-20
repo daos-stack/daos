@@ -1061,6 +1061,9 @@ crt_proc_struct_daos_req_comm_in(crt_proc_t proc, crt_proc_op_t proc_op,
 	rc = crt_proc_uint32_t(proc, proc_op, &drci->req_in_gid);
 	if (unlikely(rc))
 		return rc;
+	rc = crt_proc_uint32_t(proc, proc_op, &drci->req_in_padding0);
+	if (unlikely(rc))
+		return rc;
 	rc = crt_proc_uint32_t(proc, proc_op, &drci->req_in_projid);
 	if (unlikely(rc))
 		return rc;
