@@ -1825,10 +1825,6 @@ dtx_cont_register(struct ds_cont_child *cont)
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
-	cont->sc_dtx_committable_count = 0;
-	cont->sc_dtx_committable_coll_count = 0;
-	D_INIT_LIST_HEAD(&cont->sc_dtx_cos_list);
-	D_INIT_LIST_HEAD(&cont->sc_dtx_coll_list);
 	ds_cont_child_get(cont);
 	dbca->dbca_refs = 0;
 	dbca->dbca_cont = cont;

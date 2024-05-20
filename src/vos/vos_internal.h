@@ -28,40 +28,42 @@
 
 #define VOS_MINOR_EPC_MAX EVT_MINOR_EPC_MAX
 
-#define VOS_TX_LOG_FAIL(rc, ...)			\
-	do {						\
-		bool	__is_err = true;		\
-							\
-		if (rc >= 0)				\
-			break;				\
-		switch (rc) {				\
-		case -DER_TX_RESTART:			\
-		case -DER_INPROGRESS:			\
-		case -DER_EXIST:			\
-		case -DER_NONEXIST:			\
-			__is_err = false;		\
-			break;				\
-		}					\
-		D_CDEBUG(__is_err, DLOG_ERR, DB_IO,	\
-			 __VA_ARGS__);			\
+#define VOS_TX_LOG_FAIL(rc, ...)                                                                   \
+	do {                                                                                       \
+		bool __is_err = true;                                                              \
+                                                                                                   \
+		if (rc >= 0)                                                                       \
+			break;                                                                     \
+		switch (rc) {                                                                      \
+		case -DER_TX_RESTART:                                                              \
+		case -DER_INPROGRESS:                                                              \
+		case -DER_UPDATE_AGAIN:                                                            \
+		case -DER_BUSY:                                                                    \
+		case -DER_EXIST:                                                                   \
+		case -DER_NONEXIST:                                                                \
+			__is_err = false;                                                          \
+			break;                                                                     \
+		}                                                                                  \
+		D_CDEBUG(__is_err, DLOG_ERR, DB_IO, __VA_ARGS__);                                  \
 	} while (0)
 
-#define VOS_TX_TRACE_FAIL(rc, ...)			\
-	do {						\
-		bool	__is_err = true;		\
-							\
-		if (rc >= 0)				\
-			break;				\
-		switch (rc) {				\
-		case -DER_TX_RESTART:			\
-		case -DER_INPROGRESS:			\
-		case -DER_EXIST:			\
-		case -DER_NONEXIST:			\
-			__is_err = false;		\
-			break;				\
-		}					\
-		D_CDEBUG(__is_err, DLOG_ERR, DB_TRACE,	\
-			 __VA_ARGS__);			\
+#define VOS_TX_TRACE_FAIL(rc, ...)                                                                 \
+	do {                                                                                       \
+		bool __is_err = true;                                                              \
+                                                                                                   \
+		if (rc >= 0)                                                                       \
+			break;                                                                     \
+		switch (rc) {                                                                      \
+		case -DER_TX_RESTART:                                                              \
+		case -DER_INPROGRESS:                                                              \
+		case -DER_UPDATE_AGAIN:                                                            \
+		case -DER_BUSY:                                                                    \
+		case -DER_EXIST:                                                                   \
+		case -DER_NONEXIST:                                                                \
+			__is_err = false;                                                          \
+			break;                                                                     \
+		}                                                                                  \
+		D_CDEBUG(__is_err, DLOG_ERR, DB_TRACE, __VA_ARGS__);                               \
 	} while (0)
 
 #define VOS_CONT_ORDER		20	/* Order of container tree */
@@ -185,6 +187,8 @@ struct vos_agg_metrics {
 	struct d_tm_node_t	*vam_merge_recs;	/* Total merged EV records */
 	struct d_tm_node_t	*vam_merge_size;	/* Total merged size */
 	struct d_tm_node_t	*vam_fail_count;	/* Aggregation failed */
+	struct d_tm_node_t      *vam_agg_blocked;       /* Aggregation waiting for discard */
+	struct d_tm_node_t      *vam_discard_blocked;   /* Discard waiting for aggregation */
 };
 
 struct vos_gc_metrics {
@@ -1065,8 +1069,11 @@ struct vos_iterator {
 	vos_iter_type_t		 it_type;
 	enum vos_iter_state	 it_state;
 	uint32_t		 it_ref_cnt;
+	/** Note: it_for_agg is only set at object level as it's only used for
+	 * mutual exclusion between aggregation and object discard.
+	 */
 	uint32_t it_from_parent : 1, it_for_purge : 1, it_for_discard : 1, it_for_migration : 1,
-	    it_show_uncommitted : 1, it_ignore_uncommitted : 1, it_for_sysdb : 1;
+	    it_show_uncommitted : 1, it_ignore_uncommitted : 1, it_for_sysdb : 1, it_for_agg : 1;
 };
 
 /* Auxiliary structure for passing information between parent and nested
