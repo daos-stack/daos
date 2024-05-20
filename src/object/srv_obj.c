@@ -146,7 +146,7 @@ obj_rw_complete(crt_rpc_t *rpc, struct obj_io_context *ioc,
 				rc = -DER_NO_PERM;
 			DL_CDEBUG(rc == -DER_REC2BIG || rc == -DER_INPROGRESS ||
 				      rc == -DER_TX_RESTART || rc == -DER_EXIST ||
-				      rc == -DER_NONEXIST || rc == -DER_ALREADY ||
+				      /* rc == -DER_NONEXIST || */rc == -DER_ALREADY ||
 				      rc == -DER_CHKPT_BUSY,
 				  DLOG_DBG, DLOG_ERR, rc, DF_UOID " %s end failed",
 				  DP_UOID(orwi->orw_oid), update ? "Update" : "Fetch");
@@ -1495,7 +1495,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 				     cond_flags | fetch_flags, shadows, &ioh, dth);
 		daos_recx_ep_list_free(shadows, iods_nr);
 		if (rc) {
-			DL_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_NONEXIST ||
+			DL_CDEBUG(rc == -DER_INPROGRESS ||
 				      rc == -DER_TX_RESTART,
 				  DB_IO, DLOG_ERR, rc, "Fetch begin for " DF_UOID " failed",
 				  DP_UOID(orw->orw_oid));
@@ -4186,7 +4186,7 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	if (rc == 0)
 		okqo->okqo_recx = otqa.otqa_recx;
 	else
-		DL_CDEBUG(rc != -DER_NONEXIST && rc != -DER_INPROGRESS && rc != -DER_TX_RESTART,
+		DL_CDEBUG(/*rc != -DER_NONEXIST && */rc != -DER_INPROGRESS && rc != -DER_TX_RESTART,
 			  DLOG_ERR, DB_IO, rc, "Failed to handle reqular query RPC %p on XS %u/%u "
 			  "for obj "DF_UOID" epc "DF_X64" pmv %u/%u, api_flags "DF_X64" with dti "
 			  DF_DTI, rpc, dmi->dmi_xs_id, dmi->dmi_tgt_id, DP_UOID(okqi->okqi_oid),
