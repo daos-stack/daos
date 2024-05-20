@@ -20,6 +20,6 @@ They may also describe features that are currently under development
 for a future DAOS release. Those features will be clearly marked as such.
 
 !!! warning
-    DAOS v2.7 is the (unstable) master branch for DAOS v2.6 development.
+    DAOS v2.7 is the (unstable) master branch for DAOS v2.8 development.
     Use at your own risk. Please consider the [latest](../latest/)
     stable DAOS release for production deployments.
