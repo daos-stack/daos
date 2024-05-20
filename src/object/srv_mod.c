@@ -217,13 +217,6 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 
 	D_ASSERT(proto_ver == DAOS_OBJ_VERSION || proto_ver == DAOS_OBJ_VERSION - 1);
 
-	/*
-	 * Proto v9 doesn't support hint return cart timeout for retry
-	 * skip RPC rejections for them.
-	 */
-	if (proto_ver == 9)
-		attr->sra_flags |= SCHED_REQ_FL_NO_REJECT;
-
 	/* Extract hint from RPC */
 	attr->sra_enqueue_id = 0;
 	if (obj_rpc_is_update(rpc) || obj_rpc_is_fetch(rpc)) {
@@ -250,7 +243,7 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 
 			attr->sra_enqueue_id = oei_v10->oei_comm_in.req_in_enqueue_id;
 		}
-		sched_req_attr_init(attr, SCHED_REQ_FETCH, &oei->oei_pool_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &oei->oei_pool_uuid);
 	} else if (obj_rpc_is_punch(rpc)) {
 		struct obj_punch_in *opi = crt_req_get(rpc);
 
@@ -259,7 +252,7 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 
 			attr->sra_enqueue_id = opi_v10->opi_comm_in.req_in_enqueue_id;
 		}
-		sched_req_attr_init(attr, SCHED_REQ_UPDATE, &opi->opi_pool_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &opi->opi_pool_uuid);
 	} else if (obj_rpc_is_query(rpc)) {
 		struct obj_query_key_in *okqi = crt_req_get(rpc);
 
@@ -268,7 +261,7 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 
 			attr->sra_enqueue_id = okqi_v10->okqi_comm_in.req_in_enqueue_id;
 		}
-		sched_req_attr_init(attr, SCHED_REQ_FETCH, &okqi->okqi_pool_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &okqi->okqi_pool_uuid);
 	} else if (obj_rpc_is_sync(rpc)) {
 		struct obj_sync_in *osi = crt_req_get(rpc);
 
@@ -277,7 +270,7 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 
 			attr->sra_enqueue_id = osi_v10->osi_comm_in.req_in_enqueue_id;
 		}
-		sched_req_attr_init(attr, SCHED_REQ_UPDATE, &osi->osi_pool_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &osi->osi_pool_uuid);
 	} else if (obj_rpc_is_key2anchor(rpc)) {
 		struct obj_key2anchor_in *oki = crt_req_get(rpc);
 
@@ -286,25 +279,32 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 
 			attr->sra_enqueue_id = oki_v10->oki_comm_in.req_in_enqueue_id;
 		}
-		sched_req_attr_init(attr, SCHED_REQ_FETCH, &oki->oki_pool_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &oki->oki_pool_uuid);
 	} else if (obj_rpc_is_ec_agg(rpc)) {
 		struct obj_ec_agg_in *ea = crt_req_get(rpc);
 
 		attr->sra_enqueue_id = ea->ea_comm_in.req_in_enqueue_id;
-		sched_req_attr_init(attr, SCHED_REQ_MIGRATE, &ea->ea_pool_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &ea->ea_pool_uuid);
 	} else if (obj_rpc_is_ec_rep(rpc)) {
 		struct obj_ec_rep_in *er = crt_req_get(rpc);
 
 		attr->sra_enqueue_id = er->er_comm_in.req_in_enqueue_id;
-		sched_req_attr_init(attr, SCHED_REQ_MIGRATE, &er->er_pool_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &er->er_pool_uuid);
 	} else if (obj_rpc_is_cpd(rpc)) {
 		struct obj_cpd_in *oci = crt_req_get(rpc);
 
-		sched_req_attr_init(attr, SCHED_REQ_MIGRATE, &oci->oci_pool_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &oci->oci_pool_uuid);
 	} else {
 		/* Other requests will not be queued, see dss_rpc_hdlr() */
 		return -DER_NOSYS;
 	}
+	/*
+	 * Proto v9 doesn't support hint return cart timeout for retry
+	 * skip RPC rejections for them.
+	 */
+	if (proto_ver == 9)
+		attr->sra_flags |= SCHED_REQ_FL_NO_REJECT;
+
 
 	return 0;
 }

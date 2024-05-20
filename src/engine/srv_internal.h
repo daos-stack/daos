@@ -368,7 +368,7 @@ static inline bool
 dss_xstream_has_nvme(struct dss_xstream *dx)
 {
 
-	if (dx->dx_main_xs != 0)
+	if (dx->dx_main_xs)
 		return true;
 	if (bio_nvme_configured(SMD_DEV_TYPE_META) && dx->dx_xs_id == 0)
 		return true;
