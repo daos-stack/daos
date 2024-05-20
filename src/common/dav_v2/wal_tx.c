@@ -426,13 +426,6 @@ struct umem_wal_tx_ops dav_wal_tx_ops = {
 	.wtx_act_next = wal_tx_act_next,
 };
 
-struct dav_wal_replay_cache {
-	uint64_t                last_txid;
-	int                     capacity;
-	int                     cur_pos;
-	struct umem_pin_handle *pinhdl[];
-};
-
 static inline void *
 dav_wal_replay_heap_off2ptr(dav_obj_t *dav_hdl, uint64_t off)
 {
@@ -440,46 +433,18 @@ dav_wal_replay_heap_off2ptr(dav_obj_t *dav_hdl, uint64_t off)
 	struct umem_cache_range      rg   = {0};
 	int                          rc;
 	struct umem_store           *store = dav_hdl->do_store;
-	struct dav_wal_replay_cache *dwrc  = (struct dav_wal_replay_cache *)dav_hdl->do_cb_wa;
-	struct umem_pin_handle      *pin_handle;
 
-	if (!umem_cache_offispinned(store, off)) {
-		rg.cr_off  = GET_ZONE_OFFSET(z_id);
-		rg.cr_size = ((store->stor_size - rg.cr_off) > ZONE_MAX_SIZE)
-				 ? ZONE_MAX_SIZE
-				 : (store->stor_size - rg.cr_off);
-		rc         = umem_cache_pin(store, &rg, 1, 0, &pin_handle);
-		if (rc) {
-			D_ERROR("Failed to load pages to umem cache");
-			errno = daos_der2errno(rc);
-			return NULL;
-		}
-		D_ASSERT(dwrc->capacity > dwrc->cur_pos);
-		dwrc->pinhdl[dwrc->cur_pos++] = pin_handle;
+	rg.cr_off  = GET_ZONE_OFFSET(z_id);
+	rg.cr_size = ((store->stor_size - rg.cr_off) > ZONE_MAX_SIZE)
+			 ? ZONE_MAX_SIZE
+			 : (store->stor_size - rg.cr_off);
+	rc         = umem_cache_load(store, &rg, 1, 0);
+	if (rc) {
+		D_ERROR("Failed to load pages to umem cache");
+		errno = daos_der2errno(rc);
+		return NULL;
 	}
 	return umem_cache_off2ptr(store, off);
-}
-
-static inline void
-dav_wal_replay_check_txid(dav_obj_t *dav_hdl, uint64_t tx_id)
-{
-	struct dav_wal_replay_cache *dwrc  = (struct dav_wal_replay_cache *)dav_hdl->do_cb_wa;
-	struct umem_store           *store = dav_hdl->do_store;
-	int                          i;
-
-	if (tx_id == dwrc->last_txid)
-		return;
-
-	if (dwrc->last_txid)
-		umem_cache_commit(store, dwrc->last_txid);
-
-	for (i = 0; i < dwrc->cur_pos; i++)
-		umem_cache_unpin(store, dwrc->pinhdl[i]);
-
-	dwrc->cur_pos   = 0;
-	dwrc->last_txid = tx_id;
-
-	return;
 }
 
 int
@@ -494,7 +459,7 @@ dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *arg)
 	dav_obj_t         *dav_hdl = arg;
 	struct umem_store *store   = dav_hdl->do_store;
 
-	dav_wal_replay_check_txid(dav_hdl, tx_id);
+	umem_cache_commit(store, tx_id);
 	switch (act->ac_opc) {
 	case UMEM_ACT_COPY:
 		D_DEBUG(DB_TRACE,
@@ -577,31 +542,5 @@ dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *arg)
 		rc = umem_cache_touch(store, tx_id, off, size);
 
 out:
-	return rc;
-}
-
-int
-dav_wal_replay(dav_obj_t *hdl, uint32_t mem_pages)
-{
-	int                          rc;
-	struct dav_wal_replay_cache *dwrc;
-
-	umem_cache_set_early_boot(hdl->do_store, true);
-	D_ALLOC(hdl->do_cb_wa,
-		sizeof(struct dav_wal_replay_cache) + sizeof(struct umem_pin_handle *) * mem_pages);
-	if (hdl->do_cb_wa == NULL) {
-		D_ERROR("Failed to allocate for pinhdl_vec");
-		rc = ENOMEM;
-		goto out;
-	}
-	dwrc           = (struct dav_wal_replay_cache *)hdl->do_cb_wa;
-	dwrc->capacity = mem_pages;
-
-	rc = hdl->do_store->stor_ops->so_wal_replay(hdl->do_store, dav_wal_replay_cb, hdl);
-	dav_wal_replay_check_txid(hdl, (-1UL));
-	D_FREE(hdl->do_cb_wa);
-
-out:
-	umem_cache_set_early_boot(hdl->do_store, false);
 	return rc;
 }

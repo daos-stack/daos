@@ -39,6 +39,6 @@ int dav_wal_tx_assign(void *hdl, void *addr, uint64_t val);
 int dav_wal_tx_clr_bits(void *hdl, void *addr, uint32_t pos, uint16_t num_bits);
 int dav_wal_tx_set_bits(void *hdl, void *addr, uint32_t pos, uint16_t num_bits);
 int dav_wal_tx_set(void *hdl, void *addr, char c, daos_size_t size);
-int dav_wal_replay(struct dav_obj *hdl, uint32_t mem_pages);
+int dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *arg);
 
 #endif	/*__DAOS_COMMON_DAV_WAL_TX_*/

@@ -251,13 +251,6 @@ dav_tx_xadd_range_v2(uint64_t off, size_t size, uint64_t flags);
 int
 dav_tx_xadd_range_direct_v2(const void *ptr, size_t size, uint64_t flags);
 
-/*
- * Converts the offset to a pointer in the context of heap associated with
- * current transaction.
- */
-void *
-dav_tx_off2ptr_v2(uint64_t off);
-
 #define DAV_ACTION_XRESERVE_VALID_FLAGS						\
 	(DAV_XALLOC_CLASS_MASK | DAV_XALLOC_EZONE_MASK | DAV_XALLOC_ZERO)
 

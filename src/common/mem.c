@@ -2096,15 +2096,6 @@ umem_cache_offisloaded(struct umem_store *store, umem_off_t offset)
 	return ((page->pg_info != NULL) && page->pg_info->pi_loaded);
 }
 
-bool
-umem_cache_offispinned(struct umem_store *store, umem_off_t offset)
-{
-	struct umem_cache *cache = store->cache;
-	struct umem_page  *page  = cache_off2page(cache, offset);
-
-	return ((page->pg_info != NULL) && page->pg_info->pi_ref);
-}
-
 /* Convert MD-blob offset to memory pointer */
 void *
 umem_cache_off2ptr(struct umem_store *store, umem_off_t offset)
@@ -2131,20 +2122,6 @@ umem_cache_ptr2off(struct umem_store *store, const void *ptr)
 	offset += (ptr - cache->ca_base) & cache->ca_page_mask;
 
 	return offset;
-}
-bool
-umem_cache_ptrisvalid(struct umem_store *store, void *ptr)
-{
-	struct umem_cache *cache = store->cache;
-	uint32_t           idx;
-
-	if (ptr < cache->ca_base)
-		return false;
-	idx = (ptr - cache->ca_base) >> cache->ca_page_shift;
-	if (idx >= cache->ca_mem_pages)
-		return false;
-
-	return true;
 }
 
 static int
@@ -2410,6 +2387,8 @@ cache_unmap_page(struct umem_cache *cache, struct umem_page_info *pinfo)
 
 	pinfo->pi_mapped = 0;
 	pinfo->pi_loaded = 0;
+	pinfo->pi_last_inflight                  = 0;
+	pinfo->pi_last_checkpoint                = 0;
 	cache->ca_pages[pinfo->pi_pg_id].pg_info = NULL;
 
 	d_list_add_tail(&pinfo->pi_lru_link, &cache->ca_pgs_free);
@@ -3183,7 +3162,7 @@ need_reserve(struct umem_cache *cache, uint32_t extra_pgs)
 {
 	uint32_t	page_nr = 0;
 
-	if (!cache->ca_early_boot) {
+	if (cache->ca_replay_done) {
 		/* Few free pages are always reserved for potential non-evictable zone grow */
 		D_ASSERT(cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE] <= cache->ca_max_ne_pages);
 		page_nr = cache->ca_max_ne_pages - cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE];
@@ -3416,15 +3395,7 @@ error:
 #define UMEM_PAGES_ON_STACK	16
 
 void
-umem_cache_set_early_boot(struct umem_store *store, bool mode)
-{
-	struct umem_cache *cache = store->cache;
-
-	cache->ca_early_boot = mode;
-}
-
-void
-umem_cache_update_nonevictable_stats(struct umem_store *store)
+umem_cache_post_replay(struct umem_store *store)
 {
 	struct umem_cache     *cache = store->cache;
 	int                    cnt   = 0;
@@ -3433,7 +3404,7 @@ umem_cache_update_nonevictable_stats(struct umem_store *store)
 
 	pinfo = (struct umem_page_info *)&cache->ca_pages[cache->ca_md_pages];
 	for (idx = 0; idx < cache->ca_mem_pages; idx++) {
-		if (pinfo[idx].pi_mapped == 0)
+		if (pinfo[idx].pi_loaded == 0)
 			continue;
 
 		if (!is_id_evictable(cache, pinfo[idx].pi_pg_id)) {
@@ -3443,6 +3414,7 @@ umem_cache_update_nonevictable_stats(struct umem_store *store)
 		}
 	}
 	cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE] = cnt;
+	cache->ca_replay_done                           = 1;
 }
 
 int

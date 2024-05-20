@@ -74,7 +74,7 @@ enum mb_usage_hint {
 #define MB_U90         (ZONE_MAX_SIZE * 9 / 10)
 #define MB_U75         (ZONE_MAX_SIZE * 75 / 100)
 #define MB_U30         (ZONE_MAX_SIZE * 3 / 10)
-#define MB_USAGE_DELTA (ZONE_MAX_SIZE / 10)
+#define MB_USAGE_DELTA (ZONE_MAX_SIZE / 20)
 
 size_t mb_usage_byhint[MB_UMAX_HINT] = {0, MB_U30 + 1, MB_U75 + 1, MB_U90 + 1};
 
@@ -431,21 +431,27 @@ heap_mbrt_incrmb_usage(struct palloc_heap *heap, uint32_t zone_id, int size)
 	    (labs((int64_t)(mb->space_usage - mb->prev_usage)) < MB_USAGE_DELTA))
 		return;
 
-	if ((mb->space_usage > MB_U90) && (mb->qptr != &heap->rt->mb_u90)) {
-		TAILQ_REMOVE(mb->qptr, mb, mb_link);
-		TAILQ_INSERT_TAIL(&heap->rt->mb_u90, mb, mb_link);
-		mb->qptr = &heap->rt->mb_u90;
-		heap_zinfo_set_usage(heap, zone_id, MB_U90_HINT);
-	} else if ((mb->space_usage > MB_U75) && (mb->qptr != &heap->rt->mb_u75)) {
-		TAILQ_REMOVE(mb->qptr, mb, mb_link);
-		TAILQ_INSERT_TAIL(&heap->rt->mb_u75, mb, mb_link);
-		mb->qptr = &heap->rt->mb_u75;
-		heap_zinfo_set_usage(heap, zone_id, MB_U75_HINT);
-	} else if ((mb->space_usage > MB_U30) && (mb->qptr != &heap->rt->mb_u30)) {
-		TAILQ_REMOVE(mb->qptr, mb, mb_link);
-		TAILQ_INSERT_TAIL(&heap->rt->mb_u30, mb, mb_link);
-		mb->qptr = &heap->rt->mb_u30;
-		heap_zinfo_set_usage(heap, zone_id, MB_U30_HINT);
+	if (mb->space_usage > MB_U90) {
+		if (mb->qptr != &heap->rt->mb_u90) {
+			TAILQ_REMOVE(mb->qptr, mb, mb_link);
+			TAILQ_INSERT_TAIL(&heap->rt->mb_u90, mb, mb_link);
+			mb->qptr = &heap->rt->mb_u90;
+			heap_zinfo_set_usage(heap, zone_id, MB_U90_HINT);
+		}
+	} else if (mb->space_usage > MB_U75) {
+		if (mb->qptr != &heap->rt->mb_u75) {
+			TAILQ_REMOVE(mb->qptr, mb, mb_link);
+			TAILQ_INSERT_TAIL(&heap->rt->mb_u75, mb, mb_link);
+			mb->qptr = &heap->rt->mb_u75;
+			heap_zinfo_set_usage(heap, zone_id, MB_U75_HINT);
+		}
+	} else if (mb->space_usage > MB_U30) {
+		if (mb->qptr != &heap->rt->mb_u30) {
+			TAILQ_REMOVE(mb->qptr, mb, mb_link);
+			TAILQ_INSERT_TAIL(&heap->rt->mb_u30, mb, mb_link);
+			mb->qptr = &heap->rt->mb_u30;
+			heap_zinfo_set_usage(heap, zone_id, MB_U30_HINT);
+		}
 	} else if (mb->qptr != &heap->rt->mb_u0) {
 		TAILQ_REMOVE(mb->qptr, mb, mb_link);
 		TAILQ_INSERT_TAIL(&heap->rt->mb_u0, mb, mb_link);
@@ -1367,7 +1373,7 @@ heap_verify_header(struct heap_header *hdr, size_t heap_size, size_t cache_size)
 		return -1;
 	}
 
-	if ((hdr->major != HEAP_MAJOR) || (hdr->minor != HEAP_MINOR)) {
+	if ((hdr->major != HEAP_MAJOR) || (hdr->minor > HEAP_MINOR)) {
 		D_ERROR("Version mismatch of heap layout\n");
 		return -1;
 	}
@@ -1543,8 +1549,7 @@ heap_init(void *heap_start, uint64_t umem_cache_size, struct umem_store *store)
 	if (heap_size < HEAP_MIN_SIZE)
 		return EINVAL;
 
-	if (store->stor_priv == NULL)
-		return 0;
+	D_ASSERT(store->stor_priv != NULL);
 
 	nzones = heap_max_zone(heap_size);
 	meta_clear_pages(store, sizeof(struct heap_header), 4096, ZONE_MAX_SIZE, nzones);
@@ -1648,7 +1653,10 @@ heap_get_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id)
 		ret = heap_create_evictable_mb(heap, mb_id);
 		if (ret) {
 			mb = TAILQ_FIRST(&heap->rt->mb_u90);
-			D_ASSERT(mb != NULL);
+			if (mb == NULL) {
+				*mb_id = 0;
+				return 0;
+			}
 			TAILQ_REMOVE(&heap->rt->mb_u90, mb, mb_link);
 		} else {
 			mb = heap_mbrt_get_mb(heap, *mb_id);
@@ -1719,8 +1727,6 @@ heap_update_mbrt_zinfo(struct palloc_heap *heap, bool init)
 	heap->rt->zones_exhausted    = i;
 	heap->rt->zones_exhausted_ne = nemb_cnt;
 	heap->rt->zones_exhausted_e  = emb_cnt;
-
-	umem_cache_update_nonevictable_stats(heap->layout_info.store);
 
 	return 0;
 }

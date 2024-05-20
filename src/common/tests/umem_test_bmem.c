@@ -1408,17 +1408,6 @@ test_tx_xadd_ptr(void **state)
 	assert_true(rc != 0);
 	validate_persist_activity(1, 0);
 	assert_false(strncmp(local_buf, start_ptr, 512));
-
-	/* Invalid pointer */
-	snap_persist_activity();
-	rc = umem_tx_begin(umm, NULL);
-	assert_int_equal(rc, 0);
-	rc = umem_tx_xadd_ptr(umm, local_buf, 128, UMEM_XADD_NO_SNAPSHOT);
-	assert_true(rc != 0);
-	assert_true(umem_tx_stage(umm) == UMEM_STAGE_ONABORT);
-	rc = umem_tx_end(umm, rc);
-	assert_true(rc != 0);
-	validate_persist_activity(1, 0);
 }
 
 static void
@@ -2317,19 +2306,24 @@ test_tx_alloc_from_multimb(void **state)
 static void
 test_umempobj_create_smallsize(void **state)
 {
-	int               num = 0;
-	char             *name;
-	struct umem_store ustore_tmp = {.stor_size  = POOL_SIZE,
-					.stor_ops   = &_store_ops_v2,
-					.store_type = DAOS_MD_BMEM_V2,
-					.stor_priv  = (void *)(UINT64_MAX)};
-	struct umem_pool *umm;
+	int                  num = 0;
+	char                *name;
+	uint32_t             id;
+	struct umem_store    ustore_tmp = {.stor_size  = POOL_SIZE,
+					   .stor_ops   = &_store_ops_v2,
+					   .store_type = DAOS_MD_BMEM_V2,
+					   .stor_priv  = (void *)(UINT64_MAX)};
+	struct umem_attr     uma;
+	struct umem_instance umm;
+
+	uma.uma_id = umempobj_backend_type2class_id(ustore_tmp.store_type);
 
 	/* umempobj_create with zero scm size */
 	D_ASPRINTF(name, "/mnt/daos/umem-test-tmp-%d", num++);
 	assert_true(name != NULL);
-	umm = umempobj_create(name, "invalid_pool", UMEMPOBJ_ENABLE_STATS, 0, 0666, &ustore_tmp);
-	assert_ptr_equal(umm, NULL);
+	uma.uma_pool =
+	    umempobj_create(name, "invalid_pool", UMEMPOBJ_ENABLE_STATS, 0, 0666, &ustore_tmp);
+	assert_ptr_equal(uma.uma_pool, NULL);
 	unlink(name);
 	D_FREE(name);
 
@@ -2337,9 +2331,9 @@ test_umempobj_create_smallsize(void **state)
 	D_ASPRINTF(name, "/mnt/daos/umem-test-tmp-%d", num++);
 	assert_true(name != NULL);
 	ustore_tmp.stor_size = 0;
-	umm = umempobj_create(name, "invalid_pool", UMEMPOBJ_ENABLE_STATS, POOL_SIZE, 0666,
-			      &ustore_tmp);
-	assert_ptr_equal(umm, NULL);
+	uma.uma_pool = umempobj_create(name, "invalid_pool", UMEMPOBJ_ENABLE_STATS, POOL_SIZE, 0666,
+				       &ustore_tmp);
+	assert_ptr_equal(uma.uma_pool, NULL);
 	ustore_tmp.stor_size = POOL_SIZE;
 	unlink(name);
 	D_FREE(name);
@@ -2347,19 +2341,19 @@ test_umempobj_create_smallsize(void **state)
 	/* umempobj_create with scm size less than 32MB */
 	D_ASPRINTF(name, "/mnt/daos/umem-test-tmp-%d", num++);
 	assert_true(name != NULL);
-	umm = umempobj_create(name, "invalid_pool", UMEMPOBJ_ENABLE_STATS, 24 * 1024 * 1024, 0666,
-			      &ustore_tmp);
-	assert_ptr_equal(umm, NULL);
+	uma.uma_pool = umempobj_create(name, "invalid_pool", UMEMPOBJ_ENABLE_STATS,
+				       24 * 1024 * 1024, 0666, &ustore_tmp);
+	assert_ptr_equal(uma.uma_pool, NULL);
 	unlink(name);
 	D_FREE(name);
 
 	/* umempobj_create with scm size set to 112MB */
 	D_ASPRINTF(name, "/mnt/daos/umem-test-tmp-%d", num++);
 	assert_true(name != NULL);
-	umm = umempobj_create(name, "invalid_pool", UMEMPOBJ_ENABLE_STATS, 112 * 1024 * 1024, 0666,
-			      &ustore_tmp);
-	assert_ptr_not_equal(umm, NULL);
-	umempobj_close(umm);
+	uma.uma_pool = umempobj_create(name, "invalid_pool", UMEMPOBJ_ENABLE_STATS,
+				       112 * 1024 * 1024, 0666, &ustore_tmp);
+	assert_ptr_not_equal(uma.uma_pool, NULL);
+	umempobj_close(uma.uma_pool);
 	unlink(name);
 	D_FREE(name);
 
@@ -2367,11 +2361,15 @@ test_umempobj_create_smallsize(void **state)
 	D_ASPRINTF(name, "/mnt/daos/umem-test-tmp-%d", num++);
 	assert_true(name != NULL);
 	ustore_tmp.stor_size = 112 * 1024 * 1024;
-	umm = umempobj_create(name, "invalid_pool", UMEMPOBJ_ENABLE_STATS, 112 * 1024 * 1024, 0666,
-			      &ustore_tmp);
+	uma.uma_pool         = umempobj_create(name, "invalid_pool", UMEMPOBJ_ENABLE_STATS,
+					       112 * 1024 * 1024, 0666, &ustore_tmp);
+	umem_class_init(&uma, &umm);
+	id = umem_allot_mb_evictable(&umm, 0);
+	print_message("with scm == metablob, evictable id returned is %d\n", id);
+	assert_true(id == 0);
 	ustore_tmp.stor_size = POOL_SIZE;
-	assert_ptr_not_equal(umm, NULL);
-	umempobj_close(umm);
+	assert_ptr_not_equal(uma.uma_pool, NULL);
+	umempobj_close(uma.uma_pool);
 	unlink(name);
 	D_FREE(name);
 
@@ -2379,11 +2377,15 @@ test_umempobj_create_smallsize(void **state)
 	D_ASPRINTF(name, "/mnt/daos/umem-test-tmp-%d", num++);
 	assert_true(name != NULL);
 	ustore_tmp.stor_size = 224 * 1024 * 1024;
-	umm = umempobj_create(name, "invalid_pool", UMEMPOBJ_ENABLE_STATS, 112 * 1024 * 1024, 0666,
-			      &ustore_tmp);
+	uma.uma_pool         = umempobj_create(name, "invalid_pool", UMEMPOBJ_ENABLE_STATS,
+					       112 * 1024 * 1024, 0666, &ustore_tmp);
+	umem_class_init(&uma, &umm);
+	id = umem_allot_mb_evictable(&umm, 0);
+	print_message("with metablob > scm, evictable id returned is %d\n", id);
+	assert_true(id != 0);
 	ustore_tmp.stor_size = POOL_SIZE;
-	assert_ptr_not_equal(umm, NULL);
-	umempobj_close(umm);
+	assert_ptr_not_equal(uma.uma_pool, NULL);
+	umempobj_close(uma.uma_pool);
 	unlink(name);
 	D_FREE(name);
 }

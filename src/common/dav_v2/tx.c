@@ -456,7 +456,11 @@ lw_tx_begin(dav_obj_t *pop)
 	int			 rc;
 	uint64_t		 wal_id;
 
-	umem_cache_reserve(pop->do_store);
+	rc = umem_cache_reserve(pop->do_store);
+	if (rc) {
+		D_ERROR("umem_cache_reserve failed, " DF_RC "\n", DP_RC(rc));
+		return rc;
+	}
 	rc = dav_wal_tx_reserve(pop, &wal_id);
 	if (rc) {
 		D_ERROR("so_wal_reserv failed, "DF_RC"\n", DP_RC(rc));
@@ -1418,19 +1422,6 @@ DAV_FUNC_EXPORT int
 dav_tx_free_v2(uint64_t off)
 {
 	return dav_tx_xfree(off, 0);
-}
-
-DAV_FUNC_EXPORT void*
-dav_tx_off2ptr_v2(uint64_t off)
-{
-	struct tx *tx = get_tx();
-
-	ASSERT_IN_TX(tx);
-	ASSERT_TX_STAGE_WORK(tx);
-	ASSERT(tx->pop != NULL);
-
-	ASSERT(OBJ_OFF_IS_VALID(tx->pop, off));
-	return (void *)OBJ_OFF_TO_PTR(tx->pop, off);
 }
 
 /* arguments for constructor_alloc */

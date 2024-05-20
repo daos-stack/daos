@@ -213,8 +213,8 @@ struct umem_cache {
 	uint32_t         ca_base_off;
 	/** Cache Mode */
 	uint32_t         ca_mode;
-	/** Early boot mode */
-	uint32_t         ca_early_boot;
+	/** WAL replay status */
+	uint32_t         ca_replay_done;
 	/** Total MD pages */
 	uint32_t         ca_md_pages;
 	/** Total memory pages in cache */
@@ -311,26 +311,6 @@ umem_cache_free(struct umem_store *store);
 bool
 umem_cache_offisloaded(struct umem_store *store, umem_off_t offset);
 
-/** Check MD-blob offset is already pinned onto umem cache.
- *
- * \param[in]	store	The umem store
- * \param[in]	offset	MD-blob offset to be converted
- *
- * \return	true or false
- */
-bool
-umem_cache_offispinned(struct umem_store *store, umem_off_t offset);
-
-/** Check ptr is a valid memory pointer in the umem cache.
- *
- * \param[in]	store	The umem store
- * \param[in]	ptr     Memory Pointer
- *
- * \return	true or false
- */
-bool
-umem_cache_ptrisvalid(struct umem_store *store, void *ptr);
-
 /** Convert MD-blob offset to memory pointer, the corresponding page must be mapped already.
  *
  * \param[in]	store	The umem store
@@ -351,7 +331,7 @@ umem_cache_off2ptr(struct umem_store *store, umem_off_t offset);
 umem_off_t
 umem_cache_ptr2off(struct umem_store *store, const void *ptr);
 
-/** Update stats for nonevictable pages. This routine is called after
+/** Update umem_cache post WAL replay. This routine is called after
  *  WAL replay and the evictability of all pages are determined.
  *
  * \param[in]	store	The umem store
@@ -359,7 +339,7 @@ umem_cache_ptr2off(struct umem_store *store, const void *ptr);
  * \return      None
  */
 void
-umem_cache_update_nonevictable_stats(struct umem_store *store);
+umem_cache_post_replay(struct umem_store *store);
 
 struct umem_cache_range {
 	umem_off_t  cr_off;
@@ -484,17 +464,6 @@ umem_cache_wait_cb_t(void *arg, uint64_t chkpt_tx, uint64_t *committed_tx);
 int
 umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, void *arg,
 		      uint64_t *chkpt_id, struct umem_cache_chkpt_stats *chkpt_stats);
-
-/** Inform umem cache that the heap is in early boot mode or not.
- *
- * This function is called by allocator during wal replay to skip certain checks and
- * actions within the umem cache.
- *
- * \param[in]	store		The umem store
- * \param[in]	early		The early boot mode
- */
-void
-umem_cache_set_early_boot(struct umem_store *store, bool early);
 
 #endif /*DAOS_PMEM_BUILD*/
 
@@ -889,10 +858,7 @@ umem_ptr2off(const struct umem_instance *umm, void *ptr)
 
 #ifdef DAOS_PMEM_BUILD
 	if (umm->umm_pool && (umm->umm_pool->up_store.store_type == DAOS_MD_BMEM_V2)) {
-		if (umem_cache_ptrisvalid(&umm->umm_pool->up_store, ptr))
 			return umem_cache_ptr2off(&umm->umm_pool->up_store, ptr);
-		else
-			return UINT64_MAX;
 	} else
 #endif
 		return (umem_off_t)ptr - umm->umm_base;

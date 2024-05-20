@@ -26,7 +26,7 @@
 #define OBJ_PTR_FROM_POOL(pop, ptr)                                                                \
 	((uintptr_t)(ptr) >= (uintptr_t)(((dav_obj_t *)pop)->do_base) &&                           \
 	 (uintptr_t)(ptr) <                                                                        \
-	     (uintptr_t)(((dav_obj_t *)pop)->do_base) + (((dav_obj_t *)pop)->do_size_mem))
+	     (uintptr_t)(((dav_obj_t *)pop)->do_base) + (((dav_obj_t *)pop)->do_size_mem_usable))
 
 #define OBJ_PTR_IS_VALID(pop, ptr) OBJ_PTR_FROM_POOL(pop, ptr)
 

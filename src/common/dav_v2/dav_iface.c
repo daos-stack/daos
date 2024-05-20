@@ -23,8 +23,6 @@
 #define	DAV_HEAP_INIT	0x1
 #define MEGABYTE	((uintptr_t)1 << 20)
 
-D_CASSERT(UMEM_CACHE_PAGE_SZ == ZONE_MAX_SIZE);
-
 static bool
 is_zone_evictable(void *arg, uint32_t zid)
 {
@@ -105,24 +103,27 @@ dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct
 	}
 
 	hdl->do_fd = fd;
-	hdl->do_base          = mmap_base;
-	hdl->do_size_mem      = scm_sz;
-	hdl->do_size_meta     = store->stor_size;
-	hdl->p_ops.base       = hdl;
-	hdl->do_store = store;
-	hdl->p_ops.umem_store = store;
+	hdl->do_base            = mmap_base;
+	hdl->do_size_mem        = scm_sz;
+	hdl->do_size_mem_usable = hzl.nzones_cache * ZONE_MAX_SIZE;
+	hdl->do_size_meta       = store->stor_size;
+	hdl->p_ops.base         = hdl;
+	hdl->do_store           = store;
+	hdl->p_ops.umem_store   = store;
 
 	if (hdl->do_store->stor_priv == NULL) {
-		D_ERROR("meta context not defined. WAL commit disabled for %s\n", path);
-	} else {
-		rc = umem_cache_alloc(store, UMEM_CACHE_PAGE_SZ, hzl.nzones_heap, hzl.nzones_cache,
-				      hzl.nzones_ne_max, 4096, mmap_base, is_zone_evictable,
-				      dav_uc_callback, hdl);
-		if (rc != 0) {
-			D_ERROR("Could not allocate page cache: rc=" DF_RC "\n", DP_RC(rc));
-			err = daos_der2errno(rc);
-			goto out1;
-		}
+		D_ERROR("Missing backing store for the heap");
+		err = EINVAL;
+		goto out1;
+	}
+
+	rc = umem_cache_alloc(store, ZONE_MAX_SIZE, hzl.nzones_heap, hzl.nzones_cache,
+			      hzl.nzones_ne_max, 4096, mmap_base, is_zone_evictable,
+			      dav_uc_callback, hdl);
+	if (rc != 0) {
+		D_ERROR("Could not allocate page cache: rc=" DF_RC "\n", DP_RC(rc));
+		err = daos_der2errno(rc);
+		goto out1;
 	}
 
 	D_STRNDUP(hdl->do_path, path, strlen(path));
@@ -161,7 +162,7 @@ dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct
 			goto out2;
 		}
 		D_ASSERT(store != NULL);
-		rc = dav_wal_replay(hdl, hzl.nzones_cache);
+		rc = hdl->do_store->stor_ops->so_wal_replay(hdl->do_store, dav_wal_replay_cb, hdl);
 		if (rc) {
 			err = daos_der2errno(rc);
 			goto out2;
@@ -230,6 +231,8 @@ dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct
 		}
 		lw_tx_end(hdl, NULL);
 	}
+	umem_cache_post_replay(hdl->do_store);
+
 #if VG_MEMCHECK_ENABLED
 	if (On_memcheck)
 		palloc_heap_vg_open(hdl->do_heap, 1);
