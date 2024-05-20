@@ -72,6 +72,10 @@ def set_device_faulty(test, dmg, server, uuid, pool=None, has_sys_xs=False, **kw
             "Expecting ranks %s on %s to be excluded due to excluding sys_xs storage device: %s",
             ranks, server, rank_hosts)
         test.server_managers[-1].update_expected_states(ranks, ["stopped", "excluded"])
+        if pool:
+            pool.dmg.hostlist.remove(server)
+            test.log.debug(
+                "Removing %s from the %s dmg.hostlist: %s", server, pool, pool.dmg.hostlist)
 
     # Add a tearDown method to reset the faulty device
     test.register_cleanup(reset_fault_device, dmg=dmg, server=server, uuid=uuid)
