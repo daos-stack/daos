@@ -59,6 +59,10 @@ ior:
   clientslots:
     slots: 48
   test_file: /testFile
+  env_vars:
+    - D_LOG_MASK=DEBUG,MEM=ERR,RPC=ERR,BULK=ERR,HG=ERR,GRP=ERR
+    - DD_MASK=all
+    - D_LOG_FLUSH=DEBUG
   repetitions: 1
   dfs_destroy: false
   iorflags:
