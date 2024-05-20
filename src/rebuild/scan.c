@@ -66,10 +66,12 @@ rebuild_obj_fill_buf(daos_handle_t ih, d_iov_t *key_iov,
 	shards[count] = obj_val->shard;
 	arg->count++;
 
-	D_DEBUG(DB_REBUILD, "send oid/con "DF_UOID"/"DF_UUID" ephs "DF_U64
-		"shard %d cnt %d tgt_id %d\n", DP_UOID(oids[count]),
-		DP_UUID(arg->cont_uuid), obj_val->eph, shards[count],
-		arg->count, arg->tgt_id);
+	if (0 && oids[count].id_pub.hi == (uint64_t)2533300560199681 &&
+	    oids[count].id_pub.lo == 0)
+		D_ERROR("send oid/con "DF_UOID"/"DF_UUID" ephs "DF_X64
+			"shard %d cnt %d tgt_id %d\n", DP_UOID(oids[count]),
+			DP_UUID(arg->cont_uuid), obj_val->eph, shards[count],
+			arg->count, arg->tgt_id);
 
 	rc = dbtree_iter_delete(ih, NULL);
 	if (rc != 0)
@@ -129,7 +131,7 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 			break;
 
 		/* otherwise let's retry */
-		D_DEBUG(DB_REBUILD, DF_UUID" retry send object to tgt_id %d\n",
+		D_ERROR(DF_UUID" retry send object to tgt_id %d\n",
 			DP_UUID(rpt->rt_pool_uuid), arg->tgt_id);
 		dss_sleep(daos_rpc_rand_delay(max_delay) << 10);
 	}
@@ -389,6 +391,24 @@ rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt, uuid_t co_uuid,
 	return rc;
 }
 
+#define	OBJ_SCANNED_SZ		(1 << 19)
+#define CONT_SCANNED_SZ		(4)
+struct obj_scanned {
+	daos_unit_oid_t		os_uoid;
+	int			os_rc;
+	int			os_covered;
+	uint64_t		os_epoch;
+	uint32_t		os_tgt[4];
+	uint32_t		os_shard[4];
+};
+
+struct obj_scanned_arg {
+	uuid_t			 os_cont_uuid;
+	struct obj_scanned	*os_objs;
+	uint32_t		 os_obj_nr;
+	uint32_t		 os_size;
+};
+
 #define LOCAL_ARRAY_SIZE	128
 #define NUM_SHARDS_STEP_INCREASE	10
 /* The structure for scan per xstream */
@@ -400,6 +420,8 @@ struct rebuild_scan_arg {
 	uint32_t			yield_freq;
 	int32_t				obj_yield_cnt;
 	struct ds_cont_child		*cont_child;
+	struct obj_scanned_arg		os_obj_scanned[CONT_SCANNED_SZ];
+	int				os_idx;
 };
 
 /**
@@ -632,7 +654,7 @@ rebuild_object(struct rebuild_tgt_pool_tracker *rpt, uuid_t co_uuid, daos_unit_o
 
 	if (myrank == target->ta_comp.co_rank && mytarget == target->ta_comp.co_index &&
 	    (shard == oid.id_shard) && rpt->rt_rebuild_op != RB_OP_UPGRADE) {
-		D_DEBUG(DB_REBUILD, DF_UOID" %u/%u already on the target shard\n",
+		D_ERROR(DF_UOID" %u/%u already on the target shard\n",
 			DP_UOID(oid), myrank, mytarget);
 		return 0;
 	}
@@ -645,11 +667,20 @@ rebuild_object(struct rebuild_tgt_pool_tracker *rpt, uuid_t co_uuid, daos_unit_o
 		punched_eph = 0;
 	}
 
-	if (myrank == target->ta_comp.co_rank)
+	if (myrank == target->ta_comp.co_rank) {
+		/* lxz
+		D_ERROR(DF_UOID" %u/%u rebuild local\n",
+			DP_UOID(oid), myrank, mytarget);
+		*/
 		rc = rebuild_object_local(rpt, co_uuid, oid, target->ta_comp.co_index, shard,
 					  eph, punched_eph);
-	else
+	} else {
+		/* lxz
+		D_ERROR(DF_UOID" %u/%u rebuild insert\n",
+			DP_UOID(oid), myrank, mytarget);
+		*/
 		rc = rebuild_object_insert(rpt, co_uuid, oid, tgt, shard, eph, punched_eph);
+	}
 
 	return rc;
 }
@@ -660,6 +691,8 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		    void *data, unsigned *acts)
 {
 	struct rebuild_scan_arg		*arg = data;
+	struct obj_scanned_arg		*os_arg;
+	struct obj_scanned		*os_obj;
 	struct rebuild_tgt_pool_tracker *rpt = arg->rpt;
 	struct pl_map			*map = NULL;
 	struct daos_obj_md		md;
@@ -737,6 +770,24 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		D_ASSERT(0);
 	}
 
+	if (rpt->rt_rebuild_op == RB_OP_REBUILD) {
+		os_arg = &arg->os_obj_scanned[arg->os_idx];
+		D_ASSERTF(os_arg->os_obj_nr < os_arg->os_size, "obj_nr %d, os_size %d\n",
+			  os_arg->os_obj_nr, os_arg->os_size);
+		os_obj = &os_arg->os_objs[os_arg->os_obj_nr];
+		os_obj->os_uoid = oid;
+		os_obj->os_rc = rc;
+		D_ASSERTF(rc <= 4, "rc %d\n", rc);
+		for (i = 0; i < rc; i++) {
+			os_obj->os_tgt[i] = tgts[i];
+			os_obj->os_shard[i] = shards[i];
+		}
+		if (ent->ie_vis_flags & VOS_VIS_FLAG_COVERED)
+			os_obj->os_covered = 1;
+		os_obj->os_epoch = ent->ie_epoch;
+		os_arg->os_obj_nr++;
+	}
+
 	if (rc <= 0) {
 		DL_CDEBUG(rc == 0, DB_REBUILD, DLOG_ERR, rc, DF_UOID " rebuild shards",
 			  DP_UOID(oid));
@@ -796,6 +847,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			  void *data, unsigned *acts)
 {
 	struct rebuild_scan_arg		*arg = data;
+	struct obj_scanned_arg		*os_arg;
 	struct rebuild_tgt_pool_tracker *rpt = arg->rpt;
 	struct dtx_handle		*dth = NULL;
 	vos_iter_param_t		param = { 0 };
@@ -886,6 +938,14 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		}
 	}
 
+	D_ASSERT(arg->os_idx < CONT_SCANNED_SZ);
+	os_arg = &arg->os_obj_scanned[arg->os_idx];
+	uuid_copy(os_arg->os_cont_uuid, entry->ie_couuid);
+	D_ALLOC_ARRAY(os_arg->os_objs, OBJ_SCANNED_SZ);
+	D_ASSERT(os_arg->os_objs != NULL);
+	os_arg->os_obj_nr = 0;
+	os_arg->os_size = OBJ_SCANNED_SZ;
+
 	epoch.oe_value = rpt->rt_stable_epoch;
 	rc = dtx_begin(coh, &dti, &epoch, 0, rpt->rt_rebuild_ver,
 		       &oid, NULL, 0, DTX_IGNORE_UNCOMMITTED, NULL, &dth);
@@ -908,6 +968,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchor,
 			 rebuild_obj_scan_cb, NULL, arg, dth);
+	arg->os_idx++;
 	dtx_end(dth, NULL, rc);
 
 close:
@@ -956,6 +1017,35 @@ is_rebuild_scanning_tgt(struct rebuild_tgt_pool_tracker *rpt)
 	}
 
 	return false;
+}
+
+void
+scanner_dump_obj(struct rebuild_scan_arg *arg)
+{
+	struct obj_scanned_arg	*os_arg;
+	struct obj_scanned	*os_obj;
+	int			 i, j;
+
+	D_ERROR("arg->os_idx %d\n", arg->os_idx);
+	for (i = 0; i < arg->os_idx; i++) {
+		os_arg = &arg->os_obj_scanned[i];
+		D_ERROR("scanned %d obj for cont "DF_UUID"\n",
+			os_arg->os_obj_nr, DP_UUID(os_arg->os_cont_uuid));
+		for (j = 0; j < os_arg->os_obj_nr; j++) {
+			os_obj = &os_arg->os_objs[j];
+			D_ERROR(DF_UOID" covered %d, epoch "DF_X64
+				", rc %d, %u/%u, %u/%u, %u/%u, %u/%u.\n",
+				DP_UOID(os_obj->os_uoid), os_obj->os_covered,
+				os_obj->os_epoch, os_obj->os_rc,
+				os_obj->os_shard[0], os_obj->os_tgt[0],
+				os_obj->os_shard[1], os_obj->os_tgt[1],
+				os_obj->os_shard[2], os_obj->os_tgt[2],
+				os_obj->os_shard[3], os_obj->os_tgt[3]);
+			if (j > 0 && j % 10 == 0)
+				dss_sleep(0);
+		}
+		D_FREE(os_arg->os_objs);
+	}
 }
 
 int
@@ -1022,6 +1112,7 @@ rebuild_scanner(void *data)
 	arg.obj_yield_cnt = SCAN_OBJ_YIELD_CNT;
 	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
 			 rebuild_container_scan_cb, NULL, &arg, NULL);
+	scanner_dump_obj(&arg);
 	if (rc < 0)
 		D_GOTO(put, rc);
 	rc = 0; /* rc might be 1 if rebuild is aborted */
@@ -1051,7 +1142,7 @@ rebuild_scan_leader(void *data)
 	struct rebuild_pool_tls	  *tls;
 	int			   rc;
 
-	D_DEBUG(DB_REBUILD, DF_UUID "check resync %u/%u < %u\n",
+	D_ERROR(DF_UUID "check resync %u/%u < %u\n",
 		DP_UUID(rpt->rt_pool_uuid), rpt->rt_pool->sp_dtx_resync_version,
 		rpt->rt_global_dtx_resync_version, rpt->rt_rebuild_ver);
 
@@ -1074,7 +1165,7 @@ rebuild_scan_leader(void *data)
 		}
 	}
 
-	D_DEBUG(DB_REBUILD, "rebuild scan collective "DF_UUID" begin.\n",
+	D_ERROR("rebuild scan collective "DF_UUID" begin.\n",
 		DP_UUID(rpt->rt_pool_uuid));
 
 	rc = ds_pool_thread_collective(rpt->rt_pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |

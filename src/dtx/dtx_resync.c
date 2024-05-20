@@ -797,7 +797,7 @@ dtx_resync_ult(void *data)
 			arg->version);
 		D_GOTO(out_put, rc);
 	}
-	D_DEBUG(DB_MD, DF_UUID" update dtx resync version %u->%u\n",
+	D_ERROR(DF_UUID" update dtx resync version %u->%u\n",
 		DP_UUID(arg->pool_uuid), pool->sp_dtx_resync_version,
 		arg->version);
 
