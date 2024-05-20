@@ -3,7 +3,7 @@ server_manager:
 hosts:
   test_servers: 3
   test_clients: 1
-timeout: 2400
+timeout: 5400
 setup:
   start_servers_once: false
 skip_add_log_msg: true
@@ -36,7 +36,7 @@ pool:
   nvme_size: 108000000000
   svcn: 4
   control_method: dmg
-  rebuild_timeout: 240
+  rebuild_timeout: 1800
   properties: scrub:timed
 container:
   type: POSIX
@@ -59,6 +59,10 @@ ior:
   clientslots:
     slots: 48
   test_file: /testFile
+  env_vars:
+    - D_LOG_MASK=DEBUG,MEM=ERR,RPC=ERR,BULK=ERR,HG=ERR,GRP=ERR
+    - DD_MASK=all
+    - D_LOG_FLUSH=DEBUG
   repetitions: 1
   dfs_destroy: false
   iorflags:
