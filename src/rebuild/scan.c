@@ -66,10 +66,12 @@ rebuild_obj_fill_buf(daos_handle_t ih, d_iov_t *key_iov,
 	shards[count] = obj_val->shard;
 	arg->count++;
 
-	D_DEBUG(DB_REBUILD, "send oid/con "DF_UOID"/"DF_UUID" ephs "DF_U64
+	/* lxz
+	D_ERROR("send oid/con "DF_UOID"/"DF_UUID" ephs "DF_X64
 		"shard %d cnt %d tgt_id %d\n", DP_UOID(oids[count]),
 		DP_UUID(arg->cont_uuid), obj_val->eph, shards[count],
 		arg->count, arg->tgt_id);
+	*/
 
 	rc = dbtree_iter_delete(ih, NULL);
 	if (rc != 0)
@@ -109,7 +111,8 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 	if (daos_fail_check(DAOS_REBUILD_TGT_SEND_OBJS_FAIL))
 		D_GOTO(out, rc = -DER_IO);
 
-	D_DEBUG(DB_REBUILD, "send rebuild objects "DF_UUID" to tgt %d"
+	if (0) /* lxz */
+	D_ERROR("send rebuild objects "DF_UUID" to tgt %d"
 		" cnt %d stable epoch "DF_U64"\n", DP_UUID(rpt->rt_pool_uuid), arg->tgt_id,
 		arg->count, rpt->rt_stable_epoch);
 	while (1) {
@@ -129,7 +132,7 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 			break;
 
 		/* otherwise let's retry */
-		D_DEBUG(DB_REBUILD, DF_UUID" retry send object to tgt_id %d\n",
+		D_ERROR(DF_UUID" retry send object to tgt_id %d\n",
 			DP_UUID(rpt->rt_pool_uuid), arg->tgt_id);
 		dss_sleep(daos_rpc_rand_delay(max_delay) << 10);
 	}
@@ -314,7 +317,8 @@ rebuild_objects_send_ult(void *data)
 		dss_sleep(0);
 	}
 
-	D_DEBUG(DB_REBUILD, DF_UUID"/%d objects send finish\n",
+	if (0) /* lxz */
+	D_ERROR(DF_UUID"/%d objects send finish\n",
 		DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver);
 out:
 	if (oids != NULL)
@@ -381,7 +385,8 @@ rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt, uuid_t co_uuid,
 			DP_UUID(co_uuid), DP_UOID(oid), tgt_id);
 		rc = 0;
 	} else {
-		D_DEBUG(DB_REBUILD, "insert "DF_UOID"/"DF_UUID" tgt %u "DF_U64"/"DF_U64": "
+		if (0) /* lxz*/
+		D_ERROR("insert "DF_UOID"/"DF_UUID" tgt %u "DF_U64"/"DF_U64": "
 			DF_RC"\n", DP_UOID(oid), DP_UUID(co_uuid), tgt_id, epoch,
 			punched_epoch, DP_RC(rc));
 	}
@@ -632,7 +637,7 @@ rebuild_object(struct rebuild_tgt_pool_tracker *rpt, uuid_t co_uuid, daos_unit_o
 
 	if (myrank == target->ta_comp.co_rank && mytarget == target->ta_comp.co_index &&
 	    (shard == oid.id_shard) && rpt->rt_rebuild_op != RB_OP_UPGRADE) {
-		D_DEBUG(DB_REBUILD, DF_UOID" %u/%u already on the target shard\n",
+		D_ERROR(DF_UOID" %u/%u already on the target shard\n",
 			DP_UOID(oid), myrank, mytarget);
 		return 0;
 	}
@@ -645,11 +650,20 @@ rebuild_object(struct rebuild_tgt_pool_tracker *rpt, uuid_t co_uuid, daos_unit_o
 		punched_eph = 0;
 	}
 
-	if (myrank == target->ta_comp.co_rank)
+	if (myrank == target->ta_comp.co_rank) {
+		/* lxz
+		D_ERROR(DF_UOID" %u/%u rebuild local\n",
+			DP_UOID(oid), myrank, mytarget);
+		*/
 		rc = rebuild_object_local(rpt, co_uuid, oid, target->ta_comp.co_index, shard,
 					  eph, punched_eph);
-	else
+	} else {
+		/* lxz
+		D_ERROR(DF_UOID" %u/%u rebuild insert\n",
+			DP_UOID(oid), myrank, mytarget);
+		*/
 		rc = rebuild_object_insert(rpt, co_uuid, oid, tgt, shard, eph, punched_eph);
+	}
 
 	return rc;
 }
@@ -738,16 +752,17 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	}
 
 	if (rc <= 0) {
-		DL_CDEBUG(rc == 0, DB_REBUILD, DLOG_ERR, rc, DF_UOID " rebuild shards",
-			  DP_UOID(oid));
+		D_ERROR(DF_UOID " rebuild checked layout, rc %d\n", DP_UOID(oid), rc);
 		D_GOTO(out, rc);
 	}
 
-	D_DEBUG(DB_REBUILD, "rebuild obj "DF_UOID" rebuild_nr %d\n", DP_UOID(oid), rc);
+	/* lxz
+	D_ERROR("rebuild obj "DF_UOID" rebuild_nr %d\n", DP_UOID(oid), rc);
+	*/
 	rebuild_nr = rc;
 	rc = 0;
 	for (i = 0; i < rebuild_nr; i++) {
-		D_DEBUG(DB_REBUILD, "rebuild obj "DF_UOID"/"DF_UUID"/"DF_UUID
+		D_ERROR("rebuild obj "DF_UOID"/"DF_UUID"/"DF_UUID
 			"on %d for shard %d eph "DF_U64" visible %s\n", DP_UOID(oid),
 			DP_UUID(rpt->rt_pool_uuid), DP_UUID(arg->co_uuid),
 			tgts[i], shards[i], ent->ie_epoch,
@@ -755,7 +770,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 
 		/* Ignore the shard if it is not in the same group of failure shard */
 		if ((int)tgts[i] == -1 || oid.id_shard / grp_size != shards[i] / grp_size) {
-			D_DEBUG(DB_REBUILD, "i %d stale object "DF_UOID" shards %u grp_size %u tgt %d\n",
+			D_ERROR("i %d stale object "DF_UOID" shards %u grp_size %u tgt %d\n",
 				i, DP_UOID(oid), shards[i], grp_size, (int)tgts[i]);
 			continue;
 		}
@@ -1051,7 +1066,7 @@ rebuild_scan_leader(void *data)
 	struct rebuild_pool_tls	  *tls;
 	int			   rc;
 
-	D_DEBUG(DB_REBUILD, DF_UUID "check resync %u/%u < %u\n",
+	D_ERROR(DF_UUID "check resync %u/%u < %u\n",
 		DP_UUID(rpt->rt_pool_uuid), rpt->rt_pool->sp_dtx_resync_version,
 		rpt->rt_global_dtx_resync_version, rpt->rt_rebuild_ver);
 
@@ -1074,7 +1089,7 @@ rebuild_scan_leader(void *data)
 		}
 	}
 
-	D_DEBUG(DB_REBUILD, "rebuild scan collective "DF_UUID" begin.\n",
+	D_ERROR("rebuild scan collective "DF_UUID" begin.\n",
 		DP_UUID(rpt->rt_pool_uuid));
 
 	rc = ds_pool_thread_collective(rpt->rt_pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |

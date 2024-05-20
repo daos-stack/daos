@@ -842,7 +842,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		 * don't log errors in-case of possible conditionals or
 		 * rec2big errors which can be expected.
 		 */
-		if (rc == -DER_REC2BIG || rc == -DER_NONEXIST || rc == -DER_NO_PERM ||
+		if (rc == -DER_REC2BIG || rc == -DER_NO_PERM ||
 		    rc == -DER_EXIST || rc == -DER_RF)
 			D_DEBUG(DB_IO, DF_UOID" rpc %p opc %d to rank %d tag %d: "DF_RC"\n",
 				DP_UOID(orw->orw_oid), rw_args->rpc, opc,
