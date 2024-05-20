@@ -893,7 +893,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 		}
 	}
 
-	D_DEBUG(DB_REBUILD, DF_UOID " mrone %p dkey " DF_KEY " nr %d eph " DF_U64 " fetch %s\n",
+	D_ERROR(DF_UOID " mrone %p dkey " DF_KEY " nr %d eph " DF_U64 " fetch %s\n",
 		DP_UOID(mrone->mo_oid), mrone, DP_KEY(&mrone->mo_dkey), mrone->mo_iod_num,
 		mrone->mo_epoch, fetch ? "yes" : "no");
 
@@ -941,7 +941,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 			continue;
 		}
 
-		D_DEBUG(DB_TRACE, "update start %d cnt %d\n", start, iod_cnt);
+		D_ERROR("update start %d cnt %d\n", start, iod_cnt);
 
 		rc = migrate_csum_calc(csummer, mrone, &iods[start], iod_cnt, &sgls[start],
 				       fetch ? &csum_iov : &mrone->mo_csum_iov,  &iod_csums);
@@ -1266,8 +1266,7 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 		sgls[i].sg_iovs = &iov[i];
 	}
 
-	D_DEBUG(DB_REBUILD,
-		DF_UOID" mrone %p dkey "DF_KEY" nr %d eph "DF_U64"\n",
+	D_ERROR(DF_UOID" mrone %p dkey "DF_KEY" nr %d eph "DF_U64"\n",
 		DP_UOID(mrone->mo_oid), mrone, DP_KEY(&mrone->mo_dkey),
 		mrone->mo_iod_num, mrone->mo_epoch);
 
@@ -1311,8 +1310,7 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 			 * the rebuild and retry.
 			 */
 			rc = -DER_DATA_LOSS;
-			D_DEBUG(DB_REBUILD,
-				DF_UOID" %p dkey "DF_KEY" "DF_KEY" nr %d/%d"
+			D_ERROR(DF_UOID" %p dkey "DF_KEY" "DF_KEY" nr %d/%d"
 				" eph "DF_U64" "DF_RC"\n",
 				DP_UOID(mrone->mo_oid),
 				mrone, DP_KEY(&mrone->mo_dkey),
@@ -1440,8 +1438,7 @@ __migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 		sgl_cnt++;
 	}
 
-	D_DEBUG(DB_REBUILD,
-		DF_UOID" mrone %p dkey "DF_KEY" nr %d eph "DF_X64"/"DF_X64"\n",
+	D_ERROR(DF_UOID" mrone %p dkey "DF_KEY" nr %d eph "DF_X64"/"DF_X64"\n",
 		DP_UOID(mrone->mo_oid), mrone, DP_KEY(&mrone->mo_dkey),
 		iod_num, mrone->mo_epoch, update_eph);
 
@@ -2046,7 +2043,7 @@ migrate_one_ult(void *arg)
 	rc = migrate_dkey(tls, mrone, data_size);
 	tls->mpt_inflight_size -= data_size;
 
-	D_DEBUG(DB_REBUILD, DF_UOID" layout %u migrate dkey "DF_KEY" inflight_size "DF_U64": "
+	D_ERROR(DF_UOID" layout %u migrate dkey "DF_KEY" inflight_size "DF_U64": "
 		DF_RC"\n", DP_UOID(mrone->mo_oid), mrone->mo_oid.id_layout_ver,
 		DP_KEY(&mrone->mo_dkey), tls->mpt_inflight_size, DP_RC(rc));
 
@@ -2586,7 +2583,7 @@ migrate_one_create(struct enum_unpack_arg *arg, struct dc_obj_enum_unpack_io *io
 			D_GOTO(free, rc);
 	}
 
-	D_DEBUG(DB_REBUILD, DF_UOID" %p dkey "DF_KEY" migrate on idx %d iod_num %d min eph "DF_U64
+	D_ERROR(DF_UOID" %p dkey "DF_KEY" migrate on idx %d iod_num %d min eph "DF_U64
 		" ver %u\n", DP_UOID(mrone->mo_oid), mrone, DP_KEY(dkey), iter_arg->tgt_idx,
 		mrone->mo_iod_num, mrone->mo_min_epoch, version);
 
@@ -2763,7 +2760,7 @@ migrate_obj_punch_one(void *data)
 		D_GOTO(put, rc = 0);
 	}
 
-	D_DEBUG(DB_REBUILD, "tls %p "DF_UUID" version %d punch "DF_U64" "DF_UOID"\n",
+	D_ERROR("tls %p "DF_UUID" version %d punch "DF_U64" "DF_UOID"\n",
 		tls, DP_UUID(tls->mpt_pool_uuid), arg->version, arg->punched_epoch,
 		DP_UOID(arg->oid));
 
@@ -2861,12 +2858,12 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 	uint32_t		 num;
 	int			 rc = 0;
 
-	D_DEBUG(DB_REBUILD, "migrate obj "DF_UOID" for shard %u eph "
+	D_ERROR("migrate obj "DF_UOID" for shard %u eph "
 		DF_X64"-"DF_X64"\n", DP_UOID(arg->oid), arg->shard, epr->epr_lo,
 		epr->epr_hi);
 
 	if (tls->mpt_fini) {
-		D_DEBUG(DB_REBUILD, DF_UUID "migration is aborted.\n",
+		D_ERROR(DF_UUID "migration is aborted.\n",
 			DP_UUID(tls->mpt_pool_uuid));
 		return 0;
 	}
@@ -2965,7 +2962,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 				     &dkey_anchor, &akey_anchor, p_csum);
 
 		if (rc == -DER_KEY2BIG) {
-			D_DEBUG(DB_REBUILD, "migrate obj "DF_UOID" got "
+			D_ERROR("migrate obj "DF_UOID" got "
 				"-DER_KEY2BIG, key_len "DF_U64"\n",
 				DP_UOID(arg->oid), kds[0].kd_key_len);
 			/* For EC parity migration, it will enumerate from all data
@@ -2988,7 +2985,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 			continue;
 		} else if (rc == -DER_TRUNC && p_csum != NULL &&
 			   p_csum->iov_len > p_csum->iov_buf_len) {
-			D_DEBUG(DB_REBUILD, "migrate obj csum buf "
+			D_ERROR("migrate obj csum buf "
 				"not large enough. Increase and try again");
 			if (p_csum->iov_buf != stack_csum_buf)
 				D_FREE(p_csum->iov_buf);
@@ -3005,7 +3002,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 			   daos_anchor_get_flags(&dkey_anchor) & DIOF_TO_LEADER) {
 			if (rc != -DER_INPROGRESS) {
 				enum_flags &= ~DIOF_TO_LEADER;
-				D_DEBUG(DB_REBUILD, "retry to non leader "
+				D_ERROR("retry to non leader "
 					DF_UOID": "DF_RC"\n",
 					DP_UOID(arg->oid), DP_RC(rc));
 			} else {
@@ -3014,7 +3011,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 				 * uncommitted records, or it will choose a new leader
 				 * once the pool map is updated.
 				 */
-				D_DEBUG(DB_REBUILD, "retry leader "DF_UOID"\n",
+				D_ERROR("retry leader "DF_UOID"\n",
 					DP_UOID(arg->oid));
 			}
 			continue;
@@ -3022,7 +3019,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 			/* -DER_UPDATE_AGAIN means the remote target does not parse EC
 			 * aggregation yet, so let's retry.
 			 */
-			D_DEBUG(DB_REBUILD, DF_UOID "retry with %d \n", DP_UOID(arg->oid), rc);
+			D_ERROR(DF_UOID "retry with %d \n", DP_UOID(arg->oid), rc);
 			rc = 0;
 			continue;
 		} else if (rc) {
@@ -3031,7 +3028,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 			 */
 			if (rc == -DER_TIMEDOUT &&
 			    tls->mpt_version + 1 >= tls->mpt_pool->spc_map_version) {
-				D_WARN(DF_UUID" retry "DF_UOID" "DF_RC"\n",
+				D_ERROR(DF_UUID" retry "DF_UOID" "DF_RC"\n",
 				       DP_UUID(tls->mpt_pool_uuid), DP_UOID(arg->oid),
 				       DP_RC(rc));
 				rc = 0;
@@ -3049,18 +3046,18 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 			 * -DER_NONEXIST, see obj_ioc_init().
 			 */
 			if (rc == -DER_DATA_LOSS || rc == -DER_NONEXIST) {
-				D_WARN("No replicas for "DF_UOID" %d\n", DP_UOID(arg->oid), rc);
+				D_ERROR("No replicas for "DF_UOID" %d\n", DP_UOID(arg->oid), rc);
 				num = 0;
 				rc = 0;
 			}
-			D_DEBUG(DB_REBUILD, "Can not rebuild "DF_UOID" "DF_RC" mpt %u spc %u\n",
+			D_ERROR("Can not rebuild "DF_UOID" "DF_RC" mpt %u spc %u\n",
 				DP_UOID(arg->oid), DP_RC(rc), tls->mpt_version, tls->mpt_pool->spc_map_version);
 			break;
 		}
 
 		/* Each object enumeration RPC will at least one OID */
 		if (num <= minimum_nr && (enum_flags & DIOF_TO_SPEC_GROUP)) {
-			D_DEBUG(DB_REBUILD, "enumeration buffer %u empty"
+			D_ERROR("enumeration buffer %u empty"
 				DF_UOID"\n", num, DP_UOID(arg->oid));
 			break;
 		}
@@ -3097,7 +3094,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 out_obj:
 	dsc_obj_close(oh);
 out:
-	D_DEBUG(DB_REBUILD, "obj "DF_UOID" for shard %u eph "
+	D_ERROR("obj "DF_UOID" for shard %u eph "
 		DF_U64"-"DF_U64": "DF_RC"\n", DP_UOID(arg->oid), arg->shard,
 		epr->epr_lo, epr->epr_hi, DP_RC(rc));
 
@@ -3247,8 +3244,8 @@ migrate_obj_ult(void *data)
 	for (i = 0; i < arg->snap_cnt; i++) {
 		epr.epr_lo = i > 0 ? arg->snaps[i - 1] + 1 : 0;
 		epr.epr_hi = arg->snaps[i];
-		D_DEBUG(DB_REBUILD, "rebuild_snap %d "DF_X64"-"DF_X64"\n",
-			i, epr.epr_lo, epr.epr_hi);
+		D_ERROR(DF_UOID" rebuild_snap %d "DF_X64"-"DF_X64"\n",
+			DP_UOID(arg->oid), i, epr.epr_lo, epr.epr_hi);
 		rc = migrate_one_epoch_object(&epr, tls, arg);
 		if (rc)
 			D_GOTO(free, rc);
@@ -3264,10 +3261,12 @@ migrate_obj_ult(void *data)
 	D_ASSERT(tls->mpt_max_eph != 0);
 	epr.epr_hi = tls->mpt_max_eph;
 	if (arg->epoch > 0) {
+		D_ERROR(DF_UOID" rebuild "DF_X64"-"DF_X64"\n", DP_UOID(arg->oid),
+			epr.epr_lo, epr.epr_hi);
 		rc = migrate_one_epoch_object(&epr, tls, arg);
 	} else {
 		/* The obj has been punched for this range */
-		D_DEBUG(DB_REBUILD, "punched obj "DF_UOID" epoch"
+		D_ERROR("punched obj "DF_UOID" epoch"
 			" "DF_U64"/"DF_U64"/"DF_U64"\n", DP_UOID(arg->oid),
 			arg->epoch, arg->punched_epoch, epr.epr_hi);
 		arg->epoch = DAOS_EPOCH_MAX;

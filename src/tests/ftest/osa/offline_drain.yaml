@@ -42,7 +42,7 @@ container:
   type: POSIX
   control_method: daos
   oclass: RP_3G6
-  properties: cksum:crc64,cksum_size:16384,srv_cksum:on,rd_fac:2
+  properties: rd_fac:2
 dkeys:
   single:
     no_of_dkeys:
@@ -59,6 +59,10 @@ ior:
   clientslots:
     slots: 48
   test_file: /testFile
+  env_vars:
+    - D_LOG_MASK=DEBUG,MEM=ERR,RPC=ERR,BULK=ERR,HG=ERR,GRP=ERR
+    - DD_MASK=all
+    - D_LOG_FLUSH=DEBUG
   repetitions: 1
   dfs_destroy: false
   iorflags:
