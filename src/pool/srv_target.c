@@ -715,6 +715,42 @@ retry:
 	return 0;
 }
 
+static void
+pool_child_delete_all(struct ds_pool *pool)
+{
+	int rc;
+
+	rc = ds_pool_thread_collective(pool->sp_uuid, 0, pool_child_delete_one, pool->sp_uuid, 0);
+	if (rc == 0)
+		D_INFO(DF_UUID ": deleted\n", DP_UUID(pool->sp_uuid));
+	else if (rc == -DER_CANCELED)
+		D_INFO(DF_UUID ": no ESs\n", DP_UUID(pool->sp_uuid));
+	else
+		DL_ERROR(rc, DF_UUID ": failed to delete ES pool caches", DP_UUID(pool->sp_uuid));
+}
+
+static int
+pool_child_add_all(struct ds_pool *pool)
+{
+	struct pool_child_lookup_arg collective_arg = {
+		.pla_pool		= pool,
+		.pla_uuid		= pool->sp_uuid,
+		.pla_map_version	= pool->sp_map_version
+	};
+	int rc;
+
+	rc = ds_pool_thread_collective(pool->sp_uuid, 0, pool_child_add_one, &collective_arg,
+				       DSS_ULT_DEEP_STACK);
+	if (rc == 0) {
+		D_INFO(DF_UUID ": added\n", DP_UUID(pool->sp_uuid));
+	} else {
+		DL_ERROR(rc, DF_UUID ": failed to add ES pool caches", DP_UUID(pool->sp_uuid));
+		pool_child_delete_all(pool);
+		return rc;
+	}
+	return 0;
+}
+
 /* ds_pool ********************************************************************/
 
 static struct daos_lru_cache   *pool_cache;
@@ -735,7 +771,6 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 {
 	struct ds_pool_create_arg      *arg = varg;
 	struct ds_pool		       *pool;
-	struct pool_child_lookup_arg	collective_arg;
 	char				group_id[DAOS_UUID_STR_SIZE];
 	struct dss_module_info	       *info = dss_get_module_info();
 	unsigned int			iv_ns_id;
@@ -807,22 +842,9 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 		goto err_group;
 	}
 
-	collective_arg.pla_pool = pool;
-	collective_arg.pla_uuid = key;
-	collective_arg.pla_map_version = arg->pca_map_version;
-	rc = ds_pool_thread_collective(pool->sp_uuid, 0, pool_child_add_one,
-				       &collective_arg, DSS_ULT_DEEP_STACK);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to add ES pool caches: "DF_RC"\n",
-			DP_UUID(key), DP_RC(rc));
-		goto err_iv_ns;
-	}
-
 	*link = &pool->sp_entry;
 	return 0;
 
-err_iv_ns:
-	ds_iv_ns_put(pool->sp_iv_ns);
 err_group:
 	rc_tmp = crt_group_secondary_destroy(pool->sp_group);
 	if (rc_tmp != 0)
@@ -1148,13 +1170,17 @@ ds_pool_start(uuid_t uuid, bool aft_chk)
 	else
 		pool->sp_cr_checked = 0;
 
+	rc = pool_child_add_all(pool);
+	if (rc != 0)
+		goto failure_pool;
+
 	if (!ds_pool_skip_for_check(pool)) {
 		rc = dss_ult_create(pool_fetch_hdls_ult, pool, DSS_XS_SYS, 0,
 				    DSS_DEEP_STACK_SZ, NULL);
 		if (rc != 0) {
 			D_ERROR(DF_UUID": failed to create fetch ult: "DF_RC"\n",
 				DP_UUID(uuid), DP_RC(rc));
-			D_GOTO(failure_pool, rc);
+			goto failure_children;
 		}
 
 		pool->sp_fetch_hdls = 1;
@@ -1173,6 +1199,8 @@ ds_pool_start(uuid_t uuid, bool aft_chk)
 
 failure_ult:
 	pool_fetch_hdls_ult_abort(pool);
+failure_children:
+	pool_child_delete_all(pool);
 failure_pool:
 	ds_pool_put(pool);
 	return rc;
@@ -1197,20 +1225,6 @@ pool_tgt_disconnect_all(struct ds_pool *pool)
 		pool_tgt_disconnect(hdl);
 		ds_pool_hdl_put(hdl);
 	}
-}
-
-static void
-pool_stop_children(struct ds_pool *pool)
-{
-	int rc;
-
-	rc = ds_pool_thread_collective(pool->sp_uuid, 0, pool_child_delete_one, pool->sp_uuid, 0);
-	if (rc == 0)
-		D_INFO(DF_UUID": stopped\n", DP_UUID(pool->sp_uuid));
-	else if (rc == -DER_CANCELED)
-		D_INFO(DF_UUID ": no ESs\n", DP_UUID(pool->sp_uuid));
-	else
-		DL_ERROR(rc, DF_UUID ": failed to delete ES pool caches", DP_UUID(pool->sp_uuid));
 }
 
 /*
@@ -1248,7 +1262,7 @@ ds_pool_stop(uuid_t uuid)
 	ds_rebuild_abort(pool->sp_uuid, -1, -1, -1);
 	ds_migrate_stop(pool, -1, -1);
 
-	pool_stop_children(pool);
+	pool_child_delete_all(pool);
 
 	ds_pool_put(pool); /* held by ds_pool_start */
 	ds_pool_put(pool);
