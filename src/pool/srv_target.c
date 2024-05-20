@@ -1856,19 +1856,20 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		struct dtx_scan_args	*arg;
 		int ret;
 
-		/* Since the map has been updated successfully, so let's
-		 * ignore the dtx resync failure for now.
-		 */
+		if (ds_pool_skip_for_check(pool))
+			D_GOTO(out, rc = 0);
+
 		D_ALLOC_PTR(arg);
 		if (arg == NULL)
-			D_GOTO(out, rc);
+			D_GOTO(out, rc = -DER_NOMEM);
 
 		uuid_copy(arg->pool_uuid, pool->sp_uuid);
 		arg->version = pool->sp_map_version;
 		ret = dss_ult_create(dtx_resync_ult, arg, DSS_XS_SYS,
 				     0, 0, NULL);
 		if (ret) {
-			D_ERROR("dtx_resync_ult failure %d\n", ret);
+			/* Ignore DTX resync failure that is not fatal. */
+			D_WARN("dtx_resync_ult failure %d\n", ret);
 			D_FREE(arg);
 		}
 	} else {

@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -114,6 +114,7 @@ class PosixSimul(TestWithServers):
         elif exclude and not include:
             cmd = "{0} -vv -d {1} -e {2}".format(simul_cmd, dfuse.mount_dir.value, exclude)
         else:
+            cmd = None  # appease pylint
             self.fail("##Both include and exclude tests are selected both or empty.")
 
         self.log_step("Running simul on %s", mpi_type)
