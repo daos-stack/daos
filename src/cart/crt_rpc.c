@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -346,8 +346,7 @@ crt_register_proto_fi(crt_endpoint_t *ep)
 	if (rc != 0)
 		return -DER_MISC;
 
-	rc = crt_proto_query(ep, cpf.cpf_base, &cpf.cpf_ver,
-			     1, crt_pfi_cb, &pfi);
+	rc = crt_proto_query(ep, cpf.cpf_base, &cpf.cpf_ver, 1, 0, crt_pfi_cb, &pfi);
 	if (rc != -DER_SUCCESS)
 		D_GOTO(out, rc);
 
@@ -386,8 +385,7 @@ crt_register_proto_ctl(crt_endpoint_t *ep)
 	if (rc != 0)
 		return -DER_MISC;
 
-	rc = crt_proto_query(ep, cpf.cpf_base, &cpf.cpf_ver,
-			     1, crt_pfi_cb, &pfi);
+	rc = crt_proto_query(ep, cpf.cpf_base, &cpf.cpf_ver, 1, 0, crt_pfi_cb, &pfi);
 	if (rc != -DER_SUCCESS)
 		D_GOTO(out, rc);
 

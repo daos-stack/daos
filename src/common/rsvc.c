@@ -91,7 +91,7 @@ rsvc_client_choose(struct rsvc_client *client, crt_endpoint_t *ep)
 		chosen = client->sc_leader_index;
 	} else {
 		if (client->sc_next < 0)
-			client->sc_next = d_randn(client->sc_ranks->rl_nr);
+			client->sc_next = d_rand() % client->sc_ranks->rl_nr;
 		chosen = client->sc_next;
 		/* The hintless search is a round robin of all replicas. */
 		client->sc_next++;
@@ -148,7 +148,7 @@ rsvc_client_process_error(struct rsvc_client *client, int rc,
 			 * search.
 			 */
 			D_DEBUG(DB_MD, "give up leader rank %u\n", ep->ep_rank);
-			client->sc_next = d_randn(client->sc_ranks->rl_nr);
+			client->sc_next = d_rand() % client->sc_ranks->rl_nr;
 			if (client->sc_next == leader_index) {
 				client->sc_next++;
 				client->sc_next %= client->sc_ranks->rl_nr;

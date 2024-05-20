@@ -1827,9 +1827,7 @@ choose_map_refresh_rank(struct map_refresh_arg *arg)
 
 	if (arg->mra_i == -1) {
 		/* Let i be a random integer in [0, n). */
-		i = ((double)rand() / RAND_MAX) * n;
-		if (i == n)
-			i = 0;
+		i = d_rand() % n;
 	} else {
 		/* Continue the round robin. */
 		i = arg->mra_i;

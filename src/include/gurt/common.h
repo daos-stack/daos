@@ -74,7 +74,6 @@ extern "C" {
 
 void d_srand(long int);
 long int d_rand(void);
-long int d_randn(long int n);
 
 /* memory allocating macros */
 void  d_free(void *);
