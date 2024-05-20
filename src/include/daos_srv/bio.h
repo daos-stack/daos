@@ -368,6 +368,7 @@ bio_free_dev_info(struct bio_dev_info *dev_info)
 		D_FREE(dev_info->bdi_ctrlr->fw_rev);
 		D_FREE(dev_info->bdi_ctrlr->vendor_id);
 		D_FREE(dev_info->bdi_ctrlr->pci_type);
+		D_FREE(dev_info->bdi_ctrlr->pci_cfg);
 		D_FREE(dev_info->bdi_ctrlr->nss);
 		D_FREE(dev_info->bdi_ctrlr);
 	}

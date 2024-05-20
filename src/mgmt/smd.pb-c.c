@@ -1502,186 +1502,111 @@ const ProtobufCMessageDescriptor ctl__nvme_controller__namespace__descriptor =
   (ProtobufCMessageInit) ctl__nvme_controller__namespace__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor ctl__nvme_controller__field_descriptors[12] =
-{
-  {
-    "model",
-    1,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__NvmeController, model),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "serial",
-    2,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__NvmeController, serial),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "pci_addr",
-    3,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__NvmeController, pci_addr),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "fw_rev",
-    4,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__NvmeController, fw_rev),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "socket_id",
-    5,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_INT32,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__NvmeController, socket_id),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "health_stats",
-    6,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_MESSAGE,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__NvmeController, health_stats),
-    &ctl__bio_health_resp__descriptor,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "namespaces",
-    7,
-    PROTOBUF_C_LABEL_REPEATED,
-    PROTOBUF_C_TYPE_MESSAGE,
-    offsetof(Ctl__NvmeController, n_namespaces),
-    offsetof(Ctl__NvmeController, namespaces),
-    &ctl__nvme_controller__namespace__descriptor,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "smd_devices",
-    8,
-    PROTOBUF_C_LABEL_REPEATED,
-    PROTOBUF_C_TYPE_MESSAGE,
-    offsetof(Ctl__NvmeController, n_smd_devices),
-    offsetof(Ctl__NvmeController, smd_devices),
-    &ctl__smd_device__descriptor,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "dev_state",
-    9,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_ENUM,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__NvmeController, dev_state),
-    &ctl__nvme_dev_state__descriptor,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "led_state",
-    10,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_ENUM,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__NvmeController, led_state),
-    &ctl__led_state__descriptor,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "pci_dev_type",
-    11,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__NvmeController, pci_dev_type),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "vendor_id",
-    12,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__NvmeController, vendor_id),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
+static const ProtobufCFieldDescriptor ctl__nvme_controller__field_descriptors[13] = {
+    {
+	"model", 1, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0, /* quantifier_offset */
+	offsetof(Ctl__NvmeController, model), NULL, &protobuf_c_empty_string, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"serial", 2, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0, /* quantifier_offset */
+	offsetof(Ctl__NvmeController, serial), NULL, &protobuf_c_empty_string, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"pci_addr", 3, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0, /* quantifier_offset */
+	offsetof(Ctl__NvmeController, pci_addr), NULL, &protobuf_c_empty_string, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"fw_rev", 4, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0, /* quantifier_offset */
+	offsetof(Ctl__NvmeController, fw_rev), NULL, &protobuf_c_empty_string, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"socket_id", 5, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_INT32, 0, /* quantifier_offset */
+	offsetof(Ctl__NvmeController, socket_id), NULL, NULL, 0,         /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"health_stats", 6, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_MESSAGE,
+	0, /* quantifier_offset */
+	offsetof(Ctl__NvmeController, health_stats), &ctl__bio_health_resp__descriptor, NULL,
+	0,            /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"namespaces", 7, PROTOBUF_C_LABEL_REPEATED, PROTOBUF_C_TYPE_MESSAGE,
+	offsetof(Ctl__NvmeController, n_namespaces), offsetof(Ctl__NvmeController, namespaces),
+	&ctl__nvme_controller__namespace__descriptor, NULL, 0, /* flags */
+	0, NULL, NULL                                          /* reserved1,reserved2, etc */
+    },
+    {
+	"smd_devices", 8, PROTOBUF_C_LABEL_REPEATED, PROTOBUF_C_TYPE_MESSAGE,
+	offsetof(Ctl__NvmeController, n_smd_devices), offsetof(Ctl__NvmeController, smd_devices),
+	&ctl__smd_device__descriptor, NULL, 0, /* flags */
+	0, NULL, NULL                          /* reserved1,reserved2, etc */
+    },
+    {
+	"dev_state", 9, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_ENUM, 0, /* quantifier_offset */
+	offsetof(Ctl__NvmeController, dev_state), &ctl__nvme_dev_state__descriptor, NULL,
+	0,            /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"led_state", 10, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_ENUM, 0, /* quantifier_offset */
+	offsetof(Ctl__NvmeController, led_state), &ctl__led_state__descriptor, NULL, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"pci_dev_type", 11, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING,
+	0, /* quantifier_offset */
+	offsetof(Ctl__NvmeController, pci_dev_type), NULL, &protobuf_c_empty_string, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"vendor_id", 12, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0, /* quantifier_offset */
+	offsetof(Ctl__NvmeController, vendor_id), NULL, &protobuf_c_empty_string, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"pci_cfg", 13, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0, /* quantifier_offset */
+	offsetof(Ctl__NvmeController, pci_cfg), NULL, &protobuf_c_empty_string, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
 };
 static const unsigned ctl__nvme_controller__field_indices_by_name[] = {
-  8,   /* field[8] = dev_state */
-  3,   /* field[3] = fw_rev */
-  5,   /* field[5] = health_stats */
-  9,   /* field[9] = led_state */
-  0,   /* field[0] = model */
-  6,   /* field[6] = namespaces */
-  2,   /* field[2] = pci_addr */
-  10,   /* field[10] = pci_dev_type */
-  1,   /* field[1] = serial */
-  7,   /* field[7] = smd_devices */
-  4,   /* field[4] = socket_id */
-  11,   /* field[11] = vendor_id */
+    8,  /* field[8] = dev_state */
+    3,  /* field[3] = fw_rev */
+    5,  /* field[5] = health_stats */
+    9,  /* field[9] = led_state */
+    0,  /* field[0] = model */
+    6,  /* field[6] = namespaces */
+    2,  /* field[2] = pci_addr */
+    12, /* field[12] = pci_cfg */
+    10, /* field[10] = pci_dev_type */
+    1,  /* field[1] = serial */
+    7,  /* field[7] = smd_devices */
+    4,  /* field[4] = socket_id */
+    11, /* field[11] = vendor_id */
 };
-static const ProtobufCIntRange ctl__nvme_controller__number_ranges[1 + 1] =
-{
-  { 1, 0 },
-  { 0, 12 }
-};
-const ProtobufCMessageDescriptor ctl__nvme_controller__descriptor =
-{
-  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "ctl.NvmeController",
-  "NvmeController",
-  "Ctl__NvmeController",
-  "ctl",
-  sizeof(Ctl__NvmeController),
-  12,
-  ctl__nvme_controller__field_descriptors,
-  ctl__nvme_controller__field_indices_by_name,
-  1,  ctl__nvme_controller__number_ranges,
-  (ProtobufCMessageInit) ctl__nvme_controller__init,
-  NULL,NULL,NULL    /* reserved[123] */
+static const ProtobufCIntRange   ctl__nvme_controller__number_ranges[1 + 1] = {{1, 0}, {0, 13}};
+const ProtobufCMessageDescriptor ctl__nvme_controller__descriptor           = {
+    PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+    "ctl.NvmeController",
+    "NvmeController",
+    "Ctl__NvmeController",
+    "ctl",
+    sizeof(Ctl__NvmeController),
+    13,
+    ctl__nvme_controller__field_descriptors,
+    ctl__nvme_controller__field_indices_by_name,
+    1,
+    ctl__nvme_controller__number_ranges,
+    (ProtobufCMessageInit)ctl__nvme_controller__init,
+    NULL,
+    NULL,
+    NULL /* reserved[123] */
 };
 static const ProtobufCFieldDescriptor ctl__smd_device__field_descriptors[14] =
 {

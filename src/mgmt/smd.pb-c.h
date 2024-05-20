@@ -302,11 +302,20 @@ struct  _Ctl__NvmeController
    * controller's vendor ID
    */
   char *vendor_id;
+  /*
+   * PCIe configuration space
+   */
+  char                            *pci_cfg;
 };
-#define CTL__NVME_CONTROLLER__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&ctl__nvme_controller__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, NULL, 0,NULL, 0,NULL, CTL__NVME_DEV_STATE__UNKNOWN, CTL__LED_STATE__NA, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
-
+#define CTL__NVME_CONTROLLER__INIT                                                                 \
+  {                                                                                                \
+	  PROTOBUF_C_MESSAGE_INIT(&ctl__nvme_controller__descriptor)                               \
+	  , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string,                      \
+	      (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, NULL, 0, NULL,  \
+	      0, NULL, CTL__NVME_DEV_STATE__UNKNOWN, CTL__LED_STATE__NA,                           \
+	      (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string,                    \
+	      (char *)protobuf_c_empty_string                                                      \
+  }
 
 /*
  * SmdDevice represents a DAOS BIO device, identified by a UUID written into a label stored on a

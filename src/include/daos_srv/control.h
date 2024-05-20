@@ -137,6 +137,8 @@ struct nvme_ctrlr_t {
 	char                *fw_rev;
 	char                *pci_type;
 	char                *vendor_id;
+	char                *pci_cfg;
+	int                  pci_cfg_sz;
 	int                  socket_id;
 	struct nvme_ns_t    *nss;
 	struct nvme_stats   *stats;

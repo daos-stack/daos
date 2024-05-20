@@ -382,109 +382,43 @@ struct pci_dev_opts {
 	bool                 finished;
 	int                 *socket_id;
 	char               **pci_type;
+	char               **cfg;
+	size_t               cfg_sz;
 	int                  status;
 };
 
-/*
- * Following macros are derived from linux/pci_regs.h, however,
- * we can't simply include that header here, as there is no such
- * file for non-Linux platform.
- */
-#define PCI_CAPABILITY_LIST 0x34
-#define PCI_CAP_ID_VNDR     0x09
-// #define PCI_CAP_ID_MSIX		0x11
-
-/* This is the PCI capability header: */
-struct pci_cap {
-	__u8   cap_vndr;   /* Generic PCI field: PCI_CAP_ID_VNDR */
-	__u8   cap_next;   /* Generic PCI field: next ptr. */
-	__u8   cap_len;    /* Generic PCI field: capability length */
-	__u8   cfg_type;   /* Identifies the structure. */
-	__u8   bar;        /* Where to find it. */
-	__u8   padding[3]; /* Pad to full dword. */
-	__le32 offset;     /* Offset within bar. */
-	__le32 length;     /* Length of the structure, in bytes. */
-};
-
-static int
-read_caps(struct spdk_pci_device *pci_dev)
-{
-	uint8_t        pos;
-	struct pci_cap cap;
-	int            ret;
-
-	D_INFO("trying to read capabilities from pci device\n");
-	ret = spdk_pci_device_cfg_read(pci_dev, &pos, 1, PCI_CAPABILITY_LIST);
-	if (ret < 0) {
-		D_ERROR("failed to read pci capability list\n");
-		return ret;
-	}
-
-	while (pos) {
-		ret = spdk_pci_device_cfg_read(pci_dev, &cap, sizeof(cap), pos);
-		if (ret < 0) {
-			D_ERROR("failed to read pci cap at pos: %" PRIx8 "\n", pos);
-			break;
-		}
-
-		//		if (cap.cap_vndr == PCI_CAP_ID_MSIX) {
-		//			hw->use_msix = 1;
-		//		}
-
-		//		if (cap.cap_vndr != PCI_CAP_ID_VNDR) {
-		//			//D_DEBUG(DB_MGMT,
-		//			D_INFO(
-		//				 "[%2"PRIx8"] skipping non VNDR cap id:
-		//%02"PRIx8"\n", 				 pos, cap.cap_vndr);
-		//goto next;
-		//		}
-
-		// D_DEBUG(DB_MGMT,
-		D_INFO("[%2" PRIx8 "] cfg type: %" PRIu8 ", bar: %" PRIu8 ", offset: %04" PRIx32
-		       ", "
-		       "len: %" PRIu32 "\n",
-		       pos, cap.cfg_type, cap.bar, cap.offset, cap.length);
-
-		//		switch (cap.cfg_type) {
-		//		case VIRTIO_PCI_CAP_COMMON_CFG:
-		//			hw->common_cfg = get_cfg_addr(hw, &cap);
-		//			break;
-		//		case VIRTIO_PCI_CAP_NOTIFY_CFG:
-		//			spdk_pci_device_cfg_read(hw->pci_dev,
-		//&hw->notify_off_multiplier, 						 4, pos +
-		// sizeof(cap)); 			hw->notify_base = get_cfg_addr(hw, &cap);
-		// break; 		case VIRTIO_PCI_CAP_DEVICE_CFG:
-		// hw->dev_cfg
-		// =
-		// get_cfg_addr(hw, &cap); 			break; 		case
-		// VIRTIO_PCI_CAP_ISR_CFG: 			hw->isr = get_cfg_addr(hw, &cap);
-		// break;
-		//		}
-
-		// next:
-		pos = cap.cap_next;
-	}
-	//
-	//	if (hw->common_cfg == NULL || hw->notify_base == NULL ||
-	//	    hw->dev_cfg == NULL    || hw->isr == NULL) {
-	//		SPDK_DEBUGLOG(virtio_pci, "no modern virtio pci device found.\n");
-	//		if (ret < 0) {
-	//			return ret;
-	//		} else {
-	//			return -EINVAL;
-	//		}
-	//	}
-	//
-	//	SPDK_DEBUGLOG(virtio_pci, "found modern virtio pci device.\n");
-	//
-	//	SPDK_DEBUGLOG(virtio_pci, "common cfg mapped at: %p\n", hw->common_cfg);
-	//	SPDK_DEBUGLOG(virtio_pci, "device cfg mapped at: %p\n", hw->dev_cfg);
-	//	SPDK_DEBUGLOG(virtio_pci, "isr cfg mapped at: %p\n", hw->isr);
-	//	SPDK_DEBUGLOG(virtio_pci, "notify base: %p, notify off multiplier: %u\n",
-	//		      hw->notify_base, hw->notify_off_multiplier);
-	//
-	return 0;
-}
+// static int
+// read_caps(struct spdk_pci_device *dev, char *config)
+//{
+//	//struct spdk_json_write_ctx *w;
+//	char config[4096];
+//	//struct spdk_pci_addr addr;
+//	//char config[4096], bdf[32];
+//	int rc;
+//
+//	//addr = spdk_pci_device_get_addr(dev);
+//	//spdk_pci_addr_fmt(bdf, sizeof(bdf), &addr);
+//
+//	rc = spdk_pci_device_cfg_read(dev, config, sizeof(config), 0);
+//	if (rc != 0) {
+//		D_ERROR("Failed to read config space of device\n");
+//		return rc;
+//	}
+//
+//	spdk_json_write_object_begin(w);
+//	//spdk_json_write_named_string(w, "address", bdf);
+//	//spdk_json_write_named_string(w, "type", spdk_pci_device_get_type(dev));
+//
+//	/* Don't write the extended config space if it's all zeroes */
+//	if (spdk_mem_all_zero(&config[256], sizeof(config) - 256)) {
+//		spdk_json_write_named_bytearray(w, "config_space", config, 256);
+//	} else {
+//		spdk_json_write_named_bytearray(w, "config_space", config, sizeof(config));
+//	}
+//
+//	spdk_json_write_object_end(w);
+//	return 0;
+// }
 
 static void
 pci_device_cb(void *ctx, struct spdk_pci_device *pci_device)
@@ -525,10 +459,11 @@ pci_device_cb(void *ctx, struct spdk_pci_device *pci_device)
 		return;
 	}
 
-	rc = read_caps(pci_device);
+	rc = spdk_pci_device_cfg_read(pci_device, *opts->cfg, opts->cfg_sz, 0);
 	if (rc != 0) {
-		D_ERROR("Unable to read capabilities for device (%s)\n", spdk_strerror(-rc));
+		D_ERROR("Failed to read config space of device (%s)\n", spdk_strerror(-rc));
 		opts->status = -DER_INVAL;
+		return;
 	}
 }
 
@@ -537,6 +472,7 @@ fetch_pci_dev_info(struct nvme_ctrlr_t *w_ctrlr, const char *tr_addr)
 {
 	struct pci_dev_opts  opts = {0};
 	struct spdk_pci_addr pci_addr;
+	int                  cfg_buf_sz = 4096;
 	int                  rc;
 
 	rc = spdk_pci_addr_parse(&pci_addr, tr_addr);
@@ -546,13 +482,48 @@ fetch_pci_dev_info(struct nvme_ctrlr_t *w_ctrlr, const char *tr_addr)
 		return -DER_INVAL;
 	}
 
+	D_ALLOC(w_ctrlr->pci_cfg, cfg_buf_sz);
+	if (w_ctrlr->pci_cfg == NULL)
+		return -DER_NOMEM;
+	w_ctrlr->pci_cfg_sz = cfg_buf_sz;
+
 	opts.finished  = false;
 	opts.status    = 0;
 	opts.pci_addr  = pci_addr;
 	opts.socket_id = &w_ctrlr->socket_id;
 	opts.pci_type  = &w_ctrlr->pci_type;
+	opts.cfg       = &w_ctrlr->pci_cfg;
+	opts.cfg_sz    = cfg_buf_sz;
 
 	spdk_pci_for_each_device(&opts, pci_device_cb);
+
+	//	int i;
+	//	char* buf2 = cfg_buf;
+	//	char* endofbuf = cfg_buf + sizeof(cfg_buf);
+	//	for (int i = 0; i < 256; i++)
+	//	{
+	//	/* i use 5 here since we are going to add at most
+	//       3 chars, need a space for the end '\n' and need
+	//       a null terminator */
+	//		if (buf2 + 5 < endofbuf)
+	//		{
+	//			if (i > 0)
+	//			{
+	//				buf2 += sprintf(buf2, ":");
+	//			}
+	//			buf2 += sprintf(buf2, "%02X", cfg_buf[i]);
+	//		}
+	//	}
+	//	buf2 += sprintf(buf2, "\n");
+	D_INFO("device pcie config: %02X %02X %02X %02X\n", w_ctrlr->pci_cfg[0],
+	       w_ctrlr->pci_cfg[1], w_ctrlr->pci_cfg[2], w_ctrlr->pci_cfg[3]);
+	//	int i;
+	//	for (i = 0; i < 256; i++)
+	//	{
+	//		if (i > 0) D_INFO(":");
+	//		D_INFO("%02X", buf[i]);
+	//	}
+	//	D_INFO("\n");
 
 	return opts.status;
 }
@@ -605,7 +576,7 @@ alloc_ctrlr_info(uuid_t dev_id, char *dev_name, struct bio_dev_info *b_info)
 		return rc;
 	}
 
-	/* Fetch socket ID and PCI device type by enumerating spdk_pci_device list */
+	/* Fetch socket ID, PCI device type and config space by enumerating spdk_pci_device list */
 	rc = fetch_pci_dev_info(b_info->bdi_ctrlr, b_info->bdi_traddr);
 	if (rc != 0) {
 		return rc;
