@@ -1,4 +1,4 @@
-# DAOS Version 2.7 Support
+# DAOS Version 2.8 Support
 
 DAOS 2.8 is under active development and has not been released yet.
 The release is planned for late 2023.
