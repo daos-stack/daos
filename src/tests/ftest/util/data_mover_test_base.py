@@ -1010,6 +1010,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         cont2 = self.get_container(pool, oclass=self.ior_cmd.dfs_oclass.value)
 
         # perform various datamover activities
+        daos_path = None
+        read_back_cont = None
+        read_back_pool = None
         if tool == 'CONT_CLONE':
             result = self.run_datamover(
                 self.test_id + " (cont to cont2)",
