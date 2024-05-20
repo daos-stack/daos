@@ -29,10 +29,6 @@ void job_step_update(def value=currentBuild.currentResult) {
     jobStatusUpdate(job_status_internal, env.STAGE_NAME, value)
 }
 
-// Should try to figure this out automatically
-/* groovylint-disable-next-line CompileStatic, VariableName */
-String base_branch = 'master'
-
 // For master, this is just some wildly high number
 next_version = '1000'
 
@@ -56,7 +52,7 @@ pipeline {
 
     triggers {
         /* groovylint-disable-next-line AddEmptyString */
-        cron(env.BRANCH_NAME == 'provider-testing' ? 'TZ=UTC\n0 2 * * 6' : '')
+        cron(env.BRANCH_NAME == 'provider-2.6-testing' ? 'TZ=UTC\n0 12 * * 6' : '')
     }
 
     environment {
@@ -100,7 +96,7 @@ pipeline {
                defaultValue: 'ucx+ud_x',
                description: 'Provider to use for the Functional Hardware Medium/Large stages of this run (i.e. ucx+ud_x, ucx+dc_x)')
         string(name: 'BaseBranch',
-               defaultValue: base_branch,
+               defaultValue: 'release/2.6',
                description: 'The base branch to run testing against (i.e. master, or a PR\'s branch)')
         string(name: 'CI_RPM_TEST_VERSION',
                defaultValue: '',
