@@ -1708,7 +1708,7 @@ free_map(int idx)
 int
 d_get_fd_redirected(int fd)
 {
-	int i, fd_ret = fd;
+	int i, rc, fd_ret = fd;
 
 	if (atomic_load_relaxed(&d_daos_inited) == false)
 		return fd;
@@ -1728,7 +1728,9 @@ d_get_fd_redirected(int fd)
 		}
 	}
 
-	D_MUTEX_LOCK(&lock_fd_dup2ed);
+	rc = pthread_mutex_lock(&lock_fd_dup2ed);
+	if (rc)
+		DS_ERROR(errno, "pthread_mutex_lock failed");
 	if (num_fd_dup2ed > 0) {
 		for (i = 0; i < MAX_FD_DUP2ED; i++) {
 			if (fd_dup2_list[i].fd_src == fd) {
@@ -1737,7 +1739,9 @@ d_get_fd_redirected(int fd)
 			}
 		}
 	}
-	D_MUTEX_UNLOCK(&lock_fd_dup2ed);
+	rc = pthread_mutex_unlock(&lock_fd_dup2ed);
+	if (rc)
+		DS_ERROR(errno, "pthread_mutex_unlock failed");
 
 	return fd_ret;
 }
