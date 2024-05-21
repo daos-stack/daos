@@ -580,6 +580,8 @@ def set_test_environment(logger, test_env=None, servers=None, clients=None, prov
         os.environ["D_LOG_FILE_APPEND_PID"] = "1"
         os.environ["D_LOG_FILE_APPEND_RANK"] = "1"
 
+        os.environ["GORACE"] = "atexit_sleep_ms=100"
+
     # Python paths required for functional testing
     set_python_environment(logger)
 
