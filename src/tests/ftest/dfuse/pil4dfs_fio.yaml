@@ -40,7 +40,6 @@ fio:
   output_format: 'json'
   global:
     direct: 1
-    iodepth: 1
     time_based: 1
     runtime: '60s'
     ramp_time: '5s'
@@ -53,18 +52,39 @@ fio:
   job:
     params: !mux
       256B_fork:
+        pil4dfs_ioengines: ['psync', 'libaio']
         thread: 0
         blocksize: '256B'
         size: '32K'
+        iodepth: 1
       256B_pthread:
+        pil4dfs_ioengines: ['psync', 'libaio']
         thread: 1
         blocksize: '256B'
         size: '32K'
+        iodepth: 1
       1M_fork:
+        pil4dfs_ioengines: ['psync', 'libaio']
         thread: 0
         blocksize: '1M'
         size: '64M'
+        iodepth: 1
       1M_pthread:
+        pil4dfs_ioengines: ['psync', 'libaio']
         thread: 1
         blocksize: '1M'
         size: '64M'
+        iodepth: 1
+      iodepth_fork:
+        pil4dfs_ioengines: ['libaio']
+        thread: 0
+        numjobs: 8
+        blocksize: '4K'
+        size: '512K'
+        iodepth: 16
+      iodepth_thread:
+        pil4dfs_ioengines: ['libaio']
+        thread: 1
+        blocksize: '4K'
+        size: '512K'
+        numjobs: 8
