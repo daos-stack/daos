@@ -3819,8 +3819,6 @@ struct migrate_query_arg {
 	uint32_t                 version;
 	uint32_t                 total_ult_cnt;
 	uint32_t                 generation;
-	d_rank_t                 leader_rank;
-	uint64_t                 leader_term;
 	daos_rebuild_opc_t       rebuild_op;
 	uint32_t                 pad;
 };
@@ -3845,8 +3843,8 @@ migrate_check_one(void *data)
 			      atomic_load(tls->mpt_tgt_dkey_ult_cnt);
 	ABT_mutex_unlock(arg->status_lock);
 	D_DEBUG(DB_REBUILD,
-		DF_RBF " status %d/%d/ ult %u/%u  rec/obj/size " DF_U64 "/" DF_U64 "/" DF_U64 "\n",
-		DP_RBF_MQA(arg), tls->mpt_status, arg->dms.dm_status,
+		DF_RB " status %d/%d/ ult %u/%u  rec/obj/size " DF_U64 "/" DF_U64 "/" DF_U64 "\n",
+		DP_RB_MQA(arg), tls->mpt_status, arg->dms.dm_status,
 		atomic_load(tls->mpt_tgt_obj_ult_cnt), atomic_load(tls->mpt_tgt_dkey_ult_cnt),
 		tls->mpt_rec_count, tls->mpt_obj_count, tls->mpt_size);
 
@@ -3855,8 +3853,7 @@ migrate_check_one(void *data)
 }
 
 int
-ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver, unsigned int generation,
-			daos_rebuild_opc_t op, uint32_t leader_rank, uint64_t leader_term,
+ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver, unsigned int generation, int op,
 			struct ds_migrate_status *dms)
 {
 	struct migrate_query_arg	arg = { 0 };
@@ -3870,8 +3867,6 @@ ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver, unsigned int generation,
 	uuid_copy(arg.pool_uuid, pool_uuid);
 	arg.version = ver;
 	arg.generation = generation;
-	arg.leader_rank = leader_rank;
-	arg.leader_term = leader_term;
 	arg.rebuild_op  = op;
 	rc = ABT_mutex_create(&arg.status_lock);
 	if (rc != ABT_SUCCESS)

@@ -13,6 +13,7 @@
 #include <daos/rpc.h>
 #include <daos/pool.h>
 #include <daos_srv/daos_engine.h>
+#include <daos_srv/object.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/container.h>
 #include <daos_srv/iv.h>
@@ -107,10 +108,8 @@ static void
 rebuild_pool_tls_destroy(struct rebuild_pool_tls *tls)
 {
 	/* log format derived from DF_RB format definition (don't have leader rank, opcode here) */
-	D_DEBUG(DB_REBUILD, "rb=" DF_UUID "/%u/" DF_U64 "/%u/ldr=?/op=? r:t=%u:%d TLS destroy\n",
-		DP_UUID(tls->rebuild_pool_uuid), tls->rebuild_pool_ver,
-		tls->rebuild_pool_leader_term, tls->rebuild_pool_gen, dss_self_rank(),
-		dss_get_module_info()->dmi_tgt_id);
+	D_DEBUG(DB_REBUILD, DF_UUID "/%u/%u/op=? TLS destroy\n", DP_UUID(tls->rebuild_pool_uuid),
+		tls->rebuild_pool_ver, tls->rebuild_pool_gen);
 	if (daos_handle_is_valid(tls->rebuild_tree_hdl))
 		rebuild_obj_tree_destroy(tls->rebuild_tree_hdl);
 	d_list_del(&tls->rebuild_pool_list);
@@ -425,8 +424,7 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 
 	if (rpt->rt_rebuild_op != RB_OP_RECLAIM && rpt->rt_rebuild_op != RB_OP_FAIL_RECLAIM) {
 		rc = ds_migrate_query_status(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
-					     rpt->rt_rebuild_gen, rpt->rt_rebuild_op,
-					     rpt->rt_leader_rank, rpt->rt_leader_term, &dms);
+					     rpt->rt_rebuild_gen, rpt->rt_rebuild_op, &dms);
 		if (rc)
 			D_GOTO(out, rc);
 	}
@@ -884,7 +882,7 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 	int	rc = 0;
 
 	D_DEBUG(DB_REBUILD, DF_RB " create rebuild iv\n", DP_UUID(pool->sp_uuid), rebuild_ver,
-		leader_term, rebuild_gen, dss_self_rank(), RB_OP_STR(rebuild_op));
+		rebuild_gen, RB_OP_STR(rebuild_op));
 
 	if (rebuild_op == RB_OP_UPGRADE || rebuild_op == RB_OP_RECLAIM ||
 	    rebuild_op == RB_OP_FAIL_RECLAIM) {
@@ -929,8 +927,8 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 							leader_term, reclaim_eph, rebuild_op, rgt);
 		if (ret) {
 			DL_ERROR(rc, DF_RB " rebuild_global_pool_tracker create failed",
-				 DP_UUID(pool->sp_uuid), rebuild_ver, leader_term, rebuild_gen,
-				 dss_self_rank(), RB_OP_STR(rebuild_op));
+				 DP_UUID(pool->sp_uuid), rebuild_ver, rebuild_gen,
+				 RB_OP_STR(rebuild_op));
 			rc = ret;
 		}
 	}

@@ -36,35 +36,34 @@ typedef enum {
 			  "Unknown")
 
 /* Common rebuild identifying information for INFO/DEBUG logging:
- * rb=<pool_uuid>/<rebuild_ver>/<term>/<rebuild_gen>/<ldr_engine_rank>/<opstring>
+ * rb=<pool_uuid>/<rebuild_ver>/<rebuild_gen>/<opstring>
  */
-#define DF_RB  "rb=" DF_UUID "/%u/" DF_U64 "/%u/%u/%s"
+#define DF_RB  "rb=" DF_UUID "/%u/%u/%s"
 
-/* Full rebuild identifying information includes engine_rank:tgt_id */
-#define DF_RBF DF_RB " r:t=%u:%d"
+/* Full rebuild identifying information includes <term>/<rebuild_gen> */
+#define DF_RBF DF_RB " "DF_U64"/%u"
 
 /* arguments for log rebuild identifier given a struct rebuild_global_pool_tracker * */
 #define DP_RB_RGT(rgt)                                                                             \
-	DP_UUID((rgt)->rgt_pool_uuid), (rgt)->rgt_rebuild_ver, (rgt)->rgt_leader_term,             \
-	    (rgt)->rgt_rebuild_gen, dss_self_rank(), RB_OP_STR((rgt)->rgt_opc)
+	DP_UUID((rgt)->rgt_pool_uuid), (rgt)->rgt_rebuild_ver, (rgt)->rgt_rebuild_gen,             \
+	    RB_OP_STR((rgt)->rgt_opc)
 
 /* arguments for log rebuild identifier given a struct rebuild_tgt_pool_tracker *rpt */
 #define DP_RB_RPT(rpt)                                                                             \
-	DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver, rpt->rt_leader_term, rpt->rt_rebuild_gen, \
-	    rpt->rt_leader_rank, RB_OP_STR(rpt->rt_rebuild_op)
-#define DP_RBF_RPT(rpt) DP_RB_RPT(rpt), dss_self_rank(), dss_get_module_info()->dmi_tgt_id
+	DP_UUID((rpt)->rt_pool_uuid), (rpt)->rt_rebuild_ver, (rpt)->rt_rebuild_gen,                \
+	    RB_OP_STR((rpt)->rt_rebuild_op)
+#define DP_RBF_RPT(rpt) DP_RB_RPT(rpt), (rpt)->rt_leader_term, (rpt)->rt_leader_rank
 
 /* arguments for log rebuild identifier given a struct rebuild_scan_in *rsin */
-#define DP_RB_RSI(rsin)                                                                            \
-	DP_UUID(rsin->rsi_pool_uuid), rsin->rsi_rebuild_ver, rsin->rsi_leader_term,                \
-	    rsin->rsi_rebuild_gen, rsin->rsi_master_rank, RB_OP_STR(rsin->rsi_rebuild_op)
-#define DP_RBF_RSI(rsin) DP_RB_RSI(rsin), dss_self_rank(), dss_get_module_info()->dmi_tgt_id
+#define DP_RB_RSI(rsi)                                                                             \
+	DP_UUID((rsi)->rsi_pool_uuid), (rsi)->rsi_rebuild_ver, (rsi)->rsi_rebuild_gen,             \
+	    RB_OP_STR((rsi)->rsi_rebuild_op)
+#define DP_RBF_RSI(rsi) DP_RB_RSI(rsi), (rsi)->rsi_leader_term, (rsi)->rsi_master_rank
 
 /* arguments for log rebuild identifier given a struct migrate_query_arg * */
 #define DP_RB_MQA(mqa)                                                                             \
-	DP_UUID((mqa)->pool_uuid), (mqa)->version, (mqa)->leader_term, (mqa)->generation,          \
-	    (mqa)->leader_rank, RB_OP_STR((mqa)->rebuild_op)
-#define DP_RBF_MQA(mqa) DP_RB_MQA(mqa), dss_self_rank(), dss_get_module_info()->dmi_tgt_id
+	DP_UUID((mqa)->pool_uuid), (mqa)->version, (mqa)->generation, RB_OP_STR((mqa)->rebuild_op)
+#define DP_RBF_MQA(mqa) DP_RB_MQA(mqa), (mqa)->leader_term, (mqa)->leader_rank
 
 int ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver,
 			daos_epoch_t stable_eph, uint32_t layout_version,
