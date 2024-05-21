@@ -1256,11 +1256,21 @@ dfs_get_size_by_oid(dfs_t *dfs, daos_obj_id_t oid, daos_size_t chunk_size, daos_
 	return daos_der2errno(rc);
 }
 
-int
-dfs_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group)
+inline static bool
+is_uid_invalid(uid_t uid)
 {
-	uid_t                      uid;
-	gid_t                      gid;
+	return uid == (uid_t)-1;
+}
+
+inline static bool
+is_gid_invalid(gid_t gid)
+{
+	return gid == (gid_t)-1;
+}
+
+int
+dfs_cont_set_owner(daos_handle_t coh, d_string_t user, uid_t uid, d_string_t group, gid_t gid)
+{
 	daos_key_t                 dkey;
 	d_sg_list_t                sgl;
 	d_iov_t                    sg_iovs[4];
@@ -1325,10 +1335,13 @@ dfs_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group)
 	i++;
 
 	if (user != NULL) {
-		rc = daos_acl_principal_to_uid(user, &uid);
-		if (rc) {
-			D_ERROR("daos_acl_principal_to_uid() failed: " DF_RC "\n", DP_RC(rc));
-			D_GOTO(out_prop, rc = daos_der2errno(rc));
+		if (is_uid_invalid(uid)) {
+			rc = daos_acl_principal_to_uid(user, &uid);
+			if (rc) {
+				D_ERROR("daos_acl_principal_to_uid() failed: " DF_RC "\n",
+					DP_RC(rc));
+				D_GOTO(out_prop, rc = EINVAL);
+			}
 		}
 		d_iov_set(&sg_iovs[i], &uid, sizeof(uid_t));
 		recxs[i].rx_idx = UID_IDX;
@@ -1337,10 +1350,13 @@ dfs_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group)
 	}
 
 	if (group != NULL) {
-		rc = daos_acl_principal_to_gid(group, &gid);
-		if (rc) {
-			D_ERROR("daos_acl_principal_to_gid() failed: " DF_RC "\n", DP_RC(rc));
-			D_GOTO(out_prop, rc = daos_der2errno(rc));
+		if (is_gid_invalid(gid)) {
+			rc = daos_acl_principal_to_gid(group, &gid);
+			if (rc) {
+				D_ERROR("daos_acl_principal_to_gid() failed: " DF_RC "\n",
+					DP_RC(rc));
+				D_GOTO(out_prop, rc = EINVAL);
+			}
 		}
 		d_iov_set(&sg_iovs[i], &gid, sizeof(gid_t));
 		recxs[i].rx_idx = GID_IDX;
@@ -1348,8 +1364,8 @@ dfs_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group)
 		i++;
 	}
 
-	/** set the owner ACL */
-	rc = daos_cont_set_owner(coh, user, group, NULL);
+	/* set the owner ACL - already checked user/group are real above, if needed */
+	rc = daos_cont_set_owner_no_check(coh, user, group, NULL);
 	if (rc) {
 		D_ERROR("daos_cont_set_owner() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out_prop, rc = daos_der2errno(rc));

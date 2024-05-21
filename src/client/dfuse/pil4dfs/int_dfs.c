@@ -110,7 +110,6 @@ static daos_handle_t          eq_list[MAX_EQ];
 uint16_t                      d_eq_count_max;
 uint16_t                      d_eq_count;
 static uint16_t               eq_idx;
-extern uint16_t               d_aio_eq_count_g;
 
 /* Configuration of the Garbage Collector */
 static uint32_t               dcache_size_bits;
@@ -236,8 +235,6 @@ static pthread_mutex_t lock_dirfd;
 static pthread_mutex_t lock_mmap;
 static pthread_mutex_t lock_fd_dup2ed;
 static pthread_mutex_t lock_eqh;
-
-pthread_mutex_t        d_lock_aio_eqs_g;
 
 /* store ! umask to apply on mode when creating file to honor system umask */
 static mode_t          mode_not_umask;
@@ -504,9 +501,6 @@ register_handler(int sig, struct sigaction *old_handler);
 
 static void
 print_summary(void);
-
-extern void
-d_free_aio_ctx(void);
 
 static int       num_fd_dup2ed;
 struct fd_dup2   fd_dup2_list[MAX_FD_DUP2ED];
@@ -3762,6 +3756,17 @@ closedir(DIR *dirp)
 	}
 	if (!d_hook_enabled)
 		return next_closedir(dirp);
+
+	_Pragma("GCC diagnostic push")
+	_Pragma("GCC diagnostic ignored \"-Wnonnull-compare\"")
+	/* Check whether dirp is NULL or not since application provides dirp */
+	if (!dirp) {
+		D_DEBUG(DB_ANY, "dirp is NULL in closedir(): %d (%s)\n", EINVAL, strerror(EINVAL));
+		errno = EINVAL;
+		return (-1);
+	}
+	_Pragma("GCC diagnostic pop")
+
 	fd = dirfd(dirp);
 
 	if (d_compatible_mode && fd < FD_FILE_BASE) {
@@ -3775,16 +3780,6 @@ closedir(DIR *dirp)
 			return next_closedir(dirp);
 		}
 	}
-
-	_Pragma("GCC diagnostic push")
-	_Pragma("GCC diagnostic ignored \"-Wnonnull-compare\"")
-	/* Check whether dirp is NULL or not since application provides dirp */
-	if (!dirp) {
-		D_DEBUG(DB_ANY, "dirp is NULL in closedir(): %d (%s)\n", EINVAL, strerror(EINVAL));
-		errno = EINVAL;
-		return (-1);
-	}
-	_Pragma("GCC diagnostic pop")
 
 	if (fd >= FD_DIR_BASE) {
 		free_dirfd(fd - FD_DIR_BASE);
@@ -4255,6 +4250,7 @@ setup_fd_0_1_2(void)
 	if (num_fd_dup2ed == 0)
 		return 0;
 
+	D_MUTEX_LOCK(&lock_fd_dup2ed);
 	for (i = 0; i < MAX_FD_DUP2ED; i++) {
 		/* only check fd 0, 1, and 2 */
 		if (fd_dup2_list[i].fd_src >= 0 && fd_dup2_list[i].fd_src <= 2) {
@@ -4266,9 +4262,10 @@ setup_fd_0_1_2(void)
 			/* get a real fd from kernel */
 			fd_tmp = libc_open(d_file_list[idx]->path, open_flag);
 			if (fd_tmp < 0) {
+				error_save = errno;
 				fprintf(stderr, "Error: open %s failed. %d (%s)\n",
 					d_file_list[idx]->path, errno, strerror(errno));
-				return errno;
+				D_GOTO(err, error_save);
 			}
 			/* using dup2() to make sure we get desired fd */
 			fd_new = dup2(fd_tmp, fd);
@@ -4277,7 +4274,7 @@ setup_fd_0_1_2(void)
 				fprintf(stderr, "Error: dup2 failed. %d (%s)\n", errno,
 					strerror(errno));
 				libc_close(fd_tmp);
-				return error_save;
+				D_GOTO(err, error_save);
 			}
 			libc_close(fd_tmp);
 			if (libc_lseek(fd, offset, SEEK_SET) == -1) {
@@ -4285,11 +4282,16 @@ setup_fd_0_1_2(void)
 				fprintf(stderr, "Error: lseek failed to set offset. %d (%s)\n",
 					errno, strerror(errno));
 				libc_close(fd);
-				return error_save;
+				D_GOTO(err, error_save);
 			}
 		}
 	}
+	D_MUTEX_UNLOCK(&lock_fd_dup2ed);
 	return 0;
+
+err:
+	D_MUTEX_UNLOCK(&lock_fd_dup2ed);
+	return error_save;
 }
 
 static int
@@ -6711,9 +6713,6 @@ init_myhook(void)
 	if (rc)
 		return;
 
-	rc = D_MUTEX_INIT(&d_lock_aio_eqs_g, NULL);
-	if (rc)
-		return;
 	rc = D_MUTEX_INIT(&lock_eqh, NULL);
 	if (rc)
 		return;
@@ -6732,22 +6731,26 @@ init_myhook(void)
 	dcache_size_bits = DCACHE_SIZE_BITS;
 	rc               = d_getenv_uint32_t("D_IL_DCACHE_SIZE_BITS", &dcache_size_bits);
 	if (rc != -DER_SUCCESS && rc != -DER_NONEXIST)
-		DS_WARN(rc, "'D_IL_DCACHE_SIZE_BITS' env variable could not be used");
+		DS_WARN(daos_der2errno(rc),
+			"'D_IL_DCACHE_SIZE_BITS' env variable could not be used");
 
 	dcache_rec_timeout = DCACHE_REC_TIMEOUT;
 	rc                 = d_getenv_uint32_t("D_IL_DCACHE_REC_TIMEOUT", &dcache_rec_timeout);
 	if (rc != -DER_SUCCESS && rc != -DER_NONEXIST)
-		DS_WARN(rc, "'D_IL_DCACHE_REC_TIMEOUT' env variable could not be used");
+		DS_WARN(daos_der2errno(rc),
+			"'D_IL_DCACHE_REC_TIMEOUT' env variable could not be used");
 
 	dcache_gc_period = DCACHE_GC_PERIOD;
 	rc               = d_getenv_uint32_t("D_IL_DCACHE_GC_PERIOD", &dcache_gc_period);
 	if (rc != -DER_SUCCESS && rc != -DER_NONEXIST)
-		DS_WARN(rc, "'D_IL_DCACHE_GC_PERIOD' env variable could not be used");
+		DS_WARN(daos_der2errno(rc),
+			"'D_IL_DCACHE_GC_PERIOD' env variable could not be used");
 
 	dcache_gc_reclaim_max = DCACHE_GC_RECLAIM_MAX;
 	rc = d_getenv_uint32_t("D_IL_DCACHE_GC_RECLAIM_MAX", &dcache_gc_reclaim_max);
 	if (rc != -DER_SUCCESS && rc != -DER_NONEXIST)
-		DS_WARN(rc, "'D_IL_DCACHE_GC_RECLAIM_MAX' env variable could not be used");
+		DS_WARN(daos_der2errno(rc),
+			"'D_IL_DCACHE_GC_RECLAIM_MAX' env variable could not be used");
 	if (dcache_gc_reclaim_max == 0) {
 		D_WARN("'D_IL_DCACHE_GC_RECLAIM_MAX' env variable could not be used: value == 0.");
 		dcache_gc_reclaim_max = DCACHE_GC_RECLAIM_MAX;
@@ -6884,9 +6887,6 @@ destroy_all_eqs(void)
 {
 	int i, rc;
 
-	/** destroy EQs created for aio */
-	d_free_aio_ctx();
-
 	/** destroy EQs created by threads */
 	for (i = 0; i < d_eq_count; i++) {
 		rc = daos_eq_destroy(eq_list[i], 0);
@@ -6939,7 +6939,6 @@ finalize_myhook(void)
 
 		finalize_dfs();
 
-		D_MUTEX_DESTROY(&d_lock_aio_eqs_g);
 		D_MUTEX_DESTROY(&lock_eqh);
 		D_MUTEX_DESTROY(&lock_reserve_fd);
 		D_MUTEX_DESTROY(&lock_dfs);
@@ -7103,9 +7102,9 @@ get_eqh(daos_handle_t *eqh)
 
 	rc = pthread_mutex_lock(&lock_eqh);
 	/** create a new EQ if the EQ pool is not full; otherwise round robin EQ use from pool */
-	if (d_eq_count >= (d_eq_count_max - d_aio_eq_count_g)) {
+	if (d_eq_count >= d_eq_count_max) {
 		td_eqh = eq_list[eq_idx++];
-		if (eq_idx == (d_eq_count_max - d_aio_eq_count_g))
+		if (eq_idx == d_eq_count_max)
 			eq_idx = 0;
 	} else {
 		rc = daos_eq_create(&td_eqh);
