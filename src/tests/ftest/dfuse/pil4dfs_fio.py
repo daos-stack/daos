@@ -12,7 +12,7 @@ from ClusterShell.NodeSet import NodeSet
 from cpu_utils import CpuInfo
 from dfuse_utils import get_dfuse, start_dfuse
 from fio_utils import FioCommand
-from general_utils import bytes_to_human
+from general_utils import bytes_to_human, percent_change
 
 
 class Pil4dfsFio(TestWithServers):
@@ -194,15 +194,14 @@ class Pil4dfsFio(TestWithServers):
         for ioengine in ['psync', 'libaio']:
             self.log_step(f"Comparing FIO bandwidths of DFuse with {ioengine} ioengine and DFS")
             for rw in Pil4dfsFio._FIO_RW_NAMES:
-                delta = abs(dfuse_bws[ioengine][rw] - dfs_bws[rw]) * 100
-                delta /= max(dfuse_bws[ioengine][rw], dfs_bws[rw])
+                delta = 100 * percent_change(dfs_bws[rw], dfuse_bws[rw])
                 self.log.debug(
                     "Comparing %s bandwidths: delta=%.2f%%, DFuse=%s (%iB), DFS=%s (%iB)",
                     rw, delta, bytes_to_human(dfuse_bws[ioengine][rw]), dfuse_bws[ioengine][rw],
                     bytes_to_human(dfs_bws[rw]), dfs_bws[rw])
-                if bw_deltas[rw] <= delta:
+                if bw_deltas[rw] <= abs(delta):
                     self.log.info(
                         "FIO %s bandwidth difference should be < %i%%: got=%.2f%%",
-                        rw, bw_deltas[rw], delta)
+                        rw, bw_deltas[rw], abs(delta))
 
         self.log_step("Test passed")
