@@ -85,6 +85,7 @@ fio:
       iodepth_thread:
         pil4dfs_ioengines: ['libaio']
         thread: 1
+        numjobs: 8
         blocksize: '4K'
         size: '512K'
-        numjobs: 8
+        iodepth: 16
