@@ -37,6 +37,11 @@ pool:
 container:
   type: POSIX
   control_method: daos
+daos:
+  container:
+    destroy:
+      env_vars:
+        - CRT_TIMEOUT=10
 ior:
   api: "DFS"
   client_processes:
