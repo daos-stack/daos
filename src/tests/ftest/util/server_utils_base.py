@@ -510,6 +510,42 @@ class DaosServerCommand(YamlCommand):
                 #   --helper-log-file=   Log file location for debug from daos_admin binary
                 self.helper_log_file = FormattedParameter("--helper-log-file={}")
 
+    class SupportSubCommand(CommandWithSubCommand):
+        """Defines an object for the daos_server support sub command."""
+
+        def __init__(self):
+            """Create a support subcommand object."""
+            super().__init__("/run/daos_server/support/*", "support")
+
+        def get_sub_command_class(self):
+            """Get the daos_server support sub command object."""
+            # Available sub-commands:
+            #   collect-log  Collect logs on servers
+            if self.sub_command.value == "collect-log":
+                self.sub_command_class = self.CollectLogSubCommand()
+            else:
+                self.sub_command_class = None
+
+        class CollectLogSubCommand(CommandWithSubCommand):
+            """Defines an object for the daos_server support collect-log command."""
+
+            def __init__(self):
+                """Create a support collect-log subcommand object."""
+                super().__init__(
+                    "/run/daos_server/support/collect-log/*", "collect-log")
+
+                # daos_server support collect-log command options:
+                #   --stop-on-error     Stop the collect-log command on very first error
+                #   --target-folder=    Target Folder location where log will be copied
+                #   --archive=          Archive the log/config files
+                #   --extra-logs-dir=   Collect the Logs from given custom directory
+                #   --target-host=      R sync the logs to target-host system
+                self.stop_on_error = FormattedParameter("--stop-on-error", False)
+                self.target_folder = FormattedParameter("--target-folder={}")
+                self.archive = FormattedParameter("--archive", False)
+                self.extra_logs_dir = FormattedParameter("--extra-logs-dir={}")
+                self.target_host = FormattedParameter("--target-host={}")
+
     class StorageSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server storage sub command."""
 

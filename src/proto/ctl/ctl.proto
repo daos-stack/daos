@@ -15,6 +15,7 @@ import "ctl/firmware.proto";
 import "ctl/smd.proto";
 import "ctl/ranks.proto";
 import "ctl/server.proto";
+import "ctl/support.proto";
 
 // Service definitions for communications between gRPC management server and
 // client regarding tasks related to DAOS system and server hardware.
@@ -52,4 +53,6 @@ service CtlSvc {
 	rpc ResetFormatRanks(RanksReq) returns (RanksResp) {}
 	// Start DAOS I/O Engines on a host. (gRPC fanout)
 	rpc StartRanks(RanksReq) returns (RanksResp) {}
+// Perform a Log collection on Servers for support/debug purpose
+	rpc CollectLog (CollectLogReq) returns (CollectLogResp) {};
 }
