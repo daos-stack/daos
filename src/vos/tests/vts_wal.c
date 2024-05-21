@@ -1901,6 +1901,7 @@ wal_umempobj_chkpt_block_reuse(void **state)
 	wal_umempobj_block_reuse_internal(state, 1);
 	arg->checkpoint = false;
 	arg->no_replay  = false;
+	daos_fail_loc_set(0);
 }
 
 static const struct CMUnitTest wal_tests[] = {

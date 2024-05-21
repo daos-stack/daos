@@ -159,34 +159,33 @@ dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct
 		rc = heap_zone_load(hdl->do_heap, 0);
 		if (rc) {
 			err = rc;
-			goto out2;
+			goto out3;
 		}
 		D_ASSERT(store != NULL);
 		rc = hdl->do_store->stor_ops->so_wal_replay(hdl->do_store, dav_wal_replay_cb, hdl);
 		if (rc) {
 			err = daos_der2errno(rc);
-			goto out2;
+			goto out3;
 		}
 	}
 
 	rc = dav_create_clogs(hdl);
 	if (rc) {
 		err = rc;
-		heap_cleanup(hdl->do_heap);
-		goto out2;
+		goto out3;
 	}
 
 	rc = lw_tx_begin(hdl);
 	if (rc) {
 		D_ERROR("lw_tx_begin failed with err %d\n", rc);
 		err = ENOMEM;
-		goto out2;
+		goto out3;
 	}
 	rc = heap_ensure_zone0_initialized(hdl->do_heap);
 	if (rc) {
 		lw_tx_end(hdl, NULL);
 		D_ERROR("Failed to initialize zone0, rc = %d", daos_errno2der(rc));
-		goto out2;
+		goto out3;
 	}
 	lw_tx_end(hdl, NULL);
 
@@ -199,14 +198,14 @@ dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct
 		if (rc) {
 			D_ERROR("Failed to update mbrt with zinfo errno = %d", rc);
 			err = rc;
-			goto out2;
+			goto out3;
 		}
 
 		rc = heap_load_nonevictable_zones(hdl->do_heap);
 		if (rc) {
 			D_ERROR("Failed to load required zones during boot, errno= %d", rc);
 			err = rc;
-			goto out2;
+			goto out3;
 		}
 	} else {
 		D_ASSERT(z0->header.zone0_zinfo_size == 0);
@@ -214,20 +213,20 @@ dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct
 		if (rc) {
 			D_ERROR("lw_tx_begin failed with err %d\n", rc);
 			err = ENOMEM;
-			goto out2;
+			goto out3;
 		}
 		rc = obj_realloc(hdl, &z0->header.zone0_zinfo_off, &z0->header.zone0_zinfo_size,
 				 heap_zinfo_get_size(hzl.nzones_heap));
 		if (rc != 0) {
 			lw_tx_end(hdl, NULL);
 			D_ERROR("Failed to setup zinfo");
-			goto out2;
+			goto out3;
 		}
 		rc = heap_update_mbrt_zinfo(hdl->do_heap, true);
 		if (rc) {
 			D_ERROR("Failed to update mbrt with zinfo errno = %d", rc);
 			err = rc;
-			goto out2;
+			goto out3;
 		}
 		lw_tx_end(hdl, NULL);
 	}
@@ -242,6 +241,8 @@ dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct
 
 	return hdl;
 
+out3:
+	heap_cleanup(hdl->do_heap);
 out2:
 	if (hdl->do_stats)
 		stats_delete(hdl, hdl->do_stats);
