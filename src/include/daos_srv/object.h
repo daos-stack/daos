@@ -67,11 +67,11 @@ int ds_obj_enum_pack(vos_iter_param_t *param, vos_iter_type_t type, bool recursi
 
 /* Per xstream migrate status */
 struct ds_migrate_status {
-	uint64_t dm_rec_count;	/* migrated record size */
-	uint64_t dm_obj_count;	/* migrated object count */
-	uint64_t dm_total_size;	/* migrated total size */
-	int	 dm_status;	/* migrate status */
-	uint32_t dm_migrating:1; /* if it is migrating */
+	uint64_t dm_rec_count;     /* migrated record size */
+	uint64_t dm_obj_count;     /* migrated object count */
+	uint64_t dm_total_size;    /* migrated total size */
+	int      dm_status;        /* migrate status */
+	uint32_t dm_migrating : 1; /* if it is migrating */
 };
 
 int

@@ -41,7 +41,7 @@ typedef enum {
 #define DF_RB  "rb=" DF_UUID "/%u/%u/%s"
 
 /* Full rebuild identifying information includes <term>/<rebuild_gen> */
-#define DF_RBF DF_RB " "DF_U64"/%u"
+#define DF_RBF DF_RB " " DF_U64 "/%u"
 
 /* arguments for log rebuild identifier given a struct rebuild_global_pool_tracker * */
 #define DP_RB_RGT(rgt)                                                                             \
