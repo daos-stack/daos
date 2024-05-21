@@ -338,9 +338,9 @@ static int data_init(int server, crt_init_options_t *opt)
 	d_getenv_char("UCX_IB_FORK_INIT", &ucx_ib_fork_init);
 	if (ucx_ib_fork_init) {
 		if (server) {
-			D_INFO("UCX_IB_FORK_INIT was set to %c, setting to n\n", ucx_ib_fork_init);
+			D_INFO("UCX_IB_FORK_INIT already set to %c, setting to n\n", ucx_ib_fork_init);
 		} else {
-			D_INFO("UCX_IB_FORK_INIT was set to %c on client\n", ucx_ib_fork_init);
+			D_INFO("UCX_IB_FORK_INIT already set to %c on client\n", ucx_ib_fork_init);
 		}
 	}
 	if (server)
