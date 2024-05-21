@@ -229,6 +229,7 @@ io
 iod
 iodepth
 ioengine
+ioengines
 ior
 ioreqs
 iotype
