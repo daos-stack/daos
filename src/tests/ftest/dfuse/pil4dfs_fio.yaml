@@ -52,25 +52,25 @@ fio:
   job:
     params: !mux
       256B_fork:
-        pil4dfs_ioengines: ['psync', 'libaio']
+        pil4dfs_ioengines: ['psync']
         thread: 0
         blocksize: '256B'
         size: '32K'
         iodepth: 1
       256B_pthread:
-        pil4dfs_ioengines: ['psync', 'libaio']
+        pil4dfs_ioengines: ['psync']
         thread: 1
         blocksize: '256B'
         size: '32K'
         iodepth: 1
       1M_fork:
-        pil4dfs_ioengines: ['psync', 'libaio']
+        pil4dfs_ioengines: ['psync']
         thread: 0
         blocksize: '1M'
         size: '64M'
         iodepth: 1
       1M_pthread:
-        pil4dfs_ioengines: ['psync', 'libaio']
+        pil4dfs_ioengines: ['psync']
         thread: 1
         blocksize: '1M'
         size: '64M'
