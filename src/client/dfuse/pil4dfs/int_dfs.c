@@ -225,6 +225,8 @@ static bool            segv_handler_inited;
 /* Old segv handler */
 struct sigaction       old_segv;
 
+static bool            target_hit;
+
 /* the flag to indicate whether initlization is finished or not */
 bool                   d_hook_enabled;
 static bool            hook_enabled_bak;
@@ -1705,6 +1707,32 @@ free_map(int idx)
 	D_MUTEX_UNLOCK(&lock_mmap);
 }
 
+
+static void
+sigv_cmake_handler(int code, siginfo_t *siginfo, void *ctx)
+{
+	int         fd;
+	char       *addr, msg[64];
+	ucontext_t *context = ctx;
+
+	if (code != SIGSEGV || target_hit == false)
+		return old_segv.sa_sigaction(code, siginfo, context);
+	addr = (char *)siginfo->si_addr;
+
+	fd = libc_open("/dev/shm/hang.txt", O_WRONLY | O_CREAT, 0644);
+	if (fd >= 0) {
+		libc_lseek(fd, 0, SEEK_END);
+		snprintf(msg, 63, "%d %p\n", getpid(), addr);
+		libc_write(fd, msg, sizeof(msg));
+		libc_close(fd);
+
+		volatile int  flag = 1;
+		while(flag) {
+			sleep(1);
+		}
+	}
+}
+
 int
 d_get_fd_redirected(int fd)
 {
@@ -1716,6 +1744,23 @@ d_get_fd_redirected(int fd)
 	if (fd >= FD_FILE_BASE)
 		return fd;
 
+	if (old_segv.sa_handler == NULL) {
+		struct sigaction action;
+
+		action.sa_flags = SA_RESTART;
+		action.sa_handler = NULL;
+		action.sa_sigaction = sigv_cmake_handler;
+		action.sa_flags |= SA_SIGINFO;
+		sigemptyset(&action.sa_mask);
+
+		rc = sigaction(SIGSEGV, &action, &old_segv);
+		if (rc != 0) {
+			D_FATAL("sigaction() failed: %d (%s)\n", errno, strerror(errno));
+			abort();
+		}
+	}
+
+	target_hit = true;
 	if (d_compatible_mode) {
 		d_list_t     *rlink;
 		int           fd_kernel = fd;
@@ -1724,6 +1769,7 @@ d_get_fd_redirected(int fd)
 		rlink = d_hash_rec_find(fd_hash, &fd_kernel, sizeof(int));
 		if (rlink != NULL) {
 			fd_ht_obj = fd_obj(rlink);
+			target_hit = false;
 			return fd_ht_obj->fake_fd;
 		}
 	}
@@ -1743,6 +1789,7 @@ d_get_fd_redirected(int fd)
 	if (rc)
 		DS_ERROR(errno, "pthread_mutex_unlock failed");
 
+	target_hit = false;
 	return fd_ret;
 }
 
