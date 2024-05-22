@@ -29,9 +29,10 @@ void job_step_update(def value=currentBuild.currentResult) {
     jobStatusUpdate(job_status_internal, env.STAGE_NAME, value)
 }
 
-// For master, this is just some wildly high number
-// For release branches, its the subsequent DAOS version
-next_version = '2.7.0'
+// Should try to figure this out automatically
+/* groovylint-disable-next-line CompileStatic, VariableName */
+String base_branch = 'release/2.6'
+String next_version = base_branch
 
 // Don't define this as a type or it loses it's global scope
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
@@ -97,7 +98,7 @@ pipeline {
                defaultValue: 'ucx+ud_x',
                description: 'Provider to use for the Functional Hardware Medium/Large stages of this run (i.e. ucx+ud_x, ucx+dc_x)')
         string(name: 'BaseBranch',
-               defaultValue: 'release/2.6',
+               defaultValue: base_branch,
                description: 'The base branch to run testing against (i.e. master, or a PR\'s branch)')
         string(name: 'CI_RPM_TEST_VERSION',
                defaultValue: '',
