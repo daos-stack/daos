@@ -1816,23 +1816,33 @@ const ProtobufCMessageDescriptor ctl__smd_device__descriptor =
   (ProtobufCMessageInit) ctl__smd_device__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-#define ctl__smd_dev_req__field_descriptors NULL
-#define ctl__smd_dev_req__field_indices_by_name NULL
-#define ctl__smd_dev_req__number_ranges NULL
-const ProtobufCMessageDescriptor ctl__smd_dev_req__descriptor =
-{
-  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "ctl.SmdDevReq",
-  "SmdDevReq",
-  "Ctl__SmdDevReq",
-  "ctl",
-  sizeof(Ctl__SmdDevReq),
-  0,
-  ctl__smd_dev_req__field_descriptors,
-  ctl__smd_dev_req__field_indices_by_name,
-  0,  ctl__smd_dev_req__number_ranges,
-  (ProtobufCMessageInit) ctl__smd_dev_req__init,
-  NULL,NULL,NULL    /* reserved[123] */
+static const ProtobufCFieldDescriptor ctl__smd_dev_req__field_descriptors[1] = {
+    {
+	"fetch_pci_cfg", 1, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_BOOL, 0, /* quantifier_offset */
+	offsetof(Ctl__SmdDevReq, fetch_pci_cfg), NULL, NULL, 0,             /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+};
+static const unsigned ctl__smd_dev_req__field_indices_by_name[] = {
+    0, /* field[0] = fetch_pci_cfg */
+};
+static const ProtobufCIntRange   ctl__smd_dev_req__number_ranges[1 + 1] = {{1, 0}, {0, 1}};
+const ProtobufCMessageDescriptor ctl__smd_dev_req__descriptor           = {
+    PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+    "ctl.SmdDevReq",
+    "SmdDevReq",
+    "Ctl__SmdDevReq",
+    "ctl",
+    sizeof(Ctl__SmdDevReq),
+    1,
+    ctl__smd_dev_req__field_descriptors,
+    ctl__smd_dev_req__field_indices_by_name,
+    1,
+    ctl__smd_dev_req__number_ranges,
+    (ProtobufCMessageInit)ctl__smd_dev_req__init,
+    NULL,
+    NULL,
+    NULL /* reserved[123] */
 };
 static const ProtobufCFieldDescriptor ctl__smd_dev_resp__field_descriptors[2] =
 {

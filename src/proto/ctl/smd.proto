@@ -135,7 +135,10 @@ message SmdDevice {
 	uint32 ctrlr_namespace_id = 17;	// NVMe namespace id hosting SMD blobstore
 }
 
-message SmdDevReq {}
+message SmdDevReq
+{
+	bool fetch_pci_cfg = 1; // Retrieve parent NVMe device's PCIe config space contents.
+}
 
 message SmdDevResp {
 	int32 status = 1;

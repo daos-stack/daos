@@ -163,6 +163,16 @@ func (ei *EngineInstance) StorageFormatSCM(ctx context.Context, force bool) (mRe
 	return
 }
 
+func addLinkInfoToHealthStats(health *ctlpb.BioHealthResp, pciCfg []byte) error {
+	// Pipe string representation of PCI config space into lspci.
+
+	// Extract Lnk entries.
+
+	// Add extracted entries to health stats.
+
+	return nil
+}
+
 func populateCtrlrHealth(ctx context.Context, engine Engine, req *ctlpb.BioHealthReq, ctrlr *ctlpb.NvmeController) (bool, error) {
 	stateName := ctlpb.NvmeDevState_name[int32(ctrlr.DevState)]
 	if !ctrlr.CanSupplyHealthStats() {
@@ -176,14 +186,22 @@ func populateCtrlrHealth(ctx context.Context, engine Engine, req *ctlpb.BioHealt
 		return false, errors.Wrapf(err, "retrieve health stats for %q (state %q)", ctrlr,
 			stateName)
 	}
-	ctrlr.HealthStats = health
 
+	if err := addLinkInfoToHealthStats(health, ctrlr.PciCfg); err != nil {
+		return false, errors.Wrapf(err, "add link stats for %q", ctrlr)
+	}
+
+	ctrlr.HealthStats = health
 	return true, nil
 }
 
 // Scan SMD devices over dRPC and reconstruct NVMe scan response from results.
 func scanEngineBdevsOverDrpc(ctx context.Context, engine Engine, pbReq *ctlpb.ScanNvmeReq) (*ctlpb.ScanNvmeResp, error) {
-	scanSmdResp, err := scanSmd(ctx, engine, &ctlpb.SmdDevReq{})
+	// In order to add link info to health-stats, request PCI config space fetch when health
+	// flag is set in scan-NVMe request.
+	scanSmdResp, err := scanSmd(ctx, engine, &ctlpb.SmdDevReq{
+		FetchPciCfg: pbReq.Health,
+	})
 	if err != nil {
 		return nil, errors.Wrap(err, "scan smd")
 	}
@@ -395,7 +413,11 @@ func smdQueryEngine(ctx context.Context, engine Engine, pbReq *ctlpb.SmdQueryReq
 	rResp := new(ctlpb.SmdQueryResp_RankResp)
 	rResp.Rank = engineRank.Uint32()
 
-	listDevsResp, err := listSmdDevices(ctx, engine, new(ctlpb.SmdDevReq))
+	// In order to add link info to health-stats, request PCI config space fetch when
+	// IncludeBioHealth flag is set in SMD-query request.
+	listDevsResp, err := listSmdDevices(ctx, engine, &ctlpb.SmdDevReq{
+		FetchPciCfg: pbReq.IncludeBioHealth,
+	})
 	if err != nil {
 		return nil, errors.Wrapf(err, "rank %d", engineRank)
 	}
