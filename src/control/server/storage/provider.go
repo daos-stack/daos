@@ -26,9 +26,8 @@ const defaultMetadataPath = "/mnt/daos"
 // SystemProvider provides operating system capabilities.
 type SystemProvider interface {
 	system.IsMountedProvider
-	system.MountProvider
 	GetfsUsage(string) (uint64, uint64, error)
-	Mkfs(system.MkfsReq) error
+	ReadFile(string) ([]byte, error)
 }
 
 // Provider provides storage specific capabilities.
