@@ -1,6 +1,6 @@
 module github.com/daos-stack/daos/src/control
 
-go 1.21
+go 1.20
 
 require (
 	github.com/Jille/raft-grpc-transport v1.2.0
