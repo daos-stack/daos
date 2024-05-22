@@ -1244,9 +1244,9 @@ ds_pool_stop(uuid_t uuid)
 		return 0;
 	}
 	if (pool->sp_stopping) {
-		int rc = -DER_BUSY;
+		int rc = -DER_AGAIN;
 
-		DL_WARN(rc, DF_UUID ": already stopping", DP_UUID(uuid));
+		DL_INFO(rc, DF_UUID ": already stopping", DP_UUID(uuid));
 		ds_pool_put(pool);
 		return rc;
 	}
@@ -1262,9 +1262,13 @@ ds_pool_stop(uuid_t uuid)
 	ds_rebuild_abort(pool->sp_uuid, -1, -1, -1);
 	ds_migrate_stop(pool, -1, -1);
 
+	ds_pool_put(pool); /* held by ds_pool_start */
+
+	while (!daos_lru_is_last_user(&pool->sp_entry))
+		dss_sleep(1000 /* ms */);
+
 	pool_child_delete_all(pool);
 
-	ds_pool_put(pool); /* held by ds_pool_start */
 	ds_pool_put(pool);
 	D_INFO(DF_UUID ": stopped\n", DP_UUID(uuid));
 	return 0;
