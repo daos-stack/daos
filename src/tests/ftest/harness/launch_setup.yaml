@@ -1,9 +1,0 @@
-hosts:
-  test_servers: 1
-  test_clients: 1
-timeout: 60
-client_users:
-  # user:group
-  - daos_test_user_x1:daos_test_group_x
-  - daos_test_user_x2:daos_test_group_x
-  - daos_test_user_y1:daos_test_group_y

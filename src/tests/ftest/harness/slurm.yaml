@@ -1,4 +1,0 @@
-hosts:
-  test_servers: 1
-  client_partition: daos_client_partition
-timeout: 120

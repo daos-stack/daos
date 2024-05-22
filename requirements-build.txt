@@ -1,5 +1,0 @@
-scons
-ninja
-meson
-distro
-pyelftools

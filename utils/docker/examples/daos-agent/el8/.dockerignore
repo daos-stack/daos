@@ -1,4 +1,0 @@
-# Ignore everything except DAOS configuration file
-*
-!daos_agent.yml
-!run-daos_agent.sh

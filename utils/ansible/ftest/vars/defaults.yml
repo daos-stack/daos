@@ -1,4 +1,0 @@
-# Default variable
-
-daos_ofi_provider_default: ofi+tcp;ofi_rxm
-daos_hugepages_nb_default: 4096

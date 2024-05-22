@@ -1,6 +1,0 @@
-tabulate
-junit_xml
-pyxattr
-PyYAML
-# Disabled for now because of DAOS-14688
-# pytest

@@ -1,4 +1,0 @@
-#!/bin/bash
-set -eu
-
-. utils/githooks/hook_base.sh

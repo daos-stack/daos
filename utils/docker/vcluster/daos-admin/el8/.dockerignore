@@ -1,3 +1,0 @@
-# Ignore everything except DAOS configuration file
-*
-!daos_control.yml.in
