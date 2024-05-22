@@ -112,7 +112,7 @@ message NvmeController {
 	LedState led_state = 10;		// NVMe device LED state
 	string pci_dev_type = 11;		// PCI device type, vmd or pci
 	string vendor_id = 12;			// controller's vendor ID
-	string             pci_cfg      = 13;                  // PCIe configuration space
+	bytes              pci_cfg      = 13;                  // PCIe configuration space
 }
 
 // SmdDevice represents a DAOS BIO device, identified by a UUID written into a label stored on a

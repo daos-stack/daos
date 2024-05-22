@@ -335,7 +335,6 @@ ctrlr_reset_str_fields(Ctl__NvmeController *ctrlr)
 	ctrlr->fw_rev       = NULL;
 	ctrlr->vendor_id    = NULL;
 	ctrlr->pci_dev_type = NULL;
-	ctrlr->pci_cfg      = NULL;
 }
 
 static int
@@ -361,16 +360,16 @@ add_ctrlr_details(Ctl__NvmeController *ctrlr, struct bio_dev_info *dev_info)
 	rc = copy_str2ctrlr(&ctrlr->pci_dev_type, dev_info->bdi_ctrlr->pci_type);
 	if (rc != 0)
 		return rc;
-	rc = copy_str2ctrlr(&ctrlr->pci_cfg, dev_info->bdi_ctrlr->pci_cfg);
-	if (rc != 0)
-		return rc;
 	ctrlr->socket_id = dev_info->bdi_ctrlr->socket_id;
+
+	ctrlr->pci_cfg.data = (uint8_t *)dev_info->bdi_ctrlr->pci_cfg;
+	ctrlr->pci_cfg.len  = dev_info->bdi_ctrlr->pci_cfg_sz;
 
 	D_DEBUG(DB_MGMT,
 		"ctrlr details: '%s' '%s' '%s' '%s' '%s' '%s' '%d' (%02X %02X %02X %02X)\n",
 		ctrlr->pci_addr, ctrlr->model, ctrlr->serial, ctrlr->fw_rev, ctrlr->vendor_id,
-		ctrlr->pci_dev_type, ctrlr->socket_id, ctrlr->pci_cfg[0], ctrlr->pci_cfg[1],
-		ctrlr->pci_cfg[2], ctrlr->pci_cfg[3]);
+		ctrlr->pci_dev_type, ctrlr->socket_id, ctrlr->pci_cfg.data[0],
+		ctrlr->pci_cfg.data[1], ctrlr->pci_cfg.data[2], ctrlr->pci_cfg.data[3]);
 
 	/* Populate NVMe namespace id and capacity */
 

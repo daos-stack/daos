@@ -383,42 +383,8 @@ struct pci_dev_opts {
 	int                 *socket_id;
 	char               **pci_type;
 	char               **cfg;
-	size_t               cfg_sz;
 	int                  status;
 };
-
-// static int
-// read_caps(struct spdk_pci_device *dev, char *config)
-//{
-//	//struct spdk_json_write_ctx *w;
-//	char config[4096];
-//	//struct spdk_pci_addr addr;
-//	//char config[4096], bdf[32];
-//	int rc;
-//
-//	//addr = spdk_pci_device_get_addr(dev);
-//	//spdk_pci_addr_fmt(bdf, sizeof(bdf), &addr);
-//
-//	rc = spdk_pci_device_cfg_read(dev, config, sizeof(config), 0);
-//	if (rc != 0) {
-//		D_ERROR("Failed to read config space of device\n");
-//		return rc;
-//	}
-//
-//	spdk_json_write_object_begin(w);
-//	//spdk_json_write_named_string(w, "address", bdf);
-//	//spdk_json_write_named_string(w, "type", spdk_pci_device_get_type(dev));
-//
-//	/* Don't write the extended config space if it's all zeroes */
-//	if (spdk_mem_all_zero(&config[256], sizeof(config) - 256)) {
-//		spdk_json_write_named_bytearray(w, "config_space", config, 256);
-//	} else {
-//		spdk_json_write_named_bytearray(w, "config_space", config, sizeof(config));
-//	}
-//
-//	spdk_json_write_object_end(w);
-//	return 0;
-// }
 
 static void
 pci_device_cb(void *ctx, struct spdk_pci_device *pci_device)
@@ -459,7 +425,7 @@ pci_device_cb(void *ctx, struct spdk_pci_device *pci_device)
 		return;
 	}
 
-	rc = spdk_pci_device_cfg_read(pci_device, *opts->cfg, opts->cfg_sz, 0);
+	rc = spdk_pci_device_cfg_read(pci_device, *opts->cfg, NVME_PCI_CFG_SPC_MAX_LEN, 0);
 	if (rc != 0) {
 		D_ERROR("Failed to read config space of device (%s)\n", spdk_strerror(-rc));
 		opts->status = -DER_INVAL;
@@ -472,7 +438,6 @@ fetch_pci_dev_info(struct nvme_ctrlr_t *w_ctrlr, const char *tr_addr)
 {
 	struct pci_dev_opts  opts = {0};
 	struct spdk_pci_addr pci_addr;
-	int                  cfg_buf_sz = 4096;
 	int                  rc;
 
 	rc = spdk_pci_addr_parse(&pci_addr, tr_addr);
@@ -482,10 +447,10 @@ fetch_pci_dev_info(struct nvme_ctrlr_t *w_ctrlr, const char *tr_addr)
 		return -DER_INVAL;
 	}
 
-	D_ALLOC(w_ctrlr->pci_cfg, cfg_buf_sz);
+	D_ALLOC(w_ctrlr->pci_cfg, NVME_PCI_CFG_SPC_MAX_LEN);
 	if (w_ctrlr->pci_cfg == NULL)
 		return -DER_NOMEM;
-	w_ctrlr->pci_cfg_sz = cfg_buf_sz;
+	w_ctrlr->pci_cfg_sz = NVME_PCI_CFG_SPC_MAX_LEN;
 
 	opts.finished  = false;
 	opts.status    = 0;
@@ -493,37 +458,11 @@ fetch_pci_dev_info(struct nvme_ctrlr_t *w_ctrlr, const char *tr_addr)
 	opts.socket_id = &w_ctrlr->socket_id;
 	opts.pci_type  = &w_ctrlr->pci_type;
 	opts.cfg       = &w_ctrlr->pci_cfg;
-	opts.cfg_sz    = cfg_buf_sz;
 
 	spdk_pci_for_each_device(&opts, pci_device_cb);
 
-	//	int i;
-	//	char* buf2 = cfg_buf;
-	//	char* endofbuf = cfg_buf + sizeof(cfg_buf);
-	//	for (int i = 0; i < 256; i++)
-	//	{
-	//	/* i use 5 here since we are going to add at most
-	//       3 chars, need a space for the end '\n' and need
-	//       a null terminator */
-	//		if (buf2 + 5 < endofbuf)
-	//		{
-	//			if (i > 0)
-	//			{
-	//				buf2 += sprintf(buf2, ":");
-	//			}
-	//			buf2 += sprintf(buf2, "%02X", cfg_buf[i]);
-	//		}
-	//	}
-	//	buf2 += sprintf(buf2, "\n");
 	D_INFO("device pcie config: %02X %02X %02X %02X\n", w_ctrlr->pci_cfg[0],
 	       w_ctrlr->pci_cfg[1], w_ctrlr->pci_cfg[2], w_ctrlr->pci_cfg[3]);
-	//	int i;
-	//	for (i = 0; i < 256; i++)
-	//	{
-	//		if (i > 0) D_INFO(":");
-	//		D_INFO("%02X", buf[i]);
-	//	}
-	//	D_INFO("\n");
 
 	return opts.status;
 }

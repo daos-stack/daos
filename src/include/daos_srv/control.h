@@ -26,6 +26,7 @@ dpdk_cli_override_opts;
 
 #define NVME_PCI_DEV_TYPE_VMD           "vmd"
 #define NVME_DETAIL_BUFLEN              1024
+#define NVME_PCI_CFG_SPC_MAX_LEN        4096
 
 /** Device state flags */
 #define NVME_DEV_FL_PLUGGED	(1 << 0)	/* Device is present in slot */

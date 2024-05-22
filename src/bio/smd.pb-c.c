@@ -1570,8 +1570,8 @@ static const ProtobufCFieldDescriptor ctl__nvme_controller__field_descriptors[13
 	0, NULL, NULL /* reserved1,reserved2, etc */
     },
     {
-	"pci_cfg", 13, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0, /* quantifier_offset */
-	offsetof(Ctl__NvmeController, pci_cfg), NULL, &protobuf_c_empty_string, 0, /* flags */
+	"pci_cfg", 13, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_BYTES, 0, /* quantifier_offset */
+	offsetof(Ctl__NvmeController, pci_cfg), NULL, NULL, 0,          /* flags */
 	0, NULL, NULL /* reserved1,reserved2, etc */
     },
 };
