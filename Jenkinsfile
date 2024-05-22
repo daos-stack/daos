@@ -330,7 +330,6 @@ pipeline {
             }
         }
         stage('Checkout sources') {
-            agent any
             steps {
                 checkoutScm(
                     url: 'https://github.com/daos-stack/daos.git',
