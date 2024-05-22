@@ -132,6 +132,8 @@ pipeline {
         preserveStashes(buildCount: 5)
         ansiColor('xterm')
         buildDiscarder(logRotator(artifactDaysToKeepStr: '100', daysToKeepStr: '730'))
+        // This is key setting that enables one checkout across different stages
+        skipDefaultCheckout true
     }
 
     parameters {
@@ -327,6 +329,16 @@ pipeline {
                 cancelPreviousBuilds()
             }
         }
+        stage('Checkout sources') {
+            agent any
+            steps {
+                checkoutScm(
+                    url: 'https://github.com/daos-stack/daos.git',
+                    branch: base_branch,
+                    withSubmodules: true,
+                    pruneStaleBranch: true)
+            }
+        }
         stage('Build') {
             /* Don't use failFast here as whilst it avoids using extra resources
              * and gives faster results for PRs it's also on for master where we
@@ -355,11 +367,6 @@ pipeline {
                         }
                     }
                     steps {
-                        checkoutScm(
-                            url: 'https://github.com/daos-stack/daos.git',
-                            branch: base_branch,
-                            withSubmodules: true,
-                            pruneStaleBranch: true)
                         job_step_update(
                             sconsBuild(parallel_build: true,
                                        stash_files: 'ci/test_files_to_stash.txt',
@@ -399,11 +406,6 @@ pipeline {
                         }
                     }
                     steps {
-                        checkoutScm(
-                            url: 'https://github.com/daos-stack/daos.git',
-                            branch: base_branch,
-                            withSubmodules: true,
-                            pruneStaleBranch: true)
                         job_step_update(
                             sconsBuild(parallel_build: true,
                                        stash_files: 'ci/test_files_to_stash.txt',
