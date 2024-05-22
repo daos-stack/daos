@@ -295,7 +295,7 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 			return nil, errors.Wrap(err, "query on already-created pool failed")
 		}
 
-		resp.Leader = qr.Leader
+		resp.Leader = qr.SvcLdr
 		resp.SvcReps = ranklist.RanksToUint32(ps.Replicas)
 		resp.TgtRanks = ranklist.RanksToUint32(ps.Storage.CreationRanks())
 		resp.TierBytes = ps.Storage.PerRankTierStorage
@@ -909,6 +909,10 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 		return nil, err
 	}
 
+	if req.QueryMask == 0 {
+		req.QueryMask = uint64(daos.DefaultPoolQueryMask)
+	}
+
 	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolQuery, req)
 	if err != nil {
 		return nil, err
@@ -918,6 +922,9 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal PoolQuery response")
 	}
+
+	// Preserve compatibility with pre-2.6 callers.
+	resp.Leader = resp.SvcLdr
 
 	return resp, nil
 }

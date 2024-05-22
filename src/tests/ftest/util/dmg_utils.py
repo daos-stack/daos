@@ -583,6 +583,7 @@ class DmgCommand(DmgCommandBase):
         data["status"] = output["status"]
         data["uuid"] = output["response"]["uuid"]
         data["svc"] = ",".join([str(svc) for svc in output["response"]["svc_reps"]])
+        data["leader"] = output["response"]["svc_ldr"]
         data["ranks"] = ",".join([str(r) for r in output["response"]["tgt_ranks"]])
         data["scm_per_rank"] = output["response"]["tier_bytes"][0]
         data["nvme_per_rank"] = output["response"]["tier_bytes"][1]
@@ -614,7 +615,7 @@ class DmgCommand(DmgCommandBase):
         #         "total_engines": 1,
         #         "disabled_targets": 0,
         #         "version": 1,
-        #         "leader": 0,
+        #         "svc_ldr": 0,
         #         "rebuild": {
         #             "status": 0,
         #             "state": "idle",
@@ -790,10 +791,8 @@ class DmgCommand(DmgCommandBase):
         #             "svc_reps": [
         #             0
         #             ],
-        #             "targets_total": 8,
-        #             "targets_disabled": 0,
-        #             "query_error_msg": "",
-        #             "query_status_msg": "",
+        #             "total_targets": 8,
+        #             "disabled_targets": 0,
         #             "usage": [
         #             {
         #                 "tier_name": "SCM",

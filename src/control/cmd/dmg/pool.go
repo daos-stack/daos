@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -21,6 +21,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/ui"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -357,8 +358,9 @@ type PoolListCmd struct {
 	cfgCmd
 	ctlInvokerCmd
 	cmdutil.JSONOutputCmd
-	Verbose bool `short:"v" long:"verbose" description:"Add pool UUIDs and service replica lists to display"`
-	NoQuery bool `short:"n" long:"no-query" description:"Disable query of listed pools"`
+	Verbose     bool `short:"v" long:"verbose" description:"Add pool UUIDs and service replica lists to display"`
+	NoQuery     bool `short:"n" long:"no-query" description:"Disable query of listed pools"`
+	RebuildOnly bool `short:"r" long:"rebuild-only" description:"List only pools which rebuild stats is not idle"`
 }
 
 // Execute is run when PoolListCmd activates
@@ -380,12 +382,24 @@ func (cmd *PoolListCmd) Execute(_ []string) (errOut error) {
 		return err // control api returned an error, disregard response
 	}
 
+	// If rebuild-only pools requested, list the pools which has been rebuild only
+	// and not in idle state, otherwise list all the pools.
+	if cmd.RebuildOnly {
+		filtered := resp.Pools[:0] // reuse backing array
+		for _, p := range resp.Pools {
+			if p.Rebuild != nil && p.Rebuild.State != daos.PoolRebuildStateIdle {
+				filtered = append(filtered, p)
+			}
+		}
+		resp.Pools = filtered
+	}
+
 	if cmd.JSONOutputEnabled() {
 		return cmd.OutputJSON(resp, nil)
 	}
 
 	var out, outErr strings.Builder
-	if err := pretty.PrintListPoolsResponse(&out, &outErr, resp, cmd.Verbose); err != nil {
+	if err := pretty.PrintListPoolsResponse(&out, &outErr, resp, cmd.Verbose, cmd.NoQuery); err != nil {
 		return err
 	}
 	if outErr.String() != "" {
@@ -587,20 +601,29 @@ type PoolQueryCmd struct {
 	poolCmd
 	ShowEnabledRanks  bool `short:"e" long:"show-enabled" description:"Show engine unique identifiers (ranks) which are enabled"`
 	ShowDisabledRanks bool `short:"b" long:"show-disabled" description:"Show engine unique identifiers (ranks) which are disabled"`
+	HealthOnly        bool `short:"t" long:"health-only" description:"Only perform pool health related queries"`
 }
 
 // Execute is run when PoolQueryCmd subcommand is activated
 func (cmd *PoolQueryCmd) Execute(args []string) error {
 	req := &control.PoolQueryReq{
-		ID: cmd.PoolID().String(),
+		ID:        cmd.PoolID().String(),
+		QueryMask: daos.DefaultPoolQueryMask,
 	}
 
+	if cmd.HealthOnly {
+		req.QueryMask = daos.HealthOnlyPoolQueryMask
+	}
 	// TODO (DAOS-10250) The two options should not be incompatible (i.e. engine limitation)
 	if cmd.ShowEnabledRanks && cmd.ShowDisabledRanks {
 		return errIncompatFlags("show-enabled-ranks", "show-disabled-ranks")
 	}
-	req.IncludeEnabledRanks = cmd.ShowEnabledRanks
-	req.IncludeDisabledRanks = cmd.ShowDisabledRanks
+	if cmd.ShowEnabledRanks {
+		req.QueryMask.SetOptions(daos.PoolQueryOptionEnabledEngines)
+	}
+	if cmd.ShowDisabledRanks {
+		req.QueryMask.SetOptions(daos.PoolQueryOptionDisabledEngines)
+	}
 
 	resp, err := control.PoolQuery(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 
@@ -616,6 +639,8 @@ func (cmd *PoolQueryCmd) Execute(args []string) error {
 	if err := pretty.PrintPoolQueryResponse(resp, &bld); err != nil {
 		return err
 	}
+
+	cmd.Debugf("Pool query options: %s", resp.PoolInfo.QueryMask)
 	cmd.Info(bld.String())
 	return nil
 }
