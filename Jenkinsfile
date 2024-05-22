@@ -355,6 +355,11 @@ pipeline {
                         }
                     }
                     steps {
+                        checkoutScm(
+                            url: 'https://github.com/daos-stack/daos.git',
+                            branch: base_branch,
+                            withSubmodules: true,
+                            pruneStaleBranch: true)
                         job_step_update(
                             sconsBuild(parallel_build: true,
                                        stash_files: 'ci/test_files_to_stash.txt',
@@ -394,6 +399,11 @@ pipeline {
                         }
                     }
                     steps {
+                        checkoutScm(
+                            url: 'https://github.com/daos-stack/daos.git',
+                            branch: base_branch,
+                            withSubmodules: true,
+                            pruneStaleBranch: true)
                         job_step_update(
                             sconsBuild(parallel_build: true,
                                        stash_files: 'ci/test_files_to_stash.txt',
