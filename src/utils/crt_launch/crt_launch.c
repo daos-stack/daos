@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
- /**
+/**
  * MPI-based and cart-based crt_launch application that facilitates launching
  * cart-based clients and servers when no pmix is used.
  *

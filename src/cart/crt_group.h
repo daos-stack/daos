@@ -94,7 +94,7 @@ struct crt_grp_priv {
 	/* PSR rank in attached group */
 	d_rank_t		 gp_psr_rank;
 	/* PSR URI address in attached group */
-	char			*gp_psr_uri;
+	char                     *gp_psr_uri;
 	/* address lookup cache, only valid for primary group */
 	struct d_hash_table	 *gp_lookup_cache;
 
@@ -238,8 +238,9 @@ struct crt_grp_gdata {
 
 void crt_hdlr_uri_lookup(crt_rpc_t *rpc_req);
 int crt_grp_detach(crt_group_t *attached_grp);
-void crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
-		      d_rank_t rank, uint32_t tag, char **base_addr, hg_addr_t *hg_addr);
+void
+    crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx, d_rank_t rank, uint32_t tag,
+		      char **base_addr, hg_addr_t *hg_addr);
 int crt_grp_lc_uri_insert(struct crt_grp_priv *grp_priv,
 			  d_rank_t rank, uint32_t tag, const char *uri);
 int crt_grp_lc_addr_insert(struct crt_grp_priv *grp_priv,
@@ -323,8 +324,7 @@ crt_grp_priv_decref(struct crt_grp_priv *grp_priv)
 }
 
 static inline int
-crt_grp_psr_set(struct crt_grp_priv *grp_priv, d_rank_t psr_rank,
-		char *psr_uri, bool steal)
+crt_grp_psr_set(struct crt_grp_priv *grp_priv, d_rank_t psr_rank, char *psr_uri, bool steal)
 {
 	int rc = 0;
 
@@ -336,15 +336,15 @@ crt_grp_psr_set(struct crt_grp_priv *grp_priv, d_rank_t psr_rank,
 	if (steal) {
 		grp_priv->gp_psr_uri = psr_uri;
 	} else {
-		D_STRNDUP(grp_priv->gp_psr_uri , psr_uri, CRT_ADDR_STR_MAX_LEN);
+		D_STRNDUP(grp_priv->gp_psr_uri, psr_uri, CRT_ADDR_STR_MAX_LEN);
 		if (grp_priv->gp_psr_uri == NULL)
 			rc = -DER_NOMEM;
 	}
 
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
-	D_DEBUG(DB_TRACE, "group %s, set psr rank %d, uri %s.\n",
-		grp_priv->gp_pub.cg_grpid, psr_rank, psr_uri);
+	D_DEBUG(DB_TRACE, "group %s, set psr rank %d, uri %s.\n", grp_priv->gp_pub.cg_grpid,
+		psr_rank, psr_uri);
 	return rc;
 }
 

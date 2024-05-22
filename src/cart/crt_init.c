@@ -19,42 +19,42 @@ static bool		g_prov_settings_applied[CRT_PROV_COUNT];
 
 /* List of the environment variables used in CaRT */
 static const char      *crt_env_names[] = {
-    "D_PROVIDER",
-    "D_INTERFACE",
-    "D_DOMAIN",
-    "D_PORT",
-    "CRT_PHY_ADDR_STR",
-    "D_LOG_STDERR_IN_LOG",
-    "D_LOG_SIZE",
-    "D_LOG_FILE",
-    "D_LOG_FILE_APPEND_PID",
-    "D_LOG_MASK",
-    "DD_MASK",
-    "DD_STDERR",
-    "DD_SUBSYS",
-    "CRT_TIMEOUT",
-    "CRT_ATTACH_INFO_PATH",
-    "CRT_CREDIT_EP_CTX",
-    "CRT_CTX_SHARE_ADDR",
-    "CRT_CTX_NUM",
-    "D_FI_CONFIG",
-    "FI_UNIVERSE_SIZE",
-    "CRT_ENABLE_MEM_PIN",
-    "FI_OFI_RXM_USE_SRX",
-    "D_LOG_FLUSH",
-    "CRT_MRC_ENABLE",
-    "CRT_SECONDARY_PROVIDER",
-    "D_PROVIDER_AUTH_KEY",
-    "D_PORT_AUTO_ADJUST",
-    "D_POLL_TIMEOUT",
-    "D_LOG_FILE_APPEND_RANK",
-    "D_QUOTA_RPCS",
-    "D_POST_INIT",
-    "D_POST_INCR",
-    "DAOS_SIGNAL_REGISTER",
-    "D_CLIENT_METRICS_ENABLE",
-    "D_CLIENT_METRICS_RETAIN",
-    "D_CLIENT_METRICS_DUMP_DIR",
+	 "D_PROVIDER",
+	 "D_INTERFACE",
+	 "D_DOMAIN",
+	 "D_PORT",
+	 "CRT_PHY_ADDR_STR",
+	 "D_LOG_STDERR_IN_LOG",
+	 "D_LOG_SIZE",
+	 "D_LOG_FILE",
+	 "D_LOG_FILE_APPEND_PID",
+	 "D_LOG_MASK",
+	 "DD_MASK",
+	 "DD_STDERR",
+	 "DD_SUBSYS",
+	 "CRT_TIMEOUT",
+	 "CRT_ATTACH_INFO_PATH",
+	 "CRT_CREDIT_EP_CTX",
+	 "CRT_CTX_SHARE_ADDR",
+	 "CRT_CTX_NUM",
+	 "D_FI_CONFIG",
+	 "FI_UNIVERSE_SIZE",
+	 "CRT_ENABLE_MEM_PIN",
+	 "FI_OFI_RXM_USE_SRX",
+	 "D_LOG_FLUSH",
+	 "CRT_MRC_ENABLE",
+	 "CRT_SECONDARY_PROVIDER",
+	 "D_PROVIDER_AUTH_KEY",
+	 "D_PORT_AUTO_ADJUST",
+	 "D_POLL_TIMEOUT",
+	 "D_LOG_FILE_APPEND_RANK",
+	 "D_QUOTA_RPCS",
+	 "D_POST_INIT",
+	 "D_POST_INCR",
+	 "DAOS_SIGNAL_REGISTER",
+	 "D_CLIENT_METRICS_ENABLE",
+	 "D_CLIENT_METRICS_RETAIN",
+	 "D_CLIENT_METRICS_DUMP_DIR",
 };
 
 static void
@@ -132,8 +132,8 @@ dump_opt(crt_init_options_t *opt)
 	D_INFO("interface = %s\n", opt->cio_interface);
 	D_INFO("domain = %s\n", opt->cio_domain);
 	D_INFO("port = %s\n", opt->cio_port);
-	D_INFO("Flags: fi: %d, use_credits: %d, use_esnsors: %d\n",
-		opt->cio_fault_inject, opt->cio_use_credits, opt->cio_use_sensors);
+	D_INFO("Flags: fi: %d, use_credits: %d, use_esnsors: %d\n", opt->cio_fault_inject,
+	       opt->cio_use_credits, opt->cio_use_sensors);
 
 	if (opt->cio_use_expected_size)
 		D_INFO("max_expected_size = %d\n", opt->cio_max_expected_size);
@@ -242,7 +242,7 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	prov_data->cpg_inited = true;
 	prov_data->cpg_provider = provider;
 	prov_data->cpg_ctx_num = 0;
-	prov_data->cpg_sep_mode = false;
+	prov_data->cpg_sep_mode       = false;
 	prov_data->cpg_contig_ports = true;
 	prov_data->cpg_ctx_max_num = max_num_ctx;
 	prov_data->cpg_max_exp_size = max_expect_size;
@@ -256,14 +256,13 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	prov_data->cpg_num_remote_tags = 1;
 	prov_data->cpg_last_remote_tag = 0;
 
-	D_DEBUG(DB_ALL, "prov_idx: %d primary: %d sizes: (%d/%d) max_ctx: %d\n",
-		provider, primary, max_expect_size, max_unexpect_size, max_num_ctx);
+	D_DEBUG(DB_ALL, "prov_idx: %d primary: %d sizes: (%d/%d) max_ctx: %d\n", provider, primary,
+		max_expect_size, max_unexpect_size, max_num_ctx);
 
 	D_INIT_LIST_HEAD(&prov_data->cpg_ctx_list);
 
 	return DER_SUCCESS;
 }
-
 
 /* first step init - for initializing crt_gdata */
 static int data_init(int server, crt_init_options_t *opt)
@@ -589,12 +588,6 @@ void
 crt_protocol_info_free(struct crt_protocol_info *protocol_info)
 {
 	crt_hg_free_protocol_info((struct na_protocol_info *)protocol_info);
-}
-
-static inline void
-warn_deprecated(const char *old_env, const char *new_env)
-{
-	D_WARN("Usage of %s is deprecated. Set %s instead\n", old_env, new_env);
 }
 
 int
@@ -960,10 +953,10 @@ crt_initialized()
 int
 crt_finalize(void)
 {
-	struct crt_prov_gdata	*prov_data;
-	int			local_rc;
-	int			rc = 0;
-	int			i;
+	struct crt_prov_gdata *prov_data;
+	int                    local_rc;
+	int                    rc = 0;
+	int                    i;
 
 	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
 
@@ -988,7 +981,7 @@ crt_finalize(void)
 			D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 			D_GOTO(out, rc = -DER_BUSY);
 		} else {
-			D_ASSERT(crt_context_empty(crt_gdata.cg_primary_prov,CRT_LOCKED));
+			D_ASSERT(crt_context_empty(crt_gdata.cg_primary_prov, CRT_LOCKED));
 		}
 
 		if (crt_plugin_gdata.cpg_inited == 1)
@@ -1066,8 +1059,8 @@ static inline bool is_integer_str(char *str)
 static inline int
 crt_get_port_opx(int *port)
 {
-	int		rc = 0;
-	uint16_t	pid;
+	int      rc = 0;
+	uint16_t pid;
 
 	pid = getpid();
 	*port = pid;
@@ -1231,7 +1224,8 @@ crt_na_config_init(bool primary, crt_provider_t provider,
 			if (provider == CRT_PROV_OFI_CXI && port_auto_adjust) {
 				if (port > 511) {
 					D_WARN("Port=%d outside of valid range 0-511, "
-					       "converting it to %d\n", port, port % 512);
+					       "converting it to %d\n",
+					       port, port % 512);
 					port = port % 512;
 				}
 			}

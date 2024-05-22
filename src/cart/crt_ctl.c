@@ -47,7 +47,7 @@ out:
 static int
 crt_ctl_fill_buffer_cb(d_list_t *rlink, void *arg)
 {
-	char 			*uri;
+	char                    *uri;
 	struct crt_uri_cache	*uri_cache = arg;
 	struct crt_uri_item	*ui;
 	uint32_t		*idx;
