@@ -1266,6 +1266,7 @@ ds_pool_stop(uuid_t uuid)
 
 	while (!daos_lru_is_last_user(&pool->sp_entry))
 		dss_sleep(1000 /* ms */);
+	D_INFO(DF_UUID ": completed reference wait\n", DP_UUID(uuid));
 
 	pool_child_delete_all(pool);
 
