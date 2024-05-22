@@ -790,7 +790,7 @@ crt_req_decref(crt_rpc_t *req)
 }
 
 static inline int
-crt_req_fill_tgt_uri(struct crt_rpc_priv *rpc_priv, crt_phy_addr_t base_uri)
+crt_req_fill_tgt_uri(struct crt_rpc_priv *rpc_priv, char *base_uri)
 {
 	D_ASSERT(rpc_priv != NULL);
 	D_ASSERT(base_uri != NULL);
@@ -1197,9 +1197,9 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 	crt_rpc_t		*req;
 	crt_endpoint_t		*tgt_ep;
 	struct crt_context	*ctx;
-	crt_phy_addr_t		 uri = NULL;
+	char			*uri = NULL;
 	int			 rc = 0;
-	crt_phy_addr_t		 base_addr = NULL;
+	char			*base_addr = NULL;
 	struct crt_prov_gdata	*prov_data;
 	int			 dst_tag;
 
@@ -1253,8 +1253,7 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 		rc = crt_req_fill_tgt_uri(rpc_priv, base_addr);
 		if (rc != 0)
 			RPC_ERROR(rpc_priv,
-				  "crt_req_fill_tgt_uri() failed, " DF_RC "\n",
-				  DP_RC(rc));
+				  "crt_req_fill_tgt_uri() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1265,28 +1264,26 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 	 * later can insert it here.
 	 */
 	if (base_addr == NULL && !crt_is_service()) {
+
 		D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
-		if (tgt_ep->ep_rank == grp_priv->gp_psr_rank &&
-		    dst_tag == 0) {
-			D_STRNDUP(uri, grp_priv->gp_psr_phy_addr,
-				  CRT_ADDR_STR_MAX_LEN);
+		if (tgt_ep->ep_rank == grp_priv->gp_psr_rank && dst_tag == 0) {
+
+			D_STRNDUP(uri, grp_priv->gp_psr_uri, CRT_ADDR_STR_MAX_LEN);
 			D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
+
 			if (uri == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 
 			base_addr = uri;
-			rc = crt_grp_lc_uri_insert(grp_priv,
-						   tgt_ep->ep_rank, 0, uri);
+			rc = crt_grp_lc_uri_insert(grp_priv, tgt_ep->ep_rank, 0, uri);
 			if (rc != 0) {
-				D_ERROR("crt_grp_lc_uri_insert() failed, "
-					"rc: %d\n", rc);
+				D_ERROR("crt_grp_lc_uri_insert() failed rc=%d\n", rc);
 				D_GOTO(out, rc);
 			}
 
 			rc = crt_req_fill_tgt_uri(rpc_priv, uri);
 			if (rc != 0) {
-				D_ERROR("crt_req_fill_tgt_uri failed, "
-					"opc: %#x.\n", req->cr_opc);
+				RPC_ERROR(rpc_priv, "tgt_uri='%s' fill failed\n", uri);
 				D_GOTO(out, rc);
 			}
 		} else {

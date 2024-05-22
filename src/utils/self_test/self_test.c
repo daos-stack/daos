@@ -87,7 +87,7 @@ static void *progress_fn(void *arg)
 static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 			  crt_group_t **srv_grp, pthread_t *tid,
 			  char *attach_info_path, bool listen,
-			  bool use_daos_agent_vars)
+			  bool use_agent)
 {
 	uint32_t	 init_flags = 0;
 	uint32_t	 grp_size;
@@ -100,7 +100,7 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(0, attach_retries, false, false);
 
-	if (use_daos_agent_vars) {
+	if (use_agent) {
 		ret = dc_agent_init();
 		if (ret != 0) {
 			fprintf(stderr, "dc_agent_init() failed. ret: %d\n", ret);
@@ -134,7 +134,7 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 	}
 	g_context_created = true;
 
-	if (use_daos_agent_vars) {
+	if (use_agent) {
 		ret = crt_group_view_create(dest_name, srv_grp);
 		if (!*srv_grp || ret != 0) {
 			D_ERROR("Failed to create group view; ret=%d\n", ret);
@@ -809,7 +809,7 @@ static int run_self_test(struct st_size_params all_params[],
 			 struct st_endpoint *endpts, uint32_t num_endpts,
 			 int output_megabits, int16_t buf_alignment,
 			 char *attach_info_path,
-			 bool use_daos_agent_vars)
+			 bool use_agent)
 {
 	crt_context_t		  crt_ctx;
 	crt_group_t		 *srv_grp;
@@ -843,7 +843,7 @@ static int run_self_test(struct st_size_params all_params[],
 	/* Initialize CART */
 	ret = self_test_init(dest_name, &crt_ctx, &srv_grp, &tid,
 			     attach_info_path, listen /* run as server */,
-			     use_daos_agent_vars);
+			     use_agent);
 	if (ret != 0) {
 		D_ERROR("self_test_init failed; ret = %d\n", ret);
 		D_GOTO(cleanup_nothread, ret);
@@ -1077,10 +1077,8 @@ cleanup_nothread:
 }
 
 static void print_usage(const char *prog_name, const char *msg_sizes_str,
-			int rep_count,
-			int max_inflight)
+			int rep_count, int max_inflight)
 {
-	/* TODO --randomize-endpoints */
 	/* TODO --verbose */
 	printf("Usage: %s --group-name <name> --endpoint <ranks:tags> [optional arguments]\n"
 	       "\n"
@@ -1237,7 +1235,6 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "      Specifying --Mbits switches the output to megabits (#bits/1000000)\n"
 	       "  --path  /path/to/attach_info_file/directory/\n"
 	       "      Short version: -p  prefix\n"
-	       "      This option implies --singleton is set.\n"
 	       "        If specified, self_test will use the address information in:\n"
 	       "        /tmp/group_name.attach_info_tmp, if prefix is specified, self_test will use\n"
 	       "        the address information in: prefix/group_name.attach_info_tmp.\n"
@@ -1713,10 +1710,9 @@ int main(int argc, char *argv[])
 	uint32_t			 num_endpts = 0;
 	uint32_t			 num_ms_endpts = 0;
 	int				 output_megabits = 0;
-	int16_t				 buf_alignment =
-		CRT_ST_BUF_ALIGN_DEFAULT;
+	int16_t				 buf_alignment = CRT_ST_BUF_ALIGN_DEFAULT;
 	char				*attach_info_path = NULL;
-	bool				 use_daos_agent_vars = false;
+	bool				 use_agent = false;
 
 	ret = d_log_init();
 	if (ret != 0) {
@@ -1734,16 +1730,14 @@ int main(int argc, char *argv[])
 			{"max-inflight-rpcs", required_argument, 0, 'i'},
 			{"align", required_argument, 0, 'a'},
 			{"Mbits", no_argument, 0, 'b'},
-			{"singleton", no_argument, 0, 't'},
 			{"randomize-endpoints", no_argument, 0, 'q'},
 			{"path", required_argument, 0, 'p'},
-			{"nopmix", no_argument, 0, 'n'},
 			{"use-daos-agent-env", no_argument, 0, 'u'},
 			{"help", no_argument, 0, 'h'},
 			{0, 0, 0, 0}
 		};
 
-		c = getopt_long(argc, argv, "g:m:e:s:r:i:a:bthnqp:u",
+		c = getopt_long(argc, argv, "g:m:e:s:r:i:a:bhqp:u",
 				long_options, NULL);
 		if (c == -1)
 			break;
@@ -1797,35 +1791,26 @@ int main(int argc, char *argv[])
 			attach_info_path = optarg;
 			break;
 		case 'u':
-			use_daos_agent_vars = true;
+			use_agent = true;
 			break;
 		case 'q':
 			g_randomize_endpoints = true;
 			break;
 
-		/* 't' and 'n' options are deprecated */
-		case 't':
-			printf("Warning: 't' argument is deprecated\n");
-			break;
-		case 'n':
-			printf("Warning: 'n' argument is deprecated\n");
-			break;
 		case 'h':
 		case '?':
 			print_usage(argv[0], default_msg_sizes_str,
-				    default_rep_count,
-				    default_max_inflight);
+				    default_rep_count, default_max_inflight);
 			D_GOTO(cleanup, ret = 0);
 			break;
 		default:
 			print_usage(argv[0], default_msg_sizes_str,
-				    default_rep_count,
-				    default_max_inflight);
+				    default_rep_count, default_max_inflight);
 			D_GOTO(cleanup, ret = -DER_INVAL);
 		}
 	}
 
-	if (use_daos_agent_vars == false) {
+	if (use_agent == false) {
 		char *attach_path;
 		char *attach_path_env = NULL;
 
@@ -1858,8 +1843,6 @@ int main(int argc, char *argv[])
 	}
 
 	/******************** Parse message sizes argument ********************/
-
-
 	/*
 	 * Count the number of tuple tokens (',') in the user-specified string
 	 * This gives an upper limit on the number of arguments the user passed
@@ -1898,8 +1881,7 @@ int main(int argc, char *argv[])
 	while (pch != NULL) {
 		D_ASSERTF(num_msg_sizes <= num_tokens, "Token counting err\n");
 
-		ret = parse_message_sizes_string(pch,
-						 &all_params[num_msg_sizes]);
+		ret = parse_message_sizes_string(pch, &all_params[num_msg_sizes]);
 		if (ret == 0)
 			num_msg_sizes++;
 		else
@@ -1921,8 +1903,7 @@ int main(int argc, char *argv[])
 		struct st_size_params *realloced_mem;
 
 		/* This should always succeed since the buffer is shrinking.. */
-		D_REALLOC_ARRAY(realloced_mem, all_params, num_tokens + 1,
-				num_msg_sizes);
+		D_REALLOC_ARRAY(realloced_mem, all_params, num_tokens + 1, num_msg_sizes);
 		if (realloced_mem == NULL)
 			D_GOTO(cleanup, ret = -DER_NOMEM);
 		all_params = (struct st_size_params *)realloced_mem;
@@ -1939,19 +1920,24 @@ int main(int argc, char *argv[])
 		printf("--group-name argument not specified or is invalid\n");
 		D_GOTO(cleanup, ret = -DER_INVAL);
 	}
+
 	if (ms_endpts == NULL)
 		printf("Warning: No --master-endpoint specified; using this"
 		       " command line application as the master endpoint\n");
 
-
 	if (endpts == NULL || num_endpts == 0) {
-		printf("Warning: No --endpoint specified; using 0:2 default\n");
+		int tag = 0; /* use context 0 as a default one for non-daos case */
+
+		/* In case of the DAOS engines first 2 contexts are reserved */
+		if (use_agent)
+			tag = 2;
+
+		printf("Warning: No --endpoint specified; using 0:%d default\n", tag);
 		num_endpts = 1;
 		D_ALLOC_ARRAY(endpts, 1);
 		endpts[0].rank = 0;
-		endpts[0].tag = 2;
+		endpts[0].tag = tag;
 	}
-
 
 	/* repeat rep_count for each endpoint */
 	rep_count = rep_count * num_endpts;
@@ -2002,24 +1988,17 @@ int main(int argc, char *argv[])
 			    max_inflight, dest_name, ms_endpts,
 			    num_ms_endpts, endpts, num_endpts,
 			    output_megabits, buf_alignment, attach_info_path,
-			    use_daos_agent_vars);
+			    use_agent);
 
 	/********************* Clean up *********************/
 cleanup:
-	if (ms_endpts != NULL) {
-		D_FREE(ms_endpts);
-		ms_endpts = NULL;
-	}
-	if (endpts != NULL) {
-		D_FREE(endpts);
-		endpts = NULL;
-	}
-	if (all_params != NULL)
-		D_FREE(all_params);
+	D_FREE(ms_endpts);
+	D_FREE(endpts);
+	D_FREE(all_params);
 
-	if (use_daos_agent_vars) {
+	if (use_agent)
 		dc_mgmt_fini();
-	}
+
 	d_log_fini();
 
 	return ret;

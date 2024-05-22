@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -93,8 +93,8 @@ struct crt_grp_priv {
 	d_rank_list_t		 *gp_psr_ranks;
 	/* PSR rank in attached group */
 	d_rank_t		 gp_psr_rank;
-	/* PSR phy addr address in attached group */
-	crt_phy_addr_t		 gp_psr_phy_addr;
+	/* PSR URI address in attached group */
+	char			*gp_psr_uri;
 	/* address lookup cache, only valid for primary group */
 	struct d_hash_table	 *gp_lookup_cache;
 
@@ -196,8 +196,7 @@ struct crt_uri_item {
 	d_list_t	ui_link;
 
 	/* URI string for each remote tag */
-	/* TODO: in phase2 change this to hash table */
-	ATOMIC crt_phy_addr_t ui_uri[CRT_SRV_CONTEXT_NUM];
+	ATOMIC d_string_t ui_uri[CRT_SRV_CONTEXT_NUM];
 
 	/* Primary rank; for secondary groups only  */
 	d_rank_t	ui_pri_rank;
@@ -240,8 +239,7 @@ struct crt_grp_gdata {
 void crt_hdlr_uri_lookup(crt_rpc_t *rpc_req);
 int crt_grp_detach(crt_group_t *attached_grp);
 void crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
-		      d_rank_t rank, uint32_t tag, crt_phy_addr_t *base_addr,
-		      hg_addr_t *hg_addr);
+		      d_rank_t rank, uint32_t tag, char **base_addr, hg_addr_t *hg_addr);
 int crt_grp_lc_uri_insert(struct crt_grp_priv *grp_priv,
 			  d_rank_t rank, uint32_t tag, const char *uri);
 int crt_grp_lc_addr_insert(struct crt_grp_priv *grp_priv,
@@ -326,24 +324,27 @@ crt_grp_priv_decref(struct crt_grp_priv *grp_priv)
 
 static inline int
 crt_grp_psr_set(struct crt_grp_priv *grp_priv, d_rank_t psr_rank,
-		crt_phy_addr_t psr_addr, bool steal)
+		char *psr_uri, bool steal)
 {
 	int rc = 0;
 
 	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
-	D_FREE(grp_priv->gp_psr_phy_addr);
+
+	D_FREE(grp_priv->gp_psr_uri);
 	grp_priv->gp_psr_rank = psr_rank;
+
 	if (steal) {
-		grp_priv->gp_psr_phy_addr = psr_addr;
+		grp_priv->gp_psr_uri = psr_uri;
 	} else {
-		D_STRNDUP(grp_priv->gp_psr_phy_addr, psr_addr,
-			CRT_ADDR_STR_MAX_LEN);
-		if (grp_priv->gp_psr_phy_addr == NULL)
+		D_STRNDUP(grp_priv->gp_psr_uri , psr_uri, CRT_ADDR_STR_MAX_LEN);
+		if (grp_priv->gp_psr_uri == NULL)
 			rc = -DER_NOMEM;
 	}
+
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
+
 	D_DEBUG(DB_TRACE, "group %s, set psr rank %d, uri %s.\n",
-		grp_priv->gp_pub.cg_grpid, psr_rank, psr_addr);
+		grp_priv->gp_pub.cg_grpid, psr_rank, psr_uri);
 	return rc;
 }
 
