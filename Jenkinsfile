@@ -32,7 +32,8 @@ void job_step_update(def value=currentBuild.currentResult) {
 }
 
 // For master, this is just some wildly high number
-next_version = '1000'
+// For release branches, its the subsequent DAOS version
+next_version = '2.7.0'
 
 // Don't define this as a type or it loses it's global scope
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
