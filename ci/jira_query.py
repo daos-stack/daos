@@ -40,7 +40,7 @@ VALID_TICKET_PREFIX = ('DAOS', 'CORCI', 'SRE')
 FIELDS = 'summary,status,labels,customfield_10044,customfield_10045'
 
 # Labels in GitHub which this script will set/clear based on the logic below.
-MANAGED_LABELS_REGEX = re.compile(r'^(priority)|(release-(\d+\.\d+))$')
+MANAGED_LABELS_REGEX = re.compile(r'^(priority|release-\d+\.\d+)$')
 
 # Required version Jira labels that the script will generate GitHub labels from
 REQ_VERSION_REGEX = re.compile(r'(^\d+\.\d+) Community Release$')
