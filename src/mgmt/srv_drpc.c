@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1772,12 +1772,17 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
+	/* TODO (DAOS-10250) Enabled and disabled engines should be retrieve both if needed */
+	if (req->query_mask & DPI_ENGINES_ENABLED && req->query_mask & DPI_ENGINES_DISABLED) {
+		D_ERROR("cannot query enabled and disabled engines in the same request\n");
+		D_GOTO(out, rc = -DER_NOTSUPPORTED);
+	}
+
 	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
 	if (svc_ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	/* TODO (DAOS-10250) Enabled and disabled engines should be retrieve both if needed */
-	pool_info.pi_bits = req->include_enabled_ranks ? DPI_ALL : (DPI_ALL & ~DPI_ENGINES_ENABLED);
+	pool_info.pi_bits = req->query_mask;
 	rc = ds_mgmt_pool_query(uuid, svc_ranks, &ranks, &pool_info, &resp.pool_layout_ver,
 				&resp.upgrade_layout_ver);
 	if (rc != 0) {
@@ -1797,15 +1802,18 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		truncated ? " ...(TRUNCATED)" : "");
 
 	/* Populate the response */
+	resp.query_mask       = pool_info.pi_bits;
 	resp.uuid = req->id;
 	resp.total_targets = pool_info.pi_ntargets;
 	resp.disabled_targets = pool_info.pi_ndisabled;
 	resp.active_targets = pool_info.pi_space.ps_ntargets;
 	resp.total_engines = pool_info.pi_nnodes;
-	resp.leader = pool_info.pi_leader;
+	resp.svc_ldr          = pool_info.pi_leader;
+	resp.svc_reps         = req->svc_ranks;
+	resp.n_svc_reps       = req->n_svc_ranks;
 	resp.version = pool_info.pi_map_ver;
-	resp.enabled_ranks = (req->include_enabled_ranks) ? range_list_str : "";
-	resp.disabled_ranks = (req->include_disabled_ranks) ? range_list_str : "";
+	resp.enabled_ranks    = (req->query_mask & DPI_ENGINES_ENABLED) ? range_list_str : "";
+	resp.disabled_ranks   = (req->query_mask & DPI_ENGINES_DISABLED) ? range_list_str : "";
 
 	D_ALLOC_ARRAY(resp.tier_stats, DAOS_MEDIA_MAX);
 	if (resp.tier_stats == NULL) {

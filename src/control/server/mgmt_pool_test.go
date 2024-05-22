@@ -117,7 +117,7 @@ func TestServer_MgmtSvc_PoolCreateAlreadyExists(t *testing.T) {
 		"ready": {
 			state: system.PoolServiceStateReady,
 			queryResp: &mgmtpb.PoolQueryResp{
-				Leader: 1,
+				SvcLdr: 1,
 			},
 			expResp: &mgmtpb.PoolCreateResp{
 				Leader:    1,
@@ -1806,7 +1806,27 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 				Id: mockUUID,
 			},
 			expResp: &mgmtpb.PoolQueryResp{
-				Uuid: mockUUID,
+				State: mgmtpb.PoolServiceState_Ready,
+				Uuid:  mockUUID,
+			},
+		},
+		"successful query (includes pre-2.6 Leader field)": {
+			req: &mgmtpb.PoolQueryReq{
+				Id: mockUUID,
+			},
+			setupMockDrpc: func(svc *mgmtSvc, err error) {
+				resp := &mgmtpb.PoolQueryResp{
+					State:  mgmtpb.PoolServiceState_Ready,
+					Uuid:   mockUUID,
+					SvcLdr: 42,
+				}
+				setupMockDrpcClient(svc, resp, nil)
+			},
+			expResp: &mgmtpb.PoolQueryResp{
+				State:  mgmtpb.PoolServiceState_Ready,
+				Uuid:   mockUUID,
+				SvcLdr: 42,
+				Leader: 42,
 			},
 		},
 	} {
