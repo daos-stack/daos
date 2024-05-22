@@ -220,24 +220,24 @@ struct statx {
 #endif
 
 /* working dir of current process */
-static char            cur_dir[DFS_MAX_PATH] = "";
-static bool            segv_handler_inited;
+static char             cur_dir[DFS_MAX_PATH] = "";
+static bool             segv_handler_inited;
 /* Old segv handler */
-struct sigaction       old_segv;
+struct sigaction        old_segv;
 
 /* the flag to indicate whether initlization is finished or not */
-bool                   d_hook_enabled;
-static bool            hook_enabled_bak;
-static pthread_mutex_t lock_reserve_fd;
-static pthread_mutex_t lock_dfs;
-static pthread_mutex_t lock_fd;
-static pthread_mutex_t lock_dirfd;
-static pthread_mutex_t lock_mmap;
-static pthread_mutex_t lock_fd_dup2ed;
-static pthread_mutex_t lock_eqh;
+bool                    d_hook_enabled;
+static bool             hook_enabled_bak;
+static pthread_mutex_t  lock_reserve_fd;
+static pthread_mutex_t  lock_dfs;
+static pthread_mutex_t  lock_fd;
+static pthread_mutex_t  lock_dirfd;
+static pthread_mutex_t  lock_mmap;
+static pthread_rwlock_t lock_fd_dup2ed;
+static pthread_mutex_t  lock_eqh;
 
 /* store ! umask to apply on mode when creating file to honor system umask */
-static mode_t          mode_not_umask;
+static mode_t           mode_not_umask;
 
 static void
 finalize_dfs(void);
@@ -1393,7 +1393,7 @@ init_fd_list(void)
 	rc = D_MUTEX_INIT(&lock_mmap, NULL);
 	if (rc)
 		return 1;
-	rc = D_MUTEX_INIT(&lock_fd_dup2ed, NULL);
+	rc = D_RWLOCK_INIT(&lock_fd_dup2ed, NULL);
 	if (rc)
 		return 1;
 
@@ -1705,29 +1705,16 @@ free_map(int idx)
 	D_MUTEX_UNLOCK(&lock_mmap);
 }
 
-#define GET_FD_REDIRECT_NOT_RUNNING 0
-#define GET_FD_REDIRECT_RUNNING     1
-
-static long int         get_fd_redirect_running;
-
 int
 d_get_fd_redirected(int fd)
 {
-	int      i, rc;
-	int      fd_ret     = fd;
-	uint64_t status_old = GET_FD_REDIRECT_NOT_RUNNING;
-	bool     rc_cmp_swap;
+	int i, fd_ret = fd;
 
 	if (atomic_load_relaxed(&d_daos_inited) == false)
 		return fd;
 
 	if (fd >= FD_FILE_BASE)
 		return fd;
-
-	/* locking may be involved in the following code. avoid reentrant / possible hang */
-	if (!atomic_compare_exchange_weak(&get_fd_redirect_running, &status_old,
-	    GET_FD_REDIRECT_RUNNING))
-		goto out_normal;
 
 	if (d_compatible_mode) {
 		d_list_t     *rlink;
@@ -1742,32 +1729,17 @@ d_get_fd_redirected(int fd)
 	}
 
 	if (atomic_load_relaxed(&num_fd_dup2ed) > 0) {
-		rc = pthread_mutex_lock(&lock_fd_dup2ed);
-		if (rc)
-			DS_ERROR(errno, "pthread_mutex_lock failed");
+		D_RWLOCK_RDLOCK(&lock_fd_dup2ed);
 		for (i = 0; i < MAX_FD_DUP2ED; i++) {
 			if (fd_dup2_list[i].fd_src == fd) {
 				fd_ret = fd_dup2_list[i].fd_dest;
-				status_old = GET_FD_REDIRECT_RUNNING;
-				rc_cmp_swap = atomic_compare_exchange_weak(&get_fd_redirect_running,
-					&status_old, GET_FD_REDIRECT_NOT_RUNNING);
-				D_ASSERT(rc_cmp_swap);
 				break;
 			}
 		}
-		rc = pthread_mutex_unlock(&lock_fd_dup2ed);
-		if (rc)
-			DS_ERROR(errno, "pthread_mutex_unlock failed");
+		D_RWLOCK_UNLOCK(&lock_fd_dup2ed);
 	}
-	status_old = GET_FD_REDIRECT_RUNNING;
-	rc_cmp_swap = atomic_compare_exchange_weak(&get_fd_redirect_running, &status_old,
-		GET_FD_REDIRECT_NOT_RUNNING);
-	D_ASSERT(rc_cmp_swap);
 
 	return fd_ret;
-
-out_normal:
-	return fd;
 }
 
 /* This fd is a fd from kernel and it is associated with a fake fd.
@@ -1790,7 +1762,7 @@ close_dup_fd(int (*next_close)(int fd), int fd, bool close_fd)
 
 	/* remove the fd_dup entry */
 	if (atomic_load_relaxed(&num_fd_dup2ed) > 0) {
-		D_MUTEX_LOCK(&lock_fd_dup2ed);
+		D_RWLOCK_WRLOCK(&lock_fd_dup2ed);
 		for (i = 0; i < MAX_FD_DUP2ED; i++) {
 			if (fd_dup2_list[i].fd_src == fd) {
 				idx_dup = i;
@@ -1802,7 +1774,7 @@ close_dup_fd(int (*next_close)(int fd), int fd, bool close_fd)
 				break;
 			}
 		}
-		D_MUTEX_UNLOCK(&lock_fd_dup2ed);
+		D_RWLOCK_UNLOCK(&lock_fd_dup2ed);
 	}
 
 	if (idx_dup < 0) {
@@ -1821,12 +1793,12 @@ init_fd_dup2_list(void)
 {
 	int i;
 
-	D_MUTEX_LOCK(&lock_fd_dup2ed);
+	D_RWLOCK_WRLOCK(&lock_fd_dup2ed);
 	for (i = 0; i < MAX_FD_DUP2ED; i++) {
 		fd_dup2_list[i].fd_src  = -1;
 		fd_dup2_list[i].fd_dest = -1;
 	}
-	D_MUTEX_UNLOCK(&lock_fd_dup2ed);
+	D_RWLOCK_UNLOCK(&lock_fd_dup2ed);
 }
 
 static int
@@ -1839,17 +1811,17 @@ allocate_dup2ed_fd(const int fd_src, const int fd_dest)
 
 	/* Not many applications use dup2(). Normally the number of fd duped is small. */
 	if (atomic_load_relaxed(&num_fd_dup2ed) < MAX_FD_DUP2ED) {
-		D_MUTEX_LOCK(&lock_fd_dup2ed);
+		D_RWLOCK_WRLOCK(&lock_fd_dup2ed);
 		for (i = 0; i < MAX_FD_DUP2ED; i++) {
 			if (fd_dup2_list[i].fd_src == -1) {
 				fd_dup2_list[i].fd_src  = fd_src;
 				fd_dup2_list[i].fd_dest = fd_dest;
 				atomic_fetch_add_relaxed(&num_fd_dup2ed, 1);
-				D_MUTEX_UNLOCK(&lock_fd_dup2ed);
+				D_RWLOCK_UNLOCK(&lock_fd_dup2ed);
 				return i;
 			}
 		}
-		D_MUTEX_UNLOCK(&lock_fd_dup2ed);
+		D_RWLOCK_UNLOCK(&lock_fd_dup2ed);
 	}
 
 	/* decrease dup reference count in error */
@@ -1865,15 +1837,15 @@ query_fd_forward_dest(int fd_src)
 	int i, fd_dest = -1;
 
 	if (atomic_load_relaxed(&num_fd_dup2ed) > 0) {
-		D_MUTEX_LOCK(&lock_fd_dup2ed);
+		D_RWLOCK_RDLOCK(&lock_fd_dup2ed);
 		for (i = 0; i < MAX_FD_DUP2ED; i++) {
 			if (fd_src == fd_dup2_list[i].fd_src) {
 				fd_dest = fd_dup2_list[i].fd_dest;
-				D_MUTEX_UNLOCK(&lock_fd_dup2ed);
+				D_RWLOCK_UNLOCK(&lock_fd_dup2ed);
 				return fd_dest;
 			}
 		}
-		D_MUTEX_UNLOCK(&lock_fd_dup2ed);
+		D_RWLOCK_UNLOCK(&lock_fd_dup2ed);
 	}
 	return -1;
 }
@@ -4278,7 +4250,7 @@ setup_fd_0_1_2(void)
 	if (atomic_load_relaxed(&num_fd_dup2ed) == 0)
 		return 0;
 
-	D_MUTEX_LOCK(&lock_fd_dup2ed);
+	D_RWLOCK_RDLOCK(&lock_fd_dup2ed);
 	for (i = 0; i < MAX_FD_DUP2ED; i++) {
 		/* only check fd 0, 1, and 2 */
 		if (fd_dup2_list[i].fd_src >= 0 && fd_dup2_list[i].fd_src <= 2) {
@@ -4314,11 +4286,11 @@ setup_fd_0_1_2(void)
 			}
 		}
 	}
-	D_MUTEX_UNLOCK(&lock_fd_dup2ed);
+	D_RWLOCK_UNLOCK(&lock_fd_dup2ed);
 	return 0;
 
 err:
-	D_MUTEX_UNLOCK(&lock_fd_dup2ed);
+	D_RWLOCK_UNLOCK(&lock_fd_dup2ed);
 	return error_save;
 }
 
@@ -6973,7 +6945,7 @@ finalize_myhook(void)
 		D_MUTEX_DESTROY(&lock_dirfd);
 		D_MUTEX_DESTROY(&lock_fd);
 		D_MUTEX_DESTROY(&lock_mmap);
-		D_MUTEX_DESTROY(&lock_fd_dup2ed);
+		D_RWLOCK_DESTROY(&lock_fd_dup2ed);
 
 		if (fd_255_reserved)
 			libc_close(255);
