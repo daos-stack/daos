@@ -7,8 +7,9 @@ import time
 
 from avocado.core.exceptions import TestFail
 from ClusterShell.NodeSet import NodeSet
-from general_utils import check_file_exists, pcmd, report_errors
+from general_utils import check_file_exists, report_errors
 from recovery_test_base import RecoveryTestBase
+from run_utils import run_remote
 
 
 class PoolListConsolidationTest(RecoveryTestBase):
@@ -278,19 +279,20 @@ class PoolListConsolidationTest(RecoveryTestBase):
         self.log_step("Remove <scm_mount>/<pool_uuid>/rdb-pool from two ranks.")
         scm_mount = self.server_managers[0].get_config_value("scm_mount")
         rdb_pool_path = f"{scm_mount}/{self.pool.uuid.lower()}/rdb-pool"
-        command = f"sudo rm {scm_mount}/{self.pool.uuid.lower()}/rdb-pool"
+        command = f"sudo rm {rdb_pool_path}"
         hosts = list(set(self.server_managers[0].ranks.values()))
         count = 0
         for host in hosts:
             node = NodeSet(host)
             check_out = check_file_exists(hosts=node, filename=rdb_pool_path, sudo=True)
             if check_out[0]:
-                pcmd(hosts=node, command=command)
+                run_remote(log=self.log, hosts=node, command=command)
                 self.log.info("rm rdb-pool from %s", str(node))
                 count += 1
                 if count > 1:
                     break
-        if count == 0:
+        using_control_metadata = self.server_managers[0].manager.job.using_control_metadata
+        if count == 0 or using_control_metadata:
             msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
                    "after system stop.")
             self.log.info(msg)
@@ -379,8 +381,8 @@ class PoolListConsolidationTest(RecoveryTestBase):
             # return results in PASS.
             return
         command = f"sudo rm {rdb_pool_path}"
-        remove_result = pcmd(hosts=self.hostlist_servers, command=command)
-        success_nodes = remove_result[0]
+        remove_result = run_remote(log=self.log, hosts=self.hostlist_servers, command=command)
+        success_nodes = remove_result.passed_hosts
         if self.hostlist_servers != success_nodes:
             msg = (f"Failed to remove rdb-pool! All = {self.hostlist_servers}, "
                    f"Success = {success_nodes}")
