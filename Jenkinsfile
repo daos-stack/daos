@@ -31,10 +31,8 @@ void job_step_update(def value=currentBuild.currentResult) {
 
 // Should try to figure this out automatically
 /* groovylint-disable-next-line CompileStatic, VariableName */
-String base_branch = 'master'
-
-// For master, this is just some wildly high number
-next_version = '1000'
+String base_branch = 'release/2.6'
+String next_version = base_branch
 
 // Don't define this as a type or it loses it's global scope
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
@@ -56,7 +54,7 @@ pipeline {
 
     triggers {
         /* groovylint-disable-next-line AddEmptyString */
-        cron(env.BRANCH_NAME == 'provider-testing' ? 'TZ=UTC\n0 2 * * 6' : '')
+        cron(env.BRANCH_NAME == 'provider-2.6-testing' ? 'TZ=UTC\n0 12 * * 6' : '')
     }
 
     environment {
