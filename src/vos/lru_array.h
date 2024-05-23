@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -22,6 +22,10 @@ struct lru_callbacks {
 	void	(*lru_on_init)(void *entry, uint32_t idx, void *arg);
 	/** Called on finalization of an entry */
 	void	(*lru_on_fini)(void *entry, uint32_t idx, void *arg);
+	/** Called on allocation of any LRU entries */
+	void	(*lru_on_alloc)(void *arg, daos_size_t size);
+	/** Called on free of any LRU entries */
+	void	(*lru_on_free)(void *arg, daos_size_t size);
 };
 
 struct lru_entry {
@@ -113,8 +117,8 @@ lrua_find_free(struct lru_array *array, struct lru_entry **entry,
 
 /** Internal API: Remove an entry from the lru list */
 static inline void
-lrua_remove_entry(struct lru_sub *sub, uint32_t *head, struct lru_entry *entry,
-		  uint32_t idx)
+lrua_remove_entry(struct lru_array *array, struct lru_sub *sub, uint32_t *head,
+		  struct lru_entry *entry, uint32_t idx)
 {
 	struct lru_entry	*entries = &sub->ls_table[0];
 	struct lru_entry	*prev = &entries[entry->le_prev_idx];
@@ -123,14 +127,19 @@ lrua_remove_entry(struct lru_sub *sub, uint32_t *head, struct lru_entry *entry,
 	/** Last entry in the list */
 	if (prev == entry) {
 		*head = LRU_NO_IDX;
-		return;
+	} else {
+		prev->le_next_idx = entry->le_next_idx;
+		next->le_prev_idx = entry->le_prev_idx;
+		if (idx == *head)
+			*head = entry->le_next_idx;
 	}
 
-	prev->le_next_idx = entry->le_next_idx;
-	next->le_prev_idx = entry->le_prev_idx;
-
-	if (idx == *head)
-		*head = entry->le_next_idx;
+	/*
+	 * If no free entries in the sub, then remove it from array free list (array->la_free_sub)
+	 * to avoid being searched when try to find free entry next time.
+	 */
+	if (head == &sub->ls_free && *head == LRU_NO_IDX && array->la_flags & LRU_FLAG_EVICT_MANUAL)
+		d_list_del_init(&sub->ls_link);
 }
 
 /** Internal API: Insert an entry in the lru list */
@@ -164,7 +173,8 @@ lrua_insert(struct lru_sub *sub, uint32_t *head, struct lru_entry *entry,
 
 /** Internal API: Make the entry the mru */
 static inline void
-lrua_move_to_mru(struct lru_sub *sub, struct lru_entry *entry, uint32_t idx)
+lrua_move_to_mru(struct lru_array *array, struct lru_sub *sub,
+		 struct lru_entry *entry, uint32_t idx)
 {
 	if (entry->le_next_idx == sub->ls_lru) {
 		/** Already the mru */
@@ -180,7 +190,7 @@ lrua_move_to_mru(struct lru_sub *sub, struct lru_entry *entry, uint32_t idx)
 	}
 
 	/** First remove */
-	lrua_remove_entry(sub, &sub->ls_lru, entry, idx);
+	lrua_remove_entry(array, sub, &sub->ls_lru, entry, idx);
 
 	/** Insert at mru */
 	lrua_insert(sub, &sub->ls_lru, entry, idx, true);
@@ -208,7 +218,7 @@ lrua_lookup_idx(struct lru_array *array, uint32_t idx, uint64_t key,
 	if (entry->le_key == key) {
 		if (touch_mru && !array->la_evicting) {
 			/** Only make mru if we are not evicting it */
-			lrua_move_to_mru(sub, entry, ent_idx);
+			lrua_move_to_mru(array, sub, entry, ent_idx);
 		}
 		return entry;
 	}
@@ -220,7 +230,7 @@ lrua_lookup_idx(struct lru_array *array, uint32_t idx, uint64_t key,
  *
  * \param	array[in]	The lru array
  * \param	idx[in]		The index of the entry
- * \param	idx[in]		Unique identifier
+ * \param	key[in]		Unique identifier
  * \param	entryp[out]	Valid only if function returns true.
  *
  * \return true if the entry is in the array and set \p entryp accordingly
@@ -324,11 +334,11 @@ lrua_peek_(struct lru_array *array, const uint32_t *idx, void **entryp)
  *		-DER_BUSY	Entries need to be evicted to free up
  *				entries in the table
  */
-#define lrua_allocx(array, idx, key, entryp)	\
-	lrua_allocx_(array, idx, key, (void **)(entryp))
+#define lrua_allocx(array, idx, key, entryp, stub)	\
+	lrua_allocx_(array, idx, key, (void **)(entryp), (void **)(stub))
 static inline int
 lrua_allocx_(struct lru_array *array, uint32_t *idx, uint64_t key,
-	     void **entryp)
+	     void **entryp, void **stub)
 {
 	struct lru_entry	*new_entry;
 	int			 rc;
@@ -344,6 +354,8 @@ lrua_allocx_(struct lru_array *array, uint32_t *idx, uint64_t key,
 		return rc;
 
 	*entryp = new_entry->le_payload;
+	if (stub != NULL)
+		*stub = new_entry;
 
 	return 0;
 }
@@ -368,7 +380,7 @@ lrua_allocx_(struct lru_array *array, uint32_t *idx, uint64_t key,
 static inline int
 lrua_alloc_(struct lru_array *array, uint32_t *idx, void **entryp)
 {
-	return lrua_allocx_(array, idx, (uint64_t)idx, entryp);
+	return lrua_allocx_(array, idx, (uint64_t)idx, entryp, NULL);
 }
 
 /** Allocate an entry in place.  Used for recreating an old array.
@@ -423,7 +435,7 @@ lrua_allocx_inplace_(struct lru_array *array, uint32_t idx, uint64_t key,
 	entry->le_key = key;
 
 	/** First remove */
-	lrua_remove_entry(sub, &sub->ls_free, entry, ent_idx);
+	lrua_remove_entry(array, sub, &sub->ls_free, entry, ent_idx);
 
 	/** Insert at mru */
 	lrua_insert(sub, &sub->ls_lru, entry, ent_idx, true);
@@ -486,5 +498,13 @@ lrua_array_free(struct lru_array *array);
  */
 void
 lrua_array_aggregate(struct lru_array *array);
+
+static inline void
+lrua_refresh_key(struct lru_entry *entry, uint64_t key)
+{
+	D_ASSERT(entry != NULL);
+
+	entry->le_key = key;
+}
 
 #endif /* __LRU_ARRAY__ */

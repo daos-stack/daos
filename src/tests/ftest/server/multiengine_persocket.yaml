@@ -1,0 +1,122 @@
+hosts:
+  test_servers: 1
+  test_clients: 1
+timeout: 930
+setup:
+  start_agents: False
+  start_servers: False
+  start_agents_once: False
+  start_servers_once: False
+server_config:
+  name: daos_server
+  reboot_waittime: 210
+  engines_per_socket: 2
+  number_pmem: 4
+  engines:
+    -
+      pinned_numa_node: 0
+      targets: 8
+      nr_xs_helpers: 0    # count of I/O offload threads per engine
+      fabric_iface: eth0
+      fabric_iface_port: 31416
+      log_mask: ERR
+      log_file: /tmp/daos_engine.1.log
+      env_vars:
+        - FI_SOCKETS_MAX_CONN_RETRY=1
+        - FI_SOCKETS_CONN_TIMEOUT=2000
+      storage:
+        -
+          class: dcpm
+          scm_list: [/dev/pmem0]
+          scm_mount: /mnt/daos1
+    -
+      pinned_numa_node: 0
+      targets: 8
+      nr_xs_helpers: 0   # count of I/O offload threads per engine
+      fabric_iface: eth0
+      fabric_iface_port: 32416
+      log_mask: ERR
+      log_file: /tmp/daos_engine.2.log
+      env_vars:
+        - FI_SOCKETS_MAX_CONN_RETRY=1
+        - FI_SOCKETS_CONN_TIMEOUT=2000
+      storage:
+        -
+          class: dcpm
+          scm_list: [/dev/pmem0.1]
+          scm_mount: /mnt/daos2
+    -
+      pinned_numa_node: 1
+      targets: 8
+      nr_xs_helpers: 0   # count of I/O offload threads per engine
+      fabric_iface: eth0
+      fabric_iface_port: 33416
+      log_mask: ERR
+      log_file: /tmp/daos_engine.3.log
+      env_vars:
+        - FI_SOCKETS_MAX_CONN_RETRY=1
+        - FI_SOCKETS_CONN_TIMEOUT=2000
+      storage:
+        -
+          class: dcpm
+          scm_list: [/dev/pmem1]
+          scm_mount: /mnt/daos3
+    -
+      pinned_numa_node: 1
+      targets: 8
+      nr_xs_helpers: 0   # count of I/O offload threads per engine
+      fabric_iface: eth0
+      fabric_iface_port: 34416
+      log_mask: ERR
+      log_file: /tmp/daos_engine.4.log
+      env_vars:
+        - FI_SOCKETS_MAX_CONN_RETRY=1
+        - FI_SOCKETS_CONN_TIMEOUT=2000
+      storage:
+        -
+          class: dcpm
+          scm_list: [/dev/pmem1.1]
+          scm_mount: /mnt/daos4
+  transport_config:
+    allow_insecure: false
+agent_config:
+  transport_config:
+    allow_insecure: false
+dmg:
+  transport_config:
+    allow_insecure: false
+provider: ofi+tcp
+pool:
+  control_method: dmg
+  scm_size: 1G
+  name: daos_server
+container:
+  control_method: daos
+  type: POSIX
+  properties: rf:0
+attrtests:
+  num_attributes: 20
+dfuse:
+  mount_dir: "/tmp/daos_dfuse1/"
+  disable_caching: True
+ior:
+  ior_timeout: 120
+  client_processes:
+    np: 2
+  test_file: daos:/testFile
+  api: DFS
+  dfs_oclass: "SX"
+  transfer_size: '1M'
+  block_size: '128M'
+  iorflags:
+    write_flg: "-w -W -k -G 1 -i 1"
+    read_flg: "-C -k -e -r -R -g -G 1 -Q 1 -vv"
+mdtest:
+  client_processes:
+    ppn: 8
+  test_dir: "/"
+  iteration: 1
+  manager: "MPICH"
+  mdtest_params:
+    # [api, write, read, branching_factor, num_of_dir_files, depth, flags]
+    - [DFS, 4096, 4096, 1, 100, 0, ' ']

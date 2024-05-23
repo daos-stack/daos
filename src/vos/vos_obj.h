@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -49,13 +49,25 @@ struct vos_object {
 	struct vos_container		*obj_cont;
 	/** nobody should access this object */
 	bool				obj_zombie;
+	/** Object is held for discard */
+	uint32_t                         obj_discard : 1,
+	    /** If non-zero, object is held for aggregation */
+	    obj_aggregate                            : 1;
 };
 
 enum {
 	/** Only return the object if it's visible */
-	VOS_OBJ_VISIBLE		= (1 << 0),
+	VOS_OBJ_VISIBLE = (1 << 0),
 	/** Create the object if it doesn't exist */
-	VOS_OBJ_CREATE		= (1 << 1),
+	VOS_OBJ_CREATE = (1 << 1),
+	/** Hold for discard */
+	VOS_OBJ_DISCARD = (1 << 2),
+	/** Hold for VOS or EC aggregation */
+	VOS_OBJ_AGGREGATE = (1 << 3),
+	/** Hold the object for delete dkey */
+	VOS_OBJ_KILL_DKEY = (1 << 4),
+	/** Don't actually complete the hold, just check for conflicts */
+	VOS_OBJ_NO_HOLD = (1 << 5),
 };
 
 /**
@@ -95,13 +107,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
  * \param obj	[IN]	Reference to be released.
  */
 void
-vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj, bool evict);
-
-static inline int
-vos_obj_refcount(struct vos_object *obj)
-{
-	return obj->obj_llink.ll_ref;
-}
+vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj, uint64_t flags, bool evict);
 
 /** Evict an object reference from the cache */
 void vos_obj_evict(struct daos_lru_cache *occ, struct vos_object *obj);
@@ -131,9 +137,9 @@ void vos_obj_cache_evict(struct daos_lru_cache *occ,
 			 struct vos_container *cont);
 
 /**
- * Return object cache for the current thread.
+ * Return object cache for the current IO.
  */
-struct daos_lru_cache *vos_obj_cache_current(void);
+struct daos_lru_cache *vos_obj_cache_current(bool standalone);
 
 /**
  * Object Index API and handles
@@ -206,6 +212,30 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 
 /** delete an object from OI table */
 int
-vos_oi_delete(struct vos_container *cont, daos_unit_oid_t oid);
+vos_oi_delete(struct vos_container *cont, daos_unit_oid_t oid, bool only_delete_entry);
+
+/** Hold object for range discard
+ *
+ * \param[in]	occ	Object cache, can be per cpu
+ * \param[in]	cont	Open container
+ * \param[in]	oid	The object id
+ * \param[out]	objp	Returned object
+ *
+ * \return	-DER_NONEXIST	object doesn't exist
+ *		-DER_BUSY	Object is already in discard
+ *		-DER_AGAIN	Object is being destroyed
+ *		0		Success
+ */
+int
+vos_obj_discard_hold(struct daos_lru_cache *occ, struct vos_container *cont, daos_unit_oid_t oid,
+		     struct vos_object **objp);
+
+/** Release object held for range discard
+ *
+ * \param[in]	occ	Object cache, can be per cpu
+ * \param[in]	obj	Object to release
+ */
+void
+vos_obj_discard_release(struct daos_lru_cache *occ, struct vos_object *obj);
 
 #endif

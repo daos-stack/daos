@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -80,7 +80,7 @@ static void test_srv_cb(crt_rpc_t *rpc)
 {
 	struct crt_rpc_test_in	*rpc_input;
 	struct crt_rpc_test_out	*rpc_output;
-	uint64_t		 hlc = crt_hlc_get();
+	uint64_t		 hlc = d_hlc_get();
 	int			 rc;
 
 	rpc_input = crt_req_get(rpc);
@@ -109,7 +109,7 @@ static void test_cli_cb(const struct crt_cb_info *cb_info)
 	struct crt_rpc_test_in	*rpc_input;
 	struct crt_rpc_test_out	*rpc_output;
 	crt_rpc_t		*rpc = cb_info->cci_rpc;
-	uint64_t		 hlc = crt_hlc_get();
+	uint64_t		 hlc = d_hlc_get();
 
 	dbg("opc: %#x cci_rc: %d", rpc->cr_opc, cb_info->cci_rc);
 
@@ -159,7 +159,7 @@ static int test_send_rpc(d_rank_t to)
 	rpc_input = crt_req_get(rpc);
 	D_ASSERT(rpc_input != NULL);
 	rpc_input->seq = global_srv.seq++;
-	rpc_input->hlc = crt_hlc_get();
+	rpc_input->hlc = d_hlc_get();
 	rpc_input->src = global_srv.my_rank;
 	rpc_input->dst = to;
 
@@ -218,7 +218,7 @@ static int srv_init(void)
 
 	dbg("---%s--->", __func__);
 
-	rc = crt_init(CRT_DEFAULT_GRPID, CRT_FLAG_BIT_SERVER);
+	rc = crt_init(CRT_DEFAULT_GRPID, CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	D_ASSERTF(rc == 0, " crt_init failed %d\n", rc);
 
 	rc = crt_proto_register(&test_proto_fmt);

@@ -1,7 +1,8 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
+//go:build linux
 // +build linux
 
 package logging
@@ -28,6 +29,9 @@ type (
 	syslogInfo interface {
 		WithSyslogOutput() InfoLogger
 	}
+	syslogNotice interface {
+		WithSyslogOutput() NoticeLogger
+	}
 	syslogError interface {
 		WithSyslogOutput() ErrorLogger
 	}
@@ -41,31 +45,33 @@ func (ll *LeveledLogger) WithSyslogOutput() *LeveledLogger {
 
 	var debugLoggers []DebugLogger
 	var infoLoggers []InfoLogger
+	var noticeLoggers []NoticeLogger
 	var errorLoggers []ErrorLogger
 
 	for _, l := range ll.debugLoggers {
-		if syslogger, ok := l.(syslogDebug); ok {
-			if dl, ok := syslogger.WithSyslogOutput().(DebugLogger); ok {
-				debugLoggers = append(debugLoggers, dl)
-			}
+		if dl, ok := l.(syslogDebug); ok {
+			debugLoggers = append(debugLoggers, dl.WithSyslogOutput())
 		}
 	}
 	ll.debugLoggers = debugLoggers
 
 	for _, l := range ll.infoLoggers {
-		if syslogger, ok := l.(syslogInfo); ok {
-			if il, ok := syslogger.WithSyslogOutput().(InfoLogger); ok {
-				infoLoggers = append(infoLoggers, il)
-			}
+		if il, ok := l.(syslogInfo); ok {
+			infoLoggers = append(infoLoggers, il.WithSyslogOutput())
 		}
 	}
 	ll.infoLoggers = infoLoggers
 
+	for _, l := range ll.noticeLoggers {
+		if nl, ok := l.(syslogNotice); ok {
+			noticeLoggers = append(noticeLoggers, nl.WithSyslogOutput())
+		}
+	}
+	ll.noticeLoggers = noticeLoggers
+
 	for _, l := range ll.errorLoggers {
-		if syslogger, ok := l.(syslogError); ok {
-			if el, ok := syslogger.WithSyslogOutput().(ErrorLogger); ok {
-				errorLoggers = append(errorLoggers, el)
-			}
+		if el, ok := l.(syslogError); ok {
+			errorLoggers = append(errorLoggers, el.WithSyslogOutput())
 		}
 	}
 	ll.errorLoggers = errorLoggers
@@ -81,6 +87,19 @@ func (l *DefaultErrorLogger) WithSyslogOutput() ErrorLogger {
 	return &DefaultErrorLogger{
 		baseLogger{
 			log: MustCreateSyslogger(syslog.LOG_ERR, flags),
+		},
+	}
+}
+
+// WithSyslogOutput switches the logger's output to emit messages
+// via the system logging service.
+func (l *DefaultNoticeLogger) WithSyslogOutput() NoticeLogger {
+	// Disable timestamps -- they're supplied by syslog
+	flags := noticeLogFlags ^ log.LstdFlags
+	return &DefaultNoticeLogger{
+		baseLogger{
+			// Notices are condensed into the info level in syslog
+			log: MustCreateSyslogger(syslog.LOG_INFO, flags),
 		},
 	}
 }

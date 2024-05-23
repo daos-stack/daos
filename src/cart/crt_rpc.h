@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,11 +12,13 @@
 #define __CRT_RPC_H__
 
 #include <gurt/heap.h>
-#include "gurt/common.h"
+#include <gurt/common.h>
 
 /* default RPC timeout 60 seconds */
 #define CRT_DEFAULT_TIMEOUT_S	(60) /* second */
 #define CRT_DEFAULT_TIMEOUT_US	(CRT_DEFAULT_TIMEOUT_S * 1e6) /* micro-second */
+
+#define CRT_QUOTA_RPCS_DEFAULT 64
 
 /* uri lookup max retry times */
 #define CRT_URI_LOOKUP_RETRY_MAX	(8)
@@ -65,21 +67,26 @@ struct crt_common_hdr {
 	d_rank_t	cch_dst_rank;
 	/* originator rank in default primary group */
 	d_rank_t	cch_src_rank;
-	/* tag to which rpc request was sent to */
+	/* destination tag */
 	uint32_t	cch_dst_tag;
+
+
 	/* used in crp_reply_hdr to propagate rpc failure back to sender */
-	uint32_t	cch_rc;
+	/* TODO: workaround for DAOS-13973 */
+	union {
+		uint32_t	cch_src_timeout;
+		uint32_t	cch_rc;
+	};
 };
+
 
 typedef enum {
 	RPC_STATE_INITED = 0x36,
 	RPC_STATE_QUEUED, /* queued for flow controlling */
 	RPC_STATE_REQ_SENT,
-	RPC_STATE_REPLY_RECVED,
 	RPC_STATE_COMPLETED,
 	RPC_STATE_CANCELED,
 	RPC_STATE_TIMEOUT,
-	RPC_STATE_ADDR_LOOKUP,
 	RPC_STATE_URI_LOOKUP,
 	RPC_STATE_FWD_UNREACH,
 } crt_rpc_state_t;
@@ -125,6 +132,8 @@ struct crt_rpc_priv {
 	d_list_t		crp_epi_link;
 	/* tmp_link used in crt_context_req_untrack */
 	d_list_t		crp_tmp_link;
+	/* link for crt_context::cc_quotas.rpc_waitq */
+	d_list_t		crp_waitq_link;
 	/* link to parent RPC crp_opc_info->co_child_rpcs/co_replied_rpcs */
 	d_list_t		crp_parent_link;
 	/* binheap node for timeout management, in crt_context::cc_bh_timeout */
@@ -135,8 +144,9 @@ struct crt_rpc_priv {
 	uint64_t		crp_timeout_ts;
 	crt_cb_t		crp_complete_cb;
 	void			*crp_arg; /* argument for crp_complete_cb */
-	struct crt_ep_inflight	*crp_epi; /* point back to inflight ep */
+	struct crt_ep_inflight	*crp_epi; /* point back to in-flight ep */
 
+	ATOMIC uint32_t		crp_refcount;
 	crt_rpc_state_t		crp_state; /* RPC state */
 	hg_handle_t		crp_hg_hdl; /* HG request handle */
 	hg_addr_t		crp_hg_addr; /* target na address */
@@ -171,27 +181,50 @@ struct crt_rpc_priv {
 				crp_have_ep:1,
 				/* RPC is tracked by the context */
 				crp_ctx_tracked:1,
-				/* 1 if RPC is successfully put on the wire */
-				crp_on_wire:1,
 				/* 1 if RPC fails HLC epsilon check */
 				crp_fail_hlc:1,
 				/* RPC completed flag */
-				crp_completed:1;
-	uint32_t		crp_refcount;
+				crp_completed:1,
+				/* RPC originated from a primary provider */
+				crp_src_is_primary:1;
+
 	struct crt_opc_info	*crp_opc_info;
 	/* corpc info, only valid when (crp_coll == 1) */
 	struct crt_corpc_info	*crp_corpc_info;
 	pthread_spinlock_t	crp_lock;
+	/*
+	 * Prevent data races on most crt_rpc_priv fields from crt_req_send,
+	 * crt_hg_req_send_cb, uri_lookup_cb, and crt_req_timeout_hdlr. The
+	 * following fine-to-coarse lock order shall be followed:
+	 *
+	 *   crt_rpc_priv.crp_mutex
+	 *   crt_ep_inflight.epi_mutex
+	 *   crt_context.cc_mutex
+	 *   crt_gdata.cg_rwlock
+	 */
+	pthread_mutex_t		crp_mutex;
 	struct crt_common_hdr	crp_reply_hdr; /* common header for reply */
 	struct crt_common_hdr	crp_req_hdr; /* common header for request */
 	struct crt_corpc_hdr	crp_coreq_hdr; /* collective request header */
 };
 
+static inline void
+crt_rpc_lock(struct crt_rpc_priv *rpc_priv)
+{
+	D_MUTEX_LOCK(&rpc_priv->crp_mutex);
+}
+
+static inline void
+crt_rpc_unlock(struct crt_rpc_priv *rpc_priv)
+{
+	D_MUTEX_UNLOCK(&rpc_priv->crp_mutex);
+}
+
 #define CRT_PROTO_INTERNAL_VERSION 4
 #define CRT_PROTO_FI_VERSION 3
 #define CRT_PROTO_ST_VERSION 1
 #define CRT_PROTO_CTL_VERSION 1
-#define CRT_PROTO_IV_VERSION 1
+#define CRT_PROTO_IV_VERSION       2
 
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
@@ -279,7 +312,7 @@ struct crt_rpc_priv {
 		crt_hdlr_iv_update, NULL)				\
 	X(CRT_OPC_IV_SYNC,						\
 		0, &CQF_crt_iv_sync,					\
-		crt_hdlr_iv_sync, &crt_iv_sync_co_ops)			\
+		crt_hdlr_iv_sync, &crt_iv_sync_co_ops)
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a,
@@ -447,7 +480,8 @@ CRT_RPC_DECLARE(crt_st_status_req,
 	((d_rank_t)		(ifi_root_node)		CRT_VAR)
 
 #define CRT_OSEQ_IV_FETCH	/* output fields */		 \
-	((int32_t)		(ifo_rc)		CRT_VAR)
+	((d_sg_list_t)		(ifo_sgl)		CRT_VAR) \
+	((int32_t)		(ifo_rc)		CRT_VAR) \
 
 CRT_RPC_DECLARE(crt_iv_fetch, CRT_ISEQ_IV_FETCH, CRT_OSEQ_IV_FETCH)
 
@@ -462,6 +496,7 @@ CRT_RPC_DECLARE(crt_iv_fetch, CRT_ISEQ_IV_FETCH, CRT_OSEQ_IV_FETCH)
 	((d_iov_t)		(ivu_sync_type)		CRT_VAR) \
 	/* Bulk handle for iv value */				 \
 	((crt_bulk_t)		(ivu_iv_value_bulk)	CRT_VAR) \
+	((d_sg_list_t)		(ivu_iv_sgl)		CRT_VAR) \
 	/* Root node for IV UPDATE */				 \
 	((d_rank_t)		(ivu_root_node)		CRT_VAR) \
 	/* Original node that issued crt_iv_update call */	 \
@@ -471,7 +506,8 @@ CRT_RPC_DECLARE(crt_iv_fetch, CRT_ISEQ_IV_FETCH, CRT_OSEQ_IV_FETCH)
 	((uint32_t)		(padding)		CRT_VAR)
 
 #define CRT_OSEQ_IV_UPDATE	/* output fields */		 \
-	((uint64_t)		(rc)			CRT_VAR)
+	((uint64_t)		(rc)			CRT_VAR) \
+	((d_sg_list_t)		(ivo_iv_sgl)		CRT_VAR)
 
 CRT_RPC_DECLARE(crt_iv_update, CRT_ISEQ_IV_UPDATE, CRT_OSEQ_IV_UPDATE)
 
@@ -484,8 +520,9 @@ CRT_RPC_DECLARE(crt_iv_update, CRT_ISEQ_IV_UPDATE, CRT_OSEQ_IV_UPDATE)
 	((d_iov_t)		(ivs_key)		CRT_VAR) \
 	/* IOV for sync type */					 \
 	((d_iov_t)		(ivs_sync_type)		CRT_VAR) \
+	((d_sg_list_t)		(ivs_sync_sgl)		CRT_VAR) \
 	/* IV Class ID */					 \
-	((uint32_t)		(ivs_class_id)		CRT_VAR)
+	((uint32_t)		(ivs_class_id)		CRT_VAR) \
 
 #define CRT_OSEQ_IV_SYNC	/* output fields */		 \
 	((int32_t)		(rc)			CRT_VAR)
@@ -576,27 +613,27 @@ CRT_RPC_DECLARE(crt_ctl_log_add_msg, CRT_ISEQ_CTL_LOG_ADD_MSG,
 /* Internal macros for crt_req_(add|dec)ref from within cart.  These take
  * a crt_internal_rpc pointer and provide better logging than the public
  * functions however only work when a private pointer is held.
+ *
+ * Note that we conservatively use the default, strict memory order for both
+ * RPC_ADDREF and RPC_DECREF, leaving relaxations to future work.
  */
-#define RPC_ADDREF(RPC) do {						\
-		int __ref;						\
-		D_SPIN_LOCK(&(RPC)->crp_lock);				\
-		D_ASSERTF((RPC)->crp_refcount != 0,			\
-			  "%p addref from zero\n", (RPC));		\
-		__ref = ++(RPC)->crp_refcount;				\
-		D_SPIN_UNLOCK(&(RPC)->crp_lock);			\
-		RPC_TRACE(DB_NET, RPC, "addref to %d.\n", __ref);	\
+#define RPC_ADDREF(RPC)                                                                            \
+	do {                                                                                       \
+		int __ref;                                                                         \
+		__ref = atomic_fetch_add(&(RPC)->crp_refcount, 1);                                 \
+		D_ASSERTF(__ref != 0, "%p addref from zero\n", (RPC));                             \
+		RPC_TRACE(DB_NET, (RPC), "addref to %u.\n", __ref + 1);                            \
 	} while (0)
 
-#define RPC_DECREF(RPC) do {						\
-		int __ref;						\
-		D_SPIN_LOCK(&(RPC)->crp_lock);				\
-		D_ASSERTF((RPC)->crp_refcount != 0,			\
-			  "%p decref from zero\n", (RPC));		\
-		__ref = --(RPC)->crp_refcount;				\
-		D_SPIN_UNLOCK(&(RPC)->crp_lock);			\
-		RPC_TRACE(DB_NET, RPC, "decref to %d.\n", __ref);	\
-		if (__ref == 0)						\
-			crt_req_destroy(RPC);				\
+/* Avoid the use of RPC_TRACE here as after the decref then RPC may no longer be valid */
+#define RPC_DECREF(RPC)                                                                            \
+	do {                                                                                       \
+		int __ref;                                                                         \
+		__ref = atomic_fetch_sub(&(RPC)->crp_refcount, 1);                                 \
+		D_ASSERTF(__ref != 0, "%p decref from zero\n", (RPC));                             \
+		D_DEBUG(DB_NET, "%p: decref to %u", (RPC), __ref - 1);                             \
+		if (__ref == 1)                                                                    \
+			crt_req_destroy(RPC);                                                      \
 	} while (0)
 
 #define RPC_PUB_ADDREF(RPC) do {					\
@@ -626,8 +663,7 @@ crt_rpc_cb_customized(struct crt_context *crt_ctx,
 int crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
 		       bool forward);
 void crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv);
-int crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
-		      bool srv_flag);
+void crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv_flag);
 void crt_rpc_priv_fini(struct crt_rpc_priv *rpc_priv);
 int crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 			    crt_opcode_t opc, bool forward, crt_rpc_t **req);
@@ -640,30 +676,25 @@ crt_req_timedout(struct crt_rpc_priv *rpc_priv)
 {
 	return (rpc_priv->crp_state == RPC_STATE_REQ_SENT ||
 		rpc_priv->crp_state == RPC_STATE_URI_LOOKUP ||
-		rpc_priv->crp_state == RPC_STATE_ADDR_LOOKUP ||
 		rpc_priv->crp_state == RPC_STATE_TIMEOUT ||
 		rpc_priv->crp_state == RPC_STATE_FWD_UNREACH) &&
 	       !rpc_priv->crp_in_binheap;
 }
 
-static inline uint64_t
+static inline void
 crt_set_timeout(struct crt_rpc_priv *rpc_priv)
 {
-	uint64_t	sec_diff;
-
 	D_ASSERT(rpc_priv != NULL);
 
 	if (rpc_priv->crp_timeout_sec == 0)
 		rpc_priv->crp_timeout_sec = crt_gdata.cg_timeout;
 
-	sec_diff = d_timeus_secdiff(rpc_priv->crp_timeout_sec);
-	rpc_priv->crp_timeout_ts = sec_diff;
-
-	return sec_diff;
+	rpc_priv->crp_timeout_ts = d_timeus_secdiff(rpc_priv->crp_timeout_sec);
 }
 
-/* Convert opcode to string. Only returns string for internal RPCs */
-char *crt_opc_to_str(crt_opcode_t opc);
+/*  decode cart opcode into module and rpc opcode strings */
+void
+crt_opc_decode(crt_opcode_t opc, char **module_name, char **opc_name);
 
 bool crt_rpc_completed(struct crt_rpc_priv *rpc_priv);
 

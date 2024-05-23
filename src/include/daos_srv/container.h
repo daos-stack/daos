@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -25,21 +25,20 @@
 void ds_cont_wrlock_metadata(struct cont_svc *svc);
 void ds_cont_rdlock_metadata(struct cont_svc *svc);
 void ds_cont_unlock_metadata(struct cont_svc *svc);
-int ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
-			  const uuid_t pool_uuid);
+int
+     ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, const uuid_t pool_uuid);
 int ds_cont_svc_init(struct cont_svc **svcp, const uuid_t pool_uuid,
 		     uint64_t id, struct ds_rsvc *rsvc);
 void ds_cont_svc_fini(struct cont_svc **svcp);
 int ds_cont_svc_step_up(struct cont_svc *svc);
 void ds_cont_svc_step_down(struct cont_svc *svc);
-
 int ds_cont_svc_set_prop(uuid_t pool_uuid, uuid_t cont_uuid,
 			      d_rank_list_t *ranks, daos_prop_t *prop);
-
-int ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts,
-		 uint64_t *ncont);
-
-int ds_cont_tgt_close(uuid_t hdl_uuid);
+int ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts, uint64_t *ncont);
+int ds_cont_filter(uuid_t pool_uuid, daos_pool_cont_filter_t *filt,
+		   struct daos_pool_cont_info2 **conts, uint64_t *ncont);
+int ds_cont_upgrade(uuid_t pool_uuid, struct cont_svc *svc);
+int ds_cont_tgt_close(uuid_t pool_uuid, uuid_t hdl_uuid);
 int ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 		     uuid_t cont_uuid, uint64_t flags, uint64_t sec_capas,
 		     uint32_t status_pm_ver);
@@ -57,18 +56,25 @@ struct ds_cont_child {
 	uuid_t			 sc_pool_uuid;	/* pool UUID */
 	struct ds_pool_child	*sc_pool;
 	d_list_t		 sc_link;	/* link to spc_cont_list */
+	d_list_t		 sc_open_hdls;	/* the list of ds_cont_hdl. */
 	struct daos_csummer	*sc_csummer;
 	struct cont_props	 sc_props;
 
 	ABT_mutex		 sc_mutex;
 	ABT_cond		 sc_dtx_resync_cond;
+	ABT_cond		 sc_scrub_cond;
+	ABT_cond		 sc_rebuild_cond;
 	uint32_t		 sc_dtx_resyncing:1,
 				 sc_dtx_reindex:1,
 				 sc_dtx_reindex_abort:1,
-				 sc_dtx_cos_shutdown:1,
-				 sc_closing:1,
+				 sc_dtx_delay_reset:1,
+				 sc_dtx_registered:1,
 				 sc_props_fetched:1,
-				 sc_stopping:1;
+				 sc_stopping:1,
+				 sc_vos_agg_active:1,
+				 sc_ec_agg_active:1,
+				 sc_scrubbing:1,
+				 sc_rebuilding:1;
 	uint32_t		 sc_dtx_batched_gen;
 	/* Tracks the schedule request for aggregation ULT */
 	struct sched_request	*sc_agg_req;
@@ -94,47 +100,66 @@ struct ds_cont_child {
 	uint32_t		 sc_snapshots_nr;
 	uint32_t		 sc_open;
 
-	uint64_t		 sc_dtx_committable_count;
+	uint32_t		 sc_dtx_committable_count;
+	uint32_t		 sc_dtx_committable_coll_count;
 
 	/* The global minimum EC aggregation epoch, which will be upper
 	 * limit for VOS aggregation, i.e. EC object VOS aggregation can
 	 * not cross this limit. For simplification purpose, all objects
 	 * VOS aggregation will use this boundary. We will optimize it later.
 	 */
-	uint64_t		sc_ec_agg_eph_boundry;
+	uint64_t		sc_ec_agg_eph_boundary;
 	/* The current EC aggregate epoch for this xstream */
 	uint64_t		sc_ec_agg_eph;
+	/* Used by cont_ec_eph_query_ult to query the minimum EC agg epoch from all
+	 * local VOS.
+	 */
+	uint64_t		*sc_ec_query_agg_eph;
+	/**
+	 * Timestamp of last EC update, which is used by aggregation to check
+	 * if it needs to do EC aggregate.
+	 */
+	uint64_t		sc_ec_update_timestamp;
+
 	/* The objects with committable DTXs in DRAM. */
 	daos_handle_t		 sc_dtx_cos_hdl;
 	/* The DTX COS-btree. */
 	struct btr_root		 sc_dtx_cos_btr;
-	/* The global list for committable DTXs. */
+	/* The global list for committable non-collective DTXs. */
 	d_list_t		 sc_dtx_cos_list;
-	/* The pool map version for the latest DTX resync on the container. */
-	uint32_t		 sc_dtx_resync_ver;
+	/* The global list for committable collective DTXs. */
+	d_list_t		 sc_dtx_coll_list;
 	/* the pool map version of updating DAOS_PROP_CO_STATUS prop */
 	uint32_t		 sc_status_pm_ver;
 	/* flag of CONT_CAPA_READ_DATA/_WRITE_DATA disabled */
 	uint32_t		 sc_rw_disabled:1;
 };
 
-typedef uint64_t (*agg_param_get_eph_t)(struct ds_cont_child *cont);
 struct agg_param {
 	void			*ap_data;
 	struct ds_cont_child	*ap_cont;
 	daos_epoch_t		ap_full_scan_hlc;
-	struct sched_request	*ap_req;
-	agg_param_get_eph_t	ap_max_eph_get;
-	agg_param_get_eph_t	ap_start_eph_get;
+	bool			ap_vos_agg;
 };
 
 typedef int (*cont_aggregate_cb_t)(struct ds_cont_child *cont,
-				   daos_epoch_range_t *epr, bool full_scan,
+				   daos_epoch_range_t *epr, uint32_t flags,
 				   struct agg_param *param);
 void
 cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 			struct agg_param *param);
-bool agg_rate_ctl(void *arg);
+
+/*
+ * Yield function regularly called by EC and VOS aggregation ULTs.
+ *
+ * \param[in] arg	Aggregation parameter
+ *
+ * \retval		-1:	Inform aggregation to abort current round;
+ *			 0:	Inform aggregation to run in tight mode; (less yield)
+ *			 1:	Inform aggregation to run in slack mode; (yield more often)
+ */
+int agg_rate_ctl(void *arg);
+
 /*
  * Per-thread container handle (memory) object
  *
@@ -143,11 +168,14 @@ bool agg_rate_ctl(void *arg);
  */
 struct ds_cont_hdl {
 	d_list_t		sch_entry;
+	/* link to ds_cont_child::sc_open_hdls if sch_cont is not NULL. */
+	d_list_t		sch_link;
 	uuid_t			sch_uuid;	/* of the container handle */
 	uint64_t		sch_flags;	/* user-supplied flags */
 	uint64_t		sch_sec_capas;	/* access control capas */
 	struct ds_cont_child	*sch_cont;
 	int32_t			sch_ref;
+	uint32_t		sch_closed:1;
 };
 
 struct ds_cont_hdl *ds_cont_hdl_lookup(const uuid_t uuid);
@@ -163,8 +191,8 @@ void ds_cont_child_stop_all(struct ds_pool_child *pool_child);
 
 int ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 			 struct ds_cont_child **ds_cont);
-int ds_cont_rf_check(uuid_t pool_uuid);
-
+void
+ds_cont_child_reset_ec_agg_eph_all(struct ds_pool_child *pool_child);
 /** initialize a csummer based on container properties. Will retrieve the
  * checksum related properties from IV
  */
@@ -219,39 +247,6 @@ int ds_cont_revoke_snaps(struct ds_iv_ns *ns, uuid_t cont_uuid,
 int ds_cont_find_hdl(uuid_t po_uuid, uuid_t coh_uuid,
 		     struct ds_cont_hdl **coh_p);
 
-struct csum_recalc {
-	struct evt_extent	 cr_log_ext;
-	struct evt_extent	*cr_phy_ext;
-	struct agg_phy_ent	*cr_phy_ent; /* Incomplete ex vos_aggregate.c */
-	struct dcs_csum_info	*cr_phy_csum;
-	daos_off_t		 cr_phy_off;
-	unsigned int		 cr_prefix_len;
-	unsigned int		 cr_suffix_len;
-};
-
-struct csum_recalc_args {
-	struct bio_sglist	*cra_bsgl;	/* read sgl */
-	d_sg_list_t		*cra_sgl;	/* write sgl */
-	struct evt_entry_in	*cra_ent_in;    /* coalesced entry */
-	struct csum_recalc	*cra_recalcs;   /* recalc info */
-	void			*cra_buf;	/* read buffer */
-	struct bio_xs_context	*cra_bio_ctxt;	/* used to log error */
-	daos_size_t		 cra_seg_size;  /* size of coalesced entry */
-	unsigned int		 cra_seg_cnt;   /* # of read segments */
-	unsigned int		 cra_buf_len;	/* length of read buffer */
-	int			 cra_tgt_id;	/* VOS target ID */
-	int			 cra_rc;	/* return code */
-	ABT_eventual		 csum_eventual;
-};
-
-/* Callback function to pass to vos_aggregation */
-void
-ds_csum_recalc(void *args);
-
-/* Used for VOS unit tests */
-void
-ds_csum_agg_recalc(void *args);
-
 int dsc_cont_open(daos_handle_t poh, uuid_t cont_uuid, uuid_t cont_hdl_uuid,
 		  unsigned int flags, daos_handle_t *coh);
 int dsc_cont_close(daos_handle_t poh, daos_handle_t coh);
@@ -259,5 +254,26 @@ struct daos_csummer *dsc_cont2csummer(daos_handle_t coh);
 int dsc_cont_get_props(daos_handle_t coh, struct cont_props *props);
 
 void ds_cont_tgt_ec_eph_query_ult(void *data);
+int ds_cont_ec_eph_insert(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx,
+			  uint64_t **epoch_p);
+int ds_cont_ec_eph_delete(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx);
+void ds_cont_ec_eph_free(struct ds_pool *pool);
+
+void ds_cont_ec_timestamp_update(struct ds_cont_child *cont);
+
+typedef int(*cont_rdb_iter_cb_t)(uuid_t pool_uuid, uuid_t cont_uuid, struct rdb_tx *tx, void *arg);
+int ds_cont_rdb_iterate(struct cont_svc *svc, cont_rdb_iter_cb_t iter_cb, void *cb_arg);
+int ds_cont_rf_check(uuid_t pool_uuid, uuid_t cont_uuid, struct rdb_tx *tx);
+
+int ds_cont_existence_check(struct cont_svc *svc, uuid_t uuid, daos_prop_t **prop);
+
+int ds_cont_destroy_orphan(struct cont_svc *svc, uuid_t uuid);
+
+int ds_cont_iterate_labels(struct cont_svc *svc, rdb_iterate_cb_t cb, void *arg);
+
+int ds_cont_set_label(struct cont_svc *svc, uuid_t uuid, daos_prop_t *prop_in,
+		      daos_prop_t *prop_old, bool for_svc);
+
+int ds_cont_fetch_ec_agg_boundary(void *ns, uuid_t cont_uuid);
 
 #endif /* ___DAOS_SRV_CONTAINER_H_ */

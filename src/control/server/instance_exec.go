@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,28 +17,27 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/engine"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 // EngineRunner defines an interface for starting and stopping the
 // daos_engine.
 type EngineRunner interface {
-	Start(context.Context, chan<- error) error
+	Start(context.Context) (engine.RunnerExitChan, error)
 	IsRunning() bool
-	GetLastPid() uint64
-	Signal(os.Signal) error
+	Signal(os.Signal)
 	GetConfig() *engine.Config
 }
 
-func (ei *EngineInstance) format(ctx context.Context, recreateSBs bool) error {
+func (ei *EngineInstance) format(ctx context.Context) error {
 	idx := ei.Index()
 
 	ei.log.Debugf("instance %d: checking if storage is formatted", idx)
-	if err := ei.awaitStorageReady(ctx, recreateSBs); err != nil {
+	if err := ei.awaitStorageReady(ctx); err != nil {
 		return err
 	}
-	if err := ei.createSuperblock(recreateSBs); err != nil {
+	if err := ei.createSuperblock(); err != nil {
 		return err
 	}
 
@@ -60,24 +59,21 @@ func (ei *EngineInstance) format(ctx context.Context, recreateSBs bool) error {
 // start checks to make sure that the instance has a valid superblock before
 // performing any required NVMe preparation steps and launching a managed
 // daos_engine instance.
-func (ei *EngineInstance) start(ctx context.Context, errChan chan<- error) error {
+func (ei *EngineInstance) start(ctx context.Context) (chan *engine.RunnerExitInfo, error) {
 	if err := ei.logScmStorage(); err != nil {
 		ei.log.Errorf("instance %d: unable to log SCM storage stats: %s", ei.Index(), err)
 	}
 
-	// async call returns immediately, runner sends on errChan when ctx.Done()
-	return ei.runner.Start(ctx, errChan)
+	return ei.runner.Start(ctx)
 }
 
 // waitReady awaits ready signal from I/O Engine before starting
 // management service on MS replicas immediately so other instances can join.
 // I/O Engine modules are then loaded.
-func (ei *EngineInstance) waitReady(ctx context.Context, errChan chan error) error {
+func (ei *EngineInstance) waitReady(ctx context.Context) error {
 	select {
 	case <-ctx.Done(): // propagated harness exit
 		return ctx.Err()
-	case err := <-errChan:
-		return errors.Wrapf(err, "instance %d exited during start-up", ei.Index())
 	case ready := <-ei.awaitDrpcReady():
 		if err := ei.finishStartup(ctx, ready); err != nil {
 			return err
@@ -86,18 +82,14 @@ func (ei *EngineInstance) waitReady(ctx context.Context, errChan chan error) err
 	}
 }
 
-// finishStartup sets up instance once dRPC comms are ready, this includes
-// setting the instance rank, starting management service and loading I/O Engine
-// modules.
+// finishStartup sets up instance once dRPC comms are ready, this includes setting the instance
+// rank, starting management service and loading I/O Engine modules.
 //
 // Instance ready state is set to indicate that all setup is complete.
 func (ei *EngineInstance) finishStartup(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
 	if err := ei.handleReady(ctx, ready); err != nil {
 		return err
 	}
-	// update engine target count to reflect allocated
-	// number of targets, not number requested when starting
-	ei.setTargetCount(int(ready.GetNtgts()))
 
 	ei.ready.SetTrue()
 
@@ -110,10 +102,10 @@ func (ei *EngineInstance) finishStartup(ctx context.Context, ready *srvpb.Notify
 	return nil
 }
 
-// publishInstanceExitFn returns onInstanceExitFn which will publish an exit
+// createPublishInstanceExitFunc returns onInstanceExitFn which will publish an exit
 // event using the provided publish function.
-func publishInstanceExitFn(publishFn func(*events.RASEvent), hostname string) onInstanceExitFn {
-	return func(_ context.Context, engineIdx uint32, rank system.Rank, exitErr error, exPid uint64) error {
+func createPublishInstanceExitFunc(publish func(*events.RASEvent), hostname string) onInstanceExitFn {
+	return func(_ context.Context, engineIdx uint32, rank ranklist.Rank, exitErr error, exPid int) error {
 		if exitErr == nil {
 			return errors.New("expected non-nil exit error")
 		}
@@ -122,28 +114,26 @@ func publishInstanceExitFn(publishFn func(*events.RASEvent), hostname string) on
 			common.ExitStatus(exitErr.Error()), exPid)
 
 		// set forwardable if there is a rank for the MS to operate on
-		publishFn(evt.WithForwardable(!rank.Equals(system.NilRank)))
+		publish(evt.WithForwardable(!rank.Equals(ranklist.NilRank)))
 
 		return nil
 	}
 }
 
-func (ei *EngineInstance) exit(ctx context.Context, exitErr error) {
+func (ei *EngineInstance) handleExit(ctx context.Context, exitPid int, exitErr error) {
 	engineIdx := ei.Index()
-
 	rank, err := ei.GetRank()
 	if err != nil {
 		ei.log.Debugf("instance %d: no rank (%s)", engineIdx, err)
 	}
 
 	ei._lastErr = exitErr
-	exPid := ei.runner.GetLastPid()
 
 	details := []string{fmt.Sprintf("instance %d", engineIdx)}
-	if exPid != 0 {
-		details = append(details, fmt.Sprintf("pid %d", exPid))
+	if exitPid != 0 {
+		details = append(details, fmt.Sprintf("pid %d", exitPid))
 	}
-	if !rank.Equals(system.NilRank) {
+	if !rank.Equals(ranklist.NilRank) {
 		details = append(details, fmt.Sprintf("rank %d", rank))
 	}
 	strDetails := strings.Join(details, ", ")
@@ -153,52 +143,42 @@ func (ei *EngineInstance) exit(ctx context.Context, exitErr error) {
 	// After we know that the instance has exited, fire off
 	// any callbacks that were waiting for this state.
 	for _, exitFn := range ei.onInstanceExit {
-		err := exitFn(ctx, engineIdx, rank, exitErr, exPid)
+		err := exitFn(ctx, engineIdx, rank, exitErr, exitPid)
 		if err != nil {
 			ei.log.Errorf("onExit: %s", err)
 		}
 	}
 
-	if err := ei.removeSocket(); err != nil {
+	if err := ei.removeSocket(); err != nil && !os.IsNotExist(errors.Cause(err)) {
 		ei.log.Errorf("removing socket file: %s", err)
 	}
 }
 
-// run performs setup of and starts process runner for I/O Engine instance and
+// startRunner performs setup of and starts process runner for I/O Engine instance and
 // will only return (if no errors are returned during setup) on I/O Engine
 // process exit (triggered by harness shutdown through context cancellation
 // or abnormal I/O Engine process termination).
-func (ei *EngineInstance) run(parent context.Context, recreateSBs bool) error {
-	errChan := make(chan error)
+func (ei *EngineInstance) startRunner(parent context.Context) (_ chan *engine.RunnerExitInfo, err error) {
+	ctx, cancel := context.WithCancel(parent)
+	defer func() {
+		if err != nil {
+			// If there was an error, cancel the context to signal the
+			// cleanup handlers.
+			cancel()
+		}
+	}()
 
-	// Create a cancelable subcontext to allow Stop() to interrupt
-	// goroutines that shouldn't continue running after the engine
-	// exits.
-	var ctx context.Context
-	ei.Lock()
-	ctx, ei._cancelCtx = context.WithCancel(parent)
-	ei.Unlock()
-
-	if err := ei.format(ctx, recreateSBs); err != nil {
-		return err
+	if err = ei.format(ctx); err != nil {
+		return
 	}
 
-	// Use the parent context here to avoid interfering with the shutdown
-	// logic in the runner.
-	if err := ei.start(parent, errChan); err != nil {
-		return err
+	runnerExitChan, err := ei.start(ctx)
+	if err != nil {
+		return
 	}
 	ei.waitDrpc.SetTrue()
 
-	if err := ei.waitReady(ctx, errChan); err != nil {
-		// If the error is for anything other than the fact
-		// that our subcontext was canceled, exit early.
-		if ctx.Err() == nil {
-			return err
-		}
-	}
-
-	return <-errChan // receive on runner exit
+	return runnerExitChan, ei.waitReady(ctx)
 }
 
 // requestStart makes a request to (re-)start the engine, and blocks
@@ -212,9 +192,12 @@ func (ei *EngineInstance) requestStart(ctx context.Context) {
 
 // Run starts the control loop for an EngineInstance. Engine starts are triggered by
 // calling requestStart() on the instance.
-func (ei *EngineInstance) Run(ctx context.Context, recreateSBs bool) {
+func (ei *EngineInstance) Run(ctx context.Context) {
 	// Start the instance control loop.
 	go func() {
+		var runnerExitCh engine.RunnerExitChan
+		var err error
+		var restartRequested bool
 		for {
 			select {
 			case <-ctx.Done():
@@ -224,7 +207,24 @@ func (ei *EngineInstance) Run(ctx context.Context, recreateSBs bool) {
 					return
 				}
 
-				ei.exit(ctx, ei.run(ctx, recreateSBs))
+				if runnerExitCh != nil {
+					restartRequested = true
+					continue
+				}
+
+				runnerExitCh, err = ei.startRunner(ctx)
+				if err != nil {
+					ei.log.Errorf("runner exited without starting process: %s", err)
+					ei.handleExit(ctx, 0, err)
+					continue
+				}
+			case runnerExit := <-runnerExitCh:
+				ei.handleExit(ctx, runnerExit.PID, runnerExit.Error)
+				runnerExitCh = nil // next runner will reset this
+				if restartRequested {
+					go ei.requestStart(ctx)
+					restartRequested = false
+				}
 			}
 		}
 	}()
@@ -235,15 +235,6 @@ func (ei *EngineInstance) Run(ctx context.Context, recreateSBs bool) {
 
 // Stop sends signal to stop EngineInstance runner (nonblocking).
 func (ei *EngineInstance) Stop(signal os.Signal) error {
-	ei.RLock()
-	if ei._cancelCtx != nil {
-		ei._cancelCtx()
-	}
-	ei.RUnlock()
-
-	if err := ei.runner.Signal(signal); err != nil {
-		return err
-	}
-
+	ei.runner.Signal(signal)
 	return nil
 }

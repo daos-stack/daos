@@ -383,7 +383,7 @@ test_ace_from_str_principal_too_long(void **state)
 	for (i = 0; i < DAOS_ACL_MAX_PRINCIPAL_LEN; i++) {
 		bad_username[i] = 'u';
 	}
-	bad_username[i] = '@'; /* gotta be a properly formatted principal */
+	bad_username[i] = '@'; /* got to be a properly formatted principal */
 
 	snprintf(input, sizeof(input), "A::%s:rw", bad_username);
 

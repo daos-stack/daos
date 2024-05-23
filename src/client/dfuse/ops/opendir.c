@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -8,12 +8,12 @@
 #include "dfuse.h"
 
 void
-dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie,
-		 struct fuse_file_info *fi)
+dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_info *fi)
 {
-	struct dfuse_obj_hdl	*oh = NULL;
-	struct fuse_file_info	fi_out = {0};
-	int			rc;
+	struct dfuse_info    *dfuse_info = fuse_req_userdata(req);
+	struct dfuse_obj_hdl *oh;
+	struct fuse_file_info fi_out = {0};
+	int                   rc;
 
 	D_ALLOC_PTR(oh);
 	if (!oh)
@@ -21,23 +21,23 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie,
 
 	DFUSE_TRA_UP(oh, ie, "open handle");
 
-	/** duplicate the file handle for the fuse handle */
-	rc = dfs_dup(ie->ie_dfs->dfs_ns, ie->ie_obj, fi->flags,
-		     &oh->doh_obj);
-	if (rc)
-		D_GOTO(err, rc);
-
-	oh->doh_dfs = ie->ie_dfs->dfs_ns;
-	oh->doh_ie = ie;
+	dfuse_open_handle_init(dfuse_info, oh, ie);
 
 	fi_out.fh = (uint64_t)oh;
 
-#if HAVE_CACHE_READDIR
-	if (ie->ie_dfs->dfc_dentry_timeout > 0)
+	/* If caching is enabled then always set the bit to enable caching as it might get
+	 * populated, however only set the bit to use the cache based on last use.
+	 */
+	if (ie->ie_dfs->dfc_dentry_timeout > 0) {
 		fi_out.cache_readdir = 1;
-#endif
 
-	DFUSE_REPLY_OPEN(oh, req, &fi_out);
+		if (dfuse_dcache_get_valid(ie, ie->ie_dfs->dfc_dentry_timeout))
+			fi_out.keep_cache = 1;
+	}
+
+	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
+
+	DFUSE_REPLY_OPEN_DIR(oh, req, &fi_out);
 	return;
 err:
 	D_FREE(oh);
@@ -45,17 +45,46 @@ err:
 }
 
 void
-dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino,
-		    struct fuse_file_info *fi)
+dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_file_info *fi)
 {
-	struct dfuse_obj_hdl	*oh = (struct dfuse_obj_hdl *)fi->fh;
-	int			rc;
+	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
+	struct dfuse_obj_hdl     *oh         = (struct dfuse_obj_hdl *)fi->fh;
+	struct dfuse_inode_entry *ie         = NULL;
 
-	rc = dfs_release(oh->doh_obj);
-	if (rc == 0)
-		DFUSE_REPLY_ZERO(oh, req);
-	else
-		DFUSE_REPLY_ERR_RAW(oh, req, rc);
-	D_FREE(oh->doh_dre);
-	D_FREE(oh);
+	/* Perform the opposite of what the ioctl call does, always change the open handle count
+	 * but the inode only tracks number of open handles with non-zero ioctl counts
+	 */
+
+	if (atomic_load_relaxed(&oh->doh_il_calls) != 0)
+		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_il_count, 1);
+	atomic_fetch_sub_relaxed(&oh->doh_ie->ie_open_count, 1);
+
+	DFUSE_TRA_DEBUG(oh, "Kernel cache flags invalid %d started %d finished %d",
+			oh->doh_kreaddir_invalid, oh->doh_kreaddir_started,
+			oh->doh_kreaddir_finished);
+
+	if ((!oh->doh_kreaddir_invalid) && oh->doh_kreaddir_finished) {
+		DFUSE_TRA_DEBUG(oh, "Directory handle may have populated cache, saving");
+		dfuse_dcache_set_time(oh->doh_ie);
+	}
+
+	dfuse_dre_drop(dfuse_info, oh);
+
+	if (oh->doh_evict_on_close) {
+		ie = oh->doh_ie;
+		atomic_fetch_add_relaxed(&ie->ie_ref, 1);
+	}
+
+	DFUSE_REPLY_ZERO_OH(oh, req);
+	if (ie) {
+		int rc;
+
+		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, ie->ie_parent,
+						      ie->ie_name, strnlen(ie->ie_name, NAME_MAX));
+
+		if (rc != 0 && rc != -ENOENT)
+			DHS_ERROR(ie, -rc, "inval_entry() error");
+		dfuse_inode_decref(dfuse_info, ie);
+	}
+	dfuse_oh_free(dfuse_info, oh);
 };

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,7 +12,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -59,7 +59,7 @@ func TestProvider_QueryFirmware(t *testing.T) {
 		},
 		"request device subset": {
 			input: storage.NVMeFirmwareQueryRequest{
-				DeviceAddrs: []string{"0000:80:00.0", "0000:80:00.2"},
+				DeviceAddrs: []string{"0000:00:00.0", "0000:02:00.0"},
 			},
 			backendCfg: &MockBackendConfig{
 				ScanRes: &storage.BdevScanResponse{Controllers: defaultDevs},
@@ -77,7 +77,7 @@ func TestProvider_QueryFirmware(t *testing.T) {
 		},
 		"request nonexistent device - ignored": {
 			input: storage.NVMeFirmwareQueryRequest{
-				DeviceAddrs: []string{"0000:80:00.0", "fake"},
+				DeviceAddrs: []string{"0000:00:00.0", "fake"},
 			},
 			backendCfg: &MockBackendConfig{
 				ScanRes: &storage.BdevScanResponse{Controllers: defaultDevs},
@@ -92,7 +92,7 @@ func TestProvider_QueryFirmware(t *testing.T) {
 		},
 		"request duplicates": {
 			input: storage.NVMeFirmwareQueryRequest{
-				DeviceAddrs: []string{"0000:80:00.0", "0000:80:00.0"},
+				DeviceAddrs: []string{"0000:01:00.0", "0000:01:00.0"},
 			},
 			backendCfg: &MockBackendConfig{
 				ScanRes: &storage.BdevScanResponse{Controllers: defaultDevs},
@@ -171,7 +171,7 @@ func TestProvider_QueryFirmware(t *testing.T) {
 		},
 		"nothing in device list matches filters": {
 			input: storage.NVMeFirmwareQueryRequest{
-				DeviceAddrs: []string{"0000:80:00.1", "0000:80:00.2"},
+				DeviceAddrs: []string{"0000:01:00.0", "0000:02:00.0"},
 				ModelID:     "model-0",
 				FirmwareRev: "fwRev-0",
 			},
@@ -185,13 +185,13 @@ func TestProvider_QueryFirmware(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			p := NewMockProvider(log, tc.backendCfg)
 
 			res, err := p.QueryFirmware(tc.input)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if diff := cmp.Diff(tc.expRes, res); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
@@ -268,7 +268,7 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 		},
 		"request device subset": {
 			input: storage.NVMeFirmwareUpdateRequest{
-				DeviceAddrs:  []string{"0000:80:00.0", "0000:80:00.2"},
+				DeviceAddrs:  []string{"0000:00:00.0", "0000:02:00.0"},
 				FirmwarePath: testPath,
 			},
 			backendCfg: &MockBackendConfig{
@@ -287,17 +287,17 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 		},
 		"request nonexistent device": {
 			input: storage.NVMeFirmwareUpdateRequest{
-				DeviceAddrs:  []string{"0000:80:00.0", "fake"},
+				DeviceAddrs:  []string{"0000:00:00.0", "fake"},
 				FirmwarePath: testPath,
 			},
 			backendCfg: &MockBackendConfig{
 				ScanRes: &storage.BdevScanResponse{Controllers: defaultDevs},
 			},
-			expErr: FaultBdevNotFound("fake"),
+			expErr: storage.FaultBdevNotFound(false, "fake"),
 		},
 		"request duplicates": {
 			input: storage.NVMeFirmwareUpdateRequest{
-				DeviceAddrs:  []string{"0000:80:00.0", "0000:80:00.0"},
+				DeviceAddrs:  []string{"0000:00:00.0", "0000:00:00.0"},
 				FirmwarePath: testPath,
 			},
 			backendCfg: &MockBackendConfig{
@@ -379,7 +379,7 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 		"nothing in device list matches filters": {
 			input: storage.NVMeFirmwareUpdateRequest{
 				FirmwarePath: testPath,
-				DeviceAddrs:  []string{"0000:80:00.1", "0000:80:00.2"},
+				DeviceAddrs:  []string{"0000:01:00.0", "0000:02:00.0"},
 				ModelID:      "model-0",
 				FirmwareRev:  "fwRev-0",
 			},
@@ -391,13 +391,13 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			p := NewMockProvider(log, tc.backendCfg)
 
 			res, err := p.UpdateFirmware(tc.input)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if diff := cmp.Diff(tc.expRes, res); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
@@ -409,7 +409,7 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 /* todo_tiering
 func TestProvider_WithFirmwareForwarder(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	provider := NewProvider(log, DefaultMockBackend())
 

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,6 +11,9 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"io/fs"
+	"os"
+	"time"
 
 	"github.com/pkg/errors"
 )
@@ -44,13 +47,15 @@ func (tc *TransportConfig) String() string {
 // component. ServerName is only needed if the config is being used as a
 // transport credential for a gRPC tls client.
 type CertificateConfig struct {
-	ServerName      string           `yaml:"server_name,omitempty"`
+	ServerName      string           `yaml:"-"`
 	ClientCertDir   string           `yaml:"client_cert_dir,omitempty"`
 	CARootPath      string           `yaml:"ca_cert"`
 	CertificatePath string           `yaml:"cert"`
 	PrivateKeyPath  string           `yaml:"key"`
 	tlsKeypair      *tls.Certificate `yaml:"-"`
 	caPool          *x509.CertPool   `yaml:"-"`
+	maxKeyPerms     fs.FileMode      `yaml:"-"`
+	verifyTime      time.Time        `yaml:"-"` // for testing
 }
 
 // DefaultAgentTransportConfig provides a default transport config disabling
@@ -66,14 +71,14 @@ func DefaultAgentTransportConfig() *TransportConfig {
 			PrivateKeyPath:  defaultAgentKey,
 			tlsKeypair:      nil,
 			caPool:          nil,
+			maxKeyPerms:     MaxUserOnlyKeyPerm,
 		},
 	}
 }
 
 // DefaultClientTransportConfig provides a default transport config disabling
 // certificate usage and specifying certificates located under /etc/daos/certs.
-// As this
-// credential is meant to be used as a client credential it specifies a default
+// As this credential is meant to be used as a client credential it specifies a default
 // ServerName as well.
 func DefaultClientTransportConfig() *TransportConfig {
 	return &TransportConfig{
@@ -86,6 +91,7 @@ func DefaultClientTransportConfig() *TransportConfig {
 			PrivateKeyPath:  defaultAdminKey,
 			tlsKeypair:      nil,
 			caPool:          nil,
+			maxKeyPerms:     MaxGroupKeyPerm,
 		},
 	}
 }
@@ -103,12 +109,13 @@ func DefaultServerTransportConfig() *TransportConfig {
 			PrivateKeyPath:  defaultServerKey,
 			tlsKeypair:      nil,
 			caPool:          nil,
+			maxKeyPerms:     MaxUserOnlyKeyPerm,
 		},
 	}
 }
 
 // PreLoadCertData reads the certificate files in and parses them into TLS key
-// pair and Certificate pool to provide a mechanism for detecting certificate/
+// pair and Certificate pool to provide a mechanism for detecting certificate
 // error before first use.
 func (tc *TransportConfig) PreLoadCertData() error {
 	if tc == nil {
@@ -116,10 +123,17 @@ func (tc *TransportConfig) PreLoadCertData() error {
 	}
 	if tc.tlsKeypair != nil && tc.caPool != nil || tc.AllowInsecure {
 		// In this case the data is already preloaded.
-		// In order to reload data use ReloadCertDatA
+		// In order to reload data use ReloadCertData
 		return nil
 	}
-	certificate, certPool, err := loadCertWithCustomCA(tc.CARootPath, tc.CertificatePath, tc.PrivateKeyPath)
+
+	if tc.ClientCertDir != "" {
+		if _, err := os.ReadDir(tc.ClientCertDir); err != nil {
+			return FaultUnreadableCertFile(tc.ClientCertDir)
+		}
+	}
+
+	certificate, certPool, err := loadCertWithCustomCA(tc.CARootPath, tc.CertificatePath, tc.PrivateKeyPath, tc.maxKeyPerms)
 	if err != nil {
 		return err
 	}
@@ -130,6 +144,16 @@ func (tc *TransportConfig) PreLoadCertData() error {
 	// Pre-parse the Leaf Certificate
 	tc.tlsKeypair.Leaf, err = x509.ParseCertificate(tc.tlsKeypair.Certificate[0])
 	if err != nil {
+		return err
+	}
+
+	if _, err = tc.tlsKeypair.Leaf.Verify(x509.VerifyOptions{
+		CurrentTime: tc.CertificateConfig.verifyTime, // for testing - by default this is 0, which is treated as current time
+		Roots:       certPool,
+		KeyUsages:   []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
+	}); isInvalidCert(err) {
+		return FaultInvalidCertFile(tc.CertificatePath, err)
+	} else if err != nil {
 		return err
 	}
 

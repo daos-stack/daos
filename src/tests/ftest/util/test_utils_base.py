@@ -1,13 +1,14 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+from collections import defaultdict
 from logging import getLogger
+from threading import Lock
 from time import sleep
 
-from command_utils_base import ObjectWithParameters, BasicParameter
+from command_utils_base import BasicParameter, ObjectWithParameters
 from pydaos.raw import DaosApiError
 
 
@@ -66,16 +67,13 @@ class TestDaosApiBase(ObjectWithParameters):
     USE_DMG = "dmg"
     USE_DAOS = "daos"
 
-    def __init__(self, namespace, cb_handler=None):
+    def __init__(self, namespace):
         """Create a TestDaosApi object.
 
         Args:
             namespace (str): yaml namespace (path to parameters)
-            cb_handler (CallbackHandler, optional): callback object to use with
-                the API methods. Defaults to None.
         """
         super().__init__(namespace)
-        self.cb_handler = cb_handler
         self.debug = BasicParameter(None, False)
         self.silent = BasicParameter(None, False)
 
@@ -102,11 +100,8 @@ class TestDaosApiBase(ObjectWithParameters):
 
         Args:
             method (object): method to call
-            kwargs (dict): keyworded arguments for the method
+            kwargs (dict): named arguments for the method
         """
-        if self.cb_handler:
-            kwargs["cb_func"] = self.cb_handler.callback
-
         # Optionally log the method call with its arguments if debug is set
         self._log_method(
             "{}.{}".format(
@@ -126,10 +121,6 @@ class TestDaosApiBase(ObjectWithParameters):
                     exc_info=error)
             # Raise the exception so it can be handled by the caller
             raise error
-
-        if self.cb_handler:
-            # Wait for the call back if one is provided
-            self.cb_handler.wait()
 
     def _check_info(self, check_list):
         """Verify each info attribute value matches an expected value.
@@ -152,27 +143,31 @@ class TestDaosApiBase(ObjectWithParameters):
             # Determine which comparison to utilize for this check
             compare = ("==", lambda x, y: x == y, "does not match")
             if isinstance(expect, str):
-                comparisons = {
-                    "<": (lambda x, y: x < y, "is too large"),
-                    ">": (lambda x, y: x > y, "is too small"),
-                    "<=": (
-                        lambda x, y: x <= y, "is too large or does not match"),
-                    ">=": (
-                        lambda x, y: x >= y, "is too small or does not match"),
-                }
-                for key, val in list(comparisons.items()):
+                comparisons = [
+                    ["<=", (lambda x, y: x <= y, "is too large or does not match")],
+                    ["<", (lambda x, y: x < y, "is too large")],
+                    [">=", (lambda x, y: x >= y, "is too small or does not match")],
+                    [">", (lambda x, y: x > y, "is too small")],
+                ]
+                for comparison in comparisons:
                     # If the expected value is preceded by one of the known
                     # comparison keys, use the comparison and remove the key
                     # from the expected value
+                    key = comparison[0]
+                    val = comparison[1]
                     if expect[:len(key)] == key:
                         compare = (key, val[0], val[1])
                         expect = expect[len(key):]
-                        try:
-                            expect = int(expect)
-                        except ValueError:
-                            # Allow strings to be strings
-                            pass
                         break
+            # Avoid failed comparisons due to object type
+            try:
+                actual = int(actual)
+            except ValueError:
+                pass
+            try:
+                expect = int(expect)
+            except ValueError:
+                pass
             self.log.info(
                 "Verifying the %s %s: %s %s %s",
                 self.__class__.__name__.replace("Test", "").lower(),
@@ -183,3 +178,54 @@ class TestDaosApiBase(ObjectWithParameters):
                 self.log.error(msg)
                 check_status = False
         return check_status
+
+
+class LabelGenerator():
+    # pylint: disable=too-few-public-methods
+    """Generates label used for pools and containers."""
+
+    def __init__(self, base_label=None, value=1):
+        """Constructor.
+
+        Args:
+            base_label (str, optional): Default label prefix. Don't include space.
+                Default is None.
+            value (int, optional): Number that's attached after the base_label.
+                Default is 1.
+
+        """
+        self.base_label = base_label
+        self._values = defaultdict(lambda: value)
+        self._lock = Lock()
+
+    def _next_value(self, base_label):
+        """Get the next value. Thread-safe.
+
+        Args:
+            base_label (str): Label prefix to get next value of
+
+        Returns:
+            int: the next value
+
+        """
+        with self._lock:
+            value = self._values[base_label]
+            self._values[base_label] += 1
+            return value
+
+    def get_label(self, base_label=None):
+        """Create a label by adding number after the given base_label.
+
+        Args:
+            base_label (str, optional): Label prefix. Don't include space.
+                Default is self.base_label.
+
+        Returns:
+            str: Created label.
+
+        """
+        base_label = base_label or self.base_label
+        value = str(self._next_value(base_label))
+        if base_label is None:
+            return value
+        return "_".join([base_label, value])

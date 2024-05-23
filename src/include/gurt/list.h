@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -530,6 +530,23 @@ d_hlist_add_after(d_hlist_node_t *n, d_hlist_node_t *prev)
 
 #endif /* d_list_for_each_entry_safe */
 
+#ifndef d_list_for_each_entry_reverse_safe
+/**
+ * Iterate backwards over a list of given type safe against removal of list entry
+ *
+ * \param[in] pos	the type * to use as a loop counter.
+ * \param[in] n		another type * to use as temporary storage
+ * \param[in] head	the head for your list.
+ * \param[in] member	the name of the list_struct within the struct.
+ */
+#define d_list_for_each_entry_reverse_safe(pos, n, head, member)               \
+	for (pos = d_list_entry((head)->prev, __typeof__(*pos), member),       \
+	     n = d_list_entry(pos->member.prev, __typeof__(*pos), member);     \
+	     &pos->member != (head);                                           \
+	     pos = n, n = d_list_entry(pos->member.prev, __typeof__(*pos),     \
+				       member))
+#endif /* d_list_for_each_entry_reverse_safe */
+
 #ifndef d_list_for_each_entry_safe_from
 /**
  * Iterate over a list continuing from an existing point
@@ -582,158 +599,6 @@ d_hlist_add_after(d_hlist_node_t *n, d_hlist_node_t *prev)
 	     pos && (n = pos->next, 1) &&                                      \
 		(tpos = d_hlist_entry(pos, type, member), 1);               \
 	     pos = n)
-
-/**
- * Circular queue definitions:
- *
- * A circular queue is headed by a structure defined by the CIRCLEQ_HEAD()
- * macro. This structure contains a pair of pointers, one to the first element
- * in the circular queue and the other to the last element in the circular
- * queue. The elements are doubly linked so that an arbitrary element can be
- * removed without traversing the queue. New elements can be added to the queue
- * after an existing element, before an existing element, at the head of
- * the queue, or at the end of the queue.
- *
- * A CIRCLEQ_HEAD structure is declared as follows:
- */
-#define	D_CIRCLEQ_HEAD(name, type)					\
-struct name {								\
-	struct type *cqh_first;		/* first element */		\
-	struct type *cqh_last;		/* last element */		\
-}
-
-#define	D_CIRCLEQ_HEAD_INIT(head)				\
-	{ (void *)&head, (void *)&head }
-
-#define	d_circleq_entry(type)						\
-struct {								\
-	struct type *cqe_next;		/* next element */		\
-	struct type *cqe_prev;		/* previous element */		\
-}
-
-/*
- * Circular queue functions.
- */
-#define	D_CIRCLEQ_INIT(head) do {					\
-	(head)->cqh_first = (void *)(head);				\
-	(head)->cqh_last  = (void *)(head);				\
-} while (0)
-
-#define	D_CIRCLEQ_INSERT_AFTER(head, listelm, elm, field) do {		\
-	(elm)->field.cqe_next = (listelm)->field.cqe_next;		\
-	(elm)->field.cqe_prev = (listelm);				\
-	if ((listelm)->field.cqe_next == (void *)(head))		\
-		(head)->cqh_last = (elm);				\
-	else								\
-		(listelm)->field.cqe_next->field.cqe_prev = (elm);	\
-	(listelm)->field.cqe_next = (elm);				\
-} while (0)
-
-#define	D_CIRCLEQ_INSERT_BEFORE(head, listelm, elm, field) do {		\
-	(elm)->field.cqe_next = (listelm);				\
-	(elm)->field.cqe_prev = (listelm)->field.cqe_prev;		\
-	if ((listelm)->field.cqe_prev == (void *)(head))		\
-		(head)->cqh_first = (elm);				\
-	else								\
-		(listelm)->field.cqe_prev->field.cqe_next = (elm);	\
-	(listelm)->field.cqe_prev = (elm);				\
-} while (0)
-
-#define	D_CIRCLEQ_INSERT_HEAD(head, elm, field) do {			\
-	(elm)->field.cqe_next = (head)->cqh_first;			\
-	(elm)->field.cqe_prev = (void *)(head);				\
-	if ((head)->cqh_last == (void *)(head))				\
-		(head)->cqh_last = (elm);				\
-	else								\
-		(head)->cqh_first->field.cqe_prev = (elm);		\
-	(head)->cqh_first = (elm);					\
-} while (0)
-
-#define	D_CIRCLEQ_INSERT_TAIL(head, elm, field) do {			\
-	(elm)->field.cqe_next = (void *)(head);				\
-	(elm)->field.cqe_prev = (head)->cqh_last;			\
-	if ((head)->cqh_first == (void *)(head))			\
-		(head)->cqh_first = (elm);				\
-	else								\
-		(head)->cqh_last->field.cqe_next = (elm);		\
-	(head)->cqh_last = (elm);					\
-} while (0)
-
-#define	D_CIRCLEQ_REMOVE(head, elm, field) do {				\
-	if ((elm)->field.cqe_next == (void *)(head))			\
-		(head)->cqh_last = (elm)->field.cqe_prev;		\
-	else								\
-		(elm)->field.cqe_next->field.cqe_prev =			\
-		    (elm)->field.cqe_prev;				\
-	if ((elm)->field.cqe_prev == (void *)(head))			\
-		(head)->cqh_first = (elm)->field.cqe_next;		\
-	else								\
-		(elm)->field.cqe_prev->field.cqe_next =			\
-		    (elm)->field.cqe_next;				\
-} while (0)
-
-/*
- * The macro CIRCLEQ_FOREACH() traverses the circle queue referenced by head
- * in the forward direction, assigning each element in turn to var. Each
- * element is assigned exactly once.
- */
-#define	D_CIRCLEQ_FOREACH(var, head, field)				\
-	for ((var) = ((head)->cqh_first);				\
-		(var) != (const void *)(head);				\
-		(var) = ((var)->field.cqe_next))
-
-/*
- * The macro CIRCLEQ_FOREACH_REVERSE() traverses the circle queue referenced
- * by head in the reverse direction, assigning each element in turn to var.
- * Each element is assigned exactly once.
- */
-#define	D_CIRCLEQ_FOREACH_REVERSE(var, head, field)			\
-	for ((var) = ((head)->cqh_last);				\
-		(var) != (const void *)(head);				\
-		(var) = ((var)->field.cqe_prev))
-
-/*
- * Circular queue access methods.
- */
-/*
- * The macro CIRCLEQ_EMPTY() return true if the circular queue head has no
- * elements.
- */
-#define	D_CIRCLEQ_EMPTY(head)		((head)->cqh_first == (void *)(head))
-/*
- * The macro CIRCLEQ_FIRST() returns the first element of the circular queue
- * head.
- */
-#define	D_CIRCLEQ_FIRST(head)		((head)->cqh_first)
-/*
- * The macro CIRCLEQ_LAST() returns the last element of the circular queue head.
- */
-#define	D_CIRCLEQ_LAST(head)		((head)->cqh_last)
-/*
- * The macro CIRCLEQ_NEXT() returns the element after the element elm.
- */
-#define	D_CIRCLEQ_NEXT(elm, field)	((elm)->field.cqe_next)
-/*
- * The macro CIRCLEQ_PREV() returns the element before the element elm.
- */
-#define	D_CIRCLEQ_PREV(elm, field)	((elm)->field.cqe_prev)
-
-/*
- * The macro CIRCLEQ_LOOP_NEXT() returns the element after the element elm.
- * If elm was the last element in the queue, the first element is returned.
- */
-#define D_CIRCLEQ_LOOP_NEXT(head, elm, field)				\
-	(((elm)->field.cqe_next == (void *)(head))			\
-	    ? ((head)->cqh_first)					\
-	    : (elm->field.cqe_next))
-/*
- * The macro CIRCLEQ_LOOP_PREV() returns the element before the element elm.
- * If elm was the first element in the queue, the last element is returned.
- */
-#define D_CIRCLEQ_LOOP_PREV(head, elm, field)				\
-	(((elm)->field.cqe_prev == (void *)(head))			\
-	    ? ((head)->cqh_last)					\
-	    : (elm->field.cqe_prev))
 
 #if defined(__cplusplus)
 }

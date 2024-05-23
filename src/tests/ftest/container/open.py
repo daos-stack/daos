@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -10,7 +9,7 @@ import uuid
 from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
 
-RESULT_PASS = "PASS" #nosec
+RESULT_PASS = "PASS"  # nosec
 RESULT_FAIL = "FAIL"
 RESULT_TO_NUM = {RESULT_PASS: 0, RESULT_FAIL: 1}
 
@@ -34,16 +33,19 @@ class OpenContainerTest(TestWithServers):
     """
 
     def test_container_open(self):
-        """JIRA ID: DAOS-3223
+        """JIRA ID: DAOS-9965
+           JIRA ID: DAOS-3223
 
         Test Description:
             Test container's open function as described above
 
         Use Cases:
-            Open container with valid and invalid pool handle and container
-            UUID
+            Open container with valid and invalid pool handle and container UUID.
 
-        :avocado: tags=all,small,container,full_regression,container_open
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=container
+        :avocado: tags=OpenContainerTest,test_container_open
         """
         self.pool = []
         self.container = []
@@ -52,7 +54,7 @@ class OpenContainerTest(TestWithServers):
         poh_state = self.params.get("poh", "/run/uuid_poh/*/")
 
         expected_result = RESULT_PASS
-        if uuid_state == RESULT_FAIL or poh_state == RESULT_FAIL:
+        if RESULT_FAIL in (uuid_state, poh_state):
             expected_result = RESULT_FAIL
 
         # Derive the test case number from the PASS/FAIL-PASS/FAIL combination
@@ -65,26 +67,20 @@ class OpenContainerTest(TestWithServers):
         # it shouldn't reach that point
         messages_case_1 = [
             "Case 1: Test Bug!",
-            "Error while opening the container with valid pool handle and " +
-            "container UUID",
+            "Error while opening the container with valid pool handle and container UUID",
             "Case 1: Test Bug!",
-            "Error while opening the container with valid pool handle and " +
-            "container UUID"
+            "Error while opening the container with valid pool handle and container UUID"
         ]
         messages_case_2 = [
-            "No error occurred from using container 2's UUID while opening " +
-            "container 1",
+            "No error occurred from using container 2's UUID while opening container 1",
             "Case 2: Test Bug!",
-            "No error occurred from using container 1's UUID while opening " +
-            "container 2",
+            "No error occurred from using container 1's UUID while opening container 2",
             "Case 2: Test Bug!"
         ]
         messages_case_3 = [
-            "No error occurred from using pool 2's handle while opening " +
-            "container 1",
+            "No error occurred from using pool 2's handle while opening container 1",
             "Case 3: Test Bug!",
-            "No error occurred from using pool1's handle while opening " +
-            "container 2",
+            "No error occurred from using pool1's handle while opening container 2",
             "Case 3: Test Bug!"
         ]
         result_messages = [messages_case_1, messages_case_2, messages_case_3]

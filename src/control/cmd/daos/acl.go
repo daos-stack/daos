@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,17 +10,31 @@ package main
 #include "util.h"
 
 void
-free_strings(char **str, size_t str_count)
+free_ace_list(char **str, size_t str_count)
 {
 	int i;
 
 	for (i = 0; i < str_count; i++)
 		D_FREE(str[i]);
+	D_FREE(str);
+}
+
+uid_t
+invalid_uid(void)
+{
+	return (uid_t)-1;
+}
+
+gid_t
+invalid_gid(void)
+{
+	return (gid_t)-1;
 }
 */
 import "C"
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"unsafe"
@@ -43,7 +57,7 @@ func getAclStrings(e *C.struct_daos_prop_entry) (out []string) {
 	if err := daosError(rc); err != nil || aces == nil {
 		return
 	}
-	defer C.free_strings(aces, acesNr)
+	defer C.free_ace_list(aces, acesNr)
 
 	for _, ace := range (*[1 << 30]*C.char)(unsafe.Pointer(aces))[:acesNr:acesNr] {
 		out = append(out, C.GoString(ace))
@@ -104,14 +118,37 @@ func getContAcl(hdl C.daos_handle_t) ([]*property, func(), error) {
 	return outProps, func() { C.daos_prop_free(props) }, nil
 }
 
-type containerOverwriteACLCmd struct {
+type aclCmd struct {
 	existingContainerCmd
+}
+
+func (cmd *aclCmd) getACL(ap *C.struct_cmd_args_s) (*control.AccessControlList, error) {
+	props, cleanup, err := getContAcl(ap.cont)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+
+	return convertACLProps(props), nil
+}
+
+func (cmd *aclCmd) outputACL(out io.Writer, acl *control.AccessControlList, verbose bool) error {
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(acl, nil)
+	}
+
+	_, err := fmt.Fprint(out, control.FormatACL(acl, verbose))
+	return err
+}
+
+type containerOverwriteACLCmd struct {
+	aclCmd
 
 	File string `long:"acl-file" short:"f" required:"1"`
 }
 
 func (cmd *containerOverwriteACLCmd) Execute(args []string) error {
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
 	}
@@ -123,32 +160,85 @@ func (cmd *containerOverwriteACLCmd) Execute(args []string) error {
 	}
 	defer cleanup()
 
-	ap.aclfile = C.CString(cmd.File)
-	defer C.free(unsafe.Pointer(ap.aclfile))
+	cACL, cleanupACL, err := aclFileToC(cmd.File)
+	if err != nil {
+		return err
+	}
+	defer cleanupACL()
 
-	rc := C.cont_overwrite_acl_hdlr(ap)
+	rc := C.daos_cont_overwrite_acl(ap.cont, cACL, nil)
 	if err := daosError(rc); err != nil {
 		return errors.Wrapf(err,
 			"failed to overwrite ACL for container %s",
 			cmd.ContainerID())
 	}
 
-	return nil
+	acl, err := cmd.getACL(ap)
+	if err != nil {
+		return errors.Wrap(err, "unable to fetch updated ACL")
+	}
+
+	return cmd.outputACL(os.Stdout, acl, false)
+}
+
+func aclFileToC(aclFile string) (*C.struct_daos_acl, func(), error) {
+	acl, err := control.ReadACLFile(aclFile)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return aclToC(acl)
+}
+
+func aclToC(acl *control.AccessControlList) (*C.struct_daos_acl, func(), error) {
+	aceStrs := make([]*C.char, len(acl.Entries))
+	for i, ace := range acl.Entries {
+		aceStrs[i] = C.CString(ace)
+		defer C.free(unsafe.Pointer(aceStrs[i]))
+	}
+
+	var cACL *C.struct_daos_acl
+	rc := C.daos_acl_from_strs(&aceStrs[0], C.ulong(len(aceStrs)), &cACL)
+	if err := daosError(rc); err != nil {
+		return nil, nil, errors.Wrapf(err,
+			"unable to create ACL structure")
+	}
+
+	return cACL, func() { C.daos_acl_free(cACL) }, nil
 }
 
 type containerUpdateACLCmd struct {
-	existingContainerCmd
+	aclCmd
 
 	Entry string `long:"entry" short:"e"`
 	File  string `long:"acl-file" short:"f"`
 }
 
 func (cmd *containerUpdateACLCmd) Execute(args []string) error {
-	if cmd.Entry != "" && cmd.File != "" {
-		return errors.New("only one of entry or acl-file may be supplied")
+	var cACL *C.struct_daos_acl
+	var cleanupACL func()
+	var err error
+
+	switch {
+	case cmd.Entry != "" && cmd.File != "":
+		return errors.New("only one of --entry or --acl-file may be supplied")
+	case cmd.Entry != "":
+		acl := &control.AccessControlList{
+			Entries: []string{cmd.Entry},
+		}
+		cACL, cleanupACL, err = aclToC(acl)
+	case cmd.File != "":
+		cACL, cleanupACL, err = aclFileToC(cmd.File)
+	default:
+		return errors.New("one of --entry or --acl-file must be supplied")
 	}
 
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	if err != nil {
+		return err
+	}
+	defer cleanupACL()
+
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
 	}
@@ -160,33 +250,29 @@ func (cmd *containerUpdateACLCmd) Execute(args []string) error {
 	}
 	defer cleanup()
 
-	switch {
-	case cmd.Entry != "":
-		ap.entry = C.CString(cmd.Entry)
-		defer C.free(unsafe.Pointer(ap.entry))
-	case cmd.File != "":
-		ap.aclfile = C.CString(cmd.File)
-		defer C.free(unsafe.Pointer(ap.aclfile))
-	}
-
-	rc := C.cont_update_acl_hdlr(ap)
+	rc := C.daos_cont_update_acl(ap.cont, cACL, nil)
 	if err := daosError(rc); err != nil {
 		return errors.Wrapf(err,
 			"failed to update ACL for container %s",
 			cmd.ContainerID())
 	}
 
-	return nil
+	acl, err := cmd.getACL(ap)
+	if err != nil {
+		return errors.Wrap(err, "unable to fetch updated ACL")
+	}
+
+	return cmd.outputACL(os.Stdout, acl, false)
 }
 
 type containerDeleteACLCmd struct {
-	existingContainerCmd
+	aclCmd
 
 	Principal string `long:"principal" short:"P" required:"1"`
 }
 
 func (cmd *containerDeleteACLCmd) Execute(args []string) error {
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
 	}
@@ -198,17 +284,28 @@ func (cmd *containerDeleteACLCmd) Execute(args []string) error {
 	}
 	defer cleanup()
 
-	ap.principal = C.CString(cmd.Principal)
-	defer C.free(unsafe.Pointer(ap.principal))
+	cPrincipal := C.CString(cmd.Principal)
+	defer C.free(unsafe.Pointer(cPrincipal))
+	var cType C.enum_daos_acl_principal_type
+	var cName *C.char
+	rc := C.daos_acl_principal_from_str(cPrincipal, &cType, &cName)
+	if err := daosError(rc); err != nil {
+		return errors.Wrapf(err, "unable to parse principal string %q", cmd.Principal)
+	}
 
-	rc := C.cont_delete_acl_hdlr(ap)
+	rc = C.daos_cont_delete_acl(ap.cont, cType, cName, nil)
 	if err := daosError(rc); err != nil {
 		return errors.Wrapf(err,
 			"failed to delete ACL for container %s",
 			cmd.ContainerID())
 	}
 
-	return nil
+	acl, err := cmd.getACL(ap)
+	if err != nil {
+		return errors.Wrap(err, "unable to fetch updated ACL")
+	}
+
+	return cmd.outputACL(os.Stdout, acl, false)
 }
 
 func convertACLProps(props []*property) (acl *control.AccessControlList) {
@@ -229,7 +326,7 @@ func convertACLProps(props []*property) (acl *control.AccessControlList) {
 }
 
 type containerGetACLCmd struct {
-	existingContainerCmd
+	aclCmd
 
 	File    string `long:"outfile" short:"O" description:"write ACL to file"`
 	Force   bool   `long:"force" short:"f" description:"overwrite existing outfile"`
@@ -237,20 +334,22 @@ type containerGetACLCmd struct {
 }
 
 func (cmd *containerGetACLCmd) Execute(args []string) error {
-	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RO, nil)
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
+	if err != nil {
+		return err
+	}
+	defer deallocCmdArgs()
+
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RO, ap)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	aclProps, cleanupAcl, err := getContAcl(cmd.cContHandle)
+	acl, err := cmd.getACL(ap)
 	if err != nil {
-		return errors.Wrapf(err,
-			"failed to query ACL for container %s", cmd.contUUID)
+		return errors.Wrapf(err, "failed to query ACL for container %s", cmd.contUUID)
 	}
-	defer cleanupAcl()
-
-	acl := convertACLProps(aclProps)
 
 	output := os.Stdout
 	if cmd.File != "" {
@@ -267,20 +366,17 @@ func (cmd *containerGetACLCmd) Execute(args []string) error {
 		defer output.Close()
 	}
 
-	if cmd.jsonOutputEnabled() {
-		cmd.wroteJSON.SetTrue()
-		return outputJSON(output, acl, nil)
-	}
-
-	_, err = fmt.Fprintf(output, control.FormatACL(acl, cmd.Verbose))
-	return err
+	return cmd.outputACL(output, acl, cmd.Verbose)
 }
 
 type containerSetOwnerCmd struct {
 	existingContainerCmd
 
-	User  string `long:"user" short:"u" description:"user who will own the container"`
-	Group string `long:"group" short:"g" description:"group who will own the container"`
+	User    string `long:"user" short:"u" description:"user who will own the container"`
+	Uid     *int   `long:"uid" description:"with --no-check, specify a uid for POSIX container ownership"`
+	Group   string `long:"group" short:"g" description:"group who will own the container"`
+	Gid     *int   `long:"gid" description:"with --no-check, specify a gid for POSIX container ownership"`
+	NoCheck bool   `long:"no-check" description:"don't check whether the user/group exists on the local system"`
 }
 
 func (cmd *containerSetOwnerCmd) Execute(args []string) error {
@@ -288,7 +384,7 @@ func (cmd *containerSetOwnerCmd) Execute(args []string) error {
 		return errors.New("at least one of user or group must be supplied")
 	}
 
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
 	}
@@ -300,21 +396,90 @@ func (cmd *containerSetOwnerCmd) Execute(args []string) error {
 	}
 	defer cleanup()
 
+	var user *C.char
+	var group *C.char
 	if cmd.User != "" {
-		ap.user = C.CString(cmd.User)
-		defer C.free(unsafe.Pointer(ap.user))
+		if !strings.ContainsRune(cmd.User, '@') {
+			cmd.User += "@"
+		}
+		user = C.CString(cmd.User)
+		defer C.free(unsafe.Pointer(user))
 	}
 	if cmd.Group != "" {
-		ap.group = C.CString(cmd.Group)
-		defer C.free(unsafe.Pointer(ap.group))
+		if !strings.ContainsRune(cmd.Group, '@') {
+			cmd.Group += "@"
+		}
+		group = C.CString(cmd.Group)
+		defer C.free(unsafe.Pointer(group))
 	}
 
-	rc := C.cont_set_owner_hdlr(ap)
+	props, entries, err := allocProps(3)
+	if err != nil {
+		return err
+	}
+	entries[0].dpe_type = C.DAOS_PROP_CO_LAYOUT_TYPE
+	props.dpp_nr++
+	defer func() { C.daos_prop_free(props) }()
+
+	rc := C.daos_cont_query(cmd.cContHandle, nil, props, nil)
 	if err := daosError(rc); err != nil {
-		return errors.Wrapf(err,
-			"failed to set owner for container %s",
-			cmd.ContainerID())
+		return errors.Wrapf(err, "failed to query container %s", cmd.ContainerID())
 	}
 
+	lType := C.get_dpe_val(&entries[0])
+	if lType == C.DAOS_PROP_CO_LAYOUT_POSIX {
+		uid := C.invalid_uid()
+		gid := C.invalid_gid()
+		if cmd.NoCheck {
+			if cmd.User != "" {
+				if cmd.Uid == nil {
+					return errors.New("POSIX container requires --uid to use --no-check")
+				}
+				uid = C.uid_t(*cmd.Uid)
+			}
+
+			if cmd.Group != "" {
+				if cmd.Gid == nil {
+					return errors.New("POSIX container requires --gid to use --no-check")
+				}
+				gid = C.gid_t(*cmd.Gid)
+			}
+		} else if cmd.Uid != nil || cmd.Gid != nil {
+			return errors.New("--no-check is required to use the --uid and --gid options")
+		}
+
+		if err := dfsError(C.dfs_cont_set_owner(ap.cont, user, uid, group, gid)); err != nil {
+			return errors.Wrapf(err, "failed to set owner for POSIX container %s",
+				cmd.ContainerID())
+		}
+	} else {
+		if cmd.Uid != nil || cmd.Gid != nil {
+			return errors.New("--uid and --gid options apply for POSIX containers only")
+		}
+
+		var rc C.int
+		if cmd.NoCheck {
+			rc = C.daos_cont_set_owner_no_check(ap.cont, user, group, nil)
+		} else {
+			rc = C.daos_cont_set_owner(ap.cont, user, group, nil)
+		}
+		if err := daosError(rc); err != nil {
+			return errors.Wrapf(err, "failed to set owner for container %s",
+				cmd.ContainerID())
+		}
+	}
+
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(nil, nil)
+	}
+
+	var contID string
+	if cmd.ContainerID().Empty() {
+		contID = cmd.Path
+	} else {
+		contID = cmd.ContainerID().String()
+	}
+
+	cmd.Infof("Successfully set owner for container %s", contID)
 	return nil
 }

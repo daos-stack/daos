@@ -1,0 +1,8 @@
+# Packages required to build DAOS.
+-r requirements-build.txt
+# Packages required to run ftest.
+-r requirements-ftest.txt
+# Packages required to run unit testing.
+-r requirements-utest.txt
+# Packages used for linting.
+-r utils/cq/requirements.txt

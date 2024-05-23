@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,25 +10,43 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sort"
 	"sync"
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
 // FabricNotFoundErr is the error returned when no appropriate fabric interface
 // was found.
-func FabricNotFoundErr(netDevClass uint32) error {
-	return fmt.Errorf("no suitable fabric interface found of type %q", netdetect.DevClassName(netDevClass))
+func FabricNotFoundErr(netDevClass hardware.NetDevClass) error {
+	return fmt.Errorf("no suitable fabric interface found of type %q", netDevClass)
 }
 
 // FabricInterface represents a generic fabric interface.
 type FabricInterface struct {
 	Name        string
 	Domain      string
-	NetDevClass uint32
+	NetDevClass hardware.NetDevClass
+	hw          *hardware.FabricInterface
+}
+
+// Providers returns a slice of the providers associated with the interface.
+func (f *FabricInterface) Providers() []string {
+	provs := f.hw.Providers.ToSlice()
+	provStrs := make([]string, len(provs))
+	for i, p := range provs {
+		provStrs[i] = p.Name
+	}
+	return provStrs
+}
+
+// ProviderSet returns a StringSet of the providers associated with the interface.
+func (f *FabricInterface) ProviderSet() *hardware.FabricProviderSet {
+	return f.hw.Providers
 }
 
 func (f *FabricInterface) String() string {
@@ -36,18 +54,17 @@ func (f *FabricInterface) String() string {
 	if f.Domain != "" {
 		dom = "/" + f.Domain
 	}
-	return fmt.Sprintf("%s%s (%s)", f.Name, dom, netdetect.DevClassName(f.NetDevClass))
+	return fmt.Sprintf("%s%s (%s)", f.Name, dom, f.NetDevClass)
 }
 
-// DefaultFabricInterface is the one used if no devices are found on the system.
-var DefaultFabricInterface = &FabricInterface{
-	Name:   "lo",
-	Domain: "lo",
+// HasProvider determines if the FabricInterface supports a given provider.
+func (f *FabricInterface) HasProvider(provider string) bool {
+	return f.hw.SupportsProvider(provider)
 }
 
 // FabricDevClassManual is a wildcard netDevClass that indicates the device was
 // supplied by the user.
-const FabricDevClassManual = uint32(1 << 31)
+const FabricDevClassManual = hardware.NetDevClass(1 << 31)
 
 // addrFI is a fabric interface that can provide its addresses.
 type addrFI interface {
@@ -61,9 +78,9 @@ type NUMAFabric struct {
 
 	numaMap map[int][]*FabricInterface
 
-	// current device idx to use on each NUMA node
-	currentNumaDevIdx map[int]int
-	defaultNumaNode   int
+	currentNumaDevIdx map[int]int // current device idx to use on each NUMA node
+	currentNUMANode   int         // current NUMA node to search
+	ignoreIfaces      common.StringSet
 
 	getAddrInterface func(name string) (addrFI, error)
 }
@@ -79,6 +96,16 @@ func (n *NUMAFabric) Add(numaNode int, fi *FabricInterface) error {
 
 	n.numaMap[numaNode] = append(n.numaMap[numaNode], fi)
 	return nil
+}
+
+// WithIgnoredDevices adds a set of fabric interface names that should be ignored when
+// selecting a device.
+func (n *NUMAFabric) WithIgnoredDevices(ifaces common.StringSet) *NUMAFabric {
+	n.ignoreIfaces = ifaces
+	if len(ifaces) > 0 {
+		n.log.Tracef("ignoring fabric devices: %s", n.ignoreIfaces)
+	}
+	return n
 }
 
 // NumDevices gets the number of devices on a given NUMA node.
@@ -116,47 +143,75 @@ func (n *NUMAFabric) getNumNUMANodes() int {
 	return len(n.numaMap)
 }
 
+// FabricIfaceParams is a set of parameters associated with a fabric interface.
+type FabricIfaceParams struct {
+	Interface string
+	Domain    string
+	Provider  string
+	DevClass  hardware.NetDevClass
+	NUMANode  int
+}
+
 // GetDevice selects the next available interface device on the requested NUMA node.
-func (n *NUMAFabric) GetDevice(numaNode int, netDevClass uint32) (*FabricInterface, error) {
+func (n *NUMAFabric) GetDevice(params *FabricIfaceParams) (*FabricInterface, error) {
 	if n == nil {
 		return nil, errors.New("nil NUMAFabric")
+	}
+
+	if params == nil {
+		return nil, errors.New("nil FabricIfaceParams")
+	}
+
+	if params.Provider == "" {
+		return nil, errors.New("provider is required")
 	}
 
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 
-	if n.getNumNUMANodes() == 0 {
-		n.log.Infof("No fabric interfaces found, using default interface %q", DefaultFabricInterface.Name)
-		return DefaultFabricInterface, nil
-	}
-
-	fi, err := n.getDeviceFromNUMA(numaNode, netDevClass)
+	fi, err := n.getDeviceFromNUMA(params.NUMANode, params.DevClass, params.Provider)
 	if err == nil {
-		return fi, nil
+		return copyFI(fi), nil
 	}
 
-	fi, err = n.findOnRemoteNUMA(netDevClass)
+	fi, err = n.findOnAnyNUMA(params.DevClass, params.Provider)
 	if err != nil {
 		return nil, err
 	}
 
-	fiCopy := new(FabricInterface)
-	*fiCopy = *fi
-	return fiCopy, nil
+	return copyFI(fi), nil
 }
 
-func (n *NUMAFabric) getDeviceFromNUMA(numaNode int, netDevClass uint32) (*FabricInterface, error) {
+func copyFI(fi *FabricInterface) *FabricInterface {
+	fiCopy := new(FabricInterface)
+	*fiCopy = *fi
+	return fiCopy
+}
+
+func (n *NUMAFabric) getDeviceFromNUMA(numaNode int, netDevClass hardware.NetDevClass, provider string) (*FabricInterface, error) {
 	for checked := 0; checked < n.getNumDevices(numaNode); checked++ {
 		fabricIF := n.getNextDevice(numaNode)
 
-		if fabricIF.NetDevClass != netDevClass && fabricIF.NetDevClass != FabricDevClassManual {
-			n.log.Debugf("Excluding device: %s, network device class: %s. Does not match requested network device class: %s",
-				fabricIF.Name, netdetect.DevClassName(fabricIF.NetDevClass), netdetect.DevClassName(netDevClass))
+		if n.ignoreIfaces.Has(fabricIF.Name) {
+			n.log.Tracef("device %s: ignored (ignore list %s)", fabricIF, n.ignoreIfaces)
 			continue
 		}
 
+		// Manually-provided interfaces can be assumed to support what's needed by the system.
+		if fabricIF.NetDevClass != FabricDevClassManual {
+			if fabricIF.NetDevClass != netDevClass {
+				n.log.Tracef("device %s: excluded (netDevClass %s != %s)", fabricIF, fabricIF.NetDevClass, netDevClass)
+				continue
+			}
+
+			if !fabricIF.HasProvider(provider) {
+				n.log.Tracef("device %s: excluded (provider %s not supported)", fabricIF, provider)
+				continue
+			}
+		}
+
 		if err := n.validateDevice(fabricIF); err != nil {
-			n.log.Infof("Excluding device %q: %s", fabricIF.Name, err.Error())
+			n.log.Noticef("device %s: excluded (%s)", fabricIF, err)
 			continue
 		}
 
@@ -187,7 +242,7 @@ func (n *NUMAFabric) validateDevice(fi *FabricInterface) error {
 	}
 
 	for _, a := range addrs {
-		n.log.Debugf("Interface: %s, Addr: %s %s", fi.Name, a.Network(), a.String())
+		n.log.Tracef("device %s: %s/%s", fi.Name, a.Network(), a.String())
 		if ipAddr, isIP := a.(*net.IPNet); isIP && ipAddr.IP != nil && !ipAddr.IP.IsUnspecified() {
 			return nil
 		}
@@ -201,19 +256,28 @@ func (n *NUMAFabric) getNextDevice(numaNode int) *FabricInterface {
 	return n.numaMap[numaNode][idx]
 }
 
-func (n *NUMAFabric) findOnRemoteNUMA(netDevClass uint32) (*FabricInterface, error) {
-	numNodes := n.getNumNUMANodes()
+func (n *NUMAFabric) findOnAnyNUMA(netDevClass hardware.NetDevClass, provider string) (*FabricInterface, error) {
+	nodes := n.getNUMANodes()
+	numNodes := len(nodes)
+
 	for i := 0; i < numNodes; i++ {
-		numa := (n.defaultNumaNode + i) % numNodes
-		fi, err := n.getDeviceFromNUMA(numa, netDevClass)
+		n.currentNUMANode = (n.currentNUMANode + 1) % numNodes
+		fi, err := n.getDeviceFromNUMA(nodes[n.currentNUMANode], netDevClass, provider)
 		if err == nil {
-			// Start the search on this node next time
-			n.defaultNumaNode = numa
-			n.log.Debugf("Suitable fabric interface %q found on NUMA node %d", fi.Name, numa)
+			n.log.Tracef("device %s: selected on NUMA node %d)", fi, n.currentNUMANode)
 			return fi, nil
 		}
 	}
 	return nil, FabricNotFoundErr(netDevClass)
+}
+
+func (n *NUMAFabric) getNUMANodes() []int {
+	keys := make([]int, 0)
+	for k := range n.numaMap {
+		keys = append(keys, k)
+	}
+	sort.Ints(keys)
+	return keys
 }
 
 // getNextDevIndex is a simple round-robin load balancing scheme
@@ -233,12 +297,78 @@ func (n *NUMAFabric) getNextDevIndex(numaNode int) int {
 	panic(fmt.Sprintf("no fabric interfaces on NUMA node %d", numaNode))
 }
 
-func (n *NUMAFabric) setDefaultNUMANode() {
-	for numa := range n.numaMap {
-		n.defaultNumaNode = numa
-		n.log.Debugf("The default NUMA node is: %d", numa)
-		break
+// Find finds a specific fabric device by name. There may be more than one domain associated.
+func (n *NUMAFabric) Find(name string) ([]*FabricInterface, error) {
+	if n == nil {
+		return nil, errors.New("nil NUMAFabric")
 	}
+
+	result := make([]*FabricInterface, 0)
+	for _, devs := range n.numaMap {
+		for _, fi := range devs {
+			if fi.Name == name {
+				result = append(result, copyFI(fi))
+			}
+		}
+	}
+
+	if len(result) > 0 {
+		return result, nil
+	}
+
+	return nil, fmt.Errorf("fabric interface %q not found", name)
+}
+
+// FindDevice looks up a fabric device with a given name, domain, and provider.
+// NB: The domain and provider are optional. All other parameters are required. If there is more
+// than one match, all of them are returned.
+func (n *NUMAFabric) FindDevice(params *FabricIfaceParams) ([]*FabricInterface, error) {
+	if params == nil {
+		return nil, errors.New("nil FabricIfaceParams")
+	}
+
+	fiList, err := n.Find(params.Interface)
+	if err != nil {
+		return nil, err
+	}
+
+	if params.Domain != "" {
+		fiList = filterDomain(params.Domain, fiList)
+		if len(fiList) == 0 {
+			return nil, errors.Errorf("fabric interface %q doesn't have requested domain %q",
+				params.Interface, params.Domain)
+		}
+	}
+
+	if params.Provider != "" {
+		fiList = filterProvider(params.Provider, fiList)
+		if len(fiList) == 0 {
+			return nil, errors.Errorf("fabric interface %q doesn't support provider %q",
+				params.Interface, params.Provider)
+		}
+	}
+
+	return fiList, nil
+}
+
+func filterDomain(domain string, fiList []*FabricInterface) []*FabricInterface {
+	result := make([]*FabricInterface, 0, len(fiList))
+	for _, fi := range fiList {
+		if fi.Domain == domain || (fi.Name == domain && fi.Domain == "") {
+			result = append(result, fi)
+		}
+	}
+	return result
+}
+
+func filterProvider(provider string, fiList []*FabricInterface) []*FabricInterface {
+	result := make([]*FabricInterface, 0, len(fiList))
+	for _, fi := range fiList {
+		if fi.HasProvider(provider) {
+			result = append(result, fi)
+		}
+	}
+	return result
 }
 
 func newNUMAFabric(log logging.Logger) *NUMAFabric {
@@ -250,43 +380,50 @@ func newNUMAFabric(log logging.Logger) *NUMAFabric {
 }
 
 // NUMAFabricFromScan generates a NUMAFabric from a fabric scan result.
-func NUMAFabricFromScan(ctx context.Context, log logging.Logger, scan []*netdetect.FabricScan,
-	getDevAlias func(ctx context.Context, devName string) (string, error)) *NUMAFabric {
+func NUMAFabricFromScan(ctx context.Context, log logging.Logger, scan *hardware.FabricInterfaceSet) *NUMAFabric {
 	fabric := newNUMAFabric(log)
 
-	for _, fs := range scan {
-		if fs.DeviceName == "lo" {
+	for _, name := range scan.Names() {
+		fi, err := scan.GetInterface(name)
+		if err != nil {
+			log.Errorf("unexpected failure getting FI %q from scan: %s", name, err.Error())
 			continue
 		}
 
-		newIF := &FabricInterface{
-			Name:        fs.DeviceName,
-			NetDevClass: fs.NetDevClass,
+		newIFs := fabricInterfacesFromHardware(fi)
+
+		for _, newIF := range newIFs {
+			numa := int(fi.NUMANode)
+			fabric.Add(numa, newIF)
+
+			log.Tracef("device %s: [%d] added to NUMA node %d", newIF, fabric.NumDevices(numa)-1, numa)
 		}
-
-		if getDevAlias != nil {
-			deviceAlias, err := getDevAlias(ctx, newIF.Name)
-			if err != nil {
-				log.Debugf("Non-fatal error: failed to get device alias for %q: %v", newIF.Name, err)
-			} else {
-				newIF.Domain = deviceAlias
-			}
-		}
-
-		numa := int(fs.NUMANode)
-		fabric.Add(numa, newIF)
-
-		log.Debugf("Added device %q, domain %q for NUMA %d, device number %d",
-			newIF.Name, newIF.Domain, numa, fabric.NumDevices(numa)-1)
 	}
 
-	fabric.setDefaultNUMANode()
-
 	if fabric.NumNUMANodes() == 0 {
-		log.Info("No network devices detected in fabric scan\n")
+		log.Notice("no network devices detected in fabric scan")
 	}
 
 	return fabric
+}
+
+func fabricInterfacesFromHardware(fi *hardware.FabricInterface) []*FabricInterface {
+	fis := make([]*FabricInterface, 0)
+	for netIF := range fi.NetInterfaces {
+		newFI := &FabricInterface{
+			Name:        netIF,
+			NetDevClass: fi.DeviceClass,
+			hw:          fi,
+		}
+
+		if fi.Name != netIF {
+			newFI.Domain = fi.Name
+		}
+
+		fis = append(fis, newFI)
+	}
+
+	return fis
 }
 
 // NUMAFabricFromConfig generates a NUMAFabric layout based on a config.
@@ -304,7 +441,6 @@ func NUMAFabricFromConfig(log logging.Logger, cfg []*NUMAFabricConfig) *NUMAFabr
 				})
 		}
 	}
-	fabric.setDefaultNUMANode()
 
 	return fabric
 }

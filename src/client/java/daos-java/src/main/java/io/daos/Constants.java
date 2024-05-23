@@ -19,6 +19,8 @@ public final class Constants {
 
   public static final String KEY_CHARSET = "UTF-8";
 
+  public static final int DKEY_MIN_LENGTH = 8;
+
   public static final int KEY_LIST_BATCH_SIZE_DEFAULT = 128;
 
   public static final int ENCODED_LENGTH_KEY = 2;

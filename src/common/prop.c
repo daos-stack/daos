@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,6 +16,11 @@
 #include <daos/dtx.h>
 #include <daos_security.h>
 #include <daos/cont_props.h>
+#include <daos/pool.h>
+#include <daos/pool_map.h>
+
+D_CASSERT((int)DAOS_PROP_PERF_DOMAIN_ROOT == (int)PO_COMP_TP_ROOT);
+D_CASSERT((int)DAOS_PROP_PERF_DOMAIN_GROUP == (int)PO_COMP_TP_GRP);
 
 daos_prop_t *
 daos_prop_alloc(uint32_t entries_nr)
@@ -62,6 +67,7 @@ bool
 daos_prop_has_ptr(struct daos_prop_entry *entry)
 {
 	switch (entry->dpe_type) {
+	case DAOS_PROP_PO_SVC_LIST:
 	case DAOS_PROP_PO_ACL:
 	case DAOS_PROP_CO_ACL:
 	case DAOS_PROP_CO_ROOTS:
@@ -73,8 +79,16 @@ daos_prop_has_ptr(struct daos_prop_entry *entry)
 static void
 daos_prop_entry_free_value(struct daos_prop_entry *entry)
 {
+	if (entry->dpe_type == DAOS_PROP_PO_SVC_LIST) {
+		if (entry->dpe_val_ptr)
+			d_rank_list_free((d_rank_list_t *)entry->dpe_val_ptr);
+		return;
+	}
+
 	if (daos_prop_has_str(entry)) {
-		D_FREE(entry->dpe_str);
+		if (entry->dpe_str) {
+			D_FREE(entry->dpe_str);
+		}
 		return;
 	}
 
@@ -82,11 +96,6 @@ daos_prop_entry_free_value(struct daos_prop_entry *entry)
 		D_FREE(entry->dpe_val_ptr);
 		return;
 	}
-
-	if (entry->dpe_type == DAOS_PROP_PO_SVC_LIST)
-		if (entry->dpe_val_ptr)
-			d_rank_list_free(
-				(d_rank_list_t *)entry->dpe_val_ptr);
 }
 
 void
@@ -119,8 +128,8 @@ daos_prop_free(daos_prop_t *prop)
 	D_FREE(prop);
 }
 
-daos_prop_t *
-daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop)
+int
+daos_prop_merge2(daos_prop_t *old_prop, daos_prop_t *new_prop, daos_prop_t **out_prop)
 {
 	daos_prop_t		*result;
 	int			rc;
@@ -130,27 +139,26 @@ daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop)
 
 	if (old_prop == NULL || new_prop == NULL) {
 		D_ERROR("NULL input\n");
-		return NULL;
+		return -DER_INVAL;
 	}
 
 	/*
-	 * We might override some values in the old prop. Need to account for
-	 * that in the final prop count.
+	 * We might override some values in the old prop. Need to account for that in the final prop
+	 * count.
 	 */
 	result_nr = old_prop->dpp_nr;
 	for (i = 0; i < new_prop->dpp_nr; i++) {
-		entry = daos_prop_entry_get(old_prop,
-					    new_prop->dpp_entries[i].dpe_type);
+		entry = daos_prop_entry_get(old_prop, new_prop->dpp_entries[i].dpe_type);
 		if (entry == NULL) /* New entry isn't a duplicate of old */
 			result_nr++;
 	}
 
 	result = daos_prop_alloc(result_nr);
 	if (result == NULL)
-		return NULL;
+		return -DER_NOMEM;
 
 	if (result->dpp_nr == 0) /* Nothing more to do */
-		return result;
+		D_GOTO(out, rc = -DER_SUCCESS);
 
 	result_i = 0;
 	for (i = 0; i < old_prop->dpp_nr; i++, result_i++) {
@@ -160,12 +168,9 @@ daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop)
 			goto err;
 	}
 
-	/*
-	 * Either add or update based on the values of the new prop entries
-	 */
+	/*  Either add or update based on the values of the new prop entries */
 	for (i = 0; i < new_prop->dpp_nr; i++) {
-		entry = daos_prop_entry_get(result,
-					    new_prop->dpp_entries[i].dpe_type);
+		entry = daos_prop_entry_get(result, new_prop->dpp_entries[i].dpe_type);
 		if (entry == NULL) {
 			D_ASSERT(result_i < result_nr);
 			entry = &result->dpp_entries[result_i];
@@ -175,11 +180,24 @@ daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop)
 		if (rc != 0)
 			goto err;
 	}
-
-	return result;
+out:
+	*out_prop = result;
+	return 0;
 
 err:
 	daos_prop_free(result);
+	return rc;
+}
+
+daos_prop_t *
+daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop)
+{
+	daos_prop_t *out_prop;
+	int          rc;
+
+	rc = daos_prop_merge2(old_prop, new_prop, &out_prop);
+	if (rc == -DER_SUCCESS)
+		return out_prop;
 	return NULL;
 }
 
@@ -226,10 +244,10 @@ daos_prop_owner_group_valid(d_string_t owner)
 bool
 daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 {
-	uint32_t	type;
-	uint64_t	val;
-	struct daos_acl	*acl_ptr;
-	int		i;
+	uint32_t		type;
+	uint64_t		val;
+	struct daos_acl		*acl_ptr;
+	int			i;
 
 	if (prop == NULL) {
 		D_ERROR("NULL properties\n");
@@ -242,17 +260,16 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 	}
 	if (prop->dpp_nr == 0) {
 		if (prop->dpp_entries != NULL)
-			D_ERROR("invalid properties, NON-NULL dpp_entries with "
-				"zero dpp_nr.\n");
+			D_ERROR("invalid properties, NON-NULL dpp_entries with zero dpp_nr.\n");
 		return prop->dpp_entries == NULL;
 	}
 	if (prop->dpp_entries == NULL) {
-		D_ERROR("invalid properties, NULL dpp_entries with non-zero "
-			"dpp_nr.\n");
+		D_ERROR("invalid properties, NULL dpp_entries with non-zero dpp_nr.\n");
 		return false;
 	}
 	for (i = 0; i < prop->dpp_nr; i++) {
-		struct daos_co_status	co_status;
+		struct daos_co_status co_status;
+		int                   rc;
 
 		type = prop->dpp_entries[i].dpe_type;
 		if (pool) {
@@ -276,17 +293,19 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		/* pool properties */
 		case DAOS_PROP_PO_LABEL:
 		case DAOS_PROP_CO_LABEL:
-			if (!daos_label_is_valid(
-						prop->dpp_entries[i].dpe_str)) {
-				D_ERROR("invalid label \"%s\"\n",
-					prop->dpp_entries[i].dpe_str);
+			if (!daos_label_is_valid(prop->dpp_entries[i].dpe_str)) {
+				D_ERROR("invalid label \"%s\"\n", prop->dpp_entries[i].dpe_str);
 				return false;
 			}
 			break;
 		case DAOS_PROP_PO_ACL:
 		case DAOS_PROP_CO_ACL:
 			acl_ptr = prop->dpp_entries[i].dpe_val_ptr;
-			if (daos_acl_validate(acl_ptr) != 0)
+			/* This can fail with out of memory errors */
+			rc = daos_acl_validate(acl_ptr);
+			if (rc == -DER_NOMEM)
+				rc = daos_acl_validate(acl_ptr);
+			if (rc != 0)
 				return false;
 			break;
 		case DAOS_PROP_PO_SPACE_RB:
@@ -296,8 +315,45 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 				return false;
 			}
 			break;
+		case DAOS_PROP_PO_REDUN_FAC:
+			val = prop->dpp_entries[i].dpe_val;
+			if (!daos_rf_is_valid(val)) {
+				D_ERROR("invalid rf "DF_U64"\n", val);
+				return false;
+			}
+			break;
+		case DAOS_PROP_PO_PERF_DOMAIN:
+		case DAOS_PROP_CO_PERF_DOMAIN:
+			val = prop->dpp_entries[i].dpe_val;
+			if (val != PO_COMP_TP_ROOT &&
+			    val != PO_COMP_TP_GRP) {
+				D_ERROR("invalid perf domain "DF_U64".\n", val);
+				return false;
+			}
+			break;
+		case DAOS_PROP_PO_REINT_MODE:
+			val = prop->dpp_entries[i].dpe_val;
+			if (val != DAOS_REINT_MODE_DATA_SYNC &&
+			    val != DAOS_REINT_MODE_NO_DATA_SYNC) {
+				D_ERROR("invalid reintegration mode "DF_U64".\n", val);
+				return false;
+			}
+			break;
 		case DAOS_PROP_PO_SELF_HEAL:
 		case DAOS_PROP_PO_EC_CELL_SZ:
+		case DAOS_PROP_PO_EC_PDA:
+		case DAOS_PROP_PO_RP_PDA:
+		case DAOS_PROP_PO_GLOBAL_VERSION:
+		case DAOS_PROP_PO_OBJ_VERSION:
+		case DAOS_PROP_PO_DATA_THRESH:
+			break;
+		case DAOS_PROP_PO_UPGRADE_STATUS:
+			val = prop->dpp_entries[i].dpe_val;
+			if (val > DAOS_UPGRADE_STATUS_COMPLETED) {
+				D_ERROR("invalid pool upgrade status "DF_U64".\n",
+					val);
+				return false;
+			}
 			break;
 		case DAOS_PROP_PO_RECLAIM:
 			val = prop->dpp_entries[i].dpe_val;
@@ -322,9 +378,44 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 				prop->dpp_entries[i].dpe_str))
 				return false;
 			break;
-		/* container-only properties */
 		case DAOS_PROP_PO_SVC_LIST:
 			break;
+		case DAOS_PROP_PO_SCRUB_MODE:
+			val = prop->dpp_entries[i].dpe_val;
+			if (val >= DAOS_SCRUB_MODE_INVALID) {
+				D_ERROR("invalid scrub mode: "DF_U64"\n", val);
+				return false;
+			}
+			break;
+		case DAOS_PROP_PO_SCRUB_FREQ:
+			/* accepting any number of seconds for now */
+			break;
+		case DAOS_PROP_PO_SCRUB_THRESH:
+			/* accepting any number for threshold for now */
+			break;
+		case DAOS_PROP_PO_SVC_REDUN_FAC:
+			val = prop->dpp_entries[i].dpe_val;
+			if (!daos_svc_rf_is_valid(val)) {
+				D_ERROR("invalid svc_rf "DF_U64"\n", val);
+				return false;
+			}
+			break;
+		case DAOS_PROP_PO_SVC_OPS_ENABLED:
+			val = prop->dpp_entries[i].dpe_val;
+			if (val > 1) {
+				D_ERROR("invalid svc_ops_enabled " DF_U64 ".\n", val);
+				return false;
+			}
+			break;
+		case DAOS_PROP_PO_SVC_OPS_ENTRY_AGE:
+			val = prop->dpp_entries[i].dpe_val;
+			if ((val < DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_MIN) ||
+			    (val > DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_MAX)) {
+				D_ERROR("invalid svc_ops_entry_age " DF_U64 ".\n", val);
+				return false;
+			}
+			break;
+		/* container-only properties */
 		case DAOS_PROP_CO_LAYOUT_TYPE:
 			val = prop->dpp_entries[i].dpe_val;
 			if (val >= DAOS_PROP_CO_LAYOUT_MAX) {
@@ -346,17 +437,18 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			/** Chunk size is encoded on 32 bits */
 			val = prop->dpp_entries[i].dpe_val;
 			if (val >= (1ULL << 32)) {
-				D_ERROR("invalid chunk size "
-					DF_U64". Should be < 2GiB\n", val);
+				D_ERROR("invalid chunk size " DF_U64 ". Should be < 2GiB\n", val);
 				return false;
 			}
+			break;
+		case DAOS_PROP_CO_SCRUBBER_DISABLED:
+			/* Placeholder */
 			break;
 		case DAOS_PROP_CO_CSUM_SERVER_VERIFY:
 			val = prop->dpp_entries[i].dpe_val;
 			if (val != DAOS_PROP_CO_CSUM_SV_OFF &&
 			    val != DAOS_PROP_CO_CSUM_SV_ON) {
-				D_ERROR("invalid csum server verify property "
-					DF_U64".\n", val);
+				D_ERROR("invalid csum server verify property " DF_U64 ".\n", val);
 				return false;
 			}
 			break;
@@ -365,8 +457,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			if (val != DAOS_PROP_CO_DEDUP_OFF &&
 			    val != DAOS_PROP_CO_DEDUP_MEMCMP &&
 			    val != DAOS_PROP_CO_DEDUP_HASH) {
-				D_ERROR("invalid deduplication parameter "
-					DF_U64".\n", val);
+				D_ERROR("invalid deduplication parameter " DF_U64 ".\n", val);
 				return false;
 			}
 			break;
@@ -413,8 +504,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			    val != DAOS_PROP_CO_COMPRESS_DEFLATE2 &&
 			    val != DAOS_PROP_CO_COMPRESS_DEFLATE3 &&
 			    val != DAOS_PROP_CO_COMPRESS_DEFLATE4) {
-				D_ERROR("invalid compression parameter "
-					DF_U64".\n", val);
+				D_ERROR("invalid compression parameter " DF_U64 ".\n", val);
 				return false;
 			}
 			break;
@@ -428,8 +518,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			    val != DAOS_PROP_CO_ENCRYPT_AES_CBC256 &&
 			    val != DAOS_PROP_CO_ENCRYPT_AES_GCM128 &&
 			    val != DAOS_PROP_CO_ENCRYPT_AES_GCM256) {
-				D_ERROR("invalid encryption parameter "
-					DF_U64".\n", val);
+				D_ERROR("invalid encryption parameter " DF_U64 ".\n", val);
 				return false;
 			}
 			break;
@@ -443,9 +532,22 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 				return false;
 			}
 			break;
+		case DAOS_PROP_PO_CHECKPOINT_MODE:
+			val = prop->dpp_entries[i].dpe_val;
+			if (val > DAOS_CHECKPOINT_LAZY) {
+				D_ERROR("invalid checkpoint mode: " DF_U64 "\n", val);
+				return false;
+			}
+			break;
+		case DAOS_PROP_PO_CHECKPOINT_FREQ:
+		case DAOS_PROP_PO_CHECKPOINT_THRESH:
 		case DAOS_PROP_CO_SNAPSHOT_MAX:
 		case DAOS_PROP_CO_ROOTS:
 		case DAOS_PROP_CO_EC_CELL_SZ:
+		case DAOS_PROP_CO_EC_PDA:
+		case DAOS_PROP_CO_RP_PDA:
+		case DAOS_PROP_CO_GLOBAL_VERSION:
+		case DAOS_PROP_CO_OBJ_VERSION:
 			break;
 		default:
 			D_ERROR("invalid dpe_type %d.\n", type);
@@ -471,14 +573,16 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 	daos_prop_entry_free_value(entry_dup);
 
 	entry_dup->dpe_type = entry->dpe_type;
+	entry_dup->dpe_flags = entry->dpe_flags;
 	switch (entry->dpe_type) {
 	case DAOS_PROP_PO_LABEL:
 	case DAOS_PROP_CO_LABEL:
-		D_STRNDUP(entry_dup->dpe_str, entry->dpe_str,
-			  DAOS_PROP_LABEL_MAX_LEN);
-		if (entry_dup->dpe_str == NULL) {
-			D_ERROR("failed to dup label.\n");
-			return -DER_NOMEM;
+		if (entry->dpe_str) {
+			D_STRNDUP(entry_dup->dpe_str, entry->dpe_str,
+				  DAOS_PROP_LABEL_MAX_LEN);
+			if (entry_dup->dpe_str == NULL) {
+				return -DER_NOMEM;
+			}
 		}
 		break;
 	case DAOS_PROP_PO_ACL:
@@ -486,7 +590,6 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 		acl_ptr = entry->dpe_val_ptr;
 		entry_dup->dpe_val_ptr = daos_acl_dup(acl_ptr);
 		if (entry_dup->dpe_val_ptr == NULL) {
-			D_ERROR("failed to dup ACL\n");
 			return -DER_NOMEM;
 		}
 		break;
@@ -497,7 +600,6 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 		D_STRNDUP(entry_dup->dpe_str, entry->dpe_str,
 			  DAOS_ACL_MAX_PRINCIPAL_LEN);
 		if (entry_dup->dpe_str == NULL) {
-			D_ERROR("failed to dup ownership info.\n");
 			return -DER_NOMEM;
 		}
 		break;
@@ -506,7 +608,7 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 
 		rc = d_rank_list_dup(&dst_list, svc_list);
 		if (rc) {
-			D_ERROR("failed dup rank list\n");
+			D_ERROR("failed dup rank list: "DF_RC"\n", DP_RC(rc));
 			return rc;
 		}
 		entry_dup->dpe_val_ptr = dst_list;
@@ -514,7 +616,7 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 	case DAOS_PROP_CO_ROOTS:
 		rc = daos_prop_entry_dup_co_roots(entry_dup, entry);
 		if (rc) {
-			D_ERROR("failed to dup roots\n");
+			D_ERROR("failed to dup roots: "DF_RC"\n", DP_RC(rc));
 			return rc;
 		}
 		break;
@@ -535,19 +637,30 @@ daos_prop_dup(daos_prop_t *prop, bool pool, bool input)
 {
 	daos_prop_t		*prop_dup;
 	struct daos_prop_entry	*entry, *entry_dup;
-	int			 i;
+	int			 i, j;
 	int			 rc;
+	int			 valid_nr = 0;
 
 	if (!daos_prop_valid(prop, pool, input))
 		return NULL;
 
-	prop_dup = daos_prop_alloc(prop->dpp_nr);
+	for (i = 0; i < prop->dpp_nr; i++) {
+		entry = &prop->dpp_entries[i];
+		if (daos_prop_is_set(entry))
+			valid_nr++;
+	}
+	if (valid_nr == 0)
+		return NULL;
+	prop_dup = daos_prop_alloc(valid_nr);
 	if (prop_dup == NULL)
 		return NULL;
 
+	j = 0;
 	for (i = 0; i < prop->dpp_nr; i++) {
 		entry = &prop->dpp_entries[i];
-		entry_dup = &prop_dup->dpp_entries[i];
+		if (!daos_prop_is_set(entry))
+			continue;
+		entry_dup = &prop_dup->dpp_entries[j++];
 		rc = daos_prop_entry_copy(entry, entry_dup);
 		if (rc != 0) {
 			daos_prop_free(prop_dup);
@@ -597,8 +710,7 @@ daos_prop_entry_set_str(struct daos_prop_entry *entry, const char *str, daos_siz
 		D_ERROR("Entry type does not expect a string value\n");
 		return -DER_INVAL;
 	}
-	if (entry->dpe_str != NULL)
-		D_FREE(entry->dpe_str);
+	D_FREE(entry->dpe_str);
 	if (str == NULL || len == 0)
 		return 0;
 
@@ -630,8 +742,7 @@ daos_prop_entry_set_ptr(struct daos_prop_entry *entry, const void *ptr, daos_siz
 		D_ERROR("Entry type does not expect a ptr value\n");
 		return -DER_INVAL;
 	}
-	if (entry->dpe_val_ptr != NULL)
-		D_FREE(entry->dpe_val_ptr);
+	D_FREE(entry->dpe_val_ptr);
 	if (ptr == NULL || size == 0)
 		return 0;
 
@@ -681,13 +792,17 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 	bool			 owner_alloc = false;
 	bool			 group_alloc = false;
 	bool			 svc_list_alloc = false;
-	bool			 roots_alloc = false;
+	bool			 roots_alloc    = false;
 	struct daos_acl		*acl;
 	d_rank_list_t		*dst_list;
 	uint32_t		 type;
 	int			 i;
 	int			 rc = 0;
 
+	if (prop_req == NULL) {
+		D_ERROR("no prop in req.\n");
+		return -DER_INVAL;
+	}
 	if (prop_reply == NULL || prop_reply->dpp_nr == 0 ||
 	    prop_reply->dpp_entries == NULL) {
 		D_ERROR("no prop or empty prop in reply.\n");
@@ -701,19 +816,25 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 		entries_alloc = true;
 	}
 
-	for (i = 0; i < prop_req->dpp_nr && i < prop_reply->dpp_nr; i++) {
+	for (i = 0; i < prop_req->dpp_nr; i++) {
 		entry_req = &prop_req->dpp_entries[i];
 		type = entry_req->dpe_type;
 		if (type == 0) {
 			/* req doesn't have any entry type populated yet */
-			type = prop_reply->dpp_entries[i].dpe_type;
-			entry_req->dpe_type = type;
+			if (i < prop_reply->dpp_nr) {
+				type = prop_reply->dpp_entries[i].dpe_type;
+				entry_req->dpe_type = type;
+			} else {
+				return 0;
+			}
 		}
+		/* this is possible now */
 		entry_reply = daos_prop_entry_get(prop_reply, type);
 		if (entry_reply == NULL) {
-			D_ERROR("cannot find prop entry for type %d.\n", type);
-			D_GOTO(out, rc = -DER_PROTO);
+			entry_req->dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
+			continue;
 		}
+		entry_req->dpe_flags = entry_reply->dpe_flags;
 		if (type == DAOS_PROP_PO_LABEL || type == DAOS_PROP_CO_LABEL) {
 			D_STRNDUP(entry_req->dpe_str, entry_reply->dpe_str,
 				  DAOS_PROP_LABEL_MAX_LEN);
@@ -857,8 +978,7 @@ daos_prop_entry_cmp_acl(struct daos_prop_entry *entry1,
 	acl2_size = daos_acl_get_size(acl2);
 
 	if (acl1_size != acl2_size) {
-		D_ERROR("ACL len mistmatch, %lu != %lu\n",
-			acl1_size, acl2_size);
+		D_ERROR("ACL len mismatch, %lu != %lu\n", acl1_size, acl2_size);
 		return -DER_MISMATCH;
 	}
 
@@ -879,6 +999,7 @@ parse_entry(char *str, struct daos_prop_entry *entry)
 	int	rc = 0;
 
 	/** get prop_name */
+	D_ASSERT(str != NULL);
 	name = strtok_r(str, ":", &end_token);
 	if (name == NULL)
 		return -DER_INVAL;
@@ -935,7 +1056,8 @@ parse_entry(char *str, struct daos_prop_entry *entry)
 			return rc;
 		entry->dpe_val = rc;
 		rc = 0;
-	} else if (strcmp(name, DAOS_PROP_ENTRY_REDUN_FAC) == 0) {
+	} else if (strcmp(name, DAOS_PROP_ENTRY_REDUN_FAC) == 0 ||
+		   strcmp(name, DAOS_PROP_ENTRY_REDUN_FAC_OLD) == 0) {
 		entry->dpe_type = DAOS_PROP_CO_REDUN_FAC;
 		if (!strcmp(val, "0"))
 			entry->dpe_val = DAOS_PROP_CO_REDUN_RF0;
@@ -954,14 +1076,26 @@ parse_entry(char *str, struct daos_prop_entry *entry)
 	} else if (strcmp(name, DAOS_PROP_ENTRY_EC_CELL_SZ) == 0) {
 		entry->dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
 		entry->dpe_val = strtoull(val, NULL, 0);
+	} else if (strcmp(name, DAOS_PROP_ENTRY_EC_PDA) == 0) {
+		entry->dpe_type = DAOS_PROP_CO_EC_PDA;
+		entry->dpe_val = strtoull(val, NULL, 0);
+	} else if (strcmp(name, DAOS_PROP_ENTRY_RP_PDA) == 0) {
+		entry->dpe_type = DAOS_PROP_CO_RP_PDA;
+		entry->dpe_val = strtoull(val, NULL, 0);
+	} else if (strcmp(name, DAOS_PROP_ENTRY_PERF_DOMAIN) == 0) {
+		entry->dpe_type = DAOS_PROP_CO_PERF_DOMAIN;
+		entry->dpe_val = strtoull(val, NULL, 0);
 	} else if (strcmp(name, DAOS_PROP_ENTRY_LAYOUT_TYPE) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_LAYOUT_VER) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_REDUN_LVL) == 0 ||
+		   strcmp(name, DAOS_PROP_ENTRY_REDUN_LVL_OLD) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_SNAPSHOT_MAX) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_ALLOCED_OID) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_STATUS) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_OWNER) == 0 ||
-		   strcmp(name, DAOS_PROP_ENTRY_GROUP) == 0) {
+		   strcmp(name, DAOS_PROP_ENTRY_GROUP) == 0 ||
+		   strcmp(name, DAOS_PROP_ENTRY_GLOBAL_VERSION) == 0 ||
+		   strcmp(name, DAOS_PROP_ENTRY_OBJ_VERSION) == 0) {
 		D_ERROR("Property %s is read only\n", name);
 		rc = -DER_INVAL;
 	} else {

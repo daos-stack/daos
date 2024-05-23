@@ -7,8 +7,7 @@ set -uex
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 ci_envs="$mydir/../parse_ci_envs.sh"
 if [ -e "${ci_envs}" ]; then
-  # at some point we want to use: shellcheck source=ci/parse_ci_envs.sh
-  # shellcheck disable=SC1091
+  # shellcheck source=parse_ci_envs.sh
   source "${ci_envs}"
 fi
 
@@ -16,6 +15,8 @@ fi
 : "${TARGET:=centos7}"
 
 artdir="${PWD}/artifacts/${TARGET}"
+rm -rf "$artdir"
+mkdir -p "$artdir"
 
 if [ -d /var/cache/pbuilder/ ]; then
     mockroot=/var/cache/pbuilder/
@@ -28,9 +29,6 @@ if [ -d /var/cache/pbuilder/ ]; then
         gzip -9c > Packages.gz
     popd
 
-    dpkg -f "$artdir"/daos-server_*_amd64.deb Version > "${TARGET}-rpm-version"
-    ls -l "${TARGET}-rpm-version" || true
-    cat "${TARGET}-rpm-version" || true
     exit 0
 fi
 
@@ -45,7 +43,3 @@ fi
 fi)
 
 createrepo "$artdir"
-rpm --qf "%{version}-%{release}.%{arch}" \
-    -qp "$artdir"/daos-server-[0-9]*.x86_64.rpm > "${TARGET}-rpm-version"
-rpm -qRp "$artdir"/daos-server-*.x86_64.rpm |
-  sed -ne '/mercury/s/.* = //p' > "${TARGET}-required-mercury-rpm-version"

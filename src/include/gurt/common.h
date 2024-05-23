@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -30,9 +30,22 @@
 #include <daos_errno.h>
 #ifdef D_HAS_VALGRIND
 #include <valgrind/valgrind.h>
+#include <valgrind/memcheck.h>
 #define D_ON_VALGRIND RUNNING_ON_VALGRIND
 #else
 #define D_ON_VALGRIND 0
+#define VALGRIND_MAKE_MEM_DEFINED(addr, len) do {\
+	(void)(addr);\
+	(void)(len);\
+} while (0)
+#define VALGRIND_DISABLE_ADDR_ERROR_REPORTING_IN_RANGE(addr, len) do {\
+	(void)(addr);\
+	(void)(len);\
+} while (0)
+#define VALGRIND_ENABLE_ADDR_ERROR_REPORTING_IN_RANGE(addr, len) do {\
+	(void)(addr);\
+	(void)(len);\
+} while (0)
 #endif
 
 #include <gurt/types.h>
@@ -48,10 +61,10 @@ extern "C" {
 #endif
 
 #ifndef likely
-#define likely(x)	__builtin_expect((x), 1)
+#define likely(x)	__builtin_expect((uintptr_t)(x), 1)
 #endif
 #ifndef unlikely
-#define unlikely(x)	__builtin_expect((x), 0)
+#define unlikely(x)	__builtin_expect((uintptr_t)(x), 0)
 #endif
 
 /* Check if bit is set in passed val */
@@ -63,15 +76,43 @@ extern "C" {
  */
 #define _gurt_gettime(ts) clock_gettime(CLOCK_MONOTONIC, ts)
 
+/* rand and srand macros */
+
+#define D_RAND_MAX 0x7fffffff
+
+void d_srand(long int);
+long int d_rand(void);
+double d_randd(void);
+
+/* Instruct the compiler these are allocation functions that return a pointer, and if possible
+ * which function needs to be used to free them.
+ */
+#if HAVE_DEALLOC
+#define _dalloc_ __attribute__((malloc, malloc(d_free)))
+#else
+#define _dalloc_ __attribute__((malloc))
+#endif
+
 /* memory allocating macros */
-void  d_free(void *);
-void *d_calloc(size_t, size_t);
-void *d_malloc(size_t);
-void *d_realloc(void *, size_t);
-char *d_strndup(const char *s, size_t n);
-int d_asprintf(char **strp, const char *fmt, ...);
-void *d_aligned_alloc(size_t alignment, size_t size);
-char *d_realpath(const char *path, char *resolved_path);
+void
+d_free(void *ptr);
+void *
+d_calloc(size_t nmemb, size_t size) _dalloc_ __attribute__((alloc_size(1, 2)));
+void *
+d_malloc(size_t size) _dalloc_ __attribute__((alloc_size(1)));
+void *
+d_realloc(void *, size_t) _dalloc_ __attribute__((alloc_size(2)));
+char *
+d_strndup(const char *s, size_t n) _dalloc_;
+int
+d_asprintf(char **strp, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
+/* Use a non-standard asprintf interface to enable compiler checks. */
+char *
+d_asprintf2(int *rc, const char *fmt, ...) _dalloc_ __attribute__((format(printf, 2, 3)));
+void *
+d_aligned_alloc(size_t alignment, size_t size, bool zero) _dalloc_ __attribute__((alloc_size(2)));
+char *
+d_realpath(const char *path, char *resolved_path) _dalloc_;
 
 #define D_CHECK_ALLOC(func, cond, ptr, name, size, count, cname,	\
 			on_error)					\
@@ -104,11 +145,10 @@ char *d_realpath(const char *path, char *resolved_path);
 				(int)(size));				\
 	} while (0)
 
-#define D_ALLOC_CORE(ptr, size, count)					\
-	do {								\
-		(ptr) = (__typeof__(ptr))d_calloc((count), (size));	\
-		D_CHECK_ALLOC(calloc, true, ptr, #ptr, size,		\
-			      count, #count, 0);			\
+#define D_ALLOC_CORE(ptr, size, count)                                                             \
+	do {                                                                                       \
+		(ptr) = (__typeof__(ptr))d_calloc((count), (size));                                \
+		D_CHECK_ALLOC(calloc, true, ptr, #ptr, size, count, #count, 0);                    \
 	} while (0)
 
 #define D_ALLOC_CORE_NZ(ptr, size, count)				\
@@ -135,38 +175,46 @@ char *d_realpath(const char *path, char *resolved_path);
 #define D_STRNDUP_S(ptr, s)						\
 	do {								\
 		_Static_assert(sizeof(s) != sizeof(void *) ||		\
-			__builtin_types_compatible_p(typeof(s), typeof("1234567")), \
+			__builtin_types_compatible_p(__typeof__(s), __typeof__("1234567")), \
 	"D_STRNDUP_S cannot be used with this type");			\
 		(ptr) = d_strndup(s, sizeof(s));			\
 		D_CHECK_ALLOC(strndup, true, ptr, #ptr,			\
 			sizeof(s), 0, #ptr, 0);				\
 	} while (0)
 
-#define D_ASPRINTF(ptr, ...)						\
-	do {								\
-		int _rc;						\
-		_rc = d_asprintf(&(ptr), __VA_ARGS__);			\
-		D_CHECK_ALLOC(asprintf, _rc != -1,			\
-			      ptr, #ptr, _rc + 1, 0, #ptr,		\
-			      (ptr) = NULL);				\
+#define D_ASPRINTF(ptr, ...)                                                                       \
+	do {                                                                                       \
+		int _rc;                                                                           \
+		(ptr) = d_asprintf2(&_rc, __VA_ARGS__);                                            \
+		D_CHECK_ALLOC(asprintf, (ptr) != NULL, ptr, #ptr, _rc + 1, 0, #ptr, (ptr) = NULL); \
 	} while (0)
 
+/* d_realpath() can fail with genuine errors, in which case we want to keep the errno from
+ * realpath, however if it doesn't fail then we want to preserve the previous errno, in
+ * addition the fault injection code could insert an error in the D_CHECK_ALLOC() macro
+ * so if that happens then we want to set ENOMEM there.
+ */
 #define D_REALPATH(ptr, path)						\
 	do {								\
-		int _size;						\
 		(ptr) = d_realpath((path), NULL);			\
-		_size = (ptr) != NULL ?					\
-			strnlen((ptr), PATH_MAX + 1) + 1 : 0;		\
-		D_CHECK_ALLOC(realpath, true, ptr, #ptr, _size,		\
-			      0, #ptr, 0);				\
+		if ((ptr) != NULL) {					\
+			int _size = strnlen(ptr, PATH_MAX + 1) + 1 ;	\
+			D_CHECK_ALLOC(realpath, true, ptr, #ptr, _size,	0, #ptr, 0); \
+			if (((ptr) == NULL))				\
+				errno = ENOMEM;				\
+		}							\
 	} while (0)
 
-#define D_ALIGNED_ALLOC(ptr, alignment, size)				\
-	do {								\
-		(ptr) = (__typeof__(ptr))d_aligned_alloc(alignment,	\
-							 size);		\
-		D_CHECK_ALLOC(aligned_alloc, true, ptr, #ptr,		\
-			      size, 0, #ptr, 0);			\
+#define D_ALIGNED_ALLOC(ptr, alignment, size)                                                      \
+	do {                                                                                       \
+		(ptr) = (__typeof__(ptr))d_aligned_alloc(alignment, size, true);                   \
+		D_CHECK_ALLOC(aligned_alloc, true, ptr, #ptr, size, 0, #ptr, 0);                   \
+	} while (0)
+
+#define D_ALIGNED_ALLOC_NZ(ptr, alignment, size)                                                   \
+	do {                                                                                       \
+		(ptr) = (__typeof__(ptr))d_aligned_alloc(alignment, size, false);                  \
+		D_CHECK_ALLOC(aligned_alloc, true, ptr, #ptr, size, 0, #ptr, 0);                   \
 	} while (0)
 
 /* Requires newptr and oldptr to be different variables.  Otherwise
@@ -236,14 +284,6 @@ char *d_realpath(const char *path, char *resolved_path);
 			 (oldcount) * sizeof(*(oldptr)),		\
 					     sizeof(*(oldptr)), count)
 
-#define D_REALLOC_NZ(newptr, oldptr, size)				\
-	D_REALLOC_COMMON(newptr, oldptr, size, size, 1)
-
-#define D_REALLOC_ARRAY_NZ(newptr, oldptr, count)			\
-	D_REALLOC_COMMON(newptr, oldptr,				\
-			 (count) * sizeof(*(oldptr)),			\
-			 sizeof(*(oldptr)), count)
-
 /** realloc macros that do not clear the new memory */
 #define D_REALLOC_NZ(newptr, oldptr, size)				\
 	D_REALLOC_COMMON(newptr, oldptr, size, size, 1)
@@ -260,11 +300,14 @@ char *d_realpath(const char *path, char *resolved_path);
 #define D_REALLOC_ARRAY_Z(newptr, oldptr, count)			\
 	D_REALLOC_COMMON(newptr, oldptr, 0, sizeof(*(oldptr)), count)
 
-#define D_FREE(ptr)							\
-	do {								\
-		D_DEBUG(DB_MEM, "free '" #ptr "' at %p.\n", (ptr));	\
-		d_free(ptr);						\
-		(ptr) = NULL;						\
+/* Free a pointer. Only logs if the pointer is non-NULL. */
+#define D_FREE(ptr)                                                                                \
+	do {                                                                                       \
+		if ((ptr) != NULL) {                                                               \
+			D_DEBUG(DB_MEM, "free '" #ptr "' at %p.\n", (ptr));                        \
+			d_free(ptr);                                                               \
+			(ptr) = NULL;                                                              \
+		}                                                                                  \
 	} while (0)
 
 #define D_ALLOC(ptr, size)	D_ALLOC_CORE(ptr, size, 1)
@@ -273,7 +316,6 @@ char *d_realpath(const char *path, char *resolved_path);
 #define D_ALLOC_NZ(ptr, size)	D_ALLOC_CORE_NZ(ptr, size, 1)
 #define D_ALLOC_PTR_NZ(ptr)	D_ALLOC_NZ(ptr, sizeof(*ptr))
 #define D_ALLOC_ARRAY_NZ(ptr, count) D_ALLOC_CORE_NZ(ptr, sizeof(*ptr), count)
-#define D_FREE_PTR(ptr)		D_FREE(ptr)
 
 #define D_GOTO(label, rc)			\
 	do {					\
@@ -295,12 +337,44 @@ char *d_realpath(const char *path, char *resolved_path);
 	})
 
 /* Internal helper macros, not to be called directly by the outside caller */
-#define __D_PTHREAD(fn, x)						\
+#define __D_PTHREAD(fn, x)                                                                         \
+	({                                                                                         \
+		int _rc;                                                                           \
+		_rc = fn(x);                                                                       \
+		D_ASSERTF(_rc == 0, #fn "(%p) rc=%d %s\n", x, _rc, strerror(_rc));                 \
+		d_errno2der(_rc);                                                                  \
+	})
+
+#define __D_PTHREAD_TIMED(fn, x)                                                                   \
+	({                                                                                         \
+		int             _rc;                                                               \
+		int             _delay1 = 0;                                                       \
+		int             _delay2 = 1;                                                       \
+		int             _f      = _delay1 + _delay2;                                       \
+		int             _c      = _f;                                                      \
+		struct timespec _wait   = {};                                                      \
+		clock_gettime(CLOCK_REALTIME, &_wait);                                             \
+		_wait.tv_sec += _f;                                                                \
+		while ((_rc = fn((x), &_wait)) == ETIMEDOUT) {                                     \
+			_delay1 = _delay2;                                                         \
+			_delay2 = _f;                                                              \
+			_c += _f;                                                                  \
+			_f = _delay1 + _delay2;                                                    \
+			D_CDEBUG(_c > 1, DLOG_WARN, DB_MEM,                                        \
+				 #fn "(%p) still held after %d seconds", x, _c);                   \
+			clock_gettime(CLOCK_REALTIME, &_wait);                                     \
+			_wait.tv_sec += _f;                                                        \
+		}                                                                                  \
+		D_ASSERTF(_rc == 0, #fn "(%p) rc=%d %s\n", x, _rc, strerror(_rc));                 \
+		d_errno2der(_rc);                                                                  \
+	})
+
+#define __D_PTHREAD_TRYLOCK(fn, x)					\
 	({								\
 		int _rc;						\
 		_rc = fn(x);						\
-		D_ASSERTF(_rc == 0, "%s rc=%d %s\n", #fn, _rc,		\
-			  strerror(_rc));				\
+		D_ASSERTF(_rc == 0 || _rc == EBUSY, "%s rc=%d %s\n",	\
+			  #fn, _rc, strerror(_rc));			\
 		d_errno2der(_rc);					\
 	})
 
@@ -316,11 +390,9 @@ char *d_realpath(const char *path, char *resolved_path);
 	})
 
 #define D_SPIN_LOCK(x)		__D_PTHREAD(pthread_spin_lock, x)
-#define D_SPIN_UNLOCK(x)	__D_PTHREAD(pthread_spin_unlock, x)
-#define D_MUTEX_LOCK(x)		__D_PTHREAD(pthread_mutex_lock, x)
-#define D_MUTEX_UNLOCK(x)	__D_PTHREAD(pthread_mutex_unlock, x)
-#define D_RWLOCK_RDLOCK(x)	__D_PTHREAD(pthread_rwlock_rdlock, x)
-#define D_RWLOCK_WRLOCK(x)	__D_PTHREAD(pthread_rwlock_wrlock, x)
+#define D_SPIN_UNLOCK(x)        __D_PTHREAD(pthread_spin_unlock, x)
+#define D_MUTEX_UNLOCK(x)       __D_PTHREAD(pthread_mutex_unlock, x)
+#define D_RWLOCK_TRYWRLOCK(x)	__D_PTHREAD_TRYLOCK(pthread_rwlock_trywrlock, x)
 #define D_RWLOCK_UNLOCK(x)	__D_PTHREAD(pthread_rwlock_unlock, x)
 #define D_MUTEX_DESTROY(x)	__D_PTHREAD(pthread_mutex_destroy, x)
 #define D_SPIN_DESTROY(x)	__D_PTHREAD(pthread_spin_destroy, x)
@@ -328,6 +400,20 @@ char *d_realpath(const char *path, char *resolved_path);
 #define D_MUTEX_INIT(x, y)	__D_PTHREAD_INIT(pthread_mutex_init, x, y)
 #define D_SPIN_INIT(x, y)	__D_PTHREAD_INIT(pthread_spin_init, x, y)
 #define D_RWLOCK_INIT(x, y)	__D_PTHREAD_INIT(pthread_rwlock_init, x, y)
+
+#if defined(DAOS_BUILD_RELEASE) || defined(__COVERITY__)
+
+#define D_MUTEX_LOCK(x)    __D_PTHREAD(pthread_mutex_lock, x)
+#define D_RWLOCK_WRLOCK(x) __D_PTHREAD(pthread_rwlock_wrlock, x)
+#define D_RWLOCK_RDLOCK(x) __D_PTHREAD(pthread_rwlock_rdlock, x)
+
+#else
+
+#define D_MUTEX_LOCK(x)    __D_PTHREAD_TIMED(pthread_mutex_timedlock, x)
+#define D_RWLOCK_WRLOCK(x) __D_PTHREAD_TIMED(pthread_rwlock_timedwrlock, x)
+#define D_RWLOCK_RDLOCK(x) __D_PTHREAD_TIMED(pthread_rwlock_timedrdlock, x)
+
+#endif
 
 #define DGOLDEN_RATIO_PRIME_64	0xcbf29ce484222325ULL
 #define DGOLDEN_RATIO_PRIME_32	0x9e370001UL
@@ -377,12 +463,15 @@ int d_rank_list_dup(d_rank_list_t **dst, const d_rank_list_t *src);
 int d_rank_list_dup_sort_uniq(d_rank_list_t **dst, const d_rank_list_t *src);
 void d_rank_list_filter(d_rank_list_t *src_set, d_rank_list_t *dst_set,
 			bool exclude);
+int d_rank_list_merge(d_rank_list_t *src_set, d_rank_list_t *merge_set);
 d_rank_list_t *d_rank_list_alloc(uint32_t size);
-d_rank_list_t *d_rank_list_realloc(d_rank_list_t *ptr, uint32_t size);
+int d_rank_list_resize(d_rank_list_t *ptr, uint32_t size);
 void d_rank_list_free(d_rank_list_t *rank_list);
 int d_rank_list_copy(d_rank_list_t *dst, d_rank_list_t *src);
+void d_rank_list_shuffle(d_rank_list_t *rank_list);
 void d_rank_list_sort(d_rank_list_t *rank_list);
 bool d_rank_list_find(d_rank_list_t *rank_list, d_rank_t rank, int *idx);
+void d_rank_list_del_at(d_rank_list_t *list, int idx);
 int d_rank_list_del(d_rank_list_t *rank_list, d_rank_t rank);
 bool d_rank_list_identical(d_rank_list_t *rank_list1,
 			   d_rank_list_t *rank_list2);
@@ -392,7 +481,34 @@ int d_rank_list_append(d_rank_list_t *rank_list, d_rank_t rank);
 int d_rank_list_dump(d_rank_list_t *rank_list, d_string_t name, int name_len);
 d_rank_list_t *uint32_array_to_rank_list(uint32_t *ints, size_t len);
 int rank_list_to_uint32_array(d_rank_list_t *rl, uint32_t **ints, size_t *len);
+char *d_rank_list_to_str(d_rank_list_t *rank_list);
 
+d_rank_range_list_t *d_rank_range_list_alloc(uint32_t size);
+d_rank_range_list_t *d_rank_range_list_realloc(d_rank_range_list_t *range_list, uint32_t size);
+d_rank_range_list_t *d_rank_range_list_create_from_ranks(d_rank_list_t *rank_list);
+char *d_rank_range_list_str(d_rank_range_list_t *list, bool *truncated);
+void d_rank_range_list_free(d_rank_range_list_t *range_list);
+
+#ifdef FAULT_INJECTION
+
+/* Define as a macro to improve failure logging */
+
+#define d_sgl_init(_SGL, _NR)                                                                      \
+	({                                                                                         \
+		int _rc           = -DER_SUCCESS;                                                  \
+		(_SGL)->sg_nr_out = 0;                                                             \
+		(_SGL)->sg_nr     = (_NR);                                                         \
+		if (unlikely((_NR) == 0)) {                                                        \
+			(_SGL)->sg_iovs = NULL;                                                    \
+		} else {                                                                           \
+			D_ALLOC_ARRAY((_SGL)->sg_iovs, (_NR));                                     \
+			if ((_SGL)->sg_iovs == NULL)                                               \
+				_rc = -DER_NOMEM;                                                  \
+		}                                                                                  \
+		_rc;                                                                               \
+	})
+
+#else
 static inline int
 d_sgl_init(d_sg_list_t *sgl, unsigned int nr)
 {
@@ -408,6 +524,7 @@ d_sgl_init(d_sg_list_t *sgl, unsigned int nr)
 
 	return sgl->sg_iovs == NULL ? -DER_NOMEM : 0;
 }
+#endif
 
 static inline void
 d_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
@@ -426,11 +543,76 @@ d_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
 	sgl->sg_nr = 0;
 }
 
-void d_getenv_bool(const char *env, bool *bool_val);
-void d_getenv_int(const char *env, unsigned int *int_val);
-int d_getenv_uint64_t(const char *env, uint64_t *val);
-int  d_write_string_buffer(struct d_string_buffer_t *buf, const char *fmt, ...);
-void d_free_string(struct d_string_buffer_t *buf);
+static inline size_t  __attribute__((nonnull))
+d_sgl_buf_size(d_sg_list_t *sgl)
+{
+	size_t   size = 0;
+	uint32_t i;
+
+	if (sgl->sg_iovs == NULL)
+		return 0;
+
+	for (i = 0, size = 0; i < sgl->sg_nr; i++)
+		size += sgl->sg_iovs[i].iov_buf_len;
+
+	return size;
+}
+
+static inline void
+d_sgl_buf_copy(d_sg_list_t *dst_sgl, d_sg_list_t *src_sgl)
+{
+	uint32_t i;
+
+	D_ASSERT(dst_sgl->sg_nr >= src_sgl->sg_nr);
+	for (i = 0; i < src_sgl->sg_nr; i++) {
+		D_ASSERT(dst_sgl->sg_iovs[i].iov_buf_len >=
+			 src_sgl->sg_iovs[i].iov_buf_len);
+
+		memcpy(dst_sgl->sg_iovs[i].iov_buf, src_sgl->sg_iovs[i].iov_buf,
+		       src_sgl->sg_iovs[i].iov_buf_len);
+		dst_sgl->sg_iovs[i].iov_len = src_sgl->sg_iovs[i].iov_len;
+		dst_sgl->sg_iovs[i].iov_buf_len = src_sgl->sg_iovs[i].iov_buf_len;
+	}
+}
+
+bool
+d_isenv_def(char *name);
+int
+d_getenv_str(char *str_val, size_t str_size, const char *name);
+int
+d_agetenv_str(char **str_val, const char *name);
+void
+d_freeenv_str(char **str_val);
+int
+d_getenv_bool(const char *name, bool *bool_val);
+int
+d_getenv_char(const char *name, char *char_val);
+int
+d_getenv_int(const char *name, unsigned int *uint_val)
+    __attribute__((deprecated("use d_getenv_uint")));
+int
+d_getenv_uint(const char *name, unsigned int *uint_val);
+int
+d_getenv_uint32_t(const char *name, uint32_t *uint32_val);
+int
+d_getenv_uint64_t(const char *name, uint64_t *uint64_val);
+int
+d_putenv(char *name);
+int
+d_setenv(const char *name, const char *value, int overwrite);
+int
+d_unsetenv(const char *name);
+int
+d_clearenv(void);
+
+int
+d_write_string_buffer(struct d_string_buffer_t *buf, const char *fmt, ...);
+void
+d_free_string(struct d_string_buffer_t *buf);
+
+typedef void (*d_alloc_track_cb_t)(void *arg, size_t size);
+
+void d_set_alloc_track_cb(d_alloc_track_cb_t alloc_cb, d_alloc_track_cb_t free_cb, void *arg);
 
 #if !defined(container_of)
 /* given a pointer @ptr to the field @member embedded into type (usually
@@ -444,7 +626,7 @@ void d_free_string(struct d_string_buffer_t *buf);
 # define offsetof(typ, memb)	((long)((char *)&(((typ *)0)->memb)))
 #endif
 
-#define D_ALIGNUP(x, a) (((x) + (a - 1)) & ~(a - 1))
+#define D_ALIGNUP(x, a) (((x) + ((a) - 1)) & ~((a) - 1))
 
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
@@ -502,6 +684,7 @@ d_errno2der(int err)
 	case EEXIST:	return -DER_EXIST;
 	case ENOENT:	return -DER_NONEXIST;
 	case ECANCELED:	return -DER_CANCELED;
+	case EBUSY:	return -DER_BUSY;
 	default:	return -DER_MISC;
 	}
 	return 0;
@@ -681,6 +864,212 @@ d_iov_set_safe(d_iov_t *iov, void *buf, size_t size)
 }
 
 double d_stand_div(double *array, int nr);
+
+
+
+/**
+ * Return current HLC timestamp
+ *
+ * HLC timestamps are synchronized between nodes. They sends with each RPC for
+ * different nodes and updated when received from different node. The HLC
+ * timestamps synchronization will be called transparently at sending/receiving
+ * RPC into the wire (when Mercury will encode/decode the packet). So, with
+ * each call of this function you will get from it always last HLC timestamp
+ * synchronized across all nodes involved in current communication.
+ *
+ * \return                     HLC timestamp
+ */
+uint64_t
+d_hlc_get(void);
+
+/**
+ * Sync HLC with remote message and get current HLC timestamp.
+ *
+ * \param[in] msg              remote HLC timestamp
+ * \param[out] hlc_out         HLC timestamp
+ * \param[out] offset          Returned observed clock offset.
+ *
+ * \return                     DER_SUCCESS on success or error
+ *                             on failure
+ * \retval -DER_HLC_SYNC       \a msg is too much higher than the local
+ *                             physical clock
+ */
+int
+d_hlc_get_msg(uint64_t msg, uint64_t *hlc_out, uint64_t *offset);
+
+/**
+ * Return the nanosecond timestamp of hlc.
+ *
+ * \param[in] hlc              HLC timestamp
+ *
+ * \return                     Nanosecond timestamp
+ */
+uint64_t
+d_hlc2nsec(uint64_t hlc);
+
+/** See d_hlc2nsec. */
+static inline uint64_t
+d_hlc2usec(uint64_t hlc)
+{
+	return d_hlc2nsec(hlc) / 1000;
+}
+
+/** See d_hlc2nsec. */
+static inline uint64_t
+d_hlc2msec(uint64_t hlc)
+{
+	return d_hlc2nsec(hlc) / (1000 * 1000);
+}
+
+/** See d_hlc2nsec. */
+static inline uint64_t
+d_hlc2sec(uint64_t hlc)
+{
+	return d_hlc2nsec(hlc) / (1000 * 1000 * 1000);
+}
+
+/**
+ * Return the HLC timestamp from nsec.
+ *
+ * \param[in] nsec             Nanosecond timestamp
+ *
+ * \return                     HLC timestamp
+ */
+uint64_t
+d_nsec2hlc(uint64_t nsec);
+
+/** See d_nsec2hlc. */
+static inline uint64_t
+d_usec2hlc(uint64_t usec)
+{
+	return d_nsec2hlc(usec * 1000);
+}
+
+/** See d_nsec2hlc. */
+static inline uint64_t
+d_msec2hlc(uint64_t msec)
+{
+	return d_nsec2hlc(msec * 1000 * 1000);
+}
+
+/** See d_nsec2hlc. */
+static inline uint64_t
+d_sec2hlc(uint64_t sec)
+{
+	return d_nsec2hlc(sec * 1000 * 1000 * 1000);
+}
+
+/**
+ * Return the Unix nanosecond timestamp of hlc.
+ *
+ * \param[in] hlc              HLC timestamp
+ *
+ * \return                     Unix nanosecond timestamp
+ */
+uint64_t
+d_hlc2unixnsec(uint64_t hlc);
+
+/**
+ * Return timespec from HLC
+ *
+ * \param[in]	hlc	HLC timestamp
+ * \param[out]	ts	timespec struct
+ *
+ * \return		DER_SUCCESS on success, negative value if error
+ */
+int
+d_hlc2timespec(uint64_t hlc, struct timespec *ts);
+
+/**
+ * Return HLC from timespec
+ *
+ * \param[in]	ts	timespec struct
+ * \param[out]	hlc	HLC timestamp
+ *
+ * \return		DER_SUCCESS on success, negative value if error
+ */
+int
+d_timespec2hlc(struct timespec ts, uint64_t *hlc);
+
+/**
+ * Return the HLC timestamp of unixnsec in hlc.
+ *
+ * \param[in] unixnsec         Unix nanosecond timestamp
+ *
+ * \return                     HLC timestamp on success, or 0 when it is
+ *                             impossible to convert unixnsec to hlc
+ */
+uint64_t
+d_unixnsec2hlc(uint64_t unixnsec);
+
+/**
+ * Set the maximum system clock offset.
+ *
+ * This is the maximum offset believed to be observable between the physical
+ * clocks behind any two HLCs in the system. The format of the value represent
+ * a nonnegative diff between two HLC timestamps. The value is rounded up to
+ * the HLC physical resolution.
+ *
+ * \param[in] epsilon          Nonnegative HLC duration
+ */
+void
+d_hlc_epsilon_set(uint64_t epsilon);
+
+/**
+ * Get the maximum system clock offset. See d_hlc_set_epsilon's API doc.
+ *
+ * \return                     Nonnegative HLC duration
+ */
+uint64_t
+d_hlc_epsilon_get(void);
+
+/**
+ * Get the upper bound of the HLC timestamp of an event happened before
+ * (through out of band communication) the event at \a hlc.
+ *
+ * \param[in] hlc              HLC timestamp
+ *
+ * \return                     Upper bound HLC timestamp
+ */
+uint64_t
+d_hlc_epsilon_get_bound(uint64_t hlc);
+
+/**
+ * Get the age of the hlc in second.
+ *
+ * \param[in] hlc              HLC timestamp
+ *
+ * \return                     The age of the hlc in second
+ */
+uint64_t
+d_hlc_age2sec(uint64_t hlc);
+
+uint64_t d_hlct_get(void);
+void d_hlct_sync(uint64_t msg);
+
+/** Vector of pointers */
+struct d_vec_pointers {
+	void		**p_buf;
+	uint32_t	  p_cap;
+	uint32_t	  p_len;
+};
+
+int d_vec_pointers_init(struct d_vec_pointers *pointers, uint32_t cap);
+void d_vec_pointers_fini(struct d_vec_pointers *pointers);
+int d_vec_pointers_append(struct d_vec_pointers *pointers, void *pointer);
+
+/** Change the default setting for if a signal handler should be installed in crt_init()
+ *
+ * This is controlled by DAOS_SIGNAL_REGISTER however calling this function changes the default
+ * value if the env is not set.  Daos supplied binaries should call this function, libraries should
+ * not.
+ */
+void
+d_signal_stack_enable(bool enabled);
+
+/** Register the signal handlers, if configured */
+void
+d_signal_register();
 
 #if defined(__cplusplus)
 }

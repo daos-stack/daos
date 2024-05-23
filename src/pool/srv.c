@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -13,6 +13,7 @@
 
 #include <daos_srv/pool.h>
 #include <daos/rpc.h>
+#include <daos/metrics.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/bio.h>
 #include "rpc.h"
@@ -77,9 +78,12 @@ setup(void)
 {
 	bool start = true;
 
-	d_getenv_bool("DAOS_START_POOL_SVC", &start);
-	if (start)
-		return ds_pool_start_all();
+	if (!engine_in_check()) {
+		d_getenv_bool("DAOS_START_POOL_SVC", &start);
+		if (start)
+			return ds_pool_start_all();
+	}
+
 	return 0;
 }
 
@@ -113,17 +117,18 @@ static struct crt_corpc_ops ds_pool_tgt_query_co_ops = {
 	.dr_opc       = a,	\
 	.dr_hdlr      = d,	\
 	.dr_corpc_ops = e,	\
-}
+},
 
-static struct daos_rpc_handler pool_handlers[] = {
-	POOL_PROTO_CLI_RPC_LIST,
-	POOL_PROTO_SRV_RPC_LIST,
-};
+static struct daos_rpc_handler pool_handlers_v5[] = {POOL_PROTO_CLI_RPC_LIST(5)
+							 POOL_PROTO_SRV_RPC_LIST};
+
+static struct daos_rpc_handler pool_handlers_v6[] = {POOL_PROTO_CLI_RPC_LIST(6)
+							 POOL_PROTO_SRV_RPC_LIST};
 
 #undef X
 
 static void *
-pool_tls_init(int xs_id, int tgt_id)
+pool_tls_init(int tags, int xs_id, int tgt_id)
 {
 	struct pool_tls *tls;
 
@@ -136,21 +141,29 @@ pool_tls_init(int xs_id, int tgt_id)
 }
 
 static void
-pool_tls_fini(void *data)
+pool_tls_fini(int tags, void *data)
 {
 	struct pool_tls		*tls = data;
 	struct ds_pool_child	*child;
 
 	D_ASSERT(tls != NULL);
-	/* pool child cache should be empty now */
 
+	/* pool child cache should be empty now */
 	d_list_for_each_entry(child, &tls->dt_pool_list, spc_list) {
 		D_ERROR(DF_UUID": ref: %d\n",
 			DP_UUID(child->spc_uuid), child->spc_ref);
 	}
 
-	if (!d_list_empty(&tls->dt_pool_list))
-		D_ERROR("pool list not empty\n");
+	if (!d_list_empty(&tls->dt_pool_list)) {
+		bool strict = false;
+
+		d_getenv_bool("DAOS_STRICT_SHUTDOWN", &strict);
+		if (strict)
+			D_ASSERTF(false, "dt_pool_list not empty\n");
+		else
+			D_ERROR("dt_pool_list not empty\n");
+	}
+
 	D_FREE(tls);
 }
 
@@ -161,23 +174,25 @@ struct dss_module_key pool_module_key = {
 	.dmk_fini = pool_tls_fini,
 };
 
-struct dss_module_metrics pool_metrics = {
-	.dmm_tags = DAOS_SYS_TAG,
-	.dmm_init = ds_pool_metrics_alloc,
-	.dmm_fini = ds_pool_metrics_free,
+struct daos_module_metrics pool_metrics = {
+    .dmm_tags       = DAOS_SYS_TAG,
+    .dmm_init       = ds_pool_metrics_alloc,
+    .dmm_fini       = ds_pool_metrics_free,
+    .dmm_nr_metrics = ds_pool_metrics_count,
 };
 
-struct dss_module pool_module =  {
-	.sm_name	= "pool",
-	.sm_mod_id	= DAOS_POOL_MODULE,
-	.sm_ver		= DAOS_POOL_VERSION,
-	.sm_init	= init,
-	.sm_fini	= fini,
-	.sm_setup	= setup,
-	.sm_cleanup	= cleanup,
-	.sm_proto_fmt	= &pool_proto_fmt,
-	.sm_cli_count	= POOL_PROTO_CLI_COUNT,
-	.sm_handlers	= pool_handlers,
-	.sm_key		= &pool_module_key,
-	.sm_metrics	= &pool_metrics,
+struct dss_module pool_module = {
+    .sm_name        = "pool",
+    .sm_mod_id      = DAOS_POOL_MODULE,
+    .sm_ver         = DAOS_POOL_VERSION,
+    .sm_proto_count = 2,
+    .sm_init        = init,
+    .sm_fini        = fini,
+    .sm_setup       = setup,
+    .sm_cleanup     = cleanup,
+    .sm_proto_fmt   = {&pool_proto_fmt_v5, &pool_proto_fmt_v6},
+    .sm_cli_count   = {POOL_PROTO_CLI_COUNT, POOL_PROTO_CLI_COUNT},
+    .sm_handlers    = {pool_handlers_v5, pool_handlers_v6},
+    .sm_key         = &pool_module_key,
+    .sm_metrics     = &pool_metrics,
 };

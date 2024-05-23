@@ -1,11 +1,9 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
-from daos_utils import DaosCommand
 
 
 class DaosObjectQuery(TestWithServers):
@@ -38,11 +36,13 @@ class DaosObjectQuery(TestWithServers):
     def test_object_query(self):
         """JIRA ID: DAOS-4694
         Test Description: Test daos object query.
+
         :avocado: tags=all,full_regression
+        :avocado: tags=vm
         :avocado: tags=control
-        :avocado: tags=daos_object_query
+        :avocado: tags=DaosObjectQuery,test_object_query
         """
-        daos_cmd = DaosCommand(self.bin)
+        daos_cmd = self.get_daos_command()
         errors = []
 
         # Create a pool and a container. Specify --oclass, which will be used
@@ -67,10 +67,10 @@ class DaosObjectQuery(TestWithServers):
         # This mapping could change, so check daos_obj_class.h when this test
         # fails.
         class_name_to_code = {
-            "S1": 200,
-            "RP_2G1": 240,
-            "RP_2G2": 241,
-            "RP_3G1": 280
+            "S1": 16777217,
+            "RP_2G1": 134217729,
+            "RP_2G2": 134217730,
+            "RP_3G1": 150994945
         }
         class_name_to_group_num = {
             "S1": 1,
@@ -103,8 +103,8 @@ class DaosObjectQuery(TestWithServers):
         self.log.info("oid.lo = %s", expected_oid_lo)
         oid_concat = "{}.{}".format(expected_oid_hi, expected_oid_lo)
         kwargs = {
-            "pool": self.pool.uuid,
-            "cont": self.container.uuid,
+            "pool": self.pool.identifier,
+            "cont": self.container.identifier,
             "oid": oid_concat
         }
 
@@ -114,12 +114,12 @@ class DaosObjectQuery(TestWithServers):
         actual_oid_lo = query_output["oid"][1]
         if str(expected_oid_hi) != actual_oid_hi:
             errors.append(
-                "Unexpected oid.hi! OC = {}; Expected = {}; "\
+                "Unexpected oid.hi! OC = {}; Expected = {}; "
                 "Actual = {}".format(
                     obj_class, expected_oid_hi, actual_oid_hi))
         if str(expected_oid_lo) != actual_oid_lo:
             errors.append(
-                "Unexpected oid.lo! OC = {}; Expected = {}; "\
+                "Unexpected oid.lo! OC = {}; Expected = {}; "
                 "Actual = {}".format(
                     obj_class, expected_oid_lo, actual_oid_lo))
 
@@ -128,7 +128,7 @@ class DaosObjectQuery(TestWithServers):
         actual_group_num = query_output["grp_nr"]
         if str(expected_group_num) != actual_group_num:
             errors.append(
-                "Unexpected grp_nr! Class = {}; Expected = {}; "\
+                "Unexpected grp_nr! Class = {}; Expected = {}; "
                 "Actual = {}".format(
                     class_name, expected_group_num, actual_group_num))
 
@@ -144,13 +144,13 @@ class DaosObjectQuery(TestWithServers):
             actual_group_rows += 1
         if expected_replica_rows != actual_replica_rows:
             errors.append(
-                "Unexpected replica row count! Class = {}; Expected = {}; "\
+                "Unexpected replica row count! Class = {}; Expected = {}; "
                 "Actual = {}".format(
                     class_name, expected_replica_rows, actual_replica_rows))
         # Also verify the number of group rows; rows that start with "grp".
         if expected_group_num != actual_group_rows:
             errors.append(
-                "Unexpected group row count! Class = {}; Expected = {}; "\
+                "Unexpected group row count! Class = {}; Expected = {}; "
                 "Actual = {}".format(
                     class_name, expected_group_num, actual_group_rows))
 

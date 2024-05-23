@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016 UChicago Argonne, LLC
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -189,13 +189,14 @@ void swim_self_set(struct swim_context *ctx, swim_id_t self_id);
  * Parse a SWIM message from other group member.
  *
  * @param[in]  ctx	SWIM context pointer from swim_init()
- * @param[in]  from	IDs of selected target for message
+ * @param[in]  from	IDs where message is from
+ * @param[in]  id	IDs of selected target for message
  * @param[in]  upds	SWIM updates from other group member
  * @param[in]  nupds	the count of SWIM updates
  * @returns		0 on success, negative error ID otherwise
  */
-int swim_updates_parse(struct swim_context *ctx, swim_id_t from,
-			struct swim_member_update *upds, size_t nupds);
+int swim_updates_parse(struct swim_context *ctx, swim_id_t from, swim_id_t id,
+		       struct swim_member_update *upds, size_t nupds);
 
 /**
  * Prepare a SWIM message for other group member.
@@ -203,12 +204,34 @@ int swim_updates_parse(struct swim_context *ctx, swim_id_t from,
  * @param[in]  ctx	SWIM context pointer from swim_init()
  * @param[in]  id	IDs of selected target for message
  * @param[in]  to	IDs of message to send to
- * @param[in]  upds	SWIM updates from other group member
- * @param[in]  nupds	the count of SWIM updates
+ * @param[out] pupds	Pointer to SWIM updates from other group member
+ * @param[out] pnupds	Pointer to the count of SWIM updates
  * @returns		0 on success, negative error ID otherwise
  */
 int swim_updates_prepare(struct swim_context *ctx, swim_id_t id, swim_id_t to,
 			 struct swim_member_update **pupds, size_t *pnupds);
+
+/**
+ * Parse a SWIM message from other group member and prepare a reply, shorting
+ * the local SWIM state. This is a special API for handling incoming RPCs when
+ * the self ID in \a ctx is SWIM_ID_INVALID.
+ *
+ * @param[in]  ctx	SWIM context pointer from swim_init()
+ * @param[in]  self_id	Self member ID to used instead of the one in \a ctx
+ * @param[in]  self_incarnation
+ *			Self incarnation to used instead of the one in \a ctx
+ * @param[in]  from_id	IDs where message is from
+ * @param[in]  id	IDs of selected target for message
+ * @param[in]  upds_in	SWIM updates from other group member
+ * @param[in]  nupds_in	the count of SWIM updates in \a upds_in
+ * @param[out] upds_out	Pointer to SWIM updates for other group member
+ * @param[out] nupds_out
+ *			Pointer to the count of SWIM updates in \a upds_out
+ * @returns		0 on success, negative error ID otherwise
+ */
+int swim_updates_short(struct swim_context *ctx, swim_id_t self_id, uint64_t self_incarnation,
+		       swim_id_t from_id, swim_id_t id, struct swim_member_update *upds_in,
+		       size_t nupds_in, struct swim_member_update **upds_out, size_t *nupds_out);
 
 /**
  * Send a SWIM message for other group member.
@@ -220,9 +243,26 @@ int swim_updates_prepare(struct swim_context *ctx, swim_id_t id, swim_id_t to,
  */
 int swim_updates_send(struct swim_context *ctx, swim_id_t id, swim_id_t to);
 
+/**
+ * Store information about ipinged member for subsequent reply or timeout
+ *
+ * @param[in]  ctx	SWIM context pointer from swim_init()
+ * @param[in]  from_id	IDs of member from this iping request
+ * @param[in]  to_id	IDs of message to send to
+ * @param[in]  args	the data passed to reply or timeout handler
+ * @returns		0 on success, negative error ID otherwise
+ */
 int swim_ipings_suspend(struct swim_context *ctx, swim_id_t from_id,
 			swim_id_t to_id, void *args);
 
+/**
+ * Reply to stored member about status of iping
+ *
+ * @param[in]  ctx	SWIM context pointer from swim_init()
+ * @param[in]  from_id	IDs of member from this iping request
+ * @param[in]  ret_rc	result of iping
+ * @returns		0 on success, negative error ID otherwise
+ */
 int swim_ipings_reply(struct swim_context *ctx, swim_id_t from_id, int ret_rc);
 
 /**
@@ -248,6 +288,15 @@ int swim_progress(struct swim_context *ctx, int64_t timeout);
  */
 int swim_net_glitch_update(struct swim_context *ctx, swim_id_t id,
 			   uint64_t delay);
+
+/**
+ * Delete a SWIM member.
+ *
+ * @param[in]  ctx	SWIM context pointer from swim_init()
+ * @param[in]  id	IDs of member to delete
+ */
+void swim_member_del(struct swim_context *ctx, swim_id_t id);
+
 /** @} */
 
 #ifdef __cplusplus

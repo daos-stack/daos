@@ -1,0 +1,63 @@
+hosts:
+  test_servers: 3
+  test_clients: 1
+timeout: 1110
+job_manager:
+  manager_timeout: 400
+skip_add_log_msg: true
+server_config:
+  name: daos_server
+  engines_per_host: 2
+  engines:
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31416
+      log_file: daos_server0.log
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=mgmt,md,rebuild
+      storage: auto
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31516
+      log_file: daos_server1.log
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=mgmt,md,rebuild
+      storage: auto
+pool:
+  scm_size: 12000000000
+  nvme_size: 108000000000
+  svcn: 4
+  control_method: dmg
+container:
+  type: POSIX
+  control_method: daos
+  properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+  oclass: RP_2G1
+ior:
+  no_parallel_job: 2
+  client_processes:
+    np: 2
+  test_file: /testFile
+  repetitions: 10
+  dfs_destroy: false
+  iorflags:
+    ior_flags:
+      - "-w -r -R -k -G 1"
+    ior_api:
+      - DFS
+    obj_class:
+      - "RP_2G1"
+  ior_test_sequence:
+    # - [scmsize, nvmesize, transfersize, blocksize, PASS/FAIL(Expected) ]
+    #   The values are set to be in the multiples of 10.
+    #   Values are appx GB.
+    - [4000000000, 18000000000, 4000, 50000000, PASS]  # [4G, 18G, 4K, 51M, PASS]
+daos_racer:
+  runtime: 480
+  clush_timeout: 1000

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -34,8 +34,6 @@ rdbt_svc_obj(struct ds_rsvc *rsvc)
 	return container_of(rsvc, struct rdbt_svc, rt_rsvc);
 }
 
-#define ID_OK(id) ioveq((id), &test_svc_id)
-
 #define MUST(call)							\
 do {									\
 	int _rc = call;							\
@@ -59,145 +57,12 @@ ioveq(const d_iov_t *iov1, const d_iov_t *iov2)
 	D_ASSERT(memcmp(iov1->iov_buf, iov2->iov_buf, iov1->iov_len) == 0);
 }
 
-/* Load uuid from file path. */
-static int
-uuid_load(const char *path, uuid_t uuid)
-{
-	int	fd;
-	int	rc;
-
-	/* Open the UUID file. */
-	fd = open(path, O_RDONLY);
-	if (fd < 0) {
-		if (errno == ENOENT)
-			D_DEBUG(DB_MD, "failed to open uuid file %s: %d\n",
-				path, errno);
-		else
-			D_ERROR("failed to open uuid file %s: %d\n", path,
-				errno);
-		rc = daos_errno2der(errno);
-		goto out;
-	}
-
-	/* Read the UUID. */
-	rc = read(fd, uuid, sizeof(uuid_t));
-	if (rc == sizeof(uuid_t)) {
-		rc = 0;
-	} else {
-		if (rc != -1)
-			errno = EIO;
-		D_ERROR("failed to read %s: %d %d\n", path, rc, errno);
-		rc = daos_errno2der(errno);
-	}
-
-	close(fd);
-out:
-	return rc;
-}
-
-/* Store uuid in file path. */
-static int
-uuid_store(const char *path, const uuid_t uuid)
-{
-	int	fd;
-	int	rc;
-
-	/* Create and open the UUID file. */
-	fd = open(path, O_WRONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
-	if (fd < 0) {
-		D_ERROR(DF_UUID": failed to create uuid file %s: %d\n",
-			DP_UUID(uuid), path, errno);
-		rc = daos_errno2der(errno);
-		goto out;
-	}
-
-	/* Write the UUID. */
-	rc = write(fd, uuid, sizeof(uuid_t));
-	if (rc != sizeof(uuid_t)) {
-		if (rc != -1)
-			errno = EIO;
-		D_ERROR(DF_UUID": failed to write uuid into %s: %d %d\n",
-			DP_UUID(uuid), path, rc, errno);
-		rc = daos_errno2der(errno);
-		goto out_fd;
-	}
-
-	/* Persist the UUID. */
-	rc = fsync(fd);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to fsync %s: %d\n", DP_UUID(uuid),
-			path, errno);
-		rc = daos_errno2der(errno);
-	}
-
-	/* Free the resource and remove the file on errors. */
-out_fd:
-	close(fd);
-	if (rc != 0)
-		remove(path);
-out:
-	return rc;
-}
-
 static int
 test_svc_name_cb(d_iov_t *id, char **name)
 {
-	ID_OK(id);
-	D_STRNDUP(*name, test_svc_name, strlen(test_svc_name));
+	D_STRNDUP(*name, id->iov_buf, id->iov_len - 1);
 	D_ASSERT(*name != NULL);
 	return 0;
-}
-
-static int
-test_svc_load_uuid_cb(d_iov_t *id, uuid_t db_uuid)
-{
-	int	rc;
-	char    *path = NULL;
-
-	ID_OK(id);
-	rc = asprintf(&path, "%s/rdbt-%s-uuid", dss_storage_path,
-		      test_svc_name);
-	if ((rc <= 0) || (path == NULL))
-		return -DER_NOMEM;
-	rc = uuid_load(path, db_uuid);
-	D_FREE(path);
-	return rc;
-}
-
-static int
-test_svc_store_uuid_cb(d_iov_t *id, uuid_t db_uuid)
-{
-	int	rc;
-	char    *path = NULL;
-
-	ID_OK(id);
-	rc = asprintf(&path, "%s/rdbt-%s-uuid", dss_storage_path,
-		      test_svc_name);
-	if ((rc <= 0) || (path == NULL))
-		return -DER_NOMEM;
-	rc = uuid_store(path, db_uuid);
-	D_FREE(path);
-	return rc;
-}
-
-static int
-test_svc_delete_uuid_cb(d_iov_t *id)
-{
-	int	rc;
-	char    *path = NULL;
-
-	ID_OK(id);
-	rc = asprintf(&path, "%s/rdbt-%s-uuid", dss_storage_path,
-		      test_svc_name);
-	if ((rc <= 0) || (path == NULL))
-		return -DER_NOMEM;
-	rc = remove(path);
-	if (rc != 0) {
-		D_ERROR("%s: failed to remove path %s\n", test_svc_name, path);
-		rc = daos_errno2der(errno);
-	}
-	D_FREE(path);
-	return rc;
 }
 
 static int
@@ -205,8 +70,7 @@ test_svc_locate_cb(d_iov_t *id, char **path)
 {
 	int	rc;
 
-	ID_OK(id);
-	rc = asprintf(path, "%s/rdbt-%s", dss_storage_path, test_svc_name);
+	rc = asprintf(path, "%s/rdbt-%s", dss_storage_path, (char *)id->iov_buf);
 	D_ASSERTF(rc > 0, "%d\n", rc);
 	D_ASSERT(*path != NULL);
 	return 0;
@@ -217,10 +81,14 @@ test_svc_alloc_cb(d_iov_t *id, struct ds_rsvc **svcp)
 {
 	struct rdbt_svc	       *svc;
 
-	ID_OK(id);
 	D_ALLOC_PTR(svc);
 	D_ASSERT(svc != NULL);
-	svc->rt_rsvc.s_id = test_svc_id;
+
+	D_ALLOC(svc->rt_rsvc.s_id.iov_buf, id->iov_len);
+	D_ASSERT(svc->rt_rsvc.s_id.iov_buf != NULL);
+	memcpy(svc->rt_rsvc.s_id.iov_buf, id->iov_buf, id->iov_len);
+	svc->rt_rsvc.s_id.iov_buf_len = id->iov_len;
+	svc->rt_rsvc.s_id.iov_len = id->iov_len;
 
 	MUST(rdb_path_init(&svc->rt_root_kvs_path));
 	MUST(rdb_path_push(&svc->rt_root_kvs_path, &rdb_path_root_key));
@@ -240,6 +108,7 @@ test_svc_free_cb(struct ds_rsvc *rsvc)
 	svc = rdbt_svc_obj(rsvc);
 	rdb_path_fini(&svc->rt_kvs1_path);
 	rdb_path_fini(&svc->rt_root_kvs_path);
+	D_FREE(svc->rt_rsvc.s_id.iov_buf);
 	D_FREE(svc);
 }
 
@@ -274,9 +143,6 @@ test_svc_drain_cb(struct ds_rsvc *rsvc)
 
 static struct ds_rsvc_class test_svc_rsvc_class = {
 	.sc_name	= test_svc_name_cb,
-	.sc_load_uuid	= test_svc_load_uuid_cb,
-	.sc_store_uuid	= test_svc_store_uuid_cb,
-	.sc_delete_uuid	= test_svc_delete_uuid_cb,
 	.sc_locate	= test_svc_locate_cb,
 	.sc_alloc	= test_svc_alloc_cb,
 	.sc_free	= test_svc_free_cb,
@@ -394,6 +260,39 @@ rdbt_test_path(void)
 
 	D_WARN("fini rdb path\n");
 	rdb_path_fini(&path);
+}
+
+static void
+rdbt_test_rsvc(void)
+{
+	char	       *svc_name = "tmp";
+	d_iov_t		svc_id;
+	uuid_t		uuid;
+	int		rc;
+
+	d_iov_set(&svc_id, svc_name, strlen(svc_name) + 1);
+	uuid_generate(uuid);
+
+	/*
+	 * A leader of an older term can't destroy a replica created by a
+	 * leader with a newer term.
+	 */
+	MUST(ds_rsvc_start(DS_RSVC_CLASS_TEST, &svc_id, uuid, 2 /* term */, true /* create */,
+			   DB_CAP, 0 /* vos_df_version */, NULL /* replicas */, NULL /* arg */));
+	rc = ds_rsvc_stop(DS_RSVC_CLASS_TEST, &svc_id, 1 /* term */, true /* destroy */);
+	D_ASSERTF(rc == -DER_STALE, DF_RC"\n", DP_RC(rc));
+
+	/*
+	 * A leader of an older term can't destroy a replica touched by a
+	 * leader with a newer term.
+	 */
+	rc = ds_rsvc_start(DS_RSVC_CLASS_TEST, &svc_id, uuid, 3 /* term */, true /* create */,
+			   DB_CAP, 0 /* vos_df_version */, NULL /* replicas */, NULL /* arg */);
+	D_ASSERTF(rc == -DER_ALREADY, DF_RC"\n", DP_RC(rc));
+	rc = ds_rsvc_stop(DS_RSVC_CLASS_TEST, &svc_id, 2 /* term */, true /* destroy */);
+	D_ASSERTF(rc == -DER_STALE, DF_RC"\n", DP_RC(rc));
+
+	MUST(ds_rsvc_stop(DS_RSVC_CLASS_TEST, &svc_id, 3 /* term */, true /* destroy */));
 }
 
 struct iterate_cb_arg {
@@ -549,11 +448,15 @@ rdbt_test_tx(bool update, enum rdbt_membership_op memb_op, uint64_t user_key,
 {
 	struct ds_rsvc	       *rsvc;
 	struct rdbt_svc	       *svc;
+	struct rdb_storage     *storage;
+	bool			follower = false;
 	d_iov_t			key;
 	d_iov_t			value;
 	char			value_written[] = "value";
 	char			buf[32];
 	uint64_t		keys[] = {11, 22, 33, user_key};
+	uint64_t		to_be_abort_key = 111; /* must not in keys[] */
+	char			nonexistent_kvs[] = "nonexistent_kvs";
 	struct rdb_tx		tx;
 	struct iterate_cb_arg	arg;
 	uint64_t		k = 0;
@@ -565,6 +468,11 @@ rdbt_test_tx(bool update, enum rdbt_membership_op memb_op, uint64_t user_key,
 				   &rsvc, hintp);
 	if (rc != 0) {
 		if (rc == -DER_NOTLEADER) {
+			if (!update) {
+				MUST(ds_rsvc_lookup(DS_RSVC_CLASS_TEST, &test_svc_id, &rsvc));
+				follower = true;
+				goto proceed;
+			}
 			if (hintp->sh_flags & RSVC_HINT_VALID)
 				D_WARN("not leader; try rank %u\n",
 				       hintp->sh_rank);
@@ -578,18 +486,30 @@ rdbt_test_tx(bool update, enum rdbt_membership_op memb_op, uint64_t user_key,
 		return rc;
 	}
 
+proceed:
 	D_WARN("leader, hint is %s valid, rank=%u, term="DF_U64"\n",
 	       ((hintp->sh_flags & RSVC_HINT_VALID) ? "" : "NOT"),
 	       hintp->sh_rank, hintp->sh_term);
 
 	svc = rdbt_svc_obj(rsvc);
 
-	D_WARN("commit empty tx\n");
-	MUST(rdb_tx_begin(svc->rt_rsvc.s_db, RDB_NIL_TERM, &tx));
-	MUST(rdb_tx_commit(&tx));
-	rdb_tx_end(&tx);
-
 	if (update) {
+		D_WARN("commit empty tx\n");
+		MUST(rdb_tx_begin(svc->rt_rsvc.s_db, RDB_NIL_TERM, &tx));
+		MUST(rdb_tx_commit(&tx));
+		rdb_tx_end(&tx);
+
+		D_WARN("commit deterministic-error tx\n");
+		MUST(rdb_tx_begin(svc->rt_rsvc.s_db, RDB_NIL_TERM, &tx));
+		d_iov_set(&key, &to_be_abort_key, sizeof(to_be_abort_key));
+		d_iov_set(&value, value_written, strlen(value_written) + 1);
+		MUST(rdb_tx_update(&tx, &svc->rt_kvs1_path, &key, &value));
+		d_iov_set(&key, nonexistent_kvs, sizeof(nonexistent_kvs));
+		MUST(rdb_tx_destroy_kvs(&tx, &svc->rt_root_kvs_path, &key));
+		rc = rdb_tx_commit(&tx);
+		D_ASSERTF(rc == -DER_NONEXIST, "%d == %d\n", rc, -DER_NONEXIST);
+		rdb_tx_end(&tx);
+
 		D_WARN("update: user record: (K=0x%"PRIx64", V="DF_U64")\n",
 		       user_key, user_val_in);
 		MUST(rdb_tx_begin(svc->rt_rsvc.s_db, RDB_NIL_TERM, &tx));
@@ -636,8 +556,22 @@ rdbt_test_tx(bool update, enum rdbt_membership_op memb_op, uint64_t user_key,
 		}
 	}
 
+	if (follower)
+		rdb_stop(rsvc->s_db, &storage);
+
 	D_WARN("query regular keys\n");
-	MUST(rdb_tx_begin(svc->rt_rsvc.s_db, RDB_NIL_TERM, &tx));
+	if (follower)
+		MUST(rdb_tx_begin_local(storage, &tx));
+	else
+		MUST(rdb_tx_begin(svc->rt_rsvc.s_db, RDB_NIL_TERM, &tx));
+
+	/* Look up to_be_abort_key. */
+	d_iov_set(&key, &to_be_abort_key, sizeof(to_be_abort_key));
+	d_iov_set(&value, buf, sizeof(buf));
+	value.iov_len = 0; /* no size check */
+	rc = rdb_tx_lookup(&tx, &svc->rt_kvs1_path, &key, &value);
+	D_ASSERTF(rc == -DER_NONEXIST, "%d == %d\n", rc, -DER_NONEXIST);
+
 	/* Look up keys[0]. */
 	d_iov_set(&key, &keys[0], sizeof(keys[0]));
 	d_iov_set(&value, buf, sizeof(buf));
@@ -675,7 +609,12 @@ rdbt_test_tx(bool update, enum rdbt_membership_op memb_op, uint64_t user_key,
 	       user_key, *user_val_outp);
 	rdb_tx_end(&tx);
 
-	ds_rsvc_put_leader(rsvc);
+	if (follower) {
+		MUST(rdb_start(storage, &rsvc->s_db));
+		ds_rsvc_put(rsvc);
+	} else {
+		ds_rsvc_put_leader(rsvc);
+	}
 	return 0;
 }
 
@@ -689,8 +628,11 @@ get_all_ranks(d_rank_list_t **list)
 	group = crt_group_lookup(NULL /* grp_id */);
 	D_ASSERT(group != NULL);
 	MUST(crt_group_ranks_get(group, list));
-	if (*list != NULL)
+	if (*list != NULL) {
+		/* The rank list from crt is not guaranteed to be sorted. */
+		d_rank_list_sort(*list);
 		return;
+	}
 	D_ALLOC_PTR(ranks);
 	D_ASSERT(ranks != NULL);
 	MUST(crt_group_size(group, &ranks->rl_nr));
@@ -719,9 +661,9 @@ rdbt_init_handler(crt_rpc_t *rpc)
 	for (ri = 0; ri < ranks->rl_nr; ri++)
 		D_WARN("ranks[%u]=%u\n", ri, ranks->rl_ranks[ri]);
 
-	MUST(ds_rsvc_dist_start(DS_RSVC_CLASS_TEST, &test_svc_id, in->tii_uuid,
-				ranks, true /* create */, true /* bootstrap */,
-				DB_CAP));
+	MUST(ds_rsvc_dist_start(DS_RSVC_CLASS_TEST, &test_svc_id, in->tii_uuid, ranks, RDB_NIL_TERM,
+				DS_RSVC_CREATE, true /* bootstrap */, DB_CAP,
+				0 /* vos_df_version*/));
 	crt_reply_send(rpc);
 }
 
@@ -742,8 +684,7 @@ rdbt_fini_handler(crt_rpc_t *rpc)
 	for (ri = 0; ri < ranks->rl_nr; ri++)
 		D_WARN("ranks[%u]=%u\n", ri, ranks->rl_ranks[ri]);
 
-	MUST(ds_rsvc_dist_stop(DS_RSVC_CLASS_TEST, &test_svc_id, ranks, NULL,
-			       true));
+	MUST(ds_rsvc_dist_stop(DS_RSVC_CLASS_TEST, &test_svc_id, ranks, NULL, RDB_NIL_TERM, true));
 	crt_reply_send(rpc);
 }
 
@@ -811,6 +752,7 @@ rdbt_test_handler(crt_rpc_t *rpc)
 	       rdbt_membership_opname(in->tti_memb_op));
 	rdbt_test_util();
 	rdbt_test_path();
+	rdbt_test_rsvc();
 	rc = rdbt_test_tx(in->tti_update, in->tti_memb_op, in->tti_key,
 			  in->tti_val, &out->tto_val, &out->tto_hint);
 	out->tto_rc = rc;
@@ -848,8 +790,9 @@ rdbt_replicas_add_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		goto out;
 
-	rc = ds_rsvc_add_replicas(DS_RSVC_CLASS_TEST, &test_svc_id, ranks,
-				  DB_CAP, &out->rtmo_hint);
+	rc = ds_rsvc_add_replicas(DS_RSVC_CLASS_TEST, &test_svc_id, ranks, DB_CAP,
+				  0 /* vos_df_ version */, &out->rtmo_hint);
+
 	out->rtmo_failed = ranks;
 
 out:
@@ -873,8 +816,7 @@ rdbt_replicas_remove_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		goto out;
 
-	rc = ds_rsvc_remove_replicas(DS_RSVC_CLASS_TEST, &test_svc_id, ranks,
-				     true /* stop */, &out->rtmo_hint);
+	rc = ds_rsvc_remove_replicas(DS_RSVC_CLASS_TEST, &test_svc_id, ranks, &out->rtmo_hint);
 	out->rtmo_failed = ranks;
 
 out:
@@ -908,6 +850,36 @@ out:
 
 }
 
+static void
+rdbt_dictate_handler(crt_rpc_t *rpc)
+{
+	struct ds_rsvc		*rsvc;
+	uuid_t			 db_uuid;
+	struct rdbt_dictate_in	*in = crt_req_get(rpc);
+	struct rdbt_dictate_out	*out = crt_reply_get(rpc);
+	d_rank_list_t		*ranks;
+
+	D_WARN("calling dictate on rank %u\n", dss_self_rank());
+
+	MUST(ds_rsvc_lookup(DS_RSVC_CLASS_TEST, &test_svc_id, &rsvc));
+	uuid_copy(db_uuid, rsvc->s_db_uuid);
+	ds_rsvc_put(rsvc);
+
+	MUST(d_rank_list_dup(&ranks, in->rti_ranks));
+	MUST(d_rank_list_del(ranks, in->rti_rank));
+	MUST(ds_rsvc_dist_stop(DS_RSVC_CLASS_TEST, &test_svc_id, ranks, NULL, RDB_NIL_TERM, true));
+
+	ranks->rl_ranks[0] = in->rti_rank;
+	ranks->rl_nr = 1;
+	MUST(ds_rsvc_dist_start(DS_RSVC_CLASS_TEST, &test_svc_id, db_uuid, ranks, RDB_NIL_TERM,
+				DS_RSVC_DICTATE, false /* bootstrap */, 0 /* size */,
+				0 /* vos_df_version */));
+
+	d_rank_list_free(ranks);
+	out->rto_rc = 0;
+	crt_reply_send(rpc);
+}
+
 /* Define for cont_rpcs[] array population below.
  * See RDBT_PROTO_*_RPC_LIST macro definition
  */
@@ -924,14 +896,13 @@ static struct daos_rpc_handler rdbt_handlers[] = {
 
 #undef X
 
-struct dss_module rdbt_module = {
-	.sm_name	= "rdbt",
-	.sm_mod_id	= DAOS_RDBT_MODULE,
-	.sm_ver		= DAOS_RDBT_VERSION,
-	.sm_init	= rdbt_module_init,
-	.sm_fini	= rdbt_module_fini,
-	.sm_proto_fmt	= &rdbt_proto_fmt,
-	.sm_cli_count	= RDBT_PROTO_CLI_COUNT,
-	.sm_handlers	= rdbt_handlers,
-	.sm_key		= NULL
-};
+struct dss_module rdbt_module = {.sm_name        = "rdbt",
+				 .sm_mod_id      = DAOS_RDBT_MODULE,
+				 .sm_ver         = DAOS_RDBT_VERSION,
+				 .sm_proto_count = 1,
+				 .sm_init        = rdbt_module_init,
+				 .sm_fini        = rdbt_module_fini,
+				 .sm_proto_fmt   = {&rdbt_proto_fmt},
+				 .sm_cli_count   = {RDBT_PROTO_CLI_COUNT},
+				 .sm_handlers    = {rdbt_handlers},
+				 .sm_key         = NULL};

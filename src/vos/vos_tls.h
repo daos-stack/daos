@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -63,51 +63,54 @@ struct vos_tls {
 		bool			 vtl_hash_set;
 	};
 	struct d_tm_node_t		 *vtl_committed;
+	struct d_tm_node_t		 *vtl_obj_cnt;
+	struct d_tm_node_t		 *vtl_dtx_cmt_ent_cnt;
+	struct d_tm_node_t		 *vtl_lru_alloc_size;
 };
 
 struct bio_xs_context *vos_xsctxt_get(void);
-struct vos_tls *vos_tls_get();
+struct vos_tls *vos_tls_get(bool standalone);
 
 static inline struct d_hash_table *
-vos_pool_hhash_get(void)
+vos_pool_hhash_get(bool is_sysdb)
 {
-	return vos_tls_get()->vtl_pool_hhash;
+	return vos_tls_get(is_sysdb)->vtl_pool_hhash;
 }
 
 static inline struct d_hash_table *
-vos_cont_hhash_get(void)
+vos_cont_hhash_get(bool is_sysdb)
 {
-	return vos_tls_get()->vtl_cont_hhash;
+	return vos_tls_get(is_sysdb)->vtl_cont_hhash;
 }
 
 static inline struct daos_lru_cache *
-vos_obj_cache_get(void)
+vos_obj_cache_get(bool standalone)
 {
-	return vos_tls_get()->vtl_ocache;
+	return vos_tls_get(standalone)->vtl_ocache;
 }
 
 static inline struct umem_tx_stage_data *
-vos_txd_get(void)
+vos_txd_get(bool standalone)
 {
-	return &vos_tls_get()->vtl_txd;
+	return &vos_tls_get(standalone)->vtl_txd;
 }
 
 static inline struct vos_ts_table *
-vos_ts_table_get(void)
+vos_ts_table_get(bool standalone)
 {
-	return vos_tls_get()->vtl_ts_table;
+	return vos_tls_get(standalone)->vtl_ts_table;
 }
 
 static inline void
 vos_ts_table_set(struct vos_ts_table *ts_table)
 {
-	vos_tls_get()->vtl_ts_table = ts_table;
+	vos_tls_get(false)->vtl_ts_table = ts_table;
 }
 
 static inline void
-vos_dth_set(struct dtx_handle *dth)
+vos_dth_set(struct dtx_handle *dth, bool standalone)
 {
-	struct vos_tls		*tls = vos_tls_get();
+	struct vos_tls		*tls = vos_tls_get(standalone);
 	struct dtx_share_peer	*dsp;
 
 	if (dth != NULL && dth != tls->vtl_dth &&
@@ -115,7 +118,7 @@ vos_dth_set(struct dtx_handle *dth)
 		while ((dsp = d_list_pop_entry(&dth->dth_share_tbd_list,
 					       struct dtx_share_peer,
 					       dsp_link)) != NULL)
-			D_FREE(dsp);
+			dtx_dsp_free(dsp);
 		dth->dth_share_tbd_count = 0;
 	}
 
@@ -123,26 +126,23 @@ vos_dth_set(struct dtx_handle *dth)
 }
 
 static inline struct dtx_handle *
-vos_dth_get(void)
+vos_dth_get(bool standalone)
 {
-	struct vos_tls	*tls = vos_tls_get();
+	struct vos_tls	*tls = vos_tls_get(standalone);
 
-	if (tls != NULL)
-		return vos_tls_get()->vtl_dth;
-
-	return NULL;
+	return tls ? tls->vtl_dth : NULL;
 }
 
 static inline void
-vos_kh_clear(void)
+vos_kh_clear(bool standalone)
 {
-	vos_tls_get()->vtl_hash_set = false;
+	vos_tls_get(standalone)->vtl_hash_set = false;
 }
 
 static inline void
-vos_kh_set(uint64_t hash)
+vos_kh_set(uint64_t hash, bool standalone)
 {
-	struct vos_tls	*tls = vos_tls_get();
+	struct vos_tls	*tls = vos_tls_get(standalone);
 
 	tls->vtl_hash = hash;
 	tls->vtl_hash_set = true;
@@ -150,29 +150,43 @@ vos_kh_set(uint64_t hash)
 }
 
 static inline bool
-vos_kh_get(uint64_t *hash)
+vos_kh_get(uint64_t *hash, bool standalone)
 {
-	struct vos_tls	*tls = vos_tls_get();
+	struct vos_tls	*tls = vos_tls_get(standalone);
 
 	*hash = tls->vtl_hash;
 
 	return tls->vtl_hash_set;
 }
 
-/** hash seed for murmur hash */
-#define VOS_BTR_MUR_SEED	0xC0FFEE
-
 static inline uint64_t
-vos_hash_get(const void *buf, uint64_t len)
+vos_hash_get(const void *buf, uint64_t len, bool standalone)
 {
-	uint64_t	hash;
+	uint64_t        hash;
 
-	if (vos_kh_get(&hash)) {
-		vos_kh_clear();
+	if (vos_kh_get(&hash, standalone)) {
+		vos_kh_clear(standalone);
 		return hash;
 	}
 
-	return d_hash_murmur64(buf, len, VOS_BTR_MUR_SEED);
+	return d_hash_murmur64(buf, len, BTR_MUR_SEED);
 }
+
+#ifdef VOS_STANDALONE
+static inline uint64_t
+vos_sched_seq(bool standalone)
+{
+	return 0;
+}
+#else
+static inline uint64_t
+vos_sched_seq(bool standalone)
+{
+	if (standalone)
+		return 0;
+
+	return sched_cur_seq();
+}
+#endif
 
 #endif /* __VOS_TLS_H__ */

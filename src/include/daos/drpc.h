@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -78,7 +78,8 @@ int drpc_call(struct drpc *ctx, int flags, Drpc__Call *msg,
 int drpc_connect(char *sockaddr, struct drpc **);
 struct drpc *drpc_listen(char *sockaddr, drpc_handler_t handler);
 bool drpc_is_valid_listener(struct drpc *ctx);
-struct drpc *drpc_accept(struct drpc *listener_ctx);
+int
+    drpc_accept(struct drpc *listener_ctx, struct drpc **drpc);
 int drpc_recv_call(struct drpc *ctx, Drpc__Call **call);
 int drpc_send_response(struct drpc *ctx, Drpc__Response *resp);
 int drpc_close(struct drpc *ctx);

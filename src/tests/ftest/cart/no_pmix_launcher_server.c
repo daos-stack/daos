@@ -24,6 +24,7 @@ int main(int argc, char **argv)
 	crt_group_t		*grp;
 	crt_context_t		crt_ctx[NUM_SERVER_CTX];
 	pthread_t		progress_thread[NUM_SERVER_CTX];
+	struct test_options	*opts = crtu_get_opts();
 	int			i;
 	char			*my_uri;
 	char			*env_self_rank;
@@ -32,8 +33,9 @@ int main(int argc, char **argv)
 	uint32_t		grp_size;
 	int			rc;
 
-	env_self_rank = getenv("CRT_L_RANK");
+	d_agetenv_str(&env_self_rank, "CRT_L_RANK");
 	my_rank = atoi(env_self_rank);
+	d_freeenv_str(&env_self_rank);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(my_rank, 20, true, true);
@@ -42,8 +44,7 @@ int main(int argc, char **argv)
 	assert(rc == 0);
 
 	DBG_PRINT("Server starting up\n");
-	rc = crt_init("server_grp", CRT_FLAG_BIT_SERVER |
-				CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
+	rc = crt_init("server_grp", CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	if (rc != 0) {
 		D_ERROR("crt_init() failed; rc=%d\n", rc);
 		assert(0);
@@ -55,7 +56,7 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
-	rc = crt_rank_self_set(my_rank);
+	rc = crt_rank_self_set(my_rank, 1 /* group_version_min */);
 	if (rc != 0) {
 		D_ERROR("crt_rank_self_set(%d) failed; rc=%d\n",
 			my_rank, rc);
@@ -75,7 +76,19 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
-	grp_cfg_file = getenv("CRT_L_GRP_CFG");
+	if (opts->is_swim_enabled) {
+		rc = crt_swim_init(0);
+		if (rc != 0) {
+			D_ERROR("crt_swim_init() failed; rc=%d\n", rc);
+			assert(0);
+		}
+	}
+
+	d_agetenv_str(&grp_cfg_file, "CRT_L_GRP_CFG");
+	if (grp_cfg_file == NULL) {
+		D_ERROR("CRT_L_GRP_CFG was not set\n");
+		assert(0);
+	}
 
 	rc = crt_rank_uri_get(grp, my_rank, 0, &my_uri);
 	if (rc != 0) {
@@ -93,13 +106,8 @@ int main(int argc, char **argv)
 
 	DBG_PRINT("self_rank=%d uri=%s grp_cfg_file=%s\n", my_rank,
 		  my_uri, grp_cfg_file);
+	d_freeenv_str(&grp_cfg_file);
 	D_FREE(my_uri);
-
-	rc = crt_swim_init(0);
-	if (rc != 0) {
-		D_ERROR("crt_swim_init() failed; rc=%d\n", rc);
-		assert(0);
-	}
 
 	rc = crt_group_size(NULL, &grp_size);
 	if (rc != 0) {

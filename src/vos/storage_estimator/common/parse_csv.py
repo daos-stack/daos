@@ -1,14 +1,11 @@
-#!/usr/bin/env python
 '''
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 
-import sys
-
-from storage_estimator.explorer import AverageFS
 from storage_estimator.dfs_sb import get_dfs_inode_akey
+from storage_estimator.explorer import AverageFS
 from storage_estimator.util import ProcessBase
 
 FILE_SIZES = ['4k', '64k', '128k', '256k', '512k', '768k', '1m', '8m', '64m',
@@ -84,6 +81,8 @@ class ProcessCSV(ProcessBase):
             afs.set_dfs_inode(inode_akey)
             afs.set_io_size(self._io_size)
             afs.set_chunk_size(self._chunk_size)
+            afs.set_ec_cell_size(self._ec_cell_size)
+            afs.set_assume_aggregation(self._assume_aggregation)
             afs.set_total_symlinks(count_symlink)
             afs.set_avg_symlink_size(symlink_size)
             afs.set_total_directories(count_dir)

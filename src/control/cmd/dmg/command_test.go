@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,9 +16,11 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/daos-stack/daos/src/control/common"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -130,12 +132,16 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 		resp = control.MockMSResponse("", nil, &mgmtpb.SystemEraseResp{})
 	case *control.SystemStartReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.SystemStartResp{})
+	case *control.SystemExcludeReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.SystemExcludeResp{})
 	case *control.SystemQueryReq:
 		if req.FailOnUnavailable {
 			resp = control.MockMSResponse("", system.ErrRaftUnavail, nil)
 			break
 		}
 		resp = control.MockMSResponse("", nil, &mgmtpb.SystemQueryResp{})
+	case *control.SystemCleanupReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.SystemCleanupResp{})
 	case *control.LeaderQueryReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.LeaderQueryResp{})
 	case *control.ListPoolsReq:
@@ -144,6 +150,10 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 		resp = control.MockMSResponse("", nil, &mgmtpb.ContSetOwnerResp{})
 	case *control.PoolQueryReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolQueryResp{})
+	case *control.PoolQueryTargetReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolQueryTargetResp{})
+	case *control.PoolUpgradeReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolUpgradeResp{})
 	case *control.PoolGetACLReq, *control.PoolOverwriteACLReq,
 		*control.PoolUpdateACLReq, *control.PoolDeleteACLReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.ACLResp{})
@@ -155,9 +165,105 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolExtendResp{})
 	case *control.PoolReintegrateReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolReintegrateResp{})
+	case *control.SystemCheckEnableReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
+	case *control.SystemCheckDisableReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
+	case *control.SystemCheckStartReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
+	case *control.SystemCheckStopReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
+	case *control.SystemCheckQueryReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.CheckQueryResp{})
+	case *control.SystemCheckGetPolicyReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.CheckGetPolicyResp{})
+	case *control.SystemCheckSetPolicyReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
+	case *control.SystemCheckRepairReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
+	case *control.SystemSetAttrReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
+	case *control.SystemGetAttrReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.SystemGetAttrResp{})
+	case *control.SystemSetPropReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
+	case *control.SystemGetPropReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.SystemGetPropResp{})
+	case *control.NetworkScanReq:
+		resp = &control.UnaryResponse{
+			Responses: []*control.HostResponse{
+				{
+					Addr: "host1",
+					Message: &ctlpb.NetworkScanResp{
+						Interfaces: []*ctlpb.FabricInterface{
+							{
+								Provider:    "test-provider",
+								Device:      "test-device",
+								Netdevclass: uint32(hardware.Infiniband),
+							},
+						},
+						Numacount:    1,
+						Corespernuma: 2,
+					},
+				},
+			},
+		}
+	case *control.StorageScanReq:
+		resp = &control.UnaryResponse{
+			Responses: []*control.HostResponse{
+				{
+					Addr: "host1",
+					Message: &ctlpb.StorageScanResp{
+						Scm: &ctlpb.ScanScmResp{
+							Namespaces: []*ctlpb.ScmNamespace{
+								{},
+							},
+						},
+						Nvme: &ctlpb.ScanNvmeResp{
+							Ctrlrs: []*ctlpb.NvmeController{
+								{PciAddr: "0000:80:0.0"},
+							},
+						},
+						MemInfo: &ctlpb.MemInfo{
+							HugepageSizeKb: 2048,
+						},
+					},
+				},
+			},
+		}
 	}
 
 	return resp, nil
+}
+
+func runCmdTest(t *testing.T, cmd, expectedCalls string, expectedErr error) {
+	t.Helper()
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	ctlClient := control.DefaultMockInvoker(log)
+	conn := newTestConn(t)
+	bridge := &bridgeConnInvoker{
+		MockInvoker: *ctlClient,
+		t:           t,
+		conn:        conn,
+	}
+	err := runCmd(t, cmd, log, bridge)
+	if err != expectedErr {
+		if expectedErr == nil {
+			t.Fatalf("expected nil error, got %+v", err)
+		}
+
+		if err == nil {
+			t.Fatalf("expected err '%v', got nil", expectedErr)
+		}
+
+		testExpectedError(t, expectedErr, err)
+		return
+	}
+	if diff := cmp.Diff(expectedCalls, strings.Join(conn.called, " ")); diff != "" {
+		t.Fatalf("unexpected function calls (-want, +got):\n%s\n", diff)
+	}
 }
 
 func runCmdTests(t *testing.T, cmdTests []cmdTest) {
@@ -165,41 +271,14 @@ func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 
 	for _, st := range cmdTests {
 		t.Run(st.name, func(t *testing.T) {
-			t.Helper()
-			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
-
-			ctlClient := control.DefaultMockInvoker(log)
-			conn := newTestConn(t)
-			bridge := &bridgeConnInvoker{
-				MockInvoker: *ctlClient,
-				t:           t,
-				conn:        conn,
-			}
-			err := runCmd(t, st.cmd, log, bridge)
-			if err != st.expectedErr {
-				if st.expectedErr == nil {
-					t.Fatalf("expected nil error, got %+v", err)
-				}
-
-				if err == nil {
-					t.Fatalf("expected err '%v', got nil", st.expectedErr)
-				}
-
-				testExpectedError(t, st.expectedErr, err)
-				return
-			}
-
-			if diff := cmp.Diff(st.expectedCalls, strings.Join(conn.called, " ")); diff != "" {
-				t.Fatalf("unexpected function calls (-want, +got):\n%s\n", diff)
-			}
+			runCmdTest(t, st.cmd, st.expectedCalls, st.expectedErr)
 		})
 	}
 }
 
 func TestBadCommand(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	var opts cliOptions
 	err := parseOpts([]string{"foo"}, &opts, nil, log)
@@ -208,7 +287,7 @@ func TestBadCommand(t *testing.T) {
 
 func TestNoCommand(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	var opts cliOptions
 	err := parseOpts([]string{}, &opts, nil, log)

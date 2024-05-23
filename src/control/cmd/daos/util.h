@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,21 +18,24 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/xattr.h>
 #include <fcntl.h>
 #include <daos.h>
 #include <daos/common.h>
 #include <daos/debug.h>
 #include <gurt/common.h>
 
-#include "daos_types.h"
-#include "daos_api.h"
-#include "daos_fs.h"
-#include "daos_uns.h"
-#include "dfuse_ioctl.h"
+#include <daos_types.h>
+#include <daos_api.h>
+#include <daos_fs.h>
+#include <daos_uns.h>
+#include <daos_mgmt.h>
+#include <dfuse_ioctl.h>
 
 #include "daos_hdlr.h"
 
 int resolve_duns_path(struct cmd_args_s *ap);
+int resolve_duns_pool(struct cmd_args_s *ap);
 
 /* cgo is unable to work directly with preprocessor macros
  * so we have to provide these glue helpers.
@@ -73,6 +76,15 @@ get_dpe_val_ptr(struct daos_prop_entry *dpe)
 	return dpe->dpe_val_ptr;
 }
 
+static inline bool
+dpe_is_negative(struct daos_prop_entry *dpe)
+{
+	if (dpe == NULL)
+		return 0;
+
+	return dpe->dpe_flags & DAOS_PROP_ENTRY_NOT_SET;
+}
+
 static inline void
 set_dpe_str(struct daos_prop_entry *dpe, d_string_t str)
 {
@@ -100,4 +112,18 @@ set_dpe_val_ptr(struct daos_prop_entry *dpe, void *val_ptr)
 	dpe->dpe_val_ptr = val_ptr;
 }
 
+static inline uint32_t
+get_rebuild_state(struct daos_rebuild_status *drs)
+{
+	if (drs == NULL)
+		return 0;
+
+	return drs->rs_state;
+}
+
+static inline bool
+mode_is_dir(mode_t mode)
+{
+	return S_ISDIR(mode);
+}
 #endif /* __CMD_DAOS_UTIL_H__ */

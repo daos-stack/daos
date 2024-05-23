@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,12 +12,12 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
 func TestServer_CtlSvc_getScmUsage(t *testing.T) {
@@ -31,9 +31,10 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 	mockScmNs1wMount.Mount = storage.MockScmMountPoint(1)
 
 	for name, tc := range map[string]struct {
-		smsc        *scm.MockSysConfig
+		smsc        *system.MockSysConfig
 		inResp      *storage.ScmScanResponse
 		storageCfgs []storage.TierConfigs
+		nilRank     bool
 		expErr      error
 		expOutResp  *storage.ScmScanResponse
 	}{
@@ -41,7 +42,7 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassDcpm.String()).
+						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmMountPoint(mockScmMountPath0).
 						WithScmDeviceList(mockScmNs0.BlockDevice),
 				},
@@ -64,7 +65,7 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassDcpm.String()).
+						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmMountPoint(mockScmMountPath0).
 						WithScmDeviceList(mockScmNs0.BlockDevice),
 				},
@@ -78,7 +79,7 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassDcpm.String()).
+						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmMountPoint(mockScmMountPath0).
 						WithScmDeviceList(mockScmNs0.BlockDevice),
 				},
@@ -86,8 +87,8 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 			expErr: errors.New("no pmem namespace"),
 		},
 		"get usage fails": {
-			smsc: &scm.MockSysConfig{
-				GetfsUsageResps: []scm.GetfsUsageRetval{
+			smsc: &system.MockSysConfig{
+				GetfsUsageResps: []system.GetfsUsageRetval{
 					{Err: errors.New("unknown")},
 				},
 			},
@@ -99,16 +100,16 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassDcpm.String()).
+						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmMountPoint(mockScmMountPath0).
 						WithScmDeviceList(mockScmNs0.BlockDevice),
 				},
 			},
 			expErr: errors.New("unknown"),
 		},
-		"get usage": {
-			smsc: &scm.MockSysConfig{
-				GetfsUsageResps: []scm.GetfsUsageRetval{
+		"get rank fails": {
+			smsc: &system.MockSysConfig{
+				GetfsUsageResps: []system.GetfsUsageRetval{
 					{
 						Total: mockScmNs0wMount.Mount.TotalBytes,
 						Avail: mockScmNs0wMount.Mount.AvailBytes,
@@ -123,7 +124,32 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassDcpm.String()).
+						WithStorageClass(storage.ClassDcpm.String()).
+						WithScmMountPoint(mockScmMountPath0).
+						WithScmDeviceList(mockScmNs0.BlockDevice),
+				},
+			},
+			nilRank: true,
+			expErr:  errors.New("nil rank in superblock"),
+		},
+		"get usage": {
+			smsc: &system.MockSysConfig{
+				GetfsUsageResps: []system.GetfsUsageRetval{
+					{
+						Total: mockScmNs0wMount.Mount.TotalBytes,
+						Avail: mockScmNs0wMount.Mount.AvailBytes,
+					},
+				},
+			},
+			inResp: &storage.ScmScanResponse{
+				Namespaces: storage.ScmNamespaces{
+					mockScmNs0,
+				},
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmMountPoint(mockScmMountPath0).
 						WithScmDeviceList(mockScmNs0.BlockDevice),
 				},
@@ -135,8 +161,8 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 			},
 		},
 		"get usage; multiple engines": {
-			smsc: &scm.MockSysConfig{
-				GetfsUsageResps: []scm.GetfsUsageRetval{
+			smsc: &system.MockSysConfig{
+				GetfsUsageResps: []system.GetfsUsageRetval{
 					{
 						Total: mockScmNs0wMount.Mount.TotalBytes,
 						Avail: mockScmNs0wMount.Mount.AvailBytes,
@@ -156,13 +182,13 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassDcpm.String()).
+						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmMountPoint(mockScmMountPath0).
 						WithScmDeviceList(mockScmNs0.BlockDevice),
 				},
 				{
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassDcpm.String()).
+						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmMountPoint(mockScmMountPath1).
 						WithScmDeviceList(mockScmNs1.BlockDevice),
 				},
@@ -177,19 +203,26 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			var engineCfgs []*engine.Config
 			for _, sc := range tc.storageCfgs {
-				engineCfgs = append(engineCfgs, engine.NewConfig().WithStorage(sc...))
+				engineCfgs = append(engineCfgs, engine.MockConfig().WithStorage(sc...))
 			}
 			sCfg := config.DefaultServer().WithEngines(engineCfgs...)
 			cs := mockControlService(t, log, sCfg, nil, nil, tc.smsc)
 
+			if tc.nilRank {
+				for _, ei := range cs.harness.Instances() {
+					srv := ei.(*EngineInstance)
+					srv._superblock.Rank = nil
+				}
+			}
+
 			cs.harness.started.SetTrue()
 
 			outResp, err := cs.getScmUsage(tc.inResp)
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if err != nil {
 				return
 			}

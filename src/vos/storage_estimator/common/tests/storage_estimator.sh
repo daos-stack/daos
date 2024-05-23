@@ -13,14 +13,17 @@ if ! [ -f "${PROJECT_DIR}/utils/sl/${SETUP_FILE}" ]; then
   exit 1
 fi
 
+# shellcheck disable=SC1090
 source "${PROJECT_DIR}/utils/sl/${SETUP_FILE}"
 
 popd
 
 function print_header {
   echo
+  # shellcheck disable=SC2183
   printf '%80s\n' | tr ' ' =
   echo "          ${1}"
+  # shellcheck disable=SC2183
   printf '%80s\n' | tr ' ' =
   echo
 }
@@ -86,6 +89,8 @@ daos_storage_estimator.py read_csv -v "${CLIENT_CSV}" --file_oclass RP_3GX \
 --checksum crc32
 daos_storage_estimator.py read_csv -v "${CLIENT_CSV}" --file_oclass EC_16P2GX \
 --checksum crc32
+daos_storage_estimator.py read_csv -v "${CLIENT_CSV}" --file_oclass EC_16P2GX \
+--checksum crc32 -A
 
 print_header "Storage Estimator: read_yaml"
 
@@ -112,9 +117,17 @@ daos_storage_estimator.py explore_fs -v "${TEST_DIR}" --file_oclass RP_3GX
 daos_storage_estimator.py explore_fs -v "${TEST_DIR}" --file_oclass EC_16P2GX
 daos_storage_estimator.py explore_fs -v "${TEST_DIR}" --file_oclass SX \
 --checksum crc32
+daos_storage_estimator.py explore_fs -v "${TEST_DIR}" --file_oclass SX \
+--checksum crc32 --io_size=128KiB
 daos_storage_estimator.py explore_fs -v "${TEST_DIR}" --file_oclass RP_3GX \
 --checksum crc32
 daos_storage_estimator.py explore_fs -v "${TEST_DIR}" --file_oclass EC_16P2GX \
 --checksum crc32
+daos_storage_estimator.py explore_fs -v "${TEST_DIR}" --file_oclass EC_16P2GX \
+--checksum crc32 -A
+daos_storage_estimator.py explore_fs -v "${TEST_DIR}" --file_oclass EC_16P2GX \
+--checksum crc32 -A  --io_size=128KiB
+daos_storage_estimator.py explore_fs -v "${TEST_DIR}" --file_oclass EC_16P2GX \
+--checksum crc32 -A --ec_cell_size=128KiB --chunk_size=2MiB
 
 print_header "Storage Estimator: Successful"

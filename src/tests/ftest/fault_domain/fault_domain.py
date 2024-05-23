@@ -1,11 +1,10 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
 from apricot import TestWithServers, skipForTicket
+from ClusterShell.NodeSet import NodeSet
 
 
 class FaultDomain(TestWithServers):
@@ -33,11 +32,12 @@ class FaultDomain(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=fault_domain,fault_domain_different_domains
+        :avocado: tags=fault_domain
+        :avocado: tags=FaultDomain,test_pools_in_different_domains
         """
         test_passed = True
         rank = None
-        error_messages = list()
+        error_messages = []
         fault_paths = self.params.get("fault_path", '/run/*')
         number_pools = self.params.get("number_pools", '/run/*')
 
@@ -46,7 +46,7 @@ class FaultDomain(TestWithServers):
             self.configure_manager(
                 "daos_server",
                 self.server_managers[counter],
-                [server],
+                NodeSet(server),
                 self.hostfile_servers_slots
             )
             self.server_managers[counter].set_config_value("fault_path",

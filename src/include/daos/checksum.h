@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -247,6 +247,10 @@ daos_csummer_csum_compare(struct daos_csummer *obj, uint8_t *a,
 			  uint8_t *b, uint32_t csum_len);
 
 int
+daos_csummer_calc_for_iov(struct daos_csummer *csummer, daos_key_t *iov,
+			  uint8_t *csum_buf, uint16_t csum_buf_len);
+
+int
 daos_csummer_calc_one(struct daos_csummer *obj, d_sg_list_t *sgl,
 		       struct dcs_csum_info *csums, size_t rec_len, size_t nr,
 		       size_t idx);
@@ -312,8 +316,8 @@ daos_csummer_calc_key(struct daos_csummer *csummer, daos_key_t *key,
  * error is returned.
  *
  * @param obj		the daos_csummer obj
- * @param iod		The IOD that holds the already calculated checksums
- * @param sgl		Scatter Gather List with the data to be used
+ * @param iod(s)	The IOD that holds the already calculated checksums
+ * @param sgl(s)	Scatter Gather List with the data to be used
  *			for the extents \a recxs. The total data
  *			length of the sgl should be the same as the sum
  *			of the lengths of all recxs
@@ -324,10 +328,15 @@ daos_csummer_calc_key(struct daos_csummer *csummer, daos_key_t *key,
  *			in single target.
  * @param singv_idx	single value target index, valid when singv_los
  *			is non-NULL. -1 means verifying csum for all shards.
- * @param iod_csum	checksum of the iod
+ * @param iod_csum(s)	checksum of the iod
  *
  * @return		0 for success, -DER_CSUM if corruption is detected
  */
+int
+daos_csummer_verify_iods(struct daos_csummer *obj, daos_iod_t *iods, d_sg_list_t *sgls,
+			 struct dcs_iod_csums *iods_csum, uint32_t nr,
+			 struct dcs_layout *singv_lo, int singv_idx, daos_iom_t *map);
+
 int
 daos_csummer_verify_iod(struct daos_csummer *obj, daos_iod_t *iod,
 			d_sg_list_t *sgl, struct dcs_iod_csums *iod_csum,
@@ -501,13 +510,37 @@ ci2csum(struct dcs_csum_info ci);
  */
 #define	ci_csums_len(obj) ((obj).cs_nr * (obj).cs_len)
 
-/** Serialze a \dcs_csum_info structure to an I/O vector. First the structure
-* fields are added to the memory buf, then the actual csum.
-*/
+/** Serialize a \dcs_csum_info structure to an I/O vector. First the structure
+ * fields are added to the memory buf, then the actual csum.
+ */
 int
 ci_serialize(struct dcs_csum_info *obj, d_iov_t *iov);
 void
 ci_cast(struct dcs_csum_info **obj, const d_iov_t *iov);
+
+/**
+ * A dcs_ci_list and associated functions manages the memory for storing a list of csum_infos.
+ */
+struct dcs_ci_list {
+	uint8_t			*dcl_csum_infos;
+	uint32_t		 dcl_csum_infos_nr;
+	uint32_t		 dcl_buf_used;
+	uint32_t		 dcl_buf_size;
+	/* hack for supporting biov_csums_used usage in csum_add2iods */
+	uint32_t		 dcl_csum_offset;
+};
+
+/**
+ * Initialize memory for storing the csum_infos. The nr helps to allocate an amount of memory,
+ * but depending on the number of checksums in each csum_info, the list may need to reallocate
+ * more memory to store nr checksums. The reallocation happens internally and the caller doesn't
+ * need to worry about that. dcs_csum_info_list_fini must be called when done so that the memory
+ * allocated is freed.
+ */
+int dcs_csum_info_list_init(struct dcs_ci_list *list, uint32_t nr);
+void dcs_csum_info_list_fini(struct dcs_ci_list *list);
+int dcs_csum_info_save(struct dcs_ci_list *list, struct dcs_csum_info *info);
+struct dcs_csum_info *dcs_csum_info_get(struct dcs_ci_list *list, uint32_t idx);
 
 /**
  * change the iov so that buf points to the next csum_info, assuming the

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -22,12 +22,9 @@ struct daos_task_args {
 	uint32_t			ta_opc;
 	union {
 		/** Management */
-		daos_pool_create_t	pool_create;
-		daos_pool_destroy_t	pool_destroy;
 		daos_set_params_t	mgmt_set_params;
 		daos_pool_replicas_t	pool_add_replicas;
 		daos_pool_replicas_t	pool_remove_replicas;
-		daos_mgmt_list_pools_t	mgmt_list_pools;
 		daos_mgmt_get_bs_state_t mgmt_get_bs_state;
 
 		/** Pool */
@@ -58,6 +55,9 @@ struct daos_task_args {
 		daos_cont_list_snap_t	cont_list_snap;
 		daos_cont_create_snap_t	cont_create_snap;
 		daos_cont_destroy_snap_t cont_destroy_snap;
+		daos_cont_snap_oit_oid_get_t cont_get_oit_oid;
+		daos_cont_snap_oit_create_t cont_snap_oit_create;
+		daos_cont_snap_oit_destroy_t cont_snap_oit_destroy;
 
 		/** Transaction */
 		daos_tx_open_t		tx_open;
@@ -67,7 +67,7 @@ struct daos_task_args {
 		daos_tx_restart_t	tx_restart;
 
 		/** Object */
-		daos_obj_register_class_t obj_reg_class;
+		struct daos_obj_register_class_t obj_reg_class;
 		daos_obj_query_class_t	obj_query_class;
 		daos_obj_list_class_t	obj_list_class;
 		daos_obj_open_t		obj_open;
@@ -100,6 +100,9 @@ struct daos_task_args {
 		daos_kv_put_t		kv_put;
 		daos_kv_remove_t	kv_remove;
 		daos_kv_list_t		kv_list;
+
+		/** Pipeline */
+		daos_pipeline_run_t	pipeline_run;
 	}		 ta_u;
 	daos_event_t	*ta_ev;
 };
@@ -108,8 +111,8 @@ struct daos_task_args {
  * Push to task stack space. This API only reserves space on the task stack, no
  * data copy involved.
  *
- * \param task [in] task to push the buffer.
- * \param size [in] buffer size.
+ * \param[in] task	task to push the buffer.
+ * \param[in] size	buffer size.
  *
  * \return	pointer to the pushed buffer in task stack.
  */
@@ -120,8 +123,8 @@ tse_task_stack_push(tse_task_t *task, uint32_t size);
  * Pop from task stack space. This API only reserves space on the task stack, no
  * data copy involved.
  *
- * \param task [in] task to pop the buffer.
- * \param size [in] buffer size.
+ * \param[in] task	task to pop the buffer.
+ * \param[in] size	buffer size.
  *
  * \return	pointer to the popped buffer in task stack.
  */
@@ -131,9 +134,9 @@ tse_task_stack_pop(tse_task_t *task, uint32_t size);
 /**
  * Push data to task stack space, will copy the data to stack.
  *
- * \param task [in]	task to push the buffer.
- * \param data [in]	pointer of data to push
- * \param len  [in]	length of data
+ * \param[in] task	task to push the buffer.
+ * \param[in] data	pointer of data to push
+ * \param[in] len	length of data
  */
 void
 tse_task_stack_push_data(tse_task_t *task, void *data, uint32_t len);
@@ -141,9 +144,9 @@ tse_task_stack_push_data(tse_task_t *task, void *data, uint32_t len);
 /**
  * Pop data from task stack space, will copy the data from stack.
  *
- * \param task [in]	task to push the buffer.
- * \param data [in/out]	pointer of value to store the popped data
- * \param len  [in]	length of data
+ * \param[in] task	task to push the buffer.
+ * \param[in,out] data	pointer of value to store the popped data
+ * \param[in] len	length of data
  */
 void
 tse_task_stack_pop_data(tse_task_t *task, void *data, uint32_t len);
@@ -203,6 +206,9 @@ dc_obj_query_key_task_create(daos_handle_t oh, daos_handle_t th,
 			     daos_recx_t *recx, daos_event_t *ev,
 			     tse_sched_t *tse, tse_task_t **task);
 int
+dc_obj_query_max_epoch_task_create(daos_handle_t oh, daos_handle_t th, daos_epoch_t *epoch,
+				   daos_event_t *ev, tse_sched_t *tse, tse_task_t **task);
+int
 dc_obj_sync_task_create(daos_handle_t oh, daos_epoch_t epoch,
 			daos_epoch_t **epochs_p, int *nr, daos_event_t *ev,
 			tse_sched_t *tse, tse_task_t **task);
@@ -248,6 +254,19 @@ dc_obj_list_obj_task_create(daos_handle_t oh, daos_handle_t th,
 			    daos_anchor_t *akey_anchor, bool incr_order,
 			    daos_event_t *ev, tse_sched_t *tse,
 			    d_iov_t *csum, tse_task_t **task);
+int
+dc_obj_key2anchor_task_create(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
+			      daos_key_t *akey, daos_anchor_t *anchor, daos_event_t *ev,
+			      tse_sched_t *tse, tse_task_t **task);
+
+int
+dc_pipeline_run_task_create(daos_handle_t coh, daos_handle_t oh, daos_handle_t th,
+			    daos_pipeline_t *pipeline, uint64_t flags, daos_key_t *dkey,
+			    uint32_t *nr_iods, daos_iod_t *iods, daos_anchor_t *anchor,
+			    uint32_t *nr_kds, daos_key_desc_t *kds, d_sg_list_t *sgl_keys,
+			    d_sg_list_t *sgl_recx, daos_size_t *recx_size, d_sg_list_t *sgl_agg,
+			    daos_pipeline_stats_t *stats, daos_event_t *ev, tse_sched_t *tse,
+			    tse_task_t **task);
 
 void *
 dc_task_get_args(tse_task_t *task);

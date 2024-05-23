@@ -1,4 +1,4 @@
-# Copyright (c) 2021 Intel Corporation
+# Copyright 2016-2022 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -19,11 +19,18 @@
 # SOFTWARE.
 """Fake scons environment shutting up pylint on SCons files"""
 
+
 class StopError(Exception):
     """Fake StopError"""
 
+
 class InternalError(Exception):
     """Fake InternalError"""
+
+
+class UserError(Exception):
+    """Fake UserError"""
+
 
 ARGUMENTS = {}
 

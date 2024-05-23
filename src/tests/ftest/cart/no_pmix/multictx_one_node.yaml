@@ -1,0 +1,19 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+
+ENV:
+  default:
+    # !filter-only : /run/tests/rpc_error
+    - D_LOG_MASK: "WARN"
+    - D_INTERFACE: "eth0"
+env_D_PROVIDER: !mux
+  sm:
+    D_PROVIDER: "sm"
+  ofi_tcp:
+    D_PROVIDER: "ofi+tcp"
+  ofi_tcp_rxm:
+    D_PROVIDER: "ofi+tcp;ofi_rxm"
+tests: !mux
+  no_pmix_multi_ctx:
+    name: no_pmix_multi_ctx
+    tst_bin: no_pmix_multi_ctx

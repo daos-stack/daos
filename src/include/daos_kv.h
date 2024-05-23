@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -19,22 +19,25 @@
 extern "C" {
 #endif
 
-/* Conditional Op: Insert key if it doesn't exist, fail otherwise */
+#include <daos_types.h>
+#include <daos_obj.h>
+
+/** Conditional Op: Insert key if it doesn't exist, fail otherwise */
 #define DAOS_COND_KEY_INSERT	DAOS_COND_DKEY_INSERT
-/* Conditional Op: Update key if it exists, fail otherwise */
+/** Conditional Op: Update key if it exists, fail otherwise */
 #define DAOS_COND_KEY_UPDATE	DAOS_COND_DKEY_UPDATE
-/* Conditional Op: Get key if it exists, fail otherwise */
+/** Conditional Op: Get key if it exists, fail otherwise */
 #define DAOS_COND_KEY_GET	DAOS_COND_DKEY_FETCH
-/* Conditional Op: Remove key if it exists, fail otherwise */
+/** Conditional Op: Remove key if it exists, fail otherwise */
 #define DAOS_COND_KEY_REMOVE	DAOS_COND_PUNCH
 
 /**
  * Open a KV object. This is a local operation (no RPC involved).
- * The feat bits in the oid must set DAOS_OF_KV_FLAT.
+ * The type bits in the oid must set DAOS_OT_KV_*.
  *
  * \param[in]	coh	Container open handle.
- * \param[in]	oid	Object ID. It is required that the feat for dkey type
- *			be set to DAOS_OF_KV_FLAT.
+ * \param[in]	oid	Object ID. It is required that the object type
+ *			be set to DAOS_OT_KV_*.
  * \param[in]	mode	Open mode: DAOS_OO_RO/RW
  * \param[out]	oh	Returned kv object open handle.
  * \param[in]	ev	Completion event, it is optional and can be NULL.

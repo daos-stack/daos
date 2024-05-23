@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -22,8 +22,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <inttypes.h>
-#include <vos_obj.h>
-#include <vos_internal.h>
+#include "vos_obj.h"
+#include "vos_internal.h"
 #include <daos_errno.h>
 
 /**
@@ -58,11 +58,13 @@ obj_lop_alloc(void *key, unsigned int ksize, void *args,
 	struct vos_object	*obj;
 	struct obj_lru_key	*lkey;
 	struct vos_container	*cont;
+	struct vos_tls		*tls;
 	int			 rc;
 
 	cont = (struct vos_container *)args;
 	D_ASSERT(cont != NULL);
 
+	tls = vos_tls_get(cont->vc_pool->vp_sysdb);
 	lkey = (struct obj_lru_key *)key;
 	D_ASSERT(lkey != NULL);
 
@@ -74,7 +76,7 @@ obj_lop_alloc(void *key, unsigned int ksize, void *args,
 		D_GOTO(failed, rc = -DER_NOMEM);
 
 	init_object(obj, lkey->olk_oid, cont);
-
+	d_tm_inc_gauge(tls->vtl_obj_cnt, 1);
 	*llink_p = &obj->obj_llink;
 	rc = 0;
 failed:
@@ -123,10 +125,13 @@ static void
 obj_lop_free(struct daos_llink *llink)
 {
 	struct vos_object	*obj;
+	struct vos_tls		*tls;
 
 	D_DEBUG(DB_TRACE, "lru free callback for vos_obj_cache\n");
 
 	obj = container_of(llink, struct vos_object, obj_llink);
+	tls = vos_tls_get(obj->obj_cont->vc_pool->vp_sysdb);
+	d_tm_dec_gauge(tls->vtl_obj_cnt, 1);
 	clean_object(obj);
 	D_FREE(obj);
 }
@@ -190,18 +195,18 @@ vos_obj_cache_evict(struct daos_lru_cache *cache, struct vos_container *cont)
 }
 
 /**
- * Return object cache for the current thread.
+ * Return object cache for the current IO.
  */
 struct daos_lru_cache *
-vos_obj_cache_current(void)
+vos_obj_cache_current(bool standalone)
 {
-	return vos_obj_cache_get();
+	return vos_obj_cache_get(standalone);
 }
 
 static __thread struct vos_object	 obj_local = {0};
 
 void
-vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj, bool evict)
+vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj, uint64_t flags, bool evict)
 {
 
 	if (obj == &obj_local) {
@@ -211,6 +216,10 @@ vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj, bool evict)
 	}
 
 	D_ASSERT((occ != NULL) && (obj != NULL));
+	if (flags & VOS_OBJ_AGGREGATE)
+		obj->obj_aggregate = 0;
+	else if (flags & VOS_OBJ_DISCARD)
+		obj->obj_discard = 0;
 
 	if (evict)
 		daos_lru_ref_evict(occ, &obj->obj_llink);
@@ -262,6 +271,37 @@ cache_object(struct daos_lru_cache *occ, struct vos_object **objp)
 	return 0;
 }
 
+static bool
+vos_obj_op_conflict(struct vos_object *obj, uint64_t flags, uint32_t intent, bool create)
+{
+	bool discard = flags & VOS_OBJ_DISCARD;
+	bool agg     = flags & VOS_OBJ_AGGREGATE;
+
+	/* VOS aggregation is mutually exclusive with VOS discard.
+	 * Object discard is mutually exclusive with VOS discard.
+	 * EC aggregation is not mutually exclusive with anything.
+	 * For simplicity, we do make all of them mutually exclusive on the same
+	 * object.
+	 */
+
+	if (obj->obj_discard) {
+		/** Mutually exclusive with create, discard and aggregation */
+		if (create || discard || agg) {
+			D_DEBUG(DB_EPC, "Conflict detected, discard already running on object\n");
+			return true;
+		}
+	} else if (obj->obj_aggregate) {
+		/** Mutually exclusive with discard */
+		if (discard || agg) {
+			D_DEBUG(DB_EPC,
+				"Conflict detected, aggregation already running on object\n");
+			return true;
+		}
+	}
+
+	return false;
+}
+
 int
 vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	     daos_unit_oid_t oid, daos_epoch_range_t *epr, daos_epoch_t bound,
@@ -276,12 +316,13 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	uint32_t		 cond_mask = 0;
 	bool			 create;
 	void			*create_flag = NULL;
-	bool			 visible_only;
+	bool                     visible_only;
 
 	D_ASSERT(cont != NULL);
 	D_ASSERT(cont->vc_pool);
 
-	*obj_p = NULL;
+	if (obj_p != NULL)
+		*obj_p = NULL;
 
 	if (cont->vc_pool->vp_dying)
 		return -DER_SHUTDOWN;
@@ -295,8 +336,8 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 		create_flag = cont;
 
 	D_DEBUG(DB_TRACE, "Try to hold cont="DF_UUID", obj="DF_UOID
-		" create=%s epr="DF_X64"-"DF_X64"\n",
-		DP_UUID(cont->vc_id), DP_UOID(oid),
+		" layout %u create=%s epr="DF_X64"-"DF_X64"\n",
+		DP_UUID(cont->vc_id), DP_UOID(oid), oid.id_layout_ver,
 		create ? "true" : "false", epr->epr_lo, epr->epr_hi);
 
 	/* Create the key for obj cache */
@@ -306,6 +347,10 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	rc = daos_lru_ref_hold(occ, &lkey, sizeof(lkey), create_flag, &lret);
 	if (rc == -DER_NONEXIST) {
 		D_ASSERT(obj_local.obj_cont == NULL);
+		if (flags & VOS_OBJ_NO_HOLD) {
+			/** Object is not cached, so there can be no other holders */
+			return 0;
+		}
 		obj = &obj_local;
 		init_object(obj, oid, cont);
 	} else if (rc != 0) {
@@ -318,9 +363,9 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	if (obj->obj_zombie)
 		D_GOTO(failed, rc = -DER_AGAIN);
 
-	if (intent == DAOS_INTENT_KILL) {
+	if (intent == DAOS_INTENT_KILL && !(flags & VOS_OBJ_KILL_DKEY)) {
 		if (obj != &obj_local) {
-			if (vos_obj_refcount(obj) > 2)
+			if (!daos_lru_is_last_user(&obj->obj_llink))
 				D_GOTO(failed, rc = -DER_BUSY);
 
 			vos_obj_evict(occ, obj);
@@ -372,13 +417,33 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	}
 
 check_object:
-	if (intent == DAOS_INTENT_KILL || intent == DAOS_INTENT_PUNCH)
+	if (vos_obj_op_conflict(obj, flags, intent, create)) {
+		/** Cleanup so unit test that triggers doesn't corrupt the state */
+		vos_obj_release(occ, obj, 0, false);
+		/* Update request will retry with this error */
+		if (create)
+			rc = -DER_UPDATE_AGAIN;
+		else
+			rc = -DER_BUSY;
+		goto failed_2;
+	}
+
+	if (flags & VOS_OBJ_NO_HOLD) {
+		/** Just checking for conflicts, so we are done */
+		vos_obj_release(occ, obj, 0, false);
+		return 0;
+	}
+
+	D_ASSERT(obj_p != NULL);
+
+	if ((flags & VOS_OBJ_DISCARD) || intent == DAOS_INTENT_KILL || intent == DAOS_INTENT_PUNCH)
 		goto out;
 
 	if (!create) {
 		rc = vos_ilog_fetch(vos_cont2umm(cont), vos_cont2hdl(cont),
 				    intent, &obj->obj_df->vo_ilog, epr->epr_hi,
-				    bound, NULL, NULL, &obj->obj_ilog_info);
+				    bound, false, /* has_cond: no object level condition. */
+				    NULL, NULL, &obj->obj_ilog_info);
 		if (rc != 0) {
 			if (vos_has_uncertainty(ts_set, &obj->obj_ilog_info,
 						epr->epr_hi, bound))
@@ -429,7 +494,7 @@ out:
 		obj->obj_sync_epoch = obj->obj_df->vo_sync;
 
 	if (obj->obj_df != NULL && epr->epr_hi <= obj->obj_sync_epoch &&
-	    vos_dth_get() != NULL &&
+	    vos_dth_get(obj->obj_cont->vc_pool->vp_sysdb) != NULL &&
 	    (intent == DAOS_INTENT_PUNCH || intent == DAOS_INTENT_UPDATE)) {
 		/* If someone has synced the object against the
 		 * obj->obj_sync_epoch, then we do not allow to modify the
@@ -454,13 +519,19 @@ out:
 			goto failed_2;
 	}
 
+	if (flags & VOS_OBJ_AGGREGATE)
+		obj->obj_aggregate = 1;
+	else if (flags & VOS_OBJ_DISCARD)
+		obj->obj_discard = 1;
 	*obj_p = obj;
 
 	return 0;
 failed:
-	vos_obj_release(occ, obj, true);
+	vos_obj_release(occ, obj, 0, true);
 failed_2:
-	VOS_TX_LOG_FAIL(rc, "failed to hold object, rc="DF_RC"\n", DP_RC(rc));
+	VOS_TX_LOG_FAIL(rc, "failed to hold object " DF_UOID ", rc=" DF_RC "\n", DP_UOID(oid),
+			DP_RC(rc));
+
 	return	rc;
 }
 

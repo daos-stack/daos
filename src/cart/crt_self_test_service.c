@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -121,14 +121,14 @@ static void free_session(struct st_session **session)
 		D_FREE(free_entry->buf);
 		if (free_entry->bulk_hdl != CRT_BULK_NULL)
 			crt_bulk_free(free_entry->bulk_hdl);
-		D_FREE_PTR(free_entry);
+		D_FREE(free_entry);
 
 		free_entry = (*session)->buf_list;
 	}
 
 	D_SPIN_DESTROY(&(*session)->buf_list_lock);
 
-	D_FREE_PTR(*session);
+	D_FREE(*session);
 }
 
 static inline void
@@ -488,9 +488,7 @@ void crt_self_test_msg_send_reply(crt_rpc_t *rpc_req,
 	 * Decrement the reference counter. This is where cleanup for the RPC
 	 * always happens.
 	 */
-	ret = crt_req_decref(rpc_req);
-	if (ret != 0)
-		D_ERROR("crt_req_decref failed; ret=%d\n", ret);
+	crt_req_decref(rpc_req);
 }
 
 int crt_self_test_msg_bulk_put_cb(const struct crt_bulk_cb_info *cb_info)
@@ -581,8 +579,7 @@ crt_self_test_msg_handler(crt_rpc_t *rpc_req)
 	 * Increment the reference counter for this RPC
 	 * It is decremented by crt_self_test_msg_send_reply
 	 */
-	ret = crt_req_addref(rpc_req);
-	D_ASSERT(ret == 0);
+	crt_req_addref(rpc_req);
 
 	/*
 	 * For messages that do not use bulk and have no reply data, skip

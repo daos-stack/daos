@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -265,9 +265,9 @@ static void *network_thread(void *arg)
 			} else if (failed_member != item->np_from &&
 				   failed_member != item->np_to) {
 				/* emulate RPC receive by target */
-				rc = swim_updates_parse(g.swim_ctx[item->np_to],
-						   item->np_from, item->np_upds,
-						   item->np_nupds);
+				rc = swim_updates_parse(g.swim_ctx[item->np_to], item->np_from,
+							item->np_from, item->np_upds,
+							item->np_nupds);
 				if (rc) {
 					fprintf(stderr, "swim_parse_message() "
 						" error %d\n", rc);

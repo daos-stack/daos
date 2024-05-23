@@ -1,11 +1,14 @@
 /**
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #ifndef __CREDIT_H__
 #define __CREDIT_H__
+
+#include <daos_types.h>
+#include <daos_obj.h>
 
 #if D_HAS_WARNING(4, "-Wframe-larger-than=")
 	#pragma GCC diagnostic ignored "-Wframe-larger-than="
@@ -51,8 +54,10 @@ struct io_credit {
  */
 struct credit_context {
 	/** INPUT: should be initialized by caller */
-	/** optional, pmem file name, only for VOS test */
+	/** pmem file name, only for VOS test */
 	char			*tsc_pmem_file;
+	/** pmem file root directory, only for VOS test */
+	char			*tsc_pmem_path;
 	/** DMG config file */
 	char			*tsc_dmg_conf;
 	/** optional, pool service ranks, only for DAOS test */
@@ -82,7 +87,7 @@ struct credit_context {
 	daos_handle_t		 tsc_eqh;	/**< EQ handle */
 	/** # available I/O credits */
 	int			 tsc_cred_avail;
-	/** # inflight I/O credits */
+	/** # in-flight I/O credits */
 	int			 tsc_cred_inuse;
 	/** all pre-allocated I/O credits */
 	struct io_credit	 tsc_cred_buf[DTS_CRED_MAX];
@@ -96,8 +101,8 @@ struct credit_context {
 
 struct io_engine {
 	char	*ie_name;
-	int	(*ie_init)(void);
-	void	(*ie_fini)(void);
+	int	(*ie_init)(struct credit_context *);
+	void	(*ie_fini)(struct credit_context *);
 	int	(*ie_pool_init)(struct credit_context *);
 	void	(*ie_pool_fini)(struct credit_context *);
 	int	(*ie_cont_init)(struct credit_context *);
@@ -114,7 +119,7 @@ void credits_fini(struct credit_context *tsc);
 struct io_credit *credit_take(struct credit_context *tsc); /* OK */
 
 /**
- * Drain all the inflight I/O credits of @tsc.
+ * Drain all the in-flight I/O credits of @tsc.
  */
 int credit_drain(struct credit_context *tsc);
 

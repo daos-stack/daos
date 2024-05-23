@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,14 +17,36 @@
 
 #include <daos.h>
 #include <daos/common.h>
+#include <daos/placement.h>
+#include <daos/pool.h>
+#include <daos/kv.h>
 
 #include "daos_hdlr.h"
+#include "math.h"
 
 /** Input arguments passed to daos utility */
 struct cmd_args_s *autotest_ap;
 
+/* The start and end time in ns for individual test*/
+uint64_t	t_start, t_end;
+char		iops[32];
 /** How many concurrent I/O in flight */
 #define MAX_INFLIGHT 16
+#define OUTPUT_IOPS(x) ({\
+		/* negative value is unexpected*/\
+		if ((x) < 0.0 || (x) > 1.0E12 ) {\
+			snprintf(iops, sizeof(iops)-1, "Unexpected IO/sec value");\
+		} else if ((x) < 1000.0) {\
+			snprintf(iops, sizeof(iops)-1, "%7.2lfK IO/sec", (x));\
+		} else if ((x) < 1000000.0) {\
+			snprintf(iops, sizeof(iops)-1, "%7.2lfM IO/sec", (x)*0.001);\
+		} else if ((x) < 1000000000.0) {\
+			snprintf(iops, sizeof(iops)-1, "%7.2lfG IO/sec", (x)*0.000001);\
+		} else {\
+			snprintf(iops, sizeof(iops)-1, "%7.2lfT IO/sec", (x)*0.000000001);\
+		}\
+		step_success(iops);\
+		})
 
 /** Step timing  */
 clock_t	start;
@@ -52,6 +74,52 @@ daos_handle_t	coh3 = DAOS_HDL_INVAL;
 
 /** force cleanup */
 int force;
+
+/** skip big steps */
+int skip_steps[] = {28, 29};
+
+/** deadline/time limit */
+uint64_t	deadline_count;
+clock_t		deadline_limit = 30 * CLOCKS_PER_SEC;
+
+int domain_nr;
+
+/** total number of records for progress bar */
+int total_nr;
+
+/** how many ticks in progress bar */
+int ticks;
+
+/** how big each tick is in progress bar */
+int tick_size;
+
+void
+setup_progress()
+{
+	ticks = 20;
+	tick_size = total_nr / ticks;
+	fprintf(autotest_ap->outstream, "     ");
+}
+
+void
+increment_progress(int progress)
+{
+	if (progress % tick_size == 0) {
+		int percentage;
+
+		percentage = ceil((double) progress / (double) total_nr * 100.0);
+		fprintf(autotest_ap->outstream, "\b\b\b\b\b");
+		fprintf(autotest_ap->outstream, "% 4d%%", percentage);
+		fflush(autotest_ap->outstream);
+	}
+}
+
+void
+finish_progress()
+{
+	fprintf(autotest_ap->outstream, "\b\b\b\b\b");
+}
+
 
 static inline void
 new_oid(void)
@@ -87,7 +155,7 @@ step_print(const char *status, const char *comment, va_list ap)
 	int	i;
 
 	end = clock();
-	fprintf(autotest_ap->outstream, "  %s    ", status);
+	fprintf(autotest_ap->outstream, "  %s  ", status);
 	sprintf(timing, "%03.3f", duration());
 	for (i = strlen(timing); i < 7; i++)
 		fprintf(autotest_ap->outstream, " ");
@@ -102,7 +170,7 @@ step_success(const char *comment, ...)
 	va_list	ap;
 
 	va_start(ap, comment);
-	step_print("\033[0;32mOK\033[0m",comment, ap);
+	step_print("\033[0;32mPASS\033[0m", comment, ap);
 	va_end(ap);
 }
 
@@ -112,10 +180,19 @@ step_fail(const char *comment, ...)
 	va_list	ap;
 
 	va_start(ap, comment);
-	step_print("\033[0;31mKO\033[0m",comment, ap);
+	step_print("\033[0;31mFAIL\033[0m", comment, ap);
 	va_end(ap);
 }
 
+static inline void
+step_skip(const char *comment, ...)
+{
+	va_list ap;
+
+	va_start(ap, comment);
+	step_print("\033[0;33mSKIP\033[0m", comment, ap);
+	va_end(ap);
+}
 static inline void
 step_new(int step, char *msg)
 {
@@ -131,7 +208,7 @@ static inline void
 step_init(void)
 {
 	fprintf(autotest_ap->outstream,
-		"\033[1;35mStep Operation               ");
+		"\033[1;35mStep Operation                 ");
 	fprintf(autotest_ap->outstream, "Status Time(sec) Comment\033[0m\n");
 }
 
@@ -143,7 +220,7 @@ init(void)
 	rc = daos_init();
 	if (rc) {
 		step_fail(d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 	step_success("");
 	return 0;
@@ -155,12 +232,24 @@ pconnect(void)
 	int rc;
 
 	/** Connect to pool */
-	rc = daos_pool_connect(autotest_ap->p_uuid, autotest_ap->sysname,
+	rc = daos_pool_connect(autotest_ap->pool_str, autotest_ap->sysname,
 			       DAOS_PC_RW, &poh, NULL, NULL);
 	if (rc) {
 		step_fail(d_errdesc(rc));
-		return -1;
+		return rc;
 	}
+
+	/** gather domain_nr for poh */
+	struct dc_pool		*pool;
+	struct pl_map_attr	attr = {0};
+
+	pool = dc_hdl2pool(poh);
+	D_ASSERT(pool);
+
+	rc = pl_map_query(pool->dp_pool, &attr);
+	D_ASSERT(rc == 0);
+	dc_pool_put(pool);
+	domain_nr = attr.pa_domain_nr;
 
 	step_success("");
 	return 0;
@@ -177,6 +266,11 @@ ccreate(void)
 	if (rc)
 		D_GOTO(fail, rc);
 
+	if (domain_nr < 2) {
+		step_skip("Group size 2 is larger than domain_nr(%d)", domain_nr);
+		return 0;
+	}
+
 	/** Create container with RF=1 */
 	daos_prop_t	*prop;
 
@@ -186,8 +280,14 @@ ccreate(void)
 
 	cuuid2 = "autotest_cont_rf1";
 	rc = daos_cont_create_with_label(poh, cuuid2, prop, NULL, NULL);
+	daos_prop_free(prop);
 	if (rc)
 		D_GOTO(fail, rc);
+
+	if (domain_nr < 3) {
+		step_skip("Group size 3 is larger than domain_nr(%d)", domain_nr);
+		return 0;
+	}
 
 	/** Create container with RF=2 */
 	daos_prop_t	*prop2;
@@ -198,6 +298,7 @@ ccreate(void)
 
 	cuuid3 = "autotest_cont_rf2";
 	rc = daos_cont_create_with_label(poh, cuuid3, prop2, NULL, NULL);
+	daos_prop_free(prop2);
 	if (rc)
 		D_GOTO(fail, rc);
 
@@ -206,7 +307,7 @@ ccreate(void)
 
 fail:
 	step_fail(d_errdesc(rc));
-	return -1;
+	return rc;
 }
 
 static int
@@ -219,20 +320,24 @@ copen(void)
 	if (rc)
 		D_GOTO(fail, rc);
 
-	rc = daos_cont_open(poh, cuuid2, DAOS_COO_RW, &coh2, NULL, NULL);
-	if (rc)
-		D_GOTO(fail, rc);
+	if (domain_nr >= 2) {
+		rc = daos_cont_open(poh, cuuid2, DAOS_COO_RW, &coh2, NULL, NULL);
+		if (rc)
+			D_GOTO(fail, rc);
+	}
 
-	rc = daos_cont_open(poh, cuuid3, DAOS_COO_RW, &coh3, NULL, NULL);
-	if (rc)
-		D_GOTO(fail, rc);
+	if (domain_nr >= 3) {
+		rc = daos_cont_open(poh, cuuid3, DAOS_COO_RW, &coh3, NULL, NULL);
+		if (rc)
+			D_GOTO(fail, rc);
+	}
 
 	step_success("");
 	return 0;
 
 fail:
 	step_fail(d_errdesc(rc));
-	return -1;
+	return rc;
 }
 
 static int
@@ -245,22 +350,29 @@ oS1(void)
 	new_oid();
 	daos_obj_generate_oid(coh, &oid, 0, 0, 0, 0);
 
-	for (i = 0; i < 1000000; i++) {
+	total_nr = 1000000;
+	setup_progress();
+
+	t_start = daos_get_ntime();
+	for (i = 0; i < total_nr; i++) {
 
 		rc = daos_obj_open(coh, oid, DAOS_OO_RO, &oh, NULL);
 		if (rc) {
 			step_fail("failed to open object: %s", d_errdesc(rc));
-			return -1;
+			return rc;
 		}
 
 		rc = daos_obj_close(oh, NULL);
 		if (rc) {
 			step_fail("failed to close object: %s", d_errdesc(rc));
-			return -1;
+			return rc;
 		}
+		increment_progress(i);
 	}
+	t_end = daos_get_ntime();
 
-	step_success("");
+	finish_progress();
+	OUTPUT_IOPS(total_nr/(0.000001*(t_end - t_start)));
 	return 0;
 }
 
@@ -274,42 +386,76 @@ oSX(void)
 	new_oid();
 	daos_obj_generate_oid(coh, &oid, 0, 0, 0, 0);
 
-	for (i = 0; i < 10000; i++) {
+	total_nr = 10000;
+	setup_progress();
+
+	t_start = daos_get_ntime();
+	for (i = 0; i < total_nr; i++) {
 
 		rc = daos_obj_open(coh, oid, DAOS_OO_RO, &oh, NULL);
 		if (rc) {
 			step_fail("failed to open object: %s", d_errdesc(rc));
-			return -1;
+			return rc;
 		}
 
 		rc = daos_obj_close(oh, NULL);
 		if (rc) {
 			step_fail("failed to close object: %s", d_errdesc(rc));
-			return -1;
+			return rc;
 		}
+		increment_progress(i);
 	}
+	t_end = daos_get_ntime();
 
-	step_success("");
+	finish_progress();
+	OUTPUT_IOPS(total_nr/(0.000001*(t_end - t_start)));
 	return 0;
 }
 
+static int pool_space_usage_ratio(void)
+{
+	int rc;
+	daos_pool_info_t pinfo = {0};
+	struct daos_pool_space *ps = &pinfo.pi_space;
+
+	pinfo.pi_bits = DPI_ALL;
+	rc = daos_pool_query(poh, NULL, &pinfo, NULL, NULL);
+	if (rc)
+		return rc;
+
+	if (ps->ps_space.s_total[DAOS_MEDIA_NVME] > 0)
+		return 100 - (ps->ps_space.s_free[DAOS_MEDIA_NVME] * 100 /
+			      ps->ps_space.s_total[DAOS_MEDIA_NVME]);
+
+	return 100 - (ps->ps_space.s_free[DAOS_MEDIA_SCM] * 100 /
+		      ps->ps_space.s_total[DAOS_MEDIA_SCM]);
+}
+
 static int
-kv_put(daos_handle_t oh, daos_size_t size, uint64_t nr)
+kv_put(daos_handle_t oh, daos_size_t size)
 {
 	daos_handle_t	eq;
 	daos_event_t	ev_array[MAX_INFLIGHT];
 	char		key[MAX_INFLIGHT][10];
 	char		*val;
 	daos_event_t	*evp;
-	uint64_t	i;
-	int		rc;
+	int		rc, usage_ratio1, usage_ratio2;
 	int		eq_rc;
+	clock_t		last_query = start, current;
+
+	deadline_count = 1;
+
+	total_nr = deadline_limit / CLOCKS_PER_SEC;
+	setup_progress();
+
+	usage_ratio1 = pool_space_usage_ratio();
+	if (usage_ratio1 < 0)
+		return usage_ratio1;
 
 	/** Create event queue to manage asynchronous I/Os */
 	rc = daos_eq_create(&eq);
-	if (rc) {
+	if (rc)
 		return rc;
-	}
 
 	/** allocate buffer to store value */
 	D_ALLOC(val, size * MAX_INFLIGHT);
@@ -320,19 +466,18 @@ kv_put(daos_handle_t oh, daos_size_t size, uint64_t nr)
 	memset(val, 'D', size * MAX_INFLIGHT);
 
 	/** Issue actual I/Os */
-	for (i = 1; i < nr + 1; i++) {
+	while (true) {
 		char *key_cur;
 		char *val_cur;
 
-		if (i < MAX_INFLIGHT) {
+		if (deadline_count < MAX_INFLIGHT) {
 			/** Haven't reached max request in flight yet */
-			evp = &ev_array[i];
+			evp = &ev_array[deadline_count];
 			rc = daos_event_init(evp, eq, NULL);
-			if (rc) {
+			if (rc)
 				break;
-			}
-			key_cur = key[i];
-			val_cur = val + size * i;
+			key_cur = key[deadline_count];
+			val_cur = val + size * (deadline_count);
 		} else {
 			int slot;
 
@@ -362,16 +507,40 @@ kv_put(daos_handle_t oh, daos_size_t size, uint64_t nr)
 		}
 
 		/** key = insert sequence ID */
-		sprintf(key_cur, "%ld", i);
+		sprintf(key_cur, "%ld", deadline_count);
 		/** value = sequend ID + DDDDDDD... */
-		*((uint64_t *)val_cur) = i;
+		*((uint64_t *)val_cur) = deadline_count;
 
 		/** Insert kv pair */
 		rc = daos_kv_put(oh, DAOS_TX_NONE, 0, key_cur, size, val_cur,
 				evp);
-		if (rc) {
+
+		/*
+		 * We are limited by writing 1/10th of the
+		 * available free space or 30s.
+		 */
+		current = clock();
+		if (start + deadline_limit <= current)
 			break;
+
+		if (last_query + CLOCKS_PER_SEC < current) {
+			increment_progress((current - start) / CLOCKS_PER_SEC);
+			last_query = current;
+			usage_ratio2 = pool_space_usage_ratio();
+			if (usage_ratio2 < 0) {
+				rc = usage_ratio2;
+				break;
+			}
+			if ((usage_ratio2 - usage_ratio1) >=
+			    (100 - usage_ratio1) / 10)
+				break;
 		}
+
+		if (rc)
+			break;
+
+		deadline_count++;
+
 	}
 
 	/** Wait for completion of all in-flight requests */
@@ -395,11 +564,12 @@ kv_put(daos_handle_t oh, daos_size_t size, uint64_t nr)
 			rc = eq_rc;
 	}
 
+	finish_progress();
 	return rc;
 }
 
 static int
-kv_get(daos_handle_t oh, daos_size_t size, uint64_t nr)
+kv_get(daos_handle_t oh, daos_size_t size)
 {
 	daos_handle_t	eq;
 	daos_event_t	ev_array[MAX_INFLIGHT];
@@ -412,11 +582,13 @@ kv_get(daos_handle_t oh, daos_size_t size, uint64_t nr)
 	int		rc;
 	int		eq_rc;
 
+	total_nr = deadline_count;
+	setup_progress();
+
 	/** Create event queue to manage asynchronous I/Os */
 	rc = daos_eq_create(&eq);
-	if (rc) {
+	if (rc)
 		return rc;
-	}
 
 	/** allocate buffer to store value */
 	D_ALLOC(val, size * MAX_INFLIGHT);
@@ -426,7 +598,7 @@ kv_get(daos_handle_t oh, daos_size_t size, uint64_t nr)
 	}
 
 	/** Issue actual I/Os */
-	for (i = 1; i < nr + 1; i++) {
+	for (i = 1; i < deadline_count + 1; i++) {
 		char		*key_cur;
 		char		*val_cur;
 		daos_size_t	*val_sz_cur;
@@ -435,9 +607,9 @@ kv_get(daos_handle_t oh, daos_size_t size, uint64_t nr)
 			/** Haven't reached max request in flight yet */
 			evp = &ev_array[i];
 			rc = daos_event_init(evp, eq, NULL);
-			if (rc) {
+			if (rc)
 				break;
-			}
+
 			key_cur = key[i];
 			val_cur = val + size * i;
 			val_sz_cur = &val_sz[i];
@@ -489,6 +661,7 @@ kv_get(daos_handle_t oh, daos_size_t size, uint64_t nr)
 				val_cur, evp);
 		if (rc)
 			break;
+		increment_progress(i);
 	}
 
 	/** Wait for completion of all in-flight requests */
@@ -523,10 +696,11 @@ kv_get(daos_handle_t oh, daos_size_t size, uint64_t nr)
 			return eq_rc;
 	}
 
-	/** verify that we got the sum of all integers from 1 to nr */
-	if (res != nr * (nr + 1) / 2)
+	/** verify that we got the sum of all integers from 1 to deadline_count */
+	if (res != deadline_count * (deadline_count + 1) / 2)
 		rc = -DER_MISMATCH;
 
+	finish_progress();
 	return rc;
 }
 
@@ -538,28 +712,30 @@ kv_insert128(void)
 	int		rc;
 
 	new_oid();
-	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, 0, 0, 0);
+	daos_obj_generate_oid(coh, &oid, DAOS_OT_KV_HASHED, 0, 0, 0);
 
 	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
 		step_fail("failed to open object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
-	put_rc = kv_put(oh, 128, 1000000);
+	t_start = daos_get_ntime();
+	put_rc = kv_put(oh, 128);
+	t_end = daos_get_ntime();
 	rc = daos_kv_close(oh, NULL);
 
 	if (put_rc) {
 		step_fail("failed to insert: %s", d_errdesc(put_rc));
-		return -1;
+		return put_rc;
 	}
 
 	if (rc) {
 		step_fail("failed to close object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
-	step_success("");
+	OUTPUT_IOPS(deadline_count/(0.000001*(t_end - t_start)));
 	return 0;
 }
 
@@ -573,61 +749,64 @@ kv_read128(void)
 	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
 		step_fail("failed to open object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
-	get_rc = kv_get(oh, 128, 1000000);
+	t_start = daos_get_ntime();
+	get_rc = kv_get(oh, 128);
+	t_end = daos_get_ntime();
 	rc = daos_kv_close(oh, NULL);
 
 	if (get_rc) {
 		step_fail("failed to read: %s", d_errdesc(get_rc));
-		return -1;
+		return get_rc;
 	}
 
 	if (rc) {
 		step_fail("failed to close object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
-
-	step_success("");
+	OUTPUT_IOPS(deadline_count/(0.000001*(t_end - t_start)));
 	return 0;
 }
 
-#if 0
-/**
- * Disable since it triggers an assertion error on the client.
- * Will be enabled once problem is fixed.
- */
 static int
 kv_punch(void)
 {
-	daos_handle_t	oh = DAOS_HDL_INVAL; /** object handle */
+	daos_handle_t	kv_oh = DAOS_HDL_INVAL; /** kv object handle */
+	daos_handle_t	oh;
 	int		punch_rc;
 	int		rc;
 
-	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
+	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &kv_oh, NULL);
 	if (rc) {
 		step_fail("failed to open object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
-	punch_rc = daos_obj_punch(oh, DAOS_TX_NONE, 0, NULL);
-	rc = daos_kv_close(oh, NULL);
+	oh = daos_kv2objhandle(kv_oh);
+	if (!daos_handle_is_valid(oh)) {
+		rc = daos_kv_close(kv_oh, NULL);
+		return -DER_INVAL;
+	}
+
+	punch_rc = daos_obj_punch(daos_kv2objhandle(kv_oh), DAOS_TX_NONE,
+				  0, NULL);
+	rc = daos_kv_close(kv_oh, NULL);
 
 	if (punch_rc) {
 		step_fail("failed to punch object: %s", d_errdesc(punch_rc));
-		return -1;
+		return punch_rc;
 	}
 
 	if (rc) {
 		step_fail("failed to close object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	step_success("");
 	return 0;
 }
-#endif
 
 static int
 kv_insert4k(void)
@@ -637,28 +816,30 @@ kv_insert4k(void)
 	int		rc;
 
 	new_oid();
-	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, 0, 0, 0);
+	daos_obj_generate_oid(coh, &oid, DAOS_OT_KV_HASHED, 0, 0, 0);
 
-	rc = daos_kv_open(coh, oid, DAOS_OO_RO, &oh, NULL);
+	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
 		step_fail("failed to open object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
-	put_rc = kv_put(oh, 4096, 1000000);
+	t_start = daos_get_ntime();
+	put_rc = kv_put(oh, 4096);
+	t_end = daos_get_ntime();
 	rc = daos_kv_close(oh, NULL);
 
 	if (put_rc) {
 		step_fail("failed to insert: %s", d_errdesc(put_rc));
-		return -1;
+		return put_rc;
 	}
 
 	if (rc) {
 		step_fail("failed to close object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
-	step_success("");
+	OUTPUT_IOPS(deadline_count/(0.000001*(t_end - t_start)));
 	return 0;
 }
 
@@ -672,23 +853,25 @@ kv_read4k(void)
 	rc = daos_kv_open(coh, oid, DAOS_OO_RO, &oh, NULL);
 	if (rc) {
 		step_fail("failed to open object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
-	get_rc = kv_get(oh, 4096, 1000000);
+	t_start = daos_get_ntime();
+	get_rc = kv_get(oh, 4096);
+	t_end = daos_get_ntime();
 	rc = daos_kv_close(oh, NULL);
 
 	if (get_rc) {
 		step_fail("failed to read: %s", d_errdesc(get_rc));
-		return -1;
+		return get_rc;
 	}
 
 	if (rc) {
 		step_fail("failed to close object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
-	step_success("");
+	OUTPUT_IOPS(deadline_count/(0.000001*(t_end - t_start)));
 	return 0;
 }
 
@@ -700,28 +883,30 @@ kv_insert1m(void)
 	int		rc;
 
 	new_oid();
-	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, 0, 0, 0);
+	daos_obj_generate_oid(coh, &oid, DAOS_OT_KV_HASHED, 0, 0, 0);
 
 	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
 		step_fail("failed to open object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
-	put_rc = kv_put(oh, 1048576, 100000);
+	t_start = daos_get_ntime();
+	put_rc = kv_put(oh, 1048576);
+	t_end = daos_get_ntime();
 	rc = daos_kv_close(oh, NULL);
 
 	if (put_rc) {
 		step_fail("failed to insert: %s", d_errdesc(put_rc));
-		return -1;
+		return put_rc;
 	}
 
 	if (rc) {
 		step_fail("failed to close object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
-	step_success("");
+	OUTPUT_IOPS(deadline_count/(0.000001*(t_end - t_start)));
 	return 0;
 }
 
@@ -735,130 +920,185 @@ kv_read1m(void)
 	rc = daos_kv_open(coh, oid, DAOS_OO_RO, &oh, NULL);
 	if (rc) {
 		step_fail("failed to open object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
-
-	get_rc = kv_get(oh, 1048576, 100000);
+	t_start = daos_get_ntime();
+	get_rc = kv_get(oh, 1048576);
+	t_end = daos_get_ntime();
 	rc = daos_kv_close(oh, NULL);
 
 	if (get_rc) {
 		step_fail("failed to insert: %s", d_errdesc(get_rc));
-		return -1;
+		return get_rc;
 	}
 
 	if (rc) {
 		step_fail("failed to close object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
-
-	step_success("");
+	OUTPUT_IOPS(deadline_count/(0.000001*(t_end - t_start)));
 	return 0;
 }
 
 static int
-kv_insertaux(void)
+kv_insertrf1(void)
 {
 	daos_handle_t	oh = DAOS_HDL_INVAL; /** object handle */
 	int		put_rc;
 	int		rc;
 
+	if (domain_nr < 2)
+		D_GOTO(skip_step, rc = -DER_INVAL);
+
 	new_oid2();
-	daos_obj_generate_oid(coh2, &oid2, DAOS_OF_KV_FLAT, 0, 0, 0);
+	daos_obj_generate_oid(coh2, &oid2, DAOS_OT_KV_HASHED, 0, 0, 0);
 
 	rc = daos_kv_open(coh2, oid2, DAOS_OO_RW, &oh, NULL);
-	if (rc)
-		D_GOTO(fail_open, rc);
+	if (rc) {
+		step_fail("failed to open object: %s", d_errdesc(rc));
+		return rc;
+	}
 
-	put_rc = kv_put(oh, 128, 1000000);
+	t_start = daos_get_ntime();
+	put_rc = kv_put(oh, 128);
+	t_end = daos_get_ntime();
 	rc = daos_kv_close(oh, NULL);
 
-	if (put_rc)
-		D_GOTO(fail_insert, put_rc);
+	if (put_rc) {
+		step_fail("failed to insert: %s", d_errdesc(put_rc));
+		return put_rc;
+	}
 
-	if (rc)
-		D_GOTO(fail_close, rc);
-
-	oh = DAOS_HDL_INVAL;
-	new_oid3();
-	daos_obj_generate_oid(coh3, &oid3, DAOS_OF_KV_FLAT, 0, 0, 0);
-
-	rc = daos_kv_open(coh3, oid3, DAOS_OO_RW, &oh, NULL);
-	if (rc)
-		D_GOTO(fail_open, rc);
-
-	put_rc = kv_put(oh, 128, 1000000);
-	rc = daos_kv_close(oh, NULL);
-
-	if (put_rc)
-		D_GOTO(fail_insert, put_rc);
-
-	if (rc)
-		D_GOTO(fail_close, rc);
-
-	step_success("");
+	if (rc) {
+		step_fail("failed to close object: %s", d_errdesc(rc));
+		return rc;
+	}
+	OUTPUT_IOPS(deadline_count/(0.000001*(t_end - t_start)));
 	return 0;
 
-fail_open:
-	step_fail("failed to open object: %s", d_errdesc(rc));
-	return -1;
-
-fail_insert:
-	step_fail("failed to insert: %s", d_errdesc(put_rc));
-	return -1;
-
-fail_close:
-	step_fail("failed to close object: %s", d_errdesc(rc));
-	return -1;
+skip_step:
+	step_skip("Group size(2) is larger than domain_nr(%d)", domain_nr);
+	return 0;
 }
 
 static int
-kv_readaux(void)
+kv_readrf1(void)
 {
 	daos_handle_t	oh = DAOS_HDL_INVAL; /** object handle */
 	int		get_rc;
 	int		rc;
 
+	if (domain_nr < 2)
+		D_GOTO(skip_step, rc = -DER_INVAL);
+
 	rc = daos_kv_open(coh2, oid2, DAOS_OO_RW, &oh, NULL);
-	if (rc)
-		D_GOTO(fail_open, rc);
+	if (rc) {
+		step_fail("failed to open object: %s", d_errdesc(rc));
+		return rc;
+	}
 
-	get_rc = kv_get(oh, 128, 1000000);
+	t_start = daos_get_ntime();
+	get_rc = kv_get(oh, 128);
+	t_end = daos_get_ntime();
 	rc = daos_kv_close(oh, NULL);
 
-	if (get_rc)
-		D_GOTO(fail_read, get_rc);
+	if (get_rc) {
+		step_fail("failed to read: %s", d_errdesc(get_rc));
+		return get_rc;
+	}
 
-	if (rc)
-		D_GOTO(fail_close, rc);
+	if (rc) {
+		step_fail("failed to close object: %s", d_errdesc(rc));
+		return rc;
+	}
 
-	oh = DAOS_HDL_INVAL;
-	rc = daos_kv_open(coh3, oid3, DAOS_OO_RW, &oh, NULL);
-	if (rc)
-		D_GOTO(fail_open, rc);
-
-	get_rc = kv_get(oh, 128, 1000000);
-	rc = daos_kv_close(oh, NULL);
-
-	if (get_rc)
-		D_GOTO(fail_read, get_rc);
-
-	if (rc)
-		D_GOTO(fail_close, rc);
-
-	step_success("");
+	OUTPUT_IOPS(deadline_count/(0.000001*(t_end - t_start)));
 	return 0;
 
-fail_open:
-	step_fail("failed to open object: %s", d_errdesc(rc));
-	return -1;
+skip_step:
+	step_skip("Group size(2) is larger than domain_nr(%d)", domain_nr);
+	return 0;
+}
 
-fail_read:
-	step_fail("failed to read: %s", d_errdesc(get_rc));
-	return -1;
+static int
+kv_insertrf2(void)
+{
+	daos_handle_t	oh = DAOS_HDL_INVAL; /** object handle */
+	int		put_rc;
+	int		rc;
 
-fail_close:
-	step_fail("failed to close object: %s", d_errdesc(rc));
-	return -1;
+	if (domain_nr < 3)
+		D_GOTO(skip_step, rc = -DER_INVAL);
+
+	new_oid3();
+	daos_obj_generate_oid(coh3, &oid3, DAOS_OT_KV_HASHED, 0, 0, 0);
+
+	rc = daos_kv_open(coh3, oid3, DAOS_OO_RW, &oh, NULL);
+	if (rc) {
+		step_fail("failed to open object: %s", d_errdesc(rc));
+		return rc;
+	}
+
+	t_start = daos_get_ntime();
+	put_rc = kv_put(oh, 128);
+	t_end = daos_get_ntime();
+	rc = daos_kv_close(oh, NULL);
+
+	if (put_rc) {
+		step_fail("failed to insert: %s", d_errdesc(put_rc));
+		return put_rc;
+	}
+
+	if (rc) {
+		step_fail("failed to close object: %s", d_errdesc(rc));
+		return rc;
+	}
+
+	OUTPUT_IOPS(deadline_count/(0.000001*(t_end - t_start)));
+	return 0;
+
+skip_step:
+	step_skip("Group size(3) is larger than domain_nr(%d)", domain_nr);
+	return 0;
+}
+
+static int
+kv_readrf2(void)
+{
+	daos_handle_t	oh = DAOS_HDL_INVAL; /** object handle */
+	int		get_rc;
+	int		rc;
+
+	if (domain_nr < 3)
+		D_GOTO(skip_step, rc = -DER_INVAL);
+
+	rc = daos_kv_open(coh3, oid3, DAOS_OO_RW, &oh, NULL);
+	if (rc) {
+		step_fail("failed to open object: %s", d_errdesc(rc));
+		return rc;
+	}
+
+	t_start = daos_get_ntime();
+	get_rc = kv_get(oh, 128);
+	t_end = daos_get_ntime();
+	rc = daos_kv_close(oh, NULL);
+
+	if (get_rc) {
+		step_fail("failed to read: %s", d_errdesc(get_rc));
+		return get_rc;
+	}
+
+	if (rc) {
+		step_fail("failed to close object: %s", d_errdesc(rc));
+		return rc;
+	}
+
+	OUTPUT_IOPS(deadline_count/(0.000001*(t_end - t_start)));
+	return 0;
+
+skip_step:
+	step_skip("Group size(3) is larger than domain_nr(%d)", domain_nr);
+	return 0;
 }
 
 static int
@@ -870,20 +1110,24 @@ cclose(void)
 	if (rc)
 		D_GOTO(fail, rc);
 
-	rc = daos_cont_close(coh2, NULL);
-	if (rc)
-		D_GOTO(fail, rc);
+	if (domain_nr >= 2) {
+		rc = daos_cont_close(coh2, NULL);
+		if (rc)
+			D_GOTO(fail, rc);
+	}
 
-	rc = daos_cont_close(coh3, NULL);
-	if (rc)
-		D_GOTO(fail, rc);
+	if (domain_nr >= 3) {
+		rc = daos_cont_close(coh3, NULL);
+		if (rc)
+			D_GOTO(fail, rc);
+	}
 
 	step_success("");
 	return 0;
 
 fail:
 	step_fail(d_errdesc(rc));
-	return -1;
+	return rc;
 }
 
 static int
@@ -895,20 +1139,24 @@ cdestroy(void)
 	if (rc)
 		D_GOTO(fail, rc);
 
-	rc = daos_cont_destroy(poh, cuuid2, force, NULL);
-	if (rc)
-		D_GOTO(fail, rc);
+	if (cuuid2) {
+		rc = daos_cont_destroy(poh, cuuid2, force, NULL);
+		if (rc)
+			D_GOTO(fail, rc);
+	}
 
-	rc = daos_cont_destroy(poh, cuuid3, force, NULL);
-	if (rc)
-		D_GOTO(fail, rc);
+	if (cuuid3) {
+		rc = daos_cont_destroy(poh, cuuid3, force, NULL);
+		if (rc)
+			D_GOTO(fail, rc);
+	}
 
 	step_success("");
 	return 0;
 
 fail:
 	step_fail(d_errdesc(rc));
-	return -1;
+	return rc;
 }
 
 static int
@@ -919,7 +1167,7 @@ pdisconnect(void)
 	rc = daos_pool_disconnect(poh, NULL);
 	if (rc) {
 		step_fail(d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 	step_success("");
 	return 0;
@@ -933,7 +1181,7 @@ fini(void)
 	rc = daos_fini();
 	if (rc) {
 		step_fail(d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 	step_success("");
 	return 0;
@@ -958,25 +1206,27 @@ static struct step steps[] = {
 	{ 11,	"Generating 10K SX layouts",		oSX,		96 },
 
 	/** KV tests */
-	{ 20,	"Inserting 1M 128B values",		kv_insert128,	96 },
+	{ 20,	"Inserting 128B values",		kv_insert128,	96 },
 	{ 21,	"Reading 128B values back",		kv_read128,	96 },
 	/** { 22,	"Listing keys",				kv_list,	96 },
-	* { 23,	"Punching object",			kv_punch,	96 },
 	*/
-	{ 24,	"Inserting 1M 4KB values",		kv_insert4k,	96 },
+	{ 23,	"Punching object",			kv_punch,	96 },
+	{ 24,	"Inserting 4KB values",			kv_insert4k,	96 },
 	{ 25,	"Reading 4KB values back",		kv_read4k,	96 },
 	/** { 26,	"Listing keys",				kv_list,	96 },
-	* { 27,	"Punching object",			kv_punch,	96 },
 	*/
-	{ 28,	"Inserting 100K 1MB values",		kv_insert1m,	96 },
+	{ 27,	"Punching object",			kv_punch,	96 },
+	{ 28,	"Inserting 1MB values",			kv_insert1m,	96 },
 	{ 29,	"Reading 1MB values back",		kv_read1m,	96 },
 	/** { 30,	"Listing keys",				kv_list,	96 },
-	* { 31,	"Punching object",			kv_punch,	96 },
 	*/
+	{ 31,	"Punching object",			kv_punch,	96 },
 
 	/** Test aux containers */
-	{ 40,	"Inserting into aux cont",		kv_insertaux,	96 },
-	{ 41,	"Reading values back",			kv_readaux,	96 },
+	{ 40,	"Inserting into RF1 cont",		kv_insertrf1,	96 },
+	{ 41,	"Reading RF1 values back",		kv_readrf1,	96 },
+	{ 42,	"Inserting into RF2 cont",		kv_insertrf2,	96 },
+	{ 43,	"Reading RF2 values back",		kv_readrf2,	96 },
 
 	/** Array tests */
 
@@ -994,11 +1244,17 @@ pool_autotest_hdlr(struct cmd_args_s *ap)
 	int		rc;
 	int		resume = 0;
 	struct step	*s;
+	int		ret = 0;
 
 	assert(ap != NULL);
 	assert(ap->p_op == POOL_AUTOTEST);
 
+	uuid_unparse(ap->p_uuid, ap->pool_str);
+
 	autotest_ap = ap;
+
+	if (autotest_ap->deadline_limit)
+		deadline_limit = autotest_ap->deadline_limit * CLOCKS_PER_SEC;
 
 	step_init();
 
@@ -1006,22 +1262,39 @@ pool_autotest_hdlr(struct cmd_args_s *ap)
 		if (s->id < resume)
 			continue;
 		step_new(s->id, s->op);
-		rc = (s->func)();
+
+		int	i;
+		bool	found = false;
+
+		if (ap->skip_big) {
+			for (i = 0; i < sizeof(skip_steps) / sizeof(int); i++) {
+				if (s->id == skip_steps[i]) {
+					found = true;
+					break;
+				}
+			}
+		}
+		if (found) {
+			step_skip("skipped");
+			rc = 0;
+		} else {
+			rc = (s->func)();
+		}
+
 		if (rc) {
 			force = 1;
+			if (!ret)
+				ret = rc;
 			resume = s->clean_step;
 		}
 	}
 
-	if (force) {
+	if (force)
 		fprintf(ap->outstream,
 			"\nSome steps \033[0;31mfailed\033[0m.\n");
-		rc = 1;
-	} else {
+	else
 		fprintf(ap->outstream,
 			"\nAll steps \033[0;32mpassed\033[0m.\n");
-		rc = 0;
-	}
 
-	return rc;
+	return ret;
 }

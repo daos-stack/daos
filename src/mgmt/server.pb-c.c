@@ -97,7 +97,7 @@ void   ctl__set_log_masks_resp__free_unpacked
   assert(message->base.descriptor == &ctl__set_log_masks_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-static const ProtobufCFieldDescriptor ctl__set_log_masks_req__field_descriptors[2] =
+static const ProtobufCFieldDescriptor ctl__set_log_masks_req__field_descriptors[7] =
 {
   {
     "sys",
@@ -123,15 +123,80 @@ static const ProtobufCFieldDescriptor ctl__set_log_masks_req__field_descriptors[
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "streams",
+    3,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__SetLogMasksReq, streams),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "subsystems",
+    4,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__SetLogMasksReq, subsystems),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "reset_masks",
+    5,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BOOL,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__SetLogMasksReq, reset_masks),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "reset_streams",
+    6,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BOOL,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__SetLogMasksReq, reset_streams),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "reset_subsystems",
+    7,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BOOL,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__SetLogMasksReq, reset_subsystems),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned ctl__set_log_masks_req__field_indices_by_name[] = {
   1,   /* field[1] = masks */
+  4,   /* field[4] = reset_masks */
+  5,   /* field[5] = reset_streams */
+  6,   /* field[6] = reset_subsystems */
+  2,   /* field[2] = streams */
+  3,   /* field[3] = subsystems */
   0,   /* field[0] = sys */
 };
 static const ProtobufCIntRange ctl__set_log_masks_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 2 }
+  { 0, 7 }
 };
 const ProtobufCMessageDescriptor ctl__set_log_masks_req__descriptor =
 {
@@ -141,14 +206,14 @@ const ProtobufCMessageDescriptor ctl__set_log_masks_req__descriptor =
   "Ctl__SetLogMasksReq",
   "ctl",
   sizeof(Ctl__SetLogMasksReq),
-  2,
+  7,
   ctl__set_log_masks_req__field_descriptors,
   ctl__set_log_masks_req__field_indices_by_name,
   1,  ctl__set_log_masks_req__number_ranges,
   (ProtobufCMessageInit) ctl__set_log_masks_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor ctl__set_log_masks_resp__field_descriptors[1] =
+static const ProtobufCFieldDescriptor ctl__set_log_masks_resp__field_descriptors[2] =
 {
   {
     "status",
@@ -162,14 +227,27 @@ static const ProtobufCFieldDescriptor ctl__set_log_masks_resp__field_descriptors
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "errors",
+    2,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_STRING,
+    offsetof(Ctl__SetLogMasksResp, n_errors),
+    offsetof(Ctl__SetLogMasksResp, errors),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned ctl__set_log_masks_resp__field_indices_by_name[] = {
+  1,   /* field[1] = errors */
   0,   /* field[0] = status */
 };
 static const ProtobufCIntRange ctl__set_log_masks_resp__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 1 }
+  { 0, 2 }
 };
 const ProtobufCMessageDescriptor ctl__set_log_masks_resp__descriptor =
 {
@@ -179,7 +257,7 @@ const ProtobufCMessageDescriptor ctl__set_log_masks_resp__descriptor =
   "Ctl__SetLogMasksResp",
   "ctl",
   sizeof(Ctl__SetLogMasksResp),
-  1,
+  2,
   ctl__set_log_masks_resp__field_descriptors,
   ctl__set_log_masks_resp__field_indices_by_name,
   1,  ctl__set_log_masks_resp__number_ranges,

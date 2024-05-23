@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -20,6 +20,17 @@
 
 #include <stdint.h>
 #include <gurt/types.h>
+
+/**
+ * Protocol info used to query list of protocols and devices.
+*/
+struct crt_protocol_info {
+	struct crt_protocol_info *next;          /**< Pointer to the next info */
+	char                     *class_name;    /**< Name of the Mercury class */
+	char                     *protocol_name; /**< Name of this protocol */
+	char                     *device_name;   /**< Name of associated device */
+};
+
 /**
  * Initialization options passed during crt_init() call.
  *
@@ -34,15 +45,8 @@ typedef struct crt_init_options {
 	 * evnironment variable.
 	 */
 	int		cio_crt_timeout;
-	/**
-	 * if cio_sep_override is 0, the two fields following it won't be used.
-	 */
-	uint32_t	cio_sep_override:1,
-			/**
-			 * overrides the value of the environment variable
-			 * CRT_CTX_SHARE_ADDR
-			 */
-			cio_use_sep:1,
+	uint32_t	cio_sep_override:1,	/**< Deprecated */
+			cio_use_sep:1,		/**< Deprecated */
 			/** whether or not to inject faults */
 			cio_fault_inject:1,
 			/**
@@ -56,10 +60,7 @@ typedef struct crt_init_options {
 			/** whether or not to use expected sizes */
 			cio_use_expected_size:1,
 			cio_use_unexpected_size:1;
-	/**
-	 * overrides the value of the environment variable
-	 * CRT_CTX_NUM
-	 */
+	/** overrides the value of the environment variable CRT_CTX_NUM */
 	int		cio_ctx_max_num;
 
 	/** Used with cio_use_credits to set credit limit */
@@ -71,7 +72,27 @@ typedef struct crt_init_options {
 	 */
 	uint32_t	cio_max_expected_size;
 	uint32_t	cio_max_unexpected_size;
+			/** swim crt index */
+	int		cio_swim_crt_idx;
+
+	/* see src/cart/README.env for details about the format of the fields below */
+
+	/** if set, used as a provider value instead of D_PROVIDER env */
+	char		*cio_provider;
+
+	/** If set, used as an interface setting instead of D_INTERFACE env  */
+	char		*cio_interface;
+
+	/** If set, used as a domain setting instead of D_DOMAIN env */
+	char		*cio_domain;
+
+	/** If set, used as a port setting instead of D_PORT env */
+	char		*cio_port;
+
+	/** If set, used as the authentication key instead of D_PROVIDER_AUTH_KEY env */
+	char		*cio_auth_key;
 } crt_init_options_t;
+
 
 typedef int		crt_status_t;
 /**
@@ -93,6 +114,9 @@ typedef d_string_t	crt_group_id_t;
 
 /** Indicates rank not being set */
 #define CRT_NO_RANK 0xFFFFFFFF
+
+/** Indicates incarnation unavailable or inapplicable */
+#define CRT_NO_INCARNATION 0
 
 typedef struct crt_group {
 	/** the group ID of this group */
@@ -150,7 +174,9 @@ typedef void *crt_bulk_array_t; /**< abstract bulk array handle */
 /** RPC flags enumeration */
 enum crt_rpc_flags {
 	/** send CORPC to filter_ranks only */
-	CRT_RPC_FLAG_FILTER_INVERT	= (1U << 1)
+	CRT_RPC_FLAG_FILTER_INVERT	= (1U << 1),
+	/** Do not invoke RPC handler on local node when fail to forward corpc to children. */
+	CRT_RPC_FLAG_CO_FAILOUT		= (1U << 2),
 };
 
 struct crt_rpc;
@@ -407,6 +433,17 @@ typedef enum {
 	/** Total count of supported operations */
 	CRT_GROUP_MOD_OP_COUNT,
 } crt_group_mod_op_t;
+
+/**
+ * Quotas supported by CaRT.
+ */
+typedef enum {
+	/** Limit of number of inflight rpcs */
+	CRT_QUOTA_RPCS,
+
+	/** Total count of supported quotas */
+	CRT_QUOTA_COUNT,
+} crt_quota_type_t;
 
 /** @}
  */

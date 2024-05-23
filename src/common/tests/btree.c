@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -89,8 +89,19 @@ ik_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 }
 
 static int
+ik_key_cmp(struct btr_instance *tins, struct btr_record *rec, d_iov_t *key_iov)
+{
+	int            key1 = *(uint64_t *)key_iov->iov_buf;
+	struct ik_rec *irec = umem_off2ptr(&tins->ti_umm, rec->rec_off);
+
+	if (irec->ir_key < key1)
+		return BTR_CMP_LT;
+	return irec->ir_key > key1 ? BTR_CMP_GT : BTR_CMP_EQ;
+}
+
+static int
 ik_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
-		  d_iov_t *val_iov, struct btr_record *rec)
+		  d_iov_t *val_iov, struct btr_record *rec, d_iov_t *val_out)
 {
 	umem_off_t		 irec_off;
 	struct ik_rec		*irec;
@@ -101,7 +112,7 @@ ik_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 
 	irec = umem_off2ptr(&tins->ti_umm, irec_off);
 
-	irec->ir_key = *(int *)key_iov->iov_buf;
+	irec->ir_key      = *(uint64_t *)key_iov->iov_buf;
 	irec->ir_val_size = irec->ir_val_msize = val_iov->iov_len;
 
 	irec->ir_val_off = umem_alloc(&tins->ti_umm, val_iov->iov_len);
@@ -200,7 +211,7 @@ ik_rec_string(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 ik_rec_update(struct btr_instance *tins, struct btr_record *rec,
-		   d_iov_t *key, d_iov_t *val_iov)
+		   d_iov_t *key, d_iov_t *val_iov, d_iov_t *val_out)
 {
 	struct umem_instance	*umm = &tins->ti_umm;
 	struct ik_rec		*irec;
@@ -242,14 +253,15 @@ ik_rec_stat(struct btr_instance *tins, struct btr_record *rec,
 }
 
 static btr_ops_t ik_ops = {
-	.to_hkey_size	= ik_hkey_size,
-	.to_hkey_gen	= ik_hkey_gen,
-	.to_rec_alloc	= ik_rec_alloc,
-	.to_rec_free	= ik_rec_free,
-	.to_rec_fetch	= ik_rec_fetch,
-	.to_rec_update	= ik_rec_update,
-	.to_rec_string	= ik_rec_string,
-	.to_rec_stat	= ik_rec_stat,
+    .to_hkey_size  = ik_hkey_size,
+    .to_hkey_gen   = ik_hkey_gen,
+    .to_key_cmp    = ik_key_cmp,
+    .to_rec_alloc  = ik_rec_alloc,
+    .to_rec_free   = ik_rec_free,
+    .to_rec_fetch  = ik_rec_fetch,
+    .to_rec_update = ik_rec_update,
+    .to_rec_string = ik_rec_string,
+    .to_rec_stat   = ik_rec_stat,
 };
 
 #define IK_SEP		','
@@ -275,6 +287,9 @@ ik_btr_open_create(void **state)
 	if (create && arg != NULL) {
 		if (arg[0] == '+') {
 			feats = BTR_FEAT_UINT_KEY;
+			arg += 1;
+		} else if (arg[0] == '%') {
+			feats = BTR_FEAT_EMBED_FIRST;
 			arg += 1;
 		}
 		if (arg[0] == 'i') { /* inplace create/open */
@@ -704,8 +719,10 @@ ik_btr_batch_oper(void **state)
 	}
 
 	D_ALLOC_ARRAY(arr, key_nr);
-	if (arr == NULL)
+	if (arr == NULL) {
 		fail_msg("Array allocation failed");
+		return;
+	}
 
 	D_PRINT("Batch add %d records.\n", key_nr);
 	ik_btr_gen_keys(arr, key_nr);
@@ -830,8 +847,10 @@ ik_btr_drain(void **state)
 	int		 i;
 
 	D_ALLOC_ARRAY(arr, drain_keys);
-	if (arr == NULL)
+	if (arr == NULL) {
 		fail_msg("Array allocation failed");
+		return;
+	}
 
 	D_PRINT("Batch add %d records.\n", drain_keys);
 	ik_btr_gen_keys(arr, drain_keys);
@@ -890,7 +909,7 @@ use_pmem() {
 
 	D_PRINT("Using pmem\n");
 	rc = utest_pmem_create(POOL_NAME, POOL_SIZE,
-			       sizeof(*ik_root),
+			       sizeof(*ik_root), NULL,
 			       &ik_utx);
 	D_ASSERT(rc == 0);
 	return rc;
@@ -1048,8 +1067,8 @@ main(int argc, char **argv)
 		}
 	}
 
-	rc = dbtree_class_register(IK_TREE_CLASS,
-				   dynamic_flag | BTR_FEAT_UINT_KEY, &ik_ops);
+	rc = dbtree_class_register(
+	    IK_TREE_CLASS, dynamic_flag | BTR_FEAT_EMBED_FIRST | BTR_FEAT_UINT_KEY, &ik_ops);
 	D_ASSERT(rc == 0);
 
 	if (ik_utx == NULL) {

@@ -7,7 +7,6 @@ import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -65,7 +64,7 @@ public class DaosFileMultiThreadsIT {
   public void testExists() throws Exception {
     String path = "/zjf3/Terasort/Input2/part-m-00045";
     DaosFile file = client.getFile(path);
-    file.createNewFile(0611, DaosObjectType.OC_SX, Constants.FILE_DEFAULT_CHUNK_SIZE, true);
+    file.createNewFile(0611, DaosObjectClass.OC_SX, Constants.FILE_DEFAULT_CHUNK_SIZE, true);
     StringBuilder sb = new StringBuilder();
     String str = "abcdeffffffffffffffffffffffffdddddddddddddddddddddddd";
     int size = 0;

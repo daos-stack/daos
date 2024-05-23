@@ -1,13 +1,16 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from command_utils_base import \
-    CommandFailure, BasicParameter, FormattedParameter
+import os
+
+from ClusterShell.NodeSet import NodeSet
 from command_utils import ExecutableCommand
-from general_utils import pcmd, get_log_file
+from command_utils_base import BasicParameter, FormattedParameter
+from env_modules import load_mpi
+from exception_utils import CommandFailure, MPILoadError
+from general_utils import get_log_file, pcmd
 
 
 class DaosRacerCommand(ExecutableCommand):
@@ -24,7 +27,7 @@ class DaosRacerCommand(ExecutableCommand):
         """
         super().__init__(
             "/run/daos_racer/*", "daos_racer", path)
-        self.host = host
+        self.host = NodeSet(host)
 
         # Number of seconds to run
         self.runtime = FormattedParameter("-t {}", 60)
@@ -33,8 +36,8 @@ class DaosRacerCommand(ExecutableCommand):
 
         if dmg:
             self.dmg_config = FormattedParameter("-n {}", dmg.yaml.filename)
-            dmg.copy_certificates(get_log_file("daosCA/certs"), [self.host])
-            dmg.copy_configuration([self.host])
+            dmg.copy_certificates(get_log_file("daosCA/certs"), self.host)
+            dmg.copy_configuration(self.host)
 
         # Optional timeout for the clush command running the daos_racer command.
         # This should be set greater than the 'runtime' value but less than the
@@ -42,11 +45,8 @@ class DaosRacerCommand(ExecutableCommand):
         # of None will result in no timeout being used.
         self.clush_timeout = BasicParameter(None)
 
-        # Environment variable names required to be set when running the
-        # daos_racer command.  The values for these names are populated by the
-        # get_environment() method and added to command line by the
-        # set_environment() method.
-        self._env_names = ["D_LOG_FILE"]
+        # Include bullseye coverage file environment
+        self.env["COVFILE"] = os.path.join(os.sep, "tmp", "test.cov")
 
     def get_str_param_names(self):
         """Get a sorted list of the names of the command attributes.
@@ -61,59 +61,63 @@ class DaosRacerCommand(ExecutableCommand):
         """
         return self.get_attribute_names(FormattedParameter)
 
-    def get_environment(self, manager, log_file=None):
-        """Get the environment variables to export for the daos_racer command.
+    def get_params(self, test):
+        """Get values for all of the command params from the yaml file.
+
+        Also sets default daos_racer environment.
 
         Args:
-            manager (DaosServerManager): the job manager used to start
-                daos_server from which the server config values can be obtained
-                to set the required environment variables.
-
-        Returns:
-            EnvironmentVariables: a dictionary of environment variable names and
-                values to export prior to running daos_racer
+            test (Test): avocado Test object
 
         """
-        env = super().get_environment(manager, log_file)
-        env["OMPI_MCA_btl_openib_warn_default_gid_prefix"] = "0"
-        env["OMPI_MCA_btl"] = "tcp,self"
-        env["OMPI_MCA_oob"] = "tcp"
-        env["OMPI_MCA_pml"] = "ob1"
-        env["D_LOG_MASK"] = "ERR"
-        return env
+        super().get_params(test)
+        default_env = {
+            "D_LOG_FILE": get_log_file("{}_daos.log".format(self.command)),
+            "OMPI_MCA_btl_openib_warn_default_gid_prefix": "0",
+            "OMPI_MCA_btl": "tcp,self",
+            "OMPI_MCA_oob": "tcp",
+            "OMPI_MCA_pml": "ob1",
+            "D_LOG_MASK": "ERR"
+        }
+        for key, val in default_env.items():
+            if key not in self.env:
+                self.env[key] = val
 
-    def set_environment(self, env):
-        """Set the environment variables to export prior to running daos_racer.
+        if not load_mpi("openmpi"):
+            raise MPILoadError("openmpi")
 
-        Args:
-            env (EnvironmentVariables): a dictionary of environment variable
-                names and values to export prior to running daos_racer
-        """
-        # Include exports prior to the daos_racer command
-        self._pre_command = env.get_export_str()
+        self.env["LD_LIBRARY_PATH"] = os.environ["LD_LIBRARY_PATH"]
 
-    def run(self):
+    def run(self, raise_exception=None):
         """Run the daos_racer command remotely.
+
+        Args:
+            raise_exception (bool, optional): whether or not to raise an exception if the command
+                fails. This overrides the self.exit_status_exception
+                setting if defined. Defaults to None.
 
         Raises:
             CommandFailure: if there is an error running the command
 
         """
+        if raise_exception is None:
+            raise_exception = self.exit_status_exception
+
         # Run daos_racer on the specified host
         self.log.info(
             "Running %s on %s with %s timeout",
-            self.__str__(), self.host,
+            str(self), self.host,
             "no" if self.clush_timeout.value is None else
             "a {}s".format(self.clush_timeout.value))
-        return_codes = pcmd(
-            [self.host], self.__str__(), True, self.clush_timeout.value)
+        return_codes = pcmd(self.host, self.with_exports, True, self.clush_timeout.value)
         if 0 not in return_codes or len(return_codes) > 1:
             # Kill the daos_racer process if the remote command timed out
             if 255 in return_codes:
                 self.log.info(
                     "Stopping timed out daos_racer process on %s", self.host)
-                pcmd([self.host], "pkill daos_racer", True)
+                pcmd(self.host, "pkill daos_racer", True)
 
-            raise CommandFailure("Error running '{}'".format(self._command))
+            if raise_exception:
+                raise CommandFailure("Error running '{}'".format(self._command))
 
         self.log.info("Test passed!")

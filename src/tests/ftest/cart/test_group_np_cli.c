@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -39,6 +39,10 @@ send_rpc_swim_check(crt_endpoint_t server_ep, crt_rpc_t *rpc_req)
 	rpc_req_input->rank = test_g.t_verify_swim_status.rank;
 	rpc_req_input->exp_status = test_g.t_verify_swim_status.swim_status;
 
+	/* RPC is expected to finish in 10 seconds */
+	rc = crt_req_set_timeout(rpc_req, 10);
+	D_ASSERTF(rc == 0, "crt_req_set_timeout() failed. rc: %d\n", rc);
+
 	rc = crt_req_send(rpc_req, client_cb_common, NULL);
 	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 
@@ -62,6 +66,10 @@ send_rpc_disable_swim(crt_endpoint_t server_ep, crt_rpc_t *rpc_req)
 
 	/* Set rank and expected swim status based on CLI options */
 	rpc_req_input->rank = server_ep.ep_rank;
+
+	/* RPC is expected to finish in 10 seconds */
+	rc = crt_req_set_timeout(rpc_req, 10);
+	D_ASSERTF(rc == 0, "crt_req_set_timeout() failed. rc: %d\n", rc);
 
 	rc = crt_req_send(rpc_req, client_cb_common, NULL);
 	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
@@ -94,11 +102,12 @@ test_run(void)
 				  "crt_group_config_path_set failed %d\n", rc);
 		}
 
-		crtu_cli_start_basic(test_g.t_local_group_name,
-				     test_g.t_remote_group_name,
-				     &grp, &rank_list, &test_g.t_crt_ctx[0],
-				     &test_g.t_tid[0], test_g.t_srv_ctx_num,
-				     test_g.t_use_cfg, NULL);
+		rc = crtu_cli_start_basic(test_g.t_local_group_name,
+					  test_g.t_remote_group_name,
+					  &grp, &rank_list, &test_g.t_crt_ctx[0],
+					  &test_g.t_tid[0], test_g.t_srv_ctx_num,
+					  test_g.t_use_cfg, NULL, test_g.t_use_daos_agent_env);
+		D_ASSERTF(rc == 0, "crtu_cli_start_basic() failed\n");
 
 		rc = sem_init(&test_g.t_token_to_proceed, 0, 0);
 		D_ASSERTF(rc == 0, "sem_init() failed.\n");
@@ -127,8 +136,8 @@ test_run(void)
 					 rank_list,
 					 test_g.t_srv_ctx_num - 1,
 					 test_g.t_srv_ctx_num,
-					 5,
-					 150);
+					 10, /* Individual ping timeout */
+					 test_g.t_wait_ranks_time);
 		D_ASSERTF(rc == 0, "wait_for_ranks() failed; rc=%d\n", rc);
 	}
 
@@ -176,7 +185,8 @@ test_run(void)
 	}
 
 	/* Disable swim */
-	if (test_g.t_disable_swim) {
+	if (test_g.t_disable_swim &&
+	    (rank_list != NULL)) {
 
 		crt_rank_abort_all(NULL);
 
@@ -247,6 +257,11 @@ int main(int argc, char **argv)
 	if (rc != 0) {
 		fprintf(stderr, "test_parse_args() failed, rc: %d.\n", rc);
 		return rc;
+	}
+
+	if (D_ON_VALGRIND) {
+		test_g.t_hold_time *= 4;
+		test_g.t_wait_ranks_time *= 4;
 	}
 
 	/* rank, num_attach_retries, is_server, assert_on_error */

@@ -1,0 +1,16 @@
+hosts:
+  test_servers: 1
+  test_clients: 1
+timeout: 120
+server_config:
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 1
+      nr_xs_helpers: 0
+      storage: auto
+  system_ram_reserved: 2
+server_manager:
+  storage_prepare_timeout: 60
+  storage_format_timeout: 60

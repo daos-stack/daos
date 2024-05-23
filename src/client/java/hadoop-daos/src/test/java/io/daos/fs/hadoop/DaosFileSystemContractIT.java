@@ -4,10 +4,7 @@
 
 package io.daos.fs.hadoop;
 
-import org.apache.hadoop.fs.FileAlreadyExistsException;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystemContractBaseTest;
-import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.*;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -27,6 +24,28 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
   @Override
   public void testMkdirsWithUmask() throws Exception {
     // not supported
+  }
+
+  @Test
+  public void testWorkingDirectory() throws Exception {
+
+    Path workDir = fs.makeQualified(new Path(getDefaultWorkingDirectory()));
+    assertEquals(workDir, fs.getWorkingDirectory());
+
+    fs.setWorkingDirectory(fs.makeQualified(new Path(".")));
+    assertEquals(workDir, fs.getWorkingDirectory());
+
+    fs.setWorkingDirectory(fs.makeQualified(new Path("..")));
+    assertEquals(workDir.getParent().toString() + "/", fs.getWorkingDirectory().toString());
+
+    Path relativeDir = fs.makeQualified(new Path("testWorkingDirectory"));
+    fs.setWorkingDirectory(relativeDir);
+    assertEquals(relativeDir, fs.getWorkingDirectory());
+
+    Path absoluteDir = path("/FileSystemContractBaseTest/testWorkingDirectory");
+    fs.setWorkingDirectory(absoluteDir);
+    assertEquals(absoluteDir, fs.getWorkingDirectory());
+
   }
 
   @Test
@@ -210,9 +229,9 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
 
   @Override
   public void testListStatus() throws Exception {
-    Path[] testDirs = {path("/test/hadoop/a"),
-        path("/test/hadoop/b"),
-        path("/test/hadoop/c/1"),};
+    Path[] testDirs = {fs.makeQualified(new Path("/test/hadoop/a")),
+                    fs.makeQualified(new Path("/test/hadoop/b")),
+                    fs.makeQualified(new Path("/test/hadoop/c/1")),};
     assertFalse(fs.exists(testDirs[0]));
 
     for (Path path : testDirs) {
@@ -221,16 +240,16 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
 
     FileStatus[] paths = fs.listStatus(path("/test"));
     assertEquals(1, paths.length);
-    assertEquals(path("/test/hadoop"), paths[0].getPath());
+    assertEquals(fs.makeQualified(new Path("/test/hadoop")), paths[0].getPath());
 
-    paths = fs.listStatus(path("/test/hadoop"));
+    paths = fs.listStatus(fs.makeQualified(new Path("/test/hadoop")));
     assertEquals(3, paths.length);
     // skip
 //    assertEquals(path("/test/hadoop/a"), paths[0].getPath());
 //    assertEquals(path("/test/hadoop/b"), paths[1].getPath());
 //    assertEquals(path("/test/hadoop/c"), paths[2].getPath());
 
-    paths = fs.listStatus(path("/test/hadoop/a"));
+    paths = fs.listStatus(fs.makeQualified(new Path("/test/hadoop/a")));
     assertEquals(0, paths.length);
   }
 
@@ -272,5 +291,42 @@ public class DaosFileSystemContractIT extends FileSystemContractBaseTest {
     rename(src, dst, true, true, true);
     assertTrue("Destination changed",
         fs.exists(path("/test/hadoop/file")));
+  }
+
+  @Test
+  public void testLSRootDir() throws Throwable {
+    assumeTrue(rootDirTestEnabled());
+
+    Path dir = fs.makeQualified(new Path(getTestBaseDir() + "/"));
+    Path child = fs.makeQualified(new Path(dir + "/FileSystemContractBaseTest"));
+    createFile(child);
+    assertListFilesFinds(dir, child);
+  }
+
+  private void assertListFilesFinds(Path dir, Path subdir) throws IOException {
+    RemoteIterator<LocatedFileStatus> iterator =
+            fs.listFiles(dir, true);
+    boolean found = false;
+    StringBuilder builder = new StringBuilder();
+    while (iterator.hasNext()) {
+      LocatedFileStatus next =  iterator.next();
+      builder.append(next.toString()).append('\n');
+      if (next.getPath().equals(subdir)) {
+        found = true;
+      }
+    }
+    assertTrue("Path " + subdir
+                    + " not found in directory " + dir + ":" + builder,
+            found);
+  }
+
+  @Test
+  public void testListStatusRootDir() throws Throwable {
+    assumeTrue(rootDirTestEnabled());
+
+    Path dir = fs.makeQualified(new Path("/"));
+    Path child  = fs.makeQualified(new Path("/FileSystemContractBaseTest"));
+    createFile(child);
+    assertListStatusFinds(dir, child);
   }
 }

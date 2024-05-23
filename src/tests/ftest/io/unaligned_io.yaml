@@ -1,22 +1,42 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
-    - server-E
-    - server-F
-    - server-G
-    - server-H
+  test_servers: 4
 timeout: 900
 server_config:
   name: daos_server
-  targets: 8
-  servers:
-   bdev_class: nvme
-   bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
-   scm_class: dcpm
-   scm_list: ["/dev/pmem0"]
+  engines_per_host: 2
+  engines:
+    0:
+      targets: 8
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - ABT_ENV_MAX_NUM_XSTREAMS=100
+        - ABT_MAX_NUM_XSTREAMS=100
+        - DAOS_MD_CAP=1024
+        - DD_MASK=mgmt,md,any
+        - D_LOG_FILE_APPEND_PID=1
+        - COVFILE=/tmp/test.cov
+      storage: auto
+    1:
+      targets: 8
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - ABT_ENV_MAX_NUM_XSTREAMS=100
+        - ABT_MAX_NUM_XSTREAMS=100
+        - DAOS_MD_CAP=1024
+        - DD_MASK=mgmt,md,any
+        - D_LOG_FILE_APPEND_PID=1
+        - COVFILE=/tmp/test.cov
+      storage: auto
 pool:
   scm_size: 12G
 datasize:

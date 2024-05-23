@@ -1,11 +1,13 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package proto_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -13,11 +15,11 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto"
-	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -68,7 +70,7 @@ func TestProto_AnnotateError(t *testing.T) {
 		Description: "Description",
 		Resolution:  "Resolution",
 	}
-	testStatus := drpc.DaosInvalidInput
+	testStatus := daos.InvalidInput
 	testNotReplica := &system.ErrNotReplica{
 		Replicas: []string{"a", "b", "c"},
 	}
@@ -76,11 +78,23 @@ func TestProto_AnnotateError(t *testing.T) {
 		LeaderHint: "foo.bar.baz",
 		Replicas:   []string{"a", "b", "c"},
 	}
+	testPoolNotFound := system.ErrPoolLabelNotFound("foo")
 
 	for name, tc := range map[string]struct {
-		err    error
-		expErr error
+		err      error
+		expErr   error
+		errExact bool
 	}{
+		"wrap/unwrap context.DeadlineExceeded": {
+			err:      context.DeadlineExceeded,
+			expErr:   status.FromContextError(context.DeadlineExceeded).Err(),
+			errExact: true,
+		},
+		"wrap/unwrap context.Canceled": {
+			err:      context.Canceled,
+			expErr:   status.FromContextError(context.Canceled).Err(),
+			errExact: true,
+		},
 		"wrap/unwrap Fault": {
 			err:    testFault,
 			expErr: testFault,
@@ -97,6 +111,10 @@ func TestProto_AnnotateError(t *testing.T) {
 			err:    testNotLeader,
 			expErr: testNotLeader,
 		},
+		"wrap/unwrap ErrPoolNotFound": {
+			err:    testPoolNotFound,
+			expErr: testPoolNotFound,
+		},
 		"non-fault err": {
 			err:    errors.New("not a fault"),
 			expErr: status.New(codes.Unknown, "not a fault").Err(),
@@ -107,7 +125,11 @@ func TestProto_AnnotateError(t *testing.T) {
 			aErr := proto.AnnotateError(tc.err)
 
 			gotErr := proto.UnwrapError(status.Convert(aErr))
-			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.errExact {
+				test.AssertTrue(t, gotErr.Error() == tc.expErr.Error(), "error does not match exactly")
+			} else {
+				test.CmpErr(t, tc.expErr, gotErr)
+			}
 			if tc.expErr == nil {
 				return
 			}

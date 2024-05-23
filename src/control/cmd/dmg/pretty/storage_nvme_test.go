@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,10 +16,102 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
+
+func TestPretty_PrintNVMeController(t *testing.T) {
+	ctrlrWithSmd := func(idx int32, roleBits int) *storage.NvmeController {
+		c := storage.MockNvmeController(idx)
+		sd := storage.MockSmdDevice(nil, idx)
+		sd.Roles = storage.BdevRoles{storage.OptionBits(roleBits)}
+		sd.Rank = ranklist.Rank(idx)
+		c.SmdDevices = []*storage.SmdDevice{sd}
+		return c
+	}
+	ctrlrWithNilRank := func(idx int32) *storage.NvmeController {
+		c := ctrlrWithSmd(idx, 0)
+		c.SmdDevices[0].Rank = ranklist.NilRank
+		return c
+	}
+	for name, tc := range map[string]struct {
+		devices     storage.NvmeControllers
+		expPrintStr string
+	}{
+		"multiple controllers": {
+			devices: storage.NvmeControllers{
+				storage.MockNvmeController(1),
+				storage.MockNvmeController(2),
+			},
+			expPrintStr: `
+NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank 
+--------     -----   ----------- ------ -------- ------- ---- 
+0000:01:00.0 model-1 fwRev-1     1      2.0 TB   NA      None 
+0000:02:00.0 model-2 fwRev-2     0      2.0 TB   NA      None 
+`,
+		},
+		"vmd backing devices": {
+			devices: storage.NvmeControllers{
+				&storage.NvmeController{PciAddr: "050505:01:00.0"},
+				&storage.NvmeController{PciAddr: "050505:03:00.0"},
+			},
+			expPrintStr: `
+NVMe PCI       Model FW Revision Socket Capacity Role(s) Rank 
+--------       ----- ----------- ------ -------- ------- ---- 
+050505:01:00.0                   0      0 B      NA      None 
+050505:03:00.0                   0      0 B      NA      None 
+`,
+		},
+		"controllers with roles": {
+			devices: storage.NvmeControllers{
+				ctrlrWithSmd(1, 1),
+				ctrlrWithSmd(2, 6),
+			},
+			expPrintStr: `
+NVMe PCI     Model   FW Revision Socket Capacity Role(s)  Rank 
+--------     -----   ----------- ------ -------- -------  ---- 
+0000:01:00.0 model-1 fwRev-1     1      2.0 TB   data     1    
+0000:02:00.0 model-2 fwRev-2     0      2.0 TB   meta,wal 2    
+`,
+		},
+		"controllers with no roles": {
+			devices: storage.NvmeControllers{
+				ctrlrWithSmd(1, 0),
+				ctrlrWithSmd(2, 0),
+			},
+			expPrintStr: `
+NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank 
+--------     -----   ----------- ------ -------- ------- ---- 
+0000:01:00.0 model-1 fwRev-1     1      2.0 TB   NA      1    
+0000:02:00.0 model-2 fwRev-2     0      2.0 TB   NA      2    
+`,
+		},
+		"controllers with no rank": {
+			devices: storage.NvmeControllers{
+				ctrlrWithNilRank(1),
+				ctrlrWithNilRank(2),
+			},
+			expPrintStr: `
+NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank 
+--------     -----   ----------- ------ -------- ------- ---- 
+0000:01:00.0 model-1 fwRev-1     1      2.0 TB   NA      None 
+0000:02:00.0 model-2 fwRev-2     0      2.0 TB   NA      None 
+`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var bld strings.Builder
+			if err := PrintNvmeControllers(tc.devices, &bld); err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
+				t.Fatalf("unexpected print output (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
 
 func TestPretty_PrintNVMeHealthMap(t *testing.T) {
 	var (
@@ -82,22 +174,22 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
     Volatile Memory Backup: WARNING
   Intel Vendor SMART Attributes:
     Program Fail Count:
-       Normalized(%s):%d
+       Normalized:%d%s
        Raw:%d
     Erase Fail Count:
-       Normalized(%s):%d
+       Normalized:%d%s
        Raw:%d
     Wear Leveling Count:
-       Normalized(%s):%d
+       Normalized:%d%s
        Min:%d
        Max:%d
        Avg:%d
     End-to-End Error Detection Count:%d
     CRC Error Count:%d
-    Timed Workload, Media Wear(%s):%d
-    Timed Workload, Host Reads:%d
+    Timed Workload, Media Wear:%d
+    Timed Workload, Host Read/Write Ratio:%d
     Timed Workload, Timer:%d
-    Thermal Throttle Status(%s):%d
+    Thermal Throttle Status:%d%s
     Thermal Throttle Event Count:%d
     Retry Buffer Overflow Counter:%d
     PLL Lock Loss Count:%d
@@ -123,22 +215,22 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
     Volatile Memory Backup: WARNING
   Intel Vendor SMART Attributes:
     Program Fail Count:
-       Normalized(%s):%d
+       Normalized:%d%s
        Raw:%d
     Erase Fail Count:
-       Normalized(%s):%d
+       Normalized:%d%s
        Raw:%d
     Wear Leveling Count:
-       Normalized(%s):%d
+       Normalized:%d%s
        Min:%d
        Max:%d
        Avg:%d
     End-to-End Error Detection Count:%d
     CRC Error Count:%d
-    Timed Workload, Media Wear(%s):%d
-    Timed Workload, Host Reads:%d
+    Timed Workload, Media Wear:%d
+    Timed Workload, Host Read/Write Ratio:%d
     Timed Workload, Timer:%d
-    Thermal Throttle Status(%s):%d
+    Thermal Throttle Status:%d%s
     Thermal Throttle Event Count:%d
     Retry Buffer Overflow Counter:%d
     PLL Lock Loss Count:%d
@@ -154,14 +246,14 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
 				time.Duration(controllerA.HealthStats.PowerOnHours)*time.Hour,
 				controllerA.HealthStats.UnsafeShutdowns, controllerA.HealthStats.MediaErrors,
 				controllerA.HealthStats.ErrorLogEntries,
-				"%%", controllerA.HealthStats.ProgFailCntNorm, controllerA.HealthStats.ProgFailCntRaw,
-				"%%", controllerA.HealthStats.EraseFailCntNorm, controllerA.HealthStats.EraseFailCntRaw,
-				"%%", controllerA.HealthStats.WearLevelingCntNorm, controllerA.HealthStats.WearLevelingCntMin,
+				controllerA.HealthStats.ProgFailCntNorm, "%", controllerA.HealthStats.ProgFailCntRaw,
+				controllerA.HealthStats.EraseFailCntNorm, "%", controllerA.HealthStats.EraseFailCntRaw,
+				controllerA.HealthStats.WearLevelingCntNorm, "%", controllerA.HealthStats.WearLevelingCntMin,
 				controllerA.HealthStats.WearLevelingCntMax, controllerA.HealthStats.WearLevelingCntAvg,
 				controllerA.HealthStats.EndtoendErrCntRaw, controllerA.HealthStats.CrcErrCntRaw,
-				"%%", controllerA.HealthStats.MediaWearRaw, controllerA.HealthStats.HostReadsRaw,
+				controllerA.HealthStats.MediaWearRaw, controllerA.HealthStats.HostReadsRaw,
 				controllerA.HealthStats.WorkloadTimerRaw,
-				"%%", controllerA.HealthStats.ThermalThrottleStatus, controllerA.HealthStats.ThermalThrottleEventCnt,
+				controllerA.HealthStats.ThermalThrottleStatus, "%", controllerA.HealthStats.ThermalThrottleEventCnt,
 				controllerA.HealthStats.RetryBufferOverflowCnt,
 				controllerA.HealthStats.PllLockLossCnt,
 				controllerA.HealthStats.NandBytesWritten, controllerA.HealthStats.HostBytesWritten,
@@ -174,14 +266,14 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
 				time.Duration(controllerB.HealthStats.PowerOnHours)*time.Hour,
 				controllerB.HealthStats.UnsafeShutdowns, controllerB.HealthStats.MediaErrors,
 				controllerB.HealthStats.ErrorLogEntries,
-				"%%", controllerB.HealthStats.ProgFailCntNorm, controllerB.HealthStats.ProgFailCntRaw,
-				"%%", controllerB.HealthStats.EraseFailCntNorm, controllerB.HealthStats.EraseFailCntRaw,
-				"%%", controllerB.HealthStats.WearLevelingCntNorm, controllerB.HealthStats.WearLevelingCntMin,
+				controllerB.HealthStats.ProgFailCntNorm, "%", controllerB.HealthStats.ProgFailCntRaw,
+				controllerB.HealthStats.EraseFailCntNorm, "%", controllerB.HealthStats.EraseFailCntRaw,
+				controllerB.HealthStats.WearLevelingCntNorm, "%", controllerB.HealthStats.WearLevelingCntMin,
 				controllerB.HealthStats.WearLevelingCntMax, controllerB.HealthStats.WearLevelingCntAvg,
 				controllerB.HealthStats.EndtoendErrCntRaw, controllerB.HealthStats.CrcErrCntRaw,
-				"%%", controllerB.HealthStats.MediaWearRaw, controllerB.HealthStats.HostReadsRaw,
+				controllerB.HealthStats.MediaWearRaw, controllerB.HealthStats.HostReadsRaw,
 				controllerB.HealthStats.WorkloadTimerRaw,
-				"%%", controllerB.HealthStats.ThermalThrottleStatus, controllerB.HealthStats.ThermalThrottleEventCnt,
+				controllerB.HealthStats.ThermalThrottleStatus, "%", controllerB.HealthStats.ThermalThrottleEventCnt,
 				controllerB.HealthStats.RetryBufferOverflowCnt,
 				controllerB.HealthStats.PllLockLossCnt,
 				controllerB.HealthStats.NandBytesWritten, controllerB.HealthStats.HostBytesWritten,
@@ -226,22 +318,22 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
     Volatile Memory Backup: WARNING
   Intel Vendor SMART Attributes:
     Program Fail Count:
-       Normalized(%s):%d
+       Normalized:%d%s
        Raw:%d
     Erase Fail Count:
-       Normalized(%s):%d
+       Normalized:%d%s
        Raw:%d
     Wear Leveling Count:
-       Normalized(%s):%d
+       Normalized:%d%s
        Min:%d
        Max:%d
        Avg:%d
     End-to-End Error Detection Count:%d
     CRC Error Count:%d
-    Timed Workload, Media Wear(%s):%d
-    Timed Workload, Host Reads:%d
+    Timed Workload, Media Wear:%d
+    Timed Workload, Host Read/Write Ratio:%d
     Timed Workload, Timer:%d
-    Thermal Throttle Status(%s):%d
+    Thermal Throttle Status:%d%s
     Thermal Throttle Event Count:%d
     Retry Buffer Overflow Counter:%d
     PLL Lock Loss Count:%d
@@ -259,14 +351,14 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
 				controllerAwTS.HealthStats.ReadErrors, controllerAwTS.HealthStats.WriteErrors,
 				controllerAwTS.HealthStats.UnmapErrors, controllerAwTS.HealthStats.ChecksumErrors,
 				controllerAwTS.HealthStats.ErrorLogEntries,
-				"%%", controllerAwTS.HealthStats.ProgFailCntNorm, controllerAwTS.HealthStats.ProgFailCntRaw,
-				"%%", controllerAwTS.HealthStats.EraseFailCntNorm, controllerAwTS.HealthStats.EraseFailCntRaw,
-				"%%", controllerAwTS.HealthStats.WearLevelingCntNorm, controllerAwTS.HealthStats.WearLevelingCntMin,
+				controllerAwTS.HealthStats.ProgFailCntNorm, "%", controllerAwTS.HealthStats.ProgFailCntRaw,
+				controllerAwTS.HealthStats.EraseFailCntNorm, "%", controllerAwTS.HealthStats.EraseFailCntRaw,
+				controllerAwTS.HealthStats.WearLevelingCntNorm, "%", controllerAwTS.HealthStats.WearLevelingCntMin,
 				controllerAwTS.HealthStats.WearLevelingCntMax, controllerAwTS.HealthStats.WearLevelingCntAvg,
 				controllerAwTS.HealthStats.EndtoendErrCntRaw, controllerAwTS.HealthStats.CrcErrCntRaw,
-				"%%", controllerAwTS.HealthStats.MediaWearRaw, controllerAwTS.HealthStats.HostReadsRaw,
+				controllerAwTS.HealthStats.MediaWearRaw, controllerAwTS.HealthStats.HostReadsRaw,
 				controllerAwTS.HealthStats.WorkloadTimerRaw,
-				"%%", controllerAwTS.HealthStats.ThermalThrottleStatus, controllerAwTS.HealthStats.ThermalThrottleEventCnt,
+				controllerAwTS.HealthStats.ThermalThrottleStatus, "%", controllerAwTS.HealthStats.ThermalThrottleEventCnt,
 				controllerAwTS.HealthStats.RetryBufferOverflowCnt,
 				controllerAwTS.HealthStats.PllLockLossCnt,
 				controllerAwTS.HealthStats.NandBytesWritten, controllerAwTS.HealthStats.HostBytesWritten,
@@ -276,184 +368,6 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
 		t.Run(name, func(t *testing.T) {
 			var bld strings.Builder
 			if err := PrintNvmeHealthMap(tc.hsm, &bld); err != nil {
-				t.Fatal(err)
-			}
-
-			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
-				t.Fatalf("unexpected print output (-want, +got):\n%s\n", diff)
-			}
-		})
-	}
-}
-
-func TestPretty_PrintNVMetaMap(t *testing.T) {
-	var (
-		controllerA = storage.MockNvmeController(1)
-		controllerB = storage.MockNvmeController(2)
-		controllerC = storage.MockNvmeController(1)
-		controllerD = storage.MockNvmeController(2)
-		controllerE = storage.MockNvmeController(1)
-		controllerF = storage.MockNvmeController(2)
-	)
-	controllerA.SmdDevices = nil
-	controllerB.SmdDevices = nil
-	controllerE.SmdDevices = []*storage.SmdDevice{
-		{
-			UUID:      common.MockUUID(0),
-			TargetIDs: []int32{0, 1, 2},
-			Rank:      0,
-			State:     "NORMAL",
-		},
-		{
-			UUID:      common.MockUUID(1),
-			TargetIDs: []int32{3, 4, 5},
-			Rank:      0,
-			State:     "FAULTY",
-		},
-	}
-	controllerF.SmdDevices = []*storage.SmdDevice{
-		{
-			UUID:      common.MockUUID(2),
-			TargetIDs: []int32{6, 7, 8},
-			Rank:      1,
-			State:     "NORMAL",
-		},
-		{
-			UUID:      common.MockUUID(3),
-			TargetIDs: []int32{9, 10, 11},
-			Rank:      1,
-			State:     "FAULTY",
-		},
-	}
-	for name, tc := range map[string]struct {
-		hsm         control.HostStorageMap
-		expPrintStr string
-	}{
-		"no controllers": {
-			hsm: mockHostStorageMap(t, &mockHostStorage{"host1", &control.HostStorage{}}),
-			expPrintStr: `
------
-host1
------
-  No NVMe devices detected
-`,
-		},
-		"no smd devices on controllers": {
-			hsm: mockHostStorageMap(t,
-				&mockHostStorage{
-					"host1",
-					&control.HostStorage{
-						NvmeDevices: storage.NvmeControllers{
-							controllerA,
-							controllerB,
-						},
-					},
-				},
-			),
-			expPrintStr: fmt.Sprintf(`
------
-host1
------
-PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
-  No SMD devices found
-
-PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
-  No SMD devices found
-
-`,
-				controllerA.PciAddr, controllerA.Model, controllerA.FwRev,
-				controllerA.SocketID, humanize.Bytes(controllerA.Capacity()),
-				controllerB.PciAddr, controllerB.Model, controllerB.FwRev,
-				controllerB.SocketID, humanize.Bytes(controllerB.Capacity())),
-		},
-		"single smd device on each controller": {
-			hsm: mockHostStorageMap(t,
-				&mockHostStorage{
-					"host1",
-					&control.HostStorage{
-						NvmeDevices: storage.NvmeControllers{
-							controllerC,
-							controllerD,
-						},
-					},
-				},
-			),
-			expPrintStr: fmt.Sprintf(`
------
-host1
------
-PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
-  SMD Devices
-    UUID:%s [TrAddr:%s]
-      Targets:%v Rank:%d State:%s
-
-PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
-  SMD Devices
-    UUID:%s [TrAddr:%s]
-      Targets:%v Rank:%d State:%s
-
-`,
-				controllerC.PciAddr, controllerC.Model, controllerC.FwRev,
-				controllerC.SocketID, humanize.Bytes(controllerC.Capacity()),
-				controllerC.SmdDevices[0].UUID, controllerC.PciAddr,
-				controllerC.SmdDevices[0].TargetIDs,
-				controllerC.SmdDevices[0].Rank, controllerC.SmdDevices[0].State,
-
-				controllerD.PciAddr, controllerD.Model, controllerD.FwRev,
-				controllerD.SocketID, humanize.Bytes(controllerD.Capacity()),
-				controllerD.SmdDevices[0].UUID, controllerD.PciAddr,
-				controllerD.SmdDevices[0].TargetIDs,
-				controllerD.SmdDevices[0].Rank, controllerD.SmdDevices[0].State),
-		},
-		"multiple smd devices on each controller": {
-			hsm: mockHostStorageMap(t,
-				&mockHostStorage{
-					"host1",
-					&control.HostStorage{
-						NvmeDevices: storage.NvmeControllers{
-							controllerE,
-							controllerF,
-						},
-					},
-				},
-			),
-			expPrintStr: fmt.Sprintf(`
------
-host1
------
-PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
-  SMD Devices
-    UUID:%s [TrAddr:]
-      Targets:%v Rank:%d State:%s
-    UUID:%s [TrAddr:]
-      Targets:%v Rank:%d State:%s
-
-PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
-  SMD Devices
-    UUID:%s [TrAddr:]
-      Targets:%v Rank:%d State:%s
-    UUID:%s [TrAddr:]
-      Targets:%v Rank:%d State:%s
-
-`,
-				controllerE.PciAddr, controllerE.Model, controllerE.FwRev,
-				controllerE.SocketID, humanize.Bytes(controllerE.Capacity()),
-				controllerE.SmdDevices[0].UUID, controllerE.SmdDevices[0].TargetIDs,
-				controllerE.SmdDevices[0].Rank, controllerE.SmdDevices[0].State,
-				controllerE.SmdDevices[1].UUID, controllerE.SmdDevices[1].TargetIDs,
-				controllerE.SmdDevices[1].Rank, controllerE.SmdDevices[1].State,
-
-				controllerF.PciAddr, controllerF.Model, controllerF.FwRev,
-				controllerF.SocketID, humanize.Bytes(controllerF.Capacity()),
-				controllerF.SmdDevices[0].UUID, controllerF.SmdDevices[0].TargetIDs,
-				controllerF.SmdDevices[0].Rank, controllerF.SmdDevices[0].State,
-				controllerF.SmdDevices[1].UUID, controllerF.SmdDevices[1].TargetIDs,
-				controllerF.SmdDevices[1].Rank, controllerF.SmdDevices[1].State),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			var bld strings.Builder
-			if err := PrintNvmeMetaMap(tc.hsm, &bld); err != nil {
 				t.Fatal(err)
 			}
 

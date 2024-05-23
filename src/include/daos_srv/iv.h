@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,6 +11,11 @@
 
 #include <abt.h>
 
+#include <gurt/types.h>
+#include <gurt/list.h>
+
+#include <cart/iv.h>
+
 /* DAOS iv cache provide a general interface for daos to use cart IV.
  * Each pool has one iv namespace, which is created when the  pool is
  * connected, and destroyed when pool is disconnected. Each DAOS IV
@@ -21,6 +26,7 @@ struct ds_iv_ns {
 	d_rank_t	iv_master_rank;
 	/* Different pool will use different ns id */
 	unsigned int	iv_ns_id;
+	uint64_t	iv_master_term;
 	/* Link to global ns list (ds_iv_list) */
 	d_list_t	iv_ns_link;
 	/* all of entries under the ns links here */
@@ -30,7 +36,8 @@ struct ds_iv_ns {
 	/* pool uuid */
 	uuid_t		iv_pool_uuid;
 
-	ABT_eventual	iv_done_eventual;
+	ABT_mutex	iv_mutex;
+	ABT_cond	iv_done_cond;
 	int		iv_refcount;
 	/**
 	 * iv_fini: the IV namespace will be stopped, usually happens
@@ -138,9 +145,9 @@ typedef bool (*ds_iv_key_cmp_t)(void *key1, void *key2);
 /**
  * Init class entry.
  *
- * \param iv_key [IN]	iv_key of the class to be init.
- * \param data [IN]	data to help allocate class entry.
- * \param entry [IN/OUT] class entry to be initialized.
+ * \param[in] iv_key	iv_key of the class to be init.
+ * \param[in] data	data to help allocate class entry.
+ * \param[in,out] entry	class entry to be initialized.
  *
  * \return		0 if succeeds, error code otherwise.
  */
@@ -163,9 +170,8 @@ typedef int (*ds_iv_ent_get_t)(struct ds_iv_entry *ent, void **priv);
  * \param ent [IN]	iv class entry to get.
  * \param priv [IN]	private ptr from crt IV callback.
  *
- * \return		0 if succeeds, error code otherwise.
  */
-typedef int (*ds_iv_ent_put_t)(struct ds_iv_entry *ent, void **priv);
+typedef void (*ds_iv_ent_put_t)(struct ds_iv_entry *ent, void *priv);
 
 /**
  * Destroy the data attached to the entry.
@@ -289,6 +295,7 @@ enum iv_key {
 	 * other servers
 	 */
 	IV_CONT_AGG_EPOCH_BOUNDRY,
+	IV_CHK,
 };
 
 int ds_iv_fetch(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
@@ -303,13 +310,13 @@ int ds_iv_invalidate(struct ds_iv_ns *ns, struct ds_iv_key *key,
 int ds_iv_ns_create(crt_context_t ctx, uuid_t pool_uuid, crt_group_t *grp,
 		    unsigned int *ns_id, struct ds_iv_ns **p_iv_ns);
 
-void ds_iv_ns_update(struct ds_iv_ns *ns, unsigned int master_rank);
+void ds_iv_ns_update(struct ds_iv_ns *ns, unsigned int master_rank, uint64_t term);
+void ds_iv_ns_cleanup(struct ds_iv_ns *ns);
 void ds_iv_ns_stop(struct ds_iv_ns *ns);
 void ds_iv_ns_leader_stop(struct ds_iv_ns *ns);
 void ds_iv_ns_start(struct ds_iv_ns *ns);
 void ds_iv_ns_put(struct ds_iv_ns *ns);
 void ds_iv_ns_get(struct ds_iv_ns *ns);
-void ds_iv_ns_destroy(void *ns);
 
 unsigned int ds_iv_ns_id_get(void *ns);
 

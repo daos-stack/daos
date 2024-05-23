@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -110,7 +110,7 @@ func getKernelVersion(kernel *KernelVersion, open openFunc) {
 	defer f.Close()
 
 	scn := bufio.NewScanner(f)
-	for scn.Scan() {
+	if scn.Scan() {
 		fields := strings.Split(scn.Text(), " ")
 		for i, field := range fields {
 			if field == "version" {
@@ -118,7 +118,6 @@ func getKernelVersion(kernel *KernelVersion, open openFunc) {
 				break
 			}
 		}
-		break
 	}
 }
 
@@ -130,7 +129,7 @@ func getDistributionRelease(fileName string, dv *DistributionVersion, open openF
 	defer f.Close()
 
 	scn := bufio.NewScanner(f)
-	for scn.Scan() {
+	if scn.Scan() {
 		fields := strings.Fields(scn.Text())
 		for i, field := range fields {
 			if field == "release" {
@@ -138,7 +137,6 @@ func getDistributionRelease(fileName string, dv *DistributionVersion, open openF
 				break
 			}
 		}
-		break
 	}
 	if dv.Major > 0 {
 		dv.StringVersion = ""
@@ -165,6 +163,8 @@ func getDistribution(open openFunc) Distribution {
 	getKernelVersion(&dist.Kernel, open)
 
 	switch dist.ID {
+	// The centos and redhat cases here are actually targeted at only the 7.x
+	// releases.  The default case should handle all EL8s.
 	case "centos":
 		getDistributionRelease("/etc/centos-release", &dist.Version, open)
 	case "redhat":

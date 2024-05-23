@@ -28,13 +28,13 @@ public class DaosAbsFsImpl extends DelegateToFileSystem {
   }
 
   /**
-   * not used in DAOS. Just return 1 as fake port.
+   * not used in DAOS. Just return -1 as fake port.
    *
-   * @return 1
+   * @return -1
    */
   @Override
   public int getUriDefaultPort() {
-    return 1;
+    return -1;
   }
 
   @Override

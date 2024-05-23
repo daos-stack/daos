@@ -1,12 +1,10 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from command_utils_base import \
-    BasicParameter, LogParameter, YamlParameters, TransportCredentials
+from command_utils_base import BasicParameter, LogParameter, TransportCredentials, YamlParameters
 
 
 class DmgTransportCredentials(TransportCredentials):
@@ -14,10 +12,17 @@ class DmgTransportCredentials(TransportCredentials):
 
     def __init__(self, log_dir="/tmp"):
         """Initialize a TransportConfig object."""
-        super().__init__(
-            "/run/dmg/transport_config/*", "transport_config", log_dir)
-        self.cert = LogParameter(log_dir, None, "admin.crt")
-        self.key = LogParameter(log_dir, None, "admin.key")
+        super().__init__("/run/dmg/transport_config/*", "transport_config", log_dir)
+        self.cert = LogParameter(self._log_dir, None, "admin.crt")
+        self.key = LogParameter(self._log_dir, None, "admin.key")
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            DmgTransportCredentials: a new DmgTransportCredentials object
+        """
+        return DmgTransportCredentials(self._log_dir)
 
 
 class DmgYamlParameters(YamlParameters):
@@ -51,3 +56,11 @@ class DmgYamlParameters(YamlParameters):
         self.name = BasicParameter(None, name)
         self.hostlist = BasicParameter(None, "localhost")
         self.port = BasicParameter(None, 10001)
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            DmgYamlParameters: a new DmgYamlParameters object
+        """
+        return DmgYamlParameters(self.filename, self.name.value, None)

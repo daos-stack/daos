@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -21,6 +21,14 @@ extern "C" {
 #endif
 
 #include <dirent.h>
+#include <inttypes.h>
+#include <sys/stat.h>
+
+#include <daos_types.h>
+#include <daos_obj.h>
+#include <daos_obj_class.h>
+#include <daos_array.h>
+#include <daos_cont.h>
 
 /** Maximum Name length */
 #define DFS_MAX_NAME		NAME_MAX
@@ -28,7 +36,8 @@ extern "C" {
 #define DFS_MAX_PATH		PATH_MAX
 /** Maximum file size */
 #define DFS_MAX_FSIZE		(~0ULL)
-
+/** Default chunk size for files (arrays) */
+#define DFS_DEFAULT_CHUNK_SIZE	1048576
 /** Maximum xattr name */
 #define DFS_MAX_XATTR_NAME	255
 /** Maximum xattr value */
@@ -47,14 +56,18 @@ typedef struct dfs dfs_t;
  * Reserve bit 3 in the access flags for dfs_mount() - bits 1 and 2 are used
  * for read / write access (O_RDONLY, O_RDRW).
  */
-#define DFS_BALANCED	4 /** DFS operations using a DTX */
-#define DFS_RELAXED	0 /** DFS operations do not use a DTX (default mode). */
+/** DFS container balanced consistency mode. DFS operations using a DTX */
+#define DFS_BALANCED	4
+/** DFS container relaxed consistency mode. DFS operations do not use a DTX (default mode) */
+#define DFS_RELAXED	0
+/** read-only access */
 #define DFS_RDONLY	O_RDONLY
+/** read/write access */
 #define DFS_RDWR	O_RDWR
 
-/** struct holding attributes for a DFS container */
+/** struct holding attributes for a DFS container - all optional */
 typedef struct {
-	/** Optional user ID for DFS container. */
+	/** User ID for DFS container. */
 	uint64_t		da_id;
 	/** Default Chunk size for all files in container */
 	daos_size_t		da_chunk_size;
@@ -62,12 +75,20 @@ typedef struct {
 	daos_oclass_id_t	da_oclass_id;
 	/** DAOS properties on the DFS container */
 	daos_prop_t		*da_props;
-	/*
-	 * Consistency mode for the DFS container: DFS_RELAXED, DFS_BALANCED.
-	 * If set to 0 or more generally not set to balanced explicitly, relaxed
-	 * mode will be used. In the future, Balanced mode will be the default.
+	/**
+	 * Consistency mode for the DFS container: DFS_RELAXED, DFS_BALANCED.  If set to 0 or more
+	 * generally not set to balanced explicitly, relaxed mode will be used
 	 */
 	uint32_t		da_mode;
+	/** Default Object Class for all directories in the container */
+	daos_oclass_id_t	da_dir_oclass_id;
+	/** Default Object Class for all files in the container */
+	daos_oclass_id_t	da_file_oclass_id;
+	/**
+	 * Comma separated hints for POSIX container creation of the format: "type:hint".
+	 * examples include: "file:single,dir:max", "directory:single,file:max", etc.
+	 */
+	char			da_hints[DAOS_CONT_HINT_MAX_LEN];
 } dfs_attr_t;
 
 /** IO descriptor of ranges in a file to access */
@@ -78,12 +99,96 @@ typedef struct {
 	daos_range_t	       *iod_rgs;
 } dfs_iod_t;
 
+/** DFS object information */
 typedef struct {
 	/** object class */
 	daos_oclass_id_t	doi_oclass_id;
 	/** chunk size */
 	daos_size_t		doi_chunk_size;
+	/** In case of dir, return default object class for dirs created in that dir */
+	daos_oclass_id_t        doi_dir_oclass_id;
+	/** In case of dir, return default object class for files created in that dir */
+	daos_oclass_id_t        doi_file_oclass_id;
 } dfs_obj_info_t;
+
+/**
+ * Initialize the DAOS and DFS library. Typically this is called at the beginning of a user program
+ * or in IO middleware initialization. This is required to be called if using the
+ * dfs_connect/disconnect calls to setup the DFS cache for the pool and container handles. There is
+ * no harm however in calling it whenever using any of the DFS API (mount/umount) and can be
+ * equivalent to calling daos_init() instead.
+ *
+ * \return              0 on success, errno code on failure.
+ */
+int
+dfs_init(void);
+
+/**
+ * Finalize the DAOS and DFS library. Typically this is called at the end of a user program or in IO
+ * middleware finalization. This is required to be called if dfs_init() was called and closes all
+ * cached open pool and container handles that resulted from dfs_connect() calls.
+ *
+ * \return              0 on success, errno code on failure.
+ */
+int
+dfs_fini(void);
+
+/**
+ * Mount a DFS namespace over the specified pool and container. The container can be optionally
+ * created if it doesn't exist, and O_CREAT is passed in flags. The handle must be released using
+ * dfs_disconnect() and not dfs_umount(). Using the latter in this case will leak open handles for
+ * the pool and container.
+ *
+ * This function works only if dfs_init() is called, otherwise would return EACCES. In addition to
+ * setting up the pool and container handles for the user, this also utilizes an internal cache for
+ * keeping the pool and container handles open internally with a ref count and closes those handles
+ * on dfs_finalize().
+ *
+ * \param[in]	pool	Pool label.
+ * \param[in]	sys	DAOS system name to use for the pool connect.
+ *			Pass NULL to use the default system.
+ * \param[in]	cont	Container label.
+ * \param[in]	flags	Mount flags (O_RDONLY or O_RDWR, O_CREAT). O_CREAT attempts to create the
+ *			DFS container if it doesn't exists.
+ * \param[in]	attr	Optional set of properties and attributes to set on the container (if being
+ *			created). Pass NULL to use default.
+ * \param[out]	dfs	Pointer to the created DFS mount point.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_connect(const char *pool, const char *sys, const char *cont, int flags, dfs_attr_t *attr,
+	    dfs_t **dfs);
+
+/**
+ * Umount the DFS namespace, and release the ref count on the container and pool handles. This
+ * should be called on a dfs mount created with dfs_connect() and not dfs_mount().
+ *
+ * \param[in]	dfs	Pointer to the mounted file system from dfs_connect().
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_disconnect(dfs_t *dfs);
+
+/**
+ * Evict all the container handles from the hashtable and destroy the container.
+ *
+ * \param[in]   pool    Pool label where the container is.
+ * \param[in]	sys	DAOS system name to use for the pool.
+ *			Pass NULL to use the default system.
+ * \param[in]   cont    Container label to destroy.
+ * \param[in]	force	Container destroy will return failure if the container
+ *			is still busy (outstanding open handles from other open calls).
+ *			This parameter will force the destroy to proceed even if there is an
+ *			outstanding open handle.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_destroy(const char *pool, const char *sys, const char *cont, int force, daos_event_t *ev);
 
 /**
  * Create a DFS container with the POSIX property layout set.  Optionally set attributes for hints
@@ -152,6 +257,52 @@ int
 dfs_umount(dfs_t *dfs);
 
 /**
+ * Retrieve the open pool handle on the DFS mount. This is refcounted internally and must be
+ * released with dfs_pool_put().
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[out]	poh	Open pool handle.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_pool_get(dfs_t *dfs, daos_handle_t *poh);
+
+/**
+ * Release refcount of pool handle taken by dfs_pool_get().
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[out]	poh	Pool handle that was returned from dfs_pool_get().
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_pool_put(dfs_t *dfs, daos_handle_t poh);
+
+/**
+ * Retrieve the open cont handle on the DFS mount. This is refcounted internally and must be
+ * released with dfs_cont_put().
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[out]	coh	Open cont handle.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_cont_get(dfs_t *dfs, daos_handle_t *coh);
+
+/**
+ * Release refcount of cont handle taken by dfs_cont_get().
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[out]	coh	Cont handle that was returned from dfs_cont_get().
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_cont_put(dfs_t *dfs, daos_handle_t coh);
+
+/**
  * Query attributes of a DFS mount.
  *
  * \param[in]	dfs	Pointer to the mounted file system.
@@ -194,6 +345,34 @@ dfs_local2global(dfs_t *dfs, d_iov_t *glob);
 int
 dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
 		 dfs_t **dfs);
+
+/**
+ * Convert a local dfs mount including the pool and container handles to global representation data
+ * which can be shared with peer processes.
+ * If glob->iov_buf is set to NULL, the actual size of the global handle is returned through
+ * glob->iov_buf_len.  This function does not involve any communication and does not block.
+ *
+ * \param[in]	dfs	valid dfs mount to be shared
+ * \param[out]	glob	pointer to iov of the buffer to store mount information
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_local2global_all(dfs_t *dfs, d_iov_t *glob);
+
+/**
+ * Create a dfs mount from global representation data. This has to be closed with dfs_disconnect()
+ * since the pool and container connections are established with it.
+ *
+ * \param[in]	flags	Mount flags (O_RDONLY or O_RDWR). If 0, inherit flags
+ *			of serialized DFS handle.
+ * \param[in]	glob	Global (shared) representation of a collective handle to be extracted.
+ * \param[out]	dfs	Returned dfs mount
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_global2local_all(int flags, d_iov_t glob, dfs_t **dfs);
 
 /**
  * Optionally set a prefix on the dfs mount where all paths passed to dfs_lookup
@@ -260,6 +439,21 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **obj,
 int
 dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 	       dfs_obj_t **obj, mode_t *mode, struct stat *stbuf);
+
+/**
+ * Suggest an oclass for creating DFS objects given a hint from the user of the format: obj:val
+ * where obj can be either file or dir/directory and val from:
+ * single: tiny files or directories to be single sharded.
+ * max: large files or directories to be max shared.
+ *
+ * \param[in]   dfs     Pointer to the mounted file system.
+ * \param[in]	hint	hint from user for a file or directory
+ * \param[out]	cid	object class suggested to use
+ *
+ * \return              0 on success, errno code on failure.
+ */
+int
+dfs_suggest_oclass(dfs_t *dfs, const char *hint, daos_oclass_id_t *cid);
 
 /**
  * Create/Open a directory, file, or Symlink.
@@ -462,14 +656,37 @@ dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len);
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
-	    uint32_t *nr, struct dirent *dirs);
+dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr, struct dirent *dirs);
+
+/**
+ * directory readdir + stat.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	obj	Opened directory object.
+ * \param[in,out]
+ *		anchor	Hash anchor for the next call, it should be set to
+ *			zeroes for the first call, it should not be changed
+ *			by caller between calls.
+ * \param[in,out]
+ *		nr	[in]: number of dirents allocated in \a dirs.
+ *			[out]: number of returned dirents.
+ * \param[in,out]
+ *		dirs	[in] preallocated array of dirents.
+ *			[out]: dirents returned with d_name filled only.
+ * \param[in,out]
+ *		stbufs	[in] preallocated array of struct stat.
+ *			[out]: stat of every entry in \a dirs.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_readdirplus(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
+		struct dirent *dirs, struct stat *stbufs);
 
 /**
  * User callback defined for dfs_readdir_size.
  */
-typedef int (*dfs_filler_cb_t)(dfs_t *dfs, dfs_obj_t *obj, const char name[],
-			       void *arg);
+typedef int (*dfs_filler_cb_t)(dfs_t *dfs, dfs_obj_t *obj, const char name[], void *arg);
 
 /**
  * Same as dfs_readdir, but this also adds a buffer size limitation when
@@ -494,6 +711,19 @@ typedef int (*dfs_filler_cb_t)(dfs_t *dfs, dfs_obj_t *obj, const char name[],
 int
 dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
 	    uint32_t *nr, size_t size, dfs_filler_cb_t op, void *arg);
+
+/**
+ * Set the readdir/iterate anchor to start from a specific entry name in a directory object. When
+ * using the anchor in a readdir call, the iteration will start from the position of that entry.
+ *
+ * \param[in]	obj	Opened directory object.
+ * \param[in]	name	Entry name of a file/dir in the open directory where anchor should be set.
+ * \param[out]	anchor	Hash anchor returned for the position of the entry name in \a obj.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_dir_anchor_set(dfs_obj_t *obj, const char name[], daos_anchor_t *anchor);
 
 /**
  * Provide a function for large directories to split an anchor to be able to
@@ -575,14 +805,14 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force,
  *			Target parent directory object. If NULL, use root obj.
  * \param[in]	new_name
  *			New link name of object.
- * \param[in]	oid	Optionally return the DAOS Object ID of a removed obj
- *			as a result of a rename.
+ * \param[out]	oid	Optional: return the internal object ID of the removed obj
+ *			if the move clobbered it.
  *
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
-	 char *new_name, daos_obj_id_t *oid);
+dfs_move(dfs_t *dfs, dfs_obj_t *parent, const char *name, dfs_obj_t *new_parent,
+	 const char *new_name, daos_obj_id_t *oid);
 
 /**
  * Exchange two objects.
@@ -596,8 +826,8 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, char *name1,
-	     dfs_obj_t *parent2, char *name2);
+dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, const char *name1, dfs_obj_t *parent2,
+	     const char *name2);
 
 /**
  * Retrieve mode of an open object.
@@ -654,8 +884,7 @@ dfs_obj_set_oclass(dfs_t *dfs, dfs_obj_t *obj, int flags, daos_oclass_id_t cid);
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_obj_set_chunk_size(dfs_t *dfs, dfs_obj_t *obj, int flags,
-		       daos_size_t csize);
+dfs_obj_set_chunk_size(dfs_t *dfs, dfs_obj_t *obj, int flags, daos_size_t csize);
 
 /**
  * Retrieve the DAOS open handle of a DFS file object. User should not close
@@ -763,11 +992,18 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf);
 #define DFS_SET_ATTR_MTIME	(1 << 2)
 /** Option to set size of a file */
 #define DFS_SET_ATTR_SIZE	(1 << 3)
+/** Option to set uid of object */
+#define DFS_SET_ATTR_UID	(1 << 4)
+/** Option to set gid of object */
+#define DFS_SET_ATTR_GID	(1 << 5)
 
 /**
- * set stat attributes for a file and fetch new values.  If the object is a
+ * Set stat attributes for a file and fetch new values.  If the object is a
  * symlink the link itself is modified.  See dfs_stat() for which entries
  * are filled.
+ * While the set-user/group-id bits in stbuf::st_mode are stored by libdfs, it
+ * up to the caller to implement support for the associated functionality
+ * since libdfs does not provide any way to execute binaries.
  *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	obj	Open object (File, dir or syml) to modify.
@@ -812,6 +1048,25 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask);
  */
 int
 dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode);
+
+/**
+ * Change owner and group. Since uid and gid are not enforced
+ * at the DFS level, we do not also enforce the process privileges to be able to change the uid and
+ * gid. Any process with write access to the DFS container can make changes to the uid and gid using
+ * this function.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	parent	Opened parent directory object. If NULL, use root obj.
+ * \param[in]	name	Link name of the object. Can be NULL if parent is root,
+ *			which means operation will be on root object.
+ * \param[in]	uid	change owner of file (-1 to leave unchanged).
+ * \param[in]	gid	change group of file (-1 to leave unchanged).
+ * \param[in]	flags	if 0, symlinks are dereferenced. Pass O_NOFOLLOW to not dereference.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid, int flags);
 
 /**
  * Sync to commit the latest epoch on the container. This applies to the entire
@@ -893,49 +1148,166 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name);
 int
 dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size);
 
+
+enum {
+	/** print the leaked OIDS */
+	DFS_CHECK_PRINT		= (1 << 0),
+	/** remove / punch the leaked objects */
+	DFS_CHECK_REMOVE	= (1 << 1),
+	/** relink the leaked oids under "/lost+found" */
+	DFS_CHECK_RELINK	= (1 << 2),
+	/** verify data consistency of each oid in the container (note that this will be slow) */
+	DFS_CHECK_VERIFY	= (1 << 3),
+	/** Evict all open container handles to ensure exclusive open works for the checker */
+	DFS_CHECK_EVICT_ALL	= (1 << 4),
+};
+
+/**
+ * Scan the DFS namespace and check if there are any leaked objects. Depending on the flag passed,
+ * either remove those leaked objects to reclaim space, add those object to "Lost+Found" directory,
+ * or just print the oids to stdout.
+ *
+ * \param[in]	poh	Open pool handle.
+ * \param[in]	cont	POSIX container label.
+ * \param[in]	flags	Flags to indicate what to do with leaked objects:
+ *			punch, link to l+f, or print to stdout.
+ * \param[in]	name	Optional directory name to be created under lost+found where all oids are
+ *			stored. If NULL is specified, a directory will be created with a name
+ *			corresponding to the current timestamp with the format "%Y-%m-%d-%H:%M:%S".
+ *			If the DFS_CHECK_LINK_LF is not set, this is ignored.
+ *
+ * \return		0 on success, errno code on failure.
+ */
 int
-dfs_cont_create2(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_t *coh,
-		 dfs_t **dfs);
+dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *name);
+
+/**
+ * Update a POSIX's container's owner user and/or owner group. This is the same as calling
+ * daos_cont_set_owner() but will also update the owner of the root directory in the container.
+ *
+ * \param[in]	coh	Open container handle
+ * \param[in]	user	New owner user (NULL if not updating)
+ * \param[in]	uid	New owner uid, if different from user's on local system (-1 otherwise)
+ * \param[in]	group	New owner group (NULL if not updating)
+ * \param[in]	gid	New owner gid, if different from group's on local system (-1 otherwise)
+ *
+ * \return		0 on success, errno code on failure.
+ */
 int
-dfs_cont_create1(daos_handle_t poh, const uuid_t cuuid, dfs_attr_t *attr, daos_handle_t *coh,
-		 dfs_t **dfs);
+dfs_cont_set_owner(daos_handle_t coh, d_string_t user, uid_t uid, d_string_t group, gid_t gid);
+
+/*
+ * The Pipeline DFS API (everything under this comment) is under heavy development and should not be
+ * used in production. The API is subject to change.
+ */
+
+/** DFS pipeline object */
+typedef struct dfs_pipeline dfs_pipeline_t;
+
+enum {
+	DFS_FILTER_NAME		= (1 << 1),
+	DFS_FILTER_NEWER	= (1 << 2),
+	DFS_FILTER_INCLUDE_DIRS	= (1 << 3),
+};
+
+/** Predicate conditions for filter */
+typedef struct {
+	/** name condition for entry - regex */
+	char	dp_name[DFS_MAX_NAME];
+	/** timestamp for newer condition */
+	time_t	dp_newer;
+	/** size of files - not supported for now */
+	size_t	dp_size;
+} dfs_predicate_t;
+
+/**
+ * Same as dfs_get_size() but using the OID of the file instead of the open handle. Note that the
+ * chunk_size of the file is also required to be passed if the file was created with a different
+ * chunk size than the default (passing other than 0 to dfs_open). Otherwise, 0 should be passed to
+ * chunk size.
+ *
+ * \param[in]	dfs		Pointer to the mounted file system.
+ * \param[in]	oid		Object ID of the file.
+ * \param[in]	chunk_size	Chunk size of the file (pass 0 if it was created with default).
+ * \param[out]	size		Returned size of the file.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_get_size_by_oid(dfs_t *dfs, daos_obj_id_t oid, daos_size_t chunk_size, daos_size_t *size);
+
+/**
+ * Create a pipeline object to be used during readdir with filter. Should be destroyed with
+ * dfs_pipeline_destroy().
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	pred	Predicate condition values (name/regex, newer timestamp, etc.).
+ * \param[in]	flags	Pipeline flags (conditions to apply).
+ * \param[out]	dpipe	Pipeline object created.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_pipeline_create(dfs_t *dfs, dfs_predicate_t pred, uint64_t flags, dfs_pipeline_t **dpipe);
+
+/**
+ * Destroy pipeline object.
+ *
+ * \param[in]	dpipe	Pipeline object.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_pipeline_destroy(dfs_pipeline_t *dpipe);
+
+/**
+ * Same as dfs_readdir() but this additionally applies a filter created with dfs_pipeline_create()
+ * on the entries that are enumerated. This function also optionally returns the object ID of each
+ * dirent if requested through a pre-allocated OID input array.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	obj	Opened directory object.
+ * \param[in]	dpipe	DFS pipeline filter.
+ * \param[in,out]
+ *		anchor	Hash anchor for the next call, it should be set to
+ *			zeroes for the first call, it should not be changed
+ *			by caller between calls.
+ * \param[in,out]
+ *		nr	[in]: number of dirents allocated in \a dirs.
+ *			[out]: number of returned dirents.
+ * \param[in,out]
+ *		dirs	[in] preallocated array of dirents.
+ *			[out]: dirents returned with d_name filled only.
+ * \param[in,out]
+ *		oids	[in] Optional preallocated array of object IDs.
+ *			[out]: Object ID associated with each dirent that was read.
+ * \param[in,out]
+ *		csizes	[in] Optional preallocated array of sizes.
+ *			[out]: chunk size associated with each dirent that was read.
+ * \param[out]	nr_scanned
+ *			Total number of entries scanned by readdir before returning.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_readdir_with_filter(dfs_t *dfs, dfs_obj_t *obj, dfs_pipeline_t *dpipe, daos_anchor_t *anchor,
+			uint32_t *nr, struct dirent *dirs, daos_obj_id_t *oids, daos_size_t *csizes,
+			uint64_t *nr_scanned);
+
+/**
+ * Scan the DFS namespace and report statistics about file/dir size and namespace structure.
+ *
+ * \param[in]	poh	Open pool handle.
+ * \param[in]	cont	POSIX container label.
+ * \param[in]	flags	Unused flag, added for future use.
+ * \param[in]	name	Optional subdirectory path to scan from.
+ *			Start from container root if not specified.
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_cont_scan(daos_handle_t poh, const char *cont, uint64_t flags, const char *name);
 
 #if defined(__cplusplus)
 }
-
-#define dfs_cont_create dfs_cont_create_cpp
-static inline int
-dfs_cont_create_cpp(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_t *coh,
-		    dfs_t **dfs)
-{
-	return dfs_cont_create2(poh, cuuid, attr, coh, dfs);
-}
-
-static inline int
-dfs_cont_create_cpp(daos_handle_t poh, const uuid_t cuuid, dfs_attr_t *attr, daos_handle_t *coh,
-		    dfs_t **dfs)
-{
-	return dfs_cont_create1(poh, cuuid, attr, coh, dfs);
-};
-#else
-/**
- * for backward compatility, support old api where a const uuid_t was required to be passed in for
- * the container to be created.
- */
-#define dfs_cont_create(poh, co, ...)					\
-	({								\
-		int _ret;						\
-		uuid_t *_u;						\
-		if (d_is_uuid(co)) {					\
-			_u = (uuid_t *)((unsigned char *)(co));		\
-			_ret = dfs_cont_create((poh), _u, __VA_ARGS__);	\
-		} else {						\
-			_u = (uuid_t *)(co);				\
-			_ret = dfs_cont_create2((poh), _u, __VA_ARGS__); \
-		}							\
-		_ret;							\
-	})
-
-
 #endif /* __cplusplus */
 #endif /* __DAOS_FS_H__ */

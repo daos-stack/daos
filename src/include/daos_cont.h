@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,6 +12,13 @@
 #ifndef __DAOS_CONT_H__
 #define __DAOS_CONT_H__
 
+/** Please ignore (code for back-compatibility) */
+#define daos_cont_open daos_cont_open2
+/** Please ignore (code for back-compatibility) */
+#define daos_cont_destroy daos_cont_destroy2
+/** Please ignore (code for back-compatibility) */
+#define daos_cont_create daos_cont_create2
+
 #if defined(__cplusplus)
 extern "C" {
 #endif
@@ -19,40 +26,61 @@ extern "C" {
 #include <daos_security.h>
 
 /**
- * DAOS_COO_RO opens the container for reading only. This flag conflicts with
- * DAOS_COO_RW.
- *
- * DAOS_COO_RW opens the container for reading and writing. This flag conflicts
- * with DAOS_COO_RO.
- *
- * DAOS_COO_NOSLIP disables the automatic epoch slip at epoch commit time. See
- * daos_epoch_commit().
- *
- * DAOS_COO_FORCE skips the check to see if the pool meets the redundancy
- * factor/level requirements of the container.
+ * Opens the container for reading only. This flag conflicts with DAOS_COO_RW
+ * and DAOS_COO_EX.
  */
 #define DAOS_COO_RO		(1U << 0)
+
+/**
+ * Opens the container for reading and writing. This flag conflicts with
+ * DAOS_COO_RO and DAOS_COO_EX.
+ */
 #define DAOS_COO_RW		(1U << 1)
-#define DAOS_COO_NOSLIP		(1U << 2)
+
+/**
+ * Opens the container for exclusive reading and writing. This flag conflicts
+ * with DAOS_COO_RO and DAOS_COO_RW. The current user must be the owner of the
+ * container.
+ */
+#define DAOS_COO_EX		(1U << 2)
+
+/** Skips the check to see if the pool meets the redundancy factor/level requirements of the
+ * container.
+ */
 #define DAOS_COO_FORCE		(1U << 3)
 
-#define DAOS_COO_NBITS	(4)
+/** Skips container metadata time updates on DAOS_COO_RO open, and subsequent close */
+#define DAOS_COO_RO_MDSTATS	(1U << 4)
+
+/**
+ * Before opening the container, evict current user's handles. This flag
+ * conflicts with DAOS_COO_EVICT_ALL. This flag can only be used with
+ * DAOS_COO_RO or DAOS_COO_RW at the moment.
+ *
+ * This flag is for recovery purposes and shall not be used by regular
+ * applications.
+ */
+#define DAOS_COO_EVICT		(1U << 5)
+
+/**
+ * Before opening the container, evict all handles, including other users'.
+ * This flag conflicts with DAOS_COO_EVICT. This flag can only be used with
+ * DAOS_COO_EX at the moment. The current user must be the owner of the
+ * container.
+ *
+ * This flag is for recovery purposes and shall not be used by regular
+ * applications.
+ */
+#define DAOS_COO_EVICT_ALL	(1U << 6)
+
+/** Number of bits in the container open mode flag, DAOS_COO_ bits */
+#define DAOS_COO_NBITS	(7)
+
+/** Mask for all of the bits in the container open mode flag, DAOS_COO_ bits */
 #define DAOS_COO_MASK	((1U << DAOS_COO_NBITS) - 1)
 
-/** Container information */
-typedef struct {
-	/** Container UUID */
-	uuid_t			ci_uuid;
-	/** Epoch of latest persistent snapshot */
-	daos_epoch_t		ci_lsnapshot;
-	/** Redundancy factor */
-	uint32_t		ci_redun_fac;
-	/** Number of snapshots */
-	uint32_t		ci_nsnapshots;
-	uint64_t		ci_pad[2];
-	/* TODO: add more members, e.g., size, # objects, uid, gid... */
-} daos_cont_info_t;
-
+/** Maximum length for container hints */
+#define DAOS_CONT_HINT_MAX_LEN	128
 
 /**
  * Generate a rank list from a string with a separator argument. This is a
@@ -175,7 +203,8 @@ daos_cont_create_with_label(daos_handle_t poh, const char *label,
  *
  * \param[in]	poh	Pool connection handle.
  * \param[in]	cont	Label or UUID string to identify the container.
- * \param[in]	flags	Open mode, represented by the DAOS_COO_ bits.
+ * \param[in]	flags	Open flags (DAOS_COO_RO, etc.). Must include one of
+ *			DAOS_COO_RO, DAOS_COO_RW, and DAOS_COO_EX.
  * \param[out]	coh	Returned open handle.
  * \param[out]	info	Optional, return container information
  * \param[in]	ev	Completion event, it is optional and can be NULL.
@@ -188,7 +217,7 @@ daos_cont_create_with_label(daos_handle_t poh, const char *label,
  *			-DER_UNREACH	Network is unreachable
  *			-DER_NO_PERM	Permission denied
  *			-DER_NONEXIST	Container is nonexistent
- *			-DER_RF		#failures exceed RF, data possibly lost
+ *			-DER_RF		Number of failures exceed RF, data possibly lost
  */
 int
 daos_cont_open(daos_handle_t poh, const char *cont, unsigned int flags, daos_handle_t *coh,
@@ -220,8 +249,7 @@ daos_cont_close(daos_handle_t coh, daos_event_t *ev);
  * when the operation completes.
  *
  * \param[in]	poh	Pool connection handle.
- * \param[in]	cont	Label or UUID string to idenfity the container to
- *			destroy
+ * \param[in]	cont	Label or UUID string to identify the container to destroy.
  * \param[in]	force	Container destroy will return failure if the container
  *			is still busy (outstanding open handles). This parameter
  *			will force the destroy to proceed even if there is an
@@ -270,7 +298,7 @@ daos_cont_destroy(daos_handle_t poh, const char *cont, int force, daos_event_t *
  *			-DER_NO_HDL	Invalid container handle
  */
 int
-daos_cont_query(daos_handle_t container, daos_cont_info_t *info,
+daos_cont_query(daos_handle_t coh, daos_cont_info_t *info,
 		daos_prop_t *cont_prop, daos_event_t *ev);
 
 /**
@@ -293,8 +321,8 @@ daos_cont_query(daos_handle_t container, daos_cont_info_t *info,
  *			-DER_NO_HDL	Invalid container handle
  */
 int
-daos_cont_get_acl(daos_handle_t container, daos_prop_t **acl_prop,
-		  daos_event_t *ev);
+daos_cont_get_acl(daos_handle_t coh, daos_prop_t **acl_prop, daos_event_t *ev);
+
 /**
  * Sets the container properties.
  *
@@ -313,7 +341,6 @@ daos_cont_get_acl(daos_handle_t container, daos_prop_t **acl_prop,
  */
 int
 daos_cont_set_prop(daos_handle_t coh, daos_prop_t *prop, daos_event_t *ev);
-
 
 /**
  * Clear container status, to clear container's DAOS_PROP_CO_STATUS property
@@ -414,6 +441,7 @@ daos_cont_delete_acl(daos_handle_t coh, enum daos_acl_principal_type type,
  *			0		Success
  *			-DER_INVAL	Invalid parameter
  *			-DER_NO_PERM	Permission denied
+ *			-DER_NONEXIST	User or group does not exist
  *			-DER_UNREACH	Network is unreachable
  *			-DER_NO_HDL	Invalid container handle
  *			-DER_NOMEM	Out of memory
@@ -421,6 +449,29 @@ daos_cont_delete_acl(daos_handle_t coh, enum daos_acl_principal_type type,
 int
 daos_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group,
 		    daos_event_t *ev);
+
+/**
+ * Update a container's owner user and/or owner group, without verifying the user/group exists
+ * locally on the machine.
+ *
+ * \param[in]	coh	Container handle
+ * \param[in]	user	New owner user (NULL if not updating)
+ * \param[in]	group	New owner group (NULL if not updating)
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_HDL	Invalid container handle
+ *			-DER_NOMEM	Out of memory
+ */
+int
+daos_cont_set_owner_no_check(daos_handle_t coh, d_string_t user, d_string_t group,
+			     daos_event_t *ev);
 
 /**
  * List the names of all user-defined container attributes.
@@ -571,6 +622,7 @@ daos_cont_rollback(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev);
 int
 daos_cont_subscribe(daos_handle_t coh, daos_epoch_t *epoch, daos_event_t *ev);
 
+/** maximum length of persistent snapshot name */
 #define DAOS_SNAPSHOT_MAX_LEN 128
 
 /**
@@ -590,6 +642,7 @@ int
 daos_cont_create_snap(daos_handle_t coh, daos_epoch_t *epoch, char *name,
 		      daos_event_t *ev);
 
+/** snapshot create flag options */
 enum daos_snapshot_opts {
 	/** create snapshot */
 	DAOS_SNAP_OPT_CR	= (1 << 0),
@@ -657,136 +710,50 @@ daos_cont_destroy_snap(daos_handle_t coh, daos_epoch_range_t epr,
 		       daos_event_t *ev);
 
 /**
- * Backward compatibility code.
- * Please don't use directly
+ * Fetch a user's permissions for a specific container.
+ *
+ * \param[in]	cont_prop	Container property containing DAOS_PROP_CO_ACL/OWNER/OWNER_GROUP
+ *				entries
+ * \param[in]	uid		User's local uid
+ * \param[in]	gids		Gids of the user's groups
+ * \param[in]	nr_gids		Length of the gids list
+ * \param[out]	perms		Bitmap representing the user's permissions. Bits are defined
+ *				in enum daos_acl_perm.
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input
+ *		-DER_NONEXIST	UID or GID not found on the system
+ *		-DER_NOMEM	Could not allocate memory
  */
 int
-daos_cont_open2(daos_handle_t poh, const char *cont, unsigned int flags, daos_handle_t *coh,
-		daos_cont_info_t *info, daos_event_t *ev);
+daos_cont_get_perms(daos_prop_t *cont_prop, uid_t uid, gid_t *gids, size_t nr_gids,
+		    uint64_t *perms);
 
 /**
- * Backward compatibility code.
- * Please don't use directly
+ * Create object ID table (OIT) for the snapshot
+ *
+ * \param[in]	coh	Container handle
+ * \param[out]	epoch	epoch of snapshot
+ * \param[in]	name	Optional null terminated name for snapshot.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
  */
 int
-daos_cont_destroy2(daos_handle_t poh, const char *cont, int force, daos_event_t *ev);
+daos_cont_snap_oit_create(daos_handle_t coh, daos_epoch_t epoch, char *name,
+			  daos_event_t *ev);
 
 /**
- * Backward compatibility code.
- * Please don't use directly
+ * Destroy object ID table (OIT) for the snapshot
+ *
+ * \param[in]	coh	Container handle
+ * \param[out]	oh	OIT open handle.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
  */
 int
-daos_cont_create2(daos_handle_t poh, uuid_t *uuid, daos_prop_t *cont_prop, daos_event_t *ev);
-int
-daos_cont_create1(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_prop, daos_event_t *ev);
+daos_cont_snap_oit_destroy(daos_handle_t coh, daos_handle_t oh, daos_event_t *ev);
 
 #if defined(__cplusplus)
 }
-
-#define daos_cont_open daos_cont_open_cpp
-static inline int
-daos_cont_open_cpp(daos_handle_t poh, const char *cont, unsigned int flags, daos_handle_t *coh,
-		   daos_cont_info_t *info, daos_event_t *ev)
-{
-	return daos_cont_open2(poh, cont, flags, coh, info, ev);
-}
-
-static inline int
-daos_cont_open_cpp(daos_handle_t poh, const uuid_t cont, unsigned int flags, daos_handle_t *coh,
-	       daos_cont_info_t *info, daos_event_t *ev)
-{
-	char str[37];
-
-	uuid_unparse(cont, str);
-	return daos_cont_open2(poh, str, flags, coh, info, ev);
-}
-
-#define daos_cont_destroy daos_cont_destroy_cpp
-static inline int
-daos_cont_destroy_cpp(daos_handle_t poh, const char *cont, int force, daos_event_t *ev)
-{
-	return daos_cont_destroy2(poh, cont, force, ev);
-}
-
-static inline int
-daos_cont_destroy_cpp(daos_handle_t poh, const uuid_t cont, int force, daos_event_t *ev)
-{
-	char str[37];
-
-	uuid_unparse(cont, str);
-	return daos_cont_destroy2(poh, str, force, ev);
-}
-
-#define daos_cont_create daos_cont_create_cpp
-static inline int
-daos_cont_create_cpp(daos_handle_t poh, uuid_t *uuid, daos_prop_t *cont_prop, daos_event_t *ev)
-{
-	return daos_cont_create2(poh, uuid, cont_prop, ev);
-}
-
-static inline int
-daos_cont_create_cpp(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_prop, daos_event_t *ev)
-{
-	return daos_cont_create1(poh, uuid, cont_prop, ev);
-}
-#else
-/**
- * for backward compatility, support old api where a const uuid_t was used instead of a string to
- * identify the container.
- */
-#define daos_cont_open(poh, co, ...)					\
-	({								\
-		int _ret;						\
-		char _str[37];						\
-		const char *__str = NULL;				\
-		if (d_is_string(co)) {					\
-			__str = (const char *)(co);			\
-		} else if (d_is_uuid(co)) {				\
-			uuid_unparse((unsigned char *)(co), _str);	\
-			__str = _str;					\
-		}							\
-		_ret = daos_cont_open2((poh), __str, __VA_ARGS__);	\
-		_ret;							\
-	})
-
-/**
- * for backward compatility, support old api where a const uuid_t was used instead of a string to
- * identify the container.
- */
-#define daos_cont_destroy(poh, co, ...)					\
-	({								\
-		int _ret;						\
-		char _str[37];						\
-		const char *__str = NULL;				\
-		if (d_is_string(co)) {					\
-			__str = (const char *)(co);			\
-		} else if (d_is_uuid(co)) {				\
-			uuid_unparse((unsigned char *)(co), _str);	\
-			__str = _str;					\
-		}							\
-		_ret = daos_cont_destroy2((poh), __str, __VA_ARGS__);	\
-		_ret;							\
-	})
-
-/**
- * for backward compatility, support old api where a const uuid_t was required to be passed in for
- * the container to be created.
- */
-#define daos_cont_create(poh, co, ...)					\
-	({								\
-		int _ret;						\
-		uuid_t *_u;						\
-		if (d_is_uuid(co)) {					\
-			_u = (uuid_t *)((unsigned char *)(co));		\
-			_ret = daos_cont_create((poh), _u,		\
-						__VA_ARGS__);		\
-		} else {						\
-			_u = (uuid_t *)(co);				\
-			_ret = daos_cont_create2((poh), _u,		\
-						 __VA_ARGS__);		\
-		}							\
-		_ret;							\
-	})
-
 #endif /* __cplusplus */
 #endif /* __DAOS_CONT_H__ */

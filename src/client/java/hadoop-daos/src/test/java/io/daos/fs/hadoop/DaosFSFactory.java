@@ -15,8 +15,8 @@ import java.io.IOException;
  *
  */
 public class DaosFSFactory {
-  public final static String defaultPoolId = "fa659243-b141-4dc8-8487-13d8fbd54010";
-  public final static String defaultContId = "b72e068f-ba04-4546-b05c-2de9d936895e";
+  public final static String defaultPoolId = "420a7ae6-b456-4e23-a8e2-cb3477b485e6";
+  public final static String defaultContId = "8971ba3c-238e-4437-adcf-ad3244674519";
   public final static String pooluuid = System.getProperty("pool_id", defaultPoolId);
   public final static String contuuid = System.getProperty("cont_id", defaultContId);
   public static final String defaultPoolLabel = "pool1";
@@ -40,7 +40,6 @@ public class DaosFSFactory {
     conf.set(Constants.DAOS_POOL_ID, pooluuid);
     conf.set(Constants.DAOS_CONTAINER_ID, contuuid);
     conf.set(Constants.DAOS_IO_ASYNC, String.valueOf(async));
-    conf.setBoolean(Constants.DAOS_WITH_UNS_PREFIX, false);
   }
 
   public synchronized static FileSystem getFS() throws IOException {

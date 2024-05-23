@@ -3,6 +3,7 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package common
 
 import (
@@ -11,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func resetEnv(t *testing.T) func() {
@@ -35,6 +37,10 @@ func setEnv(t *testing.T, env []string) {
 			t.Fatal(err)
 		}
 	}
+}
+
+var defCmpOpts = []cmp.Option{
+	cmpopts.SortSlices(func(a, b string) bool { return a < b }),
 }
 
 func TestScrubEnvironment(t *testing.T) {
@@ -152,6 +158,57 @@ func TestScrubProxyVariables(t *testing.T) {
 
 			if diff := cmp.Diff(tc.expected, os.Environ()); diff != "" {
 				t.Fatalf("unexpected environment (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestCommon_MergeKeyValues(t *testing.T) {
+	for name, tc := range map[string]struct {
+		baseVars  []string
+		mergeVars []string
+		wantVars  []string
+	}{
+		"no dupes without merge": {
+			baseVars:  []string{"FOO=BAR", "FOO=BAZ"},
+			mergeVars: []string{},
+			wantVars:  []string{"FOO=BAR"},
+		},
+		"no dupes after merge": {
+			baseVars:  []string{"FOO=BAR", "FOO=BAZ"},
+			mergeVars: []string{"FOO=QUX"},
+			wantVars:  []string{"FOO=QUX"},
+		},
+		"no dupes in merge": {
+			baseVars:  []string{"FOO=BAR"},
+			mergeVars: []string{"FOO=BAZ", "FOO=QUX"},
+			wantVars:  []string{"FOO=BAZ"},
+		},
+		"basic test": {
+			baseVars:  []string{"A=B"},
+			mergeVars: []string{"C=D"},
+			wantVars:  []string{"A=B", "C=D"},
+		},
+		"complex value": {
+			baseVars:  []string{"SIMPLE=OK"},
+			mergeVars: []string{"COMPLEX=FOO;bar=quux;woof=meow"},
+			wantVars:  []string{"SIMPLE=OK", "COMPLEX=FOO;bar=quux;woof=meow"},
+		},
+		"append no base": {
+			baseVars:  []string{},
+			mergeVars: []string{"C=D"},
+			wantVars:  []string{"C=D"},
+		},
+		"skip malformed": {
+			baseVars:  []string{"GOOD_BASE=OK", "BAD_BASE="},
+			mergeVars: []string{"GOOD_MERGE=OK", "BAD_MERGE"},
+			wantVars:  []string{"GOOD_BASE=OK", "GOOD_MERGE=OK"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotVars := MergeKeyValues(tc.baseVars, tc.mergeVars)
+			if diff := cmp.Diff(tc.wantVars, gotVars, defCmpOpts...); diff != "" {
+				t.Fatalf("(-want, +got):\n%s", diff)
 			}
 		})
 	}

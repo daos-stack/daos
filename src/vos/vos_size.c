@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -63,7 +63,7 @@ print_dynamic(struct d_string_buffer_t *buf, const char *name,
 		d_write_string_buffer(buf, "  order: %d\n",
 				      ovhd->to_dyn_overhead[i].no_order);
 		d_write_string_buffer(buf, "  size: %d\n",
-				      ovhd->to_dyn_overhead[i].no_size);
+				      D_ALIGNUP(ovhd->to_dyn_overhead[i].no_size, 32));
 	}
 }
 
@@ -78,13 +78,12 @@ print_record(struct d_string_buffer_t *buf, const char *name,
 	d_write_string_buffer(buf, "    order: %d\n",
 			      ovhd->to_leaf_overhead.no_order);
 	d_write_string_buffer(buf, "    leaf_node_size: %d\n",
-			      ovhd->to_leaf_overhead.no_size);
+			      D_ALIGNUP(ovhd->to_leaf_overhead.no_size, 32));
 	d_write_string_buffer(buf, "    int_node_size: %d\n",
-			      ovhd->to_int_node_size);
-	d_write_string_buffer(buf, "    record_msize: %d\n",
-			      ovhd->to_record_msize);
+			      D_ALIGNUP(ovhd->to_int_node_size, 32));
+	d_write_string_buffer(buf, "    record_msize: %d\n", D_ALIGNUP(ovhd->to_record_msize, 32));
 	d_write_string_buffer(buf, "    node_rec_msize: %d\n",
-			      ovhd->to_node_rec_msize);
+			      D_ALIGNUP(ovhd->to_node_rec_msize, 32));
 	d_write_string_buffer(buf, "    num_dynamic: %d\n", ovhd->to_dyn_count);
 	if (ovhd->to_dyn_count == 0)
 		return;
@@ -134,7 +133,8 @@ get_daos_csummers(struct d_string_buffer_t *buf)
 }
 
 int
-get_vos_structure_sizes_yaml(int alloc_overhead, struct d_string_buffer_t *buf)
+get_vos_structure_sizes_yaml(int alloc_overhead, struct d_string_buffer_t *buf,
+			     const char *vos_path)
 {
 	FOREACH_TYPE(DECLARE_TYPE)
 	int rc;
@@ -146,8 +146,7 @@ get_vos_structure_sizes_yaml(int alloc_overhead, struct d_string_buffer_t *buf)
 	if (rc) {
 		goto exit_0;
 	}
-
-	rc = vos_self_init("/mnt/daos");
+	rc = vos_self_init(vos_path, false, BIO_STANDALONE_TGT_ID);
 	if (rc) {
 		goto exit_1;
 	}
@@ -155,9 +154,8 @@ get_vos_structure_sizes_yaml(int alloc_overhead, struct d_string_buffer_t *buf)
 	FOREACH_TYPE(CHECK_CALL)
 
 	d_write_string_buffer(buf, "---\n# VOS tree overheads\n");
-	d_write_string_buffer(buf, "root: %d\n", vos_pool_get_msize());
-	d_write_string_buffer(buf, "container: %d\n",
-			      vos_container_get_msize());
+	d_write_string_buffer(buf, "root: %d\n", D_ALIGNUP(vos_pool_get_msize(), 32));
+	d_write_string_buffer(buf, "container: %d\n", D_ALIGNUP(vos_container_get_msize(), 32));
 	d_write_string_buffer(buf, "scm_cutoff: %d\n",
 			      vos_pool_get_scm_cutoff());
 

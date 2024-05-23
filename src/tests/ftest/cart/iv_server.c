@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -623,7 +623,7 @@ iv_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	return 0;
 }
 
-static int
+static void
 iv_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *user_priv)
 {
 	DBG_ENTRY();
@@ -635,8 +635,6 @@ iv_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *user_priv)
 
 	dump_all_keys("ON_PUTVALUE");
 	DBG_EXIT();
-
-	return 0;
 }
 
 static void
@@ -719,8 +717,7 @@ init_iv(void)
 			assert(rc == 0);
 			assert(output->rc == 0);
 
-			rc = crt_req_decref(rpc);
-			assert(rc == 0);
+			crt_req_decref(rpc);
 		}
 	}
 }
@@ -730,7 +727,6 @@ iv_destroy_cb(crt_iv_namespace_t ivns, void *arg)
 {
 	D_ASSERT(ivns != NULL);
 	D_ASSERT(arg != NULL);
-	D_ASSERT(ivns == ivns);
 
 	D_DEBUG(DB_TRACE, "ivns %p was destroyed, arg %p\n", ivns, arg);
 }
@@ -803,8 +799,7 @@ static int fetch_bulk_put_cb(const struct crt_bulk_cb_info *cb_info)
 	rc = crt_reply_send(rpc);
 	assert(rc == 0);
 
-	rc = crt_req_decref(rpc);
-	assert(rc == 0);
+	crt_req_decref(rpc);
 
 	rc = crt_bulk_free(cb_info->bci_bulk_desc->bd_local_hdl);
 	assert(rc == 0);
@@ -908,8 +903,7 @@ fail_reply:
 	rc = crt_reply_send(rpc);
 	assert(rc == 0);
 
-	rc = crt_req_decref(rpc);
-	assert(rc == 0);
+	crt_req_decref(rpc);
 
 	return 0;
 }
@@ -942,8 +936,7 @@ update_done(crt_iv_namespace_t ivns, uint32_t class_id,
 	rc = crt_reply_send(cb_info->rpc);
 	assert(rc == 0);
 
-	rc = crt_req_decref(cb_info->rpc);
-	assert(rc == 0);
+	crt_req_decref(cb_info->rpc);
 
 	D_FREE(cb_info);
 
@@ -1008,8 +1001,7 @@ iv_test_update_iv(crt_rpc_t *rpc)
 	update_cb_info->key = key;
 	update_cb_info->rpc = rpc;
 
-	rc = crt_req_addref(rpc);
-	assert(rc == 0);
+	crt_req_addref(rpc);
 
 	rc = crt_iv_update(g_ivns, 0, key, 0, &iv_value, 0, *sync, update_done,
 			   update_cb_info);
@@ -1092,8 +1084,7 @@ iv_get_grp_version(crt_rpc_t *rpc)
 int
 iv_test_fetch_iv(crt_rpc_t *rpc)
 {
-	struct RPC_TEST_FETCH_IV_in	*input;
-	int				 rc;
+	struct RPC_TEST_FETCH_IV_in *input;
 
 	DBG_ENTRY();
 	wait_for_namespace();
@@ -1101,10 +1092,9 @@ iv_test_fetch_iv(crt_rpc_t *rpc)
 	input = crt_req_get(rpc);
 	assert(input != NULL);
 
-	rc = crt_req_addref(rpc);
-	assert(rc == 0);
+	crt_req_addref(rpc);
 
-	rc = crt_iv_fetch(g_ivns, 0, &input->key, 0, 0, fetch_done, rpc);
+	crt_iv_fetch(g_ivns, 0, &input->key, 0, 0, fetch_done, rpc);
 
 	/*
 	 * Test break case:
@@ -1163,8 +1153,7 @@ invalidate_done(crt_iv_namespace_t ivns, uint32_t class_id,
 	rc = crt_reply_send(cb_info->rpc);
 	assert(rc == 0);
 
-	rc = crt_req_decref(cb_info->rpc);
-	assert(rc == 0);
+	crt_req_decref(cb_info->rpc);
 
 	D_FREE(cb_info->expect_key->iov_buf);
 	D_FREE(cb_info->expect_key);
@@ -1181,8 +1170,7 @@ int iv_test_invalidate_iv(crt_rpc_t *rpc)
 	crt_iv_key_t				*key;
 	struct invalidate_cb_info		*cb_info;
 	crt_iv_sync_t				 dsync = CRT_IV_SYNC_MODE_NONE;
-	crt_iv_sync_t				*sync = &dsync;
-	int					 rc;
+	crt_iv_sync_t                           *sync  = &dsync;
 
 	DBG_ENTRY();
 
@@ -1195,8 +1183,7 @@ int iv_test_invalidate_iv(crt_rpc_t *rpc)
 	key = alloc_key(key_struct->rank, key_struct->key_id);
 	assert(key != NULL);
 
-	rc = crt_req_addref(rpc);
-	assert(rc == 0);
+	crt_req_addref(rpc);
 
 	D_ALLOC_PTR(cb_info);
 	assert(cb_info != NULL);
@@ -1207,8 +1194,7 @@ int iv_test_invalidate_iv(crt_rpc_t *rpc)
 	if (input->iov_sync.iov_buf != NULL)
 		sync = (crt_iv_sync_t *)input->iov_sync.iov_buf;
 
-	rc = crt_iv_invalidate(g_ivns, 0, key, 0, CRT_IV_SHORTCUT_NONE,
-			       *sync, invalidate_done, cb_info);
+	crt_iv_invalidate(g_ivns, 0, key, 0, CRT_IV_SHORTCUT_NONE, *sync, invalidate_done, cb_info);
 	DBG_EXIT();
 	return 0;
 }
@@ -1255,22 +1241,22 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	env_self_rank = getenv("CRT_L_RANK");
+	d_agetenv_str(&env_self_rank, "CRT_L_RANK");
 	if (env_self_rank == NULL) {
 		printf("CRT_L_RANK was not set\n");
 		return -1;
 	}
 
 	my_rank = atoi(env_self_rank);
+	d_freeenv_str(&env_self_rank);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(my_rank, 20, true, true);
 
-	rc = crt_init(IV_GRP_NAME, CRT_FLAG_BIT_SERVER |
-				   CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
+	rc = crt_init(IV_GRP_NAME, CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	assert(rc == 0);
 
-	rc = crt_rank_self_set(my_rank);
+	rc = crt_rank_self_set(my_rank, 1 /* group_version_min */);
 	assert(rc == 0);
 
 	grp = crt_group_lookup(IV_GRP_NAME);
@@ -1289,7 +1275,7 @@ int main(int argc, char **argv)
 	init_work_contexts();
 
 	/* Load the group configuration file */
-	grp_cfg_file = getenv("CRT_L_GRP_CFG");
+	rc = d_agetenv_str(&grp_cfg_file, "CRT_L_GRP_CFG");
 	if (grp_cfg_file == NULL) {
 		D_ERROR("CRT_L_GRP_CFG was not set\n");
 		assert(0);
@@ -1303,6 +1289,7 @@ int main(int argc, char **argv)
 		D_ERROR("Failed to load group file %s\n", grp_cfg_file);
 		assert(0);
 	}
+	d_freeenv_str(&grp_cfg_file);
 
 	/* Start the server for myself */
 	DBG_PRINT("Server starting, self_rank=%d\n", my_rank);
@@ -1318,7 +1305,7 @@ int main(int argc, char **argv)
 	rc = crt_group_ranks_get(grp, &rank_list);
 	assert(rc == 0);
 
-	rc = crtu_wait_for_ranks(g_main_ctx, grp, rank_list, 0, 1, 5, 120);
+	rc = crtu_wait_for_ranks(g_main_ctx, grp, rank_list, 0, 1, 60, 120);
 	assert(rc == 0);
 
 	d_rank_list_free(rank_list);

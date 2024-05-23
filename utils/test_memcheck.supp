@@ -167,6 +167,17 @@
    ...
 }
 {
+   libevent
+   Memcheck:Leak
+   match-leak-kinds: all
+   ...
+   fun:?alloc
+   ...
+   obj:*libevent*.so*
+   fun:*event_base_loop
+   ...
+}
+{
    libopen-rte leak
    Memcheck:Leak
    match-leak-kinds: all
@@ -233,11 +244,167 @@
    match-leak-kinds: reachable
    fun:malloc
    fun:hg_dlog_mkcount32
-   fun:na_ofi_domain_open
-   fun:na_ofi_initialize
-   fun:NA_Initialize_opt
-   fun:hg_core_init
-   fun:HG_Core_init_opt
-   fun:HG_Init_opt
    ...
+}
+{
+   Tcp provider
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   ...
+   fun:sendmsg
+   fun:ofi_sockapi_sendv_socket
+   fun:ofi_bsock_sendv
+   ...
+   fun:fi_senddata
+   ...
+}
+{
+   Tcp provider with ofi rxm
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   ...
+   fun:ofi_bsock_sendv
+   ...
+   fun:fi_tsend
+   ...
+}
+{
+   Tcp provider with ofi rxm 2
+   Memcheck:Param
+   sendmsg(msg.msg_iov[2])
+   ...
+   fun:sendmsg
+   fun:ofi_sockapi_sendv_socket
+   fun:ofi_bsock_sendv
+   ...
+   fun:fi_tsend
+   ...
+}
+{
+   par_init mpi or dlopen leak
+   Memcheck:Leak
+   match-leak-kinds: all
+   fun:?alloc
+   ...
+   fun:par_init
+}
+{
+   par_init mpi or dlopen leak
+   Memcheck:Leak
+   match-leak-kinds: all
+   fun:realloc
+   ...
+   fun:par_init
+}
+{
+   memalign issue in MPI
+   Memcheck:Leak
+   match-leak-kinds: all
+   fun:memalign
+   ...
+   fun:par_init
+}
+{
+   par_fini mpi leak
+   Memcheck:Leak
+   match-leak-kinds: all
+   fun:?alloc
+   ...
+   fun:par_fini
+}
+{
+   conditional error in MPI_init
+   Memcheck:Cond
+   ...
+   ...
+   fun:ompi_mpi_init
+   ...
+}
+{
+   Leak in start thread, mpi
+   Memcheck:Leak
+   match-leak-kinds: all
+   fun:malloc
+   ...
+   obj:*
+   fun:???
+   ...
+   fun:start_thread
+}
+{
+   getpwnam_r leak
+   Memcheck:Leak
+   ...
+   fun:_nss_systemd_getpwnam_r
+   fun:getpwnam_r*
+   fun:daos_acl_principal_to_uid
+}
+{
+   getgrgid_r leak
+   Memcheck:Leak
+   ...
+   fun:_nss_systemd_getgrgid_r
+   fun:getgrgid_r*
+   fun:daos_acl_gid_to_principal
+}
+{
+   getgrouplist leak
+   Memcheck:Leak
+   ...
+   fun:compat_call.constprop.0
+   fun:internal_getgrouplist
+}
+{
+   spdk_env_init leak
+   Memcheck:Leak
+   ...
+   fun:spdk_env_init
+}
+{
+   spdk_notify_type_register leak
+   Memcheck:Leak
+   ...
+   fun:spdk_notify_type_register
+}
+{
+   bdev_user_io_getevents invalid read
+   Memcheck:Addr1
+   ...
+   fun:bdev_user_io_getevents
+}
+{
+   bdev_aio_writev param error
+   Memcheck:Param
+   io_submit(PWRITEV(iov[i]))
+   fun:syscall
+   ...
+   fun:bdev_aio_writev
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Param
+   writev(vector[...])
+   fun:writev
+   ...
+   fun:mdb_txn_commit
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Param
+   pwrite64(buf)
+   fun:pwrite
+   ...
+   fun:mdb_txn_commit
+}
+{
+   go_runtime_syscall_param
+   Memcheck:Param
+   write(buf)
+   fun:runtime/internal/syscall.Syscall6
+}
+{
+   go ShadowSet race
+   Memcheck:Value8
+   fun:_ZN6__tsan9ShadowSetEPNS_9RawShadowES1_S0_
+   fun:racecall
 }

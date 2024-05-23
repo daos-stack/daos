@@ -37,6 +37,7 @@ struct test_global_t {
 	int			 tg_send_queue_front;
 	bool			 tg_use_cfg;
 	bool			 tg_save_cfg;
+	bool			 tg_use_daos_agent_env;
 	char			*tg_cfg_path;
 };
 
@@ -142,6 +143,7 @@ test_parse_args(int argc, char **argv)
 	};
 
 	test.tg_use_cfg = true;
+	test.tg_use_daos_agent_env = false;
 
 	while (1) {
 		rc = getopt_long(argc, argv, "n:a:b:c:p:u:fhsq", long_options,

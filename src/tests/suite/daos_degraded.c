@@ -1,16 +1,14 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
  *
- * tests/suite/daos_replicated.c
- *
  * Replication tests need external interaction, to
  * kill servers and update pool map.
-*/
+ */
 #define D_LOGFAC	DD_FAC(tests)
 #include "daos_iotest.h"
 
@@ -35,33 +33,33 @@ enum {
 static void
 insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 {
-	daos_obj_id_t		oid;
-	struct ioreq		req;
-	int			i;
-	int			g_dkeys_strlen = 8; /* "999999" */
-	const char		*dkey_fmt = "degraded dkey%d";
-	const char		akey[] = "degraded akey";
-	char			*dkey[g_dkeys], *buf, *ptr;
-	char			*dkey_enum;
-	char			*rec[g_dkeys];
-	char			*val[g_dkeys];
-	daos_key_desc_t		kds[g_dkeys];
-	daos_anchor_t		anchor_out;
-	daos_size_t		rec_size[g_dkeys];
-	daos_off_t		offset[g_dkeys];
-	const char		*val_fmt = "degraded val%d";
-	daos_size_t		val_size[g_dkeys];
-	char			*rec_verify;
-	uint32_t		number;
-	int			rank, key_nr;
-	int			enum_op = 1;
-	int			size;
-	int			rc;
-	daos_pool_info_t	info = {0};
-	int			enumed = 1;
+	daos_obj_id_t    oid;
+	struct ioreq     req;
+	int              i;
+	int              g_dkeys_strlen = 9; /* "-999999" */
+	const char      *dkey_fmt       = "degraded dkey%d";
+	const char       akey[]         = "degraded akey";
+	char            *dkey[g_dkeys], *buf, *ptr;
+	char            *dkey_enum;
+	char            *rec[g_dkeys];
+	char            *val[g_dkeys];
+	daos_key_desc_t  kds[g_dkeys];
+	daos_anchor_t    anchor_out;
+	daos_size_t      rec_size[g_dkeys];
+	daos_off_t       offset[g_dkeys];
+	const char      *val_fmt = "degraded val%d";
+	daos_size_t      val_size[g_dkeys];
+	char            *rec_verify;
+	uint32_t         number;
+	int              rank, key_nr;
+	int              enum_op = 1;
+	int              size;
+	int              rc;
+	daos_pool_info_t info   = {0};
+	int              enumed = 1;
 
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	MPI_Comm_size(MPI_COMM_WORLD, &size);
+	par_rank(PAR_COMM_WORLD, &rank);
+	par_size(PAR_COMM_WORLD, &size);
 
 	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, rank);
 
@@ -72,7 +70,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 		print_message("Inserting %d keys ...\n", g_dkeys * size);
 	}
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL, NULL);
 	assert_rc_equal(rc, 0);
 	if (info.pi_ntargets - info.pi_ndisabled < 2) {
@@ -82,7 +80,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 				      info.pi_ndisabled);
 		skip();
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	for (i = 0; i < g_dkeys; i++) {
 		D_ALLOC(dkey[i], strlen(dkey_fmt) + g_dkeys_strlen + 1);
@@ -105,7 +103,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 			      rec_size[i], DAOS_TX_NONE, &req);
 
 		if ((i + 1) % (g_dkeys/10) == 0) {
-			MPI_Barrier(MPI_COMM_WORLD);
+			par_barrier(PAR_COMM_WORLD);
 			if (rank == 0)
 				print_message("\t%d keys inserted\n",
 					      (i + 1) * size);
@@ -118,7 +116,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 					 arg->group, arg->pool.svc, -1);
 	}
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	if (arg->myrank == 0)
 		print_message("insertion done\nNow looking up %d keys ...\n",
@@ -134,7 +132,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 		assert_memory_equal(val[i], rec_verify, req.iod[0].iod_size);
 
 		if ((i + 1) % (g_dkeys/10) == 0) {
-			MPI_Barrier(MPI_COMM_WORLD);
+			par_barrier(PAR_COMM_WORLD);
 			if (rank == 0)
 				print_message("\t%d keys looked up\n",
 					      (i + 1) * size);
@@ -148,7 +146,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 	}
 	D_FREE(rec_verify);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	if (arg->myrank == 0)
 		print_message("lookup done\nNow enumerating %d keys ...\n",
@@ -180,7 +178,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 		key_nr += number;
 
 		if (key_nr >= enumed * (g_dkeys/10)) {
-			MPI_Barrier(MPI_COMM_WORLD);
+			par_barrier(PAR_COMM_WORLD);
 			if (rank == 0)
 				print_message("\t%d keys enumerated\n",
 					      key_nr * size);
@@ -198,7 +196,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 	}
 	assert_int_equal(key_nr, g_dkeys);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	if (arg->myrank == 0)
 		print_message("enumeration done\n");
@@ -250,16 +248,25 @@ static const struct CMUnitTest degraded_tests[] = {
 static int
 degraded_setup(void **state)
 {
-	return test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE,
-			  0, NULL);
+	test_arg_t *arg;
+	int rc;
+
+	rc = rebuild_sub_setup_common(state, DEFAULT_POOL_SIZE, 0,
+				      DAOS_PROP_CO_REDUN_RF3);
+	if (rc)
+		return rc;
+
+	arg = *state;
+	arg->no_rebuild = 1;
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal",
+				"exclude");
+	return rc;
+
 }
 
 static int
 degraded_teardown(void **state)
 {
-#if 0
-	print_message("degraded_teardown(): At the moment, the daos_pool_destroy() call may time out, since the client MGMT_POOL_DESTROY RPC has the same timeout as the server RDB_STOP RPC(s) to the killed server(s). (Previously, the same issue affects the daos_pool_disconnect() call.)\n");
-#endif
 	return test_teardown(state);
 }
 
@@ -268,10 +275,10 @@ run_daos_degraded_test(int rank, int size)
 {
 	int rc = 0;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	rc = cmocka_run_group_tests_name("DAOS_Degraded-mode",
 					 degraded_tests, degraded_setup,
 					 degraded_teardown);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }

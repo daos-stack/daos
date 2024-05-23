@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,6 +17,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -114,17 +115,17 @@ func printNvmeHealth(stat *storage.NvmeHealth, out io.Writer, opts ...PrintConfi
 	if stat.ProgFailCntNorm > 0 {
 		fmt.Fprintf(out, "Intel Vendor SMART Attributes:\n")
 		fmt.Fprintf(iw, "Program Fail Count:\n")
-		fmt.Fprintf(iw, "   Normalized(%s):%d\n", "%%",
+		fmt.Fprintf(iw, "   Normalized:%d%%\n",
 			uint8(stat.ProgFailCntNorm))
 		fmt.Fprintf(iw, "   Raw:%d\n",
 			uint64(stat.ProgFailCntRaw))
 		fmt.Fprintf(iw, "Erase Fail Count:\n")
-		fmt.Fprintf(iw, "   Normalized(%s):%d\n", "%%",
+		fmt.Fprintf(iw, "   Normalized:%d%%\n",
 			uint8(stat.EraseFailCntNorm))
 		fmt.Fprintf(iw, "   Raw:%d\n",
 			uint64(stat.EraseFailCntRaw))
 		fmt.Fprintf(iw, "Wear Leveling Count:\n")
-		fmt.Fprintf(iw, "   Normalized(%s):%d\n", "%%",
+		fmt.Fprintf(iw, "   Normalized:%d%%\n",
 			uint8(stat.WearLevelingCntNorm))
 		fmt.Fprintf(iw, "   Min:%d\n",
 			uint16(stat.WearLevelingCntMin))
@@ -136,13 +137,13 @@ func printNvmeHealth(stat *storage.NvmeHealth, out io.Writer, opts ...PrintConfi
 			uint64(stat.EndtoendErrCntRaw))
 		fmt.Fprintf(iw, "CRC Error Count:%d\n",
 			uint64(stat.CrcErrCntRaw))
-		fmt.Fprintf(iw, "Timed Workload, Media Wear(%s):%d\n", "%%",
+		fmt.Fprintf(iw, "Timed Workload, Media Wear:%d\n",
 			uint64(stat.MediaWearRaw))
-		fmt.Fprintf(iw, "Timed Workload, Host Reads:%d\n",
+		fmt.Fprintf(iw, "Timed Workload, Host Read/Write Ratio:%d\n",
 			uint64(stat.HostReadsRaw))
 		fmt.Fprintf(iw, "Timed Workload, Timer:%d\n",
 			uint64(stat.WorkloadTimerRaw))
-		fmt.Fprintf(iw, "Thermal Throttle Status(%s):%d\n", "%%",
+		fmt.Fprintf(iw, "Thermal Throttle Status:%d%%\n",
 			uint8(stat.ThermalThrottleStatus))
 		fmt.Fprintf(iw, "Thermal Throttle Event Count:%d\n",
 			uint64(stat.ThermalThrottleEventCnt))
@@ -159,24 +160,44 @@ func printNvmeHealth(stat *storage.NvmeHealth, out io.Writer, opts ...PrintConfi
 	return w.Err
 }
 
-func printNvmeFormatResults(devices storage.NvmeControllers, out io.Writer, opts ...PrintConfigOption) error {
-	if len(devices) == 0 {
-		fmt.Fprintln(out, "\tNo NVMe devices found")
+// Strip NVMe controller format results of skip entries.
+func parseNvmeFormatResults(inResults storage.NvmeControllers) storage.NvmeControllers {
+	parsedResults := make(storage.NvmeControllers, 0, len(inResults))
+	for _, result := range inResults {
+		if result.PciAddr != storage.NilBdevAddress {
+			parsedResults = append(parsedResults, result)
+		}
+	}
+	return parsedResults
+}
+
+func printNvmeFormatResults(inCtrlrs storage.NvmeControllers, out io.Writer, opts ...PrintConfigOption) error {
+	ctrlrs := parseNvmeFormatResults(inCtrlrs)
+	iw := txtfmt.NewIndentWriter(out)
+	if len(ctrlrs) == 0 {
+		fmt.Fprintln(iw, "No NVMe devices were formatted")
 		return nil
 	}
 
 	pciTitle := "NVMe PCI"
 	resultTitle := "Format Result"
+	rolesTitle := "Role(s)"
 
-	formatter := txtfmt.NewTableFormatter(pciTitle, resultTitle)
+	formatter := txtfmt.NewTableFormatter(pciTitle, resultTitle, rolesTitle)
 	formatter.InitWriter(out)
 	var table []txtfmt.TableRow
 
-	sort.Slice(devices, func(i, j int) bool { return devices[i].PciAddr < devices[j].PciAddr })
+	sort.Slice(ctrlrs, func(i, j int) bool { return ctrlrs[i].PciAddr < ctrlrs[j].PciAddr })
 
-	for _, device := range devices {
-		row := txtfmt.TableRow{pciTitle: device.PciAddr}
-		row[resultTitle] = device.Info
+	for _, c := range ctrlrs {
+		row := txtfmt.TableRow{pciTitle: c.PciAddr}
+		row[resultTitle] = c.Info
+		roles := "NA"
+		// Assumes that all SMD devices on a controller have the same roles.
+		if len(c.SmdDevices) > 0 {
+			roles = fmt.Sprintf("%s", c.SmdDevices[0].Roles.String())
+		}
+		row[rolesTitle] = roles
 
 		table = append(table, row)
 	}
@@ -186,24 +207,25 @@ func printNvmeFormatResults(devices storage.NvmeControllers, out io.Writer, opts
 }
 
 // PrintNvmeControllers displays controller details in a verbose table.
-//
-// TODO: un-export function when not needed in cmd/daos_server/storage.go
 func PrintNvmeControllers(controllers storage.NvmeControllers, out io.Writer, opts ...PrintConfigOption) error {
 	w := txtfmt.NewErrWriter(out)
 
+	iw := txtfmt.NewIndentWriter(out)
 	if len(controllers) == 0 {
-		fmt.Fprintln(out, "\tNo NVMe devices found")
+		fmt.Fprintln(iw, "No NVMe devices found")
 		return w.Err
 	}
 
 	pciTitle := "NVMe PCI"
 	modelTitle := "Model"
 	fwTitle := "FW Revision"
-	socketTitle := "Socket ID"
+	socketTitle := "Socket"
 	capacityTitle := "Capacity"
+	rolesTitle := "Role(s)"
+	rankTitle := "Rank"
 
 	formatter := txtfmt.NewTableFormatter(
-		pciTitle, modelTitle, fwTitle, socketTitle, capacityTitle,
+		pciTitle, modelTitle, fwTitle, socketTitle, capacityTitle, rolesTitle, rankTitle,
 	)
 	formatter.InitWriter(out)
 	var table []txtfmt.TableRow
@@ -216,6 +238,18 @@ func PrintNvmeControllers(controllers storage.NvmeControllers, out io.Writer, op
 		row[fwTitle] = ctrlr.FwRev
 		row[socketTitle] = fmt.Sprint(ctrlr.SocketID)
 		row[capacityTitle] = humanize.Bytes(ctrlr.Capacity())
+		roles := "NA"
+		rank := "None"
+		// Assumes that all SMD devices on a controller have the same roles and rank.
+		if len(ctrlr.SmdDevices) > 0 {
+			sd := ctrlr.SmdDevices[0]
+			roles = sd.Roles.String()
+			if sd.Rank != ranklist.NilRank {
+				rank = sd.Rank.String()
+			}
+		}
+		row[rolesTitle] = roles
+		row[rankTitle] = rank
 
 		table = append(table, row)
 	}
@@ -247,46 +281,6 @@ func PrintNvmeHealthMap(hsm control.HostStorageMap, out io.Writer, opts ...Print
 			iw := txtfmt.NewIndentWriter(out)
 			if err := printNvmeHealth(controller.HealthStats, iw, opts...); err != nil {
 				return err
-			}
-			fmt.Fprintln(out)
-		}
-	}
-
-	return w.Err
-}
-
-// PrintNvmeMetaMap generates a human-readable representation of the supplied
-// HostStorageMap, with a focus on presenting the NVMe Device Server Meta Data.
-func PrintNvmeMetaMap(hsm control.HostStorageMap, out io.Writer, opts ...PrintConfigOption) error {
-	w := txtfmt.NewErrWriter(out)
-
-	for _, key := range hsm.Keys() {
-		hss := hsm[key]
-		hosts := getPrintHosts(hss.HostSet.RangedString(), opts...)
-		lineBreak := strings.Repeat("-", len(hosts))
-		fmt.Fprintf(out, "%s\n%s\n%s\n", lineBreak, hosts, lineBreak)
-
-		if len(hss.HostStorage.NvmeDevices) == 0 {
-			fmt.Fprintln(out, "  No NVMe devices detected")
-			continue
-		}
-
-		for _, controller := range hss.HostStorage.NvmeDevices {
-			if err := printNvmeControllerSummary(controller, out, opts...); err != nil {
-				return err
-			}
-			iw := txtfmt.NewIndentWriter(out)
-			if len(controller.SmdDevices) > 0 {
-				fmt.Fprintln(iw, "SMD Devices")
-
-				for _, device := range controller.SmdDevices {
-					iw1 := txtfmt.NewIndentWriter(iw)
-					if err := printSmdDevice(device, iw1, opts...); err != nil {
-						return err
-					}
-				}
-			} else {
-				fmt.Fprintln(iw, "No SMD devices found")
 			}
 			fmt.Fprintln(out)
 		}

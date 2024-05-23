@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -81,7 +81,10 @@ crt_proc_prop_entries(crt_proc_t proc, crt_proc_op_t proc_op, daos_prop_t *prop)
 		rc = crt_proc_uint32_t(proc, proc_op, &entry->dpe_type);
 		if (rc)
 			break;
-		rc = crt_proc_uint32_t(proc, proc_op, &entry->dpe_reserv);
+		rc = crt_proc_uint16_t(proc, proc_op, &entry->dpe_flags);
+		if (rc)
+			break;
+		rc = crt_proc_uint16_t(proc, proc_op, &entry->dpe_reserv);
 		if (rc)
 			break;
 
@@ -95,7 +98,7 @@ crt_proc_prop_entries(crt_proc_t proc, crt_proc_op_t proc_op, daos_prop_t *prop)
 						 &entry->dpe_str);
 
 		} else if (entry->dpe_type == DAOS_PROP_PO_ACL ||
-			 entry->dpe_type == DAOS_PROP_CO_ACL) {
+			   entry->dpe_type == DAOS_PROP_CO_ACL) {
 			rc = crt_proc_struct_daos_acl(proc, proc_op,
 						      (struct daos_acl **)
 						      &entry->dpe_val_ptr);
@@ -200,4 +203,50 @@ crt_proc_daos_prop_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_prop_t **data)
 		D_ERROR("bad proc_op %d.\n", proc_op);
 		return -DER_INVAL;
 	}
+}
+
+int
+crt_proc_d_sg_list_t(crt_proc_t proc, crt_proc_op_t proc_op, d_sg_list_t *p)
+{
+	int		i;
+	int		rc;
+
+	if (FREEING(proc_op)) {
+		/* NB: don't need free in crt_proc_d_iov_t() */
+		D_FREE(p->sg_iovs);
+		return 0;
+	}
+
+	rc = crt_proc_uint32_t(proc, proc_op, &p->sg_nr);
+	if (unlikely(rc))
+		return rc;
+
+	rc = crt_proc_uint32_t(proc, proc_op, &p->sg_nr_out);
+	if (unlikely(rc))
+		return rc;
+
+	if (p->sg_nr == 0)
+		return 0;
+
+	switch (proc_op) {
+	case CRT_PROC_DECODE:
+		D_ALLOC_ARRAY(p->sg_iovs, p->sg_nr);
+		if (p->sg_iovs == NULL)
+			return -DER_NOMEM;
+		/* fall through to fill sg_iovs */
+	case CRT_PROC_ENCODE:
+		for (i = 0; i < p->sg_nr; i++) {
+			rc = crt_proc_d_iov_t(proc, proc_op, &p->sg_iovs[i]);
+			if (unlikely(rc)) {
+				if (DECODING(proc_op))
+					D_FREE(p->sg_iovs);
+				return rc;
+			}
+		}
+		break;
+	default:
+		return -DER_INVAL;
+	}
+
+	return rc;
 }

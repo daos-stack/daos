@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +8,8 @@ package server
 
 import (
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -16,28 +18,15 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/reflect/protoreflect"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/proto"
-	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
+	"github.com/daos-stack/daos/src/control/system"
 )
-
-func checkAccess(ctx context.Context, FullMethod string) error {
-	component, err := componentFromContext(ctx)
-
-	if err != nil {
-		return err
-	}
-
-	hasAccess := component.HasAccess(FullMethod)
-
-	if !hasAccess {
-		errMsg := fmt.Sprintf("%s does not have permission to call %s", component, FullMethod)
-		return status.Error(codes.PermissionDenied, errMsg)
-	}
-
-	return nil
-}
 
 func componentFromContext(ctx context.Context) (comp *security.Component, err error) {
 	clientPeer, ok := peer.FromContext(ctx)
@@ -52,33 +41,40 @@ func componentFromContext(ctx context.Context) (comp *security.Component, err er
 
 	certs := authInfo.State.VerifiedChains
 	if len(certs) == 0 || len(certs[0]) == 0 {
-		//This should never happen since we require it on the TLS handshake and don't allow skipping.
+		// This should never happen since we require it on the TLS handshake and don't allow skipping.
 		return nil, status.Error(codes.Unauthenticated, "unable to verify client certificates")
 	}
 
 	peerCert := certs[0][0]
-
 	component := security.CommonNameToComponent(peerCert.Subject.CommonName)
 
 	return &component, nil
 }
 
-func unaryAccessInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-
-	err := checkAccess(ctx, info.FullMethod)
-
+func checkAccess(ctx context.Context, FullMethod string) error {
+	component, err := componentFromContext(ctx)
 	if err != nil {
-		return nil, err
+		return err
+	}
+
+	if !component.HasAccess(FullMethod) {
+		errMsg := fmt.Sprintf("%s does not have permission to call %s", component, FullMethod)
+		return status.Error(codes.PermissionDenied, errMsg)
+	}
+
+	return nil
+}
+
+func unaryAccessInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	if err := checkAccess(ctx, info.FullMethod); err != nil {
+		return nil, errors.Wrapf(err, "access denied for %T", req)
 	}
 
 	return handler(ctx, req)
 }
 
 func streamAccessInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-	ctx := ss.Context()
-	err := checkAccess(ctx, info.FullMethod)
-
-	if err != nil {
+	if err := checkAccess(ss.Context(), info.FullMethod); err != nil {
 		return err
 	}
 
@@ -109,6 +105,107 @@ func streamInterceptorForTransportConfig(cfg *security.TransportConfig) (grpc.St
 	return streamAccessInterceptor, nil
 }
 
+var selfServerComponent = func() *build.VersionedComponent {
+	self, err := build.NewVersionedComponent("server", build.DaosVersion)
+	if err != nil {
+		return &build.VersionedComponent{
+			Component: build.ComponentServer,
+			Version:   build.MustNewVersion("0.0.0"),
+		}
+	}
+	return self
+}()
+
+func checkVersion(ctx context.Context, log logging.Logger, self *build.VersionedComponent, req interface{}) error {
+	// If we can't determine our own version, then there's no
+	// checking to be done.
+	if self.Version.IsZero() {
+		return errors.New("unable to determine self server version")
+	}
+
+	// Default to the other side being a server, as the requirements
+	// are most stringent for server/server communication. We have
+	// to set a default because this security component lookup
+	// will fail if certificates are disabled.
+	otherComponent := build.ComponentServer
+	otherVersion := build.MustNewVersion("0.0.0")
+	secComponent, err := componentFromContext(ctx)
+	if err == nil {
+		otherComponent = build.Component(secComponent.String())
+	}
+	isInsecure := status.Code(err) == codes.Unauthenticated
+
+	fromHeaders, err := build.FromContext(ctx)
+	if err != nil && err != build.ErrNoCtxMetadata {
+		return errors.Wrap(err, "failed to extract peer component/version from headers")
+	}
+
+	// Prefer the new header-based component/version mechanism.
+	// If we are in secure mode, verify that the component presented
+	// in the header matches the certificate's component.
+	if fromHeaders != nil {
+		otherVersion = fromHeaders.Version
+		if isInsecure {
+			otherComponent = fromHeaders.Component
+		} else if otherComponent != fromHeaders.Component {
+			return status.Errorf(codes.PermissionDenied,
+				"component mismatch (req: %q != cert: %q)", fromHeaders.Component, otherComponent)
+		}
+	} else {
+		// If we did not receive a version via request header, then we need to fall back
+		// to trying to pick it out of the overloaded system name field.
+		//
+		// TODO (DAOS-14336): Remove this once the compatibility window has closed (e.g. for 2.8+).
+		if sReq, ok := req.(interface{ GetSys() string }); ok {
+			comps := strings.Split(sReq.GetSys(), "-")
+			if len(comps) > 1 {
+				if ver, err := build.NewVersion(comps[len(comps)-1]); err == nil {
+					otherVersion = ver
+				}
+			}
+		} else {
+			// If the request message type does not implement GetSys(), then
+			// there is no version to check. We leave message compatibility
+			// to lower layers.
+			return nil
+		}
+
+		// If we're running without certificates and we didn't receive a component
+		// via headers, then we have to enforce the strictest compatibility requirements,
+		// i.e. exact same version.
+		if isInsecure && !self.Version.Equals(otherVersion) {
+			return FaultNoCompatibilityInsecure(self.Version, otherVersion)
+		}
+	}
+
+	other, err := build.NewVersionedComponent(otherComponent, otherVersion.String())
+	if err != nil {
+		other = &build.VersionedComponent{
+			Component: "unknown",
+			Version:   build.MustNewVersion(otherVersion.String()),
+		}
+		return FaultIncompatibleComponents(self, other)
+	}
+
+	if err := build.CheckCompatibility(self, other); err != nil {
+		log.Errorf("%s is incompatible with %s", other, self)
+		return FaultIncompatibleComponents(self, other)
+	}
+
+	log.Debugf("%s is compatible with %s", other, self)
+	return nil
+}
+
+func unaryVersionInterceptor(log logging.Logger) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		if err := checkVersion(ctx, log, selfServerComponent, req); err != nil {
+			return nil, errors.Wrapf(err, "version check failed for %T", req)
+		}
+
+		return handler(ctx, req)
+	}
+}
+
 func unaryErrorInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	res, err := handler(ctx, req)
 	return res, proto.AnnotateError(err)
@@ -131,7 +228,7 @@ func dErrFromStatus(sg statusGetter) error {
 		return nil
 	}
 
-	return drpc.DaosStatus(dStatus)
+	return daos.Status(dStatus)
 }
 
 func unaryStatusInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
@@ -145,4 +242,54 @@ func unaryStatusInterceptor(ctx context.Context, req interface{}, info *grpc.Una
 	}
 
 	return res, err
+}
+
+// isSentinelErr indicates whether or not the error is a sentinel
+// error used to convey a specific state to the client.
+func isSentinelErr(err error) bool {
+	return system.IsNotReady(err) || system.IsNotReplica(err) || system.IsNotLeader(err)
+}
+
+// shouldLogMsg determines whether or not the given message should be logged.
+func shouldLogMsg(msg interface{}, log logging.Logger, ldrChk func() bool) (protoreflect.ProtoMessage, bool) {
+	m, ok := msg.(protoreflect.ProtoMessage)
+	return m, ok && log.EnabledFor(logging.LogLevelDebug) && proto.ShouldDebug(m, ldrChk)
+}
+
+// unaryLoggingInterceptor generates a grpc.UnaryServerInterceptor that
+// will log an error if the RPC handler returned an error. If debugging is
+// enabled, it will also log the request and response messages.
+//
+// NB: This interceptor should be the last in the chain, i.e. first in the
+// list of interceptors passed to grpc.NewServer.
+func unaryLoggingInterceptor(log logging.Logger, ldrChk func() bool) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		if m, ok := shouldLogMsg(req, log, ldrChk); ok {
+			log.Debugf("gRPC request: %s", proto.Debug(m))
+		}
+
+		startTime := time.Now()
+		res, err := handler(ctx, req)
+		elapsed := time.Since(startTime)
+		logErr := err
+		if logErr != nil {
+			// Unwrap the message if it's a gRPC status error.
+			if st, ok := status.FromError(err); ok {
+				logErr = proto.UnwrapError(st)
+			}
+		}
+
+		// Log the unwrapped error if it's not a sentinel error.
+		if logErr != nil {
+			if !isSentinelErr(logErr) {
+				log.Errorf("gRPC handler for %T failed: %s (elapsed: %s)", req, logErr, elapsed)
+			}
+			return res, err
+		}
+
+		if m, ok := shouldLogMsg(res, log, ldrChk); ok {
+			log.Debugf("gRPC response for %T: %s (elapsed: %s)", req, proto.Debug(m), elapsed)
+		}
+		return res, err
+	}
 }

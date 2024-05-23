@@ -1,31 +1,27 @@
 """Build io_conf generator"""
-import daos_build
+
 
 def scons():
     """Execute build"""
-    Import('denv')
+    Import(['denv', 'daos_test_tgt', 'daos_epoch_io', 'daos_test_rebuild', 'daos_test_obj'])
 
-    libraries = ['daos_common_pmem', 'daos', 'daos_tests', 'gurt', 'cart']
-    libraries += ['uuid']
-    libraries += ['cmocka', 'json-c']
-
-    Import('daos_test_tgt')
-    Import('daos_epoch_io')
-    Import('daos_test_obj')
+    libraries = ['daos_common', 'daos', 'dfs', 'daos_tests', 'gurt', 'cart', 'uuid']
+    libraries += ['cmocka', 'json-c', 'dpar']
 
     iogen = denv.SharedObject('daos_generate_io_conf.c')
-    daos_gen_io_conf = daos_build.test(denv, 'daos_gen_io_conf',
-                                       daos_test_tgt + daos_epoch_io +
-                                       daos_test_obj + iogen,
-                                       LIBS=libraries)
+    daos_gen_io_conf = denv.d_test_program('daos_gen_io_conf',
+                                           [daos_test_tgt, daos_epoch_io, daos_test_rebuild,
+                                            daos_test_obj, iogen],
+                                           LIBS=libraries)
 
     ioconf = denv.SharedObject('daos_run_io_conf.c')
-    daos_run_io_conf = daos_build.test(denv, 'daos_run_io_conf',
-                                       daos_test_tgt + daos_epoch_io +
-                                       daos_test_obj + ioconf,
-                                       LIBS=libraries)
+    daos_run_io_conf = denv.d_test_program('daos_run_io_conf',
+                                           [daos_test_tgt, daos_epoch_io, daos_test_rebuild,
+                                            daos_test_obj, ioconf],
+                                           LIBS=libraries)
     denv.Install('$PREFIX/bin/', daos_gen_io_conf)
     denv.Install('$PREFIX/bin/', daos_run_io_conf)
+
 
 if __name__ == "SCons.Script":
     scons()

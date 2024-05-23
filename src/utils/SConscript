@@ -1,53 +1,45 @@
 """Build DAOS utilities"""
-import daos_build
-Import('env', 'base_env', 'prereqs')
+
 
 def scons():
     """Execute build"""
 
+    Import('env', 'prereqs')
+
+    if prereqs.server_requested():
+        # Build daos_metrics
+        SConscript('daos_metrics/SConscript')
+
+        # Build ddb
+        SConscript('ddb/SConscript')
+
     if not prereqs.client_requested():
         return
 
-    libs = ['daos', 'daos_common', 'uuid', 'dfs', 'duns', 'gurt', 'cart']
-
-    daos_build.add_build_rpath(env)
-    daos_build.add_build_rpath(base_env)
-    env.AppendUnique(LIBPATH=[Dir('.')])
-
-    denv = env.Clone()
+    env.d_add_build_rpath()
 
     # Build self test
     SConscript('self_test/SConscript')
     Default('self_test')
 
     if prereqs.test_requested():
+        # Build wrapper libraries
+        SConscript('wrap/SConscript')
+
         # Build crt_launch
         SConscript('crt_launch/SConscript')
-
-        # Build daos_metrics
-        SConscript('daos_metrics/SConscript')
 
     # Build cart_ctl
     SConscript('ctl/SConscript')
 
-    # Can remove this when pmdk is not needed on client
-    denv.AppendUnique(LIBPATH=["../client/dfs"])
+    denv = env.Clone()
+    denv.AppendUnique(LIBPATH=[Dir('../client/dfs')])
+    libs = ['daos', 'daos_common', 'uuid', 'dfs', 'duns', 'gurt', 'cart', 'dl']
 
     daos_hdlrs_src = ['daos_hdlr.c', 'daos_autotest.c', 'daos_dfs_hdlr.c']
-    daos_hdlrs_lib = daos_build.library(denv, 'daos_cmd_hdlrs',
-                                        daos_hdlrs_src,
-                                        LIBS=libs)
+    daos_hdlrs_lib = denv.d_library('daos_cmd_hdlrs', daos_hdlrs_src, LIBS=libs)
     env.Install('$PREFIX/lib64/', daos_hdlrs_lib)
-    libs += ['daos_cmd_hdlrs']
 
-    Export('daos_hdlrs_lib')
-
-    Import('cmd_parser', 'dc_credit')
-    daos_obj = [cmd_parser, dc_credit]
-    daos_src = ['daos.c', 'daos_obj_ctl.c']
-
-    daos = daos_build.program(denv, 'daos_old', [daos_src, daos_obj], LIBS=libs)
-    denv.Install('$PREFIX/bin/', daos)
 
 if __name__ == "SCons.Script":
     scons()

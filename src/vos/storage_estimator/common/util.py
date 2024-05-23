@@ -1,14 +1,13 @@
-#!/usr/bin/env python3
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 
 
 import os
-import yaml
 
+import yaml
 from storage_estimator.dfs_sb import VOS_SIZE, get_dfs_sb_obj
 from storage_estimator.vos_size import MetaOverhead
 from storage_estimator.vos_structures import Containers
@@ -144,16 +143,22 @@ class ObjectClass(CommonBase):
 
         return 0
 
-    def validate_chunk_size(self, chunk_size):
+    def validate_ec_args(self, chunk_size, io_size, ec_cell_size):
         if self.get_dir_parity():
             if chunk_size % self.get_dir_stripe():
-                return True
+                raise ValueError(f"chunk_size={chunk_size} must be a multiple of data cell count")
+            if min(chunk_size, io_size) % ec_cell_size:
+                raise ValueError("ec_cell_size must divide evenly into min(chunk_size, io_size)")
+            if self.get_dir_stripe() * ec_cell_size > chunk_size:
+                raise ValueError("chunk_size should be >= EC stripe size")
 
         if self.get_file_parity():
             if chunk_size % self.get_file_stripe():
-                return True
-
-        return False
+                raise ValueError(f"chunk_size={chunk_size} must be a multiple of data cell count")
+            if min(chunk_size, io_size) % ec_cell_size:
+                raise ValueError("ec_cell_size must divide evenly into min(chunk_size, io_size)")
+            if self.get_file_stripe() * ec_cell_size > chunk_size:
+                raise ValueError("chunk_size should be >= EC stripe size")
 
     def is_ec_enabled(self):
         if self.get_dir_parity():
@@ -302,7 +307,7 @@ class Common(CommonBase):
 
     def _create_vos_meta(self):
         vos_size = VOS_SIZE()
-        meta_str = vos_size.get_vos_size_str(self._args.alloc_overhead)
+        meta_str = vos_size.get_vos_size_str(self._args.alloc_overhead, self._args.vospath)
 
         return meta_str
 
@@ -352,16 +357,28 @@ class ProcessBase(Common):
     def __init__(self, args):
         super().__init__(args)
         self._oclass = ObjectClass(args)
+        self._assume_aggregation = False
+        self.set_assume_aggregation(args.assume_aggregation)
         self._process_block_values()
         self._process_checksum()
         self._num_shards = self._get_num_shards(args)
         self._meta = self._update_vos_meta(args)
+
+    def set_assume_aggregation(self, assume_aggregation):
+        self._check_value_type(assume_aggregation, bool)
+        self._assume_aggregation = assume_aggregation
 
     def get_io_size(self):
         return self._io_size
 
     def get_chunk_size(self):
         return self._chunk_size
+
+    def get_ec_cell_size(self):
+        return self._ec_cell_size
+
+    def get_assume_aggregation(self):
+        return self._assume_aggregation
 
     def _update_vos_meta(self, args):
         if args.meta:
@@ -404,9 +421,8 @@ class ProcessBase(Common):
             csum_name = self._args.checksum
 
             if csum_name not in csummers:
-                raise ValueError(
-                    'unknown checksum algorithm: "{0}", the supported checksum algorithms are: {1}'. format(
-                        csum_name, list(csummers.keys())))
+                raise ValueError(f"unknown checksum algorithm: '{csum_name}', the supported "
+                                 + f"checksum algorithms are: '{list(csummers.keys())}'")
 
             csum_size = csummers[csum_name]
             self._debug(
@@ -416,26 +432,26 @@ class ProcessBase(Common):
 
     def _process_block_values(self):
         scm_cutoff = self._process_scm_cutoff()
-        io_size = self._parse_num_value('io_size', '128KiB')
+        io_size = self._parse_num_value('io_size', '1MiB')
         chunk_size = self._parse_num_value('chunk_size', '1MiB')
+        ec_cell_size = self._parse_num_value('ec_cell_size', '64KiB')
         self._debug('using scm_cutoff of {0} bytes'.format(scm_cutoff))
-
-        if io_size % scm_cutoff:
-            raise ValueError('io_size must be multiple of scm_cutoff')
 
         self._debug('using io_size of {0} bytes'.format(io_size))
 
-        if chunk_size % io_size:
-            raise ValueError('chunk_size must be multiple of io_size')
+        if io_size > chunk_size:
+            io_size = chunk_size
 
-        if self._oclass.validate_chunk_size(chunk_size):
-            raise ValueError(
-                'chunk_size must be multiple of number of stripes')
+        if chunk_size % io_size:
+            raise ValueError('If chunk_size > io_size, it must be a multiple')
+
+        self._oclass.validate_ec_args(chunk_size, io_size, ec_cell_size)
 
         self._debug('using chunk_size of {0} bytes'.format(chunk_size))
         self._scm_cutoff = scm_cutoff
         self._io_size = io_size
         self._chunk_size = chunk_size
+        self._ec_cell_size = ec_cell_size
         self._oclass.print_pretty_status()
 
     def _get_yaml_from_dfs(self, fse, use_average=False):

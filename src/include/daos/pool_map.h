@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,9 +18,10 @@
 #define POOL_MAP_VER_2		(2)
 #define POOL_MAP_VERSION	POOL_MAP_VER_2
 
-#define DF_TARGET "Target[%d] (rank %u idx %u status %u)"
+#define DF_TARGET "Target[%d] (rank %u idx %u status %u ver %u in/out ver %u fseq %u)"
 #define DP_TARGET(t) t->ta_comp.co_id, t->ta_comp.co_rank, t->ta_comp.co_index,\
-		     t->ta_comp.co_status
+		     t->ta_comp.co_status, t->ta_comp.co_ver, t->ta_comp.co_in_ver, \
+		     t->ta_comp.co_fseq
 
 /**
  * pool component types
@@ -33,6 +34,7 @@ typedef enum pool_comp_type {
 	PO_COMP_TP_RANK		= 1, /** reserved, hard-coded */
 	PO_COMP_TP_MIN		= 2, /** first user-defined domain */
 	PO_COMP_TP_NODE		= 2, /** for test only */
+	PO_COMP_TP_GRP		= 3, /** group, commonly used for performance domain */
 	PO_COMP_TP_MAX		= 254, /** last user-defined domain */
 	PO_COMP_TP_ROOT		= 255,
 	PO_COMP_TP_END		= 256,
@@ -61,7 +63,16 @@ enum pool_component_flags {
 	 * indicate when in status PO_COMP_ST_DOWNOUT, it is changed from
 	 * PO_COMP_ST_DOWN (rather than from PO_COMP_ST_DRAIN).
 	 */
-	PO_COMPF_DOWN2OUT	= 1,
+	PO_COMPF_DOWN2OUT	= (1 << 0),
+	/**
+	 * If the target status is UP, then it indicates the UP status is
+	 * from DOWN directly, instead of NEW and DOWNOUT.
+	 */
+	PO_COMPF_DOWN2UP	= (1 << 1),
+	/**
+	 * The component has been processed by DAOS check, only in DRAM.
+	 */
+	PO_COMPF_CHK_DONE	= (1 << 2),
 };
 
 #define co_in_ver	co_out_ver
@@ -156,6 +167,10 @@ pool_target_addr_list_append(struct pool_target_addr_list *dst_list,
 void
 pool_target_addr_list_free(struct pool_target_addr_list *list);
 
+bool
+pool_target_addr_found(struct pool_target_addr_list *addr_list,
+		       struct pool_target_addr *tgt);
+
 struct pool_target_id {
 	uint32_t	pti_id;
 };
@@ -212,6 +227,27 @@ static inline unsigned int pool_buf_nr(size_t size)
 		sizeof(struct pool_component);
 }
 
+static inline const char *
+pool_map_status2name(uint32_t status)
+{
+	switch (status) {
+	case PO_COMP_ST_UNKNOWN:
+		return "unknown";
+	case PO_COMP_ST_NEW:
+		return "new";
+	case PO_COMP_ST_UP:
+		return "up";
+	case PO_COMP_ST_DOWN:
+		return "down";
+	case PO_COMP_ST_DOWNOUT:
+		return "downout";
+	case PO_COMP_ST_DRAIN:
+		return "drain";
+	default:
+		D_ASSERTF(0, "Invalid status %u\n", status);
+	}
+}
+
 struct pool_map;
 
 struct pool_buf *pool_buf_alloc(unsigned int nr);
@@ -220,11 +256,8 @@ void pool_buf_free(struct pool_buf *buf);
 int  pool_buf_extract(struct pool_map *map, struct pool_buf **buf_pp);
 int  pool_buf_attach(struct pool_buf *buf, struct pool_component *comps,
 		     unsigned int comp_nr);
-int gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
-		int map_version, int ndomains, int nnodes, int ntargets,
-		const uint32_t *domains, uuid_t target_uuids[],
-		const d_rank_list_t *target_addrs, uuid_t **uuids_out,
-		uint32_t dss_tgt_nr);
+int gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_version, int ndomains,
+		 int nnodes, int ntargets, const uint32_t *domains, uint32_t dss_tgt_nr);
 
 int pool_map_comp_cnt(struct pool_map *map);
 
@@ -238,6 +271,7 @@ void pool_map_print(struct pool_map *map);
 
 int  pool_map_set_version(struct pool_map *map, uint32_t version);
 uint32_t pool_map_get_version(struct pool_map *map);
+uint32_t pool_map_bump_version(struct pool_map *map);
 
 int pool_map_get_failed_cnt(struct pool_map *map, uint32_t domain);
 
@@ -270,7 +304,9 @@ int pool_map_find_target_by_rank_idx(struct pool_map *map, uint32_t rank,
 int pool_map_find_failed_tgts_by_rank(struct pool_map *map,
 				  struct pool_target ***tgt_ppp,
 				  unsigned int *tgt_cnt, d_rank_t rank);
-int pool_map_activate_new_target(struct pool_map *map, uint32_t id);
+int
+update_dom_status_by_tgt_id(struct pool_map *map, uint32_t tgt_id, uint32_t status,
+			    uint32_t version, bool *updated);
 bool
 pool_map_node_status_match(struct pool_domain *dom, unsigned int status);
 
@@ -281,6 +317,9 @@ int pool_map_find_by_rank_status(struct pool_map *map,
 				 struct pool_target ***tgt_ppp,
 				 unsigned int *tgt_cnt, unsigned int status,
 				 d_rank_t rank);
+
+int pool_map_get_ranks(uuid_t pool_uuid, struct pool_map *map, bool get_enabled,
+		       d_rank_list_t **ranks);
 
 static inline struct pool_target *
 pool_map_targets(struct pool_map *map)
@@ -355,6 +394,12 @@ pool_target_avail(struct pool_target *tgt, uint32_t allow_status)
 	return tgt->ta_comp.co_status & allow_status;
 }
 
+static inline bool
+pool_target_is_up_or_drain(struct pool_target *tgt)
+{
+	return tgt->ta_comp.co_status & (PO_COMP_ST_UP | PO_COMP_ST_DRAIN);
+}
+
 /** Check if the target is in PO_COMP_ST_DOWN status */
 static inline bool
 pool_target_down(struct pool_target *tgt)
@@ -365,7 +410,7 @@ pool_target_down(struct pool_target *tgt)
 	return (status == PO_COMP_ST_DOWN);
 }
 
-int pool_map_rf_verify(struct pool_map *map, uint32_t last_ver, uint32_t rf);
+int pool_map_rf_verify(struct pool_map *map, uint32_t last_ver, uint32_t rlvl, uint32_t rf);
 pool_comp_state_t pool_comp_str2state(const char *name);
 const char *pool_comp_state2str(pool_comp_state_t state);
 
@@ -378,6 +423,13 @@ pool_comp_name(struct pool_component *comp)
 {
 	return pool_comp_type2str(comp->co_type);
 }
+
+bool
+is_pool_map_adding(struct pool_map *map);
+void
+pool_map_init_in_fseq(struct pool_map *map);
+int
+pool_map_failure_domain_level(struct pool_map *map, uint32_t level);
 
 #define pool_target_name(target)	pool_comp_name(&(target)->ta_comp)
 #define pool_domain_name(domain)	pool_comp_name(&(domain)->do_comp)

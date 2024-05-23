@@ -1,0 +1,113 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+hosts:
+  test_servers: 4
+timeout: 800
+timeouts:
+  test_rebuild_0to10: 2000
+  test_rebuild_12to15: 1500
+  test_rebuild_27: 1500
+pool:
+  nvme_size: 0G
+server_config:
+  name: daos_server
+  engines_per_host: 2
+  engines:
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=group_metadata_only,io,epc,rebuild
+        - D_LOG_FILE_APPEND_PID=1
+        - D_LOG_FILE_APPEND_RANK=1
+      storage: auto
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=group_metadata_only,io,epc,rebuild
+        - D_LOG_FILE_APPEND_PID=1
+        - D_LOG_FILE_APPEND_RANK=1
+      storage: auto
+  transport_config:
+    allow_insecure: false
+agent_config:
+  transport_config:
+    allow_insecure: false
+dmg:
+  transport_config:
+    allow_insecure: false
+daos_tests:
+  num_clients: 1
+  num_replicas: 1
+  test_name:
+    test_rebuild_0to10: DAOS_Rebuild_0to10
+    test_rebuild_12to15: DAOS_Rebuild_12to15
+    test_rebuild_16: DAOS_Rebuild_16
+    test_rebuild_17: DAOS_Rebuild_17
+    test_rebuild_18: DAOS_Rebuild_18
+    test_rebuild_19: DAOS_Rebuild_19
+    test_rebuild_20: DAOS_Rebuild_20
+    test_rebuild_21: DAOS_Rebuild_21
+    test_rebuild_22: DAOS_Rebuild_22
+    test_rebuild_23: DAOS_Rebuild_23
+    test_rebuild_24: DAOS_Rebuild_24
+    test_rebuild_25: DAOS_Rebuild_25
+    test_rebuild_26: DAOS_Rebuild_26
+    test_rebuild_27: DAOS_Rebuild_27
+    test_rebuild_28: DAOS_Rebuild_28
+    test_rebuild_29: DAOS_Rebuild_29
+    test_rebuild_30: DAOS_Rebuild_30
+  daos_test:
+    test_rebuild_0to10: r
+    test_rebuild_12to15: r
+    test_rebuild_16: r
+    test_rebuild_17: r
+    test_rebuild_18: r
+    test_rebuild_19: r
+    test_rebuild_20: r
+    test_rebuild_21: r
+    test_rebuild_22: r
+    test_rebuild_23: r
+    test_rebuild_24: r
+    test_rebuild_25: r
+    test_rebuild_26: r
+    test_rebuild_27: r
+    test_rebuild_28: r
+    test_rebuild_29: r
+    test_rebuild_30: r
+  args:
+    test_rebuild_0to10: -s3 -u subtests="0-10"
+    test_rebuild_12to15: -s3 -u subtests="12-15"
+    test_rebuild_16: -s3 -u subtests="16"
+    test_rebuild_17: -s3 -u subtests="17"
+    test_rebuild_18: -s3 -u subtests="18"
+    test_rebuild_19: -s3 -u subtests="19"
+    test_rebuild_20: -s3 -u subtests="20"
+    test_rebuild_21: -s3 -u subtests="21"
+    test_rebuild_22: -s3 -u subtests="22"
+    test_rebuild_23: -s3 -u subtests="23"
+    test_rebuild_24: -s3 -u subtests="24"
+    test_rebuild_25: -s5 -u subtests="25"
+    test_rebuild_26: -s5 -u subtests="26"
+    test_rebuild_27: -s7 -u subtests="27"
+    test_rebuild_28: -s3 -u subtests="28"
+    test_rebuild_29: -s5 -u subtests="29"
+    test_rebuild_30: -s5 -u subtests="30"
+  stopped_ranks:
+    test_rebuild_26: ["random"]
+    test_rebuild_27: ["random"]
+    test_rebuild_29: ["random"]
+  pools_created:
+    test_rebuild_0to10: 16
+    test_rebuild_12to15: 5
+    test_rebuild_18: 5
+    test_rebuild_28: 2

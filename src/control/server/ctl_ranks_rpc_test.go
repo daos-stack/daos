@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -23,8 +23,10 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -39,7 +41,7 @@ var (
 	msStopped    = stateString(system.MemberStateStopped)
 	msErrored    = stateString(system.MemberStateErrored)
 
-	defRankCmpOpts = append(common.DefaultCmpOpts(),
+	defRankCmpOpts = append(test.DefaultCmpOpts(),
 		protocmp.IgnoreFields(&sharedpb.RankResult{}, "msg"),
 	)
 )
@@ -55,16 +57,20 @@ func mockEvtEngineDied(t *testing.T) *events.RASEvent {
 func checkUnorderedRankResults(t *testing.T, expResults, gotResults []*sharedpb.RankResult) {
 	t.Helper()
 
-	common.AssertEqual(t, len(gotResults), len(expResults), "number of rank results")
+	test.AssertEqual(t, len(gotResults), len(expResults), "number of rank results")
 	for _, exp := range expResults {
+		rank := exp.Rank
 		match := false
 		for _, got := range gotResults {
-			if diff := cmp.Diff(exp, got, defRankCmpOpts...); diff == "" {
+			if got.Rank == exp.Rank {
+				if diff := cmp.Diff(exp, got, defRankCmpOpts...); diff != "" {
+					t.Fatalf("unexpected result: %s", diff)
+				}
 				match = true
 			}
 		}
 		if !match {
-			t.Fatalf("unexpected results: %s", cmp.Diff(expResults, gotResults, defRankCmpOpts...))
+			t.Fatalf("unmatched result for rank %d", rank)
 		}
 	}
 }
@@ -96,9 +102,13 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 			// no results as rank cannot be read from superblock
 			expResults: []*sharedpb.RankResult{},
 		},
-		"instances stopped": {
+		"instances stopped already": {
 			req:              &ctlpb.RanksReq{Ranks: "0-3"},
 			instancesStopped: true,
+			drpcResps: []proto.Message{
+				&mgmtpb.DaosResp{Status: -1},
+				&mgmtpb.DaosResp{Status: -1},
+			},
 			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msStopped},
 				{Rank: 2, State: msStopped},
@@ -124,18 +134,6 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 				{Rank: 2, State: msErrored, Errored: true},
 			},
 		},
-		"prep shutdown timeout": { // dRPC req-resp duration > rankReqTime
-			req:           &ctlpb.RanksReq{Ranks: "0-3"},
-			responseDelay: 200 * time.Millisecond,
-			drpcResps: []proto.Message{
-				&mgmtpb.DaosResp{Status: 0},
-				&mgmtpb.DaosResp{Status: 0},
-			},
-			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: stateString(system.MemberStateUnresponsive)},
-				{Rank: 2, State: stateString(system.MemberStateUnresponsive)},
-			},
-		},
 		"context timeout": { // dRPC req-resp duration > parent context timeout
 			req:           &ctlpb.RanksReq{Ranks: "0-3"},
 			responseDelay: 40 * time.Millisecond,
@@ -144,10 +142,7 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 				&mgmtpb.DaosResp{Status: 0},
 			},
-			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: stateString(system.MemberStateUnresponsive)},
-				{Rank: 2, State: stateString(system.MemberStateUnresponsive)},
-			},
+			expErr: context.DeadlineExceeded,
 		},
 		"context cancel": { // dRPC req-resp duration > when parent context is canceled
 			req:           &ctlpb.RanksReq{Ranks: "0-3"},
@@ -157,7 +152,7 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 				&mgmtpb.DaosResp{Status: 0},
 			},
-			expErr: errors.New("nil result"), // parent ctx cancel
+			expErr: context.Canceled,
 		},
 		"unsuccessful call": {
 			req: &ctlpb.RanksReq{Ranks: "0-3"},
@@ -184,11 +179,11 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			cfg := config.DefaultServer().WithEngines(
-				engine.NewConfig().WithTargetCount(1),
-				engine.NewConfig().WithTargetCount(1),
+				engine.MockConfig().WithTargetCount(1),
+				engine.MockConfig().WithTargetCount(1),
 			)
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 			for i, e := range svc.harness.instances {
@@ -203,11 +198,11 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 					trc.Running.SetTrue()
 					srv.ready.SetTrue()
 				}
-				srv.runner = engine.NewTestRunner(trc, engine.NewConfig())
+				srv.runner = engine.NewTestRunner(trc, engine.MockConfig())
 				srv.setIndex(uint32(i))
 
-				srv._superblock.Rank = new(system.Rank)
-				*srv._superblock.Rank = system.Rank(i + 1)
+				srv._superblock.Rank = new(ranklist.Rank)
+				*srv._superblock.Rank = ranklist.Rank(i + 1)
 
 				cfg := new(mockDrpcClientConfig)
 				if tc.drpcRet != nil {
@@ -222,13 +217,13 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 						cfg.setResponseDelay(tc.responseDelay)
 					}
 				}
-				srv.setDrpcClient(newMockDrpcClient(cfg))
+				srv.getDrpcClientFn = func(s string) drpc.DomainSocketClient {
+					return newMockDrpcClient(cfg)
+				}
 			}
 
-			svc.harness.rankReqTimeout = 50 * time.Millisecond
-
 			var cancel context.CancelFunc
-			ctx := context.Background()
+			ctx := test.Context(t)
 			if tc.ctxTimeout != 0 {
 				ctx, cancel = context.WithTimeout(ctx, tc.ctxTimeout)
 				defer cancel()
@@ -241,7 +236,7 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 			}
 
 			gotResp, gotErr := svc.PrepShutdownRanks(ctx, tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -254,16 +249,16 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 
 func TestServer_CtlSvc_StopRanks(t *testing.T) {
 	for name, tc := range map[string]struct {
-		missingSB        bool
-		engineCount      int
-		instancesStopped bool
-		req              *ctlpb.RanksReq
-		signal           os.Signal
-		signalErr        error
-		ctxTimeout       time.Duration
-		expSignalsSent   map[uint32]os.Signal
-		expResults       []*sharedpb.RankResult
-		expErr           error
+		missingSB         bool
+		engineCount       int
+		instancesStopped  bool
+		instancesDontStop bool
+		req               *ctlpb.RanksReq
+		timeout           time.Duration
+		signal            os.Signal
+		expSignalsSent    map[uint32]os.Signal
+		expResults        []*sharedpb.RankResult
+		expErr            error
 	}{
 		"nil request": {
 			expErr: errors.New("nil request"),
@@ -282,33 +277,28 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 			req:        &ctlpb.RanksReq{Ranks: "0,3"},
 			expResults: []*sharedpb.RankResult{},
 		},
-		"kill signal send error": {
-			req: &ctlpb.RanksReq{
-				Ranks: "0-3", Force: true,
-			},
-			signalErr: errors.New("sending signal failed"),
-			expErr:    errors.New("sending killed: sending signal failed"),
-		},
-		"context timeout": { // near-immediate parent context Timeout
-			req:        &ctlpb.RanksReq{Ranks: "0-3"},
-			ctxTimeout: time.Millisecond,
-			expErr:     context.DeadlineExceeded, // parent ctx timeout
-		},
-		"instances started": { // unsuccessful result for kill
+		"instances successfully stopped": {
 			req:            &ctlpb.RanksReq{Ranks: "0-3"},
 			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGINT, 1: syscall.SIGINT},
 			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: msErrored, Errored: true},
-				{Rank: 2, State: msErrored, Errored: true},
+				{Rank: 1, State: msStopped},
+				{Rank: 2, State: msStopped},
 			},
 		},
-		"force stop instances started": { // unsuccessful result for kill
+		"instances successfully stopped with force": {
 			req:            &ctlpb.RanksReq{Ranks: "0-3", Force: true},
 			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGKILL, 1: syscall.SIGKILL},
 			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: msErrored, Errored: true},
-				{Rank: 2, State: msErrored, Errored: true},
+				{Rank: 1, State: msStopped},
+				{Rank: 2, State: msStopped},
 			},
+		},
+		"instances not stopped in time": {
+			req:               &ctlpb.RanksReq{Ranks: "0-3"},
+			timeout:           time.Second,
+			expSignalsSent:    map[uint32]os.Signal{0: syscall.SIGINT, 1: syscall.SIGINT},
+			instancesDontStop: true,
+			expErr:            errors.New("deadline exceeded"),
 		},
 		"instances already stopped": { // successful result for kill
 			req:              &ctlpb.RanksReq{Ranks: "0-3"},
@@ -316,13 +306,6 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msStopped},
 				{Rank: 2, State: msStopped},
-			},
-		},
-		"force stop single instance started": {
-			req:            &ctlpb.RanksReq{Ranks: "1", Force: true},
-			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGKILL},
-			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: msErrored, Errored: true},
 			},
 		},
 		"single instance already stopped": {
@@ -335,7 +318,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			var signalsSent sync.Map
 
@@ -344,18 +327,19 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 			}
 
 			cfg := config.DefaultServer().WithEngines(
-				engine.NewConfig().WithTargetCount(1),
-				engine.NewConfig().WithTargetCount(1),
+				engine.MockConfig().WithTargetCount(1),
+				engine.MockConfig().WithTargetCount(1),
 			)
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 
-			if tc.ctxTimeout == 0 {
-				tc.ctxTimeout = 500 * time.Millisecond
+			ctx, outerCancel := context.WithCancel(test.Context(t))
+			t.Cleanup(outerCancel)
+			var cancel context.CancelFunc
+			if tc.timeout != time.Duration(0) {
+				t.Logf("timeout of %s being applied", tc.timeout)
+				ctx, cancel = context.WithTimeout(ctx, tc.timeout)
+				defer cancel()
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), tc.ctxTimeout)
-			defer cancel()
-
-			svc.harness.rankReqTimeout = 50 * time.Millisecond
 
 			ps := events.NewPubSub(ctx, log)
 			defer ps.Close()
@@ -365,46 +349,51 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 			svc.events.Subscribe(events.RASTypeStateChange, dispatched)
 
 			for i, e := range svc.harness.instances {
-				srv := e.(*EngineInstance)
+				ei := e.(*EngineInstance)
 				if tc.missingSB {
-					srv._superblock = nil
+					ei._superblock = nil
 					continue
 				}
 
 				trc := &engine.TestRunnerConfig{}
 				if !tc.instancesStopped {
 					trc.Running.SetTrue()
-					srv.ready.SetTrue()
+					ei.ready.SetTrue()
 				}
 				trc.SignalCb = func(idx uint32, sig os.Signal) {
 					signalsSent.Store(idx, sig)
-					// simulate process exit which will call
-					// onInstanceExit handlers.
-					svc.harness.instances[idx].(*EngineInstance).exit(context.TODO(),
-						common.NormalExit)
+					if tc.instancesDontStop {
+						return
+					}
+					// simulate process exit which will call onInstanceExit handlers
+					ei.handleExit(ctx, 0, common.NormalExit)
+					// set false on test runner so IsStarted on engine returns false
+					ei.runner.(*engine.TestRunner).GetRunnerConfig().Running.SetFalse()
+					log.Debugf("mock handling signal %v on engine %d", sig, idx)
 				}
-				trc.SignalErr = tc.signalErr
-				srv.runner = engine.NewTestRunner(trc, engine.NewConfig())
-				srv.setIndex(uint32(i))
+				ei.runner = engine.NewTestRunner(trc, engine.MockConfig())
+				ei.setIndex(uint32(i))
 
-				srv._superblock.Rank = new(system.Rank)
-				*srv._superblock.Rank = system.Rank(i + 1)
+				ei._superblock.Rank = new(ranklist.Rank)
+				*ei._superblock.Rank = ranklist.Rank(i + 1)
 
-				srv.OnInstanceExit(
-					func(_ context.Context, _ uint32, _ system.Rank, _ error, _ uint64) error {
+				ei.OnInstanceExit(
+					func(_ context.Context, _ uint32, _ ranklist.Rank, _ error, _ int) error {
 						svc.events.Publish(mockEvtEngineDied(t))
 						return nil
 					})
 			}
 
 			gotResp, gotErr := svc.StopRanks(ctx, tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
 
-			<-ctx.Done()
-			common.AssertEqual(t, 0, len(dispatched.rx), "number of events published")
+			if tc.timeout != time.Duration(0) {
+				<-ctx.Done()
+			}
+			test.AssertEqual(t, 0, len(dispatched.rx), "number of events published")
 
 			if diff := cmp.Diff(tc.expResults, gotResp.Results, defRankCmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
@@ -415,7 +404,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 				numSignalsSent++
 				return true
 			})
-			common.AssertEqual(t, len(tc.expSignalsSent), numSignalsSent, "number of signals sent")
+			test.AssertEqual(t, len(tc.expSignalsSent), numSignalsSent, "number of signals sent")
 
 			for expKey, expValue := range tc.expSignalsSent {
 				value, found := signalsSent.Load(expKey)
@@ -430,215 +419,6 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 	}
 }
 
-func TestServer_CtlSvc_PingRanks(t *testing.T) {
-	for name, tc := range map[string]struct {
-		missingSB        bool
-		instancesStopped bool
-		req              *ctlpb.RanksReq
-		drpcRet          error
-		junkResp         bool
-		drpcResps        []proto.Message
-		responseDelay    time.Duration
-		ctxTimeout       time.Duration
-		ctxCancel        time.Duration
-		expResults       []*sharedpb.RankResult
-		expErr           error
-	}{
-		"nil request": {
-			expErr: errors.New("nil request"),
-		},
-		"no ranks specified": {
-			req:    &ctlpb.RanksReq{},
-			expErr: errors.New("no ranks specified in request"),
-		},
-		"missing superblock": {
-			req:       &ctlpb.RanksReq{Ranks: "0-3"},
-			missingSB: true,
-			// no results as rank can't be read from superblock
-			expResults: []*sharedpb.RankResult{},
-		},
-		"instances stopped": {
-			req:              &ctlpb.RanksReq{Ranks: "0-3"},
-			instancesStopped: true,
-			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: msStopped},
-				{Rank: 2, State: msStopped},
-			},
-		},
-		"instances started": {
-			req: &ctlpb.RanksReq{Ranks: "0-3"},
-			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: msReady},
-				{Rank: 2, State: msReady},
-			},
-		},
-		"dRPC resp fails": {
-			// force flag in request triggers dRPC ping
-			req:     &ctlpb.RanksReq{Ranks: "0-3", Force: true},
-			drpcRet: errors.New("call failed"),
-			drpcResps: []proto.Message{
-				&mgmtpb.DaosResp{Status: 0},
-				&mgmtpb.DaosResp{Status: 0},
-			},
-			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: msErrored, Errored: true},
-				{Rank: 2, State: msErrored, Errored: true},
-			},
-		},
-		"dRPC resp junk": {
-			// force flag in request triggers dRPC ping
-			req:      &ctlpb.RanksReq{Ranks: "0-3", Force: true},
-			junkResp: true,
-			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: msErrored, Errored: true},
-				{Rank: 2, State: msErrored, Errored: true},
-			},
-		},
-		"dRPC ping timeout": { // dRPC req-resp duration > rankReqTimeout
-			// force flag in request triggers dRPC ping
-			req:           &ctlpb.RanksReq{Ranks: "0-3", Force: true},
-			responseDelay: 200 * time.Millisecond,
-			drpcResps: []proto.Message{
-				&mgmtpb.DaosResp{Status: 0},
-				&mgmtpb.DaosResp{Status: 0},
-			},
-			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: stateString(system.MemberStateUnresponsive)},
-				{Rank: 2, State: stateString(system.MemberStateUnresponsive)},
-			},
-		},
-		"dRPC context timeout": { // dRPC req-resp duration > parent context Timeout
-			// force flag in request triggers dRPC ping
-			req:           &ctlpb.RanksReq{Ranks: "0-3", Force: true},
-			responseDelay: 40 * time.Millisecond,
-			ctxTimeout:    10 * time.Millisecond,
-			drpcResps: []proto.Message{
-				&mgmtpb.DaosResp{Status: 0},
-				&mgmtpb.DaosResp{Status: 0},
-			},
-			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: stateString(system.MemberStateUnresponsive)},
-				{Rank: 2, State: stateString(system.MemberStateUnresponsive)},
-			},
-		},
-		"dRPC context cancel": { // dRPC req-resp duration > when parent context is canceled
-			// force flag in request triggers dRPC ping
-			req:           &ctlpb.RanksReq{Ranks: "0-3", Force: true},
-			responseDelay: 40 * time.Millisecond,
-			ctxCancel:     10 * time.Millisecond,
-			drpcResps: []proto.Message{
-				&mgmtpb.DaosResp{Status: 0},
-				&mgmtpb.DaosResp{Status: 0},
-			},
-			expErr: errors.New("nil result"), // parent ctx cancel
-		},
-		"dRPC unsuccessful call": {
-			// force flag in request triggers dRPC ping
-			req: &ctlpb.RanksReq{Ranks: "0-3", Force: true},
-			drpcResps: []proto.Message{
-				&mgmtpb.DaosResp{Status: -1},
-				&mgmtpb.DaosResp{Status: -1},
-			},
-			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: msErrored, Errored: true},
-				{Rank: 2, State: msErrored, Errored: true},
-			},
-		},
-		"dRPC successful call": {
-			// force flag in request triggers dRPC ping
-			req: &ctlpb.RanksReq{Ranks: "0-3", Force: true},
-			drpcResps: []proto.Message{
-				&mgmtpb.DaosResp{Status: 0},
-				&mgmtpb.DaosResp{Status: 0},
-			},
-			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: msReady},
-				{Rank: 2, State: msReady},
-			},
-		},
-		"dRPC filtered ranks": {
-			// force flag in request triggers dRPC ping
-			req: &ctlpb.RanksReq{Ranks: "0-1,3", Force: true},
-			drpcResps: []proto.Message{
-				&mgmtpb.DaosResp{Status: 0},
-				&mgmtpb.DaosResp{Status: 0},
-			},
-			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: msReady},
-			},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
-
-			cfg := config.DefaultServer().WithEngines(
-				engine.NewConfig().WithTargetCount(1),
-				engine.NewConfig().WithTargetCount(1),
-			)
-			svc := mockControlService(t, log, cfg, nil, nil, nil)
-
-			for i, e := range svc.harness.instances {
-				srv := e.(*EngineInstance)
-				if tc.missingSB {
-					srv._superblock = nil
-					continue
-				}
-
-				trc := &engine.TestRunnerConfig{}
-				if !tc.instancesStopped {
-					trc.Running.SetTrue()
-					srv.ready.SetTrue()
-				}
-				srv.runner = engine.NewTestRunner(trc, engine.NewConfig())
-				srv.setIndex(uint32(i))
-
-				srv._superblock.Rank = new(system.Rank)
-				*srv._superblock.Rank = system.Rank(i + 1)
-
-				cfg := new(mockDrpcClientConfig)
-				if tc.drpcRet != nil {
-					cfg.setSendMsgResponse(drpc.Status_FAILURE, nil, nil)
-				} else if tc.junkResp {
-					cfg.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
-				} else if len(tc.drpcResps) > i {
-					rb, _ := proto.Marshal(tc.drpcResps[i])
-					cfg.setSendMsgResponse(drpc.Status_SUCCESS, rb, tc.expErr)
-
-					if tc.responseDelay != time.Duration(0) {
-						cfg.setResponseDelay(tc.responseDelay)
-					}
-				}
-				srv.setDrpcClient(newMockDrpcClient(cfg))
-			}
-
-			svc.harness.rankReqTimeout = 50 * time.Millisecond
-
-			var cancel context.CancelFunc
-			ctx := context.Background()
-			if tc.ctxTimeout != 0 {
-				ctx, cancel = context.WithTimeout(ctx, tc.ctxTimeout)
-				defer cancel()
-			} else if tc.ctxCancel != 0 {
-				ctx, cancel = context.WithCancel(ctx)
-				go func() {
-					<-time.After(tc.ctxCancel)
-					cancel()
-				}()
-			}
-
-			gotResp, gotErr := svc.PingRanks(ctx, tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
-			if tc.expErr != nil {
-				return
-			}
-
-			// order of results nondeterministic as dPing run async
-			checkUnorderedRankResults(t, tc.expResults, gotResp.Results)
-		})
-	}
-}
-
 func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 	for name, tc := range map[string]struct {
 		missingSB        bool
@@ -646,7 +426,7 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 		instancesStarted bool
 		startFails       bool
 		req              *ctlpb.RanksReq
-		ctxTimeout       time.Duration
+		timeout          time.Duration
 		expResults       []*sharedpb.RankResult
 		expErr           error
 	}{
@@ -662,15 +442,6 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 			missingSB: true,
 			// no results as rank can't be read from superblock
 			expResults: []*sharedpb.RankResult{},
-		},
-		"missing ranks": {
-			req:        &ctlpb.RanksReq{Ranks: "0,3"},
-			expResults: []*sharedpb.RankResult{},
-		},
-		"context timeout": { // near-immediate parent context Timeout
-			req:        &ctlpb.RanksReq{Ranks: "0-3"},
-			ctxTimeout: time.Nanosecond,
-			expErr:     context.DeadlineExceeded, // parent ctx timeout
 		},
 		"instances already started": {
 			req:              &ctlpb.RanksReq{Ranks: "0-3"},
@@ -687,96 +458,97 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 		"instances stay stopped": {
 			req:        &ctlpb.RanksReq{Ranks: "0-3"},
 			startFails: true,
-			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: msStopped, Errored: true},
-				{Rank: 2, State: msStopped, Errored: true},
-			},
+			timeout:    time.Second,
+			expErr:     errors.New("deadline exceeded"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.engineCount == 0 {
 				tc.engineCount = maxEngines
 			}
 
-			ctx := context.Background()
+			ctx, outerCancel := context.WithCancel(test.Context(t))
+			t.Cleanup(outerCancel)
+			if tc.timeout != time.Duration(0) {
+				t.Logf("timeout of %s being applied", tc.timeout)
+				inner, cancel := context.WithTimeout(ctx, tc.timeout)
+				defer cancel()
+				ctx = inner
+			}
 
 			cfg := config.DefaultServer().WithEngines(
-				engine.NewConfig().
+				engine.MockConfig().
 					WithTargetCount(1).
 					WithStorage(
 						storage.NewTierConfig().
-							WithScmClass("ram"),
+							WithStorageClass("ram"),
 					),
-				engine.NewConfig().
+				engine.MockConfig().
 					WithTargetCount(1).
 					WithStorage(
 						storage.NewTierConfig().
-							WithScmClass("ram"),
+							WithStorageClass("ram"),
 					),
 			)
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 
 			for i, e := range svc.harness.instances {
-				srv := e.(*EngineInstance)
+				ei := e.(*EngineInstance)
 				if tc.missingSB {
-					srv._superblock = nil
+					ei._superblock = nil
 					continue
 				}
 
 				engineCfg := cfg.Engines[i]
 
-				testDir, cleanup := common.CreateTestDir(t)
+				testDir, cleanup := test.CreateTestDir(t)
 				defer cleanup()
 				engineCfg.Storage.Tiers[0].Scm.MountPoint = testDir
 
 				trc := &engine.TestRunnerConfig{}
 				if tc.instancesStarted {
 					trc.Running.SetTrue()
-					srv.ready.SetTrue()
+					ei.ready.SetTrue()
 				}
-				srv.runner = engine.NewTestRunner(trc, engineCfg)
-				srv.setIndex(uint32(i))
+				if !tc.startFails {
+					ei.waitFormat.SetTrue()
+				}
 
-				cfg, err := srv.storage.GetScmConfig()
+				ei.runner = engine.NewTestRunner(trc, engineCfg)
+				ei.setIndex(uint32(i))
+
+				cfg, err := ei.storage.GetScmConfig()
 				if err != nil {
 					t.Fatal(err)
 				}
 				t.Logf("scm dir: %s", cfg.Scm.MountPoint)
 				superblock := &Superblock{
 					Version: superblockVersion,
-					UUID:    common.MockUUID(),
+					UUID:    test.MockUUID(),
 					System:  "test",
 				}
-				superblock.Rank = new(system.Rank)
-				*superblock.Rank = system.Rank(i + 1)
-				srv.setSuperblock(superblock)
-				if err := srv.WriteSuperblock(); err != nil {
+				superblock.Rank = new(ranklist.Rank)
+				*superblock.Rank = ranklist.Rank(i + 1)
+				ei.setSuperblock(superblock)
+				if err := ei.WriteSuperblock(); err != nil {
 					t.Fatal(err)
 				}
 
-				// mimic srv.run, set "ready" on startLoop rx
+				// Unblock requestStart() called from ResetFormatRanks() by reading
+				// from startRequested channel.
 				go func(s *EngineInstance, startFails bool) {
-					<-s.startRequested
-					if startFails {
-						return
+					select {
+					case <-ctx.Done():
+					case <-s.startRequested:
 					}
-					// processing loop reaches wait for format state
-					s.waitFormat.SetTrue()
-				}(srv, tc.startFails)
+				}(ei, tc.startFails)
 			}
-
-			if tc.ctxTimeout != 0 {
-				var cancel context.CancelFunc
-				ctx, cancel = context.WithTimeout(ctx, tc.ctxTimeout)
-				defer cancel()
-			}
-			svc.harness.rankStartTimeout = 50 * time.Millisecond
 
 			gotResp, gotErr := svc.ResetFormatRanks(ctx, tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -795,7 +567,7 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 		instancesStopped bool
 		startFails       bool
 		req              *ctlpb.RanksReq
-		ctxTimeout       time.Duration
+		timeout          time.Duration
 		expResults       []*sharedpb.RankResult
 		expErr           error
 	}{
@@ -816,11 +588,6 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 			req:        &ctlpb.RanksReq{Ranks: "0,3"},
 			expResults: []*sharedpb.RankResult{},
 		},
-		"context timeout": { // near-immediate parent context Timeout
-			req:        &ctlpb.RanksReq{Ranks: "0-3"},
-			ctxTimeout: time.Nanosecond,
-			expErr:     context.DeadlineExceeded, // parent ctx timeout
-		},
 		"instances already started": {
 			req: &ctlpb.RanksReq{Ranks: "0-3"},
 			expResults: []*sharedpb.RankResult{
@@ -836,29 +603,34 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 				{Rank: 2, State: msReady},
 			},
 		},
-		"instances stay stopped": {
+		"instances not started in time": {
 			req:              &ctlpb.RanksReq{Ranks: "0-3"},
+			timeout:          time.Second,
 			instancesStopped: true,
 			startFails:       true,
-			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: msErrored, Errored: true},
-				{Rank: 2, State: msErrored, Errored: true},
-			},
+			expErr:           errors.New("deadline exceeded"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.engineCount == 0 {
 				tc.engineCount = maxEngines
 			}
 
-			ctx := context.Background()
+			ctx, outerCancel := context.WithCancel(test.Context(t))
+			t.Cleanup(outerCancel)
+			if tc.timeout != time.Duration(0) {
+				t.Logf("timeout of %s being applied", tc.timeout)
+				inner, cancel := context.WithTimeout(ctx, tc.timeout)
+				defer cancel()
+				ctx = inner
+			}
 
 			cfg := config.DefaultServer().WithEngines(
-				engine.NewConfig().WithTargetCount(1),
-				engine.NewConfig().WithTargetCount(1),
+				engine.MockConfig().WithTargetCount(1),
+				engine.MockConfig().WithTargetCount(1),
 			)
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 
@@ -874,46 +646,138 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 					trc.Running.SetTrue()
 					srv.ready.SetTrue()
 				}
-				srv.runner = engine.NewTestRunner(trc, engine.NewConfig())
+				srv.runner = engine.NewTestRunner(trc, engine.MockConfig())
 				srv.setIndex(uint32(i))
 
-				srv._superblock.Rank = new(system.Rank)
-				*srv._superblock.Rank = system.Rank(i + 1)
+				srv._superblock.Rank = new(ranklist.Rank)
+				*srv._superblock.Rank = ranklist.Rank(i + 1)
 
 				// mimic srv.run, set "ready" on startLoop rx
-				go func(s *EngineInstance, startFails bool) {
-					<-s.startRequested
+				go func(ctx context.Context, s *EngineInstance, startFails bool) {
+					select {
+					case <-ctx.Done():
+						return
+					case <-s.startRequested:
+					}
 					t.Logf("instance %d: start signal received", s.Index())
-					if startFails {
+					if startFails || !tc.instancesStopped {
 						return
 					}
 
 					// set instance runner started and ready
-					ch := make(chan error, 1)
-					if err := s.runner.Start(context.TODO(), ch); err != nil {
+					if _, err := s.runner.Start(ctx); err != nil {
 						t.Logf("failed to start runner: %s", err)
 						return
 					}
-					<-ch
 					s.ready.SetTrue()
-				}(srv, tc.startFails)
+					t.Log("ready set to true")
+				}(ctx, srv, tc.startFails)
 			}
-
-			if tc.ctxTimeout != 0 {
-				var cancel context.CancelFunc
-				ctx, cancel = context.WithTimeout(ctx, tc.ctxTimeout)
-				defer cancel()
-			}
-			svc.harness.rankStartTimeout = 50 * time.Millisecond
 
 			gotResp, gotErr := svc.StartRanks(ctx, tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
 
 			if diff := cmp.Diff(tc.expResults, gotResp.Results, defRankCmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestServer_updateSetEngineLogMasksReq(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req           ctlpb.SetLogMasksReq
+		cfgMasks      string
+		cfgStreams    string
+		cfgSubsystems string
+		expMasks      string
+		expStreams    string
+		expSubsystems string
+		expErr        error
+	}{
+		"empty masks string in request; reset not set in request": {
+			expErr: errors.New("empty log masks in request"),
+		},
+		"empty masks string in request; no configured log mask": {
+			req: ctlpb.SetLogMasksReq{
+				ResetMasks: true,
+			},
+			expErr: errors.New("empty log masks in config"),
+		},
+		"empty masks string in request; configured log mask": {
+			req: ctlpb.SetLogMasksReq{
+				Masks:      "DEBUG",
+				ResetMasks: true,
+			},
+			cfgMasks: "ERR",
+			expMasks: "ERR",
+		},
+		"masks specified in request": {
+			req: ctlpb.SetLogMasksReq{
+				Masks: "DEBUG",
+			},
+			cfgMasks: "ERR",
+			expMasks: "DBUG",
+		},
+		"all values specified in request": {
+			req: ctlpb.SetLogMasksReq{
+				Masks:      "DEBUG",
+				Streams:    "MGMT",
+				Subsystems: "MISC",
+			},
+			expMasks:   "ERR,MISC=DBUG",
+			expStreams: "MGMT",
+		},
+		"reset all masks; simple": {
+			req: ctlpb.SetLogMasksReq{
+				Masks:           "DEBUG",
+				Streams:         "MGMT",
+				Subsystems:      "MISC",
+				ResetMasks:      true,
+				ResetStreams:    true,
+				ResetSubsystems: true,
+			},
+			cfgMasks:      "ERR",
+			cfgStreams:    "md",
+			cfgSubsystems: "misc",
+			expMasks:      "ERR",
+			expStreams:    "md",
+		},
+		"reset all masks; complex": {
+			req: ctlpb.SetLogMasksReq{
+				ResetMasks:      true,
+				ResetStreams:    true,
+				ResetSubsystems: true,
+			},
+			cfgMasks:   "info,dtx=debug,vos=debug,object=debug",
+			cfgStreams: "io,epc",
+			expMasks:   "INFO,dtx=DBUG,vos=DBUG,object=DBUG",
+			expStreams: "io,epc",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := engine.MockConfig().
+				WithLogMask(tc.cfgMasks).
+				WithLogStreams(tc.cfgStreams).
+				WithLogSubsystems(tc.cfgSubsystems)
+
+			gotErr := updateSetLogMasksReq(cfg, &tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expMasks, tc.req.Masks); diff != "" {
+				t.Fatalf("unexpected masks: %s", diff)
+			}
+			if diff := cmp.Diff(tc.expStreams, tc.req.Streams); diff != "" {
+				t.Fatalf("unexpected streams: %s", diff)
+			}
+			if diff := cmp.Diff(tc.expSubsystems, tc.req.Subsystems); diff != "" {
+				t.Fatalf("unexpected subsystems: %s", diff)
 			}
 		})
 	}
@@ -929,27 +793,33 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 		junkResp         bool
 		drpcResps        []proto.Message
 		responseDelay    time.Duration
-		ctxTimeout       time.Duration
-		ctxCancel        time.Duration
 		expResp          *ctlpb.SetLogMasksResp
 		expErr           error
 	}{
 		"nil request": {
 			expErr: errors.New("nil request"),
 		},
-		"empty masks string in request; no configured log mask": {
-			req:    &ctlpb.SetLogMasksReq{},
-			expErr: errors.New("no log_mask set in engine config"),
-		},
 		"empty masks string in request; configured log mask": {
 			cfgLogMask: "DEBUG",
-			req:        &ctlpb.SetLogMasksReq{},
-			expErr:     errors.New("dRPC returned no response"),
+			req: &ctlpb.SetLogMasksReq{
+				ResetMasks: true,
+			},
+			expResp: &ctlpb.SetLogMasksResp{
+				Errors: []string{
+					"validate response: dRPC returned no response",
+					"validate response: dRPC returned no response",
+				},
+			},
 		},
 		"instances stopped": {
 			req:              &ctlpb.SetLogMasksReq{Masks: "ERR,mgmt=DEBUG"},
 			instancesStopped: true,
-			expErr:           errors.New("not ready"),
+			expResp: &ctlpb.SetLogMasksResp{
+				Errors: []string{
+					FaultDataPlaneNotStarted.Error(),
+					FaultDataPlaneNotStarted.Error(),
+				},
+			},
 		},
 		"dRPC resp fails": {
 			req:     &ctlpb.SetLogMasksReq{Masks: "ERR,mgmt=DEBUG"},
@@ -958,7 +828,12 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 				&ctlpb.SetLogMasksResp{Status: 0},
 				&ctlpb.SetLogMasksResp{Status: 0},
 			},
-			expErr: errors.New("bad dRPC response"),
+			expResp: &ctlpb.SetLogMasksResp{
+				Errors: []string{
+					"validate response: bad dRPC response status: FAILURE",
+					"validate response: bad dRPC response status: FAILURE",
+				},
+			},
 		},
 		"dRPC resp junk": {
 			req:      &ctlpb.SetLogMasksReq{Masks: "ERR,mgmt=DEBUG"},
@@ -972,7 +847,9 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 				&ctlpb.SetLogMasksResp{Status: 0},
 				&ctlpb.SetLogMasksResp{Status: 0},
 			},
-			expResp: &ctlpb.SetLogMasksResp{},
+			expResp: &ctlpb.SetLogMasksResp{
+				Errors: []string{"", ""},
+			},
 		},
 		"successful call": {
 			req: &ctlpb.SetLogMasksReq{Masks: "ERR,mgmt=DEBUG"},
@@ -980,7 +857,9 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 				&ctlpb.SetLogMasksResp{Status: 0},
 				&ctlpb.SetLogMasksResp{Status: 0},
 			},
-			expResp: &ctlpb.SetLogMasksResp{},
+			expResp: &ctlpb.SetLogMasksResp{
+				Errors: []string{"", ""},
+			},
 		},
 		"unsuccessful call": {
 			req: &ctlpb.SetLogMasksReq{Masks: "ERR,mgmt=DEBUG"},
@@ -988,16 +867,21 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 				&ctlpb.SetLogMasksResp{Status: -1},
 				&ctlpb.SetLogMasksResp{Status: -1},
 			},
-			expErr: errors.New("DER_UNKNOWN(-1): Unknown error code -1"),
+			expResp: &ctlpb.SetLogMasksResp{
+				Errors: []string{
+					"DER_UNKNOWN(-1): Unknown error code -1",
+					"DER_UNKNOWN(-1): Unknown error code -1",
+				},
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			cfg := config.DefaultServer().WithEngines(
-				engine.NewConfig().WithTargetCount(1).WithLogMask(tc.cfgLogMask),
-				engine.NewConfig().WithTargetCount(1).WithLogMask(tc.cfgLogMask),
+				engine.MockConfig().WithTargetCount(1).WithLogMask(tc.cfgLogMask),
+				engine.MockConfig().WithTargetCount(1).WithLogMask(tc.cfgLogMask),
 			)
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 			for i, e := range svc.harness.instances {
@@ -1008,12 +892,12 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 					trc.Running.SetTrue()
 					srv.ready.SetTrue()
 				}
-				srv.runner = engine.NewTestRunner(trc, engine.NewConfig())
+				srv.runner = engine.NewTestRunner(trc, engine.MockConfig())
 				srv.setIndex(uint32(i))
 
 				if !tc.missingRank {
-					srv._superblock.Rank = new(system.Rank)
-					*srv._superblock.Rank = system.Rank(i + 1)
+					srv._superblock.Rank = new(ranklist.Rank)
+					*srv._superblock.Rank = ranklist.Rank(i + 1)
 				}
 
 				cfg := new(mockDrpcClientConfig)
@@ -1029,26 +913,13 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 						cfg.setResponseDelay(tc.responseDelay)
 					}
 				}
-				srv.setDrpcClient(newMockDrpcClient(cfg))
+				srv.getDrpcClientFn = func(s string) drpc.DomainSocketClient {
+					return newMockDrpcClient(cfg)
+				}
 			}
 
-			svc.harness.rankReqTimeout = 50 * time.Millisecond
-
-			var cancel context.CancelFunc
-			ctx := context.Background()
-			if tc.ctxTimeout != 0 {
-				ctx, cancel = context.WithTimeout(ctx, tc.ctxTimeout)
-				defer cancel()
-			} else if tc.ctxCancel != 0 {
-				ctx, cancel = context.WithCancel(ctx)
-				go func() {
-					<-time.After(tc.ctxCancel)
-					cancel()
-				}()
-			}
-
-			gotResp, gotErr := svc.SetEngineLogMasks(ctx, tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			gotResp, gotErr := svc.SetEngineLogMasks(test.Context(t), tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}

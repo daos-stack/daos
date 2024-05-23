@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,23 +8,25 @@ package main
 
 import (
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/security"
 )
 
 func TestAgent_LoadConfig(t *testing.T) {
-	dir, cleanup := common.CreateTestDir(t)
+	dir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
-	junkFile := common.CreateTestFile(t, dir, "One ring to rule them all\n")
-	emptyFile := common.CreateTestFile(t, dir, "")
+	junkFile := test.CreateTestFile(t, dir, "One ring to rule them all\n")
+	emptyFile := test.CreateTestFile(t, dir, "")
 
-	withoutOptCfg := common.CreateTestFile(t, dir, `
+	withoutOptCfg := test.CreateTestFile(t, dir, `
 name: shire
 access_points: ["one:10001", "two:10001"]
 port: 4242
@@ -34,14 +36,19 @@ transport_config:
   allow_insecure: true
 `)
 
-	fabricCfg := common.CreateTestFile(t, dir, `
+	optCfg := test.CreateTestFile(t, dir, `
 name: shire
 access_points: ["one:10001", "two:10001"]
 port: 4242
 runtime_dir: /tmp/runtime
 log_file: /home/frodo/logfile
+control_log_mask: debug
+disable_caching: true
+cache_expiration: 30
+disable_auto_evict: true
 transport_config:
   allow_insecure: true
+exclude_fabric_ifaces: ["ib3"]
 fabric_ifaces:
 -
   numa_node: 0
@@ -63,13 +70,24 @@ fabric_ifaces:
      domain: mlx5_3
 `)
 
+	badLogMaskCfg := test.CreateTestFile(t, dir, `
+name: shire
+access_points: ["one:10001", "two:10001"]
+port: 4242
+runtime_dir: /tmp/runtime
+log_file: /home/frodo/logfile
+control_log_mask: gandalf
+transport_config:
+  allow_insecure: true
+`)
+
 	for name, tc := range map[string]struct {
 		path      string
 		expResult *Config
 		expErr    error
 	}{
 		"empty path": {
-			expErr: errors.New("no path"),
+			expErr: errors.New("no config path"),
 		},
 		"bad path": {
 			path:   "/not/real/path",
@@ -91,24 +109,34 @@ fabric_ifaces:
 				ControlPort:  4242,
 				RuntimeDir:   "/tmp/runtime",
 				LogFile:      "/home/frodo/logfile",
+				LogLevel:     common.DefaultControlLogLevel,
 				TransportConfig: &security.TransportConfig{
 					AllowInsecure:     true,
 					CertificateConfig: DefaultConfig().TransportConfig.CertificateConfig,
 				},
 			},
 		},
-		"manual fabric config": {
-			path: fabricCfg,
+		"bad log mask": {
+			path:   badLogMaskCfg,
+			expErr: errors.New("not a valid log level"),
+		},
+		"all options": {
+			path: optCfg,
 			expResult: &Config{
-				SystemName:   "shire",
-				AccessPoints: []string{"one:10001", "two:10001"},
-				ControlPort:  4242,
-				RuntimeDir:   "/tmp/runtime",
-				LogFile:      "/home/frodo/logfile",
+				SystemName:       "shire",
+				AccessPoints:     []string{"one:10001", "two:10001"},
+				ControlPort:      4242,
+				RuntimeDir:       "/tmp/runtime",
+				LogFile:          "/home/frodo/logfile",
+				LogLevel:         common.ControlLogLevelDebug,
+				DisableCache:     true,
+				CacheExpiration:  refreshMinutes(30 * time.Minute),
+				DisableAutoEvict: true,
 				TransportConfig: &security.TransportConfig{
 					AllowInsecure:     true,
 					CertificateConfig: DefaultConfig().TransportConfig.CertificateConfig,
 				},
+				ExcludeFabricIfaces: common.NewStringSet("ib3"),
 				FabricInterfaces: []*NUMAFabricConfig{
 					{
 						NUMANode: 0,
@@ -143,7 +171,7 @@ fabric_ifaces:
 		t.Run(name, func(t *testing.T) {
 			result, err := LoadConfig(tc.path)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result, cmpopts.IgnoreUnexported(security.CertificateConfig{})); diff != "" {
 				t.Fatalf("(want-, got+):\n%s", diff)
 			}

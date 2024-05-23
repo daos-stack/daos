@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -50,7 +50,7 @@ struct test_input_value tst_fn_val;
 
 static struct utest_context	*ts_utx;
 static struct umem_attr		*ts_uma;
-static int			 ts_feats = EVT_FEAT_DEFAULT;
+static int                       ts_feats = EVT_FEAT_DEFAULT | EVT_FEAT_DYNAMIC_ROOT;
 
 #define ORDER_DEF_INTERNAL	13
 #define	ORDER_DEF		16
@@ -298,7 +298,7 @@ bio_alloc_init(struct utest_context *utx, bio_addr_t *addr, const void *src,
 		BIO_ADDR_SET_HOLE(addr);
 		return 0;
 	} else {
-		BIO_ADDR_SET_NOT_HOLE(addr);
+		BIO_ADDR_CLEAR_HOLE(addr);
 	}
 	rc = utest_alloc(utx, &umoff, size, init_mem, src);
 
@@ -360,6 +360,8 @@ ts_add_rect(void)
 	entry.ei_inob = val == NULL ? 0 : 1;
 
 	rc = evt_insert(ts_toh, &entry, NULL);
+	if (rc == 1)
+		rc = 0;
 	if (rc == 0)
 		total_added++;
 
@@ -449,14 +451,15 @@ ts_remove_rect(void)
 	rc = evt_remove_all(ts_toh, &rect.rc_ex, &epr);
 
 	if (should_pass) {
-		if (rc != 0)
+		if (rc < 0) {
 			D_FATAL("Remove rect failed "DF_RC"\n", DP_RC(rc));
+			fail();
+		}
 	} else {
-		if (rc == 0) {
+		if (rc >= 0) {
 			D_FATAL("Remove rect should have failed\n");
 			fail();
 		}
-		rc = 0;
 	}
 }
 
@@ -744,6 +747,8 @@ ts_many_add(void)
 		entry.ei_inob = 1;
 
 		rc = evt_insert(ts_toh, &entry, NULL);
+		if (rc == 1)
+			rc = 0;
 		if (rc != 0) {
 			D_FATAL("Add rect %d failed "DF_RC"\n", i, DP_RC(rc));
 			fail();
@@ -823,7 +828,7 @@ setup_builtin(void **state)
 	}
 
 	rc = utest_pmem_create(arg->ta_pool_name, POOL_SIZE,
-			       sizeof(*arg->ta_root), &arg->ta_utx);
+			       sizeof(*arg->ta_root), NULL, &arg->ta_utx);
 	if (rc != 0) {
 		perror("Evtree internal test couldn't create pool");
 		rc = 1;
@@ -898,8 +903,7 @@ copy_exp_val_to_array(int flag, int **evtdata,
 		if (flag == EVT_ITER_VISIBLE) {
 			val[epoch] = evtdata[epoch][epoch];
 			 count++;
-		} else if ((flag == EVT_ITER_COVERED) ||
-		(flag == (EVT_ITER_COVERED))) {
+		} else if (flag == EVT_ITER_COVERED) {
 			for (offset = epoch; offset >= 1; offset--) {
 				if (evtdata[offset][epoch+incr] != 0) {
 					val[count] =
@@ -1100,6 +1104,8 @@ test_evt_iter_flags(void **state)
 			if (rc != 0)
 				goto finish;
 			rc = evt_insert(toh, &entry, NULL);
+			if (rc == 1)
+				rc = 0;
 			if (rc != 0)
 				goto finish;
 		}
@@ -1217,6 +1223,10 @@ test_evt_iter_delete(void **state)
 	assert_rc_equal(rc, 0);
 	rc = utest_sync_mem_status(arg->ta_utx);
 	assert_int_equal(rc, 0);
+
+	rc = evt_has_data(arg->ta_root, arg->ta_uma);
+	assert_rc_equal(rc, 0);
+
 	/* Insert a bunch of entries */
 	for (epoch = 1; epoch <= NUM_EPOCHS; epoch++) {
 		for (offset = epoch; offset < NUM_EXTENTS + epoch; offset++) {
@@ -1233,6 +1243,8 @@ test_evt_iter_delete(void **state)
 			assert_int_equal(rc, 0);
 
 			rc = evt_insert(toh, &entry, NULL);
+			if (rc == 1)
+				rc = 0;
 			assert_rc_equal(rc, 0);
 			rc = utest_check_mem_increase(arg->ta_utx);
 			assert_int_equal(rc, 0);
@@ -1240,6 +1252,8 @@ test_evt_iter_delete(void **state)
 			assert_int_equal(rc, 0);
 		}
 	}
+	rc = evt_has_data(arg->ta_root, arg->ta_uma);
+	assert_rc_equal(rc, 1);
 
 	rc = evt_iter_prepare(toh, EVT_ITER_VISIBLE, NULL, &ih);
 	assert_rc_equal(rc, 0);
@@ -1343,6 +1357,7 @@ test_evt_find_internal(void **state)
 	struct evt_entry_in	 entry = {0};
 	struct evt_entry	 *ent;
 	struct evt_filter	 filter = {0};
+	char                     *value;
 	EVT_ENT_ARRAY_LG_PTR(ent_array);
 	bio_addr_t		 addr;
 	int			 rc;
@@ -1387,6 +1402,8 @@ test_evt_find_internal(void **state)
 				assert_int_equal(rc, 0);
 			}
 			rc = evt_insert(toh, &entry, NULL);
+			if (rc == 1)
+				rc = 0;
 			assert_rc_equal(rc, 0);
 			rc = utest_check_mem_increase(arg->ta_utx);
 			assert_int_equal(rc, 0);
@@ -1416,12 +1433,16 @@ test_evt_find_internal(void **state)
 			addr = ent->en_addr;
 			strcpy(buf, " ");
 			punched = bio_addr_is_hole(&addr);
-			D_PRINT("Find rect "DF_ENT" width=%d val=%.*s\n",
-			DP_ENT(ent),
-			(int)evt_extent_width(&ent->en_sel_ext),
-			punched ? 4 : (int)evt_extent_width(&ent->en_sel_ext),
-			punched ? "None" : (char *)utest_off2ptr(arg->ta_utx,
-								 addr.ba_off));
+			if (punched) {
+				D_PRINT("Find rect " DF_ENT " (punch)\n", DP_ENT(ent));
+			} else {
+				/** Must have a valid address if the extent isn't punched */
+				value = utest_off2ptr(arg->ta_utx, addr.ba_off);
+				D_ASSERT(value != NULL);
+				D_PRINT("Find rect " DF_ENT " width=%d val=%.*s\n", DP_ENT(ent),
+					(int)evt_extent_width(&ent->en_sel_ext),
+					(int)evt_extent_width(&ent->en_sel_ext), value);
+			}
 			punched ? strcpy(buf, "None") :
 			strncpy(buf,
 				(char *)utest_off2ptr(arg->ta_utx, addr.ba_off),
@@ -1513,6 +1534,8 @@ test_evt_iter_delete_internal(void **state)
 			assert_int_equal(rc, 0);
 
 			rc = evt_insert(toh, &entry, NULL);
+			if (rc == 1)
+				rc = 0;
 			assert_rc_equal(rc, 0);
 		}
 	}
@@ -1580,6 +1603,8 @@ test_evt_variable_record_size_internal(void **state)
 					    data, data_size);
 			assert_int_equal(rc, 0);
 			rc = evt_insert(toh, &entry, NULL);
+			if (rc == 1)
+				rc = 0;
 			if (count > 0)
 				assert_int_not_equal(rc, 0);
 			else
@@ -1651,6 +1676,8 @@ test_evt_various_data_size_internal(void **state)
 				break;
 			}
 			rc = evt_insert(toh, &entry, NULL);
+			if (rc == 1)
+				rc = 0;
 			if (rc != 0) {
 				assert_rc_equal(rc, -DER_NOSPACE);
 				break;
@@ -1727,6 +1754,99 @@ test_evt_various_data_size_internal(void **state)
 	}
 }
 
+static int
+insert_val(struct test_arg *arg, daos_handle_t toh, daos_epoch_t epoch, uint64_t start_offset,
+	   const char *data, uint64_t length)
+{
+	struct evt_entry_in	 entry = {0};
+	int                      rc;
+
+	entry.ei_rect.rc_ex.ex_lo = start_offset;
+	entry.ei_rect.rc_ex.ex_hi = start_offset + length - 1;
+	entry.ei_rect.rc_epc = epoch;
+	entry.ei_ver = 0;
+	entry.ei_bound = epoch;
+	entry.ei_inob = 1;
+
+	memset(&entry.ei_csum, 0, sizeof(entry.ei_csum));
+
+	rc = bio_alloc_init(arg->ta_utx, &entry.ei_addr, &data, length);
+	if (rc != 0)
+		return rc;
+
+	return evt_insert(toh, &entry, NULL);
+}
+
+static int
+insert_one(struct test_arg *arg, daos_handle_t toh, daos_epoch_t epoch, uint64_t start_offset,
+	   uint64_t length)
+{
+	char *data;
+	int   rc;
+
+	D_ALLOC_ARRAY(data, length);
+	if (data == NULL)
+		return -DER_NOMEM;
+	memset(data, 'a', length);
+
+	rc = insert_val(arg, toh, epoch, start_offset, data, length);
+
+	D_FREE(data);
+
+	return rc;
+}
+
+static int
+insert_str(struct test_arg *arg, daos_handle_t toh, daos_epoch_t epoch, uint64_t start_offset,
+	   const char *str)
+{
+	return insert_val(arg, toh, epoch, start_offset, str, strnlen(str, 32));
+}
+
+static void
+test_evt_agg_check(void **state)
+{
+	struct test_arg		*arg = *state;
+	daos_handle_t		 toh;
+	int			 rc;
+	int			 epoch;
+
+	epoch = 1;
+	rc = evt_create(arg->ta_root, ts_feats, ORDER_DEF_INTERNAL,
+			arg->ta_uma, &ts_evt_desc_cbs, &toh);
+	assert_rc_equal(rc, 0);
+
+	rc = insert_one(arg, toh, epoch++, 0, 1);
+	assert_rc_equal(rc, 0);
+
+	rc = insert_one(arg, toh, epoch++, 1, 2);
+	assert_rc_equal(rc, 1); /* Adjacent is aggregatable */
+
+	rc = insert_one(arg, toh, epoch++, 10, 5);
+	assert_rc_equal(rc, 0); /** Standalone, not aggregatable */
+
+	rc = insert_one(arg, toh, epoch++, 9, 8);
+	assert_rc_equal(rc, 1); /** Encapsulates prior extent, aggregatable */
+
+	rc = insert_one(arg, toh, epoch++, 7, 2);
+	assert_rc_equal(rc, 1); /** Adjacent to prior extent, aggregatable */
+
+	rc = insert_one(arg, toh, epoch++, 5, 1);
+	assert_rc_equal(rc, 0); /** Standalone, not aggregatable */
+
+	rc = insert_one(arg, toh, epoch++, 11, 2);
+	assert_rc_equal(rc, 1); /** Partial coverage, aggregatable */
+
+	rc = insert_one(arg, toh, epoch++, DAOS_EC_PARITY_BIT | 1000, 2);
+	assert_rc_equal(rc, 1); /** Parity written with non-parity in tree, aggregatable */
+
+	rc = insert_one(arg, toh, epoch++, 1000, 2);
+	assert_rc_equal(rc, 1); /** Simulate partial write with in-tree parity, aggregatable */
+
+	rc = evt_destroy(toh);
+	assert_rc_equal(rc, 0);
+}
+
 static void
 test_evt_node_size_internal(void **state)
 {
@@ -1739,8 +1859,7 @@ test_evt_node_size_internal(void **state)
 		evt_created = false;
 		rc = evt_create(arg->ta_root, ts_feats, order_size,
 				arg->ta_uma, &ts_evt_desc_cbs, &toh);
-		if ((order_size >= EVT_MIN_ORDER) &&
-		(order_size <= EVT_MAX_ORDER)) {
+		if ((order_size >= EVT_ORDER_MIN) && (order_size <= EVT_ORDER_MAX)) {
 			assert_rc_equal(rc, 0);
 			evt_created = true;
 		} else {
@@ -1787,6 +1906,8 @@ set_data(struct test_arg *arg, daos_handle_t toh, char *dest_data,
 			    src, size);
 	assert_int_equal(rc, 0);
 	rc = evt_insert(toh, &entry, NULL);
+	if (rc == 1)
+		rc = 0;
 	assert_rc_equal(rc, 0);
 }
 
@@ -1959,6 +2080,8 @@ insert_and_check(daos_handle_t toh, struct evt_entry_in *entry, int idx, int nr)
 	entry->ei_rect.rc_epc = epoch;
 	entry->ei_bound = epoch;
 	rc = evt_insert(toh, entry, NULL);
+	if (rc == 1)
+		rc = 0;
 	assert_rc_equal(rc, 0);
 
 	return epoch++;
@@ -2110,6 +2233,8 @@ test_evt_outer_punch(void **state)
 			assert_int_equal(rc, 0);
 
 			rc = evt_insert(toh, &entry, NULL);
+			if (rc == 1)
+				rc = 0;
 			assert_rc_equal(rc, 0);
 		}
 	}
@@ -2203,44 +2328,106 @@ test_evt_outer_punch(void **state)
 	assert_rc_equal(rc, 0);
 }
 
+static void
+test_dyn_root_yield(void **state)
+{
+	struct test_arg  *arg = *state;
+	daos_handle_t     toh;
+	daos_handle_t     ih[2];
+	struct evt_entry  ent;
+	int               rc;
+	int               i;
+	int               epoch  = 1;
+	struct evt_filter filter = {0};
+	uint32_t          inob;
+	daos_anchor_t     anchor[2] = {0};
+
+	rc = evt_create(arg->ta_root, ts_feats, ORDER_DEF_INTERNAL, arg->ta_uma,
+			&ts_evt_desc_nofree_cbs, &toh);
+	assert_rc_equal(rc, 0);
+
+	rc = insert_str(arg, toh, epoch++, 0, "Hello World");
+	assert_rc_equal(rc, 0);
+
+	filter.fr_ex.ex_lo        = 0;
+	filter.fr_ex.ex_hi        = 1000;
+	filter.fr_punch_minor_epc = 0;
+	filter.fr_epr.epr_hi      = DAOS_EPOCH_MAX;
+	filter.fr_epoch           = filter.fr_epr.epr_hi;
+	rc = evt_iter_prepare(toh, EVT_ITER_VISIBLE | EVT_ITER_COVERED, &filter, &ih[0]);
+	assert_rc_equal(rc, 0);
+
+	rc = evt_iter_prepare(toh, 0, &filter, &ih[1]);
+	assert_rc_equal(rc, 0);
+
+	for (i = 0; i < 2; i++) {
+		rc = evt_iter_probe(ih[i], EVT_ITER_FIRST, NULL, NULL);
+		assert_rc_equal(rc, 0);
+		rc = evt_iter_fetch(ih[i], &inob, &ent, &anchor[i]);
+		assert_rc_equal(rc, 0);
+		assert_false(bio_addr_is_hole(&ent.en_addr));
+	}
+
+	rc = insert_str(arg, toh, epoch++, 0, "Hello");
+	assert_rc_equal(rc, 1);
+	rc = insert_str(arg, toh, epoch++, 16, "Hello World");
+	assert_rc_equal(rc, 0);
+	rc = insert_str(arg, toh, epoch++, 32, "Hello World");
+	assert_rc_equal(rc, 0);
+	rc = insert_str(arg, toh, epoch++, 48, "Hello World");
+	assert_rc_equal(rc, 0);
+	rc = insert_str(arg, toh, epoch++, 64, "Hello World");
+	assert_rc_equal(rc, 0);
+	rc = insert_str(arg, toh, epoch++, 80, "Hello World");
+	assert_rc_equal(rc, 0);
+
+	for (i = 0; i < 2; i++) {
+		rc = evt_iter_probe(ih[i], EVT_ITER_FIND, NULL, &anchor[i]);
+		assert_rc_equal(rc, 0);
+
+		for (;;) {
+			rc = evt_iter_fetch(ih[i], &inob, &ent, &anchor[i]);
+			assert_rc_equal(rc, 0);
+			assert_false(bio_addr_is_hole(&ent.en_addr));
+
+			rc = evt_iter_next(ih[i]);
+			if (rc == -DER_NONEXIST)
+				break;
+			assert_rc_equal(rc, 0);
+		}
+		rc = evt_iter_finish(ih[i]);
+		assert_rc_equal(rc, 0);
+	}
+
+	rc = evt_destroy(toh);
+	assert_rc_equal(rc, 0);
+}
+
 static int
 run_internal_tests(char *test_name)
 {
 	static const struct CMUnitTest evt_builtin[] = {
-		{ "EVT050: evt_iter_delete", test_evt_iter_delete,
-			setup_builtin, teardown_builtin},
-		{ "EVT051: evt_iter_delete_internal",
-			test_evt_iter_delete_internal,
-			setup_builtin, teardown_builtin},
-		{ "EVT052: evt_ent_alloc_bug",
-			test_evt_ent_alloc_bug,
-			setup_builtin, teardown_builtin},
-		{ "EVT053: evt_root_deactivate_bug",
-			test_evt_root_deactivate_bug,
-			setup_builtin, teardown_builtin},
-		{ "EVT054: evt_iter_flags",
-			test_evt_iter_flags,
-			setup_builtin, teardown_builtin},
-		{ "EVT055: evt_find_internal",
-			test_evt_find_internal,
-			setup_builtin, teardown_builtin},
-		{ "EVT015: evt_overlap_split_internal",
-			test_evt_overlap_split_internal,
-			setup_builtin, teardown_builtin},
-		{ "EVT016: evt_variable_record_size_internal",
-			test_evt_variable_record_size_internal,
-			setup_builtin, teardown_builtin},
-		{ "EVT017: evt_iter_outer_punch",
-			test_evt_outer_punch,
-			setup_builtin, teardown_builtin},
-		{ "EVT018: evt_node_size_internal",
-			test_evt_node_size_internal,
-			setup_builtin, teardown_builtin},
-		{ "EVT019: evt_various_data_size_internal",
-			test_evt_various_data_size_internal,
-			setup_builtin, teardown_builtin},
-		{ NULL, NULL, NULL, NULL }
-	};
+	    {"EVT050: evt_iter_delete", test_evt_iter_delete, setup_builtin, teardown_builtin},
+	    {"EVT051: evt_iter_delete_internal", test_evt_iter_delete_internal, setup_builtin,
+	     teardown_builtin},
+	    {"EVT052: evt_ent_alloc_bug", test_evt_ent_alloc_bug, setup_builtin, teardown_builtin},
+	    {"EVT053: evt_root_deactivate_bug", test_evt_root_deactivate_bug, setup_builtin,
+	     teardown_builtin},
+	    {"EVT054: evt_iter_flags", test_evt_iter_flags, setup_builtin, teardown_builtin},
+	    {"EVT055: evt_find_internal", test_evt_find_internal, setup_builtin, teardown_builtin},
+	    {"EVT015: evt_overlap_split_internal", test_evt_overlap_split_internal, setup_builtin,
+	     teardown_builtin},
+	    {"EVT016: evt_variable_record_size_internal", test_evt_variable_record_size_internal,
+	     setup_builtin, teardown_builtin},
+	    {"EVT017: evt_iter_outer_punch", test_evt_outer_punch, setup_builtin, teardown_builtin},
+	    {"EVT018: evt_node_size_internal", test_evt_node_size_internal, setup_builtin,
+	     teardown_builtin},
+	    {"EVT019: evt_various_data_size_internal", test_evt_various_data_size_internal,
+	     setup_builtin, teardown_builtin},
+	    {"EVT020: evt_agg_check", test_evt_agg_check, setup_builtin, teardown_builtin},
+	    {"EVT021: dynamic root change during yield", test_dyn_root_yield, setup_builtin,
+	     teardown_builtin},
+	    {NULL, NULL, NULL, NULL}};
 
 	return cmocka_run_group_tests_name(test_name, evt_builtin,
 					   global_setup, global_teardown);
@@ -2335,10 +2522,8 @@ ts_group(void **state)
 
 	int	opc = 0;
 
-	while ((opc = getopt_long(test_group_argc,
-				 test_group_args,
-				 "C:a:m:e:f:g:d:b:Docl::tsr:",
-				 ts_ops, NULL)) != -1){
+	while ((opc = getopt_long(test_group_argc, test_group_args,
+				  "C:a:m:e:f:g:d:b:Docl::ts:r:", ts_ops, NULL)) != -1) {
 		ts_cmd_run(opc, optarg);
 	}
 }
@@ -2367,8 +2552,7 @@ main(int argc, char **argv)
 	int		rc;
 	int		j;
 	int		start_idx;
-	char		*test_name;
-	bool		create_pmem;
+	char           *test_name;
 
 	d_register_alt_assert(mock_assert);
 
@@ -2381,33 +2565,19 @@ main(int argc, char **argv)
 	if (rc != 0)
 		return rc;
 
-	/* Capture test_name and pmem args if any */
+	/* Capture test_name args if any */
 	start_idx = 0;
 	test_name = "evtree default test suite name";
-	create_pmem = false;
 	if (argc > 1) {
 		/* Get test suite variables */
 		if (strcmp(argv[1], "--start-test") == 0) {
 			start_idx = 2;
 			test_name = argv[start_idx];
 		}
-
-		/* Capture pmem parameter */
-		if (argc > start_idx+1) {
-			if (strcmp(argv[start_idx+1], "pmem") == 0) {
-				create_pmem = true;
-				start_idx++;
-			}
-		}
 	}
 	optind = start_idx;
-	/* Create pool - pmem or vmem */
-	if (create_pmem) {
-		rc = utest_pmem_create(POOL_NAME, POOL_SIZE, sizeof(*ts_root),
-				       &ts_utx);
-	} else {
-		rc = utest_vmem_create(sizeof(*ts_root), &ts_utx);
-	}
+	/* Create pmem pool */
+	rc = utest_pmem_create(POOL_NAME, POOL_SIZE, sizeof(*ts_root), NULL, &ts_utx);
 	if (rc != 0) {
 		perror("Evtree test couldn't create pool");
 		return rc;

@@ -1,8 +1,9 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package logging
 
 import (
@@ -14,12 +15,23 @@ import (
 type (
 	// Logger defines a standard logging interface
 	Logger interface {
+		EnabledFor(level LogLevel) bool
+		TraceLogger
+		Trace(msg string)
 		DebugLogger
 		Debug(msg string)
 		InfoLogger
 		Info(msg string)
+		NoticeLogger
+		Notice(msg string)
 		ErrorLogger
 		Error(msg string)
+	}
+
+	// TraceLogger defines an interface to be implemented
+	// by Trace loggers.
+	TraceLogger interface {
+		Tracef(format string, args ...interface{})
 	}
 
 	// DebugLogger defines an interface to be implemented
@@ -32,6 +44,12 @@ type (
 	// by Info loggers.
 	InfoLogger interface {
 		Infof(format string, args ...interface{})
+	}
+
+	// NoticeLogger defines an interface to be implemented
+	// by Notice loggers.
+	NoticeLogger interface {
+		Noticef(format string, args ...interface{})
 	}
 
 	// ErrorLogger defines an interface to be implemented
@@ -52,10 +70,12 @@ type (
 	LeveledLogger struct {
 		sync.RWMutex
 
-		level        LogLevel
-		debugLoggers []DebugLogger
-		infoLoggers  []InfoLogger
-		errorLoggers []ErrorLogger
+		level         LogLevel
+		traceLoggers  []TraceLogger
+		debugLoggers  []DebugLogger
+		infoLoggers   []InfoLogger
+		noticeLoggers []NoticeLogger
+		errorLoggers  []ErrorLogger
 	}
 
 	baseLogger struct {
@@ -76,13 +96,23 @@ func (ll *LeveledLogger) Level() LogLevel {
 	return ll.level.Get()
 }
 
+// EnabledFor returns true if the logger is enabled for the
+// specified LogLevel.
+func (ll *LeveledLogger) EnabledFor(level LogLevel) bool {
+	return ll.level.Get() >= level
+}
+
 // ClearLevel clears all loggers for the specified level.
 func (ll *LeveledLogger) ClearLevel(level LogLevel) {
 	switch level {
+	case LogLevelTrace:
+		ll.traceLoggers = nil
 	case LogLevelDebug:
 		ll.debugLoggers = nil
 	case LogLevelInfo:
 		ll.infoLoggers = nil
+	case LogLevelNotice:
+		ll.noticeLoggers = nil
 	case LogLevelError:
 		ll.errorLoggers = nil
 	default:
@@ -95,6 +125,35 @@ func (ll *LeveledLogger) ClearLevel(level LogLevel) {
 func (ll *LeveledLogger) WithLogLevel(level LogLevel) *LeveledLogger {
 	ll.SetLevel(level)
 	return ll
+}
+
+// WithTraceLogger adds the specified Trace logger to
+// the logger as part of a chained method call.
+func (ll *LeveledLogger) WithTraceLogger(newLogger TraceLogger) *LeveledLogger {
+	ll.AddTraceLogger(newLogger)
+	return ll
+}
+
+// Trace emits an unformatted message at Trace level, if
+// the logger is configured to do so.
+func (ll *LeveledLogger) Trace(msg string) {
+	ll.Tracef("%s", msg)
+}
+
+// Tracef emits a formatted message at Trace level, if
+// the logger is configured to do so.
+func (ll *LeveledLogger) Tracef(format string, args ...interface{}) {
+	if ll.Level() < LogLevelTrace {
+		return
+	}
+
+	ll.RLock()
+	loggers := ll.traceLoggers
+	ll.RUnlock()
+
+	for _, l := range loggers {
+		l.Tracef(format, args...)
+	}
 }
 
 // WithDebugLogger adds the specified Debug logger to
@@ -111,11 +170,25 @@ func (ll *LeveledLogger) WithInfoLogger(newLogger InfoLogger) *LeveledLogger {
 	return ll
 }
 
+// WithNoticeLogger adds the specified Notice logger to
+// the logger as part of a chained method call.
+func (ll *LeveledLogger) WithNoticeLogger(newLogger NoticeLogger) *LeveledLogger {
+	ll.AddNoticeLogger(newLogger)
+	return ll
+}
+
 // WithErrorLogger adds the specified Error logger to
 // the logger as part of a chained method call.
 func (ll *LeveledLogger) WithErrorLogger(newLogger ErrorLogger) *LeveledLogger {
 	ll.AddErrorLogger(newLogger)
 	return ll
+}
+
+// AddTraceLogger adds the specified Trace logger to the logger.
+func (ll *LeveledLogger) AddTraceLogger(newLogger TraceLogger) {
+	ll.Lock()
+	defer ll.Unlock()
+	ll.traceLoggers = append(ll.traceLoggers, newLogger)
 }
 
 // AddDebugLogger adds the specified Debug logger to the logger.
@@ -173,6 +246,35 @@ func (ll *LeveledLogger) Infof(format string, args ...interface{}) {
 
 	for _, l := range loggers {
 		l.Infof(format, args...)
+	}
+}
+
+// AddNoticeLogger adds the specified Notice logger to the logger.
+func (ll *LeveledLogger) AddNoticeLogger(newLogger NoticeLogger) {
+	ll.Lock()
+	defer ll.Unlock()
+	ll.noticeLoggers = append(ll.noticeLoggers, newLogger)
+}
+
+// Notice emits an unformatted message at Notice level, if
+// the logger is configured to do so.
+func (ll *LeveledLogger) Notice(msg string) {
+	ll.Noticef("%s", msg)
+}
+
+// Noticef emits a formatted message at Notice level, if
+// the logger is configured to do so.
+func (ll *LeveledLogger) Noticef(format string, args ...interface{}) {
+	if ll.Level() < LogLevelNotice {
+		return
+	}
+
+	ll.RLock()
+	loggers := ll.noticeLoggers
+	ll.RUnlock()
+
+	for _, l := range loggers {
+		l.Noticef(format, args...)
 	}
 }
 

@@ -1,12 +1,38 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from apricot import TestWithServers
-from daos_utils import DaosCommand
 import base64
+
+from apricot import TestWithServers
+from general_utils import report_errors
+
+# Test container set-attr, get-attr, and list-attrs with different
+# types of characters.
+# pylint: disable=anomalous-backslash-in-string
+test_strings = [
+    "abcd",
+    "1234",
+    "abc123",
+    "abcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghij",
+    # Characters that don't require backslash. The backslashes in here
+    # are required for the code to work, but not by daos.
+    "~@#$%^*-=_+[]\{\}/?.",  # noqa: W605
+    # Characters that require backslash.
+    "\`\&\(\)\\\;\!\<\>\\\\\\,\\\\\\:",  # noqa: W605
+    # Characters that include space.
+    "\"aa bb\""]
+# We added backslashes for the code to work, but get-attr output
+# does not contain them, so prepare the expected output that does not
+# include backslashes.
+escape_to_not = {}
+escape_to_not[test_strings[-3]] = '~@#$%^*-=_+[]{}/?.'
+# We still need a backslash before the double quote for the code to
+# work.
+escape_to_not[test_strings[-2]] = "`&()\;!<>\,\:"  # noqa: W605
+escape_to_not[test_strings[-1]] = "aa bb"
+
 
 class ContainerQueryAttributeTest(TestWithServers):
     # pylint: disable=anomalous-backslash-in-string
@@ -29,22 +55,6 @@ class ContainerQueryAttributeTest(TestWithServers):
     :avocado: recursive
     """
 
-    def __init__(self, *args, **kwargs):
-        """Initialize a ContainerQueryAttribute object."""
-        super().__init__(*args, **kwargs)
-        self.expected_cont_uuid = None
-        self.daos_cmd = None
-
-    def create_pool_container(self):
-        """Create a pool and a container in the pool.
-
-        Save some variables so that we can use them in the tests.
-        """
-        self.add_pool()
-        self.daos_cmd = DaosCommand(self.bin)
-        self.expected_cont_uuid = self.daos_cmd.get_output(
-            "container_create", pool=self.pool.uuid)[0]
-
     def test_container_query_attr(self):
         """JIRA ID: DAOS-4640
 
@@ -55,66 +65,48 @@ class ContainerQueryAttributeTest(TestWithServers):
         Use Cases:
             Test container query, set-attr, get-attr, and list-attrs.
 
-        :avocado: tags=all,pool,small,full_regression,cont_query_attr
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=container,daos_cmd
+        :avocado: tags=ContainerQueryAttributeTest,test_container_query_attr
         """
-        # Test pool query.
-        self.create_pool_container()
+        # Create a pool and a container.
+        pool = self.get_pool()
+        container = self.get_container(pool)
+
         # Call daos container query, obtain pool and container UUID, and
         # compare against those used when creating the pool and the container.
-        kwargs = {
-            "pool": self.pool.uuid,
-            "cont": self.expected_cont_uuid
-        }
-        data = self.daos_cmd.container_query(**kwargs)['response']
+        data = container.query()['response']
         actual_pool_uuid = data['pool_uuid']
         actual_cont_uuid = data['container_uuid']
-        self.assertEqual(actual_pool_uuid, self.pool.uuid.lower())
-        self.assertEqual(actual_cont_uuid, self.expected_cont_uuid)
+        self.assertEqual(
+            actual_pool_uuid, pool.uuid.lower(),
+            'pool UUID from cont query does not match pool create')
+        self.assertEqual(
+            actual_cont_uuid, container.uuid.lower(),
+            'container UUID from cont query does not match cont create')
 
-        # Test container set-attr, get-attr, and list-attrs with different
-        # types of characters.
-        test_strings = [
-            "abcd",
-            "1234",
-            "abc123",
-            "abcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghij",
-            # Characters that don't require backslash. The backslashes in here
-            # are required for the code to work, but not by daos.
-            "~@#$%^*-=_+[]\{\}:/?,.",
-            # Characters that require backslash.
-            "\`\&\(\)\\\;\\'\\\"\!\<\>",
-            # Characters that include space.
-            "\"aa bb\""]
-        # We added backslashes for the code to work, but get-attr output
-        # does not contain them, so prepare the expected output that does not
-        # include backslashes.
-        escape_to_not = {}
-        escape_to_not[test_strings[-3]] = "~@#$%^*-=_+[]{}:/?,."
-        # We still need a backslash before the double quote for the code to
-        # work.
-        escape_to_not[test_strings[-2]] = "`&()\;'\"!<>"
-        escape_to_not[test_strings[-1]] = "aa bb"
-        # Prepare attr-value paris. Use the test_strings in value for the first
+        # Prepare attr-value pairs. Use the test_strings in value for the first
         # 7 and in attr for the next 7.
         attr_values = []
-        j = 0
-        for i in range(2):
+        attr_idx = 0
+        for idx in range(2):
             for test_string in test_strings:
-                if i == 0:
-                    attr_values.append(["attr" + str(j), test_string])
+                if idx == 0:
+                    attr_values.append(["attr" + str(attr_idx), test_string])
                 else:
-                    attr_values.append([test_string, "attr" + str(j)])
-                j += 1
+                    attr_values.append([test_string, "attr" + str(attr_idx)])
+                attr_idx += 1
 
         # Set and verify get-attr.
         errors = []
         expected_attrs = []
+
         for attr_value in attr_values:
-            self.daos_cmd.container_set_attr(
-                pool=actual_pool_uuid, cont=actual_cont_uuid,
-                attr=attr_value[0], val=attr_value[1])
-            kwargs["attr"] = attr_value[0]
-            data = self.daos_cmd.container_get_attr(**kwargs)['response']
+            container.set_attr(attrs={attr_value[0]: attr_value[1]})
+
+            data = container.get_attr(attr_value[0])['response']
+
             actual_val = base64.b64decode(data["value"]).decode()
             if attr_value[1] in escape_to_not:
                 # Special character string.
@@ -133,19 +125,88 @@ class ContainerQueryAttributeTest(TestWithServers):
                 expected_attrs.append(escape_to_not[attr_value[0]])
             else:
                 expected_attrs.append(attr_value[0])
-        self.assertEqual(len(errors), 0, "; ".join(errors))
+
+        report_errors(self, errors)
 
         # Verify that attr-lists works with test_strings.
         expected_attrs.sort()
-        kwargs = {
-            "pool": actual_pool_uuid,
-            "cont": actual_cont_uuid
-        }
-        data = self.daos_cmd.container_list_attrs(**kwargs)['response']
-        actual_attrs = list(data.keys())
-        actual_attrs.sort()
-        self.log.debug(str(actual_attrs))
-        self.assertEqual(actual_attrs, expected_attrs)
+        actual_attrs = sorted(list(container.list_attrs()['response']))
+        self.assertEqual(actual_attrs, expected_attrs, 'list-attrs does not match set-attr')
+
+    def test_container_query_attrs(self):
+        """JIRA ID: DAOS-4640
+
+        Test Description:
+            Test daos container query and attribute commands as described
+            above.
+
+        Use Cases:
+            Test container query, set-attr, get-attr with bulk inputs.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=container,daos_cmd
+        :avocado: tags=ContainerQueryAttributeTest,test_container_query_attrs
+        """
+        # Create a pool and a container.
+        pool = self.get_pool()
+        container = self.get_container(pool)
+
+        # Call daos container query, obtain pool and container UUID, and
+        # compare against those used when creating the pool and the container.
+        data = container.query()['response']
+        actual_pool_uuid = data['pool_uuid']
+        actual_cont_uuid = data['container_uuid']
+        self.assertEqual(
+            actual_pool_uuid, pool.uuid.lower(),
+            'pool UUID from cont query does not match pool create')
+        self.assertEqual(
+            actual_cont_uuid, container.uuid.lower(),
+            'container UUID from cont query does not match cont create')
+
+        # Prepare attr-value pairs. Use the test_strings in value for the first
+        # 7 and in attr for the next 7.
+        attr_values = {}
+        attr_idx = 0
+        for idx in range(2):
+            for test_string in test_strings:
+                if idx == 0:
+                    attr_values["attr" + str(attr_idx)] = test_string
+                else:
+                    attr_values[test_string] = "attr" + str(attr_idx)
+                attr_idx += 1
+
+        # Set and verify get-attr.
+        errors = []
+
+        # bulk-set all attributes
+        container.set_attr(attrs=attr_values)
+
+        # bulk-get all attributes
+        data = container.get_attr(list(attr_values))['response']
+
+        for attr_resp in data:
+            key = attr_resp["name"]
+            for esc_key, val in escape_to_not.items():
+                if val == key:
+                    key = esc_key
+                    break
+
+            actual_val = base64.b64decode(attr_resp["value"]).decode()
+            if attr_values[key] in escape_to_not:
+                # Special character string.
+                if actual_val != escape_to_not[attr_values[key]]:
+                    errors.append(
+                        "Unexpected output for get_attr: {} != {}\n".format(
+                            actual_val, escape_to_not[attr_values[key]]))
+            else:
+                # Standard character string.
+                if actual_val != attr_values[key]:
+                    errors.append(
+                        "Unexpected output for get_attr: {} != {}\n".format(
+                            actual_val, attr_values[key]))
+
+        report_errors(self, errors)
 
     def test_list_attrs_long(self):
         """JIRA ID: DAOS-4640
@@ -156,25 +217,20 @@ class ContainerQueryAttributeTest(TestWithServers):
         Use Cases:
             Test daos container list-attrs with 50 attributes.
 
-        :avocado: tags=all,pool,small,full_regression,cont_list_attrs
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=container,daos_cmd
+        :avocado: tags=ContainerQueryAttributeTest,test_list_attrs_long
         """
-        self.create_pool_container()
-        expected_attrs = []
-        vals = []
-        for i in range(50):
-            expected_attrs.append("attr" + str(i))
-            vals.append("val" + str(i))
-        for expected_attr, val in zip(expected_attrs, vals):
-            _ = self.daos_cmd.container_set_attr(
-                pool=self.pool.uuid, cont=self.expected_cont_uuid,
-                attr=expected_attr, val=val)
-        expected_attrs.sort()
-        kwargs = {
-            "pool": self.pool.uuid,
-            "cont": self.expected_cont_uuid
-        }
-        data = self.daos_cmd.container_list_attrs(**kwargs)['response']
-        actual_attrs = list(data.keys())
-        actual_attrs.sort()
+        # Create a pool and a container.
+        pool = self.get_pool()
+        container = self.get_container(pool)
+
+        expected_attrs = {"attr" + str(idx): "val" + str(idx) for idx in range(50)}
+
+        container.set_attr(attrs=expected_attrs)
+
+        actual_attr_names = sorted(list(container.list_attrs()['response']))
+        expected_attr_names = sorted(expected_attrs.keys())
         self.assertEqual(
-            expected_attrs, actual_attrs, "Unexpected output from list_attrs")
+            actual_attr_names, expected_attr_names, "Unexpected output from list_attrs")

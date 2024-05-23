@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -44,7 +44,7 @@ vc_set_fail_loc(test_arg_t *arg, uint64_t fail_loc, int total, int cur)
 	if (fail_loc == 0 || cur > total || cur < total - 1)
 		return;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (cur == total) {
 		if (arg->myrank == 0)
 			daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
@@ -54,7 +54,7 @@ vc_set_fail_loc(test_arg_t *arg, uint64_t fail_loc, int total, int cur)
 			daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 					      fail_loc, 0, NULL);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 }
 
 static void
@@ -315,21 +315,21 @@ vc_8(void **state)
 
 	vc_gen_modifications(arg, &req, oid, 7, 7, 7, 0, 0, 0);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				      DAOS_VC_LOST_REPLICA | DAOS_FAIL_ALWAYS,
 				      0, NULL);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	rc = vc_obj_verify(arg, oid);
 	assert_rc_equal(rc, -DER_MISMATCH);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				      0, 0, NULL);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	ioreq_fini(&req);
 }
@@ -352,11 +352,39 @@ vc_9(void **state)
 	oid = daos_test_oid_gen(arg->coh, dts_vc_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
-	vc_gen_modifications(arg, &req, oid, 7, 7, 7,
-			     DAOS_VC_DIFF_DKEY, 0, 0);
+	vc_gen_modifications(arg, &req, oid, 7, 7, 7, DAOS_VC_DIFF_DKEY | DAOS_FAIL_ALWAYS, 0, 0);
 
 	rc = vc_obj_verify(arg, oid);
 	assert_rc_equal(rc, -DER_MISMATCH);
+
+	ioreq_fini(&req);
+}
+
+static void
+vc_10(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	struct ioreq	 req;
+	int		 rc;
+
+	print_message("OBJ_SYNC RPC retry\n");
+
+	if (!test_runable(arg, dts_vc_replica_cnt))
+		return;
+
+	oid = daos_test_oid_gen(arg->coh, dts_vc_class, 0, 0, arg->myrank);
+	arg->fail_loc = DAOS_OBJ_SYNC_RETRY | DAOS_FAIL_SOME;
+	arg->fail_num = 3;
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
+
+	vc_gen_modifications(arg, &req, oid, 7, 7, 7, 0, 0, 0);
+
+	rc = vc_obj_verify(arg, oid);
+	assert_rc_equal(rc, 0);
+
+	daos_fail_num_set(0);
+	daos_fail_loc_set(0);
 
 	ioreq_fini(&req);
 }
@@ -380,6 +408,8 @@ static const struct CMUnitTest vc_tests[] = {
 	 vc_8, NULL, test_case_teardown},
 	{"VC9: verify with different dkey",
 	 vc_9, NULL, test_case_teardown},
+	{"VC10: OBJ_SYNC RPC retry",
+	 vc_10, NULL, test_case_teardown},
 };
 
 static int
@@ -398,7 +428,7 @@ run_daos_vc_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
 	int rc = 0;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (sub_tests_size == 0) {
 		sub_tests_size = ARRAY_SIZE(vc_tests);
 		sub_tests = NULL;
@@ -408,7 +438,7 @@ run_daos_vc_test(int rank, int size, int *sub_tests, int sub_tests_size)
 				sub_tests, sub_tests_size, vc_test_setup,
 				test_teardown);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	return rc;
 }

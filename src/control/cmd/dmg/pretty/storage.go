@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/dustin/go-humanize"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
@@ -26,6 +27,8 @@ func printHostStorageMapVerbose(hsm control.HostStorageMap, out io.Writer, opts 
 		hosts := getPrintHosts(hss.HostSet.RangedString(), opts...)
 		lineBreak := strings.Repeat("-", len(hosts))
 		fmt.Fprintf(out, "%s\n%s\n%s\n", lineBreak, hosts, lineBreak)
+		fmt.Fprintf(out, "HugePage Size: %d KB\n\n",
+			hss.HostStorage.MemInfo.HugepageSizeKiB)
 		if len(hss.HostStorage.ScmNamespaces) == 0 {
 			if err := PrintScmModules(hss.HostStorage.ScmModules, out, opts...); err != nil {
 				return err
@@ -165,7 +168,8 @@ func PrintStorageFormatMap(hsm control.HostStorageMap, out io.Writer, opts ...Pr
 		hosts := getPrintHosts(hss.HostSet.RangedString(), opts...)
 		row := txtfmt.TableRow{hostsTitle: hosts}
 		row[scmTitle] = fmt.Sprintf("%d", len(hss.HostStorage.ScmMountPoints))
-		row[nvmeTitle] = fmt.Sprintf("%d", len(hss.HostStorage.NvmeDevices))
+		row[nvmeTitle] = fmt.Sprintf("%d",
+			len(parseNvmeFormatResults(hss.HostStorage.NvmeDevices)))
 		table = append(table, row)
 	}
 
@@ -173,17 +177,44 @@ func PrintStorageFormatMap(hsm control.HostStorageMap, out io.Writer, opts ...Pr
 	return nil
 }
 
+// NVMe controller namespace ID (NSID) should only be displayed if >= 1. Zero value should be
+// ignored in display output.
 func printSmdDevice(dev *storage.SmdDevice, iw io.Writer, opts ...PrintConfigOption) error {
-	if _, err := fmt.Fprintf(iw, "UUID:%s [TrAddr:%s]\n",
-		dev.UUID, dev.TrAddr); err != nil {
+	fc := getPrintConfig(opts...)
 
+	trAddr := fmt.Sprintf("TrAddr:%s", dev.Ctrlr.PciAddr)
+	nsID := fmt.Sprintf("NSID:%d", dev.CtrlrNamespaceID)
+	uid := fmt.Sprintf("UUID:%s", dev.UUID)
+	led := fmt.Sprintf("LED:%s", dev.Ctrlr.LedState)
+
+	if fc.LEDInfoOnly {
+		out := trAddr
+		if dev.CtrlrNamespaceID > 0 {
+			out = fmt.Sprintf("%s %s", out, nsID)
+		}
+		if dev.UUID != "" {
+			out = fmt.Sprintf("%s [%s]", out, uid)
+		}
+
+		_, err := fmt.Fprintf(iw, "%s %s\n", out, led)
 		return err
 	}
 
-	iw1 := txtfmt.NewIndentWriter(iw)
-	if _, err := fmt.Fprintf(iw1, "Targets:%+v Rank:%d State:%s\n",
-		dev.TargetIDs, dev.Rank, dev.State); err != nil {
+	out := fmt.Sprintf("%s [%s", uid, trAddr)
+	if dev.CtrlrNamespaceID > 0 {
+		out = fmt.Sprintf("%s %s", out, nsID)
+	}
+	if _, err := fmt.Fprintf(iw, "%s]\n", out); err != nil {
+		return err
+	}
 
+	var hasSysXS string
+	if dev.HasSysXS {
+		hasSysXS = "SysXS "
+	}
+	if _, err := fmt.Fprintf(txtfmt.NewIndentWriter(iw),
+		"Roles:%s %sTargets:%+v Rank:%d State:%s LED:%s\n", &dev.Roles, hasSysXS,
+		dev.TargetIDs, dev.Rank, dev.Ctrlr.NvmeState, dev.Ctrlr.LedState); err != nil {
 		return err
 	}
 
@@ -203,7 +234,7 @@ func printSmdPool(pool *control.SmdPool, out io.Writer, opts ...PrintConfigOptio
 
 // PrintSmdInfoMap generates a human-readable representation of the supplied
 // HostStorageMap, with a focus on presenting the per-server metadata (SMD) information.
-func PrintSmdInfoMap(req *control.SmdQueryReq, hsm control.HostStorageMap, out io.Writer, opts ...PrintConfigOption) error {
+func PrintSmdInfoMap(omitDevs, omitPools bool, hsm control.HostStorageMap, out io.Writer, opts ...PrintConfigOption) error {
 	w := txtfmt.NewErrWriter(out)
 
 	for _, key := range hsm.Keys() {
@@ -218,7 +249,7 @@ func PrintSmdInfoMap(req *control.SmdQueryReq, hsm control.HostStorageMap, out i
 			continue
 		}
 
-		if !req.OmitDevices {
+		if !omitDevs {
 			if len(hss.HostStorage.SmdInfo.Devices) > 0 {
 				fmt.Fprintln(iw, "Devices")
 
@@ -227,20 +258,21 @@ func PrintSmdInfoMap(req *control.SmdQueryReq, hsm control.HostStorageMap, out i
 					if err := printSmdDevice(device, iw1, opts...); err != nil {
 						return err
 					}
-					if device.Health != nil {
-						iw2 := txtfmt.NewIndentWriter(iw1)
-						if err := printNvmeHealth(device.Health, iw2, opts...); err != nil {
-							return err
-						}
-						fmt.Fprintln(out)
+					if device.Ctrlr.HealthStats == nil {
+						continue
 					}
+					if err := printNvmeHealth(device.Ctrlr.HealthStats,
+						txtfmt.NewIndentWriter(iw1), opts...); err != nil {
+						return err
+					}
+					fmt.Fprintln(out)
 				}
 			} else {
 				fmt.Fprintln(iw, "No devices found")
 			}
 		}
 
-		if !req.OmitPools {
+		if !omitPools {
 			if len(hss.HostStorage.SmdInfo.Pools) > 0 {
 				fmt.Fprintln(iw, "Pools")
 
@@ -256,10 +288,41 @@ func PrintSmdInfoMap(req *control.SmdQueryReq, hsm control.HostStorageMap, out i
 					fmt.Fprintln(out)
 				}
 			} else {
-				fmt.Fprintln(iw, "No pools found")
+				fmt.Fprintln(iw, "No pools with NVMe found")
 			}
 		}
 	}
 
 	return w.Err
+}
+
+// PrintSmdManageResp generates a human-readable representation of the supplied response.
+func PrintSmdManageResp(op control.SmdManageOpcode, resp *control.SmdResp, out, outErr io.Writer, opts ...PrintConfigOption) error {
+	switch op {
+	case control.SetFaultyOp, control.DevReplaceOp:
+		if resp.ResultCount() > 1 {
+			return errors.Errorf("smd-manage %s: unexpected number of results, "+
+				"want %d got %d", op, 1, resp.ResultCount())
+		}
+
+		hem := resp.GetHostErrors()
+		if len(hem) > 0 {
+			for errStr, hostSet := range hem {
+				fmt.Fprintln(outErr, fmt.Sprintf("%s operation failed on %s: %s",
+					op, hostSet.HostSet, errStr))
+			}
+			return nil
+		}
+
+		return PrintHostStorageSuccesses(fmt.Sprintf("%s operation performed", op),
+			resp.HostStorage, out)
+	case control.LedCheckOp, control.LedBlinkOp, control.LedResetOp:
+		if err := PrintResponseErrors(resp, outErr, opts...); err != nil {
+			return err
+		}
+
+		return PrintSmdInfoMap(false, true, resp.HostStorage, out, opts...)
+	default:
+		return errors.Errorf("unsupported opcode %d", op)
+	}
 }

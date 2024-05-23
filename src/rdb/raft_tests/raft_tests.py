@@ -1,5 +1,5 @@
-#!/usr/bin/python
-# Copyright (c) 2018-2021 Intel Corporation
+#!/usr/bin/env python3
+# Copyright 2018-2022 Intel Corporation
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -8,17 +8,14 @@ Run the raft tests using make -C DIR tests, where DIR is the path to the raft
 Makefile. Check the output for the number of "not ok" occurrences and return
 this number as the return code.
 '''
-import subprocess
-import sys
-import os
 import json
-
-# Get rid of complaints about parens for print statements and short var names
-#pylint: disable=C0103
-#pylint: disable=C0325
+import os
+import subprocess  # nosec
+import sys
 
 TEST_NOT_RUN = -1
-DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'raft')
+DIR = os.path.join(os.path.dirname(os.path.relpath(os.path.dirname(__file__))), 'raft')
+
 
 def number_of_failures():
     """
@@ -31,15 +28,16 @@ def number_of_failures():
     json_file = ".build_vars.json"
     path = os.path.join("build", DIR, "src")
     if os.path.exists(json_file):
-        ofh = open(json_file, "r")
-        conf = json.load(ofh)
-        ofh.close()
+        with open(json_file, "r") as ofh:
+            conf = json.load(ofh)
+        print(f"DIR={DIR}")
         path = os.path.join(conf["BUILD_DIR"], DIR, "src")
+    print(f"path={path}")
     if not os.path.exists(path):
         try:
             res = subprocess.check_output(['/usr/bin/make', '-C', DIR, 'tests'])
-        except Exception as e:
-            print("Building Raft Tests failed due to\n{}".format(e))
+        except subprocess.CalledProcessError as error:
+            print(f"Building Raft Tests failed due to{error}\n")
             return TEST_NOT_RUN
     else:
         os.chdir(path)
@@ -47,7 +45,7 @@ def number_of_failures():
 
     for line in res.split('\n'):
         if line.startswith("not ok"):
-            line = "FAIL: {}".format(line)
+            line = f"FAIL: {line}"
             failures += 1
         elif line.startswith("ok"):
             successes += 1
@@ -56,6 +54,7 @@ def number_of_failures():
     if not successes and not failures:
         failures = TEST_NOT_RUN
     return failures
+
 
 def main():
     """
@@ -68,8 +67,9 @@ def main():
     elif failures == TEST_NOT_RUN:
         print("Raft Tests did not run")
     else:
-        print("Raft Tests had {} failures".format(failures))
+        print(f"Raft Tests had {failures} failures")
     sys.exit(failures)
+
 
 if __name__ == "__main__":
     main()

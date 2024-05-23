@@ -1,0 +1,56 @@
+# This line is mandatory to access the configuration functions
+from Config import *
+
+addFilter("daos\.(src|x86_64): W: name-repeated-in-summary DAOS")
+
+# GitHub asset URL (https://github.com/daos-stack/daos/archive/refs/tags/v2.0.3.tar.gz)
+# does not match the local tarball naming
+addFilter("daos\.spec: W: invalid-url Source0: daos-[\d\.]+\.tar\.gz")
+
+# suid binary false positives
+addFilter("daos-firmware\.x86_64: E: (setuid-binary|non-standard-executable-perm) \/usr\/bin\/daos_firmware")
+addFilter("daos-server\.x86_64: E: (setuid-binary|non-standard-executable-perm) \/usr\/bin\/daos_admin")
+addFilter("daos-server\.x86_64: E: (setuid-binary|non-standard-executable-perm) \/usr\/bin\/daos_server")
+addFilter("daos-server\.x86_64: E: setgid-binary \/usr\/bin\/daos_server daos_server 2755")
+
+# https://github.com/rpm-software-management/rpmlint/issues/922
+addFilter("daos-client\.x86_64: E: post(i|u)n-without-ldconfig \/usr\/lib64\/libdaos.so.[\d\.]+")
+
+# Leap 15.3's %run_ldconfig has an rm command in it
+addFilter("daos-(client|server)\.x86_64: W: dangerous-command-in-%post(un)? rm")
+
+# lots of missing manpages
+addFilter("W: no-manual-page-for-binary (cart_ctl|daos_agent|dfuse|self_test|acl_dump_test|agent_tests|crt_launch|daos_debug_set_params|daos_gen_io_conf|daos_perf|daos_racer|daos_run_io_conf|daos_test|dfs_test|dfuse_test|drpc_engine_test|drpc_test|eq_tests|fault_status|hello_drpc|job_tests|jobtest|security_test|daos_firmware|daos_admin|daos_engine|daos_metrics|daos_server|daos_storage_estimator.py|evt_ctl|jump_pl_map|obj_ctl|pl_bench|rdbt|ring_pl_map|smd_ut|bio_ut|vea_stress|vea_ut|vos_perf|vos_tests|dtx_tests|ddb|ddb_tests)")
+
+addFilter("daos-(server|firmware)\.x86_64: W: non-standard-(u|g)id \/.+ daos_server")
+
+# https://github.com/rpm-software-management/rpmlint/issues/924
+# https://github.com/rpm-software-management/rpmlint/pull/925
+addFilter("daos\.x86_64: W: non-conffile-in-etc \/etc\/(bash_completion.d\/daos.bash|ld\.so\.conf\.d\/daos\.conf)")
+
+# mofed-shim hackery
+addFilter("daos.spec:\d+: W: unversioned-explicit-provides libmpi.+so.40\(\)\(64bit\)")
+
+# https://github.com/rpm-software-management/rpmlint/issues/856
+addFilter("daos\.x86_64: W: incoherent-version-in-changelog [\d\.]+-\d+")
+
+addFilter("daos-client-tests\.x86_64: W: hidden-file-or-dir \/usr\/lib\/daos\/.build_vars\.(json|sh)")
+
+# these files may have the same contents, but really should not be linked together
+addFilter("daos-client-tests\.x86_64: W: files-duplicate \/usr\/lib\/daos\/TESTING\/ftest\/")
+
+# per Ashley, we want to supply these even though they cannot be debugged
+addFilter("E: static-library-without-debuginfo \/usr\/lib64\/lib(dfuse|ioil)\.a")
+
+# these need to be fixed:
+# https://daosio.atlassian.net/browse/DAOS-11539
+addFilter("W: no-soname \/usr\/lib64\/lib(ds3|daos_(common|cmd_hdlrs|tests|serialize|common_pmem)|dfs|dfuse|duns|ioil|pil4dfs|dpar(|_mpi)).so")
+
+# Tests rpm needs to be able to build daos from source so pulls in build deps and is expected.
+addFilter("daos-client-tests.x86_64: E: devel-dependency protobuf-c-devel")
+
+# a functional test builds daos from source, so it needs the various *-devel packages for daos' build dependencies.
+addFilter("daos-client-tests.x86_64: E: devel-dependency capstone-devel")
+addFilter("daos-client-tests.x86_64: E: explicit-lib-dependency libcapstone-devel")
+addFilter("daos-client-tests.x86_64: E: devel-dependency libcapstone-devel")
+addFilter("daos-client-tests.x86_64: E: devel-dependency fuse3-devel")

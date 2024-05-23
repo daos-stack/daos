@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,33 +7,132 @@
 package engine
 
 import (
+	"fmt"
+	"os"
 	"strings"
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
-const maxHelperStreamCount = 2
+const (
+	maxHelperStreamCount         = 2
+	numPrimaryProviders          = 1
+	defaultNumSecondaryEndpoints = 1
 
-// ErrNoPinnedNumaNode error indicates no NUMA node has been pinned in this
-// engine's configuration.
-var ErrNoPinnedNumaNode = errors.New("pinned NUMA node was not configured")
+	// MultiProviderSeparator delineates between providers in a multi-provider config.
+	MultiProviderSeparator = ","
+
+	envLogMasks      = "D_LOG_MASK"
+	envLogDbgStreams = "DD_MASK"
+	envLogSubsystems = "DD_SUBSYS"
+)
 
 // FabricConfig encapsulates networking fabric configuration.
 type FabricConfig struct {
-	Provider        string `yaml:"provider,omitempty" cmdEnv:"CRT_PHY_ADDR_STR"`
-	Interface       string `yaml:"fabric_iface,omitempty" cmdEnv:"OFI_INTERFACE"`
-	InterfacePort   int    `yaml:"fabric_iface_port,omitempty" cmdEnv:"OFI_PORT,nonzero"`
-	PinnedNumaNode  *uint  `yaml:"pinned_numa_node,omitempty" cmdLongFlag:"--pinned_numa_node" cmdShortFlag:"-p"`
+	Provider        string `yaml:"provider,omitempty" cmdEnv:"D_PROVIDER"`
+	Interface       string `yaml:"fabric_iface,omitempty" cmdEnv:"D_INTERFACE"`
+	InterfacePort   int    `yaml:"fabric_iface_port,omitempty" cmdEnv:"D_PORT,nonzero"`
+	NumaNodeIndex   uint   `yaml:"-"`
 	BypassHealthChk *bool  `yaml:"bypass_health_chk,omitempty" cmdLongFlag:"--bypass_health_chk" cmdShortFlag:"-b"`
-	CrtCtxShareAddr uint32 `yaml:"crt_ctx_share_addr,omitempty" cmdEnv:"CRT_CTX_SHARE_ADDR"`
 	CrtTimeout      uint32 `yaml:"crt_timeout,omitempty" cmdEnv:"CRT_TIMEOUT"`
+	// NumSecondaryEndpoints configures the number of cart endpoints per secondary provider.
+	NumSecondaryEndpoints []int  `yaml:"secondary_provider_endpoints,omitempty" cmdLongFlag:"--nr_sec_ctx,nonzero" cmdShortFlag:"-S,nonzero"`
+	DisableSRX            bool   `yaml:"disable_srx,omitempty" cmdEnv:"FI_OFI_RXM_USE_SRX,invertBool,intBool"`
+	AuthKey               string `yaml:"fabric_auth_key,omitempty" cmdEnv:"D_PROVIDER_AUTH_KEY"`
+}
+
+// GetPrimaryProvider parses the primary provider from the Provider string.
+func (fc *FabricConfig) GetPrimaryProvider() (string, error) {
+	providers, err := fc.GetProviders()
+	if err != nil {
+		return "", err
+	}
+
+	return providers[0], nil
+}
+
+// GetProviders parses the Provider string to one or more providers.
+func (fc *FabricConfig) GetProviders() ([]string, error) {
+	if fc == nil {
+		return nil, errors.New("FabricConfig is nil")
+	}
+
+	providers := splitMultiProviderStr(fc.Provider)
+	if len(providers) == 0 {
+		return nil, errors.New("provider not set")
+	}
+
+	return providers, nil
+}
+
+func splitMultiProviderStr(str string) []string {
+	strs := strings.Split(str, MultiProviderSeparator)
+	result := make([]string, 0)
+	for _, s := range strs {
+		trimmed := strings.TrimSpace(s)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+
+	return result
+}
+
+// GetNumProviders gets the number of fabric providers configured.
+func (fc *FabricConfig) GetNumProviders() int {
+	providers, err := fc.GetProviders()
+	if err != nil {
+		return 0
+	}
+	return len(providers)
+}
+
+// GetPrimaryInterface parses the primary fabric interface from the Interface string.
+func (fc *FabricConfig) GetPrimaryInterface() (string, error) {
+	interfaces, err := fc.GetInterfaces()
+	if err != nil {
+		return "", err
+	}
+
+	return interfaces[0], nil
+}
+
+// GetInterfaces parses the Interface string into one or more interfaces.
+func (fc *FabricConfig) GetInterfaces() ([]string, error) {
+	if fc == nil {
+		return nil, errors.New("FabricConfig is nil")
+	}
+
+	interfaces := splitMultiProviderStr(fc.Interface)
+	if len(interfaces) == 0 {
+		return nil, errors.New("fabric_iface not set")
+	}
+
+	return interfaces, nil
+}
+
+// GetInterfacePorts parses the InterfacePort string to one or more ports.
+func (fc *FabricConfig) GetInterfacePorts() ([]int, error) {
+	if fc == nil {
+		return nil, errors.New("FabricConfig is nil")
+	}
+
+	if fc.InterfacePort == 0 {
+		return nil, errors.New("fabric_iface_port not set")
+	}
+
+	return []int{fc.InterfacePort}, nil
 }
 
 // Update fills in any missing fields from the provided FabricConfig.
 func (fc *FabricConfig) Update(other FabricConfig) {
+	if fc == nil {
+		return
+	}
+
 	if fc.Provider == "" {
 		fc.Provider = other.Provider
 	}
@@ -43,37 +142,77 @@ func (fc *FabricConfig) Update(other FabricConfig) {
 	if fc.InterfacePort == 0 {
 		fc.InterfacePort = other.InterfacePort
 	}
-	if fc.CrtCtxShareAddr == 0 {
-		fc.CrtCtxShareAddr = other.CrtCtxShareAddr
-	}
 	if fc.CrtTimeout == 0 {
 		fc.CrtTimeout = other.CrtTimeout
 	}
+	if fc.DisableSRX == false {
+		fc.DisableSRX = other.DisableSRX
+	}
+	if fc.AuthKey == "" {
+		fc.AuthKey = other.AuthKey
+	}
+	if len(fc.NumSecondaryEndpoints) == 0 {
+		fc.setNumSecondaryEndpoints(other.NumSecondaryEndpoints)
+	}
 }
 
-// GetNumaNode retrieves the value configured by the YML if it was supplied
-// returns an error if it was not configured.
-func (fc *FabricConfig) GetNumaNode() (uint, error) {
-	if fc.PinnedNumaNode != nil {
-		return *fc.PinnedNumaNode, nil
+func (fc *FabricConfig) setNumSecondaryEndpoints(other []int) {
+	if len(other) == 0 {
+		// Set defaults
+		numSecProv := fc.GetNumProviders() - numPrimaryProviders
+		for i := 0; i < numSecProv; i++ {
+			other = append(other, defaultNumSecondaryEndpoints)
+		}
 	}
-	return 0, ErrNoPinnedNumaNode
+	fc.NumSecondaryEndpoints = other
 }
 
 // Validate ensures that the configuration meets minimum standards.
 func (fc *FabricConfig) Validate() error {
-	switch {
-	case fc.Provider == "":
+	numProv := fc.GetNumProviders()
+	if numProv == 0 {
 		return errors.New("provider not set")
-	case fc.Interface == "":
-		return errors.New("fabric_iface not set")
-	case fc.InterfacePort == 0:
-		return errors.New("fabric_iface_port not set")
-	case fc.InterfacePort < 0:
-		return errors.New("fabric_iface_port cannot be negative")
-	default:
-		return nil
 	}
+
+	interfaces, err := fc.GetInterfaces()
+	if err != nil {
+		return err
+	}
+
+	ports, err := fc.GetInterfacePorts()
+	if err != nil {
+		return err
+	}
+
+	for _, p := range ports {
+		if p < 0 {
+			return errors.New("fabric_iface_port cannot be negative")
+		}
+	}
+
+	if len(interfaces) != numProv { // TODO SRS-31: check num ports when multiprovider fully enabled: || len(ports) != numProv {
+		return errors.Errorf("provider, fabric_iface and fabric_iface_port must include the same number of items delimited by %q", MultiProviderSeparator)
+	}
+
+	numSecProv := numProv - numPrimaryProviders
+	if numSecProv > 0 {
+		if len(fc.NumSecondaryEndpoints) != 0 && len(fc.NumSecondaryEndpoints) != numSecProv {
+			return errors.New("secondary_provider_endpoints must have one value for each secondary provider")
+		}
+
+		for _, nrCtx := range fc.NumSecondaryEndpoints {
+			if nrCtx < 1 {
+				return errors.Errorf("all values in secondary_provider_endpoints must be > 0")
+			}
+		}
+	}
+
+	return nil
+}
+
+// GetAuthKeyEnv returns the environment variable string for the auth key.
+func (fc *FabricConfig) GetAuthKeyEnv() string {
+	return fmt.Sprintf("D_PROVIDER_AUTH_KEY=%s", fc.AuthKey)
 }
 
 // cleanEnvVars scrubs the supplied slice of environment
@@ -99,76 +238,25 @@ func cleanEnvVars(in, allowed []string) (out []string) {
 	return
 }
 
-// mergeEnvVars merges and deduplicates two slices of environment
-// variables. Conflicts are resolved by taking the value from the
-// second list.
-func mergeEnvVars(curVars []string, newVars []string) (merged []string) {
-	mergeMap := make(map[string]string)
-	for _, pair := range curVars {
-		kv := strings.SplitN(pair, "=", 2)
-		if len(kv) != 2 || kv[0] == "" || kv[1] == "" {
-			continue
-		}
-		// strip duplicates in curVars; shouldn't be any
-		// but this will ensure it.
-		if _, found := mergeMap[kv[0]]; found {
-			continue
-		}
-		mergeMap[kv[0]] = kv[1]
-	}
-
-	mergedKeys := make(map[string]struct{})
-	for _, pair := range newVars {
-		kv := strings.SplitN(pair, "=", 2)
-		if len(kv) != 2 || kv[0] == "" || kv[1] == "" {
-			continue
-		}
-		// strip duplicates in newVars
-		if _, found := mergedKeys[kv[0]]; found {
-			continue
-		}
-		mergedKeys[kv[0]] = struct{}{}
-		mergeMap[kv[0]] = kv[1]
-	}
-
-	merged = make([]string, 0, len(mergeMap))
-	for key, val := range mergeMap {
-		merged = append(merged, strings.Join([]string{key, val}, "="))
-	}
-
-	return
-}
-
-type LegacyStorage struct {
-	storage.ScmConfig  `yaml:",inline,omitempty"`
-	ScmClass           storage.Class `yaml:"scm_class,omitempty"`
-	storage.BdevConfig `yaml:",inline,omitempty"`
-	BdevClass          storage.Class `yaml:"bdev_class,omitempty"`
-}
-
-func (ls *LegacyStorage) WasDefined() bool {
-	return ls.ScmClass != storage.ClassNone || ls.BdevClass != storage.ClassNone
-}
-
 // Config encapsulates an I/O Engine's configuration.
 type Config struct {
-	Rank              *system.Rank   `yaml:"rank,omitempty"`
 	Modules           string         `yaml:"modules,omitempty" cmdLongFlag:"--modules" cmdShortFlag:"-m"`
 	TargetCount       int            `yaml:"targets,omitempty" cmdLongFlag:"--targets,nonzero" cmdShortFlag:"-t,nonzero"`
 	HelperStreamCount int            `yaml:"nr_xs_helpers" cmdLongFlag:"--xshelpernr" cmdShortFlag:"-x"`
-	ServiceThreadCore int            `yaml:"first_core" cmdLongFlag:"--firstcore,nonzero" cmdShortFlag:"-f,nonzero"`
-	SystemName        string         `yaml:"name,omitempty" cmdLongFlag:"--group" cmdShortFlag:"-g"`
-	SocketDir         string         `yaml:"socket_dir,omitempty" cmdLongFlag:"--socket_dir" cmdShortFlag:"-d"`
+	ServiceThreadCore *int           `yaml:"first_core,omitempty" cmdLongFlag:"--firstcore" cmdShortFlag:"-f"`
+	SystemName        string         `yaml:"-" cmdLongFlag:"--group" cmdShortFlag:"-g"`
+	SocketDir         string         `yaml:"-" cmdLongFlag:"--socket_dir" cmdShortFlag:"-d"`
 	LogMask           string         `yaml:"log_mask,omitempty" cmdEnv:"D_LOG_MASK"`
 	LogFile           string         `yaml:"log_file,omitempty" cmdEnv:"D_LOG_FILE"`
-	LegacyStorage     LegacyStorage  `yaml:",inline,omitempty"`
 	Storage           storage.Config `yaml:",inline,omitempty"`
 	Fabric            FabricConfig   `yaml:",inline"`
 	EnvVars           []string       `yaml:"env_vars,omitempty"`
 	EnvPassThrough    []string       `yaml:"env_pass_through,omitempty"`
+	PinnedNumaNode    *uint          `yaml:"pinned_numa_node,omitempty" cmdLongFlag:"--pinned_numa_node" cmdShortFlag:"-p"`
 	Index             uint32         `yaml:"-" cmdLongFlag:"--instance_idx" cmdShortFlag:"-I"`
 	MemSize           int            `yaml:"-" cmdLongFlag:"--mem_size" cmdShortFlag:"-r"`
-	HugePageSz        int            `yaml:"-" cmdLongFlag:"--hugepage_size" cmdShortFlag:"-H"`
+	HugepageSz        int            `yaml:"-" cmdLongFlag:"--hugepage_size" cmdShortFlag:"-H"`
+	CheckerEnabled    bool           `yaml:"-" cmdLongFlag:"--checker" cmdShortFlag:"-C"`
 }
 
 // NewConfig returns an I/O Engine config.
@@ -178,21 +266,129 @@ func NewConfig() *Config {
 	}
 }
 
+// ReadLogDbgStreams extracts the value of DD_MASK from engine config env_vars.
+func (c *Config) ReadLogDbgStreams() (string, error) {
+	val, err := c.GetEnvVar(envLogDbgStreams)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return "", err
+	}
+
+	return val, nil
+}
+
+// ReadLogSubsystems extracts the value of DD_SUBSYS from engine config env_vars.
+func (c *Config) ReadLogSubsystems() (string, error) {
+	val, err := c.GetEnvVar(envLogSubsystems)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return "", err
+	}
+
+	return val, nil
+}
+
 // Validate ensures that the configuration meets minimum standards.
 func (c *Config) Validate() error {
+	if c.PinnedNumaNode != nil && c.ServiceThreadCore != nil && *c.ServiceThreadCore != 0 {
+		return errors.New("cannot specify both pinned_numa_node and first_core")
+	}
+
+	errNegative := func(s string) error {
+		return errors.Errorf("%s must not be negative", s)
+	}
+	if c.TargetCount < 0 {
+		return errNegative("target count")
+	}
+	if c.HelperStreamCount < 0 {
+		return errNegative("helper stream count")
+	}
+	if c.ServiceThreadCore != nil && *c.ServiceThreadCore < 0 {
+		return errNegative("service thread core index")
+	}
+	if c.MemSize < 0 {
+		return errNegative("mem size")
+	}
+	if c.HugepageSz < 0 {
+		return errNegative("hugepage size")
+	}
+
+	if c.TargetCount == 0 {
+		return errors.New("target count must be nonzero")
+	}
+
 	if err := c.Fabric.Validate(); err != nil {
 		return errors.Wrap(err, "fabric config validation failed")
 	}
 
 	if err := c.Storage.Validate(); err != nil {
-		return errors.Wrap(err, "storage config validation failed")
+		return err
 	}
 
-	if c.LogMask != "" {
-		return ValidateLogMasks(c.LogMask)
+	if err := ValidateLogMasks(c.LogMask); err != nil {
+		return errors.Wrap(err, "validate engine log masks")
+	}
+
+	streams, err := c.ReadLogDbgStreams()
+	if err != nil {
+		return errors.Wrap(err, "reading environment variable")
+	}
+	if err := ValidateLogStreams(streams); err != nil {
+		return errors.Wrap(err, "validate engine log debug streams")
+	}
+
+	subsystems, err := c.ReadLogSubsystems()
+	if err != nil {
+		return errors.Wrap(err, "reading environment variable")
+	}
+	if err := ValidateLogSubsystems(subsystems); err != nil {
+		return errors.Wrap(err, "validate engine log subsystems")
 	}
 
 	return nil
+}
+
+type cfgNumaMismatch struct {
+	cfgNode uint
+	detNode uint
+}
+
+func (cnm *cfgNumaMismatch) Error() string {
+	return fmt.Sprintf("configured NUMA node %d does not match detected NUMA node %d", cnm.cfgNode, cnm.detNode)
+}
+
+func errNumaMismatch(cfg, det uint) error {
+	return &cfgNumaMismatch{cfgNode: cfg, detNode: det}
+}
+
+// IsNUMAMismatch returns true if the supplied error is the result
+// of a NUMA node configuration error.
+func IsNUMAMismatch(err error) bool {
+	_, ok := errors.Cause(err).(*cfgNumaMismatch)
+	return ok
+}
+
+// SetNUMAAffinity sets the NUMA affinity for the engine,
+// if not already set in the configuration.
+func (c *Config) SetNUMAAffinity(node uint) error {
+	if c.PinnedNumaNode != nil && c.ServiceThreadCore != nil && *c.ServiceThreadCore != 0 {
+		return errors.New("cannot set both NUMA node and service core")
+	}
+
+	var hasMismatch error
+	if c.PinnedNumaNode != nil {
+		if *c.PinnedNumaNode != node {
+			// advisory for now; may become fatal in future
+			hasMismatch = errNumaMismatch(*c.PinnedNumaNode, node)
+		}
+	} else {
+		// If not set via config, use the detected NUMA node affinity.
+		c.PinnedNumaNode = &node
+	}
+
+	// Propagate the NUMA node affinity to the nested config structs.
+	c.Storage.SetNUMAAffinity(*c.PinnedNumaNode)
+	c.Fabric.NumaNodeIndex = *c.PinnedNumaNode
+
+	return hasMismatch
 }
 
 // CmdLineArgs returns a slice of command line arguments to be
@@ -225,10 +421,10 @@ func (c *Config) CmdLineEnv() ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		env = mergeEnvVars(env, sEnv)
+		env = common.MergeKeyValues(env, sEnv)
 	}
 
-	return mergeEnvVars(c.EnvVars, env), nil
+	return common.MergeKeyValues(c.EnvVars, env), nil
 }
 
 // HasEnvVar returns true if the configuration contains
@@ -242,11 +438,24 @@ func (c *Config) HasEnvVar(name string) bool {
 	return false
 }
 
+// GetEnvVar returns the value of the given environment variable to be supplied when starting an I/O
+// engine instance.
+func (c *Config) GetEnvVar(name string) (string, error) {
+	env, err := c.CmdLineEnv()
+	if err != nil {
+		return "", err
+	}
+
+	env = common.MergeKeyValues(cleanEnvVars(os.Environ(), c.EnvPassThrough), env)
+
+	return common.FindKeyValue(env, name)
+}
+
 // WithEnvVars applies the supplied list of environment
 // variables to any existing variables, with new values
 // overwriting existing values.
 func (c *Config) WithEnvVars(newVars ...string) *Config {
-	c.EnvVars = mergeEnvVars(c.EnvVars, newVars)
+	c.EnvVars = common.MergeKeyValues(c.EnvVars, newVars)
 
 	return c
 }
@@ -256,12 +465,6 @@ func (c *Config) WithEnvVars(newVars ...string) *Config {
 // engine subprocess environment.
 func (c *Config) WithEnvPassThrough(allowList ...string) *Config {
 	c.EnvPassThrough = allowList
-	return c
-}
-
-// WithRank sets the instance rank.
-func (c *Config) WithRank(r uint32) *Config {
-	c.Rank = system.NewRankPtr(r)
 	return c
 }
 
@@ -275,7 +478,7 @@ func (c *Config) WithSystemName(name string) *Config {
 // Note that this method replaces any existing configs. To append,
 // use AppendStorage().
 func (c *Config) WithStorage(cfgs ...*storage.TierConfig) *Config {
-	c.Storage.Tiers = c.Storage.Tiers[:]
+	c.Storage.Tiers = storage.TierConfigs{}
 	c.AppendStorage(cfgs...)
 	return c
 }
@@ -301,6 +504,30 @@ func (c *Config) WithStorageConfigOutputPath(cfgPath string) *Config {
 // WithStorageVosEnv sets the VOS_BDEV_CLASS env variable.
 func (c *Config) WithStorageVosEnv(ve string) *Config {
 	c.Storage.VosEnv = ve
+	return c
+}
+
+// WithStorageEnableHotplug sets EnableHotplug in engine storage.
+func (c *Config) WithStorageEnableHotplug(enable bool) *Config {
+	c.Storage.EnableHotplug = enable
+	return c
+}
+
+// WithStorageNumaNodeIndex sets the NUMA node index to be used by this instance.
+func (c *Config) WithStorageNumaNodeIndex(nodeIndex uint) *Config {
+	c.Storage.NumaNodeIndex = nodeIndex
+	return c
+}
+
+// WithStorageControlMetadataPath sets the metadata path to be used by this instance.
+func (c *Config) WithStorageControlMetadataPath(path string) *Config {
+	c.Storage.ControlMetadata.Path = path
+	return c
+}
+
+// WithStorageControlMetadataDevice sets the metadata device to be used by this instance.
+func (c *Config) WithStorageControlMetadataDevice(device string) *Config {
+	c.Storage.ControlMetadata.DevicePath = device
 	return c
 }
 
@@ -334,9 +561,21 @@ func (c *Config) WithFabricInterfacePort(ifacePort int) *Config {
 	return c
 }
 
-// WithPinnedNumaNode sets the NUMA node affinity for the I/O Engine instance
-func (c *Config) WithPinnedNumaNode(numa *uint) *Config {
-	c.Fabric.PinnedNumaNode = numa
+// WithFabricAuthKey sets the fabric authorization key.
+func (c *Config) WithFabricAuthKey(key string) *Config {
+	c.Fabric.AuthKey = key
+	return c
+}
+
+// WithSrxDisabled disables or enables SRX.
+func (c *Config) WithSrxDisabled(disable bool) *Config {
+	c.Fabric.DisableSRX = disable
+	return c
+}
+
+// WithFabricNumaNodeIndex sets the NUMA node index to be used by this instance.
+func (c *Config) WithFabricNumaNodeIndex(nodeIndex uint) *Config {
+	c.Fabric.NumaNodeIndex = nodeIndex
 	return c
 }
 
@@ -346,15 +585,15 @@ func (c *Config) WithBypassHealthChk(bypass *bool) *Config {
 	return c
 }
 
-// WithCrtCtxShareAddr defines the CRT_CTX_SHARE_ADDR for this instance
-func (c *Config) WithCrtCtxShareAddr(addr uint32) *Config {
-	c.Fabric.CrtCtxShareAddr = addr
-	return c
-}
-
 // WithCrtTimeout defines the CRT_TIMEOUT for this instance
 func (c *Config) WithCrtTimeout(timeout uint32) *Config {
 	c.Fabric.CrtTimeout = timeout
+	return c
+}
+
+// WithNumSecondaryEndpoints sets the number of network endpoints for each secondary provider.
+func (c *Config) WithNumSecondaryEndpoints(nr []int) *Config {
+	c.Fabric.NumSecondaryEndpoints = nr
 	return c
 }
 
@@ -372,7 +611,7 @@ func (c *Config) WithHelperStreamCount(count int) *Config {
 
 // WithServiceThreadCore sets the core index to be used for running DAOS service threads.
 func (c *Config) WithServiceThreadCore(idx int) *Config {
-	c.ServiceThreadCore = idx
+	c.ServiceThreadCore = &idx
 	return c
 }
 
@@ -388,14 +627,66 @@ func (c *Config) WithLogMask(logMask string) *Config {
 	return c
 }
 
+// WithLogStreams sets the DAOS logging debug streams to be used by this instance.
+func (c *Config) WithLogStreams(streams string) *Config {
+	c.EnvVars = append(c.EnvVars, fmt.Sprintf("%s=%s", envLogDbgStreams, streams))
+	return c
+}
+
+// WithLogSubsystems sets the DAOS logging subsystems to be used by this instance.
+func (c *Config) WithLogSubsystems(subsystems string) *Config {
+	c.EnvVars = append(c.EnvVars, fmt.Sprintf("%s=%s", envLogSubsystems, subsystems))
+	return c
+}
+
 // WithMemSize sets the NVMe memory size for SPDK memory allocation on this instance.
 func (c *Config) WithMemSize(memsize int) *Config {
 	c.MemSize = memsize
 	return c
 }
 
-// WithHugePageSize sets the configured hugepage size on this instance.
-func (c *Config) WithHugePageSize(hugepagesz int) *Config {
-	c.HugePageSz = hugepagesz
+// WithHugepageSize sets the configured hugepage size on this instance.
+func (c *Config) WithHugepageSize(hugepagesz int) *Config {
+	c.HugepageSz = hugepagesz
+	return c
+}
+
+// WithPinnedNumaNode sets the NUMA node affinity for the I/O Engine instance.
+func (c *Config) WithPinnedNumaNode(numa uint) *Config {
+	c.PinnedNumaNode = &numa
+	return c
+}
+
+// WithStorageAccelProps sets the acceleration properties for the I/O Engine instance.
+func (c *Config) WithStorageAccelProps(name string, mask storage.AccelOptionBits) *Config {
+	c.Storage.AccelProps.Engine = name
+	c.Storage.AccelProps.Options = mask
+	return c
+}
+
+// WithStorageSpdkRpcSrvProps specifies whether a SPDK JSON-RPC server will run in the I/O Engine.
+func (c *Config) WithStorageSpdkRpcSrvProps(enable bool, sockAddr string) *Config {
+	c.Storage.SpdkRpcSrvProps.Enable = enable
+	c.Storage.SpdkRpcSrvProps.SockAddr = sockAddr
+	return c
+}
+
+// WithStorageAutoFaultyCriteria specifies NVMe auto-faulty settings in the I/O Engine.
+func (c *Config) WithStorageAutoFaultyCriteria(enable bool, maxIoErrs, maxCsumErrs uint32) *Config {
+	c.Storage.AutoFaultyProps.Enable = enable
+	c.Storage.AutoFaultyProps.MaxIoErrs = maxIoErrs
+	c.Storage.AutoFaultyProps.MaxCsumErrs = maxCsumErrs
+	return c
+}
+
+// WithIndex sets the I/O Engine instance index.
+func (c *Config) WithIndex(i uint32) *Config {
+	c.Index = i
+	return c.WithStorageIndex(i)
+}
+
+// WithStorageIndex sets the I/O Engine instance index in the storage struct.
+func (c *Config) WithStorageIndex(i uint32) *Config {
+	c.Storage.EngineIdx = uint(i)
 	return c
 }

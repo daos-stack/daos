@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,8 +7,8 @@
 /*
  * This provides a simple example for how to access different DAOS objects.
  *
- * For more information on the DAOS object model, please visit this
- * page: https://daos-stack.github.io/overview/storage/#daos-object
+ * For more information on the DAOS object model, please visit this page:
+ * https://docs.daos.io/latest/overview/storage/#daos-object
  */
 
 #include <stdlib.h>
@@ -480,11 +480,9 @@ example_daos_array()
 	oid.hi = 0;
 	oid.lo = 3;
 
-	/*
-	 * generate an array objid to encode feature flags and object class to
-	 * the OID. This is a convenience function over the
-	 * daos_obj_generate_oid() that adds the required feature flags for an
-	 * array: DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT | DAOS_OF_ARRAY
+	/**
+	 * Convenience function to generate a DAOS Array object ID by encoding
+	 * the private DAOS bits of the object address space.
 	 */
 	daos_array_generate_oid(coh, &oid, true, 0, 0, 0);
 
@@ -611,8 +609,7 @@ example_daos_kv()
 
 	oid.hi = 0;
 	oid.lo = 4;
-	/** the KV API requires the flat feature flag be set in the oid */
-	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, OC_SX, 0, 0);
+	daos_obj_generate_oid(coh, &oid, DAOS_OT_KV_HASHED, OC_SX, 0, 0);
 
 	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	ASSERT(rc == 0, "KV open failed with %d", rc);
@@ -666,7 +663,8 @@ example_daos_kv()
 	ASSERT(num_keys == (KEYS - 1) * rankn,
 	       "KV enumerate after remove failed");
 
-	daos_kv_close(oh, NULL);
+	rc = daos_kv_close(oh, NULL);
+	ASSERT(rc == 0, "KV close failed with %d", rc);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (rank == 0)
@@ -676,7 +674,6 @@ example_daos_kv()
 int
 main(int argc, char **argv)
 {
-	uuid_t		pool_uuid, co_uuid;
 	int		rc;
 
 	rc = MPI_Init(&argc, &argv);
@@ -697,13 +694,9 @@ main(int argc, char **argv)
 	rc = daos_init();
 	ASSERT(rc == 0, "daos_init failed with %d", rc);
 
-	/** parse the pool information and connect to the pool */
-	rc = uuid_parse(argv[1], pool_uuid);
-	ASSERT(rc == 0, "Failed to parse 'Pool uuid': %s", argv[1]);
-
 	/** Call connect on rank 0 only and broadcast handle to others */
 	if (rank == 0) {
-		rc = daos_pool_connect(pool_uuid, NULL, DAOS_PC_RW, &poh,
+		rc = daos_pool_connect(argv[1], NULL, DAOS_PC_RW, &poh,
 				       NULL, NULL);
 		ASSERT(rc == 0, "pool connect failed with %d", rc);
 	}
@@ -718,16 +711,13 @@ main(int argc, char **argv)
 	 * and pass the uuid to the app.
 	 */
 	if (rank == 0) {
-		/** generate uuid for container */
-		uuid_generate(co_uuid);
-
 		/** create container */
-		rc = daos_cont_create(poh, co_uuid, NULL /* properties */,
-				      NULL /* event */);
+		rc = daos_cont_create_with_label(poh, "simple_obj", NULL, NULL,
+						 NULL);
 		ASSERT(rc == 0, "container create failed with %d", rc);
 
 		/** open container */
-		rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, NULL,
+		rc = daos_cont_open(poh, "simple_obj", DAOS_COO_RW, &coh, NULL,
 				    NULL);
 		ASSERT(rc == 0, "container open failed with %d", rc);
 	}

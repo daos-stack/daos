@@ -1,5 +1,5 @@
 """Build rebuild library"""
-import daos_build
+
 
 def scons():
     """Execute build"""
@@ -12,14 +12,15 @@ def scons():
 
     denv = env.Clone()
 
-    prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
+    denv.require('argobots', 'protobufc')
 
     denv.Append(CCFLAGS=['-Wframe-larger-than=131072'])
     # rebuild
-    rebuild = daos_build.library(denv, 'rebuild',
-                                 ['scan.c', 'srv.c', 'rpc.c', 'ras.c',
-                                  'rebuild_iv.c'], install_off="../..")
+    rebuild = denv.d_library('rebuild',
+                             ['scan.c', 'srv.c', 'rpc.c', 'ras.c', 'rebuild_iv.c'],
+                             install_off="../..")
     denv.Install('$PREFIX/lib64/daos_srv', rebuild)
+
 
 if __name__ == "SCons.Script":
     scons()

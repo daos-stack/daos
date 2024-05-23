@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -23,12 +23,6 @@
 
 #define OID_SEND_MAX	128
 
-/* NB: simplify client implementation, all OIDs are stored under one dkey,
- * this should be changed in the future, e.g. bump it to 1024 dkeys so OIDs
- * can scatter to more targets.
- */
-#define OIT_BUCKET_MAX	1
-
 /* All OIDs within a bucket are stored under the same dkey of OIT */
 struct oit_bucket {
 	daos_obj_id_t		*ob_oids;
@@ -44,14 +38,16 @@ struct oit_scan_args {
 	daos_key_t		oa_dkey;
 	daos_epoch_t		oa_epoch;
 	daos_obj_id_t		oa_oit_id;
+	daos_obj_id_t		oa_pre_id;
 	d_iov_t			oa_iov;
 	int			oa_hash;
+	int			oa_max_buckets;
 	/** sgl for OID each bucket */
 	d_sg_list_t		oa_sgls[OID_SEND_MAX];
 	/** IOD for OID each bucket */
 	daos_iod_t		oa_iods[OID_SEND_MAX];
 	/** OID buckets, OIDs are hashed into different buckets */
-	struct oit_bucket	oa_buckets[OIT_BUCKET_MAX];
+	struct oit_bucket	oa_buckets[DAOS_OIT_BUCKET_MAX];
 };
 
 static int
@@ -62,15 +58,15 @@ cont_send_oit_bucket(struct oit_scan_args *oa, uint32_t bucket_id)
 	int		   rc;
 
 	D_ASSERT(bucket->ob_nr <= OID_SEND_MAX);
-	d_iov_set(&oa->oa_dkey, &bucket_id, sizeof(bucket_id));
+	DAOS_OIT_DKEY_SET(&oa->oa_dkey, &bucket_id);
+	D_CASSERT(sizeof(oa->oa_epoch) == DAOS_OIT_DEFAULT_VAL_LEN);
 	d_iov_set(&oa->oa_iov, &oa->oa_epoch, sizeof(oa->oa_epoch));
 
 	for (i = 0; i < bucket->ob_nr; i++) {
 		daos_iod_t	*iod = &oa->oa_iods[i];
 		d_sg_list_t	*sgl = &oa->oa_sgls[i];
 
-		d_iov_set(&iod->iod_name, &bucket->ob_oids[i],
-			  sizeof(bucket->ob_oids[i]));
+		DAOS_OIT_AKEY_SET(&iod->iod_name, &bucket->ob_oids[i]);
 		iod->iod_type	= DAOS_IOD_SINGLE;
 		iod->iod_size	= sizeof(oa->oa_epoch);
 		iod->iod_nr	= 1;
@@ -88,7 +84,6 @@ cont_send_oit_bucket(struct oit_scan_args *oa, uint32_t bucket_id)
 	if (rc)
 		goto failed;
 
-	bucket->ob_nr = 0;
 	return 0;
 failed:
 	return rc;
@@ -108,10 +103,20 @@ cont_iter_obj_cb(daos_handle_t ch, vos_iter_entry_t *ent, vos_iter_type_t type,
 	if (daos_oid_is_oit(oid))
 		return 0; /* ignore IOT object */
 
-	D_DEBUG(DB_TRACE, "enumerate OID="DF_OID"\n", DP_OID(oid));
+	/* There might be some objects, which has same oid.id_pub, but different
+	 * id_shard, so let's compare with the previous oid to avoid duplicate
+	 * oid. Because these same oid will be put together in OI table, so only
+	 * check the previous OID should be safe here.
+	 */
+	if (daos_oid_cmp(oa->oa_pre_id, oid) == 0) {
+		D_DEBUG(DB_TRACE, "skip duplicate OID="DF_UOID"\n", DP_UOID(ent->ie_oid));
+		return 0;
+	}
+	oa->oa_pre_id = oid;
 
+	D_DEBUG(DB_TRACE, "enumerate OID="DF_OID"\n", DP_OID(oid));
 	bid = d_hash_murmur64((unsigned char *)&oid, sizeof(oid), 0) %
-			      OIT_BUCKET_MAX;
+			      oa->oa_max_buckets;
 	bucket = &oa->oa_buckets[bid];
 	if (bucket->ob_nr < OID_SEND_MAX) {
 		bucket->ob_oids[bucket->ob_nr] = oid;
@@ -122,13 +127,17 @@ cont_iter_obj_cb(daos_handle_t ch, vos_iter_entry_t *ent, vos_iter_type_t type,
 	/* bucket is full, store it now */
 	D_DEBUG(DB_TRACE, "Bucket is full, send OIDs\n");
 	rc = cont_send_oit_bucket(oa, bid);
+	if (rc == 0) { /* store the current OID for the next send */
+		bucket->ob_oids[0] = oid;
+		bucket->ob_nr = 1;
+	}
 	*acts |= VOS_ITER_CB_YIELD;
 	return rc;
 }
 
 int
 cont_child_gather_oids(struct ds_cont_child *coc, uuid_t coh_uuid,
-		       daos_epoch_t epoch)
+		       daos_epoch_t epoch, daos_obj_id_t oit_oid)
 {
 	struct ds_pool_child	*poc = coc->sc_pool;
 	struct oit_scan_args	*oa;
@@ -139,12 +148,13 @@ cont_child_gather_oids(struct ds_cont_child *coc, uuid_t coh_uuid,
 	uuid_t			 uuid;
 	int			 i;
 	int			 rc;
+	uint32_t		 co_ver;
 
 	D_ALLOC_PTR(oa); /* NB: too large to be stack */
 	if (!oa)
 		return -DER_NOMEM;
 
-	for (i = 0; i < OIT_BUCKET_MAX; i++) {
+	for (i = 0; i < DAOS_OIT_BUCKET_MAX; i++) {
 		daos_obj_id_t *oids;
 
 		D_ALLOC_ARRAY(oids, OID_SEND_MAX);
@@ -156,9 +166,6 @@ cont_child_gather_oids(struct ds_cont_child *coc, uuid_t coh_uuid,
 	rc = ds_pool_iv_svc_fetch(poc->spc_pool, &svc);
 	if (rc)
 		D_GOTO(out, rc);
-
-	oa->oa_oit_id = daos_oit_gen_id(epoch, coc->sc_props.dcp_redun_fac);
-	D_DEBUG(DB_IO, "OIT="DF_OID"\n", DP_OID(oa->oa_oit_id));
 
 	uuid_generate(uuid);
 	rc = dsc_pool_open(poc->spc_uuid, uuid, 0, NULL,
@@ -172,6 +179,14 @@ cont_child_gather_oids(struct ds_cont_child *coc, uuid_t coh_uuid,
 	rc = dsc_cont_open(oa->oa_poh, coc->sc_uuid, coh_uuid, 0, &oa->oa_coh);
 	if (rc)
 		D_GOTO(out, rc);
+
+	rc = dc_cont_hdl2globalver(oa->oa_coh, &co_ver);
+	if (rc)
+		D_GOTO(out, rc);
+
+	oa->oa_oit_id = oit_oid;
+	oa->oa_max_buckets = co_ver < 2 ? 1 : DAOS_OIT_BUCKET_MAX;
+	D_DEBUG(DB_IO, "OIT="DF_OID"\n", DP_OID(oa->oa_oit_id));
 
 	rc = dsc_obj_open(oa->oa_coh, oa->oa_oit_id, DAOS_OO_RW, &oa->oa_oh);
 	if (rc)
@@ -189,9 +204,11 @@ cont_child_gather_oids(struct ds_cont_child *coc, uuid_t coh_uuid,
 		D_GOTO(out, rc);
 
 	/* send out remaining OIDs */
-	for (i = 0; i < OIT_BUCKET_MAX; i++) {
-		if (oa->oa_buckets[i].ob_nr > 0)
+	for (i = 0; i < DAOS_OIT_BUCKET_MAX; i++) {
+		if (oa->oa_buckets[i].ob_nr > 0) {
 			rc = cont_send_oit_bucket(oa, i);
+			oa->oa_buckets[i].ob_nr = 0;
+		}
 	}
 out:
 	if (daos_handle_is_valid(oa->oa_oh))
@@ -203,10 +220,9 @@ out:
 	if (svc)
 		d_rank_list_free(svc);
 
-	for (i = 0; i < OIT_BUCKET_MAX; i++) {
+	for (i = 0; i < DAOS_OIT_BUCKET_MAX; i++) {
 		bucket = &oa->oa_buckets[i];
-		if (bucket->ob_oids)
-			D_FREE(bucket->ob_oids);
+		D_FREE(bucket->ob_oids);
 	}
 	D_FREE(oa);
 	return rc;

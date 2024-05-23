@@ -1,14 +1,13 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from command_utils_base import FormattedParameter
-from command_utils_base import BasicParameter
 from command_utils import ExecutableCommand
+from command_utils_base import BasicParameter, FormattedParameter
 from job_manager_utils import Mpirun
+
 
 def uuid_from_obj(obj):
     """Try to get uuid from an object.
@@ -24,28 +23,6 @@ def uuid_from_obj(obj):
         return obj.uuid
     return obj
 
-def format_daos_path(pool=None, cont=None, path=None):
-    """Format a daos path as daos://<pool>/<cont>/<path>.
-
-    Args:
-        pool (TestPool, optional): the source pool or uuid.
-        cont (TestContainer, optional): the source cont or uuid.
-        path (str, optional): cont path relative to the root.
-
-    Returns:
-        str: the formatted path.
-
-    """
-    daos_path = "daos://"
-    if pool:
-        pool_uuid = uuid_from_obj(pool)
-        daos_path += str(pool_uuid) + "/"
-    if cont:
-        cont_uuid = uuid_from_obj(cont)
-        daos_path += str(cont_uuid) + "/"
-    if path:
-        daos_path += str(path).lstrip("/")
-    return daos_path
 
 class MfuCommandBase(ExecutableCommand):
     """Base MpiFileUtils command."""
@@ -57,7 +34,7 @@ class MfuCommandBase(ExecutableCommand):
             namespace (str): yaml namespace (path to parameters)
             command: command (str): string of the command to be executed.
             hosts (list): list of hosts to specify in the hostfile.
-            tmp (str): path for hostfiles.
+            tmp (str): path for host-files.
 
         """
         super().__init__(namespace, command)
@@ -72,50 +49,48 @@ class MfuCommandBase(ExecutableCommand):
             kwargs: name, value pairs of class Parameters
 
         """
-        for a in kwargs:
-            attr = getattr(self, a)
-            attr.update(kwargs[a], a)
-
-    @staticmethod
-    def __param_sort(k):
-        """Key sort for get_param_names. Moves src_path and dst_path
-           to the end of the list.
-
-        Args:
-            k (str): the key
-
-        Returns:
-            int: the sort priority
-
-        """
-        if k in ("dst_path", "dst"):
-            return 3
-        if k in ("src_path", "src"):
-            return 2
-        return 1
+        for key, value in kwargs.items():
+            attr = getattr(self, key)
+            attr.update(value, key)
 
     def get_param_names(self):
-        """Override the original get_param_names to sort
-           the src and dst paths.
+        """Override the original get_param_names to sort the src and dst paths.
 
         Returns:
             list: the sorted param names.
 
         """
+        def _param_sort(key):
+            """Key sort for get_param_names. Moves src and dst to the end of the list.
+
+            Args:
+                key (str): the key
+
+            Returns:
+                int: the sort priority
+
+            """
+            return {
+                'dst': 3,
+                'src': 2
+            }.get(key, 0)
+
         param_names = super().get_param_names()
-        param_names.sort(key=self.__param_sort)
+        param_names.sort(key=_param_sort)
         return param_names
 
-    def run(self, processes):
+    def run(self, processes, job_manager, ppn=None, env=None):
         # pylint: disable=arguments-differ
         """Run the MpiFileUtils command.
 
         Args:
-            processes: Number of processes for the command.
+            processes (int): Number of processes for the command.
+            job_manager (JobManager): Job manager variable to set/assign
+            ppn (int, optional): client processes per node for the command.
+            env (dict, optional): environment variables to update before running
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            CmdResult: Object that contains exit status, stdout, and other information.
 
         Raises:
             CommandFailure: In case run command fails.
@@ -124,15 +99,17 @@ class MfuCommandBase(ExecutableCommand):
         self.log.info('Starting %s', str(self.command).lower())
 
         # Get job manager cmd
-        mpirun = Mpirun(self, mpitype="mpich")
-        mpirun.assign_hosts(self.hosts, self.tmp)
-        mpirun.assign_processes(processes)
-        mpirun.exit_status_exception = self.exit_status_exception
+        job_manager = Mpirun(self, mpi_type="mpich")
+        job_manager.assign_hosts(self.hosts, self.tmp)
+        job_manager.assign_processes(processes, ppn)
+        job_manager.exit_status_exception = self.exit_status_exception
+        job_manager.assign_environment(env or {}, True)
 
         # Run the command
-        out = mpirun.run()
+        out = job_manager.run()
 
         return out
+
 
 class DcpCommand(MfuCommandBase):
     """Defines an object representing a dcp command."""
@@ -143,14 +120,13 @@ class DcpCommand(MfuCommandBase):
 
         # dcp options
 
+        # pylint: disable=wrong-spelling-in-comment
         # IO buffer size in bytes (default 64MB)
         self.blocksize = FormattedParameter("--blocksize {}")
         # New versions use bufsize instead of blocksize
         self.bufsize = FormattedParameter("--bufsize {}")
         # work size per task in bytes (default 64MB)
         self.chunksize = FormattedParameter("--chunksize {}")
-        # DAOS prefix for unified namespace path
-        self.daos_prefix = FormattedParameter("--daos-prefix {}")
         # DAOS API in {DFS, DAOS} (default uses DFS for POSIX containers)
         self.daos_api = FormattedParameter("--daos-api {}")
         # read source list from file
@@ -174,9 +150,9 @@ class DcpCommand(MfuCommandBase):
         # print help/usage
         self.print_usage = FormattedParameter("--help", False)
         # source path
-        self.src_path = BasicParameter(None)
+        self.src = BasicParameter(None)
         # destination path
-        self.dst_path = BasicParameter(None)
+        self.dst = BasicParameter(None)
 
 
 class DsyncCommand(MfuCommandBase):
@@ -196,8 +172,6 @@ class DsyncCommand(MfuCommandBase):
         self.bufsize = FormattedParameter("--blocksize {}")
         # work size per task in bytes (default 4MB)
         self.chunksize = FormattedParameter("--chunksize {}")
-        # DAOS prefix for unified namespace path
-        self.daos_prefix = FormattedParameter("--daos-prefix {}")
         # DAOS API in {DFS, DAOS} (default uses DFS for POSIX containers)
         self.daos_api = FormattedParameter("--daos-api {}")
         # read and compare file contents rather than compare size and mtime
@@ -210,7 +184,7 @@ class DsyncCommand(MfuCommandBase):
         self.no_dereference = FormattedParameter("--no-dereference", False)
         # open files with O_DIRECT
         self.direct = FormattedParameter("--direct", False)
-        # hardlink to files in DIR when unchanged
+        # hard-link to files in DIR when unchanged
         self.link_dest = FormattedParameter("--link-dest {}")
         # create sparse files when possible
         self.sparse = FormattedParameter("--sparse", False)
@@ -223,9 +197,10 @@ class DsyncCommand(MfuCommandBase):
         # print help/usage
         self.print_usage = FormattedParameter("--help", False)
         # source path
-        self.src_path = BasicParameter(None)
+        self.src = BasicParameter(None)
         # destination path
-        self.dst_path = BasicParameter(None)
+        self.dst = BasicParameter(None)
+
 
 class DserializeCommand(MfuCommandBase):
     """Defines an object representing a daos-serialize command."""
@@ -245,7 +220,7 @@ class DserializeCommand(MfuCommandBase):
         # print help/usage
         self.print_usage = FormattedParameter("--help", False)
         # source path
-        self.src_path = BasicParameter(None)
+        self.src = BasicParameter(None)
 
 
 class DdeserializeCommand(MfuCommandBase):
@@ -266,14 +241,13 @@ class DdeserializeCommand(MfuCommandBase):
         # print help/usage
         self.print_usage = FormattedParameter("--help", False)
         # source path
-        self.src_path = BasicParameter(None)
+        self.src = BasicParameter(None)
 
 
 class FsCopy():
     """Class defining an object of type FsCopy.
-       Allows interfacing with daos fs copy in a similar
-       manner to DcpCommand.
 
+    Allows interfacing with daos fs copy in a similar manner to DcpCommand.
     """
 
     def __init__(self, daos_cmd, log):
@@ -287,10 +261,11 @@ class FsCopy():
         """
         self.src = None
         self.dst = None
+        self.preserve_props = None
         self.daos_cmd = daos_cmd
         self.log = log
 
-    def set_fs_copy_params(self, src=None, dst=None):
+    def set_params(self, src=None, dst=None, preserve_props=None):
         """Set the daos fs copy params.
 
         Args:
@@ -304,6 +279,8 @@ class FsCopy():
             self.src = src
         if dst:
             self.dst = dst
+        if preserve_props:
+            self.preserve_props = preserve_props
 
     def run(self):
         # pylint: disable=arguments-differ
@@ -319,12 +296,15 @@ class FsCopy():
         """
         self.log.info("Starting daos filesystem copy")
 
-        return self.daos_cmd.filesystem_copy(src=self.src, dst=self.dst)
+        return self.daos_cmd.filesystem_copy(src=self.src, dst=self.dst,
+                                             preserve_props=self.preserve_props)
+
 
 class ContClone():
     """Class defining an object of type ContClone.
-       Allows interfacing with daos container copy in a similar
-       manner to DcpCommand.
+
+    Allows interfacing with daos container copy in a similar
+    manner to DcpCommand.
     """
 
     def __init__(self, daos_cmd, log):
@@ -341,7 +321,7 @@ class ContClone():
         self.daos_cmd = daos_cmd
         self.log = log
 
-    def set_cont_clone_params(self, src=None, dst=None):
+    def set_params(self, src=None, dst=None):
         """Set the daos container clone params.
 
         Args:

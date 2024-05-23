@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -19,6 +19,10 @@
 #if defined(__cplusplus)
 extern "C" {
 #endif
+
+#include <daos_prop.h>
+#include <daos_obj_class.h>
+#include <daos_cont.h>
 
 /** Flags for duns_resolve_path */
 enum {
@@ -58,7 +62,7 @@ struct duns_attr_t {
 	 *
 	 * DUNS_NO_PREFIX
 	 * DUNS_NO_REVERSE_LOOKUP
-	 * DUNS_NO_CHECK_PATH:
+	 * DUNS_NO_CHECK_PATH
 	 */
 	uint32_t		da_flags;
 	/** OUT: Pool UUID or label string.
@@ -114,14 +118,26 @@ struct duns_attr_t {
 	 * da_cont with duns_resolve_path().
 	 */
 	uuid_t			da_cuuid;
+	/** IN: (Optional) For a POSIX container, set a default object class for all directories. */
+	daos_oclass_id_t	da_dir_oclass_id;
+	/** IN: (Optional) For a POSIX container, set a default object class for all files. */
+	daos_oclass_id_t	da_file_oclass_id;
+	/** IN: (Optional) For a POSIX container, set hints for file and dir object classes. */
+	char			da_hints[DAOS_CONT_HINT_MAX_LEN];
 };
 
 /** extended attribute name that will store the UNS info */
 #define DUNS_XATTR_NAME		"user.daos"
 /** Length of the extended attribute */
 #define DUNS_MAX_XATTR_LEN	170
-
+/** Format of daos attributes in the extended attribute */
 #define DUNS_XATTR_FMT		"DAOS.%s://%36s/%36s"
+/**
+ * Lustre specific foreign LOV/LMV format (container type will be encoded in
+ * lfm_flag field and extra slashes will be added when needed by foreign_symlink
+ * Lustre code)
+ */
+#define DUNS_LUSTRE_XATTR_FMT		"%36s/%36s"
 
 /**
  * Create a special directory (POSIX) or file (HDF5) depending on the container type, and create a
@@ -216,6 +232,26 @@ duns_set_sys_name(struct duns_attr_t *attrp, const char *sys);
  */
 void
 duns_destroy_attr(struct duns_attr_t *attrp);
+
+/**
+ * Create a special directory (POSIX) or file (HDF5) depending on the container type that links to
+ * an existing DAOS container. This is similar to duns_create_path except for the fact that a new
+ * container is not created, and the container that is passed should be an existing container in the
+ * \a poh. Note that it is possible that a user creates multiple paths in the namespace to the same
+ * container, however when any path is destroyed, the container is destroyed with it, leaving other
+ * dangling paths in the namespace to a non-existing container. It is the responsibility of the user
+ * to cleanup those dangling paths in the namespace and ensure that the container is not going to be
+ * accessed anymore through the remaining paths after the destroy operation on any of the paths that
+ * were created to that container.
+ *
+ * \param[in]	poh	Pool handle
+ * \param[in]	cont	Existing container in the pool to create the uns path to.
+ * \param[in]	path	Path in an existing namespace to create with the uns link to the container.
+ *
+ * \return		0 on Success. errno code on failure.
+ */
+int
+duns_link_cont(daos_handle_t poh, const char *cont, const char *path);
 
 #if defined(__cplusplus)
 }

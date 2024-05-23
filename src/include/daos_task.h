@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -24,6 +24,7 @@ extern "C" {
 #include <daos_pool.h>
 #include <daos_mgmt.h>
 #include <daos/tse.h>
+#include <daos_pipeline.h>
 
 /** DAOS operation codes for task creation */
 typedef enum {
@@ -80,8 +81,7 @@ typedef enum {
 	DAOS_OPC_TX_RESTART,
 
 	/** Object APIs */
-	DAOS_OPC_OBJ_REGISTER_CLASS = 43,
-	DAOS_OPC_OBJ_QUERY_CLASS,
+	DAOS_OPC_OBJ_QUERY_CLASS = 44,
 	DAOS_OPC_OBJ_LIST_CLASS,
 	DAOS_OPC_OBJ_OPEN,
 	DAOS_OPC_OBJ_CLOSE,
@@ -108,15 +108,24 @@ typedef enum {
 	DAOS_OPC_ARRAY_PUNCH,
 	DAOS_OPC_ARRAY_GET_SIZE,
 	DAOS_OPC_ARRAY_SET_SIZE,
+	DAOS_OPC_ARRAY_STAT,
 
 	/** KV APIs */
-	DAOS_OPC_KV_OPEN = 69,
+	DAOS_OPC_KV_OPEN = 70,
 	DAOS_OPC_KV_CLOSE,
 	DAOS_OPC_KV_DESTROY,
 	DAOS_OPC_KV_GET,
 	DAOS_OPC_KV_PUT,
 	DAOS_OPC_KV_REMOVE,
 	DAOS_OPC_KV_LIST,
+
+	DAOS_OPC_POOL_FILTER_CONT,
+	DAOS_OPC_OBJ_KEY2ANCHOR,
+	DAOS_OPC_CONT_SNAP_OIT_CREATE,
+	DAOS_OPC_CONT_SNAP_OIT_DESTROY,
+
+	/** Pipeline APIs */
+	DAOS_OPC_PIPELINE_RUN,
 
 	DAOS_OPC_MAX
 } daos_opc_t;
@@ -134,42 +143,6 @@ typedef struct {
 	/** optional extra value to set the fail */
 	uint64_t		value_extra;
 } daos_set_params_t;
-
-/** pool create params */
-typedef struct {
-	/** Capabilities permitted for the pool. */
-	uint32_t		mode;
-	/** User owning the pool */
-	uid_t			uid;
-	/** Group owning the pool */
-	gid_t			gid;
-	/** Process set name of the DAOS servers managing the pool. */
-	const char		*grp;
-	/** Optional, allocate targets on this list of ranks. */
-	const d_rank_list_t	*tgts;
-	/** String identifying the target devices to use. */
-	const char		*dev;
-	/** Target SCM (Storage Class Memory) size in bytes. */
-	daos_size_t		scm_size;
-	/** Target NVMe (Non-Volatile Memory express) size in bytes. */
-	daos_size_t		nvme_size;
-	/** Optional, pool properties. */
-	daos_prop_t		*prop;
-	/** Number of desired pool service replicas. */
-	d_rank_list_t		*svc;
-	/** UUID of the pool created */
-	unsigned char		*uuid;
-} daos_pool_create_t;
-
-/** pool destroy args */
-typedef struct {
-	/** UUID of the pool to destroy. */
-	uuid_t			uuid;
-	/** Process set name of the DAOS servers managing the pool */
-	const char		*grp;
-	/** Force destruction even if there are active connections */
-	int			force;
-} daos_pool_destroy_t;
 
 /** pool connect by UUID args */
 typedef struct {
@@ -208,16 +181,26 @@ typedef struct {
 	struct d_tgt_list	*tgts;
 } daos_pool_update_t;
 
+/** Object class register args */
+struct daos_obj_register_class_t {
+	/** Container open handle. */
+	daos_handle_t		coh;
+	/** Object class ID. */
+	daos_oclass_id_t	cid;
+	/** Object class attributes. */
+	struct daos_oclass_attr	*cattr;
+};
+
 /** pool query args */
 typedef struct {
 	/** Pool open handle. */
 	daos_handle_t		poh;
-	/** Optional, returned storage targets in this pool. */
-	d_rank_list_t		*tgts;
+	/** Optional, returned storage ranks in this pool. */
+	d_rank_list_t	      **ranks;
 	/** Optional, returned pool information. */
-	daos_pool_info_t	*info;
+	daos_pool_info_t       *info;
 	/** Optional, returned pool properties. */
-	daos_prop_t		*prop;
+	daos_prop_t	       *prop;
 } daos_pool_query_t;
 
 /** pool target query args */
@@ -242,6 +225,18 @@ typedef struct {
 	struct daos_pool_cont_info	*cont_buf;
 } daos_pool_list_cont_t;
 
+/** pool filter containers args */
+typedef struct {
+	/** Pool open handle. */
+	daos_handle_t			 poh;
+	/** [in] filter selection criteria */
+	daos_pool_cont_filter_t		*filt;
+	/** [in] length of \a cont_buf. [out] number of containers that match filter criteria. */
+	daos_size_t			*ncont;
+	/** Array of container extended info structures. */
+	struct daos_pool_cont_info2	*cont_buf;
+} daos_pool_filter_cont_t;
+
 /** pool list attributes args */
 typedef struct {
 	/** Pool open handle. */
@@ -255,9 +250,9 @@ typedef struct {
 /** pool get attributes args */
 typedef struct {
 	/** Pool open handle. */
-	daos_handle_t		poh;
+	daos_handle_t            poh;
 	/** Number of attributes. */
-	int			n;
+	int                      n;
 	/** Array of \a n null-terminated attribute names. */
 	char    const *const	*names;
 	/** Array of \a n buffers to store attribute values. */
@@ -287,7 +282,7 @@ typedef struct {
 	/** Number of attributes. */
 	int			n;
 	/** Array of \a n null-terminated attribute names. */
-	char   const *const	*names;
+	char const *const      *names;
 } daos_pool_del_attr_t;
 
 /** pool add/remove replicas args */
@@ -302,20 +297,13 @@ typedef struct {
 	d_rank_list_t		*failed;
 } daos_pool_replicas_t;
 
-/** pool management pool list args */
-typedef struct {
-	/** Process set name of the DAOS servers managing the pool */
-	const char		*grp;
-	/** Array of pool mgmt information structures. */
-	daos_mgmt_pool_info_t	*pools;
-	/** length of array */
-	daos_size_t		*npools;
-} daos_mgmt_list_pools_t;
-
 /** Blobstore state query args */
 typedef struct {
+	/** daos system name (server group) */
 	const char		*grp;
+	/** blobstore UUID */
 	uuid_t			uuid;
+	/** pointer to user-provided blobstore state */
 	int			*state;
 } daos_mgmt_get_bs_state_t;
 
@@ -436,7 +424,7 @@ typedef struct {
 typedef struct {
 	/** Container open handle. */
 	daos_handle_t		coh;
-	/*
+	/**
 	 * [in]: epoch of snapshot to wait for.
 	 * [out]: epoch of persistent snapshot taken.
 	 */
@@ -505,7 +493,7 @@ typedef struct {
 typedef struct {
 	/** Container open handle. */
 	daos_handle_t		coh;
-	/*
+	/**
 	 * [in]: Number of snapshots in epochs and names.
 	 * [out]: Actual number of snapshots returned
 	 */
@@ -537,6 +525,34 @@ typedef struct {
 	/** Epoch range of snapshots to destroy. */
 	daos_epoch_range_t	epr;
 } daos_cont_destroy_snap_t;
+
+/** Container snapshot oit oid get args */
+typedef struct {
+	/** Container open handle. */
+	daos_handle_t		 coh;
+	/** Epoch of snapshot for getting oit oid */
+	daos_epoch_t		 epoch;
+	/** Returned OIT OID for the epoch snapshot */
+	daos_obj_id_t		*oid;
+} daos_cont_snap_oit_oid_get_t;
+
+/** Container snapshot oit create args */
+typedef struct {
+	/** Container open handle. */
+	daos_handle_t		 coh;
+	/** epoch of persistent snapshot taken. */
+	daos_epoch_t		 epoch;
+	/** Optional null terminated name for snapshot. */
+	char			*name;
+} daos_cont_snap_oit_create_t;
+
+/** Container snapshot oit destroy args */
+typedef struct {
+	/** Container open handle. */
+	daos_handle_t		coh;
+	/** epoch of persistent snapshot. */
+	daos_epoch_t		epoch;
+} daos_cont_snap_oit_destroy_t;
 
 /** Transaction Open args */
 typedef struct {
@@ -584,16 +600,6 @@ typedef struct {
 	daos_handle_t		th;
 } daos_tx_restart_t;
 
-/** Object class register args */
-typedef struct {
-	/** Container open handle. */
-	daos_handle_t		coh;
-	/** Object class ID. */
-	daos_oclass_id_t	cid;
-	/** Object class attributes. */
-	struct daos_oclass_attr	*cattr;
-} daos_obj_register_class_t;
-
 /** Object class query args */
 typedef struct {
 	/** Container open handle. */
@@ -632,11 +638,11 @@ typedef struct {
 	daos_handle_t		oh;
 } daos_obj_close_t;
 
-/*
+/**
  * Object & Object Key Punch args.
  * NB:
- * - If @dkey is NULL, it is parameter for object punch.
- * - If @akeys is NULL, it is parameter for dkey punch.
+ * - If #dkey is NULL, it is parameter for object punch.
+ * - If #akeys is NULL, it is parameter for dkey punch.
  * - API allows user to punch multiple dkeys, in this case, client module needs
  *   to allocate multiple instances of this data structure.
  */
@@ -673,12 +679,12 @@ typedef struct {
 	daos_handle_t		oh;
 	/** Transaction open handle. */
 	daos_handle_t		th;
-	/*
+	/**
 	 * [in]: allocated integer dkey.
 	 * [out]: max or min dkey (if flag includes dkey query).
 	 */
 	daos_key_t		*dkey;
-	/*
+	/**
 	 * [in]: allocated integer akey.
 	 * [out]: max or min akey (if flag includes akey query).
 	 */
@@ -687,6 +693,8 @@ typedef struct {
 	daos_recx_t		*recx;
 	/** Operation flags. */
 	uint64_t		flags;
+	/** [out]: optional - Max epoch value */
+	daos_epoch_t		*max_epoch;
 } daos_obj_query_key_t;
 
 /** Object fetch/update args */
@@ -758,7 +766,8 @@ typedef struct {
 	daos_recx_t		*recxs;
 	/** epoch ranges */
 	daos_epoch_range_t	*eprs;
-	/* anchors for obj list -
+	/** anchor for list_recx.
+	 *  anchors for obj list -
 	 * list_dkey uses dkey_anchor,
 	 * list_akey uses akey_anchor,
 	 * list_recx uses anchor,
@@ -839,6 +848,16 @@ typedef daos_obj_list_t		daos_obj_list_recx_t;
 */
 typedef daos_obj_list_t		daos_obj_list_obj_t;
 
+/**
+ * parameter subset for list_obj -
+ * daos_handle_t	oh;
+ * daos_handle_t	th;
+ * daos_key_t		*dkey;
+ * daos_key_t		*akey;
+ * daos_anchor_t	*anchor;
+ */
+typedef daos_obj_list_t		daos_obj_key2anchor_t;
+
 /** Array create args */
 typedef struct {
 	/** Container open handle. */
@@ -902,6 +921,16 @@ typedef struct {
 	/** Returned array size in number of records. */
 	daos_size_t		*size;
 } daos_array_get_size_t;
+
+/** Array stat args */
+typedef struct {
+	/** Array open handle. */
+	daos_handle_t		oh;
+	/** Transaction open handle. */
+	daos_handle_t		th;
+	/** Returned array stat info */
+	daos_array_stbuf_t	*stbuf;
+} daos_array_stat_t;
 
 /** Array set size args */
 typedef struct {
@@ -997,8 +1026,8 @@ typedef struct {
 	daos_handle_t		oh;
 	/** Transaction open handle. */
 	daos_handle_t		th;
-	/*
-	 * [in]: number of key descriptors in \a kds.
+	/**
+	 * [in]: number of key descriptors in #kds.
 	 * [out]: number of returned key descriptors.
 	 */
 	uint32_t		*nr;
@@ -1010,6 +1039,40 @@ typedef struct {
 	daos_anchor_t		*anchor;
 } daos_kv_list_t;
 
+/** Pipeline run args */
+typedef struct {
+	/** object handler */
+	daos_handle_t			oh;
+	/** transaction handler */
+	daos_handle_t			th;
+	/** pipeline object */
+	daos_pipeline_t			*pipeline;
+	/** conditional operations */
+	uint64_t			flags;
+	/** operation done on this specific dkey */
+	daos_key_t			*dkey;
+	/** I/O descriptors in the iods table. */
+	uint32_t			*nr_iods;
+	/** akeys */
+	daos_iod_t			*iods;
+	/** anchor to start from last returned key */
+	daos_anchor_t			*anchor;
+	/** number of keys in kds and sgl_keys */
+	uint32_t			*nr_kds;
+	/** keys' metadata */
+	daos_key_desc_t			*kds;
+	/** dkeys */
+	d_sg_list_t			*sgl_keys;
+	/** records  */
+	d_sg_list_t			*sgl_recx;
+	/** records' size */
+	daos_size_t			*recx_size;
+	/** aggregations */
+	d_sg_list_t			*sgl_agg;
+	/** returned pipeline stats  */
+	daos_pipeline_stats_t		*stats;
+} daos_pipeline_run_t;
+
 /**
  * Create an asynchronous task and associate it with a daos client operation.
  * For synchronous operations please use the specific API for that operation.
@@ -1020,15 +1083,12 @@ typedef struct {
  * to the open task.
  * For a simpler workflow, users can use the event based API instead of tasks.
  *
- * \param opc	[IN]	Operation Code to identify the daos op to associate with
- *			the task,
- * \param sched	[IN]	Scheduler / Engine this task will be added to.
- * \param num_deps [IN]	Number of tasks this task depends on before it gets
- *			scheduled. No tasks can be in progress.
- * \param dep_tasks [IN]
- *			Array of tasks that new task will wait on completion
- *			before it's scheduled.
- * \param taskp	[OUT]	Pointer to task to be created/initialized with the op.
+ * \param[in] opc	Operation Code to identify the daos op to associate with the task,
+ * \param[in] sched	Scheduler / Engine this task will be added to.
+ * \param[in] num_deps	Number of tasks this task depends on before it gets scheduled. No tasks can
+ * 			be in progress.
+ * \param[in] dep_tasks	Array of tasks that new task will wait on completion before it's scheduled.
+ * \param[out] taskp	Pointer to task to be created/initialized with the op.
  *
  * \return		0		Success
  *			-DER_INVAL	Invalid parameter
@@ -1045,9 +1105,8 @@ daos_task_create(daos_opc_t opc, tse_sched_t *sched,
  * ref count on the task to prevent it to be freed after the DAOS operation has
  * completed).
  *
- * \param task	[IN]	Task to reset.
- * \param opc	[IN]	Operation code to identify the daos op to associate with
- *			the task.
+ * \param[in] task	Task to reset.
+ * \param[in] opc	Operation code to identify the daos op to associate with the task.
  *
  * \return		0		Success
  *			-DER_INVAL	Invalid parameter
@@ -1062,7 +1121,7 @@ daos_task_reset(tse_task_t *task, daos_opc_t opc);
  * created or in its prepare cb. The task must be created with
  * daos_task_create() and a valid DAOS opc.
  *
- * \param task	[IN]	Task to retrieve the struct from.
+ * \param[in] task	Task to retrieve the struct from.
  *
  * \return		Success: Pointer to arguments for the DAOS task
  */
@@ -1073,7 +1132,7 @@ daos_task_get_args(tse_task_t *task);
  * Return a pointer to the DAOS task private state. If no private state has
  * been set (via daos_task_get_priv()), NULL is returned.
  *
- * \param task	[IN]	Task to retrieve the private state from
+ * \param[in] task	Task to retrieve the private state from
  *
  * \return		Pointer to the private state
  */
@@ -1083,8 +1142,8 @@ daos_task_get_priv(tse_task_t *task);
 /**
  * Set a pointer to the DAOS task private state.
  *
- * \param task	[IN]	Task to retrieve the private state from
- * \param priv	[IN]	Pointer to the private state
+ * \param[in] task	Task to retrieve the private state from
+ * \param[in] priv	Pointer to the private state
  *
  * \return		private state set by the previous call
  */
@@ -1095,12 +1154,11 @@ daos_task_set_priv(tse_task_t *task, void *priv);
  * Make progress on the RPC context associated with the scheduler and schedule
  * tasks that are ready. Also check if the scheduler has any tasks.
  *
- * \param sched	[IN]	Scheduler to make progress on.
- * \param timeout [IN]	How long is caller going to wait (micro-second)
+ * \param[in] sched	Scheduler to make progress on.
+ * \param[in] timeout	How long is caller going to wait (micro-second)
  *			if \a timeout > 0,
  *			it can also be DAOS_EQ_NOWAIT, DAOS_EQ_WAIT
- * \param is_empty [OUT]
- *			flag to indicate whether the scheduler is empty or not.
+ * \param[out] is_empty	Flag to indicate whether the scheduler is empty or not.
  *
  * \return		0 if Success, negative DER if failed.
  */

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,24 +11,20 @@
 #include <daos_pool.h>
 #include <daos_srv/bio.h>
 #include <daos_srv/vea.h>
+#include <daos_srv/daos_chk.h>
 #include <daos/object.h>
 #include <daos/dtx.h>
 #include <daos/checksum.h>
 
-#define VOS_SUB_OP_MAX	((uint16_t)-2)
+#define VOS_SUB_OP_MAX  (((uint16_t)-1) >> 2)
+
+#define VOS_POOL_DF_2_2 24
+#define VOS_POOL_DF_2_4 25
+#define VOS_POOL_DF_2_6 26
 
 struct dtx_rsrvd_uint {
 	void			*dru_scm;
 	d_list_t		dru_nvme;
-};
-
-enum dtx_cos_flags {
-	DCF_SHARED		= (1 << 0),
-	/* Some DTX (such as for the distributed transaction across multiple
-	 * RDGs, or for EC object modification) need to be committed via DTX
-	 * RPC instead of piggyback via other dispatched update/punch RPC.
-	 */
-	DCF_EXP_CMT		= (1 << 1),
 };
 
 enum dtx_stat_flags {
@@ -57,6 +53,10 @@ enum dtx_entry_flags {
 	DTE_CORRUPTED		= (1 << 3),
 	/* The DTX entry on leader does not exist, then not sure the status. */
 	DTE_ORPHAN		= (1 << 4),
+	/* Related DTX may be only committed on some participants, but not
+	 * on all yet, need to be re-committed.
+	 */
+	DTE_PARTIAL_COMMITTED	= (1 << 5),
 };
 
 struct dtx_entry {
@@ -81,6 +81,16 @@ enum vos_pool_open_flags {
 	VOS_POF_SMALL	= (1 << 0),
 	/** Exclusive (-DER_BUSY if already opened) */
 	VOS_POF_EXCL	= (1 << 1),
+	/** Ignore the pool uuid passed into vos_pool_open */
+	VOS_POF_SKIP_UUID_CHECK = (1 << 2),
+	/** Caller does VEA flush periodically */
+	VOS_POF_EXTERNAL_FLUSH	= (1 << 3),
+	/** RDB pool */
+	VOS_POF_RDB	= (1 << 4),
+	/** SYS DB pool */
+	VOS_POF_SYSDB	= (1 << 5),
+	/** Open the pool for daos check query, that will bypass EXEL flags. */
+	VOS_POF_FOR_CHECK_QUERY = (1 << 6),
 };
 
 enum vos_oi_attr {
@@ -123,6 +133,17 @@ struct vos_pool_space {
 #define NVME_FREE(vps)	((vps)->vps_space.s_free[DAOS_MEDIA_NVME])
 #define NVME_SYS(vps)	((vps)->vps_space_sys[DAOS_MEDIA_NVME])
 
+struct chk_pool_info {
+	/** DAOS check phase on the pool shard. */
+	uint32_t		cpi_phase;
+	/** DAOS check instance status on the pool shard. */
+	uint32_t		cpi_ins_status;
+	/** Inconsistency information for DAOS check on the pool shard. */
+	struct chk_statistics	cpi_statistics;
+	/** Time information for DAOS check on the pool shard. */
+	struct chk_time		cpi_time;
+};
+
 /**
  * pool attributes returned to query
  */
@@ -133,6 +154,8 @@ typedef struct {
 	struct vos_pool_space	pif_space;
 	/** garbage collector statistics */
 	struct vos_gc_stat	pif_gc_stat;
+	/** DAOS check related information */
+	struct chk_pool_info	pif_chk;
 	/** TODO */
 } vos_pool_info_t;
 
@@ -212,6 +235,12 @@ typedef enum {
 	VOS_IT_EPC_EQ,
 } vos_it_epc_expr_t;
 
+typedef enum {
+	VOS_ITER_PROC_OP_UNKNOWN = 0,
+	VOS_ITER_PROC_OP_DELETE = 1,
+	VOS_ITER_PROC_OP_MARK_CORRUPT = 2,
+} vos_iter_proc_op_t;
+
 enum {
 	/** Conditional Op: Punch key if it exists, fail otherwise */
 	VOS_OF_COND_PUNCH		= DAOS_COND_PUNCH,
@@ -255,6 +284,21 @@ enum {
 	VOS_OF_SKIP_FETCH		= (1 << 18),
 	/** Operation on EC object (currently only applies to update) */
 	VOS_OF_EC			= (1 << 19),
+	/** Update from rebuild */
+	VOS_OF_REBUILD			= (1 << 20),
+};
+
+enum {
+	/** Aggregation optimization is enabled for this pool */
+	VOS_POOL_FEAT_AGG_OPT = (1ULL << 0),
+	/** Pool check is supported for this pool */
+	VOS_POOL_FEAT_CHK = (1ULL << 1),
+	/** Dynamic evtree root supported for this pool */
+	VOS_POOL_FEAT_DYN_ROOT = (1ULL << 2),
+	/** Embedded value in tree root supported */
+	VOS_POOL_FEAT_EMBED_FIRST = (1ULL << 3),
+	/** Flat DKEY support enabled */
+	VOS_POOL_FEAT_FLAT_DKEY = (1ULL << 4),
 };
 
 /** Mask for any conditionals passed to to the fetch */
@@ -283,23 +327,25 @@ D_CASSERT((VOS_OF_PUNCH_PROPAGATE & DAOS_COND_MASK) == 0);
 /** vos definitions that match daos_obj_key_query flags */
 enum {
 	/** retrieve the max of dkey, akey, and/or idx of array value */
-	VOS_GET_MAX		= DAOS_GET_MAX,
+	VOS_GET_MAX = DAOS_GET_MAX,
 	/** retrieve the min of dkey, akey, and/or idx of array value */
-	VOS_GET_MIN		= DAOS_GET_MIN,
+	VOS_GET_MIN = DAOS_GET_MIN,
 	/** retrieve the dkey */
-	VOS_GET_DKEY		= DAOS_GET_DKEY,
+	VOS_GET_DKEY = DAOS_GET_DKEY,
 	/** retrieve the akey */
-	VOS_GET_AKEY		= DAOS_GET_AKEY,
+	VOS_GET_AKEY = DAOS_GET_AKEY,
 	/** retrieve the idx of array value */
-	VOS_GET_RECX		= DAOS_GET_RECX,
+	VOS_GET_RECX = DAOS_GET_RECX,
 	/**
 	 * Internal flag to indicate retrieve the idx of EC array value,
 	 * in that case need to retrieve both normal space and parity space
 	 * (parity space with DAOS_EC_PARITY_BIT in the recx index).
 	 */
-	VOS_GET_RECX_EC		= (1 << 5),
+	VOS_GET_RECX_EC = (1 << 5),
 	/** Internal flag to indicate timestamps are used */
-	VOS_USE_TIMESTAMPS	= (1 << 6),
+	VOS_USE_TIMESTAMPS = (1 << 6),
+	/** Internal flag to indicate dkey is flat */
+	VOS_FLAT_DKEY = (1 << 7),
 };
 
 D_CASSERT((VOS_USE_TIMESTAMPS & (VOS_GET_MAX | VOS_GET_MIN | VOS_GET_DKEY |
@@ -307,36 +353,67 @@ D_CASSERT((VOS_USE_TIMESTAMPS & (VOS_GET_MAX | VOS_GET_MIN | VOS_GET_DKEY |
 
 enum {
 	/** The absence of any flags means iterate all unsorted extents */
-	VOS_IT_RECX_ALL		= 0,
+	VOS_IT_RECX_ALL = 0,
 	/** Include visible extents in sorted iteration */
-	VOS_IT_RECX_VISIBLE	= (1 << 0),
+	VOS_IT_RECX_VISIBLE = (1 << 0),
 	/** Include covered extents, implies VOS_IT_RECX_VISIBLE */
-	VOS_IT_RECX_COVERED	= (1 << 1) | VOS_IT_RECX_VISIBLE,
+	VOS_IT_RECX_COVERED = (1 << 1) | VOS_IT_RECX_VISIBLE,
 	/** Include hole extents in sorted iteration
 	 *  Only applicable if VOS_IT_RECX_COVERED is not set
 	 */
-	VOS_IT_RECX_SKIP_HOLES	= (1 << 2),
+	VOS_IT_RECX_SKIP_HOLES = (1 << 2),
 	/** When sorted iteration is enabled, iterate in reverse */
-	VOS_IT_RECX_REVERSE	= (1 << 3),
+	VOS_IT_RECX_REVERSE = (1 << 3),
 	/** The iterator is for purge operation */
-	VOS_IT_FOR_PURGE	= (1 << 4),
+	VOS_IT_FOR_PURGE = (1 << 4),
 	/** The iterator is for data migration scan */
-	VOS_IT_FOR_MIGRATION	= (1 << 5),
+	VOS_IT_FOR_MIGRATION = (1 << 5),
 	/** Iterate only show punched records in interval */
-	VOS_IT_PUNCHED		= (1 << 6),
+	VOS_IT_PUNCHED = (1 << 6),
 	/** Cleanup stale DTX entry. */
-	VOS_IT_CLEANUP_DTX	= (1 << 7),
+	VOS_IT_FOR_DISCARD = (1 << 7),
+	/** Entry is not committed */
+	VOS_IT_UNCOMMITTED = (1 << 8),
+	/** The iterator is for an aggregation operation (EC or VOS) */
+	VOS_IT_FOR_AGG = (1 << 9),
 	/** Mask for all flags */
-	VOS_IT_MASK		= (1 << 8) - 1,
+	VOS_IT_MASK = (1 << 10) - 1,
 };
+
+typedef struct {
+	union {
+		/** The object id of the entry */
+		daos_unit_oid_t	 id_oid;
+		/** The key for the entry */
+		d_iov_t		 id_key;
+	};
+	/** Conservative approximation of last aggregatable write for object or key. */
+	daos_epoch_t		 id_agg_write;
+	/** Timestamp of latest parent punch, if applicable.  Zero if there is no punch */
+	daos_epoch_t		 id_parent_punch;
+	/** Type of entry */
+	vos_iter_type_t		 id_type;
+} vos_iter_desc_t;
+
+/** Probe flags for vos_iter_probe_ex */
+enum {
+	/** Indicate that we should skip the current entry */
+	VOS_ITER_PROBE_NEXT	= (1 << 0),
+	/** Indicate that we've already invoked probe for this entry */
+	VOS_ITER_PROBE_AGAIN	= (1 << 1),
+};
+
+/**
+ * Iteration object/key filter callback
+ */
+typedef int (*vos_iter_filter_cb_t)(daos_handle_t ih, vos_iter_desc_t *desc,
+				    void *cb_arg, unsigned int *acts);
 
 /**
  * Parameters for initializing VOS iterator
  */
 typedef struct {
-	/** standalone prepare:	pool connection handle or container open handle
-	 *  nested prepare:	DAOS_HDL_INVAL
-	 */
+	/** pool connection handle or container open handle */
 	daos_handle_t		ip_hdl;
 	/** standalone prepare:	DAOS_HDL_INVAL
 	 *  nested prepare:	parent iterator handle
@@ -354,6 +431,10 @@ typedef struct {
 	daos_epoch_range_t	ip_epr;
 	/** epoch logic expression for the iterator. */
 	vos_it_epc_expr_t	ip_epc_expr;
+	/** filter callback for object/key (vos_iterate only) */
+	vos_iter_filter_cb_t	ip_filter_cb;
+	/** filter callback argument (vos_iterate only) */
+	void			*ip_filter_arg;
 	/** flags for for iterator */
 	uint32_t		ip_flags;
 } vos_iter_param_t;
@@ -456,20 +537,25 @@ typedef struct {
 typedef int (*vos_iter_cb_t)(daos_handle_t ih, vos_iter_entry_t *entry,
 			     vos_iter_type_t type, vos_iter_param_t *param,
 			     void *cb_arg, unsigned int *acts);
+
 /**
  * Actions performed in iteration callback
  */
 enum {
-	/** Yield */
-	VOS_ITER_CB_YIELD	= (1UL << 0),
+	/** No action */
+	VOS_ITER_CB_NONE	= 0,
 	/** Delete entry */
-	VOS_ITER_CB_DELETE	= (1UL << 1),
+	VOS_ITER_CB_DELETE	= (1UL << 0),
 	/** Skip entry, don't iterate into next level for current entry */
-	VOS_ITER_CB_SKIP	= (1UL << 2),
+	VOS_ITER_CB_SKIP	= (1UL << 1),
+	/** Abort the current level iterator and restart */
+	VOS_ITER_CB_RESTART	= (1UL << 2),
 	/** Abort current level iteration */
 	VOS_ITER_CB_ABORT	= (1UL << 3),
-	/** Abort the current level iterator and restart */
-	VOS_ITER_CB_RESTART	= (1UL << 4),
+	/** Yield */
+	VOS_ITER_CB_YIELD	= (1UL << 4),
+	/** Exit all levels of iterator */
+	VOS_ITER_CB_EXIT	= (1UL << 5),
 };
 
 /**
@@ -489,12 +575,9 @@ struct vos_iter_anchors {
 	/** Anchor for EV tree */
 	daos_anchor_t	ia_ev;
 	/** Triggers for re-probe */
-	unsigned int	ia_reprobe_co:1,
-			ia_reprobe_obj:1,
-			ia_reprobe_dkey:1,
-			ia_reprobe_akey:1,
-			ia_reprobe_sv:1,
-			ia_reprobe_ev:1;
+	unsigned int    ia_reprobe_co : 1, ia_reprobe_obj : 1, ia_reprobe_dkey : 1,
+	    ia_reprobe_akey : 1, ia_reprobe_sv : 1, ia_reprobe_ev : 1;
+	unsigned int ia_probe_level;
 };
 
 /* Ignores DTX as they are transient records */

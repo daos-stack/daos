@@ -1,0 +1,48 @@
+hosts:
+  test_servers: 1
+  test_clients: 1
+timeout: 600
+server_config:
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      log_mask: INFO
+      storage: auto
+pool:
+  scm_size: 8G
+  nvme_size: 100G
+  svcn: 1
+container:
+  type: POSIX
+  control_method: daos
+ior:
+  env_vars:
+    - D_LOG_MASK=INFO
+    - DD_MASK=all
+    - DD_SUBSYS=all
+  api: POSIX
+  client_processes:
+    np_16:
+      np: 16
+  test_file: testFile
+  repetitions: 1
+  iorflags:
+    flags: "-v -w -r -R"
+  transfer_size: '1M'
+  block_size: '100M'
+  write_x: 2
+  read_x: 1
+  objectclass:
+    oclass_SX:
+      dfs_oclass: "SX"
+dfuse:
+  disable_caching: true
+tests:
+  D_IL_REPORT: !mux
+    summary_only:
+      value: "0"
+    one_intercept:
+      value: "1"
+    two_intercept:
+      value: "2"

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -116,9 +116,9 @@ func (hs *HostSet) Delete(stringHosts string) (int, error) {
 	return int(hs.list.hostCount - startCount), nil
 }
 
-// ReplaceSet replaces this HostSet with the contents
+// Replace replaces this HostSet with the contents
 // of the supplied HostSet.
-func (hs *HostSet) ReplaceSet(other *HostSet) {
+func (hs *HostSet) Replace(other *HostSet) {
 	hs.initList()
 
 	if other == nil {
@@ -133,8 +133,8 @@ func (hs *HostSet) ReplaceSet(other *HostSet) {
 	hs.list.ReplaceList(other.list)
 }
 
-// MergeSet merges the supplied HostSet into this one.
-func (hs *HostSet) MergeSet(other *HostSet) error {
+// Merge merges the supplied HostSet into this one.
+func (hs *HostSet) Merge(other *HostSet) error {
 	hs.initList()
 
 	if other == nil {

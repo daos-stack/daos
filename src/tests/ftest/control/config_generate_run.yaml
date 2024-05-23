@@ -1,36 +1,60 @@
 hosts:
-  test_servers:
-    - server-A
+  test_servers: 1
 timeout: 250
+server_config:
+  transport_config:
+    allow_insecure: False
+  engines_per_host: 1
+  engines:
+    0:
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos0
+# Force the use of certificates regardless of the launch.py --insecure setting.
 pool:
   control_method: dmg
+  transport_config:
+    allow_insecure: False
+agent_config:
+  transport_config:
+    allow_insecure: False
+dmg:
+  transport_config:
+    allow_insecure: False
 setup:
   start_servers_once: False
 config_generate_params: !mux
   # 1. Access points only. Use default for others.
   all_default:
+    net_provider: ofi+tcp
   # 2. Use one engine.
   single_engine:
     num_engines: 1
-  # 3. Use min_ssd=1. This will still use the maximum number of SSDs, so the
+    net_provider: ofi+tcp
+  # 3. Use scm_only=false. This will use the maximum number of SSDs, so the
   # generated config file should be identical to all_default.
-  one_min_ssd:
-    min_ssds: 1
-  # 4. Use min_ssd=0. No NVMe entry. SCM only.
-  zero_min_ssd:
-    min_ssds: 0
+  scm_only_false:
+    scm_only: false
+    net_provider: ofi+tcp
+  # 4. Use scm_only=true. No NVMe entry. SCM only.
+  scm_only_true:
+    scm_only: true
+    net_provider: ofi+tcp
   # 5. Use infiniband. This is usually the default behavior, so the generated
   # config file would be identical to all_default if the feature is working
   # correctly.
   infiniband:
     net_class: infiniband
+    net_provider: ofi+tcp
   # 6. Use ethernet. There's usually only one ethernet interface available, so
   # use one engine. Each engine would need different interface. We could come up
   # with the maximum usable count, but that's out of scope.
   ethernet:
     net_class: ethernet
     num_engines: 1
-  # 7. Use best-available, which is the default, so this variant would be
-  # identical to all_default if the feature is working correctly.
-  best_available:
-    net_class: best-available
+    net_provider: ofi+tcp
+  # 7. Use tmpfs for scm instead of pmem.
+  tmpfs_scm_true:
+    use_tmpfs_scm: true
+    net_provider: ofi+tcp

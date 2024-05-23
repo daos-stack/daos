@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -26,17 +26,15 @@ mdr_stop_pool_svc(void **argv)
 		print_message("creating pool\n");
 		rc = dmg_pool_create(dmg_config_file,
 				     geteuid(), getegid(), arg->group,
-				     NULL, 128 * 1024 * 1024, 0,
+				     NULL, 256 * 1024 * 1024, 0,
 				     NULL, arg->pool.svc, uuid);
 	}
-	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
 	assert_rc_equal(rc, 0);
-	MPI_Bcast(uuid, 16, MPI_CHAR, 0, MPI_COMM_WORLD);
-	MPI_Bcast(&arg->pool.svc->rl_nr, sizeof(arg->pool.svc->rl_nr), MPI_CHAR,
-		  0, MPI_COMM_WORLD);
-	MPI_Bcast(arg->pool.ranks,
-		  sizeof(arg->pool.ranks[0]) * arg->pool.svc->rl_nr,
-		  MPI_CHAR, 0, MPI_COMM_WORLD);
+	par_bcast(PAR_COMM_WORLD, uuid, 16, PAR_CHAR, 0);
+	par_bcast(PAR_COMM_WORLD, &arg->pool.svc->rl_nr, sizeof(arg->pool.svc->rl_nr), PAR_CHAR, 0);
+	par_bcast(PAR_COMM_WORLD, arg->pool.ranks,
+		  sizeof(arg->pool.ranks[0]) * arg->pool.svc->rl_nr, PAR_CHAR, 0);
 
 	/* Check the number of pool service replicas. */
 	if (arg->pool.svc->rl_nr < 3) {
@@ -48,12 +46,15 @@ mdr_stop_pool_svc(void **argv)
 
 	/* Connect to the pool. */
 	if (arg->myrank == 0) {
+		char	str[37];
+
+		uuid_unparse(uuid, str);
 		print_message("connecting to pool\n");
-		rc = daos_pool_connect(uuid, arg->group,
+		rc = daos_pool_connect(str, arg->group,
 				       DAOS_PC_RW, &poh, NULL /* info */,
 				       NULL /* ev */);
 	}
-	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
 	assert_rc_equal(rc, 0);
 	handle_share(&poh, HANDLE_POOL, arg->myrank, DAOS_HDL_INVAL, 0);
 
@@ -75,7 +76,9 @@ mdr_stop_pool_svc(void **argv)
 	} else {
 		int n = 10000 / arg->rank_size;
 		int i;
+		uint64_t t_start, t_end, duration = 0;
 
+		t_start = daos_get_ntime();
 		/* Generate some concurrent requests. */
 		print_message("repeating %d queries: begin\n", n);
 		for (i = 0; i < n; i++) {
@@ -84,11 +87,22 @@ mdr_stop_pool_svc(void **argv)
 					     NULL /* properties */,
 					     NULL /* ev */);
 			assert_rc_equal(rc, 0);
+			if (i % 10 == 0) {
+				t_end = daos_get_ntime();
+				duration = (t_end - t_start) / NSEC_PER_SEC;
+				if (duration >= 15)
+					break;
+			}
 		}
-		print_message("repeating %d queries: end\n", n);
+		if (duration == 0) {
+			t_end = daos_get_ntime();
+			duration = (t_end - t_start) / NSEC_PER_SEC;
+		}
+		print_message("repeating %d queries, duration: %lu seconds end\n",
+			      i, duration);
 	}
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	print_message("disconnecting from pool\n");
 	rc = daos_pool_disconnect(poh, NULL /* ev */);
@@ -115,13 +129,14 @@ mdr_stop_cont_svc(void **argv)
 	uuid_t			uuid;
 	daos_handle_t		poh;
 	daos_handle_t		coh;
+	char			str[37];
 	bool			skip = false;
 	int			rc;
 
 	print_message("creating pool\n");
 	rc = dmg_pool_create(dmg_config_file,
 			     geteuid(), getegid(), arg->group,
-			     NULL, 128 * 1024 * 1024, 0,
+			     NULL, 256 * 1024 * 1024, 0,
 			     NULL, arg->pool.svc, pool_uuid);
 	assert_rc_equal(rc, 0);
 
@@ -133,15 +148,16 @@ mdr_stop_cont_svc(void **argv)
 	}
 
 	print_message("connecting to pool\n");
-	rc = daos_pool_connect(pool_uuid, arg->group,
+	uuid_unparse(pool_uuid, str);
+	rc = daos_pool_connect(str, arg->group,
 			       DAOS_PC_RW, &poh, NULL, NULL /* ev */);
 	assert_rc_equal(rc, 0);
 	print_message("creating container\n");
-	uuid_generate(uuid);
-	rc = daos_cont_create(poh, uuid, NULL, NULL);
+	rc = daos_cont_create(poh, &uuid, NULL, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("opening container\n");
-	rc = daos_cont_open(poh, uuid, DAOS_COO_RW, &coh, NULL, NULL);
+	uuid_unparse(uuid, str);
+	rc = daos_cont_open(poh, str, DAOS_COO_RW, &coh, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
 	print_message("stopping container service leader\n");
@@ -153,7 +169,7 @@ mdr_stop_cont_svc(void **argv)
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("destroying container\n");
-	rc = daos_cont_destroy(poh, uuid, 1 /* force */, NULL);
+	rc = daos_cont_destroy(poh, str, 1 /* force */, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("disconnecting from pool\n");
 	rc = daos_pool_disconnect(poh, NULL /* ev */);
@@ -192,6 +208,6 @@ run_daos_md_replication_test(int rank, int size)
 
 	rc = cmocka_run_group_tests_name("DAOS_MD_Replication", mdr_tests,
 					 setup, test_teardown);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }

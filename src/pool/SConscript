@@ -1,32 +1,37 @@
 """Build pool library"""
-import daos_build
+
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env', 'prereqs', 'libdaos_tgts')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
+    env.AppendUnique(CPPPATH=[Dir('../mgmt').srcnode()])
     denv = env.Clone()
 
-    prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
+    denv.require('protobufc')
 
     common = denv.SharedObject(['rpc.c'])
 
     # dc_pool: Pool Client
-    dc_pool_tgts = denv.SharedObject(['cli.c']) + common
-    Export('dc_pool_tgts')
+    libdaos_tgts.extend(denv.SharedObject(['cli.c']) + common)
 
     if not prereqs.server_requested():
         return
 
+    senv = denv.Clone()
+    senv.require('argobots')
     # ds_pool: Pool Server
-    ds_pool = daos_build.library(denv, 'pool',
-                                 ['srv.c', 'srv_pool.c', 'srv_layout.c',
-                                  'srv_target.c', 'srv_util.c', 'srv_iv.c',
-                                  'srv_cli.c', 'srv_pool_scrub.c',
-                                  'srv_pool_map.c', 'srv_metrics.c', common],
-                                 install_off="../..")
-    denv.Install('$PREFIX/lib64/daos_srv', ds_pool)
+    ds_pool = senv.d_library('pool',
+                             ['srv.c', 'srv_pool.c', 'srv_layout.c',
+                              'srv_target.c', 'srv_util.c', 'srv_iv.c',
+                              'srv_cli.c',
+                              'srv_pool_scrub_ult.c', 'srv_pool_map.c',
+                              'srv_metrics.c', 'srv_pool_chkpt.c',
+                              'srv_pool_check.c', common],
+                             install_off="../..")
+    senv.Install('$PREFIX/lib64/daos_srv', ds_pool)
+
 
 if __name__ == "SCons.Script":
     scons()

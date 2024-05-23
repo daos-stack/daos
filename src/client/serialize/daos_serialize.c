@@ -12,9 +12,67 @@ struct usr_attr {
 	hvl_t	attr_val;
 };
 
+int
+serialize_roots(hid_t file_id, struct daos_prop_entry *entry, const char *prop_str)
+{
+	int				rc = 0;
+	hid_t				status = 0;
+	struct daos_prop_co_roots	*roots;
+	hsize_t				attr_dims[1];
+	/* HDF5 returns non-negative identifiers if successfully opened/created */
+	hid_t				attr_dtype = -1;
+	hid_t				attr_dspace = -1;
+	hid_t				usr_attr = -1;
+
+	if (entry == NULL || entry->dpe_val_ptr == NULL)
+		D_GOTO(out, rc = -DER_INVAL);
+
+	roots = entry->dpe_val_ptr;
+	attr_dims[0] = 4;
+
+	attr_dtype = H5Tcreate(H5T_COMPOUND, sizeof(daos_obj_id_t));
+	if (attr_dtype < 0) {
+		D_ERROR("failed to create attribute datatype\n");
+		D_GOTO(out, rc = -DER_MISC);
+	}
+	status = H5Tinsert(attr_dtype, "lo", HOFFSET(daos_obj_id_t, lo), H5T_NATIVE_UINT64);
+	if (status < 0) {
+		D_ERROR("failed to insert oid low\n");
+		D_GOTO(out, rc = -DER_MISC);
+	}
+	status = H5Tinsert(attr_dtype, "hi", HOFFSET(daos_obj_id_t, hi), H5T_NATIVE_UINT64);
+	if (status < 0) {
+		D_ERROR("failed to insert oid high\n");
+		D_GOTO(out, rc = -DER_MISC);
+	}
+
+	attr_dspace = H5Screate_simple(1, attr_dims, NULL);
+	if (attr_dspace < 0) {
+		D_ERROR("failed to create attribute dataspace\n");
+		D_GOTO(out, rc = -DER_MISC);
+	}
+	usr_attr = H5Acreate2(file_id, prop_str, attr_dtype, attr_dspace, H5P_DEFAULT, H5P_DEFAULT);
+	if (usr_attr < 0) {
+		D_ERROR("failed to create attribute\n");
+		D_GOTO(out, rc = -DER_MISC);
+	}
+	status = H5Awrite(usr_attr, attr_dtype, roots->cr_oids);
+	if (status < 0) {
+		D_ERROR("failed to write attribute\n");
+		D_GOTO(out, rc = -DER_MISC);
+	}
+out:
+	if (usr_attr >= 0)
+		H5Aclose(usr_attr);
+	if (attr_dtype >= 0)
+		H5Tclose(attr_dtype);
+	if (attr_dspace >= 0)
+		H5Sclose(attr_dspace);
+	return rc;
+}
+
 static int
-serialize_acl(hid_t file_id, struct daos_prop_entry *entry,
-	      const char *prop_str)
+serialize_acl(hid_t file_id, struct daos_prop_entry *entry, const char *prop_str)
 {
 	int		rc = 0;
 	int		i = 0;
@@ -84,8 +142,7 @@ out:
 }
 
 static int
-serialize_str(hid_t file_id, struct daos_prop_entry *entry,
-	      const char *prop_str)
+serialize_str(hid_t file_id, struct daos_prop_entry *entry, const char *prop_str)
 {
 
 	int	rc = 0;
@@ -95,7 +152,7 @@ serialize_str(hid_t file_id, struct daos_prop_entry *entry,
 	hid_t	attr_dspace = 0;
 	hid_t	usr_attr = 0;
 
-	if (entry == NULL || entry->dpe_str == NULL) {
+	if (entry == NULL) {
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -105,7 +162,7 @@ serialize_str(hid_t file_id, struct daos_prop_entry *entry,
 		D_ERROR("failed to create datatype\n");
 		D_GOTO(out, rc = -DER_MISC);
 	}
-	status = H5Tset_size(attr_dtype, strlen(entry->dpe_str) + 1);
+	status = H5Tset_size(attr_dtype, (entry->dpe_str ? strlen(entry->dpe_str) : 0) + 1);
 	if (status < 0) {
 		D_ERROR("failed to set datatype size\n");
 		D_GOTO(out, rc = -DER_MISC);
@@ -127,7 +184,7 @@ serialize_str(hid_t file_id, struct daos_prop_entry *entry,
 		D_ERROR("failed to create attribute\n");
 		D_GOTO(out, rc = -DER_MISC);
 	}
-	status = H5Awrite(usr_attr, attr_dtype, entry->dpe_str);
+	status = H5Awrite(usr_attr, attr_dtype, entry->dpe_str ? entry->dpe_str : "");
 	if (status < 0) {
 		rc = -DER_IO;
 		D_ERROR("failed to write attribute "DF_RC"\n", DP_RC(rc));
@@ -227,6 +284,20 @@ prop_to_str(uint32_t type)
 		return "DAOS_PROP_CO_DEDUP_THRESHOLD";
 	case DAOS_PROP_CO_ALLOCED_OID:
 		return "DAOS_PROP_CO_ALLOCED_OID";
+	case DAOS_PROP_CO_EC_CELL_SZ:
+		return "DAOS_PROP_CO_EC_CELL_SZ";
+	case DAOS_PROP_CO_EC_PDA:
+		return "DAOS_PROP_CO_EC_PDA";
+	case DAOS_PROP_CO_RP_PDA:
+		return "DAOS_PROP_CO_RP_PDA";
+	case DAOS_PROP_CO_PERF_DOMAIN:
+		return "DAOS_PROP_CO_PERF_DOMAIN";
+	case DAOS_PROP_CO_GLOBAL_VERSION:
+		return "DAOS_PROP_CO_GLOBAL_VERSION";
+	case DAOS_PROP_CO_ROOTS:
+		return "DAOS_PROP_CO_ROOTS";
+	case DAOS_PROP_CO_SCRUBBER_DISABLED:
+		return "DAOS_PROP_CO_SCRUBBER_DISABLED";
 	default:
 		return "PROPERTY NOT SUPPORTED";
 	}
@@ -261,6 +332,12 @@ daos_cont_serialize_props(hid_t file_id, daos_prop_t *prop_query)
 			if (rc != 0) {
 				D_GOTO(out, rc);
 			}
+		} else if (type == DAOS_PROP_CO_ROOTS) {
+			entry = &prop_query->dpp_entries[i];
+			rc = serialize_roots(file_id, entry, prop_str);
+			if (rc != 0) {
+				D_GOTO(out, rc);
+			}
 		} else if (type == DAOS_PROP_CO_ACL) {
 			entry = &prop_query->dpp_entries[i];
 			rc = serialize_acl(file_id, entry, prop_str);
@@ -279,7 +356,13 @@ daos_cont_serialize_props(hid_t file_id, daos_prop_t *prop_query)
 			   type == DAOS_PROP_CO_ENCRYPT ||
 			   type == DAOS_PROP_CO_DEDUP ||
 			   type == DAOS_PROP_CO_DEDUP_THRESHOLD ||
-			   type == DAOS_PROP_CO_ALLOCED_OID) {
+			   type == DAOS_PROP_CO_EC_CELL_SZ ||
+			   type == DAOS_PROP_CO_EC_PDA ||
+			   type == DAOS_PROP_CO_RP_PDA ||
+			   type == DAOS_PROP_CO_PERF_DOMAIN ||
+			   type == DAOS_PROP_CO_GLOBAL_VERSION ||
+			   type == DAOS_PROP_CO_ALLOCED_OID ||
+			   type == DAOS_PROP_CO_SCRUBBER_DISABLED) {
 			entry = &prop_query->dpp_entries[i];
 			rc = serialize_uint(file_id, entry->dpe_val,
 					    prop_str);
@@ -470,7 +553,7 @@ deserialize_str(hid_t file_id, char **str, const char *prop_str)
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	buf_size = H5Tget_size(attr_dtype);
-	if (buf_size <= 0) {
+	if (buf_size == 0) {
 		D_ERROR("failed to get size of datatype\n");
 		D_GOTO(out, rc = -DER_MISC);
 	}
@@ -524,9 +607,81 @@ out:
 	return rc;
 }
 
+int
+deserialize_roots(hid_t file_id, struct daos_prop_entry *entry, const char *prop_str)
+{
+	hid_t                      status = 0;
+	int                        rc     = 0;
+	int                        ndims  = 0;
+	htri_t                     roots_exist;
+	hid_t                      cont_attr   = -1;
+	hid_t                      attr_dtype  = -1;
+	hid_t                      attr_dspace = -1;
+	hsize_t                    attr_dims[1];
+	struct daos_prop_co_roots *roots = NULL;
+
+	/* First check if the roots attribute exists. */
+	roots_exist = H5Aexists(file_id, prop_str);
+	if (roots_exist < 0) {
+		/* Actual error  */
+		D_ERROR("failed to check if attribute exists\n");
+		D_GOTO(out, rc = -DER_MISC);
+	} else if (roots_exist == 0) {
+		/* Does not exist, but that's okay. */
+		D_GOTO(out, rc = 0);
+	}
+	cont_attr = H5Aopen(file_id, prop_str, H5P_DEFAULT);
+	if (cont_attr < 0) {
+		/* Should be able to open attribute if it exists */
+		D_ERROR("failed to open attribute\n");
+		D_GOTO(out, rc = -DER_MISC);
+	}
+	attr_dtype = H5Aget_type(cont_attr);
+	if (attr_dtype < 0) {
+		D_ERROR("failed to get attribute type\n");
+		D_GOTO(out_attr, rc = -DER_MISC);
+	}
+	attr_dspace = H5Aget_space(cont_attr);
+	if (attr_dspace < 0) {
+		D_ERROR("failed to get attribute dataspace\n");
+		D_GOTO(out_dtype, rc = -DER_MISC);
+	}
+	ndims = H5Sget_simple_extent_dims(attr_dspace, attr_dims, NULL);
+	if (ndims < 0) {
+		D_ERROR("failed to get dimensions of dataspace\n");
+		D_GOTO(out_dspace, rc = -DER_MISC);
+	}
+	D_ALLOC_PTR(roots);
+	if (roots == NULL)
+		D_GOTO(out_dspace, rc = -DER_NOMEM);
+	status = H5Aread(cont_attr, attr_dtype, roots->cr_oids);
+	if (status < 0) {
+		D_ERROR("failed to read property attribute %s\n", prop_str);
+		D_GOTO(out_roots, rc = -DER_MISC);
+	}
+	entry->dpe_val_ptr = roots;
+
+out_roots:
+	if (rc != 0)
+		D_FREE(roots);
+out_dspace:
+	status = H5Sclose(attr_dspace);
+	if (status < 0 && !rc)
+		rc = -DER_MISC;
+out_dtype:
+	status = H5Tclose(attr_dtype);
+	if (status < 0 && !rc)
+		rc = -DER_MISC;
+out_attr:
+	status = H5Aclose(cont_attr);
+	if (status < 0 && !rc)
+		rc = -DER_MISC;
+out:
+	return rc;
+}
+
 static int
-deserialize_acl(hid_t file_id, struct daos_prop_entry *entry,
-		const char *prop_str)
+deserialize_acl(hid_t file_id, struct daos_prop_entry *entry, const char *prop_str)
 {
 	hid_t		status = 0;
 	int		rc = 0;
@@ -610,18 +765,18 @@ out:
 }
 
 static int
-deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
-		  uint64_t *cont_type)
+deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop, uint64_t *cont_type)
 {
 
 	int			rc = 0;
+	int			rc2 = 0;
 	bool			deserialize_label = false;
 	bool			close_cont = true;
 	uint64_t		total_props = 0;
 	char			*label = NULL;
 	daos_prop_t		*prop = NULL;
 	struct daos_prop_entry	*entry;
-	daos_handle_t		coh;
+	daos_handle_t		coh = DAOS_HDL_INVAL;
 	daos_cont_info_t	cont_info = {0};
 	int			prop_num = 0;
 	uint32_t		type;
@@ -640,15 +795,22 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
 		if (rc != 0) {
 			D_GOTO(out, rc);
 		}
-		rc = daos_cont_open(poh, label, DAOS_COO_RW, &coh, &cont_info, NULL);
-		if (rc == -DER_NONEXIST) {
-			/* label doesn't already exist so deserialize */
-			deserialize_label = true;
+		if (label[0]) {
+			rc = daos_cont_open(poh, label, DAOS_COO_RW, &coh, &cont_info, NULL);
+			if (rc == -DER_NONEXIST) {
+				/* label doesn't already exist so deserialize */
+				deserialize_label = true;
+				close_cont = false;
+				/* reset rc */
+				rc = 0;
+			} else if (rc != 0) {
+				D_GOTO(out, rc);
+			}  else {
+				D_PRINT("Container label already exists in pool and "
+					"cannot be set\n");
+			}
+		} else {
 			close_cont = false;
-		} else if (rc != 0) {
-			D_GOTO(out, rc);
-		}  else {
-			D_PRINT("Container label already exists in pool and cannot be set\n");
 		}
 	}
 
@@ -848,6 +1010,66 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
 		}
 		prop_num++;
 	}
+	if (H5Aexists(file_id, "DAOS_PROP_CO_ROOTS") > 0) {
+		type = DAOS_PROP_CO_ROOTS;
+		prop->dpp_entries[prop_num].dpe_type = type;
+		entry = &prop->dpp_entries[prop_num];
+		rc = deserialize_roots(file_id, entry, "DAOS_PROP_CO_ROOTS");
+		if (rc != 0) {
+			D_GOTO(out, rc);
+		}
+		prop_num++;
+	}
+	if (H5Aexists(file_id, "DAOS_PROP_CO_EC_CELL_SZ") > 0) {
+		type = DAOS_PROP_CO_EC_CELL_SZ;
+		prop->dpp_entries[prop_num].dpe_type = type;
+		entry = &prop->dpp_entries[prop_num];
+		rc = deserialize_uint(file_id, &entry->dpe_val, "DAOS_PROP_CO_EC_CELL_SZ");
+		if (rc != 0) {
+			D_GOTO(out, rc);
+		}
+		prop_num++;
+	}
+	if (H5Aexists(file_id, "DAOS_PROP_CO_EC_PDA") > 0) {
+		type = DAOS_PROP_CO_EC_PDA;
+		prop->dpp_entries[prop_num].dpe_type = type;
+		entry = &prop->dpp_entries[prop_num];
+		rc = deserialize_uint(file_id, &entry->dpe_val,
+				      "DAOS_PROP_CO_EC_PDA");
+		if (rc != 0)
+			D_GOTO(out, rc);
+		prop_num++;
+	}
+	if (H5Aexists(file_id, "DAOS_PROP_CO_RP_PDA") > 0) {
+		type = DAOS_PROP_CO_RP_PDA;
+		prop->dpp_entries[prop_num].dpe_type = type;
+		entry = &prop->dpp_entries[prop_num];
+		rc = deserialize_uint(file_id, &entry->dpe_val,
+				      "DAOS_PROP_CO_RP_PDA");
+		if (rc != 0)
+			D_GOTO(out, rc);
+		prop_num++;
+	}
+	if (H5Aexists(file_id, "DAOS_PROP_CO_PERF_DOMAIN") > 0) {
+		type = DAOS_PROP_CO_PERF_DOMAIN;
+		prop->dpp_entries[prop_num].dpe_type = type;
+		entry = &prop->dpp_entries[prop_num];
+		rc = deserialize_uint(file_id, &entry->dpe_val,
+				      "DAOS_PROP_CO_PERF_DOMAIN");
+		if (rc != 0)
+			D_GOTO(out, rc);
+		prop_num++;
+	}
+	if (H5Aexists(file_id, "DAOS_PROP_CO_SCRUBBER_DISABLED") > 0) {
+		type = DAOS_PROP_CO_SCRUBBER_DISABLED;
+		prop->dpp_entries[prop_num].dpe_type = type;
+		entry = &prop->dpp_entries[prop_num];
+		rc = deserialize_uint(file_id, &entry->dpe_val,
+				      "DAOS_PROP_CO_SCRUBBER_DISABLED");
+		if (rc != 0)
+			D_GOTO(out, rc);
+		prop_num++;
+	}
 	/* deserialize_label stays false if property doesn't exist above */
 	if (deserialize_label) {
 		prop->dpp_entries[prop_num].dpe_type = DAOS_PROP_CO_LABEL;
@@ -856,10 +1078,18 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
 			D_GOTO(out, rc);
 	}
 	*_prop = prop;
+	if (prop->dpp_nr > prop_num) {
+		prop->dpp_nr = prop_num;
+	}
 out:
 	/* close container after checking if label exists in pool */
-	if (close_cont)
-		daos_cont_close(coh, NULL);
+	if (close_cont) {
+		rc2 = daos_cont_close(coh, NULL);
+		if (rc2)
+			D_ERROR("daos_cont_close() Failed "DF_RC"\n", DP_RC(rc2));
+	}
+	if (rc != 0 && prop != NULL)
+		daos_prop_free(prop);
 	D_FREE(label);
 	return rc;
 }
@@ -965,6 +1195,11 @@ deserialize_attrs(hid_t file_id, uint64_t *_num_attrs,
 	*_buffers = buffers;
 	*_sizes = sizes;
 out:
+	if (rc != 0) {
+		D_FREE(names);
+		D_FREE(buffers);
+		D_FREE(sizes);
+	}
 	D_FREE(attr_data);
 	if (dset > 0)
 		H5Dclose(dset);

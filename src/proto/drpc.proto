@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,9 +8,7 @@ package drpc;
 
 option go_package = "github.com/daos-stack/daos/src/control/drpc";
 
-/**
- * Call describes a function call to be executed over the dRPC channel.
- */
+// Call describes a function call to be executed over the dRPC channel.
 message Call {
 	int32 module = 1; // ID of the module to process the call.
 	int32 method = 2; // ID of the method to be executed.
@@ -18,9 +16,7 @@ message Call {
 	bytes body = 4; // Input payload to be used by the method.
 }
 
-/**
- * Status represents the valid values for a response status.
- */
+// Status represents the valid values for a response status.
 enum Status {
 	SUCCESS = 0; // The method executed and provided a response payload, if needed. Otherwise, the method simply succeeded.
 	SUBMITTED = 1; // The method has been queued for asynchronous execution.
@@ -32,9 +28,7 @@ enum Status {
 	FAILED_MARSHAL = 7; // Generated a response payload, but couldn't marshal it into the response.
 }
 
-/**
- * Response describes the result of a dRPC call.
- */
+// Response describes the result of a dRPC call.
 message Response {
 	int64 sequence = 1; // Sequence number of the Call that triggered this response.
 	Status status = 2; // High-level status of the RPC. If SUCCESS, method-specific status may be included in the body.

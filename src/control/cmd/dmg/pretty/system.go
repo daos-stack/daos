@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,9 +16,12 @@ import (
 
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/system"
 )
+
+const rowFieldSep = "\t"
 
 // tabulateRankGroups produces a representation of rank groupings in a tabular form.
 func tabulateRankGroups(out io.Writer, groups system.RankGroups, titles ...string) error {
@@ -36,7 +39,8 @@ func tabulateRankGroups(out io.Writer, groups system.RankGroups, titles ...strin
 
 		summary := strings.Split(result, rowFieldSep)
 		if len(summary) != len(columnTitles) {
-			return errors.New("unexpected summary format")
+			return errors.Errorf("unexpected summary format, fields %v values %v",
+				columnTitles, summary)
 		}
 		for i, title := range columnTitles {
 			row[title] = summary[i]
@@ -58,7 +62,7 @@ func printAbsentHosts(out io.Writer, absentHosts *hostlist.HostSet) {
 	}
 }
 
-func printAbsentRanks(out io.Writer, absentRanks *system.RankSet) {
+func printAbsentRanks(out io.Writer, absentRanks *ranklist.RankSet) {
 	if absentRanks.Count() > 0 {
 		fmt.Fprintf(out, "Unknown %s: %s\n",
 			english.Plural(absentRanks.Count(), "rank", "ranks"),
@@ -66,7 +70,7 @@ func printAbsentRanks(out io.Writer, absentRanks *system.RankSet) {
 	}
 }
 
-func printSystemQuery(out io.Writer, members system.Members, absentRanks *system.RankSet) error {
+func printSystemQuery(out io.Writer, members system.Members, absentRanks *ranklist.RankSet) error {
 	groups := make(system.RankGroups)
 	if err := groups.FromMembers(members); err != nil {
 		return err
@@ -99,7 +103,7 @@ func printSystemQueryVerbose(out io.Writer, members system.Members) {
 		row[uuidTitle] = m.UUID.String()
 		row[addrTitle] = m.Addr.String()
 		row[faultDomainTitle] = m.FaultDomain.String()
-		row[stateTitle] = m.State().String()
+		row[stateTitle] = m.State.String()
 		row[reasonTitle] = m.Info
 
 		table = append(table, row)
@@ -135,7 +139,7 @@ func PrintSystemQueryResponse(out, outErr io.Writer, resp *control.SystemQueryRe
 	return nil
 }
 
-func printSystemResultTable(out io.Writer, results system.MemberResults, absentRanks *system.RankSet) error {
+func printSystemResultTable(out io.Writer, results system.MemberResults, absentRanks *ranklist.RankSet) error {
 	groups := make(system.RankGroups)
 	if err := groups.FromMemberResults(results, rowFieldSep); err != nil {
 		return err
@@ -152,7 +156,7 @@ func printSystemResultTable(out io.Writer, results system.MemberResults, absentR
 	return nil
 }
 
-func printSystemResults(out, outErr io.Writer, results system.MemberResults, absentHosts *hostlist.HostSet, absentRanks *system.RankSet) error {
+func printSystemResults(out, outErr io.Writer, results system.MemberResults, absentHosts *hostlist.HostSet, absentRanks *ranklist.RankSet) error {
 	if len(results) == 0 {
 		fmt.Fprintln(out, "No results returned")
 		printAbsentHosts(outErr, absentHosts)
@@ -179,4 +183,49 @@ func PrintSystemStartResponse(out, outErr io.Writer, resp *control.SystemStartRe
 // supplied SystemStopResp struct and writes it to the supplied io.Writer.
 func PrintSystemStopResponse(out, outErr io.Writer, resp *control.SystemStopResp) error {
 	return printSystemResults(out, outErr, resp.Results, &resp.AbsentHosts, &resp.AbsentRanks)
+}
+
+func printSystemCleanupRespVerbose(out io.Writer, resp *control.SystemCleanupResp) error {
+	if len(resp.Results) == 0 {
+		fmt.Fprintln(out, "no handles cleaned up")
+		return nil
+	}
+
+	titles := []string{"Pool", "Handles Revoked"}
+	formatter := txtfmt.NewTableFormatter(titles...)
+
+	var table []txtfmt.TableRow
+	for _, r := range resp.Results {
+		row := txtfmt.TableRow{
+			"Pool":            r.PoolID,
+			"Handles Revoked": fmt.Sprintf("%d", r.Count),
+		}
+		table = append(table, row)
+	}
+
+	fmt.Fprintln(out, formatter.Format(table))
+
+	return nil
+}
+
+// PrintSystemCleanupResponse generates a human-readable representation of the
+// supplied SystemCleanupResp struct and writes it to the supplied io.Writer.
+func PrintSystemCleanupResponse(out, outErr io.Writer, resp *control.SystemCleanupResp, verbose bool) error {
+	err := resp.Errors()
+
+	if err != nil {
+		fmt.Fprintln(outErr, err.Error())
+	}
+
+	if len(resp.Results) == 0 {
+		fmt.Fprintln(out, "No handles cleaned up")
+		return nil
+	}
+
+	if verbose {
+		return printSystemCleanupRespVerbose(out, resp)
+	}
+
+	fmt.Fprintln(out, "System Cleanup Success")
+	return nil
 }

@@ -229,7 +229,7 @@ static const ProtobufCFieldDescriptor shared__rasevent__pool_svc_event_info__fie
     offsetof(Shared__RASEvent__PoolSvcEventInfo, svc_reps),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {

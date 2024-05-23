@@ -1,20 +1,19 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-  test_clients:
-    - client-C
+  test_servers: 3
+  test_clients: 1
 timeout: 600
 server_config:
   name: daos_server
-  servers:
-    scm_class: dcpm
-    scm_list: ["/dev/pmem0"]
+  engines_per_host: 1
+  engines:
+    0:
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos
 pool:
-  mode: 146
-  name: daos_server
   scm_size: 1000000000
-  control_method: dmg
   pool_count: 10
 container:
   type: POSIX
@@ -37,17 +36,15 @@ fio:
   test:
     numjobs: 1
 ior:
-    client_processes:
-        np_1:
-            np: 1
-    repetitions: 1
-    iorflags:
-        flags: "-v -w -k"
-    api: POSIX
-    transfer_size: '25M'
-    block_size: '26214400'    # 25M
-    objectclass:
-        oclass_SX:
-          dfs_oclass: "SX"
-dfuse:
-  mount_dir: "/tmp/daos_dfuse/"
+  client_processes:
+    np_1:
+      np: 1
+  repetitions: 1
+  iorflags:
+    flags: "-v -w -k"
+  api: POSIX
+  transfer_size: '25M'
+  block_size: '26214400'    # 25M
+  objectclass:
+    oclass_EC_2P1GX:
+      dfs_oclass: "EC_2P1GX"

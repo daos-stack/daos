@@ -1,55 +1,42 @@
-# (C) Copyright 2020-2021 Intel Corporation.
+# (C) Copyright 2020-2023 Intel Corporation.
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 """Unit tests"""
 
 import os
-import daos_build
 
-TEST_SRC = ['test_gurt.c',
-            'test_gurt_telem_producer.c']
+TEST_SRC = ['test_gurt.c', 'test_gurt_telem_producer.c']
+
 
 def scons():
     """Scons function"""
     if GetOption('help'):
         return
 
-    # pylint: disable=too-many-locals
-    Import('env', 'prereqs', 'gurt_targets')
-    # pylint: enable=too-many-locals
-
-    #Use full path to wrap_cmocka.h for configure test.  Since standalone
-    #cmocka header can't be included without including other headers,
-    #this test can't be generalized
-    wrap_cmocka = os.path.join(Dir('.').srcnode().abspath, 'wrap_cmocka.h')
-    prereqs.define('cmockawrap', headers=[wrap_cmocka], libs=['cmocka'],
-                   package='libcmocka-devel')
-    if not prereqs.check_component('cmocka'):
-        print("\n***************************************************")
-        print("libcmocka-devel package needed to enable unit tests")
-        print("***************************************************\n")
-        # Just returning is the desired behavior here.  The utest target
-        # has yet to be defined so the build will just fail.
-        return
+    Import('env', 'gurt_targets')
 
     test_env = env.Clone()
-    prereqs.require(test_env, "mercury", "uuid", "cmocka")
-    test_env.AppendUnique(LIBS=['pthread', 'm'])
+    test_env.require('mercury', 'uuid')
+    test_env.AppendUnique(LIBS=['pthread', 'cmocka', 'm', 'dl'])
     test_env.AppendUnique(CXXFLAGS=['-std=c++0x'])
-    tests = []
 
+    mocks_ld_script = f"{Dir('.').srcnode()}/mocks-gurt-ld-opts"
+    test_env.AppendUnique(LINKFLAGS=[f'-Wl,@{mocks_ld_script}'])
+    mocks = test_env.SharedObject(['mocks_gurt.c'])
+    Export('mocks')
+
+    tests = []
     for test in TEST_SRC:
-        flags = []
         testobj = test_env.Object(test)
         testname = os.path.splitext(test)[0]
-        testprog = daos_build.test(test_env, target=testname,
-                                   source=testobj + gurt_targets,
-                                   LIBS=test_env["LIBS"] + ['yaml'],
-                                   LINKFLAGS=flags)
+        testprog = test_env.d_test_program(target=testname,
+                                           source=testobj + gurt_targets + [mocks],
+                                           LIBS=test_env["LIBS"] + ['yaml'])
         tests.append(testprog)
 
     Default(tests)
+
 
 if __name__ == "SCons.Script":
     scons()

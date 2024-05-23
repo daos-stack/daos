@@ -1,0 +1,36 @@
+hosts:
+  test_servers: 1
+  test_clients: 1
+timeout: 180
+server_config:
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 1  # 1 target to keep the pool small
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+  system_ram_reserved: 2
+pool_large:
+  size: 256M
+pool_small:
+  size: 64M
+container:
+  type: POSIX
+  control_method: daos
+ior:
+  client_processes:
+    np: 1
+  api: DFS
+  dfs_oclass: SX
+  test_file: /testFile
+  flags: "-v -w -k"
+  block_size: 128M  #  Aggregate 128M - over 64M for pool_small
+  transfer_size: '1M'
+  signature: 5
+dcp:
+  client_processes:
+    np: 3

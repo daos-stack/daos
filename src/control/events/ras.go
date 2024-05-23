@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -45,14 +45,16 @@ type RASID uint32
 // RASID constant definitions matching those used when creating events either in
 // the control or data (engine) planes.
 const (
-	RASUnknownEvent         RASID = C.RAS_UNKNOWN_EVENT
-	RASEngineFormatRequired RASID = C.RAS_ENGINE_FORMAT_REQUIRED // notice
-	RASEngineDied           RASID = C.RAS_ENGINE_DIED            // error
-	RASPoolRepsUpdate       RASID = C.RAS_POOL_REPS_UPDATE       // info
-	RASSwimRankAlive        RASID = C.RAS_SWIM_RANK_ALIVE        // info
-	RASSwimRankDead         RASID = C.RAS_SWIM_RANK_DEAD         // info
-	RASSystemStartFailed    RASID = C.RAS_SYSTEM_START_FAILED    // error
-	RASSystemStopFailed     RASID = C.RAS_SYSTEM_STOP_FAILED     // error
+	RASUnknownEvent            RASID = C.RAS_UNKNOWN_EVENT
+	RASEngineFormatRequired    RASID = C.RAS_ENGINE_FORMAT_REQUIRED     // notice
+	RASEngineDied              RASID = C.RAS_ENGINE_DIED                // error
+	RASPoolRepsUpdate          RASID = C.RAS_POOL_REPS_UPDATE           // info
+	RASSwimRankAlive           RASID = C.RAS_SWIM_RANK_ALIVE            // info
+	RASSwimRankDead            RASID = C.RAS_SWIM_RANK_DEAD             // info
+	RASSystemStartFailed       RASID = C.RAS_SYSTEM_START_FAILED        // error
+	RASSystemStopFailed        RASID = C.RAS_SYSTEM_STOP_FAILED         // error
+	RASEngineJoinFailed        RASID = C.RAS_ENGINE_JOIN_FAILED         // error
+	RASSystemFabricProvChanged RASID = C.RAS_SYSTEM_FABRIC_PROV_CHANGED // info
 )
 
 func (id RASID) String() string {
@@ -125,7 +127,7 @@ type RASEvent struct {
 	Rank         uint32          `json:"rank"`
 	Incarnation  uint64          `json:"incarnation"`
 	HWID         string          `json:"hw_id"`
-	ProcID       uint64          `json:"proc_id"`
+	ProcID       int             `json:"proc_id"`
 	ThreadID     uint64          `json:"thread_id"`
 	JobID        string          `json:"job_id"`
 	PoolUUID     string          `json:"pool_uuid"`
@@ -195,7 +197,7 @@ func fill(evt *RASEvent) *RASEvent {
 		evt.Hostname = getHostName()
 	}
 	if evt.ProcID == 0 {
-		evt.ProcID = uint64(os.Getpid())
+		evt.ProcID = os.Getpid()
 	}
 	if evt.Severity == RASSeverityUnknown {
 		evt.Severity = RASSeverityNotice
@@ -277,7 +279,7 @@ func (evt *RASEvent) FromProto(pbEvt *sharedpb.RASEvent) (err error) {
 		Rank:        pbEvt.Rank,
 		Incarnation: pbEvt.Incarnation,
 		HWID:        pbEvt.HwId,
-		ProcID:      pbEvt.ProcId,
+		ProcID:      int(pbEvt.ProcId),
 		ThreadID:    pbEvt.ThreadId,
 		JobID:       pbEvt.JobId,
 		PoolUUID:    pbEvt.PoolUuid,
@@ -303,6 +305,10 @@ func (evt *RASEvent) FromProto(pbEvt *sharedpb.RASEvent) (err error) {
 	}
 
 	return
+}
+
+func (ev *RASEvent) String() string {
+	return ev.PrintRAS()
 }
 
 // PrintRAS generates a string representation of the event consistent with

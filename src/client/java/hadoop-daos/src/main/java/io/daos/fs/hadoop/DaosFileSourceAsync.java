@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -33,15 +33,15 @@ public class DaosFileSourceAsync extends DaosFileSource {
   private final static int TIMEOUT_MS = Integer.valueOf(System.getProperty(Constants.CFG_DAOS_TIMEOUT,
       Constants.DEFAULT_DAOS_TIMEOUT_MS)); // MILLI SEC
 
-  public DaosFileSourceAsync(DaosFile daosFile, int bufCapacity, long fileLen, boolean readOrWrite,
+  public DaosFileSourceAsync(DaosFile daosFile, int bufCapacity, long fileLen, boolean readOrWrite, boolean append,
                              FileSystem.Statistics stats) {
-    super(daosFile, bufCapacity, fileLen, stats);
+    super(daosFile, bufCapacity, fileLen, append, stats);
     createDesc(readOrWrite);
   }
 
   public DaosFileSourceAsync(DaosFile daosFile, ByteBuf buffer, long fileLen,
-                             boolean readOrWrite, FileSystem.Statistics stats) {
-    super(daosFile, buffer, fileLen, stats);
+                             boolean readOrWrite, boolean append, FileSystem.Statistics stats) {
+    super(daosFile, buffer, fileLen, append, stats);
     createDesc(readOrWrite);
   }
 
@@ -64,6 +64,10 @@ public class DaosFileSourceAsync extends DaosFileSource {
 
   @Override
   protected int doWrite(long nextWritePos) throws IOException {
+    assert Thread.currentThread().getId() == eq.getThreadId() : "current thread " + Thread.currentThread().getId() +
+        "(" + Thread.currentThread().getName() + "), is not expected " + eq.getThreadId() + "(" +
+        eq.getThreadName() + ")";
+
     DaosEventQueue.Event event = eq.acquireEventBlocking(TIMEOUT_MS, completed, IODfsDesc.class, candidates);
     desc.reuse();
     desc.setEvent(event);
@@ -75,6 +79,10 @@ public class DaosFileSourceAsync extends DaosFileSource {
 
   @Override
   protected int doRead(long nextReadPos, int length) throws IOException {
+    assert Thread.currentThread().getId() == eq.getThreadId() : "current thread " + Thread.currentThread().getId() +
+        "(" + Thread.currentThread().getName() + "), is not expected " + eq.getThreadId() + "(" +
+        eq.getThreadName() + ")";
+
     DaosEventQueue.Event event = eq.acquireEventBlocking(TIMEOUT_MS, completed, IODfsDesc.class, candidates);
     desc.reuse();
     desc.setEvent(event);
@@ -91,6 +99,7 @@ public class DaosFileSourceAsync extends DaosFileSource {
       eq.pollCompleted(completed, IODfsDesc.class, candidates, 1, TIMEOUT_MS - dur);
     }
     if (completed.isEmpty()) {
+      desc.discard();
       throw new DaosIOException("failed to get expected return after waiting " + TIMEOUT_MS + " ms. desc: " + desc +
           ", candidates size: " + candidates.size() + ", dur: " + (System.currentTimeMillis() - start));
     }

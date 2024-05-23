@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -73,7 +73,7 @@ public class IODataDescSync extends IODataDescBase {
    * and buffer length.
    *
    * @param maxKeyLen
-   * max length of dkey and akey
+   * max length of dkey and akey, should be no less than 8
    * @param nbrOfEntries
    * number of entries/akeys
    * @param entryBufLen
@@ -89,8 +89,9 @@ public class IODataDescSync extends IODataDescBase {
   protected IODataDescSync(int maxKeyLen, int nbrOfEntries, int entryBufLen,
                            IodType iodType, int recordSize, boolean updateOrFetch) {
     super(null, updateOrFetch);
-    if (maxKeyLen <= 0) {
-      throw new IllegalArgumentException("dkey length should be positive. " + maxKeyLen);
+    if (maxKeyLen < Constants.DKEY_MIN_LENGTH) {
+      throw new IllegalArgumentException("dkey length should be no less than " + Constants.DKEY_MIN_LENGTH +
+          ". " + maxKeyLen);
     }
     if (maxKeyLen > Short.MAX_VALUE) {
       throw new IllegalArgumentException("dkey and akey length in should not exceed "
@@ -145,11 +146,7 @@ public class IODataDescSync extends IODataDescBase {
     super(dkey, updateOrFetch);
     this.maxKeyLen = -1;
     this.dkey = dkey;
-    this.dkeyBytes = dkey.getBytes(Constants.KEY_CHARSET);
-    if (dkeyBytes.length > Short.MAX_VALUE) {
-      throw new IllegalArgumentException("dkey length in " + Constants.KEY_CHARSET + " should not exceed "
-                      + Short.MAX_VALUE);
-    }
+    this.dkeyBytes = DaosUtils.keyToBytes8(dkey);
     if (iodType == IodType.NONE) {
       throw new IllegalArgumentException("need valid IodType, either " + IodType.ARRAY + " or " +
         IodType.SINGLE);
@@ -273,16 +270,7 @@ public class IODataDescSync extends IODataDescBase {
     if (dkey.equals(this.dkey)) { // in case of same dkey
       return;
     }
-    byte[] dkeyBytes = null;
-    try {
-      dkeyBytes = dkey.getBytes(Constants.KEY_CHARSET);
-    } catch (UnsupportedEncodingException e) {
-      throw new IllegalArgumentException("failed to get bytes in " + Constants.KEY_CHARSET + " of dkey " + dkey);
-    }
-    if (dkeyBytes.length > maxKeyLen) {
-      throw new IllegalArgumentException("dkey length in " + Constants.KEY_CHARSET + " should not exceed max key len: "
-          + maxKeyLen);
-    }
+    byte[] dkeyBytes = DaosUtils.keyToBytes8(dkey);
     this.dkey = dkey;
     this.dkeyBytes = dkeyBytes;
   }
@@ -494,7 +482,7 @@ public class IODataDescSync extends IODataDescBase {
       this.descBuffer.release();
       descBuffer = null;
     }
-    if ((releaseFetchBuffer && !updateOrFetch) || isReusable()) {
+    if ((releaseFetchBuffer & !updateOrFetch) | updateOrFetch) {
       akeyEntries.forEach(e -> e.releaseDataBuffer());
       akeyEntries.clear();
     }
@@ -565,12 +553,8 @@ public class IODataDescSync extends IODataDescBase {
         throw new IllegalArgumentException("key is blank");
       }
       this.key = key;
-      this.keyBytes = key.getBytes(Constants.KEY_CHARSET);
       int limit = maxKeyLen > 0 ? maxKeyLen : Short.MAX_VALUE;
-      if (keyBytes.length > limit) {
-        throw new IllegalArgumentException("akey length in " + Constants.KEY_CHARSET + " should not exceed "
-            + limit + ", akey: " + key);
-      }
+      this.keyBytes = DaosUtils.keyToBytes(key, limit);
       this.offset = offset;
       this.dataSize = dataSize;
       if (offset%recordSize != 0) {
@@ -736,11 +720,7 @@ public class IODataDescSync extends IODataDescBase {
       }
       if (!akey.equals(this.key)) {
         this.key = akey;
-        this.keyBytes = akey.getBytes(Constants.KEY_CHARSET);
-        if (keyBytes.length > maxKeyLen) {
-          throw new IllegalArgumentException("akey length in " + Constants.KEY_CHARSET + " should not exceed "
-              + maxKeyLen + ", akey: " + key);
-        }
+        this.keyBytes = DaosUtils.keyToBytes(akey, maxKeyLen);
       }
       this.offset = offset;
       if (updateOrFetch) {

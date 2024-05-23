@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -21,9 +21,8 @@ func (svc *mgmtSvc) ListContainers(ctx context.Context, req *mgmtpb.ListContReq)
 	if err := svc.checkReplicaRequest(req); err != nil {
 		return nil, err
 	}
-	svc.log.Debugf("MgmtSvc.ListContainers dispatch, req:%+v\n", *req)
 
-	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodListContainers, req)
+	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodListContainers, req)
 	if err != nil {
 		return nil, err
 	}
@@ -33,8 +32,6 @@ func (svc *mgmtSvc) ListContainers(ctx context.Context, req *mgmtpb.ListContReq)
 		return nil, errors.Wrap(err, "unmarshal ListContainers response")
 	}
 
-	svc.log.Debugf("MgmtSvc.ListContainers dispatch, resp:%+v\n", *resp)
-
 	return resp, nil
 }
 
@@ -43,9 +40,8 @@ func (svc *mgmtSvc) ContSetOwner(ctx context.Context, req *mgmtpb.ContSetOwnerRe
 	if err := svc.checkReplicaRequest(req); err != nil {
 		return nil, err
 	}
-	svc.log.Debugf("MgmtSvc.ContSetOwner dispatch, req:%+v\n", *req)
 
-	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodContSetOwner, req)
+	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodContSetOwner, req)
 	if err != nil {
 		return nil, err
 	}
@@ -54,8 +50,6 @@ func (svc *mgmtSvc) ContSetOwner(ctx context.Context, req *mgmtpb.ContSetOwnerRe
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal ContSetOwner response")
 	}
-
-	svc.log.Debugf("MgmtSvc.ContSetOwner dispatch, resp:%+v\n", *resp)
 
 	return resp, nil
 }

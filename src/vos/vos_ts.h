@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,8 +14,8 @@
 #define __VOS_TS__
 
 #include <daos/dtx.h>
-#include <lru_array.h>
-#include <vos_tls.h>
+#include "lru_array.h"
+#include "vos_tls.h"
 
 struct vos_ts_table;
 struct vos_ts_entry;
@@ -27,6 +27,8 @@ struct vos_ts_info {
 	struct vos_ts_table	*ti_table;
 	/** Negative entries for this type */
 	struct vos_ts_entry	*ti_misses;
+	/** TLS for tracking memory usage */
+	struct vos_tls		*ti_tls;
 	/** Type identifier */
 	uint32_t		ti_type;
 	/** Mask for negative entry cache */
@@ -146,9 +148,9 @@ struct vos_ts_table {
 	daos_epoch_t		tt_ts_rh;
 	/** Global write timestamps */
 	struct vos_wts_cache	tt_w_cache;
-	/** Transaciton id associated with global read low timestamp */
+	/** Transaction id associated with global read low timestamp */
 	struct dtx_id		tt_tx_rl;
-	/** Transaciton id associated with global read high timestamp */
+	/** Transaction id associated with global read high timestamp */
 	struct dtx_id		tt_tx_rh;
 	/** Negative entry cache */
 	struct vos_ts_entry	*tt_misses;
@@ -234,7 +236,7 @@ static inline bool
 vos_ts_lookup_internal(struct vos_ts_set *ts_set, uint32_t type, uint32_t *idx,
 		       struct vos_ts_entry **entryp)
 {
-	struct vos_ts_table	*ts_table = vos_ts_table_get();
+	struct vos_ts_table	*ts_table = vos_ts_table_get(false);
 	struct vos_ts_info	*info = &ts_table->tt_type_info[type];
 	void			*entry;
 	struct vos_ts_set_entry	 set_entry = {0};
@@ -317,7 +319,7 @@ vos_ts_alloc(struct vos_ts_set *ts_set, uint32_t *idx, uint64_t hash)
 	if (!vos_ts_in_tx(ts_set))
 		return NULL;
 
-	ts_table = vos_ts_table_get();
+	ts_table = vos_ts_table_get(false);
 
 	vos_ts_set_get_info(ts_table, ts_set, &info, &hash_offset);
 
@@ -378,7 +380,7 @@ vos_ts_get_negative(struct vos_ts_set *ts_set, uint64_t hash, bool reset)
 	if (reset)
 		ts_set->ts_init_count--;
 
-	ts_table = vos_ts_table_get();
+	ts_table = vos_ts_table_get(false);
 
 	vos_ts_set_get_info(ts_table, ts_set, &info, &hash_offset);
 
@@ -490,15 +492,27 @@ vos_ts_set_add(struct vos_ts_set *ts_set, uint32_t *idx, const void *rec,
 		return -DER_BUSY; /** No more room in the set */
 
 	if (vos_ts_lookup(ts_set, idx, false, &entry)) {
-		vos_kh_clear();
+		vos_kh_clear(false);
 		expected_type = entry->te_info->ti_type;
 		D_ASSERT(expected_type == ts_set->ts_etype);
 		goto set_params;
 	}
 
 calc_hash:
-	if (ts_set->ts_etype > VOS_TS_TYPE_CONT)
-		hash = vos_hash_get(rec, rec_size);
+	if (ts_set->ts_etype > VOS_TS_TYPE_CONT) {
+		/* sysdb pool should not come here */
+		if (ts_set->ts_etype != VOS_TS_TYPE_OBJ) {
+			hash = vos_hash_get(rec, rec_size, false);
+		} else {
+			daos_unit_oid_t *oid = (daos_unit_oid_t *)rec;
+
+			/*
+			 * Test shows using d_hash_murmur64() for oid
+			 * is easy to conflict.
+			 */
+			hash = oid->id_pub.lo ^ oid->id_pub.hi;
+		}
+	}
 
 	if (idx != NULL) {
 		entry = vos_ts_alloc(ts_set, idx, hash);
@@ -580,18 +594,27 @@ vos_ts_set_mark_entry(struct vos_ts_set *ts_set, uint32_t *idx)
  * \param[in]	type	Type of the object
  */
 static inline void
-vos_ts_evict(uint32_t *idx, uint32_t type)
+vos_ts_evict(uint32_t *idx, uint32_t type, bool standalone)
 {
-	struct vos_ts_table	*ts_table = vos_ts_table_get();
+	struct vos_ts_table	*ts_table = vos_ts_table_get(standalone);
+
+	if (ts_table == NULL)
+		return;
 
 	lrua_evict(ts_table->tt_type_info[type].ti_array, idx);
 }
 
 static inline bool
-vos_ts_peek_entry(uint32_t *idx, uint32_t type, struct vos_ts_entry **entryp)
+vos_ts_peek_entry(uint32_t *idx, uint32_t type, struct vos_ts_entry **entryp,
+		  bool standalone)
 {
-	struct vos_ts_table	*ts_table = vos_ts_table_get();
-	struct vos_ts_info	*info = &ts_table->tt_type_info[type];
+	struct vos_ts_table	*ts_table = vos_ts_table_get(standalone);
+	struct vos_ts_info      *info;
+
+	if (ts_table == NULL)
+		return false;
+
+	info = &ts_table->tt_type_info[type];
 
 	return lrua_peek(info->ti_array, idx, entryp);
 }
@@ -599,20 +622,22 @@ vos_ts_peek_entry(uint32_t *idx, uint32_t type, struct vos_ts_entry **entryp)
 /** Allocate thread local timestamp cache.   Set the initial global times
  *
  * \param[in,out]	ts_table	Thread local table pointer
+ * \param[in]		tls		TLS to track memory usage.
  *
  * \return		-DER_NOMEM	Not enough memory available
  *			0		Success
  */
 int
-vos_ts_table_alloc(struct vos_ts_table **ts_table);
+vos_ts_table_alloc(struct vos_ts_table **ts_table, struct vos_tls *tls);
 
 
 /** Free the thread local timestamp cache and reset pointer to NULL
  *
  * \param[in,out]	ts_table	Thread local table pointer
+ * \param[in]		tls		TLS to track memory usage.
  */
 void
-vos_ts_table_free(struct vos_ts_table **ts_table);
+vos_ts_table_free(struct vos_ts_table **ts_table, struct vos_tls *tls);
 
 /** Allocate a timestamp set
  *
@@ -621,13 +646,14 @@ vos_ts_table_free(struct vos_ts_table **ts_table);
  * \param[in]		cflags	Check/update flags
  * \param[in]		akey_nr	Number of akeys in operation
  * \param[in]		dth	Optional transaction handle
+ * \param[in]		standalone use standalone tls
  *
  * \return	0 on success, error otherwise.
  */
 int
 vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
 		    uint16_t cflags, uint32_t akey_nr,
-		    const struct dtx_handle *dth);
+		    const struct dtx_handle *dth, bool standalone);
 
 /** Upgrade any negative entries in the set now that the associated
  *  update/punch has committed
@@ -639,13 +665,12 @@ vos_ts_set_upgrade(struct vos_ts_set *ts_set);
 
 /** Free an allocated timestamp set
  *
+ * Implemented as a macro to improve logging.
+ *
  * \param[in]	ts_set	Set to free
  */
-static inline void
-vos_ts_set_free(struct vos_ts_set *ts_set)
-{
-	D_FREE(ts_set);
-}
+
+#define vos_ts_set_free(ts_set) D_FREE(ts_set)
 
 /** Internal API to copy timestamp */
 static inline void

@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,8 +7,8 @@ import string
 
 from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
-from general_utils import report_errors, get_random_string
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure
+from general_utils import get_random_string, report_errors
 
 
 class Label(TestWithServers):
@@ -35,7 +34,9 @@ class Label(TestWithServers):
 
         try:
             if use_dmg:
+                pool.dmg.server_set_logmasks("DEBUG", raise_exception=False)
                 pool.dmg.pool_destroy(pool=pool.label.value, force=1)
+                pool.dmg.server_set_logmasks(raise_exception=False)
             else:
                 pool.destroy()
             if failure_expected:
@@ -74,7 +75,7 @@ class Label(TestWithServers):
             result_stdout = str(self.pool[-1].dmg.result.stdout)
             exit_status = self.pool[-1].dmg.result.exit_status
 
-            if  exit_status == 0 and failure_expected:
+            if exit_status == 0 and failure_expected:
                 error_message = "dmg pool create is expected to fail, " +\
                     "but worked! {}".format(label)
                 errors.append(error_message)
@@ -110,8 +111,9 @@ class Label(TestWithServers):
         * Random number string of length 50.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=small
-        :avocado: tags=pool,create_valid_labels
+        :avocado: tags=vm
+        :avocado: tags=pool
+        :avocado: tags=Label,test_valid_labels
         """
         self.pool = []
         errors = []
@@ -133,16 +135,19 @@ class Label(TestWithServers):
         """Test ID: DAOS-7942
 
         Test Description: Create pool with following invalid labels.
+        * The default string for an unset pool label property.
         * UUID format string: 23ab123e-5296-4f95-be14-641de40b4d5a
         * Long label - 128 random chars.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=small
-        :avocado: tags=pool,create_invalid_labels
+        :avocado: tags=vm
+        :avocado: tags=pool
+        :avocado: tags=Label,test_invalid_labels
         """
         self.pool = []
         errors = []
         label_outs = [
+            ("pool_label_not_set", "Invalid parameters"),
             ("23ab123e-5296-4f95-be14-641de40b4d5a", "invalid label"),
             (get_random_string(128), "invalid label")
         ]
@@ -162,8 +167,9 @@ class Label(TestWithServers):
         4. Create a pool with the same label again. It should work this time.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=small
-        :avocado: tags=pool,duplicate_label_create
+        :avocado: tags=vm
+        :avocado: tags=pool
+        :avocado: tags=Label,test_duplicate_create
         """
         self.pool = []
         label = "TestLabel"
@@ -189,8 +195,9 @@ class Label(TestWithServers):
         3. Destroy it with the label again. The second destroy should fail.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=small
-        :avocado: tags=pool,duplicate_label_destroy
+        :avocado: tags=vm
+        :avocado: tags=pool
+        :avocado: tags=Label,test_duplicate_destroy
         """
         self.pool = []
 
@@ -202,3 +209,48 @@ class Label(TestWithServers):
 
         # Step 3
         report_errors(self, self.verify_destroy(self.pool[-1], True, True))
+
+    def test_label_update(self):
+        """Test ID: DAOS-7942
+
+        Test Description:
+        1. Create a pool.
+        2. Update the label with dmg pool set-prop.
+        3. Call dmg pool get-prop and verify that the new label is returned.
+        4. Try to destroy the pool with the old label. It should fail.
+        5. Destroy the pool with the new label. Should work.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=pool
+        :avocado: tags=Label,test_label_update
+        """
+        self.pool = []
+
+        # Step 1
+        old_label = "OldLabel"
+        report_errors(self, self.verify_create(label=old_label, failure_expected=False))
+
+        # Step 2. Update the label.
+        new_label = "NewLabel"
+        self.pool[-1].set_property(prop_name="label", prop_value=new_label)
+        # Update the label in TestPool.
+        self.pool[-1].label.update(new_label)
+
+        # Step 3. Verify the label was set with get-prop.
+        prop_value = self.pool[-1].get_property(prop_name="label")
+        errors = []
+        if prop_value != new_label:
+            msg = "Unexpected label from get-prop! Expected = {}; Actual = {}".format(
+                new_label, prop_value)
+            errors.append(msg)
+
+        # Step 4. Try to destroy the pool with the old label. Should fail.
+        self.pool[-1].label.update(old_label)
+        errors.extend(self.verify_destroy(pool=self.pool[-1], failure_expected=True))
+
+        # Step 5. Destroy the pool with the new label. Should work.
+        self.pool[-1].label.update(new_label)
+        errors.extend(self.verify_destroy(pool=self.pool[-1], failure_expected=False))
+
+        report_errors(test=self, errors=errors)

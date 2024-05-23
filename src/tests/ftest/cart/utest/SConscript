@@ -1,62 +1,34 @@
-#!python
-# (C) Copyright 2016-2021 Intel Corporation.
+# (C) Copyright 2016-2023 Intel Corporation.
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 """Unit tests"""
 
-import os
-import daos_build
-
 TEST_SRC = ['test_linkage.cpp', 'utest_hlc.c', 'utest_swim.c',
-            'utest_portnumber.c']
+            'utest_portnumber.c', 'utest_protocol.c']
 LIBPATH = [Dir('../../'), Dir('../../../gurt')]
+
 
 def scons():
     """Scons function"""
     if GetOption('help'):
         return
 
-    # pylint: disable=too-many-locals
-    Import('env', 'prereqs', 'cart_targets', 'swim_targets', 'gurt_targets')
-    # pylint: enable=too-many-locals
-
-    #Use full path to wrap_cmocka.h for configure test.  Since standalone
-    #cmocka header can't be included without including other headers,
-    #this test can't be generalized
-    env.AppendUnique(CPPPATH=[Dir('.')])
-    wrap_cmocka = os.path.join(Dir('.').srcnode().abspath, 'wrap_cmocka.h')
-    prereqs.define('cmockawrap', headers=[wrap_cmocka], libs=['cmocka'],
-                   package='libcmocka-devel')
-    if not prereqs.check_component('cmocka'):
-        print("\n***************************************************")
-        print("libcmocka-devel package needed to enable unit tests")
-        print("***************************************************\n")
-        # Just returning is the desired behavior here.  The utest target
-        # has yet to be defined so the build will just fail.
-        return
+    Import('env', 'cart_targets', 'swim_targets', 'gurt_targets')
 
     test_env = env.Clone()
-    prereqs.require(test_env, "mercury", "uuid", "cmocka")
-    test_env.AppendUnique(LIBS=['pthread', 'm'])
-    test_env.AppendUnique(CPPPATH=['../../../include'])
+    test_env.require('mercury', 'uuid', 'cmocka')
+    # The test is checking that this feature works so disable the compile warnings for it.
+    test_env.AppendIfSupported(CCFLAGS=['-Wno-gnu-designator', '-Wno-missing-field-initializers'])
+    test_env.AppendUnique(LIBS=['pthread', 'm', 'yaml', 'dl'])
     test_env.AppendUnique(CXXFLAGS=['-std=c++0x'])
     test_env.AppendUnique(LIBPATH=LIBPATH)
     test_env.AppendUnique(RPATH_FULL=LIBPATH)
-    tests = []
 
     for test in TEST_SRC:
-        flags = []
-        testobj = test_env.Object(test)
-        testname = os.path.splitext(test)[0]
-        testprog = daos_build.test(test_env, target=testname,
-                                   source=testobj + cart_targets +
-                                   swim_targets + gurt_targets,
-                                   LIBS=test_env["LIBS"] + ['yaml'],
-                                   LINKFLAGS=flags)
-        tests.append(testprog)
+        testprog = test_env.d_test_program(source=[test, cart_targets, swim_targets, gurt_targets])
+        Default(testprog)
 
-    Default(tests)
 
 if __name__ == "SCons.Script":
     scons()

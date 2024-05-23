@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -83,6 +83,7 @@ smd_db_ready(void)
 void
 smd_db_lock(void)
 {
+	D_ASSERT(smd_db_ready());
 	if (smd_db->sd_lock)
 		smd_db->sd_lock(smd_db);
 }
@@ -90,6 +91,7 @@ smd_db_lock(void)
 void
 smd_db_unlock(void)
 {
+	D_ASSERT(smd_db_ready());
 	if (smd_db->sd_unlock)
 		smd_db->sd_unlock(smd_db);
 }
@@ -97,6 +99,9 @@ smd_db_unlock(void)
 void
 smd_fini(void)
 {
+	if (!smd_db_ready())
+		return;
+
 	smd_db = NULL;
 }
 

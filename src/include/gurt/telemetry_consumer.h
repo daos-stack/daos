@@ -46,12 +46,24 @@ uint64_t d_tm_count_metrics(struct d_tm_context *ctx, struct d_tm_node_t *node,
 			    int d_tm_type);
 int d_tm_list(struct d_tm_context *ctx, struct d_tm_nodeList_t **head,
 	      struct d_tm_node_t *node, int d_tm_type);
-void d_tm_print_my_children(struct d_tm_context *ctx, struct d_tm_node_t *node,
-			    int level, int filter, char *path, int format,
-			    int opt_fields, FILE *stream);
+int d_tm_list_subdirs(struct d_tm_context *ctx, struct d_tm_nodeList_t **head,
+		      struct d_tm_node_t *node, uint64_t *node_count,
+		      int max_depth);
+
+typedef void (*d_tm_iter_cb_t)(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
+			       char *path, int format, int opt_fields, void *cb_arg);
+
+void
+d_tm_iterate(struct d_tm_context *ctx, struct d_tm_node_t *node, int level, int filter, char *path,
+	     int format, int opt_fields, d_tm_iter_cb_t iter_cb, void *cb_arg);
 void d_tm_print_node(struct d_tm_context *ctx, struct d_tm_node_t *node,
 		     int level, char *name, int format, int opt_fields,
 		     FILE *stream);
+
+void
+      d_tm_reset_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level, char *path,
+		      int format, int opt_fields, FILE *stream);
+
 void d_tm_print_field_descriptors(int opt_fields, FILE *stream);
 void d_tm_print_counter(uint64_t val, char *name, int format, char *units,
 			int opt_fields, FILE *stream);

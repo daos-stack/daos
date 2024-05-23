@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,7 +10,9 @@
 #include <stdio.h>
 #include <daos_errno.h>
 
+#ifndef DD_FAC
 #define DD_FAC(name)	daos_##name##_logfac
+#endif /* !DD_FAC */
 #ifndef D_LOGFAC
 #define D_LOGFAC DD_FAC(daos)
 #endif /* !D_LOGFAC */
@@ -45,9 +47,13 @@
 	ACTION(drpc,      drpc,      arg)	\
 	ACTION(security,  security,  arg)	\
 	ACTION(dtx,       dtx,       arg)	\
+	ACTION(chk,       chk,       arg)	\
 	ACTION(dfuse,     dfuse,     arg)	\
 	ACTION(il,        il,        arg)	\
-	ACTION(csum,      csum,      arg)
+	ACTION(csum,      csum,      arg)	\
+	ACTION(pipeline,  pipeline,  arg)	\
+	ACTION(stack,     stack,     arg)
+
 
 #define DAOS_FOREACH_DB(ACTION, arg)				\
 	/** metadata operation */				\
@@ -65,9 +71,7 @@
 	/** security check */					\
 	ACTION(DB_SEC,	   sec,	    security,       0, arg)	\
 	/** checksum */						\
-	ACTION(DB_CSUM,	   csum,    checksum,	    0, arg)	\
-	/** daos management */					\
-	ACTION(DB_DSMS,	   dsms,    service,	    0, arg)
+	ACTION(DB_CSUM,	   csum,    checksum,	    0, arg)
 
 DAOS_FOREACH_DB(D_LOG_DECLARE_DB, D_NOOP);
 DAOS_FOREACH_LOG_FAC(D_LOG_DECLARE_FAC, DAOS_FOREACH_DB);
@@ -78,12 +82,16 @@ DAOS_FOREACH_LOG_FAC(D_LOG_DECLARE_FAC, DAOS_FOREACH_DB);
 #define DB_DEFAULT	DLOG_DBG
 #define DB_NULL		0
 /** XXX Temporary things, should be replaced by debug bits above */
-#define DF_DSMC		DB_ANY
-#define DF_DSMS		DB_DSMS
 #define DF_MISC		DB_ANY
 
 /** initialize the debug system */
 int  daos_debug_init(char *logfile);
+/**
+ * DAOS-10412
+ * need this unnecessary internal API since Go can't see log masks due to
+ * no C pre-processor macro support
+ */
+int  daos_debug_init_ex(char *logfile, d_dbug_t logmask);
 void daos_debug_set_id_cb(d_log_id_cb_t id_cb);
 /** finalize the debug system */
 void daos_debug_fini(void);
@@ -101,6 +109,8 @@ enum {
 	IOBP_NVME		= (1 << 3),
 	/** bypass bulk handle cache */
 	IOBP_SRV_BULK_CACHE	= (1 << 4),
+	/** bypass WAL commit */
+	IOBP_WAL_COMMIT		= (1 << 5),
 };
 
 /**
@@ -114,6 +124,7 @@ enum {
 #define IOBP_ENV_TARGET		"target"
 #define IOBP_ENV_NVME		"nvme"
 #define IOBP_ENV_SRV_BULK_CACHE	"srv_bulk_cache"
+#define IOBP_ENV_WAL_COMMIT	"wal_commit"
 
 extern unsigned int daos_io_bypass;
 

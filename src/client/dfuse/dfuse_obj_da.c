@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -26,6 +26,7 @@ struct da_entry {
 };
 
 struct obj_da {
+	int magic;                 /* magic number for sanity */
 	pthread_key_t key;         /* key to threadprivate data */
 	pthread_mutex_t lock;      /* lock thread events */
 	d_list_t free_entries;     /* entries put in da by dead thread */
@@ -34,7 +35,6 @@ struct obj_da {
 	size_t obj_size;           /* size of objects in da */
 	size_t padded_size;        /* real size of objects in da */
 	size_t block_size;         /* allocation size */
-	int magic;                 /* magic number for sanity */
 };
 
 #define PAD8(size) ((size + 7) & ~7)
@@ -144,7 +144,7 @@ obj_da_destroy(obj_da_t *da)
 
 	rc = pthread_mutex_destroy(&real_da->lock);
 	if (rc != 0)
-		D_ERROR("Failed to destroy lock %d %s", rc, strerror(rc));
+		D_ERROR("Failed to destroy lock %d %s\n", rc, strerror(rc));
 
 	return -DER_SUCCESS;
 }

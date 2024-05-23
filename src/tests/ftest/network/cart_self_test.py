@@ -1,18 +1,15 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import os
-
 from apricot import TestWithServers
-
-from command_utils_base import \
-    EnvironmentVariables, FormattedParameter, CommandFailure
 from command_utils import ExecutableCommand
-from job_manager_utils import Orterun
-from general_utils import get_log_file
+from command_utils_base import EnvironmentVariables, FormattedParameter
+from exception_utils import CommandFailure
+from host_utils import get_local_host
+from job_manager_utils import get_job_manager
+
 
 class CartSelfTest(TestWithServers):
     """Runs a few variations of CaRT self-test.
@@ -45,7 +42,8 @@ class CartSelfTest(TestWithServers):
             self.max_inflight_rpcs = FormattedParameter(max_rpc_opt)
 
             self.repetitions = FormattedParameter("--repetitions {0}")
-            self.attach_info = FormattedParameter("--path {0}")
+            self.use_daos_agent_env = FormattedParameter(
+                "--use-daos-agent-env", True)
 
     def __init__(self, *args, **kwargs):
         """Initialize a CartSelfTest object."""
@@ -56,7 +54,6 @@ class CartSelfTest(TestWithServers):
     def setUp(self):
         """Set up each test case."""
         super().setUp()
-        share_addr = self.params.get("share_addr", "/run/test_params/*")
 
         # Configure the daos server
         self.add_server_manager()
@@ -66,44 +63,38 @@ class CartSelfTest(TestWithServers):
             self.hostlist_servers,
             self.hostfile_servers_slots,
             self.access_points)
-        self.assertTrue(
-            self.server_managers[-1].set_config_value(
-                "crt_ctx_share_addr", share_addr),
-            "Error updating daos_server 'crt_ctx_share_addr' config setting")
 
         # Setup additional environment variables for the server orterun command
-        self.cart_env["CRT_CTX_SHARE_ADDR"] = str(share_addr)
         self.cart_env["CRT_CTX_NUM"] = "8"
-        self.cart_env["CRT_PHY_ADDR_STR"] = \
+        self.cart_env["D_PROVIDER"] = \
             self.server_managers[0].get_config_value("provider")
-        self.cart_env["OFI_INTERFACE"] = \
+        self.cart_env["D_INTERFACE"] = \
             self.server_managers[0].get_config_value("fabric_iface")
+        self.cart_env["DAOS_AGENT_DRPC_DIR"] = "/var/run/daos_agent/"
+
         self.server_managers[0].manager.assign_environment(self.cart_env, True)
+        self.server_managers[0].detect_start_via_dmg = True
 
         # Start the daos server
         self.start_server_managers()
 
-        # Generate a uri file using daos_agent dump-attachinfo
-        attachinfo_file = "{}.attach_info_tmp".format(self.server_group)
-        self.uri_file = get_log_file(attachinfo_file)
-        agent_cmd = self.agent_managers[0].manager.job
-        agent_cmd.dump_attachinfo(self.uri_file)
-
     def test_self_test(self):
         """Run a few CaRT self-test scenarios.
 
-        :avocado: tags=all,pr,daily_regression,smoke,unittest,tiny,cartselftest
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=network,smoke,cart
+        :avocado: tags=CartSelfTest,unittest,test_self_test
         """
         # Setup the orterun command
-        orterun = Orterun(self.SelfTest(self.bin))
+        orterun = get_job_manager(self, "Orterun", self.SelfTest(self.bin), mpi_type="openmpi")
+        orterun.assign_hosts(get_local_host(), hostfile=False)
         orterun.map_by.update(None, "orterun/map_by")
         orterun.enable_recovery.update(False, "orterun/enable_recovery")
 
         # Get the self_test command line parameters
         orterun.job.get_params(self)
         orterun.job.group_name.update(self.server_group, "group_name")
-        orterun.job.attach_info.update(
-            os.path.dirname(self.uri_file), "attach_info")
 
         # Setup the environment variables for the self_test orterun command
         orterun.assign_environment(self.cart_env)

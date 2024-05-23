@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,42 +7,17 @@
 package control
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
-
-type mockFabricScan struct {
-	Hosts  string
-	Fabric *HostFabric
-}
-
-func mockHostFabricMap(t *testing.T, scans ...*mockFabricScan) HostFabricMap {
-	hfm := make(HostFabricMap)
-
-	for _, scan := range scans {
-		hfs := &HostFabricSet{
-			HostFabric: scan.Fabric,
-			HostSet:    mockHostSet(t, scan.Hosts),
-		}
-
-		hk, err := hfs.HostFabric.HashKey()
-		if err != nil {
-			t.Fatal(err)
-		}
-		hfm[hk] = hfs
-	}
-
-	return hfm
-}
 
 func TestControl_NetworkScan(t *testing.T) {
 	for name, tc := range map[string]struct {
@@ -129,7 +104,7 @@ func TestControl_NetworkScan(t *testing.T) {
 				},
 			},
 			expResp: &NetworkScanResp{
-				HostFabrics: mockHostFabricMap(t, &mockFabricScan{
+				HostFabrics: MockHostFabricMap(t, &MockFabricScan{
 					Hosts: "host1",
 					Fabric: &HostFabric{
 						Interfaces: []*HostFabricInterface{
@@ -169,7 +144,7 @@ func TestControl_NetworkScan(t *testing.T) {
 				},
 			},
 			expResp: &NetworkScanResp{
-				HostFabrics: mockHostFabricMap(t, &mockFabricScan{
+				HostFabrics: MockHostFabricMap(t, &MockFabricScan{
 					Hosts: "host1",
 					Fabric: &HostFabric{
 						Interfaces: []*HostFabricInterface{
@@ -231,7 +206,7 @@ func TestControl_NetworkScan(t *testing.T) {
 				},
 			},
 			expResp: &NetworkScanResp{
-				HostFabrics: mockHostFabricMap(t, &mockFabricScan{
+				HostFabrics: MockHostFabricMap(t, &MockFabricScan{
 					Hosts: "host[1-2]",
 					Fabric: &HostFabric{
 						Interfaces: []*HostFabricInterface{
@@ -254,18 +229,18 @@ func TestControl_NetworkScan(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mic := tc.mic
 			if mic == nil {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := NetworkScan(ctx, mi, &NetworkScanReq{})
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -358,18 +333,18 @@ func TestControl_GetAttachInfo(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mic := tc.mic
 			if mic == nil {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := GetAttachInfo(ctx, mi, tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}

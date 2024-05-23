@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,12 +9,17 @@ package telemetry
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func TestTelemetry_Init(t *testing.T) {
@@ -35,15 +40,12 @@ func TestTelemetry_Init(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			ctx, cancelCtx := context.WithCancel(context.Background())
-			defer cancelCtx()
-
-			newCtx, err := Init(ctx, uint32(tc.id))
+			newCtx, err := Init(test.Context(t), uint32(tc.id))
 			if newCtx != nil {
 				defer Detach(newCtx)
 			}
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if tc.expErr == nil { // success
 				// Verify the initialized context
@@ -52,11 +54,11 @@ func TestTelemetry_Init(t *testing.T) {
 					t.Fatalf("can't get handle from result ctx: %v", err)
 				}
 
-				common.AssertEqual(t, uint32(producerID), hdl.idx, "handle.idx doesn't match shmem ID")
+				test.AssertEqual(t, uint32(producerID), hdl.id, "handle.idx doesn't match shmem ID")
 
 				hdl.RLock()
 				defer hdl.RUnlock()
-				common.AssertTrue(t, hdl.isValid(), "handle is not valid")
+				test.AssertTrue(t, hdl.isValid(), "handle is not valid")
 			}
 		})
 	}
@@ -68,13 +70,10 @@ func TestTelemetry_Detach(t *testing.T) {
 	defer CleanupTestMetricsProducer(t)
 
 	// Invalid context
-	Detach(context.Background())
+	Detach(test.Context(t))
 
 	// success
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	newCtx, err := Init(ctx, uint32(producerID))
+	newCtx, err := Init(test.Context(t), uint32(producerID))
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
@@ -86,26 +85,26 @@ func TestTelemetry_Detach(t *testing.T) {
 	}
 
 	hdl.RLock()
-	common.AssertFalse(t, hdl.isValid(), "handle should be invalidated")
+	test.AssertFalse(t, hdl.isValid(), "handle should be invalidated")
 	hdl.RUnlock()
 
 	// previously invalidated handle/context
 	Detach(newCtx)
 	hdl.RLock()
-	common.AssertFalse(t, hdl.isValid(), "handle should still be invalid")
+	test.AssertFalse(t, hdl.isValid(), "handle should still be invalid")
 	hdl.RUnlock()
 }
 
 func TestTelemetry_GetAPIVersion(t *testing.T) {
 	ver := GetAPIVersion()
 
-	common.AssertEqual(t, ver, 1, "wrong API version")
+	test.AssertEqual(t, ver, 1, "wrong API version")
 }
 
 func initCtxReal(t *testing.T, id uint32) context.Context {
 	t.Helper()
 
-	ctx, err := Init(context.Background(), id)
+	ctx, err := Init(test.Context(t), id)
 	if err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
@@ -132,14 +131,14 @@ func TestTelemetry_GetRank(t *testing.T) {
 	}{
 		"nil handle": {
 			setupCtx: func(_ *testing.T, _ uint32) context.Context {
-				return context.WithValue(context.Background(), handleKey, nil)
+				return context.WithValue(test.Context(t), handleKey, nil)
 			},
 			teardownCtx: func(_ *testing.T, _ context.Context) {},
 			expErr:      errors.New("no handle"),
 		},
 		"handle has rank": {
 			setupCtx: func(_ *testing.T, _ uint32) context.Context {
-				return context.WithValue(context.Background(), handleKey, rankHdl)
+				return context.WithValue(test.Context(t), handleKey, rankHdl)
 			},
 			teardownCtx: func(_ *testing.T, _ context.Context) {},
 			expResult:   *rankHdl.rank,
@@ -178,9 +177,109 @@ func TestTelemetry_GetRank(t *testing.T) {
 
 			result, err := GetRank(ctx)
 
-			common.CmpErr(t, tc.expErr, err)
-			common.AssertEqual(t, tc.expResult, result, "rank result")
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expResult, result, "rank result")
 		})
+	}
+}
+
+func childErrExit(err error) {
+	if err == nil {
+		err = errors.New("unknown error")
+	}
+	fmt.Fprintf(os.Stderr, "CHILD ERROR: %s\n", err)
+	os.Exit(1)
+}
+
+const (
+	childModeEnvVar   = "TEST_CHILD_MODE"
+	childModeLinkTest = "CHILD_MODE_LINK_TEST"
+	childShmIDEnvVar  = "TEST_CHILD_SHM_ID"
+)
+
+func TestMain(m *testing.M) {
+	mode := os.Getenv(childModeEnvVar)
+	switch mode {
+	case "":
+		// default; run the test binary
+		os.Exit(m.Run())
+	case childModeLinkTest:
+		runChildTelemProc()
+	default:
+		childErrExit(errors.Errorf("Unknown child mode: %q", mode))
+	}
+}
+
+func runChildTelemProc() {
+	pid := os.Getpid()
+	shmID, err := strconv.Atoi(os.Getenv(childShmIDEnvVar))
+	if err != nil {
+		childErrExit(err)
+	}
+
+	jobDir := TestMetricsMap{
+		MetricTypeDirectory: &TestMetric{
+			Name: "job",
+		},
+	}
+	pidLink := TestMetricsMap{
+		MetricTypeLink: &TestMetric{
+			Name: fmt.Sprintf("job/%d", pid),
+		},
+	}
+	startedAt := TestMetricsMap{
+		MetricTypeTimestamp: &TestMetric{
+			Name: fmt.Sprintf("job/%d/started_at", pid),
+		},
+	}
+
+	t := &testing.T{}
+
+	InitTestMetricsProducer(t, shmID, 1024)
+
+	AddTestMetrics(t, jobDir)
+	AddTestMetrics(t, pidLink)
+	AddTestMetrics(t, startedAt)
+
+	if t.Failed() {
+		childErrExit(errors.New("test failed"))
+	}
+}
+
+func TestTelemetry_PruneSegments(t *testing.T) {
+	shmID := uint32(NextTestID())
+
+	cmd := exec.Command(os.Args[0])
+	cmd.Env = append(os.Environ(),
+		fmt.Sprintf("%s=%s", childModeEnvVar, childModeLinkTest),
+		fmt.Sprintf("%s=%d", childShmIDEnvVar, shmID),
+	)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Errorf("child failed: %s", out)
+		t.Fatal(err)
+	}
+
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	ctx, err := initClientRoot(test.MustLogContext(t, log), shmID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		Fini()
+	}()
+
+	path := fmt.Sprintf("job/%d/started_at", cmd.Process.Pid)
+	_, err = GetTimestamp(ctx, path)
+	test.CmpErr(t, nil, err)
+
+	err = PruneUnusedSegments(ctx, time.Nanosecond)
+	test.CmpErr(t, nil, err)
+
+	_, err = GetTimestamp(ctx, path)
+	if err == nil {
+		t.Fatal("expected GetTimestamp() to fail after prune")
 	}
 }
 
@@ -193,6 +292,12 @@ func TestTelemetry_CollectMetrics(t *testing.T) {
 		MetricTypeGauge: &TestMetric{
 			Name: "collect_test/my_gauge",
 			Cur:  2020,
+		},
+		MetricTypeStatsGauge: &TestMetric{
+			Name: "collect_test/my_stats_gauge",
+			Cur:  4242,
+			min:  10,
+			max:  5000,
 		},
 		MetricTypeTimestamp: &TestMetric{
 			Name: "ts",
@@ -215,7 +320,7 @@ func TestTelemetry_CollectMetrics(t *testing.T) {
 	}{
 		"no handle": {
 			setupCtx: func(_ *testing.T, _ uint32) context.Context {
-				return context.Background()
+				return test.Context(t)
 			},
 			teardownCtx: func(_ *testing.T, _ context.Context) {},
 			expErr:      errors.New("no handle"),
@@ -279,12 +384,13 @@ func TestTelemetry_CollectMetrics(t *testing.T) {
 				wg.Done()
 			}()
 
-			err := CollectMetrics(ctx, ch)
+			s := NewSchema()
+			err := CollectMetrics(ctx, s, ch)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			wg.Wait()
-			common.AssertEqual(t, len(tc.expMetrics), len(gotMetrics), "got wrong number of metrics")
+			test.AssertEqual(t, len(tc.expMetrics), len(gotMetrics), "got wrong number of metrics")
 
 			for _, exp := range tc.expMetrics {
 				expPath := fmt.Sprintf("ID: %d/%s", producerID, exp.Name)
@@ -310,7 +416,7 @@ func TestTelemetry_garbageCollection(t *testing.T) {
 	validCtx, _ := setupTestMetrics(t)
 	defer cleanupTestMetrics(validCtx, t)
 
-	invalidCtx := context.WithValue(context.Background(), handleKey, &handle{})
+	invalidCtx := context.WithValue(test.Context(t), handleKey, &handle{})
 	testTimeout := 5 * time.Second
 	loopInterval := time.Millisecond
 
@@ -319,7 +425,7 @@ func TestTelemetry_garbageCollection(t *testing.T) {
 		cancelAfter time.Duration
 	}{
 		"no handle": {
-			ctx: context.Background(),
+			ctx: test.Context(t),
 		},
 		"handle invalid": {
 			ctx: invalidCtx,

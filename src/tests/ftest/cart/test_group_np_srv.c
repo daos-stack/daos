@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -51,12 +51,6 @@ swim_crt_event_cb(d_rank_t rank, uint64_t incarnation, enum crt_event_source src
 	maxlen = MAX_SWIM_STATUSES - strlen(swim_state_str);
 	if (strlen(swim_seq_by_rank[rank]) < maxlen)
 		strcat(swim_seq_by_rank[rank], swim_state_str);
-
-	/* Remove rank from context, so we stop sending swim RPCs to it. */
-	if (src == CRT_EVS_SWIM && type == CRT_EVT_DEAD) {
-		/* avoid checkpatch warning */
-		crt_group_rank_remove(NULL, rank);
-	}
 }
 
 void
@@ -67,8 +61,9 @@ test_run(d_rank_t my_rank)
 	int			 i;
 	int			 rc = 0;
 
-	crtu_srv_start_basic(test_g.t_local_group_name, &test_g.t_crt_ctx[0],
-			     &test_g.t_tid[0], &grp, &grp_size, NULL);
+	rc = crtu_srv_start_basic(test_g.t_local_group_name, &test_g.t_crt_ctx[0],
+				  &test_g.t_tid[0], &grp, &grp_size, NULL);
+	D_ASSERTF(rc == 0, "crtu_srv_start_basic() failed\n");
 
 	/* Register event callback after CaRT has initialized */
 	if (test_g.t_register_swim_callback) {
@@ -156,8 +151,9 @@ int main(int argc, char **argv)
 		return rc;
 	}
 
-	env_self_rank = getenv("CRT_L_RANK");
+	d_agetenv_str(&env_self_rank, "CRT_L_RANK");
 	my_rank = atoi(env_self_rank);
+	d_freeenv_str(&env_self_rank);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(my_rank, 20, true, true);

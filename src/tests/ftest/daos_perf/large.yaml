@@ -1,0 +1,50 @@
+hosts:
+  test_servers: 2
+  test_clients: 2
+# some run can take long to run, but needs to be verified
+# by running consecutively for accurate time.
+timeout: 3600
+job_manager:
+  class_name: Orterun
+  mpi_type: openmpi
+  manager_timeout: 3600
+pool:
+  size: 1TB
+  control_method: dmg
+container:
+  type: POSIX
+  control_method: daos
+server_config:
+  name: daos_server
+  engines_per_host: 2
+  engines:
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos0
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem1"]
+          scm_mount: /mnt/daos1
+daos_perf:
+  test_command: 'U;p F;p V O;p'
+  test_type: daos
+  processes: 64
+  akey_use_array: false
+  dkeys: 256
+  akeys: 128
+  object_class: EC2P1

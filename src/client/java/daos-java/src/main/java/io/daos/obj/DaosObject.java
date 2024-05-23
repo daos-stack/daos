@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -64,12 +64,12 @@ public class DaosObject {
   }
 
   /**
-   * open object with default mode, {@linkplain OpenMode#UNKNOWN}.
+   * open object with default mode, {@linkplain OpenMode#DAOS_OO_RW}.
    *
    * @throws DaosObjectException
    */
   public void open() throws DaosObjectException {
-    open(OpenMode.UNKNOWN);
+    open(OpenMode.DAOS_OO_RW);
   }
 
   /**
@@ -110,34 +110,29 @@ public class DaosObject {
       log.debug("punching object " + oid);
     }
     try {
-      client.punchObject(objectPtr, 0);
+      client.punchObject(objectPtr, 0L);
     } catch (DaosIOException e) {
       throw new DaosObjectException(oid, "failed to punch entire object ", e);
     }
   }
 
-  private ByteBuf encodeKeys(List<String> keys) throws DaosObjectException {
+  private ByteBuf encodeKeys(List<String> keys, boolean hasAkey) {
     int bufferLen = 0;
     List<byte[]> keyBytesList = new ArrayList<>(keys.size());
+    boolean checkAkey = hasAkey;
     for (String key : keys) {
       if (DaosUtils.isBlankStr(key)) {
         throw new IllegalArgumentException("one of akey is blank");
       }
       byte bytes[];
-      try {
-        bytes = key.getBytes(Constants.KEY_CHARSET);
-      } catch (UnsupportedEncodingException e) {
-        throw new DaosObjectException(oid, "failed to encode " + key + " in " + Constants.KEY_CHARSET, e);
-      }
-      if (bytes.length > Short.MAX_VALUE) {
-        throw new IllegalArgumentException("key length in " + Constants.KEY_CHARSET +
-          " should not exceed " + Short.MAX_VALUE);
+      if (checkAkey) { // first entry is dkey
+        bytes = DaosUtils.keyToBytes8(key);
+        checkAkey = false;
+      } else { // remaining are akeys or all is dkey
+        bytes = hasAkey ? DaosUtils.keyToBytes(key) : DaosUtils.keyToBytes8(key);
       }
       keyBytesList.add(bytes);
       bufferLen += (bytes.length + Constants.ENCODED_LENGTH_KEY);
-    }
-    if (bufferLen == 0) {
-      return null;
     }
     // encode keys to buffer
     ByteBuf buffer = BufferAllocator.objBufWithNativeOrder(bufferLen);
@@ -174,15 +169,15 @@ public class DaosObject {
    */
   public void punchDkeys(List<String> dkeys) throws DaosObjectException {
     checkOpen();
-    ByteBuf buffer = encodeKeys(dkeys);
-    if (buffer == null) {
+    ByteBuf buffer = encodeKeys(dkeys, false);
+    if (buffer == null || buffer.readableBytes() == 0) {
       throw new DaosObjectException(oid, "no dkeys specified when punch dkeys");
     }
     if (log.isDebugEnabled()) {
       log.debug("punching dkeys: " + enumKeys(dkeys, MAX_DEBUG_SIZE) + oid);
     }
     try {
-      client.punchObjectDkeys(objectPtr, 0, dkeys.size(), buffer.memoryAddress(), buffer.readableBytes());
+      client.punchObjectDkeys(objectPtr, 0L, dkeys.size(), buffer.memoryAddress(), buffer.readableBytes());
     } catch (DaosIOException e) {
       throw new DaosObjectException(oid, "failed to punch " + dkeys.size() + " dkeys: " +
         enumKeys(dkeys, MAX_EXCEPTION_SIZE), e);
@@ -209,12 +204,12 @@ public class DaosObject {
     List<String> allKeys = new ArrayList<>(nbrOfAkyes + 1);
     allKeys.add(dkey);
     allKeys.addAll(akeys);
-    ByteBuf buffer = encodeKeys(allKeys);
+    ByteBuf buffer = encodeKeys(allKeys, true);
     if (log.isDebugEnabled()) {
       log.debug("punching akeys: " + enumKeys(akeys, MAX_DEBUG_SIZE) + oid);
     }
     try {
-      client.punchObjectAkeys(objectPtr, 0, nbrOfAkyes, buffer.memoryAddress(), buffer.readableBytes());
+      client.punchObjectAkeys(objectPtr, 0L, nbrOfAkyes, buffer.memoryAddress(), buffer.readableBytes());
     } catch (DaosIOException e) {
       throw new DaosObjectException(oid, "failed to punch " + akeys.size() + " akeys: " +
         enumKeys(akeys, MAX_EXCEPTION_SIZE) + " under dkey " + dkey, e);
@@ -277,7 +272,7 @@ public class DaosObject {
     }
     ByteBuf descBuffer = desc.getDescBuffer();
     try {
-      client.fetchObject(objectPtr, 0, desc.getNbrOfEntries(), descBuffer.memoryAddress(),
+      client.fetchObject(objectPtr, 0L, desc.getNbrOfEntries(), descBuffer.memoryAddress(),
           descBuffer.capacity());
       desc.parseFetchResult();
     } catch (DaosIOException e) {
@@ -304,7 +299,7 @@ public class DaosObject {
     }
     try {
       boolean async = desc.isAsync();
-      client.fetchObjectSimple(objectPtr, 0, desc.getDescBuffer().memoryAddress(), async);
+      client.fetchObjectSimple(objectPtr, 0L, desc.getDescBuffer().memoryAddress(), async);
       if (!async) {
         desc.parseFetchResult();
       }
@@ -331,7 +326,7 @@ public class DaosObject {
       log.debug(oid + " fetch object with description: " + desc.toString(MAX_DEBUG_SIZE));
     }
     try {
-      client.fetchObjectAsync(objectPtr, 0, desc.getDescBuffer().memoryAddress());
+      client.fetchObjectAsync(objectPtr, 0L, desc.getDescBuffer().memoryAddress());
     } catch (DaosIOException e) {
       DaosObjectException de = new DaosObjectException(oid, "failed to fetch object with description " +
           desc.toString(MAX_EXCEPTION_SIZE), e);
@@ -356,7 +351,7 @@ public class DaosObject {
       log.debug(oid + " update object with description: " + desc.toString(MAX_DEBUG_SIZE));
     }
     try {
-      client.updateObject(objectPtr, 0, desc.getNbrOfEntries(), desc.getDescBuffer().memoryAddress(),
+      client.updateObject(objectPtr, 0L, desc.getNbrOfEntries(), desc.getDescBuffer().memoryAddress(),
           desc.getDescBuffer().capacity());
       desc.parseUpdateResult();
     } catch (DaosIOException e) {
@@ -368,7 +363,7 @@ public class DaosObject {
   }
 
   /**
-   * Same as {@link #fetch(IODataDescSync)}, but fetch object with {@link IOSimpleDataDesc}.
+   * Same as {@link #update(IODataDescSync)}, but update object with {@link IOSimpleDataDesc}.
    *
    * @param desc
    * request and data description
@@ -382,7 +377,7 @@ public class DaosObject {
       log.debug(oid + " update object with description: " + desc.toString(MAX_DEBUG_SIZE));
     }
     try {
-      client.updateObjectSimple(objectPtr, 0, desc.getDescBuffer().memoryAddress(), desc.isAsync());
+      client.updateObjectSimple(objectPtr, 0L, desc.getDescBuffer().memoryAddress(), desc.isAsync());
       if (!desc.isAsync()) {
         desc.parseUpdateResult();
       }
@@ -395,7 +390,7 @@ public class DaosObject {
   }
 
   /**
-   * Same as {@link #fetch(IODataDescSync)}, but fetch object with {@link IOSimpleDDAsync}.
+   * Same as {@link #update(IODataDescSync)}, but update object with {@link IOSimpleDDAsync}.
    *
    * @param desc
    * request and data description
@@ -409,12 +404,56 @@ public class DaosObject {
       log.debug(oid + " update object with description: " + desc.toString(MAX_DEBUG_SIZE));
     }
     try {
-      client.updateObjectAsync(objectPtr, 0, desc.getDescBuffer().memoryAddress());
+      client.updateObjectAsync(objectPtr, 0L, desc.getDescBuffer().memoryAddress());
     } catch (DaosIOException e) {
       DaosObjectException de = new DaosObjectException(oid, "failed to update object with description " +
           desc.toString(MAX_EXCEPTION_SIZE), e);
       desc.setCause(de);
       throw de;
+    }
+  }
+
+  /**
+   * update with {@link IODescUpdAsync}.
+   *
+   * @param desc
+   * @throws DaosObjectException
+   */
+  public void updateAsync(IODescUpdAsync desc)
+      throws DaosObjectException {
+    checkOpen();
+
+    if (log.isDebugEnabled()) {
+      log.debug(oid + " update object with description " + desc);
+    }
+    try {
+      client.updateObjAsyncNoDecode(objectPtr, desc.descMemoryAddress(), desc.getEqHandle(), desc.getEventId(),
+          desc.getDestOffset(), desc.readableBytes(), desc.dataMemoryAddress());
+    } catch (DaosIOException e) {
+      throw new DaosObjectException(oid, "failed to update object with description " + desc,
+          e);
+    }
+  }
+
+  /**
+   * update with {@link IODescUpdSync}.
+   *
+   * @param desc
+   * @throws DaosObjectException
+   */
+  public void updateSync(IODescUpdSync desc)
+          throws DaosObjectException {
+    checkOpen();
+
+    if (log.isDebugEnabled()) {
+      log.debug(oid + " update object with description " + desc);
+    }
+    try {
+      client.updateObjSyncNoDecode(objectPtr, desc.descMemoryAddress(),
+              desc.getDestOffset(), desc.readableBytes(), desc.dataMemoryAddress());
+    } catch (DaosIOException e) {
+      throw new DaosObjectException(oid, "failed to update object with description " + desc,
+              e);
     }
   }
 
@@ -505,26 +544,8 @@ public class DaosObject {
     if (DaosUtils.isBlankStr(akey)) {
       throw new IllegalArgumentException("akey is blank");
     }
-    byte dkeyBytes[];
-    byte akeyBytes[];
-    try {
-      dkeyBytes = dkey.getBytes(Constants.KEY_CHARSET);
-      if (dkeyBytes.length > Short.MAX_VALUE) {
-        throw new IllegalArgumentException("dkey length in " + Constants.KEY_CHARSET +
-          " should not exceed " + Short.MAX_VALUE);
-      }
-    } catch (UnsupportedEncodingException e) {
-      throw new DaosObjectException(oid, "failed to encode dkey " + dkey + " in " + Constants.KEY_CHARSET, e);
-    }
-    try {
-      akeyBytes = akey.getBytes(Constants.KEY_CHARSET);
-      if (akeyBytes.length > Short.MAX_VALUE) {
-        throw new IllegalArgumentException("akey length in " + Constants.KEY_CHARSET +
-          " should not exceed " + Short.MAX_VALUE);
-      }
-    } catch (UnsupportedEncodingException e) {
-      throw new DaosObjectException(oid, "failed to encode akey " + akey + " in " + Constants.KEY_CHARSET, e);
-    }
+    byte dkeyBytes[] = DaosUtils.keyToBytes8(dkey);
+    byte akeyBytes[] = DaosUtils.keyToBytes(akey);
     ByteBuf buffer = BufferAllocator.objBufWithNativeOrder(dkeyBytes.length + akeyBytes.length + 4);
     buffer.writeShort(dkeyBytes.length);
     buffer.writeBytes(dkeyBytes);
@@ -546,6 +567,10 @@ public class DaosObject {
     if (objectPtr == -1) {
       throw new DaosObjectException(oid, "object is not open.");
     }
+  }
+
+  public DaosObjectId getOid() {
+    return oid;
   }
 
   /**

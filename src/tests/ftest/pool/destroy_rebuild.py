@@ -1,10 +1,12 @@
-#!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
+import random
+
 from apricot import TestWithServers
+from general_utils import list_to_str
 
 
 class DestroyRebuild(TestWithServers):
@@ -16,11 +18,8 @@ class DestroyRebuild(TestWithServers):
     :avocado: recursive
     """
 
-    # also remove the commented line form yaml file for rank 0
-    CANCEL_FOR_TICKET = [["DAOS-4891", "rank_to_kill", "[0]"]]
-
     def test_destroy_while_rebuilding(self):
-        """Jira ID: DAOS-xxxx.
+        """Jira ID: DAOS-7100.
 
         Test Description:
             Create a pool across multiple servers. After excluding one of the
@@ -30,33 +29,66 @@ class DestroyRebuild(TestWithServers):
             Verifying that a pool can be destroyed during rebuild.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=medium
-        :avocado: tags=pool,destroy_pool_rebuild
+        :avocado: tags=vm
+        :avocado: tags=pool,rebuild
+        :avocado: tags=DestroyRebuild,test_destroy_while_rebuilding
         """
         # Get the test parameters
-        targets = self.params.get("targets", "/run/server_config/servers/*")
-        ranks = self.params.get("rank_to_kill", "/run/testparams/*")
+        targets = self.server_managers[0].get_config_value("targets")
 
-        # Create a pool
-        self.add_pool()
+        # 1.
+        self.log_step("Create a pool")
+        pool = self.get_pool()
 
-        # Verify the pool information before starting rebuild
+        # 2.
+        self.log_step("Verify the pool information before starting rebuild")
         checks = {
             "pi_nnodes": len(self.hostlist_servers),
             "pi_ntargets": len(self.hostlist_servers) * targets,
             "pi_ndisabled": 0,
         }
         self.assertTrue(
-            self.pool.check_pool_info(**checks),
+            pool.check_pool_info(**checks),
             "Invalid pool information detected prior to rebuild")
 
-        # Start rebuild
+        # 3.
+        self.log_step("Start rebuild, system stop")
+        all_ranks = self.server_managers[0].ranks.keys()
+        ap_ranks = self.server_managers[0].get_host_ranks(self.access_points)
+        non_ap_ranks = list(set(all_ranks) - set(ap_ranks))
+
+        # Get the pool leader rank
+        pool.set_query_data()
+        leader_rank = pool.query_data["response"]["svc_ldr"]
+        if leader_rank in ap_ranks:
+            ap_ranks.remove(leader_rank)
+        elif leader_rank in non_ap_ranks:
+            non_ap_ranks.remove(leader_rank)
+
+        # Select the following ranks to stop
+        #  - the pool leader rank
+        #  - a random rank that is not an access point
+        #  - a random rank this is an access point and not the pool leader
+        self.log.debug(
+            "Engine ranks:  pool leader=%s, access points=%s, other=%s",
+            leader_rank, ap_ranks, non_ap_ranks)
+        ranks = [leader_rank]
+        ranks.append(random.choice(ap_ranks))  # nosec
+        ranks.append(random.choice(non_ap_ranks))  # nosec
+        self.log.info("ranks to rebuild: %s", ranks)
+
         self.server_managers[0].stop_ranks(ranks, self.d_log, force=True)
-        self.pool.wait_for_rebuild(True)
+        pool.wait_for_rebuild_to_start()
 
-        # Destroy the pool while rebuild is active
-        self.pool.destroy()
+        # 4.
+        self.log_step("Destroy the pool while rebuild is active")
+        pool.destroy()
 
+        # 5.
+        self.log_step("System start")
+        self.get_dmg_command().system_start(list_to_str(value=ranks))
+
+        # 6.
+        self.log_step("Check restarted server in join state")
+        self.server_managers[0].update_expected_states(ranks, ["joined"])
         self.log.info("Test Passed")
-        self.get_dmg_command().system_start(",".join(ranks))
-        self.server_managers[0].update_expected_states(",".join(ranks), ["joined"])

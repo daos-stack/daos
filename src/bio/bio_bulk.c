@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -65,7 +65,7 @@ static inline bool
 bulk_hdl_is_inuse(struct bio_bulk_hdl *hdl)
 {
 	D_ASSERT(hdl->bbh_chunk != NULL);
-	D_ASSERT(hdl->bbh_bulk != NULL);
+	D_ASSERT(hdl->bbh_chunk->bdc_bulk_hdl != NULL);
 
 	if (hdl->bbh_inuse) {
 		D_ASSERT(d_list_empty(&hdl->bbh_link));
@@ -111,18 +111,20 @@ bulk_chunk_depopulate(struct bio_dma_chunk *chk, bool fini)
 
 		D_ASSERT(!bulk_hdl_is_inuse(hdl));
 		d_list_del_init(&hdl->bbh_link);
-		rc = bulk_free_fn(hdl->bbh_bulk);
-		if (rc)
-			D_ERROR("Failed to free bulk hdl %p "DF_RC"\n",
-				hdl->bbh_bulk, DP_RC(rc));
-		hdl->bbh_bulk = NULL;
 	}
 	chk->bdc_bulk_cnt = chk->bdc_bulk_idle = 0;
 	chk->bdc_bulk_grp = NULL;
 
 	if (fini) {
 		D_FREE(chk->bdc_bulks);
-		chk->bdc_bulks = NULL;
+
+		if (chk->bdc_bulk_hdl != NULL) {
+			rc = bulk_free_fn(chk->bdc_bulk_hdl);
+			if (rc)
+				D_ERROR("Failed to free bulk hdl %p "DF_RC"\n",
+					chk->bdc_bulk_hdl, DP_RC(rc));
+			chk->bdc_bulk_hdl = NULL;
+		}
 	}
 }
 
@@ -138,6 +140,8 @@ bulk_grp_evict_one(struct bio_dma_buffer *bdb, struct bio_dma_chunk *chk,
 	bulk_chunk_depopulate(chk, fini);
 	bbg->bbg_chk_cnt--;
 	d_list_move_tail(&chk->bdc_link, &bdb->bdb_idle_list);
+	if (bbg->bbg_chk_cnt == 0 && bdb->bdb_stats.bds_bulk_grps)
+		d_tm_dec_gauge(bdb->bdb_stats.bds_bulk_grps, 1);
 }
 
 static inline void
@@ -272,46 +276,24 @@ bulk_reclaim_chunk(struct bio_dma_buffer *bdb, struct bio_bulk_group *ex_grp)
 static int
 bulk_create_hdl(struct bio_dma_chunk *chk, struct bio_bulk_args *arg)
 {
-	struct bio_bulk_group	*bbg = chk->bdc_bulk_grp;
-	d_sg_list_t		 sgl;
-	struct bio_bulk_hdl	*bbh;
-	unsigned int		 bulk_idx, pgs;
-	int			 rc;
-
-	D_ASSERT(chk->bdc_bulk_cnt == chk->bdc_bulk_idle);
-	bulk_idx = chk->bdc_bulk_cnt;
-	D_ASSERT(bulk_idx < bio_chk_sz);
-
-	bbh = &chk->bdc_bulks[bulk_idx];
-	D_ASSERT(bbh->bbh_chunk == chk);
-	D_ASSERT(bbh->bbh_bulk == NULL);
-	D_ASSERT(d_list_empty(&bbh->bbh_link));
-
-	D_ASSERT(bbg != NULL);
-	pgs = bbg->bbg_bulk_pgs;
-	bbh->bbh_pg_idx = (bulk_idx * pgs);
-	D_ASSERT(bbh->bbh_pg_idx < bio_chk_sz);
+	d_sg_list_t	sgl;
+	int		rc;
 
 	rc = d_sgl_init(&sgl, 1);
 	if (rc)
 		return rc;
 
 	sgl.sg_nr_out = sgl.sg_nr;
-	sgl.sg_iovs[0].iov_buf = chk->bdc_ptr +
-				(bbh->bbh_pg_idx << BIO_DMA_PAGE_SHIFT);
-	sgl.sg_iovs[0].iov_buf_len = (pgs << BIO_DMA_PAGE_SHIFT);
-	sgl.sg_iovs[0].iov_len = (pgs << BIO_DMA_PAGE_SHIFT);
+	sgl.sg_iovs[0].iov_buf = chk->bdc_ptr;
+	sgl.sg_iovs[0].iov_buf_len = (bio_chk_sz << BIO_DMA_PAGE_SHIFT);
+	sgl.sg_iovs[0].iov_len = (bio_chk_sz << BIO_DMA_PAGE_SHIFT);
 
 	rc = bulk_create_fn(arg->ba_bulk_ctxt, &sgl, arg->ba_bulk_perm,
-			    &bbh->bbh_bulk);
+			    &chk->bdc_bulk_hdl);
 	if (rc) {
 		D_ERROR("Create bulk handle failed. "DF_RC"\n", DP_RC(rc));
-		bbh->bbh_bulk = NULL;
 	} else {
-		D_ASSERT(bbh->bbh_bulk != NULL);
-		chk->bdc_bulk_cnt++;
-		chk->bdc_bulk_idle++;
-		d_list_add_tail(&bbh->bbh_link, &bbg->bbg_idle_bulks);
+		D_ASSERT(chk->bdc_bulk_hdl != NULL);
 	}
 
 	d_sgl_fini(&sgl, false);
@@ -336,11 +318,17 @@ bulk_chunk_populate(struct bio_dma_chunk *chk, struct bio_bulk_group *bbg,
 			D_INIT_LIST_HEAD(&hdl->bbh_link);
 			hdl->bbh_chunk = chk;
 		}
+
+		D_ASSERT(chk->bdc_bulk_hdl == NULL);
+		rc = bulk_create_hdl(chk, arg);
+		if (rc)
+			goto error;
 	}
 
 	D_ASSERT(bulk_chunk_is_idle(chk));
 	D_ASSERT(chk->bdc_bulk_cnt == 0);
 
+	D_ASSERT(bbg != NULL);
 	chk->bdc_bulk_grp = bbg;
 	chk->bdc_type = BIO_CHK_TYPE_IO;
 
@@ -348,10 +336,15 @@ bulk_chunk_populate(struct bio_dma_chunk *chk, struct bio_bulk_group *bbg,
 	tot_bulks = bio_chk_sz / bbg->bbg_bulk_pgs;
 
 	for (i = 0; i < tot_bulks; i++) {
-		rc = bulk_create_hdl(chk, arg);
-		if (rc)
-			goto error;
+		hdl = &chk->bdc_bulks[i];
+		D_ASSERT(hdl->bbh_chunk == chk);
+		D_ASSERT(d_list_empty(&hdl->bbh_link));
+
+		hdl->bbh_pg_idx = (bbg->bbg_bulk_pgs * i);
+		d_list_add_tail(&hdl->bbh_link, &bbg->bbg_idle_bulks);
+
 	}
+	chk->bdc_bulk_cnt = chk->bdc_bulk_idle = tot_bulks;
 	return 0;
 error:
 	bulk_chunk_depopulate(chk, true);
@@ -392,6 +385,8 @@ populate:
 
 	d_list_move_tail(&chk->bdc_link, &bbg->bbg_dma_chks);
 	bbg->bbg_chk_cnt++;
+	if (bbg->bbg_chk_cnt == 1 && bdb->bdb_stats.bds_bulk_grps)
+		d_tm_inc_gauge(bdb->bdb_stats.bds_bulk_grps, 1);
 
 	return 0;
 }
@@ -404,36 +399,95 @@ bulk_hdl_unhold(struct bio_bulk_hdl *hdl)
 
 	D_ASSERT(bulk_hdl_is_inuse(hdl));
 
-	hdl->bbh_inuse = false;
-	hdl->bbh_bulk_off = 0;
+	hdl->bbh_inuse--;
+	if (hdl->bbh_inuse == 0) {
+		hdl->bbh_bulk_off = 0;
+		hdl->bbh_used_bytes = 0;
+		hdl->bbh_shareable = 0;
+		hdl->bbh_remote_idx = 0;
 
-	D_ASSERT(chk != NULL);
-	D_ASSERT(chk->bdc_bulk_idle < chk->bdc_bulk_cnt);
-	chk->bdc_bulk_idle++;
+		D_ASSERT(chk != NULL);
+		D_ASSERT(chk->bdc_bulk_idle < chk->bdc_bulk_cnt);
+		chk->bdc_bulk_idle++;
 
-	bbg = chk->bdc_bulk_grp;
-	D_ASSERT(bbg != NULL);
-	d_list_add_tail(&hdl->bbh_link, &bbg->bbg_idle_bulks);
+		bbg = chk->bdc_bulk_grp;
+		D_ASSERT(bbg != NULL);
+		d_list_add_tail(&hdl->bbh_link, &bbg->bbg_idle_bulks);
+	}
+}
+
+static inline bool
+is_exclusive_biov(struct bio_iov *biov)
+{
+	/* NVMe IOV or IOV with extra data for csum can't share bulk handle with others */
+	return (bio_iov2media(biov) != DAOS_MEDIA_SCM) ||
+		(bio_iov2raw_len(biov) != bio_iov2req_len(biov));
 }
 
 static void
-bulk_hdl_hold(struct bio_bulk_hdl *hdl, unsigned int pg_off)
+bulk_hdl_hold(struct bio_bulk_hdl *hdl, unsigned int pg_off, unsigned int remote_idx,
+	      struct bio_iov *biov)
 {
 	struct bio_dma_chunk	*chk = hdl->bbh_chunk;
 
 	D_ASSERT(!bulk_hdl_is_inuse(hdl));
 
 	d_list_del_init(&hdl->bbh_link);
-	hdl->bbh_inuse = true;
-	hdl->bbh_bulk_off = pg_off;
+	hdl->bbh_inuse = 1;
+	/* biov->bi_prefix_len is for csum, not included in bulk transfer */
+	hdl->bbh_bulk_off = pg_off + biov->bi_prefix_len;
+	hdl->bbh_remote_idx = remote_idx;
+	hdl->bbh_shareable = !is_exclusive_biov(biov);
 
 	D_ASSERT(chk != NULL);
 	D_ASSERT(chk->bdc_bulk_idle > 0);
 	chk->bdc_bulk_idle--;
 }
 
+static inline unsigned int
+bulk_hdl2len(struct bio_bulk_hdl *hdl)
+{
+	struct bio_dma_chunk	*chk = hdl->bbh_chunk;
+	struct bio_bulk_group	*bbg;
+
+	D_ASSERT(chk != NULL);
+	bbg = chk->bdc_bulk_grp;
+	D_ASSERT(bbg != NULL);
+
+	return bbg->bbg_bulk_pgs << BIO_DMA_PAGE_SHIFT;
+}
+
 static struct bio_bulk_hdl *
-bulk_get_hdl(struct bio_desc *biod, unsigned int pg_cnt,
+bulk_get_shared_hdl(struct bio_desc *biod, struct bio_iov *biov, unsigned int remote_idx)
+{
+	struct bio_bulk_hdl	*prev_hdl;
+
+	if (is_exclusive_biov(biov))
+		return NULL;
+
+	D_ASSERT(biod->bd_bulk_hdls != NULL);
+	if (biod->bd_bulk_cnt == 0)
+		return NULL;
+
+	prev_hdl = biod->bd_bulk_hdls[biod->bd_bulk_cnt - 1];
+	if (prev_hdl == NULL || !prev_hdl->bbh_shareable ||
+	    (prev_hdl->bbh_remote_idx != remote_idx))
+		return NULL;
+
+	D_ASSERT(bulk_hdl_is_inuse(prev_hdl));
+	D_ASSERT(prev_hdl->bbh_bulk_off == 0);
+	D_ASSERT(prev_hdl->bbh_used_bytes > 0);
+	D_ASSERT(prev_hdl->bbh_used_bytes <= bulk_hdl2len(prev_hdl));
+
+	if (prev_hdl->bbh_used_bytes + bio_iov2len(biov) > bulk_hdl2len(prev_hdl))
+		return NULL;
+
+	prev_hdl->bbh_inuse++;
+	return prev_hdl;
+}
+
+static struct bio_bulk_hdl *
+bulk_get_hdl(struct bio_desc *biod, struct bio_iov *biov, unsigned int pg_cnt,
 	     unsigned int pg_off, struct bio_bulk_args *arg)
 {
 	struct bio_dma_buffer	*bdb = iod_dma_buf(biod);
@@ -441,11 +495,14 @@ bulk_get_hdl(struct bio_desc *biod, unsigned int pg_cnt,
 	struct bio_bulk_hdl	*hdl;
 	int			 rc;
 
+	hdl = bulk_get_shared_hdl(biod, biov, arg->ba_sgl_idx);
+	if (hdl != NULL) {
+		D_DEBUG(DB_IO, "Reuse shared bulk handle %p\n", hdl);
+		return hdl;
+	}
+
 	bbg = bulk_grp_get(bdb, pg_cnt);
 	if (bbg == NULL) {
-		D_ERROR("Failed to get bulk group (%u pages)\n", pg_cnt);
-		dump_dma_info(bdb);
-
 		biod->bd_retry = 1;
 		return NULL;
 	}
@@ -455,12 +512,11 @@ bulk_get_hdl(struct bio_desc *biod, unsigned int pg_cnt,
 
 	rc = bulk_grp_grow(bdb, bbg, arg);
 	if (rc) {
-		D_ERROR("Failed to grow bulk grp (%u pages) "DF_RC"\n",
-			pg_cnt, DP_RC(rc));
-		dump_dma_info(bdb);
-
 		if (rc == -DER_AGAIN)
 			biod->bd_retry = 1;
+		else
+			D_ERROR("Failed to grow bulk grp (%u pages) "DF_RC"\n",
+				pg_cnt, DP_RC(rc));
 
 		return NULL;
 	}
@@ -469,7 +525,7 @@ done:
 	hdl = d_list_entry(bbg->bbg_idle_bulks.next, struct bio_bulk_hdl,
 			   bbh_link);
 
-	bulk_hdl_hold(hdl, pg_off);
+	bulk_hdl_hold(hdl, pg_off, arg->ba_sgl_idx, biov);
 	return hdl;
 }
 
@@ -509,7 +565,6 @@ bulk_iod_init(struct bio_desc *biod)
 
 	D_ALLOC_ARRAY(biod->bd_bulk_hdls, max_bulks);
 	if (biod->bd_bulk_hdls == NULL) {
-		D_ERROR("Failed to allocate bulk handle array\n");
 		return -DER_NOMEM;
 	}
 	biod->bd_bulk_max = max_bulks;
@@ -519,13 +574,25 @@ bulk_iod_init(struct bio_desc *biod)
 }
 
 static inline void *
-bulk_hdl2addr(struct bio_bulk_hdl *hdl)
+bulk_hdl2addr(struct bio_bulk_hdl *hdl, unsigned int pg_off)
 {
 	struct bio_dma_chunk	*chk = hdl->bbh_chunk;
 	unsigned int		 chk_pg_idx = hdl->bbh_pg_idx;
-	unsigned int		 pg_off = hdl->bbh_bulk_off;
+	void			*payload;
 
-	return chk->bdc_ptr + (chk_pg_idx << BIO_DMA_PAGE_SHIFT) + pg_off;
+	D_ASSERT(bulk_hdl_is_inuse(hdl));
+
+	payload = chk->bdc_ptr + (chk_pg_idx << BIO_DMA_PAGE_SHIFT);
+	if (hdl->bbh_shareable) {
+		D_ASSERT(hdl->bbh_bulk_off == 0);
+		D_ASSERT(pg_off == 0);
+		payload += hdl->bbh_used_bytes;
+	} else {
+		D_ASSERT(hdl->bbh_used_bytes == 0);
+		payload += pg_off;
+	}
+
+	return payload;
 }
 
 /* Try to round up the bulk size to fully utilize the chunk */
@@ -551,13 +618,21 @@ bulk_map_one(struct bio_desc *biod, struct bio_iov *biov, void *data)
 
 	D_ASSERT(biod && biod->bd_chk_type == BIO_CHK_TYPE_IO);
 	D_ASSERT(biod->bd_rdma);
-	D_ASSERT(biov && bio_iov2raw_len(biov) != 0);
+	D_ASSERT(biov);
 
 	if (biod->bd_bulk_hdls == NULL) {
 		rc = bulk_iod_init(biod);
 		if (rc)
 			return rc;
 	}
+
+	/* Zero length IOV */
+	if (bio_iov2req_len(biov) == 0) {
+		D_ASSERT(bio_iov2raw_len(biov) == 0);
+		bio_iov_set_raw_buf(biov, NULL);
+		goto done;
+	}
+
 	dma_biov2pg(biov, &off, &end, &pg_cnt, &pg_off);
 
 	if (bypass_bulk_cache(biod, biov, pg_cnt)) {
@@ -566,7 +641,7 @@ bulk_map_one(struct bio_desc *biod, struct bio_iov *biov, void *data)
 	}
 	D_ASSERT(!BIO_ADDR_IS_DEDUP(&biov->bi_addr));
 
-	hdl = bulk_get_hdl(biod, roundup_pgs(pg_cnt), pg_off, arg);
+	hdl = bulk_get_hdl(biod, biov, roundup_pgs(pg_cnt), pg_off, arg);
 	if (hdl == NULL) {
 		if (biod->bd_retry)
 			return -DER_AGAIN;
@@ -575,12 +650,18 @@ bulk_map_one(struct bio_desc *biod, struct bio_iov *biov, void *data)
 		return -DER_NOMEM;
 	}
 
-	bio_iov_set_raw_buf(biov, bulk_hdl2addr(hdl));
-	rc = iod_add_region(biod, hdl->bbh_chunk, hdl->bbh_pg_idx, off, end,
-			    bio_iov2media(biov));
+	bio_iov_set_raw_buf(biov, bulk_hdl2addr(hdl, pg_off));
+	rc = iod_add_region(biod, hdl->bbh_chunk, hdl->bbh_pg_idx, hdl->bbh_used_bytes,
+			    off, end, bio_iov2media(biov));
 	if (rc) {
 		bulk_hdl_unhold(hdl);
 		return rc;
+	}
+
+	/* Update the used bytes for shared handle */
+	if (hdl->bbh_shareable) {
+		D_ASSERT(hdl->bbh_bulk_off == 0);
+		hdl->bbh_used_bytes += bio_iov2len(biov);
 	}
 done:
 	D_ASSERT(biod->bd_bulk_hdls != NULL);
@@ -589,7 +670,7 @@ done:
 	biod->bd_bulk_hdls[biod->bd_bulk_cnt] = hdl;
 	biod->bd_bulk_cnt++;
 
-	return 0;
+	return rc;
 }
 
 void
@@ -668,7 +749,6 @@ bulk_cache_create(struct bio_dma_buffer *bdb)
 	D_ALLOC_ARRAY(bbc->bbc_sorted, BIO_BULK_GRPS_MAX);
 	if (bbc->bbc_sorted == NULL) {
 		D_FREE(bbc->bbc_grps);
-		bbc->bbc_grps = NULL;
 		return -DER_NOMEM;
 	}
 
@@ -687,26 +767,12 @@ bulk_cache_create(struct bio_dma_buffer *bdb)
 	return 0;
 }
 
-static inline unsigned int
-bulk_hdl2len(struct bio_bulk_hdl *hdl)
-{
-	struct bio_dma_chunk	*chk = hdl->bbh_chunk;
-	struct bio_bulk_group	*bbg;
-
-	D_ASSERT(chk != NULL);
-	bbg = chk->bdc_bulk_grp;
-	D_ASSERT(bbg != NULL);
-
-	return bbg->bbg_bulk_pgs << BIO_DMA_PAGE_SHIFT;
-}
-
 void *
 bio_iod_bulk(struct bio_desc *biod, int sgl_idx, int iov_idx,
 	     unsigned int *bulk_off)
 {
 	struct bio_bulk_hdl	*hdl;
 	struct bio_sglist	*bsgl = NULL;
-	struct bio_iov		*biov;
 	int			 i, bulk_idx = 0;
 
 	/* Pass in NULL 'biod' is allowed */
@@ -717,7 +783,8 @@ bio_iod_bulk(struct bio_desc *biod, int sgl_idx, int iov_idx,
 	if (biod->bd_bulk_hdls == NULL)
 		return NULL;
 
-	D_ASSERT(biod->bd_bulk_cnt == biod->bd_bulk_max);
+	D_ASSERTF(biod->bd_bulk_cnt == biod->bd_bulk_max, "bulk_cnt:%u, bulk_max:%u\n",
+		  biod->bd_bulk_cnt, biod->bd_bulk_max);
 	D_ASSERT(sgl_idx < biod->bd_sgl_cnt);
 
 	for (i = 0; i < sgl_idx; i++) {
@@ -728,7 +795,6 @@ bio_iod_bulk(struct bio_desc *biod, int sgl_idx, int iov_idx,
 
 	bsgl = &biod->bd_sgls[sgl_idx];
 	D_ASSERT(iov_idx < bsgl->bs_nr_out);
-	biov = &bsgl->bs_iovs[iov_idx];
 
 	bulk_idx += iov_idx;
 	D_ASSERT(bulk_idx < biod->bd_bulk_cnt);
@@ -738,9 +804,8 @@ bio_iod_bulk(struct bio_desc *biod, int sgl_idx, int iov_idx,
 		return NULL;
 
 	D_ASSERT(bulk_hdl_is_inuse(hdl));
-	/* biov->bi_prefix_len is for csum, not included in bulk transfer */
-	*bulk_off = hdl->bbh_bulk_off + biov->bi_prefix_len;
-	D_ASSERT(*bulk_off < bulk_hdl2len(hdl));
+	D_ASSERT(hdl->bbh_bulk_off < bulk_hdl2len(hdl));
+	*bulk_off = (hdl->bbh_pg_idx << BIO_DMA_PAGE_SHIFT) + hdl->bbh_bulk_off;
 
-	return hdl->bbh_bulk;
+	return hdl->bbh_chunk->bdc_bulk_hdl;
 }

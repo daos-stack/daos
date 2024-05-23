@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -182,4 +182,17 @@ d_fd_get_exp_num_domains(uint32_t compressed_len, uint32_t exp_num_ranks,
 
 	*result = domain_len / FD_TREE_TUPLE_LEN;
 	return 0;
+}
+
+bool
+d_fd_node_is_group(struct d_fd_node *node)
+{
+	if (node == NULL)
+		return false;
+
+	if (node->fdn_type == D_FD_NODE_TYPE_DOMAIN &&
+	    node->fdn_val.dom->fd_level == D_FD_GROUP_DOMAIN_LEVEL)
+		return true;
+
+	return false;
 }

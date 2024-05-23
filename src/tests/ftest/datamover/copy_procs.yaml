@@ -1,0 +1,36 @@
+hosts:
+  test_servers: 1
+  test_clients: 1
+timeout: 120
+server_config:
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+pool:
+  scm_size: 1G
+  control_method: dmg
+container:
+  type: POSIX
+  control_method: daos
+ior:
+  api: 'DFS'
+  client_processes:
+    np: 1
+  test_file: "testFile"
+  ior_flags:
+    - "-v -w -k"  # write
+    - "-v -r -R"  # read-verify
+  block_size: '100M'
+  signature: 5
+datamover:
+  tool: "DCP"
+dcp:
+  bufsize: '8MB'
+  chunksize: '4MB'
+  copy_procs:
+    processes: [3, 7, 16]

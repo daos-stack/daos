@@ -1,0 +1,30 @@
+hosts:
+  test_servers: 1
+timeout: 90
+server_config:
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 1
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+  system_ram_reserved: 1
+pool:
+  control_method: dmg
+  createsize: !mux
+    size1gb:
+      scm_size: 1073741824
+    size3gb:
+      scm_size: 3221225472
+test:
+  poolconnect: !mux
+    ro:
+      permissions: 0
+    rw:
+      permissions: 1
+    ex:
+      permissions: 2

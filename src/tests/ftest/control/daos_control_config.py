@@ -1,13 +1,12 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 
 from apricot import TestWithServers
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure
 
 
 class DaosControlConfigTest(TestWithServers):
@@ -24,7 +23,10 @@ class DaosControlConfigTest(TestWithServers):
         Test Description: Test dmg tool executes with variant positive and
         negative inputs to its configuration file.
 
-        :avocado: tags=all,small,control,daily_regression,control_start,basic
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=control,basic
+        :avocado: tags=DaosControlConfigTest,test_daos_control_config_basic
         """
         # Get the input to verify
         c_val = self.params.get("config_val", "/run/control_config_val/*/")

@@ -1,0 +1,44 @@
+name: Jira Report
+
+on:
+  # Having this be pull_request_target rather than pull_request means it runs in the context of the
+  # target branch rather than the PR, which in turn means the checkout is of the target.
+  # Trigger for the defaults plus "edited" so that it re-runs if a PR title is modified as that's
+  # what it's checking.  This probably doesn't need to run on synchronize however if a PR is being
+  # worked then re-checking the Jira metadata is no bad thing.
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited]
+
+permissions: {}
+
+jobs:
+  example_comment_pr:
+    runs-on: ubuntu-22.04
+    permissions:
+      pull-requests: write
+    name: Report Jira data to PR comment
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: install jira
+        run: python3 -m pip install jira
+      - name: Load jira metadata
+        run: ./ci/jira_query.py ${{ github.event.pull_request.number }}
+        id: jira-data
+      - name: Comment on PR
+        if: always()
+        uses: thollander/actions-comment-pull-request@v2
+        with:
+          comment_tag: 'jira_query_message'
+          message: ${{ steps.jira-data.outputs.message }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set labels
+        if: ${{ always() && steps.jira-data.outputs.label != '' }}
+        uses: actions-ecosystem/action-add-labels@v1
+        with:
+          labels: ${{ steps.jira-data.outputs.label }}
+      - name: Clear labels
+        if: ${{ always() && steps.jira-data.outputs.label-clear != '' }}
+        uses: actions-ecosystem/action-remove-labels@v1
+        with:
+          labels: ${{ steps.jira-data.outputs.label-clear }}

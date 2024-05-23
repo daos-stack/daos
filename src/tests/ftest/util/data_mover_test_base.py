@@ -1,33 +1,40 @@
-#!/usr/bin/python
 """
-(C) Copyright 2018-2021 Intel Corporation.
+(C) Copyright 2018-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from command_utils_base import CommandFailure
-from daos_utils import DaosCommand
-from test_utils_container import TestContainer
-from pydaos.raw import str_to_c_uuid, DaosContainer, DaosObj, IORequest
+import ctypes
+# pylint: disable=too-many-lines
+import os
+import re
+from os.path import join
+
+from command_utils_base import BasicParameter, EnvironmentVariables
+from data_mover_utils import (ContClone, DcpCommand, DdeserializeCommand, DserializeCommand,
+                              DsyncCommand, FsCopy, uuid_from_obj)
+from dfuse_utils import get_dfuse, start_dfuse
+from duns_utils import format_path
+from exception_utils import CommandFailure
+from general_utils import create_string_buffer, get_log_file
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
-from data_mover_utils import DcpCommand, DsyncCommand, FsCopy, ContClone
-from data_mover_utils import DserializeCommand, DdeserializeCommand
-from data_mover_utils import format_daos_path, uuid_from_obj
-from os.path import join
-import uuid
-import re
-import ctypes
-from general_utils import create_string_buffer
+from pydaos.raw import DaosObj, IORequest
+from run_utils import run_remote
 
 
 class DataMoverTestBase(IorTestBase, MdtestBase):
-    # pylint: disable=too-many-ancestors
+    # pylint: disable=too-many-instance-attributes
     """Base DataMover test class.
+
+    Optional yaml config values:
+        datamover/posix_root (str): path to POSIX filesystem.
+        datamover/tool (list): default datamover tool to use.
+        datamover/np (int): default processes for all tools.
+        datamover/ppn (int): default processes-per-client for all tools.
 
     Sample Use Case:
         # Create test file
-        run_ior_with_params("DAOS", "/testFile, pool1, cont1,
-                            flags="-w -K")
+        run_ior_with_params("DAOS", "/testFile, pool1, cont1, flags="-w -K")
 
         # Set dcp as the tool to use
         self.set_tool("DCP")
@@ -35,12 +42,11 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         # Copy from DAOS to POSIX
         run_datamover(
             "some test description",
-            "DAOS", "/testFile", pool1, cont1,
-            "POSIX", "/some/posix/path/testFile")
+            src_path="daos://pool1/cont1/testFile",
+            dst_path="/some/posix/path/testFile")
 
         # Verify destination file
-        run_ior_with_params("POSIX", "/some/posix/path/testFile",
-                            flags="-r -R")
+        run_ior_with_params("POSIX", "/some/posix/path/testFile", flags="-r -R")
     :avocado: recursive
 
     """
@@ -50,11 +56,11 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
     # The valid datamover tools that can be used
     TOOLS = (
-        "DCP",       # mpifileutils dcp
-        "DSYNC",     # mpifileutils dsync
-        "DSERIAL",   # mpifileutils daos-serialize + daos-deserialize
-        "FS_COPY",   # daos filesystem copy
-        "CONT_CLONE" # daos container clone
+        "DCP",        # mpifileutils dcp
+        "DSYNC",      # mpifileutils dsync
+        "DSERIAL",    # mpifileutils daos-serialize + daos-deserialize
+        "FS_COPY",    # daos filesystem copy
+        "CONT_CLONE"  # daos container clone
     )
 
     def __init__(self, *args, **kwargs):
@@ -69,23 +75,43 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.ddeserialize_cmd = None
         self.fs_copy_cmd = None
         self.cont_clone_cmd = None
-        self.ior_processes = None
-        self.mdtest_processes = None
-        self.dcp_processes = None
-        self.dsync_processes = None
-        self.dserialize_processes = None
-        self.ddeserialize_processes = None
         self.pool = []
-        self.container = []
-        self.uuids = []
         self.dfuse_hosts = None
         self.num_run_datamover = 0  # Number of times run_datamover was called
+        self.job_manager = None
+
+        # Override processes and np from IorTestBase and MdtestBase to use "datamover" namespace.
+        # Define processes and np for each datamover tool, which defaults to the "datamover" one.
+        self.processes = None
+        self.ppn = None
+        self.datamover_np = None
+        self.datamover_ppn = None
+        self.ior_np = None
+        self.ior_ppn = None
+        self.mdtest_np = None
+        self.mdtest_ppn = None
+        self.dcp_np = None
+        self.dsync_np = None
+        self.dserialize_np = None
+        self.ddeserialize_np = None
+
+        # Root directory for POSIX paths. Default is self.tmp
+        posix_root_map = {'self.workdir': self.workdir, 'self.tmp': self.tmp}
+        self.posix_root = BasicParameter(None, mapped_values=posix_root_map)
 
         # Temp directory for serialize/deserialize
         self.serial_tmp_dir = self.tmp
 
-        # List of test paths to create and remove
-        self.posix_test_paths = []
+        self.preserve_props_path = None
+
+        # List of local test paths to create and remove
+        self.posix_local_test_paths = []
+
+        # List of shared test paths to create and remove
+        self.posix_shared_test_paths = []
+
+        # paths to unmount in teardown
+        self.mounted_posix_test_paths = []
 
         # List of daos test paths to keep track of
         self.daos_test_paths = []
@@ -98,23 +124,26 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.dfuse_hosts = self.agent_managers[0].hosts
 
         # initialize daos_cmd
-        self.daos_cmd = DaosCommand(self.bin)
+        self.daos_cmd = self.get_daos_command()
 
-        # Get the processes for each explicitly
-        # This is needed because both IorTestBase and MdtestBase
-        # define self.processes
-        self.ior_processes = self.params.get(
-            "np", '/run/ior/client_processes/*')
-        self.mdtest_processes = self.params.get(
-            "np", '/run/mdtest/client_processes/*')
-        self.dcp_processes = self.params.get(
-            "np", "/run/dcp/client_processes/*", 1)
-        self.dsync_processes = self.params.get(
-            "np", "/run/dsync/client_processes/*", 1)
-        self.dserialize_processes = self.params.get(
-            "np", "/run/dserialize/client_processes/*", 1)
-        self.ddeserialize_processes = self.params.get(
-            "np", "/run/ddeserialize/client_processes/*", 1)
+        # Get the processes and np for all datamover tools, as well as for individual tools.
+        self.datamover_np = self.params.get("np", '/run/datamover/*', 1)
+        self.datamover_ppn = self.params.get("ppn", '/run/datamover/*', 1)
+        self.ior_np = self.params.get("np", '/run/ior/client_processes/*', 1)
+        self.ior_ppn = self.params.get("ppn", '/run/ior/client_processes/*', None)
+        self.mdtest_np = self.params.get("np", '/run/mdtest/client_processes/*', 1)
+        self.mdtest_ppn = self.params.get("ppn", '/run/mdtest/client_processes/*', None)
+        self.dcp_np = self.params.get("np", "/run/dcp/*", self.datamover_np)
+        self.dcp_ppn = self.params.get("ppn", "/run/dcp/*", self.datamover_ppn)
+        self.dsync_np = self.params.get("np", "/run/dsync/*", self.datamover_np)
+        self.dsync_ppn = self.params.get("ppn", "/run/dsync/*", self.datamover_ppn)
+        self.dserialize_np = self.params.get("np", "/run/dserialize/*", self.datamover_np)
+        self.dserialize_ppn = self.params.get("ppn", "/run/dserialize/*", self.datamover_ppn)
+        self.ddeserialize_np = self.params.get("np", "/run/ddeserialize/*", self.datamover_np)
+        self.ddeserialize_ppn = self.params.get("ppn", "/run/ddeserialize/*", self.datamover_ppn)
+
+        self.posix_root.update_default(self.tmp)
+        self.posix_root.get_yaml_value("posix_root", self, "/run/datamover/*")
 
         tool = self.params.get("tool", "/run/datamover/*")
         if tool:
@@ -127,15 +156,49 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             list: a list of error strings to report at the end of tearDown().
 
         """
+        # doesn't append to error list because it reports an error if all
+        # processes completed successfully (nothing to stop), but this call is
+        # necessary in the case that mpi processes are ran across multiple nodes
+        # and a timeout occurs. If this happens then cleanup on shared posix
+        # directories causes errors (because an MPI process might still have it open)
         error_list = []
-        # Remove the created directories
-        if self.posix_test_paths:
+
+        if self.job_manager:
+            self.job_manager.kill()
+
+        # cleanup mounted paths
+        if self.mounted_posix_test_paths:
+            path_list = self._get_posix_test_path_list(path_list=self.mounted_posix_test_paths)
+            for item in path_list:
+                # need to remove contents before umount
+                rm_cmd = "rm -rf {}/*".format(item)
+                try:
+                    self._execute_command(rm_cmd)
+                except CommandFailure as error:
+                    error_list.append("Error removing directory contents: {}".format(error))
+                umount_cmd = "sudo umount -f {}".format(item)
+                try:
+                    self._execute_command(umount_cmd)
+                except CommandFailure as error:
+                    error_list.append("Error umounting posix test directory: {}".format(error))
+
+        # cleanup local paths
+        if self.posix_local_test_paths:
             command = "rm -rf {}".format(self._get_posix_test_path_string())
             try:
                 self._execute_command(command)
             except CommandFailure as error:
-                error_list.append(
-                    "Error removing created directories: {}".format(error))
+                error_list.append("Error removing created directories: {}".format(error))
+
+        # cleanup shared paths (only runs on one node in job)
+        if self.posix_shared_test_paths:
+            shared_path_strs = self._get_posix_test_path_string(path=self.posix_shared_test_paths)
+            command = "rm -rf {}".format(shared_path_strs)
+            try:
+                # only call rm on one client since this is cleaning up shared dir
+                self._execute_command(command, hosts=list(self.hostlist_clients)[0:1])
+            except CommandFailure as error:
+                error_list.append("Error removing created directories: {}".format(error))
         return error_list
 
     def set_api(self, api):
@@ -163,51 +226,69 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         else:
             self.fail("Invalid tool: {}".format(_tool))
 
-    def _get_posix_test_path_list(self):
+    def _get_posix_test_path_list(self, path_list=None):
         """Get a list of quoted posix test path strings.
 
         Returns:
             list: a list of quoted posix test path strings
 
         """
-        return ["'{}'".format(item) for item in self.posix_test_paths]
+        if path_list is None:
+            path_list = self.posix_local_test_paths
 
-    def _get_posix_test_path_string(self):
+        return ["'{}'".format(item) for item in path_list]
+
+    def _get_posix_test_path_string(self, path=None):
         """Get a string of all of the quoted posix test path strings.
 
         Returns:
             str: a string of all of the quoted posix test path strings
 
         """
-        return " ".join(self._get_posix_test_path_list())
+        return " ".join(self._get_posix_test_path_list(path_list=path))
 
-    def new_posix_test_path(self, create=True, parent=None):
+    def new_posix_test_path(self, shared=False, create=True, parent=None, mount_dir_size=None):
         """Generate a new, unique posix path.
 
         Args:
+            shared (bool): Whether to create a directory shared across nodes or local.
+                Defaults to False.
             create (bool): Whether to create the directory.
                 Defaults to True.
             parent (str, optional): The parent directory to create the
-                path in. Defaults to self.tmp.
+                path in. Defaults to self.posix_root, which defaults to self.tmp.
+            mount_dir_size (str, optional): if specified, directory will be mounted in tmpfs
+                with the given size.
 
         Returns:
             str: the posix path.
 
         """
-        dir_name = "posix_test{}".format(len(self.posix_test_paths))
+        # make directory name unique to datamover test
+        method = self.get_test_name()
+        dir_name = "{}{}".format(method, len(self.posix_local_test_paths))
 
-        if parent:
-            path = join(parent, dir_name)
-        else:
-            path = join(self.tmp, dir_name)
+        path = join(parent or self.posix_root.value, dir_name)
 
         # Add to the list of posix paths
-        self.posix_test_paths.append(path)
+        if shared:
+            self.posix_shared_test_paths.append(path)
+        else:
+            self.posix_local_test_paths.append(path)
 
         if create:
             # Create the directory
-            cmd = "mkdir -p '{}'".format(path)
-            self.execute_cmd(cmd)
+            cmd = f"mkdir -p '{path}'"
+            if not run_remote(self.log, self.hostlist_clients, cmd).passed:
+                self.fail(f"Failed to mkdir {path}")
+
+        # mount small tmpfs filesystem on posix path, using size required sudo
+        # add mount_dir to mounted list for use when umounting
+        if mount_dir_size:
+            cmd = f"sudo mount -t tmpfs none '{path}' -o size={mount_dir_size}"
+            if not run_remote(self.log, self.hostlist_clients, cmd).passed:
+                self.fail(f"Failed to mount directory {path}")
+            self.mounted_posix_test_paths.append(path)
 
         return path
 
@@ -261,132 +342,37 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.fail("Invalid param_type: {}".format(_type))
         return None
 
-    def create_pool(self):
+    def create_pool(self, **params):
         """Create a TestPool object and adds to self.pool.
 
         Returns:
             TestPool: the created pool
 
         """
-        pool = self.get_pool(connect=False)
+        pool = self.get_pool(connect=False, **params)
 
-        # Save the pool and uuid
+        # Save the pool
         self.pool.append(pool)
-        self.uuids.append(str(pool.uuid))
 
         return pool
 
-    def create_cont(self, pool, use_dfuse_uns=False,
-                    dfuse_uns_pool=None, dfuse_uns_cont=None,
-                    cont_type=None):
-        # pylint: disable=arguments-differ
-        """Create a TestContainer object.
-
-        Args:
-            pool (TestPool): pool to create the container in.
-            use_dfuse_uns (bool, optional): whether to create a
-                UNS path in the dfuse mount.
-                Default is False.
-            dfuse_uns_pool (TestPool, optional): pool in the
-                dfuse mount for which to create a UNS path.
-                Default assumes dfuse is running for a specific pool.
-            dfuse_uns_cont (TestContainer, optional): container in the
-                dfuse mount for which to create a UNS path.
-                Default assumes dfuse is running for a specific container.
-            cont_type (str, optional): the container type.
-
-        Returns:
-            TestContainer: the container object
-
-        Note about uns path:
-            These are only created within a dfuse mount.
-            The full UNS path will be created as:
-            <dfuse.mount_dir>/[pool_uuid]/[cont_uuid]/<dir_name>
-            dfuse_uns_pool and dfuse_uns_cont should only be supplied
-            when dfuse was not started for a specific pool/container.
-
-        """
-        container = self.get_container(pool, create=False)
-
-        if use_dfuse_uns:
-            path = str(self.dfuse.mount_dir.value)
-            if dfuse_uns_pool:
-                path = join(path, dfuse_uns_pool.uuid)
-            if dfuse_uns_cont:
-                path = join(path, dfuse_uns_cont.uuid)
-            path = join(path, "uns{}".format(str(len(self.container))))
-            container.path.update(path)
-
-        if cont_type:
-            container.type.update(cont_type)
-
-        # Create container
-        container.create()
-
-        # Save container and uuid
-        self.container.append(container)
-        self.uuids.append(str(container.uuid))
-
-        return container
-
-    def get_cont(self, pool, cont_uuid):
-        """Get an existing container.
-
-        Args:
-            pool (TestPool): pool to open the container in.
-            cont_uuid (str): container uuid.
-
-        Returns:
-            TestContainer: the container object
-
-        """
-        # Open the container
-        # Create a TestContainer instance
-        container = TestContainer(pool, daos_command=self.get_daos_command())
-
-        # Create the underlying DaosContainer instance
-        container.container = DaosContainer(pool.context)
-        container.container.uuid = str_to_c_uuid(cont_uuid)
-        container.uuid = container.container.get_uuid_str()
-        container.container.poh = pool.pool.handle
-
-        # Save container and uuid
-        self.container.append(container)
-        self.uuids.append(str(container.uuid))
-
-        return container
-
-    def gen_uuid(self):
-        """Generate a unique uuid.
-
-        Returns:
-            str: a unique uuid
-
-        """
-        new_uuid = str(uuid.uuid4())
-        while new_uuid in self.uuids:
-            new_uuid = str(uuid.uuid4())
-        return new_uuid
-
-    def parse_create_cont_uuid(self, output):
-        """Parse a uuid from some output.
+    def parse_create_cont_label(self, output):
+        """Parse a uuid or label from create container output.
 
         Format:
-            Successfully created container (.*-.*-.*-.*-.*)
+            Successfully created container (.*)
 
         Args:
-            output (str): The string to parse for the uuid.
+            output (str): The string to parse for the uuid or label
 
         Returns:
-            str: The parsed uuid.
+            str: The parsed uuid or label
 
         """
-        uuid_search = re.search(
-            r"Successfully created container (.*-.*-.*-.*-.*)",
-            output)
-        if not uuid_search:
-            self.fail("Failed to parse container uuid")
-        return uuid_search.group(1)
+        label_search = re.search(r"Successfully created container (.*)", output)
+        if not label_search:
+            self.fail("Failed to parse container label")
+        return label_search.group(1).strip()
 
     def dataset_gen(self, cont, num_objs, num_dkeys, num_akeys_single,
                     num_akeys_array, akey_sizes, akey_extents):
@@ -418,7 +404,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             # Open the obj
             obj = DaosObj(cont.pool.context, cont.container)
             obj_list.append(obj)
-            obj.create(rank=obj_idx, objcls=2)
+            obj.create(rank=obj_idx, objcls=3)
             obj.open()
 
             ioreq = IORequest(cont.pool.context, cont.container, obj)
@@ -453,8 +439,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                     for data_idx in range(num_extents):
                         data_val = str(data_idx % 10)
                         data = data_size * data_val
-                        c_data.append([
-                            create_string_buffer(data), data_size])
+                        c_data.append([create_string_buffer(data), data_size])
                     ioreq.insert_array(c_dkey, c_akey, c_data)
 
             obj.close()
@@ -504,13 +489,12 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                     data = data_size * data_val
                     akey = "akey single {}".format(akey_idx)
                     c_akey = create_string_buffer(akey)
-                    c_data = ioreq.single_fetch(c_dkey, c_akey,
-                                                data_size + 1)
+                    c_data = ioreq.single_fetch(c_dkey, c_akey, data_size + 1)
                     actual_data = str(c_data.value.decode())
                     if actual_data != data:
                         self.log.info("Expected:\n%s\nBut got:\n%s",
-                            data[:100] + "...",
-                            actual_data[:100] + "...")
+                                      data[:100] + "...",
+                                      actual_data[:100] + "...")
                         self.log.info(
                             "For:\nobj: %s.%s\ndkey: %s\nakey: %s",
                             str(obj.c_oid.hi), str(obj.c_oid.lo),
@@ -529,106 +513,110 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                     c_akey = create_string_buffer(akey)
                     c_num_extents = ctypes.c_uint(num_extents)
                     c_data_size = ctypes.c_size_t(data_size)
-                    actual_data = ioreq.fetch_array(c_dkey, c_akey,
-                        c_num_extents, c_data_size)
+                    actual_data = ioreq.fetch_array(c_dkey, c_akey, c_num_extents, c_data_size)
                     for data_idx in range(num_extents):
                         data_val = str(data_idx % 10)
                         data = data_size * data_val
                         actual_idx = str(actual_data[data_idx].decode())
                         if data != actual_idx:
-                            self.log.info("Expected:\n%s\nBut got:\n%s",
+                            self.log.info(
+                                "Expected:\n%s\nBut got:\n%s",
                                 data[:100] + "...",
                                 actual_idx + "...")
                             self.log.info(
                                 "For:\nobj: %s.%s\ndkey: %s\nakey: %s",
-                                    str(obj.c_oid.hi), str(obj.c_oid.lo),
-                                    dkey, akey)
+                                str(obj.c_oid.hi), str(obj.c_oid.lo),
+                                dkey, akey)
                             self.fail("Array verification failed.")
 
             obj.close()
         cont.close()
 
-    def set_datamover_params(self,
-                             src_type=None, src_path=None,
-                             src_pool=None, src_cont=None,
-                             dst_type=None, dst_path=None,
-                             dst_pool=None, dst_cont=None):
+    def set_dm_params(self, src=None, dst=None, dst_pool=None):
         """Set the params for self.tool.
-        Called by run_datamover if params are passed.
 
         Args:
-            src_type (str): how to interpret the src params.
-                Must be in PARAM_TYPES.
-            src_path (str): source cont path or posix path.
-            src_pool (TestPool, optional): the source pool or uuid.
-            src_cont (TestContainer, optional): the source cont or uuid.
-            dst_type (str): how to interpret the dst params.
-                Must be in PARAM_TYPES.
-            dst_path (str): destination cont path or posix path.
-            dst_pool (TestPool, optional): the destination pool or uuid.
-            dst_cont (TestContainer, optional): the destination cont or uuid.
-
+            src (str, optional): src daos://pool/cont/[path] or POSIX path.
+                Default is None, which is ignored.
+            dst (str, optional): dst daos://pool/cont/[path] or POSIX path
+                Default is None, which is ignored.
+            dst_pool (TestPool/str, optional): dst pool or uuid. Only used with serialization.
+                Default is None, which is ignored.
         """
         if self.tool == "DCP":
-            self._set_dcp_params(src_type, src_path, src_pool, src_cont,
-                                 dst_type, dst_path, dst_pool, dst_cont)
+            self._set_dcp_params(src, dst)
         elif self.tool == "DSYNC":
-            self._set_dsync_params(src_type, src_path, src_pool, src_cont,
-                                   dst_type, dst_path, dst_pool, dst_cont)
+            self._set_dsync_params(src, dst)
         elif self.tool == "DSERIAL":
-            assert src_type in (None, "DAOS", "DAOS_UUID") #nosec
-            assert src_path is None #nosec
-            assert dst_type in (None, "DAOS", "DAOS_UUID") #nosec
-            assert dst_path is None #nosec
-            assert dst_cont is None #nosec
-            self._set_dserial_params(src_pool, src_cont, dst_pool)
+            self._set_dserial_params(src, dst_pool)
         elif self.tool == "FS_COPY":
-            self._set_fs_copy_params(src_type, src_path, src_pool, src_cont,
-                                     dst_type, dst_path, dst_pool, dst_cont)
+            self._set_fs_copy_params(src, dst)
         elif self.tool == "CONT_CLONE":
-            assert src_type in (None, "DAOS", "DAOS_UUID") # nosec
-            assert src_path is None # nosec
-            assert dst_type in (None, "DAOS", "DAOS_UUID") # nosec
-            assert dst_path is None # nosec
-            self._set_cont_clone_params(src_pool, src_cont,
-                                        dst_pool, dst_cont)
+            self._set_cont_clone_params(src, dst)
         else:
-            self.fail("Invalid tool: {}".format(str(self.tool)))
+            self.fail("Invalid tool: {}".format(self.tool))
 
-    def _set_dcp_params(self,
-                        src_type=None, src_path=None,
-                        src_pool=None, src_cont=None,
-                        dst_type=None, dst_path=None,
-                        dst_pool=None, dst_cont=None):
-        """Set the params for dcp.
-        This is a wrapper for DcpCommand.set_params.
+    def set_datamover_params(self,
+                             src_type=None, src_path=None, src_pool=None, src_cont=None,
+                             dst_type=None, dst_path=None, dst_pool=None, dst_cont=None):
+        """Set the params for self.tool.
 
-        When both src_type and dst_type are DAOS_UNS, a prefix will
-        only work for either the src or the dst, but not both.
+        Called by run_datamover if params are passed.
+
+        DEPRECATED. Use set_dm_params() instead.
 
         Args:
-            src_type (str): how to interpret the src params.
-                Must be in PARAM_TYPES.
-            src_path (str): source cont path or posix path.
-            src_pool (TestPool, optional): the source pool or uuid.
-            src_cont (TestContainer, optional): the source cont or uuid.
-            dst_type (str): how to interpret the dst params.
-                Must be in PARAM_TYPES.
-            dst_path (str): destination cont path or posix path.
-            dst_pool (TestPool, optional): the destination pool or uuid.
-            dst_cont (TestContainer, optional): the destination cont or uuid.
+            src_type (str, optional): how to interpret the src params.
+                Must be in PARAM_TYPES. Default is None.
+            src_path (str, optional): source cont path or posix path. Default is None.
+            src_pool (TestPool, optional): the source pool or uuid. Default is None.
+            src_cont (TestContainer, optional): the source cont or uuid. Default is None.
+            dst_type (str, optional): how to interpret the dst params.
+                Must be in PARAM_TYPES. Default is None.
+            dst_path (str, optional): destination cont path or posix path. Default is None.
+            dst_pool (TestPool, optional): the destination pool or uuid. Default is None.
+            dst_cont (TestContainer, optional): the destination cont or uuid. Default is None.
 
         """
-        if src_type is not None:
-            src_type = self._validate_param_type(src_type)
-        if dst_type is not None:
-            dst_type = self._validate_param_type(dst_type)
+        _src_path = None
+        _dst_path = None
 
-        if not src_type and (src_path or src_pool or src_cont):
-            self.fail("src params require src_type")
-        if not dst_type and (dst_path or dst_pool or dst_cont):
-            self.fail("dst params require dst_type")
+        if src_type == "POSIX":
+            _src_path = src_path
+        elif src_type in ("DAOS", "DAOS_UUID"):
+            _src_path = format_path(src_pool, src_cont, src_path)
+        elif src_type == "DAOS_UNS":
+            _src_path = src_cont.path.value.rstrip('/') + src_path
+        elif src_pool is not None and src_cont is not None:
+            _src_path = format_path(src_pool, src_cont, src_path)
+        elif src_cont is not None:
+            _src_path = src_cont.path.value.rstrip('/') + src_path
+        elif src_path is not None:
+            _src_path = src_path
 
+        if dst_type == "POSIX":
+            _dst_path = dst_path
+        elif dst_type in ("DAOS", "DAOS_UUID"):
+            _dst_path = format_path(dst_pool, dst_cont, dst_path)
+        elif dst_type == "DAOS_UNS":
+            _dst_path = dst_cont.path.value.rstrip('/') + dst_path
+        elif dst_pool is not None and dst_cont is not None:
+            _dst_path = format_path(dst_pool, dst_cont, dst_path)
+        elif dst_cont is not None:
+            _dst_path = dst_cont.path.value.rstrip('/') + dst_path
+        elif dst_path is not None:
+            _dst_path = dst_path
+
+        self.set_dm_params(_src_path, _dst_path, dst_pool)
+
+    def _set_dcp_params(self, src=None, dst=None):
+        """Wrapper for DcpCommand.set_params.
+
+        Args:
+            src (str): source cont path or posix path.
+            dst (str): destination cont path or posix path.
+
+        """
         # First, initialize a new dcp command
         self.dcp_cmd = DcpCommand(self.hostlist_clients, self.workdir)
         self.dcp_cmd.get_params(self)
@@ -636,62 +624,18 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         if self.api:
             self.dcp_cmd.set_params(daos_api=self.api)
 
-        # Set the source params
-        if src_type == "POSIX":
-            self.dcp_cmd.set_params(
-                src_path=str(src_path))
-        elif src_type == "DAOS_UUID":
-            self.dcp_cmd.set_params(
-                src_path=format_daos_path(src_pool, src_cont, src_path))
-        elif src_type == "DAOS_UNS":
-            if src_cont:
-                if src_path == "/":
-                    self.dcp_cmd.set_params(
-                        src_path=src_cont.path.value)
-                else:
-                    self.dcp_cmd.set_params(
-                        daos_prefix=src_cont.path.value,
-                        src_path=src_cont.path.value + src_path)
+        if src is not None:
+            self.dcp_cmd.set_params(src=src)
 
-        # Set the destination params
-        if dst_type == "POSIX":
-            self.dcp_cmd.set_params(
-                dst_path=str(dst_path))
-        elif dst_type == "DAOS_UUID":
-            self.dcp_cmd.set_params(
-                dst_path=format_daos_path(dst_pool, dst_cont, dst_path))
-        elif dst_type == "DAOS_UNS":
-            if dst_cont:
-                if dst_path == "/":
-                    self.dcp_cmd.set_params(
-                        dst_path=dst_cont.path.value)
-                else:
-                    self.dcp_cmd.set_params(
-                        daos_prefix=dst_cont.path.value,
-                        dst_path=dst_cont.path.value + dst_path)
+        if dst is not None:
+            self.dcp_cmd.set_params(dst=dst)
 
-    def _set_dsync_params(self,
-                          src_type=None, src_path=None,
-                          src_pool=None, src_cont=None,
-                          dst_type=None, dst_path=None,
-                          dst_pool=None, dst_cont=None):
-        """Set the params for dsync.
-        This is a wrapper for DsyncCommand.set_params.
-
-        When both src_type and dst_type are DAOS_UNS, a prefix will
-        only work for either the src or the dst, but not both.
+    def _set_dsync_params(self, src=None, dst=None):
+        """Wrapper for DsyncCommand.set_params.
 
         Args:
-            src_type (str): how to interpret the src params.
-                Must be in PARAM_TYPES.
-            src_path (str): source cont path or posix path.
-            src_pool (TestPool, optional): the source pool or uuid.
-            src_cont (TestContainer, optional): the source cont or uuid.
-            dst_type (str): how to interpret the dst params.
-                Must be in PARAM_TYPES.
-            dst_path (str): destination cont path or posix path.
-            dst_pool (TestPool, optional): the destination pool or uuid.
-            dst_cont (TestContainer, optional): the destination cont or uuid.
+            src (str): source cont path or posix path.
+            dst (str): destination cont path or posix path.
 
         """
         # First, initialize a new dsync command
@@ -699,175 +643,81 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.dsync_cmd.get_params(self)
 
         if self.api:
-            self.dcp_cmd.set_params(daos_api=self.api)
+            self.dsync_cmd.set_params(daos_api=self.api)
 
-        # Set the source params
-        if src_type == "POSIX":
-            self.dsync_cmd.set_params(
-                src_path=str(src_path))
-        elif src_type == "DAOS_UUID":
-            self.dsync_cmd.set_params(
-                src_path=format_daos_path(src_pool, src_cont, src_path))
-        elif src_type == "DAOS_UNS":
-            if src_cont:
-                if src_path == "/":
-                    self.dsync_cmd.set_params(
-                        src_path=src_cont.path.value)
-                else:
-                    self.dsync_cmd.set_params(
-                        daos_prefix=src_cont.path.value,
-                        src_path=src_cont.path.value + src_path)
+        if src is not None:
+            self.dsync_cmd.set_params(src=src)
 
-        # Set the destination params
-        if dst_type == "POSIX":
-            self.dsync_cmd.set_params(
-                dst_path=str(dst_path))
-        elif dst_type == "DAOS_UUID":
-            self.dsync_cmd.set_params(
-                dst_path=format_daos_path(dst_pool, dst_cont, dst_path))
-        elif dst_type == "DAOS_UNS":
-            if dst_cont:
-                if dst_path == "/":
-                    self.dsync_cmd.set_params(
-                        dst_path=dst_cont.path.value)
-                else:
-                    self.dsync_cmd.set_params(
-                        daos_prefix=dst_cont.path.value,
-                        dst_path=dst_cont.path.value + dst_path)
+        if dst is not None:
+            self.dsync_cmd.set_params(dst=dst)
 
-    def _set_fs_copy_params(self,
-                            src_type=None, src_path=None,
-                            src_pool=None, src_cont=None,
-                            dst_type=None, dst_path=None,
-                            dst_pool=None, dst_cont=None):
+    def _set_fs_copy_params(self, src=None, dst=None):
         """Set the params for fs copy.
 
-        daos fs copy does not support a "prefix" on UNS paths,
-        so the param type for DAOS_UNS must have the path "/".
-
         Args:
-            src_type (str): how to interpret the src params.
-                Must be in PARAM_TYPES.
-            src_path (str): source cont path or posix path.
-            src_pool (TestPool, optional): the source pool or uuid.
-            src_cont (TestContainer, optional): the source cont or uuid.
-            dst_type (str): how to interpret the dst params.
-                Must be in PARAM_TYPES.
-            dst_path (str): destination cont path or posix path.
-            dst_pool (TestPool, optional): the destination pool or uuid.
-            dst_cont (TestContainer, optional): the destination cont or uuid.
+            src (str): source cont path or posix path.
+            dst (str): destination cont path or posix path.
 
         """
-        if src_type is not None:
-            src_type = self._validate_param_type(src_type)
-        if dst_type is not None:
-            dst_type = self._validate_param_type(dst_type)
-
-        if not src_type and (src_path or src_pool or src_cont):
-            self.fail("src params require src_type")
-        if not dst_type and (dst_path or dst_pool or dst_cont):
-            self.fail("dst params require dst_type")
-
         # First, initialize a new fs copy command
         self.fs_copy_cmd = FsCopy(self.daos_cmd, self.log)
 
-        # Set the source params
-        if src_type == "POSIX":
-            self.fs_copy_cmd.set_fs_copy_params(
-                src=str(src_path))
-        elif src_type == "DAOS_UUID":
-            self.fs_copy_cmd.set_fs_copy_params(
-                src=format_daos_path(src_pool, src_cont, src_path))
-        elif src_type == "DAOS_UNS":
-            path = ""
-            if src_cont:
-                if src_path == "/":
-                    path = str(src_cont.path)
-                else:
-                    self.fail("daos fs copy does not support a prefix")
-            self.fs_copy_cmd.set_fs_copy_params(
-                src=path)
+        # set preserve-props path if it was used in test case
+        if self.preserve_props_path:
+            self.fs_copy_cmd.set_params(preserve_props=self.preserve_props_path)
 
-        # Set the destination params
-        if dst_type == "POSIX":
-            self.fs_copy_cmd.set_fs_copy_params(
-                dst=str(dst_path))
-        elif dst_type == "DAOS_UUID":
-            self.fs_copy_cmd.set_fs_copy_params(
-                dst=format_daos_path(dst_pool, dst_cont, dst_path))
-        elif dst_type == "DAOS_UNS":
-            path = ""
-            if dst_cont:
-                if dst_path == "/":
-                    path = str(dst_cont.path)
-                else:
-                    self.fail("daos fs copy does not support a prefix")
-            self.fs_copy_cmd.set_fs_copy_params(
-                dst=path)
+        if src is not None:
+            self.fs_copy_cmd.set_params(src=src)
 
-    def _set_cont_clone_params(self,
-                               src_pool=None, src_cont=None,
-                               dst_pool=None, dst_cont=None):
+        if dst is not None:
+            self.fs_copy_cmd.set_params(dst=dst)
+
+    def _set_cont_clone_params(self, src=None, dst=None):
         """Set the params for daos cont clone.
 
         This only supports DAOS -> DAOS copies.
 
         Args:
-            src_pool (TestPool, optional): the source pool or uuid.
-            src_cont (TestContainer, optional): the source cont or uuid.
-            dst_pool (TestPool, optional): the destination pool or uuid.
-            dst_cont (TestContainer, optional): the destination cont or uuid.
+            src (str): source cont path.
+            dst (str): destination cont path.
 
         """
-        # First, initialize a new cont copy command
+        # First, initialize a new cont clone command
         self.cont_clone_cmd = ContClone(self.daos_cmd, self.log)
 
         # Set the source params
-        if src_pool or src_cont:
-            self.cont_clone_cmd.set_cont_clone_params(
-                src=format_daos_path(src_pool, src_cont))
+        if src is not None:
+            self.cont_clone_cmd.set_params(src=src)
 
         # Set the destination params
-        if dst_pool or dst_cont:
-            self.cont_clone_cmd.set_cont_clone_params(
-                dst=format_daos_path(dst_pool, dst_cont))
+        if dst is not None:
+            self.cont_clone_cmd.set_params(dst=dst)
 
-    def _set_dserial_params(self,
-                            src_pool=None, src_cont=None,
-                            dst_pool=None):
+    def _set_dserial_params(self, src=None, dst_pool=None):
         """Set the params for daos-serialize and daos-deserialize.
 
         This uses a temporary POSIX path as the intermediate step
         between serializing and deserializing.
 
         Args:
-            src_pool (TestPool, optional): the source pool or uuid.
-            src_cont (TestContainer, optional): the source cont or uuid.
+            src (str): source cont path.
             dst_pool (TestPool, optional): the destination pool or uuid.
 
         """
         # First initialize new commands
-        self.dserialize_cmd = DserializeCommand(self.hostlist_clients,
-                                                self.workdir)
-        self.ddeserialize_cmd = DdeserializeCommand(self.hostlist_clients,
-                                                    self.workdir)
+        self.dserialize_cmd = DserializeCommand(self.hostlist_clients, self.workdir)
+        self.ddeserialize_cmd = DdeserializeCommand(self.hostlist_clients, self.workdir)
 
         # Get an intermediate path for HDF5 file(s)
-        tmp_path = self.new_posix_test_path(create=False,
-                                            parent=self.serial_tmp_dir)
+        tmp_path = self.new_posix_test_path(create=False, parent=self.serial_tmp_dir)
 
-        # Set the source params for dserialize
-        if src_pool or src_cont:
-            self.dserialize_cmd.set_params(
-                src_path=format_daos_path(src_pool, src_cont),
-                output_path=tmp_path)
+        # Set the source params for serialize
+        if src is not None:
+            self.dserialize_cmd.set_params(src=src, output_path=tmp_path)
 
-        # Set the destination params for ddeserialize
-        if dst_pool:
-            self.ddeserialize_cmd.set_params(
-                src_path=tmp_path,
-                pool=uuid_from_obj(dst_pool))
-
+        # Set the destination params for deserialize
+        if dst_pool is not None:
+            self.ddeserialize_cmd.set_params(src=tmp_path, pool=uuid_from_obj(dst_pool))
 
     def set_ior_params(self, param_type, path, pool=None, cont=None,
                        path_suffix=None, flags=None, display=True):
@@ -914,12 +764,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         elif param_type in ("DAOS_UUID", "DAOS_UNS"):
             self.ior_cmd.api.update("DFS", display_api)
             self.ior_cmd.test_file.update(path, display_test_file)
-            if pool and cont_uuid:
-                self.ior_cmd.set_daos_params(self.server_group,
-                                             pool, cont_uuid)
-            elif pool:
-                self.ior_cmd.set_daos_params(self.server_group,
-                                             pool, None)
+            if pool:
+                self.ior_cmd.set_daos_params(pool, cont_uuid or None)
 
     def run_ior_with_params(self, param_type, path, pool=None, cont=None,
                             path_suffix=None, flags=None, display=True,
@@ -938,14 +784,13 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 Defaults to False.
 
         """
-        self.set_ior_params(param_type, path, pool, cont,
-                            path_suffix, flags, display)
-        self.run_ior(self.get_ior_job_manager_command(), self.ior_processes,
-                     display_space=(display_space and bool(pool)),
-                     pool=pool)
+        self.ppn = self.ior_ppn
+        self.processes = self.ior_np
+        self.set_ior_params(param_type, path, pool, cont, path_suffix, flags, display)
+        self.run_ior(self.get_ior_job_manager_command(), self.processes, pool=pool,
+                     display_space=(display_space and bool(pool)))
 
-    def set_mdtest_params(self, param_type, path, pool=None, cont=None,
-                          flags=None, display=True):
+    def set_mdtest_params(self, param_type, path, pool=None, cont=None, flags=None, display=True):
         """Set the mdtest params.
 
         Args:
@@ -962,7 +807,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         # Reset params
         self.mdtest_cmd.api.update(None)
         self.mdtest_cmd.test_dir.update(None)
-        self.mdtest_cmd.dfs_pool_uuid.update(None)
+        self.mdtest_cmd.dfs_pool.update(None)
         self.mdtest_cmd.dfs_cont.update(None)
         self.mdtest_cmd.dfs_group.update(None)
 
@@ -982,11 +827,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             self.mdtest_cmd.api.update("DFS", display_api)
             self.mdtest_cmd.test_dir.update(path, display_test_dir)
             if pool and cont_uuid:
-                self.mdtest_cmd.set_daos_params(self.server_group,
-                                                pool, cont_uuid)
+                self.mdtest_cmd.update_params(dfs_pool=pool.identifier, dfs_cont=cont_uuid)
             elif pool:
-                self.mdtest_cmd.set_daos_params(self.server_group,
-                                                pool, None)
+                self.mdtest_cmd.update_params(dfs_pool=pool.identifier, dfs_cont=None)
 
     def run_mdtest_with_params(self, param_type, path, pool=None, cont=None,
                                flags=None, display=True):
@@ -1001,13 +844,14 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             display (bool, optional): print updated params. Defaults to True.
 
         """
+        self.ppn = self.mdtest_ppn
+        self.processes = self.mdtest_np
         self.set_mdtest_params(param_type, path, pool, cont, flags, display)
-        self.run_mdtest(self.get_mdtest_job_manager_command(self.manager),
-                        self.mdtest_processes,
+        self.run_mdtest(self.get_mdtest_job_manager_command(self.manager), self.processes,
                         display_space=(bool(pool)), pool=pool)
 
     def run_diff(self, src, dst, deref=False):
-        """Run linux diff command.
+        """Run Linux diff command.
 
         Args:
             src (str): the source path
@@ -1026,13 +870,12 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
     # pylint: disable=too-many-arguments
     def run_datamover(self, test_desc=None,
-                      src_type=None, src_path=None,
-                      src_pool=None, src_cont=None,
-                      dst_type=None, dst_path=None,
-                      dst_pool=None, dst_cont=None,
+                      src_type=None, src_path=None, src_pool=None, src_cont=None,
+                      dst_type=None, dst_path=None, dst_pool=None, dst_cont=None,
                       expected_rc=0, expected_output=None, expected_err=None,
                       processes=None):
         """Run the corresponding command specified by self.tool.
+
         Calls set_datamover_params if and only if any are passed in.
 
         Args:
@@ -1048,7 +891,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             expected_output (list, optional): substrings expected in stdout
             expected_err (list, optional): substrings expected in stderr
             processes (int, optional): number of mpi processes.
-                defaults to self.dcp_processes
+                Defaults to np for corresponding tool.
 
         Returns:
             The result "run" object
@@ -1081,29 +924,45 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         if test_desc is not None:
             self.log.info("Running %s: %s", self.tool, test_desc)
 
+        env = EnvironmentVariables.from_list(
+            self.params.get("env_vars", "/run/{}/*".format(self.tool.lower()), []))
+        if "D_LOG_FILE" not in env:
+            env["D_LOG_FILE"] = get_log_file("{}.log".format(self.tool.lower()))
+
+        ppn = None
+        result = None
         try:
             if self.tool == "DCP":
                 if not processes:
-                    processes = self.dcp_processes
+                    processes = self.dcp_np
+                    ppn = self.dcp_ppn
                 # If we expect an rc other than 0, don't fail
-                self.dcp_cmd.exit_status_exception = (expected_rc == 0)
-                result = self.dcp_cmd.run(processes)
+                self.dcp_cmd.exit_status_exception = expected_rc == 0
+                result = self.dcp_cmd.run(processes, self.job_manager, ppn, env)
             elif self.tool == "DSYNC":
                 if not processes:
-                    processes = self.dsync_processes
+                    processes = self.dsync_np
+                    ppn = self.dsync_ppn
                 # If we expect an rc other than 0, don't fail
-                self.dsync_cmd.exit_status_exception = (expected_rc == 0)
-                result = self.dsync_cmd.run(processes)
-            elif self.tool== "DSERIAL":
+                self.dsync_cmd.exit_status_exception = expected_rc == 0
+                result = self.dsync_cmd.run(processes, self.job_manager, ppn, env)
+            elif self.tool == "DSERIAL":
                 if processes:
                     processes1 = processes2 = processes
+                    ppn1 = ppn2 = None
                 else:
-                    processes1 = self.dserialize_processes
-                    processes2 = self.ddeserialize_processes
-                result = self.dserialize_cmd.run(processes1)
-                result = self.ddeserialize_cmd.run(processes2)
+                    processes1 = self.dserialize_np
+                    ppn1 = self.dserialize_ppn
+                    processes2 = self.ddeserialize_np
+                    ppn2 = self.ddeserialize_ppn
+                result = self.dserialize_cmd.run(processes1, self.job_manager, ppn1, env)
+                result = self.ddeserialize_cmd.run(processes2, self.job_manager, ppn2, env)
             elif self.tool == "FS_COPY":
-                result = self.fs_copy_cmd.run()
+                if expected_rc != 0:
+                    with self.daos_cmd.no_exception():
+                        result = self.fs_copy_cmd.run()
+                else:
+                    result = self.fs_copy_cmd.run()
             elif self.tool == "CONT_CLONE":
                 result = self.cont_clone_cmd.run()
             else:
@@ -1114,17 +973,108 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 test_desc))
 
         # Check the return code
+        assert result is not None
         actual_rc = result.exit_status
         if actual_rc != expected_rc:
             self.fail("Expected (rc={}) but got (rc={}): {}\n".format(
                 expected_rc, actual_rc, test_desc))
 
         # Check for expected output
-        for s in expected_output:
-            if s not in result.stdout_text:
-                self.fail("stdout expected {}: {}".format(s, test_desc))
-        for s in expected_err:
-            if s not in result.stderr_text:
-                self.fail("stderr expected {}: {}".format(s, test_desc))
+        for expected in expected_output:
+            if expected not in result.stdout_text:
+                self.fail("stdout expected {}: {}".format(expected, test_desc))
+        for expected in expected_err:
+            if expected not in result.stderr_text:
+                self.fail("stderr expected {}: {}".format(expected, test_desc))
 
         return result
+
+    def run_dm_activities_with_ior(self, tool, pool, cont, create_dataset=False):
+        """Generic method to perform various datamover activities using ior
+
+        Args:
+            tool (str): specify the tool name to be used
+            pool (TestPool): source pool object
+            cont (TestContainer): source container object
+            create_dataset (bool, optional): boolean to create initial set of data using ior.
+                Defaults to False.
+        """
+        # Set the tool to use
+        self.set_tool(tool)
+
+        if create_dataset:
+            # create initial data-sets with ior
+            self.run_ior_with_params("DAOS", self.ior_cmd.test_file.value, pool, cont)
+
+        # create cont2
+        cont2 = self.get_container(pool, oclass=self.ior_cmd.dfs_oclass.value)
+
+        # perform various datamover activities
+        daos_path = None
+        read_back_cont = None
+        read_back_pool = None
+        if tool == 'CONT_CLONE':
+            result = self.run_datamover(
+                self.test_id + " (cont to cont2)",
+                src_path=format_path(pool, cont),
+                dst_path=format_path(pool))
+            read_back_cont = self.parse_create_cont_label(result.stdout_text)
+            read_back_pool = pool
+        elif tool == 'DSERIAL':
+            # Create pool2
+            pool2 = self.get_pool()
+            # Use dfuse as a shared intermediate for serialize + deserialize
+            dfuse_cont = self.get_container(pool, oclass=self.ior_cmd.dfs_oclass.value)
+            self.dfuse = get_dfuse(self, self.dfuse_hosts)
+            start_dfuse(self, self.dfuse, pool, dfuse_cont)
+            self.serial_tmp_dir = self.dfuse.mount_dir.value
+
+            # Serialize/Deserialize container 1 to a new cont2 in pool2
+            result = self.run_datamover(
+                self.test_id + " (cont->HDF5->cont2)",
+                src_path=format_path(pool, cont),
+                dst_pool=pool2)
+
+            # Get the destination cont2 uuid
+            read_back_cont = self.parse_create_cont_label(result.stdout_text)
+            read_back_pool = pool2
+        elif tool in ['FS_COPY', 'DCP']:
+            # copy from daos cont to cont2
+            self.run_datamover(
+                self.test_id + " (cont to cont2)",
+                src_path=format_path(pool, cont),
+                dst_path=format_path(pool, cont2))
+        else:
+            self.fail("Invalid tool: {}".format(tool))
+
+        # move data from daos to posix FS and vice versa
+        if tool in ['FS_COPY', 'DCP']:
+            posix_path = self.new_posix_test_path(shared=True)
+            # copy from daos cont2 to posix file system
+            self.run_datamover(
+                self.test_id + " (cont2 to posix)",
+                src_path=format_path(pool, cont2),
+                dst_path=posix_path)
+
+            # create cont3
+            cont3 = self.get_container(pool, oclass=self.ior_cmd.dfs_oclass.value)
+
+            # copy from posix file system to daos cont3
+            self.run_datamover(
+                self.test_id + " (posix to cont3)",
+                src_path=posix_path,
+                dst_path=format_path(pool, cont3))
+            read_back_cont = cont3
+            read_back_pool = pool
+        test_file = os.path.basename(self.ior_cmd.test_file.value)
+        if tool in ['FS_COPY', 'DCP']:
+            # the result is that a NEW directory is created in the destination
+            daos_path = os.path.join(os.sep, os.path.basename(posix_path), test_file)
+        elif tool in ['CONT_CLONE', 'DSERIAL']:
+            daos_path = os.path.join(os.sep, test_file)
+        else:
+            self.fail("Invalid tool: {}".format(tool))
+        # update ior params, read back and verify data from cont3
+        self.run_ior_with_params(
+            "DAOS", daos_path, read_back_pool, read_back_cont,
+            flags="-r -R -F -k")

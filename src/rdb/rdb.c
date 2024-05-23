@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,35 +17,41 @@
 #include "rdb_internal.h"
 #include "rdb_layout.h"
 
-static int rdb_start_internal(daos_handle_t pool, daos_handle_t mc,
-			      const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
-			      struct rdb **dbp);
+static int rdb_open_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid,
+			     uint64_t caller_term, struct rdb_cbs *cbs, void *arg,
+			     struct rdb **dbp);
 
 /**
- * Create an RDB replica at \a path with \a uuid, \a size, and \a replicas, and
- * start it with \a cbs and \a arg.
+ * Create an RDB replica at \a path with \a uuid, \a caller_term, \a size,
+ * \a vos_df_version, and \a replicas, and open it with \a cbs and \a arg.
  *
  * \param[in]	path		replica path
  * \param[in]	uuid		database UUID
+ * \param[in]	caller_term	caller term if not RDB_NIL_TERM (see rdb_open)
  * \param[in]	size		replica size in bytes
+ * \param[in]	vos_df_version	version of VOS durable format
  * \param[in]	replicas	list of replica ranks
  * \param[in]	cbs		callbacks (not copied)
  * \param[in]	arg		argument for cbs
- * \param[out]	dbp		database
+ * \param[out]	storagep	database storage
  */
 int
-rdb_create(const char *path, const uuid_t uuid, size_t size,
-	   const d_rank_list_t *replicas, struct rdb_cbs *cbs, void *arg,
-	   struct rdb **dbp)
+rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t size,
+	   uint32_t vos_df_version, const d_rank_list_t *replicas, struct rdb_cbs *cbs, void *arg,
+	   struct rdb_storage **storagep)
 {
 	daos_handle_t	pool;
 	daos_handle_t	mc;
 	d_iov_t		value;
 	uint32_t	version = RDB_LAYOUT_VERSION;
+	struct rdb     *db;
 	int		rc;
 
-	D_DEBUG(DB_MD, DF_UUID": creating db %s with %u replicas\n",
-		DP_UUID(uuid), path, replicas == NULL ? 0 : replicas->rl_nr);
+	D_DEBUG(DB_MD,
+		DF_UUID ": creating db %s with %u replicas: caller_term=" DF_X64 " size=" DF_U64
+			" vos_df_version=%u\n",
+		DP_UUID(uuid), path, replicas == NULL ? 0 : replicas->rl_nr, caller_term, size,
+		vos_df_version);
 
 	/*
 	 * Create and open a VOS pool. RDB pools specify VOS_POF_SMALL for
@@ -53,7 +59,7 @@ rdb_create(const char *path, const uuid_t uuid, size_t size,
 	 * access protection.
 	 */
 	rc = vos_pool_create(path, (unsigned char *)uuid, size, 0 /* nvme_sz */,
-			     VOS_POF_SMALL | VOS_POF_EXCL, &pool);
+			     VOS_POF_SMALL | VOS_POF_EXCL | VOS_POF_RDB, vos_df_version, &pool);
 	if (rc != 0)
 		goto out;
 	ABT_thread_yield();
@@ -68,8 +74,7 @@ rdb_create(const char *path, const uuid_t uuid, size_t size,
 
 	/* Initialize the layout version. */
 	d_iov_set(&value, &version, sizeof(version));
-	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_version,
-			   &value);
+	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_version, &value, NULL /* vtx */);
 	if (rc != 0)
 		goto out_mc_hdl;
 
@@ -83,12 +88,17 @@ rdb_create(const char *path, const uuid_t uuid, size_t size,
 	 * rdb_start() checks this attribute when starting a DB.
 	 */
 	d_iov_set(&value, (void *)uuid, sizeof(uuid_t));
-	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_uuid, &value);
+	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_uuid, &value, NULL /* vtx */);
 	if (rc != 0)
 		goto out_mc_hdl;
 
-	rc = rdb_start_internal(pool, mc, uuid, cbs, arg, dbp);
+	rc = rdb_open_internal(pool, mc, uuid, caller_term, cbs, arg, &db);
+	if (rc != 0)
+		goto out_mc_hdl;
 
+	db->d_new = true;
+
+	*storagep = rdb_to_storage(db);
 out_mc_hdl:
 	if (rc != 0)
 		vos_cont_close(mc);
@@ -97,7 +107,7 @@ out_pool_hdl:
 		int rc_tmp;
 
 		vos_pool_close(pool);
-		rc_tmp = vos_pool_destroy(path, (unsigned char *)uuid);
+		rc_tmp = vos_pool_destroy_ex(path, (unsigned char *)uuid, VOS_POF_RDB);
 		if (rc_tmp != 0)
 			D_ERROR(DF_UUID": failed to destroy %s: %d\n",
 				DP_UUID(uuid), path, rc_tmp);
@@ -117,7 +127,7 @@ rdb_destroy(const char *path, const uuid_t uuid)
 {
 	int rc;
 
-	rc = vos_pool_destroy(path, (unsigned char *)uuid);
+	rc = vos_pool_destroy_ex(path, (unsigned char *)uuid, VOS_POF_RDB);
 	if (rc != 0)
 		D_ERROR(DF_UUID": failed to destroy %s: "DF_RC"\n",
 			DP_UUID(uuid), path, DP_RC(rc));
@@ -217,20 +227,23 @@ rdb_lookup(const uuid_t uuid)
 	return rdb_obj(entry);
 }
 
+static int rdb_chkptd_start(struct rdb *db);
+static void rdb_chkptd_stop(struct rdb *db);
+
 /*
  * If created successfully, the new DB handle will consume pool and mc, which
  * the caller shall not close in this case.
  */
 static int
-rdb_start_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid,
-		   struct rdb_cbs *cbs, void *arg, struct rdb **dbp)
+rdb_open_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid, uint64_t caller_term,
+		  struct rdb_cbs *cbs, void *arg, struct rdb **dbp)
 {
 	struct rdb	       *db;
 	int			rc;
 	struct vos_pool_space	vps;
 	uint64_t		rdb_extra_sys[DAOS_MEDIA_MAX];
 
-	D_ASSERT(cbs->dc_stop != NULL);
+	D_ASSERT(cbs == NULL || cbs->dc_stop != NULL);
 
 	D_ALLOC_PTR(db);
 	if (db == NULL) {
@@ -269,9 +282,13 @@ rdb_start_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid,
 		goto err_raft_mutex;
 	}
 
-	rc = rdb_kvs_cache_create(&db->d_kvss);
+	rc = rdb_chkptd_start(db);
 	if (rc != 0)
 		goto err_ref_cv;
+
+	rc = rdb_kvs_cache_create(&db->d_kvss);
+	if (rc != 0)
+		goto err_chkptd;
 
 	/* metadata vos pool management: reserved memory:
 	 * vos sets aside a portion of a pool for system activity:
@@ -307,27 +324,19 @@ rdb_start_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid,
 		SCM_TOTAL(&vps), SCM_FREE(&vps), SCM_SYS(&vps),
 		rdb_extra_sys[DAOS_MEDIA_SCM]);
 
-	rc = rdb_raft_start(db);
+	db->d_nospc_ts = daos_getutime();
+
+	rc = rdb_raft_open(db, caller_term);
 	if (rc != 0)
 		goto err_kvss;
-
-	ABT_mutex_lock(rdb_hash_lock);
-	rc = d_hash_rec_insert(&rdb_hash, db->d_uuid, sizeof(uuid_t),
-			       &db->d_entry, true /* exclusive */);
-	ABT_mutex_unlock(rdb_hash_lock);
-	if (rc != 0) {
-		/* We have the PMDK pool open. */
-		D_ASSERT(rc != -DER_EXIST);
-		goto err_raft;
-	}
 
 	*dbp = db;
 	return 0;
 
-err_raft:
-	rdb_raft_stop(db);
 err_kvss:
 	rdb_kvs_cache_destroy(db->d_kvss);
+err_chkptd:
+	rdb_chkptd_stop(db);
 err_ref_cv:
 	ABT_cond_free(&db->d_ref_cv);
 err_raft_mutex:
@@ -341,34 +350,51 @@ err:
 }
 
 /**
- * Start an RDB replica at \a path.
+ * Open an RDB replica at \a path.
  *
- * \param[in]	path	replica path
- * \param[in]	uuid	database UUID
- * \param[in]	cbs	callbacks (not copied)
- * \param[in]	arg	argument for cbs
- * \param[out]	dbp	database
+ * If \a caller_term is not RDB_NIL_TERM, it shall be the term of the leader
+ * (of the same RDB) who is calling this function (usually via an RPC). This is
+ * used to perform the Raft term check/update so that an older leader doesn't
+ * interrupt with a newer leader.
+ *
+ * \param[in]	path		replica path
+ * \param[in]	uuid		database UUID
+ * \param[in]	caller_term	caller term if not RDB_NIL_TERM
+ * \param[in]	cbs		callbacks (not copied)
+ * \param[in]	arg		argument for cbs
+ * \param[out]	storagep	database storage
+ *
+ * \retval	-DER_STALE	\a caller_term < the current term
  */
 int
-rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
-	  struct rdb **dbp)
+rdb_open(const char *path, const uuid_t uuid, uint64_t caller_term, struct rdb_cbs *cbs, void *arg,
+	 struct rdb_storage **storagep)
 {
-	daos_handle_t		pool;
-	daos_handle_t		mc;
-	d_iov_t			value;
-	uuid_t			uuid_persist;
-	uint32_t		version;
-	int			rc;
+	daos_handle_t	pool;
+	daos_handle_t	mc;
+	d_iov_t		value;
+	uuid_t		uuid_persist;
+	uint32_t	version;
+	struct rdb     *db;
+	int		rc;
 
-	D_INFO(DF_UUID": starting RDB %s\n", DP_UUID(uuid), path);
+	D_DEBUG(DB_MD, DF_UUID": opening db %s: caller_term="DF_X64"\n", DP_UUID(uuid), path,
+		caller_term);
 
 	/*
 	 * RDB pools specify VOS_POF_SMALL for basic system memory reservation
 	 * and VOS_POF_EXCL for concurrent access protection.
 	 */
 	rc = vos_pool_open(path, (unsigned char *)uuid,
-			   VOS_POF_SMALL | VOS_POF_EXCL, &pool);
-	if (rc != 0) {
+			   VOS_POF_SMALL | VOS_POF_EXCL | VOS_POF_RDB, &pool);
+	if (rc == -DER_ID_MISMATCH) {
+		ds_notify_ras_eventf(RAS_RDB_DF_INCOMPAT, RAS_TYPE_INFO, RAS_SEV_ERROR,
+				     NULL /* hwid */, NULL /* rank */, NULL /* inc */,
+				     NULL /* jobid */, NULL /* pool */, NULL /* cont */,
+				     NULL /* objid */, NULL /* ctlop */, NULL /* data */,
+				     "%s: incompatible DB UUID: "DF_UUIDF"\n", path, DP_UUID(uuid));
+		goto err;
+	} else if (rc != 0) {
 		D_ERROR(DF_UUID": failed to open %s: "DF_RC"\n", DP_UUID(uuid),
 			path, DP_RC(rc));
 		goto err;
@@ -399,12 +425,10 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 	d_iov_set(&value, &version, sizeof(version));
 	rc = rdb_mc_lookup(mc, RDB_MC_ATTRS, &rdb_mc_version, &value);
 	if (rc == -DER_NONEXIST) {
-		ds_notify_ras_eventf(RAS_RDB_DF_INCOMPAT, RAS_TYPE_INFO,
-				     RAS_SEV_ERROR, NULL /* hwid */,
-				     NULL /* rank */, NULL /* jobid */,
-				     NULL /* pool */, NULL /* cont */,
-				     NULL /* objid */, NULL /* ctlop */,
-				     NULL /* data */,
+		ds_notify_ras_eventf(RAS_RDB_DF_INCOMPAT, RAS_TYPE_INFO, RAS_SEV_ERROR,
+				     NULL /* hwid */, NULL /* rank */, NULL /* inc */,
+				     NULL /* jobid */, NULL /* pool */, NULL /* cont */,
+				     NULL /* objid */, NULL /* ctlop */, NULL /* data */,
 				     DF_UUID": %s: incompatible layout version",
 				     DP_UUID(uuid), path);
 		rc = -DER_DF_INCOMPT;
@@ -415,27 +439,23 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 		goto err_mc;
 	}
 	if (version < RDB_LAYOUT_VERSION_LOW || version > RDB_LAYOUT_VERSION) {
-		ds_notify_ras_eventf(RAS_RDB_DF_INCOMPAT, RAS_TYPE_INFO,
-				     RAS_SEV_ERROR, NULL /* hwid */,
-				     NULL /* rank */, NULL /* jobid */,
-				     NULL /* pool */, NULL /* cont */,
-				     NULL /* objid */, NULL /* ctlop */,
-				     NULL /* data */,
-				     DF_UUID": %s: incompatible layout version:"
-				     " %u not in [%u, %u]", DP_UUID(uuid), path,
-				     version, RDB_LAYOUT_VERSION_LOW,
+		ds_notify_ras_eventf(RAS_RDB_DF_INCOMPAT, RAS_TYPE_INFO, RAS_SEV_ERROR,
+				     NULL /* hwid */, NULL /* rank */, NULL /* inc */,
+				     NULL /* jobid */, NULL /* pool */, NULL /* cont */,
+				     NULL /* objid */, NULL /* ctlop */, NULL /* data */,
+				     DF_UUID": %s: incompatible layout version: %u not in [%u, %u]",
+				     DP_UUID(uuid), path, version, RDB_LAYOUT_VERSION_LOW,
 				     RDB_LAYOUT_VERSION);
 		rc = -DER_DF_INCOMPT;
 		goto err_mc;
 	}
 
-	rc = rdb_start_internal(pool, mc, uuid, cbs, arg, dbp);
+	rc = rdb_open_internal(pool, mc, uuid, caller_term, cbs, arg, &db);
 	if (rc != 0)
 		goto err_mc;
 
-	D_DEBUG(DB_MD, DF_DB": started db %s %p with %u replicas\n",
-		DP_DB(*dbp), path, *dbp,
-		(*dbp)->d_replicas == NULL ? 0 : (*dbp)->d_replicas->rl_nr);
+	D_DEBUG(DB_MD, DF_DB": opened db %s %p\n", DP_DB(db), path, db);
+	*storagep = rdb_to_storage(db);
 	return 0;
 
 err_mc:
@@ -447,50 +467,262 @@ err:
 }
 
 /**
- * Stop an RDB replica \a db. All TXs in \a db must be either ended already or
- * blocking only in rdb.
+ * Close \a storage.
  *
- * \param[in]	db	database
+ * \param[in]	storage	database storage
  */
 void
-rdb_stop(struct rdb *db)
+rdb_close(struct rdb_storage *storage)
 {
-	bool deleted;
+	struct rdb *db = rdb_from_storage(storage);
 
-	if (db == NULL) {
-		D_ERROR("db is NULL\n");
-		return;
-	}
-
-	D_DEBUG(DB_MD, DF_DB": stopping db %p\n", DP_DB(db), db);
-	ABT_mutex_lock(rdb_hash_lock);
-	deleted = d_hash_rec_delete(&rdb_hash, db->d_uuid, sizeof(uuid_t));
-	ABT_mutex_unlock(rdb_hash_lock);
-	D_ASSERT(deleted);
-	rdb_raft_stop(db);
+	D_ASSERTF(db->d_ref == 1, "d_ref %d == 1\n", db->d_ref);
+	rdb_raft_close(db);
+	rdb_chkptd_stop(db);
 	vos_cont_close(db->d_mc);
 	vos_pool_close(db->d_pool);
 	rdb_kvs_cache_destroy(db->d_kvss);
 	ABT_cond_free(&db->d_ref_cv);
 	ABT_mutex_free(&db->d_raft_mutex);
 	ABT_mutex_free(&db->d_mutex);
-	D_DEBUG(DB_MD, DF_DB": stopped db %p\n", DP_DB(db), db);
+	D_DEBUG(DB_MD, DF_DB": closed db %p\n", DP_DB(db), db);
 	D_FREE(db);
 }
 
+static bool
+rdb_get_use_leases(void)
+{
+	char   *name = "RDB_USE_LEASES";
+	bool	value = true;
+
+	d_getenv_bool(name, &value);
+	return value;
+}
+
+/**
+ * Glance at \a storage and return \a clue. Callers are responsible for freeing
+ * \a clue->bcl_replicas with d_rank_list_free.
+ *
+ * \param[in]	storage	database storage
+ * \param[out]	clue	database clue
+ */
+int
+rdb_glance(struct rdb_storage *storage, struct rdb_clue *clue)
+{
+	struct rdb	       *db = rdb_from_storage(storage);
+	d_iov_t			value;
+	uint64_t		term;
+	int			vote;
+	uint64_t		last_index = db->d_lc_record.dlr_tail - 1;
+	uint64_t		last_term;
+	d_rank_list_t	       *replicas;
+	uint64_t		oid_next;
+	int			rc;
+
+	d_iov_set(&value, &term, sizeof(term));
+	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_term, &value);
+	if (rc == -DER_NONEXIST) {
+		term = 0;
+	} else if (rc != 0) {
+		D_ERROR(DF_DB": failed to look up term: "DF_RC"\n", DP_DB(db), DP_RC(rc));
+		goto err;
+	}
+
+	d_iov_set(&value, &vote, sizeof(vote));
+	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_vote, &value);
+	if (rc == -DER_NONEXIST) {
+		vote = -1;
+	} else if (rc != 0) {
+		D_ERROR(DF_DB": failed to look up vote: "DF_RC"\n", DP_DB(db), DP_RC(rc));
+		goto err;
+	}
+
+	if (last_index == db->d_lc_record.dlr_base) {
+		last_term = db->d_lc_record.dlr_base_term;
+	} else {
+		struct rdb_entry header;
+
+		d_iov_set(&value, &header, sizeof(header));
+		rc = rdb_lc_lookup(db->d_lc, last_index, RDB_LC_ATTRS, &rdb_lc_entry_header,
+				   &value);
+		if (rc != 0) {
+			D_ERROR(DF_DB": failed to look up entry "DF_U64" header: %d\n", DP_DB(db),
+				last_index, rc);
+			goto err;
+		}
+		last_term = header.dre_term;
+	}
+
+	rc = rdb_raft_load_replicas(db->d_lc, last_index, &replicas);
+	if (rc != 0) {
+		D_ERROR(DF_DB": failed to load replicas at "DF_U64": "DF_RC"\n", DP_DB(db),
+			last_index, DP_RC(rc));
+		goto err;
+	}
+
+	d_iov_set(&value, &oid_next, sizeof(oid_next));
+	rc = rdb_lc_lookup(db->d_lc, last_index, RDB_LC_ATTRS, &rdb_lc_oid_next, &value);
+	if (rc == -DER_NONEXIST) {
+		oid_next = RDB_LC_OID_NEXT_INIT;
+	} else if (rc != 0) {
+		D_ERROR(DF_DB": failed to look up next object number: %d\n", DP_DB(db), rc);
+		goto err_replicas;
+	}
+
+	clue->bcl_term = term;
+	clue->bcl_vote = vote;
+	/*
+	 * In the future, the self node ID might differ from the rank and need
+	 * to be stored persistently.
+	 */
+	clue->bcl_self = dss_self_rank();
+	clue->bcl_last_index = last_index;
+	clue->bcl_last_term = last_term;
+	clue->bcl_base_index = db->d_lc_record.dlr_base;
+	clue->bcl_base_term = db->d_lc_record.dlr_base_term;
+	clue->bcl_replicas = replicas;
+	clue->bcl_oid_next = oid_next;
+	return 0;
+
+err_replicas:
+	d_rank_list_free(replicas);
+err:
+	return rc;
+}
+
+/**
+ * Start \a storage, converting \a storage into \a dbp. If this is successful,
+ * the caller must stop using \a storage; otherwise, the caller remains
+ * responsible for closing \a storage.
+ *
+ * \param[in]	storage	database storage
+ * \param[out]	dbp	database
+ */
+int
+rdb_start(struct rdb_storage *storage, struct rdb **dbp)
+{
+	struct rdb     *db = rdb_from_storage(storage);
+	int		rc;
+
+	rc = rdb_raft_start(db);
+	if (rc != 0)
+		return rc;
+
+	ABT_mutex_lock(rdb_hash_lock);
+	rc = d_hash_rec_insert(&rdb_hash, db->d_uuid, sizeof(uuid_t), &db->d_entry,
+			       true /* exclusive */);
+	ABT_mutex_unlock(rdb_hash_lock);
+	if (rc != 0) {
+		/* We have the PMDK pool open. */
+		D_ASSERT(rc != -DER_EXIST);
+		rdb_raft_stop(db);
+		return rc;
+	}
+
+	db->d_use_leases = rdb_get_use_leases();
+
+	D_DEBUG(DB_MD, DF_DB": started db %p: use_leases=%d\n", DP_DB(db), db, db->d_use_leases);
+	*dbp = db;
+	return 0;
+}
+
+/**
+ * Stop \a db, converting \a db into \a storagep. All TXs in \a db must be
+ * either ended already or blocking only in rdb.
+ *
+ * \param[in]	db		database
+ * \param[out]	storagep	database storage
+ */
+void
+rdb_stop(struct rdb *db, struct rdb_storage **storagep)
+{
+	bool deleted;
+
+	D_DEBUG(DB_MD, DF_DB": stopping db %p\n", DP_DB(db), db);
+
+	ABT_mutex_lock(rdb_hash_lock);
+	deleted = d_hash_rec_delete(&rdb_hash, db->d_uuid, sizeof(uuid_t));
+	ABT_mutex_unlock(rdb_hash_lock);
+	D_ASSERT(deleted);
+
+	rdb_raft_stop(db);
+
+	D_DEBUG(DB_MD, DF_DB": stopped db %p\n", DP_DB(db), db);
+	*storagep = rdb_to_storage(db);
+}
+
+/**
+ * Stop and close \a db. All TXs in \a db must be either ended already or
+ * blocking only in rdb.
+ *
+ * \param[in]	db	database
+ */
+void
+rdb_stop_and_close(struct rdb *db)
+{
+	struct rdb_storage *storage;
+
+	rdb_stop(db, &storage);
+	rdb_close(storage);
+}
+
+/**
+ * Forcefully removing all other replicas from the membership. Callers must
+ * destroy all other replicas (or prevent them from starting) beforehand.
+ *
+ * This API is for catastrophic recovery scenarios, for instance, when more
+ * than a minority of replicas are lost.
+ *
+ *   1 Choose the best replica to recover from (see ds_pool_check_svc_clues).
+ *   2 Destroy all other replicas (or prevent them from starting).
+ *   3 Call rdb_open and rdb_dictate on the chosen replica.
+ *
+ * \param[in]	storage		database storage
+ */
+int
+rdb_dictate(struct rdb_storage *storage)
+{
+	struct rdb *db = rdb_from_storage(storage);
+
+	return rdb_raft_dictate(db);
+}
+
+/**
+ * Add \a replicas.
+ *
+ * \param[in]	db		database
+ * \param[in,out]
+ *		replicas	[in] list of replica ranks;
+ *				[out] list of replica ranks that could not be added
+ */
 int
 rdb_add_replicas(struct rdb *db, d_rank_list_t *replicas)
 {
-	int i;
-	int rc = -DER_INVAL;
+	int	i;
+	int	rc;
 
 	D_DEBUG(DB_MD, DF_DB": Adding %d replicas\n",
 		DP_DB(db), replicas->rl_nr);
+
+	ABT_mutex_lock(db->d_raft_mutex);
+
+	rc = rdb_raft_wait_applied(db, db->d_debut, raft_get_current_term(db->d_raft));
+	if (rc != 0) {
+		ABT_mutex_unlock(db->d_raft_mutex);
+		return rc;
+	}
+
+	rc = -DER_INVAL;
 	for (i = 0; i < replicas->rl_nr; ++i) {
 		rc = rdb_raft_add_replica(db, replicas->rl_ranks[i]);
-		if (rc != 0)
+		if (rc != 0) {
+			D_ERROR(DF_DB": failed to add rank %u: "DF_RC"\n", DP_DB(db),
+				replicas->rl_ranks[i], DP_RC(rc));
 			break;
+		}
 	}
+
+	ABT_mutex_unlock(db->d_raft_mutex);
 
 	/* Update list to only contain ranks which could not be added. */
 	replicas->rl_nr -= i;
@@ -500,19 +732,42 @@ rdb_add_replicas(struct rdb *db, d_rank_list_t *replicas)
 	return rc;
 }
 
+/**
+ * Remove \a replicas.
+ *
+ * \param[in]	db		database
+ * \param[in,out]
+ *		replicas	[in] list of replica ranks;
+ *				[out] list of replica ranks that could not be removed
+ */
 int
 rdb_remove_replicas(struct rdb *db, d_rank_list_t *replicas)
 {
-	int i;
-	int rc = -DER_INVAL;
+	int	i;
+	int	rc;
 
 	D_DEBUG(DB_MD, DF_DB": Removing %d replicas\n",
 		DP_DB(db), replicas->rl_nr);
+
+	ABT_mutex_lock(db->d_raft_mutex);
+
+	rc = rdb_raft_wait_applied(db, db->d_debut, raft_get_current_term(db->d_raft));
+	if (rc != 0) {
+		ABT_mutex_unlock(db->d_raft_mutex);
+		return rc;
+	}
+
+	rc = -DER_INVAL;
 	for (i = 0; i < replicas->rl_nr; ++i) {
 		rc = rdb_raft_remove_replica(db, replicas->rl_ranks[i]);
-		if (rc != 0)
+		if (rc != 0) {
+			D_ERROR(DF_DB": failed to remove rank %u: "DF_RC"\n", DP_DB(db),
+				replicas->rl_ranks[i], DP_RC(rc));
 			break;
+		}
 	}
+
+	ABT_mutex_unlock(db->d_raft_mutex);
 
 	/* Update list to only contain ranks which could not be removed. */
 	replicas->rl_nr -= i;
@@ -538,12 +793,32 @@ rdb_resign(struct rdb *db, uint64_t term)
 }
 
 /**
- * Call for a new election (campaign to become leader).
+ * Call a new election (campaign to become leader). Must be a voting replica.
+ *
+ * \param[in]	db	database
+ *
+ * \retval -DER_NO_PERM	not a voting replica or might violate a lease
  */
 int
 rdb_campaign(struct rdb *db)
 {
 	return rdb_raft_campaign(db);
+}
+
+/**
+ * Simulate a ping (i.e., an empty AE) from the leader of \a caller_term to \a
+ * db. This essentially checks if \a caller_term is stale, and if not, update
+ * the current term. See also rdb_open.
+ *
+ * \param[in]	db		database
+ * \param[in]	caller_term	caller term
+ *
+ * \retval -DER_STALE	\a caller_term < the current term
+ */
+int
+rdb_ping(struct rdb *db, uint64_t caller_term)
+{
+	return rdb_raft_ping(db, caller_term);
 }
 
 /**
@@ -606,17 +881,280 @@ rdb_get_leader(struct rdb *db, uint64_t *term, d_rank_t *rank)
 int
 rdb_get_ranks(struct rdb *db, d_rank_list_t **ranksp)
 {
-	return daos_rank_list_dup(ranksp, db->d_replicas);
+	return rdb_raft_get_ranks(db, ranksp);
+}
+
+int
+rdb_get_size(struct rdb *db, uint64_t *sizep)
+{
+	int                   rc;
+	struct vos_pool_space vps;
+
+	rc = vos_pool_query_space(db->d_uuid, &vps);
+	if (rc != 0) {
+		D_ERROR(DF_DB ": failed to query vos pool space: " DF_RC "\n", DP_DB(db),
+			DP_RC(rc));
+		return rc;
+	}
+
+	*sizep = SCM_TOTAL(&vps);
+
+	return rc;
+}
+
+/** Implementation of the RDB pool checkpoint ULT. The ULT
+ *  is only active if DAOS is using MD on SSD.
+ */
+static void
+rdb_chkpt_wait(void *arg, uint64_t wait_id, uint64_t *commit_id)
+{
+	struct rdb              *db    = arg;
+	struct rdb_chkpt_record *dcr   = &db->d_chkpt_record;
+	struct umem_store       *store = dcr->dcr_store;
+
+	D_DEBUG(DB_MD, DF_DB ": commit >= " DF_X64 "\n", DP_DB(db), wait_id);
+
+	if (wait_id == 0) {
+		/** Special case, checkpoint needs to yield to allow progress */
+		ABT_thread_yield();
+		return;
+	}
+
+	if (store->stor_ops->so_wal_id_cmp(store, dcr->dcr_commit_id, wait_id) >= 0)
+		goto out;
+
+	if (store->store_faulty)
+		goto out;
+
+	D_DEBUG(DB_MD, DF_DB ": wait for commit >= " DF_X64 "\n", DP_DB(db), wait_id);
+	ABT_mutex_lock(db->d_chkpt_mutex);
+	dcr->dcr_waiting = 1;
+	dcr->dcr_wait_id = wait_id;
+	ABT_cond_wait(db->d_commit_cv, db->d_chkpt_mutex);
+	ABT_mutex_unlock(db->d_chkpt_mutex);
+out:
+	D_DEBUG(DB_MD, DF_DB ": commit " DF_X64 " is >= " DF_X64 "\n", DP_DB(db),
+		dcr->dcr_commit_id, wait_id);
+	*commit_id = dcr->dcr_commit_id;
+}
+
+static void
+rdb_chkpt_update(void *arg, uint64_t commit_id, uint32_t used_blocks, uint32_t total_blocks)
+{
+	struct rdb              *db    = arg;
+	struct rdb_chkpt_record *dcr   = &db->d_chkpt_record;
+	struct umem_store       *store = dcr->dcr_store;
+
+	if (!dcr->dcr_init) {
+		/** Set threshold to 50% of blocks */
+		dcr->dcr_thresh = total_blocks >> 1;
+	}
+
+	if (commit_id == dcr->dcr_commit_id)
+		return; /** reserve path can call this with duplicate commit_id */
+
+	dcr->dcr_commit_id = commit_id;
+
+	if (dcr->dcr_idle) {
+		if (used_blocks >= dcr->dcr_thresh) {
+			dcr->dcr_needed = 1;
+			D_DEBUG(DB_MD,
+				DF_DB ": used %u/%u exceeds threshold %u, triggering checkpoint\n",
+				DP_DB(db), used_blocks, total_blocks, dcr->dcr_thresh);
+			ABT_cond_broadcast(db->d_chkpt_cv);
+		}
+		D_DEBUG(DB_MD, DF_DB ": update commit = " DF_X64 ", chkpt is idle\n", DP_DB(db),
+			commit_id);
+		return;
+	}
+
+	if (!dcr->dcr_waiting) {
+		D_DEBUG(DB_MD, DF_DB ": update commit = " DF_X64 ", chkpt is not waiting\n",
+			DP_DB(db), commit_id);
+		return;
+	}
+
+	/** Checkpoint ULT is waiting for a commit, check if we can wake it up */
+	if (store->store_faulty ||
+	    store->stor_ops->so_wal_id_cmp(store, commit_id, dcr->dcr_wait_id) >= 0) {
+		dcr->dcr_waiting = 0;
+		D_DEBUG(DB_MD,
+			DF_DB ": update commit = " DF_X64 ", waking checkpoint waiting for " DF_X64
+			      "\n",
+			DP_DB(db), commit_id, dcr->dcr_wait_id);
+		ABT_cond_broadcast(db->d_commit_cv);
+	} else {
+		D_DEBUG(DB_MD, DF_DB ": update commit = " DF_X64 "\n", DP_DB(db), commit_id);
+	}
+}
+
+static bool
+rdb_chkpt_enabled(struct rdb *db)
+{
+	struct rdb_chkpt_record *dcr = &db->d_chkpt_record;
+
+	if (dcr->dcr_init)
+		return dcr->dcr_enabled == 1;
+
+	if (!vos_pool_needs_checkpoint(db->d_pool)) {
+		D_DEBUG(DB_MD, DF_DB ": checkpointing is disabled for rdb replica\n", DP_DB(db));
+		dcr->dcr_init    = 1;
+		dcr->dcr_enabled = 0;
+		return false;
+	}
+
+	D_DEBUG(DB_MD, DF_DB ": checkpointing is enabled for rdb replica\n", DP_DB(db));
+	vos_pool_checkpoint_init(db->d_pool, rdb_chkpt_update, rdb_chkpt_wait, db, &dcr->dcr_store);
+
+	dcr->dcr_enabled = 1;
+	dcr->dcr_init    = 1;
+
+	return true;
+}
+
+static void
+rdb_chkpt_fini(struct rdb *db)
+{
+	vos_pool_checkpoint_fini(db->d_pool);
+}
+
+/* Daemon ULT for checkpointing to metadata blob (MD on SSD only) */
+static void
+rdb_chkptd(void *arg)
+{
+	struct timespec          last;
+	struct timespec          deadline;
+	struct rdb *db = arg;
+	struct rdb_chkpt_record *dcr = &db->d_chkpt_record;
+
+	D_DEBUG(DB_MD, DF_DB ": checkpointd starting\n", DP_DB(db));
+	/** ABT_cond_timedwait uses CLOCK_REALTIME internally so we have to use it but using
+	 *  COARSE version should be fine.  CLOCK_MONOTONIC might be completely different
+	 *  because it's not affected by system changes.
+	 */
+	clock_gettime(CLOCK_REALTIME_COARSE, &last);
+	for (;;) {
+		int  rc;
+
+		ABT_mutex_lock(db->d_chkpt_mutex);
+		for (;;) {
+			if (db->d_chkpt_record.dcr_needed)
+				break;
+			clock_gettime(CLOCK_REALTIME_COARSE, &deadline);
+			if (deadline.tv_sec >= last.tv_sec + 10)
+				break;
+			if (dcr->dcr_stop)
+				break;
+			deadline.tv_sec += 10;
+			dcr->dcr_idle = 1;
+			ABT_cond_timedwait(db->d_chkpt_cv, db->d_chkpt_mutex, &deadline);
+		}
+		ABT_mutex_unlock(db->d_chkpt_mutex);
+		if (dcr->dcr_stop)
+			break;
+		dcr->dcr_idle = 0;
+		rc            = vos_pool_checkpoint(db->d_pool);
+		if (rc != 0) {
+			D_ERROR(DF_DB ": failed to checkpoint: rc=" DF_RC "\n", DP_DB(db),
+				DP_RC(rc));
+			break;
+		}
+		db->d_chkpt_record.dcr_needed = 0;
+		clock_gettime(CLOCK_REALTIME_COARSE, &last);
+	}
+	D_DEBUG(DB_MD, DF_DB ": checkpointd stopping\n", DP_DB(db));
+	rdb_chkpt_fini(db);
+}
+
+static void
+rdb_chkptd_stop(struct rdb *db)
+{
+	struct rdb_chkpt_record *dcr = &db->d_chkpt_record;
+	int                      rc;
+
+	switch (dcr->dcr_state) {
+	default:
+		D_ASSERTF(0, "Invalid state %d\n", dcr->dcr_state);
+	case CHKPT_NONE:
+		return;
+	case CHKPT_ULT:
+		D_DEBUG(DB_MD, DF_DB ": Stopping chkptd ULT\n", DP_DB(db));
+		dcr->dcr_stop = 1;
+		ABT_cond_broadcast(db->d_chkpt_cv);
+		rc = ABT_thread_free(&db->d_chkptd);
+		D_ASSERTF(rc == 0, "free rdb_chkptd: rc=%d\n", rc);
+		D_DEBUG(DB_MD, DF_DB ": Stopped chkptd ULT\n", DP_DB(db));
+		/** Fall through */
+	case CHKPT_COMMIT_CV:
+		ABT_cond_free(&db->d_commit_cv);
+		/** Fall through */
+	case CHKPT_MAIN_CV:
+		ABT_cond_free(&db->d_chkpt_cv);
+		/** Fall through */
+	case CHKPT_MUTEX:
+		ABT_mutex_free(&db->d_chkpt_mutex);
+		/** Fall through */
+	}
+
+	dcr->dcr_state = CHKPT_NONE;
+}
+
+static int
+rdb_chkptd_start(struct rdb *db)
+{
+	struct rdb_chkpt_record *dcr = &db->d_chkpt_record;
+	int                      rc;
+
+	if (!rdb_chkpt_enabled(db))
+		return 0;
+
+	rc = ABT_mutex_create(&db->d_chkpt_mutex);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR(DF_DB ": failed to create checkpoint mutex: %d\n", DP_DB(db), rc);
+		D_GOTO(error, rc = dss_abterr2der(rc));
+	}
+	dcr->dcr_state = CHKPT_MUTEX;
+
+	rc = ABT_cond_create(&db->d_chkpt_cv);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR(DF_DB ": failed to create checkpoint main CV: %d\n", DP_DB(db), rc);
+		D_GOTO(error, rc = dss_abterr2der(rc));
+	}
+	dcr->dcr_state = CHKPT_MAIN_CV;
+
+	rc = ABT_cond_create(&db->d_commit_cv);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR(DF_DB ": failed to create checkpoint commit CV: %d\n", DP_DB(db), rc);
+		D_GOTO(error, rc = dss_abterr2der(rc));
+	}
+	dcr->dcr_state = CHKPT_COMMIT_CV;
+
+	rc = dss_ult_create(rdb_chkptd, db, DSS_XS_SELF, 0, DSS_DEEP_STACK_SZ, &db->d_chkptd);
+	if (rc != 0) {
+		D_ERROR(DF_DB ": failed to start chkptd ULT: " DF_RC "\n", DP_DB(db), DP_RC(rc));
+		goto error;
+	}
+	dcr->dcr_state = CHKPT_ULT;
+
+	return 0;
+error:
+	rdb_chkptd_stop(db);
+	return rc;
 }
 
 /**
- * Get the UUID of the database.
+ * Upgrade the durable format of the VOS pool underlying \a db to
+ * \a df_version.
  *
- * \param[in]	db	database
- * \param[out]	uuid	UUID
+ * Exposing "VOS pool" makes this API function hacky, and probably indicates
+ * that the upgrade model is not quite right.
+ *
+ * \param[in]	db		database
+ * \param[in]	df_version	VOS durable format version (e.g.,
+ *				VOS_POOL_DF_2_6)
  */
-
-void rdb_get_uuid(struct rdb *db, uuid_t uuid)
+int
+rdb_upgrade_vos_pool(struct rdb *db, uint32_t df_version)
 {
-	uuid_copy(uuid, db->d_uuid);
+	return vos_pool_upgrade(db->d_pool, df_version);
 }

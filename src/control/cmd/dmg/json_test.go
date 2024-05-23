@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,7 +15,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -57,50 +57,68 @@ func TestDmg_JsonOutput(t *testing.T) {
 		cmdArgs = append(cmdArgs, cmd)
 	})
 
-	testDir, cleanup := common.CreateTestDir(t)
+	testDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 	aclContent := "A::OWNER@:rw\nA::user1@:rw\nA:g:group1@:r\n"
-	aclPath := common.CreateTestFile(t, testDir, aclContent)
+	aclPath := test.CreateTestFile(t, testDir, aclContent)
 
 	for _, args := range cmdArgs {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			testArgs := append([]string{"-i", "--json"}, args...)
 			switch strings.Join(args, " ") {
 			case "version", "telemetry config", "telemetry run", "config generate",
-				"manpage":
+				"manpage", "system set-prop", "support collect-log", "check repair":
 				return
-			case "storage prepare":
-				testArgs = append(testArgs, "--force")
-			case "storage query target-health":
-				testArgs = append(testArgs, []string{"-r", "0", "-t", "0"}...)
+			case "storage nvme-rebind":
+				testArgs = append(testArgs, "-l", "foo.com", "-a",
+					test.MockPCIAddr())
+			case "storage nvme-add-device":
+				testArgs = append(testArgs, "-l", "foo.com", "-a",
+					test.MockPCIAddr(), "-e", "0")
 			case "storage query device-health":
-				testArgs = append(testArgs, []string{"-u", common.MockUUID()}...)
+				testArgs = append(testArgs, "-u", test.MockUUID())
 			case "storage set nvme-faulty":
-				testArgs = append(testArgs, []string{"--force", "-u", common.MockUUID()}...)
+				testArgs = append(testArgs, "--force", "-u", test.MockUUID())
 			case "storage replace nvme":
-				testArgs = append(testArgs, []string{"--old-uuid", common.MockUUID(), "--new-uuid", common.MockUUID()}...)
-			case "storage identify vmd":
-				testArgs = append(testArgs, []string{"--uuid", common.MockUUID()}...)
+				testArgs = append(testArgs, "--old-uuid", test.MockUUID(),
+					"--new-uuid", test.MockUUID())
+			case "storage led identify", "storage led check", "storage led clear":
+				testArgs = append(testArgs, test.MockUUID())
 			case "pool create":
-				testArgs = append(testArgs, []string{"-s", "1TB"}...)
-			case "pool destroy", "pool evict", "pool query", "pool get-acl":
-				testArgs = append(testArgs, []string{common.MockUUID()}...)
+				testArgs = append(testArgs, "-s", "1TB", "label")
+			case "pool destroy", "pool evict", "pool query", "pool get-acl", "pool upgrade":
+				testArgs = append(testArgs, test.MockUUID())
 			case "pool overwrite-acl", "pool update-acl":
-				testArgs = append(testArgs, []string{common.MockUUID(), "-a", aclPath}...)
+				testArgs = append(testArgs, test.MockUUID(), "-a", aclPath)
 			case "pool delete-acl":
-				testArgs = append(testArgs, []string{common.MockUUID(), "-p", "foo@"}...)
+				testArgs = append(testArgs, test.MockUUID(), "-p", "foo@")
 			case "pool set-prop":
-				testArgs = append(testArgs, []string{common.MockUUID(), "label:foo"}...)
+				testArgs = append(testArgs, test.MockUUID(), "label:foo")
 			case "pool get-prop":
-				testArgs = append(testArgs, []string{common.MockUUID(), "label"}...)
+				testArgs = append(testArgs, test.MockUUID(), "label")
 			case "pool extend":
-				testArgs = append(testArgs, []string{common.MockUUID(), "--ranks", "0"}...)
+				testArgs = append(testArgs, test.MockUUID(), "--ranks", "0")
 			case "pool exclude", "pool drain", "pool reintegrate":
-				testArgs = append(testArgs, []string{common.MockUUID(), "--rank", "0"}...)
+				testArgs = append(testArgs, test.MockUUID(), "--rank", "0")
+			case "pool query-targets":
+				testArgs = append(testArgs, test.MockUUID(), "--rank", "0", "--target-idx", "1,3,5,7")
 			case "container set-owner":
-				testArgs = append(testArgs, []string{"--user", "foo", "--pool", common.MockUUID(), "--cont", common.MockUUID()}...)
+				testArgs = append(testArgs, "--user", "foo", "--pool", test.MockUUID(),
+					"--cont", test.MockUUID())
 			case "telemetry metrics list", "telemetry metrics query":
 				return // These commands query via http directly
+			case "system cleanup":
+				testArgs = append(testArgs, "hostname")
+			case "check set-policy":
+				testArgs = append(testArgs, "POOL_BAD_LABEL:IGNORE")
+			case "system set-attr":
+				testArgs = append(testArgs, "foo:bar")
+			case "system del-attr":
+				testArgs = append(testArgs, "foo")
+			case "system exclude":
+				testArgs = append(testArgs, "--ranks", "0")
+			case "system clear-exclude":
+				testArgs = append(testArgs, "--ranks", "0")
 			}
 
 			// replace os.Stdout so that we can verify the generated output

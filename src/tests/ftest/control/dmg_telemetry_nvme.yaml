@@ -1,10 +1,13 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-timeouts:
-  test_telemetry_list_nvme: 90
+  test_servers: 2
+timeout: 90
 server_config:
-  servers:
-    bdev_class: nvme
-    bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
+  engines_per_host: 1
+  engines:
+    0:
+      storage: auto
+telemetry_metrics:
+  nvme_crit_warn_metrics_valid: [0, 1]
+  nvme_temp_metrics_valid: [280, 350]
+  nvme_temp_time_metrics_valid: [0, 4294967295]
+  nvme_reliability_metrics_valid: [0, 100]

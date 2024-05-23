@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/user"
 	"strconv"
+	"strings"
 
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
@@ -145,6 +146,16 @@ func sysNameToPrincipalName(name string) string {
 	return name + "@"
 }
 
+// GetMachineName returns the "short" hostname by stripping the domain from the FQDN.
+func GetMachineName() (string, error) {
+	name, err := os.Hostname()
+	if err != nil {
+		return "", err
+	}
+
+	return strings.Split(name, ".")[0], nil
+}
+
 // AuthSysRequestFromCreds takes the domain info credentials gathered
 // during the dRPC request and creates an AuthSys security request to obtain
 // a handle from the management service.
@@ -171,9 +182,9 @@ func AuthSysRequestFromCreds(ext UserExt, creds *security.DomainInfo, signing cr
 			userInfo.Username())
 	}
 
-	name, err := os.Hostname()
+	host, err := GetMachineName()
 	if err != nil {
-		name = "unavailable"
+		host = "unavailable"
 	}
 
 	var groupList = []string{}
@@ -191,7 +202,7 @@ func AuthSysRequestFromCreds(ext UserExt, creds *security.DomainInfo, signing cr
 	// Craft AuthToken
 	sys := Sys{
 		Stamp:       0,
-		Machinename: name,
+		Machinename: host,
 		User:        sysNameToPrincipalName(userInfo.Username()),
 		Group:       sysNameToPrincipalName(groupInfo.Name),
 		Groups:      groupList,

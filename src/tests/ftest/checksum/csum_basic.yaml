@@ -1,35 +1,36 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
 hosts:
- test_servers:
-  - server-A
- test_clients:
-  - client-B
-timeout: 60
+  test_servers: 1
+  test_clients: 1
+timeout: 100
 server_config:
- name: daos_server
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+  system_ram_reserved: 1
 pool:
-    createmode:
-        mode_RW:
-             mode: 511
-    createset:
-        group: daos_server
-    createsize:
-        scm_size: 3000000000
-    createsvc:
-        svcn: 1
-    control_method: dmg
+  scm_size: 3000000000
+  svcn: 1
+  control_method: dmg
 container: !mux
-   properties:
-       enable_checksum: True
+  properties:
+    enable_checksum: true
 dkeys: !mux
   single:
     no_of_dkeys:
-    - 50
+      - 50
 akeys: !mux
   single:
     no_of_akeys:
-    - 10
+      - 10
 record: !mux
   1Byte:
     length:

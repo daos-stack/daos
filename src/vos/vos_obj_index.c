@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,9 +15,10 @@
 #include <daos/btree.h>
 #include <daos/object.h>
 #include <daos_types.h>
-#include <vos_internal.h>
-#include <vos_ilog.h>
-#include <vos_obj.h>
+#include "vos_internal.h"
+#include "vos_ilog.h"
+#include "vos_obj.h"
+#include <daos_srv/vos.h>
 
 /** iterator for oid */
 struct vos_oi_iter {
@@ -68,17 +69,17 @@ oi_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 
 static int
 oi_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
-	     d_iov_t *val_iov, struct btr_record *rec)
+	     d_iov_t *val_iov, struct btr_record *rec, d_iov_t *val_out)
 {
-	struct dtx_handle	*dth = vos_dth_get();
+	struct vos_container	*cont = vos_hdl2cont(tins->ti_coh);
+	struct dtx_handle	*dth = vos_dth_get(cont->vc_pool->vp_sysdb);
 	struct vos_obj_df	*obj;
 	daos_unit_oid_t		*key;
 	umem_off_t		 obj_off;
 	int			 rc;
 
 	/* Allocate a PMEM value of type vos_obj_df */
-	obj_off = vos_slab_alloc(&tins->ti_umm, sizeof(struct vos_obj_df),
-				 VOS_SLAB_OBJ_DF);
+	obj_off = umem_zalloc(&tins->ti_umm, sizeof(struct vos_obj_df));
 	if (UMOFF_IS_NULL(obj_off))
 		return -DER_NOSPACE;
 
@@ -87,13 +88,20 @@ oi_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	D_ASSERT(key_iov->iov_len == sizeof(daos_unit_oid_t));
 	key = key_iov->iov_buf;
 
-	obj->vo_sync	= 0;
-	obj->vo_id	= *key;
-	rc = ilog_create(&tins->ti_umm, &obj->vo_ilog);
-	if (rc != 0) {
-		D_ERROR("Failure to create incarnation log: "DF_RC"\n",
-			DP_RC(rc));
-		return rc;
+	if (val_out == NULL) {
+		obj->vo_id	= *key;
+		obj->vo_sync	= 0;
+		rc = ilog_create(&tins->ti_umm, &obj->vo_ilog);
+		if (rc != 0) {
+			D_ERROR("Failure to create incarnation log: "DF_RC"\n",
+				DP_RC(rc));
+			return rc;
+		}
+	} else {
+		struct vos_obj_df *new_obj = val_out->iov_buf;
+
+		memcpy(obj, new_obj, sizeof(*obj));
+		obj->vo_id = *key;
 	}
 
 	d_iov_set(val_iov, obj, sizeof(struct vos_obj_df));
@@ -111,30 +119,49 @@ oi_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	return 0;
 }
 
+struct oi_delete_arg {
+	void		*cont;
+	uint32_t	only_delete_entry:1;
+};
+
 static int
 oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
 	struct umem_instance	*umm = &tins->ti_umm;
 	struct vos_obj_df	*obj;
 	struct ilog_desc_cbs	 cbs;
-	daos_handle_t		 coh;
+	struct oi_delete_arg	*del_arg = args;
+	daos_handle_t		 coh = { 0 };
 	int			 rc;
+	struct vos_pool		*pool;
 
 	obj = umem_off2ptr(umm, rec->rec_off);
 
-	vos_ilog_desc_cbs_init(&cbs, tins->ti_coh);
-	rc = ilog_destroy(umm, &cbs, &obj->vo_ilog);
-	if (rc != 0) {
-		D_ERROR("Failed to destroy incarnation log: "DF_RC"\n",
-			DP_RC(rc));
-		return rc;
+	D_ASSERT(tins->ti_priv);
+	pool = (struct vos_pool *)tins->ti_priv;
+	/* Normally it should delete both ilog and vo_tree, but during upgrade
+	 * the new OID (with new layout version) will share the same ilog and
+	 * vos_tree with the old OID (with old layout version), so it will only
+	 * delete the entry in this case.
+	 */
+	if (del_arg != NULL && del_arg->only_delete_entry) {
+		memset(&obj->vo_ilog, 0, sizeof(obj->vo_ilog));
+		memset(&obj->vo_tree, 0, sizeof(obj->vo_tree));
+	} else {
+		vos_ilog_desc_cbs_init(&cbs, tins->ti_coh);
+		rc = ilog_destroy(umm, &cbs, &obj->vo_ilog);
+		if (rc != 0) {
+			D_ERROR("Failed to destroy incarnation log: "DF_RC"\n",
+				DP_RC(rc));
+			return rc;
+		}
+
+		vos_ilog_ts_evict(&obj->vo_ilog, VOS_TS_TYPE_OBJ, pool->vp_sysdb);
 	}
 
-	vos_ilog_ts_evict(&obj->vo_ilog, VOS_TS_TYPE_OBJ);
 
-	D_ASSERT(tins->ti_priv);
-
-	coh = vos_cont2hdl(args);
+	if (del_arg != NULL)
+		coh = vos_cont2hdl((struct vos_container *)del_arg->cont);
 	return gc_add_item(tins->ti_priv, coh, GC_OBJ, rec->rec_off, 0);
 }
 
@@ -155,7 +182,7 @@ oi_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 oi_rec_update(struct btr_instance *tins, struct btr_record *rec,
-		  d_iov_t *key, d_iov_t *val)
+	      d_iov_t *key, d_iov_t *val, d_iov_t *val_out)
 {
 	D_ASSERTF(0, "Should never been called\n");
 	return 0;
@@ -164,7 +191,7 @@ oi_rec_update(struct btr_instance *tins, struct btr_record *rec,
 static umem_off_t
 oi_node_alloc(struct btr_instance *tins, int size)
 {
-	return vos_slab_alloc(&tins->ti_umm, size, VOS_SLAB_OBJ_NODE);
+	return umem_zalloc(&tins->ti_umm, size);
 }
 
 static btr_ops_t oi_btr_ops = {
@@ -221,7 +248,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 		  daos_epoch_t epoch, bool log, struct vos_obj_df **obj_p,
 		  struct vos_ts_set *ts_set)
 {
-	struct dtx_handle	*dth = vos_dth_get();
+	struct dtx_handle	*dth = vos_dth_get(cont->vc_pool->vp_sysdb);
 	struct vos_obj_df	*obj = NULL;
 	d_iov_t			 key_iov;
 	d_iov_t			 val_iov;
@@ -246,12 +273,14 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 	d_iov_set(&key_iov, &oid, sizeof(oid));
 
 	rc = dbtree_upsert(cont->vc_btr_hdl, BTR_PROBE_EQ, DAOS_INTENT_DEFAULT,
-			   &key_iov, &val_iov);
+			   &key_iov, &val_iov, NULL);
 	if (rc) {
 		D_ERROR("Failed to update Key for Object index\n");
 		return rc;
 	}
 	obj = val_iov.iov_buf;
+	/** Since we just allocated it, we can save a tx_add later to set this */
+	obj->vo_max_write = epoch;
 
 	vos_ilog_ts_ignore(vos_cont2umm(cont), &obj->vo_ilog);
 	vos_ilog_ts_mark(ts_set, &obj->vo_ilog);
@@ -259,7 +288,7 @@ do_log:
 	if (!log)
 		goto skip_log;
 	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
-	rc = ilog_open(vos_cont2umm(cont), &obj->vo_ilog, &cbs, &loh);
+	rc = ilog_open(vos_cont2umm(cont), &obj->vo_ilog, &cbs, dth == NULL, &loh);
 	if (rc != 0)
 		return rc;
 
@@ -314,16 +343,21 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
  * one incarnation for each object.
  */
 int
-vos_oi_delete(struct vos_container *cont, daos_unit_oid_t oid)
+vos_oi_delete(struct vos_container *cont, daos_unit_oid_t oid, bool only_delete_entry)
 {
+	struct oi_delete_arg arg;
 	d_iov_t		key_iov;
 	int		rc = 0;
 
 	D_DEBUG(DB_TRACE, "Delete obj "DF_UOID"\n", DP_UOID(oid));
 
+	arg.cont = cont;
+	if (only_delete_entry)
+		arg.only_delete_entry = 1;
+	else
+		arg.only_delete_entry = 0;
 	d_iov_set(&key_iov, &oid, sizeof(oid));
-
-	rc = dbtree_delete(cont->vc_btr_hdl, BTR_PROBE_EQ, &key_iov, cont);
+	rc = dbtree_delete(cont->vc_btr_hdl, BTR_PROBE_EQ, &key_iov, &arg);
 	if (rc == -DER_NONEXIST)
 		return 0;
 
@@ -332,6 +366,49 @@ vos_oi_delete(struct vos_container *cont, daos_unit_oid_t oid)
 		return rc;
 	}
 	return 0;
+}
+
+int
+vos_oi_upgrade_layout_ver(struct vos_container *cont, daos_unit_oid_t oid,
+			  uint32_t layout_ver)
+{
+	d_iov_t		  key_iov;
+	d_iov_t		  val_iov;
+	int		  rc;
+
+	if (oid.id_layout_ver == layout_ver)
+		return 0;
+
+	/* NB: This is only used by object layout version upgrade. During upgrade,
+	 * it does not need to recreate the ilog or vos_tree for the new OI entry,
+	 * i.e. the new layout OI entry and old OI entry will share the same ilog
+	 * and vos_tree.
+	 *
+	 * So this function will fetch the OI entry, then use @val_out by dbtree_upsert(),
+	 * so oi_rec_alloc() will not allocate new ilog and vos_tree.
+	 *
+	 * The old OI_entry will be deleted by oi_rec_free(), which will not delete ilog
+	 * and vos_tree in this case.
+	 **/
+	d_iov_set(&key_iov, &oid, sizeof(oid));
+	d_iov_set(&val_iov, NULL, 0);
+	rc = dbtree_fetch(cont->vc_btr_hdl, BTR_PROBE_EQ,
+			  DAOS_INTENT_DEFAULT, &key_iov, NULL, &val_iov);
+	if (rc == -DER_NONEXIST)
+		return 0;
+	if (rc) {
+		D_ERROR("dbtree fetch "DF_UOID": %d\n", DP_UOID(oid), rc);
+		return rc;
+	}
+
+	d_iov_set(&key_iov, &oid, sizeof(oid));
+	oid.id_layout_ver = layout_ver;
+	rc = dbtree_upsert(cont->vc_btr_hdl, BTR_PROBE_EQ, DAOS_INTENT_DEFAULT,
+			   &key_iov, &val_iov, &val_iov);
+	if (rc)
+		D_ERROR("dbtree upsert "DF_UOID": %d\n", DP_UOID(oid), rc);
+
+	return rc;
 }
 
 static struct vos_oi_iter *
@@ -375,7 +452,7 @@ oi_iter_ilog_check(struct vos_obj_df *obj, struct vos_oi_iter *oiter,
 	umm = vos_cont2umm(oiter->oit_cont);
 	rc = vos_ilog_fetch(umm, vos_cont2hdl(oiter->oit_cont),
 			    vos_iter_intent(&oiter->oit_iter), &obj->vo_ilog,
-			    oiter->oit_epr.epr_hi, oiter->oit_iter.it_bound,
+			    oiter->oit_epr.epr_hi, oiter->oit_iter.it_bound, false,
 			    NULL, NULL, &oiter->oit_ilog_info);
 	if (rc != 0)
 		goto out;
@@ -426,6 +503,8 @@ oi_iter_nested_tree_fetch(struct vos_iterator *iter, vos_iter_type_t type,
 	info->ii_oid = obj->vo_id;
 	info->ii_punched = oiter->oit_ilog_info.ii_prior_punch;
 	info->ii_hdl = vos_cont2hdl(oiter->oit_cont);
+	info->ii_filter_cb = iter->it_filter_cb;
+	info->ii_filter_arg = iter->it_filter_arg;
 
 	return 0;
 }
@@ -436,7 +515,7 @@ oi_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 {
 	struct vos_oi_iter	*oiter = NULL;
 	struct vos_container	*cont = NULL;
-	struct dtx_handle	*dth = vos_dth_get();
+	struct dtx_handle	*dth;
 	int			rc = 0;
 
 	if (type != VOS_ITER_OBJ) {
@@ -448,6 +527,8 @@ oi_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	cont = vos_hdl2cont(param->ip_hdl);
 	if (cont == NULL)
 		return -DER_INVAL;
+
+	dth = vos_dth_get(cont->vc_pool->vp_sysdb);
 
 	D_ALLOC_PTR(oiter);
 	if (oiter == NULL)
@@ -467,11 +548,17 @@ oi_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 		oiter->oit_iter.it_bound = param->ip_epr.epr_hi;
 	vos_cont_addref(cont);
 
+	oiter->oit_iter.it_filter_cb = param->ip_filter_cb;
+	oiter->oit_iter.it_filter_arg = param->ip_filter_arg;
 	oiter->oit_flags = param->ip_flags;
 	if (param->ip_flags & VOS_IT_FOR_PURGE)
 		oiter->oit_iter.it_for_purge = 1;
+	if (param->ip_flags & VOS_IT_FOR_DISCARD)
+		oiter->oit_iter.it_for_discard = 1;
 	if (param->ip_flags & VOS_IT_FOR_MIGRATION)
 		oiter->oit_iter.it_for_migration = 1;
+	if (cont->vc_pool->vp_sysdb)
+		oiter->oit_iter.it_for_sysdb = 1;
 
 	rc = dbtree_iter_prepare(cont->vc_btr_hdl, 0, &oiter->oit_hdl);
 	if (rc)
@@ -490,19 +577,23 @@ exit:
  * to the object matching the condition.
  */
 static int
-oi_iter_match_probe(struct vos_iterator *iter)
+oi_iter_match_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t flags)
 {
+	uint64_t		 start_seq;
 	struct vos_oi_iter	*oiter	= iter2oiter(iter);
+	struct dtx_handle	*dth;
 	char			*str	= NULL;
-
+	vos_iter_desc_t		 desc;
+	uint64_t		 feats;
+	unsigned int		 acts;
 	int			 rc;
+	bool			 is_sysdb = !!iter->it_for_sysdb;
 
 	while (1) {
 		struct vos_obj_df *obj;
-		int		   probe;
 		d_iov_t	   iov;
 
-		rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &iov, NULL);
+		rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &iov, anchor);
 		if (rc != 0) {
 			str = "fetch";
 			goto failed;
@@ -511,6 +602,40 @@ oi_iter_match_probe(struct vos_iterator *iter)
 		D_ASSERT(iov.iov_len == sizeof(struct vos_obj_df));
 		obj = (struct vos_obj_df *)iov.iov_buf;
 
+		if (iter->it_filter_cb != NULL && (flags & VOS_ITER_PROBE_AGAIN) == 0) {
+			desc.id_type = VOS_ITER_OBJ;
+			desc.id_oid = obj->vo_id;
+			desc.id_parent_punch = 0;
+
+			feats = dbtree_feats_get(&obj->vo_tree);
+
+			if (!vos_feats_agg_time_get(feats, &desc.id_agg_write)) {
+				/* Upgrading case, set it to latest known epoch */
+				if (obj->vo_max_write == 0)
+					vos_ilog_last_update(&obj->vo_ilog, VOS_TS_TYPE_OBJ,
+							     &desc.id_agg_write,
+							     !!iter->it_for_sysdb);
+				else
+					desc.id_agg_write = obj->vo_max_write;
+			}
+			acts = 0;
+			start_seq = vos_sched_seq(is_sysdb);
+			dth = vos_dth_get(is_sysdb);
+			vos_dth_set(NULL, is_sysdb);
+			rc = iter->it_filter_cb(vos_iter2hdl(iter), &desc, iter->it_filter_arg,
+						&acts);
+			vos_dth_set(dth, is_sysdb);
+			if (rc != 0)
+				goto failed;
+			if (start_seq != vos_sched_seq(is_sysdb))
+				acts |= VOS_ITER_CB_YIELD;
+			if (acts & (VOS_ITER_CB_EXIT | VOS_ITER_CB_ABORT | VOS_ITER_CB_RESTART |
+				    VOS_ITER_CB_DELETE | VOS_ITER_CB_YIELD))
+				return acts;
+			if (acts & VOS_ITER_CB_SKIP)
+				goto next;
+		}
+
 		rc = oi_iter_ilog_check(obj, oiter, NULL, true);
 		if (rc == 0)
 			break;
@@ -518,13 +643,11 @@ oi_iter_match_probe(struct vos_iterator *iter)
 			str = "ilog check";
 			goto failed;
 		}
-		probe = BTR_PROBE_GT;
-
-		d_iov_set(&iov, &obj->vo_id, sizeof(obj->vo_id));
-		rc = dbtree_iter_probe(oiter->oit_hdl, probe,
-				       vos_iter_intent(iter), &iov, NULL);
+next:
+		flags = 0;
+		rc = dbtree_iter_next(oiter->oit_hdl);
 		if (rc != 0) {
-			str = "probe";
+			str = "next";
 			goto failed;
 		}
 	}
@@ -539,15 +662,17 @@ oi_iter_match_probe(struct vos_iterator *iter)
 }
 
 static int
-oi_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
+oi_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t flags)
 {
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
+	dbtree_probe_opc_t	 next_opc;
 	dbtree_probe_opc_t	 opc;
 	int			 rc;
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 
-	opc = anchor == NULL ? BTR_PROBE_FIRST : BTR_PROBE_GE;
+	next_opc = (flags & VOS_ITER_PROBE_NEXT) ? BTR_PROBE_GT : BTR_PROBE_GE;
+	opc = vos_anchor_is_zero(anchor) ? BTR_PROBE_FIRST : next_opc;
 	rc = dbtree_iter_probe(oiter->oit_hdl, opc, vos_iter_intent(iter), NULL,
 			       anchor);
 	if (rc)
@@ -556,13 +681,13 @@ oi_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
 	/* NB: these probe cannot guarantee the returned entry is within
 	 * the condition epoch range.
 	 */
-	rc = oi_iter_match_probe(iter);
+	rc = oi_iter_match_probe(iter, anchor, flags);
  out:
 	return rc;
 }
 
 static int
-oi_iter_next(struct vos_iterator *iter)
+oi_iter_next(struct vos_iterator *iter, daos_anchor_t *anchor)
 {
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
 	int			 rc;
@@ -572,9 +697,41 @@ oi_iter_next(struct vos_iterator *iter)
 	if (rc)
 		D_GOTO(out, rc);
 
-	rc = oi_iter_match_probe(iter);
+	rc = oi_iter_match_probe(iter, anchor, 0);
  out:
 	return rc;
+}
+
+static int
+oi_iter_fill(struct vos_obj_df *obj, struct vos_oi_iter *oiter, bool check_existence,
+	     vos_iter_entry_t *ent)
+{
+	daos_epoch_range_t	epr = {0, DAOS_EPOCH_MAX};
+	int			rc;
+
+	rc = oi_iter_ilog_check(obj, oiter, &epr, check_existence);
+	if (rc != 0)
+		return rc;
+
+	ent->ie_oid = obj->vo_id;
+	ent->ie_punch = oiter->oit_ilog_info.ii_next_punch;
+	ent->ie_obj_punch = ent->ie_punch;
+	ent->ie_epoch = epr.epr_hi;
+	ent->ie_vis_flags = VOS_VIS_FLAG_VISIBLE;
+	if (oiter->oit_ilog_info.ii_create == 0) {
+		/** Object isn't visible so mark covered */
+		ent->ie_vis_flags = VOS_VIS_FLAG_COVERED;
+	}
+	ent->ie_child_type = VOS_ITER_DKEY;
+
+	/* Upgrading case, set it to latest known epoch */
+	if (obj->vo_max_write == 0)
+		vos_ilog_last_update(&obj->vo_ilog, VOS_TS_TYPE_OBJ,
+				     &ent->ie_last_update, oiter->oit_iter.it_for_sysdb);
+	else
+		ent->ie_last_update = obj->vo_max_write;
+
+	return 0;
 }
 
 static int
@@ -582,9 +739,7 @@ oi_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	      daos_anchor_t *anchor)
 {
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
-	struct vos_obj_df	*obj;
-	daos_epoch_range_t	 epr;
-	d_iov_t		 rec_iov;
+	d_iov_t			 rec_iov;
 	int			 rc;
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
@@ -602,41 +757,28 @@ oi_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	}
 
 	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_obj_df));
-	obj = (struct vos_obj_df *)rec_iov.iov_buf;
 
-	rc = oi_iter_ilog_check(obj, oiter, &epr, false);
-	if (rc != 0)
-		return rc;
-
-	it_entry->ie_oid = obj->vo_id;
-	it_entry->ie_punch = oiter->oit_ilog_info.ii_next_punch;
-	it_entry->ie_obj_punch = it_entry->ie_punch;
-	it_entry->ie_epoch = epr.epr_hi;
-	it_entry->ie_vis_flags = VOS_VIS_FLAG_VISIBLE;
-	if (oiter->oit_ilog_info.ii_create == 0) {
-		/** Object isn't visible so mark covered */
-		it_entry->ie_vis_flags = VOS_VIS_FLAG_COVERED;
-	}
-	it_entry->ie_child_type = VOS_ITER_DKEY;
-
-	vos_ilog_last_update(&obj->vo_ilog, VOS_TS_TYPE_OBJ,
-			     &it_entry->ie_last_update);
-	return 0;
+	return oi_iter_fill(rec_iov.iov_buf, oiter, false, it_entry);
 }
 
 static int
-oi_iter_delete(struct vos_iterator *iter, void *args)
+oi_iter_process(struct vos_iterator *iter, vos_iter_proc_op_t op, void *args)
 {
+	struct oi_delete_arg	del_arg;
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
 	int			rc = 0;
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
+	if (op != VOS_ITER_PROC_OP_DELETE)
+		return -DER_NOSYS;
 
+	del_arg.cont = args;
+	del_arg.only_delete_entry = 0;
 	rc = umem_tx_begin(vos_cont2umm(oiter->oit_cont), NULL);
 	if (rc != 0)
 		goto exit;
 
-	rc = dbtree_iter_delete(oiter->oit_hdl, args);
+	rc = dbtree_iter_delete(oiter->oit_hdl, &del_arg);
 
 	rc = umem_tx_end(vos_cont2umm(oiter->oit_cont), rc);
 
@@ -647,14 +789,14 @@ exit:
 }
 
 int
-oi_iter_aggregate(daos_handle_t ih, bool discard)
+oi_iter_check_punch(daos_handle_t ih)
 {
 	struct vos_iterator	*iter = vos_hdl2iter(ih);
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
 	struct vos_obj_df	*obj;
+	struct oi_delete_arg	del_arg;
 	daos_unit_oid_t		 oid;
 	d_iov_t			 rec_iov;
-	bool			 reprobe = false;
 	int			 rc;
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
@@ -669,26 +811,93 @@ oi_iter_aggregate(daos_handle_t ih, bool discard)
 	obj = (struct vos_obj_df *)rec_iov.iov_buf;
 	oid = obj->vo_id;
 
+	if (!vos_ilog_is_punched(vos_cont2hdl(oiter->oit_cont), &obj->vo_ilog, &oiter->oit_epr,
+				 NULL, &oiter->oit_ilog_info))
+		return 0;
+
+	/** Ok, ilog is fully punched, so we can move it to gc heap */
+	rc = umem_tx_begin(vos_cont2umm(oiter->oit_cont), NULL);
+	if (rc != 0)
+		goto exit;
+
+	/* Incarnation log is empty, delete the object */
+	D_DEBUG(DB_IO, "Moving object "DF_UOID" to gc heap\n",
+		DP_UOID(oid));
+	/* Evict the object from cache */
+	rc = vos_obj_evict_by_oid(vos_obj_cache_current(oiter->oit_cont->vc_pool->vp_sysdb),
+				  oiter->oit_cont, oid);
+	if (rc != 0)
+		D_ERROR("Could not evict object "DF_UOID" "DF_RC"\n",
+			DP_UOID(oid), DP_RC(rc));
+	del_arg.cont = oiter->oit_cont;
+	del_arg.only_delete_entry = 0;
+	rc = dbtree_iter_delete(oiter->oit_hdl, &del_arg);
+	D_ASSERT(rc != -DER_NONEXIST);
+
+	rc = umem_tx_end(vos_cont2umm(oiter->oit_cont), rc);
+exit:
+	if (rc == 0)
+		return 1;
+
+	return rc;
+}
+
+int
+oi_iter_aggregate(daos_handle_t ih, bool range_discard)
+{
+	struct vos_iterator	*iter = vos_hdl2iter(ih);
+	struct vos_oi_iter	*oiter = iter2oiter(iter);
+	struct vos_container    *cont  = oiter->oit_cont;
+	struct vos_obj_df	*obj;
+	daos_unit_oid_t		 oid;
+	d_iov_t			 rec_iov;
+	bool			 delete = false, invisible = false;
+	int			 rc;
+	uint64_t                 base_flag = range_discard ? VOS_OBJ_DISCARD : VOS_OBJ_AGGREGATE;
+
+	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
+
+	d_iov_set(&rec_iov, NULL, 0);
+	rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &rec_iov, NULL);
+	D_ASSERTF(rc != -DER_NONEXIST,
+		  "Probe should be done before aggregation\n");
+	if (rc != 0)
+		return rc;
+	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_obj_df));
+	obj = (struct vos_obj_df *)rec_iov.iov_buf;
+	oid = obj->vo_id;
+
+	rc = vos_obj_hold(vos_obj_cache_current(cont->vc_pool->vp_sysdb), cont, oid,
+			  &oiter->oit_epr, iter->it_bound, base_flag | VOS_OBJ_NO_HOLD,
+			  DAOS_INTENT_PURGE, NULL, NULL);
+	if (rc != 0) {
+		/** -DER_BUSY means the object is in-use already.  We will after a yield in this
+		 * case.
+		 */
+		D_CDEBUG(rc == -DER_BUSY, DB_EPC, DLOG_ERR, "Hold check failed for " DF_UOID "\n",
+			 DP_UOID(oid));
+		return rc;
+	}
+
 	rc = umem_tx_begin(vos_cont2umm(oiter->oit_cont), NULL);
 	if (rc != 0)
 		goto exit;
 
 	rc = vos_ilog_aggregate(vos_cont2hdl(oiter->oit_cont), &obj->vo_ilog,
-				&oiter->oit_epr, discard, NULL,
+				&oiter->oit_epr, iter->it_for_discard, false, NULL,
 				&oiter->oit_ilog_info);
 	if (rc == 1) {
 		/* Incarnation log is empty, delete the object */
 		D_DEBUG(DB_IO, "Removing object "DF_UOID" from tree\n",
 			DP_UOID(oid));
-		reprobe = true;
-		if (!dbtree_is_empty_inplace(&obj->vo_tree)) {
-			/* This can be an assert once we have sane under punch
-			 * detection.
-			 */
-			D_ERROR("Removing orphaned dkey tree\n");
-		}
+		delete = true;
+
+		/* XXX: The dkey tree may be not empty because related prepared transaction can
+		 *	be aborted. Then it will be added and handled via GC when oi_rec_free().
+		 */
+
 		/* Evict the object from cache */
-		rc = vos_obj_evict_by_oid(vos_obj_cache_current(),
+		rc = vos_obj_evict_by_oid(vos_obj_cache_current(oiter->oit_cont->vc_pool->vp_sysdb),
 					  oiter->oit_cont, oid);
 		if (rc != 0)
 			D_ERROR("Could not evict object "DF_UOID" "DF_RC"\n",
@@ -696,15 +905,15 @@ oi_iter_aggregate(daos_handle_t ih, bool discard)
 		rc = dbtree_iter_delete(oiter->oit_hdl, NULL);
 		D_ASSERT(rc != -DER_NONEXIST);
 	} else if (rc == -DER_NONEXIST) {
-		/** ilog isn't visible in range but still has some enrtries */
-		reprobe = true;
+		/** ilog isn't visible in range but still has some entries */
+		invisible = true;
 		rc = 0;
 	}
 
 	rc = umem_tx_end(vos_cont2umm(oiter->oit_cont), rc);
 exit:
-	if (rc == 0 && reprobe)
-		return 1;
+	if (rc == 0 && (delete || invisible))
+		return delete ? 1 : 2;
 
 	return rc;
 }
@@ -716,7 +925,7 @@ struct vos_iter_ops vos_oi_iter_ops = {
 	.iop_probe		= oi_iter_probe,
 	.iop_next		= oi_iter_next,
 	.iop_fetch		= oi_iter_fetch,
-	.iop_delete		= oi_iter_delete,
+	.iop_process		= oi_iter_process,
 };
 
 /**

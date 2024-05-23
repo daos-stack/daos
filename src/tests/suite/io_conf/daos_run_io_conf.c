@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -31,11 +31,11 @@ main(int argc, char **argv)
 	void			*state = NULL;
 	int			rc;
 
-	MPI_Init(&argc, &argv);
+	par_init(&argc, &argv);
 	rc = daos_init();
 	if (rc) {
 		fprintf(stderr, "daos init failed: rc %d\n", rc);
-		goto out_fini;
+		goto out_mpi;
 	}
 
 	while ((rc = getopt_long(argc, argv, "h:n:", long_ops, NULL)) != -1) {
@@ -77,10 +77,14 @@ main(int argc, char **argv)
 	eio_arg->op_lvl = TEST_LVL_DAOS;
 	eio_arg->op_iod_size = 1;
 	eio_arg->op_oid = dts_oid_gen(arg->myrank);
-	daos_obj_set_oid(&eio_arg->op_oid, 0, dts_obj_class, 0);
+	rc = daos_obj_set_oid_by_class(&eio_arg->op_oid, 0, dts_obj_class, 0);
+	if (rc) {
+		fprintf(stderr, "oid setup failed: rc %d\n", rc);
+		goto out_fini;
+	}
 	arg->eio_args.op_no_verify = 1;	/* No verification for now */
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	rc = io_conf_run(arg, fname);
 	if (rc)
@@ -88,10 +92,11 @@ main(int argc, char **argv)
 
 	test_teardown(&state);
 
-	daos_fini();
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	fprintf(stdout, "daos_run_io_conf completed successfully\n");
 out_fini:
-	MPI_Finalize();
+	daos_fini();
+out_mpi:
+	par_fini();
 	return rc;
 }

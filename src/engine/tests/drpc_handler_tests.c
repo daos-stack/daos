@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -147,6 +147,8 @@ static void
 drpc_hdlr_register_bad_module_id(void **state)
 {
 	assert_rc_equal(drpc_hdlr_register(NUM_DRPC_MODULES,
+					   dummy_drpc_handler2), -DER_INVAL);
+	assert_rc_equal(drpc_hdlr_register(-1,
 					   dummy_drpc_handler2), -DER_INVAL);
 }
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -67,12 +67,137 @@ enum daos_pool_props {
 	 * The pool svc rank list.
 	 */
 	DAOS_PROP_PO_SVC_LIST,
+	/**
+	 * Pool cell size.
+	 */
 	DAOS_PROP_PO_EC_CELL_SZ,
+	/**
+	 * Bdev threshold size
+	 */
+	DAOS_PROP_PO_DATA_THRESH,
+	/**
+	 * Pool redundancy factor.
+	 */
+	DAOS_PROP_PO_REDUN_FAC,
+	/**
+	 * The pool performance domain affinity level of EC object.
+	 */
+	DAOS_PROP_PO_EC_PDA,
+	/**
+	 * The pool performance domain affinity level
+	 * of replicated object.
+	 */
+	DAOS_PROP_PO_RP_PDA,
+
+	/**
+	 * Aggregation of pool/container/object/key disk format
+	 * version.
+	 */
+	DAOS_PROP_PO_GLOBAL_VERSION,
+	/**
+	 * Pool upgrade status.
+	 */
+	DAOS_PROP_PO_UPGRADE_STATUS,
+	/*
+	 * Schedule that the checksum scrubber will run. See
+	 * DAOS_SCRUBBER_SCHED_*
+	 *
+	 * default: DAOS_SCRUB_MODE_OFF
+	 */
+	DAOS_PROP_PO_SCRUB_MODE,
+	/**
+	 * How frequently the schedule will run. In seconds.
+	 *
+	 * default: 604800 seconds (1 week)
+	 */
+	DAOS_PROP_PO_SCRUB_FREQ,
+	/**
+	 * Number of checksum errors before auto eviction is engaged.
+	 *
+	 * default: 0 (disabled)
+	 */
+	DAOS_PROP_PO_SCRUB_THRESH,
+	/**
+	 * Pool service redundancy factor.
+	 */
+	DAOS_PROP_PO_SVC_REDUN_FAC,
+	/** object global version */
+	DAOS_PROP_PO_OBJ_VERSION,
+	/**
+	 * The pool performance domain
+	 */
+	DAOS_PROP_PO_PERF_DOMAIN,
+	/** Checkpoint mode, only applicable to MD_ON_SSD */
+	DAOS_PROP_PO_CHECKPOINT_MODE,
+	/** Frequency of timed checkpoint in seconds, default is 5 */
+	DAOS_PROP_PO_CHECKPOINT_FREQ,
+	/** WAL usage threshold to trigger checkpoint, default is 50% */
+	DAOS_PROP_PO_CHECKPOINT_THRESH,
+	/** Reintegration mode for pool, data_sync|no_data_sync default is data_sync*/
+	DAOS_PROP_PO_REINT_MODE,
+	/** Metadata duplicate operations detection enabled (1) or disabled (0) */
+	DAOS_PROP_PO_SVC_OPS_ENABLED,
+	/** Metadata duplicate operations SVC_OPS KVS max entry age (seconds), default 300 */
+	DAOS_PROP_PO_SVC_OPS_ENTRY_AGE,
 	DAOS_PROP_PO_MAX,
 };
 
 #define DAOS_PROP_PO_EC_CELL_SZ_MIN	(1UL << 10)
 #define DAOS_PROP_PO_EC_CELL_SZ_MAX	(1UL << 30)
+
+#define DAOS_PROP_PO_REDUN_FAC_MAX	4
+#define DAOS_PROP_PO_REDUN_FAC_DEFAULT	0
+
+static inline bool
+daos_rf_is_valid(unsigned long long rf)
+{
+	return rf <= DAOS_PROP_PO_REDUN_FAC_MAX;
+}
+
+#define DAOS_PROP_PDA_MAX	((uint32_t)-1)
+/**
+ * The default PDA for replica object or non-replica obj (S1/S2/.../SX).
+ * Default value (-1) means will try to put all replica shards of same RDG on same PD,
+ * for non-replica obj will put all shards for the object within a PD if
+ * the #targets in the PD is enough.
+ */
+#define DAOS_PROP_PO_RP_PDA_DEFAULT	DAOS_PROP_PDA_MAX
+/**
+ * the placement algorithm always tries to scatter shards of EC
+ * object to different PDs.
+ */
+#define DAOS_PROP_PO_EC_PDA_DEFAULT	((uint32_t)1)
+
+/** DAOS pool upgrade status */
+enum {
+	DAOS_UPGRADE_STATUS_NOT_STARTED = 0,
+	DAOS_UPGRADE_STATUS_IN_PROGRESS = 1,
+	DAOS_UPGRADE_STATUS_COMPLETED = 2,
+	DAOS_UPGRADE_STATUS_FAILED = 3,
+};
+
+#define DAOS_PROP_PO_SVC_REDUN_FAC_MAX		4
+#define DAOS_PROP_PO_SVC_REDUN_FAC_DEFAULT	2
+
+static inline bool
+daos_svc_rf_is_valid(uint64_t svc_rf)
+{
+	return svc_rf <= DAOS_PROP_PO_SVC_REDUN_FAC_MAX;
+}
+
+/**
+ * Level of perf_domain, should be same value as PO_COMP_TP_xxx (enum pool_comp_type).
+ */
+enum {
+	DAOS_PROP_PERF_DOMAIN_ROOT = 255,
+	DAOS_PROP_PERF_DOMAIN_GROUP = 3,
+};
+
+/**
+ * default performance domain is root
+ */
+#define DAOS_PROP_PO_PERF_DOMAIN_DEFAULT	DAOS_PROP_PERF_DOMAIN_ROOT
+#define DAOS_PROP_CO_PERF_DOMAIN_DEFAULT	DAOS_PROP_PERF_DOMAIN_ROOT
 
 /**
  * Number of pool property types
@@ -88,9 +213,56 @@ enum {
 	DAOS_RECLAIM_TIME,
 };
 
-/** self headling strategy bits */
+enum {
+	DAOS_REINT_MODE_DATA_SYNC = 0,
+	DAOS_REINT_MODE_NO_DATA_SYNC = 1,
+};
+
+/**
+ * default reintegration mode is data_sync
+ */
+#define DAOS_PROP_PO_REINT_MODE_DEFAULT	DAOS_REINT_MODE_DATA_SYNC
+
+/**
+ * Pool checksum scrubbing schedule type
+ * It is expected that these stay contiguous.
+ */
+enum {
+	DAOS_SCRUB_MODE_OFF = 0,
+	DAOS_SCRUB_MODE_LAZY = 1,
+	DAOS_SCRUB_MODE_TIMED = 2,
+	DAOS_SCRUB_MODE_INVALID = 3,
+};
+
+/* Checksum Scrubbing Defaults */
+#define DAOS_PROP_PO_SCRUB_MODE_DEFAULT DAOS_SCRUB_MODE_OFF
+
+#define DAOS_PROP_PO_SCRUB_FREQ_DEFAULT 604800 /* 1 week in seconds */
+#define DAOS_PROP_PO_SCRUB_THRESH_DEFAULT 0
+
+/** Checkpoint strategy */
+enum {
+	DAOS_CHECKPOINT_DISABLED = 0,
+	DAOS_CHECKPOINT_TIMED,
+	DAOS_CHECKPOINT_LAZY,
+};
+
+#define DAOS_PROP_PO_CHECKPOINT_MODE_DEFAULT   DAOS_CHECKPOINT_TIMED
+#define DAOS_PROP_PO_CHECKPOINT_FREQ_DEFAULT   5         /* 5 seconds */
+#define DAOS_PROP_PO_CHECKPOINT_FREQ_MIN       1         /* 1 seconds */
+#define DAOS_PROP_PO_CHECKPOINT_FREQ_MAX       (1 << 20) /* 1 million seconds */
+#define DAOS_PROP_PO_CHECKPOINT_THRESH_DEFAULT 50        /* 50 % WAL capacity */
+#define DAOS_PROP_PO_CHECKPOINT_THRESH_MAX     75        /* 75 % WAL capacity */
+#define DAOS_PROP_PO_CHECKPOINT_THRESH_MIN     10        /* 10 % WAL capacity */
+#define DAOS_PROP_PO_SVC_OPS_ENABLED_DEFAULT   1         /* true: enabled by default */
+#define DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_DEFAULT 300       /* 300 seconds */
+#define DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_MIN     60        /* 60 seconds */
+#define DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_MAX     600       /* 600 seconds */
+
+/** self healing strategy bits */
 #define DAOS_SELF_HEAL_AUTO_EXCLUDE	(1U << 0)
 #define DAOS_SELF_HEAL_AUTO_REBUILD	(1U << 1)
+#define DAOS_SELF_HEAL_DELAY_REBUILD	(1U << 2)
 
 /**
  * DAOS container property types
@@ -199,11 +371,24 @@ enum daos_cont_props {
 	DAOS_PROP_CO_ALLOCED_OID,
 	/** EC cell size, it can overwrite DAOS_PROP_CO_EC_CELL_SZ of pool */
 	DAOS_PROP_CO_EC_CELL_SZ,
+	/** Performance domain affinity level of EC object */
+	DAOS_PROP_CO_EC_PDA,
+	/**  performance domain affinity level of RP object */
+	DAOS_PROP_CO_RP_PDA,
+	/** immutable container global version */
+	DAOS_PROP_CO_GLOBAL_VERSION,
+	/** Override the pool scrubbing property. */
+	DAOS_PROP_CO_SCRUBBER_DISABLED,
+	/** immutable container object global version */
+	DAOS_PROP_CO_OBJ_VERSION,
+	/** The container performance domain, now always inherit from pool */
+	DAOS_PROP_CO_PERF_DOMAIN,
 	DAOS_PROP_CO_MAX,
 };
 
 /** first citizen objects of a container, stored as container property */
 struct daos_prop_co_roots {
+	/** array that stores root, SB OIDs */
 	daos_obj_id_t	cr_oids[4];
 };
 
@@ -292,9 +477,15 @@ enum {
  */
 enum {
 	DAOS_PROP_CO_REDUN_MIN	= 1,
-	DAOS_PROP_CO_REDUN_RANK	= 1, /** hard-coded */
+	/* server rank (engine) level */
+	DAOS_PROP_CO_REDUN_RANK	= 1,
+	/* server node level */
+	DAOS_PROP_CO_REDUN_NODE	= 2,
 	DAOS_PROP_CO_REDUN_MAX	= 254,
 };
+
+/** default fault domain level */
+#define DAOS_PROP_CO_REDUN_DEFAULT	DAOS_PROP_CO_REDUN_NODE
 
 /** container status flag */
 enum {
@@ -310,6 +501,8 @@ enum {
 
 /** clear the UNCLEAN status */
 #define DAOS_PROP_CO_CLEAR	(0x1)
+
+/** daos container status */
 struct daos_co_status {
 	/** DAOS_PROP_CO_HEALTHY/DAOS_PROP_CO_UNCLEAN */
 	uint16_t	dcs_status;
@@ -340,11 +533,18 @@ daos_prop_val_2_co_status(uint64_t val, struct daos_co_status *co_status)
 	co_status->dcs_pm_ver = (uint32_t)(val & 0xFFFFFFFF);
 }
 
+enum {
+	DAOS_PROP_ENTRY_NOT_SET = (1 << 0),
+};
+
+/** daos property entry */
 struct daos_prop_entry {
 	/** property type, see enum daos_pool_props/daos_cont_props */
 	uint32_t		 dpe_type;
+	/** property flags, eg negative entry*/
+	uint16_t		 dpe_flags;
 	/** reserved for future usage (for 64 bits alignment now) */
-	uint32_t		 dpe_reserv;
+	uint16_t		 dpe_reserv;
 	/**
 	 * value can be either a uint64_t, or a string, or any other type
 	 * data such as the struct daos_acl pointer.
@@ -363,6 +563,10 @@ struct daos_prop_entry {
 #define DAOS_PROP_LABEL_MAX_LEN		(127)
 /** DAOS_PROP_LABEL_MAX_LEN including NULL terminator */
 #define DAOS_PROP_MAX_LABEL_BUF_LEN	(DAOS_PROP_LABEL_MAX_LEN + 1)
+
+/** default values for unset labels */
+#define DAOS_PROP_CO_LABEL_DEFAULT "container_label_not_set"
+#define DAOS_PROP_PO_LABEL_DEFAULT "pool_label_not_set"
 
 /**
  * Check if DAOS (pool or container property) label string is valid.
@@ -406,30 +610,32 @@ daos_label_is_valid(const char *label)
 	}
 
 	/** Check to see if it could be a valid UUID */
-	if (maybe_uuid && strnlen(label, 36) == 36) {
-		bool		is_uuid = true;
-		const char	*p;
-
-		/** Implement the check directly to avoid uuid_parse() overhead */
-		for (i = 0, p = label; i < 36; i++, p++) {
-			if (i == 8 || i == 13 || i == 18 || i == 23) {
-				if (*p != '-') {
-					is_uuid = false;
-					break;
-				}
-				continue;
-			}
-			if (!isxdigit(*p)) {
-				is_uuid = false;
-				break;
-			}
-		}
-
-		if (is_uuid)
-			return false;
-	}
+	if (maybe_uuid && daos_is_valid_uuid_string(label))
+		return false;
 
 	return true;
+}
+
+/* default data threshold size of 4KiB */
+#define DAOS_PROP_PO_DATA_THRESH_DEFAULT (1UL << 12)
+
+/* For the case of no label is set for the pool. */
+#define DAOS_PROP_NO_PO_LABEL		"pool_label_not_set"
+
+/* Default container label */
+#define DEFAULT_CONT_LABEL		"container_label_not_set"
+
+/* For the case of no label is set for the container. */
+#define DAOS_PROP_NO_CO_LABEL		DEFAULT_CONT_LABEL
+
+/**
+ * Check if DAOS pool performance domain string is valid, string
+ * has same requirement as label.
+ */
+static inline bool
+daos_perf_domain_is_valid(const char *perf_domain)
+{
+	return daos_label_is_valid(perf_domain);
 }
 
 /** daos properties, for pool or container */
@@ -474,7 +680,8 @@ daos_prop_free(daos_prop_t *prop);
  * prop_entry_name1:value1;prop_entry_name2:value2;prop_entry_name3:value3;
  * \a prop must be freed with daos_prop_free() to release allocated space.
  * This supports properties that can be modified on container creation only:
- * label, cksum, cksum_size, srv_cksum, dedup, dedup_threshold, compression, encryption, rf, ec_cell
+ *   label, cksum, cksum_size, srv_cksum, dedup, dedup_threshold, compression,
+ *   encryption, rf, ec_cell_sz
  *
  * \param[in]	str	Serialized string of property entries and their values
  * \param[in]	len	Serialized string length
@@ -482,6 +689,19 @@ daos_prop_free(daos_prop_t *prop);
  */
 int
 daos_prop_from_str(const char *str, daos_size_t len, daos_prop_t **prop);
+
+/**
+ * Merge a set of new DAOS properties into a set of existing DAOS properties.
+ *
+ * \param[in]	old_prop	Existing set of properties
+ * \param[in]	new_prop	New properties - may override old entries
+ * \param[out]	out_prop	New properties - may override old entries
+ *
+ * \return		0		Success
+ *			-DER_NOMEM	Out of memory
+ */
+int
+daos_prop_merge2(daos_prop_t *old_prop, daos_prop_t *new_prop, daos_prop_t **out_prop);
 
 /**
  * Merge a set of new DAOS properties into a set of existing DAOS properties.
@@ -620,6 +840,23 @@ daos_prop_has_str(struct daos_prop_entry *entry);
  */
 bool
 daos_prop_has_ptr(struct daos_prop_entry *entry);
+
+/**
+ * Check if a DAOS prop entry is set or not.
+ *
+ * \param[in]		entry		Entry to be checked.
+ *
+ * \return		true		Entry is set
+ *			false		Entry is not set.
+ */
+static inline bool
+daos_prop_is_set(struct daos_prop_entry *entry)
+{
+	if (entry->dpe_flags & DAOS_PROP_ENTRY_NOT_SET)
+		return false;
+
+	return true;
+}
 
 #if defined(__cplusplus)
 }

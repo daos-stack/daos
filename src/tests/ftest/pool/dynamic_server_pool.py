@@ -1,11 +1,10 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
-from check_for_pool import check_for_pool
+from ClusterShell.NodeSet import NodeSet
 
 
 class DynamicServerPool(TestWithServers):
@@ -51,19 +50,18 @@ class DynamicServerPool(TestWithServers):
         each hosts.
 
         Args:
-            hosts (list of str): Hostnames to search the UUID-named directory.
+            hosts (NodeSet): Hosts to search the UUID-named directory.
             uuid_to_ranks (str to list of int dictionary): UUID to rank list
                 dictionary.
         """
-        RC_SUCCESS = 0
         errors = []
         for pool in self.pool:
             # Note that we don't check mapping between rank and hostname, but it
             # appears that self.hostlist_servers[0] is always rank0, 1 is rank1,
             # and the extra server we'll be adding will be rank2.
             for rank, host in enumerate(hosts):
-                rc = check_for_pool(host, pool.uuid.lower())
-                pool_exists_on_host = rc == RC_SUCCESS
+                pool_exists_on_host = pool.verify_uuid_directory(
+                    NodeSet(host), self.server_managers[0].get_config_value("scm_mount"))
                 # If this rank is in the rank list, there should be the
                 # UUID-named directory; i.e., pool_exist_on_host is True.
                 pool_expected = rank in uuid_to_ranks[pool.uuid.lower()]
@@ -100,38 +98,33 @@ class DynamicServerPool(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=control,dynamic_server_pool
+        :avocado: tags=pool,control
+        :avocado: tags=DynamicServerPool,test_dynamic_server_pool
         """
         # Create a pool on rank0.
         self.create_pool_with_ranks(ranks=[0], tl_update=True)
-        # Create a pool across the 2 servers.
-        self.create_pool_with_ranks(ranks=[0, 1])
         # Verify UUIDs by calling dmg pool list.
         self.verify_uuids()
 
-        # Verify that the UUID-named directory is created, or not created, at
-        # each host for the two pools.
+        # Verify that the UUID-named directory is created, or not created, at each host.
         self.check_pool_location(self.hostlist_servers, self.uuid_to_ranks)
 
         # Start an additional server.
-        extra_servers = self.params.get("test_servers", "/run/extra_servers/*")
+        extra_servers = self.get_hosts_from_yaml(
+            "test_servers", "server_partition", "server_reservation", "/run/extra_servers/*")
         self.log.info("Extra Servers = %s", extra_servers)
         self.start_additional_servers(extra_servers)
 
         # Create a pool on the newly added server and verify the UUIDs with dmg
         # pool list.
-        self.create_pool_with_ranks(ranks=[2], tl_update=True)
+        self.create_pool_with_ranks(ranks=[1], tl_update=True)
         self.verify_uuids()
         # Verify that the UUID-named directory is created at each host including
         # the new host.
-        self.check_pool_location(
-            self.hostlist_servers + extra_servers, self.uuid_to_ranks)
+        self.check_pool_location(self.hostlist_servers.union(extra_servers), self.uuid_to_ranks)
 
-        # Create a new pool across all three servers and verify the UUIDs with
-        # dmg pool list.
-        self.create_pool_with_ranks(ranks=[0, 1, 2])
+        # Create a new pool across both servers and verify the UUIDs with dmg pool list.
+        self.create_pool_with_ranks(ranks=[0, 1])
         self.verify_uuids()
-        # Verify that the UUID-named directory is created at each host for all
-        # pools.
-        self.check_pool_location(
-            self.hostlist_servers + extra_servers, self.uuid_to_ranks)
+        # Verify that the UUID-named directory is created at each host for all pools.
+        self.check_pool_location(self.hostlist_servers.union(extra_servers), self.uuid_to_ranks)

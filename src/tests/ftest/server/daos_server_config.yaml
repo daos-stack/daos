@@ -1,11 +1,17 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
 hosts:
-  test_servers:
-    - server-A
+  test_servers: 1
 timeout: 130
 server_config:
   name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
 # The 'config_val' list is composed of the following values:
 # - name of the config attribute, used to look for the attribute object
 # - test value that will be inserted into the server config for the attribute
@@ -92,11 +98,16 @@ server_config_val: !mux
     config_val:
       - "nr_hugepages"
       - 1000000000000000000
-      - "PASS"
-  nr_hugepages_negative_int:
+      - "FAIL"
+  nr_hugepages_large_negative_int:
     config_val:
       - "nr_hugepages"
       - -100
+      - "FAIL"
+  nr_hugepages_positive_int:
+    config_val:
+      - "nr_hugepages"
+      - 4096
       - "PASS"
   port_str:
     config_val:
@@ -152,14 +163,14 @@ server_config_val: !mux
     config_val:
       - "nr_xs_helpers"
       - -10000
-      - "PASS"
-  targets_negative:
-    config_val:
-      - "targets"
-      - -1
-      - "PASS"
+      - "FAIL"
   targets_str:
     config_val:
       - "targets"
       - "ABDCD"
+      - "FAIL"
+  targets_negative:
+    config_val:
+      - "targets"
+      - -1
       - "FAIL"

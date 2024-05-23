@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,7 +15,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -26,7 +26,7 @@ func assertFaultDomainEqualStr(t *testing.T, expResultStr string, result *system
 			t.Fatalf("expected nil result, got %q", result.String())
 		}
 	} else {
-		common.AssertEqual(t, expResultStr, result.String(), "incorrect fault domain")
+		test.AssertEqual(t, expResultStr, result.String(), "incorrect fault domain")
 	}
 }
 
@@ -58,7 +58,7 @@ func TestServer_getDefaultFaultDomain(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result, err := getDefaultFaultDomain(tc.getHostname)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			assertFaultDomainEqualStr(t, tc.expResult, result)
 		})
 	}
@@ -70,7 +70,7 @@ func TestServer_getFaultDomain(t *testing.T) {
 		t.Fatalf("couldn't get hostname: %s", err)
 	}
 
-	tmpDir, cleanup := common.CreateTestDir(t)
+	tmpDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
 	validFaultDomain := "/host0"
@@ -91,11 +91,17 @@ func TestServer_getFaultDomain(t *testing.T) {
 		"nil cfg": {
 			expErr: config.FaultBadConfig,
 		},
-		"cfg fault path": {
+		"single-layer fault path": {
 			cfg: &config.Server{
 				FaultPath: validFaultDomain,
 			},
 			expResult: validFaultDomain,
+		},
+		"two-layer fault path": {
+			cfg: &config.Server{
+				FaultPath: "/grp1/host0",
+			},
+			expResult: "/grp1/host0",
 		},
 		"cfg fault path is not valid": {
 			cfg: &config.Server{
@@ -109,9 +115,9 @@ func TestServer_getFaultDomain(t *testing.T) {
 			},
 			expErr: config.FaultConfigFaultDomainInvalid,
 		},
-		"too many layers": { // TODO DAOS-6353: change when multiple layers supported
+		"too many layers": { // TODO DAOS-6353: change when arbitrary layers supported
 			cfg: &config.Server{
-				FaultPath: "/rack1/host0",
+				FaultPath: "/rack1/grp1/host0",
 			},
 			expErr: config.FaultConfigTooManyLayersInFaultDomain,
 		},
@@ -142,7 +148,7 @@ func TestServer_getFaultDomain(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result, err := getFaultDomain(tc.cfg)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			assertFaultDomainEqualStr(t, tc.expResult, result)
 		})
 	}
@@ -183,7 +189,7 @@ func createScriptFile(t *testing.T, path string, mode os.FileMode, content strin
 }
 
 func TestServer_getFaultDomainFromCallback(t *testing.T) {
-	tmpDir, cleanup := common.CreateTestDir(t)
+	tmpDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
 	workingDir, err := os.Getwd()
@@ -229,7 +235,7 @@ func TestServer_getFaultDomainFromCallback(t *testing.T) {
 	createFaultCBScriptFile(t, invalidScriptPath, 0755, "some junk")
 
 	multiLayerScriptPath := filepath.Join(tmpDir, "multilayer.sh")
-	createFaultCBScriptFile(t, multiLayerScriptPath, 0755, "/one/two")
+	createFaultCBScriptFile(t, multiLayerScriptPath, 0755, "/one/two/three")
 
 	rootScriptPath := filepath.Join(tmpDir, "rootdomain.sh")
 	createFaultCBScriptFile(t, rootScriptPath, 0755, "/")
@@ -337,7 +343,7 @@ func TestServer_getFaultDomainFromCallback(t *testing.T) {
 
 			result, err := getFaultDomainFromCallback(tc.scriptPath, cbDir)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			assertFaultDomainEqualStr(t, tc.expResult, result)
 		})
 	}

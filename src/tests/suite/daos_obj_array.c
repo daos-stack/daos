@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -33,7 +33,7 @@ byte_array_simple_stack(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -106,7 +106,7 @@ array_simple(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -187,7 +187,7 @@ array_partial(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -339,7 +339,7 @@ replicator(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -415,7 +415,7 @@ read_empty(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -521,7 +521,7 @@ array_dkey_punch_enumerate(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init scatter/gather */
@@ -602,7 +602,7 @@ array_akey_punch_enumerate(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init scatter/gather */
@@ -703,7 +703,7 @@ array_recx_punch_enumerate(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -809,7 +809,7 @@ array_recx_read_incomplete(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -923,7 +923,7 @@ fetch_array_with_map(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -1038,7 +1038,7 @@ fetch_array_with_map_2(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -1115,7 +1115,7 @@ fetch_array_with_map_3(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -1192,7 +1192,7 @@ fetch_array_with_map_4(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -1272,7 +1272,7 @@ small_sgl(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -1336,7 +1336,7 @@ cond_ops(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -1397,6 +1397,141 @@ cond_ops(void **state)
 	print_message("all good\n");
 }
 
+
+#define NUM_IOS 256
+#define IO_SIZE 24
+#define NUM_TH	8
+
+struct test_async_arg {
+	int			thread_idx;
+	pthread_barrier_t	*barrier;
+	daos_handle_t		oh;
+	test_arg_t		*arg;
+};
+
+struct test_async_arg th_arg[NUM_TH];
+pthread_t test_tid[NUM_TH];
+
+static void *
+test_async_io(void *arg)
+{
+	struct test_async_arg	*targ = arg;
+	d_iov_t			dkey[NUM_IOS];
+	d_sg_list_t		sgls[NUM_IOS];
+	d_iov_t			sg_iovs[NUM_IOS];
+	daos_iod_t		iods[NUM_IOS];
+	daos_recx_t		recx[NUM_IOS];
+	char			akey_str[NUM_IOS][10];
+	char			dkey_str[NUM_IOS][10];
+	char			buf[NUM_IOS][IO_SIZE];
+	daos_handle_t		eqh;
+	int			i, rc;
+
+	print_message("test_async_io thread: %d\n", targ->thread_idx);
+
+	rc = daos_eq_create(&eqh);
+	D_ASSERT(rc == 0);
+	print_message("dfs_test_read_thread %d create eqh\n", targ->thread_idx);
+
+	for (i = 0; i < NUM_IOS; i++) {
+		daos_event_t	*ev;
+
+		D_ALLOC_PTR_NZ(ev);
+		D_ASSERT(ev != NULL);
+
+		rc = daos_event_init(ev, eqh, NULL);
+		assert_rc_equal(rc, 0);
+
+		/** init dkey */
+		sprintf(dkey_str[i], "dkey_%d_%d", targ->thread_idx, i);
+		d_iov_set(&dkey[i], dkey_str[i], strlen(dkey_str[i]));
+		dts_buf_render(buf[i], IO_SIZE);
+
+		d_iov_set(&sg_iovs[i], buf[i], sizeof(buf[i]));
+		sgls[i].sg_nr		= 1;
+		sgls[i].sg_nr_out	= 0;
+		sgls[i].sg_iovs		= &sg_iovs[i];
+
+		sprintf(akey_str[i], "akey_%d", i);
+		d_iov_set(&iods[i].iod_name, akey_str[i], strlen(akey_str[i]));
+		iods[i].iod_nr		= 1;
+		iods[i].iod_size	= 1;
+		recx[i].rx_idx		= i * IO_SIZE;
+		recx[i].rx_nr		= IO_SIZE;
+		iods[i].iod_recxs	= &recx[i];
+		iods[i].iod_type	= DAOS_IOD_ARRAY;
+
+		rc = daos_obj_update(targ->oh, DAOS_TX_NONE, 0, &dkey[i], 1, &iods[i], &sgls[i],
+				     ev);
+		assert_rc_equal(rc, 0);
+	}
+
+	pthread_barrier_wait(targ->barrier);
+
+	while (1) {
+		struct daos_event	*eps[NUM_IOS] = { 0 };
+
+		rc = daos_eq_poll(eqh, 0, DAOS_EQ_NOWAIT, NUM_IOS, eps);
+		if (rc < 0) {
+			print_error("EQ poll failed: %d\n", rc);
+			pthread_exit(NULL);
+		}
+
+		for (i = 0; i < rc; i++)
+			daos_event_fini(eps[i]);
+
+		/** exit when nothing left in EQ */
+		rc = daos_eq_query(eqh, DAOS_EQR_ALL, 0, NULL);
+		if (rc < 0) {
+			print_error("EQ poll failed: %d\n", rc);
+			pthread_exit(NULL);
+		}
+		if (rc == 0) {
+			rc = daos_eq_destroy(eqh, 0);
+			assert_rc_equal(rc, 0);
+			pthread_exit(NULL);
+		}
+	}
+}
+
+static void
+mth_async_io(void **state)
+{
+	test_arg_t		*arg = *state;
+	pthread_barrier_t	barrier;
+	daos_obj_id_t		oid;
+	daos_handle_t		oh;
+	int			i, rc;
+
+	/** open object */
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	pthread_barrier_init(&barrier, NULL, NUM_TH + 1);
+
+	for (i = 0; i < NUM_TH; i++) {
+		th_arg[i].thread_idx	= i;
+		th_arg[i].oh		= oh;
+		th_arg[i].arg		= arg;
+		th_arg[i].barrier	= &barrier;
+		rc = pthread_create(&test_tid[i], NULL, test_async_io, &th_arg[i]);
+		assert_int_equal(rc, 0);
+	}
+
+	pthread_barrier_wait(&barrier);
+
+	for (i = 0; i < NUM_TH; i++) {
+		rc = pthread_join(test_tid[i], NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	/** close object */
+	rc = daos_obj_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("all good\n");
+}
+
 static const struct CMUnitTest array_tests[] = {
 	{ "ARRAY0: small_sgl",
 	  small_sgl, NULL, test_case_teardown},
@@ -1439,6 +1574,8 @@ static const struct CMUnitTest array_tests[] = {
 	  fetch_array_with_map_4, NULL, test_case_teardown},
 	{ "ARRAY18: Simple Conditional Operations",
 	  cond_ops, NULL, test_case_teardown},
+	{ "ARRAY19: multi-threaded EQ IO",
+	  mth_async_io, NULL, test_case_teardown},
 };
 
 static int
@@ -1457,6 +1594,6 @@ run_daos_obj_array_test(int rank, int size)
 		rc = cmocka_run_group_tests_name("DAOS_Obj_Array",
 						 array_tests, obj_array_setup,
 						 test_teardown);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }

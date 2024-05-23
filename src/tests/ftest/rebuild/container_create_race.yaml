@@ -1,0 +1,64 @@
+hosts:
+  test_servers: 2
+  test_clients: 1
+
+timeout: 360
+
+server_config:
+  name: daos_server
+  engines_per_host: 2
+  crt_timeout: 10
+  engines:
+    0:
+      targets: 2
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos0
+    1:
+      targets: 2
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos1
+
+testparams:
+  rank_to_kill: 3
+
+pool:
+  scm_size: 8G
+  pool_query_timeout: 15
+  properties: rd_fac:1
+
+container:
+  type: POSIX
+  control_method: daos
+
+io:
+  object_qty: 8
+  record_qty: 8
+  data_size: 100000
+  akey_size: 10
+  dkey_size: 10
+  oclass: "OC_RP_3GX"
+  cont_qty: 10
+
+ior:
+  client_processes:
+    ppn: 8
+  ior_test_loop: 2
+  api: DFS
+  dfs_oclass: "RP_2G1"
+  flags: "-w -W -F -k -G 1"
+  transfer_size: '1M'
+  block_size: '128M'

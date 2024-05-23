@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -9,7 +8,7 @@ import ctypes
 from apricot import TestWithServers
 
 
-class BadEvictTest(TestWithServers):
+class PoolBadEvictTest(TestWithServers):
     """Test pool evict calls.
 
     Test Class Description:
@@ -19,15 +18,16 @@ class BadEvictTest(TestWithServers):
     :avocado: recursive
     """
 
-    def test_evict(self):
+    def test_pool_bad_evict(self):
         """Test ID: DAOS-427.
 
         Test Description:
             Pass bad parameters to the pool evict clients call.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=tiny
-        :avocado: tags=pool,bad_evict
+        :avocado: tags=vm
+        :avocado: tags=pool
+        :avocado: tags=PoolBadEvictTest,test_pool_bad_evict
         """
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the
@@ -62,7 +62,10 @@ class BadEvictTest(TestWithServers):
             saveduuid = (ctypes.c_ubyte * 16)(0)
             for index, _ in enumerate(saveduuid):
                 saveduuid[index] = self.pool.pool.uuid[index]
-            self.pool.pool.uuid[4] = 244
+            if self.pool.pool.uuid[4] != 244:
+                self.pool.pool.uuid[4] = 244
+            else:
+                self.pool.pool.uuid[4] = 255
 
         self.pool.uuid = self.pool.pool.get_uuid_str()
 

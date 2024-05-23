@@ -1,16 +1,16 @@
 {
-    "problemMatcher": [
-        {
-            "owner": "daos-doxygen",
-            "pattern": [
-                {
-                    "regexp": "^(.+):(\\d+):\\s(warning|error):\\s(.+)$",
-                    "file": 1,
-                    "line": 2,
-                    "severity": 3,
-                    "message": 4,
-                }
-            ]
-        }
-    ]
+  "problemMatcher": [
+    {
+      "owner": "daos-doxygen",
+      "pattern": [
+	{
+	  "regexp": "(src/include/.+\\.h):(\\d+):\\s(warning|error):\\s(.+)$",
+	  "file": 1,
+	  "line": 2,
+	  "severity": 3,
+	  "message": 4
+	}
+      ]
+    }
+  ]
 }

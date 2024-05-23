@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -125,8 +125,9 @@ int main(void)
 	excluded_membs.rl_nr = 1;
 	excluded_membs.rl_ranks = &excluded_ranks;
 
-	env_self_rank = getenv("CRT_L_RANK");
+	d_agetenv_str(&env_self_rank, "CRT_L_RANK");
 	my_rank = atoi(env_self_rank);
+	d_freeenv_str(&env_self_rank);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(my_rank, 20, true, true);
@@ -134,8 +135,7 @@ int main(void)
 	rc = d_log_init();
 	assert(rc == 0);
 
-	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER |
-			CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
+	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	assert(rc == 0);
 
 	rc = crt_proto_register(&my_proto_fmt_basic_corpc);
@@ -151,9 +151,9 @@ int main(void)
 		assert(0);
 	}
 
-	grp_cfg_file = getenv("CRT_L_GRP_CFG");
+	d_agetenv_str(&grp_cfg_file, "CRT_L_GRP_CFG");
 
-	rc = crt_rank_self_set(my_rank);
+	rc = crt_rank_self_set(my_rank, 1 /* group_version_min */);
 	if (rc != 0) {
 		D_ERROR("crt_rank_self_set(%d) failed; rc=%d\n",
 			my_rank, rc);
@@ -169,6 +169,7 @@ int main(void)
 	/* load group info from a config file and delete file upon return */
 	rc = crtu_load_group_from_file(grp_cfg_file, g_main_ctx, grp, my_rank,
 				       true);
+	d_freeenv_str(&grp_cfg_file);
 	if (rc != 0) {
 		D_ERROR("crtu_load_group_from_file() failed; rc=%d\n", rc);
 		assert(0);
@@ -181,9 +182,8 @@ int main(void)
 			assert(0);
 		}
 
-		sleep(2);
 		rc = crtu_wait_for_ranks(g_main_ctx, grp, rank_list,
-					 0, 1, 10, 100.0);
+					 0, 1, 50, 100.0);
 		if (rc != 0) {
 			D_ERROR("wait_for_ranks() failed; rc=%d\n", rc);
 			assert(0);

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -29,56 +29,20 @@
 
 #define DATA_SIZE	(1048576 * 2 + 512)
 
-static int
-reintegrate_inflight_io(void *data)
-{
-	test_arg_t	*arg = data;
-	daos_obj_id_t	oid = *(daos_obj_id_t *)arg->rebuild_cb_arg;
-	struct ioreq	req;
-	int		i;
-
-	rebuild_pool_connect_internal(arg);
-	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-	for (i = 0; i < 5; i++) {
-		char	key[32];
-		daos_recx_t recx;
-		char	buf[DATA_SIZE];
-
-		sprintf(key, "d_inflight_%d", i);
-		insert_single(key, "a_key", 0, "data", strlen("data") + 1,
-			      DAOS_TX_NONE, &req);
-
-		sprintf(key, "d_inflight_1M_%d", i);
-		recx.rx_idx = 0;
-		recx.rx_nr = DATA_SIZE;
-		memset(buf, 'a', DATA_SIZE);
-		insert_recxs(key, "a_key_1M", 1, DAOS_TX_NONE, &recx, 1,
-			     buf, DATA_SIZE, &req);
-	}
-	ioreq_fini(&req);
-	rebuild_pool_disconnect_internal(arg);
-	if (arg->myrank == 0)
-		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0,
-				      NULL);
-	return 0;
-}
-
 static void
 reintegrate_with_inflight_io(test_arg_t *arg, daos_obj_id_t *oid,
 			     d_rank_t rank, int tgt)
 {
 	daos_obj_id_t inflight_oid;
 
-#if 0
-	/* Disable it due to DAOS-7420 */
 	if (oid != NULL) {
 		inflight_oid = *oid;
 	} else {
-#endif
-	inflight_oid = daos_test_oid_gen(arg->coh,
+		inflight_oid = daos_test_oid_gen(arg->coh,
 					 DAOS_OC_R3S_SPEC_RANK, 0,
 					 0, arg->myrank);
-	inflight_oid = dts_oid_set_rank(inflight_oid, rank);
+		inflight_oid = dts_oid_set_rank(inflight_oid, rank);
+	}
 
 	arg->rebuild_cb = reintegrate_inflight_io;
 	arg->rebuild_cb_arg = &inflight_oid;
@@ -91,8 +55,6 @@ reintegrate_with_inflight_io(test_arg_t *arg, daos_obj_id_t *oid,
 	arg->rebuild_cb = NULL;
 	arg->rebuild_cb_arg = NULL;
 
-#if 0
-	/* Disable it due to DAOS-7420 */
 	if (oid == NULL) {
 		int rc;
 
@@ -100,7 +62,6 @@ reintegrate_with_inflight_io(test_arg_t *arg, daos_obj_id_t *oid,
 		if (rc != 0)
 			assert_rc_equal(rc, -DER_NOSYS);
 	}
-#endif
 }
 
 static void
@@ -526,7 +487,7 @@ rebuild_snap_punch_keys(void **state)
 
 			rc = daos_tx_open_snap(arg->coh, snap_epoch[j],
 					       &th_open, NULL);
-			assert_int_equal(rc, 0);
+			assert_success(rc);
 			number = 2 * SNAP_CNT;
 			memset(&anchor, 0, sizeof(anchor));
 			enumerate_dkey(th_open, &number, kds, &anchor, buf,
@@ -773,7 +734,8 @@ rebuild_objects(void **state)
 }
 
 static void
-rebuild_sx_object_internal(void **state, uint16_t oclass)
+rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass,
+			   bool verify, bool wait_rebuild)
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
@@ -784,6 +746,8 @@ rebuild_sx_object_internal(void **state, uint16_t oclass)
 	d_rank_t	rank = 2;
 	int		rank_nr = 1;
 	int		i;
+	int		rc = 0;
+	char		buffer[32];
 
 	if (!test_runable(arg, 4))
 		return;
@@ -797,28 +761,51 @@ rebuild_sx_object_internal(void **state, uint16_t oclass)
 			      DAOS_TX_NONE, &req);
 	}
 
+	if (!wait_rebuild) {
+		rc = daos_pool_set_prop(arg->pool.pool_uuid, "reintegration",
+					"no_data_sync");
+		assert_success(rc);
+		print_message("lookup 100 dkeys with RO containers\n");
+		for (i = 0; i < 100 && verify; i++) {
+			memset(buffer, 0, 32);
+			sprintf(dkey, "dkey_%d\n", i);
+			lookup_single(dkey, akey, 0, buffer, 32, DAOS_TX_NONE, &req);
+			assert_string_equal(buffer, rec);
+		}
+		sprintf(dkey, "dkey_101\n");
+		arg->expect_result = -DER_NO_PERM;
+		insert_single(dkey, akey, 0, (void *)rec, strlen(rec),
+			      DAOS_TX_NONE, &req);
+		arg->expect_result = 0;
+	}
+
 	get_killing_rank_by_oid(arg, oid, 1, 0, &rank, &rank_nr);
 	/** exclude the target of this obj's replicas */
-	daos_exclude_server(arg->pool.pool_uuid, arg->group,
-			    arg->dmg_config, rank);
+	rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
+			      arg->group, rank, -1);
+	assert_success(rc);
 
 	/* wait until rebuild done */
-	test_rebuild_wait(&arg, 1);
+	if (wait_rebuild)
+		test_rebuild_wait(&arg, 1);
 
 	/* add back the excluded targets */
-	daos_reint_server(arg->pool.pool_uuid, arg->group,
-			  arg->dmg_config, rank);
+	rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+				  rank, -1);
+	assert_success(rc);
 
 	/* wait until reintegration is done */
 	test_rebuild_wait(&arg, 1);
 
 	print_message("lookup 100 dkeys\n");
-	for (i = 0; i < 100; i++) {
-		char buffer[32];
-
+	for (i = 0; i < 100 && verify; i++) {
 		memset(buffer, 0, 32);
 		sprintf(dkey, "dkey_%d\n", i);
 		lookup_single(dkey, akey, 0, buffer, 32, DAOS_TX_NONE, &req);
+		/* SX only has one replica, and reintegration will delete the "stale"
+		 * data anyway, so it may lose data here, so do not need verify data
+		 * for SX object. Incremental reintegration might fix this.
+		 */
 		assert_string_equal(buffer, rec);
 	}
 	ioreq_fini(&req);
@@ -827,14 +814,35 @@ rebuild_sx_object_internal(void **state, uint16_t oclass)
 static void
 rebuild_sx_object(void **state)
 {
-	rebuild_sx_object_internal(state, OC_SX);
+	rebuild_sx_object_internal(state, OC_SX, false, true);
 }
 
 static void
 rebuild_xsf_object(void **state)
 {
-	rebuild_sx_object_internal(state, OC_RP_XSF);
+	rebuild_sx_object_internal(state, OC_RP_XSF, true, true);
 }
+
+static void
+rebuild_sx_object_no_data_sync(void **state)
+{
+	rebuild_sx_object_internal(state, OC_SX, false, false);
+}
+
+static int
+reintegration_no_data_sync_teardown(void **state)
+{
+	test_arg_t	*arg = *state;
+	int		 rc;
+
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "reintegration",
+				"data_sync");
+	assert_success(rc);
+	test_teardown(state);
+
+	return rc;
+}
+
 
 static void
 rebuild_large_object(void **state)
@@ -848,6 +856,7 @@ rebuild_large_object(void **state)
 	d_rank_t	rank = 2;
 	int		i;
 	int		j;
+	int		rc = 0;
 
 	if (!test_runable(arg, 4))
 		return;
@@ -864,18 +873,48 @@ rebuild_large_object(void **state)
 	}
 
 	/** exclude the target of this obj's replicas */
-	daos_exclude_server(arg->pool.pool_uuid, arg->group,
-			    arg->dmg_config, rank);
+	rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+			      rank, -1);
+	assert_success(rc);
 
 	/* wait until rebuild done */
 	test_rebuild_wait(&arg, 1);
 
 	/* add back the excluded targets */
-	daos_reint_server(arg->pool.pool_uuid, arg->group,
-			  arg->dmg_config, rank);
+	rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+				  rank, -1);
+	assert_success(rc);
 
 	/* wait until reintegration is done */
 	test_rebuild_wait(&arg, 1);
+}
+
+int
+rebuild_small_pool_n4_rf1_setup(void **state)
+{
+	test_arg_t	*arg;
+	int rc;
+
+	save_group_state(state);
+	rc = rebuild_sub_setup_common(state, REBUILD_SMALL_POOL_SIZE, 4, DAOS_PROP_CO_REDUN_RF1);
+	rc = test_setup(state, SETUP_CONT_CONNECT, true,
+			REBUILD_SMALL_POOL_SIZE, 4, NULL);
+	if (rc) {
+		/* Let's skip for this case, since it is possible there
+		 * is not enough ranks here.
+		 */
+		print_message("It can not create the pool with 4 ranks"
+			      " probably due to not enough ranks %d\n", rc);
+		return 0;
+	}
+
+	arg = *state;
+	if (dt_obj_class != DAOS_OC_UNKNOWN)
+		arg->obj_class = dt_obj_class;
+	else
+		arg->obj_class = DAOS_OC_R3S_SPEC_RANK;
+
+	return 0;
 }
 
 int
@@ -1032,7 +1071,7 @@ rebuild_multiple_group(void **state)
 	if (!test_runable(arg, 7))
 		return;
 
-	oid = daos_test_oid_gen(arg->coh, OC_RP_2G3, 0, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_2G4, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	print_message("Insert %d kv record in object "DF_OID"\n",
@@ -1174,6 +1213,7 @@ rebuild_with_dfs_open_create_punch(void **state)
 	dfs_obj_t	*obj;
 	dfs_obj_t	*dir;
 	uuid_t		co_uuid;
+	char		str[37];
 	char		filename[32];
 	d_rank_t	rank;
 	daos_obj_id_t	oid;
@@ -1184,8 +1224,15 @@ rebuild_with_dfs_open_create_punch(void **state)
 	if (!test_runable(arg, 6))
 		return;
 
-	uuid_generate(co_uuid);
-	rc = dfs_cont_create(arg->pool.poh, co_uuid, NULL, &co_hdl, &dfs_mt);
+	dfs_attr_t attr = {};
+
+	attr.da_props = daos_prop_alloc(1);
+	assert_non_null(attr.da_props);
+	attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+	attr.da_props->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RANK;
+
+	rc = dfs_cont_create(arg->pool.poh, &co_uuid, &attr, &co_hdl, &dfs_mt);
+	daos_prop_free(attr.da_props);
 	assert_int_equal(rc, 0);
 	printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 
@@ -1207,7 +1254,8 @@ rebuild_with_dfs_open_create_punch(void **state)
 
 	rank = get_rank_by_oid_shard(arg, oid, 0);
 	rebuild_single_pool_rank(arg, rank, false);
-	reintegrate_single_pool_rank_no_disconnect(arg, rank);
+	reintegrate_single_pool_rank(arg, rank, false);
+	daos_cont_status_clear(co_hdl, NULL);
 
 	for (i = 0; i < 20; i++) {
 		sprintf(filename, "degrade_file_%d", i);
@@ -1221,7 +1269,6 @@ rebuild_with_dfs_open_create_punch(void **state)
 		assert_int_equal(rc, 0);
 	}
 
-	daos_cont_status_clear(co_hdl, NULL);
 
 	rc = dfs_release(dir);
 	assert_int_equal(rc, 0);
@@ -1232,8 +1279,641 @@ rebuild_with_dfs_open_create_punch(void **state)
 	rc = daos_cont_close(co_hdl, NULL);
 	assert_rc_equal(rc, 0);
 
-	rc = daos_cont_destroy(arg->pool.poh, co_uuid, 1, NULL);
+	uuid_unparse(co_uuid, str);
+	rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
 	assert_rc_equal(rc, 0);
+}
+
+static int
+rebuild_wait_reset_fail_cb(void *data)
+{
+	test_arg_t	*arg = data;
+
+	print_message("wait 300 seconds for rebuild/reclaim/retry....");
+	sleep(60);
+
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 0, 0, NULL);
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_NUM, 0, 0, NULL);
+
+	return 0;
+}
+
+static void
+rebuild_many_objects_with_failure(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	*oids;
+	int		rc;
+	int		i;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	D_ALLOC_ARRAY(oids, 8000);
+	for (i = 0; i < 8000; i++) {
+		char buffer[256];
+		daos_recx_t recx;
+		struct ioreq req;
+
+		oids[i] = daos_test_oid_gen(arg->coh, OC_RP_3G1, 0, 0, arg->myrank);
+		ioreq_init(&req, arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
+		memset(buffer, 'a', 256);
+		recx.rx_idx = 0;
+		recx.rx_nr = 256;
+		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1, buffer, 256, &req);
+
+		ioreq_fini(&req);
+	}
+
+	if (arg->myrank == 0) {
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_REBUILD_OBJ_FAIL | DAOS_FAIL_ALWAYS, 0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 50,
+				      0, NULL);
+	}
+
+	arg->rebuild_cb = rebuild_wait_reset_fail_cb;
+
+	rebuild_single_pool_target(arg, 3, -1, false);
+
+	for (i = 0; i < 8000; i++) {
+		rc = daos_obj_verify(arg->coh, oids[i], DAOS_EPOCH_MAX);
+		if (rc != 0)
+			assert_rc_equal(rc, -DER_NOSYS);
+	}
+	D_FREE(oids);
+}
+
+#define KB 1024
+#define MB (KB * 1024)
+#define GB (MB * 1024)
+
+static void
+inject_corruption(const int my_rank, const int injection_rank, const char *injection_group,
+		  const int injection_count)
+{
+	int	fault_injection = DAOS_CSUM_CORRUPT_DISK | DAOS_FAIL_SOME;
+
+	if (my_rank == 0) {
+		daos_debug_set_params(injection_group, injection_rank, DMG_KEY_FAIL_NUM,
+				      injection_count, 0, NULL);
+		daos_debug_set_params(injection_group, injection_rank, DMG_KEY_FAIL_LOC,
+				      fault_injection, 0, NULL);
+	}
+}
+
+/*
+ * This test was introduced to troubleshoot hitting an assert in rpc_csum.c "csum->cs_csum != NULL".
+ * It tests that nothing breaks while the checksum scrubber detects data corruption and
+ * initiates a drain on multiple targets due to the corruption threshold being hit.
+ */
+static void
+rebuild_object_with_csum_error(void **state)
+{
+	test_arg_t	*arg = *state;
+	d_sg_list_t	 sgl = {0};
+	int		 rc = 0;
+	int		 i, j;
+	daos_handle_t	 poh = arg->pool.poh;
+	int		 ranks = 3; /* will inject corruption to ranks 0-2 */
+	daos_key_t	 dkey, akey;
+	uint64_t	 dkey_val;
+	char		*akey_val = "0";
+	daos_prop_t	*cont_props;
+	uuid_t		 cont_uuid;
+	char		 uuid_cont_str[DAOS_UUID_STR_SIZE];
+	daos_handle_t	 coh;
+	daos_handle_t	 oh;
+	daos_obj_id_t	 oid;
+	daos_recx_t	 recx;
+	daos_iod_t	 iod;
+	uint8_t		*pool_uuid = arg->pool.pool_uuid;
+
+	/* test params */
+	daos_size_t	transfer_size = 1 * MB;
+	daos_size_t	block_size = 2L * GB;
+	daos_size_t	io_count = block_size / transfer_size;
+	uint32_t	iterations = 2;
+
+	if (!test_runable(arg, 3)) {
+		skip();
+		return;
+	}
+
+	/* setup pool to have scrubbing turned on */
+	assert_success(dmg_pool_set_prop(dmg_config_file, "scrub", "timed", pool_uuid));
+	assert_success(dmg_pool_set_prop(dmg_config_file, "scrub_freq", "1", pool_uuid));
+	assert_success(dmg_pool_set_prop(dmg_config_file, "scrub_thresh", "2", pool_uuid));
+
+	/* setup container */
+	cont_props = daos_prop_alloc(3);
+	assert_non_null(cont_props);
+	cont_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+	cont_props->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RANK;
+	cont_props->dpp_entries[1].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	cont_props->dpp_entries[1].dpe_val = 1;
+	cont_props->dpp_entries[2].dpe_type = DAOS_PROP_CO_CSUM;
+	cont_props->dpp_entries[2].dpe_val = DAOS_PROP_CO_CSUM_CRC16;
+
+	if (arg->myrank == 0) {
+		/* make sure corruption is disabled while creating cont ... */
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_NUM, 0, 0, NULL);
+	}
+
+	assert_success(daos_cont_create(poh, &cont_uuid, cont_props, NULL));
+	uuid_unparse(cont_uuid, uuid_cont_str);
+	assert_success(daos_cont_open(poh, uuid_cont_str, DAOS_COO_RW, &coh, NULL, NULL));
+
+	/* setup object */
+	oid = daos_test_oid_gen(coh, OC_RP_2GX, 0, 0, 0);
+	assert_success(daos_obj_open(coh, oid, DAOS_OO_RW, &oh, NULL));
+
+	/* setup keys */
+	d_iov_set(&dkey, &dkey_val, sizeof(dkey_val));
+	d_iov_set(&akey, akey_val, strlen(akey_val));
+
+	/* setup IOD and SGL */
+	recx.rx_idx = 0;
+	recx.rx_nr = transfer_size;
+
+	iod.iod_nr = 1;
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_size = 1;
+	iod.iod_name = akey;
+	iod.iod_recxs = &recx;
+
+	assert_success(d_sgl_init(&sgl, 1));
+	assert_success(daos_iov_alloc(&sgl.sg_iovs[0], transfer_size, true));
+	memset(sgl.sg_iovs[0].iov_buf, 0xa, transfer_size);
+
+	for (j = 0; j < iterations && rc == 0; j++) {
+		print_message("iteration: %d\n", j);
+		for (i = 0; i < io_count && rc == 0; i++) {
+			if (i % 100 == 0)
+				inject_corruption(arg->myrank, (i / 100) % ranks, arg->group, 2);
+			dkey_val = i;
+			rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+			if (rc != 0)
+				print_message("Error updating object: "DF_RC"\n", DP_RC(rc));
+		}
+		for (i = 0; i < io_count && rc == 0; i++) {
+			dkey_val = i;
+			rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL, NULL);
+			if (rc != 0)
+				print_message("Error fetching object: "DF_RC"\n", DP_RC(rc));
+		}
+	}
+
+	if (arg->myrank == 0) {
+		/* reset fault injection */
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_NUM, 0, 0, NULL);
+	}
+
+	/* clean up */
+	assert_success(daos_cont_close(coh, NULL));
+	assert_success(daos_cont_destroy(poh, uuid_cont_str, false, NULL));
+	assert_success(dmg_pool_set_prop(dmg_config_file, "scrub", "off", arg->pool.pool_uuid));
+}
+
+struct rebuild_cb_arg {
+	dfs_t		*dfs_mt;
+	dfs_obj_t	*dir;
+	daos_off_t	offset;
+	daos_size_t	size;
+};
+
+
+static int
+rebuild_dfs_read_check(dfs_t *dfs_mt, dfs_obj_t *dir, daos_off_t offset,
+		       daos_size_t size)
+{
+	d_iov_t		iov;
+	d_sg_list_t	sgl;
+	char		*buf;
+	char		*verify_buf;
+	char		filename[32];
+	dfs_obj_t	*obj;
+	daos_size_t	read_size = size;
+	int		i;
+	int		rc;
+
+	buf = malloc(size);
+	assert_non_null(buf);
+	verify_buf = malloc(size);
+	assert_non_null(verify_buf);
+	memset(verify_buf, 'a', size);
+
+	d_iov_set(&iov, buf, size);
+	sgl.sg_nr = 1;
+	sgl.sg_iovs = &iov;
+	for (i = 0; i < 20; i++) {
+		sprintf(filename, "rebuild_file_%d", i);
+		rc = dfs_open(dfs_mt, dir, filename, S_IFREG | S_IWUSR | S_IRUSR,
+			      O_RDONLY | O_EXCL, OC_RP_3G6, 1048576, NULL, &obj);
+		assert_int_equal(rc, 0);
+
+		rc = dfs_read(dfs_mt, obj, &sgl, 0, &read_size, NULL);
+		assert_int_equal(rc, 0);
+
+		assert_int_equal(read_size, size);
+		assert_memory_equal(buf, verify_buf, size);
+		rc = dfs_release(obj);
+		assert_int_equal(rc, 0);
+	}
+
+	free(buf);
+	return 0;
+}
+
+static int
+rebuild_dfs_write(dfs_t *dfs_mt, dfs_obj_t *dir, daos_off_t offset,
+		  daos_size_t size, uint32_t flags)
+{
+	d_iov_t		iov;
+	d_sg_list_t	sgl;
+	char		*buf;
+	char		filename[32];
+	dfs_obj_t	*obj;
+	int		i;
+	int		rc;
+
+	buf = malloc(size);
+	assert_non_null(buf);
+	memset(buf, 'a', size);
+	d_iov_set(&iov, buf, size);
+	sgl.sg_nr = 1;
+	sgl.sg_iovs = &iov;
+	for (i = 0; i < 20; i++) {
+		sprintf(filename, "rebuild_file_%d", i);
+		rc = dfs_open(dfs_mt, dir, filename, S_IFREG | S_IWUSR | S_IRUSR,
+			      flags, OC_RP_3G6, 1048576, NULL, &obj);
+		assert_int_equal(rc, 0);
+
+		rc = dfs_write(dfs_mt, obj, &sgl, offset, NULL);
+		assert_int_equal(rc, 0);
+
+		rc = dfs_release(obj);
+		assert_int_equal(rc, 0);
+	}
+
+	free(buf);
+	return 0;
+}
+
+static int
+rebuild_dfs_remove(dfs_t *dfs_mt, dfs_obj_t *dir)
+{
+	char	filename[32];
+	int	i;
+	int	rc;
+
+	for (i = 0; i < 20; i++) {
+		sprintf(filename, "rebuild_file_%d", i);
+		rc = dfs_remove(dfs_mt, dir, filename, 0, NULL);
+		assert_int_equal(rc, 0);
+	}
+	return 0;
+}
+
+static void
+rebuild_dfs_prep(test_arg_t *arg, dfs_t **dfs_mt, dfs_obj_t **dir,
+		 daos_handle_t *co_hdl, uuid_t *co_uuid)
+{
+	dfs_attr_t	attr = {};
+	int		rc;
+
+	attr.da_props = daos_prop_alloc(2);
+	assert_non_null(attr.da_props);
+	attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+	attr.da_props->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RANK;
+	attr.da_props->dpp_entries[1].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	attr.da_props->dpp_entries[1].dpe_val = DAOS_PROP_CO_REDUN_RF1;
+
+	rc = dfs_cont_create(arg->pool.poh, co_uuid, &attr, co_hdl, dfs_mt);
+	daos_prop_free(attr.da_props);
+	assert_int_equal(rc, 0);
+
+	printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(*co_uuid));
+
+	rc = dfs_open(*dfs_mt, NULL, "dir1", S_IWUSR | S_IRUSR | S_IFDIR,
+		      O_RDWR | O_CREAT, OC_RP_3G6, 0, NULL, dir);
+	assert_int_equal(rc, 0);
+
+	rc = rebuild_dfs_write(*dfs_mt, *dir, 0, 1048576, O_RDWR | O_CREAT | O_EXCL);
+	assert_int_equal(rc, 0);
+}
+
+static void
+rebuild_dfs_fini(test_arg_t *arg, dfs_t *dfs_mt, dfs_obj_t *dir,
+		 daos_handle_t co_hdl, uuid_t co_uuid)
+{
+	char str[37];
+	int rc;
+
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_umount(dfs_mt);
+	assert_int_equal(rc, 0);
+
+	rc = daos_cont_close(co_hdl, NULL);
+	assert_rc_equal(rc, 0);
+
+	uuid_unparse(co_uuid, str);
+	rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
+	assert_rc_equal(rc, 0);
+}
+
+static int
+rebuild_dfs_append_cb(void *data)
+{
+	test_arg_t	*arg = data;
+	struct rebuild_cb_arg *cb_arg = arg->rebuild_cb_arg;
+
+	rebuild_dfs_write(cb_arg->dfs_mt, cb_arg->dir, cb_arg->offset,
+			  cb_arg->size, O_RDWR | O_EXCL);
+	if (arg->myrank == 0) {
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      0, 0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE,
+				      0, 0, NULL);
+	}
+	return 0;
+}
+
+static int
+rebuild_dfs_punch_cb(void *data)
+{
+	test_arg_t	*arg = data;
+	struct rebuild_cb_arg *cb_arg = arg->rebuild_cb_arg;
+
+	rebuild_dfs_remove(cb_arg->dfs_mt, cb_arg->dir);
+	if (arg->myrank == 0) {
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      0, 0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE,
+				      0, 0, NULL);
+	}
+	return 0;
+}
+
+void
+rebuild_with_dfs_inflight_append(void **state)
+{
+	test_arg_t	*arg = *state;
+	dfs_t		*dfs_mt;
+	daos_handle_t	co_hdl;
+	dfs_obj_t	*dir;
+	uuid_t		co_uuid;
+	d_rank_t	rank;
+	daos_obj_id_t	oid;
+	struct rebuild_cb_arg cb_arg;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "disabled");
+	rebuild_dfs_prep(arg, &dfs_mt, &dir, &co_hdl, &co_uuid);
+
+	arg->rebuild_cb = rebuild_dfs_append_cb;
+	cb_arg.dfs_mt = dfs_mt;
+	cb_arg.dir = dir;
+	cb_arg.offset = 1048576;
+	cb_arg.size = 1048576;
+	arg->rebuild_cb_arg = &cb_arg;
+
+	dfs_obj2id(dir, &oid);
+	rank = get_rank_by_oid_shard(arg, oid, 0);
+	if (arg->myrank == 0) {
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_REBUILD_TGT_REBUILD_HANG, 0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE,
+				      2, 0, NULL);
+	}
+
+	rebuild_single_pool_rank(arg, rank, false);
+
+	arg->rebuild_cb = rebuild_dfs_append_cb;
+	cb_arg.dfs_mt = dfs_mt;
+	cb_arg.dir = dir;
+	cb_arg.offset = 1048576 * 2;
+	cb_arg.size = 1048576;
+	arg->rebuild_cb_arg = &cb_arg;
+	if (arg->myrank == 0) {
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_REBUILD_TGT_REBUILD_HANG, 0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE,
+				      2, 0, NULL);
+	}
+	reintegrate_single_pool_rank(arg, rank, false);
+
+	rebuild_dfs_read_check(dfs_mt, dir, 0, 1048576 * 3);
+
+	rebuild_dfs_fini(arg, dfs_mt, dir, co_hdl, co_uuid);
+}
+
+void
+rebuild_with_dfs_inflight_punch(void **state)
+{
+	test_arg_t	*arg = *state;
+	dfs_t		*dfs_mt;
+	daos_handle_t	co_hdl;
+	dfs_obj_t	*dir;
+	uuid_t		co_uuid;
+	d_rank_t	rank;
+	daos_obj_id_t	oid;
+	char		filename[32];
+	int		i;
+	struct rebuild_cb_arg cb_arg;
+	struct stat	st;
+	int		rc;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "disabled");
+	rebuild_dfs_prep(arg, &dfs_mt, &dir, &co_hdl, &co_uuid);
+
+	arg->rebuild_cb = rebuild_dfs_punch_cb;
+	cb_arg.dfs_mt = dfs_mt;
+	cb_arg.dir = dir;
+	arg->rebuild_cb_arg = &cb_arg;
+
+	if (arg->myrank == 0) {
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_REBUILD_TGT_REBUILD_HANG, 0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE,
+				      2, 0, NULL);
+	}
+	dfs_obj2id(dir, &oid);
+	rank = get_rank_by_oid_shard(arg, oid, 0);
+	rebuild_single_pool_rank(arg, rank, false);
+	for (i = 0; i < 20; i++) {
+		sprintf(filename, "rebuild_file_%d", i);
+		rc = dfs_stat(dfs_mt, dir, filename, &st);
+		assert_int_not_equal(rc, 0);
+	}
+
+	/* recreate the file */
+	rebuild_dfs_write(dfs_mt, dir, 0, 1048576, O_RDWR | O_CREAT | O_EXCL);
+	arg->rebuild_cb = rebuild_dfs_punch_cb;
+	arg->rebuild_cb_arg = &cb_arg;
+
+	if (arg->myrank == 0) {
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_REBUILD_TGT_REBUILD_HANG, 0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE,
+				      2, 0, NULL);
+	}
+	reintegrate_single_pool_rank(arg, rank, false);
+	for (i = 0; i < 20; i++) {
+		sprintf(filename, "rebuild_file_%d", i);
+		rc = dfs_stat(dfs_mt, dir, filename, &st);
+		assert_int_not_equal(rc, 0);
+	}
+
+	rebuild_dfs_fini(arg, dfs_mt, dir, co_hdl, co_uuid);
+}
+
+static int
+rebuild_dfs_create_append_cb(void *data)
+{
+	test_arg_t		*arg = data;
+	struct rebuild_cb_arg	*cb_arg = arg->rebuild_cb_arg;
+
+	rebuild_dfs_write(cb_arg->dfs_mt, cb_arg->dir, cb_arg->offset,
+			  cb_arg->size, O_RDWR | O_CREAT | O_EXCL);
+
+	if (arg->myrank == 0) {
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      0, 0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE,
+				      0, 0, NULL);
+	}
+	return 0;
+}
+
+void
+rebuild_with_dfs_inflight_append_punch(void **state)
+{
+	test_arg_t	*arg = *state;
+	dfs_t		*dfs_mt;
+	daos_handle_t	co_hdl;
+	dfs_obj_t	*dir;
+	uuid_t		co_uuid;
+	d_rank_t	rank;
+	daos_obj_id_t	oid;
+	char		filename[32];
+	int		i;
+	struct rebuild_cb_arg cb_arg;
+	struct stat	st;
+	int		rc;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "disabled");
+	rebuild_dfs_prep(arg, &dfs_mt, &dir, &co_hdl, &co_uuid);
+
+	arg->rebuild_cb = rebuild_dfs_punch_cb;
+	cb_arg.dfs_mt = dfs_mt;
+	cb_arg.dir = dir;
+	arg->rebuild_cb_arg = &cb_arg;
+	if (arg->myrank == 0)
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_REBUILD_TGT_REBUILD_HANG, 0, NULL);
+	dfs_obj2id(dir, &oid);
+	rank = get_rank_by_oid_shard(arg, oid, 0);
+	rebuild_single_pool_rank(arg, rank, false);
+	for (i = 0; i < 20; i++) {
+		sprintf(filename, "rebuild_file_%d", i);
+		rc = dfs_stat(dfs_mt, dir, filename, &st);
+		assert_int_not_equal(rc, 0);
+	}
+
+	if (arg->myrank == 0) {
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_REBUILD_TGT_REBUILD_HANG | DAOS_FAIL_ALWAYS,
+				      0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE,
+				      2, 0, NULL);
+	}
+	/* recreate the file */
+	print_message("create append continue\n");
+	arg->rebuild_cb = rebuild_dfs_create_append_cb;
+	cb_arg.dfs_mt = dfs_mt;
+	cb_arg.dir = dir;
+	cb_arg.offset = 0;
+	cb_arg.size = 1048576 + 10;
+	arg->rebuild_cb_arg = &cb_arg;
+	reintegrate_single_pool_rank(arg, rank, false);
+
+	rebuild_dfs_read_check(dfs_mt, dir, 0, 1048576 + 10);
+	rebuild_dfs_fini(arg, dfs_mt, dir, co_hdl, co_uuid);
+}
+
+static int
+rebuild_dfs_punch_create_cb(void *data)
+{
+	test_arg_t		*arg = data;
+	struct rebuild_cb_arg	*cb_arg = arg->rebuild_cb_arg;
+	int			i;
+
+	print_message("start remove/update loop\n");
+	for (i = 0; i < 100; i++) {
+		rebuild_dfs_remove(cb_arg->dfs_mt, cb_arg->dir);
+		rebuild_dfs_write(cb_arg->dfs_mt, cb_arg->dir, cb_arg->offset,
+				  cb_arg->size, O_RDWR | O_CREAT | O_EXCL);
+	}
+	print_message("end remove/update loop\n");
+	return 0;
+}
+
+void
+rebuild_with_dfs_inflight_punch_create(void **state)
+{
+	test_arg_t	*arg = *state;
+	dfs_t		*dfs_mt;
+	daos_handle_t	co_hdl;
+	dfs_obj_t	*dir;
+	uuid_t		co_uuid;
+	d_rank_t	rank;
+	daos_obj_id_t	oid;
+	char		filename[32];
+	int		i;
+	struct rebuild_cb_arg cb_arg;
+	struct stat	st;
+	int		rc;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "disabled");
+	rebuild_dfs_prep(arg, &dfs_mt, &dir, &co_hdl, &co_uuid);
+
+	dfs_obj2id(dir, &oid);
+	rank = get_rank_by_oid_shard(arg, oid, 0);
+	rebuild_single_pool_rank(arg, rank, false);
+	for (i = 0; i < 20; i++) {
+		sprintf(filename, "rebuild_file_%d", i);
+		rc = dfs_stat(dfs_mt, dir, filename, &st);
+		assert_int_equal(rc, 0);
+	}
+
+	/* recreate the file */
+	arg->rebuild_cb = rebuild_dfs_punch_create_cb;
+	cb_arg.dfs_mt = dfs_mt;
+	cb_arg.dir = dir;
+	cb_arg.offset = 0;
+	cb_arg.size = 1048576 + 10;
+	arg->rebuild_cb_arg = &cb_arg;
+	reintegrate_single_pool_rank(arg, rank, false);
+
+	rebuild_dfs_read_check(dfs_mt, dir, 0, 1048576 + 10);
+	rebuild_dfs_fini(arg, dfs_mt, dir, co_hdl, co_uuid);
 }
 
 /** create a new pool/container for each test */
@@ -1261,25 +1941,40 @@ static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD11: rebuild snapshotted punched object",
 	 rebuild_snap_punch_empty, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD12: rebuild sx object",
-	 rebuild_sx_object, rebuild_small_sub_setup, test_teardown},
+	 rebuild_sx_object, rebuild_small_sub_rf0_setup, test_teardown},
 	{"REBUILD13: rebuild xsf object",
 	 rebuild_xsf_object, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD14: rebuild large stripe object",
-	 rebuild_large_object, rebuild_small_pool_n4_setup, test_teardown},
+	 rebuild_large_object, rebuild_small_pool_n4_rf1_setup, test_teardown},
 	{"REBUILD15: rebuild with 100 snapshot",
 	 rebuild_large_snap, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD16: rebuild with full stripe",
-	 rebuild_full_shards, rebuild_small_pool_n4_setup, test_teardown},
+	 rebuild_full_shards, rebuild_small_pool_n4_rf1_setup, test_teardown},
 	{"REBUILD17: rebuild with punch recxs",
 	 rebuild_punch_recs, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD18: rebuild with multiple group",
-	 rebuild_multiple_group, rebuild_small_sub_setup, test_teardown},
+	 rebuild_multiple_group, rebuild_small_sub_rf1_setup, test_teardown},
 	{"REBUILD19: rebuild with large offset",
 	 rebuild_with_large_offset, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD20: rebuild with large key",
 	 rebuild_with_large_key, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD21: rebuild with dfs open create punch",
-	 rebuild_with_dfs_open_create_punch, rebuild_small_sub_setup, test_teardown},
+	 rebuild_with_dfs_open_create_punch, rebuild_small_sub_rf1_setup, test_teardown},
+	{"REBUILD22: rebuild lot of objects with failure",
+	 rebuild_many_objects_with_failure, rebuild_sub_setup, test_teardown},
+	{"REBUILD23: object corrupt rebuild",
+	 rebuild_object_with_csum_error, rebuild_small_sub_rf1_setup, test_teardown},
+	{"REBUILD24: rebuild with dfs in-flight append",
+	 rebuild_with_dfs_inflight_append, rebuild_small_sub_rf1_setup, test_teardown},
+	{"REBUILD25: rebuild with dfs in-flight punch",
+	 rebuild_with_dfs_inflight_punch, rebuild_small_sub_rf1_setup, test_teardown},
+	{"REBUILD26: rebuild with dfs in-flight append punch",
+	 rebuild_with_dfs_inflight_append_punch, rebuild_small_sub_rf1_setup, test_teardown},
+	{"REBUILD27: rebuild with dfs in-flight punch create",
+	 rebuild_with_dfs_inflight_punch_create, rebuild_small_sub_rf1_setup, test_teardown},
+	{"REBUILD28: rebuild sx object with reintegration mode no_data_sync",
+	 rebuild_sx_object_no_data_sync, rebuild_small_sub_rf0_setup,
+	 reintegration_no_data_sync_teardown},
 };
 
 int
@@ -1288,7 +1983,7 @@ run_daos_rebuild_simple_test(int rank, int size, int *sub_tests,
 {
 	int rc = 0;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (sub_tests_size == 0) {
 		sub_tests_size = ARRAY_SIZE(rebuild_tests);
 		sub_tests = NULL;
@@ -1298,7 +1993,7 @@ run_daos_rebuild_simple_test(int rank, int size, int *sub_tests,
 				     ARRAY_SIZE(rebuild_tests), sub_tests,
 				     sub_tests_size);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	return rc;
 }

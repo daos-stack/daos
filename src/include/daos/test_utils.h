@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,7 +12,6 @@
 #define __DAOS_TEST_UTILS_H__
 
 #include <daos/drpc.h>
-#include <daos/drpc.pb-c.h>
 
 /*
  * drpc unit test utilities
@@ -51,18 +50,6 @@ Drpc__Call *new_drpc_call(void);
 Drpc__Call *new_drpc_call_with_module(int module_id);
 
 /**
- * Using mocks in test_mocks.h, sets up recvmsg mock to populate a valid
- * serialized Drpc__Call as the message received.
- */
-void mock_valid_drpc_call_in_recvmsg(void);
-
-/**
- * Using mocks in test_mocks.h, sets up recvmsg mock to populate a valid
- * serialized Drpc__Response as the message received.
- */
-void mock_valid_drpc_resp_in_recvmsg(Drpc__Status status);
-
-/**
  * Generates a valid Drpc__Response structure.
  *
  * \return	Newly allocated Drpc__Response
@@ -90,5 +77,14 @@ fill_ace_list_with_users(struct daos_ace *ace[], size_t num_aces);
  */
 void
 free_all_aces(struct daos_ace *ace[], size_t num_aces);
+
+/* Mock to be used for the drpc->handler function pointer */
+void mock_drpc_handler_setup(void);
+void mock_drpc_handler_teardown(void);
+extern int mock_drpc_handler_call_count; /* how many times it was called */
+extern Drpc__Call *mock_drpc_handler_call; /* alloc copy of input param */
+extern void *mock_drpc_handler_resp_ptr; /* saved value of resp ptr */
+extern Drpc__Response *mock_drpc_handler_resp_return; /* returned in *resp */
+void mock_drpc_handler(Drpc__Call *call, Drpc__Response *resp);
 
 #endif /* __DAOS_TEST_UTILS_H__ */

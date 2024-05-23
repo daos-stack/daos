@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,15 +13,34 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
 func TestDmg_SystemCommands(t *testing.T) {
+	withRanks := func(req control.UnaryRequest, ranks ...ranklist.Rank) control.UnaryRequest {
+		if rs, ok := req.(interface{ SetRanks(*ranklist.RankSet) }); ok {
+			rs.SetRanks(ranklist.RankSetFromRanks(ranks))
+		}
+
+		return req
+	}
+
+	withHosts := func(req control.UnaryRequest, hosts ...string) control.UnaryRequest {
+		if rs, ok := req.(interface{ SetHosts(*hostlist.HostSet) }); ok {
+			rs.SetHosts(hostlist.MustCreateSet(strings.Join(hosts, ",")))
+		}
+
+		return req
+	}
+
 	runCmdTests(t, []cmdTest{
 		{
 			"system query with no arguments",
@@ -35,7 +54,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with single rank",
 			"system query --ranks 0",
 			strings.Join([]string{
-				`*control.SystemQueryReq-{"Sys":"","HostList":null,"Ranks":"0","Hosts":"","FailOnUnavailable":false}`,
+				printRequest(t, withRanks(&control.SystemQueryReq{}, 0)),
 			}, " "),
 			nil,
 		},
@@ -43,7 +62,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with multiple ranks",
 			"system query --ranks 0,2,4-8",
 			strings.Join([]string{
-				`*control.SystemQueryReq-{"Sys":"","HostList":null,"Ranks":"[0,2,4-8]","Hosts":"","FailOnUnavailable":false}`,
+				printRequest(t, withRanks(&control.SystemQueryReq{}, 0, 2, 4, 5, 6, 7, 8)),
 			}, " "),
 			nil,
 		},
@@ -57,7 +76,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with single host",
 			"system query --rank-hosts foo-0",
 			strings.Join([]string{
-				`*control.SystemQueryReq-{"Sys":"","HostList":null,"Ranks":"","Hosts":"foo-0","FailOnUnavailable":false}`,
+				printRequest(t, withHosts(&control.SystemQueryReq{}, "foo-0")),
 			}, " "),
 			nil,
 		},
@@ -65,7 +84,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with multiple hosts",
 			"system query --rank-hosts bar9,foo-[0-100]",
 			strings.Join([]string{
-				`*control.SystemQueryReq-{"Sys":"","HostList":null,"Ranks":"","Hosts":"bar9,foo-[0-100]","FailOnUnavailable":false}`,
+				printRequest(t, withHosts(&control.SystemQueryReq{}, "foo-[0-100]", "bar9")),
 			}, " "),
 			nil,
 		},
@@ -80,6 +99,38 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query --rank-hosts bar9,foo-[0-100] --ranks 0,2,4-8",
 			"",
 			errors.New("--ranks and --rank-hosts options cannot be set together"),
+		},
+		{
+			"system query with not-ok specified",
+			"system query --not-ok",
+			strings.Join([]string{
+				printRequest(t, &control.SystemQueryReq{
+					NotOK: true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"system query with states specified",
+			"system query --with-states joined,Excluded",
+			strings.Join([]string{
+				printRequest(t, &control.SystemQueryReq{
+					WantedStates: system.MemberStateJoined | system.MemberStateExcluded,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"system query with invalid state specified",
+			"system query --with-states Joined,Exclud",
+			"",
+			errors.New("invalid state name"),
+		},
+		{
+			"system query with both not-ok and with-states specified",
+			"system query --not-ok --with-states Joined",
+			"",
+			errors.New("--not-ok and --with-states options cannot be set together"),
 		},
 		{
 			"system query verbose",
@@ -109,7 +160,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system stop with single rank",
 			"system stop --ranks 0",
 			strings.Join([]string{
-				`*control.SystemStopReq-{"Sys":"","HostList":null,"Ranks":"0","Hosts":"","Force":false}`,
+				printRequest(t, withRanks(&control.SystemStopReq{}, 0)),
 			}, " "),
 			nil,
 		},
@@ -117,7 +168,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system stop with multiple ranks",
 			"system stop --ranks 0,1,4",
 			strings.Join([]string{
-				`*control.SystemStopReq-{"Sys":"","HostList":null,"Ranks":"[0-1,4]","Hosts":"","Force":false}`,
+				printRequest(t, withRanks(&control.SystemStopReq{}, 0, 1, 4)),
 			}, " "),
 			nil,
 		},
@@ -125,7 +176,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system stop with multiple hosts",
 			"system stop --rank-hosts bar9,foo-[0-100]",
 			strings.Join([]string{
-				`*control.SystemStopReq-{"Sys":"","HostList":null,"Ranks":"","Hosts":"bar9,foo-[0-100]","Force":false}`,
+				printRequest(t, withHosts(&control.SystemStopReq{}, "foo-[0-100]", "bar9")),
 			}, " "),
 			nil,
 		},
@@ -153,7 +204,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system start with single rank",
 			"system start --ranks 0",
 			strings.Join([]string{
-				`*control.SystemStartReq-{"Sys":"","HostList":null,"Ranks":"0","Hosts":""}`,
+				printRequest(t, withRanks(&control.SystemStartReq{}, 0)),
 			}, " "),
 			nil,
 		},
@@ -161,7 +212,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system start with multiple ranks",
 			"system start --ranks 0,1,4",
 			strings.Join([]string{
-				`*control.SystemStartReq-{"Sys":"","HostList":null,"Ranks":"[0-1,4]","Hosts":""}`,
+				printRequest(t, withRanks(&control.SystemStartReq{}, 0, 1, 4)),
 			}, " "),
 			nil,
 		},
@@ -169,7 +220,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system start with multiple hosts",
 			"system start --rank-hosts bar9,foo-[0-100]",
 			strings.Join([]string{
-				`*control.SystemStartReq-{"Sys":"","HostList":null,"Ranks":"","Hosts":"bar9,foo-[0-100]"}`,
+				printRequest(t, withHosts(&control.SystemStartReq{}, "foo-[0-100]", "bar9")),
 			}, " "),
 			nil,
 		},
@@ -190,6 +241,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system leader-query",
 			strings.Join([]string{
 				printRequest(t, &control.LeaderQueryReq{}),
+				printRequest(t, &control.LeaderQueryReq{}),
 			}, " "),
 			nil,
 		},
@@ -198,6 +250,55 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system list-pools",
 			strings.Join([]string{
 				printRequest(t, &control.ListPoolsReq{}),
+			}, " "),
+			nil,
+		},
+		{
+			"system set-attr multi attributes",
+			"system set-attr foo:bar,baz:qux",
+			strings.Join([]string{
+				printRequest(t, &control.SystemSetAttrReq{
+					Attributes: map[string]string{
+						"foo": "bar",
+						"baz": "qux",
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"system get-attr multi attributes",
+			"system get-attr foo,baz",
+			strings.Join([]string{
+				printRequest(t, &control.SystemGetAttrReq{
+					Keys: []string{"baz", "foo"},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"system del-attr multi attributes",
+			"system del-attr foo,baz",
+			strings.Join([]string{
+				printRequest(t, &control.SystemSetAttrReq{
+					Attributes: map[string]string{
+						"foo": "",
+						"baz": "",
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"system get-prop multi props",
+			"system get-prop daos_system,daos_version",
+			strings.Join([]string{
+				printRequest(t, &control.SystemGetPropReq{
+					Keys: []daos.SystemPropertyKey{
+						daos.SystemPropertyDaosSystem,
+						daos.SystemPropertyDaosVersion,
+					},
+				}),
 			}, " "),
 			nil,
 		},
@@ -240,7 +341,7 @@ func TestDmg_LeaderQueryCmd_Errors(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
 				UnaryResponse: control.MockMSResponse("10.0.0.1:10001",
@@ -249,11 +350,11 @@ func TestDmg_LeaderQueryCmd_Errors(t *testing.T) {
 
 			leaderQueryCmd := new(leaderQueryCmd)
 			leaderQueryCmd.setInvoker(mi)
-			leaderQueryCmd.setLog(log)
+			leaderQueryCmd.SetLog(log)
 			leaderQueryCmd.setConfig(tc.ctlCfg)
 
 			gotErr := leaderQueryCmd.Execute(nil)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }
@@ -269,13 +370,13 @@ func TestDmg_systemQueryCmd_Errors(t *testing.T) {
 				Members: []*mgmtpb.SystemMember{
 					{
 						Rank:  1,
-						Uuid:  common.MockUUID(1),
+						Uuid:  test.MockUUID(1),
 						State: system.MemberStateReady.String(),
 						Addr:  "10.0.0.1:10001",
 					},
 					{
 						Rank:  2,
-						Uuid:  common.MockUUID(2),
+						Uuid:  test.MockUUID(2),
 						State: system.MemberStateReady.String(),
 						Addr:  "10.0.0.1:10001",
 					},
@@ -309,7 +410,7 @@ func TestDmg_systemQueryCmd_Errors(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
 				UnaryResponse: control.MockMSResponse("10.0.0.1:10001",
@@ -318,10 +419,10 @@ func TestDmg_systemQueryCmd_Errors(t *testing.T) {
 
 			queryCmd := new(systemQueryCmd)
 			queryCmd.setInvoker(mi)
-			queryCmd.setLog(log)
+			queryCmd.SetLog(log)
 
 			gotErr := queryCmd.Execute(nil)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }
@@ -401,7 +502,7 @@ func TestDmg_systemStartCmd_Errors(t *testing.T) {
 					},
 				},
 			},
-			expErr: errors.New("system start failed: duplicate result"),
+			expErr: errors.New("duplicate result for rank"),
 		},
 		"system start absent hosts": {
 			resp: &mgmtpb.SystemStartResp{
@@ -438,7 +539,7 @@ func TestDmg_systemStartCmd_Errors(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
 				UnaryResponse: control.MockMSResponse("10.0.0.1:10001",
@@ -447,10 +548,10 @@ func TestDmg_systemStartCmd_Errors(t *testing.T) {
 
 			startCmd := new(systemStartCmd)
 			startCmd.setInvoker(mi)
-			startCmd.setLog(log)
+			startCmd.SetLog(log)
 
 			gotErr := startCmd.Execute(nil)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }
@@ -530,7 +631,7 @@ func TestDmg_systemStopCmd_Errors(t *testing.T) {
 					},
 				},
 			},
-			expErr: errors.New("system stop failed: duplicate result"),
+			expErr: errors.New("duplicate result for rank"),
 		},
 		"system stop absent hosts": {
 			resp: &mgmtpb.SystemStopResp{
@@ -567,7 +668,7 @@ func TestDmg_systemStopCmd_Errors(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
 				UnaryResponse: control.MockMSResponse("10.0.0.1:10001",
@@ -576,10 +677,10 @@ func TestDmg_systemStopCmd_Errors(t *testing.T) {
 
 			stopCmd := new(systemStopCmd)
 			stopCmd.setInvoker(mi)
-			stopCmd.setLog(log)
+			stopCmd.SetLog(log)
 
 			gotErr := stopCmd.Execute(nil)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }

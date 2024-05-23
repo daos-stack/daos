@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -131,7 +131,7 @@ out:
 		}
 	}
 
-	return 0;
+	return rc;
 }
 
 int
@@ -235,16 +235,9 @@ daos_sgl_data_len(d_sg_list_t *sgl)
 daos_size_t
 daos_sgl_buf_size(d_sg_list_t *sgl)
 {
-	daos_size_t	size = 0;
-	int		i;
-
-	if (sgl == NULL || sgl->sg_iovs == NULL)
+	if (sgl == NULL)
 		return 0;
-
-	for (i = 0, size = 0; i < sgl->sg_nr; i++)
-		size += sgl->sg_iovs[i].iov_buf_len;
-
-	return size;
+	return d_sgl_buf_size(sgl);
 }
 
 daos_size_t
@@ -322,10 +315,13 @@ daos_sgl_get_bytes(d_sg_list_t *sgl, bool check_buf, struct daos_sgl_idx *idx,
 	daos_size_t len;
 
 	if (p_buf_len != NULL)
-	*p_buf_len = 0;
+		*p_buf_len = 0;
 
-	if (idx->iov_idx >= sgl->sg_nr)
+	if (idx->iov_idx >= sgl->sg_nr) {
+		if (p_buf != NULL)
+			*p_buf = NULL;
 		return true; /** no data in sgl to get bytes from */
+	}
 
 	len = check_buf ? sgl->sg_iovs[idx->iov_idx].iov_buf_len :
 		sgl->sg_iovs[idx->iov_idx].iov_len;
@@ -361,7 +357,7 @@ daos_sgl_processor(d_sg_list_t *sgl, bool check_buf, struct daos_sgl_idx *idx,
 		   size_t requested_bytes, daos_sgl_process_cb process_cb,
 		   void *cb_args)
 {
-	uint8_t		*buf = NULL;
+	uint8_t		*buf;
 	size_t		 len = 0;
 	bool		 end = false;
 	int		 rc  = 0;
@@ -371,15 +367,16 @@ daos_sgl_processor(d_sg_list_t *sgl, bool check_buf, struct daos_sgl_idx *idx,
 	 * an error occurs
 	 */
 	while (requested_bytes > 0 && !end && !rc) {
+		buf = NULL;
 		end = daos_sgl_get_bytes(sgl, check_buf, idx, requested_bytes,
 					 &buf, &len);
 		requested_bytes -= len;
-		if (process_cb != NULL)
+		if (process_cb != NULL && buf != NULL)
 			rc = process_cb(buf, len, cb_args);
 	}
 
 	if (requested_bytes)
-		D_INFO("Requested more bytes than what's available in sgl");
+		D_INFO("Requested more bytes than what's available in sgl\n");
 
 	return rc;
 }
@@ -545,7 +542,7 @@ static pthread_mutex_t	daos_ht_lock = PTHREAD_MUTEX_INITIALIZER;
 static unsigned int	daos_ht_ref;
 
 int
-daos_hhash_init(void)
+daos_hhash_init_feats(uint32_t feats)
 {
 	int rc;
 
@@ -555,8 +552,8 @@ daos_hhash_init(void)
 		D_GOTO(unlock, rc = 0);
 	}
 
-	rc = d_hhash_create(D_HASH_FT_GLOCK | D_HASH_FT_LRU, D_HHASH_BITS,
-			    &daos_ht.dht_hhash);
+	/* D_HASH_FT_NO_KEYINIT_LOCK for optimized link_insert perf */
+	rc = d_hhash_create(feats | D_HASH_FT_NO_KEYINIT_LOCK, D_HHASH_BITS, &daos_ht.dht_hhash);
 	if (rc == 0) {
 		D_ASSERT(daos_ht.dht_hhash != NULL);
 		daos_ht_ref = 1;
@@ -633,70 +630,36 @@ daos_hhash_link_delete(struct d_hlink *hlink)
 	return d_hhash_link_delete(daos_ht.dht_hhash, hlink);
 }
 
-
-#define CRT_SOCKET_PROV		"ofi+sockets"
 /**
  * a helper to get the needed crt_init_opt.
- * When using SEP (scalable endpoint), if user set un-reasonable CRT_CTX_NUM it
- * possibly cause failure when creating cart context. So in this helper it will
- * check the ENV setting, if SEP is used then will set the crt_init_opttions_t
- * and the caller can pass it to crt_init_opt().
  *
  * \param server [IN]	true for server
  * \param ctx_nr [IN]	number of contexts
  *
- * \return		the pointer to crt_init_options_t (NULL if not needed)
+ * \return		the pointer to crt_init_options_t
  */
-crt_init_options_t daos_crt_init_opt;
+static crt_init_options_t daos_crt_init_opt;
 crt_init_options_t *
 daos_crt_init_opt_get(bool server, int ctx_nr)
 {
-	crt_phy_addr_t	addr_env;
-	bool		sep = false;
+	uint32_t	limit = 0;
 
 	/** enable statistics on the server side */
 	daos_crt_init_opt.cio_use_sensors = server;
 
 	/** configure cart for maximum bulk threshold */
+	d_getenv_uint32_t("DAOS_RPC_SIZE_LIMIT", &limit);
+
 	daos_crt_init_opt.cio_use_expected_size = 1;
-	daos_crt_init_opt.cio_max_expected_size = DAOS_RPC_SIZE;
+	daos_crt_init_opt.cio_max_expected_size = limit ? limit : DAOS_RPC_SIZE;
 	daos_crt_init_opt.cio_use_unexpected_size = 1;
-	daos_crt_init_opt.cio_max_unexpected_size = DAOS_RPC_SIZE;
+	daos_crt_init_opt.cio_max_unexpected_size = limit ? limit : DAOS_RPC_SIZE;
+	daos_crt_init_opt.cio_ctx_max_num = ctx_nr;
 
-	/** Scalable EndPoint-related settings */
-	d_getenv_bool("CRT_CTX_SHARE_ADDR", &sep);
-	if (!sep)
-		goto out;
-
-	daos_crt_init_opt.cio_sep_override = 1;
-
-	/* for socket provider, force it to use regular EP rather than SEP for:
-	 * 1) now sockets provider cannot create more than 16 contexts for SEP
-	 * 2) some problems if SEP communicates with regular EP.
-	 */
-	addr_env = (crt_phy_addr_t)getenv(CRT_PHY_ADDR_ENV);
-	if (addr_env != NULL &&
-	    strncmp(addr_env, CRT_SOCKET_PROV, strlen(CRT_SOCKET_PROV)) == 0) {
-		D_INFO("for sockets provider force it to use regular EP.\n");
-		daos_crt_init_opt.cio_use_sep = 0;
-		goto out;
-	}
-
-	/* for psm2 provider, set a reasonable cio_ctx_max_num for cart */
-	daos_crt_init_opt.cio_use_sep = 1;
-	if (!server) {
-		/* to workaround a bug in mercury/ofi, that the basic EP cannot
-		 * communicate with SEP. Setting 2 for client to make it to use
-		 * SEP for client.
-		 */
-		daos_crt_init_opt.cio_ctx_max_num = 2;
-	} else {
-		daos_crt_init_opt.cio_ctx_max_num = ctx_nr;
-	}
-
-out:
 	return &daos_crt_init_opt;
 }
+
+static __thread uuid_t dti_uuid;
 
 void
 daos_dti_gen_unique(struct dtx_id *dti)
@@ -706,23 +669,38 @@ daos_dti_gen_unique(struct dtx_id *dti)
 	uuid_generate(uuid);
 
 	uuid_copy(dti->dti_uuid, uuid);
-	dti->dti_hlc = crt_hlc_get();
+	dti->dti_hlc = d_hlc_get();
 }
 
 void
 daos_dti_gen(struct dtx_id *dti, bool zero)
 {
-	static __thread uuid_t uuid;
-
 	if (zero) {
 		memset(dti, 0, sizeof(*dti));
 	} else {
-		if (uuid_is_null(uuid))
-			uuid_generate(uuid);
+		if (uuid_is_null(dti_uuid))
+			uuid_generate(dti_uuid);
 
-		uuid_copy(dti->dti_uuid, uuid);
-		dti->dti_hlc = crt_hlc_get();
+		uuid_copy(dti->dti_uuid, dti_uuid);
+		dti->dti_hlc = d_hlc_get();
 	}
+}
+
+void
+daos_dti_reset(void)
+{
+	memset(dti_uuid, 0, sizeof(dti_uuid));
+}
+
+/**
+ * daos_get_client_uuid to get (and lazily initialize) client thread dti_uuid.
+ */
+void
+daos_get_client_uuid(uuid_t *uuidp)
+{
+	if (uuid_is_null(dti_uuid))
+		uuid_generate(dti_uuid);
+	uuid_copy(*uuidp, dti_uuid);
 }
 
 /**
@@ -742,4 +720,132 @@ void
 daos_recx_free(daos_recx_t *recx)
 {
 	D_FREE(recx);
+}
+
+int
+daos_hlc2timespec(uint64_t hlc, struct timespec *ts)
+{
+	return d_hlc2timespec(hlc, ts);
+}
+
+int
+daos_hlc2timestamp(uint64_t hlc, time_t *ts)
+{
+	struct timespec		tspec;
+	int			rc;
+
+	if (ts == NULL)
+		return -DER_INVAL;
+
+	rc = d_hlc2timespec(hlc, &tspec);
+	if (rc)
+		return rc;
+
+	*ts = tspec.tv_sec;
+	return 0;
+}
+
+/** Find requested number of unused bits (neither set it @used or @reserved */
+int
+daos_find_bits(uint64_t *used, uint64_t *reserved, int bmap_sz, int bits_min, int *bits)
+{
+	int	nr_saved;
+	int	at_saved;
+	int	nr;
+	int	at;
+	int	i;
+	int	j;
+
+	nr = nr_saved = 0;
+	at = at_saved = -1;
+
+	for (i = 0; i < bmap_sz; i++) {
+		uint64_t free_bits = ~used[i];
+
+		if (reserved)
+			free_bits &= ~reserved[i];
+
+		if (free_bits == 0) { /* no space in the current int64 */
+			if (nr > nr_saved) {
+				nr_saved = nr;
+				at_saved = at;
+			}
+			nr = 0;
+			at = -1;
+			continue;
+		}
+
+		j = ffsll(free_bits);
+		D_ASSERT(j > 0);
+		if (at >= 0 && j == 1) {
+			D_ASSERT(nr > 0);
+			nr++;
+		} else {
+			at = i * 64 + j - 1;
+			nr = 1;
+		}
+
+		for (; j < 64; j++) {
+			if (nr == *bits) /* done */
+				goto out;
+
+			if (isset64(&free_bits, j)) {
+				if (at < 0)
+					at = i * 64 + j;
+				nr++;
+				continue;
+			}
+
+			if (nr > nr_saved) {
+				nr_saved = nr;
+				at_saved = at;
+			}
+			nr = 0;
+			at = -1;
+			if ((free_bits >> j) == 0)
+				break;
+		}
+		if (nr == *bits)
+			goto out;
+	}
+ out:
+	if (nr == *bits || nr > nr_saved) {
+		nr_saved = nr;
+		at_saved = at;
+	}
+
+	if (nr_saved >= bits_min)
+		*bits = nr_saved;
+	else
+		at_saved = -1;
+
+	return at_saved;
+}
+
+int
+daos_count_free_bits(uint64_t *used, int bmap_sz)
+{
+	int	i;
+	int	j;
+	int	nr = 0;
+
+	for (i = 0; i < bmap_sz; i++) {
+		uint64_t free_bits = ~used[i];
+
+		/* no free bits in the current int64 */
+		if (free_bits == 0)
+			continue;
+
+		j = ffsll(free_bits);
+		D_ASSERT(j > 0);
+		nr++;
+		for (; j < 64; j++) {
+			if (isset64(&free_bits, j))
+				nr++;
+			if ((free_bits >> j) == 0)
+				break;
+		}
+	}
+
+	return nr;
 }

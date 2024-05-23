@@ -1,14 +1,13 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from general_utils import pcmd
-
-from command_utils_base import \
-    CommandFailure, BasicParameter, FormattedParameter, CommandWithParameters
+from ClusterShell.NodeSet import NodeSet
 from command_utils import ExecutableCommand
+from command_utils_base import BasicParameter, CommandWithParameters, FormattedParameter
+from exception_utils import CommandFailure
+from run_utils import run_remote
 
 
 class FioCommand(ExecutableCommand):
@@ -19,12 +18,11 @@ class FioCommand(ExecutableCommand):
         """Create a FioCommand object.
 
         Args:
-            path (str, optional): path to location of command binary file.
-                Defaults to "".
+            path (str, optional): path to location of command binary file.  Defaults to "".
         """
         super().__init__("/run/fio/*", "fio", path)
 
-        # fio commandline options
+        # fio command-line options
         self.debug = FormattedParameter("--debug={}")
         self.parse_only = FormattedParameter("--parse-only", False)
         self.output = FormattedParameter("--output={}")
@@ -59,16 +57,14 @@ class FioCommand(ExecutableCommand):
         self.trigger_remote = FormattedParameter("--trigger-remote={}")
         self.aux_path = FormattedParameter("--aux-path={}")
 
-        # Middleware to use with fio.  Needs to be configured externally prior
-        # to calling run().
+        # Middleware to use with fio.  Needs to be configured externally prior to calling run()
         self.api = BasicParameter(None, "POSIX")
 
         # List of fio job names to run
         self.names = BasicParameter(None)
         self._jobs = {}
 
-        # List of hosts on which the fio command will run.  If not defined the
-        # fio command will run locally
+        # List of hosts on which the fio command will run
         self._hosts = None
 
     @property
@@ -76,7 +72,7 @@ class FioCommand(ExecutableCommand):
         """Get the host(s) on which to remotely run the fio command via run().
 
         Returns:
-            list: remote host(s) on which the fio command will run.
+            NodeSet: remote host(s) on which the fio command will run.
 
         """
         return self._hosts
@@ -88,13 +84,15 @@ class FioCommand(ExecutableCommand):
         If the specified host is None the command will run locally w/o ssh.
 
         Args:
-            value (list): remote host(s) on which to run the fio command
+            value (NodeSet): remote host(s) on which to run the fio command
+
+        Raises:
+            TypeError: if value is not a NodeSet
+
         """
-        if value is None or isinstance(value, list):
-            self._hosts = value
-        else:
-            self.log.error("Invalid fio host list: %s (%s)", value, type(value))
-            self._hosts = None
+        if not isinstance(value, NodeSet):
+            raise TypeError("Invalid fio host NodeSet: {} ({})".format(value, type(value)))
+        self._hosts = value.copy()
 
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
@@ -137,14 +135,25 @@ class FioCommand(ExecutableCommand):
         else:
             self.log.error("Invalid job name: %s", job_name)
 
-    def __str__(self):
-        """Return the command with all of its defined parameters as a string.
+    def update_directory(self, directory):
+        """Helper method for setting Fio directory command line option.
+
+        Args:
+            directory (str): fio directory argument value
+        """
+        self.update("global", "directory", directory, "fio --name=global --directory")
+
+    @property
+    def command_with_params(self):
+        """Get the command with all of its defined parameters as a string.
+
+        Overrides base method to include params specific to fio jobs.
 
         Returns:
             str: the command with all the defined parameters
 
         """
-        command = [super().__str__()]
+        command = [super().command_with_params]
         for name in sorted(self._jobs):
             if name == "global":
                 command.insert(1, str(self._jobs[name]))
@@ -152,31 +161,33 @@ class FioCommand(ExecutableCommand):
                 command.append(str(self._jobs[name]))
         return " ".join(command)
 
-    def _run_process(self):
-        """Run the command as a foreground process.
+    def _run_process(self, raise_exception=None):
+        """Run the command remotely as a foreground process.
+
+        Args:
+            raise_exception (bool, optional): whether or not to raise an exception if the command
+                fails. This overrides the self.exit_status_exception
+                setting if defined. Defaults to None.
 
         Raises:
             CommandFailure: if there is an error running the command
 
-        """
-        if self._hosts is None:
-            # Run fio locally
-            self.log.debug("Running: %s", self.__str__())
-            super()._run_process()
-        else:
-            # Run fio remotely
-            self.log.debug("Running: %s", self.__str__())
-            ret_codes = pcmd(self._hosts, self.__str__())
+        Returns:
+            RemoteCommandResult: a grouping of the command results from the same hosts with the
+                same return status
 
-            # Report any failures
-            if len(ret_codes) > 1 or 0 not in ret_codes:
-                failed = [
-                    "{}: rc={}".format(val, key)
-                    for key, val in list(ret_codes.items()) if key != 0
-                ]
-                raise CommandFailure(
-                    "Error running fio on the following hosts: {}".format(
-                        ", ".join(failed)))
+        """
+        if not self._hosts:
+            raise CommandFailure('No hosts specified for fio command')
+
+        if raise_exception is None:
+            raise_exception = self.exit_status_exception
+
+        # Run fio remotely
+        result = run_remote(self.log, self._hosts, self.with_exports, timeout=None)
+        if raise_exception and not result.passed:
+            raise CommandFailure("Error running fio on: {}".format(result.failed_hosts))
+        return result
 
     class FioJob(CommandWithParameters):
         # pylint: disable=too-many-instance-attributes
@@ -194,8 +205,7 @@ class FioCommand(ExecutableCommand):
             """
             job_namespace = namespace.split("/")
             job_namespace.insert(-1, name)
-            super().__init__(
-                "/".join(job_namespace), "--name={}".format(name))
+            super().__init__("/".join(job_namespace), "--name={}".format(name))
 
             # fio global/local job options
             self.description = FormattedParameter("--description={}")
@@ -206,7 +216,7 @@ class FioCommand(ExecutableCommand):
             self.filename_format = FormattedParameter("--filename_format={}")
             self.unique_filename = FormattedParameter("--unique_filename={}")
             self.opendir = FormattedParameter("--opendir={}")
-            self.rw = FormattedParameter("--rw={}")
+            self.rw = FormattedParameter("--rw={}")  # pylint: disable=invalid-name
             self.blocksize = FormattedParameter("--bs={}")
             self.blockalign = FormattedParameter("--ba={}")
             self.bsrange = FormattedParameter("--bsrange={}")
@@ -220,13 +230,10 @@ class FioCommand(ExecutableCommand):
             self.ioengine = FormattedParameter("--ioengine={}")
             self.iodepth = FormattedParameter("--iodepth={}")
             self.iodepth_batch = FormattedParameter("--iodepth_batch={}")
-            self.iodepth_batch_complete_min = FormattedParameter(
-                "--iodepth_batch_complete_min={}")
-            self.iodepth_batch_complete_max = FormattedParameter(
-                "--iodepth_batch_complete_max={}")
+            self.iodepth_batch_complete_min = FormattedParameter("--iodepth_batch_complete_min={}")
+            self.iodepth_batch_complete_max = FormattedParameter("--iodepth_batch_complete_max={}")
             self.iodepth_low = FormattedParameter("--iodepth_low={}")
-            self.serialize_overlap = FormattedParameter(
-                "--serialize_overlap={}")
+            self.serialize_overlap = FormattedParameter("--serialize_overlap={}")
             self.io_submit_mode = FormattedParameter("--io_submit_mode={}")
             self.size = FormattedParameter("--size={}")
             self.io_size = FormattedParameter("--io_size={}")
@@ -238,14 +245,11 @@ class FioCommand(ExecutableCommand):
             self.offset_align = FormattedParameter("--offset_align={}")
             self.number_ios = FormattedParameter("--number_ios={}")
             self.random_generator = FormattedParameter("--random_generator={}")
-            self.random_distribution = FormattedParameter(
-                "--random_distribution={}")
-            self.percentage_random = FormattedParameter(
-                "--percentage_random={}")
+            self.random_distribution = FormattedParameter("--random_distribution={}")
+            self.percentage_random = FormattedParameter("--percentage_random={}")
             self.allrandrepeat = FormattedParameter("--allrandrepeat={}")
             self.nrfiles = FormattedParameter("--nrfiles={}")
-            self.file_service_type = FormattedParameter(
-                "--file_service_type={}")
+            self.file_service_type = FormattedParameter("--file_service_type={}")
             self.openfiles = FormattedParameter("--openfiles={}")
             self.fallocate = FormattedParameter("--fallocate={}")
             self.fadvise_hint = FormattedParameter("--fadvise_hint={}")
@@ -278,19 +282,14 @@ class FioCommand(ExecutableCommand):
             self.verify_dump = FormattedParameter("--verify_dump={}")
             self.verify_async = FormattedParameter("--verify_async={}")
             self.verify_backlog = FormattedParameter("--verify_backlog={}")
-            self.verify_backlog_batch = FormattedParameter(
-                "--verify_backlog_batch={}")
-            self.experimental_verify = FormattedParameter(
-                "--experimental_verify={}")
-            self.verify_state_load = FormattedParameter(
-                "--verify_state_load={}")
-            self.verify_state_save = FormattedParameter(
-                "--verify_state_save={}")
+            self.verify_backlog_batch = FormattedParameter("--verify_backlog_batch={}")
+            self.experimental_verify = FormattedParameter("--experimental_verify={}")
+            self.verify_state_load = FormattedParameter("--verify_state_load={}")
+            self.verify_state_save = FormattedParameter("--verify_state_save={}")
             self.trim_percentage = FormattedParameter("--trim_percentage={}")
             self.trim_verify_zero = FormattedParameter("--trim_verify_zero={}")
             self.trim_backlog = FormattedParameter("--trim_backlog={}")
-            self.trim_backlog_batch = FormattedParameter(
-                "--trim_backlog_batch={}")
+            self.trim_backlog_batch = FormattedParameter("--trim_backlog_batch={}")
             self.write_iolog = FormattedParameter("--write_iolog={}")
             self.read_iolog = FormattedParameter("--read_iolog={}")
             self.replay_no_stall = FormattedParameter("--replay_no_stall={}")
@@ -316,30 +315,25 @@ class FioCommand(ExecutableCommand):
             self.rate_min = FormattedParameter("--rate_min={}")
             self.rate_process = FormattedParameter("--rate_process={}")
             self.rate_cycle = FormattedParameter("--rate_cycle={}")
-            self.rate_ignore_thinktime = FormattedParameter(
-                "--rate_ignore_thinktime={}")
+            self.rate_ignore_thinktime = FormattedParameter("--rate_ignore_thinktime={}")
             self.rate_iops = FormattedParameter("--rate_iops={}")
             self.rate_iops_min = FormattedParameter("--rate_iops_min={}")
             self.max_latency = FormattedParameter("--max_latency={}")
             self.latency_target = FormattedParameter("--latency_target={}")
             self.latency_window = FormattedParameter("--latency_window={}")
-            self.latency_percentile = FormattedParameter(
-                "--latency_percentile={}")
+            self.latency_percentile = FormattedParameter("--latency_percentile={}")
             self.invalidate = FormattedParameter("--invalidate={}")
             self.write_hint = FormattedParameter("--write_hint={}")
             self.create_serialize = FormattedParameter("--create_serialize={}")
             self.create_fsync = FormattedParameter("--create_fsync={}")
             self.create_on_open = FormattedParameter("--create_on_open={}")
             self.create_only = FormattedParameter("--create_only={}")
-            self.allow_file_create = FormattedParameter(
-                "--allow_file_create={}")
-            self.allow_mounted_write = FormattedParameter(
-                "--allow_mounted_write={}")
+            self.allow_file_create = FormattedParameter("--allow_file_create={}")
+            self.allow_mounted_write = FormattedParameter("--allow_mounted_write={}")
             self.pre_read = FormattedParameter("--pre_read={}")
             self.cpumask = FormattedParameter("--cpumask={}")
             self.cpus_allowed = FormattedParameter("--cpus_allowed={}")
-            self.cpus_allowed_policy = FormattedParameter(
-                "--cpus_allowed_policy={}")
+            self.cpus_allowed_policy = FormattedParameter("--cpus_allowed_policy={}")
             self.numa_cpu_nodes = FormattedParameter("--numa_cpu_nodes={}")
             self.numa_mem_policy = FormattedParameter("--numa_mem_policy={}")
             self.end_fsync = FormattedParameter("--end_fsync={}")
@@ -347,8 +341,7 @@ class FioCommand(ExecutableCommand):
             self.unlink = FormattedParameter("--unlink={}")
             self.unlink_each_loop = FormattedParameter("--unlink_each_loop={}")
             self.exitall = FormattedParameter("--exitall", False)
-            self.exitall_on_error = FormattedParameter(
-                "--exitall_on_error", False)
+            self.exitall_on_error = FormattedParameter("--exitall_on_error", False)
             self.stonewall = FormattedParameter("--stonewall", False)
             self.new_group = FormattedParameter("--new_group", False)
             self.thread = FormattedParameter("--thread={}")
@@ -360,48 +353,37 @@ class FioCommand(ExecutableCommand):
             self.iopsavgtime = FormattedParameter("--iopsavgtime={}")
             self.log_avg_msec = FormattedParameter("--log_avg_msec={}")
             self.log_hist_msec = FormattedParameter("--log_hist_msec={}")
-            self.log_hist_coarseness = FormattedParameter(
-                "--log_hist_coarseness={}")
+            self.log_hist_coarseness = FormattedParameter("--log_hist_coarseness={}")
             self.write_hist_log = FormattedParameter("--write_hist_log={}")
             self.log_max_value = FormattedParameter("--log_max_value={}")
             self.log_offset = FormattedParameter("--log_offset={}")
             self.log_compression = FormattedParameter("--log_compression={}")
-            self.log_compression_cpus = FormattedParameter(
-                "--log_compression_cpus={}")
-            self.log_store_compressed = FormattedParameter(
-                "--log_store_compressed={}")
+            self.log_compression_cpus = FormattedParameter("--log_compression_cpus={}")
+            self.log_store_compressed = FormattedParameter("--log_store_compressed={}")
             self.log_unix_epoch = FormattedParameter("--log_unix_epoch={}")
-            self.block_error_percentiles = FormattedParameter(
-                "--block_error_percentiles={}")
+            self.block_error_percentiles = FormattedParameter("--block_error_percentiles={}")
             self.group_reporting = FormattedParameter("--group_reporting={}")
             self.stats = FormattedParameter("--stats={}")
             self.zero_buffers = FormattedParameter("--zero_buffers={}")
             self.refill_buffers = FormattedParameter("--refill_buffers={}")
             self.scramble_buffers = FormattedParameter("--scramble_buffers={}")
             self.buffer_pattern = FormattedParameter("--buffer_pattern={}")
-            self.buffer_compress_percentage = FormattedParameter(
-                "--buffer_compress_percentage={}")
-            self.buffer_compress_chunk = FormattedParameter(
-                "--buffer_compress_chunk={}")
-            self.dedupe_percentage = FormattedParameter(
-                "--dedupe_percentage={}")
+            self.buffer_compress_percentage = FormattedParameter("--buffer_compress_percentage={}")
+            self.buffer_compress_chunk = FormattedParameter("--buffer_compress_chunk={}")
+            self.dedupe_percentage = FormattedParameter("--dedupe_percentage={}")
             self.clat_percentiles = FormattedParameter("--clat_percentiles={}")
             self.lat_percentiles = FormattedParameter("--lat_percentiles={}")
             self.percentile_list = FormattedParameter("--percentile_list={}")
-            self.significant_figures = FormattedParameter(
-                "--significant_figures={}")
+            self.significant_figures = FormattedParameter("--significant_figures={}")
             self.disk_util = FormattedParameter("--disk_util={}")
             self.gtod_reduce = FormattedParameter("--gtod_reduce={}")
             self.disable_lat = FormattedParameter("--disable_lat={}")
             self.disable_clat = FormattedParameter("--disable_clat={}")
             self.disable_slat = FormattedParameter("--disable_slat={}")
-            self.disable_bw_measurement = FormattedParameter(
-                "--disable_bw_measurement={}")
+            self.disable_bw_measurement = FormattedParameter("--disable_bw_measurement={}")
             self.gtod_cpu = FormattedParameter("--gtod_cpu={}")
-            self.unified_rw_reporting = FormattedParameter(
-                "--unified_rw_reporting={}")
-            self.continue_on_error = FormattedParameter(
-                "--continue_on_error={}")
+            self.unified_rw_reporting = FormattedParameter("--unified_rw_reporting={}")
+            self.continue_on_error = FormattedParameter("--continue_on_error={}")
             self.error_dump = FormattedParameter("--error_dump={}")
             self.profile = FormattedParameter("--profile={}")
             self.cgroup = FormattedParameter("--cgroup={}")
@@ -417,7 +399,11 @@ class FioCommand(ExecutableCommand):
             self.flow_watermark = FormattedParameter("--flow_watermark={}")
             self.flow_sleep = FormattedParameter("--flow_sleep={}")
             self.steadystate = FormattedParameter("--steadystate={}")
-            self.steadystate_duration = FormattedParameter(
-                "--steadystate_duration={}")
-            self.steadystate_ramp_time = FormattedParameter(
-                "--steadystate_ramp_time={}")
+            self.steadystate_duration = FormattedParameter("--steadystate_duration={}")
+            self.steadystate_ramp_time = FormattedParameter("--steadystate_ramp_time={}")
+
+            # NOTE DFS ioengine options must come after the ioengine that defines them is selected.
+            self.pool = FormattedParameter("--pool={}")
+            self.cont = FormattedParameter("--cont={}")
+            self.chunk_size = FormattedParameter("--chunk_size={}")
+            self.object_class = FormattedParameter("--object_class={}")

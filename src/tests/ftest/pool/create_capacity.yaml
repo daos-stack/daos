@@ -1,0 +1,50 @@
+hosts:
+  test_servers: 3
+  test_clients: 1
+
+timeouts:
+  # NOTE DAOS-14528: Half of the time is needed to destroy pool in the teardown
+  test_create_pool_quantity: 900
+
+server_config:
+  name: daos_server
+  engines_per_host: 2
+  restart_duration: 120
+  engines:
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      log_mask: DEBUG
+      targets: 1
+      env_vars:
+        # NOTE The minimal size of the DAOS RDB is equal to 128MiB
+        - DAOS_MD_CAP=128
+        - DD_MASK=group_metadata_only
+        - D_LOG_FLUSH=DEBUG
+      storage: auto
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      log_mask: DEBUG
+      targets: 1
+      env_vars:
+        # NOTE The minimal size of the DAOS RDB is equal to 128MiB
+        - DAOS_MD_CAP=128
+        - DD_MASK=group_metadata_only
+        - D_LOG_FLUSH=DEBUG
+      storage: auto
+
+pool:
+  control_method: dmg
+  scm_size: 192MiB
+  # NOTE The minimal size of DATA with MD on SCM is equal to 1GiB (i.e. size of a SPDK cluster)
+  nvme_size: 1024MiB
+  quantity: [150, 200]
+  create_duration: 30
+  set_logmasks: False

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -52,8 +52,7 @@ struct ilog_desc_cbs {
 	 *  return error code < 0.
 	 */
 	int (*dc_log_status_cb)(struct umem_instance *umm, uint32_t tx_id,
-				daos_epoch_t epoch, uint32_t intent,
-				void *args);
+				daos_epoch_t epoch, uint32_t intent, bool retry, void *args);
 	void	*dc_log_status_args;
 	/** Check if the log entry was created by current transaction */
 	int (*dc_is_same_tx_cb)(struct umem_instance *umm, uint32_t tx_id,
@@ -89,14 +88,15 @@ ilog_create(struct umem_instance *umm, struct ilog_df *root);
  *
  *  \param	umm[IN]		The umem instance
  *  \param	root[IN]	A pointer to the allocated root
- *  \param	cbs[in]		Incarnation log transaction log callbacks
+ *  \param	cbs[IN]		Incarnation log transaction log callbacks
+ *  \param	fixed_epoch[IN]	It is for operation with fixed epoch or not
  *  \param	loh[OUT]	Returned open log handle
  *
  *  \return 0 on success, error code on failure
  */
 int
 ilog_open(struct umem_instance *umm, struct ilog_df *root,
-	  const struct ilog_desc_cbs *cbs, daos_handle_t *loh);
+	  const struct ilog_desc_cbs *cbs, bool fixed_epoch, daos_handle_t *loh);
 
 /** Close an open incarnation log handle
  *
@@ -167,7 +167,15 @@ struct ilog_entry {
 	int32_t		ie_idx;
 };
 
-#define ILOG_PRIV_SIZE 416
+#define ILOG_PRIV_SIZE 144
+/* Information about ilog entries */
+struct ilog_info {
+	/** Status of ilog entry */
+	int16_t		ii_status;
+	/** Used internally to indicate removal during aggregation */
+	uint16_t	ii_removed;
+};
+
 /** Structure for storing the full incarnation log for ilog_fetch.  The
  * fields shouldn't generally be accessed directly but via the iteration
  * APIs below.
@@ -175,7 +183,8 @@ struct ilog_entry {
 struct ilog_entries {
 	/** Array of log entries */
 	struct ilog_id		*ie_ids;
-	uint32_t		*ie_statuses;
+	/** Parsed information about each ilog entry */
+	struct ilog_info	*ie_info;
 	/** Number of entries in the log */
 	int64_t			 ie_num_entries;
 	/** Private log data */
@@ -193,6 +202,8 @@ struct ilog_entries {
  *				that are provably not needed.  If discard is
  *				set, it will remove everything in the epoch
  *				range.
+ *  \param	inprogress[in]	If discarding, leave committed entries alone.
+ *				Remove only uncommitted entries.
  *  \param	punch_major[in]	Max major epoch punch of parent incarnation log
  *  \param	punch_major[in]	Max minor epoch punch of parent incarnation log
  *  \param	entries[in]	Used for efficiency since aggregation is used
@@ -205,7 +216,7 @@ struct ilog_entries {
 int
 ilog_aggregate(struct umem_instance *umm, struct ilog_df *root,
 	       const struct ilog_desc_cbs *cbs, const daos_epoch_range_t *epr,
-	       bool discard, daos_epoch_t punch_major, uint16_t punch_minor,
+	       bool discard, bool inprogress, daos_epoch_t punch_major, uint16_t punch_minor,
 	       struct ilog_entries *entries);
 
 /** Initialize an ilog_entries struct for fetch
@@ -232,6 +243,7 @@ ilog_fetch_move(struct ilog_entries *dest, struct ilog_entries *src);
  *  \param	root[in]	Pointer to log root
  *  \param	cbs[in]		Incarnation log transaction log callbacks
  *  \param	intent[in]	The intent of the operation
+ *  \param	has_cond[in]	Whether for conditional operation or not
  *  \param	entries[in,out]	Allocated structure passed in will be filled
  *				with incarnation log entries in the range.
  *
@@ -239,7 +251,7 @@ ilog_fetch_move(struct ilog_entries *dest, struct ilog_entries *src);
  */
 int
 ilog_fetch(struct umem_instance *umm, struct ilog_df *root,
-	   const struct ilog_desc_cbs *cbs, uint32_t intent,
+	   const struct ilog_desc_cbs *cbs, uint32_t intent, bool has_cond,
 	   struct ilog_entries *entries);
 
 /** Deallocate any memory associated with an ilog_entries struct for fetch
@@ -255,7 +267,7 @@ ilog_cache_entry(const struct ilog_entries *entries, struct ilog_entry *entry, i
 {
 	entry->ie_id.id_value = entries->ie_ids[idx].id_value;
 	entry->ie_id.id_epoch = entries->ie_ids[idx].id_epoch;
-	entry->ie_status = entries->ie_statuses[idx];
+	entry->ie_status = entries->ie_info[idx].ii_status;
 	return true;
 }
 

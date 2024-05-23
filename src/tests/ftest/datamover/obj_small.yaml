@@ -1,0 +1,33 @@
+hosts:
+  test_servers: 1
+  test_clients: 1
+timeouts:
+  test_dm_obj_small_dcp: 120
+  test_dm_obj_small_cont_clone: 90
+server_config:
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+  system_ram_reserved: 1
+pool:
+  scm_size: 1G
+  control_method: dmg
+container:
+  control_method: API
+dcp:
+  client_processes:
+    np: 3
+dataset:
+  num_objs: 10
+  num_dkeys: 10
+  num_akeys_single: 5
+  num_akeys_array: 5
+  akey_sizes: [1, 512, 1024]
+  akey_extents: [32, 16, 8, 4, 2]

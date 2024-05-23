@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -262,12 +262,16 @@ test_daos_prop_from_str(void **state)
 	char		*DEDUP_TH	= "dedup_threshold:8192";
 	char		*COMP		= "compression:lz4";
 	char		*ENC		= "encryption:aes-xts128";
-	char		*RF		= "rf:2";
-	char		*EC_CELL	= "ec_cell:2021";
+	char		*RF		= "rd_fac:2";
+	char		*RF_OLD		= "rf:2";
+	char		*EC_CELL	= "ec_cell_sz:2021";
+	char		*EC_PDA		= "ec_pda:1";
+	char		*RP_PDA		= "rp_pda:4";
 
 	/** Valid prop entries, wrong values */
 	char		*CSUM_INV	= "cksum:crc2000";
-	char            *RF_INV		= "rf:64";
+	char            *RF_INV		= "rd_fac:64";
+	char            *RF_OLD_INV	= "rf:64";
 
 	/** Read only props, that should not be parsed */
 	char		*OID		= "alloc_oid:25";
@@ -317,12 +321,19 @@ test_daos_prop_from_str(void **state)
 	sprintf(buf, "%s;%s", CSUM_INV, RF);
 	rc = daos_prop_from_str(buf, sizeof(buf), &prop);
 	assert_int_equal(rc, -DER_INVAL);
+	sprintf(buf, "%s;%s", CSUM_INV, RF_OLD);
+	rc = daos_prop_from_str(buf, sizeof(buf), &prop);
+	assert_int_equal(rc, -DER_INVAL);
 	sprintf(buf, "%s;%s", CSUM, RF_INV);
 	rc = daos_prop_from_str(buf, sizeof(buf), &prop);
 	assert_int_equal(rc, -DER_INVAL);
+	sprintf(buf, "%s;%s", CSUM, RF_OLD_INV);
+	rc = daos_prop_from_str(buf, sizeof(buf), &prop);
+	assert_int_equal(rc, -DER_INVAL);
 
-	sprintf(buf, "%s;%s;%s;%s;%s;%s;%s;%s;%s",
-		LABEL, CSUM, CSUM_SIZE, DEDUP, DEDUP_TH, COMP, ENC, RF, EC_CELL);
+	sprintf(buf, "%s;%s;%s;%s;%s;%s;%s;%s;%s;%s;%s",
+		LABEL, CSUM, CSUM_SIZE, DEDUP, DEDUP_TH, COMP, ENC, RF,
+		EC_CELL, EC_PDA, RP_PDA);
 	rc = daos_prop_from_str(buf, sizeof(buf), &prop);
 	assert_int_equal(rc, 0);
 
@@ -353,6 +364,12 @@ test_daos_prop_from_str(void **state)
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_EC_CELL_SZ);
 	assert_int_equal(entry->dpe_val, 2021);
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_EC_PDA);
+	assert_int_equal(entry->dpe_val, 1);
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_RP_PDA);
+	assert_int_equal(entry->dpe_val, 4);
 
 	daos_prop_free(prop);
 }

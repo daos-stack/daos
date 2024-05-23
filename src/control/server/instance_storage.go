@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,49 +8,65 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"os"
-	"path"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
-// GetScmConfig calls in to the private engine storage provider to retrieve the
-// SCM config.
-func (ei *EngineInstance) GetScmConfig() (*storage.TierConfig, error) {
-	return ei.storage.GetScmConfig()
+// GetStorage retrieve the storage provider for an engine instance.
+func (ei *EngineInstance) GetStorage() *storage.Provider {
+	return ei.storage
 }
 
-// GetScmUsage calls in to the private engine storage provider to retrieve the
-// SCM usage.
-func (ei *EngineInstance) GetScmUsage() (*storage.ScmMountPoint, error) {
-	return ei.storage.GetScmUsage()
+// MountMetadata mounts the configured control metadata location.
+func (ei *EngineInstance) MountMetadata() error {
+	msgIdx := fmt.Sprintf("instance %d", ei.Index())
+
+	msgCheck := fmt.Sprintf("%s: checking if metadata is mounted", msgIdx)
+	ei.log.Trace(msgCheck)
+
+	isMounted, err := ei.storage.ControlMetadataIsMounted()
+	if err != nil {
+		return errors.WithMessage(err, msgCheck)
+	}
+
+	ei.log.Debugf("%s: IsMounted: %v", msgIdx, isMounted)
+	if isMounted {
+		return nil
+	}
+
+	return ei.storage.MountControlMetadata()
 }
 
 // MountScm mounts the configured SCM device (DCPM or ramdisk emulation)
 // at the mountpoint specified in the configuration. If the device is already
 // mounted, the function returns nil, indicating success.
 func (ei *EngineInstance) MountScm() error {
+	msgIdx := fmt.Sprintf("instance %d", ei.Index())
+
+	msgCheck := fmt.Sprintf("%s: checking if scm is mounted", msgIdx)
+	ei.log.Trace(msgCheck)
+
 	isMounted, err := ei.storage.ScmIsMounted()
 	if err != nil && !os.IsNotExist(errors.Cause(err)) {
-		return errors.WithMessage(err, "failed to check SCM mount")
+		return errors.WithMessage(err, msgCheck)
 	}
+
+	ei.log.Debugf("%s: IsMounted: %v", msgIdx, isMounted)
 	if isMounted {
 		return nil
 	}
 
 	return ei.storage.MountScm()
-}
-
-// NeedsScmFormat probes the configured instance storage and determines whether
-// or not it requires a format operation before it can be used.
-func (ei *EngineInstance) NeedsScmFormat() (bool, error) {
-	return ei.storage.ScmNeedsFormat()
 }
 
 // NotifyStorageReady releases any blocks on awaitStorageReady().
@@ -60,56 +76,95 @@ func (ei *EngineInstance) NotifyStorageReady() {
 	}()
 }
 
-// publishFormatRequiredFn returns onAwaitFormatFn which will publish an
+// createPublishFormatRequiredFunc returns onAwaitFormatFn which will publish an
 // event using the provided publish function to indicate that host is awaiting
 // storage format.
-func publishFormatRequiredFn(publishFn func(*events.RASEvent), hostname string) onAwaitFormatFn {
+func createPublishFormatRequiredFunc(publish func(*events.RASEvent), hostname string) onAwaitFormatFn {
 	return func(_ context.Context, engineIdx uint32, formatType string) error {
 		evt := events.NewEngineFormatRequiredEvent(hostname, engineIdx, formatType).
-			WithRank(uint32(system.NilRank))
-		publishFn(evt)
+			WithRank(uint32(ranklist.NilRank))
+		publish(evt)
 
 		return nil
 	}
 }
 
+func (ei *EngineInstance) checkScmNeedFormat() (bool, error) {
+	msgIdx := fmt.Sprintf("instance %d", ei.Index())
+
+	if ei.storage.ControlMetadataPathConfigured() {
+		cfg, err := ei.storage.GetScmConfig()
+		if err != nil {
+			return false, err
+		}
+		if cfg.Class != "ram" {
+			return false, storage.FaultBdevConfigRolesWithDCPM
+		}
+		if !ei.storage.BdevRoleMetaConfigured() {
+			return false, storage.FaultBdevConfigControlMetadataNoRoles
+		}
+		ei.log.Debugf("scm class is ram and bdev role meta configured")
+
+		return true, nil
+	}
+
+	needsScmFormat, err := ei.storage.ScmNeedsFormat()
+	if err != nil {
+		if fault.IsFaultCode(err, code.StorageDeviceWithFsNoMountpoint) {
+			return false, err
+		}
+		ei.log.Errorf("%s: failed to check storage formatting: %s", msgIdx, err)
+
+		return true, nil
+	}
+
+	return needsScmFormat, nil
+}
+
 // awaitStorageReady blocks until instance has storage available and ready to be used.
-func (ei *EngineInstance) awaitStorageReady(ctx context.Context, skipMissingSuperblock bool) error {
+func (ei *EngineInstance) awaitStorageReady(ctx context.Context) error {
 	idx := ei.Index()
+	msgIdx := fmt.Sprintf("instance %d", idx)
 
 	if ei.IsStarted() {
-		return errors.Errorf("can't wait for storage: instance %d already started", idx)
+		return errors.Errorf("can't wait for storage: %s already started", msgIdx)
 	}
 
-	ei.log.Infof("Checking %s instance %d storage ...", build.DataPlaneName, idx)
+	ei.log.Infof("Checking %s %s storage ...", build.DataPlaneName, msgIdx)
 
-	needsScmFormat, err := ei.NeedsScmFormat()
+	needsMetaFormat, err := ei.storage.ControlMetadataNeedsFormat()
 	if err != nil {
-		ei.log.Errorf("instance %d: failed to check storage formatting: %s", idx, err)
-		needsScmFormat = true
+		ei.log.Errorf("%s: failed to check control metadata storage formatting: %s",
+			msgIdx, err)
+		needsMetaFormat = true
 	}
+	ei.log.Debugf("%s: needsMetaFormat: %t", msgIdx, needsMetaFormat)
 
-	if !needsScmFormat {
-		if skipMissingSuperblock {
-			return nil
-		}
-		ei.log.Debugf("instance %d: no SCM format required; checking for superblock", idx)
-		needsSuperblock, err := ei.NeedsSuperblock()
-		if err != nil {
-			ei.log.Errorf("instance %d: failed to check instance superblock: %s", idx, err)
-		}
-		if !needsSuperblock {
-			ei.log.Debugf("instance %d: superblock not needed", idx)
-			return nil
-		}
-	}
-
-	cfg, err := ei.storage.GetScmConfig()
+	needsScmFormat, err := ei.checkScmNeedFormat()
 	if err != nil {
 		return err
 	}
-	if skipMissingSuperblock {
-		return FaultScmUnmanaged(cfg.Scm.MountPoint)
+	ei.log.Debugf("%s: needsScmFormat: %t", msgIdx, needsScmFormat)
+
+	// Always reformat ramdisk in MD-on-SSD mode if control metadata intact.
+	if ei.storage.ControlMetadataPathConfigured() && !needsMetaFormat {
+		if err := ei.storage.FormatScm(true); err != nil {
+			return errors.Wrapf(err, "%s: format ramdisk", msgIdx)
+		}
+		needsScmFormat = false
+	}
+
+	if !needsMetaFormat && !needsScmFormat {
+		ei.log.Debugf("%s: no SCM format required; checking for superblock", msgIdx)
+		needsSuperblock, err := ei.needsSuperblock()
+		if err != nil {
+			ei.log.Errorf("%s: failed to check instance superblock: %s", msgIdx, err)
+		}
+		if !needsSuperblock {
+			ei.log.Debugf("%s: superblock not needed", msgIdx)
+			return nil
+		}
+		ei.log.Debugf("%s: superblock needed", msgIdx)
 	}
 
 	// by this point we need superblock and possibly scm format
@@ -117,7 +172,7 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context, skipMissingSupe
 	if !needsScmFormat {
 		formatType = "Metadata"
 	}
-	ei.log.Infof("%s format required on instance %d", formatType, idx)
+	ei.log.Infof("%s format required on %s", formatType, msgIdx)
 
 	ei.waitFormat.SetTrue()
 	// After we know that the instance is awaiting format, fire off
@@ -130,9 +185,9 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context, skipMissingSupe
 
 	select {
 	case <-ctx.Done():
-		ei.log.Infof("%s instance %d storage not ready: %s", build.DataPlaneName, idx, ctx.Err())
+		ei.log.Infof("%s %s storage not ready: %s", build.DataPlaneName, msgIdx, ctx.Err())
 	case <-ei.storageReady:
-		ei.log.Infof("%s instance %d storage ready", build.DataPlaneName, idx)
+		ei.log.Infof("%s %s storage ready", build.DataPlaneName, msgIdx)
 	}
 
 	ei.waitFormat.SetFalse()
@@ -141,42 +196,13 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context, skipMissingSupe
 }
 
 func (ei *EngineInstance) logScmStorage() error {
-	scmMount := path.Dir(ei.superblockPath())
-
-	cfg, err := ei.storage.GetScmConfig()
-	if err != nil {
-		return err
-	}
-	if scmMount != cfg.Scm.MountPoint {
-		return errors.New("superblock path doesn't match config mountpoint")
-	}
-
 	mp, err := ei.storage.GetScmUsage()
 	if err != nil {
 		return err
 	}
 
 	ei.log.Infof("SCM @ %s: %s Total/%s Avail", mp.Path,
-		humanize.Bytes(mp.TotalBytes), humanize.Bytes(mp.AvailBytes))
+		humanize.IBytes(mp.TotalBytes), humanize.IBytes(mp.AvailBytes))
 
 	return nil
-}
-
-// HasBlockDevices calls in to the private engine storage provider to check if
-// block devices exist in the storage configurations of the engine.
-func (ei *EngineInstance) HasBlockDevices() bool {
-	return ei.storage.HasBlockDevices()
-}
-
-// ScanBdevTiers calls in to the private engine storage provider to scan bdev
-// tiers. Scan will avoid using any cached results if direct is set to true.
-func (ei *EngineInstance) ScanBdevTiers() ([]storage.BdevTierScanResult, error) {
-	isReady := ei.IsReady()
-	upDn := "down"
-	if isReady {
-		upDn = "up"
-	}
-	ei.log.Debugf("scanning engine-%d bdev tiers while engine is %s", ei.Index(), upDn)
-
-	return ei.storage.ScanBdevTiers(!isReady)
 }

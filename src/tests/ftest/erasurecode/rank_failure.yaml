@@ -1,0 +1,38 @@
+hosts:
+  test_servers: 6
+  test_clients: 1
+timeout: 1800
+setup:
+  start_agents_once: false
+  start_servers_once: false
+server_config:
+  name: daos_server
+  engines_per_host: 2
+  engines:
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      log_mask: ERR
+      storage: auto
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      log_mask: ERR
+      storage: auto
+pool:
+  scm_size: 8G
+  control_method: dmg
+gen_io_conf:
+  ranks: "11"
+  targets: "4"
+  dkeys: "2"
+  akeys: "2"
+  record_size: "1000"
+  obj_num: "3"
+  obj_class: "EC_8P2GX"

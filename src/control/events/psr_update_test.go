@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,7 +11,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 )
 
 const (
@@ -19,7 +19,7 @@ const (
 )
 
 var (
-	tUuid    = common.MockUUID(1)
+	tUuid    = test.MockUUID(1)
 	tSvcReps = []uint32{0, 1}
 )
 

@@ -1,15 +1,13 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from logging import getLogger
 import re
+from logging import getLogger
 
 from command_utils_base import BasicParameter, ObjectWithParameters
 from general_utils import get_host_data
-
 
 DATA_ERROR = "[ERROR]"
 
@@ -250,7 +248,7 @@ class Configuration():
             self._active_name = None
             self._inactive_names = list(self._all_names)
 
-            # Report errors for invalid configutaion names
+            # Report errors for invalid configuration names
             if value is not None:
                 self.log.error("Invalid configuration name: %s", value)
 
@@ -296,7 +294,7 @@ class Configuration():
         """Is the specified path valid for the active configuration.
 
         Note:
-            Does not support paths with wildcards.
+            Does not support paths with wild-cards.
             Assumes configuration names are always at the end of the path.
 
         Args:
@@ -325,7 +323,7 @@ class Configuration():
         """
         self.available_names = []
         for name in self._all_names:
-            # Get each configuration's requirements and determine its viablity
+            # Get each configuration's requirements and determine its viability
             self.log.info("Verifying the %s configuration", name)
             config_params = ConfigurationParameters(
                 self.namespace, name, self._data)
@@ -405,7 +403,7 @@ class Configuration():
             # Remove the trailing "*"
             re_path = "/".join(path.split("/")[:-1])
         else:
-            # Without a trailing "*", only match the path specifified
+            # Without a trailing "*", only match the path specified
             re_path = "".join([path, "$"])
         # Replace any "*" not at the end of the path
         search_path = re.compile(re_path.replace('*', '[^/]*'))
@@ -454,10 +452,12 @@ class Configuration():
                 # Multiple configuration-specific matching paths for the key -
                 # no other way to determine which value to use
                 multiple_matches = True
+                value = None
         else:
             # Multiple matching paths w/o an active configuration for the key -
             # no way to determine which value to use
             multiple_matches = True
+            value = None
 
         # Report an AvocadoParam-style exception for multiple key matches
         if multiple_matches:

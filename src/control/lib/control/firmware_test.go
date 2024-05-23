@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,16 +7,15 @@
 package control
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -32,7 +31,7 @@ func createTestHostSet(t *testing.T, hosts string) *hostlist.HostSet {
 
 func getCmpOpts() []cmp.Option {
 	return []cmp.Option{
-		cmp.Comparer(common.CmpErrBool),
+		cmp.Comparer(test.CmpErrBool),
 		cmp.Comparer(func(h1, h2 *hostlist.HostSet) bool {
 			return h1.String() == h2.String()
 		}),
@@ -154,18 +153,18 @@ func TestControl_FirmwareQuery(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mic := tc.mic
 			if mic == nil {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := FirmwareQuery(ctx, mi, tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -308,8 +307,8 @@ func TestControl_DeviceType_toCtlPBType(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result, err := tc.originalType.toCtlPBType()
 
-			common.CmpErr(t, tc.expErr, err)
-			common.AssertEqual(t, tc.expPBType, result, "")
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expPBType, result, "")
 		})
 	}
 }
@@ -401,18 +400,18 @@ func TestControl_FirmwareUpdate(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mic := tc.mic
 			if mic == nil {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := FirmwareUpdate(ctx, mi, tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}

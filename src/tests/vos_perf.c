@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -24,17 +24,23 @@
 #include <daos_test.h>
 #include <daos/dts.h>
 #include "perf_internal.h"
+#include <daos/stack_mmap.h>
 
 uint64_t	ts_flags;
+bool                    ts_flat = false;
 
+char		ts_pmem_path[PATH_MAX - 32];
 char		ts_pmem_file[PATH_MAX];
-bool		ts_zero_copy;	/* use zero-copy API for VOS */
-bool		ts_nest_iterator;
+bool                    ts_zero_copy; /* use zero-copy API for VOS */
 
 daos_unit_oid_t	*ts_uoids;	/* object shard IDs */
 
 bool		ts_in_ult;	/* Run tests in ULT mode */
 static ABT_xstream	abt_xstream;
+
+#ifdef ULT_MMAP_STACK
+struct stack_pool *sp;
+#endif
 
 static int
 ts_abt_init(void)
@@ -148,7 +154,7 @@ _vos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 			       cred->tc_sgl.sg_iovs[0].iov_len);
 		}
 
-		rc = bio_iod_post(vos_ioh2desc(ioh));
+		rc = bio_iod_post(vos_ioh2desc(ioh), 0);
 end:
 		if (op_type == TS_DO_UPDATE)
 			rc = vos_update_end(ioh, 0, &cred->tc_dkey, rc, NULL,
@@ -200,9 +206,10 @@ vos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 	ult_arg.epoch = epoch;
 	ult_arg.duration = duration;
 	ult_arg.obj_idx = obj_idx;
-	rc = ABT_thread_create_on_xstream(abt_xstream, vos_update_or_fetch_ult,
-					  &ult_arg, ABT_THREAD_ATTR_NULL,
-					  &thread);
+	rc = daos_abt_thread_create_on_xstream(sp, NULL, abt_xstream,
+					       vos_update_or_fetch_ult,
+					       &ult_arg, ABT_THREAD_ATTR_NULL,
+					       &thread);
 	if (rc != ABT_SUCCESS)
 		return rc;
 
@@ -218,7 +225,7 @@ vos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 static int
 objects_query(struct pf_param *param)
 {
-	daos_epoch_t epoch = crt_hlc_get();
+	daos_epoch_t epoch = d_hlc_get();
 	char		*akey = "0";
 	d_iov_t		dkey_iov;
 	d_iov_t		akey_iov;
@@ -237,7 +244,7 @@ objects_query(struct pf_param *param)
 		rc = vos_obj_query_key(ts_ctx.tsc_coh, ts_uoids[i],
 				       DAOS_GET_MAX | DAOS_GET_DKEY |
 				       DAOS_GET_RECX, epoch, &dkey_iov,
-				       &akey_iov, &recx, 0, 0, NULL);
+				       &akey_iov, &recx, NULL, 0, 0, NULL);
 		if (rc != 0 && rc != -DER_NONEXIST)
 			break;
 		if (param->pa_verbose) {
@@ -272,10 +279,12 @@ iter_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type, vos_ite
 	if (ppa->pa_verbose) {
 		switch (type) {
 		case VOS_ITER_DKEY:
-			D_PRINT("\tdkey ="DF_KEY"\n", DP_KEY(&entry->ie_key));
+			D_PRINT("\tdkey =" DF_KEY ", epoch=" DF_X64 ".%d\n", DP_KEY(&entry->ie_key),
+				entry->ie_epoch, entry->ie_minor_epc);
 			break;
 		case VOS_ITER_AKEY:
-			D_PRINT("\takey ="DF_KEY"\n", DP_KEY(&entry->ie_key));
+			D_PRINT("\takey =" DF_KEY ", epoch=" DF_X64 ".%d\n", DP_KEY(&entry->ie_key),
+				entry->ie_epoch, entry->ie_minor_epc);
 			break;
 		case VOS_ITER_SINGLE:
 			D_PRINT("\tsingv="DF_U64" bytes\n", entry->ie_rsize);
@@ -315,7 +324,8 @@ obj_iter_records(daos_unit_oid_t oid, struct pf_param *ppa)
 	TS_TIME_START(&ppa->pa_duration, start);
 	if (ppa->pa_verbose)
 		D_PRINT("Iteration dkeys in "DF_UOID"\n", DP_UOID(oid));
-	rc = vos_iterate(&param, VOS_ITER_DKEY, true, &anchors, iter_cb, NULL, ppa, NULL);
+	rc = vos_iterate(&param, VOS_ITER_DKEY, ppa->pa_iter.recurse, &anchors, iter_cb, NULL, ppa,
+			 NULL);
 	TS_TIME_END(&ppa->pa_duration, start);
 	return rc;
 }
@@ -360,7 +370,7 @@ punch_keys(daos_key_t *dkey, daos_epoch_t *epoch, struct pf_param *param)
 static int
 objects_punch(struct pf_param *param)
 {
-	daos_epoch_t epoch = crt_hlc_get();
+	daos_epoch_t epoch = d_hlc_get();
 	int		i;
 	int		rc = 0;
 	uint64_t	start = 0;
@@ -393,18 +403,11 @@ objects_open(void)
 
 	perf_setup_keys();
 
-	for (i = 0; i < ts_obj_p_cont; i++) {
-		if (!ts_oid_init) {
-			ts_oids[i] = daos_test_oid_gen(
-				DAOS_HDL_INVAL, DAOS_OC_RAW, ts_flags, 0,
-				ts_ctx.tsc_mpi_rank);
-		}
-
-		ts_uoids[i].id_pub = ts_oids[i];
-		ts_uoids[i].id_shard = 0;
-		ts_uoids[i].id_pad_32 = 0;
+	if (!ts_oid_init) {
+		for (i = 0; i < ts_obj_p_cont; i++)
+			ts_uoids[i] = dts_unit_oid_gen(ts_flags, 0);
+		ts_oid_init = true;
 	}
-	ts_oid_init = true;
 	return 0;
 }
 
@@ -467,6 +470,59 @@ pf_fetch(struct pf_test *ts, struct pf_param *param)
 }
 
 static int
+pf_aggregate(struct pf_test *ts, struct pf_param *param)
+{
+	daos_epoch_t epoch = d_hlc_get();
+	daos_epoch_range_t	epr = {0, ++epoch};
+	int			rc = 0;
+	uint64_t		start = 0;
+	uint64_t		flags = 0;
+
+	TS_TIME_START(&param->pa_duration, start);
+
+	if (param->pa_agg.full_scan)
+		flags |= VOS_AGG_FL_FORCE_SCAN;
+	if (param->pa_agg.force_merge)
+		flags |= VOS_AGG_FL_FORCE_MERGE;
+	rc = vos_aggregate(ts_ctx.tsc_coh, &epr, NULL, NULL, flags);
+
+	TS_TIME_END(&param->pa_duration, start);
+
+	return rc;
+}
+
+static int
+pf_discard(struct pf_test *ts, struct pf_param *param)
+{
+	daos_epoch_t epoch = d_hlc_get();
+	daos_epoch_range_t	epr = {0, ++epoch};
+	int			rc = 0;
+	uint64_t		start = 0;
+
+	TS_TIME_START(&param->pa_duration, start);
+
+	rc = vos_discard(ts_ctx.tsc_coh, NULL, &epr, NULL, NULL);
+
+	TS_TIME_END(&param->pa_duration, start);
+
+	return rc;
+}
+
+static int
+pf_gc(struct pf_test *ts, struct pf_param *param)
+{
+	uint64_t		start = 0;
+
+	TS_TIME_START(&param->pa_duration, start);
+
+	gc_wait();
+
+	TS_TIME_END(&param->pa_duration, start);
+
+	return 0;
+}
+
+static int
 pf_verify(struct pf_test *ts, struct pf_param *param)
 {
 	int	rc;
@@ -493,7 +549,6 @@ pf_verify(struct pf_test *ts, struct pf_param *param)
 static int
 pf_iterate(struct pf_test *pf, struct pf_param *param)
 {
-	ts_nest_iterator = param->pa_iter.nested;
 	return obj_iter_records(ts_uoids[0], param);
 }
 
@@ -502,7 +557,7 @@ pf_query(struct pf_test *ts, struct pf_param *param)
 {
 	int rc;
 
-	if ((ts_flags & DAOS_OF_DKEY_UINT64) == 0) {
+	if (ts_flags != DAOS_OT_DKEY_UINT64 && ts_flags != DAOS_OT_ARRAY_BYTE) {
 		fprintf(stderr, "Integer dkeys required for query test (-i)\n");
 		return -1;
 	}
@@ -551,12 +606,12 @@ pf_parse_iterate_cb(char *str, struct pf_param *pa, char **strp)
 	default:
 		str++;
 		break;
-	case 'n':
-		pa->pa_iter.nested = true;
-		str++;
-		break;
 	case 'V':
 		pa->pa_iter.visible = true;
+		str++;
+		break;
+	case 's':
+		pa->pa_iter.recurse = false;
 		str++;
 		break;
 	}
@@ -567,7 +622,45 @@ pf_parse_iterate_cb(char *str, struct pf_param *pa, char **strp)
 static int
 pf_parse_iterate(char *str, struct pf_param *pa, char **strp)
 {
+	pa->pa_iter.recurse = true;
 	return pf_parse_common(str, pa, pf_parse_iterate_cb, strp);
+}
+
+/**
+ * Example: "U;p A;p;f;m"
+ * 'U' is update test.  Integer dkey required
+ *	'p': parameter of update and it means outputting performance result
+ *
+ * 'A' is aggregate test
+ *	'p': parameter of query and it means outputting performance result
+ *	'v': enables verbosity
+ *	'f': Force full scan
+ *	'm': Force merge of adjacent recx
+ */
+static int
+pf_parse_aggregate_cb(char *str, struct pf_param *pa, char **strp)
+{
+	switch (*str) {
+	default:
+		str++;
+		break;
+	case 'f':
+		pa->pa_agg.full_scan = true;
+		str++;
+		break;
+	case 'm':
+		pa->pa_agg.force_merge = true;
+		str++;
+		break;
+	}
+	*strp = str;
+	return 0;
+}
+
+static int
+pf_parse_aggregate(char *str, struct pf_param *pa, char **strp)
+{
+	return pf_parse_common(str, pa, pf_parse_aggregate_cb, strp);
 }
 
 /* predefined test cases */
@@ -609,6 +702,24 @@ struct pf_test pf_tests[] = {
 		.ts_func	= pf_punch,
 	},
 	{
+		.ts_code	= 'A',
+		.ts_name	= "AGGREGATE",
+		.ts_parse	= pf_parse_aggregate,
+		.ts_func	= pf_aggregate,
+	},
+	{
+		.ts_code	= 'D',
+		.ts_name	= "DISCARD",
+		.ts_parse	= pf_parse_aggregate,
+		.ts_func	= pf_discard,
+	},
+	{
+		.ts_code	= 'G',
+		.ts_name	= "GARBAGE COLLECTION",
+		.ts_parse	= pf_parse_aggregate,
+		.ts_func	= pf_gc,
+	},
+	{
 		.ts_code	= 0,
 	},
 };
@@ -620,14 +731,15 @@ ts_yes_or_no(bool value)
 }
 
 const char perf_vos_usage[] = "\n"
-"-f pathname\n"
-"	Full path name of the VOS file.\n\n"
-"-z	Use zero copy API.\n\n"
-"-i	Use integer dkeys.  Required if running QUERY test.\n\n"
-"-I	Use constant akey.  Required for QUERY test.\n\n"
-"-x	Run each test in an ABT ULT.\n\n"
-"Examples:\n"
-"	$ vos_perf -s 1024k -A -R 'U U;o=4k;s=4k V'\n";
+			      "-D pathname\n"
+			      "	Full path name of the directory where to store the VOS file(s).\n\n"
+			      "-z	Use zero copy API.\n\n"
+			      "-i	Use integer dkeys.  Required if running QUERY test.\n\n"
+			      "-I	Use constant akey.  Required for QUERY test.\n\n"
+			      "-f	Use a flat DKEY object type\n\n"
+			      "-x	Run each test in an ABT ULT.\n\n"
+			      "Examples:\n"
+			      "	$ vos_perf -s 1024k -A -R 'U U;o=4k;s=4k V'\n";
 
 static void
 ts_print_usage(void)
@@ -641,15 +753,16 @@ ts_print_usage(void)
 }
 
 const struct option perf_vos_opts[] = {
-	{ "file",	required_argument,	NULL,	'f' },
-	{ "zcopy",	no_argument,		NULL,	'z' },
-	{ "int_dkey",	no_argument,		NULL,	'i' },
-	{ "const_akey",	no_argument,		NULL,	'I' },
-	{ "abt_ult",	no_argument,		NULL,	'x' },
-	{ NULL,		0,			NULL,	0   },
+    {"dir", required_argument, NULL, 'D'},
+    {"zcopy", no_argument, NULL, 'z'},
+    {"int_dkey", no_argument, NULL, 'i'},
+    {"flat_dkey", no_argument, NULL, 'f'},
+    {"const_akey", no_argument, NULL, 'I'},
+    {"abt_ult", no_argument, NULL, 'x'},
+    {NULL, 0, NULL, 0},
 };
 
-const char perf_vos_optstr[] = "f:ziIx";
+const char perf_vos_optstr[] = "D:zifIx";
 
 int
 main(int argc, char **argv)
@@ -664,16 +777,15 @@ main(int argc, char **argv)
 	ts_dkey_prefix = PF_DKEY_PREF;
 	ts_flags = 0;
 
-	MPI_Init(&argc, &argv);
-	MPI_Comm_rank(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_rank);
-	MPI_Comm_size(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_size);
+	par_init(&argc, &argv);
+	par_rank(PAR_COMM_WORLD, &ts_ctx.tsc_mpi_rank);
+	par_size(PAR_COMM_WORLD, &ts_ctx.tsc_mpi_size);
 
 	rc = perf_alloc_opts(perf_vos_opts, ARRAY_SIZE(perf_vos_opts),
 			     perf_vos_optstr, &ts_opts, &ts_optstr);
 	if (rc)
 		return rc;
 
-	memset(ts_pmem_file, 0, sizeof(ts_pmem_file));
 	while ((rc = getopt_long(argc, argv, ts_optstr, ts_opts, NULL)) != -1) {
 		switch (rc) {
 		default:
@@ -687,21 +799,28 @@ main(int argc, char **argv)
 				return ret;
 			}
 			break;
-		case 'f':
-			if (strnlen(optarg, PATH_MAX) >= (PATH_MAX - 5)) {
-				fprintf(stderr, "filename size must be < %d\n",
-					PATH_MAX - 5);
+		case 'D':
+			if (strnlen(optarg, PATH_MAX) >= sizeof(ts_pmem_path)) {
+				fprintf(stderr, "directory name size must be < %zu\n",
+					sizeof(ts_pmem_path));
 				perf_free_opts(ts_opts, ts_optstr);
 				return -1;
 			}
-			strncpy(ts_pmem_file, optarg, PATH_MAX - 5);
+			strncpy(ts_pmem_path, optarg, sizeof(ts_pmem_path));
+			ts_pmem_path[sizeof(ts_pmem_path) - 1] = 0;
 			break;
 		case 'z':
 			ts_zero_copy = true;
 			break;
 		case 'i':
-			ts_flags |= DAOS_OF_DKEY_UINT64;
+			ts_flags = DAOS_OT_DKEY_UINT64;
 			ts_dkey_prefix = NULL;
+			break;
+		case 'f':
+			ts_flat        = true;
+			ts_dkey_prefix = NULL;
+			/** Flat dkey implies const_akey */
+			ts_const_akey = true;
 			break;
 		case 'I':
 			ts_const_akey = true;
@@ -715,6 +834,14 @@ main(int argc, char **argv)
 
 	if (ts_const_akey)
 		ts_akey_p_dkey = 1;
+
+	if (ts_flat) {
+		if (ts_single)
+			ts_flags = DAOS_OT_KV_HASHED;
+		else
+			ts_flags = DAOS_OT_ARRAY_BYTE;
+		ts_dkey_prefix = NULL;
+	}
 
 	if (!cmds) {
 		D_PRINT("Please provide command string\n");
@@ -744,16 +871,11 @@ main(int argc, char **argv)
 	}
 
 	ts_ctx.tsc_cred_nr = -1; /* VOS can only support sync mode */
-	if (strlen(ts_pmem_file) == 0) {
-		snprintf(ts_pmem_file, sizeof(ts_pmem_file),
-			 "/mnt/daos/vos_perf%d.pmem", ts_ctx.tsc_mpi_rank);
-	} else {
-		char id[16];
-
-		snprintf(id, sizeof(id), "%d", ts_ctx.tsc_mpi_rank);
-		strncat(ts_pmem_file, id,
-			(sizeof(ts_pmem_file) - strlen(ts_pmem_file)));
-	}
+	if (ts_pmem_path[0] == '\0')
+		strcpy(ts_pmem_path, "/mnt/daos");
+	snprintf(ts_pmem_file, sizeof(ts_pmem_file), "%s/vos_perf%d.pmem", ts_pmem_path,
+		 ts_ctx.tsc_mpi_rank);
+	ts_ctx.tsc_pmem_path = ts_pmem_path;
 	ts_ctx.tsc_pmem_file = ts_pmem_file;
 
 	if (ts_in_ult) {
@@ -790,6 +912,12 @@ main(int argc, char **argv)
 
 	ts_update_or_fetch_fn = vos_update_or_fetch;
 
+#ifdef ULT_MMAP_STACK
+	rc = stack_pool_create(&sp);
+	if (rc)
+		return -1;
+#endif
+
 	rc = dts_ctx_init(&ts_ctx, &vos_engine);
 	if (rc)
 		return -1;
@@ -799,7 +927,7 @@ main(int argc, char **argv)
 
 	if (ts_ctx.tsc_mpi_rank == 0) {
 		fprintf(stdout,
-			"Test :\n\t%s\n"
+			"Test :\n\tVOS storage\n"
 			"Pool :\n\t%s\n"
 			"Parameters :\n"
 			"\tpool size     : SCM: %u MB, NVMe: %u MB\n"
@@ -809,10 +937,10 @@ main(int argc, char **argv)
 			"\takey_per_dkey : %u%s\n"
 			"\trecx_per_akey : %u\n"
 			"\tvalue type    : %s\n"
-			"\tstride size   : %u\n"
+			"\tvalue size    : %u\n"
 			"\tzero copy     : %s\n"
 			"\tVOS file      : %s\n",
-			pf_class2name(DAOS_OC_RAW), uuid_buf,
+			uuid_buf,
 			(unsigned int)(ts_scm_size >> 20),
 			(unsigned int)(ts_nvme_size >> 20),
 			credits,
@@ -840,7 +968,7 @@ main(int argc, char **argv)
 		return -1;
 	}
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	rc = run_commands(cmds, pf_tests);
 
@@ -852,7 +980,10 @@ main(int argc, char **argv)
 	stride_buf_fini();
 	dts_ctx_fini(&ts_ctx);
 
-	MPI_Finalize();
+#ifdef ULT_MMAP_STACK
+	stack_pool_destroy(sp);
+#endif
+	par_fini();
 
 	if (ts_uoids)
 		free(ts_uoids);

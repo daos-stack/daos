@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,7 +7,7 @@
 package server
 
 import (
-	"io/ioutil"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -16,7 +16,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
 
 const (
@@ -30,7 +30,7 @@ type Superblock struct {
 	Version         uint8
 	UUID            string
 	System          string
-	Rank            *system.Rank
+	Rank            *ranklist.Rank
 	URI             string
 	ValidRank       bool
 	HostFaultDomain string
@@ -53,16 +53,7 @@ func (sb *Superblock) Unmarshal(raw []byte) error {
 }
 
 func (ei *EngineInstance) superblockPath() string {
-	cfg, err := ei.storage.GetScmConfig()
-	if err != nil {
-		ei.log.Errorf("unable to get SCM config: %s", err)
-		return defaultStoragePath
-	}
-
-	storagePath := cfg.Scm.MountPoint
-	if storagePath == "" {
-		storagePath = defaultStoragePath
-	}
+	storagePath := ei.storage.ControlMetadataEnginePath()
 	return filepath.Join(ei.fsRoot, storagePath, "superblock")
 }
 
@@ -75,49 +66,65 @@ func (ei *EngineInstance) setSuperblock(sb *Superblock) {
 func (ei *EngineInstance) getSuperblock() *Superblock {
 	ei.RLock()
 	defer ei.RUnlock()
-	return ei._superblock
+
+	if ei._superblock == nil {
+		return nil
+	}
+
+	// Make a read-only copy to avoid race warnings.
+	// NB: There is not currently any logic that relies
+	// on the returned Superblock being "live", i.e. the
+	// actual in-memory struct. If that changes, then the
+	// Superblock struct will probably need some locking to
+	// provide thread-safe access to its fields.
+	sbCopy := *ei._superblock
+	return &sbCopy
 }
 
 func (ei *EngineInstance) hasSuperblock() bool {
 	return ei.getSuperblock() != nil
 }
 
-// NeedsSuperblock indicates whether or not the instance appears
+// needsSuperblock indicates whether or not the instance appears
 // to need a superblock to be created in order to start.
 //
 // Should not be called if SCM format is required.
-func (ei *EngineInstance) NeedsSuperblock() (bool, error) {
+func (ei *EngineInstance) needsSuperblock() (bool, error) {
 	if ei.hasSuperblock() {
+		ei.log.Debugf("instance %d has no superblock set", ei.Index())
 		return false, nil
 	}
 
 	err := ei.ReadSuperblock()
 	if os.IsNotExist(errors.Cause(err)) {
+		ei.log.Debugf("instance %d: superblock not found", ei.Index())
 		return true, nil
 	}
 
 	if err != nil {
+		ei.log.Debugf("instance %d failed to read superblock", ei.Index())
 		return true, errors.Wrap(err, "failed to read existing superblock")
 	}
 
+	ei.log.Debugf("instance %d: superblock found", ei.Index())
 	return false, nil
 }
 
 // createSuperblock creates instance superblock if needed.
-func (ei *EngineInstance) createSuperblock(recreate bool) error {
+func (ei *EngineInstance) createSuperblock() error {
 	if ei.IsStarted() {
 		return errors.Errorf("can't create superblock: instance %d already started", ei.Index())
 	}
 
-	needsSuperblock, err := ei.NeedsSuperblock() // scm format completed by now
+	needsSuperblock, err := ei.needsSuperblock() // scm format completed by now
 	if !needsSuperblock {
 		return nil
 	}
-	if err != nil && !recreate {
+	if err != nil {
 		return err
 	}
 
-	if err := ei.MountScm(); err != nil {
+	if err := ei.MountMetadata(); err != nil {
 		return err
 	}
 
@@ -142,12 +149,6 @@ func (ei *EngineInstance) createSuperblock(recreate bool) error {
 		superblock.HostFaultDomain = ei.hostFaultDomain.String()
 	}
 
-	if cfg.Rank != nil {
-		superblock.Rank = new(system.Rank)
-		if cfg.Rank != nil {
-			*superblock.Rank = *cfg.Rank
-		}
-	}
 	ei.setSuperblock(superblock)
 	ei.log.Debugf("index %d: creating %s: (rank: %s, uuid: %s)",
 		ei.Index(), ei.superblockPath(), superblock.Rank, superblock.UUID)
@@ -158,20 +159,30 @@ func (ei *EngineInstance) createSuperblock(recreate bool) error {
 // WriteSuperblock writes the instance's superblock
 // to storage.
 func (ei *EngineInstance) WriteSuperblock() error {
+	ei.log.Debugf("instance %d: writing superblock at %s", ei.Index(), ei.superblockPath())
 	return WriteSuperblock(ei.superblockPath(), ei.getSuperblock())
 }
 
-// ReadSuperblock reads the instance's superblock
-// from storage.
+// ReadSuperblock reads the instance's superblock from storage.
 func (ei *EngineInstance) ReadSuperblock() error {
-	if err := ei.MountScm(); err != nil {
-		return errors.Wrap(err, "failed to mount SCM device")
+	if err := ei.MountMetadata(); err != nil {
+		return errors.Wrap(err, "failed to mount control metadata device")
 	}
 
-	sb, err := ReadSuperblock(ei.superblockPath())
+	msgIdx := fmt.Sprintf("instance %d", ei.Index())
+	sbPath := ei.superblockPath()
+	ei.log.Tracef("%s: read sb: %q", msgIdx, sbPath)
+
+	data, err := ei.storage.Sys.ReadFile(sbPath)
 	if err != nil {
-		return errors.Wrap(err, "failed to read instance superblock")
+		return errors.Wrapf(err, "%s: failed to read Superblock from %s", msgIdx, sbPath)
 	}
+
+	sb := &Superblock{}
+	if err := sb.Unmarshal(data); err != nil {
+		return err
+	}
+
 	ei.setSuperblock(sb)
 
 	return nil
@@ -181,6 +192,7 @@ func (ei *EngineInstance) ReadSuperblock() error {
 func (ei *EngineInstance) RemoveSuperblock() error {
 	ei.setSuperblock(nil)
 
+	ei.log.Debugf("instance %d: removing superblock at %s", ei.Index(), ei.superblockPath())
 	return os.Remove(ei.superblockPath())
 }
 
@@ -193,19 +205,4 @@ func WriteSuperblock(sbPath string, sb *Superblock) error {
 
 	return errors.Wrapf(common.WriteFileAtomic(sbPath, data, 0600),
 		"Failed to write Superblock to %s", sbPath)
-}
-
-// ReadSuperblock reads a Superblock from storage.
-func ReadSuperblock(sbPath string) (*Superblock, error) {
-	data, err := ioutil.ReadFile(sbPath)
-	if err != nil {
-		return nil, errors.Wrapf(err, "Failed to read Superblock from %s", sbPath)
-	}
-
-	sb := &Superblock{}
-	if err := sb.Unmarshal(data); err != nil {
-		return nil, err
-	}
-
-	return sb, nil
 }

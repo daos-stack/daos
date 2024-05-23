@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -25,61 +25,82 @@
 #define _INCLUDED_DAOS_JNI_COMMON
 
 typedef struct {
-    int nbrOfEvents;
-    daos_handle_t eqhdl;
-    daos_event_t **events;
-    daos_event_t **polled_events;
+	uint8_t status;
+	daos_event_t event;
+} data_event_t;
+
+typedef struct {
+	int nbrOfEvents;
+	daos_handle_t eqhdl;
+	data_event_t *events;
+	daos_event_t **polled_events;
 } event_queue_wrapper_t;
 
 typedef struct {
-    int reusable;
-    int nbrOfAkeys;
-    uint16_t maxKeyLen;
-    daos_iod_t *iods;
-    d_sg_list_t *sgls;
-    daos_recx_t *recxs;
-    d_iov_t *iovs;
-    daos_iod_type_t iod_type;
-    uint16_t record_size;
-    uint64_t ret_buf_address;
+	int reusable;
+	int nbrOfAkeys;
+	uint16_t maxKeyLen;
+	daos_iod_t *iods;
+	d_sg_list_t *sgls;
+	daos_recx_t *recxs;
+	d_iov_t *iovs;
+	daos_iod_type_t iod_type;
+	uint16_t record_size;
+	uint64_t ret_buf_address;
 } data_desc_t;
 
 typedef struct {
-    daos_key_t dkey;
-    uint16_t maxKeyLen;
-    uint16_t nbrOfEntries;
-    uint16_t nbrOfRequests;
-    event_queue_wrapper_t *eq;
-    daos_event_t *event;
-    daos_iod_t *iods;
-    d_sg_list_t *sgls;
-    daos_recx_t *recxs;
-    d_iov_t *iovs;
-    uint64_t ret_buf_address;
+	daos_key_t dkey;
+	uint16_t maxKeyLen;
+	uint16_t nbrOfEntries;
+	uint16_t nbrOfRequests;
+	event_queue_wrapper_t *eq;
+	data_event_t *event;
+	daos_iod_t *iods;
+	d_sg_list_t *sgls;
+	daos_recx_t *recxs;
+	d_iov_t *iovs;
+	uint64_t ret_buf_address;
 } data_desc_simple_t;
 
 typedef struct {
-    daos_key_t dkey;
-    uint16_t nbrOfEntries;
-    daos_event_t *event;
-    daos_iod_t *iods;
-    d_sg_list_t *sgls;
-    daos_recx_t *recxs;
-    d_iov_t *iovs;
-    uint64_t ret_buf_address;
+	daos_key_t dkey;
+	uint16_t nbrOfEntries;
+	data_event_t *event;
+	daos_iod_t *iods;
+	d_sg_list_t *sgls;
+	daos_recx_t *recxs;
+	d_iov_t *iovs;
+	uint64_t ret_buf_address;
 } data_desc_async_t;
 
 typedef struct {
-    int nbrOfDescs;
-    data_desc_simple_t **descs;
+	daos_key_t dkey;
+	daos_iod_t iods;
+	d_sg_list_t sgls;
+	daos_recx_t recxs;
+	d_iov_t iovs;
+} data_desc_upd_sync_t;
+
+typedef struct {
+	data_desc_upd_sync_t basicDesc;
+	data_event_t *event;
+	uint64_t ret_buf_address;
+	uint16_t maxKeyLen;
+} data_desc_upd_async_t;
+
+typedef struct {
+	int nbrOfDescs;
+	data_desc_simple_t **descs;
 } data_desc_simple_grp_t;
 
 typedef struct {
-    d_sg_list_t sgl;
-    d_iov_t iov;
-    event_queue_wrapper_t *eq;
-    uint64_t ret_buf_address;
-    daos_size_t size;
+	d_sg_list_t sgl;
+	d_iov_t iov;
+	event_queue_wrapper_t *eq;
+	data_event_t *event;
+	uint64_t ret_buf_address;
+	daos_size_t size;
 } dfs_desc_t;
 
 static jint JNI_VERSION = JNI_VERSION_1_8;
@@ -120,7 +141,7 @@ static uint8_t KEY_LIST_CODE_ANCHOR_END = (uint8_t)2;
 static uint8_t KEY_LIST_CODE_KEY2BIG = (uint8_t)3;
 static uint8_t KEY_LIST_CODE_REACH_LIMIT = (uint8_t)4;
 
-static int EVENT_IN_USE = -32768;
+static uint8_t EVENT_IN_USE = 1;
 
 /**
  * utility function to throw Java exception.

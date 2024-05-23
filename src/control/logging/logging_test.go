@@ -1,8 +1,9 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package logging_test
 
 import (
@@ -94,14 +95,22 @@ func TestLogging_StandardFormat(t *testing.T) {
 		fmtFnArgs []interface{}
 		expected  *regexp.Regexp
 	}{
+		"Trace": {fn: logger.Trace, fnInput: "test",
+			expected: regexp.MustCompile(`^TRACE \d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}\.\d{6} [^:]+:\d+: test\n$`)},
+		"Tracef": {fmtFn: logger.Tracef, fmtFnFmt: "test: %d", fmtFnArgs: []interface{}{42},
+			expected: regexp.MustCompile(`^TRACE \d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}\.\d{6} [^:]+:\d+: test: 42\n$`)},
 		"Debug": {fn: logger.Debug, fnInput: "test",
-			expected: regexp.MustCompile(`^DEBUG \d{2}:\d{2}:\d{2}\.\d{6} [^:]+:\d+: test\n$`)},
+			expected: regexp.MustCompile(`^DEBUG \d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}\.\d{6} [^:]+:\d+: test\n$`)},
 		"Debugf": {fmtFn: logger.Debugf, fmtFnFmt: "test: %d", fmtFnArgs: []interface{}{42},
-			expected: regexp.MustCompile(`^DEBUG \d{2}:\d{2}:\d{2}\.\d{6} [^:]+:\d+: test: 42\n$`)},
+			expected: regexp.MustCompile(`^DEBUG \d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}\.\d{6} [^:]+:\d+: test: 42\n$`)},
 		"Info": {fn: logger.Info, fnInput: "test",
 			expected: regexp.MustCompile(`^testPrefix INFO \d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} test\n$`)},
 		"Infof": {fmtFn: logger.Infof, fmtFnFmt: "test: %d", fmtFnArgs: []interface{}{42},
 			expected: regexp.MustCompile(`^testPrefix INFO \d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} test: 42\n$`)},
+		"Notice": {fn: logger.Notice, fnInput: "test",
+			expected: regexp.MustCompile(`^testPrefix NOTICE \d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} test\n$`)},
+		"Noticef": {fmtFn: logger.Noticef, fmtFnFmt: "test: %d", fmtFnArgs: []interface{}{42},
+			expected: regexp.MustCompile(`^testPrefix NOTICE \d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} test: 42\n$`)},
 		"Error": {fn: logger.Error, fnInput: "test",
 			expected: regexp.MustCompile(`^testPrefix ERROR \d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} test\n$`)},
 		"Errorf": {fmtFn: logger.Errorf, fmtFnFmt: "test: %d", fmtFnArgs: []interface{}{42},
@@ -150,6 +159,10 @@ func TestLogging_JSONFormat(t *testing.T) {
 			expected: regexp.MustCompile(`^\{\"level\":\"INFO\",\"time\":\"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[-+Z]\d{0,4}\",\"extra\":\"testPrefix\",\"message\":\"test\"\}\n$`)},
 		"Infof": {fmtFn: logger.Infof, fmtFnFmt: "test: %d", fmtFnArgs: []interface{}{42},
 			expected: regexp.MustCompile(`^\{\"level\":\"INFO\",\"time\":\"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[-+Z]\d{0,4}\",\"extra\":\"testPrefix\",\"message\":\"test: 42\"\}\n$`)},
+		"Notice": {fn: logger.Notice, fnInput: "test",
+			expected: regexp.MustCompile(`^\{\"level\":\"NOTICE\",\"time\":\"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[-+Z]\d{0,4}\",\"extra\":\"testPrefix\",\"message\":\"test\"\}\n$`)},
+		"Noticef": {fmtFn: logger.Noticef, fmtFnFmt: "test: %d", fmtFnArgs: []interface{}{42},
+			expected: regexp.MustCompile(`^\{\"level\":\"NOTICE\",\"time\":\"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[-+Z]\d{0,4}\",\"extra\":\"testPrefix\",\"message\":\"test: 42\"\}\n$`)},
 		"Error": {fn: logger.Error, fnInput: "test",
 			expected: regexp.MustCompile(`^\{\"level\":\"ERROR\",\"time\":\"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[-+Z]\d{0,4}\",\"extra\":\"testPrefix\",\"message\":\"test\"\}\n$`)},
 		"Errorf": {fmtFn: logger.Errorf, fmtFnFmt: "test: %d", fmtFnArgs: []interface{}{42},
@@ -187,6 +200,9 @@ func TestLogging_MultipleFormats(t *testing.T) {
 		WithInfoLogger(
 			logging.NewInfoLogger("testPrefix", &jsonBuf).WithJSONOutput(),
 		).
+		WithNoticeLogger(
+			logging.NewNoticeLogger("testPrefix", &jsonBuf).WithJSONOutput(),
+		).
 		WithErrorLogger(
 			logging.NewErrorLogger("testPrefix", &jsonBuf).WithJSONOutput(),
 		)
@@ -201,10 +217,10 @@ func TestLogging_MultipleFormats(t *testing.T) {
 		expectedJSON *regexp.Regexp
 	}{
 		"Debug": {fn: logger.Debug, fnInput: "test",
-			expectedStd:  regexp.MustCompile(`^DEBUG \d{2}:\d{2}:\d{2}\.\d{6} [^:]+:\d+: test\n$`),
+			expectedStd:  regexp.MustCompile(`^DEBUG \d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}\.\d{6} [^:]+:\d+: test\n$`),
 			expectedJSON: regexp.MustCompile(`^\{\"level\":\"DEBUG\",\"time\":\"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}[-+Z]\d{0,4}\",\"source\":\"[^:]+:\d+\",\"message\":\"test\"\}\n$`)},
 		"Debugf": {fmtFn: logger.Debugf, fmtFnFmt: "test: %d", fmtFnArgs: []interface{}{42},
-			expectedStd:  regexp.MustCompile(`^DEBUG \d{2}:\d{2}:\d{2}\.\d{6} [^:]+:\d+: test: 42\n$`),
+			expectedStd:  regexp.MustCompile(`^DEBUG \d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}\.\d{6} [^:]+:\d+: test: 42\n$`),
 			expectedJSON: regexp.MustCompile(`^\{\"level\":\"DEBUG\",\"time\":\"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}[-+Z]\d{0,4}\",\"source\":\"[^:]+:\d+\",\"message\":\"test: 42\"\}\n$`)},
 		"Info": {fn: logger.Info, fnInput: "test",
 			expectedStd:  regexp.MustCompile(`^testPrefix INFO \d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} test\n$`),
@@ -212,6 +228,12 @@ func TestLogging_MultipleFormats(t *testing.T) {
 		"Infof": {fmtFn: logger.Infof, fmtFnFmt: "test: %d", fmtFnArgs: []interface{}{42},
 			expectedStd:  regexp.MustCompile(`^testPrefix INFO \d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} test: 42\n$`),
 			expectedJSON: regexp.MustCompile(`^\{\"level\":\"INFO\",\"time\":\"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[-+Z]\d{0,4}\",\"extra\":\"testPrefix\",\"message\":\"test: 42\"\}\n$`)},
+		"Notice": {fn: logger.Notice, fnInput: "test",
+			expectedStd:  regexp.MustCompile(`^testPrefix NOTICE \d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} test\n$`),
+			expectedJSON: regexp.MustCompile(`^\{\"level\":\"NOTICE\",\"time\":\"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[-+Z]\d{0,4}\",\"extra\":\"testPrefix\",\"message\":\"test\"\}\n$`)},
+		"Noticef": {fmtFn: logger.Noticef, fmtFnFmt: "test: %d", fmtFnArgs: []interface{}{42},
+			expectedStd:  regexp.MustCompile(`^testPrefix NOTICE \d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} test: 42\n$`),
+			expectedJSON: regexp.MustCompile(`^\{\"level\":\"NOTICE\",\"time\":\"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[-+Z]\d{0,4}\",\"extra\":\"testPrefix\",\"message\":\"test: 42\"\}\n$`)},
 		"Error": {fn: logger.Error, fnInput: "test",
 			expectedStd:  regexp.MustCompile(`^testPrefix ERROR \d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} test\n$`),
 			expectedJSON: regexp.MustCompile(`^\{\"level\":\"ERROR\",\"time\":\"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[-+Z]\d{0,4}\",\"extra\":\"testPrefix\",\"message\":\"test\"\}\n$`)},
@@ -258,18 +280,26 @@ func TestLogging_LogLevels(t *testing.T) {
 		fnInput  string
 		expected *regexp.Regexp
 	}{
-		"Disabled-Debug": {setLevel: logging.LogLevelDisabled, fn: logger.Debug, fnInput: "test", expected: regexp.MustCompile(`^$`)},
-		"Disabled-Info":  {setLevel: logging.LogLevelDisabled, fn: logger.Info, fnInput: "test", expected: regexp.MustCompile(`^$`)},
-		"Disabled-Error": {setLevel: logging.LogLevelDisabled, fn: logger.Error, fnInput: "test", expected: regexp.MustCompile(`^$`)},
-		"Debug-Debug":    {setLevel: logging.LogLevelDebug, fn: logger.Debug, fnInput: "test", expected: regexp.MustCompile(`test`)},
-		"Debug-Info":     {setLevel: logging.LogLevelDebug, fn: logger.Info, fnInput: "test", expected: regexp.MustCompile(`test`)},
-		"Debug-Error":    {setLevel: logging.LogLevelDebug, fn: logger.Error, fnInput: "test", expected: regexp.MustCompile(`test`)},
-		"Info-Debug":     {setLevel: logging.LogLevelInfo, fn: logger.Debug, fnInput: "test", expected: regexp.MustCompile(`^$`)},
-		"Info-Info":      {setLevel: logging.LogLevelInfo, fn: logger.Info, fnInput: "test", expected: regexp.MustCompile(`test`)},
-		"Info-Error":     {setLevel: logging.LogLevelInfo, fn: logger.Error, fnInput: "test", expected: regexp.MustCompile(`test`)},
-		"Error-Debug":    {setLevel: logging.LogLevelError, fn: logger.Debug, fnInput: "test", expected: regexp.MustCompile(`^$`)},
-		"Error-Info":     {setLevel: logging.LogLevelError, fn: logger.Info, fnInput: "test", expected: regexp.MustCompile(`^$`)},
-		"Error-Error":    {setLevel: logging.LogLevelError, fn: logger.Error, fnInput: "test", expected: regexp.MustCompile(`test`)},
+		"Disabled-Debug":  {setLevel: logging.LogLevelDisabled, fn: logger.Debug, fnInput: "test", expected: regexp.MustCompile(`^$`)},
+		"Disabled-Info":   {setLevel: logging.LogLevelDisabled, fn: logger.Info, fnInput: "test", expected: regexp.MustCompile(`^$`)},
+		"Disabled-Notice": {setLevel: logging.LogLevelDisabled, fn: logger.Notice, fnInput: "test", expected: regexp.MustCompile(`^$`)},
+		"Disabled-Error":  {setLevel: logging.LogLevelDisabled, fn: logger.Error, fnInput: "test", expected: regexp.MustCompile(`^$`)},
+		"Debug-Debug":     {setLevel: logging.LogLevelDebug, fn: logger.Debug, fnInput: "test", expected: regexp.MustCompile(`test`)},
+		"Debug-Info":      {setLevel: logging.LogLevelDebug, fn: logger.Info, fnInput: "test", expected: regexp.MustCompile(`test`)},
+		"Debug-Notice":    {setLevel: logging.LogLevelDebug, fn: logger.Notice, fnInput: "test", expected: regexp.MustCompile(`test`)},
+		"Debug-Error":     {setLevel: logging.LogLevelDebug, fn: logger.Error, fnInput: "test", expected: regexp.MustCompile(`test`)},
+		"Info-Debug":      {setLevel: logging.LogLevelInfo, fn: logger.Debug, fnInput: "test", expected: regexp.MustCompile(`^$`)},
+		"Info-Info":       {setLevel: logging.LogLevelInfo, fn: logger.Info, fnInput: "test", expected: regexp.MustCompile(`test`)},
+		"Info-Notice":     {setLevel: logging.LogLevelInfo, fn: logger.Notice, fnInput: "test", expected: regexp.MustCompile(`test`)},
+		"Info-Error":      {setLevel: logging.LogLevelInfo, fn: logger.Error, fnInput: "test", expected: regexp.MustCompile(`test`)},
+		"Notice-Debug":    {setLevel: logging.LogLevelNotice, fn: logger.Debug, fnInput: "test", expected: regexp.MustCompile(`^$`)},
+		"Notice-Info":     {setLevel: logging.LogLevelNotice, fn: logger.Info, fnInput: "test", expected: regexp.MustCompile(`^$`)},
+		"Notice-Notice":   {setLevel: logging.LogLevelNotice, fn: logger.Notice, fnInput: "test", expected: regexp.MustCompile(`test`)},
+		"Notice-Error":    {setLevel: logging.LogLevelNotice, fn: logger.Error, fnInput: "test", expected: regexp.MustCompile(`test`)},
+		"Error-Debug":     {setLevel: logging.LogLevelError, fn: logger.Debug, fnInput: "test", expected: regexp.MustCompile(`^$`)},
+		"Error-Info":      {setLevel: logging.LogLevelError, fn: logger.Info, fnInput: "test", expected: regexp.MustCompile(`^$`)},
+		"Error-Notice":    {setLevel: logging.LogLevelError, fn: logger.Notice, fnInput: "test", expected: regexp.MustCompile(`^$`)},
+		"Error-Error":     {setLevel: logging.LogLevelError, fn: logger.Error, fnInput: "test", expected: regexp.MustCompile(`test`)},
 	}
 
 	for name, tc := range tests {

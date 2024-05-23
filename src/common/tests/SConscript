@@ -1,86 +1,85 @@
 """Build daos common tests"""
-import daos_build
-import compiler_setup
 
-def define_checksum_timing(build, env):
-    """Define the Checksum Timing build"""
-    checksum_timing_libs = ['daos_common', 'gurt']
-    build.test(env, 'checksum_timing', 'checksum_timing.c',
-               LIBS=checksum_timing_libs)
-
-def define_compress_timing(build, env):
-    """Define the Compress Timing build"""
-    compress_timing_libs = ['daos_common', 'gurt']
-    build.test(env, 'compress_timing', 'compress_timing.c',
-               LIBS=compress_timing_libs)
 
 def scons():
     """Execute build"""
-    Import('tenv')
+    Import('tenv', 'utest_utils')
 
-    common_test_utils = tenv.SharedObject(['test_mocks.c', 'test_utils.c'])
-    Export('common_test_utils')
     tenv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
+    tenv.require('argobots')
 
-    utest_utils = tenv.SharedObject('utest_common.c')
-    Export('utest_utils')
-
-    daos_build.test(tenv, 'btree', ['btree.c', utest_utils],
-                    LIBS=['daos_common_pmem', 'gurt', 'pmemobj', 'cmocka'])
-    daos_build.test(tenv, 'umem_test', ['umem_test.c', utest_utils],
-                    LIBS=['daos_common_pmem', 'gurt', 'pmemobj', 'cmocka'])
-    daos_build.test(tenv, 'btree_direct', ['btree_direct.c', utest_utils],
-                    LIBS=['daos_common_pmem', 'gurt', 'pmemobj', 'cmocka'])
-    daos_build.test(tenv, 'other', 'other.c',
-                    LIBS=['daos_common_pmem', 'gurt', 'cart'])
-    common_test = daos_build.test(tenv, 'common_test',
-                                  ['common_test.c', 'checksum_tests.c',
-                                   'compress_tests.c', 'misc_tests.c'],
-                                  LIBS=['daos_common', 'daos_tests',
-                                        'gurt', 'cart', 'cmocka'])
-    daos_build.test(tenv, 'lru', 'lru.c',
-                    LIBS=['daos_common_pmem', 'gurt', 'cart'])
-    daos_build.test(tenv, 'sched', 'sched.c',
-                    LIBS=['daos_common', 'gurt', 'cart', 'cmocka'])
-    daos_build.test(tenv, 'abt_perf', 'abt_perf.c',
-                    LIBS=['daos_common', 'gurt', 'abt'])
-    daos_build.test(tenv, 'acl_real_tests', 'acl_util_real_tests.c',
-                    LIBS=['daos_common', 'gurt', 'cmocka'])
-    daos_build.test(tenv, 'prop_tests', 'prop_tests.c',
-                    LIBS=['daos_common', 'gurt', 'cmocka'])
-    daos_build.test(tenv, 'fault_domain_tests', 'fault_domain_tests.c',
-                    LIBS=['daos_common', 'gurt', 'cmocka'])
-    define_checksum_timing(daos_build, tenv)
-    define_compress_timing(daos_build, tenv)
-
-    tenv.Install('$PREFIX/bin/', [common_test])
+    tenv.d_test_program('btree', ['btree.c', utest_utils],
+                        LIBS=['daos_common_pmem', 'gurt', 'pmemobj', 'cmocka'])
+    tenv.d_test_program('umem_test_bmem', ['umem_test_bmem.c', utest_utils],
+                        LIBS=['daos_common_pmem', 'gurt', 'cmocka'])
+    tenv.d_test_program('umem_test', ['umem_test.c', utest_utils],
+                        LIBS=['daos_common_pmem', 'gurt', 'pmemobj', 'cmocka'])
+    tenv.d_test_program('btree_direct', ['btree_direct.c', utest_utils],
+                        LIBS=['daos_common_pmem', 'gurt', 'pmemobj', 'cmocka'])
+    tenv.d_test_program('other', 'other.c',
+                        LIBS=['daos_common_pmem', 'gurt', 'cart'])
+    tenv.d_test_program('common_test', ['common_test.c', 'checksum_tests.c',
+                                        'compress_tests.c', 'misc_tests.c'],
+                        LIBS=['daos_common', 'daos_tests', 'gurt',
+                              'cart', 'cmocka'])
+    tenv.d_test_program('lru', 'lru.c', LIBS=['daos_common_pmem', 'gurt', 'cart'])
+    tenv.d_test_program('sched', 'sched.c',
+                        LIBS=['daos_common', 'gurt', 'cart', 'cmocka', 'pthread'])
+    new_env = tenv.Clone()
+    if tenv["STACK_MMAP"] == 1:
+        new_env.Append(CCFLAGS=['-DULT_MMAP_STACK'])
+    new_env.d_test_program('abt_perf', 'abt_perf.c',
+                           LIBS=['daos_common_pmem', 'gurt', 'abt'])
+    tenv.d_test_program('acl_real_tests', 'acl_util_real_tests.c',
+                        LIBS=['daos_common', 'gurt', 'cmocka'])
+    tenv.d_test_program('prop_tests', 'prop_tests.c',
+                        LIBS=['daos_common', 'gurt', 'cmocka'])
+    tenv.d_test_program('fault_domain_tests', 'fault_domain_tests.c',
+                        LIBS=['daos_common', 'gurt', 'cmocka'])
+    tenv.d_test_program('ad_mem_tests', 'ad_mem_tests.c',
+                        LIBS=['daos_common_pmem', 'gurt', 'cmocka'])
+    tenv.d_test_program('checksum_timing', 'checksum_timing.c', LIBS=['daos_common', 'gurt'])
+    tenv.d_test_program('compress_timing', 'compress_timing.c', LIBS=['daos_common', 'gurt'])
+    tenv.d_test_program('rsvc_tests', ['rsvc_tests.c', '../rsvc.c'],
+                        LIBS=['daos_common', 'gurt', 'cmocka'])
 
     unit_env = tenv.Clone()
-    # Some syscalls are aliased when fortification is enabled, which makes
-    # mocking in unit tests into a headache.
-    # The compiler decides this on its own, but let's force the issue.
-    compiler_setup.remove_fortify(unit_env)
+    unit_env.AppendUnique(OBJPREFIX='utest_')
+
+    common_mock_ld_script = f"{Dir('.').srcnode()}/common-mock-ld-opts"
+    unit_env.AppendUnique(LINKFLAGS=[f'-Wl,@{common_mock_ld_script}'])
+
+    mock_test_utils = unit_env.SharedObject(['test_mocks.c', 'test_utils.c'])
+    drpc_test_utils = unit_env.SharedObject(['../drpc.c']) + mock_test_utils
+    Export('drpc_test_utils')
 
     acl_api = unit_env.Object('../acl_api.c')
 
-    daos_build.test(unit_env, 'drpc_tests',
-                    ['drpc_tests.c', '../drpc.c', '../drpc.pb-c.c',
-                     common_test_utils],
-                    LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
-    daos_build.test(unit_env, 'acl_api_tests',
-                    source=['acl_api_tests.c', acl_api,
-                            common_test_utils],
-                    LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
-    daos_build.test(unit_env, 'acl_valid_tests',
-                    source=['acl_valid_tests.c', acl_api,
-                            common_test_utils],
-                    LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
-    daos_build.test(unit_env, 'acl_util_tests',
-                    source=['acl_util_tests.c', '../acl_util.c'],
-                    LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
-    daos_build.test(unit_env, 'acl_principal_tests',
-                    source=['acl_principal_tests.c', '../acl_principal.c'],
-                    LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
+    Depends('acl_api_tests', common_mock_ld_script)
+    unit_env.d_test_program('acl_api_tests',
+                            source=['acl_api_tests.c', acl_api, mock_test_utils],
+                            LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
+
+    Depends('acl_valid_tests', common_mock_ld_script)
+    unit_env.d_test_program('acl_valid_tests',
+                            source=['acl_valid_tests.c', acl_api, mock_test_utils],
+                            LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
+
+    Depends('acl_util_tests', common_mock_ld_script)
+    unit_env.d_test_program('acl_util_tests',
+                            source=['acl_util_tests.c', '../acl_util.c', mock_test_utils],
+                            LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
+
+    Depends('acl_principal_tests', common_mock_ld_script)
+    unit_env.d_test_program('acl_principal_tests',
+                            source=['acl_principal_tests.c', '../acl_principal.c', mock_test_utils],
+                            LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
+
+    Depends('drpc_tests', common_mock_ld_script)
+    unit_env.d_test_program('drpc_tests',
+                            ['drpc_tests.c', '../drpc.c', '../drpc.pb-c.c', mock_test_utils],
+                            LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
+
 
 if __name__ == "SCons.Script":
     scons()

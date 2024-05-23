@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -23,6 +23,10 @@
 #include <daos/btree_class.h>
 #include <daos/placement.h>
 #include <daos/job.h>
+#include <daos/metrics.h>
+#if BUILD_PIPELINE
+#include <daos/pipeline.h>
+#endif
 #include "task_internal.h"
 #include <pthread.h>
 
@@ -85,19 +89,19 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_tx_restart, sizeof(daos_tx_restart_t)},
 
 	/** Object */
-	{dc_obj_register_class, sizeof(daos_obj_register_class_t)},
+	{dc_obj_register_class, sizeof(struct daos_obj_register_class_t)},
 	{dc_obj_query_class, sizeof(daos_obj_query_class_t)},
 	{dc_obj_list_class, sizeof(daos_obj_list_class_t)},
 	{dc_obj_open, sizeof(daos_obj_open_t)},
 	{dc_obj_close, sizeof(daos_obj_close_t)},
-	{dc_obj_punch_task,		sizeof(daos_obj_punch_t)},
-	{dc_obj_punch_dkeys_task,	sizeof(daos_obj_punch_t)},
-	{dc_obj_punch_akeys_task,	sizeof(daos_obj_punch_t)},
+	{dc_obj_punch_task, sizeof(daos_obj_punch_t)},
+	{dc_obj_punch_dkeys_task, sizeof(daos_obj_punch_t)},
+	{dc_obj_punch_akeys_task, sizeof(daos_obj_punch_t)},
 	{dc_obj_query, sizeof(daos_obj_query_t)},
 	{dc_obj_query_key, sizeof(daos_obj_query_key_t)},
 	{dc_obj_sync, sizeof(struct daos_obj_sync_args)},
-	{dc_obj_fetch_task,		sizeof(daos_obj_fetch_t)},
-	{dc_obj_update_task,		sizeof(daos_obj_update_t)},
+	{dc_obj_fetch_task, sizeof(daos_obj_fetch_t)},
+	{dc_obj_update_task, sizeof(daos_obj_update_t)},
 	{dc_obj_list_dkey, sizeof(daos_obj_list_dkey_t)},
 	{dc_obj_list_akey, sizeof(daos_obj_list_akey_t)},
 	{dc_obj_list_rec, sizeof(daos_obj_list_recx_t)},
@@ -113,6 +117,7 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_array_punch, sizeof(daos_array_io_t)},
 	{dc_array_get_size, sizeof(daos_array_get_size_t)},
 	{dc_array_set_size, sizeof(daos_array_set_size_t)},
+	{dc_array_stat, sizeof(daos_array_stat_t)},
 
 	/** Key-Value Store */
 	{dc_kv_open, sizeof(daos_kv_open_t)},
@@ -122,6 +127,16 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_kv_put, sizeof(daos_kv_put_t)},
 	{dc_kv_remove, sizeof(daos_kv_remove_t)},
 	{dc_kv_list, sizeof(daos_kv_list_t)},
+
+	{dc_pool_filter_cont, sizeof(daos_pool_filter_cont_t)},
+	{dc_obj_key2anchor, sizeof(daos_obj_key2anchor_t)},
+	{dc_cont_snap_oit_create, sizeof(daos_cont_snap_oit_create_t)},
+	{dc_cont_snap_oit_destroy, sizeof(daos_cont_snap_oit_destroy_t)},
+
+#if BUILD_PIPELINE
+	/** Pipeline */
+	{dc_pipeline_run, sizeof(daos_pipeline_run_t)},
+#endif
 };
 
 /**
@@ -130,6 +145,10 @@ const struct daos_task_api dc_funcs[] = {
 int
 daos_init(void)
 {
+	struct d_fault_attr_t *d_fault_init;
+	struct d_fault_attr_t *d_fault_mem = NULL;
+	struct d_fault_attr_t  d_fault_mem_saved;
+	crt_init_options_t    *crt_info;
 	int rc;
 
 	D_MUTEX_LOCK(&module_lock);
@@ -143,8 +162,28 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(unlock, rc);
 
-	/** set up handle hash-table */
-	rc = daos_hhash_init();
+	d_fault_init = d_fault_attr_lookup(101);
+
+	/* If fault injection 101 is set then turn off fault injection 0 for the rest of this
+	 * function.  This allows us to only test daos_init() under fault injection for one
+	 * test only, then avoid replicating the same effort for other fault injection tests.
+	 */
+	if (D_SHOULD_FAIL(d_fault_init)) {
+		struct d_fault_attr_t blank = {};
+
+		d_fault_mem = d_fault_attr_lookup(0);
+
+		if (d_fault_mem) {
+			d_fault_mem_saved = *d_fault_mem;
+			d_fault_attr_set(0, blank);
+		}
+	}
+
+	/**
+	 * Set up handle hash-table, use RW lock instead of spinlock
+	 * improves multiple threads performance significantly.
+	 */
+	rc = daos_hhash_init_feats(D_HASH_FT_RWLOCK);
 	if (rc != 0)
 		D_GOTO(out_debug, rc);
 
@@ -158,30 +197,53 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_agent, rc);
 
+	/** get and cache attach info of default system */
+	rc = dc_mgmt_cache_attach_info(NULL);
+	if (rc != 0)
+		D_GOTO(out_job, rc);
+
+	crt_info = daos_crt_init_opt_get(false, 1);
 	/**
 	 * get CaRT configuration (see mgmtModule.handleGetAttachInfo for the
 	 * handling of NULL system names)
 	 */
-	rc = dc_mgmt_net_cfg(NULL);
+	rc = dc_mgmt_net_cfg(NULL, crt_info);
 	if (rc != 0)
-		D_GOTO(out_job, rc);
+		D_GOTO(out_attach, rc);
 
 	/** set up event queue */
-	rc = daos_eq_lib_init();
+	rc = daos_eq_lib_init(crt_info);
+	D_FREE(crt_info->cio_provider);
+	D_FREE(crt_info->cio_interface);
+	D_FREE(crt_info->cio_domain);
 	if (rc != 0) {
 		D_ERROR("failed to initialize eq_lib: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_job, rc);
+		D_GOTO(out_attach, rc);
 	}
+
+	/**
+	 * daos_eq_lib_init() might change net cfg, check it.
+	 */
+	rc = dc_mgmt_net_cfg_check(NULL);
+	if (rc != 0)
+		D_GOTO(out_eq, rc);
 
 	/** set up placement */
 	rc = pl_init();
 	if (rc != 0)
-		goto out_eq;
+		D_GOTO(out_eq, rc);
 
 	/** set up management interface */
 	rc = dc_mgmt_init();
 	if (rc != 0)
 		D_GOTO(out_pl, rc);
+
+	/** set up client telemetry */
+	rc = dc_tm_init();
+	if (rc != 0) {
+		/* should not be fatal */
+		DL_WARN(rc, "failed to initialize client telemetry");
+	}
 
 	/** set up pool */
 	rc = dc_pool_init();
@@ -198,19 +260,32 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_co, rc);
 
+#if BUILD_PIPELINE
+	/** set up pipeline */
+	rc = dc_pipeline_init();
+	if (rc != 0)
+		D_GOTO(out_obj, rc);
+#endif
 	module_initialized++;
 	D_GOTO(unlock, rc = 0);
 
+#if BUILD_PIPELINE
+out_obj:
+	dc_obj_fini();
+#endif
 out_co:
 	dc_cont_fini();
 out_pool:
 	dc_pool_fini();
 out_mgmt:
+	dc_tm_fini();
 	dc_mgmt_fini();
 out_pl:
 	pl_fini();
 out_eq:
 	daos_eq_lib_fini();
+out_attach:
+	dc_mgmt_drop_attach_info();
 out_job:
 	dc_job_fini();
 out_agent:
@@ -221,6 +296,10 @@ out_debug:
 	daos_debug_fini();
 unlock:
 	D_MUTEX_UNLOCK(&module_lock);
+
+	if (d_fault_mem)
+		d_fault_attr_set(0, d_fault_mem_saved);
+
 	return rc;
 }
 
@@ -251,6 +330,11 @@ daos_fini(void)
 		D_GOTO(unlock, rc);
 	}
 
+	/** clean up all registered per-module metrics */
+	daos_metrics_fini();
+#if BUILD_PIPELINE
+	dc_pipeline_fini();
+#endif
 	dc_obj_fini();
 	dc_cont_fini();
 	dc_pool_fini();
@@ -261,6 +345,8 @@ daos_fini(void)
 		D_ERROR("failed to disconnect some resources may leak, "
 			DF_RC"\n", DP_RC(rc));
 
+	dc_tm_fini();
+	dc_mgmt_drop_attach_info();
 	dc_agent_fini();
 	dc_job_fini();
 

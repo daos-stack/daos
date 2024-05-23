@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016 UChicago Argonne, LLC
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -49,7 +49,7 @@ extern "C" {
 
 /** SWIM protocol parameter defaults */
 #define SWIM_PROTOCOL_PERIOD_LEN 1000	/* milliseconds */
-#define SWIM_SUSPECT_TIMEOUT	(8 * SWIM_PROTOCOL_PERIOD_LEN)
+#define SWIM_SUSPECT_TIMEOUT	(20 * SWIM_PROTOCOL_PERIOD_LEN)
 #define SWIM_PING_TIMEOUT	900	/* milliseconds */
 #define SWIM_SUBGROUP_SIZE	2
 #define SWIM_PIGGYBACK_ENTRIES	8	/**< count of piggybacked entries */
@@ -67,6 +67,10 @@ enum swim_context_state {
 				 */
 	SCS_TIMEDOUT,		/**< the state when no dping response was
 				 * received and we should select iping targets.
+				 */
+	SCS_IPINGED,		/**< the state after ipings were sent and we
+				 * are waiting for responses or the end of the
+				 * current period.
 				 */
 	SCS_SELECT,		/**< the state to select next target */
 };
@@ -100,11 +104,13 @@ struct swim_context {
 
 	uint64_t		 sc_default_ping_timeout;
 	uint64_t		 sc_expect_progress_time;
-	uint64_t		 sc_last_success_time;
 	uint64_t		 sc_next_tick_time;
+	uint64_t		 sc_next_event;
 	uint64_t		 sc_deadline;
 
 	uint64_t		 sc_piggyback_tx_max;
+
+	unsigned int		 sc_glitch:1;
 };
 
 static inline int

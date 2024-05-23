@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -196,7 +196,7 @@ int d_log_dbg_bit_alloc(d_dbug_t *dbgbit, char *name, char *lname);
 int d_log_dbg_grp_dealloc(char *grpname);
 
 /**
- * Create an identifier/group name for muliple debug bits
+ * Create an identifier/group name for multiple debug bits
  *
  * \param[in]	dbgmask		mask of all bits in group
  * \param[in]	grpname		debug mask group name
@@ -357,6 +357,7 @@ void d_log_fini(void);
  */
 void d_log_close(void);
 
+void d_log_rank_setup(int rank);
 /**
  * Reapplies the masks set in D_LOG_MASK.   Can be called after adding new
  * log facilities to ensure that the mask is set appropriately for the
@@ -364,6 +365,8 @@ void d_log_close(void);
  *
  */
 void d_log_sync_mask(void);
+
+void d_log_sync_mask_ex(const char *log_mask, const char *dd_mask);
 
 /**
  * open a dlog.
@@ -406,7 +409,7 @@ int d_log_setlogmask(int facility, int mask);
  *
  * \return			0 on success, -1 on error.
  */
-int d_log_setmasks(char *mstr, int mlen);
+int d_log_setmasks(const char *mstr, int mlen);
 
 /**
  * get current mask level as a string (not null terminated).
@@ -443,6 +446,12 @@ void d_log_add_cache(int *cache, int nr);
  * Fsync log files.
  */
 void d_log_sync(void);
+
+/**
+ * disable logging by resetting fd for logging
+ */
+void
+d_log_disable_logging(void);
 
 #if defined(__cplusplus)
 }

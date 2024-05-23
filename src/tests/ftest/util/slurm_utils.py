@@ -1,20 +1,19 @@
-#!/usr/bin/python
 """
-(C) Copyright 2019-2021 Intel Corporation.
+(C) Copyright 2019-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
-
 import os
 import random
-import time
-import threading
 import re
+import threading
+import time
 
-from general_utils import run_command, DaosTestError
-from ClusterShell.NodeSet import NodeSet
+from ClusterShell.NodeSet import NodeSet, NodeSetParseError
+# pylint: disable=import-error,no-name-in-module
+from util.run_utils import RunException, run_local, run_remote
 
+PACKAGES = ['slurm', 'slurm-example-configs', 'slurm-slurmctld', 'slurm-slurmd']
 W_LOCK = threading.Lock()
 
 
@@ -22,119 +21,218 @@ class SlurmFailed(Exception):
     """Thrown when something goes wrong with slurm."""
 
 
-def cancel_jobs(job_id):
-    """Cancel slurms jobs.
+def cancel_jobs(log, control, job_id):
+    """Cancel slurm jobs.
 
     Args:
+        log (logger): logger for the messages produced by this method
+        control (NodeSet): slurm control host
         job_id (int): slurm job id
 
     Returns:
-        int: return status from scancel command
+        RemoteCommandResult: results from the scancel command
 
     """
-    result = run_command("scancel {}".format(job_id), raise_exception=False)
-    if result.exit_status > 0:
-        raise SlurmFailed(
-            "Slurm: scancel failed to kill job {}".format(job_id))
-    return result.exit_status
+    command = ['scancel', str(job_id)]
+    return run_remote(log, control, ' '.join(command))
 
 
-def create_slurm_partition(nodelist, name):
+def create_partition(log, control, name, hosts, default='yes', max_time='UNLIMITED', state='up'):
     """Create a slurm partition for soak jobs.
 
     Client nodes will be allocated for this partition.
 
     Args:
-        nodelist (list): list of nodes for job allocation
-        name (str): partition name
+        log (logger): logger for the messages produced by this method
+        control (NodeSet): slurm control host
+        name (str): slurm partition name
+        hosts (NodeSet): hosts to include in the partition
+        default (str, optional): whether this partition should be the default. Defaults to 'yes'.
+        max_time (str, optional): maximum run time for jobs. Defaults to 'UNLIMITED'.
+        state (str, optional): state of jobs that can be allocated. Defaults to 'up'.
 
     Returns:
-        int: return status from scontrol command
+        RemoteCommandResult: results from the scontrol command
 
     """
-    # If the partition exists; delete it because if may have wrong nodes
-    command = "scontrol delete PartitionName={}".format(name)
-    result = run_command(command, raise_exception=False)
-    if result.exit_status == 0:
-        command = "scontrol create PartitionName={} Nodes={}".format(
-            name, ",".join(nodelist))
-        result = run_command(command, raise_exception=False)
-    return result.exit_status
+    command = ['scontrol', 'create']
+    command.append('='.join(['PartitionName', str(name)]))
+    command.append('='.join(['Nodes', str(hosts)]))
+    command.append('='.join(['Default', str(default)]))
+    command.append('='.join(['MaxTime', str(max_time)]))
+    command.append('='.join(['State', str(state)]))
+    return run_remote(log, control, ' '.join(command))
 
 
-def delete_slurm_partition(name):
+def delete_partition(log, control, name):
     """Remove the partition from slurm.
 
     Args:
-        name (str): partition name
+        log (logger): logger for the messages produced by this method
+        control (NodeSet): slurm control host
+        name (str): slurm partition name
 
     Returns:
         int: return status from scontrol command
 
     """
-    # If the partition exists; delete it because if may have wrong nodes
-    command = "scontrol delete PartitionName={}".format(name)
-    result = run_command(command, raise_exception=False)
-    return result.exit_status
+    command = ['scontrol', 'delete']
+    command.append('='.join(['PartitionName', str(name)]))
+    return run_remote(log, control, ' '.join(command))
 
 
-def get_reserved_nodes(reservation, partition):
-    """Get the reserved nodes.
+def show_partition(log, control, name):
+    """Show the slurm partition.
 
     Args:
-        reservation (str): reservation name
-        partition (str): partition name
+        log (logger): logger for the messages produced by this method
+        control (NodeSet): slurm control host
+        name (str): slurm partition name
 
     Returns:
-        list: return list of reserved nodes in partition
+        RemoteCommandResult: results from the scontrol command
 
     """
-    partition_hosts = []
-    hosts = []
-    # Get the partition information
-    cmd = "scontrol show partition {}".format(partition)
-    partition_result = run_command(cmd, raise_exception=False)
-
-    if partition_result:
-        # Get the list of hosts from the reservation information
-        output = partition_result.stdout_text
-        match = re.search(r"\sNodes=(\S+)", str(output))
-        if match is not None:
-            partition_hosts = list(NodeSet(match.group(1)))
-            print("partition_hosts = {}".format(partition_hosts))
-            # partition hosts exists; continue with valid partition
-            cmd = "scontrol show reservation {}".format(reservation)
-            reservation_result = run_command(cmd, raise_exception=False)
-            if reservation_result:
-                # Get the list of hosts from the reservation information
-                output = reservation_result.stdout_text
-                match = re.search(r"\sNodes=(\S+)", str(output))
-                if match is not None:
-                    reservation_hosts = list(NodeSet(match.group(1)))
-                    print("reservation_hosts = {}".format(reservation_hosts))
-                    if set(reservation_hosts).issubset(set(partition_hosts)):
-                        hosts = reservation_hosts
-    return hosts
+    command = ['scontrol', 'show', 'partition', str(name)]
+    return run_remote(log, control, ' '.join(command))
 
 
-def write_slurm_script(path, name, output, nodecount, cmds, uniq, sbatch=None):
+def show_reservation(log, control, name):
+    """Show the slurm reservation.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        control (NodeSet): slurm control host
+        name (str): slurm reservation name
+
+    Returns:
+        RemoteCommandResult: results from the scontrol command
+
+    """
+    command = ['scontrol', 'show', 'reservation', str(name)]
+    return run_remote(log, control, ' '.join(command))
+
+
+def sinfo(log, control):
+    """Run the sinfo command.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        control (NodeSet): slurm control host
+
+    Returns:
+        RemoteCommandResult: results from the sinfo command
+
+    """
+    return run_remote(log, control, 'sinfo')
+
+
+def sbatch(log, script, log_file=None):
+    """Run the specified script with the sbatch command.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        script (str): script file suitable to by run by slurm
+        log_file (str, optional): logfile to generate. Defaults to None.
+
+    Returns:
+        CommandResult: results from the sbatch command
+
+    """
+    command = ['sbatch']
+    if log_file:
+        command.extend(['-o', str(log_file)])
+    command.append(script)
+    return run_local(log, ' '.join(command))
+
+
+def get_partition_hosts(log, control, partition):
+    """Get the hosts defined in the specified slurm partition.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        control_host (NodeSet): slurm control host
+        partition (str): name of the slurm partition from which to obtain the names
+
+    Raises:
+        SlurmFailed: if there is a problem obtaining the hosts from the slurm partition
+
+    Returns:
+        NodeSet: slurm partition hosts
+
+    """
+    if partition is None:
+        return NodeSet()
+
+    # Get the partition name information
+    result = show_partition(log, control, partition)
+    if not result.passed:
+        raise SlurmFailed(f'Unable to obtain hosts from the {partition} slurm partition')
+
+    # Get the list of hosts from the partition information
+    try:
+        output = '\n'.join(result.all_stdout.values())
+        return NodeSet(','.join(re.findall(r'\s+Nodes=(.*)', output)))
+    except (NodeSetParseError, TypeError) as error:
+        raise SlurmFailed(
+            f'Unable to obtain hosts from the {partition} slurm partition output') from error
+
+
+def get_reservation_hosts(log, control, reservation):
+    """Get the hosts defined in the specified slurm reservation.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        partition (str): name of the slurm reservation from which to obtain the names
+
+    Raises:
+        SlurmFailed: if there is a problem obtaining the hosts from the slurm reservation
+
+    Returns:
+        NodeSet: slurm reservation hosts
+
+    """
+    if not reservation:
+        return NodeSet()
+
+    # Get the list of hosts from the reservation information
+    result = show_reservation(log, control, reservation)
+    if not result.passed:
+        raise SlurmFailed(f'Unable to obtain hosts from the {reservation} slurm reservation')
+
+    # Get the list of hosts from the reservation information
+    try:
+        output = '\n'.join(result.all_stdout.values())
+        return NodeSet(','.join(re.findall(r'\sNodes=(\S+)', output)))
+    except (NodeSetParseError, TypeError) as error:
+        raise SlurmFailed(
+            f'Unable to obtain hosts from the {reservation} slurm reservation output') from error
+
+
+def write_slurm_script(path, name, output, nodecount, cmds, uniq, sbatch_params=None):
     """Generate a script for submitting a job to slurm.
 
-    path      --where to write the script file
-    name      --job name
-    output    --where to put the output (full path)
-    nodecount --number of compute nodes to execute on
-    cmds      --shell commands that are to be executed
-    sbatch    --dictionary containing other less often used parameters to
-                sbatch, e.g. mem:100
-    uniq string  --a unique string to append to the job and log files
-    returns   --the full path of the script
+    Args:
+        path (str): where to write the script file
+        name (str): job name
+        output (str): where to put the output (full path)
+        nodecount (int): number of compute nodes to execute on
+        cmds (list): shell commands that are to be executed
+        uniq (str): a unique string to append to the job and log files
+        sbatch_params (dict, optional): dictionary containing other less often used parameters to
+                sbatch, e.g. mem:100. Defaults to None.
+
+    Raises:
+        SlurmFailed: if missing require parameters for the slurm script
+
+    Returns:
+        str: the full path of the script
+
     """
     if name is None or nodecount is None or cmds is None:
         raise SlurmFailed("Bad parameters passed for slurm script.")
     if uniq is None:
-        uniq = random.randint(1, 100000)
-
+        uniq = random.randint(1, 100000)  # nosec
     if not os.path.exists(path):
         os.makedirs(path)
     scriptfile = path + '/jobscript' + "_" + str(uniq) + ".sh"
@@ -149,11 +247,14 @@ def write_slurm_script(path, name, output, nodecount, cmds, uniq, sbatch=None):
         if output is not None:
             output = output + str(uniq)
             script_file.write("#SBATCH --output={}\n".format(output))
-        if sbatch:
-            for key, value in list(sbatch.items()):
-                if key == "error":
-                    value = value + str(uniq)
-                script_file.write("#SBATCH --{}={}\n".format(key, value))
+        if sbatch_params:
+            for key, value in list(sbatch_params.items()):
+                if value is not None:
+                    if key == "error":
+                        value = value + str(uniq)
+                    script_file.write("#SBATCH --{}={}\n".format(key, value))
+                else:
+                    script_file.write("#SBATCH --{}\n".format(key))
         script_file.write("\n")
 
         # debug
@@ -163,13 +264,15 @@ def write_slurm_script(path, name, output, nodecount, cmds, uniq, sbatch=None):
 
         for cmd in list(cmds):
             script_file.write(cmd + "\n")
+        script_file.close()
     return scriptfile
 
 
-def run_slurm_script(script, logfile=None):
+def run_slurm_script(log, script, logfile=None):
     """Run slurm script.
 
     Args:
+        log (logger): logger for the messages produced by this method
         script (str): script file suitable to by run by slurm
         logfile (str, optional): logfile to generate. Defaults to None.
 
@@ -181,25 +284,20 @@ def run_slurm_script(script, logfile=None):
 
     """
     job_id = None
-    if logfile is not None:
-        script = " -o " + logfile + " " + script
-    cmd = "sbatch " + script
-    try:
-        result = run_command(cmd, timeout=10)
-    except DaosTestError as error:
-        raise SlurmFailed("job failed : {}".format(error)) from error
-    if result:
-        output = result.stdout_text
-        match = re.search(r"Submitted\s+batch\s+job\s+(\d+)", str(output))
-        if match is not None:
-            job_id = match.group(1)
+    result = sbatch(log, script, logfile)
+    match = re.search(r"Submitted\s+batch\s+job\s+(\d+)", result.stdout)
+    if match is not None:
+        job_id = match.group(1)
+    else:
+        raise SlurmFailed("Error running sbatch")
     return job_id
 
 
-def check_slurm_job(handle):
+def check_slurm_job(log, handle):
     """Get the state of a job initiated via slurm.
 
     Args:
+        log (logger): logger for the messages produced by this method
         handle (str): slurm job id
 
     Returns:
@@ -207,63 +305,65 @@ def check_slurm_job(handle):
             UNKNOWN if the handle doesn't match a known slurm job.
 
     """
-    command = "scontrol show job {}".format(handle)
-    result = run_command(command, raise_exception=False, verbose=False)
-    match = re.search(r"JobState=([a-zA-Z]+)", result.stdout_text)
-    if match is not None:
-        state = match.group(1)
-    else:
-        state = "UNKNOWN"
+    state = "UNKNOWN"
+    command = ["scontrol", "show", "job", handle]
+    try:
+        result = run_local(log, ' '.join(command), verbose=False, check=True)
+        match = re.search(r"JobState=([a-zA-Z]+)", result.stdout)
+        if match is not None:
+            state = match.group(1)
+    except RunException as error:
+        log.debug(str(error))
     return state
 
 
-def register_for_job_results(handle, test, maxwait=3600):
-    """
-    Register a callback for a slurm soak test job.
+def register_for_job_results(handle, test, max_wait=3600):
+    """Register a callback for a slurm soak test job.
 
-    handle   --slurm job id
-    test     --object with a job_done callback function
-    maxwait  --maximum time to wait in seconds, defaults to 1 hour
-    returns  --None
-
+    Args:
+        handle (str): slurm job id
+        test (Test): object with a job_done callback function
+        max_wait (int, optional): maximum time to wait in seconds. Defaults to 3600 (1 hour).
     """
-    params = {"handle": handle, "maxwait": maxwait, "test_obj": test}
-    athread = threading.Thread(target=watch_job,
-                               kwargs=params)
+    params = {
+        "log": test.log,
+        "handle": handle,
+        "max_wait": max_wait,
+        "test_obj": test
+    }
+    athread = threading.Thread(target=watch_job, kwargs=params)
     athread.start()
 
 
-def watch_job(handle, maxwait, test_obj):
+def watch_job(log, handle, max_wait, test_obj):
     """Watch for a slurm job to finish use callback function with the result.
 
-    handle   --the slurm job handle
-    maxwait  --max time in seconds to wait
-    test_obj --whom to notify when its done
-
-    return   --none, all results handled through callback
+    Args:
+        log (logger): logger for the messages produced by this method
+        handle (str): the slurm job handle
+        max_wait (int): max time in seconds to wait
+        test_obj (Test): whom to notify when its done
     """
     wait_time = 0
     while True:
-        state = check_slurm_job(handle)
+        state = check_slurm_job(log, handle)
         if state in ("PENDING", "RUNNING", "COMPLETING", "CONFIGURING"):
-            if wait_time > maxwait:
+            if wait_time > max_wait:
                 state = "MAXWAITREACHED"
-                print("Job {} has timedout after {} secs".format(handle,
-                                                                 maxwait))
+                log.error("Job %s has timed out after %s secs", handle, max_wait)
                 break
             wait_time += 5
             time.sleep(5)
         else:
             break
 
-    print("FINAL STATE: slurm job {} completed with : {} at {}\n".format(
-        handle, state, time.ctime()))
+    log.debug("FINAL STATE: slurm job %s completed with : %s at %s", handle, state, time.ctime())
     params = {"handle": handle, "state": state}
     with W_LOCK:
         test_obj.job_done(params)
 
 
-def srun_str(hosts, cmd, srun_params=None):
+def srun_str(hosts, cmd, srun_params=None, timeout=None):
     """Create string of cmd with srun and params.
 
     Args:
@@ -279,6 +379,8 @@ def srun_str(hosts, cmd, srun_params=None):
     params = ""
     if hosts is not None:
         params_list.append("--nodelist {}".format(hosts))
+    if timeout is not None:
+        params_list.append("--time {}".format(timeout))
     if srun_params is not None:
         for key, value in list(srun_params.items()):
             params_list.extend(["--{}={}".format(key, value)])
@@ -287,23 +389,77 @@ def srun_str(hosts, cmd, srun_params=None):
     return str(cmd)
 
 
-def srun(hosts, cmd, srun_params=None, timeout=30):
+def srun(log, control, hosts, cmd, srun_params=None, timeout=60):
     """Run srun cmd on slurm partition.
 
     Args:
+        log (logger): logger for the messages produced by this method
+        control (NodeSet): slurm control host
         hosts (str): hosts to allocate
-        cmd (str): cmdline to execute
-        srun_params(dict): additional params for srun
+        cmd (str): cmdline to execute via srun
+        srun_params (dict, optional): additional params for srun. Defaults to None.
+        timeout (int, optional): timeout for the srun command. Defaults to 60.
 
     Returns:
-        CmdResult: object containing the result (exit status, stdout, etc.) of
-            the srun command
+        RemoteCommandResult: results from the srun command
 
     """
-    cmd = srun_str(hosts, cmd, srun_params)
-    try:
-        result = run_command(cmd, timeout)
-    except DaosTestError as error:
-        result = None
-        raise SlurmFailed("srun failed : {}".format(error)) from error
-    return result
+    srun_time = max(int(timeout / 60), 1)
+    cmd = srun_str(hosts, cmd, srun_params, str(srun_time))
+    return run_remote(log, control, cmd, timeout=timeout)
+
+
+def install_slurm(log, hosts, sudo, timeout=600):
+    """Install slurm packages.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        hosts (NodeSet): hosts on which to install slurm
+        sudo (bool): whether or not to issue the commands with sudo.
+        timeout (int, optional): command timeout in seconds. Defaults to 600.
+
+    Returns:
+        bool: True if slurm was installed successfully on all hosts
+
+    """
+    log.info('Installing packages on %s: %s', hosts, ', '.join(PACKAGES))
+    sudo_command = ['sudo', '-n'] if sudo else []
+    command = sudo_command + ['dnf', 'install', '-y'] + PACKAGES
+    return run_remote(log, hosts, ' '.join(command), timeout=timeout).passed
+
+
+def remove_slurm(log, hosts, sudo, timeout=600):
+    """Remove slurm packages.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        hosts (NodeSet): hosts on which to remove slurm
+        sudo (bool): whether or not to issue the commands with sudo.
+        timeout (int, optional): command timeout in seconds. Defaults to 600.
+
+    Returns:
+        bool: True if slurm was removed successfully on all hosts
+
+    """
+    log.info('Removing packages on %s: %s', hosts, ', '.join(PACKAGES))
+    sudo_command = ['sudo', '-n'] if sudo else []
+    command = sudo_command + ['dnf', 'remove', '-y'] + PACKAGES
+    return run_remote(log, hosts, ' '.join(command), timeout=timeout).passed
+
+
+def slurm_installed(log, hosts):
+    """Determine if slurm is installed on the specified hosts.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        hosts (NodeSet): hosts on which to determine if slurm is installed
+
+    Returns:
+        bool: True if all slurm packages are installed on all hosts
+
+    """
+    log.info('Determining if slurm is installed on %s', hosts)
+    regex = ['\'(', '|'.join(PACKAGES), ')-[0-9]\'']
+    command = ['rpm', '-qa', '|', 'grep', '-E', ''.join(regex)]
+    result = run_remote(log, hosts, ' '.join(command))
+    return result.homogeneous and len(result.output[0].stdout) >= len(PACKAGES)

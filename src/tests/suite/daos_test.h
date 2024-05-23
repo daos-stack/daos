@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -22,23 +22,6 @@
 #include <dirent.h>
 
 #include <cmocka.h>
-#ifdef OVERRIDE_CMOCKA_SKIP
-/* redefine cmocka's skip() so it will no longer abort()
- * if CMOCKA_TEST_ABORT=1
- *
- * it can't be redefined as a function as it must return from current context
- */
-#undef skip
-#define skip() \
-	do { \
-		const char *abort_test = getenv("CMOCKA_TEST_ABORT"); \
-		if (abort_test != NULL && abort_test[0] == '1') \
-			print_message("Skipped !!!\n"); \
-		else \
-			_skip(__FILE__, __LINE__); \
-		return; \
-	} while  (0)
-#endif
 
 #if FAULT_INJECTION
 #define FAULT_INJECTION_REQUIRED() do { } while (0)
@@ -50,13 +33,14 @@
 	} while (0)
 #endif /* FAULT_INJECTION */
 
-#include <mpi.h>
+#include <daos/dpar.h>
 #include <daos/debug.h>
 #include <daos/common.h>
 #include <daos/mgmt.h>
 #include <daos/sys_debug.h>
 #include <daos/tests_lib.h>
 #include <daos.h>
+#include <daos_mgmt.h>
 
 #if D_HAS_WARNING(4, "-Wframe-larger-than=")
 	#pragma GCC diagnostic ignored "-Wframe-larger-than="
@@ -74,6 +58,9 @@ extern unsigned int dt_csum_type;
 extern unsigned int dt_csum_chunksize;
 extern bool dt_csum_server_verify;
 extern int  dt_obj_class;
+extern unsigned int dt_cell_size;
+extern int dt_redun_lvl;
+extern int dt_redun_fac;
 
 /* the temporary IO dir*/
 extern char *test_io_dir;
@@ -88,6 +75,7 @@ extern int daos_event_priv_reset(void);
 /* the pool used for daos test suite */
 struct test_pool {
 	d_rank_t		ranks[TEST_RANKS_MAX_NUM];
+	char			pool_str[64];
 	uuid_t			pool_uuid;
 	daos_handle_t		poh;
 	daos_pool_info_t	pool_info;
@@ -102,6 +90,7 @@ struct test_pool {
 	 * can not be changed.
 	 */
 	d_rank_list_t		*svc;
+	char			*label;
 	/* flag of slave that share the pool of other test_arg_t */
 	bool			slave;
 	bool			destroyed;
@@ -116,10 +105,10 @@ struct epoch_io_args {
 	/* cached dkey/akey used last time, so need not specify it every time */
 	char			*op_dkey;
 	char			*op_akey;
-	int			op_no_verify:1,
-				op_ec:1; /* true for EC, false for replica */
+	uint32_t                 op_no_verify : 1, op_ec : 1; /* true for EC, false for replica */
 };
 
+typedef int (*test_rebuild_cb_t)(void *test_arg);
 typedef struct {
 	bool			multi_rank;
 	int			myrank;
@@ -129,6 +118,7 @@ typedef struct {
 	struct test_pool	pool;
 	char			*pool_label;
 	uuid_t			co_uuid;
+	char			co_str[64];
 	char			*cont_label;
 	unsigned int		uid;
 	unsigned int		gid;
@@ -145,7 +135,8 @@ typedef struct {
 	uint32_t		overlap:1,
 				not_check_result:1,
 				idx_no_jump:1,
-				no_rebuild:1;
+				no_rebuild:1,
+				delay_rebuild:1;
 	int			expect_result;
 	daos_size_t		size;
 	int			nr;
@@ -160,19 +151,19 @@ typedef struct {
 	/* The callback is called before pool rebuild. like disconnect
 	 * pool etc.
 	 */
-	int			(*rebuild_pre_cb)(void *test_arg);
+	test_rebuild_cb_t	rebuild_pre_cb;
 	void			*rebuild_pre_cb_arg;
 
 	/* The callback is called during pool rebuild, used for concurrent IO,
 	 * container destroy etc
 	 */
-	int			(*rebuild_cb)(void *test_arg);
+	test_rebuild_cb_t	rebuild_cb;
 	void			*rebuild_cb_arg;
 	uint32_t		rebuild_pre_pool_ver;
 	/* The callback is called after pool rebuild, used for validating IO
 	 * after rebuild
 	 */
-	int			(*rebuild_post_cb)(void *test_arg);
+	test_rebuild_cb_t	rebuild_post_cb;
 	void			*rebuild_post_cb_arg;
 	/* epoch IO OP queue */
 	struct epoch_io_args	eio_args;
@@ -263,8 +254,9 @@ int
 pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool);
 
 static inline daos_obj_id_t
-daos_test_oid_gen(daos_handle_t coh, daos_oclass_id_t oclass, uint8_t ofeats,
-		  daos_oclass_hints_t hints, unsigned seed)
+daos_test_oid_gen(daos_handle_t coh, daos_oclass_id_t oclass,
+		  enum daos_otype_t type, daos_oclass_hints_t hints,
+		  unsigned int seed)
 {
 	daos_obj_id_t	oid;
 
@@ -273,9 +265,10 @@ daos_test_oid_gen(daos_handle_t coh, daos_oclass_id_t oclass, uint8_t ofeats,
 
 	oid = dts_oid_gen(seed);
 	if (daos_handle_is_valid(coh))
-		daos_obj_generate_oid(coh, &oid, ofeats, oclass, hints, 0);
+		daos_obj_generate_oid(coh, &oid, type, oclass, hints, 0);
 	else
-		daos_obj_set_oid(&oid, ofeats, oclass, 0);
+		daos_obj_set_oid(&oid, type, oclass >> 24,
+				 oclass - (oclass >> 24), 0);
 
 	return oid;
 }
@@ -342,7 +335,8 @@ int run_daos_io_test(int rank, int size, int *tests, int test_size);
 int run_daos_ec_io_test(int rank, int size, int *sub_tests, int sub_tests_size);
 int run_daos_epoch_io_test(int rank, int size, int *tests, int test_size);
 int run_daos_obj_array_test(int rank, int size);
-int run_daos_array_test(int rank, int size);
+int run_daos_array_test(int rank, int size, int *sub_tests, int sub_tests_size);
+int run_daos_cr_test(int rank, int size, int *sub_tests, int sub_tests_size);
 int run_daos_kv_test(int rank, int size);
 int run_daos_epoch_test(int rank, int size);
 int run_daos_epoch_recovery_test(int rank, int size);
@@ -369,9 +363,15 @@ int run_daos_rebuild_simple_ec_test(int rank, int size, int *tests,
 				    int test_size);
 int run_daos_degrade_simple_ec_test(int rank, int size, int *sub_tests,
 				    int sub_tests_size);
+int run_daos_upgrade_test(int rank, int size, int *sub_tests,
+			  int sub_tests_size);
+int run_daos_pipeline_test(int rank, int size);
 void daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 		      d_rank_list_t *svc, d_rank_t rank);
+void daos_start_server(test_arg_t *arg, const uuid_t pool_uuid,
+		       const char *grp, d_rank_list_t *svc, d_rank_t rank);
 struct daos_acl *get_daos_acl_with_owner_perms(uint64_t perms);
+struct daos_acl *get_daos_acl_with_user_perms(uint64_t perms);
 daos_prop_t *get_daos_prop_with_owner_acl_perms(uint64_t perms,
 						uint32_t prop_type);
 daos_prop_t *get_daos_prop_with_user_acl_perms(uint64_t perms);
@@ -381,34 +381,18 @@ daos_prop_t *get_daos_prop_with_owner_and_acl(char *owner, uint32_t owner_type,
 typedef int (*test_setup_cb_t)(void **state);
 typedef int (*test_teardown_cb_t)(void **state);
 
-bool test_runable(test_arg_t *arg, unsigned int required_tgts);
-int test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo);
+bool test_runable(test_arg_t *arg, unsigned int required_nodes);
+int test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo, d_rank_list_t **engine_ranks);
 int test_get_leader(test_arg_t *arg, d_rank_t *rank);
 bool test_rebuild_query(test_arg_t **args, int args_cnt);
 void test_rebuild_wait(test_arg_t **args, int args_cnt);
-void daos_exclude_target(const uuid_t pool_uuid, const char *grp,
-			 const char *dmg_config,
-			 d_rank_t rank, int tgt);
-void daos_reint_target(const uuid_t pool_uuid, const char *grp,
-		       const char *dmg_config,
-		       d_rank_t rank, int tgt);
-void daos_drain_target(const uuid_t pool_uuid, const char *grp,
-		       const char *dmg_config,
-		       d_rank_t rank, int tgt);
-void daos_extend_target(const uuid_t pool_uuid, const char *grp,
-			const char *dmg_config,
-			d_rank_t rank, int tgt, daos_size_t nvme_size);
-void daos_exclude_server(const uuid_t pool_uuid, const char *grp,
-			 const char *dmg_config,
-			 d_rank_t rank);
-void daos_reint_server(const uuid_t pool_uuid, const char *grp,
-		       const char *dmg_config,
-		       d_rank_t rank);
 int daos_pool_set_prop(const uuid_t pool_uuid, const char *name,
 		       const char *value);
 
+int daos_pool_upgrade(const uuid_t pool_uuid);
 int ec_data_nr_get(daos_obj_id_t oid);
 int ec_parity_nr_get(daos_obj_id_t oid);
+int ec_tgt_nr_get(daos_obj_id_t oid);
 
 void
 get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data,
@@ -422,7 +406,7 @@ get_tgt_idx_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid, uint32_t shard);
 void
 ec_verify_parity_data(struct ioreq *req, char *dkey, char *akey,
 		      daos_off_t offset, daos_size_t size,
-		      char *verify_data, daos_handle_t th);
+		      char *verify_data, daos_handle_t th, bool degraded);
 
 int run_daos_sub_tests(char *test_name, const struct CMUnitTest *tests,
 		       int tests_size, int *sub_tests, int sub_tests_size,
@@ -439,16 +423,14 @@ void dfs_ec_rebuild_io(void **state, int *shards, int shards_nr);
 void rebuild_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
 				int failed_tgt, bool kill);
 void rebuild_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank, bool kill);
-void reintegrate_single_pool_rank_no_disconnect(test_arg_t *arg, d_rank_t failed_rank);
+void reintegrate_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank, bool restart);
 void rebuild_pools_ranks(test_arg_t **args, int args_cnt,
 		d_rank_t *failed_ranks, int ranks_nr, bool kill);
 
 void reintegrate_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
-		int failed_tgt);
-void reintegrate_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank);
-void reintegrate_pools_ranks(test_arg_t **args, int args_cnt,
-		d_rank_t *failed_ranks,  int ranks_nr);
-
+				    int failed_tgt);
+void reintegrate_pools_ranks(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
+			     int ranks_nr, bool restart);
 void drain_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
 				int failed_tgt, bool kill);
 void drain_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank, bool kill);
@@ -465,8 +447,15 @@ int rebuild_pool_connect_internal(void *data);
 
 
 int rebuild_sub_setup(void **state);
+int rebuild_sub_rf1_setup(void **state);
+int rebuild_sub_rf0_setup(void **state);
 int rebuild_sub_teardown(void **state);
 int rebuild_small_sub_setup(void **state);
+int rebuild_small_sub_rf1_setup(void **state);
+int rebuild_small_sub_rf0_setup(void **state);
+int rebuild_sub_3nodes_rf0_setup(void **state);
+int rebuild_sub_6nodes_rf1_setup(void **state);
+int rebuild_sub_setup_common(void **state, daos_size_t pool_size, int node_nr, uint32_t rf);
 
 int get_server_config(char *host, char *server_config_file);
 int get_log_file(char *host, char *server_config_file,
@@ -503,6 +492,9 @@ void verify_ec_full_partial(struct ioreq *req, int test_idx, daos_off_t off);
 void make_buffer(char *buffer, char start, int total);
 
 bool oid_is_ec(daos_obj_id_t oid, struct daos_oclass_attr **attr);
+uint32_t test_ec_get_parity_off(daos_key_t *dkey, struct daos_oclass_attr *oca);
+int reintegrate_inflight_io(void *data);
+int reintegrate_inflight_io_verify(void *data);
 
 static inline void
 daos_test_print(int rank, char *message)
@@ -528,8 +520,8 @@ handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 	}
 
 	/** broadcast size of global handle to all peers */
-	rc = MPI_Bcast(&ghdl.iov_buf_len, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
-	assert_int_equal(rc, MPI_SUCCESS);
+	rc = par_bcast(PAR_COMM_WORLD, &ghdl.iov_buf_len, 1, PAR_UINT64, 0);
+	assert_int_equal(rc, 0);
 
 	/** allocate buffer for global pool handle */
 	D_ALLOC(ghdl.iov_buf, ghdl.iov_buf_len);
@@ -554,9 +546,8 @@ handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 	if (rank == 0 && verbose == 1)
 		print_message("rank 0 broadcast global %s handle ...",
 			      (type == HANDLE_POOL) ? "pool" : "container");
-	rc = MPI_Bcast(ghdl.iov_buf, ghdl.iov_len, MPI_BYTE, 0,
-		       MPI_COMM_WORLD);
-	assert_int_equal(rc, MPI_SUCCESS);
+	rc = par_bcast(PAR_COMM_WORLD, ghdl.iov_buf, ghdl.iov_len, PAR_BYTE, 0);
+	assert_int_equal(rc, 0);
 	if (rank == 0 && verbose == 1)
 		print_message("success\n");
 
@@ -580,7 +571,7 @@ handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 
 	D_FREE(ghdl.iov_buf);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 }
 
 #define MAX_KILLS	3
@@ -643,8 +634,7 @@ test_rmdir(const char *path, bool force)
 	if (dir == NULL) {
 		if (errno == ENOENT)
 			D_GOTO(out, rc);
-		D_ERROR("can't open directory %s, %d (%s)",
-			path, errno, strerror(errno));
+		D_ERROR("can't open directory %s, %d (%s)\n", path, errno, strerror(errno));
 		D_GOTO(out, rc = daos_errno2der(errno));
 	}
 
@@ -662,17 +652,15 @@ test_rmdir(const char *path, bool force)
 		case DT_DIR:
 			rc = test_rmdir(fullpath, force);
 			if (rc != 0)
-				D_ERROR("test_rmdir %s failed, rc %d",
-						fullpath, rc);
+				D_ERROR("test_rmdir %s failed, rc %d\n", fullpath, rc);
 			break;
 		case DT_REG:
 			rc = unlink(fullpath);
 			if (rc != 0)
-				D_ERROR("unlink %s failed, rc %d",
-						fullpath, rc);
+				D_ERROR("unlink %s failed, rc %d\n", fullpath, rc);
 			break;
 		default:
-			D_WARN("find unexpected type %d", ent->d_type);
+			D_WARN("find unexpected type %d\n", ent->d_type);
 		}
 
 		D_FREE(fullpath);
@@ -689,5 +677,28 @@ out:
 	D_FREE(fullpath);
 	return rc;
 }
+
+/* Zero out uuids, free svc rank lists in pool info returned by DAOS API */
+static inline void
+clean_pool_info(daos_size_t npools, daos_mgmt_pool_info_t *pools)
+{
+	int	i;
+
+	if (pools) {
+		for (i = 0; i < npools; i++) {
+			uuid_clear(pools[i].mgpi_uuid);
+			if (pools[i].mgpi_svc) {
+				d_rank_list_free(pools[i].mgpi_svc);
+				pools[i].mgpi_svc = NULL;
+			}
+		}
+	}
+}
+
+void test_set_engine_fail_loc(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_loc);
+void
+     test_set_engine_fail_loc_quiet(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_loc);
+void test_set_engine_fail_value(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_value);
+void test_set_engine_fail_num(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_num);
 
 #endif

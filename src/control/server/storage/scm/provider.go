@@ -1,5 +1,4 @@
-//
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,10 +8,7 @@ package scm
 import (
 	"fmt"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
@@ -20,67 +16,47 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/mount"
 )
 
 var _ storage.ScmProvider = &Provider{}
 
 const (
-	defaultUnmountFlags = 0
-	defaultMountFlags   = unix.MS_NOATIME
+	defaultMountFlags = unix.MS_NOATIME
 
 	defaultMountPointPerms = 0700
 
-	parseFsUnformatted = "data"
-
-	fsTypeNone  = "none"
-	fsTypeExt4  = "ext4"
-	fsTypeTmpfs = "tmpfs"
-
-	dcpmFsType    = fsTypeExt4
+	dcpmFsType    = system.FsTypeExt4
 	dcpmMountOpts = "dax,nodelalloc"
 
-	ramFsType = fsTypeTmpfs
+	ramFsType = system.FsTypeTmpfs
 )
 
 type (
 	// Backend defines a set of methods to be implemented by a SCM backend.
 	Backend interface {
-		Discover() (storage.ScmModules, error)
-		Prep(storage.ScmState) (bool, storage.ScmNamespaces, error)
-		PrepReset(storage.ScmState) (bool, error)
-		GetPmemState() (storage.ScmState, error)
-		GetPmemNamespaces() (storage.ScmNamespaces, error)
+		getModules(int) (storage.ScmModules, error)
+		getNamespaces(int) (storage.ScmNamespaces, error)
+		prep(storage.ScmPrepareRequest, *storage.ScmScanResponse) (*storage.ScmPrepareResponse, error)
+		prepReset(storage.ScmPrepareRequest, *storage.ScmScanResponse) (*storage.ScmPrepareResponse, error)
 		GetFirmwareStatus(deviceUID string) (*storage.ScmFirmwareInfo, error)
 		UpdateFirmware(deviceUID string, firmwarePath string) error
 	}
 
-	// SystemProvider defines a set of methods to be implemented by a provider
-	// of SCM-specific system capabilities.
+	// SystemProvider provides operating system capabilities.
 	SystemProvider interface {
-		system.IsMountedProvider
-		system.MountProvider
-		system.UnmountProvider
-		Mkfs(fsType, device string, force bool) error
-		Getfs(device string) (string, error)
-		Stat(string) (os.FileInfo, error)
-	}
-
-	defaultSystemProvider struct {
-		system.LinuxProvider
+		Chown(string, int, int) error
+		Getfs(string) (string, error)
+		Mkfs(system.MkfsReq) error
 	}
 
 	// Provider encapsulates configuration and logic for
 	// providing SCM management and interrogation.
 	Provider struct {
-		sync.RWMutex
-		scanCompleted bool
-		lastState     storage.ScmState
-		modules       storage.ScmModules
-		namespaces    storage.ScmNamespaces
-
 		log     logging.Logger
 		backend Backend
 		sys     SystemProvider
+		mounter storage.MountProvider
 	}
 )
 
@@ -112,17 +88,238 @@ func validateFormatRequest(r storage.ScmFormatRequest) error {
 	return nil
 }
 
-func (dsp *defaultSystemProvider) checkDevice(device string) error {
-	st, err := dsp.Stat(device)
+// DefaultProvider returns an initialized *Provider suitable for use with production code.
+func DefaultProvider(log logging.Logger) *Provider {
+	return NewProvider(log, defaultCmdRunner(log), system.DefaultProvider(), mount.DefaultProvider(log))
+}
+
+// NewProvider returns an initialized *Provider.
+func NewProvider(log logging.Logger, backend Backend, sys SystemProvider, mounter storage.MountProvider) *Provider {
+	p := &Provider{
+		log:     log,
+		backend: backend,
+		sys:     sys,
+		mounter: mounter,
+	}
+	return p
+}
+
+// Scan attempts to scan the system for SCM storage components.
+func (p *Provider) Scan(req storage.ScmScanRequest) (_ *storage.ScmScanResponse, err error) {
+	msg := fmt.Sprintf("scm backend scan: req %+v", req)
+	defer func() {
+		if err != nil {
+			msg = fmt.Sprintf("%s failed: %s", msg, err)
+		}
+		p.log.Debug(msg)
+	}()
+
+	resp := &storage.ScmScanResponse{
+		Modules:    storage.ScmModules{},
+		Namespaces: storage.ScmNamespaces{},
+	}
+
+	// If socket ID set in request, only scan devices attached to that socket.
+	sockSelector := sockAny
+	if req.SocketID != nil {
+		sockSelector = int(*req.SocketID)
+	}
+
+	modules, err := p.backend.getModules(sockSelector)
 	if err != nil {
-		return errors.Wrapf(err, "stat failed on %s", device)
+		return nil, err
+	}
+	if len(modules) == 0 {
+		msg = fmt.Sprintf("%s: no pmem modules", msg)
+		return resp, nil
+	}
+	msg = fmt.Sprintf("%s: %d pmem modules", msg, len(modules))
+	resp.Modules = modules
+
+	namespaces, err := p.backend.getNamespaces(sockSelector)
+	if err != nil {
+		return nil, err
+	}
+	if len(namespaces) == 0 {
+		msg = fmt.Sprintf("%s: no pmem namespaces", msg)
+		return resp, nil
+	}
+	msg = fmt.Sprintf("%s: %d pmem namespace", msg, len(namespaces))
+	resp.Namespaces = namespaces
+
+	return resp, nil
+}
+
+type scanFn func(storage.ScmScanRequest) (*storage.ScmScanResponse, error)
+
+func (p *Provider) prepare(req storage.ScmPrepareRequest, scan scanFn) (*storage.ScmPrepareResponse, error) {
+	p.log.Debug("scm provider prepare: calling provider scan")
+
+	scanReq := storage.ScmScanRequest{
+		SocketID: req.SocketID,
 	}
 
-	if st.Mode()&os.ModeDevice == 0 {
-		return errors.Errorf("%s is not a device file", device)
+	scanResp, err := scan(scanReq)
+	if err != nil {
+		return nil, err
 	}
 
-	return nil
+	if req.Reset {
+		// Unmount PMem namespaces before removing them.
+		if len(scanResp.Namespaces) > 0 {
+			for _, ns := range scanResp.Namespaces {
+				nsDev := "/dev/" + ns.BlockDevice
+				isMounted, err := p.mounter.IsMounted(nsDev)
+				if err != nil {
+					if os.IsNotExist(errors.Cause(err)) {
+						continue
+					}
+					return nil, err
+				}
+				if isMounted {
+					p.log.Debugf("Unmounting %s", nsDev)
+					if _, err := p.mounter.Unmount(storage.MountRequest{
+						Target: nsDev,
+					}); err != nil {
+						p.log.Errorf("Unmount error: %s", err)
+						return nil, err
+					}
+				}
+			}
+		}
+
+		p.log.Debug("scm provider prepare: calling backend prepReset")
+		return p.backend.prepReset(req, scanResp)
+	}
+
+	p.log.Debug("scm provider prepare: calling backend prep")
+	return p.backend.prep(req, scanResp)
+}
+
+// Prepare attempts to fulfill a SCM Prepare request.
+func (p *Provider) Prepare(req storage.ScmPrepareRequest) (*storage.ScmPrepareResponse, error) {
+	return p.prepare(req, p.Scan)
+}
+
+// CheckFormat attempts to determine whether or not the SCM specified in the
+// request is already formatted. If it is mounted, it is assumed to be formatted.
+// In the case of DCPM, the device is checked directly for the presence of a
+// filesystem.
+func (p *Provider) CheckFormat(req storage.ScmFormatRequest) (*storage.ScmFormatResponse, error) {
+	if err := validateFormatRequest(req); err != nil {
+		return nil, err
+	}
+
+	res := &storage.ScmFormatResponse{
+		Mountpoint: req.Mountpoint,
+		Formatted:  true,
+	}
+
+	mntptMissing := false
+
+	isMounted, err := p.mounter.IsMounted(req.Mountpoint)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return nil, err
+		}
+		mntptMissing = true
+	}
+	if isMounted {
+		res.Mounted = true
+		return res, nil
+	}
+
+	if req.Dcpm == nil {
+		// ramdisk
+		res.Formatted = false
+		return res, nil
+	}
+
+	fsType, err := p.sys.Getfs(req.Dcpm.Device)
+	if err != nil {
+		if os.IsNotExist(errors.Cause(err)) {
+			return nil, FaultFormatMissingDevice(req.Dcpm.Device)
+		}
+		return nil, errors.Wrapf(err, "failed to check if %s is formatted", req.Dcpm.Device)
+	}
+
+	p.log.Debugf("device %s filesystem: %s", req.Dcpm.Device, fsType)
+
+	switch fsType {
+	case system.FsTypeExt4:
+		if mntptMissing {
+			return nil, storage.FaultDeviceWithFsNoMountpoint(req.Dcpm.Device,
+				req.Mountpoint)
+		}
+		res.Mountable = true
+	case system.FsTypeNone:
+		res.Formatted = false
+	case system.FsTypeUnknown:
+		// formatted but not mountable
+		p.log.Debugf("unexpected format of output from 'file -s %s'", req.Dcpm.Device)
+	default:
+		// formatted but not mountable
+		p.log.Debugf("%q fs type is unexpected", fsType)
+	}
+
+	return res, nil
+}
+
+// Format attempts to fulfill the specified SCM format request.
+func (p *Provider) Format(req storage.ScmFormatRequest) (*storage.ScmFormatResponse, error) {
+	check, err := p.CheckFormat(req)
+	if err != nil {
+		return nil, err
+	}
+	if check.Formatted {
+		if !req.Force {
+			return nil, FaultFormatNoReformat
+		}
+	}
+
+	if err := p.mounter.ClearMountpoint(req.Mountpoint); err != nil {
+		return nil, errors.Wrap(err, "failed to clear existing mount")
+	}
+
+	if err := p.mounter.MakeMountPath(req.Mountpoint, req.OwnerUID, req.OwnerGID); err != nil {
+		return nil, errors.Wrap(err, "failed to create mount path")
+	}
+
+	switch {
+	case req.Ramdisk != nil:
+		return p.formatRamdisk(req)
+	case req.Dcpm != nil:
+		return p.formatDcpm(req)
+	default:
+		return nil, FaultFormatMissingParam
+	}
+}
+
+func (p *Provider) formatRamdisk(req storage.ScmFormatRequest) (*storage.ScmFormatResponse, error) {
+	if req.Ramdisk == nil {
+		return nil, FaultFormatMissingParam
+	}
+
+	res, err := p.mountRamdisk(req.Mountpoint, req.Ramdisk)
+	if err != nil {
+		return nil, err
+	}
+
+	if !res.Mounted {
+		return nil, errors.Errorf("%s was not mounted", req.Mountpoint)
+	}
+
+	if err := p.sys.Chown(req.Mountpoint, req.OwnerUID, req.OwnerGID); err != nil {
+		return nil, errors.Wrapf(err, "failed to set ownership of %s to %d.%d",
+			req.Mountpoint, req.OwnerUID, req.OwnerGID)
+	}
+
+	return &storage.ScmFormatResponse{
+		Mountpoint: res.Target,
+		Formatted:  true,
+		Mounted:    true,
+		Mountable:  false,
+	}, nil
 }
 
 func getDistroArgs() []string {
@@ -162,22 +359,12 @@ func getDistroArgs() []string {
 	}
 }
 
-// Mkfs attempts to create a filesystem of the supplied type, on the
-// supplied device.
-func (dsp *defaultSystemProvider) Mkfs(fsType, device string, force bool) error {
-	cmdPath, err := exec.LookPath(fmt.Sprintf("mkfs.%s", fsType))
-	if err != nil {
-		return errors.Wrapf(err, "unable to find mkfs.%s", fsType)
+func (p *Provider) formatDcpm(req storage.ScmFormatRequest) (*storage.ScmFormatResponse, error) {
+	if req.Dcpm == nil {
+		return nil, FaultFormatMissingParam
 	}
 
-	if err := dsp.checkDevice(device); err != nil {
-		return err
-	}
-
-	// TODO: Think about a way to allow for some kind of progress
-	// callback so that the user has some visibility into long-running
-	// format operations (very large devices).
-	args := []string{
+	opts := []string{
 		// use quiet mode
 		"-q",
 		// use direct i/o to avoid polluting page cache
@@ -192,428 +379,22 @@ func (dsp *defaultSystemProvider) Mkfs(fsType, device string, force bool) error 
 		// since we don't use xattr
 		"-I", "128",
 		// reduce the inode per bytes ratio
-		// one inode for 64M is more than enough
+		// one inode for 64MiB is more than enough
 		"-i", "67108864",
 	}
-	args = append(args, getDistroArgs()...)
-	// string always comes last
-	args = append(args, []string{device}...)
-	if force {
-		args = append([]string{"-F"}, args...)
-	}
-	out, err := exec.Command(cmdPath, args...).Output()
-	if err != nil {
-		return &runCmdError{
-			wrapped: err,
-			stdout:  string(out),
-		}
-	}
-
-	return nil
-}
-
-// Getfs probes the specified device in an attempt to determine the
-// formatted filesystem type, if any.
-func (dsp *defaultSystemProvider) Getfs(device string) (string, error) {
-	cmdPath, err := exec.LookPath("file")
-	if err != nil {
-		return fsTypeNone, errors.Wrap(err, "unable to find file")
-	}
-
-	if err := dsp.checkDevice(device); err != nil {
-		return fsTypeNone, err
-	}
-
-	args := []string{"-s", device}
-	out, err := exec.Command(cmdPath, args...).Output()
-	if err != nil {
-		return fsTypeNone, &runCmdError{
-			wrapped: err,
-			stdout:  string(out),
-		}
-	}
-
-	return parseFsType(string(out))
-}
-
-// Stat probes the specified path and returns os level file info.
-func (dsp *defaultSystemProvider) Stat(path string) (os.FileInfo, error) {
-	return os.Stat(path)
-}
-
-func parseFsType(input string) (string, error) {
-	// /dev/pmem0: Linux rev 1.0 ext4 filesystem data, UUID=09619a0d-0c9e-46b4-add5-faf575dd293d
-	// /dev/pmem1: data
-	fields := strings.Fields(input)
-	switch {
-	case len(fields) == 2 && fields[1] == parseFsUnformatted:
-		return fsTypeNone, nil
-	case len(fields) >= 5:
-		return fields[4], nil
-	}
-
-	return fsTypeNone, errors.Errorf("unable to determine fs type from %q", input)
-}
-
-// DefaultProvider returns an initialized *Provider suitable for use with production code.
-func DefaultProvider(log logging.Logger) *Provider {
-	lp := system.DefaultProvider()
-	p := &defaultSystemProvider{
-		LinuxProvider: *lp,
-	}
-	return NewProvider(log, defaultCmdRunner(log), p)
-}
-
-// NewProvider returns an initialized *Provider.
-func NewProvider(log logging.Logger, backend Backend, sys SystemProvider) *Provider {
-	p := &Provider{
-		log:     log,
-		backend: backend,
-		sys:     sys,
-	}
-	return p
-}
-
-func (p *Provider) isInitialized() bool {
-	p.RLock()
-	defer p.RUnlock()
-	return p.scanCompleted
-}
-
-func (p *Provider) currentState() storage.ScmState {
-	p.RLock()
-	defer p.RUnlock()
-	return p.lastState
-}
-
-func (p *Provider) updateState() (state storage.ScmState, err error) {
-	state, err = p.backend.GetPmemState()
-	if err != nil {
-		return
-	}
-
-	p.Lock()
-	p.lastState = state
-	p.Unlock()
-
-	return
-}
-
-// GetPmemState returns the current state of DCPM namespaces, if available.
-func (p *Provider) GetPmemState() (storage.ScmState, error) {
-	if !p.isInitialized() {
-		if _, err := p.Scan(storage.ScmScanRequest{}); err != nil {
-			return p.lastState, err
-		}
-	}
-
-	return p.currentState(), nil
-}
-
-func (p *Provider) createScanResponse() *storage.ScmScanResponse {
-	p.RLock()
-	defer p.RUnlock()
-
-	return &storage.ScmScanResponse{
-		State:      p.lastState,
-		Modules:    p.modules,
-		Namespaces: p.namespaces,
-	}
-}
-
-// Scan attempts to scan the system for SCM storage components.
-func (p *Provider) Scan(req storage.ScmScanRequest) (*storage.ScmScanResponse, error) {
-	if p.isInitialized() && !req.Rescan {
-		return p.createScanResponse(), nil
-	}
-
-	modules, err := p.backend.Discover()
-	if err != nil {
-		return nil, err
-	}
-
-	p.Lock()
-	p.scanCompleted = true
-	p.modules = modules
-	p.Unlock()
-
-	// If there are no modules, don't bother with the rest of the scan.
-	if len(modules) == 0 {
-		return p.createScanResponse(), nil
-	}
-
-	namespaces, err := p.backend.GetPmemNamespaces()
-	if err != nil {
-		return p.createScanResponse(), err
-	}
-
-	state, err := p.backend.GetPmemState()
-	if err != nil {
-		return nil, err
-	}
-
-	p.Lock()
-	p.lastState = state
-	p.namespaces = namespaces
-	p.Unlock()
-
-	return p.createScanResponse(), nil
-}
-
-// Prepare attempts to fulfill a SCM Prepare request.
-func (p *Provider) Prepare(req storage.ScmPrepareRequest) (res *storage.ScmPrepareResponse, err error) {
-	if !p.isInitialized() {
-		if _, err := p.Scan(storage.ScmScanRequest{}); err != nil {
-			return nil, err
-		}
-	}
-
-	res = &storage.ScmPrepareResponse{}
-	if sr := p.createScanResponse(); len(sr.Modules) == 0 {
-		p.log.Info("skipping SCM prepare; no modules detected")
-		res.State = sr.State
-
-		return res, nil
-	}
-
-	if req.Reset {
-		// Ensure that namespace block devices are unmounted first.
-		if sr := p.createScanResponse(); len(sr.Namespaces) > 0 {
-			for _, ns := range sr.Namespaces {
-				nsDev := "/dev/" + ns.BlockDevice
-				isMounted, err := p.IsMounted(nsDev)
-				if err != nil {
-					if os.IsNotExist(errors.Cause(err)) {
-						continue
-					}
-					return nil, err
-				}
-				if isMounted {
-					p.log.Debugf("Unmounting %s", nsDev)
-					if err := p.sys.Unmount(nsDev, 0); err != nil {
-						p.log.Errorf("Unmount error: %s", err)
-						return nil, err
-					}
-				}
-			}
-		}
-
-		res.RebootRequired, err = p.backend.PrepReset(p.currentState())
-		if err != nil {
-			res = nil
-			return
-		}
-		res.State, err = p.updateState()
-		if err != nil {
-			res = nil
-		}
-		return
-	}
-
-	res.RebootRequired, res.Namespaces, err = p.backend.Prep(p.currentState())
-	if err != nil {
-		res = nil
-		return
-	}
-	res.State, err = p.updateState()
-	if err != nil {
-		res = nil
-	}
-	return
-}
-
-// CheckFormat attempts to determine whether or not the SCM specified in the
-// request is already formatted. If it is mounted, it is assumed to be formatted.
-// In the case of DCPM, the device is checked directly for the presence of a
-// filesystem.
-func (p *Provider) CheckFormat(req storage.ScmFormatRequest) (*storage.ScmFormatResponse, error) {
-	if err := validateFormatRequest(req); err != nil {
-		return nil, err
-	}
-
-	res := &storage.ScmFormatResponse{
-		Mountpoint: req.Mountpoint,
-		Formatted:  true,
-	}
-
-	isMounted, err := p.IsMounted(req.Mountpoint)
-	if err != nil && !os.IsNotExist(err) {
-		return nil, err
-	}
-	if isMounted {
-		res.Mounted = true
-		return res, nil
-	}
-
-	if req.Dcpm == nil {
-		// ramdisk
-		res.Formatted = false
-		return res, nil
-	}
-
-	if !p.isInitialized() {
-		if _, err := p.Scan(storage.ScmScanRequest{}); err != nil {
-			return nil, err
-		}
-	}
-
-	fsType, err := p.sys.Getfs(req.Dcpm.Device)
-	if err != nil {
-		if os.IsNotExist(errors.Cause(err)) {
-			return nil, FaultFormatMissingDevice(req.Dcpm.Device)
-		}
-		return nil, errors.Wrapf(err, "failed to check if %s is formatted", req.Dcpm.Device)
-	}
-
-	p.log.Debugf("device %s filesystem: %s", req.Dcpm.Device, fsType)
-
-	switch fsType {
-	case fsTypeExt4:
-		res.Mountable = true
-	case fsTypeNone:
-		res.Formatted = false
-	}
-
-	return res, nil
-}
-
-func (p *Provider) clearMount(mntpt string) error {
-	mounted, err := p.IsMounted(mntpt)
-	if err != nil && !os.IsNotExist(err) {
-		return err
-	}
-
-	if mounted {
-		_, err := p.unmount(mntpt, defaultUnmountFlags)
-		if err != nil {
-			return err
-		}
-	}
-
-	if err := os.RemoveAll(mntpt); err != nil {
-		if !os.IsNotExist(err) {
-			return errors.Wrapf(err, "failed to remove %s", mntpt)
-		}
-	}
-
-	return nil
-}
-
-// makeMountPath will build the target path by creating any non-existent
-// subdirectories and setting ownership to target uid/gid to ensure that the
-// target user is able to access the created mount point if multiple layers
-// deep. If subdirectories in path already exist, their permissions will not be
-// modified.
-func (p *Provider) makeMountPath(path string, tgtUID, tgtGID int) error {
-	if !filepath.IsAbs(path) {
-		return errors.Errorf("expecting absolute target path, got %q", path)
-	}
-	if _, err := p.Stat(path); err == nil {
-		return nil // path already exists
-	}
-	// don't need to validate request UID/GID as they are populated inside
-	// this package during CreateFormatRequest()
-
-	sep := string(filepath.Separator)
-	dirs := strings.Split(path, sep)[1:] // omit empty element
-
-	for i := range dirs {
-		ps := sep + filepath.Join(dirs[:i+1]...)
-		_, err := p.Stat(ps)
-		switch {
-		case os.IsNotExist(err):
-			// subdir missing, attempt to create and chown
-			if err := os.Mkdir(ps, defaultMountPointPerms); err != nil {
-				return errors.Wrapf(err, "failed to create directory %q", ps)
-			}
-			if err := os.Chown(ps, tgtUID, tgtGID); err != nil {
-				return errors.Wrapf(err, "failed to set ownership of %s to %d.%d",
-					ps, tgtUID, tgtGID)
-			}
-		case err != nil:
-			return errors.Wrapf(err, "unable to stat %q", ps)
-		}
-	}
-
-	return nil
-}
-
-// Format attempts to fulfill the specified SCM format request.
-func (p *Provider) Format(req storage.ScmFormatRequest) (*storage.ScmFormatResponse, error) {
-	check, err := p.CheckFormat(req)
-	if err != nil {
-		return nil, err
-	}
-	if check.Formatted {
-		if !req.Force {
-			return nil, FaultFormatNoReformat
-		}
-	}
-
-	if err := p.clearMount(req.Mountpoint); err != nil {
-		return nil, errors.Wrap(err, "failed to clear existing mount")
-	}
-
-	if err := p.makeMountPath(req.Mountpoint, req.OwnerUID, req.OwnerGID); err != nil {
-		return nil, errors.Wrap(err, "failed to create mount path")
-	}
-
-	switch {
-	case req.Ramdisk != nil:
-		return p.formatRamdisk(req)
-	case req.Dcpm != nil:
-		return p.formatDcpm(req)
-	default:
-		return nil, FaultFormatMissingParam
-	}
-}
-
-func (p *Provider) formatRamdisk(req storage.ScmFormatRequest) (*storage.ScmFormatResponse, error) {
-	if req.Ramdisk == nil {
-		return nil, FaultFormatMissingParam
-	}
-
-	res, err := p.MountRamdisk(req.Mountpoint, req.Ramdisk.Size)
-	if err != nil {
-		return nil, err
-	}
-
-	if !res.Mounted {
-		return nil, errors.Errorf("%s was not mounted", req.Mountpoint)
-	}
-
-	if err := os.Chown(req.Mountpoint, req.OwnerUID, req.OwnerGID); err != nil {
-		return nil, errors.Wrapf(err, "failed to set ownership of %s to %d.%d",
-			req.Mountpoint, req.OwnerUID, req.OwnerGID)
-	}
-
-	return &storage.ScmFormatResponse{
-		Mountpoint: res.Target,
-		Formatted:  true,
-		Mounted:    true,
-		Mountable:  false,
-	}, nil
-}
-
-func (p *Provider) formatDcpm(req storage.ScmFormatRequest) (*storage.ScmFormatResponse, error) {
-	if req.Dcpm == nil {
-		return nil, FaultFormatMissingParam
-	}
-
-	alreadyMounted, err := p.IsMounted(req.Dcpm.Device)
-	if err != nil {
-		return nil, err
-	}
-	if alreadyMounted {
-		return nil, errors.Wrap(FaultDeviceAlreadyMounted, req.Dcpm.Device)
-	}
+	opts = append(opts, getDistroArgs()...)
 
 	p.log.Debugf("running mkfs.%s %s", dcpmFsType, req.Dcpm.Device)
-	if err := p.sys.Mkfs(dcpmFsType, req.Dcpm.Device, req.Force); err != nil {
+	if err := p.sys.Mkfs(system.MkfsReq{
+		Filesystem: dcpmFsType,
+		Device:     req.Dcpm.Device,
+		Options:    opts,
+		Force:      req.Force,
+	}); err != nil {
 		return nil, errors.Wrapf(err, "failed to format %s", req.Dcpm.Device)
 	}
 
-	res, err := p.MountDcpm(req.Dcpm.Device, req.Mountpoint)
+	res, err := p.mountDcpm(req.Dcpm.Device, req.Mountpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -622,7 +403,7 @@ func (p *Provider) formatDcpm(req storage.ScmFormatRequest) (*storage.ScmFormatR
 		return nil, errors.Errorf("%s was not mounted", req.Mountpoint)
 	}
 
-	if err := os.Chown(req.Mountpoint, req.OwnerUID, req.OwnerGID); err != nil {
+	if err := p.sys.Chown(req.Mountpoint, req.OwnerUID, req.OwnerGID); err != nil {
 		return nil, errors.Wrapf(err, "failed to set ownership of %s to %d.%d",
 			req.Mountpoint, req.OwnerUID, req.OwnerGID)
 	}
@@ -635,93 +416,60 @@ func (p *Provider) formatDcpm(req storage.ScmFormatRequest) (*storage.ScmFormatR
 	}, nil
 }
 
-// MountDcpm attempts to mount a DCPM device at the specified mountpoint.
-func (p *Provider) MountDcpm(device, target string) (*storage.ScmMountResponse, error) {
-	// make sure the source device is not already mounted somewhere else
-	devMounted, err := p.sys.IsMounted(device)
-	if err != nil {
-		return nil, errors.Wrapf(err, "unable to check if %s is mounted", device)
-	}
-	if devMounted {
-		return nil, errors.Wrap(FaultDeviceAlreadyMounted, device)
-	}
-
-	return p.mount(device, target, dcpmFsType, defaultMountFlags, dcpmMountOpts)
+// mountDcpm attempts to mount a DCPM device at the specified mountpoint.
+func (p *Provider) mountDcpm(device, target string) (*storage.MountResponse, error) {
+	return p.mounter.Mount(storage.MountRequest{
+		Source:     device,
+		Target:     target,
+		Filesystem: dcpmFsType,
+		Flags:      defaultMountFlags,
+		Options:    dcpmMountOpts,
+	})
 }
 
-// MountRamdisk attempts to mount a tmpfs-based ramdisk of the specified size at
+// mountRamdisk attempts to mount a tmpfs-based ramdisk of the specified size at
 // the specified mountpoint.
-func (p *Provider) MountRamdisk(target string, size uint) (*storage.ScmMountResponse, error) {
-	var opts string
-	if size > 0 {
-		opts = fmt.Sprintf("size=%dg", size)
+func (p *Provider) mountRamdisk(target string, params *storage.RamdiskParams) (*storage.MountResponse, error) {
+	if params == nil {
+		return nil, FaultFormatMissingParam
 	}
 
-	return p.mount(ramFsType, target, ramFsType, defaultMountFlags, opts)
+	var opts = []string{
+		// https://www.kernel.org/doc/html/latest/filesystems/tmpfs.html
+		// mpol=prefer:Node prefers to allocate memory from the given Node
+		fmt.Sprintf("mpol=prefer:%d", params.NUMANode),
+	}
+	if params.Size > 0 {
+		opts = append(opts, fmt.Sprintf("size=%dg", params.Size))
+	}
+	if !params.DisableHugepages {
+		opts = append(opts, "huge=always")
+	}
+
+	return p.mounter.Mount(storage.MountRequest{
+		Source:     ramFsType,
+		Target:     target,
+		Filesystem: ramFsType,
+		Flags:      defaultMountFlags,
+		Options:    strings.Join(opts, ","),
+	})
 }
 
 // Mount attempts to mount the target specified in the supplied request.
-func (p *Provider) Mount(req storage.ScmMountRequest) (*storage.ScmMountResponse, error) {
+func (p *Provider) Mount(req storage.ScmMountRequest) (*storage.MountResponse, error) {
 	switch req.Class {
 	case storage.ClassDcpm:
-		return p.MountDcpm(req.Device, req.Target)
+		return p.mountDcpm(req.Device, req.Target)
 	case storage.ClassRam:
-		return p.MountRamdisk(req.Target, req.Size)
+		return p.mountRamdisk(req.Target, req.Ramdisk)
 	default:
 		return nil, errors.New(storage.ScmMsgClassNotSupported)
 	}
 }
 
-func (p *Provider) mount(src, target, fsType string, flags uintptr, opts string) (*storage.ScmMountResponse, error) {
-	// make sure that we're not double-mounting over an existing mount
-	tgtMounted, err := p.IsMounted(target)
-	if err != nil && !os.IsNotExist(err) {
-		return nil, err
-	}
-	if tgtMounted {
-		return nil, errors.Wrap(FaultTargetAlreadyMounted, target)
-	}
-
-	p.log.Debugf("mount %s->%s (%s) (%s)", src, target, fsType, opts)
-	if err := p.sys.Mount(src, target, fsType, flags, opts); err != nil {
-		return nil, errors.Wrapf(err, "mount %s->%s failed", src, target)
-	}
-
-	return &storage.ScmMountResponse{
-		Target:  target,
-		Mounted: true,
-	}, nil
-}
-
 // Unmount attempts to unmount the target specified in the supplied request.
-func (p *Provider) Unmount(req storage.ScmMountRequest) (*storage.ScmMountResponse, error) {
-	return p.unmount(req.Target, defaultUnmountFlags)
-}
-
-func (p *Provider) unmount(target string, flags int) (*storage.ScmMountResponse, error) {
-	if err := p.sys.Unmount(target, flags); err != nil {
-		return nil, errors.Wrapf(err, "failed to unmount %s", target)
-	}
-
-	return &storage.ScmMountResponse{
-		Target:  target,
-		Mounted: false,
-	}, nil
-}
-
-// Stat probes the specified path and returns os level file info.
-func (p *Provider) Stat(path string) (os.FileInfo, error) {
-	return p.sys.Stat(path)
-}
-
-// IsMounted checks to see if the target device or directory is mounted and
-// returns flag to specify whether mounted or a relevant fault.
-func (p *Provider) IsMounted(target string) (bool, error) {
-	isMounted, err := p.sys.IsMounted(target)
-
-	if errors.Is(err, os.ErrPermission) {
-		return false, errors.Wrap(FaultPathAccessDenied(target), "check if mounted")
-	}
-
-	return isMounted, err
+func (p *Provider) Unmount(req storage.ScmMountRequest) (*storage.MountResponse, error) {
+	return p.mounter.Unmount(storage.MountRequest{
+		Target: req.Target,
+	})
 }

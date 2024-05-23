@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -249,6 +249,7 @@ int main(int argc, char **argv)
 	crt_group_t		*grp;
 	crt_context_t		crt_ctx[NUM_SERVER_CTX];
 	pthread_t		progress_thread[NUM_SERVER_CTX];
+	struct test_options	*opts = crtu_get_opts();
 	int			i, k;
 	char			*my_uri;
 	char			*env_self_rank;
@@ -264,8 +265,15 @@ int main(int argc, char **argv)
 	sem_t			sem;
 	int			rc;
 
-	env_self_rank = getenv("CRT_L_RANK");
+	if (D_ON_VALGRIND) {
+		crtu_set_shutdown_delay(10);
+	} else {
+		crtu_set_shutdown_delay(2);
+	}
+
+	d_agetenv_str(&env_self_rank, "CRT_L_RANK");
 	my_rank = atoi(env_self_rank);
+	d_freeenv_str(&env_self_rank);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(my_rank, 20, true, true);
@@ -274,8 +282,7 @@ int main(int argc, char **argv)
 	assert(rc == 0);
 
 	DBG_PRINT("Server starting up\n");
-	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER |
-			CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
+	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	if (rc != 0) {
 		D_ERROR("crt_init() failed; rc=%d\n", rc);
 		assert(0);
@@ -312,9 +319,17 @@ int main(int argc, char **argv)
 		}
 	}
 
-	grp_cfg_file = getenv("CRT_L_GRP_CFG");
+	if (opts->is_swim_enabled) {
+		rc = crt_swim_init(0);
+		if (rc != 0) {
+			D_ERROR("crt_swim_init() failed; rc=%d\n", rc);
+			assert(0);
+		}
+	}
 
-	rc = crt_rank_self_set(my_rank);
+	d_agetenv_str(&grp_cfg_file, "CRT_L_GRP_CFG");
+
+	rc = crt_rank_self_set(my_rank, 1 /* group_version_min */);
 	if (rc != 0) {
 		D_ERROR("crt_rank_self_set(%d) failed; rc=%d\n",
 			my_rank, rc);
@@ -337,6 +352,7 @@ int main(int argc, char **argv)
 
 	DBG_PRINT("self_rank=%d uri=%s grp_cfg_file=%s\n", my_rank,
 			my_uri, grp_cfg_file);
+	d_freeenv_str(&grp_cfg_file);
 	D_FREE(my_uri);
 
 	rc = crt_group_size(NULL, &grp_size);
@@ -397,15 +413,9 @@ int main(int argc, char **argv)
 	}
 
 	rc = crtu_wait_for_ranks(crt_ctx[0], grp, rank_list, 0,
-				 NUM_SERVER_CTX, 10, 100.0);
+				 NUM_SERVER_CTX, 50, 100.0);
 	if (rc != 0) {
 		D_ERROR("wait_for_ranks() failed; rc=%d\n", rc);
-		assert(0);
-	}
-
-	rc = crt_swim_init(0);
-	if (rc != 0) {
-		D_ERROR("crt_swim_init() failed; rc=%d\n", rc);
 		assert(0);
 	}
 
@@ -442,7 +452,7 @@ int main(int argc, char **argv)
 	}
 
 	/* Send shutdown RPC to all nodes except for self */
-	DBG_PRINT("Senidng shutdown to all nodes\n");
+	DBG_PRINT("Sending shutdown to all nodes\n");
 
 	/* Note rank at i=0 corresponds to 'self' */
 	for (i = 0; i < s_list->rl_nr; i++) {

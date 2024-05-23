@@ -1,0 +1,78 @@
+hosts:
+  test_servers: 1
+  test_clients: 1
+timeout: 600
+server_config:
+  name: daos_server
+  port: 10001
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+          scm_size: 4
+  system_ram_reserved: 1
+container:
+  control_method: daos
+pool_acl:
+  scm_size: 134217728
+  user_prefix: daos_ci
+  num_user: 1
+  num_group: 1
+  primary_secondary_group_test:
+    primary_group:
+      pg_permission:
+        - rw
+      pg_read_write:
+        - pass
+        - pass
+    secondary_group_name:
+      - daos_ci_sg2
+      - daos_ci_sg3
+    test_case: !mux
+      test1:
+        sg_permission:
+          - r
+          - w
+        sg_read_write:
+          - pass
+          - pass
+      test2:
+        sg_permission:
+          - none
+          - rw
+        sg_read_write:
+          - pass
+          - pass
+      test3:
+        sg_permission:
+          - r
+          - none
+        sg_read_write:
+          - pass
+          - deny
+      test4:
+        sg_permission:
+          - none
+          - w
+        sg_read_write:
+          - deny
+          - deny
+      test5:
+        sg_permission:
+          - wr
+          - w
+        sg_read_write:
+          - pass
+          - pass
+      test6:
+        sg_permission:
+          - none
+          - none
+        sg_read_write:
+          - deny
+          - deny

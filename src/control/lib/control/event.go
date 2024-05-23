@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -48,11 +48,15 @@ func eventNotify(ctx context.Context, rpcClient UnaryInvoker, seq uint64, evt *e
 
 	req := &EventNotifyReq{}
 	req.SetHostList(aps)
-	rpcClient.Debugf("forwarding %s event to MS access points %v (seq: %d)", evt.ID, aps, seq)
+	rpcClient.Debugf("forwarding %s event (seq: %d)", evt.ID, seq)
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).ClusterEvent(ctx,
+		msg, err := mgmtpb.NewMgmtSvcClient(conn).ClusterEvent(ctx,
 			&sharedpb.ClusterEventReq{Sequence: seq, Event: pbRASEvent})
+		if err == nil && msg != nil {
+			rpcClient.Debugf("%s event forwarded to MS @ %s", evt.ID, conn.Target())
+		}
+		return msg, err
 	})
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
@@ -155,8 +159,8 @@ func newEventLogger(logBasic logging.Logger, newSyslogger newSysloggerFn) *Event
 	} {
 		sl, err := newSyslogger(sev.SyslogPriority(), flags)
 		if err != nil {
-			logBasic.Errorf("failed to create syslogger with priority %s: %s",
-				sev.SyslogPriority(), err)
+			logBasic.Errorf("failed to create syslogger with priority %d (severity=%s,"+
+				" facility=DAEMON): %s", sev.SyslogPriority(), sev, err)
 			continue
 		}
 		el.sysloggers[sev] = sl

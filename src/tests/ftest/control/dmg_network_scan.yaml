@@ -1,10 +1,16 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
 hosts:
-  test_servers:
-    - server-A
+  test_servers: 1
 timeout: 180
 server_config:
   name: daos_server
   port: 10001
-  control_log_mask: INFO
+  control_log_mask: TRACE
+  engines_per_host: 1
+  engines:
+    0:
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos

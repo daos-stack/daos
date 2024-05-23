@@ -1,10 +1,10 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-/*
+/**
  * Primitives to share between data and control planes.
  */
 
@@ -14,55 +14,62 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <assert.h>
+#include <string.h>
+#include <daos/common.h>
 
-/*
+/**
  * Space separated string of CLI options to pass to DPDK when started during
  * spdk_env_init(). These options will override the DPDK defaults.
  */
 extern const char *
 dpdk_cli_override_opts;
 
-enum {
-	/* Device is plugged */
-	NVME_DEV_FL_PLUGGED	= 0x1,
-	/* Device is used by DAOS (present in SMD) */
-	NVME_DEV_FL_INUSE	= 0x2,
-	/* Device is marked as FAULTY */
-	NVME_DEV_FL_FAULTY	= 0x4,
-};
+#define NVME_PCI_DEV_TYPE_VMD           "vmd"
+#define NVME_DETAIL_BUFLEN              1024
 
-enum bio_dev_state {
-	/* fully functional and in-use */
-	BIO_DEV_NORMAL	= 0,
-	/* evicted device */
-	BIO_DEV_FAULTY,
-	/* unplugged device */
-	BIO_DEV_OUT,
-	/* new device not currently in-use */
-	BIO_DEV_NEW,
-};
+/** Device state flags */
+#define NVME_DEV_FL_PLUGGED	(1 << 0)	/* Device is present in slot */
+#define NVME_DEV_FL_INUSE	(1 << 1)	/* Used by DAOS (present in SMD) */
+#define NVME_DEV_FL_FAULTY	(1 << 2)	/* Faulty state has been assigned */
 
-/*
- * Convert device state to human-readable string
- *
- * \param [IN]  state   Device state
- *
- * \return              Static string representing enum value
- */
-static inline char *
-bio_dev_state_enum_to_str(enum bio_dev_state state)
-{
-	switch (state) {
-	case BIO_DEV_NORMAL: return "NORMAL";
-	case BIO_DEV_FAULTY: return "EVICTED";
-	case BIO_DEV_OUT:    return "UNPLUGGED";
-	case BIO_DEV_NEW:    return "NEW";
-	}
+/** Env defining the size of a metadata pmem pool/file allocated during pool create, in MiBs */
+#define DAOS_MD_CAP_ENV			"DAOS_MD_CAP"
+/** Default size of a metadata pmem pool/file (1024 MiB) */
+#define DEFAULT_DAOS_MD_CAP_SIZE        (1ul << 30)
+#define MINIMUM_DAOS_MD_CAP_SIZE        (1ul << 27)
 
-	return "Undefined state";
-}
+/** Utility macros */
+#define CHK_FLAG(x, m) ((x & m) == m)
+#define SET_FLAG(x, m) (x |= m)
+#define UNSET_FLAG(x, m) (x &= ~(m))
+#define STR_EQ(x, m) (strcmp(x, m) == 0)
 
-/*
+/** NVMe config keys */
+#define NVME_CONF_ATTACH_CONTROLLER	"bdev_nvme_attach_controller"
+#define NVME_CONF_AIO_CREATE		"bdev_aio_create"
+#define NVME_CONF_ENABLE_VMD		"enable_vmd"
+#define NVME_CONF_SET_HOTPLUG_RANGE	"hotplug_busid_range"
+#define NVME_CONF_SET_ACCEL_PROPS	"accel_props"
+#define NVME_CONF_SET_SPDK_RPC_SERVER	"spdk_rpc_srv"
+#define NVME_CONF_SET_AUTO_FAULTY       "auto_faulty"
+
+/** Supported acceleration engine settings */
+#define NVME_ACCEL_NONE		"none"
+#define NVME_ACCEL_SPDK		"spdk"
+#define NVME_ACCEL_DML		"dml"
+
+/** Acceleration engine optional capabilities */
+#define NVME_ACCEL_FLAG_MOVE	(1 << 0)
+#define NVME_ACCEL_FLAG_CRC	(1 << 1)
+
+/** Device role flags */
+#define NVME_ROLE_DATA		(1 << 0)
+#define NVME_ROLE_META		(1 << 1)
+#define NVME_ROLE_WAL		(1 << 2)
+
+#define NVME_ROLE_ALL		(NVME_ROLE_DATA | NVME_ROLE_META | NVME_ROLE_WAL)
+
+/**
  * Current device health state (health statistics). Periodically updated in
  * bio_bs_monitor(). Used to determine faulty device status.
  * Also retrieved on request via go-spdk bindings from the control-plane.
@@ -72,6 +79,9 @@ struct nvme_stats {
 	/* Device space utilization */
 	uint64_t	 total_bytes;
 	uint64_t	 avail_bytes;
+	uint64_t	 cluster_size;
+	uint64_t	 meta_wal_size;
+	uint64_t	 rdb_wal_size;
 	/* Device health details */
 	uint32_t	 warn_temp_time;
 	uint32_t	 crit_temp_time;
@@ -118,6 +128,31 @@ struct nvme_stats {
 };
 
 /**
+ * NVMe controller details.
+ */
+struct nvme_ctrlr_t {
+	char                *model;
+	char                *serial;
+	char                *pci_addr;
+	char                *fw_rev;
+	char                *pci_type;
+	char                *vendor_id;
+	int                  socket_id;
+	struct nvme_ns_t    *nss;
+	struct nvme_stats   *stats;
+	struct nvme_ctrlr_t *next;
+};
+
+/**
+ * NVMe namespace details.
+ */
+struct nvme_ns_t {
+	uint32_t          id;
+	uint64_t          size;
+	struct nvme_ns_t *next;
+};
+
+/**
  * Parse input string and output ASCII as required by the NVMe spec.
  *
  * \param[out] dst	pre-allocated destination string buffer
@@ -128,4 +163,4 @@ struct nvme_stats {
  * \return		Zero on success, negative value on error
  */
 int copy_ascii(char *dst, size_t dst_sz, const void *src, size_t src_sz);
-#endif /* __CONTROL_H_ */
+#endif /** __CONTROL_H_ */

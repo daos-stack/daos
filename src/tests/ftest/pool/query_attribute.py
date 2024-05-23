@@ -1,9 +1,10 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import base64
+
 from apricot import TestWithServers
 
 
@@ -38,8 +39,9 @@ class QueryAttributeTest(TestWithServers):
             Test query, set-attr, list-attr, and get-attr commands.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=small
-        :avocado: tags=pool,pool_query_attr
+        :avocado: tags=vm
+        :avocado: tags=pool,pool_query,daos_cmd
+        :avocado: tags=QueryAttributeTest,test_query_attr
         """
         errors = []
         daos_cmd = self.get_daos_command()
@@ -53,6 +55,7 @@ class QueryAttributeTest(TestWithServers):
         query_result = daos_cmd.pool_query(pool=self.pool.uuid)
         actual_uuid = query_result["response"]["uuid"]
         actual_size = query_result["response"]["tier_stats"][0]["total"]
+        actual_size_roundup = int(actual_size / 100000) * 100000
 
         expected_uuid = self.pool.uuid.lower()
         if expected_uuid != actual_uuid:
@@ -60,10 +63,10 @@ class QueryAttributeTest(TestWithServers):
                 "Expected = {}; Actual = {}".format(expected_uuid, actual_uuid)
             errors.append(msg)
 
-        if expected_size != actual_size:
-            msg = "Unexpected Total Storage Tier 0 size from daos pool " +\
-                "query! Expected = {}; Actual = {}".format(
-                    expected_size, actual_size)
+        if expected_size != actual_size_roundup:
+            msg = "#Unexpected Total Storage Tier 0 size from daos pool " +\
+                "query! Expected = {}; Actual roundup = {}".format(
+                    expected_size, actual_size_roundup)
             errors.append(msg)
 
         # 2. Test pool set-attr, get-attr, and list-attrs.
@@ -73,9 +76,9 @@ class QueryAttributeTest(TestWithServers):
         sample_vals = []
 
         # Create 5 attributes.
-        for i in range(5):
-            sample_attr = "attr" + str(i)
-            sample_val = "val" + str(i)
+        for idx in range(5):
+            sample_attr = "attr" + str(idx)
+            sample_val = "val" + str(idx)
             sample_attrs.append(sample_attr)
             sample_vals.append(sample_val)
             daos_cmd.pool_set_attr(
@@ -85,7 +88,7 @@ class QueryAttributeTest(TestWithServers):
         # List the attribute names and compare against those set.
         attrs = daos_cmd.pool_list_attrs(pool=self.pool.uuid)
         for attr in attrs["response"]:
-            actual_attrs.append(attr["name"])
+            actual_attrs.append(attr)
 
         actual_attrs.sort()
         expected_attrs.sort()
@@ -97,14 +100,14 @@ class QueryAttributeTest(TestWithServers):
             errors.append(msg)
 
         # Get each attribute's value and compare against those set.
-        for i in range(5):
+        for idx in range(5):
             output = daos_cmd.pool_get_attr(
-                pool=self.pool.uuid, attr=sample_attrs[i])
-            actual_val = output["response"]["value"]
-            if sample_vals[i] != actual_val:
+                pool=self.pool.uuid, attr=sample_attrs[idx])
+            actual_val = base64.b64decode(output["response"]["value"]).decode()
+            if sample_vals[idx] != actual_val:
                 msg = "Unexpected attribute value! " +\
                     "Expected = {}; Actual = {}".format(
-                        sample_vals[i], actual_val)
+                        sample_vals[idx], actual_val)
                 errors.append(msg)
 
         if errors:

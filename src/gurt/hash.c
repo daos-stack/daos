@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -519,14 +519,16 @@ d_hash_rec_insert_anonym(struct d_hash_table *htable, d_list_t *link,
 			 void *arg)
 {
 	struct d_hash_bucket	*bucket;
-	uint32_t	 idx;
-	uint32_t	 nr = 1U << htable->ht_bits;
-	bool		 need_lock = !(htable->ht_feats & D_HASH_FT_NOLOCK);
+	uint32_t		 idx;
+	uint32_t		 nr = 1U << htable->ht_bits;
+	bool			 need_lock = !(htable->ht_feats & D_HASH_FT_NOLOCK);
+	bool			 need_keyinit_lock;
 
 	if (htable->ht_ops->hop_key_init == NULL)
 		return -DER_INVAL;
 
-	if (need_lock) {
+	need_keyinit_lock = !(htable->ht_feats & D_HASH_FT_NO_KEYINIT_LOCK);
+	if (need_lock && need_keyinit_lock) {
 		/* Lock all buckets because of unknown key yet */
 		for (idx = 0; idx < nr; idx++) {
 			ch_bucket_lock(htable, idx, false);
@@ -537,16 +539,23 @@ d_hash_rec_insert_anonym(struct d_hash_table *htable, d_list_t *link,
 
 	/* has no key, hash table should have provided key generator */
 	ch_key_init(htable, link, arg);
-
 	idx = ch_rec_hash(htable, link);
 	bucket = &htable->ht_buckets[idx];
+
+	if (need_lock && !need_keyinit_lock)
+		ch_bucket_lock(htable, idx, false);
+
 	ch_rec_insert_addref(htable, bucket, link);
 
 	if (need_lock) {
-		for (idx = 0; idx < nr; idx++) {
+		if (!need_keyinit_lock) {
 			ch_bucket_unlock(htable, idx, false);
-			if (htable->ht_feats & D_HASH_FT_GLOCK)
-				break;
+		} else {
+			for (idx = 0; idx < nr; idx++) {
+				ch_bucket_unlock(htable, idx, false);
+				if (htable->ht_feats & D_HASH_FT_GLOCK)
+					break;
+			}
 		}
 	}
 	return 0;
@@ -894,9 +903,11 @@ d_hash_table_traverse(struct d_hash_table *htable, d_hash_traverse_cb_t cb,
 	}
 
 	for (idx = 0; idx < nr && !rc; idx++) {
+		d_list_t *linkn;
+
 		bucket = &htable->ht_buckets[idx];
 		ch_bucket_lock(htable, idx, true);
-		d_list_for_each(link, &bucket->hb_head) {
+		d_list_for_each_safe(link, linkn, &bucket->hb_head) {
 			rc = cb(link, arg);
 			if (rc)
 				break;
@@ -937,6 +948,12 @@ d_hash_table_destroy_inplace(struct d_hash_table *htable, bool force)
 	uint32_t		 nr = 1U << htable->ht_bits;
 	uint32_t		 i;
 	int			 rc = 0;
+
+	if (htable->ht_buckets == NULL) {
+		rc = -DER_UNINIT;
+		DHL_ERROR(htable, rc, "d_hash_table not initialized (NULL buckets)");
+		D_GOTO(out, 0);
+	}
 
 	for (i = 0; i < nr; i++) {
 		bucket = &htable->ht_buckets[i];
@@ -1006,7 +1023,7 @@ d_hash_table_debug(struct d_hash_table *htable)
  ******************************************************************************/
 
 struct d_hhash {
-	uint64_t		ch_cookie;
+	ATOMIC uint64_t		ch_cookie;
 	struct d_hash_table	ch_htable;
 	/* server-side uses D_HTYPE_PTR handle */
 	bool			ch_ptrtype;
@@ -1022,23 +1039,26 @@ link2rlink(d_list_t *link)
 static void
 rl_op_addref(struct d_rlink *rlink)
 {
-	rlink->rl_ref++;
+	atomic_fetch_add_relaxed(&rlink->rl_ref, 1);
 }
 
 static bool
 rl_op_decref(struct d_rlink *rlink)
 {
-	D_ASSERT(rlink->rl_ref > 0);
-	rlink->rl_ref--;
-	return rlink->rl_ref == 0;
+	uint32_t oldref;
+
+	oldref = atomic_fetch_sub_relaxed(&rlink->rl_ref, 1);
+	D_ASSERT(oldref > 0);
+
+	return oldref == 1;
 }
 
 static void
 rl_op_init(struct d_rlink *rlink)
 {
 	D_INIT_LIST_HEAD(&rlink->rl_link);
-	rlink->rl_initialized	= 1;
-	rlink->rl_ref		= 1; /* for caller */
+	rlink->rl_initialized = 1;
+	atomic_store_relaxed(&rlink->rl_ref, 1); /* for caller */
 }
 
 static bool
@@ -1049,8 +1069,10 @@ rl_op_empty(struct d_rlink *rlink)
 	if (!rlink->rl_initialized)
 		return true;
 
-	is_unlinked = d_hash_rec_unlinked(&rlink->rl_link);
-	D_ASSERT(rlink->rl_ref != 0 || is_unlinked);
+	is_unlinked = (atomic_load_relaxed(&rlink->rl_ref) == 0);
+	if (is_unlinked)
+		D_ASSERT(d_hash_rec_unlinked(&rlink->rl_link));
+
 	return is_unlinked;
 }
 
@@ -1068,10 +1090,11 @@ hh_op_key_init(struct d_hash_table *htable, d_list_t *link, void *arg)
 	struct d_hhash	*hhash;
 	struct d_hlink	*hlink = link2hlink(link);
 	int		 type  = *(int *)arg;
+	uint64_t	 cookie;
 
 	hhash = container_of(htable, struct d_hhash, ch_htable);
-	hlink->hl_key = ((hhash->ch_cookie++) << D_HTYPE_BITS)
-			| (type & D_HTYPE_MASK);
+	cookie = atomic_fetch_add_relaxed(&hhash->ch_cookie, 1);
+	hlink->hl_key = (cookie << D_HTYPE_BITS) | (type & D_HTYPE_MASK);
 }
 
 static uint32_t
@@ -1149,7 +1172,7 @@ d_hhash_create(uint32_t feats, uint32_t bits, struct d_hhash **hhash_pp)
 		D_GOTO(out, rc);
 	}
 
-	hhash->ch_cookie  = 1ULL;
+	atomic_store_relaxed(&hhash->ch_cookie, 1);
 	hhash->ch_ptrtype = false;
 out:
 	*hhash_pp = hhash;
@@ -1200,8 +1223,6 @@ d_uhash_link_empty(struct d_ulink *ulink)
 void
 d_hhash_link_insert(struct d_hhash *hhash, struct d_hlink *hlink, int type)
 {
-	bool need_lock = !(hhash->ch_htable.ht_feats & D_HASH_FT_NOLOCK);
-
 	D_ASSERT(hlink->hl_link.rl_initialized);
 
 	/* check if handle type fits in allocated bits */
@@ -1210,34 +1231,15 @@ d_hhash_link_insert(struct d_hhash *hhash, struct d_hlink *hlink, int type)
 		  type, D_HTYPE_BITS);
 
 	if (d_hhash_is_ptrtype(hhash)) {
-		uint64_t ptr_key = (uintptr_t)hlink;
-		uint32_t nr = 1U << hhash->ch_htable.ht_bits;
-		uint32_t idx = 0;
+		uint64_t		 ptr_key = (uintptr_t)hlink;
 
 		D_ASSERTF(type == D_HTYPE_PTR, "direct/ptr-based htable can "
 			  "only contain D_HTYPE_PTR type entries");
 		D_ASSERTF(d_hhash_key_isptr(ptr_key), "hlink ptr %p is invalid "
 			  "D_HTYPE_PTR type", hlink);
 
-		if (need_lock) {
-			/* Lock all buckets to emulate proper hlink lock */
-			for (idx = 0; idx < nr; idx++) {
-				ch_bucket_lock(&hhash->ch_htable, idx, false);
-				if (hhash->ch_htable.ht_feats & D_HASH_FT_GLOCK)
-					break;
-			}
-		}
-
-		ch_rec_addref(&hhash->ch_htable, &hlink->hl_link.rl_link);
 		hlink->hl_key = ptr_key;
-
-		if (need_lock) {
-			for (idx = 0; idx < nr; idx++) {
-				ch_bucket_unlock(&hhash->ch_htable, idx, false);
-				if (hhash->ch_htable.ht_feats & D_HASH_FT_GLOCK)
-					break;
-			}
-		}
+		ch_rec_addref(&hhash->ch_htable, &hlink->hl_link.rl_link);
 	} else {
 		D_ASSERTF(type != D_HTYPE_PTR, "PTR type key being inserted "
 			  "in a non ptr-based htable.\n");
@@ -1310,13 +1312,18 @@ d_hhash_link_delete(struct d_hhash *hhash, struct d_hlink *hlink)
 void
 d_hhash_link_getref(struct d_hhash *hhash, struct d_hlink *hlink)
 {
-	d_hash_rec_addref(&hhash->ch_htable, &hlink->hl_link.rl_link);
+	ch_rec_addref(&hhash->ch_htable, &hlink->hl_link.rl_link);
 }
 
 void
 d_hhash_link_putref(struct d_hhash *hhash, struct d_hlink *hlink)
 {
-	d_hash_rec_decref(&hhash->ch_htable, &hlink->hl_link.rl_link);
+
+	/* handle hash table should not use D_HASH_FT_EPHEMERAL */
+	D_ASSERT(!(hhash->ch_htable.ht_feats & D_HASH_FT_EPHEMERAL));
+
+	if (ch_rec_decref(&hhash->ch_htable, &hlink->hl_link.rl_link))
+		ch_rec_free(&hhash->ch_htable, &hlink->hl_link.rl_link);
 }
 
 bool
@@ -1506,7 +1513,7 @@ d_uhash_link_insert(struct d_hash_table *htable, struct d_uuid *key,
 	rc = d_hash_rec_insert(htable, (void *)&uhbund, sizeof(uhbund),
 			       &ulink->ul_link.rl_link, true);
 	if (rc)
-		D_ERROR("Error Inserting handle in UUID in-memory hash\n");
+		D_ERROR("Error Inserting handle in UUID in-memory hash: "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -1514,7 +1521,7 @@ d_uhash_link_insert(struct d_hash_table *htable, struct d_uuid *key,
 bool
 d_uhash_link_last_ref(struct d_ulink *ulink)
 {
-	return ulink->ul_link.rl_ref == 1;
+	return atomic_load_relaxed(&ulink->ul_link.rl_ref) == 1;
 }
 
 void

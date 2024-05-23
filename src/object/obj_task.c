@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,6 +14,7 @@
 #include <daos/container.h>
 #include <daos/pool.h>
 #include <daos/task.h>
+#include "obj_rpc.h"
 #include "obj_internal.h"
 
 int
@@ -148,6 +149,31 @@ dc_obj_query_key_task_create(daos_handle_t oh, daos_handle_t th,
 	args->dkey	= dkey;
 	args->akey	= akey;
 	args->recx	= recx;
+	args->max_epoch = NULL;
+
+	return 0;
+}
+
+int
+dc_obj_query_max_epoch_task_create(daos_handle_t oh, daos_handle_t th, daos_epoch_t *epoch,
+				   daos_event_t *ev, tse_sched_t *tse, tse_task_t **task)
+{
+	daos_obj_query_key_t	*args;
+	int			 rc;
+
+	DAOS_API_ARG_ASSERT(*args, OBJ_QUERY_KEY);
+	rc = dc_task_create(dc_obj_query_key, tse, ev, task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(*task);
+	args->oh	= oh;
+	args->th	= th;
+	args->flags	= 0;
+	args->dkey	= NULL;
+	args->akey	= NULL;
+	args->recx	= NULL;
+	args->max_epoch = epoch;
 
 	return 0;
 }
@@ -351,6 +377,30 @@ dc_obj_list_obj_task_create(daos_handle_t oh, daos_handle_t th,
 	args->akey_anchor = akey_anchor;
 	args->incr_order = incr_order;
 	args->csum	= csum;
+
+	return 0;
+}
+
+int
+dc_obj_key2anchor_task_create(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
+			      daos_key_t *akey, daos_anchor_t *anchor, daos_event_t *ev,
+			      tse_sched_t *tse, tse_task_t **task)
+{
+	daos_obj_key2anchor_t	*args;
+	int			rc;
+
+	DAOS_API_ARG_ASSERT(*args, OBJ_KEY2ANCHOR);
+	rc = dc_task_create(dc_obj_key2anchor, tse, ev, task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(*task);
+	args->oh	= oh;
+	args->th        = th;
+	args->dkey	= dkey;
+	args->akey	= akey;
+	args->anchor	= anchor;
+	args->nr	= NULL;
 
 	return 0;
 }

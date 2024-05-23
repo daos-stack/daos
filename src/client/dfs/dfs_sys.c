@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,10 +14,10 @@
 
 #include <gurt/atomic.h>
 
-#include "daos.h"
-#include "daos_fs.h"
+#include <daos.h>
+#include <daos_fs.h>
 
-#include "daos_fs_sys.h"
+#include <daos_fs_sys.h>
 
 /** Number of entries for readdir */
 #define DFS_SYS_NUM_DIRENTS 24
@@ -126,13 +126,10 @@ static void
 hash_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct hash_hdl *hdl = hash_hdl_obj(rlink);
-	int		rc = 0;
 
 	D_DEBUG(DB_TRACE, "name=%s\n", hdl->name);
 
-	rc = dfs_release(hdl->obj);
-	if (rc == ENOMEM)
-		dfs_release(hdl->obj);
+	dfs_release(hdl->obj);
 	D_FREE(hdl->name);
 	D_FREE(hdl);
 }
@@ -364,9 +361,8 @@ sys_path_parse(dfs_sys_t *dfs_sys, struct sys_path *sys_path,
 	return rc;
 }
 
-int
-dfs_sys_mount(daos_handle_t poh, daos_handle_t coh, int mflags, int sflags,
-	      dfs_sys_t **_dfs_sys)
+static int
+init_sys(int mflags, int sflags, dfs_sys_t **_dfs_sys)
 {
 	dfs_sys_t	*dfs_sys;
 	int		rc;
@@ -397,45 +393,62 @@ dfs_sys_mount(daos_handle_t poh, daos_handle_t coh, int mflags, int sflags,
 	if (dfs_sys == NULL)
 		return ENOMEM;
 
-	/* Mount dfs */
-	rc = dfs_mount(poh, coh, mflags, &dfs_sys->dfs);
-	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "dfs_mount() failed (%d)\n", rc);
-		D_GOTO(err_dfs_sys, rc);
-	}
+	*_dfs_sys = dfs_sys;
+
+	if (no_cache)
+		return 0;
 
 	/* Initialize the hash */
-	if (!no_cache) {
-		if (no_lock)
-			hash_feats |= D_HASH_FT_NOLOCK;
-		else
-			hash_feats |= D_HASH_FT_RWLOCK;
+	if (no_lock)
+		hash_feats |= D_HASH_FT_NOLOCK;
+	else
+		hash_feats |= D_HASH_FT_RWLOCK;
 
-		rc = d_hash_table_create(hash_feats, DFS_SYS_HASH_SIZE,
-					 NULL, &hash_hdl_ops,
-					 &dfs_sys->hash);
-		if (rc != 0) {
-			D_DEBUG(DB_TRACE, "failed to create hash table "
-				DF_RC"\n", DP_RC(rc));
-			D_GOTO(err_hash, rc = daos_der2errno(rc));
-		}
+	rc = d_hash_table_create(hash_feats, DFS_SYS_HASH_SIZE, NULL, &hash_hdl_ops,
+				 &dfs_sys->hash);
+	if (rc != 0) {
+		D_DEBUG(DB_TRACE, "failed to create hash table "
+			DF_RC"\n", DP_RC(rc));
+		D_GOTO(err_dfs_sys, rc = daos_der2errno(rc));
 	}
 
-	*_dfs_sys = dfs_sys;
-	return rc;
+	return 0;
 
-err_hash:
-	dfs_umount(dfs_sys->dfs);
 err_dfs_sys:
 	D_FREE(dfs_sys);
 	return rc;
 }
 
-/**
- * Unmount a file system with dfs_mount and destroy the hash.
- */
 int
-dfs_sys_umount(dfs_sys_t *dfs_sys)
+dfs_sys_connect(const char *pool, const char *sys, const char *cont, int mflags, int sflags,
+		dfs_attr_t *attr, dfs_sys_t **_dfs_sys)
+{
+	dfs_sys_t	*dfs_sys;
+	int		rc;
+
+	rc = init_sys(mflags, sflags, &dfs_sys);
+	if (rc)
+		return rc;
+
+	/* Mount dfs */
+	rc = dfs_connect(pool, sys, cont, mflags, attr, &dfs_sys->dfs);
+	if (rc != 0) {
+		D_DEBUG(DB_TRACE, "dfs_connect() failed (%d)\n", rc);
+		D_GOTO(err_dfs_sys, rc);
+	}
+
+	*_dfs_sys = dfs_sys;
+	return rc;
+
+err_dfs_sys:
+	if (dfs_sys->hash != NULL)
+		d_hash_table_destroy(dfs_sys->hash, false);
+	D_FREE(dfs_sys);
+	return rc;
+}
+
+static int
+fini_sys(dfs_sys_t *dfs_sys, bool disconnect)
 {
 	int		rc;
 	d_list_t	*rlink;
@@ -456,16 +469,24 @@ dfs_sys_umount(dfs_sys_t *dfs_sys)
 		rc = d_hash_table_destroy(dfs_sys->hash, false);
 		if (rc) {
 			D_DEBUG(DB_TRACE, "failed to destroy hash table: "DF_RC"\n", DP_RC(rc));
-			return rc;
+			return daos_der2errno(rc);
 		}
 		dfs_sys->hash = NULL;
 	}
 
 	if (dfs_sys->dfs != NULL) {
-		rc = dfs_umount(dfs_sys->dfs);
-		if (rc) {
-			D_DEBUG(DB_TRACE, "dfs_umount() failed (%d)\n", rc);
-			return rc;
+		if (disconnect) {
+			rc = dfs_disconnect(dfs_sys->dfs);
+			if (rc) {
+				D_DEBUG(DB_TRACE, "dfs_disconnect() failed (%d)\n", rc);
+				return rc;
+			}
+		} else {
+			rc = dfs_umount(dfs_sys->dfs);
+			if (rc) {
+				D_DEBUG(DB_TRACE, "dfs_umount() failed (%d)\n", rc);
+				return rc;
+			}
 		}
 		dfs_sys->dfs = NULL;
 	}
@@ -474,6 +495,85 @@ dfs_sys_umount(dfs_sys_t *dfs_sys)
 	D_FREE(dfs_sys);
 
 	return 0;
+}
+
+int
+dfs_sys_disconnect(dfs_sys_t *dfs_sys)
+{
+	return fini_sys(dfs_sys, true);
+}
+
+int
+dfs_sys_mount(daos_handle_t poh, daos_handle_t coh, int mflags, int sflags,
+	      dfs_sys_t **_dfs_sys)
+{
+	dfs_sys_t	*dfs_sys;
+	int		rc;
+
+	rc = init_sys(mflags, sflags, &dfs_sys);
+	if (rc)
+		return rc;
+
+	/* Mount dfs */
+	rc = dfs_mount(poh, coh, mflags, &dfs_sys->dfs);
+	if (rc != 0) {
+		D_DEBUG(DB_TRACE, "dfs_mount() failed (%d)\n", rc);
+		D_GOTO(err_dfs_sys, rc);
+	}
+
+	*_dfs_sys = dfs_sys;
+	return rc;
+
+err_dfs_sys:
+	if (dfs_sys->hash != NULL)
+		d_hash_table_destroy(dfs_sys->hash, false);
+	D_FREE(dfs_sys);
+	return rc;
+}
+
+/**
+ * Unmount a file system with dfs_mount and destroy the hash.
+ */
+int
+dfs_sys_umount(dfs_sys_t *dfs_sys)
+{
+	return fini_sys(dfs_sys, false);
+}
+
+int
+dfs_sys_local2global_all(dfs_sys_t *dfs_sys, d_iov_t *glob)
+{
+	if (dfs_sys == NULL)
+		return EINVAL;
+
+	/* TODO serialize the dfs_sys flags as well */
+	return dfs_local2global_all(dfs_sys->dfs, glob);
+}
+
+int
+dfs_sys_global2local_all(int mflags, int sflags, d_iov_t glob, dfs_sys_t **_dfs_sys)
+{
+	dfs_sys_t	*dfs_sys;
+	int		rc;
+
+	rc = init_sys(mflags, sflags, &dfs_sys);
+	if (rc)
+		return rc;
+
+	rc = dfs_global2local_all(mflags, glob, &dfs_sys->dfs);
+	if (rc != 0) {
+		D_DEBUG(DB_TRACE, "dfs_global2local() failed (%d)\n", rc);
+		D_GOTO(err_dfs_sys, rc);
+	}
+
+	*_dfs_sys = dfs_sys;
+	return rc;
+
+err_dfs_sys:
+	if (dfs_sys->hash != NULL)
+		d_hash_table_destroy(dfs_sys->hash, false);
+	D_FREE(dfs_sys);
+	return rc;
 }
 
 int
@@ -490,65 +590,25 @@ int
 dfs_sys_global2local(daos_handle_t poh, daos_handle_t coh, int mflags,
 		     int sflags, d_iov_t glob, dfs_sys_t **_dfs_sys)
 {
-	int		rc;
 	dfs_sys_t	*dfs_sys;
-	bool		no_cache = false;
-	bool		no_lock = false;
-	uint32_t	hash_feats = D_HASH_FT_EPHEMERAL;
+	int		rc;
 
-	if (_dfs_sys == NULL)
-		return EINVAL;
-
-	if (sflags & DFS_SYS_NO_CACHE) {
-		D_DEBUG(DB_TRACE, "mount: DFS_SYS_NO_CACHE.\n");
-		no_cache = true;
-		sflags &= ~DFS_SYS_NO_CACHE;
-	}
-	if (sflags & DFS_SYS_NO_LOCK) {
-		D_DEBUG(DB_TRACE, "mount: DFS_SYS_NO_LOCK.\n");
-		no_lock = true;
-		sflags &= ~DFS_SYS_NO_LOCK;
-	}
-
-	if (sflags != 0) {
-		D_DEBUG(DB_TRACE, "mount: invalid sflags.\n");
-		return EINVAL;
-	}
-
-	/* Create the DFS Sys handle with no RPCs */
-	D_ALLOC_PTR(dfs_sys);
-	if (dfs_sys == NULL)
-		return ENOMEM;
+	rc = init_sys(mflags, sflags, &dfs_sys);
+	if (rc)
+		return rc;
 
 	rc = dfs_global2local(poh, coh, mflags, glob, &dfs_sys->dfs);
 	if (rc != 0) {
 		D_DEBUG(DB_TRACE, "dfs_global2local() failed (%d)\n", rc);
-		D_GOTO(err_mount, rc);
-	}
-
-	/* Initialize the hash */
-	if (!no_cache) {
-		if (no_lock)
-			hash_feats |= D_HASH_FT_NOLOCK;
-		else
-			hash_feats |= D_HASH_FT_RWLOCK;
-
-		rc = d_hash_table_create(hash_feats, DFS_SYS_HASH_SIZE,
-					 NULL, &hash_hdl_ops,
-					 &dfs_sys->hash);
-		if (rc != 0) {
-			D_DEBUG(DB_TRACE, "failed to create hash table: "
-				DF_RC"\n", DP_RC(rc));
-			D_GOTO(err_hash, rc = daos_der2errno(rc));
-		}
+		D_GOTO(err_dfs_sys, rc);
 	}
 
 	*_dfs_sys = dfs_sys;
 	return rc;
 
-err_hash:
-	dfs_umount(dfs_sys->dfs);
-err_mount:
+err_dfs_sys:
+	if (dfs_sys->hash != NULL)
+		d_hash_table_destroy(dfs_sys->hash, false);
 	D_FREE(dfs_sys);
 	return rc;
 }
@@ -639,6 +699,28 @@ dfs_sys_chmod(dfs_sys_t *dfs_sys, const char *path, mode_t mode)
 }
 
 int
+dfs_sys_chown(dfs_sys_t *dfs_sys, const char *path, uid_t uid, gid_t gid, int flags)
+{
+	int		rc;
+	struct sys_path	sys_path;
+
+	if (dfs_sys == NULL)
+		return EINVAL;
+	if (path == NULL)
+		return EINVAL;
+
+	rc = sys_path_parse(dfs_sys, &sys_path, path);
+	if (rc != 0)
+		return rc;
+
+	rc = dfs_chown(dfs_sys->dfs, sys_path.parent, sys_path.name, uid, gid, flags);
+
+	sys_path_free(dfs_sys, &sys_path);
+
+	return rc;
+}
+
+int
 dfs_sys_setattr(dfs_sys_t *dfs_sys, const char *path, struct stat *stbuf,
 		int flags, int sflags)
 {
@@ -709,10 +791,10 @@ int
 dfs_sys_stat(dfs_sys_t *dfs_sys, const char *path, int flags,
 	     struct stat *buf)
 {
-	int		rc;
-	struct sys_path	sys_path;
-	dfs_obj_t	*obj;
-	int		lookup_flags = O_RDWR;
+	int             rc;
+	struct sys_path sys_path;
+	dfs_obj_t      *obj;
+	int             lookup_flags = O_RDWR;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
@@ -1022,7 +1104,7 @@ dfs_sys_symlink(dfs_sys_t *dfs_sys, const char *target, const char *path)
 {
 	int		rc;
 	struct sys_path	sys_path;
-	dfs_obj_t	*obj;
+	dfs_obj_t	*obj = NULL;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
@@ -1042,7 +1124,8 @@ dfs_sys_symlink(dfs_sys_t *dfs_sys, const char *target, const char *path)
 		D_GOTO(out_free_path, rc);
 	}
 
-	dfs_release(obj);
+	if (obj)
+		dfs_release(obj);
 
 out_free_path:
 	sys_path_free(dfs_sys, &sys_path);
@@ -1129,8 +1212,6 @@ dfs_sys_close(dfs_obj_t *obj)
 	int rc = 0;
 
 	rc = dfs_release(obj);
-	if (rc == ENOMEM)
-		dfs_release(obj);
 	return rc;
 }
 
@@ -1385,9 +1466,6 @@ dfs_sys_closedir(DIR *dirp)
 	sys_dir = (struct dfs_sys_dir *)dirp;
 
 	rc = dfs_release(sys_dir->obj);
-	if (rc == ENOMEM)
-		dfs_release(sys_dir->obj);
-
 	D_FREE(sys_dir);
 
 	return rc;

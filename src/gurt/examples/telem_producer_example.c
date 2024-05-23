@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,8 +7,8 @@
  * This file shows an example of using the telemetry API to produce metrics
  */
 
-#include "gurt/telemetry_common.h"
-#include "gurt/telemetry_producer.h"
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 /**
  * A sample function that creates and incremements a metric for a loop counter
@@ -121,7 +121,7 @@ void test_close_handle(void)
  * high resolution timer snapshots at various places within their code, which
  * can then be interpreted depending on the need.  A duration type metric
  * is a simplified version of this metric that does the interval calculation.
- * When the timer shapshot is created, specify the clock type from:
+ * When the timer snapshot is created, specify the clock type from:
  * D_TM_CLOCK_REALTIME which is CLOCK_REALTIME
  * D_TM_CLOCK_PROCESS_CPUTIME which is CLOCK_PROCESS_CPUTIME_ID
  * D_TM_CLOCK_THREAD_CPUTIME which is CLOCK_THREAD_CPUTIME_ID

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -57,8 +57,8 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
 		rpc_priv->crp_flags |= CRT_RPC_FLAG_COLL;
 		if (co_info->co_grp_priv->gp_primary)
 			rpc_priv->crp_flags |= CRT_RPC_FLAG_PRIMARY_GRP;
-		if (flags & CRT_RPC_FLAG_FILTER_INVERT)
-			rpc_priv->crp_flags |= CRT_RPC_FLAG_FILTER_INVERT;
+		rpc_priv->crp_flags |= flags & (CRT_RPC_FLAG_FILTER_INVERT |
+						CRT_RPC_FLAG_CO_FAILOUT);
 
 		co_hdr->coh_grpid = grp_priv->gp_pub.cg_grpid;
 		co_hdr->coh_filter_ranks = co_info->co_filter_ranks;
@@ -68,6 +68,7 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
 		co_hdr->coh_root = grp_root;
 	}
 
+	D_ASSERT(co_hdr->coh_bulk_hdl == CRT_BULK_NULL);
 	co_hdr->coh_bulk_hdl = co_bulk_hdl;
 
 	rpc_priv->crp_corpc_info = co_info;
@@ -93,6 +94,7 @@ crt_corpc_initiate(struct crt_rpc_priv *rpc_priv)
 	struct crt_grp_gdata	*grp_gdata;
 	struct crt_grp_priv	*grp_priv;
 	struct crt_corpc_hdr	*co_hdr;
+	int			 src_timeout;
 	bool			 grp_ref_taken = false;
 	int			 rc = 0;
 
@@ -119,6 +121,12 @@ crt_corpc_initiate(struct crt_rpc_priv *rpc_priv)
 			D_GOTO(out, rc = -DER_GRPVER);
 		}
 	}
+
+	/* Inherit a timeout from a source */
+	src_timeout = rpc_priv->crp_req_hdr.cch_src_timeout;
+
+	if (src_timeout != 0)
+		rpc_priv->crp_timeout_sec = src_timeout;
 
 	rc = crt_corpc_info_init(rpc_priv, grp_priv, grp_ref_taken,
 				 co_hdr->coh_filter_ranks,
@@ -151,8 +159,10 @@ crt_corpc_chained_bulk_cb(const struct crt_bulk_cb_info *cb_info)
 {
 	crt_rpc_t			*rpc_req;
 	struct crt_rpc_priv		*rpc_priv;
+	struct crt_corpc_hdr		*co_hdr;
 	struct crt_bulk_desc		*bulk_desc;
 	crt_bulk_t			 local_bulk_hdl;
+	crt_bulk_t			 remote_bulk_hdl;
 	void				*bulk_buf;
 	int				 rc = 0;
 
@@ -163,9 +173,18 @@ crt_corpc_chained_bulk_cb(const struct crt_bulk_cb_info *cb_info)
 	D_ASSERT(rpc_req != NULL && bulk_buf != NULL);
 
 	rpc_priv = container_of(rpc_req, struct crt_rpc_priv, crp_pub);
+	co_hdr = &rpc_priv->crp_coreq_hdr;
 
 	local_bulk_hdl = bulk_desc->bd_local_hdl;
+	remote_bulk_hdl = bulk_desc->bd_remote_hdl;
 	D_ASSERT(local_bulk_hdl != NULL);
+
+	/* chained bulk done, free remote_bulk_hdl, reset co_hdr->coh_bulk_hdl as NULL as
+	 * crt_corpc_initiate() will reuse it as chained bulk handle for child RPC.
+	 */
+	D_ASSERT(remote_bulk_hdl != NULL && remote_bulk_hdl == co_hdr->coh_bulk_hdl);
+	crt_bulk_free(remote_bulk_hdl);
+	co_hdr->coh_bulk_hdl = NULL;
 
 	if (rc != 0) {
 		RPC_ERROR(rpc_priv, "crt_corpc_chained_bulk_cb, bulk failed: "
@@ -225,13 +244,12 @@ crt_corpc_free_chained_bulk(crt_bulk_t bulk_hdl)
 		D_GOTO(out, rc);
 	}
 
-	for (i = 0; i < seg_num; i++)
-		D_FREE(iovs[i].iov_buf);
-
 	rc = crt_bulk_free(bulk_hdl);
 	if (rc != 0)
 		D_ERROR("crt_bulk_free failed: "DF_RC"\n", DP_RC(rc));
 
+	for (i = 0; i < seg_num; i++)
+		D_FREE(iovs[i].iov_buf);
 out:
 	D_FREE(iovs);
 	return rc;
@@ -367,12 +385,7 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 	}
 
 	D_ASSERT(rpc_priv != NULL);
-	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, false /* srv_flag */);
-	if (rc != 0) {
-		D_ERROR("crt_rpc_priv_init(opc: %#x) failed: "DF_RC"\n", opc,
-			DP_RC(rc));
-		D_GOTO(out, rc);
-	}
+	crt_rpc_priv_init(rpc_priv, crt_ctx, false /* srv_flag */);
 
 	rpc_priv->crp_grp_priv = grp_priv;
 
@@ -532,7 +545,8 @@ crt_corpc_complete(struct crt_rpc_priv *rpc_priv)
 	myrank = co_info->co_grp_priv->gp_self;
 	am_root = (myrank == co_info->co_root);
 	if (am_root) {
-		crt_rpc_complete(rpc_priv, co_info->co_rc);
+		crt_rpc_lock(rpc_priv);
+		crt_rpc_complete_and_unlock(rpc_priv, co_info->co_rc);
 	} else {
 		if (co_info->co_rc != 0)
 			crt_corpc_fail_parent_rpc(rpc_priv, co_info->co_rc);
@@ -632,7 +646,8 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 
 	rc = cb_info->cci_rc;
 	if (rc != 0) {
-		RPC_ERROR(child_rpc_priv, "error, rc: "DF_RC"\n", DP_RC(rc));
+		RPC_CERROR(crt_quiet_error(rc), DB_NET, child_rpc_priv, "error, rc: "DF_RC"\n",
+			   DP_RC(rc));
 		co_info->co_rc = rc;
 	}
 	/* propagate failure rc to parent */
@@ -666,7 +681,8 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 				D_ERROR("co_ops->co_aggregate(opc: %#x) "
 					"failed: "DF_RC"\n",
 					child_req->cr_opc, DP_RC(rc));
-				rc = 0;
+				if (co_info->co_rc == 0)
+					co_info->co_rc = rc;
 			}
 			co_info->co_child_ack_num++;
 			D_DEBUG(DB_NET, "parent rpc %p, child rpc %p, "
@@ -704,7 +720,8 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 					D_ERROR("co_ops->co_aggregate(opc: %#x)"
 						" failed: "DF_RC"\n",
 						child_req->cr_opc, DP_RC(rc));
-					rc = 0;
+					if (co_info->co_rc == 0)
+						co_info->co_rc = rc;
 				}
 			}
 		}
@@ -809,9 +826,9 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 				   &children_rank_list, &ver_match);
 
 	if (rc != 0) {
-		RPC_ERROR(rpc_priv,
-			  "crt_tree_get_children(group %s) failed: "DF_RC"\n",
-			  co_info->co_grp_priv->gp_pub.cg_grpid, DP_RC(rc));
+		RPC_CERROR(crt_quiet_error(rc), DB_NET, rpc_priv,
+			   "crt_tree_get_children(group %s) failed: "DF_RC"\n",
+			   co_info->co_grp_priv->gp_pub.cg_grpid, DP_RC(rc));
 		crt_corpc_fail_parent_rpc(rpc_priv, rc);
 		D_GOTO(forward_done, rc);
 	}
@@ -863,6 +880,7 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 		child_rpc_priv = container_of(child_rpc, struct crt_rpc_priv,
 					      crp_pub);
 
+		child_rpc_priv->crp_timeout_sec = rpc_priv->crp_timeout_sec;
 		corpc_add_child_rpc(rpc_priv, child_rpc_priv);
 
 		child_rpc_priv->crp_grp_priv = co_info->co_grp_priv;
@@ -888,6 +906,11 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 	}
 
 forward_done:
+	if (rc != 0 && rpc_priv->crp_flags & CRT_RPC_FLAG_CO_FAILOUT) {
+		crt_corpc_complete(rpc_priv);
+		goto out;
+	}
+
 	/* NOOP bcast (no child and root excluded) */
 	if (co_info->co_child_num == 0 && co_info->co_root_excluded)
 		crt_corpc_complete(rpc_priv);

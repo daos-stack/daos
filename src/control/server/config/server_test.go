@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,22 +8,23 @@ package config
 
 import (
 	"bufio"
-	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
-	. "github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -32,21 +33,46 @@ import (
 
 const (
 	sConfigUncomment = "daos_server_uncomment.yml"
-	socketsExample   = "../../../../utils/config/examples/daos_server_sockets.yml"
-	psm2Example      = "../../../../utils/config/examples/daos_server_psm2.yml"
+	tcpExample       = "../../../../utils/config/examples/daos_server_tcp.yml"
+	verbsExample     = "../../../../utils/config/examples/daos_server_verbs.yml"
+	mdOnSSDExample   = "../../../../utils/config/examples/daos_server_mdonssd.yml"
 	defaultConfig    = "../../../../utils/config/daos_server.yml"
-	legacyConfig     = "../../../../utils/config/examples/daos_server_unittests.yml"
 )
 
 var (
 	defConfigCmpOpts = []cmp.Option{
+		cmpopts.SortSlices(func(x, y string) bool { return x < y }),
 		cmpopts.IgnoreUnexported(
-			Server{},
 			security.CertificateConfig{},
 		),
-		cmpopts.IgnoreFields(Server{}, "GetDeviceClassFn", "Path"),
+		cmpopts.IgnoreFields(Server{}, "Path"),
+		cmp.Comparer(func(x, y *storage.BdevDeviceList) bool {
+			if x == nil && y == nil {
+				return true
+			}
+			return x.Equals(y)
+		}),
 	}
 )
+
+func baseCfg(t *testing.T, testFile string) *Server {
+	t.Helper()
+
+	config, err := mockConfigFromFile(t, testFile)
+	if err != nil {
+		t.Fatalf("failed to load %s: %s", testFile, err)
+	}
+
+	return config
+}
+
+func defaultEngineCfg() *engine.Config {
+	return engine.NewConfig().
+		WithFabricInterfacePort(1234).
+		WithFabricInterface("eth0").
+		WithTargetCount(8).
+		WithPinnedNumaNode(0)
+}
 
 // uncommentServerConfig removes leading comment chars from daos_server.yml
 // lines in order to verify parsing of all available params.
@@ -101,28 +127,10 @@ func uncommentServerConfig(t *testing.T, outFile string) {
 // file at the given path.
 func mockConfigFromFile(t *testing.T, path string) (*Server, error) {
 	t.Helper()
-	c := DefaultServer().
-		WithProviderValidator(netdetect.ValidateProviderStub).
-		WithNUMAValidator(netdetect.ValidateNUMAStub).
-		WithGetNetworkDeviceClass(getDeviceClassStub)
+	c := DefaultServer()
 	c.Path = path
 
 	return c, c.Load()
-}
-
-func getDeviceClassStub(netdev string) (uint32, error) {
-	switch netdev {
-	case "eth0":
-		return netdetect.Ether, nil
-	case "eth1":
-		return netdetect.Ether, nil
-	case "ib0":
-		return netdetect.Infiniband, nil
-	case "ib1":
-		return netdetect.Infiniband, nil
-	default:
-		return 0, nil
-	}
 }
 
 func TestServerConfig_MarshalUnmarshal(t *testing.T) {
@@ -131,8 +139,9 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 		expErr error
 	}{
 		"uncommented default config": {inPath: "uncommentedDefault"},
-		"socket example config":      {inPath: socketsExample},
-		"psm2 example config":        {inPath: psm2Example},
+		"tcp example config":         {inPath: tcpExample},
+		"verbs example config":       {inPath: verbsExample},
+		"mdonssd example config":     {inPath: mdOnSSDExample},
 		"default empty config":       {inPath: defaultConfig},
 		"nonexistent config": {
 			inPath: "/foo/bar/baz.yml",
@@ -141,9 +150,9 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
-			testDir, cleanup := CreateTestDir(t)
+			testDir, cleanup := test.CreateTestDir(t)
 			defer cleanup()
 			testFile := filepath.Join(testDir, "test.yml")
 
@@ -152,29 +161,35 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 				uncommentServerConfig(t, tt.inPath)
 			}
 
-			configA := DefaultServer().
-				WithProviderValidator(netdetect.ValidateProviderStub).
-				WithNUMAValidator(netdetect.ValidateNUMAStub).
-				WithGetNetworkDeviceClass(getDeviceClassStub)
+			configA := DefaultServer()
 			configA.Path = tt.inPath
 			err := configA.Load()
 			if err == nil {
 				err = configA.Validate(log)
 			}
 
-			CmpErr(t, tt.expErr, err)
+			test.CmpErr(t, tt.expErr, err)
 			if tt.expErr != nil {
 				return
 			}
+
+			configAPretty, err := json.MarshalIndent(configA, "", "  ")
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Logf("config A loaded from %s: %+v", tt.inPath, string(configAPretty))
 
 			if err := configA.SaveToFile(testFile); err != nil {
 				t.Fatal(err)
 			}
 
-			configB := DefaultServer().
-				WithProviderValidator(netdetect.ValidateProviderStub).
-				WithNUMAValidator(netdetect.ValidateNUMAStub).
-				WithGetNetworkDeviceClass(getDeviceClassStub)
+			bytes, err := ioutil.ReadFile(testFile)
+			if err != nil {
+				t.Fatal(errors.WithMessage(err, "reading file"))
+			}
+			t.Logf("config saved loaded from %s: %+v", testFile, string(bytes))
+
+			configB := DefaultServer()
 			if err := configB.SetPath(testFile); err != nil {
 				t.Fatal(err)
 			}
@@ -188,6 +203,12 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 				t.Fatal(err)
 			}
 
+			configBPretty, err := json.MarshalIndent(configB, "", "  ")
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Logf("config B loaded from %s: %+v", testFile, string(configBPretty))
+
 			if diff := cmp.Diff(configA, configB, defConfigCmpOpts...); diff != "" {
 				t.Fatalf("(-want, +got): %s", diff)
 			}
@@ -196,7 +217,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 }
 
 func TestServerConfig_Constructed(t *testing.T) {
-	testDir, cleanup := CreateTestDir(t)
+	testDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
 	// First, load a config based on the server config with all options uncommented.
@@ -207,91 +228,260 @@ func TestServerConfig_Constructed(t *testing.T) {
 		t.Fatalf("failed to load %s: %s", testFile, err)
 	}
 
-	var numaNode0 uint = 0
-	var numaNode1 uint = 1
 	var bypass = true
 
 	// Next, construct a config to compare against the first one. It should be
 	// possible to construct an identical configuration with the helpers.
 	constructed := DefaultServer().
 		WithControlPort(10001).
-		WithBdevInclude("0000:81:00.1", "0000:81:00.2", "0000:81:00.3").
+		WithControlMetadata(storage.ControlMetadata{
+			Path:       "/home/daos_server/control_meta",
+			DevicePath: "/dev/sdb1",
+		}).
 		WithBdevExclude("0000:81:00.1").
-		WithDisableVFIO(true). // vfio enabled by default
-		WithEnableVMD(true).   // vmd disabled by default
-		WithNrHugePages(4096).
-		WithControlLogMask(ControlLogLevelError).
+		WithDisableVFIO(true).   // vfio enabled by default
+		WithDisableVMD(true).    // vmd enabled by default
+		WithEnableHotplug(true). // hotplug disabled by default
+		WithControlLogMask(common.ControlLogLevelError).
 		WithControlLogFile("/tmp/daos_server.log").
-		WithHelperLogFile("/tmp/daos_admin.log").
-		WithFirmwareHelperLogFile("/tmp/daos_firmware.log").
+		WithHelperLogFile("/tmp/daos_server_helper.log").
+		WithFirmwareHelperLogFile("/tmp/daos_firmware_helper.log").
+		WithTelemetryPort(9191).
 		WithSystemName("daos_server").
 		WithSocketDir("./.daos/daos_server").
 		WithFabricProvider("ofi+verbs;ofi_rxm").
-		WithCrtCtxShareAddr(1).
 		WithCrtTimeout(30).
 		WithAccessPoints("hostname1").
 		WithFaultCb("./.daos/fd_callback").
 		WithFaultPath("/vcdu0/rack1/hostname").
+		WithClientEnvVars([]string{"foo=bar"}).
+		WithFabricAuthKey("foo:bar").
 		WithHyperthreads(true). // hyper-threads disabled by default
-		WithProviderValidator(netdetect.ValidateProviderStub).
-		WithNUMAValidator(netdetect.ValidateNUMAStub).
-		WithGetNetworkDeviceClass(getDeviceClassStub).
-		WithEngines(
-			engine.NewConfig().
-				WithRank(0).
-				WithTargetCount(16).
-				WithHelperStreamCount(6).
-				WithServiceThreadCore(0).
-				WithStorage(
-					storage.NewTierConfig().
-						WithScmMountPoint("/mnt/daos/1").
-						WithScmClass("ram").
-						WithScmRamdiskSize(16),
-					storage.NewTierConfig().
-						WithBdevClass("nvme").
-						WithBdevDeviceList("0000:81:00.0"),
-				).
-				WithFabricInterface("qib0").
-				WithFabricInterfacePort(20000).
-				WithPinnedNumaNode(&numaNode0).
-				WithBypassHealthChk(&bypass).
-				WithEnvVars("CRT_TIMEOUT=30").
-				WithLogFile("/tmp/daos_engine.0.log").
-				WithLogMask("WARN"),
-			engine.NewConfig().
-				WithRank(1).
-				WithTargetCount(16).
-				WithHelperStreamCount(6).
-				WithServiceThreadCore(22).
-				WithStorage(
-					storage.NewTierConfig().
-						WithScmMountPoint("/mnt/daos/2").
-						WithScmClass("dcpm").
-						WithScmDeviceList("/dev/pmem1"),
-					storage.NewTierConfig().
-						WithBdevClass("file").
-						WithBdevDeviceList("/tmp/daos-bdev1", "/tmp/daos-bdev2").
-						WithBdevFileSize(16),
-				).
-				WithFabricInterface("qib1").
-				WithFabricInterfacePort(20000).
-				WithPinnedNumaNode(&numaNode1).
-				WithEnvVars("CRT_TIMEOUT=100").
-				WithLogFile("/tmp/daos_engine.1.log").
-				WithLogMask("WARN"),
-		)
+		WithSystemRamReserved(5)
+
+	// add engines explicitly to test functionality applied in WithEngines()
+	constructed.Engines = []*engine.Config{
+		engine.MockConfig().
+			WithSystemName("daos_server").
+			WithSocketDir("./.daos/daos_server").
+			WithTargetCount(16).
+			WithHelperStreamCount(4).
+			WithServiceThreadCore(0).
+			WithStorage(
+				storage.NewTierConfig().
+					WithScmMountPoint("/mnt/daos/1").
+					WithStorageClass("ram").
+					WithScmDisableHugepages(),
+				storage.NewTierConfig().
+					WithStorageClass("nvme").
+					WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
+					WithBdevBusidRange("0x80-0x8f").
+					WithBdevDeviceRoles(storage.BdevRoleAll),
+			).
+			WithFabricInterface("ib0").
+			WithFabricInterfacePort(20000).
+			WithFabricProvider("ofi+verbs;ofi_rxm").
+			WithFabricAuthKey("foo:bar").
+			WithCrtTimeout(30).
+			WithPinnedNumaNode(0).
+			WithBypassHealthChk(&bypass).
+			WithEnvVars("CRT_TIMEOUT=30").
+			WithLogFile("/tmp/daos_engine.0.log").
+			WithLogMask("INFO").
+			WithStorageEnableHotplug(true).
+			WithStorageAutoFaultyCriteria(true, 100, 200),
+		engine.MockConfig().
+			WithSystemName("daos_server").
+			WithSocketDir("./.daos/daos_server").
+			WithTargetCount(16).
+			WithHelperStreamCount(4).
+			WithServiceThreadCore(22).
+			WithStorage(
+				storage.NewTierConfig().
+					WithScmMountPoint("/mnt/daos/2").
+					WithStorageClass("ram"),
+				storage.NewTierConfig().
+					WithStorageClass("file").
+					WithBdevDeviceList("/tmp/daos-bdev1", "/tmp/daos-bdev2").
+					WithBdevFileSize(16).
+					WithBdevDeviceRoles(storage.BdevRoleAll),
+			).
+			WithFabricInterface("ib1").
+			WithFabricInterfacePort(21000).
+			WithFabricProvider("ofi+verbs;ofi_rxm").
+			WithFabricAuthKey("foo:bar").
+			WithCrtTimeout(30).
+			WithBypassHealthChk(&bypass).
+			WithEnvVars("CRT_TIMEOUT=100").
+			WithLogFile("/tmp/daos_engine.1.log").
+			WithLogMask("INFO").
+			WithStorageEnableHotplug(true).
+			WithStorageAutoFaultyCriteria(false, 0, 0),
+	}
 	constructed.Path = testFile // just to avoid failing the cmp
+
+	for i := range constructed.Engines {
+		t.Logf("constructed: %+v", constructed.Engines[i])
+		t.Logf("default: %+v", defaultCfg.Engines[i])
+	}
 
 	if diff := cmp.Diff(defaultCfg, constructed, defConfigCmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got): %s", diff)
 	}
 }
 
+func TestServerConfig_updateServerConfig(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg       *Server
+		nilEngCfg bool
+		expEngCfg *engine.Config
+	}{
+		"nil engCfg": {
+			cfg: &Server{
+				SystemName: "name",
+			},
+			nilEngCfg: true,
+			expEngCfg: &engine.Config{},
+		},
+		"basic": {
+			cfg: &Server{
+				SystemName:    "name",
+				SocketDir:     "socketdir",
+				Modules:       "modules",
+				EnableHotplug: true,
+				Fabric: engine.FabricConfig{
+					Provider:              "provider",
+					Interface:             "iface",
+					InterfacePort:         1111,
+					NumSecondaryEndpoints: []int{2, 3, 4},
+				},
+			},
+			expEngCfg: &engine.Config{
+				SystemName: "name",
+				SocketDir:  "socketdir",
+				Modules:    "modules",
+				Storage: storage.Config{
+					EnableHotplug: true,
+				},
+				Fabric: engine.FabricConfig{
+					Provider:              "provider",
+					Interface:             "iface",
+					InterfacePort:         1111,
+					NumSecondaryEndpoints: []int{2, 3, 4},
+				},
+			},
+		},
+		"multiprovider": {
+			cfg: &Server{
+				SystemName: "name",
+				Fabric: engine.FabricConfig{
+					Provider:              "p1 p2 p3",
+					NumSecondaryEndpoints: []int{2, 3, 4},
+				},
+			},
+			expEngCfg: &engine.Config{
+				SystemName: "name",
+				Fabric: engine.FabricConfig{
+					Provider:              "p1 p2 p3",
+					NumSecondaryEndpoints: []int{2, 3, 4},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var engCfg *engine.Config
+			if !tc.nilEngCfg {
+				engCfg = &engine.Config{}
+			}
+
+			tc.cfg.updateServerConfig(&engCfg)
+
+			if diff := cmp.Diff(tc.expEngCfg, engCfg); diff != "" {
+				t.Fatalf("(-want, +got): %s", diff)
+			}
+		})
+	}
+}
+
+func TestServerConfig_MDonSSD_Constructed(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	mdOnSSDCfg, err := mockConfigFromFile(t, mdOnSSDExample)
+	if err != nil {
+		t.Fatalf("failed to load %s: %s", mdOnSSDExample, err)
+	}
+
+	constructed := DefaultServer().
+		WithControlMetadata(storage.ControlMetadata{
+			Path: "/var/daos/config",
+		}).
+		WithControlLogFile("/tmp/daos_server.log").
+		WithTelemetryPort(9191).
+		WithFabricProvider("ofi+tcp").
+		WithAccessPoints("example")
+
+	constructed.Engines = []*engine.Config{
+		engine.MockConfig().
+			WithSystemName("daos_server").
+			WithSocketDir("/var/run/daos_server").
+			WithTargetCount(4).
+			WithHelperStreamCount(1).
+			WithStorage(
+				storage.NewTierConfig().
+					WithScmMountPoint("/mnt/daos").
+					WithStorageClass("ram"),
+				storage.NewTierConfig().
+					WithStorageClass("nvme").
+					WithBdevDeviceList("0000:81:00.0").
+					WithBdevDeviceRoles(storage.BdevRoleWAL),
+				storage.NewTierConfig().
+					WithStorageClass("nvme").
+					WithBdevDeviceList("0000:82:00.0").
+					WithBdevDeviceRoles(storage.BdevRoleMeta),
+				storage.NewTierConfig().
+					WithStorageClass("nvme").
+					WithBdevDeviceList("0000:83:00.0").
+					WithBdevDeviceRoles(storage.BdevRoleData),
+			).
+			WithFabricInterface("ib0").
+			WithFabricInterfacePort(31316).
+			WithFabricProvider("ofi+tcp").
+			WithPinnedNumaNode(0).
+			WithEnvVars("FI_SOCKETS_CONN_TIMEOUT=2000", "FI_SOCKETS_MAX_CONN_RETRY=1").
+			WithLogFile("/tmp/daos_engine.0.log").
+			WithLogMask("INFO"),
+	}
+
+	for i := range constructed.Engines {
+		t.Logf("constructed: %+v", constructed.Engines[i])
+		t.Logf("default: %+v", mdOnSSDCfg.Engines[i])
+	}
+
+	if diff := cmp.Diff(mdOnSSDCfg, constructed, defConfigCmpOpts...); diff != "" {
+		t.Fatalf("(-want, +got): %s", diff)
+	}
+
+	if err := mdOnSSDCfg.Validate(log); err != nil {
+		t.Fatalf("failed to validate %s: %s", mdOnSSDExample, err)
+	}
+}
+
 func TestServerConfig_Validation(t *testing.T) {
+	testDir, cleanup := test.CreateTestDir(t)
+	defer cleanup()
+
+	// First, load a config based on the server config with all options uncommented.
+	testFile := filepath.Join(testDir, sConfigUncomment)
+	uncommentServerConfig(t, testFile)
+
+	testMetadataDir := filepath.Join(testDir, "control_md")
+
 	noopExtra := func(c *Server) *Server { return c }
 
 	for name, tt := range map[string]struct {
 		extraConfig func(c *Server) *Server
+		expConfig   *Server
 		expErr      error
 	}{
 		"example config": {},
@@ -427,30 +617,704 @@ func TestServerConfig_Validation(t *testing.T) {
 			},
 			expErr: FaultConfigBadTelemetryPort,
 		},
+		"different number of bdevs": {
+			extraConfig: func(c *Server) *Server {
+				// add multiple bdevs for engine 0 to create mismatch
+				c.Engines[0].Storage.Tiers.BdevConfigs()[0].
+					WithBdevDeviceList("0000:10:00.0", "0000:11:00.0", "0000:12:00.0")
+				return c
+			},
+			// No failure because validation now occurs on server start-up.
+		},
+		"different number of targets": {
+			extraConfig: func(c *Server) *Server {
+				// change engine 0 number of targets to create mismatch
+				c.Engines[0].WithTargetCount(1)
+				return c
+			},
+			expErr: FaultConfigTargetCountMismatch(1, 16, 0, 1),
+		},
+		"different number of helper streams": {
+			extraConfig: func(c *Server) *Server {
+				// change engine 0 number of helper streams to create mismatch
+				c.Engines[0].WithHelperStreamCount(9)
+				return c
+			},
+			expErr: FaultConfigHelperStreamCountMismatch(1, 4, 0, 9),
+		},
+		"out of range hugepages; low": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithNrHugepages(-2048)
+			},
+			expErr: FaultConfigNrHugepagesOutOfRange(-2048, math.MaxInt32),
+		},
+		"out of range hugepages; high": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithNrHugepages(math.MaxInt32 + 1)
+			},
+			expErr: FaultConfigNrHugepagesOutOfRange(math.MaxInt32+1, math.MaxInt32),
+		},
+		"out of range scm_size; low": {
+			extraConfig: func(c *Server) *Server {
+				c.Engines[0].Storage.Tiers.ScmConfigs()[0].Scm.RamdiskSize = 3
+				return c
+			},
+			expErr: storage.FaultConfigRamdiskUnderMinMem(humanize.GiByte*3,
+				storage.MinRamdiskMem),
+		},
+		"zero system ram reserved": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithSystemRamReserved(0)
+			},
+			expErr: FaultConfigSysRsvdZero,
+		},
+		"control metadata multi-engine": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithControlMetadata(storage.ControlMetadata{
+					Path:       testMetadataDir,
+					DevicePath: "/dev/something",
+				}).
+					WithEngines(
+						defaultEngineCfg().
+							WithFabricInterfacePort(1234).
+							WithStorage(
+								storage.NewTierConfig().
+									WithScmMountPoint("/mnt/daos/1").
+									WithStorageClass("ram").
+									WithScmDisableHugepages(),
+								storage.NewTierConfig().
+									WithStorageClass("nvme").
+									WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
+									WithBdevBusidRange("0x80-0x8f").
+									WithBdevDeviceRoles(storage.BdevRoleAll),
+							),
+						defaultEngineCfg().
+							WithFabricInterfacePort(5678).
+							WithStorage(
+								storage.NewTierConfig().
+									WithScmMountPoint("/mnt/daos/2").
+									WithStorageClass("ram").
+									WithScmDisableHugepages(),
+								storage.NewTierConfig().
+									WithStorageClass("nvme").
+									WithBdevDeviceList("0000:91:00.0", "0000:92:00.0").
+									WithBdevBusidRange("0x90-0x9f").
+									WithBdevDeviceRoles(storage.BdevRoleAll),
+							),
+					)
+			},
+			expConfig: baseCfg(t, testFile).
+				WithAccessPoints("hostname1:10001").
+				WithControlMetadata(storage.ControlMetadata{
+					Path:       testMetadataDir,
+					DevicePath: "/dev/something",
+				}).
+				WithEngines(
+					defaultEngineCfg().
+						WithFabricInterfacePort(1234).
+						WithStorage(
+							storage.NewTierConfig().
+								WithScmMountPoint("/mnt/daos/1").
+								WithStorageClass("ram").
+								WithScmDisableHugepages(),
+							storage.NewTierConfig().
+								WithStorageClass("nvme").
+								WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
+								WithBdevBusidRange("0x80-0x8f").
+								WithBdevDeviceRoles(storage.BdevRoleAll),
+						).
+						WithStorageVosEnv("NVME").
+						WithStorageControlMetadataPath(testMetadataDir).
+						WithStorageControlMetadataDevice("/dev/something").
+						WithStorageConfigOutputPath(filepath.Join(
+							testMetadataDir,
+							storage.ControlMetadataSubdir,
+							"engine0",
+							"daos_nvme.conf",
+						)), // NVMe conf should end up in metadata dir
+					defaultEngineCfg().
+						WithStorageIndex(1).
+						WithFabricInterfacePort(5678).
+						WithStorage(
+							storage.NewTierConfig().
+								WithScmMountPoint("/mnt/daos/2").
+								WithStorageClass("ram").
+								WithScmDisableHugepages(),
+							storage.NewTierConfig().
+								WithStorageClass("nvme").
+								WithBdevDeviceList("0000:91:00.0", "0000:92:00.0").
+								WithBdevBusidRange("0x90-0x9f").
+								WithBdevDeviceRoles(storage.BdevRoleAll),
+						).
+						WithStorageVosEnv("NVME").
+						WithStorageControlMetadataPath(testMetadataDir).
+						WithStorageControlMetadataDevice("/dev/something").
+						WithStorageConfigOutputPath(filepath.Join(
+							testMetadataDir,
+							storage.ControlMetadataSubdir,
+							"engine1",
+							"daos_nvme.conf",
+						)), // NVMe conf should end up in metadata dir
+				),
+		},
+		"md-on-ssd enabled with role assignment": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithControlMetadata(storage.ControlMetadata{
+					Path:       testMetadataDir,
+					DevicePath: "/dev/something",
+				}).
+					WithEngines(
+						defaultEngineCfg().
+							WithFabricInterfacePort(1234).
+							WithStorage(
+								storage.NewTierConfig().
+									WithScmMountPoint("/mnt/daos/1").
+									WithStorageClass("ram").
+									WithScmDisableHugepages(),
+								storage.NewTierConfig().
+									WithStorageClass("nvme").
+									WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
+									WithBdevDeviceRoles(storage.BdevRoleAll),
+							),
+					)
+			},
+			expConfig: baseCfg(t, testFile).
+				WithAccessPoints("hostname1:10001").
+				WithControlMetadata(storage.ControlMetadata{
+					Path:       testMetadataDir,
+					DevicePath: "/dev/something",
+				}).
+				WithEngines(
+					defaultEngineCfg().
+						WithFabricInterfacePort(1234).
+						WithStorage(
+							storage.NewTierConfig().
+								WithScmMountPoint("/mnt/daos/1").
+								WithStorageClass("ram").
+								WithScmDisableHugepages(),
+							storage.NewTierConfig().
+								WithStorageClass("nvme").
+								WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
+								WithBdevDeviceRoles(storage.BdevRoleAll),
+						).
+						WithStorageVosEnv("NVME").
+						WithStorageControlMetadataPath(testMetadataDir).
+						WithStorageControlMetadataDevice("/dev/something").
+						WithStorageConfigOutputPath(filepath.Join(
+							testMetadataDir,
+							storage.ControlMetadataSubdir,
+							"engine0",
+							"daos_nvme.conf",
+						)), // NVMe conf should end up in metadata dir
+				),
+		},
+		"md-on-ssd enabled with role assignment on one engine only": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithControlMetadata(storage.ControlMetadata{
+					Path:       testMetadataDir,
+					DevicePath: "/dev/something",
+				}).
+					WithEngines(
+						defaultEngineCfg().
+							WithFabricInterfacePort(1234).
+							WithStorage(
+								storage.NewTierConfig().
+									WithScmMountPoint("/mnt/daos/0").
+									WithStorageClass("ram").
+									WithScmDisableHugepages(),
+								storage.NewTierConfig().
+									WithStorageClass("nvme").
+									WithBdevDeviceList("0000:80:00.0").
+									WithBdevDeviceRoles(storage.BdevRoleAll),
+							),
+						defaultEngineCfg().
+							WithFabricInterfacePort(2234).
+							WithStorage(
+								storage.NewTierConfig().
+									WithScmMountPoint("/mnt/daos/1").
+									WithStorageClass("ram").
+									WithScmDisableHugepages(),
+								storage.NewTierConfig().
+									WithStorageClass("nvme").
+									WithBdevDeviceList("0000:81:00.0"),
+							),
+					)
+			},
+			expErr: storage.FaultBdevConfigControlMetadataNoRoles,
+		},
+		"control metadata has path only": {
+			extraConfig: func(c *Server) *Server {
+				return c.
+					WithControlMetadata(storage.ControlMetadata{
+						Path: testMetadataDir,
+					}).
+					WithEngines(
+						defaultEngineCfg().
+							WithStorage(
+								storage.NewTierConfig().
+									WithScmMountPoint("/mnt/daos/1").
+									WithStorageClass("ram").
+									WithScmDisableHugepages(),
+								storage.NewTierConfig().
+									WithStorageClass("nvme").
+									WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
+									WithBdevBusidRange("0x80-0x8f").
+									WithBdevDeviceRoles(storage.BdevRoleAll),
+							),
+					)
+			},
+			expConfig: baseCfg(t, testFile).
+				WithAccessPoints("hostname1:10001").
+				WithControlMetadata(storage.ControlMetadata{
+					Path: testMetadataDir,
+				}).
+				WithEngines(defaultEngineCfg().
+					WithStorage(
+						storage.NewTierConfig().
+							WithScmMountPoint("/mnt/daos/1").
+							WithStorageClass("ram").
+							WithScmDisableHugepages(),
+						storage.NewTierConfig().
+							WithStorageClass("nvme").
+							WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
+							WithBdevBusidRange("0x80-0x8f").
+							WithBdevDeviceRoles(storage.BdevRoleAll),
+					).
+					WithStorageVosEnv("NVME").
+					WithStorageControlMetadataPath(testMetadataDir).
+					WithStorageControlMetadataDevice("").
+					WithStorageConfigOutputPath(filepath.Join(
+						testMetadataDir,
+						storage.ControlMetadataSubdir,
+						"engine0",
+						"daos_nvme.conf",
+					)), // NVMe conf should end up in metadata dir
+				),
+		},
+		"control metadata has device only": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithControlMetadata(storage.ControlMetadata{
+					DevicePath: "/dev/sdb0",
+				}).
+					WithEngines(defaultEngineCfg().
+						WithStorage(
+							storage.NewTierConfig().
+								WithStorageClass("ram").
+								WithScmMountPoint("/foo"),
+						))
+			},
+			expErr: FaultConfigControlMetadataNoPath,
+		},
+		"control metadata with no roles specified": {
+			extraConfig: func(c *Server) *Server {
+				return c.
+					WithControlMetadata(storage.ControlMetadata{
+						Path: testMetadataDir,
+					}).
+					WithEngines(
+						defaultEngineCfg().
+							WithStorage(
+								storage.NewTierConfig().
+									WithScmMountPoint("/mnt/daos/1").
+									WithStorageClass("ram").
+									WithScmDisableHugepages(),
+								storage.NewTierConfig().
+									WithStorageClass("nvme").
+									WithBdevDeviceList("0000:81:00.0"),
+							),
+					)
+			},
+			expErr: storage.FaultBdevConfigControlMetadataNoRoles,
+		},
+		"roles specified with no control metadata path": {
+			extraConfig: func(c *Server) *Server {
+				return c.
+					WithControlMetadata(storage.ControlMetadata{}).
+					WithEngines(
+						defaultEngineCfg().
+							WithStorage(
+								storage.NewTierConfig().
+									WithScmMountPoint("/mnt/daos/1").
+									WithStorageClass("ram").
+									WithScmDisableHugepages(),
+								storage.NewTierConfig().
+									WithStorageClass("nvme").
+									WithBdevDeviceList("0000:81:00.0").
+									WithBdevDeviceRoles(storage.BdevRoleAll),
+							),
+					)
+			},
+			expErr: storage.FaultBdevConfigRolesNoControlMetadata,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			if tt.extraConfig == nil {
 				tt.extraConfig = noopExtra
 			}
 
-			testDir, cleanup := CreateTestDir(t)
-			defer cleanup()
+			// Apply test case changes to basic config
+			cfg := tt.extraConfig(baseCfg(t, testFile))
 
-			// First, load a config based on the server config with all options uncommented.
-			testFile := filepath.Join(testDir, sConfigUncomment)
-			uncommentServerConfig(t, testFile)
-			config, err := mockConfigFromFile(t, testFile)
-			if err != nil {
-				t.Fatalf("failed to load %s: %s", testFile, err)
+			log.Debugf("baseCfg metadata: %+v", cfg.Metadata)
+
+			test.CmpErr(t, tt.expErr, cfg.Validate(log))
+			if tt.expErr != nil || tt.expConfig == nil {
+				return
 			}
 
-			// Apply extra config test case
-			config = tt.extraConfig(config)
+			if diff := cmp.Diff(tt.expConfig, cfg, defConfigCmpOpts...); diff != "" {
+				t.Fatalf("unexpected config after validation (-want, +got): %s", diff)
+			}
+		})
+	}
+}
 
-			CmpErr(t, tt.expErr, config.Validate(log))
+func TestServerConfig_SetNrHugepages(t *testing.T) {
+	testDir, cleanup := test.CreateTestDir(t)
+	defer cleanup()
+
+	// First, load a config based on the server config with all options uncommented.
+	testFile := filepath.Join(testDir, sConfigUncomment)
+	uncommentServerConfig(t, testFile)
+
+	for name, tc := range map[string]struct {
+		extraConfig    func(c *Server) *Server
+		memTotBytes    uint64
+		expNrHugepages int
+		expErr         error
+	}{
+		"disabled hugepages; bdevs configured": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithDisableHugepages(true).
+					WithEngines(defaultEngineCfg().
+						WithStorage(
+							storage.NewTierConfig().
+								WithStorageClass("ram").
+								WithScmMountPoint("/foo"),
+							storage.NewTierConfig().
+								WithStorageClass("nvme").
+								WithBdevDeviceList("0000:81:00.0"),
+						),
+					)
+			},
+			expErr: FaultConfigHugepagesDisabledWithBdevs,
+		},
+		"disabled hugepages; emulated bdevs configured": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithDisableHugepages(true).
+					WithEngines(defaultEngineCfg().
+						WithStorage(
+							storage.NewTierConfig().
+								WithStorageClass("ram").
+								// 80gib total - (8gib huge + 6gib sys +
+								// 1gib engine)
+								WithScmRamdiskSize(65).
+								WithScmMountPoint("/foo"),
+							storage.NewTierConfig().
+								WithStorageClass("file").
+								WithBdevDeviceList("/tmp/daos-bdev").
+								WithBdevFileSize(16),
+						),
+					)
+			},
+			expErr: FaultConfigHugepagesDisabledWithBdevs,
+		},
+		"disabled hugepages; no bdevs configured": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithDisableHugepages(true).
+					WithEngines(defaultEngineCfg().
+						WithStorage(
+							storage.NewTierConfig().
+								WithStorageClass("ram").
+								WithScmMountPoint("/foo"),
+						),
+					)
+			},
+		},
+		"zero hugepages set in config; bdevs configured; implicit role assignment": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithEngines(defaultEngineCfg().
+					WithStorage(
+						storage.NewTierConfig().
+							WithStorageClass("ram").
+							WithScmMountPoint("/foo"),
+						storage.NewTierConfig().
+							WithStorageClass("nvme").
+							WithBdevDeviceList("0000:81:00.0"),
+					),
+				)
+			},
+			expNrHugepages: 4096,
+		},
+		"zero hugepages set in config; emulated bdevs configured": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithEngines(defaultEngineCfg().
+					WithStorage(
+						storage.NewTierConfig().
+							WithStorageClass("ram").
+							WithScmMountPoint("/foo"),
+						storage.NewTierConfig().
+							WithStorageClass("file").
+							WithBdevDeviceList("/tmp/daos-bdev").
+							WithBdevFileSize(16),
+					),
+				)
+			},
+			expNrHugepages: 4096,
+		},
+		"zero hugepages set in config; no bdevs configured": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithEngines(defaultEngineCfg().
+					WithStorage(
+						storage.NewTierConfig().
+							WithStorageClass("ram").
+							WithScmMountPoint("/foo"),
+					),
+				)
+			},
+		},
+		"md-on-ssd enabled with explicit role assignment": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithEngines(
+					defaultEngineCfg().
+						WithFabricInterfacePort(1234).
+						WithStorage(
+							storage.NewTierConfig().
+								WithScmMountPoint("/mnt/daos/1").
+								WithStorageClass("ram").
+								WithScmDisableHugepages(),
+							storage.NewTierConfig().
+								WithStorageClass("nvme").
+								WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
+								WithBdevDeviceRoles(storage.BdevRoleAll),
+						),
+				)
+			},
+			// 512 pages * (8 targets + 1 sys-xstream for MD-on-SSD)
+			expNrHugepages: 4608,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			// Apply test case changes to basic config
+			cfg := tc.extraConfig(baseCfg(t, testFile))
+
+			mi := &common.MemInfo{
+				HugepageSizeKiB: 2048,
+			}
+
+			test.CmpErr(t, tc.expErr, cfg.SetNrHugepages(log, mi))
+			if tc.expErr != nil {
+				return
+			}
+
+			test.AssertEqual(t, tc.expNrHugepages, cfg.NrHugepages,
+				"unexpected number of hugepages set in config")
+		})
+	}
+}
+
+func TestServerConfig_SetRamdiskSize(t *testing.T) {
+	testDir, cleanup := test.CreateTestDir(t)
+	defer cleanup()
+
+	// First, load a config based on the server config with all options uncommented.
+	testFile := filepath.Join(testDir, sConfigUncomment)
+	uncommentServerConfig(t, testFile)
+
+	for name, tc := range map[string]struct {
+		extraConfig    func(c *Server) *Server
+		memTotBytes    uint64
+		expRamdiskSize int
+		expErr         error
+	}{
+		"out of range scm_size; high": {
+			// 16896 hugepages / 512 pages-per-gib = 33 gib huge mem
+			// 33 huge mem + 5 sys rsv + 2 engine rsv = 40 gib reserved mem
+			// 60 total - 40 reserved = 20 for tmpfs (10 gib per engine)
+			memTotBytes: humanize.GiByte * 60,
+			extraConfig: func(c *Server) *Server {
+				// 10gib is max remainder after reserved, 11gib is too high
+				c.Engines[0].Storage.Tiers.ScmConfigs()[0].Scm.RamdiskSize = 11
+				return c.WithNrHugepages(16896)
+			},
+			expErr: FaultConfigRamdiskOverMaxMem(humanize.GiByte*11, humanize.GiByte*9, 0),
+		},
+		"low mem": {
+			// 46 total - 40 reserved = 6 for tmpfs (3 gib per engine - too low)
+			memTotBytes: humanize.GiByte * 46,
+			extraConfig: func(c *Server) *Server {
+				return c.WithNrHugepages(16896)
+			},
+			// error indicates min RAM needed = 40 + 4 gib per engine
+			expErr: storage.FaultRamdiskLowMem("Total", storage.MinRamdiskMem,
+				humanize.GiByte*50, humanize.GiByte*46),
+		},
+		"custom value set": {
+			memTotBytes: humanize.GiByte * 60,
+			extraConfig: func(c *Server) *Server {
+				// set custom value between min and max
+				c.Engines[0].Storage.Tiers.ScmConfigs()[0].Scm.RamdiskSize = 6
+				c.Engines[1].Storage.Tiers.ScmConfigs()[0].Scm.RamdiskSize = 6
+				return c.WithNrHugepages(16896)
+			},
+			expRamdiskSize: 6,
+		},
+		"auto-calculated value set": {
+			memTotBytes: humanize.GiByte * 60,
+			extraConfig: func(c *Server) *Server {
+				return c.WithNrHugepages(16896)
+			},
+			expRamdiskSize: 9,
+		},
+		"custom system_ram_reserved value set": {
+			// 33 huge mem + 2 sys rsv + 2 engine rsv = 37 gib reserved mem
+			// 60 total - 37 reserved = 23 for tmpfs (11 gib per engine after rounding)
+			memTotBytes: humanize.GiByte * 60,
+			extraConfig: func(c *Server) *Server {
+				c.SystemRamReserved = 2
+				return c.WithNrHugepages(16896)
+			},
+			expRamdiskSize: 10,
+		},
+		"no scm configured on second engine": {
+			memTotBytes: humanize.GiByte * 80,
+			extraConfig: func(c *Server) *Server {
+				return c.WithNrHugepages(4096).
+					WithEngines(
+						defaultEngineCfg().
+							WithStorage(
+								storage.NewTierConfig().
+									WithStorageClass("ram").
+									WithScmMountPoint("/foo"),
+								storage.NewTierConfig().
+									WithStorageClass("nvme").
+									WithBdevDeviceList("0000:81:00.0"),
+							),
+						defaultEngineCfg().
+							WithStorage(
+								storage.NewTierConfig().
+									WithStorageClass("nvme").
+									WithBdevDeviceList("0000:81:00.0"),
+							),
+					)
+			},
+			expErr: errors.New("unexpected number of scm tiers"),
+		},
+		"bdevs configured": {
+			memTotBytes: humanize.GiByte * 80,
+			extraConfig: func(c *Server) *Server {
+				return c.WithNrHugepages(4096).
+					WithEngines(defaultEngineCfg().
+						WithStorage(
+							storage.NewTierConfig().
+								WithStorageClass("ram").
+								WithScmMountPoint("/foo"),
+							storage.NewTierConfig().
+								WithStorageClass("nvme").
+								WithBdevDeviceList("0000:81:00.0"),
+						),
+					)
+			},
+			// 80gib total - (8gib huge + 5gib sys + 1gib engine)
+			expRamdiskSize: 66,
+		},
+		"emulated bdevs configured": {
+			memTotBytes: humanize.GiByte * 80,
+			extraConfig: func(c *Server) *Server {
+				return c.WithNrHugepages(4096).
+					WithEngines(defaultEngineCfg().
+						WithStorage(
+							storage.NewTierConfig().
+								WithStorageClass("ram").
+								WithScmMountPoint("/foo"),
+							storage.NewTierConfig().
+								WithStorageClass("file").
+								WithBdevDeviceList("/tmp/daos-bdev").
+								WithBdevFileSize(16),
+						),
+					)
+			},
+			// 80gib total - (8gib huge + 5gib sys + 1gib engine)
+			expRamdiskSize: 66,
+		},
+		"no bdevs configured": {
+			memTotBytes: humanize.GiByte * 80,
+			extraConfig: func(c *Server) *Server {
+				return c.WithEngines(defaultEngineCfg().
+					WithStorage(
+						storage.NewTierConfig().
+							WithStorageClass("ram").
+							WithScmMountPoint("/foo"),
+					),
+				)
+			},
+			// 80gib total - (0gib huge + 5gib sys + 1gib engine)
+			expRamdiskSize: 74,
+		},
+		"md-on-ssd enabled with explicit role assignment": {
+			memTotBytes: humanize.GiByte * 80,
+			extraConfig: func(c *Server) *Server {
+				return c.WithNrHugepages(4608).
+					WithEngines(
+						defaultEngineCfg().
+							WithFabricInterfacePort(1234).
+							WithStorage(
+								storage.NewTierConfig().
+									WithScmMountPoint("/mnt/daos/1").
+									WithStorageClass("ram").
+									WithScmDisableHugepages(),
+								storage.NewTierConfig().
+									WithStorageClass("nvme").
+									WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
+									WithBdevDeviceRoles(storage.BdevRoleAll),
+							),
+					)
+			},
+			// 80gib total - (9gib huge + 5gib sys + 1gib engine)
+			expRamdiskSize: 65,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			// Apply test case changes to basic config
+			cfg := tc.extraConfig(baseCfg(t, testFile))
+
+			val := tc.memTotBytes / humanize.KiByte
+			if val > math.MaxInt {
+				t.Fatal("int overflow")
+			}
+			mi := &common.MemInfo{
+				HugepageSizeKiB: 2048,
+				MemTotalKiB:     int(val),
+			}
+
+			test.CmpErr(t, tc.expErr, cfg.SetRamdiskSize(log, mi))
+			if tc.expErr != nil {
+				return
+			}
+
+			if len(cfg.Engines) == 0 {
+				t.Fatal("no engines in config")
+			}
+			for _, ec := range cfg.Engines {
+				scmTiers := ec.Storage.Tiers.ScmConfigs()
+				if len(scmTiers) != 1 {
+					t.Fatal("unexpected number of scm tiers")
+				}
+				if scmTiers[0].Class != storage.ClassRam {
+					t.Fatal("expected scm tier to have class RAM")
+				}
+				test.AssertEqual(t, tc.expRamdiskSize, int(scmTiers[0].Scm.RamdiskSize),
+					"unexpected ramdisk size set in config")
+			}
 		})
 	}
 }
@@ -476,6 +1340,8 @@ func replaceLine(r io.Reader, w io.Writer, oldTxt, newTxt string) (int, error) {
 }
 
 func replaceFile(t *testing.T, name, oldTxt, newTxt string) {
+	t.Helper()
+
 	// open original file
 	f, err := os.Open(name)
 	if err != nil {
@@ -496,7 +1362,7 @@ func replaceFile(t *testing.T, name, oldTxt, newTxt string) {
 		t.Fatal(err)
 	}
 	if linesChanged == 0 {
-		t.Fatalf("no recurrences of %q in file %q", oldTxt, name)
+		t.Fatalf("no occurrences of %q in file %q", oldTxt, name)
 	}
 
 	// make sure the tmp file was successfully written to
@@ -518,18 +1384,25 @@ func replaceFile(t *testing.T, name, oldTxt, newTxt string) {
 func TestServerConfig_Parsing(t *testing.T) {
 	noopExtra := func(c *Server) *Server { return c }
 
-	cfgFromFile := func(t *testing.T, testFile, matchText, replaceText string) (*Server, error) {
+	cfgFromFile := func(t *testing.T, testFile string, matchText, replaceText []string) (*Server, error) {
 		t.Helper()
 
-		if matchText != "" {
-			replaceFile(t, testFile, matchText, replaceText)
+		if len(matchText) != len(replaceText) {
+			return nil, errors.New("number of text matches and replacements must be equal")
+		}
+
+		for i, m := range matchText {
+			if m == "" {
+				continue
+			}
+			replaceFile(t, testFile, m, replaceText[i])
 		}
 
 		return mockConfigFromFile(t, testFile)
 	}
 
 	// load a config based on the server config with all options uncommented.
-	loadFromDefaultFile := func(t *testing.T, testDir, matchText, replaceText string) (*Server, error) {
+	loadFromFile := func(t *testing.T, testDir string, matchText, replaceText []string) (*Server, error) {
 		t.Helper()
 
 		defaultConfigFile := filepath.Join(testDir, sConfigUncomment)
@@ -538,30 +1411,11 @@ func TestServerConfig_Parsing(t *testing.T) {
 		return cfgFromFile(t, defaultConfigFile, matchText, replaceText)
 	}
 
-	// load a config file with a legacy storage config
-	loadFromLegacyFile := func(t *testing.T, testDir, matchText, replaceText string) (*Server, error) {
-		t.Helper()
-
-		lcp := strings.Split(legacyConfig, "/")
-		testLegacyConfigFile := filepath.Join(testDir, lcp[len(lcp)-1])
-		if err := common.CopyFile(legacyConfig, testLegacyConfigFile); err != nil {
-			return nil, err
-		}
-
-		return cfgFromFile(t, testLegacyConfigFile, matchText, replaceText)
-	}
-
-	loadFromFile := func(t *testing.T, testDir, matchText, replaceText string, legacy bool) (*Server, error) {
-		if legacy {
-			return loadFromLegacyFile(t, testDir, matchText, replaceText)
-		}
-
-		return loadFromDefaultFile(t, testDir, matchText, replaceText)
-	}
-
 	for name, tt := range map[string]struct {
 		inTxt          string
 		outTxt         string
+		inTxtList      []string
+		outTxtList     []string
 		legacyStorage  bool
 		extraConfig    func(c *Server) *Server
 		expParseErr    error
@@ -573,80 +1427,69 @@ func TestServerConfig_Parsing(t *testing.T) {
 			outTxt:      "engine:",
 			expParseErr: errors.New("field engine not found"),
 		},
-		"use legacy servers conf directive rather than engines": {
-			inTxt:          "engines:",
-			outTxt:         "servers:",
-			expValidateErr: errors.New("use \"engines\" instead"),
-		},
-		"specify legacy servers conf directive in addition to engines": {
-			inTxt:  "engines:",
-			outTxt: "servers:",
-			extraConfig: func(c *Server) *Server {
-				var nilEngineConfig *engine.Config
-				return c.WithEngines(nilEngineConfig)
-			},
-			expValidateErr: errors.New("use \"engines\" instead"),
-		},
 		"duplicates in bdev_list from config": {
 			extraConfig: func(c *Server) *Server {
 				return c.WithEngines(
-					engine.NewConfig().
-						WithFabricInterface("qib0").
+					engine.MockConfig().
+						WithFabricInterface("ib0").
 						WithFabricInterfacePort(20000).
 						WithStorage(
 							storage.NewTierConfig().
-								WithScmClass("ram").
-								WithScmRamdiskSize(1).
+								WithStorageClass("ram").
 								WithScmMountPoint("/mnt/daos/2"),
 							storage.NewTierConfig().
-								WithBdevClass("nvme").
-								WithBdevDeviceList(MockPCIAddr(1), MockPCIAddr(1)),
-						))
+								WithStorageClass("nvme").
+								WithBdevDeviceList(test.MockPCIAddr(1), test.MockPCIAddr(1)),
+						).
+						WithTargetCount(8))
 			},
-			expValidateErr: errors.New("bdev_list contains duplicate pci"),
+			expValidateErr: errors.New("valid PCI addresses"),
 		},
-		"legacy storage; empty bdev_list": {
-			legacyStorage: true,
-			expCheck: func(c *Server) error {
-				nr := len(c.Engines[0].Storage.Tiers)
-				if nr != 1 {
-					return errors.Errorf("want %d storage tiers, got %d", 1, nr)
-				}
-				return nil
-			},
+		"bad busid range": {
+			// fail first engine storage
+			inTxt:       "    bdev_busid_range: 0x80-0x8f",
+			outTxt:      "    bdev_busid_range: 0x80-0x8g",
+			expParseErr: errors.New("\"0x8g\": invalid syntax"),
 		},
-		"legacy storage; no bdev_list": {
-			legacyStorage: true,
-			inTxt:         "  bdev_list: []",
-			outTxt:        "",
-			expCheck: func(c *Server) error {
-				nr := len(c.Engines[0].Storage.Tiers)
-				if nr != 1 {
-					return errors.Errorf("want %d storage tiers, got %d", 1, nr)
-				}
-				return nil
-			},
-		},
-		"legacy storage; no bdev_class": {
-			legacyStorage: true,
-			inTxt:         "  bdev_class: nvme",
-			outTxt:        "",
-			expCheck: func(c *Server) error {
-				nr := len(c.Engines[0].Storage.Tiers)
-				if nr != 1 {
-					return errors.Errorf("want %d storage tiers, got %d", 1, nr)
-				}
-				return nil
-			},
-		},
-		"legacy storage; non-empty bdev_list": {
-			legacyStorage: true,
-			inTxt:         "  bdev_list: []",
-			outTxt:        "  bdev_list: [0000:80:00.0]",
+		"additional empty storage tier": {
+			// Add empty storage tier to engine-0 and verify it is ignored.
+			inTxt:  "    - wal",
+			outTxt: "    - wal\n  -",
 			expCheck: func(c *Server) error {
 				nr := len(c.Engines[0].Storage.Tiers)
 				if nr != 2 {
-					return errors.Errorf("want %d storage tiers, got %d", 2, nr)
+					return errors.Errorf("want 2 storage tiers, got %d", nr)
+				}
+				return nil
+			},
+		},
+		"no bdev_list": {
+			inTxt:          "    bdev_list: [\"0000:81:00.0\", \"0000:82:00.0\"]  # generate regular nvme.conf",
+			outTxt:         "",
+			expValidateErr: errors.New("valid PCI addresses"),
+		},
+		"no bdev_class": {
+			inTxt:          "    class: nvme",
+			outTxt:         "",
+			expValidateErr: errors.New("no storage class"),
+		},
+		"non-empty bdev_list; hugepages disabled": {
+			inTxt:  "disable_hugepages: false",
+			outTxt: "disable_hugepages: true",
+			expCheck: func(c *Server) error {
+				if !c.DisableHugepages {
+					return errors.Errorf("expected hugepages to be disabled")
+				}
+				return nil
+			},
+		},
+		"check default system_ram_reserved": {
+			inTxt:  "system_ram_reserved: 5",
+			outTxt: "",
+			expCheck: func(c *Server) error {
+				if c.SystemRamReserved != storage.DefaultSysMemRsvd/humanize.GiByte {
+					return errors.Errorf("unexpected system_ram_reserved, want %d got %d",
+						storage.DefaultSysMemRsvd/humanize.GiByte, c.SystemRamReserved)
 				}
 				return nil
 			},
@@ -654,24 +1497,38 @@ func TestServerConfig_Parsing(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
-			testDir, cleanup := CreateTestDir(t)
+			testDir, cleanup := test.CreateTestDir(t)
 			defer cleanup()
 
 			if tt.extraConfig == nil {
 				tt.extraConfig = noopExtra
 			}
 
-			config, errParse := loadFromFile(t, testDir, tt.inTxt, tt.outTxt, tt.legacyStorage)
-			CmpErr(t, tt.expParseErr, errParse)
+			if tt.inTxtList != nil {
+				if tt.inTxt != "" {
+					t.Fatal("bad test params")
+				}
+			} else {
+				tt.inTxtList = []string{tt.inTxt}
+			}
+			if tt.outTxtList != nil {
+				if tt.outTxt != "" {
+					t.Fatal("bad test params")
+				}
+			} else {
+				tt.outTxtList = []string{tt.outTxt}
+			}
+
+			config, errParse := loadFromFile(t, testDir, tt.inTxtList, tt.outTxtList)
+			test.CmpErr(t, tt.expParseErr, errParse)
 			if tt.expParseErr != nil {
 				return
 			}
-			config = tt.extraConfig(config)
-			log.Debugf("%+v", config)
 
-			CmpErr(t, tt.expValidateErr, config.Validate(log))
+			config = tt.extraConfig(config)
+			test.CmpErr(t, tt.expValidateErr, config.Validate(log))
 
 			if tt.expCheck != nil {
 				if err := tt.expCheck(config); err != nil {
@@ -691,7 +1548,7 @@ func TestServerConfig_RelativeWorkingPath(t *testing.T) {
 		"path does not exist": {expErrMsg: "no such file or directory"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			testDir, cleanup := CreateTestDir(t)
+			testDir, cleanup := test.CreateTestDir(t)
 			defer cleanup()
 			testFile := filepath.Join(testDir, "test.yml")
 
@@ -713,10 +1570,7 @@ func TestServerConfig_RelativeWorkingPath(t *testing.T) {
 			relPath := filepath.Join(pathToRoot, testFile)
 			t.Logf("abs: %s, cwd: %s, rel: %s", testFile, cwd, relPath)
 
-			config := DefaultServer().
-				WithProviderValidator(netdetect.ValidateProviderStub).
-				WithNUMAValidator(netdetect.ValidateNUMAStub).
-				WithGetNetworkDeviceClass(getDeviceClassStub)
+			config := DefaultServer()
 
 			err = config.SetPath(relPath)
 			if err != nil {
@@ -741,7 +1595,7 @@ func TestServerConfig_WithEnginesInheritsMain(t *testing.T) {
 	testSystemName := "test-system"
 	testSocketDir := "test-sockets"
 
-	wantCfg := engine.NewConfig().
+	wantCfg := engine.MockConfig().
 		WithFabricProvider(testFabric).
 		WithModules(testModules).
 		WithSocketDir(testSocketDir).
@@ -752,43 +1606,46 @@ func TestServerConfig_WithEnginesInheritsMain(t *testing.T) {
 		WithModules(testModules).
 		WithSocketDir(testSocketDir).
 		WithSystemName(testSystemName).
-		WithEngines(engine.NewConfig())
+		WithEngines(engine.MockConfig())
 
-	if diff := cmp.Diff(wantCfg, config.Engines[0]); diff != "" {
+	if diff := cmp.Diff(wantCfg, config.Engines[0], defConfigCmpOpts...); diff != "" {
 		t.Fatalf("unexpected server config (-want, +got):\n%s\n", diff)
 	}
 }
 
-func TestServerConfig_DuplicateValues(t *testing.T) {
+func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 	configA := func() *engine.Config {
-		return engine.NewConfig().
+		return engine.MockConfig().
 			WithLogFile("a").
-			WithFabricInterface("a").
+			WithFabricInterface("ib0").
 			WithFabricInterfacePort(42).
 			WithStorage(
 				storage.NewTierConfig().
-					WithScmClass("ram").
-					WithScmRamdiskSize(1).
+					WithStorageClass("ram").
 					WithScmMountPoint("a"),
-			)
+			).
+			WithPinnedNumaNode(0).
+			WithTargetCount(8)
 	}
 	configB := func() *engine.Config {
-		return engine.NewConfig().
+		return engine.MockConfig().
 			WithLogFile("b").
-			WithFabricInterface("b").
+			WithFabricInterface("ib1").
 			WithFabricInterfacePort(42).
 			WithStorage(
 				storage.NewTierConfig().
-					WithScmClass("ram").
-					WithScmRamdiskSize(1).
+					WithStorageClass("ram").
 					WithScmMountPoint("b"),
-			)
+			).
+			WithPinnedNumaNode(1).
+			WithTargetCount(8)
 	}
 
 	for name, tc := range map[string]struct {
 		configA *engine.Config
 		configB *engine.Config
 		expErr  error
+		expLog  string
 	}{
 		"successful validation": {
 			configA: configA(),
@@ -811,7 +1668,7 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 			configB: configB().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassDcpm.String()).
+						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmDeviceList("a").
 						WithScmMountPoint(configA().Storage.Tiers.ScmConfigs()[0].Scm.MountPoint),
 				),
@@ -821,14 +1678,14 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 			configA: configA().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassDcpm.String()).
+						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmMountPoint("aa").
 						WithScmDeviceList("a"),
 				),
 			configB: configB().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassDcpm.String()).
+						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmMountPoint("bb").
 						WithScmDeviceList("a"),
 				),
@@ -836,143 +1693,86 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 		},
 		"overlapping bdev_list": {
 			configA: configA().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
-						WithBdevDeviceList(MockPCIAddr(1)),
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(1)),
 				),
 			configB: configB().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
-						WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(1)),
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(2),
+							test.MockPCIAddr(1)),
 				),
 			expErr: FaultConfigOverlappingBdevDeviceList(1, 0),
 		},
 		"duplicates in bdev_list": {
 			configA: configA().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
-						WithBdevDeviceList(MockPCIAddr(1), MockPCIAddr(1)),
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(1),
+							test.MockPCIAddr(2)),
 				),
+			configB: configB().
+				AppendStorage(
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(2),
+							test.MockPCIAddr(1)),
+				),
+			expErr: errors.New("engine 1 overlaps with entries in engine 0"),
+		},
+		"mismatched scm_class": {
+			configA: configA(),
 			configB: configB().
 				WithStorage(
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
-						WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(2)),
+						WithStorageClass(storage.ClassDcpm.String()).
+						WithScmMountPoint("bb").
+						WithScmDeviceList("a"),
 				),
-			expErr: errors.New("bdev_list contains duplicate pci addresses"),
+			expErr: FaultConfigScmDiffClass(1, 0),
+		},
+		"mismatched nr bdev_list": {
+			configA: configA().
+				AppendStorage(
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(1)),
+				),
+			configB: configB().
+				AppendStorage(
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(2),
+							test.MockPCIAddr(3)),
+				),
+			expLog: "engine 1 has 2 but engine 0 has 1",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			conf := DefaultServer().
 				WithFabricProvider("test").
-				WithGetNetworkDeviceClass(getDeviceClassStub).
 				WithEngines(tc.configA, tc.configB)
 
 			gotErr := conf.Validate(log)
-			CmpErr(t, tc.expErr, gotErr)
-		})
-	}
-}
+			test.CmpErr(t, tc.expErr, gotErr)
 
-func TestServerConfig_NetworkDeviceClass(t *testing.T) {
-	configA := func() *engine.Config {
-		return engine.NewConfig().
-			WithLogFile("a").
-			WithStorage(
-				storage.NewTierConfig().
-					WithScmClass("ram").
-					WithScmRamdiskSize(1).
-					WithScmMountPoint("a"),
-			).
-			WithFabricInterfacePort(42)
-	}
-	configB := func() *engine.Config {
-		return engine.NewConfig().
-			WithLogFile("b").
-			WithStorage(
-				storage.NewTierConfig().
-					WithScmClass("ram").
-					WithScmRamdiskSize(1).
-					WithScmMountPoint("b"),
-			).
-			WithFabricInterfacePort(43)
-	}
-
-	for name, tc := range map[string]struct {
-		configA      *engine.Config
-		configB      *engine.Config
-		expNetDevCls uint32
-		expErr       error
-	}{
-		"successful validation with matching Infiniband": {
-			configA: configA().
-				WithFabricInterface("ib1"),
-			configB: configB().
-				WithFabricInterface("ib0"),
-			expNetDevCls: netdetect.Infiniband,
-		},
-		"successful validation with matching Ethernet": {
-			configA: configA().
-				WithFabricInterface("eth0"),
-			configB: configB().
-				WithFabricInterface("eth1"),
-			expNetDevCls: netdetect.Ether,
-		},
-		"mismatching net dev class with primary server as ib0 / Infiniband": {
-			configA: configA().
-				WithFabricInterface("ib0"),
-			configB: configB().
-				WithFabricInterface("eth0"),
-			expErr: FaultConfigInvalidNetDevClass(1, netdetect.Infiniband, netdetect.Ether, "eth0"),
-		},
-		"mismatching net dev class with primary server as eth0 / Ethernet": {
-			configA: configA().
-				WithFabricInterface("eth0"),
-			configB: configB().
-				WithFabricInterface("ib0"),
-			expErr: FaultConfigInvalidNetDevClass(1, netdetect.Ether, netdetect.Infiniband, "ib0"),
-		},
-		"mismatching net dev class with primary server as ib1 / Infiniband": {
-			configA: configA().
-				WithFabricInterface("ib1"),
-			configB: configB().
-				WithFabricInterface("eth1"),
-			expErr: FaultConfigInvalidNetDevClass(1, netdetect.Infiniband, netdetect.Ether, "eth1"),
-		},
-		"mismatching net dev class with primary server as eth1 / Ethernet": {
-			configA: configA().
-				WithFabricInterface("eth1"),
-			configB: configB().
-				WithFabricInterface("ib0"),
-			expErr: FaultConfigInvalidNetDevClass(1, netdetect.Ether, netdetect.Infiniband, "ib0"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			gotNetDevCls, gotErr := DefaultServer().
-				WithFabricProvider("test").
-				WithGetNetworkDeviceClass(getDeviceClassStub).
-				WithEngines(tc.configA, tc.configB).
-				CheckFabric(context.Background())
-
-			CmpErr(t, tc.expErr, gotErr)
-			if gotErr != nil {
-				return
+			if tc.expLog != "" {
+				hasEntry := strings.Contains(buf.String(), tc.expLog)
+				test.AssertTrue(t, hasEntry, "expected entries not found in log")
 			}
-
-			AssertEqual(t, tc.expNetDevCls, gotNetDevCls,
-				"unexpected config network device class")
 		})
 	}
 }
 
 func TestServerConfig_SaveActiveConfig(t *testing.T) {
-	testDir, cleanup := CreateTestDir(t)
+	testDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
 	t.Logf("test dir: %s", testDir)
@@ -983,7 +1783,7 @@ func TestServerConfig_SaveActiveConfig(t *testing.T) {
 	}{
 		"successful write": {
 			cfgPath:   testDir,
-			expLogOut: fmt.Sprintf("config saved to %s/%s", testDir, configOut),
+			expLogOut: fmt.Sprintf("config saved to %s/%s", testDir, ConfigOut),
 		},
 		"missing directory": {
 			cfgPath:   filepath.Join(testDir, "non-existent/"),
@@ -992,14 +1792,330 @@ func TestServerConfig_SaveActiveConfig(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			cfg := DefaultServer().WithSocketDir(tc.cfgPath)
 
 			cfg.SaveActiveConfig(log)
 
-			common.AssertTrue(t, strings.Contains(buf.String(), tc.expLogOut),
+			test.AssertTrue(t, strings.Contains(buf.String(), tc.expLogOut),
 				fmt.Sprintf("expected %q in %q", tc.expLogOut, buf.String()))
+		})
+	}
+}
+
+func TestConfig_detectEngineAffinity(t *testing.T) {
+	genAffFn := func(node uint, err error) EngineAffinityFn {
+		return func(logging.Logger, *engine.Config) (uint, error) {
+			return node, err
+		}
+	}
+
+	for name, tc := range map[string]struct {
+		cfg         *engine.Config
+		affSrcSet   []EngineAffinityFn
+		expErr      error
+		expDetected uint
+	}{
+		"first source misses; second hits": {
+			cfg: engine.MockConfig(),
+			affSrcSet: []EngineAffinityFn{
+				genAffFn(0, ErrNoAffinityDetected),
+				genAffFn(1, nil),
+			},
+			expDetected: 1,
+		},
+		"first source hits": {
+			cfg: engine.MockConfig(),
+			affSrcSet: []EngineAffinityFn{
+				genAffFn(1, nil),
+				genAffFn(2, nil),
+			},
+			expDetected: 1,
+		},
+		"first source errors": {
+			cfg: engine.MockConfig(),
+			affSrcSet: []EngineAffinityFn{
+				genAffFn(1, errors.New("fatal")),
+				genAffFn(2, nil),
+			},
+			expErr: errors.New("fatal"),
+		},
+		"no sources hit": {
+			cfg: engine.MockConfig(),
+			affSrcSet: []EngineAffinityFn{
+				genAffFn(1, ErrNoAffinityDetected),
+				genAffFn(2, ErrNoAffinityDetected),
+			},
+			expErr: ErrNoAffinityDetected,
+		},
+		"no sources defined": {
+			cfg:    engine.MockConfig(),
+			expErr: ErrNoAffinityDetected,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			detected, err := detectEngineAffinity(log, tc.cfg, tc.affSrcSet...)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			test.AssertEqual(t, tc.expDetected, detected,
+				"unexpected detected numa node")
+		})
+	}
+}
+
+func TestConfig_SetNUMAAffinity(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg     *engine.Config
+		setNUMA uint
+		expErr  error
+		expNUMA uint
+	}{
+		"pinned_numa_node set in config conflicts with detected affinity": {
+			cfg: engine.MockConfig().
+				WithPinnedNumaNode(2).
+				WithFabricInterface("ib1").
+				WithFabricProvider("ofi+verbs"),
+			setNUMA: 1,
+			expNUMA: 2,
+			expErr:  errors.New("configured NUMA node"),
+		},
+		"pinned_numa_node not set in config; detected affinity used": {
+			cfg: engine.MockConfig().
+				WithFabricInterface("ib1").
+				WithFabricProvider("ofi+verbs"),
+			setNUMA: 1,
+			expNUMA: 1,
+		},
+		"pinned_numa_node and first_core set": {
+			cfg: engine.MockConfig().
+				WithPinnedNumaNode(2).
+				WithServiceThreadCore(1).
+				WithFabricInterface("ib1").
+				WithFabricProvider("ofi+verbs"),
+			expErr: errors.New("cannot set both"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := tc.cfg.SetNUMAAffinity(tc.setNUMA)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			test.AssertEqual(t, tc.expNUMA, *tc.cfg.PinnedNumaNode,
+				"unexpected pinned numa node")
+			test.AssertEqual(t, tc.expNUMA, tc.cfg.Fabric.NumaNodeIndex,
+				"unexpected numa node in fabric config")
+			test.AssertEqual(t, tc.expNUMA, tc.cfg.Storage.NumaNodeIndex,
+				"unexpected numa node in storage config")
+		})
+	}
+}
+
+func TestConfig_SetEngineAffinities(t *testing.T) {
+	baseSrvCfg := func() *Server {
+		return DefaultServer()
+	}
+	genAffFn := func(iface string, node uint) EngineAffinityFn {
+		return func(_ logging.Logger, cfg *engine.Config) (uint, error) {
+			if iface == cfg.Fabric.Interface {
+				return node, nil
+			}
+			return 0, ErrNoAffinityDetected
+		}
+	}
+
+	for name, tc := range map[string]struct {
+		cfg         *Server
+		affSrcSet   []EngineAffinityFn
+		expNumaSet  []int
+		expFabNumas []int
+		expErr      error
+	}{
+		"no affinity sources": {
+			affSrcSet: []EngineAffinityFn{},
+			expErr:    errors.New("requires at least one"),
+		},
+		"no affinity detected (default NUMA nodes)": {
+			cfg: baseSrvCfg().WithEngines(
+				engine.MockConfig().
+					WithFabricInterface("ib0").
+					WithFabricProvider("ofi+verbs"),
+				engine.MockConfig().
+					WithFabricInterface("ib1").
+					WithFabricProvider("ofi+verbs"),
+			),
+			affSrcSet: []EngineAffinityFn{
+				genAffFn("", 0),
+			},
+			expNumaSet: []int{0, 0},
+		},
+		"engines have first_core set; NUMA nodes should not be set": {
+			cfg: baseSrvCfg().WithEngines(
+				engine.MockConfig().
+					WithFabricInterface("ib0").
+					WithFabricProvider("ofi+verbs").
+					WithServiceThreadCore(1),
+				engine.MockConfig().
+					WithFabricInterface("ib1").
+					WithFabricProvider("ofi+verbs").
+					WithServiceThreadCore(2),
+			),
+			expNumaSet: []int{-1, -1},
+		},
+		"single engine with pinned_numa_node set": {
+			cfg: baseSrvCfg().WithEngines(
+				engine.MockConfig().
+					WithFabricInterface("ib0").
+					WithFabricProvider("ofi+verbs").
+					WithPinnedNumaNode(1),
+			),
+			expNumaSet: []int{1},
+		},
+		"single engine without pinned_numa_node set and no detected affinity": {
+			cfg: baseSrvCfg().WithEngines(
+				engine.MockConfig().
+					WithFabricInterface("ib0").
+					WithFabricProvider("ofi+verbs"),
+			),
+			affSrcSet: []EngineAffinityFn{
+				genAffFn("", 0),
+			},
+			expNumaSet: []int{-1},
+		},
+		"single engine without pinned_numa_node set and affinity detected as != 0": {
+			cfg: baseSrvCfg().WithEngines(
+				engine.MockConfig().
+					WithFabricInterface("ib0").
+					WithFabricProvider("ofi+verbs"),
+			),
+			affSrcSet: []EngineAffinityFn{
+				genAffFn("ib0", 1),
+			},
+			expNumaSet: []int{1},
+		},
+		"single engine without pinned_numa_node set and affinity detected as 0": {
+			cfg: baseSrvCfg().WithEngines(
+				engine.MockConfig().
+					WithFabricInterface("ib0").
+					WithFabricProvider("ofi+verbs"),
+			),
+			affSrcSet: []EngineAffinityFn{
+				genAffFn("ib0", 0),
+			},
+			expNumaSet: []int{-1},
+		},
+		"multi engine without pinned_numa_node set and affinity for both detected as 0": {
+			cfg: baseSrvCfg().WithEngines(
+				engine.MockConfig().
+					WithFabricInterface("ib0").
+					WithFabricProvider("ofi+verbs"),
+				engine.MockConfig().
+					WithFabricInterface("ib1").
+					WithFabricProvider("ofi+verbs"),
+			),
+			affSrcSet: []EngineAffinityFn{
+				genAffFn("ib0", 0),
+				genAffFn("ib1", 0),
+			},
+			expNumaSet: []int{0, 0},
+		},
+		"multi engine without pinned_numa_node set": {
+			cfg: baseSrvCfg().WithEngines(
+				engine.MockConfig().
+					WithFabricInterface("ib0").
+					WithFabricProvider("ofi+verbs"),
+				engine.MockConfig().
+					WithFabricInterface("ib1").
+					WithFabricProvider("ofi+verbs"),
+			),
+			expNumaSet: []int{1, 2},
+		},
+		"multi engine with pinned_numa_node set matching detected affinities": {
+			cfg: baseSrvCfg().WithEngines(
+				engine.MockConfig().
+					WithPinnedNumaNode(1).
+					WithFabricInterface("ib0").
+					WithFabricProvider("ofi+verbs"),
+				engine.MockConfig().
+					WithPinnedNumaNode(2).
+					WithFabricInterface("ib1").
+					WithFabricProvider("ofi+verbs"),
+			),
+			expNumaSet: []int{1, 2},
+		},
+		"multi engine with pinned_numa_node set overriding detected affinities": {
+			cfg: baseSrvCfg().WithEngines(
+				engine.MockConfig().
+					WithPinnedNumaNode(2).
+					WithFabricInterface("ib0").
+					WithFabricProvider("ofi+verbs"),
+				engine.MockConfig().
+					WithPinnedNumaNode(1).
+					WithFabricInterface("ib1").
+					WithFabricProvider("ofi+verbs"),
+			),
+			expNumaSet: []int{2, 1},
+		},
+		"multi engine with first_core set; detected affinities overridden": {
+			cfg: baseSrvCfg().WithEngines(
+				engine.MockConfig().
+					WithServiceThreadCore(1).
+					WithFabricInterface("ib0").
+					WithFabricProvider("ofi+verbs"),
+				engine.MockConfig().
+					WithServiceThreadCore(25).
+					WithFabricInterface("ib1").
+					WithFabricProvider("ofi+verbs"),
+			),
+			expNumaSet:  []int{-1, -1}, // PinnedNumaNode should not be set
+			expFabNumas: []int{0, 0},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotNumaSet := make([]int, 0, len(tc.expNumaSet))
+			fabNumaSet := make([]int, 0, len(tc.expFabNumas))
+
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			if tc.affSrcSet == nil {
+				tc.affSrcSet = []EngineAffinityFn{
+					genAffFn("ib0", 1),
+					genAffFn("ib1", 2),
+				}
+			}
+
+			gotErr := tc.cfg.SetEngineAffinities(log, tc.affSrcSet...)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			for _, engine := range tc.cfg.Engines {
+				fabNumaSet = append(fabNumaSet, int(engine.Fabric.NumaNodeIndex))
+				if engine.PinnedNumaNode == nil {
+					gotNumaSet = append(gotNumaSet, -1)
+					continue
+				}
+				gotNumaSet = append(gotNumaSet, int(*engine.PinnedNumaNode))
+			}
+
+			if diff := cmp.Diff(tc.expNumaSet, gotNumaSet); diff != "" {
+				t.Errorf("unexpected engine numa node set (-want +got):\n%s", diff)
+			}
+			if tc.expFabNumas != nil {
+				if diff := cmp.Diff(tc.expFabNumas, fabNumaSet); diff != "" {
+					t.Errorf("unexpected fabric numa node set (-want +got):\n%s", diff)
+				}
+			}
 		})
 	}
 }

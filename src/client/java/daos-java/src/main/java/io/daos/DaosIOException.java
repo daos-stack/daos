@@ -138,6 +138,7 @@ public class DaosIOException extends IOException {
     sb.append(" error code: ");
     if (errorCode == Integer.MIN_VALUE) {
       sb.append("unknown.");
+      needSuperMsg = true;
     } else {
       sb.append(errorCode);
       if (errorCode < Constants.CUSTOM_ERROR_BASE) {

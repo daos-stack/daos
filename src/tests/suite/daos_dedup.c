@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -42,7 +42,7 @@ dedup_is_nvme_enabled(test_arg_t *arg)
 	int			 rc;
 
 	pinfo.pi_bits = DPI_ALL;
-	rc = test_pool_get_info(arg, &pinfo);
+	rc = test_pool_get_info(arg, &pinfo, NULL /* engine_ranks */);
 	assert_rc_equal(rc, 0);
 
 	return ps->ps_free_min[DAOS_MEDIA_NVME] != 0;
@@ -127,7 +127,8 @@ setup_cont_obj(struct dedup_test_ctx *ctx,
 	       uint32_t dedup_type,
 	       uint32_t dedup_threshold_setting)
 {
-	daos_prop_t *props = NULL;
+	daos_prop_t	*props = NULL;
+	char		 str[37];
 	int		 rc;
 	daos_size_t	 data_len;
 	daos_size_t	 dedup_threshold;
@@ -138,8 +139,6 @@ setup_cont_obj(struct dedup_test_ctx *ctx,
 	dedup_threshold = dedup_threshold_setting == THRESHOLD_GREATER_THAN_DATA
 			  ? data_len + 10 : data_len - 10;
 
-	uuid_generate(ctx->uuid);
-
 	props = daos_prop_alloc(3);
 	assert_non_null(props);
 	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_CSUM;
@@ -149,16 +148,17 @@ setup_cont_obj(struct dedup_test_ctx *ctx,
 	props->dpp_entries[2].dpe_type = DAOS_PROP_CO_DEDUP_THRESHOLD;
 	props->dpp_entries[2].dpe_val = dedup_threshold;
 
-	rc = daos_cont_create(ctx->poh, ctx->uuid, props, NULL);
+	rc = daos_cont_create(ctx->poh, &ctx->uuid, props, NULL);
 	assert_rc_equal(0, rc);
 	daos_prop_free(props);
 
-	rc = daos_cont_open(ctx->poh, ctx->uuid, DAOS_COO_RW,
+	uuid_unparse(ctx->uuid, str);
+	rc = daos_cont_open(ctx->poh, str, DAOS_COO_RW,
 			    &ctx->coh, &ctx->info, NULL);
 	assert_rc_equal(0, rc);
 
 	ctx->oid = daos_test_oid_gen(ctx->coh, oclass, 0, 0, 1);
-	rc = daos_obj_open(ctx->coh, ctx->oid, 0, &ctx->oh, NULL);
+	rc = daos_obj_open(ctx->coh, ctx->oid, DAOS_OO_RW, &ctx->oh, NULL);
 	assert_rc_equal(0, rc);
 }
 
@@ -352,6 +352,6 @@ run_daos_dedup_test(int rank, int size, int *sub_tests, int sub_tests_size)
 		}
 	}
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -13,6 +13,8 @@
 #define ENUM_LARGE_KEY_BUF	(512 * 1024) /* 512k large key */
 #define ENUM_DESC_NR		5 /* number of keys/records returned by enum */
 #define ENUM_DESC_BUF		512 /* all keys/records returned by enum */
+#define LIBSERIALIZE		"libdaos_serialize.so"
+#define NUM_SERIALIZE_PROPS	19
 
 #include <stdio.h>
 #include <dirent.h>
@@ -21,6 +23,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <sys/ioctl.h>
+#include <dlfcn.h>
 #include <daos.h>
 #include <daos/common.h>
 #include <daos/checksum.h>
@@ -28,25 +32,14 @@
 #include <daos/debug.h>
 #include <daos/object.h>
 
-#include "daos_types.h"
-#include "daos_api.h"
-#include "daos_fs.h"
-#include "daos_uns.h"
-#include "daos_prop.h"
-#include "daos_fs_sys.h"
+#include <daos_types.h>
+#include <daos_api.h>
+#include <daos_fs.h>
+#include <daos_uns.h>
+#include <daos_prop.h>
+#include <daos_fs_sys.h>
 
 #include "daos_hdlr.h"
-
-#define NUM_DIRENTS 24
-#define MAX_FILENAME 256
-#define OID_ARR_SIZE 8
-
-struct fs_copy_dirent {
-	dfs_obj_t *dir;
-	struct dirent ents[NUM_DIRENTS];
-	daos_anchor_t anchor;
-	uint32_t num_ents;
-};
 
 struct file_dfs {
 	enum {POSIX, DAOS} type;
@@ -56,627 +49,24 @@ struct file_dfs {
 	dfs_sys_t *dfs_sys;
 };
 
-struct dm_args {
-	char		*src;
-	char		*dst;
-	char		src_pool[DAOS_PROP_LABEL_MAX_LEN + 1];
-	char		src_cont[DAOS_PROP_LABEL_MAX_LEN + 1];
-	char		dst_pool[DAOS_PROP_LABEL_MAX_LEN + 1];
-	char		dst_cont[DAOS_PROP_LABEL_MAX_LEN + 1];
-	daos_handle_t	src_poh;
-	daos_handle_t	src_coh;
-	daos_handle_t	dst_poh;
-	daos_handle_t	dst_coh;
-	uint32_t	cont_prop_oid;
-	uint32_t	cont_prop_layout;
-	uint64_t	cont_layout;
-	uint64_t	cont_oid;
-
-};
-
 /* Report an error with a system error number using a standard output format */
-#define DH_PERROR_SYS(AP, RC, STR, ...)					\
-	fprintf((AP)->errstream, STR ": %s (%d)\n", ## __VA_ARGS__, strerror(RC), (RC))
+#define DH_PERROR_SYS(AP, RC, STR, ...)                                                            \
+	do {                                                                                       \
+		fprintf((AP)->errstream, STR ": %s (%d)\n", ##__VA_ARGS__, strerror(RC), (RC));    \
+	} while (0)
 
 /* Report an error with a daos error number using a standard output format */
-#define DH_PERROR_DER(AP, RC, STR, ...)					\
-	fprintf((AP)->errstream, STR ": %s (%d)\n", ## __VA_ARGS__, d_errdesc(RC), (RC))
+#define DH_PERROR_DER(AP, RC, STR, ...)                                                            \
+	do {                                                                                       \
+		fprintf((AP)->errstream, STR ": %s (%d)\n", ##__VA_ARGS__, d_errdesc(RC), (RC));   \
+	} while (0)
 
 static int
-parse_acl_file(struct cmd_args_s *ap, const char *path, struct daos_acl **acl);
+cont_destroy_snap_hdlr(struct cmd_args_s *ap);
 
 /* TODO: implement these pool op functions
  * int pool_stat_hdlr(struct cmd_args_s *ap);
  */
-
-static int
-pool_decode_props(struct cmd_args_s *ap, daos_prop_t *props)
-{
-	struct daos_prop_entry		*entry;
-	int				rc = 0;
-
-	/* unset properties should get default value */
-
-	entry = daos_prop_entry_get(props, DAOS_PROP_PO_LABEL);
-	if (entry == NULL || entry->dpe_str == NULL) {
-		fprintf(ap->errstream, "label property not found\n");
-		rc = -DER_INVAL;
-	} else {
-		D_PRINT("label:\t\t\t%s\n", entry->dpe_str);
-	}
-
-	entry = daos_prop_entry_get(props, DAOS_PROP_PO_SPACE_RB);
-	if (entry == NULL) {
-		fprintf(ap->errstream,
-			"rebuild space ratio property not found\n");
-		rc = -DER_INVAL;
-	} else {
-		D_PRINT("rebuild space ratio:\t"DF_U64"%%\n", entry->dpe_val);
-	}
-
-	entry = daos_prop_entry_get(props, DAOS_PROP_PO_SELF_HEAL);
-	if (entry == NULL) {
-		fprintf(ap->errstream, "self-healing property not found\n");
-		rc = -DER_INVAL;
-	} else {
-		D_PRINT("self-healing:\t\t");
-		D_PRINT("%s-exclude,", entry->dpe_val &
-				       DAOS_SELF_HEAL_AUTO_EXCLUDE ?
-				       "auto" : "manual");
-		D_PRINT("%s-rebuild\n", entry->dpe_val &
-					DAOS_SELF_HEAL_AUTO_REBUILD ?
-					"auto" : "manual");
-		if (entry->dpe_val & ~(DAOS_SELF_HEAL_AUTO_EXCLUDE |
-				       DAOS_SELF_HEAL_AUTO_REBUILD))
-			D_PRINT("unknown bits set in self-healing property ("
-				DF_X64")\n", entry->dpe_val);
-	}
-
-	entry = daos_prop_entry_get(props, DAOS_PROP_PO_RECLAIM);
-	if (entry == NULL) {
-		fprintf(ap->errstream, "reclaim property not found\n");
-		rc = -DER_INVAL;
-	} else {
-		D_PRINT("reclaim strategy:\t");
-		switch (entry->dpe_val) {
-		case DAOS_RECLAIM_DISABLED:
-			D_PRINT("disabled\n");
-			break;
-		case DAOS_RECLAIM_LAZY:
-			D_PRINT("lazy\n");
-			break;
-		case DAOS_RECLAIM_SNAPSHOT:
-			D_PRINT("snapshot\n");
-			break;
-		case DAOS_RECLAIM_BATCH:
-			D_PRINT("batch\n");
-			break;
-		case DAOS_RECLAIM_TIME:
-			D_PRINT("time\n");
-			break;
-		default:
-			D_PRINT("<unknown value> ("DF_X64")\n", entry->dpe_val);
-			break;
-		}
-	}
-
-	entry = daos_prop_entry_get(props, DAOS_PROP_PO_EC_CELL_SZ);
-	if (entry == NULL) {
-		fprintf(ap->errstream, "EC cell size not found\n");
-		rc = -DER_INVAL;
-	} else {
-		if (!daos_ec_cs_valid(entry->dpe_val)) {
-			D_PRINT("Invalid EC cell size: %u\n",
-				(uint32_t)entry->dpe_val);
-		} else {
-			D_PRINT("EC cell size = %u\n",
-				(uint32_t)entry->dpe_val);
-		}
-	}
-
-	entry = daos_prop_entry_get(props, DAOS_PROP_PO_OWNER);
-	if (entry == NULL || entry->dpe_str == NULL) {
-		fprintf(ap->errstream, "owner property not found\n");
-		rc = -DER_INVAL;
-	} else {
-		D_PRINT("owner:\t\t\t%s\n", entry->dpe_str);
-	}
-
-	entry = daos_prop_entry_get(props, DAOS_PROP_PO_OWNER_GROUP);
-	if (entry == NULL || entry->dpe_str == NULL) {
-		fprintf(ap->errstream, "owner-group property not found\n");
-		rc = -DER_INVAL;
-	} else {
-		D_PRINT("owner-group:\t\t%s\n", entry->dpe_str);
-	}
-
-	entry = daos_prop_entry_get(props, DAOS_PROP_PO_ACL);
-	if (entry == NULL || entry->dpe_val_ptr == NULL) {
-		fprintf(ap->errstream, "acl property not found\n");
-		rc = -DER_INVAL;
-	} else {
-		daos_acl_dump(entry->dpe_val_ptr);
-	}
-
-	return rc;
-}
-
-int
-pool_get_prop_hdlr(struct cmd_args_s *ap)
-{
-	daos_prop_t	*prop_query;
-	int		rc = 0;
-	int		rc2;
-
-	assert(ap != NULL);
-	assert(ap->p_op == POOL_GET_PROP);
-
-	rc = daos_pool_connect(ap->p_uuid, ap->sysname, DAOS_PC_RO, &ap->pool, NULL, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream, "failed to connect to pool "DF_UUIDF": %s (%d)\n",
-			DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
-		D_GOTO(out, rc);
-	}
-
-	prop_query = daos_prop_alloc(0);
-	if (prop_query == NULL)
-		D_GOTO(out_disconnect, rc = -DER_NOMEM);
-
-	rc = daos_pool_query(ap->pool, NULL, NULL, prop_query, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream, "failed to query properties for pool "DF_UUIDF": %s (%d)\n",
-			DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
-		D_GOTO(out_disconnect, rc);
-	}
-
-	D_PRINT("Pool properties for "DF_UUIDF" :\n", DP_UUID(ap->p_uuid));
-
-	rc = pool_decode_props(ap, prop_query);
-
-out_disconnect:
-	daos_prop_free(prop_query);
-
-	/* Pool disconnect  in normal and error flows: preserve rc */
-	rc2 = daos_pool_disconnect(ap->pool, NULL);
-	if (rc2 != 0)
-		fprintf(ap->errstream, "failed to disconnect from pool "DF_UUIDF
-			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc2),
-			rc2);
-
-	if (rc == 0)
-		rc = rc2;
-out:
-	return rc;
-}
-
-int
-pool_set_attr_hdlr(struct cmd_args_s *ap)
-{
-	size_t	value_size;
-	int	rc = 0;
-	int	rc2;
-
-	assert(ap != NULL);
-	assert(ap->p_op == POOL_SET_ATTR);
-
-	if (ap->attrname_str == NULL || ap->value_str == NULL) {
-		fprintf(ap->errstream,
-			"both attribute name and value must be provided\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
-			       DAOS_PC_RW, &ap->pool,
-			       NULL /* info */, NULL /* ev */);
-	if (rc != 0) {
-		fprintf(ap->errstream, "failed to connect to pool "DF_UUIDF
-			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
-		D_GOTO(out, rc);
-	}
-
-	value_size = strlen(ap->value_str);
-	rc = daos_pool_set_attr(ap->pool, 1,
-				(const char * const*)&ap->attrname_str,
-				(const void * const*)&ap->value_str,
-				(const size_t *)&value_size, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to set attribute '%s' for pool "DF_UUIDF
-			": %s (%d)\n", ap->attrname_str, DP_UUID(ap->p_uuid),
-			d_errdesc(rc), rc);
-		D_GOTO(out_disconnect, rc);
-	}
-
-out_disconnect:
-	/* Pool disconnect  in normal and error flows: preserve rc */
-	rc2 = daos_pool_disconnect(ap->pool, NULL);
-	if (rc2 != 0)
-		fprintf(ap->errstream, "failed to disconnect from pool "DF_UUIDF
-			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc2),
-			rc2);
-
-	if (rc == 0)
-		rc = rc2;
-out:
-	return rc;
-}
-
-int
-pool_del_attr_hdlr(struct cmd_args_s *ap)
-{
-	int rc = 0;
-	int rc2;
-
-	assert(ap != NULL);
-	assert(ap->p_op == POOL_DEL_ATTR);
-
-	if (ap->attrname_str == NULL) {
-		fprintf(ap->errstream, "attribute name must be provided\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
-			       DAOS_PC_RW, &ap->pool,
-			       NULL /* info */, NULL /* ev */);
-	if (rc != 0) {
-		fprintf(ap->errstream, "failed to connect to pool "DF_UUIDF
-			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
-		D_GOTO(out, rc);
-	}
-
-	rc = daos_pool_del_attr(ap->pool, 1,
-				(const char * const*)&ap->attrname_str, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to delete attribute '%s' for pool "
-			DF_UUIDF": %s (%d)\n", ap->attrname_str,
-			DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
-		D_GOTO(out_disconnect, rc);
-	}
-
-out_disconnect:
-	/* Pool disconnect  in normal and error flows: preserve rc */
-	rc2 = daos_pool_disconnect(ap->pool, NULL);
-	if (rc2 != 0)
-		fprintf(ap->errstream, "failed to disconnect from pool "DF_UUIDF
-			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc2),
-			rc2);
-
-	if (rc == 0)
-		rc = rc2;
-out:
-	return rc;
-}
-
-int
-pool_get_attr_hdlr(struct cmd_args_s *ap)
-{
-	size_t	attr_size, expected_size;
-	char	*buf = NULL;
-	int	rc = 0;
-	int	rc2;
-
-	assert(ap != NULL);
-	assert(ap->p_op == POOL_GET_ATTR);
-
-	if (ap->attrname_str == NULL) {
-		fprintf(ap->errstream, "attribute name must be provided\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
-			       DAOS_PC_RO, &ap->pool,
-			       NULL /* info */, NULL /* ev */);
-	if (rc != 0) {
-		fprintf(ap->errstream, "failed to connect to pool "DF_UUIDF
-			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
-		D_GOTO(out, rc);
-	}
-
-	/* evaluate required size to get attr */
-	attr_size = 0;
-	rc = daos_pool_get_attr(ap->pool, 1,
-				(const char * const*)&ap->attrname_str, NULL,
-				&attr_size, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to retrieve size of attribute '%s' for "
-			"pool "DF_UUIDF": %s (%d)\n", ap->attrname_str,
-			DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
-		D_GOTO(out_disconnect, rc);
-	}
-
-	D_PRINT("Pool's '%s' attribute value: ", ap->attrname_str);
-	if (attr_size <= 0) {
-		D_PRINT("empty attribute\n");
-		D_GOTO(out_disconnect, rc);
-	}
-
-	D_ALLOC(buf, attr_size);
-	if (buf == NULL)
-		D_GOTO(out_disconnect, rc = -DER_NOMEM);
-
-	expected_size = attr_size;
-	rc = daos_pool_get_attr(ap->pool, 1,
-				(const char * const*)&ap->attrname_str,
-				(void * const*)&buf, &attr_size, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to get attribute '%s' for pool "DF_UUIDF
-			": %s (%d)\n", ap->attrname_str, DP_UUID(ap->p_uuid),
-			d_errdesc(rc), rc);
-		D_GOTO(out_disconnect, rc);
-	}
-
-	if (expected_size < attr_size)
-		fprintf(ap->errstream,
-			"size required to get attributes has raised, "
-			"value has been truncated\n");
-	D_PRINT("%s\n", buf);
-
-out_disconnect:
-	D_FREE(buf);
-
-	/* Pool disconnect  in normal and error flows: preserve rc */
-	rc2 = daos_pool_disconnect(ap->pool, NULL);
-	if (rc2 != 0)
-		fprintf(ap->errstream, "failed to disconnect from pool "DF_UUIDF
-			": %s (%d\n)", DP_UUID(ap->p_uuid), d_errdesc(rc2),
-			rc2);
-
-	if (rc == 0)
-		rc = rc2;
-out:
-	return rc;
-}
-
-int
-pool_list_attrs_hdlr(struct cmd_args_s *ap)
-{
-	size_t	total_size, expected_size, cur = 0, len;
-	char	*buf = NULL;
-	int	rc = 0;
-	int	rc2;
-
-	assert(ap != NULL);
-	assert(ap->p_op == POOL_LIST_ATTRS);
-
-	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
-			       DAOS_PC_RO, &ap->pool,
-			       NULL /* info */, NULL /* ev */);
-	if (rc != 0) {
-		fprintf(ap->errstream, "failed to connect to pool "DF_UUIDF
-			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
-		D_GOTO(out, rc);
-	}
-
-	/* evaluate required size to get all attrs */
-	total_size = 0;
-	rc = daos_pool_list_attr(ap->pool, NULL, &total_size, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to list attribute for pool "DF_UUIDF
-			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
-		D_GOTO(out_disconnect, rc);
-	}
-
-	D_PRINT("Pool attributes:\n");
-	if (total_size == 0) {
-		D_PRINT("No attributes\n");
-		D_GOTO(out_disconnect, rc);
-	}
-
-	D_ALLOC(buf, total_size);
-	if (buf == NULL)
-		D_GOTO(out_disconnect, rc = -DER_NOMEM);
-
-	expected_size = total_size;
-	rc = daos_pool_list_attr(ap->pool, buf, &total_size, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to list attribute for pool "DF_UUIDF
-			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
-		D_GOTO(out_disconnect, rc);
-	}
-
-	if (expected_size < total_size)
-		fprintf(ap->errstream,
-			"size required to gather all attributes has raised,"
-			" list has been truncated\n");
-	while (cur < total_size) {
-		len = strnlen(buf + cur, total_size - cur);
-		if (len == total_size - cur) {
-			fprintf(ap->errstream,
-				"end of buf reached but no end of string"
-				" encountered, ignoring\n");
-			break;
-		}
-		D_PRINT("%s\n", buf + cur);
-		cur += len + 1;
-	}
-
-out_disconnect:
-	D_FREE(buf);
-
-	/* Pool disconnect  in normal and error flows: preserve rc */
-	rc2 = daos_pool_disconnect(ap->pool, NULL);
-	if (rc2 != 0)
-		fprintf(ap->errstream, "failed to disconnect from pool "DF_UUIDF
-			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc2),
-			rc2);
-
-	if (rc == 0)
-		rc = rc2;
-out:
-	return rc;
-}
-
-int
-pool_list_containers_hdlr(struct cmd_args_s *ap)
-{
-	daos_size_t			 ncont = 0;
-	const daos_size_t		 extra_cont_margin = 16;
-	struct daos_pool_cont_info	*conts = NULL;
-	int				 i;
-	int				 rc = 0;
-	int				 rc2;
-
-	assert(ap != NULL);
-	assert(ap->p_op == POOL_LIST_CONTAINERS);
-
-	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
-			       DAOS_PC_RO, &ap->pool,
-			       NULL /* info */, NULL /* ev */);
-	if (rc != 0) {
-		fprintf(ap->errstream, "failed to connect to pool "DF_UUIDF
-			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
-		D_GOTO(out, rc);
-	}
-
-	/* Issue first API call to get current number of containers */
-	rc = daos_pool_list_cont(ap->pool, &ncont, NULL /* cbuf */,
-				 NULL /* ev */);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to retrieve number of containers for "
-			"pool "DF_UUIDF": %s (%d)\n", DP_UUID(ap->p_uuid),
-			d_errdesc(rc), rc);
-		D_GOTO(out_disconnect, rc);
-	}
-
-	/* If no containers, no need for a second call */
-	if (ncont == 0)
-		D_GOTO(out_disconnect, rc);
-
-	/* Allocate conts[] with some margin to avoid -DER_TRUNC if more
-	 * containers were created after the first call
-	 */
-	ncont += extra_cont_margin;
-	D_ALLOC_ARRAY(conts, ncont);
-	if (conts == NULL) {
-		rc = -DER_NOMEM;
-		fprintf(ap->errstream, "failed to allocate memory for "
-			"pool "DF_UUIDF": %s (%d)\n", DP_UUID(ap->p_uuid),
-			d_errdesc(rc), rc);
-		D_GOTO(out_disconnect, 0);
-	}
-
-	rc = daos_pool_list_cont(ap->pool, &ncont, conts, NULL /* ev */);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to list containers for pool "DF_UUIDF
-			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
-		D_GOTO(out_free, rc);
-	}
-
-	for (i = 0; i < ncont; i++) {
-		D_PRINT(DF_UUIDF" %s\n", DP_UUID(conts[i].pci_uuid),
-			conts[i].pci_label);
-	}
-
-out_free:
-	D_FREE(conts);
-
-out_disconnect:
-	/* Pool disconnect  in normal and error flows: preserve rc */
-	rc2 = daos_pool_disconnect(ap->pool, NULL);
-	/* Automatically retry in case of DER_NOMEM.  This is to allow the
-	 * NLT testing to correctly stress-test all code paths and not
-	 * register any memory leaks.
-	 * TODO: Move this retry login into daos_pool_disconnect()
-	 * or work out another way to effectively shut down and release
-	 * resources in this case.
-	 */
-	if (rc2 == -DER_NOMEM)
-		rc2 = daos_pool_disconnect(ap->pool, NULL);
-	if (rc2 != 0)
-		fprintf(ap->errstream, "failed to disconnect from pool "DF_UUIDF
-			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc2),
-			rc2);
-
-	if (rc == 0)
-		rc = rc2;
-out:
-	return rc;
-}
-
-int
-pool_query_hdlr(struct cmd_args_s *ap)
-{
-	daos_pool_info_t		 pinfo = {0};
-	struct daos_pool_space		*ps = &pinfo.pi_space;
-	struct daos_rebuild_status	*rstat = &pinfo.pi_rebuild_st;
-	int				 i;
-	int				rc = 0;
-	int				rc2;
-
-	assert(ap != NULL);
-	assert(ap->p_op == POOL_QUERY);
-
-	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
-			       DAOS_PC_RO, &ap->pool,
-			       NULL /* info */, NULL /* ev */);
-	if (rc != 0) {
-		fprintf(ap->errstream, "failed to connect to pool "DF_UUIDF
-			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
-		D_GOTO(out, rc);
-	}
-
-	pinfo.pi_bits = DPI_ALL;
-	rc = daos_pool_query(ap->pool, NULL, &pinfo, NULL, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to query pool "DF_UUIDF": %s (%d)\n",
-			DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
-		D_GOTO(out_disconnect, rc);
-	}
-	D_PRINT("Pool "DF_UUIDF", ntarget=%u, disabled=%u, version=%u\n",
-		DP_UUID(pinfo.pi_uuid), pinfo.pi_ntargets,
-		pinfo.pi_ndisabled, pinfo.pi_map_ver);
-
-	D_PRINT("Pool space info:\n");
-	D_PRINT("- Target(VOS) count:%d\n", ps->ps_ntargets);
-	for (i = DAOS_MEDIA_SCM; i < DAOS_MEDIA_MAX; i++) {
-		D_PRINT("- %s:\n",
-			i == DAOS_MEDIA_SCM ? "SCM" : "NVMe");
-		D_PRINT("  Total size: "DF_U64"\n",
-			ps->ps_space.s_total[i]);
-		D_PRINT("  Free: "DF_U64", min:"DF_U64", max:"DF_U64", "
-			"mean:"DF_U64"\n", ps->ps_space.s_free[i],
-			ps->ps_free_min[i], ps->ps_free_max[i],
-			ps->ps_free_mean[i]);
-	}
-
-	if (rstat->rs_errno == 0) {
-		char	*sstr;
-
-		if (rstat->rs_version == 0)
-			sstr = "idle";
-		else if (rstat->rs_done)
-			sstr = "done";
-		else
-			sstr = "busy";
-
-		D_PRINT("Rebuild %s, "DF_U64" objs, "DF_U64" recs\n",
-			sstr, rstat->rs_obj_nr, rstat->rs_rec_nr);
-	} else {
-		D_PRINT("Rebuild failed, rc=%d, status=%d\n",
-			rc, rstat->rs_errno);
-	}
-
-out_disconnect:
-	/* Pool disconnect  in normal and error flows: preserve rc */
-	rc2 = daos_pool_disconnect(ap->pool, NULL);
-	if (rc2 != 0)
-		fprintf(ap->errstream, "failed to disconnect from pool "DF_UUIDF
-			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc2),
-			rc2);
-
-	if (rc == 0)
-		rc = rc2;
-out:
-	return rc;
-}
 
 int
 cont_check_hdlr(struct cmd_args_s *ap)
@@ -692,6 +82,7 @@ cont_check_hdlr(struct cmd_args_s *ap)
 	unsigned long		inconsistent = 0;
 	uint32_t		oids_nr;
 	int			rc, i;
+	int			rc2;
 
 	/* Create a snapshot with OIT */
 	rc = daos_cont_create_snap_opt(ap->cont, &ap->epc, NULL,
@@ -703,9 +94,7 @@ cont_check_hdlr(struct cmd_args_s *ap)
 	/* Open OIT */
 	rc = daos_oit_open(ap->cont, ap->epc, &oit, NULL);
 	if (rc != 0) {
-		fprintf(ap->errstream,
-			"open of container's OIT failed: "DF_RC"\n",
-			DP_RC(rc));
+		DH_PERROR_DER(ap, rc, "open of container's OIT failed");
 		goto out_snap;
 	}
 
@@ -717,9 +106,7 @@ cont_check_hdlr(struct cmd_args_s *ap)
 		oids_nr = OID_ARR_SIZE;
 		rc = daos_oit_list(oit, oids, &oids_nr, &anchor, NULL);
 		if (rc != 0) {
-			fprintf(ap->errstream,
-				"object IDs enumeration failed: "DF_RC"\n",
-				DP_RC(rc));
+			DH_PERROR_DER(ap, rc, "object IDs enumeration failed");
 			D_GOTO(out_close, rc);
 		}
 
@@ -741,9 +128,8 @@ cont_check_hdlr(struct cmd_args_s *ap)
 			}
 
 			if (rc < 0) {
-				fprintf(ap->errstream,
-					"check object "DF_OID" failed: "
-					DF_RC"\n", DP_OID(oids[i]), DP_RC(rc));
+				DH_PERROR_DER(ap, rc,
+					"check object "DF_OID" failed", DP_OID(oids[i]));
 				D_GOTO(out_close, rc);
 			}
 		}
@@ -768,137 +154,21 @@ cont_check_hdlr(struct cmd_args_s *ap)
 	}
 
 out_close:
-	daos_oit_close(oit, NULL);
+	rc2 = daos_cont_snap_oit_destroy(ap->cont, oit, NULL);
+	if (rc == 0)
+		rc = rc2;
+	rc2 = daos_oit_close(oit, NULL);
+	if (rc == 0)
+		rc = rc2;
 out_snap:
-	cont_destroy_snap_hdlr(ap);
+	rc2 = cont_destroy_snap_hdlr(ap);
+	if (rc == 0)
+		rc = rc2;
 out:
 	return rc;
 }
 
-/* TODO implement the following container op functions
- * all with signatures similar to this:
- * int cont_FN_hdlr(struct cmd_args_s *ap)
- *
- * int cont_stat_hdlr()
- */
-
-/* this routine can be used to list all snapshots or to map a snapshot name
- * to its epoch number.
- */
-int
-cont_list_snaps_hdlr(struct cmd_args_s *ap)
-{
-	daos_epoch_t	*epochs = NULL;
-	char		**names = NULL;
-	daos_anchor_t	anchor;
-	int		rc;
-	int		i;
-	int		snaps_count;
-	int		expected_count;
-
-	/* evaluate size for listing */
-	snaps_count = 0;
-	memset(&anchor, 0, sizeof(anchor));
-	rc = daos_cont_list_snap(ap->cont, &snaps_count, NULL, NULL, &anchor, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to retrieve number of snapshots for container %s: %s (%d)\n",
-			ap->cont_str, d_errdesc(rc), rc);
-		D_GOTO(out, rc);
-	}
-
-	if (ap->snapname_str == NULL)
-		D_PRINT("Container's snapshots :\n");
-
-	if (!daos_anchor_is_eof(&anchor)) {
-		fprintf(ap->errstream, "too many snapshots returned\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-	if (snaps_count == 0) {
-		D_PRINT("no snapshots\n");
-		D_GOTO(out, rc);
-	}
-
-	D_ALLOC_ARRAY(epochs, snaps_count);
-	if (epochs == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-	D_ALLOC_ARRAY(names, snaps_count);
-	if (names == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-	for (i = 0; i < snaps_count; i++) {
-		D_ALLOC_ARRAY(names[i], DAOS_SNAPSHOT_MAX_LEN);
-		if (names[i] == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-	}
-
-	expected_count = snaps_count;
-	memset(&anchor, 0, sizeof(anchor));
-	rc = daos_cont_list_snap(ap->cont, &snaps_count, epochs, names, &anchor,
-				 NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream, "failed to list snapshots for container %s: %s (%d)\n",
-			ap->cont_str, d_errdesc(rc), rc);
-		D_GOTO(out, rc);
-	}
-	if (expected_count < snaps_count)
-		fprintf(ap->errstream,
-			"snapshot list has been truncated (size changed)\n");
-
-	if (ap->snapname_str == NULL && ap->epc == 0) {
-		for (i = 0; i < min(expected_count, snaps_count); i++)
-			D_PRINT(DF_U64" %s\n", epochs[i], names[i]);
-	} else {
-		for (i = 0; i < min(expected_count, snaps_count); i++)
-			if (ap->snapname_str != NULL &&
-			    strcmp(ap->snapname_str, names[i]) == 0) {
-				ap->epc = epochs[i];
-				break;
-			} else if (ap->epc == epochs[i]) {
-				break;
-			}
-		if (i == min(expected_count, snaps_count)) {
-			if (ap->snapname_str != NULL)
-				fprintf(ap->errstream,
-					"%s not found in snapshots list\n",
-				ap->snapname_str);
-			else
-				fprintf(ap->errstream,
-					DF_U64" not found in snapshots list\n",
-					ap->epc);
-			rc = -DER_NONEXIST;
-		}
-	}
-
-out:
-	D_FREE(epochs);
-	if (names != NULL) {
-		for (i = 0; i < snaps_count; i++)
-			D_FREE(names[i]);
-		D_FREE(names);
-	}
-
-	return rc;
-}
-
-int
-cont_create_snap_hdlr(struct cmd_args_s *ap)
-{
-	int rc;
-
-	rc = daos_cont_create_snap(ap->cont, &ap->epc, ap->snapname_str, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to create snapshot for container %s: %s (%d)\n",
-			ap->cont_str, d_errdesc(rc), rc);
-		D_GOTO(out, rc);
-	}
-
-	fprintf(ap->outstream, "snapshot/epoch "DF_U64" has been created\n", ap->epc);
-out:
-	return rc;
-}
-
-int
+static int
 cont_destroy_snap_hdlr(struct cmd_args_s *ap)
 {
 	daos_epoch_range_t epr;
@@ -934,888 +204,6 @@ cont_destroy_snap_hdlr(struct cmd_args_s *ap)
 	}
 
 out:
-	return rc;
-}
-
-int
-cont_set_attr_hdlr(struct cmd_args_s *ap)
-{
-	size_t	value_size;
-	int	rc = 0;
-
-	if (ap->attrname_str == NULL || ap->value_str == NULL) {
-		fprintf(ap->errstream,
-			"both attribute name and value must be provided\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	value_size = strlen(ap->value_str);
-	rc = daos_cont_set_attr(ap->cont, 1,
-				(const char * const*)&ap->attrname_str,
-				(const void * const*)&ap->value_str,
-				(const size_t *)&value_size, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to set attribute '%s' for container %s: %s (%d)\n",
-			ap->attrname_str, ap->cont_str, d_errdesc(rc), rc);
-		D_GOTO(out, rc);
-	}
-
-out:
-	return rc;
-}
-
-int
-cont_del_attr_hdlr(struct cmd_args_s *ap)
-{
-	int rc = 0;
-
-	if (ap->attrname_str == NULL) {
-		fprintf(ap->errstream, "attribute name must be provided\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	rc = daos_cont_del_attr(ap->cont, 1,
-				(const char * const*)&ap->attrname_str, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to delete attribute '%s' for container %s: %s (%d)\n",
-			ap->attrname_str, ap->cont_str, d_errdesc(rc), rc);
-		D_GOTO(out, rc);
-	}
-
-out:
-	return rc;
-}
-
-int
-cont_get_attr_hdlr(struct cmd_args_s *ap)
-{
-	size_t	attr_size, expected_size;
-	char	*buf = NULL;
-	int	rc = 0;
-
-	if (ap->attrname_str == NULL) {
-		fprintf(ap->errstream, "attribute name must be provided\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	/* evaluate required size to get attr */
-	attr_size = 0;
-	rc = daos_cont_get_attr(ap->cont, 1,
-				(const char * const*)&ap->attrname_str, NULL,
-				&attr_size, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to retrieve size of attribute '%s' for container %s: %s (%d)\n",
-			ap->attrname_str, ap->cont_str, d_errdesc(rc), rc);
-		D_GOTO(out, rc);
-	}
-
-	D_PRINT("Container's '%s' attribute value: ", ap->attrname_str);
-	if (attr_size <= 0) {
-		D_PRINT("empty attribute\n");
-		D_GOTO(out, rc);
-	}
-
-	D_ALLOC(buf, attr_size);
-	if (buf == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	expected_size = attr_size;
-	rc = daos_cont_get_attr(ap->cont, 1,
-				(const char * const*)&ap->attrname_str,
-				(void * const*)&buf, &attr_size, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to get attribute '%s' for container %s: %s (%d)\n",
-			ap->attrname_str, ap->cont_str, d_errdesc(rc), rc);
-		D_GOTO(out, rc);
-	}
-
-	if (expected_size < attr_size)
-		fprintf(ap->errstream,
-			"attributes list has been truncated (size changed)\n");
-
-	D_PRINT("%s\n", buf);
-
-out:
-	D_FREE(buf);
-
-	return rc;
-}
-
-int
-cont_list_attrs_hdlr(struct cmd_args_s *ap)
-{
-	size_t	size;
-	size_t	total_size;
-	size_t	expected_size;
-	size_t	cur = 0;
-	size_t	len;
-	char	*buf = NULL;
-	int	rc = 0;
-
-	/* evaluate required size to get all attrs */
-	total_size = 0;
-	rc = daos_cont_list_attr(ap->cont, NULL, &total_size, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to retrieve number of attributes for container %s: %s (%d)\n",
-			ap->cont_str, d_errdesc(rc), rc);
-		D_GOTO(out, rc);
-	}
-
-	D_PRINT("Container attributes:\n");
-	if (total_size == 0) {
-		D_PRINT("No attributes\n");
-		D_GOTO(out, rc);
-	}
-
-	D_ALLOC(buf, total_size);
-	if (buf == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	expected_size = total_size;
-	rc = daos_cont_list_attr(ap->cont, buf, &total_size, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream, "failed to list attributes for container %s: %s (%d)\n",
-			ap->cont_str, d_errdesc(rc), rc);
-		D_GOTO(out, rc);
-	}
-
-	if (expected_size < total_size)
-		fprintf(ap->errstream,
-			"attributes list has been truncated (size changed)\n");
-	size = min(expected_size, total_size);
-	while (cur < size) {
-		len = strnlen(buf + cur, size - cur);
-		if (len == size - cur) {
-			fprintf(ap->errstream,
-				"end of buf with no EOF; ignoring\n");
-			break;
-		}
-		D_PRINT("%s\n", buf + cur);
-		cur += len + 1;
-	}
-
-out:
-	D_FREE(buf);
-
-	return rc;
-}
-
-static int
-cont_decode_props(struct cmd_args_s *ap, daos_prop_t *props,
-		  daos_prop_t *prop_acl)
-{
-	struct daos_prop_entry		*entry;
-	char				type[10];
-	int				rc = 0;
-
-	/* unset properties should get default value */
-
-	entry = daos_prop_entry_get(props, DAOS_PROP_CO_LABEL);
-	if (entry == NULL || entry->dpe_str == NULL) {
-		fprintf(ap->errstream, "label property not found\n");
-		rc = -DER_INVAL;
-	} else {
-		D_PRINT("label:\t\t\t%s\n", entry->dpe_str);
-	}
-
-	entry = daos_prop_entry_get(props, DAOS_PROP_CO_LAYOUT_TYPE);
-	if (entry == NULL) {
-		fprintf(ap->errstream, "layout type property not found\n");
-		rc = -DER_INVAL;
-	} else {
-		daos_unparse_ctype(entry->dpe_val, type);
-		D_PRINT("layout type:\t\t%s ("DF_X64")\n", type,
-			entry->dpe_val);
-	}
-
-	entry = daos_prop_entry_get(props, DAOS_PROP_CO_LAYOUT_VER);
-	if (entry == NULL) {
-		fprintf(ap->errstream, "layout version property not found\n");
-		rc = -DER_INVAL;
-	} else {
-		D_PRINT("layout version:\t\t"DF_U64"\n", entry->dpe_val);
-	}
-
-	entry = daos_prop_entry_get(props, DAOS_PROP_CO_CSUM);
-	if (entry == NULL) {
-		fprintf(ap->errstream, "checksum type property not found\n");
-		rc = -DER_INVAL;
-	} else {
-		struct hash_ft *csum;
-
-		D_PRINT("checksum type:\t\t");
-		if (entry->dpe_val == DAOS_PROP_CO_CSUM_OFF) {
-			D_PRINT("off\n");
-		} else {
-			csum = daos_mhash_type2algo(
-				daos_contprop2hashtype(entry->dpe_val));
-			if (csum == NULL)
-				D_PRINT("<unknown value> ("DF_X64")\n",
-					entry->dpe_val);
-			else
-				D_PRINT("%s\n", csum->cf_name);
-		}
-	}
-
-	entry = daos_prop_entry_get(props, DAOS_PROP_CO_CSUM_CHUNK_SIZE);
-	if (entry == NULL) {
-		fprintf(ap->errstream,
-			"checksum chunk-size property not found\n");
-		rc = -DER_INVAL;
-	} else {
-		D_PRINT("checksum chunk-size:\t"DF_U64"\n", entry->dpe_val);
-	}
-
-	entry = daos_prop_entry_get(props, DAOS_PROP_CO_CSUM_SERVER_VERIFY);
-	if (entry == NULL) {
-		fprintf(ap->errstream,
-			"checksum verification on server property not found\n");
-		rc = -DER_INVAL;
-	} else {
-		D_PRINT("cksum verif. on server:\t");
-		if (entry->dpe_val == DAOS_PROP_CO_CSUM_SV_OFF)
-			D_PRINT("off\n");
-		else if (entry->dpe_val == DAOS_PROP_CO_CSUM_SV_ON)
-			D_PRINT("on\n");
-		else
-			D_PRINT("<unknown value> ("DF_X64")\n", entry->dpe_val);
-	}
-
-	entry = daos_prop_entry_get(props, DAOS_PROP_CO_DEDUP);
-	if (entry == NULL) {
-		fprintf(ap->errstream, "dedup property not found\n");
-		rc = -DER_INVAL;
-	} else {
-		D_PRINT("deduplication:\t\t");
-		switch (entry->dpe_val) {
-		case DAOS_PROP_CO_DEDUP_OFF:
-			D_PRINT("off\n");
-			break;
-		case DAOS_PROP_CO_DEDUP_MEMCMP:
-			D_PRINT("memcmp\n");
-			break;
-		case DAOS_PROP_CO_DEDUP_HASH:
-			D_PRINT("hash\n");
-			break;
-		default:
-			D_PRINT("<unknown value> ("DF_X64")\n", entry->dpe_val);
-			break;
-		}
-	}
-
-	entry = daos_prop_entry_get(props, DAOS_PROP_CO_DEDUP_THRESHOLD);
-	if (entry == NULL) {
-		fprintf(ap->errstream, "dedup threshold property not found\n");
-		rc = -DER_INVAL;
-	} else {
-		D_PRINT("dedup threshold:\t"DF_U64"\n", entry->dpe_val);
-	}
-
-	entry = daos_prop_entry_get(props, DAOS_PROP_CO_REDUN_FAC);
-	if (entry == NULL) {
-		fprintf(ap->errstream,
-			"redundancy factor property not found\n");
-		rc = -DER_INVAL;
-	} else {
-		D_PRINT("redundancy factor:\t");
-		switch (entry->dpe_val) {
-		case DAOS_PROP_CO_REDUN_RF0:
-			D_PRINT("rf0\n");
-			break;
-		case DAOS_PROP_CO_REDUN_RF1:
-			D_PRINT("rf1\n");
-			break;
-		case DAOS_PROP_CO_REDUN_RF2:
-			D_PRINT("rf2\n");
-			break;
-		case DAOS_PROP_CO_REDUN_RF3:
-			D_PRINT("rf3\n");
-			break;
-		case DAOS_PROP_CO_REDUN_RF4:
-			D_PRINT("rf4\n");
-			break;
-		default:
-			D_PRINT("<unknown value> ("DF_X64")\n", entry->dpe_val);
-			break;
-		}
-	}
-
-	entry = daos_prop_entry_get(props, DAOS_PROP_CO_REDUN_LVL);
-	if (entry == NULL) {
-		fprintf(ap->errstream, "redundancy level property not found\n");
-		rc = -DER_INVAL;
-	} else {
-		D_PRINT("redundancy level:\t");
-		if (entry->dpe_val == DAOS_PROP_CO_REDUN_RANK)
-			D_PRINT("node (%d)\n", DAOS_PROP_CO_REDUN_RANK);
-		else
-			/* XXX: should be resolved to string */
-			D_PRINT("rank+"DF_U64" ("DF_U64")\n",
-				entry->dpe_val - DAOS_PROP_CO_REDUN_RANK,
-				entry->dpe_val);
-	}
-
-	entry = daos_prop_entry_get(props, DAOS_PROP_CO_SNAPSHOT_MAX);
-	if (entry == NULL) {
-		fprintf(ap->errstream, "max snapshots property not found\n");
-		rc = -DER_INVAL;
-	} else {
-		D_PRINT("max snapshots:\t\t"DF_U64"\n", entry->dpe_val);
-	}
-
-	entry = daos_prop_entry_get(props, DAOS_PROP_CO_COMPRESS);
-	if (entry == NULL) {
-		fprintf(ap->errstream, "compression type property not found\n");
-		rc = -DER_INVAL;
-	} else {
-		D_PRINT("compression type:\t");
-		if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_OFF)
-			D_PRINT("off\n");
-		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_LZ4)
-			D_PRINT("lz4\n");
-		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_DEFLATE)
-			D_PRINT("deflate\n");
-		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_DEFLATE1)
-			D_PRINT("deflate1\n");
-		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_DEFLATE2)
-			D_PRINT("deflate2\n");
-		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_DEFLATE3)
-			D_PRINT("deflate3\n");
-		else if (entry->dpe_val == DAOS_PROP_CO_COMPRESS_DEFLATE4)
-			D_PRINT("deflate4\n");
-		else
-			D_PRINT("<unknown> ("DF_X64")\n", entry->dpe_val);
-	}
-
-	entry = daos_prop_entry_get(props, DAOS_PROP_CO_ENCRYPT);
-	if (entry == NULL) {
-		fprintf(ap->errstream, "encryption type property not found\n");
-		rc = -DER_INVAL;
-	} else {
-		D_PRINT("encryption type:\t");
-		if (entry->dpe_val == DAOS_PROP_CO_ENCRYPT_OFF)
-			D_PRINT("off\n");
-		else
-			D_PRINT("<unknown value> ("DF_X64")\n", entry->dpe_val);
-	}
-
-	entry = daos_prop_entry_get(props, DAOS_PROP_CO_EC_CELL_SZ);
-	if (entry == NULL) {
-		fprintf(ap->errstream, "EC cell size property not found\n");
-		rc = -DER_INVAL;
-	} else {
-		D_PRINT("EC cell size:\t%d\n", (int)entry->dpe_val);
-	}
-	entry = daos_prop_entry_get(props, DAOS_PROP_CO_ALLOCED_OID);
-	if (entry == NULL) {
-		fprintf(ap->errstream,
-			"Container allocated oid property not found\n");
-		rc = -DER_INVAL;
-	} else {
-		D_PRINT("Allocated OID:\t\t"DF_U64"\n", entry->dpe_val);
-	}
-
-	entry = daos_prop_entry_get(props, DAOS_PROP_CO_OWNER);
-	if (entry == NULL || entry->dpe_str == NULL) {
-		fprintf(ap->errstream, "owner property not found\n");
-		rc = -DER_INVAL;
-	} else {
-		D_PRINT("owner:\t\t\t%s\n", entry->dpe_str);
-	}
-
-	entry = daos_prop_entry_get(props, DAOS_PROP_CO_OWNER_GROUP);
-	if (entry == NULL || entry->dpe_str == NULL) {
-		fprintf(ap->errstream, "owner-group property not found\n");
-		rc = -DER_INVAL;
-	} else {
-		D_PRINT("owner-group:\t\t%s\n", entry->dpe_str);
-	}
-
-	entry = daos_prop_entry_get(props, DAOS_PROP_CO_ROOTS);
-	if (entry == NULL || entry->dpe_val_ptr == NULL) {
-		fprintf(ap->errstream, "roots property not found\n");
-		rc = -DER_INVAL;
-	}
-
-	entry = daos_prop_entry_get(props, DAOS_PROP_CO_STATUS);
-	if (entry == NULL) {
-		fprintf(ap->errstream, "status property not found\n");
-		rc = -DER_INVAL;
-	} else {
-		struct daos_co_status	co_stat = { 0 };
-
-		daos_prop_val_2_co_status(entry->dpe_val, &co_stat);
-		if (co_stat.dcs_status == DAOS_PROP_CO_HEALTHY)
-			D_PRINT("status:\t\t\tHEALTHY\n");
-		else if (co_stat.dcs_status == DAOS_PROP_CO_UNCLEAN)
-			D_PRINT("status:\t\t\tUNCLEAN\n");
-		else
-			fprintf(ap->errstream, "bad dcs_status %d\n",
-				co_stat.dcs_status);
-	}
-
-	/* Only mention ACL if there's something to print */
-	if (prop_acl != NULL) {
-		entry = daos_prop_entry_get(prop_acl, DAOS_PROP_CO_ACL);
-		if (entry != NULL && entry->dpe_val_ptr != NULL) {
-			struct daos_acl *acl;
-
-			acl = (struct daos_acl *)entry->dpe_val_ptr;
-			D_PRINT("acl:\n");
-			rc = daos_acl_to_stream(ap->outstream, acl, false);
-			if (rc)
-				fprintf(ap->errstream,
-					"unable to decode ACL: %s (%d)\n",
-					d_errdesc(rc), rc);
-		}
-	}
-
-	return rc;
-}
-
-/* cont_get_prop_hdlr() - get container properties */
-int
-cont_get_prop_hdlr(struct cmd_args_s *ap)
-{
-	daos_prop_t	*prop_query;
-	daos_prop_t	*prop_acl = NULL;
-	int		rc = 0;
-	uint32_t	i;
-	uint32_t	entry_type;
-
-	/*
-	 * Get all props except the ACL first.
-	 */
-	prop_query = daos_prop_alloc(DAOS_PROP_CO_NUM - 1);
-	if (prop_query == NULL)
-		return -DER_NOMEM;
-
-	entry_type = DAOS_PROP_CO_MIN + 1;
-	for (i = 0; i < prop_query->dpp_nr; entry_type++) {
-		if (entry_type == DAOS_PROP_CO_ACL)
-			continue; /* skip ACL */
-		prop_query->dpp_entries[i].dpe_type = entry_type;
-		i++;
-	}
-
-	rc = daos_cont_query(ap->cont, NULL, prop_query, NULL);
-	if (rc) {
-		fprintf(ap->errstream, "failed to query container %s: %s (%d)\n",
-			ap->cont_str, d_errdesc(rc), rc);
-		D_GOTO(err_out, rc);
-	}
-
-	/* Fetch the ACL separately in case user doesn't have access */
-	rc = daos_cont_get_acl(ap->cont, &prop_acl, NULL);
-	if (rc && rc != -DER_NO_PERM) {
-		fprintf(ap->errstream, "failed to query ACL for container %s: %s (%d)\n",
-			ap->cont_str, d_errdesc(rc), rc);
-		D_GOTO(err_out, rc);
-	}
-
-	D_PRINT("Container properties for \"%s\":\n", ap->cont_str);
-	rc = cont_decode_props(ap, prop_query, prop_acl);
-
-err_out:
-	daos_prop_free(prop_query);
-	daos_prop_free(prop_acl);
-	return rc;
-}
-
-int
-cont_set_prop_hdlr(struct cmd_args_s *ap)
-{
-	int			 rc;
-	struct daos_prop_entry	*entry;
-	uint32_t		 i;
-
-	if (ap->props == NULL || ap->props->dpp_nr == 0) {
-		fprintf(ap->errstream,
-			"at least one property must be requested\n");
-		D_GOTO(err_out, rc = -DER_INVAL);
-	}
-
-	/* Validate the properties are supported for set */
-	for (i = 0; i < ap->props->dpp_nr; i++) {
-		entry = &ap->props->dpp_entries[i];
-		if (entry->dpe_type != DAOS_PROP_CO_LABEL &&
-		    entry->dpe_type != DAOS_PROP_CO_STATUS) {
-			fprintf(ap->errstream,
-				"property not supported for set\n");
-			D_GOTO(err_out, rc = -DER_INVAL);
-		}
-	}
-
-	rc = daos_cont_set_prop(ap->cont, ap->props, NULL);
-	if (rc) {
-		fprintf(ap->errstream, "failed to set properties for container %s: %s (%d)\n",
-			ap->cont_str, d_errdesc(rc), rc);
-		D_GOTO(err_out, rc);
-	}
-
-	D_PRINT("Properties were successfully set\n");
-
-err_out:
-	return rc;
-}
-
-static size_t
-get_num_prop_entries_to_add(struct cmd_args_s *ap)
-{
-	size_t nr = 0;
-
-	if (ap->aclfile)
-		nr++;
-	if (ap->user)
-		nr++;
-	if (ap->group)
-		nr++;
-	if (ap->type != DAOS_PROP_CO_LAYOUT_POSIX &&
-	    ap->type != DAOS_PROP_CO_LAYOUT_UNKNOWN)
-		nr++;
-
-	return nr;
-}
-
-/*
- * Returns the first empty prop entry in ap->props.
- * If ap->props wasn't set previously, a new prop is created.
- */
-static int
-get_first_empty_prop_entry(struct cmd_args_s *ap,
-			   struct daos_prop_entry **entry)
-{
-	size_t nr = 0;
-
-	nr = get_num_prop_entries_to_add(ap);
-	if (nr == 0) {
-		*entry = NULL;
-		return 0; /* nothing to do */
-	}
-
-	if (ap->props == NULL) {
-		/*
-		 * Note that we don't control the memory this way, the prop is
-		 * freed by the external caller
-		 */
-		ap->props = daos_prop_alloc(nr);
-		if (ap->props == NULL) {
-			fprintf(ap->errstream,
-				"failed to allocate memory while processing "
-				"access control parameters\n");
-			return -DER_NOMEM;
-		}
-		*entry = &ap->props->dpp_entries[0];
-	} else {
-		*entry = &ap->props->dpp_entries[ap->props->dpp_nr];
-		ap->props->dpp_nr += nr;
-	}
-
-	if (ap->props->dpp_nr > DAOS_PROP_ENTRIES_MAX_NR) {
-		fprintf(ap->errstream,
-			"too many properties supplied. Try again with "
-			"fewer props set.\n");
-		return -DER_INVAL;
-	}
-
-	return 0;
-}
-
-static int
-update_props_for_create(struct cmd_args_s *ap)
-{
-	int			rc = 0;
-	struct daos_acl		*acl = NULL;
-	struct daos_prop_entry	*entry = NULL;
-
-	rc = get_first_empty_prop_entry(ap, &entry);
-	if (rc != 0 || entry == NULL)
-		return rc;
-
-	D_ASSERT(entry->dpe_type == 0);
-	D_ASSERT(entry->dpe_val_ptr == NULL);
-
-	/*
-	 * When we allocate new memory here, we always do it in the prop entry,
-	 * which is a pointer into ap->props.
-	 * This will be freed by the external caller on exit, so we don't have
-	 * to worry about it here.
-	 */
-
-	if (ap->aclfile) {
-		rc = parse_acl_file(ap, ap->aclfile, &acl);
-		if (rc != 0)
-			return rc;
-
-		entry->dpe_type = DAOS_PROP_CO_ACL;
-		entry->dpe_val_ptr = acl;
-		acl = NULL; /* acl will be freed with the prop now */
-
-		entry++;
-	}
-
-	if (ap->user) {
-		if (!daos_acl_principal_is_valid(ap->user)) {
-			fprintf(ap->errstream,
-				"invalid user name.\n");
-			return -DER_INVAL;
-		}
-
-		entry->dpe_type = DAOS_PROP_CO_OWNER;
-		D_STRNDUP(entry->dpe_str, ap->user, DAOS_ACL_MAX_PRINCIPAL_LEN);
-		if (entry->dpe_str == NULL) {
-			fprintf(ap->errstream,
-				"failed to allocate memory for user name.\n");
-			return -DER_NOMEM;
-		}
-
-		entry++;
-	}
-
-	if (ap->group) {
-		if (!daos_acl_principal_is_valid(ap->group)) {
-			fprintf(ap->errstream,
-				"invalid group name.\n");
-			return -DER_INVAL;
-		}
-
-		entry->dpe_type = DAOS_PROP_CO_OWNER_GROUP;
-		D_STRNDUP(entry->dpe_str, ap->group,
-			  DAOS_ACL_MAX_PRINCIPAL_LEN);
-		if (entry->dpe_str == NULL) {
-			fprintf(ap->errstream,
-				"failed to allocate memory for group name.\n");
-			return -DER_NOMEM;
-		}
-
-		entry++;
-	}
-
-	if (ap->type != DAOS_PROP_CO_LAYOUT_POSIX &&
-	    ap->type != DAOS_PROP_CO_LAYOUT_UNKNOWN) {
-		entry->dpe_type = DAOS_PROP_CO_LAYOUT_TYPE;
-		entry->dpe_val = ap->type;
-
-		entry++;
-	}
-
-	return 0;
-}
-
-static void
-cmd_args_print(struct cmd_args_s *ap)
-{
-	char	oclass[10] = {}, type[10] = {};
-
-	if (ap == NULL)
-		return;
-
-	daos_oclass_id2name(ap->oclass, oclass);
-	daos_unparse_ctype(ap->type, type);
-
-	D_INFO("\tDAOS system name: %s\n", ap->sysname);
-	D_INFO("\tpool UUID: "DF_UUIDF"\n", DP_UUID(ap->p_uuid));
-	D_INFO("\tcont UUID: "DF_UUIDF"\n", DP_UUID(ap->c_uuid));
-
-	D_INFO("\tattr: name=%s, value=%s\n",
-		ap->attrname_str ? ap->attrname_str : "NULL",
-		ap->value_str ? ap->value_str : "NULL");
-
-	D_INFO("\tpath=%s, type=%s, oclass=%s, chunk_size="DF_U64"\n",
-		ap->path ? ap->path : "NULL",
-		type, oclass, ap->chunk_size);
-	D_INFO("\tsnapshot: name=%s, epoch="DF_U64", epoch range=%s "
-		"("DF_U64"-"DF_U64")\n",
-		ap->snapname_str ? ap->snapname_str : "NULL",
-		ap->epc,
-		ap->epcrange_str ? ap->epcrange_str : "NULL",
-		ap->epcrange_begin, ap->epcrange_end);
-	D_INFO("\toid: "DF_OID"\n", DP_OID(ap->oid));
-}
-
-/* cont_create_hdlr() - create container by UUID */
-int
-cont_create_hdlr(struct cmd_args_s *ap)
-{
-	int rc;
-
-	rc = update_props_for_create(ap);
-	if (rc != 0)
-		return rc;
-
-	cmd_args_print(ap);
-
-	if (ap->type == DAOS_PROP_CO_LAYOUT_POSIX) {
-		dfs_attr_t attr;
-
-		attr.da_id = 0;
-		attr.da_oclass_id = ap->oclass;
-		attr.da_chunk_size = ap->chunk_size;
-		attr.da_props = ap->props;
-		attr.da_mode = ap->mode;
-
-		if (uuid_is_null(ap->c_uuid))
-			rc = dfs_cont_create(ap->pool, &ap->c_uuid, &attr, NULL, NULL);
-		else
-			rc = dfs_cont_create(ap->pool, ap->c_uuid, &attr, NULL, NULL);
-		if (rc)
-			rc = daos_errno2der(rc);
-	} else {
-		if (uuid_is_null(ap->c_uuid))
-			rc = daos_cont_create(ap->pool, &ap->c_uuid, ap->props, NULL);
-		else
-			rc = daos_cont_create(ap->pool, ap->c_uuid, ap->props, NULL);
-	}
-
-	if (rc != 0) {
-		DH_PERROR_DER(ap, rc, "failed to create container");
-		return rc;
-	}
-
-	fprintf(ap->outstream, "Successfully created container "DF_UUIDF"\n", DP_UUID(ap->c_uuid));
-
-	return rc;
-}
-
-/* cont_create_uns_hdlr() - create container and link to
- * POSIX filesystem directory or HDF5 file.
- */
-int
-cont_create_uns_hdlr(struct cmd_args_s *ap)
-{
-	struct duns_attr_t	dattr = {0};
-	char			type[10];
-	int			rc;
-
-	/* Required: pool handle, container type, obj class, chunk_size.
-	 * Optional: uuid of pool handle, user-specified container UUID.
-	 */
-	ARGS_VERIFY_PATH_CREATE(ap, err_rc, rc = -DER_INVAL);
-
-	rc = update_props_for_create(ap);
-	if (rc != 0)
-		return rc;
-
-	uuid_copy(dattr.da_puuid, ap->p_uuid);
-	uuid_copy(dattr.da_cuuid, ap->c_uuid);
-	dattr.da_type = ap->type;
-	dattr.da_oclass_id = ap->oclass;
-	dattr.da_chunk_size = ap->chunk_size;
-	dattr.da_props = ap->props;
-
-	rc = duns_create_path(ap->pool, ap->path, &dattr);
-	if (rc) {
-		DH_PERROR_SYS(ap, rc, "duns_create_path() failed");
-		D_GOTO(err_rc, rc = daos_errno2der(rc));
-	}
-
-	snprintf(ap->cont_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_cont);
-	if (uuid_is_null(ap->c_uuid))
-		uuid_parse(ap->cont_str, ap->c_uuid);
-	daos_unparse_ctype(ap->type, type);
-	fprintf(ap->outstream, "Successfully created container %s type %s\n", ap->cont_str, type);
-
-	return 0;
-
-err_rc:
-	return rc;
-}
-
-int
-cont_query_hdlr(struct cmd_args_s *ap)
-{
-	daos_cont_info_t	cont_info;
-	char			oclass[10], type[10];
-	daos_prop_t		*prop = NULL;
-	uint64_t		cont_type;
-	int			rc;
-
-	prop = daos_prop_alloc(1);
-	if (prop == NULL)
-		D_GOTO(err_out, rc = -DER_NOMEM);
-
-	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LAYOUT_TYPE;
-
-	rc = daos_cont_query(ap->cont, &cont_info, prop, NULL);
-	if (rc) {
-		daos_prop_free(prop);
-		fprintf(ap->errstream,
-			"Container query failed, result: %d\n", rc);
-		D_GOTO(err_out, rc);
-	}
-	cont_type = prop->dpp_entries[0].dpe_val;
-	daos_prop_free(prop);
-
-	printf("Pool UUID:\t%s\n", ap->pool_str);
-	printf("Container UUID:\t"DF_UUIDF"\n", DP_UUID(cont_info.ci_uuid));
-	printf("Number of snapshots: %i\n", (int)cont_info.ci_nsnapshots);
-	printf("Latest Persistent Snapshot: %i\n",
-		(int)cont_info.ci_lsnapshot);
-	printf("Container redundancy factor: %d\n", cont_info.ci_redun_fac);
-	daos_unparse_ctype(cont_type, type);
-	printf("Container Type:\t%s\n", type);
-
-	if (ap->oid.hi || ap->oid.lo) {
-		printf("Path is within container, oid: " DF_OID "\n",
-			DP_OID(ap->oid));
-	}
-
-	if (cont_type == DAOS_PROP_CO_LAYOUT_POSIX) {
-		dfs_t		*dfs;
-		dfs_attr_t	attr;
-
-		rc = dfs_mount(ap->pool, ap->cont, O_RDONLY, &dfs);
-		if (rc) {
-			fprintf(ap->errstream, "failed to mount container %s: %s (%d)\n",
-				ap->cont_str, strerror(rc), rc);
-			D_GOTO(err_out, rc = daos_errno2der(rc));
-		}
-
-		dfs_query(dfs, &attr);
-		daos_oclass_id2name(attr.da_oclass_id, oclass);
-		fprintf(ap->outstream, "Object Class:\t%s\n", oclass);
-		fprintf(ap->outstream, "Chunk Size:\t%zu\n", attr.da_chunk_size);
-
-		rc = dfs_umount(dfs);
-		if (rc) {
-			fprintf(ap->errstream, "failed to unmount container %s: %s (%d)\n",
-				ap->cont_str, strerror(rc), rc);
-			D_GOTO(err_out, rc = daos_errno2der(rc));
-		}
-	}
-
-	return 0;
-err_out:
-	return rc;
-}
-
-int
-cont_destroy_hdlr(struct cmd_args_s *ap)
-{
-	int	rc;
-
-	if (ap->path) {
-		rc = duns_destroy_path(ap->pool, ap->path);
-		if (rc)
-			fprintf(ap->errstream, "failed to unlink container path %s: %s\n",
-				ap->path, strerror(rc));
-		else
-			fprintf(ap->outstream, "Successfully destroyed path %s\n", ap->path);
-		return daos_errno2der(rc);
-	}
-
-	rc = daos_cont_destroy(ap->pool, ap->cont_str, ap->force, NULL);
-	if (rc != 0)
-		fprintf(ap->errstream, "failed to destroy container %s: %s (%d)\n",
-			ap->cont_str, d_errdesc(rc), rc);
-	else
-		fprintf(ap->outstream, "Successfully destroyed container %s\n", ap->cont_str);
-
 	return rc;
 }
 
@@ -1952,7 +340,7 @@ file_open(struct cmd_args_s *ap, struct file_dfs *file_dfs,
 		}
 	} else if (file_dfs->type == DAOS) {
 		rc = dfs_sys_open(file_dfs->dfs_sys, file, mode, flags, 0, 0, NULL,
-				  &(file_dfs->obj));
+				  &file_dfs->obj);
 		if (rc != 0) {
 			DH_PERROR_SYS(ap, rc, "file_open failed on '%s'", file);
 		}
@@ -2135,10 +523,18 @@ file_close(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *file)
 }
 
 static int
-file_chmod(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *path,
-	   mode_t mode)
+file_chmod(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *path, mode_t mode,
+	   bool ignore_unsup, uint64_t *num_chmod_enotsup)
 {
 	int rc = 0;
+
+	/* Unset any unsupported mode bits. We track these errors so they can
+	 * be surfaced to the user at the end of the copy operation.
+	 */
+	if (!ignore_unsup && mode & S_ISVTX) {
+		(*num_chmod_enotsup)++;
+	}
+	mode &= ~S_ISVTX;
 
 	if (file_dfs->type == POSIX) {
 		rc = chmod(path, mode);
@@ -2159,15 +555,12 @@ file_chmod(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *path,
 }
 
 static int
-fs_copy_file(struct cmd_args_s *ap,
-	     struct file_dfs *src_file_dfs,
-	     struct file_dfs *dst_file_dfs,
-	     struct stat *src_stat,
-	     const char *src_path,
-	     const char *dst_path)
+fs_copy_file(struct cmd_args_s *ap, struct file_dfs *src_file_dfs, struct file_dfs *dst_file_dfs,
+	     struct stat *src_stat, const char *src_path, const char *dst_path, bool ignore_unsup,
+	     uint64_t *num_chmod_enotsup)
 {
 	int src_flags		= O_RDONLY;
-	int dst_flags		= O_CREAT | O_WRONLY;
+	int dst_flags		= O_CREAT | O_TRUNC | O_WRONLY;
 	mode_t tmp_mode_file	= S_IRUSR | S_IWUSR;
 	int rc;
 	uint64_t file_length	= src_stat->st_size;
@@ -2215,7 +608,8 @@ fs_copy_file(struct cmd_args_s *ap,
 	}
 
 	/* set perms on destination to original source perms */
-	rc = file_chmod(ap, dst_file_dfs, dst_path, src_stat->st_mode);
+	rc = file_chmod(ap, dst_file_dfs, dst_path, src_stat->st_mode, ignore_unsup,
+			num_chmod_enotsup);
 	if (rc != 0) {
 		rc = daos_errno2der(rc);
 		DH_PERROR_DER(ap, rc, "updating dst file permissions failed");
@@ -2236,17 +630,91 @@ out:
 }
 
 static int
-fs_copy_dir(struct cmd_args_s *ap,
-	    struct file_dfs *src_file_dfs,
-	    struct file_dfs *dst_file_dfs,
-	    struct stat *src_stat,
-	    const char *src_path,
-	    const char *dst_path,
-	    uint64_t *num_dirs,
-	    uint64_t *num_files)
+fs_copy_symlink(struct cmd_args_s *ap,
+		struct file_dfs *src_file_dfs,
+		struct file_dfs *dst_file_dfs,
+		struct stat *src_stat,
+		const char *src_path,
+		const char *dst_path)
+{
+	int		rc = 0;
+	daos_size_t	len = DFS_MAX_PATH; /* unsigned for dfs_sys_readlink() */
+	ssize_t		len2 = DFS_MAX_PATH; /* signed for readlink() */
+	char		*symlink_value = NULL;
+
+	D_ALLOC(symlink_value, len + 1);
+	if (symlink_value == NULL)
+		D_GOTO(out_copy_symlink, rc = -DER_NOMEM);
+
+	if (src_file_dfs->type == POSIX) {
+		len2 = readlink(src_path, symlink_value, len2);
+		if (len2 < 0) {
+			rc = daos_errno2der(errno);
+			DH_PERROR_DER(ap, rc, "fs_copy_symlink failed on readlink('%s')",
+				      src_path);
+			D_GOTO(out_copy_symlink, rc);
+		}
+		len = (daos_size_t)len2;
+	} else if (src_file_dfs->type == DAOS) {
+		rc = dfs_sys_readlink(src_file_dfs->dfs_sys, src_path, symlink_value, &len);
+		if (rc != 0) {
+			rc = daos_errno2der(rc);
+			DH_PERROR_DER(ap, rc, "fs_copy_symlink failed on dfs_sys_readlink('%s')",
+				      src_path);
+			D_GOTO(out_copy_symlink, rc);
+		}
+		/*length of symlink_value includes the NULL terminator already.*/
+		len--;
+	} else {
+		rc = -DER_INVAL;
+		DH_PERROR_DER(ap, rc, "unknown type for %s", src_path);
+		D_GOTO(out_copy_symlink, rc);
+	}
+	symlink_value[len] = 0;
+
+	if (dst_file_dfs->type == POSIX) {
+		rc = symlink(symlink_value, dst_path);
+		if ((rc != 0) && (errno == EEXIST)) {
+			rc = -DER_EXIST;
+			D_DEBUG(DB_TRACE, "Link %s exists.\n", dst_path);
+			D_GOTO(out_copy_symlink, rc);
+		} else if (rc != 0) {
+			rc = daos_errno2der(errno);
+			DH_PERROR_DER(ap, rc, "fs_copy_symlink failed on symlink('%s')",
+				      dst_path);
+			D_GOTO(out_copy_symlink, rc);
+		}
+	} else if (dst_file_dfs->type == DAOS) {
+		rc = dfs_sys_symlink(dst_file_dfs->dfs_sys, symlink_value, dst_path);
+		if (rc == EEXIST) {
+			rc = -DER_EXIST;
+			D_DEBUG(DB_TRACE, "Link %s exists.\n", dst_path);
+			D_GOTO(out_copy_symlink, rc);
+		} else if (rc != 0) {
+			rc = daos_errno2der(rc);
+			DH_PERROR_DER(ap, rc,
+				      "fs_copy_symlink failed on dfs_sys_readlink('%s')",
+				      dst_path);
+			D_GOTO(out_copy_symlink, rc);
+		}
+	} else {
+		rc = -DER_INVAL;
+		DH_PERROR_DER(ap, rc, "unknown type for %s", dst_path);
+		D_GOTO(out_copy_symlink, rc);
+	}
+out_copy_symlink:
+	D_FREE(symlink_value);
+	src_file_dfs->offset = 0;
+	dst_file_dfs->offset = 0;
+	return rc;
+}
+
+static int
+fs_copy_dir(struct cmd_args_s *ap, struct file_dfs *src_file_dfs, struct file_dfs *dst_file_dfs,
+	    struct stat *src_stat, const char *src_path, const char *dst_path, bool ignore_unsup,
+	    struct fs_copy_stats *num)
 {
 	DIR			*src_dir = NULL;
-	struct fs_copy_dirent	*dirp = NULL;
 	struct dirent		*entry = NULL;
 	char			*next_src_path = NULL;
 	char			*next_dst_path = NULL;
@@ -2262,15 +730,14 @@ fs_copy_dir(struct cmd_args_s *ap,
 		D_GOTO(out, rc);
 	}
 
-	/* create the destination directory if it does not exist */
-	rc = file_mkdir(ap, dst_file_dfs, dst_path, &tmp_mode_dir);
-	if (rc != EEXIST && rc != 0)
-		D_GOTO(out, rc = daos_errno2der(rc));
-
-	/* initialize DAOS anchor */
-	dirp = (struct fs_copy_dirent *)src_dir;
-	memset(&dirp->anchor, 0, sizeof(dirp->anchor));
-
+	/* create the destination directory if it does not exist. Assume root always exists */
+	if (strcmp(dst_path, "/") != 0) {
+		rc = file_mkdir(ap, dst_file_dfs, dst_path, &tmp_mode_dir);
+		if (rc != 0 && rc != EEXIST) {
+			DH_PERROR_SYS(ap, rc, "mkdir '%s' failed", dst_path);
+			D_GOTO(out, rc = daos_errno2der(rc));
+		}
+	}
 	/* copy all directory entries */
 	while (1) {
 		const char *d_name;
@@ -2278,9 +745,8 @@ fs_copy_dir(struct cmd_args_s *ap,
 		/* walk source directory */
 		rc = file_readdir(ap, src_file_dfs, src_dir, &entry);
 		if (rc != 0) {
-			rc = daos_errno2der(rc);
-			DH_PERROR_DER(ap, rc, "Cannot read directory");
-			D_GOTO(out, rc);
+			DH_PERROR_SYS(ap, rc, "Cannot read directory");
+			D_GOTO(out, rc = daos_errno2der(rc));
 		}
 
 		/* end of stream when entry is NULL and rc == 0 */
@@ -2319,31 +785,40 @@ fs_copy_dir(struct cmd_args_s *ap,
 
 		switch (next_src_stat.st_mode & S_IFMT) {
 		case S_IFREG:
-			rc = fs_copy_file(ap, src_file_dfs, dst_file_dfs,
-					  &next_src_stat, next_src_path,
-					  next_dst_path);
-			if (rc != 0)
+			rc = fs_copy_file(ap, src_file_dfs, dst_file_dfs, &next_src_stat,
+					  next_src_path, next_dst_path, ignore_unsup,
+					  &num->num_chmod_enotsup);
+			if ((rc != 0) && (rc != -DER_EXIST))
 				D_GOTO(out, rc);
-			(*num_files)++;
+			num->num_files++;
+			break;
+		case S_IFLNK:
+			rc = fs_copy_symlink(ap, src_file_dfs, dst_file_dfs,
+					     &next_src_stat, next_src_path,
+					     next_dst_path);
+			if ((rc != 0) && (rc != -DER_EXIST))
+				D_GOTO(out, rc);
+			num->num_links++;
 			break;
 		case S_IFDIR:
-			rc = fs_copy_dir(ap, src_file_dfs, dst_file_dfs,
-					 &next_src_stat, next_src_path,
-					 next_dst_path, num_dirs, num_files);
-			if (rc != 0)
+			rc = fs_copy_dir(ap, src_file_dfs, dst_file_dfs, &next_src_stat,
+					 next_src_path, next_dst_path, ignore_unsup, num);
+			if ((rc != 0) && (rc != -DER_EXIST))
 				D_GOTO(out, rc);
-			(*num_dirs)++;
+			num->num_dirs++;
 			break;
 		default:
 			rc = -DER_INVAL;
-			DH_PERROR_DER(ap, rc, "Only files and directories are supported");
+			DH_PERROR_DER(ap, rc,
+				      "Only files, directories, and symlinks are supported");
 		}
 		D_FREE(next_src_path);
 		D_FREE(next_dst_path);
 	}
 
 	/* set original source perms on directories after copying */
-	rc = file_chmod(ap, dst_file_dfs, dst_path, src_stat->st_mode);
+	rc = file_chmod(ap, dst_file_dfs, dst_path, src_stat->st_mode, ignore_unsup,
+			&num->num_chmod_enotsup);
 	if (rc != 0) {
 		rc = daos_errno2der(rc);
 		DH_PERROR_DER(ap, rc, "updating destination permissions failed on '%s'", dst_path);
@@ -2370,13 +845,9 @@ out:
 }
 
 static int
-fs_copy(struct cmd_args_s *ap,
-	struct file_dfs *src_file_dfs,
-	struct file_dfs *dst_file_dfs,
-	const char *src_path,
-	const char *dst_path,
-	uint64_t *num_dirs,
-	uint64_t *num_files)
+fs_copy(struct cmd_args_s *ap, struct dm_args *ca, struct file_dfs *src_file_dfs,
+	struct file_dfs *dst_file_dfs, const char *src_path, const char *dst_path,
+	bool ignore_unsup, struct fs_copy_stats *num)
 {
 	int		rc = 0;
 	struct stat	src_stat;
@@ -2398,12 +869,16 @@ fs_copy(struct cmd_args_s *ap,
 	 * copy INTO the directory instead of TO it.
 	 */
 	rc = file_lstat(ap, dst_file_dfs, dst_path, &dst_stat);
-	if (rc == 0) {
+	if (rc != 0 && rc != ENOENT) {
+		rc = daos_errno2der(rc);
+		DH_PERROR_DER(ap, rc, "Failed to stat %s", dst_path);
+		D_GOTO(out, rc);
+	} else if (rc == 0) {
 		if (S_ISDIR(dst_stat.st_mode)) {
 			copy_into_dst = true;
 		} else if S_ISDIR(src_stat.st_mode) {
 			rc = -DER_INVAL;
-			DH_PERROR_DER(ap, rc, "Destination is not a directory");
+			DH_PERROR_DER(ap, rc, "Destination exists and is not a directory");
 			D_GOTO(out, rc);
 		}
 	}
@@ -2425,17 +900,55 @@ fs_copy(struct cmd_args_s *ap,
 		}
 	}
 
+	/* Make sure the source and destination are not the same.
+	 * Make sure the source is not a subpath of the destination. */
+	if ((src_file_dfs->type == POSIX && dst_file_dfs->type == POSIX) ||
+	    (src_file_dfs->type == DAOS && dst_file_dfs->type == DAOS &&
+	     strcmp(ca->src_pool, ca->dst_pool) == 0 && strcmp(ca->src_cont, ca->dst_cont) == 0)) {
+		if (strcmp(src_path, dst_path) == 0) {
+			rc = -DER_INVAL;
+			DH_PERROR_DER(ap, rc, "source and destination are the same");
+			D_GOTO(out, rc);
+		}
+		if (S_ISDIR(src_stat.st_mode)) {
+			int  src_path_len;
+			int  dst_path_len;
+			bool src_is_subpath;
+
+			/* If src_path ends with / and dst_path starts with the full src_path,
+			 * then src_path is a subpath of dst_path.
+			 * If src_path doesn't end with / then it's only a subpath if equal
+			 * to dst_path and dst_path ends with / */
+			src_path_len = strlen(src_path);
+			dst_path_len = strlen(dst_path);
+			if (src_path[src_path_len - 1] == '/') {
+				src_is_subpath = (strncmp(src_path, dst_path, src_path_len) == 0);
+			} else {
+				src_is_subpath =
+				    (strncmp(src_path, dst_path, src_path_len) == 0 &&
+				     dst_path_len > src_path_len && dst_path[src_path_len] == '/');
+			}
+
+			if (src_is_subpath) {
+				rc = -DER_INVAL;
+				DH_PERROR_DER(ap, rc, "cannot copy a directory into itself");
+				D_GOTO(out, rc);
+			}
+		}
+	}
+
 	switch (src_stat.st_mode & S_IFMT) {
 	case S_IFREG:
-		rc = fs_copy_file(ap, src_file_dfs, dst_file_dfs, &src_stat, src_path, dst_path);
+		rc = fs_copy_file(ap, src_file_dfs, dst_file_dfs, &src_stat, src_path, dst_path,
+				  ignore_unsup, &num->num_chmod_enotsup);
 		if (rc == 0)
-			(*num_files)++;
+			num->num_files++;
 		break;
 	case S_IFDIR:
 		rc = fs_copy_dir(ap, src_file_dfs, dst_file_dfs, &src_stat, src_path, dst_path,
-				 num_dirs, num_files);
+				 ignore_unsup, num);
 		if (rc == 0)
-			(*num_dirs)++;
+			num->num_dirs++;
 		break;
 	default:
 		rc = -DER_INVAL;
@@ -2467,46 +980,418 @@ set_dm_args_default(struct dm_args *dm)
 	dm->cont_oid = 0;
 }
 
-static int
-dm_get_cont_prop(struct cmd_args_s *ap,
-		 daos_handle_t coh,
-		 daos_cont_info_t *cont_info,
-		 int size,
-		 uint32_t *dpe_types,
-		 uint64_t *dpe_vals)
+/*
+ * Free the user attribute buffers created by dm_cont_get_usr_attrs.
+ */
+void
+dm_cont_free_usr_attrs(int n, char ***_names, void ***_buffers, size_t **_sizes)
 {
-	int                     rc = 0;
-	int                     i = 0;
-	daos_prop_t		*prop = NULL;
+	char	**names = *_names;
+	void	**buffers = *_buffers;
+	size_t	i;
 
-	prop = daos_prop_alloc(size);
-	if (prop == NULL) {
-		rc = -DER_NOMEM;
-		DH_PERROR_DER(ap, rc, "Failed to allocate prop");
+	if (names != NULL) {
+		for (i = 0; i < n; i++)
+			D_FREE(names[i]);
+		D_FREE(*_names);
+	}
+	if (buffers != NULL) {
+		for (i = 0; i < n; i++)
+			D_FREE(buffers[i]);
+		D_FREE(*_buffers);
+	}
+	D_FREE(*_sizes);
+}
+
+/*
+ * Get the user attributes for a container in a format similar
+ * to what daos_cont_set_attr expects.
+ * cont_free_usr_attrs should be called to free the allocations.
+ */
+int
+dm_cont_get_usr_attrs(struct cmd_args_s *ap, daos_handle_t coh, int *_n, char ***_names,
+		      void ***_buffers, size_t **_sizes)
+{
+	int		rc = 0;
+	uint64_t	total_size = 0;
+	uint64_t	cur_size = 0;
+	uint64_t	num_attrs = 0;
+	uint64_t	name_len = 0;
+	char		*name_buf = NULL;
+	char		**names = NULL;
+	void		**buffers = NULL;
+	size_t		*sizes = NULL;
+	uint64_t	i;
+
+	/* Get the total size needed to store all names */
+	rc = daos_cont_list_attr(coh, NULL, &total_size, NULL);
+	if (rc != 0) {
+		DH_PERROR_DER(ap, rc, "Failed list user attributes");
 		D_GOTO(out, rc);
 	}
 
-	for (i = 0; i < size; i++) {
-		prop->dpp_entries[i].dpe_type = dpe_types[i];
+	/* no attributes found */
+	if (total_size == 0) {
+		*_n = 0;
+		D_GOTO(out, rc);
 	}
+
+	/* Allocate a buffer to hold all attribute names */
+	D_ALLOC(name_buf, total_size);
+	if (name_buf == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	/* Get the attribute names */
+	rc = daos_cont_list_attr(coh, name_buf, &total_size, NULL);
+	if (rc != 0) {
+		DH_PERROR_DER(ap, rc, "Failed to list user attributes");
+		D_GOTO(out, rc);
+	}
+
+	/* Figure out the number of attributes */
+	while (cur_size < total_size) {
+		name_len = strnlen(name_buf + cur_size, total_size - cur_size);
+		if (name_len == total_size - cur_size) {
+			/* end of buf reached but no end of string, ignoring */
+			break;
+		}
+		num_attrs++;
+		cur_size += name_len + 1;
+	}
+
+	/* Sanity check */
+	if (num_attrs == 0) {
+		rc = -DER_INVAL;
+		DH_PERROR_DER(ap, rc, "Failed to parse user attributes");
+		D_GOTO(out, rc);
+	}
+
+	/* Allocate arrays for attribute names, buffers, and sizes */
+	D_ALLOC_ARRAY(names, num_attrs);
+	if (names == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+	D_ALLOC_ARRAY(sizes, num_attrs);
+	if (sizes == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+	D_ALLOC_ARRAY(buffers, num_attrs);
+	if (buffers == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	/* Create the array of names */
+	cur_size = 0;
+	for (i = 0; i < num_attrs; i++) {
+		name_len = strnlen(name_buf + cur_size, total_size - cur_size);
+		if (name_len == total_size - cur_size) {
+			/* end of buf reached but no end of string, ignoring */
+			break;
+		}
+		D_STRNDUP(names[i], name_buf + cur_size, name_len + 1);
+		if (names[i] == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		cur_size += name_len + 1;
+	}
+
+	/* Get the buffer sizes */
+	rc = daos_cont_get_attr(coh, num_attrs, (const char * const*)names, NULL, sizes, NULL);
+	if (rc != 0) {
+		DH_PERROR_DER(ap, rc, "Failed to get user attribute sizes");
+		D_GOTO(out, rc);
+	}
+
+	/* Allocate space for each value */
+	for (i = 0; i < num_attrs; i++) {
+		D_ALLOC(buffers[i], sizes[i] * sizeof(size_t));
+		if (buffers[i] == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	/* Get the attribute values */
+	rc = daos_cont_get_attr(coh, num_attrs, (const char * const*)names,
+				(void * const*)buffers, sizes, NULL);
+	if (rc != 0) {
+		DH_PERROR_DER(ap, rc, "Failed to get user attribute values");
+		D_GOTO(out, rc);
+	}
+
+	/* Return values to the caller */
+	*_n = num_attrs;
+	*_names = names;
+	*_buffers = buffers;
+	*_sizes = sizes;
+out:
+	if (rc != 0)
+		dm_cont_free_usr_attrs(num_attrs, &names, &buffers, &sizes);
+	D_FREE(name_buf);
+	return rc;
+}
+
+/* Copy all user attributes from one container to another. */
+int
+dm_copy_usr_attrs(struct cmd_args_s *ap, daos_handle_t src_coh, daos_handle_t dst_coh)
+{
+	int	num_attrs = 0;
+	char	**names = NULL;
+	void	**buffers = NULL;
+	size_t	*sizes = NULL;
+	int	rc;
+
+	/* Get all user attributes */
+	rc = dm_cont_get_usr_attrs(ap, src_coh, &num_attrs, &names, &buffers, &sizes);
+	if (rc != 0) {
+		DH_PERROR_DER(ap, rc, "Failed to get user attributes");
+		D_GOTO(out, rc);
+	}
+
+	/* no attributes to copy */
+	if (num_attrs == 0)
+		D_GOTO(out, rc = 0);
+
+	rc = daos_cont_set_attr(dst_coh, num_attrs, (char const * const*)names,
+				(void const * const*)buffers, sizes, NULL);
+	if (rc != 0) {
+		DH_PERROR_DER(ap, rc, "Failed to set user attributes");
+		D_GOTO(out, rc);
+	}
+out:
+	dm_cont_free_usr_attrs(num_attrs, &names, &buffers, &sizes);
+	return rc;
+}
+
+/*
+ * Get the container properties for a container in a format similar
+ * to what daos_cont_set_prop expects.
+ * The last entry is the ACL and is conditionally set only if
+ * the user has permissions.
+ */
+int
+dm_cont_get_all_props(struct cmd_args_s *ap, daos_handle_t coh, daos_prop_t **_props,
+		      bool get_oid, bool get_label, bool get_roots)
+{
+	int		rc;
+	daos_prop_t	*props = NULL;
+	daos_prop_t	*prop_acl = NULL;
+	daos_prop_t	*props_merged = NULL;
+	uint32_t        total_props = NUM_SERIALIZE_PROPS;
+	/* minimum number of properties that are always allocated/used to start count */
+	int             prop_index = NUM_SERIALIZE_PROPS;
+
+	if (get_oid)
+		total_props++;
+
+	/* container label is required to be unique, so do not retrieve it for copies.
+	 * The label is retrieved for serialization, but only deserialized if the label
+	 * no longer exists in the pool
+	 */
+	if (get_label)
+		total_props++;
+
+	if (get_roots)
+		total_props++;
+
+	/* Allocate space for all props except ACL. */
+	props = daos_prop_alloc(total_props);
+	if (props == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	/* The order of properties MUST match the order expected by serialization  */
+	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+	props->dpp_entries[1].dpe_type = DAOS_PROP_CO_LAYOUT_TYPE;
+	props->dpp_entries[2].dpe_type = DAOS_PROP_CO_LAYOUT_VER;
+	props->dpp_entries[3].dpe_type = DAOS_PROP_CO_CSUM;
+	props->dpp_entries[4].dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
+	props->dpp_entries[5].dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
+	props->dpp_entries[6].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	props->dpp_entries[7].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+	props->dpp_entries[8].dpe_type = DAOS_PROP_CO_SNAPSHOT_MAX;
+	props->dpp_entries[9].dpe_type = DAOS_PROP_CO_COMPRESS;
+	props->dpp_entries[10].dpe_type = DAOS_PROP_CO_ENCRYPT;
+	props->dpp_entries[11].dpe_type = DAOS_PROP_CO_OWNER;
+	props->dpp_entries[12].dpe_type = DAOS_PROP_CO_OWNER_GROUP;
+	props->dpp_entries[13].dpe_type = DAOS_PROP_CO_DEDUP;
+	props->dpp_entries[14].dpe_type = DAOS_PROP_CO_DEDUP_THRESHOLD;
+	props->dpp_entries[15].dpe_type = DAOS_PROP_CO_EC_PDA;
+	props->dpp_entries[16].dpe_type = DAOS_PROP_CO_RP_PDA;
+	props->dpp_entries[17].dpe_type = DAOS_PROP_CO_SCRUBBER_DISABLED;
+	props->dpp_entries[18].dpe_type = DAOS_PROP_CO_PERF_DOMAIN;
+
+	/* Conditionally get the OID. Should always be true for serialization. */
+	if (get_oid) {
+		props->dpp_entries[prop_index].dpe_type = DAOS_PROP_CO_ALLOCED_OID;
+		prop_index++;
+	}
+
+	if (get_label) {
+		props->dpp_entries[prop_index].dpe_type = DAOS_PROP_CO_LABEL;
+		prop_index++;
+	}
+
+	if (get_roots) {
+		props->dpp_entries[prop_index].dpe_type = DAOS_PROP_CO_ROOTS;
+	}
+
+	/* Get all props except ACL first. */
+	rc = daos_cont_query(coh, NULL, props, NULL);
+	if (rc != 0) {
+		DH_PERROR_DER(ap, rc, "Failed to query container");
+		D_GOTO(out, rc);
+	}
+
+	/* Fetch the ACL separately in case user doesn't have access */
+	rc = daos_cont_get_acl(coh, &prop_acl, NULL);
+	if (rc == 0) {
+		/* ACL will be appended to the end */
+		rc = daos_prop_merge2(props, prop_acl, &props_merged);
+		if (rc != 0) {
+			DH_PERROR_DER(ap, rc, "Failed to set container ACL");
+			D_GOTO(out, rc);
+		}
+		daos_prop_free(props);
+		props = props_merged;
+	} else if (rc != -DER_NO_PERM) {
+		DH_PERROR_DER(ap, rc, "Failed to query container ACL");
+		D_GOTO(out, rc);
+	}
+	rc = 0;
+	*_props = props;
+out:
+	daos_prop_free(prop_acl);
+	if (rc != 0)
+		daos_prop_free(props);
+	return rc;
+}
+
+/* check if cont status is unhealthy */
+static int
+dm_check_cont_status(struct cmd_args_s *ap, daos_handle_t coh, bool *status_healthy)
+{
+	daos_prop_t		*prop;
+	struct daos_prop_entry	*entry;
+	struct daos_co_status	stat = {0};
+	int			rc = 0;
+
+	prop = daos_prop_alloc(1);
+	if (prop == NULL)
+		return -DER_NOMEM;
+
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_STATUS;
 
 	rc = daos_cont_query(coh, NULL, prop, NULL);
 	if (rc) {
-		DH_PERROR_DER(ap, rc, "daos_cont_query() failed");
-		daos_prop_free(prop);
+		DH_PERROR_DER(ap, rc, "daos container query failed");
 		D_GOTO(out, rc);
 	}
 
-	for (i = 0; i < size; i++) {
-		dpe_vals[i] = prop->dpp_entries[i].dpe_val;
+	entry = &prop->dpp_entries[0];
+	daos_prop_val_2_co_status(entry->dpe_val, &stat);
+	if (stat.dcs_status == DAOS_PROP_CO_HEALTHY) {
+		*status_healthy = true;
+	} else {
+		*status_healthy = false;
 	}
-
+out:
 	daos_prop_free(prop);
+	return rc;
+}
+
+static int
+dm_serialize_cont_md(struct cmd_args_s *ap, struct dm_args *ca, daos_prop_t *props,
+		     char *preserve_props)
+{
+	int	rc = 0;
+	int	num_attrs = 0;
+	char	**names = NULL;
+	void	**buffers = NULL;
+	size_t	*sizes = NULL;
+	void	*handle = NULL;
+	int (*daos_cont_serialize_md)(char *, daos_prop_t *props, int, char **, char **, size_t *);
+
+	/* Get all user attributes if any exist */
+	rc = dm_cont_get_usr_attrs(ap, ca->src_coh, &num_attrs, &names, &buffers, &sizes);
+	if (rc != 0) {
+		DH_PERROR_DER(ap, rc, "Failed to get user attributes");
+		D_GOTO(out, rc);
+	}
+	handle = dlopen(LIBSERIALIZE, RTLD_NOW);
+	if (handle == NULL) {
+		rc = -DER_INVAL;
+		DH_PERROR_DER(ap, rc, "libdaos_serialize.so not found");
+		D_GOTO(out, rc);
+	}
+	daos_cont_serialize_md = dlsym(handle, "daos_cont_serialize_md");
+	if (daos_cont_serialize_md == NULL)  {
+		rc = -DER_INVAL;
+		DH_PERROR_DER(ap, rc, "Failed to lookup daos_cont_serialize_md");
+		D_GOTO(out, rc);
+	}
+	(*daos_cont_serialize_md)(preserve_props, props, num_attrs, names, (char **)buffers, sizes);
+out:
+	if (num_attrs > 0) {
+		dm_cont_free_usr_attrs(num_attrs, &names, &buffers, &sizes);
+	}
+	return rc;
+}
+
+static int
+dm_deserialize_cont_md(struct cmd_args_s *ap, struct dm_args *ca, char *preserve_props,
+		       daos_prop_t **props)
+{
+	int		rc = 0;
+	void		*handle = NULL;
+	int (*daos_cont_deserialize_props)(daos_handle_t, char *, daos_prop_t **props, uint64_t *);
+
+	handle = dlopen(LIBSERIALIZE, RTLD_NOW);
+	if (handle == NULL) {
+		rc = -DER_INVAL;
+		DH_PERROR_DER(ap, rc, "libdaos_serialize.so not found");
+		D_GOTO(out, rc);
+	}
+	daos_cont_deserialize_props = dlsym(handle, "daos_cont_deserialize_props");
+	if (daos_cont_deserialize_props == NULL)  {
+		rc = -DER_INVAL;
+		DH_PERROR_DER(ap, rc, "Failed to lookup daos_cont_deserialize_props");
+		D_GOTO(out, rc);
+	}
+	(*daos_cont_deserialize_props)(ca->dst_poh, preserve_props, props, &ca->cont_layout);
 out:
 	return rc;
 }
 
-/* Returns a DAOS error number */
+static int
+dm_deserialize_cont_attrs(struct cmd_args_s *ap, struct dm_args *ca, char *preserve_props)
+{
+	int		rc = 0;
+	uint64_t	num_attrs = 0;
+	char		**names = NULL;
+	void		**buffers = NULL;
+	size_t		*sizes = NULL;
+	void		*handle = NULL;
+	int (*daos_cont_deserialize_attrs)(char *, uint64_t *, char ***, void ***, size_t **);
+
+	handle = dlopen(LIBSERIALIZE, RTLD_NOW);
+	if (handle == NULL) {
+		rc = -DER_INVAL;
+		DH_PERROR_DER(ap, rc, "libdaos_serialize.so not found");
+		D_GOTO(out, rc);
+	}
+	daos_cont_deserialize_attrs = dlsym(handle, "daos_cont_deserialize_attrs");
+	if (daos_cont_deserialize_attrs == NULL)  {
+		rc = -DER_INVAL;
+		DH_PERROR_DER(ap, rc, "Failed to lookup daos_cont_deserialize_attrs");
+		D_GOTO(out, rc);
+	}
+	(*daos_cont_deserialize_attrs)(preserve_props, &num_attrs, &names, &buffers, &sizes);
+	if (num_attrs > 0) {
+		rc = daos_cont_set_attr(ca->dst_coh, num_attrs, (const char * const*)names,
+					(const void * const*)buffers, sizes, NULL);
+		if (rc != 0) {
+			DH_PERROR_DER(ap, rc, "Failed to set user attributes");
+			D_GOTO(out, rc);
+		}
+		dm_cont_free_usr_attrs(num_attrs, &names, &buffers, &sizes);
+	}
+out:
+	return rc;
+}
 
 static int
 dm_connect(struct cmd_args_s *ap,
@@ -2520,36 +1405,52 @@ dm_connect(struct cmd_args_s *ap,
 	   daos_cont_info_t *dst_cont_info)
 {
 	/* check source pool/conts */
-	int			rc = 0;
-	struct duns_attr_t	dattr = {0};
-	daos_prop_t		*props = NULL;
-	int			size = 2;
-	uint32_t		dpe_types[size];
-	uint64_t		dpe_vals[size];
-	int			rc2;
+	int                rc    = 0;
+	struct duns_attr_t dattr = {0};
+	dfs_attr_t         attr  = {0};
+	daos_prop_t       *props = NULL;
+	int                rc2;
+	bool               status_healthy;
+	unsigned int       src_cont_flags;
+
+	/* DFS only needs R. For daos API we need W for snapshot create */
+	if (is_posix_copy)
+		src_cont_flags = DAOS_COO_RO;
+	else
+		src_cont_flags = DAOS_COO_RW;
 
 	/* open src pool, src cont, and mount dfs */
 	if (src_file_dfs->type == DAOS) {
-		rc = daos_pool_connect(ca->src_pool, sysname, DAOS_PC_RW, &ca->src_poh, NULL, NULL);
+		rc = daos_pool_connect(ca->src_pool, sysname, DAOS_PC_RO, &ca->src_poh, NULL, NULL);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "failed to connect to source pool");
-			D_GOTO(out, rc);
+			D_GOTO(err, rc);
 		}
-		rc = daos_cont_open(ca->src_poh, ca->src_cont, DAOS_COO_RW, &ca->src_coh,
+		rc = daos_cont_open(ca->src_poh, ca->src_cont, src_cont_flags, &ca->src_coh,
 				    src_cont_info, NULL);
 		if (rc != 0) {
-			DH_PERROR_DER(ap, rc, "failed to open source container\n");
+			DH_PERROR_DER(ap, rc, "failed to open source container");
 			D_GOTO(err, rc);
 		}
 		if (is_posix_copy) {
-			rc = dfs_sys_mount(ca->src_poh, ca->src_coh, O_RDWR,
-					   DFS_SYS_NO_LOCK, &src_file_dfs->dfs_sys);
+			rc = dfs_sys_mount(ca->src_poh, ca->src_coh, O_RDONLY, DFS_SYS_NO_LOCK,
+					   &src_file_dfs->dfs_sys);
 			if (rc != 0) {
 				rc = daos_errno2der(rc);
 				DH_PERROR_DER(ap, rc, "Failed to mount DFS filesystem on source");
-				dfs_sys_umount(src_file_dfs->dfs_sys);
 				D_GOTO(err, rc);
 			}
+		}
+
+		/* do not copy a container that has unhealthy container status */
+		rc = dm_check_cont_status(ap, ca->src_coh, &status_healthy);
+		if (rc != 0) {
+			DH_PERROR_DER(ap, rc, "Failed to check container status");
+			D_GOTO(err, rc);
+		} else if (!status_healthy) {
+			rc = -DER_INVAL;
+			DH_PERROR_DER(ap, rc, "Container status is unhealthy, stopping");
+			D_GOTO(err, rc);
 		}
 	}
 
@@ -2560,45 +1461,42 @@ dm_connect(struct cmd_args_s *ap,
 	if (src_file_dfs->type == POSIX)
 		ca->cont_layout = DAOS_PROP_CO_LAYOUT_POSIX;
 
-	/* only need to query if source is not POSIX, since
-	 * this connect call is used by the filesystem and clone
-	 * tools
-	 */
+	/* Retrieve source container properties */
 	if (src_file_dfs->type != POSIX) {
-		/* Need to query source max oid for non-POSIX source
-		 * containers, and the cont type to see if the source
-		 * container is POSIX, and if it is then use dfs_cont_create
-		 * to create the destination container
+		/* if moving data from POSIX to DAOS and preserve_props option is on,
+		 * then write container properties to the provided hdf5 filename
 		 */
-		dpe_types[0] = ca->cont_prop_layout;
-		dpe_types[1] = ca->cont_prop_oid;
-
-		/* This will be extended to get all props
-		 * from the source container and then
-		 * set them in the destination when
-		 * the --preserve option is added
-		 */
-		rc = dm_get_cont_prop(ap, ca->src_coh, src_cont_info, size, dpe_types, dpe_vals);
-		if (rc != 0) {
-			DH_PERROR_DER(ap, rc, "Failed to get cont property");
-			D_GOTO(err, rc);
-		}
-
-		ca->cont_layout = dpe_vals[0];
-		ca->cont_oid = dpe_vals[1];
-
-		if (!is_posix_copy) {
-			props = daos_prop_alloc(2);
-			if (props == NULL) {
-				rc = -DER_NOMEM;
-				DH_PERROR_DER(ap, rc, "Failed to allocate property");
+		if (ap->preserve_props != NULL && dst_file_dfs->type == POSIX) {
+			/* preserve_props option is for filesystem copy (which uses DFS API),
+			 * so do not retrieve roots or max oid property.
+			 */
+			rc = dm_cont_get_all_props(ap, ca->src_coh, &props, false,  true, false);
+			if (rc != 0) {
+				DH_PERROR_DER(ap, rc, "Failed to get container properties");
 				D_GOTO(err, rc);
 			}
-			props->dpp_entries[0].dpe_type = ca->cont_prop_layout;
-			props->dpp_entries[0].dpe_val = ca->cont_layout;
-
-			props->dpp_entries[1].dpe_type = ca->cont_prop_oid;
-			props->dpp_entries[1].dpe_val = ca->cont_oid;
+			rc = dm_serialize_cont_md(ap, ca, props, ap->preserve_props);
+			if (rc != 0) {
+				DH_PERROR_DER(ap, rc, "Failed to serialize metadata");
+				D_GOTO(err, rc);
+			}
+		}
+		/* if DAOS -> DAOS copy container properties from src to dst */
+		if (dst_file_dfs->type == DAOS) {
+			/* src to dst copies never copy label, and filesystem copies use DFS
+			 * so do not copy roots or max oid prop
+			 */
+			if (is_posix_copy)
+				rc = dm_cont_get_all_props(ap, ca->src_coh, &props,
+							   false, false, false);
+			else
+				rc = dm_cont_get_all_props(ap, ca->src_coh, &props,
+							   true, false, true);
+			if (rc != 0) {
+				DH_PERROR_DER(ap, rc, "Failed to get container properties");
+				D_GOTO(err, rc);
+			}
+			ca->cont_layout = props->dpp_entries[1].dpe_val;
 		}
 	}
 
@@ -2628,66 +1526,88 @@ dm_connect(struct cmd_args_s *ap,
 				DH_PERROR_DER(ap, rc, "failed to connect to destination pool");
 				D_GOTO(err, rc);
 			}
-
-			dattr.da_type = ca->cont_layout;
-			dattr.da_props = props;
+			if (src_file_dfs->type == POSIX)
+				dattr.da_type = DAOS_PROP_CO_LAYOUT_POSIX;
+			else
+				dattr.da_type = ca->cont_layout;
+			if (props != NULL)
+				dattr.da_props = props;
 			rc = duns_create_path(ca->dst_poh, path, &dattr);
 			if (rc != 0) {
-				rc = daos_errno2der(rc);
-				DH_PERROR_DER(ap, rc, "provide a destination pool or UNS path "
-					      "of the form:\n\t --dst </$pool> | </path/to/uns>");
-				D_GOTO(err, rc);
+				DH_PERROR_SYS(ap, rc, "failed to create destination UNS path");
+				D_GOTO(err, rc = daos_errno2der(rc));
 			}
 			snprintf(ca->dst_cont, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_cont);
 		}
 
-		/* try to open container if this is a filesystem copy, and if it fails try to create
-		 * a destination, then attempt to open again
+		/* check preserve_props, if source is from POSIX and destination is DAOS we need
+		 * to read container properties from the file that is specified before the DAOS
+		 * destination container is created
 		 */
-		if (dst_cont_passed)
+		if (ap->preserve_props != NULL && src_file_dfs->type == POSIX) {
+			rc = dm_deserialize_cont_md(ap, ca, ap->preserve_props, &props);
+			if (rc != 0) {
+				DH_PERROR_DER(ap, rc, "Failed to deserialize metadata");
+				D_GOTO(err, rc);
+			}
+		}
+
+		/* try to open container if this is a filesystem copy, and if it fails try to
+		 * create a destination, then attempt to open again
+		 */
+		if (dst_cont_passed) {
 			rc = daos_cont_open(ca->dst_poh, ca->dst_cont, DAOS_COO_RW, &ca->dst_coh,
 					    dst_cont_info, NULL);
-		else
+			if (rc != 0 && rc != -DER_NONEXIST) {
+				DH_PERROR_DER(ap, rc, "failed to open destination container");
+				D_GOTO(err, rc);
+			}
+		} else {
 			rc = -DER_NONEXIST;
+		}
 		if (rc == -DER_NONEXIST) {
-			uuid_t cuuid;
+			uuid_t	cuuid;
+			bool	dst_cont_is_uuid = true;
+
+			if (dst_cont_passed) {
+				rc = uuid_parse(ca->dst_cont, cuuid);
+				dst_cont_is_uuid = (rc == 0);
+				if (dst_cont_is_uuid) {
+					/* Cannot create a container with a user-supplied UUID */
+					rc = -DER_NONEXIST;
+					DH_PERROR_DER(ap, rc,
+						      "failed to open destination container");
+					D_GOTO(err, rc);
+				}
+			}
 
 			if (ca->cont_layout == DAOS_PROP_CO_LAYOUT_POSIX) {
-				if (dst_cont_passed) {
-					rc = uuid_parse(ca->dst_cont, cuuid);
-					if (rc)
-						D_GOTO(err, rc);
-					rc = dfs_cont_create(ca->dst_poh, cuuid, NULL, NULL, NULL);
-				} else {
-					rc = dfs_cont_create(ca->dst_poh, &cuuid, NULL, NULL, NULL);
-					uuid_unparse(cuuid, ca->dst_cont);
-				}
-				if (rc != 0) {
+				attr.da_props = props;
+				if (dst_cont_is_uuid)
+					rc = dfs_cont_create(ca->dst_poh, &cuuid, &attr,
+							     NULL, NULL);
+				else
+					rc = dfs_cont_create_with_label(ca->dst_poh, ca->dst_cont,
+									&attr, &cuuid, NULL, NULL);
+				if (rc) {
 					rc = daos_errno2der(rc);
 					DH_PERROR_DER(ap, rc,
 						      "failed to create destination container");
 					D_GOTO(err, rc);
 				}
 			} else {
-				if (dst_cont_passed) {
-					rc = uuid_parse(ca->dst_cont, cuuid);
-					if (rc == 0)
-						rc = daos_cont_create(ca->dst_poh, cuuid, props,
-								      NULL);
-					else
-						rc = daos_cont_create_with_label(ca->dst_poh,
-										 ca->dst_cont,
-										 props, NULL, NULL);
-				} else {
+				if (dst_cont_is_uuid)
 					rc = daos_cont_create(ca->dst_poh, &cuuid, props, NULL);
-					uuid_unparse(cuuid, ca->dst_cont);
-				}
-				if (rc != 0) {
+				else
+					rc = daos_cont_create_with_label(
+						ca->dst_poh, ca->dst_cont, props, &cuuid, NULL);
+				if (rc) {
 					DH_PERROR_DER(ap, rc,
 						      "failed to create destination container");
 					D_GOTO(err, rc);
 				}
 			}
+			uuid_unparse(cuuid, ca->dst_cont);
 			rc = daos_cont_open(ca->dst_poh, ca->dst_cont, DAOS_COO_RW, &ca->dst_coh,
 					    dst_cont_info, NULL);
 			if (rc != 0) {
@@ -2702,19 +1622,48 @@ dm_connect(struct cmd_args_s *ap,
 			if (rc != 0) {
 				rc = daos_errno2der(rc);
 				DH_PERROR_DER(ap, rc, "dfs_mount on destination failed");
-				dfs_sys_umount(dst_file_dfs->dfs_sys);
 				D_GOTO(err, rc);
 			}
+		}
+
+		/* check preserve_props, if source is from POSIX and destination is DAOS we
+		 * need to read user attributes from the file that is specified, and set them
+		 * in the destination container
+		 */
+		if (ap->preserve_props != NULL && src_file_dfs->type == POSIX) {
+			rc = dm_deserialize_cont_attrs(ap, ca, ap->preserve_props);
+			if (rc != 0) {
+				DH_PERROR_DER(ap, rc, "Failed to deserialize user attributes");
+				D_GOTO(err, rc);
+			}
+		}
+	}
+	/* get source container user attributes and copy them to the DAOS destination container */
+	if (src_file_dfs->type == DAOS && dst_file_dfs->type == DAOS) {
+		rc = dm_copy_usr_attrs(ap, ca->src_coh, ca->dst_coh);
+		if (rc != 0) {
+			DH_PERROR_DER(ap, rc, "Copying user attributes failed");
+			D_GOTO(err, rc);
 		}
 	}
 	D_GOTO(out, rc);
 err:
 	if (daos_handle_is_valid(ca->dst_coh)) {
+		if (dst_file_dfs->dfs_sys != NULL) {
+			rc2 = dfs_sys_umount(dst_file_dfs->dfs_sys);
+			if (rc2 != 0)
+				DH_PERROR_SYS(ap, rc2, "failed to unmount destination container");
+		}
 		rc2 = daos_cont_close(ca->dst_coh, NULL);
 		if (rc2 != 0)
 			DH_PERROR_DER(ap, rc2, "failed to close destination container");
 	}
 	if (daos_handle_is_valid(ca->src_coh)) {
+		if (src_file_dfs->dfs_sys != NULL) {
+			rc2 = dfs_sys_umount(src_file_dfs->dfs_sys);
+			if (rc2 != 0)
+				DH_PERROR_SYS(ap, rc2, "failed to unmount source container");
+		}
 		rc2 = daos_cont_close(ca->src_coh, NULL);
 		if (rc2 != 0)
 			DH_PERROR_DER(ap, rc2, "failed to close source container");
@@ -2767,43 +1716,44 @@ dm_disconnect(struct cmd_args_s *ap,
 	if (src_file_dfs->type == DAOS) {
 		if (is_posix_copy) {
 			rc = dfs_sys_umount(src_file_dfs->dfs_sys);
-			if (rc != 0) {
-				rc = daos_errno2der(rc);
-				DH_PERROR_DER(ap, rc, "failed to unmount source");
-				dfs_sys_umount(src_file_dfs->dfs_sys);
-			}
+			if (rc != 0)
+				DH_PERROR_SYS(ap, rc, "failed to unmount source");
 			src_file_dfs->dfs_sys = NULL;
 		}
 		rc = daos_cont_close(ca->src_coh, NULL);
-		if (rc != 0) {
+		if (rc != 0)
 			DH_PERROR_DER(ap, rc, "failed to close source container");
-			daos_cont_close(ca->src_coh, NULL);
-		}
 		rc = daos_pool_disconnect(ca->src_poh, NULL);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "failed to disconnect source pool");
-			daos_pool_disconnect(ca->src_poh, NULL);
+			if (rc == -DER_NOMEM) {
+				rc = daos_pool_disconnect(ca->src_poh, NULL);
+				if (rc != 0)
+					DH_PERROR_DER(ap, rc,
+						      "failed to disconnect source pool on retry");
+			}
 		}
 	}
 	if (dst_file_dfs->type == DAOS) {
 		if (is_posix_copy) {
 			rc = dfs_sys_umount(dst_file_dfs->dfs_sys);
-			if (rc != 0) {
-				rc = daos_errno2der(rc);
-				DH_PERROR_DER(ap, rc, "failed to unmount source");
-				dfs_sys_umount(dst_file_dfs->dfs_sys);
-			}
+			if (rc != 0)
+				DH_PERROR_SYS(ap, rc, "failed to unmount source");
 			dst_file_dfs->dfs_sys = NULL;
 		}
 		rc = daos_cont_close(ca->dst_coh, NULL);
-		if (rc != 0) {
+		if (rc != 0)
 			DH_PERROR_DER(ap, rc, "failed to close destination container");
-			daos_cont_close(ca->dst_coh, NULL);
-		}
 		rc = daos_pool_disconnect(ca->dst_poh, NULL);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "failed to disconnect destination pool");
-			daos_pool_disconnect(ca->dst_poh, NULL);
+			if (rc == -DER_NOMEM) {
+				rc = daos_pool_disconnect(ca->dst_poh, NULL);
+				if (rc != 0)
+					DH_PERROR_DER(
+					    ap, rc,
+					    "failed to disconnect destination pool on retry");
+			}
 		}
 	}
 	return rc;
@@ -2821,31 +1771,70 @@ dm_parse_path(struct file_dfs *file, char *path, size_t path_len, char (*pool_st
 {
 	struct duns_attr_t	dattr = {0};
 	int			rc = 0;
+	char			*tmp_path1 = NULL;
+	char			*path_dirname = NULL;
+	char			*tmp_path2 = NULL;
+	char			*path_basename = NULL;
 
 	rc = duns_resolve_path(path, &dattr);
 	if (rc == 0) {
 		snprintf(*pool_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_pool);
 		snprintf(*cont_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_cont);
-		if (dattr.da_rel_path == NULL) {
+		if (dattr.da_rel_path == NULL)
 			strncpy(path, "/", path_len);
-		} else {
+		else
 			strncpy(path, dattr.da_rel_path, path_len);
-		}
 	} else if (rc == ENOMEM) {
-		/* TODO: Take this path of rc != ENOENT? */
 		D_GOTO(out, rc);
 	} else if (strncmp(path, "daos://", 7) == 0) {
 		/* Error, since we expect a DAOS path */
-		D_GOTO(out, rc = EINVAL);
+		D_GOTO(out, rc);
 	} else {
-		/* not a DAOS path, set type to POSIX,
-		 * POSIX dir will be checked with stat
-		 * at the beginning of fs_copy
+		/* If basename does not exist yet then duns_resolve_path will fail even if
+		 * dirname is a UNS path
 		 */
-		rc = 0;
-		file->type = POSIX;
+
+		/* get dirname */
+		D_STRNDUP(tmp_path1, path, path_len);
+		if (tmp_path1 == NULL)
+			D_GOTO(out, rc = ENOMEM);
+		path_dirname = dirname(tmp_path1);
+		/* reset before calling duns_resolve_path with new string */
+		memset(&dattr, 0, sizeof(struct duns_attr_t));
+
+		/* Check if this path represents a daos pool and/or container. */
+		rc = duns_resolve_path(path_dirname, &dattr);
+		if (rc == 0) {
+			/* if duns_resolve_path succeeds then concat basename to da_rel_path */
+			D_STRNDUP(tmp_path2, path, path_len);
+			if (tmp_path2 == NULL)
+				D_GOTO(out, rc = ENOMEM);
+			path_basename = basename(tmp_path2);
+
+			/* dirname might be root uns path, if that is the case,
+			 * then da_rel_path might be NULL
+			 */
+			if (dattr.da_rel_path == NULL)
+				snprintf(path, path_len, "/%s", path_basename);
+			else
+				snprintf(path, path_len, "%s/%s", dattr.da_rel_path, path_basename);
+			snprintf(*pool_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_pool);
+			snprintf(*cont_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_cont);
+		} else if (rc == ENOMEM) {
+			/* TODO: Take this path of rc != ENOENT? */
+			D_GOTO(out, rc);
+		} else {
+			/* not a DAOS path, set type to POSIX,
+			 * POSIX dir will be checked with stat
+			 * at the beginning of fs_copy
+			 */
+			rc = 0;
+			file->type = POSIX;
+		}
 	}
 out:
+	D_FREE(tmp_path1);
+	D_FREE(tmp_path2);
 	duns_destroy_attr(&dattr);
 	return daos_errno2der(rc);
 }
@@ -2863,12 +1852,21 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	daos_cont_info_t	dst_cont_info = {0};
 	struct file_dfs		src_file_dfs = {0};
 	struct file_dfs		dst_file_dfs = {0};
-	struct dm_args		ca = {0};
+	struct dm_args		*ca = NULL;
 	bool			is_posix_copy = true;
-	uint64_t		num_dirs = 0;
-	uint64_t		num_files = 0;
+	struct fs_copy_stats	*num = NULL;
 
-	set_dm_args_default(&ca);
+	D_ALLOC(ca, sizeof(struct dm_args));
+	if (ca == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+	ap->dm_args = ca;
+
+	D_ALLOC(num, sizeof(struct fs_copy_stats));
+	if (num == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+	ap->fs_copy_stats = num;
+
+	set_dm_args_default(ca);
 	file_set_defaults_dfs(&src_file_dfs);
 	file_set_defaults_dfs(&dst_file_dfs);
 
@@ -2884,7 +1882,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 		DH_PERROR_DER(ap, rc, "Unable to allocate memory for source path");
 		D_GOTO(out, rc);
 	}
-	rc = dm_parse_path(&src_file_dfs, src_str, src_str_len, &ca.src_pool, &ca.src_cont);
+	rc = dm_parse_path(&src_file_dfs, src_str, src_str_len, &ca->src_pool, &ca->src_cont);
 	if (rc != 0) {
 		DH_PERROR_DER(ap, rc, "failed to parse source path");
 		D_GOTO(out, rc);
@@ -2902,34 +1900,30 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 		DH_PERROR_DER(ap, rc, "Unable to allocate memory for destination path");
 		D_GOTO(out, rc);
 	}
-	rc = dm_parse_path(&dst_file_dfs, dst_str, dst_str_len, &ca.dst_pool, &ca.dst_cont);
+	rc = dm_parse_path(&dst_file_dfs, dst_str, dst_str_len, &ca->dst_pool, &ca->dst_cont);
 	if (rc != 0) {
 		DH_PERROR_DER(ap, rc, "failed to parse destination path");
 		D_GOTO(out, rc);
 	}
+	if (dst_file_dfs.type == POSIX)
+		ap->fs_copy_posix = true;
 
-	rc = dm_connect(ap, is_posix_copy, &src_file_dfs, &dst_file_dfs, &ca,
+	rc = dm_connect(ap, is_posix_copy, &src_file_dfs, &dst_file_dfs, ca,
 			ap->sysname, ap->dst, &src_cont_info, &dst_cont_info);
 	if (rc != 0) {
 		DH_PERROR_DER(ap, rc, "fs copy failed to connect");
 		D_GOTO(out, rc);
 	}
 
-	rc = fs_copy(ap, &src_file_dfs, &dst_file_dfs, src_str, dst_str, &num_dirs, &num_files);
-	if (rc != 0)
+	rc = fs_copy(ap, ca, &src_file_dfs, &dst_file_dfs, src_str, dst_str, ap->ignore_unsup, num);
+	if (rc != 0) {
+		DH_PERROR_DER(ap, rc, "fs copy failed");
 		D_GOTO(out_disconnect, rc);
-
-	if (dst_file_dfs.type == DAOS) {
-		fprintf(ap->outstream, "Successfully copied to DAOS: %s\n", dst_str);
-	} else if (dst_file_dfs.type == POSIX) {
-		fprintf(ap->outstream, "Successfully copied to POSIX: %s\n", dst_str);
 	}
-	fprintf(ap->outstream, "    Directories: %lu\n", num_dirs);
-	fprintf(ap->outstream, "    Files:       %lu\n", num_files);
 
 out_disconnect:
 	/* umount dfs, close conts, and disconnect pools */
-	rc2 = dm_disconnect(ap, is_posix_copy, &ca, &src_file_dfs, &dst_file_dfs);
+	rc2 = dm_disconnect(ap, is_posix_copy, ca, &src_file_dfs, &dst_file_dfs);
 	if (rc2 != 0)
 		DH_PERROR_DER(ap, rc2, "failed to disconnect");
 out:
@@ -3298,7 +2292,7 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 	uint32_t		oids_nr;
 	daos_handle_t		toh;
 	daos_epoch_t		epoch;
-	struct			dm_args ca = {0};
+	struct			dm_args *ca = NULL;
 	bool			is_posix_copy = false;
 	daos_handle_t		oh;
 	daos_handle_t		dst_oh;
@@ -3310,7 +2304,12 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 	size_t			dst_str_len = 0;
 	daos_epoch_range_t	epr;
 
-	set_dm_args_default(&ca);
+	D_ALLOC(ca, sizeof(struct dm_args));
+	if (ca == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+	ap->dm_args = ca;
+
+	set_dm_args_default(ca);
 	file_set_defaults_dfs(&src_cp_type);
 	file_set_defaults_dfs(&dst_cp_type);
 
@@ -3321,7 +2320,7 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 		DH_PERROR_DER(ap, rc, "Unable to allocate memory for source path");
 		D_GOTO(out, rc);
 	}
-	rc = dm_parse_path(&src_cp_type, src_str, src_str_len, &ca.src_pool, &ca.src_cont);
+	rc = dm_parse_path(&src_cp_type, src_str, src_str_len, &ca->src_pool, &ca->src_cont);
 	if (rc != 0) {
 		DH_PERROR_DER(ap, rc, "Failed to parse source path");
 		D_GOTO(out, rc);
@@ -3334,16 +2333,16 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 		DH_PERROR_DER(ap, rc, "Unable to allocate memory for destination path");
 		D_GOTO(out, rc);
 	}
-	rc = dm_parse_path(&dst_cp_type, dst_str, dst_str_len, &ca.dst_pool, &ca.dst_cont);
+	rc = dm_parse_path(&dst_cp_type, dst_str, dst_str_len, &ca->dst_pool, &ca->dst_cont);
 	if (rc != 0) {
 		DH_PERROR_DER(ap, rc, "Failed to parse destination path");
 		D_GOTO(out, rc);
 	}
 
-	if (strlen(ca.dst_cont) != 0) {
+	if (strlen(ca->dst_cont) != 0) {
 		/* make sure destination container does not already exist for object level copies
 		 */
-		rc = daos_pool_connect(ca.dst_pool, ap->sysname, DAOS_PC_RW, &ca.dst_poh,
+		rc = daos_pool_connect(ca->dst_pool, ap->sysname, DAOS_PC_RW, &ca->dst_poh,
 				       NULL, NULL);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "Failed to connect to destination pool");
@@ -3352,7 +2351,7 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 		/* make sure this destination container doesn't exist already,
 		 * if it does, exit
 		 */
-		rc = daos_cont_open(ca.dst_poh, ca.dst_cont, DAOS_COO_RW, &ca.dst_coh,
+		rc = daos_cont_open(ca->dst_poh, ca->dst_cont, DAOS_COO_RW, &ca->dst_coh,
 				    &dst_cont_info, NULL);
 		if (rc == 0) {
 			fprintf(ap->errstream,
@@ -3361,34 +2360,34 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 				"provide an existing pool or new UNS path of the "
 				"form:\n\t--dst </$pool> | <path/to/uns>\n");
 			/* disconnect from only destination and exit */
-			rc = daos_cont_close(ca.dst_coh, NULL);
+			rc = daos_cont_close(ca->dst_coh, NULL);
 			if (rc != 0) {
 				DH_PERROR_DER(ap, rc, "Failed to close destination container");
 				D_GOTO(out, rc);
 			}
-			rc = daos_pool_disconnect(ca.dst_poh, NULL);
+			rc = daos_pool_disconnect(ca->dst_poh, NULL);
 			if (rc != 0) {
 				DH_PERROR_DER(ap, rc2,
 					      "failed to disconnect from destination pool %s",
-					      ca.dst_pool);
+					      ca->dst_pool);
 				D_GOTO(out, rc);
 			}
 			D_GOTO(out, rc = 1);
 		}
 	}
 
-	rc = dm_connect(ap, is_posix_copy, &dst_cp_type, &src_cp_type,
-			&ca, ap->sysname, ap->dst, &src_cont_info, &dst_cont_info);
+	rc = dm_connect(ap, is_posix_copy, &dst_cp_type, &src_cp_type, ca, ap->sysname,
+			ap->dst, &src_cont_info, &dst_cont_info);
 	if (rc != 0) {
 		D_GOTO(out_disconnect, rc);
 	}
-	rc = daos_cont_create_snap_opt(ca.src_coh, &epoch, NULL,
+	rc = daos_cont_create_snap_opt(ca->src_coh, &epoch, NULL,
 				       DAOS_SNAP_OPT_CR | DAOS_SNAP_OPT_OIT, NULL);
 	if (rc) {
 		DH_PERROR_DER(ap, rc, "Failed to create snapshot");
 		D_GOTO(out_disconnect, rc);
 	}
-	rc = daos_oit_open(ca.src_coh, epoch, &toh, NULL);
+	rc = daos_oit_open(ca->src_coh, epoch, &toh, NULL);
 	if (rc != 0) {
 		DH_PERROR_DER(ap, rc, "Failed to open object iterator");
 		D_GOTO(out_snap, rc);
@@ -3404,12 +2403,12 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 
 		/* list object ID's */
 		for (i = 0; i < oids_nr; i++) {
-			rc = daos_obj_open(ca.src_coh, oids[i], 0, &oh, NULL);
+			rc = daos_obj_open(ca->src_coh, oids[i], DAOS_OO_RW, &oh, NULL);
 			if (rc != 0) {
 				DH_PERROR_DER(ap, rc, "Failed to open source object");
 				D_GOTO(out_oit, rc);
 			}
-			rc = daos_obj_open(ca.dst_coh, oids[i], 0, &dst_oh, NULL);
+			rc = daos_obj_open(ca->dst_coh, oids[i], DAOS_OO_RW, &dst_oh, NULL);
 			if (rc != 0) {
 				DH_PERROR_DER(ap, rc, "Failed to open destination object");
 				D_GOTO(err_dst, rc);
@@ -3443,6 +2442,9 @@ err_dst:
 		DH_PERROR_DER(ap, rc2, "Failed to close source object");
 	}
 out_oit:
+	rc2 = daos_cont_snap_oit_destroy(ca->src_coh, toh, NULL);
+	if (rc2 != 0)
+		DH_PERROR_DER(ap, rc2, "Failed to destroy oit");
 	rc2 = daos_oit_close(toh, NULL);
 	if (rc2 != 0) {
 		DH_PERROR_DER(ap, rc2, "Failed to close object iterator");
@@ -3451,482 +2453,196 @@ out_oit:
 out_snap:
 	epr.epr_lo = epoch;
 	epr.epr_hi = epoch;
-	rc2 = daos_cont_destroy_snap(ca.src_coh, epr, NULL);
+	rc2 = daos_cont_destroy_snap(ca->src_coh, epr, NULL);
 	if (rc2 != 0) {
 		DH_PERROR_DER(ap, rc2, "Failed to destroy snapshot");
 	}
 out_disconnect:
 	/* close src and dst pools, conts */
-	rc2 = dm_disconnect(ap, is_posix_copy, &ca, &src_cp_type, &dst_cp_type);
+	rc2 = dm_disconnect(ap, is_posix_copy, ca, &src_cp_type, &dst_cp_type);
 	if (rc2 != 0) {
 		DH_PERROR_DER(ap, rc2, "Failed to disconnect");
 	}
 out:
-	if (rc == 0) {
-		fprintf(ap->outstream, "Successfully copied to destination container %s\n",
-			ca.dst_cont);
-	}
 	D_FREE(src_str);
 	D_FREE(dst_str);
-	D_FREE(ca.src);
-	D_FREE(ca.dst);
-	return rc;
-}
-
-static int
-print_acl(struct cmd_args_s *ap, FILE *outstream, daos_prop_t *acl_prop,
-	  bool verbose)
-{
-	int			rc = 0;
-	struct daos_prop_entry	*entry = {0};
-	struct daos_acl		*acl = NULL;
-
-	entry = daos_prop_entry_get(acl_prop, DAOS_PROP_CO_ACL);
-	if (entry != NULL)
-		acl = entry->dpe_val_ptr;
-
-	entry = daos_prop_entry_get(acl_prop, DAOS_PROP_CO_OWNER);
-	if (entry != NULL && entry->dpe_str != NULL)
-		fprintf(outstream, "# Owner: %s\n", entry->dpe_str);
-
-	entry = daos_prop_entry_get(acl_prop, DAOS_PROP_CO_OWNER_GROUP);
-	if (entry != NULL && entry->dpe_str != NULL)
-		fprintf(outstream, "# Owner-Group: %s\n", entry->dpe_str);
-
-	rc = daos_acl_to_stream(outstream, acl, verbose);
-	if (rc != 0) {
-		fprintf(ap->errstream, "failed to print ACL: %s (%d)\n",
-			d_errstr(rc), rc);
+	if (ca) {
+		D_FREE(ca->src);
+		D_FREE(ca->dst);
 	}
-
 	return rc;
 }
 
 int
-cont_get_acl_hdlr(struct cmd_args_s *ap)
+dfuse_cont_query(struct cmd_args_s *ap)
 {
-	int		rc;
-	daos_prop_t	*prop = NULL;
-	FILE		*outstream = ap->outstream;
+	struct dfuse_mem_query query = {};
+	int                    rc    = -DER_SUCCESS;
+	int                    fd;
+	struct dfuse_stat     *stat   = NULL;
+	uint64_t               tstats = 0;
+	int                    i;
 
-	if (ap->outfile) {
-		int fd;
-		int flags = O_CREAT | O_WRONLY;
-
-		/* Ensure we don't overwrite some existing file without the
-		 * force option.
-		 */
-		if (!ap->force) {
-			flags |= O_EXCL;
-		}
-
-		fd = open(ap->outfile, flags, 0644);
-		if (fd < 0) {
-			fprintf(ap->errstream,
-				"Unable to create output file: %s\n",
-				strerror(errno));
-			return daos_errno2der(errno);
-		}
-
-		outstream = fdopen(fd, "w");
-		if (outstream == NULL) {
-			fprintf(ap->errstream,
-				"Unable to stream to output file: %s\n",
-				strerror(errno));
-			return daos_errno2der(errno);
-		}
+	fd = open(ap->path, O_NOFOLLOW, O_RDONLY);
+	if (fd < 0) {
+		rc = errno;
+		if (rc != ENOENT)
+			DH_PERROR_SYS(ap, rc, "Failed to open path");
+		return daos_errno2der(rc);
 	}
 
-	rc = daos_cont_get_acl(ap->cont, &prop, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to get ACL for container %s: %s (%d)\n",
-			ap->cont_str, d_errdesc(rc), rc);
-	} else {
-		rc = print_acl(ap, outstream, prop, ap->verbose);
-		if (rc == 0 && ap->outfile)
-			fprintf(ap->outstream, "Wrote ACL to output file: %s\n",
-				ap->outfile);
+	query.ino = ap->dfuse_mem.ino;
+
+	rc = ioctl(fd, DFUSE_IOCTL_COUNT_QUERY, &query);
+	if (rc < 0) {
+		rc = errno;
+		if (rc == ENOTTY) {
+			rc = -DER_MISC;
+		} else {
+			DH_PERROR_SYS(ap, rc, "query ioctl failed");
+			rc = daos_errno2der(errno);
+		}
+		goto close;
 	}
 
-	if (ap->outfile)
-		fclose(outstream);
-	daos_prop_free(prop);
+	ap->dfuse_mem.inode_count     = query.inode_count;
+	ap->dfuse_mem.fh_count        = query.fh_count;
+	ap->dfuse_mem.pool_count      = query.pool_count;
+	ap->dfuse_mem.container_count = query.container_count;
+	ap->dfuse_mem.found           = query.found;
+	ap->dfuse_mem.stat_count      = query.stat_count;
+
+	D_ALLOC_ARRAY(stat, query.stat_count);
+	if (stat == NULL)
+		D_GOTO(close, rc = -DER_NOMEM);
+
+	rc = ioctl(fd,
+		   (int)_IOC(_IOC_READ, DFUSE_IOCTL_TYPE, DFUSE_IOCTL_STAT_NR,
+			     sizeof(struct dfuse_stat) * query.stat_count),
+		   stat);
+	if (rc < 0) {
+		rc = errno;
+		if (rc == ENOTTY) {
+			rc = -DER_MISC;
+		} else {
+			DH_PERROR_SYS(ap, rc, "stat ioctl failed");
+			rc = daos_errno2der(errno);
+		}
+		goto close;
+	}
+	for (i = 0; i < query.stat_count; i++)
+		tstats += stat[i].value;
+
+	for (i = 0; i < query.stat_count; i++)
+		if (stat[i].value != 0)
+			fprintf(ap->outstream, "%16s: %5.1f%% (%ld)\n", stat[i].name,
+				(double)stat[i].value / tstats * 100, stat[i].value);
+
+	ap->dfuse_stat = stat;
+close:
+	close(fd);
+	if (rc != 0)
+		D_FREE(stat);
 	return rc;
 }
 
-/*
- * Returns a substring of the line with leading and trailing whitespace trimmed.
- * Doesn't allocate any new memory - trimmed string is just a pointer.
+/* Dfuse cache evict (and helper).
+ * Open a path and make a ioctl call for dfuse to evict it.  IF the path is the root then dfuse
+ * cannot do this so perform the same over all the top-level directory entries instead.
+ *
+ * Always closes fd.
  */
-static char *
-trim_acl_file_line(char *line)
-{
-	char *end;
-
-	while (isspace(*line))
-		line++;
-	if (line[0] == '\0')
-		return line;
-
-	end = line + strnlen(line, DAOS_ACL_MAX_ACE_STR_LEN) - 1;
-	while (isspace(*end))
-		end--;
-	end[1] = '\0';
-
-	return line;
-}
-
 static int
-parse_acl_file(struct cmd_args_s *ap, const char *path, struct daos_acl **acl)
+dfuse_evict_helper(int fd, struct dfuse_mem_query *query)
 {
-	int		rc = 0;
-	FILE		*instream;
-	char		*line = NULL;
-	size_t		line_len = 0;
-	char		*trimmed;
-	struct daos_ace	*ace;
-	struct daos_acl	*tmp_acl;
+	struct dirent *ent;
+	DIR           *dir;
+	int            rc = 0;
 
-	instream = fopen(path, "r");
-	if (instream == NULL) {
-		fprintf(ap->errstream,
-			"Unable to read ACL input file '%s': %s\n",
-			path, strerror(errno));
-		return daos_errno2der(errno);
+	dir = fdopendir(fd);
+	if (dir == 0) {
+		rc = errno;
+		close(fd);
+		return rc;
 	}
 
-	tmp_acl = daos_acl_create(NULL, 0);
-	if (tmp_acl == NULL) {
-		fprintf(ap->errstream, "Unable to allocate memory for ACL\n");
-		D_GOTO(out, rc = -DER_NOMEM);
-	}
+	while ((ent = readdir(dir)) != NULL) {
+		int cfd;
 
-	while (getline(&line, &line_len, instream) != -1) {
-		trimmed = trim_acl_file_line(line);
-
-		/* ignore blank lines and comments */
-		if (trimmed[0] == '\0' || trimmed[0] == '#') {
-			D_FREE(line);
-			continue;
+		cfd = openat(fd, ent->d_name, O_NOFOLLOW, O_RDONLY);
+		if (cfd < 0) {
+			rc = errno;
+			goto out;
 		}
 
-		rc = daos_ace_from_str(trimmed, &ace);
-		if (rc != 0) {
-			fprintf(ap->errstream,
-				"Error parsing ACE '%s' from file: %s (%d)\n",
-				trimmed, d_errdesc(rc), rc);
-			D_GOTO(parse_err, rc);
+		rc = ioctl(cfd, DFUSE_IOCTL_DFUSE_EVICT, query);
+		close(cfd);
+		if (rc < 0) {
+			rc = errno;
+			goto out;
 		}
-
-		rc = daos_acl_add_ace(&tmp_acl, ace);
-		daos_ace_free(ace);
-		if (rc != 0) {
-			fprintf(ap->errstream,
-				"Error parsing ACL file: %s (%d)\n",
-				d_errdesc(rc), rc);
-			D_GOTO(parse_err, rc);
-		}
-
-		D_FREE(line);
 	}
 
-	if (daos_acl_validate(tmp_acl) != 0) {
-		fprintf(ap->errstream, "Content of ACL file is invalid\n");
-		D_GOTO(parse_err, rc = -DER_INVAL);
-	}
-
-	*acl = tmp_acl;
-	D_GOTO(out, rc = 0);
-
-parse_err:
-	daos_acl_free(tmp_acl);
 out:
-	D_FREE(line);
-	fclose(instream);
+	closedir(dir);
 	return rc;
 }
 
 int
-cont_overwrite_acl_hdlr(struct cmd_args_s *ap)
+dfuse_evict(struct cmd_args_s *ap)
 {
-	int		rc;
-	struct daos_acl	*acl = NULL;
-	daos_prop_t	*prop_out;
+	struct dfuse_mem_query query = {};
+	struct stat            buf;
+	int                    rc = -DER_SUCCESS;
+	int                    fd;
 
-	if (!ap->aclfile) {
-		fprintf(ap->errstream,
-			"Parameter --acl-file is required\n");
-		return -DER_INVAL;
+	fd = open(ap->path, O_NOFOLLOW, O_RDONLY);
+	if (fd < 0) {
+		rc = errno;
+		DH_PERROR_SYS(ap, rc, "Failed to open path");
+		return daos_errno2der(rc);
 	}
 
-	rc = parse_acl_file(ap, ap->aclfile, &acl);
-	if (rc != 0)
-		return rc;
-
-	rc = daos_cont_overwrite_acl(ap->cont, acl, NULL);
-	daos_acl_free(acl);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to overwrite ACL for container %s: %s (%d)\n",
-			ap->cont_str, d_errdesc(rc), rc);
-		return rc;
+	rc = fstat(fd, &buf);
+	if (rc < 0) {
+		rc = errno;
+		DH_PERROR_SYS(ap, rc, "Failed to stat file");
+		rc = daos_errno2der(rc);
+		goto close;
 	}
 
-	rc = daos_cont_get_acl(ap->cont, &prop_out, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"overwrite appeared to succeed, but failed to fetch ACL"
-			" for confirmation: %s (%d)\n", d_errdesc(rc), rc);
-		return rc;
-	}
-
-	rc = print_acl(ap, ap->outstream, prop_out, false);
-
-	daos_prop_free(prop_out);
-	return rc;
-}
-
-int
-cont_update_acl_hdlr(struct cmd_args_s *ap)
-{
-	int		rc;
-	struct daos_acl	*acl = NULL;
-	struct daos_ace	*ace = NULL;
-	daos_prop_t	*prop_out;
-
-	/* need one or the other, not both */
-	if (!ap->aclfile == !ap->entry) {
-		fprintf(ap->errstream,
-			"either parameter --acl-file or --entry is required\n");
-		return -DER_INVAL;
-	}
-
-	if (ap->aclfile) {
-		rc = parse_acl_file(ap, ap->aclfile, &acl);
-		if (rc != 0)
-			return rc;
-	} else {
-		rc = daos_ace_from_str(ap->entry, &ace);
+	if (buf.st_ino == 1) {
+		rc = dfuse_evict_helper(fd, &query);
+		fd = -1;
 		if (rc != 0) {
-			fprintf(ap->errstream,
-				"failed to parse entry: %s (%d)\n",
-				d_errdesc(rc), rc);
-			return rc;
+			DH_PERROR_SYS(ap, rc, "Unable to traverse root");
+			rc = daos_errno2der(rc);
+			goto close;
 		}
-
-		acl = daos_acl_create(&ace, 1);
-		daos_ace_free(ace);
-		if (acl == NULL) {
-			rc = -DER_NOMEM;
-			fprintf(ap->errstream,
-				"failed to make ACL from entry: %s "
-				"(%d)\n", d_errdesc(rc), rc);
-			return rc;
-		}
-	}
-
-	rc = daos_cont_update_acl(ap->cont, acl, NULL);
-	daos_acl_free(acl);
-	if (rc != 0) {
-		fprintf(ap->errstream, "failed to update ACL for container %s: %s (%d)\n",
-			ap->cont_str, d_errdesc(rc), rc);
-		return rc;
-	}
-
-	rc = daos_cont_get_acl(ap->cont, &prop_out, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"update appeared to succeed, but failed to fetch ACL "
-			"for confirmation: %s (%d)\n", d_errdesc(rc), rc);
-		return rc;
-	}
-
-	rc = print_acl(ap, ap->outstream, prop_out, false);
-
-	daos_prop_free(prop_out);
-	return rc;
-}
-
-int
-cont_delete_acl_hdlr(struct cmd_args_s *ap)
-{
-	int				rc;
-	enum daos_acl_principal_type	type;
-	char				*name;
-	daos_prop_t			*prop_out;
-
-	if (!ap->principal) {
-		fprintf(ap->errstream,
-			"parameter --principal is required\n");
-		return -DER_INVAL;
-	}
-
-	rc = daos_acl_principal_from_str(ap->principal, &type, &name);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"unable to parse principal string '%s': %s"
-			"(%d)\n", ap->principal, d_errdesc(rc), rc);
-		return rc;
-	}
-
-	rc = daos_cont_delete_acl(ap->cont, type, name, NULL);
-	D_FREE(name);
-	if (rc != 0) {
-		fprintf(ap->errstream, "failed to delete ACL for container %s: %s (%d)\n",
-			ap->cont_str, d_errdesc(rc), rc);
-		return rc;
-	}
-
-	rc = daos_cont_get_acl(ap->cont, &prop_out, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"delete appeared to succeed, but failed to fetch ACL "
-			"for confirmation: %s (%d)\n", d_errdesc(rc), rc);
-		return rc;
-	}
-
-	rc = print_acl(ap, ap->outstream, prop_out, false);
-
-	daos_prop_free(prop_out);
-	return rc;
-}
-
-int
-cont_set_owner_hdlr(struct cmd_args_s *ap)
-{
-	int	rc;
-
-	if (!ap->user && !ap->group) {
-		fprintf(ap->errstream,
-			"parameter --user or --group is required\n");
-		return -DER_INVAL;
-	}
-
-	rc = daos_cont_set_owner(ap->cont, ap->user, ap->group, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to set owner for container %s: %s (%d)\n",
-			ap->cont_str, d_errdesc(rc), rc);
-		return rc;
-	}
-
-	fprintf(ap->outstream, "successfully updated owner for container\n");
-	return rc;
-}
-
-int
-cont_rollback_hdlr(struct cmd_args_s *ap)
-{
-	int	rc;
-
-	if (ap->epc == 0 && ap->snapname_str == NULL) {
-		fprintf(ap->errstream,
-			"either parameter --epc or --snap is required\n");
-		return -DER_INVAL;
-	}
-	if (ap->epc != 0 && ap->snapname_str != NULL) {
-		fprintf(ap->errstream,
-			"both parameters --epc and --snap could not be specified\n");
-		return -DER_INVAL;
-	}
-
-	if (ap->snapname_str != NULL) {
-		rc = cont_list_snaps_hdlr(ap);
-		if (rc != 0)
-			return rc;
-	}
-	rc = daos_cont_rollback(ap->cont, ap->epc, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to roll back container %s to snapshot "DF_U64": %s (%d)\n",
-			ap->cont_str, ap->epc, d_errdesc(rc), rc);
-		return rc;
-	}
-
-	fprintf(ap->outstream, "successfully rollback container\n");
-	return rc;
-}
-
-int
-cont_list_objs_hdlr(struct cmd_args_s *ap)
-{
-	daos_obj_id_t		oids[OID_ARR_SIZE];
-	daos_handle_t		oit;
-	daos_anchor_t		anchor = {0};
-	uint32_t		oids_nr;
-	int			rc, i;
-
-	/* create a snapshot with OIT */
-	rc = daos_cont_create_snap_opt(ap->cont, &ap->epc, NULL,
-				       DAOS_SNAP_OPT_CR | DAOS_SNAP_OPT_OIT,
-				       NULL);
-	if (rc != 0)
 		goto out;
-
-	/* open OIT */
-	rc = daos_oit_open(ap->cont, ap->epc, &oit, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"open of container's OIT failed: "DF_RC"\n", DP_RC(rc));
-		goto out_snap;
 	}
 
-	while (!daos_anchor_is_eof(&anchor)) {
-		oids_nr = OID_ARR_SIZE;
-		rc = daos_oit_list(oit, oids, &oids_nr, &anchor, NULL);
-		if (rc != 0) {
-			fprintf(ap->errstream,
-				"object IDs enumeration failed: "DF_RC"\n",
-				DP_RC(rc));
-			D_GOTO(out_close, rc);
+	rc = ioctl(fd, DFUSE_IOCTL_DFUSE_EVICT, &query);
+	if (rc < 0) {
+		rc = errno;
+		if (rc == ENOTTY) {
+			rc = -DER_MISC;
+		} else {
+			DH_PERROR_SYS(ap, rc, "ioctl failed");
+			rc = daos_errno2der(errno);
 		}
-
-		for (i = 0; i < oids_nr; i++)
-			D_PRINT(DF_OID"\n", DP_OID(oids[i]));
+		goto close;
 	}
 
-out_close:
-	daos_oit_close(oit, NULL);
-out_snap:
-	cont_destroy_snap_hdlr(ap);
+	ap->dfuse_mem.ino = buf.st_ino;
 out:
-	return rc;
-}
+	ap->dfuse_mem.inode_count     = query.inode_count;
+	ap->dfuse_mem.fh_count        = query.fh_count;
+	ap->dfuse_mem.pool_count      = query.pool_count;
+	ap->dfuse_mem.container_count = query.container_count;
 
-int
-obj_query_hdlr(struct cmd_args_s *ap)
-{
-	struct daos_obj_layout *layout;
-	int			i;
-	int			j;
-	int			rc;
-
-	rc = daos_obj_layout_get(ap->cont, ap->oid, &layout);
-	if (rc) {
-		fprintf(ap->errstream,
-			"failed to retrieve layout for object "DF_OID
-			": %s (%d)\n", DP_OID(ap->oid), d_errdesc(rc), rc);
-		D_GOTO(out, rc);
-	}
-
-	/* Print the object layout */
-	fprintf(ap->outstream,
-		"oid: "DF_OID" ver %d grp_nr: %d\n", DP_OID(ap->oid),
-		layout->ol_ver, layout->ol_nr);
-
-	for (i = 0; i < layout->ol_nr; i++) {
-		struct daos_obj_shard *shard;
-
-		shard = layout->ol_shards[i];
-		fprintf(ap->outstream, "grp: %d\n", i);
-		for (j = 0; j < shard->os_replica_nr; j++)
-			fprintf(ap->outstream, "replica %d %d\n", j,
-				shard->os_shard_loc[j].sd_rank);
-	}
-
-	daos_obj_layout_free(layout);
-
-out:
+close:
+	if (fd >= 0)
+		close(fd);
 	return rc;
 }

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -8,6 +8,21 @@
 
 #include <daos_srv/evtree.h>
 #include "vos_internal.h"
+
+/** Upper two bits are reserved. On disk, this will be (uint16_t)-2)
+ *  for backward compatibility reasons.
+ *  For the upper bits,
+ *  00 means distributed transaction write
+ *  11 is reserved for max normal write and removal records
+ *  01 is reserved for rebuild writes
+ *  10 is reserved for future use
+ *
+ *  When converting to not durable values, we want all rebuild records to be
+ *  greater than any normal write records.  So, we use a smaller value here.
+ */
+#define EVT_TX_MINOR_MAX_DF   ((uint16_t)-2)
+#define EVT_REBUILD_MINOR_MIN (VOS_SUB_OP_MAX + 1)
+#define EVT_REBUILD_MINOR_MAX (EVT_REBUILD_MINOR_MIN + VOS_SUB_OP_MAX)
 
 /**
  * Tree node types.
@@ -62,13 +77,15 @@ struct evt_context {
 	/** refcount on the context */
 	unsigned int			 tc_ref;
 	/** cached tree order (reduce PMEM access) */
-	uint16_t			 tc_order;
+	uint8_t                          tc_order;
+	/** Cached maximum tree order (reduce PMEM access) */
+	uint8_t                          tc_max_order;
 	/** cached tree depth (reduce PMEM access) */
 	uint16_t			 tc_depth;
 	/** number of credits for "drain" operation */
-	int				 tc_creds:30;
+	uint32_t                         tc_creds    : 30;
 	/** credits is enabled */
-	int				 tc_creds_on:1;
+	uint32_t                         tc_creds_on : 1;
 	/** cached number of bytes per entry */
 	uint32_t			 tc_inob;
 	/** cached tree feature bits (reduce PMEM access) */

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,20 +16,23 @@ import (
 )
 
 const (
-	shortFlagTag = "cmdShortFlag"
-	longFlagTag  = "cmdLongFlag"
-	envTag       = "cmdEnv"
+	shortFlagTag = "cmdShortFlag" // a short flag, e.g. -f
+	longFlagTag  = "cmdLongFlag"  // a long flag, e.g. --flag
+	envTag       = "cmdEnv"       // an environment variable, e.g. ENV_VAR
 
-	nonZero = "nonzero"
+	nonZero    = "nonzero"    // only set if non-zero value
+	invertBool = "invertBool" // invert the value before setting
+	intBool    = "intBool"    // convert the bool to an int
+	sliceCount = "count"      // use the length of a slice rather than its contents
 )
 
 type (
 	refMap  map[uintptr]struct{}
 	tagOpts map[string]struct{}
-	joinFn  func(args []string) []string
+	joinFn  func(args ...string) []string
 )
 
-func joinLongArgs(args []string) []string {
+func joinLongArgs(args ...string) []string {
 	switch len(args) {
 	case 2:
 		return []string{args[0] + "=" + args[1]}
@@ -40,7 +43,7 @@ func joinLongArgs(args []string) []string {
 	}
 }
 
-func joinShortArgs(args []string) []string {
+func joinShortArgs(args ...string) []string {
 	switch len(args) {
 	case 2:
 		return []string{args[0], args[1]}
@@ -51,10 +54,10 @@ func joinShortArgs(args []string) []string {
 	}
 }
 
-func joinEnvVars(args []string) []string {
+func joinEnvVars(args ...string) []string {
 	switch len(args) {
 	case 2:
-		return joinLongArgs(args)
+		return joinLongArgs(args...)
 	case 1:
 		return []string{args[0] + "=true"}
 	default:
@@ -116,31 +119,52 @@ func parseCmdTags(in interface{}, tagFilter string, joiner joinFn, seenRefs refM
 			switch f.Type.Kind() {
 			case reflect.String:
 				if fVal.String() != "" {
-					out = append(out, joiner([]string{tag, fVal.String()})...)
+					out = append(out, joiner(tag, fVal.String())...)
 				}
 			case reflect.Bool:
 				isSet := fVal.Bool()
+				if opts.hasOpt(invertBool) {
+					isSet = !isSet
+				}
+				if opts.hasOpt(intBool) {
+					var strVal string
+					if isSet {
+						strVal = "1"
+					} else {
+						strVal = "0"
+					}
+					out = append(out, joiner(tag, strVal)...)
+					continue
+				}
+
 				if isSet {
-					out = append(out, joiner([]string{tag})...)
+					out = append(out, joiner(tag)...)
 				}
 			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 				if fVal.Int() == 0 && opts.hasOpt(nonZero) {
 					continue
 				}
 				strVal := strconv.FormatInt(fVal.Int(), 10)
-				out = append(out, joiner([]string{tag, strVal})...)
+				out = append(out, joiner(tag, strVal)...)
 			case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 				if fVal.Uint() == 0 && opts.hasOpt(nonZero) {
 					continue
 				}
 				strVal := strconv.FormatUint(fVal.Uint(), 10)
-				out = append(out, joiner([]string{tag, strVal})...)
+				out = append(out, joiner(tag, strVal)...)
 			case reflect.Slice:
 				if fVal.Len() == 0 && opts.hasOpt(nonZero) {
 					continue
 				}
-				strVal := strconv.Itoa(fVal.Len())
-				out = append(out, joiner([]string{tag, strVal})...)
+
+				var strVal string
+				if opts.hasOpt(sliceCount) {
+					strVal = fmt.Sprintf("%d", fVal.Len())
+				} else {
+					strVal = getSliceStr(fVal)
+				}
+
+				out = append(out, joiner(tag, strVal)...)
 			case reflect.Uintptr, reflect.Ptr:
 				if fVal.IsNil() {
 					continue
@@ -173,12 +197,30 @@ func parseCmdTags(in interface{}, tagFilter string, joiner joinFn, seenRefs refM
 			continue
 		}
 
-		nested, err := parseCmdTags(fVal.Interface(), tagFilter, joiner, seenRefs)
-		if err != nil {
-			return nil, err
+		if fVal.CanInterface() {
+			nested, err := parseCmdTags(fVal.Interface(), tagFilter, joiner, seenRefs)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, nested...)
 		}
-		out = append(out, nested...)
 	}
 
 	return
+}
+
+func getSliceStr(val reflect.Value) string {
+	iVal := val.Interface()
+
+	var strSlice []string
+	switch slice := iVal.(type) {
+	case []int:
+		for _, n := range slice {
+			strSlice = append(strSlice, fmt.Sprintf("%d", n))
+		}
+	default:
+		return strconv.Itoa(val.Len())
+	}
+
+	return strings.Join(strSlice, ",")
 }

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,12 +16,16 @@
 #include <abt.h>
 #include <daos_types.h>
 #include <daos/btree.h>
+#include <daos/sys_db.h>
 #include <daos/mem.h>
 #include <daos_srv/smd.h>
 
-#define TABLE_DEV	"device"
-#define TABLE_TGT	"target"
-#define TABLE_POOL	"pool"
+#define TABLE_DEV		"device"
+#define SMD_DEV_NAME_MAX	16
+
+extern char TABLE_TGTS[SMD_DEV_TYPE_MAX][SMD_DEV_NAME_MAX];
+
+extern char TABLE_POOLS[SMD_DEV_TYPE_MAX][SMD_DEV_NAME_MAX];
 
 #define SMD_MAX_TGT_CNT		64
 
@@ -40,10 +44,5 @@ int smd_db_tx_end(int rc);
 void smd_db_lock(void);
 void smd_db_unlock(void);
 bool smd_db_ready(void);
-
-/* smd_pool.c */
-int
-smd_pool_replace_blobs_locked(struct smd_pool_info *info, int tgt_cnt,
-			      uint32_t *tgts);
 
 #endif /** __SMD_INTERNAL_H__ */

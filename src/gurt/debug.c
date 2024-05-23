@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -34,7 +34,7 @@ static d_dbug_t DB_OPT8;
 static d_dbug_t DB_OPT9;
 static d_dbug_t DB_OPT10;
 
-#define DBG_ENV_MAX_LEN	(32)
+#define DBG_ENV_MAX_LEN	(128)
 
 #define DBG_DICT_ENTRY(bit, name, longname)				\
 	{ .db_bit = bit, .db_name = name, .db_name_size = sizeof(name),	\
@@ -270,6 +270,7 @@ debug_mask_load(const char *mask_name)
 {
 	char			*mask_str;
 	char			*cur;
+	char			*saved_ptr;
 	int			 i;
 	struct d_debug_bit	*d;
 	struct d_debug_grp	*g;
@@ -283,7 +284,7 @@ debug_mask_load(const char *mask_name)
 		return;
 	}
 
-	cur = strtok(mask_str, DD_SEP);
+	cur = strtok_r(mask_str, DD_SEP, &saved_ptr);
 	d_dbglog_data.dd_mask = 0;
 	while (cur != NULL) {
 		for (i = 0; i < NUM_DBG_BIT_ENTRIES; i++) {
@@ -311,7 +312,7 @@ debug_mask_load(const char *mask_name)
 				break;
 			}
 		}
-		cur = strtok(NULL, DD_SEP);
+		cur = strtok_r(NULL, DD_SEP, &saved_ptr);
 	}
 	/** Must not use D_ macros internally to avoid caching log mask
 	 *  during mask resync
@@ -320,7 +321,7 @@ debug_mask_load(const char *mask_name)
 }
 
 /**
- * Create an identifier/group name for muliple debug bits
+ * Create an identifier/group name for multiple debug bits
  *
  * \param[in]	dbgmask		group mask
  * \param[in]	grpname		debug mask group name
@@ -379,7 +380,7 @@ debug_prio_err_load_env(void)
 	char	*env;
 	int	i;
 
-	env = getenv(DD_STDERR_ENV);
+	d_agetenv_str(&env, DD_STDERR_ENV);
 	if (env == NULL)
 		return;
 
@@ -394,42 +395,37 @@ debug_prio_err_load_env(void)
 	/* invalid DD_STDERR option */
 	if (d_dbglog_data.dd_prio_err == 0)
 		D_PRINT_ERR("DD_STDERR = %s - invalid option\n", env);
-}
-
-/** Load the debug mask from the environment variable. */
-static void
-debug_mask_load_env(void)
-{
-	char	*mask_env;
-
-	mask_env = getenv(DD_MASK_ENV);
-	if (mask_env == NULL)
-		return;
-
-	debug_mask_load(mask_env);
+	d_freeenv_str(&env);
 }
 
 void
-d_log_sync_mask(void)
+d_log_sync_mask_ex(const char *log_mask, const char *dd_mask)
 {
-	static char *log_mask;
-
 	D_MUTEX_LOCK(&d_log_lock);
 
-	/* Load debug mask environment (DD_MASK); only the facility log mask
-	 * will be returned and debug mask will be set if fac mask = DEBUG
-	 * and dd_mask is not 0.
-	 */
-	debug_mask_load_env();
+	if (dd_mask != NULL)
+		debug_mask_load(dd_mask);
 
-	/* load facility mask environment (D_LOG_MASK) */
-	log_mask = getenv(D_LOG_MASK_ENV);
-	if (log_mask != NULL) {
-		/* Prevent checkpatch warning */
+	if (log_mask != NULL)
 		d_log_setmasks(log_mask, -1);
-	}
 
 	D_MUTEX_UNLOCK(&d_log_lock);
+}
+
+/** Load the debug mask from the environment variable. */
+void
+d_log_sync_mask(void)
+{
+	char *log_mask;
+	char *dd_mask;
+
+	d_agetenv_str(&log_mask, D_LOG_MASK_ENV);
+	d_agetenv_str(&dd_mask, DD_MASK_ENV);
+
+	d_log_sync_mask_ex(log_mask, dd_mask);
+
+	d_freeenv_str(&dd_mask);
+	d_freeenv_str(&log_mask);
 }
 
 /**
@@ -554,14 +550,15 @@ d_log_init(void)
 	int	 flags = DLOG_FLV_LOGPID | DLOG_FLV_FAC | DLOG_FLV_TAG;
 	int	 rc;
 
-	log_file = getenv(D_LOG_FILE_ENV);
+	d_agetenv_str(&log_file, D_LOG_FILE_ENV);
 	if (log_file == NULL || strlen(log_file) == 0) {
 		flags |= DLOG_FLV_STDOUT;
-		log_file = NULL;
+		d_freeenv_str(&log_file);
 	}
 
 	rc = d_log_init_adv("CaRT", log_file, flags, DLOG_WARN, DLOG_EMERG,
 			    NULL);
+	d_freeenv_str(&log_file);
 	if (rc != DER_SUCCESS) {
 		D_PRINT_ERR("d_log_init_adv failed, rc: %d.\n", rc);
 		D_GOTO(out, rc);
@@ -574,9 +571,8 @@ out:
 
 void d_log_fini(void)
 {
-	D_ASSERT(d_log_refcount > 0);
-
 	D_MUTEX_LOCK(&d_log_lock);
+	D_ASSERT(d_log_refcount > 0);
 	d_log_refcount--;
 	if (d_log_refcount == 0) {
 		cleanup_dbg_namebit();

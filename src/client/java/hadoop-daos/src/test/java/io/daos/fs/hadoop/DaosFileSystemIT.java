@@ -230,6 +230,38 @@ public class DaosFileSystemIT {
   }
 
   @Test
+  public void testConnectViaFileContext() throws Exception {
+    File file = Files.createTempDirectory("uns").toFile();
+    try {
+      String path = file.getAbsolutePath();
+      String daosAttr = String.format(io.daos.Constants.DUNS_XATTR_FMT, Layout.POSIX.name(),
+          DaosFSFactory.getPooluuid(), DaosFSFactory.getContuuid());
+      DaosUns.setAppInfo(path, io.daos.Constants.DUNS_XATTR_NAME, daosAttr);
+      String authority = io.daos.Constants.UNS_ID_PREFIX + unsId.getAndIncrement();
+      String uriStr = "daos://" + authority + path;
+      Configuration cfg = new Configuration();
+      cfg.set("fs.defaultFS", uriStr);
+      cfg.set("fs.AbstractFileSystem.daos.impl", "io.daos.fs.hadoop.DaosAbsFsImpl");
+      AbstractFileSystem afs = FileContext.getFileContext(cfg).getDefaultFileSystem();
+      Assert.assertEquals("daos://" + authority + "/", afs.getUri().toString());
+      Assert.assertNotNull(afs);
+    } finally {
+      file.delete();
+    }
+  }
+
+  @Test
+  public void testConnectViaFileContextWithLabels() throws Exception {
+    String uriStr = "daos://" + DaosFSFactory.getPoolLabel() + "/" + DaosFSFactory.getContLabel();
+    Configuration cfg = new Configuration();
+    cfg.set("fs.defaultFS", uriStr);
+    cfg.set("fs.AbstractFileSystem.daos.impl", "io.daos.fs.hadoop.DaosAbsFsImpl");
+    AbstractFileSystem afs = FileContext.getFileContext(cfg).getDefaultFileSystem();
+    Assert.assertEquals("daos://" + DaosFSFactory.getPoolLabel() + "/", afs.getUri().toString());
+    Assert.assertNotNull(afs);
+  }
+
+  @Test
   public void testDirAndListPathFromHybridUnsPath() throws Exception {
     File file = Files.createTempDirectory("uns").toFile();
     try {

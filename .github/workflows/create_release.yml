@@ -2,17 +2,24 @@ name: Create Release
 # This workflow is triggered on pushes to the master branch of the repository.
 on:
   push:
+    paths:
+      - TAG
     branches:
-    - master
-    - 'release/**'
+      - master
+      - 'release/**'
+
+permissions: {}
 
 jobs:
   make_release:
     name: Create Release
+    if: github.repository == 'daos-stack/daos'
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
-    - uses: ./.github/actions/make_release
-      id: make_release
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: ./.github/actions/make_release
+        id: make_release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

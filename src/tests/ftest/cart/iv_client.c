@@ -68,8 +68,7 @@ test_iv_shutdown()
 {
 	struct RPC_SHUTDOWN_in	*input;
 	struct RPC_SHUTDOWN_out	*output;
-	crt_rpc_t		*rpc_req;
-	int			 rc;
+	crt_rpc_t               *rpc_req;
 
 	DBG_PRINT("Requesting rank %d shut down\n", g_server_ep.ep_rank);
 
@@ -84,8 +83,7 @@ test_iv_shutdown()
 		DBG_PRINT("Shutdown of rank %d FAILED; rc = %u\n",
 			  g_server_ep.ep_rank, output->rc);
 
-	rc = crt_req_decref(rpc_req);
-	assert(rc == 0);
+	crt_req_decref(rpc_req);
 }
 
 static int
@@ -159,7 +157,7 @@ test_iv_invalidate(struct iv_key_struct *key, char *arg_sync)
 		DBG_PRINT("Invalidate of key=[%d:%d] FAILED; rc = %d\n",
 			  key->rank, key->key_id, output->rc);
 
-	rc = crt_req_decref(rpc_req);
+	crt_req_decref(rpc_req);
 	D_FREE(sync);
 exit_code:
 	assert(rc == 0);
@@ -324,8 +322,7 @@ test_iv_fetch(struct iv_key_struct *key, FILE *log_file)
 	rc = crt_bulk_free(input->bulk_hdl);
 	assert(rc == 0);
 
-	rc = crt_req_decref(rpc_req);
-	assert(rc == 0);
+	crt_req_decref(rpc_req);
 
 	/* Frees the IOV buf also */
 	d_sgl_fini(&sg_list, true);
@@ -336,12 +333,12 @@ static int
 test_iv_update(struct iv_key_struct *key, char *str_value, bool value_is_hex,
 	       char *arg_sync)
 {
-	struct RPC_TEST_UPDATE_IV_in	*input;
-	struct RPC_TEST_UPDATE_IV_out	*output;
-	crt_rpc_t			*rpc_req;
-	size_t				 len;
-	int				 rc;
-	crt_iv_sync_t				*sync = NULL;
+	struct RPC_TEST_UPDATE_IV_in  *input;
+	struct RPC_TEST_UPDATE_IV_out *output;
+	crt_rpc_t                     *rpc_req;
+	size_t                         len;
+	int                            rc;
+	crt_iv_sync_t                 *sync = NULL;
 
 	rc = create_sync(arg_sync, &sync);
 	if (rc != 0) {
@@ -374,7 +371,7 @@ test_iv_update(struct iv_key_struct *key, char *str_value, bool value_is_hex,
 	else
 		DBG_PRINT("Update FAILED; rc = %ld\n", output->rc);
 
-	rc = crt_req_decref(rpc_req);
+	crt_req_decref(rpc_req);
 exit_code:
 	assert(rc == 0);
 	return 0;
@@ -404,8 +401,7 @@ test_iv_set_grp_version(char *arg_version, char *arg_timing)
 {
 	struct RPC_SET_GRP_VERSION_in		*input;
 	struct RPC_SET_GRP_VERSION_out		*output;
-	crt_rpc_t				*rpc_req;
-	int					 rc;
+	crt_rpc_t                               *rpc_req;
 	int					 version;
 	int					 time = 0;
 	char					*tmp;
@@ -446,20 +442,18 @@ test_iv_set_grp_version(char *arg_version, char *arg_timing)
 		DBG_PRINT("Grp Set Version FAILED 0x%x : %d\n",
 			  version, version);
 
-	rc = crt_req_decref(rpc_req);
+	crt_req_decref(rpc_req);
 
-	assert(rc == 0);
 	return 0;
 }
 
 static int
 test_iv_get_grp_version()
 {
-	struct RPC_GET_GRP_VERSION_in		*input;
-	struct RPC_GET_GRP_VERSION_out		*output;
-	crt_rpc_t				*rpc_req;
-	int					 rc;
-	int					 version = 0;
+	struct RPC_GET_GRP_VERSION_in  *input;
+	struct RPC_GET_GRP_VERSION_out *output;
+	crt_rpc_t                      *rpc_req;
+	int                             version = 0;
 
 	prepare_rpc_request(g_crt_ctx, RPC_GET_GRP_VERSION, &g_server_ep,
 			    (void **)&input, &rpc_req);
@@ -476,8 +470,7 @@ test_iv_get_grp_version()
 		DBG_PRINT("Grp Get Version PASSED 0x%08x : %d\n",
 			  version, version);
 
-	rc = crt_req_decref(rpc_req);
-	assert(rc == 0);
+	crt_req_decref(rpc_req);
 	return 0;
 }
 

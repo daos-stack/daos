@@ -3,6 +3,7 @@ package transport
 import (
 	pb "github.com/Jille/raft-grpc-transport/proto"
 	"github.com/hashicorp/raft"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func encodeAppendEntriesRequest(s *raft.AppendEntriesRequest) *pb.AppendEntriesRequest {
@@ -38,6 +39,7 @@ func encodeLog(s *raft.Log) *pb.Log {
 		Type:       encodeLogType(s.Type),
 		Data:       s.Data,
 		Extensions: s.Extensions,
+		AppendedAt: timestamppb.New(s.AppendedAt),
 	}
 }
 

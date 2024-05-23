@@ -5,7 +5,7 @@ Wants=network-online.target
 After=network-online.target
 
 [Service]
-Type=simple
+Type=notify
 User=daos_agent
 Group=daos_agent
 RuntimeDirectory=daos_agent

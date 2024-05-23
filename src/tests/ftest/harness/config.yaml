@@ -1,0 +1,18 @@
+hosts:
+  test_servers: 2
+  test_clients: 1
+timeout: 60
+setup:
+  access_points_suffix: .wolf.hpdd.intel.com
+server_config:
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+  system_ram_reserved: 2
+agent_config:
+  exclude_fabric_ifaces: ["fake_iface1", "fake_iface2"]

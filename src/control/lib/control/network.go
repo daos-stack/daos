@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,6 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -30,7 +31,7 @@ type HostFabricInterface struct {
 	Device      string
 	NumaNode    uint32
 	Priority    uint32
-	NetDevClass uint32
+	NetDevClass hardware.NetDevClass
 }
 
 func (hfi *HostFabricInterface) String() string {
@@ -56,6 +57,7 @@ func (hf *HostFabric) AddInterface(hfi *HostFabricInterface) {
 	hf.Interfaces = append(hf.Interfaces, hfi)
 	hf.Providers = append(hf.Providers, hfi.Provider)
 	hf.Providers = common.DedupeStringSlice(hf.Providers)
+	sort.Strings(hf.Providers)
 }
 
 // HostFabricSet contains a HostFabric configuration and the
@@ -205,26 +207,32 @@ type (
 	// PrimaryServiceRank provides a rank->uri mapping for a DAOS
 	// Primary Service Rank (PSR).
 	PrimaryServiceRank struct {
-		Rank uint32
-		Uri  string
+		Rank        uint32 `json:"rank"`
+		Uri         string `json:"uri"`
+		ProviderIdx uint32 `json:"provider_idx"`
+		NumCtxs     uint32 `json:"num_ctxs"`
 	}
 
 	ClientNetworkHint struct {
 		// These CaRT settings are shared with the
 		// libdaos client to aid in CaRT initialization.
-		Provider        string `json:"provider"`
-		Interface       string `json:"interface"`
-		Domain          string `json:"domain"`
-		CrtCtxShareAddr uint32 `json:"crt_ctx_share_addr"`
-		CrtTimeout      uint32 `json:"crt_timeout"`
-		NetDevClass     uint32 `json:"net_dev_class"`
-		SrvSrxSet       int32  `json:"srv_srx_set"`
+		Provider    string   `json:"provider"`
+		Interface   string   `json:"interface"`
+		Domain      string   `json:"domain"`
+		CrtTimeout  uint32   `json:"crt_timeout"`
+		NetDevClass uint32   `json:"net_dev_class"`
+		SrvSrxSet   int32    `json:"srv_srx_set"`
+		EnvVars     []string `json:"env_vars"`
+		ProviderIdx uint32   `json:"provider_idx"`
 	}
 
 	GetAttachInfoResp struct {
-		ServiceRanks  []*PrimaryServiceRank `json:"rank_uris"`
-		MSRanks       []uint32              `json:"ms_ranks"`
-		ClientNetHint ClientNetworkHint     `json:"client_net_hint"`
+		System                  string                `json:"sys"`
+		ServiceRanks            []*PrimaryServiceRank `json:"rank_uris"`
+		AlternateServiceRanks   []*PrimaryServiceRank `json:"secondary_rank_uris"`
+		MSRanks                 []uint32              `json:"ms_ranks"`
+		ClientNetHint           ClientNetworkHint     `json:"client_net_hint"`
+		AlternateClientNetHints []ClientNetworkHint   `json:"secondary_client_net_hints"`
 	}
 )
 
@@ -235,9 +243,9 @@ func (gair *GetAttachInfoResp) String() string {
 
 	// Condensed format for debugging...
 	ch := gair.ClientNetHint
-	return fmt.Sprintf("p=%s i=%s d=%s a=%d t=%d c=%d x=%d, rus(%d)=%s, mss=%v",
+	return fmt.Sprintf("p=%s i=%s d=%s t=%d c=%d x=%d, rus(%d)=%s, mss=%v",
 		ch.Provider, ch.Interface, ch.Domain,
-		ch.CrtCtxShareAddr, ch.CrtTimeout, ch.NetDevClass, ch.SrvSrxSet,
+		ch.CrtTimeout, ch.NetDevClass, ch.SrvSrxSet,
 		len(gair.ServiceRanks), rankURI, gair.MSRanks,
 	)
 }

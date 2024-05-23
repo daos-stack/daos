@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -23,7 +23,7 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
-#define DAOS_REBUILD_VERSION 2
+#define DAOS_REBUILD_VERSION 4
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
@@ -46,12 +46,14 @@ extern struct crt_proto_format rebuild_proto_fmt;
 #define DAOS_ISEQ_REBUILD_SCAN	/* input fields */		 \
 	((uuid_t)		(rsi_pool_uuid)		CRT_VAR) \
 	((uint64_t)		(rsi_leader_term)	CRT_VAR) \
+	((uint64_t)		(rsi_reclaim_epoch)	CRT_VAR) \
 	((int32_t)		(rsi_rebuild_op)	CRT_VAR) \
 	((uint32_t)		(rsi_tgts_num)		CRT_VAR) \
 	((uint32_t)		(rsi_ns_id)		CRT_VAR) \
 	((uint32_t)		(rsi_rebuild_ver)	CRT_VAR) \
 	((uint32_t)		(rsi_master_rank)	CRT_VAR) \
-	((uint32_t)		(rsi_padding)		CRT_VAR)
+	((uint32_t)		(rsi_rebuild_gen)	CRT_VAR) \
+	((uint32_t)		(rsi_layout_ver)	CRT_VAR)
 
 #define DAOS_OSEQ_REBUILD_SCAN	/* output fields */		 \
 	((uint64_t)		(rso_stable_epoch)	CRT_VAR) \

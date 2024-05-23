@@ -1,5 +1,5 @@
 """Build DAOS I/O Engine"""
-import daos_build
+
 
 def scons():
     """Execute build"""
@@ -10,13 +10,15 @@ def scons():
 
     denv = env.Clone()
 
+    denv.AppendUnique(CPPPATH=[Dir('..').srcnode()])
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     libraries = ['daos_common_pmem', 'gurt', 'cart', 'vos_srv']
     libraries += ['bio', 'dl', 'uuid', 'pthread', 'abt']
     libraries += ['hwloc', 'pmemobj', 'protobuf-c', 'isal']
 
-    prereqs.require(denv, 'hwloc', 'argobots', 'protobufc', 'pmdk', 'isal')
+    denv.require('argobots', 'protobufc', 'pmdk', 'isal')
 
+    # pylint: disable-next=wrong-spelling-in-comment
     # the "-rdynamic" is to allow other dll to refer symbol defined in
     # daos_engine such as dss_tls_key etc.
     denv.AppendUnique(LINKFLAGS=['-rdynamic'])
@@ -24,20 +26,24 @@ def scons():
     # Add runtime paths for daos libraries
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
 
+    sources = ['drpc_client.c', 'drpc_ras.c',
+               'drpc_handler.c', 'drpc_listener.c',
+               'drpc_progress.c', 'init.c', 'module.c',
+               'srv_cli.c', 'profile.c', 'rpc.c',
+               'server_iv.c', 'srv.c', 'srv.pb-c.c',
+               'sched.c', 'ult.c', 'event.pb-c.c',
+               'srv_metrics.c'] + libdaos_tgts
+
+    if denv["STACK_MMAP"] == 1:
+        denv.Append(CCFLAGS=['-DULT_MMAP_STACK'])
+
     # Generate I/O Engine program
-    engine = daos_build.program(denv, 'daos_engine',
-                                ['drpc_client.c', 'drpc_ras.c',
-                                 'drpc_handler.c', 'drpc_listener.c',
-                                 'drpc_progress.c', 'init.c', 'module.c',
-                                 'srv_cli.c', 'profile.c', 'rpc.c',
-                                 'server_iv.c', 'srv.c', 'srv.pb-c.c', 'tls.c',
-                                 'sched.c', 'ult.c', 'event.pb-c.c',
-                                 'srv_metrics.c'] + libdaos_tgts,
-                                LIBS=libraries)
+    engine = denv.d_program('daos_engine', sources, LIBS=libraries)
     denv.Install('$PREFIX/bin', engine)
 
     if prereqs.test_requested():
         SConscript('tests/SConscript', exports='denv')
+
 
 if __name__ == "SCons.Script":
     scons()

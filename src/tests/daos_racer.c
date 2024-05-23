@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,12 +15,12 @@
 #include <sys/ioctl.h>
 #include <stdlib.h>
 #include <getopt.h>
-#include <mpi.h>
 #include <daos/common.h>
 #include <daos/tests_lib.h>
 #include <daos_test.h>
 #include <daos/dts.h>
 #include <daos/credit.h>
+#include <daos/dpar.h>
 
 enum {
 	UPDATE,
@@ -66,7 +66,7 @@ int			obj_cnt_per_class = 2;
  */
 int			cond_pct = 20;
 
-static uint16_t
+static daos_oclass_id_t
 oclass_get(unsigned int random)
 {
 	uint16_t idx = random % OBJ_CNT;
@@ -98,19 +98,17 @@ oclass_get(unsigned int random)
 daos_obj_id_t
 racer_oid_gen(int random)
 {
-	daos_obj_id_t	oid;
-	uint64_t	hdr;
-	uint16_t	oclass;
+	daos_obj_id_t	 oid;
+	daos_oclass_id_t oclass;
+	int		 rc;
 
 	oclass = oclass_get(random);
-
-	hdr = oclass;
-	hdr <<= 32;
 
 	oid.lo	= random % obj_cnt_per_class;
 	oid.lo	|= oclass;
 	oid.hi	= oclass;
-	daos_obj_generate_oid(ts_ctx.tsc_coh, &oid, 0, oclass, 0, 0);
+	rc = daos_obj_generate_oid(ts_ctx.tsc_coh, &oid, 0, oclass, 0, 0);
+	assert_success(rc);
 
 	return oid;
 }
@@ -118,7 +116,7 @@ racer_oid_gen(int random)
 void
 pack_dkey_iod_sgl(char *dkey, d_iov_t *dkey_iov, char akeys[][MAX_KEY_SIZE],
 		  daos_iod_t *iods, daos_recx_t *recxs, d_sg_list_t *sgls,
-		  d_iov_t *iovs, char sgl_bufs[][MAX_REC_SIZE], int iod_nr)
+		  d_iov_t *iovs, char *sgl_bufs[], int iod_nr)
 {
 	int i;
 
@@ -161,7 +159,7 @@ update_or_fetch(bool update)
 	char		akeys[max_akey_per_dkey][MAX_KEY_SIZE];
 	daos_iod_t	iods[max_akey_per_dkey];
 	d_sg_list_t	sgls[max_akey_per_dkey];
-	char		sgl_bufs[max_akey_per_dkey][MAX_REC_SIZE];
+	char		*sgl_bufs[max_akey_per_dkey];
 	daos_recx_t	recxs[max_akey_per_dkey];
 	d_iov_t		sgl_iovs[max_akey_per_dkey];
 	d_iov_t		dkey_iov;
@@ -175,6 +173,14 @@ update_or_fetch(bool update)
 	rc = daos_obj_open(ts_ctx.tsc_coh, ts_oid, DAOS_OO_RW, &oh, NULL);
 	if (rc)
 		return;
+
+	for (i = 0; i < max_akey_per_dkey; i++) {
+		D_ALLOC(sgl_bufs[i], MAX_REC_SIZE);
+		if (sgl_bufs[i] == NULL) {
+			D_ERROR("sgl_buf allocation failed.\n");
+			return;
+		}
+	}
 
 	for (i = 0; i < round; i++) {
 		int iod_nr = random % max_akey_per_dkey;
@@ -220,6 +226,9 @@ update_or_fetch(bool update)
 				       iod_nr, iods, sgls, NULL, NULL);
 		}
 	}
+
+	for (i = 0; i < max_akey_per_dkey; i++)
+		D_FREE(sgl_bufs[i]);
 
 	daos_obj_close(oh, NULL);
 }
@@ -473,14 +482,13 @@ main(int argc, char **argv)
 	d_rank_t	svc_rank  = 0;	/* pool service rank */
 	unsigned	duration = 60; /* seconds */
 	double		expire = 0;
-	daos_prop_t	*prop;
 	int		idx;
 	struct racer_sub_tests	sub_tests[TEST_SIZE] = { 0 };
 	int		rc;
 
-	MPI_Init(&argc, &argv);
-	MPI_Comm_rank(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_rank);
-	MPI_Comm_size(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_size);
+	par_init(&argc, &argv);
+	par_rank(PAR_COMM_WORLD, &ts_ctx.tsc_mpi_rank);
+	par_size(PAR_COMM_WORLD, &ts_ctx.tsc_mpi_size);
 	while ((rc = getopt_long(argc, argv,
 				 "n:p:c:t:",
 				 ts_ops, NULL)) != -1) {
@@ -560,23 +568,17 @@ main(int argc, char **argv)
 	if (rc)
 		D_GOTO(out, rc);
 
-	prop = daos_prop_alloc(1);
-	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
-	prop->dpp_entries[0].dpe_val = 1024;
-	daos_cont_set_prop(ts_ctx.tsc_coh, prop, NULL);
-	daos_prop_free(prop);
-
 	sub_tests_init(sub_tests, 0xFFFF);
 	expire = dts_time_now() + duration;
 
 	idx = racer_test_idx(sub_tests);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	while (1) {
 		sub_tests[idx].sub_test();
 		if (dts_time_now() > expire)
 			break;
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	if (ts_ctx.tsc_mpi_rank == 0) {
 		daos_pool_info_t	pinfo = { 0 };
@@ -641,6 +643,6 @@ main(int argc, char **argv)
 fini:
 	dts_ctx_fini(&ts_ctx);
 out:
-	MPI_Finalize();
+	par_fini();
 	return rc;
 }

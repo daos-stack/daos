@@ -1,17 +1,28 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
 hosts:
-  test_servers:
-    - server-A
+  test_servers: 1
 timeout: 110
 setup:
-  start_servers: False
-  start_agents_once: False
-  start_servers_once: False
+  start_servers: false
+  start_agents_once: false
+  start_servers_once: false
   agent_manager_class: Orterun
   server_manager_class: Orterun
+daos_server:
+  pattern_timeout: 60
 server_config:
   name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+  system_ram_reserved: 1
 self_test:
   repetitions: 1000
   endpoint: 0:0
@@ -23,9 +34,3 @@ self_test:
       message_sizes: "\"0 b1048576\""
     large_io_bulk_get:
       message_sizes: "\"b1048576 0\""
-test_params:
-  share_addr_mux: !mux
-    on:
-      share_addr: 1
-    off:
-      share_addr: 0

@@ -1,0 +1,187 @@
+#  (C) Copyright 2023-2024 Intel Corporation.
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+- name: common
+  base: "BUILD_DIR"
+  tests:
+    - cmd: ["src/common/tests/umem_test"]
+    - cmd: ["src/common/tests/sched"]
+    - cmd: ["src/common/tests/acl_api_tests"]
+    - cmd: ["src/common/tests/acl_valid_tests"]
+    - cmd: ["src/common/tests/acl_util_tests"]
+    - cmd: ["src/common/tests/acl_principal_tests"]
+    - cmd: ["src/common/tests/acl_real_tests"]
+    - cmd: ["src/common/tests/prop_tests"]
+    - cmd: ["src/common/tests/fault_domain_tests"]
+- name: common_md_on_ssd
+  base: "BUILD_DIR"
+  required_src: ["src/common/tests/ad_mem_tests.c"]
+  tests:
+    - cmd: ["src/common/tests/ad_mem_tests"]
+    - cmd: ["src/common/tests/umem_test_bmem"]
+- name: btree_stress
+  memcheck: False
+  tests:
+    - cmd: ["src/common/tests/btree.sh", "perf"]
+    - cmd: ["src/common/tests/btree.sh", "perf", "direct"]
+    - cmd: ["src/common/tests/btree.sh", "perf", "direct", "emb"]
+    - cmd: ["src/common/tests/btree.sh", "perf", "ukey"]
+    - cmd: ["src/common/tests/btree.sh", "dyn", "perf"]
+    - cmd: ["src/common/tests/btree.sh", "dyn", "perf", "ukey"]
+    - cmd: ["src/common/tests/btree.sh", "dyn", "perf", "emb"]
+- name: btree
+  tests:
+    - cmd: ["src/common/tests/btree.sh"]
+    - cmd: ["src/common/tests/btree.sh", "direct"]
+    - cmd: ["src/common/tests/btree.sh", "direct", "emb"]
+    - cmd: ["src/common/tests/btree.sh", "ukey"]
+    - cmd: ["src/common/tests/btree.sh", "dyn", "ukey"]
+    - cmd: ["src/common/tests/btree.sh", "dyn"]
+    - cmd: ["src/common/tests/btree.sh", "dyn", "emb"]
+- name: drpc
+  base: "BUILD_DIR"
+  tests:
+    - cmd: ["src/common/tests/drpc_tests"]
+    - cmd: ["src/engine/tests/drpc_client_tests"]
+    - cmd: ["src/engine/tests/drpc_progress_tests"]
+    - cmd: ["src/engine/tests/drpc_handler_tests"]
+    - cmd: ["src/engine/tests/drpc_listener_tests"]
+    - cmd: ["src/mgmt/tests/srv_drpc_tests"]
+- name: gurt
+  base: "BUILD_DIR"
+  tests:
+    - cmd: ["src/gurt/tests/test_gurt"]
+    - cmd: ["src/gurt/tests/test_gurt_telem_producer"]
+- name: DTX
+  base: "PREFIX"
+  tests:
+    - cmd: ["bin/dtx_tests"]
+- name: placement
+  base: "PREFIX"
+  tests:
+    - cmd: ["bin/jump_pl_map"]
+- name: rdb
+  memcheck: False
+  tests:
+    - cmd: ["src/rdb/raft_tests/raft_tests.py"]
+- name: rsvc
+  base: "BUILD_DIR"
+  tests:
+    - cmd: ["src/common/tests/rsvc_tests"]
+- name: security
+  base: "BUILD_DIR"
+  tests:
+    - cmd: ["src/security/tests/cli_security_tests"]
+    - cmd: ["src/security/tests/srv_acl_tests"]
+- name: vea
+  base: "PREFIX"
+  tests:
+    - cmd: ["bin/vea_ut"]
+    - cmd: ["bin/vea_stress", "-d", "60"]
+- name: vea_debug
+  base: "PREFIX"
+  tests:
+    - cmd: ["bin/vea_ut"]
+      env_vars:
+        D_LOG_MASK: "debug"
+        DD_SUBSYS: "all"
+        DD_MASK: "all"
+- name: VOS
+  base: "PREFIX"
+  tests:
+    - cmd: ["bin/vos_perf", "-i", "-d", "15", "-o", "5", "-f", "-a", "1", "-A", "-n", "5", "-R",
+            '"U;p F;p I;s;p, I;p; A;p"']
+    - cmd: ["bin/vos_perf", "-i", "-d", "15", "-o", "5", "-f", "-a", "1", "-n", "5", "-R",
+            '"U;p F;p I;s;p, I;p; A;p"']
+    - cmd: ["bin/vos_perf", "-R", '"U;p F;p V"', "-o", "5", "-d", "5", "-a", "5", "-n", "10"]
+    - cmd: ["bin/vos_perf", "-R", '"U;p F;p V"', "-o", "5", "-d", "5", "-a", "5", "-n", "10",
+            "-A", "-D", "/mnt/..MOUNT"]
+      replace_path: {"MOUNT": "MOUNT_DIR"}
+    - cmd: ["bin/vos_perf", "-R", '"U Q;p V"', "-o", "5", "-d", "5", "-n", "10", "-A", "-i",
+            "-I", "-D", "MOUNT"]
+      replace_path: {"MOUNT": "MOUNT_DIR"}
+    - cmd: ["bin/vos_tests", "-A", "500"]
+    - cmd: ["bin/vos_tests", "-r",
+            "-c pool -w key@0-4 -w key@3-4 -R key@3-3 -w key@5-4 -R key@5-3 -a -i -d -D"]
+    - cmd: ["bin/vos_tests", "-r",
+            "-c pool -w key@0-3 -w key@3-4 -w key@5-1 -w key@5-4 -R key@5-3 -a -i -d -D"]
+    - cmd: ["bin/vos_tests", "-r", "-c pool -x key@10-400 -i -d -o pool -a -i -d -D"]
+    - cmd: ["bin/vos_tests", "-C"]
+      env_vars:
+        DAOS_DKEY_PUNCH_PROPAGATE: "1"
+- name: VOS_evtree
+  tests:
+    - cmd: ["src/vos/tests/evt_ctl.sh"]
+- name: VOS_evtree_stress
+  memcheck: False
+  tests:
+    - cmd: ["src/vos/tests/evt_stress.py"]
+    - cmd: ["src/vos/tests/evt_stress.py", "--algo", "soff"]
+    - cmd: ["src/vos/tests/evt_stress.py", "--algo", "dist_even"]
+- name: VOS_NVMe
+  base: "PREFIX"
+  sudo: True
+  tests:
+    - cmd: ["bin/vos_tests", "-a"]
+      aio: "AIO_1"
+      size: 4
+- name: VOS_md_on_ssd
+  base: "PREFIX"
+  sudo: True
+  required_src: ["src/vos/tests/bio_ut.c"]
+  tests:
+    - cmd: ["bin/vos_tests", "-A", "50"]
+      aio: "AIO_7"
+      size: 13
+    - cmd: ["bin/bio_ut"]
+      aio: "AIO_7"
+      size: 4
+- name: csum
+  base: "BUILD_DIR"
+  tests:
+    - cmd: ["src/tests/rpc/rpc_tests"]
+    - cmd: ["src/vos/tests/pool_scrubbing_tests"]
+    - cmd: ["src/object/tests/srv_checksum_tests"]
+    - cmd: ["src/object/tests/cli_checksum_tests"]
+- name: bio
+  base: "BUILD_DIR"
+  tests:
+    - cmd: ["src/bio/smd/tests/smd_ut"]
+- name: client
+  base: "PREFIX"
+  tests:
+    - cmd: ["bin/eq_tests"]
+    - cmd: ["bin/agent_tests"]
+    - cmd: ["bin/job_tests"]
+- name: cart
+  base: "BUILD_DIR"
+  tests:
+    - cmd: ["src/tests/ftest/cart/utest/test_linkage"]
+    - cmd: ["src/tests/ftest/cart/utest/utest_hlc"]
+    - cmd: ["src/tests/ftest/cart/utest/utest_protocol"]
+    - cmd: ["src/tests/ftest/cart/utest/utest_swim"]
+- name: storage_estimator
+  base: "DAOS_BASE"
+  memcheck: False
+  tests:
+    - cmd: ["src/vos/storage_estimator/common/tests/storage_estimator.sh"]
+- name: control
+  memcheck: False
+  tests:
+    - cmd: ["src/control/run_go_tests.sh"]
+- name: spdk
+  base: "PREFIX"
+  memcheck: False
+  tests:
+    - cmd: ["bin/nvme_control_ctests"]
+      warn_if_missing: "bin/nvme_control_ctests is missing, SPDK_SRC not available when built?"
+- name: ddb
+  base: "PREFIX"
+  tests:
+    - cmd: ["bin/ddb_tests"]
+- name: Source metadata testing
+  gha: True
+  memcheck: False
+  tests:
+    - cmd: ["src/tests/ftest/tags.py", "unit"]
+    - cmd: ["utils/unit/include_test.py"]

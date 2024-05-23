@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,22 +7,21 @@
 package server
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 func getPBNvmeQueryResults(t *testing.T, devs storage.NvmeControllers) []*ctlpb.NvmeFirmwareQueryResp {
@@ -94,7 +93,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 				QueryScm: true,
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverErr: errors.New("mock discovery failed"),
+				GetModulesErr: errors.New("mock discovery failed"),
 			},
 			expErr: errors.New("mock discovery failed"),
 		},
@@ -112,7 +111,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 				QueryScm: true,
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:          mockSCM,
+				GetModulesRes:        mockSCM,
 				GetFirmwareStatusRes: testFWInfo,
 			},
 			expResp: &ctlpb.FirmwareQueryResp{
@@ -146,7 +145,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 				QueryScm: true,
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:          mockSCM,
+				GetModulesRes:        mockSCM,
 				GetFirmwareStatusErr: errors.New("mock query"),
 			},
 			expResp: &ctlpb.FirmwareQueryResp{
@@ -172,7 +171,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 				FirmwareRev: "FwRev0",
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:          mockSCM,
+				GetModulesRes:        mockSCM,
 				GetFirmwareStatusRes: testFWInfo,
 			},
 			expResp: &ctlpb.FirmwareQueryResp{
@@ -193,7 +192,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 				ModelID:  "PartNumber1",
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:          mockSCM,
+				GetModulesRes:        mockSCM,
 				GetFirmwareStatusRes: testFWInfo,
 			},
 			expResp: &ctlpb.FirmwareQueryResp{
@@ -214,7 +213,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 				DeviceIDs: []string{"Device1", "Device2"},
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:          mockSCM,
+				GetModulesRes:        mockSCM,
 				GetFirmwareStatusRes: testFWInfo,
 			},
 			expResp: &ctlpb.FirmwareQueryResp{
@@ -300,7 +299,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 		"NVMe - specific devices": {
 			req: ctlpb.FirmwareQueryReq{
 				QueryNvme: true,
-				DeviceIDs: []string{"0000:80:00.1", "0000:80:00.2"},
+				DeviceIDs: []string{"0000:01:00.0", "0000:02:00.0"},
 			},
 			bmbc: &bdev.MockBackendConfig{
 				ScanRes: &storage.BdevScanResponse{Controllers: testNVMeDevs},
@@ -322,7 +321,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 				QueryScm:  true,
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:          mockSCM,
+				GetModulesRes:        mockSCM,
 				GetFirmwareStatusRes: testFWInfo,
 			},
 			bmbc: &bdev.MockBackendConfig{
@@ -361,7 +360,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 				QueryScm:  true,
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes: storage.ScmModules{},
+				GetModulesRes: storage.ScmModules{},
 			},
 			bmbc: &bdev.MockBackendConfig{
 				ScanRes: &storage.BdevScanResponse{Controllers: testNVMeDevs},
@@ -377,7 +376,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 				QueryScm:  true,
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:          mockSCM,
+				GetModulesRes:        mockSCM,
 				GetFirmwareStatusRes: testFWInfo,
 			},
 			bmbc: &bdev.MockBackendConfig{},
@@ -415,7 +414,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 				FirmwareRev: "FWRev0",
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:          mockSCM,
+				GetModulesRes:        mockSCM,
 				GetFirmwareStatusRes: testFWInfo,
 			},
 			bmbc: &bdev.MockBackendConfig{
@@ -441,7 +440,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 				ModelID:   "model-0",
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:          mockSCM,
+				GetModulesRes:        mockSCM,
 				GetFirmwareStatusRes: testFWInfo,
 			},
 			bmbc: &bdev.MockBackendConfig{
@@ -460,10 +459,10 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 			req: ctlpb.FirmwareQueryReq{
 				QueryNvme: true,
 				QueryScm:  true,
-				DeviceIDs: []string{"0000:80:00.1", "Device0", "0000:80:00.2"},
+				DeviceIDs: []string{"0000:01:00.0", "Device0", "0000:02:00.0"},
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:          mockSCM,
+				GetModulesRes:        mockSCM,
 				GetFirmwareStatusRes: testFWInfo,
 			},
 			bmbc: &bdev.MockBackendConfig{
@@ -493,16 +492,16 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			config := config.DefaultServer()
 			cs := mockControlService(t, log, config, tc.bmbc, tc.smbc, nil)
 
-			resp, err := cs.FirmwareQuery(context.TODO(), &tc.req)
+			resp, err := cs.FirmwareQuery(test.Context(t), &tc.req)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
-			if diff := cmp.Diff(tc.expResp, resp, common.DefaultCmpOpts()...); diff != "" {
+			if diff := cmp.Diff(tc.expResp, resp, test.DefaultCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
@@ -558,7 +557,7 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 				FirmwarePath: "/some/path",
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverErr: errors.New("mock discovery failed"),
+				GetModulesErr: errors.New("mock discovery failed"),
 			},
 			expErr: errors.New("mock discovery failed"),
 		},
@@ -576,7 +575,7 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 				FirmwarePath: "/some/path",
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:       mockSCM,
+				GetModulesRes:     mockSCM,
 				UpdateFirmwareErr: nil,
 			},
 			expResp: &ctlpb.FirmwareUpdateResp{
@@ -599,7 +598,7 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 				FirmwarePath: "/some/path",
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:       mockSCM,
+				GetModulesRes:     mockSCM,
 				UpdateFirmwareErr: errors.New("mock update"),
 			},
 			expResp: &ctlpb.FirmwareUpdateResp{
@@ -626,7 +625,7 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 				FirmwareRev:  "FWRev2",
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:       mockSCM,
+				GetModulesRes:     mockSCM,
 				UpdateFirmwareErr: nil,
 			},
 			expResp: &ctlpb.FirmwareUpdateResp{
@@ -644,7 +643,7 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 				ModelID:      "PartNumber1",
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:       mockSCM,
+				GetModulesRes:     mockSCM,
 				UpdateFirmwareErr: nil,
 			},
 			expResp: &ctlpb.FirmwareUpdateResp{
@@ -662,7 +661,7 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 				DeviceIDs:    []string{"Device1", "Device2"},
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:       mockSCM,
+				GetModulesRes:     mockSCM,
 				UpdateFirmwareErr: nil,
 			},
 			expResp: &ctlpb.FirmwareUpdateResp{
@@ -780,7 +779,7 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 			req: ctlpb.FirmwareUpdateReq{
 				Type:         ctlpb.FirmwareUpdateReq_NVMe,
 				FirmwarePath: "/some/path",
-				DeviceIDs:    []string{"0000:80:00.0", "0000:80:00.1"},
+				DeviceIDs:    []string{"0000:00:00.0", "0000:01:00.0"},
 			},
 			bmbc: &bdev.MockBackendConfig{
 				ScanRes: &storage.BdevScanResponse{Controllers: mockNVMe},
@@ -799,30 +798,30 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			cfg := config.DefaultServer()
 			cs := mockControlService(t, log, cfg, tc.bmbc, tc.smbc, nil)
 			for i := 0; i < 2; i++ {
 				rCfg := new(engine.TestRunnerConfig)
 				rCfg.Running.Store(tc.enginesRunning)
-				runner := engine.NewTestRunner(rCfg, engine.NewConfig())
+				runner := engine.NewTestRunner(rCfg, engine.MockConfig())
 				instance := NewEngineInstance(log, nil, nil, runner)
 				if !tc.noRankEngines {
 					instance._superblock = &Superblock{}
 					instance._superblock.ValidRank = true
-					instance._superblock.Rank = system.NewRankPtr(uint32(i))
+					instance._superblock.Rank = ranklist.NewRankPtr(uint32(i))
 				}
 				if err := cs.harness.AddInstance(instance); err != nil {
 					t.Fatal(err)
 				}
 			}
 
-			resp, err := cs.FirmwareUpdate(context.TODO(), &tc.req)
+			resp, err := cs.FirmwareUpdate(test.Context(t), &tc.req)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
-			if diff := cmp.Diff(tc.expResp, resp, common.DefaultCmpOpts()...); diff != "" {
+			if diff := cmp.Diff(tc.expResp, resp, test.DefaultCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})

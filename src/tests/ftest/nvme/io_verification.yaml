@@ -1,0 +1,67 @@
+hosts:
+  test_servers: 3
+  test_clients: 1
+timeout: 4000
+server_config:
+  name: daos_server
+  engines_per_host: 2
+  engines:
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      storage: auto
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      storage: auto
+pool:
+  ior_sequence_pool_qty: 4
+  pool_0:
+    control_method: dmg
+    size: 20%
+  pool_1:
+    control_method: dmg
+    size: 30%
+  pool_2:
+    control_method: dmg
+    size: 50%
+  pool_3:
+    control_method: dmg
+    size: 60%
+container:
+  type: POSIX
+  control_method: daos
+ior:
+  client_processes:
+    np: 16
+  flags: "-w -W -r -R -k -vv"
+  flag_restart:
+    write: "-w -k -G=5"
+    read: "-r -R -k -G=5"
+  repetitions: 1
+  api: DFS
+  object_type: 'SX'
+  dfs_destroy: False
+  test_file: /testFile
+  transfersize: !mux
+    case1:
+      block_size: 30000000
+      tsize:
+        - 8
+        - 1000
+        - 200000
+        - 1000000
+        - 30000000
+    case2:
+      block_size: 120000000
+      tsize:
+        - 50000
+        - 2400000
+        - 30000000
+        - 60000000

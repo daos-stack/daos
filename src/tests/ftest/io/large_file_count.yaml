@@ -1,36 +1,27 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
-    - server-E
-  test_clients:
-    - client-F
-    - client-G
-    - client-H
-timeout: 7200
+  test_servers: 5
+  test_clients: 3
+timeout: 5000
 server_config:
   name: daos_server
-  servers:
-    log_mask: ERR
-    bdev_class: nvme
-    bdev_list: ["0000:81:00.0","0000:da:00.0"]
-    scm_class: dcpm
-    scm_list: ["/dev/pmem0"]
-    scm_size: 400
+  engines_per_host: 2
+  engines:
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      storage: auto
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      storage: auto
 pool:
-  createmode:
-    mode_RW:
-      mode: 146
-  createset:
-    setname: daos_server
-  createsize:
-    scm_size: 40000000000
-    nvme_size: 400000000000 # large nvme_size for mdtest 1M file creation
-  createsvc:
-    svcn: 3
-  control_method: dmg
+  size: 95%
 container:
   type: POSIX
   control_method: daos
@@ -40,31 +31,25 @@ largefilecount:
     - POSIX
   object_class:
     - SX
-    - RP_3GX
+    - EC_2P1GX
 ior:
   np: 30
-  dfs_destroy: False
-  iorflags:
-    sequential:
-      flags: "-v -D 300 -W -w -r -R"
+  dfs_destroy: false
+  flags: "-v -D 300 -W -w -r -R -F"
   test_file: /testFile
   repetitions: 1
-  transfersize_blocksize:
-    4K:
-      transfer_size: '4K'
-      block_size: '2G'
+  transfer_size: '1M'
+  block_size: '7G'
 dfuse:
-  mount_dir: "/tmp/daos_dfuse/"
-  disable_caching: True
+  disable_caching: true
 
 mdtest:
   client_processes:
     np: 30
-  num_of_files_dirs: 1667         # creating total of 50K files
-  num_of_files_dirs_rc: 33334    # creating total of 1M files
+  num_of_files_dirs: 33334     # creating total of 1M files
   test_dir: "/"
   iteration: 1
-  dfs_destroy: True
+  dfs_destroy: false
   manager: "MPICH"
   flags: "-F -C"
   write_bytes: 4096

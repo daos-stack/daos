@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,7 +13,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -21,7 +21,7 @@ const defaultTestModID ModuleID = ModuleMgmt
 
 func TestNewModuleService(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	service := NewModuleService(log)
 
@@ -29,12 +29,12 @@ func TestNewModuleService(t *testing.T) {
 		t.Fatal("service was nil")
 	}
 
-	common.AssertEqual(t, len(service.modules), 0, "expected empty module list")
+	test.AssertEqual(t, len(service.modules), 0, "expected empty module list")
 }
 
 func TestService_RegisterModule_Single_Success(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	service := NewModuleService(log)
 	expectedID := defaultTestModID
@@ -54,7 +54,7 @@ func TestService_RegisterModule_Single_Success(t *testing.T) {
 
 func TestService_RegisterModule_Multiple_Success(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	service := NewModuleService(log)
 	expectedIDs := []ModuleID{-1, 7, 255, defaultTestModID}
@@ -82,7 +82,7 @@ func TestService_RegisterModule_Multiple_Success(t *testing.T) {
 
 func TestService_RegisterModule_DuplicateID(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	service := NewModuleService(log)
 	testMod := newTestModule(ModuleMgmt)
@@ -100,7 +100,7 @@ func TestService_RegisterModule_DuplicateID(t *testing.T) {
 
 func TestService_GetModule_NotFound(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	service := NewModuleService(log)
 	service.RegisterModule(newTestModule(defaultTestModID))
@@ -184,7 +184,7 @@ func TestService_ProcessMessage(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mockMod := newTestModule(defaultTestModID)
 			mockMod.HandleCallErr = tc.handleCallErr
@@ -193,7 +193,7 @@ func TestService_ProcessMessage(t *testing.T) {
 			service := NewModuleService(log)
 			service.RegisterModule(mockMod)
 
-			respBytes, err := service.ProcessMessage(&Session{}, tc.callBytes)
+			respBytes, err := service.ProcessMessage(test.Context(t), &Session{}, tc.callBytes)
 
 			if err != nil {
 				t.Fatalf("expected nil error, got: %v", err)
@@ -205,7 +205,7 @@ func TestService_ProcessMessage(t *testing.T) {
 				t.Fatalf("couldn't unmarshal response bytes: %v", err)
 			}
 
-			cmpOpts := common.DefaultCmpOpts()
+			cmpOpts := test.DefaultCmpOpts()
 			if diff := cmp.Diff(tc.expectedResp, resp, cmpOpts...); diff != "" {
 				t.Fatalf("(-want, +got)\n%s", diff)
 			}

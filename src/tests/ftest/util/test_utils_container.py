@@ -1,19 +1,112 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+# pylint: disable=too-many-lines
+
+import ctypes
 from logging import getLogger
 from time import time
 
+from avocado import TestFail, fail_on
+from command_utils_base import BasicParameter
+from exception_utils import CommandFailure
+from general_utils import DaosTestError, get_random_bytes
+from pydaos.raw import DaosApiError, DaosContainer, DaosInputParams, str_to_c_uuid
 from test_utils_base import TestDaosApiBase
 
-from avocado import fail_on
-from command_utils_base import BasicParameter, CommandFailure
-from pydaos.raw import (DaosApiError, DaosContainer, DaosInputParams,
-                        c_uuid_to_str, str_to_c_uuid)
-from general_utils import get_random_bytes, DaosTestError
+CONT_NAMESPACE = "/run/container/*"
+
+
+def add_container(test, pool, namespace=CONT_NAMESPACE, create=True, daos=None, **params):
+    """Add a new TestContainer object to the test.
+
+    Args:
+        test (Test): the test to which the container will be added
+        pool (TestPool): the pool to which the container will be added
+        namespace (str, optional): namespace for TestContainer parameters in the test yaml file.
+            Defaults to CONT_NAMESPACE.
+        create (bool, optional): should the container be created. Defaults to True.
+        daos (DaosCommand, optional): daos command object used to create the container.
+            Defaults to calling test.get_daos_command().
+
+    Returns:
+        TestContainer: the new container object
+    """
+    if not daos:
+        daos = test.get_daos_command()
+    container = TestContainer(
+        namespace=namespace, pool=pool, daos_command=daos, label_generator=test.label_generator)
+    container.get_params(test)
+    if params:
+        container.update_params(**params)
+    if create:
+        container.create()
+    if container.register_cleanup.value is True:
+        test.register_cleanup(remove_container, test=test, container=container)
+    return container
+
+
+def remove_container(test, container):
+    """Remove the requested pool from the test.
+
+    Args:
+        test (Test): the test from which to destroy the container
+        container (TestContainer): the container to destroy
+
+    Returns:
+        list: a list of any errors detected when removing the container
+    """
+    error_list = []
+    test.test_log.info("Destroying container %s", str(container))
+
+    # Ensure messages are logged
+    container.silent.value = False
+
+    # Ensure exceptions are raised for any failed command
+    exit_status_exception = None
+    if container.daos is not None:
+        exit_status_exception = container.daos.exit_status_exception
+        container.daos.exit_status_exception = True
+
+    # Attempt to destroy the pool
+    try:
+        container.destroy(force=1)
+    except (DaosApiError, TestFail) as error:
+        test.test_log.info(f'  {str(error)}')
+        error_list.append(f'Error destroying container {container.identifier}: {str(error)}')
+
+    # Restore raising exceptions for any failed command
+    if exit_status_exception is False:
+        container.daos.exit_status_exception = exit_status_exception
+
+    return error_list
+
+
+def get_existing_container(test, pool, container_id, daos=None, namespace=CONT_NAMESPACE):
+    """Get a TestContainer object for an existing container.
+
+    Args:
+        test (Test): the test to which the container will be added
+        pool (TestPool): pool to open the container in.
+        container_id (str): container uuid or label.
+        daos (DaosCommand, optional): daos command object used to create the container.
+            Defaults to self.get_daos_command()
+        namespace (str, optional): namespace for TestContainer parameters in the test yaml file.
+            Defaults to CONT_NAMESPACE.
+
+    Returns:
+        TestContainer: the container object
+    """
+    if not daos:
+        daos = test.get_daos_command()
+
+    # Create a TestContainer object from an existing container uuid.
+    container = add_container(test, pool, namespace, False, daos)
+    container.create(query_id=container_id)
+
+    return container
 
 
 class TestContainerData():
@@ -137,7 +230,7 @@ class TestContainerData():
                     "\n  wrote: {}\n  read:  {}".format(data, data_read))
 
     def read_record(self, container, akey, dkey, data_size, data_array_size=0,
-                    txn=None):
+                    txn=None, test_hints=None):
         """Read a record from the container.
 
         Args:
@@ -148,6 +241,7 @@ class TestContainerData():
             data_array_size (int): size of array item
             txn (int, optional): transaction timestamp to read. Defaults to None
                 which uses the last timestamp written.
+            test_hints (list, optional): optional test hints list. Defaults to None
 
         Raises:
             DaosTestError: if there was an error reading the object
@@ -170,6 +264,7 @@ class TestContainerData():
                 read_data = container.container.read_an_array(**kwargs)
             else:
                 kwargs["size"] = data_size
+                kwargs["test_hints"] = test_hints
                 self._log_method("read_an_obj", kwargs)
                 read_data = container.container.read_an_obj(**kwargs)
         except DaosApiError as error:
@@ -181,13 +276,14 @@ class TestContainerData():
         return [data[:-1] for data in read_data] \
             if data_array_size > 0 else read_data.value
 
-    def read_object(self, container, txn=None):
+    def read_object(self, container, txn=None, test_hints=None):
         """Read an object from the container.
 
         Args:
             container (TestContainer): container from which to read the object
             txn (int, optional): transaction timestamp to read. Defaults to None
                 which uses the last timestamp written.
+            test_hints (list, optional): optional test hints list. Defaults to None
 
         Returns:
             bool: True if all the records where read successfully and matched
@@ -202,6 +298,7 @@ class TestContainerData():
                 "akey": record_info["akey"],
                 "dkey": record_info["dkey"],
                 "txn": txn,
+                "test_hints": test_hints,
             }
             try:
                 if isinstance(data, list):
@@ -232,18 +329,20 @@ class TestContainerData():
         return status
 
 
-class TestContainer(TestDaosApiBase):
+class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
     """A class for functional testing of DaosContainer objects."""
 
-    def __init__(self, pool, cb_handler=None, daos_command=None):
+    def __init__(self, pool, daos_command, label_generator=None, namespace=CONT_NAMESPACE):
         """Create a TestContainer object.
 
         Args:
             pool (TestPool): the test pool in which to create the container
-            cb_handler (CallbackHandler, optional): callback object to use with
-                the API methods. Defaults to None.
+            daos_command (DaosCommand, optional): daos command object. Defaults to None
+            label_generator (LabelGenerator, optional): used to generate container label by adding
+                a number to self.label. Defaults to None
+
         """
-        super().__init__("/run/container/*", cb_handler)
+        super().__init__(namespace)
         self.pool = pool
 
         self.object_qty = BasicParameter(None)
@@ -256,7 +355,7 @@ class TestContainer(TestDaosApiBase):
         # for enabling different container properties
         self.input_params = DaosInputParams()
 
-        # Optional daos command object to use with the USE_DAOS control method
+        # The daos command object to use with the USE_DAOS control method
         self.daos = daos_command
 
         # Optional daos command argument values to use with the USE_DAOS control
@@ -264,27 +363,63 @@ class TestContainer(TestDaosApiBase):
         self.path = BasicParameter(None)
         self.type = BasicParameter(None)
         self.oclass = BasicParameter(None)
+        self.dir_oclass = BasicParameter(None)
+        self.file_oclass = BasicParameter(None)
         self.chunk_size = BasicParameter(None)
         self.properties = BasicParameter(None)
+        self.acl_file = BasicParameter(None)
         self.daos_timeout = BasicParameter(None)
+        self.label = BasicParameter(None, "TestContainer")
+        self.label_generator = label_generator
+
+        self.register_cleanup = BasicParameter(True, True)  # call register_cleanup by default
 
         self.container = None
         self.uuid = None
-        self.info = None
         self.opened = False
         self.written_data = []
         self.epoch = None
+
+        # If defined, use container labels for most operations by default.
+        # Setting to False will use the UUID where possible.
+        self.use_label = True
 
     def __str__(self):
         """Return a string representation of this TestContainer object.
 
         Returns:
-            str: the container's UUID, if defined
+            str: 'label (uuid)' if using labels, else 'uuid'
 
         """
-        if self.container is not None and self.uuid is not None:
+        if self.container is not None:
+            if self.label.value:
+                return "{} ({})".format(self.label.value, self.uuid)
             return str(self.uuid)
         return super().__str__()
+
+    @property
+    def identifier(self):
+        """Get the container uuid or label.
+
+        Returns:
+            str: label if using labels and one is defined; otherwise the uuid
+
+        """
+        if self.use_label and self.label.value is not None:
+            return self.label.value
+        return self.uuid
+
+    def no_exception(self):
+        """Temporarily disable raising exceptions for failed commands."""
+        return self.daos.no_exception()
+
+    def as_user(self, user):
+        """Temporarily run commands as a different user.
+
+        Args:
+            user (str): the user to temporarily run as
+        """
+        return self.daos.as_user(user)
 
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
@@ -304,155 +439,165 @@ class TestContainer(TestDaosApiBase):
         if self.daos:
             self.daos.timeout = self.daos_timeout.value
 
+        # Use a unique container label if a generator is supplied
+        if self.label.value and self.label_generator:
+            self.label.update(self.label_generator.get_label(self.label.value))
+
+    def skip_cleanup(self):
+        """Prevent container from being removed during cleanup.
+        Useful for corner case tests where the container no longer exists due to a pool destroy.
+        """
+        self.container = None
+        self.uuid = None
+        self.opened = False
+        self.written_data = []
+        self.epoch = None
+
     @fail_on(DaosApiError)
     @fail_on(CommandFailure)
-    def create(self, uuid=None, con_in=None, acl_file=None):
+    def create(self, con_in=None, query_id=None):
         """Create a container.
 
         Args:
-            uuid (str, optional): container uuid. Defaults to None.
             con_in (optional): to be defined. Defaults to None.
-            acl_file (str, optional): path of the ACL file. Defaults to None.
+            query_id (str, optional): container uuid or label which if specified will be used to
+                find an existing container through a daos query. Defaults to None which will use a
+                create command to populate this object.
+
+        Returns:
+            dict: the daos json command output converted to a python dictionary
+            None: if control_method is API
+
         """
         self.destroy()
         if not self.silent.value:
             self.log.info(
                 "Creating a container with pool handle %s",
-                self.pool.pool.handle.value)
+                self.pool.pool.handle.value if hasattr(self.pool.pool.handle, 'value') else
+                self.pool.pool.handle)
         self.container = DaosContainer(self.pool.context)
+        result = None
 
-        if self.control_method.value == self.USE_API:
+        if query_id:
+            # Get an existing container with the daos query command
+            kwargs = {"pool": self.pool.identifier, "cont": query_id}
+            self._log_method("daos.container_query", kwargs)
+            result = self.daos.container_query(**kwargs)
+
+        elif self.control_method.value == self.USE_API:
+            # pydaos.raw doesn't support create with a label
+            if not self.silent.value:
+                self.log.info("Ignoring label for container created with API")
+            self.label.update(None)
+
             # Create a container with the API method
             kwargs = {"poh": self.pool.pool.handle}
-            if uuid is not None:
-                kwargs["con_uuid"] = uuid
 
             # Refer daos_api for setting input params for DaosContainer.
+            cop = self.input_params.get_con_create_params()
             if con_in is not None:
-                cop = self.input_params.get_con_create_params()
                 cop.type = con_in[0]
                 cop.enable_chksum = con_in[1]
                 cop.srv_verify = con_in[2]
                 cop.chksum_type = con_in[3]
                 cop.chunk_size = con_in[4]
-                kwargs["con_prop"] = cop
+                cop.rd_lvl = con_in[5]
+            else:
+                # Default to RANK fault domain (rd_lvl:1) when not specified
+                cop.rd_lvl = ctypes.c_uint64(1)
+
+            kwargs["con_prop"] = cop
 
             self._call_method(self.container.create, kwargs)
 
-        elif self.control_method.value == self.USE_DAOS and self.daos:
-            # Disconnect the pool if connected
-            self.pool.disconnect()
-
+        else:
             # Create a container with the daos command
             kwargs = {
-                "pool": self.pool.uuid,
+                "pool": self.pool.identifier,
                 "sys_name": self.pool.name.value,
-                "cont": uuid,
                 "path": self.path.value,
                 "cont_type": self.type.value,
                 "oclass": self.oclass.value,
+                "dir_oclass": self.dir_oclass.value,
+                "file_oclass": self.file_oclass.value,
                 "chunk_size": self.chunk_size.value,
                 "properties": self.properties.value,
-                "acl_file": acl_file,
+                "acl_file": self.acl_file.value,
+                "label": self.label.value
             }
-
             self._log_method("daos.container_create", kwargs)
+            result = self.daos.container_create(**kwargs)
+
+        if result:
             try:
-                uuid = self.daos.container_create(
-                    **kwargs)["response"]["container_uuid"]
+                if result["status"] != 0:
+                    # The command failed but no exception was raised, so let the caller handle
+                    return result
+                uuid = result["response"]["container_uuid"]
+
+                # Update if these values exist
+                self.label.update(result["response"].get("container_label"))
+                self.type.update(result["response"].get("container_type"))
+
             except KeyError as error:
-                raise CommandFailure(
-                    "Error: Unexpected daos container create output") from error
+                raise CommandFailure("Error: Unexpected daos container create output") from error
             # Populate the empty DaosContainer object with the properties of the
             # container created with daos container create.
             self.container.uuid = str_to_c_uuid(uuid)
             self.container.attached = 1
             self.container.poh = self.pool.pool.handle
 
-        elif self.control_method.value == self.USE_DAOS:
-            self.log.error("Error: Undefined daos command")
-
-        else:
-            self.log.error(
-                "Error: Undefined control_method: %s",
-                self.control_method.value)
-
         self.uuid = self.container.get_uuid_str()
         if not self.silent.value:
-            self.log.info("  Container created with uuid %s", self.uuid)
+            self.log.info("  Created container %s", str(self))
 
-    @fail_on(DaosApiError)
+        return result
+
     @fail_on(CommandFailure)
-    def create_snap(self, snap_name=None, epoch=None):
-        """Create Snapshot using daos utility.
+    def create_snap(self, *args, **kwargs):
+        """Create container snapshot by calling daos container create-snap.
+
+        Sets self.epoch to the created epoch.
 
         Args:
-            snap_name (str, optional): Snapshot name. Defaults to None.
-            epoch (str, optional): Epoch ID. Defaults to None.
+            args (tuple, optional): positional arguments to DaosCommand.container_create_snap
+            kwargs (dict, optional): named arguments to DaosCommand.container_create_snap
+
+        Returns:
+            str: JSON output of daos container create-snap
+
+        Raises:
+            CommandFailure: Raised from the daos command call
+
         """
-        self.log.info("Creating Snapshot for Container: %s", self.uuid)
-        if self.control_method.value == self.USE_DAOS and self.daos:
-            # create snapshot using daos utility
-            kwargs = {
-                "pool": self.pool.uuid,
-                "cont": self.uuid,
-                "snap_name": snap_name,
-                "epoch": epoch,
-                "sys_name": self.pool.name.value
-            }
-            self._log_method("daos.container_create_snap", kwargs)
-            data = self.daos.container_create_snap(**kwargs)
+        result = self.daos.container_create_snap(
+            pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
+        if result["status"] == 0:
+            self.epoch = result["response"]["epoch"]
+        return result
 
-        elif self.control_method.value == self.USE_DAOS:
-            self.log.error("Error: Undefined daos command")
-
-        else:
-            self.log.error(
-                "Error: Undefined control_method: %s",
-                self.control_method.value)
-
-        self.epoch = data["epoch"]
-
-    @fail_on(DaosApiError)
     @fail_on(CommandFailure)
-    def destroy_snap(self, snap_name=None, epc=None, epcrange=None):
-        """Destroy Snapshot using daos utility.
+    def destroy_snap(self, *args, **kwargs):
+        """Destroy container snapshot by calling daos container destroy-snap.
+
+        Sets self.epoch to the created epoch.
 
         Args:
-            snap_name (str, optional): Snapshot name
-            epc (str, optional): Epoch ID that indicates the snapshot to be
-                destroyed. Defaults to None.
-            epcrange (str, optional): Epoch range in the format "<start>-<end>".
+            args (tuple, optional): positional arguments to DaosCommand.container_destroy_snap
+            kwargs (dict, optional): named arguments to DaosCommand.container_destroy_snap
+
+        Returns:
+            str: JSON output of daos container destroy-snap
+
+        Raises:
+            CommandFailure: Raised from the daos command call
+
         """
-        status = False
-
-        self.log.info("Destroying Snapshot for Container: %s", self.uuid)
-
-        if self.control_method.value == self.USE_DAOS and self.daos:
-            # destroy snapshot using daos utility
-            kwargs = {
-                "pool": self.pool.uuid,
-                "cont": self.uuid,
-                "snap_name": snap_name,
-                "epc": epc,
-                "epcrange": epcrange,
-                "sys_name": self.pool.name.value,
-            }
-            self._log_method("daos.container_destroy_snap", kwargs)
-            self.daos.container_destroy_snap(**kwargs)
-            status = True
-
-        elif self.control_method.value == self.USE_DAOS:
-            self.log.error("Error: Undefined daos command")
-
-        else:
-            self.log.error(
-                "Error: Undefined control_method: %s",
-                self.control_method.value)
-
-        self.epoch = None
-
-        return status
+        result = self.daos.container_destroy_snap(
+            pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
+        if result["status"] == 0:
+            self.epoch = None
+        return result
 
     @fail_on(DaosApiError)
     def open(self, pool_handle=None, container_uuid=None):
@@ -471,11 +616,12 @@ class TestContainer(TestDaosApiBase):
 
         Returns:
             bool: True if the container has been opened; False if the container
-                is already opened.
+                is already opened or not created.
 
         """
         if self.container and not self.opened:
-            self.log.info("Opening container %s", self.uuid)
+            if not self.silent.value:
+                self.log.info("Opening container %s", str(self))
             self.pool.connect()
             kwargs = {}
             kwargs["poh"] = pool_handle
@@ -491,11 +637,12 @@ class TestContainer(TestDaosApiBase):
 
         Returns:
             bool: True if the container has been closed; False if the container
-                is already closed.
+                is already closed or not created.
 
         """
         if self.container and self.opened:
-            self.log.info("Closing container %s", self.uuid)
+            if not self.silent.value:
+                self.log.info("Closing container %s", str(self))
             self._call_method(self.container.close, {})
             self.opened = False
             return True
@@ -518,7 +665,7 @@ class TestContainer(TestDaosApiBase):
         if self.container:
             self.close()
             if not self.silent.value:
-                self.log.info("Destroying container %s", self.uuid)
+                self.log.info("Destroying container %s", str(self))
             if self.container.attached:
                 kwargs = {"force": force}
 
@@ -527,107 +674,21 @@ class TestContainer(TestDaosApiBase):
                     self._call_method(self.container.destroy, kwargs)
                     status = True
 
-                elif self.control_method.value == self.USE_DAOS and self.daos:
-                    # Disconnect the pool if connected
-                    self.pool.disconnect()
-
+                else:
                     # Destroy the container with the daos command
-                    kwargs["pool"] = self.pool.uuid
+                    kwargs["pool"] = self.pool.identifier
                     kwargs["sys_name"] = self.pool.name.value
-                    kwargs["cont"] = self.uuid
+                    kwargs["cont"] = self.identifier
                     self._log_method("daos.container_destroy", kwargs)
                     self.daos.container_destroy(**kwargs)
                     status = True
 
-                elif self.control_method.value == self.USE_DAOS:
-                    self.log.error("Error: Undefined daos command")
-
-                else:
-                    self.log.error(
-                        "Error: Undefined control_method: %s",
-                        self.control_method.value)
-
             self.container = None
             self.uuid = None
-            self.info = None
             self.written_data = []
 
         return status
 
-    @fail_on(DaosApiError)
-    def get_info(self, coh=None):
-        """Query the container for information.
-
-        Sets the self.info attribute.
-
-        Args:
-            coh (str, optional): container handle override. Defaults to None.
-        """
-        if self.container:
-            self.open()
-            self.log.info("Querying container %s", self.uuid)
-            self._call_method(self.container.query, {"coh": coh})
-            self.info = self.container.info
-
-    def check_container_info(self, ci_uuid=None, ci_nsnapshots=None):
-        # pylint: disable=unused-argument
-        """Check the container info attributes.
-
-        Note:
-            Arguments may also be provided as a string with a number preceded
-            by '<', '<=', '>', or '>=' for other comparisons besides the
-            default '=='.
-
-        Args:
-            ci_uuid (str, optional): container uuid. Defaults to None.
-            ci_nsnapshots (int, optional): number of snapshots.
-                Defaults to None.
-
-        Note:
-            Arguments may also be provided as a string with a number preceded
-            by '<', '<=', '>', or '>=' for other comparisons besides the
-            default '=='.
-
-        Returns:
-            bool: True if at least one expected value is specified and all the
-                specified values match; False otherwise
-
-        """
-        self.get_info()
-        checks = [
-            (key,
-             c_uuid_to_str(getattr(self.info, key))
-             if key == "ci_uuid" else getattr(self.info, key),
-             val)
-            for key, val in list(locals().items())
-            if key != "self" and val is not None]
-        return self._check_info(checks)
-
-    def write_objects_wo_failon(self, rank=None, obj_class=None):
-        """Write objects to the container without fail_on DaosTestError,
-           for negative test on container write_objects.
-
-        Args:
-            rank (int, optional): server rank. Defaults to None.
-            obj_class (int, optional): daos object class. Defaults to None.
-
-        """
-        self.open()
-        self.log.info(
-            "Writing %s object(s), with %s record(s) of %s bytes(s) each, in "
-            "container %s%s%s",
-            self.object_qty.value, self.record_qty.value, self.data_size.value,
-            self.uuid, " on rank {}".format(rank) if rank is not None else "",
-            " with object class {}".format(obj_class)
-            if obj_class is not None else "")
-        for _ in range(self.object_qty.value):
-            self.written_data.append(TestContainerData(self.debug.value))
-            self.written_data[-1].write_object(
-                self, self.record_qty.value, self.akey_size.value,
-                self.dkey_size.value, self.data_size.value, rank, obj_class,
-                self.data_array_size.value)
-
-    @fail_on(DaosTestError)
     def write_objects(self, rank=None, obj_class=None):
         """Write objects to the container.
 
@@ -644,7 +705,7 @@ class TestContainer(TestDaosApiBase):
             "Writing %s object(s), with %s record(s) of %s bytes(s) each, in "
             "container %s%s%s",
             self.object_qty.value, self.record_qty.value, self.data_size.value,
-            self.uuid, " on rank {}".format(rank) if rank is not None else "",
+            str(self), " on rank {}".format(rank) if rank is not None else "",
             " with object class {}".format(obj_class)
             if obj_class is not None else "")
         for _ in range(self.object_qty.value):
@@ -654,13 +715,13 @@ class TestContainer(TestDaosApiBase):
                 self.dkey_size.value, self.data_size.value, rank, obj_class,
                 self.data_array_size.value)
 
-    @fail_on(DaosTestError)
-    def read_objects(self, txn=None):
+    def read_objects(self, txn=None, test_hints=None):
         """Read the objects from the container and verify they match.
 
         Args:
             txn (int, optional): transaction timestamp to read. Defaults to None
                 which uses the last timestamp written.
+            test_hints (list, optional): optional test hints list. Defaults to None
 
         Returns:
             bool: True if all the container objects contain the same previously
@@ -670,11 +731,11 @@ class TestContainer(TestDaosApiBase):
         self.open()
         self.log.info(
             "Reading %s object(s) in container %s",
-            len(self.written_data), self.uuid)
+            len(self.written_data), str(self))
         status = len(self.written_data) > 0
         for data in self.written_data:
             data.debug = self.debug.value
-            status &= data.read_object(self, txn)
+            status &= data.read_object(self, txn, test_hints)
         return status
 
     def execute_io(self, duration, rank=None, obj_class=None):
@@ -689,14 +750,13 @@ class TestContainer(TestDaosApiBase):
             int: number of bytes written to the container
 
         Raises:
-            DaosTestError: if there is an error writing, reading, or verify the
-                data
+            DaosTestError: if there is an error writing, reading, or verify the data
 
         """
         self.open()
         self.log.info(
             "Writing and reading objects in container %s for %s seconds",
-            self.uuid, duration)
+            str(self), duration)
 
         total_bytes_written = 0
         finish_time = time() + duration
@@ -736,7 +796,7 @@ class TestContainer(TestDaosApiBase):
                 raise DaosTestError(
                     "Error obtaining target rank list for object {} in "
                     "container {}: {}".format(
-                        data.obj, self.uuid, error)) from error
+                        data.obj, str(self), error)) from error
         if message is not None:
             self.log.info("Target rank lists%s:", message)
             for ranks in target_rank_lists:
@@ -754,9 +814,8 @@ class TestContainer(TestDaosApiBase):
             (int): the number of object rank lists containing the rank
 
         """
-        count = sum([ranks.count(rank) for ranks in target_rank_list])
-        self.log.info(
-            "Occurrences of rank %s in the target rank list: %s", rank, count)
+        count = sum(ranks.count(rank) for ranks in target_rank_list)
+        self.log.info("Occurrences of rank %s in the target rank list: %s", rank, count)
         return count
 
     def punch_objects(self, indices):
@@ -777,7 +836,7 @@ class TestContainer(TestDaosApiBase):
         self.open()
         self.log.info(
             "Punching %s objects from container %s with %s written objects",
-            len(indices), self.uuid, len(self.written_data))
+            len(indices), str(self), len(self.written_data))
         count = 0
         if self.written_data:
             for index in indices:
@@ -793,7 +852,7 @@ class TestContainer(TestDaosApiBase):
                 # Close the object
                 self.log.info(
                     "Closing object %s (index: %s, txn: %s) in container %s",
-                    obj, index, txn, self.uuid)
+                    obj, index, txn, str(self))
                 try:
                     self._call_method(obj.close, {})
                 except DaosApiError:
@@ -802,7 +861,7 @@ class TestContainer(TestDaosApiBase):
                 # Punch the object
                 self.log.info(
                     "Punching object %s (index: %s, txn: %s) from container %s",
-                    obj, index, txn, self.uuid)
+                    obj, index, txn, str(self))
                 try:
                     self._call_method(obj.punch, {"txn": txn})
                     count += 1
@@ -837,13 +896,13 @@ class TestContainer(TestDaosApiBase):
         self.log.info(
             "Punching %s records from each object in container %s with %s "
             "written objects",
-            len(indices), self.uuid, len(self.written_data))
+            len(indices), str(self), len(self.written_data))
         count = 0
         for data in self.written_data:
             # Close the object
             self.log.info(
                 "Closing object %s in container %s",
-                data.obj, self.uuid)
+                data.obj, str(self))
             try:
                 self._call_method(data.obj.close, {})
             except DaosApiError:
@@ -862,7 +921,7 @@ class TestContainer(TestDaosApiBase):
                 self.log.info(
                     "Punching record %s (index: %s, akey: %s, dkey: %s) from "
                     "object %s in container %s",
-                    rec, index, rec["akey"], rec["dkey"], data.obj, self.uuid)
+                    rec, index, rec["akey"], rec["dkey"], data.obj, str(self))
                 kwargs = {"txn": 0}
                 try:
                     if punch_dkey:
@@ -881,3 +940,252 @@ class TestContainer(TestDaosApiBase):
 
         # Return the number of punched objects
         return count
+
+    @fail_on(CommandFailure)
+    def check(self, *args, **kwargs):
+        """Check object consistency by calling daos container check.
+
+        Args:
+            args (tuple, optional): positional arguments to DaosCommand.container_check
+            kwargs (dict, optional): named arguments to DaosCommand.container_check
+
+        Returns:
+            str: JSON output of daos container check.
+
+        Raises:
+            CommandFailure: Raised from the daos command call.
+
+        """
+        return self.daos.container_check(
+            pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
+
+    def delete_acl(self, *args, **kwargs):
+        """Set container properties by calling daos container delete-acl.
+
+        Args:
+            args (tuple, optional): positional arguments to DaosCommand.container_delete_acl
+            kwargs (dict, optional): named arguments to DaosCommand.container_delete_acl
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
+        Raises:
+            CommandFailure: Raised from the daos command call.
+
+        """
+        return self.daos.container_delete_acl(
+            self.pool.identifier, self.identifier, *args, **kwargs)
+
+    def get_acl(self, *args, **kwargs):
+        """Call daos container get-acl.
+
+        Args:
+            args (tuple, optional): args to pass to container_get_acl
+            kwargs (dict, optional): keyword args to pass to container_get_acl
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
+        Raises:
+            CommandFailure: Raised from the daos command call.
+
+        """
+        return self.daos.container_get_acl(
+            self.pool.identifier, self.identifier, *args, **kwargs)
+
+    def get_attr(self, *args, **kwargs):
+        """Call daos container get-attr.
+
+        Args:
+            args (tuple, optional): positional arguments to DaosCommand.container_get_attr
+            kwargs (dict, optional): named arguments to DaosCommand.container_get_attr
+
+        Returns:
+            str: JSON output of daos container get-attr.
+
+        """
+        return self.daos.container_get_attr(
+            self.pool.identifier, self.identifier, *args, **kwargs)
+
+    @fail_on(CommandFailure)
+    def get_prop(self, *args, **kwargs):
+        """Get container properties by calling daos container get-prop.
+
+        Args:
+            args (tuple, optional): positional arguments to DaosCommand.container_get_prop
+            kwargs (dict, optional): named arguments to DaosCommand.container_get_prop
+
+        Returns:
+            str: JSON output of daos container get-prop
+
+        Raises:
+            CommandFailure: Raised from the daos command call
+
+        """
+        return self.daos.container_get_prop(
+            pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
+
+    def verify_prop(self, expected_props):
+        """Verify daos container get-prop returns expected values.
+
+        Args:
+            expected_props (dict): expected properties and values
+
+        Returns:
+            bool: whether props from daos container get-prop match expected values
+
+        """
+        prop_output = self.get_prop(properties=expected_props.keys())
+        for actual_prop in prop_output['response']:
+            if expected_props[actual_prop['name']] != actual_prop['value']:
+                return False
+        return True
+
+    def list_attrs(self, *args, **kwargs):
+        """Get container properties by calling daos container list-attrs.
+
+        Args:
+            args (tuple, optional): positional arguments to DaosCommand.container_list_attrs
+            kwargs (dict, optional): named arguments to DaosCommand.container_list_attrs
+
+        Returns:
+            str: JSON output of daos container list-attrs
+
+        Raises:
+            CommandFailure: Raised from the daos command call
+
+        """
+        return self.daos.container_list_attrs(
+            self.pool.identifier, self.identifier, *args, **kwargs)
+
+    @fail_on(CommandFailure)
+    def list_snaps(self):
+        """Get container properties by calling daos container list-snaps.
+
+        Returns:
+            str: JSON output of daos container list-snaps
+
+        Raises:
+            CommandFailure: Raised from the daos command call
+
+        """
+        return self.daos.container_list_snaps(pool=self.pool.identifier, cont=self.identifier)
+
+    def overwrite_acl(self, *args, **kwargs):
+        """Call daos container overwrite-acl.
+
+        Args:
+            args (tuple, optional): args to pass to overwrite_acl
+            kwargs (dict, optional): keyword args to pass to overwrite_acl
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
+        Raises:
+            CommandFailure: Raised from the daos command call.
+
+        """
+        return self.daos.container_overwrite_acl(
+            self.pool.identifier, self.identifier, *args, **kwargs)
+
+    @fail_on(CommandFailure)
+    def query(self, *args, **kwargs):
+        """Call daos container query.
+
+        Args:
+            args (tuple, optional): args to pass to container_query
+            kwargs (dict, optional): keyword args to pass to container_query
+
+        Returns:
+            str: JSON output of daos container query.
+
+        Raises:
+            CommandFailure: Raised from the daos command call.
+
+        """
+        return self.daos.container_query(
+            pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
+
+    def verify_query(self, expected_response):
+        """Verify daos container query returns expected response values.
+
+        Args:
+            expected_response (dict): expected response values
+
+        Returns:
+            bool: whether response values from daos container query match expected values
+
+        """
+        response = self.query()['response']
+        for expected_key, expected_val in expected_response.items():
+            if expected_key not in response:
+                return False
+            if response[expected_key] != expected_val:
+                return False
+        return True
+
+    def set_attr(self, *args, **kwargs):
+        """Call daos container set-attr.
+
+        Args:
+            args (tuple, optional): positional arguments to DaosCommand.container_set_attr
+            kwargs (dict, optional): named arguments to DaosCommand.container_set_attr
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
+        """
+        return self.daos.container_set_attr(
+            pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
+
+    def set_owner(self, *args, **kwargs):
+        """Set container properties by calling daos container set-owner.
+
+        Args:
+            args (tuple, optional): positional arguments to DaosCommand.container_set_owner
+            kwargs (dict, optional): named arguments to DaosCommand.container_set_owner
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
+        Raises:
+            CommandFailure: Raised from the daos command call.
+
+        """
+        return self.daos.container_set_owner(
+            self.pool.identifier, self.identifier, *args, **kwargs)
+
+    @fail_on(CommandFailure)
+    def set_prop(self, *args, **kwargs):
+        """Set container properties by calling daos container set-prop.
+
+        Args:
+            args (tuple, optional): positional arguments to DaosCommand.container_set_prop
+            kwargs (dict, optional): named arguments to DaosCommand.container_set_prop
+
+        Returns:
+            str: JSON output of daos container set-prop.
+
+        Raises:
+            CommandFailure: Raised from the daos command call.
+
+        """
+        return self.daos.container_set_prop(
+            pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
+
+    def update_acl(self, *args, **kwargs):
+        """Call daos container update-acl.
+
+        Args:
+            args (tuple, optional): args to pass to container_update_acl
+            kwargs (dict, optional): keyword args to pass to container_update_acl
+
+        Returns:
+            str: JSON output of daos container update-acl.
+
+        Raises:
+            CommandFailure: Raised from the daos command call.
+
+        """
+        return self.daos.container_update_acl(
+            pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)

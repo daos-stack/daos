@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -19,6 +19,10 @@
 extern "C" {
 #endif
 
+#include <daos_types.h>
+#include <daos_obj.h>
+#include <daos_obj_class.h>
+
 /** Range of contiguous records */
 typedef struct {
 	/** Index of the first record in the range */
@@ -33,63 +37,22 @@ typedef struct {
 	daos_size_t		arr_nr;
 	/** Array of ranges; each range defines a starting index and length. */
 	daos_range_t	       *arr_rgs;
-	/*
-	 * On read only: return the number of records that are short fetched
-	 * from the largest dkey(s). This helps for checking for short reads. If
-	 * this values is not zero, then a short read is possible and should be
-	 * checked with daos_array_get_size() compared with the indexes being
-	 * read.
+	/** (on read only) the number of records that are short fetched from the largest dkey(s).
+	 * Helps for checking short reads. If nonzero, a short read is possible and should be
+	 * checked with daos_array_get_size() compared with the indexes being read.
 	 */
 	daos_size_t		arr_nr_short_read;
+	/** (on read only) the number of records that were actually read from the array */
 	daos_size_t		arr_nr_read;
 } daos_array_iod_t;
 
-/**
- * Deprecated - use daos_array_generate_oid()
- * Convenience function to generate a DAOS object ID by encoding the private
- * DAOS bits of the object address space.
- *
- * \param[in,out]
- *		oid	[in]: Object ID with low 96 bits set and unique inside
- *			the container. [out]: Fully populated DAOS object
- *			identifier with the the low 96 bits untouched and the
- *			DAOS private bits (the high 32 bits) encoded.
- * \param[in]	cid	Class Identifier
- * \param[in]	add_attr
- *			Indicate whether the user would maintain the array
- *			cell and chunk size (false), or the metadata should
- *			be stored in the obj (true).
- * \param[in]	args	Reserved.
- */
-static inline int  __attribute__ ((deprecated))
-daos_array_generate_id(daos_obj_id_t *oid, daos_oclass_id_t cid, bool add_attr, uint32_t args)
-{
-	static daos_ofeat_t	feat;
-	uint64_t		hdr;
-
-	feat = DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT;
-
-	if (add_attr)
-		feat = feat | DAOS_OF_ARRAY;
-
-	/* TODO: add check at here, it should return error if user specified
-	 * bits reserved by DAOS
-	 */
-	oid->hi &= (1ULL << OID_FMT_INTR_BITS) - 1;
-	/**
-	 * | Upper bits contain
-	 * | OID_FMT_VER_BITS (version)		 |
-	 * | OID_FMT_FEAT_BITS (object features) |
-	 * | OID_FMT_CLASS_BITS (object class)	 |
-	 * | 96-bit for upper layer ...		 |
-	 */
-	hdr  = ((uint64_t)OID_FMT_VER << OID_FMT_VER_SHIFT);
-	hdr |= ((uint64_t)feat << OID_FMT_FEAT_SHIFT);
-	hdr |= ((uint64_t)cid << OID_FMT_CLASS_SHIFT);
-	oid->hi |= hdr;
-
-	return 0;
-}
+/** DAOS array stat (size, modification time) information */
+typedef struct {
+	/** Array size (in records) */
+	daos_size_t	st_size;
+	/** Max epoch of array modification (mtime) */
+	daos_epoch_t	st_max_epoch;
+} daos_array_stbuf_t;
 
 /**
  * Convenience function to generate a DAOS Array object ID by encoding the private DAOS bits of the
@@ -117,41 +80,32 @@ static inline int
 daos_array_generate_oid(daos_handle_t coh, daos_obj_id_t *oid, bool add_attr, daos_oclass_id_t cid,
 			daos_oclass_hints_t hints, uint32_t args)
 {
-	static daos_ofeat_t	feat;
+	enum daos_otype_t type;
 
-	feat = DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT;
+	type = DAOS_OT_ARRAY_ATTR;
 
 	if (add_attr)
-		feat = feat | DAOS_OF_ARRAY;
+		type = DAOS_OT_ARRAY;
 
-	return daos_obj_generate_oid(coh, oid, feat, cid, hints, args);
+	return daos_obj_generate_oid(coh, oid, type, cid, hints, args);
 }
 
 /**
- * Create an Array object. This opens a DAOS KV object and adds metadata to
- * define the cell size and chunk size. Further access to that object using the
- * handle will use that metadata to store the array elements.
+ * Create an Array object. This opens a DAOS object and adds metadata under a special akey to define
+ * the cell size and chunk size. Further access to that object using the handle will use that
+ * metadata to store the array elements.
  *
- * The metadata of the array is stored under a special AKEY in DKEY 0. This
- * means that this is a generic array object with it's metadata tracked in the
- * DAOS object. The feat bits in the oid must set DAOS_OF_DKEY_UINT64 |
- * DAOS_OF_KV_FLAT | DAOS_OF_ARRAY.  If the feat bits does not set
- * DAOS_OF_ARRAY, the user would be responsible for remembering the array
- * metadata since DAOS will not store those, and should not call this API since
- * nothing will be written to the array object. daos_array_open_with_attrs() can
- * be used to get an array OH in that case to access with the Array APIs.
- *
- * The metadata are just entries in the KV object, meaning that any user can
- * open the object and overwrite that metadata. The user can recreate the array;
- * This will not punch the existing raw data; just overwrite the metadata.
- * However changing the metadata will cause undefined access issues. (MSC - we
- * can force an error in this case by checking for object existence by reading
- * the metadata. But this adds extra overhead).
+ * The metadata of the array is stored under a special AKEY in DKEY 0. This means that this is a
+ * generic array object with it's metadata tracked in the DAOS object. The feat bits in the oid must
+ * set DAOS_OT_ARRAY,DAOS_OT_ARRAY_ATTR or DAOS_OT_ARRAY_BYTE. If the feat bits does not set
+ * DAOS_OT_ARRAY, the user would be responsible for remembering the array metadata since DAOS will
+ * not store those, and should not call this API since nothing will be written to the array
+ * object. daos_array_open_with_attrs() can be used to get an array OH in that case to access with
+ * the Array APIs.
  *
  * \param[in]	coh	Container open handle.
- * \param[in]	oid	Object ID. It is required that the feat for dkey type
- *			be set to DAOS_OF_KV_FLAT | DAOS_OF_DKEY_UINT64 |
- *			DAOS_OF_ARRAY.
+ * \param[in]	oid	Object ID. It is required that the object type
+ *			be set to DAOS_OT_ARRAY.
  * \param[in]	th	Transaction handle.
  * \param[in]	cell_size
  *			Record size of the array.
@@ -167,7 +121,7 @@ daos_array_generate_oid(daos_handle_t coh, daos_obj_id_t *oid, bool add_attr, da
  *			0		Success
  *			-DER_NO_HDL	Invalid container handle
  *			-DER_INVAL	Invalid parameter
- *			-DER_NO_PERM	Permission denied
+ *			-DER_EXIST	Array already exists
  *			-DER_UNREACH	Network is unreachable
  */
 int
@@ -176,13 +130,12 @@ daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
 		  daos_handle_t *oh, daos_event_t *ev);
 
 /**
- * Open an Array object. If the array has not been created before (no array
- * metadata exists), this will fail.
+ * Open an Array object. If the array has not been created before (no array metadata exists), this
+ * will fail.
  *
  * \param[in]	coh	Container open handle.
  * \param[in]	oid	Object ID. It is required that the feat for dkey type
- *			be set to DAOS_OF_KV_FLAT | DAOS_OF_DKEY_UINT64 |
- *			DAOS_OF_ARRAY.
+ *			be set to DAOS_OT_ARRAY.
  * \param[in]	th	Transaction handle.
  * \param[in]	mode	Open mode: DAOS_OO_RO/RW
  * \param[out]	cell_size
@@ -216,8 +169,8 @@ daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
  * it again will introduce corruption in the array data.
  *
  * \param[in]	coh	Container open handle.
- * \param[in]	oid	Object ID. It is required that the feat for dkey type
- *			be set to DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT.
+ * \param[in]	oid	Object ID. It is required that the object type to be
+ *			be set to DAOS_OT_ARRAY_ATTR or DAOS_OT_ARRAY_BYTE.
  * \param[in]	th	Transaction handle.
  * \param[in]	mode	Open mode: DAOS_OO_RO/RW
  * \param[in]	cell_size
@@ -369,12 +322,30 @@ daos_array_write(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
  *			-DER_UNREACH	Network is unreachable
  */
 int
-daos_array_get_size(daos_handle_t oh, daos_handle_t th, daos_size_t *size,
-		    daos_event_t *ev);
+daos_array_get_size(daos_handle_t oh, daos_handle_t th, daos_size_t *size, daos_event_t *ev);
+
+/**
+ * Stat array to retrieve size and mtime.
+ *
+ * \param[in]	oh	Array object open handle.
+ * \param[in]	th	Transaction handle.
+ * \param[out]	stbuf	Returned stat info.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ */
+int
+daos_array_stat(daos_handle_t oh, daos_handle_t th, daos_array_stbuf_t *stbuf, daos_event_t *ev);
 
 /**
  * Set the array size (truncate) in records. If array is shrinking, we punch
- * dkeys/records above the required size. If the array is epxanding, we insert 1
+ * dkeys/records above the required size. If the array is expanding, we insert 1
  * record at the corresponding size. This is NOT equivalent to an allocate.
  *
  *
@@ -457,6 +428,21 @@ daos_array_punch(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
 int
 daos_array_get_attr(daos_handle_t oh, daos_size_t *chunk_size,
 		    daos_size_t *cell_size);
+
+/**
+ * Update the chunk size for an open array handle. Users normally should not use this API.
+ *
+ * \param[in]	oh	Array object open handle.
+ * \param[in]	chunk_size
+ *			Chunk size of the array.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ */
+int
+daos_array_update_chunk_size(daos_handle_t oh, daos_size_t chunk_size);
 
 #if defined(__cplusplus)
 }

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/mitchellh/hashstructure/v2"
 	"github.com/pkg/errors"
@@ -20,6 +21,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
@@ -55,6 +57,9 @@ type HostStorage struct {
 	// RebootRequired indicates that a host reboot is necessary in order
 	// to achieve some goal (SCM prep, etc.)
 	RebootRequired bool `json:"reboot_required"`
+
+	// MemInfo contains information about the host's hugepages.
+	MemInfo *common.MemInfo `json:"mem_info"`
 }
 
 // HashKey returns a uint64 value suitable for use as a key into
@@ -68,6 +73,19 @@ func (hs *HostStorage) HashKey() (uint64, error) {
 type HostStorageSet struct {
 	HostStorage *HostStorage      `json:"storage"`
 	HostSet     *hostlist.HostSet `json:"hosts"`
+}
+
+func (hss *HostStorageSet) String() string {
+	return fmt.Sprintf("hosts %s, storage %+v", hss.HostSet, hss.HostStorage)
+}
+
+// Len returns the number of hosts in set with this host storage.
+func (hss *HostStorageSet) Len() int {
+	if hss == nil {
+		return 0
+	}
+
+	return hss.HostSet.Count()
 }
 
 // NewHostStorageSet returns an initialized HostStorageSet for the given
@@ -85,6 +103,14 @@ func NewHostStorageSet(hostAddr string, hs *HostStorage) (*HostStorageSet, error
 
 // HostStorageMap provides a map of HostStorage keys to HostStorageSet values.
 type HostStorageMap map[uint64]*HostStorageSet
+
+func (hsm HostStorageMap) String() string {
+	var strs []string
+	for _, hss := range hsm {
+		strs = append(strs, hss.String())
+	}
+	return strings.Join(strs, "\n")
+}
 
 // Add inserts the given host address to a matching HostStorageSet or
 // creates a new one.
@@ -118,13 +144,21 @@ func (hsm HostStorageMap) Keys() []uint64 {
 	return keys
 }
 
+// HostCount returns a count of hosts in map.
+func (hsm HostStorageMap) HostCount() (nrHosts int) {
+	for _, set := range hsm {
+		nrHosts += set.Len()
+	}
+
+	return nrHosts
+}
+
 type (
 	// StorageScanReq contains the parameters for a storage scan request.
 	StorageScanReq struct {
 		unaryRequest
 		Usage      bool
 		NvmeHealth bool
-		NvmeMeta   bool
 		NvmeBasic  bool
 	}
 
@@ -190,6 +224,10 @@ func (ssp *StorageScanResp) addHostResponse(hr *HostResponse) error {
 		}
 	}
 
+	if err := convert.Types(pbResp.GetMemInfo(), &hs.MemInfo); err != nil {
+		return err
+	}
+
 	if ssp.HostStorage == nil {
 		ssp.HostStorage = make(HostStorageMap)
 	}
@@ -216,10 +254,10 @@ func StorageScan(ctx context.Context, rpcClient UnaryInvoker, req *StorageScanRe
 				Usage: req.Usage,
 			},
 			Nvme: &ctlpb.ScanNvmeReq{
-				Health: req.NvmeHealth,
-				// NVMe meta option will populate usage statistics
-				Meta:  req.NvmeMeta || req.Usage,
 				Basic: req.NvmeBasic,
+				// Health and meta details required to populate usage statistics.
+				Health: req.NvmeHealth || req.Usage,
+				Meta:   req.Usage,
 			},
 		})
 	})
@@ -285,6 +323,13 @@ func (sfr *StorageFormatResp) addHostResponse(hr *HostResponse) (err error) {
 			hs.NvmeDevices = append(hs.NvmeDevices, &storage.NvmeController{
 				Info:    info,
 				PciAddr: nr.GetPciAddr(),
+				SmdDevices: []*storage.SmdDevice{
+					{
+						Roles: storage.BdevRoles{
+							storage.OptionBits(nr.RoleBits),
+						},
+					},
+				},
 			})
 		default:
 			if err := ctlStateToErr(nr.GetState()); err != nil {
@@ -414,4 +459,107 @@ func StorageFormat(ctx context.Context, rpcClient UnaryInvoker, req *StorageForm
 	}
 
 	return sfr, nil
+}
+
+type (
+	// NvmeRebindReq contains the parameters for a storage nvme-rebind request.
+	NvmeRebindReq struct {
+		unaryRequest
+		PCIAddr string `json:"pci_addr"`
+	}
+
+	// NvmeRebindResp contains the response from a storage nvme-rebind request.
+	NvmeRebindResp struct {
+		HostErrorsResp
+	}
+)
+
+// StorageNvmeRebind rebinds NVMe SSD from kernel driver and binds to user-space driver on single
+// server.
+func StorageNvmeRebind(ctx context.Context, rpcClient UnaryInvoker, req *NvmeRebindReq) (*NvmeRebindResp, error) {
+	// validate address in request
+	if _, err := hardware.NewPCIAddress(req.PCIAddr); err != nil {
+		return nil, errors.Wrap(err, "invalid pci address in request")
+	}
+
+	pbReq := new(ctlpb.NvmeRebindReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return nil, err
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return ctlpb.NewCtlSvcClient(conn).StorageNvmeRebind(ctx, pbReq)
+	})
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(NvmeRebindResp)
+	for _, hostResp := range ur.Responses {
+		if hostResp.Error != nil {
+			if err := resp.addHostError(hostResp.Addr, hostResp.Error); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return resp, nil
+}
+
+type (
+	// NvmeAddDeviceReq contains the parameters for a storage nvme-add-device request.
+	//
+	// If StorageTierIndex is set to -1, this indicates that the server should add the device
+	// to the first configured bdev tier.
+	NvmeAddDeviceReq struct {
+		unaryRequest
+		PCIAddr          string `json:"pci_addr"`
+		EngineIndex      uint32 `json:"engine_index"`
+		StorageTierIndex int32  `json:"storage_tier_index"`
+	}
+
+	// NvmeAddDeviceResp contains the response from a storage nvme-add-device request.
+	NvmeAddDeviceResp struct {
+		HostErrorsResp
+	}
+)
+
+// WithStorageTierIndex updates request storage tier index value and returns reference.
+func (req *NvmeAddDeviceReq) WithStorageTierIndex(i int32) *NvmeAddDeviceReq {
+	req.StorageTierIndex = i
+
+	return req
+}
+
+// StorageNvmeAddDevice adds NVMe SSD transport address to an engine configuration.
+func StorageNvmeAddDevice(ctx context.Context, rpcClient UnaryInvoker, req *NvmeAddDeviceReq) (*NvmeAddDeviceResp, error) {
+	// validate address in request
+	if _, err := hardware.NewPCIAddress(req.PCIAddr); err != nil {
+		return nil, errors.Wrap(err, "invalid pci address in request")
+	}
+
+	pbReq := new(ctlpb.NvmeAddDeviceReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return nil, err
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return ctlpb.NewCtlSvcClient(conn).StorageNvmeAddDevice(ctx, pbReq)
+	})
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(NvmeAddDeviceResp)
+	for _, hostResp := range ur.Responses {
+		if hostResp.Error != nil {
+			if err := resp.addHostError(hostResp.Addr, hostResp.Error); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return resp, nil
 }

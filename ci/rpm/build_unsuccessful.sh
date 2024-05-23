@@ -7,8 +7,7 @@ set -uex
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 ci_envs="$mydir/../parse_ci_envs.sh"
 if [ -e "${ci_envs}" ]; then
-  # at some point we want to use: shellcheck source=ci/parse_ci_envs.sh
-  # shellcheck disable=SC1091
+  # shellcheck source=parse_ci_envs.sh
   source "${ci_envs}"
 fi
 
@@ -25,7 +24,10 @@ if [ -d /var/cache/pbuilder/ ]; then
     exit 0
 fi
 
-mockroot="/var/lib/mock/${CHROOT_NAME}"
+rpm -q mock
+mock --debug-config
+
+mockroot="/var/lib/mock/$CHROOT_NAME"
 cat "$mockroot"/result/{root,build}.log 2>/dev/null || true
 
 if srpms="$(ls _topdir/SRPMS/*)"; then

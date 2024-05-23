@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -21,6 +21,9 @@
 #include <daos_srv/vos.h>
 #include "rdb_internal.h"
 #include "rdb_layout.h"
+
+/* Flags for rdb_tx.dt_flags */
+#define RDB_TX_LOCAL	(1U << 0)	/* local and query-only */
 
 /* Check leadership locally. Caller must hold d_raft_mutex lock. */
 static inline int
@@ -83,6 +86,27 @@ rdb_tx_begin(struct rdb *db, uint64_t term, struct rdb_tx *tx)
 }
 
 /**
+ * Initialize and begin a local, query-only \a tx. The resulting \a tx sees the
+ * latest DB contents that may contain uncommitted updates. This is mainly
+ * intended for special scenarios such as catastrophic recovery and testing.
+ *
+ * \param[in]	storage	database storage
+ * \param[out]	tx	transaction
+ */
+int
+rdb_tx_begin_local(struct rdb_storage *storage, struct rdb_tx *tx)
+{
+	struct rdb     *db = rdb_from_storage(storage);
+	struct rdb_tx	t = {};
+
+	rdb_get(db);
+	t.dt_db = db;
+	t.dt_flags = RDB_TX_LOCAL;
+	*tx = t;
+	return 0;
+}
+
+/**
  * End and finalize \a tx. If \a tx is not committed, then all updates in \a tx
  * are discarded.
  *
@@ -135,11 +159,14 @@ rdb_tx_opc_str(enum rdb_tx_opc opc)
 struct rdb_tx_op {
 	enum rdb_tx_opc		dto_opc;
 	rdb_path_t		dto_kvs;
-	d_iov_t		dto_key;
-	d_iov_t		dto_value;
+	d_iov_t			dto_key;
+	d_iov_t			dto_value;
 	struct rdb_kvs_attr    *dto_attr;
 };
 
+/* TX header to indicate if the transaction is critical and must bypass SCM space checks.
+ * If more protocol needed (e.g., to convey log compaction), could make this a bit flag.
+ */
 struct rdb_tx_hdr {
 	uint32_t	critical;	/* use VOS_OF_CRIT for all ops in TX? */
 };
@@ -184,18 +211,17 @@ rdb_tx_hdr_decode(const void *buf, size_t len, struct rdb_tx_hdr *hdr)
 static bool
 rdb_tx_is_critical(struct rdb_tx *tx)
 {
-	struct rdb_tx_hdr	hdr;
-	bool			crit = true;
+	struct rdb_tx_hdr hdr = {.critical = 1};
 
 	D_ASSERT(tx != NULL);
-	if (tx->dt_entry) {
-		ssize_t		nb;
+	if (tx->dt_entry_len > 0) {
+		ssize_t nb;
 
+		D_ASSERT(tx->dt_entry != NULL);
 		nb = rdb_tx_hdr_decode(tx->dt_entry, tx->dt_entry_len, &hdr);
-		D_ASSERT(nb == sizeof(struct rdb_tx_hdr));
-		crit = hdr.critical;
+		D_ASSERTF(nb > 0, "nb=%zd\n", nb);
 	}
-	return crit;
+	return hdr.critical;
 }
 
 /* If buf is NULL, then just calculate and return the length required. */
@@ -284,15 +310,15 @@ rdb_tx_op_decode(const void *buf, size_t len, struct rdb_tx_op *op)
 
 /* Append an update operation to tx->dt_entry. */
 static int
-rdb_tx_append(struct rdb_tx *tx, struct rdb_tx_op *op)
+rdb_tx_append(struct rdb_tx *tx, struct rdb_tx_op *op, bool is_critical)
 {
 	struct rdb_tx_hdr	hdr;
 	size_t			op_len;
 	size_t			len;
-	bool			opc_is_critical;
 	const size_t		RDB_TX_CRITICAL_OPS_LIMIT = 8;
 	int			rc;
 
+	D_ASSERT(!(tx->dt_flags & RDB_TX_LOCAL));
 	D_ASSERTF((tx->dt_entry == NULL && tx->dt_entry_cap == 0 &&
 		   tx->dt_entry_len == 0) ||
 		  (tx->dt_entry != NULL && tx->dt_entry_cap > 0 &&
@@ -344,16 +370,13 @@ rdb_tx_append(struct rdb_tx *tx, struct rdb_tx_op *op)
 
 	/* TX is critical if it is reasonably-sized, and any op is critical */
 	tx->dt_num_ops++;
-	opc_is_critical = ((op->dto_opc == RDB_TX_DESTROY_ROOT) ||
-			   (op->dto_opc == RDB_TX_DESTROY) ||
-			   (op->dto_opc == RDB_TX_DELETE));
 	if (tx->dt_entry_len == 0) {
-		hdr.critical = opc_is_critical ? 1 : 0;
+		hdr.critical = is_critical ? 1 : 0;
 		tx->dt_entry_len += rdb_tx_hdr_encode(&hdr, tx->dt_entry);
 	} else if (tx->dt_num_ops > RDB_TX_CRITICAL_OPS_LIMIT) {
 		hdr.critical = 0;
 		rdb_tx_hdr_encode(&hdr, tx->dt_entry);
-	} else if (opc_is_critical) {
+	} else if (is_critical) {
 		hdr.critical = 1;
 		rdb_tx_hdr_encode(&hdr, tx->dt_entry);
 	}
@@ -362,6 +385,27 @@ rdb_tx_append(struct rdb_tx *tx, struct rdb_tx_op *op)
 	rdb_tx_op_encode(op, tx->dt_entry + tx->dt_entry_len);
 	tx->dt_entry_len += op_len;
 	return 0;
+}
+
+/**
+ * Discard all updates (if any) in \a tx.
+ */
+void
+rdb_tx_discard(struct rdb_tx *tx)
+{
+	D_ASSERT(!(tx->dt_flags & RDB_TX_LOCAL));
+	D_ASSERTF((tx->dt_entry == NULL && tx->dt_entry_cap == 0 && tx->dt_entry_len == 0) ||
+		      (tx->dt_entry != NULL && tx->dt_entry_cap > 0 &&
+		       tx->dt_entry_len <= tx->dt_entry_cap),
+		  "entry=%p cap=%zu len=%zu\n", tx->dt_entry, tx->dt_entry_cap, tx->dt_entry_len);
+
+	if (tx->dt_entry) {
+		D_FREE(tx->dt_entry);
+		tx->dt_entry = NULL;
+	}
+	tx->dt_entry_len = 0;
+	tx->dt_entry_cap = 0;
+	tx->dt_num_ops   = 0;
 }
 
 /**
@@ -379,7 +423,7 @@ rdb_tx_commit(struct rdb_tx *tx)
 	int		rc;
 
 	/* Don't fail query-only TXs for leader checks. */
-	if (tx->dt_entry == NULL)
+	if ((tx->dt_flags & RDB_TX_LOCAL) || tx->dt_entry == NULL)
 		return 0;
 
 	ABT_mutex_lock(tx->dt_db->d_raft_mutex);
@@ -390,26 +434,60 @@ rdb_tx_commit(struct rdb_tx *tx)
 		goto out_lock;
 	}
 
-	/* If tx is not critical, and almost out of space, do not append.
-	 * TODO: decide if an official free space amount should be in lc
-	 *       and possibly adjusted based on differences across replicas.
-	 */
+	/* If tx is not critical, and out of space (even after log compaction), do not append. */
 	if (!rdb_tx_is_critical(tx)) {
 		daos_size_t	scm_remaining = 0;
+		uint32_t	nchecks = 0;
 
+check_space:
 		rc = rdb_scm_left(tx->dt_db, &scm_remaining);
 		if (rc != 0) {
-			D_ERROR(DF_DB": failed to query free space\n",
-				DP_DB(tx->dt_db));
+			D_ERROR(DF_DB": failed to query free space\n", DP_DB(tx->dt_db));
 			goto out_lock;
 		}
+		nchecks++;
 
 		if (scm_remaining < RDB_NOAPPEND_FREE_SPACE) {
-			D_DEBUG(DB_TRACE, DF_DB": nearly out of space, do not "
-			       "append! scm_left="DF_U64"\n", DP_DB(tx->dt_db),
-			       scm_remaining);
-			D_GOTO(out_lock, rc = -DER_NOSPACE);
+			uint64_t		idx = 0;
+
+			if (nchecks > 1) {
+				D_DEBUG(DB_TRACE, DF_DB": nearly out of space, do not append! "
+				       "scm_left="DF_U64"\n", DP_DB(tx->dt_db), scm_remaining);
+				D_GOTO(out_lock, rc = -DER_NOSPACE);
+			}
+
+			/* Compact applied entries (not too often). May recover enough space. */
+			if ((daos_getutime() - tx->dt_db->d_nospc_ts) < RDB_NOSPC_ERR_INTVL_USEC) {
+				D_DEBUG(DB_TRACE, DF_DB": nearly out of space, but too "
+					"early to trigger compaction\n", DP_DB(tx->dt_db));
+				goto check_space;	/* will return via nchecks test above */
+			}
+			D_DEBUG(DB_TRACE, DF_DB": nearly out of space, compact log before retry! "
+				"scm_left="DF_U64"\n", DP_DB(tx->dt_db), scm_remaining);
+			rc = rdb_raft_trigger_compaction(tx->dt_db, true /* compact_all */, &idx);
+			if (rc != 0) {
+				D_WARN(DF_DB": failed to trigger compaction!\n", DP_DB(tx->dt_db));
+				D_GOTO(out_lock, rc = -DER_NOSPACE);
+			}
+			while ((idx != 0) && (tx->dt_db->d_lc_record.dlr_aggregated < idx)) {
+				sched_cond_wait(tx->dt_db->d_compacted_cv, tx->dt_db->d_raft_mutex);
+				D_DEBUG(DB_TRACE, DF_DB": compacted to "DF_U64", need "DF_U64"\n",
+					DP_DB(tx->dt_db), tx->dt_db->d_lc_record.dlr_aggregated,
+					idx);
+			}
+			tx->dt_db->d_nospc_ts = daos_getutime();
+
+			/* Do not append if we lost leadership while waiting for log compaction. */
+			rc = rdb_tx_leader_check(tx);
+			if (rc != 0)
+				goto out_lock;
+
+			goto check_space;
 		}
+
+		D_DEBUG(DB_TRACE, DF_DB": %s append tx entry to raft log, scm_left="DF_U64"\n",
+			DP_DB(tx->dt_db), (nchecks > 1) ? "(after log compaction)" : "",
+			scm_remaining);
 	}
 
 	rc = rdb_raft_append_apply(tx->dt_db, tx->dt_entry, tx->dt_entry_len,
@@ -441,7 +519,7 @@ rdb_tx_create_root(struct rdb_tx *tx, const struct rdb_kvs_attr *attr)
 		.dto_attr	= (struct rdb_kvs_attr *)attr
 	};
 
-	return rdb_tx_append(tx, &op);
+	return rdb_tx_append(tx, &op, false /* is_critical */);
 }
 
 /**
@@ -462,7 +540,7 @@ rdb_tx_destroy_root(struct rdb_tx *tx)
 		.dto_attr	= NULL
 	};
 
-	return rdb_tx_append(tx, &op);
+	return rdb_tx_append(tx, &op, true /* is_critical */);
 }
 
 /**
@@ -487,7 +565,7 @@ rdb_tx_create_kvs(struct rdb_tx *tx, const rdb_path_t *parent,
 		.dto_attr	= (struct rdb_kvs_attr *)attr
 	};
 
-	return rdb_tx_append(tx, &op);
+	return rdb_tx_append(tx, &op, false /* is_critical */);
 }
 
 /**
@@ -512,7 +590,7 @@ rdb_tx_destroy_kvs(struct rdb_tx *tx, const rdb_path_t *parent,
 		.dto_attr	= NULL
 	};
 
-	return rdb_tx_append(tx, &op);
+	return rdb_tx_append(tx, &op, true /* is_critical */);
 }
 
 /**
@@ -537,7 +615,33 @@ rdb_tx_update(struct rdb_tx *tx, const rdb_path_t *kvs, const d_iov_t *key,
 		.dto_attr	= NULL
 	};
 
-	return rdb_tx_append(tx, &op);
+	return rdb_tx_append(tx, &op, false /* is_critical */);
+}
+
+/**
+ * Update the value of \a key in \a kvs to \a value.
+ * Mark the TX as critical (to not fail the TX due to SCM free space checks).
+ *
+ * \param[in]	tx	transaction
+ * \param[in]	kvs	path to KVS
+ * \param[in]	key	key in KVS
+ * \param[in]	value	new value
+ *
+ * \retval -DER_NOTLEADER	not current leader
+ */
+int
+rdb_tx_update_critical(struct rdb_tx *tx, const rdb_path_t *kvs, const d_iov_t *key,
+		       const d_iov_t *value)
+{
+	struct rdb_tx_op op = {
+		.dto_opc	= RDB_TX_UPDATE,
+		.dto_kvs	= *kvs,
+		.dto_key	= *key,
+		.dto_value	= *value,
+		.dto_attr	= NULL
+	};
+
+	return rdb_tx_append(tx, &op, true /* is_critical */);
 }
 
 /**
@@ -560,7 +664,7 @@ rdb_tx_delete(struct rdb_tx *tx, const rdb_path_t *kvs, const d_iov_t *key)
 		.dto_attr	= NULL
 	};
 
-	return rdb_tx_append(tx, &op);
+	return rdb_tx_append(tx, &op, true /* is_critical */);
 }
 
 static inline int
@@ -573,16 +677,23 @@ rdb_oid_class(enum rdb_kvs_class class, rdb_oid_t *oid_class)
 	case RDB_KVS_INTEGER:
 		*oid_class = RDB_OID_CLASS_INTEGER;
 		return 0;
+	case RDB_KVS_LEXICAL:
+		*oid_class = RDB_OID_CLASS_LEXICAL;
+		return 0;
 	default:
 		return -DER_IO;
 	}
 }
 
+/* See rdb_tx_apply_create. */
+#define RDB_TX_APPLY_CREATE_NVOPS 2
+
+/* Must invoke no more than RDB_TX_APPLY_CREATE_NVOPS VOS TX operations. */
 static int
-rdb_tx_apply_create(struct rdb *db, uint64_t index, rdb_oid_t parent,
-		    d_iov_t *key, enum rdb_kvs_class class, bool crit)
+rdb_tx_apply_create(struct rdb *db, uint64_t index, rdb_oid_t parent, d_iov_t *key,
+		    enum rdb_kvs_class class, bool crit, rdb_vos_tx_t vtx)
 {
-	d_iov_t	value;
+	d_iov_t		value;
 	rdb_oid_t	oid_class;
 	rdb_oid_t	oid_number;
 	rdb_oid_t	oid;
@@ -591,8 +702,7 @@ rdb_tx_apply_create(struct rdb *db, uint64_t index, rdb_oid_t parent,
 	/* Convert the KVS class into the object ID class. */
 	rc = rdb_oid_class(class, &oid_class);
 	if (rc != 0) {
-		D_ERROR(DF_DB": unknown KVS class %x: %d\n", DP_DB(db), class,
-			rc);
+		DL_ERROR(rc, DF_DB ": unknown KVS class %x", DP_DB(db), class);
 		return rc;
 	}
 
@@ -602,8 +712,7 @@ rdb_tx_apply_create(struct rdb *db, uint64_t index, rdb_oid_t parent,
 	if (rc == 0) {
 		return -DER_EXIST;
 	} else if (rc != -DER_NONEXIST) {
-		D_ERROR(DF_DB": failed to check KVS existence: %d\n", DP_DB(db),
-			rc);
+		DL_ERROR(rc, DF_DB ": failed to check KVS existence", DP_DB(db));
 		return rc;
 	}
 
@@ -616,8 +725,7 @@ rdb_tx_apply_create(struct rdb *db, uint64_t index, rdb_oid_t parent,
 		D_DEBUG(DB_MD, DF_DB": initialized rdb_lc_oid_next to "DF_U64
 			"\n", DP_DB(db), oid_number);
 	} else if (rc != 0) {
-		D_ERROR(DF_DB": failed to look up next object number: %d\n",
-			DP_DB(db), rc);
+		DL_ERROR(rc, DF_DB ": failed to look up next object number", DP_DB(db));
 		return rc;
 	}
 	if ((oid_number & RDB_OID_CLASS_MASK) != 0) {
@@ -629,32 +737,34 @@ rdb_tx_apply_create(struct rdb *db, uint64_t index, rdb_oid_t parent,
 	oid_number += 1;
 
 	/* Update the next object number. */
-	rc = rdb_lc_update(db->d_lc, index, RDB_LC_ATTRS, crit, 1 /* n */,
-			   &rdb_lc_oid_next, &value);
+	rc = rdb_lc_update(db->d_lc, index, RDB_LC_ATTRS, crit, 1 /* n */, &rdb_lc_oid_next, &value,
+			   vtx);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to update next object number"DF_X64
-			": %d\n", DP_DB(db), oid_number, rc);
+		DL_ERROR(rc, DF_DB ": failed to update next object number " DF_X64, DP_DB(db),
+			 oid_number);
 		return rc;
 	}
 
 	/* Update the key in the parent object. */
 	d_iov_set(&value, &oid, sizeof(oid));
-	rc = rdb_lc_update(db->d_lc, index, parent, crit, 1 /* n */,
-			   key, &value);
+	rc = rdb_lc_update(db->d_lc, index, parent, crit, 1 /* n */, key, &value, vtx);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to update parent KVS: %d\n", DP_DB(db),
-			rc);
+		DL_ERROR(rc, DF_DB ": failed to update parent KVS", DP_DB(db));
 		return rc;
 	}
 
 	return 0;
 }
 
+/* See rdb_tx_apply_destroy. */
+#define RDB_TX_APPLY_DESTROY_NVOPS 2
+
+/* Must invoke no more than RDB_TX_APPLY_DESTROY_NVOPS VOS TX operations. */
 static int
-rdb_tx_apply_destroy(struct rdb *db, uint64_t index, rdb_oid_t parent,
-		     d_iov_t *key)
+rdb_tx_apply_destroy(struct rdb *db, uint64_t index, rdb_oid_t parent, d_iov_t *key,
+		     rdb_vos_tx_t vtx)
 {
-	d_iov_t	value;
+	d_iov_t		value;
 	rdb_oid_t	oid;
 	int		rc;
 
@@ -669,53 +779,75 @@ rdb_tx_apply_destroy(struct rdb *db, uint64_t index, rdb_oid_t parent,
 	}
 
 	/* Punch the key in the parent object. */
-	rc = rdb_lc_punch(db->d_lc, index, parent, 1 /* n */, key);
+	rc = rdb_lc_punch(db->d_lc, index, parent, 1 /* n */, key, vtx);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to update parent KVS "DF_X64": %d\n",
-			DP_DB(db), parent, rc);
+		DL_ERROR(rc, DF_DB ": failed to update parent KVS " DF_X64, DP_DB(db), parent);
 		return rc;
 	}
 
 	/* Punch the KVS object. */
-	rc = rdb_lc_punch(db->d_lc, index, oid, 0 /* n */, NULL /* akeys */);
+	rc = rdb_lc_punch(db->d_lc, index, oid, 0 /* n */, NULL /* akeys */, vtx);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to punch KVS "DF_X64": %d\n", DP_DB(db),
-			oid, rc);
+		DL_ERROR(rc, DF_DB ": failed to punch KVS " DF_X64, DP_DB(db), oid);
 		return rc;
 	}
 
 	return 0;
 }
 
+/* See rdb_tx_apply_update. */
+#define RDB_TX_APPLY_UPDATE_NVOPS 1
+
+/* Must invoke no more than RDB_TX_APPLY_UPDATE_NVOPS VOS TX operations. */
 static int
-rdb_tx_apply_update(struct rdb *db, uint64_t index, rdb_oid_t kvs,
-		    d_iov_t *key, d_iov_t *value, bool crit)
+rdb_tx_apply_update(struct rdb *db, uint64_t index, rdb_oid_t kvs, d_iov_t *key, d_iov_t *value,
+		    bool crit, rdb_vos_tx_t vtx)
 {
 	int rc;
 
-	rc = rdb_lc_update(db->d_lc, index, kvs, crit, 1 /* n */,
-			   key, value);
+	rc = rdb_lc_update(db->d_lc, index, kvs, crit, 1 /* n */, key, value, vtx);
 	if (rc != 0)
-		D_ERROR(DF_DB": failed to update KVS "DF_X64": %d\n", DP_DB(db),
-			kvs, rc);
+		DL_ERROR(rc, DF_DB ": failed to update KVS " DF_X64, DP_DB(db), kvs);
+	return rc;
+}
+
+/* See rdb_tx_apply_delete. */
+#define RDB_TX_APPLY_DELETE_NVOPS 1
+
+/* Must invoke no more than RDB_TX_APPLY_DELETE_NVOPS VOS TX operations. */
+static int
+rdb_tx_apply_delete(struct rdb *db, uint64_t index, rdb_oid_t kvs, d_iov_t *key, rdb_vos_tx_t vtx)
+{
+	int rc;
+
+	rc = rdb_lc_punch(db->d_lc, index, kvs, 1 /* n */, key, vtx);
+	if (rc != 0)
+		DL_ERROR(rc, DF_DB ": failed to update KVS " DF_X64, DP_DB(db), kvs);
 	return rc;
 }
 
 static int
-rdb_tx_apply_delete(struct rdb *db, uint64_t index, rdb_oid_t kvs,
-		    d_iov_t *key)
+rdb_tx_op_count_vops(struct rdb *db, struct rdb_tx_op *op)
 {
-	int rc;
-
-	rc = rdb_lc_punch(db->d_lc, index, kvs, 1 /* n */, key);
-	if (rc != 0)
-		D_ERROR(DF_DB": failed to update KVS "DF_X64": %d\n", DP_DB(db),
-			kvs, rc);
-	return rc;
+	switch (op->dto_opc) {
+	case RDB_TX_CREATE_ROOT:
+	case RDB_TX_CREATE:
+		return RDB_TX_APPLY_CREATE_NVOPS;
+	case RDB_TX_DESTROY_ROOT:
+	case RDB_TX_DESTROY:
+		return RDB_TX_APPLY_DESTROY_NVOPS;
+	case RDB_TX_UPDATE:
+		return RDB_TX_APPLY_UPDATE_NVOPS;
+	case RDB_TX_DELETE:
+		return RDB_TX_APPLY_DELETE_NVOPS;
+	default:
+		D_ERROR(DF_DB ": unknown update operation %u\n", DP_DB(db), op->dto_opc);
+		return -DER_IO;
+	}
 }
 
 static int
-rdb_tx_apply_op(struct rdb *db, uint64_t index, struct rdb_tx_op *op, bool crit)
+rdb_tx_apply_op(struct rdb *db, uint64_t index, struct rdb_tx_op *op, bool crit, rdb_vos_tx_t vtx)
 {
 	struct rdb_kvs *kvs = NULL;
 	rdb_path_t	victim_path;
@@ -752,28 +884,24 @@ rdb_tx_apply_op(struct rdb *db, uint64_t index, struct rdb_tx_op *op, bool crit)
 	switch (op->dto_opc) {
 	case RDB_TX_CREATE_ROOT:
 		rc = rdb_tx_apply_create(db, index, RDB_LC_ATTRS, &rdb_lc_root,
-					 op->dto_attr->dsa_class, crit);
+					 op->dto_attr->dsa_class, crit, vtx);
 		break;
 	case RDB_TX_CREATE:
-		rc = rdb_tx_apply_create(db, index, kvs->de_object,
-					 &op->dto_key, op->dto_attr->dsa_class,
-					 crit);
+		rc = rdb_tx_apply_create(db, index, kvs->de_object, &op->dto_key,
+					 op->dto_attr->dsa_class, crit, vtx);
 		break;
 	case RDB_TX_DESTROY_ROOT:
-		rc = rdb_tx_apply_destroy(db, index, RDB_LC_ATTRS,
-					  &rdb_lc_root);
+		rc = rdb_tx_apply_destroy(db, index, RDB_LC_ATTRS, &rdb_lc_root, vtx);
 		break;
 	case RDB_TX_DESTROY:
-		rc = rdb_tx_apply_destroy(db, index, kvs->de_object,
-					  &op->dto_key);
+		rc = rdb_tx_apply_destroy(db, index, kvs->de_object, &op->dto_key, vtx);
 		break;
 	case RDB_TX_UPDATE:
-		rc = rdb_tx_apply_update(db, index, kvs->de_object,
-					 &op->dto_key, &op->dto_value, crit);
+		rc = rdb_tx_apply_update(db, index, kvs->de_object, &op->dto_key, &op->dto_value,
+					 crit, vtx);
 		break;
 	case RDB_TX_DELETE:
-		rc = rdb_tx_apply_delete(db, index, kvs->de_object,
-					 &op->dto_key);
+		rc = rdb_tx_apply_delete(db, index, kvs->de_object, &op->dto_key, vtx);
 		break;
 	default:
 		D_ERROR(DF_DB": unknown update operation %u\n",
@@ -796,8 +924,7 @@ rdb_tx_apply_op(struct rdb *db, uint64_t index, struct rdb_tx_op *op, bool crit)
 		 * call returns, no other TXs will look up victim_path in the
 		 * rdb_kvs cache.
 		 */
-		rc_tmp = rdb_kvs_lookup(db, &victim_path, index,
-					false /* alloc */, &victim);
+		rc_tmp = rdb_kvs_lookup(db, &victim_path, index, false /* alloc */, &victim);
 		if (rc_tmp == 0) {
 			D_DEBUG(DB_TRACE, DF_DB": evicting kvs %p\n",
 				DP_DB(db), victim);
@@ -817,6 +944,48 @@ out:
 	return rc;
 }
 
+int
+rdb_tx_count_vops(struct rdb *db, const void *buf, size_t len)
+{
+	const void       *p = buf;
+	ssize_t           n;
+	struct rdb_tx_hdr hdr;
+	int               count = 0;
+
+	if (len == 0)
+		return 0;
+
+	/* Skip the header. */
+	n = rdb_tx_hdr_decode(p, len, &hdr);
+	if (n < 0) {
+		D_ERROR(DF_DB ": invalid header: buf=%p, len=" DF_U64 "\n", DP_DB(db), buf, len);
+		return n;
+	}
+	p += n;
+
+	/* Count those that will be invoked by each RDB TX operation. */
+	while (p < buf + len) {
+		struct rdb_tx_op op;
+		int              rc;
+
+		n = rdb_tx_op_decode(p, buf + len - p, &op);
+		if (n < 0) {
+			D_ERROR(DF_DB ": invalid entry format: buf=%p len=" DF_U64 " p=%p\n",
+				DP_DB(db), buf, len, p);
+			return n;
+		}
+
+		rc = rdb_tx_op_count_vops(db, &op);
+		if (rc < 0)
+			return rc;
+		count += rc;
+
+		p += n;
+	}
+
+	return count;
+}
+
 /* Is "error" deterministic? */
 static inline bool
 rdb_tx_deterministic_error(int error)
@@ -826,103 +995,95 @@ rdb_tx_deterministic_error(int error)
 }
 
 /*
- * Apply an entry and return the error only if a nondeterministic error
- * happens. This function tries to discard index if an error occurs.
- * Interpret header to know if ops in the TX are deemed "critical".
+ * Apply an entry and return 0, RDB_TX_APPLY_ERR_DETERMINISTIC, or a
+ * nondeterministic error. Interpret header to know if ops in the TX are deemed
+ * "critical", and output to critp when returning 0 or
+ * RDB_TX_APPLY_ERR_DETERMINISTIC.
  */
 int
-rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
-	     void *result, bool *critp)
+rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len, void *result, bool *critp,
+	     rdb_vos_tx_t vtx)
 {
 	const void	       *p = buf;
 	ssize_t			n;
-	bool			crit = true;
 	daos_size_t		scm_remaining = 0;
+	struct rdb_tx_hdr	hdr = {.critical = 1};
 	int			rc = 0;
+
+	if (len == 0)
+		goto out;
+	D_ASSERT(buf != NULL);
 
 	rc = rdb_scm_left(db, &scm_remaining);
 	if (rc != 0) {
 		D_ERROR(DF_DB": could not query free space: "DF_RC"\n",
 			DP_DB(db), DP_RC(rc));
-		goto err_checks;
+		return rc;
 	}
 
-	if (buf) {
-		struct rdb_tx_hdr	hdr;
+	n = rdb_tx_hdr_decode(p, len, &hdr);
+	if (n < 0) {
+		D_ERROR(DF_DB ": invalid header: buf=%p, len=" DF_U64 "\n", DP_DB(db), buf, len);
+		rc = n;
+		return rc;
+	}
+	p += n;
 
-		n = rdb_tx_hdr_decode(p, sizeof(struct rdb_tx_hdr), &hdr);
-		if (n < 0) {
-			D_ERROR(DF_DB": invalid header: buf=%p, len="DF_U64"\n",
-				DP_DB(db), buf, sizeof(struct rdb_tx_hdr));
-			rc = n;
-			goto err_checks;
-		}
-		p += n;
-		crit = hdr.critical;
-
-		/* scm_remaining < RDB_NOAPPEND_FREE_SPACE can happen on
-		 * on follower after leader compacts log first.
-		 * Warn only when critically low on space.
-		 */
-		if (!crit && (scm_remaining < RDB_CRITICAL_FREE_SPACE)) {
-			D_WARN(DF_DB": space is tight! index "DF_U64" buf=%p "
-			       "len="DF_U64" crit=%d scm_left="DF_U64"\n",
-			       DP_DB(db), index, buf, len, crit, scm_remaining);
-		}
+	/*
+	 * scm_remaining < RDB_NOAPPEND_FREE_SPACE can happen on
+	 * on follower after leader compacts log first.
+	 * Warn only when critically low on space.
+	 */
+	if (!hdr.critical && (scm_remaining < RDB_CRITICAL_FREE_SPACE)) {
+		D_WARN(DF_DB ": space is tight! index " DF_U64 " buf=%p "
+		       "len=" DF_U64 " crit=%d scm_left=" DF_U64 "\n",
+		       DP_DB(db), index, buf, len, hdr.critical, scm_remaining);
 	}
 
 	D_DEBUG(DB_TRACE, DF_DB": applying index "DF_U64": buf=%p len="DF_U64
 		" crit=%d, scm_left="DF_U64"\n", DP_DB(db), index, buf, len,
-		crit, scm_remaining);
+		hdr.critical, scm_remaining);
 
 	while (p < buf + len) {
-		struct rdb_tx_op	op;
+		struct rdb_tx_op op;
 
 		n = rdb_tx_op_decode(p, buf + len - p, &op);
 		if (n < 0) {
-			D_ERROR(DF_DB": invalid entry format: buf=%p len="DF_U64
-				" p=%p\n", DP_DB(db), buf, len, p);
+			D_ERROR(DF_DB ": invalid entry format: buf=%p len=" DF_U64 " p=%p\n",
+				DP_DB(db), buf, len, p);
 			rc = n;
 			break;
 		}
-		rc = rdb_tx_apply_op(db, index, &op, crit);
+		rc = rdb_tx_apply_op(db, index, &op, hdr.critical, vtx);
 		if (rc != 0) {
-			if (!rdb_tx_deterministic_error(rc))
-				D_ERROR(DF_DB": failed to apply entry "DF_U64
-					" op %u <%td, %zd>: %d\n", DP_DB(db),
-					index, op.dto_opc, p - buf, n, rc);
+			if (rdb_tx_deterministic_error(rc))
+				D_DEBUG(DB_TRACE,
+					DF_DB ": entry " DF_U64 " op %u <%td, %zd>: " DF_RC "\n",
+					DP_DB(db), index, op.dto_opc, p - buf, n, DP_RC(rc));
+			else
+				D_ERROR(DF_DB ": failed to apply entry " DF_U64
+					      " op %u <%td, %zd>: " DF_RC "\n",
+					DP_DB(db), index, op.dto_opc, p - buf, n, DP_RC(rc));
 			break;
 		}
-
 		p += n;
 	}
 
-err_checks:
 	/*
-	 * If an error occurs, empty the rdb_kvs cache (to evict any rdb_kvs
-	 * objects corresponding to KVSs created by this TX) and discard all
-	 * updates in index. Don't bother with undoing the exact set of changes
-	 * made by this TX, as nondeterministic errors must be rare and
-	 * deterministic errors can be easily avoided by rdb callers.
+	 * If an error occurs after we have potentially made some
+	 * modifications, empty the rdb_kvs cache (to evict any rdb_kvs objects
+	 * corresponding to KVSs created by this TX). Don't bother with undoing
+	 * the exact set of rdb_kvs changes made by this TX, as
+	 * nondeterministic errors must be rare and deterministic errors can be
+	 * easily avoided by rdb callers.
 	 */
-	if (rc != 0) {
-		int rc_tmp;
-
+	if (rc != 0)
 		rdb_kvs_cache_evict(db->d_kvss);
-		rc_tmp = rdb_lc_discard(db->d_lc, index, index);
-		if (rc_tmp != 0) {
-			D_ERROR(DF_DB": failed to discard entry "DF_U64": %d\n",
-				DP_DB(db), index, rc_tmp);
-			if (rdb_tx_deterministic_error(rc))
-				return rc_tmp;
-			else
-				return rc;
-		}
-	}
 
 	if (rc != 0 && !rdb_tx_deterministic_error(rc))
 		return rc;
 
+out:
 	/*
 	 * Report the deterministic error to the result buffer, if there is
 	 * one, and consider this entry applied.
@@ -930,26 +1091,40 @@ err_checks:
 	if (result != NULL)
 		*(int *)result = rc;
 
-	*critp = crit;
-	return 0;
+	*critp = hdr.critical;
+	return rc == 0 ? 0 : RDB_TX_APPLY_ERR_DETERMINISTIC;
 }
 
 /* Called at the beginning of every query. */
 static int
 rdb_tx_query_pre(struct rdb_tx *tx, const rdb_path_t *path,
-		 struct rdb_kvs **kvs)
+		 struct rdb_kvs **kvs, uint64_t *index)
 {
-	int rc;
+	uint64_t	i;
+	int		rc;
 
 	ABT_mutex_lock(tx->dt_db->d_raft_mutex);
-	rc = rdb_tx_leader_check(tx);
+	if (tx->dt_flags & RDB_TX_LOCAL) {
+		i = tx->dt_db->d_lc_record.dlr_tail - 1;
+	} else {
+		i = tx->dt_db->d_applied;
+		rc = rdb_tx_leader_check(tx);
+		if (rc != 0) {
+			ABT_mutex_unlock(tx->dt_db->d_raft_mutex);
+			return rc;
+		}
+	}
 	ABT_mutex_unlock(tx->dt_db->d_raft_mutex);
-	if (rc != 0)
-		return rc;
+
 	if (path == NULL)
 		return 0;
-	return rdb_kvs_lookup(tx->dt_db, path, tx->dt_db->d_applied,
-			      true /* alloc */, kvs);
+
+	rc = rdb_kvs_lookup(tx->dt_db, path, i, true /* alloc */, kvs);
+	if (rc != 0)
+		return rc;
+
+	*index = i;
+	return 0;
 }
 
 /* Called at the end of every query. */
@@ -979,13 +1154,13 @@ rdb_tx_lookup(struct rdb_tx *tx, const rdb_path_t *kvs, const d_iov_t *key,
 {
 	struct rdb     *db = tx->dt_db;
 	struct rdb_kvs *s;
+	uint64_t	i;
 	int		rc;
 
-	rc = rdb_tx_query_pre(tx, kvs, &s);
+	rc = rdb_tx_query_pre(tx, kvs, &s, &i);
 	if (rc != 0)
 		return rc;
-	rc = rdb_lc_lookup(db->d_lc, db->d_applied, s->de_object,
-			   (d_iov_t *)key, value);
+	rc = rdb_lc_lookup(db->d_lc, i, s->de_object, (d_iov_t *)key, value);
 	rdb_tx_query_post(tx, s);
 	return rc;
 }
@@ -1012,13 +1187,41 @@ rdb_tx_fetch(struct rdb_tx *tx, const rdb_path_t *kvs, enum rdb_probe_opc opc,
 {
 	struct rdb     *db = tx->dt_db;
 	struct rdb_kvs *s;
+	uint64_t	i;
 	int		rc;
 
-	rc = rdb_tx_query_pre(tx, kvs, &s);
+	rc = rdb_tx_query_pre(tx, kvs, &s, &i);
 	if (rc != 0)
 		return rc;
-	rc = rdb_lc_iter_fetch(db->d_lc, db->d_applied, s->de_object, opc,
-			       (d_iov_t *)key_in, key_out, value);
+	rc = rdb_lc_iter_fetch(db->d_lc, i, s->de_object, opc, (d_iov_t *)key_in, key_out, value);
+	rdb_tx_query_post(tx, s);
+	return rc;
+}
+
+/* Find the largest integer key in \a kvs
+ * \param[in]		tx	transaction
+ * \param[in]		kvs	path to a KVS with an integer key
+ * \param[out]		key_out	output maximum key
+ *
+ * \retval -DER_NOTLEADER	not current leader
+ * \retval -DER_NONEXIST	no keys (KVS is empty)
+ */
+int
+rdb_tx_query_key_max(struct rdb_tx *tx, const rdb_path_t *kvs, d_iov_t *key_out)
+{
+	struct rdb     *db = tx->dt_db;
+	struct rdb_kvs *s;
+	uint64_t	i;
+	int		rc;
+
+	rc = rdb_tx_query_pre(tx, kvs, &s, &i);
+	if (rc != 0)
+		return rc;
+	rc = rdb_lc_query_key_max(db->d_lc, i, s->de_object, key_out);
+	if (rc != 0) {
+		D_ERROR(DF_DB": rdb_lc_query_key_max index="DF_U64", d_applied="DF_U64", rdb_oid="
+			DF_U64"\n", DP_DB(db), i, db->d_applied, s->de_object);
+	}
 	rdb_tx_query_post(tx, s);
 	return rc;
 }
@@ -1043,12 +1246,13 @@ rdb_tx_iterate(struct rdb_tx *tx, const rdb_path_t *kvs, bool backward, rdb_iter
 {
 	struct rdb     *db = tx->dt_db;
 	struct rdb_kvs *s;
+	uint64_t	i;
 	int		rc;
 
-	rc = rdb_tx_query_pre(tx, kvs, &s);
+	rc = rdb_tx_query_pre(tx, kvs, &s, &i);
 	if (rc != 0)
 		return rc;
-	rc = rdb_lc_iterate(db->d_lc, db->d_applied, s->de_object, backward, cb, arg);
+	rc = rdb_lc_iterate(db->d_lc, i, s->de_object, backward, cb, arg);
 	rdb_tx_query_post(tx, s);
 	return rc;
 }
@@ -1069,5 +1273,5 @@ rdb_tx_iterate(struct rdb_tx *tx, const rdb_path_t *kvs, bool backward, rdb_iter
 int
 rdb_tx_revalidate(struct rdb_tx *tx)
 {
-	return rdb_tx_query_pre(tx, NULL /* path */, NULL /* kvs */);
+	return rdb_tx_query_pre(tx, NULL /* path */, NULL /* kvs */, NULL /* index */);
 }

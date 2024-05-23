@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -41,7 +41,6 @@ uint_ref_lru_alloc(void *key, unsigned int ksize,
 
 	D_ALLOC_PTR(ref);
 	if (ref == NULL) {
-		D_ERROR("Error in allocating lru_refs");
 		return -DER_NOMEM;
 	}
 	ref->ur_key = *(uint64_t *)key;

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -99,13 +99,29 @@ static void init_entry(void *payload, uint32_t idx, void *arg)
 	entry->te_info = info;
 }
 
+static void vos_lru_ts_alloc(void *arg, daos_size_t size)
+{
+	struct vos_ts_info	*info = arg;
+
+	vos_lru_alloc_track(info->ti_tls, size);
+}
+
+static void vos_lru_ts_free(void *arg, daos_size_t size)
+{
+	struct vos_ts_info	*info = arg;
+
+	vos_lru_free_track(info->ti_tls, size);
+}
+
 static const struct lru_callbacks lru_cbs = {
 	.lru_on_evict = evict_entry,
 	.lru_on_init = init_entry,
+	.lru_on_alloc = vos_lru_ts_alloc,
+	.lru_on_free = vos_lru_ts_free,
 };
 
 int
-vos_ts_table_alloc(struct vos_ts_table **ts_tablep)
+vos_ts_table_alloc(struct vos_ts_table **ts_tablep, struct vos_tls *tls)
 {
 	struct vos_ts_entry	*entry;
 	struct vos_ts_table	*ts_table;
@@ -129,6 +145,11 @@ vos_ts_table_alloc(struct vos_ts_table **ts_tablep)
 		goto free_table;
 	}
 
+	if (tls != NULL)
+		d_tm_inc_gauge(tls->vtl_lru_alloc_size,
+			       sizeof(*ts_table->tt_misses) *
+			       (OBJ_MISS_SIZE + DKEY_MISS_SIZE + AKEY_MISS_SIZE));
+
 	ts_table->tt_ts_rl = vos_start_epoch;
 	ts_table->tt_ts_rh = vos_start_epoch;
 	uuid_clear(ts_table->tt_tx_rl.dti_uuid);
@@ -140,6 +161,7 @@ vos_ts_table_alloc(struct vos_ts_table **ts_tablep)
 		info->ti_type = i;
 		info->ti_count = type_counts[i];
 		info->ti_table = ts_table;
+		info->ti_tls = tls;
 		switch (i) {
 		case VOS_TS_TYPE_OBJ:
 			miss_size = OBJ_MISS_SIZE;
@@ -192,6 +214,10 @@ vos_ts_table_alloc(struct vos_ts_table **ts_tablep)
 cleanup:
 	for (i = 0; i < VOS_TS_TYPE_COUNT; i++)
 		lrua_array_free(ts_table->tt_type_info[i].ti_array);
+	if (tls != NULL)
+		d_tm_dec_gauge(tls->vtl_lru_alloc_size,
+			       sizeof(*ts_table->tt_misses) *
+			       (OBJ_MISS_SIZE + DKEY_MISS_SIZE + AKEY_MISS_SIZE));
 	D_FREE(ts_table->tt_misses);
 free_table:
 	D_FREE(ts_table);
@@ -200,7 +226,7 @@ free_table:
 }
 
 void
-vos_ts_table_free(struct vos_ts_table **ts_tablep)
+vos_ts_table_free(struct vos_ts_table **ts_tablep, struct vos_tls *tls)
 {
 	struct vos_ts_table	*ts_table = *ts_tablep;
 	int			 i;
@@ -208,6 +234,10 @@ vos_ts_table_free(struct vos_ts_table **ts_tablep)
 	for (i = 0; i < VOS_TS_TYPE_COUNT; i++)
 		lrua_array_free(ts_table->tt_type_info[i].ti_array);
 
+	if (tls != NULL)
+		d_tm_dec_gauge(tls->vtl_lru_alloc_size,
+			       sizeof(*ts_table->tt_misses) *
+			       (OBJ_MISS_SIZE + DKEY_MISS_SIZE + AKEY_MISS_SIZE));
 	D_FREE(ts_table->tt_misses);
 	D_FREE(ts_table);
 
@@ -262,7 +292,7 @@ vos_ts_evict_lru(struct vos_ts_table *ts_table, struct vos_ts_entry **entryp,
 int
 vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
 		    uint16_t cflags, uint32_t akey_nr,
-		    const struct dtx_handle *dth)
+		    const struct dtx_handle *dth, bool standalone)
 {
 	const struct dtx_id	*tx_id = NULL;
 	uint32_t		 size;
@@ -271,10 +301,10 @@ vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
 					     VOS_COND_UPDATE_MASK |
 					     VOS_OF_COND_PER_AKEY;
 
-	vos_kh_clear();
+	vos_kh_clear(standalone);
 
 	*ts_set = NULL;
-	if (!dtx_is_valid_handle(dth)) {
+	if (!dtx_is_real_handle(dth)) {
 		if ((flags & cond_mask) == 0)
 			return 0;
 	} else {
@@ -313,7 +343,7 @@ vos_ts_set_upgrade(struct vos_ts_set *ts_set)
 	if (!vos_ts_in_tx(ts_set))
 		return;
 
-	ts_table = vos_ts_table_get();
+	ts_table = vos_ts_table_get(false);
 
 	for (i = 0; i < ts_set->ts_init_count; i++) {
 		set_entry = &ts_set->ts_entries[i];
@@ -358,6 +388,7 @@ vos_ts_check_read_conflict(struct vos_ts_set *ts_set, int idx,
 	struct vos_ts_set_entry	*se;
 	struct vos_ts_entry	*entry;
 	int			 write_level;
+	bool			 conflict;
 
 	D_ASSERT(ts_set != NULL);
 
@@ -372,15 +403,31 @@ vos_ts_check_read_conflict(struct vos_ts_set *ts_set, int idx,
 	if (se->se_etype > write_level)
 		return false; /** Check is redundant */
 
+	/** NB: If there is a negative entry, we should also check it.  Otherwise, we can miss
+	 *  timestamp updates associated with conditional operations where the tree exists but
+	 *  we don't load it
+	 */
 	if (se->se_etype < write_level) {
 		/* check the low time */
-		return vos_ts_check_conflict(entry->te_ts.tp_ts_rl,
-					     &entry->te_ts.tp_tx_rl,
+		conflict = vos_ts_check_conflict(entry->te_ts.tp_ts_rl, &entry->te_ts.tp_tx_rl,
+						 write_time, &ts_set->ts_tx_id);
+
+		if (conflict || entry->te_negative == NULL)
+			return conflict;
+
+		return vos_ts_check_conflict(entry->te_negative->te_ts.tp_ts_rl,
+					     &entry->te_negative->te_ts.tp_tx_rl,
 					     write_time, &ts_set->ts_tx_id);
 	}
 
 	/* check the high time */
-	return vos_ts_check_conflict(entry->te_ts.tp_ts_rh,
-				     &entry->te_ts.tp_tx_rh,
-				     write_time, &ts_set->ts_tx_id);
+	conflict = vos_ts_check_conflict(entry->te_ts.tp_ts_rh, &entry->te_ts.tp_tx_rh, write_time,
+					 &ts_set->ts_tx_id);
+
+	if (conflict || entry->te_negative == NULL)
+		return conflict;
+
+	return vos_ts_check_conflict(entry->te_negative->te_ts.tp_ts_rh,
+				     &entry->te_negative->te_ts.tp_tx_rh, write_time,
+				     &ts_set->ts_tx_id);
 }

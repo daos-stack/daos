@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,7 +17,8 @@
 
 enum {
 	GC_CREDS_MIN	= 1,	/**< minimum credits for vos_gc_run/pool() */
-	GC_CREDS_PRIV	= 32,	/**< credits for internal usage */
+	GC_CREDS_SLACK	= 8,	/**< credits for slack mode */
+	GC_CREDS_TIGHT	= 32,	/**< credits for tight mode */
 	GC_CREDS_MAX	= 4096,	/**< maximum credits for vos_gc_run/pool() */
 };
 
@@ -28,7 +29,7 @@ enum {
  * - each item consumes 16 bytes, 250 * 16 = 4000 bytes
  * - together is 4080 bytes, reserve 16 bytes for future use
  */
-static int gc_bag_size	= 250;
+static int gc_bag_size	= 250 + 3 * 256;
 
 /** VOS garbage collector */
 struct vos_gc {
@@ -63,13 +64,9 @@ struct vos_gc {
 	 * It is unused for now, but we might need it if we want to support
 	 * GC_BIO, see comments in vos_gc_type.
 	 */
-	int			(*gc_free)(struct vos_gc *gc,
-					   struct vos_pool *pool,
-					   umem_off_t addr);
+	int (*gc_free)(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
+		       struct vos_gc_item *item);
 };
-
-static int gc_reclaim_pool(struct vos_pool *pool, int *credits,
-			   bool *empty_ret);
 
 /**
  * drain items stored in btree, this function returns when the btree is empty,
@@ -102,7 +99,7 @@ gc_drain_btr(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 	D_DEBUG(DB_TRACE, "empty=%d, remainded creds=%d\n", *empty, *credits);
 	return 0;
  failed:
-	D_ERROR("Failed to drain %s btree: %s\n", gc->gc_name, d_errstr(rc));
+	D_ERROR("Failed to drain %s btree: " DF_RC "\n", gc->gc_name, DP_RC(rc));
 	return rc;
 }
 
@@ -129,7 +126,7 @@ gc_drain_evt(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 
 	D_DEBUG(DB_TRACE, "drain %s evtree, creds=%d\n", gc->gc_name, *credits);
 	rc = evt_drain(toh, credits, empty);
-	evt_close(toh);
+	D_ASSERT(evt_close(toh) == 0);
 	if (rc)
 		goto failed;
 
@@ -138,7 +135,7 @@ gc_drain_evt(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 	D_DEBUG(DB_TRACE, "empty=%d, remainded creds=%d\n", *empty, *credits);
 	return 0;
  failed:
-	D_ERROR("Failed to drain evtree %s: %s\n", gc->gc_name, d_errstr(rc));
+	D_ERROR("Failed to drain evtree %s: " DF_RC "\n", gc->gc_name, DP_RC(rc));
 	return rc;
 }
 
@@ -151,8 +148,16 @@ gc_drain_key(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 	     struct vos_gc_item *item, int *credits, bool *empty)
 {
 	struct vos_krec_df *key = umem_off2ptr(&pool->vp_umm, item->it_addr);
-	int		    creds = *credits;
+	int                 creds = *credits;
 	int		    rc;
+
+	if (key->kr_bmap & KREC_BF_NO_AKEY && gc->gc_type == GC_DKEY) {
+		/** Special case, this will defer to the free callback
+		 *  and the tree will be inserted as akey.
+		 */
+		*empty = true;
+		return 0;
+	}
 
 	if (key->kr_bmap & KREC_BF_BTR) {
 		rc = gc_drain_btr(gc, pool, coh, &key->kr_btr, credits, empty);
@@ -180,6 +185,19 @@ gc_drain_key(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 		pool->vp_gc_stat.gs_singvs += creds;
 	else
 		pool->vp_gc_stat.gs_recxs += creds;
+	return 0;
+}
+
+static int
+gc_free_dkey(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh, struct vos_gc_item *item)
+{
+	struct vos_krec_df *krec = umem_off2ptr(&pool->vp_umm, item->it_addr);
+
+	D_ASSERT(krec->kr_bmap & KREC_BF_DKEY);
+	if (krec->kr_bmap & KREC_BF_NO_AKEY)
+		gc_add_item(pool, coh, GC_AKEY, item->it_addr, item->it_args);
+	else
+		umem_free(&pool->vp_umm, item->it_addr);
 	return 0;
 }
 
@@ -285,52 +303,51 @@ gc_drain_cont(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 }
 
 static int
-gc_free_cont(struct vos_gc *gc, struct vos_pool *pool, umem_off_t addr)
+gc_free_cont(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh, struct vos_gc_item *item)
 {
 	int	rc;
 
-	rc = vos_dtx_table_destroy(&pool->vp_umm,
-				   umem_off2ptr(&pool->vp_umm, addr));
+	rc = vos_dtx_table_destroy(&pool->vp_umm, umem_off2ptr(&pool->vp_umm, item->it_addr));
 	if (rc == 0)
-		rc = umem_free(&pool->vp_umm, addr);
+		rc = umem_free(&pool->vp_umm, item->it_addr);
 
 	return rc;
 }
 
-static struct vos_gc	gc_table[] = {
-	{
-		.gc_name		= "akey",
-		.gc_type		= GC_AKEY,
-		.gc_drain_creds		= 0,	/* consume user credits */
-		.gc_drain		= gc_drain_key,
-		.gc_free		= NULL,
-	},
+static struct vos_gc gc_table[] = {
+    {
+	.gc_name        = "akey",
+	.gc_type        = GC_AKEY,
+	.gc_drain_creds = 0, /* consume user credits */
+	.gc_drain       = gc_drain_key,
+	.gc_free        = NULL,
+    },
 
-	{
-		.gc_name		= "dkey",
-		.gc_type		= GC_DKEY,
-		.gc_drain_creds		= 32,
-		.gc_drain		= gc_drain_key,
-		.gc_free		= NULL,
-	},
-	{
-		.gc_name		= "object",
-		.gc_type		= GC_OBJ,
-		.gc_drain_creds		= 8,
-		.gc_drain		= gc_drain_obj,
-		.gc_free		= NULL,
-	},
-	{
-		.gc_name		= "container",
-		.gc_type		= GC_CONT,
-		.gc_drain_creds		= 1,
-		.gc_drain		= gc_drain_cont,
-		.gc_free		= gc_free_cont,
-	},
-	{
-		.gc_name		= "unknown",
-		.gc_type		= GC_MAX,
-	},
+    {
+	.gc_name        = "dkey",
+	.gc_type        = GC_DKEY,
+	.gc_drain_creds = 32,
+	.gc_drain       = gc_drain_key,
+	.gc_free        = gc_free_dkey,
+    },
+    {
+	.gc_name        = "object",
+	.gc_type        = GC_OBJ,
+	.gc_drain_creds = 8,
+	.gc_drain       = gc_drain_obj,
+	.gc_free        = NULL,
+    },
+    {
+	.gc_name        = "container",
+	.gc_type        = GC_CONT,
+	.gc_drain_creds = 1,
+	.gc_drain       = gc_drain_cont,
+	.gc_free        = gc_free_cont,
+    },
+    {
+	.gc_name = "unknown",
+	.gc_type = GC_MAX,
+    },
 };
 
 static const char *
@@ -457,13 +474,12 @@ gc_bin_add_item(struct umem_instance *umm, struct vos_gc_bin_df *bin,
 		return -DER_NOSPACE;
 
 	D_ASSERT(bag->bag_item_nr < bin->bin_bag_size);
-	/* NB: no umem_tx_add, this is totally safe because we never
-	 * overwrite valid items
+	/* NB: umem_tx_add with UMEM_XADD_NO_SNAPSHOT, this is totally
+	 * safe because we never overwrite valid items
 	 */
 	it = &bag->bag_items[bag->bag_item_last];
-	if (DAOS_ON_VALGRIND)
-		umem_tx_xadd_ptr(umm, it, sizeof(*it), POBJ_XADD_NO_SNAPSHOT);
-	pmemobj_memcpy_persist(umm->umm_pool, it, item, sizeof(*it));
+	umem_tx_xadd_ptr(umm, it, sizeof(*it), UMEM_XADD_NO_SNAPSHOT);
+	memcpy(it, item, sizeof(*it));
 
 	last = bag->bag_item_last + 1;
 	if (last == bin->bin_bag_size)
@@ -544,13 +560,13 @@ gc_free_item(struct vos_gc *gc, struct vos_pool *pool,
 	struct vos_gc_bin_df *bin = gc_type2bin(pool, cont, gc->gc_type);
 	struct vos_gc_bag_df *bag;
 	int		      first;
-	umem_off_t	      addr;
+	struct vos_gc_item    it;
 	int		      rc = 0;
 
 	bag = umem_off2ptr(&pool->vp_umm, bin->bin_bag_first);
 	D_ASSERT(bag && bag->bag_item_nr > 0);
 	D_ASSERT(item == &bag->bag_items[bag->bag_item_first]);
-	addr = item->it_addr;
+	it = *item;
 
 	first = bag->bag_item_first + 1;
 	if (first == bin->bin_bag_size)
@@ -561,6 +577,8 @@ gc_free_item(struct vos_gc *gc, struct vos_pool *pool,
 		D_ASSERT(bag->bag_item_nr == 1);
 		rc = gc_bin_free_bag(&pool->vp_umm, cont, bin,
 				     bin->bin_bag_first);
+		if (rc)
+			goto failed;
 	} else {
 		rc = umem_tx_add_ptr(&pool->vp_umm, bag, sizeof(*bag));
 		if (rc)
@@ -573,9 +591,9 @@ gc_free_item(struct vos_gc *gc, struct vos_pool *pool,
 	D_DEBUG(DB_TRACE, "GC released a %s\n", gc->gc_name);
 	/* this is the real container|object|dkey|akey free */
 	if (gc->gc_free)
-		rc = gc->gc_free(gc, pool, addr);
+		rc = gc->gc_free(gc, pool, vos_cont2hdl(cont), &it);
 	else
-		rc = umem_free(&pool->vp_umm, addr);
+		rc = umem_free(&pool->vp_umm, it.it_addr);
 
 	if (rc != 0)
 		goto failed;
@@ -611,9 +629,10 @@ int
 gc_add_item(struct vos_pool *pool, daos_handle_t coh,
 	    enum vos_gc_type type, umem_off_t item_off, uint64_t args)
 {
-	struct vos_container *cont = vos_hdl2cont(coh);
-	struct vos_gc_bin_df *bin = gc_type2bin(pool, cont, type);
-	struct vos_gc_item    item;
+	struct vos_container	*cont = vos_hdl2cont(coh);
+	struct vos_gc_bin_df	*bin = gc_type2bin(pool, cont, type);
+	struct vos_gc_item	 item;
+	int			 rc;
 
 	D_DEBUG(DB_TRACE, "Add %s addr="DF_X64"\n",
 		gc_type2name(type), item_off);
@@ -623,53 +642,21 @@ gc_add_item(struct vos_pool *pool, daos_handle_t coh,
 
 	item.it_addr = item_off;
 	item.it_args = args;
-	while (1) {
-		int	  creds = GC_CREDS_PRIV;
-		int	  rc;
-		bool	  empty;
-
-		rc = gc_bin_add_item(&pool->vp_umm, bin, &item);
-		if (rc == 0) {
-			if (!gc_have_pool(pool))
-				gc_add_pool(pool);
-			if (cont != NULL && d_list_empty(&cont->vc_gc_link)) {
-				/** New item to remove from the container */
-				d_list_add_tail(&cont->vc_gc_link,
-						&pool->vp_gc_cont);
-			}
-			return 0;
-		}
-
-		/* this is unlikely, but if we cannot even queue more items
-		 * for GC, it means we should reclaim space for this pool
-		 * immediately.
-		 */
-		if (rc != -DER_NOSPACE) {
-			D_CRIT("Failed to add item, pool="DF_UUID", rc=%s\n",
-			       DP_UUID(pool->vp_id), d_errstr(rc));
-			return rc;
-		}
-
-		if (d_list_empty(&pool->vp_gc_link) &&
-		    d_list_empty(&pool->vp_gc_cont)) {
-			D_CRIT("Pool="DF_UUID" is full but nothing for GC\n",
-			       DP_UUID(pool->vp_id));
-			return rc;
-		}
-
-		rc = gc_reclaim_pool(pool, &creds, &empty);
-		if (rc) {
-			D_CRIT("Cannot run RC for pool="DF_UUID", rc=%s\n",
-			       DP_UUID(pool->vp_id), d_errstr(rc));
-			return rc;
-		}
-
-		if (creds == GC_CREDS_PRIV) { /* recliamed nothing? */
-			D_CRIT("Failed to recliam space for pool="DF_UUID"\n",
-			       DP_UUID(pool->vp_id));
-			return -DER_NOSPACE;
-		}
+	rc = gc_bin_add_item(&pool->vp_umm, bin, &item);
+	if (rc) {
+		D_ERROR("Failed to add item, pool=" DF_UUID ", rc=" DF_RC "\n",
+			DP_UUID(pool->vp_id), DP_RC(rc));
+		return rc;
 	}
+
+	if (!gc_have_pool(pool))
+		gc_add_pool(pool);
+
+	/** New item to remove from the container */
+	if (cont != NULL && d_list_empty(&cont->vc_gc_link))
+		d_list_add_tail(&cont->vc_gc_link, &pool->vp_gc_cont);
+
+	return rc;
 }
 
 struct vos_container *
@@ -688,6 +675,33 @@ gc_get_container(struct vos_pool *pool)
 	return cont;
 }
 
+static void
+gc_update_stats(struct vos_pool *pool)
+{
+	struct vos_gc_stat    *stat  = &pool->vp_gc_stat;
+	struct vos_gc_stat    *gstat = &pool->vp_gc_stat_global;
+	struct vos_gc_metrics *vgm;
+
+	if (pool->vp_metrics != NULL) {
+		vgm = &pool->vp_metrics->vp_gc_metrics;
+		d_tm_inc_counter(vgm->vgm_cont_del, stat->gs_conts);
+		d_tm_inc_counter(vgm->vgm_obj_del, stat->gs_objs);
+		d_tm_inc_counter(vgm->vgm_dkey_del, stat->gs_dkeys);
+		d_tm_inc_counter(vgm->vgm_akey_del, stat->gs_akeys);
+		d_tm_inc_counter(vgm->vgm_ev_del, stat->gs_recxs);
+		d_tm_inc_counter(vgm->vgm_sv_del, stat->gs_singvs);
+	}
+
+	gstat->gs_conts += stat->gs_conts;
+	gstat->gs_objs += stat->gs_objs;
+	gstat->gs_dkeys += stat->gs_dkeys;
+	gstat->gs_akeys += stat->gs_akeys;
+	gstat->gs_recxs += stat->gs_recxs;
+	gstat->gs_singvs += stat->gs_singvs;
+
+	memset(stat, 0, sizeof(*stat));
+}
+
 /**
  * Run garbage collector for a pool, it returns if all @credits are consumed
  * or there is nothing to be reclaimed.
@@ -702,14 +716,21 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 
 	if (pool->vp_dying) {
 		*empty_ret = true;
-		return 0;
+		D_GOTO(done, rc = 0);
 	}
+
+	/* take an extra ref to avoid concurrent container destroy/free */
+	if (cont != NULL)
+		vos_cont_addref(cont);
 
 	rc = umem_tx_begin(&pool->vp_umm, NULL);
 	if (rc) {
-		D_ERROR("Failed to start transacton for "DF_UUID": %s\n",
-			DP_UUID(pool->vp_id), d_errstr(rc));
-		return rc;
+		D_ERROR("Failed to start transacton for " DF_UUID ": " DF_RC "\n",
+			DP_UUID(pool->vp_id), DP_RC(rc));
+		if (cont != NULL)
+			vos_cont_decref(cont);
+		*empty_ret = false;
+		goto done;
 	}
 
 	*empty_ret = false;
@@ -727,14 +748,17 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 				if (gc->gc_type == GC_OBJ) { /* top level GC */
 					D_DEBUG(DB_TRACE, "container %p objects"
 						" reclaimed\n", cont);
+					vos_cont_decref(cont);
 					cont = gc_get_container(pool);
+					/* take a ref on new cont */
+					if (cont != NULL)
+						vos_cont_addref(cont);
 					gc = &gc_table[0]; /* reset to akey */
 					continue;
 				}
 			} else if (gc->gc_type == GC_CONT) { /* top level GC */
 				D_DEBUG(DB_TRACE, "Nothing to reclaim\n");
 				*empty_ret = true;
-				cont = NULL;
 				break;
 			}
 			D_DEBUG(DB_TRACE, "GC=%s is empty\n", gc->gc_name);
@@ -748,13 +772,17 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 		rc = gc_drain_item(gc, pool, vos_cont2hdl(cont), item, &creds,
 				   &empty);
 		if (rc < 0) {
-			D_ERROR("GC=%s error=%s\n", gc->gc_name, d_errstr(rc));
+			D_ERROR("GC=%s error: " DF_RC "\n", gc->gc_name, DP_RC(rc));
 			break;
 		}
 
 		if (empty && creds) {
 			/* item can be released and removed from bin */
-			gc_free_item(gc, pool, cont, item);
+			rc = gc_free_item(gc, pool, cont, item);
+			if (rc) {
+				D_ERROR("GC=%s free item error: "DF_RC"\n", gc->gc_name, DP_RC(rc));
+				break;
+			}
 			creds--;
 		}
 
@@ -795,6 +823,13 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 		d_list_add_tail(&cont->vc_gc_link, &pool->vp_gc_cont);
 	}
 
+	/* hopefully if last ref cont_free() will dequeue it */
+	if (cont != NULL)
+		vos_cont_decref(cont);
+
+done:
+	gc_update_stats(pool);
+
 	return rc;
 }
 
@@ -807,7 +842,10 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 int
 gc_init_pool(struct umem_instance *umm, struct vos_pool_df *pd)
 {
-	int	i;
+	int		i;
+	umem_off_t	bag_id;
+	int		size;
+	int		rc;
 
 	D_DEBUG(DB_IO, "Init garbage bins for pool="DF_UUID"\n",
 		DP_UUID(pd->pd_id));
@@ -815,10 +853,19 @@ gc_init_pool(struct umem_instance *umm, struct vos_pool_df *pd)
 	for (i = 0; i < GC_MAX; i++) {
 		struct vos_gc_bin_df *bin = &pd->pd_gc_bins[i];
 
-		bin->bin_bag_first = UMOFF_NULL;
-		bin->bin_bag_last  = UMOFF_NULL;
+		size = offsetof(struct vos_gc_bag_df, bag_items[gc_bag_size]);
+		bag_id = umem_zalloc(umm, size);
+		if (UMOFF_IS_NULL(bag_id))
+			return -DER_NOMEM;
+
+		rc = umem_tx_add_ptr(umm, bin, sizeof(*bin));
+		if (rc != 0)
+			return rc;
+
 		bin->bin_bag_size  = gc_bag_size;
-		bin->bin_bag_nr	   = 0;
+		bin->bin_bag_first = bag_id;
+		bin->bin_bag_last = bag_id;
+		bin->bin_bag_nr = 1;
 	}
 	return 0;
 }
@@ -877,7 +924,7 @@ gc_check_cont(struct vos_container *cont)
 int
 gc_add_pool(struct vos_pool *pool)
 {
-	struct vos_tls	   *tls = vos_tls_get();
+	struct vos_tls	   *tls = vos_tls_get(pool->vp_sysdb);
 
 	D_DEBUG(DB_TRACE, "Register pool="DF_UUID" for GC\n",
 		DP_UUID(pool->vp_id));
@@ -918,7 +965,7 @@ gc_have_pool(struct vos_pool *pool)
 static void
 gc_log_pool(struct vos_pool *pool)
 {
-	struct vos_gc_stat *stat = &pool->vp_gc_stat;
+	struct vos_gc_stat *stat = &pool->vp_gc_stat_global;
 
 	D_DEBUG(DB_TRACE,
 		"Pool="DF_UUID", GC reclaimed:\n"
@@ -943,7 +990,7 @@ gc_log_pool(struct vos_pool *pool)
 static int
 vos_gc_run(int *credits)
 {
-	struct vos_tls	*tls	 = vos_tls_get();
+	struct vos_tls	*tls	 = vos_tls_get(true);
 	d_list_t	*pools	 = &tls->vtl_gc_pools;
 	int		 rc	 = 0;
 	int		 checked = 0;
@@ -1013,7 +1060,7 @@ gc_wait(void)
 	int total = 0;
 
 	while (1) {
-		int creds = GC_CREDS_PRIV;
+		int creds = GC_CREDS_TIGHT;
 		int rc;
 
 		total += creds;
@@ -1052,7 +1099,7 @@ vos_gc_pool_tight(daos_handle_t poh, int *credits)
 	total = *credits;
 	rc = gc_reclaim_pool(pool, credits, &empty);
 	if (rc) {
-		D_CRIT("GC failed %s\n", d_errstr(rc));
+		D_CRIT("gc_reclaim_pool failed " DF_RC "\n", DP_RC(rc));
 		return 0; /* caller can't do anything for it */
 	}
 	total -= *credits; /* subtract the remained credits */
@@ -1071,71 +1118,122 @@ vos_gc_pool_tight(daos_handle_t poh, int *credits)
 	return 0;
 }
 
-static inline bool
-vos_gc_yield(bool (*yield_func)(void *arg), void *yield_arg)
-{
-	if (yield_func != NULL)
-		return yield_func(yield_arg);
+struct vos_gc_param {
+	struct umem_instance	*vgc_umm;
+	int			(*vgc_yield_func)(void *arg);
+	void			*vgc_yield_arg;
+	uint32_t		 vgc_credits;
+};
 
-	bio_yield();
+static inline bool
+vos_gc_yield(void *arg)
+{
+	struct vos_gc_param	*param = arg;
+	int			 rc;
+
+	/* Current DTX handle must be NULL, since GC runs under non-DTX mode. */
+	D_ASSERT(vos_dth_get(false) == NULL);
+
+	if (param->vgc_yield_func == NULL) {
+		param->vgc_credits = GC_CREDS_TIGHT;
+		bio_yield(param->vgc_umm);
+		return false;
+	}
+
+	rc = param->vgc_yield_func(param->vgc_yield_arg);
+	if (rc < 0)	/* Abort */
+		return true;
+
+	/* rc == 0: tight mode; rc == 1: slack mode */
+	param->vgc_credits = (rc == 0) ? GC_CREDS_TIGHT : GC_CREDS_SLACK;
+
 	return false;
 }
 
 /** public API to reclaim space for a opened pool */
 int
-vos_gc_pool(daos_handle_t poh, int credits, bool (*yield_func)(void *arg),
+vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 	    void *yield_arg)
 {
-	struct vos_pool	*pool = vos_hdl2pool(poh);
-	struct vos_tls	*tls  = vos_tls_get();
-	int		 rc, total = 0;
+	struct d_tm_node_t      *duration = NULL;
+	struct d_tm_node_t      *tight    = NULL;
+	struct d_tm_node_t      *slack    = NULL;
+	struct vos_pool		*pool = vos_hdl2pool(poh);
+	struct vos_tls		*tls  = vos_tls_get(pool->vp_sysdb);
+	struct vos_gc_param	 param;
+	uint32_t		 nr_flushed = 0;
+	int			 rc = 0, total = 0;
 
 	D_ASSERT(daos_handle_is_valid(poh));
-	if (!gc_have_pool(pool))
-		return 0; /* nothing to reclaim for this pool */
+	D_ASSERT(pool->vp_sysdb == false);
+
+	vos_space_update_metrics(pool);
+
+	param.vgc_umm		= &pool->vp_umm;
+	param.vgc_yield_func	= yield_func;
+	param.vgc_yield_arg	= yield_arg;
+	param.vgc_credits	= GC_CREDS_TIGHT;
+
+	/* To accelerate flush on container destroy done */
+	if (!gc_have_pool(pool)) {
+		if (pool->vp_vea_info != NULL)
+			rc = vea_flush(pool->vp_vea_info, UINT32_MAX, &nr_flushed);
+		return rc < 0 ? rc : nr_flushed;
+	}
 
 	tls->vtl_gc_running++;
-	/*
-	 * Pause flushing free extents in VEA aging buffer, otherwise,
-	 * there'll be way more fragments to be processed.
-	 */
-	vos_pool_ctl(poh, VOS_PO_CTL_VEA_PLUG);
+
+	if (pool->vp_metrics != NULL) {
+		duration = pool->vp_metrics->vp_gc_metrics.vgm_duration;
+		slack    = pool->vp_metrics->vp_gc_metrics.vgm_slack_cnt;
+		tight    = pool->vp_metrics->vp_gc_metrics.vgm_tight_cnt;
+	}
 
 	while (1) {
-		int	creds = GC_CREDS_PRIV;
+		int	creds = param.vgc_credits;
+
+		d_tm_mark_duration_start(duration, D_TM_CLOCK_THREAD_CPUTIME);
+		if (creds == GC_CREDS_TIGHT)
+			d_tm_inc_counter(tight, 1);
+		else
+			d_tm_inc_counter(slack, 1);
 
 		if (credits > 0 && (credits - total) < creds)
 			creds = credits - total;
 
 		total += creds;
 		rc = vos_gc_pool_tight(poh, &creds);
+
 		if (rc) {
-			D_ERROR("GC pool failed: %s\n", d_errstr(rc));
+			D_ERROR("GC pool failed: " DF_RC "\n", DP_RC(rc));
+			d_tm_mark_duration_end(duration);
 			break;
 		}
 		total -= creds; /* subtract the remainded credits */
-		if (creds != 0)
+		if (creds != 0) {
+			d_tm_mark_duration_end(duration);
 			break; /* reclaimed everything */
+		}
 
-		if (credits > 0 && total >= credits)
+		if (credits > 0 && total >= credits) {
+			d_tm_mark_duration_end(duration);
 			break; /* consumed all credits */
+		}
 
-		if (vos_gc_yield(yield_func, yield_arg)) {
+		d_tm_mark_duration_end(duration);
+
+		if (vos_gc_yield(&param)) {
 			D_DEBUG(DB_TRACE, "GC pool run aborted\n");
-			rc = 1;
 			break;
 		}
 	}
-
-	/* Unplug and make the freed extents available immediately. */
-	vos_pool_ctl(poh, VOS_PO_CTL_VEA_UNPLUG);
 
 	if (total != 0) /* did something */
 		D_DEBUG(DB_TRACE, "GC consumed %d credits\n", total);
 
 	D_ASSERT(tls->vtl_gc_running > 0);
 	tls->vtl_gc_running--;
-	return rc;
+	return rc < 0 ? rc : nr_flushed;
 }
 
 inline bool
@@ -1148,6 +1246,90 @@ vos_gc_pool_idle(daos_handle_t poh)
 inline void
 gc_reserve_space(daos_size_t *rsrvd)
 {
-	rsrvd[DAOS_MEDIA_SCM]	+= gc_bag_size * GC_CREDS_MAX;
+	rsrvd[DAOS_MEDIA_SCM]	+= gc_bag_size * (daos_size_t)GC_CREDS_MAX;
 	rsrvd[DAOS_MEDIA_NVME]	+= 0;
+}
+
+/** Exported VOS API for explicit VEA flush */
+int
+vos_flush_pool(daos_handle_t poh, uint32_t nr_flush, uint32_t *nr_flushed)
+{
+	struct vos_pool	*pool = vos_hdl2pool(poh);
+	int		 rc;
+
+	D_ASSERT(daos_handle_is_valid(poh));
+
+	if (pool->vp_vea_info == NULL) {
+		if (nr_flushed != NULL)
+			*nr_flushed = 0;
+		return 1;
+	}
+
+	rc = vea_flush(pool->vp_vea_info, nr_flush, nr_flushed);
+	if (rc)
+		D_ERROR("VEA flush failed. "DF_RC"\n", DP_RC(rc));
+
+	return rc;
+}
+
+#define VOS_GC_DIR "vos_gc"
+void
+vos_gc_metrics_init(struct vos_gc_metrics *vgm, const char *path, int tgt_id)
+{
+	int rc;
+
+	/* GC slice duration */
+	rc = d_tm_add_metric(&vgm->vgm_duration, D_TM_DURATION | D_TM_CLOCK_THREAD_CPUTIME,
+			     "GC slice duration", NULL, "%s/%s/duration/tgt_%u", path, VOS_GC_DIR,
+			     tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'duration' telemetry: " DF_RC "\n", DP_RC(rc));
+
+	/* GC container deletion */
+	rc = d_tm_add_metric(&vgm->vgm_cont_del, D_TM_COUNTER, "GC containers deleted", NULL,
+			     "%s/%s/cont_del/tgt_%u", path, VOS_GC_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'cont_del' telemetry: " DF_RC "\n", DP_RC(rc));
+
+	/* GC object deletion */
+	rc = d_tm_add_metric(&vgm->vgm_obj_del, D_TM_COUNTER, "GC objects deleted", NULL,
+			     "%s/%s/obj_del/tgt_%u", path, VOS_GC_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'obj_del' telemetry: " DF_RC "\n", DP_RC(rc));
+
+	/* GC dkey deletion */
+	rc = d_tm_add_metric(&vgm->vgm_dkey_del, D_TM_COUNTER, "GC dkeys deleted", NULL,
+			     "%s/%s/dkey_del/tgt_%u", path, VOS_GC_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'dkey_del' telemetry: " DF_RC "\n", DP_RC(rc));
+
+	/* GC akey deletion */
+	rc = d_tm_add_metric(&vgm->vgm_akey_del, D_TM_COUNTER, "GC akeys deleted", NULL,
+			     "%s/%s/akey_del/tgt_%u", path, VOS_GC_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'akey_del' telemetry: " DF_RC "\n", DP_RC(rc));
+
+	/* GC ev deletion */
+	rc = d_tm_add_metric(&vgm->vgm_ev_del, D_TM_COUNTER, "GC ev deleted", NULL,
+			     "%s/%s/ev_del/tgt_%u", path, VOS_GC_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'ev_del' telemetry: " DF_RC "\n", DP_RC(rc));
+
+	/* GC sv deletion */
+	rc = d_tm_add_metric(&vgm->vgm_sv_del, D_TM_COUNTER, "GC sv deleted", NULL,
+			     "%s/%s/sv_del/tgt_%u", path, VOS_GC_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'sv_del' telemetry: " DF_RC "\n", DP_RC(rc));
+
+	/* GC slack mode runs */
+	rc = d_tm_add_metric(&vgm->vgm_slack_cnt, D_TM_COUNTER, "GC slack mode count", NULL,
+			     "%s/%s/slack_cnt/tgt_%u", path, VOS_GC_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'slack_cnt' telemetry: " DF_RC "\n", DP_RC(rc));
+
+	/* GC tight mode runs */
+	rc = d_tm_add_metric(&vgm->vgm_tight_cnt, D_TM_COUNTER, "GC tight mode count", NULL,
+			     "%s/%s/tight_cnt/tgt_%u", path, VOS_GC_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'tight_cnt' telemetry: " DF_RC "\n", DP_RC(rc));
 }

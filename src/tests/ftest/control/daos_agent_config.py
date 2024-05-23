@@ -1,14 +1,11 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
-
-from apricot import TestWithServers
 from agent_utils import include_local_host
-from command_utils_base import CommandFailure
+from apricot import TestWithServers
+from exception_utils import CommandFailure
 
 
 class DaosAgentConfigTest(TestWithServers):
@@ -34,9 +31,9 @@ class DaosAgentConfigTest(TestWithServers):
         on the system.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=small,agent_start,basic
-        :avocado: tags=control,daos_agent_config_test
-        :avocado: tags=test_daos_agent_config_basic
+        :avocado: tags=vm
+        :avocado: tags=control,basic
+        :avocado: tags=DaosAgentConfigTest,test_daos_agent_config_basic
         """
         # Setup the agents
         self.add_agent_manager()

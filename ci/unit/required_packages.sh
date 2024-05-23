@@ -2,29 +2,35 @@
 
 set -eux
 
-distro="$1"
-quick_build="${2:-false}"
+# No longer used but provided by pipeline-lib
+# distro="$1"
+# quick_build="${2:-false}"
 
-pkgs="gotestsum openmpi3                 \
-      hwloc-devel argobots               \
-      fuse3-libs fuse3                   \
-      boost-python36-devel               \
-      libisa-l-devel libpmem             \
-      libpmemobj protobuf-c              \
-      spdk-devel libfabric-devel         \
-      pmix numactl-devel                 \
-      libipmctl-devel python36-pyxattr   \
-      python36-junit_xml                 \
-      python36-tabulate numactl          \
-      libyaml-devel                      \
-      valgrind-devel patchelf"
+OPENMPI_VER=""
+PY_MINOR_VER=""
 
-if $quick_build; then
-    read -r mercury_version < "$distro"-required-mercury-rpm-version
-    pkgs="$pkgs spdk-tools mercury-$mercury_version         \
-          libisa-l_crypto libfabric-debuginfo   \
-          argobots-debuginfo protobuf-c-debuginfo"
-fi
+pkgs="argobots                         \
+      boost-python3$PY_MINOR_VER-devel \
+      capstone                         \
+      fuse3                            \
+      fuse3-libs                       \
+      gotestsum                        \
+      hwloc-devel                      \
+      libipmctl-devel                  \
+      libisa-l-devel                   \
+      libfabric-devel                  \
+      libpmem                          \
+      libpmemobj                       \
+      libyaml-devel                    \
+      numactl                          \
+      numactl-devel                    \
+      openmpi$OPENMPI_VER              \
+      patchelf                         \
+      pmix                             \
+      protobuf-c                       \
+      spdk-devel                       \
+      valgrind-devel"
 
-echo "$pkgs"
+# output with trailing newline suppressed
+echo  -e "$pkgs\c"
 exit 0

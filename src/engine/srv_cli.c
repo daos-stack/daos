@@ -48,13 +48,11 @@ dsc_progress_start(void)
 	if (dx->dx_dsc_started)
 		return 0;
 
-	rc = ABT_thread_create(dx->dx_pools[DSS_POOL_GENERIC], dsc_progress,
-			       dx, ABT_THREAD_ATTR_NULL, NULL);
-	if (rc != ABT_SUCCESS)
-		return dss_abterr2der(rc);
-
-	dx->dx_dsc_started = true;
-	return 0;
+	/* NB: EC recovery will be done inside this ULT, so let's use DEEP stack size */
+	rc = dss_ult_create(dsc_progress, dx, DSS_XS_SELF, 0, DSS_DEEP_STACK_SZ, NULL);
+	if (rc == 0)
+		dx->dx_dsc_started = true;
+	return rc;
 }
 
 static int

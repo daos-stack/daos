@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -341,7 +341,7 @@ static void deliver_pkt(struct network_pkt *item)
 		swim_net_glitch_update(ctx, from_id, snd_delay - max_delay);
 
 	/* emulate RPC receive by target */
-	rc = swim_updates_parse(ctx, from_id, item->np_upds, item->np_nupds);
+	rc = swim_updates_parse(ctx, from_id, from_id, item->np_upds, item->np_nupds);
 	if (rc == -DER_SHUTDOWN)
 		swim_self_set(ctx, SWIM_ID_INVALID);
 	else if (rc)

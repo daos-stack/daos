@@ -38,13 +38,17 @@ determined through a pointer to a DAOS event passed to each API call that:
   the operation will be available in the event error code (event.ev_error) when
   the event completes.
 
-A valid event to be used must be created first with a separate API call. To
-allow users to track multiple events at a time, an event can be created as part
-of an event queue, which is basically a collection of events that can be
-progressed and polled together. Alternatively, an event can be created without
-an event queue, and be tracked individually. Once an event is completed, it can
-re-used for another DAOS API call to minimize the need for event creation and
-allocations inside the DAOS library.
+A valid event to be used must be created first with a separate API call. To allow users to track
+multiple events at a time, an event can be created as part of an event queue, which is basically a
+collection of events that can be progressed and polled together. An event queue also creates a
+separate task scheduler internally for all DAOS tasks as well as a new network context. The network
+context creation is an expensive operation on some network providers, and thus users should try to
+limit the number of event queue being created in their applications or IO middleware libraries on
+top of DAOS. Alternatively, an event can be created without an event queue, and be tracked
+individually. In this case, and for blocking operations, an internal global task scheduler and
+network context is used instead for the independent ones that would be created for an event
+queue. Once an event is completed, it can be reused for another DAOS API call to minimize the need for
+event creation and allocations inside the DAOS library.
 
 ## Task Engine Integration
 

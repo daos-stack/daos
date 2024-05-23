@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,6 +15,7 @@ import "ctl/firmware.proto";
 import "ctl/smd.proto";
 import "ctl/ranks.proto";
 import "ctl/server.proto";
+import "ctl/support.proto";
 
 // Service definitions for communications between gRPC management server and
 // client regarding tasks related to DAOS system and server hardware.
@@ -26,6 +27,10 @@ service CtlSvc {
 	rpc StorageScan(StorageScanReq) returns(StorageScanResp) {};
 	// Format nonvolatile storage devices for use with DAOS
 	rpc StorageFormat(StorageFormatReq) returns(StorageFormatResp) {};
+	// Rebind SSD from kernel and bind instead to user-space for use with DAOS
+	rpc StorageNvmeRebind(NvmeRebindReq) returns(NvmeRebindResp) {};
+	// Add newly inserted SSD to DAOS engine config
+	rpc StorageNvmeAddDevice(NvmeAddDeviceReq) returns(NvmeAddDeviceResp) {};
 	// Perform a fabric scan to determine the available provider, device, NUMA node combinations
 	rpc NetworkScan (NetworkScanReq) returns (NetworkScanResp) {};
 	// Retrieve firmware details from storage devices on server
@@ -34,16 +39,18 @@ service CtlSvc {
 	rpc FirmwareUpdate(FirmwareUpdateReq) returns (FirmwareUpdateResp) {};
 	// Query the per-server metadata
 	rpc SmdQuery(SmdQueryReq) returns (SmdQueryResp) {}
+	// Manage devices (per-server) identified in SMD table
+	rpc SmdManage(SmdManageReq) returns (SmdManageResp) {}
 	// Set log level for DAOS I/O Engines on a host.
 	rpc SetEngineLogMasks(SetLogMasksReq) returns (SetLogMasksResp) {}
 	// Prepare DAOS I/O Engines on a host for controlled shutdown. (gRPC fanout)
 	rpc PrepShutdownRanks(RanksReq) returns (RanksResp) {}
 	// Stop DAOS I/O Engines on a host. (gRPC fanout)
 	rpc StopRanks(RanksReq) returns (RanksResp) {}
-	// Ping DAOS I/O Engines on a host. (gRPC fanout)
-	rpc PingRanks(RanksReq) returns (RanksResp) {}
 	// ResetFormat DAOS I/O Engines on a host. (gRPC fanout)
 	rpc ResetFormatRanks(RanksReq) returns (RanksResp) {}
 	// Start DAOS I/O Engines on a host. (gRPC fanout)
 	rpc StartRanks(RanksReq) returns (RanksResp) {}
+	// Perform a Log collection on Servers for support/debug purpose
+	rpc CollectLog (CollectLogReq) returns (CollectLogResp) {};
 }

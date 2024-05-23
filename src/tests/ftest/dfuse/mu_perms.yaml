@@ -1,0 +1,40 @@
+hosts:
+  test_servers: 1
+  test_clients: 1
+timeout: 480
+server_config:
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+  system_ram_reserved: 1
+pool:
+  control_method: dmg
+  size: 1G
+container:
+  control_method: daos
+  type: POSIX
+dfuse:
+  disable_caching: true
+  multi_user: true
+dfuse_with_caching:
+  multi_user: true
+  mount_dir: "/tmp/daos_dfuse"
+client_users:
+  # Two users in the same group. One user in a separate group
+  - daos_test_user_x1:daos_test_group_x1
+  - daos_test_user_x2:daos_test_group_x1
+  - daos_test_user_y1:daos_test_group_y1
+verify_perms:
+  perms: all
+  owner: daos_test_user_x1
+  group_user: daos_test_user_x2
+  other_user: daos_test_user_y1
+test_dfuse_mu_perms_cache:
+  cache_time: 1

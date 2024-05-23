@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -42,7 +42,10 @@ static inline void
 evt_rect_read(struct evt_rect *rout, const struct evt_rect_df *rin)
 {
 	rout->rc_epc = rin->rd_epc;
-	rout->rc_minor_epc = rin->rd_minor_epc;
+	if (rin->rd_minor_epc != EVT_TX_MINOR_MAX_DF)
+		rout->rc_minor_epc = rin->rd_minor_epc;
+	else
+		rout->rc_minor_epc = VOS_SUB_OP_MAX;
 	evt_ext_read(&rout->rc_ex, rin);
 };
 
@@ -52,8 +55,11 @@ evt_rect_write(struct evt_rect_df *rout, const struct evt_rect *rin)
 {
 	evt_len_write(rout, evt_rect_width(rin));
 	rout->rd_epc = rin->rc_epc;
-	rout->rd_minor_epc = rin->rc_minor_epc;
 	rout->rd_lo = rin->rc_ex.ex_lo;
+	if (rin->rc_minor_epc != VOS_SUB_OP_MAX)
+		rout->rd_minor_epc = rin->rc_minor_epc;
+	else
+		rout->rd_minor_epc = EVT_TX_MINOR_MAX_DF;
 };
 
 #define DF_BUF_LEN	128
@@ -93,7 +99,7 @@ enum {
 	RT_OVERLAP_PARTIAL	= (1 << 6),
 };
 
-static struct evt_policy_ops evt_ssof_pol_ops;
+static struct evt_policy_ops  evt_soff_pol_ops;
 static struct evt_policy_ops evt_sdist_pol_ops;
 static struct evt_policy_ops evt_sdist_even_pol_ops;
 /**
@@ -101,10 +107,10 @@ static struct evt_policy_ops evt_sdist_even_pol_ops;
  * - Sorted by Start Offset(SSOF): it is the only policy for now.
  */
 static struct evt_policy_ops *evt_policies[] = {
-	&evt_ssof_pol_ops,
-	&evt_sdist_pol_ops,
-	&evt_sdist_even_pol_ops,
-	NULL,
+    &evt_soff_pol_ops,
+    &evt_sdist_pol_ops,
+    &evt_sdist_even_pol_ops,
+    NULL,
 };
 
 static void
@@ -159,10 +165,20 @@ time_cmp(uint64_t t1, uint64_t t2, int *out)
 		return true;
 	}
 
-	if (t1 < t2)
+	if (t1 < t2) {
+		/** Even if t2 is rebuild, overwrite just works here */
 		*out = RT_OVERLAP_OVER;
-	else
+	} else {
 		*out = RT_OVERLAP_UNDER;
+		if (t2 == EVT_REBUILD_MINOR_MIN) {
+			/** If t1 is also a rebuild, we should return
+			 * RT_OVERLAP_SAME to force adjustment of new rebuild
+			 * minor epoch.
+			 */
+			if (t1 < EVT_REBUILD_MINOR_MAX)
+				*out = RT_OVERLAP_SAME;
+		}
+	}
 
 	return false;
 }
@@ -774,6 +790,9 @@ process_ext:
 			set_visibility(this_ent, EVT_COVERED);
 			evt_ent_addr_update(tcx, temp_ent,
 					    evt_extent_width(this_ext));
+			temp = cur_update;
+			cur_update = cur_update->next;
+			d_list_del(temp);
 			/** Leave marking it covered until processed */
 			cur_update = evt_insert_sorted(temp_ent,
 						    to_process,
@@ -791,10 +810,14 @@ process_ext:
 
 static int
 evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
-		 struct evt_entry_array *ent_array, int *num_visible)
+		 struct evt_entry_array *ent_array, int *num_visible,
+		 bool removals_only)
 {
 	struct evt_extent	*this_ext;
 	struct evt_extent	*next_ext;
+	struct evt_list_entry	*le;
+	struct evt_list_entry   *next_le;
+	struct evt_list_entry   *tmp_le;
 	struct evt_entry	*this_ent;
 	struct evt_entry	*next_ent;
 	struct evt_entry	*temp_ent;
@@ -841,6 +864,42 @@ evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
 
 	if (d_list_empty(&covered))
 		return 0;
+
+	if (removals_only) {
+		/** Ok, everything remaining in the list is not covered by a removal.  One more
+		 *  step is required to merge records at the same major epoch so we don't attempt
+		 *  to insert overlapping removal records.  Once this step is complete, we can sort
+		 *  the remaining records and return to the caller.
+		 */
+		while ((le = d_list_pop_entry(&covered, struct evt_list_entry, le_link)) != NULL) {
+			this_ent = &le->le_ent;
+			d_list_for_each_entry_safe(next_le, tmp_le, &covered, le_link) {
+				next_ent = &next_le->le_ent;
+				if (next_ent->en_sel_ext.ex_lo > (this_ent->en_sel_ext.ex_hi + 1)) {
+					/** If the physical extent is also beyond the end,
+					 *  everything else in the list is guaranteed to be later
+					 *  so we can break the loop. Otherwise, just continue to
+					 *  next entry.
+					 */
+					if (next_ent->en_ext.ex_lo > (this_ent->en_ext.ex_hi + 1))
+						break;
+					continue;
+				}
+				if (next_ent->en_epoch != this_ent->en_epoch)
+					continue;
+				set_visibility(next_ent, EVT_COVERED);
+				d_list_del(&next_le->le_link);
+				/** For removals, we don't care about the actual extent,
+				 *  so we can just fake it.  We only want to know what
+				 *  removal to insert.
+				 */
+				this_ent->en_sel_ext.ex_hi = next_ent->en_sel_ext.ex_hi;
+			}
+			/** Mark the current entry as visible for sorting */
+			evt_mark_visible(this_ent, false, num_visible);
+		}
+		return 0;
+	}
 
 	/* Now uncover entries */
 	current = covered.next;
@@ -960,8 +1019,8 @@ evt_ent_array_sort(struct evt_context *tcx, struct evt_entry_array *ent_array,
 	int			 num_visible = 0;
 	int			 rc;
 
-	D_DEBUG(DB_TRACE, "Sorting array with filter "DF_FILTER"\n",
-		DP_FILTER(filter));
+	D_DEBUG(DB_TRACE, "Sorting array with filter "DF_FILTER", ea_ent_nr %d.\n",
+		DP_FILTER(filter), ent_array->ea_ent_nr);
 	if (ent_array->ea_ent_nr == 0)
 		return 0;
 
@@ -983,8 +1042,8 @@ evt_ent_array_sort(struct evt_context *tcx, struct evt_entry_array *ent_array,
 		      evt_ent_list_cmp);
 
 		/* Now separate entries into covered and visible */
-		rc = evt_find_visible(tcx, filter, ent_array, &num_visible);
-
+		rc = evt_find_visible(tcx, filter, ent_array, &num_visible,
+				      (flags & EVT_ITER_REMOVALS) != 0);
 		if (rc != 0) {
 			if (rc == -DER_AGAIN)
 				continue; /* List reallocated, start over */
@@ -1000,7 +1059,7 @@ re_sort:
 		total = ent_array->ea_ent_nr;
 		compar = evt_ent_list_cmp;
 	} else {
-		D_ASSERT(flags & EVT_VISIBLE);
+		D_ASSERT(flags & (EVT_ITER_VISIBLE | EVT_ITER_REMOVALS));
 		compar = evt_ent_list_cmp_visible;
 		total = num_visible;
 	}
@@ -1059,7 +1118,8 @@ evt_tcx_set_trace(struct evt_context *tcx, int level, umem_off_t nd_off, int at,
 {
 	struct evt_trace *trace;
 
-	D_ASSERT(at >= 0 && at < tcx->tc_order);
+	D_ASSERTF(at >= 0 && at < tcx->tc_order, "at=%d, tcx->tc_order=%d, level=%d\n", at,
+		  tcx->tc_order, level);
 
 	V_TRACE(DB_TRACE, "set trace[%d] "DF_X64"/%d\n", level, nd_off, at);
 
@@ -1122,7 +1182,13 @@ evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
 
 	if (feats != -1) { /* tree creation */
 		tcx->tc_feats	= feats;
-		tcx->tc_order	= order;
+		if (feats & EVT_FEAT_DYNAMIC_ROOT) {
+			tcx->tc_order     = 1;
+			tcx->tc_max_order = order;
+		} else {
+			tcx->tc_order     = order;
+			tcx->tc_max_order = order;
+		}
 		depth		= 0;
 		V_TRACE(DB_TRACE, "Create context for a new tree\n");
 
@@ -1135,12 +1201,16 @@ evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
 
 		tcx->tc_feats	= root->tr_feats;
 		tcx->tc_order	= root->tr_order;
+		if (tcx->tc_feats & EVT_FEAT_DYNAMIC_ROOT)
+			tcx->tc_max_order = root->tr_max_order;
+		else
+			tcx->tc_max_order = root->tr_order;
 		tcx->tc_inob	= root->tr_inob;
 		depth		= root->tr_depth;
 		V_TRACE(DB_TRACE, "Load tree context from %p\n", root);
 	}
 
-	policy = tcx->tc_feats & EVT_FEATS_SUPPORTED;
+	policy = tcx->tc_feats & EVT_POLICY_MASK;
 	switch (policy) {
 	case EVT_FEAT_SORT_SOFF:
 		tcx->tc_ops = evt_policies[0];
@@ -1175,7 +1245,7 @@ evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
 int
 evt_tcx_clone(struct evt_context *tcx, struct evt_context **tcx_pp)
 {
-	struct umem_attr uma;
+	struct umem_attr uma = {0};
 	int		 rc;
 
 	umem_attr_get(&tcx->tc_umm, &uma);
@@ -1211,12 +1281,12 @@ evt_desc_log_status(struct evt_context *tcx, daos_epoch_t epoch,
 	if (!cbs->dc_log_status_cb) {
 		return ALB_AVAILABLE_CLEAN;
 	} else {
-		return cbs->dc_log_status_cb(evt_umm(tcx), epoch, desc, intent,
+		return cbs->dc_log_status_cb(evt_umm(tcx), epoch, desc, intent, true,
 					     cbs->dc_log_status_args);
 	}
 }
 
-int
+static int
 evt_desc_log_add(struct evt_context *tcx, struct evt_desc *desc)
 {
 	struct evt_desc_cbs *cbs = &tcx->tc_desc_cbs;
@@ -1266,7 +1336,7 @@ evt_node_entry_free(struct evt_context *tcx, struct evt_node_entry *ne)
 
 	return 0;
 out:
-	D_ERROR("Failed to release entry: %s\n", d_errstr(rc));
+	D_ERROR("Failed to release entry: " DF_RC "\n", DP_RC(rc));
 	return rc;
 }
 
@@ -1274,7 +1344,7 @@ out:
 static bool
 evt_node_is_full(struct evt_context *tcx, struct evt_node *nd)
 {
-	D_ASSERT(nd->tn_nr <= tcx->tc_order);
+	D_ASSERTF(nd->tn_nr <= tcx->tc_order, "tn_nr=%d tc_order=%d\n", nd->tn_nr, tcx->tc_order);
 	return nd->tn_nr == tcx->tc_order;
 }
 
@@ -1345,18 +1415,24 @@ evt_node_mbr_update(struct evt_context *tcx, struct evt_node *node,
 	return changed;
 }
 
-/**
- * Return the size of evtree node, leaf node has different size with internal
- * node.
- */
-static int
-evt_node_size(struct evt_context *tcx, bool leaf)
+static inline int
+evt_order2size(int order, bool leaf)
 {
 	size_t entry_size;
 
 	entry_size = leaf ? sizeof(struct evt_node_entry) : sizeof(uint64_t);
 
-	return sizeof(struct evt_node) + entry_size * tcx->tc_order;
+	return sizeof(struct evt_node) + entry_size * order;
+}
+
+/**
+ * Return the size of evtree node, leaf node has different size with internal
+ * node.
+ */
+static inline int
+evt_node_size(struct evt_context *tcx, bool leaf)
+{
+	return evt_order2size(tcx->tc_order, leaf);
 }
 
 /** Allocate a evtree node */
@@ -1364,12 +1440,11 @@ static int
 evt_node_alloc(struct evt_context *tcx, unsigned int flags,
 	       umem_off_t *nd_off_p)
 {
-	struct evt_node		*nd;
+	struct evt_node         *nd;
 	umem_off_t		 nd_off;
-	bool			 leaf = (flags & EVT_NODE_LEAF);
+	bool                     leaf = (flags & EVT_NODE_LEAF);
 
-	nd_off = vos_slab_alloc(evt_umm(tcx), evt_node_size(tcx, leaf),
-			leaf ? VOS_SLAB_EVT_NODE : VOS_SLAB_EVT_NODE_SM);
+	nd_off = umem_zalloc(evt_umm(tcx), evt_node_size(tcx, leaf));
 	if (UMOFF_IS_NULL(nd_off))
 		return -DER_NOSPACE;
 
@@ -1442,7 +1517,7 @@ evt_node_destroy(struct evt_context *tcx, umem_off_t nd_off, int level,
 			rc = evt_node_destroy(tcx, nd->tn_child[i], level + 1,
 					      &empty);
 			if (rc) {
-				D_ERROR("destroy failed: %s\n", d_errstr(rc));
+				D_ERROR("destroy failed: " DF_RC "\n", DP_RC(rc));
 				goto out;
 			}
 
@@ -1616,6 +1691,10 @@ evt_root_init(struct evt_context *tcx)
 
 	root->tr_feats = tcx->tc_feats;
 	root->tr_order = tcx->tc_order;
+	if (tcx->tc_feats & EVT_FEAT_DYNAMIC_ROOT)
+		root->tr_max_order = tcx->tc_max_order;
+	else
+		root->tr_max_order = 0; /** For backward compatibility */
 	root->tr_node  = UMOFF_NULL;
 	root->tr_pool_uuid = umem_get_uuid(evt_umm(tcx));
 
@@ -1780,6 +1859,76 @@ evt_select_node(struct evt_context *tcx, const struct evt_rect *rect,
 	return rc < 0 ? nd1 : nd2;
 }
 
+/** Maximum dynamic root size before switching to user-specified order */
+#define MAX_DYN_ROOT 7
+static inline int
+evt_new_order(int order, int max_order)
+{
+	if (order == MAX_DYN_ROOT)
+		return max_order;
+
+	return ((order + 1) << 1) - 1;
+}
+
+/** Expand the dynamic tree root node if it is currently full and not
+ *  already at full size
+ */
+static inline int
+evt_node_extend(struct evt_context *tcx, struct evt_trace *trace)
+{
+	struct evt_node *nd_cur;
+	int              rc;
+	uint8_t          old_order;
+	void            *new_node;
+	int              old_size;
+	umem_off_t       new_off;
+
+	if (tcx->tc_order == tcx->tc_max_order)
+		return 0;
+
+	nd_cur = evt_off2node(tcx, trace->tr_node);
+	D_ASSERT(evt_node_is_leaf(tcx, nd_cur));
+	D_ASSERT(tcx->tc_depth == 1);
+	D_ASSERT(tcx->tc_feats & EVT_FEAT_DYNAMIC_ROOT);
+
+	if (!evt_node_is_full(tcx, nd_cur))
+		return 0;
+
+	old_order = tcx->tc_order;
+	old_size  = evt_node_size(tcx, true);
+
+	tcx->tc_order = evt_new_order(tcx->tc_order, tcx->tc_max_order);
+
+	if (tcx->tc_order > tcx->tc_max_order)
+		tcx->tc_order = tcx->tc_max_order;
+
+	rc = evt_node_alloc(tcx, true, &new_off);
+	if (rc != 0)
+		goto failed;
+
+	new_node = umem_off2ptr(evt_umm(tcx), new_off);
+	memcpy(new_node, nd_cur, old_size);
+	rc = umem_free(evt_umm(tcx), trace->tr_node);
+	if (rc != 0)
+		goto failed;
+
+	rc = evt_root_tx_add(tcx);
+	if (rc != 0)
+		goto failed;
+
+	tcx->tc_root->tr_order = tcx->tc_order;
+	tcx->tc_root->tr_node  = new_off;
+
+	trace->tr_node     = new_off;
+	trace->tr_tx_added = true;
+
+	return 0;
+
+failed:
+	tcx->tc_order = old_order;
+	return rc;
+}
+
 /**
  * Insert an entry \a entry to the leaf node located by the trace of \a tcx.
  * If the leaf node is full it will be split. The split will bubble up if its
@@ -1805,10 +1954,22 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new,
 		umem_off_t		 nm_cur;
 		umem_off_t		 nm_new;
 		bool			 leaf;
+		bool                     changed;
 
 		trace	= &tcx->tc_trace[level];
+		if (tcx->tc_depth > 1) {
+			D_ASSERTF(tcx->tc_order == tcx->tc_max_order,
+				  "Dynamic ordering for root only. order=%d != max_order=%d\n",
+				  tcx->tc_order, tcx->tc_max_order);
+		} else {
+			rc = evt_node_extend(tcx, trace);
+			if (rc != 0)
+				goto failed;
+		}
+
 		nm_cur	= trace->tr_node;
 		nd_cur = evt_off2node(tcx, nm_cur);
+
 		if (!trace->tr_tx_added) {
 			rc = evt_node_tx_add(tcx, nd_cur);
 			if (rc != 0)
@@ -1840,8 +2001,6 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new,
 		}
 
 		if (!evt_node_is_full(tcx, nd_cur)) {
-			bool	changed;
-
 			rc = evt_node_insert(tcx, nd_cur, nm_save,
 					     &entry, &changed, csum_bufp);
 			if (rc != 0)
@@ -1859,6 +2018,7 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new,
 			level--;
 			continue;
 		}
+
 		/* Try to split */
 
 		V_TRACE(DB_TRACE, "Split node at level %d\n", level);
@@ -2056,6 +2216,7 @@ evt_large_hole_insert(daos_handle_t toh, const struct evt_entry_in *entry)
 	struct evt_entry_in	 hole;
 	struct evt_filter	 filter = {0};
 	EVT_ENT_ARRAY_SM_PTR(ent_array);
+	int			 alt_rc = 0;
 	int			 rc = 0;
 
 	filter.fr_epr.epr_hi = entry->ei_bound;
@@ -2074,13 +2235,17 @@ evt_large_hole_insert(daos_handle_t toh, const struct evt_entry_in *entry)
 		hole = *entry;
 		hole.ei_rect.rc_ex = ent->en_sel_ext;
 		rc = evt_insert(toh, &hole, NULL);
-		if (rc != 0)
+		if (rc < 0)
 			break;
+		if (rc == 1) {
+			alt_rc = 1;
+			rc = 0;
+		}
 	}
 done:
 	evt_ent_array_fini(ent_array);
 
-	return rc;
+	return rc == 0 ? alt_rc : rc;
 }
 
 /**
@@ -2099,6 +2264,8 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 	const struct evt_entry_in	*entryp = entry;
 	struct evt_filter		 filter;
 	int				 rc;
+	int				 alt_rc = 0;
+	bool                             overwrite = false;
 
 	tcx = evt_hdl2tcx(toh);
 	if (tcx == NULL)
@@ -2129,6 +2296,13 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 
 	evt_ent_array_init(ent_array, 1);
 
+	/* For evt_remove_all, we only insert removals for things that
+	 * are visible, so we shouldn't need to check for overwrite at
+	 * all.
+	 */
+	if (entry->ei_rect.rc_minor_epc == EVT_MINOR_EPC_MAX)
+		goto run_tx;
+
 	filter.fr_ex = entry->ei_rect.rc_ex;
 	filter.fr_epr.epr_lo = entry->ei_rect.rc_epc;
 	filter.fr_epr.epr_hi = entry->ei_bound;
@@ -2138,65 +2312,46 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 	/* Phase-1: Check for overwrite and uncertainty */
 	rc = evt_ent_array_fill(tcx, EVT_FIND_OVERWRITE, DAOS_INTENT_UPDATE,
 				&filter, &entry->ei_rect, ent_array);
-	if (rc != 0)
+	alt_rc = rc;
+	if (rc < 0)
 		return rc;
 
 	if (ent_array->ea_ent_nr == 1) {
-		if (entry->ei_rect.rc_minor_epc == EVT_MINOR_EPC_MAX) {
-			/** Special case.   This is an overlapping delete record
-			 *  which can happen when there are minor epochs
-			 *  involved.   Rather than rejecting, insert prefix
-			 *  and/or suffix extents.
+		ent = evt_ent_array_get(ent_array, 0);
+		if (entry->ei_rect.rc_minor_epc == EVT_REBUILD_MINOR_MIN) {
+			ent_cpy                      = *entry;
+			ent_cpy.ei_rect.rc_minor_epc = ent->en_minor_epc + 1;
+			D_ASSERTF(ent_cpy.ei_rect.rc_minor_epc <= EVT_REBUILD_MINOR_MAX,
+				  "minor_epc=%d\n", ent_cpy.ei_rect.rc_minor_epc);
+			/* This should never happen because otherwise, we would
+			 * return no overlap.
 			 */
-			ent = evt_ent_array_get(ent_array, 0);
-			if (ent->en_ext.ex_lo <= entry->ei_rect.rc_ex.ex_lo &&
-			    ent->en_ext.ex_hi >= entry->ei_rect.rc_ex.ex_hi) {
-				/** Nothing to do, existing extent contains
-				 *  the new one
-				 */
-				return 0;
-			}
+			D_ASSERTF(ent_cpy.ei_rect.rc_minor_epc > EVT_REBUILD_MINOR_MIN,
+				  "minor_epc=%d\n", ent_cpy.ei_rect.rc_minor_epc);
+			entryp = &ent_cpy;
+			goto run_tx;
 		}
+		overwrite = true;
 	}
 
+run_tx:
 	rc = evt_tx_begin(tcx);
 	if (rc != 0)
 		return rc;
 
 	if (tcx->tc_depth == 0) { /* empty tree */
-		rc = evt_root_activate(tcx, entry);
+		rc = evt_root_activate(tcx, entryp);
 		if (rc != 0)
 			goto out;
-	} else if (tcx->tc_inob == 0 && entry->ei_inob != 0) {
+	} else if (tcx->tc_inob == 0 && entryp->ei_inob != 0) {
 		rc = evt_root_tx_add(tcx);
 		if (rc != 0)
 			goto out;
-		tcx->tc_inob = tcx->tc_root->tr_inob = entry->ei_inob;
+		tcx->tc_inob = tcx->tc_root->tr_inob = entryp->ei_inob;
 	}
 
 	D_ASSERT(ent_array->ea_ent_nr <= 1);
-	if (ent_array->ea_ent_nr == 1) {
-		if (ent != NULL) {
-			memcpy(&ent_cpy, entry, sizeof(*entry));
-			entryp = &ent_cpy;
-			/** We need to edit the existing extent */
-			if (entry->ei_rect.rc_ex.ex_lo < ent->en_ext.ex_lo) {
-				ent_cpy.ei_rect.rc_ex.ex_hi = ent->en_ext.ex_lo - 1;
-				if (entry->ei_rect.rc_ex.ex_hi <= ent->en_ext.ex_hi)
-					goto insert;
-				/* There is also a suffix, so insert the prefix */
-				rc = evt_insert_entry(tcx, entryp, csum_bufp);
-				if (rc != 0)
-					goto out;
-			}
-
-			D_ASSERT(entry->ei_rect.rc_ex.ex_hi > ent->en_ext.ex_hi);
-			ent_cpy.ei_rect.rc_ex.ex_hi = entry->ei_rect.rc_ex.ex_hi;
-			ent_cpy.ei_rect.rc_ex.ex_lo = ent->en_ext.ex_hi + 1;
-
-			/* Now insert the suffix */
-			goto insert;
-		}
+	if (overwrite) {
 		/*
 		 * NB: This is part of the current hack to keep "supporting"
 		 * overwrite for same epoch, full overwrite.
@@ -2207,7 +2362,6 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 		goto out;
 	}
 
-insert:
 	/* Phase-2: Inserting */
 	rc = evt_insert_entry(tcx, entryp, csum_bufp);
 
@@ -2215,7 +2369,9 @@ insert:
 	 * with 1 entry in the list
 	 */
 out:
-	return evt_tx_end(tcx, rc);
+	rc = evt_tx_end(tcx, rc);
+
+	return rc == 0 ? alt_rc : rc;
 }
 
 /** Fill the entry with the extent at the specified position of \a node */
@@ -2394,6 +2550,27 @@ evt_data_loss_check(d_list_t *head, struct evt_entry_array *ent_array)
 	return 0;
 }
 
+static inline bool
+agg_check(const struct evt_extent *inserted, const struct evt_extent *intree)
+{
+	if (inserted->ex_hi + 1 >= intree->ex_lo &&
+	    intree->ex_hi + 1 >= inserted->ex_lo) {
+		/** Extent overlaps or is adjacent, so assume aggregation is needed. */
+		return true;
+	} else if ((inserted->ex_hi & DAOS_EC_PARITY_BIT) !=
+		   (intree->ex_hi & DAOS_EC_PARITY_BIT)) {
+		/** EC aggregation needs to run if there is parity and we are doing a
+		 *  partial stripe write or vice versa.   Since we don't know the
+		 *  cell or stripe size, we can only approximate this by just flagging
+		 *  any parity mismatch between what we are writing and what is in
+		 *  the tree.
+		 */
+		return true;
+	}
+
+	return false;
+}
+
 /**
  * See the description in evt_priv.h
  */
@@ -2410,11 +2587,16 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 	int				 at;
 	int				 i;
 	int				 rc = 0;
+	bool                             has_agg = false;
 
 	V_TRACE(DB_TRACE, "Searching rectangle "DF_RECT" opc=%d\n",
 		DP_RECT(rect), find_opc);
 	if (tcx->tc_root->tr_depth == 0)
 		return 0; /* empty tree */
+
+	/** On re-probe, the tree order may have changed */
+	if (tcx->tc_root->tr_order != tcx->tc_order)
+		tcx->tc_order = tcx->tc_root->tr_order;
 
 	D_INIT_LIST_HEAD(&data_loss_list);
 
@@ -2446,10 +2628,16 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 
 			if (evt_filter_rect(filter, &rtmp, leaf)) {
 				V_TRACE(DB_TRACE, "Filtered "DF_RECT" filter=("
-					DF_FILTER")\n", DP_RECT(&rtmp),
-					DP_FILTER(filter));
+					DF_FILTER")\n", DP_RECT(&rtmp), DP_FILTER(filter));
+				if (find_opc == EVT_FIND_OVERWRITE && !has_agg) {
+					if (agg_check(&filter->fr_ex, &rtmp.rc_ex))
+						has_agg = true;
+				}
 				continue; /* Doesn't match the filter */
 			}
+
+			if (find_opc == EVT_FIND_OVERWRITE)
+				has_agg = true;
 
 			evt_rect_overlap(&rtmp, rect, &range_overlap,
 					 &time_overlap);
@@ -2498,8 +2686,9 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 			rc = evt_desc_log_status(tcx, rtmp.rc_epc, desc,
 						 intent);
 			/* Skip the unavailable record. */
-			if (rc == ALB_UNAVAILABLE)
+			if (rc == ALB_UNAVAILABLE) {
 				continue;
+			}
 
 			/* early check */
 			switch (find_opc) {
@@ -2513,30 +2702,34 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 				if (rc < 0)
 					D_GOTO(out, rc);
 
-				/* NB: This is temporary to allow full overwrite
-				 * in same epoch to avoid breaking rebuild.
-				 * Without some sequence number and client
-				 * identifier, we can't do this robustly.
-				 * There can be a race between rebuild and
-				 * client doing different updates.  But this
-				 * isn't any worse than what we already have in
-				 * place so I did it this way to minimize
-				 * change while we decide how to handle this
-				 * properly.
-				 */
-				if (range_overlap != RT_OVERLAP_SAME) {
-					if (rect->rc_minor_epc ==
-					    EVT_MINOR_EPC_MAX)
-						break; /* Need to adjust it */
-					D_ERROR("Same epoch partial "
-						"overwrite not supported:"
-						DF_RECT" overlaps with "DF_RECT
-						"\n", DP_RECT(rect),
-						DP_RECT(&rtmp));
-					rc = -DER_NO_PERM;
-					goto out;
+				D_ASSERTF(rect->rc_minor_epc != EVT_MINOR_EPC_MAX,
+					  "Should never have overlap with removals: " DF_RECT
+					  " overlaps with " DF_RECT "\n",
+					  DP_RECT(&rtmp), DP_RECT(rect));
+
+				if (rect->rc_minor_epc != EVT_REBUILD_MINOR_MIN) {
+					if (range_overlap != RT_OVERLAP_SAME) {
+						D_ERROR("Same epoch partial overwrite not "
+							"supported: " DF_RECT
+							" overlaps with " DF_RECT "\n",
+							DP_RECT(rect), DP_RECT(&rtmp));
+						rc = -DER_VOS_PARTIAL_UPDATE;
+						goto out;
+					}
 				}
-				break; /* we can update the record in place */
+
+				if (ent_array->ea_ent_nr == 0)
+					break;
+
+				/** If the extent is an overlap, partial or
+				 * otherwise, we want to keep only the one with
+				 * the highest minor epoch and let the caller
+				 * deal with it.
+				 */
+				ent = evt_ent_array_get(ent_array, 0);
+				if (ent->en_minor_epc > rtmp.rc_minor_epc)
+					continue;
+				goto replace_ent;
 			case EVT_FIND_SAME:
 				if (range_overlap != RT_OVERLAP_SAME)
 					continue;
@@ -2557,7 +2750,6 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 					if (evt_data_loss_add(&data_loss_list,
 							      &rtmp) == NULL)
 						D_GOTO(out, rc = -DER_NOMEM);
-
 					continue;
 				}
 
@@ -2575,6 +2767,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 				goto out;
 			}
 
+replace_ent:
 			evt_entry_fill(tcx, node, i, rect, intent, ent);
 			switch (find_opc) {
 			default:
@@ -2607,7 +2800,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 			if (level == 0) { /* done with the root */
 				V_TRACE(DB_TRACE, "Found total %d rects\n",
 					ent_array ? ent_array->ea_ent_nr : 0);
-				return 0; /* succeed and return */
+				return has_agg ? 1 : 0; /* succeed and return */
 			}
 
 			level--;
@@ -2629,6 +2822,8 @@ out:
 					edli_link)) != NULL)
 		D_FREE(edli);
 
+	if (rc == 0 && has_agg)
+		rc = 1;
 	return rc;
 }
 
@@ -2665,8 +2860,9 @@ evt_find(daos_handle_t toh, const struct evt_filter *filter,
 
 	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, DAOS_INTENT_DEFAULT,
 				filter, &rect, ent_array);
+
 	if (rc == 0)
-		rc = evt_ent_array_sort(tcx, ent_array, filter, EVT_VISIBLE);
+		rc = evt_ent_array_sort(tcx, ent_array, filter, EVT_ITER_VISIBLE);
 
 	return rc;
 }
@@ -2772,7 +2968,7 @@ evt_has_data(struct evt_root *root, struct umem_attr *uma)
 	rc = 0; /* Assume there is no data */
 	evt_ent_array_for_each(ent, tcx->tc_iter.it_entries) {
 		if (ent->en_minor_epc != EVT_MINOR_EPC_MAX) {
-			D_DEBUG(DB_IO, "Found "DF_ENT", stopping search\n", DP_ENT(ent));
+			D_INFO("Found orphaned extent "DF_ENT"\n", DP_ENT(ent));
 			rc = 1;
 			break;
 		}
@@ -2780,7 +2976,6 @@ evt_has_data(struct evt_root *root, struct umem_attr *uma)
 	}
 out:
 	evt_tcx_decref(tcx); /* -1 for tcx_create */
-	evt_tcx_decref(tcx); /* -1 for open */
 	return rc;
 }
 
@@ -2801,6 +2996,7 @@ evt_close(daos_handle_t toh)
 	return 0;
 }
 
+#define EVT_AGG_MASK (VOS_TF_AGG_HLC | VOS_AGG_TIME_MASK | VOS_TF_AGG_OPT)
 /**
  * Create a new tree inplace of \a root, return the open handle.
  * Please check API comment in evtree.h for the details.
@@ -2812,7 +3008,7 @@ evt_create(struct evt_root *root, uint64_t feats, unsigned int order,
 	struct evt_context *tcx;
 	int		    rc;
 
-	if (!(feats & EVT_FEATS_SUPPORTED)) {
+	if (!(feats & (EVT_AGG_MASK | EVT_FEATS_SUPPORTED))) {
 		D_ERROR("Unknown feature bits "DF_X64"\n", feats);
 		return -DER_INVAL;
 	}
@@ -2935,8 +3131,9 @@ evt_debug(daos_handle_t toh, int debug_level)
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	D_PRINT("Tree depth=%d, order=%d, feats="DF_X64"\n",
-		tcx->tc_depth, tcx->tc_order, tcx->tc_feats);
+	D_PRINT("Tree depth=%d, order=%d, max=%d, feats=" DF_X64 "\n", tcx->tc_depth, tcx->tc_order,
+		tcx->tc_feats & EVT_FEAT_DYNAMIC_ROOT ? tcx->tc_max_order : tcx->tc_order,
+		tcx->tc_feats);
 
 	if (tcx->tc_root->tr_node != 0)
 		evt_node_debug(tcx, tcx->tc_root->tr_node, 0, debug_level);
@@ -3065,11 +3262,8 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 		if (csum_buf_size > 0) {
 			D_DEBUG(DB_TRACE, "Allocating an extra %d bytes "
 						"for checksum", csum_buf_size);
-			desc_off = umem_zalloc(evt_umm(tcx), desc_size);
-		} else {
-			desc_off = vos_slab_alloc(evt_umm(tcx), desc_size,
-							VOS_SLAB_EVT_DESC);
 		}
+		desc_off = umem_zalloc(evt_umm(tcx), desc_size);
 		if (UMOFF_IS_NULL(desc_off))
 			return -DER_NOSPACE;
 
@@ -3220,32 +3414,30 @@ move:
 
 /** Rectangle comparison for sorting */
 static int
-evt_ssof_cmp_rect(struct evt_context *tcx, const struct evt_node *nd,
-		  const struct evt_rect *rt1, const struct evt_rect *rt2)
+evt_soff_cmp_rect(struct evt_context *tcx, const struct evt_node *nd, const struct evt_rect *rt1,
+		  const struct evt_rect *rt2)
 {
 	return evt_rect_cmp(rt1, rt2);
 }
 
 static int
-evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
-		umem_off_t in_off, const struct evt_entry_in *ent,
-		bool *changed, uint8_t **csum_bufp)
+evt_soff_insert(struct evt_context *tcx, struct evt_node *nd, umem_off_t in_off,
+		const struct evt_entry_in *ent, bool *changed, uint8_t **csum_bufp)
 {
-	return evt_common_insert(tcx, nd, in_off, ent, changed,
-				 evt_ssof_cmp_rect, csum_bufp);
+	return evt_common_insert(tcx, nd, in_off, ent, changed, evt_soff_cmp_rect, csum_bufp);
 }
 
 static int
-evt_ssof_adjust(struct evt_context *tcx, struct evt_node *nd, int at)
+evt_soff_adjust(struct evt_context *tcx, struct evt_node *nd, int at)
 {
-	return evt_common_adjust(tcx, nd, at, evt_ssof_cmp_rect);
+	return evt_common_adjust(tcx, nd, at, evt_soff_cmp_rect);
 }
 
-static struct evt_policy_ops evt_ssof_pol_ops = {
-	.po_insert		= evt_ssof_insert,
-	.po_adjust		= evt_ssof_adjust,
-	.po_split		= evt_even_split,
-	.po_rect_weight		= evt_common_rect_weight,
+static struct evt_policy_ops evt_soff_pol_ops = {
+    .po_insert      = evt_soff_insert,
+    .po_adjust      = evt_soff_adjust,
+    .po_split       = evt_even_split,
+    .po_rect_weight = evt_common_rect_weight,
 };
 
 /**
@@ -3279,7 +3471,7 @@ evt_sdist_cmp_rect(struct evt_context *tcx, const struct evt_node *nd,
 	if (dist1 > dist2)
 		return 1;
 
-	/* All else being equal, revert to ssof */
+	/* All else being equal, revert to soff */
 	return evt_rect_cmp(rt1, rt2);
 }
 
@@ -3294,6 +3486,9 @@ evt_sdist_split(struct evt_context *tcx, bool leaf, struct evt_node *nd_src,
 	int			 boundary;
 	bool			 cond;
 	int64_t			 dist;
+
+	if (unlikely(tcx->tc_depth > 6))
+		return evt_even_split(tcx, leaf, nd_src, nd_dst);
 
 	evt_mbr_read(&mbr, nd_src);
 
@@ -3408,7 +3603,7 @@ evt_node_delete(struct evt_context *tcx)
 {
 	struct evt_trace	*trace;
 	struct evt_node		*node;
-	struct evt_node_entry	*ne;
+	struct evt_node_entry	*ne = NULL;
 	void			*data;
 	umem_off_t		*child_offp;
 	umem_off_t		 child_off;
@@ -3617,6 +3812,7 @@ evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
 	struct evt_filter	 filter = {0};
 	struct evt_rect		 rect;
 	int			 rc = 0;
+	int			 alt_rc = 0;
 
 	/** Find all of the overlapping rectangles and insert a delete record
 	 *  for each one in the specified epoch range
@@ -3637,39 +3833,37 @@ evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
 	if (rc != 0)
 		goto done;
 
+	rc = evt_ent_array_sort(tcx, ent_array, &filter, EVT_ITER_REMOVALS);
+	if (rc != 0)
+		goto done;
+
 	rc = evt_tx_begin(tcx);
 	if (rc != 0)
 		goto done;
 
 	evt_ent_array_for_each(ent, ent_array) {
-		if (ent->en_minor_epc == EVT_MINOR_EPC_MAX)
-			continue; /* Skip existing removal records */
-		entry.ei_rect.rc_ex = ent->en_ext;
+		D_ASSERT(ent->en_minor_epc != EVT_MINOR_EPC_MAX);
+
+		entry.ei_rect.rc_ex = ent->en_sel_ext;
 		entry.ei_bound = entry.ei_rect.rc_epc = ent->en_epoch;
 		entry.ei_rect.rc_minor_epc = EVT_MINOR_EPC_MAX;
-
-		/** One could make the case for removal for intact extents here but it has the
-		 *  potential for messing with aggregation's implicit assumption that it is the
-		 *  remover of extents.  If the extent is only partially covered, we do need to
-		 *  adjust the bounds before inserting the removal record.
-		 */
-		if (ent->en_ext.ex_lo < ext->ex_lo)
-			entry.ei_rect.rc_ex.ex_lo = ext->ex_lo;
-		if (ent->en_ext.ex_hi > ext->ex_hi)
-			entry.ei_rect.rc_ex.ex_hi = ext->ex_hi;
 
 		D_DEBUG(DB_IO, "Insert removal record "DF_RECT"\n", DP_RECT(&entry.ei_rect));
 		BIO_ADDR_SET_HOLE(&entry.ei_addr);
 
 		rc = evt_insert(toh, &entry, NULL);
-		if (rc != 0)
+		if (rc == 1) {
+			alt_rc = 1;
+			rc = 0;
+		}
+		if (rc < 0)
 			break;
 	}
 	rc = evt_tx_end(tcx, rc);
 done:
 	evt_ent_array_fini(ent_array);
 
-	return rc;
+	return rc == 0 ? alt_rc : rc;
 }
 
 daos_size_t
@@ -3713,8 +3907,8 @@ evt_desc_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 	csum_buf_len = ci_csums_len(ent->ei_csum);
 
 	if (csum->cs_buf_len < csum_buf_len) {
-		D_ERROR("Issue copying checksum. Source (%d) is "
-			"larger than destination (%"PRIu64")",
+		D_ERROR("Issue copying checksum. Source (%d) is larger than destination (%" PRIu64
+			")\n",
 			csum->cs_buf_len, csum_buf_len);
 	} else if (csum_buf_len > 0) {
 		memcpy(desc->pt_csum, csum->cs_csum, csum_buf_len);
@@ -3797,20 +3991,29 @@ int
 evt_overhead_get(int alloc_overhead, int tree_order,
 		 struct daos_tree_overhead *ovhd)
 {
+	int order;
+	int order_idx;
+
 	if (ovhd == NULL) {
 		D_ERROR("Invalid ovhd argument\n");
 		return -DER_INVAL;
 	}
 
-	ovhd->to_dyn_count = 0;
 	ovhd->to_record_msize = alloc_overhead + sizeof(struct evt_desc);
 	ovhd->to_node_rec_msize = sizeof(struct evt_node_entry);
-	ovhd->to_leaf_overhead.no_size = alloc_overhead +
-		sizeof(struct evt_node) +
-		(tree_order * sizeof(struct evt_node_entry));
+	ovhd->to_leaf_overhead.no_size  = alloc_overhead + evt_order2size(tree_order, true);
 	ovhd->to_leaf_overhead.no_order = tree_order;
-	ovhd->to_int_node_size = alloc_overhead + sizeof(struct evt_node) +
-		(tree_order * sizeof(uint64_t));
+	ovhd->to_int_node_size          = alloc_overhead + evt_order2size(tree_order, false);
+
+	order_idx = 0;
+	order     = 1;
+	while (order != tree_order) {
+		ovhd->to_dyn_overhead[order_idx].no_order = order;
+		ovhd->to_dyn_overhead[order_idx].no_size  = evt_order2size(order, true);
+		order_idx++;
+		order = evt_new_order(order, tree_order);
+	}
+	ovhd->to_dyn_count = order_idx;
 
 	return 0;
 }
@@ -3841,7 +4044,7 @@ evt_drain(daos_handle_t toh, int *credits, bool *destroyed)
 	if (rc)
 		goto out;
 
-	if (tcx->tc_creds_on)
+	if (credits)
 		*credits = tcx->tc_creds;
 out:
 	rc = evt_tx_end(tcx, rc);
@@ -3850,3 +4053,36 @@ out:
 	tcx->tc_creds = 0;
 	return rc;
 }
+
+int
+evt_feats_set(struct evt_root *root, struct umem_instance *umm, uint64_t feats)
+
+{
+	int			 rc = 0;
+	bool                     end = false;
+
+	if (root->tr_feats == feats)
+		return 0;
+
+	if ((feats & ~EVT_AGG_MASK) != (root->tr_feats & EVT_FEATS_SUPPORTED)) {
+		D_ERROR("Attempt to set internal features denied "DF_X64"\n", feats);
+		return -DER_INVAL;
+	}
+
+	if (!umem_tx_inprogress(umm)) {
+		rc = umem_tx_begin(umm, NULL);
+		if (rc != 0)
+			return rc;
+		end = true;
+	}
+	rc = umem_tx_xadd_ptr(umm, &root->tr_feats, sizeof(root->tr_feats), UMEM_XADD_NO_SNAPSHOT);
+
+	if (rc == 0)
+		root->tr_feats = feats;
+
+	if (end)
+		rc = umem_tx_end(umm, rc);
+
+	return rc;
+}
+

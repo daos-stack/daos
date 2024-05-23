@@ -1,0 +1,32 @@
+hosts:
+  test_servers: 2
+  test_clients: 2
+timeout: 600
+server_config:
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      log_mask: INFO
+      storage: auto
+pool:
+  scm_size: 8000000000
+  nvme_size: 80000000000
+  svcn: 1
+  control_method: dmg
+container:
+  type: POSIX
+  control_method: daos
+mdtest:
+  client_processes:
+    np: 2
+  test_dir: "/"
+  dfs_destroy: false
+  iteration: 1
+  manager: "MPICH"
+  mdtest_params:
+    api: 'DFS'
+    write_bytes: 4194304
+    branching_factor: 1
+    num_of_files_dirs: 4000
+    depth: 0

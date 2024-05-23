@@ -7,7 +7,7 @@
   <parent>
     <groupId>io.daos</groupId>
     <artifactId>daos-java-root</artifactId>
-    <version>1.2.1-SNAPSHOT</version>
+    <version>2.4.0-SNAPSHOT</version>
   </parent>
 
   <groupId>io.daos</groupId>
@@ -15,7 +15,7 @@
   <packaging>jar</packaging>
 
   <properties>
-    <hadoop.version>3.3.1</hadoop.version>
+    <hadoop.version>3.3.6</hadoop.version>
     <native.build.path>${project.basedir}/build</native.build.path>
     <daos.install.path>${project.basedir}/install</daos.install.path>
   </properties>
@@ -42,6 +42,32 @@
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-common</artifactId>
       <version>${hadoop.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>log4j</groupId>
+          <artifactId>log4j</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.zookeeper</groupId>
+          <artifactId>zookeeper</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.codehaus.jackson</groupId>
+          <artifactId>jackson-mapper-asl</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>com.google.guava</groupId>
+          <artifactId>guava</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.eclipse.jetty</groupId>
+          <artifactId>jetty-http</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.eclipse.jetty</groupId>
+          <artifactId>jetty-server</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.mockito</groupId>
@@ -67,6 +93,32 @@
       <version>${hadoop.version}</version>
       <type>test-jar</type>
       <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>log4j</groupId>
+          <artifactId>log4j</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.zookeeper</groupId>
+          <artifactId>zookeeper</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.codehaus.jackson</groupId>
+          <artifactId>jackson-mapper-asl</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>com.google.guava</groupId>
+          <artifactId>guava</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.eclipse.jetty</groupId>
+          <artifactId>jetty-http</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.eclipse.jetty</groupId>
+          <artifactId>jetty-server</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.assertj</groupId>
@@ -138,7 +190,30 @@
                   <include>com.google.protobuf:protobuf-java</include>
                 </includes>
               </artifactSet>
-              <finalName>${artifactId}-${version}-protobuf3-netty4-shaded</finalName>
+              <finalName>${project.artifactId}-${project.version}-protobuf3-netty4-shaded</finalName>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>build-helper-maven-plugin</artifactId>
+        <version>3.0.0</version>
+        <executions>
+          <execution>
+            <id>attach-shaded</id>
+            <phase>package</phase>
+            <goals>
+              <goal>attach-artifact</goal>
+            </goals>
+            <configuration>
+              <artifacts>
+                <artifact>
+                  <file>target/${project.artifactId}-${project.version}-protobuf3-netty4-shaded.jar</file>
+                  <type>jar</type>
+                  <classifier>protobuf3-netty4-shaded</classifier>
+                </artifact>
+              </artifacts>
             </configuration>
           </execution>
         </executions>
@@ -190,6 +265,30 @@
 
   <profiles>
     <profile>
+      <id>java-11</id>
+      <activation>
+        <jdk>11</jdk>
+      </activation>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <configuration>
+              <argLine>--add-exports java.xml/jdk.xml.internal=ALL-UNNAMED</argLine>
+            </configuration>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-failsafe-plugin</artifactId>
+            <configuration>
+              <argLine>--add-exports java.xml/jdk.xml.internal=ALL-UNNAMED</argLine>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
       <id>shade-all</id>
       <build>
         <plugins>
@@ -234,7 +333,7 @@
                 <configuration>
                   <artifacts>
                     <artifact>
-                      <file>target/${artifactId}-${version}-shaded.jar</file>
+                      <file>target/${project.artifactId}-${project.version}-shaded.jar</file>
                       <type>jar</type>
                       <classifier>all-shaded</classifier>
                     </artifact>

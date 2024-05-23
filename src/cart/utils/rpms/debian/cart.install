@@ -1,6 +1,0 @@
-usr/bin/cart_ctl
-usr/bin/*-cart_ctl
-usr/bin/self_test
-usr/bin/*-self_test
-usr/lib/*/cart/utils/*
-usr/etc/*

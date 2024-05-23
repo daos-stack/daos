@@ -1,48 +1,43 @@
 """Build security library"""
-import daos_build
 
-SRC_FILES = ['srv.c', 'cli_security.c', 'srv_acl.c', 'auth.pb-c.c']
-
-def get_objects(cache, *args):
-    """Retrieve built objects from the object cache"""
-    built = []
-    for arg in args:
-        built.append(cache[arg])
-    return built
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env', 'prereqs', 'libdaos_tgts')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
 
-    prereqs.require(denv, 'protobufc', 'argobots', 'hwloc')
+    denv.require('protobufc')
 
-    # Populate the object cache
-    cache = {}
-    for src_file in SRC_FILES:
-        cache[src_file] = denv.SharedObject(src_file)
+    sec_obj = denv.SharedObject('cli_security.c')
+    auth_obj = denv.SharedObject('auth.pb-c.c')
+    acl_obj = denv.SharedObject('acl.c')
 
     # dc_security: Security Client
-    dc_security_tgts = get_objects(cache, 'cli_security.c', 'auth.pb-c.c')
-    Export('dc_security_tgts')
+    dc_security_tgts = [sec_obj, auth_obj, acl_obj]
+    libdaos_tgts.extend(dc_security_tgts)
 
     if not prereqs.server_requested():
         return
 
-    denv.AppendUnique(LIBS=['gurt'])
-    ds_sec = daos_build.library(denv, 'security',
-                                get_objects(cache, 'srv.c', 'srv_acl.c'),
-                                install_off="../..")
-    denv.Install('$PREFIX/lib64/daos_srv', ds_sec)
+    senv = denv.Clone()
+    senv.require("argobots")
+    senv.AppendUnique(LIBS=['gurt'])
+    srv_acl_obj = senv.SharedObject('srv_acl.c')
+    ds_sec = senv.d_library('security', ['srv.c', srv_acl_obj, acl_obj], install_off="../..")
+    senv.Install('$PREFIX/lib64/daos_srv', ds_sec)
 
-    dc_sectest_tgts = get_objects(cache, 'srv_acl.c', 'cli_security.c',
-                                  'auth.pb-c.c')
+    # pylint: disable-next=unused-variable
+    acl_tgts = [auth_obj, srv_acl_obj, acl_obj]
+
+    dc_sectest_tgts = [srv_acl_obj, acl_obj, sec_obj, auth_obj]
     Export('dc_sectest_tgts')
 
     if prereqs.test_requested():
-        SConscript('tests/SConscript', exports='denv')
+        denv = senv
+        SConscript('tests/SConscript', exports=['denv', 'dc_security_tgts', 'acl_tgts'])
+
 
 if __name__ == "SCons.Script":
     scons()

@@ -1,24 +1,24 @@
-#!/usr/bin/python
 """
-(C) Copyright 2020-2021 Intel Corporation.
+(C) Copyright 2020-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from dfuse_test_base import DfuseTestBase
-from command_utils_base import EnvironmentVariables, CommandFailure
+from apricot import TestWithServers
 from command_utils import ExecutableCommand
+from command_utils_base import EnvironmentVariables
+from dfuse_utils import get_dfuse, start_dfuse
+from exception_utils import CommandFailure
 
 
-class VolTestBase(DfuseTestBase):
-    # pylint: disable=too-few-public-methods,too-many-ancestors
-    """Runs HDF5 vol test suites.
+class VolTestBase(TestWithServers):
+    """Runs HDF5 vol test-suites.
 
     :avocado: recursive
     """
 
-    def run_test(self, plugin_path, test_repo):
-        """Run the HDF5 VOL testsuites.
+    def run_test(self, job_manager, plugin_path, test_repo):
+        """Run the HDF5 VOL test-suites.
 
         Raises:
             VolFailed: for an invalid test name or test execution failure
@@ -30,35 +30,37 @@ class VolTestBase(DfuseTestBase):
         client_processes = self.params.get("client_processes")
 
         # create pool, container and dfuse mount
-        self.add_pool(connect=False)
-        self.add_container(self.pool)
+        self.log_step('Creating a single pool and container')
+        pool = self.get_pool(connect=False)
+        container = self.get_container(pool)
 
         # VOL needs to run from a file system that supports xattr.
         #  Currently nfs does not have this attribute so it was recommended
         #  to create a dfuse dir and run vol tests from there.
         # create dfuse container
-        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
+        self.log_step('Starting dfuse so VOL can run from a file system that supports xattr')
+        dfuse = get_dfuse(self, self.hostlist_clients)
+        start_dfuse(self, dfuse, pool, container)
 
         # Assign the test to run
-        self.job_manager.job = ExecutableCommand(
+        job_manager.job = ExecutableCommand(
             namespace=None, command=testname, path=test_repo,
-            check_results=["FAILED"])
+            check_results=["FAILED", "stderr"])
 
         env = EnvironmentVariables()
-        env["DAOS_POOL"] = "{}".format(self.pool.uuid)
-        env["DAOS_SVCL"] = "{}".format(",".join([str(item) for item in
-                                                 self.pool.svc_ranks]))
-        env["DAOS_CONT"] = "{}".format(self.container.uuid)
+        env["DAOS_POOL"] = "{}".format(pool.uuid)
+        env["DAOS_CONT"] = "{}".format(container.uuid)
         env["HDF5_VOL_CONNECTOR"] = "daos"
         env["HDF5_PLUGIN_PATH"] = "{}".format(plugin_path)
-        self.job_manager.assign_hosts(self.hostlist_clients)
-        self.job_manager.assign_processes(client_processes)
-        self.job_manager.assign_environment(env, True)
-        self.job_manager.working_dir.value = self.dfuse.mount_dir.value
+        job_manager.assign_hosts(self.hostlist_clients)
+        job_manager.assign_processes(client_processes)
+        job_manager.assign_environment(env, True)
+        job_manager.working_dir.value = dfuse.mount_dir.value
 
         # run VOL Command
+        self.log_step(f'Running {job_manager.job.command}')
         try:
-            self.job_manager.run()
-        except CommandFailure as _error:
-            self.fail("{} FAILED> \nException occurred: {}".format(
-                self.job_manager.job, str(_error)))
+            job_manager.run()
+        except CommandFailure as error:
+            self.log.error(str(error))
+            self.fail(f"{job_manager.job.command} failed")

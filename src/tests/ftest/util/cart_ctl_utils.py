@@ -1,13 +1,12 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from command_utils_base import FormattedParameter
-from command_utils_base import BasicParameter
 from command_utils import ExecutableCommand
+from command_utils_base import BasicParameter, FormattedParameter
+
 
 # pylint: disable=too-few-public-methods,too-many-instance-attributes
 class CartCtlCommand(ExecutableCommand):
@@ -37,7 +36,7 @@ class CartCtlCommand(ExecutableCommand):
         #
         # set_fi_attr
         #         set fault injection attributes for a fault ID. This command
-        #         must be acompanied by the option
+        #         must be accompanied by the option
         #         --attr fault_id,max_faults,probability,err_code[,argument]
         #
         # options:
@@ -60,9 +59,11 @@ class CartCtlCommand(ExecutableCommand):
         self.cfg_path = FormattedParameter("--cfg_path {}")
         self.directory = FormattedParameter("--directory {}")
         self.rank = FormattedParameter("--rank {}")
-        self.l = FormattedParameter("-l {}")
-        self.n = BasicParameter("-n")
-        self.m = FormattedParameter("-m {}")
+        self.log_mask = FormattedParameter("-l {}")  # noqa: E741
+        self.no_sync = BasicParameter("-n")
+        self.log_message = FormattedParameter("-m {}")
+        self.use_daos_agent_env = FormattedParameter("--use_daos_agent_env", True)
+
 
 class CartCtl(CartCtlCommand):
     """Class defining an object of type CartCtlCommand."""

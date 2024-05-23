@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,8 +19,8 @@ var (
 		code.ScmUnknown, "unknown scm error", "",
 	)
 
-	// FaultDiscoveryFailed represents an SCM discovery failure.
-	FaultDiscoveryFailed = scmFault(
+	// FaultGetModulesFailed represents an SCM discovery failure.
+	FaultGetModulesFailed = scmFault(
 		code.ScmDiscoveryFailed, "module discovery failed", "",
 	)
 
@@ -59,7 +59,7 @@ var (
 	// on SCM storage that was already formatted.
 	FaultFormatNoReformat = scmFault(
 		code.StorageAlreadyFormatted,
-		"format request for already-formatted storage",
+		"format request for device with an existing filesystem signature",
 		"retry the operation with force option to overwrite existing data",
 	)
 
@@ -69,14 +69,6 @@ var (
 		code.StorageDeviceAlreadyMounted,
 		"request included already-mounted device",
 		"unmount the device and retry the operation",
-	)
-
-	// FaultTargetAlreadyMounted represents an error where a format was requested
-	// on an SCM storage target that was already mounted on the system.
-	FaultTargetAlreadyMounted = scmFault(
-		code.StorageTargetAlreadyMounted,
-		"request included already-mounted mount target (cannot double-mount)",
-		"unmount the target and retry the operation",
 	)
 
 	// FaultMissingNdctl represents an error where the ndctl SCM management tool
@@ -116,16 +108,6 @@ func FaultFormatMissingDevice(device string) *fault.Fault {
 		code.ScmFormatMissingDevice,
 		fmt.Sprintf("configured SCM device %s does not exist", device),
 		"check the configured value and/or perform the SCM preparation procedure",
-	)
-}
-
-// FaultPathAccessDenied represents an error where a mount point or device path for
-// a SCM storage target is inaccessible because of a permissions issue.
-func FaultPathAccessDenied(path string) *fault.Fault {
-	return scmFault(
-		code.ScmPathAccessDenied,
-		fmt.Sprintf("path %q has incompatible access permissions", path),
-		"verify the path is accessible by the user running daos_server and try again",
 	)
 }
 

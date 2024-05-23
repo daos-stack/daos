@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,26 +15,126 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
-	. "github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
-var (
-	defaultPoolUUID = MockUUID()
-)
+func Test_Dmg_PoolTierRatioFlag(t *testing.T) {
+	for name, tc := range map[string]struct {
+		input     string
+		expRatios []float64
+		expString string
+		expErr    error
+	}{
+		"empty": {
+			expErr: errors.New("no tier ratio specified"),
+		},
+		"invalid": {
+			input:  "ABCD",
+			expErr: errors.New("invalid tier ratio \"ABCD\""),
+		},
+		"less than 100%": {
+			input:  "10,80",
+			expErr: errors.New("must add up to"),
+		},
+		"total more than 100%": {
+			input:  "30,90",
+			expErr: errors.New("must add up to"),
+		},
+		"non-numeric": {
+			input:  "0.3,foo",
+			expErr: errors.New("invalid"),
+		},
+		"negative adds up to 100": {
+			input:  "-30,130",
+			expErr: errors.New("0-100"),
+		},
+		"0,0": {
+			input:  "0,0",
+			expErr: errors.New("must add up to"),
+		},
+		"%,%": {
+			input:  "%,%",
+			expErr: errors.New("invalid"),
+		},
+		"defaults": {
+			input:     "defaults",
+			expRatios: defaultTierRatios,
+			expString: func() string {
+				rStrs := make([]string, len(defaultTierRatios))
+				for i, ratio := range defaultTierRatios {
+					rStrs[i] = pretty.PrintTierRatio(ratio)
+				}
+				return strings.Join(rStrs, ",")
+			}(),
+		},
+		"0": {
+			input:     "0",
+			expRatios: []float64{0, 1},
+			expString: "0.00%,100.00%",
+		},
+		"100": {
+			input:     "100",
+			expRatios: []float64{1},
+			expString: "100.00%",
+		},
+		"single tier padded": {
+			input:     "45.3",
+			expRatios: []float64{0.453, 0.547},
+			expString: "45.30%,54.70%",
+		},
+		"valid two tiers": {
+			input:     "0.3,99.7",
+			expRatios: []float64{0.003, 0.997},
+			expString: "0.30%,99.70%",
+		},
+		"valid three tiers": {
+			input:     "0.3,69.7,30.0",
+			expRatios: []float64{0.003, 0.697, 0.3},
+			expString: "0.30%,69.70%,30.00%",
+		},
+		"valid with %": {
+			input:     "7 %,93%",
+			expRatios: []float64{0.07, 0.93},
+			expString: "7.00%,93.00%",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var trf tierRatioFlag
+			if tc.input != "defaults" {
+				err := trf.UnmarshalFlag(tc.input)
+				test.CmpErr(t, tc.expErr, err)
+				if err != nil {
+					return
+				}
+			}
+			cmpOpts := []cmp.Option{
+				cmpopts.EquateApprox(0.01, 0),
+			}
+			if diff := cmp.Diff(tc.expRatios, trf.Ratios(), cmpOpts...); diff != "" {
+				t.Fatalf("unexpected tier ratio (-want, +got):\n%s\n", diff)
+			}
+			if diff := cmp.Diff(tc.expString, trf.String()); diff != "" {
+				t.Fatalf("unexpected string (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
 
 func createACLFile(t *testing.T, dir string, acl *control.AccessControlList) string {
 	t.Helper()
 
-	return common.CreateTestFile(t, dir, control.FormatACLDefault(acl))
+	return test.CreateTestFile(t, dir, control.FormatACLDefault(acl))
 }
 
 func TestPoolCommands(t *testing.T) {
@@ -49,7 +149,7 @@ func TestPoolCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tmpDir, tmpCleanup := CreateTestDir(t)
+	tmpDir, tmpCleanup := test.CreateTestDir(t)
 	defer tmpCleanup()
 
 	// Some tests need a valid ACL file
@@ -68,7 +168,7 @@ func TestPoolCommands(t *testing.T) {
 		t.Fatalf("Couldn't set file writable only")
 	}
 
-	testEmptyFile := common.CreateTestFile(t, tmpDir, "")
+	testEmptyFile := test.CreateTestFile(t, tmpDir, "")
 
 	// Subdirectory with no write perms
 	testNoPermDir := filepath.Join(tmpDir, "badpermsdir")
@@ -76,8 +176,8 @@ func TestPoolCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	propWithVal := func(key, val string) *control.PoolProperty {
-		hdlr := control.PoolProperties()[key]
+	propWithVal := func(key, val string) *daos.PoolProperty {
+		hdlr := daos.PoolProperties()[key]
 		prop := hdlr.GetProperty(key)
 		if val != "" {
 			if err := prop.SetValue(val); err != nil {
@@ -87,74 +187,250 @@ func TestPoolCommands(t *testing.T) {
 		return prop
 	}
 
+	setQueryMask := func(xfrm func(qm *daos.PoolQueryMask)) daos.PoolQueryMask {
+		qm := daos.DefaultPoolQueryMask
+		xfrm(&qm)
+		return qm
+	}
+
 	runCmdTests(t, []cmdTest{
 		{
-			"Create pool with missing arguments",
-			"pool create",
+			"Pool create with extra argument",
+			fmt.Sprintf("pool create --size %s foo bar", testSizeStr),
 			"",
-			errors.New("must be supplied"),
+			errors.New("unexpected"),
+		},
+		{
+			"Create pool with label prop and argument",
+			fmt.Sprintf("pool create --size %s --properties label:foo foo", testSizeStr),
+			"",
+			errors.New("can't set label property"),
+		},
+		{
+			"Create pool with invalid label",
+			fmt.Sprintf("pool create --size %s alfalfa!", testSizeStr),
+			"",
+			errors.New("invalid label"),
+		},
+		{
+			"Create pool with label argument",
+			fmt.Sprintf("pool create --size %s foo", testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					TotalBytes: uint64(testSize),
+					TierRatio:  []float64{0.06, 0.94},
+					User:       eUsr.Username + "@",
+					UserGroup:  eGrp.Name + "@",
+					Ranks:      []ranklist.Rank{},
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", "foo"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Create pool with missing size",
+			"pool create label",
+			"",
+			errors.New("must be set"),
+		},
+		{
+			"Create pool with missing label",
+			fmt.Sprintf("pool create --size %s", testSizeStr),
+			"",
+			errors.New("required argument"),
 		},
 		{
 			"Create pool with incompatible arguments (auto nvme-size)",
-			fmt.Sprintf("pool create --size %s --nvme-size %s", testSizeStr, testSizeStr),
+			fmt.Sprintf("pool create label --size %s --nvme-size %s", testSizeStr, testSizeStr),
 			"",
 			errors.New("may not be mixed"),
 		},
 		{
 			"Create pool with incompatible arguments (auto scm-size)",
-			fmt.Sprintf("pool create --size %s --scm-size %s", testSizeStr, testSizeStr),
+			fmt.Sprintf("pool create label --size %s --scm-size %s", testSizeStr, testSizeStr),
 			"",
 			errors.New("may not be mixed"),
+		},
+		{
+			"Create pool with incompatible arguments (% size nranks)",
+			"pool create label --size 100% --nranks 16",
+			"",
+			errors.New("--size may not be mixed with --nranks"),
+		},
+		{
+			"Create pool with incompatible arguments (% size tier-ratio)",
+			"pool create label --size 100% --tier-ratio 16",
+			"",
+			errors.New("--size=% may not be mixed with --tier-ratio"),
+		},
+		{
+			"Create pool with invalid arguments (too small ratio)",
+			"pool create label --size=0%",
+			"",
+			errors.New("Creating DAOS pool with invalid full size ratio"),
+		},
+		{
+			"Create pool with invalid arguments (too big ratio)",
+			"pool create label --size=101%",
+			"",
+			errors.New("Creating DAOS pool with invalid full size ratio"),
 		},
 		{
 			"Create pool with incompatible rank arguments (auto)",
-			fmt.Sprintf("pool create --size %s --nranks 16 --ranks 1,2,3", testSizeStr),
+			fmt.Sprintf("pool create label --size %s --nranks 16 --ranks 1,2,3", testSizeStr),
 			"",
 			errors.New("may not be mixed"),
 		},
 		{
-			"Create pool with invalid tier-ratio (auto)",
-			fmt.Sprintf("pool create --size %s --tier-ratio 200", testSizeStr),
+			"Create pool with incompatible arguments (auto with meta-blob)",
+			fmt.Sprintf("pool create label --size %s --meta-size 32G", testSizeStr),
+			"",
+			errors.New("can only be set"),
+		},
+		{
+			"Create pool with too-large tier-ratio (auto)",
+			fmt.Sprintf("pool create label --size %s --tier-ratio 200", testSizeStr),
 			"",
 			errors.New("0-100"),
 		},
 		{
+			"Create pool with too-small tier-ratio (auto)",
+			fmt.Sprintf("pool create label --size %s --tier-ratio 30,30", testSizeStr),
+			"",
+			errors.New("100"),
+		},
+		{
 			"Create pool with single tier-ratio (auto)",
-			fmt.Sprintf("pool create --size %s --tier-ratio 10", testSizeStr),
+			fmt.Sprintf("pool create label --size %s --tier-ratio 10", testSizeStr),
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
 					TotalBytes: uint64(testSize),
 					TierRatio:  []float64{0.1, 0.9},
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
-					Ranks:      []system.Rank{},
+					Ranks:      []ranklist.Rank{},
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Create pool with fine-grained tier-ratios (auto)",
+			fmt.Sprintf("pool create label --size %s --tier-ratio 3.23,96.77", testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					TotalBytes: uint64(testSize),
+					TierRatio:  []float64{0.0323, 0.9677},
+					User:       eUsr.Username + "@",
+					UserGroup:  eGrp.Name + "@",
+					Ranks:      []ranklist.Rank{},
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Create pool with really fine-grained tier-ratios (auto; rounded)",
+			fmt.Sprintf("pool create label --size %s --tier-ratio 23.725738953,76.274261047", testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					TotalBytes: uint64(testSize),
+					TierRatio:  []float64{0.2373, 0.7626999999999999},
+					User:       eUsr.Username + "@",
+					UserGroup:  eGrp.Name + "@",
+					Ranks:      []ranklist.Rank{},
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
+					},
 				}),
 			}, " "),
 			nil,
 		},
 		{
 			"Create pool with incompatible arguments (manual)",
-			fmt.Sprintf("pool create --scm-size %s --nranks 42", testSizeStr),
+			fmt.Sprintf("pool create label --scm-size %s --nranks 42", testSizeStr),
 			"",
 			errors.New("may not be mixed"),
 		},
 		{
+			"Create pool with incompatible arguments (-s -t)",
+			fmt.Sprintf("pool create label --scm-size %s --tier-ratio 6", testSizeStr),
+			"",
+			errors.New("may not be mixed"),
+		},
+		{
+			"Create pool with incompatible arguments (-n without -s)",
+			fmt.Sprintf("pool create label --nvme-size %s", testSizeStr),
+			"",
+			errors.New("must be set"),
+		},
+		{
 			"Create pool with minimal arguments",
-			fmt.Sprintf("pool create --scm-size %s --nsvc 3", testSizeStr),
+			fmt.Sprintf("pool create label --scm-size %s --nsvc 3", testSizeStr),
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
 					NumSvcReps: 3,
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
-					Ranks:      []system.Rank{},
+					Ranks:      []ranklist.Rank{},
 					TierBytes:  []uint64{uint64(testSize), 0},
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Create pool with manual meta blob size",
+			fmt.Sprintf("pool create label --scm-size %s --meta-size 1024G",
+				testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					User:      eUsr.Username + "@",
+					UserGroup: eGrp.Name + "@",
+					Ranks:     []ranklist.Rank{},
+					TierBytes: []uint64{uint64(testSize), 0},
+					MetaBytes: humanize.GByte * 1024,
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Create pool with manual meta blob size smaller than scm",
+			"pool create label --scm-size 1026G --meta-size 1024G",
+			"",
+			errors.New("can not be smaller than"),
+		},
+		{
+			"Create pool with manual ranks",
+			fmt.Sprintf("pool create label --size %s --ranks 1,2", testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					User:       eUsr.Username + "@",
+					UserGroup:  eGrp.Name + "@",
+					Ranks:      []ranklist.Rank{1, 2},
+					TotalBytes: uint64(testSize),
+					TierRatio:  []float64{0.06, 0.94},
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
+					},
 				}),
 			}, " "),
 			nil,
 		},
 		{
 			"Create pool with auto storage parameters",
-			fmt.Sprintf("pool create --size %s --tier-ratio 2,98 --nranks 8", testSizeStr),
+			fmt.Sprintf("pool create label --size %s --tier-ratio 2,98 --nranks 8", testSizeStr),
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
 					TotalBytes: uint64(testSize),
@@ -162,64 +438,94 @@ func TestPoolCommands(t *testing.T) {
 					NumRanks:   8,
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
-					Ranks:      []system.Rank{},
+					Ranks:      []ranklist.Rank{},
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
+					},
 				}),
 			}, " "),
 			nil,
 		},
 		{
 			"Create pool with user and group domains",
-			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo@home --group bar@home", testSizeStr),
+			fmt.Sprintf("pool create label --scm-size %s --nsvc 3 --user foo@home --group bar@home", testSizeStr),
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
 					NumSvcReps: 3,
 					User:       "foo@home",
 					UserGroup:  "bar@home",
-					Ranks:      []system.Rank{},
+					Ranks:      []ranklist.Rank{},
 					TierBytes:  []uint64{uint64(testSize), 0},
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
+					},
 				}),
 			}, " "),
 			nil,
 		},
 		{
 			"Create pool with user but no group",
-			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo", testSizeStr),
+			fmt.Sprintf("pool create label --scm-size %s --nsvc 3 --user foo", testSizeStr),
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
 					NumSvcReps: 3,
 					User:       "foo@",
 					UserGroup:  eGrp.Name + "@",
-					Ranks:      []system.Rank{},
+					Ranks:      []ranklist.Rank{},
 					TierBytes:  []uint64{uint64(testSize), 0},
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
+					},
 				}),
 			}, " "),
 			nil,
 		},
 		{
 			"Create pool with group but no user",
-			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --group foo", testSizeStr),
+			fmt.Sprintf("pool create label --scm-size %s --nsvc 3 --group foo", testSizeStr),
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
 					NumSvcReps: 3,
 					User:       eUsr.Username + "@",
 					UserGroup:  "foo@",
-					Ranks:      []system.Rank{},
+					Ranks:      []ranklist.Rank{},
 					TierBytes:  []uint64{uint64(testSize), 0},
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
+					},
 				}),
 			}, " "),
 			nil,
 		},
 		{
 			"Create pool with invalid ACL file",
-			fmt.Sprintf("pool create --scm-size %s --acl-file /not/a/real/file", testSizeStr),
+			fmt.Sprintf("pool create label --scm-size %s --acl-file /not/a/real/file", testSizeStr),
 			"",
 			dmgTestErr("opening ACL file: open /not/a/real/file: no such file or directory"),
 		},
 		{
 			"Create pool with empty ACL file",
-			fmt.Sprintf("pool create --scm-size %s --acl-file %s", testSizeStr, testEmptyFile),
+			fmt.Sprintf("pool create label --scm-size %s --acl-file %s", testSizeStr, testEmptyFile),
 			"",
 			dmgTestErr(fmt.Sprintf("ACL file '%s' contains no entries", testEmptyFile)),
+		},
+		{
+			"Create pool with scrubbing",
+			fmt.Sprintf("pool create label --scm-size %s --properties=scrub:timed,scrub_freq:1", testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					Properties: []*daos.PoolProperty{
+						propWithVal("scrub", "timed"),
+						propWithVal("scrub_freq", "1"),
+						propWithVal("label", "label"),
+					},
+					User:      eUsr.Username + "@",
+					UserGroup: eGrp.Name + "@",
+					Ranks:     []ranklist.Rank{},
+					TierBytes: []uint64{uint64(testSize), 0},
+				}),
+			}, " "),
+			nil,
 		},
 		{
 			"Exclude a target with single target idx",
@@ -306,7 +612,7 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.PoolExtendReq{
 					ID:    "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Ranks: []system.Rank{1},
+					Ranks: []ranklist.Rank{1},
 				}),
 			}, " "),
 			nil,
@@ -317,7 +623,7 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.PoolExtendReq{
 					ID:    "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Ranks: []system.Rank{1, 2, 3},
+					Ranks: []ranklist.Rank{1, 2, 3},
 				}),
 			}, " "),
 			nil,
@@ -370,6 +676,17 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Destroy pool with recursive",
+			"pool destroy 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --recursive",
+			strings.Join([]string{
+				printRequest(t, &control.PoolDestroyReq{
+					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Recursive: true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Evict pool",
 			"pool evict 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 			strings.Join([]string{
@@ -401,7 +718,7 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.PoolSetPropReq{
 					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Properties: []*control.PoolProperty{
+					Properties: []*daos.PoolProperty{
 						propWithVal("label", "foo"),
 						propWithVal("space_rb", "42"),
 					},
@@ -415,30 +732,13 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.PoolSetPropReq{
 					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Properties: []*control.PoolProperty{
+					Properties: []*daos.PoolProperty{
 						propWithVal("label", "foo"),
 						propWithVal("space_rb", "42"),
 					},
 				}),
 			}, " "),
 			nil,
-		},
-		{
-			"Set pool property with pool flag and deprecated flags",
-			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --name label --value foo",
-			strings.Join([]string{
-				printRequest(t, &control.PoolSetPropReq{
-					ID:         "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Properties: []*control.PoolProperty{propWithVal("label", "foo")},
-				}),
-			}, " "),
-			nil,
-		},
-		{
-			"Set pool property mixed flags/positional",
-			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --name label --value foo label:foo",
-			"",
-			errors.New("cannot mix"),
 		},
 		{
 			"Set pool property invalid property",
@@ -450,7 +750,7 @@ func TestPoolCommands(t *testing.T) {
 			"Set pool property missing value",
 			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb label:",
 			"",
-			errors.New("must not be empty"),
+			errors.New("invalid property"),
 		},
 		{
 			"Set pool property bad value",
@@ -459,12 +759,42 @@ func TestPoolCommands(t *testing.T) {
 			errors.New("invalid value"),
 		},
 		{
+			"Set pool perf_domain property is not allowed",
+			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb perf_domain:root",
+			"",
+			errors.New("can't set perf_domain on existing pool."),
+		},
+		{
+			"Set pool rd_fac property is not allowed",
+			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb rd_fac:1",
+			"",
+			errors.New("can't set redundancy factor on existing pool."),
+		},
+		{
+			"Set pool rf property is not allowed",
+			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb rf:1",
+			"",
+			errors.New("can't set redundancy factor on existing pool."),
+		},
+		{
+			"Set pool ec_pda property is not allowed",
+			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb ec_pda:1",
+			"",
+			errors.New("can't set EC performance domain affinity on existing pool."),
+		},
+		{
+			"Set pool rp_pda property is not allowed",
+			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb rp_pda:1",
+			"",
+			errors.New("can't set RP performance domain affinity on existing pool"),
+		},
+		{
 			"Get pool property",
 			"pool get-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb label",
 			strings.Join([]string{
 				printRequest(t, &control.PoolGetPropReq{
 					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Properties: []*control.PoolProperty{
+					Properties: []*daos.PoolProperty{
 						propWithVal("label", ""),
 					},
 				}),
@@ -632,7 +962,63 @@ func TestPoolCommands(t *testing.T) {
 			"pool query 12345678-1234-1234-1234-1234567890ab",
 			strings.Join([]string{
 				printRequest(t, &control.PoolQueryReq{
-					ID: "12345678-1234-1234-1234-1234567890ab",
+					ID:        "12345678-1234-1234-1234-1234567890ab",
+					QueryMask: daos.DefaultPoolQueryMask,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query pool with UUID and enabled ranks",
+			"pool query --show-enabled 12345678-1234-1234-1234-1234567890ab",
+			strings.Join([]string{
+				printRequest(t, &control.PoolQueryReq{
+					ID:        "12345678-1234-1234-1234-1234567890ab",
+					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) { qm.SetOptions(daos.PoolQueryOptionEnabledEngines) }),
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query pool with UUID and enabled ranks",
+			"pool query -e 12345678-1234-1234-1234-1234567890ab",
+			strings.Join([]string{
+				printRequest(t, &control.PoolQueryReq{
+					ID:        "12345678-1234-1234-1234-1234567890ab",
+					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) { qm.SetOptions(daos.PoolQueryOptionEnabledEngines) }),
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query pool with UUID and disabled ranks",
+			"pool query --show-disabled 12345678-1234-1234-1234-1234567890ab",
+			strings.Join([]string{
+				printRequest(t, &control.PoolQueryReq{
+					ID:        "12345678-1234-1234-1234-1234567890ab",
+					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) { qm.SetOptions(daos.PoolQueryOptionDisabledEngines) }),
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query pool with UUID and disabled ranks",
+			"pool query -b 12345678-1234-1234-1234-1234567890ab",
+			strings.Join([]string{
+				printRequest(t, &control.PoolQueryReq{
+					ID:        "12345678-1234-1234-1234-1234567890ab",
+					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) { qm.SetOptions(daos.PoolQueryOptionDisabledEngines) }),
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query pool for health only",
+			"pool query --health-only 12345678-1234-1234-1234-1234567890ab",
+			strings.Join([]string{
+				printRequest(t, &control.PoolQueryReq{
+					ID:        "12345678-1234-1234-1234-1234567890ab",
+					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) { *qm = daos.HealthOnlyPoolQueryMask }),
 				}),
 			}, " "),
 			nil,
@@ -642,7 +1028,8 @@ func TestPoolCommands(t *testing.T) {
 			"pool query test_label",
 			strings.Join([]string{
 				printRequest(t, &control.PoolQueryReq{
-					ID: "test_label",
+					ID:        "test_label",
+					QueryMask: daos.DefaultPoolQueryMask,
 				}),
 			}, " "),
 			nil,
@@ -654,19 +1041,35 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Errorf("invalid label"),
 		},
 		{
+			"Upgrade pool with pool ID",
+			"pool upgrade 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+			strings.Join([]string{
+				printRequest(t, &control.PoolUpgradeReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Nonexistent subcommand",
 			"pool quack",
 			"",
 			fmt.Errorf("Unknown command"),
+		},
+		{
+			"Query pool with incompatible arguments",
+			"pool query --show-disabled --show-enabled 12345678-1234-1234-1234-1234567890ab",
+			"",
+			errors.New("may not be mixed"),
 		},
 	})
 }
 
 func TestPoolGetACLToFile_Success(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
-	tmpDir, tmpCleanup := CreateTestDir(t)
+	tmpDir, tmpCleanup := test.CreateTestDir(t)
 	defer tmpCleanup()
 
 	aclFile := filepath.Join(tmpDir, "out.txt")
@@ -733,13 +1136,13 @@ func TestDmg_PoolListCmd_Errors(t *testing.T) {
 			listResp: &mgmtpb.ListPoolsResp{
 				Pools: []*mgmtpb.ListPoolsResp_Pool{
 					{
-						Uuid:    common.MockUUID(1),
+						Uuid:    test.MockUUID(1),
 						SvcReps: []uint32{1, 3, 5, 8},
 					},
 				},
 			},
 			queryResp: &mgmtpb.PoolQueryResp{
-				Uuid:      common.MockUUID(1),
+				Uuid:      test.MockUUID(1),
 				TierStats: []*mgmtpb.StorageUsageStats{{}},
 			},
 		},
@@ -748,20 +1151,21 @@ func TestDmg_PoolListCmd_Errors(t *testing.T) {
 			listResp: &mgmtpb.ListPoolsResp{
 				Pools: []*mgmtpb.ListPoolsResp_Pool{
 					{
-						Uuid:    common.MockUUID(1),
+						Uuid:    test.MockUUID(1),
 						SvcReps: []uint32{1, 3, 5, 8},
+						State:   daos.PoolServiceStateReady.String(),
 					},
 				},
 			},
 			queryResp: &mgmtpb.PoolQueryResp{
-				Status: int32(drpc.DaosNotInit),
+				Status: int32(daos.NotInit),
 			},
 			expErr: errors.New("Query on pool \"00000001\" unsuccessful, status: \"DER_UNINIT"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			responses := []*control.UnaryResponse{
 				control.MockMSResponse("10.0.0.1:10001", tc.msErr, tc.listResp),
@@ -777,11 +1181,11 @@ func TestDmg_PoolListCmd_Errors(t *testing.T) {
 
 			PoolListCmd := new(PoolListCmd)
 			PoolListCmd.setInvoker(mi)
-			PoolListCmd.setLog(log)
+			PoolListCmd.SetLog(log)
 			PoolListCmd.setConfig(tc.ctlCfg)
 
 			gotErr := PoolListCmd.Execute(nil)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }

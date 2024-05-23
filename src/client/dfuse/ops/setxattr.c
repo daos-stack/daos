@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,7 +7,10 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-#include "daos_uns.h"
+#include <daos_uns.h>
+
+#define ACL_ACCESS	"system.posix_acl_access"
+#define ACL_DEFAULT	"system.posix_acl_default"
 
 void
 dfuse_cb_setxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
@@ -20,7 +23,7 @@ dfuse_cb_setxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 	DFUSE_TRA_DEBUG(inode, "Attribute '%s'", name);
 
 	if (strncmp(name, DUNS_XATTR_NAME, sizeof(DUNS_XATTR_NAME)) == 0) {
-		struct duns_attr_t	dattr = {};
+		struct duns_attr_t dattr = {};
 
 		if (inode->ie_root) {
 			DFUSE_TRA_WARNING(inode, "Attempt to set duns attr on container root");
@@ -35,8 +38,13 @@ dfuse_cb_setxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 		duns_attr = true;
 	}
 
-	rc = dfs_setxattr(inode->ie_dfs->dfs_ns, inode->ie_obj, name, value,
-			  size, flags);
+	if (strncmp(name, ACL_ACCESS, sizeof(ACL_ACCESS)) == 0)
+		D_GOTO(err, rc = ENOTSUP);
+
+	if (strncmp(name, ACL_DEFAULT, sizeof(ACL_DEFAULT)) == 0)
+		D_GOTO(err, rc = ENOTSUP);
+
+	rc = dfs_setxattr(inode->ie_dfs->dfs_ns, inode->ie_obj, name, value, size, flags);
 	if (rc == 0) {
 		/* Optionally remove the dentry to force a new lookup on access.
 		 * If the xattr is to set a UNS entry point, and dentry_dir
@@ -48,12 +56,10 @@ dfuse_cb_setxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 		 * will be skipped.
 		 */
 		if (duns_attr && inode->ie_dfs->dfc_dentry_dir_timeout > 0) {
-			struct dfuse_projection_info *fs_handle;
+			struct dfuse_info *dfuse_info = fuse_req_userdata(req);
 
-			fs_handle = fuse_req_userdata(req);
-			rc = fuse_lowlevel_notify_inval_entry(fs_handle->dpi_info->di_session,
-							      inode->ie_parent,
-							      inode->ie_name,
+			rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session,
+							      inode->ie_parent, inode->ie_name,
 							      strnlen(inode->ie_name, NAME_MAX));
 			DFUSE_TRA_INFO(inode, "inval_entry() rc is %d", rc);
 		}

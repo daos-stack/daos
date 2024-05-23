@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,7 +7,6 @@
 package common
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -46,32 +45,6 @@ func GetFilePaths(dir string, ext string) ([]string, error) {
 		}
 	}
 	return matchingFiles, nil
-}
-
-// SplitFile separates file content into contiguous sections separated by
-// a blank line.
-func SplitFile(path string) (sections [][]string, err error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	var lines []string
-	for scanner.Scan() {
-		if scanner.Text() == "" {
-			sections = append(sections, lines)
-			lines = make([]string, 0)
-		} else {
-			lines = append(lines, scanner.Text())
-		}
-	}
-	if len(lines) > 0 {
-		sections = append(sections, lines)
-	}
-
-	return
 }
 
 // TruncFile overrides existing or creates new file with default options
@@ -286,9 +259,8 @@ func FindBinary(binName string) (string, error) {
 	return adjPath, nil
 }
 
-// CopyFile the src file to dst. Any existing file will be overwritten and
-// will not copy file attributes.
-func CopyFile(src, dst string) error {
+// CpFile copies a file from src to dst.
+func CpFile(src, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {
 		return err
@@ -307,4 +279,99 @@ func CopyFile(src, dst string) error {
 	}
 
 	return nil
+}
+
+// Copy the Directory from source to destination.
+func CpDir(source string, dest string) error {
+	// get properties of source dir
+	sourceinfo, err := os.Stat(source)
+	if err != nil {
+		return errors.Wrap(err, "unable to get FileInfo structure")
+	}
+
+	// create dest dir
+	err = os.MkdirAll(dest, sourceinfo.Mode())
+	if err != nil {
+		return errors.Wrap(err, "unable to create destination Folder")
+	}
+
+	directory, _ := os.Open(source)
+	objects, err := directory.Readdir(-1)
+
+	for _, obj := range objects {
+		sourceFile := source + "/" + obj.Name()
+		destinationFile := dest + "/" + obj.Name()
+
+		if obj.IsDir() {
+			// create sub-directories - recursively
+			err = CpDir(sourceFile, destinationFile)
+			if err != nil {
+				return errors.Wrap(err, "unable to Copy Dir")
+			}
+		} else {
+			// perform the file copy
+			err = CpFile(sourceFile, destinationFile)
+			if err != nil {
+				return errors.Wrap(err, "unable to Copy File")
+			}
+		}
+
+	}
+	return nil
+}
+
+// Check if file or directory that starts with . which is hidden
+func IsHidden(filename string) bool {
+	if filename != "" && filename[0:1] == "." {
+		return true
+	}
+
+	return false
+}
+
+// Normalize the input path with removing redundant separators, up-level reference, changing relative
+// path to absolute one, etc.
+func NormalizePath(p string) (np string, err error) {
+	np, err = filepath.EvalSymlinks(p)
+	if err != nil {
+		return
+	}
+
+	if !filepath.IsAbs(np) {
+		np, err = filepath.Abs(np)
+		if err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+// HasPrefixPath reports whether sub parameter path is a prefix of the base parameter one.
+func HasPrefixPath(base, sub string) (bool, error) {
+	var err error
+
+	base, err = NormalizePath(base)
+	if err != nil {
+		return false, err
+	}
+	baseList := strings.Split(base, string(os.PathSeparator))[1:]
+
+	sub, err = NormalizePath(sub)
+	if err != nil {
+		return false, err
+	}
+	subList := strings.Split(sub, string(os.PathSeparator))[1:]
+
+	if len(baseList) > len(subList) {
+		return false, nil
+	}
+
+	for i, file := range baseList {
+		if file != subList[i] {
+			return false, nil
+		}
+	}
+
+	return true, nil
 }

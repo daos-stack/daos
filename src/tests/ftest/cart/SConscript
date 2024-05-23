@@ -1,69 +1,36 @@
-#!python
-# Copyright (C) 2016-2021 Intel Corporation
-# All rights reserved.
-#
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted for any purpose (including commercial purposes)
-# provided that the following conditions are met:
-#
-# 1. Redistributions of source code must retain the above copyright notice,
-#    this list of conditions, and the following disclaimer.
-#
-# 2. Redistributions in binary form must reproduce the above copyright notice,
-#    this list of conditions, and the following disclaimer in the
-#    documentation and/or materials provided with the distribution.
-#
-# 3. In addition, redistributions of modified forms of the source or binary
-#    code must carry prominent notices stating that the original code was
-#    changed and the date of the change.
-#
-#  4. All publications or advertising materials mentioning features or use of
-#     this software are asked, but not required, to acknowledge that it was
-#     developed by Intel Corporation and credit the contributors.
-#
-# 5. Neither the name of Intel Corporation, nor the name of any Contributor
-#    may be used to endorse or promote products derived from this software
-#    without specific prior written permission.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY
-# DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-# (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
-# THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+# /*
+#  * (C) Copyright 2016-2023 Intel Corporation.
+#  *
+#  * SPDX-License-Identifier: BSD-2-Clause-Patent
+# */
 """Build crt tests"""
 
 import os
-import daos_build
 
 SIMPLE_TEST_SRC = ['threaded_client.c', 'dual_iface_server.c',
                    'no_pmix_multi_ctx.c', 'threaded_server.c',
                    'test_corpc_prefwd.c',
                    'test_corpc_exclusive.c',
                    'test_proto_server.c', 'test_proto_client.c',
+                   'test_multisend_server.c', 'test_multisend_client.c',
                    'test_no_timeout.c', 'test_ep_cred_server.c',
                    'test_ep_cred_client.c', 'no_pmix_launcher_server.c',
                    'no_pmix_launcher_client.c', 'no_pmix_group_test.c',
                    'test_rpc_to_ghost_rank.c', 'no_pmix_corpc_errors.c']
-BASIC_SRC = ['crt_basic.c']
+BASIC_SRC = 'crt_basic.c'
 IV_TESTS = ['iv_client.c', 'iv_server.c']
-#TEST_RPC_ERR_SRC = 'test_rpc_error.c'
-#CRT_RPC_TESTS = ['rpc_test_cli.c', 'rpc_test_srv.c', 'rpc_test_srv2.c']
+# TEST_RPC_ERR_SRC = 'test_rpc_error.c'
+# CRT_RPC_TESTS = ['rpc_test_cli.c', 'rpc_test_srv.c', 'rpc_test_srv2.c']
 SWIM_TESTS = ['test_swim.c', 'test_swim_net.c', 'test_swim_emu.c']
 HLC_TESTS = ['test_hlc_net.c']
-TEST_GROUP_NP_TESTS = ['test_group_np_srv.c', 'test_group_np_cli.c',
-                       'no_pmix_group_version.c']
+TEST_GROUP_NP_TESTS = ['test_group_np_srv.c', 'test_group_np_cli.c', 'no_pmix_group_version.c']
 FAULT_STATUS_TEST = 'fault_status.c'
+
 
 def scons():
     """scons function"""
 
-    Import('env', 'prereqs')
-    Import('cart_utils_objs')
+    Import('env', 'cart_utils_objs')
 
     ##############################
     # Create test programs
@@ -71,47 +38,45 @@ def scons():
     tenv = env.Clone()
 
     tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'm'])
-    prereqs.require(tenv, 'crypto', 'mercury')
+    tenv.AppendUnique(LIBS=['daos', 'daos_common'])
+    tenv.AppendUnique(CPPPATH=[Dir('../../../cart/utils').srcnode()])
+    tenv.require('crypto', 'mercury', 'protobufc')
 
     tests_dir = os.path.join("$PREFIX", 'lib', 'daos', 'TESTING', 'tests')
     # Compile all of the tests
     for test in SIMPLE_TEST_SRC:
-        target = daos_build.test(tenv, [test, cart_utils_objs],
-                                 install_off='../../../../')
+        target = tenv.d_test_program([test, cart_utils_objs], install_off='../../../../')
         tenv.Install(tests_dir, target)
 
     for test in IV_TESTS:
-        target = daos_build.test(tenv, [test, cart_utils_objs],
-                                 install_off='../../../../')
+        target = tenv.d_test_program([test, cart_utils_objs], install_off='../../../../')
         tenv.Install(tests_dir, target)
 
     for test in SWIM_TESTS:
-        target = daos_build.test(tenv, [test, cart_utils_objs],
-                                 install_off='../../../../')
+        target = tenv.d_test_program([test, cart_utils_objs], install_off='../../../../')
         tenv.Install(tests_dir, target)
 
     for test in HLC_TESTS:
-        target = daos_build.test(tenv, [test, cart_utils_objs],
-                                 install_off='../../../../')
+        target = tenv.d_test_program([test, cart_utils_objs], install_off='../../../../')
         tenv.Install(tests_dir, target)
 
     for test in TEST_GROUP_NP_TESTS:
-        target = daos_build.test(tenv, [test, cart_utils_objs],
-                                 install_off='../../../../')
+        target = tenv.d_test_program([test, cart_utils_objs], install_off='../../../../')
         tenv.Install(tests_dir, target)
 
     # Build FAULT_STATUS_TEST separately and install it into bin/
-    target = daos_build.test(tenv, FAULT_STATUS_TEST)
+    target = tenv.d_test_program(FAULT_STATUS_TEST)
     tenv.Install(os.path.join("$PREFIX", 'bin'), target)
 
     benv = tenv.Clone()
 
     benv.AppendUnique(CFLAGS=['-std=gnu99', '-pedantic'])
-    basic_target = daos_build.test(tenv, BASIC_SRC)
-    benv.Requires(basic_target, [cart_utils_objs])
+    basic_target = tenv.d_test_program(BASIC_SRC)
+    Depends(basic_target, [cart_utils_objs])
 
     # Call scons on unit test directory
     SConscript('utest/SConscript')
+
 
 if __name__ == "SCons.Script":
     scons()

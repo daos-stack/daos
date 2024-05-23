@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,6 +12,7 @@
 
 #include <stdio.h>
 #include <gurt/common.h>
+#include <gurt/atomic.h>
 
 static inline int drain_queue(crt_context_t ctx)
 {

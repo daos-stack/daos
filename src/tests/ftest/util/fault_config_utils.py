@@ -1,21 +1,46 @@
-#!/usr/bin/python3
-'''
-  (C) Copyright 2019-2021 Intel Corporation.
+"""
+  (C) Copyright 2019-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
-'''
+"""
 
 import os
-import io
+
 import yaml
+from general_utils import DaosTestError, distribute_files, run_command
+from run_utils import get_clush_command
 
 # a lookup table of predefined faults
+#
+# In addition the following fault IDs are used elsewhere
+#
+# 0: This is used in D_ALLOC to force memory allocation failures.
+# 100: Used in dfuse to trigger an exit after initialization is complete
+# 101: Used by daos_init() to disable fault id 0 for duration of daos_init
 FAULTS = {
-    'DAOS_CHECKSUM_UPDATE_FAIL': {
-        'id': '65568',
+    'DAOS_DELAYED_CSUM_CORRUPT_DISK': {
+        'id': '65574',
         'probability_x': '100',
         'probability_y': '100',
+        'interval': '50',
+        'max_faults': '100'},
+    'DAOS_CSUM_CORRUPT_DISK': {
+        'id': '65574',
+        'probability_x': '100',
+        'probability_y': '100',
+        'interval': '5',
+        'max_faults': '10'},
+    'DAOS_CSUM_CORRUPT_UPDATE': {
+        'id': '65568',
+        'probability_x': '20',
+        'probability_y': '100',
         'interval': '1',
+        'max_faults': '1'},
+    'DAOS_CSUM_CORRUPT_FETCH': {
+        'id': '65569',
+        'probability_x': '100',
+        'probability_y': '100',
+        'interval': '5',
         'max_faults': '1'},
     'DAOS_DTX_LOST_RPC_REQUEST': {
         'id': '65587',
@@ -203,7 +228,12 @@ FAULTS = {
         'probability_y': '20',
         'interval': '1',
         'max_faults': '10'},
-
+    'DAOS_SHARD_OBJ_RW_DROP_REPLY': {
+        'id': '131200',
+        'probability_x': '100',
+        'probability_y': '100',
+        'interval': '1',
+        'max_faults': '1'},
 }
 
 
@@ -211,34 +241,86 @@ class FaultInjectionFailed(Exception):
     """Raise if FI failed."""
 
 
-def write_fault_file(path, fault_list=None, on_the_fly_fault=None):
-    """ Write out a fault injection config file.
+class FaultInjection():
+    """Fault Injection
 
-        path             --where to write the file
-        fault_list       --a list of strings identifying which predefined
-                            faults to write out
-        on_the_fly_fault --a fault dictionary that isn't predefined
-
-        Returns the name of the file.
+    :avocado: recursive
     """
-    if fault_list is None and on_the_fly_fault is None:
-        raise FaultInjectionFailed("bad parameters")
 
-    if not os.path.exists(path):
-        os.makedirs(path)
-    fi_config = path + '/fi.yaml'
+    def __init__(self):
+        super().__init__()
+        self._hosts = []
+        self.fault_file = None
+        self._test_dir = None
+        self._fault_list = []
 
-    with io.open(fi_config, 'w', encoding='utf8') as outfile:
-        yaml.dump({'seed': '123'}, outfile, default_flow_style=False,
-                  allow_unicode=True)
+    def write_fault_file(self, on_the_fly_fault=None):
+        """Write out a fault injection config file.
 
-        fault_config = []
-        if fault_list is not None:
-            for fault in fault_list:
-                fault_config.append(FAULTS[fault])
-        if on_the_fly_fault is not None:
-            fault_config.append(on_the_fly_fault)
-        yaml.dump({'fault_config': fault_config}, outfile,
-                  default_flow_style=False, allow_unicode=True)
+        Args:
+            on_the_fly_fault --a fault dictionary that isn't predefined
+        """
+        if self._fault_list is None and on_the_fly_fault is None:
+            raise FaultInjectionFailed("bad parameters")
 
-    return fi_config
+        fi_config = os.path.join(self._test_dir, "fi.yaml")
+
+        with open(fi_config, 'w', encoding='utf8') as outfile:
+            yaml.dump({'seed': '123'}, outfile, default_flow_style=False, allow_unicode=True)
+            fault_config = []
+            if self._fault_list is not None:
+                for fault in self._fault_list:
+                    fault_config.append(FAULTS[fault])
+            if on_the_fly_fault is not None:
+                fault_config.append(on_the_fly_fault)
+            yaml.dump({'fault_config': fault_config}, outfile,
+                      default_flow_style=False, allow_unicode=True)
+
+        os.environ["D_FI_CONFIG"] = fi_config
+
+        self.fault_file = fi_config
+
+    def start(self, fault_list, test_dir):
+        """Create the fault injection file to inject DAOS faults.
+
+        Args:
+            fault_list (list): List of faults to inject.
+            test_dir(str) : Path to create the fault injection file.
+        """
+        self._fault_list = fault_list
+        self._test_dir = test_dir
+        if self._fault_list:
+            # not using "workdir" because the huge path was messing up
+            # orterun or something, could re-evaluate this later
+            self.write_fault_file(None)
+
+    def copy_fault_files(self, hosts):
+        """Copy the fault injection file to all test hosts.
+
+        Args:
+            hosts (list): list of hosts to copy the fault injection file
+        """
+        if self._fault_list:
+            self._hosts = hosts
+            distribute_files(self._hosts, self.fault_file, self.fault_file)
+
+    def stop(self):
+        """Remove the fault injection file created during testing.
+
+        Returns:
+           error_list (list) : Errors during removing fault files (if any).
+        """
+        if not self.fault_file:
+            return []
+
+        # Remove the fault injection files on the hosts.
+        error_list = []
+        command = "rm -f {}".format(self.fault_file)
+        if self._hosts:
+            command = get_clush_command(
+                self._hosts, args="-S -v", command=command, command_sudo=True)
+        try:
+            run_command(command, verbose=True, raise_exception=False)
+        except DaosTestError as error:
+            error_list.append(error)
+        return error_list

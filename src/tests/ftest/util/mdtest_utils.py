@@ -1,16 +1,15 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+import os
+import re
 
-
-import uuid
-
-from command_utils_base import FormattedParameter
 from command_utils import ExecutableCommand
+from command_utils_base import FormattedParameter
+from general_utils import get_log_file
 
 
 class MdtestCommand(ExecutableCommand):
@@ -21,7 +20,7 @@ class MdtestCommand(ExecutableCommand):
         super().__init__("/run/mdtest/*", "mdtest")
         self.flags = FormattedParameter("{}")   # mdtest flags
         # Optional arguments
-        #  -a=STRING             API for I/O [POSIX|DUMMY]
+        #  -a=STRING             API for I/O [POSIX|DFS|DUMMY]
         #  -b=1                  branching factor of hierarchical dir structure
         #  -d=./out              the directory in which the tests will run
         #  -B=0                  no barriers between phases
@@ -82,17 +81,17 @@ class MdtestCommand(ExecutableCommand):
         #  --dfs.dir_oclass=STRING       DAOS directory object class
         #  --dfs.prefix=STRING           Mount prefix
 
-        self.dfs_pool_uuid = FormattedParameter("--dfs.pool {}")
+        self.dfs_pool = FormattedParameter("--dfs.pool {}")
         self.dfs_cont = FormattedParameter("--dfs.cont {}")
         self.dfs_group = FormattedParameter("--dfs.group {}")
         self.dfs_destroy = FormattedParameter("--dfs.destroy", True)
         self.dfs_chunk = FormattedParameter("--dfs.chunk_size {}", 1048576)
-        self.dfs_oclass = FormattedParameter("--dfs.oclass {}", "SX")
+        self.dfs_oclass = FormattedParameter("--dfs.oclass {}", "S1")
         self.dfs_prefix = FormattedParameter("--dfs.prefix {}")
         self.dfs_dir_oclass = FormattedParameter("--dfs.dir_oclass {}", "SX")
 
-        # A list of environment variable names to set and export with ior
-        self._env_names = ["D_LOG_FILE"]
+        # Include bullseye coverage file environment
+        self.env["COVFILE"] = os.path.join(os.sep, "tmp", "test.cov")
 
     def get_param_names(self):
         """Get a sorted list of the defined MdtestCommand parameters."""
@@ -108,32 +107,6 @@ class MdtestCommand(ExecutableCommand):
 
         return param_names
 
-    def set_daos_params(self, group, pool, cont_uuid=None, display=True):
-        """Set the Mdtest params for the DAOS group, pool, and container uuid.
-
-        Args:
-            group (str): DAOS server group name
-            pool (TestPool): DAOS test pool object
-            cont_uuid (str, optional): the container uuid. If not specified one
-                is generated. Defaults to None.
-            display (bool, optional): print updated params. Defaults to True.
-        """
-        self.set_daos_pool_params(pool, display)
-        self.dfs_group.update(group, "dfs_group" if display else None)
-        self.dfs_cont.update(
-            cont_uuid if cont_uuid else str(uuid.uuid4()),
-            "dfs_cont" if display else None)
-
-    def set_daos_pool_params(self, pool, display=True):
-        """Set the Mdtest parameters that are based on a DAOS pool.
-
-        Args:
-            pool (TestPool): DAOS test pool object
-            display (bool, optional): print updated params. Defaults to True.
-        """
-        self.dfs_pool_uuid.update(
-            pool.pool.get_uuid_str(), "dfs_pool" if display else None)
-
     def get_default_env(self, manager_cmd, log_file=None):
         """Get the default environment settings for running mdtest.
 
@@ -145,14 +118,113 @@ class MdtestCommand(ExecutableCommand):
             EnvironmentVariables: a dictionary of environment names and values
 
         """
-        env = self.get_environment(None, log_file)
-        env["MPI_LIB"] = "\"\""
-        env["FI_PSM2_DISCONNECT"] = "1"
+        env = self.env.copy()
+        env["D_LOG_FILE"] = get_log_file(log_file or "{}_daos.log".format(self.command))
+        env["MPI_LIB"] = '""'
 
         if "mpirun" in manager_cmd or "srun" in manager_cmd:
-            env["DAOS_POOL"] = self.dfs_pool_uuid.value
+            env["DAOS_POOL"] = self.dfs_pool.value
             env["DAOS_CONT"] = self.dfs_cont.value
-            env["IOR_HINT__MPI__romio_daos_obj_class"] = \
-                self.dfs_oclass.value
+            env["IOR_HINT__MPI__romio_daos_obj_class"] = self.dfs_oclass.value
 
         return env
+
+
+class MdtestMetrics():
+    # pylint: disable=too-few-public-methods
+    """Represents metrics from mdtest output.
+
+    Metrics are split into groups "rates" and "times".
+    Each group contains metrics for each operation.
+    Each operation contains values for max, min, mean, stddev.
+    For example:
+        self.rates.file_creation.max
+        self.times.directory_stat.min
+
+    """
+
+    class MdtestMetricsOperation():
+        """Metrics for an individual operation. E.g. file_creation."""
+        def __init__(self):
+            """Initialize operations values."""
+            self.max = 0.0
+            self.min = 0.0
+            self.mean = 0.0
+            self.stddev = 0.0
+
+    class MdtestMetricsGroup():
+        """Group of metrics. E.g. "SUMMARY rate" and "SUMMARY time"."""
+        def __init__(self):
+            """Initialize each operation.
+            Names are aligned with output from mdtest. E.g. "File creation" -> "file_creation"
+            """
+            self.directory_creation = MdtestMetrics.MdtestMetricsOperation()
+            self.directory_stat = MdtestMetrics.MdtestMetricsOperation()
+            self.directory_rename = MdtestMetrics.MdtestMetricsOperation()
+            self.directory_removal = MdtestMetrics.MdtestMetricsOperation()
+            self.file_creation = MdtestMetrics.MdtestMetricsOperation()
+            self.file_stat = MdtestMetrics.MdtestMetricsOperation()
+            self.file_read = MdtestMetrics.MdtestMetricsOperation()
+            self.file_rename = MdtestMetrics.MdtestMetricsOperation()
+            self.file_removal = MdtestMetrics.MdtestMetricsOperation()
+            self.tree_creation = MdtestMetrics.MdtestMetricsOperation()
+            self.tree_removal = MdtestMetrics.MdtestMetricsOperation()
+
+    def __init__(self, output=None):
+        """Initialize MdtestMetrics.
+
+        Args:
+            output (str, optional): output from mdtest from which to parse metrics.
+                Default initializes metrics to 0.
+
+        """
+        self.rates = MdtestMetrics.MdtestMetricsGroup()
+        self.times = MdtestMetrics.MdtestMetricsGroup()
+        if output is not None:
+            self.parse_output(output)
+
+    def parse_output(self, output):
+        """Parse output from Mdtest into metrics.
+
+        Args:
+            output (str): output from mdtest from which to parse metrics.
+
+        """
+        self._parse_output_group(output, self.rates, "rate")
+        self._parse_output_group(output, self.times, "time")
+
+    @staticmethod
+    def _parse_output_group(output, group_obj, group_suffix):
+        """Parse an output group.
+
+        Args:
+            output (str): output from mdtest from which to parse metrics.
+            group_obj (MdtestMetrics.MdtestMetricsGroup): the group object.
+            group_suffix (str): "rate" or "time" header in the output.
+
+        """
+        # Extract just one group, in case both are in the output
+        match = re.search("SUMMARY {}(((?!(SUMMARY)|-- finished).)*)".format(group_suffix),
+                          output, re.MULTILINE | re.DOTALL)
+        if not match:
+            return
+
+        # Split into individual metric lines, skipping over headers
+        for metric_line in match.group(0).splitlines()[3:]:
+            if not metric_line:
+                continue
+            metric_vals = metric_line.split()
+            if not metric_vals:
+                continue
+            # Name is, for example, "File" + " " + "creation"
+            # Convert to "file_creation"
+            operation_name = metric_vals[0] + ' ' + metric_vals[1]
+            operation_name = operation_name.lower().replace(" ", "_")
+            try:
+                operation = getattr(group_obj, operation_name)
+                operation.max = float(metric_vals[2])
+                operation.min = float(metric_vals[3])
+                operation.mean = float(metric_vals[4])
+                operation.stddev = float(metric_vals[5])
+            except AttributeError:
+                pass

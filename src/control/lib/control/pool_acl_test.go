@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,14 +7,13 @@
 package control
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -38,7 +37,7 @@ func TestControl_PoolGetACL(t *testing.T) {
 	}{
 		"local failure": {
 			req: &PoolGetACLReq{
-				ID: common.MockUUID(),
+				ID: test.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryError: errors.New("local failed"),
@@ -47,7 +46,7 @@ func TestControl_PoolGetACL(t *testing.T) {
 		},
 		"remote failure": {
 			req: &PoolGetACLReq{
-				ID: common.MockUUID(),
+				ID: test.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
@@ -57,31 +56,33 @@ func TestControl_PoolGetACL(t *testing.T) {
 		"success": {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("", nil, &mgmtpb.ACLResp{
-					OwnerUser:  MockACL.Owner,
-					OwnerGroup: MockACL.OwnerGroup,
-					ACL:        MockACL.Entries,
+					Acl: &mgmtpb.AccessControlList{
+						OwnerUser:  MockACL.Owner,
+						OwnerGroup: MockACL.OwnerGroup,
+						Entries:    MockACL.Entries,
+					},
 				}),
 			},
 			req: &PoolGetACLReq{
-				ID: common.MockUUID(),
+				ID: test.MockUUID(),
 			},
 			expResp: &PoolGetACLResp{ACL: MockACL},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mic := tc.mic
 			if mic == nil {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := PoolGetACL(ctx, mi, tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -103,7 +104,7 @@ func TestControl_PoolOverwriteACL(t *testing.T) {
 		"local failure": {
 			req: &PoolOverwriteACLReq{
 				ACL: MockACL,
-				ID:  common.MockUUID(),
+				ID:  test.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryError: errors.New("local failed"),
@@ -113,7 +114,7 @@ func TestControl_PoolOverwriteACL(t *testing.T) {
 		"remote failure": {
 			req: &PoolOverwriteACLReq{
 				ACL: MockACL,
-				ID:  common.MockUUID(),
+				ID:  test.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
@@ -122,39 +123,41 @@ func TestControl_PoolOverwriteACL(t *testing.T) {
 		},
 		"empty ACL": {
 			req: &PoolOverwriteACLReq{
-				ID: common.MockUUID(),
+				ID: test.MockUUID(),
 			},
 			expErr: errors.New("empty ACL"),
 		},
 		"success": {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("", nil, &mgmtpb.ACLResp{
-					OwnerUser:  MockACL.Owner,
-					OwnerGroup: MockACL.OwnerGroup,
-					ACL:        MockACL.Entries,
+					Acl: &mgmtpb.AccessControlList{
+						OwnerUser:  MockACL.Owner,
+						OwnerGroup: MockACL.OwnerGroup,
+						Entries:    MockACL.Entries,
+					},
 				}),
 			},
 			req: &PoolOverwriteACLReq{
 				ACL: MockACL,
-				ID:  common.MockUUID(),
+				ID:  test.MockUUID(),
 			},
 			expResp: &PoolOverwriteACLResp{ACL: MockACL},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mic := tc.mic
 			if mic == nil {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := PoolOverwriteACL(ctx, mi, tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -176,7 +179,7 @@ func TestControl_PoolUpdateACL(t *testing.T) {
 		"local failure": {
 			req: &PoolUpdateACLReq{
 				ACL: MockACL,
-				ID:  common.MockUUID(),
+				ID:  test.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryError: errors.New("local failed"),
@@ -186,7 +189,7 @@ func TestControl_PoolUpdateACL(t *testing.T) {
 		"remote failure": {
 			req: &PoolUpdateACLReq{
 				ACL: MockACL,
-				ID:  common.MockUUID(),
+				ID:  test.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
@@ -195,39 +198,41 @@ func TestControl_PoolUpdateACL(t *testing.T) {
 		},
 		"empty ACL": {
 			req: &PoolUpdateACLReq{
-				ID: common.MockUUID(),
+				ID: test.MockUUID(),
 			},
 			expErr: errors.New("empty ACL"),
 		},
 		"success": {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("", nil, &mgmtpb.ACLResp{
-					OwnerUser:  MockACL.Owner,
-					OwnerGroup: MockACL.OwnerGroup,
-					ACL:        MockACL.Entries,
+					Acl: &mgmtpb.AccessControlList{
+						OwnerUser:  MockACL.Owner,
+						OwnerGroup: MockACL.OwnerGroup,
+						Entries:    MockACL.Entries,
+					},
 				}),
 			},
 			req: &PoolUpdateACLReq{
 				ACL: MockACL,
-				ID:  common.MockUUID(),
+				ID:  test.MockUUID(),
 			},
 			expResp: &PoolUpdateACLResp{ACL: MockACL},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mic := tc.mic
 			if mic == nil {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := PoolUpdateACL(ctx, mi, tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -250,7 +255,7 @@ func TestControl_PoolDeleteACL(t *testing.T) {
 	}{
 		"local failure": {
 			req: &PoolDeleteACLReq{
-				ID:        common.MockUUID(),
+				ID:        test.MockUUID(),
 				Principal: testPrincipal,
 			},
 			mic: &MockInvokerConfig{
@@ -260,7 +265,7 @@ func TestControl_PoolDeleteACL(t *testing.T) {
 		},
 		"remote failure": {
 			req: &PoolDeleteACLReq{
-				ID:        common.MockUUID(),
+				ID:        test.MockUUID(),
 				Principal: testPrincipal,
 			},
 			mic: &MockInvokerConfig{
@@ -270,19 +275,21 @@ func TestControl_PoolDeleteACL(t *testing.T) {
 		},
 		"empty principal": {
 			req: &PoolDeleteACLReq{
-				ID: common.MockUUID(),
+				ID: test.MockUUID(),
 			},
 			expErr: errors.New("no principal provided"),
 		},
 		"success": {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("", nil, &mgmtpb.ACLResp{
-					OwnerUser:  MockACL.Owner,
-					OwnerGroup: MockACL.OwnerGroup,
+					Acl: &mgmtpb.AccessControlList{
+						OwnerUser:  MockACL.Owner,
+						OwnerGroup: MockACL.OwnerGroup,
+					},
 				}),
 			},
 			req: &PoolDeleteACLReq{
-				ID:        common.MockUUID(),
+				ID:        test.MockUUID(),
 				Principal: testPrincipal,
 			},
 			expResp: &PoolDeleteACLResp{
@@ -295,18 +302,18 @@ func TestControl_PoolDeleteACL(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mic := tc.mic
 			if mic == nil {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := PoolDeleteACL(ctx, mi, tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}

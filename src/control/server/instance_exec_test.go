@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,7 +7,6 @@
 package server
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -15,11 +14,11 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 // TestIOEngineInstance_exit establishes that event is published on exit.
@@ -40,7 +39,7 @@ func TestIOEngineInstance_exit(t *testing.T) {
 		exitErr          error
 		expShouldForward bool
 		expEvtMsg        string
-		expExPid         uint64
+		expExPid         int
 	}{
 		"without rank": {
 			expEvtMsg: fmt.Sprintf(exitMsg, 0),
@@ -62,7 +61,7 @@ func TestIOEngineInstance_exit(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			rxEvts = []*events.RASEvent{}
 
@@ -73,27 +72,28 @@ func TestIOEngineInstance_exit(t *testing.T) {
 
 			if tc.rankInSuperblock {
 				engine.setSuperblock(&Superblock{
-					Rank: system.NewRankPtr(0), ValidRank: true,
+					Rank: ranklist.NewRankPtr(0), ValidRank: true,
 				})
 			}
 			if tc.expExPid == 0 {
-				tc.expExPid = uint64(os.Getpid())
+				tc.expExPid = os.Getpid()
 			}
 
 			hn, _ := os.Hostname()
-			engine.OnInstanceExit(publishInstanceExitFn(fakePublish, hn))
+			engine.OnInstanceExit(createPublishInstanceExitFunc(fakePublish, hn))
 
-			engine.exit(context.Background(), exitErr)
+			engine.handleExit(test.Context(t), tc.expExPid, exitErr)
 
-			common.AssertEqual(t, 1, len(rxEvts),
+			test.AssertEqual(t, 1, len(rxEvts),
 				"unexpected number of events published")
-			common.AssertEqual(t, rxEvts[0].ShouldForward(),
+			test.AssertEqual(t, rxEvts[0].ShouldForward(),
 				tc.expShouldForward, "unexpected forwarding state")
 			if diff := cmp.Diff(tc.expEvtMsg, rxEvts[0].Msg); diff != "" {
 				t.Fatalf("unexpected message (-want, +got):\n%s\n", diff)
 			}
-			common.AssertEqual(t, tc.expExPid, rxEvts[0].ProcID,
-				"unexpected process ID in event")
+			if tc.expExPid != rxEvts[0].ProcID {
+				t.Fatalf("unexpected PID in event (%d != %d)", tc.expExPid, rxEvts[0].ProcID)
+			}
 		})
 	}
 }

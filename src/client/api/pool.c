@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,49 +7,17 @@
 
 #include <daos/pool.h>
 #include <daos/pool_map.h>
+#include <daos/security.h>
 #include <daos/task.h>
 #include "client_internal.h"
 #include "task_internal.h"
-
-/** Disable backward compat code */
-#undef daos_pool_connect
-
-/** Kept for backward ABI compatibility, but not advertised via header file */
-int
-daos_pool_connect(const char *pool, const char *grp, unsigned int flags,
-		  daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev)
-{
-	daos_pool_connect_t	*args;
-	tse_task_t		*task;
-	const unsigned char	*uuid = (const unsigned char *) pool;
-	int			rc;
-
-	DAOS_API_ARG_ASSERT(*args, POOL_CONNECT);
-	if (!daos_uuid_valid(uuid))
-		return -DER_INVAL;
-
-	rc = dc_task_create(dc_pool_connect, NULL, ev, &task);
-	if (rc)
-		return rc;
-
-	args = dc_task_get_args(task);
-	args->grp	= grp;
-	args->flags	= flags;
-	args->poh	= poh;
-	args->info	= info;
-	/** use deprecated field for backward compatibility */
-	uuid_copy((unsigned char *)args->uuid, uuid);
-	args->pool	= NULL;
-
-	return dc_task_schedule(task, true);
-}
 
 /**
  * Real latest & greatest implementation of pool connect.
  * Used by anyone including the daos_pool.h header file.
  */
 int
-daos_pool_connect2(const char *pool, const char *sys, unsigned int flags,
+daos_pool_connect(const char *pool, const char *sys, unsigned int flags,
 		   daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev)
 {
 	daos_pool_connect_t	*args;
@@ -71,6 +39,12 @@ daos_pool_connect2(const char *pool, const char *sys, unsigned int flags,
 
 	return dc_task_schedule(task, true);
 }
+
+#undef daos_pool_connect
+int
+daos_pool_connect(const char *pool, const char *sys, unsigned int flags,
+		  daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev)
+		  __attribute__ ((weak, alias("daos_pool_connect2")));
 
 int
 daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
@@ -103,7 +77,7 @@ daos_pool_global2local(d_iov_t glob, daos_handle_t *poh)
 }
 
 int
-daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts, daos_pool_info_t *info,
+daos_pool_query(daos_handle_t poh, d_rank_list_t **ranks, daos_pool_info_t *info,
 		daos_prop_t *pool_prop, daos_event_t *ev)
 {
 	daos_pool_query_t	*args;
@@ -123,7 +97,7 @@ daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts, daos_pool_info_t *info,
 
 	args = dc_task_get_args(task);
 	args->poh	= poh;
-	args->tgts	= tgts;
+	args->ranks	= ranks;
 	args->info	= info;
 	args->prop	= pool_prop;
 
@@ -177,6 +151,87 @@ daos_pool_list_cont(daos_handle_t poh, daos_size_t *ncont,
 	args->poh	= poh;
 	args->ncont	= ncont;
 	args->cont_buf	= cbuf;
+
+	return dc_task_schedule(task, true);
+}
+
+int
+daos_pool_cont_filter_init(daos_pool_cont_filter_t *filt, uint32_t combine_func)
+{
+	if (filt == NULL)
+		return -DER_INVAL;
+
+	if (combine_func >= PCF_FUNC_MAX)
+		return -DER_INVAL;
+
+	filt->pcf_combine_func = combine_func;
+	filt->pcf_nparts = 0;
+	filt->pcf_parts = NULL;
+
+	return 0;
+}
+
+int
+daos_pool_cont_filter_add(daos_pool_cont_filter_t *filt, daos_pool_cont_filter_part_t *part)
+{
+	daos_pool_cont_filter_part_t **ptr;
+
+	if ((filt == NULL) || (part == NULL))
+		return -DER_INVAL;
+
+	D_REALLOC_ARRAY(ptr, filt->pcf_parts, filt->pcf_nparts, filt->pcf_nparts + 1);
+	if (ptr == NULL)
+		return -DER_NOMEM;
+
+	filt->pcf_parts = ptr;
+	filt->pcf_parts[filt->pcf_nparts++] = part;
+
+	return 0;
+}
+
+void
+daos_pool_cont_filter_fini(daos_pool_cont_filter_t *filt)
+{
+	if (filt) {
+		if (filt->pcf_parts)
+			D_FREE(filt->pcf_parts);
+		filt->pcf_nparts = 0;
+		filt->pcf_parts = NULL;
+	}
+}
+
+int
+daos_pool_filter_cont(daos_handle_t poh, daos_pool_cont_filter_t *filter,
+		      daos_size_t *ncont, struct daos_pool_cont_info2 *cbuf, daos_event_t *ev)
+{
+	daos_pool_filter_cont_t	*args;
+	tse_task_t		*task;
+	int			 rc;
+
+	DAOS_API_ARG_ASSERT(*args, POOL_FILTER_CONT);
+
+	if (ncont == NULL) {
+		D_ERROR("ncont must be non-NULL\n");
+		return -DER_INVAL;
+	}
+
+	if (filter && filter->pcf_nparts > DAOS_POOL_CONT_FILTER_MAX_NPARTS) {
+		D_ERROR("filter pcf_nparts %u > maximum (%u)\n", filter->pcf_nparts,
+			DAOS_POOL_CONT_FILTER_MAX_NPARTS);
+		return -DER_INVAL;
+	}
+
+	rc = dc_task_create(dc_pool_filter_cont, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->poh	= poh;
+	args->filt	= filter;
+	args->ncont	= ncont;
+	args->cont_buf	= cbuf;
+	D_DEBUG(DB_MD, "args=%p, filt=%p, ncont=%p, *ncont=%zu, cont_buf=%p\n",
+		args, args->filt, args->ncont, *args->ncont, args->cont_buf);
 
 	return dc_task_schedule(task, true);
 }
@@ -290,4 +345,10 @@ daos_pool_stop_svc(daos_handle_t poh, daos_event_t *ev)
 	args->poh	= poh;
 
 	return dc_task_schedule(task, true);
+}
+
+int
+daos_pool_get_perms(daos_prop_t *pool_prop, uid_t uid, gid_t *gids, size_t nr_gids, uint64_t *perms)
+{
+	return dc_sec_get_pool_permissions(pool_prop, uid, gids, nr_gids, perms);
 }

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -9,6 +9,13 @@
 
 #include <time.h>
 #include <uuid/uuid.h>
+#include <inttypes.h>
+#include <string.h>
+#include <stdbool.h>
+
+#include <daos_types.h>
+#include <gurt/debug.h>
+#include <gurt/common.h>
 
 /* If the count of committable DTXs on leader exceeds this threshold,
  * it will trigger batched DTX commit globally. We will optimize the
@@ -19,6 +26,17 @@
 
 /* The time (in second) threshold for batched DTX commit. */
 #define DTX_COMMIT_THRESHOLD_AGE	10
+
+/*
+ * VOS aggregation should try to avoid aggregating in the epoch range where
+ * lots of data records are pending to commit, so the aggregation epoch upper
+ * bound is: current HLC - (DTX batched commit threshold + buffer period)
+ *
+ * To avoid conflicting of aggregation vs. transactions, any transactional
+ * update/fetch with epoch lower than the aggregation upper bound should be
+ * rejected and restarted.
+ */
+#define DAOS_AGG_THRESHOLD	(DTX_COMMIT_THRESHOLD_AGE + 10) /* seconds */
 
 enum dtx_target_flags {
 	/* The target only contains read-only operations for the DTX. */
@@ -31,15 +49,28 @@ enum dtx_grp_flags {
 };
 
 enum dtx_mbs_flags {
-	/* The targets modified via the DTX belong to replicated object
-	 * within single redundancy group.
+	/* The targets being modified via the DTX belong to a replicated
+	 * object within single redundancy group.
 	 */
 	DMF_SRDG_REP			= (1 << 0),
-	/* The MBS contains the leader information, used for distributed
-	 * transaction. For stand-alone modification, leader information
-	 * is not stored inside MBS as optimization.
+	/* The MBS contains the DTX leader information, usually used for
+	 * distributed transaction. In old release (before 2.4), for some
+	 * stand-alone modification, leader information may be not stored
+	 * inside MBS as optimization.
 	 */
 	DMF_CONTAIN_LEADER		= (1 << 1),
+	/* The dtx_memberships::dm_tgts is sorted against target ID. Obsolete. */
+	DMF_SORTED_TGT_ID		= (1 << 2),
+	/* The dtx_memberships::dm_tgts is sorted against shard index.
+	 * For most of cases, shard index matches the shard ID. But during
+	 * shard migration, there may be some temporary shards in related
+	 * object layout. Under such case, related shard ID is not unique
+	 * in the object layout, but the shard index is unique. So we use
+	 * shard index to sort the dtx_memberships::dm_tgts. Obsolete.
+	 */
+	DMF_SORTED_SAD_IDX		= (1 << 3),
+	/* The dtx target information are organized as dtx_coll_target. */
+	DMF_COLL_TARGET			= (1 << 4),
 };
 
 /**
@@ -48,8 +79,11 @@ enum dtx_mbs_flags {
 struct dtx_daos_target {
 	/* Globally target ID, corresponding to pool_component::co_id. */
 	uint32_t			ddt_id;
-	/* See dtx_target_flags. */
-	uint32_t			ddt_flags;
+	union {
+		/* For distributed transaction, see dtx_target_flags. */
+		uint32_t		ddt_flags;
+		uint32_t		ddt_padding;
+	};
 };
 
 /**
@@ -103,6 +137,64 @@ struct dtx_redundancy_group {
 	uint32_t			drg_ids[0];
 };
 
+/*
+ * How many targets are recorded in dtx_memberships::dm_tgts for collective DTX. The first one is
+ * current leader, the others are for new leader candicates in order when leader switched.
+ *
+ * For most of cases, when DTX leader switch happens, DTX resync will commit or abort related DTX.
+ * After that, related DTX dtx_memberships will become useless any longer and discarded. So unless
+ * the new leader is dead and excluded during current DTX resync, one new leader candidate will be
+ * enough. We record three new leader candidates, that can resolve the leader election trouble for
+ * twice when leader switch during DTX resync.
+ */
+#define DTX_COLL_INLINE_TARGETS		4
+
+/**
+ * A collective transaction may contains a lot of participants. If we store all of them one by one
+ * in the dtx_memberships (MBS) structure, then the MBS body will be very large. Transferring such
+ * large MBS on network is inconvenient and may have to via RDAM instead of directly packed inside
+ * related RPC body.
+ *
+ * To avoid such bad situation, collective DTX will use dtx_coll_target. Instead of recording all
+ * the DTX participants information in MBS, the dtx_coll_target will record the targets reside on
+ * current engine, that can be used for local DTX operation (commit, abort, check).
+ *
+ * Please note that collective DTX only can be used for single object based stand alone operation.
+ * If current user is the collective DTX leader, and wants to operate the collective DTX on other
+ * DAOS engines, then it needs to re-calculate related participants based on related object layout.
+ * For most of commit/abort cases, the collective DTX leader has already prepared the paraticipants
+ * information in DRAM before starting the DTX, it is unnecessary to re-calculate the paraticipants.
+ * The re-calculation DTX paraticipants will happen when resync or cleanup the collective DTX. Such
+ * two cases are relative rare, so even if the overhead for such re-calculation would be quite high,
+ * it will not affect the whole system too much.
+ *
+ * On the other hand, DTX refresh is frequently used DTX logic. Efficiently find out the DTX leader
+ * is crucial for that. Consider DTX leader switch, we will record several new leader candidates in
+ * the MBS in front of the collective targets information. Then for most of cases, DTX refresh does
+ * not need to re-calculation DTX paraticipants.
+ */
+struct dtx_coll_target {
+	/* Fault domain level - used for generating related object layout. */
+	uint32_t			dct_fdom_lvl;
+	/* Performance domain affinity - used for generating related object layout. */
+	uint32_t			dct_pda;
+	/* Performance domain level - used for generating related object layout. */
+	uint32_t			dct_pdom_lvl;
+	/* The object layout version - used for generating related object layout. */
+	uint16_t			dct_layout_ver;
+	/* How many shards on current engine that participant in the collective DTX. */
+	uint8_t				dct_tgt_nr;
+	/* The size of dct_bitmap. */
+	uint8_t				dct_bitmap_sz;
+	/*
+	 * The ID (pool_component::co_id) array for targets on current engine, used for DTX check.
+	 * The bitmap for local object shards on current engine is appended after the ID array. The
+	 * bitmap is used for DTX commit and abort. In fact, we can re-calculate such bitmap based
+	 * on the taregets ID, but directly store the bitmap is more efficient since it is not big.
+	 */
+	uint32_t			dct_tgts[0];
+};
+
 struct dtx_memberships {
 	/* How many touched shards in the DTX. */
 	uint32_t			dm_tgt_cnt;
@@ -128,7 +220,8 @@ struct dtx_memberships {
 	};
 
 	/* The first 'sizeof(struct dtx_daos_target) * dm_tgt_cnt' is the
-	 * dtx_daos_target array. The subsequent are modification groups.
+	 * dtx_daos_target array. The subsequent can be redundancy groups
+	 * or dtx_coll_target, depends on dm_flags.
 	 */
 	union {
 		char			dm_data[0];
@@ -149,6 +242,7 @@ struct dtx_id {
 
 void daos_dti_gen_unique(struct dtx_id *dti);
 void daos_dti_gen(struct dtx_id *dti, bool zero);
+void daos_dti_reset(void);
 
 static inline void
 daos_dti_copy(struct dtx_id *des, const struct dtx_id *src)
@@ -172,6 +266,7 @@ daos_dti_equal(struct dtx_id *dti0, struct dtx_id *dti1)
 }
 
 #define DF_DTI		DF_UUID"."DF_X64
+#define DF_DTIF		DF_UUIDF"."DF_X64
 #define DP_DTI(dti)	DP_UUID((dti)->dti_uuid), (dti)->dti_hlc
 
 enum daos_ops_intent {
@@ -183,6 +278,7 @@ enum daos_ops_intent {
 	DAOS_INTENT_CHECK		= 5, /* check aborted or not */
 	DAOS_INTENT_KILL		= 6, /* delete object/key */
 	DAOS_INTENT_IGNORE_NONCOMMITTED	= 7, /* ignore non-committed DTX. */
+	DAOS_INTENT_DISCARD		= 8, /* discard data */
 };
 
 /**
@@ -201,6 +297,12 @@ enum dtx_status {
 	DTX_ST_COMMITTABLE	= 4,
 	/** The DTX is aborted. */
 	DTX_ST_ABORTED		= 5,
+	/** The DTX is in aborting, non-persistent status. */
+	DTX_ST_ABORTING		= 6,
+	/** The DTX is in committing, non-persistent status. */
+	DTX_ST_COMMITTING	= 7,
+	/** The DTX is in preparing, non-persistent status. */
+	DTX_ST_PREPARING	= 8,
 };
 
 enum daos_dtx_alb {
@@ -226,8 +328,8 @@ dtx_alb2state(int alb)
 	case ALB_AVAILABLE_ABORTED:
 		return DTX_ST_ABORTED;
 	default:
-		D_ASSERTF(0, "Invalid alb:%d\n", alb);
-		return DTX_ST_PREPARED;
+		D_ASSERTF(alb < 0, "Invalid alb:%d\n", alb);
+		return alb;
 	}
 }
 

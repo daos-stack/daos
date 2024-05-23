@@ -1,0 +1,42 @@
+hosts:
+  test_servers: 1
+  test_clients: 3
+timeout: 800
+server_config:
+  name: daos_server
+  engines_per_host: 2
+  engines:
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      log_mask: ERR
+      storage: auto
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      log_mask: ERR
+      storage: auto
+pool:
+  size: 90%
+  control_method: dmg
+container:
+  type: POSIX
+  control_method: daos
+ior:
+  api: "DFS"
+  client_processes:
+    ppn: 32
+  dfs_destroy: false
+  flags: "-v -w -r -R"
+  sw_deadline: 120
+  test_file: /testFile
+  transfer_size: '4K'
+  block_size: '100G'
+  dfs_oclass: "SX"
+  subprocess: true

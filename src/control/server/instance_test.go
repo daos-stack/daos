@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,7 +10,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"testing"
 
@@ -18,15 +17,18 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/daos-stack/daos/src/control/common"
 	commonpb "github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/atm"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
+	sysprov "github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/scm"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -37,41 +39,14 @@ var (
 )
 
 func getTestEngineInstance(log logging.Logger) *EngineInstance {
-	cfg := engine.NewConfig().WithStorage(
+	cfg := engine.MockConfig().WithStorage(
 		storage.NewTierConfig().
-			WithScmClass("ram").
+			WithStorageClass("ram").
 			WithScmMountPoint("/foo/bar"),
 	)
 	runner := engine.NewRunner(log, cfg)
-	storage := storage.MockProvider(log, 0, &cfg.Storage, nil, nil, nil)
+	storage := storage.MockProvider(log, 0, &cfg.Storage, nil, nil, nil, nil)
 	return NewEngineInstance(log, storage, nil, runner)
-}
-
-func getTestBioErrorReq(t *testing.T, sockPath string, idx uint32, tgt int32, unmap bool, read bool, write bool) *srvpb.BioErrorReq {
-	return &srvpb.BioErrorReq{
-		DrpcListenerSock: sockPath,
-		InstanceIdx:      idx,
-		TgtId:            tgt,
-		UnmapErr:         unmap,
-		ReadErr:          read,
-		WriteErr:         write,
-	}
-}
-
-func TestServer_Instance_BioError(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-
-	instance := getTestEngineInstance(log)
-
-	req := getTestBioErrorReq(t, "/tmp/instance_test.sock", 0, 0, false, false, true)
-
-	instance.BioErrorNotify(req)
-
-	expectedOut := "detected blob I/O error"
-	if !strings.Contains(buf.String(), expectedOut) {
-		t.Fatal("No I/O error notification detected")
-	}
 }
 
 func TestServer_Instance_WithHostFaultDomain(t *testing.T) {
@@ -88,7 +63,7 @@ func TestServer_Instance_WithHostFaultDomain(t *testing.T) {
 		t.Fatalf("unexpected results (-want, +got):\n%s\n", diff)
 	}
 	// updatedInstance is the same ptr as instance
-	common.AssertEqual(t, updatedInstance, instance, "not the same structure")
+	test.AssertEqual(t, updatedInstance, instance, "not the same structure")
 }
 
 func TestServer_Instance_updateFaultDomainInSuperblock(t *testing.T) {
@@ -135,31 +110,45 @@ func TestServer_Instance_updateFaultDomainInSuperblock(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
-			testDir, cleanupDir := common.CreateTestDir(t)
+			testDir, cleanupDir := test.CreateTestDir(t)
 			defer cleanupDir()
 
-			inst := getTestEngineInstance(log).WithHostFaultDomain(tc.newDomain)
-			inst.fsRoot = testDir
-			inst._superblock = tc.superblock
+			// Use real os.ReadFile in MockSysProvider to test superblock logic.
+			cfg := engine.MockConfig().WithStorage(
+				storage.NewTierConfig().
+					WithStorageClass("ram").
+					WithScmMountPoint("/foo/bar"),
+			)
+			runner := engine.NewRunner(log, cfg)
+			sysCfg := sysprov.MockSysConfig{RealReadFile: true}
+			sysProv := sysprov.NewMockSysProvider(log, &sysCfg)
+			scmProv := scm.NewMockProvider(log, &scm.MockBackendConfig{}, &sysCfg)
+			storage := storage.MockProvider(log, 0, &cfg.Storage, sysProv, scmProv,
+				nil, nil)
 
-			sbPath := inst.superblockPath()
+			ei := NewEngineInstance(log, storage, nil, runner).
+				WithHostFaultDomain(tc.newDomain)
+			ei.fsRoot = testDir
+			ei._superblock = tc.superblock
+
+			sbPath := ei.superblockPath()
 			if err := os.MkdirAll(filepath.Dir(sbPath), 0755); err != nil {
 				t.Fatalf("failed to make test superblock dir: %s", err.Error())
 			}
 
-			err := inst.updateFaultDomainInSuperblock()
-
-			common.CmpErr(t, tc.expErr, err)
+			err := ei.updateFaultDomainInSuperblock()
+			test.CmpErr(t, tc.expErr, err)
 
 			// Ensure the newer value in the instance was written to the superblock
-			newSB, err := ReadSuperblock(sbPath)
+			err = ei.ReadSuperblock()
 			if tc.expWritten {
 				if err != nil {
 					t.Fatalf("can't read expected superblock: %s", err.Error())
 				}
 
+				newSB := ei.getSuperblock()
 				if newSB == nil {
 					t.Fatalf("expected non-nil superblock")
 				}
@@ -168,11 +157,11 @@ func TestServer_Instance_updateFaultDomainInSuperblock(t *testing.T) {
 				if tc.newDomain != nil {
 					expDomainStr = tc.newDomain.String()
 				}
-				common.AssertEqual(t, expDomainStr, newSB.HostFaultDomain, "")
+				test.AssertEqual(t, expDomainStr, newSB.HostFaultDomain, "")
 			} else if err == nil {
 				t.Fatal("expected no superblock written")
 			} else {
-				common.CmpErr(t, syscall.ENOENT, err)
+				test.CmpErr(t, syscall.ENOENT, err)
 			}
 		})
 	}
@@ -182,19 +171,19 @@ type (
 	MockInstanceConfig struct {
 		CallDrpcResp        *drpc.Response
 		CallDrpcErr         error
-		GetRankResp         system.Rank
+		GetRankResp         ranklist.Rank
 		GetRankErr          error
 		TargetCount         int
 		Index               uint32
 		Started             atm.Bool
 		Ready               atm.Bool
+		CheckerMode         atm.Bool
 		LocalState          system.MemberState
 		RemoveSuperblockErr error
 		SetupRankErr        error
 		StopErr             error
 		ScmTierConfig       *storage.TierConfig
 		ScanBdevTiersResult []storage.BdevTierScanResult
-		HasBlockDevices     bool
 	}
 
 	MockInstance struct {
@@ -216,11 +205,15 @@ func DefaultMockInstance() *MockInstance {
 	return NewMockInstance(nil)
 }
 
+func (mi *MockInstance) SetCheckerMode(enabled bool) {
+	mi.cfg.CheckerMode.Store(enabled)
+}
+
 func (mi *MockInstance) CallDrpc(_ context.Context, _ drpc.Method, _ proto.Message) (*drpc.Response, error) {
 	return mi.cfg.CallDrpcResp, mi.cfg.CallDrpcErr
 }
 
-func (mi *MockInstance) GetRank() (system.Rank, error) {
+func (mi *MockInstance) GetRank() (ranklist.Rank, error) {
 	return mi.cfg.GetRankResp, mi.cfg.GetRankErr
 }
 
@@ -248,22 +241,14 @@ func (mi *MockInstance) RemoveSuperblock() error {
 	return mi.cfg.RemoveSuperblockErr
 }
 
-func (mi *MockInstance) Run(_ context.Context, _ bool) {}
+func (mi *MockInstance) Run(_ context.Context) {}
 
-func (mi *MockInstance) SetupRank(_ context.Context, _ system.Rank) error {
+func (mi *MockInstance) SetupRank(_ context.Context, _ ranklist.Rank, _ uint32) error {
 	return mi.cfg.SetupRankErr
 }
 
 func (mi *MockInstance) Stop(os.Signal) error {
 	return mi.cfg.StopErr
-}
-
-func (mi *MockInstance) GetScmConfig() (*storage.TierConfig, error) {
-	return mi.cfg.ScmTierConfig, nil
-}
-
-func (mi *MockInstance) HasBlockDevices() bool {
-	return mi.cfg.HasBlockDevices
 }
 
 func (mi *MockInstance) ScanBdevTiers() ([]storage.BdevTierScanResult, error) {
@@ -280,22 +265,14 @@ func (mi *MockInstance) newCret(_ string, _ error) *ctlpb.NvmeControllerResult {
 	return nil
 }
 
-func (mi *MockInstance) bdevConfig() storage.BdevConfig {
-	return storage.BdevConfig{}
-}
-
-func (mi *MockInstance) scmConfig() storage.ScmConfig {
-	return storage.ScmConfig{}
-}
-
 func (mi *MockInstance) tryDrpc(_ context.Context, _ drpc.Method) *system.MemberResult {
 	return nil
 }
 
 func (mi *MockInstance) requestStart(_ context.Context) {}
 
-func (mi *MockInstance) updateInUseBdevs(_ context.Context, _ map[string]*storage.NvmeController) error {
-	return nil
+func (mi *MockInstance) updateInUseBdevs(_ context.Context, _ []storage.NvmeController, _ uint64, _ uint64) ([]storage.NvmeController, error) {
+	return []storage.NvmeController{}, nil
 }
 
 func (mi *MockInstance) isAwaitingFormat() bool {
@@ -304,13 +281,8 @@ func (mi *MockInstance) isAwaitingFormat() bool {
 
 func (mi *MockInstance) NotifyDrpcReady(_ *srvpb.NotifyReadyReq) {}
 func (mi *MockInstance) NotifyStorageReady()                     {}
-func (mi *MockInstance) BioErrorNotify(_ *srvpb.BioErrorReq)     {}
 
 func (mi *MockInstance) GetBioHealth(context.Context, *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
-	return nil, nil
-}
-
-func (mi *MockInstance) GetScmUsage() (*storage.ScmMountPoint, error) {
 	return nil, nil
 }
 
@@ -326,6 +298,14 @@ func (mi *MockInstance) StorageFormatSCM(context.Context, bool) *ctlpb.ScmMountR
 	return nil
 }
 
-func (mi *MockInstance) StorageWriteNvmeConfig() error {
+func (mi *MockInstance) GetStorage() *storage.Provider {
 	return nil
+}
+
+func (mi *MockInstance) Debugf(format string, args ...interface{}) {
+	return
+}
+
+func (mi *MockInstance) Tracef(format string, args ...interface{}) {
+	return
 }

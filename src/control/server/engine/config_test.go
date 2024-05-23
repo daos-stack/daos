@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,9 +8,11 @@ package engine
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -18,67 +20,20 @@ import (
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 var update = flag.Bool("update", false, "update .golden files")
 
-func cmpOpts() []cmp.Option {
-	return []cmp.Option{
-		cmpopts.SortSlices(func(a, b string) bool { return a < b }),
-	}
-}
-
-func TestConfig_MergeEnvVars(t *testing.T) {
-	for name, tc := range map[string]struct {
-		baseVars  []string
-		mergeVars []string
-		wantVars  []string
-	}{
-		"no dupes without merge": {
-			baseVars:  []string{"FOO=BAR", "FOO=BAZ"},
-			mergeVars: []string{},
-			wantVars:  []string{"FOO=BAR"},
-		},
-		"no dupes after merge": {
-			baseVars:  []string{"FOO=BAR", "FOO=BAZ"},
-			mergeVars: []string{"FOO=QUX"},
-			wantVars:  []string{"FOO=QUX"},
-		},
-		"no dupes in merge": {
-			baseVars:  []string{"FOO=BAR"},
-			mergeVars: []string{"FOO=BAZ", "FOO=QUX"},
-			wantVars:  []string{"FOO=BAZ"},
-		},
-		"basic test": {
-			baseVars:  []string{"A=B"},
-			mergeVars: []string{"C=D"},
-			wantVars:  []string{"A=B", "C=D"},
-		},
-		"complex value": {
-			baseVars:  []string{"SIMPLE=OK"},
-			mergeVars: []string{"COMPLEX=FOO;bar=quux;woof=meow"},
-			wantVars:  []string{"SIMPLE=OK", "COMPLEX=FOO;bar=quux;woof=meow"},
-		},
-		"append no base": {
-			baseVars:  []string{},
-			mergeVars: []string{"C=D"},
-			wantVars:  []string{"C=D"},
-		},
-		"skip malformed": {
-			baseVars:  []string{"GOOD_BASE=OK", "BAD_BASE="},
-			mergeVars: []string{"GOOD_MERGE=OK", "BAD_MERGE"},
-			wantVars:  []string{"GOOD_BASE=OK", "GOOD_MERGE=OK"},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			gotVars := mergeEnvVars(tc.baseVars, tc.mergeVars)
-			if diff := cmp.Diff(tc.wantVars, gotVars, cmpOpts()...); diff != "" {
-				t.Fatalf("(-want, +got):\n%s", diff)
-			}
-		})
-	}
+var defConfigCmpOpts = []cmp.Option{
+	cmpopts.SortSlices(func(a, b string) bool { return a < b }),
+	cmp.Comparer(func(x, y *storage.BdevDeviceList) bool {
+		if x == nil && y == nil {
+			return true
+		}
+		return x.Equals(y)
+	}),
 }
 
 func TestConfig_HasEnvVar(t *testing.T) {
@@ -107,41 +62,86 @@ func TestConfig_HasEnvVar(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			cfg := NewConfig().
+			cfg := MockConfig().
 				WithEnvVars(tc.startVars...)
 
 			if !cfg.HasEnvVar(tc.addVar) {
 				cfg.WithEnvVars(tc.addVar + "=" + tc.addVal)
 			}
 
-			if diff := cmp.Diff(tc.expVars, cfg.EnvVars, cmpOpts()...); diff != "" {
+			if diff := cmp.Diff(tc.expVars, cfg.EnvVars, defConfigCmpOpts...); diff != "" {
 				t.Fatalf("unexpected env vars:\n%s\n", diff)
 			}
 		})
 	}
 }
 
-func TestConstructedConfig(t *testing.T) {
-	var numaNode uint = 8
+func TestConfig_GetEnvVar(t *testing.T) {
+	for name, tc := range map[string]struct {
+		environment []string
+		key         string
+		expValue    string
+		expErr      error
+	}{
+		"present": {
+			environment: []string{"FOO=BAR"},
+			key:         "FOO",
+			expValue:    "BAR",
+		},
+		"invalid prefix": {
+			environment: []string{"FOO=BAR"},
+			key:         "FFOO",
+			expErr:      errors.New("Undefined environment variable"),
+		},
+		"invalid suffix": {
+			environment: []string{"FOO=BAR"},
+			key:         "FOOO",
+			expErr:      errors.New("Undefined environment variable"),
+		},
+		"empty env": {
+			key:    "FOO",
+			expErr: errors.New("Undefined environment variable"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := MockConfig().WithEnvVars(tc.environment...)
+
+			value, err := cfg.GetEnvVar(tc.key)
+
+			if err != nil {
+				test.AssertTrue(t, tc.expErr != nil,
+					fmt.Sprintf("Unexpected error %q", err))
+				test.CmpErr(t, tc.expErr, err)
+				test.AssertEqual(t, value, "",
+					fmt.Sprintf("Unexpected value %q for key %q",
+						tc.key, value))
+				return
+			}
+
+			test.AssertTrue(t, tc.expErr == nil,
+				fmt.Sprintf("Expected error %q", tc.expErr))
+			test.AssertEqual(t, value, tc.expValue, "Invalid value returned")
+		})
+	}
+}
+
+func TestConfig_Constructed(t *testing.T) {
 	goldenPath := "testdata/full.golden"
 
 	// just set all values regardless of validity
-	constructed := NewConfig().
-		WithRank(37).
-		WithSystemName("foo").
-		WithSocketDir("/foo/bar").
+	constructed := MockConfig().
 		WithFabricProvider("foo+bar").
-		WithFabricInterface("qib42").
+		WithFabricInterface("qib42"). // qib42 recognized by mock validator
 		WithFabricInterfacePort(100).
 		WithModules("foo,bar,baz").
 		WithStorage(
 			storage.NewTierConfig().
-				WithScmClass("ram").
+				WithStorageClass("ram").
 				WithScmRamdiskSize(42).
 				WithScmMountPoint("/mnt/daostest").
 				WithScmDeviceList("/dev/a", "/dev/b"),
 			storage.NewTierConfig().
-				WithBdevClass("kdev").
+				WithStorageClass("kdev").
 				WithBdevDeviceCount(2).
 				WithBdevFileSize(20).
 				WithBdevDeviceList("/dev/c", "/dev/d"),
@@ -152,7 +152,7 @@ func TestConstructedConfig(t *testing.T) {
 		WithServiceThreadCore(8).
 		WithTargetCount(12).
 		WithHelperStreamCount(1).
-		WithPinnedNumaNode(&numaNode).
+		WithPinnedNumaNode(8).
 		WithBypassHealthChk(nil)
 
 	if *update {
@@ -177,17 +177,19 @@ func TestConstructedConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if diff := cmp.Diff(fromDisk, constructed, cmpOpts()...); diff != "" {
+	if diff := cmp.Diff(fromDisk, constructed, defConfigCmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got):\n%s", diff)
 	}
 }
 
 func TestConfig_ScmValidation(t *testing.T) {
 	baseValidConfig := func() *Config {
-		return NewConfig().
+		return MockConfig().
 			WithFabricProvider("test"). // valid enough to pass "not-blank" test
-			WithFabricInterface("test").
-			WithFabricInterfacePort(42)
+			WithFabricInterface("ib0"). // ib0 recognized by mock validator
+			WithFabricInterfacePort(42).
+			WithTargetCount(8).
+			WithPinnedNumaNode(0)
 	}
 
 	for name, tc := range map[string]struct {
@@ -200,13 +202,13 @@ func TestConfig_ScmValidation(t *testing.T) {
 					storage.NewTierConfig().
 						WithScmMountPoint("test"),
 				),
-			expErr: errors.New("no storage class"),
+			expErr: storage.FaultScmConfigTierMissing,
 		},
 		"missing scm_mount": {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("ram"),
+						WithStorageClass("ram"),
 				),
 			expErr: errors.New("scm_mount"),
 		},
@@ -214,35 +216,16 @@ func TestConfig_ScmValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("ram").
-						WithScmRamdiskSize(1).
+						WithStorageClass("ram").
+						WithScmRamdiskSize(storage.MinRamdiskMem).
 						WithScmMountPoint("test"),
 				),
-		},
-		"ramdisk missing scm_size": {
-			cfg: baseValidConfig().
-				WithStorage(
-					storage.NewTierConfig().
-						WithScmClass("ram").
-						WithScmMountPoint("test"),
-				),
-			expErr: errors.New("scm_size"),
-		},
-		"ramdisk scm_size: 0": {
-			cfg: baseValidConfig().
-				WithStorage(
-					storage.NewTierConfig().
-						WithScmClass("ram").
-						WithScmRamdiskSize(0).
-						WithScmMountPoint("test"),
-				),
-			expErr: errors.New("scm_size"),
 		},
 		"ramdisk with scm_list": {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("ram").
+						WithStorageClass("ram").
 						WithScmRamdiskSize(1).
 						WithScmDeviceList("foo", "bar").
 						WithScmMountPoint("test"),
@@ -253,7 +236,7 @@ func TestConfig_ScmValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("dcpm").
+						WithStorageClass("dcpm").
 						WithScmDeviceList("foo").
 						WithScmMountPoint("test"),
 				),
@@ -262,7 +245,7 @@ func TestConfig_ScmValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("dcpm").
+						WithStorageClass("dcpm").
 						WithScmDeviceList("foo", "bar").
 						WithScmMountPoint("test"),
 				),
@@ -272,7 +255,7 @@ func TestConfig_ScmValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("dcpm").
+						WithStorageClass("dcpm").
 						WithScmMountPoint("test"),
 				),
 			expErr: errors.New("scm_list"),
@@ -281,7 +264,7 @@ func TestConfig_ScmValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("dcpm").
+						WithStorageClass("dcpm").
 						WithScmDeviceList("foo").
 						WithScmRamdiskSize(1).
 						WithScmMountPoint("test"),
@@ -290,23 +273,25 @@ func TestConfig_ScmValidation(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.CmpErr(t, tc.expErr, tc.cfg.Validate())
+			test.CmpErr(t, tc.expErr, tc.cfg.Validate())
 		})
 	}
 }
 
 func TestConfig_BdevValidation(t *testing.T) {
 	baseValidConfig := func() *Config {
-		return NewConfig().
+		return MockConfig().
 			WithFabricProvider("test"). // valid enough to pass "not-blank" test
-			WithFabricInterface("test").
+			WithFabricInterface("ib0"). // ib0 recognized by mock validator
 			WithFabricInterfacePort(42).
 			WithStorage(
 				storage.NewTierConfig().
-					WithScmClass("dcpm").
+					WithStorageClass("dcpm").
 					WithScmDeviceList("foo").
 					WithScmMountPoint("test"),
-			)
+			).
+			WithTargetCount(8).
+			WithPinnedNumaNode(0)
 	}
 
 	for name, tc := range map[string]struct {
@@ -315,80 +300,88 @@ func TestConfig_BdevValidation(t *testing.T) {
 		expCls          storage.Class
 		expEmptyCfgPath bool
 	}{
-		"unknown class": {
+		"nvme class; no scm": {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithBdevClass("nvmed"),
+						WithStorageClass("nvme").
+						WithBdevDeviceList(test.MockPCIAddr(1), test.MockPCIAddr(2)),
+				),
+			expErr: errors.New("missing scm storage tier"),
+		},
+		"unknown class": {
+			cfg: baseValidConfig().
+				AppendStorage(
+					storage.NewTierConfig().
+						WithStorageClass("nvmed"),
 				),
 			expErr: errors.New("no storage class"),
 		},
 		"nvme class; no devices": {
-			// output config path should be empty
 			cfg: baseValidConfig().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
-						WithBdevClass("nvme"),
+						WithStorageClass("nvme"),
 				),
-			expEmptyCfgPath: true,
+			expErr: errors.New("valid PCI addresses"),
 		},
 		"nvme class; good pci addresses": {
 			cfg: baseValidConfig().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
-						WithBdevClass("nvme").
-						WithBdevDeviceList(common.MockPCIAddr(1), common.MockPCIAddr(2)),
+						WithStorageClass("nvme").
+						WithBdevDeviceList(test.MockPCIAddr(1), test.MockPCIAddr(2)),
 				),
 		},
 		"nvme class; duplicate pci address": {
 			cfg: baseValidConfig().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
-						WithBdevClass("nvme").
-						WithBdevDeviceList(common.MockPCIAddr(1), common.MockPCIAddr(1)),
+						WithStorageClass("nvme").
+						WithBdevDeviceList(test.MockPCIAddr(1), test.MockPCIAddr(1)),
 				),
 			expErr: errors.New("bdev_list"),
 		},
 		"nvme class; bad pci address": {
 			cfg: baseValidConfig().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
-						WithBdevClass("nvme").
-						WithBdevDeviceList(common.MockPCIAddr(1), "0000:00:00"),
+						WithStorageClass("nvme").
+						WithBdevDeviceList(test.MockPCIAddr(1), "0000:00:00"),
 				),
-			expErr: errors.New("unexpected pci address"),
+			expErr: errors.New("valid PCI addresses"),
 		},
 		"kdev class; no devices": {
 			cfg: baseValidConfig().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
-						WithBdevClass("kdev"),
+						WithStorageClass("kdev"),
 				),
 			expErr: errors.New("kdev requires non-empty bdev_list"),
 		},
 		"kdev class; valid": {
 			cfg: baseValidConfig().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
-						WithBdevClass("kdev").
+						WithStorageClass("kdev").
 						WithBdevDeviceList("/dev/sda"),
 				),
 			expCls: storage.ClassKdev,
 		},
 		"file class; no size": {
 			cfg: baseValidConfig().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
-						WithBdevClass("file").
+						WithStorageClass("file").
 						WithBdevDeviceList("bdev1"),
 				),
 			expErr: errors.New("file requires non-zero bdev_size"),
 		},
 		"file class; negative size": {
 			cfg: baseValidConfig().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
-						WithBdevClass("file").
+						WithStorageClass("file").
 						WithBdevDeviceList("bdev1").
 						WithBdevFileSize(-1),
 				),
@@ -396,65 +389,166 @@ func TestConfig_BdevValidation(t *testing.T) {
 		},
 		"file class; no devices": {
 			cfg: baseValidConfig().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
-						WithBdevClass("file").
+						WithStorageClass("file").
 						WithBdevFileSize(10),
 				),
 			expErr: errors.New("file requires non-empty bdev_list"),
 		},
 		"file class; valid": {
 			cfg: baseValidConfig().
-				WithStorage(
+				AppendStorage(
 					storage.NewTierConfig().
-						WithBdevClass("file").
+						WithStorageClass("file").
 						WithBdevFileSize(10).
 						WithBdevDeviceList("bdev1", "bdev2"),
 				),
 			expCls: storage.ClassFile,
 		},
+		"mix of emulated and non-emulated device classes": {
+			cfg: baseValidConfig().
+				AppendStorage(
+					storage.NewTierConfig().
+						WithStorageClass("nvme").
+						WithBdevDeviceList(test.MockPCIAddr(1)),
+					storage.NewTierConfig().
+						WithStorageClass("file").
+						WithBdevFileSize(10).
+						WithBdevDeviceList("bdev1", "bdev2"),
+				),
+			expErr: storage.FaultBdevConfigTierTypeMismatch,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.CmpErr(t, tc.expErr, tc.cfg.Validate())
+			test.CmpErr(t, tc.expErr, tc.cfg.Validate())
 			if tc.expErr != nil {
 				return
 			}
 
-			if tc.expCls == "" {
-				tc.expCls = storage.ClassNvme // default if unset
-			}
-			common.AssertEqual(t, tc.expCls, tc.cfg.Storage.Tiers.BdevConfigs()[0].Class, "unexpected bdev class")
-
 			var ecp string
 			if !tc.expEmptyCfgPath {
-				ecp = filepath.Join(tc.cfg.Storage.Tiers.ScmConfigs()[0].Scm.MountPoint, storage.BdevOutConfName)
+				if tc.expCls == "" {
+					tc.expCls = storage.ClassNvme // default if unset
+				}
+				test.AssertEqual(t, tc.expCls,
+					tc.cfg.Storage.Tiers.BdevConfigs()[0].Class,
+					"unexpected bdev class")
+
+				ecp = filepath.Join(tc.cfg.Storage.Tiers.ScmConfigs()[0].Scm.MountPoint,
+					storage.BdevOutConfName)
 			}
-			common.AssertEqual(t, ecp, tc.cfg.Storage.ConfigOutputPath, "unexpected config path")
+			test.AssertEqual(t, ecp, tc.cfg.Storage.ConfigOutputPath,
+				"unexpected config path")
 		})
 	}
 }
 
 func TestConfig_Validation(t *testing.T) {
-	bad := NewConfig()
-
-	if err := bad.Validate(); err == nil {
-		t.Fatal("expected empty config to fail validation")
+	validConfig := func() *Config {
+		return MockConfig().WithFabricProvider("foo").
+			WithFabricInterface("ib0").
+			WithFabricInterfacePort(42).
+			WithStorage(
+				storage.NewTierConfig().
+					WithStorageClass("ram").
+					WithScmRamdiskSize(storage.MinRamdiskMem).
+					WithScmMountPoint("/foo/bar"),
+			).
+			WithTargetCount(8).
+			WithPinnedNumaNode(0)
 	}
 
-	// create a minimally-valid config
-	good := NewConfig().WithFabricProvider("foo").
-		WithFabricInterface("qib0").
-		WithFabricInterfacePort(42).
-		WithStorage(
-			storage.NewTierConfig().
-				WithScmClass("ram").
-				WithScmRamdiskSize(1).
-				WithScmMountPoint("/foo/bar"),
-		)
-
-	if err := good.Validate(); err != nil {
-		t.Fatalf("expected %#v to validate; got %s", good, err)
+	for name, tc := range map[string]struct {
+		cfg    *Config
+		expErr error
+	}{
+		"empty config should fail": {
+			cfg:    MockConfig(),
+			expErr: errors.New("target count must be nonzero"),
+		},
+		"config with pinned_numa_node and nonzero first_core should fail": {
+			cfg:    validConfig().WithPinnedNumaNode(1).WithServiceThreadCore(1),
+			expErr: errors.New("cannot specify both"),
+		},
+		"config with negative target count should fail": {
+			cfg:    validConfig().WithTargetCount(-10),
+			expErr: errors.New("must not be negative"),
+		},
+		"config with negative helper stream count should fail": {
+			cfg:    validConfig().WithHelperStreamCount(-10),
+			expErr: errors.New("must not be negative"),
+		},
+		"config with negative service core index should fail": {
+			cfg: func() *Config {
+				c := validConfig().WithServiceThreadCore(-10)
+				c.PinnedNumaNode = nil
+				return c
+			}(),
+			expErr: errors.New("must not be negative"),
+		},
+		"config with negative memory size should fail": {
+			cfg:    validConfig().WithMemSize(-10),
+			expErr: errors.New("must not be negative"),
+		},
+		"config with negative hugepage size should fail": {
+			cfg:    validConfig().WithHugepageSize(-10),
+			expErr: errors.New("must not be negative"),
+		},
+		"config with zero target count should fail": {
+			cfg:    validConfig().WithTargetCount(0),
+			expErr: errors.New("target count must be nonzero"),
+		},
+		"minimally-valid config should pass": {
+			cfg: validConfig(),
+		},
+		"invalid log mask in config": {
+			cfg:    validConfig().WithLogMask("DBGG"),
+			expErr: errUnknownLogLevel("DBGG"),
+		},
+		"empty DD_MASK env in config": {
+			cfg: validConfig().WithEnvVars("DD_MASK="),
+		},
+		"empty DD_SUBSYS env in config": {
+			cfg: validConfig().WithEnvVars("DD_SUBSYS="),
+		},
+		"invalid DD_MASK env in config": {
+			cfg:    validConfig().WithEnvVars("DD_MASK=mgmt,grogu"),
+			expErr: errors.New("unknown name \"grogu\""),
+		},
+		"invalid DD_SUBSYS env in config": {
+			cfg:    validConfig().WithEnvVars("DD_SUBSYS=mgmt,mando"),
+			expErr: errors.New("unknown name \"mando\""),
+		},
+		"valid DD_MASK env in config": {
+			cfg: validConfig().WithEnvVars("DD_MASK=REBUILD,PL,mgmt,epc"),
+		},
+		"valid DD_SUBSYS env in config": {
+			cfg: validConfig().WithEnvVars("DD_SUBSYS=COMMON,misc,rpc"),
+		},
+		"valid 'all' DD_MASKs in config": {
+			cfg: validConfig().WithEnvVars("DD_MASK=all"),
+		},
+		"valid 'all' DD_SUBSYS in config": {
+			cfg: validConfig().WithEnvVars("DD_SUBSYS=all"),
+		},
+		"invalid 'all' with another debug stream in config": {
+			cfg:    validConfig().WithEnvVars("DD_MASK=all,PL"),
+			expErr: errLogNameAllWithOther,
+		},
+		"invalid 'all' with another subsystem in config": {
+			cfg:    validConfig().WithEnvVars("DD_SUBSYS=all,MEM"),
+			expErr: errLogNameAllWithOther,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.CmpErr(t, tc.expErr, tc.cfg.Validate())
+		})
 	}
+}
+
+func multiProviderString(comp ...string) string {
+	return strings.Join(comp, MultiProviderSeparator)
 }
 
 func TestConfig_FabricValidation(t *testing.T) {
@@ -491,38 +585,102 @@ func TestConfig_FabricValidation(t *testing.T) {
 			},
 			expErr: errors.New("fabric_iface_port"),
 		},
+		"success": {
+			cfg: FabricConfig{
+				Provider:      "foo",
+				Interface:     "bar",
+				InterfacePort: 42,
+			},
+		},
+		"multi provider/interface/port ok": {
+			cfg: FabricConfig{
+				Provider:      multiProviderString("foo", "bar"),
+				Interface:     multiProviderString("baz", "net"),
+				InterfacePort: 42,
+			},
+		},
+		"mismatched num providers": {
+			cfg: FabricConfig{
+				Provider:      "foo",
+				Interface:     multiProviderString("baz", "net"),
+				InterfacePort: 42,
+			},
+			expErr: errors.New("same number"),
+		},
+		"mismatched num interfaces": {
+			cfg: FabricConfig{
+				Provider:      multiProviderString("foo", "bar"),
+				Interface:     "baz",
+				InterfacePort: 42,
+			},
+			expErr: errors.New("same number"),
+		},
+		"nr secondary ctxs less than 1": {
+			cfg: FabricConfig{
+				Provider:              multiProviderString("foo", "bar"),
+				Interface:             multiProviderString("baz", "net"),
+				InterfacePort:         42,
+				NumSecondaryEndpoints: []int{0},
+			},
+			expErr: errors.New("must be > 0"),
+		},
+		"nr secondary ctxs okay": {
+			cfg: FabricConfig{
+				Provider:              multiProviderString("foo", "bar", "baz"),
+				Interface:             multiProviderString("net0", "net1", "net2"),
+				InterfacePort:         42,
+				NumSecondaryEndpoints: []int{1, 2},
+			},
+		},
+		"too many nr secondary ctxs": {
+			cfg: FabricConfig{
+				Provider:              multiProviderString("foo", "bar", "baz"),
+				Interface:             multiProviderString("net0", "net1", "net2"),
+				InterfacePort:         42,
+				NumSecondaryEndpoints: []int{1, 2, 3},
+			},
+			expErr: errors.New("must have one value for each"),
+		},
+		"too few nr secondary ctxs": {
+			cfg: FabricConfig{
+				Provider:              multiProviderString("foo", "bar", "baz"),
+				Interface:             multiProviderString("net0", "net1", "net2"),
+				InterfacePort:         42,
+				NumSecondaryEndpoints: []int{1},
+			},
+			expErr: errors.New("must have one value for each"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotErr := tc.cfg.Validate()
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }
 
 func TestConfig_ToCmdVals(t *testing.T) {
 	var (
-		mountPoint      = "/mnt/test"
-		provider        = "test+foo"
-		interfaceName   = "qib0"
-		modules         = "foo,bar,baz"
-		systemName      = "test-system"
-		socketDir       = "/var/run/foo"
-		logMask         = "LOG_MASK_VALUE"
-		logFile         = "/path/to/log"
-		cfgPath         = "/path/to/nvme.conf"
-		interfacePort   = 20
-		targetCount     = 4
-		helperCount     = 1
-		serviceCore     = 8
-		index           = 2
-		pinnedNumaNode  = uint(1)
-		bypass          = true
-		crtCtxShareAddr = uint32(1)
-		crtTimeout      = uint32(30)
-		memSize         = 8192
-		hugepageSz      = 2
+		mountPoint     = "/mnt/test"
+		provider       = "test+foo"
+		interfaceName  = "ib0"
+		modules        = "foo,bar,baz"
+		systemName     = "test-system"
+		socketDir      = "/var/run/foo"
+		logMask        = "LOG_MASK_VALUE"
+		logFile        = "/path/to/log"
+		cfgPath        = "/path/to/nvme.conf"
+		interfacePort  = 20
+		targetCount    = 4
+		helperCount    = 1
+		serviceCore    = 8
+		index          = 2
+		pinnedNumaNode = uint(1)
+		bypass         = true
+		crtTimeout     = uint32(30)
+		memSize        = 8192
+		hugepageSz     = 2
 	)
-	cfg := NewConfig().
+	cfg := MockConfig().
 		WithStorage(
 			storage.NewTierConfig().
 				WithScmMountPoint(mountPoint),
@@ -534,17 +692,17 @@ func TestConfig_ToCmdVals(t *testing.T) {
 		WithFabricProvider(provider).
 		WithFabricInterface(interfaceName).
 		WithFabricInterfacePort(interfacePort).
-		WithPinnedNumaNode(&pinnedNumaNode).
+		WithPinnedNumaNode(pinnedNumaNode).
 		WithBypassHealthChk(&bypass).
 		WithModules(modules).
 		WithSocketDir(socketDir).
 		WithLogFile(logFile).
 		WithLogMask(logMask).
 		WithSystemName(systemName).
-		WithCrtCtxShareAddr(crtCtxShareAddr).
 		WithCrtTimeout(crtTimeout).
 		WithMemSize(memSize).
-		WithHugePageSize(hugepageSz)
+		WithHugepageSize(hugepageSz).
+		WithSrxDisabled(true)
 
 	cfg.Index = uint32(index)
 
@@ -565,20 +723,20 @@ func TestConfig_ToCmdVals(t *testing.T) {
 		"-H", strconv.Itoa(hugepageSz),
 	}
 	wantEnv := []string{
-		"OFI_INTERFACE=" + interfaceName,
-		"OFI_PORT=" + strconv.Itoa(interfacePort),
-		"CRT_PHY_ADDR_STR=" + provider,
+		"D_INTERFACE=" + interfaceName,
+		"D_PORT=" + strconv.Itoa(interfacePort),
+		"D_PROVIDER=" + provider,
 		"D_LOG_FILE=" + logFile,
 		"D_LOG_MASK=" + logMask,
 		"CRT_TIMEOUT=" + strconv.FormatUint(uint64(crtTimeout), 10),
-		"CRT_CTX_SHARE_ADDR=" + strconv.FormatUint(uint64(crtCtxShareAddr), 10),
+		"FI_OFI_RXM_USE_SRX=0",
 	}
 
 	gotArgs, err := cfg.CmdLineArgs()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if diff := cmp.Diff(wantArgs, gotArgs, cmpOpts()...); diff != "" {
+	if diff := cmp.Diff(wantArgs, gotArgs, defConfigCmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got):\n%s", diff)
 	}
 
@@ -586,7 +744,363 @@ func TestConfig_ToCmdVals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if diff := cmp.Diff(wantEnv, gotEnv, cmpOpts()...); diff != "" {
+	if diff := cmp.Diff(wantEnv, gotEnv, defConfigCmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got):\n%s", diff)
+	}
+}
+
+func TestFabricConfig_GetProviders(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg          *FabricConfig
+		expProviders []string
+		expErr       error
+	}{
+		"nil": {
+			expErr: errors.New("nil"),
+		},
+		"empty": {
+			cfg:    &FabricConfig{},
+			expErr: errors.New("provider not set"),
+		},
+		"single": {
+			cfg: &FabricConfig{
+				Provider: "p1",
+			},
+			expProviders: []string{"p1"},
+		},
+		"multi": {
+			cfg: &FabricConfig{
+				Provider: multiProviderString("p1", "p2", "p3"),
+			},
+			expProviders: []string{"p1", "p2", "p3"},
+		},
+		"excessive whitespace": {
+			cfg: &FabricConfig{
+				Provider: multiProviderString(" ", " p1 ", "  p2 ", "p3"),
+			},
+			expProviders: []string{"p1", "p2", "p3"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			providers, err := tc.cfg.GetProviders()
+
+			test.CmpErr(t, tc.expErr, err)
+			if diff := cmp.Diff(tc.expProviders, providers); diff != "" {
+				t.Fatalf("(-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestFabricConfig_GetNumProviders(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg    *FabricConfig
+		expNum int
+	}{
+		"nil": {},
+		"empty": {
+			cfg: &FabricConfig{},
+		},
+		"single": {
+			cfg: &FabricConfig{
+				Provider: "p1",
+			},
+			expNum: 1,
+		},
+		"multi": {
+			cfg: &FabricConfig{
+				Provider: multiProviderString("p1", "p2", "p3", "p4"),
+			},
+			expNum: 4,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.AssertEqual(t, tc.expNum, tc.cfg.GetNumProviders(), "")
+		})
+	}
+}
+
+func TestFabricConfig_GetPrimaryProvider(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg         *FabricConfig
+		expProvider string
+		expErr      error
+	}{
+		"nil": {
+			expErr: errors.New("nil"),
+		},
+		"empty": {
+			cfg:    &FabricConfig{},
+			expErr: errors.New("provider not set"),
+		},
+		"single": {
+			cfg: &FabricConfig{
+				Provider: "p1",
+			},
+			expProvider: "p1",
+		},
+		"multi": {
+			cfg: &FabricConfig{
+				Provider: multiProviderString("p1", "p2", "p3"),
+			},
+			expProvider: "p1",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			provider, err := tc.cfg.GetPrimaryProvider()
+
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expProvider, provider, "")
+		})
+	}
+}
+
+func TestFabricConfig_GetInterfaces(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg           *FabricConfig
+		expInterfaces []string
+		expErr        error
+	}{
+		"nil": {
+			expErr: errors.New("nil"),
+		},
+		"empty": {
+			cfg:    &FabricConfig{},
+			expErr: errors.New("fabric_iface not set"),
+		},
+		"single": {
+			cfg: &FabricConfig{
+				Interface: "net1",
+			},
+			expInterfaces: []string{"net1"},
+		},
+		"multi": {
+			cfg: &FabricConfig{
+				Interface: multiProviderString("net1", "net2", "net3"),
+			},
+			expInterfaces: []string{"net1", "net2", "net3"},
+		},
+		"excessive whitespace": {
+			cfg: &FabricConfig{
+				Interface: multiProviderString(" net1  ", "", "    net2", "net3", ""),
+			},
+			expInterfaces: []string{"net1", "net2", "net3"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			interfaces, err := tc.cfg.GetInterfaces()
+
+			test.CmpErr(t, tc.expErr, err)
+			if diff := cmp.Diff(tc.expInterfaces, interfaces); diff != "" {
+				t.Fatalf("(-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestFabricConfig_GetPrimaryInterface(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg          *FabricConfig
+		expInterface string
+		expErr       error
+	}{
+		"nil": {
+			expErr: errors.New("nil"),
+		},
+		"empty": {
+			cfg:    &FabricConfig{},
+			expErr: errors.New("fabric_iface not set"),
+		},
+		"single": {
+			cfg: &FabricConfig{
+				Interface: "net1",
+			},
+			expInterface: "net1",
+		},
+		"multi": {
+			cfg: &FabricConfig{
+				Interface: multiProviderString("net0", "net1", "net2", "net3"),
+			},
+			expInterface: "net0",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			iface, err := tc.cfg.GetPrimaryInterface()
+
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expInterface, iface, "")
+		})
+	}
+}
+
+func TestFabricConfig_GetInterfacePorts(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg      *FabricConfig
+		expPorts []int
+		expErr   error
+	}{
+		"nil": {
+			expErr: errors.New("nil"),
+		},
+		"empty": {
+			cfg:    &FabricConfig{},
+			expErr: errors.New("fabric_iface_port not set"),
+		},
+		"single": {
+			cfg: &FabricConfig{
+				InterfacePort: 1234,
+			},
+			expPorts: []int{1234},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ports, err := tc.cfg.GetInterfacePorts()
+
+			test.CmpErr(t, tc.expErr, err)
+			if diff := cmp.Diff(tc.expPorts, ports); diff != "" {
+				t.Fatalf("(-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestConfig_EnvVarConflict(t *testing.T) {
+	logMask1 := "LOG_MASK_VALUE_1"
+	logMask2 := "LOG_MASK_VALUE_2"
+
+	for name, tc := range map[string]struct {
+		logMask    string
+		envLogMask string
+		expEnvMask string
+	}{
+		"log_mask takes precedence": {
+			logMask:    logMask1,
+			envLogMask: logMask2,
+			expEnvMask: logMask1,
+		},
+		"empty log_mask uses env": {
+			logMask:    "",
+			envLogMask: logMask2,
+			expEnvMask: logMask2,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := MockConfig().
+				WithLogMask(tc.logMask).
+				WithEnvVars("D_LOG_MASK=" + tc.envLogMask)
+
+			wantEnv := []string{
+				"D_LOG_MASK=" + tc.expEnvMask,
+				"CRT_TIMEOUT=0",
+				"FI_OFI_RXM_USE_SRX=1",
+			}
+
+			gotEnv, err := cfg.CmdLineEnv()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(wantEnv, gotEnv, defConfigCmpOpts...); diff != "" {
+				t.Fatalf("(-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestFabricConfig_Update(t *testing.T) {
+	for name, tc := range map[string]struct {
+		fc        *FabricConfig
+		new       FabricConfig
+		expResult *FabricConfig
+	}{
+		"nil": {},
+		"nothing set": {
+			fc:        &FabricConfig{},
+			new:       FabricConfig{},
+			expResult: &FabricConfig{},
+		},
+		"update": {
+			fc: &FabricConfig{},
+			new: FabricConfig{
+				Provider:              "provider",
+				Interface:             "iface",
+				InterfacePort:         9999,
+				CrtTimeout:            60,
+				DisableSRX:            true,
+				NumSecondaryEndpoints: []int{1},
+			},
+			expResult: &FabricConfig{
+				Provider:              "provider",
+				Interface:             "iface",
+				InterfacePort:         9999,
+				CrtTimeout:            60,
+				DisableSRX:            true,
+				NumSecondaryEndpoints: []int{1},
+			},
+		},
+		"don't unset fields": {
+			fc: &FabricConfig{
+				Provider:              "provider",
+				Interface:             "iface",
+				InterfacePort:         9999,
+				CrtTimeout:            60,
+				DisableSRX:            true,
+				NumSecondaryEndpoints: []int{1},
+			},
+			new: FabricConfig{},
+			expResult: &FabricConfig{
+				Provider:              "provider",
+				Interface:             "iface",
+				InterfacePort:         9999,
+				CrtTimeout:            60,
+				DisableSRX:            true,
+				NumSecondaryEndpoints: []int{1},
+			},
+		},
+		"update mixed": {
+			fc: &FabricConfig{
+				CrtTimeout: 60,
+			},
+			new: FabricConfig{
+				Provider:      "provider",
+				Interface:     "iface",
+				InterfacePort: 9999,
+				CrtTimeout:    120,
+				DisableSRX:    true,
+			},
+			expResult: &FabricConfig{
+				Provider:      "provider",
+				Interface:     "iface",
+				InterfacePort: 9999,
+				CrtTimeout:    60,
+				DisableSRX:    true,
+			},
+		},
+		"default secondary ctx": {
+			fc: &FabricConfig{},
+			new: FabricConfig{
+				Provider: multiProviderString("one", "two", "three"),
+			},
+			expResult: &FabricConfig{
+				Provider:              multiProviderString("one", "two", "three"),
+				NumSecondaryEndpoints: []int{1, 1},
+			},
+		},
+		"no secondary ctx": {
+			fc: &FabricConfig{},
+			new: FabricConfig{
+				Provider: "one",
+			},
+			expResult: &FabricConfig{
+				Provider: "one",
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			tc.fc.Update(tc.new)
+
+			if diff := cmp.Diff(tc.expResult, tc.fc); diff != "" {
+				t.Fatalf("(-want, +got):\n%s", diff)
+			}
+		})
 	}
 }

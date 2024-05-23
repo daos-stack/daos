@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -14,95 +14,140 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/atm"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwloc"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
+	"github.com/daos-stack/daos/src/control/lib/systemd"
+	"github.com/daos-stack/daos/src/control/lib/telemetry/promexp"
 )
+
+type ctxKey string
 
 const (
-	agentSockName = "daos_agent.sock"
+	agentSockName          = "daos_agent.sock"
+	shuttingDownKey ctxKey = "agent_shutting_down"
 )
 
+func agentIsShuttingDown(ctx context.Context) bool {
+	shuttingDown, ok := ctx.Value(shuttingDownKey).(*atm.Bool)
+	if !ok {
+		return false
+	}
+	return shuttingDown.IsTrue()
+}
+
 type startCmd struct {
-	logCmd
+	cmdutil.LogCmd
 	configCmd
 	ctlInvokerCmd
 }
 
 func (cmd *startCmd) Execute(_ []string) error {
-	cmd.log.Debugf("Starting %s (pid %d)", versionString(), os.Getpid())
+	if err := common.CheckDupeProcess(); err != nil {
+		cmd.Notice(err.Error())
+	}
+
+	cmd.Infof("Starting %s (pid %d)", versionString(), os.Getpid())
 	startedAt := time.Now()
 
-	ctx, shutdown := context.WithCancel(context.Background())
+	parent, shutdown := context.WithCancel(cmd.MustLogCtx())
 	defer shutdown()
 
+	var shuttingDown atm.Bool
+	ctx := context.WithValue(parent, shuttingDownKey, &shuttingDown)
+
 	sockPath := filepath.Join(cmd.cfg.RuntimeDir, agentSockName)
-	cmd.log.Debugf("Full socket path is now: %s", sockPath)
+	cmd.Debugf("Full socket path is now: %s", sockPath)
 
-	drpcServer, err := drpc.NewDomainSocketServer(ctx, cmd.log, sockPath)
+	// Agent socket file to be readable and writable by all.
+	createDrpcStart := time.Now()
+	drpcServer, err := drpc.NewDomainSocketServer(cmd.Logger, sockPath, 0666)
 	if err != nil {
-		cmd.log.Errorf("Unable to create socket server: %v", err)
+		cmd.Errorf("Unable to create socket server: %v", err)
 		return err
 	}
+	cmd.Debugf("created dRPC server: %s", time.Since(createDrpcStart))
 
-	aicEnabled := (os.Getenv("DAOS_AGENT_DISABLE_CACHE") != "true")
-	if !aicEnabled {
-		cmd.log.Debugf("GetAttachInfo agent caching has been disabled\n")
+	cacheStart := time.Now()
+	cache := NewInfoCache(ctx, cmd.Logger, cmd.ctlInvoker, cmd.cfg)
+	if cmd.attachInfoCacheDisabled() {
+		cache.DisableAttachInfoCache()
+		cmd.Debug("GetAttachInfo agent caching has been disabled")
 	}
 
-	ficEnabled := (os.Getenv("DAOS_AGENT_DISABLE_OFI_CACHE") != "true")
-	if !ficEnabled {
-		cmd.log.Debugf("Local fabric interface caching has been disabled\n")
+	if cmd.fabricCacheDisabled() {
+		cache.DisableFabricCache()
+		cmd.Debug("Local fabric interface caching has been disabled")
+	}
+	cmd.Debugf("created cache: %s", time.Since(cacheStart))
+
+	procmonStart := time.Now()
+	procmon := NewProcMon(cmd.Logger, cmd.ctlInvoker, cmd.cfg.SystemName)
+	procmon.startMonitoring(ctx, cmd.cfg.EvictOnStart)
+	cmd.Debugf("started process monitor: %s", time.Since(procmonStart))
+
+	var clientMetricSource *promexp.ClientSource
+	if cmd.cfg.TelemetryExportEnabled() {
+		if ctx, clientMetricSource, err = promexp.NewClientSource(ctx); err != nil {
+			return errors.Wrap(err, "unable to create client metrics source")
+		}
+		telemetryStart := time.Now()
+		shutdown, err := startPrometheusExporter(ctx, cmd, clientMetricSource, cmd.cfg)
+		if err != nil {
+			return errors.Wrap(err, "unable to start prometheus exporter")
+		}
+		defer shutdown()
+		cmd.Debugf("telemetry exporter started: %s", time.Since(telemetryStart))
 	}
 
-	netCtx, err := netdetect.Init(context.Background())
-	defer netdetect.CleanUp(netCtx)
+	drpcRegStart := time.Now()
+	drpcServer.RegisterRPCModule(NewSecurityModule(cmd.Logger, cmd.cfg.TransportConfig))
+	mgmtMod := &mgmtModule{
+		log:           cmd.Logger,
+		sys:           cmd.cfg.SystemName,
+		ctlInvoker:    cmd.ctlInvoker,
+		cache:         cache,
+		numaGetter:    hwprov.DefaultProcessNUMAProvider(cmd.Logger),
+		monitor:       procmon,
+		providerIdx:   cmd.cfg.ProviderIdx,
+		cliMetricsSrc: clientMetricSource,
+	}
+	drpcServer.RegisterRPCModule(mgmtMod)
+	cmd.Debugf("registered dRPC modules: %s", time.Since(drpcRegStart))
+
+	hwlocStart := time.Now()
+	// Cache hwloc data in context on startup, since it'll be used extensively at runtime.
+	hwlocCtx, err := hwloc.CacheContext(ctx, cmd.Logger)
 	if err != nil {
-		cmd.log.Errorf("Unable to initialize netdetect services")
 		return err
 	}
+	defer hwloc.Cleanup(hwlocCtx)
+	cmd.Debugf("cached hwloc content: %s", time.Since(hwlocStart))
 
-	numaAware := netdetect.HasNUMA(netCtx)
-	if !numaAware {
-		cmd.log.Debugf("This system is not NUMA aware.  Any devices found are reported as NUMA node 0.")
-	}
-
-	procmon := NewProcMon(cmd.log, cmd.ctlInvoker, cmd.cfg.SystemName)
-	procmon.startMonitoring(ctx)
-
-	fabricCache := newLocalFabricCache(cmd.log, ficEnabled)
-	if len(cmd.cfg.FabricInterfaces) > 0 {
-		// Cache is required to use user-defined fabric interfaces
-		fabricCache.enabled.SetTrue()
-		nf := NUMAFabricFromConfig(cmd.log, cmd.cfg.FabricInterfaces)
-		fabricCache.Cache(ctx, nf)
-	}
-
-	drpcServer.RegisterRPCModule(NewSecurityModule(cmd.log, cmd.cfg.TransportConfig))
-	drpcServer.RegisterRPCModule(&mgmtModule{
-		log:        cmd.log,
-		sys:        cmd.cfg.SystemName,
-		ctlInvoker: cmd.ctlInvoker,
-		attachInfo: newAttachInfoCache(cmd.log, aicEnabled),
-		fabricInfo: fabricCache,
-		numaAware:  numaAware,
-		netCtx:     netCtx,
-		monitor:    procmon,
-	})
-
-	err = drpcServer.Start()
+	drpcSrvStart := time.Now()
+	err = drpcServer.Start(hwlocCtx)
 	if err != nil {
-		cmd.log.Errorf("Unable to start socket server on %s: %v", sockPath, err)
-		return err
+		return errors.Wrap(err, "unable to start dRPC server")
 	}
+	cmd.Debugf("dRPC socket server started: %s", time.Since(drpcSrvStart))
 
-	cmd.log.Debugf("startup complete in %s", time.Since(startedAt))
-	cmd.log.Infof("%s (pid %d) listening on %s", versionString(), os.Getpid(), sockPath)
+	cmd.Debugf("startup complete in %s", time.Since(startedAt))
+	cmd.Infof("%s (pid %d) listening on %s", versionString(), os.Getpid(), sockPath)
+	if err := systemd.Ready(); err != nil && err != systemd.ErrSdNotifyNoSocket {
+		return errors.Wrap(err, "unable to notify systemd")
+	}
+	defer systemd.Stopping()
 
 	// Setup signal handlers so we can block till we get SIGINT or SIGTERM
 	signals := make(chan os.Signal)
 	finish := make(chan struct{})
 
-	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGPIPE)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGPIPE, syscall.SIGUSR1, syscall.SIGUSR2)
 	// Anonymous goroutine to wait on the signals channel and tell the
 	// program to finish when it receives a signal. Since we notify on
 	// SIGINT and SIGTERM we should only catch these on a kill or ctrl+c
@@ -111,19 +156,38 @@ func (cmd *startCmd) Execute(_ []string) error {
 	// channel.
 	var shutdownRcvd time.Time
 	go func() {
-		sig := <-signals
-		switch sig {
-		case syscall.SIGPIPE:
-			cmd.log.Infof("Signal received.  Caught non-fatal %s; continuing", sig)
-		default:
-			shutdownRcvd = time.Now()
-			cmd.log.Infof("Signal received.  Caught %s; shutting down", sig)
-			close(finish)
+		for sig := range signals {
+			switch sig {
+			case syscall.SIGPIPE:
+				cmd.Infof("Signal received.  Caught non-fatal %s; continuing", sig)
+			case syscall.SIGUSR1:
+				cmd.Infof("Signal received.  Caught %s; flushing open pool handles", sig)
+				procmon.FlushAllHandles(ctx)
+			case syscall.SIGUSR2:
+				cmd.Infof("Signal received. Caught %s; refreshing caches", sig)
+				mgmtMod.RefreshCache(ctx)
+			default:
+				shutdownRcvd = time.Now()
+				cmd.Infof("Signal received.  Caught %s; shutting down", sig)
+				shuttingDown.SetTrue()
+				if !cmd.cfg.DisableAutoEvict {
+					procmon.FlushAllHandles(ctx)
+				}
+				close(finish)
+				return
+			}
 		}
 	}()
 	<-finish
-	drpcServer.Shutdown()
 
-	cmd.log.Debugf("shutdown complete in %s", time.Since(shutdownRcvd))
+	cmd.Debugf("shutdown complete in %s", time.Since(shutdownRcvd))
 	return nil
+}
+
+func (cmd *startCmd) attachInfoCacheDisabled() bool {
+	return cmd.cfg.DisableCache || os.Getenv("DAOS_AGENT_DISABLE_CACHE") == "true"
+}
+
+func (cmd *startCmd) fabricCacheDisabled() bool {
+	return cmd.cfg.DisableCache || os.Getenv("DAOS_AGENT_DISABLE_OFI_CACHE") == "true"
 }

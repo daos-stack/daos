@@ -5,7 +5,7 @@
 
   <groupId>io.daos</groupId>
   <artifactId>daos-java-root</artifactId>
-  <version>1.2.1-SNAPSHOT</version>
+  <version>2.4.0-SNAPSHOT</version>
   <packaging>pom</packaging>
 
   <name>${project.groupId}:${project.artifactId}</name>
@@ -16,7 +16,7 @@
     <junit.platform.version>1.4.0</junit.platform.version>
     <junit.jupiter.version>5.4.0</junit.jupiter.version>
     <slf4j.version>1.7.25</slf4j.version>
-    <log4j.version>2.13.3</log4j.version>
+    <log4j.version>2.17.1</log4j.version>
     <checkstyle.failOnViolation>true</checkstyle.failOnViolation>
     <maven.compiler.source>1.8</maven.compiler.source>
     <maven.compiler.target>1.8</maven.compiler.target>
@@ -81,8 +81,8 @@
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-compiler-plugin</artifactId>
-          <version>3.5.1</version>
+	  <artifactId>maven-compiler-plugin</artifactId>
+          <version>3.8.0</version>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
@@ -339,7 +339,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-javadoc-plugin</artifactId>
-        <version>3.0.0-M1</version>
+        <version>3.5.0</version>
         <reportSets>
           <reportSet><!-- by default, id = "default" -->
             <reports><!-- select non-aggregate reports -->
@@ -368,9 +368,21 @@
     <profile>
       <id>java-8</id>
       <activation>
-        <jdk>[1.8,)</jdk>
+        <jdk>1.8</jdk>
       </activation>
       <properties>
+        <doclint>none</doclint>
+        <additionalparam>-Xdoclint:none</additionalparam>
+      </properties>
+    </profile>
+    <profile>
+      <id>java-11</id>
+      <activation>
+        <jdk>11</jdk>
+      </activation>
+      <properties>
+        <maven.compiler.source>11</maven.compiler.source>
+        <maven.compiler.target>11</maven.compiler.target>
         <doclint>none</doclint>
         <additionalparam>-Xdoclint:none</additionalparam>
       </properties>

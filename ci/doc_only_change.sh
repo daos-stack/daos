@@ -15,7 +15,15 @@ fi
 
 # The fetch of $TARGET_BRANCH gets the branch for the compare as a commit hash
 # with the temporary name FETCH_HEAD.
-git fetch origin "${TARGET_BRANCH}"
-git diff-tree --no-commit-id --name-only                                \
-  "$(git merge-base "FETCH_HEAD" HEAD)" HEAD | \
-  grep -v -e "^doc$"
+if ! git fetch origin "${TARGET_BRANCH}"; then
+    echo "Hrm.  Got an error fetching the target branch"
+    # nothing to do here except exit as if it's not a doc-only change
+    exit 0
+fi
+if ! merge_base="$(git merge-base "FETCH_HEAD" HEAD)"; then
+    echo "Hrm.  Got an error finding the merge base"
+    # nothing to do here except exit as if it's not a doc-only change
+    exit 0
+fi
+git diff --no-commit-id --name-only "$merge_base" HEAD | \
+  grep -v -e "^docs/" -e "\.md$"

@@ -1,100 +1,37 @@
 """Build test suite"""
-import sys
 
-import subprocess
-#hack to handle old subprocess version
-try:
-    from subprocess import DEVNULL
-except ImportError:
-    import os
-    DEVNULL = open(os.devnull, "wb")
 
-import daos_build
-
-test_cmocka_skip = """
-#include <stdarg.h>
-#include <stddef.h>
-#include <setjmp.h>
-#include <cmocka.h>
-
-static void
-test(void **state) { skip(); }
-
-int main(int argc, char **argv)
-{
-	const struct CMUnitTest tests[] = {
-		cmocka_unit_test(test),
-		cmocka_unit_test(test),
-	};
-	return cmocka_run_group_tests(tests, NULL, NULL);
-}
-"""
-
-def CheckCmockaSkip(context):
-    """Configure check for cmocka bug"""
-    context.Message('Checking if cmocka skip() bug is present ... ')
-    rc = context.TryCompile(test_cmocka_skip, '.c')
-    if rc == 0:
-        sys.stdout.write(" (Compile failed) assuming ")
-        context.Result(not rc)
-        return rc
-    rc = context.TryLink(test_cmocka_skip, '.c')
-    if rc == 0:
-        sys.stdout.write(" (Link failed) assuming ")
-        context.Result(not rc)
-        return rc
-    prog = context.lastTarget
-    pname = prog.get_abspath()
-    rc = subprocess.call(pname, env={"CMOCKA_TEST_ABORT": "1"}, stdout=DEVNULL,
-                         stderr=DEVNULL)
-    #in case of abort rc is -6 instead of 134 (128+6) with shell ...
-    if rc == -6:
-        sys.stdout.write(" (Bug reproduced) ")
-    else:
-        if rc != 0:
-            sys.stdout.write(" (Other error than bug) assuming ")
-        else:
-            sys.stdout.write(" (Bug not reproduced) ")
-    context.Result(rc)
-    #return 0 means error
-    return not rc
-
-#pylint: disable=no-member
-def configure_cmocka(nenv):
-    """configure cmocka environment"""
-    if GetOption('help') or GetOption('clean'):
-        return nenv
-    conf = Configure(nenv, custom_tests={'CheckCmockaSkip' : CheckCmockaSkip})
-    conf.env.AppendUnique(LIBS=['cmocka'])
-    if not conf.CheckCmockaSkip():
-        #it would be cool to be able to check exit code is effectively 134
-        #    (for abort() upon skip() bug) but in all error cases we should
-        #    decide to use workaround
-        conf.env.AppendUnique(CCFLAGS=['-DOVERRIDE_CMOCKA_SKIP'])
-        print("libcmocka with broken skip(), using workaround (DAOS-1093).")
-    return conf.Finish()
-#pylint: enable=no-member
-#
 def scons():
     """Execute build"""
-    Import('denv')
+    Import('denv', 'base_env')
 
-    libraries = ['daos', 'dfs', 'daos_tests', 'gurt',
-                 'cart']
-    libraries += ['uuid', 'dfs', 'cmocka', 'pthread', 'isal']
+    libraries = ['daos', 'dfs', 'daos_tests', 'gurt', 'cart']
+    libraries += ['uuid', 'cmocka', 'pthread', 'isal', 'dpar']
 
-    denv.AppendUnique(LIBPATH=["$BUILD_DIR/src/client/dfs"])
+    dfuse_env = base_env.Clone()
+    dfuse_env.compiler_setup()
+    dfusetest = dfuse_env.d_program(File("dfuse_test.c"), LIBS='cmocka')
+    denv.Install('$PREFIX/bin/', dfusetest)
+
+    denv.AppendUnique(LIBPATH=[Dir('../../client/dfs')])
+    denv.AppendUnique(CPPPATH=[Dir('../../client/dfs').srcnode()])
+    denv.AppendUnique(CPPPATH=[Dir('../../mgmt').srcnode()])
 
     daos_test_tgt = denv.SharedObject(['daos_test_common.c'])
-    Export('daos_test_tgt')
-
+    # These two are exported below but that isn't detected by pylint so disable the warning here.
+    # pylint: disable-next=unused-variable
     daos_epoch_io = denv.SharedObject(['daos_epoch_io.c'])
-    Export('daos_epoch_io')
-
+    # pylint: disable-next=unused-variable
+    daos_test_rebuild = denv.SharedObject(['daos_rebuild_common.c'])
+    # pylint: disable-next=unused-variable
     daos_test_obj = denv.SharedObject(['daos_obj.c'])
-    Export('daos_test_obj')
 
-    newenv = configure_cmocka(denv.Clone())
+    c_files = ['daos_debug_set_params.c']
+    daosdebug = denv.d_program('daos_debug_set_params',
+                               c_files + daos_test_tgt,
+                               LIBS=['daos_common'] + libraries)
+
+    newenv = denv.Clone()
 
     c_files = Split("""daos_array.c daos_base_tx.c daos_capa.c daos_checksum.c
                     daos_container.c daos_dedup.c daos_degraded.c
@@ -104,25 +41,28 @@ def scons():
                     daos_obj_array.c daos_obj.c daos_oid_alloc.c daos_pool.c
                     daos_rebuild.c daos_rebuild_common.c daos_rebuild_ec.c
                     daos_rebuild_simple.c daos_test.c daos_verify_consistency.c
-                    daos_aggregate_ec.c daos_degrade_ec.c
-                    daos_extend_simple.c daos_obj_ec.c""")
-    daostest = daos_build.program(newenv, 'daos_test', c_files + daos_test_tgt,
-                                  LIBS=['daos_common'] + libraries)
+                    daos_aggregate_ec.c daos_degrade_ec.c daos_cr.c
+                    daos_extend_simple.c daos_obj_ec.c daos_upgrade.c daos_pipeline.c""")
 
-    c_files = Split("""dfs_unit_test.c dfs_par_test.c dfs_test.c """
-                    """dfs_sys_unit_test.c""")
-    newenv.AppendUnique(CPPPATH=["#/src/client/dfs"])
-    dfstest = daos_build.program(newenv, 'dfs_test', c_files + daos_test_tgt,
-                                 LIBS=['daos_common'] + libraries)
+    daostest = newenv.d_program('daos_test', c_files + daos_test_tgt,
+                                LIBS=['daos_common'] + libraries)
+
+    c_files = ['dfs_unit_test.c', 'dfs_par_test.c', 'dfs_test.c', 'dfs_sys_unit_test.c']
+    dfstest = newenv.d_program('dfs_test', c_files + daos_test_tgt,
+                               LIBS=['daos_common'] + libraries)
 
     denv.Install('$PREFIX/bin/', daostest)
     denv.Install('$PREFIX/bin/', dfstest)
-    denv.Install('$PREFIX/bin/io_conf', Glob('io_conf/daos_io_conf_1'))
-    denv.Install('$PREFIX/bin/io_conf', Glob('io_conf/daos_io_conf_2'))
-    denv.Install('$PREFIX/bin/io_conf', Glob('io_conf/daos_io_conf_3'))
-    denv.Install('$PREFIX/bin/io_conf', Glob('io_conf/daos_io_conf_4'))
-    denv.Install('$PREFIX/bin/io_conf', Glob('io_conf/daos_io_conf_5'))
-    SConscript('io_conf/SConscript', exports='denv')
+    denv.Install('$PREFIX/bin/', daosdebug)
+    denv.Install('$PREFIX/lib/daos/TESTING/io_conf', 'io_conf/daos_io_conf_1')
+    denv.Install('$PREFIX/lib/daos/TESTING/io_conf', 'io_conf/daos_io_conf_2')
+    denv.Install('$PREFIX/lib/daos/TESTING/io_conf', 'io_conf/daos_io_conf_3')
+    denv.Install('$PREFIX/lib/daos/TESTING/io_conf', 'io_conf/daos_io_conf_4')
+    denv.Install('$PREFIX/lib/daos/TESTING/io_conf', 'io_conf/daos_io_conf_5')
+    SConscript('io_conf/SConscript',
+               exports=['denv', 'daos_epoch_io', 'daos_test_tgt', 'daos_test_rebuild',
+                        'daos_test_obj'])
+
 
 if __name__ == "SCons.Script":
     scons()

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -142,7 +142,7 @@ typedef int (*crt_iv_on_update_cb_t)(crt_iv_namespace_t ivns,
  * \param[in] ivns		the local handle of the IV namespace
  * \param[in] iv_key		key of the IV
  * \param[in] cb		a callback which must be called or scheduled by
- *				the user in order to compelete the handling of
+ *				the user in order to complete the handling of
  *				the crt_iv_fetch() request.
  * \param[in] cb_arg		arguments for \a cb.
  *
@@ -165,7 +165,7 @@ typedef void (*crt_iv_pre_fetch_cb_t)(crt_iv_namespace_t ivns,
  * \param[in] ivns		the local handle of the IV namespace
  * \param[in] iv_key		key of the IV
  * \param[in] cb		a callback which must be called or scheduled by
- *				the user in order to compelete the handling of
+ *				the user in order to complete the handling of
  *				the crt_iv_update() request.
  * \param[in] cb_arg		arguments for \a cb.
  */
@@ -184,7 +184,7 @@ typedef void (*crt_iv_pre_update_cb_t)(crt_iv_namespace_t ivns,
  * \param[in] ivns		the local handle of the IV namespace
  * \param[in] iv_key		key of the IV
  * \param[in] cb		a callback which must be called or scheduled by
- *				the user in order to compelete the handling of
+ *				the user in order to complete the handling of
  *				the crt_iv_sync() request.
  * \param[in] cb_arg		arguments for \a cb.
  */
@@ -239,6 +239,7 @@ typedef int (*crt_iv_on_hash_cb_t)(crt_iv_namespace_t ivns,
 typedef enum {
 	CRT_IV_PERM_READ = 0x1,
 	CRT_IV_PERM_WRITE = 0x2,
+	CRT_IV_NO_ALLOC = 0x4,
 } crt_iv_perm_t;
 
 /**
@@ -287,11 +288,8 @@ typedef int (*crt_iv_on_get_cb_t)(crt_iv_namespace_t ivns,
  * \param[in] iv_value		iv_value buffers to return
  * \param[in] arg		private user data
  *
- * \return			DER_SUCCESS on success, negative value if error
  */
-typedef int (*crt_iv_on_put_cb_t)(crt_iv_namespace_t ivns,
-				  d_sg_list_t *iv_value,
-				  void *arg);
+typedef void (*crt_iv_on_put_cb_t)(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *arg);
 
 /**
  * Compares two passed iv keys 'key1' and 'key2' and returns either
@@ -601,12 +599,6 @@ typedef int (*crt_iv_sync_done_cb_t)(void *cb_arg, int rc);
 typedef struct {
 	crt_iv_sync_mode_t	ivs_mode;
 	crt_iv_sync_event_t	ivs_event;
-	/** This callback will be called once the current IV sync is done
-	 * for the local node.
-	 **/
-	crt_iv_sync_done_cb_t	ivs_comp_cb;
-	/* argument for ivs_comp_cb */
-	void			*ivs_comp_cb_arg;
 	/* OR-ed combination of 0 or more crt_iv_sync_flag_t flags */
 	uint32_t		ivs_flags;
 } crt_iv_sync_t;

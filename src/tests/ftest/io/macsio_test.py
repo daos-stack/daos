@@ -1,23 +1,18 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from general_utils import convert_list
-from dfuse_test_base import DfuseTestBase
+from dfuse_utils import get_dfuse, start_dfuse
+from general_utils import list_to_str
 from macsio_test_base import MacsioTestBase
 
 
-class MacsioTest(DfuseTestBase, MacsioTestBase):
-    # pylint: disable=too-many-ancestors
+class MacsioTest(MacsioTestBase):
     """Test class Description: Runs a basic MACSio test.
 
     :avocado: recursive
     """
-
-    # Cancel any test using MPICH w/ MACSio due to DAOS-5265
-    CANCEL_FOR_TICKET = [["DAOS-5265", "job_manager_mpi_type", "mpich"]]
 
     def test_macsio(self):
         """JIRA ID: DAOS-3658.
@@ -30,23 +25,26 @@ class MacsioTest(DfuseTestBase, MacsioTestBase):
             Six clients and two servers.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,large
-        :avocado: tags=io,DAOS_5610,dfuse
-        :avocado: tags=macsio
+        :avocado: tags=hw,medium
+        :avocado: tags=io,macsio,dfuse
+        :avocado: tags=MacsioTest,test_macsio
+        :avocado: tags=DAOS_5610
         """
+        processes = self.params.get("processes", "/run/macsio/*", len(self.hostlist_clients))
+
         # Create a pool
-        self.add_pool()
-        self.pool.display_pool_daos_space()
+        self.log_step('Create a single pool')
+        pool = self.get_pool()
+        pool.display_pool_daos_space()
 
         # Create a container
-        self.add_container(self.pool)
+        self.log_step('Create a single container')
+        container = self.get_container(pool)
 
         # Run macsio
-        self.log.info("Running MACSio")
+        self.log_step("Running MACSio")
         status = self.macsio.check_results(
-            self.run_macsio(
-                self.pool.uuid, convert_list(self.pool.svc_ranks),
-                self.container.uuid),
+            self.run_macsio(pool.uuid, list_to_str(pool.svc_ranks), processes, container.uuid),
             self.hostlist_clients)
         if status:
             self.log.info("Test passed")
@@ -62,33 +60,38 @@ class MacsioTest(DfuseTestBase, MacsioTestBase):
             Six clients and two servers.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,large
-        :avocado: tags=io,DAOS_5610,dfuse
-        :avocado: tags=macsio_daos_vol
+        :avocado: tags=hw,medium
+        :avocado: tags=io,macsio,dfuse,daos_vol
+        :avocado: tags=MacsioTest,test_macsio_daos_vol
+        :avocado: tags=DAOS_5610
         """
-        plugin_path = self.params.get("plugin_path")
+        plugin_path = self.params.get("plugin_path", "/run/job_manager/*")
+        processes = self.params.get("processes", "/run/macsio/*", len(self.hostlist_clients))
 
         # Create a pool
-        self.add_pool()
-        self.pool.display_pool_daos_space()
+        self.log_step('Create a single pool')
+        pool = self.get_pool()
+        pool.display_pool_daos_space()
 
         # Create a container
-        self.add_container(self.pool)
+        self.log_step('Create a single container')
+        container = self.get_container(pool)
 
         # Create dfuse mount point
-        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
+        self.log_step('Starting dfuse')
+        dfuse = get_dfuse(self, self.hostlist_clients)
+        start_dfuse(self, dfuse, pool, container)
 
         # VOL needs to run from a file system that supports xattr.  Currently
         # nfs does not have this attribute so it was recommended to create and
         # use a dfuse dir and run vol tests from there.
-        self.job_manager.working_dir.value = self.dfuse.mount_dir.value
+        self.job_manager.working_dir.value = dfuse.mount_dir.value
 
         # Run macsio
-        self.log.info("Running MACSio with DAOS VOL connector")
+        self.log_step("Running MACSio with DAOS VOL connector")
         status = self.macsio.check_results(
             self.run_macsio(
-                self.pool.uuid, convert_list(self.pool.svc_ranks),
-                self.container.uuid, plugin_path),
+                pool.uuid, list_to_str(pool.svc_ranks), processes, container.uuid, plugin_path),
             self.hostlist_clients)
         if status:
             self.log.info("Test passed")

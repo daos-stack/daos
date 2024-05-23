@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,6 +10,7 @@
  */
 #define D_LOGFAC	DD_FAC(vos)
 
+#include <daos_srv/vos.h>
 #include "vos_layout.h"
 #include "vos_internal.h"
 
@@ -49,7 +50,7 @@ dtx_iter_fini(struct vos_iterator *iter)
 	if (oiter->oit_cont != NULL)
 		vos_cont_decref(oiter->oit_cont);
 
-	D_FREE_PTR(oiter);
+	D_FREE(oiter);
 	return rc;
 }
 
@@ -74,9 +75,6 @@ dtx_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	if (oiter == NULL)
 		return -DER_NOMEM;
 
-	if (param->ip_flags & VOS_IT_CLEANUP_DTX)
-		oiter->oit_iter.it_cleanup_stale_dtx = 1;
-
 	oiter->oit_iter.it_type = type;
 	oiter->oit_cont = cont;
 	vos_cont_addref(cont);
@@ -96,7 +94,7 @@ dtx_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 }
 
 static int
-dtx_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
+dtx_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t next /* Unimplemented */)
 {
 	struct vos_dtx_iter	*oiter = iter2oiter(iter);
 	struct vos_dtx_act_ent	*dae;
@@ -105,7 +103,7 @@ dtx_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
 
 	D_ASSERT(iter->it_type == VOS_ITER_DTX);
 
-	if (anchor == NULL) {
+	if (vos_anchor_is_zero(anchor)) {
 		oiter->oit_linear = true;
 		if (d_list_empty(&oiter->oit_cont->vc_dtx_act_list)) {
 			oiter->oit_cur = NULL;
@@ -116,8 +114,6 @@ dtx_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
 			d_list_entry(oiter->oit_cont->vc_dtx_act_list.next,
 				     struct vos_dtx_act_ent, dae_link);
 	} else {
-		D_ASSERT(!oiter->oit_iter.it_cleanup_stale_dtx);
-
 		oiter->oit_linear = false;
 		rc = dbtree_iter_probe(oiter->oit_hdl, BTR_PROBE_GE,
 				       vos_iter_intent(iter), NULL, anchor);
@@ -136,8 +132,8 @@ dtx_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
 		dae = rec_iov.iov_buf;
 	}
 
-	while (dae->dae_committable || dae->dae_committed ||
-	       dae->dae_aborted || dae->dae_dbd == NULL) {
+	while (vos_dae_is_commit(dae) || vos_dae_is_abort(dae) || dae->dae_preparing ||
+	       dae->dae_dth != NULL) {
 		if (oiter->oit_linear) {
 			if (dae->dae_link.next ==
 			    &oiter->oit_cont->vc_dtx_act_list) {
@@ -170,7 +166,7 @@ out:
 }
 
 static int
-dtx_iter_next(struct vos_iterator *iter)
+dtx_iter_next(struct vos_iterator *iter, daos_anchor_t *anchor)
 {
 	struct vos_dtx_iter	*oiter = iter2oiter(iter);
 	struct vos_dtx_act_ent	*dae;
@@ -208,8 +204,8 @@ dtx_iter_next(struct vos_iterator *iter)
 				 sizeof(struct vos_dtx_act_ent));
 			dae = rec_iov.iov_buf;
 		}
-	} while (dae->dae_committable || dae->dae_committed ||
-		 dae->dae_aborted || dae->dae_dbd == NULL);
+	} while (vos_dae_is_commit(dae) || vos_dae_is_abort(dae) || dae->dae_preparing ||
+		 dae->dae_dth != NULL);
 
 out:
 	return rc;
@@ -245,28 +241,46 @@ dtx_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	}
 
 	/* Only return prepared ones. */
-	D_ASSERT(!dae->dae_committable);
-	D_ASSERT(!dae->dae_committed);
-	D_ASSERT(!dae->dae_aborted);
-	D_ASSERT(dae->dae_dbd != NULL);
+	D_ASSERT(!vos_dae_is_commit(dae));
+	D_ASSERT(!vos_dae_is_abort(dae));
+	D_ASSERT(!dae->dae_preparing);
+	D_ASSERT(dae->dae_dth == NULL);
+
+	/*
+	 * The DTX entry is returned via the iteration. The upper layer caller, for DTX resync
+	 * or DTX cleanup, may abort it sometime later. Before being aborted, it may re-attach
+	 * to some DTX handle for handling resent request. Then there is race between them. So
+	 * before become committable or being committed by RPC handler, needs to check whether
+	 * it has been aborted or not.
+	 */
+	dae->dae_need_validation = 1;
 
 	it_entry->ie_epoch = DAE_EPOCH(dae);
 	it_entry->ie_dtx_xid = DAE_XID(dae);
 	it_entry->ie_dtx_oid = DAE_OID(dae);
 	it_entry->ie_dtx_ver = DAE_VER(dae);
 	it_entry->ie_dtx_flags = DAE_FLAGS(dae);
-	it_entry->ie_dtx_mbs_flags = DAE_MBS_FLAGS(dae);
-	it_entry->ie_dtx_tgt_cnt = DAE_TGT_CNT(dae);
-	it_entry->ie_dtx_grp_cnt = DAE_GRP_CNT(dae);
-	it_entry->ie_dtx_mbs_dsize = DAE_MBS_DSIZE(dae);
 	it_entry->ie_dtx_start_time = dae->dae_start_time;
 	it_entry->ie_dkey_hash = DAE_DKEY_HASH(dae);
-	if (DAE_MBS_DSIZE(dae) <= sizeof(DAE_MBS_INLINE(dae)))
-		it_entry->ie_dtx_mbs = DAE_MBS_INLINE(dae);
-	else
-		it_entry->ie_dtx_mbs = umem_off2ptr(
-					&oiter->oit_cont->vc_pool->vp_umm,
-					DAE_MBS_OFF(dae));
+
+	if (dae->dae_dbd == NULL) {
+		/* Unprepared entry, the MBS data is not initialized. */
+		it_entry->ie_dtx_mbs_flags = 0;
+		it_entry->ie_dtx_tgt_cnt = 0;
+		it_entry->ie_dtx_grp_cnt = 0;
+		it_entry->ie_dtx_mbs_dsize = 0;
+		it_entry->ie_dtx_mbs = NULL;
+	} else {
+		it_entry->ie_dtx_mbs_flags = DAE_MBS_FLAGS(dae);
+		it_entry->ie_dtx_tgt_cnt = DAE_TGT_CNT(dae);
+		it_entry->ie_dtx_grp_cnt = DAE_GRP_CNT(dae);
+		it_entry->ie_dtx_mbs_dsize = DAE_MBS_DSIZE(dae);
+		if (DAE_MBS_DSIZE(dae) <= sizeof(DAE_MBS_INLINE(dae)))
+			it_entry->ie_dtx_mbs = DAE_MBS_INLINE(dae);
+		else
+			it_entry->ie_dtx_mbs = umem_off2ptr(&oiter->oit_cont->vc_pool->vp_umm,
+							    DAE_MBS_OFF(dae));
+	}
 
 	D_DEBUG(DB_IO, "DTX iterator fetch the one "DF_DTI"\n",
 		DP_DTI(&DAE_XID(dae)));
@@ -275,9 +289,11 @@ dtx_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 }
 
 static int
-dtx_iter_delete(struct vos_iterator *iter, void *args)
+dtx_iter_process(struct vos_iterator *iter, vos_iter_proc_op_t op, void *args)
 {
 	D_ASSERT(iter->it_type == VOS_ITER_DTX);
+	if (op != VOS_ITER_PROC_OP_DELETE)
+		return -DER_NOSYS;
 
 	D_WARN("NOT allow to remove DTX entry via iteration!\n");
 
@@ -290,5 +306,5 @@ struct vos_iter_ops vos_dtx_iter_ops = {
 	.iop_probe   =	dtx_iter_probe,
 	.iop_next    =  dtx_iter_next,
 	.iop_fetch   =  dtx_iter_fetch,
-	.iop_delete  =	dtx_iter_delete,
+	.iop_process  =	dtx_iter_process,
 };

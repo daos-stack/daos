@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,7 +17,6 @@ drpc_hdlr_init(void)
 {
 	D_ALLOC_ARRAY(registry_table, NUM_DRPC_MODULES);
 	if (registry_table == NULL) {
-		D_ERROR("Failed to allocate handler registry table\n");
 		return -DER_NOMEM;
 	}
 
@@ -35,7 +34,7 @@ drpc_hdlr_fini(void)
 static bool
 module_id_is_valid(int module_id)
 {
-	return module_id < NUM_DRPC_MODULES;
+	return (module_id >= 0 && module_id < NUM_DRPC_MODULES);
 }
 
 int
@@ -159,7 +158,12 @@ drpc_hdlr_unregister_all(struct dss_drpc_handler *handlers)
 
 	current = handlers;
 	while (current->handler != NULL) {
-		drpc_hdlr_unregister(current->module_id);
+		int rc;
+
+		rc = drpc_hdlr_unregister(current->module_id);
+		if (rc != 0)
+			D_ERROR("failed to unregister dRPC handler for module %d: "DF_RC"\n",
+				current->module_id, DP_RC(rc));
 
 		current++;
 	}

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"os/user"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -25,59 +26,120 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
-func processConfig(log *logging.LeveledLogger, cfg *config.Server) (*system.FaultDomain, error) {
-	err := cfg.Validate(log)
-	if err != nil {
-		return nil, errors.Wrapf(err, "%s: validation failed", cfg.Path)
+func genFiAffFn(fis *hardware.FabricInterfaceSet) config.EngineAffinityFn {
+	return func(l logging.Logger, e *engine.Config) (uint, error) {
+		iface, err := e.Fabric.GetPrimaryInterface()
+		if err != nil {
+			return 0, err
+		}
+
+		prov, err := e.Fabric.GetPrimaryProvider()
+		if err != nil {
+			return 0, err
+		}
+
+		fi, err := fis.GetInterfaceOnNetDevice(iface, prov)
+		if err != nil {
+			return 0, err
+		}
+		return fi.NUMANode, nil
+	}
+}
+
+// non-exported package-scope function variable for mocking in unit tests
+var osSetenv = os.Setenv
+
+func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricInterfaceSet, mi *common.MemInfo, lookupNetIF ifLookupFn, affSrcs ...config.EngineAffinityFn) error {
+	processFabricProvider(cfg)
+
+	if err := cfg.SetEngineAffinities(log, affSrcs...); err != nil {
+		return errors.Wrap(err, "failed to set engine affinities")
 	}
 
-	lookupNetIF := func(name string) (netInterface, error) {
-		return net.InterfaceByName(name)
+	if err := cfg.Validate(log); err != nil {
+		return errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
+
+	if err := cfg.SetNrHugepages(log, mi); err != nil {
+		return err
+	}
+
+	if err := cfg.SetRamdiskSize(log, mi); err != nil {
+		return err
+	}
+
 	for _, ec := range cfg.Engines {
-		if err := checkFabricInterface(ec.Fabric.Interface, lookupNetIF); err != nil {
-			return nil, err
+		fabricIFs, err := ec.Fabric.GetInterfaces()
+		if err != nil {
+			return err
+		}
+
+		for _, iface := range fabricIFs {
+			if err := checkFabricInterface(iface, lookupNetIF); err != nil {
+				return err
+			}
+		}
+
+		if err := updateFabricEnvars(log, ec, fis); err != nil {
+			return errors.Wrap(err, "update engine fabric envars")
 		}
 	}
 
 	cfg.SaveActiveConfig(log)
 
-	if err := setDaosHelperEnvs(cfg, os.Setenv); err != nil {
-		return nil, err
+	if err := setDaosHelperEnvs(cfg, osSetenv); err != nil {
+		return err
 	}
 
-	faultDomain, err := getFaultDomain(cfg)
+	return nil
+}
+
+func processFabricProvider(cfg *config.Server) error {
+	providers, err := cfg.Fabric.GetProviders()
 	if err != nil {
-		return nil, err
+		return err
 	}
-	log.Debugf("fault domain: %s", faultDomain.String())
 
-	return faultDomain, nil
+	for i, p := range providers {
+		if shouldAppendRXM(p) {
+			providers[i] = p + ";ofi_rxm"
+		}
+	}
+
+	cfg.WithFabricProvider(strings.Join(providers, engine.MultiProviderSeparator))
+	return nil
+}
+
+func shouldAppendRXM(provider string) bool {
+	return provider == "ofi+verbs"
 }
 
 // server struct contains state and components of DAOS Server.
 type server struct {
-	log         *logging.LeveledLogger
+	log         logging.Logger
 	cfg         *config.Server
 	hostname    string
-	runningUser string
+	runningUser *user.User
 	faultDomain *system.FaultDomain
 	ctlAddr     *net.TCPAddr
-	netDevClass uint32
+	netDevClass []hardware.NetDevClass
 	listener    net.Listener
 
 	harness      *EngineHarness
 	membership   *system.Membership
-	sysdb        *system.Database
+	sysdb        *raft.Database
 	pubSub       *events.PubSub
 	evtForwarder *control.EventForwarder
 	evtLogger    *control.EventLogger
@@ -90,7 +152,7 @@ type server struct {
 	onShutdown       []func()
 }
 
-func newServer(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server, faultDomain *system.FaultDomain) (*server, error) {
+func newServer(log logging.Logger, cfg *config.Server, faultDomain *system.FaultDomain) (*server, error) {
 	hostname, err := os.Hostname()
 	if err != nil {
 		return nil, errors.Wrap(err, "get hostname")
@@ -107,7 +169,7 @@ func newServer(ctx context.Context, log *logging.LeveledLogger, cfg *config.Serv
 		log:         log,
 		cfg:         cfg,
 		hostname:    hostname,
-		runningUser: cu.Username,
+		runningUser: cu,
 		faultDomain: faultDomain,
 		harness:     harness,
 	}, nil
@@ -121,30 +183,50 @@ func (srv *server) logDuration(msg string, start time.Time) {
 	srv.log.Debugf("%v: %v\n", msg, time.Since(start))
 }
 
-// createServices builds scaffolding for rpc and event services.
-func (srv *server) createServices(ctx context.Context) error {
-	dbReplicas, err := cfgGetReplicas(srv.cfg, net.ResolveTCPAddr)
+// CreateDatabaseConfig creates a new database configuration.
+func CreateDatabaseConfig(cfg *config.Server) (*raft.DatabaseConfig, error) {
+	dbReplicas, err := cfgGetReplicas(cfg, net.LookupIP)
 	if err != nil {
-		return errors.Wrap(err, "retrieve replicas from config")
+		return nil, errors.Wrap(err, "unable to retrieve replicas from config")
+	}
+
+	raftDir := cfgGetRaftDir(cfg)
+	if raftDir == "" {
+		return nil, errors.New("raft directory not available (missing SCM or control metadata in config?)")
+	}
+
+	return &raft.DatabaseConfig{
+		Replicas:   dbReplicas,
+		RaftDir:    raftDir,
+		SystemName: cfg.SystemName,
+	}, nil
+}
+
+// newManagementDatabase creates a new instance of the raft-backed management database.
+func newManagementDatabase(log logging.Logger, cfg *config.Server) (*raft.Database, error) {
+	dbCfg, err := CreateDatabaseConfig(cfg)
+	if err != nil {
+		return nil, errors.Wrap(err, "unable to create database config")
 	}
 
 	// If this daos_server instance ends up being the MS leader,
 	// this will record the DAOS system membership.
-	sysdb, err := system.NewDatabase(srv.log, &system.DatabaseConfig{
-		Replicas:   dbReplicas,
-		RaftDir:    cfgGetRaftDir(srv.cfg),
-		SystemName: srv.cfg.SystemName,
-	})
+	return raft.NewDatabase(log, dbCfg)
+}
+
+// createServices builds scaffolding for rpc and event services.
+func (srv *server) createServices(ctx context.Context) (err error) {
+	srv.sysdb, err = newManagementDatabase(srv.log, srv.cfg)
 	if err != nil {
-		return errors.Wrap(err, "create system database")
+		return
 	}
-	srv.sysdb = sysdb
-	srv.membership = system.NewMembership(srv.log, sysdb)
+	srv.membership = system.NewMembership(srv.log, srv.sysdb)
 
 	// Create rpcClient for inter-server communication.
 	cliCfg := control.DefaultConfig()
 	cliCfg.TransportConfig = srv.cfg.TransportConfig
 	rpcClient := control.NewClient(
+		control.WithClientComponent(build.ComponentServer),
 		control.WithConfig(cliCfg),
 		control.WithClientLogger(srv.log))
 
@@ -154,8 +236,15 @@ func (srv *server) createServices(ctx context.Context) error {
 	srv.evtForwarder = control.NewEventForwarder(rpcClient, srv.cfg.AccessPoints)
 	srv.evtLogger = control.NewEventLogger(srv.log)
 
-	srv.ctlSvc = NewControlService(srv.log, srv.harness, srv.cfg, srv.pubSub)
-	srv.mgmtSvc = newMgmtSvc(srv.harness, srv.membership, sysdb, rpcClient, srv.pubSub)
+	srv.ctlSvc = NewControlService(srv.log, srv.harness, srv.cfg, srv.pubSub,
+		hwprov.DefaultFabricScanner(srv.log))
+	srv.mgmtSvc = newMgmtSvc(srv.harness, srv.membership, srv.sysdb, rpcClient, srv.pubSub)
+
+	if err := srv.mgmtSvc.systemProps.UpdateCompPropVal(daos.SystemPropertyDaosSystem, func() string {
+		return srv.cfg.SystemName
+	}); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -184,37 +273,42 @@ func (srv *server) shutdown() {
 	}
 }
 
-// initNetwork resolves local address and starts TCP listener then calls
-// netInit to process network configuration.
-func (srv *server) initNetwork(ctx context.Context) error {
+func (srv *server) setCoreDumpFilter() error {
+	if srv.cfg.CoreDumpFilter == 0 {
+		return nil
+	}
+
+	srv.log.Debugf("setting core dump filter to 0x%x", srv.cfg.CoreDumpFilter)
+
+	// Set core dump filter.
+	if err := writeCoreDumpFilter(srv.log, "/proc/self/coredump_filter", srv.cfg.CoreDumpFilter); err != nil {
+		return errors.Wrap(err, "failed to set core dump filter")
+	}
+
+	return nil
+}
+
+// initNetwork resolves local address and starts TCP listener.
+func (srv *server) initNetwork() error {
 	defer srv.logDuration(track("time to init network"))
 
-	ctlAddr, listener, err := createListener(srv.cfg.ControlPort, net.ResolveTCPAddr, net.Listen)
+	ctlAddr, err := getControlAddr(ctlAddrParams{
+		port:           srv.cfg.ControlPort,
+		replicaAddrSrc: srv.sysdb,
+		lookupHost:     net.LookupIP,
+	})
+	if err != nil {
+		return err
+	}
+
+	listener, err := createListener(ctlAddr, net.Listen)
 	if err != nil {
 		return err
 	}
 	srv.ctlAddr = ctlAddr
 	srv.listener = listener
 
-	ndc, err := netInit(ctx, srv.log, srv.cfg)
-	if err != nil {
-		return err
-	}
-	srv.netDevClass = ndc
-	srv.log.Infof("Network device class set to %q", netdetect.DevClassName(ndc))
-
 	return nil
-}
-
-func (srv *server) initStorage() error {
-	defer srv.logDuration(track("time to init storage"))
-
-	if err := prepBdevStorage(srv, iommuDetected(), common.GetHugePageInfo); err != nil {
-		return err
-	}
-
-	srv.log.Debug("running storage setup on server start-up, scanning storage devices")
-	return srv.ctlSvc.Setup()
 }
 
 func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config) (*EngineInstance, error) {
@@ -227,8 +321,12 @@ func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config
 		return control.SystemJoin(ctxIn, srv.mgmtSvc.rpcClient, req)
 	}
 
-	engine := NewEngineInstance(srv.log, storage.DefaultProvider(srv.log, idx, &cfg.Storage), joinFn,
-		engine.NewRunner(srv.log, cfg)).WithHostFaultDomain(srv.harness.faultDomain)
+	sp := storage.DefaultProvider(srv.log, idx, &cfg.Storage).
+		WithVMDEnabled(srv.ctlSvc.storage.IsVMDEnabled())
+
+	engine := NewEngineInstance(srv.log, sp, joinFn, engine.NewRunner(srv.log, cfg)).
+		WithHostFaultDomain(srv.harness.faultDomain)
+
 	if idx == 0 {
 		configureFirstEngine(ctx, engine, srv.sysdb, joinFn)
 	}
@@ -236,33 +334,33 @@ func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config
 	return engine, nil
 }
 
-// addEngines creates and adds engine instances to harness then starts
-// goroutine to execute callbacks when all engines are started.
+// addEngines creates and adds engine instances to harness then starts goroutine to execute
+// callbacks when all engines are started.
 func (srv *server) addEngines(ctx context.Context) error {
 	var allStarted sync.WaitGroup
 	registerTelemetryCallbacks(ctx, srv)
 
-	// Store cached NVMe device details retrieved on start-up (before
-	// engines are started) so static details can be recovered by the engine
-	// storage provider(s) during scan even if devices are in use.
-	nvmeScanResp, err := srv.ctlSvc.NvmeScan(storage.BdevScanRequest{})
+	iommuEnabled, err := hwprov.DefaultIOMMUDetector(srv.log).IsIOMMUEnabled()
 	if err != nil {
-		srv.log.Errorf("nvme scan failed: %s", err)
-		nvmeScanResp = &storage.BdevScanResponse{}
+		return err
 	}
-	if nvmeScanResp == nil {
-		return errors.New("nil nvme scan response received")
+
+	// Allocate hugepages and rebind NVMe devices to userspace drivers.
+	if err := prepBdevStorage(srv, iommuEnabled); err != nil {
+		return err
+	}
+
+	if len(srv.cfg.Engines) == 0 {
+		return nil
 	}
 
 	for i, c := range srv.cfg.Engines {
 		engine, err := srv.createEngine(ctx, i, c)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "creating engine instances")
 		}
 
-		engine.storage.SetBdevCache(*nvmeScanResp)
-
-		registerEngineEventCallbacks(engine, srv.hostname, srv.pubSub, &allStarted)
+		registerEngineEventCallbacks(srv, engine, &allStarted)
 
 		if err := srv.harness.AddInstance(engine); err != nil {
 			return err
@@ -291,7 +389,7 @@ func (srv *server) addEngines(ctx context.Context) error {
 
 // setupGrpc creates a new grpc server and registers services.
 func (srv *server) setupGrpc() error {
-	srvOpts, err := getGrpcOpts(srv.cfg.TransportConfig)
+	srvOpts, err := getGrpcOpts(srv.log, srv.cfg.TransportConfig, srv.sysdb.IsLeader)
 	if err != nil {
 		return err
 	}
@@ -303,20 +401,34 @@ func (srv *server) setupGrpc() error {
 	if err != nil {
 		return err
 	}
-	srv.mgmtSvc.clientNetworkHint = &mgmtpb.ClientNetHint{
-		Provider:        srv.cfg.Fabric.Provider,
-		CrtCtxShareAddr: srv.cfg.Fabric.CrtCtxShareAddr,
-		CrtTimeout:      srv.cfg.Fabric.CrtTimeout,
-		NetDevClass:     srv.netDevClass,
-		SrvSrxSet:       srxSetting,
+
+	providers, err := srv.cfg.Fabric.GetProviders()
+	if err != nil {
+		return err
 	}
+
+	clientNetHints := make([]*mgmtpb.ClientNetHint, 0, len(providers))
+	for i, p := range providers {
+		clientNetHints = append(clientNetHints, &mgmtpb.ClientNetHint{
+			Provider:    p,
+			CrtTimeout:  srv.cfg.Fabric.CrtTimeout,
+			NetDevClass: uint32(srv.netDevClass[i]),
+			SrvSrxSet:   srxSetting,
+			ProviderIdx: uint32(i),
+			EnvVars:     srv.cfg.ClientEnvVars,
+		})
+	}
+	srv.mgmtSvc.clientNetworkHint = clientNetHints
+
 	mgmtpb.RegisterMgmtSvcServer(srv.grpcServer, srv.mgmtSvc)
 
 	tSec, err := security.DialOptionForTransportConfig(srv.cfg.TransportConfig)
 	if err != nil {
 		return err
 	}
-	srv.sysdb.ConfigureTransport(srv.grpcServer, tSec)
+	if err := srv.sysdb.ConfigureTransport(srv.grpcServer, tSec); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -327,14 +439,38 @@ func (srv *server) registerEvents() {
 	srv.sysdb.OnLeadershipGained(
 		func(ctx context.Context) error {
 			srv.log.Infof("MS leader running on %s", srv.hostname)
-			srv.mgmtSvc.startJoinLoop(ctx)
+
+			if err := srv.mgmtSvc.updateFabricProviders([]string{srv.cfg.Fabric.Provider}, srv.pubSub); err != nil {
+				srv.log.Errorf(err.Error())
+				return err
+			}
+
+			srv.mgmtSvc.startLeaderLoops(ctx)
 			registerLeaderSubscriptions(srv)
-			srv.log.Debugf("requesting sync GroupUpdate after leader change")
-			srv.mgmtSvc.reqGroupUpdate(ctx, true)
+			srv.log.Debugf("requesting immediate GroupUpdate after leader change")
+			go func() {
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					default:
+						// Wait for at least one engine to be ready to service the
+						// GroupUpdate request.
+						for _, ei := range srv.harness.Instances() {
+							if ei.IsReady() {
+								srv.mgmtSvc.reqGroupUpdate(ctx, true)
+								return
+							}
+						}
+						srv.log.Debugf("no engines ready for GroupUpdate; waiting %s", groupUpdateInterval)
+						time.Sleep(groupUpdateInterval)
+					}
+				}
+			}()
 			return nil
 		},
 		func(ctx context.Context) error {
-			return srv.mgmtSvc.checkPools(ctx)
+			return srv.mgmtSvc.checkPools(ctx, true)
 		},
 	)
 	srv.sysdb.OnLeadershipLost(func() error {
@@ -344,7 +480,7 @@ func (srv *server) registerEvents() {
 	})
 }
 
-func (srv *server) start(ctx context.Context, shutdown context.CancelFunc) error {
+func (srv *server) start(ctx context.Context) error {
 	defer srv.logDuration(track("time server was listening"))
 
 	go func() {
@@ -352,17 +488,11 @@ func (srv *server) start(ctx context.Context, shutdown context.CancelFunc) error
 	}()
 	defer srv.grpcServer.Stop()
 
+	// noop on release builds
+	control.StartPProf(srv.log)
+
 	srv.log.Infof("%s v%s (pid %d) listening on %s", build.ControlPlaneName,
 		build.DaosVersion, os.Getpid(), srv.ctlAddr)
-
-	sigChan := make(chan os.Signal)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
-	go func() {
-		sig := <-sigChan
-		srv.log.Debugf("Caught signal: %s", sig)
-
-		shutdown()
-	}()
 
 	drpcSetupReq := &drpcServerSetupReq{
 		log:     srv.log,
@@ -382,14 +512,57 @@ func (srv *server) start(ctx context.Context, shutdown context.CancelFunc) error
 		}
 	}()
 
+	srv.mgmtSvc.startAsyncLoops(ctx)
+
+	if srv.cfg.AutoFormat {
+		srv.log.Notice("--auto flag set on server start so formatting storage now")
+		if _, err := srv.ctlSvc.StorageFormat(ctx, &ctlpb.StorageFormatReq{}); err != nil {
+			return errors.WithMessage(err, "attempting to auto format")
+		}
+	}
+
 	return errors.Wrapf(srv.harness.Start(ctx, srv.sysdb, srv.cfg),
 		"%s harness exited", build.ControlPlaneName)
 }
 
-// Start is the entry point for a daos_server instance.
-func Start(log *logging.LeveledLogger, cfg *config.Server) error {
-	faultDomain, err := processConfig(log, cfg)
+func waitFabricReady(ctx context.Context, log logging.Logger, cfg *config.Server) error {
+	ifaces := make([]string, 0, len(cfg.Engines))
+	for _, eng := range cfg.Engines {
+		engIfaces, err := eng.Fabric.GetInterfaces()
+		if err != nil {
+			return err
+		}
+		ifaces = append(ifaces, engIfaces...)
+	}
+
+	// Skip wait if no fabric interfaces specified in config.
+	if len(ifaces) == 0 {
+		return nil
+	}
+
+	if err := hardware.WaitFabricReady(ctx, log, hardware.WaitFabricReadyParams{
+		StateProvider:  hwprov.DefaultNetDevStateProvider(log),
+		FabricIfaces:   ifaces,
+		IterationSleep: time.Second,
+	}); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func lookupIF(name string) (netInterface, error) {
+	iface, err := net.InterfaceByName(name)
 	if err != nil {
+		return nil, errors.Wrapf(err,
+			"unable to retrieve interface %q", name)
+	}
+	return iface, nil
+}
+
+// Start is the entry point for a daos_server instance.
+func Start(log logging.Logger, cfg *config.Server) error {
+	if err := common.CheckDupeProcess(); err != nil {
 		return err
 	}
 
@@ -398,21 +571,56 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	ctx, shutdown := context.WithCancel(context.Background())
 	defer shutdown()
 
-	srv, err := newServer(ctx, log, cfg, faultDomain)
+	providers, err := cfg.Fabric.GetProviders()
+	if err != nil {
+		return err
+	}
+
+	if err := waitFabricReady(ctx, log, cfg); err != nil {
+		return err
+	}
+
+	scanner := hwprov.DefaultFabricScanner(log)
+
+	fis, err := scanner.Scan(ctx, providers...)
+	if err != nil {
+		return errors.Wrap(err, "scan fabric")
+	}
+
+	mi, err := common.GetMemInfo()
+	if err != nil {
+		return errors.Wrapf(err, "retrieve system memory info")
+	}
+
+	if err = processConfig(log, cfg, fis, mi, lookupIF, genFiAffFn(fis)); err != nil {
+		return err
+	}
+
+	faultDomain, err := getFaultDomain(cfg)
+	if err != nil {
+		return err
+	}
+	log.Debugf("fault domain: %s", faultDomain.String())
+
+	srv, err := newServer(log, cfg, faultDomain)
 	if err != nil {
 		return err
 	}
 	defer srv.shutdown()
 
+	if err := srv.setCoreDumpFilter(); err != nil {
+		return err
+	}
+
+	if srv.netDevClass, err = getFabricNetDevClass(cfg, fis); err != nil {
+		return err
+	}
+
 	if err := srv.createServices(ctx); err != nil {
 		return err
 	}
 
-	if err := srv.initNetwork(ctx); err != nil {
-		return err
-	}
-
-	if err := srv.initStorage(); err != nil {
+	if err := srv.initNetwork(); err != nil {
 		return err
 	}
 
@@ -426,5 +634,13 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 
 	srv.registerEvents()
 
-	return srv.start(ctx, shutdown)
+	sigChan := make(chan os.Signal)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+	go func() {
+		sig := <-sigChan
+		srv.log.Debugf("Caught signal: %s", sig)
+		shutdown()
+	}()
+
+	return srv.start(ctx)
 }

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -125,7 +125,7 @@ gc_obj_update(struct gc_test_args *args, daos_handle_t coh, daos_unit_oid_t oid,
 		}
 
 		/* write garbage, we don't care */
-		rc = bio_iod_post(vos_ioh2desc(ioh));
+		rc = bio_iod_post(vos_ioh2desc(ioh), 0);
 		if (rc) {
 			print_error("Failed to post bio request\n");
 			return rc;
@@ -162,7 +162,7 @@ gc_obj_prepare(struct gc_test_args *args, daos_handle_t coh,
 		daos_unit_oid_t	oid;
 
 		gc_add_stat(STAT_OBJ);
-		oid = dts_unit_oid_gen(0, 0, 0);
+		oid = dts_unit_oid_gen(0, 0);
 		if (oids)
 			oids[i] = oid;
 
@@ -246,7 +246,7 @@ gc_key_run(struct gc_test_args *args)
 	int		      i;
 	int		      rc;
 
-	oid = dts_unit_oid_gen(0, 0, 0);
+	oid = dts_unit_oid_gen(0, 0);
 	for (i = 0; i < CREDS_MAX; i++) {
 		daos_iod_t *iod;
 
@@ -298,7 +298,7 @@ gc_key_test(void **state)
 	int		     rc;
 
 	rc = gc_key_run(args);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 
 static int
@@ -555,6 +555,7 @@ static int
 gc_setup(void **state)
 {
 	struct credit_context	*tc = &gc_args.gc_ctx;
+	int rc;
 
 	memset(&gc_stat, 0, sizeof(gc_stat));
 	memset(&gc_args, 0, sizeof(gc_args));
@@ -569,7 +570,8 @@ gc_setup(void **state)
 	uuid_generate(tc->tsc_cont_uuid);
 	vts_pool_fallocate(&tc->tsc_pmem_file);
 
-	dts_ctx_init(&gc_args.gc_ctx);
+	rc = dts_ctx_init(&gc_args.gc_ctx);
+	assert_rc_equal(rc, 0);
 
 	gc_args.gc_array = false;
 	*state = &gc_args;
@@ -598,7 +600,7 @@ gc_prepare(void **state)
 	struct gc_test_args *args = *state;
 
 	daos_fail_loc_set(0);
-	vos_pool_ctl(args->gc_ctx.tsc_poh, VOS_PO_CTL_RESET_GC);
+	vos_pool_ctl(args->gc_ctx.tsc_poh, VOS_PO_CTL_RESET_GC, NULL);
 	memset(&gc_stat, 0, sizeof(gc_stat));
 	return 0;
 }
@@ -628,7 +630,7 @@ run_gc_tests(const char *cfg)
 		dkey_per_obj = 3;
 	}
 
-	dts_create_config(test_name, "Garbage collector %s", cfg);
+	dts_create_config(test_name, "GC tests %s", cfg);
 	return cmocka_run_group_tests_name(test_name,
 					   gc_tests, gc_setup, gc_teardown);
 }

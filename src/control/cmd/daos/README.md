@@ -1,6 +1,6 @@
 # DAOS CLI
 
-The source files in this directory are used to build the command-line interface for DAOS ($PREFIX/bin/daos). This utility is intended to be used by both admin and unprivileged users. It leverages the <a href="../../client/api/README.md">libdaos client library</a> in order to communicate with DAOS Data Plane servers via the storage fabric.
+The source files in this directory are used to build the command-line interface for DAOS ($PREFIX/bin/daos). This utility is intended to be used by both admin and unprivileged users. It leverages the <a href="../../../client/api/README.md">libdaos client library</a> in order to communicate with DAOS Data Plane servers via the storage fabric.
 
 ## Implementation Details
 
@@ -23,8 +23,6 @@ The backend code is entirely written in C and for the moment is organized in the
   * daos_dfs_hdlr.c
   * daos_hdlr.c
 
-Note that the daos.c file contains frontend code for the C-only implementation, and its contents are not available to be utilized from Go.
-
 Longer-term, it would probably make sense to move the source files for `daos_cmd_hdlrs` under src/control/cmd/daos so that they live alongside the frontend code and can be compiled directly into the new daos binary in order to remove the need for the shared library. We could also consider implementing more of the backend logic in Go, but this may not necessarily make sense in many cases (e.g. data mover).
 
 ## Adding New Features
@@ -33,7 +31,7 @@ Adding new features should hopefully be fairly straightforward. The new frontend
 
 As an example, we can look at adding a new container subcommand such that running `daos cont scrub` will invoke a libdaos API for scrubbing a container, whatever that means.
 
-The first question to answer is whether or not we need a C-based handler to wrap the API call, or if we can call the API directly from Go. This is somewhat of a philosophical question and it really depends on how comfortable the implementor is in working with Go. For the purposes of this example, let's assume that the implementor is going to add a new handler named `cont_scrub_hdlr()` to daos_hdlr.c:
+The first question to answer is whether or not we need a C-based handler to wrap the API call, or if we can call the API directly from Go. This is somewhat of a philosophical question and it really depends on how comfortable the implementer is in working with Go. For the purposes of this example, let's assume that the implementer is going to add a new handler named `cont_scrub_hdlr()` to daos_hdlr.c:
 
 In src/utils/daos_hdlr.h:
 ```C
@@ -128,7 +126,7 @@ func (cmd *containerScrubCmd) Execute(_ []string) error {
 	// cmd_args_s.
 	ap.scrub_level = C.CString(cmd.Level)
 	// The freeArgs() closure only frees fields used with all
-	// handlers. It's up to the handler implementor to free
+	// handlers. It's up to the handler implementer to free
 	// C memory allocated in the handler.
 	defer freeString(ap.scrub_level)
 

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,21 +7,22 @@
 package config
 
 import (
-	"context"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"net"
 	"os"
 	"path/filepath"
 	"strconv"
 
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -31,83 +32,57 @@ import (
 const (
 	defaultRuntimeDir   = "/var/run/daos_server"
 	defaultConfigPath   = "../etc/daos_server.yml"
-	configOut           = ".daos_server.active.yml"
+	ConfigOut           = ".daos_server.active.yml"
 	relConfExamplesPath = "../utils/config/examples/"
 )
-
-type networkProviderValidation func(context.Context, string, string) error
-type networkNUMAValidation func(context.Context, string, uint) error
-type networkDeviceClass func(string) (uint32, error)
 
 // Server describes configuration options for DAOS control plane.
 // See utils/config/daos_server.yml for parameter descriptions.
 type Server struct {
 	// control-specific
-	ControlPort     int                       `yaml:"port"`
-	TransportConfig *security.TransportConfig `yaml:"transport_config"`
-	// Detect outdated "servers" config, to direct users to change their config file
-	Servers             []*engine.Config `yaml:"servers,omitempty"`
-	Engines             []*engine.Config `yaml:"engines"`
-	BdevInclude         []string         `yaml:"bdev_include,omitempty"`
-	BdevExclude         []string         `yaml:"bdev_exclude,omitempty"`
-	DisableVFIO         bool             `yaml:"disable_vfio"`
-	EnableVMD           bool             `yaml:"enable_vmd"`
-	NrHugepages         int              `yaml:"nr_hugepages"`
-	ControlLogMask      ControlLogLevel  `yaml:"control_log_mask"`
-	ControlLogFile      string           `yaml:"control_log_file"`
-	ControlLogJSON      bool             `yaml:"control_log_json,omitempty"`
-	HelperLogFile       string           `yaml:"helper_log_file"`
-	FWHelperLogFile     string           `yaml:"firmware_helper_log_file"`
-	RecreateSuperblocks bool             `yaml:"recreate_superblocks"`
-	FaultPath           string           `yaml:"fault_path"`
-	TelemetryPort       int              `yaml:"telemetry_port"`
+	ControlPort       int                       `yaml:"port"`
+	TransportConfig   *security.TransportConfig `yaml:"transport_config"`
+	Engines           []*engine.Config          `yaml:"engines"`
+	BdevExclude       []string                  `yaml:"bdev_exclude,omitempty"`
+	DisableVFIO       bool                      `yaml:"disable_vfio"`
+	DisableVMD        *bool                     `yaml:"disable_vmd"`
+	EnableHotplug     bool                      `yaml:"enable_hotplug"`
+	NrHugepages       int                       `yaml:"nr_hugepages"`        // total for all engines
+	SystemRamReserved int                       `yaml:"system_ram_reserved"` // total for all engines
+	DisableHugepages  bool                      `yaml:"disable_hugepages"`
+	ControlLogMask    common.ControlLogLevel    `yaml:"control_log_mask"`
+	ControlLogFile    string                    `yaml:"control_log_file,omitempty"`
+	ControlLogJSON    bool                      `yaml:"control_log_json,omitempty"`
+	HelperLogFile     string                    `yaml:"helper_log_file,omitempty"`
+	FWHelperLogFile   string                    `yaml:"firmware_helper_log_file,omitempty"`
+	FaultPath         string                    `yaml:"fault_path,omitempty"`
+	TelemetryPort     int                       `yaml:"telemetry_port,omitempty"`
+	CoreDumpFilter    uint8                     `yaml:"core_dump_filter,omitempty"`
+	ClientEnvVars     []string                  `yaml:"client_env_vars,omitempty"`
 
 	// duplicated in engine.Config
 	SystemName string              `yaml:"name"`
 	SocketDir  string              `yaml:"socket_dir"`
 	Fabric     engine.FabricConfig `yaml:",inline"`
-	Modules    string
+	Modules    string              `yaml:"-"`
 
 	AccessPoints []string `yaml:"access_points"`
+
+	Metadata storage.ControlMetadata `yaml:"control_metadata,omitempty"`
 
 	// unused (?)
 	FaultCb      string `yaml:"fault_cb"`
 	Hyperthreads bool   `yaml:"hyperthreads"`
 
-	Path string // path to config file
+	Path string `yaml:"-"` // path to config file
 
-	// pointer to a function that validates the chosen provider
-	validateProviderFn networkProviderValidation
-
-	// pointer to a function that validates the chosen numa node
-	validateNUMAFn networkNUMAValidation
-
-	// pointer to a function that retrieves the I/O Engine network device class
-	GetDeviceClassFn networkDeviceClass `yaml:"-"`
+	// Behavior flags
+	AutoFormat bool `yaml:"-"`
 }
 
-// WithRecreateSuperblocks indicates that a missing superblock should not be treated as
-// an error. The server will create new superblocks as necessary.
-func (cfg *Server) WithRecreateSuperblocks() *Server {
-	cfg.RecreateSuperblocks = true
-	return cfg
-}
-
-// WithProviderValidator sets the function that validates the provider
-func (cfg *Server) WithProviderValidator(fn networkProviderValidation) *Server {
-	cfg.validateProviderFn = fn
-	return cfg
-}
-
-// WithNUMAValidator sets the function that validates the NUMA configuration
-func (cfg *Server) WithNUMAValidator(fn networkNUMAValidation) *Server {
-	cfg.validateNUMAFn = fn
-	return cfg
-}
-
-// WithGetNetworkDeviceClass sets the function that determines the network device class
-func (cfg *Server) WithGetNetworkDeviceClass(fn networkDeviceClass) *Server {
-	cfg.GetDeviceClassFn = fn
+// WithCoreDumpFilter sets the core dump filter written to /proc/self/coredump_filter.
+func (cfg *Server) WithCoreDumpFilter(filter uint8) *Server {
+	cfg.CoreDumpFilter = filter
 	return cfg
 }
 
@@ -142,17 +117,24 @@ func (cfg *Server) WithModules(mList string) *Server {
 func (cfg *Server) WithFabricProvider(provider string) *Server {
 	cfg.Fabric.Provider = provider
 	for _, engine := range cfg.Engines {
-		engine.Fabric.Update(cfg.Fabric)
+		engine.Fabric.Provider = cfg.Fabric.Provider
 	}
 	return cfg
 }
 
-// WithCrtCtxShareAddr sets the top-level CrtCtxShareAddr.
-func (cfg *Server) WithCrtCtxShareAddr(addr uint32) *Server {
-	cfg.Fabric.CrtCtxShareAddr = addr
+// WithFabricAuthKey sets the top-level fabric authorization key.
+func (cfg *Server) WithFabricAuthKey(key string) *Server {
+	cfg.Fabric.AuthKey = key
+	cfg.ClientEnvVars = common.MergeKeyValues(cfg.ClientEnvVars, []string{cfg.Fabric.GetAuthKeyEnv()})
 	for _, engine := range cfg.Engines {
-		engine.Fabric.Update(cfg.Fabric)
+		engine.Fabric.AuthKey = cfg.Fabric.AuthKey
 	}
+	return cfg
+}
+
+// WithClientEnvVars sets the environment variables to be sent to the client.
+func (cfg *Server) WithClientEnvVars(envVars []string) *Server {
+	cfg.ClientEnvVars = envVars
 	return cfg
 }
 
@@ -162,6 +144,22 @@ func (cfg *Server) WithCrtTimeout(timeout uint32) *Server {
 	for _, engine := range cfg.Engines {
 		engine.Fabric.Update(cfg.Fabric)
 	}
+	return cfg
+}
+
+// WithNumSecondaryEndpoints sets the number of network endpoints for each engine's secondary
+// provider.
+func (cfg *Server) WithNumSecondaryEndpoints(nr []int) *Server {
+	cfg.Fabric.NumSecondaryEndpoints = nr
+	for _, engine := range cfg.Engines {
+		engine.Fabric.Update(cfg.Fabric)
+	}
+	return cfg
+}
+
+// WithControlMetadata sets the control plane metadata.
+func (cfg *Server) WithControlMetadata(md storage.ControlMetadata) *Server {
+	cfg.Metadata = md
 	return cfg
 }
 
@@ -184,6 +182,7 @@ func (cfg *Server) updateServerConfig(cfgPtr **engine.Config) {
 	engineCfg.SystemName = cfg.SystemName
 	engineCfg.SocketDir = cfg.SocketDir
 	engineCfg.Modules = cfg.Modules
+	engineCfg.Storage.EnableHotplug = cfg.EnableHotplug
 }
 
 // WithEngines sets the list of engine configurations.
@@ -231,12 +230,6 @@ func (cfg *Server) WithBdevExclude(bList ...string) *Server {
 	return cfg
 }
 
-// WithBdevInclude sets the block device include list.
-func (cfg *Server) WithBdevInclude(bList ...string) *Server {
-	cfg.BdevInclude = bList
-	return cfg
-}
-
 // WithDisableVFIO indicates that the vfio-pci driver should not be
 // used by SPDK even if an IOMMU is detected. Note that this option
 // requires that DAOS be run as root.
@@ -245,10 +238,16 @@ func (cfg *Server) WithDisableVFIO(disabled bool) *Server {
 	return cfg
 }
 
-// WithEnableVMD can be used to set the state of VMD functionality,
-// if enabled then VMD devices will be used if they exist.
-func (cfg *Server) WithEnableVMD(enabled bool) *Server {
-	cfg.EnableVMD = enabled
+// WithDisableVMD can be used to set the state of VMD functionality,
+// if disabled then VMD devices will not be used if they exist.
+func (cfg *Server) WithDisableVMD(disabled bool) *Server {
+	cfg.DisableVMD = &disabled
+	return cfg
+}
+
+// WithEnableHotplug can be used to enable hotplug
+func (cfg *Server) WithEnableHotplug(enabled bool) *Server {
+	cfg.EnableHotplug = enabled
 	return cfg
 }
 
@@ -258,14 +257,27 @@ func (cfg *Server) WithHyperthreads(enabled bool) *Server {
 	return cfg
 }
 
-// WithNrHugePages sets the number of huge pages to be used.
-func (cfg *Server) WithNrHugePages(nr int) *Server {
+// WithNrHugepages sets the number of huge pages to be used (total for all engines).
+func (cfg *Server) WithNrHugepages(nr int) *Server {
 	cfg.NrHugepages = nr
 	return cfg
 }
 
+// WithDisableHugepages disables the use of huge pages.
+func (cfg *Server) WithDisableHugepages(disabled bool) *Server {
+	cfg.DisableHugepages = disabled
+	return cfg
+}
+
+// WithSystemRamReserved sets the amount of system memory to reserve for system (non-DAOS)
+// use. In units of GiB.
+func (cfg *Server) WithSystemRamReserved(nr int) *Server {
+	cfg.SystemRamReserved = nr
+	return cfg
+}
+
 // WithControlLogMask sets the daos_server log level.
-func (cfg *Server) WithControlLogMask(lvl ControlLogLevel) *Server {
+func (cfg *Server) WithControlLogMask(lvl common.ControlLogLevel) *Server {
 	cfg.ControlLogMask = lvl
 	return cfg
 }
@@ -282,13 +294,13 @@ func (cfg *Server) WithControlLogJSON(enabled bool) *Server {
 	return cfg
 }
 
-// WithHelperLogFile sets the path to the daos_admin logfile.
+// WithHelperLogFile sets the path to the daos_server_helper logfile.
 func (cfg *Server) WithHelperLogFile(filePath string) *Server {
 	cfg.HelperLogFile = filePath
 	return cfg
 }
 
-// WithFirmwareHelperLogFile sets the path to the daos_firmware logfile.
+// WithFirmwareHelperLogFile sets the path to the daos_firmware_helper logfile.
 func (cfg *Server) WithFirmwareHelperLogFile(filePath string) *Server {
 	cfg.FWHelperLogFile = filePath
 	return cfg
@@ -304,22 +316,22 @@ func (cfg *Server) WithTelemetryPort(port int) *Server {
 // populated with defaults.
 func DefaultServer() *Server {
 	return &Server{
-		SystemName:         build.DefaultSystemName,
-		SocketDir:          defaultRuntimeDir,
-		AccessPoints:       []string{fmt.Sprintf("localhost:%d", build.DefaultControlPort)},
-		ControlPort:        build.DefaultControlPort,
-		TransportConfig:    security.DefaultServerTransportConfig(),
-		Hyperthreads:       false,
-		Path:               defaultConfigPath,
-		ControlLogMask:     ControlLogLevel(logging.LogLevelInfo),
-		validateProviderFn: netdetect.ValidateProviderStub,
-		validateNUMAFn:     netdetect.ValidateNUMAStub,
-		GetDeviceClassFn:   netdetect.GetDeviceClass,
-		EnableVMD:          false, // disabled by default
+		SystemName:        build.DefaultSystemName,
+		SocketDir:         defaultRuntimeDir,
+		AccessPoints:      []string{fmt.Sprintf("localhost:%d", build.DefaultControlPort)},
+		ControlPort:       build.DefaultControlPort,
+		TransportConfig:   security.DefaultServerTransportConfig(),
+		Hyperthreads:      false,
+		SystemRamReserved: storage.DefaultSysMemRsvd / humanize.GiByte,
+		Path:              defaultConfigPath,
+		ControlLogMask:    common.ControlLogLevel(logging.LogLevelInfo),
+		EnableHotplug:     false, // disabled by default
+		// https://man7.org/linux/man-pages/man5/core.5.html
+		CoreDumpFilter: 0b00010011, // private, shared, ELF
 	}
 }
 
-// Load reads the serialized configuration from disk and validates it.
+// Load reads the serialized configuration from disk and validates file syntax.
 func (cfg *Server) Load() error {
 	if cfg.Path == "" {
 		return FaultConfigNoPath
@@ -331,13 +343,27 @@ func (cfg *Server) Load() error {
 	}
 
 	if err = yaml.UnmarshalStrict(bytes, cfg); err != nil {
-		return errors.WithMessage(err, "parse failed; config contains invalid "+
-			"parameters and may be out of date, see server config examples")
+		return errors.WithMessagef(err, "parse of %q failed; config contains invalid "+
+			"parameters and may be out of date, see server config examples",
+			cfg.Path)
 	}
 
-	// propagate top-level settings to server configs
+	if !daos.SystemNameIsValid(cfg.SystemName) {
+		return errors.Errorf("invalid system name: %q", cfg.SystemName)
+	}
+
+	// TODO multiprovider: Remove when multiprovider is enabled
+	if cfg.Fabric.GetNumProviders() > 1 {
+		return errors.Errorf("fabric provider string %q includes more than one provider", cfg.Fabric.Provider)
+	}
+
+	// propagate top-level settings to engine configs
 	for i := range cfg.Engines {
 		cfg.updateServerConfig(&cfg.Engines[i])
+	}
+
+	if cfg.Fabric.AuthKey != "" {
+		cfg.ClientEnvVars = common.MergeKeyValues(cfg.ClientEnvVars, []string{cfg.Fabric.GetAuthKeyEnv()})
 	}
 
 	return nil
@@ -371,7 +397,7 @@ func (cfg *Server) SetPath(inPath string) error {
 
 // SaveActiveConfig saves read-only active config, tries config dir then /tmp/.
 func (cfg *Server) SaveActiveConfig(log logging.Logger) {
-	activeConfig := filepath.Join(cfg.SocketDir, configOut)
+	activeConfig := filepath.Join(cfg.SocketDir, ConfigOut)
 
 	if err := cfg.SaveToFile(activeConfig); err != nil {
 		log.Debugf("active config could not be saved: %s", err.Error())
@@ -381,21 +407,23 @@ func (cfg *Server) SaveActiveConfig(log logging.Logger) {
 	log.Debugf("active config saved to %s (read-only)", activeConfig)
 }
 
-func getAccessPointAddrWithPort(log logging.Logger, addr string, portDefault int) (string, error) {
+// GetAccessPointPort returns port number suffixed to AP address after its validation or 0 if no
+// port number specified. Error returned if validation fails.
+func GetAccessPointPort(log logging.Logger, addr string) (int, error) {
 	if !common.HasPort(addr) {
-		return fmt.Sprintf("%s:%d", addr, portDefault), nil
+		return 0, nil
 	}
 
-	host, port, err := net.SplitHostPort(addr)
+	_, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		log.Errorf("invalid access point %q: %s", addr, err)
-		return "", FaultConfigBadAccessPoints
+		return 0, FaultConfigBadAccessPoints
 	}
 
 	portNum, err := strconv.Atoi(port)
 	if err != nil {
 		log.Errorf("invalid access point port: %s", err)
-		return "", FaultConfigBadControlPort
+		return 0, FaultConfigBadControlPort
 	}
 	if portNum <= 0 {
 		m := "zero"
@@ -403,16 +431,193 @@ func getAccessPointAddrWithPort(log logging.Logger, addr string, portDefault int
 			m = "negative"
 		}
 		log.Errorf("access point port cannot be %s", m)
-		return "", FaultConfigBadControlPort
+		return 0, FaultConfigBadControlPort
 	}
 
-	// warn if access point port differs from config control port
+	return portNum, nil
+}
+
+// getAccessPointAddrWithPort appends default port number to address if custom port is not
+// specified, otherwise custom specified port is validated.
+func getAccessPointAddrWithPort(log logging.Logger, addr string, portDefault int) (string, error) {
+	portNum, err := GetAccessPointPort(log, addr)
+	if err != nil {
+		return "", err
+	}
+	if portNum == 0 {
+		return fmt.Sprintf("%s:%d", addr, portDefault), nil
+	}
+
+	// Warn if access point port differs from config control port.
 	if portDefault != portNum {
-		log.Debugf("access point (%s) port (%s) differs from default port (%d)",
-			host, port, portDefault)
+		log.Debugf("access point %q port differs from default port %q",
+			addr, portDefault)
 	}
 
 	return addr, nil
+}
+
+func hugePageBytes(hpNr, hpSz int) uint64 {
+	return uint64(hpNr*hpSz) * humanize.KiByte
+}
+
+// SetNrHugepages calculates minimum based on total target count if using nvme.
+func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error {
+	var cfgTargetCount int
+	var sysXSCount int
+	for idx, ec := range cfg.Engines {
+		msg := fmt.Sprintf("engine %d fabric numa %d, storage numa %d", idx,
+			ec.Fabric.NumaNodeIndex, ec.Storage.NumaNodeIndex)
+
+		// Calculate overall target count if NVMe is enabled.
+		if ec.Storage.Tiers.HaveBdevs() {
+			cfgTargetCount += ec.TargetCount
+			if ec.Storage.Tiers.HasBdevRoleMeta() {
+				msg = fmt.Sprintf("%s (MD-on-SSD)", msg)
+				// MD-on-SSD has extra sys-xstream for rdb.
+				sysXSCount++
+			}
+		}
+		log.Debug(msg)
+	}
+
+	if cfgTargetCount <= 0 {
+		return nil // no nvme, no hugepages required
+	}
+
+	if cfg.DisableHugepages {
+		return FaultConfigHugepagesDisabledWithBdevs
+	}
+
+	// Calculate minimum number of hugepages for all configured engines.
+	minHugepages, err := storage.CalcMinHugepages(mi.HugepageSizeKiB, cfgTargetCount+sysXSCount)
+	if err != nil {
+		return err
+	}
+
+	// If the config doesn't specify hugepages, use the minimum. Otherwise, validate
+	// that the configured amount is sufficient.
+	if cfg.NrHugepages == 0 {
+		var msgSysXS string
+		if sysXSCount > 0 {
+			msgSysXS = fmt.Sprintf(" and %d sys-xstreams", sysXSCount)
+		}
+		log.Debugf("calculated nr_hugepages: %d for %d targets%s", minHugepages,
+			cfgTargetCount, msgSysXS)
+		cfg.NrHugepages = minHugepages
+		log.Infof("hugepage count automatically set to %d (%s)", minHugepages,
+			humanize.IBytes(hugePageBytes(minHugepages, mi.HugepageSizeKiB)))
+	}
+
+	if cfg.NrHugepages < minHugepages {
+		log.Noticef("configured nr_hugepages %d is less than recommended %d, "+
+			"if this is not intentional update the 'nr_hugepages' config "+
+			"parameter or remove and it will be automatically calculated",
+			cfg.NrHugepages, minHugepages)
+	}
+
+	return nil
+}
+
+// CalcRamdiskSize calculates possible RAM-disk size using nr hugepages from config and total memory.
+func (cfg *Server) CalcRamdiskSize(log logging.Logger, hpSizeKiB, memKiB int) (uint64, error) {
+	// Convert memory from kib to bytes.
+	memTotal := uint64(memKiB * humanize.KiByte)
+
+	// Calculate assigned hugepage memory in bytes.
+	memHuge := hugePageBytes(cfg.NrHugepages, hpSizeKiB)
+
+	// Calculate reserved system memory in bytes.
+	memSys := uint64(cfg.SystemRamReserved * humanize.GiByte)
+
+	if len(cfg.Engines) == 0 {
+		return 0, errors.New("no engines in config")
+	}
+
+	return storage.CalcRamdiskSize(log, memTotal, memHuge, memSys, cfg.Engines[0].TargetCount,
+		len(cfg.Engines))
+}
+
+// CalcMemForRamdiskSize calculates minimum memory needed for a given RAM-disk size.
+func (cfg *Server) CalcMemForRamdiskSize(log logging.Logger, hpSizeKiB int, ramdiskSize uint64) (uint64, error) {
+	// Calculate assigned hugepage memory in bytes.
+	memHuge := uint64(cfg.NrHugepages * hpSizeKiB * humanize.KiByte)
+
+	// Calculate reserved system memory in bytes.
+	memSys := uint64(cfg.SystemRamReserved * humanize.GiByte)
+
+	if len(cfg.Engines) == 0 {
+		return 0, errors.New("no engines in config")
+	}
+
+	return storage.CalcMemForRamdiskSize(log, ramdiskSize, memHuge, memSys,
+		cfg.Engines[0].TargetCount, len(cfg.Engines))
+}
+
+// SetRamdiskSize calculates maximum RAM-disk size using total memory as reported by /proc/meminfo.
+// Then either validate configured engine storage values or assign if not already set.
+func (cfg *Server) SetRamdiskSize(log logging.Logger, mi *common.MemInfo) error {
+	if len(cfg.Engines) == 0 {
+		return nil // no engines
+	}
+
+	// Create the same size scm for each engine.
+	scmCfgs := cfg.Engines[0].Storage.Tiers.ScmConfigs()
+
+	if len(scmCfgs) == 0 || scmCfgs[0].Class != storage.ClassRam {
+		return nil // no ramdisk to size
+	}
+
+	maxRamdiskSize, err := cfg.CalcRamdiskSize(log, mi.HugepageSizeKiB, mi.MemTotalKiB)
+	if err != nil {
+		return errors.Wrapf(err, "calculate ramdisk size")
+	}
+
+	memTotBytes := uint64(mi.MemTotalKiB) * humanize.KiByte
+
+	msg := fmt.Sprintf("calculated max ram-disk size (%s) using MemTotal (%s)",
+		humanize.IBytes(maxRamdiskSize), humanize.IBytes(memTotBytes))
+
+	if maxRamdiskSize < storage.MinRamdiskMem {
+		// Total RAM is insufficient to meet minimum size.
+		log.Errorf("%s: insufficient total memory", msg)
+
+		minMem, err := cfg.CalcMemForRamdiskSize(log, mi.HugepageSizeKiB,
+			storage.MinRamdiskMem)
+		if err != nil {
+			log.Error(err.Error())
+		}
+
+		return storage.FaultRamdiskLowMem("Total", storage.MinRamdiskMem, minMem,
+			memTotBytes)
+	}
+
+	for idx, ec := range cfg.Engines {
+		scs := ec.Storage.Tiers.ScmConfigs()
+		if len(scs) != 1 {
+			return errors.Errorf("unexpected number of scm tiers, want 1 got %d",
+				len(scs))
+		}
+
+		// Validate or set configured scm sizes based on calculated value.
+		confSize := uint64(scs[0].Scm.RamdiskSize) * humanize.GiByte
+		if confSize == 0 {
+			// Apply calculated size in config as not already set.
+			log.Debugf("%s: auto-sized ram-disk in engine-%d config", msg, idx)
+			scs[0].WithScmRamdiskSize(uint(maxRamdiskSize / humanize.GiByte))
+			log.Infof("engine-%d: ramdisk size automatically set to %s", idx,
+				humanize.IBytes(maxRamdiskSize))
+		} else if confSize > maxRamdiskSize {
+			// Total RAM is not enough to meet tmpfs size requested in config.
+			log.Errorf("%s: engine-%d config size too large for total memory", msg,
+				idx)
+
+			return FaultConfigRamdiskOverMaxMem(confSize, maxRamdiskSize,
+				storage.MinRamdiskMem)
+		}
+	}
+
+	return nil
 }
 
 // Validate asserts that config meets minimum requirements.
@@ -427,73 +632,20 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 	defer func() {
 		if err != nil && !fault.HasResolution(err) {
 			examplesPath, _ := common.GetAdjacentPath(relConfExamplesPath)
-			err = errors.WithMessage(FaultBadConfig, err.Error()+", examples: "+examplesPath)
+			err = errors.WithMessage(FaultBadConfig, err.Error()+", examples: "+
+				examplesPath)
 		}
 	}()
 
-	// The config file format no longer supports "servers"
-	if len(cfg.Servers) > 0 {
-		return errors.New("\"servers\" server config file parameter is deprecated, use \"engines\" instead")
+	// Set DisableVMD reference if unset in config file.
+	if cfg.DisableVMD == nil {
+		cfg.WithDisableVMD(false)
 	}
 
-	for idx, ec := range cfg.Engines {
-		if ec.LegacyStorage.WasDefined() {
-			log.Infof("engine %d: Legacy storage configuration detected. Please migrate to new-style storage configuration.", idx)
-			var tierCfgs storage.TierConfigs
-			if ec.LegacyStorage.ScmClass != storage.ClassNone {
-				tierCfgs = append(tierCfgs,
-					storage.NewTierConfig().
-						WithScmClass(ec.LegacyStorage.ScmClass.String()).
-						WithScmDeviceList(ec.LegacyStorage.ScmConfig.DeviceList...).
-						WithScmMountPoint(ec.LegacyStorage.MountPoint).
-						WithScmRamdiskSize(ec.LegacyStorage.RamdiskSize),
-				)
-			}
+	log.Debugf("vfio=%v hotplug=%v vmd=%v requested in config", !cfg.DisableVFIO,
+		cfg.EnableHotplug, !(*cfg.DisableVMD))
 
-			// Do not add bdev tier if cls is none or nvme has no
-			// devices to maintain backward compatible behavior.
-			bc := ec.LegacyStorage.BdevClass
-			switch {
-			case bc == storage.ClassNvme && len(ec.LegacyStorage.BdevConfig.DeviceList) == 0:
-				log.Debugf("legacy storage config conversion skipped for class %s with empty bdev_list",
-					storage.ClassNvme)
-			case bc == storage.ClassNone:
-				log.Debugf("legacy storage config conversion skipped for class %s",
-					storage.ClassNone)
-			default:
-				tierCfgs = append(tierCfgs,
-					storage.NewTierConfig().
-						WithBdevClass(ec.LegacyStorage.BdevClass.String()).
-						WithBdevDeviceCount(ec.LegacyStorage.DeviceCount).
-						WithBdevDeviceList(ec.LegacyStorage.BdevConfig.DeviceList...).
-						WithBdevFileSize(ec.LegacyStorage.FileSize),
-				)
-			}
-			ec.WithStorage(tierCfgs...)
-			ec.LegacyStorage = engine.LegacyStorage{}
-		}
-	}
-
-	// A config without engines is valid when initially discovering hardware
-	// prior to adding per-engine sections with device allocations.
-	if len(cfg.Engines) == 0 {
-		log.Infof("No %ss in configuration, %s starting in discovery mode", build.DataPlaneName,
-			build.ControlPlaneName)
-		cfg.Engines = nil
-		return nil
-	}
-
-	switch {
-	case cfg.Fabric.Provider == "":
-		return FaultConfigNoProvider
-	case cfg.ControlPort <= 0:
-		return FaultConfigBadControlPort
-	case cfg.TelemetryPort < 0:
-		return FaultConfigBadTelemetryPort
-	}
-
-	// Update access point addresses with control port if port is not
-	// supplied.
+	// Update access point addresses with control port if port is not supplied.
 	newAPs := make([]string, 0, len(cfg.AccessPoints))
 	for _, ap := range cfg.AccessPoints {
 		newAP, err := getAccessPointAddrWithPort(log, ap, cfg.ControlPort)
@@ -508,34 +660,69 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 	}
 	cfg.AccessPoints = newAPs
 
+	if cfg.Metadata.DevicePath != "" && cfg.Metadata.Path == "" {
+		return FaultConfigControlMetadataNoPath
+	}
+
+	if cfg.SystemRamReserved <= 0 {
+		return FaultConfigSysRsvdZero
+	}
+
+	// A config without engines is valid when initially discovering hardware prior to adding
+	// per-engine sections with device allocations.
+	if len(cfg.Engines) == 0 {
+		log.Infof("No %ss in configuration, %s starting in discovery mode",
+			build.DataPlaneName, build.ControlPlaneName)
+		cfg.Engines = nil
+		return nil
+	}
+
 	switch {
 	case len(cfg.AccessPoints) < 1:
 		return FaultConfigBadAccessPoints
 	case len(cfg.AccessPoints)%2 == 0:
 		return FaultConfigEvenAccessPoints
+	case len(cfg.AccessPoints) == 1:
+		log.Noticef("Configuration includes only one access point. This provides no redundancy " +
+			"in the event of an access point failure.")
 	}
 
-	for i, engine := range cfg.Engines {
-		engine.Fabric.Update(cfg.Fabric)
-		if err := engine.Validate(); err != nil {
-			return errors.Wrapf(err, "I/O Engine %d failed config validation", i)
+	switch {
+	case cfg.Fabric.Provider == "":
+		return FaultConfigNoProvider
+	case cfg.ControlPort <= 0:
+		return FaultConfigBadControlPort
+	case cfg.TelemetryPort < 0:
+		return FaultConfigBadTelemetryPort
+	}
+
+	for idx, ec := range cfg.Engines {
+		ec.Storage.ControlMetadata = cfg.Metadata
+		ec.Storage.EngineIdx = uint(idx)
+		ec.Fabric.Update(cfg.Fabric)
+
+		if err := ec.Validate(); err != nil {
+			return errors.Wrapf(err, "I/O Engine %d failed config validation", idx)
 		}
 	}
 
 	if len(cfg.Engines) > 1 {
-		if err := cfg.validateMultiServerConfig(log); err != nil {
+		if err := cfg.validateMultiEngineConfig(log); err != nil {
 			return err
 		}
+	}
+
+	if cfg.NrHugepages < 0 || cfg.NrHugepages > math.MaxInt32 {
+		return FaultConfigNrHugepagesOutOfRange(cfg.NrHugepages, math.MaxInt32)
 	}
 
 	return nil
 }
 
-// validateMultiServerConfig performs an extra level of validation
-// for multi-server configs. The goal is to ensure that each instance
-// has unique values for resources which cannot be shared (e.g. log files,
-// fabric configurations, PCI devices, etc.)
-func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
+// validateMultiEngineConfig performs an extra level of validation for multi-server configs. The
+// goal is to ensure that each instance has unique values for resources which cannot be shared
+// (e.g. log files, fabric configurations, PCI devices, etc.)
+func (cfg *Server) validateMultiEngineConfig(log logging.Logger) error {
 	if len(cfg.Engines) < 2 {
 		return nil
 	}
@@ -543,9 +730,15 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 	seenValues := make(map[string]int)
 	seenScmSet := make(map[string]int)
 	seenBdevSet := make(map[string]int)
+	seenIdx := -1
+	seenBdevCount := -1
+	seenTargetCount := -1
+	seenHelperStreamCount := -1
+	seenScmCls := storage.ClassNone
+	seenScmClsIdx := -1
 
 	for idx, engine := range cfg.Engines {
-		fabricConfig := fmt.Sprintf("fabric:%s-%s-%d",
+		fabricConfig := fmt.Sprintf("fabric:%q-%q-%q",
 			engine.Fabric.Provider,
 			engine.Fabric.Interface,
 			engine.Fabric.InterfacePort)
@@ -566,15 +759,14 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 		}
 
 		for _, scmConf := range engine.Storage.Tiers.ScmConfigs() {
+
 			mountConfig := fmt.Sprintf("scm_mount:%s", scmConf.Scm.MountPoint)
 			if seenIn, exists := seenValues[mountConfig]; exists {
 				log.Debugf("%s in %d duplicates %d", mountConfig, idx, seenIn)
 				return FaultConfigDuplicateScmMount(idx, seenIn)
 			}
 			seenValues[mountConfig] = idx
-		}
 
-		for _, scmConf := range engine.Storage.Tiers.ScmConfigs() {
 			for _, dev := range scmConf.Scm.DeviceList {
 				if seenIn, exists := seenScmSet[dev]; exists {
 					log.Debugf("scm_list entry %s in %d duplicates %d", dev, idx, seenIn)
@@ -582,70 +774,139 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 				}
 				seenScmSet[dev] = idx
 			}
-		}
 
-		for _, bdevConf := range engine.Storage.Tiers.BdevConfigs() {
-			for _, dev := range bdevConf.Bdev.DeviceList {
-				if seenIn, exists := seenBdevSet[dev]; exists {
-					log.Debugf("bdev_list entry %s in %d overlaps %d", dev, idx, seenIn)
-					return FaultConfigOverlappingBdevDeviceList(idx, seenIn)
-				}
-				seenBdevSet[dev] = idx
+			if seenScmClsIdx != -1 && scmConf.Class != seenScmCls {
+				log.Debugf("scm_class entry %s in %d doesn't match %d",
+					scmConf.Class, idx, seenScmClsIdx)
+				return FaultConfigScmDiffClass(idx, seenScmClsIdx)
 			}
+			seenScmCls = scmConf.Class
+			seenScmClsIdx = idx
 		}
+
+		bdevs := engine.Storage.GetBdevs()
+		bdevCount := bdevs.Len()
+		for _, dev := range bdevs.Devices() {
+			if seenIn, exists := seenBdevSet[dev]; exists {
+				log.Debugf("bdev_list entry %s in %d overlaps %d", dev, idx, seenIn)
+				return FaultConfigOverlappingBdevDeviceList(idx, seenIn)
+			}
+			seenBdevSet[dev] = idx
+		}
+		if seenBdevCount != -1 && bdevCount != seenBdevCount {
+			// Log error but don't fail in order to be lenient with unbalanced device
+			// counts in particular cases e.g. using different capacity SSDs or VMDs
+			// with different number of backing devices.
+			e := FaultConfigBdevCountMismatch(idx, bdevCount, seenIdx, seenBdevCount)
+			log.Noticef(e.Error())
+		}
+		if seenTargetCount != -1 && engine.TargetCount != seenTargetCount {
+			return FaultConfigTargetCountMismatch(idx, engine.TargetCount, seenIdx,
+				seenTargetCount)
+		}
+		if seenHelperStreamCount != -1 && engine.HelperStreamCount != seenHelperStreamCount {
+			return FaultConfigHelperStreamCountMismatch(idx, engine.HelperStreamCount,
+				seenIdx, seenHelperStreamCount)
+		}
+		seenIdx = idx
+		seenBdevCount = bdevCount
+		seenTargetCount = engine.TargetCount
+		seenHelperStreamCount = engine.HelperStreamCount
 	}
 
 	return nil
 }
 
-// validateEngineFabric ensures engine configuration parameters are valid.
-func (cfg *Server) validateEngineFabric(ctx context.Context, cfgEngine *engine.Config) error {
-	if err := cfg.validateProviderFn(ctx, cfgEngine.Fabric.Interface, cfgEngine.Fabric.Provider); err != nil {
-		return errors.Wrapf(err, "Network device %s does not support provider %s. "+
-			"The configuration is invalid.", cfgEngine.Fabric.Interface,
-			cfgEngine.Fabric.Provider)
-	}
+var (
+	// ErrNoAffinityDetected is a sentinel error used to indicate that no affinity was detected.
+	ErrNoAffinityDetected = errors.New("no NUMA affinity detected")
+)
 
-	// check to see if pinned numa node was provided in the engine config
-	numaNode, err := cfgEngine.Fabric.GetNumaNode()
-	if err != nil {
-		// as pinned_numa_node is an optional config file parameter,
-		// error is considered non-fatal
-		if err == engine.ErrNoPinnedNumaNode {
-			return nil
+// EngineAffinityFn defines a function which returns the NUMA node affinity of a given engine.
+type EngineAffinityFn func(logging.Logger, *engine.Config) (uint, error)
+
+func detectEngineAffinity(log logging.Logger, engineCfg *engine.Config, affSources ...EngineAffinityFn) (node uint, err error) {
+	for _, affSource := range affSources {
+		if affSource == nil {
+			return 0, errors.New("nil affinity source")
 		}
-		return err
-	}
-	// validate that numa node is correct for the given device
-	if err := cfg.validateNUMAFn(ctx, cfgEngine.Fabric.Interface, numaNode); err != nil {
-		return errors.Wrapf(err, "Network device %s on NUMA node %d is an "+
-			"invalid configuration.", cfgEngine.Fabric.Interface, numaNode)
+
+		node, err = affSource(log, engineCfg)
+		if err == nil {
+			return
+		}
+
+		if err != nil && err != ErrNoAffinityDetected {
+			return
+		}
 	}
 
-	return nil
+	return 0, ErrNoAffinityDetected
 }
 
-// CheckFabric ensures engines in configuration have compatible parameter
-// values and returns fabric network device class for the configuration.
-func (cfg *Server) CheckFabric(ctx context.Context) (uint32, error) {
-	var netDevClass uint32
-	for index, engine := range cfg.Engines {
-		ndc, err := cfg.GetDeviceClassFn(engine.Fabric.Interface)
+// SetEngineAffinities sets the NUMA node affinity for all engines in the configuration.
+func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineAffinityFn) error {
+	if len(affSources) == 0 {
+		return errors.New("requires at least one affinity source")
+	}
+	defaultAffinity := uint(0)
+
+	// Detect legacy mode by checking if first_core is being used.
+	legacyMode := false
+	for _, engineCfg := range cfg.Engines {
+		if engineCfg.ServiceThreadCore != nil {
+			if *engineCfg.ServiceThreadCore == 0 && engineCfg.PinnedNumaNode != nil {
+				// Both are set but we don't know yet which to use
+				continue
+			}
+			legacyMode = true
+			break
+		}
+	}
+
+	// Fail if any engine has an explicit pin and non-zero first_core.
+	for idx, engineCfg := range cfg.Engines {
+		if legacyMode {
+			if engineCfg.PinnedNumaNode != nil {
+				log.Infof("pinned_numa_node setting ignored on engine %d", idx)
+				engineCfg.PinnedNumaNode = nil
+			}
+			log.Debugf("setting legacy core allocation algorithm on engine %d", idx)
+			continue
+		} else if engineCfg.ServiceThreadCore != nil {
+			log.Infof("first_core setting ignored on engine %d", idx)
+			engineCfg.ServiceThreadCore = nil
+		}
+
+		numaAffinity, err := detectEngineAffinity(log, engineCfg, affSources...)
 		if err != nil {
-			return 0, err
-		}
-		if index == 0 {
-			netDevClass = ndc
-			if err := cfg.validateEngineFabric(ctx, engine); err != nil {
-				return 0, err
+			if err != ErrNoAffinityDetected {
+				return errors.Wrap(err, "failure while detecting engine affinity")
 			}
+			log.Debugf("no NUMA affinity detected for engine %d; defaulting to %d", idx,
+				defaultAffinity)
+			numaAffinity = defaultAffinity
+		} else {
+			log.Debugf("detected NUMA affinity %d for engine %d", numaAffinity, idx)
+		}
+
+		// Special case: If only one engine is defined, NUMA is not pinned and engine's
+		// detected NUMA node is zero, don't pin the engine to any NUMA node in order to
+		// enable the engine's legacy core allocation algorithm.
+		if len(cfg.Engines) == 1 && engineCfg.PinnedNumaNode == nil && numaAffinity == 0 {
+			log.Debugf("setting legacy core allocation algorithm on engine %d", idx)
 			continue
 		}
-		if ndc != netDevClass {
-			return 0, FaultConfigInvalidNetDevClass(index, netDevClass,
-				ndc, engine.Fabric.Interface)
+
+		if err := engineCfg.SetNUMAAffinity(numaAffinity); err != nil {
+			// For now, just log the error and continue.
+			if engine.IsNUMAMismatch(err) {
+				log.Noticef("engine %d: %s", idx, err)
+				continue
+			}
+			return errors.Wrapf(err, "unable to set engine affinity to %d", numaAffinity)
 		}
 	}
 
-	return netDevClass, nil
+	return nil
 }

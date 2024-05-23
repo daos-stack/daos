@@ -1,18 +1,25 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
 hosts:
-  test_servers:
-    - server-A
-  test_clients:
-    - client-B
+  test_servers: 1
+  test_clients: 1
 timeout: 120
 server_config:
   name: daos_server
+  engines_per_host: 1
+  system_ram_reserved: 6
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+          scm_size: 4
 pool:
   control_method: dmg
-  mode: 511
   scm_size: 1G
-  name: daos_server
 container:
   control_method: daos
   type: POSIX
@@ -23,11 +30,11 @@ invalid_acl_filename:
   - 1ab2@3c4$%(
 
 invalid_acl_file_content:
+  - []
   - ["@$%656672!7", "987654321", "A::OWNER@:dtTaAo"]
   - ["B::OWNER@:dtTaAo", "C::GROUP@:dtTaAo"]
   - ["A::OWNER@:NOTPERMISSIONS", "A::OWNER@:123456"]
   - ["A::OWNER:dtTaAo", "A:G:GROUP:dtTaAo"]
 
 valid_acl_file:
-  - []
   - ["A::OWNER@:dtTaAo", "A:G:my_great_test@:rw", "A::person@:r"]

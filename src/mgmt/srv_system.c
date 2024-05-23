@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -46,25 +46,6 @@ mgmt_svc_name_cb(d_iov_t *id, char **name)
 	if (s == NULL)
 		return -DER_NOMEM;
 	*name = s;
-	return 0;
-}
-
-static int
-mgmt_svc_load_uuid_cb(d_iov_t *id, uuid_t db_uuid)
-{
-	uuid_copy(db_uuid, mgmt_svc_db_uuid);
-	return 0;
-}
-
-static int
-mgmt_svc_store_uuid_cb(d_iov_t *id, uuid_t db_uuid)
-{
-	return 0;
-}
-
-static int
-mgmt_svc_delete_uuid_cb(d_iov_t *id)
-{
 	return 0;
 }
 
@@ -171,6 +152,9 @@ dup_server_list(struct server_entry *in, int in_len)
 
 	for (i = 0; i < in_len; i++) {
 		out[i].se_rank = in[i].se_rank;
+		out[i].se_flags = in[i].se_flags;
+		out[i].se_nctxs = in[i].se_nctxs;
+		out[i].se_incarnation = in[i].se_incarnation;
 		D_STRNDUP(out[i].se_uri, in[i].se_uri, ADDR_STR_MAX_LEN - 1);
 		if (out[i].se_uri == NULL) {
 			free_server_list(out, i);
@@ -198,15 +182,9 @@ ds_mgmt_group_update_handler(struct mgmt_grp_up_in *in)
 	if (rc != 0 && rc != -DER_NOTLEADER)
 		goto out;
 
-	D_DEBUG(DB_MGMT, "setting %d servers in map version %u\n",
-		in->gui_n_servers, in->gui_map_version);
-	rc = ds_mgmt_group_update(CRT_GROUP_MOD_OP_REPLACE, in->gui_servers,
-				  in->gui_n_servers, in->gui_map_version);
+	rc = ds_mgmt_group_update(in->gui_servers, in->gui_n_servers, in->gui_map_version);
 	if (rc != 0)
 		goto out_svc;
-
-	D_DEBUG(DB_MGMT, "set %d servers in map version %u\n",
-		in->gui_n_servers, in->gui_map_version);
 
 	map_servers = dup_server_list(in->gui_servers, in->gui_n_servers);
 	if (map_servers == NULL) {
@@ -282,7 +260,7 @@ out:
 }
 
 static int
-mgmt_svc_map_dist_cb(struct ds_rsvc *rsvc)
+mgmt_svc_map_dist_cb(struct ds_rsvc *rsvc, uint32_t *version)
 {
 	struct mgmt_svc	       *svc = mgmt_svc_obj(rsvc);
 	struct dss_module_info *info = dss_get_module_info();
@@ -305,17 +283,16 @@ mgmt_svc_map_dist_cb(struct ds_rsvc *rsvc)
 
 	rc = map_update_bcast(info->dmi_ctx, svc, map_version,
 			      n_map_servers, map_servers);
-
 	free_server_list(map_servers, n_map_servers);
+	if (rc != 0)
+		return rc;
 
-	return rc;
+	*version = map_version;
+	return 0;
 }
 
 static struct ds_rsvc_class mgmt_svc_rsvc_class = {
 	.sc_name	= mgmt_svc_name_cb,
-	.sc_load_uuid   = mgmt_svc_load_uuid_cb,
-	.sc_store_uuid  = mgmt_svc_store_uuid_cb,
-	.sc_delete_uuid = mgmt_svc_delete_uuid_cb,
 	.sc_locate	= mgmt_svc_locate_cb,
 	.sc_alloc	= mgmt_svc_alloc_cb,
 	.sc_free	= mgmt_svc_free_cb,

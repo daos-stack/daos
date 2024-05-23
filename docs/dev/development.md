@@ -35,13 +35,13 @@ components individually by replacing `--build-deps=yes` with
 configuration from before. For automated environment setup, source
 `utils/sl/setup_local.sh`.
 
-The install path should be relocatable with the exception that `daos_admin`
+The install path should be relocatable with the exception that `daos_server_helper`
 will not be able to find the new location of daos and dependencies. All other
 libraries and binaries should work without any change due to relative
 paths.  Editing the `.build-vars.sh` file to replace the old with the new can
 restore the capability of setup_local.sh to automate path setup.
 
-To run daos_server, either the rpath in daos_admin needs to be patched to
+To run daos_server, either the rpath in daos_server_helper needs to be patched to
 the new installation location of `spdk` and `isal` or `LD_LIBRARY_PATH` needs to
 be set.  This can be done using `SL_SPDK_PREFIX` and `SL_ISAL_PREFIX` set when
 sourcing `setup_local.sh`.   This can also be done with the following
@@ -49,10 +49,10 @@ commands:
 
 ```
 source utils/sl/setup_local.sh
-sudo -E utils/setup_daos_admin.sh [path to new location of daos]
+sudo -E utils/setup_daos_server_helper.sh [path to new location of daos]
 ```
 
-This script is intended only for developer setup of `daos_admin`.
+This script is intended only for developer setup of `daos_server_helper`.
 
 With this approach, DAOS gets built using the prebuilt dependencies in
 `${daos_prefix_path}/prereq`, and required options are saved for future compilations.
@@ -121,42 +121,6 @@ scons reduces the clutter from compiler setup.
 
 Additionally, the tool supports options to filter by directory and file names and specify a lower
 bound value to report.
-
-### Building Optional Components
-
-There are a few optional components that can be included into the DAOS build.
-For instance, to include the `psm2` provider. Run the following `scons`
-command:
-
-```bash
-$ scons PREFIX=${daos_prefix_path}
-      INCLUDE=psm2
-      install
-      --build-deps=yes
-      --config=force
-```
-
-Refer to the built-in `scons` help command to get a full list of all the
-optional components under the `INCLUDE` optional parameter.
-
-```bash
-$ scons -h
-scons: Reading SConscript files ...
-
-INCLUDE: Optional components to build
-    (all|none|comma-separated list of names)
-    allowed names: psm2 psm3
-    default: none
-    actual:
-```
-
-The version of the components can be changed by editing the
-[utils/build.config][1] file.
-
->**_NOTE_**
->
->The support of the optional components is not guarantee and can be removed
->without further notification.
 
 ## Go dependencies
 
@@ -281,4 +245,77 @@ $ git status
 After verifying that the generated C/Go files are correct, add and commit them
 as you would any other file.
 
-[1]: <../../utils/build.config> (build.config)
+## DAOS Development in Docker
+
+This section describes how to build and run the DAOS service in a Docker
+container. A minimum of 5GB of DRAM and 16GB of disk space will be required.
+On Mac, please make sure that the Docker settings under
+"Preferences/{Disk, Memory}" are configured accordingly.
+
+### Building a Docker Image
+
+To build the Docker image directly from GitHub, run the following command:
+
+```bash
+$ docker build https://github.com/daos-stack/daos.git#master \
+        -f utils/docker/Dockerfile.el.8 -t daos
+```
+
+or from a local tree:
+
+```bash
+$ docker build  . -f utils/docker/Dockerfile.el.8 -t daos
+```
+
+This creates a Rocky Linux 8 image, fetches the latest DAOS version from GitHub,
+builds it, and installs it in the image.
+For Ubuntu and other Linux distributions, replace Dockerfile.el.8 with
+Dockerfile.ubuntu or the appropriate version of interest.
+
+### Simple Docker Setup
+
+Once the image created, one can start a container that will eventually run
+the DAOS service:
+
+```bash
+$ docker run -it -d --privileged --cap-add=ALL --name server -v /dev:/dev daos
+```
+
+!!! note
+    If you want to be more selective with the devices that are exported to the
+    container, individual devices should be listed and exported as volume via
+    the -v option. In this case, the hugepages devices should also be added
+    to the command line via -v /dev/hugepages:/dev/hugepages and
+    -v /dev/hugepages-1G:/dev/hugepages-1G
+
+!!! warning
+    If Docker is being run on a non-Linux system (e.g., OSX), -v /dev:/dev
+    should be removed from the command line.
+
+The `daos_server_local.yml` configuration file sets up a simple local DAOS
+system with a single server instance running in the container. By default, it
+uses 4GB of DRAM to emulate persistent memory and 16GB of bulk storage under
+/tmp. The storage size can be changed in the yaml file if necessary.
+
+The DAOS service can be started in the docker container as follows:
+
+```bash
+$ docker exec server daos_server start \
+        -o /home/daos/daos/utils/config/examples/daos_server_local.yml
+```
+
+!!! note
+    Please make sure that the uio_pci_generic module is loaded on the host.
+
+Once started, the DAOS server waits for the administrator to format the system.
+This can be triggered in a different shell, using the following command:
+
+```bash
+$ docker exec server dmg -i storage format
+```
+
+Upon successful completion of the format, the storage engine is started, and pools
+can be created using the daos admin tool (see next section).
+
+For more advanced configurations involving SCM, SSD or a real fabric, please
+refer to the next section.

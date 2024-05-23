@@ -1,17 +1,18 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
-from dfuse_test_base import DfuseTestBase
-from command_utils import CommandFailure
 from dbench_utils import Dbench
+from dfuse_utils import get_dfuse, start_dfuse
+from exception_utils import CommandFailure
 
-class DbenchTest(DfuseTestBase):
-    # pylint: disable=too-few-public-methods,too-many-ancestors
+
+class DbenchTest(TestWithServers):
+    # pylint: disable=too-few-public-methods
     """Base Dbench test class.
 
     :avocado: recursive
@@ -31,18 +32,23 @@ class DbenchTest(DfuseTestBase):
             Run dbench on top of mount point.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=dbench,dfuse
+        :avocado: tags=DbenchTest,test_dbench
         """
 
-        self.add_pool(connect=False)
-        self.add_container(self.pool)
-        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
+        self.log_step('Creating a single pool and container')
+        pool = self.get_pool(connect=False)
+        container = self.get_container(pool)
 
+        self.log_step('Starting dfuse')
+        dfuse = get_dfuse(self, self.hostlist_clients)
+        start_dfuse(self, dfuse, pool, container)
+
+        self.log_step('Running dbench')
         dbench_cmd = Dbench(self.hostlist_clients, self.tmp)
         dbench_cmd.get_params(self)
-        dbench_cmd.directory.update(self.dfuse.mount_dir.value)
-
+        dbench_cmd.directory.update(dfuse.mount_dir.value)
         try:
             # Start dfuse
             dbench_cmd.run()
@@ -52,9 +58,4 @@ class DbenchTest(DfuseTestBase):
                 str(NodeSet.fromlist(dbench_cmd.hosts)), exc_info=error)
             self.fail("Test was expected to pass but it failed.")
 
-        # stop dfuse
-        self.stop_dfuse()
-        # destroy container
-        self.container.destroy()
-        # destroy pool
-        self.pool.destroy()
+        self.log.info('Test passed')

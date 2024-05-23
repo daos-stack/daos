@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,7 +11,7 @@
 #include "daos_test.h"
 #include "daos_iotest.h"
 
-#define MUST(rc)	assert_int_equal(rc, 0)
+#define MUST(rc)        assert_success(rc)
 #define VAL_FMT		"VALUE-%lu"
 #define REC_MAX_LEN	32
 
@@ -101,27 +101,28 @@ io_for_aggregation(test_arg_t *arg, daos_handle_t coh, daos_handle_t ths[],
 }
 
 static int
-cont_create(test_arg_t *arg, uuid_t uuid)
+cont_create(test_arg_t *arg, uuid_t *uuid)
 {
-	uuid_generate(uuid);
-	print_message("creating container "DF_UUIDF"\n", DP_UUID(uuid));
-	return daos_cont_create(arg->pool.poh, uuid, NULL, NULL);
+	int rc;
+
+	rc = daos_cont_create(arg->pool.poh, uuid, NULL, NULL);
+	print_message("created container "DF_UUIDF"\n", DP_UUID(*uuid));
+	return rc;
 }
 
 static int
-cont_destroy(test_arg_t *arg, const uuid_t uuid)
+cont_destroy(test_arg_t *arg, const char *uuid_str)
 {
-	print_message("destroying container "DF_UUID"\n", DP_UUID(uuid));
-	return daos_cont_destroy(arg->pool.poh, uuid, 1, NULL);
+	print_message("destroying container %s\n", uuid_str);
+	return daos_cont_destroy(arg->pool.poh, uuid_str, 1, NULL);
 }
 
 static int
-cont_open(test_arg_t *arg, const uuid_t uuid, unsigned int flags,
+cont_open(test_arg_t *arg, const char *uuid_str, unsigned int flags,
 	  daos_handle_t *coh)
 {
-	print_message("opening container "DF_UUIDF" (flags=%X)\n",
-		      DP_UUID(uuid), flags);
-	return daos_cont_open(arg->pool.poh, uuid, flags, coh, &arg->co_info,
+	print_message("opening container %s (flags=%X)\n", uuid_str, flags);
+	return daos_cont_open(arg->pool.poh, uuid_str, flags, coh, &arg->co_info,
 			      NULL);
 }
 
@@ -142,9 +143,11 @@ test_epoch_aggregate(void **argp)
 	daos_obj_id_t		oid;
 	daos_epoch_t		epoch, epc_hi = 0;
 	int			i;
+	char			uuid_str[37];
 
-	MUST(cont_create(arg, cont_uuid));
-	MUST(cont_open(arg, cont_uuid, DAOS_COO_RW, &coh));
+	MUST(cont_create(arg, &cont_uuid));
+	uuid_unparse(cont_uuid, uuid_str);
+	MUST(cont_open(arg, uuid_str, DAOS_COO_RW, &coh));
 
 	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 	print_message("OID: "DF_OID"\n", DP_OID(oid));
@@ -186,7 +189,8 @@ test_epoch_aggregate(void **argp)
 
 	D_FREE(ths);
 	MUST(cont_close(arg, coh));
-	MUST(cont_destroy(arg, cont_uuid));
+	uuid_unparse(cont_uuid, uuid_str);
+	MUST(cont_destroy(arg, uuid_str));
 }
 
 static void
@@ -211,11 +215,14 @@ test_snapshots(void **argp)
 	daos_anchor_t		anchor;
 	daos_cont_info_t	cinfo;
 	int			rc;
+	char			uuid_str[37];
 
-	MUST(cont_create(arg, co_uuid));
-	print_message("Initial container open after create, nsnapshots=0\n");
-	MUST(cont_open(arg, co_uuid, DAOS_COO_RW | DAOS_COO_NOSLIP, &coh));
+	MUST(cont_create(arg, &co_uuid));
+	print_message("Initial container open after create, nsnapshots=0 lsnapshot=0\n");
+	uuid_unparse(co_uuid, uuid_str);
+	MUST(cont_open(arg, uuid_str, DAOS_COO_RW, &coh));
 	assert_int_equal(arg->co_info.ci_nsnapshots, 0);
+	assert_int_equal(arg->co_info.ci_lsnapshot, 0);
 
 	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 	print_message("OID: "DF_OID"\n", DP_OID(oid));
@@ -226,21 +233,24 @@ test_snapshots(void **argp)
 	if (arg->async)
 		MUST(daos_event_init(&ev, arg->eq, NULL));
 
-	print_message("Container query nsnapshots=0 (before snapshots created)\n");
+	print_message("Container query nsnapshots=0, lsnapshot=0 (before snapshots created)\n");
 	cinfo.ci_nsnapshots = 10;	/* should be ignored on input */
 	MUST(daos_cont_query(coh, &cinfo, NULL /* prop */, arg->async ? &ev : NULL));
 	WAIT_ON_ASYNC(arg, ev);
 	assert_int_equal(cinfo.ci_nsnapshots, 0);
+	assert_int_equal(cinfo.ci_lsnapshot, 0);
 
 	io_for_aggregation(arg, coh, ths, num_records, oid,
 			   /* update */ true, snaps_in, snaps,
 			   /* verification data */ NULL);
 
-	print_message("Container query nsnapshots=%d (after snapshots created)\n", snap_count);
+	print_message("Container query nsnapshots=%d lsnapshot="DF_X64
+		      " (after snapshots created)\n", snap_count, snaps[snap_count-1]);
 	cinfo.ci_nsnapshots = snap_count * 10;	/* should be ignored on input */
 	MUST(daos_cont_query(coh, &cinfo, NULL /* prop */, arg->async ? &ev : NULL));
 	WAIT_ON_ASYNC(arg, ev);
 	assert_int_equal(cinfo.ci_nsnapshots, snap_count);
+	assert_int_equal(cinfo.ci_lsnapshot, snaps[snap_count-1]);
 
 	print_message("Snapshot listing shall succeed with no buffer\n");
 	snap_count_out = 0;
@@ -316,17 +326,19 @@ test_snapshots(void **argp)
 	epr.epr_hi = epr.epr_lo = 42;
 	rc = daos_cont_destroy_snap(coh, epr, arg->async ? &ev : NULL);
 	if (arg->async) {
-		assert_int_equal(rc, 0);
+		assert_success(rc);
 		WAIT_ON_ASYNC_ERR(arg, ev, -DER_NONEXIST);
 	} else {
-		assert_int_equal(rc, -DER_NONEXIST);
+		assert_rc_equal(rc, -DER_NONEXIST);
 	}
 
-	print_message("Container query nsnapshots=%d (after 1 snapshot deleted)\n", (snap_count-1));
+	print_message("Container query nsnapshots=%d lsnapshot="DF_X64
+		      " (after 1 snapshot deleted)\n", (snap_count-1), snaps[snap_count-1]);
 	cinfo.ci_nsnapshots = 10;	/* should be ignored on input */
 	MUST(daos_cont_query(coh, &cinfo, NULL /* prop */, arg->async ? &ev : NULL));
 	WAIT_ON_ASYNC(arg, ev);
 	assert_int_equal(cinfo.ci_nsnapshots, (snap_count-1));
+	assert_int_equal(cinfo.ci_lsnapshot, snaps[snap_count-1]);
 
 	if (arg->async)
 		MUST(daos_event_fini(&ev));
@@ -337,12 +349,14 @@ test_snapshots(void **argp)
 	MUST(cont_close(arg, coh));
 
 	/* Reopen container, verify number of snapshots */
-	print_message("Container (re)open nsnapshots=%d\n", (snap_count-1));
-	MUST(cont_open(arg, co_uuid, DAOS_COO_RW | DAOS_COO_NOSLIP, &coh));
+	print_message("Container (re)open nsnapshots=%d lsnapshot="DF_X64"\n", (snap_count-1),
+		      snaps[snap_count-1]);
+	MUST(cont_open(arg, uuid_str, DAOS_COO_RW, &coh));
 	assert_int_equal(arg->co_info.ci_nsnapshots, (snap_count-1));
+	assert_int_equal(arg->co_info.ci_lsnapshot, snaps[snap_count-1]);
 	MUST(cont_close(arg, coh));
 
-	MUST(cont_destroy(arg, co_uuid));
+	MUST(cont_destroy(arg, uuid_str));
 }
 
 static const struct CMUnitTest epoch_tests[] = {
@@ -376,6 +390,6 @@ run_daos_epoch_test(int rank, int size)
 		rc = cmocka_run_group_tests_name("DAOS_Epoch",
 						 epoch_tests, setup,
 						 test_teardown);
-	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
 	return rc;
 }

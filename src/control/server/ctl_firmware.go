@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -23,8 +23,6 @@ import (
 // caller's request parameters. It can fetch firmware information for NVMe, SCM,
 // or both.
 func (svc *ControlService) FirmwareQuery(parent context.Context, pbReq *ctlpb.FirmwareQueryReq) (*ctlpb.FirmwareQueryResp, error) {
-	svc.log.Debug("received FirmwareQuery RPC")
-
 	pbResp := new(ctlpb.FirmwareQueryResp)
 
 	if pbReq.QueryScm {
@@ -43,12 +41,11 @@ func (svc *ControlService) FirmwareQuery(parent context.Context, pbReq *ctlpb.Fi
 		pbResp.NvmeResults = nvmeResults
 	}
 
-	svc.log.Debug("responding to FirmwareQuery RPC")
 	return pbResp, nil
 }
 
 func (svc *ControlService) querySCMFirmware(pbReq *ctlpb.FirmwareQueryReq) ([]*ctlpb.ScmFirmwareQueryResp, error) {
-	queryResp, err := svc.storage.Scm.QueryFirmware(storage.ScmFirmwareQueryRequest{
+	queryResp, err := svc.storage.QueryScmFirmware(storage.ScmFirmwareQueryRequest{
 		FirmwareRev: pbReq.FirmwareRev,
 		ModelID:     pbReq.ModelID,
 		DeviceUIDs:  pbReq.DeviceIDs,
@@ -104,8 +101,6 @@ func (svc *ControlService) queryNVMeFirmware(pbReq *ctlpb.FirmwareQueryReq) ([]*
 //
 // It updates the firmware on the storage devices of the specified type.
 func (svc *ControlService) FirmwareUpdate(parent context.Context, pbReq *ctlpb.FirmwareUpdateReq) (*ctlpb.FirmwareUpdateResp, error) {
-	svc.log.Debug("received FirmwareUpdate RPC")
-
 	instances := svc.harness.Instances()
 	for _, srv := range instances {
 		if srv.IsStarted() {
@@ -132,12 +127,11 @@ func (svc *ControlService) FirmwareUpdate(parent context.Context, pbReq *ctlpb.F
 		return nil, err
 	}
 
-	svc.log.Debug("responding to FirmwareUpdate RPC")
 	return pbResp, nil
 }
 
 func (svc *ControlService) updateSCM(pbReq *ctlpb.FirmwareUpdateReq, pbResp *ctlpb.FirmwareUpdateResp) error {
-	updateResp, err := svc.storage.Scm.UpdateFirmware(storage.ScmFirmwareUpdateRequest{
+	updateResp, err := svc.storage.UpdateScmFirmware(storage.ScmFirmwareUpdateRequest{
 		FirmwarePath: pbReq.FirmwarePath,
 		FirmwareRev:  pbReq.FirmwareRev,
 		ModelID:      pbReq.ModelID,

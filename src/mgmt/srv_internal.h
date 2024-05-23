@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -21,13 +21,27 @@
 #include <daos_srv/rdb.h>
 #include <daos_srv/rsvc.h>
 #include <daos_srv/smd.h>
+#include <daos_srv/daos_chk.h>
 #include <daos_security.h>
 #include <daos_prop.h>
 
+#include "check.pb-c.h"
 #include "svc.pb-c.h"
 #include "smd.pb-c.h"
 #include "rpc.h"
 #include "srv_layout.h"
+
+/*
+ * Use a fixed timeout that matches what the control plane uses for the
+ * moment.
+ *
+ * TODO: Pass the deadline from dmg (or daos_server).
+ */
+static inline uint64_t
+mgmt_ps_call_deadline(void)
+{
+	return daos_getmtime_coarse() + 5 * 60 * 1000;
+}
 
 /** srv.c */
 void ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc);
@@ -37,6 +51,7 @@ void ds_mgmt_profile_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_pool_get_svcranks_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_pool_find_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_mark_hdlr(crt_rpc_t *rpc);
+void dss_bind_to_xstream_cpuset(int tgt_id);
 
 /** srv_system.c */
 /* Management service (used only for map broadcast) */
@@ -63,18 +78,16 @@ void ds_mgmt_svc_put(struct mgmt_svc *svc);
 int ds_mgmt_group_update_handler(struct mgmt_grp_up_in *in);
 
 /** srv_pool.c */
-int ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
-			d_rank_list_t *targets, size_t scm_size,
-			size_t nvme_size, daos_prop_t *prop, uint32_t svc_nr,
-			d_rank_list_t **svcp, int domains_nr,
-			uint32_t *domains);
-int ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-			 const char *group, uint32_t force);
-int ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-		       uuid_t *handles, size_t n_handles, const char *group);
+int ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev, d_rank_list_t *targets,
+			size_t scm_size, size_t nvme_size, daos_prop_t *prop, d_rank_list_t **svcp,
+			int domains_nr, uint32_t *domains, size_t meta_blob_size);
+int ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks);
+int ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uuid_t *handles,
+		       size_t n_handles, uint32_t destroy, uint32_t force_destroy,
+		       char *machine, uint32_t *count);
 int ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-				     struct pool_target_addr_list *tgt_addr,
-				     pool_comp_state_t new_state);
+				     struct pool_target_addr_list *target_addrs,
+				     pool_comp_state_t state, size_t scm_size, size_t nvme_size);
 int ds_mgmt_pool_reintegrate(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			     uint32_t reint_rank,
 			     struct pool_target_id_list *reint_list);
@@ -86,6 +99,7 @@ int ds_mgmt_pool_set_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			  daos_prop_t *prop);
 int ds_mgmt_pool_get_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			  daos_prop_t *prop);
+int ds_mgmt_pool_upgrade(uuid_t pool_uuid, d_rank_list_t *svc_ranks);
 int ds_mgmt_pool_get_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			 daos_prop_t **access_prop);
 int ds_mgmt_pool_overwrite_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
@@ -97,37 +111,54 @@ int ds_mgmt_pool_delete_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 int ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
 			   struct daos_pool_cont_info **containers,
 			   uint64_t *ncontainers);
-int ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-		       daos_pool_info_t *pool_info);
+int ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **ranks,
+		       daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
+		       uint32_t *upgrade_layout_ver);
+int ds_mgmt_pool_query_targets(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_t rank,
+			       d_rank_list_t *tgts, daos_target_info_t **infos);
+
 int ds_mgmt_cont_set_owner(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			   uuid_t cont_uuid, const char *user,
 			   const char *group);
+
+/** srv_chk.c */
+int ds_mgmt_check_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
+			Mgmt__CheckInconsistPolicy **policies, int pool_nr, char **pools,
+			uint32_t flags, int phase);
+int ds_mgmt_check_stop(int pool_nr, char **pools);
+int ds_mgmt_check_query(int pool_nr, char **pools, chk_query_head_cb_t head_cb,
+			chk_query_pool_cb_t pool_cb, void *buf);
+int ds_mgmt_check_prop(chk_prop_cb_t prop_cb, void *buf);
+int ds_mgmt_check_act(uint64_t seq, uint32_t act, bool for_all);
+bool ds_mgmt_check_enabled(void);
 
 /** srv_query.c */
 
 /* Device health stats from nvme_stats */
 struct mgmt_bio_health {
-	struct nvme_stats		mb_dev_state;
-	uuid_t				mb_devid;
+	struct nvme_stats	mb_dev_state;
+	uuid_t			mb_devid;
+	uint64_t		mb_meta_size;
+	uint64_t		mb_rdb_size;
 };
 
-int ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid,
-			     char *tgt_id);
+int ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid);
 int ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp);
+void
+     ds_mgmt_smd_free_dev(Ctl__SmdDevice *dev);
 int ds_mgmt_smd_list_pools(Ctl__SmdPoolResp *resp);
-int ds_mgmt_dev_state_query(uuid_t uuid, Ctl__DevStateResp *resp);
-int ds_mgmt_dev_set_faulty(uuid_t uuid, Ctl__DevStateResp *resp);
+int ds_mgmt_dev_set_faulty(uuid_t uuid, Ctl__DevManageResp *resp);
+int ds_mgmt_dev_manage_led(Ctl__LedManageReq *req, Ctl__DevManageResp *resp);
 int ds_mgmt_get_bs_state(uuid_t bs_uuid, int *bs_state);
 void ds_mgmt_hdlr_get_bs_state(crt_rpc_t *rpc_req);
-int ds_mgmt_dev_replace(uuid_t old_uuid, uuid_t new_uuid,
-			Ctl__DevReplaceResp *resp);
-int ds_mgmt_dev_identify(uuid_t uuid, Ctl__DevIdentifyResp *resp);
+int ds_mgmt_dev_replace(uuid_t old_uuid, uuid_t new_uuid, Ctl__DevManageResp *resp);
 
 /** srv_target.c */
 int ds_mgmt_tgt_setup(void);
 void ds_mgmt_tgt_cleanup(void);
 void ds_mgmt_hdlr_tgt_create(crt_rpc_t *rpc_req);
 void ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *rpc_req);
+void ds_mgmt_hdlr_tgt_shard_destroy(crt_rpc_t *rpc_req);
 int ds_mgmt_tgt_create_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				  void *priv);
 int ds_mgmt_tgt_create_post_reply(crt_rpc_t *rpc, void *priv);
@@ -139,8 +170,7 @@ int ds_mgmt_tgt_map_update_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 void ds_mgmt_tgt_mark_hdlr(crt_rpc_t *rpc);
 
 /** srv_util.c */
-int ds_mgmt_group_update(crt_group_mod_op_t op, struct server_entry *servers,
-			 int nservers, uint32_t version);
+int ds_mgmt_group_update(struct server_entry *servers, int nservers, uint32_t version);
 void ds_mgmt_kill_rank(bool force);
 
 #endif /* __SRV_MGMT_INTERNAL_H__ */

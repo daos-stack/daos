@@ -55,7 +55,19 @@ A-key: "DFS_CHUNK_SIZE"
 single-value (uint64_t): Default chunk size for files in this container
 
 A-key: "DFS_OBJ_CLASS"
+single-value (uint16_t): Default object class for all objects in this container
+
+A-key: "DFS_DIR_OBJ_CLASS"
+single-value (uint16_t): Default object class for directories in this container
+
+A-key: "DFS_FILE_OBJ_CLASS"
 single-value (uint16_t): Default object class for files in this container
+
+A-key: "DFS_MODE"
+single-value (uint16_t): Consistency mode of this container (Relaxed vs Balanced)
+
+A-key: "DFS_HINTS"
+single-value (string): Container hints for object class selection for files and directories
 
 D-key: "/"
 // rest of akey entries for root are same as in directory entry described below.
@@ -78,11 +90,16 @@ Directory Object
       RECX (byte array starting at idx 0):
         mode_t: permission bit mask + type of entry
         oid: object id of entry
-        atime: access time
-        mtime: modify time
-        ctime: change time
+        mtime: modify time (seconds)
+        ctime: change time (seconds)
         chunk_size: chunk_size of file (0 if default or not a file)
-        syml: symlink value (does not exist if not a symlink)
+        object class: default object class of objects under this dir
+        mtime: modify time (nano-seconds)
+        ctime: change time (nano-seconds)
+        uid: user identifier
+        gid: group identifier
+        size: symlink size (0 for files/dirs)
+        object HLC: internal timestamp used to track max epoch of a file
     A-key "x:xattr1"	// extended attribute name (if any)
     A-key "x:xattr2"	// extended attribute name (if any)
 ~~~~~~
@@ -114,12 +131,15 @@ Object testdir
     ...
 ~~~~~~
 
-Note that with this mapping, the inode information is stored with the entry that
-it corresponds to in the parent directory object. Thus, hard links won't be
-supported, since it won't be possible to create a different entry (dkey) that
-actually points to the same set of akeys that the current ones are stored
-within. This limitation was agreed upon, and makes the representation simple as
-described above.
+By default, all directories are created with an object class with 1 shard. This means, that if the
+container redundancy factor (RF) is 0, OC_S1 oclass will be used; if RF=1 OC_RP_2G1 is used, and so
+on. The user can of course change that when creating the directory and set the desired object class
+manually, or set the default object class when creating the container.
+
+Note that with this mapping, the inode information is stored with the entry that it corresponds to
+in the parent directory object. Thus, hard links won't be supported, since it won't be possible to
+create a different entry (dkey) that actually points to the same set of akeys that the current ones
+are stored within. This limitation makes the representation simple as described above.
 
 ## Files
 
@@ -148,6 +168,11 @@ Object array
 For more information about the array object layout, please refer to the
 README.md file for Array Addons.
 
+By default, all files are created with an object class with max sharding. This means, that if the
+container redundancy factor (RF) is 0, OC_SX oclass will be used; if RF=1 an EC oclass OC_EC_nP1GX
+is used, and so on. The user can of course change that when creating the file and set the desired
+object class manually, or set the default object class when creating the container.
+
 Access to that object is done through the DAOS Array API. All read and write
 operations to the file will be translated to DAOS array read and write
 operations. The file size can be set (truncate) or retrieved by the DAOS array
@@ -157,9 +182,18 @@ space allocation cannot be supported by a naïve set_size operation.
 
 ## Symbolic Links
 
-As mentioned in the directory section, symbolic links will not have an object
-for the symlink itself, but will have a value in the entry itself of the parent
-directory containing the actual value of the symlink.
+As mentioned in the directory section, symbolic links will not have an object for the symlink
+itself, but will have a value in the entry itself of the parent directory containing the actual
+value of the symlink. In addition to inode akey, symlinks have an akey that contains a single value
+of the symlink value itself:
+
+Symlink Object
+  D-key "entry1_name"
+    A-key "DFS_INODE"
+      ..
+    A-key "DFS_SLINK" - only exists if entry is a symlink
+      Single Value:
+        Symlink value
 
 ## Access Permissions
 
@@ -171,3 +205,99 @@ namespace.
 
 setuid(), setgid() programs, supplementary groups, ACLs are not supported in the
 DFS namespace.
+
+## Time settings
+
+DFS stores the mtime (modify) and ctime (change) in the inode information of an object. the mtime is
+actively maintained for just file objects (changing a file contents updates the mtime value that
+would be returned on stat). At this time, mtime for directory objects and ctime for all objects are
+not actively maintained. atime (access) is not stored in DFS and stat returns the max value between
+mtime and ctime for atime.
+
+## Container Hints
+
+A user can set container hints when creating a POSIX type container. Those hints are immutable and
+are used internally to select a more suitable object class for files and directories than the
+default selection that the internal object API would do. The hints are required to be passed in the
+following format:
+
+~~~~~~
+type:value,type:value
+type can be file or dir (directory is also accepted)
+value can be:
+ - single (single sharded objects for small files / directories) or
+ - max (maximum sharded objects for large files / directories)
+~~~~~~
+
+If a hint is set to single, depending on the container redundancy factor, the oclass would be (same
+for files and dirs in this case):
+ - S1 if rd\_fac == 0
+ - RP\_2G1 if rd\_fac == 1
+ - RP\_3G1 if rd\_fac == 2
+
+Otherwise if the hint is set to max, for directories, it would be the same as single except the
+group would be X for max sharding (SX, RP_2GX, etc.). For files on the other hand, we use EC for
+redundancy instead of replication in this case (n depends on the number of fault domains in the
+pool):
+ - SX if rd\_fac == 0
+ - EC\_nP1GX if rd\_fac == 1
+ - EC\_nP2GX if rd\_fac == 2
+
+# DFS control flow
+
+Below are a few sequence diagrams to illustrate what happens when a dfs API is
+called.
+
+## Opening an existing file with dfs_open
+```mermaid
+sequenceDiagram
+    box Client
+        participant A as application
+        participant B as libdfs
+        participant C as libdaos
+    end
+    box Server
+        participant D as parent RG member
+    end
+
+    A->>B: dfs_open
+    Note over B: We need to get the<br/>inode from the parent object
+    B->>C: daos_obj_fetch(obj=parent_obj, dkey=filename)
+    Note over C: Calculate RG from dkey
+    C->>D: obj_fetch_rpc
+    D->>C: return metadata
+    C->>B: return metadata
+    Note over B: Check permissions
+    B->>C: daos_array_open_with_attr
+    Note over C: Allocate handle<br/>Calculate object layout
+    C->>B: Return array object handle
+    Note over B: Allocate file handle<br/>Save object info
+    B->>A: Return file handle
+```
+
+## Opening an existing directory with dfs_open
+```mermaid
+sequenceDiagram
+    box Client
+        participant A as application
+        participant B as libdfs
+        participant C as libdaos
+    end
+    box Server
+        participant D as parent RG member
+    end
+
+    A->>B: dfs_open
+    Note over B: We need to get the<br/>inode from the parent object
+    B->>C: daos_obj_fetch(obj=parent_obj, dkey=filename)
+    Note over C: Calculate RG from dkey
+    C->>D: obj_fetch_rpc
+    D->>C: return metadata
+    C->>B: return metadata
+    Note over B: Check permissions
+    B->>C: daos_obj_open
+    Note over C: Allocate handle<br/>Calculate object layout<br/>Check class validity
+    C->>B: Return array object handle
+    Note over B: Allocate directory handle<br/>Save object info
+    B->>A: Return directory handle
+```

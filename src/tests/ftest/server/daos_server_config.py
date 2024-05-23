@@ -1,10 +1,8 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
 
 from apricot import TestWithServers
 from server_utils import ServerFailed
@@ -34,7 +32,10 @@ class DaosServerConfigTest(TestWithServers):
         Test Description: Test daos_server start/stops properly.
         on the system.
 
-        :avocado: tags=all,small,control,daily_regression,server_start,basic
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=server,control,server_start,basic
+        :avocado: tags=DaosServerConfigTest,test_daos_server_config_basic
         """
         # Setup the servers
         self.add_server_manager()
@@ -44,6 +45,14 @@ class DaosServerConfigTest(TestWithServers):
 
         # Get the input to verify
         c_val = self.params.get("config_val", "/run/server_config_val/*/")
+
+        if c_val[0] == "name":
+            # Set the dmg system name to match the server in order to avoid
+            # mismatch failures that aren't part of this test
+            self.assertTrue(
+                self.server_managers[-1].dmg.set_config_value(c_val[0], c_val[1]),
+                "Error setting the '{}' config file parameter to '{}'".format(
+                    c_val[0], c_val[1]))
 
         # Identify the attribute and modify its value to test value
         self.assertTrue(

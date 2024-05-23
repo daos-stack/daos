@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -29,8 +29,7 @@
 
 #include <daos/tests_lib.h>
 #include <daos.h>
-#include "suite/daos_test.h"
-#include <mpi.h>
+#include "simple_common.h"
 
 /** local task information */
 int			 rank = -1;
@@ -98,19 +97,6 @@ char astr[] = "data";
 
 /** data buffer */
 uint64_t data[SLICE_SIZE];
-
-#define FAIL(fmt, ...)						\
-do {								\
-	fprintf(stderr, "Process %d(%s): " fmt " aborting\n",	\
-		rank, node, ## __VA_ARGS__);			\
-	MPI_Abort(MPI_COMM_WORLD, 1);				\
-} while (0)
-
-#define	ASSERT(cond, ...)					\
-do {								\
-	if (!(cond))						\
-		FAIL(__VA_ARGS__);				\
-} while (0)
 
 void
 pool_create(void)
@@ -466,11 +452,14 @@ main(int argc, char **argv)
 	ASSERT(rc == 0, "eq create failed with %d", rc);
 
 	if (rank == 0) {
+		char	str[37];
+
 		/** create a test pool and container for this test */
 		pool_create();
 
 		/** connect to the just created DAOS pool */
-		rc = daos_pool_connect(pool_uuid, DSS_PSETID,
+		uuid_unparse(pool_uuid, str);
+		rc = daos_pool_connect(str, DSS_PSETID,
 				       DAOS_PC_EX /* exclusive access */,
 				       &poh /* returned pool handle */,
 				       NULL /* returned pool info */,
@@ -482,17 +471,16 @@ main(int argc, char **argv)
 	handle_share(&poh, HANDLE_POOL, rank, poh, 1);
 
 	if (rank == 0) {
-		/** generate uuid for container */
-		uuid_generate(co_uuid);
+		char	str[37];
 
 		/** create container */
-		rc = daos_cont_create(poh, co_uuid, NULL /* properties */,
+		rc = daos_cont_create(poh, &co_uuid, NULL /* properties */,
 				      NULL /* event */);
 		ASSERT(rc == 0, "container create failed with %d", rc);
 
 		/** open container */
-		rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, NULL,
-				    NULL);
+		uuid_unparse(co_uuid, str);
+		rc = daos_cont_open(poh, str, DAOS_COO_RW, &coh, NULL, NULL);
 		ASSERT(rc == 0, "container open failed with %d", rc);
 	}
 
@@ -533,10 +521,14 @@ main(int argc, char **argv)
 		array();
 
 	/** close container */
-	daos_cont_close(coh, NULL);
+	rc = daos_cont_close(coh, NULL);
+	if (rc)
+		D_ERROR("daos_cont_close() Failed "DF_RC"\n", DP_RC(rc));
 
 	/** disconnect from pool & destroy it */
-	daos_pool_disconnect(poh, NULL);
+	rc = daos_pool_disconnect(poh, NULL);
+	if (rc)
+		D_ERROR("daos_pool_disconnect() Failed "DF_RC"\n", DP_RC(rc));
 	if (rank == 0)
 		/** free allocated storage */
 		pool_destroy();

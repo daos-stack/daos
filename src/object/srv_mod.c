@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,8 +12,9 @@
 #include <daos_srv/vos.h>
 #include <daos_srv/pool.h>
 #include <daos/rpc.h>
+#include <daos/metrics.h>
 #include "obj_rpc.h"
-#include "obj_internal.h"
+#include "srv_internal.h"
 
 /**
  * Switch of enable DTX or not, enabled by default.
@@ -44,7 +45,7 @@ out_class:
 out_utils:
 	obj_utils_fini();
 out:
-	D_ERROR("Object module init error: %s\n", d_errstr(rc));
+	D_ERROR("Object module init error: " DF_RC "\n", DP_RC(rc));
 	return rc;
 }
 
@@ -67,14 +68,18 @@ obj_mod_fini(void)
 	.dr_corpc_ops = e,	\
 },
 
-static struct daos_rpc_handler obj_handlers[] = {
-	OBJ_PROTO_CLI_RPC_LIST
+static struct daos_rpc_handler obj_handlers_v9[] = {
+	OBJ_PROTO_CLI_RPC_LIST(9)
+};
+
+static struct daos_rpc_handler obj_handlers_v10[] = {
+	OBJ_PROTO_CLI_RPC_LIST(10)
 };
 
 #undef X
 
 static void *
-obj_tls_init(int xs_id, int tgt_id)
+obj_tls_init(int tags, int xs_id, int tgt_id)
 {
 	struct obj_tls	*tls;
 	uint32_t	opc;
@@ -98,7 +103,7 @@ obj_tls_init(int xs_id, int tgt_id)
 				     "io/ops/%s/active/tgt_%u",
 				     obj_opc_to_str(opc), tgt_id);
 		if (rc)
-			D_WARN("Failed to create active cnt sensor: "DF_RC"\n",
+			D_WARN("Failed to create active counter: "DF_RC"\n",
 			       DP_RC(rc));
 
 		if (opc == DAOS_OBJ_RPC_UPDATE ||
@@ -121,48 +126,36 @@ obj_tls_init(int xs_id, int tgt_id)
 	 * Maintain per-I/O size latency for update & fetch RPCs
 	 * of type gauge
 	 */
-	for (opc = 0; opc < 2; opc++) {
-		int			i;
-		unsigned int		bucket_max = 256;
-		struct d_tm_node_t	**tm[2] = { tls->ot_update_lat,
-						    tls->ot_fetch_lat };
 
-		for (i = 0; i < NR_LATENCY_BUCKETS; i++) {
-			char *path;
+	obj_latency_tm_init(DAOS_OBJ_RPC_UPDATE, tgt_id, tls->ot_update_lat,
+			    obj_opc_to_str(DAOS_OBJ_RPC_UPDATE), "update RPC processing time",
+			    true);
+	obj_latency_tm_init(DAOS_OBJ_RPC_FETCH, tgt_id, tls->ot_fetch_lat,
+			    obj_opc_to_str(DAOS_OBJ_RPC_FETCH), "fetch RPC processing time", true);
 
-			if (bucket_max < 1024) /** B */
-				D_ASPRINTF(path, "io/latency/%s/%uB/tgt_%u",
-					   opc ? "fetch" : "update", bucket_max,
-					   tgt_id);
-			else if (bucket_max < 1024 * 1024) /** KB */
-				D_ASPRINTF(path, "io/latency/%s/%uKB/tgt_%u",
-					   opc ? "fetch" : "update",
-					   bucket_max / 1024, tgt_id);
-			else if (bucket_max <= 1024 * 1024 * 4) /** MB */
-				D_ASPRINTF(path, "io/latency/%s/%uMB/tgt_%u",
-					   opc ? "fetch" : "update",
-					   bucket_max / (1024 * 1024), tgt_id);
-			else /** >4MB */
-				D_ASPRINTF(path, "io/latency/%s/GT4MB/tgt_%u",
-					   opc ? "fetch" : "update", tgt_id);
+	obj_latency_tm_init(DAOS_OBJ_RPC_TGT_UPDATE, tgt_id, tls->ot_tgt_update_lat,
+			    obj_opc_to_str(DAOS_OBJ_RPC_TGT_UPDATE),
+			    "update tgt RPC processing time", true);
+	obj_latency_tm_init(DAOS_OBJ_RPC_UPDATE, tgt_id, tls->ot_update_bulk_lat, "bulk_update",
+			    "Bulk update processing time", true);
+	obj_latency_tm_init(DAOS_OBJ_RPC_FETCH, tgt_id, tls->ot_fetch_bulk_lat, "bulk_fetch",
+			    "Bulk fetch processing time", true);
 
-			rc = d_tm_add_metric(&tm[opc][i], D_TM_STATS_GAUGE,
-					     "I/O RPC processing time", "us",
-					     path);
-			if (rc)
-				D_WARN("Failed to create per-I/O size latency "
-				       "sensor: "DF_RC"\n", DP_RC(rc));
-			D_FREE(path);
+	obj_latency_tm_init(DAOS_OBJ_RPC_UPDATE, tgt_id, tls->ot_update_vos_lat, "vos_update",
+			    "VOS update processing time", true);
+	obj_latency_tm_init(DAOS_OBJ_RPC_FETCH, tgt_id, tls->ot_fetch_vos_lat, "vos_fetch",
+			    "VOS fetch processing time", true);
 
-			bucket_max <<= 1;
-		}
-	}
+	obj_latency_tm_init(DAOS_OBJ_RPC_UPDATE, tgt_id, tls->ot_update_bio_lat, "bio_update",
+			    "BIO update processing time", true);
+	obj_latency_tm_init(DAOS_OBJ_RPC_FETCH, tgt_id, tls->ot_fetch_bio_lat, "bio_fetch",
+			    "BIO fetch processing time", true);
 
 	return tls;
 }
 
 static void
-obj_tls_fini(void *data)
+obj_tls_fini(int tags, void *data)
 {
 	struct obj_tls *tls = data;
 	struct migrate_pool_tls *pool_tls;
@@ -187,114 +180,290 @@ struct dss_module_key obj_module_key = {
 static int
 obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 {
-	if (obj_rpc_is_update(rpc)) {
+	int	opc = opc_get(rpc->cr_opc);
+	int	proto_ver = crt_req_get_proto_ver(rpc);
+	int	rc = 0;
+
+	D_ASSERT(proto_ver == DAOS_OBJ_VERSION || proto_ver == DAOS_OBJ_VERSION - 1);
+
+	/*
+	 * Proto v9 doesn't support hint return cart timeout for retry
+	 * skip RPC rejections for them.
+	 */
+	if (proto_ver == 9)
+		attr->sra_flags |= SCHED_REQ_FL_NO_REJECT;
+
+	/* Extract hint from RPC */
+	attr->sra_enqueue_id = 0;
+
+	switch (opc) {
+	case DAOS_OBJ_RPC_UPDATE:
+	case DAOS_OBJ_RPC_TGT_UPDATE:
+	case DAOS_OBJ_RPC_FETCH: {
 		struct obj_rw_in	*orw = crt_req_get(rpc);
 
-		sched_req_attr_init(attr, SCHED_REQ_UPDATE,
-				    &orw->orw_pool_uuid);
-	} else if (obj_rpc_is_fetch(rpc)) {
-		struct obj_rw_in	*orw = crt_req_get(rpc);
+		if (proto_ver >= 10) {
+			struct obj_rw_v10_in *orw_v10 = crt_req_get(rpc);
 
-		sched_req_attr_init(attr, SCHED_REQ_FETCH,
+			attr->sra_enqueue_id = orw_v10->orw_comm_in.req_in_enqueue_id;
+		}
+		sched_req_attr_init(attr, obj_rpc_is_update(rpc) ?
+				    SCHED_REQ_UPDATE : SCHED_REQ_FETCH,
 				    &orw->orw_pool_uuid);
-	} else if (obj_rpc_is_migrate(rpc)) {
-		struct obj_migrate_in	*omi = crt_req_get(rpc);
+		break;
+	}
+	case DAOS_OBJ_RPC_MIGRATE: {
+		struct obj_migrate_in *omi = crt_req_get(rpc);
 
-		sched_req_attr_init(attr, SCHED_REQ_MIGRATE,
-				    &omi->om_pool_uuid);
-	} else {
+		attr->sra_enqueue_id = omi->om_comm_in.req_in_enqueue_id;
+		sched_req_attr_init(attr, SCHED_REQ_MIGRATE, &omi->om_pool_uuid);
+		break;
+	}
+	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
+	case DAOS_OBJ_RPC_ENUMERATE:
+	case DAOS_OBJ_AKEY_RPC_ENUMERATE:
+	case DAOS_OBJ_RECX_RPC_ENUMERATE: {
+		struct obj_key_enum_in *oei = crt_req_get(rpc);
+
+		if (proto_ver >= 10) {
+			struct obj_key_enum_v10_in *oei_v10 = crt_req_get(rpc);
+
+			attr->sra_enqueue_id = oei_v10->oei_comm_in.req_in_enqueue_id;
+		}
+		sched_req_attr_init(attr, SCHED_REQ_FETCH, &oei->oei_pool_uuid);
+		break;
+	}
+	case DAOS_OBJ_RPC_PUNCH:
+	case DAOS_OBJ_RPC_PUNCH_DKEYS:
+	case DAOS_OBJ_RPC_PUNCH_AKEYS:
+	case DAOS_OBJ_RPC_TGT_PUNCH:
+	case DAOS_OBJ_RPC_TGT_PUNCH_DKEYS:
+	case DAOS_OBJ_RPC_TGT_PUNCH_AKEYS: {
+		struct obj_punch_in *opi = crt_req_get(rpc);
+
+		if (proto_ver >= 10) {
+			struct obj_punch_v10_in *opi_v10 = crt_req_get(rpc);
+
+			attr->sra_enqueue_id = opi_v10->opi_comm_in.req_in_enqueue_id;
+		}
+		sched_req_attr_init(attr, SCHED_REQ_UPDATE, &opi->opi_pool_uuid);
+		break;
+	}
+	case DAOS_OBJ_RPC_QUERY_KEY: {
+		struct obj_query_key_in *okqi = crt_req_get(rpc);
+
+		if (proto_ver >= 10) {
+			struct obj_query_key_v10_in *okqi_v10 = crt_req_get(rpc);
+
+			attr->sra_enqueue_id = okqi_v10->okqi_comm_in.req_in_enqueue_id;
+		}
+		sched_req_attr_init(attr, SCHED_REQ_FETCH, &okqi->okqi_pool_uuid);
+		break;
+	}
+	case DAOS_OBJ_RPC_SYNC: {
+		struct obj_sync_in *osi = crt_req_get(rpc);
+
+		if (proto_ver >= 10) {
+			struct obj_sync_v10_in *osi_v10 = crt_req_get(rpc);
+
+			attr->sra_enqueue_id = osi_v10->osi_comm_in.req_in_enqueue_id;
+		}
+		sched_req_attr_init(attr, SCHED_REQ_UPDATE, &osi->osi_pool_uuid);
+		break;
+	}
+	case DAOS_OBJ_RPC_KEY2ANCHOR: {
+		struct obj_key2anchor_in *oki = crt_req_get(rpc);
+
+		if (proto_ver >= 10) {
+			struct obj_key2anchor_v10_in *oki_v10 = crt_req_get(rpc);
+
+			attr->sra_enqueue_id = oki_v10->oki_comm_in.req_in_enqueue_id;
+		}
+		sched_req_attr_init(attr, SCHED_REQ_FETCH, &oki->oki_pool_uuid);
+		break;
+	}
+	case DAOS_OBJ_RPC_EC_AGGREGATE: {
+		struct obj_ec_agg_in *ea = crt_req_get(rpc);
+
+		attr->sra_enqueue_id = ea->ea_comm_in.req_in_enqueue_id;
+		sched_req_attr_init(attr, SCHED_REQ_MIGRATE, &ea->ea_pool_uuid);
+		break;
+	}
+	case DAOS_OBJ_RPC_EC_REPLICATE: {
+		struct obj_ec_rep_in *er = crt_req_get(rpc);
+
+		attr->sra_enqueue_id = er->er_comm_in.req_in_enqueue_id;
+		sched_req_attr_init(attr, SCHED_REQ_MIGRATE, &er->er_pool_uuid);
+		break;
+	}
+	case DAOS_OBJ_RPC_CPD: {
+		struct obj_cpd_in *oci = crt_req_get(rpc);
+
+		sched_req_attr_init(attr, SCHED_REQ_UPDATE, &oci->oci_pool_uuid);
+		break;
+	}
+	case DAOS_OBJ_RPC_COLL_PUNCH: {
+		struct obj_coll_punch_in *ocpi = crt_req_get(rpc);
+
+		attr->sra_enqueue_id = ocpi->ocpi_comm_in.req_in_enqueue_id;
+		sched_req_attr_init(attr, SCHED_REQ_UPDATE, &ocpi->ocpi_po_uuid);
+		break;
+	}
+	case DAOS_OBJ_RPC_COLL_QUERY: {
+		struct obj_coll_query_in *ocqi = crt_req_get(rpc);
+
+		attr->sra_enqueue_id = ocqi->ocqi_comm_in.req_in_enqueue_id;
+		sched_req_attr_init(attr, SCHED_REQ_FETCH, &ocqi->ocqi_po_uuid);
+		break;
+	}
+	default:
 		/* Other requests will not be queued, see dss_rpc_hdlr() */
-		return -DER_NOSYS;
+		rc = -DER_NOSYS;
+		break;
 	}
 
-	return 0;
+	return rc;
+}
+
+static int
+obj_set_req(crt_rpc_t *rpc, struct sched_req_attr *attr)
+{
+	int	opc = opc_get(rpc->cr_opc);
+	int	proto_ver = crt_req_get_proto_ver(rpc);
+	int	rc = -DER_OVERLOAD_RETRY;
+
+	/* Old protocol RPCs won't be rejected. */
+	D_ASSERT(proto_ver == DAOS_OBJ_VERSION);
+
+	switch (opc) {
+	case DAOS_OBJ_RPC_UPDATE:
+	case DAOS_OBJ_RPC_TGT_UPDATE:
+	case DAOS_OBJ_RPC_FETCH: {
+		struct obj_rw_v10_out	*orwo_v10 = crt_reply_get(rpc);
+
+		orwo_v10->orw_comm_out.req_out_enqueue_id = attr->sra_enqueue_id;
+		orwo_v10->orw_ret = -DER_OVERLOAD_RETRY;
+		break;
+	}
+	case DAOS_OBJ_RPC_MIGRATE: {
+		struct obj_migrate_out *om = crt_reply_get(rpc);
+
+		om->om_comm_out.req_out_enqueue_id = attr->sra_enqueue_id;
+		om->om_status = -DER_OVERLOAD_RETRY;
+		break;
+	}
+	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
+	case DAOS_OBJ_RPC_ENUMERATE:
+	case DAOS_OBJ_AKEY_RPC_ENUMERATE:
+	case DAOS_OBJ_RECX_RPC_ENUMERATE: {
+		struct obj_key_enum_v10_out *oeo_v10 = crt_reply_get(rpc);
+
+		oeo_v10->oeo_comm_out.req_out_enqueue_id = attr->sra_enqueue_id;
+		oeo_v10->oeo_ret = -DER_OVERLOAD_RETRY;
+		break;
+	}
+	case DAOS_OBJ_RPC_PUNCH:
+	case DAOS_OBJ_RPC_PUNCH_DKEYS:
+	case DAOS_OBJ_RPC_PUNCH_AKEYS:
+	case DAOS_OBJ_RPC_TGT_PUNCH:
+	case DAOS_OBJ_RPC_TGT_PUNCH_DKEYS:
+	case DAOS_OBJ_RPC_TGT_PUNCH_AKEYS: {
+		struct obj_punch_v10_out *opo_v10 = crt_reply_get(rpc);
+
+		opo_v10->opo_comm_out.req_out_enqueue_id = attr->sra_enqueue_id;
+		opo_v10->opo_ret = -DER_OVERLOAD_RETRY;
+		break;
+	}
+	case DAOS_OBJ_RPC_QUERY_KEY: {
+		struct obj_query_key_v10_out *okqo_v10 = crt_reply_get(rpc);
+
+		okqo_v10->okqo_comm_out.req_out_enqueue_id = attr->sra_enqueue_id;
+		okqo_v10->okqo_ret = -DER_OVERLOAD_RETRY;
+		break;
+	}
+	case DAOS_OBJ_RPC_SYNC: {
+		struct obj_sync_v10_out *oso_v10 = crt_reply_get(rpc);
+
+		oso_v10->oso_comm_out.req_out_enqueue_id = attr->sra_enqueue_id;
+		oso_v10->oso_ret = -DER_OVERLOAD_RETRY;
+		break;
+	}
+	case DAOS_OBJ_RPC_KEY2ANCHOR: {
+		struct obj_key2anchor_v10_out *oko_v10 = crt_reply_get(rpc);
+
+		oko_v10->oko_comm_out.req_out_enqueue_id = attr->sra_enqueue_id;
+		oko_v10->oko_ret = -DER_OVERLOAD_RETRY;
+		break;
+	}
+	case DAOS_OBJ_RPC_EC_AGGREGATE: {
+		struct obj_ec_agg_out *ea_out = crt_reply_get(rpc);
+
+		ea_out->ea_comm_out.req_out_enqueue_id = attr->sra_enqueue_id;
+		ea_out->ea_status = -DER_OVERLOAD_RETRY;
+		break;
+	}
+	case DAOS_OBJ_RPC_EC_REPLICATE: {
+		struct obj_ec_rep_out *er_out = crt_reply_get(rpc);
+
+		er_out->er_comm_out.req_out_enqueue_id = attr->sra_enqueue_id;
+		er_out->er_status = -DER_OVERLOAD_RETRY;
+		break;
+	}
+	case DAOS_OBJ_RPC_CPD:
+		/* NOTE: It needs to be enhanced. Currently, just let client retry anyway. */
+		rc = -DER_TIMEDOUT;
+		break;
+	case DAOS_OBJ_RPC_COLL_PUNCH: {
+		struct obj_coll_punch_out *ocpo = crt_reply_get(rpc);
+
+		ocpo->ocpo_comm_out.req_out_enqueue_id = attr->sra_enqueue_id;
+		ocpo->ocpo_ret = -DER_OVERLOAD_RETRY;
+		break;
+	}
+	case DAOS_OBJ_RPC_COLL_QUERY: {
+		struct obj_coll_query_out *ocqo = crt_reply_get(rpc);
+
+		ocqo->ocqo_comm_out.req_out_enqueue_id = attr->sra_enqueue_id;
+		ocqo->ocqo_ret = -DER_OVERLOAD_RETRY;
+		break;
+	}
+	default:
+		/* Other requests will not be queued, see dss_rpc_hdlr() */
+		rc = -DER_TIMEDOUT;
+		break;
+	}
+
+	return rc;
 }
 
 static struct dss_module_ops ds_obj_mod_ops = {
 	.dms_get_req_attr = obj_get_req_attr,
+	.dms_set_req	  = obj_set_req,
 };
 
 static void *
 obj_metrics_alloc(const char *path, int tgt_id)
 {
-	struct obj_pool_metrics	*metrics;
-	uint32_t		opc;
-	int			rc;
-
-	D_ASSERT(tgt_id >= 0);
-
-	D_ALLOC_PTR(metrics);
-	if (metrics == NULL)
-		return NULL;
-
-	/** register different per-opcode counters */
-	for (opc = 0; opc < OBJ_PROTO_CLI_COUNT; opc++) {
-		/** Then the total number of requests, of type counter */
-		rc = d_tm_add_metric(&metrics->opm_total[opc], D_TM_COUNTER,
-				     "total number of processed object RPCs",
-				     "ops", "%s/ops/%s/tgt_%u", path,
-				     obj_opc_to_str(opc), tgt_id);
-		if (rc)
-			D_WARN("Failed to create total cnt sensor: "DF_RC"\n",
-			       DP_RC(rc));
-	}
-
-	/** Total number of silently restarted updates, of type counter */
-	rc = d_tm_add_metric(&metrics->opm_update_restart, D_TM_COUNTER,
-			     "total number of restarted update ops", "updates",
-			     "%s/restarted/tgt_%u", path, tgt_id);
-	if (rc)
-		D_WARN("Failed to create restarted cnt sensor: "DF_RC"\n",
-		       DP_RC(rc));
-
-	/** Total number of resent updates, of type counter */
-	rc = d_tm_add_metric(&metrics->opm_update_resent, D_TM_COUNTER,
-			     "total number of resent update RPCs", "updates",
-			     "%s/resent/tgt_%u", path, tgt_id);
-	if (rc)
-		D_WARN("Failed to create resent cnt sensor: "DF_RC"\n",
-		       DP_RC(rc));
-
-	/** Total bytes read */
-	rc = d_tm_add_metric(&metrics->opm_fetch_bytes, D_TM_COUNTER,
-			     "total number of bytes fetched/read", "bytes",
-			     "%s/xferred/fetch/tgt_%u", path, tgt_id);
-	if (rc)
-		D_WARN("Failed to create bytes fetch sensor: "DF_RC"\n",
-		       DP_RC(rc));
-
-	/** Total bytes written */
-	rc = d_tm_add_metric(&metrics->opm_update_bytes, D_TM_COUNTER,
-			     "total number of bytes updated/written", "bytes",
-			     "%s/xferred/update/tgt_%u", path, tgt_id);
-	if (rc)
-		D_WARN("Failed to create bytes update sensor: "DF_RC"\n",
-		       DP_RC(rc));
-
-	return metrics;
+	return obj_metrics_alloc_internal(path, tgt_id, true);
 }
 
-static void
-obj_metrics_free(void *data)
-{
-	D_FREE(data);
-}
-
-struct dss_module_metrics obj_metrics = {
-	.dmm_tags = DAOS_TGT_TAG,
-	.dmm_init = obj_metrics_alloc,
-	.dmm_fini = obj_metrics_free,
+struct daos_module_metrics obj_metrics = {
+    .dmm_tags       = DAOS_TGT_TAG,
+    .dmm_init       = obj_metrics_alloc,
+    .dmm_fini       = obj_metrics_free,
+    .dmm_nr_metrics = obj_metrics_count,
 };
 
-struct dss_module obj_module =  {
+struct dss_module obj_module = {
 	.sm_name	= "obj",
 	.sm_mod_id	= DAOS_OBJ_MODULE,
 	.sm_ver		= DAOS_OBJ_VERSION,
 	.sm_init	= obj_mod_init,
 	.sm_fini	= obj_mod_fini,
-	.sm_proto_fmt	= &obj_proto_fmt,
-	.sm_cli_count	= OBJ_PROTO_CLI_COUNT,
-	.sm_handlers	= obj_handlers,
+	.sm_proto_count	= 2,
+	.sm_proto_fmt	= {&obj_proto_fmt_v9, &obj_proto_fmt_v10},
+	.sm_cli_count	= {OBJ_PROTO_CLI_COUNT, OBJ_PROTO_CLI_COUNT},
+	.sm_handlers	= {obj_handlers_v9, obj_handlers_v10},
 	.sm_key		= &obj_module_key,
 	.sm_mod_ops	= &ds_obj_mod_ops,
 	.sm_metrics	= &obj_metrics,

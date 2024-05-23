@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,6 +18,7 @@ extern "C" {
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
+#include <ctype.h>
 
 /** uuid_t */
 #include <uuid/uuid.h>
@@ -57,16 +58,21 @@ typedef enum {
 /** Iteration Anchor */
 typedef struct {
 	uint16_t	da_type;	/**< daos_anchor_type_t */
-	uint16_t	da_shard;
+	uint16_t	da_shard;	/**< internal, do not use */
 	uint32_t	da_flags;	/**< see enum daos_anchor_flags */
 	uint64_t	da_sub_anchors;	/**< record the offset for each shards for EC object */
-	uint8_t		da_buf[DAOS_ANCHOR_BUF_MAX];
+	uint8_t		da_buf[DAOS_ANCHOR_BUF_MAX];	/**< internal, do not use */
 } daos_anchor_t;
 
-#define DAOS_ANCHOR_INIT	((daos_anchor_t){DAOS_ANCHOR_TYPE_ZERO})
+#define DAOS_ANCHOR_INIT	{ .da_type = DAOS_ANCHOR_TYPE_ZERO,	\
+				  .da_shard = 0,			\
+				  .da_flags = 0,			\
+				  .da_sub_anchors = 0,			\
+				  .da_buf = { 0 } }
 
 /** Generic handle for various DAOS components like container, object, etc. */
 typedef struct {
+	/** generic handle value */
 	uint64_t	cookie;
 } daos_handle_t;
 
@@ -90,9 +96,7 @@ daos_handle_is_valid(daos_handle_t hdl)
  *
  * DAOS_PC_RW connects to the pool for reading and writing.
  *
- * DAOS_PC_EX connects to the pool for reading and writing exclusively. In the
- * presence of an exclusive pool handle, no connection with DSM_PC_RW is
- * permitted.
+ * DAOS_PC_EX connects to the pool for reading and writing exclusively.
  *
  * The three flags above are mutually exclusive.
  */
@@ -108,6 +112,9 @@ daos_handle_is_valid(daos_handle_t hdl)
  */
 typedef uint64_t	daos_epoch_t;
 
+/**
+ * Epoch range
+ */
 typedef struct {
 	/** Low bound of the epoch range */
 	daos_epoch_t	epr_lo;
@@ -118,17 +125,41 @@ typedef struct {
 /** Highest possible epoch */
 #define DAOS_EPOCH_MAX	(~0ULL)
 
+/** Container information */
+typedef struct {
+	/** Container UUID */
+	uuid_t			ci_uuid;
+	/** Epoch of latest persistent snapshot */
+	daos_epoch_t		ci_lsnapshot;
+	/** Number of open handles */
+	uint32_t		ci_nhandles;
+	/** Number of snapshots */
+	uint32_t		ci_nsnapshots;
+	/** Latest open time (hybrid logical clock) */
+	uint64_t		ci_md_otime;
+	/** Latest close/modify time (hybrid logical clock) */
+	uint64_t		ci_md_mtime;
+	/* TODO: add more members, e.g., size, # objects, uid, gid... */
+} daos_cont_info_t;
+
 typedef d_iov_t daos_key_t;
+
+static inline bool
+daos_key_is_null(daos_key_t key)
+{
+	return key.iov_buf_len == 0 || key.iov_buf == NULL;
+}
 
 /**
  * Event and event queue
  */
 
 typedef struct daos_event {
+	/** return code of non-blocking operation */
 	int			ev_error;
-	/** Internal use, please do not modify */
+	/** Internal use - 152 + 8 bytes pad for pthread_mutex_t size difference on __aarch64__ */
 	struct {
-		uint64_t	space[19];
+		uint64_t	space[20];
 	}			ev_private;
 	/** Used for debugging */
 	uint64_t		ev_debug;
@@ -142,9 +173,9 @@ typedef struct daos_event {
 typedef enum {
 	/** Query outstanding completed event */
 	DAOS_EQR_COMPLETED	= (1),
-	/** Query # inflight event */
+	/** Query # in-flight event */
 	DAOS_EQR_WAITING	= (1 << 1),
-	/** Query # inflight + completed events in EQ */
+	/** Query # in-flight + completed events in EQ */
 	DAOS_EQR_ALL		= (DAOS_EQR_COMPLETED | DAOS_EQR_WAITING),
 } daos_eq_query_t;
 
@@ -196,9 +227,58 @@ enum {
  * It is put here because it's almost used by everyone.
  */
 typedef struct {
+	/** least significant (low) bits of object ID */
 	uint64_t	lo;
+	/** most significant (high) bits of object ID */
 	uint64_t	hi;
 } daos_obj_id_t;
+
+#define DAOS_UUID_STR_SIZE 37	/* 36 + 1 for '\0' */
+
+static inline bool
+daos_is_valid_uuid_string(const char *uuid)
+{
+	const char	*p;
+	int		 len = DAOS_UUID_STR_SIZE - 1; /* Not include the terminated '\0' */
+	int		 i;
+
+	if (strnlen(uuid, len) != len)
+		return false;
+
+	for (i = 0, p = uuid; i < len; i++, p++) {
+		if (i == 8 || i == 13 || i == 18 || i == 23) {
+			if (*p != '-')
+				return false;
+		} else if (!isxdigit(*p)) {
+			return false;
+		}
+	}
+
+	return true;
+}
+/**
+ * Corresponding rank and URI for a DAOS engine
+ */
+struct daos_rank_uri {
+	/** DAOS engine rank */
+	uint32_t	 dru_rank;
+	/** URI associated with rank */
+	char		*dru_uri;
+};
+
+/**
+ * DAOS general system information for clients
+ */
+struct daos_sys_info {
+	/** name of DAOS system */
+	char			 dsi_system_name[DAOS_SYS_INFO_STRING_MAX + 1];
+	/** fabric provider in use by this system */
+	char			 dsi_fabric_provider[DAOS_SYS_INFO_STRING_MAX + 1];
+	/** length of ranks array */
+	uint32_t		 dsi_nr_ranks;
+	/** ranks and their client-accessible URIs */
+	struct daos_rank_uri	*dsi_ranks;
+};
 
 /** max pool/cont attr size */
 #define DAOS_ATTR_NAME_MAX 511

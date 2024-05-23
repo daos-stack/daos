@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -14,7 +14,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/daos-stack/daos/src/control/build"
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/fault"
 )
 
@@ -23,7 +23,7 @@ func TestPbin_NewResponseWithError(t *testing.T) {
 
 	resp := NewResponseWithError(expErr)
 
-	common.CmpErr(t, expErr, resp.Error)
+	test.CmpErr(t, expErr, resp.Error)
 
 	if diff := cmp.Diff(json.RawMessage("null"), resp.Payload); diff != "" {
 		t.Errorf("unexpected payload (-want, +got)\n%s\n", diff)

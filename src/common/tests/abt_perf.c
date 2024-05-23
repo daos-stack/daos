@@ -9,6 +9,9 @@
 #include <daos/common.h>
 #include <getopt.h>
 #include <time.h>
+#ifdef ULT_MMAP_STACK
+#include <daos/stack_mmap.h>
+#endif
 
 static unsigned long	abt_cntr;
 static int		abt_ults;
@@ -26,6 +29,10 @@ static int		opt_concur = 1;
 static int		opt_secs;
 static int		opt_stack;
 static int		opt_cr_type;
+#ifdef ULT_MMAP_STACK
+static int		opt_mmap;
+static struct stack_pool *sp;
+#endif
 
 static inline uint64_t
 abt_current_ms(void)
@@ -46,6 +53,12 @@ abt_thread_1(void *arg)
 		abt_cntr++;
 		ABT_mutex_unlock(abt_lock);
 
+#ifdef ULT_MMAP_STACK
+		if (opt_mmap)
+			mmap_stack_thread_create(sp, NULL, abt_pool, abt_thread_1, NULL,
+						 abt_attr, NULL);
+		else
+#endif
 		ABT_thread_create(abt_pool, abt_thread_1, NULL, abt_attr, NULL);
 
 		ABT_mutex_lock(abt_lock);
@@ -103,6 +116,12 @@ abt_ult_create_rate(void)
 		abt_cntr++;
 		ABT_mutex_unlock(abt_lock);
 
+#ifdef ULT_MMAP_STACK
+		if (opt_mmap)
+			rc = mmap_stack_thread_create(sp, NULL, abt_pool, abt_thread_1,
+						      NULL, abt_attr, NULL);
+		else
+#endif
 		rc = ABT_thread_create(abt_pool, abt_thread_1, NULL,
 				       abt_attr, NULL);
 		if (rc != ABT_SUCCESS) {
@@ -180,6 +199,14 @@ abt_sched_rate(void)
 		abt_ults++;
 		ABT_mutex_unlock(abt_lock);
 
+#ifdef ULT_MMAP_STACK
+		if (opt_mmap)
+			rc = mmap_stack_thread_create(sp, NULL, abt_pool, abt_thread_2,
+						      NULL,
+						      ABT_THREAD_ATTR_NULL,
+						      NULL);
+		else
+#endif
 		rc = ABT_thread_create(abt_pool, abt_thread_2, NULL,
 				       ABT_THREAD_ATTR_NULL, NULL);
 		if (rc != ABT_SUCCESS) {
@@ -286,6 +313,9 @@ static struct option abt_ops[] = {
 	{ "sec",	required_argument,	NULL,	's'	},
 	/** stack size (kilo-bytes) */
 	{ "stack",	required_argument,	NULL,	'S'	},
+#ifdef ULT_MMAP_STACK
+	{ "mmap",	no_argument,	NULL,	'm'	},
+#endif
 };
 
 int
@@ -313,6 +343,11 @@ main(int argc, char **argv)
 			opt_stack = atoi(optarg);
 			opt_stack <<= 10; /* kilo-byte */
 			break;
+#ifdef ULT_MMAP_STACK
+		case 'm':
+			opt_mmap = true;
+			break;
+#endif
 		}
 	}
 
@@ -368,9 +403,34 @@ main(int argc, char **argv)
 
 		rc = ABT_thread_attr_set_stacksize(abt_attr, opt_stack);
 		D_ASSERT(rc == ABT_SUCCESS);
+#ifdef ULT_MMAP_STACK
+		if (opt_mmap)
+			printf("mmap()'ed ULT stack size = %d\n",
+			       max(opt_stack, MMAPED_ULT_STACK_SIZE));
+		else
+			printf("ULT stack size = %d\n", opt_stack);
+#else
 		printf("ULT stack size = %d\n", opt_stack);
+#endif
+	} else {
+#ifdef ULT_MMAP_STACK
+		if (opt_mmap)
+			printf("mmap()'ed ULT stack size = %d\n",
+			       MMAPED_ULT_STACK_SIZE);
+		else
+			printf("ULT stack size = default ABT ULT stack size\n");
+#else
+		printf("ULT stack size = default ABT ULT stack size\n");
+#endif
 	}
 
+#ifdef ULT_MMAP_STACK
+	rc = stack_pool_create(&sp);
+	if (rc) {
+		fprintf(stderr, "unable to create stack pool: %d\n", rc);
+		return -1;
+	}
+#endif
 	switch (test_id) {
 	default:
 		break;
@@ -409,6 +469,12 @@ main(int argc, char **argv)
 	}
 
 	abt_waiting = true;
+#ifdef ULT_MMAP_STACK
+	if (opt_mmap)
+		rc = mmap_stack_thread_create(sp, NULL, abt_pool, abt_lock_create_rate,
+					      NULL, ABT_THREAD_ATTR_NULL, NULL);
+	else
+#endif
 	rc = ABT_thread_create(abt_pool, abt_lock_create_rate, NULL,
 			       ABT_THREAD_ATTR_NULL, NULL);
 
@@ -424,5 +490,8 @@ out:
 	ABT_mutex_free(&abt_lock);
 	ABT_cond_free(&abt_cond);
 	ABT_finalize();
+#ifdef ULT_MMAP_STACK
+	stack_pool_destroy(sp);
+#endif
 	return 0;
 }

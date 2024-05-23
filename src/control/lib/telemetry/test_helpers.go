@@ -1,9 +1,12 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
-// +build linux,amd64
+//go:build linux && (amd64 || arm64)
+// +build linux
+// +build amd64 arm64
+
 //
 
 package telemetry
@@ -16,7 +19,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 )
 
 /*
@@ -35,6 +41,18 @@ add_metric(struct d_tm_node_t **node, int metric_type, char *sh_desc,
 {
 	return d_tm_add_metric(node, metric_type, sh_desc, lng_desc, str);
 }
+
+static int
+add_eph_dir(struct d_tm_node_t **node, size_t size_bytes, const char *str)
+{
+	return d_tm_add_ephemeral_dir(node, size_bytes, str);
+}
+
+static int
+del_eph_dir(const char *str)
+{
+	return d_tm_del_ephemeral_dir(str);
+}
 */
 import "C"
 
@@ -44,6 +62,7 @@ var nextIDMutex sync.Mutex
 const (
 	telemetryIDBase = 100
 	PromexpIDBase   = 200
+	AgentIDBase     = 300
 )
 
 // NextTestID gets the next available ID for a shmem segment. This helps avoid
@@ -64,16 +83,19 @@ func NextTestID(base ...int) int {
 
 type (
 	TestMetric struct {
+		Type   MetricType
 		Name   string
 		path   string
 		desc   string
 		units  string
-		min    float64
-		max    float64
+		min    uint64
+		max    uint64
 		Cur    float64 // value - may be exact or approximate
-		sum    float64
+		Values []uint64
+		sum    uint64
 		mean   float64
 		stddev float64
+		sumsqs float64
 		str    string // string of regex to compare String() against
 		node   *C.struct_d_tm_node_t
 	}
@@ -89,6 +111,25 @@ func (tm *TestMetric) FullPath() string {
 	return fullName
 }
 
+func (tm *TestMetric) GetMetric(ctx context.Context) (Metric, error) {
+	switch tm.Type {
+	case MetricTypeCounter:
+		return GetCounter(ctx, tm.FullPath())
+	case MetricTypeTimestamp:
+		return GetTimestamp(ctx, tm.FullPath())
+	case MetricTypeSnapshot:
+		return GetSnapshot(ctx, tm.FullPath())
+	case MetricTypeDuration:
+		return GetDuration(ctx, tm.FullPath())
+	case MetricTypeGauge:
+		return GetGauge(ctx, tm.FullPath())
+	case MetricTypeStatsGauge:
+		return GetStatsGauge(ctx, tm.FullPath())
+	default:
+		return nil, errors.Errorf("unsupported metric type %s", tm.Type)
+	}
+}
+
 func InitTestMetricsProducer(t *testing.T, id int, size uint64) {
 	t.Helper()
 
@@ -98,54 +139,97 @@ func InitTestMetricsProducer(t *testing.T, id int, size uint64) {
 	}
 }
 
+func AddTestMetric(t *testing.T, tm *TestMetric) {
+	t.Helper()
+
+	fullName := tm.FullPath()
+	switch tm.Type {
+	case MetricTypeGauge:
+		rc := C.add_metric(&tm.node, C.D_TM_GAUGE, C.CString(tm.desc), C.CString(tm.units), C.CString(fullName))
+		if rc != 0 {
+			t.Fatalf("failed to add %s: %s", fullName, daos.Status(rc))
+		}
+		C.d_tm_set_gauge(tm.node, C.uint64_t(tm.Cur))
+	case MetricTypeStatsGauge:
+		rc := C.add_metric(&tm.node, C.D_TM_STATS_GAUGE, C.CString(tm.desc), C.CString(tm.units), C.CString(fullName))
+		if rc != 0 {
+			t.Fatalf("failed to add %s: %s", tm.Name, daos.Status(rc))
+		}
+
+		vals := make([]uint64, len(tm.Values))
+		if len(tm.Values) > 0 {
+			copy(vals, tm.Values)
+		} else {
+			vals = []uint64{tm.min, tm.max, uint64(tm.Cur)}
+		}
+		t.Logf("setting values for %s: %+v\n", tm.FullPath(), vals)
+
+		for _, val := range vals {
+			C.d_tm_set_gauge(tm.node, C.uint64_t(val))
+			t.Logf("set %s to %d\n", tm.FullPath(), val)
+		}
+	case MetricTypeCounter:
+		rc := C.add_metric(&tm.node, C.D_TM_COUNTER, C.CString(tm.desc), C.CString(tm.units), C.CString(fullName))
+		if rc != 0 {
+			t.Fatalf("failed to add %s: %s", fullName, daos.Status(rc))
+		}
+		C.d_tm_inc_counter(tm.node, C.ulong(tm.Cur))
+	case MetricTypeDuration:
+		rc := C.add_metric(&tm.node, C.D_TM_DURATION|C.D_TM_CLOCK_REALTIME, C.CString(tm.desc), C.CString(tm.units), C.CString(fullName))
+		if rc != 0 {
+			t.Fatalf("failed to add %s: %s", fullName, daos.Status(rc))
+		}
+		C.d_tm_mark_duration_start(tm.node, C.D_TM_CLOCK_REALTIME)
+		time.Sleep(time.Duration(tm.Cur))
+		C.d_tm_mark_duration_end(tm.node)
+	case MetricTypeTimestamp:
+		rc := C.add_metric(&tm.node, C.D_TM_TIMESTAMP, C.CString(tm.desc), C.CString(tm.units), C.CString(fullName))
+		if rc != 0 {
+			t.Fatalf("failed to add %s: %s", fullName, daos.Status(rc))
+		}
+		C.d_tm_record_timestamp(tm.node)
+	case MetricTypeSnapshot:
+		rc := C.add_metric(&tm.node, C.D_TM_TIMER_SNAPSHOT|C.D_TM_CLOCK_REALTIME, C.CString(tm.desc), C.CString(tm.units), C.CString(fullName))
+		if rc != 0 {
+			t.Fatalf("failed to add %s: %s", fullName, daos.Status(rc))
+		}
+		C.d_tm_take_timer_snapshot(tm.node, C.D_TM_CLOCK_REALTIME)
+	case MetricTypeDirectory:
+		rc := C.add_metric(&tm.node, C.D_TM_DIRECTORY, C.CString(tm.desc), C.CString(tm.units), C.CString(fullName))
+		if rc != 0 {
+			t.Fatalf("failed to add %s: %s", fullName, daos.Status(rc))
+		}
+	case MetricTypeLink:
+		rc := C.add_eph_dir(&tm.node, 1024, C.CString(fullName))
+		if rc != 0 {
+			t.Fatalf("failed to add %s: %s", fullName, daos.Status(rc))
+		}
+	default:
+		t.Fatalf("metric type %s not supported", tm.Type)
+	}
+}
+
 func AddTestMetrics(t *testing.T, testMetrics TestMetricsMap) {
 	t.Helper()
 
 	for mt, tm := range testMetrics {
+		tm.Type = mt
+		AddTestMetric(t, tm)
+	}
+}
+
+func RemoveTestMetrics(t *testing.T, testMetrics TestMetricsMap) {
+	t.Helper()
+
+	for mt, tm := range testMetrics {
+		if mt != MetricTypeLink {
+			continue
+		}
+
 		fullName := tm.FullPath()
-		switch mt {
-		case MetricTypeGauge:
-			rc := C.add_metric(&tm.node, C.D_TM_GAUGE, C.CString(tm.desc), C.CString(tm.units), C.CString(fullName))
-			if rc != 0 {
-				t.Fatalf("failed to add %s: %d", fullName, rc)
-			}
-			C.d_tm_set_gauge(tm.node, C.uint64_t(tm.Cur))
-		case MetricTypeStatsGauge:
-			rc := C.add_metric(&tm.node, C.D_TM_STATS_GAUGE, C.CString(tm.desc), C.CString(tm.units), C.CString(fullName))
-			if rc != 0 {
-				t.Fatalf("failed to add %s: %d", tm.Name, rc)
-			}
-			for _, val := range []float64{tm.min, tm.max, tm.Cur} {
-				C.d_tm_set_gauge(tm.node, C.uint64_t(val))
-			}
-		case MetricTypeCounter:
-			rc := C.add_metric(&tm.node, C.D_TM_COUNTER, C.CString(tm.desc), C.CString(tm.units), C.CString(fullName))
-			if rc != 0 {
-				t.Fatalf("failed to add %s: %d", fullName, rc)
-			}
-			C.d_tm_inc_counter(tm.node, C.ulong(tm.Cur))
-		case MetricTypeDuration:
-			rc := C.add_metric(&tm.node, C.D_TM_DURATION|C.D_TM_CLOCK_REALTIME, C.CString(tm.desc), C.CString(tm.units), C.CString(fullName))
-			if rc != 0 {
-				t.Fatalf("failed to add %s: %d", fullName, rc)
-			}
-			C.d_tm_mark_duration_start(tm.node, C.D_TM_CLOCK_REALTIME)
-			time.Sleep(time.Duration(tm.Cur))
-			C.d_tm_mark_duration_end(tm.node)
-		case MetricTypeTimestamp:
-			rc := C.add_metric(&tm.node, C.D_TM_TIMESTAMP, C.CString(tm.desc), C.CString(tm.units), C.CString(fullName))
-			if rc != 0 {
-				t.Fatalf("failed to add %s: %d", fullName, rc)
-			}
-			C.d_tm_record_timestamp(tm.node)
-		case MetricTypeSnapshot:
-			rc := C.add_metric(&tm.node, C.D_TM_TIMER_SNAPSHOT|C.D_TM_CLOCK_REALTIME, C.CString(tm.desc), C.CString(tm.units), C.CString(fullName))
-			if rc != 0 {
-				t.Fatalf("failed to add %s: %d", fullName, rc)
-			}
-			C.d_tm_take_timer_snapshot(tm.node, C.D_TM_CLOCK_REALTIME)
-		default:
-			t.Fatalf("metric type %d not supported", mt)
+		rc := C.del_eph_dir(C.CString(fullName))
+		if rc != 0 {
+			t.Fatalf("failed to remove %s: %s", fullName, daos.Status(rc))
 		}
 	}
 }
@@ -156,7 +240,7 @@ func setupTestMetrics(t *testing.T) (context.Context, TestMetricsMap) {
 	id := NextTestID()
 	InitTestMetricsProducer(t, id, 2048)
 
-	ctx, err := Init(context.Background(), uint32(id))
+	ctx, err := Init(test.Context(t), uint32(id))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +265,8 @@ func setupTestMetrics(t *testing.T) (context.Context, TestMetricsMap) {
 			sum:    107,
 			mean:   35.666666666666664,
 			stddev: 31.973947728319903,
-			str:    `test_gauge_stats: 42 rpc/s \p{Ps}min: 1, max: 64, avg: 36, stddev: 32, samples: 3\p{Pe}`,
+			sumsqs: 5861,
+			str:    `test_gauge_stats: 42 rpc/s \p{Ps}min: 1, max: 64, avg: 36, sum: 107, stddev: 32, samples: 3\p{Pe}`,
 		},
 		MetricTypeCounter: {
 			Name:  "test_counter",
@@ -197,7 +282,7 @@ func setupTestMetrics(t *testing.T) (context.Context, TestMetricsMap) {
 			desc:  "some duration",
 			units: "us", // TODO: fix at library level, should be ns
 			Cur:   float64(10 * time.Millisecond),
-			str:   `test_duration: [0-9]+ us \p{Ps}min: [0-9]+, max: [0-9]+, avg: [0-9]+, samples: [0-9]+\p{Pe}`,
+			str:   `test_duration: [0-9]+ us \p{Ps}min: [0-9]+, max: [0-9]+, avg: [0-9]+, sum: [0-9]+, samples: [0-9]+\p{Pe}`,
 		},
 		MetricTypeTimestamp: {
 			Name: "test_timestamp",
@@ -233,15 +318,15 @@ func CleanupTestMetricsProducer(t *testing.T) {
 func testMetricBasics(t *testing.T, tm *TestMetric, m Metric) {
 	t.Helper()
 
-	common.AssertEqual(t, tm.Name, m.Name(), "Name() failed")
-	common.AssertEqual(t, tm.path, m.Path(), "Path() failed")
-	common.AssertEqual(t, tm.FullPath(), m.FullPath(), "FullPath() failed")
-	common.AssertEqual(t, tm.desc, m.Desc(), "Desc() failed")
-	common.AssertEqual(t, tm.units, m.Units(), "Units() failed")
+	test.AssertEqual(t, tm.Name, m.Name(), "Name() failed")
+	test.AssertEqual(t, tm.path, m.Path(), "Path() failed")
+	test.AssertEqual(t, tm.FullPath(), m.FullPath(), "FullPath() failed")
+	test.AssertEqual(t, tm.desc, m.Desc(), "Desc() failed")
+	test.AssertEqual(t, tm.units, m.Units(), "Units() failed")
 
 	strRE, err := regexp.Compile(tm.str)
 	if err != nil {
 		t.Fatalf("invalid regex %q", tm.str)
 	}
-	common.AssertTrue(t, strRE.Match([]byte(m.String())), fmt.Sprintf("String() failed: %q", m.String()))
+	test.AssertTrue(t, strRE.Match([]byte(m.String())), fmt.Sprintf("String() failed: %q", m.String()))
 }

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -13,11 +13,11 @@
 #include <pthread.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
-#include "tests_lib.h"
+#include <daos/tests_lib.h>
 #include "wrap_cmocka.h"
-#include "gurt/telemetry_common.h"
-#include "gurt/telemetry_producer.h"
-#include "gurt/telemetry_consumer.h"
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
+#include <gurt/telemetry_consumer.h>
 
 #define STATS_EPSILON	(0.00001)
 #define TEST_IDX	(99)
@@ -1061,6 +1061,57 @@ test_list_ephemeral(void **state)
 }
 
 static void
+test_list_subdirs(void **state)
+{
+	char			*root_dir = "gurt/tests/subdir_root";
+	char			*subdir_name;
+	char			 new_path[D_TM_MAX_NAME_LEN];
+	struct d_tm_node_t	*dir_node;
+	struct d_tm_nodeList_t	*head = NULL;
+	struct d_tm_nodeList_t	*cur = NULL;
+	uint64_t		 num_subdirs = 0;
+	int			 expected_subdirs = 0;
+	int			 i, rc;
+
+	static const char * const subdirs[] = {
+		"sub0",
+		"sub1",
+		"sub2",
+		"sub3",
+		NULL,
+	};
+
+	for (i = 0; subdirs[i] != NULL; i++) {
+		snprintf(new_path, sizeof(new_path), "%s/%s", root_dir, subdirs[i]);
+		rc = d_tm_add_ephemeral_dir(&dir_node, 1024, new_path);
+		assert_rc_equal(rc, DER_SUCCESS);
+		expected_subdirs++;
+	}
+
+	/* add another dir at a deeper level -- shouldn't be included */
+	snprintf(new_path, sizeof(new_path), "%s/%s/deeper", root_dir, subdirs[0]);
+	rc = d_tm_add_ephemeral_dir(&dir_node, 1024, new_path);
+	assert_rc_equal(rc, DER_SUCCESS);
+
+	/* collect a list from the ephemeral metrics' parent directory */
+	dir_node = d_tm_find_metric(cli_ctx, root_dir);
+	assert_non_null(dir_node);
+
+	rc = d_tm_list_subdirs(cli_ctx, &head, dir_node, &num_subdirs, 1);
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_int_equal(num_subdirs, expected_subdirs);
+
+	for (cur = head, i = 0; cur && i < num_subdirs; i++) {
+		subdir_name = d_tm_get_name(cli_ctx, cur->dtnl_node);
+
+		assert_string_equal(subdir_name, subdirs[i]);
+		cur = cur->dtnl_next;
+	}
+
+	d_tm_list_free(head);
+}
+
+static void
 test_follow_link(void **state)
 {
 	struct d_tm_node_t	*node;
@@ -1176,6 +1227,13 @@ test_verify_object_count(void **state)
 }
 
 static void
+iter_print(struct d_tm_context *ctx, struct d_tm_node_t *node, int level, char *path, int format,
+	   int opt_fields, void *arg)
+{
+	d_tm_print_node(ctx, node, level, path, format, opt_fields, (FILE *)arg);
+}
+
+static void
 test_print_metrics(void **state)
 {
 	struct d_tm_node_t	*node;
@@ -1187,15 +1245,15 @@ test_print_metrics(void **state)
 	filter = (D_TM_COUNTER | D_TM_TIMESTAMP | D_TM_TIMER_SNAPSHOT |
 		  D_TM_DURATION | D_TM_GAUGE | D_TM_DIRECTORY);
 
-	d_tm_print_my_children(cli_ctx, node, 0, filter, NULL, D_TM_STANDARD,
-			       D_TM_INCLUDE_METADATA, stdout);
+	d_tm_iterate(cli_ctx, node, 0, filter, NULL, D_TM_STANDARD, D_TM_INCLUDE_METADATA,
+		     iter_print, stdout);
 
 	d_tm_print_field_descriptors(D_TM_INCLUDE_TIMESTAMP |
 				     D_TM_INCLUDE_METADATA, stdout);
 
 	filter &= ~D_TM_DIRECTORY;
-	d_tm_print_my_children(cli_ctx, node, 0, filter, NULL, D_TM_CSV,
-			       D_TM_INCLUDE_METADATA, stdout);
+	d_tm_iterate(cli_ctx, node, 0, filter, NULL, D_TM_CSV, D_TM_INCLUDE_METADATA, iter_print,
+		     stdout);
 }
 
 static void
@@ -1226,7 +1284,7 @@ test_shared_memory_cleanup(void **state)
 	/* Detach */
 	d_tm_fini();
 
-	/* can still get retained region*/
+	/* can still get retained region */
 	ctx = d_tm_open(simulated_srv_idx);
 	assert_non_null(ctx);
 	d_tm_close(&ctx);
@@ -1236,6 +1294,48 @@ test_shared_memory_cleanup(void **state)
 	shmid = shmget(key, 0, 0);
 	assert_false(shmid < 0);
 	assert_false(shmctl(shmid, IPC_RMID, NULL) < 0);
+}
+
+static void
+test_cleanup_on_init(void **state)
+{
+	int			idx = TEST_IDX + 1;
+	struct d_tm_context	*ctx;
+	struct d_tm_node_t	*node;
+	key_t			sub_key;
+	int			rc;
+
+	/* Close the default stuff */
+	d_tm_fini();
+
+	/* Retain the old shmem region so we can delete/recreate */
+	rc = d_tm_init(idx, 1024, D_TM_RETAIN_SHMEM);
+	assert_rc_equal(rc, 0);
+
+	/* add sub-region */
+	ctx = d_tm_open(idx);
+	assert_non_null(ctx);
+
+	rc = d_tm_add_ephemeral_dir(&node, 256, "/test1");
+	assert_rc_equal(rc, 0);
+	sub_key = node->dtn_shmem_key;
+
+	d_tm_close(&ctx);
+	d_tm_fini();
+
+	/* Verify the regions survived the fini */
+	rc = shmget(d_tm_get_srv_key(idx), 0, 0);
+	assert_false(rc < 0);
+	rc = shmget(sub_key, 0, 0);
+	assert_false(rc < 0);
+
+	/* Recreate fresh */
+	rc = d_tm_init(idx, 2048, 0);
+	assert_rc_equal(rc, 0);
+
+	/* Verify the sub-region was destroyed in recreate */
+	rc = shmget(sub_key, 0, 0);
+	assert_true(rc < 0);
 }
 
 static int
@@ -1269,12 +1369,14 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_gc_ctx),
 		/* Run after the tests that populate the metrics */
 		cmocka_unit_test(test_list_ephemeral),
+		cmocka_unit_test(test_list_subdirs),
 		cmocka_unit_test(test_follow_link),
 		cmocka_unit_test(test_find_metric),
 		cmocka_unit_test(test_verify_object_count),
 		cmocka_unit_test(test_print_metrics),
 		/* Run last since nothing can be written afterward */
 		cmocka_unit_test(test_shared_memory_cleanup),
+		cmocka_unit_test(test_cleanup_on_init),
 	};
 
 	d_register_alt_assert(mock_assert);

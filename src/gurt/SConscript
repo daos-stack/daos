@@ -1,40 +1,38 @@
-#!python
-# (C) Copyright 2016-2021 Intel Corporation.
+# (C) Copyright 2016-2023 Intel Corporation.
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 """Build libgurt"""
 
-import daos_build
 SRC = ['debug.c', 'dlog.c', 'hash.c', 'misc.c', 'heap.c', 'errno.c',
-       'fault_inject.c', 'slab.c', 'telemetry.c']
+       'fault_inject.c', 'slab.c', 'telemetry.c', 'hlc.c', 'hlct.c', 'signals.c']
+
 
 def scons():
     """Scons function"""
 
-    Import('base_env', 'env', 'prereqs', 'CART_VERSION')
+    Import('env', 'prereqs', 'CART_VERSION')
 
-    daos_build.add_build_rpath(base_env)
-    daos_build.add_build_rpath(env)
-    base_env.AppendUnique(LIBPATH=[Dir('.')])
+    env.d_add_build_rpath()
     env.AppendUnique(LIBPATH=[Dir('.')])
     env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
 
     denv = env.Clone()
 
-    denv.AppendUnique(LIBS=['pthread', 'yaml', 'm'])
-    prereqs.require(denv, 'uuid')
+    denv.AppendUnique(LIBS=['pthread', 'yaml', 'm', 'dl'])
+    denv.require('uuid')
 
     gurt_targets = denv.SharedObject(SRC)
-    gurt_lib = daos_build.library(denv, 'libgurt', gurt_targets,
-                                  SHLIBVERSION=CART_VERSION)
-    denv.InstallVersionedLib('$PREFIX/lib64/', gurt_lib,
-                             SHLIBVERSION=CART_VERSION)
+    gurt_lib = denv.d_library('gurt', gurt_targets, SHLIBVERSION=CART_VERSION)
+    denv.InstallVersionedLib('$PREFIX/lib64/', gurt_lib, SHLIBVERSION=CART_VERSION)
 
-    Export('gurt_targets', 'gurt_lib')
+    Export('gurt_targets')
 
     SConscript('examples/SConscript')
-    SConscript('tests/SConscript')
+
+    if prereqs.test_requested():
+        SConscript('tests/SConscript')
+
 
 if __name__ == "SCons.Script":
     scons()

@@ -1,32 +1,38 @@
-# change host names to your reserved nodes,  the
-# required quantity is indicated by the placeholders
 hosts:
-  test_servers:
-    - server-A
-    - server-B
+  test_servers: 2
 timeout: 600
 faults:
-    no_faults:
-      fault_list: []
+  no_faults:
+    fault_list: []
 server_config:
-   name: daos_server
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+  system_ram_reserved: 1
 pool:
-    name: daos_server
-    scm_size: 1G
-    control_method: dmg
+  scm_size: 5G
+  control_method: dmg
 snapshot:
-    dkey: "dkey"
-    akey: "akey"
-    test_datasize: 200
-    num_of_snapshot: 20
+  dkey: "dkey"
+  akey: "akey"
+  snapshot_vars: !mux
+    reg_usage:
+      test_datasize: 200
+      num_of_snapshot: 20
+    high_usage:
+      test_datasize: 100000000
+      num_of_snapshot: 3
 object_class: !mux
-    OC_S1:
-        obj_class: OC_S1
-    OC_S4:
-        obj_class: OC_S4
-    OC_SX:
-        obj_class: OC_SX
-    OC_RP_2G1:
-        obj_class: OC_RP_2G1
-    OC_RP_2G2:
-        obj_class: OC_RP_2G2
+  OC_S4:
+    obj_class: OC_S4
+  OC_SX:
+    obj_class: OC_SX
+  OC_RP_2GX:
+    obj_class: OC_RP_2GX

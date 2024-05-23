@@ -2,11 +2,13 @@ package io.daos.obj;
 
 import io.daos.BufferAllocator;
 import io.daos.Constants;
+import io.daos.DaosUtils;
 import io.netty.buffer.ByteBuf;
 import org.junit.Assert;
 import org.junit.Test;
 import org.powermock.reflect.Whitebox;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 public class IODataDescSyncTest {
@@ -214,7 +216,6 @@ public class IODataDescSyncTest {
       Assert.assertNotNull(ee);
       Assert.assertTrue(ee.getMessage().contains("only support for fetch"));
     } finally {
-      buffer.release();
       desc.release();
     }
   }
@@ -270,16 +271,18 @@ public class IODataDescSyncTest {
     // record size
     Assert.assertEquals(10, descBuffer.readInt());
     // dkey
-    Assert.assertEquals(4, descBuffer.readShort());
-    byte keyBytes[] = new byte[4];
+    Assert.assertEquals(8, descBuffer.readShort());
+    byte keyBytes[] = new byte[8];
     descBuffer.readBytes(keyBytes);
-    Assert.assertTrue(Arrays.equals("dkey".getBytes(Constants.KEY_CHARSET), keyBytes));
-    descBuffer.readerIndex(descBuffer.readerIndex() + 10 - 4);
+    Assert.assertTrue(Arrays.equals(DaosUtils.keyToBytes8("dkey"), keyBytes));
+    // max key len - key length = 10 - 8
+    descBuffer.readerIndex(descBuffer.readerIndex() + 10 - 8);
     // entries
+    keyBytes = new byte[4];
     for (int i = 0; i < 2; i++) {
       Assert.assertEquals(4, descBuffer.readShort());
       descBuffer.readBytes(keyBytes);
-      Assert.assertTrue(Arrays.equals(("key" + i).getBytes(Constants.KEY_CHARSET), keyBytes));
+      Assert.assertTrue(Arrays.equals(("key" + i).getBytes(StandardCharsets.UTF_8), keyBytes));
       descBuffer.readerIndex(descBuffer.readerIndex() + 10 - 4);
       if (type == IODataDescSync.IodType.ARRAY) {
         Assert.assertEquals(0, descBuffer.readLong());
@@ -298,7 +301,7 @@ public class IODataDescSyncTest {
       desc = new IODataDescSync("dkey", IODataDescSync.IodType.SINGLE, 10, false);
       IODataDescSync.Entry entry = desc.addEntryForFetch("akey", 0, 10);
       desc.encode();
-      Assert.assertEquals(33, desc.getDescBuffer().writerIndex());
+      Assert.assertEquals(37, desc.getDescBuffer().writerIndex());
       ByteBuf descBuf = desc.getDescBuffer();
       descBuf.writeInt(8);
       descBuf.writeInt(8);
@@ -318,21 +321,22 @@ public class IODataDescSyncTest {
       IODataDescSync.Entry entry = desc.addEntryForFetch("akey", 0, 30);
       desc.encode();
       ByteBuf descBuf = desc.getDescBuffer();
-      Assert.assertEquals(45, descBuf.writerIndex());
+      Assert.assertEquals(49, descBuf.writerIndex());
       // not reusable
       descBuf.readerIndex(0);
       Assert.assertEquals(-1L, descBuf.readLong());
       // check iod type and record size
       Assert.assertEquals(IODataDescSync.IodType.ARRAY.getValue(), descBuf.readByte());
       Assert.assertEquals(10, descBuf.readInt());
-      // check dkey
-      Assert.assertEquals(4, descBuf.readShort());
-      byte keyBytes[] = new byte[4];
+      // check dkey and akey
+      Assert.assertEquals(8, descBuf.readShort());
+      byte keyBytes[] = new byte[8];
       descBuf.readBytes(keyBytes);
-      Assert.assertTrue(Arrays.equals("dkey".getBytes(Constants.KEY_CHARSET), keyBytes));
+      Assert.assertTrue(Arrays.equals(DaosUtils.keyToBytes8("dkey"), keyBytes));
+      keyBytes = new byte[4];
       Assert.assertEquals(4, descBuf.readShort());
       descBuf.readBytes(keyBytes);
-      Assert.assertTrue(Arrays.equals("akey".getBytes(Constants.KEY_CHARSET), keyBytes));
+      Assert.assertTrue(Arrays.equals("akey".getBytes(StandardCharsets.UTF_8), keyBytes));
       Assert.assertEquals(0, descBuf.readLong());
       Assert.assertEquals(3, descBuf.readInt());
       // parse

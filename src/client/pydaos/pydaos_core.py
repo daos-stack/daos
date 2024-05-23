@@ -1,26 +1,36 @@
-# (C) Copyright 2019-2021 Intel Corporation.
+# (C) Copyright 2019-2024 Intel Corporation.
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
+# pylint: disable=invalid-name
+# pylint: disable=consider-using-f-string
 """
 PyDAOS Module allowing global access to the DAOS containers and objects.
 """
 
 import enum
 
-# pylint: disable=relative-beyond-top-level
-from . import pydaos_shim
-# pylint: enable=relative-beyond-top-level
-
-from . import DAOS_MAGIC
-from . import PyDError
-from . import DaosClient
+# pylint: disable-next=relative-beyond-top-level
+from . import DAOS_MAGIC, DaosClient, PyDError, pydaos_shim
 
 # Import Object class as an enumeration
 ObjClassID = enum.Enum(
     "Enumeration of the DAOS object classes (OC).",
     {key: value for key, value in list(pydaos_shim.__dict__.items())
      if key.startswith("OC_")})
+
+
+class InvalidModeError(ValueError):
+    """Raised by DCont() when open_mode is not valid"""
+
+
+def _get_object_id(cid):
+    """ Get the existing DAOS object class ID based on name.  """
+
+    # Default to OC_UNKNOWN (0), which will automatically select an object class.
+    if cid == "0":
+        return 0
+    return ObjClassID[cid].value
 
 
 class DObjNotFound(Exception):
@@ -33,6 +43,7 @@ class DObjNotFound(Exception):
     def __str__(self):
         return "Failed to open '{}'".format(self.name)
 
+
 class DCont():
     """
     Class representing of DAOS python container
@@ -42,12 +53,14 @@ class DCont():
 
     Attributes
     ----------
-    path : string
-        Path for container representation in unified namespace
     pool : string
         Pool label or UUID string
     cont : string
         Container label or UUID string
+    path : string
+        Path for container representation in unified namespace
+    open_mode : string (optional)
+        Open mode for container.  Set to 'RO' for read-only access.
 
     Methods
     -------
@@ -61,20 +74,26 @@ class DCont():
     array(name, kwargs):
         Create new DArray object.
     """
-    def __init__(self, pool=None, cont=None, path=None):
-        self._dc   = DaosClient()
-        self._hdl  = None
+
+    def __init__(self, pool=None, cont=None, path=None, open_mode='RW'):
+        self._dc = DaosClient()
+        self._hdl = None
         if path is None and (pool is None or cont is None):
             raise PyDError("invalid pool or container UUID",
                            -pydaos_shim.DER_INVAL)
+        open_ro = False
+        if open_mode == 'RO':
+            open_ro = True
+        elif open_mode != 'RW':
+            raise InvalidModeError('open_mode is neither "RO" or "RW"')
         if path is not None:
-            self.pool  = None
+            self.pool = None
             self.cont = None
-            (ret, hdl) = pydaos_shim.cont_open_by_path(DAOS_MAGIC, path, 0)
+            (ret, hdl) = pydaos_shim.cont_open_by_path(DAOS_MAGIC, path, open_ro)
         else:
-            self.pool  = pool
-            self.cont  = cont
-            (ret, hdl) = pydaos_shim.cont_open(DAOS_MAGIC, pool, cont, 0)
+            self.pool = pool
+            self.cont = cont
+            (ret, hdl) = pydaos_shim.cont_open(DAOS_MAGIC, pool, cont, open_ro)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to access container", ret)
         self._hdl = hdl
@@ -90,7 +109,7 @@ class DCont():
         """ Look up DAOS object associated with name """
 
         (ret, hi, lo, otype) = pydaos_shim.cont_get(DAOS_MAGIC, self._hdl, name)
-        if ret == pydaos_shim.DER_NONEXIST:
+        if ret == -pydaos_shim.DER_NONEXIST:
             raise DObjNotFound(name)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to look up name", ret)
@@ -105,12 +124,15 @@ class DCont():
     def __getitem__(self, name):
         return self.get(name)
 
-    def dict(self, name, v: dict = None):
+    def dict(self, name, v: dict = None, cid="0"):
         """ Create new DDict object """
+
+        # Get the existing class ID based on class name given. Default to 0
+        objId = _get_object_id(cid)
 
         # Insert name into root kv and get back an object ID
         (ret, hi, lo) = pydaos_shim.cont_newobj(DAOS_MAGIC, self._hdl, name,
-                                                pydaos_shim.PYDAOS_DICT)
+                                                objId, pydaos_shim.PYDAOS_DICT)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to create DAOS dict", ret)
 
@@ -122,13 +144,16 @@ class DCont():
 
         return dd
 
-    def array(self, name, v: list = None):
+    def array(self, name, v: list = None, cid="0"):
         # pylint: disable=unused-argument
         """ Create new DArray object """
 
+        # Get the existing class ID based on class name given. Default to 0
+        objId = _get_object_id(cid)
+
         # Insert name into root kv and get back an object ID
         (ret, hi, lo) = pydaos_shim.cont_newobj(DAOS_MAGIC, self._hdl, name,
-                                                pydaos_shim.PYDAOS_ARRAY)
+                                                objId, pydaos_shim.PYDAOS_ARRAY)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to create DAOS array", ret)
 
@@ -144,6 +169,7 @@ class DCont():
 
     def __repr__(self):
         return 'daos://{}/{}'.format(self.pool, self.cont)
+
 
 class _DObj():
     # pylint: disable=no-member
@@ -173,11 +199,10 @@ class _DObj():
     def __repr__(self):
         return "[" + hex(self.hi) + ":" + hex(self.lo) + "]"
 
-# pylint: disable=too-few-public-methods
+
 class DDictIter():
-
+    # pylint: disable=too-few-public-methods
     """ Iterator class for DDict """
-
     def __init__(self, ddict):
         self._dc = DaosClient()
         self._entries = []
@@ -188,6 +213,7 @@ class DDictIter():
         self._kv = ddict
 
     def next(self):
+        # pylint: disable=unnecessary-dunder-call
         """for python 2 compatibility"""
         return self.__next__()
 
@@ -216,7 +242,7 @@ class DDictIter():
         if len(self._entries) != 0:
             return self._entries.pop()
         raise StopIteration()
-# pylint: enable=too-few-public-methods
+
 
 class DDict(_DObj):
     """
@@ -268,7 +294,7 @@ class DDict(_DObj):
 
     # Size of buffer to use for reads.  If the object value is bigger than this
     # then it'll require two round trips rather than one.
-    value_size = 1024*1024
+    value_size = 1024 * 1024
 
     def _open(self, hdl):
         (ret, oh) = pydaos_shim.kv_open(DAOS_MAGIC, hdl, self.hi, self.lo, 0)
@@ -376,6 +402,8 @@ class DDict(_DObj):
         return DDictIter(self)
 
 # pylint: disable=too-few-public-methods
+
+
 class DArray(_DObj):
     """
     Class representing of DAOS array leveraging the numpy's dispatch mechanism.
@@ -394,3 +422,28 @@ class DArray(_DObj):
 
     def __array_function__(self, func, types, args, kwargs):
         raise NotImplementedError
+
+
+def check(pool=None, cont=None, path=None):
+    """
+    Function invoking the container checker
+
+    Attributes
+    ----------
+    pool : string
+        Pool label or UUID string
+    cont : string
+        Container label or UUID string
+    path : string
+        Path for container representation in unified namespace
+    """
+
+    DaosClient()
+    if path is None and (pool is None or cont is None):
+        raise PyDError("invalid pool or container labels", -pydaos_shim.DER_INVAL)
+    if path is not None:
+        ret = pydaos_shim.cont_check_by_path(DAOS_MAGIC, path, 0)
+    else:
+        ret = pydaos_shim.cont_check(DAOS_MAGIC, pool, cont, 0)
+    if ret != pydaos_shim.DER_SUCCESS:
+        raise PyDError("failed to access container", ret)

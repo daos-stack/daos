@@ -1,0 +1,58 @@
+hosts:
+  test_servers: server-[1-2]
+  test_clients: 1
+# If we define the server under test_servers, launch.py will convert it to the
+# actual server name passed into --test_servers. If above test_servers is hosts,
+# it'll be used as one of the servers at test startup time, so use something
+# other than hosts.
+extra_servers:
+  test_servers: server-3
+timeout: 1800
+skip_add_log_msg: true
+server_config:
+  name: daos_server
+  engines_per_host: 2
+  engines:
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31416
+      log_file: daos_server0.log
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=mgmt,md,rebuild
+      storage: auto
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31516
+      log_file: daos_server1.log
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=mgmt,md,rebuild
+      storage: auto
+pool:
+  scm_size: 6000000000
+  nvme_size: 54000000000
+  svcn: 4
+  control_method: dmg
+container:
+  properties:
+    enable_checksum: true
+test_sequence:
+  dmg_cmd_test:
+    # Rank list, target_list, Pass/Fail Condition
+    # Invalid Rank list
+    - ["7", "0,1", "Fail"]
+    # Invalid Target list
+    - ["1", "0,10", "Fail"]
+    - ["2", "10", "Fail"]
+    - ["3", "10", "Fail"]
+    # Invalid rank, target
+    - ["7", "11", "Fail"]
+    # Valid Rank and Target
+    - ["0", "1,2", "Pass"]
+    - ["4", "0,2", "Pass"]
+    - ["5", "1,2", "Pass"]

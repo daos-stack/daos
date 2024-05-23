@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -33,19 +33,14 @@ extern "C" {
 #include <daos_types.h>
 #include <daos_errno.h>
 
-#if !defined(container_of)
 /**
- * Given a pointer @ptr to the field @member embedded into type (usually
- * struct) @type, return pointer to the embedding instance of @type.
- */
-# define container_of(ptr, type, member)                \
-		((type *)((char *)(ptr)-(char *)(&((type *)0)->member)))
-#endif
-
-/**
- * Create an Event Queue.
+ * Create an Event Queue. An event queue is used to hold and pool multiple events. Each event queue
+ * created will create a network (cart) context to be associated with the event queue. The network
+ * context creation is an expensive operation, and the number of network context can be limited on
+ * some systems. Thus, it is advisable to not create a lot of event queues in a user application or
+ * middleware.
  *
- * \param eq [OUT]	Returned EQ handle
+ * \param[out] eq	Returned EQ handle
  *
  * \return		Zero on success, negative value if error
  */
@@ -54,13 +49,13 @@ daos_eq_create(daos_handle_t *eqh);
 
 #define DAOS_EQ_DESTROY_FORCE	1
 /**
- * Destroy an Event Queue, it waits on -EBUSY if EQ is not empty.
+ * Destroy an Event Queue, it returns -DER_BUSY if EQ is not empty.
  *
- * \param eqh [IN]	EQ to finalize
- * \param ev [IN]	Pointer to completion event
- * \param flags [IN]	Flags to indicate the behavior of the destroy.
+ * \param[in] eqh	EQ to finalize
+ * \param[in] ev	Pointer to completion event
+ * \param[in] flags	Flags to indicate the behavior of the destroy.
  *
- * \return		Zero on success, EBUSY if there is any launched event
+ * \return		Zero on success, -DER_BUSY if there is any launched event
  */
 int
 daos_eq_destroy(daos_handle_t eqh, int flags);
@@ -68,16 +63,16 @@ daos_eq_destroy(daos_handle_t eqh, int flags);
 /**
  * Retrieve completion events from an EQ
  *
- * \param eqh [IN]	EQ handle
- * \param wait_running [IN] Wait only if there are running event. Some events
+ * \param[in] eqh	EQ handle
+ * \param[in] wait_running Wait only if there are running event. Some events
  *			maybe initialized but not running. This selects
  *			whether to wait only on events that are running or all.
- * \param timeout [IN]	How long is caller going to wait (micro-second)
+ * \param[in] timeout	How long is caller going to wait (micro-second)
  *			if \a timeout > 0,
  *			it can also be DAOS_EQ_NOWAIT, DAOS_EQ_WAIT
- * \param nevents [IN]	Size of \a events array, returned number of events
+ * \param[in] nevents	Size of \a events array, returned number of events
  *			should always be less than or equal to \a nevents
- * \param events [OUT]	Pointer to returned events array
+ * \param[out] events	Pointer to returned events array
  *
  * \return		>= 0	Returned number of events
  *			< 0	negative value if error
@@ -99,10 +94,10 @@ daos_eq_poll(daos_handle_t eqh, int wait_running,
  * It is the user's responsibility to guarantee that returned events would be
  * freed by the polling process.
  *
- * \param eqh [IN]	EQ handle
- * \param mode [IN]	Query mode
- * \param nevents [IN]	Size of \a events array
- * \param events [OUT]	Pointer to returned events array
+ * \param[in] eqh	EQ handle
+ * \param[in] mode	Query mode, bitmask of daos_eq_query_t
+ * \param[in] nevents	Size of \a events array
+ * \param[out] events	Pointer to returned events array
  * \return		>= 0	Returned number of events
  *			 < 0	negative value if error
  */
@@ -113,10 +108,10 @@ daos_eq_query(daos_handle_t eqh, daos_eq_query_t query,
 /**
  * Initialize a new event for \a eq
  *
- * \param ev [IN]	Event to initialize
- * \param eqh [IN]	Where the event to be queued on, it's ignored if
+ * \param[in] ev	Event to initialize
+ * \param[in] eqh	Where the event to be queued on, it's ignored if
  *			\a parent is specified
- * \param parent [IN]	"parent" event, it can be NULL if no parent event.
+ * \param[in] parent	"parent" event, it can be NULL if no parent event.
  *			If it's not NULL, caller will never see completion
  *			of this event, instead, will only see completion
  *			of \a parent when all children of \a parent are
@@ -140,9 +135,10 @@ daos_event_init(daos_event_t *ev, daos_handle_t eqh, daos_event_t *parent);
  * calling daos_event_abort().
  * The event will be removed from child-list of the parent event if it is
  * initialized with parent. If \a ev itself is a parent event, then this
- * function will finalize all child events and \a ev.
+ * function will finalize all child events and \a ev.  Entries in \a ev
+ * should not be considered valid after this call returns.
  *
- * \param ev [IN]	Event to finalize
+ * \param[in] ev	Event to finalize
  *
  * \return		0		Success
  *			-DER_INVAL	Invalid parameter
@@ -155,8 +151,8 @@ daos_event_fini(daos_event_t *ev);
  * Get the next child event of \a ev, it will return the first child event
  * if \a child is NULL.
  *
- * \param parent [IN]	Parent event
- * \param child [IN]	Current child event.
+ * \param[in] parent	Parent event
+ * \param[in] child	Current child event.
  *
  * \return		The next child event after \a child, or NULL if it's
  *			the last one.
@@ -169,11 +165,11 @@ daos_event_next(daos_event_t *parent, daos_event_t *child);
  * If the event was initialized in an event queue, and the test completes the
  * event, the event will be pulled out of the event queue.
  *
- * \param ev [IN]	Event (operation) to test.
- * \param timeout [IN]	How long is caller going to wait (micro-second)
+ * \param[in] ev	Event (operation) to test.
+ * \param[in] timeout	How long is caller going to wait (micro-second)
  *			if \a timeout > 0,
  *			it can also be DAOS_EQ_NOWAIT, DAOS_EQ_WAIT
- * \param flag [OUT]	returned state of the event. true if the event is
+ * \param[out] flag	returned state of the event. true if the event is
  *			finished (completed or aborted), false if in-flight.
  *
  * \return		0		Success
@@ -190,9 +186,9 @@ typedef int (*daos_event_comp_cb_t)(void *, daos_event_t *, int);
 /**
  * Register completion callback on event.
  *
- * \param ev [IN]	Event (operation).
- * \param cb [IN]	Completion callback to register.
- * \param arg [IN]	User args passed to completion callback.
+ * \param[in] ev	Event (operation).
+ * \param[in] cb	Completion callback to register.
+ * \param[in] arg	User args passed to completion callback.
  *
  * \return		0		Success
  *			-DER_INVAL	Invalid parameter
@@ -216,7 +212,7 @@ daos_event_register_comp_cb(struct daos_event *ev, daos_event_comp_cb_t cb,
  * itself can be completed before the children do, but the event won't be marked
  * as ready before all the children complete.
  *
- * \param ev [IN]	Parent event
+ * \param[in] ev	Parent event
  *
  * \return		0		Success
  *			-DER_INVAL	Invalid parameter
@@ -227,10 +223,11 @@ int
 daos_event_parent_barrier(struct daos_event *ev);
 
 /**
- * Try to abort operations associated with this event.
- * If \a ev is a parent event, this call will abort all child operations.
+ * Try to abort operations associated with this event. The user is still required to wait or poll on
+ * the event after this call.
+ * This currently does not abort any internal DAOS operation and is effectively a no-op.
  *
- * \param ev [IN]	Event (operation) to abort
+ * \param[in] ev	Event (operation) to abort
  *
  * \return		0		Success
  *			-DER_INVAL	Invalid parameter

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -95,6 +95,11 @@ insert_recxs(const char *dkey, const char *akey, daos_size_t iod_size,
 	     daos_size_t data_size, struct ioreq *req);
 
 void
+inset_recxs_dkey_uint64(uint64_t *dkey, const char *akey, daos_size_t iod_size,
+	     daos_handle_t th, daos_recx_t *recxs, int nr, void *data,
+	     daos_size_t data_size, struct ioreq *req);
+
+void
 lookup(const char *dkey, int nr, const char **akey, uint64_t *idx,
 	daos_size_t *iod_size, void **val, daos_size_t *data_size,
 	daos_handle_t th, struct ioreq *req, bool empty);
@@ -145,7 +150,7 @@ obj_teardown(void **state);
 
 int io_conf_run(test_arg_t *arg, const char *io_conf);
 
-int pool_storage_info(void **state, daos_pool_info_t *pinfo);
+int pool_storage_info(test_arg_t *arg, daos_pool_info_t *pinfo);
 
 /* below list the structure defined for epoch io testing */
 
@@ -207,8 +212,8 @@ struct test_update_fetch_arg {
 	int			*ua_values;
 	int			ua_recx_num;
 	int			ua_single_value;
-	int			ua_array:1, /* false for single */
-				ua_verify:1;
+	uint32_t                 ua_array : 1, /* false for single */
+	    ua_verify                     : 1;
 	bool			snap;
 };
 

@@ -19,6 +19,8 @@ only authorized components must be able to access the DAOS management network.
 
 There are different means of authentication, depending on whether the caller is
 accessing client resources or the DAOS management network.
+Component certificates play a pivotal role in both methods.
+For this reason, certificates should _never_ be disabled in production systems.
 
 ### Client Library
 
@@ -26,6 +28,15 @@ The client library `libdaos` is an untrusted component. The `daos` user-level
 command that uses the client library is also an untrusted component.
 A trusted process, the DAOS agent (`daos_agent`),
 runs on each client node and authenticates the user processes.
+
+The `daos_agent` detects the user associated with the process and uses the `agent`
+component certificate to sign the user credentials.
+The agent returns the signed credential package to the client, to be included in
+RPCs to the DAOS system.
+After receiving a client RPC, the server verifies the signature before proceeding
+with the requested operation.
+The cryptographic signature of the trusted `daos_agent` is essential for the server
+process to have any confidence in the user's identity.
 
 The DAOS security model is designed to support different authentication methods
 for client processes. Currently, we support only the AUTH_SYS authentication
@@ -42,19 +53,24 @@ administrative tool) is authenticated by means of a certificate generated for
 that component by the system administrator. All of the component certificates
 must be generated with the same root certificate and distributed to the
 appropriate DAOS nodes, as described in the
-[DAOS Administration Guide](https://daos-stack.github.io/admin/deployment/#certificate-configuration).
+[DAOS Administration Guide](https://docs.daos.io/v2.2/admin/deployment/#certificate-configuration).
 
 DAOS components identify one another over the DAOS management network via
 gRPC over mutually-authenticated TLS using their respective component
 certificates. DAOS verifies the certificate chain, as well as the Common Name
 (CN) in the certificate, to authenticate the component's identity.
 
+The `admin` component certificate serves as the only authentication and authorization
+mechanism for the `dmg` administrative tool.
+With the `admin` certificate's private key and the `dmg` executable, a user has
+full administrative access to the DAOS system.
+
 ## Authorization
 
 Client authorization for resources is controlled by the Access Control List
 (ACL) on the resource. Authorization on the management network is
 achieved by settings on the
-[certificates](https://daos-stack.github.io/admin/deployment/#certificate-configuration)
+[certificates](https://docs.daos.io/v2.2/admin/deployment/#certificate-configuration)
 that are generated while setting up the DAOS system.
 
 ### Component Certificates
@@ -78,7 +94,7 @@ The permissions of a handle last for the duration of its existence, similar to
 an open file descriptor in a POSIX system. A handle cannot currently be revoked.
 
 A DAOS ACL is composed of zero or more Access Control Entries (ACEs). The ACEs
-are the [rules](https://daos-stack.github.io/overview/security/#enforcement)
+are the [rules](https://docs.daos.io/v2.2/overview/security/#enforcement)
 used to grant or deny privileges to a user who requests access to a resource.
 
 #### Access Control Entries

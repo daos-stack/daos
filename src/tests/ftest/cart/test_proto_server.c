@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,8 +18,9 @@ test_run(d_rank_t my_rank)
 	fprintf(stderr, "local group: %s remote group: %s\n",
 		test.tg_local_group_name, test.tg_remote_group_name);
 
-	crtu_srv_start_basic(test.tg_local_group_name, &test.tg_crt_ctx,
-			     &test.tg_tid, &grp, &grp_size, NULL);
+	rc = crtu_srv_start_basic(test.tg_local_group_name, &test.tg_crt_ctx,
+				  &test.tg_tid, &grp, &grp_size, NULL);
+	D_ASSERTF(rc == 0, "crtu_srv_start_basic() failed\n");
 
 	rc = sem_init(&test.tg_token_to_proceed, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");
@@ -82,8 +83,9 @@ main(int argc, char **argv)
 		return rc;
 	}
 
-	env_self_rank = getenv("CRT_L_RANK");
+	d_agetenv_str(&env_self_rank, "CRT_L_RANK");
 	my_rank = atoi(env_self_rank);
+	d_freeenv_str(&env_self_rank);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(my_rank, 40, true, true);

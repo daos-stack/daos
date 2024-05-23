@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -161,7 +161,7 @@ setup(void **state)
 
 	uuid_generate_time_safe(test_arg->pool_uuid);
 	vts_pool_fallocate(&test_arg->fname);
-	ret = vos_pool_create(test_arg->fname, test_arg->pool_uuid, 0, 0, 0,
+	ret = vos_pool_create(test_arg->fname, test_arg->pool_uuid, 0, 0, 0, 0 /* version */,
 			      &test_arg->poh);
 	assert_rc_equal(ret, 0);
 	*state = test_arg;
@@ -266,7 +266,7 @@ co_uuid_iter_test(struct vc_test_args *arg)
 		}
 
 
-		rc = vos_iter_next(ih);
+		rc = vos_iter_next(ih, NULL);
 		if (rc == -DER_NONEXIST)
 			break;
 
@@ -362,7 +362,7 @@ run_co_test(const char *cfg)
 {
 	char	test_name[DTS_CFG_MAX];
 
-	dts_create_config(test_name, "VOS container tests %s", cfg);
+	dts_create_config(test_name, "Container tests %s", cfg);
 	return cmocka_run_group_tests_name(test_name,
 					   vos_co_tests,
 					   setup, teardown);

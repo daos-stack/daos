@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,12 +16,6 @@
 #include <daos/mem.h>
 #include <gurt/list.h>
 #include <daos_srv/bio.h>
-
-/** Minimum tree order for an evtree */
-#define EVT_MIN_ORDER	4
-/** Maximum tree order for an evtree */
-#define EVT_MAX_ORDER	128
-
 
 enum {
 	EVT_UMEM_TYPE	= 150,
@@ -82,9 +76,8 @@ struct evt_desc_cbs {
 	 * this method is absent.
 	 */
 	int		(*dc_log_status_cb)(struct umem_instance *umm,
-					    daos_epoch_t epoch,
-					    struct evt_desc *desc, int intent,
-					    void *args);
+					    daos_epoch_t epoch, struct evt_desc *desc,
+					    int intent, bool retry, void *args);
 	void		 *dc_log_status_args;
 	/** Add a descriptor to undo log */
 	int		(*dc_log_add_cb)(struct umem_instance *umm,
@@ -154,8 +147,8 @@ struct evt_filter {
 
 #define DP_FILTER(filter)					\
 	DP_EXT(&(filter)->fr_ex), (filter)->fr_epr.epr_lo,	\
-	(filter)->fr_epr.epr_hi, (filter)->fr_punch_epc,	\
-	(filter)->fr_epoch, (filter)->fr_punch_minor_epc
+	(filter)->fr_epr.epr_hi, (filter)->fr_epoch,		\
+	(filter)->fr_punch_epc, (filter)->fr_punch_minor_epc
 
 /** Return the width of an extent */
 static inline daos_size_t
@@ -237,8 +230,13 @@ struct evt_root {
 	uint64_t			tr_node;
 	/** the current tree depth */
 	uint16_t			tr_depth;
-	/** tree order */
-	uint16_t			tr_order;
+	/** Note, this is backward compatible with 2.2 release where dynamic order isn't
+	 *  supported. In 2.2, it's a 16 bit field but the maximum is 128
+	 */
+	/** current tree order */
+	uint8_t                         tr_order;
+	/** maximum tree order */
+	uint8_t                         tr_max_order;
 	/** number of bytes per index */
 	uint32_t			tr_inob;
 	/** see \a evt_feats */
@@ -275,19 +273,26 @@ evt_has_data(struct evt_root *root, struct umem_attr *uma);
 
 enum evt_feats {
 	/** rectangles are Sorted by their Start Offset */
-	EVT_FEAT_SORT_SOFF		= (1 << 0),
+	EVT_FEAT_SORT_SOFF = (1 << 0),
 	/** rectangles split by closest side of MBR
 	 */
-	EVT_FEAT_SORT_DIST		= (1 << 1),
+	EVT_FEAT_SORT_DIST = (1 << 1),
 	/** rectangles are sorted by distance to sides of MBR and split
 	 *  evenly
 	 */
-	EVT_FEAT_SORT_DIST_EVEN		= (1 << 2),
+	EVT_FEAT_SORT_DIST_EVEN = (1 << 2),
+	/** Dynamic root tree size */
+	EVT_FEAT_DYNAMIC_ROOT = (1 << 3),
+	EVT_FEATS_END,
+	/** Calculated mask for all supported feats */
+	EVT_FEATS_SUPPORTED = ((EVT_FEATS_END - 1) << 1) - 1,
+	/** Policy mask */
+	EVT_POLICY_MASK = EVT_FEATS_SUPPORTED ^ EVT_FEAT_DYNAMIC_ROOT,
 };
 
+/** These are "internal" flags meant to match the btree ones */
+
 #define EVT_FEAT_DEFAULT EVT_FEAT_SORT_DIST
-#define EVT_FEATS_SUPPORTED	\
-	(EVT_FEAT_SORT_SOFF | EVT_FEAT_SORT_DIST | EVT_FEAT_SORT_DIST_EVEN)
 
 /* Information about record to insert */
 struct evt_entry_in {
@@ -371,11 +376,7 @@ struct evt_entry_array {
 	/** Maximum size of array */
 	uint32_t			 ea_max;
 	/** Number of bytes per index */
-	uint32_t			 ea_inob;
-	/** Index of first delete record, valid if ea_delete_nr != 0 */
-	uint32_t			 ea_first_delete;
-	/** Number of delete records */
-	uint32_t			 ea_delete_nr;
+	uint32_t                         ea_inob;
 	/* Small array of embedded entries */
 	struct evt_list_entry		 ea_embedded_ents[0];
 };
@@ -410,7 +411,7 @@ evt_vis2dbg(int flag)
 
 	switch (flag & flags) {
 	default:
-		D_ASSERT(0);
+		D_ASSERTF(0, "unexpected flag %x\n", flag);
 	case 0:
 		break;
 	case EVT_PARTIAL:
@@ -571,9 +572,9 @@ int evt_destroy(daos_handle_t toh);
  * It returns if all input credits are consumed or the tree is empty, in the
  * later case, it also destroys the evtree.
  *
- * \param toh		[IN]	 Tree open handle.
- * \param credits	[IN/OUT] Input and returned drain credits
- * \param destroyed	[OUT]	 Tree is empty and destroyed
+ * \param[in] toh		Tree open handle.
+ * \param[in,out] credits	Input and returned drain credits
+ * \param[out] destroyed	Tree is empty and destroyed
  */
 int evt_drain(daos_handle_t toh, int *credits, bool *destroyed);
 
@@ -584,6 +585,10 @@ int evt_drain(daos_handle_t toh, int *credits, bool *destroyed);
  * \param toh		[IN]	The tree open handle
  * \param entry		[IN]	The entry to insert
  * \param csum_bufp	[OUT]	The pointer for the csum copy location.
+ *
+ * \return	0 success
+ *		1 success, detected potential need for aggregation
+ *		< 0 on error
  */
 int evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 	       uint8_t **csum_bufp);
@@ -665,8 +670,12 @@ enum {
 	EVT_ITER_FOR_PURGE	= (1 << 5),
 	/** The iterator is for data migration scan */
 	EVT_ITER_FOR_MIGRATION	= (1 << 6),
+	/** The iterator is for data discard */
+	EVT_ITER_FOR_DISCARD	= (1 << 7),
 	/** Skip visible data (Only valid with EVT_ITER_VISIBLE) */
-	EVT_ITER_SKIP_DATA	= (1 << 7),
+	EVT_ITER_SKIP_DATA	= (1 << 8),
+	/** Only process removals */
+	EVT_ITER_REMOVALS	= (1 << 9),
 };
 
 D_CASSERT((int)EVT_VISIBLE == (int)EVT_ITER_VISIBLE);
@@ -750,6 +759,13 @@ int evt_iter_empty(daos_handle_t ih);
 int evt_iter_delete(daos_handle_t ih, struct evt_entry *ent);
 
 /**
+ * Mark the record at the current cursor as being corrupt.
+ *
+ * \param ih		[IN]	Iterator open handle.
+ */
+int evt_iter_corrupt(daos_handle_t ih);
+
+/**
  * Fetch the extent and its data address from the current iterator position.
  *
  * \param ih	[IN]	Iterator open handle.
@@ -770,5 +786,28 @@ int evt_iter_fetch(daos_handle_t ih, unsigned int *inob,
  */
 int evt_overhead_get(int alloc_overhead, int tree_order,
 		     struct daos_tree_overhead *ovhd);
+
+/** Get the tree feats
+ *
+ * \param[in]	root	evtree root
+ *
+ * return	Tree feats
+ */
+static inline uint64_t
+evt_feats_get(struct evt_root *root)
+{
+	return root->tr_feats;
+}
+
+/**
+ * Set the tree feats.
+ *
+ * \param root[in]	Tree root
+ * \param umm[in]	umem instance
+ * \param feats[in]	feats to set
+ *
+ * \return 0 on success
+ */
+int  evt_feats_set(struct evt_root *root, struct umem_instance *umm, uint64_t feats);
 
 #endif /* __DAOS_EV_TREE_H__ */

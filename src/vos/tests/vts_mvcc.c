@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -166,10 +166,10 @@ set_oid(int i, char *path, daos_unit_oid_t *oid)
 	oid->id_pub.hi = 0;
 	D_ASSERT(L_O < strlen(path));
 	oid->id_pub.lo = (i << 8) + path[L_O];
-	daos_obj_set_oid(&oid->id_pub,
-			 DAOS_OF_AKEY_UINT64 | DAOS_OF_DKEY_UINT64, 0, 0);
+	daos_obj_set_oid(&oid->id_pub, DAOS_OT_MULTI_UINT64, OR_RP_1, 1, 0);
 	oid->id_shard = 0;
-	oid->id_pad_32 = 0;
+	oid->id_layout_ver = 0;
+	oid->id_padding = 0;
 }
 
 static void
@@ -244,6 +244,8 @@ stop_tx(daos_handle_t coh, struct tx_helper *txh, bool success, bool write)
 
 	if (txh->th_nr_ops == txh->th_op_seq) {
 		xid = dth->dth_xid;
+		if (txh->th_nr_mods != 0 && !success)
+			vos_dtx_cleanup(dth, true);
 		vts_dtx_end(dth);
 		if (txh->th_nr_mods != 0) {
 			if (success && !txh->th_skip_commit) {
@@ -252,7 +254,8 @@ stop_tx(daos_handle_t coh, struct tx_helper *txh, bool success, bool write)
 			} else {
 				if (!success)
 					txh->th_skip_commit = false;
-				daos_dti_copy(&txh->th_saved_xid, &xid);
+				else
+					daos_dti_copy(&txh->th_saved_xid, &xid);
 			}
 		}
 	}
@@ -764,7 +767,7 @@ tx_query(daos_handle_t coh, struct tx_helper *txh, daos_epoch_t epoch,
 	dth = start_tx(coh, oid, epoch, txh);
 
 	rc = vos_obj_query_key(coh, oid, flags, epoch, dkey, akey, recx,
-			       0, 0, dth);
+			       NULL, 0, 0, dth);
 
 	stop_tx(coh, txh, rc == 0, false);
 
@@ -1117,12 +1120,17 @@ we_minus_re(daos_epoch_t we, daos_epoch_t re)
 		return -1;
 }
 
+static bool pp_enabled;
+
 static bool
 conflicting_rw_is_excluded(bool empty, struct op *r, char *rp, daos_epoch_t re,
 			   struct op *w, char *wp, daos_epoch_t we,
 			   bool same_tx)
 {
 	int i;
+
+	if (pp_enabled)
+		return false;
 
 	for (i = 0; i < ARRAY_SIZE(conflicting_rw_excluded_cases); i++) {
 		struct conflicting_rw_excluded_case *c;
@@ -1214,6 +1222,7 @@ conflicting_rw_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 	if (!empty) {
 		char	pp[L_COUNT + 1] = "coda";
 
+		D_ASSERT(strlen(rp) <= L_COUNT);
 		memcpy(pp, rp, strlen(rp));
 		print_message("  update(%s, "DF_X64") before %s(%s, "
 			      DF_X64"): ", pp, re - 1, r->o_name, rp, re);
@@ -1289,7 +1298,7 @@ conflicting_rw_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 		if (txh1.th_skip_commit) {
 			rc = vos_dtx_commit(arg->ctx.tc_co_hdl,
 					    &txh1.th_saved_xid, 1, NULL);
-			assert(rc >= 0 || rc == -DER_NONEXIST);
+			assert(rc >= 0);
 		}
 		if (expect_inprogress) {
 			print_message("  %s(%s, "DF_X64") (expect %s): ",
@@ -1476,7 +1485,7 @@ uncertainty_check_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 		char		pp[L_COUNT + 1] = "coda";
 		daos_epoch_t	pe = ae - 1;
 
-		D_ASSERT(strlen(wp) <= sizeof(pp) - 1);
+		D_ASSERT(strlen(wp) <= L_COUNT);
 		memcpy(pp, wp, strlen(wp));
 		print_message("  update(%s, "DF_U64") (expect DER_SUCCESS): ",
 			      pp, pe);
@@ -1552,23 +1561,19 @@ out:
 				      bound, mvcc_arg->i));
 
 	if (!daos_is_zero_dti(&wtx->th_saved_xid)) {
-		if (wtx->th_skip_commit)
+		if (wtx->th_skip_commit) {
 			rc = vos_dtx_commit(arg->ctx.tc_co_hdl,
 					    &wtx->th_saved_xid, 1, NULL);
-		else
-			rc = vos_dtx_abort(arg->ctx.tc_co_hdl, DAOS_EPOCH_MAX,
-					   &wtx->th_saved_xid, 1);
-		assert(rc >= 0 || rc == -DER_NONEXIST);
+			assert(rc >= 0);
+		}
 	}
 
 	if (!daos_is_zero_dti(&atx->th_saved_xid)) {
-		if (atx->th_skip_commit)
+		if (atx->th_skip_commit) {
 			rc = vos_dtx_commit(arg->ctx.tc_co_hdl,
 					    &atx->th_saved_xid, 1, NULL);
-		else
-			rc = vos_dtx_abort(arg->ctx.tc_co_hdl, DAOS_EPOCH_MAX,
-					   &atx->th_saved_xid, 1);
-		assert(rc >= 0 || rc == -DER_NONEXIST);
+			assert(rc >= 0);
+		}
 	}
 
 #undef DP_CASE
@@ -1738,7 +1743,9 @@ run_mvcc_tests(const char *cfg)
 {
 	char	test_name[DTS_CFG_MAX];
 
-	dts_create_config(test_name, "VOS MVCC Tests %s", cfg);
+	d_getenv_bool("DAOS_DKEY_PUNCH_PROPAGATE", &pp_enabled);
+
+	dts_create_config(test_name, "MVCC Tests %s%s", cfg, pp_enabled ? " pp enabled" : "");
 
 	return cmocka_run_group_tests_name(test_name, mvcc_tests,
 					   setup_mvcc, teardown_mvcc);

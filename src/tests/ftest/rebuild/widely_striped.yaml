@@ -1,0 +1,48 @@
+hosts:
+  test_servers: 7
+  test_clients: 1
+timeout: 1200
+agent_config:
+  cache_expiration: 1
+  #disable_caching: true
+server_config:
+  name: daos_server
+  crt_timeout: 60
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 8
+      storage: auto
+testparams:
+  ranks_to_kill:
+    - [6]
+    - [5]
+    - [3, 4]
+pool:
+  scm_size: 10G
+  nvme_size: 60G
+  rebuild_timeout: 240
+  pool_query_timeout: 60
+  properties: rd_fac:2
+container:
+  type: POSIX
+  control_method: daos
+  oclass: RP_3G1
+  properties: rd_fac:2
+mdtest:
+  api: DFS
+  client_processes:
+    np: 30
+  num_of_files_dirs: 4067         # creating total of 120K files
+  test_dir: "/"
+  dfs_destroy: false
+  dfs_oclass: RP_3G1
+  dfs_dir_oclass: RP_3G1
+  manager: "MPICH"
+  flags: "-F -C"
+  wr_size: !mux
+    32K:
+      write_bytes: 32768
+    empty:
+      write_bytes: 0
+  depth: 0

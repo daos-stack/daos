@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -352,8 +352,7 @@ test_drpc_progress_poll_failed(void **state)
 	struct drpc_progress_context ctx;
 
 	init_drpc_progress_context(&ctx, new_drpc_with_fd(15));
-	poll_return = -1;
-	errno = ENOMEM;
+	poll_return = -ENOMEM;
 
 	assert_rc_equal(drpc_progress(&ctx, 20), -DER_NOMEM);
 
@@ -370,10 +369,10 @@ test_drpc_progress_listener_accept_failed(void **state)
 
 	init_drpc_progress_context(&ctx, new_drpc_with_fd(15));
 	poll_revents_return[0] = POLLIN;
-	accept_return = -1;
+	accept_return          = -EIO;
 
 	/* No clear reason why accept would fail if we got data on it */
-	assert_rc_equal(drpc_progress(&ctx, 100), -DER_MISC);
+	assert_rc_equal(drpc_progress(&ctx, 100), -DER_IO);
 
 	cleanup_drpc_progress_context(&ctx);
 }
@@ -492,8 +491,7 @@ test_drpc_progress_session_cleanup_if_recv_fails(void **state)
 
 	poll_revents_return[num_sessions] = POLLIN; /* listener */
 
-	recvmsg_return = -1;
-	errno = ENOMEM;
+	recvmsg_return = -ENOMEM;
 
 	/* the error was handled by closing the sessions */
 	assert_rc_equal(drpc_progress(&ctx, 1), DER_SUCCESS);
@@ -529,8 +527,7 @@ test_drpc_progress_session_fails_if_no_data(void **state)
 
 	poll_revents_return[num_sessions] = POLLIN; /* listener */
 
-	recvmsg_return = -1;
-	errno = EAGAIN; /* No data to fetch */
+	recvmsg_return = -EAGAIN; /* No data to fetch */
 
 	/* Pass up the error this time - we didn't do anything with it */
 	assert_rc_equal(drpc_progress(&ctx, 1), -DER_AGAIN);

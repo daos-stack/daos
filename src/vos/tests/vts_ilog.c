@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -90,7 +90,7 @@ static D_LIST_HEAD(fake_tx_list);
 
 static int
 fake_tx_status_get(struct umem_instance *umm, uint32_t tx_id,
-		   daos_epoch_t epoch, uint32_t intent, void *args)
+		   daos_epoch_t epoch, uint32_t intent, bool retry, void *args)
 {
 	struct lru_array	*array = args;
 	struct fake_tx_entry	*entry;
@@ -158,7 +158,7 @@ fake_tx_log_add(struct umem_instance *umm, umem_off_t offset, uint32_t *tx_id,
 	uint32_t		 idx;
 	int			 rc;
 
-	rc = lrua_allocx(array, &idx, epoch, &entry);
+	rc = lrua_allocx(array, &idx, epoch, &entry, NULL);
 	assert_rc_equal(rc, 0);
 	assert_non_null(entry);
 
@@ -339,7 +339,7 @@ entries_check(struct umem_instance *umm, struct ilog_df *root,
 
 	ilog_fetch_init(&ilog_entries);
 
-	rc = ilog_fetch(umm, root, cbs, 0, &ilog_entries);
+	rc = ilog_fetch(umm, root, cbs, 0, false, &ilog_entries);
 	if (rc != expected_rc) {
 		print_message("Unexpected fetch rc: %s\n", d_errstr(rc));
 		if (rc == 0)
@@ -482,6 +482,7 @@ ilog_test_update(void **state)
 	struct umem_instance	*umm;
 	struct entries		*entries = args->custom;
 	struct ilog_df		*ilog;
+	struct ilog_id		 id;
 	struct version_cache	 version_cache;
 	daos_epoch_t		 epoch;
 	daos_handle_t		 loh;
@@ -503,7 +504,7 @@ ilog_test_update(void **state)
 	rc = ilog_create(umm, ilog);
 	LOG_FAIL(rc, 0, "Failed to create a new incarnation log\n");
 
-	rc = ilog_open(umm, ilog, &ilog_callbacks, &loh);
+	rc = ilog_open(umm, ilog, &ilog_callbacks, false, &loh);
 	LOG_FAIL(rc, 0, "Failed to open incarnation log\n");
 
 	version_cache_fetch(&version_cache, loh, true);
@@ -528,6 +529,14 @@ ilog_test_update(void **state)
 	assert_rc_equal(rc, 0);
 	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
 	assert_rc_equal(rc, 0);
+
+	/* Commit the punch ilog. */
+	id.id_epoch = epoch;
+	id.id_tx_id = current_tx_id.id_tx_id;
+	rc = ilog_persist(loh, &id);
+	assert_rc_equal(rc, 0);
+
+	version_cache_fetch(&version_cache, loh, true);
 
 	/** Same epoch, different transaction, same operation.  In other
 	 *  words, both the existing entry and this one are punches so
@@ -644,7 +653,7 @@ ilog_test_abort(void **state)
 	rc = ilog_create(umm, ilog);
 	LOG_FAIL(rc, 0, "Failed to create a new incarnation log\n");
 
-	rc = ilog_open(umm, ilog, &ilog_callbacks, &loh);
+	rc = ilog_open(umm, ilog, &ilog_callbacks, false, &loh);
 	LOG_FAIL(rc, 0, "Failed to open new incarnation log\n");
 	version_cache_fetch(&version_cache, loh, true);
 
@@ -756,7 +765,7 @@ ilog_test_persist(void **state)
 	rc = ilog_create(umm, ilog);
 	LOG_FAIL(rc, 0, "Failed to create a new incarnation log\n");
 
-	rc = ilog_open(umm, ilog, &ilog_callbacks, &loh);
+	rc = ilog_open(umm, ilog, &ilog_callbacks, false, &loh);
 	LOG_FAIL(rc, 0, "Failed to open incarnation log\n");
 	version_cache_fetch(&version_cache, loh, true);
 
@@ -840,7 +849,7 @@ ilog_test_aggregate(void **state)
 	rc = ilog_create(umm, ilog);
 	LOG_FAIL(rc, 0, "Failed to create a new incarnation log\n");
 
-	rc = ilog_open(umm, ilog, &ilog_callbacks, &loh);
+	rc = ilog_open(umm, ilog, &ilog_callbacks, false, &loh);
 	LOG_FAIL(rc, 0, "Failed to open incarnation log\n");
 
 	id.id_epoch = 1;
@@ -868,7 +877,7 @@ ilog_test_aggregate(void **state)
 	commit_all();
 	epr.epr_lo = 2;
 	epr.epr_hi = 4;
-	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, false, 0, 0,
+	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, false, false, 0, 0,
 			    &ilents);
 	LOG_FAIL(rc, 0, "Failed to aggregate ilog\n");
 	version_cache_fetch(&version_cache, loh, true);
@@ -892,7 +901,7 @@ ilog_test_aggregate(void **state)
 
 	epr.epr_lo = 0;
 	epr.epr_hi = 6;
-	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, false, 0, 0,
+	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, false, false, 0, 0,
 			    &ilents);
 	LOG_FAIL(rc, 0, "Failed to aggregate ilog\n");
 	version_cache_fetch(&version_cache, loh, true);
@@ -907,7 +916,7 @@ ilog_test_aggregate(void **state)
 	version_cache_fetch(&version_cache, loh, true);
 	commit_all();
 	epr.epr_hi = 7;
-	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, false, 0, 0,
+	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, false, false, 0, 0,
 			    &ilents);
 	/* 1 means empty */
 	LOG_FAIL(rc, 1, "Failed to aggregate log entry\n");
@@ -956,7 +965,7 @@ ilog_test_discard(void **state)
 	rc = ilog_create(umm, ilog);
 	LOG_FAIL(rc, 0, "Failed to create a new incarnation log\n");
 
-	rc = ilog_open(umm, ilog, &ilog_callbacks, &loh);
+	rc = ilog_open(umm, ilog, &ilog_callbacks, false, &loh);
 	LOG_FAIL(rc, 0, "Failed to open incarnation log\n");
 
 	id.id_epoch = 1;
@@ -984,7 +993,7 @@ ilog_test_discard(void **state)
 	commit_all();
 	epr.epr_lo = 2;
 	epr.epr_hi = 4;
-	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, true, 0, 0,
+	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, true, false, 0, 0,
 			    &ilents);
 	LOG_FAIL(rc, 0, "Failed to aggregate ilog\n");
 	version_cache_fetch(&version_cache, loh, true);
@@ -1007,7 +1016,7 @@ ilog_test_discard(void **state)
 	commit_all();
 	epr.epr_lo = 0;
 	epr.epr_hi = 6;
-	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, true, 0, 0,
+	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, true, false, 0, 0,
 			    &ilents);
 	/* 1 means empty */
 	LOG_FAIL(rc, 1, "Failed to aggregate ilog\n");
@@ -1025,7 +1034,7 @@ ilog_test_discard(void **state)
 	commit_all();
 
 	epr.epr_hi = 7;
-	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, true, 0, 0,
+	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, true, false, 0, 0,
 			    &ilents);
 	/* 1 means empty */
 	LOG_FAIL(rc, 1, "Failed to aggregate ilog\n");
@@ -1096,7 +1105,7 @@ run_ilog_tests(const char *cfg)
 {
 	char	test_name[DTS_CFG_MAX];
 
-	dts_create_config(test_name, "VOS Incarnation log tests %s", cfg);
+	dts_create_config(test_name, "ILOG tests %s", cfg);
 	return cmocka_run_group_tests_name(test_name,
 					   inc_tests, setup_ilog,
 					   teardown_ilog);

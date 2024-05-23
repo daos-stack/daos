@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -104,31 +104,42 @@ static struct crt_proto_format my_proto_fmt_threaded_server = {
 int main(int argc, char **argv)
 {
 	pthread_t		thread[NUM_THREADS];
-	int			status = 0;
-	int			rc;
+	ATOMIC int              status = 0;
+	int                     rc;
 	int			i;
+	int                     thread_count;
 
 	rc = d_log_init();
 	assert(rc == 0);
 
-	rc = crt_init("manyserver", CRT_FLAG_BIT_SERVER);
+	rc = crt_init("manyserver", CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	if (rc != 0) {
 		printf("Could not start server, rc = %d", rc);
-		return -1;
+		goto log_fini;
 	}
 
 	rc = crt_proto_register(&my_proto_fmt_threaded_server);
 	if (rc != 0) {
 		printf("Could not register rpc protocol , rc = %d", rc);
-		return -1;
+		goto fini;
 	}
 
-	crt_context_create(&crt_ctx);
-	for (rc = 0; rc < NUM_THREADS; rc++)
-		pthread_create(&thread[rc], NULL, progress, &status);
+	rc = crt_context_create(&crt_ctx);
+	if (rc != 0) {
+		printf("Failed to create context: " DF_RC "\n", DP_RC(rc));
+		goto fini;
+	}
+
+	for (thread_count = 0; thread_count < NUM_THREADS; thread_count++) {
+		rc = pthread_create(&thread[thread_count], NULL, progress, &status);
+		if (rc != 0) {
+			printf("Failed to create thread: %d (%s), exiting\n", rc, strerror(rc));
+			goto stop;
+		}
+	}
 
 	printf("Waiting for threads to start\n");
-	while (status != -NUM_THREADS)
+	while (atomic_load_relaxed(&status) != -NUM_THREADS)
 		sched_yield();
 
 	printf("Waiting for stop rpc\n");
@@ -139,11 +150,13 @@ int main(int argc, char **argv)
 	D_MUTEX_UNLOCK(&lock);
 	printf("Stop rpc exited with rc = %d\n", rc);
 
+	rc = 0;
+stop:
 	status = STOP;
 	printf("Waiting for threads to stop\n");
 
-	for (rc = 0; rc < NUM_THREADS; rc++)
-		pthread_join(thread[rc], NULL);
+	for (i = 0; i < thread_count; i++)
+		pthread_join(thread[i], NULL);
 
 	drain_queue(crt_ctx);
 
@@ -153,9 +166,11 @@ int main(int argc, char **argv)
 		       msg_counts[i]);
 
 	crt_context_destroy(crt_ctx, false);
+fini:
 	crt_finalize();
 
+log_fini:
 	d_log_fini();
 
-	return 0;
+	return rc;
 }

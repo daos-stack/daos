@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,6 +17,7 @@
 #include <cmocka.h>
 #include <daos/tests_lib.h>
 
+bool fail_domain_node;
 void
 print_layout(struct pl_obj_layout *layout)
 {
@@ -40,7 +41,7 @@ print_layout(struct pl_obj_layout *layout)
 }
 
 int
-plt_obj_place(daos_obj_id_t oid, struct pl_obj_layout **layout,
+plt_obj_place(daos_obj_id_t oid, uint32_t pda, struct pl_obj_layout **layout,
 		struct pl_map *pl_map, bool print_layout_flag)
 {
 	struct daos_obj_md	 md;
@@ -48,11 +49,11 @@ plt_obj_place(daos_obj_id_t oid, struct pl_obj_layout **layout,
 
 	memset(&md, 0, sizeof(md));
 	md.omd_id  = oid;
+	md.omd_pda = pda;
 	D_ASSERT(pl_map != NULL);
 	md.omd_ver = pool_map_get_version(pl_map->pl_poolmap);
 
-	rc = pl_obj_place(pl_map, &md, NULL, layout);
-
+	rc = pl_obj_place(pl_map, PLT_LAYOUT_VERSION, &md, 0, NULL, layout);
 	if (print_layout_flag) {
 		if (*layout != NULL)
 			print_layout(*layout);
@@ -524,9 +525,11 @@ plt_spare_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 	D_ASSERT(pl_map != NULL);
 	dc_obj_fetch_md(oid, &md);
 	md.omd_ver = *po_ver;
-	*spare_cnt = pl_obj_find_rebuild(pl_map, &md, NULL, *po_ver,
-					 spare_tgt_ranks, shard_ids,
-					 spare_max_nr);
+	rc = pl_obj_find_rebuild(pl_map, PLT_LAYOUT_VERSION, &md, NULL, *po_ver,
+				 spare_tgt_ranks, shard_ids,
+				 spare_max_nr);
+	D_ASSERT(rc >= 0);
+	*spare_cnt = rc;
 	D_PRINT("spare_cnt %d for version %d -\n", *spare_cnt, *po_ver);
 	for (i = 0; i < *spare_cnt; i++)
 		D_PRINT("shard %d, spare target rank %d\n",
@@ -538,26 +541,40 @@ plt_spare_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 }
 
 void
-gen_pool_and_placement_map(int num_domains, int nodes_per_domain,
-			   int vos_per_target, pl_map_type_t pl_type,
-			   struct pool_map **po_map_out,
-			   struct pl_map **pl_map_out)
+gen_pool_and_placement_map(int num_pds, int fdoms_per_pd, int nodes_per_domain,
+			   int vos_per_target, pl_map_type_t pl_type, int fdom_lvl,
+			   struct pool_map **po_map_out, struct pl_map **pl_map_out)
 {
 	struct pool_buf         *buf;
 	int                      i;
 	struct pl_map_init_attr  mia;
-	int                      nr;
+	int                      nr = 0;
+	int			 num_domains;
 	struct pool_component   *comps;
 	struct pool_component   *comp;
 	int                      rc;
 
-	nr = num_domains + (nodes_per_domain * num_domains) +
-	     (num_domains * nodes_per_domain * vos_per_target);
+	if (num_pds < 1)
+		num_pds = 1;
+	num_domains = num_pds * fdoms_per_pd;
+	if (num_pds >= 2)
+		nr = num_pds;
+	nr += num_domains + (nodes_per_domain * num_domains) +
+	      (num_domains * nodes_per_domain * vos_per_target);
 	D_ALLOC_ARRAY(comps, nr);
 	D_ASSERT(comps != NULL);
 
 	comp = &comps[0];
 	/* fake the pool map */
+	for (i = 0; i < num_pds && num_pds >= 2; i++, comp++) {
+		comp->co_type   = PO_COMP_TP_GRP;
+		comp->co_status = PO_COMP_ST_UPIN;
+		comp->co_id     = i;
+		comp->co_rank   = i;
+		comp->co_ver    = 1;
+		comp->co_nr     = fdoms_per_pd;
+	}
+
 	for (i = 0; i < num_domains; i++, comp++) {
 		comp->co_type   = PO_COMP_TP_NODE;
 		comp->co_status = PO_COMP_ST_UPIN;
@@ -602,10 +619,13 @@ gen_pool_and_placement_map(int num_domains, int nodes_per_domain,
 	/* No longer needed, copied into pool map */
 	D_FREE(buf);
 
-	mia.ia_type         = pl_type;
-	mia.ia_ring.ring_nr = 1;
-	mia.ia_ring.domain  = PO_COMP_TP_NODE;
-
+	D_ASSERTF(fdom_lvl == PO_COMP_TP_RANK || fdom_lvl == PO_COMP_TP_NODE,
+		  "bad fdom_lvl %d\n", fdom_lvl);
+	mia.ia_type = pl_type;
+	if (fail_domain_node || fdom_lvl == PO_COMP_TP_NODE)
+		mia.ia_ring.domain  = PO_COMP_TP_NODE;
+	else
+		mia.ia_ring.domain = PO_COMP_TP_RANK;
 	rc = pl_map_create(*po_map_out, &mia, pl_map_out);
 	assert_success(rc);
 }
@@ -691,7 +711,7 @@ gen_pool_and_placement_map_non_standard(int num_domains,
 
 	mia.ia_type         = pl_type;
 	mia.ia_ring.ring_nr = 1;
-	mia.ia_ring.domain  = PO_COMP_TP_NODE;
+	mia.ia_ring.domain  = PO_COMP_TP_RANK;
 
 	rc = pl_map_create(*po_map_out, &mia, pl_map_out);
 	assert_success(rc);
@@ -703,7 +723,8 @@ free_pool_and_placement_map(struct pool_map *po_map_in,
 {
 	struct pool_buf *buf;
 
-	pool_buf_extract(po_map_in, &buf);
+	if (pool_buf_extract(po_map_in, &buf))
+		return;
 	pool_map_decref(po_map_in);
 	pool_buf_free(buf);
 
@@ -734,8 +755,8 @@ plt_reint_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 	D_ASSERT(pl_map != NULL);
 	dc_obj_fetch_md(oid, &md);
 	md.omd_ver = *po_ver;
-	rc = pl_obj_find_reint(pl_map, &md, NULL, *po_ver, spare_tgt_ranks,
-			       shard_ids, spare_max_nr);
+	rc = pl_obj_find_rebuild(pl_map, PLT_LAYOUT_VERSION, &md, NULL, *po_ver,
+			         spare_tgt_ranks, shard_ids, spare_max_nr);
 
 	D_ASSERT(rc >= 0);
 	*spare_cnt = rc;
@@ -761,7 +782,7 @@ get_object_classes(daos_oclass_id_t **oclass_id_pp)
 	char *oclass_names;
 	char oclass[64];
 	daos_oclass_id_t *oclass_id;
-	uint32_t length = 0;
+	ssize_t length = 0;
 	uint32_t num_oclass = 0;
 	uint32_t oclass_str_index = 0;
 	uint32_t i, oclass_index;
@@ -771,6 +792,10 @@ get_object_classes(daos_oclass_id_t **oclass_id_pp)
 		return -1;
 
 	length = daos_oclass_names_list(str_size, oclass_names);
+	if (length < 0) {
+		D_FREE(oclass_names);
+		return length;
+	}
 
 	for (i = 0; i < length; ++i) {
 		if (oclass_names[i] == ',')
@@ -797,12 +822,9 @@ get_object_classes(daos_oclass_id_t **oclass_id_pp)
 }
 
 int
-extend_test_pool_map(struct pool_map *map,
-		     uint32_t nnodes, uuid_t target_uuids[],
-		     d_rank_list_t *rank_list, uint32_t ndomains,
-		     uint32_t *domains, bool *updated_p,
-		     uint32_t *map_version_p,
-		     uint32_t dss_tgt_nr)
+extend_test_pool_map(struct pool_map *map, uint32_t nnodes,
+		     uint32_t ndomains, uint32_t *domains, bool *updated_p,
+		     uint32_t *map_version_p, uint32_t dss_tgt_nr)
 {
 	struct pool_buf	*map_buf = NULL;
 	uint32_t	map_version;
@@ -813,9 +835,8 @@ extend_test_pool_map(struct pool_map *map,
 
 	map_version = pool_map_get_version(map) + 1;
 
-	rc = gen_pool_buf(map, &map_buf, map_version, ndomains, nnodes,
-			  ntargets, domains, target_uuids, rank_list, NULL,
-			dss_tgt_nr);
+	rc = gen_pool_buf(map, &map_buf, map_version, ndomains, nnodes, ntargets, domains,
+			  dss_tgt_nr);
 	assert_success(rc);
 
 	D_ASSERT(map_buf != NULL);
@@ -833,15 +854,19 @@ extend_test_pool_map(struct pool_map *map,
 bool
 is_max_class_obj(daos_oclass_id_t cid)
 {
-	struct daos_oclass_attr *oc_attr;
-	daos_obj_id_t oid;
+	struct daos_oclass_attr	*oc_attr;
+	daos_obj_id_t		oid;
+	uint32_t		grp_nr;
+	int			rc;
 
 	oid.hi = 5;
 	oid.lo = rand();
-	daos_obj_set_oid(&oid, 0, cid, 0);
-	oc_attr = daos_oclass_attr_find(oid, NULL);
+	rc = daos_obj_set_oid_by_class(&oid, 0, cid, 0);
+	assert_success(rc == 0);
 
-	if (oc_attr->ca_grp_nr == DAOS_OBJ_GRP_MAX ||
+	oc_attr = daos_oclass_attr_find(oid, &grp_nr);
+
+	if (grp_nr == DAOS_OBJ_GRP_MAX ||
 	    oc_attr->u.rp.r_num == DAOS_OBJ_REPL_MAX)
 		return true;
 	return false;

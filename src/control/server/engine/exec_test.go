@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -22,6 +21,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -59,7 +59,28 @@ func TestMain(m *testing.M) {
 // the TestMain() function is used to do some simple simulation
 // of the real binary's behavior.
 func createFakeBinary(t *testing.T) {
+	t.Helper()
+
+	// stash this to restore after scrubbing the rest of the env
+	ld_library_path := os.Getenv("LD_LIBRARY_PATH")
+	// ensure that we have a clean environment for testing
+	os.Clearenv()
+	os.Setenv("LD_LIBRARY_PATH", ld_library_path)
+
 	testDir := filepath.Dir(os.Args[0])
+	fakeBin := filepath.Join(testDir, engineBin)
+
+	// Don't regenerate the test binary if it already exists.
+	// The package tests are run sequentially, but they do
+	// share a common build directory. In rare cases, the
+	// tests have stepped on each other here, most likely due
+	// the test child process from a previous test not being
+	// completely stopped before the next test starts.
+	if _, err := os.Stat(fakeBin); err == nil {
+		return
+	} else if !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
 
 	testSource, err := os.Open(os.Args[0])
 	if err != nil {
@@ -67,7 +88,7 @@ func createFakeBinary(t *testing.T) {
 	}
 	defer testSource.Close()
 
-	testBin, err := os.OpenFile(path.Join(testDir, engineBin), os.O_RDWR|os.O_CREATE, 0755)
+	testBin, err := os.OpenFile(fakeBin, os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,14 +98,6 @@ func createFakeBinary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	// capture this and set on exit to accommodate the addition of
-	// netdetect dependencies
-	ldLibraryPath := os.Getenv("LD_LIBRARY_PATH")
-	defer os.Setenv("LD_LIBRARY_PATH", ldLibraryPath)
-
-	// ensure that we have a clean environment for testing
-	os.Clearenv()
 }
 
 func TestRunnerContextExit(t *testing.T) {
@@ -94,29 +107,32 @@ func TestRunnerContextExit(t *testing.T) {
 	os.Setenv(testModeVar, "RunnerContextExit")
 
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
-	cfg := NewConfig().
-		WithEnvPassThrough(testModeVar, "LD_LIBRARY_PATH")
+	cfg := MockConfig().
+		WithEnvPassThrough(testModeVar)
 	cfg.Index = 9
 
 	runner := NewRunner(log, cfg)
-	errOut := make(chan error)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	if err := runner.Start(ctx, errOut); err != nil {
+	ctx, cancel := context.WithCancel(test.Context(t))
+	eiChan, err := runner.Start(ctx)
+	if err != nil {
 		t.Fatal(err)
 	}
+	// Add a short sleep to avoid canceling the context before the process
+	// has launched. Would be better to do it in an onStarted() callback,
+	// but implementing that to fix this seems like overkill.
+	time.Sleep(10 * time.Millisecond)
 	cancel()
 
-	err := <-errOut
-	if errors.Cause(err) == common.NormalExit {
+	ei := <-eiChan
+	if errors.Cause(ei.Error) == common.NormalExit {
 		t.Fatal("expected process to not exit normally")
 	}
 }
 
 func TestRunnerNormalExit(t *testing.T) {
-	var numaNode uint = 1
 	var bypass bool = false
 	createFakeBinary(t)
 
@@ -125,40 +141,38 @@ func TestRunnerNormalExit(t *testing.T) {
 	// verify that bad user env is scrubbed
 	os.Setenv("FI_VERBS_PREFER_XRC", "1")
 	// verify that allowed user env gets overridden by config
-	os.Setenv("OFI_INTERFACE", "bob0")
+	os.Setenv("D_INTERFACE", "bob0")
 	// verify that allowed user env without a config override is passed through
 	allowedUserEnv := "MOOD"
 	allowedUserVal := "happy"
 	os.Setenv(allowedUserEnv, allowedUserVal)
 
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
-	cfg := NewConfig().
-		WithEnvPassThrough(testModeVar, "LD_LIBRARY_PATH",
-			"OFI_INTERFACE", allowedUserEnv).
+	cfg := MockConfig().
+		WithEnvPassThrough(testModeVar, "D_INTERFACE", allowedUserEnv, "LD_LIBRARY_PATH").
 		WithTargetCount(42).
 		WithHelperStreamCount(1).
 		WithFabricInterface("qib0").
 		WithLogMask("DEBUG,MGMT=DEBUG,RPC=ERR,MEM=ERR").
-		WithPinnedNumaNode(&numaNode).
+		WithPinnedNumaNode(1).
 		WithBypassHealthChk(&bypass).
-		WithCrtCtxShareAddr(1).
 		WithCrtTimeout(30).
 		WithStorage(
 			storage.NewTierConfig().
-				WithScmClass("ram").
+				WithStorageClass("ram").
 				WithScmMountPoint("/foo/bar"),
 		)
 	runner := NewRunner(log, cfg)
-	errOut := make(chan error)
 
-	if err := runner.Start(context.Background(), errOut); err != nil {
+	eiChan, err := runner.Start(test.Context(t))
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	err := <-errOut
-	if errors.Cause(err).Error() != common.NormalExit.Error() {
+	ei := <-eiChan
+	if errors.Cause(ei.Error).Error() != common.NormalExit.Error() {
 		t.Fatalf("expected normal exit; got %s", err)
 	}
 
@@ -166,9 +180,9 @@ func TestRunnerNormalExit(t *testing.T) {
 	wantArgs := "-t 42 -x 1 -T 1 -p 1 -I 0 -r 0 -H 0 -s /foo/bar"
 	var gotArgs string
 	env := []string{
-		"CRT_CTX_SHARE_ADDR=1",
+		"FI_OFI_RXM_USE_SRX=1",
 		"CRT_TIMEOUT=30",
-		"OFI_INTERFACE=qib0",
+		"D_INTERFACE=qib0",
 		"D_LOG_MASK=DEBUG,MGMT=DEBUG,RPC=ERR,MEM=ERR",
 		allowedUserEnv + "=" + allowedUserVal,
 	}

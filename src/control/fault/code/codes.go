@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -50,6 +50,7 @@ const (
 	PrivilegedHelperNotPrivileged
 	PrivilegedHelperNotAvailable
 	PrivilegedHelperRequestFailed
+	SocketFileInUse
 )
 
 // generic storage fault codes
@@ -59,6 +60,8 @@ const (
 	StorageFilesystemAlreadyMounted
 	StorageDeviceAlreadyMounted
 	StorageTargetAlreadyMounted
+	StoragePathAccessDenied
+	StorageDeviceWithFsNoMountpoint
 )
 
 // SCM fault codes
@@ -74,6 +77,12 @@ const (
 	ScmDiscoveryFailed
 	ScmDuplicatesInDeviceList
 	ScmNoDevicesMatchFilter
+	ScmNoPMem
+	ScmBadRegion
+	ScmInvalidPMem
+	ScmRamdiskLowMem
+	ScmRamdiskBadSize
+	ScmConfigTierMissing
 )
 
 // Bdev fault codes
@@ -85,12 +94,26 @@ const (
 	BdevNotFound
 	BdevDuplicatesInDeviceList
 	BdevNoDevicesMatchFilter
+	BdevAccelEngineUnknown
+	BdevConfigOptFlagUnknown
+	BdevConfigTierTypeMismatch
+	BdevNonRootVFIODisable
+	BdevNoIOMMU
+	BdevConfigRolesWithDCPM
+	BdevConfigRolesBadNr
+	BdevConfigRolesMissing
+	BdevConfigMultiTierWithoutRoles
+	BdevConfigBadNrTiersWithRoles
+	BdevConfigControlMetadataNoRoles
+	BdevConfigRolesNoControlMetadata
+	BdevConfigRolesWalDataNoMeta
 )
 
 // DAOS system fault codes
 const (
 	SystemUnknown Code = iota + 400
 	SystemBadFaultDomainDepth
+	SystemPoolLocked
 )
 
 // client fault codes
@@ -103,8 +126,10 @@ const (
 	ClientConnectionNoRoute
 	ClientConnectionRefused
 	ClientConnectionClosed
+	ClientConnectionTimedOut
 	ClientFormatRunningSystem
 	ClientRpcTimeout
+	ClientConfigVMDImbalance
 )
 
 // server fault codes
@@ -116,15 +141,19 @@ const (
 	ServerPoolScmTooSmall
 	ServerPoolNvmeTooSmall
 	ServerPoolInvalidRanks
+	ServerPoolInvalidNumRanks
 	ServerPoolInvalidServiceReps
 	ServerPoolDuplicateLabel
-	ServerInsufficientFreeHugePages
 	ServerHarnessNotStarted
 	ServerDataPlaneNotStarted
 	ServerInstancesNotStopped
 	ServerConfigInvalidNetDevClass
 	ServerVfioDisabled
 	ServerPoolNoLabel
+	ServerIncompatibleComponents
+	ServerNoCompatibilityInsecure
+	ServerPoolHasContainers
+	ServerHugepagesDisabled
 )
 
 // server config fault codes
@@ -143,6 +172,9 @@ const (
 	ServerConfigDuplicateScmMount
 	ServerConfigDuplicateScmDeviceList
 	ServerConfigOverlappingBdevDeviceList
+	ServerConfigBdevCountMismatch
+	ServerConfigTargetCountMismatch
+	ServerConfigHelperStreamCountMismatch
 	ServerConfigFaultDomainInvalid
 	ServerConfigFaultCallbackNotFound
 	ServerConfigFaultCallbackInsecure
@@ -151,6 +183,16 @@ const (
 	ServerConfigBothFaultPathAndCb
 	ServerConfigFaultCallbackEmpty
 	ServerConfigFaultDomainTooManyLayers
+	ServerConfigNrHugepagesOutOfRange
+	ServerConfigHugepagesDisabledWithBdevs
+	ServerConfigVMDSettingDuplicate
+	ServerConfigEngineNUMAImbalance
+	ServerConfigControlMetadataNoPath
+	ServerConfigRamdiskUnderMinMem
+	ServerConfigRamdiskOverMaxMem
+	ServerConfigScmDiffClass
+	ServerConfigEngineBdevRolesMismatch
+	ServerConfigSysRsvdZero
 )
 
 // SPDK library bindings codes
@@ -166,4 +208,18 @@ const (
 	SecurityUnknown Code = iota + 900
 	SecurityMissingCertFile
 	SecurityUnreadableCertFile
+	SecurityInvalidCert
+)
+
+const (
+	ControlMetadataUnknown Code = iota + 1000
+	ControlMetadataBadFilesystem
+)
+
+// System Checker codes
+const (
+	SystemCheckerUnknown Code = iota + 1100
+	SystemCheckerInvalidMemberStates
+	SystemCheckerNotEnabled
+	SystemCheckerEnabled
 )

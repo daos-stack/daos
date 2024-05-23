@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,6 +12,7 @@
 
 #include <sys/stat.h>
 #include <daos_srv/vos.h>
+#include <daos/sys_db.h>
 #include "vos_internal.h"
 
 /* Reserved system pool and container UUIDs
@@ -40,7 +41,7 @@ struct vos_sys_db {
 	char			*db_path;
 	struct umem_instance	*db_umm;
 	/* DB should be destroyed on exit */
-	bool			 db_vos_self;
+	bool			 db_destroy_db;
 	ABT_mutex		 db_lock;
 	uuid_t			 db_pool;
 	uuid_t			 db_cont;
@@ -68,6 +69,12 @@ struct vos_sys_db *
 db2vos(struct sys_db *db)
 {
 	return container_of(db, struct vos_sys_db, db_pub);
+}
+
+uuid_t *
+vos_db_pool_uuid()
+{
+	return &vos_db.db_pool;
 }
 
 static void
@@ -122,14 +129,14 @@ db_open_create(struct sys_db *db, bool try_create)
 	}
 	D_DEBUG(DB_IO, "Opening %s, try_create=%d\n", vdb->db_file, try_create);
 	if (try_create) {
-		rc = vos_pool_create(vdb->db_file, vdb->db_pool, SYS_DB_SIZE, 0,
-				     0, &vdb->db_poh);
+		rc = vos_pool_create(vdb->db_file, vdb->db_pool, SYS_DB_SIZE, 0, VOS_POF_SYSDB,
+				     0 /* version */, &vdb->db_poh);
 		if (rc) {
 			D_CRIT("sys pool create error: "DF_RC"\n", DP_RC(rc));
 			goto failed;
 		}
 	} else {
-		rc = vos_pool_open(vdb->db_file, vdb->db_pool, 0, &vdb->db_poh);
+		rc = vos_pool_open(vdb->db_file, vdb->db_pool, VOS_POF_SYSDB, &vdb->db_poh);
 		if (rc) {
 			/**
 			 * The access checks above should ensure the file
@@ -334,13 +341,21 @@ db_unlock(struct sys_db *db)
 
 /** Initialize system DB of VOS */
 int
-vos_db_init(const char *db_path, const char *db_name, bool self_mode)
+vos_db_init(const char *db_path)
+{
+	return vos_db_init_ex(db_path, NULL, false, false);
+}
+
+int
+vos_db_init_ex(const char *db_path, const char *db_name, bool force_create, bool destroy_db_on_fini)
 {
 	int	create;
 	int	rc;
 
+	D_ASSERT(db_path != NULL);
+
 	memset(&vos_db, 0, sizeof(vos_db));
-	vos_db.db_vos_self = self_mode;
+	vos_db.db_destroy_db = destroy_db_on_fini;
 
 	rc = asprintf(&vos_db.db_path, "%s/%s", db_path, SYS_DB_DIR);
 	if (rc < 0) {
@@ -383,7 +398,7 @@ vos_db_init(const char *db_path, const char *db_name, bool self_mode)
 	rc = uuid_parse(SYS_DB_CONT, vos_db.db_cont);
 	D_ASSERTF(rc == 0, "Failed to parse sys cont uuid: %s\n", SYS_DB_CONT);
 
-	if (self_mode)
+	if (force_create)
 		db_unlink(&vos_db.db_pub);
 
 	for (create = 0; create <= 1; create++) {
@@ -414,10 +429,10 @@ vos_db_fini(void)
 		ABT_mutex_free(&vos_db.db_lock);
 
 	if (vos_db.db_file) {
-		if (vos_db.db_vos_self) {
+		if (vos_db.db_destroy_db) {
 			int rc;
 
-			rc = vos_pool_destroy(vos_db.db_file, vos_db.db_pool);
+			rc = vos_pool_destroy_ex(vos_db.db_file, vos_db.db_pool, 0);
 			if (rc != 0)
 				D_ERROR(DF_UUID": failed to destroy %s: %d\n",
 					DP_UUID(vos_db.db_pool), vos_db.db_file, rc);

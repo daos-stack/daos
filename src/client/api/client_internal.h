@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -58,7 +58,7 @@ struct daos_event_private {
 	unsigned int		is_errno:1;
 
 	unsigned int		evx_flags;
-	daos_ev_status_t	evx_status;
+	ATOMIC daos_ev_status_t	evx_status;
 
 	struct daos_event_private *evx_parent;
 
@@ -66,6 +66,8 @@ struct daos_event_private {
 	struct daos_event_callback evx_callback;
 
 	tse_sched_t		*evx_sched;
+	/** Lock for events that are not in an EQ, including the thread private event */
+	pthread_mutex_t		evx_lock;
 };
 
 static inline struct daos_event_private *

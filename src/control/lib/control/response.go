@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,6 +15,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
+	pbUtil "github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
@@ -36,6 +37,10 @@ type (
 	// HostResponseChan defines a channel of *HostResponse items returned
 	// from asynchronous unary RPC invokers.
 	HostResponseChan chan *HostResponse
+
+	// HostResponseReport defines the function signature for a callback
+	// invoked when a host response is received.
+	HostResponseReportFn func(*HostResponse)
 )
 
 // HostErrorsResp is a response type containing a HostErrorsMap.
@@ -149,16 +154,37 @@ func (hem HostErrorsMap) Keys() []string {
 	return keys
 }
 
+// ErrorCount returns a count of errors in map.
+func (hem HostErrorsMap) ErrorCount() (nrErrs int) {
+	for _, set := range hem {
+		if set != nil {
+			nrErrs += set.HostSet.Count()
+		}
+	}
+
+	return nrErrs
+}
+
 // UnaryResponse contains a slice of *HostResponse items returned
 // from synchronous unary RPC invokers.
 type UnaryResponse struct {
-	Responses []*HostResponse
-	fromMS    bool
+	Responses  []*HostResponse
+	fromMS     bool
+	retryCount uint
+	log        debugLogger
 }
 
-// getMSResponse is a helper method to return the MS response
-// message from a UnaryResponse.
-func (ur *UnaryResponse) getMSResponse() (proto.Message, error) {
+func (ur *UnaryResponse) debugf(format string, args ...interface{}) {
+	if ur.log != nil {
+		ur.log.Debugf(format, args...)
+	}
+}
+
+// findMSResponse returns the first *HostResponse in the slice that
+// contains a management service response. If the response Message
+// contains a data version as supplied by the server, then the
+// response with the highest version is returned.
+func (ur *UnaryResponse) findMSResponse() (*HostResponse, error) {
 	if ur == nil {
 		return nil, errors.Errorf("nil %T", ur)
 	}
@@ -168,26 +194,50 @@ func (ur *UnaryResponse) getMSResponse() (proto.Message, error) {
 	}
 
 	if len(ur.Responses) == 0 {
+		ur.debugf("zero MS responses received")
 		return nil, errNoMsResponse
 	}
 
+	dataVersion := func(hr *HostResponse) uint64 {
+		if hr == nil || hr.Message == nil || hr.Error != nil {
+			return 0
+		}
+		if dvg, ok := hr.Message.(interface{ GetDataVersion() uint64 }); ok {
+			return dvg.GetDataVersion()
+		}
+		return 0
+	}
+
 	// As we may have sent the request to multiple MS replicas, just pick
-	// through the responses to find the one that succeeded. If none succeeded,
-	// return the error from the last response.
+	// through the responses to find ether the one that succeeded, or the one
+	// with the highest data version.
+	// If none succeeded, return the error from the last response.
 	var msResp *HostResponse
+	var maxResp *HostResponse
 	for _, msResp = range ur.Responses {
-		if msResp.Error != nil || msResp.Message == nil {
+		if msResp == nil || msResp.Error != nil || msResp.Message == nil {
 			continue
 		}
 
-		break
+		if maxResp == nil || dataVersion(msResp) > dataVersion(maxResp) {
+			maxResp = msResp
+		}
+	}
+
+	// If we found a response with a higher data version, then we
+	// know that it's a valid response and can bypass the rest of
+	// the error-checking logic.
+	if maxResp != nil && maxResp != msResp {
+		return maxResp, nil
 	}
 
 	if msResp == nil {
+		ur.debugf("no usable MS responses received")
 		return nil, errNoMsResponse
 	}
 
 	if msResp.Error != nil {
+		ur.debugf("%s: err: %s", msResp.Addr, msResp.Error)
 		return nil, msResp.Error
 	}
 
@@ -195,7 +245,25 @@ func (ur *UnaryResponse) getMSResponse() (proto.Message, error) {
 		return nil, errors.New("management service response message was nil")
 	}
 
-	return msResp.Message, nil
+	return msResp, nil
+}
+
+// getMSError returns the error, if any, from the management service response.
+func (ur *UnaryResponse) getMSError() error {
+	_, err := ur.findMSResponse()
+	return err
+}
+
+// getMSResponse is a helper method to return the MS response
+// message from a UnaryResponse.
+func (ur *UnaryResponse) getMSResponse() (proto.Message, error) {
+	msr, err := ur.findMSResponse()
+	if err != nil {
+		return nil, err
+	}
+
+	ur.debugf("%s: %s", msr.Addr, pbUtil.Debug(msr.Message))
+	return msr.Message, nil
 }
 
 // convertMSResponse is a helper function to extract the MS response
@@ -205,7 +273,7 @@ func convertMSResponse(ur *UnaryResponse, out interface{}) error {
 	msResp, err := ur.getMSResponse()
 	if err != nil {
 		if IsConnErr(err) {
-			return errMSConnectionFailure
+			return errors.Wrap(errMSConnectionFailure, err.Error())
 		}
 		return err
 	}

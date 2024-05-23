@@ -1,36 +1,24 @@
-#!python
-# (C) Copyright 2016-2021 Intel Corporation.
-#
-# SPDX-License-Identifier: BSD-2-Clause-Patent
-#
 """Build crt_launch"""
-import os
-import sys
-import daos_build
 
 CRT_LAUNCH = 'crt_launch.c'
 
+
 def scons():
     """scons function"""
-    Import('base_env', 'prereqs')
+    Import('env')
 
-    tenv = base_env.Clone()
+    tenv = env.Clone()
 
-    libs = ['cart', 'gurt', 'pthread', 'm']
-    if not GetOption('help') and not GetOption('clean'):
-        mpi = daos_build.configure_mpi(tenv, libs)
-        if mpi is None:
-            print("\nSkipping compilation for tests that need MPI")
-            print("Install and load mpich or openmpi\n")
-            return
+    libs = ['dpar', 'cart', 'gurt', 'pthread', 'm']
 
     tenv.AppendUnique(LIBS=libs)
-    prereqs.require(tenv, 'mercury')
+    tenv.require('mercury')
     tenv.AppendUnique(FLAGS='-pthread')
 
-    crt_launch = daos_build.program(tenv, CRT_LAUNCH, LIBS=libs)
+    crt_launch = tenv.d_program(CRT_LAUNCH, LIBS=libs)
 
-    tenv.Install(os.path.join("$PREFIX", 'bin'), crt_launch)
+    tenv.Install('$PREFIX/bin', crt_launch)
+
 
 if __name__ == "SCons.Script":
     scons()

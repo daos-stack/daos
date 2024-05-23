@@ -1,17 +1,14 @@
-#!/usr/bin/env python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 
-import json
-import sys
-import os
 import ctypes
+import os
 
 from pydaos.raw import daos_cref
-from storage_estimator.vos_structures import ValType, Overhead, AKey, VosValue, DKey, VosObject
+from storage_estimator.vos_structures import AKey, DKey, Overhead, ValType, VosObject, VosValue
 
 header = '''---
 # Sample conflig file DFS files and directories
@@ -39,19 +36,6 @@ array_akey: &file_data
   value_type: array
   values: [{'count': 1, 'size': 4096, 'aligned': 'Yes'}]
 
-array_meta: &file_meta
-  count: 1
-  type: integer
-  overhead: meta
-  value_type: single_value
-  values: [{'count': 3, 'size': 64, 'aligned': 'Yes'}]
-
-file_dkey_key0: &file_dkey0
-  count: 1
-  type: integer
-  overhead: user
-  akeys: [*file_data, *file_meta]
-
 file_dkey_key: &file_dkey
   count: 1
   type: integer
@@ -60,7 +44,7 @@ file_dkey_key: &file_dkey
 
 file_key: &file
   count: 1000000
-  dkeys: [*file_dkey0, *file_dkey]
+  dkeys: [*file_dkey]
 
 posix_key: &posix
   objects: [*sb, *file, *dir]
@@ -204,13 +188,11 @@ def _parse_dfs_sb_dkey(dkey_raw, iods, akey_count):
 
 def _parse_dfs_akey_inode(dfs_entry_key_size, dfs_entry_size):
     key = 'x' * dfs_entry_key_size
-    overhead = Overhead.META
-    value_type = ValType.ARRAY
+    value = VosValue(size=dfs_entry_size)
     akey = AKey(
         key=key,
-        overhead=overhead,
-        value_type=value_type)
-    value = VosValue(size=dfs_entry_size)
+        overhead=Overhead.META,
+        value_type=ValType.ARRAY)
     akey.add_value(value)
 
     return akey
@@ -252,11 +234,13 @@ class VOS_SIZE(BASE_CLASS):
     def __del__(self):
         self._lib.d_free_string(ctypes.byref(self._data))
 
-    def get_vos_size_str(self, alloc_overhead):
+    def get_vos_size_str(self, alloc_overhead, vospath):
+        """vospath - mount point of daos. Default is /mnt/daos"""
         print('  Reading VOS structures from current installation')
         ret = self._lib.get_vos_structure_sizes_yaml(
             ctypes.c_int(alloc_overhead),
-            ctypes.byref(self._data))
+            ctypes.byref(self._data),
+            bytes(vospath, encoding='utf-8'))
 
         if ret != 0:
             raise Exception(
@@ -269,7 +253,7 @@ class VOS_SIZE(BASE_CLASS):
 
 class FREE_DFS_SB(BASE_CLASS):
     def __init__(self):
-        super().__init__('libdfs_internal.so')
+        super().__init__('libdfs.so')
 
     def dfs_free_sb_layout(self, data_pointer):
         self._lib.dfs_free_sb_layout(data_pointer)

@@ -1,20 +1,20 @@
 """Build versioned object store"""
-import os
-import daos_build
 
 FILES = ["evt_iter.c", "vos_common.c", "vos_iterator.c", "vos_io.c",
          "vos_pool.c", "vos_aggregate.c", "vos_container.c", "vos_obj.c",
          "vos_obj_cache.c", "vos_obj_index.c", "vos_tree.c", "evtree.c",
          "vos_dtx.c", "vos_query.c", "vos_overhead.c",
          "vos_dtx_iter.c", "vos_gc.c", "vos_ilog.c", "ilog.c", "vos_ts.c",
-         "lru_array.c", "vos_space.c", "sys_db.c"]
+         "lru_array.c", "vos_space.c", "sys_db.c",
+         "vos_csum_recalc.c", "vos_pool_scrub.c"]
+
 
 def build_vos(env, standalone):
     """build vos"""
     denv = env.Clone()
 
     if standalone:
-        denv.Append(CPPDEFINES={'VOS_STANDALONE' : '1'})
+        denv.Append(CPPDEFINES={'VOS_STANDALONE': '1'})
         denv.Append(OBJPREFIX="s_")
         libname = 'vos'
     else:
@@ -27,9 +27,9 @@ def build_vos(env, standalone):
         # profiling tools will point at preprocessed file lines.
         files = denv.Preprocess(FILES)
 
-    vos = daos_build.library(denv, libname, files, install_off='../..',
-                             LIBS=['vea'])
+    vos = denv.d_library(libname, files, install_off='../..', LIBS=['vea'])
     denv.Install('$PREFIX/lib64/daos_srv', vos)
+
 
 def build_vos_internal(env):
     """build vos internal"""
@@ -40,28 +40,25 @@ def build_vos_internal(env):
     # Add runtime paths for daos libraries
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
 
-
-    vos_size = daos_build.library(denv, 'vos_size', ['vos_size.c'],
-                                  LIBS=libraries, install_off='../..')
+    vos_size = denv.d_library('vos_size', ['vos_size.c'], LIBS=libraries, install_off='../..')
 
     denv.Install('$PREFIX/lib64/daos_srv', vos_size)
 
+
 def scons():
     """Execute build"""
-    Import('env', 'base_env', 'prereqs')
+    Import('env', 'prereqs')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
-    base_env.AppendUnique(LIBPATH=[Dir('.')])
 
     if not prereqs.server_requested():
         return
 
     denv = env.Clone()
 
-    prereqs.require(denv, 'pmdk', 'argobots', 'protobufc', 'hwloc')
+    denv.require('pmdk', 'argobots', 'protobufc')
 
     # Compiler options
-    denv.Append(CPPPATH=[Dir('.').srcnode()])
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     build_vos(denv, False)
     build_vos(denv, True)
@@ -70,6 +67,7 @@ def scons():
     if prereqs.test_requested():
         SConscript('tests/SConscript', exports='denv')
     SConscript('storage_estimator/SConscript')
+
 
 if __name__ == "SCons.Script":
     scons()

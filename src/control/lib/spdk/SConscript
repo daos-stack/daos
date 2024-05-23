@@ -1,6 +1,6 @@
-#!/bin/env python
 """Build DAOS SPDK Go bindings"""
 from os.path import join
+
 
 def scons():
     """Execute build"""
@@ -9,31 +9,28 @@ def scons():
     denv.AppendUnique(LIBPATH=[Dir('.')])
 
     senv = denv.Clone()
-    prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
+    senv.require('pmdk', 'spdk', 'ofi')
     if senv["CC"] == 'icx':
-        #Avoid need to link Intel libraries in go build
+        # Avoid need to link Intel libraries in go build
         senv["CC"] = "gcc"
 
     senv.AppendUnique(CPPPATH=[join(Dir('.').srcnode().abspath, "include")])
     senv.AppendUnique(OBJPREFIX='s_')
 
     # Explicitly link RTE & SPDK libs for CGO access
-    libs = ['spdk_env_dpdk', 'spdk_nvme', 'spdk_vmd', 'rte_mempool']
-    libs += ['rte_mempool_ring', 'rte_bus_pci', 'nvme_control']
+    libs = ['spdk_log', 'spdk_env_dpdk', 'spdk_nvme', 'spdk_vmd', 'rte_mempool']
+    libs += ['rte_mempool_ring', 'rte_bus_pci']
 
     # Other libs
     libs += ['numa', 'dl']
 
-    senv.nc = senv.Object("src/nvme_control.c")
-    senv.ncc = senv.Object("src/nvme_control_common.c")
-    denv.nvmecontrol = senv.StaticLibrary("nvme_control",
-                                          [senv.nc, senv.ncc] + control_tgts,
-                                          LIBS=libs)
-
-    senv.Install(join(senv.subst("$PREFIX"), "lib64"), denv.nvmecontrol)
+    nc_obj = senv.Object("src/nvme_control.c")
+    ncc_obj = senv.Object("src/nvme_control_common.c")
+    senv.d_static_library("nvme_control", [nc_obj, ncc_obj, control_tgts], LIBS=libs)
 
     if prereqs.test_requested():
-        SConscript('ctests/SConscript', exports='senv')
+        SConscript('ctests/SConscript', exports=['senv', 'nc_obj', 'ncc_obj'])
+
 
 if __name__ == "SCons.Script":
     scons()

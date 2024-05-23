@@ -1,12 +1,6 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
-    - server-E
-  test_clients:
-    - client-A
+  test_servers: 5
+  test_clients: 1
 timeout: 600
 fault_path:
   - /fault1
@@ -16,31 +10,34 @@ fault_path:
   - /fault1
 server_config:
   name: daos_server
-  servers:
-    scm_size: 10
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+  system_ram_reserved: 1
 number_pools: 5
 pool_0:
-  name: daos_server
   size: 1G
   nranks: 1
   control_method: dmg
 pool_1:
-  name: daos_server
   size: 3G
   nranks: 3
   control_method: dmg
 pool_2:
-  name: daos_server
   smc_size: 3G
   nranks: 3
   control_method: dmg
 pool_3:
-  name: daos_server
   scm_size: 2G
   nranks: 2
   control_method: dmg
 pool_4:
-  name: daos_server
   scm_size: 2G
   nranks: 2
   control_method: dmg

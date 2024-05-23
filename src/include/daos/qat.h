@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -26,6 +26,7 @@ qat_dc_is_available();
 int
 qat_dc_init(CpaInstanceHandle *dcInstHandle,
 	    CpaDcSessionHandle *sessionHdl,
+	    CpaInstanceInfo2 *inst_info,
 	    Cpa16U *numInterBuffLists,
 	    CpaBufferList ***bufferInterArrayPtr,
 	    Cpa32U maxBufferSize,
@@ -34,6 +35,7 @@ qat_dc_init(CpaInstanceHandle *dcInstHandle,
 int
 qat_dc_compress(CpaInstanceHandle *dcInstHandle,
 		CpaDcSessionHandle *sessionHdl,
+		CpaInstanceInfo2 *inst_info,
 		uint8_t *src,
 		size_t srcLen,
 		uint8_t *dst,
@@ -44,6 +46,7 @@ qat_dc_compress(CpaInstanceHandle *dcInstHandle,
 int qat_dc_compress_async(
 		CpaInstanceHandle *dcInstHandle,
 		CpaDcSessionHandle *sessionHdl,
+		CpaInstanceInfo2 *inst_info,
 		uint8_t *src,
 		size_t srcLen,
 		uint8_t *dst,

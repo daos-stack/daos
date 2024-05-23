@@ -1,0 +1,62 @@
+hosts:
+  servers: !mux
+    6_server:
+      test_servers: server-[1-3]
+    8_server:
+      test_servers: server-[1-4]
+    12_server:
+      test_servers: server-[1-6]
+  test_clients: 2
+timeout: 1000
+setup:
+  start_agents_once: False
+  start_servers_once: False
+server_config:
+  name: daos_server
+  engines_per_host: 2
+  engines:
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31416
+      log_file: daos_server0.log
+      storage: auto
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31517
+      log_file: daos_server1.log
+      storage: auto
+pool:
+  control_method: dmg
+  size: 93%
+container:
+  type: POSIX
+  control_method: daos
+  properties: rd_fac:2
+mdtest:
+  client_processes:
+    np_48:
+      np: 48
+      num_of_files_dirs: 200
+  mdtest_api:
+    dfs:
+      api: 'DFS'
+  test_dir: "/"
+  iteration: 4
+  dfs_destroy: True
+  manager: "MPICH"
+  flags: "-u"
+  write_bytes: 4194304
+  read_bytes: 4194304
+  depth: 10
+  # EC does not supported for directory so for now running with RP
+  dfs_dir_oclass: "RP_3G1"
+  objectclass:
+    dfs_oclass_list:
+      #- [EC_Object_Class, Minimum number of servers]
+      - ["EC_2P2GX", 6]
+      - ["EC_4P2GX", 8]
+      - ["EC_8P2GX", 12]

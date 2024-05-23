@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,6 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
@@ -30,7 +31,7 @@ type (
 	onAwaitFormatFn  func(context.Context, uint32, string) error
 	onStorageReadyFn func(context.Context) error
 	onReadyFn        func(context.Context) error
-	onInstanceExitFn func(context.Context, uint32, system.Rank, error, uint64) error
+	onInstanceExitFn func(context.Context, uint32, ranklist.Rank, error, int) error
 )
 
 // EngineInstance encapsulates control-plane specific configuration
@@ -57,12 +58,13 @@ type EngineInstance struct {
 	onStorageReady  []onStorageReadyFn
 	onReady         []onReadyFn
 	onInstanceExit  []onInstanceExitFn
+	getDrpcClientFn func(string) drpc.DomainSocketClient
 
 	sync.RWMutex
 	// these must be protected by a mutex in order to
 	// avoid racy access.
+	_drpcSocket string
 	_cancelCtx  context.CancelFunc
-	_drpcClient drpc.DomainSocketClient
 	_superblock *Superblock
 	_lastErr    error // populated when harness receives signal
 }
@@ -156,16 +158,18 @@ func (ei *EngineInstance) Index() uint32 {
 	return ei.runner.GetConfig().Index
 }
 
+// SetCheckerMode adjusts the engine configuration to enable or disable
+// starting the engine in checker mode.
+func (ei *EngineInstance) SetCheckerMode(enabled bool) {
+	ei.runner.GetConfig().CheckerEnabled = enabled
+}
+
 // removeSocket removes the socket file used for dRPC communication with
 // harness and updates relevant ready states.
 func (ei *EngineInstance) removeSocket() error {
 	fMsg := fmt.Sprintf("removing instance %d socket file", ei.Index())
 
-	dc, err := ei.getDrpcClient()
-	if err != nil {
-		return errors.Wrap(err, fMsg)
-	}
-	engineSock := dc.GetSocketPath()
+	engineSock := ei.getDrpcSocket()
 
 	if err := checkDrpcClientSocketPath(engineSock); err != nil {
 		return errors.Wrap(err, fMsg)
@@ -177,49 +181,64 @@ func (ei *EngineInstance) removeSocket() error {
 	return nil
 }
 
-func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.NotifyReadyReq) (system.Rank, bool, error) {
+func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.NotifyReadyReq) (ranklist.Rank, bool, uint32, error) {
 	superblock := ei.getSuperblock()
 	if superblock == nil {
-		return system.NilRank, false, errors.New("nil superblock while determining rank")
+		return ranklist.NilRank, false, 0, errors.New("nil superblock while determining rank")
 	}
 
-	r := system.NilRank
+	r := ranklist.NilRank
 	if superblock.Rank != nil {
 		r = *superblock.Rank
 	}
 
-	resp, err := ei.joinSystem(ctx, &control.SystemJoinReq{
-		UUID:        superblock.UUID,
-		Rank:        r,
-		URI:         ready.GetUri(),
-		NumContexts: ready.GetNctxs(),
-		FaultDomain: ei.hostFaultDomain,
-		InstanceIdx: ei.Index(),
-		Incarnation: ready.GetIncarnation(),
-	})
+	joinReq := &control.SystemJoinReq{
+		UUID:                 superblock.UUID,
+		Rank:                 r,
+		URI:                  ready.GetUri(),
+		SecondaryURIs:        ready.GetSecondaryUris(),
+		NumContexts:          ready.GetNctxs(),
+		NumSecondaryContexts: ready.GetSecondaryNctxs(),
+		FaultDomain:          ei.hostFaultDomain,
+		InstanceIdx:          ei.Index(),
+		Incarnation:          ready.GetIncarnation(),
+		CheckMode:            ready.GetCheckMode(),
+	}
+
+	resp, err := ei.joinSystem(ctx, joinReq)
 	if err != nil {
 		ei.log.Errorf("join failed: %s", err)
-		return system.NilRank, false, err
-	} else if resp.State == system.MemberStateExcluded {
-		return system.NilRank, resp.LocalJoin, errors.Errorf("rank %d excluded", resp.Rank)
+		return ranklist.NilRank, false, 0, err
 	}
-	r = system.Rank(resp.Rank)
+	switch resp.State {
+	case system.MemberStateAdminExcluded, system.MemberStateExcluded:
+		return ranklist.NilRank, resp.LocalJoin, 0, errors.Errorf("rank %d excluded", resp.Rank)
+	case system.MemberStateCheckerStarted:
+		// If the system is in checker mode but the rank was not started in
+		// checker mode, we need to restart it in order to get the correct
+		// modules loaded.
+		if !ready.GetCheckMode() {
+			ei.log.Noticef("restarting rank %d in checker mode", resp.Rank)
+			go ei.requestStart(context.Background())
+			ei.SetCheckerMode(true)
+			return ranklist.NilRank, resp.LocalJoin, 0, errors.Errorf("rank %d restarting to enable checker", resp.Rank)
+		}
+	}
+	r = ranklist.Rank(resp.Rank)
 
-	// TODO: Check to see if ready.Uri != superblock.URI, which might
-	// need to trigger some kind of update?
-
-	if !superblock.ValidRank {
-		superblock.Rank = new(system.Rank)
+	if !superblock.ValidRank || ready.Uri != superblock.URI {
+		ei.log.Noticef("updating rank %d URI to %s", resp.Rank, ready.Uri)
+		superblock.Rank = new(ranklist.Rank)
 		*superblock.Rank = r
 		superblock.ValidRank = true
-		superblock.URI = ready.GetUri()
+		superblock.URI = ready.Uri
 		ei.setSuperblock(superblock)
 		if err := ei.WriteSuperblock(); err != nil {
-			return system.NilRank, resp.LocalJoin, err
+			return ranklist.NilRank, resp.LocalJoin, 0, err
 		}
 	}
 
-	return r, resp.LocalJoin, nil
+	return r, resp.LocalJoin, resp.MapVersion, nil
 }
 
 func (ei *EngineInstance) updateFaultDomainInSuperblock() error {
@@ -256,7 +275,7 @@ func (ei *EngineInstance) handleReady(ctx context.Context, ready *srvpb.NotifyRe
 		ei.log.Error(err.Error()) // nonfatal
 	}
 
-	r, localJoin, err := ei.determineRank(ctx, ready)
+	r, localJoin, mapVersion, err := ei.determineRank(ctx, ready)
 	if err != nil {
 		return err
 	}
@@ -267,11 +286,16 @@ func (ei *EngineInstance) handleReady(ctx context.Context, ready *srvpb.NotifyRe
 		return nil
 	}
 
-	return ei.SetupRank(ctx, r)
+	return ei.SetupRank(ctx, r, mapVersion)
 }
 
-func (ei *EngineInstance) SetupRank(ctx context.Context, rank system.Rank) error {
-	if err := ei.callSetRank(ctx, rank); err != nil {
+func (ei *EngineInstance) SetupRank(ctx context.Context, rank ranklist.Rank, map_version uint32) error {
+	if ei.IsReady() {
+		ei.log.Debugf("SetupRank called on an already set-up instance %d", ei.Index())
+		return nil
+	}
+
+	if err := ei.callSetRank(ctx, rank, map_version); err != nil {
 		return errors.Wrap(err, "SetRank failed")
 	}
 
@@ -283,8 +307,8 @@ func (ei *EngineInstance) SetupRank(ctx context.Context, rank system.Rank) error
 	return nil
 }
 
-func (ei *EngineInstance) callSetRank(ctx context.Context, rank system.Rank) error {
-	dresp, err := ei.CallDrpc(ctx, drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: rank.Uint32()})
+func (ei *EngineInstance) callSetRank(ctx context.Context, rank ranklist.Rank, map_version uint32) error {
+	dresp, err := ei.callDrpc(ctx, drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: rank.Uint32(), MapVersion: map_version})
 	if err != nil {
 		return err
 	}
@@ -301,7 +325,7 @@ func (ei *EngineInstance) callSetRank(ctx context.Context, rank system.Rank) err
 }
 
 // GetRank returns a valid instance rank or error.
-func (ei *EngineInstance) GetRank() (system.Rank, error) {
+func (ei *EngineInstance) GetRank() (ranklist.Rank, error) {
 	var err error
 	sb := ei.getSuperblock()
 
@@ -313,18 +337,26 @@ func (ei *EngineInstance) GetRank() (system.Rank, error) {
 	}
 
 	if err != nil {
-		return system.NilRank, err
+		return ranklist.NilRank, err
 	}
 
 	return *sb.Rank, nil
 }
 
-// setTargetCount updates target count in engine config.
-func (ei *EngineInstance) setTargetCount(numTargets int) {
+// setMemSize updates memory size in engine config.
+func (ei *EngineInstance) setMemSize(memSizeMb int) {
 	ei.Lock()
 	defer ei.Unlock()
 
-	ei.runner.GetConfig().TargetCount = numTargets
+	ei.runner.GetConfig().MemSize = memSizeMb
+}
+
+// setHugepageSz updates hugepage size in engine config.
+func (ei *EngineInstance) setHugepageSz(hpSizeMb int) {
+	ei.Lock()
+	defer ei.Unlock()
+
+	ei.runner.GetConfig().HugepageSz = hpSizeMb
 }
 
 // GetTargetCount returns the target count set for this instance.
@@ -336,7 +368,7 @@ func (ei *EngineInstance) GetTargetCount() int {
 }
 
 func (ei *EngineInstance) callSetUp(ctx context.Context) error {
-	dresp, err := ei.CallDrpc(ctx, drpc.MethodSetUp, nil)
+	dresp, err := ei.callDrpc(ctx, drpc.MethodSetUp, nil)
 	if err != nil {
 		return err
 	}
@@ -352,9 +384,10 @@ func (ei *EngineInstance) callSetUp(ctx context.Context) error {
 	return nil
 }
 
-// BioErrorNotify logs a blob I/O error.
-func (ei *EngineInstance) BioErrorNotify(bio *srvpb.BioErrorReq) {
+func (ei *EngineInstance) Debugf(format string, args ...interface{}) {
+	ei.log.Debugf(format, args...)
+}
 
-	ei.log.Errorf("I/O Engine instance %d (target %d) has detected blob I/O error! %v",
-		ei.Index(), bio.TgtId, bio)
+func (ei *EngineInstance) Tracef(format string, args ...interface{}) {
+	ei.log.Tracef(format, args...)
 }

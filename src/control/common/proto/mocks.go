@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,6 +10,7 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/dustin/go-humanize"
 )
 
 // MockNvmeNamespace is a mock protobuf Namespace message used in tests for
@@ -27,20 +28,25 @@ func MockNvmeNamespace(varIdx ...int32) *ctlpb.NvmeController_Namespace {
 
 // MockSmdDevice is a mock protobuf SmdDevice message used in tests for
 // multiple packages.
-func MockSmdDevice(parentTrAddr string, varIdx ...int32) *ctlpb.NvmeController_SmdDevice {
-	native := storage.MockSmdDevice(parentTrAddr, varIdx...)
+func MockSmdDevice(c *storage.NvmeController, varIdx ...int32) *ctlpb.SmdDevice {
+	native := storage.MockSmdDevice(c, varIdx...)
 	pb := new(SmdDevice)
 
 	if err := pb.FromNative(native); err != nil {
 		panic(err)
 	}
 
-	return pb.AsProto()
+	pbSmdDevice := pb.AsProto()
+	if c == nil {
+		pbSmdDevice.Ctrlr = nil
+	}
+
+	return pbSmdDevice
 }
 
 // MockNvmeHealth is a mock protobuf Health message used in tests for
 // multiple packages.
-func MockNvmeHealth(varIdx ...int32) *ctlpb.NvmeController_Health {
+func MockNvmeHealth(varIdx ...int32) *ctlpb.BioHealthResp {
 	native := storage.MockNvmeHealth(varIdx...)
 	pb := new(NvmeHealth)
 
@@ -108,4 +114,18 @@ func MockScmMountPoint(varIdx ...int32) *ctlpb.ScmNamespace_Mount {
 var MockPoolList = []*mgmtpb.ListPoolsResp_Pool{
 	{Uuid: "12345678-1234-1234-1234-123456789abc", SvcReps: []uint32{1, 2}},
 	{Uuid: "12345678-1234-1234-1234-cba987654321", SvcReps: []uint32{0}},
+}
+
+// MockPBMemInfo returns a mock MemInfo result.
+func MockPBMemInfo() *ctlpb.MemInfo {
+	return &ctlpb.MemInfo{
+		HugepagesTotal:    1024,
+		HugepagesFree:     512,
+		HugepagesReserved: 64,
+		HugepagesSurplus:  32,
+		HugepageSizeKb:    2048,
+		MemTotalKb:        (humanize.GiByte * 4) / humanize.KiByte,
+		MemFreeKb:         (humanize.GiByte * 1) / humanize.KiByte,
+		MemAvailableKb:    (humanize.GiByte * 2) / humanize.KiByte,
+	}
 }

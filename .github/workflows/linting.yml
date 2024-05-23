@@ -1,0 +1,177 @@
+name: Linting
+
+# Always run on Pull Requests as then these checks can be marked as required.
+on:
+  push:
+    branches:
+      - master
+      - 'feature/*'
+      - 'release/*'
+  pull_request:
+
+permissions: {}
+
+jobs:
+  # Run isort on the tree.
+  # This checks .py files only so misses SConstruct and SConscript files are not checked, rather
+  # for these files check them afterwards.  The output-filter will not be installed for this part
+  # so regressions will be detected but not annotated.
+  isort:
+    name: Python isort
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d  # v5.1.0
+        with:
+          python-version: '3'
+      - uses: isort/isort-action@master
+        with:
+          requirementsFiles: "requirements.txt"
+      - name: Run on SConstruct file.
+        run: isort --check-only SConstruct
+      - name: Run on build files.
+        run: find . -name SConscript | xargs isort --check-only
+
+  shell-check:
+    name: ShellCheck
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Run
+        run: sudo apt-get update && sudo apt-get install shellcheck
+      - name: Add error parser
+        run: echo -n "::add-matcher::ci/shellcheck-matcher.json"
+      - name: Run Shellcheck
+        # The check will run with this file from the target branch but the code from the PR so
+        # test for this file before calling it to prevent failures on PRs where this check is
+        # in the target branch but the PR is not updated to include it.
+        run: \[ ! -x ci/run_shellcheck.sh \] || ./ci/run_shellcheck.sh
+
+  log-check:
+    name: Logging macro checking
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Check DAOS logging macro use.
+        run: ./utils/cq/d_logging_check.py --github src
+
+  ftest-tags:
+    name: Ftest tag check
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+      - name: Check DAOS ftest tags.
+        run: \[ ! -x src/tests/ftest/tags.py \] || ./src/tests/ftest/tags.py lint --verbose
+
+  flake8-lint:
+    runs-on: ubuntu-22.04
+    name: Flake8 check
+    steps:
+      - name: Check out source repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Set up Python environment
+        uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d  # v5.1.0
+        with:
+          python-version: '3'
+      - name: Add parser
+        run: echo -n "::add-matcher::ci/daos-flake-matcher.json"
+      - name: Add whitespace parser
+        run: echo -n "::add-matcher::ci/daos-flakew-matcher.json"
+      - name: Add error parser
+        run: echo -n "::add-matcher::ci/daos-flakee-matcher.json"
+      - name: flake8 Lint
+        uses: py-actions/flake8@84ec6726560b6d5bd68f2a5bed83d62b52bb50ba  # v2.3.0
+        with:
+          # W503 and W504 are related as they conflict.  W503 is the preferred style and all code
+          # should be using it now.
+          ignore: 'W503'
+          exclude: 'src/control/vendor,src/client/pydaos/raw'
+          max-line-length: '100'
+      - name: flake8 Lint on SCons files.
+        uses: py-actions/flake8@84ec6726560b6d5bd68f2a5bed83d62b52bb50ba  # v2.3.0
+        with:
+          ignore: 'F821,W503,F841'
+          max-line-length: '100'
+          args: '--filename */SConscript, SConstruct'
+
+  doxygen:
+    name: Doxygen
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Install doxygen
+        run: sudo apt-get install doxygen
+      - name: Add parser
+        run: echo -n "::add-matcher::ci/daos-doxygen-matcher.json"
+      - name: Run check
+        run: doxygen Doxyfile
+      - name: 'Upload Artifact'
+        uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3  # v4.3.1
+        with:
+          name: API Documentation
+          path: docs/doxygen/html/
+          retention-days: 1
+
+  pylint:
+    name: Pylint check
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d  # v5.1.0
+        with:
+          python-version: '3.11'
+      - name: Install python packages
+        run: python3 -m pip install --requirement requirements.txt
+      - name: Install enchant
+        run: sudo apt-get update && sudo apt-get -y install python3-enchant
+      - name: Show versions
+        run: ./utils/cq/daos_pylint.py --version
+      - name: Run pylint check.
+        run: ./utils/cq/daos_pylint.py --git --output-format github
+
+  codespell:
+    name: Codespell
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+      - name: Install extra python packages
+        run: pip install --requirement utils/cq/requirements.txt
+      - name: Run check
+        uses: codespell-project/actions-codespell@3174815d6231f5bdc24dbfb6fc3b8caec73d521c  # master
+        with:
+          skip: ./src/control/vendor,./src/control/go.sum,./.git
+          ignore_words_file: ci/codespell.ignores
+          builtin: clear,rare,informal,names,en-GB_to_en-US
+
+  linting-summary:
+    name: Linting Summary
+    runs-on: ubuntu-22.04
+    needs: [isort, shell-check, log-check, ftest-tags, flake8-lint, doxygen, pylint, codespell]
+    if: (!cancelled())
+    steps:
+      - name: Check if any job failed
+        run: |
+          if [[ -z "$(echo "${{ join(needs.*.result, '') }}" | sed -e 's/success//g')" ]]; then
+            echo "All jobs succeeded"
+          else
+            echo "One or more jobs did not succeed"
+            exit 1
+          fi

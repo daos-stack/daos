@@ -1,0 +1,19 @@
+"""Build DAOS S3 client library"""
+
+
+def scons():
+    """Execute build"""
+    Import('env')
+
+    denv = env.Clone()
+
+    libraries = ['daos', 'dfs']
+    denv.AppendUnique(LIBPATH=["../dfs"])
+
+    ds3_src = ['pool.c', 'user.c', 'bucket.c', 'object.c', 'multipart.c']
+    ds3 = denv.d_library('ds3', ds3_src, LIBS=libraries)
+    denv.Install('$PREFIX/lib64/', ds3)
+
+
+if __name__ == "SCons.Script":
+    scons()

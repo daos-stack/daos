@@ -18,7 +18,7 @@ The DAOS Server provides capability to provision and manage network devices and
 non-volatile storage including the allocation of resources to engine instances.
 
 See
-[admin guide](https://daos-stack.github.io/admin/deployment/#hardware-provisioning)
+[admin guide](https://docs.daos.io/latest/admin/deployment/#hardware-provisioning)
 for details on hardware provisioning.
 
 ## Configuration
@@ -49,7 +49,7 @@ running DAOS servers in the [server config file](/utils/config/daos_server.yml).
 NOTES:
 * some environment variables can only be supplied to `daos_engine` instances
 through the server config file:
-	* `CRT_PHY_ADDR_STR`, `OFI_INTERFACE`, `OFI_PORT`, `D_LOG_MASK`,
+	* `D_PROVIDER`, `D_INTERFACE`, `D_PORT`, `D_LOG_MASK`,
 `D_LOG_FILE`
 * while it is very highly recommended to use the server config file as a means
 to supply parameters, environment variables not applied through the config file
@@ -115,7 +115,7 @@ and the DAOS Server occur over the management network, via the gRPC protocol.
 Management requests can be made to operate over resources local to specific
 storage nodes or to operate over the distributed DAOS system.
 When issuing `dmg` commands that operate over the DAOS system, requests are
-directed to the management service leader which is capable of handling them.
+directed to the management service (MS) leader which is capable of handling them.
 The control API is responsible for working out which `daos_server` instance
 is the MS leader and issuing the request, `dmg` uses the control API.
 The `dmg` tool requires the hostlist of all hosts in the DAOS system to be
@@ -157,8 +157,7 @@ Preparing SCM involves configuring DCPM modules in AppDirect memory regions
 resultant nvdimm namespaces are defined by a device identifier (e.g.
 /dev/pmem0).
 
-See `daos_server storage prepare --help` and the
-[admin guide](https://daos-stack.github.io/admin/deployment/#hardware-provisioning) for usage.
+See the [admin guide](https://docs.daos.io/latest/admin/deployment/#hardware-provisioning) for usage.
 
 ### Storage Scan
 
@@ -169,9 +168,7 @@ Device details for any discovered PMem (Intel(R) Optane(TM) persistent memory)
 modules on the storage server will be returned when running the `storage scan`
 subcommand.
 
-See `daos_server storage scan --help` and the
-[admin guide](https://daos-stack.github.io/admin/deployment/#storage-selection)
-for usage.
+See the [admin guide](https://docs.daos.io/latest/admin/deployment/#hardware-provisioning) for usage.
 
 ### Network Scan
 

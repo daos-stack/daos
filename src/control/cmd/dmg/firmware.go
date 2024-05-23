@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,31 +7,31 @@
 package main
 
 import (
-	"context"
 	"io"
 	"strings"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 )
 
 // firmwareOption defines a DMG option that enables firmware management in DAOS.
 type firmwareOption struct {
-	Firmware firmwareCmd `command:"firmware" alias:"fw" hidden:"true" description:"Manage the storage device firmware"`
+	Firmware firmwareCmd `command:"firmware" hidden:"true" description:"Manage the storage device firmware"`
 }
 
 // firmwareCmd defines the firmware management subcommands.
 type firmwareCmd struct {
-	Query  firmwareQueryCmd  `command:"query" alias:"q" description:"Query device firmware versions and status on DAOS storage nodes"`
-	Update firmwareUpdateCmd `command:"update" alias:"u" description:"Update the device firmware on DAOS storage nodes"`
+	Query  firmwareQueryCmd  `command:"query" description:"Query device firmware versions and status on DAOS storage nodes"`
+	Update firmwareUpdateCmd `command:"update" description:"Update the device firmware on DAOS storage nodes"`
 }
 
 // firmwareQueryCmd is used to query the storage device firmware on a set of DAOS hosts.
 type firmwareQueryCmd struct {
-	logCmd
+	baseCmd
 	ctlInvokerCmd
 	hostListCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 	DeviceType  string `short:"t" long:"type" choice:"nvme" choice:"scm" choice:"all" default:"all" description:"Type of storage devices to query"`
 	Devices     string `short:"d" long:"devices" description:"Comma-separated list of device identifiers to query"`
 	ModelID     string `short:"m" long:"model" description:"Model ID to filter results by"`
@@ -41,7 +41,7 @@ type firmwareQueryCmd struct {
 
 // Execute runs the firmware query command.
 func (cmd *firmwareQueryCmd) Execute(args []string) error {
-	ctx := context.Background()
+	ctx := cmd.MustLogCtx()
 
 	req := &control.FirmwareQueryReq{
 		SCM:         cmd.isSCMRequested(),
@@ -54,11 +54,11 @@ func (cmd *firmwareQueryCmd) Execute(args []string) error {
 		req.Devices = strings.Split(cmd.Devices, ",")
 	}
 
-	req.SetHostList(cmd.hostlist)
+	req.SetHostList(cmd.getHostList())
 	resp, err := control.FirmwareQuery(ctx, cmd.ctlInvoker, req)
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -81,7 +81,7 @@ func (cmd *firmwareQueryCmd) Execute(args []string) error {
 			return err
 		}
 	}
-	cmd.log.Info(bld.String())
+	cmd.Info(bld.String())
 
 	return resp.Errors()
 }
@@ -112,10 +112,10 @@ func (cmd *firmwareQueryCmd) getDisplayFunctions() (hostSCMQueryMapPrinter, host
 
 // firmwareUpdateCmd updates the firmware on storage devices on a set of DAOS hosts.
 type firmwareUpdateCmd struct {
-	logCmd
+	baseCmd
 	ctlInvokerCmd
 	hostListCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 	DeviceType  string `short:"t" long:"type" choice:"nvme" choice:"scm" required:"1" description:"Type of storage devices to update"`
 	FilePath    string `short:"p" long:"path" required:"1" description:"Path to the firmware file accessible from all nodes"`
 	Devices     string `short:"d" long:"devices" description:"Comma-separated list of device identifiers to update"`
@@ -126,7 +126,7 @@ type firmwareUpdateCmd struct {
 
 // Execute runs the firmware update command.
 func (cmd *firmwareUpdateCmd) Execute(args []string) error {
-	ctx := context.Background()
+	ctx := cmd.MustLogCtx()
 
 	req := &control.FirmwareUpdateReq{
 		FirmwarePath: cmd.FilePath,
@@ -144,11 +144,11 @@ func (cmd *firmwareUpdateCmd) Execute(args []string) error {
 		req.Devices = strings.Split(cmd.Devices, ",")
 	}
 
-	req.SetHostList(cmd.hostlist)
+	req.SetHostList(cmd.getHostList())
 	resp, err := control.FirmwareUpdate(ctx, cmd.ctlInvoker, req)
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -164,7 +164,7 @@ func (cmd *firmwareUpdateCmd) Execute(args []string) error {
 		return err
 	}
 
-	cmd.log.Info(bld.String())
+	cmd.Info(bld.String())
 
 	return resp.Errors()
 }

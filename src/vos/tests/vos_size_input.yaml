@@ -1,4 +1,3 @@
----
 # yaml sample
 # num_shards specifies the number of VOS pools.
 num_shards: 30

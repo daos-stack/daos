@@ -1,0 +1,37 @@
+hosts:
+  test_servers: 2
+  test_clients: 2
+timeout: 540
+server_config:
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      log_mask: INFO
+      storage: auto
+pool:
+  scm_size: 50000000000
+  nvme_size: 500000000000
+  svcn: 1
+  control_method: dmg
+container:
+  type: POSIX
+  control_method: daos
+ior:
+  env_vars:
+    - D_LOG_MASK=INFO
+  client_processes:
+    ppn: 6
+  test_file: daos:/testFile
+  repetitions: 1
+  dfs_destroy: false
+  iorflags:
+    flags: "-v -w -W -r -R -k"
+  api: DFS
+  transfer_size: '1M'
+  block_size: '8G'
+  objectclass: !mux
+    oclass_SX:
+      dfs_oclass: "SX"
+    oclass_RP_2GX:
+      dfs_oclass: "RP_2GX"

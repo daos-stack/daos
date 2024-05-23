@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -57,9 +57,9 @@ main(int argc, char **argv)
 		return rc;
 	}
 
-	gen_pool_and_placement_map(DOM_NR, NODE_PER_DOM,
+	gen_pool_and_placement_map(1, DOM_NR, NODE_PER_DOM,
 				   VOS_PER_TARGET, PL_TYPE_RING,
-				   &po_map, &pl_map);
+				   PO_COMP_TP_RANK, &po_map, &pl_map);
 	D_ASSERT(po_map != NULL);
 	D_ASSERT(pl_map != NULL);
 	pool_map_print(po_map);
@@ -71,9 +71,10 @@ main(int argc, char **argv)
 	oid.hi = 5;
 
 	/* initial placement when all nodes alive */
-	daos_obj_set_oid(&oid, 0, OC_RP_4G2, 0);
+	rc = daos_obj_set_oid_by_class(&oid, 0, OC_RP_4G2, 0);
+	assert_success(rc == 0);
 	D_PRINT("\ntest initial placement when no failed shard ...\n");
-	assert_success(plt_obj_place(oid, &lo_1, pl_map, true));
+	assert_success(plt_obj_place(oid, 0, &lo_1, pl_map, true));
 	plt_obj_layout_check(lo_1, COMPONENT_NR, 0);
 
 	/* test plt_obj_place when some/all shards failed */
@@ -81,7 +82,7 @@ main(int argc, char **argv)
 	for (i = 0; i < SPARE_MAX_NUM && i < lo_1->ol_nr; i++)
 		plt_fail_tgt(lo_1->ol_shards[i].po_target, &po_ver, po_map,
 			     pl_debug_msg);
-	assert_success(plt_obj_place(oid, &lo_2, pl_map, true));
+	assert_success(plt_obj_place(oid, 0, &lo_2, pl_map, true));
 	plt_obj_layout_check(lo_2, COMPONENT_NR, 0);
 	D_ASSERT(!plt_obj_layout_match(lo_1, lo_2));
 	D_PRINT("spare target candidate:");
@@ -95,12 +96,12 @@ main(int argc, char **argv)
 	for (i = 0; i < SPARE_MAX_NUM && i < lo_1->ol_nr; i++)
 		plt_reint_tgt_up(lo_1->ol_shards[i].po_target, &po_ver, po_map,
 			    pl_debug_msg);
-	assert_success(plt_obj_place(oid, &lo_3, pl_map, true));
+	assert_success(plt_obj_place(oid, 0, &lo_3, pl_map, true));
 	plt_obj_layout_check(lo_3, COMPONENT_NR, 0);
 	D_ASSERT(plt_obj_layout_match(lo_1, lo_3));
 
 	/* test pl_obj_find_rebuild */
-	D_PRINT("\ntest pl_obj_find_rebuild to get correct spare tagets ...\n");
+	D_PRINT("\ntest pl_obj_find_rebuild to get correct spare targets ...\n");
 	failed_tgts[0] = lo_3->ol_shards[0].po_target;
 	failed_tgts[1] = lo_3->ol_shards[1].po_target;
 	D_PRINT("failed target %d[0], %d[1], expected spare %d %d\n",
@@ -118,7 +119,7 @@ main(int argc, char **argv)
 
 	/* test pl_obj_find_reint */
 	D_PRINT("\ntest pl_obj_find_reint to get correct reintegration "
-		"tagets ...\n");
+		"targets ...\n");
 	reint_tgts[0] = lo_3->ol_shards[0].po_target;
 	failed_tgts[0] = lo_3->ol_shards[1].po_target;
 	plt_reint_tgts_get(pl_uuid, oid, failed_tgts, 1, reint_tgts, 1,
@@ -154,8 +155,8 @@ main(int argc, char **argv)
 
 
 	/* test pl_obj_find_reint */
-	D_PRINT("\ntest pl_obj_find_reint to get correct reintregationi "
-		"tagets ...\n");
+	D_PRINT("\ntest pl_obj_find_reint to get correct reintregation "
+		"targets ...\n");
 	reint_tgts[0] = lo_3->ol_shards[0].po_target;
 	reint_tgts[1] = spare_tgt_candidate[0];
 	failed_tgts[0] = lo_3->ol_shards[1].po_target;

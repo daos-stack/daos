@@ -52,7 +52,7 @@ directory.
 
 ### Control Service
 
-The gRPC server registers the [control service](/src/proto/ctl/control.proto)
+The gRPC server registers the [control service](/src/proto/ctl/ctl.proto)
 to handle requests from the management tool.
 
 Control service requests are operations that will be performed on one or more
@@ -61,7 +61,7 @@ handlers triggered on receipt of control service RPCs will typically end-up
 calling into native-C storage or network libraries through the relevant
 go bindings e.g. [ipmctl](/src/control/lib/ipmctl/README.md),
 [spdk](/src/control/lib/ipmctl/README.md) or
-[netdetect](/src/control/lib/netdetect/README.md).
+[hardware](/src/control/lib/hardware).
 
 Such broadcast commands (which will be issued after connecting to a list of
 hosts) will usually be issued by the
@@ -186,7 +186,7 @@ storage media which will remove blobstores and remove any filesystem signatures
 from the SSD controller namespaces.
 
 Formatting will be performed on devices identified by PCI addresses specified
-in config file parameter `bdev_list` when `bdev_class` is equal to `nvme`.
+in config file parameter `bdev_list` when `class` is equal to `nvme`.
 
 In order to designate NVMe devices to be used by DAOS data plane instances, the
 control plane will generate a `daos_nvme.conf` file to be consumed by SPDK
@@ -203,10 +203,10 @@ A view of DAOS' software component architecture:
 ## Running
 
 For instructions on building and running DAOS see the
-[admin guide](https://daos-stack.github.io/admin/installation/).
+[admin guide](https://docs.daos.io/latest/admin/hardware/).
 
 ## Configuration
 
 For instructions on configuring the DAOS server see the
-[admin guide](https://daos-stack.github.io/admin/deployment/#server-configuration-file).
+[admin guide](https://docs.daos.io/latest/admin/deployment/#server-configuration-file).
 

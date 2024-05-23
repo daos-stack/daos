@@ -1,8 +1,9 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package logging
 
 import (
@@ -24,11 +25,17 @@ const (
 func NewCommandLineLogger() *LeveledLogger {
 	return &LeveledLogger{
 		level: DefaultLogLevel,
+		traceLoggers: []TraceLogger{
+			NewTraceLogger(os.Stderr),
+		},
 		debugLoggers: []DebugLogger{
 			NewDebugLogger(os.Stderr),
 		},
 		infoLoggers: []InfoLogger{
 			NewCommandLineInfoLogger(os.Stdout),
+		},
+		noticeLoggers: []NoticeLogger{
+			NewCommandLineNoticeLogger(os.Stderr),
 		},
 		errorLoggers: []ErrorLogger{
 			NewCommandLineErrorLogger(os.Stderr),
@@ -48,11 +55,17 @@ func NewStdoutLogger(prefix string) *LeveledLogger {
 func NewCombinedLogger(prefix string, output io.Writer) *LeveledLogger {
 	return &LeveledLogger{
 		level: DefaultLogLevel,
+		traceLoggers: []TraceLogger{
+			NewTraceLogger(output),
+		},
 		debugLoggers: []DebugLogger{
 			NewDebugLogger(output),
 		},
 		infoLoggers: []InfoLogger{
 			NewInfoLogger(prefix, output),
+		},
+		noticeLoggers: []NoticeLogger{
+			NewNoticeLogger(prefix, output),
 		},
 		errorLoggers: []ErrorLogger{
 			NewErrorLogger(prefix, output),
@@ -62,9 +75,33 @@ func NewCombinedLogger(prefix string, output io.Writer) *LeveledLogger {
 
 // NewTestLogger returns a logger and a *LogBuffer,
 // with the logger configured to send all output into
-// the buffer. The logger's level is set to DEBUG by default.
+// the buffer. The logger's level is set to TRACE by default.
 func NewTestLogger(prefix string) (*LeveledLogger, *LogBuffer) {
 	var buf LogBuffer
 	return NewCombinedLogger(prefix, &buf).
-		WithLogLevel(LogLevelDebug), &buf
+		WithLogLevel(LogLevelTrace), &buf
+}
+
+// NewTestCommandlineLogger returns a commandline logger and a *LogBuffer, with the logger
+// configured to send all output into the buffer. The logger's level is set to TRACE by default.
+func NewTestCommandLineLogger() (*LeveledLogger, *LogBuffer) {
+	var buf LogBuffer
+	return &LeveledLogger{
+		level: LogLevelTrace,
+		traceLoggers: []TraceLogger{
+			NewTraceLogger(&buf),
+		},
+		debugLoggers: []DebugLogger{
+			NewDebugLogger(&buf),
+		},
+		infoLoggers: []InfoLogger{
+			NewCommandLineInfoLogger(&buf),
+		},
+		noticeLoggers: []NoticeLogger{
+			NewCommandLineNoticeLogger(&buf),
+		},
+		errorLoggers: []ErrorLogger{
+			NewCommandLineErrorLogger(&buf),
+		},
+	}, &buf
 }

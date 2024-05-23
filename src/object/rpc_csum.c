@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -62,6 +62,7 @@ proc_struct_dcs_csum_info_adv(crt_proc_t proc, crt_proc_op_t proc_op,
 		return 0;
 
 	if (ENCODING(proc_op)) {
+		D_ASSERT(csum->cs_csum != NULL);
 		rc = crt_proc_memcpy(proc, proc_op,
 				     csum->cs_csum + idx * csum->cs_len,
 				     buf_len);
@@ -74,8 +75,7 @@ proc_struct_dcs_csum_info_adv(crt_proc_t proc, crt_proc_op_t proc_op,
 		if (csum->cs_csum == NULL)
 			return -DER_NOMEM;
 
-		rc = crt_proc_memcpy(proc, proc_op,
-				     csum->cs_csum, csum->cs_buf_len);
+		rc = crt_proc_memcpy(proc, proc_op, csum->cs_csum, csum->cs_buf_len);
 		if (unlikely(rc)) {
 			D_FREE(csum->cs_csum);
 			return rc;
@@ -167,8 +167,7 @@ crt_proc_struct_dcs_iod_csums_adv(crt_proc_t proc, crt_proc_op_t proc_op,
 			D_ASSERT(iod_csum->ic_nr == 1);
 			singv_ci = &iod_csum->ic_data[0];
 			D_ASSERT(idx < singv_ci->cs_nr);
-			rc = proc_struct_dcs_csum_info_adv(proc, proc_op,
-							   singv_ci, idx, 1);
+			rc = proc_struct_dcs_csum_info_adv(proc, proc_op, singv_ci, idx, 1);
 			if (unlikely(rc))
 				return rc;
 		} else {
@@ -183,15 +182,17 @@ crt_proc_struct_dcs_iod_csums_adv(crt_proc_t proc, crt_proc_op_t proc_op,
 
 	if (DECODING(proc_op)) {
 		PROC(uint32_t, &iod_csum->ic_nr);
-		D_ALLOC_ARRAY(iod_csum->ic_data, iod_csum->ic_nr);
-		if (iod_csum->ic_data == NULL)
-			return -DER_NOMEM;
-		for (i = 0; i < iod_csum->ic_nr; i++) {
-			rc = proc_struct_dcs_csum_info(proc, proc_op,
-						       &iod_csum->ic_data[i]);
-			if (unlikely(rc)) {
-				D_FREE(iod_csum->ic_data);
-				return rc;
+		if (iod_csum->ic_nr) {
+			D_ALLOC_ARRAY(iod_csum->ic_data, iod_csum->ic_nr);
+			if (iod_csum->ic_data == NULL)
+				return -DER_NOMEM;
+			for (i = 0; i < iod_csum->ic_nr; i++) {
+				rc = proc_struct_dcs_csum_info(proc, proc_op,
+							       &iod_csum->ic_data[i]);
+				if (unlikely(rc)) {
+					D_FREE(iod_csum->ic_data);
+					return rc;
+				}
 			}
 		}
 	}
@@ -210,7 +211,8 @@ crt_proc_struct_dcs_iod_csums_adv(crt_proc_t proc, crt_proc_op_t proc_op,
 
 	rc = proc_struct_dcs_csum_info(proc, proc_op, &iod_csum->ic_akey);
 	if (unlikely(rc)) {
-		D_FREE(iod_csum->ic_data);
+		if (DECODING(proc_op))
+			D_FREE(iod_csum->ic_data);
 		return rc;
 	}
 

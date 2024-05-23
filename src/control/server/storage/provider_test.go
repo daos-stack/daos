@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,15 +7,21 @@
 package storage
 
 import (
+	"os"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/provider/system"
 )
+
+var mockScmTier = NewTierConfig().WithStorageClass(ClassDcpm.String()).
+	WithScmMountPoint("/mnt/daos0").
+	WithScmDeviceList("/dev/pmem0")
 
 // defBdevCmpOpts returns a default set of cmp option suitable for this package
 func defBdevCmpOpts() []cmp.Option {
@@ -25,200 +31,649 @@ func defBdevCmpOpts() []cmp.Option {
 	}
 }
 
-func Test_filterScanResp(t *testing.T) {
-	ctrlr1 := MockNvmeController(1)
-	ctrlr2 := MockNvmeController(2)
-	ctrlr3 := MockNvmeController(3)
-	ctrlr4 := MockNvmeController(4)
-	ctrlr5 := MockNvmeController(5)
+func Test_BdevWriteRequestFromConfig(t *testing.T) {
+	hostname, err := os.Hostname()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	for name, tc := range map[string]struct {
-		scanResp   *BdevScanResponse
-		deviceList []string
-		expResp    *BdevScanResponse
+		cfg        *Config
+		vmdEnabled bool
+		getTopoFn  topologyGetter
+		expReq     *BdevWriteConfigRequest
 		expErr     error
 	}{
-		"nil scan response": {
-			expErr: errors.New("nil response"),
+		"nil config": {
+			expErr: errors.New("nil config"),
 		},
-		"scan response no filter": {
-			scanResp: &BdevScanResponse{
-				Controllers: NvmeControllers{ctrlr1, ctrlr2, ctrlr3},
-			},
-			expResp: &BdevScanResponse{
-				Controllers: NvmeControllers{ctrlr1, ctrlr2, ctrlr3},
-			},
+		"nil topo function": {
+			cfg:    &Config{},
+			expErr: errors.New("nil GetTopology"),
 		},
-		"scan response filtered": {
-			deviceList: []string{ctrlr1.PciAddr, ctrlr3.PciAddr},
-			scanResp: &BdevScanResponse{
-				Controllers: NvmeControllers{ctrlr1, ctrlr2, ctrlr3},
+		"no bdev configs": {
+			cfg: &Config{
+				Tiers:         TierConfigs{mockScmTier},
+				EnableHotplug: true,
 			},
-			expResp: &BdevScanResponse{
-				Controllers: NvmeControllers{ctrlr1, ctrlr3},
-			},
-		},
-		"scan response inclusive filter": {
-			deviceList: []string{ctrlr1.PciAddr, ctrlr2.PciAddr, ctrlr3.PciAddr},
-			scanResp: &BdevScanResponse{
-				Controllers: NvmeControllers{ctrlr1, ctrlr3},
-			},
-			expResp: &BdevScanResponse{
-				Controllers: NvmeControllers{ctrlr1, ctrlr3},
+			getTopoFn: MockGetTopology,
+			expReq: &BdevWriteConfigRequest{
+				OwnerUID:       os.Geteuid(),
+				OwnerGID:       os.Getegid(),
+				TierProps:      []BdevTierProperties{},
+				Hostname:       hostname,
+				HotplugEnabled: true,
 			},
 		},
-		"scan response exclusive filter": {
-			deviceList: []string{ctrlr1.PciAddr, ctrlr5.PciAddr, ctrlr3.PciAddr},
-			scanResp: &BdevScanResponse{
-				Controllers: NvmeControllers{ctrlr2, ctrlr4},
+		"hotplug disabled": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
+						WithBdevBusidRange("0x00-0x7f"),
+				},
 			},
-			expResp: &BdevScanResponse{
-				Controllers: NvmeControllers{},
+			getTopoFn: MockGetTopology,
+			expReq: &BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{Class: ClassNvme},
+				},
+				Hostname: hostname,
+			},
+		},
+		"range specified": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
+						WithBdevBusidRange("0x70-0x7f"),
+				},
+				EnableHotplug: true,
+			},
+			getTopoFn: MockGetTopology,
+			expReq: &BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{Class: ClassNvme},
+				},
+				Hostname:          hostname,
+				HotplugEnabled:    true,
+				HotplugBusidBegin: 0x70,
+				HotplugBusidEnd:   0x7f,
+			},
+		},
+		"range specified; vmd enabled": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
+						WithBdevBusidRange("0x70-0x7f"),
+				},
+				EnableHotplug: true,
+			},
+			vmdEnabled: true,
+			getTopoFn:  MockGetTopology,
+			expReq: &BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{Class: ClassNvme},
+				},
+				Hostname:          hostname,
+				HotplugEnabled:    true,
+				HotplugBusidBegin: 0x00,
+				HotplugBusidEnd:   0xff,
+				VMDEnabled:        true,
+			},
+		},
+		"range unspecified": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()),
+				},
+				EnableHotplug: true,
+			},
+			getTopoFn: MockGetTopology,
+			expReq: &BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{Class: ClassNvme},
+				},
+				Hostname:        hostname,
+				HotplugEnabled:  true,
+				HotplugBusidEnd: 0x07,
+			},
+		},
+		"range unspecified; vmd enabled": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()),
+				},
+				EnableHotplug: true,
+			},
+			vmdEnabled: true,
+			getTopoFn:  MockGetTopology,
+			expReq: &BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{Class: ClassNvme},
+				},
+				Hostname:          hostname,
+				HotplugEnabled:    true,
+				HotplugBusidBegin: 0x00,
+				HotplugBusidEnd:   0xff,
+				VMDEnabled:        true,
+			},
+		},
+		"accel properties; spdk": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()),
+				},
+				AccelProps: AccelProps{
+					Engine:  AccelEngineSPDK,
+					Options: AccelOptCRCFlag | AccelOptMoveFlag,
+				},
+			},
+			getTopoFn: MockGetTopology,
+			expReq: &BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{Class: ClassNvme},
+				},
+				Hostname: hostname,
+				AccelProps: AccelProps{
+					Engine:  AccelEngineSPDK,
+					Options: AccelOptCRCFlag | AccelOptMoveFlag,
+				},
+			},
+		},
+		"spdk rpc server enabled": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()),
+				},
+				SpdkRpcSrvProps: SpdkRpcServer{
+					Enable:   true,
+					SockAddr: "/tmp/spdk.sock",
+				},
+			},
+			getTopoFn: MockGetTopology,
+			expReq: &BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{Class: ClassNvme},
+				},
+				Hostname: hostname,
+				SpdkRpcSrvProps: SpdkRpcServer{
+					Enable:   true,
+					SockAddr: "/tmp/spdk.sock",
+				},
+			},
+		},
+		"auto faulty criteria applied": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()),
+				},
+				AutoFaultyProps: BdevAutoFaulty{
+					Enable:      true,
+					MaxIoErrs:   10000,
+					MaxCsumErrs: 20000,
+				},
+			},
+			getTopoFn: MockGetTopology,
+			expReq: &BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{Class: ClassNvme},
+				},
+				Hostname: hostname,
+				AutoFaultyProps: BdevAutoFaulty{
+					Enable:      true,
+					MaxIoErrs:   10000,
+					MaxCsumErrs: 20000,
+				},
 			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
-			gotResp, gotErr := filterScanResp(log, tc.scanResp, tc.deviceList...)
-			common.CmpErr(t, tc.expErr, gotErr)
+			gotReq, gotErr := BdevWriteConfigRequestFromConfig(test.Context(t), log, tc.cfg,
+				tc.vmdEnabled, tc.getTopoFn)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expResp, gotResp, defBdevCmpOpts()...); diff != "" {
-				t.Fatalf("\nunexpected response (-want, +got):\n%s\n", diff)
+			if diff := cmp.Diff(tc.expReq, gotReq, defBdevCmpOpts()...); diff != "" {
+				t.Fatalf("\nunexpected generated request (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
 }
 
-func Test_scanBdevs(t *testing.T) {
+func TestStorage_FormatControlMetadata(t *testing.T) {
 	for name, tc := range map[string]struct {
-		scanReq  BdevScanRequest
-		cache    *BdevScanResponse
-		scanResp *BdevScanResponse
-		scanErr  error
-		expMsg   string
-		expResp  *BdevScanResponse
-		expErr   error
+		nilProv      bool
+		cfg          *Config
+		metadataProv MetadataProvider
+		expErr       error
 	}{
-		"scan error": {
-			scanReq: BdevScanRequest{},
-			scanErr: errors.New("fail"),
-			expErr:  errors.New("fail"),
+		"nil": {
+			nilProv: true,
+			expErr:  errors.New("nil"),
 		},
-		"nil scan response": {
-			scanReq:  BdevScanRequest{},
-			scanResp: nil,
-			expErr:   errors.New("nil response"),
+		"no control metadata cfg": {
+			cfg:          &Config{},
+			metadataProv: &MockMetadataProvider{FormatErr: errors.New("format was called!")},
 		},
-		"nil devices": {
-			scanReq:  BdevScanRequest{},
-			scanResp: new(BdevScanResponse),
-			expResp: &BdevScanResponse{
-				Controllers: NvmeControllers{},
-			},
-		},
-		"no devices": {
-			scanReq: BdevScanRequest{},
-			scanResp: &BdevScanResponse{
-				Controllers: NvmeControllers{},
-			},
-			expResp: &BdevScanResponse{
-				Controllers: NvmeControllers{},
-			},
-		},
-		"use cache": {
-			scanReq: BdevScanRequest{},
-			cache: &BdevScanResponse{
-				Controllers: MockNvmeControllers(3),
-			},
-			scanResp: &BdevScanResponse{
-				Controllers: MockNvmeControllers(2),
-			},
-			expResp: &BdevScanResponse{
-				Controllers: MockNvmeControllers(3),
-			},
-		},
-		"bypass cache": {
-			scanReq: BdevScanRequest{BypassCache: true},
-			cache: &BdevScanResponse{
-				Controllers: MockNvmeControllers(3),
-			},
-			scanResp: &BdevScanResponse{
-				Controllers: MockNvmeControllers(2),
-			},
-			expResp: &BdevScanResponse{
-				Controllers: MockNvmeControllers(2),
-			},
-		},
-		"ignore nil cache": {
-			scanReq: BdevScanRequest{},
-			scanResp: &BdevScanResponse{
-				Controllers: MockNvmeControllers(3),
-			},
-			expResp: &BdevScanResponse{
-				Controllers: MockNvmeControllers(3),
-			},
-		},
-		"ignore empty cache": {
-			scanReq: BdevScanRequest{},
-			cache:   &BdevScanResponse{},
-			scanResp: &BdevScanResponse{
-				Controllers: MockNvmeControllers(3),
-			},
-			expResp: &BdevScanResponse{
-				Controllers: MockNvmeControllers(3),
-			},
-		},
-		"filtered devices from backend scan": {
-			scanReq: BdevScanRequest{
-				DeviceList: []string{
-					MockNvmeController(0).PciAddr,
-					MockNvmeController(1).PciAddr,
+		"format failed": {
+			cfg: &Config{
+				ControlMetadata: ControlMetadata{
+					Path: "something",
 				},
 			},
-			scanResp: &BdevScanResponse{
-				Controllers: MockNvmeControllers(3),
-			},
-			expResp: &BdevScanResponse{
-				Controllers: MockNvmeControllers(2),
-			},
+			metadataProv: &MockMetadataProvider{FormatErr: errors.New("mock format")},
+			expErr:       errors.New("mock format"),
 		},
-		"filtered devices from cache": {
-			scanReq: BdevScanRequest{
-				DeviceList: []string{
-					MockNvmeController(0).PciAddr,
-					MockNvmeController(1).PciAddr,
+		"success": {
+			cfg: &Config{
+				ControlMetadata: ControlMetadata{
+					Path: "something",
 				},
 			},
-			cache: &BdevScanResponse{
-				Controllers: MockNvmeControllers(3),
+			metadataProv: &MockMetadataProvider{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			var p *Provider
+			if !tc.nilProv {
+				p = NewProvider(log, 0, tc.cfg, nil, nil, nil, tc.metadataProv)
+			}
+
+			err := p.FormatControlMetadata([]uint{0, 1})
+
+			test.CmpErr(t, tc.expErr, err)
+		})
+	}
+}
+
+func TestStorage_ControlMetadataNeedsFormat(t *testing.T) {
+	for name, tc := range map[string]struct {
+		nilProv      bool
+		cfg          *Config
+		metadataProv MetadataProvider
+		expResult    bool
+		expErr       error
+	}{
+		"nil": {
+			nilProv: true,
+			expErr:  errors.New("nil"),
+		},
+		"no control metadata cfg": {
+			cfg:          &Config{},
+			metadataProv: &MockMetadataProvider{NeedsFormatErr: errors.New("NeedsFormat was called")},
+		},
+		"NeedsFormat failed": {
+			cfg: &Config{
+				ControlMetadata: ControlMetadata{
+					Path: "something",
+				},
 			},
-			expResp: &BdevScanResponse{
-				Controllers: MockNvmeControllers(2),
+			metadataProv: &MockMetadataProvider{NeedsFormatErr: errors.New("mock NeedsFormat")},
+			expErr:       errors.New("mock NeedsFormat"),
+		},
+		"format not needed": {
+			cfg: &Config{
+				ControlMetadata: ControlMetadata{
+					Path: "something",
+				},
+			},
+			metadataProv: &MockMetadataProvider{},
+		},
+		"format needed": {
+			cfg: &Config{
+				ControlMetadata: ControlMetadata{
+					Path: "something",
+				},
+			},
+			metadataProv: &MockMetadataProvider{
+				NeedsFormatRes: true,
+			},
+			expResult: true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			var p *Provider
+			if !tc.nilProv {
+				p = NewProvider(log, 0, tc.cfg, nil, nil, nil, tc.metadataProv)
+			}
+
+			result, err := p.ControlMetadataNeedsFormat()
+
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expResult, result, "")
+		})
+	}
+}
+
+func TestStorage_MountControlMetadata(t *testing.T) {
+	for name, tc := range map[string]struct {
+		nilProv      bool
+		cfg          *Config
+		metadataProv MetadataProvider
+		scmProv      ScmProvider
+		expErr       error
+	}{
+		"nil": {
+			nilProv: true,
+			expErr:  errors.New("nil"),
+		},
+		"no control metadata cfg": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					{
+						Class: "dcpm",
+						Scm: ScmConfig{
+							MountPoint: "/scm",
+							DeviceList: []string{"/dev/pmem0"},
+						},
+					},
+				},
+			},
+			metadataProv: &MockMetadataProvider{MountErr: errors.New("metadata mount was called!")},
+			scmProv:      &MockScmProvider{MountErr: errors.New("scm mount was called!")},
+			expErr:       errors.New("scm mount was called!"), // verify that we called into SCM provider
+		},
+		"mount failed": {
+			cfg: &Config{
+				ControlMetadata: ControlMetadata{
+					Path:       "something",
+					DevicePath: "somethingelse",
+				},
+			},
+			metadataProv: &MockMetadataProvider{MountErr: errors.New("mock mount")},
+			expErr:       errors.New("mock mount"),
+		},
+		"success": {
+			cfg: &Config{
+				ControlMetadata: ControlMetadata{
+					Path:       "something",
+					DevicePath: "somethingelse",
+				},
+			},
+			metadataProv: &MockMetadataProvider{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			var p *Provider
+			if !tc.nilProv {
+				p = NewProvider(log, 0, tc.cfg, nil, tc.scmProv, nil, tc.metadataProv)
+			}
+
+			err := p.MountControlMetadata()
+
+			test.CmpErr(t, tc.expErr, err)
+		})
+	}
+}
+
+func TestStorage_ControlMetadataIsMounted(t *testing.T) {
+	for name, tc := range map[string]struct {
+		nilProv    bool
+		cfg        *Config
+		sysProvCfg *system.MockSysConfig
+		expResult  bool
+		expErr     error
+		expInput   []string
+	}{
+		"nil provider": {
+			nilProv: true,
+			expErr:  errors.New("nil"),
+		},
+		"no control metadata cfg": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					{
+						Class: "dcpm",
+						Scm: ScmConfig{
+							MountPoint: "/scm",
+							DeviceList: []string{"/dev/pmem0"},
+						},
+					},
+				},
+			},
+			expInput: []string{"/scm"},
+		},
+		"IsMounted failed": {
+			cfg: &Config{
+				ControlMetadata: ControlMetadata{
+					Path:       "/something",
+					DevicePath: "/dev/somethingelse",
+				},
+			},
+			sysProvCfg: &system.MockSysConfig{
+				IsMountedErr: errors.New("mock IsMounted"),
+			},
+			expErr:   errors.New("mock IsMounted"),
+			expInput: []string{"/something"},
+		},
+		"mounted": {
+			cfg: &Config{
+				ControlMetadata: ControlMetadata{
+					Path:       "/something",
+					DevicePath: "/dev/somethingelse",
+				},
+			},
+			sysProvCfg: &system.MockSysConfig{
+				IsMountedBool: true,
+			},
+			expResult: true,
+			expInput:  []string{"/something"},
+		},
+		"not mounted": {
+			cfg: &Config{
+				ControlMetadata: ControlMetadata{
+					Path:       "/something",
+					DevicePath: "/dev/somethingelse",
+				},
+			},
+			sysProvCfg: &system.MockSysConfig{},
+			expResult:  false,
+			expInput:   []string{"/something"},
+		},
+		"no device": {
+			cfg: &Config{
+				ControlMetadata: ControlMetadata{
+					Path: "/something",
+				},
+			},
+			sysProvCfg: &system.MockSysConfig{ // No need to check IsMounted in this case
+				IsMountedErr: errors.New("IsMounted was called!"),
 			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
-			scanFn := func(r BdevScanRequest) (*BdevScanResponse, error) {
-				return tc.scanResp, tc.scanErr
+			sysProv := system.NewMockSysProvider(log, tc.sysProvCfg)
+			var p *Provider
+			if !tc.nilProv {
+				p = NewProvider(log, 0, tc.cfg, sysProv, nil, nil, nil)
 			}
 
-			gotResp, gotErr := scanBdevs(log, tc.scanReq, tc.cache, scanFn)
-			common.CmpErr(t, tc.expErr, gotErr)
-			if gotErr != nil {
-				return
+			result, err := p.ControlMetadataIsMounted()
+
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expResult, result, "")
+
+			test.AssertEqual(t, tc.expInput, sysProv.IsMountedInputs, "")
+		})
+	}
+}
+
+func TestStorage_ControlMetadataPath(t *testing.T) {
+	for name, tc := range map[string]struct {
+		nilProv   bool
+		cfg       *Config
+		expResult string
+	}{
+		"nil": {
+			nilProv:   true,
+			expResult: defaultMetadataPath,
+		},
+		"control metadata path": {
+			cfg: &Config{
+				ControlMetadata: ControlMetadata{
+					Path:       "/metadata",
+					DevicePath: "/dev/dev0",
+				},
+			},
+			expResult: "/metadata/daos_control",
+		},
+		"no control metadata uses scm": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					{
+						Class: "dcpm",
+						Scm: ScmConfig{
+							MountPoint: "/scm",
+							DeviceList: []string{"/dev/pmem0"},
+						},
+					},
+				},
+			},
+			expResult: "/scm",
+		},
+		"no scm mountpoint": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					{
+						Class: "dcpm",
+						Scm: ScmConfig{
+							DeviceList: []string{"/dev/pmem0"},
+						},
+					},
+				},
+			},
+			expResult: defaultMetadataPath,
+		},
+		"no scm tier": {
+			cfg: &Config{
+				Tiers: TierConfigs{},
+			},
+			expResult: defaultMetadataPath,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			var p *Provider
+			if !tc.nilProv {
+				p = NewProvider(log, 0, tc.cfg, nil, nil, nil, nil)
 			}
 
-			if diff := cmp.Diff(tc.expResp, gotResp, defBdevCmpOpts()...); diff != "" {
-				t.Fatalf("\nunexpected response (-want, +got):\n%s\n", diff)
+			test.AssertEqual(t, tc.expResult, p.ControlMetadataPath(), "")
+		})
+	}
+}
+
+func TestStorage_ControlMetadataEnginePath(t *testing.T) {
+	for name, tc := range map[string]struct {
+		nilProv   bool
+		engineIdx uint
+		cfg       *Config
+		expResult string
+	}{
+		"nil": {
+			nilProv:   true,
+			expResult: defaultMetadataPath,
+		},
+		"control metadata path": {
+			engineIdx: 2,
+			cfg: &Config{
+				ControlMetadata: ControlMetadata{
+					Path:       "/metadata",
+					DevicePath: "/dev/dev0",
+				},
+			},
+			expResult: "/metadata/daos_control/engine2",
+		},
+		"no control metadata uses scm": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					{
+						Class: "dcpm",
+						Scm: ScmConfig{
+							MountPoint: "/scm",
+							DeviceList: []string{"/dev/pmem0"},
+						},
+					},
+				},
+			},
+			expResult: "/scm",
+		},
+		"no scm mountpoint": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					{
+						Class: "dcpm",
+						Scm: ScmConfig{
+							DeviceList: []string{"/dev/pmem0"},
+						},
+					},
+				},
+			},
+			expResult: defaultMetadataPath,
+		},
+		"no scm tier": {
+			cfg: &Config{
+				Tiers: TierConfigs{},
+			},
+			expResult: defaultMetadataPath,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			var p *Provider
+			if !tc.nilProv {
+				p = NewProvider(log, int(tc.engineIdx), tc.cfg, nil, nil, nil, nil)
 			}
+
+			if tc.cfg != nil {
+				tc.cfg.EngineIdx = tc.engineIdx
+			}
+
+			test.AssertEqual(t, tc.expResult, p.ControlMetadataEnginePath(), "")
 		})
 	}
 }

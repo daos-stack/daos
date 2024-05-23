@@ -239,32 +239,64 @@ func getDaosAttribute(hdl C.daos_handle_t, at attrType, name string) (*attribute
 	return attrs[0], nil
 }
 
-func setDaosAttribute(hdl C.daos_handle_t, at attrType, attr *attribute) error {
-	if attr == nil {
-		return errors.Errorf("nil %T", attr)
+// setDaosAttributes sets the values for the given list of attribute names.
+// Uses the bulk attribute set API to minimize roundtrips.
+func setDaosAttributes(hdl C.daos_handle_t, at attrType, attrs attrList) error {
+	if len(attrs) == 0 {
+		return nil
 	}
 
-	attrName := C.CString(attr.Name)
-	defer freeString(attrName)
+	// First, build a slice of C strings for the attribute names.
+	attrNames := make([]*C.char, len(attrs))
+	for i, attr := range attrs {
+		attrNames[i] = C.CString(attr.Name)
+	}
+	defer func(nameSlice []*C.char) {
+		for _, name := range nameSlice {
+			freeString(name)
+		}
+	}(attrNames)
 
-	// NB: We are copying the value into C memory for safety and simplicity.
-	valLen := C.uint64_t(len(attr.Value))
-	valBuf := C.malloc(valLen)
-	valSlice := (*[1 << 30]byte)(valBuf)
-	copy(valSlice[:], attr.Value)
-	defer C.free(valBuf)
+	// Next, create a slice of C.size_t entries to hold the sizes of the values,
+	// and a slice of pointers to the actual values.
+	valSizes := make([]C.size_t, len(attrs))
+	valBufs := make([]unsafe.Pointer, len(attrs))
+	for i, attr := range attrs {
+		valSizes[i] = C.size_t(len(attr.Value))
+		// NB: We are copying the values into C memory for safety and simplicity.
+		valBufs[i] = C.malloc(valSizes[i])
+		valSlice := (*[1 << 30]byte)(valBufs[i])
+		copy(valSlice[:], attr.Value)
+	}
+	defer func(bufSlice []unsafe.Pointer) {
+		for _, buf := range bufSlice {
+			C.free(buf)
+		}
+	}(valBufs)
 
+	attrCount := C.int(len(attrs))
 	var rc C.int
 	switch at {
 	case poolAttr:
-		rc = C.daos_pool_set_attr(hdl, 1, &attrName, &valBuf, &valLen, nil)
+		rc = C.daos_pool_set_attr(hdl, attrCount, &attrNames[0], &valBufs[0], &valSizes[0], nil)
 	case contAttr:
-		rc = C.daos_cont_set_attr(hdl, 1, &attrName, &valBuf, &valLen, nil)
+		rc = C.daos_cont_set_attr(hdl, attrCount, &attrNames[0], &valBufs[0], &valSizes[0], nil)
 	default:
 		return errors.Errorf("unknown attr type %d", at)
 	}
 
 	return daosError(rc)
+}
+
+// setDaosAttribute sets the value for the given attribute name.
+// NB: For operations involving multiple attributes, the setDaosAttributes()
+// function is preferred for efficiency.
+func setDaosAttribute(hdl C.daos_handle_t, at attrType, attr *attribute) error {
+	if attr == nil {
+		return errors.Errorf("nil %T", attr)
+	}
+
+	return setDaosAttributes(hdl, at, attrList{attr})
 }
 
 func delDaosAttribute(hdl C.daos_handle_t, at attrType, name string) error {

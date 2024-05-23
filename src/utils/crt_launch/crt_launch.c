@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,7 +7,7 @@
  * MPI-based and cart-based crt_launch application that facilitates launching
  * cart-based clients and servers when no pmix is used.
  *
- * Usage is mpirun -x OFI_INTERFACE=eth0 -H <hosts> crt_launch <app to run>
+ * Usage is mpirun -x D_INTERFACE=eth0 -H <hosts> crt_launch <app to run>
  *
  * crt_launch will prepare environment for app and exec provided <app to run>
  * The environment consists of envariables:
@@ -24,7 +24,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <mpi.h>
+#include <daos/dpar.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -148,8 +148,6 @@ get_self_uri(struct host *h, int rank)
 {
 	char		*uri;
 	crt_context_t	ctx;
-	char		*p;
-	int		len;
 	int		rc;
 	char		*str_port = NULL;
 
@@ -158,7 +156,7 @@ get_self_uri(struct host *h, int rank)
 	if (str_port == NULL)
 		return -DER_NOMEM;
 
-	setenv("OFI_PORT", str_port, 1);
+	d_setenv("OFI_PORT", str_port, 1);
 
 	rc = crt_init(0, CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	if (rc != 0) {
@@ -178,24 +176,9 @@ get_self_uri(struct host *h, int rank)
 		D_GOTO(out, rc);
 	}
 
-	len = strlen(uri);
-
 	strncpy(h->self_uri, uri, URI_MAX-1);
+	h->ofi_port = atoi(str_port);
 
-	/* Find port number - first from the end number separated by :*/
-	/* URIs have a form of: ofi+sockets://10.8.1.55:48259 */
-	p = uri+len;
-	while (*p != ':') {
-		p--;
-		if (p == uri)
-			break;
-	}
-
-	/* Replace : with space */
-	*p = ' ';
-
-	p++;
-	h->ofi_port = atoi(p);
 	D_FREE(uri);
 
 	rc = crt_context_destroy(ctx, 1);
@@ -250,7 +233,7 @@ generate_group_file(int world_size, struct host *h)
 	}
 
 	fclose(f);
-	setenv("CRT_L_GRP_CFG", grp_info_template, true);
+	d_setenv("CRT_L_GRP_CFG", grp_info_template, true);
 
 	return 0;
 }
@@ -264,6 +247,8 @@ int main(int argc, char **argv)
 	int		rc = 0;
 	char		str_rank[255];
 	char		str_port[255];
+
+	d_setenv("D_PORT_AUTO_ADJUST", "1", true);
 
 	if (argc < 2) {
 		show_usage("Insufficient number of arguments");
@@ -290,10 +275,10 @@ int main(int argc, char **argv)
 	 * Using MPI negotiate ranks between each process and retrieve
 	 * URI.
 	 */
-	MPI_Init(&argc, &argv);
+	par_init(&argc, &argv);
 
-	MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
-	MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+	par_rank(PAR_COMM_WORLD, &my_rank);
+	par_size(PAR_COMM_WORLD, &world_size);
 
 	hostbuf = calloc(sizeof(*hostbuf), 1);
 	if (!hostbuf) {
@@ -315,9 +300,7 @@ int main(int argc, char **argv)
 		D_GOTO(exit, rc);
 	}
 
-	MPI_Allgather(hostbuf, sizeof(struct host), MPI_CHAR,
-		recv_buf, sizeof(struct host), MPI_CHAR,
-		   MPI_COMM_WORLD);
+	par_allgather(PAR_COMM_WORLD, hostbuf, recv_buf, sizeof(struct host), PAR_CHAR);
 
 	/* Generate group configuration file */
 	rc = generate_group_file(world_size, recv_buf);
@@ -326,13 +309,14 @@ int main(int argc, char **argv)
 		D_GOTO(exit, rc);
 	}
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	sprintf(str_rank, "%d", hostbuf->my_rank);
 	sprintf(str_port, "%d", hostbuf->ofi_port);
 	/* Set CRT_L_RANK and OFI_PORT */
-	setenv("CRT_L_RANK", str_rank, true);
-	setenv("OFI_PORT", str_port, true);
+	d_setenv("CRT_L_RANK", str_rank, true);
+	d_setenv("D_PORT", str_port, true);
+
 exit:
 	if (hostbuf)
 		free(hostbuf);
@@ -340,7 +324,7 @@ exit:
 	if (recv_buf)
 		free(recv_buf);
 
-	MPI_Finalize();
+	par_fini();
 
 	if (rc == 0) {
 		rc = execvp(g_opt.app_to_exec, &argv[g_opt.app_args_indx]);

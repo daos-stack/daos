@@ -26,13 +26,13 @@ public class DaosObjectTest {
   public void setup() throws Exception {
     PowerMockito.mockStatic(DaosObjClient.class);
     DaosObjectId oid = new DaosObjectId();
-    oid.encode();
+    oid.encode(0L);
     DaosObjClient client = Mockito.mock(DaosObjClient.class);
     long contPtr = 12345;
     long address = oid.getBuffer().memoryAddress();
     long objPtr = 6789;
     Mockito.when(client.getContPtr()).thenReturn(contPtr);
-    Mockito.when(client.openObject(contPtr, address, OpenMode.UNKNOWN.getValue())).thenReturn(objPtr);
+    Mockito.when(client.openObject(contPtr, address, OpenMode.DAOS_OO_RW.getValue())).thenReturn(objPtr);
     object = new DaosObject(client, oid);
   }
 

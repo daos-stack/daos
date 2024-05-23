@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -35,15 +35,15 @@ dts_oid_gen(unsigned seed)
 }
 
 daos_unit_oid_t
-dts_unit_oid_gen(daos_oclass_id_t oclass, uint8_t ofeats, uint32_t shard)
+dts_unit_oid_gen(enum daos_otype_t type, uint32_t shard)
 {
 	daos_unit_oid_t	uoid;
 
-	uoid.id_pub	= dts_oid_gen(time(NULL));
-	daos_obj_set_oid(&uoid.id_pub, ofeats, oclass ? oclass : DTS_OCLASS_DEF,
-			 0);
+	uoid.id_pub	= dts_oid_gen((unsigned int)(time(NULL) & 0xFFFFFFFFUL));
+	daos_obj_set_oid(&uoid.id_pub, type, DTS_OCLASS_DEF, shard + 1, 0);
 	uoid.id_shard	= shard;
-	uoid.id_pad_32	= 0;
+	uoid.id_layout_ver = 0;
+	uoid.id_padding = 0;
 
 	return uoid;
 }
@@ -205,6 +205,7 @@ v_dts_sgl_init_with_strings_repeat(d_sg_list_t *sgl, uint32_t repeat,
 
 		arg = va_arg(valist, char *);
 	}
+	sgl->sg_nr_out = count;
 }
 
 void
@@ -226,4 +227,136 @@ dts_sgl_init_with_strings_repeat(d_sg_list_t *sgl, uint32_t repeat,
 	va_start(valist, d);
 	v_dts_sgl_init_with_strings_repeat(sgl, repeat, count, d, valist);
 	va_end(valist);
+}
+
+void
+dts_sgl_alloc_single_iov(d_sg_list_t *sgl, daos_size_t size)
+{
+	d_sgl_init(sgl, 1);
+	D_ALLOC(sgl->sg_iovs[0].iov_buf, size);
+	D_ASSERT(sgl->sg_iovs[0].iov_buf != NULL);
+	sgl->sg_iovs[0].iov_buf_len = size;
+}
+
+void
+dts_sgl_generate(d_sg_list_t *sgl, uint32_t iov_nr, daos_size_t data_size, uint8_t value)
+{
+	int i;
+
+	d_sgl_init(sgl, iov_nr);
+
+	for (i = 0; i < iov_nr; i++) {
+		daos_iov_alloc(&sgl->sg_iovs[0], data_size, true);
+		D_ASSERT(sgl->sg_iovs[0].iov_buf != NULL);
+		memset(sgl->sg_iovs[0].iov_buf, value, data_size);
+	}
+	sgl->sg_nr_out = iov_nr; /* All have data */
+}
+
+void
+td_init(struct test_data *td, uint32_t iod_nr, struct td_init_args args)
+{
+	int i, j;
+	const daos_iod_type_t	*iod_types = args.ca_iod_types;
+	const uint32_t		*recx_nr = args.ca_recx_nr;
+
+	if (args.ca_data_size == 0)
+		args.ca_data_size = 100;
+
+	D_ALLOC_ARRAY(td->td_iods, iod_nr);
+	D_ALLOC_ARRAY(td->td_sgls, iod_nr);
+	D_ALLOC_ARRAY(td->td_maps, iod_nr);
+	D_ALLOC_ARRAY(td->td_sizes, iod_nr);
+	td->td_iods_nr = iod_nr;
+
+	dts_iov_alloc_str(&td->dkey, "dkey");
+
+	for (i = 0; i < iod_nr; i++) {
+		daos_iod_t	*iod = &td->td_iods[i];
+		d_sg_list_t	*sgl = &td->td_sgls[i];
+		daos_iom_t	*map = &td->td_maps[i];
+		uint32_t	 data_len = args.ca_data_size;
+
+		/* Initialize and create some data */
+		dts_sgl_generate(sgl, 1, args.ca_data_size, 0xAB);
+		D_ASSERT(daos_sgl_data_len(sgl) == data_len);
+
+		iod->iod_type = iod_types[i];
+		dts_iov_alloc_str(&iod->iod_name, "akey");
+		if (iod_types[i] == DAOS_IOD_ARRAY) {
+			D_ALLOC_ARRAY(iod->iod_recxs, recx_nr[i]);
+			D_ALLOC_ARRAY(map->iom_recxs, recx_nr[i]);
+
+			iod->iod_nr = recx_nr[i];
+			iod->iod_size = 1;
+			map->iom_nr = recx_nr[i];
+			map->iom_nr_out = recx_nr[i];
+
+			/* split the data evenly over the recxs */
+			for (j = 0; j < iod->iod_nr; j++) {
+				daos_recx_t *recx = &iod->iod_recxs[j];
+
+				recx->rx_nr = data_len / iod->iod_nr;
+				recx->rx_idx = recx->rx_nr * j;
+				map->iom_recxs[j] = *recx;
+			}
+			map->iom_recx_lo = map->iom_recxs[0];
+			map->iom_recx_hi = map->iom_recxs[map->iom_nr - 1];
+		} else {
+			iod->iod_size = data_len;
+			iod->iod_nr = 1;
+		}
+		map->iom_size = iod->iod_size;
+		map->iom_type = iod->iod_type;
+		td->td_sizes[i] = iod->iod_size;
+	}
+}
+
+void
+td_init_single_values(struct test_data *td, uint32_t iod_nr)
+{
+	struct td_init_args args = {0};
+	int i;
+
+	for (i = 0; i < iod_nr; i++)
+		args.ca_iod_types[i] = DAOS_IOD_SINGLE;
+
+	td_init(td, iod_nr, args);
+}
+
+void
+td_init_array_values(struct test_data *td, uint32_t iod_nr, uint32_t recx_nr, uint32_t data_size,
+		     uint32_t chunksize)
+{
+	struct td_init_args args = {0};
+	int i;
+
+	for (i = 0; i < iod_nr; i++) {
+		args.ca_iod_types[i] = DAOS_IOD_ARRAY;
+		args.ca_recx_nr[i] = recx_nr;
+	}
+
+	args.ca_data_size = data_size;
+
+	td_init(td, iod_nr, args);
+}
+
+void
+td_destroy(struct test_data *td)
+{
+	int i;
+
+	for (i = 0; i < td->td_iods_nr; i++) {
+		D_FREE(td->td_iods[i].iod_recxs);
+		D_FREE(td->td_maps[i].iom_recxs);
+		daos_iov_free(&td->td_iods[i].iod_name);
+
+		d_sgl_fini(&td->td_sgls[i], true);
+	}
+
+	daos_iov_free(&td->dkey);
+	D_FREE(td->td_sgls);
+	D_FREE(td->td_maps);
+	D_FREE(td->td_sizes);
+	D_FREE(td->td_iods);
 }

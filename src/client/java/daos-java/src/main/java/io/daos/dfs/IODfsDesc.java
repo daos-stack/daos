@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -33,6 +33,7 @@ public class IODfsDesc implements DaosEventQueue.Attachment {
   private int actualLength;
 
   private boolean released;
+  private boolean discarded;
 
   private static final Logger log = LoggerFactory.getLogger(IODfsDesc.class);
 
@@ -82,6 +83,16 @@ public class IODfsDesc implements DaosEventQueue.Attachment {
   @Override
   public boolean alwaysBoundToEvt() {
     return false;
+  }
+
+  @Override
+  public void discard() {
+    discarded = true;
+  }
+
+  @Override
+  public boolean isDiscarded() {
+    return discarded;
   }
 
   /**

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -58,7 +58,7 @@ func EngineStateInfoToProto(rsi *EngineStateInfo) (*sharedpb.RASEvent_EngineStat
 }
 
 // NewEngineDiedEvent creates a specific EngineDied event from given inputs.
-func NewEngineDiedEvent(hostname string, instanceIdx uint32, rank uint32, exitErr common.ExitStatus, exPid uint64) *RASEvent {
+func NewEngineDiedEvent(hostname string, instanceIdx uint32, rank uint32, exitErr common.ExitStatus, exPid int) *RASEvent {
 	return fill(&RASEvent{
 		Msg:      fmt.Sprintf("DAOS engine %d exited unexpectedly: %s", instanceIdx, exitErr),
 		ID:       RASEngineDied,
@@ -85,5 +85,18 @@ func NewEngineFormatRequiredEvent(hostname string, instanceIdx uint32, formatTyp
 		ExtendedInfo: &EngineStateInfo{
 			InstanceIdx: instanceIdx,
 		},
+	})
+}
+
+// NewEngineJoinFailedEvent creates an EngineJoinFailed event from the given inputs.
+func NewEngineJoinFailedEvent(hostname string, instanceIdx uint32, rank uint32, reason string) *RASEvent {
+	return fill(&RASEvent{
+		Msg:          fmt.Sprintf("DAOS engine %d (rank %d) was not allowed to join the system", instanceIdx, rank),
+		ID:           RASEngineJoinFailed,
+		Hostname:     hostname,
+		Rank:         rank,
+		Type:         RASTypeInfoOnly,
+		Severity:     RASSeverityError,
+		ExtendedInfo: NewStrInfo(reason),
 	})
 }

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -26,8 +26,11 @@ unsigned int svc_nreplicas = 1;
 unsigned int	dt_csum_type;
 unsigned int	dt_csum_chunksize;
 bool		dt_csum_server_verify;
+/** container cell size */
+unsigned int	dt_cell_size;
 int		dt_obj_class;
-
+int		dt_redun_lvl;
+int		dt_redun_fac;
 
 /* Create or import a single pool with option to store info in arg->pool
  * or an alternate caller-specified test_pool structure.
@@ -57,19 +60,20 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 		d_rank_list_dup(&outpool->svc, ipool->svc);
 		outpool->slave = 1;
 		if (arg->multi_rank)
-			MPI_Barrier(MPI_COMM_WORLD);
+			par_barrier(PAR_COMM_WORLD);
 		return 0;
 	}
 
 	if (arg->myrank == 0) {
 		char		*env;
 		int		 size_gb;
-		daos_size_t	 nvme_size;
+		daos_size_t	 nvme_size = 0;
 		d_rank_list_t	 *rank_list = NULL;
 
-		env = getenv("POOL_SCM_SIZE");
+		d_agetenv_str(&env, "POOL_SCM_SIZE");
 		if (env) {
 			size_gb = atoi(env);
+			d_freeenv_str(&env);
 			if (size_gb != 0)
 				outpool->pool_size =
 					(daos_size_t)size_gb << 30;
@@ -82,9 +86,10 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 		 * Set env POOL_NVME_SIZE to overwrite the default NVMe size.
 		 */
 		nvme_size = outpool->pool_size * 4;
-		env = getenv("POOL_NVME_SIZE");
+		d_agetenv_str(&env, "POOL_NVME_SIZE");
 		if (env) {
 			size_gb = atoi(env);
+			d_freeenv_str(&env);
 			nvme_size = (daos_size_t)size_gb << 30;
 		}
 
@@ -105,28 +110,27 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 		else
 			print_message("setup: created pool "DF_UUIDF"\n",
 				       DP_UUID(outpool->pool_uuid));
+		uuid_unparse(outpool->pool_uuid, outpool->pool_str);
 		if (rank_list)
 			d_rank_list_free(rank_list);
 	}
 out:
 	/** broadcast pool create result */
 	if (arg->multi_rank) {
-		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
 		/** broadcast pool UUID and svc addresses */
 		if (!rc) {
-			MPI_Bcast(outpool->pool_uuid, 16,
-				  MPI_CHAR, 0, MPI_COMM_WORLD);
+			par_bcast(PAR_COMM_WORLD, outpool->pool_uuid, 16, PAR_CHAR, 0);
+			uuid_unparse(outpool->pool_uuid, outpool->pool_str);
 
 			/* TODO: Should we even be broadcasting this now? */
 			if (outpool->svc == NULL)
 				return rc;
-			MPI_Bcast(&outpool->svc->rl_nr,
-				  sizeof(outpool->svc->rl_nr),
-				  MPI_CHAR, 0, MPI_COMM_WORLD);
-			MPI_Bcast(outpool->svc->rl_ranks,
-				  sizeof(outpool->svc->rl_ranks[0]) *
-					 outpool->svc->rl_nr,
-				  MPI_CHAR, 0, MPI_COMM_WORLD);
+			par_bcast(PAR_COMM_WORLD, &outpool->svc->rl_nr, sizeof(outpool->svc->rl_nr),
+				  PAR_CHAR, 0);
+			par_bcast(PAR_COMM_WORLD, outpool->svc->rl_ranks,
+				  sizeof(outpool->svc->rl_ranks[0]) * outpool->svc->rl_nr,
+				  PAR_CHAR, 0);
 		}
 	}
 	return rc;
@@ -145,7 +149,7 @@ test_setup_pool_connect(void **state, struct test_pool *pool)
 		       sizeof(pool->pool_info));
 		arg->pool.poh = pool->poh;
 		if (arg->multi_rank)
-			MPI_Barrier(MPI_COMM_WORLD);
+			par_barrier(PAR_COMM_WORLD);
 		return 0;
 	}
 
@@ -162,9 +166,9 @@ test_setup_pool_connect(void **state, struct test_pool *pool)
 					       &arg->pool.pool_info,
 					       NULL);
 		} else {
-			print_message("setup: connecting to pool "DF_UUID"\n",
-				      DP_UUID(arg->pool.pool_uuid));
-			rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+			print_message("setup: connecting to pool %s\n",
+				      arg->pool.pool_str);
+			rc = daos_pool_connect(arg->pool.pool_str, arg->group,
 					       flags, &arg->pool.poh,
 					       &arg->pool.pool_info, NULL);
 		}
@@ -188,12 +192,11 @@ test_setup_pool_connect(void **state, struct test_pool *pool)
 
 	/** broadcast pool connect result */
 	if (arg->multi_rank) {
-		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
 		if (!rc) {
 			/** broadcast pool info */
-			MPI_Bcast(&arg->pool.pool_info,
-				  sizeof(arg->pool.pool_info),
-				  MPI_CHAR, 0, MPI_COMM_WORLD);
+			par_bcast(PAR_COMM_WORLD, &arg->pool.pool_info, sizeof(arg->pool.pool_info),
+				  PAR_CHAR, 0);
 			/** l2g and g2l the pool handle */
 			handle_share(&arg->pool.poh, HANDLE_POOL,
 				     arg->myrank, arg->pool.poh, 0);
@@ -209,22 +212,67 @@ test_setup_cont_create(void **state, daos_prop_t *co_prop)
 	int rc = 0;
 
 	if (arg->myrank == 0) {
-		uuid_generate(arg->co_uuid);
-		print_message("setup: creating container "DF_UUIDF"\n",
-			      DP_UUID(arg->co_uuid));
-		rc = daos_cont_create(arg->pool.poh, arg->co_uuid, co_prop,
-				      NULL);
-		if (rc)
+		daos_prop_t	*redun_lvl_prop = NULL;
+		daos_prop_t	*merged_props = NULL;
+
+		/* create container with redun_lvl on RANK */
+		if (!co_prop || daos_prop_entry_get(co_prop, DAOS_PROP_CO_REDUN_LVL) == NULL) {
+			redun_lvl_prop = daos_prop_alloc(1);
+			if (redun_lvl_prop == NULL) {
+				D_ERROR("failed to allocate prop\n");
+				return -DER_NOMEM;
+			}
+			redun_lvl_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+			redun_lvl_prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RANK;
+
+			if (co_prop) {
+				merged_props = daos_prop_merge(co_prop, redun_lvl_prop);
+				if (merged_props == NULL) {
+					D_ERROR("failed to merge cont_prop and redun_lvl_prop\n");
+					daos_prop_free(redun_lvl_prop);
+					return -DER_NOMEM;
+				}
+				co_prop = merged_props;
+			} else {
+				co_prop = redun_lvl_prop;
+			}
+		}
+
+		D_ASSERT(co_prop != NULL);
+		if (daos_prop_entry_get(co_prop, DAOS_PROP_CO_LABEL) == NULL) {
+			char cont_label[32];
+			static int cont_idx;
+
+			sprintf(cont_label, "daos_test_%d", cont_idx++);
+			print_message("setup: creating container with label %s\n", cont_label);
+			rc = daos_cont_create_with_label(arg->pool.poh, cont_label,
+							 co_prop, &arg->co_uuid, NULL);
+		} else {
+			print_message("setup: creating container\n");
+			rc = daos_cont_create(arg->pool.poh, &arg->co_uuid, co_prop, NULL);
+		}
+
+		daos_prop_free(redun_lvl_prop);
+		daos_prop_free(merged_props);
+
+		if (rc) {
 			print_message("daos_cont_create failed, rc: %d\n", rc);
+		} else {
+			print_message("setup: container "DF_UUIDF" created\n",
+				      DP_UUID(arg->co_uuid));
+			uuid_unparse(arg->co_uuid, arg->co_str);
+		}
 	}
 	/** broadcast container create result */
 	if (arg->multi_rank) {
-		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
 		/** broadcast container UUID */
-		if (!rc)
-			MPI_Bcast(arg->co_uuid, 16,
-				  MPI_CHAR, 0, MPI_COMM_WORLD);
+		if (!rc) {
+			par_bcast(PAR_COMM_WORLD, arg->co_uuid, 16, PAR_CHAR, 0);
+			uuid_unparse(arg->co_uuid, arg->co_str);
+		}
 	}
+
 	return rc;
 }
 
@@ -244,9 +292,9 @@ test_setup_cont_open(void **state)
 					    &arg->coh, &arg->co_info,
 					    NULL);
 		} else {
-			print_message("setup: opening container "DF_UUID"\n",
-				      DP_UUID(arg->co_uuid));
-			rc = daos_cont_open(arg->pool.poh, arg->co_uuid,
+			print_message("setup: opening container %s\n",
+				      arg->co_str);
+			rc = daos_cont_open(arg->pool.poh, arg->co_str,
 					    arg->cont_open_flags,
 					    &arg->coh, &arg->co_info, NULL);
 		}
@@ -255,7 +303,7 @@ test_setup_cont_open(void **state)
 	}
 	/** broadcast container open result */
 	if (arg->multi_rank) {
-		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
 		/** l2g and g2l the container handle */
 		if (!rc)
 			handle_share(&arg->coh, HANDLE_CO,
@@ -299,7 +347,7 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 	unsigned int		 seed;
 	int			 rc = 0;
 	daos_prop_t		 co_props = {0};
-	struct daos_prop_entry	 csum_entry[3] = {0};
+	struct daos_prop_entry	 dpp_entry[6] = {0};
 	struct daos_prop_entry	*entry;
 
 	/* feed a seed for pseudo-random number generator */
@@ -316,8 +364,8 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		*state = arg;
 		memset(arg, 0, sizeof(*arg));
 
-		MPI_Comm_rank(MPI_COMM_WORLD, &arg->myrank);
-		MPI_Comm_size(MPI_COMM_WORLD, &arg->rank_size);
+		par_rank(PAR_COMM_WORLD, &arg->myrank);
+		par_size(PAR_COMM_WORLD, &arg->rank_size);
 		arg->multi_rank = multi_rank;
 		arg->pool.pool_size = pool_size;
 		arg->setup_state = -1;
@@ -352,7 +400,7 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		print_message("\n-------\n"
 			      "Checksum enabled in test!"
 			      "\n-------\n");
-		entry = &csum_entry[co_props.dpp_nr];
+		entry = &dpp_entry[co_props.dpp_nr];
 		entry->dpe_type = DAOS_PROP_CO_CSUM;
 		entry->dpe_val = dt_csum_type;
 
@@ -360,14 +408,14 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 	}
 
 	if (dt_csum_chunksize) {
-		entry = &csum_entry[co_props.dpp_nr];
+		entry = &dpp_entry[co_props.dpp_nr];
 		entry->dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
 		entry->dpe_val = dt_csum_chunksize;
 		co_props.dpp_nr++;
 	}
 
 	if (dt_csum_server_verify) {
-		entry = &csum_entry[co_props.dpp_nr];
+		entry = &dpp_entry[co_props.dpp_nr];
 		entry->dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
 		entry->dpe_val = dt_csum_server_verify ?
 			DAOS_PROP_CO_CSUM_SV_ON :
@@ -376,8 +424,29 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		co_props.dpp_nr++;
 	}
 
+	if (dt_cell_size) {
+		entry = &dpp_entry[co_props.dpp_nr];
+		entry->dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+		entry->dpe_val = dt_cell_size;
+		co_props.dpp_nr++;
+	}
+
+	if (dt_redun_lvl) {
+		entry = &dpp_entry[co_props.dpp_nr];
+		entry->dpe_type = DAOS_PROP_CO_REDUN_LVL;
+		entry->dpe_val = dt_redun_lvl;
+		co_props.dpp_nr++;
+	}
+
+	if (dt_redun_fac) {
+		entry = &dpp_entry[co_props.dpp_nr];
+		entry->dpe_type = DAOS_PROP_CO_REDUN_FAC;
+		entry->dpe_val = dt_redun_fac;
+		co_props.dpp_nr++;
+	}
+
 	if (co_props.dpp_nr > 0)
-		co_props.dpp_entries = csum_entry;
+		co_props.dpp_entries = dpp_entry;
 
 	while (!rc && step != arg->setup_state)
 		rc = test_setup_next_step(state, pool, NULL, &co_props);
@@ -402,7 +471,7 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 	poh = pool->poh;
 
 	if (daos_handle_is_inval(poh)) {
-		rc = daos_pool_connect(pool->pool_uuid, arg->group,
+		rc = daos_pool_connect(pool->pool_str, arg->group,
 				       DAOS_PC_RW,
 				       &poh, &pool->pool_info,
 				       NULL /* ev */);
@@ -423,8 +492,10 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 			return rc;
 		}
 
-		if (rstat->rs_done == 0) {
-			print_message("waiting for rebuild\n");
+		print_message("waiting for rebuild, ver %u, sec %u, err %d, state %d,"
+			      "fail_rank %d\n", rstat->rs_version, rstat->rs_seconds,
+			      rstat->rs_errno, rstat->rs_state, rstat->rs_fail_rank);
+		if (rstat->rs_state == DRS_IN_PROGRESS) {
 			sleep(1);
 			continue;
 		}
@@ -433,7 +504,10 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 		break;
 	}
 
-	daos_pool_disconnect(poh, NULL);
+	rc = daos_pool_disconnect(poh, NULL);
+	if (rc) {
+		print_message("daos_pool_disconnect failed, rc: %d\n", rc);
+	}
 
 	rc = dmg_pool_destroy(dmg_config_file,
 			      pool->pool_uuid, arg->group, 1);
@@ -453,8 +527,7 @@ test_teardown_cont_hdl(test_arg_t *arg)
 
 	rc = daos_cont_close(arg->coh, NULL);
 	if (arg->multi_rank) {
-		MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN,
-			      MPI_COMM_WORLD);
+		par_allreduce(PAR_COMM_WORLD, &rc, &rc_reduce, 1, PAR_INT, PAR_MIN);
 		rc = rc_reduce;
 	}
 	arg->coh = DAOS_HDL_INVAL;
@@ -474,7 +547,7 @@ test_teardown_cont(test_arg_t *arg)
 	int	rc = 0;
 
 	while (arg->myrank == 0) {
-		rc = daos_cont_destroy(arg->pool.poh, arg->co_uuid, 1,
+		rc = daos_cont_destroy(arg->pool.poh, arg->co_str, 1,
 				       NULL);
 		if (rc == -DER_BUSY) {
 			print_message("Container is busy, wait\n");
@@ -484,10 +557,13 @@ test_teardown_cont(test_arg_t *arg)
 		break;
 	}
 	if (arg->multi_rank)
-		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
 	if (rc)
 		print_message("failed to destroy container "DF_UUIDF
 			      ": %d\n", DP_UUID(arg->co_uuid), rc);
+	else
+		print_message("teardown: container "DF_UUIDF" destroyed\n",
+			      DP_UUID(arg->co_uuid));
 
 	uuid_clear(arg->co_uuid);
 	arg->setup_state = SETUP_POOL_CONNECT;
@@ -507,7 +583,7 @@ test_teardown(void **state)
 	}
 
 	if (arg->multi_rank)
-		MPI_Barrier(MPI_COMM_WORLD);
+		par_barrier(PAR_COMM_WORLD);
 
 	if (daos_handle_is_valid(arg->coh)) {
 		rc = test_teardown_cont_hdl(arg);
@@ -538,12 +614,12 @@ test_teardown(void **state)
 				rc = daos_pool_disconnect(arg->pool.poh, NULL);
 		}
 		if (arg->multi_rank)
-			MPI_Barrier(MPI_COMM_WORLD);
+			par_barrier(PAR_COMM_WORLD);
 		if (arg->myrank == 0)
 			rc = pool_destroy_safe(arg, NULL);
 
 		if (arg->multi_rank)
-			MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+			par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
 		if (rc) {
 			print_message("failed to destroy pool "DF_UUIDF
 				      " rc: %d\n",
@@ -561,10 +637,13 @@ test_teardown(void **state)
 	}
 
 free:
+	dt_redun_lvl = 0;
+	dt_redun_fac = 0;
 	if (arg->pool.svc)
 		d_rank_list_free(arg->pool.svc);
 	if (arg->pool.alive_svc)
 		d_rank_list_free(arg->pool.alive_svc);
+	D_FREE(arg->pool.label);
 	D_FREE(arg);
 	*state = NULL;
 	return 0;
@@ -604,8 +683,8 @@ d_rank_t ranks_to_kill[MAX_KILLS];
 bool
 test_runable(test_arg_t *arg, unsigned int required_nodes)
 {
-	int		 i;
-	static bool	 runable = true;
+	int	i;
+	int	runable = 1;
 
 	if (arg == NULL) {
 		print_message("state not set, likely due to group-setup"
@@ -627,29 +706,29 @@ test_runable(test_arg_t *arg, unsigned int required_nodes)
 					      required_nodes,
 					      arg->srv_ntgts,
 					      arg->srv_disabled_ntgts);
-			runable = false;
+			runable = 0;
 		}
 
 		for (i = 0; i < MAX_KILLS; i++)
 			ranks_to_kill[i] = arg->srv_nnodes -
 					   disable_nodes - i - 1;
 
-		arg->hce = crt_hlc_get();
+		arg->hce = d_hlc_get();
 	}
 
-	MPI_Bcast(&runable, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	MPI_Barrier(MPI_COMM_WORLD);
-	return runable;
+	par_bcast(PAR_COMM_WORLD, &runable, 1, PAR_INT, 0);
+	par_barrier(PAR_COMM_WORLD);
+	return runable == 1;
 }
 
 int
-test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo)
+test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo, d_rank_list_t **engine_ranks)
 {
 	bool	   connect_pool = false;
 	int	   rc;
 
 	if (daos_handle_is_inval(arg->pool.poh)) {
-		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+		rc = daos_pool_connect(arg->pool.pool_str, arg->group,
 				       DAOS_PC_RW,
 				       &arg->pool.poh, pinfo,
 				       NULL /* ev */);
@@ -662,7 +741,7 @@ test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo)
 		connect_pool = true;
 	}
 
-	rc = daos_pool_query(arg->pool.poh, NULL, pinfo, NULL, NULL);
+	rc = daos_pool_query(arg->pool.poh, engine_ranks, pinfo, NULL, NULL);
 	if (rc != 0)
 		print_message("pool query failed %d\n", rc);
 
@@ -686,25 +765,22 @@ rebuild_pool_wait(test_arg_t *arg)
 	bool			   done = false;
 
 	pinfo.pi_bits = DPI_REBUILD_STATUS;
-	rc = test_pool_get_info(arg, &pinfo);
+	rc = test_pool_get_info(arg, &pinfo, NULL /* engine_ranks */);
 	rst = &pinfo.pi_rebuild_st;
-	if ((rst->rs_done || rc != 0) && rst->rs_version != 0 &&
-	     rst->rs_version != arg->rebuild_pre_pool_ver) {
-		print_message("Rebuild "DF_UUIDF" (ver=%u orig_ver=%u) is done %d/%d, "
-			      "obj="DF_U64", rec="DF_U64".\n",
-			       DP_UUID(arg->pool.pool_uuid), rst->rs_version,
-			       arg->rebuild_pre_pool_ver,
-			       rc, rst->rs_errno, rst->rs_obj_nr,
-			       rst->rs_rec_nr);
+	if ((rst->rs_state == DRS_COMPLETED || rc != 0) &&
+	    (rst->rs_version > arg->rebuild_pre_pool_ver ||
+	     pinfo.pi_map_ver > arg->rebuild_pre_pool_ver)) {
+		print_message("Rebuild "DF_UUIDF" (ver=%u pi_ver = %u orig_ver=%u) is done %d/%d,"
+			      "obj="DF_U64", rec="DF_U64".\n", DP_UUID(arg->pool.pool_uuid),
+			      rst->rs_version, pinfo.pi_map_ver, arg->rebuild_pre_pool_ver,
+			      rc, rst->rs_errno, rst->rs_obj_nr, rst->rs_rec_nr);
 		done = true;
 	} else {
-		print_message("wait for rebuild pool "DF_UUIDF"(ver=%u orig_ver=%u), "
-			      "to-be-rebuilt obj="DF_U64", already rebuilt obj="
-			      DF_U64", rec="DF_U64"\n",
-			      DP_UUID(arg->pool.pool_uuid), rst->rs_version,
-			      arg->rebuild_pre_pool_ver,
-			      rst->rs_toberb_obj_nr, rst->rs_obj_nr,
-			      rst->rs_rec_nr);
+		print_message("wait for rebuild pool "DF_UUIDF"(ver=%u pi_ver=%u orig_ver=%u),"
+			      "to-be-rebuilt obj="DF_U64", already rebuilt obj="DF_U64","
+			      "rec="DF_U64"\n", DP_UUID(arg->pool.pool_uuid), rst->rs_version,
+			      pinfo.pi_map_ver, arg->rebuild_pre_pool_ver, rst->rs_toberb_obj_nr,
+			      rst->rs_obj_nr, rst->rs_rec_nr);
 	}
 
 	return done;
@@ -716,7 +792,7 @@ test_get_leader(test_arg_t *arg, d_rank_t *rank)
 	daos_pool_info_t	pinfo = {0};
 	int			rc;
 
-	rc = test_pool_get_info(arg, &pinfo);
+	rc = test_pool_get_info(arg, &pinfo, NULL /* engine_ranks */);
 	if (rc)
 		return rc;
 
@@ -818,32 +894,26 @@ run_daos_sub_tests(char *test_name, const struct CMUnitTest *tests,
 	return rc;
 }
 
-static void
-daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
-		     const char *grp, const char *dmg_config,
-		     d_rank_t rank, int tgt_idx, daos_size_t scm_size)
+static int
+daos_dmg_pool_upgrade(const uuid_t pool_uuid, const char *dmg_config)
 {
 	char		dmg_cmd[DTS_CFG_MAX];
 	int		rc;
 
 	/* build and invoke dmg cmd */
-	if (strncmp(sub_cmd, "extend", strlen("extend")) == 0)
-		dts_create_config(dmg_cmd, "dmg pool %s " DF_UUIDF
-				  " --ranks=%d", sub_cmd,
-				  DP_UUID(pool_uuid), rank);
-	else
-		dts_create_config(dmg_cmd, "dmg pool %s " DF_UUIDF
-				  " --rank=%d", sub_cmd, DP_UUID(pool_uuid),
-				  rank);
+	dts_create_config(dmg_cmd, "dmg pool upgrade " DF_UUIDF, DP_UUID(pool_uuid));
 
-	if (tgt_idx != -1)
-		dts_append_config(dmg_cmd, " --target-idx=%d", tgt_idx);
-	if (dmg_config != NULL)
-		dts_append_config(dmg_cmd, " -o %s", dmg_config);
-
+	dts_append_config(dmg_cmd, " -o %s", dmg_config);
 	rc = system(dmg_cmd);
 	print_message("%s rc %#x\n", dmg_cmd, rc);
 	assert_int_equal(rc, 0);
+	return rc;
+}
+
+int
+daos_pool_upgrade(const uuid_t pool_uuid)
+{
+	return daos_dmg_pool_upgrade(pool_uuid, dmg_config_file);
 }
 
 int
@@ -854,52 +924,19 @@ daos_pool_set_prop(const uuid_t pool_uuid, const char *name,
 }
 
 void
-daos_exclude_target(const uuid_t pool_uuid, const char *grp,
-		    const char *dmg_config,
-		    d_rank_t rank, int tgt_idx)
+daos_start_server(test_arg_t *arg, const uuid_t pool_uuid,
+		  const char *grp, d_rank_list_t *svc, d_rank_t rank)
 {
-	daos_dmg_pool_target("exclude", pool_uuid, grp, dmg_config,
-			     rank, tgt_idx, 0);
-}
+	int	rc;
 
-void
-daos_reint_target(const uuid_t pool_uuid, const char *grp,
-		  const char *dmg_config, d_rank_t rank, int tgt_idx)
-{
-	daos_dmg_pool_target("reintegrate", pool_uuid, grp, dmg_config,
-			     rank, tgt_idx, 0);
-}
+	if (d_rank_in_rank_list(svc, rank))
+		svc->rl_nr++;
 
-void
-daos_extend_target(const uuid_t pool_uuid, const char *grp,
-		   const char *dmg_config, d_rank_t rank, int tgt_idx,
-		   daos_size_t nvme_size)
-{
-	daos_dmg_pool_target("extend", pool_uuid, grp, dmg_config,
-			     rank, tgt_idx, nvme_size);
-}
+	print_message("\tstart rank %d (svc->rl_nr %d)!\n", rank, svc->rl_nr);
 
-void
-daos_drain_target(const uuid_t pool_uuid, const char *grp,
-		  const char *dmg_config, d_rank_t rank, int tgt_idx)
-{
-
-	daos_dmg_pool_target("drain", pool_uuid, grp, dmg_config,
-			     rank, tgt_idx, 0);
-}
-
-void
-daos_exclude_server(const uuid_t pool_uuid, const char *grp,
-		    const char *dmg_config, d_rank_t rank)
-{
-	daos_exclude_target(pool_uuid, grp, dmg_config, rank, -1);
-}
-
-void
-daos_reint_server(const uuid_t pool_uuid, const char *grp,
-		  const char *dmg_config, d_rank_t rank)
-{
-	daos_reint_target(pool_uuid, grp, dmg_config, rank, -1);
+	rc = dmg_system_start_rank(dmg_config_file, rank);
+	print_message(" dmg start: %d, rc %#x\n", rank, rc);
+	assert_rc_equal(rc, 0);
 }
 
 void
@@ -912,7 +949,6 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 	int		max_failure;
 	int		i;
 	int		rc;
-	char		dmg_cmd[DTS_CFG_MAX];
 
 	tgts_per_node = arg->srv_ntgts / arg->srv_nnodes;
 	disable_nodes = (arg->srv_disabled_ntgts + tgts_per_node - 1) /
@@ -935,22 +971,17 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 		rank = arg->srv_nnodes - disable_nodes - 1;
 
 	arg->srv_disabled_ntgts += tgts_per_node;
-	if (d_rank_in_rank_list(svc, rank))
-		svc->rl_nr--;
+	rc = d_rank_list_del(svc, rank);
+	assert_rc_equal(rc, 0);
 	print_message("\tKilling rank %d (total of %d with %d already "
 		      "disabled, svc->rl_nr %d)!\n", rank, arg->srv_ntgts,
 		       arg->srv_disabled_ntgts - 1, svc->rl_nr);
 
-	/* build and invoke dmg cmd to stop the server */
-	dts_create_config(dmg_cmd, "dmg system stop -r %d --force", rank);
-	if (arg->dmg_config != NULL)
-		dts_append_config(dmg_cmd, " -o %s", arg->dmg_config);
+	/* stop the rank */
+	rc = dmg_system_stop_rank(dmg_config_file, rank, true);
+	print_message(" dmg stop, rc %#x\n", rc);
 
-	rc = system(dmg_cmd);
-	print_message(" %s rc %#x\n", dmg_cmd, rc);
 	assert_rc_equal(rc, 0);
-
-	daos_cont_status_clear(arg->coh, NULL);
 }
 
 struct daos_acl *
@@ -993,6 +1024,21 @@ get_daos_prop_with_owner_and_acl(char *owner, uint32_t owner_type,
 }
 
 daos_prop_t *
+get_daos_prop_with_acl(struct daos_acl *acl, uint32_t acl_type)
+{
+	daos_prop_t	*prop;
+
+	prop = daos_prop_alloc(1);
+	assert_non_null(prop);
+
+	prop->dpp_entries[0].dpe_type = acl_type;
+	prop->dpp_entries[0].dpe_val_ptr = daos_acl_dup(acl);
+	assert_non_null(prop->dpp_entries[0].dpe_val_ptr);
+
+	return prop;
+}
+
+daos_prop_t *
 get_daos_prop_with_owner_acl_perms(uint64_t perms, uint32_t type)
 {
 	daos_prop_t	*prop;
@@ -1010,12 +1056,11 @@ get_daos_prop_with_owner_acl_perms(uint64_t perms, uint32_t type)
 	return prop;
 }
 
-daos_prop_t *
-get_daos_prop_with_user_acl_perms(uint64_t perms)
+struct daos_acl *
+get_daos_acl_with_user_perms(uint64_t perms)
 {
-	daos_prop_t	*prop;
 	struct daos_acl	*acl;
-	struct daos_ace	*ace;
+	struct daos_ace	*ace = NULL;
 	char		*user = NULL;
 
 	assert_rc_equal(daos_acl_uid_to_principal(geteuid(), &user), 0);
@@ -1030,9 +1075,23 @@ get_daos_prop_with_user_acl_perms(uint64_t perms)
 
 	assert_rc_equal(daos_acl_add_ace(&acl, ace), 0);
 
-	/* Set effective user up as non-owner */
-	prop = get_daos_prop_with_owner_and_acl("nobody@", DAOS_PROP_CO_OWNER,
-						acl, DAOS_PROP_CO_ACL);
+	daos_ace_free(ace);
+	D_FREE(user);
+	return acl;
+}
+
+daos_prop_t *
+get_daos_prop_with_user_acl_perms(uint64_t perms)
+{
+	daos_prop_t	*prop;
+	struct daos_acl	*acl;
+	struct daos_ace	*ace = NULL;
+	char		*user = NULL;
+
+	assert_rc_equal(daos_acl_uid_to_principal(geteuid(), &user), 0);
+
+	acl = get_daos_acl_with_user_perms(perms);
+	prop = get_daos_prop_with_acl(acl, DAOS_PROP_CO_ACL);
 
 	daos_ace_free(ace);
 	daos_acl_free(acl);
@@ -1061,6 +1120,8 @@ get_pid_of_process(char *host, char *dpid, char *proc)
 		strcat(dpid, line);
 	}
 
+	if (line)
+		free(line);
 	pclose(fp1);
 	return 0;
 }
@@ -1133,16 +1194,18 @@ get_server_config(char *host, char *server_config_file)
 	pclose(fp);
 
 	D_FREE(dpid);
-	free(line);
+	if (line)
+		free(line);
 	return 0;
 }
 
 int verify_server_log_mask(char *host, char *server_config_file,
-			   char *log_mask){
+			   char *log_mask) {
 	char	command[256];
 	size_t	len = 0;
 	size_t	read;
 	char	*line = NULL;
+	int	rc = 0;
 
 	snprintf(command, sizeof(command),
 		 "ssh %s cat %s", host, server_config_file);
@@ -1158,14 +1221,16 @@ int verify_server_log_mask(char *host, char *server_config_file,
 				print_message(
 					"Expected log_mask = %s, Found %s\n ",
 					log_mask, line);
-				return -DER_INVAL;
+				D_GOTO(out, rc = -DER_INVAL);
 			}
 		}
 	}
 
+out:
 	pclose(fp);
-	free(line);
-	return 0;
+	if (line)
+		free(line);
+	return rc;
 }
 
 int get_log_file(char *host, char *server_config_file,
@@ -1190,7 +1255,8 @@ int get_log_file(char *host, char *server_config_file,
 	}
 
 	pclose(fp);
-	D_FREE(line);
+	if (line)
+		free(line);
 	return 0;
 }
 
@@ -1217,10 +1283,11 @@ int verify_state_in_log(char *host, char *log_file, char *state)
 		snprintf(command, sizeof(command),
 			 "ssh %s cat %s | grep \"%s\"", host, pch, state);
 		fp = popen(command, "r");
-		while ((read = getline(&line, &len, fp)) != -1) {
+		while (fp && (read = getline(&line, &len, fp)) != -1) {
 			if (strstr(line, state) != NULL) {
 				print_message("Found state %s in Log file %s\n",
 					      state, pch);
+				pclose(fp);
 				goto out;
 			}
 		}
@@ -1228,12 +1295,14 @@ int verify_state_in_log(char *host, char *log_file, char *state)
 
 		if (fp != NULL)
 			pclose(fp);
-		free(line);
 	}
 
+	if (line)
+		free(line);
 	D_FREE(tmp);
 	return -DER_INVAL;
 out:
+	free(line);
 	D_FREE(tmp);
 	return 0;
 }
@@ -1282,8 +1351,11 @@ int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
 
 	retry_cnt = 0;
 	while (retry_cnt <= MAX_POOL_TGT_STATE_RETRY) {
-		char *expected_state_dup = strdup(expected_state);
-		char *state = strtok(expected_state_dup, "|");
+		char *expected_state_dup;
+		char *state;
+
+		D_STRNDUP(expected_state_dup, expected_state, strlen(expected_state));
+		state = strtok(expected_state_dup, "|");
 
 		rc = daos_pool_query_target(poh, tgtidx, rank, &tgt_info, NULL);
 		if (rc) {
@@ -1316,4 +1388,118 @@ int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
 	};
 
 	return -DER_TIMEDOUT;
+}
+
+static void
+test_set_engine_fail_loc_int(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_loc, bool verbose)
+{
+	int rc;
+
+	assert(fail_loc == 0 ||
+	       (fail_loc & (DAOS_FAIL_ONCE | DAOS_FAIL_SOME | DAOS_FAIL_ALWAYS)) != 0);
+
+	if (arg->myrank != 0)
+		return;
+
+	if (verbose) {
+		if (engine_rank == CRT_NO_RANK)
+			print_message("setting fail_loc to " DF_X64 " on all engine ranks\n",
+				      fail_loc);
+		else
+			print_message("setting fail_loc to " DF_X64 " on engine rank %u\n",
+				      fail_loc, engine_rank);
+	}
+
+	rc = daos_debug_set_params(arg->group, engine_rank, DMG_KEY_FAIL_LOC, fail_loc, 0, NULL);
+	assert_rc_equal(rc, 0);
+}
+
+/**
+ * If this is client rank 0, set fail_loc to \a fail_loc on \a engine_rank. The
+ * caller must eventually set fail_loc to 0 on these engines, even when using
+ * DAOS_FAIL_ONCE.
+ *
+ * \param[in]	arg		test state
+ * \param[in]	engine_rank	rank of an engine or CRT_NO_RANK (i.e., all
+ *				engines)
+ * \param[in]	fail_loc	fail_loc, which must either be 0 or include one
+ *				of DAOS_FAIL_ONCE, DAOS_FAIL_SOME, or
+ *				DAOS_FAIL_ALWAYS)
+ */
+void
+test_set_engine_fail_loc(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_loc)
+{
+	test_set_engine_fail_loc_int(arg, engine_rank, fail_loc, true /* verbose */);
+}
+
+/**
+ * If this is client rank 0, set fail_loc to \a fail_loc on \a engine_rank. The
+ * caller must eventually set fail_loc to 0 on these engines, even when using
+ * DAOS_FAIL_ONCE.
+ *
+ * \param[in]	arg		test state
+ * \param[in]	engine_rank	rank of an engine or CRT_NO_RANK (i.e., all
+ *				engines)
+ * \param[in]	fail_loc	fail_loc, which must either be 0 or include one
+ *				of DAOS_FAIL_ONCE, DAOS_FAIL_SOME, or
+ *				DAOS_FAIL_ALWAYS)
+ */
+void
+test_set_engine_fail_loc_quiet(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_loc)
+{
+	test_set_engine_fail_loc_int(arg, engine_rank, fail_loc, false /* verbose */);
+}
+
+/**
+ * If this is client rank 0, set fail_value to \a fail_value on \a engine_rank.
+ * 
+ * \param[in]	arg		test state
+ * \param[in]	engine_rank	rank of an engine or CRT_NO_RANK (i.e., all
+ *				engines)
+ * \param[in]	fail_value	fail_value
+ */
+void
+test_set_engine_fail_value(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_value)
+{
+	int rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	if (engine_rank == CRT_NO_RANK)
+		print_message("setting fail_value to " DF_X64 " on all engine ranks\n", fail_value);
+	else
+		print_message("setting fail_value to " DF_X64 " on engine rank %u\n", fail_value,
+			      engine_rank);
+
+	rc = daos_debug_set_params(arg->group, engine_rank, DMG_KEY_FAIL_VALUE, fail_value, 0,
+				   NULL);
+	assert_rc_equal(rc, 0);
+}
+
+
+/**
+ * If this is client rank 0, set fail_num to \a fail_num on \a engine_rank.
+ * 
+ * \param[in]	arg		test state
+ * \param[in]	engine_rank	rank of an engine or CRT_NO_RANK (i.e., all
+ *				engines)
+ * \param[in]	fail_num	fail_num
+ */
+void
+test_set_engine_fail_num(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_num)
+{
+	int rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	if (engine_rank == CRT_NO_RANK)
+		print_message("setting fail_num to " DF_X64 " on all engine ranks\n", fail_num);
+	else
+		print_message("setting fail_num to " DF_X64 " on engine rank %u\n", fail_num,
+			      engine_rank);
+
+	rc = daos_debug_set_params(arg->group, engine_rank, DMG_KEY_FAIL_NUM, fail_num, 0, NULL);
+	assert_rc_equal(rc, 0);
 }

@@ -2,57 +2,57 @@
 seed: 123
 
 fault_config:
-    # id 0 controls global fault injection for D_ALLOC() and D_ALLOC_ARRAY().
-    # It's turned off by default. Change probability_x and probability_y both
-    # to non-zero to turn it on.
-  - id:            0
+  # id 0 controls global fault injection for D_ALLOC() and D_ALLOC_ARRAY().
+  # It's turned off by default. Change probability_x and probability_y both
+  # to non-zero to turn it on.
+  - id: 0
     probability_x: 0
     probability_y: 0
-    interval:     34
-    max_faults:   80
+    interval: 34
+    max_faults: 80
 
-  - id:            1
+  - id: 1
     probability_x: 50
     probability_y: 100
-    interval:      120
-    max_faults:    300
+    interval: 120
+    max_faults: 300
 
-  - id:           5000
-    probability_x:  100
-    probability_y:  0
-    argument:     without-quoting-only-one-word-is-allowed
-    interval:     1
-    max_faults:   2
-    err_code:     -1011
+  - id: 5000
+    probability_x: 100
+    probability_y: 0
+    argument: without-quoting-only-one-word-is-allowed
+    interval: 1
+    max_faults: 2
+    err_code: -1011
 
     # Change probability_x and probability_y both to non-zero to turn on the
     # D_ALLOC injection in test_group.c
-  - id:           1000
-    probability_x:  0
-    probability_y:  0
+  - id: 1000
+    probability_x: 0
+    probability_y: 0
     # without quoting, no space is allowed here, leading and trailing white
     # spaces are ignored.  with quoting, anything between quotes is preserved,
     # including white spaces.
-    argument:     "anything on this line is parsed as one single string"
-    interval:     1
-    max_faults:   2
-    err_code:     -1011
+    argument: "anything on this line is parsed as one single string"
+    interval: 1
+    max_faults: 2
+    err_code: -1011
 
     # SWIM messages drop fault injection
     # probability_x should be 1 always to drop SWIM messages
     # Change probability_y to non-zero to introduce random failures.
     # probability_y: 20  - will introduce 5% of message loss
     # probability_y: 100 - will introduce 1% of message loss
-  - id:            65025
-    interval:      0
-    max_faults:    0
+  - id: 65025
+    interval: 0
+    max_faults: 0
     probability_x: 1
     probability_y: 0
-    err_code:      0
+    err_code: 0
     # Comma separated list of SWIM messages drop fault injection arguments:
     # rank=<num> - Set it to the rank number which should be evicted by
     # simulation of network failures.
     # delay=<num> - Set it to the number of seconds on which fault injection
     # will be delayed. It can be useful to complete an initialization and
     # creation of pool/container need for testing.
-    argument:     "rank=1,delay=10"
+    argument: "rank=1,delay=10"

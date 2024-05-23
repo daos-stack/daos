@@ -1,45 +1,48 @@
 """Build objects"""
-import daos_build
-Import('env', 'prereqs')
+
 
 def scons():
     """Execute build"""
 
+    Import('env', 'prereqs', 'libdaos_tgts')
+
     env.AppendUnique(LIBPATH=[Dir('.')])
 
     denv = env.Clone()
-    prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
+    denv.require('protobufc')
 
     # Common object code
     common_tgts = denv.SharedObject(['obj_class.c', 'obj_rpc.c', 'obj_task.c',
                                      'obj_utils.c', 'rpc_csum.c', 'obj_tx.c',
-                                     'obj_enum.c', 'obj_class_def.c'])
+                                     'obj_enum.c', 'obj_class_def.c', "obj_layout.c"])
 
     # Object client library
-    dc_obj_tgts = denv.SharedObject(['cli_obj.c', 'cli_shard.c',
-                                     'cli_mod.c', 'cli_ec.c',
+    dc_obj_tgts = denv.SharedObject(['cli_obj.c', 'cli_shard.c', 'cli_coll.c',
+                                     'cli_mod.c', 'cli_ec.c', 'cli_csum.c',
                                      'obj_verify.c'])
-    dc_obj_tgts += common_tgts
-    Export('dc_obj_tgts')
+    libdaos_tgts.extend(dc_obj_tgts + common_tgts)
 
     if not prereqs.server_requested():
         return
 
     # generate server module
     senv = denv.Clone()
-    prereqs.require(senv, 'pmdk', headers_only=True)
+    senv.require('isal', 'argobots')
+    senv.require('pmdk', headers_only=True)
 
     senv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
-    srv = daos_build.library(senv, 'obj',
-                             common_tgts + ['srv_obj.c', 'srv_mod.c',
-                                            'srv_obj_remote.c', 'srv_ec.c',
-                                            'srv_csum.c', 'srv_obj_migrate.c',
-                                            'srv_cli.c', 'srv_ec_aggregate.c'],
-                             install_off="../..")
+    srv = senv.d_library('obj',
+                         common_tgts + ['srv_obj.c', 'srv_coll.c', 'srv_mod.c',
+                                        'srv_obj_remote.c', 'srv_ec.c',
+                                        'srv_obj_migrate.c', 'srv_enum.c',
+                                        'srv_cli.c', 'srv_ec_aggregate.c',
+                                        'srv_csum.c', 'srv_io_map.c'],
+                         install_off="../..")
     senv.Install('$PREFIX/lib64/daos_srv', srv)
 
     if prereqs.test_requested():
         SConscript('tests/SConscript', exports='denv')
+
 
 if __name__ == "SCons.Script":
     scons()

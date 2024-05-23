@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,20 +7,27 @@
 package main
 
 import (
-	"fmt"
 	"net"
 	"strings"
+	"sync"
 
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/daos-stack/daos/src/control/common"
+	pblog "github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/telemetry"
+	"github.com/daos-stack/daos/src/control/lib/telemetry/promexp"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -28,17 +35,22 @@ import (
 // Management Service proxy, handling dRPCs sent by libdaos by forwarding them
 // to MS.
 type mgmtModule struct {
-	log        logging.Logger
-	sys        string
-	ctlInvoker control.Invoker
-	attachInfo *attachInfoCache
-	fabricInfo *localFabricCache
-	numaAware  bool
-	netCtx     context.Context
-	monitor    *procMon
+	attachInfoMutex sync.RWMutex
+	fabricMutex     sync.RWMutex
+
+	log            logging.Logger
+	sys            string
+	ctlInvoker     control.Invoker
+	cache          *InfoCache
+	monitor        *procMon
+	cliMetricsSrc  *promexp.ClientSource
+	useDefaultNUMA bool
+
+	numaGetter  hardware.ProcessNUMAProvider
+	providerIdx uint
 }
 
-func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
+func (mod *mgmtModule) HandleCall(ctx context.Context, session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
 	uc, ok := session.Conn.(*net.UnixConn)
 	if !ok {
 		return nil, errors.Errorf("session.Conn type conversion failed")
@@ -56,11 +68,16 @@ func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req
 		return nil, err
 	}
 
-	ctx := context.TODO() // FIXME: Should be the top-level context.
+	if agentIsShuttingDown(ctx) {
+		mod.log.Errorf("agent is shutting down, dropping %s", method)
+		return nil, drpc.NewFailureWithMessage("agent is shutting down")
+	}
 
 	switch method {
 	case drpc.MethodGetAttachInfo:
 		return mod.handleGetAttachInfo(ctx, req, cred.Pid)
+	case drpc.MethodSetupClientTelemetry:
+		return mod.handleSetupClientTelemetry(ctx, req, cred)
 	case drpc.MethodNotifyPoolConnect:
 		return nil, mod.handleNotifyPoolConnect(ctx, req, cred.Pid)
 	case drpc.MethodNotifyPoolDisconnect:
@@ -96,129 +113,263 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 		return nil, drpc.UnmarshalingPayloadFailure()
 	}
 
-	mod.log.Debugf("GetAttachInfo req from client: %+v", pbReq)
+	client := &procInfo{
+		pid: pid,
+	}
+	procName, err := common.GetProcName(int(pid))
+	if err == nil {
+		client.name = procName
+	}
+	mod.log.Tracef("%s: %s", client, pblog.Debug(pbReq))
 
 	// Check the system name. Due to the special daos_init-dc_mgmt_net_cfg
 	// case, where the system name is not available, we let an empty
 	// system name indicates such, and hence skip the check.
 	if pbReq.Sys != "" && pbReq.Sys != mod.sys {
-		mod.log.Errorf("GetAttachInfo: %s: unknown system name", pbReq.Sys)
-		respb, err := proto.Marshal(&mgmtpb.GetAttachInfoResp{Status: int32(drpc.DaosInvalidInput)})
+		mod.log.Errorf("%s: %s: unknown system name", client, pbReq.Sys)
+		respb, err := proto.Marshal(&mgmtpb.GetAttachInfoResp{Status: int32(daos.InvalidInput)})
 		if err != nil {
 			return nil, drpc.MarshalingFailure()
 		}
 		return respb, err
 	}
 
-	var err error
-	var numaNode int
-
-	if mod.numaAware {
-		numaNode, err = netdetect.GetNUMASocketIDForPid(mod.netCtx, pid)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	resp, err := mod.getAttachInfo(ctx, numaNode, pbReq.Sys)
+	numaNode, err := mod.getNUMANode(ctx, pid)
 	if err != nil {
+		mod.log.Errorf("%s: unable to get NUMA node: %s", client, err)
+		return nil, err
+	}
+	mod.log.Tracef("%s: detected numa %d", client, numaNode)
+
+	resp, err := mod.getAttachInfo(ctx, int(numaNode), pbReq)
+	switch {
+	case fault.IsFaultCode(err, code.ServerWrongSystem):
+		resp = &mgmtpb.GetAttachInfoResp{Status: int32(daos.ControlIncompatible)}
+	case fault.IsFaultCode(err, code.SecurityInvalidCert):
+		resp = &mgmtpb.GetAttachInfoResp{Status: int32(daos.BadCert)}
+	case control.IsMSConnectionFailure(err):
+		resp = &mgmtpb.GetAttachInfoResp{Status: int32(daos.Unreachable)}
+	case err != nil:
 		return nil, err
 	}
 
-	mod.log.Debugf("GetAttachInfoResp: %+v", resp)
-
+	if resp.ClientNetHint != nil {
+		mod.log.Infof("%s: numa:%d iface:%s dom:%s prov:%s srx:%d", client, numaNode,
+			resp.ClientNetHint.Interface, resp.ClientNetHint.Domain,
+			resp.ClientNetHint.Provider, resp.ClientNetHint.SrvSrxSet)
+	}
+	mod.log.Tracef("%s: %s", client, pblog.Debug(resp))
 	return proto.Marshal(resp)
 }
 
-func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, sys string) (*mgmtpb.GetAttachInfoResp, error) {
-	resp, err := mod.getAttachInfoResp(ctx, numaNode, sys)
+func (mod *mgmtModule) getNUMANode(ctx context.Context, pid int32) (uint, error) {
+	if mod.useDefaultNUMA {
+		return 0, nil
+	}
+
+	numaNode, err := mod.numaGetter.GetNUMANodeIDForPID(ctx, pid)
+	if errors.Is(err, hardware.ErrNoNUMANodes) {
+		mod.log.Debug("system is not NUMA-aware")
+		mod.useDefaultNUMA = true
+		return 0, nil
+	} else if err != nil {
+		return 0, errors.Wrapf(err, "failed to get NUMA node ID for pid %d", pid)
+	}
+
+	return numaNode, nil
+}
+
+func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, req *mgmtpb.GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error) {
+	rawResp, err := mod.getAttachInfoResp(ctx, req.Sys)
 	if err != nil {
-		mod.log.Errorf("failed to fetch remote AttachInfo: %s", err.Error())
+		mod.log.Errorf("failed to fetch AttachInfo: %s", err.Error())
 		return nil, err
 	}
 
-	fabricIF, err := mod.getFabricInterface(ctx, numaNode, resp.ClientNetHint.NetDevClass)
+	resp, err := mod.selectAttachInfo(ctx, rawResp, req.Interface, req.Domain)
 	if err != nil {
-		mod.log.Errorf("failed to fetch fabric interface of type %s: %s",
-			netdetect.DevClassName(resp.ClientNetHint.NetDevClass), err.Error())
 		return nil, err
 	}
 
-	resp.ClientNetHint.Interface = fabricIF.Name
-	resp.ClientNetHint.Domain = fabricIF.Name
-	if strings.HasPrefix(resp.ClientNetHint.Provider, verbsProvider) {
-		if fabricIF.Domain == "" {
-			mod.log.Errorf("domain is required for verbs provider, none found on interface %s", fabricIF.Name)
-			return nil, fmt.Errorf("no domain on interface %s", fabricIF.Name)
+	// Requested fabric interface/domain behave as a simple override. If we weren't able to
+	// validate them, we return them to the user with the understanding that perhaps the user
+	// knows what they're doing.
+	iface := req.Interface
+	domain := req.Domain
+	if req.Interface == "" {
+		fabricIF, err := mod.getFabricInterface(ctx, &FabricIfaceParams{
+			NUMANode: numaNode,
+			DevClass: hardware.NetDevClass(resp.ClientNetHint.NetDevClass),
+			Provider: resp.ClientNetHint.Provider,
+		})
+		if err != nil {
+			mod.log.Errorf("failed to fetch fabric interface of type %s: %s",
+				hardware.NetDevClass(resp.ClientNetHint.NetDevClass), err.Error())
+			return nil, err
 		}
 
-		resp.ClientNetHint.Domain = fabricIF.Domain
-		mod.log.Debugf("OFI_DOMAIN for %s has been detected as: %s",
+		iface = fabricIF.Name
+		domain = fabricIF.Domain
+	}
+
+	resp.ClientNetHint.Interface = iface
+	resp.ClientNetHint.Domain = iface
+	if domain != "" {
+		resp.ClientNetHint.Domain = domain
+		mod.log.Tracef("D_DOMAIN for %s has been detected as: %s",
 			resp.ClientNetHint.Interface, resp.ClientNetHint.Domain)
 	}
 
 	return resp, nil
 }
 
-func (mod *mgmtModule) getAttachInfoResp(ctx context.Context, numaNode int, sys string) (*mgmtpb.GetAttachInfoResp, error) {
-	if mod.attachInfo.IsCached() {
-		return mod.attachInfo.GetAttachInfoResp()
-	}
-
-	resp, err := mod.getAttachInfoRemote(ctx, numaNode, sys)
+func (mod *mgmtModule) getAttachInfoResp(ctx context.Context, sys string) (*mgmtpb.GetAttachInfoResp, error) {
+	ctlResp, err := mod.cache.GetAttachInfo(ctx, sys)
 	if err != nil {
 		return nil, err
 	}
 
-	if mod.attachInfo.IsEnabled() {
-		mod.attachInfo.Cache(ctx, resp)
-		return mod.attachInfo.GetAttachInfoResp()
+	resp := new(mgmtpb.GetAttachInfoResp)
+	if err := convert.Types(ctlResp, resp); err != nil {
+		return nil, err
 	}
-
 	return resp, nil
 }
 
-func (mod *mgmtModule) getAttachInfoRemote(ctx context.Context, numaNode int, sys string) (*mgmtpb.GetAttachInfoResp, error) {
-	// Ask the MS for _all_ info, regardless of pbReq.AllRanks, so that the
-	// cache can serve future "pbReq.AllRanks == true" requests.
-	req := new(control.GetAttachInfoReq)
-	req.SetSystem(sys)
-	req.AllRanks = true
-	resp, err := control.GetAttachInfo(ctx, mod.ctlInvoker, req)
-	if err != nil {
-		return nil, errors.Wrapf(err, "GetAttachInfo %+v", req)
+func (mod *mgmtModule) selectAttachInfo(ctx context.Context, srvResp *mgmtpb.GetAttachInfoResp, iface, domain string) (*mgmtpb.GetAttachInfoResp, error) {
+	reqProviders := mod.getIfaceProviders(ctx, iface, domain)
+
+	if mod.providerIdx > 0 {
+		// Secondary provider indices begin at 1
+		resp, err := mod.selectSecondaryAttachInfo(srvResp, mod.providerIdx)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(reqProviders) != 0 && !reqProviders.Has(resp.ClientNetHint.Provider) {
+			mod.log.Errorf("requested fabric interface %q (domain: %q) does not report support for configured provider %q (idx %d)",
+				iface, domain, resp.ClientNetHint.Provider, mod.providerIdx)
+		}
+
+		return resp, nil
 	}
 
-	if resp.ClientNetHint.Provider == "" {
-		return nil, errors.New("GetAttachInfo response contained no provider")
+	if len(reqProviders) == 0 || reqProviders.Has(srvResp.ClientNetHint.Provider) {
+		return srvResp, nil
 	}
 
-	pbResp := new(mgmtpb.GetAttachInfoResp)
-	if err := convert.Types(resp, pbResp); err != nil {
-		return nil, errors.Wrap(err, "Failed to convert GetAttachInfo response")
+	mod.log.Debugf("primary provider is not supported by requested interface %q domain %q (supports: %s)", iface, domain, strings.Join(reqProviders.ToSlice(), ", "))
+
+	// We can try to be smart about choosing a provider if the client requested a specific interface
+	for _, hint := range srvResp.SecondaryClientNetHints {
+		if reqProviders.Has(hint.Provider) {
+			mod.log.Tracef("found secondary provider supported by requested interface: %q (idx %d)", hint.Provider, hint.ProviderIdx)
+			return mod.selectSecondaryAttachInfo(srvResp, uint(hint.ProviderIdx))
+		}
 	}
 
-	return pbResp, nil
+	mod.log.Errorf("no supported provider for requested interface %q domain %q, using primary by default", iface, domain)
+	return srvResp, nil
 }
 
-func (mod *mgmtModule) getFabricInterface(ctx context.Context, numaNode int, netDevClass uint32) (*FabricInterface, error) {
-	if mod.fabricInfo.IsCached() {
-		return mod.fabricInfo.GetDevice(numaNode, netDevClass)
+func (mod *mgmtModule) getIfaceProviders(ctx context.Context, iface, domain string) common.StringSet {
+	providers := common.NewStringSet()
+	if iface == "" {
+		return providers
 	}
 
-	netCtx, err := netdetect.Init(ctx)
+	if domain == "" {
+		domain = iface
+	}
+
+	if fis, err := mod.getFabricInterface(ctx, &FabricIfaceParams{
+		Interface: iface,
+		Domain:    domain,
+	}); err != nil {
+		mod.log.Errorf("requested fabric interface %q (domain %q) may not function as desired: %s", iface, domain, err)
+	} else {
+		providers.Add(fis.Providers()...)
+	}
+
+	mod.log.Tracef("requested interface %q (domain: %q) supports providers: %q", iface, domain, strings.Join(providers.ToSlice(), ", "))
+	return providers
+}
+
+func (mod *mgmtModule) selectSecondaryAttachInfo(srvResp *mgmtpb.GetAttachInfoResp, provIdx uint) (*mgmtpb.GetAttachInfoResp, error) {
+	if provIdx == 0 {
+		return nil, errors.New("provider index 0 is not a secondary provider")
+	}
+	maxIdx := len(srvResp.SecondaryClientNetHints)
+	if int(provIdx) > maxIdx {
+		return nil, errors.Errorf("provider index %d out of range (maximum: %d)", provIdx, maxIdx)
+	}
+
+	hint := srvResp.SecondaryClientNetHints[provIdx-1]
+	if hint.ProviderIdx != uint32(provIdx) {
+		return nil, errors.Errorf("malformed network hint: expected provider index %d, got %d", provIdx, hint.ProviderIdx)
+	}
+	mod.log.Debugf("getting secondary provider %s URIs", hint.Provider)
+	uris, err := mod.getProviderIdxURIs(srvResp, provIdx)
 	if err != nil {
 		return nil, err
 	}
-	defer netdetect.CleanUp(netCtx)
 
-	result, err := netdetect.ScanFabric(netCtx, "")
-	if err != nil {
-		return nil, err
+	return &mgmtpb.GetAttachInfoResp{
+		Status:        srvResp.Status,
+		RankUris:      uris,
+		MsRanks:       srvResp.MsRanks,
+		ClientNetHint: hint,
+	}, nil
+}
+
+func (mod *mgmtModule) getProviderIdxURIs(srvResp *mgmtpb.GetAttachInfoResp, idx uint) ([]*mgmtpb.GetAttachInfoResp_RankUri, error) {
+	uris := []*mgmtpb.GetAttachInfoResp_RankUri{}
+	for _, uri := range srvResp.SecondaryRankUris {
+		if uri.ProviderIdx == uint32(idx) {
+			uris = append(uris, uri)
+		}
 	}
-	mod.fabricInfo.CacheScan(netCtx, result)
 
-	return mod.fabricInfo.GetDevice(numaNode, netDevClass)
+	if len(uris) == 0 {
+		return nil, errors.Errorf("no rank URIs for provider idx %d", mod.providerIdx)
+	}
+
+	return uris, nil
+}
+
+func (mod *mgmtModule) getFabricInterface(ctx context.Context, params *FabricIfaceParams) (*FabricInterface, error) {
+	return mod.cache.GetFabricDevice(ctx, params)
+}
+
+func (mod *mgmtModule) handleSetupClientTelemetry(ctx context.Context, reqb []byte, cred *unix.Ucred) ([]byte, error) {
+	if len(reqb) == 0 {
+		return nil, errors.New("empty request")
+	}
+
+	pbReq := new(mgmtpb.ClientTelemetryReq)
+	if err := proto.Unmarshal(reqb, pbReq); err != nil {
+		return nil, drpc.UnmarshalingPayloadFailure()
+	}
+	if pbReq.Jobid == "" {
+		return nil, errors.New("empty jobid")
+	}
+	if pbReq.ShmKey == 0 {
+		return nil, errors.New("unset shm key")
+	}
+	if cred == nil {
+		return nil, errors.New("nil user credentials")
+	}
+
+	resp := &mgmtpb.ClientTelemetryResp{AgentUid: int32(unix.Getuid())}
+	if err := telemetry.SetupClientRoot(ctx, pbReq.Jobid, int(cred.Pid), int(pbReq.ShmKey)); err != nil {
+		if cause, ok := errors.Cause(err).(daos.Status); ok {
+			resp.Status = int32(cause)
+		} else {
+			return nil, err
+		}
+	}
+	mod.log.Tracef("%d: %s", cred.Pid, pblog.Debug(resp))
+	return proto.Marshal(resp)
 }
 
 func (mod *mgmtModule) handleNotifyPoolConnect(ctx context.Context, reqb []byte, pid int32) error {
@@ -245,4 +396,10 @@ func (mod *mgmtModule) handleNotifyPoolDisconnect(ctx context.Context, reqb []by
 // that the process held open.
 func (mod *mgmtModule) handleNotifyExit(ctx context.Context, pid int32) {
 	mod.monitor.NotifyExit(ctx, pid)
+}
+
+// RefreshCache triggers a refresh of all data that is currently cached. If nothing has been cached
+// yet, it does nothing.
+func (mod *mgmtModule) RefreshCache(ctx context.Context) error {
+	return mod.cache.Refresh(ctx)
 }

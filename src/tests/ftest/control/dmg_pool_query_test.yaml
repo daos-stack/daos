@@ -1,27 +1,23 @@
 hosts:
-  test_servers:
-    - server-A
-  test_clients:
-    - client-B
+  test_servers: 1
+  test_clients: 1
 timeout: 80
 server_config:
   name: daos_server
   port: 10001
-  servers:
-    targets: 8
-    bdev_class: nvme
-    bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
-    scm_class: dcpm
-    scm_list: ["/dev/pmem0"]
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 4
+      storage: auto
+  system_ram_reserved: 64
 pool:
   control_method: dmg
-  mode: 146
   scm_size: 16GB
   nvme_size: 32GB
-  name: daos_server
 container:
-    type: POSIX
-    control_method: daos
+  type: POSIX
+  control_method: daos
 ior:
   flags: "-k -w -r"
   transfer_size: "64M"
@@ -30,14 +26,17 @@ ior:
 
 exp_vals:
   pool_status: 0
-  total_targets: 8
-  active_targets: 8
-  total_nodes: 1
+  pool_state: "Ready"
+  total_targets: 4
+  active_targets: 4
+  total_engines: 1
   disabled_targets: 0
   version: 1
   leader: 0
+  replicas: [0]
+  query_mask: "rebuild,space"
   scm:
-    total: 16000000000
+    total: 16000008192
   nvme:
     total: 32000000000
   rebuild:

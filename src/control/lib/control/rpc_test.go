@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,9 +20,11 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -97,8 +99,11 @@ func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
 		"request timeout": {
 			timeout: 1 * time.Nanosecond,
 			req: &testRequest{
-				rpcFn: func(_ context.Context, _ *grpc.ClientConn) (proto.Message, error) {
+				rpcFn: func(ctx context.Context, _ *grpc.ClientConn) (proto.Message, error) {
 					time.Sleep(1 * time.Microsecond)
+					if ctx.Err() != nil {
+						return nil, ctx.Err()
+					}
 					return defaultMessage, nil
 				},
 			},
@@ -111,14 +116,17 @@ func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
 		},
 		"parent context canceled": {
 			withCancel: func() *ctxCancel {
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(test.Context(t))
 				return &ctxCancel{
 					ctx:    ctx,
 					cancel: cancel,
 				}
 			}(),
 			req: &testRequest{
-				rpcFn: func(_ context.Context, _ *grpc.ClientConn) (proto.Message, error) {
+				rpcFn: func(ctx context.Context, _ *grpc.ClientConn) (proto.Message, error) {
+					if ctx.Err() != nil {
+						return nil, ctx.Err()
+					}
 					time.Sleep(10 * time.Second) // shouldn't be allowed to run this long
 					return defaultMessage, nil
 				},
@@ -143,7 +151,7 @@ func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			goRoutinesAtStart := runtime.NumGoroutine()
 
@@ -152,7 +160,7 @@ func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
 				WithClientLogger(log),
 			)
 
-			outerCtx := context.TODO()
+			outerCtx := test.Context(t)
 			if tc.withCancel != nil {
 				outerCtx = tc.withCancel.ctx
 			}
@@ -168,7 +176,7 @@ func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
 				tc.withCancel.cancel()
 			}
 
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -193,7 +201,13 @@ func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
 				}
 			}
 
-			testDeadline, ok := t.Deadline()
+			deadliner, ok := (interface{})(t).(interface{ Deadline() (time.Time, bool) })
+			if !ok {
+				t.Log("go version < 1.15; skipping stragglers check")
+				return
+			}
+
+			testDeadline, ok := deadliner.Deadline()
 			if !ok {
 				panic("no deadline")
 			}
@@ -263,6 +277,7 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 	errNotReplica := &system.ErrNotReplica{
 		Replicas: replicaHosts,
 	}
+	errUnimplemented := status.Newf(codes.Unimplemented, "unimplemented").Err()
 
 	genRpcFn := func(inner func(*int) (proto.Message, error)) func(_ context.Context, _ *grpc.ClientConn) (proto.Message, error) {
 		callCount := 0
@@ -286,11 +301,11 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 					return defaultMessage, nil
 				},
 			},
-			expErr: context.DeadlineExceeded,
+			expErr: errors.New("timed out"),
 		},
 		"parent context canceled": {
 			withCancel: func() *ctxCancel {
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(test.Context(t))
 				return &ctxCancel{
 					ctx:    ctx,
 					cancel: cancel,
@@ -303,6 +318,38 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 				},
 			},
 			expErr: context.Canceled,
+		},
+		"ctrl RPC handler unimplemented on one host": {
+			req: &testRequest{
+				HostList: []string{"127.0.0.1:1", "127.0.0.1:2"},
+				rpcFn: func(_ context.Context, cc *grpc.ClientConn) (proto.Message, error) {
+					if cc.Target() == "127.0.0.1:2" {
+						return nil, errUnimplemented
+					}
+					return defaultMessage, nil
+				},
+			},
+			expResp: &UnaryResponse{
+				Responses: []*HostResponse{
+					{
+						Addr:    "127.0.0.1:1",
+						Message: defaultMessage,
+					},
+					{
+						Addr:  "127.0.0.1:2",
+						Error: errUnimplemented,
+					},
+				},
+			},
+		},
+		"mgmt RPC handler unimplemented": {
+			req: &testRequest{
+				toMS: true,
+				rpcFn: func(_ context.Context, _ *grpc.ClientConn) (proto.Message, error) {
+					return nil, errUnimplemented
+				},
+			},
+			expErr: errors.New("unimplemented"),
 		},
 		"multiple hosts in request": {
 			req: &testRequest{
@@ -406,6 +453,19 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 			},
 			expErr: FaultRpcTimeout(new(testRequest)),
 		},
+		"request to non-leader replicas with no current leader hits retry cap": {
+			req: &testRequest{
+				HostList: nonLeaderReplicas,
+				retryableRequest: retryableRequest{
+					retryMaxTries: 2,
+				},
+				toMS: true,
+				rpcFn: func(_ context.Context, cc *grpc.ClientConn) (proto.Message, error) {
+					return nil, errNotLeaderNoLeader
+				},
+			},
+			expErr: errors.New("max retries"),
+		},
 		"request to non-replicas eventually discovers at least one replica": {
 			req: &testRequest{
 				HostList: nonReplicaHosts,
@@ -445,14 +505,14 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			client := NewClient(
 				WithConfig(clientCfg),
 				WithClientLogger(log),
 			)
 
-			outerCtx := context.TODO()
+			outerCtx := test.Context(t)
 			if tc.withCancel != nil {
 				outerCtx = tc.withCancel.ctx
 			}
@@ -471,7 +531,7 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 			}
 			gotResp, gotErr := client.InvokeUnaryRPC(ctx, tc.req)
 
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -481,7 +541,7 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 			if tc.withCancel == nil {
 				cmpOpts := []cmp.Option{
 					cmpopts.IgnoreUnexported(UnaryResponse{}),
-					cmp.Comparer(func(x, y error) bool { return common.CmpErrBool(x, y) }),
+					cmp.Comparer(func(x, y error) bool { return test.CmpErrBool(x, y) }),
 					cmp.Transformer("Sort", func(in []*HostResponse) []*HostResponse {
 						out := append([]*HostResponse(nil), in...)
 						sort.Slice(out, func(i, j int) bool { return out[i].Addr < out[j].Addr })

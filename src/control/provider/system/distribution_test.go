@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -58,6 +58,19 @@ func TestSystem_getDistribution(t *testing.T) {
 				},
 			},
 		},
+		"rocky-8.5": {
+			fileMap: map[string]string{
+				"/etc/os-release": "distros/rocky8.5-os-rel",
+			},
+			expDist: Distribution{
+				ID:   "rocky",
+				Name: "Rocky Linux",
+				Version: DistributionVersion{
+					Major: 8,
+					Minor: 5,
+				},
+			},
+		},
 		"ubuntu-20.04": {
 			fileMap: map[string]string{
 				"/etc/os-release": "distros/ubuntu20.04-os-rel",
@@ -67,6 +80,19 @@ func TestSystem_getDistribution(t *testing.T) {
 				Name: "Ubuntu",
 				Version: DistributionVersion{
 					Major: 20,
+					Minor: 4,
+				},
+			},
+		},
+		"ubuntu-22.04": {
+			fileMap: map[string]string{
+				"/etc/os-release": "distros/ubuntu22.04-os-rel",
+			},
+			expDist: Distribution{
+				ID:   "ubuntu",
+				Name: "Ubuntu",
+				Version: DistributionVersion{
+					Major: 22,
 					Minor: 4,
 				},
 			},
@@ -81,6 +107,32 @@ func TestSystem_getDistribution(t *testing.T) {
 				Version: DistributionVersion{
 					Major: 15,
 					Minor: 2,
+				},
+			},
+		},
+		"opensuse-15.3": {
+			fileMap: map[string]string{
+				"/etc/os-release": "distros/opensuse15.3-os-rel",
+			},
+			expDist: Distribution{
+				ID:   "opensuse-leap",
+				Name: "openSUSE Leap",
+				Version: DistributionVersion{
+					Major: 15,
+					Minor: 3,
+				},
+			},
+		},
+		"opensuse-15.4": {
+			fileMap: map[string]string{
+				"/etc/os-release": "distros/opensuse15.4-os-rel",
+			},
+			expDist: Distribution{
+				ID:   "opensuse-leap",
+				Name: "openSUSE Leap",
+				Version: DistributionVersion{
+					Major: 15,
+					Minor: 4,
 				},
 			},
 		},

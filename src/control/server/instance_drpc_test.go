@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,6 +9,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -16,11 +17,15 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
+	. "github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	. "github.com/daos-stack/daos/src/control/system"
 )
 
@@ -42,7 +47,7 @@ func waitForEngineReady(t *testing.T, instance *EngineInstance) {
 
 func TestEngineInstance_NotifyDrpcReady(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	instance := getTestEngineInstance(log)
 
@@ -50,23 +55,31 @@ func TestEngineInstance_NotifyDrpcReady(t *testing.T) {
 
 	instance.NotifyDrpcReady(req)
 
-	dc, err := instance.getDrpcClient()
-	if err != nil || dc == nil {
-		t.Fatal("Expected a dRPC client connection")
-	}
+	test.AssertEqual(t, req.DrpcListenerSock, instance.getDrpcSocket(), "expected socket value set")
 
 	waitForEngineReady(t, instance)
 }
 
 func TestEngineInstance_CallDrpc(t *testing.T) {
 	for name, tc := range map[string]struct {
-		notReady bool
-		resp     *drpc.Response
-		expErr   error
+		notStarted bool
+		notReady   bool
+		noSocket   bool
+		noClient   bool
+		resp       *drpc.Response
+		expErr     error
 	}{
+		"not started": {
+			notStarted: true,
+			expErr:     FaultDataPlaneNotStarted,
+		},
 		"not ready": {
 			notReady: true,
-			expErr:   errors.New("no dRPC client set"),
+			expErr:   errEngineNotReady,
+		},
+		"drpc not ready": {
+			noSocket: true,
+			expErr:   errDRPCNotReady,
 		},
 		"success": {
 			resp: &drpc.Response{},
@@ -74,20 +87,132 @@ func TestEngineInstance_CallDrpc(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
-			instance := getTestEngineInstance(log)
-			if !tc.notReady {
-				cfg := &mockDrpcClientConfig{
-					SendMsgResponse: tc.resp,
-				}
-				instance.setDrpcClient(newMockDrpcClient(cfg))
+			defer test.ShowBufferOnFailure(t, buf)
+
+			trc := engine.TestRunnerConfig{}
+			trc.Running.Store(!tc.notStarted)
+			runner := engine.NewTestRunner(&trc, engine.MockConfig())
+			instance := NewEngineInstance(log, nil, nil, runner)
+			instance.ready.Store(!tc.notReady)
+
+			if !tc.noSocket {
+				instance.setDrpcSocket("/something")
 			}
 
-			_, err := instance.CallDrpc(context.TODO(),
+			cfg := &mockDrpcClientConfig{
+				SendMsgResponse: tc.resp,
+			}
+			instance.getDrpcClientFn = func(s string) drpc.DomainSocketClient {
+				return newMockDrpcClient(cfg)
+			}
+
+			_, err := instance.CallDrpc(test.Context(t),
 				drpc.MethodPoolCreate, &mgmtpb.PoolCreateReq{})
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 		})
 	}
+}
+
+type sendMsgDrpcClient struct {
+	sync.Mutex
+	sendMsgFn func(context.Context, *drpc.Call) (*drpc.Response, error)
+}
+
+func (c *sendMsgDrpcClient) IsConnected() bool {
+	return true
+}
+
+func (c *sendMsgDrpcClient) Connect(_ context.Context) error {
+	return nil
+}
+
+func (c *sendMsgDrpcClient) Close() error {
+	return nil
+}
+
+func (c *sendMsgDrpcClient) SendMsg(ctx context.Context, call *drpc.Call) (*drpc.Response, error) {
+	return c.sendMsgFn(ctx, call)
+}
+
+func (c *sendMsgDrpcClient) GetSocketPath() string {
+	return ""
+}
+
+func TestEngineInstance_CallDrpc_Parallel(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	// This test starts with one long-running drpc client that should remain in the SendMsg
+	// function until all other clients complete, demonstrating a single dRPC call cannot
+	// block the channel.
+
+	numClients := 100
+	numFastClients := numClients - 1
+
+	doneCh := make(chan struct{}, numFastClients)
+	longClient := &sendMsgDrpcClient{
+		sendMsgFn: func(ctx context.Context, _ *drpc.Call) (*drpc.Response, error) {
+			numDone := 0
+
+			for numDone < numFastClients {
+				select {
+				case <-ctx.Done():
+					t.Fatalf("context done before test finished: %s", ctx.Err())
+				case <-doneCh:
+					numDone++
+					t.Logf("%d/%d finished", numDone, numFastClients)
+				}
+			}
+			t.Log("long running client finished")
+			return &drpc.Response{}, nil
+		},
+	}
+
+	clientCh := make(chan drpc.DomainSocketClient, numClients)
+	go func(t *testing.T) {
+		t.Log("starting client producer thread...")
+		t.Log("adding long-running client")
+		clientCh <- longClient
+		for i := 0; i < numFastClients; i++ {
+			t.Logf("adding client %d", i)
+			clientCh <- &sendMsgDrpcClient{
+				sendMsgFn: func(ctx context.Context, _ *drpc.Call) (*drpc.Response, error) {
+					doneCh <- struct{}{}
+					return &drpc.Response{}, nil
+				},
+			}
+		}
+		t.Log("closing client channel")
+		close(clientCh)
+	}(t)
+
+	t.Log("setting up engine...")
+	trc := engine.TestRunnerConfig{}
+	trc.Running.Store(true)
+	runner := engine.NewTestRunner(&trc, engine.MockConfig())
+	instance := NewEngineInstance(log, nil, nil, runner)
+	instance.ready.Store(true)
+
+	instance.getDrpcClientFn = func(s string) drpc.DomainSocketClient {
+		t.Log("fetching drpc client")
+		cli := <-clientCh
+		t.Log("got drpc client")
+		return cli
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(numClients)
+	for i := 0; i < numClients; i++ {
+		go func(t *testing.T, j int) {
+			t.Logf("%d: CallDrpc", j)
+			_, err := instance.CallDrpc(test.Context(t), drpc.MethodPoolCreate, &mgmt.PoolCreateReq{})
+			if err != nil {
+				t.Logf("%d: error: %s", j, err.Error())
+			}
+			wg.Done()
+		}(t, i)
+	}
+	wg.Wait()
 }
 
 func TestEngineInstance_DrespToRankResult(t *testing.T) {
@@ -104,10 +229,10 @@ func TestEngineInstance_DrespToRankResult(t *testing.T) {
 			expResult: &MemberResult{Rank: dRank, State: MemberStateJoined},
 		},
 		"rank failure": {
-			daosResp: &mgmtpb.DaosResp{Status: int32(drpc.DaosNoSpace)},
+			daosResp: &mgmtpb.DaosResp{Status: int32(daos.NoSpace)},
 			expResult: &MemberResult{
 				Rank: dRank, State: MemberStateErrored, Errored: true,
-				Msg: fmt.Sprintf("rank %d: %s", dRank, drpc.DaosNoSpace),
+				Msg: fmt.Sprintf("rank %d: %s", dRank, daos.NoSpace),
 			},
 		},
 		"drpc failure": {
@@ -127,7 +252,7 @@ func TestEngineInstance_DrespToRankResult(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.daosResp == nil {
 				tc.daosResp = &mgmtpb.DaosResp{Status: 0}
@@ -147,7 +272,7 @@ func TestEngineInstance_DrespToRankResult(t *testing.T) {
 			}
 
 			gotResult := drespToMemberResult(Rank(dRank), resp, tc.inErr, tc.targetState)
-			if diff := cmp.Diff(tc.expResult, gotResult, common.DefaultCmpOpts()...); diff != "" {
+			if diff := cmp.Diff(tc.expResult, gotResult, test.DefaultCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 		})

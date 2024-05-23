@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,7 +11,116 @@
 #include <daos/common.h>
 #include <daos_errno.h>
 #include <daos_srv/vos.h>
+#include <gurt/telemetry_producer.h>
 #include "srv_internal.h"
+
+/*
+ * CPU weights for each type of ULTs, the ULT consuming more CPU in a schedule
+ * cycle has larger weights.
+ */
+static unsigned int req_weights[SCHED_REQ_MAX] = {
+	2,	/* SCHED_REQ_UPDATE */
+	1,	/* SCHED_REQ_FETCH */
+	4,	/* SCHED_REQ_GC */
+	3,	/* SCHED_REQ_SCRUB */
+	2,	/* SCHED_REQ_MIGRATE */
+};
+
+/* CPU time(us) for each type of ULTS.*/
+static unsigned int req_latencys[SCHED_REQ_MAX] = {
+	10,	/* SCHED_REQ_UPDATE */
+	5,	/* SCHED_REQ_FETCH */
+	20,	/* SCHED_REQ_GC */
+	15,	/* SCHED_REQ_SCRUB */
+	10,	/* SCHED_REQ_MIGRATE */
+};
+
+struct stats_cycle {
+	/* Kicked off weights in a schedule cycle */
+	uint64_t	sc_kicked_wts[SCHED_REQ_MAX];
+};
+
+#define SW_CYCLE_MAX	10000
+
+struct stats_window {
+	/* All schedule cycles in the stats window */
+	struct stats_cycle	sw_cycles[SW_CYCLE_MAX];
+	/* Last schedule cycle */
+	struct stats_cycle	sw_last_cycle;
+	/* Per type kicked off weights in the stats window */
+	uint64_t		sw_kicked_wts[SCHED_REQ_MAX];
+	/* Total kicked off weights in the stats window */
+	uint64_t		sw_kicked_wts_tot;
+	/* To be updated array index of 'sw_cycles' */
+	unsigned int		sw_cursor;
+	/* Array size of 'sw_cycles' */
+	unsigned int		sw_count;
+	/* Generation used on making kicking off decision */
+	uint8_t			sw_gen;
+};
+
+/*
+ * Assume the CPU is under utilized (not enough workload generated for certain DAOS
+ * pool) when the total kicked weights are less than the SW_MIN_WEIGHTS within a
+ * stats window.
+ */
+#define SW_MIN_WEIGHTS	2500 /* req_weights[SCHED_REQ_FETCH] * SW_CYCLE_MAX / 4 */
+
+static inline void
+sw_cycle_update(struct stats_window *sw, unsigned int req_type)
+{
+	struct stats_cycle	*cur = &sw->sw_last_cycle;
+
+	D_ASSERT(req_type < SCHED_REQ_MAX);
+	cur->sc_kicked_wts[req_type] += req_weights[req_type];
+}
+
+static inline void
+increase_kicked_wts(struct stats_window *sw, struct stats_cycle *sc,
+		    struct stats_cycle *last_cycle, unsigned int req_type)
+{
+	sc->sc_kicked_wts[req_type]	= last_cycle->sc_kicked_wts[req_type];
+	sw->sw_kicked_wts[req_type]	+= last_cycle->sc_kicked_wts[req_type];
+	sw->sw_kicked_wts_tot		+= last_cycle->sc_kicked_wts[req_type];
+
+	last_cycle->sc_kicked_wts[req_type] = 0;
+}
+
+static void
+sw_window_update(struct stats_window *sw)
+{
+	struct stats_cycle	*last_cycle = &sw->sw_last_cycle;
+	struct stats_cycle	*sc = &sw->sw_cycles[sw->sw_cursor];
+	int			 i;
+
+	if (likely(sw->sw_count == SW_CYCLE_MAX)) {
+		for (i = SCHED_REQ_UPDATE; i < SCHED_REQ_MAX; i++) {
+			/* Replace the weights in the entry to be updated */
+			D_ASSERT(sw->sw_kicked_wts[i] >= sc->sc_kicked_wts[i]);
+			D_ASSERT(sw->sw_kicked_wts_tot >= sw->sw_kicked_wts[i]);
+			sw->sw_kicked_wts[i]	-= sc->sc_kicked_wts[i];
+			sw->sw_kicked_wts_tot	-= sc->sc_kicked_wts[i];
+
+			increase_kicked_wts(sw, sc, last_cycle, i);
+		}
+		goto done;
+	}
+
+	for (i = SCHED_REQ_UPDATE; i < SCHED_REQ_MAX; i++)
+		increase_kicked_wts(sw, sc, last_cycle, i);
+
+	sw->sw_count++;
+done:
+	if (sw->sw_cursor == (SW_CYCLE_MAX - 1))
+		sw->sw_cursor = 0;
+	else
+		sw->sw_cursor++;
+
+	if (sw->sw_gen == UINT8_MAX)
+		sw->sw_gen = 0;
+	else
+		sw->sw_gen++;
+}
 
 struct sched_req_info {
 	d_list_t		sri_req_list;
@@ -37,6 +146,7 @@ struct sched_pool_info {
 	int			spi_gc_sleeping;
 	int			spi_ref;
 	uint32_t		spi_req_cnt;
+	struct stats_window	spi_stats_window;
 };
 
 struct sched_request {
@@ -46,6 +156,7 @@ struct sched_request {
 	 * When request is not used, it's in 'sched_info->si_idle_list'.
 	 */
 	d_list_t		 sr_link;
+	struct d_binheap_node	 sr_node;
 	struct sched_req_attr	 sr_attr;
 	void			*sr_func;
 	void			*sr_arg;
@@ -55,14 +166,18 @@ struct sched_request {
 	uint64_t		 sr_wakeup_time;
 	/* When the request is enqueued, in msecs */
 	uint64_t		 sr_enqueue_ts;
-	unsigned int		 sr_abort:1;
+	unsigned int		 sr_abort:1,
+				 /* sr_ult is sched_request-owned */
+				 sr_owned:1,
+				 /* request is in heap */
+				 sr_in_heap:1;
 };
 
 bool		sched_prio_disabled;
-unsigned int	sched_stats_intvl;
 unsigned int	sched_relax_intvl = SCHED_RELAX_INTVL_DEFAULT;
 unsigned int	sched_relax_mode;
 unsigned int	sched_unit_runtime_max = 32; /* ms */
+bool		sched_watchdog_all;
 
 enum {
 	/* All requests for various pools are processed in FIFO */
@@ -93,59 +208,9 @@ static int	sched_policy;
  */
 #define SCHED_DELAY_THRESH	40000	/* msecs */
 
-static unsigned int max_delay_msecs[SCHED_REQ_MAX] = {
-	20000,	/* SCHED_REQ_UPDATE */
-	1000,	/* SCHED_REQ_FETCH */
-	500,	/* SCHED_REQ_GC */
-	20000,	/* SCHED_REQ_SCRUB */
-	20000,	/* SCHED_REQ_MIGRATE */
-};
-
-static unsigned int max_qds[SCHED_REQ_MAX] = {
-	64000,	/* SCHED_REQ_UPDATE */
-	32000,	/* SCHED_REQ_FETCH */
-	1024,	/* SCHED_REQ_GC */
-	1024,	/* SCHED_REQ_SCRUB */
-	64000,	/* SCHED_REQ_MIGRATE */
-};
-
-static unsigned int req_throttle[SCHED_REQ_MAX] = {
-	0,	/* SCHED_REQ_UPDATE */
-	0,	/* SCHED_REQ_FETCH */
-	30,	/* SCHED_REQ_GC */
-	30,	/* SCHED_REQ_SCRUB */
-	30,	/* SCHED_REQ_REBUILD */
-};
-
-/*
- * Throttle certain type of requests to N percent of IO requests
- * in a cycle. IO requests can't be throttled.
- */
-int
-sched_set_throttle(unsigned int type, unsigned int percent)
-{
-	if (percent >= 100) {
-		D_ERROR("Invalid throttle number: %d\n", percent);
-		return -DER_INVAL;
-	}
-
-	if (type >= SCHED_REQ_MAX) {
-		D_ERROR("Invalid request type: %d\n", type);
-		return -DER_INVAL;
-	}
-
-	if (type == SCHED_REQ_UPDATE || type == SCHED_REQ_FETCH) {
-		D_ERROR("Can't throttle IO requests");
-		return -DER_INVAL;
-	}
-
-	req_throttle[type] = percent;
-	return 0;
-}
-
 struct pressure_ratio {
 	unsigned int	pr_free;	/* free space ratio */
-	unsigned int	pr_throttle;	/* update throttle ratio */
+	unsigned int	pr_gc_ratio;	/* CPU percentage for GC & Aggregation */
 	unsigned int	pr_delay;	/* update being delayed in msec */
 	unsigned int	pr_pressure;	/* index in pressure_gauge */
 };
@@ -153,38 +218,38 @@ struct pressure_ratio {
 static struct pressure_ratio pressure_gauge[] = {
 	{	/* free space > 40%, no space pressure */
 		.pr_free	= 40,
-		.pr_throttle	= 100,
+		.pr_gc_ratio	= 10,
 		.pr_delay	= 0,
 		.pr_pressure	= SCHED_SPACE_PRESS_NONE,
 	},
 	{	/* free space > 30% */
 		.pr_free	= 30,
-		.pr_throttle	= 70,
-		.pr_delay	= 2000, /* msecs */
+		.pr_gc_ratio	= 20,
+		.pr_delay	= 4000, /* msecs */
 		.pr_pressure	= 1,
 	},
 	{	/* free space > 20% */
 		.pr_free	= 20,
-		.pr_throttle	= 40,
-		.pr_delay	= 4000, /* msecs */
+		.pr_gc_ratio	= 30,
+		.pr_delay	= 6000, /* msecs */
 		.pr_pressure	= 2,
 	},
 	{	/* free space > 10% */
 		.pr_free	= 10,
-		.pr_throttle	= 20,
+		.pr_gc_ratio	= 40,
 		.pr_delay	= 8000, /* msecs */
 		.pr_pressure	= 3,
 	},
 	{	/* free space > 5% */
 		.pr_free	= 5,
-		.pr_throttle	= 10,
-		.pr_delay	= 12000, /* msecs */
+		.pr_gc_ratio	= 50,
+		.pr_delay	= 10000, /* msecs */
 		.pr_pressure	= 4,
 	},
 	{	/* free space <= 5% */
 		.pr_free	= 0,
-		.pr_throttle	= 5,
-		.pr_delay	= 20000, /* msecs */
+		.pr_gc_ratio	= 60,
+		.pr_delay	= 12000, /* msecs */
 		.pr_pressure	= 5,
 	},
 };
@@ -319,13 +384,12 @@ prune_purge_list(struct dss_xstream *dx)
 						    pi->pi_pool_id,
 						    sizeof(uuid_t));
 			if (!deleted)
-				D_ERROR("XS(%d): Purge "DF_UUID" failed.\n",
-					dx->dx_xs_id, DP_UUID(pi->pi_pool_id));
+				D_ERROR("Purge "DF_UUID" failed.\n",
+					DP_UUID(pi->pi_pool_id));
 		} else {
 			unsigned int type;
 
-			D_ERROR("XS(%d): Pool "DF_UUID", req_cnt:%u, "
-				"gc_ults:%d\n", dx->dx_xs_id,
+			D_ERROR("Pool "DF_UUID", req_cnt:%u, gc_ults:%d\n",
 				DP_UUID(pi->pi_pool_id), spi->spi_req_cnt,
 				spi->spi_gc_ults);
 
@@ -349,10 +413,8 @@ add_purge_list(struct dss_xstream *dx, struct sched_pool_info *spi)
 	struct purge_item	*pi;
 
 	D_CDEBUG(!is_spi_inuse(spi), DB_TRACE, DLOG_ERR,
-		 "XS(%d): vos pool:"DF_UUID" is destroyed. "
-		 "req_cnt:%u, gc_ults:%u\n", dx->dx_xs_id,
-		 DP_UUID(spi->spi_pool_id), spi->spi_req_cnt,
-		 spi->spi_gc_ults);
+		 "vos pool:"DF_UUID" is destroyed. req_cnt:%u, gc_ults:%u\n",
+		 DP_UUID(spi->spi_pool_id), spi->spi_req_cnt, spi->spi_gc_ults);
 
 	/* Don't purge the spi when it's still inuse */
 	if (is_spi_inuse(spi))
@@ -366,7 +428,6 @@ add_purge_list(struct dss_xstream *dx, struct sched_pool_info *spi)
 
 	D_ALLOC_PTR(pi);
 	if (pi == NULL) {
-		D_ERROR("XS(%d): Alloc purge item failed.\n", dx->dx_xs_id);
 		return;
 	}
 	D_INIT_LIST_HEAD(&pi->pi_link);
@@ -379,8 +440,12 @@ sched_info_fini(struct dss_xstream *dx)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
 	struct sched_request	*req, *tmp;
+	int			 i;
 
-	D_ASSERT(info->si_req_cnt == 0);
+	for (i = SCHED_REQ_UPDATE; i < SCHED_REQ_MAX; i++)
+		D_ASSERT(info->si_req_cnt[i] == 0);
+
+	D_ASSERT(info->si_total_req_cnt == 0);
 	D_ASSERT(d_list_empty(&info->si_sleep_list));
 	D_ASSERT(d_list_empty(&info->si_fifo_list));
 
@@ -390,9 +455,11 @@ sched_info_fini(struct dss_xstream *dx)
 		d_hash_table_destroy(info->si_pool_hash, true);
 		info->si_pool_hash = NULL;
 	}
+	d_binheap_destroy_inplace(&info->si_heap);
 
 	d_list_for_each_entry_safe(req, tmp, &info->si_idle_list,
 				   sr_link) {
+		D_ASSERT(req->sr_in_heap == 0);
 		d_list_del_init(&req->sr_link);
 		D_FREE(req);
 	}
@@ -407,7 +474,6 @@ prealloc_requests(struct sched_info *info, int cnt)
 	for (i = 0; i < cnt; i++) {
 		D_ALLOC_PTR(req);
 		if (req == NULL) {
-			D_ERROR("Alloc req failed.\n");
 			return -DER_NOMEM;
 		}
 		D_INIT_LIST_HEAD(&req->sr_link);
@@ -417,41 +483,143 @@ prealloc_requests(struct sched_info *info, int cnt)
 	return 0;
 }
 
-#define SCHED_PREALLOC_INIT_CNT		8192
-#define SCHED_PREALLOC_BATCH_CNT	1024
+/* These values will be tuned down in the code if Valgrind is being used. */
+#define SCHED_PREALLOC_INIT_CNT  8192
+#define SCHED_PREALLOC_BATCH_CNT 1024
+
+static void
+sched_metrics_init(struct dss_xstream *dx)
+{
+	struct sched_info	*info = &dx->dx_sched_info;
+	struct sched_stats	*stats = &info->si_stats;
+	int			 rc;
+
+	stats->ss_busy_ts = info->si_cur_ts;
+	stats->ss_watchdog_ts = 0;
+	stats->ss_last_unit = NULL;
+
+	rc = d_tm_add_metric(&stats->ss_total_time, D_TM_COUNTER, "Total running time", "ms",
+			     "sched/total_time/xs_%u", dx->dx_xs_id);
+	if (rc)
+		D_WARN("Failed to create total_time telemetry: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&stats->ss_relax_time, D_TM_COUNTER, "Total relaxing time", "ms",
+			     "sched/relax_time/xs_%u", dx->dx_xs_id);
+	if (rc)
+		D_WARN("Failed to create relax_time telemetry: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&stats->ss_wq_len, D_TM_GAUGE, "Wait queue length", "req",
+			     "sched/wait_queue/xs_%u", dx->dx_xs_id);
+	if (rc)
+		D_WARN("Failed to create wait_queue telemetry: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&stats->ss_sq_len, D_TM_GAUGE, "Sleep queue length", "req",
+			     "sched/sleep_queue/xs_%u", dx->dx_xs_id);
+	if (rc)
+		D_WARN("Failed to create sleep_queue telemetry: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&stats->ss_cycle_duration, D_TM_STATS_GAUGE, "Schedule cycle duration",
+			     "ms", "sched/cycle_duration/xs_%u", dx->dx_xs_id);
+	if (rc)
+		D_WARN("Failed to create cycle_duration telemetry: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&stats->ss_cycle_size, D_TM_STATS_GAUGE, "Schedule cycle size",
+			     "ULT", "sched/cycle_size/xs_%u", dx->dx_xs_id);
+	if (rc)
+		D_WARN("Failed to create cycle_size telemetry: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&stats->ss_total_reject, D_TM_COUNTER, "Total rejected requests",
+			     "req", "sched/total_reject/xs_%u", dx->dx_xs_id);
+	if (rc)
+		D_WARN("Failed to create total_reject telemetry: "DF_RC"\n", DP_RC(rc));
+}
+
+static int
+rpc_heap_node_enter(struct d_binheap *h, struct d_binheap_node *e)
+{
+	struct sched_request *sr;
+
+	D_ASSERT(h != NULL);
+	D_ASSERT(e != NULL);
+
+	sr = container_of(e, struct sched_request, sr_node);
+	sr->sr_in_heap = 1;
+
+	return 0;
+}
+
+static int
+rpc_heap_node_exit(struct d_binheap *h, struct d_binheap_node *e)
+{
+	struct sched_request *sr;
+
+	D_ASSERT(h != NULL);
+	D_ASSERT(e != NULL);
+
+	sr = container_of(e, struct sched_request, sr_node);
+	sr->sr_in_heap = 0;
+
+	return 0;
+}
+
+static bool
+rpc_heap_node_cmp(struct d_binheap_node *a, struct d_binheap_node *b)
+{
+	struct sched_request *nodea, *nodeb;
+
+	nodea = container_of(a, struct sched_request, sr_node);
+	nodeb = container_of(b, struct sched_request, sr_node);
+
+	/* Min heap, the min enqueue id is heap root */
+	return nodea->sr_attr.sra_enqueue_id < nodeb->sr_attr.sra_enqueue_id;
+}
+
+static struct d_binheap_ops rpc_heap_ops = {
+	.hop_enter	= rpc_heap_node_enter,
+	.hop_exit	= rpc_heap_node_exit,
+	.hop_compare	= rpc_heap_node_cmp,
+};
 
 static int
 sched_info_init(struct dss_xstream *dx)
 {
-	struct sched_info	*info = &dx->dx_sched_info;
-	int			 rc;
+	struct sched_info *info = &dx->dx_sched_info;
+	int                rc;
+	int                count = SCHED_PREALLOC_INIT_CNT;
 
 	info->si_cur_ts = daos_getmtime_coarse();
-	info->si_stats.ss_tot_time = 0;
-	info->si_stats.ss_relax_time = 0;
-	info->si_stats.ss_busy_ts = info->si_cur_ts;
-	info->si_stats.ss_print_ts = 0;
-	info->si_stats.ss_watchdog_ts = 0;
-	info->si_stats.ss_last_unit = NULL;
+	info->si_cur_seq = 0;
+	info->si_cur_id = 0;
 	D_INIT_LIST_HEAD(&info->si_idle_list);
 	D_INIT_LIST_HEAD(&info->si_sleep_list);
 	D_INIT_LIST_HEAD(&info->si_fifo_list);
 	D_INIT_LIST_HEAD(&info->si_purge_list);
-	info->si_req_cnt = 0;
+	info->si_total_req_cnt = 0;
 	info->si_sleep_cnt = 0;
 	info->si_wait_cnt = 0;
 	info->si_stop = 0;
+	sched_metrics_init(dx);
 
 	rc = d_hash_table_create(D_HASH_FT_NOLOCK, 4,
 				 NULL, &sched_pool_hash_ops,
 				 &info->si_pool_hash);
 	if (rc) {
-		D_ERROR("XS(%d): Create sched pool hash failed. "DF_RC".\n",
-			dx->dx_xs_id, DP_RC(rc));
+		D_ERROR("Create sched pool hash failed. " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 
-	rc = prealloc_requests(info, SCHED_PREALLOC_INIT_CNT);
+	if (D_ON_VALGRIND)
+		count = 16;
+
+	rc = d_binheap_create_inplace(DBH_FT_NOLOCK, 0, NULL, &rpc_heap_ops, &info->si_heap);
+	if (rc != 0) {
+		D_ERROR("Failed to create binheap. "DF_RC"\n", DP_RC(-DER_NOMEM));
+		goto out;
+	}
+
+	rc = prealloc_requests(info, count);
+
+out:
 	if (rc)
 		sched_info_fini(dx);
 
@@ -477,10 +645,9 @@ cur_pool_info(struct sched_info *info, uuid_t pool_uuid)
 	}
 
 	D_ALLOC_PTR(spi);
-	if (spi == NULL) {
-		D_ERROR("Failed to allocate spi\n");
+	if (spi == NULL)
 		return NULL;
-	}
+
 	D_INIT_LIST_HEAD(&spi->spi_hash_link);
 	uuid_copy(spi->spi_pool_id, pool_uuid);
 
@@ -498,10 +665,9 @@ cur_pool_info(struct sched_info *info, uuid_t pool_uuid)
 	return spi;
 }
 
-
 static struct sched_request *
 req_get(struct dss_xstream *dx, struct sched_req_attr *attr,
-	void (*func)(void *), void *arg, ABT_thread ult)
+	void (*func)(void *), void *arg, ABT_thread ult, bool owned)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
 	struct sched_pool_info	*spi;
@@ -513,14 +679,19 @@ req_get(struct dss_xstream *dx, struct sched_req_attr *attr,
 	} else {
 		spi = cur_pool_info(info, attr->sra_pool_id);
 		if (spi == NULL) {
-			D_ERROR("XS(%d): get pool info "DF_UUID" failed.\n",
-				dx->dx_xs_id, DP_UUID(attr->sra_pool_id));
+			D_ERROR("Get pool info "DF_UUID" failed.\n",
+				DP_UUID(attr->sra_pool_id));
 			return NULL;
 		}
 	}
 
 	if (d_list_empty(&info->si_idle_list)) {
-		rc = prealloc_requests(info, SCHED_PREALLOC_BATCH_CNT);
+		int count = SCHED_PREALLOC_BATCH_CNT;
+
+		if (D_ON_VALGRIND)
+			count = 8;
+
+		rc = prealloc_requests(info, count);
 		if (rc)
 			return NULL;
 	}
@@ -534,6 +705,7 @@ req_get(struct dss_xstream *dx, struct sched_req_attr *attr,
 	req->sr_arg	= arg;
 	req->sr_ult	= ult;
 	req->sr_abort	= 0;
+	req->sr_owned	= (owned ? 1 : 0);
 	req->sr_pool_info = spi;
 
 	return req;
@@ -555,10 +727,11 @@ req_kickoff_internal(struct dss_xstream *dx, struct sched_req_attr *attr,
 		     void (*func)(void *), void *arg)
 {
 	D_ASSERT(attr && func && arg);
-	D_ASSERT(attr->sra_type < SCHED_REQ_MAX);
+	D_ASSERT(attr->sra_type < SCHED_REQ_TYPE_MAX);
 
 	return sched_create_thread(dx, func, arg, ABT_THREAD_ATTR_NULL, NULL,
-				   0);
+				   attr->sra_flags & SCHED_REQ_FL_PERIODIC ?
+					DSS_ULT_FL_PERIODIC : 0);
 }
 
 static int
@@ -585,10 +758,17 @@ req_kickoff(struct dss_xstream *dx, struct sched_request *req)
 	sri->sri_req_cnt--;
 	D_ASSERT(spi->spi_req_cnt > 0);
 	spi->spi_req_cnt--;
-	D_ASSERT(info->si_req_cnt > 0);
-	info->si_req_cnt--;
+	D_ASSERT(info->si_total_req_cnt > 0);
+	info->si_total_req_cnt--;
+	D_ASSERT(info->si_req_cnt[req->sr_attr.sra_type] > 0);
+	info->si_req_cnt[req->sr_attr.sra_type]--;
+	sw_cycle_update(&spi->spi_stats_window, req->sr_attr.sra_type);
 
-	d_list_del_init(&req->sr_link);
+	if (req->sr_in_heap)
+		d_binheap_remove(&info->si_heap, &req->sr_node);
+	else
+		d_list_del_init(&req->sr_link);
+
 	req_put(dx, req);
 
 	return rc;
@@ -610,7 +790,7 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi)
 	if (info->si_stop)
 		goto out;
 
-	/* Use cached space presure info */
+	/* Use cached space pressure info */
 	if ((spi->spi_space_ts + SCHED_SPACE_AGE_MAX) > info->si_cur_ts)
 		goto out;
 
@@ -619,8 +799,8 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi)
 		add_purge_list(dx, spi);
 		goto out;
 	} else if (rc) {
-		D_ERROR("XS(%d): query pool:"DF_UUID" space failed. "DF_RC"\n",
-			dx->dx_xs_id, DP_UUID(spi->spi_pool_id), DP_RC(rc));
+		D_ERROR("Query pool:"DF_UUID" space failed. "DF_RC"\n",
+			DP_UUID(spi->spi_pool_id), DP_RC(rc));
 		goto out;
 	}
 	spi->spi_space_ts = info->si_cur_ts;
@@ -651,19 +831,27 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi)
 
 	if (spi->spi_space_pressure != SCHED_SPACE_PRESS_NONE &&
 	    spi->spi_space_pressure != orig_pressure) {
-		D_INFO("XS(%d): pool:"DF_UUID" is under %d presure, "
+		D_INFO("Pool:"DF_UUID" is under %d pressure, "
 		       "SCM: tot["DF_U64"], sys["DF_U64"], free["DF_U64"] "
 		       "NVMe: tot["DF_U64"], sys["DF_U64"], free["DF_U64"]\n",
-		       dx->dx_xs_id, DP_UUID(spi->spi_pool_id),
-		       spi->spi_space_pressure, SCM_TOTAL(&vps),
-		       SCM_SYS(&vps), SCM_FREE(&vps), NVME_TOTAL(&vps),
-		       NVME_SYS(&vps), NVME_FREE(&vps));
+		       DP_UUID(spi->spi_pool_id), spi->spi_space_pressure,
+		       SCM_TOTAL(&vps), SCM_SYS(&vps), SCM_FREE(&vps),
+		       NVME_TOTAL(&vps), NVME_SYS(&vps), NVME_FREE(&vps));
 
 		spi->spi_pressure_ts = info->si_cur_ts;
 	}
 out:
 	return spi->spi_space_pressure;
 }
+
+/*
+ * Current default ult stack size is 16kib, limit amount of memory
+ * that each target can use to process RPC to 100MiB.
+ */
+#define DEFAULT_STACKSIZE	16384
+#define MAX_KICKED_REQ_CNT	((100 << 20) / 16384)
+/* max cycle time in msecs */
+#define MAX_CYCLE_TIME		((MAX_KICKED_REQ_CNT * 20) / 1000)
 
 static int
 process_req(struct dss_xstream *dx, struct sched_request *req)
@@ -672,7 +860,6 @@ process_req(struct dss_xstream *dx, struct sched_request *req)
 	struct sched_pool_info	*spi = req->sr_pool_info;
 	struct sched_req_info	*sri;
 	unsigned int		 req_type = req->sr_attr.sra_type;
-	unsigned int		 delay_msecs;
 
 	D_ASSERT(spi != NULL);
 	D_ASSERT(req_type < SCHED_REQ_MAX);
@@ -689,53 +876,48 @@ process_req(struct dss_xstream *dx, struct sched_request *req)
 	if (req->sr_attr.sra_flags & SCHED_REQ_FL_NO_DELAY)
 		goto kickoff;
 
-	if (req_type == SCHED_REQ_UPDATE) {
-		struct pressure_ratio *pr;
-
-		pr = &pressure_gauge[spi->spi_space_pressure];
-		delay_msecs = pr->pr_delay;
-	} else {
-		delay_msecs = max_delay_msecs[req_type];
-	}
-
 	/* Request expired */
-	D_ASSERT(info->si_cur_ts >= req->sr_enqueue_ts);
-	if ((info->si_cur_ts - req->sr_enqueue_ts) > delay_msecs)
+	if (req->sr_attr.sra_timeout > MAX_CYCLE_TIME &&
+	    (info->si_cur_ts - req->sr_enqueue_ts) >
+	    (req->sr_attr.sra_timeout - MAX_CYCLE_TIME))
 		goto kickoff;
 
-	/* Remaining requests are not expired */
+	/*
+	 * To ensure normal performance and simplify the code logic, we choose
+	 * not to sort RPC individually based on RPC timeouts and the current
+	 * number of RPCs. However, the downside of this approach is that we
+	 * cannot guarantee that enqueued RPCs will not time out.
+	 */
 	return 1;
+
 kickoff:
 	sri->sri_req_kicked++;
+	info->si_kicked_req_cnt[req_type]++;
 	req_kickoff(dx, req);
 	return 0;
 }
 
 static inline void
-process_req_list(struct dss_xstream *dx, d_list_t *list)
+process_req_list(struct dss_xstream *dx, d_list_t *list, bool stop_early)
 {
 	struct sched_request	*req, *tmp;
 	int			 rc;
 
 	d_list_for_each_entry_safe(req, tmp, list, sr_link) {
+		D_ASSERT(req->sr_in_heap == 0);
 		rc = process_req(dx, req);
-		if (rc)
+		if (rc && stop_early)
 			break;
 	}
 }
 
 static inline void
-reset_req_limit(struct dss_xstream *dx, struct sched_pool_info *spi,
-		unsigned int req_type, unsigned int limit)
+set_req_limit(struct dss_xstream *dx, struct sched_pool_info *spi,
+	      unsigned int req_type, unsigned int limit)
 {
 	unsigned int	tot = pool2req_cnt(spi, req_type);
 
 	D_ASSERT(limit <= tot);
-	if (tot - limit > max_qds[req_type]) {
-		D_CRIT("XS(%d) Too large QD: %u/%u/%u for req:%d\n",
-		       dx->dx_xs_id, tot, max_qds[req_type], limit, req_type);
-		limit = tot - max_qds[req_type];
-	}
 	spi->spi_req_array[req_type].sri_req_limit = limit;
 	spi->spi_req_array[req_type].sri_req_kicked = 0;
 }
@@ -756,21 +938,186 @@ is_pressure_recent(struct sched_info *info, struct sched_pool_info *spi)
 	return (info->si_cur_ts - spi->spi_pressure_ts) < SCHED_DELAY_THRESH;
 }
 
-static inline unsigned int
-throttle_update(unsigned int u_max, struct pressure_ratio *pr)
+static inline uint64_t
+apportion_wts(uint64_t avail_wts, uint32_t *kick, unsigned int req_type)
 {
-	if (u_max == 0)
+	uint64_t	pending_wts, kick_cnt;
+
+	if (kick[req_type] == 0)
+		return avail_wts;
+
+	if (avail_wts == 0) {
+		kick[req_type] = 0;
+		return 0;
+	}
+
+	pending_wts = (uint64_t)kick[req_type] * req_weights[req_type];
+	if (avail_wts <= pending_wts) {
+		kick_cnt = avail_wts / req_weights[req_type];
+		if (kick_cnt < kick[req_type])
+			kick[req_type] = kick_cnt;
+		return 0;
+	}
+
+	return avail_wts - pending_wts;
+}
+
+/*
+ * The goal is to subtract 'delta' weights from 'cur_wts' to make it satisfy:
+ * (cur_wts - delta) = (tot_wts - delta) * ratio
+ *
+ * That concludes: delta = (cur_wts - tot_wts * ratio) / (1 - ratio)
+ */
+static inline uint64_t
+calc_avail_wts(uint64_t cur_wts, uint64_t goal_wts, uint64_t kicked_wts, unsigned int ratio)
+{
+	uint64_t	avail_wts;
+
+	D_ASSERT(cur_wts > goal_wts);
+	avail_wts = (cur_wts - goal_wts) * 100 / (100 - ratio);
+
+	if (cur_wts <= avail_wts)
 		return 0;
 
-	/* Severe space pressure */
-	if (pr->pr_free == 0)
-		return u_max * pr->pr_throttle / 100;
+	avail_wts = cur_wts - avail_wts;
+	return (avail_wts <= kicked_wts) ? 0 : avail_wts - kicked_wts;
+}
 
-	/* Keep IO flow moving when there are only few inflight updates */
-	if ((u_max * pr->pr_throttle / 100) == 0)
-		return 1;
+/*
+ * When the pool is under space pressure, GC ULTs could be throttled if it
+ * exceeded the ratio defined for current pressure level, otherwise, other
+ * ULTs could be throttled.
+ */
+static void
+throttle_io(struct sched_info *info, struct sched_pool_info *spi, uint32_t *kick,
+	    struct pressure_ratio *pr)
+{
+	struct stats_window	*sw = &spi->spi_stats_window;
+	uint64_t		*kicked_wts, tot_wts, gc_wts, gc_wts_max, avail_wts;
+	unsigned int		 req_type;
 
-	return u_max * pr->pr_throttle / 100;
+	kicked_wts = &sw->sw_kicked_wts[0];
+
+	/* No onging I/O and rebuild, full-speed GC without any throttling */
+	if (kicked_wts[SCHED_REQ_UPDATE] == 0 && kicked_wts[SCHED_REQ_FETCH] == 0 &&
+	    kicked_wts[SCHED_REQ_MIGRATE] == 0 && kick[SCHED_REQ_UPDATE] == 0 &&
+	    kick[SCHED_REQ_FETCH] == 0 && kick[SCHED_REQ_MIGRATE] == 0)
+		return;
+
+	gc_wts = kicked_wts[SCHED_REQ_GC];
+	gc_wts += (uint64_t)kick[SCHED_REQ_GC] * req_weights[SCHED_REQ_GC];
+
+	tot_wts = sw->sw_kicked_wts_tot;
+	for (req_type = SCHED_REQ_UPDATE; req_type < SCHED_REQ_MAX; req_type++)
+		tot_wts += (uint64_t)kick[req_type] * req_weights[req_type];
+
+	gc_wts_max = tot_wts * pr->pr_gc_ratio / 100;
+	avail_wts = (uint64_t)kick[SCHED_REQ_SCRUB] * req_weights[SCHED_REQ_SCRUB];
+	if (gc_wts > gc_wts_max) {
+		if (kick[SCHED_REQ_GC] == 0)
+			goto done;
+
+		gc_wts = calc_avail_wts(gc_wts, gc_wts_max, kicked_wts[SCHED_REQ_GC],
+					pr->pr_gc_ratio);
+		apportion_wts(gc_wts, kick, SCHED_REQ_GC);
+	} else if (gc_wts < gc_wts_max) {
+		avail_wts = 0;
+		/*
+		 * If space pressure isn't at highest level (pr->pr_free != 0), throttling
+		 * will be skipped when all GC/Aggregation ULTs are in sleep.
+		 */
+		if (pr->pr_free != 0 && !is_gc_pending(spi))
+			goto done;
+		/*
+		 * If space pressure stays in highest level for a while, we just assume that
+		 * no available space can be reclaimed, so throttling will be skipped and
+		 * ENOSPACE could be returned to client sooner.
+		 */
+		if (pr->pr_free == 0 && !is_pressure_recent(info, spi))
+			goto done;
+
+		D_ASSERT(sw->sw_kicked_wts_tot >= kicked_wts[SCHED_REQ_GC]);
+		avail_wts = calc_avail_wts(tot_wts - gc_wts, tot_wts - gc_wts_max,
+					   sw->sw_kicked_wts_tot - kicked_wts[SCHED_REQ_GC],
+					   100 - pr->pr_gc_ratio);
+
+		/* Satisfy rebuild/reintegration ULTs first when 'sw_gen' is odd */
+		if (sw->sw_gen & 0x1) {
+			avail_wts = apportion_wts(avail_wts, kick, SCHED_REQ_MIGRATE);
+			avail_wts = apportion_wts(avail_wts, kick, SCHED_REQ_UPDATE);
+		} else {
+			avail_wts = apportion_wts(avail_wts, kick, SCHED_REQ_UPDATE);
+			avail_wts = apportion_wts(avail_wts, kick, SCHED_REQ_MIGRATE);
+		}
+	}
+done:
+	/* Schedule SCRUB ULT when there are available weights or on every 256 cycles */
+	if (sw->sw_gen != 0)
+		apportion_wts(avail_wts, kick, SCHED_REQ_SCRUB);
+}
+
+/* Rebuild/Reintegration takes 30% CPU when there is no space pressure */
+#define REBUILD_RATIO	30
+
+/*
+ * When there is no space pressure, all IO requests will be kicked off immediately,
+ * internal sys ULTs will be throttled.
+ */
+static void
+throttle_sys(struct stats_window *sw, uint32_t *kick, struct pressure_ratio *pr)
+{
+	uint64_t	*kicked_wts, io_wts, tot_wts, avail_wts;
+	unsigned int	 io_ratio;
+
+	kicked_wts = &sw->sw_kicked_wts[0];
+
+	io_wts = kicked_wts[SCHED_REQ_UPDATE] + kicked_wts[SCHED_REQ_FETCH];
+	io_wts += (uint64_t)kick[SCHED_REQ_UPDATE] * req_weights[SCHED_REQ_UPDATE];
+	io_wts += (uint64_t)kick[SCHED_REQ_FETCH] * req_weights[SCHED_REQ_FETCH];
+
+	/* No recent IO and pending IO, no throttling on sys ULTs */
+	if (io_wts == 0)
+		return;
+
+	if (kicked_wts[SCHED_REQ_MIGRATE] != 0 || kick[SCHED_REQ_MIGRATE] != 0)
+		io_ratio = 100 - REBUILD_RATIO;
+	else
+		io_ratio = 100 - pr->pr_gc_ratio;
+
+	/* Calculate the target total weights based on IO weights and IO ratio */
+	tot_wts = io_wts * 100 / io_ratio;
+	if (tot_wts < SW_MIN_WEIGHTS)
+		tot_wts = SW_MIN_WEIGHTS;
+
+	if (tot_wts <= sw->sw_kicked_wts_tot) {
+		kick[SCHED_REQ_GC] = 0;
+		kick[SCHED_REQ_MIGRATE] = 0;
+		kick[SCHED_REQ_SCRUB] = 0;
+		return;
+	}
+
+	avail_wts = tot_wts - sw->sw_kicked_wts_tot;
+	/* Satisfy rebuild/reintegration ULTs first when 'sw_gen' is odd */
+	if (sw->sw_gen & 0x1) {
+		avail_wts = apportion_wts(avail_wts, kick, SCHED_REQ_MIGRATE);
+		avail_wts = apportion_wts(avail_wts, kick, SCHED_REQ_GC);
+	} else {
+		avail_wts = apportion_wts(avail_wts, kick, SCHED_REQ_GC);
+		avail_wts = apportion_wts(avail_wts, kick, SCHED_REQ_MIGRATE);
+	}
+
+	/* Schedule SCRUB ULT when there are available weights or on every 256 cycles */
+	if (sw->sw_gen != 0)
+		apportion_wts(avail_wts, kick, SCHED_REQ_SCRUB);
+}
+
+static bool
+is_system_req(int req_type)
+{
+	if (req_type == SCHED_REQ_UPDATE || req_type == SCHED_REQ_FETCH)
+		return false;
+
+	return true;
 }
 
 static int
@@ -779,101 +1126,138 @@ process_pool_cb(d_list_t *rlink, void *arg)
 	struct dss_xstream	*dx = (struct dss_xstream *)arg;
 	struct sched_info	*info = &dx->dx_sched_info;
 	struct sched_pool_info	*spi;
-	unsigned int		 u_max, f_max, io_max, gc_max, scrub_max,
-				 mig_max;
-	unsigned int		 gc_thr, mig_thr;
+	uint32_t		 kick[SCHED_REQ_MAX];
 	struct pressure_ratio	*pr;
-	int			 press;
+	int			 press, i;
+	uint64_t		 tmp;
+	uint32_t		 rpc_cnt = 0;
 
 	spi = sched_rlink2spi(rlink);
 
-	gc_thr	= req_throttle[SCHED_REQ_GC];
-	mig_thr	= req_throttle[SCHED_REQ_MIGRATE];
-	D_ASSERT(gc_thr < 100 && mig_thr < 100);
-
-	u_max	= pool2req_cnt(spi, SCHED_REQ_UPDATE);
-	f_max	= pool2req_cnt(spi, SCHED_REQ_FETCH);
-	io_max	= u_max + f_max;
-
-	gc_max	= pool2req_cnt(spi, SCHED_REQ_GC);
-	scrub_max = pool2req_cnt(spi, SCHED_REQ_SCRUB);
-	mig_max	= pool2req_cnt(spi, SCHED_REQ_MIGRATE);
-
+	/* Update stats window no matter if any pending ULT or not */
+	sw_window_update(&spi->spi_stats_window);
+	/* check_space_pressure() can't be skipped, otherwise, destroyed pool won't be detected */
 	press = check_space_pressure(dx, spi);
+	if (spi->spi_req_cnt == 0)
+		return 0;
 
-	if (press == SCHED_SPACE_PRESS_NONE) {
-		/* Throttle GC & aggregation */
-		if (io_max && gc_max && gc_thr)
-			gc_max = min(gc_max, io_max * gc_thr / 100);
-		goto out;
+	for (i = SCHED_REQ_UPDATE; i < SCHED_REQ_MAX; i++) {
+		kick[i] = pool2req_cnt(spi, i);
+		if (!is_system_req(i))
+			rpc_cnt += kick[i];
+	}
+
+	/*
+	 * If the number of non-system requests exceeds the limit of maximum kicked
+	 * requests, adjust the limit based on the ratio of each non-system request type.
+	 */
+	if (rpc_cnt > MAX_KICKED_REQ_CNT) {
+		for (i = SCHED_REQ_UPDATE; i < SCHED_REQ_MAX; i++) {
+			if (is_system_req(i))
+				continue;
+			tmp = (uint64_t)kick[i] * MAX_KICKED_REQ_CNT / rpc_cnt;
+			kick[i] = tmp;
+		}
 	}
 
 	pr = &pressure_gauge[press];
-	D_ASSERT(pr->pr_throttle < 100);
 
-	if (pr->pr_free != 0) {	/* Light space pressure */
-		/* Throttle updates when there is space to be reclaimed */
-		if (is_gc_pending(spi)) {
-			u_max	= throttle_update(u_max, pr);
-			io_max	= u_max + f_max;
-		}
-	} else {		/* Severe space pressure */
-		/*
-		 * If space pressure stays in highest level for a while, we
-		 * can assume that no available space could be reclaimed, so
-		 * throttling can be stopped and ENOSPACE could be returned
-		 * to client sooner.
-		 */
-		if (is_pressure_recent(info, spi)) {
-			u_max	= throttle_update(u_max, pr);
-			/*
-			 * Delay all rebuild and reintegration requests for
-			 * this moment, since we can't tell if they are for
-			 * update or fetch.
-			 */
-			mig_max	= 0;
-		}
+	if (press == SCHED_SPACE_PRESS_NONE)
+		throttle_sys(&spi->spi_stats_window, &kick[SCHED_REQ_UPDATE], pr);
+	else
+		throttle_io(info, spi, &kick[SCHED_REQ_UPDATE], pr);
+
+	for (i = SCHED_REQ_UPDATE; i < SCHED_REQ_MAX; i++) {
+		set_req_limit(dx, spi, i, kick[i]);
+		info->si_kicked_req_cnt[i] = 0;
 	}
 
-out:
-	/* Throttle rebuild and reintegration */
-	if (mig_max && io_max && mig_thr) {
-		mig_thr = max(1, io_max * mig_thr / 100);
-		mig_max = min(mig_max, mig_thr);
-	}
-
-	reset_req_limit(dx, spi, SCHED_REQ_UPDATE, u_max);
-	reset_req_limit(dx, spi, SCHED_REQ_FETCH, f_max);
-	reset_req_limit(dx, spi, SCHED_REQ_GC, gc_max);
-	reset_req_limit(dx, spi, SCHED_REQ_SCRUB, scrub_max);
-	reset_req_limit(dx, spi, SCHED_REQ_MIGRATE, mig_max);
-
-	process_req_list(dx, pool2req_list(spi, SCHED_REQ_GC));
-	process_req_list(dx, pool2req_list(spi, SCHED_REQ_SCRUB));
-	process_req_list(dx, pool2req_list(spi, SCHED_REQ_MIGRATE));
+	process_req_list(dx, pool2req_list(spi, SCHED_REQ_GC), true);
+	process_req_list(dx, pool2req_list(spi, SCHED_REQ_SCRUB), true);
+	process_req_list(dx, pool2req_list(spi, SCHED_REQ_MIGRATE), true);
 
 	return 0;
 }
 
-static void
+static int
 policy_fifo_enqueue(struct dss_xstream *dx, struct sched_request *req,
 		    void *prio_data)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
+	struct sched_req_attr	*attr = &req->sr_attr;
+
+	D_ASSERT(attr->sra_type < SCHED_REQ_TYPE_MAX);
+	/*
+	 * The initial motivation behind this change is to utilize the heap
+	 * exclusively for sorted resent RPCs and the FIFO list for regular
+	 * fetch and update requests. This strategic allocation aims to avoid
+	 * potential performance impacts that could result from maintaining a
+	 * heap in the critical hot path.
+	 */
+	if (attr->sra_flags & SCHED_REQ_FL_RESENT) {
+		D_ASSERT(attr->sra_enqueue_id > 0);
+		return d_binheap_insert(&info->si_heap, &req->sr_node);
+	}
 
 	d_list_add_tail(&req->sr_link, &info->si_fifo_list);
+
+	return 0;
 }
 
 static void
 policy_fifo_process(struct dss_xstream *dx)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
+	struct sched_request	*req, *tmp, *req1;
+	struct d_binheap_node	*node;
+	d_list_t                 tmp_list;
+	int			 rc;
 
-	process_req_list(dx, &info->si_fifo_list);
+	D_INIT_LIST_HEAD(&tmp_list);
+	/*
+	 * All retried RPCs are inserted into a sorted heap, they are sorted
+	 * by RPC enqueue sequence ID in the server side(firstly enqueue time). So
+	 * retried RPCs won't starve forever.
+	 */
+	d_list_for_each_entry_safe(req, tmp, &info->si_fifo_list, sr_link) {
+		while (!d_binheap_is_empty(&info->si_heap)) {
+			node = d_binheap_root(&info->si_heap);
+			req1 = container_of(node, struct sched_request, sr_node);
+			if (req1->sr_attr.sra_enqueue_id < req->sr_attr.sra_enqueue_id) {
+				rc = process_req(dx, req1);
+				if (rc > 0) {
+					d_binheap_remove(&info->si_heap, &req1->sr_node);
+					d_list_add_tail(&req1->sr_link, &tmp_list);
+				}
+			} else {
+				break;
+			}
+		}
+		process_req(dx, req);
+	}
+
+	/* Process retried RPCs if any */
+	while (!d_binheap_is_empty(&info->si_heap)) {
+		node = d_binheap_root(&info->si_heap);
+		req1 = container_of(node, struct sched_request, sr_node);
+		rc = process_req(dx, req1);
+		if (rc > 0) {
+			d_binheap_remove(&info->si_heap, &req1->sr_node);
+			d_list_add_tail(&req1->sr_link, &tmp_list);
+		}
+	}
+
+	/*
+	 * Insert skipped retried RPCs back to heap.
+	 */
+	d_list_for_each_entry_safe(req, tmp, &tmp_list, sr_link) {
+		d_binheap_insert(&info->si_heap, &req->sr_node);
+		d_list_del_init(&req->sr_link);
+	}
 }
 
 struct sched_policy_ops {
-	void (*enqueue_io)(struct dss_xstream *dx, struct sched_request *req,
+	int (*enqueue_io)(struct dss_xstream *dx, struct sched_request *req,
 			   void *prio_data);
 	void (*process_io)(struct dss_xstream *dx);
 };
@@ -899,16 +1283,10 @@ process_all(struct dss_xstream *dx)
 	struct sched_info	*info = &dx->dx_sched_info;
 	int			 rc;
 
-	if (info->si_req_cnt == 0) {
-		D_ASSERT(d_list_empty(&info->si_fifo_list));
-		return;
-	}
-
 	prune_purge_list(dx);
 	rc = d_hash_table_traverse(info->si_pool_hash, process_pool_cb, dx);
 	if (rc)
-		D_ERROR("XS(%d) traverse pool hash error. "DF_RC"\n",
-			dx->dx_xs_id, DP_RC(rc));
+		D_ERROR("Traverse pool hash error. "DF_RC"\n", DP_RC(rc));
 
 	D_ASSERT(policy_ops[sched_policy].process_io != NULL);
 	policy_ops[sched_policy].process_io(dx);
@@ -922,7 +1300,7 @@ should_enqueue_req(struct dss_xstream *dx, struct sched_req_attr *attr)
 	if (sched_prio_disabled || info->si_stop)
 		return false;
 
-	D_ASSERT(attr->sra_type < SCHED_REQ_MAX);
+	D_ASSERT(attr->sra_type < SCHED_REQ_TYPE_MAX);
 	if (attr->sra_type == SCHED_REQ_ANONYM)
 		return false;
 
@@ -930,22 +1308,25 @@ should_enqueue_req(struct dss_xstream *dx, struct sched_req_attr *attr)
 	return dx->dx_main_xs;
 }
 
-static void
+static int
 req_enqueue(struct dss_xstream *dx, struct sched_request *req)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
 	struct sched_pool_info	*spi = req->sr_pool_info;
 	struct sched_req_attr	*attr = &req->sr_attr;
 	struct sched_req_info	*sri;
+	int			 rc = 0;
 
 	D_ASSERT(spi != NULL);
+	D_ASSERT(attr->sra_type < SCHED_REQ_MAX);
 	sri = &spi->spi_req_array[attr->sra_type];
 
+	D_ASSERT(req->sr_in_heap == 0);
 	D_ASSERT(d_list_empty(&req->sr_link));
 	if (attr->sra_type == SCHED_REQ_UPDATE ||
 	    attr->sra_type == SCHED_REQ_FETCH) {
 		D_ASSERT(policy_ops[sched_policy].enqueue_io != NULL);
-		policy_ops[sched_policy].enqueue_io(dx, req, NULL);
+		rc = policy_ops[sched_policy].enqueue_io(dx, req, NULL);
 	} else {
 		d_list_add_tail(&req->sr_link, &sri->sri_req_list);
 	}
@@ -953,7 +1334,52 @@ req_enqueue(struct dss_xstream *dx, struct sched_request *req)
 
 	sri->sri_req_cnt++;
 	spi->spi_req_cnt++;
-	info->si_req_cnt++;
+	info->si_total_req_cnt++;
+	info->si_req_cnt[attr->sra_type]++;
+
+	return rc;
+}
+
+#define MAX_SCHED_REQ_NUM	(1 << 20)
+#define RPC_ROUND_TRIP_TIME	(100)	/* in msecs */
+
+static bool
+req_need_reject(struct sched_req_attr *attr, struct sched_info *info)
+{
+	uint64_t	estimated_time = 0;
+	uint64_t	req_num = 0;
+	int		i;
+
+	/* Old clients RPC won't be rejected */
+	if (attr->sra_flags & SCHED_REQ_FL_NO_REJECT)
+		return false;
+
+	/*
+	 * Calculate time based on ults on argobots and non-system
+	 * requests queued. It is not easy to estimate how many system
+	 * ults will be executed, reserve 50% of RPC estimated time.
+	 */
+	for (i = SCHED_REQ_UPDATE; i < SCHED_REQ_MAX; i++) {
+		if (!is_system_req(i)) {
+			estimated_time += (uint64_t)info->si_req_cnt[i] * req_latencys[i];
+			req_num += info->si_req_cnt[i];
+		}
+	}
+	/* convert to msecs */
+	estimated_time /= 1000;
+	/* system ULT time */
+	estimated_time += (estimated_time / 2);
+	/* max cycle time */
+	estimated_time += MAX_CYCLE_TIME;
+	/* RPC round-trip time */
+	estimated_time += RPC_ROUND_TRIP_TIME;
+	if (estimated_time > attr->sra_timeout)
+		return true;
+
+	if (req_num > MAX_SCHED_REQ_NUM)
+		return true;
+
+	return false;
 }
 
 int
@@ -961,25 +1387,47 @@ sched_req_enqueue(struct dss_xstream *dx, struct sched_req_attr *attr,
 		  void (*func)(void *), void *arg)
 {
 	struct sched_request	*req;
+	struct sched_info	*info = &dx->dx_sched_info;
 
 	if (!should_enqueue_req(dx, attr))
 		return req_kickoff_internal(dx, attr, func, arg);
 
+	if (attr->sra_enqueue_id == 0)
+		attr->sra_enqueue_id = ++info->si_cur_id;
+	else
+		attr->sra_flags |= SCHED_REQ_FL_RESENT;
+
+	/*
+	 * A RPC flow control mechanism is introduced to avoid RPC timeout when the
+	 * server is congested:
+	 *
+	 * Estimate how long it would take to process the incoming request based on the server
+	 * request queue length and the average per request processing time, then compare the
+	 * estimated time with the RPC timeout to see if the request should be early replied
+	 * with hint data for retry.
+	 *
+	 * That requires wire format and client changes.
+	 */
+	if (req_need_reject(attr, info)) {
+		d_tm_inc_counter(info->si_stats.ss_total_reject, 1);
+		return -DER_OVERLOAD_RETRY;
+	}
+
 	D_ASSERT(attr->sra_type < SCHED_REQ_MAX);
-	req = req_get(dx, attr, func, arg, ABT_THREAD_NULL);
+	req = req_get(dx, attr, func, arg, ABT_THREAD_NULL, false);
 	if (req == NULL) {
-		D_ERROR("XS(%d): get req failed.\n", dx->dx_xs_id);
+		D_ERROR("Get req failed.\n");
 		return -DER_NOMEM;
 	}
-	req_enqueue(dx, req);
 
-	return 0;
+	return req_enqueue(dx, req);
 }
 
 void
 sched_req_yield(struct sched_request *req)
 {
 	struct dss_xstream	*dx = dss_current_xstream();
+	int			 rc;
 
 	D_ASSERT(req != NULL);
 	if (!should_enqueue_req(dx, &req->sr_attr)) {
@@ -988,7 +1436,8 @@ sched_req_yield(struct sched_request *req)
 	}
 
 	D_ASSERT(req->sr_ult != ABT_THREAD_NULL);
-	req_enqueue(dx, req);
+	rc = req_enqueue(dx, req);
+	D_ASSERT(rc == 0);
 
 	ABT_self_suspend();
 }
@@ -1013,8 +1462,8 @@ sleep_counting(struct dss_xstream *dx, struct sched_request *req, int sleep)
 
 	D_ASSERTF(spi->spi_gc_sleeping >= 0 &&
 		  spi->spi_gc_sleeping <= spi->spi_gc_ults,
-		  "XS(%d): pool:"DF_UUID", gc_ults:%d, sleeping:%d\n",
-		  dx->dx_xs_id, DP_UUID(spi->spi_pool_id), spi->spi_gc_ults,
+		  "Pool:"DF_UUID", gc_ults:%d, sleeping:%d\n",
+		  DP_UUID(spi->spi_pool_id), spi->spi_gc_ults,
 		  spi->spi_gc_sleeping);
 }
 
@@ -1034,6 +1483,7 @@ sched_req_sleep(struct sched_request *req, uint32_t msecs)
 	D_ASSERT(req->sr_ult != ABT_THREAD_NULL);
 	req->sr_wakeup_time = info->si_cur_ts + msecs;
 
+	D_ASSERT(req->sr_in_heap == 0);
 	D_ASSERT(d_list_empty(&req->sr_link));
 	/* Sleep list is sorted in wakeup time ascending order */
 	d_list_for_each_entry_reverse(tmp, &info->si_sleep_list, sr_link) {
@@ -1053,11 +1503,11 @@ sched_req_sleep(struct sched_request *req, uint32_t msecs)
 static void
 req_wakeup_internal(struct dss_xstream *dx, struct sched_request *req)
 {
-	D_ASSERT(req != NULL);
 	/* The request is not in sleep */
-	if (req->sr_wakeup_time == 0)
+	if (req == NULL || req->sr_wakeup_time == 0)
 		return;
 
+	D_ASSERT(req->sr_in_heap == 0);
 	D_ASSERT(!d_list_empty(&req->sr_link));
 	d_list_del_init(&req->sr_link);
 	req->sr_wakeup_time = 0;
@@ -1079,13 +1529,16 @@ sched_req_wakeup(struct sched_request *req)
 void
 sched_req_wait(struct sched_request *req, bool abort)
 {
+	int	rc;
+
 	D_ASSERT(req != NULL);
 	if (abort) {
 		req->sr_abort = 1;
 		sched_req_wakeup(req);
 	}
 	D_ASSERT(req->sr_ult != ABT_THREAD_NULL);
-	ABT_thread_join(req->sr_ult);
+	rc = ABT_thread_join(req->sr_ult);
+	D_ASSERTF(rc == ABT_SUCCESS, "ABT_thread_join: %d\n", rc);
 }
 
 inline bool
@@ -1109,13 +1562,7 @@ wakeup_all(struct dss_xstream *dx)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
 	struct sched_request	*req, *tmp;
-	uint64_t		 cur_ts;
-
-	/* Update current ts stored in sched_info */
-	cur_ts = daos_getmtime_coarse();
-	D_ASSERT(cur_ts >= info->si_cur_ts);
-	info->si_stats.ss_tot_time += (cur_ts - info->si_cur_ts);
-	info->si_cur_ts = cur_ts;
+	int			 rc;
 
 	d_list_for_each_entry_safe(req, tmp, &info->si_sleep_list, sr_link) {
 		D_ASSERT(req->sr_wakeup_time > 0);
@@ -1129,7 +1576,8 @@ wakeup_all(struct dss_xstream *dx)
 			req->sr_wakeup_time = 0;
 			sleep_counting(dx, req, -1);
 			D_ASSERT(req->sr_ult != ABT_THREAD_NULL);
-			req_enqueue(dx, req);
+			rc = req_enqueue(dx, req);
+			D_ASSERT(rc == 0);
 		}
 	}
 }
@@ -1138,24 +1586,42 @@ struct sched_request *
 sched_req_get(struct sched_req_attr *attr, ABT_thread ult)
 {
 	struct dss_xstream	*dx = dss_current_xstream();
+	bool			 owned;
 	struct sched_request	*req;
 	int			 rc;
 
-	D_ASSERT(attr->sra_type < SCHED_REQ_MAX);
+	D_ASSERT(attr->sra_type < SCHED_REQ_TYPE_MAX);
 
 	if (ult == ABT_THREAD_NULL) {
 		ABT_thread	self;
 
 		rc = ABT_thread_self(&self);
-		if (rc) {
-			D_ERROR("Failed to get self thread. "DF_RC"\n",
-				DP_RC(dss_abterr2der(rc)));
+		if (rc != ABT_SUCCESS) {
+			D_ERROR("Failed to get self thread: %d\n", rc);
 			return NULL;
 		}
 		ult = self;
+		owned = false;
+	} else {
+		ABT_bool unnamed;
+
+		/*
+		 * Since Argobots prohibits freeing unnamed ULTs, don't own
+		 * them.
+		 */
+		rc = ABT_thread_is_unnamed(ult, &unnamed);
+		if (rc != ABT_SUCCESS) {
+			D_ERROR("Failed to get thread type: %d\n", rc);
+			return NULL;
+		}
+		if (unnamed == ABT_TRUE) {
+			D_ERROR("Unnamed threads are not supported\n");
+			return NULL;
+		}
+		owned = true;
 	}
 
-	req = req_get(dx, attr, NULL, NULL, ult);
+	req = req_get(dx, attr, NULL, NULL, ult, owned);
 	if (req != NULL && attr->sra_type == SCHED_REQ_GC)
 		req->sr_pool_info->spi_gc_ults++;
 
@@ -1167,9 +1633,17 @@ sched_req_put(struct sched_request *req)
 {
 	struct dss_xstream	*dx = dss_current_xstream();
 	struct sched_info	*info = &dx->dx_sched_info;
+	int			 rc;
 
 	D_ASSERT(req != NULL && req->sr_ult != ABT_THREAD_NULL);
 	D_ASSERT(d_list_empty(&req->sr_link));
+	if (req->sr_owned) {
+		/* We are responsible for freeing a req-owned ULT. */
+		rc = ABT_thread_free(&req->sr_ult);
+		D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+	} else {
+		req->sr_ult = ABT_THREAD_NULL;
+	}
 	d_list_add_tail(&req->sr_link, &info->si_idle_list);
 
 	if (req->sr_attr.sra_type == SCHED_REQ_GC) {
@@ -1188,8 +1662,8 @@ sched_stop(struct dss_xstream *dx)
 	process_all(dx);
 }
 
-void
-sched_cond_wait(ABT_cond cond, ABT_mutex mutex)
+static void
+cond_wait(ABT_cond cond, ABT_mutex mutex, bool for_business)
 {
 	struct dss_xstream	*dx = dss_current_xstream();
 	struct sched_info	*info = &dx->dx_sched_info;
@@ -1198,6 +1672,66 @@ sched_cond_wait(ABT_cond cond, ABT_mutex mutex)
 	ABT_cond_wait(cond, mutex);
 	D_ASSERT(info->si_wait_cnt > 0);
 	info->si_wait_cnt -= 1;
+	if (for_business)
+		info->si_stats.ss_busy_ts = info->si_cur_ts;
+}
+
+void
+sched_cond_wait(ABT_cond cond, ABT_mutex mutex)
+{
+	cond_wait(cond, mutex, false /* for_business */);
+}
+
+void
+sched_cond_wait_for_business(ABT_cond cond, ABT_mutex mutex)
+{
+	cond_wait(cond, mutex, true /* for_business */);
+}
+
+uint64_t
+sched_cur_msec(void)
+{
+	struct dss_xstream	*dx = dss_current_xstream();
+	struct sched_info	*info = &dx->dx_sched_info;
+
+	return info->si_cur_ts;
+}
+
+uint64_t
+sched_cur_seq(void)
+{
+	struct dss_xstream	*dx = dss_current_xstream();
+	struct sched_info	*info = &dx->dx_sched_info;
+
+	return info->si_cur_seq;
+}
+
+struct sched_request *
+sched_create_ult(struct sched_req_attr *attr, void (*func)(void *), void *arg, size_t stack_size)
+{
+	struct dss_xstream	*dx = dss_current_xstream();
+	struct sched_request	*req;
+	ABT_thread		 ult = ABT_THREAD_NULL;
+	int			 rc;
+
+	req = req_get(dx, attr, NULL, NULL, ult, true);
+	if (req == NULL)
+		return NULL;
+
+	/* The ULT must be created on the caller xstream */
+	rc = dss_ult_create(func, arg, DSS_XS_SELF, 0, stack_size, &ult);
+	if (rc) {
+		D_ERROR("Failed to create ULT: "DF_RC"\n", DP_RC(rc));
+		req_put(dx, req);
+		return NULL;
+	}
+	D_ASSERT(ult != ABT_THREAD_NULL);
+
+	req->sr_ult = ult;
+	if (attr->sra_type == SCHED_REQ_GC)
+		req->sr_pool_info->spi_gc_ults++;
+
+	return req;
 }
 
 /*
@@ -1233,9 +1767,9 @@ sched_dump_data(struct sched_data *data)
 	struct dss_xstream	*dx = data->sd_dx;
 	struct sched_cycle	*cycle = &data->sd_cycle;
 
-	D_PRINT("XS(%d): comm:%d main:%d. age_net:%u, age_nvme:%u, "
+	D_PRINT("comm:%d main:%d. age_net:%u, age_nvme:%u, "
 		"new_cycle:%d cycle_started:%d total_ults:%u\n",
-		dx->dx_xs_id, dx->dx_comm, dx->dx_main_xs, cycle->sc_age_net,
+		dx->dx_comm, dx->dx_main_xs, cycle->sc_age_net,
 		cycle->sc_age_nvme, cycle->sc_new_cycle,
 		cycle->sc_cycle_started, cycle->sc_ults_tot);
 #endif
@@ -1292,7 +1826,6 @@ need_net_poll(struct sched_cycle *cycle)
 static ABT_unit
 sched_pop_net_poll(struct sched_data *data, ABT_pool pool)
 {
-	struct dss_xstream	*dx = data->sd_dx;
 	struct sched_cycle	*cycle = &data->sd_cycle;
 	ABT_unit		 unit;
 	int			 ret;
@@ -1314,8 +1847,7 @@ sched_pop_net_poll(struct sched_data *data, ABT_pool pool)
 	 */
 	ret = ABT_pool_pop(pool, &unit);
 	if (ret != ABT_SUCCESS) {
-		D_ERROR("XS(%d) failed to pop network poll ULT: %d\n",
-			dx->dx_xs_id, ret);
+		D_ERROR("Failed to pop network poll ULT: %d\n", ret);
 		return ABT_UNIT_NULL;
 	}
 
@@ -1371,14 +1903,13 @@ sched_pop_nvme_poll(struct sched_data *data, ABT_pool pool)
 	if (cycle->sc_ults_tot == 0)
 		cycle->sc_cycle_started = 0;
 
-	/* Only main xstream (VOS xstream) has NVMe poll ULT */
-	if (!dx->dx_main_xs)
+	/* main and system xstream (VOS xstream) have NVMe poll ULT */
+	if (!dss_xstream_has_nvme(dx))
 		return ABT_UNIT_NULL;
 
 	ret = ABT_pool_pop(pool, &unit);
 	if (ret != ABT_SUCCESS) {
-		D_ERROR("XS(%d) failed to pop NVMe poll ULT: %d\n",
-			dx->dx_xs_id, ret);
+		D_ERROR("Failed to pop NVMe poll ULT: %d\n", ret);
 		return ABT_UNIT_NULL;
 	}
 
@@ -1388,7 +1919,6 @@ sched_pop_nvme_poll(struct sched_data *data, ABT_pool pool)
 static ABT_unit
 sched_pop_one(struct sched_data *data, ABT_pool pool, int pool_idx)
 {
-	struct dss_xstream	*dx = data->sd_dx;
 	struct sched_cycle	*cycle = &data->sd_cycle;
 	ABT_unit		 unit;
 	int			 ret;
@@ -1399,8 +1929,7 @@ sched_pop_one(struct sched_data *data, ABT_pool pool, int pool_idx)
 
 	ret = ABT_pool_pop(pool, &unit);
 	if (ret != ABT_SUCCESS) {
-		D_ERROR("XS(%d) failed to pop ULT for ABT pool(%d): %d\n",
-			dx->dx_xs_id, pool_idx, ret);
+		D_ERROR("Failed to pop ULT for ABT pool(%d): %d\n", pool_idx, ret);
 		return ABT_UNIT_NULL;
 	}
 
@@ -1414,8 +1943,7 @@ sched_pop_one(struct sched_data *data, ABT_pool pool, int pool_idx)
 	 * ABT_thread_join() is called.
 	 */
 	if (unit == ABT_UNIT_NULL)
-		D_DEBUG(DB_TRACE, "XS(%d) popped NULL unit for ABT pool(%d)\n",
-			dx->dx_xs_id, pool_idx);
+		D_DEBUG(DB_TRACE, "Popped NULL unit for ABT pool(%d)\n", pool_idx);
 
 	cycle->sc_age_net++;
 	cycle->sc_age_nvme++;
@@ -1461,13 +1989,13 @@ sched_try_relax(struct dss_xstream *dx, ABT_pool *pools, uint32_t running)
 		return;
 
 	/* There are queued requests to be processed */
-	if (info->si_req_cnt != 0)
+	if (info->si_total_req_cnt != 0)
 		return;
 
 	ret = ABT_pool_get_total_size(pools[DSS_POOL_GENERIC], &blocked);
 	if (ret != ABT_SUCCESS) {
-		D_ERROR("XS(%d) get ABT pool(%d) total size error: %d\n",
-			dx->dx_xs_id, DSS_POOL_GENERIC, ret);
+		D_ERROR("Get ABT pool(%d) total size error: %d\n",
+			DSS_POOL_GENERIC, ret);
 		return;
 	}
 
@@ -1504,7 +2032,7 @@ sched_try_relax(struct dss_xstream *dx, ABT_pool *pools, uint32_t running)
 		req = d_list_entry(info->si_sleep_list.next,
 				   struct sched_request, sr_link);
 
-		/* wakeup_all() has already been called for info->si_cur_ts */
+		/* sched_start_cycle() has already been called for info->si_cur_ts */
 		D_ASSERT(req->sr_wakeup_time > info->si_cur_ts);
 		if (sleep_time > req->sr_wakeup_time - info->si_cur_ts)
 			sleep_time = req->sr_wakeup_time - info->si_cur_ts;
@@ -1515,18 +2043,17 @@ sched_try_relax(struct dss_xstream *dx, ABT_pool *pools, uint32_t running)
 	 * Wait on external network request if the xstream has Cart context,
 	 * otherwise, sleep for a while.
 	 */
-	if (sched_relax_mode != SCHED_RELAX_MODE_SLEEP && dx->dx_comm) {
+	if (sched_relax_mode != SCHED_RELAX_MODE_SLEEP && dx->dx_progress_started) {
 		/* convert to micro-seconds */
 		dx->dx_timeout = sleep_time * 1000;
 	} else {
 		ret = usleep(sleep_time * 1000);
 		if (ret)
-			D_ERROR("XS(%d) sleep error: %s\n", dx->dx_xs_id,
-				strerror(errno));
+			D_ERROR("Sleep error: %s\n", strerror(errno));
 	}
 
 	/* Rough stats, interruption isn't taken into account */
-	info->si_stats.ss_relax_time += sleep_time;
+	d_tm_inc_counter(info->si_stats.ss_relax_time, sleep_time);
 }
 
 static void
@@ -1537,6 +2064,7 @@ sched_start_cycle(struct sched_data *data, ABT_pool *pools)
 	struct sched_cycle	*cycle = &data->sd_cycle;
 	size_t			 cnt;
 	int			 ret;
+	uint64_t		 cur_ts, duration;
 
 	D_ASSERT(cycle->sc_new_cycle == 1);
 	D_ASSERT(cycle->sc_cycle_started == 0);
@@ -1545,6 +2073,16 @@ sched_start_cycle(struct sched_data *data, ABT_pool *pools)
 	cycle->sc_new_cycle = 0;
 	cycle->sc_cycle_started = 1;
 
+	/* Update current ts stored in sched_info */
+	cur_ts = daos_getmtime_coarse();
+	if (cur_ts < info->si_cur_ts) {
+		D_WARN("Backwards time: cur_ts:"DF_U64", si_cur_ts:"DF_U64"\n",
+		       cur_ts, info->si_cur_ts);
+		cur_ts = info->si_cur_ts;
+	}
+	duration = cur_ts - info->si_cur_ts;
+	info->si_cur_ts = cur_ts;
+
 	wakeup_all(dx);
 	process_all(dx);
 
@@ -1552,8 +2090,8 @@ sched_start_cycle(struct sched_data *data, ABT_pool *pools)
 	D_ASSERT(cycle->sc_ults_cnt[DSS_POOL_GENERIC] == 0);
 	ret = ABT_pool_get_size(pools[DSS_POOL_GENERIC], &cnt);
 	if (ret != ABT_SUCCESS) {
-		D_ERROR("XS(%d) get ABT pool(%d) size error: %d\n",
-			dx->dx_xs_id, DSS_POOL_GENERIC, ret);
+		D_ERROR("Get ABT pool(%d) size error: %d\n",
+			DSS_POOL_GENERIC, ret);
 		cnt = 0;
 	}
 	cycle->sc_ults_cnt[DSS_POOL_GENERIC] = cnt;
@@ -1562,78 +2100,123 @@ sched_start_cycle(struct sched_data *data, ABT_pool *pools)
 	if (sched_relax_mode != SCHED_RELAX_MODE_DISABLED)
 		sched_try_relax(dx, pools, cycle->sc_ults_tot);
 
-	if (sched_stats_intvl != 0 &&
-	    (info->si_stats.ss_print_ts + sched_stats_intvl) <
-	    info->si_cur_ts) {
-		D_PRINT("XS(%d) CPU time(ms): Total:"DF_U64", Relax:"DF_U64"\n",
-			dx->dx_xs_id, info->si_stats.ss_tot_time,
-			info->si_stats.ss_relax_time);
-		info->si_stats.ss_print_ts = info->si_cur_ts;
+	d_tm_inc_counter(info->si_stats.ss_total_time, duration);
+	d_tm_set_gauge(info->si_stats.ss_wq_len, info->si_total_req_cnt);
+	d_tm_set_gauge(info->si_stats.ss_sq_len, info->si_sleep_cnt);
+	if (cycle->sc_ults_tot) {
+		d_tm_set_gauge(info->si_stats.ss_cycle_duration, duration);
+		d_tm_set_gauge(info->si_stats.ss_cycle_size, cycle->sc_ults_tot);
 	}
 }
-
-struct sched_unit {
-	uint64_t	 su_start;
-	void		*su_func_addr;
-};
 
 static inline bool
 watchdog_enabled(struct dss_xstream *dx)
 {
-	/* Enable watchdog for sys xstream only */
-	return sched_unit_runtime_max != 0 && dx->dx_xs_id == 0;
+	if (sched_unit_runtime_max == 0)
+		return false;
+
+	/* Enable watchdog for system and swim xstream by default. */
+	return dx->dx_xs_id == 0 || dx->dx_xs_id == 1 ||
+			(sched_watchdog_all && dx->dx_xs_id != 2);
+}
+
+int
+sched_exec_time(uint64_t *msecs, const char *ult_name)
+{
+	struct dss_xstream	*dx = dss_current_xstream();
+	struct sched_info	*info = &dx->dx_sched_info;
+	uint64_t		 cur;
+
+	if (!watchdog_enabled(dx))
+		return -DER_NOSYS;
+
+	cur = daos_getmtime_coarse();
+	if (cur < info->si_ult_start) {
+		D_WARN("cur:"DF_U64" < start:"DF_U64"\n", cur, info->si_ult_start);
+		*msecs = 0;
+		return 0;
+	}
+
+	*msecs = cur - info->si_ult_start;
+	if (*msecs > sched_unit_runtime_max && ult_name != NULL)
+		D_WARN("ULT:%s executed "DF_U64" msecs\n", ult_name, *msecs);
+	return 0;
 }
 
 static void
-sched_watchdog_prep(struct dss_xstream *dx, ABT_unit unit,
-		    struct sched_unit *su)
+sched_watchdog_prep(struct dss_xstream *dx, ABT_unit unit)
 {
-	ABT_thread	thread;
-	void		(*thread_func)(void *);
-	int		rc;
+	struct sched_info	*info = &dx->dx_sched_info;
+	ABT_thread		 thread;
+	void			 (*thread_func)(void *);
+#ifdef ULT_MMAP_STACK
+	mmap_stack_desc_t		*desc;
+#endif
+	int			 rc;
 
 	if (!watchdog_enabled(dx))
 		return;
 
-	su->su_start = daos_getmtime_coarse();
+	info->si_ult_start = daos_getmtime_coarse();
 	rc = ABT_unit_get_thread(unit, &thread);
 	D_ASSERT(rc == ABT_SUCCESS);
 	rc = ABT_thread_get_thread_func(thread, &thread_func);
 	D_ASSERT(rc == ABT_SUCCESS);
-	su->su_func_addr = thread_func;
+#ifdef ULT_MMAP_STACK
+	/* has ULT stack been allocated using mmap() or using
+	 * Argobots standard way ? With the later case the ULT
+	 * argument could not be used to address the mmap()'ed
+	 * stack descriptor !
+	 */
+	if (likely(thread_func == mmap_stack_wrapper)) {
+		rc = ABT_thread_get_arg(thread, (void **)&desc);
+		D_ASSERT(rc == ABT_SUCCESS);
+		thread_func = desc->thread_func;
+	}
+#endif
+	info->si_ult_func = thread_func;
 }
 
 static void
-sched_watchdog_post(struct dss_xstream *dx, struct sched_unit *su)
+sched_watchdog_post(struct dss_xstream *dx)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
 	uint64_t		 cur;
 	unsigned int		 elapsed;
 	char			**strings;
 
+	/* A ULT is just scheduled, increase schedule seq */
+	info->si_cur_seq++;
+
 	if (!watchdog_enabled(dx))
 		return;
 
 	cur = daos_getmtime_coarse();
-	D_ASSERT(cur >= su->su_start);
-	elapsed = cur - su->su_start;
+	if (cur < info->si_ult_start) {
+		D_WARN("Backwards time, cur:"DF_U64", start:"DF_U64"\n",
+		       cur, info->si_ult_start);
+		return;
+	}
 
+	elapsed = cur - info->si_ult_start;
 	if (elapsed <= sched_unit_runtime_max)
 		return;
 
 	/* Throttle printing a bit */
-	D_ASSERT(cur >= info->si_stats.ss_watchdog_ts);
-	if (info->si_stats.ss_last_unit == su->su_func_addr &&
+	D_ASSERTF(cur >= info->si_stats.ss_watchdog_ts,
+		  "cur:"DF_U64" < watchdog_ts:"DF_U64"\n",
+		  cur, info->si_stats.ss_watchdog_ts);
+
+	if (info->si_stats.ss_last_unit == info->si_ult_func &&
 	    (cur - info->si_stats.ss_watchdog_ts) <= 2000)
 		return;
 
-	info->si_stats.ss_last_unit = su->su_func_addr;
+	info->si_stats.ss_last_unit = info->si_ult_func;
 	info->si_stats.ss_watchdog_ts = cur;
 
-	strings = backtrace_symbols(&su->su_func_addr, 1);
-	D_ERROR("WATCHDOG: XS(%d) Thread %p took %u ms. symbol:%s\n",
-		dx->dx_xs_id, su->su_func_addr, elapsed,
-		strings != NULL ? strings[0] : NULL);
+	strings = backtrace_symbols(&info->si_ult_func, 1);
+	D_WARN("WATCHDOG: Thread %p took %u ms. symbol:%s\n",
+		info->si_ult_func, elapsed, strings != NULL ? strings[0] : NULL);
 
 	free(strings);
 }
@@ -1648,7 +2231,6 @@ sched_run(ABT_sched sched)
 	ABT_pool		 pool;
 	ABT_unit		 unit;
 	uint32_t		 work_count = 0;
-	struct sched_unit	 su = { 0 };
 	int			 ret;
 
 	ABT_sched_get_data(sched, (void **)&data);
@@ -1657,8 +2239,7 @@ sched_run(ABT_sched sched)
 
 	ret = ABT_sched_get_pools(sched, DSS_POOL_CNT, 0, pools);
 	if (ret != ABT_SUCCESS) {
-		D_ERROR("XS(%d) get ABT pools error: %d\n",
-			dx->dx_xs_id, ret);
+		D_ERROR("Get ABT pools error: %d\n", ret);
 		return;
 	}
 
@@ -1691,11 +2272,11 @@ sched_run(ABT_sched sched)
 		goto check_event;
 execute:
 		D_ASSERT(pool != ABT_POOL_NULL);
-		sched_watchdog_prep(dx, unit, &su);
+		sched_watchdog_prep(dx, unit);
 
 		ABT_xstream_run_unit(unit, pool);
 
-		sched_watchdog_post(dx, &su);
+		sched_watchdog_post(dx);
 start_cycle:
 		if (cycle->sc_new_cycle) {
 			sched_start_cycle(data, pools);
@@ -1707,8 +2288,7 @@ check_event:
 
 			ABT_sched_has_to_stop(sched, &stop);
 			if (stop == ABT_TRUE) {
-				D_DEBUG(DB_TRACE, "XS(%d) stop scheduler\n",
-					dx->dx_xs_id);
+				D_DEBUG(DB_TRACE, "Stop scheduler\n");
 				break;
 			}
 			work_count = 0;

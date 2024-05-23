@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,8 +17,9 @@
 
 #include <stdint.h>
 #include <pthread.h>
+
 #include <daos/common.h>
-#include <daos/tse.h>
+
 #include "tse_internal.h"
 
 D_CASSERT(sizeof(struct tse_task) == TSE_TASK_SIZE);
@@ -36,8 +37,7 @@ tse_sched_init(tse_sched_t *sched, tse_sched_comp_cb_t comp_cb,
 	       void *udata)
 {
 	struct tse_sched_private	*dsp = tse_sched2priv(sched);
-	pthread_mutexattr_t		attr;
-	int rc;
+	int				 rc;
 
 	D_CASSERT(sizeof(sched->ds_private) >= sizeof(*dsp));
 
@@ -55,19 +55,6 @@ tse_sched_init(tse_sched_t *sched, tse_sched_comp_cb_t comp_cb,
 	rc = D_MUTEX_INIT(&dsp->dsp_lock, NULL);
 	if (rc != 0)
 		return rc;
-
-	rc = pthread_mutexattr_init(&attr);
-	if (rc != 0) {
-		D_MUTEX_DESTROY(&dsp->dsp_lock);
-		return -DER_INVAL;
-	}
-	pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
-
-	rc = D_MUTEX_INIT(&dsp->dsp_comp_lock, &attr);
-	if (rc != 0) {
-		D_MUTEX_DESTROY(&dsp->dsp_lock);
-		return rc;
-	}
 
 	if (comp_cb != NULL) {
 		rc = tse_sched_register_comp_cb(sched, comp_cb, udata);
@@ -102,6 +89,7 @@ tse_task_buf_embedded(tse_task_t *task, int size)
 	/** Let's assume dtp_buf is always enough at the moment */
 	/** MSC - should malloc if size requested is bigger */
 	size = tse_task_buf_size(size);
+	D_ASSERT(size < UINT16_MAX);
 	avail_size = sizeof(dtp->dtp_buf) - dtp->dtp_stack_top;
 	D_ASSERTF(size <= avail_size,
 		  "req size %u avail size %u (all_size %lu stack_top %u)\n",
@@ -221,6 +209,7 @@ tse_task2sched(tse_task_t *task)
 static void
 tse_task_addref_locked(struct tse_task_private *dtp)
 {
+	D_ASSERT(dtp->dtp_refcnt < UINT16_MAX);
 	dtp->dtp_refcnt++;
 }
 
@@ -260,12 +249,22 @@ tse_task_decref(tse_task_t *task)
 		return;
 
 	D_ASSERT(d_list_empty(&dtp->dtp_dep_list));
+	D_ASSERT(d_list_empty(&dtp->dtp_comp_cb_list));
+	D_FREE(task);
+}
 
-	/*
-	 * MSC - since we require user to allocate task, maybe we should have
-	 * user also free it. This now requires task to be on the heap all the
-	 * time.
-	 */
+static void
+tse_task_decref_free_locked(tse_task_t *task)
+{
+	struct tse_task_private *dtp = tse_task2priv(task);
+	bool			zombie;
+
+	zombie = tse_task_decref_locked(dtp);
+	if (!zombie)
+		return;
+
+	D_ASSERT(d_list_empty(&dtp->dtp_dep_list));
+	D_ASSERT(d_list_empty(&dtp->dtp_comp_cb_list));
 	D_FREE(task);
 }
 
@@ -280,7 +279,6 @@ tse_sched_fini(tse_sched_t *sched)
 	D_ASSERT(d_list_empty(&dsp->dsp_complete_list));
 	D_ASSERT(d_list_empty(&dsp->dsp_sleeping_list));
 	D_MUTEX_DESTROY(&dsp->dsp_lock);
-	D_MUTEX_DESTROY(&dsp->dsp_comp_lock);
 }
 
 static inline void
@@ -371,7 +369,7 @@ tse_task_complete_locked(struct tse_task_private *dtp,
 		return;
 
 	/*
-	 * if completing a task that never started, we need to bump inflight tasks in scheduler
+	 * if completing a task that never started, we need to bump in-flight tasks in scheduler
 	 * before adding it to tail of completed list.
 	 */
 	if (!dtp->dtp_running) {
@@ -380,7 +378,6 @@ tse_task_complete_locked(struct tse_task_private *dtp,
 	}
 
 	dtp->dtp_running = 0;
-	dtp->dtp_completing = 0;
 	dtp->dtp_completed = 1;
 	d_list_move_tail(&dtp->dtp_list, &dsp->dsp_complete_list);
 }
@@ -392,7 +389,7 @@ register_cb(tse_task_t *task, bool is_comp, tse_task_cb_t cb,
 	struct tse_task_private *dtp = tse_task2priv(task);
 	struct tse_task_cb *dtc;
 
-	if (dtp->dtp_completed) {
+	if (atomic_load(&dtp->dtp_completed)) {
 		D_ERROR("Can't add a callback for a completed task\n");
 		return -DER_NO_PERM;
 	}
@@ -445,6 +442,18 @@ tse_task_register_cbs(tse_task_t *task, tse_task_cb_t prep_cb,
 	return rc;
 }
 
+static uint32_t
+dtp_generation_get(struct tse_task_private *dtp)
+{
+	return atomic_fetch_add(&dtp->dtp_generation, 0);
+}
+
+static void
+dtp_generation_inc(struct tse_task_private *dtp)
+{
+	atomic_fetch_add(&dtp->dtp_generation, 1);
+}
+
 /*
  * Execute the prep callback(s) of the task.
  */
@@ -454,22 +463,23 @@ tse_task_prep_callback(tse_task_t *task)
 	struct tse_task_private	*dtp = tse_task2priv(task);
 	struct tse_task_cb	*dtc;
 	struct tse_task_cb	*tmp;
+	uint32_t		 gen, new_gen;
 	bool			 ret = true;
 	int			 rc;
 
 	d_list_for_each_entry_safe(dtc, tmp, &dtp->dtp_prep_cb_list, dtc_list) {
 		d_list_del(&dtc->dtc_list);
 		/** no need to call if task was completed in one of the cbs */
-		if (!dtp->dtp_completed) {
+		gen = dtp_generation_get(dtp);
+		if (!atomic_load(&dtp->dtp_completed)) {
 			rc = dtc->dtc_cb(task, dtc->dtc_arg);
 			if (task->dt_result == 0)
 				task->dt_result = rc;
 		}
-
 		D_FREE(dtc);
-
+		new_gen = dtp_generation_get(dtp);
 		/** Task was re-initialized; */
-		if (!dtp->dtp_running && !dtp->dtp_completing)
+		if (!atomic_load(&dtp->dtp_running) && new_gen != gen)
 			ret = false;
 	}
 
@@ -487,40 +497,35 @@ tse_task_prep_callback(tse_task_t *task)
 static bool
 tse_task_complete_callback(tse_task_t *task)
 {
-	struct tse_task_private	*dtp = tse_task2priv(task);
-	struct tse_sched_private *dsp = dtp->dtp_sched;
-	uint32_t		 dep_cnt = dtp->dtp_dep_cnt;
-	struct tse_task_cb	*dtc;
-	struct tse_task_cb	*tmp;
+	struct tse_task_private		*dtp = tse_task2priv(task);
+	uint32_t		 	gen, new_gen;
+	struct tse_task_cb		*dtc;
+	struct tse_task_cb		*tmp;
 
-	D_MUTEX_LOCK(&dsp->dsp_comp_lock);
+	/* Take one extra ref-count here and decref before exit, as in dtc_cb() it possibly
+	 * re-init the task that may be completed immediately.
+	 */
+	tse_task_addref(task);
+
 	d_list_for_each_entry_safe(dtc, tmp, &dtp->dtp_comp_cb_list, dtc_list) {
 		int ret;
 
 		d_list_del(&dtc->dtc_list);
+		gen = dtp_generation_get(dtp);
 		ret = dtc->dtc_cb(task, dtc->dtc_arg);
 		if (task->dt_result == 0)
 			task->dt_result = ret;
-
 		D_FREE(dtc);
-
-		/** Task was re-initialized; break */
-		if (!dtp->dtp_completing) {
-			D_DEBUG(DB_TRACE, "re-init task %p\n", task);
-			D_MUTEX_UNLOCK(&dsp->dsp_comp_lock);
-			return false;
-		}
-
-		/** New dependent task added in completion call-back */
-		if (dtp->dtp_dep_cnt > dep_cnt) {
-			D_DEBUG(DB_TRACE, "new dep-task added to task %p\n",
-				task);
-			D_MUTEX_UNLOCK(&dsp->dsp_comp_lock);
+		/** Task was re-initialized, or new dep-task added */
+		new_gen = dtp_generation_get(dtp);
+		if (new_gen != gen) {
+			D_DEBUG(DB_TRACE, "task %p re-inited or new dep-task added\n", task);
+			tse_task_decref(task);
 			return false;
 		}
 	}
-	D_MUTEX_UNLOCK(&dsp->dsp_comp_lock);
 
+	tse_task_decref(task);
 	return true;
 }
 
@@ -585,7 +590,7 @@ tse_sched_process_init(struct tse_sched_private *dsp)
 				continue;
 			}
 			D_ASSERT(dtp->dtp_func != NULL);
-			if (!dtp->dtp_completed)
+			if (!atomic_load(&dtp->dtp_completed))
 				dtp->dtp_func(task);
 		}
 		if (bumped)
@@ -607,18 +612,20 @@ tse_task_post_process(tse_task_t *task)
 	struct tse_sched_private *dsp = dtp->dtp_sched;
 	int rc = 0;
 
-	D_ASSERT(dtp->dtp_completed == 1);
+	D_ASSERT(atomic_load(&dtp->dtp_completed) == 1);
+	D_MUTEX_LOCK(&dsp->dsp_lock);
 
 	/* set scheduler result */
 	if (tse_priv2sched(dsp)->ds_result == 0)
 		tse_priv2sched(dsp)->ds_result = task->dt_result;
 
 	/* Check dependent list */
-	D_MUTEX_LOCK(&dsp->dsp_lock);
 	while (!d_list_empty(&dtp->dtp_dep_list)) {
-		struct tse_task_link	*tlink;
-		tse_task_t		*task_tmp;
-		struct tse_task_private	*dtp_tmp;
+		struct tse_task_link		*tlink;
+		tse_task_t			*task_tmp;
+		struct tse_task_private		*dtp_tmp;
+		struct tse_sched_private	*dsp_tmp;
+		bool				 diff_sched;
 
 		tlink = d_list_entry(dtp->dtp_dep_list.next,
 				     struct tse_task_link, tl_link);
@@ -628,15 +635,22 @@ tse_task_post_process(tse_task_t *task)
 		D_FREE(tlink);
 
 		/* propagate dep task's failure */
-		if (task_tmp->dt_result == 0)
+		if (task_tmp->dt_result == 0 && !dtp_tmp->dtp_no_propagate)
 			task_tmp->dt_result = task->dt_result;
 
+		dsp_tmp = dtp_tmp->dtp_sched;
+		diff_sched = dsp != dsp_tmp;
+
+		if (diff_sched) {
+			D_MUTEX_UNLOCK(&dsp->dsp_lock);
+			D_MUTEX_LOCK(&dsp_tmp->dsp_lock);
+		}
 		/* see if the dependent task is ready to be scheduled */
 		D_ASSERT(dtp_tmp->dtp_dep_cnt > 0);
 		dtp_tmp->dtp_dep_cnt--;
 		D_DEBUG(DB_TRACE, "daos task %p dep_cnt %d\n", dtp_tmp,
 			dtp_tmp->dtp_dep_cnt);
-		if (!dsp->dsp_cancelling && dtp_tmp->dtp_dep_cnt == 0 &&
+		if (!dsp_tmp->dsp_cancelling && dtp_tmp->dtp_dep_cnt == 0 &&
 		    dtp_tmp->dtp_running) {
 			bool done;
 
@@ -649,12 +663,10 @@ tse_task_post_process(tse_task_t *task)
 			 * it is completed when they completed in this code
 			 * block.
 			 */
-
-			dtp_tmp->dtp_completing = 1;
 			/** release lock for CB */
-			D_MUTEX_UNLOCK(&dsp->dsp_lock);
+			D_MUTEX_UNLOCK(&dsp_tmp->dsp_lock);
 			done = tse_task_complete_callback(task_tmp);
-			D_MUTEX_LOCK(&dsp->dsp_lock);
+			D_MUTEX_LOCK(&dsp_tmp->dsp_lock);
 
 			/*
 			 * task reinserted itself in scheduler by
@@ -662,23 +674,24 @@ tse_task_post_process(tse_task_t *task)
 			 */
 			if (!done) {
 				/* -1 for tlink (addref by add_dependent) */
-				tse_task_decref_locked(dtp_tmp);
+				tse_task_decref_free_locked(task_tmp);
 				continue;
 			}
 
-			tse_task_complete_locked(dtp_tmp, dsp);
+			tse_task_complete_locked(dtp_tmp, dsp_tmp);
 		}
 
 		/* -1 for tlink (addref by add_dependent) */
-		tse_task_decref_locked(dtp_tmp);
+		tse_task_decref_free_locked(task_tmp);
+		if (diff_sched) {
+			D_MUTEX_UNLOCK(&dsp_tmp->dsp_lock);
+			D_MUTEX_LOCK(&dsp->dsp_lock);
+		}
 	}
 
 	D_ASSERT(dsp->dsp_inflight > 0);
 	dsp->dsp_inflight--;
 	D_MUTEX_UNLOCK(&dsp->dsp_lock);
-
-	if (task->dt_result == 0)
-		task->dt_result = rc;
 
 	return rc;
 }
@@ -837,24 +850,22 @@ tse_task_complete(tse_task_t *task, int ret)
 	struct tse_sched_private	*dsp	= dtp->dtp_sched;
 	bool				done;
 
-	if (dtp->dtp_completed)
+	if (atomic_load(&dtp->dtp_completed))
 		return;
 
 	if (task->dt_result == 0)
 		task->dt_result = ret;
 
-	dtp->dtp_completing = 1;
 	/** Execute task completion callbacks first. */
 	done = tse_task_complete_callback(task);
 
 	D_MUTEX_LOCK(&dsp->dsp_lock);
-
 	if (!dsp->dsp_cancelling) {
 		/** if task reinserted itself in scheduler, don't complete */
 		if (done)
 			tse_task_complete_locked(dtp, dsp);
 	} else {
-		tse_task_decref_locked(dtp);
+		tse_task_decref_free_locked(task);
 	}
 	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 
@@ -870,42 +881,46 @@ tse_task_complete(tse_task_t *task, int ret)
 static int
 tse_task_add_dependent(tse_task_t *task, tse_task_t *dep)
 {
-	struct tse_task_private  *dtp = tse_task2priv(task);
-	struct tse_task_private  *dep_dtp = tse_task2priv(dep);
-	struct tse_task_link	  *tlink;
+	struct tse_task_private	*dtp = tse_task2priv(task);
+	struct tse_task_private	*dep_dtp = tse_task2priv(dep);
+	struct tse_task_link	*tlink;
+	bool			 diff_sched;
 
 	D_ASSERT(task != dep);
 
-	if (dtp->dtp_sched != dep_dtp->dtp_sched) {
-		D_ERROR("Two tasks should belong to the same scheduler.\n");
-		return -DER_NO_PERM;
-	}
-
-	if (dtp->dtp_completed) {
+	if (atomic_load(&dtp->dtp_completed)) {
 		D_ERROR("Can't add a dependency for a completed task (%p)\n",
 			task);
 		return -DER_NO_PERM;
 	}
 
 	/** if task to depend on has completed already, do nothing */
-	if (dep_dtp->dtp_completed)
+	if (atomic_load(&dep_dtp->dtp_completed))
 		return 0;
+
+	diff_sched = dtp->dtp_sched != dep_dtp->dtp_sched;
 
 	D_ALLOC_PTR(tlink);
 	if (tlink == NULL)
 		return -DER_NOMEM;
 
-	D_DEBUG(DB_TRACE, "Add dependent %p ---> %p\n", dep_dtp, dtp);
+	D_DEBUG(DB_TRACE, "Add dependent %p ---> %p\n", dep, task);
 
 	D_MUTEX_LOCK(&dtp->dtp_sched->dsp_lock);
-
+	D_ASSERT(dtp->dtp_dep_cnt < UINT16_MAX);
 	tse_task_addref_locked(dtp);
 	tlink->tl_task = task;
-
-	d_list_add_tail(&tlink->tl_link, &dep_dtp->dtp_dep_list);
 	dtp->dtp_dep_cnt++;
-
+	dtp_generation_inc(dtp);
+	if (!diff_sched)
+		d_list_add_tail(&tlink->tl_link, &dep_dtp->dtp_dep_list);
 	D_MUTEX_UNLOCK(&dtp->dtp_sched->dsp_lock);
+
+	if (diff_sched) {
+		D_MUTEX_LOCK(&dep_dtp->dtp_sched->dsp_lock);
+		d_list_add_tail(&tlink->tl_link, &dep_dtp->dtp_dep_list);
+		D_MUTEX_UNLOCK(&dep_dtp->dtp_sched->dsp_lock);
+	}
 
 	return 0;
 }
@@ -993,15 +1008,17 @@ tse_task_insert_sleeping(struct tse_task_private *dtp,
 int
 tse_task_schedule_with_delay(tse_task_t *task, bool instant, uint64_t delay)
 {
-	struct tse_task_private  *dtp = tse_task2priv(task);
-	struct tse_sched_private *dsp = dtp->dtp_sched;
-	int rc = 0;
+	struct tse_task_private		*dtp = tse_task2priv(task);
+	struct tse_sched_private	*dsp = dtp->dtp_sched;
+	bool				ready;
+	int				rc = 0;
 
 	D_ASSERT(!instant || (dtp->dtp_func && delay == 0));
 
 	/* Add task to scheduler */
 	D_MUTEX_LOCK(&dsp->dsp_lock);
-	if (dtp->dtp_func == NULL || instant) {
+	ready = (dtp->dtp_dep_cnt == 0 && d_list_empty(&dtp->dtp_prep_cb_list));
+	if ((dtp->dtp_func == NULL || instant) && ready) {
 		/** If task has no body function, mark it as running */
 		dsp->dsp_inflight++;
 		dtp->dtp_running = 1;
@@ -1024,26 +1041,19 @@ tse_task_schedule_with_delay(tse_task_t *task, bool instant, uint64_t delay)
 	tse_sched_priv_addref_locked(dsp);
 	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 
-	/* if caller wants to run the task instantly, call the task body
-	 * function now.
-	 */
-	if (instant) {
+	/** if caller wants to run the task instantly, call the task body function now. */
+	if (instant && ready) {
+		/** result of task should be set in dt_result and checked by caller. */
 		dtp->dtp_func(task);
-
-		/** If task was completed return the task result */
-		if (dtp->dtp_completed)
-			rc = task->dt_result;
-
 		tse_task_decref(task);
 	}
-
 	return rc;
 }
 
 int
 tse_task_schedule(tse_task_t *task, bool instant)
 {
-	return tse_task_schedule_with_delay(task, instant, 0 /* delay */);
+	return tse_task_schedule_with_delay(task, instant, 0);
 }
 
 int
@@ -1085,8 +1095,9 @@ tse_task_reinit_with_delay(tse_task_t *task, uint64_t delay)
 
 	/** Mark the task back at init state */
 	dtp->dtp_running = 0;
-	dtp->dtp_completing = 0;
 	dtp->dtp_completed = 0;
+
+	dtp_generation_inc(dtp);
 
 	/** reset stack pointer as zero */
 	if (dtp->dtp_stack_top != 0) {
@@ -1094,6 +1105,8 @@ tse_task_reinit_with_delay(tse_task_t *task, uint64_t delay)
 			task, dtp->dtp_stack_top);
 		dtp->dtp_stack_top = 0;
 	}
+
+	task->dt_result = 0;
 
 	/** Move back to init list */
 	if (delay == 0) {
@@ -1106,8 +1119,6 @@ tse_task_reinit_with_delay(tse_task_t *task, uint64_t delay)
 	}
 
 	D_MUTEX_UNLOCK(&dsp->dsp_lock);
-
-	task->dt_result = 0;
 
 	return 0;
 
@@ -1171,7 +1182,6 @@ tse_task_reset(tse_task_t *task, tse_task_func_t task_func, void *priv)
 
 	/** Mark the task back at init state */
 	dtp->dtp_running = 0;
-	dtp->dtp_completing = 0;
 	dtp->dtp_completed = 0;
 
 	/** reset stack pointer as zero */
@@ -1299,4 +1309,38 @@ tse_task_list_traverse(d_list_t *head, tse_task_cb_t cb, void *arg)
 	}
 
 	return ret;
+}
+
+int
+tse_task_list_traverse_adv(d_list_t *head, tse_task_cb_t cb, void *arg)
+{
+	struct tse_task_private	*dtp;
+	struct tse_task_private	*dtp_exec;
+	struct tse_task_private	*tmp;
+	int			 ret = 0;
+	int			 rc;
+	bool			 done;
+
+	for (dtp = d_list_entry(head->next, struct tse_task_private, dtp_task_list),
+	     tmp = d_list_entry(dtp->dtp_task_list.next, struct tse_task_private, dtp_task_list),
+	     done = (&dtp->dtp_task_list == head); !done;) {
+		dtp_exec = dtp;
+		dtp = tmp,
+		tmp = d_list_entry(tmp->dtp_task_list.next, struct tse_task_private,
+				   dtp_task_list);
+		done = (&dtp->dtp_task_list == head);
+		rc = cb(tse_priv2task(dtp_exec), arg);
+		if (rc != 0)
+			ret = rc;
+	}
+
+	return ret;
+}
+
+void
+tse_disable_propagate(tse_task_t *task)
+{
+	struct tse_task_private  *dtp = tse_task2priv(task);
+
+	dtp->dtp_no_propagate = 1;
 }

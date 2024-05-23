@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,7 +16,7 @@
 #include <daos_srv/vos.h>
 #include "vos_internal.h"
 
-int vos_evt_feats = EVT_FEAT_SORT_DIST;
+uint64_t vos_evt_feats = EVT_FEAT_SORT_DIST;
 
 /**
  * VOS Btree attributes, for tree registration and tree creation.
@@ -34,7 +34,8 @@ struct vos_btr_attr {
 	btr_ops_t	*ta_ops;
 };
 
-static struct vos_btr_attr *obj_tree_find_attr(unsigned tree_class);
+static struct vos_btr_attr *
+obj_tree_find_attr(unsigned tree_class, int flags);
 
 static struct vos_svt_key *
 iov2svt_key(d_iov_t *key_iov)
@@ -46,6 +47,9 @@ iov2svt_key(d_iov_t *key_iov)
 static struct vos_rec_bundle *
 iov2rec_bundle(d_iov_t *val_iov)
 {
+	if (val_iov == NULL)
+		return NULL;
+
 	D_ASSERT(val_iov->iov_len == sizeof(struct vos_rec_bundle));
 	return (struct vos_rec_bundle *)val_iov->iov_buf;
 }
@@ -54,46 +58,6 @@ iov2rec_bundle(d_iov_t *val_iov)
  * @defgroup vos_key_btree vos key-btree
  * @{
  */
-
-/** Inline key is max of 15 bytes.  The extra byte in the struct is used
- *  to encode the type (hash or inline) and the length of the inline key.
- */
-#define KH_INLINE_MAX 15
-
-/**
- * hashed key for the key-btree, it is stored in btr_record::rec_hkey
- */
-struct ktr_hkey {
-	/** murmur64 hash */
-	union {
-		/** NB: This assumes little endian.  We already have little
-		 *  endian assumptions with integer keys so this isn't the
-		 *  first violation.  The hkey_gen code will trigger an
-		 *  assertion if this is violated.
-		 */
-		struct {
-			/** Length of key shifted left by 2 bits. */
-			uint32_t	kh_len;
-			/** string32 hash of key */
-			uint32_t	kh_str32;
-			/** Murmur hash of key */
-			uint64_t	kh_murmur64;
-		};
-		struct {
-			/** length shifted left by 2 bits. Low bit means inline
-			 *  key.  An extra bit is reserved for future use.
-			 */
-			char		kh_inline_len;
-			/** Inline key */
-			char		kh_inline[KH_INLINE_MAX];
-		};
-		/** For comparison convenience */
-		uint64_t		kh_hash[2];
-	};
-};
-
-D_CASSERT(sizeof(struct ktr_hkey) == 16);
-
 /**
  * Store a key and its checksum as a durable struct.
  */
@@ -188,27 +152,15 @@ ktr_rec_msize(int alloc_overhead)
 static void
 ktr_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 {
-	struct ktr_hkey		*kkey  = (struct ktr_hkey *)hkey;
+	struct ktr_hkey		*kkey = (struct ktr_hkey *)hkey;
+	struct umem_pool        *umm_pool = tins->ti_umm.umm_pool;
+	struct vos_pool         *pool     = (struct vos_pool *)tins->ti_priv;
 
-	if (key_iov->iov_len <= KH_INLINE_MAX) {
-		kkey->kh_hash[0] = 0;
-		kkey->kh_hash[1] = 0;
+	D_ASSERT(key_iov->iov_len < pool->vp_pool_df->pd_scm_sz);
+	hkey_common_gen(key_iov, hkey);
 
-		/** Set the lowest bit for inline key */
-		kkey->kh_inline_len = (key_iov->iov_len << 2) | 1;
-		memcpy(&kkey->kh_inline[0], key_iov->iov_buf, key_iov->iov_len);
-		D_ASSERT(kkey->kh_len & 1);
-		return;
-	}
-
-	kkey->kh_murmur64 = d_hash_murmur64(key_iov->iov_buf, key_iov->iov_len,
-					    VOS_BTR_MUR_SEED);
-	kkey->kh_str32 = d_hash_string_u32(key_iov->iov_buf, key_iov->iov_len);
-	/** Lowest bit is clear for hashed key */
-	kkey->kh_len = key_iov->iov_len << 2;
-
-	vos_kh_set(kkey->kh_murmur64);
-	D_ASSERT(!(kkey->kh_inline_len & 1));
+	if (key_iov->iov_len > KH_INLINE_MAX)
+		vos_kh_set(kkey->kh_murmur64, umm_pool->up_store.store_standalone);
 }
 
 /** compare the hashed key */
@@ -218,24 +170,7 @@ ktr_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 	struct ktr_hkey *k1 = (struct ktr_hkey *)&rec->rec_hkey[0];
 	struct ktr_hkey *k2 = (struct ktr_hkey *)hkey;
 
-	/** Since the low bit is set for inline keys, there will never be
-	 *  a conflict between an inline key and a hashed key so we can
-	 *  simply compare as if they are hashed.  Order doesn't matter
-	 *  as long as it's consistent.
-	 */
-	if (k1->kh_hash[0] < k2->kh_hash[0])
-		return BTR_CMP_LT;
-
-	if (k1->kh_hash[0] > k2->kh_hash[0])
-		return BTR_CMP_GT;
-
-	if (k1->kh_hash[1] < k2->kh_hash[1])
-		return BTR_CMP_LT;
-
-	if (k1->kh_hash[1] > k2->kh_hash[1])
-		return BTR_CMP_GT;
-
-	return BTR_CMP_EQ;
+	return hkey_common_cmp(k1, k2);
 }
 
 static int
@@ -312,7 +247,7 @@ ktr_key_decode(struct btr_instance *tins, d_iov_t *key,
 /** create a new key-record, or install an externally allocated key-record */
 static int
 ktr_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
-	      d_iov_t *val_iov, struct btr_record *rec)
+	      d_iov_t *val_iov, struct btr_record *rec, d_iov_t *val_out)
 {
 	struct vos_rec_bundle	*rbund;
 	struct vos_krec_df	*krec;
@@ -350,6 +285,7 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	daos_handle_t		 coh;
 	int			 gc;
 	int			 rc;
+	struct vos_pool		*pool;
 
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return 0;
@@ -362,22 +298,33 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	if (rc != 0)
 		return rc;
 
+	pool = (struct vos_pool *)tins->ti_priv;
 	vos_ilog_ts_evict(&krec->kr_ilog, (krec->kr_bmap & KREC_BF_DKEY) ?
-			  VOS_TS_TYPE_DKEY : VOS_TS_TYPE_AKEY);
+			  VOS_TS_TYPE_DKEY : VOS_TS_TYPE_AKEY, pool->vp_sysdb);
 
 	D_ASSERT(tins->ti_priv);
 	gc = (krec->kr_bmap & KREC_BF_DKEY) ? GC_DKEY : GC_AKEY;
 	coh = vos_cont2hdl(args);
-	return gc_add_item((struct vos_pool *)tins->ti_priv, coh, gc,
-			   rec->rec_off, 0);
+	return gc_add_item(pool, coh, gc, rec->rec_off, 0);
 }
 
 static int
 ktr_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 	      d_iov_t *key_iov, d_iov_t *val_iov)
 {
+	char                    *kbuf;
 	struct vos_krec_df	*krec = vos_rec2krec(tins, rec);
 	struct vos_rec_bundle	*rbund = iov2rec_bundle(val_iov);
+
+	/** For embedded value, we sometimes only need to fetch the key,
+	 *  to generate the hash.
+	 */
+	if (rbund == NULL) {
+		D_ASSERT(key_iov != NULL);
+		kbuf = vos_krec2key(krec);
+		d_iov_set(key_iov, kbuf, krec->kr_size);
+		return 0;
+	}
 
 	rbund->rb_krec = krec;
 
@@ -389,7 +336,7 @@ ktr_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 ktr_rec_update(struct btr_instance *tins, struct btr_record *rec,
-	       d_iov_t *key_iov, d_iov_t *val_iov)
+	       d_iov_t *key_iov, d_iov_t *val_iov, d_iov_t *val_out)
 {
 	struct vos_rec_bundle	*rbund = iov2rec_bundle(val_iov);
 
@@ -404,9 +351,6 @@ ktr_rec_update(struct btr_instance *tins, struct btr_record *rec,
 static umem_off_t
 ktr_node_alloc(struct btr_instance *tins, int size)
 {
-	/* Dynamic root could have smaller size */
-	if (size == umem_slab_usize(&tins->ti_umm, VOS_SLAB_KEY_NODE))
-		return vos_slab_alloc(&tins->ti_umm, size, VOS_SLAB_KEY_NODE);
 	return umem_zalloc(&tins->ti_umm, size);
 }
 
@@ -438,7 +382,8 @@ static int
 svt_rec_store(struct btr_instance *tins, struct btr_record *rec,
 	      struct vos_svt_key *skey, struct vos_rec_bundle *rbund)
 {
-	struct dtx_handle	*dth	= vos_dth_get();
+	struct vos_container	*cont = vos_hdl2cont(tins->ti_coh);
+	struct dtx_handle	*dth	= vos_dth_get(cont->vc_pool->vp_sysdb);
 	struct vos_irec_df	*irec	= vos_rec2irec(tins, rec);
 	struct dcs_csum_info	*csum	= rbund->rb_csum;
 	struct bio_iov		*biov	= rbund->rb_biov;
@@ -515,7 +460,8 @@ svt_rec_load(struct btr_instance *tins, struct btr_record *rec,
 	rbund->rb_rsize	= irec->ir_size;
 	rbund->rb_gsize	= irec->ir_gsize;
 	rbund->rb_ver	= irec->ir_ver;
-	rbund->rb_dtx_state = vos_dtx_ent_state(irec->ir_dtx);
+	rbund->rb_dtx_state = vos_dtx_ent_state(irec->ir_dtx, vos_hdl2cont(tins->ti_coh), *epc);
+	rbund->rb_off = rec->rec_off;
 	return 0;
 }
 
@@ -581,7 +527,7 @@ svt_rec_alloc_common(struct btr_instance *tins, struct btr_record *rec,
 
 	D_ASSERT(!UMOFF_IS_NULL(rbund->rb_off));
 	rc = umem_tx_xadd(&tins->ti_umm, rbund->rb_off, vos_irec_msize(rbund),
-			  POBJ_XADD_NO_SNAPSHOT);
+			  UMEM_XADD_NO_SNAPSHOT);
 	if (rc != 0)
 		return rc;
 
@@ -604,7 +550,7 @@ svt_rec_alloc_common(struct btr_instance *tins, struct btr_record *rec,
 /** allocate a new record and fetch data */
 static int
 svt_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
-	       d_iov_t *val_iov, struct btr_record *rec)
+	       d_iov_t *val_iov, struct btr_record *rec, d_iov_t *val_out)
 {
 	struct vos_svt_key	*skey = key_iov->iov_buf;
 	struct vos_rec_bundle	*rbund;
@@ -653,15 +599,14 @@ svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
 	struct vos_irec_df	*irec = vos_rec2irec(tins, rec);
 	bio_addr_t		*addr = &irec->ir_ex_addr;
 	struct dtx_handle	*dth = NULL;
-	struct vos_rsrvd_scm	*rsrvd_scm;
-	struct pobj_action	*act;
-	int			 i;
+	struct umem_rsrvd_act	*rsrvd_scm;
+	struct vos_container	*cont = vos_hdl2cont(tins->ti_coh);
 
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return 0;
 
 	if (overwrite) {
-		dth = vos_dth_get();
+		dth = vos_dth_get(cont->vc_pool->vp_sysdb);
 		if (dth == NULL)
 			return -DER_NO_PERM; /* Not allowed */
 	}
@@ -670,13 +615,16 @@ svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
 				  irec->ir_dtx, *epc, rec->rec_off);
 
 	if (!overwrite) {
-		/** TODO: handle NVME */
+		int	rc;
+
 		/* SCM value is stored together with vos_irec_df */
 		if (addr->ba_type == DAOS_MEDIA_NVME) {
 			struct vos_pool *pool = tins->ti_priv;
 
 			D_ASSERT(pool != NULL);
-			vos_bio_addr_free(pool, addr, irec->ir_size);
+			rc = vos_bio_addr_free(pool, addr, irec->ir_size);
+			if (rc)
+				return rc;
 		}
 
 		return umem_free(&tins->ti_umm, rec->rec_off);
@@ -685,16 +633,13 @@ svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
 	/** There can't be more cancellations than updates in this
 	 *  modification so just use the current one
 	 */
-	D_ASSERT(dth->dth_op_seq > 0);
-	D_ASSERT(dth->dth_op_seq <= dth->dth_deferred_cnt);
-	i = dth->dth_op_seq - 1;
-	rsrvd_scm = dth->dth_deferred[i];
+	D_ASSERTF(dth->dth_deferred_used_cnt < dth->dth_deferred_cnt, "%u < %u\n",
+		  dth->dth_deferred_used_cnt, dth->dth_deferred_cnt);
+	rsrvd_scm = dth->dth_deferred[dth->dth_deferred_used_cnt];
+	dth->dth_deferred_used_cnt++;
 	D_ASSERT(rsrvd_scm != NULL);
-	D_ASSERT(rsrvd_scm->rs_actv_at < rsrvd_scm->rs_actv_cnt);
 
-	act = &rsrvd_scm->rs_actv[rsrvd_scm->rs_actv_at];
-	umem_defer_free(&tins->ti_umm, rec->rec_off, act);
-	rsrvd_scm->rs_actv_at++;
+	umem_defer_free(&tins->ti_umm, rec->rec_off, rsrvd_scm);
 
 	cancel_nvme_exts(addr, dth);
 
@@ -718,13 +663,12 @@ svt_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 	if (key_iov != NULL)
 		key = iov2svt_key(key_iov);
 
-	svt_rec_load(tins, rec, key, rbund);
-	return 0;
+	return svt_rec_load(tins, rec, key, rbund);
 }
 
 static int
 svt_rec_update(struct btr_instance *tins, struct btr_record *rec,
-		d_iov_t *key_iov, d_iov_t *val_iov)
+		d_iov_t *key_iov, d_iov_t *val_iov, d_iov_t *val_out)
 {
 	struct vos_svt_key	*skey;
 	struct vos_irec_df	*irec;
@@ -746,7 +690,12 @@ svt_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	if (rc != 0)
 		return rc;
 
-	return svt_rec_alloc_common(tins, rec, skey, rbund);
+	rc = svt_rec_alloc_common(tins, rec, skey, rbund);
+	if (rc != 0)
+		return rc;
+
+	/* Inform btr_update() that the original record is replaced */
+	return 1;
 }
 
 static int
@@ -758,15 +707,12 @@ svt_check_availability(struct btr_instance *tins, struct btr_record *rec,
 
 	svt = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	return vos_dtx_check_availability(tins->ti_coh, svt->ir_dtx, *epc,
-					  intent, DTX_RT_SVT);
+					  intent, DTX_RT_SVT, true);
 }
 
 static umem_off_t
 svt_node_alloc(struct btr_instance *tins, int size)
 {
-	/* Dynamic root could have smaller size */
-	if (size == umem_slab_usize(&tins->ti_umm, VOS_SLAB_SV_NODE))
-		return vos_slab_alloc(&tins->ti_umm, size, VOS_SLAB_SV_NODE);
 	return umem_zalloc(&tins->ti_umm, size);
 }
 
@@ -787,33 +733,33 @@ static btr_ops_t singv_btr_ops = {
  * @} vos_singv_btr
  */
 static struct vos_btr_attr vos_btr_attrs[] = {
-	{
-		.ta_class	= VOS_BTR_DKEY,
-		.ta_order	= VOS_KTR_ORDER,
-		.ta_feats	= VOS_OFEAT_BITS | BTR_FEAT_UINT_KEY |
-				  BTR_FEAT_DIRECT_KEY | BTR_FEAT_DYNAMIC_ROOT,
-		.ta_name	= "vos_dkey",
-		.ta_ops		= &key_btr_ops,
-	},
-	{
-		.ta_class	= VOS_BTR_AKEY,
-		.ta_order	= VOS_KTR_ORDER,
-		.ta_feats	= VOS_OFEAT_BITS | BTR_FEAT_UINT_KEY |
-				  BTR_FEAT_DIRECT_KEY | BTR_FEAT_DYNAMIC_ROOT,
-		.ta_name	= "vos_akey",
-		.ta_ops		= &key_btr_ops,
-	},
-	{
-		.ta_class	= VOS_BTR_SINGV,
-		.ta_order	= VOS_SVT_ORDER,
-		.ta_feats	= BTR_FEAT_DYNAMIC_ROOT,
-		.ta_name	= "singv",
-		.ta_ops		= &singv_btr_ops,
-	},
-	{
-		.ta_class	= VOS_BTR_END,
-		.ta_name	= "null",
-	},
+    {
+	.ta_class = VOS_BTR_DKEY,
+	.ta_order = VOS_KTR_ORDER,
+	.ta_feats =
+	    BTR_FEAT_EMBED_FIRST | BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY | BTR_FEAT_DYNAMIC_ROOT,
+	.ta_name = "vos_dkey",
+	.ta_ops  = &key_btr_ops,
+    },
+    {
+	.ta_class = VOS_BTR_AKEY,
+	.ta_order = VOS_KTR_ORDER,
+	.ta_feats =
+	    BTR_FEAT_EMBED_FIRST | BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY | BTR_FEAT_DYNAMIC_ROOT,
+	.ta_name = "vos_akey",
+	.ta_ops  = &key_btr_ops,
+    },
+    {
+	.ta_class = VOS_BTR_SINGV,
+	.ta_order = VOS_SVT_ORDER,
+	.ta_feats = BTR_FEAT_DYNAMIC_ROOT,
+	.ta_name  = "singv",
+	.ta_ops   = &singv_btr_ops,
+    },
+    {
+	.ta_class = VOS_BTR_END,
+	.ta_name  = "null",
+    },
 };
 
 static int
@@ -827,14 +773,13 @@ evt_dop_bio_free(struct umem_instance *umm, struct evt_desc *desc,
 
 static int
 evt_dop_log_status(struct umem_instance *umm, daos_epoch_t epoch,
-		   struct evt_desc *desc, int intent, void *args)
+		   struct evt_desc *desc, int intent, bool retry, void *args)
 {
 	daos_handle_t coh;
 
 	coh.cookie = (unsigned long)args;
 	D_ASSERT(coh.cookie != 0);
-	return vos_dtx_check_availability(coh, desc->dc_dtx,
-					  epoch, intent, DTX_RT_EVT);
+	return vos_dtx_check_availability(coh, desc->dc_dtx, epoch, intent, DTX_RT_EVT, retry);
 }
 
 int
@@ -880,10 +825,17 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 	daos_handle_t		 coh = vos_cont2hdl(obj->obj_cont);
 	struct evt_desc_cbs	 cbs;
 	int			 expected_flag;
+	uint64_t                 feats = vos_evt_feats;
 	int			 unexpected_flag;
 	int			 rc = 0;
 
-	if (flags & SUBTR_EVT) {
+	vos_evt_desc_cbs_init(&cbs, pool, coh);
+	if ((krec->kr_bmap & (KREC_BF_BTR | KREC_BF_EVT)) == 0)
+		goto create;
+
+	/** If subtree is already created, it could have been created by an older pool version
+	 *  so if the dkey is not flat, we need to use KREC_BF_BTR here */
+	if (flags & SUBTR_EVT && (tclass == VOS_BTR_AKEY || (krec->kr_bmap & KREC_BF_NO_AKEY))) {
 		expected_flag = KREC_BF_EVT;
 		unexpected_flag = KREC_BF_BTR;
 	} else {
@@ -902,20 +854,16 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 		goto out;
 	}
 
-	vos_evt_desc_cbs_init(&cbs, pool, coh);
-	if (krec->kr_bmap & expected_flag) {
-		if (flags & SUBTR_EVT) {
-			rc = evt_open(&krec->kr_evt, uma, &cbs, sub_toh);
-		} else {
-			rc = dbtree_open_inplace_ex(&krec->kr_btr, uma, coh,
-						    pool, sub_toh);
-		}
-		if (rc != 0)
-			D_ERROR("Failed to open tree: "DF_RC"\n", DP_RC(rc));
-
-		goto out;
+	if (flags & SUBTR_EVT) {
+		rc = evt_open(&krec->kr_evt, uma, &cbs, sub_toh);
+	} else {
+		rc = dbtree_open_inplace_ex(&krec->kr_btr, uma, coh, pool, sub_toh);
 	}
+	if (rc != 0)
+		D_ERROR("Failed to open tree: " DF_RC "\n", DP_RC(rc));
 
+	goto out;
+create:
 	if ((flags & SUBTR_CREATE) == 0) {
 		/** This can happen if application does a punch first before any
 		 *  updates.   Simply return -DER_NONEXIST in such case.
@@ -924,19 +872,25 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 		goto out;
 	}
 
+	if (flags & SUBTR_EVT) {
+		expected_flag = KREC_BF_EVT;
+	} else {
+		expected_flag = KREC_BF_BTR;
+	}
+
 	if (!created) {
 		rc = umem_tx_add_ptr(vos_obj2umm(obj), krec,
 				     sizeof(*krec));
 		if (rc != 0) {
-			D_ERROR("Failed to add key record to transaction,"
-				" rc = %d", rc);
+			D_ERROR("Failed to add key record to transaction: " DF_RC "\n", DP_RC(rc));
 			goto out;
 		}
 	}
 
 	if (flags & SUBTR_EVT) {
-		rc = evt_create(&krec->kr_evt, vos_evt_feats, VOS_EVT_ORDER,
-				uma, &cbs, sub_toh);
+		if (pool->vp_feats & VOS_POOL_FEAT_DYN_ROOT)
+			feats |= EVT_FEAT_DYNAMIC_ROOT;
+		rc = evt_create(&krec->kr_evt, feats, VOS_EVT_ORDER, uma, &cbs, sub_toh);
 		if (rc != 0) {
 			D_ERROR("Failed to create evtree: "DF_RC"\n",
 				DP_RC(rc));
@@ -948,19 +902,24 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 
 		/* Step-1: find the btree attributes and create btree */
 		if (tclass == VOS_BTR_DKEY) {
-			uint64_t	obj_feats;
+			enum daos_otype_t type;
 
 			/* Check and setup the akey key compare bits */
-			obj_feats = daos_obj_id2feat(obj->obj_df->vo_id.id_pub);
-			tree_feats = (uint64_t)obj_feats << VOS_OFEAT_SHIFT;
-			if (obj_feats & DAOS_OF_AKEY_UINT64)
+			type = daos_obj_id2type(obj->obj_df->vo_id.id_pub);
+			if (daos_is_akey_uint64_type(type))
 				tree_feats |= VOS_KEY_CMP_UINT64_SET;
-			else if (obj_feats & DAOS_OF_AKEY_LEXICAL)
+			else if (daos_is_akey_lexical_type(type))
 				tree_feats |= VOS_KEY_CMP_LEXICAL_SET;
 		}
 
+		ta = obj_tree_find_attr(tclass, flags);
 
-		ta = obj_tree_find_attr(tclass);
+		/** Single value tree uses major epoch for hash key and minor
+		 * epoch for key so it doesn't play nicely with embedded value
+		 * and even if it did, it would not be more efficient.
+		 */
+		if (ta->ta_class != VOS_BTR_SINGV && (pool->vp_feats & VOS_POOL_FEAT_EMBED_FIRST))
+			tree_feats |= BTR_FEAT_EMBED_FIRST;
 
 		D_DEBUG(DB_TRACE, "Create dbtree %s feats 0x"DF_X64"\n",
 			ta->ta_name, tree_feats);
@@ -974,9 +933,13 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 		}
 	}
 	/* NB: Only happens on create so krec will be in the transaction log
-	 * already.
+	 * already.  Mark that tree supports the aggregation optimizations.
+	 * At akey level, this bit map is used for the optimization.  At higher
+	 * levels, only the tree_feats version is used.
 	 */
 	krec->kr_bmap |= expected_flag;
+	if (flags & SUBTR_FLAT)
+		krec->kr_bmap |= KREC_BF_NO_AKEY;
 out:
 	return rc;
 }
@@ -1004,14 +967,20 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 	int			 tmprc;
 
 	/** reset the saved hash */
-	vos_kh_clear();
+	vos_kh_clear(obj->obj_cont->vc_pool->vp_sysdb);
 
 	if (krecp != NULL)
 		*krecp = NULL;
 
 	D_DEBUG(DB_TRACE, "prepare tree, flags=%x, tclass=%d\n", flags, tclass);
-	if (tclass != VOS_BTR_AKEY && (flags & SUBTR_EVT))
-		D_GOTO(out, rc = -DER_INVAL);
+	if (flags & SUBTR_EVT) {
+		if (tclass != VOS_BTR_AKEY && (flags & SUBTR_FLAT) == 0) {
+			D_ERROR("SUBTR_EVT flag passed with invalid type or flags: tclass = %x, "
+				"flags = %x\n",
+				tclass, flags);
+			D_GOTO(out, rc = -DER_INVAL);
+		}
+	}
 
 	tree_rec_bundle2iov(&rbund, &riov);
 	rbund.rb_off	= UMOFF_NULL;
@@ -1061,7 +1030,7 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 
 		rbund.rb_iov	= key;
 		/* use BTR_PROBE_BYPASS to avoid probe again */
-		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, intent, key, &riov);
+		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, intent, key, &riov, NULL);
 		if (rc) {
 			D_ERROR("Failed to upsert: "DF_RC"\n", DP_RC(rc));
 			goto out;
@@ -1086,7 +1055,19 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 	if (krecp != NULL)
 		*krecp = krec;
  out:
-	return rc;
+	D_CDEBUG(rc == 0, DB_TRACE, DB_IO, "prepare tree, flags=%x, tclass=%d %d\n",
+		 flags, tclass, rc);
+
+	if (rc != 0 || tclass != VOS_BTR_AKEY || !(flags & SUBTR_CREATE))
+		return rc;
+
+	/** If it's evtree, evt_insert will detect if aggregation is needed.  For single value,
+	 *  return 1 to indicate aggregation is on update to an existing tree.
+	 */
+	if (flags & SUBTR_EVT)
+		return 0;
+
+	return created ? 0 : 1;
 }
 
 /** Close the opened trees */
@@ -1109,7 +1090,7 @@ key_tree_release(daos_handle_t toh, bool is_array)
 int
 key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	       daos_epoch_t bound, d_iov_t *key_iov, d_iov_t *val_iov,
-	       uint64_t flags, struct vos_ts_set *ts_set,
+	       uint64_t flags, struct vos_ts_set *ts_set, umem_off_t *known_key,
 	       struct vos_ilog_info *parent, struct vos_ilog_info *info)
 {
 	struct vos_rec_bundle	*rbund = iov2rec_bundle(val_iov);
@@ -1154,7 +1135,7 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 		D_ASSERT(rc == -DER_NONEXIST);
 		/* use BTR_PROBE_BYPASS to avoid probe again */
 		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, DAOS_INTENT_UPDATE,
-				   key_iov, val_iov);
+				   key_iov, val_iov, NULL);
 		if (rc)
 			goto done;
 
@@ -1175,6 +1156,18 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 			    info, ts_set, true,
 			    (flags & VOS_OF_REPLAY_PC) != 0);
 
+	if (rc != 0)
+		goto done;
+
+	if (*known_key == umem_ptr2off(vos_obj2umm(obj), krec)) {
+		/** Set the value to UMOFF_NULL so punch propagation will run full check */
+		rc = umem_tx_add_ptr(vos_obj2umm(obj), known_key, sizeof(*known_key));
+		if (rc)
+			D_GOTO(done, rc);
+		*known_key |= 0x1;
+	}
+
+	rc = vos_key_mark_agg(obj->obj_cont, krec, epoch);
 done:
 	VOS_TX_LOG_FAIL(rc, "Failed to punch key: "DF_RC"\n", DP_RC(rc));
 
@@ -1200,17 +1193,15 @@ obj_tree_init(struct vos_object *obj)
 
 	D_ASSERT(obj->obj_df);
 	if (obj->obj_df->vo_tree.tr_class == 0) {
-		uint64_t	tree_feats	= 0;
-		daos_ofeat_t	obj_feats;
+		uint64_t tree_feats = 0;
+		enum daos_otype_t type;
 
 		D_DEBUG(DB_DF, "Create btree for object\n");
 
-		obj_feats = daos_obj_id2feat(obj->obj_df->vo_id.id_pub);
-		/* Use hashed key if feature bits aren't set for object */
-		tree_feats = (uint64_t)obj_feats << VOS_OFEAT_SHIFT;
-		if (obj_feats & DAOS_OF_DKEY_UINT64)
+		type = daos_obj_id2type(obj->obj_df->vo_id.id_pub);
+		if (daos_is_dkey_uint64_type(type))
 			tree_feats |= VOS_KEY_CMP_UINT64_SET;
-		else if (obj_feats & DAOS_OF_DKEY_LEXICAL)
+		else if (daos_is_dkey_lexical_type(type))
 			tree_feats |= VOS_KEY_CMP_LEXICAL_SET;
 
 		rc = dbtree_create_inplace_ex(ta->ta_class, tree_feats,
@@ -1269,7 +1260,7 @@ obj_tree_register(void)
 
 /** find the attributes of the subtree of @tree_class */
 static struct vos_btr_attr *
-obj_tree_find_attr(unsigned tree_class)
+obj_tree_find_attr(unsigned tree_class, int flags)
 {
 	int	i;
 
@@ -1283,8 +1274,10 @@ obj_tree_find_attr(unsigned tree_class)
 		break;
 
 	case VOS_BTR_DKEY:
-		/* TODO: change it to VOS_BTR_AKEY while adding akey support */
-		tree_class = VOS_BTR_AKEY;
+		if (flags & SUBTR_FLAT)
+			tree_class = VOS_BTR_SINGV;
+		else
+			tree_class = VOS_BTR_AKEY;
 		break;
 	}
 

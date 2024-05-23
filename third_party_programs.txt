@@ -20,6 +20,10 @@ Third party programs and their corresponding required notices and/or license ter
 	Copyright (c) 2015-2021 Intel Corporation.  All rights reserved.
 	Copyright (c) 2015-2019 Cisco Systems, Inc.  All rights reserved.
 
+	protobuf-c (BSD 2-clause "Simplified" License)
+	https://github.com/protobuf-c/protobuf-c
+	Copyright (c) 2008-2016, Dave Benson and the protobuf-c authors. All rights reserved.
+
 	librdmacm (BSD 2-clause "Simplified" License)
 	http://www.openfabrics.org/downloads/rdmacm/
 	Copyright (c) 2005 Intel Corporation.  All rights reserved.
@@ -136,6 +140,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	Copyright © 2013-2014 University of Wisconsin-La Crosse. All rights reserved.
 	Copyright © 2015      Research Organization for Information Science and Technology (RIST). All rights reserved.
 	Copyright © 2015-2016 Intel, Inc.  All rights reserved.
+
+	protobuf (BSD 3-clause "New" or "Revised" License)
+	https://github.com/protocolbuffers/protobufi
+	Copyright 2008 Google Inc.  All rights reserved.
 
 	spdk (BSD 3-clause "New" or "Revised" License)
 	https://github.com/spdk/spdk
@@ -570,6 +578,9 @@ Exhibit B - "Incompatible With Secondary Licenses" Notice
 	grpc-go	(Apache License 2.0)
 	http://github.com/grpc/grpc-go/
 
+	Prometheus Monitoring (Apache License 2.0)
+	http://github.com/prometheus/prometheus/
+
 	yaml for Go	(Apache License 2.0)
 	http://github.com/go-yaml/yaml/
 
@@ -930,6 +941,10 @@ privately owned rights.
 	Etcd-io bbolt (MIT License)
 	https://github.com/etcd-io/bbolt
 	Copyright (c) 2013 Ben Johnson
+
+	hashicorp/go-hclog (MIT License)
+	https://github.com/hashicorp/go-hclog
+	Copyright (c) 2017 HashiCorp
 
 	LibYAML	(MIT License)
 	http://pyyaml.org/wiki/LibYAML

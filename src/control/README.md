@@ -12,8 +12,8 @@ DAOS Data Plane (Engine) processes that run on the same host.
 
 ## Code Organization
 
-The control directory contains a "cmd" subdirectory for server, agent, and dmg
-applications. These applications import the control API
+The control directory contains a "cmd" subdirectory for server, agent, ddb, and
+dmg applications. These applications import the control API
 (`src/control/lib/control`) or server packages along with peripheral shared
 packages common, drpc, fault, logging, and security where necessary to provide
 the given features.
@@ -27,7 +27,7 @@ receipt of events over dRPC from the DAOS Engine and forwarding of management
 service actionable events to the MS leader.
 
 The pbin package provides a framework for forwarding of requests to be executed
-by the privileged binary `daos_admin` on behalf of `daos_server`.
+by the privileged binary `daos_server_helper` on behalf of `daos_server`.
 
 The provider package contains interface shims to the external environment,
 initially just to the Linux operating system.
@@ -44,4 +44,4 @@ Please refer to package-specific README's.
 
 ## User Documentation
 
-- [online documentation](https://daos-stack.github.io/)
+- [online documentation](https://docs.daos.io/latest/)

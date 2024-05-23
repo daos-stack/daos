@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -100,7 +100,7 @@ static void swim_srv_cb(crt_rpc_t *rpc_req)
 	dbg("receive RPC %u <== %lu", global_srv.my_rank, rpc_cli_input->src);
 	if (global_srv.my_rank != FAILED_MEMBER &&
 	    rpc_cli_input->src != FAILED_MEMBER) {
-		rc = swim_updates_parse(global_srv.swim_ctx, rpc_cli_input->src,
+		rc = swim_updates_parse(global_srv.swim_ctx, rpc_cli_input->src, rpc_cli_input->src,
 					rpc_cli_input->upds.ca_arrays,
 					rpc_cli_input->upds.ca_count);
 		D_ASSERTF(rc == 0, "swim_parse_rpc() failed rc=%d", rc);
@@ -275,7 +275,7 @@ static void *srv_progress(void *data)
 	return NULL;
 }
 
-static void swim_progress_cb(crt_context_t ctx, void *arg)
+static int64_t swim_progress_cb(crt_context_t ctx, int64_t timeout, void *arg)
 {
 	struct swim_global_srv *srv = arg;
 	swim_id_t self_id = swim_self_get(srv->swim_ctx);
@@ -293,6 +293,7 @@ static void swim_progress_cb(crt_context_t ctx, void *arg)
 		D_ERROR("swim_progress() failed rc=%d\n", rc);
 out:
 	dbg("<---%s---", __func__);
+	return timeout;
 }
 
 static void srv_fini(void)
@@ -339,7 +340,7 @@ static int srv_init(void)
 
 	dbg("---%s--->", __func__);
 
-	rc = crt_init(CRT_DEFAULT_GRPID, CRT_FLAG_BIT_SERVER);
+	rc = crt_init(CRT_DEFAULT_GRPID, CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	D_ASSERTF(rc == 0, " crt_init failed %d\n", rc);
 
 	rc = crt_proto_register(&swim_proto_fmt);

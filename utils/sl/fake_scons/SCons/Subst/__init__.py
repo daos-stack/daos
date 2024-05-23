@@ -1,4 +1,4 @@
-# Copyright (c) 2020 Intel Corporation
+# Copyright 2020-2022 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -19,7 +19,7 @@
 # SOFTWARE.
 """Fake scons environment shutting up pylint on SCons files"""
 
-# pylint: disable=too-few-public-methods
+
 class Literal():
     """Fake Literal"""
 

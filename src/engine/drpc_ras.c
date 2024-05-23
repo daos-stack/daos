@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,6 +16,7 @@
 #include "event.pb-c.h"
 #include "drpc_internal.h"
 #include "srv_internal.h"
+#include "srv.pb-c.h"
 
 static void
 free_event(Shared__RASEvent *evt)
@@ -68,7 +69,6 @@ init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 		   tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, tm->tm_hour,
 		   tm->tm_min, tm->tm_sec, tv.tv_usec, zone);
 	if (evt->timestamp == NULL) {
-		D_ERROR("failed to generate timestamp string\n");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
@@ -78,7 +78,7 @@ init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 	evt->proc_id = (uint64_t)getpid();
 
 	if (dmi == NULL) {
-		D_ERROR("failed to retrieve xstream id");
+		D_ERROR("failed to retrieve xstream id\n");
 		D_GOTO(out_ts, rc = -DER_UNINIT);
 	}
 	evt->thread_id = (uint64_t)dmi->dmi_xs_id;
@@ -88,6 +88,8 @@ init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 		D_GOTO(out_ts, rc = -DER_UNINIT);
 	}
 	D_STRNDUP(evt->hostname, dss_hostname, DSS_HOSTNAME_MAX_LEN);
+	if (evt->hostname == NULL)
+		D_GOTO(out_ts, rc = -DER_NOMEM);
 
 	if ((msg == NULL) || strnlen(msg, DAOS_RAS_STR_FIELD_SIZE) == 0) {
 		D_ERROR("missing msg parameter\n");
@@ -182,8 +184,21 @@ log_event(Shared__RASEvent *evt)
 
 out:
 	fclose(stream);
-	D_INFO("&&& RAS EVENT%s\n", buf);
-	D_FREE(buf);
+	switch (evt->severity) {
+	case RAS_SEV_ERROR:
+		D_ERROR("&&& RAS EVENT%s\n", buf);
+		break;
+	case RAS_SEV_NOTICE:
+		D_INFO("&&& RAS EVENT%s\n", buf);
+		break;
+	case RAS_SEV_WARNING:
+		D_WARN("&&& RAS EVENT%s\n", buf);
+		break;
+	default:
+		D_ERROR("&&& RAS EVENT%s\n", buf);
+		break;
+	}
+	free(buf);
 }
 
 static int
@@ -300,7 +315,7 @@ ds_notify_ras_eventf(ras_event_t id, ras_type_t type, ras_sev_t sev, char *hwid,
 }
 
 int
-ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl)
+ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl, uint64_t version)
 {
 	Shared__RASEvent			evt = SHARED__RASEVENT__INIT;
 	Shared__RASEvent__PoolSvcEventInfo	info = \
@@ -322,6 +337,8 @@ ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl)
 		D_ERROR("failed to convert svc replicas to proto\n");
 		return rc;
 	}
+
+	info.version = version;
 
 	evt.extended_info_case = SHARED__RASEVENT__EXTENDED_INFO_POOL_SVC_INFO;
 	evt.pool_svc_info = &info;
@@ -348,4 +365,253 @@ ds_notify_swim_rank_dead(d_rank_t rank, uint64_t incarnation)
 			 &rank /* rank */, &incarnation /* inc */, NULL /* jobid */,
 			 NULL /* pool */, NULL /* cont */, NULL /* objid */,
 			 NULL /* ctlop */, &evt, false /* wait_for_resp */);
+}
+
+void
+ds_chk_free_pool_list(struct chk_list_pool *clp, uint32_t nr)
+{
+	int	i;
+
+	for (i = 0; i < nr; i++) {
+		D_FREE(clp[i].clp_label);
+		d_rank_list_free(clp[i].clp_svcreps);
+	}
+
+	D_FREE(clp);
+}
+
+int
+ds_chk_listpool_upcall(struct chk_list_pool **clp)
+{
+	struct chk_list_pool	*pools = NULL;
+	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Srv__CheckListPoolReq	 req = SRV__CHECK_LIST_POOL_REQ__INIT;
+	Srv__CheckListPoolResp	*respb = NULL;
+	Drpc__Response		*dresp = NULL;
+	uint8_t			*reqb = NULL;
+	size_t			 size;
+	int			 rc;
+	int			 i;
+
+	size = srv__check_list_pool_req__get_packed_size(&req);
+	D_ALLOC(reqb, size);
+	if (reqb == NULL)
+		D_GOTO(out_req, rc = -DER_NOMEM);
+
+	rc = srv__check_list_pool_req__pack(&req, reqb);
+	if (rc < 0)
+		goto out_req;
+
+	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_CHK_LIST_POOL, reqb, size, 0, &dresp);
+	if (rc != 0)
+		goto out_req;
+
+	if (dresp->status != DRPC__STATUS__SUCCESS) {
+		D_ERROR("Received erroneous dRPC response for list pool: %d\n", dresp->status);
+		D_GOTO(out_dresp, rc = -DER_IO);
+	}
+
+	respb = srv__check_list_pool_resp__unpack(&alloc.alloc, dresp->body.len, dresp->body.data);
+	if (alloc.oom || respb == NULL)
+		D_GOTO(out_dresp, rc = -DER_NOMEM);
+
+	if (respb->status != 0)
+		D_GOTO(out_respb, rc = respb->status);
+
+	D_ALLOC_ARRAY(pools, respb->n_pools);
+	if (pools == NULL)
+		D_GOTO(out_respb, rc = -DER_NOMEM);
+
+	for (i = 0; i < respb->n_pools; i++) {
+		rc = uuid_parse(respb->pools[i]->uuid, pools[i].clp_uuid);
+		if (rc != 0) {
+			D_ERROR("Failed to parse uuid %s: %d\n", respb->pools[i]->uuid, rc);
+			D_GOTO(out_parse, rc);
+		}
+
+		D_STRNDUP(pools[i].clp_label, respb->pools[i]->label, DAOS_PROP_LABEL_MAX_LEN);
+		if (pools[i].clp_label == NULL)
+			D_GOTO(out_parse, rc = -DER_NOMEM);
+
+		pools[i].clp_svcreps = uint32_array_to_rank_list(respb->pools[i]->svcreps,
+								 respb->pools[i]->n_svcreps);
+		if (pools[i].clp_svcreps == NULL)
+			D_GOTO(out_parse, rc = -DER_NOMEM);
+	}
+
+	rc = respb->n_pools;
+	*clp = pools;
+	pools = NULL;
+
+out_parse:
+	if (pools != NULL)
+		ds_chk_free_pool_list(pools, respb->n_pools);
+out_respb:
+	srv__check_list_pool_resp__free_unpacked(respb, &alloc.alloc);
+out_dresp:
+	drpc_response_free(dresp);
+out_req:
+	D_FREE(reqb);
+
+	return rc;
+}
+
+/*
+ * Register the pool information on MS via DRPC_METHOD_CHK_REG_POOL:
+ * if the pool does not exist, then add it on MS; otherwise, refresh
+ * the pool service replicas and label information.
+ */
+int
+ds_chk_regpool_upcall(uint64_t seq, uuid_t uuid, char *label, d_rank_list_t *svcreps)
+{
+	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Srv__CheckRegPoolReq	 req = SRV__CHECK_REG_POOL_REQ__INIT;
+	Srv__CheckRegPoolResp	*respb = NULL;
+	Drpc__Response		*dresp = NULL;
+	uint8_t			*reqb = NULL;
+	size_t			 size;
+	int			 rc;
+
+	if (DAOS_FAIL_CHECK(DAOS_CHK_LEADER_FAIL_REGPOOL))
+		return -DER_IO;
+
+	req.seq = seq;
+	D_ASPRINTF(req.uuid, DF_UUIDF, DP_UUID(uuid));
+	if (req.uuid == NULL)
+		D_GOTO(out_req, rc = -DER_NOMEM);
+
+	req.label = label;
+	req.n_svcreps = svcreps->rl_nr;
+	req.svcreps = svcreps->rl_ranks;
+
+	size = srv__check_reg_pool_req__get_packed_size(&req);
+	D_ALLOC(reqb, size);
+	if (reqb == NULL)
+		D_GOTO(out_req, rc = -DER_NOMEM);
+
+	rc = srv__check_reg_pool_req__pack(&req, reqb);
+	if (rc < 0)
+		goto out_req;
+
+	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_CHK_REG_POOL, reqb, size, 0, &dresp);
+	if (rc != 0)
+		goto out_req;
+
+	if (dresp->status != DRPC__STATUS__SUCCESS) {
+		D_ERROR("Received erroneous dRPC response for register pool: %d\n", dresp->status);
+		D_GOTO(out_dresp, rc = -DER_IO);
+	}
+
+	respb = srv__check_reg_pool_resp__unpack(&alloc.alloc, dresp->body.len, dresp->body.data);
+	if (alloc.oom || respb == NULL)
+		D_GOTO(out_dresp, rc = -DER_NOMEM);
+
+	rc = respb->status;
+	srv__check_reg_pool_resp__free_unpacked(respb, &alloc.alloc);
+
+out_dresp:
+	drpc_response_free(dresp);
+out_req:
+	D_FREE(req.uuid);
+	D_FREE(reqb);
+
+	return rc;
+}
+
+int
+ds_chk_deregpool_upcall(uint64_t seq, uuid_t uuid)
+{
+	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Srv__CheckDeregPoolReq	 req = SRV__CHECK_DEREG_POOL_REQ__INIT;
+	Srv__CheckDeregPoolResp	*respb = NULL;
+	Drpc__Response		*dresp = NULL;
+	uint8_t			*reqb = NULL;
+	size_t			 size;
+	int			 rc;
+
+	req.seq = seq;
+	D_ASPRINTF(req.uuid, DF_UUIDF, DP_UUID(uuid));
+	if (req.uuid == NULL)
+		D_GOTO(out_req, rc = -DER_NOMEM);
+
+	size = srv__check_dereg_pool_req__get_packed_size(&req);
+	D_ALLOC(reqb, size);
+	if (reqb == NULL)
+		D_GOTO(out_req, rc = -DER_NOMEM);
+
+	rc = srv__check_dereg_pool_req__pack(&req, reqb);
+	if (rc < 0)
+		goto out_req;
+
+	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_CHK_DEREG_POOL, reqb, size, 0, &dresp);
+	if (rc != 0)
+		goto out_req;
+
+	if (dresp->status != DRPC__STATUS__SUCCESS) {
+		D_ERROR("Received erroneous dRPC response for de-register pool: %d\n",
+			dresp->status);
+		D_GOTO(out_dresp, rc = -DER_IO);
+	}
+
+	respb = srv__check_dereg_pool_resp__unpack(&alloc.alloc, dresp->body.len, dresp->body.data);
+	if (alloc.oom || respb == NULL)
+		D_GOTO(out_dresp, rc = -DER_NOMEM);
+
+	rc = respb->status;
+	srv__check_dereg_pool_resp__free_unpacked(respb, &alloc.alloc);
+
+out_dresp:
+	drpc_response_free(dresp);
+out_req:
+	D_FREE(req.uuid);
+	D_FREE(reqb);
+
+	return rc;
+}
+
+int
+ds_chk_report_upcall(void *rpt)
+{
+	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Srv__CheckReportReq	 req = SRV__CHECK_REPORT_REQ__INIT;
+	Srv__CheckReportResp	*respb = NULL;
+	Drpc__Response		*dresp = NULL;
+	uint8_t			*reqb = NULL;
+	size_t			 size;
+	int			 rc;
+
+	D_ASSERT(rpt != NULL);
+	req.report = rpt;
+
+	size = srv__check_report_req__get_packed_size(&req);
+	D_ALLOC(reqb, size);
+	if (reqb == NULL)
+		D_GOTO(out_req, rc = -DER_NOMEM);
+
+	rc = srv__check_report_req__pack(&req, reqb);
+	if (rc < 0)
+		goto out_req;
+
+	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_CHK_REPORT, reqb, size, 0, &dresp);
+	if (rc != 0)
+		goto out_req;
+
+	if (dresp->status != DRPC__STATUS__SUCCESS) {
+		D_ERROR("Received erroneous dRPC response for check report: %d\n", dresp->status);
+		D_GOTO(out_dresp, rc = -DER_IO);
+	}
+
+	respb = srv__check_report_resp__unpack(&alloc.alloc, dresp->body.len, dresp->body.data);
+	if (alloc.oom || respb == NULL)
+		D_GOTO(out_dresp, rc = -DER_NOMEM);
+
+	rc = respb->status;
+	srv__check_report_resp__free_unpacked(respb, &alloc.alloc);
+
+out_dresp:
+	drpc_response_free(dresp);
+out_req:
+	D_FREE(reqb);
+
+	return rc;
 }

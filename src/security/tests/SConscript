@@ -1,21 +1,21 @@
 """Build daos security tests"""
-import daos_build
+
 
 def scons():
     """Execute build"""
-    Import('denv', 'dc_security_tgts')
+    Import('denv', 'dc_security_tgts', 'acl_tgts')
 
     mocks = denv.Object('drpc_mocks.c')
+    util = denv.Object('sec_test_util.c')
     # Isolated unit tests
-    daos_build.test(denv, 'cli_security_tests',
-                    source=['cli_security_tests.c', dc_security_tgts,
-                            mocks],
-                    LIBS=['cmocka', 'protobuf-c', 'daos_common', 'gurt'])
+    denv.d_test_program('cli_security_tests',
+                        source=['cli_security_tests.c', util, dc_security_tgts, mocks],
+                        LIBS=['cmocka', 'protobuf-c', 'daos_common', 'gurt'])
 
-    daos_build.test(denv, 'srv_acl_tests',
-                    source=['srv_acl_tests.c', '../srv_acl.c',
-                            '../auth.pb-c.c', mocks],
-                    LIBS=['cmocka', 'protobuf-c', 'daos_common', 'gurt'])
+    denv.d_test_program('srv_acl_tests',
+                        source=['srv_acl_tests.c', util, acl_tgts, mocks],
+                        LIBS=['cmocka', 'protobuf-c', 'daos_common', 'gurt'])
+
 
 if __name__ == "SCons.Script":
     scons()

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,27 +8,22 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"sync"
-	"time"
 
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
-	commonpb "github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/atm"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
-)
-
-const (
-	rankReqTimeout   = 30 * time.Second
-	rankStartTimeout = 2 * rankReqTimeout
 )
 
 // Engine defines an interface to be implemented by engine instances.
@@ -41,61 +36,51 @@ type Engine interface {
 	newCret(string, error) *ctlpb.NvmeControllerResult
 	tryDrpc(context.Context, drpc.Method) *system.MemberResult
 	requestStart(context.Context)
-	updateInUseBdevs(context.Context, map[string]*storage.NvmeController) error
 	isAwaitingFormat() bool
 
 	// These methods should probably be replaced by callbacks.
 	NotifyDrpcReady(*srvpb.NotifyReadyReq)
 	NotifyStorageReady()
-	BioErrorNotify(*srvpb.BioErrorReq)
 
 	// These methods should probably be refactored out into functions that
 	// accept the engine instance as a parameter.
-	GetBioHealth(context.Context, *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error)
-	GetScmConfig() (*storage.TierConfig, error)
-	GetScmUsage() (*storage.ScmMountPoint, error)
-	HasBlockDevices() bool
-	ScanBdevTiers() ([]storage.BdevTierScanResult, error)
-	ListSmdDevices(context.Context, *ctlpb.SmdDevReq) (*ctlpb.SmdDevResp, error)
 	StorageFormatSCM(context.Context, bool) *ctlpb.ScmMountResult
-	StorageFormatNVMe() commonpb.NvmeControllerResults
-	StorageWriteNvmeConfig() error
 
 	// This is a more reasonable surface that will be easier to maintain and test.
 	CallDrpc(context.Context, drpc.Method, proto.Message) (*drpc.Response, error)
-	GetRank() (system.Rank, error)
+	GetRank() (ranklist.Rank, error)
 	GetTargetCount() int
 	Index() uint32
 	IsStarted() bool
 	IsReady() bool
 	LocalState() system.MemberState
 	RemoveSuperblock() error
-	Run(context.Context, bool)
-	SetupRank(context.Context, system.Rank) error
+	Run(context.Context)
+	SetupRank(context.Context, ranklist.Rank, uint32) error
 	Stop(os.Signal) error
 	OnInstanceExit(...onInstanceExitFn)
 	OnReady(...onReadyFn)
+	GetStorage() *storage.Provider
+	SetCheckerMode(bool)
+	Debugf(format string, args ...interface{})
+	Tracef(format string, args ...interface{})
 }
 
 // EngineHarness is responsible for managing Engine instances.
 type EngineHarness struct {
 	sync.RWMutex
-	log              logging.Logger
-	instances        []Engine
-	started          atm.Bool
-	rankReqTimeout   time.Duration
-	rankStartTimeout time.Duration
-	faultDomain      *system.FaultDomain
-	onDrpcFailure    []func(context.Context, error)
+	log           logging.Logger
+	instances     []Engine
+	started       atm.Bool
+	faultDomain   *system.FaultDomain
+	onDrpcFailure []onDrpcFailureFn
 }
 
 // NewEngineHarness returns an initialized *EngineHarness.
 func NewEngineHarness(log logging.Logger) *EngineHarness {
 	return &EngineHarness{
-		log:              log,
-		instances:        make([]Engine, 0),
-		rankReqTimeout:   rankReqTimeout,
-		rankStartTimeout: rankStartTimeout,
+		log:       log,
+		instances: make([]Engine, 0),
 	}
 }
 
@@ -123,7 +108,7 @@ func (h *EngineHarness) FilterInstancesByRankSet(ranks string) ([]Engine, error)
 	h.RLock()
 	defer h.RUnlock()
 
-	rankList, err := system.ParseRanks(ranks)
+	rankList, err := ranklist.ParseRanks(ranks)
 	if err != nil {
 		return nil, err
 	}
@@ -158,8 +143,10 @@ func (h *EngineHarness) AddInstance(ei Engine) error {
 	return nil
 }
 
+type onDrpcFailureFn func(ctx context.Context, err error)
+
 // OnDrpcFailure registers callbacks to be invoked on dRPC call failure.
-func (h *EngineHarness) OnDrpcFailure(fns ...func(ctx context.Context, err error)) {
+func (h *EngineHarness) OnDrpcFailure(fns ...onDrpcFailureFn) {
 	h.Lock()
 	defer h.Unlock()
 
@@ -168,52 +155,62 @@ func (h *EngineHarness) OnDrpcFailure(fns ...func(ctx context.Context, err error
 
 // CallDrpc calls the supplied dRPC method on a managed I/O Engine instance.
 func (h *EngineHarness) CallDrpc(ctx context.Context, method drpc.Method, body proto.Message) (resp *drpc.Response, err error) {
-	defer func() {
-		if err == nil {
-			return
-		}
-		// Don't trigger callbacks for these errors which can happen when
-		// things are still starting up.
-		if err == FaultHarnessNotStarted || err == errInstanceNotReady {
-			return
-		}
-
-		h.log.Debugf("invoking dRPC failure handlers for %s", err)
-		h.RLock()
-		defer h.RUnlock()
-		for _, fn := range h.onDrpcFailure {
-			fn(ctx, err)
-		}
-	}()
-
 	if !h.isStarted() {
 		return nil, FaultHarnessNotStarted
 	}
 
-	// Iterate through the managed instances, looking for
-	// the first one that is available to service the request.
-	// If the request fails, that error will be returned.
-	for _, i := range h.Instances() {
-		if !i.IsReady() {
-			if i.IsStarted() {
-				if err == nil {
-					err = errInstanceNotReady
-				}
-			} else {
-				if err == nil {
-					err = FaultDataPlaneNotStarted
-				}
-			}
-			continue
-		}
+	instances := h.Instances()
+	if len(instances) == 0 {
+		return nil, errors.New("no engine instances to service drpc call")
+	}
+
+	// Iterate through the managed instances, looking for the first one that is available to
+	// service the request. If non-transient error is returned from CallDrpc, that error will
+	// be returned immediately. If a transient error is returned, continue to the next engine.
+	drpcErrs := make([]error, 0, len(instances))
+	for _, i := range instances {
 		resp, err = i.CallDrpc(ctx, method, body)
+		if err == nil {
+			break
+		}
+
+		drpcErrs = append(drpcErrs, errors.Cause(err))
+		msg := fmt.Sprintf("failure on engine instance %d: %s", i.Index(), err)
 
 		switch errors.Cause(err) {
-		case errDRPCNotReady, FaultDataPlaneNotStarted:
+		case errEngineNotReady, errDRPCNotReady, FaultDataPlaneNotStarted:
+			h.log.Debug("drpc call transient " + msg)
 			continue
-		default:
-			return
 		}
+
+		h.log.Debug("drpc call hard " + msg)
+		break
+	}
+
+	if err == nil {
+		return // Request sent.
+	}
+
+	var e error
+	hasDRPCErr := false
+	for _, e = range drpcErrs {
+		switch e {
+		case errDRPCNotReady, FaultDataPlaneNotStarted:
+			// If no engines can service request and drpc specific error has
+			// been returned then pass that error to the failure handlers.
+			hasDRPCErr = true
+			break
+		}
+	}
+	if !hasDRPCErr {
+		return // Don't trigger handlers on failures not related to dRPC comms.
+	}
+
+	h.log.Debugf("invoking dRPC failure handlers for %s", e)
+	h.RLock()
+	defer h.RUnlock()
+	for _, fn := range h.onDrpcFailure {
+		fn(ctx, e)
 	}
 
 	return
@@ -222,6 +219,21 @@ func (h *EngineHarness) CallDrpc(ctx context.Context, method drpc.Method, body p
 type dbLeader interface {
 	IsLeader() bool
 	ShutdownRaft() error
+	ResignLeadership(error) error
+}
+
+func newOnDrpcFailureFn(log logging.Logger, db dbLeader) onDrpcFailureFn {
+	return func(_ context.Context, errIn error) {
+		if !db.IsLeader() {
+			return
+		}
+
+		// If we cannot service a dRPC request on this node, we should resign as leader in
+		// order to force a new leader election.
+		if err := db.ResignLeadership(errIn); err != nil {
+			log.Errorf("failed to resign leadership after dRPC failure: %s", err)
+		}
+	}
 }
 
 // Start starts harness by setting up and starting dRPC before initiating
@@ -244,31 +256,10 @@ func (h *EngineHarness) Start(ctx context.Context, db dbLeader, cfg *config.Serv
 	defer h.started.SetFalse()
 
 	for _, ei := range h.Instances() {
-		ei.Run(ctx, cfg.RecreateSuperblocks)
+		ei.Run(ctx)
 	}
 
-	h.OnDrpcFailure(func(_ context.Context, err error) {
-		if !db.IsLeader() {
-			return
-		}
-
-		switch errors.Cause(err) {
-		case errDRPCNotReady, FaultDataPlaneNotStarted:
-			break
-		default:
-			// Don't shutdown on other failures which are
-			// not related to dRPC communications.
-			return
-		}
-
-		// If we cannot service a dRPC request on this node,
-		// we should shutdown the raft service in order
-		// to force a new leader to step up and also to exclude
-		// this replica from participating in the quorum.
-		if err := db.ShutdownRaft(); err != nil {
-			h.log.Errorf("raft shutdown failed after dRPC failure: %s", err)
-		}
-	})
+	h.OnDrpcFailure(newOnDrpcFailureFn(h.log, db))
 
 	<-ctx.Done()
 	h.log.Debug("shutting down harness")
@@ -278,11 +269,11 @@ func (h *EngineHarness) Start(ctx context.Context, db dbLeader, cfg *config.Serv
 
 // readyRanks returns rank assignment of configured harness instances that are
 // in a ready state. Rank assignments can be nil.
-func (h *EngineHarness) readyRanks() []system.Rank {
+func (h *EngineHarness) readyRanks() []ranklist.Rank {
 	h.RLock()
 	defer h.RUnlock()
 
-	ranks := make([]system.Rank, 0)
+	ranks := make([]ranklist.Rank, 0)
 	for idx, ei := range h.instances {
 		if ei.IsReady() {
 			rank, err := ei.GetRank()

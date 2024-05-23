@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,6 +15,7 @@
 #include <daos/drpc.h>
 #include <daos/rpc.h>
 #include <daos/cont_props.h>
+#include <daos/tls.h>
 #include <daos_srv/iv.h>
 #include <daos_srv/vos_types.h>
 #include <daos_srv/pool.h>
@@ -26,6 +27,12 @@
 #include <abt.h>
 #include <cart/iv.h>
 #include <daos/checksum.h>
+
+/* Standard max length of addresses e.g. URI, PCI */
+#define ADDR_STR_MAX_LEN 128
+
+/** DAOS system name (corresponds to crt group ID) */
+extern char             *daos_sysname;
 
 /** number of target (XS set) per engine */
 extern unsigned int	 dss_tgt_nr;
@@ -39,14 +46,11 @@ extern const char	*dss_nvme_conf;
 /** Socket Directory */
 extern const char	*dss_socket_dir;
 
-/** NVMe shm_id for enabling SPDK multi-process mode */
-extern int		 dss_nvme_shm_id;
-
-/** NVMe mem_size for SPDK memory allocation when using primary mode (in MB) */
-extern int		 dss_nvme_mem_size;
+/** NVMe mem_size for SPDK memory allocation (in MB) */
+extern unsigned int	dss_nvme_mem_size;
 
 /** NVMe hugepage_size for DPDK/SPDK memory allocation (in MB) */
-extern int		 dss_nvme_hugepage_size;
+extern unsigned int	 dss_nvme_hugepage_size;
 
 /** I/O Engine instance index */
 extern unsigned int	 dss_instance_idx;
@@ -54,137 +58,18 @@ extern unsigned int	 dss_instance_idx;
 /** Bypass for the nvme health check */
 extern bool		 dss_nvme_bypass_health_check;
 
-/**
- * Stackable Module API
- * Provides a modular interface to load and register server-side code on
- * demand. A module is composed of:
- * - a set of request handlers which are registered when the module is loaded.
- * - a server-side API (see header files suffixed by "_srv") used for
- *   inter-module direct calls.
- *
- * For now, all loaded modules are assumed to be trustful, but sandboxes can be
- * implemented in the future.
- */
-/*
- * Thead-local storage
- */
-struct dss_thread_local_storage {
-	uint32_t	dtls_tag;
-	void		**dtls_values;
-};
-
-enum dss_module_tag {
-	DAOS_SYS_TAG	= 1 << 0, /** only run on system xstream */
-	DAOS_TGT_TAG	= 1 << 1, /** only run on target xstream */
-	DAOS_OFF_TAG	= 1 << 2, /** only run on offload/helper xstream */
-	DAOS_SERVER_TAG	= 0xff,	  /** run on all xstream */
-};
-
-/* The module key descriptor for each xstream */
-struct dss_module_key {
-	/* Indicate where the keys should be instantiated */
-	enum dss_module_tag dmk_tags;
-
-	/* The position inside the dss_module_keys */
-	int dmk_index;
-	/* init keys for context */
-	void  *(*dmk_init)(int xs_id, int tgt_id);
-
-	/* fini keys for context */
-	void  (*dmk_fini)(void *data);
-};
-
-extern pthread_key_t dss_tls_key;
-extern struct dss_module_key *dss_module_keys[];
-#define DAOS_MODULE_KEYS_NR 10
-
-static inline struct dss_thread_local_storage *
-dss_tls_get()
-{
-	return (struct dss_thread_local_storage *)
-		pthread_getspecific(dss_tls_key);
-}
-
-/**
- * Get value from context by the key
- *
- * Get value inside dtls by key. So each module will use this API to
- * retrieve their own value in the thread context.
- *
- * \param[in] dtls	the thread context.
- * \param[in] key	key used to retrieve the dtls_value.
- *
- * \retval		the dtls_value retrieved by key.
- */
-static inline void *
-dss_module_key_get(struct dss_thread_local_storage *dtls,
-		   struct dss_module_key *key)
-{
-	D_ASSERT(key->dmk_index >= 0);
-	D_ASSERT(key->dmk_index < DAOS_MODULE_KEYS_NR);
-	D_ASSERT(dss_module_keys[key->dmk_index] == key);
-	D_ASSERT(dtls != NULL);
-
-	return dtls->dtls_values[key->dmk_index];
-}
-
-void dss_register_key(struct dss_module_key *key);
-void dss_unregister_key(struct dss_module_key *key);
-
 /** pthread names are limited to 16 chars */
 #define DSS_XS_NAME_LEN		(32)
-
-struct srv_profile_chunk {
-	d_list_t	spc_chunk_list;
-	uint32_t	spc_chunk_offset;
-	uint32_t	spc_chunk_size;
-	uint64_t	*spc_chunks;
-};
-
-/* The profile structure to record single operation */
-struct srv_profile_op {
-	int		pro_op;			/* operation */
-	char		*pro_op_name;		/* name of the op */
-	int		pro_acc_cnt;		/* total number of val */
-	int		pro_acc_val;		/* current total val */
-	d_list_t	pro_chunk_list;		/* list of all chunks */
-	d_list_t	pro_chunk_idle_list;	/* idle list of profile chunk */
-	int		pro_chunk_total_cnt;	/* Count in idle list & list */
-	int		pro_chunk_cnt;		/* count in list */
-	struct srv_profile_chunk *pro_current_chunk; /* current chunk */
-};
-
-/* Holding the total trunk list for a specific profiling module */
-
-#define D_TIME_START(start, op)			\
-do {						\
-	struct daos_profile *dp;		\
-						\
-	dp = dss_get_module_info()->dmi_dp;	\
-	if ((dp) == NULL)			\
-		break;				\
-	start = daos_get_ntime();		\
-} while (0)
-
-#define D_TIME_END(start, op)			\
-do {						\
-	struct daos_profile *dp;		\
-	int time_msec;				\
-						\
-	dp = dss_get_module_info()->dmi_dp;	\
-	if ((dp) == NULL || start == 0)		\
-		break;				\
-	time_msec = (daos_get_ntime() - start)/1000; \
-	daos_profile_count(dp, op, time_msec);	\
-} while (0)
 
 /* Opaque xstream configuration data */
 struct dss_xstream;
 
+int  dss_xstream_set_affinity(struct dss_xstream *dxs);
 bool dss_xstream_exiting(struct dss_xstream *dxs);
 bool dss_xstream_is_busy(void);
 daos_epoch_t dss_get_start_epoch(void);
 void dss_set_start_epoch(void);
+bool dss_has_enough_helper(void);
 
 struct dss_module_info {
 	crt_context_t		dmi_ctx;
@@ -196,8 +81,10 @@ struct dss_module_info {
 	int			dmi_tgt_id;
 	/* the cart context id */
 	int			dmi_ctx_id;
-	uint32_t		dmi_dtx_batched_started:1;
-	d_list_t		dmi_dtx_batched_cont_list;
+	uint32_t		dmi_dtx_batched_started:1,
+				dmi_srv_shutting_down:1;
+	d_list_t		dmi_dtx_batched_cont_open_list;
+	d_list_t		dmi_dtx_batched_cont_close_list;
 	d_list_t		dmi_dtx_batched_pool_list;
 	/* the profile information */
 	struct daos_profile	*dmi_dp;
@@ -211,7 +98,7 @@ static inline struct dss_module_info *
 dss_get_module_info(void)
 {
 	struct dss_module_info *dmi;
-	struct dss_thread_local_storage *dtc;
+	struct daos_thread_local_storage *dtc;
 
 	dtc = dss_tls_get();
 	dmi = (struct dss_module_info *)
@@ -224,6 +111,15 @@ dss_current_xstream(void)
 {
 	return dss_get_module_info()->dmi_xstream;
 }
+
+/**
+ * Is the engine shutting down? If this function returns false, then before the
+ * current xstream enters the scheduler (e.g., by yielding), the engine won't
+ * finish entering shutdown mode (i.e., any dss_srv_set_shutting_down call
+ * won't return).
+ */
+bool
+dss_srv_shutting_down(void);
 
 /**
  * Module facility feature bits
@@ -250,18 +146,26 @@ enum {
 	SCHED_REQ_GC,
 	SCHED_REQ_SCRUB,
 	SCHED_REQ_MIGRATE,
-	SCHED_REQ_ANONYM,
 	SCHED_REQ_MAX,
+	/* Anonymous request which doesn't associate to a DAOS pool */
+	SCHED_REQ_ANONYM = SCHED_REQ_MAX,
+	SCHED_REQ_TYPE_MAX,
 };
 
 enum {
 	SCHED_REQ_FL_NO_DELAY	= (1 << 0),
+	SCHED_REQ_FL_PERIODIC	= (1 << 1),
+	SCHED_REQ_FL_NO_REJECT	= (1 << 2),
+	SCHED_REQ_FL_RESENT	= (1 << 3),
 };
 
 struct sched_req_attr {
 	uuid_t		sra_pool_id;
 	uint32_t	sra_type;
 	uint32_t	sra_flags;
+	uint32_t	sra_timeout;
+	/* Hint for RPC rejection */
+	uint64_t	sra_enqueue_id;
 };
 
 static inline void
@@ -276,11 +180,14 @@ sched_req_attr_init(struct sched_req_attr *attr, unsigned int type,
 struct sched_request;	/* Opaque schedule request */
 
 /**
- * Get A sched request.
+ * Get a sched request.
  *
  * \param[in] attr	Sched request attributes.
- * \param[in] ult	ULT attached to the sched request,
- *			self ULT will be used when ult == ABT_THREAD_NULL.
+ * \param[in] ult	ULT attached to the sched request, self ULT will be
+ *			used when ult == ABT_THREAD_NULL. If not
+ *			ABT_THREAD_NULL, ult will be freed by sched_req_put.
+ *			Unnamed ULTs (e.g., from ABT_thread_self) are
+ *			prohibited.
  *
  * \retval		Sched request.
  */
@@ -288,7 +195,8 @@ struct sched_request *
 sched_req_get(struct sched_req_attr *attr, ABT_thread ult);
 
 /**
- * Put A sched request.
+ * Put a sched request. If the associated ULT was passed in by the caller, it
+ * will be freed.
  *
  * \param[in] req	Sched request.
  *
@@ -325,7 +233,8 @@ void sched_req_sleep(struct sched_request *req, uint32_t msec);
 void sched_req_wakeup(struct sched_request *req);
 
 /**
- * Wakeup a sched request attached ULT terminated.
+ * Wakeup a sched request attached ULT terminated. The associated ULT of \a req
+ * must not an unnamed ULT.
  *
  * \param[in] req	Sched request.
  * \param[in] abort	Abort the ULT or not.
@@ -360,6 +269,51 @@ int sched_req_space_check(struct sched_request *req);
  */
 void sched_cond_wait(ABT_cond cond, ABT_mutex mutex);
 
+/**
+ * Wrapper of ABT_cond_wait(), inform scheduler that it's going
+ * to be blocked for a relative long time. Unlike sched_cond_wait,
+ * after waking up, this function will prevent relaxing for a while.
+ */
+void sched_cond_wait_for_business(ABT_cond cond, ABT_mutex mutex);
+
+/**
+ * Get current monotonic time in milli-seconds.
+ */
+uint64_t sched_cur_msec(void);
+
+/**
+ * Get current schedule sequence, by comparing the results of two
+ * sched_cur_seq() calls, we can tell if an ULT was yielding between
+ * these two calls.
+ */
+uint64_t sched_cur_seq(void);
+
+/**
+ * Get current ULT/Task execution time. The execution time is the elapsed
+ * time since current ULT/Task was scheduled last time.
+ *
+ * \param[out]	msecs		executed time in milli-second
+ * \param[in]	ult_name	ULT name (optional)
+ *
+ * \retval			-DER_NOSYS or 0 on success.
+ */
+int sched_exec_time(uint64_t *msecs, const char *ult_name);
+
+/**
+ * Create an ULT on the caller xstream and return the associated sched_request.
+ * Caller is responsible for freeing the sched_request by sched_req_put().
+ *
+ * \param[in]	attr		sched request attributes
+ * \param[in]	func		ULT function
+ * \param[in]	arg		ULT argument
+ * \param[in]	stack_size	ULT stack size
+ *
+ * \retval			associated shed_request on success, NULL on error.
+ */
+struct sched_request *
+sched_create_ult(struct sched_req_attr *attr, void (*func)(void *), void *arg,
+		 size_t stack_size);
+
 static inline bool
 dss_ult_exiting(struct sched_request *req)
 {
@@ -368,7 +322,7 @@ dss_ult_exiting(struct sched_request *req)
 	return dss_xstream_exiting(dx) || sched_req_is_aborted(req);
 }
 
-/*
+/**
  * Yield function regularly called by long-run ULTs.
  *
  * \param[in] req	Sched request.
@@ -391,26 +345,12 @@ dss_ult_yield(void *arg)
 struct dss_module_ops {
 	/* Get schedule request attributes from RPC */
 	int (*dms_get_req_attr)(crt_rpc_t *rpc, struct sched_req_attr *attr);
-
-	/* Each module to start/stop the profiling */
-	int	(*dms_profile_start)(char *path, int avg);
-	int	(*dms_profile_stop)(void);
+	/* Set schedule request attributes to RPC */
+	int (*dms_set_req)(crt_rpc_t *rpc, struct sched_req_attr *attr);
 };
 
 int srv_profile_stop();
 int srv_profile_start(char *path, int avg);
-
-struct dss_module_metrics {
-	/* Indicate where the keys should be instantiated */
-	enum dss_module_tag dmm_tags;
-
-	/**
-	 * allocate metrics with path to ephemeral shmem for to the
-	 * newly-created pool
-	 */
-	void	*(*dmm_init)(const char *path, int tgt_id);
-	void	 (*dmm_fini)(void *data);
-};
 
 /**
  * Each module should provide a dss_module structure which defines the module
@@ -442,12 +382,14 @@ struct dss_module {
 	int				(*sm_setup)(void);
 	/* Cleanup function, invoked before stopping progressing */
 	int				(*sm_cleanup)(void);
-	/* Whole list of RPC definition for request sent by nodes */
-	struct crt_proto_format		*sm_proto_fmt;
-	/* The count of RPCs which are dedicated for client nodes only */
-	uint32_t			sm_cli_count;
-	/* RPC handler of these RPC, last entry of the array must be empty */
-	struct daos_rpc_handler		*sm_handlers;
+	/* Number of RPC protocols this module supports - max 2 */
+	int				sm_proto_count;
+	/* Array of whole list of RPC definition for request sent by nodes */
+	struct crt_proto_format		*sm_proto_fmt[2];
+	/* Array of the count of RPCs which are dedicated for client nodes only */
+	uint32_t			sm_cli_count[2];
+	/* Array of RPC handler of these RPC, last entry of the array must be empty */
+	struct daos_rpc_handler		*sm_handlers[2];
 	/* dRPC handlers, for unix socket comm, last entry must be empty */
 	struct dss_drpc_handler		*sm_drpc_handlers;
 
@@ -455,7 +397,7 @@ struct dss_module {
 	struct dss_module_ops		*sm_mod_ops;
 
 	/* Per-pool metrics (optional) */
-	struct dss_module_metrics	*sm_metrics;
+	struct daos_module_metrics      *sm_metrics;
 };
 
 /**
@@ -474,8 +416,10 @@ enum dss_xs_type {
 	DSS_XS_OFFLOAD	= 2,
 	/** pool service, RDB, drpc handler */
 	DSS_XS_SYS	= 3,
+	/** SWIM operations */
+	DSS_XS_SWIM	= 4,
 	/** drpc listener */
-	DSS_XS_DRPC	= 4,
+	DSS_XS_DRPC	= 5,
 };
 
 int dss_parameters_set(unsigned int key_id, uint64_t value);
@@ -483,6 +427,10 @@ int dss_parameters_set(unsigned int key_id, uint64_t value);
 enum dss_ult_flags {
 	/* Periodically created ULTs */
 	DSS_ULT_FL_PERIODIC	= (1 << 0),
+	/* Use DSS_DEEP_STACK_SZ as the stack size */
+	DSS_ULT_DEEP_STACK	= (1 << 1),
+	/* Use current ULT (instead of creating new one) for the task. */
+	DSS_USE_CURRENT_ULT	= (1 << 2),
 };
 
 int dss_ult_create(void (*func)(void *), void *arg, int xs_type, int tgt_id,
@@ -490,6 +438,8 @@ int dss_ult_create(void (*func)(void *), void *arg, int xs_type, int tgt_id,
 int dss_ult_execute(int (*func)(void *), void *arg, void (*user_cb)(void *),
 		    void *cb_args, int xs_type, int tgt_id, size_t stack_size);
 int dss_ult_create_all(void (*func)(void *), void *arg, bool main);
+int __attribute__((weak)) dss_offload_exec(int (*func)(void *), void *arg);
+int __attribute__((weak)) dss_main_exec(void (*func)(void *), void *arg);
 
 /*
  * If server wants to create ULTs periodically, it should call this special
@@ -518,48 +468,46 @@ struct dss_coll_ops {
 	/**
 	 * Function to be invoked by dss_collective
 	 *
-	 * \param f_args		[IN]	Arguments for function
+	 * \param[in] f_args	Arguments for function
 	 */
-	int				(*co_func)(void *f_args);
+	int (*co_func)(void *f_args);
 
 	/**
 	 * Callback for reducing after dss_collective (optional)
 	 *
-	 * \param a_args		[IN/OUT]
-	 *					Aggregator arguments for
-	 *					reducing results
-	 * \param s_args		[IN]	Reduce arguments for this
-	 *					current stream
+	 * \param[in,out] a_args	Aggregator arguments for reducing results
+	 * \param[in] s_args		Reduce arguments for this current stream
 	 */
-	void				(*co_reduce)(void *a_args,
-						     void *s_args);
+	void (*co_reduce)(void *a_args, void *s_args);
 
 	/**
 	 * Alloc function for allocating reduce arguments (optional)
 	 *
-	 * \param args			[IN/OUT] coll_args for this streams
-	 * \param aggregator_args	[IN]	 aggregator args for
-	 *					 initializatuin
+	 * \param[in,out] args		coll_args for this streams
+	 * \param[in] aggregator_args	aggregator args for  initializatuin
 	 */
-	int				(*co_reduce_arg_alloc)
-					(struct dss_stream_arg_type *args,
-					 void *a_args);
+	int (*co_reduce_arg_alloc)(struct dss_stream_arg_type *args, void *a_args);
 	/**
 	 * Free the allocated reduce arguments
 	 * (Mandatory if co_rarg_alloc was provided)
 	 *
-	 * \param args			[IN]	coll_args for this stream
+	 * \param[in] args		coll_args for this stream
 	 */
-	void				(*co_reduce_arg_free)
-					(struct dss_stream_arg_type *args);
+	void (*co_reduce_arg_free)(struct dss_stream_arg_type *args);
 };
 
 struct dss_coll_args {
 	/** Arguments for dss_collective func (Mandatory) */
 	void				*ca_func_args;
 	void				*ca_aggregator;
-	int				*ca_exclude_tgts;
-	unsigned int			ca_exclude_tgts_cnt;
+	/* Specify on which targets to execute the task. */
+	uint8_t				*ca_tgt_bitmap;
+	/*
+	 * The size (in byte) of ca_tgt_bitmap. It may be smaller than dss_tgt_nr if only some
+	 * VOS targets are involved. It also may be larger than dss_tgt_nr if dss_tgt_nr is not
+	 * 2 ^ n aligned.
+	 */
+	uint32_t			 ca_tgt_bitmap_sz;
 	/** Stream arguments for all streams */
 	struct dss_coll_stream_args	ca_stream_args;
 };
@@ -581,6 +529,8 @@ dss_thread_collective_reduce(struct dss_coll_ops *ops,
 			     unsigned int flags);
 int dss_task_collective(int (*func)(void *), void *arg, unsigned int flags);
 int dss_thread_collective(int (*func)(void *), void *arg, unsigned int flags);
+int dss_build_coll_bitmap(int *exclude_tgts, uint32_t exclude_cnt, uint8_t **p_bitmap,
+			  uint32_t *bitmap_sz);
 
 /**
  * Loaded module management metholds
@@ -589,6 +539,7 @@ struct dss_module *dss_module_get(int mod_id);
 void dss_module_fini_metrics(enum dss_module_tag tag, void **metrics);
 int dss_module_init_metrics(enum dss_module_tag tag, void **metrics,
 			    const char *path, int tgt_id);
+int dss_module_nr_pool_metrics(void);
 
 /* Convert Argobots errno to DAOS ones. */
 static inline int
@@ -612,7 +563,7 @@ enum dss_rpc_cntr_id {
 /** RPC counter */
 struct dss_rpc_cntr {
 	/**
-	 * starting wall-clock time, it can be used to calculate average
+	 * starting monotonic time, it can be used to calculate average
 	 * workload.
 	 */
 	uint64_t		rc_stime;
@@ -635,13 +586,13 @@ int dss_rpc_reply(crt_rpc_t *rpc, unsigned int fail_loc);
 
 enum {
 	/** Min Value */
-	DSS_OFFLOAD_MIN		= -1,
+	DSS_OFFLOAD_MIN = -1,
 	/** Does computation on same ULT */
-	DSS_OFFLOAD_ULT		= 1,
-	/** Offload to an accelarator */
-	DSS_OFFLOAD_ACC		= 2,
+	DSS_OFFLOAD_ULT = 1,
+	/** Offload to an accelerator */
+	DSS_OFFLOAD_ACC = 2,
 	/** Max value */
-	DSS_OFFLOAD_MAX		= 7
+	DSS_OFFLOAD_MAX = 7
 };
 
 struct dss_acc_task {
@@ -708,104 +659,6 @@ int dsc_task_run(tse_task_t *task, tse_task_cb_t retry_cb, void *arg,
 		 int arg_size, bool sync);
 tse_sched_t *dsc_scheduler(void);
 
-typedef int (*iter_copy_data_cb_t)(daos_handle_t ih,
-				   vos_iter_entry_t *it_entry,
-				   d_iov_t *iov_out);
-struct dss_enum_arg {
-	daos_epoch_range_t     *eprs;
-	struct daos_csummer    *csummer;
-	int			eprs_cap;
-	int			eprs_len;
-	int			last_type;	/* hack for tweaking kds_len */
-	iter_copy_data_cb_t	copy_data_cb;
-	/* Buffer fields */
-	union {
-		struct {	/* !fill_recxs */
-			daos_key_desc_t	       *kds;
-			int			kds_cap;
-			int			kds_len;
-			d_sg_list_t	       *sgl;
-			d_iov_t			csum_iov;
-			int			sgl_idx;
-		};
-		struct {	/* fill_recxs && type == S||R */
-			daos_recx_t	       *recxs;
-			int			recxs_cap;
-			int			recxs_len;
-		};
-	};
-	daos_size_t		inline_thres;	/* type == S||R || chk_key2big*/
-	int			rnum;		/* records num (type == S||R) */
-	daos_size_t		rsize;		/* record size (type == S||R) */
-	daos_unit_oid_t		oid;		/* for unpack */
-	uint32_t		fill_recxs:1,	/* type == S||R */
-				chk_key2big:1,
-				need_punch:1,	/* need to pack punch epoch */
-				obj_punched:1,	/* object punch is packed   */
-				size_query:1;	/* Only query size */
-};
-
-struct dtx_handle;
-typedef int (*enum_iterate_cb_t)(vos_iter_param_t *param, vos_iter_type_t type,
-			    bool recursive, struct vos_iter_anchors *anchors,
-			    vos_iter_cb_t pre_cb, vos_iter_cb_t post_cb,
-			    void *arg, struct dtx_handle *dth);
-
-int dss_enum_pack(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
-		  struct vos_iter_anchors *anchors, struct dss_enum_arg *arg,
-		  enum_iterate_cb_t iter_cb, struct dtx_handle *dth);
-typedef int (*obj_enum_process_cb_t)(daos_key_desc_t *kds, void *ptr,
-				     unsigned int size, void *arg);
-int
-obj_enum_iterate(daos_key_desc_t *kdss, d_sg_list_t *sgl, int nr,
-		 unsigned int type, obj_enum_process_cb_t cb,
-		 void *cb_arg);
-/** Maximal number of iods (i.e., akeys) in dss_enum_unpack_io.ui_iods */
-#define DSS_ENUM_UNPACK_MAX_IODS 16
-
-/**
- * Used by dss_enum_unpack to accumulate recxs that can be stored with a single
- * VOS update.
- *
- * ui_oid and ui_dkey are only filled by dss_enum_unpack for certain
- * enumeration types, as commented after each field. Callers may fill ui_oid,
- * for instance, when the enumeration type is VOS_ITER_DKEY, to pass the object
- * ID to the callback.
- *
- * ui_iods, ui_recxs_caps, and ui_sgls are arrays of the same capacity
- * (ui_iods_cap) and length (ui_iods_len). That is, the iod in ui_iods[i] can
- * hold at most ui_recxs_caps[i] recxs, which have their inline data described
- * by ui_sgls[i]. ui_sgls is optional. If ui_iods[i].iod_recxs[j] has no inline
- * data, then ui_sgls[i].sg_iovs[j] will be empty.
- */
-struct dss_enum_unpack_io {
-	daos_unit_oid_t		 ui_oid;	/**< type <= OBJ */
-	daos_key_t		 ui_dkey;	/**< type <= DKEY */
-	daos_iod_t		*ui_iods;
-	d_iov_t			 ui_csum_iov;
-	/* punched epochs per akey */
-	daos_epoch_t		*ui_akey_punch_ephs;
-	daos_epoch_t		*ui_rec_punch_ephs;
-	daos_epoch_t		**ui_recx_ephs;
-	int			 ui_iods_cap;
-	int			 ui_iods_top;
-	int			*ui_recxs_caps;
-	/* punched epoch for object */
-	daos_epoch_t		ui_obj_punch_eph;
-	/* punched epochs for dkey */
-	daos_epoch_t		ui_dkey_punch_eph;
-	d_sg_list_t		*ui_sgls;	/**< optional */
-	uint32_t		ui_version;
-	uint32_t		ui_type;
-};
-
-typedef int (*dss_enum_unpack_cb_t)(struct dss_enum_unpack_io *io, void *arg);
-
-int
-dss_enum_unpack(daos_unit_oid_t oid, daos_key_desc_t *kds, int kds_num,
-		d_sg_list_t *sgl, d_iov_t *csum, dss_enum_unpack_cb_t cb,
-		void *cb_arg);
-
 d_rank_t dss_self_rank(void);
 
 unsigned int dss_ctx_nr_get(void);
@@ -818,8 +671,8 @@ struct tree_cache_root {
 };
 
 int
-obj_tree_insert(daos_handle_t toh, uuid_t co_uuid, daos_unit_oid_t oid,
-		d_iov_t *val_iov);
+obj_tree_insert(daos_handle_t toh, uuid_t co_uuid, uint64_t tgt_id,
+		daos_unit_oid_t oid, d_iov_t *val_iov);
 int
 obj_tree_destroy(daos_handle_t btr_hdl);
 
@@ -833,18 +686,26 @@ struct ds_migrate_status {
 };
 
 int
-ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver,
+ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver, uint32_t generation,
 			struct ds_migrate_status *dms);
 int
-ds_object_migrate(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_uuid,
-		  uuid_t cont_hdl_uuid, int tgt_id, uint32_t version,
-		  uint64_t max_eph, daos_unit_oid_t *oids, daos_epoch_t *ephs,
-		  unsigned int *shards, int cnt, int clear_conts);
+ds_object_migrate_send(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_uuid,
+		       uuid_t cont_hdl_uuid, int tgt_id, uint32_t version, unsigned int generation,
+		       uint64_t max_eph, daos_unit_oid_t *oids, daos_epoch_t *ephs,
+		       daos_epoch_t *punched_ephs, unsigned int *shards, int cnt,
+		       uint32_t new_gl_ver, unsigned int migrate_opc, uint64_t *enqueue_id,
+		       uint32_t *max_delay);
+int
+ds_migrate_object(struct ds_pool *pool, uuid_t po_hdl, uuid_t co_hdl, uuid_t co_uuid,
+		  uint32_t version, uint32_t generation, uint64_t max_eph, uint32_t opc,
+		  daos_unit_oid_t *oids, daos_epoch_t *epochs, daos_epoch_t *punched_epochs,
+		  unsigned int *shards, uint32_t count, unsigned int tgt_idx, uint32_t new_gl_ver);
 void
-ds_migrate_fini_one(uuid_t pool_uuid, uint32_t ver);
+ds_migrate_stop(struct ds_pool *pool, uint32_t ver, unsigned int generation);
 
-void
-ds_migrate_abort(uuid_t pool_uuid, uint32_t ver);
+int
+obj_layout_diff(struct pl_map *map, daos_unit_oid_t oid, uint32_t new_ver, uint32_t old_ver,
+		struct daos_obj_md *md, uint32_t *tgts, uint32_t *shards, int array_size);
 
 /** Server init state (see server_init) */
 enum dss_init_state {
@@ -861,47 +722,12 @@ enum dss_media_error_type {
 
 void dss_init_state_set(enum dss_init_state state);
 
-/* Notify control-plane of a bio error. */
-int
-ds_notify_bio_error(int media_err_type, int tgt_id);
+/** Call module setup from drpc setup call handler. */
+int dss_module_setup_all(void);
 
 int ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks);
 int ds_pool_find_bylabel(d_const_string_t label, uuid_t pool_uuid,
 			 d_rank_list_t **svc_ranks);
-
-bool is_pool_from_srv(uuid_t pool_uuid, uuid_t poh_uuid);
-
-struct sys_db;
-typedef int (*sys_db_trav_cb_t)(struct sys_db *db, char *table, d_iov_t *key,
-				void *args);
-
-#define SYS_DB_NAME_SZ		32
-
-/** system database is a simple local KV store */
-struct sys_db {
-	char	 sd_name[SYS_DB_NAME_SZ];
-	/** look up the provided key in \a table and return its value */
-	int	(*sd_fetch)(struct sys_db *db, char *table,
-			    d_iov_t *key, d_iov_t *val);
-	/** update or insert a KV pair to \a table */
-	int	(*sd_upsert)(struct sys_db *db, char *table,
-			     d_iov_t *key, d_iov_t *val);
-	/** reserved */
-	int	(*sd_insert)(struct sys_db *db, char *table,
-			     d_iov_t *key, d_iov_t *val);
-	/** reserved */
-	int	(*sd_update)(struct sys_db *db, char *table,
-			     d_iov_t *key, d_iov_t *val);
-	/** delete provided key and its value from the \a table */
-	int	(*sd_delete)(struct sys_db *db, char *table, d_iov_t *key);
-	/** traverse all keys in the \a table */
-	int	(*sd_traverse)(struct sys_db *db, char *table,
-			       sys_db_trav_cb_t cb, void *args);
-	int	(*sd_tx_begin)(struct sys_db *db);
-	int	(*sd_tx_end)(struct sys_db *db, int rc);
-	void	(*sd_lock)(struct sys_db *db);
-	void	(*sd_unlock)(struct sys_db *db);
-};
 
 /** Flags for dss_drpc_call */
 enum dss_drpc_call_flag {
@@ -918,5 +744,43 @@ enum dss_drpc_call_flag {
 
 int dss_drpc_call(int32_t module, int32_t method, void *req, size_t req_size,
 		  unsigned int flags, Drpc__Response **resp);
+
+/** Status of a chore */
+enum dss_chore_status {
+	DSS_CHORE_NEW,		/**< ready to be scheduled for the first time (private) */
+	DSS_CHORE_YIELD,	/**< ready to be scheduled again */
+	DSS_CHORE_DONE		/**< no more scheduling required */
+};
+
+struct dss_chore;
+
+/**
+ * Must return either DSS_CHORE_YIELD (if yielding to other chores) or
+ * DSS_CHORE_DONE (if terminating). If \a is_reentrance is true, this is not
+ * the first time \a chore is scheduled. A typical implementation shall
+ * initialize its internal state variables if \a is_reentrance is false. See
+ * dtx_leader_exec_ops_chore for an example.
+ */
+typedef enum dss_chore_status (*dss_chore_func_t)(struct dss_chore *chore, bool is_reentrance);
+
+/**
+ * Chore (opaque)
+ *
+ * A simple task (e.g., an I/O forwarding task) that yields by returning
+ * DSS_CHORE_YIELD instead of calling ABT_thread_yield. This data structure
+ * shall be embedded in the user's own task data structure, which typically
+ * also includes arguments and internal state variables for \a cho_func. All
+ * fields are private. See dtx_chore for an example.
+ */
+struct dss_chore {
+	d_list_t              cho_link;
+	enum dss_chore_status cho_status;
+	dss_chore_func_t      cho_func;
+};
+
+int dss_chore_delegate(struct dss_chore *chore, dss_chore_func_t func);
+void dss_chore_diy(struct dss_chore *chore, dss_chore_func_t func);
+
+bool engine_in_check(void);
 
 #endif /* __DSS_API_H__ */

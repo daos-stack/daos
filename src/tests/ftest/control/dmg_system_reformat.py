@@ -1,16 +1,18 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from apricot import skipForTicket
+import time
+
+from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
-from pool_test_base import PoolTestBase
+from exception_utils import CommandFailure
+from general_utils import journalctl_time
+from test_utils_pool import add_pool, get_size_params
 
 
-class DmgSystemReformatTest(PoolTestBase):
-    # pylint: disable=too-many-ancestors
+class DmgSystemReformatTest(TestWithServers):
     """Test Class Description:
 
     Test to verify dmg storage format reformat option works as expected on a
@@ -19,7 +21,12 @@ class DmgSystemReformatTest(PoolTestBase):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-6004")
+    def setUp(self):
+        """Set up each test case."""
+        # Create test-case-specific DAOS log files
+        self.update_log_file_names()
+        super().setUp()
+
     def test_dmg_system_reformat(self):
         """
         JIRA ID: DAOS-5415
@@ -27,63 +34,76 @@ class DmgSystemReformatTest(PoolTestBase):
         Test Description: Test dmg system reformat functionality.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,small
-        :avocado: tags=control,dmg_system_reformat,dmg
+        :avocado: tags=hw,medium
+        :avocado: tags=control,dmg,system_reformat
+        :avocado: tags=DmgSystemReformatTest,test_dmg_system_reformat
         """
+        dmg = self.get_dmg_command().copy()
+
         # Create pool using 90% of the available NVMe capacity
-        self.add_pool_qty(1)
+        pools = [add_pool(self, dmg=dmg)]
 
         self.log.info("Check that new pool will fail with DER_NOSPACE")
-        self.get_dmg_command().exit_status_exception = False
-        self.add_pool_qty(1, create=False)
+        dmg.exit_status_exception = False
+        pools.append(add_pool(self, create=False, **get_size_params(pools[0])))
         try:
-            self.pool[-1].create()
+            pools[-1].create()
         except TestFail as error:
             self.log.info("Pool create failed: %s", str(error))
-            if "-1007" not in self.get_dmg_command().result.stderr_text:
+            if "-1007" not in str(error):
                 self.fail("Pool create did not fail due to DER_NOSPACE!")
-        self.get_dmg_command().exit_status_exception = True
+        dmg.exit_status_exception = True
 
         self.log.info("Stop running engine instances: 'dmg system stop'")
-        self.get_dmg_command().system_stop(force=True)
-        if self.get_dmg_command().result.exit_status != 0:
+        dmg.system_stop(force=True)
+        if dmg.result.exit_status != 0:
             self.fail("Detected issues performing a system stop: {}".format(
-                self.get_dmg_command().result.stderr_text))
+                dmg.result.stderr_text))
 
-        # Remove pools
-        self.pool = []
+        # Remove pools and disable removing pools that about to be removed by formatting
+        for pool in pools:
+            pool.skip_cleanup()
+        pools = []
 
         # Perform a dmg system erase to allow the dmg storage format to succeed
         self.log.info("Perform dmg system erase on all system ranks:")
-        self.get_dmg_command().system_erase()
-        if self.get_dmg_command().result.exit_status != 0:
+        dmg.system_erase()
+        if dmg.result.exit_status != 0:
             self.fail("Issues performing system erase: {}".format(
-                self.get_dmg_command().result.stderr_text))
-
-        # To verify that we are using the membership information instead of the
-        # dmg config explicit hostlist
-        # Uncomment below after DAOS-5979 is resolved
-        # self.assertTrue(
-        #     self.server_managers[-1].dmg.set_config_value("hostlist", None))
+                dmg.result.stderr_text))
 
         self.log.info("Perform dmg storage format on all system ranks:")
-        self.get_dmg_command().storage_format(force=True)
-        if self.get_dmg_command().result.exit_status != 0:
-            self.fail("Issues performing storage format --force: {}".format(
-                self.get_dmg_command().result.stderr_text))
+
+        # Calling storage format after system stop too soon would fail, so
+        # wait 10 sec and retry up to 4 times.
+        count = 0
+        while count < 4:
+            try:
+                dmg.storage_format(force=True)
+                if dmg.result.exit_status != 0:
+                    self.fail(
+                        "Issues performing storage format --force: {}".format(
+                            dmg.result.stderr_text))
+                break
+            except CommandFailure as error:
+                self.log.info("Storage format failed. Wait 10 sec and retry. %s", error)
+                count += 1
+                time.sleep(10)
 
         # Check that engine starts up again
         self.log.info("<SERVER> Waiting for the engines to start")
-        self.server_managers[-1].detect_engine_start(host_qty=2)
+        self.server_managers[-1].manager.timestamps["start"] = journalctl_time()
+        self.server_managers[-1].detect_engine_start()
 
         # Check that we have cleared storage by checking pool list
-        if self.get_dmg_command().get_pool_list_uuids():
+        if dmg.get_pool_list_uuids():
             self.fail("Detected pools in storage after reformat: {}".format(
-                self.get_dmg_command().result.stdout_text))
+                dmg.result.stdout_text))
 
         # Create last pool now that memory has been wiped.
-        self.add_pool_qty(1)
+        pools.append(add_pool(self, connect=False, dmg=dmg))
 
         # Lastly, verify that last created pool is in the list
-        pool_uuids = self.get_dmg_command().get_pool_list_uuids()
-        self.assertEqual(pool_uuids[0], self.pool[-1].uuid)
+        pool_uuids = dmg.get_pool_list_uuids()
+        self.assertEqual(
+            pool_uuids[0].lower(), pools[-1].uuid.lower(), "{} missing from list".format(pools[-1]))

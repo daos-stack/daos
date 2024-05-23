@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,7 +15,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 )
 
 // mockReader is a mock used to represent a successful read of some text
@@ -64,9 +64,9 @@ func TestControl_ReadACLFile_FileOpenFailed(t *testing.T) {
 }
 
 func TestControl_ReadACLFile_Success(t *testing.T) {
-	dir, cleanup := common.CreateTestDir(t)
+	dir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
-	path := common.CreateTestFile(t, dir, "A::OWNER@:rw\nA::user1@:rw\nA:g:group1@:r\n")
+	path := test.CreateTestFile(t, dir, "A::OWNER@:rw\nA::user1@:rw\nA:g:group1@:r\n")
 
 	expectedNumACEs := 3
 
@@ -87,9 +87,9 @@ func TestControl_ReadACLFile_Success(t *testing.T) {
 }
 
 func TestReadACLFile_Empty(t *testing.T) {
-	dir, cleanup := common.CreateTestDir(t)
+	dir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
-	path := common.CreateTestFile(t, dir, "")
+	path := test.CreateTestFile(t, dir, "")
 
 	result, err := ReadACLFile(path)
 
@@ -97,7 +97,7 @@ func TestReadACLFile_Empty(t *testing.T) {
 		t.Errorf("expected no result, got: %+v", result)
 	}
 
-	common.ExpectError(t, err, fmt.Sprintf("ACL file '%s' contains no entries", path), "unexpected error")
+	test.ExpectError(t, err, fmt.Sprintf("ACL file '%s' contains no entries", path), "unexpected error")
 }
 
 func TestControl_ParseACL_EmptyFile(t *testing.T) {
@@ -299,14 +299,18 @@ func TestControl_FormatACL(t *testing.T) {
 		"multiple verbose": {
 			acl: &AccessControlList{
 				Entries: []string{
-					"A::OWNER@:rw",
+					"A::OWNER@:rwcdtTaAo",
 					"A:G:GROUP@:rw",
 					"A:G:readers@:r",
 				},
 			},
-			expStr: "# Entries:\n# Allow::Owner:Read/Write\nA::OWNER@:rw\n" +
-				"# Allow:Group:Owner-Group:Read/Write\nA:G:GROUP@:rw\n" +
-				"# Allow:Group:readers@:Read\nA:G:readers@:r\n",
+			expStr: "# Entries:\n" +
+				"# Allow::Owner:Read/Write/Create-Cont/Destroy-Cont/Get-Prop/Set-Prop/Get-ACL/Set-ACL/Set-Owner\n" +
+				"A::OWNER@:rwcdtTaAo\n" +
+				"# Allow:Group:Owner-Group:Read/Write\n" +
+				"A:G:GROUP@:rw\n" +
+				"# Allow:Group:readers@:Read\n" +
+				"A:G:readers@:r\n",
 			verbose: true,
 		},
 		"with owner user": {
@@ -329,7 +333,7 @@ func TestControl_FormatACL(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, FormatACL(tc.acl, tc.verbose), tc.expStr, "string output didn't match")
+			test.AssertEqual(t, FormatACL(tc.acl, tc.verbose), tc.expStr, "string output didn't match")
 		})
 	}
 }
@@ -348,7 +352,7 @@ func TestControl_FormatACLDefault(t *testing.T) {
 	// Just need to make sure it doesn't use verbose mode
 	expStr := FormatACL(acl, false)
 
-	common.AssertEqual(t, FormatACLDefault(acl), expStr, "output didn't match non-verbose mode")
+	test.AssertEqual(t, FormatACLDefault(acl), expStr, "output didn't match non-verbose mode")
 }
 
 func TestControl_GetVerboseACE(t *testing.T) {
@@ -429,7 +433,7 @@ func TestControl_GetVerboseACE(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, getVerboseACE(tc.shortACE), tc.expStr, "incorrect output")
+			test.AssertEqual(t, getVerboseACE(tc.shortACE), tc.expStr, "incorrect output")
 		})
 	}
 }

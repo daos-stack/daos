@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -21,31 +21,45 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	. "github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-// resolveTCPFn is a type alias for the net.ResolveTCPAddr function signature.
-type resolveTCPFn func(string, string) (*net.TCPAddr, error)
+// TCPResolver is a type alias for the net.ResolveTCPAddr function signature.
+type TCPResolver func(string, string) (*net.TCPAddr, error)
+
+type MemberStore interface {
+	MemberCount(...MemberState) (int, error)
+	MemberRanks(...MemberState) ([]Rank, error)
+	FindMemberByRank(rank Rank) (*Member, error)
+	FindMemberByUUID(uuid uuid.UUID) (*Member, error)
+	AllMembers() ([]*Member, error)
+	AddMember(member *Member) error
+	UpdateMember(member *Member) error
+	RemoveMember(member *Member) error
+	CurMapVersion() (uint32, error)
+	FaultDomainTree() *FaultDomainTree
+}
 
 // Membership tracks details of system members.
 type Membership struct {
 	sync.RWMutex
 	log        logging.Logger
-	db         *Database
-	resolveTCP resolveTCPFn
+	db         MemberStore
+	resolveTCP TCPResolver
 }
 
 // NewMembership returns a reference to a new DAOS system membership.
-func NewMembership(log logging.Logger, db *Database) *Membership {
+func NewMembership(log logging.Logger, mdb MemberStore) *Membership {
 	return &Membership{
-		db:         db,
+		db:         mdb,
 		log:        log,
 		resolveTCP: net.ResolveTCPAddr,
 	}
 }
 
 // WithTCPResolver adds a resolveTCPFn to the membership structure.
-func (m *Membership) WithTCPResolver(resolver resolveTCPFn) *Membership {
+func (m *Membership) WithTCPResolver(resolver TCPResolver) *Membership {
 	m.resolveTCP = resolver
 
 	return m
@@ -81,13 +95,16 @@ func (m *Membership) Count() (int, error) {
 
 // JoinRequest contains information needed for join membership update.
 type JoinRequest struct {
-	Rank           Rank
-	UUID           uuid.UUID
-	ControlAddr    *net.TCPAddr
-	FabricURI      string
-	FabricContexts uint32
-	FaultDomain    *FaultDomain
-	Incarnation    uint64
+	Rank                    Rank
+	UUID                    uuid.UUID
+	ControlAddr             *net.TCPAddr
+	PrimaryFabricURI        string
+	SecondaryFabricURIs     []string
+	FabricContexts          uint32
+	SecondaryFabricContexts []uint32
+	FaultDomain             *FaultDomain
+	Incarnation             uint64
+	CheckMode               bool
 }
 
 // JoinResponse contains information returned from join membership update.
@@ -103,6 +120,10 @@ type JoinResponse struct {
 func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 	m.Lock()
 	defer m.Unlock()
+
+	if req.PrimaryFabricURI == "" {
+		return nil, errors.New("no primary fabric URI in JoinRequest")
+	}
 
 	resp = new(JoinResponse)
 	var curMember *Member
@@ -122,14 +143,19 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 			}
 		}
 
-		if curMember.state == MemberStateAdminExcluded {
-			return nil, errAdminExcluded(curMember.UUID, curMember.Rank)
+		if curMember.State == MemberStateAdminExcluded {
+			return nil, ErrAdminExcluded(curMember.UUID, curMember.Rank)
 		}
-		if !curMember.Rank.Equals(req.Rank) {
-			return nil, errRankChanged(req.Rank, curMember.Rank, curMember.UUID)
+		// If the member is already in the membership, don't allow rejoining
+		// with a different rank, as this may indicate something strange
+		// has happened on the node. The only exception is if the rejoin
+		// request has a rank of NilRank, which would indicate that
+		// the original join response was never received.
+		if !curMember.Rank.Equals(req.Rank) && !req.Rank.Equals(NilRank) {
+			return nil, ErrRankChanged(req.Rank, curMember.Rank, curMember.UUID)
 		}
 		if curMember.UUID != req.UUID {
-			return nil, errUuidChanged(req.UUID, curMember.UUID, curMember.Rank)
+			return nil, ErrUuidChanged(req.UUID, curMember.UUID, curMember.Rank)
 		}
 
 		if !curMember.FaultDomain.Equals(req.FaultDomain) {
@@ -139,12 +165,18 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 				req.FaultDomain.String())
 		}
 
-		resp.PrevState = curMember.state
-		curMember.state = MemberStateJoined
+		resp.PrevState = curMember.State
+		if req.CheckMode {
+			curMember.State = MemberStateCheckerStarted
+		} else {
+			curMember.State = MemberStateJoined
+		}
 		curMember.Info = ""
 		curMember.Addr = req.ControlAddr
-		curMember.FabricURI = req.FabricURI
-		curMember.FabricContexts = req.FabricContexts
+		curMember.PrimaryFabricURI = req.PrimaryFabricURI
+		curMember.SecondaryFabricURIs = req.SecondaryFabricURIs
+		curMember.PrimaryFabricContexts = req.FabricContexts
+		curMember.SecondaryFabricContexts = req.SecondaryFabricContexts
 		curMember.FaultDomain = req.FaultDomain
 		curMember.Incarnation = req.Incarnation
 		if err := m.db.UpdateMember(curMember); err != nil {
@@ -169,14 +201,16 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 	}
 
 	newMember := &Member{
-		Rank:           req.Rank,
-		Incarnation:    req.Incarnation,
-		UUID:           req.UUID,
-		Addr:           req.ControlAddr,
-		FabricURI:      req.FabricURI,
-		FabricContexts: req.FabricContexts,
-		FaultDomain:    req.FaultDomain,
-		state:          MemberStateJoined,
+		Rank:                    req.Rank,
+		Incarnation:             req.Incarnation,
+		UUID:                    req.UUID,
+		Addr:                    req.ControlAddr,
+		PrimaryFabricURI:        req.PrimaryFabricURI,
+		SecondaryFabricURIs:     req.SecondaryFabricURIs,
+		PrimaryFabricContexts:   req.FabricContexts,
+		SecondaryFabricContexts: req.SecondaryFabricContexts,
+		FaultDomain:             req.FaultDomain,
+		State:                   MemberStateJoined,
 	}
 	if err := m.db.AddMember(newMember); err != nil {
 		return nil, errors.Wrap(err, "failed to add new member")
@@ -204,7 +238,7 @@ func (m *Membership) checkReqFaultDomain(req *JoinRequest) error {
 // AddOrReplace adds member to membership or replaces member if it exists.
 //
 // Note: this method updates state without checking if state transition is
-//       legal so use with caution.
+// legal so use with caution.
 func (m *Membership) AddOrReplace(newMember *Member) error {
 	m.Lock()
 	defer m.Unlock()
@@ -311,22 +345,37 @@ func (m *Membership) HostList(rankSet *RankSet) []string {
 // Members returns slice of references to all system members ordered by rank.
 //
 // Empty rank list implies no filtering/include all and ignore ranks that are
-// not in the membership.
-func (m *Membership) Members(rankSet *RankSet) (members Members) {
+// not in the membership. Optionally filter on desired states.
+func (m *Membership) Members(rankSet *RankSet, desiredStates ...MemberState) (members Members, err error) {
 	m.RLock()
 	defer m.RUnlock()
 
+	mask, _ := MemberStates2Mask(desiredStates...)
+
 	if rankSet == nil || rankSet.Count() == 0 {
-		var err error
-		members, err = m.db.AllMembers()
-		if err != nil {
-			m.log.Errorf("failed to get all members: %s", err)
-			return nil
+		if mask == AllMemberFilter {
+			// No rank or member filtering required so copy database.
+			members, err = m.db.AllMembers()
+			if err != nil {
+				return
+			}
+		} else {
+			// No rank filtering so use full rank-set.
+			var rl []Rank
+			rl, err = m.db.MemberRanks()
+			if err != nil {
+				return
+			}
+			rankSet = RankSetFromRanks(rl)
 		}
-	} else {
+	}
+
+	if members == nil {
 		for _, rank := range rankSet.Ranks() {
 			if member, err := m.db.FindMemberByRank(rank); err == nil {
-				members = append(members, member)
+				if member.State&mask != 0 {
+					members = append(members, member)
+				}
 			}
 		}
 	}
@@ -336,7 +385,7 @@ func (m *Membership) Members(rankSet *RankSet) (members Members) {
 }
 
 func msgBadStateTransition(m *Member, ts MemberState) string {
-	return fmt.Sprintf("illegal member state update for rank %d: %s->%s", m.Rank, m.state, ts)
+	return fmt.Sprintf("illegal member state update for rank %d: %s->%s", m.Rank, m.State, ts)
 }
 
 // UpdateMemberStates updates member's state according to result state.
@@ -364,7 +413,8 @@ func (m *Membership) UpdateMemberStates(results MemberResults, updateOnFail bool
 		// - if transition from current to result state is illegal
 
 		if result.Errored {
-			if result.State != MemberStateErrored {
+			// Check state matches errored flag.
+			if result.State != MemberStateErrored && result.State != MemberStateUnresponsive {
 				// result content mismatch (programming error)
 				return errors.Errorf(
 					"errored result for rank %d has conflicting state '%s'",
@@ -375,11 +425,11 @@ func (m *Membership) UpdateMemberStates(results MemberResults, updateOnFail bool
 			}
 		}
 
-		if member.State().isTransitionIllegal(result.State) {
+		if member.State.isTransitionIllegal(result.State) {
 			m.log.Debugf("skipping %s", msgBadStateTransition(member, result.State))
 			continue
 		}
-		member.state = result.State
+		member.State = result.State
 		member.Info = result.Msg
 
 		if err := m.db.UpdateMember(member); err != nil {
@@ -397,18 +447,18 @@ func (m *Membership) CheckRanks(ranks string) (hit, miss *RankSet, err error) {
 	m.RLock()
 	defer m.RUnlock()
 
-	var allRanks, toTest []Rank
-	allRanks, err = m.db.MemberRanks()
-	if err != nil {
-		return
-	}
-	toTest, err = ParseRanks(ranks)
+	allRanks, err := m.db.MemberRanks()
 	if err != nil {
 		return
 	}
 
 	if ranks == "" {
 		return RankSetFromRanks(allRanks), RankSetFromRanks(nil), nil
+	}
+
+	toTest, err := ParseRanks(ranks)
+	if err != nil {
+		return
 	}
 
 	missing := CheckRankMembership(allRanks, toTest)
@@ -483,24 +533,24 @@ func (m *Membership) MarkRankDead(rank Rank, incarnation uint64) error {
 	}
 
 	ns := MemberStateExcluded
-	if member.State().isTransitionIllegal(ns) {
+	if member.State.isTransitionIllegal(ns) {
 		msg := msgBadStateTransition(member, ns)
 		// excluded->excluded transitions expected for multiple swim
 		// notifications, if so return error to skip group update
-		if member.State() != ns {
+		if member.State != ns {
 			m.log.Error(msg)
 		}
 
 		return errors.New(msg)
 	}
 
-	if member.State() == MemberStateJoined && member.Incarnation > incarnation {
+	if member.State == MemberStateJoined && member.Incarnation > incarnation {
 		m.log.Debugf("ignoring rank dead event for previous incarnation of %d (%x < %x)", rank, incarnation, member.Incarnation)
 		return errors.Errorf("event is for previous incarnation of %d", rank)
 	}
 
 	m.log.Infof("marking rank %d as %s in response to rank dead event", rank, ns)
-	member.state = ns
+	member.State = ns
 	return m.db.UpdateMember(member)
 }
 
@@ -527,18 +577,25 @@ func (m *Membership) handleEngineFailure(evt *events.RASEvent) {
 	//
 	// e.g. if member.Addr.IP.Equal(net.ResolveIPAddr(evt.Hostname))
 
-	ns := MemberStateErrored
-	if member.State().isTransitionIllegal(ns) {
-		m.log.Debugf("skipping %s", msgBadStateTransition(member, ns))
+	newState := MemberStateErrored
+	if member.State.isTransitionIllegal(newState) {
+		m.log.Debugf("skipping %s", msgBadStateTransition(member, newState))
 		return
 	}
 
-	member.state = ns
+	oldState := member.State
+	member.State = newState
 	member.Info = evt.Msg
 
 	if err := m.db.UpdateMember(member); err != nil {
 		m.log.Errorf("updating member with rank %d: %s", member.Rank, err)
 	}
+
+	var msg string
+	if evt.Msg != "" {
+		msg = fmt.Sprintf(" (%s)", evt.Msg)
+	}
+	m.log.Errorf("rank %d: %s->%s%s", member.Rank, oldState, newState, msg)
 }
 
 // OnEvent handles events on channel and updates member states accordingly.
@@ -595,8 +652,19 @@ func getFaultDomainSubtree(tree *FaultDomainTree, ranks ...uint32) (*FaultDomain
 	return tree.Subtree(rankDomains...)
 }
 
+// RankFaultDomainPrefix is the prefix for rank-level fault domains.
+const RankFaultDomainPrefix = "rank"
+
+// MemberFaultDomain generates a standardized fault domain for a Member,
+// based on its parent fault domain and rank.
+func MemberFaultDomain(m *Member) *FaultDomain {
+	rankDomain := fmt.Sprintf("%s%d", RankFaultDomainPrefix, m.Rank.Uint32())
+	// we know the string we're adding is valid, so can't fail
+	return m.FaultDomain.MustCreateChild(rankDomain)
+}
+
 func getFaultDomainRank(fd *FaultDomain) (uint32, bool) {
-	fmtStr := rankFaultDomainPrefix + "%d"
+	fmtStr := RankFaultDomainPrefix + "%d"
 	var rank uint32
 	n, err := fmt.Sscanf(fd.BottomLevel(), fmtStr, &rank)
 	if err != nil || n != 1 {

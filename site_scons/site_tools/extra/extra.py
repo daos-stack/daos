@@ -1,110 +1,141 @@
-#!/usr/bin/env python
-# Copyright (c) 2018-2019 Intel Corporation
+#!/usr/bin/env python3
+"""
+(C) Copyright 2018-2022 Intel Corporation.
 
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-"""SCons extra features"""
-from __future__ import print_function
+SPDX-License-Identifier: BSD-2-Clause-Patent
 
-import subprocess
-import re
+Code to handle clang-format when used in the build.
+
+This is used by scons to reformat automatically generated header files to be readable, but also
+outside of scons by the clang-format commit hook to check the version.
+"""
 import os
+import re
+import subprocess  # nosec
+import sys
 
 from SCons.Builder import Builder
-from SCons.Script import Dir
 from SCons.Script import WhereIs
 
-def supports_custom_format(clang_exe):
-    """Get the version of clang-format"""
+# Minimum version of clang-format that we use the configuration file for.  With clang-format
+# versions older than this it's still used, but without loading our config.
+MIN_FORMAT_VERSION = 12
 
+
+def _supports_custom_format(clang_exe):
+    """Checks if the version of clang-format is new enough.
+
+    Older versions complain about some of the options used so enforce a minimum version.
+    """
     try:
         rawbytes = subprocess.check_output([clang_exe, "-version"])
         output = rawbytes.decode('utf-8')
     except subprocess.CalledProcessError:
-        print("Unsupported clang-format for custom style.  "
-              "Using Mozilla style.")
+        print("Unsupported clang-format for custom style.  Using Mozilla style.")
         return False
 
     match = re.search(r"version (\d+)\.", output)
-    if match and int(match.group(1)) >= 7:
+    if match and int(match.group(1)) >= MIN_FORMAT_VERSION:
         return True
 
-    print("Custom .clang-format wants version 7+. Using Mozilla style.")
+    print(f'Custom .clang-format wants version {MIN_FORMAT_VERSION}+. Using Mozilla style.')
     return False
 
-def find_indent():
+
+def _supports_correct_style(clang_exe):
+    """Checks if the version of clang-format is 14.0.5 or newer.
+
+    Older versions contain bugs so will generate incorrectly formatted code on occasion.
+    """
+    try:
+        rawbytes = subprocess.check_output([clang_exe, "-version"])
+        output = rawbytes.decode('utf-8')
+    except subprocess.CalledProcessError:
+        return False
+
+    match = re.search(r'version ([\d+\.]+)', output)
+    if match:
+        parts = match.group(1).split('.')
+        if int(parts[0]) != 14:
+            return int(parts[0]) > 14
+        if int(parts[1]) > 0:
+            return True
+        if int(parts[2]) < 5:
+            return False
+        return True
+
+    return False
+
+
+def _find_indent():
     """find clang-format"""
     indent = WhereIs("clang-format")
-    if indent is not None:
-        style = "Mozilla" # fallback
-        root = Dir("#").abspath
-        while root != "/":
-            if os.path.exists(os.path.join(root, ".clang-format")):
-                if not supports_custom_format(indent):
-                    break
-                style = "file"
-            root = os.path.dirname(root)
-        return "%s --style=%s" % (indent, style)
+    if indent is None:
+        return None
+    if _supports_custom_format(indent):
+        style = "file"
+    else:
+        style = "Mozilla"
+    return f'{indent} --style={style}'
 
-    return "cat"
 
-def pp_gen(source, target, env, indent):
-    """generate commands for preprocessor builder"""
-    action = []
-    nenv = env.Clone()
-    cccom = nenv.subst("$CCCOM").replace(" -o ", " ")
-    for src, tgt in zip(source, target):
-        action.append("%s -E -P %s | %s > %s" % (cccom, src, indent, tgt))
-    return action
-
-def preprocess_emitter(source, target, env):
+def _preprocess_emitter(source, target, env):
     """generate target list for preprocessor builder"""
     target = []
     for src in source:
+        dirname = os.path.dirname(src.abspath)
         basename = os.path.basename(src.abspath)
-        (base, _ext) = os.path.splitext(basename)
+        (base, ext) = os.path.splitext(basename)
         prefix = ""
         for var in ["OBJPREFIX", "OBJSUFFIX", "SHOBJPREFIX", "SHOBJSUFFIX"]:
-            mod = env.subst("$%s" % var)
+            mod = env.subst(f'${var}')
             if var == "OBJSUFFIX" and mod == ".o":
                 continue
             if var == "SHOBJSUFFIX" and mod == ".os":
                 continue
             if mod != "":
                 prefix = prefix + "_" + mod
-        target.append(prefix + base + "_pp.c")
+        newtarget = os.path.join(dirname, f'{prefix}{base}_pp{ext}')
+        target.append(newtarget)
     return target, source
+
+
+def main():
+    """Check for a supported version of clang-format"""
+    supported = _supports_correct_style(WhereIs('clang-format'))
+    if not supported:
+        print('Install clang-format version 14.0.5 or newer to reformat code')
+        sys.exit(1)
+    sys.exit(0)
+
 
 def generate(env):
     """Setup the our custom tools"""
+    indent = _find_indent()
 
-    indent = find_indent()
-
-    generator = lambda source, target, env, for_signature: pp_gen(source,
-                                                                  target,
-                                                                  env, indent)
+    # pylint: disable-next=unused-argument
+    def _pp_gen(source, target, env, for_signature):
+        """generate commands for preprocessor builder"""
+        action = []
+        cccom = env.subst("$CCCOM").replace(" -o ", " ")
+        for src, tgt in zip(source, target):
+            if indent:
+                action.append(f'{cccom} -E -P {src} | {indent} > {tgt}')
+            else:
+                action.append(f'{cccom} -E -P {src} > {tgt}')
+        return action
 
     # Only handle C for now
-    preprocess = Builder(generator=generator, suffix="_pp.c",
-                         emitter=preprocess_emitter, src_suffix=".c")
+    preprocess = Builder(generator=_pp_gen, emitter=_preprocess_emitter)
 
-    env.Append(BUILDERS={"Preprocess":preprocess})
+    if not env["BUILDERS"].get("Preprocess", False):
+        env.Append(BUILDERS={"Preprocess": preprocess})
+
 
 def exists(_env):
     """assert existence of tool"""
     return True
+
+
+if __name__ == '__main__':
+    main()

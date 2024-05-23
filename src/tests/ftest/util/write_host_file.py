@@ -1,24 +1,21 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from logging import getLogger
-
 import os
-import random
+from logging import getLogger
+from tempfile import mkstemp
 
-from collections import Counter
 
-def write_host_file(hostlist, path='/tmp', slots=1):
+def write_host_file(hosts, path='/tmp', slots=None):
     """Write out a hostfile suitable for orterun.
 
     Args:
-        hostlist (list): list of hosts to write to the hostfile
+        hosts (NodeSet): hosts to write to the hostfile
         path (str, optional): where to write the hostfile. Defaults to '/tmp'.
         slots (int, optional): slots per host to specify in the hostfile.
-            Defaults to 1.
+            Defaults to None.
 
     Raises:
         ValueError: if no hosts have been specified
@@ -27,25 +24,19 @@ def write_host_file(hostlist, path='/tmp', slots=1):
         str: the full path of the written hostfile
 
     """
+    if not hosts:
+        raise ValueError("hosts parameter must be provided.")
 
     log = getLogger()
-    unique = random.randint(1, 100000)
+    os.makedirs(path, exist_ok=True)
 
-    if not os.path.exists(path):
-        os.makedirs(path)
-    hostfile = os.path.join(path, "".join(["hostfile", str(unique)]))
+    _, hostfile = mkstemp(dir=path, prefix='hostfile_')
 
-    if hostlist is None:
-        raise ValueError("host list parameter must be provided.")
-
-    log.info(
-        "Writing hostfile:\n  hosts: %s\n  slots: %s\n  file:  %s",
-        hostlist, slots, hostfile)
+    log.debug("Writing hostfile: %s (hosts=%s, slots=%s)", hostfile, hosts, slots)
     with open(hostfile, "w") as hostfile_handle:
-        for host in hostlist:
-            if slots is None:
-                hostfile_handle.write("{0}\n".format(host))
-            else:
-                hostfile_handle.write("{0} slots={1}\n".format(host, slots))
+        if slots:
+            hostfile_handle.writelines(f'{host} slots={slots}\n' for host in sorted(hosts))
+        else:
+            hostfile_handle.writelines(f'{host}\n' for host in sorted(hosts))
 
     return hostfile

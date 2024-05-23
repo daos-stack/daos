@@ -1,0 +1,33 @@
+hosts:
+  test_servers: 3
+  test_clients: 1
+timeout: 300
+server_config:
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      log_mask: INFO
+      storage: auto
+  system_ram_reserved: 64
+pool:
+  size: 50%
+container:
+  type: POSIX
+  control_method: daos
+ior:
+  client_processes:
+    ppn: 32
+  test_file: testFile
+  api: POSIX
+  dfs_destroy: false
+  transfer_size: 1M
+  block_size: 1G
+  dfs_oclass: "EC_2P1G1"
+  read_x: 3  # 300%
+  iorflags:
+    - "-v -w -k -G 3"
+    - "-v -r -k -G 3"
+dfuse:
+  disable_caching: true
+  disable_wb_caching: true

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -123,22 +123,41 @@ func (m MgmtMethod) ID() int32 {
 
 func (m MgmtMethod) String() string {
 	if s, ok := map[MgmtMethod]string{
-		MethodPrepShutdown:    "PrepShutdown",
-		MethodPingRank:        "Ping",
-		MethodSetRank:         "SetRank",
-		MethodSetLogMasks:     "SetLogMasks",
-		MethodSetUp:           "Setup",
-		MethodGroupUpdate:     "GroupUpdate",
-		MethodPoolCreate:      "PoolCreate",
-		MethodPoolDestroy:     "PoolDestroy",
-		MethodPoolEvict:       "PoolEvict",
-		MethodPoolExclude:     "PoolExclude",
-		MethodPoolDrain:       "PoolDrain",
-		MethodPoolExtend:      "PoolExtend",
-		MethodPoolReintegrate: "PoolReintegrate",
-		MethodPoolQuery:       "PoolQuery",
-		MethodPoolSetProp:     "PoolSetProp",
-		MethodListPools:       "ListPools",
+		MethodPrepShutdown:         "PrepShutdown",
+		MethodPingRank:             "PingRank",
+		MethodSetRank:              "SetRank",
+		MethodSetLogMasks:          "SetLogMasks",
+		MethodGetAttachInfo:        "GetAttachInfo",
+		MethodPoolCreate:           "PoolCreate",
+		MethodPoolDestroy:          "PoolDestroy",
+		MethodPoolEvict:            "PoolEvict",
+		MethodPoolExclude:          "PoolExclude",
+		MethodPoolDrain:            "PoolDrain",
+		MethodPoolExtend:           "PoolExtend",
+		MethodPoolReintegrate:      "PoolReintegrate",
+		MethodBioHealth:            "BioHealth",
+		MethodSetUp:                "SetUp",
+		MethodSmdDevs:              "SmdDevs",
+		MethodSmdPools:             "SmdPools",
+		MethodPoolGetACL:           "PoolGetACL",
+		MethodPoolOverwriteACL:     "PoolOverwriteACL",
+		MethodPoolUpdateACL:        "PoolUpdateACL",
+		MethodPoolDeleteACL:        "PoolDeleteACL",
+		MethodSetFaultyState:       "SetFaultyState",
+		MethodReplaceStorage:       "ReplaceStorage",
+		MethodListContainers:       "ListContainers",
+		MethodPoolQuery:            "PoolQuery",
+		MethodPoolQueryTarget:      "PoolQueryTarget",
+		MethodPoolSetProp:          "PoolSetProp",
+		MethodContSetOwner:         "ContSetOwner",
+		MethodGroupUpdate:          "GroupUpdate",
+		MethodNotifyPoolConnect:    "NotifyPoolConnect",
+		MethodNotifyPoolDisconnect: "NotifyPoolDisconnect",
+		MethodNotifyExit:           "NotifyExit",
+		MethodPoolGetProp:          "PoolGetProp",
+		MethodPoolUpgrade:          "PoolUpgrade",
+		MethodLedManage:            "LedManage",
+		MethodSetupClientTelemetry: "SetupClientTelemetry",
 	}[m]; ok {
 		return s
 	}
@@ -166,12 +185,6 @@ const (
 	MethodSetRank MgmtMethod = C.DRPC_METHOD_MGMT_SET_RANK
 	// MethodSetLogMasks is a ModuleMgmt method
 	MethodSetLogMasks MgmtMethod = C.DRPC_METHOD_MGMT_SET_LOG_MASKS
-	// MethodCreateMS is a ModuleMgmt method
-	MethodCreateMS MgmtMethod = C.DRPC_METHOD_MGMT_CREATE_MS
-	// MethodStartMS is a ModuleMgmt method
-	MethodStartMS MgmtMethod = C.DRPC_METHOD_MGMT_START_MS
-	// MethodJoin is a ModuleMgmt method
-	MethodJoin MgmtMethod = C.DRPC_METHOD_MGMT_JOIN
 	// MethodGetAttachInfo is a ModuleMgmt method
 	MethodGetAttachInfo MgmtMethod = C.DRPC_METHOD_MGMT_GET_ATTACH_INFO
 	// MethodPoolCreate is a ModuleMgmt method
@@ -198,16 +211,12 @@ const (
 	MethodSmdPools MgmtMethod = C.DRPC_METHOD_MGMT_SMD_LIST_POOLS
 	// MethodPoolGetACL is a ModuleMgmt method
 	MethodPoolGetACL MgmtMethod = C.DRPC_METHOD_MGMT_POOL_GET_ACL
-	// MethodListPools is a ModuleMgmt method
-	MethodListPools MgmtMethod = C.DRPC_METHOD_MGMT_LIST_POOLS
 	// MethodPoolOverwriteACL is a ModuleMgmt method
 	MethodPoolOverwriteACL MgmtMethod = C.DRPC_METHOD_MGMT_POOL_OVERWRITE_ACL
 	// MethodPoolUpdateACL is a ModuleMgmt method
 	MethodPoolUpdateACL MgmtMethod = C.DRPC_METHOD_MGMT_POOL_UPDATE_ACL
 	// MethodPoolDeleteACL is a ModuleMgmt method
 	MethodPoolDeleteACL MgmtMethod = C.DRPC_METHOD_MGMT_POOL_DELETE_ACL
-	// MethodDevStateQuery is a ModuleMgmt method
-	MethodDevStateQuery MgmtMethod = C.DRPC_METHOD_MGMT_DEV_STATE_QUERY
 	// MethodSetFaultyState is a ModuleMgmt method
 	MethodSetFaultyState MgmtMethod = C.DRPC_METHOD_MGMT_DEV_SET_FAULTY
 	// MethodReplaceStorage is a ModuleMgmt method
@@ -216,6 +225,8 @@ const (
 	MethodListContainers MgmtMethod = C.DRPC_METHOD_MGMT_LIST_CONTAINERS
 	// MethodPoolQuery defines a method for querying a pool
 	MethodPoolQuery MgmtMethod = C.DRPC_METHOD_MGMT_POOL_QUERY
+	// MethodPoolQueryTarget defines a method for querying a pool engine's targets
+	MethodPoolQueryTarget MgmtMethod = C.DRPC_METHOD_MGMT_POOL_QUERY_TARGETS
 	// MethodPoolSetProp defines a method for setting a pool property
 	MethodPoolSetProp MgmtMethod = C.DRPC_METHOD_MGMT_POOL_SET_PROP
 	// MethodContSetOwner defines a method for setting the container's owner
@@ -228,10 +239,24 @@ const (
 	MethodNotifyPoolDisconnect MgmtMethod = C.DRPC_METHOD_MGMT_NOTIFY_POOL_DISCONNECT
 	// MethodNotifyExit defines a method for signaling a clean client shutdown
 	MethodNotifyExit MgmtMethod = C.DRPC_METHOD_MGMT_NOTIFY_EXIT
-	// MethodIdentifyStorage is a ModuleMgmt method
-	MethodIdentifyStorage MgmtMethod = C.DRPC_METHOD_MGMT_DEV_IDENTIFY
 	// MethodPoolGetProp defines a method for getting pool properties
 	MethodPoolGetProp MgmtMethod = C.DRPC_METHOD_MGMT_POOL_GET_PROP
+	// MethodCheckerStart defines a method for starting the checker
+	MethodCheckerStart MgmtMethod = C.DRPC_METHOD_MGMT_CHK_START
+	// MethodCheckerStop defines a method for stopping the checker
+	MethodCheckerStop MgmtMethod = C.DRPC_METHOD_MGMT_CHK_STOP
+	// MethodCheckerQuery defines a method for getting the checker status
+	MethodCheckerQuery MgmtMethod = C.DRPC_METHOD_MGMT_CHK_QUERY
+	// MethodCheckerProp defines a method for getting the checker properties
+	MethodCheckerProp MgmtMethod = C.DRPC_METHOD_MGMT_CHK_PROP
+	// MethodCheckerAction defines a method for specifying a checker action
+	MethodCheckerAction MgmtMethod = C.DRPC_METHOD_MGMT_CHK_ACT
+	// MethodPoolUpgrade defines a method for upgrade pool
+	MethodPoolUpgrade MgmtMethod = C.DRPC_METHOD_MGMT_POOL_UPGRADE
+	// MethodLedManage defines a method to manage a VMD device LED state
+	MethodLedManage MgmtMethod = C.DRPC_METHOD_MGMT_LED_MANAGE
+	// MethodSetupClientTelemetry defines a method to setup client telemetry
+	MethodSetupClientTelemetry MgmtMethod = C.DRPC_METHOD_MGMT_SETUP_CLIENT_TELEM
 )
 
 type srvMethod int32
@@ -247,7 +272,6 @@ func (m srvMethod) ID() int32 {
 func (m srvMethod) String() string {
 	if s, ok := map[srvMethod]string{
 		MethodNotifyReady:  "notify ready",
-		MethodBIOError:     "block i/o error",
 		MethodClusterEvent: "cluster event",
 	}[m]; ok {
 		return s
@@ -270,14 +294,20 @@ func (m srvMethod) IsValid() bool {
 const (
 	// MethodNotifyReady is a ModuleSrv method
 	MethodNotifyReady srvMethod = C.DRPC_METHOD_SRV_NOTIFY_READY
-	// MethodBIOError is a ModuleSrv method
-	MethodBIOError srvMethod = C.DRPC_METHOD_SRV_BIO_ERR
 	// MethodGetPoolServiceRanks requests the service ranks for a pool
 	MethodGetPoolServiceRanks srvMethod = C.DRPC_METHOD_SRV_GET_POOL_SVC
 	// MethodPoolFindByLabel requests the service ranks and UUID for a pool
 	MethodPoolFindByLabel srvMethod = C.DRPC_METHOD_SRV_POOL_FIND_BYLABEL
 	// MethodClusterEvent notifies of a cluster event in the I/O Engine.
 	MethodClusterEvent srvMethod = C.DRPC_METHOD_SRV_CLUSTER_EVENT
+	// MethodCheckerListPools requests the list of pools from the MS
+	MethodCheckerListPools srvMethod = C.DRPC_METHOD_CHK_LIST_POOL
+	// MethodCheckerRegisterPool registers a pool with the MS
+	MethodCheckerRegisterPool srvMethod = C.DRPC_METHOD_CHK_REG_POOL
+	// MethodCheckerDeregisterPool deregisters a pool with the MS
+	MethodCheckerDeregisterPool srvMethod = C.DRPC_METHOD_CHK_DEREG_POOL
+	// MethodCheckerReport reports a checker finding to the MS
+	MethodCheckerReport srvMethod = C.DRPC_METHOD_CHK_REPORT
 )
 
 type securityMethod int32

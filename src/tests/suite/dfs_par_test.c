@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -13,19 +13,19 @@ static daos_handle_t	co_hdl;
 static dfs_t		*dfs_mt;
 
 static int
-check_one_success(int rc, int err, MPI_Comm comm)
+check_one_success(int rc, int err)
 {
 	int *rc_arr;
 	int mpi_size, mpi_rank, i;
 	int passed, expect_fail, failed;
 
-	MPI_Comm_size(comm, &mpi_size);
-	MPI_Comm_rank(comm, &mpi_rank);
+	par_size(PAR_COMM_WORLD, &mpi_size);
+	par_rank(PAR_COMM_WORLD, &mpi_rank);
 
 	D_ALLOC_ARRAY(rc_arr, mpi_size);
 	assert_non_null(rc_arr);
 
-	MPI_Allgather(&rc, 1, MPI_INT, rc_arr, 1, MPI_INT, comm);
+	par_allgather(PAR_COMM_WORLD, &rc, rc_arr, 1, PAR_INT);
 	passed = expect_fail = failed = 0;
 	for (i = 0; i < mpi_size; i++) {
 		if (rc_arr[i] == 0)
@@ -52,22 +52,24 @@ test_cond_helper(test_arg_t *arg, int rf)
 	dfs_t		*dfs;
 	daos_handle_t	coh;
 	dfs_obj_t	*file;
+	dfs_obj_t	*dir;
 	char		*filename = "cond_testfile";
 	char		*dirname = "cond_testdir";
 	int		rc, op_rc;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0) {
 		dfs_attr_t attr = {};
 
-		attr.da_props = daos_prop_alloc(1);
+		attr.da_props = daos_prop_alloc(2);
 		assert_non_null(attr.da_props);
 		attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
 		attr.da_props->dpp_entries[0].dpe_val = rf;
+		attr.da_props->dpp_entries[1].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+		attr.da_props->dpp_entries[1].dpe_val = DAOS_PROP_CO_REDUN_RANK;
 
-		uuid_generate(cuuid);
-		rc = dfs_cont_create(arg->pool.poh, cuuid, &attr, &coh, &dfs);
-		assert_int_equal(rc, 0);
+		rc = dfs_cont_create(arg->pool.poh, &cuuid, &attr, &coh, &dfs);
+		assert_success(rc);
 		printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(cuuid));
 
 		daos_prop_free(attr.da_props);
@@ -75,57 +77,81 @@ test_cond_helper(test_arg_t *arg, int rf)
 
 	handle_share(&coh, HANDLE_CO, arg->myrank, arg->pool.poh, 0);
 	dfs_test_share(arg->pool.poh, coh, arg->myrank, &dfs);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	if (arg->myrank == 0)
 		print_message("All ranks create the same file with O_EXCL\n");
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	op_rc = dfs_open(dfs, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR,
 			 O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &file);
-	rc = check_one_success(op_rc, EEXIST, MPI_COMM_WORLD);
+	rc = check_one_success(op_rc, EEXIST);
 	assert_int_equal(rc, 0);
 	if (op_rc == 0) {
 		rc = dfs_release(file);
 		assert_int_equal(rc, 0);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	if (arg->myrank == 0)
 		print_message("All ranks unlink the same file\n");
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	op_rc = dfs_remove(dfs, NULL, filename, true, NULL);
-	rc = check_one_success(op_rc, ENOENT, MPI_COMM_WORLD);
+	rc = check_one_success(op_rc, ENOENT);
 	if (rc)
 		print_error("Failed concurrent file unlink\n");
 	assert_int_equal(rc, 0);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	if (arg->myrank == 0)
-		print_message("All ranks create the same directory\n");
-	MPI_Barrier(MPI_COMM_WORLD);
+		print_message("All ranks create the same directory with mkdir\n");
+	par_barrier(PAR_COMM_WORLD);
 	op_rc = dfs_mkdir(dfs, NULL, dirname, S_IWUSR | S_IRUSR, 0);
-	rc = check_one_success(op_rc, EEXIST, MPI_COMM_WORLD);
+	rc = check_one_success(op_rc, EEXIST);
 	if (rc)
 		print_error("Failed concurrent dir creation\n");
 	assert_int_equal(rc, 0);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	if (arg->myrank == 0)
 		print_message("All ranks remove the same directory\n");
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	op_rc = dfs_remove(dfs, NULL, dirname, true, NULL);
-	rc = check_one_success(op_rc, ENOENT, MPI_COMM_WORLD);
+	rc = check_one_success(op_rc, ENOENT);
 	if (rc)
 		print_error("Failed concurrent rmdir\n");
 	assert_int_equal(rc, 0);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
+
+
+	if (arg->myrank == 0)
+		print_message("All ranks create the same dir with O_EXCL\n");
+	par_barrier(PAR_COMM_WORLD);
+	op_rc = dfs_open(dfs, NULL, dirname, S_IFDIR | S_IWUSR | S_IRUSR,
+			 O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &dir);
+	rc = check_one_success(op_rc, EEXIST);
+	assert_int_equal(rc, 0);
+	if (op_rc == 0) {
+		rc = dfs_release(dir);
+		assert_int_equal(rc, 0);
+	}
+	par_barrier(PAR_COMM_WORLD);
+
+	if (arg->myrank == 0)
+		print_message("All ranks remove the same dir\n");
+	par_barrier(PAR_COMM_WORLD);
+	op_rc = dfs_remove(dfs, NULL, dirname, true, NULL);
+	rc = check_one_success(op_rc, ENOENT);
+	if (rc)
+		print_error("Failed concurrent rmdir\n");
+	assert_int_equal(rc, 0);
+	par_barrier(PAR_COMM_WORLD);
 
 	/** test atomic rename with DFS DTX mode */
-	bool use_dtx;
+	bool use_dtx = false;
 
 	d_getenv_bool("DFS_USE_DTX", &use_dtx);
 	if (!use_dtx)
-		return;
+		goto out;
 	if (arg->myrank == 0) {
 		print_message("All ranks rename the same file\n");
 		rc = dfs_open(dfs, NULL, filename,
@@ -136,17 +162,17 @@ test_cond_helper(test_arg_t *arg, int rf)
 		rc = dfs_release(file);
 		assert_int_equal(rc, 0);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	char newfilename[1024];
 
 	sprintf(newfilename, "%s_new.%d", filename, arg->myrank);
 	op_rc = dfs_move(dfs, NULL, filename, NULL, newfilename, NULL);
-	rc = check_one_success(op_rc, ENOENT, MPI_COMM_WORLD);
+	rc = check_one_success(op_rc, ENOENT);
 	if (rc)
 		print_error("Failed concurrent rename\n");
 	assert_int_equal(rc, 0);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	/* Verify TX consistency semantics. */
 	if (op_rc == 0 && arg->myrank == 0) {
@@ -171,19 +197,22 @@ test_cond_helper(test_arg_t *arg, int rf)
 		dfs_release(file);
 	}
 
+out:
 	rc = dfs_umount(dfs);
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0) {
-		rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
+		char	str[37];
+
+		uuid_unparse(cuuid, str);
+		rc = daos_cont_destroy(arg->pool.poh, str, 0, NULL);
 		assert_rc_equal(rc, 0);
-		printf("Destroyed DFS Container "DF_UUIDF"\n",
-		       DP_UUID(cuuid));
+		printf("Destroyed DFS Container "DF_UUIDF"\n", DP_UUID(cuuid));
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 }
 
 static void
@@ -222,7 +251,7 @@ dfs_test_short_read_internal(void **state, daos_oclass_id_t cid,
 	d_iov_t			iov;
 	int			i, rc;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	D_ALLOC(wbuf, buf_size);
 	assert_non_null(wbuf);
 	for (i = 0; i < buf_size / sizeof(int); i++)
@@ -254,12 +283,12 @@ dfs_test_short_read_internal(void **state, daos_oclass_id_t cid,
 	assert_int_equal(read_size, 0);
 
 	/** write strided pattern and check read size with segmented buffers */
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0) {
 		rc = dfs_write(dfs_mt, obj, &wsgl, 0, NULL);
 		assert_int_equal(rc, 0);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	/** set contig mem location */
 	rsgl.sg_nr = 1;
@@ -283,64 +312,64 @@ dfs_test_short_read_internal(void **state, daos_oclass_id_t cid,
 	assert_int_equal(rc, 0);
 	assert_int_equal(read_size, buf_size);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0) {
 		rc = dfs_write(dfs_mt, obj, &wsgl, 2 * buf_size, NULL);
 		assert_int_equal(rc, 0);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(read_size, buf_size * 3);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0) {
 		rc = dfs_write(dfs_mt, obj, &wsgl, 5 * buf_size, NULL);
 		assert_int_equal(rc, 0);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(read_size, buf_size * 6);
 
 	/** truncate the buffer to a large size, read should return all */
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0) {
 		rc = dfs_punch(dfs_mt, obj, 1048576 * 2, DFS_MAX_FSIZE);
 		assert_int_equal(rc, 0);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(read_size, buf_size * NUM_SEGS);
 
 	/** punch all the data, read should return 0 */
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0) {
 		rc = dfs_punch(dfs_mt, obj, 0, DFS_MAX_FSIZE);
 		assert_int_equal(rc, 0);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	rc = dfs_read(dfs_mt, obj, &rsgl, 0, &read_size, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(read_size, 0);
 
 	/** write to 2 chunks with a large gap in the middle */
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0) {
 		rc = dfs_write(dfs_mt, obj, &wsgl, 0, NULL);
 		assert_int_equal(rc, 0);
 		rc = dfs_write(dfs_mt, obj, &wsgl, 1048576 * 3, NULL);
 		assert_int_equal(rc, 0);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	/** reading in between, even holes should not be a short read */
 	rc = dfs_read(dfs_mt, obj, &rsgl, 1048576, &read_size, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(read_size, buf_size * NUM_SEGS);
 
 	rc = dfs_release(obj);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0) {
 		rc = dfs_remove(dfs_mt, NULL, name, 0, NULL);
 		assert_int_equal(rc, 0);
@@ -367,23 +396,23 @@ dfs_test_ec_short_read(void **state)
 		return;
 
 	/* less than 1 EC stripe */
-	dfs_test_short_read_internal(state, DAOS_OC_EC_K4P2_L32K,
+	dfs_test_short_read_internal(state, OC_EC_4P2G1,
 				     32 * 1024 * 8, 2000);
 
 	/* partial EC stripe */
-	dfs_test_short_read_internal(state, DAOS_OC_EC_K4P2_L32K,
+	dfs_test_short_read_internal(state, OC_EC_4P2G1,
 				     32 * 1024 * 8, 32 * 1024 * 2);
 
 	/* full EC stripe */
-	dfs_test_short_read_internal(state, DAOS_OC_EC_K4P2_L32K,
+	dfs_test_short_read_internal(state, OC_EC_4P2G1,
 				     32 * 1024 * 8, 32 * 1024 * 4);
 
 	/* one full EC stripe + partial EC stripe */
-	dfs_test_short_read_internal(state, DAOS_OC_EC_K4P2_L32K,
+	dfs_test_short_read_internal(state, OC_EC_4P2G1,
 				     32 * 1024 * 8, 32 * 1024 * 6);
 
 	/* 2 full stripe */
-	dfs_test_short_read_internal(state, DAOS_OC_EC_K4P2_L32K,
+	dfs_test_short_read_internal(state, OC_EC_4P2G1,
 				     32 * 1024 * 8, 32 * 1024 * 6);
 }
 
@@ -402,7 +431,7 @@ dfs_test_hole_mgmt(void **state)
 	struct stat		stbuf;
 	int			i, rc;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	D_ALLOC(wbuf, buf_size);
 	assert_non_null(wbuf);
 	memset(wbuf, 'c', buf_size);
@@ -443,7 +472,7 @@ dfs_test_hole_mgmt(void **state)
 	assert_int_equal(rc, 0);
 
 	/** write 1 byte at a large offset */
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0) {
 		d_iov_set(&iov, wbuf, 1);
 		wsgl.sg_nr = 1;
@@ -452,7 +481,7 @@ dfs_test_hole_mgmt(void **state)
 		rc = dfs_write(dfs_mt, obj, &wsgl, 10485760, NULL);
 		assert_int_equal(rc, 0);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	rc = dfs_ostat(dfs_mt, obj, &stbuf);
 	assert_int_equal(rc, 0);
@@ -469,13 +498,13 @@ dfs_test_hole_mgmt(void **state)
 	/** reset */
 	memset(rbuf[0], '-', buf_size + 100);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	/** truncate file back to 0 */
 	if (arg->myrank == 0) {
 		rc = dfs_punch(dfs_mt, obj, 0, DFS_MAX_FSIZE);
 		assert_int_equal(rc, 0);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	rc = dfs_ostat(dfs_mt, obj, &stbuf);
 	assert_int_equal(rc, 0);
@@ -489,7 +518,7 @@ dfs_test_hole_mgmt(void **state)
 	assert_int_equal(rc, 0);
 
 	/** write a strided pattern, every 1k bytes */
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0) {
 		d_iov_set(&iov, wbuf, buf_size);
 		wsgl.sg_nr = 1;
@@ -501,7 +530,7 @@ dfs_test_hole_mgmt(void **state)
 			assert_int_equal(rc, 0);
 		}
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	rc = dfs_ostat(dfs_mt, obj, &stbuf);
 	assert_int_equal(rc, 0);
@@ -558,20 +587,20 @@ dfs_test_hole_mgmt(void **state)
 	for (i = 0; i < NUM_SEGS; i++)
 		memset(rbuf[i], '-', buf_size + 100);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	/** truncate file back to 0 */
 	if (arg->myrank == 0) {
 		rc = dfs_punch(dfs_mt, obj, 0, DFS_MAX_FSIZE);
 		assert_int_equal(rc, 0);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	rc = dfs_ostat(dfs_mt, obj, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_size, 0);
 
 	/** write strided 64 byte blocks */
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0) {
 		char		*ptr = wbuf;
 		daos_off_t	off = 0;
@@ -587,7 +616,7 @@ dfs_test_hole_mgmt(void **state)
 			off += 64 * 2;
 		}
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	rc = dfs_ostat(dfs_mt, obj, &stbuf);
 	assert_int_equal(rc, 0);
@@ -628,7 +657,7 @@ dfs_test_hole_mgmt(void **state)
 	}
 
 	rc = dfs_release(obj);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0) {
 		rc = dfs_remove(dfs_mt, NULL, name, 0, NULL);
 		assert_int_equal(rc, 0);
@@ -646,33 +675,26 @@ static void
 dfs_test_cont_atomic(void **state)
 {
 	test_arg_t		*arg = *state;
-	uuid_t			cuuid;
 	daos_cont_info_t	co_info;
 	daos_handle_t		coh;
 	dfs_t			*dfs;
 	int			rc, op_rc;
 
-	if (arg->myrank == 0)
-		uuid_generate(cuuid);
-	/** share uuid with other ranks */
-	MPI_Bcast(cuuid, 16, MPI_CHAR, 0, MPI_COMM_WORLD);
-
 	/** All create a DFS container with POSIX layout */
 	if (arg->myrank == 0)
 		print_message("All ranks create the same POSIX container\n");
 
-	op_rc = dfs_cont_create(arg->pool.poh, cuuid, NULL, NULL, NULL);
-	rc = check_one_success(op_rc, EEXIST, MPI_COMM_WORLD);
+	op_rc = dfs_cont_create_with_label(arg->pool.poh, "dfs_par_test_cont",
+					   NULL, NULL, NULL, NULL);
+	rc = check_one_success(op_rc, EEXIST);
 	assert_int_equal(rc, 0);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	if (arg->myrank == 0)
-		print_message("one rank Created POSIX Container "DF_UUIDF"\n",
-			      DP_UUID(cuuid));
+		print_message("one rank Created POSIX Container dfs_par_test_cont\n");
 
-	rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
-			    &coh, &co_info, NULL);
-	assert_int_equal(rc, 0);
+	rc = daos_cont_open(arg->pool.poh, "dfs_par_test_cont", DAOS_COO_RW, &coh, &co_info, NULL);
+	assert_success(rc);
 
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
 	assert_int_equal(rc, 0);
@@ -680,32 +702,34 @@ dfs_test_cont_atomic(void **state)
 	rc = dfs_umount(dfs);
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(coh, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0) {
-		rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
-		assert_int_equal(rc, 0);
-		print_message("Destroyed POSIX Container "DF_UUIDF"\n",
-			      DP_UUID(cuuid));
+		rc = daos_cont_destroy(arg->pool.poh, "dfs_par_test_cont", 0, NULL);
+		assert_success(rc);
+		print_message("Destroyed POSIX Container dfs_par_test_cont\n");
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 }
 
 static void
-file_atomicity_test_helper(test_arg_t *arg, int rf)
+atomicity_test_helper(test_arg_t *arg, int rf)
 {
 	uuid_t		cuuid;
 	dfs_t		*dfs;
 	daos_handle_t	coh;
 	dfs_obj_t	*file;
+	dfs_obj_t	*dir;
 	char		*filename = "testfile";
-	daos_obj_id_t	oid1, oid2;
+	char		*dirname = "testdir";
+	daos_obj_id_t	foid1, foid2;
+	daos_obj_id_t	doid1, doid2;
 	uint64_t	*oids_hi = NULL, *oids_lo = NULL;
 	int		i;
 	int		rc;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0) {
 		dfs_attr_t attr = {};
 
@@ -714,8 +738,7 @@ file_atomicity_test_helper(test_arg_t *arg, int rf)
 		attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
 		attr.da_props->dpp_entries[0].dpe_val = rf;
 
-		uuid_generate(cuuid);
-		rc = dfs_cont_create(arg->pool.poh, cuuid, &attr, &coh, &dfs);
+		rc = dfs_cont_create(arg->pool.poh, &cuuid, &attr, &coh, &dfs);
 		assert_int_equal(rc, 0);
 		printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(cuuid));
 
@@ -725,15 +748,24 @@ file_atomicity_test_helper(test_arg_t *arg, int rf)
 	handle_share(&coh, HANDLE_CO, arg->myrank, arg->pool.poh, 0);
 	dfs_test_share(arg->pool.poh, coh, arg->myrank, &dfs);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	/** all should succeed with the same file oid */
 	rc = dfs_open(dfs, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT, 0, 0,
 		      NULL, &file);
 	assert_int_equal(rc, 0);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
-	rc = dfs_obj2id(file, &oid1);
+	/** all should succeed with the same dir oid */
+	rc = dfs_open(dfs, NULL, dirname, S_IFDIR | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT, 0, 0,
+		      NULL, &dir);
+	assert_int_equal(rc, 0);
+	par_barrier(PAR_COMM_WORLD);
+
+	rc = dfs_obj2id(file, &foid1);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_obj2id(dir, &doid1);
 	assert_int_equal(rc, 0);
 
 	if (arg->myrank == 0) {
@@ -743,113 +775,162 @@ file_atomicity_test_helper(test_arg_t *arg, int rf)
 		assert_non_null(oids_lo);
 	}
 
-	MPI_Gather(&oid1.hi, 1, MPI_UINT64_T, oids_hi, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
-	MPI_Gather(&oid1.lo, 1, MPI_UINT64_T, oids_lo, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+	par_gather(PAR_COMM_WORLD, &foid1.hi, oids_hi, 1, PAR_UINT64, 0);
+	par_gather(PAR_COMM_WORLD, &foid1.lo, oids_lo, 1, PAR_UINT64, 0);
 
 	if (arg->myrank == 0) {
 		for (i = 0; i < arg->rank_size; i++) {
-			if (oid1.hi != oids_hi[i])
+			if (foid1.hi != oids_hi[i])
 				print_error("OID mismatch between ranks opening the same file");
-			assert_int_equal(oid1.hi, oids_hi[i]);
-			if (oid1.lo != oids_lo[i])
+			assert_int_equal(foid1.hi, oids_hi[i]);
+			if (foid1.lo != oids_lo[i])
 				print_error("OID mismatch between ranks opening the same file");
-			assert_int_equal(oid1.lo, oids_lo[i]);
+			assert_int_equal(foid1.lo, oids_lo[i]);
+		}
+	}
+
+	par_gather(PAR_COMM_WORLD, &doid1.hi, oids_hi, 1, PAR_UINT64, 0);
+	par_gather(PAR_COMM_WORLD, &doid1.lo, oids_lo, 1, PAR_UINT64, 0);
+
+	if (arg->myrank == 0) {
+		for (i = 0; i < arg->rank_size; i++) {
+			if (doid1.hi != oids_hi[i])
+				print_error("OID mismatch between ranks opening the same file");
+			assert_int_equal(doid1.hi, oids_hi[i]);
+			if (doid1.lo != oids_lo[i])
+				print_error("OID mismatch between ranks opening the same file");
+			assert_int_equal(doid1.lo, oids_lo[i]);
 		}
 	}
 
 	rc = dfs_release(file);
 	assert_int_equal(rc, 0);
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0) {
-		print_message("remove the file\n");
+		print_message("remove the file and dir\n");
 		rc = dfs_remove(dfs, NULL, filename, true, NULL);
 		assert_int_equal(rc, 0);
+		rc = dfs_remove(dfs, NULL, dirname, true, NULL);
+		assert_int_equal(rc, 0);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	if (arg->myrank == 0)
-		print_message("reopen the file with OCREAT from all ranks\n");
-	MPI_Barrier(MPI_COMM_WORLD);
+		print_message("reopen the file and dir with OCREAT from all ranks\n");
+	par_barrier(PAR_COMM_WORLD);
 
 	/** all should succeed with the same file oid */
 	rc = dfs_open(dfs, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT, 0, 0,
 		      NULL, &file);
 	assert_int_equal(rc, 0);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
+	rc = dfs_open(dfs, NULL, dirname, S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT, 0, 0,
+		      NULL, &dir);
+	assert_int_equal(rc, 0);
+	par_barrier(PAR_COMM_WORLD);
 
-	rc = dfs_obj2id(file, &oid2);
+	rc = dfs_obj2id(file, &foid2);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj2id(dir, &doid2);
 	assert_int_equal(rc, 0);
 
-	if (oid2.hi == oid1.hi && oid2.lo == oid1.lo) {
+	if (foid2.hi == foid1.hi && foid2.lo == foid1.lo) {
 		print_error("%d: dfs_open returned an existing OID!\n", arg->myrank);
-		assert_false(oid2.hi == oid1.hi && oid2.lo == oid1.lo);
+		assert_false(foid2.hi == foid1.hi && foid2.lo == foid1.lo);
 	}
 
-	MPI_Gather(&oid2.hi, 1, MPI_UINT64_T, oids_hi, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
-	MPI_Gather(&oid2.lo, 1, MPI_UINT64_T, oids_lo, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+	if (doid2.hi == doid1.hi && doid2.lo == doid1.lo) {
+		print_error("%d: dfs_open returned an existing OID!\n", arg->myrank);
+		assert_false(doid2.hi == doid1.hi && doid2.lo == doid1.lo);
+	}
+
+	par_gather(PAR_COMM_WORLD, &foid2.hi, oids_hi, 1, PAR_UINT64, 0);
+	par_gather(PAR_COMM_WORLD, &foid2.lo, oids_lo, 1, PAR_UINT64, 0);
 
 	if (arg->myrank == 0) {
 		for (i = 0; i < arg->rank_size; i++) {
-			if (oid2.hi != oids_hi[i])
+			if (foid2.hi != oids_hi[i])
 				print_error("OID mismatch between ranks opening the same file");
-			assert_int_equal(oid2.hi, oids_hi[i]);
-			if (oid2.lo != oids_lo[i])
+			assert_int_equal(foid2.hi, oids_hi[i]);
+			if (foid2.lo != oids_lo[i])
 				print_error("OID mismatch between ranks opening the same file");
-			assert_int_equal(oid2.lo, oids_lo[i]);
+			assert_int_equal(foid2.lo, oids_lo[i]);
+		}
+	}
+
+	par_gather(PAR_COMM_WORLD, &doid2.hi, oids_hi, 1, PAR_UINT64, 0);
+	par_gather(PAR_COMM_WORLD, &doid2.lo, oids_lo, 1, PAR_UINT64, 0);
+
+	if (arg->myrank == 0) {
+		for (i = 0; i < arg->rank_size; i++) {
+			if (doid2.hi != oids_hi[i])
+				print_error("OID mismatch between ranks opening the same file");
+			assert_int_equal(doid2.hi, oids_hi[i]);
+			if (doid2.lo != oids_lo[i])
+				print_error("OID mismatch between ranks opening the same file");
+			assert_int_equal(doid2.lo, oids_lo[i]);
 		}
 	}
 
 	rc = dfs_release(file);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir);
 	assert_int_equal(rc, 0);
 	if (arg->myrank == 0) {
 		D_FREE(oids_hi);
 		D_FREE(oids_lo);
 	}
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0) {
-		print_message("remove the file\n");
+		print_message("remove the file and dir\n");
 		rc = dfs_remove(dfs, NULL, filename, true, NULL);
 		assert_int_equal(rc, 0);
+		rc = dfs_remove(dfs, NULL, dirname, true, NULL);
+		assert_int_equal(rc, 0);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	rc = dfs_umount(dfs);
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(coh, NULL);
-	assert_rc_equal(rc, 0);
+	assert_success(rc);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0) {
-		rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
+		char str[37];
+
+		uuid_unparse(cuuid, str);
+		rc = daos_cont_destroy(arg->pool.poh, str, 0, NULL);
 		assert_rc_equal(rc, 0);
-		printf("Destroyed DFS Container "DF_UUIDF"\n",
-		       DP_UUID(cuuid));
+		printf("Destroyed DFS Container "DF_UUIDF"\n", DP_UUID(cuuid));
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 }
 
 static void
-dfs_test_file_create_atomicity(void **state)
+dfs_test_create_atomicity(void **state)
 {
 	test_arg_t	*arg = *state;
 
 	if (arg->myrank == 0) {
-		print_message("All ranks create the same file without O_EXCL\n");
+		print_message("All ranks create the same file & dir without O_EXCL\n");
 		print_message("Testing with RF 0 ...\n");
 	}
-	file_atomicity_test_helper(arg, DAOS_PROP_CO_REDUN_RF0);
+	atomicity_test_helper(arg, DAOS_PROP_CO_REDUN_RF0);
 
 	if (test_runable(arg, 2)) {
 		if (arg->myrank == 0)
 			print_message("Testing with RF 1 ...\n");
-		file_atomicity_test_helper(arg, DAOS_PROP_CO_REDUN_RF1);
+		atomicity_test_helper(arg, DAOS_PROP_CO_REDUN_RF1);
 	}
 	if (test_runable(arg, 3)) {
 		if (arg->myrank == 0)
 			print_message("Testing with RF 2 ...\n");
-		file_atomicity_test_helper(arg, DAOS_PROP_CO_REDUN_RF2);
+		atomicity_test_helper(arg, DAOS_PROP_CO_REDUN_RF2);
 	}
 }
 
@@ -864,27 +945,41 @@ static const struct CMUnitTest dfs_par_tests[] = {
 	  dfs_test_hole_mgmt, async_disable, test_case_teardown},
 	{ "DFS_PAR_TEST5: DFS Container create atomicity",
 	  dfs_test_cont_atomic, async_disable, test_case_teardown},
-	{ "DFS_PAR_TEST6: DFS File create (without O_EXCL) atomicity",
-	  dfs_test_file_create_atomicity, async_disable, test_case_teardown},
+	{ "DFS_PAR_TEST6: DFS File and Dir create (without O_EXCL) atomicity",
+	  dfs_test_create_atomicity, async_disable, test_case_teardown},
 };
 
 static int
 dfs_setup(void **state)
 {
-	test_arg_t		*arg;
-	int			rc = 0;
+	test_arg_t	*arg;
+	int		rc = 0;
 
-	rc = test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE,
-			0, NULL);
-	assert_int_equal(rc, 0);
+	rc = test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE, 0, NULL);
+	if (rc != 0)
+		return rc;
 
 	arg = *state;
 
 	if (arg->myrank == 0) {
-		dfs_attr_t attr = {};
+		dfs_attr_t	attr = {};
+		bool		use_dtx = false;
 
-		uuid_generate(co_uuid);
-		rc = dfs_cont_create(arg->pool.poh, co_uuid, &attr, &co_hdl, &dfs_mt);
+		d_getenv_bool("DFS_USE_DTX", &use_dtx);
+		if (use_dtx)
+			print_message("Running DFS Parallel tests with DTX enabled\n");
+		else
+			print_message("Running DFS Parallel tests with DTX disabled\n");
+
+		attr.da_props = daos_prop_alloc(2);
+		assert_non_null(attr.da_props);
+		attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+		attr.da_props->dpp_entries[0].dpe_val = 1 << 15;
+		attr.da_props->dpp_entries[1].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+		attr.da_props->dpp_entries[1].dpe_val = DAOS_PROP_CO_REDUN_RANK;
+
+		rc = dfs_cont_create(arg->pool.poh, &co_uuid, &attr, &co_hdl, &dfs_mt);
+		daos_prop_free(attr.da_props);
 		assert_int_equal(rc, 0);
 		printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 	}
@@ -906,14 +1001,16 @@ dfs_teardown(void **state)
 	rc = daos_cont_close(co_hdl, NULL);
 	assert_rc_equal(rc, 0);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0) {
-		rc = daos_cont_destroy(arg->pool.poh, co_uuid, 1, NULL);
+		char	str[37];
+
+		uuid_unparse(co_uuid, str);
+		rc = daos_cont_destroy(arg->pool.poh, str, 0, NULL);
 		assert_rc_equal(rc, 0);
-		printf("Destroyed DFS Container "DF_UUIDF"\n",
-		       DP_UUID(co_uuid));
+		printf("Destroyed DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	return test_teardown(state);
 }
@@ -923,10 +1020,17 @@ run_dfs_par_test(int rank, int size)
 {
 	int rc = 0;
 
-	MPI_Barrier(MPI_COMM_WORLD);
-	rc = cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Parallel",
-					 dfs_par_tests, dfs_setup,
+	par_barrier(PAR_COMM_WORLD);
+	rc = cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Parallel", dfs_par_tests, dfs_setup,
 					 dfs_teardown);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
+
+	/** run tests again with DTX */
+	d_setenv("DFS_USE_DTX", "1", 1);
+
+	par_barrier(PAR_COMM_WORLD);
+	rc += cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Parallel_DTX", dfs_par_tests,
+					  dfs_setup, dfs_teardown);
+	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }

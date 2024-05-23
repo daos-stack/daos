@@ -114,7 +114,7 @@ static void
 	while (rpc_srv.shutdown == 0) {
 		rc = crt_progress(*p_ctx, 1000);
 		if (rc != 0 && rc != -DER_TIMEDOUT) {
-			D_ERROR("crt_progress failed %d", rc);
+			D_ERROR("crt_progress failed %d\n", rc);
 			break;
 		}
 	}
@@ -207,7 +207,8 @@ srv_rpc_init(void)
 
 	dbg("---%s--->", __func__);
 
-	rc = crt_init(CRT_RPC_MULTITIER_GRPID, CRT_FLAG_BIT_SERVER);
+	rc = crt_init(CRT_RPC_MULTITIER_GRPID, CRT_FLAG_BIT_SERVER |
+					       CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	D_ASSERTF(rc == 0, "crt_init failed %d\n", rc);
 
 	rc = crt_group_config_path_set(rpc_srv.config_path);

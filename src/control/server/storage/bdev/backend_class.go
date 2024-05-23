@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	// device block size hardcoded to 4096
-	aioBlockSize = humanize.KiByte * 4
+	aioBlockSize       = humanize.KiByte * 4 // device block size hardcoded to 4096 bytes
+	defaultAioFileMode = 0600                // AIO file permissions set to owner +rw
 )
 
 func createEmptyFile(log logging.Logger, path string, size uint64) error {
@@ -62,7 +62,35 @@ func createEmptyFile(log logging.Logger, path string, size uint64) error {
 	return nil
 }
 
-func writeConfFile(log logging.Logger, buf *bytes.Buffer, req *storage.BdevWriteConfigRequest) error {
+func createAioFile(log logging.Logger, path string, req *storage.BdevFormatRequest) (devResp *storage.BdevDeviceFormatResponse) {
+	devResp = new(storage.BdevDeviceFormatResponse)
+	defer func() {
+		if devResp.Error != nil {
+			os.Remove(path)
+		}
+	}()
+
+	if err := createEmptyFile(log, path, req.Properties.DeviceFileSize); err != nil {
+		devResp.Error = FaultFormatError(path, err)
+		return
+	}
+	if err := os.Chown(path, req.OwnerUID, req.OwnerGID); err != nil {
+		devResp.Error = FaultFormatError(path, errors.Wrapf(err,
+			"failed to set ownership of %q to %d.%d", path,
+			req.OwnerUID, req.OwnerGID))
+		return
+	}
+	if err := os.Chmod(path, defaultAioFileMode); err != nil {
+		devResp.Error = FaultFormatError(path, errors.Wrapf(err,
+			"failed to set file mode of %q to %s", path,
+			os.FileMode(defaultAioFileMode)))
+		return
+	}
+
+	return
+}
+
+func writeConfigFile(log logging.Logger, buf *bytes.Buffer, req *storage.BdevWriteConfigRequest) error {
 	if buf.Len() == 0 {
 		return errors.New("generated file is unexpectedly empty")
 	}
@@ -87,9 +115,14 @@ func writeConfFile(log logging.Logger, buf *bytes.Buffer, req *storage.BdevWrite
 		req.OwnerUID, req.OwnerGID)
 }
 
-// writeJSONConf generates nvme config file for given bdev type to be consumed
+// writeJsonConfig generates nvme config file for given bdev type to be consumed
 // by spdk.
-func writeJSONConf(log logging.Logger, req *storage.BdevWriteConfigRequest) error {
+func writeJsonConfig(log logging.Logger, req *storage.BdevWriteConfigRequest) error {
+	if req == nil {
+		return errors.Errorf("nil %T request", req)
+	}
+	log.Debugf("writing json nvme conf file from req: %+v", req)
+
 	if len(req.TierProps) == 0 {
 		return nil
 	}
@@ -98,7 +131,7 @@ func writeJSONConf(log logging.Logger, req *storage.BdevWriteConfigRequest) erro
 	}
 	hasBdevs := false
 	for _, tierProp := range req.TierProps {
-		if tierProp.Class != storage.ClassNvme || len(tierProp.DeviceList) > 0 {
+		if tierProp.Class != storage.ClassNvme || tierProp.DeviceList.Len() > 0 {
 			hasBdevs = true
 			break
 		}
@@ -118,7 +151,7 @@ func writeJSONConf(log logging.Logger, req *storage.BdevWriteConfigRequest) erro
 		return err
 	}
 
-	if err := writeConfFile(log, bytes.NewBuffer(buf), req); err != nil {
+	if err := writeConfigFile(log, bytes.NewBuffer(buf), req); err != nil {
 		return err
 	}
 

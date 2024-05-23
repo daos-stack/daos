@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,6 +7,7 @@
 package system
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
 
 var (
@@ -96,7 +98,7 @@ func IsNotLeader(err error) bool {
 // ErrMemberExists indicates the failure of an operation that
 // expected the given member to not exist.
 type ErrMemberExists struct {
-	Rank *Rank
+	Rank *ranklist.Rank
 	UUID *uuid.UUID
 }
 
@@ -111,11 +113,11 @@ func (err *ErrMemberExists) Error() string {
 	}
 }
 
-func errRankExists(r Rank) *ErrMemberExists {
+func ErrRankExists(r ranklist.Rank) *ErrMemberExists {
 	return &ErrMemberExists{Rank: &r}
 }
 
-func errUuidExists(u uuid.UUID) *ErrMemberExists {
+func ErrUuidExists(u uuid.UUID) *ErrMemberExists {
 	return &ErrMemberExists{UUID: &u}
 }
 
@@ -134,8 +136,8 @@ type ErrJoinFailure struct {
 	isExcluded  bool
 	newUUID     *uuid.UUID
 	curUUID     *uuid.UUID
-	newRank     *Rank
-	curRank     *Rank
+	newRank     *ranklist.Rank
+	curRank     *ranklist.Rank
 }
 
 func (err *ErrJoinFailure) Error() string {
@@ -151,7 +153,7 @@ func (err *ErrJoinFailure) Error() string {
 	}
 }
 
-func errRankChanged(new, cur Rank, uuid uuid.UUID) *ErrJoinFailure {
+func ErrRankChanged(new, cur ranklist.Rank, uuid uuid.UUID) *ErrJoinFailure {
 	return &ErrJoinFailure{
 		rankChanged: true,
 		curUUID:     &uuid,
@@ -160,7 +162,7 @@ func errRankChanged(new, cur Rank, uuid uuid.UUID) *ErrJoinFailure {
 	}
 }
 
-func errUuidChanged(new, cur uuid.UUID, rank Rank) *ErrJoinFailure {
+func ErrUuidChanged(new, cur uuid.UUID, rank ranklist.Rank) *ErrJoinFailure {
 	return &ErrJoinFailure{
 		uuidChanged: true,
 		newUUID:     &new,
@@ -169,7 +171,7 @@ func errUuidChanged(new, cur uuid.UUID, rank Rank) *ErrJoinFailure {
 	}
 }
 
-func errAdminExcluded(uuid uuid.UUID, rank Rank) *ErrJoinFailure {
+func ErrAdminExcluded(uuid uuid.UUID, rank ranklist.Rank) *ErrJoinFailure {
 	return &ErrJoinFailure{
 		isExcluded: true,
 		curUUID:    &uuid,
@@ -187,7 +189,7 @@ func IsJoinFailure(err error) bool {
 // ErrMemberNotFound indicates a failure to find a member with the
 // given search criterion.
 type ErrMemberNotFound struct {
-	byRank *Rank
+	byRank *ranklist.Rank
 	byUUID *uuid.UUID
 	byAddr *net.TCPAddr
 }
@@ -212,12 +214,55 @@ func IsMemberNotFound(err error) bool {
 	return ok
 }
 
+func ErrMemberRankNotFound(r ranklist.Rank) *ErrMemberNotFound {
+	return &ErrMemberNotFound{byRank: &r}
+}
+
+func ErrMemberUUIDNotFound(u uuid.UUID) *ErrMemberNotFound {
+	return &ErrMemberNotFound{byUUID: &u}
+}
+
+func ErrMemberAddrNotFound(a *net.TCPAddr) *ErrMemberNotFound {
+	return &ErrMemberNotFound{byAddr: a}
+}
+
 // ErrPoolNotFound indicates a failure to find a pool service with the
 // given search criterion.
 type ErrPoolNotFound struct {
-	byRank  *Rank
+	byRank  *ranklist.Rank
 	byUUID  *uuid.UUID
 	byLabel *string
+}
+
+func (err *ErrPoolNotFound) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Rank  *ranklist.Rank
+		UUID  *uuid.UUID
+		Label *string
+	}{
+		Rank:  err.byRank,
+		UUID:  err.byUUID,
+		Label: err.byLabel,
+	})
+}
+
+func (err *ErrPoolNotFound) UnmarshalJSON(data []byte) error {
+	if err == nil {
+		return nil
+	}
+
+	var tmp struct {
+		Rank  *ranklist.Rank
+		UUID  *uuid.UUID
+		Label *string
+	}
+	if err := json.Unmarshal(data, &tmp); err != nil {
+		return err
+	}
+	err.byRank = tmp.Rank
+	err.byUUID = tmp.UUID
+	err.byLabel = tmp.Label
+	return nil
 }
 
 func (err *ErrPoolNotFound) Error() string {
@@ -237,5 +282,34 @@ func (err *ErrPoolNotFound) Error() string {
 // supplied error is an instance of ErrPoolNotFound.
 func IsPoolNotFound(err error) bool {
 	_, ok := errors.Cause(err).(*ErrPoolNotFound)
+	return ok
+}
+
+func ErrPoolRankNotFound(r ranklist.Rank) *ErrPoolNotFound {
+	return &ErrPoolNotFound{byRank: &r}
+}
+
+func ErrPoolUUIDNotFound(u uuid.UUID) *ErrPoolNotFound {
+	return &ErrPoolNotFound{byUUID: &u}
+}
+
+func ErrPoolLabelNotFound(l string) *ErrPoolNotFound {
+	return &ErrPoolNotFound{byLabel: &l}
+}
+
+type errSystemAttrNotFound struct {
+	key string
+}
+
+func (err *errSystemAttrNotFound) Error() string {
+	return fmt.Sprintf("unable to find system attribute with key %q", err.key)
+}
+
+func ErrSystemAttrNotFound(key string) *errSystemAttrNotFound {
+	return &errSystemAttrNotFound{key: key}
+}
+
+func IsErrSystemAttrNotFound(err error) bool {
+	_, ok := errors.Cause(err).(*errSystemAttrNotFound)
 	return ok
 }

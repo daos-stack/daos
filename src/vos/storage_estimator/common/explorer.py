@@ -1,16 +1,16 @@
-#!/usr/bin/env python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 
-import os
 import copy
+import os
 import sys
 
-from storage_estimator.vos_structures import VosObject, AKey, DKey, Container, Containers, VosValue, Overhead, ValType, KeyType
 from storage_estimator.util import CommonBase, ObjectClass
+from storage_estimator.vos_structures import (AKey, Container, DKey, KeyType, Overhead, ValType,
+                                              VosObject, VosValue)
 
 
 class FileInfo():
@@ -64,6 +64,12 @@ class AverageFS(CommonBase):
     def set_chunk_size(self, chunk_size):
         self._dfs.set_chunk_size(chunk_size)
 
+    def set_ec_cell_size(self, ec_cell_size):
+        self._dfs.set_ec_cell_size(ec_cell_size)
+
+    def set_assume_aggregation(self, assume_aggregation):
+        self._dfs.set_assume_aggregation(assume_aggregation)
+
     def set_dfs_file_meta(self, dkey):
         self._dfs.set_dfs_file_meta(dkey)
 
@@ -107,7 +113,7 @@ class AverageFS(CommonBase):
             symlink_per_dir = self._total_symlinks // self._total_dirs
             symlink_per_dir += (self._total_symlinks % self._total_dirs) > 0
             self._debug(
-                'adding {0} symlinks of name size {1} bytes and size {2} bytes per directory'.format(
+                'adding {} symlinks of name size {} bytes and size {} bytes per directory'.format(
                     symlink_per_dir,
                     self._avg_name_size,
                     self._avg_symlink_size))
@@ -164,7 +170,9 @@ class DFS(CommonBase):
         super().__init__()
         self._objects = []
         self._chunk_size = 1048576
-        self._io_size = 131072
+        self._io_size = 1048576
+        self._ec_cell_size = 65536
+        self._assume_aggregation = False
         self._all_ec_stats = CellStats()
         self._oclass = oclass
 
@@ -181,13 +189,20 @@ class DFS(CommonBase):
     def set_chunk_size(self, chunk_size):
         self._chunk_size = chunk_size
 
+    def set_ec_cell_size(self, ec_cell_size):
+        self._ec_cell_size = ec_cell_size
+
+    def set_assume_aggregation(self, assume_aggregation):
+        self._assume_aggregation = assume_aggregation
+
     def set_dfs_file_meta(self, dkey):
         self._check_value_type(dkey, DKey)
         self._dkey0 = dkey
+        print(f"dkey0 = {dkey.dump()}")
 
     def set_dfs_inode(self, akey):
         self._check_value_type(akey, AKey)
-        self._dfs_inode_akey = akey
+        self._dfs_inode_akey = copy.deepcopy(akey)
 
     def get_container(self):
         container = Container(objects=self._objects)
@@ -198,6 +213,8 @@ class DFS(CommonBase):
         new_dfs = DFS(self._oclass)
         new_dfs._io_size = copy.deepcopy(self._io_size)
         new_dfs._chunk_size = copy.deepcopy(self._chunk_size)
+        new_dfs._ec_cell_size = copy.deepcopy(self._ec_cell_size)
+        new_dfs._assume_aggregation = copy.deepcopy(self._assume_aggregation)
         new_dfs._dkey0 = copy.deepcopy(self._dkey0)
         new_dfs._dfs_inode_akey = copy.deepcopy(self._dfs_inode_akey)
         new_dfs._objects = copy.deepcopy(self._objects)
@@ -230,9 +247,10 @@ class DFS(CommonBase):
         self._objects[oid].add_value(dkey)
 
     def _add_entry(self, oid, name, dkey_count=1):
+        akey = copy.deepcopy(self._dfs_inode_akey)
         dkey = DKey(key=name)
+        dkey.add_value(akey)
         dkey.set_count(dkey_count)
-        dkey.add_value(self._dfs_inode_akey)
 
         self._objects[oid].add_value(dkey)
 
@@ -254,10 +272,11 @@ class DFS(CommonBase):
 
     def _create_default_dkey0(self):
         akey = AKey(
-            key_type=KeyType.INTEGER,
+            key='0',
+            key_type=KeyType.HASHED,
             overhead=Overhead.META,
-            value_type=ValType.SINGLE)
-        value = VosValue(count=3, size=64)
+            value_type=ValType.ARRAY)
+        value = VosValue(count=1, size=32)
         akey.add_value(value)
         dkey = DKey(
             key_type=KeyType.INTEGER,
@@ -266,7 +285,7 @@ class DFS(CommonBase):
 
         return dkey
 
-    def _create_default_inode_akey(self, key='DFS_INODE', size=64):
+    def _create_default_inode_akey(self, key='DFS_INODE', size=96):
         value = VosValue(size=size)
         akey = AKey(key=key,
                     overhead=Overhead.META,
@@ -274,10 +293,15 @@ class DFS(CommonBase):
         akey.add_value(value)
         return akey
 
-    def _create_file_akey(self, size):
+    def _create_file_akey(self, size, io_size):
         self._check_positive_number(size)
-        count = size // self._io_size
-        remainder = size % self._io_size
+        count = 1
+        akey_size = size
+        remainder = 0
+        if not self._assume_aggregation and io_size < size:
+            count = size // io_size
+            remainder = size % io_size
+            akey_size = io_size
 
         akey = AKey(
             key_type=KeyType.INTEGER,
@@ -285,7 +309,7 @@ class DFS(CommonBase):
             value_type=ValType.ARRAY)
 
         if count > 0:
-            value = VosValue(count=count, size=self._io_size)
+            value = VosValue(count=count, size=akey_size)
             akey.add_value(value)
 
         if remainder > 0:
@@ -294,8 +318,8 @@ class DFS(CommonBase):
 
         return akey
 
-    def _create_file_dkey(self, size):
-        akey = self._create_file_akey(size)
+    def _create_file_dkey(self, size, io_size):
+        akey = self._create_file_akey(size, io_size)
         dkey = DKey(
             key_type=KeyType.INTEGER,
             overhead=Overhead.USER,
@@ -303,59 +327,101 @@ class DFS(CommonBase):
 
         return dkey
 
-    def _add_chunk_size_elements(self, file_object, file_size, parity_stats):
-        count = file_size // self._chunk_size
-
-        self._debug(
-            'adding {0} chunk(s) of size {1}'.format(
-                count, self._chunk_size))
-
-        if count > 0:
-            self._add_parity_cells(
-                file_object,
-                count,
-                self._chunk_size,
-                parity_stats)
-
-            replicas = self._oclass.get_file_replicas()
-            count *= replicas
-
-            dkey = self._create_file_dkey(self._chunk_size)
-            dkey.set_count(count)
-            parity_stats.payload += count
+    def _add_replicated_data(self, file_object, replicas, chunks, remainder, parity_stats):
+        """Add replicated data"""
+        if chunks > 0:
+            chunks *= replicas
+            dkey = self._create_file_dkey(self._chunk_size, self._io_size)
+            dkey.set_count(chunks)
+            parity_stats.payload += chunks
             file_object.add_value(dkey)
-
-    def _add_chunk_size_remainder(self, file_object, file_size, parity_stats):
-        count = self._oclass.get_file_replicas()
-        remainder = file_size % self._chunk_size
-
-        self._debug('adding {0} chunk(s) of size {1}'.format(count, remainder))
 
         if remainder > 0:
-
-            dkey = self._create_file_dkey(remainder)
-            dkey.set_count(count)
+            dkey = self._create_file_dkey(remainder, self._io_size)
+            dkey.set_count(replicas)
             file_object.add_value(dkey)
-            parity_stats.payload += count
-            self._add_parity_cells(file_object, count, remainder, parity_stats)
+            parity_stats.payload += replicas
 
-    def _add_parity_cells(self, file_object, count, cell_size, parity_stats):
+    def _add_ec_full_stripes(self, file_object, stripe_size, stripes, parity_stats):
+        """Add full stripe writes but not full chunk"""
+        parity = self._oclass.get_file_parity()
+        cell_count = self._oclass.get_file_stripe()
+        dkey = self._create_file_dkey(stripes * stripe_size, self._ec_cell_size)
+        dkey.set_count(cell_count + parity)
+        file_object.add_value(dkey)
+
+        parity_stats.payload += cell_count
+        parity_stats.parity += parity
+
+    def _add_ec_full_chunks(self, file_object, stripe_size, chunks, parity_stats):
+        """Add all writes to full chunks"""
+        parity = self._oclass.get_file_parity()
+        stripes_per_chunk = self._chunk_size // stripe_size
+        cell_count = self._oclass.get_file_stripe()
+        full_dkeys = chunks // (cell_count * stripes_per_chunk)
+        partial_dkey = 0
+        if chunks % (stripes_per_chunk * cell_count):
+            partial_dkey = 1
+        dkey = self._create_file_dkey(self._chunk_size, self._ec_cell_size)
+        dkey.set_count(full_dkeys * (cell_count + parity))
+        file_object.add_value(dkey)
+
+        parity_stats.payload += cell_count * full_dkeys
+        parity_stats.parity += parity * full_dkeys
+
+        if partial_dkey:
+            stripes = (chunks % (stripes_per_chunk * cell_count)) // cell_count
+            size = (chunks % cell_count) * self._ec_cell_size
+            if stripes:
+                self._add_ec_full_stripes(file_object, stripe_size, stripes, parity_stats)
+                size -= stripe_size * stripes
+            if size:
+                # simple replication
+                self._add_replicated_data(file_object, 1 + parity, 0, size, parity_stats)
+
+    def _add_ec_elements(self, file_object, chunks, remainder, parity_stats):
+        """If it's an EC class, add EC specific data and return True.
+           For now, the command line ensures ec cell size is never smaller than
+           the io_size or chunk_size for simplicity"""
         parity = self._oclass.get_file_parity()
 
         if parity == 0:
+            return False
+
+        cell_count = self._oclass.get_file_stripe()
+        stripe_size = cell_count * self._ec_cell_size
+
+        if not self._assume_aggregation and self._io_size < stripe_size:
+            self._add_replicated_data(file_object, parity + 1, chunks, remainder, parity_stats)
+            return True
+
+        if chunks > 0:
+            self._add_ec_full_chunks(file_object, stripe_size, chunks, parity_stats)
+
+        if remainder > stripe_size:
+            stripes = remainder // stripe_size
+            remainder -= stripes * stripe_size
+            self._add_ec_full_stripes(file_object, stripe_size, stripes, parity_stats)
+
+        if remainder > 0:
+            self._add_replicated_data(file_object, 1 + parity, 0, remainder, parity_stats)
+
+        return True
+
+    def _add_elements(self, file_object, file_size, parity_stats):
+        chunks = file_size // self._chunk_size
+        remainder = file_size % self._chunk_size
+
+        self._debug(
+            'adding {0} chunk(s) of size {1}'.format(
+                chunks, self._chunk_size))
+
+        if self._add_ec_elements(file_object, chunks, remainder, parity_stats):
             return
 
-        stripe = self._oclass.get_file_stripe()
+        replicas = self._oclass.get_file_replicas()
 
-        if count % stripe:
-            parity_cells = (count // stripe) * parity + parity
-        else:
-            parity_cells = (count // stripe) * parity
-
-        dkey = self._create_file_dkey(cell_size)
-        dkey.set_count(parity_cells)
-        file_object.add_value(dkey)
-        parity_stats.parity += parity_cells
+        self._add_replicated_data(file_object, replicas, chunks, remainder, parity_stats)
 
     def create_dir_obj(self, identical_dirs=1):
         parity_stats = CellStats(self._verbose)
@@ -380,6 +446,8 @@ class DFS(CommonBase):
         return oid
 
     def create_file_obj(self, file_size, identical_files=1):
+        if file_size == 0:
+            return
         parity_stats = CellStats(self._verbose)
 
         self._debug(
@@ -389,9 +457,7 @@ class DFS(CommonBase):
         file_object.set_num_of_targets(self._oclass.get_file_targets())
         file_object.set_count(identical_files)
 
-        self._add_file_dkey0(file_object, parity_stats)
-        self._add_chunk_size_elements(file_object, file_size, parity_stats)
-        self._add_chunk_size_remainder(file_object, file_size, parity_stats)
+        self._add_elements(file_object, file_size, parity_stats)
 
         parity_stats.mul(identical_files)
         parity_stats.show()
@@ -435,6 +501,12 @@ class FileSystemExplorer(CommonBase):
     def set_chunk_size(self, chunk_size):
         self._dfs.set_chunk_size(chunk_size)
 
+    def set_ec_cell_size(self, ec_cell_size):
+        self._dfs.set_ec_cell_size(ec_cell_size)
+
+    def set_assume_aggregation(self, assume_aggregation):
+        self._dfs.set_assume_aggregation(assume_aggregation)
+
     # TODO: Get the D-Key 0 information from the DAOS Array Object
     def set_dfs_file_meta(self, dkey):
         self.dfs.set_dfs_file_meta(dkey)
@@ -445,7 +517,6 @@ class FileSystemExplorer(CommonBase):
         self._traverse_directories()
 
     def print_stats(self):
-        pretty_size = self._to_human(self._file_size)
         pretty_file_size = self._to_human(self._file_size)
         pretty_sym_size = self._to_human(self._sym_size)
         pretty_name_size = self._to_human(self._name_size)
@@ -484,7 +555,7 @@ class FileSystemExplorer(CommonBase):
         self._debug('Gloabal Stripe Stats')
         self._dfs._all_ec_stats.show()
 
-        container = self._dfs.get_container()
+        _ = self._dfs.get_container()
 
         return self._dfs
 
@@ -516,7 +587,7 @@ class FileSystemExplorer(CommonBase):
 
         dfs = averageFS.get_dfs()
 
-        container = dfs.get_container()
+        _ = dfs.get_container()
 
         return dfs
 
@@ -665,7 +736,7 @@ class FileSystemExplorer(CommonBase):
         self._dfs.reset()
         self._enqueue_path(self._path)
 
-        while(self._queue):
+        while self._queue:
             file_path = self._queue.pop(0)
             self._oid = self._dfs.create_dir_obj()
             self._debug('entering {0}'.format(file_path))

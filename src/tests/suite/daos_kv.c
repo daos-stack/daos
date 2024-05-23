@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,7 +16,7 @@
 	#pragma GCC diagnostic ignored "-Wframe-larger-than="
 #endif
 
-static daos_ofeat_t feat = DAOS_OF_KV_FLAT;
+static enum daos_otype_t type = DAOS_OT_KV_HASHED;
 
 static void simple_put_get(void **state);
 
@@ -35,7 +35,7 @@ list_keys(daos_handle_t oh, int *num_keys)
 	d_sg_list_t	sgl;
 	d_iov_t		sg_iov;
 
-	buf = malloc(ENUM_DESC_BUF);
+	D_ALLOC(buf, ENUM_DESC_BUF);
 	d_iov_set(&sg_iov, buf, ENUM_DESC_BUF);
 	sgl.sg_nr		= 1;
 	sgl.sg_nr_out		= 0;
@@ -67,11 +67,13 @@ list_keys(daos_handle_t oh, int *num_keys)
 #endif
 		key_nr += nr;
 	}
+	D_FREE(buf);
 	*num_keys = key_nr;
 }
 
 static void
-simple_put_get(void **state)
+simple_put_get_flags(void **state, bool is_old_flag)
+
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
@@ -92,15 +94,19 @@ simple_put_get(void **state)
 	D_ALLOC(buf_out, buf_size);
 	assert_non_null(buf_out);
 
-	oid = daos_test_oid_gen(arg->coh, OC_SX, feat, 0, arg->myrank);
-
+	oid = dts_oid_gen(arg->myrank);
+	if (is_old_flag)
+		daos_obj_generate_oid(arg->coh, &oid, DAOS_OT_KV_HASHED,
+				      OC_SX, 0, 0);
+	else
+		daos_obj_generate_oid(arg->coh, &oid, type, OC_SX, 0, 0);
 	if (arg->async) {
 		rc = daos_event_init(&ev, arg->eq, NULL);
 		assert_rc_equal(rc, 0);
 	}
 
 	/** open the object */
-	rc = daos_kv_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_kv_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	rc = daos_kv_put(oh, DAOS_TX_NONE, 0, NULL, buf_size, buf, NULL);
@@ -251,6 +257,18 @@ simple_put_get(void **state)
 } /* End simple_put_get */
 
 static void
+simple_put_get(void **state)
+{
+	simple_put_get_flags(state, false);
+}
+
+static void
+simple_put_get_old(void **state)
+{
+	simple_put_get_flags(state, true);
+}
+
+static void
 kv_cond_ops(void **state)
 {
 	test_arg_t	*arg = *state;
@@ -260,52 +278,68 @@ kv_cond_ops(void **state)
 	size_t		size;
 	int		rc;
 
-	oid = daos_test_oid_gen(arg->coh, OC_SX, feat, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, type, 0, arg->myrank);
 
 	/** open the object */
-	rc = daos_kv_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_kv_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	val_out = 5;
 	size = sizeof(int);
 	print_message("Conditional FETCH of non existent Key(should fail)\n");
-	rc = daos_kv_get(oh, DAOS_TX_NONE, DAOS_COND_KEY_GET, "Key2",
-			 &size, &val_out, NULL);
+	rc = daos_kv_get(oh, DAOS_TX_NONE, DAOS_COND_KEY_GET, "Key2", &size, &val_out, NULL);
 	assert_rc_equal(rc, -DER_NONEXIST);
 	assert_int_equal(val_out, 5);
 
 	val = 1;
 	print_message("Conditional UPDATE of non existent Key(should fail)\n");
-	rc = daos_kv_put(oh, DAOS_TX_NONE, DAOS_COND_KEY_UPDATE, "Key1",
-			 sizeof(int), &val, NULL);
+	rc = daos_kv_put(oh, DAOS_TX_NONE, DAOS_COND_KEY_UPDATE, "Key1", sizeof(int), &val, NULL);
 	assert_rc_equal(rc, -DER_NONEXIST);
 
 	print_message("Conditional INSERT of non existent Key\n");
-	rc = daos_kv_put(oh, DAOS_TX_NONE, DAOS_COND_KEY_INSERT, "Key1",
-			 sizeof(int), &val, NULL);
+	rc = daos_kv_put(oh, DAOS_TX_NONE, DAOS_COND_KEY_INSERT, "Key1", sizeof(int), &val, NULL);
 	assert_rc_equal(rc, 0);
 
 	val = 2;
 	print_message("Conditional INSERT of existing Key (Should fail)\n");
-	rc = daos_kv_put(oh, DAOS_TX_NONE, DAOS_COND_KEY_INSERT, "Key1",
-			 sizeof(int), &val, NULL);
+	rc = daos_kv_put(oh, DAOS_TX_NONE, DAOS_COND_KEY_INSERT, "Key1", sizeof(int), &val, NULL);
 	assert_rc_equal(rc, -DER_EXIST);
 
 	size = sizeof(int);
 	print_message("Conditional FETCH of existing Key\n");
-	rc = daos_kv_get(oh, DAOS_TX_NONE, DAOS_COND_KEY_GET, "Key1",
-			 &size, &val_out, NULL);
+	rc = daos_kv_get(oh, DAOS_TX_NONE, DAOS_COND_KEY_GET, "Key1", &size, &val_out, NULL);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(val_out, 1);
 
 	print_message("Conditional Remove non existing Key (should fail)\n");
-	rc = daos_kv_remove(oh, DAOS_TX_NONE, DAOS_COND_KEY_REMOVE, "Key2",
-			    NULL);
+	rc = daos_kv_remove(oh, DAOS_TX_NONE, DAOS_COND_KEY_REMOVE, "Key2", NULL);
 	assert_rc_equal(rc, -DER_NONEXIST);
 
 	print_message("Conditional Remove existing Key\n");
-	rc = daos_kv_remove(oh, DAOS_TX_NONE, DAOS_COND_KEY_REMOVE, "Key1",
-			    NULL);
+	rc = daos_kv_remove(oh, DAOS_TX_NONE, DAOS_COND_KEY_REMOVE, "Key1", NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("Conditional INSERT of Key with no value\n");
+	rc = daos_kv_put(oh, DAOS_TX_NONE, DAOS_COND_KEY_INSERT, "Empty_Key", 0, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("Conditional INSERT of existing (but empty) Key (should fail)\n");
+	rc = daos_kv_put(oh, DAOS_TX_NONE, DAOS_COND_KEY_INSERT, "Empty_Key", sizeof(int), &val,
+			 NULL);
+	assert_rc_equal(rc, -DER_EXIST);
+
+	size = sizeof(int);
+	print_message("Conditional FETCH of existing but empty Key\n");
+	rc = daos_kv_get(oh, DAOS_TX_NONE, DAOS_COND_KEY_GET, "Empty_Key", &size, &val_out, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(size, 0);
+
+	print_message("Update the empty Key with a no value update\n");
+	rc = daos_kv_put(oh, DAOS_TX_NONE, 0, "Empty_Key", 0, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("Conditional Remove existing but empty Key\n");
+	rc = daos_kv_remove(oh, DAOS_TX_NONE, DAOS_COND_KEY_REMOVE, "Empty_Key", NULL);
 	assert_rc_equal(rc, 0);
 
 	print_message("Destroying KV\n");
@@ -321,6 +355,8 @@ kv_cond_ops(void **state)
 static const struct CMUnitTest kv_tests[] = {
 	{"KV: Object Put/GET (blocking)",
 	 simple_put_get, async_disable, NULL},
+	{"KV: Object Put/GET with daos_ofeat_t flag(blocking)",
+	 simple_put_get_old, async_disable, NULL},
 	{"KV: Object Put/GET (non-blocking)",
 	 simple_put_get, async_enable, NULL},
 	{"KV: Object Conditional Ops (blocking)",
@@ -341,6 +377,6 @@ run_daos_kv_test(int rank, int size)
 
 	rc = cmocka_run_group_tests_name("DAOS_KV_API", kv_tests,
 					 kv_setup, test_teardown);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -139,6 +139,7 @@ enum {
 	D_TM_CLOCK_PROCESS_CPUTIME	= 0x100,
 	D_TM_CLOCK_THREAD_CPUTIME	= 0x200,
 	D_TM_LINK			= 0x400,
+	D_TM_MEMINFO			= 0x800,
 	D_TM_ALL_NODES			= (D_TM_DIRECTORY | \
 					   D_TM_COUNTER | \
 					   D_TM_TIMESTAMP | \
@@ -146,13 +147,17 @@ enum {
 					   D_TM_DURATION | \
 					   D_TM_GAUGE | \
 					   D_TM_STATS_GAUGE | \
-					   D_TM_LINK)
+					   D_TM_LINK | \
+					   D_TM_MEMINFO)
 };
 
 enum {
-	D_TM_SERVER_PROCESS		= 0x000,
-	D_TM_SERIALIZATION		= 0x001,
-	D_TM_RETAIN_SHMEM		= 0x002,
+	D_TM_SERVER_PROCESS            = 0x000,
+	D_TM_SERIALIZATION             = 0x001,
+	D_TM_RETAIN_SHMEM              = 0x002,
+	D_TM_RETAIN_SHMEM_IF_NON_EMPTY = 0x004,
+	D_TM_OPEN_OR_CREATE            = 0x008,
+	D_TM_MULTIPLE_WRITER_LOCK      = 0x010,
 };
 
 /** Output formats */
@@ -166,6 +171,12 @@ enum {
 	D_TM_INCLUDE_TIMESTAMP		= 0x001,
 	D_TM_INCLUDE_METADATA		= 0x002,
 	D_TM_INCLUDE_TYPE		= 0x004,
+};
+
+/* iterate ops */
+enum {
+	D_TM_ITER_READ			= 0x001,
+	D_TM_ITER_RESET			= 0x002,
 };
 
 /**
@@ -197,10 +208,18 @@ struct d_tm_histogram_t {
 	int			dth_value_multiplier;
 };
 
+struct d_tm_meminfo_t {
+	uint64_t arena;
+	uint64_t ordblks;
+	uint64_t uordblks;
+	uint64_t fordblks;
+};
+
 struct d_tm_metric_t {
 	union data {
 		uint64_t	value;
 		struct		timespec tms[2];
+		struct d_tm_meminfo_t meminfo;
 	}			dtm_data;
 	struct d_tm_stats_t	*dtm_stats;
 	struct d_tm_histogram_t	*dtm_histogram;
@@ -223,6 +242,14 @@ struct d_tm_nodeList_t {
 	struct d_tm_node_t	*dtnl_node;
 	struct d_tm_nodeList_t	*dtnl_next;
 };
+
+/*
+ * Estimate of a metric size. This leans toward a large estimate, but is not the absolute maximum
+ * possible size.
+ */
+#define D_TM_METRIC_SIZE (sizeof(struct d_tm_node_t) + sizeof(struct d_tm_metric_t) + \
+			  D_TM_MAX_DESC_LEN + D_TM_MAX_NAME_LEN + D_TM_MAX_UNIT_LEN + \
+			  sizeof(struct d_tm_stats_t))
 
 /** Context for a telemetry instance */
 struct d_tm_context;

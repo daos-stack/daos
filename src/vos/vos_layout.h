@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,7 +12,6 @@
 
 #ifndef _VOS_LAYOUT_H
 #define _VOS_LAYOUT_H
-#include <libpmemobj.h>
 #include <daos/btree.h>
 #include <daos_srv/evtree.h>
 #include <daos_srv/vos_types.h>
@@ -21,15 +20,8 @@
 #include <daos_srv/dtx_srv.h>
 #include "ilog.h"
 
-/**
- * Typed Layout named using Macros from libpmemobj
- * for root object.  We don't need to define the TOIDs for
- * other VOS structures because VOS uses umem_off_t for internal
- * pointers rather than using typed allocations.
- */
-POBJ_LAYOUT_BEGIN(vos_pool_layout);
-POBJ_LAYOUT_ROOT(vos_pool_layout, struct vos_pool_df);
-POBJ_LAYOUT_END(vos_pool_layout);
+/** Layout name for vos pool */
+#define VOS_POOL_LAYOUT         "vos_pool_layout"
 
 struct vos_gc_bin_df {
 	/** address of the first(oldest) bag */
@@ -88,9 +80,29 @@ enum vos_gc_type {
 #define POOL_DF_MAGIC				0x5ca1ab1e
 
 /** Lowest supported durable format version */
-#define POOL_DF_VER_1				20
+#define POOL_DF_VER_1                           23
+
+/** Individual version specific featuers are assigned to a release specific durable
+ * format version number.  This allows us to add multiple features in a release cycle
+ * while keeping checks related to the feature rather than the more ambiguous version
+ * number.   Each new feature should be assigned to the latest VOS durable format.
+ * Each feature is only enabled if the pool durable format is at least equal to that
+ * feature's assigned durable format.  Otherwise, the feature must not be used.
+ */
+
 /** Current durable format version */
-#define POOL_DF_VERSION				POOL_DF_VER_1
+#define POOL_DF_VERSION                         VOS_POOL_DF_2_6
+
+/** 2.2 features.  Until we have an upgrade path for RDB, we need to support more than one old
+ *  version.
+ */
+#define VOS_POOL_FEAT_2_2                       (VOS_POOL_FEAT_AGG_OPT)
+
+/** 2.4 features */
+#define VOS_POOL_FEAT_2_4                       (VOS_POOL_FEAT_CHK | VOS_POOL_FEAT_DYN_ROOT)
+
+/** 2.6 features */
+#define VOS_POOL_FEAT_2_6                       (VOS_POOL_FEAT_FLAT_DKEY | VOS_POOL_FEAT_EMBED_FIRST)
 
 /**
  * Durable format for VOS pool
@@ -147,8 +159,14 @@ struct vos_dtx_cmt_ent_df {
 	struct dtx_id			dce_xid;
 	/** The epoch# for the DTX. */
 	daos_epoch_t			dce_epoch;
-	/** The time of the DTX being handled on the server. */
-	daos_epoch_t			dce_handle_time;
+	/**
+	 * The time of the DTX being committed on the server.
+	 *
+	 * XXX: in the future, this field will be moved into
+	 *	vos_dtx_blob_df to shrink each committed DTX
+	 *	entry size.
+	 */
+	uint64_t			dce_cmt_time;
 };
 
 /** Active DTX entry on-disk layout in both SCM and DRAM. */
@@ -253,6 +271,8 @@ struct vos_cont_df {
 	struct vea_hint_df		cd_hint_df[VOS_IOS_CNT];
 	/** GC bins for object/dkey...Don't need GC_CONT entry */
 	struct vos_gc_bin_df		cd_gc_bins[GC_CONT];
+	/* The epoch for the most new DTX entry that is aggregated. */
+	uint64_t			cd_newest_aggregated;
 };
 
 /* Assume cd_dtx_active_tail is just after cd_dtx_active_head. */
@@ -268,11 +288,13 @@ D_CASSERT(offsetof(struct vos_cont_df, cd_dtx_committed_tail) ==
 /** btree (d/a-key) record bit flags */
 enum vos_krec_bf {
 	/* Array value (evtree) */
-	KREC_BF_EVT			= (1 << 0),
+	KREC_BF_EVT = (1 << 0),
 	/* Single Value or Key (btree) */
-	KREC_BF_BTR			= (1 << 1),
-	/* it's a dkey, otherwise is akey */
-	KREC_BF_DKEY			= (1 << 2),
+	KREC_BF_BTR = (1 << 1),
+	/* it's a dkey, otherwise is akey or single value if KREC_BF_NO_AKEY is set */
+	KREC_BF_DKEY = (1 << 2),
+	/* Value is stored in DKEY */
+	KREC_BF_NO_AKEY = (1 << 3),
 };
 
 /**
@@ -293,8 +315,12 @@ struct vos_krec_df {
 	/** Incarnation log for key */
 	struct ilog_df			kr_ilog;
 	union {
-		/** btree root under the key */
-		struct btr_root			kr_btr;
+		struct {
+			/** btree root under the key */
+			struct btr_root			kr_btr;
+			/** Offset of known existing akey */
+			umem_off_t			kr_known_akey;
+		};
 		/** evtree root, which is only used by akey */
 		struct evt_root			kr_evt;
 	};
@@ -341,8 +367,10 @@ struct vos_obj_df {
 	daos_unit_oid_t			vo_id;
 	/** The latest sync epoch */
 	daos_epoch_t			vo_sync;
-	/** Attributes of object.  See vos_oi_attr */
-	uint64_t			vo_oi_attr;
+	/** Offset of known existing dkey */
+	umem_off_t			vo_known_dkey;
+	/** Attributes for future use */
+	daos_epoch_t			vo_max_write;
 	/** Incarnation log for the object */
 	struct ilog_df			vo_ilog;
 	/** VOS dkey btree root */

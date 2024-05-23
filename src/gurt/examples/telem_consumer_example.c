@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,8 +7,8 @@
  * This file shows an example of using the telemetry API to consume metrics
  */
 
-#include "gurt/telemetry_common.h"
-#include "gurt/telemetry_consumer.h"
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_consumer.h>
 
 /**
  * An example that shows how metrics are read.
@@ -136,8 +136,8 @@ void read_metrics(struct d_tm_context *ctx, struct d_tm_node_t *root,
 		if (show_meta)
 			d_tm_print_metadata(desc, units, D_TM_STANDARD,
 					    stdout);
-		D_FREE_PTR(desc);
-		D_FREE_PTR(units);
+		D_FREE(desc);
+		D_FREE(units);
 
 		if (node->dtn_type != D_TM_DIRECTORY)
 			printf("\n");
@@ -145,6 +145,13 @@ void read_metrics(struct d_tm_context *ctx, struct d_tm_node_t *root,
 		nodelist = nodelist->dtnl_next;
 	}
 	d_tm_list_free(head);
+}
+
+static void
+iter_print(struct d_tm_context *ctx, struct d_tm_node_t *node, int level, char *path, int format,
+	   int opt_fields, void *arg)
+{
+	d_tm_print_node(ctx, node, level, path, format, opt_fields, (FILE *)arg);
 }
 
 int
@@ -177,8 +184,8 @@ main(int argc, char **argv)
 	filter = (D_TM_COUNTER | D_TM_TIMESTAMP | D_TM_TIMER_SNAPSHOT |
 		  D_TM_DURATION | D_TM_GAUGE | D_TM_DIRECTORY);
 	show_meta = true;
-	d_tm_print_my_children(ctx, root, 0, filter, NULL,
-			       D_TM_STANDARD, D_TM_INCLUDE_METADATA, stdout);
+	d_tm_iterate(ctx, root, 0, filter, NULL, D_TM_STANDARD, D_TM_INCLUDE_METADATA, iter_print,
+		     stdout);
 
 	sprintf(dirname, "manually added");
 	filter = (D_TM_COUNTER | D_TM_TIMESTAMP | D_TM_TIMER_SNAPSHOT |

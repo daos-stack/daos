@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,13 +16,15 @@ import (
 type (
 	MockBackendConfig struct {
 		VMDEnabled   bool // VMD is disabled by default
-		ResetErr     error
-		PrepareResp  *storage.BdevPrepareResponse
+		PrepareRes   *storage.BdevPrepareResponse
 		PrepareErr   error
+		ResetRes     *storage.BdevPrepareResponse
+		ResetErr     error
 		ScanRes      *storage.BdevScanResponse
 		ScanErr      error
 		FormatRes    *storage.BdevFormatResponse
 		FormatErr    error
+		WriteConfRes *storage.BdevWriteConfigResponse
 		WriteConfErr error
 		UpdateErr    error
 	}
@@ -33,6 +35,7 @@ type (
 		PrepareCalls   []storage.BdevPrepareRequest
 		ResetCalls     []storage.BdevPrepareRequest
 		WriteConfCalls []storage.BdevWriteConfigRequest
+		ScanCalls      []storage.BdevScanRequest
 	}
 )
 
@@ -51,19 +54,29 @@ func DefaultMockBackend() *MockBackend {
 }
 
 func (mb *MockBackend) Scan(req storage.BdevScanRequest) (*storage.BdevScanResponse, error) {
-	if mb.cfg.ScanRes == nil {
-		mb.cfg.ScanRes = &storage.BdevScanResponse{}
-	}
+	mb.Lock()
+	mb.ScanCalls = append(mb.ScanCalls, req)
+	mb.Unlock()
 
-	return mb.cfg.ScanRes, mb.cfg.ScanErr
+	switch {
+	case mb.cfg.ScanErr != nil:
+		return nil, mb.cfg.ScanErr
+	case mb.cfg.ScanRes == nil:
+		return &storage.BdevScanResponse{}, nil
+	default:
+		return mb.cfg.ScanRes, nil
+	}
 }
 
 func (mb *MockBackend) Format(req storage.BdevFormatRequest) (*storage.BdevFormatResponse, error) {
-	if mb.cfg.FormatRes == nil {
-		mb.cfg.FormatRes = &storage.BdevFormatResponse{}
+	switch {
+	case mb.cfg.FormatErr != nil:
+		return nil, mb.cfg.FormatErr
+	case mb.cfg.FormatRes == nil:
+		return &storage.BdevFormatResponse{}, nil
+	default:
+		return mb.cfg.FormatRes, nil
 	}
-
-	return mb.cfg.FormatRes, mb.cfg.FormatErr
 }
 
 func (mb *MockBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
@@ -74,23 +87,26 @@ func (mb *MockBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPre
 	switch {
 	case mb.cfg.PrepareErr != nil:
 		return nil, mb.cfg.PrepareErr
-	case mb.cfg.PrepareResp == nil:
+	case mb.cfg.PrepareRes == nil:
 		return &storage.BdevPrepareResponse{}, nil
 	default:
-		return mb.cfg.PrepareResp, nil
+		return mb.cfg.PrepareRes, nil
 	}
 }
 
-func (mb *MockBackend) Reset(req storage.BdevPrepareRequest) error {
+func (mb *MockBackend) Reset(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
 	mb.Lock()
 	mb.ResetCalls = append(mb.ResetCalls, req)
 	mb.Unlock()
 
-	if mb.cfg.ResetErr != nil {
-		return mb.cfg.ResetErr
+	switch {
+	case mb.cfg.ResetErr != nil:
+		return nil, mb.cfg.ResetErr
+	case mb.cfg.ResetRes == nil:
+		return &storage.BdevPrepareResponse{}, nil
+	default:
+		return mb.cfg.ResetRes, nil
 	}
-
-	return nil
 }
 
 func (mb *MockBackend) UpdateFirmware(_ string, _ string, _ int32) error {
@@ -102,7 +118,14 @@ func (mb *MockBackend) WriteConfig(req storage.BdevWriteConfigRequest) (*storage
 	mb.WriteConfCalls = append(mb.WriteConfCalls, req)
 	mb.Unlock()
 
-	return &storage.BdevWriteConfigResponse{}, mb.cfg.WriteConfErr
+	switch {
+	case mb.cfg.WriteConfErr != nil:
+		return nil, mb.cfg.WriteConfErr
+	case mb.cfg.WriteConfRes == nil:
+		return &storage.BdevWriteConfigResponse{}, nil
+	default:
+		return mb.cfg.WriteConfRes, nil
+	}
 }
 
 func NewMockProvider(log logging.Logger, mbc *MockBackendConfig) *Provider {

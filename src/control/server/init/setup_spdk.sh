@@ -1,9 +1,8 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
-## Wrap spdk setup script so we can isolate commands that require elevated
-## privileges including changing directory permissions (which enables spdk
-## to be run by an unprivileged user).
-## These sudo commands can be granted using visudo by a system administrator.
+## Wrap spdk setup script. This script will be called by daos_server_helper process which will be
+## running with elevated privileges. Activities include changing directory permissions (which
+## enables spdk to be run by an unprivileged user).
 
 set +e
 
@@ -14,7 +13,7 @@ set_vfio_permissions()
 {
 	# make sure regular users can read /dev/vfio
 	echo "RUN: chmod /dev/vfio"
-	if ! sudo chmod a+x /dev/vfio; then
+	if ! chmod a+x /dev/vfio; then
 		echo "FAIL"
 		return
 	fi
@@ -22,7 +21,7 @@ set_vfio_permissions()
 
 	# make sure regular user can access everything inside /dev/vfio
 	echo "RUN: chmod /dev/vfio/*"
-	if ! sudo chmod 0666 /dev/vfio/*; then
+	if ! chmod 0666 /dev/vfio/*; then
 		echo "FAIL"
 		return
 	fi
@@ -85,25 +84,17 @@ else
 	PCI_ALLOWED=${_PCI_ALLOWED}		\
 	PCI_BLOCKED=${_PCI_BLOCKED}		\
 	NRHUGE=${_NRHUGE} 			\
+	HUGENODE=${_HUGENODE} 			\
 	TARGET_USER=${_TARGET_USER}		\
 	DRIVER_OVERRIDE=${_DRIVER_OVERRIDE}	\
 	PATH=/sbin:${PATH}			\
 	${scriptpath}
 	set +x
 
-	# build arglist manually to filter missing directories/files
-	# so we don't error on non-existent entities
-	for glob in '/dev/hugepages' '/dev/uio*'		\
-		'/sys/class/uio/uio*/device/config'	\
-		'/sys/class/uio/uio*/device/resource*'; do
-
-		# shellcheck disable=SC2086
-		if list=$(ls -d $glob); then
-			echo -n "RUN: ls -d $glob | xargs -r chown -R "
-			echo "$_TARGET_USER"
-			echo "$list" | xargs -r chown -R "$_TARGET_USER"
-		fi
-	done
+	if [ -d "/dev/hugepages/" ]; then
+		echo "RUN: chown -R ${_TARGET_USER} /dev/hugepages"
+		chown -R "${_TARGET_USER}" "/dev/hugepages"
+	fi
 
 	echo "Setting VFIO file permissions for unprivileged access"
 	set_vfio_permissions

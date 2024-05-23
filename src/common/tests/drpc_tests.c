@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -145,8 +145,7 @@ test_drpc_close_closing_socket_fails(void **state)
 	int		expected_fd = 123;
 	struct drpc	*ctx = new_drpc_with_fd(expected_fd);
 
-	close_return = -1;
-	errno = ENOMEM;
+	close_return = -ENOMEM;
 
 	/* error is logged but ignored */
 	assert_rc_equal(drpc_close(ctx), 0);
@@ -207,8 +206,7 @@ test_drpc_call_fails_if_sendmsg_fails(void **state)
 	Drpc__Response	*resp = NULL;
 	Drpc__Call	*call = new_drpc_call();
 
-	sendmsg_return = -1;
-	errno = EINVAL; /* translates to -DER_INVAL */
+	sendmsg_return = -EINVAL; /* translates to -DER_INVAL */
 
 	assert_rc_equal(drpc_call(ctx, 0, call, &resp), -DER_INVAL);
 	assert_null(resp);
@@ -230,14 +228,14 @@ test_drpc_call_sends_call_as_mesg(void **state)
 	ctx->sequence = 10; /* arbitrary but nonzero */
 	call->sequence = 0;
 
-	drpc_call(ctx, 0, call, &resp);
+	assert_rc_equal(drpc_call(ctx, 0, call, &resp), 0);
 
 	/* drpc_call updated call seq number and incremented ctx seq num */
 	assert_int_equal(ctx->sequence, call->sequence + 1);
 
 	/* Packed message is the call struct updated by drpc_call */
 	expected_msg_size = drpc__call__get_packed_size(call);
-	expected_msg = calloc(1, expected_msg_size);
+	D_ALLOC(expected_msg, expected_msg_size);
 	drpc__call__pack(call, expected_msg);
 
 	/* Sent to the proper socket */
@@ -317,8 +315,7 @@ test_drpc_call_with_sync_flag_fails_on_recvmsg_fail(void **state)
 	Drpc__Response	*resp = NULL;
 	Drpc__Call	*call = new_drpc_call();
 
-	recvmsg_return = -1;
-	errno = EINVAL;
+	recvmsg_return = -EINVAL;
 
 	assert_rc_equal(drpc_call(ctx, R_SYNC, call, &resp), -DER_INVAL);
 	assert_null(resp);
@@ -437,17 +434,22 @@ test_drpc_listen_fails_if_listen_fails(void **state)
 static void
 test_drpc_accept_fails_with_null_ctx(void **state)
 {
-	assert_null(drpc_accept(NULL));
+	int rc;
+
+	rc = drpc_accept(NULL, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
 }
 
 static void
 test_drpc_accept_fails_with_null_handler(void **state)
 {
 	struct drpc *ctx = new_drpc_with_fd(15);
+	int          rc;
 
 	ctx->handler = NULL;
 
-	assert_null(drpc_accept(ctx));
+	rc = drpc_accept(ctx, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
 
 	free_drpc(ctx);
 }
@@ -455,10 +457,12 @@ test_drpc_accept_fails_with_null_handler(void **state)
 static void
 test_drpc_accept_success(void **state)
 {
-	struct drpc	*ctx = new_drpc_with_fd(15);
-	struct drpc	*session_ctx;
+	struct drpc *ctx = new_drpc_with_fd(15);
+	struct drpc *session_ctx;
+	int          rc;
 
-	session_ctx = drpc_accept(ctx);
+	rc = drpc_accept(ctx, &session_ctx);
+	assert_rc_equal(rc, -DER_SUCCESS);
 
 	/* got context back for the new accepted connection */
 	assert_non_null(session_ctx);
@@ -482,10 +486,12 @@ static void
 test_drpc_accept_fails_if_accept_fails(void **state)
 {
 	struct drpc *ctx = new_drpc_with_fd(15);
+	int          rc;
 
-	accept_return = -1;
+	accept_return = -EIO;
 
-	assert_null(drpc_accept(ctx));
+	rc = drpc_accept(ctx, NULL);
+	assert_rc_equal(rc, -DER_IO);
 
 	free_drpc(ctx);
 }
@@ -535,8 +541,7 @@ assert_drpc_recv_call_fails_with_recvmsg_errno(int recvmsg_errno,
 	mock_valid_drpc_call_in_recvmsg();
 
 	recvmsg_call_count = 0;
-	recvmsg_return = -1;
-	errno = recvmsg_errno;
+	recvmsg_return = -recvmsg_errno;
 
 	assert_rc_equal(drpc_recv_call(ctx, &call), expected_retval);
 
@@ -650,8 +655,7 @@ test_drpc_send_response_sendmsg_fails(void **state)
 	struct drpc	*ctx = new_drpc_with_fd(122);
 	Drpc__Response	*resp = new_drpc_response();
 
-	sendmsg_return = -1;
-	errno = ENOMEM;
+	sendmsg_return = -ENOMEM;
 
 	assert_rc_equal(drpc_send_response(ctx, resp), -DER_NOMEM);
 

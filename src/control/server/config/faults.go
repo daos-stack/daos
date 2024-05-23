@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,7 +11,8 @@ import (
 
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/dustin/go-humanize"
 )
 
 var (
@@ -52,7 +53,7 @@ var (
 	)
 	FaultConfigNoProvider = serverConfigFault(
 		code.ServerConfigBadProvider,
-		"provider not specified in configuration",
+		"provider not specified in server configuration",
 		"specify a valid network provider in configuration ('provider' parameter) and restart the control server",
 	)
 	FaultConfigNoEngines = serverConfigFault(
@@ -87,15 +88,35 @@ var (
 	)
 	FaultConfigTooManyLayersInFaultDomain = serverConfigFault(
 		code.ServerConfigFaultDomainTooManyLayers,
-		"only a single fault domain layer below the root is supported",
+		"the fault domain path may have a maximum of 2 levels below the root",
 		"update either the fault domain ('fault_path' parameter) or callback script ('fault_cb' parameter) and restart the control server",
+	)
+	FaultConfigHugepagesDisabledWithBdevs = serverConfigFault(
+		code.ServerConfigHugepagesDisabledWithBdevs,
+		"hugepages cannot be disabled if bdevs have been specified in config",
+		"either set false (or remove) disable_hugepages parameter or remove nvme storage assignment in config and restart the control server",
+	)
+	FaultConfigControlMetadataNoPath = serverConfigFault(
+		code.ServerConfigControlMetadataNoPath,
+		"using a control_metadata device requires a path to use as the mount point",
+		"add a valid 'path' to the 'control_metadata' section of the config",
+	)
+	FaultConfigEngineBdevRolesMismatch = serverConfigFault(
+		code.ServerConfigEngineBdevRolesMismatch,
+		"md-on-ssd bdev roles have been set in some but not all engine configs",
+		"set bdev roles on all engines or remove all bdev role assignments in config",
+	)
+	FaultConfigSysRsvdZero = serverConfigFault(
+		code.ServerConfigSysRsvdZero,
+		"`system_ram_reserved` is set to zero in server config",
+		"set `system_ram_reserved` to a positive integer value in config",
 	)
 )
 
 func FaultConfigDuplicateFabric(curIdx, seenIdx int) *fault.Fault {
 	return serverConfigFault(
 		code.ServerConfigDuplicateFabric,
-		fmt.Sprintf("the fabric configuration in I/O Engine %d is a duplicate of server %d", curIdx, seenIdx),
+		fmt.Sprintf("the fabric configuration in I/O Engine %d is a duplicate of I/O Engine %d", curIdx, seenIdx),
 		"ensure that each I/O Engine has a unique combination of provider,fabric_iface,fabric_iface_port and restart",
 	)
 }
@@ -118,26 +139,62 @@ func FaultConfigDuplicateScmDeviceList(curIdx, seenIdx int) *fault.Fault {
 	)
 }
 
+func FaultConfigScmDiffClass(curIdx, seenIdx int) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigScmDiffClass,
+		fmt.Sprintf("the SCM class in engine %d is different from engine %d",
+			curIdx, seenIdx),
+		"ensure that each I/O Engine has a single SCM tier with the same class and restart",
+	)
+}
+
 func FaultConfigOverlappingBdevDeviceList(curIdx, seenIdx int) *fault.Fault {
 	return serverConfigFault(
 		code.ServerConfigOverlappingBdevDeviceList,
-		fmt.Sprintf("the bdev_list value in I/O Engine %d overlaps with entries in server %d", curIdx, seenIdx),
+		fmt.Sprintf("the bdev_list value in engine %d overlaps with entries in engine %d", curIdx, seenIdx),
 		"ensure that each I/O Engine has a unique set of bdev_list entries and restart",
 	)
 }
 
-func FaultConfigInvalidNetDevClass(curIdx int, primaryDevClass, thisDevClass uint32, iface string) *fault.Fault {
+func FaultConfigBdevCountMismatch(curIdx, curCount, seenIdx, seenCount int) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigBdevCountMismatch,
+		fmt.Sprintf("the total number of bdev_list entries in all tiers is not equal across engines, engine %d has %d but engine %d has %d",
+			curIdx, curCount, seenIdx, seenCount),
+		"ensure that each I/O Engine has an equal number of total bdev_list entries and restart",
+	)
+}
+
+func FaultConfigTargetCountMismatch(curIdx, curCount, seenIdx, seenCount int) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigTargetCountMismatch,
+		fmt.Sprintf("the target count is not equal across engines, engine %d has %d but engine %d has %d",
+			curIdx, curCount, seenIdx, seenCount),
+		"ensure that each I/O Engine has an equal integer value for targets parameter and restart",
+	)
+}
+
+func FaultConfigHelperStreamCountMismatch(curIdx, curCount, seenIdx, seenCount int) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigHelperStreamCountMismatch,
+		fmt.Sprintf("the helper stream count is not equal across engines, engine %d has %d but engine %d has %d",
+			curIdx, curCount, seenIdx, seenCount),
+		"ensure that each I/O Engine has an equal integer value for nr_xs_helpers parameter and restart",
+	)
+}
+
+func FaultConfigInvalidNetDevClass(curIdx int, primaryDevClass, thisDevClass hardware.NetDevClass, iface string) *fault.Fault {
 	return serverConfigFault(
 		code.ServerConfigInvalidNetDevClass,
 		fmt.Sprintf("I/O Engine %d specifies fabric_iface %q of class %q that conflicts with the primary server's device class %q",
-			curIdx, iface, netdetect.DevClassName(thisDevClass), netdetect.DevClassName(primaryDevClass)),
+			curIdx, iface, thisDevClass, primaryDevClass),
 		"ensure that each I/O Engine specifies a fabric_iface with a matching device class and restart",
 	)
 }
 
 func dupeValue(code code.Code, name string, curIdx, seenIdx int) *fault.Fault {
 	return serverConfigFault(code,
-		fmt.Sprintf("the %s value in I/O Engine %d is a duplicate of server %d", name, curIdx, seenIdx),
+		fmt.Sprintf("the %s value in I/O Engine %d is a duplicate of I/O Engine %d", name, curIdx, seenIdx),
 		fmt.Sprintf("ensure that each I/O Engine has a unique %s value and restart", name),
 	)
 }
@@ -161,6 +218,30 @@ func FaultConfigFaultCallbackInsecure(requiredDir string) *fault.Fault {
 		fmt.Sprintf("ensure that the 'fault_cb' path is under the parent directory %q, "+
 			"not a symbolic link, does not have the setuid bit set, and does not have "+
 			"write permissions for non-owners", requiredDir),
+	)
+}
+
+// FaultConfigNrHugepagesOutOfRange creates a fault for the scenario where the number of configured
+// huge pages is smaller than zero or larger than the maximum value allowed.
+func FaultConfigNrHugepagesOutOfRange(req, max int) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigNrHugepagesOutOfRange,
+		fmt.Sprintf("number of hugepages specified (%d) is out of range (0 - %d)", req, max),
+		fmt.Sprintf("specify a nr_hugepages value between 0 and %d", max),
+	)
+}
+
+// FaultConfigRamdiskOverMaxMem indicates that the tmpfs size requested in config is larger than
+// maximum allowed.
+func FaultConfigRamdiskOverMaxMem(confSize, ramSize, memRamdiskMin uint64) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigRamdiskOverMaxMem,
+		fmt.Sprintf("configured scm tmpfs size %s is larger than the maximum (%s) that "+
+			"total system memory (RAM) will allow", humanize.IBytes(confSize),
+			humanize.IBytes(ramSize)),
+		fmt.Sprintf("remove the 'scm_size' parameter so it can be automatically set "+
+			"or manually set to a value between %s and %s in the config file",
+			humanize.IBytes(memRamdiskMin), humanize.IBytes(ramSize)),
 	)
 }
 

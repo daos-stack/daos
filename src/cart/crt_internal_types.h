@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,6 +12,11 @@
 #define __CRT_INTERNAL_TYPES_H__
 
 #define CRT_CONTEXT_NULL         (NULL)
+
+#ifndef CRT_SRV_CONTEXT_NUM
+#define CRT_SRV_CONTEXT_NUM (64)	/* Maximum number of contexts */
+#endif
+
 
 #include <arpa/inet.h>
 #include <ifaddrs.h>
@@ -26,19 +31,20 @@
 struct crt_hg_gdata;
 struct crt_grp_gdata;
 
-struct crt_na_ofi_config {
+struct crt_na_config {
 	int32_t		 noc_port;
+	int		 noc_iface_total;
 	char		*noc_interface;
 	char		*noc_domain;
-	/* IP addr str for the noc_interface */
-	char		 noc_ip_str[INET_ADDRSTRLEN];
+	char		*noc_auth_key;
+	char		**noc_iface_str; /* Array of interfaces */
 };
 
 struct crt_prov_gdata {
 	/** NA plugin type */
 	int			cpg_provider;
 
-	struct crt_na_ofi_config cpg_na_ofi_config;
+	struct crt_na_config	cpg_na_config;
 	/** Context0 URI */
 	char			cpg_addr[CRT_ADDR_STR_MAX_LEN];
 
@@ -49,36 +55,62 @@ struct crt_prov_gdata {
 	/** maximum number of contexts user wants to create */
 	uint32_t		cpg_ctx_max_num;
 
+	/** free-list of indices */
+	bool			cpg_used_idx[CRT_SRV_CONTEXT_NUM];
+
 	/** Hints to mercury/ofi for max expected/unexp sizes */
 	uint32_t		cpg_max_exp_size;
 	uint32_t		cpg_max_unexp_size;
 
+	/** Number of remote tags */
+	uint32_t		cpg_num_remote_tags;
+	uint32_t		cpg_last_remote_tag;
+
 	/** Set of flags */
 	unsigned int		cpg_sep_mode		: 1,
+				cpg_primary		: 1,
 				cpg_contig_ports	: 1,
 				cpg_inited		: 1;
+
+	/** Mutext to protect fields above */
+	pthread_mutex_t		cpg_mutex;
 };
 
+#define MAX_NUM_SECONDARY_PROVS 2
 
 /* CaRT global data */
 struct crt_gdata {
-	/** Provider initialized at crt_init() time */
-	int			cg_init_prov;
+	/** Providers iinitialized at crt_init() time */
+	int			cg_primary_prov;
+	int			cg_num_secondary_provs;
+	int			*cg_secondary_provs;
 
 	/** Provider specific data */
-	struct crt_prov_gdata	cg_prov_gdata[CRT_NA_OFI_COUNT];
+	struct crt_prov_gdata	cg_prov_gdata_primary;
+
+	/** Placeholder for secondary provider data */
+	struct crt_prov_gdata	*cg_prov_gdata_secondary;
+
+	/** Hints to mercury for request post init (ignored for clients) */
+	uint32_t                 cg_post_init;
+	uint32_t                 cg_post_incr;
 
 	/** global timeout value (second) for all RPCs */
 	uint32_t		cg_timeout;
 
-	/** credits limitation for #inflight RPCs per target EP CTX */
+	/** global swim index for all servers */
+	int32_t			cg_swim_crt_idx;
+
+	/** credits limitation for #in-flight RPCs per target EP CTX */
 	uint32_t		cg_credit_ep_ctx;
 
+	uint32_t		cg_iv_inline_limit;
 	/** the global opcode map */
 	struct crt_opc_map	*cg_opc_map;
 	/** HG level global data */
 	struct crt_hg_gdata	*cg_hg;
 
+	/** Points to default group */
 	struct crt_grp_gdata	*cg_grp;
 
 	/** refcount to protect crt_init/crt_finalize */
@@ -92,11 +124,13 @@ struct crt_gdata {
 				/** whether it is a client or server */
 				cg_server		: 1,
 				/** whether scalable endpoint is enabled */
-				cg_use_sensors		: 1;
+				cg_use_sensors		: 1,
+				/** whether we are on a primary provider */
+				cg_provider_is_primary	: 1;
 
 	ATOMIC uint64_t		cg_rpcid; /* rpc id */
 
-	/* protects crt_gdata */
+	/* protects crt_gdata (see the lock order comment on crp_mutex) */
 	pthread_rwlock_t	cg_rwlock;
 
 	/** Global statistics (when cg_use_sensors = true) */
@@ -110,6 +144,10 @@ struct crt_gdata {
 	 * others, of type counter
 	 */
 	struct d_tm_node_t	*cg_uri_other;
+	/** Number of cores on a system */
+	long			 cg_num_cores;
+	/** Inflight rpc quota limit */
+	uint32_t		cg_rpc_quota;
 };
 
 extern struct crt_gdata		crt_gdata;
@@ -119,23 +157,13 @@ struct crt_prog_cb_priv {
 	void			*cpcp_args;
 };
 
-struct crt_timeout_cb_priv {
-	crt_timeout_cb		 ctcp_func;
-	void			*ctcp_args;
-};
-
 struct crt_event_cb_priv {
 	crt_event_cb		 cecp_func;
 	void			*cecp_args;
 };
 
-/* TODO may use a RPC to query server-side context number */
-#ifndef CRT_SRV_CONTEXT_NUM
-# define CRT_SRV_CONTEXT_NUM		(256)
-#endif
-
 #ifndef CRT_PROGRESS_NUM
-# define CRT_CALLBACKS_NUM		(4)	/* start number of CBs */
+#define CRT_CALLBACKS_NUM		(4)	/* start number of CBs */
 #endif
 
 /* structure of global fault tolerance data */
@@ -144,10 +172,6 @@ struct crt_plugin_gdata {
 	size_t				 cpg_prog_size[CRT_SRV_CONTEXT_NUM];
 	struct crt_prog_cb_priv		*cpg_prog_cbs[CRT_SRV_CONTEXT_NUM];
 	struct crt_prog_cb_priv		*cpg_prog_cbs_old[CRT_SRV_CONTEXT_NUM];
-	/* list of rpc timeout callbacks */
-	size_t				 cpg_timeout_size;
-	struct crt_timeout_cb_priv	*cpg_timeout_cbs;
-	struct crt_timeout_cb_priv	*cpg_timeout_cbs_old;
 	/* list of event notification callbacks */
 	size_t				 cpg_event_size;
 	struct crt_event_cb_priv	*cpg_event_cbs;
@@ -168,11 +192,20 @@ extern struct crt_plugin_gdata		crt_plugin_gdata;
 #define CRT_DEFAULT_CREDITS_PER_EP_CTX	(32)
 #define CRT_MAX_CREDITS_PER_EP_CTX	(256)
 
+struct crt_quotas {
+	int			limit[CRT_QUOTA_COUNT];
+	ATOMIC uint32_t		current[CRT_QUOTA_COUNT];
+	bool			enabled[CRT_QUOTA_COUNT];
+	pthread_mutex_t		mutex;
+	d_list_t		rpc_waitq;
+};
+
 /* crt_context */
 struct crt_context {
 	d_list_t		 cc_link;	/** link to gdata.cg_ctx_list */
 	int			 cc_idx;	/** context index */
 	struct crt_hg_context	 cc_hg_ctx;	/** HG context */
+	bool			 cc_primary;	/** primary provider flag */
 
 	/* callbacks */
 	void			*cc_rpc_cb_arg;
@@ -182,9 +215,12 @@ struct crt_context {
 	/** RPC tracking */
 	/** in-flight endpoint tracking hash table */
 	struct d_hash_table	 cc_epi_table;
-	/** binheap for inflight RPC timeout tracking */
+	/** binheap for in-flight RPC timeout tracking */
 	struct d_binheap	 cc_bh_timeout;
-	/** mutex to protect cc_epi_table and timeout binheap */
+	/**
+	 * mutex to protect cc_epi_table and timeout binheap (see the lock
+	 * order comment on crp_mutex)
+	 */
 	pthread_mutex_t		 cc_mutex;
 
 	/** timeout per-context */
@@ -199,9 +235,16 @@ struct crt_context {
 	struct d_tm_node_t	*cc_timedout_uri;
 	/** Total number of failed address resolution, of type counter */
 	struct d_tm_node_t	*cc_failed_addr;
+	/** Counter for number of network glitches */
+	struct d_tm_node_t      *cc_net_glitches;
+	/** Stats gauge of reported SWIM delays */
+	struct d_tm_node_t      *cc_swim_delay;
 
 	/** Stores self uri for the current context */
 	char			 cc_self_uri[CRT_ADDR_STR_MAX_LEN];
+
+	/** Stores quotas */
+	struct crt_quotas	cc_quotas;
 };
 
 /* in-flight RPC req list, be tracked per endpoint for every crt_context */
@@ -214,7 +257,7 @@ struct crt_ep_inflight {
 
 	/* in-flight RPC req queue */
 	d_list_t		 epi_req_q;
-	/* (ei_req_num - ei_reply_num) is the number of inflight req */
+	/* (ei_req_num - ei_reply_num) is the number of in-flight req */
 	int64_t			 epi_req_num; /* total number of req send */
 	int64_t			 epi_reply_num; /* total number of reply recv */
 	/* RPC req wait queue */
@@ -224,7 +267,10 @@ struct crt_ep_inflight {
 	unsigned int		 epi_ref;
 	unsigned int		 epi_initialized:1;
 
-	/* mutex to protect ei_req_q and some counters */
+	/*
+	 * mutex to protect ei_req_q and some counters (see the lock order
+	 * comment on crp_mutex)
+	 */
 	pthread_mutex_t		 epi_mutex;
 };
 
@@ -236,6 +282,7 @@ struct crt_ep_inflight {
 /* max member RPC count allowed in one protocol  */
 #define CRT_PROTO_MAX_COUNT	(0xFFFFUL)
 #define CRT_PROTO_BASEOPC_MASK	(0xFF000000UL)
+#define CRT_PROTO_BASEOPC_SHIFT         24
 #define CRT_PROTO_VER_MASK	(0x00FF0000UL)
 #define CRT_PROTO_COUNT_MASK	(0x0000FFFFUL)
 
@@ -288,8 +335,7 @@ struct crt_opc_map {
 	struct crt_opc_map_L2	*com_map;
 };
 
-
-int crt_na_ofi_config_init(int provider);
-void crt_na_ofi_config_fini(int provider);
+void
+crt_na_config_fini(bool primary, crt_provider_t provider);
 
 #endif /* __CRT_INTERNAL_TYPES_H__ */

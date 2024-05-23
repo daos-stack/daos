@@ -1,41 +1,9 @@
 #!/bin/bash
-# Copyright (C) 2019 Intel Corporation.
-# All rights reserved.
-#
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted for any purpose (including commercial purposes)
-# provided that the following conditions are met:
-#
-# 1. Redistributions of source code must retain the above copyright notice,
-#    this list of conditions, and the following disclaimer.
-#
-# 2. Redistributions in binary form must reproduce the above copyright notice,
-#    this list of conditions, and the following disclaimer in the
-#    documentation and/or materials provided with the distribution.
-#
-# 3. In addition, redistributions of modified forms of the source or binary
-#    code must carry prominent notices stating that the original code was
-#    changed and the date of the change.
-#
-#  4. All publications or advertising materials mentioning features or use of
-#     this software are asked, but not required, to acknowledge that it was
-#     developed by Intel Corporation and credit the contributors.
-#
-# 5. Neither the name of Intel Corporation, nor the name of any Contributor
-#    may be used to endorse or promote products derived from this software
-#    without specific prior written permission.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY
-# DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-# (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
-# THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
+# /*
+#  * (C) Copyright 2016-2022 Intel Corporation.
+#  *
+#  * SPDX-License-Identifier: BSD-2-Clause-Patent
+# */
 
 __usage="
 Usage: gen_certificates.sh [DIR]
@@ -47,14 +15,23 @@ function print_usage () {
     >&2 echo "$__usage"
 }
 
+# validity of root CA and keys' certificates
+DAYS=1095
+
 CA_HOME="${1:-.}/daosCA"
 PRIVATE="${CA_HOME}/private"
 CERTS="${CA_HOME}/certs"
+CLIENTS="${CERTS}/clients"
+# shellcheck disable=SC2128
 CONFIGS="$(dirname "${BASH_SOURCE}")"
 
 function setup_directories () {
+    mkdir -p "${CA_HOME}"
+    chmod 700 "${CA_HOME}"
     mkdir -p "${PRIVATE}"
+    chmod 700 "${PRIVATE}"
     mkdir -p "${CERTS}"
+    chmod 755 "${CERTS}"
 }
 
 function generate_ca_cnf () {
@@ -73,7 +50,7 @@ certificate             = \$dir/daosCA.crt
 private_key             = \$dir/private/daosCA.key
 
 default_md              = sha512        # SAFE Crypto Requires SHA-512
-default_days            = 1095          # how long to certify for
+default_days            = ${DAYS}       # how long to certify for
 copy_extensions         = copy
 unique_subject          = no
 
@@ -116,10 +93,10 @@ function generate_ca_cert () {
     [[ $EUID -eq 0 ]] && chown root.root "${PRIVATE}/daosCA.key" 2>/dev/null
     chmod 0400 "${PRIVATE}/daosCA.key"
     # Generate CA Certificate
-    openssl req -new -x509 -config "${CA_HOME}/ca.cnf" -days 365  -sha512 \
+    openssl req -new -x509 -config "${CA_HOME}/ca.cnf" -days ${DAYS} -sha512 \
         -key "${PRIVATE}/daosCA.key" \
         -out "${CERTS}/daosCA.crt" -batch
-    [[ $EUID -eq 0 ]] && chown root.root "${CERTS}/daosCA.crt" 2>/dev/null
+    [[ $EUID -eq 0 ]] && chown root.daos_daemons "${CERTS}/daosCA.crt" 2>/dev/null
     chmod 0644 "${CERTS}/daosCA.crt"
     # Reset the the CA index
     rm -f "${CA_HOME}/index.txt" "${CA_HOME}/serial.txt"
@@ -199,8 +176,24 @@ function generate_server_cert () {
     ${CERTS}/server.crt"
 }
 
+function populate_clients_dir () {
+    mkdir -p                      "${CLIENTS}"
+    chmod 755                     "${CLIENTS}"
+    chown daos_server.daos_server "${CLIENTS}"
+    cp "${CERTS}/admin.crt"       "${CLIENTS}/admin.crt"
+    chown daos_server.daos_server "${CLIENTS}/admin.crt"
+    chmod 644                     "${CLIENTS}/admin.crt"
+    cp "${CERTS}/agent.crt"       "${CLIENTS}/agent.crt"
+    chown daos_server.daos_server "${CLIENTS}/agent.crt"
+    chmod 644                     "${CLIENTS}/agent.crt"
+
+    echo "Authorized Clients Certificate Files on DAOS Servers:
+    ${CLIENTS}/agent.crt
+    ${CLIENTS}/admin.crt"
+}
+
 function cleanup () {
-    rm -f "${CERTS}/*pem"
+    rm -f "${CERTS}/*.pem"
     rm -f "${CA_HOME}/agent.csr"
     rm -f "${CA_HOME}/admin.csr"
     rm -f "${CA_HOME}/server.csr"
@@ -208,12 +201,18 @@ function cleanup () {
 }
 
 function main () {
+    if [[ -d "$CA_HOME" ]]
+    then
+      echo "$CA_HOME already exists, exiting."
+      exit 1
+    fi
     setup_directories
     generate_ca_cnf
     generate_ca_cert
     generate_server_cert
     generate_agent_cert
     generate_admin_cert
+    populate_clients_dir
     cleanup
 }
 

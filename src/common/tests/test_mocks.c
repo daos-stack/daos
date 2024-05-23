@@ -1,14 +1,13 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+
 #include <daos/test_mocks.h>
 #include <daos/test_utils.h>
 
-#if D_HAS_WARNING(4, "-Wframe-larger-than=")
-	#pragma GCC diagnostic ignored "-Wframe-larger-than="
-#endif
+#include <sys/stat.h>
 
 /**
  * Generic mocks for external functions
@@ -28,7 +27,7 @@ int socket_family; /* saved input */
 int socket_type; /* saved input */
 int socket_protocol; /* saved input */
 int
-socket(int family, int type, int protocol)
+__wrap_socket(int family, int type, int protocol)
 {
 	socket_family = family;
 	socket_type = type;
@@ -38,6 +37,29 @@ socket(int family, int type, int protocol)
 		return -1;
 	}
 	return socket_return;
+}
+
+void
+mock_fchmod_setup(void)
+{
+	fchmod_return = 0; /* 0 is success */
+	fchmod_fd = 0;
+	fchmod_mode = 0;
+}
+
+int fchmod_return; /* value to be returned by fchmod() */
+int fchmod_fd; /* saved input */
+mode_t fchmod_mode; /* saved input */
+int
+__wrap_fchmod(int fd, mode_t mode)
+{
+	fchmod_fd = fd;
+	fchmod_mode = mode;
+	if (fchmod_return != 0) {
+		errno = -fchmod_return;
+		return -1;
+	}
+	return 0;
 }
 
 void
@@ -56,7 +78,7 @@ const struct sockaddr *connect_addr_ptr; /* for nullcheck */
 struct sockaddr_un connect_addr; /* saved copy of input value */
 socklen_t connect_addrlen; /* saved input */
 int
-connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
+__wrap_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
 	connect_sockfd = sockfd;
 	connect_addr_ptr = addr;
@@ -87,7 +109,7 @@ const struct sockaddr *bind_addr_ptr; /* for nullcheck */
 struct sockaddr_un bind_addr; /* saved copy of input value */
 socklen_t bind_addrlen; /* saved input */
 int
-bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
+__wrap_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
 	bind_sockfd = sockfd;
 	bind_addr_ptr = addr;
@@ -117,7 +139,7 @@ int fcntl_fd; /* saved input */
 int fcntl_cmd; /* saved input */
 int fcntl_arg; /* saved input */
 int
-fcntl(int fd, int cmd, ...)
+__wrap_fcntl(int fd, int cmd, ...)
 {
 	va_list arglist;
 
@@ -145,7 +167,7 @@ int listen_return; /* value to be returned by listen() */
 int listen_sockfd; /* saved input */
 int listen_backlog; /* saved input */
 int
-listen(int sockfd, int backlog)
+__wrap_listen(int sockfd, int backlog)
 {
 	listen_sockfd = sockfd;
 	listen_backlog = backlog;
@@ -168,12 +190,16 @@ int accept_sockfd; /* saved input */
 struct sockaddr *accept_addr_ptr; /* saved input ptr */
 socklen_t *accept_addrlen_ptr; /* saved input ptr */
 int
-accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
+__wrap_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
 {
 	accept_sockfd = sockfd;
 	accept_addr_ptr = addr;
 	accept_addrlen_ptr = addrlen;
 	accept_call_count++;
+	if (accept_return < 0) {
+		errno = -accept_return;
+		return -1;
+	}
 	return accept_return;
 }
 
@@ -189,10 +215,14 @@ int close_call_count;
 int close_return; /* value to be returned by close() */
 int close_fd; /* saved input */
 int
-close(int fd)
+__wrap_close(int fd)
 {
 	close_fd = fd;
 	close_call_count++;
+	if (close_return < 0) {
+		errno = -close_return;
+		return -1;
+	}
 	return close_return;
 }
 
@@ -218,7 +248,7 @@ size_t sendmsg_msg_iov_len; /* saved iov len */
 uint8_t sendmsg_msg_content[UNIXCOMM_MAXMSGSIZE]; /* copied into iov */
 int sendmsg_flags; /* saved input */
 ssize_t
-sendmsg(int sockfd, const struct msghdr *msg, int flags)
+__wrap_sendmsg(int sockfd, const struct msghdr *msg, int flags)
 {
 	sendmsg_call_count++;
 
@@ -231,6 +261,10 @@ sendmsg(int sockfd, const struct msghdr *msg, int flags)
 		sendmsg_msg_iov_len = msg->msg_iov[0].iov_len;
 	}
 	sendmsg_flags = flags;
+	if (sendmsg_return < 0) {
+		errno = -sendmsg_return;
+		return -1;
+	}
 	return sendmsg_return;
 }
 
@@ -256,7 +290,7 @@ size_t recvmsg_msg_iov_len; /* saved iov len */
 uint8_t recvmsg_msg_content[UNIXCOMM_MAXMSGSIZE]; /* copied into iov */
 int recvmsg_flags; /* saved input */
 ssize_t
-recvmsg(int sockfd, struct msghdr *msg, int flags)
+__wrap_recvmsg(int sockfd, struct msghdr *msg, int flags)
 {
 	recvmsg_call_count++;
 
@@ -273,7 +307,37 @@ recvmsg(int sockfd, struct msghdr *msg, int flags)
 		recvmsg_msg_iov_len = msg->msg_iov[0].iov_len;
 	}
 	recvmsg_flags = flags;
+	if (recvmsg_return < 0) {
+		errno = -recvmsg_return;
+		return -1;
+	}
 	return recvmsg_return;
+}
+
+void
+mock_valid_drpc_call_in_recvmsg(void)
+{
+	Drpc__Call *call = new_drpc_call();
+
+	/* Mock a valid DRPC call coming in */
+	recvmsg_return = drpc__call__get_packed_size(call);
+	drpc__call__pack(call, recvmsg_msg_content);
+
+	drpc__call__free_unpacked(call, NULL);
+}
+
+void
+mock_valid_drpc_resp_in_recvmsg(Drpc__Status status)
+{
+	Drpc__Response *resp = new_drpc_response();
+
+	resp->status = status;
+
+	/* Mock a valid DRPC response coming in */
+	recvmsg_return = drpc__response__get_packed_size(resp);
+	drpc__response__pack(resp, recvmsg_msg_content);
+
+	drpc__response__free_unpacked(resp, NULL);
 }
 
 void
@@ -300,7 +364,7 @@ nfds_t poll_nfds; /* saved input */
 int poll_timeout; /* saved input */
 int poll_revents_return[1024]; /* to be returned in revents struct */
 int
-poll(struct pollfd *fds, nfds_t nfds, int timeout)
+__wrap_poll(struct pollfd *fds, nfds_t nfds, int timeout)
 {
 	poll_fds_ptr = (void *)fds;
 	if (fds != NULL) {
@@ -317,6 +381,10 @@ poll(struct pollfd *fds, nfds_t nfds, int timeout)
 	}
 	poll_nfds = nfds;
 	poll_timeout = timeout;
+	if (poll_return < 0) {
+		errno = -poll_return;
+		return -1;
+	}
 	return poll_return;
 }
 
@@ -330,80 +398,11 @@ mock_unlink_setup(void)
 int unlink_call_count;
 const char *unlink_name;
 int
-unlink(const char *__name)
+__wrap_unlink(const char *__name)
 {
 	unlink_call_count++;
 	unlink_name = __name;
 	return 0;
-}
-
-/* Mock for the drpc->handler function pointer */
-void
-mock_drpc_handler_setup(void)
-{
-	mock_drpc_handler_call_count = 0;
-	mock_drpc_handler_call = NULL;
-	mock_drpc_handler_resp_ptr = NULL;
-	mock_drpc_handler_resp_return = new_drpc_response();
-}
-
-void
-mock_drpc_handler_teardown(void)
-{
-	if (mock_drpc_handler_call != NULL) {
-		drpc__call__free_unpacked(mock_drpc_handler_call, NULL);
-	}
-
-	drpc__response__free_unpacked(mock_drpc_handler_resp_return, NULL);
-}
-
-int mock_drpc_handler_call_count; /* how many times it was called */
-Drpc__Call *mock_drpc_handler_call; /* alloc copy of the structure passed in */
-void *mock_drpc_handler_resp_ptr; /* saved value of resp ptr */
-Drpc__Response *mock_drpc_handler_resp_return; /* to be returned in *resp */
-void
-mock_drpc_handler(Drpc__Call *call, Drpc__Response *resp)
-{
-	uint8_t buffer[UNIXCOMM_MAXMSGSIZE];
-
-	mock_drpc_handler_call_count++;
-
-	if (call == NULL) {
-		mock_drpc_handler_call = NULL;
-	} else {
-		/*
-		 * Caller will free the original so we want to make a copy.
-		 * Keep only the latest call.
-		 */
-		if (mock_drpc_handler_call != NULL) {
-			drpc__call__free_unpacked(mock_drpc_handler_call, NULL);
-		}
-
-		/*
-		 * Drpc__Call has hierarchy of pointers - easiest way to
-		 * copy is to pack and unpack.
-		 */
-		drpc__call__pack(call, buffer);
-		mock_drpc_handler_call = drpc__call__unpack(NULL,
-				drpc__call__get_packed_size(call),
-				buffer);
-	}
-
-	mock_drpc_handler_resp_ptr = (void *)resp;
-
-	if (resp != NULL && mock_drpc_handler_resp_return != NULL) {
-		size_t len;
-
-		len = mock_drpc_handler_resp_return->body.len;
-		memcpy(resp, mock_drpc_handler_resp_return,
-				sizeof(Drpc__Response));
-		resp->body.len = len;
-		if (len > 0) {
-			D_ALLOC(resp->body.data, len);
-			memcpy(resp->body.data,
-				mock_drpc_handler_resp_return->body.data, len);
-		}
-	}
 }
 
 /* Mocks/stubs for Argobots functions */

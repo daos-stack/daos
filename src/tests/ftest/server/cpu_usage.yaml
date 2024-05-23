@@ -1,21 +1,15 @@
 hosts:
-  test_servers:
-    - server-A
-  test_clients:
-    - client-A
+  test_servers: 1
+  test_clients: 1
 timeout: 130
 server_config:
-  servers:
-    # 16 targets and 16 nr_xs_helpers are the requirements.
-    targets: 16
-    nr_xs_helpers: 16
-    bdev_class: nvme
-    bdev_list: ["0000:00:00.0"]
-    scm_class: dcpm
-    scm_list: ["/dev/pmem0"]
-    scm_mount: /mnt/daos0
-    interface:
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 8
+      nr_xs_helpers: 8
       fabric_iface: ib0
+      storage: auto
 ior:
   client_processes:
     np: 1

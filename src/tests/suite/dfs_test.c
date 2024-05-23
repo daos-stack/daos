@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -81,24 +81,25 @@ run_specified_tests(const char *tests, int rank, int size,
 int
 main(int argc, char **argv)
 {
-	test_arg_t	*arg;
-	char		 tests[64];
-	char		*exclude_str = NULL;
-	int		 ntests = 0;
-	int		 nr_failed = 0;
-	int		 nr_total_failed = 0;
-	int		 opt = 0, index = 0;
-	int		 rank;
-	int		 size;
-	int		 rc;
+	test_arg_t *arg;
+	char        tests[64];
+	char       *exclude_str           = NULL;
+	char       *cmocka_message_output = NULL;
+	int         ntests                = 0;
+	int         nr_failed             = 0;
+	int         nr_total_failed       = 0;
+	int         opt = 0, index = 0;
+	int         rank;
+	int         size;
+	int         rc;
 
 	d_register_alt_assert(mock_assert);
 
-	MPI_Init(&argc, &argv);
+	par_init(&argc, &argv);
 
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	MPI_Comm_size(MPI_COMM_WORLD, &size);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_rank(PAR_COMM_WORLD, &rank);
+	par_size(PAR_COMM_WORLD, &size);
+	par_barrier(PAR_COMM_WORLD);
 
 	static struct option long_options[] = {
 		{"all",		no_argument,		NULL,	'a'},
@@ -141,7 +142,7 @@ main(int argc, char **argv)
 	}
 
 	if (strlen(tests) == 0)
-		strcpy(tests, all_tests);
+		strncpy(tests, all_tests, sizeof(TESTS));
 
 	if (svc_nreplicas > ARRAY_SIZE(arg->pool.ranks) && rank == 0) {
 		print_message("at most %zu service replicas allowed\n",
@@ -166,11 +167,22 @@ main(int argc, char **argv)
 		tests[new_idx] = '\0';
 	}
 
+	/** if writing XML, force all ranks other than rank 0 to use stdout to avoid conflicts */
+	d_agetenv_str(&cmocka_message_output, "CMOCKA_MESSAGE_OUTPUT");
+	if (rank != 0 && cmocka_message_output && strcasecmp(cmocka_message_output, "xml") == 0) {
+		d_freeenv_str(&cmocka_message_output);
+		rc = d_setenv("CMOCKA_MESSAGE_OUTPUT", "stdout", 1);
+		if (rc) {
+			print_message("d_setenv() failed with %d\n", rc);
+			return -1;
+		}
+	}
+	d_freeenv_str(&cmocka_message_output);
+
 	nr_failed = run_specified_tests(tests, rank, size, NULL, 0);
 
 exit:
-	MPI_Allreduce(&nr_failed, &nr_total_failed, 1, MPI_INT, MPI_SUM,
-		      MPI_COMM_WORLD);
+	par_allreduce(PAR_COMM_WORLD, &nr_failed, &nr_total_failed, 1, PAR_INT, PAR_SUM);
 
 	rc = daos_fini();
 	if (rc)
@@ -185,7 +197,7 @@ exit:
 				      nr_total_failed);
 	}
 
-	MPI_Finalize();
+	par_fini();
 
 	return nr_failed;
 }

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -29,6 +29,7 @@
 #include <vos_internal.h>
 #include "vts_common.h"
 #include <cmocka.h>
+#include <linux/limits.h>
 
 enum {
 	TCX_NONE,
@@ -38,7 +39,8 @@ enum {
 	TCX_READY,
 };
 
-int gc, oid_cnt;
+int	gc, oid_cnt;
+char	vos_path[STORAGE_PATH_LEN+1];
 
 bool
 vts_file_exists(const char *filename)
@@ -52,15 +54,14 @@ vts_file_exists(const char *filename)
 int
 vts_alloc_gen_fname(char **fname)
 {
-	char *file_name = NULL;
-	int n;
+	int rc;
 
-	file_name = malloc(25);
-	if (!file_name)
-		return -ENOMEM;
-	n = snprintf(file_name, 25, VPOOL_NAME);
-	snprintf(file_name+n, 25-n, ".%d", gc++);
-	*fname = file_name;
+	rc = asprintf(fname, "%s/vpool.%d", vos_path, gc++);
+	if (rc < 0) {
+		*fname = NULL;
+		print_error("Failed to allocate memory for fname: rc = %d\n", rc);
+		return rc;
+	}
 
 	return 0;
 }
@@ -77,9 +78,11 @@ vts_pool_fallocate(char **fname)
 	fd = open(*fname, O_CREAT | O_TRUNC | O_RDWR, 0666);
 	if (fd < 0) {
 		ret = -ENOMEM;
+		free(*fname);
+		*fname = NULL;
 		goto exit;
 	}
-	ret = fallocate(fd, 0, 0, VPOOL_16M);
+	ret = fallocate(fd, 0, 0, VPOOL_256M);
 
 exit:
 	return ret;
@@ -104,7 +107,7 @@ vts_ctx_init(struct vos_test_ctx *tcx, size_t psize)
 	uuid_generate_time_safe(tcx->tc_co_uuid);
 
 	/* specify @psize as both NVMe size and SCM size */
-	rc = vos_pool_create(tcx->tc_po_name, tcx->tc_po_uuid, psize, psize, 0,
+	rc = vos_pool_create(tcx->tc_po_name, tcx->tc_po_uuid, psize, psize, 0, 0 /* version */,
 			     &tcx->tc_po_hdl);
 	if (rc) {
 		print_error("vpool create %s failed with error : %d\n",
@@ -127,7 +130,7 @@ vts_ctx_init(struct vos_test_ctx *tcx, size_t psize)
 		print_error("vos container open error: "DF_RC"\n", DP_RC(rc));
 		goto failed;
 	}
-	tcx->tc_step = TCX_CO_OPEN;
+
 	tcx->tc_step = TCX_READY;
 	return 0;
 
@@ -224,8 +227,7 @@ vts_credits_init(struct credit_context *tsc)
 		memset(cred, 0, sizeof(*cred));
 		D_ALLOC(cred->tc_vbuf, tsc->tsc_cred_vsize);
 		if (!cred->tc_vbuf) {
-			fprintf(stderr, "Cannt allocate buffer size=%d\n",
-				tsc->tsc_cred_vsize);
+			fprintf(stderr, "Cannot allocate buffer size=%d\n", tsc->tsc_cred_vsize);
 			return -1;
 		}
 	}
@@ -254,21 +256,20 @@ pool_init(struct credit_context *tsc)
 	if (tsc->tsc_scm_size == 0)
 		tsc->tsc_scm_size = (1ULL << 30);
 
-	if (!daos_file_is_dax(pmem_file)) {
-		rc = open(pmem_file, O_CREAT | O_TRUNC | O_RDWR, 0666);
-		if (rc < 0)
-			goto out;
+	D_ASSERT(!daos_file_is_dax(pmem_file));
+	rc = open(pmem_file, O_CREAT | O_TRUNC | O_RDWR, 0666);
+	if (rc < 0)
+		goto out;
 
-		fd = rc;
-		rc = fallocate(fd, 0, 0, tsc->tsc_scm_size);
-		if (rc)
-			goto out;
-	}
+	fd = rc;
+	rc = fallocate(fd, 0, 0, tsc->tsc_scm_size);
+	if (rc)
+		goto out;
 
 	/* Use pool size as blob size for this moment. */
 	if (tsc_create_pool(tsc)) {
-		rc = vos_pool_create(pmem_file, tsc->tsc_pool_uuid, 0,
-				     tsc->tsc_nvme_size, 0, &poh);
+		rc = vos_pool_create(pmem_file, tsc->tsc_pool_uuid, 0, tsc->tsc_nvme_size, 0,
+				     0 /* version */, &poh);
 		if (rc)
 			goto out;
 	} else {
@@ -335,7 +336,7 @@ dts_ctx_init(struct credit_context *tsc)
 		goto out;
 	tsc->tsc_init = DTS_INIT_DEBUG;
 
-	rc = vos_self_init("/mnt/daos");
+	rc = vos_self_init(vos_path, false, BIO_STANDALONE_TGT_ID);
 	if (rc)
 		goto out;
 	tsc->tsc_init = DTS_INIT_MODULE;

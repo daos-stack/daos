@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,17 +7,14 @@
 package server
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/pkg/errors"
-	"google.golang.org/protobuf/proto"
 
-	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -39,7 +36,7 @@ func TestCheckDrpcClientSocketPath_BadPath(t *testing.T) {
 }
 
 func TestCheckDrpcClientSocketPath_DirNotSocket(t *testing.T) {
-	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	tmpDir, tmpCleanup := test.CreateTestDir(t)
 	defer tmpCleanup()
 
 	path := filepath.Join(tmpDir, "drpc_test.sock")
@@ -57,10 +54,10 @@ func TestCheckDrpcClientSocketPath_DirNotSocket(t *testing.T) {
 }
 
 func TestCheckDrpcClientSocketPath_FileNotSocket(t *testing.T) {
-	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	tmpDir, tmpCleanup := test.CreateTestDir(t)
 	defer tmpCleanup()
 
-	path := common.CreateTestFile(t, tmpDir, "")
+	path := test.CreateTestFile(t, tmpDir, "")
 
 	err := checkDrpcClientSocketPath(path)
 
@@ -70,11 +67,11 @@ func TestCheckDrpcClientSocketPath_FileNotSocket(t *testing.T) {
 }
 
 func TestCheckDrpcClientSocketPath_Success(t *testing.T) {
-	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	tmpDir, tmpCleanup := test.CreateTestDir(t)
 	defer tmpCleanup()
 
 	path := filepath.Join(tmpDir, "drpc_test.sock")
-	_, cleanup := common.CreateTestSocket(t, path)
+	_, cleanup := test.CreateTestSocket(t, path)
 	defer cleanup()
 
 	err := checkDrpcClientSocketPath(path)
@@ -116,7 +113,7 @@ func TestDrpcCleanup_BadSocketDir(t *testing.T) {
 }
 
 func TestDrpcCleanup_EmptyDir(t *testing.T) {
-	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	tmpDir, tmpCleanup := test.CreateTestDir(t)
 	defer tmpCleanup()
 
 	err := drpcCleanup(tmpDir)
@@ -134,7 +131,7 @@ func expectDoesNotExist(t *testing.T, path string) {
 }
 
 func TestDrpcCleanup_Single(t *testing.T) {
-	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	tmpDir, tmpCleanup := test.CreateTestDir(t)
 	defer tmpCleanup()
 
 	for _, sockName := range []string{
@@ -144,7 +141,7 @@ func TestDrpcCleanup_Single(t *testing.T) {
 		"daos_engine_2345.sock",
 	} {
 		sockPath := filepath.Join(tmpDir, sockName)
-		_, cleanup := common.CreateTestSocket(t, sockPath)
+		_, cleanup := test.CreateTestSocket(t, sockPath)
 		defer cleanup()
 
 		err := drpcCleanup(tmpDir)
@@ -158,7 +155,7 @@ func TestDrpcCleanup_Single(t *testing.T) {
 }
 
 func TestDrpcCleanup_DoesNotDeleteNonDaosSocketFiles(t *testing.T) {
-	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	tmpDir, tmpCleanup := test.CreateTestDir(t)
 	defer tmpCleanup()
 
 	for _, sockName := range []string{
@@ -169,7 +166,7 @@ func TestDrpcCleanup_DoesNotDeleteNonDaosSocketFiles(t *testing.T) {
 		"daos_engine",
 	} {
 		sockPath := filepath.Join(tmpDir, sockName)
-		_, cleanup := common.CreateTestSocket(t, sockPath)
+		_, cleanup := test.CreateTestSocket(t, sockPath)
 		defer cleanup()
 
 		err := drpcCleanup(tmpDir)
@@ -186,7 +183,7 @@ func TestDrpcCleanup_DoesNotDeleteNonDaosSocketFiles(t *testing.T) {
 }
 
 func TestDrpcCleanup_Multiple(t *testing.T) {
-	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	tmpDir, tmpCleanup := test.CreateTestDir(t)
 	defer tmpCleanup()
 
 	sockNames := []string{
@@ -205,7 +202,7 @@ func TestDrpcCleanup_Multiple(t *testing.T) {
 		path := filepath.Join(tmpDir, sockName)
 		sockPaths = append(sockPaths, path)
 
-		_, cleanup := common.CreateTestSocket(t, path)
+		_, cleanup := test.CreateTestSocket(t, path)
 		defer cleanup()
 	}
 
@@ -251,7 +248,7 @@ func TestDrpc_Errors(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			cfg := &mockDrpcClientConfig{
 				SendMsgError:    tc.sendError,
@@ -260,78 +257,10 @@ func TestDrpc_Errors(t *testing.T) {
 			}
 			mc := newMockDrpcClient(cfg)
 
-			_, err := makeDrpcCall(context.TODO(), log,
+			_, err := makeDrpcCall(test.Context(t), log,
 				mc, drpc.MethodPoolCreate,
 				&mgmtpb.PoolCreateReq{})
-			common.CmpErr(t, tc.expErr, err)
-		})
-	}
-}
-
-func TestServer_DrpcRetryCancel(t *testing.T) {
-	for name, tc := range map[string]struct {
-		req          proto.Message
-		resp         proto.Message
-		method       drpc.Method
-		timeout      time.Duration
-		shouldCancel bool
-		expErr       error
-	}{
-		"retries exceed deadline": {
-			req: &retryableDrpcReq{
-				Message:    &mgmtpb.PoolDestroyReq{},
-				RetryAfter: 1 * time.Microsecond,
-				RetryableStatuses: []drpc.DaosStatus{
-					drpc.DaosBusy,
-				},
-			},
-			resp: &mgmtpb.PoolDestroyResp{
-				Status: int32(drpc.DaosBusy),
-			},
-			method:  drpc.MethodPoolDestroy,
-			timeout: 10 * time.Microsecond,
-			expErr:  context.DeadlineExceeded,
-		},
-		"canceled request": {
-			req: &retryableDrpcReq{
-				Message:    &mgmtpb.PoolDestroyReq{},
-				RetryAfter: 1 * time.Microsecond,
-				RetryableStatuses: []drpc.DaosStatus{
-					drpc.DaosBusy,
-				},
-			},
-			resp: &mgmtpb.PoolDestroyResp{
-				Status: int32(drpc.DaosBusy),
-			},
-			method:       drpc.MethodPoolDestroy,
-			timeout:      1 * time.Second,
-			shouldCancel: true,
-			expErr:       context.Canceled,
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
-
-			body, err := proto.Marshal(tc.resp)
-			if err != nil {
-				t.Fatal(err)
-			}
-			cfg := &mockDrpcClientConfig{
-				SendMsgResponse: &drpc.Response{
-					Body: body,
-				},
-			}
-			mc := newMockDrpcClient(cfg)
-
-			ctx, cancel := context.WithTimeout(context.Background(), tc.timeout)
-			defer cancel()
-			if tc.shouldCancel {
-				cancel()
-			}
-
-			_, err = makeDrpcCall(ctx, log, mc, tc.method, tc.req)
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 		})
 	}
 }

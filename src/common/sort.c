@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -159,7 +159,7 @@ daos_array_shuffle(void *array, unsigned int len, daos_sort_ops_t *ops)
 	int		i;
 
 	for (n = len; n > 0; n--) {
-		i = rand() % n;
+		i = d_rand() % n;
 		if (i != n - 1)
 			ops->so_swap(array, i, n - 1);
 	}

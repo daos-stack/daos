@@ -1,17 +1,14 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
 
 from ior_test_base import IorTestBase
-from daos_utils import DaosCommand
 
 
 class SnapshotAggregation(IorTestBase):
-    # pylint: disable=too-many-ancestors
     """Defines snapshot aggregation test cases.
 
     Test Class Description:
@@ -23,11 +20,12 @@ class SnapshotAggregation(IorTestBase):
     def __init__(self, *args, **kwargs):
         """Initialize a SnapshotAggregation object."""
         super().__init__(*args, **kwargs)
-        self.dmg = None
         self.free_space = {"scm": [], "nvme": []}
 
     def update_free_space(self):
         """Append to the free space list with the current pool capacities."""
+        self.pool.get_info()
+        self.pool.set_query_data()
         for index, name in enumerate(("scm", "nvme")):
             for tier in self.pool.query_data["response"]["tier_stats"]:
                 if tier["media_type"] == name:
@@ -46,17 +44,12 @@ class SnapshotAggregation(IorTestBase):
             capacity by half.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,large
-        :avocado: tags=container,snapshot,snap
-        :avocado: tags=snapshot_aggregation
+        :avocado: tags=hw,medium
+        :avocado: tags=container,snap
+        :avocado: tags=SnapshotAggregation,test_snapshot_aggregation
         """
-        self.dmg = self.get_dmg_command()
-        daos = DaosCommand(self.bin)
-
         # Create a pool and a container that spans the 2 servers.
         self.update_ior_cmd_with_pool()
-        self.pool.get_info()
-        self.pool.set_query_data()
         self.update_free_space()
         self.log.info(
             "Pool free space before writes:\n  SCM:  %s\n  NVMe: %s",
@@ -113,9 +106,7 @@ class SnapshotAggregation(IorTestBase):
         self.pool.use_label = True
 
         # Delete the snapshot.
-        daos.container_destroy_snap(
-            pool=self.pool.uuid,
-            cont=self.container.uuid, epc=self.container.epoch)
+        self.container.destroy_snap(epc=self.container.epoch)
 
         # Wait for aggregation to start and finish.
         space_reclaimed = False
@@ -130,8 +121,6 @@ class SnapshotAggregation(IorTestBase):
             time.sleep(sleep_time)
 
             # Update the utilized capacity of the pool
-            self.pool.get_info()
-            self.pool.set_query_data()
             self.update_free_space()
             self.log.info(
                 "Pool free space %s seconds after deleting the snapshot:"
@@ -148,9 +137,6 @@ class SnapshotAggregation(IorTestBase):
 
         if not space_reclaimed:
             self.fail(
-                "Pool free space was not restored by the aggregation after "
-                "snapshot deletion")
+                "Pool free space was not restored by the aggregation after snapshot deletion")
 
-        self.log.info(
-            "Pool free space restored by the aggregation after snapshot "
-            "deletion")
+        self.log.info("Pool free space restored by the aggregation after snapshot deletion")

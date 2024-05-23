@@ -1,25 +1,24 @@
-#!python
-# (C) Copyright 2018-2021 Intel Corporation.
-#
-# SPDX-License-Identifier: BSD-2-Clause-Patent
-#
 """Build cart_ctl test"""
 
-import os
-import daos_build
 
 SRC = ['cart_ctl.c']
 
+
 def scons():
     """scons function"""
-    Import('env', 'prereqs', 'cart_lib', 'gurt_lib', 'cart_utils_objs')
+    Import('env', 'cart_utils_objs')
 
     tenv = env.Clone(LIBS=[])
-    tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread'])
-    prereqs.require(tenv, 'mercury')
+    tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'daos', 'daos_common'])
+    tenv.AppendUnique(CPPPATH=[Dir('../../../src/mgmt').srcnode()])
+    tenv.AppendUnique(CPPPATH=[Dir('../../cart').srcnode()])
+    tenv.AppendUnique(CPPPATH=[Dir('../../cart/utils').srcnode()])
 
-    ctl = daos_build.program(tenv, [SRC, cart_utils_objs])
-    tenv.Install(os.path.join("$PREFIX", 'bin'), ctl)
+    tenv.require('mercury', 'protobufc')
+
+    ctl = tenv.d_program([SRC, cart_utils_objs])
+    tenv.Install('$PREFIX/bin', ctl)
+
 
 if __name__ == "SCons.Script":
     scons()

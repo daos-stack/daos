@@ -16,7 +16,7 @@
       <directory>${project.parent.basedir}/hadoop-daos/src/main/resources</directory>
       <outputDirectory>.</outputDirectory>
       <includes>
-        <include>daos-site-example.xml</include>
+        <include>core-site-daos-ref.xml</include>
       </includes>
     </fileSet>
     <fileSet>

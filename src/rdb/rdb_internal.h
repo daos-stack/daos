@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -32,7 +32,38 @@ struct rdb_raft_event {
 	uint64_t			dre_term;
 };
 
+#define RDB_NOSPC_ERR_INTVL_USEC (1000000)	/* 1 second */
+
 /* rdb.c **********************************************************************/
+
+static inline struct rdb *
+rdb_from_storage(struct rdb_storage *storage)
+{
+	return (struct rdb *)storage;
+}
+
+static inline struct rdb_storage *
+rdb_to_storage(struct rdb *db)
+{
+	return (struct rdb_storage *)db;
+}
+
+enum {
+	CHKPT_NONE = 0,
+	CHKPT_MUTEX,
+	CHKPT_MAIN_CV,
+	CHKPT_COMMIT_CV,
+	CHKPT_ULT,
+};
+
+struct rdb_chkpt_record {
+	uint32_t dcr_state : 4, dcr_init : 1, dcr_enabled : 1, dcr_waiting : 1, dcr_needed : 1,
+	    dcr_idle : 1, dcr_stop : 1;
+	uint32_t dcr_thresh;
+	uint64_t dcr_commit_id;
+	uint64_t dcr_wait_id;
+	struct umem_store *dcr_store;
+};
 
 /* multi-ULT locking in struct rdb:
  *  d_mutex: for RPC mgmt and ref count:
@@ -53,16 +84,24 @@ struct rdb {
 	void		       *d_arg;		/* for d_cbs callbacks */
 	struct daos_lru_cache  *d_kvss;		/* rdb_kvs cache */
 	daos_handle_t		d_pool;		/* VOS pool */
+	struct rdb_chkpt_record d_chkpt_record; /* pool checkpoint information */
+	ABT_thread              d_chkptd;       /* thread handle for pool checkpoint daemon */
+	ABT_mutex               d_chkpt_mutex;  /* mutex for checkpoint synchronization */
+	ABT_cond                d_chkpt_cv;     /* for triggering pool checkpointing */
+	ABT_cond                d_commit_cv;    /* for waking active pool checkpoint */
 	daos_handle_t		d_mc;		/* metadata container */
+	uint64_t		d_nospc_ts;	/* last time commit observed low/no space (usec) */
+	bool			d_new;		/* for skipping lease recovery */
+	bool			d_use_leases;	/* when verifying leadership */
 
 	/* rdb_raft fields */
 	raft_server_t	       *d_raft;
+	bool			d_raft_loaded;	/* from storage (see rdb_raft_load) */
 	ABT_mutex		d_raft_mutex;	/* for raft state machine */
 	daos_handle_t		d_lc;		/* log container */
 	struct rdb_lc_record	d_lc_record;	/* of d_lc */
 	daos_handle_t		d_slc;		/* staging log container */
-	struct rdb_lc_record	d_slc_record;	/* of d_slc */
-	d_rank_list_t	       *d_replicas;
+	struct rdb_lc_record    d_slc_record;   /* of d_slc */
 	uint64_t		d_applied;	/* last applied index */
 	uint64_t		d_debut;	/* first entry in a term */
 	ABT_cond		d_applied_cv;	/* for d_applied updates */
@@ -74,21 +113,22 @@ struct rdb {
 	int			d_nevents;	/* d_events queue len from 0 */
 	ABT_cond		d_events_cv;	/* for d_events enqueues */
 	uint64_t		d_compact_thres;/* of compactable entries */
-	ABT_cond		d_compact_cv;	/* for base updates */
+	ABT_cond		d_compact_cv;	/* for triggering base updates */
+	ABT_cond                d_compacted_cv; /* for d_lc_record.dlr_aggregated updates */
 	bool			d_stop;		/* for rdb_stop() */
 	ABT_thread		d_timerd;
-	ABT_thread		d_callbackd;
+	ABT_thread              d_callbackd;
 	ABT_thread		d_recvd;
 	ABT_thread		d_compactd;
 	size_t			d_ae_max_size;
 	unsigned int		d_ae_max_entries;
 };
 
-/* thresholds of free space for a leader to avoid appending new log entries
- * and follower to warn if the situation is really dire.
+/* thresholds of free space for a leader to avoid appending new log entries (4 MiB)
+ * and follower to warn if the situation is really dire (16KiB)
  */
-#define RDB_NOAPPEND_FREE_SPACE (262144)
-#define RDB_CRITICAL_FREE_SPACE (16384)
+#define RDB_NOAPPEND_FREE_SPACE (1ULL << 22)
+#define RDB_CRITICAL_FREE_SPACE (1ULL << 14)
 
 /* Current rank */
 #define DF_RANK "%u"
@@ -138,23 +178,31 @@ struct rdb_raft_node {
 	struct rdb_raft_is	dn_is;
 };
 
-int rdb_raft_init(daos_handle_t pool, daos_handle_t mc,
-		  const d_rank_list_t *replicas);
+void rdb_raft_module_init(void);
+void rdb_raft_module_fini(void);
+int rdb_raft_init(daos_handle_t pool, daos_handle_t mc, const d_rank_list_t *replicas);
+int rdb_raft_open(struct rdb *db, uint64_t caller_term);
 int rdb_raft_start(struct rdb *db);
 void rdb_raft_stop(struct rdb *db);
+void rdb_raft_close(struct rdb *db);
+int rdb_raft_dictate(struct rdb *db);
 void rdb_raft_resign(struct rdb *db, uint64_t term);
 int rdb_raft_campaign(struct rdb *db);
+int rdb_raft_ping(struct rdb *db, uint64_t caller_term);
 int rdb_raft_verify_leadership(struct rdb *db);
+int rdb_raft_load_replicas(daos_handle_t lc, uint64_t index, d_rank_list_t **replicas);
 int rdb_raft_add_replica(struct rdb *db, d_rank_t rank);
 int rdb_raft_remove_replica(struct rdb *db, d_rank_t rank);
 int rdb_raft_append_apply(struct rdb *db, void *entry, size_t size,
 			  void *result);
 int rdb_raft_wait_applied(struct rdb *db, uint64_t index, uint64_t term);
+int rdb_raft_get_ranks(struct rdb *db, d_rank_list_t **ranksp);
 void rdb_requestvote_handler(crt_rpc_t *rpc);
 void rdb_appendentries_handler(crt_rpc_t *rpc);
 void rdb_installsnapshot_handler(crt_rpc_t *rpc);
 void rdb_raft_process_reply(struct rdb *db, crt_rpc_t *rpc);
 void rdb_raft_free_request(struct rdb *db, crt_rpc_t *rpc);
+int rdb_raft_trigger_compaction(struct rdb *db, bool compact_all, uint64_t *idx);
 
 /* rdb_rpc.c ******************************************************************/
 
@@ -164,27 +212,19 @@ void rdb_raft_free_request(struct rdb *db, crt_rpc_t *rpc);
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
-#define DAOS_RDB_VERSION 3
+#define DAOS_RDB_VERSION 4
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
-#define RDB_PROTO_SRV_RPC_LIST						\
-	X(RDB_REQUESTVOTE,						\
-		0, &CQF_rdb_requestvote,				\
-		rdb_requestvote_handler, NULL),				\
-	X(RDB_APPENDENTRIES,						\
-		0, &CQF_rdb_appendentries,				\
-		rdb_appendentries_handler, NULL),			\
-	X(RDB_INSTALLSNAPSHOT,						\
-		0, &CQF_rdb_installsnapshot,				\
-		rdb_installsnapshot_handler, NULL)
+#define RDB_PROTO_SRV_RPC_LIST                                                                     \
+	X(RDB_REQUESTVOTE, 0, &CQF_rdb_requestvote, rdb_requestvote_handler, NULL)                 \
+	X(RDB_APPENDENTRIES, 0, &CQF_rdb_appendentries, rdb_appendentries_handler, NULL)           \
+	X(RDB_INSTALLSNAPSHOT, 0, &CQF_rdb_installsnapshot, rdb_installsnapshot_handler, NULL)
 
 /* Define for RPC enum population below */
-#define X(a, b, c, d, e) a
+#define X(a, ...) a,
 
-enum rdb_operation {
-	RDB_PROTO_SRV_RPC_LIST,
-};
+enum rdb_operation { RDB_PROTO_SRV_RPC_LIST };
 
 #undef X
 
@@ -258,11 +298,6 @@ int rdb_send_raft_rpc(crt_rpc_t *rpc, struct rdb *db);
 int rdb_abort_raft_rpcs(struct rdb *db);
 void rdb_recvd(void *arg);
 
-/* rdb_tx.c *******************************************************************/
-
-int rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
-		 void *result, bool *critp);
-
 /* rdb_kvs.c ******************************************************************/
 
 /* KVS cache entry */
@@ -312,19 +347,25 @@ void rdb_anchor_from_hashes(struct rdb_anchor *anchor,
 			    daos_anchor_t *akey_anchor,
 			    daos_anchor_t *ev_anchor, daos_anchor_t *sv_anchor);
 
+struct dtx_handle;
+typedef struct dtx_handle *rdb_vos_tx_t;
+
+int rdb_vos_tx_begin(struct rdb *db, int nvops, rdb_vos_tx_t *vtx);
+int rdb_vos_tx_end(struct rdb *db, rdb_vos_tx_t vtx, int err);
 int rdb_vos_fetch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 		  daos_key_t *akey, d_iov_t *value);
 int rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 		       daos_key_t *akey, d_iov_t *value);
+int rdb_vos_query_key_max(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, daos_key_t *akey);
 int rdb_vos_iter_fetch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 		       enum rdb_probe_opc opc, daos_key_t *akey_in,
 		       daos_key_t *akey_out, d_iov_t *value);
 int rdb_vos_iterate(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 		    bool backward, rdb_iterate_cb_t cb, void *arg);
-int rdb_vos_update(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
-		   bool crit, int n, d_iov_t akeys[], d_iov_t values[]);
-int rdb_vos_punch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, int n,
-		  d_iov_t akeys[]);
+int rdb_vos_update(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, bool crit, int n,
+		   d_iov_t akeys[], d_iov_t values[], rdb_vos_tx_t vtx);
+int rdb_vos_punch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, int n, d_iov_t akeys[],
+		  rdb_vos_tx_t vtx);
 int rdb_vos_discard(daos_handle_t cont, daos_epoch_t low, daos_epoch_t high);
 int rdb_vos_aggregate(daos_handle_t cont, daos_epoch_t high);
 
@@ -337,14 +378,13 @@ int rdb_vos_aggregate(daos_handle_t cont, daos_epoch_t high);
 
 /* Update n (<= RDB_VOS_BATCH_MAX) a-keys atomically. */
 static inline int
-rdb_mc_update(daos_handle_t mc, rdb_oid_t oid, int n, d_iov_t akeys[],
-	      d_iov_t values[])
+rdb_mc_update(daos_handle_t mc, rdb_oid_t oid, int n, d_iov_t akeys[], d_iov_t values[],
+	      rdb_vos_tx_t vtx)
 {
 	D_DEBUG(DB_TRACE, "mc="DF_X64" oid="DF_X64" n=%d akeys[0]=<%p, %zd> "
 		"values[0]=<%p, %zd>\n", mc.cookie, oid, n, akeys[0].iov_buf,
 		akeys[0].iov_len, values[0].iov_buf, values[0].iov_len);
-	return rdb_vos_update(mc, RDB_MC_EPOCH, oid, true /* crit */, n,
-			      akeys, values);
+	return rdb_vos_update(mc, RDB_MC_EPOCH, oid, true /* crit */, n, akeys, values, vtx);
 }
 
 static inline int
@@ -359,19 +399,19 @@ rdb_mc_lookup(daos_handle_t mc, rdb_oid_t oid, d_iov_t *akey,
 }
 
 static inline int
-rdb_lc_update(daos_handle_t lc, uint64_t index, rdb_oid_t oid, bool crit,
-	      int n, d_iov_t akeys[], d_iov_t values[])
+rdb_lc_update(daos_handle_t lc, uint64_t index, rdb_oid_t oid, bool crit, int n, d_iov_t akeys[],
+	      d_iov_t values[], rdb_vos_tx_t vtx)
 {
 	D_DEBUG(DB_TRACE, "lc="DF_X64" index="DF_U64" oid="DF_X64
 		" n=%d akeys[0]=<%p, %zd> values[0]=<%p, %zd>\n", lc.cookie,
 		index, oid, n, akeys[0].iov_buf, akeys[0].iov_len,
 		values[0].iov_buf, values[0].iov_len);
-	return rdb_vos_update(lc, index, oid, crit, n, akeys, values);
+	return rdb_vos_update(lc, index, oid, crit, n, akeys, values, vtx);
 }
 
 static inline int
-rdb_lc_punch(daos_handle_t lc, uint64_t index, rdb_oid_t oid, int n,
-	     d_iov_t akeys[])
+rdb_lc_punch(daos_handle_t lc, uint64_t index, rdb_oid_t oid, int n, d_iov_t akeys[],
+	     rdb_vos_tx_t vtx)
 {
 	if (n > 0)
 		D_DEBUG(DB_TRACE, "lc="DF_X64" index="DF_U64" oid="DF_X64
@@ -380,7 +420,7 @@ rdb_lc_punch(daos_handle_t lc, uint64_t index, rdb_oid_t oid, int n,
 	else
 		D_DEBUG(DB_TRACE, "lc="DF_X64" index="DF_U64" oid="DF_X64
 			" n=%d\n", lc.cookie, index, oid, n);
-	return rdb_vos_punch(lc, index, oid, n, akeys);
+	return rdb_vos_punch(lc, index, oid, n, akeys, vtx);
 }
 
 /* Discard index range [low, high]. */
@@ -434,6 +474,12 @@ rdb_lc_iter_fetch(daos_handle_t lc, uint64_t index, rdb_oid_t oid,
 }
 
 static inline int
+rdb_lc_query_key_max(daos_handle_t lc, uint64_t index, rdb_oid_t oid, d_iov_t *akey)
+{
+	return rdb_vos_query_key_max(lc, index, oid, akey);
+}
+
+static inline int
 rdb_lc_iterate(daos_handle_t lc, uint64_t index, rdb_oid_t oid, bool backward,
 	       rdb_iterate_cb_t cb, void *arg)
 {
@@ -442,7 +488,17 @@ rdb_lc_iterate(daos_handle_t lc, uint64_t index, rdb_oid_t oid, bool backward,
 	return rdb_vos_iterate(lc, index, oid, backward, cb, arg);
 }
 
-int
-rdb_scm_left(struct rdb *db, daos_size_t *scm_left_outp);
+int rdb_scm_left(struct rdb *db, daos_size_t *scm_left_outp);
+
+/* rdb_tx.c *******************************************************************/
+
+int rdb_tx_count_vops(struct rdb *db, const void *buf, size_t len);
+
+enum rdb_tx_apply_err {
+	RDB_TX_APPLY_ERR_DETERMINISTIC = 1
+};
+
+int rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len, void *result,
+		 bool *critp, rdb_vos_tx_t vtx);
 
 #endif /* RDB_INTERNAL_H */

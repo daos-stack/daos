@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -231,7 +231,7 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 	crt_endpoint_t		server_ep;
 	sem_t			sem;
 	crt_rpc_t		*rpc = NULL;
-	char			other_server_uri[MAX_URI];
+	char			other_server_uri[MAX_URI+1];
 	int			tag = 0;
 	d_rank_t		other_rank;
 	crt_bulk_t		bulk_hdl = CRT_BULK_NULL;
@@ -240,13 +240,11 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 	size_t			size = 0;
 	int			fd;
 	struct stat		st;
+	crt_init_options_t	init_opts = {0};
 
-	setenv("OFI_PORT", str_port, 1);
-	setenv("OFI_INTERFACE", str_interface, 1);
-	setenv("OFI_DOMAIN", str_domain, 1);
-	setenv("CRT_PHY_ADDR_STR", str_provider, 1);
-	setenv("FI_UNIVERSE_SIZE", "1024", 1);
-	setenv("D_LOG_MASK", "ERR", 1);
+	d_setenv("FI_UNIVERSE_SIZE", "1024", 1);
+	d_setenv("D_LOG_MASK", "ERR", 1);
+	d_setenv("D_PORT_AUTO_ADJUST", "1", 1);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(my_rank, 20, true, true);
@@ -263,8 +261,13 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 		error_exit();
 	}
 
-	rc = crt_init("server_grp", CRT_FLAG_BIT_SERVER |
-		      CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
+	init_opts.cio_provider = (char *)str_provider;
+	init_opts.cio_interface = (char *)str_interface;
+	init_opts.cio_domain = (char *)str_domain;
+	init_opts.cio_port = (char *)str_port;
+
+	rc = crt_init_opt("server_grp", CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE,
+			  &init_opts);
 	if (rc != 0) {
 		D_ERROR("crt_init() failed; rc=%d\n", rc);
 		error_exit();
@@ -276,7 +279,7 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 		error_exit();
 	}
 
-	rc = crt_rank_self_set(my_rank);
+	rc = crt_rank_self_set(my_rank, 1 /* group_version_min */);
 	if (rc != 0) {
 		D_ERROR("crt_rank_self_set(%d) failed; rc=%d\n",
 			my_rank, rc);
@@ -328,14 +331,16 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 	sleep(1);
 
 	/* Read each others URIs from the file */
-	memset(other_server_uri, 0x0, MAX_URI);
-	other_server_uri[MAX_URI - 1] = '\0';
+	memset(other_server_uri, 0x0, sizeof(other_server_uri));
+
 	lseek(fd_read, 0, SEEK_SET);
 	rc = read(fd_read, other_server_uri, MAX_URI);
 	if (rc < 0) {
 		D_ERROR("Failed to read uri from a file\n");
 		error_exit();
 	}
+	/* Terminate the string read by read since it won't do it on its own */
+	other_server_uri[rc] = '\0';
 
 	DBG_PRINT("Other servers uri is '%s'\n", other_server_uri);
 
@@ -484,7 +489,7 @@ print_usage(const char *msg)
 	printf("-d 'domain0,domain1': Specify two domains to use; ");
 	printf("e.g. 'eth0,eth1'\n");
 	printf("-p 'provider'       : Specify provider to use; ");
-	printf("e.g. 'ofi+sockets'\n");
+	printf("e.g. 'ofi+tcp'\n");
 	printf("-f [filename]       : If set will transfer contents ");
 	printf("of the specified file via bulk/rdma as part of 'PING' rpc\n");
 }

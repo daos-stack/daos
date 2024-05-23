@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -123,6 +123,8 @@ test_dc_job_init_no_env(void **state)
 	/* Make sure we crafted a default jobid  */
 	assert_string_equal(dc_jobid, default_jobid);
 
+	if (default_jobid)
+		free(default_jobid);
 	dc_job_fini();
 }
 
@@ -161,6 +163,8 @@ test_dc_job_init_with_jobid_env(void **state)
 	/* Make sure we crafted a default jobid  */
 	assert_string_equal(dc_jobid, default_jobid);
 
+	if (default_jobid)
+		free(default_jobid);
 	dc_job_fini();
 }
 

@@ -49,9 +49,9 @@ Individual dRPC modules must be registered with the server in order to handle in
 
 #### Basic Server Workflow
 
-1. Create the new DomainSocketServer with the server's Unix Domain Socket:
+1. Create the new DomainSocketServer with the server's Unix Domain Socket (file permissions 0600):
     ```
-    drpcServer, err := drpc.NewDomainSocketServer("/var/run/my_socket.sock")
+    drpcServer, err := drpc.NewDomainSocketServer(log, "/var/run/my_socket.sock", 0600)
     ```
 2. Register the dRPC modules that the server needs to handle:
     ```

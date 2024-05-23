@@ -1,20 +1,16 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-  test_clients:
-    - client-A
+  test_servers: 2
+  test_clients: 1
 
 timeout: 300
 
 server_config:
   name: daos_server
-  servers:
-    targets: 8
-    bdev_class: nvme
-    bdev_list: ["0000:86:00.0", "0000:da:00.0"]
-    scm_class: dcpm
-    scm_list: ["/dev/pmem0"]
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 8
+      storage: auto
 
 pool_basic_1:
   control_method: dmg
@@ -50,6 +46,5 @@ ior:
   test_file: test_file_1
   transfer_size: 1M
   dfs_chunk: 1048576
-  dfs_dir_oclass: S1
   dfs_oclass: S1
   dfs_group: daos_server

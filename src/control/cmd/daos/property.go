@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,7 +19,7 @@ import (
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/lib/ui"
 )
@@ -55,6 +55,23 @@ type propHdlr struct {
 	readOnly bool
 }
 
+// newTestPropEntry returns an initialized property entry for testing.
+// NB: The entry is initialized with Go-managed memory, so it is not
+// suitable for use when calling real C functions.
+func newTestPropEntry() *C.struct_daos_prop_entry {
+	return new(C.struct_daos_prop_entry)
+}
+
+// getDpeVal returns the value of the given property entry.
+func getDpeVal(e *C.struct_daos_prop_entry) (uint64, error) {
+	if e == nil {
+		return 0, errors.New("nil property entry")
+	}
+
+	v := C.get_dpe_val(e)
+	return uint64(v), nil
+}
+
 // propHdlrs defines a map of property names to handlers that
 // take care of parsing the value and setting it. This odd construction
 // allows us to maintain a type-safe set of valid property names and
@@ -65,6 +82,7 @@ type propHdlr struct {
 // should only need to modify this map.
 //
 // The structure of an entry is as follows:
+//
 //	"key": {		           // used as the --property name
 //		C.DAOS_PROP_ENUM_VAL,      // identify the property type
 //		"short description",       // human-readable (short) description
@@ -74,19 +92,22 @@ type propHdlr struct {
 //		},
 //		closure of type entryStringer, // optional pretty-printer
 //		bool,			   // if true, property may not be set
-// 	},
+//	},
 var propHdlrs = propHdlrMap{
 	C.DAOS_PROP_ENTRY_LABEL: {
 		C.DAOS_PROP_CO_LABEL,
 		"Label",
 		func(_ *propHdlr, e *C.struct_daos_prop_entry, v string) error {
-			if !drpc.LabelIsValid(v) {
+			if !daos.LabelIsValid(v) {
 				return errors.Errorf("invalid label %q", v)
 			}
 			e.dpe_type = C.DAOS_PROP_CO_LABEL
 			cStr := C.CString(v)
-			C.daos_prop_entry_set_str(e, cStr, C.strlen(cStr))
-			freeString(cStr)
+			defer freeString(cStr)
+			rc := C.daos_prop_entry_set_str(e, cStr, C.strlen(cStr))
+			if err := daosError(rc); err != nil {
+				return err
+			}
 			return nil
 		},
 		nil,
@@ -95,7 +116,7 @@ var propHdlrs = propHdlrMap{
 				return propNotFound(name)
 			}
 			if C.get_dpe_str(e) == nil {
-				return labelNotSetStr
+				return ""
 			}
 			return strValStringer(e, name)
 		},
@@ -320,7 +341,7 @@ var propHdlrs = propHdlrMap{
 		C.DAOS_PROP_CO_REDUN_FAC,
 		"Redundancy Factor",
 		func(h *propHdlr, e *C.struct_daos_prop_entry, v string) error {
-			vh, err := h.valHdlrs.get("rf", v)
+			vh, err := h.valHdlrs.get("rd_fac", v)
 			if err != nil {
 				return err
 			}
@@ -340,15 +361,15 @@ var propHdlrs = propHdlrMap{
 			}
 			switch C.get_dpe_val(e) {
 			case C.DAOS_PROP_CO_REDUN_RF0:
-				return "rf0"
+				return "rd_fac0"
 			case C.DAOS_PROP_CO_REDUN_RF1:
-				return "rf1"
+				return "rd_fac1"
 			case C.DAOS_PROP_CO_REDUN_RF2:
-				return "rf2"
+				return "rd_fac2"
 			case C.DAOS_PROP_CO_REDUN_RF3:
-				return "rf3"
+				return "rd_fac3"
 			case C.DAOS_PROP_CO_REDUN_RF4:
-				return "rf4"
+				return "rd_fac4"
 			default:
 				return propInvalidValue(e, name)
 			}
@@ -392,10 +413,9 @@ var propHdlrs = propHdlrMap{
 		C.DAOS_PROP_CO_EC_CELL_SZ,
 		"EC Cell Size",
 		func(_ *propHdlr, e *C.struct_daos_prop_entry, v string) error {
-			size, err := strconv.ParseUint(v, 10, 64)
+			size, err := humanize.ParseBytes(v)
 			if err != nil {
-				return errors.Wrapf(err,
-					"unable to parse EC cell size %q", v)
+				return propError("invalid EC cell size %q (try N<unit>)", v)
 			}
 
 			if !C.daos_ec_cs_valid(C.uint32_t(size)) {
@@ -416,6 +436,72 @@ var propHdlrs = propHdlrMap{
 				return fmt.Sprintf("invalid size %d", size)
 			}
 			return humanSizeStringer(e, name)
+		},
+		false,
+	},
+	C.DAOS_PROP_ENTRY_EC_PDA: {
+		C.DAOS_PROP_CO_EC_PDA,
+		"Performance domain affinity level of EC",
+		func(_ *propHdlr, e *C.struct_daos_prop_entry, v string) error {
+			value, err := strconv.ParseUint(v, 10, 32)
+			if err != nil {
+				return propError("invalid EC PDA %q", v)
+			}
+
+			if !C.daos_ec_pda_valid(C.uint32_t(value)) {
+				return errors.Errorf("invalid EC PDA %d", value)
+			}
+
+			C.set_dpe_val(e, C.uint64_t(value))
+			return nil
+		},
+		nil,
+		func(e *C.struct_daos_prop_entry, name string) string {
+			if e == nil {
+				return propNotFound(name)
+			}
+			if C.dpe_is_negative(e) {
+				return fmt.Sprintf("not set")
+			}
+
+			value := C.get_dpe_val(e)
+			if !C.daos_ec_pda_valid(C.uint32_t(value)) {
+				return fmt.Sprintf("invalid ec pda %d", value)
+			}
+			return fmt.Sprintf("%d", value)
+		},
+		false,
+	},
+	C.DAOS_PROP_ENTRY_RP_PDA: {
+		C.DAOS_PROP_CO_RP_PDA,
+		"Performance domain affinity level of RP",
+		func(_ *propHdlr, e *C.struct_daos_prop_entry, v string) error {
+			value, err := strconv.ParseUint(v, 10, 32)
+			if err != nil {
+				return propError("invalid RP PDA %q", v)
+			}
+
+			if !C.daos_rp_pda_valid(C.uint32_t(value)) {
+				return errors.Errorf("invalid RP PDA %d", value)
+			}
+
+			C.set_dpe_val(e, C.uint64_t(value))
+			return nil
+		},
+		nil,
+		func(e *C.struct_daos_prop_entry, name string) string {
+			if e == nil {
+				return propNotFound(name)
+			}
+
+			if C.dpe_is_negative(e) {
+				return fmt.Sprintf("not set")
+			}
+			value := C.get_dpe_val(e)
+			if !C.daos_rp_pda_valid(C.uint32_t(value)) {
+				return fmt.Sprintf("invalid RP PDA %d", value)
+			}
+			return fmt.Sprintf("%d", value)
 		},
 		false,
 	},
@@ -447,7 +533,20 @@ var propHdlrs = propHdlrMap{
 	C.DAOS_PROP_ENTRY_REDUN_LVL: {
 		C.DAOS_PROP_CO_REDUN_LVL,
 		"Redundancy Level",
-		nil, nil,
+		func(h *propHdlr, e *C.struct_daos_prop_entry, v string) error {
+			vh, err := h.valHdlrs.get("rd_lvl", v)
+			if err != nil {
+				return err
+			}
+
+			return vh(e, v)
+		},
+		valHdlrMap{
+			"1":    setDpeVal(C.DAOS_PROP_CO_REDUN_RANK),
+			"2":    setDpeVal(C.DAOS_PROP_CO_REDUN_NODE),
+			"rank": setDpeVal(C.DAOS_PROP_CO_REDUN_RANK),
+			"node": setDpeVal(C.DAOS_PROP_CO_REDUN_NODE),
+		},
 		func(e *C.struct_daos_prop_entry, name string) string {
 			if e == nil {
 				return propNotFound(name)
@@ -457,11 +556,45 @@ var propHdlrs = propHdlrMap{
 			switch lvl {
 			case C.DAOS_PROP_CO_REDUN_RANK:
 				return fmt.Sprintf("rank (%d)", lvl)
+			case C.DAOS_PROP_CO_REDUN_NODE:
+				return fmt.Sprintf("node (%d)", lvl)
 			default:
 				return fmt.Sprintf("(%d)", lvl)
 			}
 		},
-		true,
+		false,
+	},
+	C.DAOS_PROP_ENTRY_PERF_DOMAIN: {
+		C.DAOS_PROP_CO_PERF_DOMAIN,
+		"Performance domain level",
+		func(h *propHdlr, e *C.struct_daos_prop_entry, v string) error {
+			vh, err := h.valHdlrs.get("perf_domain", v)
+			if err != nil {
+				return err
+			}
+
+			return vh(e, v)
+		},
+		valHdlrMap{
+			"root":  setDpeVal(C.DAOS_PROP_PERF_DOMAIN_ROOT),
+			"group": setDpeVal(C.DAOS_PROP_PERF_DOMAIN_GROUP),
+		},
+		func(e *C.struct_daos_prop_entry, name string) string {
+			if e == nil {
+				return propNotFound(name)
+			}
+
+			lvl := C.get_dpe_val(e)
+			switch lvl {
+			case C.DAOS_PROP_PERF_DOMAIN_ROOT:
+				return fmt.Sprintf("root (%d)", lvl)
+			case C.DAOS_PROP_PERF_DOMAIN_GROUP:
+				return fmt.Sprintf("group (%d)", lvl)
+			default:
+				return fmt.Sprintf("(%d)", lvl)
+			}
+		},
+		false,
 	},
 	C.DAOS_PROP_ENTRY_SNAPSHOT_MAX: {
 		C.DAOS_PROP_CO_SNAPSHOT_MAX,
@@ -491,15 +624,53 @@ var propHdlrs = propHdlrMap{
 		strValStringer,
 		true,
 	},
+	C.DAOS_PROP_ENTRY_GLOBAL_VERSION: {
+		C.DAOS_PROP_CO_GLOBAL_VERSION,
+		"Global Version",
+		nil, nil,
+		func(e *C.struct_daos_prop_entry, name string) string {
+			if e == nil {
+				return propNotFound(name)
+			}
+			if C.dpe_is_negative(e) {
+				return fmt.Sprintf("not set")
+			}
+
+			value := C.get_dpe_val(e)
+			return fmt.Sprintf("%d", value)
+		},
+		true,
+	},
+	C.DAOS_PROP_ENTRY_OBJ_VERSION: {
+		C.DAOS_PROP_CO_OBJ_VERSION,
+		"Object Version",
+		nil, nil,
+		func(e *C.struct_daos_prop_entry, name string) string {
+			if e == nil {
+				return propNotFound(name)
+			}
+			if C.dpe_is_negative(e) {
+				return fmt.Sprintf("not set")
+			}
+
+			value := C.get_dpe_val(e)
+			return fmt.Sprintf("%d", value)
+		},
+		true,
+	},
+}
+
+var contDeprProps = map[string]string{
+	"rf":     "rd_fac",
+	"rf_lvl": "rd_lvl",
 }
 
 // NB: Most feature work should not require modification to the code
 // below.
 
 const (
-	maxNameLen     = 20 // arbitrary; came from C code
-	maxValueLen    = C.DAOS_PROP_LABEL_MAX_LEN
-	labelNotSetStr = "container_label_not_set"
+	maxNameLen  = 20 // arbitrary; came from C code
+	maxValueLen = C.DAOS_PROP_LABEL_MAX_LEN
 )
 
 type entryHdlr func(*propHdlr, *C.struct_daos_prop_entry, string) error
@@ -613,7 +784,7 @@ func propInvalidValue(e *C.struct_daos_prop_entry, name string) string {
 
 func propError(fs string, args ...interface{}) *flags.Error {
 	return &flags.Error{
-		Message: fmt.Sprintf("--properties: "+fs, args...),
+		Message: fmt.Sprintf("properties: "+fs, args...),
 	}
 }
 
@@ -676,7 +847,7 @@ func createPropSlice(props *C.daos_prop_t, numProps int) propSlice {
 func allocProps(numProps int) (props *C.daos_prop_t, entries propSlice, err error) {
 	props = C.daos_prop_alloc(C.uint(numProps))
 	if props == nil {
-		return nil, nil, errors.New("failed to allocate properties list")
+		return nil, nil, errors.Wrap(daos.NoMemory, "failed to allocate properties list")
 	}
 
 	props.dpp_nr = 0
@@ -838,6 +1009,7 @@ func (f *CreatePropertiesFlag) setWritableKeys() {
 		}
 	}
 	f.SettableKeys(keys...)
+	f.DeprecatedKeyMap(contDeprProps)
 }
 
 func (f *CreatePropertiesFlag) Complete(match string) []flags.Completion {
@@ -890,19 +1062,23 @@ func (f *GetPropertiesFlag) UnmarshalFlag(fv string) error {
 	// Accept a list of property names to fetch, if specified,
 	// otherwise just fetch all known properties.
 	f.names = strings.Split(fv, ",")
-	if len(f.names) == 0 || f.names[0] == "all" {
+	if fv == "" || len(f.names) == 0 || f.names[0] == "all" {
 		f.names = propHdlrs.keys()
 	}
 
 	for i, name := range f.names {
-		f.names[i] = strings.TrimSpace(name)
-		if len(name) == 0 {
+		key := strings.TrimSpace(name)
+		if len(key) == 0 {
 			return propError("name must not be empty")
 		}
-		if len(name) > maxNameLen {
-			return propError("name too long (%d > %d)",
-				len(name), maxNameLen)
+		if len(key) > maxNameLen {
+			return propError("%q: name too long (%d > %d)",
+				key, len(key), maxNameLen)
 		}
+		if newKey, found := contDeprProps[key]; found {
+			key = newKey
+		}
+		f.names[i] = key
 	}
 
 	return nil
@@ -998,7 +1174,7 @@ func printProperties(out io.Writer, header string, props ...*property) {
 	table := []txtfmt.TableRow{}
 	for _, prop := range props {
 		row := txtfmt.TableRow{}
-		row[nameTitle] = prop.Description
+		row[nameTitle] = fmt.Sprintf("%s (%s)", prop.Description, prop.Name)
 		if prop.String() != "" {
 			row[valueTitle] = prop.String()
 			if len(titles) == 1 {

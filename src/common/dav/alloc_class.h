@@ -1,0 +1,71 @@
+/* SPDX-License-Identifier: BSD-3-Clause */
+/* Copyright 2016-2020, Intel Corporation */
+
+/*
+ * alloc_class.h -- internal definitions for allocation classes
+ */
+
+#ifndef __DAOS_COMMON_ALLOC_CLASS_H
+#define __DAOS_COMMON_ALLOC_CLASS_H 1
+
+#include <stddef.h>
+#include <stdint.h>
+#include <sys/types.h>
+#include "heap_layout.h"
+#include "memblock.h"
+
+#define MAX_ALLOCATION_CLASSES (UINT8_MAX)
+#define DEFAULT_ALLOC_CLASS_ID (0)
+#define RUN_UNIT_MAX RUN_BITS_PER_VALUE
+
+struct alloc_class_collection;
+
+enum alloc_class_type {
+	CLASS_UNKNOWN,
+	CLASS_HUGE,
+	CLASS_RUN,
+
+	MAX_ALLOC_CLASS_TYPES
+};
+
+struct alloc_class {
+	uint8_t id;
+	uint16_t flags;
+
+	size_t unit_size;
+
+	enum header_type header_type;
+	enum alloc_class_type type;
+
+	/* run-specific data */
+	struct run_descriptor rdsc;
+};
+
+struct alloc_class_collection *alloc_class_collection_new(void);
+void alloc_class_collection_delete(struct alloc_class_collection *ac);
+
+struct alloc_class *alloc_class_by_run(
+	struct alloc_class_collection *ac,
+	size_t unit_size, uint16_t flags, uint32_t size_idx);
+struct alloc_class *alloc_class_by_alloc_size(
+	struct alloc_class_collection *ac, size_t size);
+struct alloc_class *alloc_class_by_id(
+	struct alloc_class_collection *ac, uint8_t id);
+
+int alloc_class_reserve(struct alloc_class_collection *ac, uint8_t id);
+int alloc_class_find_first_free_slot(struct alloc_class_collection *ac,
+	uint8_t *slot);
+
+ssize_t
+alloc_class_calc_size_idx(struct alloc_class *c, size_t size);
+
+struct alloc_class *
+alloc_class_new(int id, struct alloc_class_collection *ac,
+	enum alloc_class_type type, enum header_type htype,
+	size_t unit_size, size_t alignment,
+	uint32_t size_idx);
+
+void alloc_class_delete(struct alloc_class_collection *ac,
+	struct alloc_class *c);
+
+#endif /* __DAOS_COMMON_ALLOC_CLASS_H */

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,10 +18,11 @@
 #include <daos.h>
 #include <daos/common.h>
 #include <daos/debug.h>
+#include <daos/dfs_lib_int.h>
+#include <daos_types.h>
+#include <daos_fs.h>
+#include <daos_uns.h>
 
-#include "daos_types.h"
-#include "daos_fs.h"
-#include "daos_uns.h"
 #include "daos_hdlr.h"
 
 int
@@ -34,10 +35,7 @@ fs_dfs_hdlr(struct cmd_args_s *ap)
 	char            *dir_name = NULL;
 	int		rc, rc2;
 
-	if (ap->fs_op == FS_GET_ATTR)
-		flags = O_RDONLY;
-	else
-		flags = O_RDWR;
+	flags = O_RDWR;
 
 	rc = dfs_mount(ap->pool, ap->cont, flags, &dfs);
 	if (rc) {
@@ -53,29 +51,6 @@ fs_dfs_hdlr(struct cmd_args_s *ap)
 	}
 
 	switch (ap->fs_op) {
-	case FS_GET_ATTR:
-	{
-		dfs_obj_info_t	info;
-		char		oclass_name[16];
-
-		rc = dfs_lookup(dfs, ap->dfs_path, flags, &obj, NULL, NULL);
-		if (rc) {
-			fprintf(ap->errstream, "failed to lookup %s (%s)\n",
-				ap->dfs_path, strerror(rc));
-			D_GOTO(out_umount, rc);
-		}
-
-		rc = dfs_obj_get_info(dfs, obj, &info);
-		if (rc) {
-			fprintf(ap->errstream, "failed to get obj info (%s)\n", strerror(rc));
-			D_GOTO(out_release, rc);
-		}
-
-		daos_oclass_id2name(info.doi_oclass_id, oclass_name);
-		fprintf(ap->outstream, "Object Class = %s\n", oclass_name);
-		fprintf(ap->outstream, "Object Chunk Size = %zu\n", info.doi_chunk_size);
-		break;
-	}
 	case FS_RESET_ATTR:
 	case FS_RESET_CHUNK_SIZE:
 	case FS_RESET_OCLASS:
@@ -166,8 +141,6 @@ out_release:
 	rc2 = dfs_release(obj);
 	if (rc2 != 0)
 		fprintf(ap->errstream, "failed to release dfs obj\n");
-	if (rc == 0)
-		rc = rc2;
 out_names:
 	D_FREE(name);
 	D_FREE(dir_name);
@@ -175,7 +148,165 @@ out_umount:
 	rc2 = dfs_umount(dfs);
 	if (rc2 != 0)
 		fprintf(ap->errstream, "failed to umount DFS container\n");
+	return rc;
+}
+
+int
+fs_dfs_get_attr_hdlr(struct cmd_args_s *ap, dfs_obj_info_t *attrs, mode_t *mode)
+{
+	int		 flags = O_RDONLY;
+	int		 rc;
+	int		 rc2;
+	dfs_t		*dfs;
+	dfs_obj_t	*obj;
+
+	D_ASSERT(ap != NULL);
+	D_ASSERT(attrs != NULL);
+
+	rc = dfs_mount(ap->pool, ap->cont, flags, &dfs);
+	if (rc) {
+		fprintf(ap->errstream, "failed to mount container %s: %s (%d)\n",
+			ap->cont_str, strerror(rc), rc);
+		return rc;
+	}
+
+	if (ap->dfs_prefix) {
+		rc = dfs_set_prefix(dfs, ap->dfs_prefix);
+		if (rc)
+			D_GOTO(out_umount, rc);
+	}
+
+	rc = dfs_lookup(dfs, ap->dfs_path, flags, &obj, NULL, NULL);
+	if (rc) {
+		fprintf(ap->errstream, "failed to lookup %s (%s)\n", ap->dfs_path, strerror(rc));
+		D_GOTO(out_umount, rc);
+	}
+
+	rc = dfs_obj_get_info(dfs, obj, attrs);
+	if (rc) {
+		fprintf(ap->errstream, "failed to get obj info (%s)\n", strerror(rc));
+		D_GOTO(out_release, rc);
+	}
+
+	rc = dfs_get_mode(obj, mode);
+	if (rc) {
+		fprintf(ap->errstream, "failed to get obj mode (%s)\n", strerror(rc));
+		D_GOTO(out_release, rc);
+	}
+
+out_release:
+	rc2 = dfs_release(obj);
+	if (rc2 != 0)
+		fprintf(ap->errstream, "failed to release dfs obj\n");
+out_umount:
+	rc2 = dfs_umount(dfs);
+	if (rc2 != 0)
+		fprintf(ap->errstream, "failed to umount DFS container\n");
+	return rc;
+}
+
+int
+fs_fix_entry_hdlr(struct cmd_args_s *ap, bool fix_entry)
+{
+	dfs_t		*dfs;
+	char            *name = NULL;
+	char            *dir_name = NULL;
+	int		rc, rc2;
+
+	rc = dfs_mount(ap->pool, ap->cont, O_RDWR, &dfs);
+	if (rc) {
+		fprintf(ap->errstream, "failed to mount container %s: %s (%d)\n",
+			ap->cont_str, strerror(rc), rc);
+		return rc;
+	}
+
+	if (ap->dfs_prefix) {
+		rc = dfs_set_prefix(dfs, ap->dfs_prefix);
+		if (rc)
+			D_GOTO(out_umount, rc);
+	}
+
+	if (fix_entry) {
+		dfs_obj_t       *parent = NULL;
+
+		parse_filename_dfs(ap->dfs_path, &name, &dir_name);
+
+		D_PRINT("Fixing entry type of: %s\n", ap->dfs_path);
+		rc = dfs_lookup(dfs, dir_name, O_RDWR, &parent, NULL, NULL);
+		if (rc) {
+			fprintf(ap->errstream, "dfs_lookup %s failed (%s)\n", dir_name,
+				strerror(rc));
+			D_GOTO(out_names, rc);
+		}
+
+		rc = dfs_obj_fix_type(dfs, parent, name);
+		if (rc) {
+			fprintf(ap->errstream, "DFS fix object type failed (%s)\n", strerror(rc));
+			dfs_release(parent);
+			D_GOTO(out_names, rc);
+		}
+
+		rc = dfs_release(parent);
+		if (rc)
+			D_GOTO(out_names, rc);
+	}
+
+	if (ap->chunk_size) {
+		dfs_obj_t	*obj;
+
+		D_PRINT("Adjusting chunk size of %s to %zu\n", ap->dfs_path, ap->chunk_size);
+		rc = dfs_lookup(dfs, ap->dfs_path, O_RDWR, &obj, NULL, NULL);
+		if (rc) {
+			fprintf(ap->errstream, "dfs_lookup %s failed (%s)\n", ap->dfs_path,
+				strerror(rc));
+			D_GOTO(out_names, rc);
+		}
+
+		rc = dfs_file_update_chunk_size(dfs, obj, ap->chunk_size);
+		if (rc) {
+			fprintf(ap->errstream, "DFS update chunk size failed (%s)\n", strerror(rc));
+			dfs_release(obj);
+			D_GOTO(out_names, rc);
+		}
+
+		rc = dfs_release(obj);
+		if (rc)
+			D_GOTO(out_names, rc);
+	}
+
+out_names:
+	D_FREE(name);
+	D_FREE(dir_name);
+out_umount:
+	rc2 = dfs_umount(dfs);
 	if (rc == 0)
 		rc = rc2;
 	return rc;
+}
+
+int
+fs_recreate_sb_hdlr(struct cmd_args_s *ap)
+{
+	dfs_attr_t	attr = {0};
+	int		rc;
+
+	attr.da_id = 0;
+	attr.da_oclass_id = ap->oclass;
+	attr.da_dir_oclass_id = ap->dir_oclass;
+	attr.da_file_oclass_id = ap->file_oclass;
+	attr.da_chunk_size = ap->chunk_size;
+	attr.da_mode = ap->mode;
+	if (ap->hints)
+		strncpy(attr.da_hints, ap->hints, DAOS_CONT_HINT_MAX_LEN - 1);
+
+	rc = dfs_recreate_sb(ap->cont, &attr);
+	if (rc)
+		D_ERROR("Failed to created DFS SB: %d (%s)\n", rc, strerror(rc));
+	return rc;
+}
+
+int
+fs_relink_root_hdlr(struct cmd_args_s *ap)
+{
+	return dfs_relink_root(ap->cont);
 }

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -32,6 +32,8 @@ public class DaosEventQueue {
   private final long eqWrapperHdl;
 
   private final String threadName;
+
+  private final long threadId;
 
   private final int nbrOfEvents;
 
@@ -90,7 +92,8 @@ public class DaosEventQueue {
    * @throws IOException
    */
   protected DaosEventQueue(String threadName, int nbrOfEvents) throws IOException {
-    this.threadName = threadName;
+    this.threadName = threadName == null ? Thread.currentThread().getName() : threadName;
+    this.threadId = Thread.currentThread().getId();
     if (nbrOfEvents > Short.MAX_VALUE) {
       throw new IllegalArgumentException("number of events should be no larger than " + Short.MAX_VALUE);
     }
@@ -127,7 +130,7 @@ public class DaosEventQueue {
       if (nbrOfEvents <= 0) {
         nbrOfEvents = DEFAULT_NBR_OF_EVENTS;
       }
-      queue = new DaosEventQueue(Thread.currentThread().getName(), nbrOfEvents);
+      queue = new DaosEventQueue(null, nbrOfEvents);
       EQ_MAP.put(tid, queue);
     }
     return queue;
@@ -330,6 +333,10 @@ public class DaosEventQueue {
    */
   public int pollCompleted(List<Attachment> completedList, Class<? extends Attachment> klass,
                            Set<? extends Attachment> candidates, int expNbrOfRet, long timeOutMs) throws IOException {
+    assert Thread.currentThread().getId() == threadId : "current thread " + Thread.currentThread().getId() + "(" +
+        Thread.currentThread().getName() + "), is not expected " + Thread.currentThread().getId() + "(" +
+        threadName + ")";
+
     int aborted;
     int nbr;
     // check detained attachments first.
@@ -338,7 +345,7 @@ public class DaosEventQueue {
     if (expNbrOfRet == 0) {
       return moved;
     }
-    while (true) {
+    while (nbrOfAcquired > 0) {
       aborted = 0;
       DaosClient.pollCompleted(eqWrapperHdl, completed.memoryAddress(),
           nbrOfAcquired, timeOutMs < 0 ? DEFAULT_POLL_TIMEOUT_MS : timeOutMs);
@@ -370,6 +377,7 @@ public class DaosEventQueue {
         return nbr;
       }
     }
+    return 0;
   }
 
   private int moveAttachment(List<Attachment> completedList, Class<? extends Attachment> klass,
@@ -391,6 +399,10 @@ public class DaosEventQueue {
   }
 
   private void detainAttachment(Attachment attachment) {
+    if (attachment.isDiscarded()) {
+      attachment.release();
+      return;
+    }
     Class<?> klass = attachment.getClass();
     List<Attachment> list = attMap.get(klass);
     if (list == null) {
@@ -457,7 +469,13 @@ public class DaosEventQueue {
     EQ_MAP.clear();
   }
 
+  public String getThreadName() {
+    return threadName;
+  }
 
+  public long getThreadId() {
+    return threadId;
+  }
 
   /**
    * Java represent of DAOS event associated to a event queue identified by
@@ -540,7 +558,7 @@ public class DaosEventQueue {
     void reuse();
 
     /**
-     * it's should be called before attachment being consumed by user.
+     * it should be called before attachment being consumed by user.
      */
     void ready();
 
@@ -551,6 +569,16 @@ public class DaosEventQueue {
      * @return true or false
      */
     boolean alwaysBoundToEvt();
+
+    /**
+     * discard attachment
+     */
+    void discard();
+
+    /**
+     * check if attachment is discarded. If true, it may be discarded when poll and detain attachment.
+     */
+    boolean isDiscarded();
 
     /**
      * release resources if any.

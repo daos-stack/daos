@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -47,7 +47,7 @@ public class DaosFile {
 
   private int mode;
 
-  private DaosObjectType objectType;
+  private DaosObjectClass objectType;
 
   private int chunkSize;
 
@@ -145,7 +145,7 @@ public class DaosFile {
    * @throws IOException
    * {@link DaosIOException}
    */
-  public void createNewFile(int mode, DaosObjectType objectType, int chunkSize, boolean createParent)
+  public void createNewFile(int mode, DaosObjectClass objectType, int chunkSize, boolean createParent)
           throws IOException {
     if (objId != 0) {
       throw new IOException("file existed already");
@@ -389,6 +389,16 @@ public class DaosFile {
             fileOffset, len);
   }
 
+  /**
+   * same as {@link #read(ByteBuf, long, long, long)}, but asynchronously. See {@link IODfsDesc} for more
+   * parameters for async read.
+   *
+   * @param desc    desc for request, buffer and event
+   * @param offset  file offset
+   * @param len     expected length in bytes read from file to buffer
+   * @throws IOException
+   * {@link DaosIOException}
+   */
   public void readAsync(IODfsDesc desc, long offset, long len) throws IOException {
     open(true);
     desc.encode(offset, len);
@@ -422,6 +432,15 @@ public class DaosFile {
             fileOffset, len);
   }
 
+  /**
+   * same as {@link #write(ByteBuf, long, long, long)}, but asynchronously. See {@link IODfsDesc} for more
+   * parameters for async read.
+   *
+   * @param desc    desc for request, buffer and event
+   * @param offset  file offset
+   * @param len     length in bytes of data to write
+   * @throws IOException
+   */
   public void writeAsync(IODfsDesc desc, long offset, long len) throws IOException {
     open(true);
     desc.encode(offset, len);

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -44,18 +44,21 @@ extern char *ds_sec_server_socket_path;
 #define CONT_CAPA_SET_ACL	(1U << 5)
 #define CONT_CAPA_SET_OWNER	(1U << 6)
 #define CONT_CAPA_DELETE	(1U << 7)
+#define CONT_CAPA_OPEN_EX	(1U << 8)
+#define CONT_CAPA_EVICT_ALL	(1U << 9)
 
 #define CONT_CAPAS_RO_MASK	(CONT_CAPA_READ_DATA |			\
 				 CONT_CAPA_GET_PROP |			\
 				 CONT_CAPA_GET_ACL)
-#define CONT_CAPAS_ALL		(CONT_CAPA_READ_DATA |			\
-				 CONT_CAPA_WRITE_DATA |			\
-				 CONT_CAPA_GET_PROP |			\
+#define CONT_CAPAS_W_MASK	(CONT_CAPA_WRITE_DATA |			\
 				 CONT_CAPA_SET_PROP |			\
-				 CONT_CAPA_GET_ACL |			\
 				 CONT_CAPA_SET_ACL |			\
-				 CONT_CAPA_SET_OWNER |			\
-				 CONT_CAPA_DELETE)
+				 CONT_CAPA_SET_OWNER)
+#define CONT_CAPAS_ALL		(CONT_CAPAS_RO_MASK |			\
+				 CONT_CAPAS_W_MASK |			\
+				 CONT_CAPA_DELETE |			\
+				 CONT_CAPA_OPEN_EX |			\
+				 CONT_CAPA_EVICT_ALL)
 
 int ds_sec_validate_credentials(d_iov_t *creds, Auth__Token **token);
 

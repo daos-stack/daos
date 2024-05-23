@@ -1,25 +1,32 @@
-server_config:
-   name: daos_server
 hosts:
-  test_servers:
-    - server-A
+  test_servers: 1
 timeout: 650
+server_config:
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+  system_ram_reserved: 1
 pool:
   control_method: dmg
-  mode: 511
   scm_size: 1073741824
-  name: daos_server
 evicttests:
-   UUID: !mux
-     gooduuid:
-          uuid:
-             - VALID
-             - PASS
-     nulluuid:
-          uuid:
-             - NULL
-             - FAIL
-     baduuid:
-          uuid:
-             - JUNK
-             - FAIL
+  UUID: !mux
+    gooduuid:
+      uuid:
+        - VALID
+        - PASS
+    nulluuid:
+      uuid:
+        - NULL
+        - FAIL
+    baduuid:
+      uuid:
+        - JUNK
+        - FAIL

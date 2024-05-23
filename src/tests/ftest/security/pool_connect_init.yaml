@@ -1,37 +1,44 @@
 hosts:
- test_servers:
-  - server-A
+  test_servers: 1
 timeout: 60
 server_config:
-   name: daos_server
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+  system_ram_reserved: 1
 # Uncomment following to force the use of certificates
 # regardless of the launch.py --insecure setting.
 #   transport_config:
 #     allow_insecure: False
-#agent_config:
+# agent_config:
 #   transport_config:
 #     allow_insecure: False
-#dmg:
+# dmg:
 #   transport_config:
 #     allow_insecure: False
 pool:
-  mode: 511
-  name: daos_server
   scm_size: 186777216
   control_method: dmg
   tests: !mux
-      user_root:
-        ids:
-           - owner
-           - 0
-           - PASS
-      root_user:
-        ids:
-           - 0
-           - owner
-           - PASS
-      root_root:
-        ids:
-           - 0
-           - 0
-           - FAIL
+    user_root:
+      ids:
+        - owner
+        - 0
+        - PASS
+    root_user:
+      ids:
+        - 0
+        - owner
+        - PASS
+    root_root:
+      ids:
+        - 0
+        - 0
+        - FAIL

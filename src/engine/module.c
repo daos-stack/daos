@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,6 +14,7 @@
 
 #include <daos_errno.h>
 #include <daos/common.h>
+#include <daos/metrics.h>
 #include <gurt/list.h>
 #include <daos/rpc.h>
 #include "drpc_handler.h"
@@ -140,6 +141,7 @@ static int
 dss_module_init_one(struct loaded_mod *lmod, uint64_t *mod_facs)
 {
 	struct dss_module	*smod;
+	int			i;
 	int			rc = 0;
 
 	smod = lmod->lm_dss_mod;
@@ -155,12 +157,14 @@ dss_module_init_one(struct loaded_mod *lmod, uint64_t *mod_facs)
 		dss_register_key(smod->sm_key);
 
 	/* register RPC handlers */
-	rc = daos_rpc_register(smod->sm_proto_fmt, smod->sm_cli_count,
-			       smod->sm_handlers, smod->sm_mod_id);
-	if (rc) {
-		D_ERROR("failed to register RPC for %s: "DF_RC"\n",
-			smod->sm_name, DP_RC(rc));
-		D_GOTO(err_mod_init, rc);
+	for (i = 0; i < smod->sm_proto_count; i++) {
+		rc = daos_rpc_register(smod->sm_proto_fmt[i], smod->sm_cli_count[i],
+				       smod->sm_handlers[i], smod->sm_mod_id);
+		if (rc) {
+			D_ERROR("failed to register RPC for %s: "DF_RC"\n",
+				smod->sm_name, DP_RC(rc));
+			D_GOTO(err_mod_init, rc);
+		}
 	}
 
 	/* register dRPC handlers */
@@ -179,7 +183,8 @@ dss_module_init_one(struct loaded_mod *lmod, uint64_t *mod_facs)
 	return 0;
 
 err_rpc:
-	daos_rpc_unregister(smod->sm_proto_fmt);
+	for (i = 0; i < smod->sm_proto_count; i++)
+		daos_rpc_unregister(smod->sm_proto_fmt[i]);
 err_mod_init:
 	dss_unregister_key(smod->sm_key);
 	smod->sm_fini();
@@ -194,15 +199,19 @@ static int
 dss_module_unload_internal(struct loaded_mod *lmod)
 {
 	struct dss_module	*smod = lmod->lm_dss_mod;
-	int			 rc = 0;
+	int			i;
+	int			rc = 0;
 
 	if (lmod->lm_init == false)
 		goto close_mod;
+
 	/* unregister RPC handlers */
-	rc = daos_rpc_unregister(smod->sm_proto_fmt);
-	if (rc) {
-		D_ERROR("failed to unregister RPC "DF_RC"\n", DP_RC(rc));
-		return rc;
+	for (i = 0; i < smod->sm_proto_count; i++) {
+		rc = daos_rpc_unregister(smod->sm_proto_fmt[i]);
+		if (rc) {
+			D_ERROR("failed to unregister RPC "DF_RC"\n", DP_RC(rc));
+			return rc;
+		}
 	}
 
 	rc = drpc_hdlr_unregister_all(smod->sm_drpc_handlers);
@@ -379,7 +388,7 @@ dss_module_init_metrics(enum dss_module_tag tag, void **metrics,
 	struct loaded_mod *mod;
 
 	d_list_for_each_entry(mod, &loaded_mod_list, lm_lk) {
-		struct dss_module_metrics *met = mod->lm_dss_mod->sm_metrics;
+		struct daos_module_metrics *met = mod->lm_dss_mod->sm_metrics;
 
 		if (met == NULL)
 			continue;
@@ -407,7 +416,7 @@ dss_module_fini_metrics(enum dss_module_tag tag, void **metrics)
 	struct loaded_mod *mod;
 
 	d_list_for_each_entry(mod, &loaded_mod_list, lm_lk) {
-		struct dss_module_metrics *met = mod->lm_dss_mod->sm_metrics;
+		struct daos_module_metrics *met = mod->lm_dss_mod->sm_metrics;
 
 		if (met == NULL)
 			continue;
@@ -420,4 +429,39 @@ dss_module_fini_metrics(enum dss_module_tag tag, void **metrics)
 
 		met->dmm_fini(metrics[mod->lm_dss_mod->sm_mod_id]);
 	}
+}
+
+/**
+ * Query all modules for the number of per-pool metrics they create.
+ *
+ * \return Total number of metrics for all modules
+ */
+int
+dss_module_nr_pool_metrics(void)
+{
+	struct loaded_mod	*mod;
+	int			 total = 0, nr;
+
+	d_list_for_each_entry(mod, &loaded_mod_list, lm_lk) {
+		struct daos_module_metrics *met = mod->lm_dss_mod->sm_metrics;
+
+		if (met == NULL)
+			continue;
+		if (met->dmm_nr_metrics == NULL)
+			continue;
+
+		/* Support SYS and TGT tag so far */
+		D_ASSERT(!(met->dmm_tags & ~(DAOS_SYS_TAG | DAOS_TGT_TAG)));
+
+		nr = 0;
+		if (met->dmm_tags & DAOS_SYS_TAG)
+			nr += 1;
+		if (met->dmm_tags & DAOS_TGT_TAG)
+			nr += dss_tgt_nr;
+		D_ASSERT(nr > 0);
+
+		total += (met->dmm_nr_metrics() * nr);
+	}
+
+	return total;
 }

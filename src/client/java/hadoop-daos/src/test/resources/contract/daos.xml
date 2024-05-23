@@ -5,6 +5,11 @@
   -->
 <configuration>
     <property>
+        <name>fs.contract.test.fs.daos</name>
+        <value>daos://pool1/cont1</value>
+    </property>
+
+    <property>
         <name>fs.contract.test.random-seek-count</name>
         <value>10</value>
     </property>
@@ -36,7 +41,7 @@
 
     <property>
         <name>fs.contract.supports-append</name>
-        <value>false</value>
+        <value>true</value>
     </property>
 
     <property>

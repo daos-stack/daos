@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,18 +14,23 @@
 
 #include <stdlib.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/un.h>
 #include <fcntl.h>
 #include <poll.h>
 #include <abt.h>
 #include <daos/drpc.h>
-#include <daos/drpc.pb-c.h>
 
 void mock_socket_setup(void);
 extern int socket_return; /* value to be returned by socket() */
 extern int socket_family; /* saved input */
 extern int socket_type; /* saved input */
 extern int socket_protocol; /* saved input */
+
+void mock_fchmod_setup(void);
+extern int fchmod_return; /* value to be returned by fchmod() */
+extern int fchmod_fd; /* saved input */
+extern mode_t fchmod_mode; /* saved input */
 
 void mock_connect_setup(void);
 extern int connect_return; /* value to be returned by connect() */
@@ -84,6 +89,16 @@ extern size_t recvmsg_msg_iov_len; /* saved iov len */
 extern uint8_t recvmsg_msg_content[UNIXCOMM_MAXMSGSIZE]; /* copied into iov */
 extern int recvmsg_flags; /* saved input */
 
+/**
+ * Sets up recvmsg mock to populate a valid serialized Drpc__Call as the message received.
+ */
+void mock_valid_drpc_call_in_recvmsg(void);
+
+/**
+ * Sets up recvmsg mock to populate a valid serialized Drpc__Response as the message received.
+ */
+void mock_valid_drpc_resp_in_recvmsg(Drpc__Status status);
+
 void mock_poll_setup(void);
 void mock_poll_teardown(void);
 extern int poll_return; /* value to be returned */
@@ -96,15 +111,6 @@ extern int poll_revents_return[1024]; /* to be returned in revents struct */
 void mock_unlink_setup(void);
 extern int unlink_call_count;
 extern const char *unlink_name;
-
-/* Mock to be used for the drpc->handler function pointer */
-void mock_drpc_handler_setup(void);
-void mock_drpc_handler_teardown(void);
-extern int mock_drpc_handler_call_count; /* how many times it was called */
-extern Drpc__Call *mock_drpc_handler_call; /* alloc copy of input param */
-extern void *mock_drpc_handler_resp_ptr; /* saved value of resp ptr */
-extern Drpc__Response *mock_drpc_handler_resp_return; /* returned in *resp */
-void mock_drpc_handler(Drpc__Call *call, Drpc__Response *resp);
 
 void mock_ABT_mutex_create_setup(void);
 extern int ABT_mutex_create_return; /* value to be returned */

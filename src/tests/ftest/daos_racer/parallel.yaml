@@ -1,0 +1,31 @@
+hosts:
+  test_servers: 4
+  test_clients: 4
+timeout: 1800
+server_config:
+  name: daos_server
+  engines_per_host: 2
+  engines:
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      log_mask: "ERR"
+      storage: auto
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      log_mask: "ERR"
+      storage: auto
+job_manager:
+  class_name: Orterun
+  mpi_type: openmpi
+  manager_timeout: 630
+daos_racer:
+  runtime: 600
+  clush_timeout: 900

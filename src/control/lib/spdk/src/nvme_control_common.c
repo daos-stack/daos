@@ -1,8 +1,8 @@
 /**
-* (C) Copyright 2019-2021 Intel Corporation.
-*
-* SPDX-License-Identifier: BSD-2-Clause-Patent
-*/
+ * (C) Copyright 2019-2023 Intel Corporation.
+ *
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
+ */
 
 #include <spdk/stdinc.h>
 #include <spdk/nvme.h>
@@ -124,11 +124,26 @@ init_ret(void)
 	return ret;
 }
 
+static void
+free_ctrlr_fields(struct nvme_ctrlr_t *ctrlr)
+{
+	if (ctrlr->model != NULL)
+		free(ctrlr->model);
+	if (ctrlr->serial != NULL)
+		free(ctrlr->serial);
+	if (ctrlr->fw_rev != NULL)
+		free(ctrlr->fw_rev);
+	if (ctrlr->vendor_id != NULL)
+		free(ctrlr->vendor_id);
+	if (ctrlr->pci_type != NULL)
+		free(ctrlr->pci_type);
+}
+
 void
 clean_ret(struct ret_t *ret)
 {
-	struct ctrlr_t		*cnext;
-	struct ns_t		*nnext;
+	struct nvme_ctrlr_t     *cnext;
+	struct nvme_ns_t        *nnext;
 	struct wipe_res_t	*wrnext;
 
 	while (ret && (ret->wipe_results)) {
@@ -146,6 +161,7 @@ clean_ret(struct ret_t *ret)
 		if (ret->ctrlrs->stats)
 			free(ret->ctrlrs->stats);
 
+		free_ctrlr_fields(ret->ctrlrs);
 		cnext = ret->ctrlrs->next;
 		free(ret->ctrlrs);
 		ret->ctrlrs = cnext;
@@ -234,32 +250,51 @@ fail:
 }
 
 static int
-copy_ctrlr_data(struct ctrlr_t *cdst, const struct spdk_nvme_ctrlr_data *cdata)
+str2ctrlr(char **dst, const void *src, size_t size)
 {
-	if (copy_ascii(cdst->model, sizeof(cdst->model), cdata->mn,
-		       sizeof(cdata->mn)) != 0)
-		return -NVMEC_ERR_CHK_SIZE;
+	assert(src != NULL);
+	assert(dst != NULL);
+	assert(*dst == NULL);
 
-	if (copy_ascii(cdst->serial, sizeof(cdst->serial), cdata->sn,
-		       sizeof(cdata->sn)) != 0)
-		return -NVMEC_ERR_CHK_SIZE;
+	*dst = calloc(1, size + 1);
+	if (*dst == NULL)
+		return -ENOMEM;
 
-	if (copy_ascii(cdst->fw_rev, sizeof(cdst->fw_rev), cdata->fr,
-		       sizeof(cdata->fr)) != 0)
+	if (copy_ascii(*dst, size + 1, src, size) != 0) {
+		perror("copy_ascii");
 		return -NVMEC_ERR_CHK_SIZE;
+	}
 
 	return 0;
 }
 
 static int
-collect_namespaces(struct ns_entry *ns_entry, struct ctrlr_t *ctrlr)
+copy_ctrlr_data(struct nvme_ctrlr_t *cdst, const struct spdk_nvme_ctrlr_data *cdata)
 {
-	struct ns_t	*ns_tmp;
+	int rc;
+
+	rc = str2ctrlr(&cdst->model, cdata->mn, sizeof(cdata->mn));
+	if (rc != 0)
+		return rc;
+	rc = str2ctrlr(&cdst->serial, cdata->sn, sizeof(cdata->sn));
+	if (rc != 0)
+		return rc;
+	rc = str2ctrlr(&cdst->fw_rev, cdata->fr, sizeof(cdata->fr));
+	if (rc != 0)
+		return rc;
+
+	return 0;
+}
+
+static int
+collect_namespaces(struct ns_entry *ns_entry, struct nvme_ctrlr_t *ctrlr)
+{
+	struct nvme_ns_t *ns_tmp;
 
 	while (ns_entry) {
-		ns_tmp = calloc(1, sizeof(struct ns_t));
+		ns_tmp = calloc(1, sizeof(struct nvme_ns_t));
 		if (ns_tmp == NULL) {
-			perror("ns_t calloc");
+			perror("nvme_ns_t calloc");
 			return -ENOMEM;
 		}
 
@@ -316,7 +351,7 @@ populate_dev_health(struct nvme_stats *stats,
 				   true : false;
 
 	/* Intel Smart Information Attributes */
-	if (cdata->vid != SPDK_PCI_VID_INTEL)
+	if ((cdata == NULL) || (cdata->vid != SPDK_PCI_VID_INTEL))
 		return;
 	for (i = 0; i < SPDK_COUNTOF(isp->attributes); i++) {
 		if (isp->attributes[i].code ==
@@ -360,7 +395,7 @@ populate_dev_health(struct nvme_stats *stats,
 				SPDK_NVME_INTEL_SMART_MEDIA_WEAR) {
 			atb = isp->attributes[i];
 			stats->media_wear_raw =
-				extend_to_uint64(atb.raw_value, 6) >> 10;
+					extend_to_uint64(atb.raw_value, 6);
 		}
 		if (isp->attributes[i].code ==
 				SPDK_NVME_INTEL_SMART_HOST_READ_PERCENTAGE) {
@@ -416,21 +451,19 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 	const struct spdk_nvme_ctrlr_data	*cdata;
 	struct spdk_pci_device			*pci_dev;
 	struct nvme_stats			*cstats;
-	struct ctrlr_t				*ctrlr_tmp;
-	int					 rc, written;
+	struct nvme_ctrlr_t                     *ctrlr_tmp;
+	const char                              *pci_type;
+	int                                      len;
+	int                                      rc;
 
 	ctrlr_entry = g_controllers;
 
 	while (ctrlr_entry) {
-		ctrlr_tmp = calloc(1, sizeof(struct ctrlr_t));
+		ctrlr_tmp = calloc(1, sizeof(struct nvme_ctrlr_t));
 		if (!ctrlr_tmp) {
 			rc = -ENOMEM;
 			goto fail;
 		}
-
-		ctrlr_tmp->nss = NULL;
-		ctrlr_tmp->stats = NULL;
-		ctrlr_tmp->next = NULL;
 
 		cdata = spdk_nvme_ctrlr_get_data(ctrlr_entry->ctrlr);
 
@@ -438,13 +471,25 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 		if (rc != 0)
 			goto fail;
 
-		rc = spdk_pci_addr_fmt(ctrlr_tmp->pci_addr,
-				       sizeof(ctrlr_tmp->pci_addr),
+		ctrlr_tmp->pci_addr = calloc(1, SPDK_NVMF_TRADDR_MAX_LEN + 1);
+		if (!ctrlr_tmp->pci_addr) {
+			rc = -ENOMEM;
+			goto fail;
+		}
+
+		rc = spdk_pci_addr_fmt(ctrlr_tmp->pci_addr, SPDK_NVMF_TRADDR_MAX_LEN,
 				       &ctrlr_entry->pci_addr);
 		if (rc != 0) {
 			rc = -NVMEC_ERR_PCI_ADDR_FMT;
 			goto fail;
 		}
+		len = strnlen(ctrlr_tmp->pci_addr, NVME_DETAIL_BUFLEN);
+		if ((len == 0) || (len == NVME_DETAIL_BUFLEN)) {
+			rc = -NVMEC_ERR_PCI_ADDR_FMT;
+			goto fail;
+		}
+
+		/* Populate numa socket id & pci device type */
 
 		pci_dev = get_pci(ctrlr_entry->ctrlr);
 		if (!pci_dev) {
@@ -452,17 +497,15 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 			goto fail;
 		}
 
-		/* populate numa socket id & pci device type */
 		ctrlr_tmp->socket_id = get_socket_id(pci_dev);
-		written = snprintf(ctrlr_tmp->pci_type,
-				   sizeof(ctrlr_tmp->pci_type), "%s",
-				   spdk_pci_device_get_type(pci_dev));
-		if (written >= sizeof(ctrlr_tmp->pci_type)) {
-			rc = -NVMEC_ERR_CHK_SIZE;
-			free(pci_dev);
+
+		pci_type = spdk_pci_device_get_type(pci_dev);
+		free(pci_dev);
+		ctrlr_tmp->pci_type = strndup(pci_type, NVME_DETAIL_BUFLEN);
+		if (ctrlr_tmp->pci_type == NULL) {
+			rc = -NVMEC_ERR_GET_PCI_TYPE;
 			goto fail;
 		}
-		free(pci_dev);
 
 		/* Alloc linked list of namespaces per controller */
 		if (ctrlr_entry->nss) {
@@ -495,9 +538,12 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 fail:
 	ret->rc = rc;
 	if (ret->rc == 0)
-		ret->rc = -1;
-	if (ctrlr_tmp)
+		/* Catch unexpected failures */
+		ret->rc = -EINVAL;
+	if (ctrlr_tmp) {
+		free_ctrlr_fields(ctrlr_tmp);
 		free(ctrlr_tmp);
+	}
 	clean_ret(ret);
 	return;
 }
@@ -517,14 +563,15 @@ collect(void)
 void
 cleanup(bool detach)
 {
-	struct ns_entry		*nentry;
-	struct ctrlr_entry	*centry, *cnext;
+	struct ns_entry			*nentry;
+	struct ctrlr_entry		*centry, *cnext;
+	struct spdk_nvme_detach_ctx	*detach_ctx = NULL;
 
 	centry = g_controllers;
 
 	while (centry) {
 		if ((centry->ctrlr) && (detach))
-			spdk_nvme_detach(centry->ctrlr);
+			spdk_nvme_detach_async(centry->ctrlr, &detach_ctx);
 		while (centry->nss) {
 			nentry = centry->nss->next;
 			free(centry->nss);
@@ -537,6 +584,9 @@ cleanup(bool detach)
 		free(centry);
 		centry = cnext;
 	}
+
+	if (detach_ctx)
+		spdk_nvme_detach_poll(detach_ctx);
 
 	g_controllers = NULL;
 }

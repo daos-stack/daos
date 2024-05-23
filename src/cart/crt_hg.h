@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -27,36 +27,74 @@
 /** number of prepost HG handles when enable pool */
 #define CRT_HG_POOL_PREPOST_NUM	(16)
 
+/** default values for init / incr to prepost handles */
+#define CRT_HG_POST_INIT        (512)
+#define CRT_HG_POST_INCR        (512)
+
 struct crt_rpc_priv;
 struct crt_common_hdr;
 struct crt_corpc_hdr;
 
-/** type of NA plugin */
-enum crt_na_type {
-	CRT_NA_SM		= 0,
-	CRT_NA_OFI_SOCKETS	= 1,
-	CRT_NA_OFI_VERBS_RXM	= 2,
-	CRT_NA_OFI_VERBS	= 3,
-	CRT_NA_OFI_GNI		= 4,
-	CRT_NA_OFI_PSM2		= 5,
-	CRT_NA_OFI_TCP_RXM	= 6,
+/**
+ * Enumeration specifying providers supported by the library
+ */
+typedef enum {
+	CRT_PROV_SM		= 0,
+	CRT_PROV_OFI_SOCKETS,
+	CRT_PROV_OFI_VERBS_RXM,
+	CRT_PROV_OFI_GNI,
+	CRT_PROV_OFI_TCP,
+	CRT_PROV_OFI_TCP_RXM,
+	CRT_PROV_OFI_CXI,
+	CRT_PROV_OFI_OPX,
+	CRT_PROV_OFI_LAST	= CRT_PROV_OFI_OPX,
+	CRT_PROV_UCX_RC,
+	CRT_PROV_UCX_UD,
+	CRT_PROV_UCX_RC_UD,
+	CRT_PROV_UCX_RC_O,
+	CRT_PROV_UCX_UD_O,
+	CRT_PROV_UCX_RC_UD_O,
+	CRT_PROV_UCX_RC_X,
+	CRT_PROV_UCX_UD_X,
+	CRT_PROV_UCX_RC_UD_X,
+	CRT_PROV_UCX_DC_X,
+	CRT_PROV_UCX_TCP,
+	CRT_PROV_UCX_LAST	= CRT_PROV_UCX_TCP,
+	/* Note: This entry should be the last valid one in enum */
+	CRT_PROV_COUNT,
+	CRT_PROV_UNKNOWN = -1,
+} crt_provider_t;
 
-	/* Note: This entry should be the last one in enum */
-	CRT_NA_OFI_COUNT,
-};
+crt_provider_t
+crt_prov_str_to_prov(const char *prov_str);
+
+int
+crt_hg_parse_uri(const char *uri, crt_provider_t *prov, char *addr);
 
 static inline bool
-crt_na_type_is_ofi(int na_type)
+crt_provider_is_ucx(crt_provider_t prov)
 {
-	return (na_type >= CRT_NA_OFI_SOCKETS) &&
-	       (na_type < CRT_NA_OFI_COUNT);
+	return (prov >= CRT_PROV_UCX_RC) &&
+	       (prov <= CRT_PROV_UCX_LAST);
+}
+
+static inline bool
+crt_provider_is_ofi(crt_provider_t prov)
+{
+	return (prov >= CRT_PROV_OFI_SOCKETS) &&
+	       (prov <= CRT_PROV_OFI_LAST);
 }
 
 struct crt_na_dict {
+	/** String identifying the provider */
 	char	*nad_str;
+	/** Alternative string */
+	char	*nad_alt_str;
 	int	nad_type;
-	/* a flag of explicitly bind with IP:port to create NA class */
+	/** a flag of explicitly bind with IP:port to create NA class */
 	bool	nad_port_bind;
+	/** a flag to indicate if endpoints are contiguous */
+	bool	nad_contig_eps;
 };
 
 extern struct crt_na_dict crt_na_dict[];
@@ -92,14 +130,16 @@ struct crt_hg_context {
 };
 
 /* crt_hg.c */
+int crt_hg_get_protocol_info(const char *info_string, struct na_protocol_info **na_protocol_info_p);
+void crt_hg_free_protocol_info(struct na_protocol_info *na_protocol_info);
 int crt_hg_init(void);
 int crt_hg_fini(void);
-int crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int provider, int idx);
+int crt_hg_ctx_init(struct crt_hg_context *hg_ctx, crt_provider_t provider, int ctx_idx, bool primary, int iface_idx);
 int crt_hg_ctx_fini(struct crt_hg_context *hg_ctx);
 int crt_hg_req_create(struct crt_hg_context *hg_ctx,
 		      struct crt_rpc_priv *rpc_priv);
 void crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv);
-int crt_hg_req_send(struct crt_rpc_priv *rpc_priv);
+void crt_hg_req_send(struct crt_rpc_priv *rpc_priv);
 int crt_hg_reply_send(struct crt_rpc_priv *rpc_priv);
 void crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code);
 int crt_hg_req_cancel(struct crt_rpc_priv *rpc_priv);
@@ -118,16 +158,22 @@ int crt_hg_unpack_body(struct crt_rpc_priv *rpc_priv, crt_proc_t proc);
 int crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data);
 int crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data);
 
-bool crt_provider_is_contig_ep(int provider);
-bool crt_provider_is_sep(int provider);
-void crt_provider_set_sep(int provider, bool enable);
-int crt_provider_get_cur_ctx_num(int provider);
-void crt_provider_inc_cur_ctx_num(int provider);
-void crt_provider_dec_cur_ctx_num(int provider);
-char *crt_provider_name_get(int provider);
+bool crt_provider_is_contig_ep(crt_provider_t provider);
+bool crt_provider_is_port_based(crt_provider_t provider);
+char *crt_provider_name_get(crt_provider_t provider);
+uint32_t crt_provider_num_ifaces_get(bool primary, crt_provider_t provider);
+bool crt_provider_is_sep(bool primary, crt_provider_t provider);
+void crt_provider_set_sep(bool primary, crt_provider_t provider, bool enable);
+int crt_provider_get_cur_ctx_num(bool primary, crt_provider_t provider);
+int crt_provider_get_ctx_idx(bool primary, crt_provider_t provider);
+void crt_provider_put_ctx_idx(bool primary, crt_provider_t provider, int idx);
+int crt_provider_get_max_ctx_num(bool primary, crt_provider_t provider);
+d_list_t *crt_provider_get_ctx_list(bool primary, crt_provider_t provider);
+void crt_provider_get_ctx_list_and_num(bool primary, crt_provider_t provider, d_list_t **list, int *num);
+char* crt_provider_iface_str_get(bool primary, crt_provider_t provider, int iface_idx);
+struct crt_na_config*
+crt_provider_get_na_config(bool primary, crt_provider_t provider);
 
-int crt_provider_get_max_ctx_num(int provider);
-d_list_t *crt_provider_get_ctx_list(int provider);
 
 static inline int
 crt_hgret_2_der(int hg_ret)
@@ -140,11 +186,20 @@ crt_hgret_2_der(int hg_ret)
 	case HG_INVALID_ARG:
 		return -DER_INVAL;
 	case HG_MSGSIZE:
+	case HG_OVERFLOW:
 		return -DER_OVERFLOW;
 	case HG_NOMEM:
 		return -DER_NOMEM;
 	case HG_CANCELED:
 		return -DER_CANCELED;
+	case HG_BUSY:
+		return -DER_BUSY;
+	case HG_FAULT:
+	case HG_PROTOCOL_ERROR:
+		return -DER_HG_FATAL;
+	case HG_PERMISSION:
+	case HG_ACCESS:
+		return -DER_NO_PERM;
 	default:
 		return -DER_HG;
 	};
@@ -166,100 +221,19 @@ crt_der_2_hgret(int der)
 		return HG_NOMEM;
 	case -DER_CANCELED:
 		return HG_CANCELED;
+	case -DER_BUSY:
+		return HG_BUSY;
 	default:
 		return HG_OTHER_ERROR;
 	};
-}
-
-/* some simple helper functions */
-typedef hg_rpc_cb_t crt_hg_rpc_cb_t;
-static inline int
-crt_hg_reg(hg_class_t *hg_class, hg_id_t rpcid, crt_proc_cb_t in_proc_cb,
-	   crt_proc_cb_t out_proc_cb, crt_hg_rpc_cb_t rpc_cb)
-{
-	hg_return_t hg_ret;
-	int         rc = 0;
-
-	D_ASSERT(hg_class != NULL);
-
-	hg_ret = HG_Register(hg_class, rpcid, (hg_proc_cb_t)in_proc_cb,
-			     (hg_proc_cb_t)out_proc_cb, rpc_cb);
-	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("HG_Register(rpcid: %#lx) failed, hg_ret: %d.\n",
-			rpcid, hg_ret);
-		rc = crt_hgret_2_der(hg_ret);
-	}
-	return rc;
-}
-
-static inline int
-crt_hg_bulk_free(crt_bulk_t bulk_hdl)
-{
-	hg_return_t	hg_ret;
-
-	hg_ret = HG_Bulk_free(bulk_hdl);
-	if (hg_ret != HG_SUCCESS)
-		D_ERROR("HG_Bulk_free failed, hg_ret: %d.\n", hg_ret);
-
-	return crt_hgret_2_der(hg_ret);
-}
-
-static inline int
-crt_hg_bulk_addref(crt_bulk_t bulk_hdl)
-{
-	hg_return_t	hg_ret;
-
-	hg_ret = HG_Bulk_ref_incr(bulk_hdl);
-	if (hg_ret != HG_SUCCESS)
-		D_ERROR("HG_Bulk_ref_incr failed, hg_ret: %d.\n", hg_ret);
-
-	return crt_hgret_2_der(hg_ret);
-}
-
-static inline int
-crt_hg_bulk_get_len(crt_bulk_t bulk_hdl, size_t *bulk_len)
-{
-	hg_size_t	hg_size;
-
-	if (bulk_len == NULL) {
-		D_ERROR("bulk_len is NULL\n");
-		return -DER_INVAL;
-	}
-
-	if (bulk_hdl == CRT_BULK_NULL) {
-		D_ERROR("bulk_hdl is NULL\n");
-		return -DER_INVAL;
-	}
-
-	hg_size = HG_Bulk_get_size(bulk_hdl);
-	*bulk_len = hg_size;
-
-	return 0;
-}
-
-static inline int
-crt_hg_bulk_get_sgnum(crt_bulk_t bulk_hdl, unsigned int *bulk_sgnum)
-{
-	hg_uint32_t	hg_sgnum;
-
-	D_ASSERT(bulk_sgnum != NULL);
-	hg_sgnum = HG_Bulk_get_segment_count(bulk_hdl);
-	*bulk_sgnum = hg_sgnum;
-
-	return 0;
 }
 
 int crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
 		       crt_bulk_perm_t bulk_perm, crt_bulk_t *bulk_hdl);
 int crt_hg_bulk_bind(crt_bulk_t bulk_hdl, struct crt_hg_context *hg_ctx);
 int crt_hg_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl);
-int crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc,
-			 crt_bulk_cb_t complete_cb, void *arg,
-			 crt_bulk_opid_t *opid, bool bind);
-static inline int
-crt_hg_bulk_cancel(crt_bulk_opid_t opid)
-{
-	return HG_Bulk_cancel(opid);
-}
+int
+crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb, void *arg,
+		     crt_bulk_opid_t *opid, bool bind);
 
 #endif /* __CRT_MERCURY_H__ */

@@ -1,8 +1,9 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package server
 
 import (
@@ -15,8 +16,8 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/engine"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 var (
@@ -50,6 +51,16 @@ var (
 		"cannot create a pool without a pool label",
 		"retry the operation with a label set",
 	)
+	FaultPoolHasContainers = serverFault(
+		code.ServerPoolHasContainers,
+		"cannot destroy a pool with existing containers",
+		"retry the operation with the recursive flag set to remove containers along with the pool",
+	)
+	FaultHugepagesDisabled = serverFault(
+		code.ServerHugepagesDisabled,
+		"the use of hugepages has been disabled in the server config",
+		"set false (or remove) disable_hugepages parameter in config and reformat storage, then retry the operation",
+	)
 )
 
 func FaultPoolInvalidServiceReps(maxSvcReps uint32) *fault.Fault {
@@ -60,7 +71,7 @@ func FaultPoolInvalidServiceReps(maxSvcReps uint32) *fault.Fault {
 	)
 }
 
-func FaultInstancesNotStopped(action string, rank system.Rank) *fault.Fault {
+func FaultInstancesNotStopped(action string, rank ranklist.Rank) *fault.Fault {
 	return serverFault(
 		code.ServerInstancesNotStopped,
 		fmt.Sprintf("%s not supported when rank %d is running", action, rank),
@@ -68,29 +79,29 @@ func FaultInstancesNotStopped(action string, rank system.Rank) *fault.Fault {
 	)
 }
 
-func FaultPoolNvmeTooSmall(reqBytes uint64, targetCount int) *fault.Fault {
+func FaultPoolNvmeTooSmall(minTotal, minNVMe uint64) *fault.Fault {
 	return serverFault(
 		code.ServerPoolNvmeTooSmall,
-		fmt.Sprintf("requested NVMe capacity (%s / %d) is too small (min %s per target)",
-			humanize.Bytes(reqBytes), targetCount,
+		fmt.Sprintf("requested NVMe capacity too small (min %s per target)",
 			humanize.IBytes(engine.NvmeMinBytesPerTarget)),
-		fmt.Sprintf("NVMe capacity should be larger than %s",
-			humanize.Bytes(engine.NvmeMinBytesPerTarget*uint64(targetCount))),
+		fmt.Sprintf("retry the request with a pool size of at least %s, with at least %s NVMe",
+			humanize.Bytes(minTotal+humanize.MiByte), humanize.Bytes(minNVMe+humanize.MiByte),
+		),
 	)
 }
 
-func FaultPoolScmTooSmall(reqBytes uint64, targetCount int) *fault.Fault {
+func FaultPoolScmTooSmall(minTotal, minSCM uint64) *fault.Fault {
 	return serverFault(
 		code.ServerPoolScmTooSmall,
-		fmt.Sprintf("requested SCM capacity (%s / %d) is too small (min %s per target)",
-			humanize.Bytes(reqBytes), targetCount,
+		fmt.Sprintf("requested SCM capacity is too small (min %s per target)",
 			humanize.IBytes(engine.ScmMinBytesPerTarget)),
-		fmt.Sprintf("SCM capacity should be larger than %s",
-			humanize.Bytes(engine.ScmMinBytesPerTarget*uint64(targetCount))),
+		fmt.Sprintf("retry the request with a pool size of at least %s, with at least %s SCM",
+			humanize.Bytes(minTotal+humanize.MiByte), humanize.Bytes(minSCM+humanize.MiByte),
+		),
 	)
 }
 
-func FaultPoolInvalidRanks(invalid []system.Rank) *fault.Fault {
+func FaultPoolInvalidRanks(invalid []ranklist.Rank) *fault.Fault {
 	rs := make([]string, len(invalid))
 	for i, r := range invalid {
 		rs[i] = r.String()
@@ -104,6 +115,14 @@ func FaultPoolInvalidRanks(invalid []system.Rank) *fault.Fault {
 	)
 }
 
+func FaultPoolInvalidNumRanks(req, avail int) *fault.Fault {
+	return serverFault(
+		code.ServerPoolInvalidNumRanks,
+		fmt.Sprintf("pool request contains invalid number of ranks (requested: %d, available: %d)", req, avail),
+		"retry the request with a valid number of ranks",
+	)
+}
+
 func FaultPoolDuplicateLabel(dupe string) *fault.Fault {
 	return serverFault(
 		code.ServerPoolDuplicateLabel,
@@ -112,11 +131,11 @@ func FaultPoolDuplicateLabel(dupe string) *fault.Fault {
 	)
 }
 
-func FaultInsufficientFreeHugePages(free, requested int) *fault.Fault {
+func FaultEngineNUMAImbalance(nodeMap map[int]int) *fault.Fault {
 	return serverFault(
-		code.ServerInsufficientFreeHugePages,
-		fmt.Sprintf("requested %d hugepages; got %d", requested, free),
-		"reboot the system or manually clear /dev/hugepages as appropriate",
+		code.ServerConfigEngineNUMAImbalance,
+		fmt.Sprintf("uneven distribution of engines across NUMA nodes %v", nodeMap),
+		"config requires an equal number of engines assigned to each NUMA node",
 	)
 }
 
@@ -124,7 +143,7 @@ func FaultScmUnmanaged(mntPoint string) *fault.Fault {
 	return serverFault(
 		code.ServerScmUnmanaged,
 		fmt.Sprintf("the SCM mountpoint at %s is unavailable and can't be created/mounted", mntPoint),
-		fmt.Sprintf("manually create %s or remove --recreate-superblocks from the server arguments", mntPoint),
+		fmt.Sprintf("manually create %s and retry", mntPoint),
 	)
 }
 
@@ -133,6 +152,22 @@ func FaultWrongSystem(reqName, sysName string) *fault.Fault {
 		code.ServerWrongSystem,
 		fmt.Sprintf("request system does not match running system (%s != %s)", reqName, sysName),
 		"retry the request with the correct system name",
+	)
+}
+
+func FaultIncompatibleComponents(self, other *build.VersionedComponent) *fault.Fault {
+	return serverFault(
+		code.ServerIncompatibleComponents,
+		fmt.Sprintf("components %s and %s are not compatible", self, other),
+		"retry the request with compatible components",
+	)
+}
+
+func FaultNoCompatibilityInsecure(self, other build.Version) *fault.Fault {
+	return serverFault(
+		code.ServerNoCompatibilityInsecure,
+		fmt.Sprintf("versions %s and %s are not compatible in insecure mode", self, other),
+		"enable certificates or use identical component versions",
 	)
 }
 

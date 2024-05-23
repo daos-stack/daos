@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -24,7 +24,7 @@
 struct btr_record {
 	/**
 	 * It could either be memory ID for the child node, or body of this
-	 * record. The record body could be any of varous things:
+	 * record. The record body could be any of various things:
 	 *
 	 * - the value address of KV record.
 	 * - a structure includes both the variable-length key and value.
@@ -293,10 +293,11 @@ typedef struct {
 	 *			by the tree class.
 	 * \param rec	[OUT]	Returned record body pointer,
 	 *			See \a btr_record for the details.
+	 * \param val_out [OUT]	Returned value address.
 	 */
 	int		(*to_rec_alloc)(struct btr_instance *tins,
 					d_iov_t *key, d_iov_t *val,
-					struct btr_record *rec);
+					struct btr_record *rec, d_iov_t *val_out);
 	/**
 	 * Free the record body stored in \a rec::rec_off
 	 *
@@ -333,16 +334,20 @@ typedef struct {
 	 *			offset and memory class etc.
 	 * \param rec	[IN]	Record to be updated.
 	 * \param val	[IN]	New value to be stored for the record.
+	 * \param val_out [OUT]	Returned value address.
 	 * \a return	0	success.
 	 *		-DER_NO_PERM
 	 *			cannot make inplace change, should call
 	 *			rec_free() to release the original record
 	 *			and rec_alloc() to create a new record.
+	 *		1
+	 *			cannot make inplace change, but rec_free()
+	 *			and rec_alloc() for replacing are done.
 	 *		-ve	error code
 	 */
 	int		(*to_rec_update)(struct btr_instance *tins,
 					 struct btr_record *rec,
-					 d_iov_t *key, d_iov_t *val);
+					 d_iov_t *key, d_iov_t *val, d_iov_t *val_out);
 	/**
 	 * Optional:
 	 * Return key and value size of the record.
@@ -473,18 +478,29 @@ embedded_key_decode(d_iov_t *key, daos_anchor_t *anchor)
  */
 enum btr_feats {
 	/** Key is an unsigned integer.  Implies no hash or key callbacks */
-	BTR_FEAT_UINT_KEY		= (1 << 0),
+	BTR_FEAT_UINT_KEY = (1 << 0),
 	/** Key is not hashed or stored by library.  User must provide
 	 * to_key_cmp callback
 	 */
-	BTR_FEAT_DIRECT_KEY		= (1 << 1),
+	BTR_FEAT_DIRECT_KEY = (1 << 1),
 	/** Root is dynamically sized up to tree order.  This bit is set for a
 	 *  tree class
 	 */
-	BTR_FEAT_DYNAMIC_ROOT		= (1 << 2),
+	BTR_FEAT_DYNAMIC_ROOT = (1 << 2),
 	/** Skip rebalance leaf when delete some record from the leaf. */
-	BTR_FEAT_SKIP_LEAF_REBAL	= (1 << 3),
+	BTR_FEAT_SKIP_LEAF_REBAL = (1 << 3),
+	/** Tree supports embedded root. */
+	BTR_FEAT_EMBED_FIRST = (1 << 4),
+	/** Marks that the current root is an embedded value */
+	BTR_FEAT_EMBEDDED = (1 << 5),
+	/** Put new entries above this line */
+	/** Convenience entry for calculating mask for all feats */
+	BTR_FEAT_HELPER,
+	/** Mask for all feats */
+	BTR_FEAT_MASK = ((BTR_FEAT_HELPER - 1) << 1) - 1,
 };
+
+D_CASSERT(((BTR_FEAT_HELPER - 1) & BTR_FEAT_MASK) == (BTR_FEAT_HELPER - 1));
 
 /**
  * Get the return code of to_hkey_cmp/to_key_cmp in case of success, for failure
@@ -533,14 +549,72 @@ int  dbtree_lookup(daos_handle_t toh, d_iov_t *key, d_iov_t *val_out);
 int  dbtree_update(daos_handle_t toh, d_iov_t *key, d_iov_t *val);
 int  dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
 		  d_iov_t *key, d_iov_t *key_out, d_iov_t *val_out);
+int  dbtree_fetch_cur(daos_handle_t toh, d_iov_t *key_out, d_iov_t *val_out);
+int  dbtree_fetch_prev(daos_handle_t toh, d_iov_t *key_out, d_iov_t *val_out, bool move);
+int  dbtree_fetch_next(daos_handle_t toh, d_iov_t *key_out, d_iov_t *val_out, bool move);
 int  dbtree_upsert(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
-		   d_iov_t *key, d_iov_t *val);
+		   d_iov_t *key, d_iov_t *val, d_iov_t *val_out);
 int  dbtree_delete(daos_handle_t toh, dbtree_probe_opc_t opc,
 		   d_iov_t *key, void *args);
 int  dbtree_query(daos_handle_t toh, struct btr_attr *attr,
 		  struct btr_stat *stat);
 int  dbtree_is_empty(daos_handle_t toh);
+int  dbtree_feats_set(struct btr_root *root, struct umem_instance *umm, uint64_t feats);
+
+static inline uint64_t
+dbtree_feats_get(struct btr_root *root)
+{
+	return root->tr_feats;
+}
+
 struct umem_instance *btr_hdl2umm(daos_handle_t toh);
+
+/**
+ * hashed key for the key-btree, it is stored in btr_record::rec_hkey
+ */
+
+/** Inline key is max of 15 bytes.  The extra byte in the struct is used
+ *  to encode the type (hash or inline) and the length of the inline key.
+ */
+#define KH_INLINE_MAX 15
+
+
+struct ktr_hkey {
+	/** murmur64 hash */
+	union {
+		/** NB: This assumes little endian.  We already have little
+		 *  endian assumptions with integer keys so this isn't the
+		 *  first violation.  The hkey_gen code will trigger an
+		 *  assertion if this is violated.
+		 */
+		struct {
+			/** Length of key shifted left by 2 bits. */
+			uint32_t	kh_len;
+			/** string32 hash of key */
+			uint32_t	kh_str32;
+			/** Murmur hash of key */
+			uint64_t	kh_murmur64;
+		};
+		struct {
+			/** length shifted left by 2 bits. Low bit means inline
+			 *  key.  An extra bit is reserved for future use.
+			 */
+			char		kh_inline_len;
+			/** Inline key */
+			char		kh_inline[KH_INLINE_MAX];
+		};
+		/** For comparison convenience */
+		uint64_t		kh_hash[2];
+	};
+};
+
+/** hash seed for murmur hash */
+#define BTR_MUR_SEED	0xC0FFEE
+
+D_CASSERT(sizeof(struct ktr_hkey) == 16);
+void hkey_common_gen(d_iov_t *key_iov, void *hkey);
+int hkey_common_cmp(struct ktr_hkey *k1, struct ktr_hkey *k2);
+void hkey_int_gen(d_iov_t *key,  void *hkey);
 
 /******* iterator API ******************************************************/
 
@@ -553,6 +627,7 @@ enum {
 	BTR_ITER_EMBEDDED	= (1 << 0),
 };
 
+int dbtree_key2anchor(daos_handle_t toh, d_iov_t *key, daos_anchor_t *anchor);
 int dbtree_iter_prepare(daos_handle_t toh, unsigned int options,
 			daos_handle_t *ih);
 int dbtree_iter_finish(daos_handle_t ih);
@@ -581,8 +656,8 @@ enum {
 	DBTREE_VOS_BEGIN	= 10,
 	DBTREE_VOS_END		= DBTREE_VOS_BEGIN + 9,
 	DBTREE_DSM_BEGIN	= 20,
-	DBTREE_DSM_END		= DBTREE_DSM_BEGIN + 9,
-	DBTREE_SMD_BEGIN	= 30,
+	DBTREE_DSM_END		= DBTREE_DSM_BEGIN + 19,
+	DBTREE_SMD_BEGIN	= 40,
 	DBTREE_SMD_END		= DBTREE_SMD_BEGIN + 9,
 };
 

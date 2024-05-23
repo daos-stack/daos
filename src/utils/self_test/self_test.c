@@ -1,8 +1,9 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+
 #define D_LOGFAC	DD_FAC(st)
 
 #include <stdio.h>
@@ -13,7 +14,10 @@
 #include <math.h>
 
 #include "crt_utils.h"
-#include "daos_errno.h"
+#include <daos_errno.h>
+
+#include <daos/agent.h>
+#include <daos/mgmt.h>
 
 #define CRT_SELF_TEST_AUTO_BULK_THRESH		(1 << 20)
 #define CRT_SELF_TEST_GROUP_NAME		("crt_self_test")
@@ -57,6 +61,8 @@ static const char * const crt_st_msg_type_str[] = { "EMPTY",
 static int g_shutdown_flag;
 static bool g_randomize_endpoints;
 static bool g_group_inited;
+static bool g_context_created;
+static bool g_cart_inited;
 
 static void *progress_fn(void *arg)
 {
@@ -80,7 +86,8 @@ static void *progress_fn(void *arg)
 
 static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 			  crt_group_t **srv_grp, pthread_t *tid,
-			  char *attach_info_path, bool listen)
+			  char *attach_info_path, bool listen,
+			  bool use_daos_agent_vars)
 {
 	uint32_t	 init_flags = 0;
 	uint32_t	 grp_size;
@@ -93,13 +100,26 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(0, attach_retries, false, false);
 
-	if (listen)
-		init_flags |= CRT_FLAG_BIT_SERVER;
-	ret = crt_init(CRT_SELF_TEST_GROUP_NAME, init_flags);
-	if (ret != 0) {
-		D_ERROR("crt_init failed; ret = %d\n", ret);
-		return ret;
+	if (use_daos_agent_vars) {
+		ret = dc_agent_init();
+		if (ret != 0) {
+			fprintf(stderr, "dc_agent_init() failed. ret: %d\n", ret);
+			return ret;
+		}
+		ret = crtu_dc_mgmt_net_cfg_setenv(dest_name);
+		if (ret != 0) {
+			D_ERROR("crtu_dc_mgmt_net_cfg_setenv() failed; ret = %d\n", ret);
+			return ret;
+		}
 	}
+
+	if (listen)
+		init_flags |= (CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
+	ret = crt_init(CRT_SELF_TEST_GROUP_NAME, init_flags);
+	if (ret != 0)
+		return ret;
+
+	g_cart_inited = true;
 
 	if (attach_info_path) {
 		ret = crt_group_config_path_set(attach_info_path);
@@ -112,12 +132,28 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 		D_ERROR("crt_context_create failed; ret = %d\n", ret);
 		return ret;
 	}
+	g_context_created = true;
 
-	while (attach_retries-- > 0) {
-		ret = crt_group_attach(dest_name, srv_grp);
-		if (ret == 0)
-			break;
-		sleep(1);
+	if (use_daos_agent_vars) {
+		ret = crt_group_view_create(dest_name, srv_grp);
+		if (!*srv_grp || ret != 0) {
+			D_ERROR("Failed to create group view; ret=%d\n", ret);
+			assert(0);
+		}
+
+		ret = crtu_dc_mgmt_net_cfg_rank_add(dest_name, *srv_grp, *crt_ctx);
+		if (ret != 0) {
+			fprintf(stderr, "crtu_dc_mgmt_net_cfg_rank_add() failed. ret: %d\n", ret);
+			return ret;
+		}
+	} else {
+		/* DAOS-8839: Do not limit retries, instead rely on global test timeout */
+		while (1) {
+			ret = crt_group_attach(dest_name, srv_grp);
+			if (ret == 0)
+				break;
+			sleep(1);
+		}
 	}
 
 	if (ret != 0) {
@@ -160,11 +196,10 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 	/* waiting to sync with the following parameters
 	 * 0 - tag 0
 	 * 1 - total ctx
-	 * 5 - ping timeout
-	 * 150 - total timeout
+	 * 60 - ping timeout
+	 * 120 - total timeout
 	 */
-	ret = crtu_wait_for_ranks(*crt_ctx, *srv_grp, rank_list,
-				  0, 1, 5, 150);
+	ret = crtu_wait_for_ranks(*crt_ctx, *srv_grp, rank_list, 0, 1, 60, 120);
 	D_ASSERTF(ret == 0, "wait_for_ranks() failed; ret=%d\n", ret);
 
 	max_rank = rank_list->rl_ranks[0];
@@ -175,7 +210,7 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 
 	d_rank_list_free(rank_list);
 
-	ret = crt_rank_self_set(max_rank+1);
+	ret = crt_rank_self_set(max_rank+1, 1 /* group_version_min */);
 	if (ret != 0) {
 		D_ERROR("crt_rank_self_set failed; ret = %d\n", ret);
 		return ret;
@@ -773,7 +808,8 @@ static int run_self_test(struct st_size_params all_params[],
 			 uint32_t num_ms_endpts_in,
 			 struct st_endpoint *endpts, uint32_t num_endpts,
 			 int output_megabits, int16_t buf_alignment,
-			 char *attach_info_path)
+			 char *attach_info_path,
+			 bool use_daos_agent_vars)
 {
 	crt_context_t		  crt_ctx;
 	crt_group_t		 *srv_grp;
@@ -806,7 +842,8 @@ static int run_self_test(struct st_size_params all_params[],
 		listen = true;
 	/* Initialize CART */
 	ret = self_test_init(dest_name, &crt_ctx, &srv_grp, &tid,
-			     attach_info_path, listen /* run as server */);
+			     attach_info_path, listen /* run as server */,
+			     use_daos_agent_vars);
 	if (ret != 0) {
 		D_ERROR("self_test_init failed; ret = %d\n", ret);
 		D_GOTO(cleanup_nothread, ret);
@@ -984,9 +1021,10 @@ cleanup:
 	/* Tell the progress thread to abort and exit */
 	g_shutdown_flag = 1;
 
-	ret = pthread_join(tid, NULL);
-	if (ret)
-		D_ERROR("Could not join progress thread");
+	if (pthread_join(tid, NULL)) {
+		D_ERROR("Could not join progress thread\n");
+		ret = -1;
+	}
 
 cleanup_nothread:
 	if (latencies_bulk_hdl != NULL) {
@@ -1017,15 +1055,22 @@ cleanup_nothread:
 		ret = ((ret == 0) ? cleanup_ret : ret);
 	}
 
-	cleanup_ret = crt_context_destroy(crt_ctx, 0);
-	if (cleanup_ret != 0)
-		D_ERROR("crt_context_destroy failed; ret = %d\n", cleanup_ret);
+	cleanup_ret = 0;
+	if (g_context_created) {
+		cleanup_ret = crt_context_destroy(crt_ctx, 0);
+		if (cleanup_ret != 0)
+			D_ERROR("crt_context_destroy failed; ret = %d\n", cleanup_ret);
+	}
+
 	/* Make sure first error is returned, if applicable */
 	ret = ((ret == 0) ? cleanup_ret : ret);
 
-	cleanup_ret = crt_finalize();
-	if (cleanup_ret != 0)
-		D_ERROR("crt_finalize failed; ret = %d\n", cleanup_ret);
+	cleanup_ret = 0;
+	if (g_cart_inited) {
+		cleanup_ret = crt_finalize();
+		if (cleanup_ret != 0)
+			D_ERROR("crt_finalize failed; ret = %d\n", cleanup_ret);
+	}
 	/* Make sure first error is returned, if applicable */
 	ret = ((ret == 0) ? cleanup_ret : ret);
 	return ret;
@@ -1161,7 +1206,7 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "      Maximum number of RPCs allowed to be executing concurrently.\n"
 	       "\n"
 	       "      Note that at the beginning of each test run, a buffer of size send_size\n"
-	       "        is allocated for each inflight RPC (total max_inflight * send_size).\n"
+	       "        is allocated for each in-flight RPC (total max_inflight * send_size).\n"
 	       "        This could be a lot of memory. Also, if the reply uses bulk, the\n"
 	       "        size increases to (max_inflight * max(send_size, reply_size))\n"
 	       "\n"
@@ -1190,13 +1235,21 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "      Short version: -b\n"
 	       "      By default, self-test outputs performance results in MB (#Bytes/1024^2)\n"
 	       "      Specifying --Mbits switches the output to megabits (#bits/1000000)\n"
-	       "  --path  /path/to/attach_info_file/directory/n"
+	       "  --path  /path/to/attach_info_file/directory/\n"
 	       "      Short version: -p  prefix\n"
 	       "      This option implies --singleton is set.\n"
 	       "        If specified, self_test will use the address information in:\n"
 	       "        /tmp/group_name.attach_info_tmp, if prefix is specified, self_test will use\n"
 	       "        the address information in: prefix/group_name.attach_info_tmp.\n"
-	       "        Note the = sign in the option.\n",
+	       "        Note the = sign in the option.\n"
+	       "\n"
+	       "  --use-daos-agent-env\n"
+	       "      Short version: -u\n"
+	       "      This option sets the following env vars through a running daos_agent.\n"
+	       "         - D_INTERFACE\n"
+	       "         - D_PROVIDER\n"
+	       "         - D_DOMAIN\n"
+	       "         - CRT_TIMEOUT\n",
 	       prog_name, UINT32_MAX,
 	       CRT_SELF_TEST_AUTO_BULK_THRESH, msg_sizes_str, rep_count,
 	       max_inflight, CRT_ST_BUF_ALIGN_MIN, CRT_ST_BUF_ALIGN_MIN);
@@ -1638,12 +1691,10 @@ int parse_message_sizes_string(const char *pch,
 int main(int argc, char *argv[])
 {
 	/* Default parameters */
-	char				 default_msg_sizes_str[] =
-		 "b200000,b200000 0,0 b200000,b200000 i1000,i1000 b200000,"
-		 "i1000,i1000 0,0 i1000,0";
-	const int			 default_rep_count = 10000;
-	const int			 default_max_inflight = 1000;
-
+	char				 default_msg_sizes_str[] = "0 0,0 b1048578,b1048578 0";
+	const int			 default_rep_count = 100000;
+	const int			 default_max_inflight = 16;
+	char				*default_dest_name = "daos_server";
 	char				*dest_name = NULL;
 	const char			 tuple_tokens[] = "(),";
 	char				*msg_sizes_str = default_msg_sizes_str;
@@ -1665,6 +1716,7 @@ int main(int argc, char *argv[])
 	int16_t				 buf_alignment =
 		CRT_ST_BUF_ALIGN_DEFAULT;
 	char				*attach_info_path = NULL;
+	bool				 use_daos_agent_vars = false;
 
 	ret = d_log_init();
 	if (ret != 0) {
@@ -1686,10 +1738,12 @@ int main(int argc, char *argv[])
 			{"randomize-endpoints", no_argument, 0, 'q'},
 			{"path", required_argument, 0, 'p'},
 			{"nopmix", no_argument, 0, 'n'},
+			{"use-daos-agent-env", no_argument, 0, 'u'},
+			{"help", no_argument, 0, 'h'},
 			{0, 0, 0, 0}
 		};
 
-		c = getopt_long(argc, argv, "g:m:e:s:r:i:a:btnqp:",
+		c = getopt_long(argc, argv, "g:m:e:s:r:i:a:bthnqp:u",
 				long_options, NULL);
 		if (c == -1)
 			break;
@@ -1699,8 +1753,7 @@ int main(int argc, char *argv[])
 			dest_name = optarg;
 			break;
 		case 'm':
-			parse_endpoint_string(optarg, &ms_endpts,
-					      &num_ms_endpts);
+			parse_endpoint_string(optarg, &ms_endpts, &num_ms_endpts);
 			break;
 		case 'e':
 			parse_endpoint_string(optarg, &endpts, &num_endpts);
@@ -1743,6 +1796,9 @@ int main(int argc, char *argv[])
 		case 'p':
 			attach_info_path = optarg;
 			break;
+		case 'u':
+			use_daos_agent_vars = true;
+			break;
 		case 'q':
 			g_randomize_endpoints = true;
 			break;
@@ -1754,7 +1810,13 @@ int main(int argc, char *argv[])
 		case 'n':
 			printf("Warning: 'n' argument is deprecated\n");
 			break;
+		case 'h':
 		case '?':
+			print_usage(argv[0], default_msg_sizes_str,
+				    default_rep_count,
+				    default_max_inflight);
+			D_GOTO(cleanup, ret = 0);
+			break;
 		default:
 			print_usage(argv[0], default_msg_sizes_str,
 				    default_rep_count,
@@ -1763,10 +1825,40 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	if (use_daos_agent_vars == false) {
+		char *attach_path;
+		char *attach_path_env = NULL;
+
+		if (!d_isenv_def("D_PROVIDER")) {
+			printf("Error: provider (D_PROVIDER) is not set\n");
+			printf("Example: export D_PROVIDER='ofi+tcp'\n");
+			D_GOTO(cleanup, ret = -DER_INVAL);
+		}
+
+		if (!d_isenv_def("D_INTERFACE")) {
+			printf("Error: interface (D_INTERFACE) is not set\n");
+			printf("Example: export D_INTERFACE=eth0\n");
+			D_GOTO(cleanup, ret = -DER_INVAL);
+		}
+
+		if (attach_info_path)
+			attach_path = attach_info_path;
+		else {
+			d_agetenv_str(&attach_path_env, "CRT_ATTACH_INFO_PATH");
+			attach_path = attach_path_env;
+			if (!attach_path)
+				attach_path = "/tmp";
+		}
+		D_ASSERT(attach_path != NULL);
+
+		printf("Warning: running without daos_agent connection (-u option); "
+		       "Using attachment file %s/%s.attach_info_tmp instead\n",
+		       attach_path, dest_name ? dest_name : default_dest_name);
+		d_freeenv_str(&attach_path_env);
+	}
+
 	/******************** Parse message sizes argument ********************/
 
-	/* repeat rep_count for each endpoint */
-	rep_count = rep_count * num_endpts;
 
 	/*
 	 * Count the number of tuple tokens (',') in the user-specified string
@@ -1837,17 +1929,33 @@ int main(int argc, char *argv[])
 	}
 
 	/******************** Validate arguments ********************/
-	if (dest_name == NULL || crt_validate_grpid(dest_name) != 0) {
+	if (dest_name == NULL) {
+		printf("Warning: no --group-name specified; using '%s'\n",
+		       default_dest_name);
+		dest_name = default_dest_name;
+	}
+
+	if (crt_validate_grpid(dest_name) != 0) {
 		printf("--group-name argument not specified or is invalid\n");
 		D_GOTO(cleanup, ret = -DER_INVAL);
 	}
 	if (ms_endpts == NULL)
 		printf("Warning: No --master-endpoint specified; using this"
 		       " command line application as the master endpoint\n");
+
+
 	if (endpts == NULL || num_endpts == 0) {
-		printf("No endpoints specified\n");
-		D_GOTO(cleanup, ret = -DER_INVAL);
+		printf("Warning: No --endpoint specified; using 0:2 default\n");
+		num_endpts = 1;
+		D_ALLOC_ARRAY(endpts, 1);
+		endpts[0].rank = 0;
+		endpts[0].tag = 2;
 	}
+
+
+	/* repeat rep_count for each endpoint */
+	rep_count = rep_count * num_endpts;
+
 	if ((rep_count <= 0) || (rep_count > SELF_TEST_MAX_REPETITIONS)) {
 		printf("Invalid --repetitions-per-size argument\n"
 		       "  Expected value in range (0:%d], got %d\n",
@@ -1886,14 +1994,15 @@ int main(int argc, char *argv[])
 	else
 		printf("  Buffer addresses end with:  %d\n", buf_alignment);
 	printf("  Repetitions per size:       %d\n"
-	       "  Max inflight RPCs:          %d\n\n",
+	       "  Max in-flight RPCs:          %d\n\n",
 	       rep_count, max_inflight);
 
 	/********************* Run the self test *********************/
 	ret = run_self_test(all_params, num_msg_sizes, rep_count,
 			    max_inflight, dest_name, ms_endpts,
 			    num_ms_endpts, endpts, num_endpts,
-			    output_megabits, buf_alignment, attach_info_path);
+			    output_megabits, buf_alignment, attach_info_path,
+			    use_daos_agent_vars);
 
 	/********************* Clean up *********************/
 cleanup:
@@ -1907,6 +2016,10 @@ cleanup:
 	}
 	if (all_params != NULL)
 		D_FREE(all_params);
+
+	if (use_daos_agent_vars) {
+		dc_mgmt_fini();
+	}
 	d_log_fini();
 
 	return ret;

@@ -1,17 +1,15 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from copy import deepcopy
 
-from ior_test_base import IorTestBase
 from control_test_base import ControlTestBase
+from ior_test_base import IorTestBase
 
 
 class DmgPoolQueryTest(ControlTestBase, IorTestBase):
-    # pylint: disable=too-many-ancestors
     """Test dmg query command.
 
     Test Class Description:
@@ -36,9 +34,9 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         pool query command.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=small,hw
-        :avocado: tags=dmg,pool_query,basic
-        :avocado: tags=pool_query_basic
+        :avocado: tags=hw,medium
+        :avocado: tags=dmg,pool_query,basic,control,pool
+        :avocado: tags=DmgPoolQueryTest,test_pool_query_basic
         """
         self.log.info("==>   Verify dmg output against expected output:")
         self.pool.set_query_data()
@@ -47,55 +45,60 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         # fluctuate across test runs. In addition, they're related to object
         # placement and testing them wouldn't be straightforward, so we'll need
         # some separate test cases.
-        del self.pool.query_data["response"]["tier_stats"][0]["free"]
-        del self.pool.query_data["response"]["tier_stats"][0]["min"]
-        del self.pool.query_data["response"]["tier_stats"][0]["max"]
-        del self.pool.query_data["response"]["tier_stats"][0]["mean"]
-        del self.pool.query_data["response"]["tier_stats"][1]["free"]
-        del self.pool.query_data["response"]["tier_stats"][1]["min"]
-        del self.pool.query_data["response"]["tier_stats"][1]["max"]
-        del self.pool.query_data["response"]["tier_stats"][1]["mean"]
+        for tier in self.pool.query_data["response"]["tier_stats"]:
+            del tier["free"]
+            del tier["min"]
+            del tier["max"]
+            del tier["mean"]
+        for usage in self.pool.query_data["response"]["usage"]:
+            del usage["free"]
+            del usage["imbalance"]
 
-        # Get the expected pool query values from the test yaml.  This should be
-        # as simple as:
+        # Get the expected pool query values from the test yaml. This should be as simple as:
         #   exp_info = self.params.get("exp_vals", path="/run/*", default={})
-        # but this yields an empty dictionary (the default), so it needs to be
-        # defined manually:
+        # but this yields an empty dictionary (the default), so it needs to be defined manually:
         exp_info = {
+            "enabled_ranks": None,
+            "disabled_ranks": None,
             "status": self.params.get("pool_status", path="/run/exp_vals/*"),
+            "state": self.params.get("pool_state", path="/run/exp_vals/*"),
             "uuid": self.pool.uuid.lower(),
-            "total_targets": self.params.get(
-                "total_targets", path="/run/exp_vals/*"),
-            "active_targets": self.params.get(
-                "active_targets", path="/run/exp_vals/*"),
-            "total_nodes": self.params.get(
-                "total_nodes", path="/run/exp_vals/*"),
-            "disabled_targets": self.params.get(
-                "disabled_targets", path="/run/exp_vals/*"),
+            "total_targets": self.params.get("total_targets", path="/run/exp_vals/*"),
+            "active_targets": self.params.get("active_targets", path="/run/exp_vals/*"),
+            "total_engines": self.params.get("total_engines", path="/run/exp_vals/*"),
+            "disabled_targets": self.params.get("disabled_targets", path="/run/exp_vals/*"),
             "version": self.params.get("version", path="/run/exp_vals/*"),
-            "leader": self.params.get("leader", path="/run/exp_vals/*"),
+            "svc_ldr": self.params.get("leader", path="/run/exp_vals/*"),
+            "svc_reps": self.params.get("replicas", path="/run/exp_vals/*"),
+            "rebuild": {
+                "status": self.params.get("rebuild_status", path="/run/exp_vals/rebuild/*"),
+                "state": self.params.get("state", path="/run/exp_vals/rebuild/*"),
+                "objects": self.params.get("objects", path="/run/exp_vals/rebuild/*"),
+                "records": self.params.get("records", path="/run/exp_vals/rebuild/*")
+            },
             "tier_stats": [
                 {
                     "media_type": "scm",
-                    "total": self.params.get(
-                        "total", path="/run/exp_vals/scm/*")
+                    "total": self.params.get("total", path="/run/exp_vals/scm/*")
                 },
                 {
                     "media_type": "nvme",
-                    "total": self.params.get(
-                        "total", path="/run/exp_vals/nvme/*")
+                    "total": self.params.get("total", path="/run/exp_vals/nvme/*")
                 }
             ],
-            "rebuild": {
-                "status": self.params.get(
-                    "rebuild_status", path="/run/exp_vals/rebuild/*"),
-                "state": self.params.get(
-                    "state", path="/run/exp_vals/rebuild/*"),
-                "objects": self.params.get(
-                    "objects", path="/run/exp_vals/rebuild/*"),
-                "records": self.params.get(
-                    "records", path="/run/exp_vals/rebuild/*")
-            }
+            "pool_layout_ver": 3,
+            "query_mask": self.params.get("query_mask", path="/run/exp_vals/*"),
+            "upgrade_layout_ver": 3,
+            "usage": [
+                {
+                    "tier_name": "SCM",
+                    "size": self.params.get("total", path="/run/exp_vals/scm/*")
+                },
+                {
+                    "tier_name": "NVME",
+                    "size": self.params.get("total", path="/run/exp_vals/nvme/*")
+                }
+            ]
         }
 
         self.assertDictEqual(
@@ -113,9 +116,9 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         argument of the dmg pool subcommand.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=small,hw
-        :avocado: tags=dmg,pool_query,basic
-        :avocado: tags=pool_query_inputs
+        :avocado: tags=hw,medium
+        :avocado: tags=dmg,pool_query,basic,control,pool
+        :avocado: tags=DmgPoolQueryTest,test_pool_query_inputs
         """
         # Get test UUIDs
         errors_list = []
@@ -160,9 +163,9 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         accurately show the size changes once there is content in the pool.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=small,hw
-        :avocado: tags=dmg,pool_query,basic
-        :avocado: tags=pool_query_write
+        :avocado: tags=hw,medium
+        :avocado: tags=dmg,pool_query,basic,control,pool
+        :avocado: tags=DmgPoolQueryTest,test_pool_query_ior
         """
         # Store original pool info
         self.pool.set_query_data()

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -22,8 +22,9 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/security/auth"
@@ -31,11 +32,11 @@ import (
 
 func TestSrvSecurityModule_ID(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	mod := NewSecurityModule(log, nil)
 
-	common.AssertEqual(t, mod.ID(), drpc.ModuleSecurity, "wrong drpc module")
+	test.AssertEqual(t, mod.ID(), drpc.ModuleSecurity, "wrong drpc module")
 }
 
 func insecureTransportConfig() *security.TransportConfig {
@@ -52,7 +53,7 @@ func secureTransportConfig(certDir string) *security.TransportConfig {
 
 func TestSrvSecurityModule_BadMethod(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	mod := NewSecurityModule(log, insecureTransportConfig())
 	method, err := mod.ID().GetMethod(-1)
@@ -60,26 +61,27 @@ func TestSrvSecurityModule_BadMethod(t *testing.T) {
 		t.Errorf("Expected no method to be returned, got %+v", method)
 	}
 
-	common.CmpErr(t, errors.New("invalid method -1 for module Security"), err)
+	test.CmpErr(t, errors.New("invalid method -1 for module Security"), err)
 }
 
-func callValidateCreds(mod *SecurityModule, body []byte) ([]byte, error) {
-	return mod.HandleCall(nil, drpc.MethodValidateCredentials, body)
+func callValidateCreds(t *testing.T, mod *SecurityModule, body []byte) ([]byte, error) {
+	t.Helper()
+	return mod.HandleCall(test.Context(t), nil, drpc.MethodValidateCredentials, body)
 }
 
 func TestSrvSecurityModule_ValidateCred_InvalidReq(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	mod := NewSecurityModule(log, insecureTransportConfig())
 	// Put garbage in the body
-	resp, err := callValidateCreds(mod, []byte{byte(123), byte(90), byte(255)})
+	resp, err := callValidateCreds(t, mod, []byte{byte(123), byte(90), byte(255)})
 
 	if resp != nil {
 		t.Errorf("Expected no response, got %+v", resp)
 	}
 
-	common.CmpErr(t, drpc.UnmarshalingPayloadFailure(), err)
+	test.CmpErr(t, drpc.UnmarshalingPayloadFailure(), err)
 }
 
 func getMarshaledValidateCredReq(t *testing.T, token *auth.Token, verifier *auth.Token) []byte {
@@ -112,7 +114,7 @@ func expectValidateResp(t *testing.T, respBytes []byte, expResp *auth.ValidateCr
 		t.Fatalf("Couldn't unmarshal result: %v", err)
 	}
 
-	cmpOpts := common.DefaultCmpOpts()
+	cmpOpts := test.DefaultCmpOpts()
 	if diff := cmp.Diff(expResp, resp, cmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got)\n%s", diff)
 	}
@@ -120,25 +122,25 @@ func expectValidateResp(t *testing.T, respBytes []byte, expResp *auth.ValidateCr
 
 func TestSrvSecurityModule_ValidateCred_NoCred(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	mod := NewSecurityModule(log, insecureTransportConfig())
 	reqBytes := marshal(t, &auth.ValidateCredReq{})
 
-	resp, err := callValidateCreds(mod, reqBytes)
+	resp, err := callValidateCreds(t, mod, reqBytes)
 
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
 	}
 
 	expectValidateResp(t, resp, &auth.ValidateCredResp{
-		Status: int32(drpc.DaosInvalidInput),
+		Status: int32(daos.InvalidInput),
 	})
 }
 
 func TestSrvSecurityModule_ValidateCred_NoToken(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	mod := NewSecurityModule(log, insecureTransportConfig())
 	reqBytes := getMarshaledValidateCredReq(t, nil, &auth.Token{
@@ -146,20 +148,20 @@ func TestSrvSecurityModule_ValidateCred_NoToken(t *testing.T) {
 		Data:   []byte{byte(1), byte(2)},
 	})
 
-	resp, err := callValidateCreds(mod, reqBytes)
+	resp, err := callValidateCreds(t, mod, reqBytes)
 
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
 	}
 
 	expectValidateResp(t, resp, &auth.ValidateCredResp{
-		Status: int32(drpc.DaosInvalidInput),
+		Status: int32(daos.InvalidInput),
 	})
 }
 
 func TestSrvSecurityModule_ValidateCred_NoVerifier(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	mod := NewSecurityModule(log, insecureTransportConfig())
 	reqBytes := getMarshaledValidateCredReq(t, &auth.Token{
@@ -167,14 +169,14 @@ func TestSrvSecurityModule_ValidateCred_NoVerifier(t *testing.T) {
 		Data:   []byte{byte(1), byte(2)},
 	}, nil)
 
-	resp, err := callValidateCreds(mod, reqBytes)
+	resp, err := callValidateCreds(t, mod, reqBytes)
 
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
 	}
 
 	expectValidateResp(t, resp, &auth.ValidateCredResp{
-		Status: int32(drpc.DaosInvalidInput),
+		Status: int32(daos.InvalidInput),
 	})
 }
 
@@ -204,14 +206,14 @@ func getVerifierForToken(t *testing.T, token *auth.Token, key crypto.PublicKey) 
 
 func TestSrvSecurityModule_ValidateCred_Insecure_OK(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	mod := NewSecurityModule(log, insecureTransportConfig())
 
 	token := getValidToken(t)
 	reqBytes := getMarshaledValidateCredReq(t, token, getVerifierForToken(t, token, nil))
 
-	resp, err := callValidateCreds(mod, reqBytes)
+	resp, err := callValidateCreds(t, mod, reqBytes)
 
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
@@ -224,21 +226,21 @@ func TestSrvSecurityModule_ValidateCred_Insecure_OK(t *testing.T) {
 
 func TestSrvSecurityModule_ValidateCred_Insecure_BadVerifier(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	mod := NewSecurityModule(log, insecureTransportConfig())
 
 	token := getValidToken(t)
 	reqBytes := getMarshaledValidateCredReq(t, token, &auth.Token{Data: []byte{0x1}}) // junk verifier
 
-	resp, err := callValidateCreds(mod, reqBytes)
+	resp, err := callValidateCreds(t, mod, reqBytes)
 
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
 	}
 
 	expectValidateResp(t, resp, &auth.ValidateCredResp{
-		Status: int32(drpc.DaosNoPermission),
+		Status: int32(daos.NoPermission),
 	})
 }
 
@@ -276,9 +278,9 @@ func generateTestCert(t *testing.T, dir string) crypto.PrivateKey {
 
 func TestSrvSecurityModule_ValidateCred_Secure_OK(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
-	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	tmpDir, tmpCleanup := test.CreateTestDir(t)
 	defer tmpCleanup()
 
 	key := generateTestCert(t, tmpDir)
@@ -288,7 +290,7 @@ func TestSrvSecurityModule_ValidateCred_Secure_OK(t *testing.T) {
 
 	reqBytes := getMarshaledValidateCredReq(t, token, getVerifierForToken(t, token, key))
 
-	resp, err := callValidateCreds(mod, reqBytes)
+	resp, err := callValidateCreds(t, mod, reqBytes)
 
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
@@ -301,29 +303,29 @@ func TestSrvSecurityModule_ValidateCred_Secure_OK(t *testing.T) {
 
 func TestSrvSecurityModule_ValidateCred_Secure_LoadingCertFailed(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	mod := NewSecurityModule(log, secureTransportConfig("some/fake/path"))
 	token := getValidToken(t)
 
 	reqBytes := getMarshaledValidateCredReq(t, token, getVerifierForToken(t, token, nil))
 
-	resp, err := callValidateCreds(mod, reqBytes)
+	resp, err := callValidateCreds(t, mod, reqBytes)
 
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
 	}
 
 	expectValidateResp(t, resp, &auth.ValidateCredResp{
-		Status: int32(drpc.DaosBadPath),
+		Status: int32(daos.NoCert),
 	})
 }
 
 func TestSrvSecurityModule_ValidateCred_Secure_BadVerifier(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
-	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	tmpDir, tmpCleanup := test.CreateTestDir(t)
 	defer tmpCleanup()
 
 	_ = generateTestCert(t, tmpDir)
@@ -334,13 +336,13 @@ func TestSrvSecurityModule_ValidateCred_Secure_BadVerifier(t *testing.T) {
 	// unsigned hash instead of signed by cert
 	reqBytes := getMarshaledValidateCredReq(t, token, getVerifierForToken(t, token, nil))
 
-	resp, err := callValidateCreds(mod, reqBytes)
+	resp, err := callValidateCreds(t, mod, reqBytes)
 
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
 	}
 
 	expectValidateResp(t, resp, &auth.ValidateCredResp{
-		Status: int32(drpc.DaosNoPermission),
+		Status: int32(daos.NoPermission),
 	})
 }

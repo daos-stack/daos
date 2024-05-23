@@ -1,41 +1,36 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import socket
-import re
 import os
+import re
+import socket
 from getpass import getuser
 
-from command_utils_base import \
-    CommandFailure, FormattedParameter, EnvironmentVariables, \
-    CommonConfig
-from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
-from general_utils import get_log_file, run_pcmd
-from agent_utils_params import \
-    DaosAgentTransportCredentials, DaosAgentYamlParameters
+from agent_utils_params import DaosAgentTransportCredentials, DaosAgentYamlParameters
+from ClusterShell.NodeSet import NodeSet
+from command_utils import CommandWithSubCommand, SubprocessManager, YamlCommand
+from command_utils_base import (CommandWithParameters, CommonConfig, EnvironmentVariables,
+                                FormattedParameter)
+from exception_utils import CommandFailure
+from general_utils import get_default_config_file, get_log_file, run_pcmd
+from run_utils import run_remote
 
 
 def include_local_host(hosts):
     """Ensure the local host is included in the specified host list.
 
     Args:
-        hosts (list): list of hosts
+        hosts (NodeSet): list of hosts
 
     Returns:
-        list: list of hosts including the local host
+        NodeSet: list of hosts including the local host
 
     """
-    local_host = socket.gethostname().split('.', 1)[0]
-    if hosts is None:
-        hosts = [local_host]
-    elif local_host not in hosts:
-        # Take a copy of hosts to avoid modifying-in-place
-        hosts = list(hosts)
-        hosts.append(local_host)
-    return hosts
+    with_localhost = NodeSet(socket.gethostname().split('.', 1)[0])
+    with_localhost.add(hosts)
+    return with_localhost
 
 
 def get_agent_command(group, cert_dir, bin_dir, config_file, config_temp=None):
@@ -120,6 +115,8 @@ class DaosAgentCommand(YamlCommand):
         """Get the daos_agent sub command object based on the sub-command."""
         if self.sub_command.value == "dump-attachinfo":
             self.sub_command_class = self.DumpAttachInfoSubCommand()
+        if self.sub_command.value == "support":
+            self.sub_command_class = self.SupportSubCommand()
         else:
             self.sub_command_class = None
 
@@ -132,6 +129,33 @@ class DaosAgentCommand(YamlCommand):
                 "/run/daos_agent/dump-attachinfo/*", "dump-attachinfo")
 
             self.output = FormattedParameter("--output {}", None)
+
+    class SupportSubCommand(CommandWithSubCommand):
+        """Defines an object for the daos_agent support sub command."""
+
+        def __init__(self):
+            """Create a daos_agent support subcommand object."""
+            super().__init__("/run/daos_agent/support/*", "support")
+
+        def get_sub_command_class(self):
+            # pylint: disable=redefined-variable-type
+            """Get the daos_agent support sub command object."""
+            if self.sub_command.value == "collect-log":
+                self.sub_command_class = self.CollectlogSubCommand()
+            else:
+                self.sub_command_class = None
+
+        class CollectlogSubCommand(CommandWithParameters):
+            """Defines an object for the daos_agent support collect-log command."""
+
+            def __init__(self):
+                """Create a daos_agent support collect-log command object."""
+                super().__init__("/run/daos_agent/support/*", "collect-log")
+                self.stop_on_error = FormattedParameter("--stop-on-error", False)
+                self.target_folder = FormattedParameter("--target-folder={}", None)
+                self.archive = FormattedParameter("--archive", False)
+                self.extra_logs_dir = FormattedParameter("--extra-logs-dir={}", None)
+                self.target_host = FormattedParameter("--target-host={}", None)
 
     def dump_attachinfo(self, output="uri.txt"):
         """Write CaRT attachinfo file.
@@ -150,6 +174,23 @@ class DaosAgentCommand(YamlCommand):
         self.set_sub_command("dump-attachinfo")
         self.sub_command_class.output.value = output
         return self._get_result()
+
+    def support_collect_log(self, **kwargs):
+        """support collect-log command run.
+
+        Args:
+            kwargs (dic): option to pass to support collect-log command
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the daos_agent support collect-log command fails.
+
+        """
+        self.set_command(("support", "collect-log"), **kwargs)
+        return self._get_json_result()
 
     def get_user_file(self):
         """Get the file defined in the yaml file that must be owned by the user.
@@ -240,28 +281,55 @@ class DaosAgentManager(SubprocessManager):
                                    str(self.manager.job))[0]["stdout"]
         self.log.info("Agent attachinfo: %s", self.attachinfo)
 
-    def get_attachinfo_file(self):
-        """Run dump-attachinfo on the daos_agent."""
+    def support_collect_log(self, **kwargs):
+        """Collect logs for debug purpose.
 
+        Args:
+            stop_on_error (bool, optional): Stop the collect-log command on very first error.
+            target (str, optional): Target Folder location to copy logs
+            archive (bool, optional): Archive the log/config files
+            extra_logs_dir (str, optional): Collect the Logs from given custom directory
+            target-host (str, optional): R sync all the logs to target system
+        Raises:
+            CommandFailure: if the daos_agent command fails.
+
+        Returns:
+            RemoteCommandResult: a grouping of the command results from
+                the same hosts with the same return status
+
+        """
+        cmd = DaosAgentCommand(self.manager.job.command_path)
+        cmd.sudo = True
+        cmd.debug.value = False
+        cmd.config.value = get_default_config_file("agent")
+        self.log.info("Support collect-log on clients: %s", str(cmd))
+        cmd.set_command(("support", "collect-log"), **kwargs)
+        return run_remote(self.log, self.hosts, cmd.with_exports)
+
+    def get_attachinfo_file(self):
+        """Run dump-attachinfo on the daos_agent.
+
+        Returns:
+            str: the attach info file path
+
+        """
         server_name = self.get_config_value("name")
 
         self.dump_attachinfo()
 
-        a = self.attachinfo
+        attach_info = self.attachinfo
 
         # Filter log messages from attachinfo content
-        L = [x for x in a if re.match(r"^(name\s|size\s|all|\d+\s)", x)]
-        attach_info_contents = "\n".join(L)
+        messages = [x for x in attach_info if re.match(r"^(name\s|size\s|all|\d+\s)", x)]
+        attach_info_contents = "\n".join(messages)
         attach_info_filename = "{}.attach_info_tmp".format(server_name)
 
-        if len(L) < 4:
-            self.log.info("Malformed attachinfo file: %s",
-                          attach_info_contents)
+        if len(messages) < 4:
+            self.log.info("Malformed attachinfo file: %s", attach_info_contents)
             return None
 
         # Write an attach_info_tmp file in this directory for cart_ctl to use
-        attachinfo_file_path = os.path.join(self.outputdir,
-                                            attach_info_filename)
+        attachinfo_file_path = os.path.join(self.outputdir, attach_info_filename)
 
         with open(attachinfo_file_path, 'w') as file_handle:
             file_handle.write(attach_info_contents)

@@ -1,0 +1,25 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+hosts:
+  test_servers: 1
+timeout: 60
+setup:
+  start_agents: False
+  start_servers: False
+  start_agents_once: False
+  start_servers_once: False
+server_config:
+  name: daos_server
+  port: 10001
+  engines_per_host: 1
+  engines:
+    0:
+      storage: auto
+  transport_config:
+    allow_insecure: True
+agent_config:
+  transport_config:
+    allow_insecure: True
+dmg:
+  transport_config:
+    allow_insecure: True

@@ -1,8 +1,9 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package hostlist_test
 
 import (
@@ -97,13 +98,13 @@ func TestHostList_Create(t *testing.T) {
 			expUniqCount: 3,
 		},
 		"tab delimited": {
-			startList: "node1	node2	node3",
+			startList:    "node1\tnode2\tnode3",
 			expRawOut:    "node[1-3]",
 			expUniqOut:   "node[1-3]",
 			expUniqCount: 3,
 		},
 		"mixed delimiters": {
-			startList: "node1	node2 node3,node4",
+			startList:    "node1\tnode2 node3,node4",
 			expRawOut:    "node[1-4]",
 			expUniqOut:   "node[1-4]",
 			expUniqCount: 4,
@@ -160,17 +161,13 @@ func TestHostList_Create(t *testing.T) {
 			expUniqOut:   "d-server-[0001-0002]ab",
 			expUniqCount: 2,
 		},
-		// TODO DAOS-7332: fix irregularity where hostlist recognizes
-		//                 negative port as bad hostname
 		"negative port": {
 			startList: "node4:10001,node5:-10001",
 			expErr:    errors.New("invalid hostname"),
 		},
 		"negative port with ip": {
-			startList:    "1.2.3.4:10001,1.2.3.5:-10001",
-			expRawOut:    "1.2.3.4:10001,1.2.3.5:-10001",
-			expUniqOut:   "1.2.3.5:-10001,1.2.3.4:10001",
-			expUniqCount: 2,
+			startList: "1.2.3.4:10001,1.2.3.5:-10001",
+			expErr:    errors.New("invalid hostname"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

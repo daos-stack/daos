@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,6 +18,8 @@
 
 /** default placement map when none are specified */
 #define DEFAULT_PL_TYPE PL_TYPE_JUMP_MAP
+
+#define NIL_BITMAP	(NULL)
 
 /** types of placement maps */
 typedef enum {
@@ -58,10 +60,13 @@ struct pl_target_grp {
 };
 
 struct pl_obj_shard {
-	uint32_t	po_shard;	/* shard index */
+	uint32_t	po_shard;	/* shard identifier */
 	uint32_t	po_target;	/* target id */
 	uint32_t	po_fseq;	/* The latest failure sequence */
-	uint32_t	po_rebuilding:1; /* rebuilding status */
+	uint16_t	po_rank;	/* The rank on which the shard exists */
+	uint8_t		po_index;	/* The target index inside the node */
+	uint8_t		po_rebuilding:1, /* rebuilding status */
+			po_reintegrating:1; /* reintegrating status */
 };
 
 struct pl_obj_layout {
@@ -74,7 +79,7 @@ struct pl_obj_layout {
 
 /** common header of all placement map */
 struct pl_map {
-	/** correpsonding pool uuid */
+	/** corresponding pool uuid */
 	uuid_t			 pl_uuid;
 	/** link chain on hash */
 	d_list_t		 pl_link;
@@ -121,33 +126,15 @@ void pl_obj_layout_free(struct pl_obj_layout *layout);
 int  pl_obj_layout_alloc(unsigned int grp_size, unsigned int grp_nr,
 			 struct pl_obj_layout **layout_pp);
 bool pl_obj_layout_contains(struct pool_map *map, struct pl_obj_layout *layout,
-			    uint32_t rank, uint32_t target_index,
-			    uint32_t shard);
+			    uint32_t rank, uint32_t target_index, uint32_t shard,
+			    bool ignore_rebuild_shard);
 
-int pl_obj_place(struct pl_map *map,
-		 struct daos_obj_md *md,
-		 struct daos_obj_shard_md *shard_md,
+int pl_obj_place(struct pl_map *map, uint16_t gl_layout_ver, struct daos_obj_md *md,
+		 unsigned int mode, struct daos_obj_shard_md *shard_md,
 		 struct pl_obj_layout **layout_pp);
 
-int pl_obj_find_rebuild(struct pl_map *map,
+int pl_obj_find_rebuild(struct pl_map *map, uint32_t gl_layout_ver,
 			struct daos_obj_md *md,
-			struct daos_obj_shard_md *shard_md,
-			uint32_t rebuild_ver, uint32_t *tgt_rank,
-			uint32_t *shard_id, unsigned int array_size);
-
-int pl_obj_find_drain(struct pl_map *map, struct daos_obj_md *md,
-		      struct daos_obj_shard_md *shard_md,
-		      uint32_t rebuild_ver, uint32_t *tgt_rank,
-		      uint32_t *shard_id, unsigned int array_size);
-
-int pl_obj_find_reint(struct pl_map *map,
-			struct daos_obj_md *md,
-			struct daos_obj_shard_md *shard_md,
-			uint32_t rebuild_ver, uint32_t *tgt_rank,
-			uint32_t *shard_id, unsigned int array_size);
-
-int pl_obj_find_addition(struct pl_map *map,
-			 struct daos_obj_md *md,
 			struct daos_obj_shard_md *shard_md,
 			uint32_t rebuild_ver, uint32_t *tgt_rank,
 			uint32_t *shard_id, unsigned int array_size);
@@ -161,9 +148,6 @@ pl_obj_get_shard(void *data, int idx)
 
 	return &layout->ol_shards[idx];
 }
-
-int pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, uint32_t grp_size,
-		     int *tgt_id, pl_get_shard_t pl_get_shard, void *data);
 
 void obj_layout_dump(daos_obj_id_t oid, struct pl_obj_layout *layout);
 

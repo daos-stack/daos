@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,20 +17,11 @@ enum Function
 {
 	GREETING = 0;
 }
-/**
- * Hello is the message to request a greeting from the server
- *
- * name is the name of the user being greeted
- */
+
 message Hello {
 	string name = 1;
 }
 
-/**
- * HeloResponse is the greeting returned from the server.
- *
- * greeting is greeting message for the user.
- */
 message HelloResponse {
 	string greeting = 1;
 }

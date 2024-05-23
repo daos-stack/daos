@@ -1,8 +1,9 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package logging_test
 
 import (
@@ -19,8 +20,10 @@ func TestLogLevelToString(t *testing.T) {
 		"Zero Value": {expected: "DISABLED"},
 		"Disabled":   {expected: "DISABLED", level: logging.LogLevelDisabled},
 		"Error":      {expected: "ERROR", level: logging.LogLevelError},
+		"Notice":     {expected: "NOTICE", level: logging.LogLevelNotice},
 		"Info":       {expected: "INFO", level: logging.LogLevelInfo},
 		"Debug":      {expected: "DEBUG", level: logging.LogLevelDebug},
+		"Trace":      {expected: "TRACE", level: logging.LogLevelTrace},
 		"Unknown":    {expected: "UNKNOWN", level: logging.LogLevel(42)},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -43,10 +46,14 @@ func TestLogLevelFromString(t *testing.T) {
 		"disabled":  {expected: logging.LogLevelDisabled},
 		"Error":     {expected: logging.LogLevelError},
 		"error":     {expected: logging.LogLevelError},
+		"Notice":    {expected: logging.LogLevelNotice},
+		"notice":    {expected: logging.LogLevelNotice},
 		"Info":      {expected: logging.LogLevelInfo},
 		"info":      {expected: logging.LogLevelInfo},
 		"Debug":     {expected: logging.LogLevelDebug},
 		"debug":     {expected: logging.LogLevelDebug},
+		"Trace":     {expected: logging.LogLevelTrace},
+		"trace":     {expected: logging.LogLevelTrace},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var level logging.LogLevel

@@ -1,0 +1,47 @@
+hosts:
+  test_servers: 1
+  test_clients: 1
+timeout: 1000
+job_manager:
+  manager_timeout: 900
+server_config:
+  name: daos_server
+  crt_timeout: 60
+  engines_per_host: 1
+  engines:
+    0:
+      storage: auto
+pool:
+  scm_size: 50G
+  nvme_size: 100G
+container:
+  type: POSIX
+  control_method: daos
+daos_vol_tests: !mux
+  test1:
+    testname: h5_partest_t_shapesame
+    client_processes: 6
+  test2:
+    testname: h5vl_test_parallel
+    client_processes: 6
+  test3:
+    testname: h5vl_test
+    client_processes: 1
+  test4:
+    testname: h5_test_testhdf5
+    client_processes: 1
+  test5:
+    testname: h5_partest_testphdf5
+    client_processes: 6
+  test6:
+    testname: h5daos_test_map
+    client_processes: 1
+  test7:
+    testname: h5daos_test_map_parallel
+    client_processes: 6
+  test8:
+    testname: h5daos_test_oclass
+    client_processes: 1
+  test9:
+    testname: h5daos_test_metadata_parallel -U -u
+    client_processes: 6

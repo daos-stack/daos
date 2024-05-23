@@ -1,0 +1,32 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+hosts:
+  test_servers: 6
+timeout: 5000
+server_config:
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 2
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+  system_ram_reserved: 1
+pool:
+  scm_size: 1073741824
+  control_method: dmg
+  pool_query_timeout: 30
+container:
+  properties: rd_fac:2
+  control_method: daos
+  akey_size: 5
+  dkey_size: 5
+  data_size: 256
+testparams:
+  ranks:
+    rank0:
+      rank: 4
+  object_class: OC_RP_3G1

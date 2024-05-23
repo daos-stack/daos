@@ -1,0 +1,78 @@
+hosts:
+  test_servers: 3
+  test_clients: 1
+
+timeout: 2000
+daos_server:
+  pattern_timeout: 60
+
+server_config:
+  name: daos_server
+  crt_timeout: 60
+  engines_per_host: 2
+  engines:
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      log_mask: INFO
+      storage: auto
+      targets: 8
+      env_vars:
+        - DD_MASK=io,rebuild
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      log_mask: INFO
+      storage: auto
+      targets: 8
+      env_vars:
+        - DD_MASK=io,rebuild
+
+pool_size_ratio_80:
+  size: 80%
+  rebuild_timeout: 960
+pool_size_value:
+  size: 500G
+  rebuild_timeout: 240
+
+container:
+  type: POSIX
+  control_method: daos
+  properties: rd_fac:2
+container_wo_rf:
+  type: POSIX
+  control_method: daos
+
+ior: &ior_base
+  client_processes:
+    ppn: 4
+  flags: -k -v -w -W
+  api: DFS
+  # We wait for a few seconds before excluding a target. If the IOR finishes too
+  # quickly, the test will not work. We use -D (deadlineForStonewalling) 120, so the
+  # process ends in about 120 sec. Adjust the transfer_size - block_size combination
+  # based on the system so that it takes longer than the -D value.
+  transfer_size: 512K
+  sw_deadline: 120
+ior_wo_rf:
+  <<: *ior_base
+  # Total size is block_size * ppn.
+  block_size: 1G
+  dfs_oclass: SX
+  dfs_dir_oclass: SX
+ior_with_rp:
+  <<: *ior_base
+  block_size: 150G
+  dfs_oclass: RP_3GX
+  dfs_dir_oclass: RP_3GX
+ior_with_ec:
+  <<: *ior_base
+  block_size: 150G
+  dfs_oclass: EC_4P2GX
+  dfs_dir_oclass: EC_4P2GX

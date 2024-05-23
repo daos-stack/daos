@@ -1,21 +1,31 @@
 # Container Management
 
-DAOS containers (not to be confused with Linux containers) are datasets (or
-buckets if you are more familiar with cloud object stores) managed
-by the users. A container is the unit of snapshot and has a type. It can be a
-POSIX namespace, an HDF5 file or any other application-specific data model.
-The chapter explains how to manage a container, while the subsequent ones detail
-how to access a DAOS container from applications.
+DAOS containers are datasets managed by the users. Similarly to S3 buckets,
+a DAOS container is a collection of objects that can be presented to applications
+through different interfaces including POSIX I/O (files and directories),
+HDF5, SQL or any other data models of your choice.
 
-## Container Basic Operations
+A container belongs to a single pool and shares the space with other containers.
+It is identified by a label selected by the user and an immutable UUID allocated
+when the container is first created.
+
+The container is the unit of data management in DAOS and can be snapshotted or
+cloned.
+
+!!! warning
+    DAOS containers are storage containers and should not be confused with Linux
+    containers.
+
+## Container Basics
+
+Containers can be created, queried, relabeled, listed and destroyed through the
+`daos(1)` utility or native DAOS API.
 
 ### Creating a Container
 
-Containers can be created and destroyed through the `daos(1)` utility.
-provided to manage containers.
+To create and then query a container labeled `mycont` on a pool
+labeled `tank`:
 
-**To create and then query a container labeled `mycont` on a pool
-(labeled `tank`):**
 ```bash
 $ daos cont create tank --label mycont
   Container UUID : daefe12c-45d4-44f7-8e56-995d02549041
@@ -35,17 +45,20 @@ $ daos cont query tank mycont
   Snapshot Epochs            :
 ```
 
-The label can be up to 127 characters long and must only include
-alphanumeric characters, colon (':'), period ('.') or underscore ('\_').
+While a label is not mandatory, it is highly recommended. Like pools, container
+labels can be up to 127 characters long and must only include alphanumeric
+characters, colon (':'), period ('.'), hyphen ('-') or underscore ('\_').
+Labels that can be parsed as UUID are not allowed.
 
 The container type (i.e., POSIX or HDF5) can be passed via the --type option.
-As shown below, the pool UUID, container UUID, and container attributes can be
-stored in the extended attributes of a POSIX file or directory for convenience.
-Then subsequent invocations of the daos tools need to reference the path
-to the POSIX file or directory.
+
+For convenience, a container can also be identified by a path to a filesystem
+supporting extended attributes. In this case, the pool and container UUIDs
+are stored in an extended attribute of the target file or directory that can
+then be used in subsequent command invocations to identify the container.
 
 ```bash
-$ daos cont create tank --path /tmp/mycontainer --type=POSIX --oclass=SX
+$ daos cont create tank --label mycont --path /tmp/mycontainer --type POSIX --oclass=SX
   Container UUID : 30e5d364-62c9-4ddf-9284-1021359455f2
   Container Type : POSIX
 
@@ -64,9 +77,25 @@ $ daos cont query --path /tmp/mycontainer
   Chunk Size                 : 1.0 MiB
 ```
 
+By default, containers are created without data protection enabled. This can
+be modified by changing the redundancy factor (rf) property at creation time.
+To create a container that can support one engine failure, use a redundancy
+factor of 1 as follows:
+
+```bash
+$ daos cont create tank --label mycont1 --type POSIX --properties rd_fac:1
+  Container UUID : b396e2ca-2077-4908-9ff2-1af4b4b2fd4a
+  Container Label: mycont1
+  Container Type : unknown
+Successfully created container b396e2ca-2077-4908-9ff2-1af4b4b2fd4a
+```
+
+Please refer to the [redundancy factor property](#Redundancy_Factor)
+for more information.
+
 ### Listing Containers
 
-**To list all containers available in a pool:**
+To list all containers available in a pool:
 
 ```bash
 $ daos cont list tank
@@ -78,7 +107,7 @@ daefe12c-45d4-44f7-8e56-995d02549041 mycont
 
 ### Destroying a Container
 
-**To destroy a container:**
+To destroy a container:
 ```bash
 $ daos cont destroy tank mycont
 Successfully destroyed container mycont
@@ -87,18 +116,24 @@ $ daos cont destroy --path /tmp/mycontainer
 Successfully destroyed container 30e5d364-62c9-4ddf-9284-1021359455f2
 ```
 
+If the container is in use, the force option (i.e., --force or -f) must be added.
+Active users of a force-deleted container will fail with a bad handle error.
+
+!!! tip
+    It is orders of magniture faster to destroy a container compared to
+    punching/deleting each object individually.
+
 ## Container Properties
 
 Container properties are the main mechanism that one can use to control the
-behavior of container. This includes the type of middleware, whether some
+behavior of containers. This includes the type of middleware, whether some
 features like deduplication or checksum are enabled. Some properties are
 immutable after creation creation, while some others can be dynamically
 changed.
 
-### Querying Properties
+### Listing Properties
 
-The user-level administration `daos` utility may be used to query a
-container's properties. Refer to the manual page for full usage details.
+The `daos` utility may be used to list all container's properties as follows:
 
 ```bash
 $ daos cont get-prop tank mycont
@@ -113,7 +148,7 @@ Checksum Chunk Size   32 KiB
 Compression           off
 Deduplication         off
 Dedupe Threshold      4.0 KiB
-EC Cell Size          1.0 MiB
+EC Cell Size          64 kiB
 Encryption            off
 Group                 jlombard@
 Label                 mycont
@@ -121,7 +156,7 @@ Layout Type           unknown (0)
 Layout Version        1
 Max Snapshot          0
 Owner                 jlombard@
-Redundancy Factor     rf0
+Redundancy Factor     rd_fac0
 Redundancy Level      rank (1)
 Server Checksumming   off
 Health                HEALTHY
@@ -131,7 +166,7 @@ Access Control List   A::OWNER@:rwdtTaAo, A:G:GROUP@:rwtT
 Additionally, a container's properties may be retrieved using the
 libdaos API `daos_cont_query()` function. Refer to the file
 src/include/daos\_cont.h Doxygen comments and the online documentation
-available [here](https://daos-stack.github.io/html/).
+available [here](https://docs.daos.io/v2.6/doxygen/html/).
 
 ### Changing Properties
 
@@ -139,7 +174,7 @@ By default, a container will inherit a set of default value for each property.
 Those can be overridden at container creation time via the `--properties` option.
 
 ```bash
-$ daos cont create tank --label mycont2 --properties cksum:sha1,dedup:hash,rf:1
+$ daos cont create tank --label mycont2 --properties cksum:sha1,dedup:hash,rd_fac:1
   Container UUID : a6286ead-1952-4faa-bf87-00fc0f3785aa
   Container Label: mycont2
   Container Type : unknown
@@ -155,7 +190,7 @@ Checksum Chunk Size   32 KiB
 Compression           off
 Deduplication         hash
 Dedupe Threshold      4.0 KiB
-EC Cell Size          1.0 MiB
+EC Cell Size          64kiB
 Encryption            off
 Group                 jlombard@
 Label                 mycont2
@@ -163,7 +198,7 @@ Layout Type           unknown (0)
 Layout Version        1
 Max Snapshot          0
 Owner                 jlombard@
-Redundancy Factor     rf1
+Redundancy Factor     rd_fac1
 Redundancy Level      rank (1)
 Server Checksumming   off
 Health                HEALTHY
@@ -194,7 +229,7 @@ Checksum Chunk Size   32 KiB
 Compression           off
 Deduplication         hash
 Dedupe Threshold      4.0 KiB
-EC Cell Size          1.0 MiB
+EC Cell Size          64 kiB
 Encryption            off
 Group                 jlombard@
 Label                 mycont3
@@ -202,7 +237,7 @@ Layout Type           unknown (0)
 Layout Version        1
 Max Snapshot          0
 Owner                 jlombard@
-Redundancy Factor     rf1
+Redundancy Factor     rd_fac1
 Redundancy Level      rank (1)
 Server Checksumming   off
 Health                HEALTHY
@@ -211,41 +246,164 @@ Access Control List   A::OWNER@:rwdtTaAo, A:G:GROUP@:rwtT
 
 ### Property Values
 
-The table below summarizes the different container properties available.
+The table below summarizes the available container properties.
 
 | **Container Property**  | **Immutable**   | **Description** |
 | ------------------------| --------------- | ----------------|
-| label			  | No              | String associate with a containers. e.g., "Cat\_Pics" or "ResNet50\_training\_data".|
-| owner                   | Yes             | User acting as the owner of the container.|
+| label			  | No              | String associate with a containers. e.g., "Cat\_Pics" or "training\_data"|
+| owner                   | Yes             | User acting as the owner of the container|
 | group                   | Yes             | Group acting as the owner of the container|
-| layout\_type            | Yes             | The container type (POSIX, HDF5, ...)|
-| layout\_ver             | Yes             | A version of the layout that can be used by I/O middleware to handle interoperability.|
-| rf                      | Yes             | The redundancy factor that drives the minimal data protection required for objects stored in the container. e.g., RF1 means no data protection, RF3 only allows 3-way replication or erasure code N+2.|
-| rf\_lvl                 | Yes             | The fault domain level to use for data redundancy placement. This is used to determine object placement.|
-| ec\_cell                | Yes             | Erasure code cell size for erasure-coded objects.|
-| cksum                   | Yes             | Checksum off, or algorithm to use (adler32, crc[16,32,64] or sha[1,256,512]).|
-| cksum\_size             | Yes             | Checksum chunk size.|
-| srv\_cksum              | Yes             | Perform additional checksum verification on server (default: off).|
-| max\_snapshot           | No              | Impose a upper limit on number of snapshots to retain (default: 0, no limitation).|
-| acl                     | No              | Container access control list.|
-| compression             | Yes             | Whether online compression is enabled (off, lz4, deflate[1-4])|
-| dedup                   | Yes             | Inline deduplication off, hash based (hash) or using memory compare (memcmp)|
+| acl                     | No              | Container access control list|
+| layout\_type            | Yes             | Container type (e.g., POSIX, HDF5, ...)|
+| layout\_ver             | Yes             | Layout version to be used at the discretion of I/O middleware for interoperability|
+| rd\_fac                 | Yes             | Redundancy Factor which is the maximum number of simultaneous engine failures that objects can support without data loss|
+| rd\_lvl                 | Yes             | Redundancy Level which is the level in the fault domain hierarchy to use for object placement|
+| health                  | No              | Current state of the container|
+| alloc\_oid              | No              | Maximum allocated object ID by container allocator|
+| ec\_cell\_sz            | Yes             | Erasure code cell size for erasure-coded objects|
+| cksum                   | Yes             | Checksum off, or algorithm to use (adler32, crc[16,32,64] or sha[1,256,512])|
+| cksum\_size             | Yes             | Checksum Size determining the maximum extent size that a checksum can cover|
+| srv\_cksum              | Yes             | Whether to verify checksum on the server before writing data (default: off)|
+
+
+Moreover, the following properties have been added as placeholders, but are not
+fully supported yet:
+
+| **Container Property**  | **Immutable**   | **Description** |
+| ------------------------| --------------- | ----------------|
+| max\_snapshot           | No              | Impose a upper limit on number of snapshots to retain (default: 0, no limitation)|
+| compression             | Yes             | Online compression off, or algorithm to use (off, lz4, deflate[1-4])|
+| dedup                   | Yes             | Inline deduplication off, or algorithm to use (hash or memcmp)|
 | dedup\_threshold        | Yes             | Minimum I/O size to consider for deduplication|
 | encryption              | Yes             | Inline encryption off, or algorithm to use (XTS[128,256], CBC[128,192,256] or GCM[128,256])|
-| status                  | No              | Current state of the container|
-| alloc\_oid              | No              | Maximum allocated object ID by container allocator|
 
-Refer to the [Data Integrity](#Data-Integrity) and [Access Control Lists](#Access_Control_Lists)
-sections for more details on the checksum and access-related properties.
+Please refer to the next sections for more details on each property.
 
-Refer to the [Inline Deduplication](#Inline_Deduplication_\(Preview\)) section
-for details about additional properties for that preview feature that are not
-listed here.
+### Container Type
 
-While those properties are currently stored persistently with container
-metadata, many of them are still under development. The ability to modify some
-of these properties on an existing container will also be provided in a future
-release.
+A DAOS container type denotes a specific storage middleware, which implements
+its own data layout on top of the main DAOS API that is provided through `libdaos`.
+Container types are specified through the immutable `layout_type` container property.
+Within each container type, the `layout_version` property provides a mechanism for
+versioning - usage of this version number is determined by the respective middleware.
+
+Some container layouts are defined as part of the main DAOS project.
+The best-known example is the `POSIX` container type that is used to implement the
+[DAOS File System (DFS)](filesystem.md) layout with files and directories.
+Other container layouts are created by various user communities that are
+implementing their own domain-specific storage middleware on top of DAOS.
+
+The known DAOS container types are maintained as an enumerated list in the
+[`daos_prop.h`](https://github.com/daos-stack/daos/blob/master/src/include/daos_prop.h#L284)
+header file. The following container types are currently defined,
+and can be used with the `daos cont create --type` command option:
+
+| **Container Type** | **Description** |
+| ------------------ | --------------- |
+| UNKNOWN            | No container type was specified at container create time, or the specified container type is unknown. |
+| POSIX              | [DAOS Filesystem (DFS)](filesystem.md), also used with dfuse and by the [MPI-IO DAOS backend](mpi-io.md). |
+| HDF5               | [HDF5 DAOS VOL connector](hdf5.md), maintained by [The HDF Group](https://www.hdfgroup.org/?s=DAOS). |
+| PYTHON             | [PyDAOS](python.md) container format. |
+| SPARK              | A specific layout for [Apache Spark](spark.md) shuffle. |
+| DATABASE           | SQL Database, used by an experimental DAOS interface to MariaDB. |
+| ROOT               | ROOT/RNTuple format, maintained by [CERN](https://root.cern.ch/). |
+| SEISMIC            | DAOS Seismic Graph, aka SEG-Y, maintained by the [segy-daos](https://github.com/daos-stack/segy-daos) project. |
+| METEO              | Meteorology, aka Fields Database (FDB), maintained by [ECMWF](https://www.ecmwf.int/search/site/FDB). |
+
+To register a new DAOS container type (represented as an integer number and a
+corresponding `DAOS_PROP_CO_LAYOUT_*` mnemonic name for that integer in the
+`daos_prop.h` header), please get in touch with the DAOS engineering team.
+
+### Redundancy Factor
+
+Objects in a DAOS container may belong to different object classes and
+have different levels of data protection. While this model gives a lot of control
+to the users, it also requires carefully selecting a suitable class for each
+object. If objects with different data protection level are also stored in the
+same container, the user should also be prepared for the case where some objects
+might suffer from data loss after several cascading failures, while some others
+with higher level of data protection may not. This incurs extra complexity that
+not all I/O middleware necessarily wants to deal with.
+
+To lower the bar of adoption while still keeping the flexibility, two container
+properties have been introduced:
+
+- the redundancy factor (rd\_fac) that describes the number of concurrent engine
+  exclusions that objects in the container are protected against. The rd\_fac value
+  is an integer between 0 (no data protection) and 5 (support up to 5
+  simultaneous failures).
+- a `health` property representing whether any object content might have been
+  lost due to cascading engine failures. The value of this property can be
+  either `HEALTHY` (no data loss) or `UNCLEAN` (data might have been lost).
+
+The redundancy factor can be set at container creation time and cannot be
+modified after creation.
+
+```bash
+$ daos cont create tank --label mycont1 --type POSIX --properties rd_fac:1
+  Container UUID : b396e2ca-2077-4908-9ff2-1af4b4b2fd4a
+  Container Label: mycont1
+  Container Type : unknown
+Successfully created container b396e2ca-2077-4908-9ff2-1af4b4b2fd4a
+```
+
+It can be checked by listing the properties:
+
+```bash
+$ daos cont get-prop tank mycont1
+Properties for container mycont1
+Name                  Value
+----                  -----
+[...]
+Redundancy Factor     rd_fac1
+Redundancy Level      rank (1)
+Health                HEALTHY
+[...]
+```
+
+Only objects with data protection enabled can be stored in such a container.
+This includes replicated or erasure-coded objects. Attempts to open an
+object with a class that does not support data redundancy (e.g., SX)
+will fail.
+
+For redundancy factor 2, only objects with at least 3-way replication or erasure
+code with two parities or more can be stored in the container.
+
+As long as the number of simultaneous engine failures is below the redundancy
+factor, the container is reported as healthy. if not, then the container is
+marked as unclean and cannot be accessed.
+
+```bash
+$ daos cont get-prop tank mycont1
+Properties for container mycont1
+Name                  Value
+----                  -----
+[...]
+Redundancy Factor     rd_fac1
+Redundancy Level      rank (1)
+Health                UNCLEAN
+[...]
+```
+
+For instance, an attempt to mount with dfuse this POSIX container fails as
+follows:
+
+```bash
+$ dfuse --pool tank --container mycont1 -m /tmp/dfuse
+dfuse ERR  src/client/dfuse/dfuse_core.c:873 dfuse_cont_open(0x19b9b00) daos_cont_open() failed: DER_RF(-2031): 'Failures exceed RF'
+Failed to connect to container (5) Input/output error
+```
+
+If the excluded engines can be reintegrated in the pool by the administrator,
+then the container state will automatically switch back to healthy and can be
+accessed again.
+
+If the user is willing to access an unhealthy container (e.g., to recover data),
+the force flag can be passed on container open or the container state can be
+forced to healthy via `daos cont set-prop tank mycont1 --properties health:healthy`.
+
+The redundancy level (rd\_lvl) is another property that was introduced to
+specify the fault domain level to use for placement.
 
 ### Data Integrity
 
@@ -295,22 +453,75 @@ Server Checksumming   on
     Note that currently, once a container is created, its checksum configuration
     cannot be changed.
 
-### Inline Deduplication (Preview)
+### Erasure Code
+
+The DAOS erasure code implementation uses a fixed cell size that applies to all
+objects in the container.
+The cell size in DAOS is the size of a single data and parity fragment.
+By default, a container's `ec_cell_sz` property is inherited from the pool's
+default `ec_cell_sz`, which was 1MiB in DAOS 2.0 and has been reduced to
+64kiB in DAOS 2.2.  The container cell size can also be set at
+container creation time via the `--property` option:
+
+```bash
+$ daos cont create tank --label mycont5 --type POSIX --properties rd_fac:1,cell_size:131072
+  Container UUID : 90185799-0e22-4a0b-be9d-1a20900a35ee
+  Container Label: mycont5
+  Container Type : unknown
+Successfully created container 90185799-0e22-4a0b-be9d-1a20900a35ee
+```
+
+This will set an EC cell size of 128 KiB for all erasure-coded objects created in
+this container.
+
+DFS (POSIX) containers use a default `chunk_size` of 1MiB.
+This is the largest I/O request size that a DFS client will send to a storage target
+in a single request. The `chunk_size` can be displayed with the `daos cont query` command.
+When using Erasure Coding as the data protection mechanism, performance is best when
+the _stripe width_ of an EC stripe is either identical to the container's `chunk size`
+or an integer multiple of the _stripe width_ is equal to the container's `chunk_size`.
+For example:
+
+* With a DFS container chunk size of 1MiB, an `ec_cell_sz` of 128kiB is a perfect setting
+  for EC\_8P1GX and EC\_8P2GX: Eight EC cells of 128kiB exactly match the 1MiB chunk size.
+  It is also good for smaller erasure coding stripe widths like EC\_4P1GX and
+  EC\_4P2GX: Four EC cells of 128kiB are 512kiB, half of the 1MiB chunk size.
+  So a single DFS container chunk will fill two _full stripes_.
+
+* With a DFS container chunk size of 1MiB, an `ec_cell_sz` of 128kiB is **not** a good
+  fit for EC\_16P2GX and other more widely striped EC types: Sixteen EC cells of
+  128kiB are 2MiB, twice as big as the DFS container's chunk size.
+  This means that even the largest DFS client write operation results in a
+  _read-modify-write_ penalty, because it only fills **half** of an EC stripe.
+
+* With a DFS container chunk size of 1MiB, an `ec_cell_sz` of 64kiB is a perfect setting
+  for EC\_16P1GX and EC\_16P2GX: Sixteen EC cells of 64kiB exactly match the 1MiB chunk size.
+  Smaller EC stripe widths like EC\_8P2GX and EC\_4P1GX also work with this EC cell size,
+  which is the reason why 64kiB is the new DAOS 2.2 default for the `ec_cell_sz`.
+
+
+### Checksum Background Scrubbing
+A pool ULT can be configured to scan the VOS trees to discover silent data
+corruption proactively. (see data_integrity.md for more details). This can be
+disabled per container using the ```DAOS_PROP_CO_SCRUBBER_DISABLED``` container
+property.
+
+### Deduplication (Preview)
 
 Data deduplication (dedup) is a process that allows to eliminate duplicated
 data copies in order to decrease capacity requirements. DAOS has some initial
 support of inline dedup.
 
 When dedup is enabled, each DAOS server maintains a per-pool table indexing
-extents by their hash (i.e. checksum). Any new I/Os bigger than the
+extents by their hash (i.e., checksum). Any new I/Os bigger than the
 deduplication threshold will thus be looked up in this table to find out
 whether an existing extent with the same signature has already been stored.
 If an extent is found, then two options are provided:
 
 - Transferring the data from the client to the server and doing a memory compare
-  (i.e. memcmp) of the two extents to verify that they are indeed identical.
+  (i.e., memcmp) of the two extents to verify that they are indeed identical.
 - Trusting the hash function and skipping the data transfer. To minimize issue
-  with hash collision, a cryptographic hash function (i.e. SHA256) is used in
+  with hash collision, a cryptographic hash function (i.e., SHA256) is used in
   this case. The benefit of this approarch is that the data to be written does
   not need to be transferred to the server. Data processing is thus greatly
   accelerated.
@@ -396,7 +607,7 @@ Attributes for container mycont:
 ## Access Control Lists
 
 Client user and group access for containers is controlled by
-[Access Control Lists (ACLs)](https://daos-stack.github.io/overview/security/#access-control-lists).
+[Access Control Lists (ACLs)](https://docs.daos.io/v2.6/overview/security/#access-control-lists).
 
 Access-controlled container accesses include:
 
@@ -420,7 +631,7 @@ Access-controlled container accesses include:
 
 
 This is reflected in the set of supported
-[container permissions](https://daos-stack.github.io/overview/security/#permissions).
+[container permissions](https://docs.daos.io/v2.6/overview/security/#permissions).
 
 ### Pool vs. Container Permissions
 
@@ -446,18 +657,20 @@ permission in the container's ACL.
 To create a container labeled mycont in a pool labeled tank with a custom ACL:
 
 ```bash
-$ daos cont create <pool_label> --label <container_label> --acl-file=<path>
+$ export DAOS_POOL="tank"
+$ export DAOS_CONT="mycont"
+$ daos cont create $DAOS_POOL --label $DAOS_CONT --acl-file=<path>
 ```
 
 The ACL file format is detailed in the
-[security overview](https://daos-stack.github.io/overview/security/#acl-file).
+[security overview](https://docs.daos.io/v2.6/overview/security/#acl-file).
 
 ### Displaying ACL
 
 To view a container's ACL:
 
 ```bash
-$ daos cont get-acl <pool_label> <container_label>
+$ daos cont get-acl $DAOS_POOL $DAOS_CONT
 ```
 
 The output is in the same string format used in the ACL file during creation,
@@ -473,7 +686,7 @@ noted above for container creation.
 To replace a container's ACL with a new ACL:
 
 ```bash
-$ daos cont overwrite-acl <pool_label> <container_label> --acl-file=<path>
+$ daos cont overwrite-acl $DAOS_POOL $DAOS_CONT --acl-file=<path>
 ```
 
 #### Adding and Updating ACEs
@@ -481,13 +694,13 @@ $ daos cont overwrite-acl <pool_label> <container_label> --acl-file=<path>
 To add or update multiple entries in an existing container ACL:
 
 ```bash
-$ daos cont update-acl <pool_label> <container_label> --acl-file=<path>
+$ daos cont update-acl $DAOS_POOL $DAOS_CONT --acl-file=<path>
 ```
 
 To add or update a single entry in an existing container ACL:
 
 ```bash
-$ daos cont update-acl <pool_label> <container_label> --entry <ACE>
+$ daos cont update-acl $DAOS_POOL $DAOS_CONT --entry <ACE>
 ```
 
 If there is no existing entry for the principal in the ACL, the new entry is
@@ -499,11 +712,11 @@ is replaced with the new one.
 To delete an entry for a given principal in an existing container ACL:
 
 ```bash
-$ daos cont delete-acl <pool_label> <container_label> --principal=<principal>
+$ daos cont delete-acl $DAOS_POOL $DAOS_CONT --principal=<principal>
 ```
 
 The `principal` argument refers to the
-[principal](https://daos-stack.github.io/overview/security/#principal), or
+[principal](https://docs.daos.io/v2.6/overview/security/#principal), or
 identity, of the entry to be removed.
 
 For the delete operation, the `principal` argument must be formatted as follows:
@@ -539,7 +752,7 @@ The owner-user will always have the following implicit capabilities:
 
 Because the owner's special permissions are implicit, they do not need to be
 specified in the `OWNER@` entry. After
-[determining](https://daos-stack.github.io/overview/security/#enforcement)
+[determining](https://docs.daos.io/v2.6/overview/security/#enforcement)
 the user's privileges from the container ACL, DAOS checks whether the user
 requesting access is the owner-user. If so, DAOS grants the owner's
 implicit permissions to that user, in addition to any permissions granted by
@@ -551,29 +764,29 @@ explicitly granted by the `GROUP@` entry in the ACL.
 #### Setting Ownership at Creation
 
 The default owner user and group are the effective user and group of the user
-creating the container. However, a specific user and/or group may be specified
-at container creation time.
+creating the container. However, an owner-group may be specified at container
+creation time.
 
 ```bash
-$ daos cont create <pool_label> <container_label> --user=<owner-user> --group=<owner-group>
+$ daos cont create --group=<owner-group> $DAOS_POOL $DAOS_CONT
 ```
 
-The user and group names are case sensitive and must be formatted as
-[DAOS ACL user/group principals](https://daos-stack.github.io/overview/security/#principal).
+The group names are case sensitive and must be formatted as
+[DAOS ACL group principals](https://docs.daos.io/v2.6/overview/security/#principal).
 
 #### Changing Ownership
 
 To change the owner user:
 
 ```bash
-$ daos cont set-owner <pool_label> <container_label> --user=<owner-user>
+$ daos cont set-owner $DAOS_POOL $DAOS_CONT --user=<owner-user>
 ```
 
 To change the owner group:
 
 ```bash
-$ daos cont set-owner <pool_label> <container_label> --group=<owner-group>
+$ daos cont set-owner $DAOS_POOL $DAOS_CONT --group=<owner-group>
 ```
 
 The user and group names are case sensitive and must be formatted as
-[DAOS ACL user/group principals](https://daos-stack.github.io/overview/security/#principal).
+[DAOS ACL user/group principals](https://docs.daos.io/v2.6/overview/security/#principal).

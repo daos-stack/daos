@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,7 +19,7 @@ type (
 	// Backend defines a set of methods to be implemented by a Block Device backend.
 	Backend interface {
 		Prepare(storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error)
-		Reset(storage.BdevPrepareRequest) error
+		Reset(storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error)
 		Scan(storage.BdevScanRequest) (*storage.BdevScanResponse, error)
 		Format(storage.BdevFormatRequest) (*storage.BdevFormatResponse, error)
 		UpdateFirmware(pciAddr string, path string, slot int32) error
@@ -51,6 +51,7 @@ func NewProvider(log logging.Logger, backend Backend) *Provider {
 // Scan calls into the backend to discover NVMe components in the
 // system.
 func (p *Provider) Scan(req storage.BdevScanRequest) (resp *storage.BdevScanResponse, err error) {
+	p.log.Debugf("run bdev storage provider scan, req: %+v", req)
 	return p.backend.Scan(req)
 }
 
@@ -59,19 +60,18 @@ func (p *Provider) Scan(req storage.BdevScanRequest) (resp *storage.BdevScanResp
 // reset allocation of hugepages, otherwise rebind devices to user-space
 // driver compatible with SPDK and allocate hugeages.
 func (p *Provider) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
+	p.log.Debugf("run bdev storage provider prepare setup, req: %+v", req)
 	if req.Reset_ {
-		p.log.Debug("run bdev storage provider prepare reset")
-		return &storage.BdevPrepareResponse{}, p.backend.Reset(req)
+		return p.backend.Reset(req)
 	}
 
-	p.log.Debug("run bdev storage provider prepare setup")
 	return p.backend.Prepare(req)
 }
 
 // Format attempts to initialize NVMe devices for use by DAOS.
 // Note that this is a no-op for non-NVMe devices.
 func (p *Provider) Format(req storage.BdevFormatRequest) (*storage.BdevFormatResponse, error) {
-	if len(req.Properties.DeviceList) == 0 {
+	if req.Properties.DeviceList.Len() == 0 {
 		return nil, errors.New("empty DeviceList in FormatRequest")
 	}
 

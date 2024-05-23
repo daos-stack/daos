@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -33,6 +33,9 @@ struct rebuild_tgt_pool_tracker {
 	/** the current version being rebuilt, only used by leader */
 	uint32_t		rt_rebuild_ver;
 
+	/* rebuild generation, will increase for each re-schedule */
+	uint32_t		rt_rebuild_gen;
+
 	/** the current rebuild operation */
 	daos_rebuild_opc_t	rt_rebuild_op;
 
@@ -62,10 +65,7 @@ struct rebuild_tgt_pool_tracker {
 	 * can be go ahead to finish the rebuild.
 	 */
 	ABT_cond		rt_fini_cond;
-	/* Notify others the rebuild of this pool has been
-	 * done on this target.
-	 */
-	ABT_cond		rt_done_cond;
+
 	/* # to-be-rebuilt objs */
 	uint64_t		rt_reported_toberb_objs;
 	/* reported # rebuilt objs */
@@ -74,10 +74,23 @@ struct rebuild_tgt_pool_tracker {
 	uint64_t		rt_reported_size;
 	/* global stable epoch to use for rebuilding the data */
 	uint64_t		rt_stable_epoch;
+
+	/* Only used by reclaim job to discard those half-rebuild data */
+	uint64_t		rt_reclaim_epoch;
 	/* local rebuild epoch mainly to constrain the VOS aggregation
 	 * to make sure aggregation will not cross the epoch
 	 */
 	uint64_t		rt_rebuild_fence;
+
+	uint32_t		rt_leader_rank;
+
+	/* Global dtx resync version */
+	uint32_t		rt_global_dtx_resync_version;
+
+	ABT_cond		rt_global_dtx_wait_cond;
+	/* new layout version for upgrade rebuild */
+	uint32_t		rt_new_layout_ver;
+
 	unsigned int		rt_lead_puller_running:1,
 				rt_abort:1,
 				/* re-report #rebuilt cnt per master change */
@@ -90,6 +103,7 @@ struct rebuild_tgt_pool_tracker {
 
 struct rebuild_server_status {
 	d_rank_t	rank;
+	uint32_t	dtx_resync_version;
 	uint32_t	scan_done:1,
 			pull_done:1;
 };
@@ -106,22 +120,34 @@ struct rebuild_global_pool_tracker {
 	/* the pool uuid */
 	uuid_t		rgt_pool_uuid;
 
-	/** the current version being rebuilt */
-	uint32_t	rgt_rebuild_ver;
-
 	/** rebuild status for each server */
 	struct rebuild_server_status *rgt_servers;
 
+	/** the current version being rebuilt */
+	uint32_t	rgt_rebuild_ver;
+
+	/** global resync dtx version */
+	uint32_t	rgt_dtx_resync_version;
+
 	/** number of rgt_server_status */
 	uint32_t	rgt_servers_number;
+
+	uint32_t	rgt_rebuild_gen;
 
 	/* The term of the current rebuild leader */
 	uint64_t	rgt_leader_term;
 
 	uint64_t	rgt_time_start;
 
-	/* stable epoch of the rebuild */
+	/* Stable epoch of the rebuild, the minimum epoch from
+	 * all rebuilding targets
+	 */
 	uint64_t	rgt_stable_epoch;
+
+	/* reclaim epoch of the rebuild, which is used to discard
+	 * the half-rebuild data if rebuild fails
+	 */
+	uint64_t	rgt_reclaim_epoch;
 
 	ABT_mutex	rgt_lock;
 	/* The current rebuild is done on the leader */
@@ -129,8 +155,8 @@ struct rebuild_global_pool_tracker {
 
 	uint32_t	rgt_refcount;
 
+	uint32_t	rgt_opc;
 	unsigned int	rgt_abort:1,
-			rgt_notify_stable_epoch:1,
 			rgt_init_scan:1;
 };
 
@@ -149,7 +175,10 @@ struct rebuild_status_completed {
 /* Structure on all targets to track all pool rebuilding */
 struct rebuild_global {
 	/* Link rebuild_tgt_pool_tracker on all targets.
-	 * Only operated by stream 0, no need lock.
+	 * Can be inserted/deleted by system XS, be lookup by system XS or VOS target main XS.
+	 * Be protected by rg_ttl_rwlock -
+	 * system XS takes wrlock to insert/delete, VOS TGT XS takes rdlock to lookup,
+	 * no lock needed for system XS to lookup.
 	 */
 	d_list_t	rg_tgt_tracker_list;
 
@@ -174,6 +203,9 @@ struct rebuild_global {
 	 */
 	d_list_t	rg_queue_list;
 
+	/* rwlock to protect rg_tgt_tracker_list */
+	ABT_rwlock	rg_ttl_rwlock;
+
 	ABT_mutex	rg_lock;
 	ABT_cond	rg_stop_cond;
 	/* how many pools is being rebuilt */
@@ -190,8 +222,18 @@ struct rebuild_task {
 	uuid_t				dst_pool_uuid;
 	struct pool_target_id_list	dst_tgts;
 	daos_rebuild_opc_t		dst_rebuild_op;
+
+	/* Epoch to use for reclaim job for discarding the data
+	 * of half-rebuild/reintegrated job.
+	 */
+	daos_epoch_t			dst_reclaim_eph;
 	uint64_t			dst_schedule_time;
 	uint32_t			dst_map_ver;
+	uint32_t			dst_new_layout_version;
+	/* Once the task fail, it will use reclaim version to
+	 * reclaim those half-rebuild/reintegrated job.
+	 */
+	uint32_t			dst_reclaim_ver;
 };
 
 /* Per pool structure in TLS to check pool rebuild status
@@ -204,6 +246,8 @@ struct rebuild_pool_tls {
 	uint64_t	rebuild_pool_obj_count;
 	uint64_t	rebuild_pool_reclaim_obj_count;
 	unsigned int	rebuild_pool_ver;
+	uint32_t	rebuild_pool_gen;
+	uint64_t	rebuild_pool_leader_term;
 	int		rebuild_pool_status;
 	unsigned int	rebuild_pool_scanning:1,
 			rebuild_pool_scan_done:1;
@@ -241,18 +285,23 @@ struct rebuild_iv {
 	uint64_t	riv_leader_term;
 	uint64_t	riv_stable_epoch;
 	uint32_t	riv_seconds;
+	uint32_t	riv_dtx_resyc_version;
+	uint32_t	riv_global_dtx_resyc_version;
 	unsigned int	riv_rank;
 	unsigned int	riv_master_rank;
 	unsigned int	riv_ver;
+	unsigned int	riv_rebuild_gen;
 	uint32_t	riv_global_done:1,
 			riv_global_scan_done:1,
 			riv_scan_done:1,
 			riv_pull_done:1,
 			riv_sync:1;
 	int		riv_status;
+
 };
 
-#define DEFAULT_YIELD_FREQ	128
+#define SCAN_YIELD_FREQ		4096
+#define SCAN_OBJ_YIELD_CNT	128
 
 extern struct dss_module_key rebuild_module_key;
 static inline struct rebuild_tls *
@@ -263,9 +312,10 @@ rebuild_tls_get()
 
 void rpt_get(struct rebuild_tgt_pool_tracker *rpt);
 void rpt_put(struct rebuild_tgt_pool_tracker *rpt);
+void rpt_delete(struct rebuild_tgt_pool_tracker *rpt);
 
 struct rebuild_pool_tls *
-rebuild_pool_tls_lookup(uuid_t pool_uuid, unsigned int ver);
+rebuild_pool_tls_lookup(uuid_t pool_uuid, unsigned int ver, uint32_t gen);
 
 struct pool_map *rebuild_pool_map_get(struct ds_pool *pool);
 void rebuild_pool_map_put(struct pool_map *map);
@@ -292,15 +342,12 @@ rebuild_tgt_status_check_ult(void *arg);
 int
 rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt);
 
-int
-rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt);
-
 bool
 rebuild_status_match(struct rebuild_tgt_pool_tracker *rpt,
 		enum pool_comp_state states);
 
 bool
-is_current_tgt_unavail(struct rebuild_tgt_pool_tracker *rpt);
+is_rebuild_scanning_tgt(struct rebuild_tgt_pool_tracker *rpt);
 
 typedef int (*rebuild_obj_insert_cb_t)(struct rebuild_root *cont_root,
 				       uuid_t co_uuid, daos_unit_oid_t oid,
@@ -321,7 +368,7 @@ int
 rebuilt_btr_destroy(daos_handle_t btr_hdl);
 
 struct rebuild_tgt_pool_tracker *
-rpt_lookup(uuid_t pool_uuid, unsigned int ver);
+rpt_lookup(uuid_t pool_uuid, uint32_t opc, unsigned int ver, unsigned int gen);
 
 void
 rgt_get(struct rebuild_global_pool_tracker *rgt);
@@ -330,17 +377,20 @@ void
 rgt_put(struct rebuild_global_pool_tracker *rgt);
 
 struct rebuild_global_pool_tracker *
-rebuild_global_pool_tracker_lookup(const uuid_t pool_uuid, unsigned int ver);
+rebuild_global_pool_tracker_lookup(const uuid_t pool_uuid, unsigned int ver, unsigned int gen);
 
 int
 rebuild_global_status_update(struct rebuild_global_pool_tracker *master_rpt,
 			     struct rebuild_iv *iv);
-void
-rebuild_hang(void);
 
 int
 rebuild_notify_ras_start(uuid_t *pool, uint32_t map_ver, char *op_str);
 
 int
 rebuild_notify_ras_end(uuid_t *pool, uint32_t map_ver, char *op_str, int op_rc);
+
+void rebuild_leader_stop(const uuid_t pool_uuid, unsigned int version,
+			 uint32_t rebuild_gen, uint64_t term);
+int
+rebuild_obj_tree_destroy(daos_handle_t btr_hdl);
 #endif /* __REBUILD_INTERNAL_H_ */

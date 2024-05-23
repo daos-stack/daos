@@ -217,7 +217,7 @@ d_binheap_create(uint32_t feats, uint32_t count, void *priv,
 	rc = d_binheap_create_inplace(feats, count, priv, ops, bh_created);
 	if (rc != 0) {
 		D_ERROR("d_binheap_create() failed, " DF_RC "\n", DP_RC(rc));
-		D_FREE_PTR(bh_created);
+		D_FREE(bh_created);
 		return rc;
 	}
 
@@ -254,7 +254,6 @@ d_binheap_destroy_inplace(struct d_binheap *h)
 
 	if (n > 0) {
 		for (idx0 = 0; idx0 < DBH_SIZE && n > 0; idx0++) {
-
 			for (idx1 = 0; idx1 < DBH_SIZE && n > 0; idx1++) {
 				D_FREE(h->d_bh_nodes3[idx0][idx1]);
 				n -= DBH_SIZE;
@@ -280,15 +279,15 @@ d_binheap_destroy(struct d_binheap *h)
 	}
 
 	d_binheap_destroy_inplace(h);
-	D_FREE_PTR(h);
+	D_FREE(h);
 }
 
 /**
  * Obtains a double pointer to a heap node, given its index into the binary
  * tree.
  *
- * \param h [in]	The binary heap instance
- * \param idx [in]	The requested node's index
+ * \param[in] h		The binary heap instance
+ * \param[in] idx	The requested node's index
  *
  * \return		valid-pointer A double pointer to a heap pointer entry
  */
@@ -296,11 +295,11 @@ static struct d_binheap_node **
 d_binheap_pointer(struct d_binheap *h, uint32_t idx)
 {
 	if (idx < DBH_SIZE)
-		return &(h->d_bh_nodes1[idx]);
+		return &h->d_bh_nodes1[idx];
 
 	idx -= DBH_SIZE;
 	if (idx < DBH_SIZE * DBH_SIZE)
-		return &(h->d_bh_nodes2[idx >> DBH_SHIFT][idx & DBH_MASK]);
+		return &h->d_bh_nodes2[idx >> DBH_SHIFT][idx & DBH_MASK];
 
 	idx -= DBH_SIZE * DBH_SIZE;
 	return &(h->d_bh_nodes3[idx >> (2 * DBH_SHIFT)]
@@ -341,8 +340,8 @@ d_binheap_find(struct d_binheap *h, uint32_t idx)
 /**
  * Moves a node upwards, towards the root of the binary tree.
  *
- * \param h [in]	The heap
- * \param e [in]	The node
+ * \param[in] h		The heap
+ * \param[in] e		The node
  *
  * \return		1 the position of \a e in the tree was changed at least
  *			once;
@@ -387,8 +386,8 @@ d_binheap_bubble(struct d_binheap *h, struct d_binheap_node *e)
 /**
  * Moves a node downwards, towards the last level of the binary tree.
  *
- * \param h [IN]	The heap
- * \param e [IN]	The node
+ * \param[in] h		The heap
+ * \param[in] e		The node
  *
  * \return		1 The position of \a e in the tree was changed at least
  *			once;

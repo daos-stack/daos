@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,17 +10,77 @@
 extern "C" {
 #endif
 
+#include <sys/types.h>
+#include <inttypes.h>
+
+#include <daos_types.h>
+
+#define MAX_OBJ_CLASS_NAME_LEN       24
+
+#define MAX_NUM_GROUPS               ((1 << 16UL) - 1)
+#define OC_REDUN_SHIFT               24
+#define OBJ_CLASS_DEF(redun, grp_nr) ((redun << OC_REDUN_SHIFT) | grp_nr)
+
 /**
- * Predefined object classes
- * It describes schema of data distribution & protection.
+ * Define the object data redundancy method. Encoded over 8 bits in the object ID.
+ * The number of redundancy groups is encoded separately in the object metadata.
  */
-enum {
-	OC_UNKNOWN	= 0,
+enum daos_obj_redun {
+	OC_UNKNOWN = 0,
+
+	/**
+	 * No data protection, aka "single replica".
+	 */
+	OR_RP_1 = 1,
+
+	/**
+	 * Static N-way replicated object (OC_RP_N).
+	 * The number of redundancy group is hardcoded in the object metadata.
+	 */
+	OR_RP_2 = 8,
+	OR_RP_3,
+	OR_RP_4,
+	OR_RP_5,
+	OR_RP_6,
+	OR_RP_8,
+	OR_RP_12,
+	OR_RP_16,
+	OR_RP_24,
+	OR_RP_32,
+	OR_RP_48,
+	OR_RP_64,
+	OR_RP_128,
+
+	/**
+	 * N+K reed solomon erasure-coded object (OC_EC_NPK).
+	 * - the first number is data cells number within a redundancy group
+	 * - the number after P is parity cells number within a redundancy group
+	 * C_S1
+	 *
+	 * Examples:
+	 * - 2P1: 2+1 EC object
+	 * - 4P2: 4+2 EC object
+	 * - 8P2: 8+2 EC object
+	 * - 16P2: 16+2 EC object
+	 */
+	OR_RS_2P1 = 32,
+	OR_RS_2P2,
+	OR_RS_4P1,
+	OR_RS_4P2,
+	OR_RS_8P1,
+	OR_RS_8P2,
+	OR_RS_16P1,
+	OR_RS_16P2,
+
+	/*
+	 * Predefined object classes that can be used directly by the API user.
+	 * It describes schema of data distribution & protection.
+	 */
 	/**
 	 * Object classes with no data protection
 	 * NB: The first 50 IDs are reserved for backward compatibility
 	 */
-	OC_BACK_COMPAT	= 50,
+	OC_BACK_COMPAT = 50,
 	/** Single shard object */
 	OC_TINY,
 	/**
@@ -49,7 +109,7 @@ enum {
 	 * Tiny object protected by replication
 	 * This object class has one redundancy group
 	 */
-	OC_RP_TINY	= 60,
+	OC_RP_TINY = 60,
 	/**
 	 * Replicated object with small number of redundancy groups.
 	 * Number of redundancy groups of the class is chosen by DAOS
@@ -79,7 +139,7 @@ enum {
 	 * Tiny object protected by replication
 	 * This object class has one redundancy group
 	 */
-	OC_RP_SF_TINY	= 70,
+	OC_RP_SF_TINY = 70,
 	/**
 	 * (SF) Replicated object with small number of redundancy groups.
 	 * Number of redundancy groups of the class is chosen by DAOS
@@ -103,7 +163,7 @@ enum {
 	 * Replicated object class which is extremely scalable for fetch.
 	 * It has many replicas so it is very slow for update.
 	 */
-	OC_RP_XSF	= 80,
+	OC_RP_XSF = 80,
 
 	/**
 	 * Object classes protected by erasure code
@@ -112,7 +172,7 @@ enum {
 	 * Tiny object protected by EC
 	 * This object class has one redundancy group
 	 */
-	OC_EC_TINY	= 100,
+	OC_EC_TINY = 100,
 	/**
 	 * EC object with small number of redundancy groups.
 	 * Number of redundancy groups of the class is chosen by DAOS
@@ -131,7 +191,6 @@ enum {
 	 * based on the current size of the pool.
 	 */
 	OC_EC_MAX,
-
 	/**
 	 * Object classes with explicit layout
 	 */
@@ -141,30 +200,15 @@ enum {
 	 * S1 : shards=1, S2 means shards=2, ...
 	 * SX : spreading across all targets within the pool
 	 */
-	OC_S1		= 200,
-	OC_S2,
-	OC_S4,
-	OC_S6,
-	OC_S8,
-	OC_S12,
-	OC_S16,
-	OC_S24,
-	OC_S32,
-	OC_S48,
-	OC_S64,
-	OC_S96,
-	OC_S128,
-	OC_S192,
-	OC_S256,
-	OC_S384,
-	OC_S512,
-	OC_S768,
-	OC_S1K,
-	OC_S2K,
-	OC_S4K,
-	OC_S6K,
-	OC_S8K,
-	OC_SX,
+	OC_S1  = OBJ_CLASS_DEF(OR_RP_1, 1ULL),
+	OC_S2  = OBJ_CLASS_DEF(OR_RP_1, 2ULL),
+	OC_S4  = OBJ_CLASS_DEF(OR_RP_1, 4ULL),
+	OC_S6  = OBJ_CLASS_DEF(OR_RP_1, 6ULL),
+	OC_S8  = OBJ_CLASS_DEF(OR_RP_1, 8ULL),
+	OC_S12 = OBJ_CLASS_DEF(OR_RP_1, 12ULL),
+	OC_S16 = OBJ_CLASS_DEF(OR_RP_1, 16ULL),
+	OC_S32 = OBJ_CLASS_DEF(OR_RP_1, 32ULL),
+	OC_SX  = OBJ_CLASS_DEF(OR_RP_1, MAX_NUM_GROUPS),
 
 	/**
 	 * Replicated object with explicit layout
@@ -177,144 +221,69 @@ enum {
 	 * 8GX : 8 replicas, it spreads across all targets within the pool
 	 */
 	/** 2-way replicated object classes */
-	OC_RP_2G1	= 240,
-	OC_RP_2G2,
-	OC_RP_2G4,
-	OC_RP_2G6,
-	OC_RP_2G8,
-	OC_RP_2G12,
-	OC_RP_2G16,
-	OC_RP_2G24,
-	OC_RP_2G32,
-	OC_RP_2G48,
-	OC_RP_2G64,
-	OC_RP_2G96,
-	OC_RP_2G128,
-	OC_RP_2G192,
-	OC_RP_2G256,
-	OC_RP_2G384,
-	OC_RP_2G512,
-	OC_RP_2G768,
-	OC_RP_2G1K,
-	OC_RP_2G2K,
-	OC_RP_2G4K,
-	OC_RP_2G6K,
-	OC_RP_2G8K,
-	OC_RP_2GX,
-	OC_RP_2G3,
+	OC_RP_2G1  = OBJ_CLASS_DEF(OR_RP_2, 1ULL),
+	OC_RP_2G2  = OBJ_CLASS_DEF(OR_RP_2, 2ULL),
+	OC_RP_2G4  = OBJ_CLASS_DEF(OR_RP_2, 4ULL),
+	OC_RP_2G6  = OBJ_CLASS_DEF(OR_RP_2, 6ULL),
+	OC_RP_2G8  = OBJ_CLASS_DEF(OR_RP_2, 8ULL),
+	OC_RP_2G12 = OBJ_CLASS_DEF(OR_RP_2, 12ULL),
+	OC_RP_2G16 = OBJ_CLASS_DEF(OR_RP_2, 16ULL),
+	OC_RP_2G32 = OBJ_CLASS_DEF(OR_RP_2, 32ULL),
+	OC_RP_2GX  = OBJ_CLASS_DEF(OR_RP_2, MAX_NUM_GROUPS),
 
 	/** 3-way replicated object classes */
-	OC_RP_3G1	= 280,
-	OC_RP_3G2,
-	OC_RP_3G4,
-	OC_RP_3G6,
-	OC_RP_3G8,
-	OC_RP_3G12,
-	OC_RP_3G16,
-	OC_RP_3G24,
-	OC_RP_3G32,
-	OC_RP_3G48,
-	OC_RP_3G64,
-	OC_RP_3G96,
-	OC_RP_3G128,
-	OC_RP_3G192,
-	OC_RP_3G256,
-	OC_RP_3G384,
-	OC_RP_3G512,
-	OC_RP_3G768,
-	OC_RP_3G1K,
-	OC_RP_3G2K,
-	OC_RP_3G4K,
-	OC_RP_3G6K,
-	OC_RP_3G8K,
-	OC_RP_3GX,
+	OC_RP_3G1  = OBJ_CLASS_DEF(OR_RP_3, 1ULL),
+	OC_RP_3G2  = OBJ_CLASS_DEF(OR_RP_3, 2ULL),
+	OC_RP_3G4  = OBJ_CLASS_DEF(OR_RP_3, 4ULL),
+	OC_RP_3G6  = OBJ_CLASS_DEF(OR_RP_3, 6ULL),
+	OC_RP_3G8  = OBJ_CLASS_DEF(OR_RP_3, 8ULL),
+	OC_RP_3G12 = OBJ_CLASS_DEF(OR_RP_3, 12ULL),
+	OC_RP_3G16 = OBJ_CLASS_DEF(OR_RP_3, 16ULL),
+	OC_RP_3G32 = OBJ_CLASS_DEF(OR_RP_3, 32ULL),
+	OC_RP_3GX  = OBJ_CLASS_DEF(OR_RP_3, MAX_NUM_GROUPS),
 
 	/** 4-way replicated object classes */
-	OC_RP_4G1	= 320,
-	OC_RP_4G2,
-	OC_RP_4G4,
-	OC_RP_4G6,
-	OC_RP_4G8,
-	OC_RP_4G12,
-	OC_RP_4G16,
-	OC_RP_4G24,
-	OC_RP_4G32,
-	OC_RP_4G48,
-	OC_RP_4G64,
-	OC_RP_4G96,
-	OC_RP_4G128,
-	OC_RP_4G192,
-	OC_RP_4G256,
-	OC_RP_4G384,
-	OC_RP_4G512,
-	OC_RP_4G768,
-	OC_RP_4G1K,
-	OC_RP_4G2K,
-	OC_RP_4G4K,
-	OC_RP_4G6K,
-	OC_RP_4G8K,
-	OC_RP_4GX,
+	OC_RP_4G1  = OBJ_CLASS_DEF(OR_RP_4, 1ULL),
+	OC_RP_4G2  = OBJ_CLASS_DEF(OR_RP_4, 2ULL),
+	OC_RP_4G4  = OBJ_CLASS_DEF(OR_RP_4, 4ULL),
+	OC_RP_4G6  = OBJ_CLASS_DEF(OR_RP_4, 6ULL),
+	OC_RP_4G8  = OBJ_CLASS_DEF(OR_RP_4, 8ULL),
+	OC_RP_4G12 = OBJ_CLASS_DEF(OR_RP_4, 12ULL),
+	OC_RP_4G16 = OBJ_CLASS_DEF(OR_RP_4, 16ULL),
+	OC_RP_4G32 = OBJ_CLASS_DEF(OR_RP_4, 32ULL),
+	OC_RP_4GX  = OBJ_CLASS_DEF(OR_RP_4, MAX_NUM_GROUPS),
+
+	/** 5-way replicated object classes */
+	OC_RP_5G1  = OBJ_CLASS_DEF(OR_RP_5, 1ULL),
+	OC_RP_5G2  = OBJ_CLASS_DEF(OR_RP_5, 2ULL),
+	OC_RP_5G4  = OBJ_CLASS_DEF(OR_RP_5, 4ULL),
+	OC_RP_5G6  = OBJ_CLASS_DEF(OR_RP_5, 6ULL),
+	OC_RP_5G8  = OBJ_CLASS_DEF(OR_RP_5, 8ULL),
+	OC_RP_5G12 = OBJ_CLASS_DEF(OR_RP_5, 12ULL),
+	OC_RP_5G16 = OBJ_CLASS_DEF(OR_RP_5, 16ULL),
+	OC_RP_5G32 = OBJ_CLASS_DEF(OR_RP_5, 32ULL),
+	OC_RP_5GX  = OBJ_CLASS_DEF(OR_RP_5, MAX_NUM_GROUPS),
 
 	/** 6-way replicated object classes */
-	OC_RP_6G1	= 360,
-	OC_RP_6G2,
-	OC_RP_6G4,
-	OC_RP_6G6,
-	OC_RP_6G8,
-	OC_RP_6G12,
-	OC_RP_6G16,
-	OC_RP_6G24,
-	OC_RP_6G32,
-	OC_RP_6G48,
-	OC_RP_6G64,
-	OC_RP_6G96,
-	OC_RP_6G128,
-	OC_RP_6G192,
-	OC_RP_6G256,
-	OC_RP_6G384,
-	OC_RP_6G512,
-	OC_RP_6G768,
-	OC_RP_6G1K,
-	OC_RP_6G2K,
-	OC_RP_6G4K,
-	OC_RP_6G6K,
-	OC_RP_6G8K,
-	OC_RP_6GX,
-
-	/** 8-way replicated object classes */
-	OC_RP_8G1	= 400,
-	OC_RP_8G2,
-	OC_RP_8G4,
-	OC_RP_8G6,
-	OC_RP_8G8,
-	OC_RP_8G12,
-	OC_RP_8G16,
-	OC_RP_8G24,
-	OC_RP_8G32,
-	OC_RP_8G48,
-	OC_RP_8G64,
-	OC_RP_8G96,
-	OC_RP_8G128,
-	OC_RP_8G192,
-	OC_RP_8G256,
-	OC_RP_8G384,
-	OC_RP_8G512,
-	OC_RP_8G768,
-	OC_RP_8G1K,
-	OC_RP_8G2K,
-	OC_RP_8G4K,
-	OC_RP_8G6K,
-	OC_RP_8G8K,
-	OC_RP_8GX,
+	OC_RP_6G1  = OBJ_CLASS_DEF(OR_RP_6, 1ULL),
+	OC_RP_6G2  = OBJ_CLASS_DEF(OR_RP_6, 2ULL),
+	OC_RP_6G4  = OBJ_CLASS_DEF(OR_RP_6, 4ULL),
+	OC_RP_6G6  = OBJ_CLASS_DEF(OR_RP_6, 6ULL),
+	OC_RP_6G8  = OBJ_CLASS_DEF(OR_RP_6, 8ULL),
+	OC_RP_6G12 = OBJ_CLASS_DEF(OR_RP_6, 12ULL),
+	OC_RP_6G16 = OBJ_CLASS_DEF(OR_RP_6, 16ULL),
+	OC_RP_6G32 = OBJ_CLASS_DEF(OR_RP_6, 32ULL),
+	OC_RP_6GX  = OBJ_CLASS_DEF(OR_RP_6, MAX_NUM_GROUPS),
 
 	/* OC_XSF will map to one of these */
-	OC_RP_12G1	= 440,
-	OC_RP_16G1,
-	OC_RP_24G1,
-	OC_RP_32G1,
-	OC_RP_48G1,
-	OC_RP_64G1,
-	OC_RP_128G1,
+	OC_RP_12G1  = OBJ_CLASS_DEF(OR_RP_12, 1ULL),
+	OC_RP_16G1  = OBJ_CLASS_DEF(OR_RP_16, 1ULL),
+	OC_RP_24G1  = OBJ_CLASS_DEF(OR_RP_24, 1ULL),
+	OC_RP_32G1  = OBJ_CLASS_DEF(OR_RP_32, 1ULL),
+	OC_RP_48G1  = OBJ_CLASS_DEF(OR_RP_48, 1ULL),
+	OC_RP_64G1  = OBJ_CLASS_DEF(OR_RP_64, 1ULL),
+	OC_RP_128G1 = OBJ_CLASS_DEF(OR_RP_128, 1ULL),
+
 	/**
 	 * Erasure coded object with explicit layout
 	 * - the first number is data cells number within a redundancy group
@@ -328,215 +297,96 @@ enum {
 	 * - 16P2GX: 16+2 EC object spreads across all targets within the pool
 	 */
 	/** EC 2+1 object classes */
-	OC_EC_2P1G1	= 500,
-	OC_EC_2P1G2,
-	OC_EC_2P1G4,
-	OC_EC_2P1G6,
-	OC_EC_2P1G8,
-	OC_EC_2P1G12,
-	OC_EC_2P1G16,
-	OC_EC_2P1G24,
-	OC_EC_2P1G32,
-	OC_EC_2P1G48,
-	OC_EC_2P1G64,
-	OC_EC_2P1G96,
-	OC_EC_2P1G128,
-	OC_EC_2P1G192,
-	OC_EC_2P1G256,
-	OC_EC_2P1G384,
-	OC_EC_2P1G512,
-	OC_EC_2P1G768,
-	OC_EC_2P1G1K,
-	OC_EC_2P1G2K,
-	OC_EC_2P1G4K,
-	OC_EC_2P1G6K,
-	OC_EC_2P1G8K,
-	OC_EC_2P1GX,
+	OC_EC_2P1G1  = OBJ_CLASS_DEF(OR_RS_2P1, 1ULL),
+	OC_EC_2P1G2  = OBJ_CLASS_DEF(OR_RS_2P1, 2ULL),
+	OC_EC_2P1G4  = OBJ_CLASS_DEF(OR_RS_2P1, 4ULL),
+	OC_EC_2P1G6  = OBJ_CLASS_DEF(OR_RS_2P1, 6ULL),
+	OC_EC_2P1G8  = OBJ_CLASS_DEF(OR_RS_2P1, 8ULL),
+	OC_EC_2P1G12 = OBJ_CLASS_DEF(OR_RS_2P1, 12ULL),
+	OC_EC_2P1G16 = OBJ_CLASS_DEF(OR_RS_2P1, 16ULL),
+	OC_EC_2P1G32 = OBJ_CLASS_DEF(OR_RS_2P1, 32ULL),
+	OC_EC_2P1GX  = OBJ_CLASS_DEF(OR_RS_2P1, MAX_NUM_GROUPS),
 
 	/** EC 2+2 object classes */
-	OC_EC_2P2G1	= 540,
-	OC_EC_2P2G2,
-	OC_EC_2P2G4,
-	OC_EC_2P2G6,
-	OC_EC_2P2G8,
-	OC_EC_2P2G12,
-	OC_EC_2P2G16,
-	OC_EC_2P2G24,
-	OC_EC_2P2G32,
-	OC_EC_2P2G48,
-	OC_EC_2P2G64,
-	OC_EC_2P2G96,
-	OC_EC_2P2G128,
-	OC_EC_2P2G192,
-	OC_EC_2P2G256,
-	OC_EC_2P2G384,
-	OC_EC_2P2G512,
-	OC_EC_2P2G768,
-	OC_EC_2P2G1K,
-	OC_EC_2P2G2K,
-	OC_EC_2P2G4K,
-	OC_EC_2P2G6K,
-	OC_EC_2P2G8K,
-	OC_EC_2P2GX,
+	OC_EC_2P2G1  = OBJ_CLASS_DEF(OR_RS_2P2, 1ULL),
+	OC_EC_2P2G2  = OBJ_CLASS_DEF(OR_RS_2P2, 2ULL),
+	OC_EC_2P2G4  = OBJ_CLASS_DEF(OR_RS_2P2, 4ULL),
+	OC_EC_2P2G6  = OBJ_CLASS_DEF(OR_RS_2P2, 6ULL),
+	OC_EC_2P2G8  = OBJ_CLASS_DEF(OR_RS_2P2, 8ULL),
+	OC_EC_2P2G12 = OBJ_CLASS_DEF(OR_RS_2P2, 12ULL),
+	OC_EC_2P2G16 = OBJ_CLASS_DEF(OR_RS_2P2, 16ULL),
+	OC_EC_2P2G32 = OBJ_CLASS_DEF(OR_RS_2P2, 32ULL),
+	OC_EC_2P2GX  = OBJ_CLASS_DEF(OR_RS_2P2, MAX_NUM_GROUPS),
 
 	/** EC 4+1 object classes */
-	OC_EC_4P1G1	= 580,
-	OC_EC_4P1G2,
-	OC_EC_4P1G4,
-	OC_EC_4P1G6,
-	OC_EC_4P1G8,
-	OC_EC_4P1G12,
-	OC_EC_4P1G16,
-	OC_EC_4P1G24,
-	OC_EC_4P1G32,
-	OC_EC_4P1G48,
-	OC_EC_4P1G64,
-	OC_EC_4P1G96,
-	OC_EC_4P1G128,
-	OC_EC_4P1G192,
-	OC_EC_4P1G256,
-	OC_EC_4P1G384,
-	OC_EC_4P1G512,
-	OC_EC_4P1G768,
-	OC_EC_4P1G1K,
-	OC_EC_4P1G2K,
-	OC_EC_4P1G4K,
-	OC_EC_4P1G6K,
-	OC_EC_4P1G8K,
-	OC_EC_4P1GX,
+	OC_EC_4P1G1  = OBJ_CLASS_DEF(OR_RS_4P1, 1ULL),
+	OC_EC_4P1G2  = OBJ_CLASS_DEF(OR_RS_4P1, 2ULL),
+	OC_EC_4P1G4  = OBJ_CLASS_DEF(OR_RS_4P1, 4ULL),
+	OC_EC_4P1G6  = OBJ_CLASS_DEF(OR_RS_4P1, 6ULL),
+	OC_EC_4P1G8  = OBJ_CLASS_DEF(OR_RS_4P1, 8ULL),
+	OC_EC_4P1G12 = OBJ_CLASS_DEF(OR_RS_4P1, 12ULL),
+	OC_EC_4P1G16 = OBJ_CLASS_DEF(OR_RS_4P1, 16ULL),
+	OC_EC_4P1G32 = OBJ_CLASS_DEF(OR_RS_4P1, 32ULL),
+	OC_EC_4P1GX  = OBJ_CLASS_DEF(OR_RS_4P1, MAX_NUM_GROUPS),
 
 	/** EC 4+2 object classes */
-	OC_EC_4P2G1	= 620,
-	OC_EC_4P2G2,
-	OC_EC_4P2G4,
-	OC_EC_4P2G6,
-	OC_EC_4P2G8,
-	OC_EC_4P2G12,
-	OC_EC_4P2G16,
-	OC_EC_4P2G24,
-	OC_EC_4P2G32,
-	OC_EC_4P2G48,
-	OC_EC_4P2G64,
-	OC_EC_4P2G96,
-	OC_EC_4P2G128,
-	OC_EC_4P2G192,
-	OC_EC_4P2G256,
-	OC_EC_4P2G384,
-	OC_EC_4P2G512,
-	OC_EC_4P2G768,
-	OC_EC_4P2G1K,
-	OC_EC_4P2G2K,
-	OC_EC_4P2G4K,
-	OC_EC_4P2G6K,
-	OC_EC_4P2G8K,
-	OC_EC_4P2GX,
+	OC_EC_4P2G1  = OBJ_CLASS_DEF(OR_RS_4P2, 1ULL),
+	OC_EC_4P2G2  = OBJ_CLASS_DEF(OR_RS_4P2, 2ULL),
+	OC_EC_4P2G4  = OBJ_CLASS_DEF(OR_RS_4P2, 4ULL),
+	OC_EC_4P2G6  = OBJ_CLASS_DEF(OR_RS_4P2, 6ULL),
+	OC_EC_4P2G8  = OBJ_CLASS_DEF(OR_RS_4P2, 8ULL),
+	OC_EC_4P2G12 = OBJ_CLASS_DEF(OR_RS_4P2, 12ULL),
+	OC_EC_4P2G16 = OBJ_CLASS_DEF(OR_RS_4P2, 16ULL),
+	OC_EC_4P2G32 = OBJ_CLASS_DEF(OR_RS_4P2, 32ULL),
+	OC_EC_4P2GX  = OBJ_CLASS_DEF(OR_RS_4P2, MAX_NUM_GROUPS),
 
 	/** EC 8+1 object classes */
-	OC_EC_8P1G1	= 660,
-	OC_EC_8P1G2,
-	OC_EC_8P1G4,
-	OC_EC_8P1G6,
-	OC_EC_8P1G8,
-	OC_EC_8P1G12,
-	OC_EC_8P1G16,
-	OC_EC_8P1G24,
-	OC_EC_8P1G32,
-	OC_EC_8P1G48,
-	OC_EC_8P1G64,
-	OC_EC_8P1G96,
-	OC_EC_8P1G128,
-	OC_EC_8P1G192,
-	OC_EC_8P1G256,
-	OC_EC_8P1G384,
-	OC_EC_8P1G512,
-	OC_EC_8P1G768,
-	OC_EC_8P1G1K,
-	OC_EC_8P1G2K,
-	OC_EC_8P1G4K,
-	OC_EC_8P1G6K,
-	OC_EC_8P1G8K,
-	OC_EC_8P1GX,
+	OC_EC_8P1G1  = OBJ_CLASS_DEF(OR_RS_8P1, 1ULL),
+	OC_EC_8P1G2  = OBJ_CLASS_DEF(OR_RS_8P1, 2ULL),
+	OC_EC_8P1G4  = OBJ_CLASS_DEF(OR_RS_8P1, 4ULL),
+	OC_EC_8P1G6  = OBJ_CLASS_DEF(OR_RS_8P1, 6ULL),
+	OC_EC_8P1G8  = OBJ_CLASS_DEF(OR_RS_8P1, 8ULL),
+	OC_EC_8P1G12 = OBJ_CLASS_DEF(OR_RS_8P1, 12ULL),
+	OC_EC_8P1G16 = OBJ_CLASS_DEF(OR_RS_8P1, 16ULL),
+	OC_EC_8P1G32 = OBJ_CLASS_DEF(OR_RS_8P1, 32ULL),
+	OC_EC_8P1GX  = OBJ_CLASS_DEF(OR_RS_8P1, MAX_NUM_GROUPS),
 
 	/** EC 8+2 object classes */
-	OC_EC_8P2G1	= 700,
-	OC_EC_8P2G2,
-	OC_EC_8P2G4,
-	OC_EC_8P2G6,
-	OC_EC_8P2G8,
-	OC_EC_8P2G12,
-	OC_EC_8P2G16,
-	OC_EC_8P2G24,
-	OC_EC_8P2G32,
-	OC_EC_8P2G48,
-	OC_EC_8P2G64,
-	OC_EC_8P2G96,
-	OC_EC_8P2G128,
-	OC_EC_8P2G192,
-	OC_EC_8P2G256,
-	OC_EC_8P2G384,
-	OC_EC_8P2G512,
-	OC_EC_8P2G768,
-	OC_EC_8P2G1K,
-	OC_EC_8P2G2K,
-	OC_EC_8P2G4K,
-	OC_EC_8P2G6K,
-	OC_EC_8P2G8K,
-	OC_EC_8P2GX,
+	OC_EC_8P2G1  = OBJ_CLASS_DEF(OR_RS_8P2, 1ULL),
+	OC_EC_8P2G2  = OBJ_CLASS_DEF(OR_RS_8P2, 2ULL),
+	OC_EC_8P2G4  = OBJ_CLASS_DEF(OR_RS_8P2, 4ULL),
+	OC_EC_8P2G6  = OBJ_CLASS_DEF(OR_RS_8P2, 6ULL),
+	OC_EC_8P2G8  = OBJ_CLASS_DEF(OR_RS_8P2, 8ULL),
+	OC_EC_8P2G12 = OBJ_CLASS_DEF(OR_RS_8P2, 12ULL),
+	OC_EC_8P2G16 = OBJ_CLASS_DEF(OR_RS_8P2, 16ULL),
+	OC_EC_8P2G32 = OBJ_CLASS_DEF(OR_RS_8P2, 32ULL),
+	OC_EC_8P2GX  = OBJ_CLASS_DEF(OR_RS_8P2, MAX_NUM_GROUPS),
 
 	/** EC 16+1 object classes */
-	OC_EC_16P1G1	= 740,
-	OC_EC_16P1G2,
-	OC_EC_16P1G4,
-	OC_EC_16P1G6,
-	OC_EC_16P1G8,
-	OC_EC_16P1G12,
-	OC_EC_16P1G16,
-	OC_EC_16P1G24,
-	OC_EC_16P1G32,
-	OC_EC_16P1G48,
-	OC_EC_16P1G64,
-	OC_EC_16P1G96,
-	OC_EC_16P1G128,
-	OC_EC_16P1G192,
-	OC_EC_16P1G256,
-	OC_EC_16P1G384,
-	OC_EC_16P1G512,
-	OC_EC_16P1G768,
-	OC_EC_16P1G1K,
-	OC_EC_16P1G2K,
-	OC_EC_16P1G4K,
-	OC_EC_16P1G6K,
-	OC_EC_16P1G8K,
-	OC_EC_16P1GX,
+	OC_EC_16P1G1  = OBJ_CLASS_DEF(OR_RS_16P1, 1ULL),
+	OC_EC_16P1G2  = OBJ_CLASS_DEF(OR_RS_16P1, 2ULL),
+	OC_EC_16P1G4  = OBJ_CLASS_DEF(OR_RS_16P1, 4ULL),
+	OC_EC_16P1G6  = OBJ_CLASS_DEF(OR_RS_16P1, 6ULL),
+	OC_EC_16P1G8  = OBJ_CLASS_DEF(OR_RS_16P1, 8ULL),
+	OC_EC_16P1G12 = OBJ_CLASS_DEF(OR_RS_16P1, 12ULL),
+	OC_EC_16P1G16 = OBJ_CLASS_DEF(OR_RS_16P1, 16ULL),
+	OC_EC_16P1G32 = OBJ_CLASS_DEF(OR_RS_16P1, 32ULL),
+	OC_EC_16P1GX  = OBJ_CLASS_DEF(OR_RS_16P1, MAX_NUM_GROUPS),
 
 	/** EC 16+2 object classes */
-	OC_EC_16P2G1	= 780,
-	OC_EC_16P2G2,
-	OC_EC_16P2G4,
-	OC_EC_16P2G6,
-	OC_EC_16P2G8,
-	OC_EC_16P2G12,
-	OC_EC_16P2G16,
-	OC_EC_16P2G24,
-	OC_EC_16P2G32,
-	OC_EC_16P2G48,
-	OC_EC_16P2G64,
-	OC_EC_16P2G96,
-	OC_EC_16P2G128,
-	OC_EC_16P2G192,
-	OC_EC_16P2G256,
-	OC_EC_16P2G384,
-	OC_EC_16P2G512,
-	OC_EC_16P2G768,
-	OC_EC_16P2G1K,
-	OC_EC_16P2G2K,
-	OC_EC_16P2G4K,
-	OC_EC_16P2G6K,
-	OC_EC_16P2G8K,
-	OC_EC_16P2GX,
+	OC_EC_16P2G1  = OBJ_CLASS_DEF(OR_RS_16P2, 1ULL),
+	OC_EC_16P2G2  = OBJ_CLASS_DEF(OR_RS_16P2, 2ULL),
+	OC_EC_16P2G4  = OBJ_CLASS_DEF(OR_RS_16P2, 4ULL),
+	OC_EC_16P2G6  = OBJ_CLASS_DEF(OR_RS_16P2, 6ULL),
+	OC_EC_16P2G8  = OBJ_CLASS_DEF(OR_RS_16P2, 8ULL),
+	OC_EC_16P2G12 = OBJ_CLASS_DEF(OR_RS_16P2, 12ULL),
+	OC_EC_16P2G16 = OBJ_CLASS_DEF(OR_RS_16P2, 16ULL),
+	OC_EC_16P2G32 = OBJ_CLASS_DEF(OR_RS_16P2, 32ULL),
+	OC_EC_16P2GX  = OBJ_CLASS_DEF(OR_RS_16P2, MAX_NUM_GROUPS),
 
 	/** Class ID equal or higher than this is reserved */
-	OC_RESERVED		= (1U << 10),
+	OC_RESERVED = 1 << 30,
+
 };
 
 enum daos_obj_schema {
@@ -561,6 +411,7 @@ struct daos_oclass_attr {
 	unsigned int			 ca_resil_degree;
 	/** Initial # redundancy group, unnecessary for some schemas */
 	unsigned int			 ca_grp_nr;
+	/** replication or erasure coding attributes based on #ca_resil */
 	union {
 		/** Replication attributes */
 		struct daos_rp_attr {
@@ -584,11 +435,9 @@ struct daos_oclass_attr {
 };
 
 /** object class ID */
-typedef uint16_t		daos_oclass_id_t;
+typedef uint32_t		daos_oclass_id_t;
 /** object class hints */
 typedef uint16_t		daos_oclass_hints_t;
-/** object feature bits */
-typedef uint16_t		daos_ofeat_t;
 
 /** List of object classes, used for class enumeration */
 struct daos_oclass_list {
@@ -618,9 +467,9 @@ daos_oclass_name2id(const char *name);
  * \param[in]	size	length in bytes of str buffer.
  * \param[out]	str	buffer to get all registered oclass names
  *
- * \return		>= 0 on success and required length of str, -1 if error.
+ * \return		>= 0 on success and required length of str, < 0 if error.
  */
-size_t
+ssize_t
 daos_oclass_names_list(size_t size, char *str);
 
 /**

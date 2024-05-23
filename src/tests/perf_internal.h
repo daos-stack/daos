@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,8 +10,6 @@
 #include <daos/common.h>
 #include <daos/dts.h>
 
-/* unused object class to identify VOS (storage only) test mode */
-#define DAOS_OC_RAW	(0xBEE)
 #define RANK_ZERO	(0)
 #define STRIDE_MIN	(4) /* Should be changed with updating NB places */
 
@@ -34,13 +32,21 @@ struct pf_param {
 	int		pa_iteration;
 	/* output parameter */
 	double		pa_duration;
+	/** Subset of objects to write */
+	int		pa_obj_nr;
+	/** Subset of dkeys to write */
+	int		pa_dkey_nr;
+	/** Subset of akeys to write */
+	int		pa_akey_nr;
+	/** Subset of recx to write */
+	int		pa_recx_nr;
 	union {
 		/* private parameter for iteration */
 		struct {
-			/* nested iterator */
-			bool	nested;
 			/* visible iteration */
 			bool	visible;
+			/* recursive iteration */
+			bool    recurse;
 		} pa_iter;
 		/* private parameter for update, fetch and verify */
 		struct {
@@ -53,6 +59,12 @@ struct pf_param {
 			/* dkey flag */
 			bool	dkey_flag;
 		} pa_rw;
+		struct {
+			/* full scan */
+			bool	full_scan;
+			/* Force merge */
+			bool	force_merge;
+		} pa_agg;
 	};
 };
 
@@ -146,8 +158,6 @@ pf_class2name(int obj_class)
 	switch (obj_class) {
 	default:
 		return "unknown";
-	case DAOS_OC_RAW:
-		return "VOS (storage only)";
 	case DAOS_OC_ECHO_TINY_RW:
 		return "ECHO TINY (network only, non-replica)";
 	case DAOS_OC_ECHO_R2S_RW:
@@ -214,5 +224,8 @@ int
 perf_alloc_keys(void);
 void
 perf_setup_keys(void);
+
+/** Add extern for vos internal function */
+void gc_wait(void);
 
 #endif /* __PERF_INTERNAL_H__ */

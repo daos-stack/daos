@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -299,14 +299,14 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 	rc = attr_bulk_transfer(rpc, CRT_BULK_PUT, local_bulk, remote_bulk,
 				0, key_length, count * sizeof(*sizes));
 	if (rc != 0)
-		goto out_iovs;
+		goto destroy_bulk;
 
 	/* sizes have been sent back, so if none of attrs exist, just stop here
 	 * and return -DER_NONEXIST
 	 */
 	if (nonexist == count) {
 		rc = -DER_NONEXIST;
-		goto out_iovs;
+		goto destroy_bulk;
 	}
 
 	local_offset = iovs[0].iov_buf_len;
@@ -320,15 +320,14 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 					remote_bulk, local_offset,
 					remote_offset, size);
 		if (rc != 0)
-			goto out_iovs;
+			goto destroy_bulk;
 
 		local_offset += sgl.sg_iovs[i].iov_buf_len;
 		remote_offset += sgl.sg_iovs[i].iov_buf_len;
 	}
 
+destroy_bulk:
 	crt_bulk_free(local_bulk);
-	if (rc != 0)
-		goto out_iovs;
 
 out_iovs:
 	for (i = 1; i <= new_index; i++)

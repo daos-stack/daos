@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,30 +15,72 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 )
 
-// ScmState represents the probed state of SCM modules on the system.
+// ScmState represents the probed state of PMem modules on the system.
+//
 //go:generate stringer -type=ScmState
 type ScmState int
 
 const (
 	// ScmStateUnknown represents the default (unknown) state.
 	ScmStateUnknown ScmState = iota
-	// ScmStateNoRegions indicates that SCM modules exist, but
-	// no regions have been created.
-	ScmStateNoRegions
-	// ScmStateFreeCapacity indicates that SCM modules exist with
-	// configured regions that have available capacity.
-	ScmStateFreeCapacity
-	// ScmStateNoCapacity indicates that SCM modules exist with
-	// configured regions but not available capacity.
-	ScmStateNoCapacity
+	// ScmNoRegions indicates that PMem modules exist, but no regions have been created.
+	ScmNoRegions
+	// ScmFreeCap indicates that PMem AppDirect regions have free capacity.
+	ScmFreeCap
+	// ScmNoFreeCap indicates that PMem AppDirect regions have no free capacity.
+	ScmNoFreeCap
+	// ScmNotInterleaved indicates that a PMem AppDirect region is in non-interleaved mode.
+	ScmNotInterleaved
+	// ScmNoModules indicates that no PMem modules exist.
+	ScmNoModules
+	// ScmNotHealthy indicates a PMem AppDirect region is showing health state as "Error".
+	ScmNotHealthy
+	// ScmPartFreeCap indicates a PMem AppDirect region has only partial free capacity.
+	ScmPartFreeCap
+	// ScmUnknownMode indicates a pMem AppDirect region is in an unsupported memory mode.
+	ScmUnknownMode
+
+	// MinRamdiskMem is the minimum amount of memory needed for each engine's tmpfs RAM-disk.
+	MinRamdiskMem = humanize.GiByte * 4
 )
 
+// Memory reservation constant defaults to be used when calculating RAM-disk size for DAOS I/O engine.
+const (
+	DefaultSysMemRsvd    = humanize.GiByte * 16  // per-system
+	DefaultTgtMemRsvd    = humanize.MiByte * 128 // per-engine-target
+	DefaultEngineMemRsvd = humanize.GiByte * 1   // per-engine
+)
+
+func (ss ScmState) String() string {
+	if val, exists := map[ScmState]string{
+		ScmStateUnknown:   "Unknown",
+		ScmNoRegions:      "NoRegions",
+		ScmFreeCap:        "FreeCapacity",
+		ScmNoFreeCap:      "NoFreeCapacity",
+		ScmNotInterleaved: "NotInterleaved",
+		ScmNoModules:      "NoModules",
+		ScmNotHealthy:     "NotHealthy",
+		ScmPartFreeCap:    "PartialFreeCapacity",
+		ScmUnknownMode:    "UnknownMode",
+	}[ss]; exists {
+		return val
+	}
+	return "Unknown"
+}
+
 type (
-	// ScmModule represents a SCM DIMM.
+	// ScmSocketState indicates the state of PMem for either a specific socket or all sockets.
+	ScmSocketState struct {
+		SocketID *uint // If set, state applies to a specific socket.
+		State    ScmState
+	}
+
+	// ScmModule represents a PMem DIMM.
 	//
 	// This is a simplified representation of the raw struct used in the ipmctl package.
 	ScmModule struct {
@@ -51,25 +93,28 @@ type (
 		UID              string
 		PartNumber       string
 		FirmwareRevision string
+		HealthState      string
 	}
 
 	// ScmModules is a type alias for []ScmModule that implements fmt.Stringer.
 	ScmModules []*ScmModule
 
-	// ScmMountPoint represents location SCM filesystem is mounted.
+	// ScmMountPoint represents location PMem filesystem is mounted.
 	ScmMountPoint struct {
-		Class      Class    `json:"class"`
-		DeviceList []string `json:"device_list"`
-		Info       string   `json:"info"`
-		Path       string   `json:"path"`
-		TotalBytes uint64   `json:"total_bytes"`
-		AvailBytes uint64   `json:"avail_bytes"`
+		Class       Class         `json:"class"`
+		DeviceList  []string      `json:"device_list"`
+		Info        string        `json:"info"`
+		Path        string        `json:"path"`
+		Rank        ranklist.Rank `json:"rank"`
+		TotalBytes  uint64        `json:"total_bytes"`
+		AvailBytes  uint64        `json:"avail_bytes"`
+		UsableBytes uint64        `json:"usable_bytes"`
 	}
 
 	// ScmMountPoints is a type alias for []ScmMountPoint that implements fmt.Stringer.
 	ScmMountPoints []*ScmMountPoint
 
-	// ScmNamespace represents a mapping of AppDirect regions to block device files.
+	// ScmNamespace is a block device exposing a PMem AppDirect region.
 	ScmNamespace struct {
 		UUID        string         `json:"uuid" hash:"ignore"`
 		BlockDevice string         `json:"blockdev"`
@@ -79,13 +124,13 @@ type (
 		Mount       *ScmMountPoint `json:"mount"`
 	}
 
-	// ScmNamespaces is a type alias for []ScmNamespace that implements fmt.Stringer.
+	// ScmNamespaces is a type alias for a slice of ScmNamespace references.
 	ScmNamespaces []*ScmNamespace
 
 	// ScmFirmwareUpdateStatus represents the status of a firmware update on the module.
 	ScmFirmwareUpdateStatus uint32
 
-	// ScmFirmwareInfo describes the firmware information of an SCM module.
+	// ScmFirmwareInfo describes the firmware information of an PMem module.
 	ScmFirmwareInfo struct {
 		ActiveVersion     string
 		StagedVersion     string
@@ -119,23 +164,28 @@ func (s ScmFirmwareUpdateStatus) String() string {
 }
 
 func (sm *ScmModule) String() string {
+	health := ""
+	if sm.HealthState != "" {
+		health = fmt.Sprintf(" Health:%s", sm.HealthState)
+	}
 	// capacity given in IEC standard units.
 	return fmt.Sprintf("UID:%s PhysicalID:%d Capacity:%s Location:(socket:%d memctrlr:%d "+
-		"chan:%d pos:%d)", sm.UID, sm.PhysicalID, humanize.IBytes(sm.Capacity),
-		sm.SocketID, sm.ControllerID, sm.ChannelID, sm.ChannelPosition)
+		"chan:%d pos:%d)%s", sm.UID, sm.PhysicalID, humanize.IBytes(sm.Capacity),
+		sm.SocketID, sm.ControllerID, sm.ChannelID, sm.ChannelPosition, health)
 }
 
 func (sms ScmModules) String() string {
 	var buf bytes.Buffer
 
 	if len(sms) == 0 {
-		return "\t\tnone\n"
+		return "\tnone\n"
 	}
 
 	sort.Slice(sms, func(i, j int) bool { return sms[i].PhysicalID < sms[j].PhysicalID })
 
+	fmt.Fprintf(&buf, "\n")
 	for _, sm := range sms {
-		fmt.Fprintf(&buf, "\t\t%s\n", sm)
+		fmt.Fprintf(&buf, "\t%s\n", sm)
 	}
 
 	return buf.String()
@@ -157,12 +207,12 @@ func (sms ScmModules) Summary() string {
 		common.Pluralise("module", len(sms)))
 }
 
-// Capacity reports total storage capacity (bytes) of SCM namespace (pmem block device).
+// Capacity reports total storage capacity (bytes) of PMem namespace (pmem block device).
 func (sn ScmNamespace) Capacity() uint64 {
 	return sn.Size
 }
 
-// Total returns the total bytes on mounted SCM namespace as reported by OS.
+// Total returns the total bytes on mounted PMem namespace as reported by OS.
 func (sn ScmNamespace) Total() uint64 {
 	if sn.Mount == nil {
 		return 0
@@ -170,12 +220,47 @@ func (sn ScmNamespace) Total() uint64 {
 	return sn.Mount.TotalBytes
 }
 
-// Free returns the available free bytes on mounted SCM namespace as reported by OS.
+// Free returns the available free bytes on mounted PMem namespace as reported by OS.
 func (sn ScmNamespace) Free() uint64 {
 	if sn.Mount == nil {
 		return 0
 	}
 	return sn.Mount.AvailBytes
+}
+
+// Free returns the available free bytes on mounted PMem namespace as reported by OS.
+func (sn ScmNamespace) Usable() uint64 {
+	if sn.Mount == nil {
+		return 0
+	}
+	return sn.Mount.UsableBytes
+}
+
+func (sn *ScmNamespace) String() string {
+	mountInfo := ""
+	if sn.Mount != nil {
+		mountInfo = fmt.Sprintf(" Mount:%+v", *sn.Mount)
+	}
+	// capacity given in IEC standard units.
+	return fmt.Sprintf("UUID:%s BlockDev:%s Name:%s NUMA:%d Size:%s%s",
+		sn.UUID, sn.BlockDevice, sn.Name, sn.NumaNode, humanize.IBytes(sn.Size), mountInfo)
+}
+
+func (sns ScmNamespaces) String() string {
+	var buf bytes.Buffer
+
+	if len(sns) == 0 {
+		return "\tnone\n"
+	}
+
+	sort.Slice(sns, func(i, j int) bool { return sns[i].Name < sns[j].Name })
+
+	fmt.Fprintf(&buf, "\n")
+	for _, sn := range sns {
+		fmt.Fprintf(&buf, "\t%s\n", sn)
+	}
+
+	return buf.String()
 }
 
 // Capacity reports total storage capacity (bytes) across all namespaces.
@@ -186,7 +271,7 @@ func (sns ScmNamespaces) Capacity() (tb uint64) {
 	return
 }
 
-// Total returns the cumulative total bytes on all mounted SCM namespaces.
+// Total returns the cumulative total bytes on all mounted PMem namespaces.
 func (sns ScmNamespaces) Total() (tb uint64) {
 	for _, sn := range sns {
 		tb += (*ScmNamespace)(sn).Total()
@@ -194,10 +279,18 @@ func (sns ScmNamespaces) Total() (tb uint64) {
 	return
 }
 
-// Free returns the cumulative available bytes on all mounted SCM namespaces.
+// Free returns the cumulative available bytes on all mounted PMem namespaces.
 func (sns ScmNamespaces) Free() (tb uint64) {
 	for _, sn := range sns {
 		tb += (*ScmNamespace)(sn).Free()
+	}
+	return
+}
+
+// Free returns the cumulative effective available bytes on all mounted PMem namespaces.
+func (sns ScmNamespaces) Usable() (tb uint64) {
+	for _, sn := range sns {
+		tb += (*ScmNamespace)(sn).Usable()
 	}
 	return
 }
@@ -216,22 +309,20 @@ func (sns ScmNamespaces) Summary() string {
 }
 
 const (
-	ScmMsgRebootRequired     = "A reboot is required to process new SCM memory allocation goals."
-	ScmMsgNoModules          = "no SCM modules to prepare"
-	ScmMsgNotInited          = "SCM storage could not be accessed"
-	ScmMsgClassNotSupported  = "operation unsupported on SCM class"
+	ScmMsgRebootRequired     = "A reboot is required to process new PMem memory allocation goals."
+	ScmMsgNotInited          = "PMem storage could not be accessed"
+	ScmMsgClassNotSupported  = "operation unsupported on PMem class"
 	ScmMsgIpmctlDiscoverFail = "ipmctl module discovery"
 )
 
 type (
-	// ScmProvider defines an interface to be implemented by a SCM provider.
+	// ScmProvider defines an interface to be implemented by a PMem provider.
 	ScmProvider interface {
-		Mount(ScmMountRequest) (*ScmMountResponse, error)
-		Unmount(ScmMountRequest) (*ScmMountResponse, error)
+		Mount(ScmMountRequest) (*MountResponse, error)
+		Unmount(ScmMountRequest) (*MountResponse, error)
 		Format(ScmFormatRequest) (*ScmFormatResponse, error)
 		CheckFormat(ScmFormatRequest) (*ScmFormatResponse, error)
 		Scan(ScmScanRequest) (*ScmScanResponse, error)
-		GetPmemState() (ScmState, error)
 		Prepare(ScmPrepareRequest) (*ScmPrepareResponse, error)
 		QueryFirmware(ScmFirmwareQueryRequest) (*ScmFirmwareQueryResponse, error)
 		UpdateFirmware(ScmFirmwareUpdateRequest) (*ScmFirmwareUpdateResponse, error)
@@ -240,13 +331,14 @@ type (
 	// ScmPrepareRequest defines the parameters for a Prepare operation.
 	ScmPrepareRequest struct {
 		pbin.ForwardableRequest
-		// Reset indicates that the operation should reset (clear) DCPM namespaces.
-		Reset bool
+		Reset                 bool  // Clear PMem namespaces and regions.
+		NrNamespacesPerSocket uint  // Request this many PMem namespaces per socket.
+		SocketID              *uint // Only process PMem attached to this socket.
 	}
 
 	// ScmPrepareResponse contains the results of a successful Prepare operation.
 	ScmPrepareResponse struct {
-		State          ScmState
+		Socket         *ScmSocketState
 		RebootRequired bool
 		Namespaces     ScmNamespaces
 	}
@@ -254,27 +346,21 @@ type (
 	// ScmScanRequest defines the parameters for a Scan operation.
 	ScmScanRequest struct {
 		pbin.ForwardableRequest
-		Rescan     bool
-		DeviceList []string
+		SocketID *uint // Only process PMem attached to this socket.
 	}
 
 	// ScmScanResponse contains information gleaned during a successful Scan operation.
 	ScmScanResponse struct {
-		State      ScmState
 		Modules    ScmModules
 		Namespaces ScmNamespaces
 	}
 
-	// DcpmParams defines the sub-parameters of a Format operation that
-	// will use DCPM
-	DcpmParams struct {
-		Device string
-	}
-
-	// RamdiskParams defines the sub-parameters of a Format operation that
+	// RamdiskParams defines the sub-parameters of a Format or Mount operation that
 	// will use tmpfs-based ramdisk
 	RamdiskParams struct {
-		Size uint
+		Size             uint
+		NUMANode         uint
+		DisableHugepages bool
 	}
 
 	// ScmFormatRequest defines the parameters for a Format operation or query.
@@ -285,7 +371,7 @@ type (
 		OwnerUID   int
 		OwnerGID   int
 		Ramdisk    *RamdiskParams
-		Dcpm       *DcpmParams
+		Dcpm       *DeviceParams
 	}
 
 	// ScmFormatResponse contains the results of a successful Format operation or query.
@@ -296,19 +382,13 @@ type (
 		Mountable  bool
 	}
 
-	// ScmMountRequest defines the parameters for a Mount operation.
+	// ScmMountRequest represents an SCM mount request.
 	ScmMountRequest struct {
 		pbin.ForwardableRequest
-		Class  Class
-		Device string
-		Target string
-		Size   uint
-	}
-
-	// ScmMountResponse contains the results of a successful Mount operation.
-	ScmMountResponse struct {
+		Class   Class
+		Device  string
 		Target  string
-		Mounted bool
+		Ramdisk *RamdiskParams
 	}
 
 	// ScmFirmwareQueryRequest defines the parameters for a firmware query.
@@ -320,7 +400,7 @@ type (
 	}
 
 	// ScmModuleFirmware represents the results of a firmware query for a specific
-	// SCM module.
+	// PMem module.
 	ScmModuleFirmware struct {
 		Module ScmModule
 		Info   *ScmFirmwareInfo
@@ -342,7 +422,7 @@ type (
 	}
 
 	// ScmFirmwareUpdateResult represents the result of a firmware update for
-	// a specific SCM module.
+	// a specific PMem module.
 	ScmFirmwareUpdateResult struct {
 		Module ScmModule
 		Error  string
@@ -373,7 +453,7 @@ type ScmAdminForwarder struct {
 
 // NewScmAdminForwarder creates a new ScmAdminForwarder.
 func NewScmAdminForwarder(log logging.Logger) *ScmAdminForwarder {
-	pf := pbin.NewForwarder(log, pbin.DaosAdminName)
+	pf := pbin.NewForwarder(log, pbin.DaosPrivHelperName)
 
 	return &ScmAdminForwarder{
 		Forwarder: *pf,
@@ -381,10 +461,10 @@ func NewScmAdminForwarder(log logging.Logger) *ScmAdminForwarder {
 }
 
 // Mount forwards an SCM mount request.
-func (f *ScmAdminForwarder) Mount(req ScmMountRequest) (*ScmMountResponse, error) {
+func (f *ScmAdminForwarder) Mount(req ScmMountRequest) (*MountResponse, error) {
 	req.Forwarded = true
 
-	res := new(ScmMountResponse)
+	res := new(MountResponse)
 	if err := f.SendReq("ScmMount", req, res); err != nil {
 		return nil, err
 	}
@@ -393,10 +473,10 @@ func (f *ScmAdminForwarder) Mount(req ScmMountRequest) (*ScmMountResponse, error
 }
 
 // Unmount forwards an SCM unmount request.
-func (f *ScmAdminForwarder) Unmount(req ScmMountRequest) (*ScmMountResponse, error) {
+func (f *ScmAdminForwarder) Unmount(req ScmMountRequest) (*MountResponse, error) {
 	req.Forwarded = true
 
-	res := new(ScmMountResponse)
+	res := new(MountResponse)
 	if err := f.SendReq("ScmUnmount", req, res); err != nil {
 		return nil, err
 	}
@@ -438,15 +518,6 @@ func (f *ScmAdminForwarder) Scan(req ScmScanRequest) (*ScmScanResponse, error) {
 	}
 
 	return res, nil
-}
-
-// GetPmemState gets the state of DCPM.
-func (f *ScmAdminForwarder) GetPmemState() (ScmState, error) {
-	resp, err := f.Scan(ScmScanRequest{})
-	if err != nil {
-		return ScmStateUnknown, err
-	}
-	return resp.State, nil
 }
 
 // Prepare forwards a request to prep the SCM.
@@ -521,4 +592,71 @@ func (f *ScmFwForwarder) UpdateFirmware(req ScmFirmwareUpdateRequest) (*ScmFirmw
 	}
 
 	return res, nil
+}
+
+// CalcRamdiskSize returns recommended tmpfs RAM-disk size calculated as
+// (total mem - hugepage mem - sys rsvd mem - engine rsvd mem) / nr engines.
+// All values in units of bytes and return value is for a single RAM-disk/engine.
+func CalcRamdiskSize(log logging.Logger, memTotal, memHuge, memSys uint64, tgtCount, engCount int) (uint64, error) {
+	if memTotal == 0 {
+		return 0, errors.New("requires nonzero total mem")
+	}
+	if tgtCount <= 0 {
+		return 0, errors.New("requires positive nonzero nr engine targets")
+	}
+	if engCount <= 0 {
+		return 0, errors.New("requires positive nonzero nr engines")
+	}
+
+	memEng := uint64(tgtCount) * DefaultTgtMemRsvd
+	if memEng < DefaultEngineMemRsvd {
+		memEng = DefaultEngineMemRsvd
+	}
+
+	msgStats := fmt.Sprintf("mem stats: total %s (%d) - (hugepages %s + sys rsvd %s + "+
+		"(engine rsvd %s * nr engines %d). %d tgts-per-engine)", humanize.IBytes(memTotal),
+		memTotal, humanize.IBytes(memHuge), humanize.IBytes(memSys),
+		humanize.IBytes(memEng), engCount, tgtCount)
+
+	memRsvd := memHuge + memSys + (memEng * uint64(engCount))
+	if memTotal < memRsvd {
+		return 0, errors.Errorf("insufficient ram to meet minimum requirements (%s)",
+			msgStats)
+	}
+
+	ramdiskSize := (memTotal - memRsvd) / uint64(engCount)
+
+	log.Debugf("ram-disk size %s calculated using %s", humanize.IBytes(ramdiskSize), msgStats)
+
+	return ramdiskSize, nil
+}
+
+// CalcMemForRamdiskSize returns the minimum RAM required for the input requested RAM-disk size.
+func CalcMemForRamdiskSize(log logging.Logger, ramdiskSize, memHuge, memSys uint64, tgtCount, engCount int) (uint64, error) {
+	if ramdiskSize == 0 {
+		return 0, errors.New("requires nonzero ram-disk size")
+	}
+	if tgtCount <= 0 {
+		return 0, errors.New("requires positive nonzero nr engine targets")
+	}
+	if engCount == 0 {
+		return 0, errors.New("requires nonzero nr engines")
+	}
+
+	memEng := uint64(tgtCount) * DefaultTgtMemRsvd
+	if memEng < DefaultEngineMemRsvd {
+		memEng = DefaultEngineMemRsvd
+	}
+
+	msgStats := fmt.Sprintf("required ram-disk size %s (%d). mem hugepage: %s, nr engines: %d, "+
+		"sys mem rsvd: %s, engine mem rsvd: %s, %d tgts-per-engine",
+		humanize.IBytes(ramdiskSize), ramdiskSize, humanize.IBytes(memHuge), engCount,
+		humanize.IBytes(memSys), humanize.IBytes(memEng), tgtCount)
+
+	memRsvd := memHuge + memSys + (memEng * uint64(engCount))
+	memReqd := memRsvd + (ramdiskSize * uint64(engCount))
+
+	log.Debugf("%s RAM needed for %s", humanize.IBytes(memReqd), msgStats)
+
+	return memReqd, nil
 }
