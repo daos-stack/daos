@@ -455,6 +455,8 @@ rdbt_test_tx(bool update, enum rdbt_membership_op memb_op, uint64_t user_key,
 	char			value_written[] = "value";
 	char			buf[32];
 	uint64_t		keys[] = {11, 22, 33, user_key};
+	uint64_t		to_be_abort_key = 111; /* must not in keys[] */
+	char			nonexistent_kvs[] = "nonexistent_kvs";
 	struct rdb_tx		tx;
 	struct iterate_cb_arg	arg;
 	uint64_t		k = 0;
@@ -495,6 +497,17 @@ proceed:
 		D_WARN("commit empty tx\n");
 		MUST(rdb_tx_begin(svc->rt_rsvc.s_db, RDB_NIL_TERM, &tx));
 		MUST(rdb_tx_commit(&tx));
+		rdb_tx_end(&tx);
+
+		D_WARN("commit deterministic-error tx\n");
+		MUST(rdb_tx_begin(svc->rt_rsvc.s_db, RDB_NIL_TERM, &tx));
+		d_iov_set(&key, &to_be_abort_key, sizeof(to_be_abort_key));
+		d_iov_set(&value, value_written, strlen(value_written) + 1);
+		MUST(rdb_tx_update(&tx, &svc->rt_kvs1_path, &key, &value));
+		d_iov_set(&key, nonexistent_kvs, sizeof(nonexistent_kvs));
+		MUST(rdb_tx_destroy_kvs(&tx, &svc->rt_root_kvs_path, &key));
+		rc = rdb_tx_commit(&tx);
+		D_ASSERTF(rc == -DER_NONEXIST, "%d == %d\n", rc, -DER_NONEXIST);
 		rdb_tx_end(&tx);
 
 		D_WARN("update: user record: (K=0x%"PRIx64", V="DF_U64")\n",
@@ -551,6 +564,14 @@ proceed:
 		MUST(rdb_tx_begin_local(storage, &tx));
 	else
 		MUST(rdb_tx_begin(svc->rt_rsvc.s_db, RDB_NIL_TERM, &tx));
+
+	/* Look up to_be_abort_key. */
+	d_iov_set(&key, &to_be_abort_key, sizeof(to_be_abort_key));
+	d_iov_set(&value, buf, sizeof(buf));
+	value.iov_len = 0; /* no size check */
+	rc = rdb_tx_lookup(&tx, &svc->rt_kvs1_path, &key, &value);
+	D_ASSERTF(rc == -DER_NONEXIST, "%d == %d\n", rc, -DER_NONEXIST);
+
 	/* Look up keys[0]. */
 	d_iov_set(&key, &keys[0], sizeof(keys[0]));
 	d_iov_set(&value, buf, sizeof(buf));

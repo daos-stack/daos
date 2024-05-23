@@ -1941,6 +1941,12 @@ ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver,
 		return 0;
 	}
 
+	if (ds_pool_skip_for_check(pool)) {
+		D_DEBUG(DB_REBUILD, DF_UUID" skip rebuild under check mode\n",
+			DP_UUID(pool->sp_uuid));
+		return 0;
+	}
+
 	if (tgts != NULL && tgts->pti_number > 0 &&
 	    rebuild_op != RB_OP_RECLAIM && rebuild_op != RB_OP_FAIL_RECLAIM) {
 		/* Check if the pool already in the queue list */

@@ -163,6 +163,7 @@ class PoolSecurityTestBase(TestWithServers):
             with container.no_exception():
                 result = container.get_attr(attr=attribute)
         else:
+            result = None  # To appease pylint
             self.fail(
                 "##In verify_cont_rw_attribute, "
                 "invalid action: {}".format(action))
@@ -188,6 +189,7 @@ class PoolSecurityTestBase(TestWithServers):
             with container.no_exception():
                 result = container.get_prop()
         else:
+            result = None  # To appease pylint
             self.fail("##In verify_cont_rw_property, invalid action: {}".format(action))
         self.log.info(
             "  In verify_cont_rw_property %s.\n =daos_cmd.run() result:\n%s", action, result)
@@ -224,6 +226,7 @@ class PoolSecurityTestBase(TestWithServers):
         elif action.lower() == "read":
             result = self.get_container_acl_list(container)
         else:
+            result = None  # To appease pylint
             self.fail(
                 "##In verify_cont_rw_acl, invalid action: {}".format(action))
         self.log.info(
@@ -330,6 +333,7 @@ class PoolSecurityTestBase(TestWithServers):
             elif action.lower() == "read":
                 result = daos_cmd.pool_query(pool.identifier)
             else:
+                result = None  # To appease pylint
                 self.fail("##In verify_pool_readwrite, invalid action: {}".format(action))
         self.log.info(
             "  In verify_pool_readwrite %s.\n =daos_cmd.run() result:\n%s",
