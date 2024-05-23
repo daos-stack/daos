@@ -213,7 +213,7 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 		break;
 	}
 	/*
-	 * To enhance system performance, metadata RPCs are currently not
+	 * To enhance system performance, following RPCs are currently not
 	 * enqueued. Recent benchmarks have indicated a 2%~3% drop in stat
 	 * and removal operations when this is done. It may be worthwhile to
 	 * reassess this decision in the future, especially if Quality of
@@ -286,7 +286,7 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 		struct obj_ec_agg_in *ea = crt_req_get(rpc);
 
 		attr->sra_enqueue_id = ea->ea_comm_in.req_in_enqueue_id;
-		sched_req_attr_init(attr, SCHED_REQ_UPDATE, &ea->ea_pool_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &ea->ea_pool_uuid);
 		break;
 	}
 	case DAOS_OBJ_RPC_EC_REPLICATE: {
