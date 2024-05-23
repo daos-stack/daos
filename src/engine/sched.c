@@ -1296,9 +1296,6 @@ static inline bool
 should_enqueue_req(struct dss_xstream *dx, struct sched_req_attr *attr)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
-	ABT_pool                 abt_pool = dx->dx_pools[DSS_POOL_GENERIC];
-	size_t			 cnt;
-	int			 ret;
 
 	if (sched_prio_disabled || info->si_stop)
 		return false;
@@ -1308,24 +1305,7 @@ should_enqueue_req(struct dss_xstream *dx, struct sched_req_attr *attr)
 		return false;
 
 	/* For VOS xstream only */
-	if (!dx->dx_main_xs)
-		return false;
-
-	if (attr->sra_flags & SCHED_REQ_FL_FORCE_ENQUEUE)
-		return true;
-	/*
-	 * To enhance system performance, metadata RPCs are currently not
-	 * enqueued when the system is not overloaded. Recent benchmarks
-	 * have indicated a 2%~3% drop in stat and removal operations when
-	 * this is done. It may be worthwhile to reassess this decision in
-	 * the future, especially if Quality of Service(QoS) requirements
-	 * are introduced. (See DAOS-15076)
-	 */
-	ret = ABT_pool_get_size(abt_pool, &cnt);
-	if (ret == ABT_SUCCESS && cnt < MAX_KICKED_REQ_CNT)
-		return false;
-
-	return true;
+	return dx->dx_main_xs;
 }
 
 static int

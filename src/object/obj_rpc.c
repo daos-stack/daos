@@ -1055,18 +1055,6 @@ crt_proc_struct_daos_req_comm_in(crt_proc_t proc, crt_proc_op_t proc_op,
 	int	rc;
 	int	i;
 
-	rc = crt_proc_uint32_t(proc, proc_op, &drci->req_in_uid);
-	if (unlikely(rc))
-		return rc;
-	rc = crt_proc_uint32_t(proc, proc_op, &drci->req_in_gid);
-	if (unlikely(rc))
-		return rc;
-	rc = crt_proc_uint32_t(proc, proc_op, &drci->req_in_padding0);
-	if (unlikely(rc))
-		return rc;
-	rc = crt_proc_uint32_t(proc, proc_op, &drci->req_in_projid);
-	if (unlikely(rc))
-		return rc;
 	rc = crt_proc_uint64_t(proc, proc_op, &drci->req_in_enqueue_id);
 	if (unlikely(rc))
 		return rc;
@@ -1075,12 +1063,6 @@ crt_proc_struct_daos_req_comm_in(crt_proc_t proc, crt_proc_op_t proc_op,
 		if (rc)
 			return rc;
 	}
-	rc = crt_proc_d_string_t(proc, proc_op, &drci->req_in_addr);
-	if (unlikely(rc))
-		return rc;
-	rc = crt_proc_d_string_t(proc, proc_op, &drci->req_in_jobid);
-	if (unlikely(rc))
-		return rc;
 
 	return rc;
 }
