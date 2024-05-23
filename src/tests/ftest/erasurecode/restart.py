@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -122,7 +122,6 @@ class EcodServerRestart(TestWithServers):
             "hosts": self.hostlist_clients,
             "path": self.workdir,
             "slots": None,
-            "group": self.server_group,
             "pool": self.pool,
             "container": None,
             "processes": processes,

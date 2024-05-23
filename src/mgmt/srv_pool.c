@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -308,7 +308,8 @@ ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t *r
 	/* TODO: Need to make pool service aware of new rank UUIDs */
 
 	ntargets = unique_add_ranks->rl_nr;
-	rc = ds_pool_extend(pool_uuid, ntargets, unique_add_ranks, domains_nr, domains, svc_ranks);
+	rc = dsc_pool_svc_extend(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), ntargets,
+				 unique_add_ranks, domains_nr, domains);
 out:
 	d_rank_list_free(unique_add_ranks);
 	return rc;
@@ -323,8 +324,8 @@ ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uuid_t *handles, 
 	D_DEBUG(DB_MGMT, "evict pool "DF_UUID"\n", DP_UUID(pool_uuid));
 
 	/* Evict active pool connections if they exist*/
-	rc = ds_pool_svc_check_evict(pool_uuid, svc_ranks, handles, n_handles,
-				     destroy, force_destroy, machine, count);
+	rc = dsc_pool_svc_check_evict(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), handles,
+				      n_handles, destroy, force_destroy, machine, count);
 	if (rc != 0) {
 		D_ERROR("Failed to evict pool handles" DF_UUID " rc: " DF_RC "\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
@@ -366,7 +367,8 @@ ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		}
 	}
 
-	rc = ds_pool_target_update_state(pool_uuid, svc_ranks, target_addrs, state);
+	rc = dsc_pool_svc_update_target_state(pool_uuid, svc_ranks, mgmt_ps_call_deadline(),
+					      target_addrs, state);
 
 	return rc;
 }
@@ -409,8 +411,6 @@ ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **r
 		   daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
 		   uint32_t *upgrade_layout_ver)
 {
-	uint64_t deadline;
-
 	if (pool_info == NULL) {
 		D_ERROR("pool_info was NULL\n");
 		return -DER_INVAL;
@@ -418,16 +418,8 @@ ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **r
 
 	D_DEBUG(DB_MGMT, "Querying pool "DF_UUID"\n", DP_UUID(pool_uuid));
 
-	/*
-	 * Use a fixed timeout that matches what the control plane uses for the
-	 * moment.
-	 *
-	 * TODO: Pass the deadline from dmg (or daos_server).
-	 */
-	deadline = daos_getmtime_coarse() + 5 * 60 * 1000;
-
-	return dsc_pool_svc_query(pool_uuid, svc_ranks, deadline, ranks, pool_info, pool_layout_ver,
-				  upgrade_layout_ver);
+	return dsc_pool_svc_query(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), ranks, pool_info,
+				  pool_layout_ver, upgrade_layout_ver);
 }
 
 /**
@@ -464,10 +456,10 @@ ds_mgmt_pool_query_targets(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_t 
 	for (i = 0; i < tgts->rl_nr; i++) {
 		D_DEBUG(DB_MGMT, "Querying pool "DF_UUID" rank %u tgt %u\n", DP_UUID(pool_uuid),
 			rank, tgts->rl_ranks[i]);
-		rc = ds_pool_svc_query_target(pool_uuid, svc_ranks, rank, tgts->rl_ranks[i],
-					      &out_infos[i]);
+		rc = dsc_pool_svc_query_target(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), rank,
+					       tgts->rl_ranks[i], &out_infos[i]);
 		if (rc != 0) {
-			D_ERROR(DF_UUID": ds_pool_svc_query_target() failed rank %u tgt %u\n",
+			D_ERROR(DF_UUID": dsc_pool_svc_query_target() failed rank %u tgt %u\n",
 				DP_UUID(pool_uuid), rank, tgts->rl_ranks[i]);
 			goto out;
 		}
@@ -500,7 +492,7 @@ get_access_props(uuid_t pool_uuid, d_rank_list_t *ranks, daos_prop_t **prop)
 	for (i = 0; i < ACCESS_PROPS_LEN; i++)
 		new_prop->dpp_entries[i].dpe_type = ACCESS_PROPS[i];
 
-	rc = ds_pool_svc_get_prop(pool_uuid, ranks, new_prop);
+	rc = dsc_pool_svc_get_prop(pool_uuid, ranks, mgmt_ps_call_deadline(), new_prop);
 	if (rc != 0) {
 		daos_prop_free(new_prop);
 		return rc;
@@ -538,7 +530,7 @@ ds_mgmt_pool_overwrite_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_ACL;
 	prop->dpp_entries[0].dpe_val_ptr = daos_acl_dup(acl);
 
-	rc = ds_pool_svc_set_prop(pool_uuid, svc_ranks, prop);
+	rc = dsc_pool_svc_set_prop(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), prop);
 	if (rc != 0)
 		goto out_prop;
 
@@ -561,7 +553,7 @@ ds_mgmt_pool_update_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 	D_DEBUG(DB_MGMT, "Updating ACL for pool "DF_UUID"\n",
 		DP_UUID(pool_uuid));
 
-	rc = ds_pool_svc_update_acl(pool_uuid, svc_ranks, acl);
+	rc = dsc_pool_svc_update_acl(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), acl);
 	if (rc != 0)
 		goto out;
 
@@ -588,7 +580,7 @@ ds_mgmt_pool_delete_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 	if (rc != 0)
 		goto out;
 
-	rc = ds_pool_svc_delete_acl(pool_uuid, svc_ranks, type, name);
+	rc = dsc_pool_svc_delete_acl(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), type, name);
 	if (rc != 0)
 		goto out_name;
 
@@ -617,7 +609,7 @@ ds_mgmt_pool_set_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 	D_DEBUG(DB_MGMT, "Setting properties for pool "DF_UUID"\n",
 		DP_UUID(pool_uuid));
 
-	rc = ds_pool_svc_set_prop(pool_uuid, svc_ranks, prop);
+	rc = dsc_pool_svc_set_prop(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), prop);
 
 out:
 	return rc;
@@ -628,7 +620,7 @@ int ds_mgmt_pool_upgrade(uuid_t pool_uuid, d_rank_list_t *svc_ranks)
 	D_DEBUG(DB_MGMT, "Upgrading pool "DF_UUID"\n",
 		DP_UUID(pool_uuid));
 
-	return ds_pool_svc_upgrade(pool_uuid, svc_ranks);
+	return dsc_pool_svc_upgrade(pool_uuid, svc_ranks, mgmt_ps_call_deadline());
 }
 
 int
@@ -646,7 +638,7 @@ ds_mgmt_pool_get_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 	D_DEBUG(DB_MGMT, "Getting properties for pool "DF_UUID"\n",
 		DP_UUID(pool_uuid));
 
-	rc = ds_pool_svc_get_prop(pool_uuid, svc_ranks, prop);
+	rc = dsc_pool_svc_get_prop(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), prop);
 
 out:
 	return rc;
@@ -667,7 +659,7 @@ ds_mgmt_tgt_pool_shard_destroy(uuid_t pool_uuid, int shard_idx, d_rank_t rank)
 
 	tgt_ep.ep_grp = NULL;
 	tgt_ep.ep_rank = rank;
-	tgt_ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
+	tgt_ep.ep_tag = daos_rpc_tag(DAOS_REQ_TGT, shard_idx);
 
 	opc = DAOS_RPC_OPCODE(MGMT_TGT_SHARD_DESTROY, DAOS_MGMT_MODULE,
 			      DAOS_MGMT_VERSION);

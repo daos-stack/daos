@@ -43,30 +43,6 @@ cat /etc/security/limits.d/80_daos_limits.conf
 ulimit -a
 echo \"/var/tmp/core.%e.%t.%p\" > /proc/sys/kernel/core_pattern"
 sudo rm -f /var/tmp/core.*
-if [ "${HOSTNAME%%.*}" != "$FIRST_NODE" ]; then
-    if grep /mnt/daos\  /proc/mounts; then
-        sudo umount /mnt/daos
-    else
-        if [ ! -d /mnt/daos ]; then
-            sudo mkdir -p /mnt/daos
-        fi
-    fi
-
-    tmpfs_size=16777216
-    memsize="$(sed -ne '/MemTotal:/s/.* \([0-9][0-9]*\) kB/\1/p' \
-               /proc/meminfo)"
-    if [ "$memsize" -gt "32000000" ]; then
-        # make it twice as big on the hardware cluster
-        tmpfs_size=$((tmpfs_size*2))
-    fi
-    sudo ed <<EOF /etc/fstab
-\$a
-tmpfs /mnt/daos tmpfs rw,relatime,size=${tmpfs_size}k 0 0 # added by ftest.sh
-.
-wq
-EOF
-    sudo mount /mnt/daos
-fi
 
 # make sure to set up for daos_agent. The test harness will take care of
 # creating the /var/run/daos_{agent,server} directories when needed.
