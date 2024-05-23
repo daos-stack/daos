@@ -382,7 +382,7 @@ struct pci_dev_opts {
 	bool                 finished;
 	int                 *socket_id;
 	char               **pci_type;
-	char               **cfg;
+	char               **pci_cfg;
 	int                  status;
 };
 
@@ -425,7 +425,10 @@ pci_device_cb(void *ctx, struct spdk_pci_device *pci_device)
 		return;
 	}
 
-	rc = spdk_pci_device_cfg_read(pci_device, *opts->cfg, NVME_PCI_CFG_SPC_MAX_LEN, 0);
+	if (*opts->pci_cfg == NULL)
+		return;
+
+	rc = spdk_pci_device_cfg_read(pci_device, *opts->pci_cfg, NVME_PCI_CFG_SPC_MAX_LEN, 0);
 	if (rc != 0) {
 		D_ERROR("Failed to read config space of device (%s)\n", spdk_strerror(-rc));
 		opts->status = -DER_INVAL;
@@ -434,7 +437,7 @@ pci_device_cb(void *ctx, struct spdk_pci_device *pci_device)
 }
 
 static int
-fetch_pci_dev_info(struct nvme_ctrlr_t *w_ctrlr, const char *tr_addr)
+fetch_pci_dev_info(struct nvme_ctrlr_t *w_ctrlr, const char *tr_addr, bool fetch_pci_cfg)
 {
 	struct pci_dev_opts  opts = {0};
 	struct spdk_pci_addr pci_addr;
@@ -447,28 +450,34 @@ fetch_pci_dev_info(struct nvme_ctrlr_t *w_ctrlr, const char *tr_addr)
 		return -DER_INVAL;
 	}
 
-	D_ALLOC(w_ctrlr->pci_cfg, NVME_PCI_CFG_SPC_MAX_LEN);
-	if (w_ctrlr->pci_cfg == NULL)
-		return -DER_NOMEM;
-	w_ctrlr->pci_cfg_sz = NVME_PCI_CFG_SPC_MAX_LEN;
+	w_ctrlr->pci_cfg    = NULL;
+	w_ctrlr->pci_cfg_sz = 0;
+	if (fetch_pci_cfg) {
+		D_ALLOC(w_ctrlr->pci_cfg, NVME_PCI_CFG_SPC_MAX_LEN);
+		if (w_ctrlr->pci_cfg == NULL)
+			return -DER_NOMEM;
+		w_ctrlr->pci_cfg_sz = NVME_PCI_CFG_SPC_MAX_LEN;
+	}
 
 	opts.finished  = false;
 	opts.status    = 0;
 	opts.pci_addr  = pci_addr;
 	opts.socket_id = &w_ctrlr->socket_id;
 	opts.pci_type  = &w_ctrlr->pci_type;
-	opts.cfg       = &w_ctrlr->pci_cfg;
+	opts.pci_cfg   = &w_ctrlr->pci_cfg;
 
 	spdk_pci_for_each_device(&opts, pci_device_cb);
 
-	D_INFO("device pcie config: %02X %02X %02X %02X\n", w_ctrlr->pci_cfg[0],
-	       w_ctrlr->pci_cfg[1], w_ctrlr->pci_cfg[2], w_ctrlr->pci_cfg[3]);
+	if (fetch_pci_cfg) {
+		D_INFO("device pcie config starts: %02X %02X %02X %02X\n", w_ctrlr->pci_cfg[0],
+		       w_ctrlr->pci_cfg[1], w_ctrlr->pci_cfg[2], w_ctrlr->pci_cfg[3]);
+	}
 
 	return opts.status;
 }
 
 static int
-alloc_ctrlr_info(uuid_t dev_id, char *dev_name, struct bio_dev_info *b_info)
+alloc_ctrlr_info(uuid_t dev_id, char *dev_name, bool fetch_pci_cfg, struct bio_dev_info *b_info)
 {
 	struct spdk_bdev *bdev;
 	uint32_t          blk_sz;
@@ -515,17 +524,12 @@ alloc_ctrlr_info(uuid_t dev_id, char *dev_name, struct bio_dev_info *b_info)
 		return rc;
 	}
 
-	/* Fetch socket ID, PCI device type and config space by enumerating spdk_pci_device list */
-	rc = fetch_pci_dev_info(b_info->bdi_ctrlr, b_info->bdi_traddr);
-	if (rc != 0) {
-		return rc;
-	}
-
-	return 0;
+	/* Fetch PCI details by enumerating spdk_pci_device list */
+	return fetch_pci_dev_info(b_info->bdi_ctrlr, b_info->bdi_traddr, fetch_pci_cfg);
 }
 
 int
-bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
+bio_dev_list(struct bio_xs_context *xs_ctxt, bool fetch_pci_cfg, d_list_t *dev_list, int *dev_cnt)
 {
 	d_list_t		 s_dev_list;
 	struct bio_dev_info	*b_info, *b_tmp;
@@ -565,7 +569,7 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 		if (d_bdev->bb_faulty)
 			b_info->bdi_flags |= NVME_DEV_FL_FAULTY;
 
-		rc = alloc_ctrlr_info(d_bdev->bb_uuid, dev_name, b_info);
+		rc = alloc_ctrlr_info(d_bdev->bb_uuid, dev_name, fetch_pci_cfg, b_info);
 		if (rc) {
 			DL_ERROR(rc, "Failed to get ctrlr details");
 			bio_free_dev_info(b_info);
@@ -790,7 +794,7 @@ set_timer_and_check_faulty(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr 
 
 	D_INIT_LIST_HEAD(&dev_list);
 
-	rc = bio_dev_list(xs_ctxt, &dev_list, &dev_list_cnt);
+	rc = bio_dev_list(xs_ctxt, false, &dev_list, &dev_list_cnt);
 	if (rc != 0) {
 		D_ERROR("Error getting BIO device list\n");
 		return rc;

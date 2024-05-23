@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -529,7 +529,7 @@ ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid)
 }
 
 int
-ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
+ds_mgmt_smd_list_devs(Ctl__SmdDevReq *req, Ctl__SmdDevResp *resp)
 {
 	return 0;
 }

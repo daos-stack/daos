@@ -2023,7 +2023,7 @@ ds_mgmt_drpc_smd_list_devs(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	/* Response status is populated with SUCCESS on init. */
 	ctl__smd_dev_resp__init(resp);
 
-	rc = ds_mgmt_smd_list_devs(resp);
+	rc = ds_mgmt_smd_list_devs(req, resp);
 	if (rc != 0)
 		D_ERROR("Failed to list SMD devices :"DF_RC"\n", DP_RC(rc));
 

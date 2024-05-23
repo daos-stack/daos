@@ -262,10 +262,11 @@ bio_storage_dev_manage_led(void *arg)
 }
 
 struct bio_list_devs_info {
-	d_list_t	dev_list;
-	int		dev_list_cnt;
-	uuid_t		devid;
+	d_list_t         dev_list;
+	int              dev_list_cnt;
+	uuid_t           devid;
 	int		*state;
+	bool             fetch_pci_cfg;
 };
 
 static int
@@ -285,7 +286,7 @@ bio_query_dev_list(void *arg)
 		return -DER_INVAL;
 	}
 
-	rc = bio_dev_list(bxc, &list_devs_info->dev_list,
+	rc = bio_dev_list(bxc, list_devs_info->fetch_pci_cfg, &list_devs_info->dev_list,
 			  &list_devs_info->dev_list_cnt);
 	if (rc != 0) {
 		D_ERROR("Error getting BIO device list\n");
@@ -338,7 +339,7 @@ ctrlr_reset_str_fields(Ctl__NvmeController *ctrlr)
 }
 
 static int
-add_ctrlr_details(Ctl__NvmeController *ctrlr, struct bio_dev_info *dev_info)
+add_ctrlr_details(Ctl__NvmeController *ctrlr, struct bio_dev_info *dev_info, bool fetch_pci_cfg)
 {
 	int rc = 0;
 
@@ -362,14 +363,20 @@ add_ctrlr_details(Ctl__NvmeController *ctrlr, struct bio_dev_info *dev_info)
 		return rc;
 	ctrlr->socket_id = dev_info->bdi_ctrlr->socket_id;
 
-	ctrlr->pci_cfg.data = (uint8_t *)dev_info->bdi_ctrlr->pci_cfg;
-	ctrlr->pci_cfg.len  = dev_info->bdi_ctrlr->pci_cfg_sz;
+	D_DEBUG(DB_MGMT, "ctrlr details: '%s' '%s' '%s' '%s' '%s' '%s' '%d'\n", ctrlr->pci_addr,
+		ctrlr->model, ctrlr->serial, ctrlr->fw_rev, ctrlr->vendor_id, ctrlr->pci_dev_type,
+		ctrlr->socket_id);
 
-	D_DEBUG(DB_MGMT,
-		"ctrlr details: '%s' '%s' '%s' '%s' '%s' '%s' '%d' (%02X %02X %02X %02X)\n",
-		ctrlr->pci_addr, ctrlr->model, ctrlr->serial, ctrlr->fw_rev, ctrlr->vendor_id,
-		ctrlr->pci_dev_type, ctrlr->socket_id, ctrlr->pci_cfg.data[0],
-		ctrlr->pci_cfg.data[1], ctrlr->pci_cfg.data[2], ctrlr->pci_cfg.data[3]);
+	if (fetch_pci_cfg) {
+		ctrlr->pci_cfg.data = (uint8_t *)dev_info->bdi_ctrlr->pci_cfg;
+		ctrlr->pci_cfg.len  = dev_info->bdi_ctrlr->pci_cfg_sz;
+		D_DEBUG(DB_MGMT, "ctrlr PCIe config space begins (%02X %02X %02X %02X)\n",
+			ctrlr->pci_cfg.data[0], ctrlr->pci_cfg.data[1], ctrlr->pci_cfg.data[2],
+			ctrlr->pci_cfg.data[3]);
+	} else {
+		ctrlr->pci_cfg.data = NULL;
+		ctrlr->pci_cfg.len  = 0;
+	}
 
 	/* Populate NVMe namespace id and capacity */
 
@@ -401,7 +408,7 @@ add_ctrlr_details(Ctl__NvmeController *ctrlr, struct bio_dev_info *dev_info)
 }
 
 int
-ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
+ds_mgmt_smd_list_devs(Ctl__SmdDevReq *req, Ctl__SmdDevResp *resp)
 {
 	struct bio_dev_info		*dev_info = NULL, *tmp;
 	struct bio_list_devs_info	 list_devs_info = { 0 };
@@ -413,6 +420,8 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 	D_DEBUG(DB_MGMT, "Querying BIO & SMD device list\n");
 
 	D_INIT_LIST_HEAD(&list_devs_info.dev_list);
+
+	list_devs_info.fetch_pci_cfg = req->fetch_pci_cfg;
 
 	rc = dss_ult_execute(bio_query_dev_list, &list_devs_info, NULL, NULL,
 			     init_xs_type(), 0, 0);
@@ -472,7 +481,7 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 
 		if (dev_info->bdi_ctrlr != NULL) {
 			rc = add_ctrlr_details(resp->devices[i]->ctrlr, dev_info,
-					       req->include_bio_health);
+					       req->fetch_pci_cfg);
 			if (rc != 0)
 				break;
 			resp->devices[i]->ctrlr_namespace_id = dev_info->bdi_ctrlr->nss->id;
