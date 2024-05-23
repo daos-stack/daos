@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-22.04
     strategy:
       matrix:
-        branch: [trivy, master, release/2.4]
+        branch: [trivy, master, release/2.6]
       fail-fast: false
 
     steps:
