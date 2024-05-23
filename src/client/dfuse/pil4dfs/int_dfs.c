@@ -1708,7 +1708,7 @@ free_map(int idx)
 int
 d_get_fd_redirected(int fd)
 {
-	int i, fd_ret = fd;
+	int i, rc, fd_ret = fd;
 
 	if (atomic_load_relaxed(&d_daos_inited) == false)
 		return fd;
@@ -1729,12 +1729,21 @@ d_get_fd_redirected(int fd)
 	}
 
 	if (atomic_load_relaxed(&num_fd_dup2ed) > 0) {
-		D_RWLOCK_RDLOCK(&lock_fd_dup2ed);
+		rc = pthread_rwlock_rdlock(&lock_fd_dup2ed);
+		if (rc != 0) {
+			DS_ERROR(rc, "pthread_rwlock_rdlock() failed");
+			return fd_ret;
+		}
 		for (i = 0; i < MAX_FD_DUP2ED; i++) {
 			if (fd_dup2_list[i].fd_src == fd) {
 				fd_ret = fd_dup2_list[i].fd_dest;
 				break;
 			}
+		}
+		rc = pthread_rwlock_unlock(&lock_fd_dup2ed);
+		if (rc != 0) {
+			DS_ERROR(rc, "pthread_rwlock_unlock() failed");
+			return fd_ret;
 		}
 		D_RWLOCK_UNLOCK(&lock_fd_dup2ed);
 	}
