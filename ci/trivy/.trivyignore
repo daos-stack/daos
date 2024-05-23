@@ -1,13 +1,16 @@
 ## Ignored hadoop related CVE
-CVE-2021-22569
-CVE-2021-22570
-CVE-2022-3509
-CVE-2022-3510
-CVE-2022-3171
-
-## CVEs to be resolved
+## CVE-2023-52428,MEDIUM,,"Denial of Service in Connect2id Nimbus JOSE+JWT","com.nimbusds:nimbus-jose-jwt","9.8.1","9.37.2",https://avd.aquasec.com/nvd/cve-2023-52428
+CVE-2023-52428
 ## CVE-2023-39410,HIGH,7.5,"apache-avro: Apache Avro Java SDK: Memory when deserializing untrusted data in Avro Java SDK","org.apache.avro:avro","1.7.7","1.11.3",https://avd.aquasec.com/nvd/cve-2023-39410
 CVE-2023-39410
+## CVE-2024-25710,HIGH,5.5,"commons-compress: Denial of service caused by an infinite loop for a corrupted DUMP file","org.apache.commons:commons-compress","1.21","1.26.0",https://avd.aquasec.com/nvd/cve-2024-25710
+CVE-2024-25710
+## CVE-2024-26308,HIGH,5.5,"commons-compress: OutOfMemoryError unpacking broken Pack200 file","org.apache.commons:commons-compress","1.21","1.26.0",https://avd.aquasec.com/nvd/cve-2024-26308
+CVE-2024-26308
+## CVE-2024-29131,MEDIUM,,"commons-configuration: StackOverflowError adding property in AbstractListDelimiterHandler.flattenIterator()","org.apache.commons:commons-configuration2","2.8.0","2.10.1",https://avd.aquasec.com/nvd/cve-2024-29131
+CVE-2024-29131
+## CVE-2024-29133,MEDIUM,,"commons-configuration: StackOverflowError calling ListDelimiterHandler.flatten(Object, int) with a cyclical object tree","org.apache.commons:commons-configuration2","2.8.0","2.10.1",https://avd.aquasec.com/nvd/cve-2024-29133
+CVE-2024-29133
 ## CVE-2022-40150,HIGH,7.5,"jettison: memory exhaustion via user-supplied XML or JSON data","org.codehaus.jettison:jettison","1.1","1.5.2",https://avd.aquasec.com/nvd/cve-2022-40150
 CVE-2022-40150
 ## CVE-2022-45685,HIGH,7.5,"jettison: stack overflow in JSONObject() allows attackers to cause a Denial of Service (DoS) via crafted JSON data","org.codehaus.jettison:jettison","1.1","1.5.2",https://avd.aquasec.com/nvd/cve-2022-45685
@@ -18,8 +21,6 @@ CVE-2022-45693
 CVE-2023-1436
 ## CVE-2022-40149,MEDIUM,7.5,"jettison: parser crash by stackoverflow","org.codehaus.jettison:jettison","1.1","1.5.1",https://avd.aquasec.com/nvd/cve-2022-40149
 CVE-2022-40149
-## GHSA-58qw-p7qm-5rvh,LOW,,"Eclipse Jetty XmlParser allows arbitrary DOCTYPE declarations","org.eclipse.jetty:jetty-xml","9.4.51.v20230217","10.0.16, 11.0.16, 12.0.0, 9.4.52",https://github.com/advisories/GHSA-58qw-p7qm-5rvh
-GHSA-58qw-p7qm-5rvh
 ## CVE-2023-34455,HIGH,7.5,"snappy-java: Unchecked chunk length leads to DoS","org.xerial.snappy:snappy-java","1.1.8.2","1.1.10.1",https://avd.aquasec.com/nvd/cve-2023-34455
 CVE-2023-34455
 ## CVE-2023-43642,HIGH,7.5,"snappy-java: Missing upper bound check on chunk length in snappy-java can lead to Denial of Service (DoS) impact","org.xerial.snappy:snappy-java","1.1.8.2","1.1.10.4",https://avd.aquasec.com/nvd/cve-2023-43642
@@ -28,17 +29,13 @@ CVE-2023-43642
 CVE-2023-34453
 ## CVE-2023-34454,MEDIUM,7.5,"snappy-java: Integer overflow in compress leads to DoS","org.xerial.snappy:snappy-java","1.1.8.2","1.1.10.1",https://avd.aquasec.com/nvd/cve-2023-34454
 CVE-2023-34454
-## CVE-2024-25710,HIGH,5.5,"commons-compress: Denial of service caused by an infinite loop for a corrupted DUMP file","org.apache.commons:commons-compress","1.21","1.26.0",https://avd.aquasec.com/nvd/cve-2024-25710
-CVE-2024-25710
-## CVE-2024-26308,HIGH,5.5,"commons-compress: OutOfMemoryError unpacking broken Pack200 file","org.apache.commons:commons-compress","1.21","1.26.0",https://avd.aquasec.com/nvd/cve-2024-26308
-CVE-2024-26308
+
+
+
+## CVEs to be resolved
+## GHSA-58qw-p7qm-5rvh,LOW,,"Eclipse Jetty XmlParser allows arbitrary DOCTYPE declarations","org.eclipse.jetty:jetty-xml","9.4.51.v20230217","10.0.16, 11.0.16, 12.0.0, 9.4.52",https://github.com/advisories/GHSA-58qw-p7qm-5rvh
+### GHSA-58qw-p7qm-5rvh
 ## CVE-2024-24786,MEDIUM,,"golang-protobuf: encoding/protojson, internal/encoding/json: infinite loop in protojson.Unmarshal when unmarshaling certain forms of invalid JSON","google.golang.org/protobuf","1.30.0","1.33.0",https://avd.aquasec.com/nvd/cve-2024-24786
-CVE-2024-24786
+### CVE-2024-24786
 ## CVE-2023-45288,MEDIUM,,"golang: net/http, x/net/http2: unlimited number of CONTINUATION frames causes DoS","golang.org/x/net","0.17.0","0.23.0",https://avd.aquasec.com/nvd/cve-2023-45288
-CVE-2023-45288
-## CVE-2023-52428,MEDIUM,,"Denial of Service in Connect2id Nimbus JOSE+JWT","com.nimbusds:nimbus-jose-jwt","9.8.1","9.37.2",https://avd.aquasec.com/nvd/cve-2023-52428
-CVE-2023-52428
-## CVE-2024-29131,MEDIUM,,"commons-configuration: StackOverflowError adding property in AbstractListDelimiterHandler.flattenIterator()","org.apache.commons:commons-configuration2","2.8.0","2.10.1",https://avd.aquasec.com/nvd/cve-2024-29131
-CVE-2024-29131
-## CVE-2024-29133,MEDIUM,,"commons-configuration: StackOverflowError calling ListDelimiterHandler.flatten(Object, int) with a cyclical object tree","org.apache.commons:commons-configuration2","2.8.0","2.10.1",https://avd.aquasec.com/nvd/cve-2024-29133
-CVE-2024-29133
+### CVE-2023-45288

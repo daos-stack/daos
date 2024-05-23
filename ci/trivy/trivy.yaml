@@ -225,7 +225,10 @@ scan:
   scanners:
     - vuln
     - secret
-  skip-dirs: ["./src/client/java/hadoop-daos/", "./src/server/java/hadoop-daos/"]
+  # ignore all hadoop dependencies
+  skip-dirs:
+    - ./src/client/java/hadoop-daos/
+    - ./src/server/java/hadoop-daos/
   skip-files: []
   slow: false
 secret:

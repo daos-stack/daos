@@ -47,7 +47,7 @@ jobs:
 
       - name: Generate trivy report
         run: |
-          trivy fs -c ci/trivy/trivy.yaml \
+          trivy fs -c ci/trivy/trivy.yaml --dependency-tree \
            --output trivy-report-daos.${{ steps.gen_extension.outputs.EXTENSION }}.txt .
 
       - name: Artifactory upload
@@ -59,4 +59,4 @@ jobs:
           name: trivy-report-daos.${{ steps.gen_extension.outputs.EXTENSION }}
 
       - name: Scan with trivy
-        run: trivy fs -c ci/trivy/trivy.yaml --dependency-tree --exit-code 1 .
+        run: trivy fs -c ci/trivy/trivy.yaml --dependency-tree -f table --exit-code 1 .
