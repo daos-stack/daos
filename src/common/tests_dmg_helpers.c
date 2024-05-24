@@ -1119,7 +1119,7 @@ dmg_pool_extend(const char *dmg_config_file, const uuid_t uuid,
 	rank_list.rl_nr = rank_nr;
 
 	rc = d_rank_list_to_str(&rank_list, &rank_str);
-	if (rc != -DER_SUCCESS)
+	if (rc != 0)
 		D_GOTO(out, rc);
 
 	uuid_unparse_lower(uuid, uuid_str);
