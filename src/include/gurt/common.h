@@ -486,7 +486,8 @@ char *d_rank_list_to_str(d_rank_list_t *rank_list);
 d_rank_range_list_t *d_rank_range_list_alloc(uint32_t size);
 d_rank_range_list_t *d_rank_range_list_realloc(d_rank_range_list_t *range_list, uint32_t size);
 d_rank_range_list_t *d_rank_range_list_create_from_ranks(d_rank_list_t *rank_list);
-char *d_rank_range_list_str(d_rank_range_list_t *list, bool *truncated);
+int
+     d_rank_range_list_str(d_rank_range_list_t *list, char **ranks_str);
 void d_rank_range_list_free(d_rank_range_list_t *range_list);
 
 #ifdef FAULT_INJECTION

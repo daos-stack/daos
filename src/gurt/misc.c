@@ -750,14 +750,19 @@ out:
 char *
 d_rank_list_to_str(d_rank_list_t *rank_list)
 {
-	char			*str;
-	bool			 truncated = false;
-	d_rank_range_list_t	*range_list;
+	char                *str        = NULL;
+	d_rank_range_list_t *range_list = NULL;
+	int                  rc;
 
 	range_list = d_rank_range_list_create_from_ranks(rank_list);
-	if (range_list == NULL)
+	if (range_list == NULL) {
+		DL_WARN(-DER_NOMEM, "rank list could not be serialized");
 		return NULL;
-	str = d_rank_range_list_str(range_list, &truncated);
+	}
+
+	rc = d_rank_range_list_str(range_list, &str);
+	if (rc != -DER_SUCCESS)
+		DL_WARN(rc, "rank list could not be serialized");
 
 	d_rank_range_list_free(range_list);
 
@@ -844,7 +849,6 @@ d_rank_range_list_realloc(d_rank_range_list_t *range_list, uint32_t size)
 	return range_list;
 }
 
-/* TODO (DAOS-10253) Add unit tests for this function */
 d_rank_range_list_t *
 d_rank_range_list_create_from_ranks(d_rank_list_t *rank_list)
 {
@@ -853,6 +857,8 @@ d_rank_range_list_create_from_ranks(d_rank_list_t *rank_list)
 	uint32_t			nranges;
 	unsigned int			i;		/* rank index */
 	unsigned int			j;		/* rank range index */
+
+	D_ASSERT(rank_list != NULL);
 
 	d_rank_list_sort(rank_list);
 	if ((rank_list == NULL) || (rank_list->rl_ranks == NULL) || (rank_list->rl_nr == 0))
@@ -890,56 +896,51 @@ d_rank_range_list_create_from_ranks(d_rank_list_t *rank_list)
 	return range_list;
 }
 
-/* TODO (DAOS-10253) Add unit tests for this function */
-char *
-d_rank_range_list_str(d_rank_range_list_t *list, bool *truncated)
+int
+d_rank_range_list_str(d_rank_range_list_t *list, char **ranks_str)
 {
-	const size_t	MAXBYTES = 512;
-	char	       *line;
-	char	       *linepos;
-	int		ret = 0;
-	size_t		remaining = MAXBYTES - 2u;
-	int		i;
-	int		err = 0;
+	const size_t MAXBYTES  = 512u;
+	size_t       remaining = MAXBYTES - 2u;
+	char        *line;
+	char        *linepos;
+	int          i;
+	int          len;
+	int          rc;
 
-	*truncated = false;
+	D_ASSERT(list != NULL);
+
 	D_ALLOC(line, MAXBYTES);
 	if (line == NULL)
-		return NULL;
+		D_GOTO(error, rc = -DER_NOMEM);
 
 	*line = '[';
 	linepos = line + 1;
 	for (i = 0; i < list->rrl_nr; i++) {
-		uint32_t	lo = list->rrl_ranges[i].lo;
-		uint32_t	hi = list->rrl_ranges[i].hi;
-		bool		lastrange = (i == (list->rrl_nr - 1));
+		uint32_t lo        = list->rrl_ranges[i].lo;
+		uint32_t hi        = list->rrl_ranges[i].hi;
+		bool     lastrange = (i == (list->rrl_nr - 1));
 
 		if (lo == hi)
-			ret = snprintf(linepos, remaining, "%u%s", lo, lastrange ? "" : ",");
+			len = snprintf(linepos, remaining, "%u%s", lo, lastrange ? "" : ",");
 		else
-			ret = snprintf(linepos, remaining, "%u-%u%s", lo, hi, lastrange ? "" : ",");
+			len = snprintf(linepos, remaining, "%u-%u%s", lo, hi, lastrange ? "" : ",");
+		if (len < 0)
+			D_GOTO(error, rc = -DER_INVAL);
+		if (len >= remaining)
+			D_GOTO(error, rc = -DER_TRUNC);
 
-		if (ret < 0) {
-			err = errno;
-			D_ERROR("rank set could not be serialized: %s (%d)\n", strerror(err), err);
-			break;
-		}
-
-		if (ret >= remaining) {
-			err = EOVERFLOW;
-			D_WARN("rank set has been partially serialized\n");
-			break;
-		}
-
-		remaining -= ret;
-		linepos += ret;
+		remaining -= len;
+		linepos += len;
 	}
 	memcpy(linepos, "]", 2u);
 
-	if (err != 0)
-		*truncated = true;
+	*ranks_str = line;
+	D_GOTO(out, rc = -DER_SUCCESS);
 
-	return line;
+error:
+	D_FREE(line);
+out:
+	return rc;
 }
 
 void

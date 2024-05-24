@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -274,17 +274,18 @@ void mock_ds_mgmt_pool_list_cont_teardown(void)
 	}
 }
 
-int			ds_mgmt_pool_query_return;
-uuid_t			ds_mgmt_pool_query_uuid;
-daos_pool_info_t	ds_mgmt_pool_query_info_out;
-daos_pool_info_t	ds_mgmt_pool_query_info_in;
-void			*ds_mgmt_pool_query_info_ptr;
-d_rank_list_t		*ds_mgmt_pool_query_ranks_out;
+int              ds_mgmt_pool_query_return;
+uuid_t           ds_mgmt_pool_query_uuid;
+daos_pool_info_t ds_mgmt_pool_query_info_out;
+daos_pool_info_t ds_mgmt_pool_query_info_in;
+void            *ds_mgmt_pool_query_info_ptr;
+d_rank_list_t   *ds_mgmt_pool_query_enabled_ranks_out;
+d_rank_list_t   *ds_mgmt_pool_query_disabled_ranks_out;
 
 int
-ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **ranks,
-		   daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
-		   uint32_t *upgrade_layout_ver)
+ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **enabled_ranks,
+		   d_rank_list_t **disabled_ranks, daos_pool_info_t *pool_info,
+		   uint32_t *pool_layout_ver, uint32_t *upgrade_layout_ver)
 {
 	/* If function is to return with an error, pool_info and ranks will not be filled. */
 	if (ds_mgmt_pool_query_return != 0)
@@ -292,13 +293,21 @@ ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **r
 
 	uuid_copy(ds_mgmt_pool_query_uuid, pool_uuid);
 	ds_mgmt_pool_query_info_ptr = (void *)pool_info;
+	if (pool_info != NULL && (pool_info->pi_bits & DPI_ENGINES_ENABLED) != 0) {
+		D_ASSERT(enabled_ranks != NULL);
+
+		*enabled_ranks = d_rank_list_alloc(8); /* 0-7 ; caller must free this */
+		ds_mgmt_pool_query_enabled_ranks_out = *enabled_ranks;
+	}
+	if (pool_info != NULL && (pool_info->pi_bits & DPI_ENGINES_DISABLED) != 0) {
+		D_ASSERT(disabled_ranks != NULL);
+
+		*disabled_ranks = d_rank_list_alloc(4); /* 0-4 ; caller must free this */
+		ds_mgmt_pool_query_disabled_ranks_out = *disabled_ranks;
+	}
 	if (pool_info != NULL) {
 		ds_mgmt_pool_query_info_in = *pool_info;
-		*pool_info = ds_mgmt_pool_query_info_out;
-	}
-	if (ranks != NULL) {
-		*ranks = d_rank_list_alloc(8);		/* 0-7 ; caller must free this */
-		ds_mgmt_pool_query_ranks_out = *ranks;
+		*pool_info                 = ds_mgmt_pool_query_info_out;
 	}
 	return ds_mgmt_pool_query_return;	/* 0 */
 }
@@ -310,7 +319,8 @@ mock_ds_mgmt_pool_query_setup(void)
 	uuid_clear(ds_mgmt_pool_query_uuid);
 	ds_mgmt_pool_query_info_ptr = NULL;
 	memset(&ds_mgmt_pool_query_info_out, 0, sizeof(daos_pool_info_t));
-	ds_mgmt_pool_query_ranks_out = NULL;
+	ds_mgmt_pool_query_enabled_ranks_out  = NULL;
+	ds_mgmt_pool_query_disabled_ranks_out = NULL;
 }
 
 int			ds_mgmt_pool_query_targets_return;
