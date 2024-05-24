@@ -392,7 +392,11 @@ process_query_result(d_rank_list_t **enabled_ranks, d_rank_list_t **disabled_ran
 	}
 
 	if ((pi_bits & DPI_ENGINES_ENABLED) != 0) {
-		D_ASSERT(enabled_ranks != NULL);
+		if (enabled_ranks == NULL) {
+			DL_ERROR(-DER_INVAL, DF_UUID ": query pool with invalid params",
+				 DP_UUID(pool_uuid));
+			D_GOTO(error, rc = -DER_INVAL);
+		}
 
 		rc = pool_map_get_ranks(pool_uuid, map, true, &enabled_rank_list);
 		if (rc != 0) {
@@ -404,7 +408,11 @@ process_query_result(d_rank_list_t **enabled_ranks, d_rank_list_t **disabled_ran
 	}
 
 	if ((pi_bits & DPI_ENGINES_DISABLED) != 0) {
-		D_ASSERT(disabled_ranks != NULL);
+		if (disabled_ranks == NULL) {
+			DL_ERROR(-DER_INVAL, DF_UUID ": query pool with invalid params",
+				 DP_UUID(pool_uuid));
+			D_GOTO(error, rc = -DER_INVAL);
+		}
 
 		rc = pool_map_get_ranks(pool_uuid, map, false, &disabled_rank_list);
 		if (rc != 0) {
