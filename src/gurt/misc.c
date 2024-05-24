@@ -744,29 +744,39 @@ out:
  * Create a ranged string representation of a rank list.
  *
  * \param[in]  rank_list	the rank list to represent
+ * \param[out] ranks_str	Returned ranged string (caller must free)
  *
- * \return			a ranged string (caller must free)
+ * \return			0 on success, a negative value on error
  */
-char *
-d_rank_list_to_str(d_rank_list_t *rank_list)
+int
+d_rank_list_to_str(d_rank_list_t *ranks, char **ranks_str)
 {
-	char                *str        = NULL;
 	d_rank_range_list_t *range_list = NULL;
+	char                *range_list_str;
 	int                  rc;
 
-	range_list = d_rank_range_list_create_from_ranks(rank_list);
-	if (range_list == NULL) {
-		DL_WARN(-DER_NOMEM, "rank list could not be serialized");
-		return NULL;
+	D_ASSERT(ranks_str != NULL);
+
+	if (ranks == NULL) {
+		range_list_str = NULL;
+		D_GOTO(out, rc = -DER_SUCCESS);
 	}
 
-	rc = d_rank_range_list_str(range_list, &str);
-	if (rc != -DER_SUCCESS)
-		DL_WARN(rc, "rank list could not be serialized");
+	range_list = d_rank_range_list_create_from_ranks(ranks);
+	if (range_list == NULL)
+		D_GOTO(error, rc = -DER_NOMEM);
 
+	rc = d_rank_range_list_str(range_list, &range_list_str);
+	if (rc != -DER_SUCCESS)
+		D_GOTO(error, rc = rc);
+
+out:
+	*ranks_str = range_list_str;
+
+error:
 	d_rank_range_list_free(range_list);
 
-	return str;
+	return rc;
 }
 
 d_rank_list_t *

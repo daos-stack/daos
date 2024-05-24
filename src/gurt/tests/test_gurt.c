@@ -2511,6 +2511,72 @@ test_d_setenv(void **state)
 }
 
 static void
+test_d_rank_list_to_str(void **state)
+{
+	d_rank_list_t *ranks;
+	char          *ranks_str = NULL;
+	int            i;
+	int            rc;
+
+	(void)state; /* unused */
+
+	// Test with null list
+	rc = d_rank_list_to_str(NULL, &ranks_str);
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_null(ranks_str);
+
+	// Test with empty list
+	ranks = d_rank_list_alloc(0);
+	assert_non_null(ranks);
+
+	rc = d_rank_list_to_str(ranks, &ranks_str);
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_string_equal(ranks_str, "[]");
+
+	D_FREE(ranks_str);
+	d_rank_list_free(ranks);
+
+	// Test with one rank
+	ranks = d_rank_list_alloc(1);
+	assert_non_null(ranks);
+	ranks->rl_ranks[0] = 2;
+
+	rc = d_rank_list_to_str(ranks, &ranks_str);
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_string_equal(ranks_str, "[2]");
+
+	D_FREE(ranks_str);
+	d_rank_list_free(ranks);
+
+	// Test with 4 ranks and two ranges
+	ranks = d_rank_list_alloc(4);
+	assert_non_null(ranks);
+	ranks->rl_ranks[0] = 2;
+	ranks->rl_ranks[1] = 1;
+	ranks->rl_ranks[2] = 5;
+	ranks->rl_ranks[3] = 3;
+
+	rc = d_rank_list_to_str(ranks, &ranks_str);
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_string_equal(ranks_str, "[1-3,5]");
+
+	D_FREE(ranks_str);
+	d_rank_list_free(ranks);
+
+	// Test truncate error
+	ranks = d_rank_list_alloc(1024);
+	assert_non_null(ranks);
+	for (i = 0; i < 1024; ++i)
+		ranks->rl_ranks[i] = 2 * i + 1;
+
+	rc = d_rank_list_to_str(ranks, &ranks_str);
+	assert_int_equal(rc, -DER_TRUNC);
+	assert_null(ranks_str);
+
+	d_rank_list_free(ranks);
+}
+
+static void
 test_d_rank_range_list_create_from_ranks(void **state)
 {
 	d_rank_list_t       *ranks;
@@ -2602,7 +2668,6 @@ test_d_rank_range_list_str(void **state)
 	assert_string_equal(ranks_str, "[2]");
 
 	D_FREE(ranks_str);
-	ranks_str = NULL;
 	d_rank_range_list_free(range_list);
 
 	// Test with 4 ranks and two ranges
@@ -2618,7 +2683,6 @@ test_d_rank_range_list_str(void **state)
 	assert_string_equal(ranks_str, "[1-3,5]");
 
 	D_FREE(ranks_str);
-	ranks_str = NULL;
 	d_rank_range_list_free(range_list);
 
 	// Test truncate error
@@ -2673,6 +2737,7 @@ main(int argc, char **argv)
 	    cmocka_unit_test_setup_teardown(test_d_getenv_uint64_t, setup_getenv_mocks,
 					    teardown_getenv_mocks),
 	    cmocka_unit_test(test_d_setenv),
+	    cmocka_unit_test(test_d_rank_list_to_str),
 	    cmocka_unit_test(test_d_rank_range_list_create_from_ranks),
 	    cmocka_unit_test(test_d_rank_range_list_str)};
 

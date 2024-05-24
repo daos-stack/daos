@@ -1165,10 +1165,10 @@ add_props_to_resp(daos_prop_t *prop, Mgmt__PoolGetPropResp *resp)
 					D_ERROR("svc rank list unset\n");
 					D_GOTO(out, rc = -DER_INVAL);
 				}
-				resp_props[j]->strval = d_rank_list_to_str(
-					(d_rank_list_t *)entry->dpe_val_ptr);
-				if (resp_props[j]->strval == NULL)
-					D_GOTO(out, rc = -DER_NOMEM);
+				rc = d_rank_list_to_str((d_rank_list_t *)entry->dpe_val_ptr,
+							&resp_props[j]->strval);
+				if (rc != -DER_SUCCESS)
+					D_GOTO(out, rc = rc);
 				resp_props[j]->value_case =
 					MGMT__POOL_PROPERTY__VALUE_STRVAL;
 				break;
@@ -1731,37 +1731,6 @@ pool_query_free_tier_stats(Mgmt__PoolQueryResp *resp)
 	resp->n_tier_stats = 0;
 }
 
-static int
-rank_list_to_str(d_rank_list_t *ranks, char **ranks_str)
-{
-	d_rank_range_list_t *range_list = NULL;
-	char                *range_list_str;
-	int                  rc;
-
-	D_ASSERT(ranks_str != NULL);
-
-	if (ranks == NULL) {
-		range_list_str = NULL;
-		D_GOTO(out, rc = -DER_SUCCESS);
-	}
-
-	range_list = d_rank_range_list_create_from_ranks(ranks);
-	if (range_list == NULL)
-		D_GOTO(error, rc = -DER_NOMEM);
-
-	rc = d_rank_range_list_str(range_list, &range_list_str);
-	if (rc != -DER_SUCCESS)
-		D_GOTO(error, rc = rc);
-
-out:
-	*ranks_str = range_list_str;
-
-error:
-	d_rank_range_list_free(range_list);
-
-	return rc;
-}
-
 void
 ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
@@ -1809,7 +1778,7 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(error, rc = rc);
 	}
 
-	rc = rank_list_to_str(enabled_ranks, &enabled_ranks_str);
+	rc = d_rank_list_to_str(enabled_ranks, &enabled_ranks_str);
 	if (rc != -DER_SUCCESS) {
 		DL_ERROR(rc, DF_UUID ": Failed to serialize the list of enabled ranks",
 			 DP_UUID(uuid));
@@ -1819,7 +1788,7 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_DEBUG(DB_MGMT, DF_UUID ": list of enabled ranks: %s\n", DP_UUID(uuid),
 			enabled_ranks_str);
 
-	rc = rank_list_to_str(disabled_ranks, &disabled_ranks_str);
+	rc = d_rank_list_to_str(disabled_ranks, &disabled_ranks_str);
 	if (rc != -DER_SUCCESS) {
 		DL_ERROR(rc, DF_UUID ": Failed to serialize the list of disabled ranks",
 			 DP_UUID(uuid));
