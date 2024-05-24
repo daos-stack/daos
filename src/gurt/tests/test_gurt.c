@@ -2518,8 +2518,6 @@ test_d_rank_list_to_str(void **state)
 	int            i;
 	int            rc;
 
-	(void)state; /* unused */
-
 	// Test with null list
 	rc = d_rank_list_to_str(NULL, &ranks_str);
 	assert_int_equal(rc, -DER_SUCCESS);
@@ -2582,8 +2580,6 @@ test_d_rank_range_list_create_from_ranks(void **state)
 	d_rank_list_t       *ranks;
 	d_rank_range_list_t *range_list;
 
-	(void)state; /* unused */
-
 	// Test with null list
 	range_list = d_rank_range_list_create_from_ranks(NULL);
 	assert_non_null(range_list);
@@ -2643,8 +2639,6 @@ test_d_rank_range_list_str(void **state)
 	char                *ranks_str = NULL;
 	int                  i;
 	int                  rc;
-
-	(void)state; /* unused */
 
 	// Test with empty list
 	range_list = d_rank_range_list_alloc(0);
