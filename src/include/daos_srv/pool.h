@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -177,17 +177,6 @@ struct ds_pool_child {
 	 * DAOS_TGT_TAG.
 	 */
 	void			*spc_metrics[DAOS_NR_MODULE];
-};
-
-struct ds_pool_svc_op_key {
-	uint64_t ok_client_time;
-	uuid_t   ok_client_id;
-	/* TODO: add a (cart) opcode to the key? */
-};
-
-struct ds_pool_svc_op_val {
-	int  ov_rc;
-	char ov_resvd[60];
 };
 
 /* Find ds_pool_child in cache, hold one reference */
