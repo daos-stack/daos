@@ -96,7 +96,7 @@ daos_tx_commit(daos_handle_t th, daos_event_t *ev);
  * Create a read-only transaction from a snapshot. This does not create the
  * snapshot, but only a read transaction to be able to read from a snapshot
  * created with daos_cont_create_snap. If the user passes an epoch that is not
- * snapshoted, or the snapshot was deleted, reads using that transaction may
+ * snapshotted, or the snapshot was deleted, reads using that transaction may
  * get undefined results.
  *
  * \param[in]	coh	Container handle.
@@ -190,7 +190,7 @@ daos_anchor_init(daos_anchor_t *anchor, __attribute__((unused)) unsigned int opt
  * Finalizie an iteratror anchor, free resources allocated
  * during the iteration.
  *
- * \param[in]	anchor	Anchor to be finialized
+ * \param[in]	anchor	Anchor to be finalized
  */
 static inline void
 daos_anchor_fini(__attribute__((unused)) daos_anchor_t *anchor)
