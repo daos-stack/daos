@@ -5,6 +5,7 @@
 """
 
 import re
+import traceback
 
 import avocado
 from control_test_base import ControlTestBase
@@ -257,7 +258,7 @@ class DmgStorageQuery(ControlTestBase):
             # The expected error is included in the DaosTestError exception which is the cause of
             # the CommandFailure exception
             expected_error = "DAOS I/O Engine instance not started or not responding on dRPC"
-            if expected_error not in str(error.__cause__):
+            if expected_error not in traceback.format_exc():
                 self.log.debug(error)
                 self.fail("dmg storage query list-devices failed for an unexpected reason")
 
