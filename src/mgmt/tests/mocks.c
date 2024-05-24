@@ -306,7 +306,7 @@ ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **e
 	if ((pool_info->pi_bits & DPI_ENGINES_DISABLED) != 0) {
 		D_ASSERT(disabled_ranks != NULL);
 
-		*disabled_ranks = d_rank_list_alloc(4); /* 0-4 ; caller must free this */
+		*disabled_ranks = d_rank_list_alloc(4); /* 0-3 ; caller must free this */
 		ds_mgmt_pool_query_disabled_ranks_out = *disabled_ranks;
 	}
 
