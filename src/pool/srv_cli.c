@@ -382,13 +382,13 @@ process_query_result(d_rank_list_t **enabled_ranks, d_rank_list_t **disabled_ran
 	rc = pool_map_create(map_buf, map_version, &map);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID ": failed to create local pool map", DP_UUID(pool_uuid));
-		D_GOTO(error, rc = rc);
+		D_GOTO(error, rc);
 	}
 
 	rc = pool_map_find_failed_tgts(map, NULL, &num_disabled);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID ": failed to get num disabled tgts", DP_UUID(pool_uuid));
-		D_GOTO(error, rc = rc);
+		D_GOTO(error, rc);
 	}
 
 	if ((pi_bits & DPI_ENGINES_ENABLED) != 0) {
@@ -397,7 +397,7 @@ process_query_result(d_rank_list_t **enabled_ranks, d_rank_list_t **disabled_ran
 		rc = pool_map_get_ranks(pool_uuid, map, true, &enabled_rank_list);
 		if (rc != 0) {
 			DL_ERROR(rc, DF_UUID ": pool_map_get_ranks() failed", DP_UUID(pool_uuid));
-			D_GOTO(error, rc = rc);
+			D_GOTO(error, rc);
 		}
 		D_DEBUG(DB_MD, DF_UUID ": found %" PRIu32 " enabled ranks in pool map\n",
 			DP_UUID(pool_uuid), enabled_rank_list->rl_nr);
@@ -409,7 +409,7 @@ process_query_result(d_rank_list_t **enabled_ranks, d_rank_list_t **disabled_ran
 		rc = pool_map_get_ranks(pool_uuid, map, false, &disabled_rank_list);
 		if (rc != 0) {
 			DL_ERROR(rc, DF_UUID ": pool_map_get_ranks() failed", DP_UUID(pool_uuid));
-			D_GOTO(error, rc = rc);
+			D_GOTO(error, rc);
 		}
 		D_DEBUG(DB_MD, DF_UUID ": found %" PRIu32 " disabled ranks in pool map\n",
 			DP_UUID(pool_uuid), disabled_rank_list->rl_nr);

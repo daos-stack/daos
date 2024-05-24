@@ -1168,7 +1168,7 @@ add_props_to_resp(daos_prop_t *prop, Mgmt__PoolGetPropResp *resp)
 				rc = d_rank_list_to_str((d_rank_list_t *)entry->dpe_val_ptr,
 							&resp_props[j]->strval);
 				if (rc != -DER_SUCCESS)
-					D_GOTO(out, rc = rc);
+					D_GOTO(out, rc);
 				resp_props[j]->value_case =
 					MGMT__POOL_PROPERTY__VALUE_STRVAL;
 				break;
@@ -1775,14 +1775,14 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 				&resp.pool_layout_ver, &resp.upgrade_layout_ver);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID ": Failed to query the pool", DP_UUID(uuid));
-		D_GOTO(error, rc = rc);
+		D_GOTO(error, rc);
 	}
 
 	rc = d_rank_list_to_str(enabled_ranks, &enabled_ranks_str);
 	if (rc != -DER_SUCCESS) {
 		DL_ERROR(rc, DF_UUID ": Failed to serialize the list of enabled ranks",
 			 DP_UUID(uuid));
-		D_GOTO(error, rc = rc);
+		D_GOTO(error, rc);
 	}
 	if (enabled_ranks_str != NULL)
 		D_DEBUG(DB_MGMT, DF_UUID ": list of enabled ranks: %s\n", DP_UUID(uuid),
@@ -1792,7 +1792,7 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (rc != -DER_SUCCESS) {
 		DL_ERROR(rc, DF_UUID ": Failed to serialize the list of disabled ranks",
 			 DP_UUID(uuid));
-		D_GOTO(error, rc = rc);
+		D_GOTO(error, rc);
 	}
 	if (disabled_ranks_str != NULL)
 		D_DEBUG(DB_MGMT, DF_UUID ": list of disabled ranks: %s\n", DP_UUID(uuid),

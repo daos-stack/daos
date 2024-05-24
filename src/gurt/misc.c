@@ -768,7 +768,7 @@ d_rank_list_to_str(d_rank_list_t *ranks, char **ranks_str)
 
 	rc = d_rank_range_list_str(range_list, &range_list_str);
 	if (rc != -DER_SUCCESS)
-		D_GOTO(error, rc = rc);
+		D_GOTO(error, rc);
 
 out:
 	*ranks_str = range_list_str;
