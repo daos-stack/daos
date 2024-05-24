@@ -371,7 +371,7 @@ static int
 process_query_result(d_rank_list_t **enabled_ranks, d_rank_list_t **disabled_ranks,
 		     daos_pool_info_t *info, uuid_t pool_uuid, uint32_t map_version,
 		     uint32_t leader_rank, struct daos_pool_space *ps,
-		     struct daos_rebuild_status *rs, struct pool_buf *map_buf)
+		     struct daos_rebuild_status *rs, struct pool_buf *map_buf, uint64_t pi_bits)
 {
 	struct pool_map *map                = NULL;
 	unsigned int     num_disabled       = 0;
@@ -391,7 +391,7 @@ process_query_result(d_rank_list_t **enabled_ranks, d_rank_list_t **disabled_ran
 		D_GOTO(error, rc = rc);
 	}
 
-	if (info != NULL && (info->pi_bits & DPI_ENGINES_ENABLED) != 0) {
+	if ((pi_bits & DPI_ENGINES_ENABLED) != 0) {
 		D_ASSERT(enabled_ranks != NULL);
 
 		rc = pool_map_get_ranks(pool_uuid, map, true, &enabled_rank_list);
@@ -403,7 +403,7 @@ process_query_result(d_rank_list_t **enabled_ranks, d_rank_list_t **disabled_ran
 			DP_UUID(pool_uuid), enabled_rank_list->rl_nr);
 	}
 
-	if (info != NULL && (info->pi_bits & DPI_ENGINES_DISABLED) != 0) {
+	if ((pi_bits & DPI_ENGINES_DISABLED) != 0) {
 		D_ASSERT(disabled_ranks != NULL);
 
 		rc = pool_map_get_ranks(pool_uuid, map, false, &disabled_rank_list);
@@ -454,10 +454,10 @@ pool_query_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 
 	D_DEBUG(DB_MGMT, DF_UUID": Successfully queried pool\n", DP_UUID(pool_uuid));
 
-	rc =
-	    process_query_result(arg->pqa_enabled_ranks, arg->pqa_disabled_ranks, arg->pqa_info,
-				 pool_uuid, out->pqo_op.po_map_version, out->pqo_op.po_hint.sh_rank,
-				 &out->pqo_space, &out->pqo_rebuild_st, arg->pqa_map_buf);
+	rc = process_query_result(arg->pqa_enabled_ranks, arg->pqa_disabled_ranks, arg->pqa_info,
+				  pool_uuid, out->pqo_op.po_map_version,
+				  out->pqo_op.po_hint.sh_rank, &out->pqo_space,
+				  &out->pqo_rebuild_st, arg->pqa_map_buf, arg->pqa_info->pi_bits);
 	if (arg->pqa_layout_ver)
 		*arg->pqa_layout_ver = out->pqo_pool_layout_ver;
 	if (arg->pqa_upgrade_layout_ver)
@@ -488,14 +488,16 @@ static struct dsc_pool_svc_call_cbs pool_query_cbs = {
 /**
  * Query the pool without holding a pool handle.
  *
- * \param[in]	pool_uuid		UUID of the pool
- * \param[in]	ps_ranks		Ranks of pool svc replicas
- * \param[in]	deadline		Unix time deadline in milliseconds
- * \param[out]	enabled_ranks		Optional, returned storage ranks with enabled targets.
- * \param[out]	disabled_ranks		Optional, returned storage ranks with disabled targets.
- * \param[out]	pool_info		Results of the pool query
- * \param[out]	pool_layout_ver		Results of the current pool global version
- * \param[out]	pool_upgrade_layout_ver	Results of the target latest pool global version
+ * \param[in]		pool_uuid		UUID of the pool
+ * \param[in]		ps_ranks		Ranks of pool svc replicas
+ * \param[in]		deadline		Unix time deadline in milliseconds
+ * \param[out]		enabled_ranks		Optional, storage ranks with enabled targets.
+ * \param[out]		disabled_ranks		Optional, storage ranks with disabled targets.
+ * \param[in][out]	pool_info		Results of the pool query
+ * \param[in][out]	pool_layout_ver		Results of the current pool global version
+ * \param[in][out]	upgrade_layout_ver	Results of the target latest pool global version
+ * \param[in][out]	upgrade_layout_ver	Latest pool global version this pool might be
+ *						upgraded
  *
  * \return	0		Success
  *		-DER_INVAL	Invalid input
