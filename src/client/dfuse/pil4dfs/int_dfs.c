@@ -1745,7 +1745,6 @@ d_get_fd_redirected(int fd)
 			DS_ERROR(rc, "pthread_rwlock_unlock() failed");
 			return fd_ret;
 		}
-		D_RWLOCK_UNLOCK(&lock_fd_dup2ed);
 	}
 
 	return fd_ret;
