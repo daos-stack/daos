@@ -496,8 +496,6 @@ static struct dsc_pool_svc_call_cbs pool_query_cbs = {
  * \param[in][out]	pool_info		Results of the pool query
  * \param[in][out]	pool_layout_ver		Results of the current pool global version
  * \param[in][out]	upgrade_layout_ver	Results of the target latest pool global version
- * \param[in][out]	upgrade_layout_ver	Latest pool global version this pool might be
- *						upgraded
  *
  * \return	0		Success
  *		-DER_INVAL	Invalid input
