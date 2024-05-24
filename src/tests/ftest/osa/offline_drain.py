@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import random
+import time
 
 from nvme_utils import ServerFillUp
 from osa_utils import OSAUtils
@@ -77,6 +78,8 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
                 if self.test_with_snapshot is True:
                     # Create a snapshot of the container
                     # after IOR job completes.
+                    self.log.info("Sleep 15 seconds before snapshot ...")
+                    time.sleep(15)
                     self.container.create_snap()
                     self.log.info("Created container snapshot: %s", self.container.epoch)
                 if self.test_during_aggregation is True:
