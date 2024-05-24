@@ -393,7 +393,8 @@ process_query_result(d_rank_list_t **enabled_ranks, d_rank_list_t **disabled_ran
 
 	if ((pi_bits & DPI_ENGINES_ENABLED) != 0) {
 		if (enabled_ranks == NULL) {
-			DL_ERROR(-DER_INVAL, DF_UUID ": query pool with invalid params",
+			DL_ERROR(-DER_INVAL,
+				 DF_UUID ": query pool requested enabled ranks, but ptr is NULL",
 				 DP_UUID(pool_uuid));
 			D_GOTO(error, rc = -DER_INVAL);
 		}
@@ -409,7 +410,8 @@ process_query_result(d_rank_list_t **enabled_ranks, d_rank_list_t **disabled_ran
 
 	if ((pi_bits & DPI_ENGINES_DISABLED) != 0) {
 		if (disabled_ranks == NULL) {
-			DL_ERROR(-DER_INVAL, DF_UUID ": query pool with invalid params",
+			DL_ERROR(-DER_INVAL,
+				 DF_UUID ": query pool requested disabled ranks, but ptr is NULL",
 				 DP_UUID(pool_uuid));
 			D_GOTO(error, rc = -DER_INVAL);
 		}
