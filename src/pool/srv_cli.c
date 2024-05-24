@@ -399,7 +399,7 @@ process_query_result(d_rank_list_t **enabled_ranks, d_rank_list_t **disabled_ran
 			DL_ERROR(rc, DF_UUID ": pool_map_get_ranks() failed", DP_UUID(pool_uuid));
 			D_GOTO(error, rc = rc);
 		}
-		D_DEBUG(DB_MD, DF_UUID ": found %" PRIu32 " enabled ranks in pool map",
+		D_DEBUG(DB_MD, DF_UUID ": found %" PRIu32 " enabled ranks in pool map\n",
 			DP_UUID(pool_uuid), enabled_rank_list->rl_nr);
 	}
 
@@ -411,7 +411,7 @@ process_query_result(d_rank_list_t **enabled_ranks, d_rank_list_t **disabled_ran
 			DL_ERROR(rc, DF_UUID ": pool_map_get_ranks() failed", DP_UUID(pool_uuid));
 			D_GOTO(error, rc = rc);
 		}
-		D_DEBUG(DB_MD, DF_UUID ": found %" PRIu32 " disabled ranks in pool map",
+		D_DEBUG(DB_MD, DF_UUID ": found %" PRIu32 " disabled ranks in pool map\n",
 			DP_UUID(pool_uuid), disabled_rank_list->rl_nr);
 	}
 

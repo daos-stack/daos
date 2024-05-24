@@ -1785,7 +1785,7 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	req = mgmt__pool_query_req__unpack(&alloc.alloc, drpc_req->body.len,
 					   drpc_req->body.data);
 	if (alloc.oom || req == NULL) {
-		D_ERROR("Failed to unpack pool query req");
+		D_ERROR("Failed to unpack pool query req\n");
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		return;
 	}
@@ -1816,7 +1816,7 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(error, rc = rc);
 	}
 	if (enabled_ranks_str != NULL)
-		D_DEBUG(DB_MGMT, DF_UUID ": list of enabled ranks: %s", DP_UUID(uuid),
+		D_DEBUG(DB_MGMT, DF_UUID ": list of enabled ranks: %s\n", DP_UUID(uuid),
 			enabled_ranks_str);
 
 	rc = rank_list_to_str(disabled_ranks, &disabled_ranks_str);
@@ -1826,7 +1826,7 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(error, rc = rc);
 	}
 	if (disabled_ranks_str != NULL)
-		D_DEBUG(DB_MGMT, DF_UUID ": list of disabled ranks: %s", DP_UUID(uuid),
+		D_DEBUG(DB_MGMT, DF_UUID ": list of disabled ranks: %s\n", DP_UUID(uuid),
 			disabled_ranks_str);
 
 	/* Populate the response */
