@@ -293,22 +293,26 @@ ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **e
 
 	uuid_copy(ds_mgmt_pool_query_uuid, pool_uuid);
 	ds_mgmt_pool_query_info_ptr = (void *)pool_info;
-	if (pool_info != NULL && (pool_info->pi_bits & DPI_ENGINES_ENABLED) != 0) {
+
+	if (pool_info == NULL)
+		return ds_mgmt_pool_query_return;
+
+	if ((pool_info->pi_bits & DPI_ENGINES_ENABLED) != 0) {
 		D_ASSERT(enabled_ranks != NULL);
 
 		*enabled_ranks = d_rank_list_alloc(8); /* 0-7 ; caller must free this */
 		ds_mgmt_pool_query_enabled_ranks_out = *enabled_ranks;
 	}
-	if (pool_info != NULL && (pool_info->pi_bits & DPI_ENGINES_DISABLED) != 0) {
+	if ((pool_info->pi_bits & DPI_ENGINES_DISABLED) != 0) {
 		D_ASSERT(disabled_ranks != NULL);
 
 		*disabled_ranks = d_rank_list_alloc(4); /* 0-4 ; caller must free this */
 		ds_mgmt_pool_query_disabled_ranks_out = *disabled_ranks;
 	}
-	if (pool_info != NULL) {
-		ds_mgmt_pool_query_info_in = *pool_info;
-		*pool_info                 = ds_mgmt_pool_query_info_out;
-	}
+
+	ds_mgmt_pool_query_info_in = *pool_info;
+	*pool_info                 = ds_mgmt_pool_query_info_out;
+
 	return ds_mgmt_pool_query_return;	/* 0 */
 }
 
