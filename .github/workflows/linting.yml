@@ -70,7 +70,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
       - name: Check DAOS ftest tags.
-        run: \[ ! -x src/tests/ftest/tags.py \] || ./src/tests/ftest/tags.py lint
+        run: \[ ! -x src/tests/ftest/tags.py \] || ./src/tests/ftest/tags.py lint --verbose
 
   flake8-lint:
     runs-on: ubuntu-22.04
@@ -105,7 +105,7 @@ jobs:
           max-line-length: '100'
           args: '--filename */SConscript, SConstruct'
 
-  Doxygen:
+  doxygen:
     name: Doxygen
     runs-on: ubuntu-22.04
     steps:
@@ -146,7 +146,7 @@ jobs:
       - name: Run pylint check.
         run: ./utils/cq/daos_pylint.py --git --output-format github
 
-  Codespell:
+  codespell:
     name: Codespell
     runs-on: ubuntu-22.04
     steps:
@@ -160,3 +160,18 @@ jobs:
           skip: ./src/control/vendor,./src/control/go.sum,./.git
           ignore_words_file: ci/codespell.ignores
           builtin: clear,rare,informal,names,en-GB_to_en-US
+
+  linting-summary:
+    name: Linting Summary
+    runs-on: ubuntu-22.04
+    needs: [isort, shell-check, log-check, ftest-tags, flake8-lint, doxygen, pylint, codespell]
+    if: (!cancelled())
+    steps:
+      - name: Check if any job failed
+        run: |
+          if [[ -z "$(echo "${{ join(needs.*.result, '') }}" | sed -e 's/success//g')" ]]; then
+            echo "All jobs succeeded"
+          else
+            echo "One or more jobs did not succeed"
+            exit 1
+          fi

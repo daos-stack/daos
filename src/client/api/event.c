@@ -14,6 +14,7 @@
 #define D_LOGFAC	DD_FAC(client)
 
 #include "client_internal.h"
+#include <daos/mgmt.h>
 #include <daos/rpc.h>
 
 /** thread-private event */
@@ -66,7 +67,7 @@ static unsigned int eq_ref;
 static tse_sched_t daos_sched_g;
 
 int
-daos_eq_lib_init()
+daos_eq_lib_init(crt_init_options_t *crt_info)
 {
 	int rc;
 
@@ -76,7 +77,7 @@ daos_eq_lib_init()
 		D_GOTO(unlock, rc = 0);
 	}
 
-	rc = crt_init_opt(NULL, 0, daos_crt_init_opt_get(false, 1));
+	rc = crt_init_opt(NULL, 0, crt_info);
 	if (rc != 0) {
 		D_ERROR("failed to initialize crt: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(unlock, rc);
@@ -110,9 +111,19 @@ crt:
 int
 daos_eq_lib_reset_after_fork(void)
 {
+	crt_init_options_t *crt_info;
+	int                 rc;
+
 	eq_ref            = 0;
 	ev_thpriv_is_init = false;
-	return daos_eq_lib_init();
+	crt_info          = daos_crt_init_opt_get(false, 1);
+	rc                = dc_mgmt_net_cfg(NULL, crt_info);
+	if (rc == 0)
+		rc = daos_eq_lib_init(crt_info);
+	D_FREE(crt_info->cio_provider);
+	D_FREE(crt_info->cio_interface);
+	D_FREE(crt_info->cio_domain);
+	return rc;
 }
 
 int

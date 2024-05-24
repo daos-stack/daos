@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,11 +15,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
+	"github.com/daos-stack/daos/src/control/cmd/daos/pretty"
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/common/proto/convert"
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/ui"
 )
@@ -196,29 +194,30 @@ type poolQueryCmd struct {
 	poolBaseCmd
 	ShowEnabledRanks  bool `short:"e" long:"show-enabled" description:"Show engine unique identifiers (ranks) which are enabled"`
 	ShowDisabledRanks bool `short:"b" long:"show-disabled" description:"Show engine unique identifiers (ranks) which are disabled"`
+	HealthOnly        bool `short:"t" long:"health-only" description:"Only perform pool health related queries"`
 }
 
-func convertPoolSpaceInfo(in *C.struct_daos_pool_space, mt C.uint) *mgmtpb.StorageUsageStats {
+func convertPoolSpaceInfo(in *C.struct_daos_pool_space, mt C.uint) *daos.StorageUsageStats {
 	if in == nil {
 		return nil
 	}
 
-	return &mgmtpb.StorageUsageStats{
+	return &daos.StorageUsageStats{
 		Total:     uint64(in.ps_space.s_total[mt]),
 		Free:      uint64(in.ps_space.s_free[mt]),
 		Min:       uint64(in.ps_free_min[mt]),
 		Max:       uint64(in.ps_free_max[mt]),
 		Mean:      uint64(in.ps_free_mean[mt]),
-		MediaType: mgmtpb.StorageMediaType(mt),
+		MediaType: daos.StorageMediaType(mt),
 	}
 }
 
-func convertPoolRebuildStatus(in *C.struct_daos_rebuild_status) *mgmtpb.PoolRebuildStatus {
+func convertPoolRebuildStatus(in *C.struct_daos_rebuild_status) *daos.PoolRebuildStatus {
 	if in == nil {
 		return nil
 	}
 
-	out := &mgmtpb.PoolRebuildStatus{
+	out := &daos.PoolRebuildStatus{
 		Status: int32(in.rs_errno),
 	}
 	if out.Status == 0 {
@@ -226,53 +225,43 @@ func convertPoolRebuildStatus(in *C.struct_daos_rebuild_status) *mgmtpb.PoolRebu
 		out.Records = uint64(in.rs_rec_nr)
 		switch {
 		case in.rs_version == 0:
-			out.State = mgmtpb.PoolRebuildStatus_IDLE
+			out.State = daos.PoolRebuildStateIdle
 		case C.get_rebuild_state(in) == C.DRS_COMPLETED:
-			out.State = mgmtpb.PoolRebuildStatus_DONE
+			out.State = daos.PoolRebuildStateDone
 		default:
-			out.State = mgmtpb.PoolRebuildStatus_BUSY
+			out.State = daos.PoolRebuildStateBusy
 		}
 	}
 
 	return out
 }
 
-// This is not great... But it allows us to leverage the existing
-// pretty printer that dmg uses for this info. Better to find some
-// way to unify all of this and remove redundancy/manual conversion.
-//
-// We're basically doing the same thing as ds_mgmt_drpc_pool_query()
-// to stuff the info into a protobuf message and then using the
-// automatic conversion from proto to control. Kind of ugly but
-// gets the job done. We could potentially create some function
-// that's shared between this code and the drpc handlers to deal
-// with stuffing the protobuf message but it's probably overkill.
-func convertPoolInfo(pinfo *C.daos_pool_info_t) (*control.PoolQueryResp, error) {
-	pqp := new(mgmtpb.PoolQueryResp)
+func convertPoolInfo(pinfo *C.daos_pool_info_t) (*daos.PoolInfo, error) {
+	poolInfo := new(daos.PoolInfo)
 
-	pqp.Uuid = uuid.Must(uuidFromC(pinfo.pi_uuid)).String()
-	pqp.TotalTargets = uint32(pinfo.pi_ntargets)
-	pqp.DisabledTargets = uint32(pinfo.pi_ndisabled)
-	pqp.ActiveTargets = uint32(pinfo.pi_space.ps_ntargets)
-	pqp.TotalEngines = uint32(pinfo.pi_nnodes)
-	pqp.Leader = uint32(pinfo.pi_leader)
-	pqp.Version = uint32(pinfo.pi_map_ver)
-
-	pqp.TierStats = []*mgmtpb.StorageUsageStats{
-		convertPoolSpaceInfo(&pinfo.pi_space, C.DAOS_MEDIA_SCM),
-		convertPoolSpaceInfo(&pinfo.pi_space, C.DAOS_MEDIA_NVME),
+	poolInfo.QueryMask = daos.PoolQueryMask(pinfo.pi_bits)
+	poolInfo.UUID = uuid.Must(uuidFromC(pinfo.pi_uuid))
+	poolInfo.TotalTargets = uint32(pinfo.pi_ntargets)
+	poolInfo.DisabledTargets = uint32(pinfo.pi_ndisabled)
+	poolInfo.ActiveTargets = uint32(pinfo.pi_space.ps_ntargets)
+	poolInfo.TotalEngines = uint32(pinfo.pi_nnodes)
+	poolInfo.ServiceLeader = uint32(pinfo.pi_leader)
+	poolInfo.Version = uint32(pinfo.pi_map_ver)
+	poolInfo.State = daos.PoolServiceStateReady
+	if poolInfo.DisabledTargets > 0 {
+		poolInfo.State = daos.PoolServiceStateDegraded
 	}
-	pqp.Rebuild = convertPoolRebuildStatus(&pinfo.pi_rebuild_st)
 
-	pqr := new(control.PoolQueryResp)
-	return pqr, convert.Types(pqp, pqr)
+	poolInfo.Rebuild = convertPoolRebuildStatus(&pinfo.pi_rebuild_st)
+	if poolInfo.QueryMask.HasOption(daos.PoolQueryOptionSpace) {
+		poolInfo.TierStats = []*daos.StorageUsageStats{
+			convertPoolSpaceInfo(&pinfo.pi_space, C.DAOS_MEDIA_SCM),
+			convertPoolSpaceInfo(&pinfo.pi_space, C.DAOS_MEDIA_NVME),
+		}
+	}
+
+	return poolInfo, nil
 }
-
-const (
-	dpiQuerySpace   = C.DPI_SPACE
-	dpiQueryRebuild = C.DPI_REBUILD_STATUS
-	dpiQueryAll     = C.uint64_t(^uint64(0)) // DPI_ALL is -1
-)
 
 func generateRankSet(ranklist *C.d_rank_list_t) string {
 	if ranklist.rl_nr == 0 {
@@ -292,9 +281,20 @@ func generateRankSet(ranklist *C.d_rank_list_t) string {
 }
 
 func (cmd *poolQueryCmd) Execute(_ []string) error {
+	queryMask := daos.DefaultPoolQueryMask
+	if cmd.HealthOnly {
+		queryMask = daos.HealthOnlyPoolQueryMask
+	}
 	if cmd.ShowEnabledRanks && cmd.ShowDisabledRanks {
 		return errors.New("show-enabled and show-disabled can't be used at the same time.")
 	}
+	if cmd.ShowEnabledRanks {
+		queryMask.SetOptions(daos.PoolQueryOptionEnabledEngines)
+	}
+	if cmd.ShowDisabledRanks {
+		queryMask.SetOptions(daos.PoolQueryOptionDisabledEngines)
+	}
+
 	var rlPtr **C.d_rank_list_t = nil
 	var rl *C.d_rank_list_t = nil
 
@@ -308,49 +308,41 @@ func (cmd *poolQueryCmd) Execute(_ []string) error {
 	}
 	defer cleanup()
 
-	pinfo := C.daos_pool_info_t{
-		pi_bits: dpiQueryAll,
-	}
-	if cmd.ShowDisabledRanks {
-		pinfo.pi_bits &= C.uint64_t(^(uint64(C.DPI_ENGINES_ENABLED)))
+	cPoolInfo := C.daos_pool_info_t{
+		pi_bits: C.uint64_t(queryMask),
 	}
 
-	rc := C.daos_pool_query(cmd.cPoolHandle, rlPtr, &pinfo, nil, nil)
+	rc := C.daos_pool_query(cmd.cPoolHandle, rlPtr, &cPoolInfo, nil, nil)
 	defer C.d_rank_list_free(rl)
 	if err := daosError(rc); err != nil {
 		return errors.Wrapf(err,
 			"failed to query pool %s", cmd.poolUUID)
 	}
 
-	pqr, err := convertPoolInfo(&pinfo)
+	poolInfo, err := convertPoolInfo(&cPoolInfo)
 	if err != nil {
 		return err
 	}
 
 	if rlPtr != nil {
 		if cmd.ShowEnabledRanks {
-			pqr.EnabledRanks = ranklist.MustCreateRankSet(generateRankSet(rl))
+			poolInfo.EnabledRanks = ranklist.MustCreateRankSet(generateRankSet(rl))
 		}
 		if cmd.ShowDisabledRanks {
-			pqr.DisabledRanks = ranklist.MustCreateRankSet(generateRankSet(rl))
+			poolInfo.DisabledRanks = ranklist.MustCreateRankSet(generateRankSet(rl))
 		}
-	}
-
-	// Update the Pool Query State based on response
-	err = pqr.UpdateState()
-	if err != nil {
-		return err
 	}
 
 	if cmd.JSONOutputEnabled() {
-		return cmd.OutputJSON(pqr, nil)
+		return cmd.OutputJSON(poolInfo, nil)
 	}
 
 	var bld strings.Builder
-	if err := pretty.PrintPoolQueryResponse(pqr, &bld); err != nil {
+	if err := pretty.PrintPoolInfo(poolInfo, &bld); err != nil {
 		return err
 	}
 
+	cmd.Debugf("Pool query options: %s", poolInfo.QueryMask)
 	cmd.Info(bld.String())
 
 	return nil
@@ -364,11 +356,11 @@ type poolQueryTargetsCmd struct {
 }
 
 // For using the pretty printer that dmg uses for this target info.
-func convertPoolTargetInfo(ptinfo *C.daos_target_info_t) (*control.PoolQueryTargetInfo, error) {
-	pqti := new(control.PoolQueryTargetInfo)
-	pqti.Type = control.PoolQueryTargetType(ptinfo.ta_type)
-	pqti.State = control.PoolQueryTargetState(ptinfo.ta_state)
-	pqti.Space = []*control.StorageTargetUsage{
+func convertPoolTargetInfo(ptinfo *C.daos_target_info_t) (*daos.PoolQueryTargetInfo, error) {
+	pqti := new(daos.PoolQueryTargetInfo)
+	pqti.Type = daos.PoolQueryTargetType(ptinfo.ta_type)
+	pqti.State = daos.PoolQueryTargetState(ptinfo.ta_state)
+	pqti.Space = []*daos.StorageUsageStats{
 		{
 			Total:     uint64(ptinfo.ta_space.s_total[C.DAOS_MEDIA_SCM]),
 			Free:      uint64(ptinfo.ta_space.s_free[C.DAOS_MEDIA_SCM]),
@@ -396,10 +388,10 @@ func (cmd *poolQueryTargetsCmd) Execute(_ []string) error {
 		return errors.WithMessage(err, "parsing target list")
 	}
 
-	infoResp := new(control.PoolQueryTargetResp)
 	ptInfo := new(C.daos_target_info_t)
 	var rc C.int
 
+	infos := make([]*daos.PoolQueryTargetInfo, 0, len(idxList))
 	for tgt := 0; tgt < len(idxList); tgt++ {
 		rc = C.daos_pool_query_target(cmd.cPoolHandle, C.uint32_t(idxList[tgt]), C.uint32_t(cmd.Rank), ptInfo, nil)
 		if err := daosError(rc); err != nil {
@@ -408,19 +400,21 @@ func (cmd *poolQueryTargetsCmd) Execute(_ []string) error {
 		}
 
 		tgtInfo, err := convertPoolTargetInfo(ptInfo)
-		infoResp.Infos = append(infoResp.Infos, tgtInfo)
 		if err != nil {
 			return err
 		}
+		infos = append(infos, tgtInfo)
 	}
 
 	if cmd.JSONOutputEnabled() {
-		return cmd.OutputJSON(infoResp, nil)
+		return cmd.OutputJSON(infos, nil)
 	}
 
 	var bld strings.Builder
-	if err := pretty.PrintPoolQueryTargetResponse(infoResp, &bld); err != nil {
-		return err
+	for _, info := range infos {
+		if err := pretty.PrintPoolQueryTargetInfo(info, &bld); err != nil {
+			return err
+		}
 	}
 
 	cmd.Info(bld.String())

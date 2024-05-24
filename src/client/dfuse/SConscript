@@ -33,7 +33,7 @@ OPS_SRC = ['create',
            'statfs']
 
 IOIL_SRC = ['int_posix.c', 'int_read.c', 'int_write.c']
-PIL4DFS_SRC = ['int_dfs.c', 'hook.c', 'dfs_dcache']
+PIL4DFS_SRC = ['int_dfs.c', 'hook.c', 'dfs_dcache', 'aio.c']
 
 
 def build_common(env, files, is_shared):
