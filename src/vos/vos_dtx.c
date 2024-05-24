@@ -877,7 +877,8 @@ out:
 	if (rc != 0)
 		D_FREE(dce);
 
-	if (rm_cos != NULL && (rc == 0 || rc == -DER_NONEXIST))
+	if (rm_cos != NULL &&
+	    (rc == 0 || rc == -DER_NONEXIST || (rc == -DER_ALREADY && dae == NULL)))
 		*rm_cos = true;
 
 	return rc;
@@ -2717,7 +2718,7 @@ vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch)
 				       sizeof(obj->obj_df->vo_sync), UMEM_COMMIT_IMMEDIATE);
 	}
 
-	vos_obj_release(occ, obj, false);
+	vos_obj_release(occ, obj, 0, false);
 	return 0;
 }
 

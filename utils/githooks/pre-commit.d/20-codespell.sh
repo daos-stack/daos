@@ -9,20 +9,15 @@
 
 set -ue
 
-echo "CodeSpell:"
+_print_githook_header "CodeSpell"
 # shellcheck disable=SC1091
 
 if ! command -v codespell > /dev/null 2>&1
 then
-    echo "  codespell not installed. Install codespell command to improve pre-commit checks"
+    echo "codespell not installed. Install codespell command to improve pre-commit checks:"
     echo "  python3 -m pip install -r ./utils/cq/requirements.txt"
     exit 0
 fi
 
-if [ "$TARGET" = "HEAD" ]; then
-        echo "  Checking against HEAD"
-        git diff HEAD --name-only | xargs codespell
-else
-        echo "  Checking against branch ${TARGET}"
-        git diff "$TARGET"... --name-only | xargs codespell
-fi
+echo "Checking for spelling mistakes"
+_git_diff_cached_files | xargs codespell

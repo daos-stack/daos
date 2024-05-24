@@ -1821,7 +1821,7 @@ class TestWithServers(TestWithoutServers):
         """
         self.container = self.get_container(pool, namespace, create, daos, **params)
 
-    def add_container_qty(self, quantity, pool, namespace=None, create=True):
+    def add_container_qty(self, quantity, pool, namespace=CONT_NAMESPACE, create=True):
         """Add multiple containers to the test case.
 
         This method requires self.container to be defined as a list.

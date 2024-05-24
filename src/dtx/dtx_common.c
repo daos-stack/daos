@@ -1627,6 +1627,7 @@ out:
 static void
 dtx_flush_on_close(struct dss_module_info *dmi, struct dtx_batched_cont_args *dbca)
 {
+	struct dss_xstream	*dx = dss_current_xstream();
 	struct ds_cont_child	*cont = dbca->dbca_cont;
 	struct dtx_stat		 stat = { 0 };
 	uint64_t		 total = 0;
@@ -1636,7 +1637,8 @@ dtx_flush_on_close(struct dss_module_info *dmi, struct dtx_batched_cont_args *db
 	dtx_stat(cont, &stat);
 
 	/* dbca->dbca_reg_gen != cont->sc_dtx_batched_gen means someone reopen the container. */
-	while (dbca->dbca_reg_gen == cont->sc_dtx_batched_gen && rc >= 0) {
+	while (!dss_xstream_exiting(dx) &&
+	       dbca->dbca_reg_gen == cont->sc_dtx_batched_gen && rc >= 0) {
 		struct dtx_entry	**dtes = NULL;
 		struct dtx_cos_key	 *dcks = NULL;
 		struct dtx_coll_entry	 *dce = NULL;
@@ -1823,10 +1825,6 @@ dtx_cont_register(struct ds_cont_child *cont)
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
-	cont->sc_dtx_committable_count = 0;
-	cont->sc_dtx_committable_coll_count = 0;
-	D_INIT_LIST_HEAD(&cont->sc_dtx_cos_list);
-	D_INIT_LIST_HEAD(&cont->sc_dtx_coll_list);
 	ds_cont_child_get(cont);
 	dbca->dbca_refs = 0;
 	dbca->dbca_cont = cont;
@@ -2329,10 +2327,11 @@ int
 dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 	     daos_epoch_t epoch)
 {
-	int	cnt;
-	int	rc = 0;
+	struct dss_xstream	*dx = dss_current_xstream();
+	int			 cnt;
+	int			 rc = 0;
 
-	while (dtx_cont_opened(cont)) {
+	while (!dss_xstream_exiting(dx) && (dtx_cont_opened(cont) || oid == NULL)) {
 		struct dtx_entry	**dtes = NULL;
 		struct dtx_cos_key	 *dcks = NULL;
 		struct dtx_coll_entry	 *dce = NULL;
