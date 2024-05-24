@@ -2518,6 +2518,13 @@ test_d_rank_range_list_create_from_ranks(void **state)
 
 	(void)state; /* unused */
 
+	// Test with null list
+	range_list = d_rank_range_list_create_from_ranks(NULL);
+	assert_non_null(range_list);
+	assert_int_equal(range_list->rrl_nr, 0);
+
+	d_rank_range_list_free(range_list);
+
 	// Test with empty list
 	ranks = d_rank_list_alloc(0);
 	assert_non_null(ranks);
