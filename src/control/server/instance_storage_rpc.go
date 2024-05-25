@@ -7,9 +7,12 @@
 package server
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"os/exec"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -20,6 +23,8 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -163,10 +168,29 @@ func (ei *EngineInstance) StorageFormatSCM(ctx context.Context, force bool) (mRe
 	return
 }
 
-func addLinkInfoToHealthStats(health *ctlpb.BioHealthResp, pciCfg []byte) error {
+func addLinkInfoToHealthStats(log logging.DebugLogger, health *ctlpb.BioHealthResp, pciCfg []byte) error {
+	// Convert byte array to lspci-format.
+	sb := new(strings.Builder)
+	sb.WriteString("01:00.0 device #1\n") // Spoof preamble required for lspci to parse.
+	byteArrayToString(pciCfg, sb)
+	pciCfgStr := sb.String()
+	log.Debugf(pciCfgStr)
+
 	// Pipe string representation of PCI config space into lspci.
+	cmd := exec.Command(system.GetLspciPath(), "-F", "<"+pciCfgStr)
+	r, _ := cmd.StdoutPipe()
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	if err := cmd.Wait(); err != nil {
+		return err
+	}
 
 	// Extract Lnk entries.
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		log.Debugf(scanner.Text())
+	}
 
 	// Add extracted entries to health stats.
 
@@ -187,7 +211,7 @@ func populateCtrlrHealth(ctx context.Context, engine Engine, req *ctlpb.BioHealt
 			stateName)
 	}
 
-	if err := addLinkInfoToHealthStats(health, ctrlr.PciCfg); err != nil {
+	if err := addLinkInfoToHealthStats(engine, health, ctrlr.PciCfg); err != nil {
 		return false, errors.Wrapf(err, "add link stats for %q", ctrlr)
 	}
 

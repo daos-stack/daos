@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -186,4 +186,15 @@ func getDistribution(open openFunc) Distribution {
 // GetDistribution returns information about the current Linux distribution.
 func GetDistribution() Distribution {
 	return getDistribution(os.Open)
+}
+
+// GetLspciPath returns binary path based on distribution.
+func GetLspciPath() string {
+	distro := GetDistribution()
+
+	if distro.ID == "opensuse-leap" || distro.ID == "opensuse" || distro.ID == "sles" {
+		return "/sbin/lspci"
+	}
+
+	return "lspci"
 }

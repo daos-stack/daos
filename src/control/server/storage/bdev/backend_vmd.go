@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -142,17 +142,10 @@ func substituteVMDAddresses(log logging.Logger, inPCIAddrs *hardware.PCIAddressS
 // DetectVMD returns whether VMD devices have been found and a slice of VMD
 // PCI addresses if found. Implements vmdDetectFn.
 func DetectVMD() (*hardware.PCIAddressSet, error) {
-	distro := system.GetDistribution()
-	var lspciCmd *exec.Cmd
-
 	// Check available VMD devices with command:
 	// "$lspci | grep  -i -E "Volume Management Device"
-	switch {
-	case distro.ID == "opensuse-leap" || distro.ID == "opensuse" || distro.ID == "sles":
-		lspciCmd = exec.Command("/sbin/lspci")
-	default:
-		lspciCmd = exec.Command("lspci")
-	}
+
+	lspciCmd := exec.Command(system.GetLspciPath())
 
 	vmdCmd := exec.Command("grep", "-i", "-E", "Volume Management Device")
 	var cmdOut bytes.Buffer
@@ -160,9 +153,15 @@ func DetectVMD() (*hardware.PCIAddressSet, error) {
 
 	vmdCmd.Stdin, _ = lspciCmd.StdoutPipe()
 	vmdCmd.Stdout = &cmdOut
-	_ = lspciCmd.Start()
-	_ = vmdCmd.Run()
-	_ = lspciCmd.Wait()
+	if err := lspciCmd.Start(); err != nil {
+		return nil, err
+	}
+	if err := vmdCmd.Run(); err != nil {
+		return nil, err
+	}
+	if err := lspciCmd.Wait(); err != nil {
+		return nil, err
+	}
 
 	if cmdOut.Len() == 0 {
 		return hardware.NewPCIAddressSet()

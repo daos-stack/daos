@@ -828,3 +828,21 @@ func checkFabricInterface(name string, lookup ifLookupFn) error {
 
 	return nil
 }
+
+// Convert byte array to formatted string of hex byte characters, 16 bytes per line.
+func byteArrayToString(ba []byte, sb *strings.Builder) {
+	for i, b := range ba {
+		rem := i % 16
+		if rem == 0 {
+			sb.WriteString(fmt.Sprintf("%02x: ", i))
+		}
+		sb.WriteString(fmt.Sprintf("%02x", b))
+		if i != (len(ba) - 1) {
+			if rem == 15 {
+				sb.WriteString("\n")
+			} else {
+				sb.WriteString(" ")
+			}
+		}
+	}
+}
