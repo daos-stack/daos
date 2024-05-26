@@ -2701,16 +2701,17 @@ vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch)
 	occ = vos_obj_cache_current(cont->vc_pool->vp_sysdb);
 	rc = vos_obj_hold(occ, cont, oid, &epr, 0, VOS_OBJ_VISIBLE,
 			  DAOS_INTENT_DEFAULT, &obj, 0);
-	if (rc != 0) {
-		D_ERROR(DF_UOID" fail to mark sync: rc = "DF_RC"\n",
-			DP_UOID(oid), DP_RC(rc));
+	D_WARN("Mark sync for obj "DF_UOID" with epoch "DF_U64": rc = %d\n",
+	       DP_UOID(oid), epoch, rc);
+	if (rc != 0)
 		return rc;
-	}
 
 	if (obj->obj_df != NULL && obj->obj_df->vo_sync < epoch) {
+#if 0
 		D_INFO("Update sync epoch "DF_U64" => "DF_U64
 		       " for the obj "DF_UOID"\n",
 		       obj->obj_sync_epoch, epoch, DP_UOID(oid));
+#endif
 
 		obj->obj_sync_epoch = epoch;
 		umem_atomic_copy(vos_cont2umm(cont),
