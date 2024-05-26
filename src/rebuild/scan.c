@@ -762,6 +762,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	rebuild_nr = rc;
 	rc = 0;
 	for (i = 0; i < rebuild_nr; i++) {
+		if (oc_attr->ca_grp_nr == 4)
 		D_ERROR("rebuild obj "DF_UOID"/"DF_UUID"/"DF_UUID
 			"on %d for shard %d eph "DF_U64" visible %s\n", DP_UOID(oid),
 			DP_UUID(rpt->rt_pool_uuid), DP_UUID(arg->co_uuid),
@@ -770,6 +771,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 
 		/* Ignore the shard if it is not in the same group of failure shard */
 		if ((int)tgts[i] == -1 || oid.id_shard / grp_size != shards[i] / grp_size) {
+			if (oc_attr->ca_grp_nr == 4)
 			D_ERROR("i %d stale object "DF_UOID" shards %u grp_size %u tgt %d\n",
 				i, DP_UOID(oid), shards[i], grp_size, (int)tgts[i]);
 			continue;

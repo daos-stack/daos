@@ -140,11 +140,12 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
                 if pool_fillup > 0:
                     self.start_ior_load(storage='NVMe', operation='Auto_Read', percent=pool_fillup)
                 else:
+                    self.log.info("Check container before IOR read ...")
+                    self.container.check()
                     self.run_ior_thread("Read", oclass, test_seq)
                     self.run_mdtest_thread(oclass)
                     self.container = self.pool_cont_dict[self.pool][0]
                     self.container.daos.env['UCX_LOG_LEVEL'] = 'error'
-                    self.container.check()
 
     def test_osa_offline_drain(self):
         """JIRA ID: DAOS-4750.
