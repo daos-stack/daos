@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -72,8 +72,8 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
                     self.start_ior_load(storage='NVMe', operation="Auto_Write", percent=pool_fillup)
                     self.log.info(self.pool.pool_percentage_used())
                 else:
-                    self.run_ior_thread("Write", oclass, test_seq)
                     self.run_mdtest_thread(oclass)
+                    self.run_ior_thread("Write", oclass, test_seq)
                 if self.test_with_snapshot is True:
                     # Create a snapshot of the container
                     # after IOR job completes.
