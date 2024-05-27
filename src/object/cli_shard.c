@@ -2304,7 +2304,7 @@ obj_shard_coll_query_cb(tse_task_t *task, void *data)
 
 	/*
 	 * Merge (L4) the results from engine that may be single shard or aggregated results from
-	 * multuple shards from single or multiple engines.
+	 * multiple shards from single or multiple engines.
 	 */
 	D_SPIN_LOCK(&cb_args->obj->cob_spin);
 	rc = daos_obj_query_merge(&oqma);

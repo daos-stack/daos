@@ -31,12 +31,13 @@ func TestPretty_PrintPoolInfo(t *testing.T) {
 			pi: &daos.PoolInfo{},
 			expPrintStr: fmt.Sprintf(`
 Pool %s, ntarget=0, disabled=0, leader=0, version=0, state=Creating
-Pool space info:
-- Target(VOS) count:0
+Pool health info:
+- No rebuild status available.
 `, uuid.Nil.String()),
 		},
 		"normal response": {
 			pi: &daos.PoolInfo{
+				QueryMask:        daos.DefaultPoolQueryMask,
 				State:            daos.PoolServiceStateDegraded,
 				UUID:             poolUUID,
 				TotalTargets:     2,
@@ -65,6 +66,8 @@ Pool space info:
 			expPrintStr: fmt.Sprintf(`
 Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
+Pool health info:
+- Rebuild busy, 42 objs, 21 recs
 Pool space info:
 - Target(VOS) count:1
 - Storage tier 0 (SCM):
@@ -73,11 +76,11 @@ Pool space info:
 - Storage tier 1 (NVMe):
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
-Rebuild busy, 42 objs, 21 recs
 `, poolUUID.String()),
 		},
 		"normal response; enabled ranks": {
 			pi: &daos.PoolInfo{
+				QueryMask:        daos.DefaultPoolQueryMask,
 				State:            daos.PoolServiceStateDegraded,
 				UUID:             poolUUID,
 				TotalTargets:     2,
@@ -107,8 +110,10 @@ Rebuild busy, 42 objs, 21 recs
 			expPrintStr: fmt.Sprintf(`
 Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
-Pool space info:
+Pool health info:
 - Enabled ranks: 0-2
+- Rebuild busy, 42 objs, 21 recs
+Pool space info:
 - Target(VOS) count:1
 - Storage tier 0 (SCM):
   Total size: 2 B
@@ -116,11 +121,11 @@ Pool space info:
 - Storage tier 1 (NVMe):
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
-Rebuild busy, 42 objs, 21 recs
 `, poolUUID.String()),
 		},
 		"normal response; disabled ranks": {
 			pi: &daos.PoolInfo{
+				QueryMask:        daos.DefaultPoolQueryMask,
 				State:            daos.PoolServiceStateDegraded,
 				UUID:             poolUUID,
 				TotalTargets:     2,
@@ -150,8 +155,10 @@ Rebuild busy, 42 objs, 21 recs
 			expPrintStr: fmt.Sprintf(`
 Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
-Pool space info:
+Pool health info:
 - Disabled ranks: 0-1,3
+- Rebuild busy, 42 objs, 21 recs
+Pool space info:
 - Target(VOS) count:1
 - Storage tier 0 (SCM):
   Total size: 2 B
@@ -159,11 +166,11 @@ Pool space info:
 - Storage tier 1 (NVMe):
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
-Rebuild busy, 42 objs, 21 recs
 `, poolUUID.String()),
 		},
 		"unknown/invalid rebuild state response": {
 			pi: &daos.PoolInfo{
+				QueryMask:        daos.DefaultPoolQueryMask,
 				State:            daos.PoolServiceStateDegraded,
 				UUID:             poolUUID,
 				TotalTargets:     2,
@@ -193,8 +200,10 @@ Rebuild busy, 42 objs, 21 recs
 			expPrintStr: fmt.Sprintf(`
 Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
-Pool space info:
+Pool health info:
 - Disabled ranks: 0-1,3
+- Rebuild unknown, 42 objs, 21 recs
+Pool space info:
 - Target(VOS) count:1
 - Storage tier 0 (SCM):
   Total size: 2 B
@@ -202,11 +211,11 @@ Pool space info:
 - Storage tier 1 (NVMe):
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
-Rebuild unknown, 42 objs, 21 recs
 `, poolUUID.String()),
 		},
 		"rebuild failed": {
 			pi: &daos.PoolInfo{
+				QueryMask:        daos.DefaultPoolQueryMask,
 				State:            daos.PoolServiceStateDegraded,
 				UUID:             poolUUID,
 				TotalTargets:     2,
@@ -236,6 +245,8 @@ Rebuild unknown, 42 objs, 21 recs
 			expPrintStr: fmt.Sprintf(`
 Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
+Pool health info:
+- Rebuild failed, status=2
 Pool space info:
 - Target(VOS) count:1
 - Storage tier 0 (SCM):
@@ -244,7 +255,6 @@ Pool space info:
 - Storage tier 1 (NVMe):
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
-Rebuild failed, status=2
 `, poolUUID.String()),
 		},
 	} {

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,32 +11,35 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/mount"
-	"github.com/pkg/errors"
 )
-
-// SystemProvider provides operating system capabilities.
-type SystemProvider interface {
-	system.IsMountedProvider
-	system.MountProvider
-	Mkfs(req system.MkfsReq) error
-	Getfs(device string) (string, error)
-	Chown(string, int, int) error
-	Stat(string) (os.FileInfo, error)
-	GetFsType(path string) (*system.FsType, error)
-}
 
 const defaultDevFS = "ext4"
 
-// Provider provides management functionality for metadata storage.
-type Provider struct {
-	log     logging.Logger
-	sys     SystemProvider
-	mounter storage.MountProvider
-}
+type (
+	// SystemProvider provides operating system capabilities.
+	SystemProvider interface {
+		Chown(string, int, int) error
+		Getfs(device string) (string, error)
+		GetfsType(path string) (*system.FsType, error)
+		Mkdir(string, os.FileMode) error
+		Mkfs(req system.MkfsReq) error
+		RemoveAll(string) error
+		Stat(string) (os.FileInfo, error)
+	}
+
+	// Provider provides management functionality for metadata storage.
+	Provider struct {
+		log     logging.Logger
+		sys     SystemProvider
+		mounter storage.MountProvider
+	}
+)
 
 // Format formats the storage used for control metadata, if it is a separate device.
 // If the storage location is on an existing partition, the format of the existing filesystem is
@@ -119,7 +122,7 @@ func (p *Provider) setupMountPoint(req storage.MetadataFormatRequest) error {
 func (p *Provider) setupRootDir(req storage.MetadataFormatRequest) error {
 	fsPath := req.RootPath
 	for {
-		fsType, err := p.sys.GetFsType(fsPath)
+		fsType, err := p.sys.GetfsType(fsPath)
 		if err == nil {
 			if !p.isUsableFS(fsType, fsPath) {
 				return FaultBadFilesystem(fsType)
@@ -175,11 +178,11 @@ func (p *Provider) isUsableFS(fs *system.FsType, path string) bool {
 }
 
 func (p *Provider) setupDataDir(req storage.MetadataFormatRequest) error {
-	if err := os.RemoveAll(req.DataPath); err != nil {
+	if err := p.sys.RemoveAll(req.DataPath); err != nil {
 		return errors.Wrap(err, "removing old control metadata subdirectory")
 	}
 
-	if err := os.Mkdir(req.DataPath, 0755); err != nil {
+	if err := p.sys.Mkdir(req.DataPath, 0755); err != nil {
 		return errors.Wrap(err, "creating control metadata subdirectory")
 	}
 
@@ -189,7 +192,7 @@ func (p *Provider) setupDataDir(req storage.MetadataFormatRequest) error {
 
 	for _, idx := range req.EngineIdxs {
 		engPath := storage.ControlMetadataEngineDir(req.DataPath, idx)
-		if err := os.Mkdir(engPath, 0755); err != nil {
+		if err := p.sys.Mkdir(engPath, 0755); err != nil {
 			return errors.Wrapf(err, "creating control metadata engine %d subdirectory", idx)
 		}
 
