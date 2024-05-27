@@ -235,7 +235,7 @@ obj_bulk_comp_cb(const struct crt_bulk_cb_info *cb_info)
 	crt_rpc_t		*rpc;
 
 	if (cb_info->bci_rc != 0)
-		D_DEBUG(DB_IO, "bulk transfer failed: %d\n", cb_info->bci_rc);
+		D_ERROR("bulk transfer failed: %d\n", cb_info->bci_rc);
 
 	bulk_desc = cb_info->bci_bulk_desc;
 	rpc = bulk_desc->bd_rpc;
