@@ -2873,10 +2873,10 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 					      (rc == -DER_NONEXIST &&
 					       (orw->orw_api_flags &
 						(DAOS_COND_DKEY_UPDATE | DAOS_COND_AKEY_UPDATE |
-						 DAOS_COND_DKEY_FETCH))),
+						 DAOS_COND_DKEY_FETCH | DAOS_COND_AKEY_FETCH))),
 					  DB_IO, DLOG_ERR, rc,
-					  " local write for " DF_UOID " failed",
-					  DP_UOID(orw->orw_oid));
+					  " local write for " DF_UOID " failed (api_flags=0x%lx)",
+					  DP_UOID(orw->orw_oid), orw->orw_api_flags);
 			rc = dtx_end(dth, ioc.ioc_coc, rc);
 		}
 
