@@ -160,7 +160,8 @@ dtx_is_leader(struct ds_pool *pool, struct dtx_resync_args *dra,
 	return 1;
 
 out:
-	D_WARN(DF_UOID" failed to get new leader: "DF_RC"\n", DP_UOID(dre->dre_oid), DP_RC(rc));
+	D_WARN("DTX_RESYNC: failed to get new leader for "DF_UOID": rc %d\n",
+	       DP_UOID(dre->dre_oid), rc);
 	return rc;
 }
 
@@ -212,7 +213,7 @@ dtx_verify_groups(struct ds_pool *pool, struct dtx_memberships *mbs,
 		 * original case, it will not correctness issue.
 		 */
 		if (k >= group->drg_redundancy && !rdonly) {
-			D_WARN("The DTX "DF_DTI" has %d redundancy group, "
+			D_WARN("DTX_RESYNC: the DTX "DF_DTI" has %d redundancy group, "
 			       "the No.%d lost too many members %d/%d/%d, "
 			       "cannot recover such DTX.\n",
 			       DP_DTI(xid), mbs->dm_grp_cnt, i,
@@ -258,7 +259,7 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 		D_GOTO(out, rc = DSHR_NEED_COMMIT);
 	case -DER_INPROGRESS:
 	case -DER_TIMEDOUT:
-		D_WARN("Other participants not sure about whether the "
+		D_WARN("DTX_RESYNC: other participants not sure about whether the "
 		       "DTX "DF_DTI" is committed or not, need retry.\n",
 		       DP_DTI(&dte->dte_xid));
 		D_GOTO(out, rc = DSHR_NEED_RETRY);
@@ -309,7 +310,7 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 
 		/* Skip this DTX if failed to get the status. */
 		if (rc != DTX_ST_PREPARED && rc != DTX_ST_INITED) {
-			D_WARN("Not sure about whether the DTX "DF_DTI
+			D_WARN("DTX_RESYNC: not sure about whether the DTX "DF_DTI
 			       " can be abort or not: %d, skip it.\n",
 			       DP_DTI(&dte->dte_xid), rc);
 			D_GOTO(out, rc = (rc > 0 ? -DER_IO : rc));
@@ -345,7 +346,7 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 
 		D_GOTO(out, rc = DSHR_IGNORE);
 	default:
-		D_WARN("Not sure about whether the DTX "DF_DTI
+		D_WARN("DTX_RESYNC: not sure about whether the DTX "DF_DTI
 		       " can be committed or not: %d, skip it.\n",
 		       DP_DTI(&dte->dte_xid), rc);
 		if (rc > 0)
@@ -398,10 +399,11 @@ dtx_status_handle(struct dtx_resync_args *dra)
 			err = vos_dtx_abort(cont->sc_hdl, &dre->dre_xid, dre->dre_epoch);
 			if (err == -DER_NONEXIST)
 				err = 0;
-			if (err != 0)
-				D_ERROR("Failed to discard stale DTX "DF_DTI" with ver %d/%d: "
-					DF_RC"\n", DP_DTI(&dre->dre_xid), dre->dre_dte.dte_ver,
-					dra->discard_version, DP_RC(err));
+			else
+				D_WARN("DTX_RESYNC: discard stale DTX "
+				       DF_DTI" with version %d/%d: rc %d\n",
+				       DP_DTI(&dre->dre_xid), dre->dre_dte.dte_ver,
+				       dra->discard_version, err);
 			dtx_dre_release(drh, dre);
 			continue;
 		}
@@ -411,7 +413,7 @@ dtx_status_handle(struct dtx_resync_args *dra)
 					      &dre->dre_dte.dte_mbs);
 			if (rc != 0) {
 				if (rc < 0 && rc != -DER_NONEXIST)
-					D_WARN("Failed to load mbs, do not know the leader for DTX "
+					D_WARN("DTX_RESYNC: failed to load mbs, unknown leader for "
 					       DF_DTI" (ver = %u/%u/%u): rc = %d, skip it.\n",
 					       DP_DTI(&dre->dre_xid), dra->resync_version,
 					       dra->discard_version, dre->dre_dte.dte_ver, rc);
@@ -429,7 +431,7 @@ dtx_status_handle(struct dtx_resync_args *dra)
 		rc = dtx_is_leader(pool, dra, dre);
 		if (rc <= 0) {
 			if (rc < 0)
-				D_WARN("Not sure about the leader for the DTX "
+				D_WARN("DTX_RESSYNC: not sure about the leader for the DTX "
 				       DF_DTI" (ver = %u/%u/%u): rc = %d, skip it.\n",
 				       DP_DTI(&dre->dre_xid), dra->resync_version,
 				       dra->discard_version, dre->dre_dte.dte_ver, rc);
@@ -529,8 +531,11 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	}
 
 	/* Current DTX resync is only for discarding old DTX entries. */
-	if (dra->resync_version == dra->discard_version)
+	if (dra->resync_version == dra->discard_version) {
+		D_WARN("DTX_RESYNC: skip DTX "DF_DTI" with discard version: %u\n",
+		       DP_DTI(&ent->ie_dtx_xid), dra->discard_version);
 		return 0;
+	}
 
 	/* Skip unprepared entry which version is at least not older than discard version. */
 	if (ent->ie_dtx_tgt_cnt == 0)
@@ -619,8 +624,8 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, b
 
 	if (target->ta_comp.co_status == PO_COMP_ST_UP) {
 		dra.discard_version = target->ta_comp.co_in_ver;
-		D_DEBUG(DB_MD, "DTX resync for "DF_UUID"/"DF_UUID" discard version: %u\n",
-			DP_UUID(po_uuid), DP_UUID(co_uuid), dra.discard_version);
+		D_WARN("DTX_RESYNC: for "DF_UUID"/"DF_UUID" with version %u, discard version: %u\n",
+		       DP_UUID(po_uuid), DP_UUID(co_uuid), ver, dra.discard_version);
 	}
 
 	ABT_rwlock_unlock(pool->sp_lock);
@@ -792,14 +797,12 @@ dtx_resync_ult(void *data)
 	rc = ds_pool_lookup(arg->pool_uuid, &pool);
 	D_ASSERTF(pool != NULL, DF_UUID" rc %d\n", DP_UUID(arg->pool_uuid), rc);
 	if (pool->sp_dtx_resync_version >= arg->version) {
-		D_DEBUG(DB_MD, DF_UUID" ignore dtx resync version %u/%u\n",
-			DP_UUID(arg->pool_uuid), pool->sp_dtx_resync_version,
-			arg->version);
+		D_WARN("DTX_RESYNC: ignore dtx resync for "DF_UUID" with version %u/%u\n",
+		       DP_UUID(arg->pool_uuid), pool->sp_dtx_resync_version, arg->version);
 		D_GOTO(out_put, rc);
 	}
-	D_DEBUG(DB_MD, DF_UUID" update dtx resync version %u->%u\n",
-		DP_UUID(arg->pool_uuid), pool->sp_dtx_resync_version,
-		arg->version);
+	D_WARN("DTX_RESYNC: start dtx resync for "DF_UUID" with version %u->%u\n",
+	       DP_UUID(arg->pool_uuid), pool->sp_dtx_resync_version, arg->version);
 
 	/* Delay 5 seconds for DTX resync. */
 	if (DAOS_FAIL_CHECK(DAOS_DTX_RESYNC_DELAY))
@@ -807,14 +810,8 @@ dtx_resync_ult(void *data)
 
 	rc = ds_pool_thread_collective(arg->pool_uuid, PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT |
 				       PO_COMP_ST_NEW, dtx_resync_one, arg, DSS_ULT_DEEP_STACK);
-	if (rc) {
-		/* If dtx resync fails, then let's still update
-		 * sp_dtx_resync_version, so the rebuild can go ahead,
-		 * though it might fail, instead of hanging here.
-		 */
-		D_ERROR("dtx resync collective "DF_UUID" %d.\n",
-			DP_UUID(arg->pool_uuid), rc);
-	}
+	D_WARN("DTX_RESYNC: stop dtx resync for "DF_UUID" with version %u->%u: rc = %d\n",
+	       DP_UUID(arg->pool_uuid), pool->sp_dtx_resync_version, arg->version, rc);
 	pool->sp_dtx_resync_version = arg->version;
 out_put:
 	ds_pool_put(pool);
