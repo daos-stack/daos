@@ -49,19 +49,25 @@ struct vos_object {
 	struct vos_container		*obj_cont;
 	/** nobody should access this object */
 	bool				obj_zombie;
-	/** Object is in discard */
-	bool				obj_discard;
+	/** Object is held for discard */
+	uint32_t                         obj_discard : 1,
+	    /** If non-zero, object is held for aggregation */
+	    obj_aggregate                            : 1;
 };
 
 enum {
 	/** Only return the object if it's visible */
-	VOS_OBJ_VISIBLE		= (1 << 0),
+	VOS_OBJ_VISIBLE = (1 << 0),
 	/** Create the object if it doesn't exist */
-	VOS_OBJ_CREATE		= (1 << 1),
-	/** Hold for object specific discard */
-	VOS_OBJ_DISCARD		= (1 << 2),
+	VOS_OBJ_CREATE = (1 << 1),
+	/** Hold for discard */
+	VOS_OBJ_DISCARD = (1 << 2),
+	/** Hold for VOS or EC aggregation */
+	VOS_OBJ_AGGREGATE = (1 << 3),
 	/** Hold the object for delete dkey */
-	VOS_OBJ_KILL_DKEY	= (1 << 3),
+	VOS_OBJ_KILL_DKEY = (1 << 4),
+	/** Don't actually complete the hold, just check for conflicts */
+	VOS_OBJ_NO_HOLD = (1 << 5),
 };
 
 /**
@@ -101,7 +107,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
  * \param obj	[IN]	Reference to be released.
  */
 void
-vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj, bool evict);
+vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj, uint64_t flags, bool evict);
 
 /** Evict an object reference from the cache */
 void vos_obj_evict(struct daos_lru_cache *occ, struct vos_object *obj);

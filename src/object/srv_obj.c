@@ -697,20 +697,21 @@ obj_set_reply_nrs(crt_rpc_t *rpc, daos_handle_t ioh, d_sg_list_t *echo_sgl, uint
 	/* Re-entry case. */
 	if (orwo->orw_nrs.ca_count != 0) {
 		D_ASSERT(orwo->orw_nrs.ca_count == nrs_count);
-		return 0;
+		D_ASSERT(orwo->orw_data_sizes.ca_count == nrs_count);
+		D_ASSERT(orwo->orw_nrs.ca_arrays != NULL);
+		D_ASSERT(orwo->orw_data_sizes.ca_arrays != NULL);
+	} else {
+		/* return sg_nr_out and data size for sgl */
+		D_ALLOC(orwo->orw_nrs.ca_arrays,
+			nrs_count * (sizeof(uint32_t) + sizeof(daos_size_t)));
+		if (orwo->orw_nrs.ca_arrays == NULL)
+			return -DER_NOMEM;
+
+		orwo->orw_nrs.ca_count = nrs_count;
+		orwo->orw_data_sizes.ca_count = nrs_count;
+		orwo->orw_data_sizes.ca_arrays = (void *)((char *)orwo->orw_nrs.ca_arrays +
+						 nrs_count * (sizeof(uint32_t)));
 	}
-
-	/* return sg_nr_out and data size for sgl */
-	D_ALLOC(orwo->orw_nrs.ca_arrays,
-		nrs_count * (sizeof(uint32_t) + sizeof(daos_size_t)));
-	if (orwo->orw_nrs.ca_arrays == NULL)
-		return -DER_NOMEM;
-
-	orwo->orw_nrs.ca_count = nrs_count;
-	orwo->orw_data_sizes.ca_count = nrs_count;
-	orwo->orw_data_sizes.ca_arrays =
-		(void *)((char *)orwo->orw_nrs.ca_arrays +
-			nrs_count * (sizeof(uint32_t)));
 
 	nrs = orwo->orw_nrs.ca_arrays;
 	data_sizes = orwo->orw_data_sizes.ca_arrays;
@@ -850,13 +851,20 @@ obj_fetch_csum_init(struct ds_cont_child *cont, struct obj_rw_in *orw, struct ob
 	 *
 	 * The memory will be freed in obj_rw_reply
 	 */
-	rc = daos_csummer_alloc_iods_csums(cont->sc_csummer, orw->orw_iod_array.oia_iods,
-					   orw->orw_iod_array.oia_iod_nr, false, NULL,
-					   &orwo->orw_iod_csums.ca_arrays);
 
-	if (rc >= 0) {
-		orwo->orw_iod_csums.ca_count = (uint64_t)rc;
-		rc                           = 0;
+	/* Re-entry case. */
+	if (orwo->orw_iod_csums.ca_count != 0) {
+		D_ASSERT(orwo->orw_iod_csums.ca_arrays != NULL);
+		rc = 0;
+	} else {
+		rc = daos_csummer_alloc_iods_csums(cont->sc_csummer, orw->orw_iod_array.oia_iods,
+						   orw->orw_iod_array.oia_iod_nr, false, NULL,
+						   &orwo->orw_iod_csums.ca_arrays);
+
+		if (rc >= 0) {
+			orwo->orw_iod_csums.ca_count = rc;
+			rc = 0;
+		}
 	}
 
 	return rc;
@@ -1061,10 +1069,10 @@ obj_fetch_create_maps(crt_rpc_t *rpc, struct bio_desc *biod, daos_iod_t *iods, u
 	if (skips == NULL)
 		D_ASSERTF(total_nr == iods_nr, "total nr %d, iods_nr %d\n", total_nr, iods_nr);
 
-	/* Re-entry case. */
-	if (orwo->orw_maps.ca_count != 0) {
-		D_ASSERT(orwo->orw_maps.ca_count == total_nr);
-		return 0;
+	/* Re-entry case, iods may be changed, let's re-generate the maps. */
+	if (orwo->orw_maps.ca_arrays != NULL) {
+		ds_iom_free(&orwo->orw_maps.ca_arrays, orwo->orw_maps.ca_count);
+		orwo->orw_maps.ca_count = 0;
 	}
 
 	rc = ds_iom_create(biod, iods, iods_nr, flags, &maps);
@@ -1143,6 +1151,10 @@ obj_prep_fetch_sgls(crt_rpc_t *rpc, struct obj_io_context *ioc)
 	int			i;
 	int			j;
 	int			rc = 0;
+
+	/* Re-entry case. */
+	if (ioc->ioc_free_sgls)
+		return 0;
 
 	for (i = 0; i < nr; i++) {
 		for (j = 0; j < sgls[i].sg_nr; j++) {
@@ -1938,7 +1950,7 @@ obj_get_iods_offs(daos_unit_oid_t uoid, struct obj_iod_array *iod_array,
 }
 
 static int
-obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc, struct dtx_handle *dth)
+obj_local_rw_internal_wrap(crt_rpc_t *rpc, struct obj_io_context *ioc, struct dtx_handle *dth)
 {
 	struct obj_rw_in	*orw = crt_req_get(rpc);
 	daos_iod_t		iod = { 0 };
@@ -1952,32 +1964,13 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc, struct dtx_handle *dth)
 	uint8_t			*skips = (uint8_t *)&local_skips;
 	uint32_t		nr = 0;
 	int			rc;
-	int			count = 0;
 
 	rc = obj_get_iods_offs(orw->orw_oid, &orw->orw_iod_array, &ioc->ioc_oca,
 			       orw->orw_dkey_hash, ioc->ioc_layout_ver, &iods,
 			       &offs, &skips, &csums, &csum_info, &nr);
-	if (rc != 0)
-		D_GOTO(out, rc);
-again:
-	rc = obj_local_rw_internal(rpc, ioc, iods, csums, offs, skips, nr, dth);
-	if (dth != NULL && obj_dtx_need_refresh(dth, rc)) {
-		if (unlikely(++count % 10 == 3)) {
-			struct dtx_share_peer	*dsp;
+	if (rc == 0)
+		rc = obj_local_rw_internal(rpc, ioc, iods, csums, offs, skips, nr, dth);
 
-			dsp = d_list_entry(dth->dth_share_tbd_list.next, struct dtx_share_peer,
-					   dsp_link);
-			D_WARN("DTX refresh for "DF_DTI" because of "DF_DTI" (%d) for %d times, "
-			       "maybe dead loop\n", DP_DTI(&dth->dth_xid), DP_DTI(&dsp->dsp_xid),
-			       dth->dth_share_tbd_count, count);
-		}
-
-		rc = dtx_refresh(dth, ioc->ioc_coc);
-		if (rc == -DER_AGAIN)
-			goto again;
-	}
-
-out:
 	if (csums != NULL && csums != &csum && csums != orw->orw_iod_array.oia_iod_csums) {
 		int i;
 
@@ -1993,6 +1986,32 @@ out:
 		D_FREE(offs);
 	if (skips != NULL && skips != (uint8_t *)&local_skips)
 		D_FREE(skips);
+
+	return rc;
+}
+
+static int
+obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc, struct dtx_handle *dth)
+{
+	struct dtx_share_peer	*dsp;
+	uint32_t		 retry = 0;
+	int			 rc;
+
+again:
+	rc = obj_local_rw_internal_wrap(rpc, ioc, dth);
+	if (dth != NULL && obj_dtx_need_refresh(dth, rc)) {
+		if (unlikely(++retry % 10 == 3)) {
+			dsp = d_list_entry(dth->dth_share_tbd_list.next, struct dtx_share_peer,
+					   dsp_link);
+			D_WARN("DTX refresh for "DF_DTI" because of "DF_DTI" (%d) for %d times, "
+			       "maybe dead loop\n", DP_DTI(&dth->dth_xid), DP_DTI(&dsp->dsp_xid),
+			       dth->dth_share_tbd_count, retry);
+		}
+
+		rc = dtx_refresh(dth, ioc->ioc_coc);
+		if (rc == -DER_AGAIN)
+			goto again;
+	}
 
 	return rc;
 }
@@ -2158,7 +2177,7 @@ obj_ioc_begin_lite(uint32_t rpc_map_ver, uuid_t pool_uuid,
 		 *	2. The current replica was NOT the old leader if
 		 *	   with the old pool map version. But it becomes
 		 *	   the new leader with the new pool map version.
-		 *	   In the subsequent modificaiton, it may hit
+		 *	   In the subsequent modification, it may hit
 		 *	   some 'prepared' DTX when make availability
 		 *	   check, it will return -DER_INPROGRESS that
 		 *	   will cause client to retry. It is possible
@@ -3057,44 +3076,11 @@ obj_enum_complete(crt_rpc_t *rpc, int status, int map_version,
 }
 
 static int
-obj_restore_enum_args(crt_rpc_t *rpc, struct ds_obj_enum_arg *des,
-		      struct ds_obj_enum_arg *src)
-{
-	struct obj_key_enum_out	*oeo = crt_reply_get(rpc);
-	struct obj_key_enum_in	*oei = crt_req_get(rpc);
-	int			 rc;
-
-	if (!des->fill_recxs && des->csum_iov.iov_buf != NULL)
-		daos_iov_free(&des->csum_iov);
-
-	*des = *src;
-
-	if (des->fill_recxs)
-		return 0;
-
-	if (des->kds != NULL)
-		memset(des->kds, 0, des->kds_cap * sizeof(daos_key_desc_t));
-	des->kds_len = 0;
-
-	if (oeo->oeo_sgl.sg_iovs == NULL)
-		return 0;
-
-	d_sgl_fini(&oeo->oeo_sgl, true);
-	rc = daos_sgls_alloc(&oeo->oeo_sgl, &oei->oei_sgl, 1);
-	if (rc != 0)
-		return rc;
-
-	des->sgl = &oeo->oeo_sgl;
-	return 0;
-}
-
-static int
 obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	       struct vos_iter_anchors *anchors, struct ds_obj_enum_arg *enum_arg,
 	       daos_epoch_t *e_out)
 {
 	vos_iter_param_t	param = { 0 };
-	struct ds_obj_enum_arg	saved_arg;
 	struct obj_key_enum_in	*oei = crt_req_get(rpc);
 	struct dtx_handle	*dth = NULL;
 	uint32_t		flags = 0;
@@ -3157,7 +3143,7 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		D_ASSERT(opc == DAOS_OBJ_RPC_ENUMERATE);
 		type = VOS_ITER_DKEY;
 		param.ip_flags |= VOS_IT_RECX_VISIBLE;
-		if (daos_anchor_get_flags(&anchors[0].ia_dkey) &
+		if (daos_anchor_get_flags(&anchors->ia_dkey) &
 		      DIOF_WITH_SPEC_EPOCH) {
 			/* For obj verification case. */
 			param.ip_epc_expr = VOS_IT_EPC_RR;
@@ -3187,7 +3173,7 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	 * 'type' to indicate the anchor is on SV tree or EV tree.
 	 */
 	if (type == VOS_ITER_SINGLE)
-		anchors[0].ia_sv = anchors[0].ia_ev;
+		anchors->ia_sv = anchors->ia_ev;
 	else if (oei->oei_oid.id_shard % 3 == 1 &&
 		 DAOS_FAIL_CHECK(DAOS_VC_LOST_REPLICA))
 		D_GOTO(failed, rc = -DER_NONEXIST);
@@ -3203,9 +3189,6 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		goto failed;
 	}
 
-	anchors[1] = anchors[0];
-	saved_arg = *enum_arg;
-
 	if (oei->oei_flags & ORF_FOR_MIGRATION)
 		flags = DTX_FOR_MIGRATION;
 
@@ -3216,16 +3199,12 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		goto failed;
 
 re_pack:
-	rc = ds_obj_enum_pack(&param, type, recursive, &anchors[0], enum_arg, vos_iterate, dth);
+	rc = ds_obj_enum_pack(&param, type, recursive, anchors, enum_arg, vos_iterate, dth);
 	if (obj_dtx_need_refresh(dth, rc)) {
 		rc = dtx_refresh(dth, ioc->ioc_coc);
-		if (rc == -DER_AGAIN) {
-			anchors[0] = anchors[1];
-			obj_restore_enum_args(rpc, enum_arg, &saved_arg);
-			if (opc == DAOS_OBJ_RPC_ENUMERATE)
-				fill_oid(oei->oei_oid, enum_arg);
+		/* After DTX refresh, re_pack will resume from the position at \@anchors. */
+		if (rc == -DER_AGAIN)
 			goto re_pack;
-		}
 	}
 
 	if ((rc == -DER_KEY2BIG) && opc == DAOS_OBJ_RPC_ENUMERATE &&
@@ -3251,7 +3230,7 @@ re_pack:
 		rc = rc_tmp;
 
 	if (type == VOS_ITER_SINGLE)
-		anchors[0].ia_ev = anchors[0].ia_sv;
+		anchors->ia_ev = anchors->ia_sv;
 
 	D_DEBUG(DB_IO, ""DF_UOID" iterate "DF_X64"-"DF_X64" type %d tag %d"
 		" rc %d\n", DP_UOID(oei->oei_oid), param.ip_epr.epr_lo,
@@ -3348,13 +3327,13 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 		dss_get_module_info()->dmi_xs_id,
 		oei->oei_map_ver, ioc.ioc_map_ver);
 
-	D_ALLOC_ARRAY(anchors, 2);
+	D_ALLOC_PTR(anchors);
 	if (anchors == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	anchors[0].ia_dkey = oei->oei_dkey_anchor;
-	anchors[0].ia_akey = oei->oei_akey_anchor;
-	anchors[0].ia_ev = oei->oei_anchor;
+	anchors->ia_dkey = oei->oei_dkey_anchor;
+	anchors->ia_akey = oei->oei_akey_anchor;
+	anchors->ia_ev = oei->oei_anchor;
 
 	/* TODO: Transfer the inline_thres from enumerate RPC */
 	enum_arg.inline_thres = 32;
@@ -3405,9 +3384,9 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 	if (rc)
 		D_GOTO(out, rc);
 
-	oeo->oeo_dkey_anchor = anchors[0].ia_dkey;
-	oeo->oeo_akey_anchor = anchors[0].ia_akey;
-	oeo->oeo_anchor = anchors[0].ia_ev;
+	oeo->oeo_dkey_anchor = anchors->ia_dkey;
+	oeo->oeo_akey_anchor = anchors->ia_akey;
+	oeo->oeo_anchor = anchors->ia_ev;
 
 	if (enum_arg.eprs)
 		oeo->oeo_eprs.ca_count = enum_arg.eprs_len;
@@ -3456,7 +3435,9 @@ obj_local_punch(struct obj_punch_in *opi, crt_opcode_t opc,
 		struct obj_io_context *ioc, struct dtx_handle *dth)
 {
 	struct ds_cont_child	*cont = ioc->ioc_coc;
+	struct dtx_share_peer	*dsp;
 	uint64_t		 sched_seq;
+	uint32_t		 retry = 0;
 	int			 rc = 0;
 
 	if (daos_is_zero_dti(&opi->opi_dti)) {
@@ -3503,6 +3484,14 @@ again:
 	}
 
 	if (dth != NULL && obj_dtx_need_refresh(dth, rc)) {
+		if (unlikely(++retry % 10 == 3)) {
+			dsp = d_list_entry(dth->dth_share_tbd_list.next,
+					   struct dtx_share_peer, dsp_link);
+			D_WARN("DTX refresh for "DF_DTI" because of "DF_DTI" (%d) for %d "
+			       "times, maybe dead loop\n", DP_DTI(&dth->dth_xid),
+			       DP_DTI(&dsp->dsp_xid), dth->dth_share_tbd_count, retry);
+		}
+
 		rc = dtx_refresh(dth, ioc->ioc_coc);
 		if (rc != -DER_AGAIN)
 			goto out;
@@ -4840,11 +4829,21 @@ ds_cpd_handle_one_wrap(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 		       struct daos_cpd_disp_ent *dcde, struct daos_cpd_sub_req *dcsrs,
 		       struct obj_io_context *ioc, struct dtx_handle *dth)
 {
-	int	rc;
+	struct dtx_share_peer	*dsp;
+	uint32_t		 retry = 0;
+	int			 rc;
 
 again:
 	rc = ds_cpd_handle_one(rpc, dcsh, dcde, dcsrs, ioc, dth);
 	if (obj_dtx_need_refresh(dth, rc)) {
+		if (unlikely(++retry % 10 == 3)) {
+			dsp = d_list_entry(dth->dth_share_tbd_list.next,
+					   struct dtx_share_peer, dsp_link);
+			D_WARN("DTX refresh for "DF_DTI" because of "DF_DTI" (%d) for %d "
+			       "times, maybe dead loop\n", DP_DTI(&dth->dth_xid),
+			       DP_DTI(&dsp->dsp_xid), dth->dth_share_tbd_count, retry);
+		}
+
 		rc = dtx_refresh(dth, ioc->ioc_coc);
 		if (rc == -DER_AGAIN)
 			goto again;
