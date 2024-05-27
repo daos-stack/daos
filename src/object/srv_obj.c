@@ -2874,13 +2874,14 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 			rc = obj_local_rw(rpc, &ioc, dth);
 			if (rc != 0)
 				DL_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
-					      (rc == -DER_EXIST &&
-					       (orw->orw_api_flags &
-						(DAOS_COND_DKEY_INSERT | DAOS_COND_AKEY_INSERT))) ||
-					      (rc == -DER_NONEXIST &&
-					       (orw->orw_api_flags &
-						(DAOS_COND_DKEY_UPDATE | DAOS_COND_AKEY_UPDATE |
-						 DAOS_COND_DKEY_FETCH | DAOS_COND_AKEY_FETCH))),
+					  rc == -DER_REC2BIG ||
+					  (rc == -DER_EXIST &&
+					   (orw->orw_api_flags &
+					    (DAOS_COND_DKEY_INSERT | DAOS_COND_AKEY_INSERT))) ||
+					  (rc == -DER_NONEXIST &&
+					   (orw->orw_api_flags &
+					    (DAOS_COND_DKEY_UPDATE | DAOS_COND_AKEY_UPDATE |
+					     DAOS_COND_DKEY_FETCH | DAOS_COND_AKEY_FETCH))),
 					  DB_IO, DLOG_ERR, rc,
 					  " local write for " DF_UOID " failed (api_flags=0x%lx)",
 					  DP_UOID(orw->orw_oid), orw->orw_api_flags);
