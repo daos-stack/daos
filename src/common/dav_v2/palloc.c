@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2015-2023, Intel Corporation */
+/* Copyright 2015-2024, Intel Corporation */
 
 /*
  * palloc.c -- implementation of pmalloc POSIX-like API
@@ -99,6 +99,18 @@ palloc_set_value(struct palloc_heap *heap, struct dav_action *act,
 	actp->lock = NULL;
 }
 
+static void *
+zone_get_base_address(struct palloc_heap *heap, void *ptr)
+{
+	uint64_t off = HEAP_PTR_TO_OFF(heap, ptr);
+	uint32_t zid = heap_off2mbid(heap, off);
+
+	if (zid)
+		return ZID_TO_ZONE(&heap->layout_info, zid);
+
+	return heap->layout_info.zone0;
+}
+
 /*
  * alloc_prep_block -- (internal) prepares a memory block for allocation
  *
@@ -119,7 +131,7 @@ alloc_prep_block(struct palloc_heap *heap, const struct memory_block *m,
 	void *uptr = m->m_ops->get_user_data(m);
 	size_t usize = m->m_ops->get_user_size(m);
 
-	VALGRIND_DO_MEMPOOL_ALLOC(heap->layout, uptr, usize);
+	VALGRIND_DO_MEMPOOL_ALLOC(zone_get_base_address(heap, uptr), uptr, usize);
 	VALGRIND_DO_MAKE_MEM_UNDEFINED(uptr, usize);
 	VALGRIND_ANNOTATE_NEW_MEMORY(uptr, usize);
 
@@ -144,7 +156,7 @@ alloc_prep_block(struct palloc_heap *heap, const struct memory_block *m,
 			 * If canceled, revert the block back to the free
 			 * state in vg machinery.
 			 */
-			VALGRIND_DO_MEMPOOL_FREE(heap->layout, uptr);
+			VALGRIND_DO_MEMPOOL_FREE(zone_get_base_address(heap, uptr), uptr);
 			return ret;
 		}
 	}
@@ -180,11 +192,11 @@ alloc_prep_block(struct palloc_heap *heap, const struct memory_block *m,
 static int
 palloc_reservation_create(struct palloc_heap *heap, size_t size, palloc_constr constructor,
 			  void *arg, uint64_t extra_field, uint16_t object_flags, uint16_t class_id,
-			  uint32_t zset_id, struct dav_action_internal *out)
+			  uint32_t mb_id, struct dav_action_internal *out)
 {
 	int                  err       = 0;
 	struct memory_block *new_block = &out->m;
-	struct zoneset      *zset;
+	struct mbrt         *mb;
 
 	out->type = DAV_ACTION_TYPE_HEAP;
 
@@ -200,8 +212,9 @@ palloc_reservation_create(struct palloc_heap *heap, size_t size, palloc_constr c
 		return -1;
 	}
 
-	zset = heap_get_zoneset(heap, zset_id);
-	if (zset == NULL) {
+retry:
+	mb = heap_mbrt_get_mb(heap, mb_id);
+	if (mb == NULL) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -226,7 +239,13 @@ palloc_reservation_create(struct palloc_heap *heap, size_t size, palloc_constr c
 	*new_block = MEMORY_BLOCK_NONE;
 	new_block->size_idx = (uint32_t)size_idx;
 
-	struct bucket *b = zoneset_bucket_acquire(zset, c->id);
+	err = heap_mbrt_update_alloc_class_buckets(heap, mb, c);
+	if (err != 0) {
+		errno = err;
+		return -1;
+	}
+
+	struct bucket *b = mbrt_bucket_acquire(mb, c->id);
 
 	err = heap_get_bestfit_block(heap, b, new_block);
 	if (err != 0)
@@ -258,10 +277,20 @@ palloc_reservation_create(struct palloc_heap *heap, size_t size, palloc_constr c
 	out->new_state = MEMBLOCK_ALLOCATED;
 
 out:
-	zoneset_bucket_release(b);
+	mbrt_bucket_release(b);
 
 	if (err == 0)
 		return 0;
+
+	/*
+	 * If there is no memory in evictable zone then do the allocation
+	 * from non-evictable zone.
+	 */
+	if ((mb_id != 0) && (err == ENOMEM)) {
+		heap_mbrt_log_alloc_failure(heap, mb_id);
+		mb_id = 0;
+		goto retry;
+	}
 
 	errno = err;
 	return -1;
@@ -275,6 +304,7 @@ palloc_heap_action_exec(struct palloc_heap *heap,
 	const struct dav_action_internal *act,
 	struct operation_context *ctx)
 {
+	struct zone *zone;
 #ifdef DAV_EXTRA_DEBUG
 	if (act->m.m_ops->get_state(&act->m) == act->new_state) {
 		D_CRIT("invalid operation or heap corruption\n");
@@ -289,6 +319,19 @@ palloc_heap_action_exec(struct palloc_heap *heap,
 	 * changing a chunk type from free to used or vice versa.
 	 */
 	act->m.m_ops->prep_hdr(&act->m, act->new_state, ctx);
+
+	/*
+	 * For evictable zone updates its local utilization here.
+	 */
+	if (act->m.zone_id != 0) {
+		zone = ZID_TO_ZONE(&heap->layout_info, act->m.zone_id);
+		if (act->new_state == MEMBLOCK_FREE)
+			zone->header.sp_usage -= act->m.m_ops->get_real_size(&act->m);
+		else
+			zone->header.sp_usage += act->m.m_ops->get_real_size(&act->m);
+		operation_add_entry(ctx, &zone->header.sp_usage, zone->header.sp_usage,
+				    ULOG_OPERATION_SET);
+	}
 }
 
 /*
@@ -300,10 +343,10 @@ static void
 palloc_restore_free_chunk_state(struct palloc_heap *heap,
 	struct memory_block *m)
 {
-	struct zoneset *zset = heap_get_zoneset(heap, m->zone_id);
+	struct mbrt *mb = heap_mbrt_get_mb(heap, m->zone_id);
 
 	if (m->type == MEMORY_BLOCK_HUGE) {
-		struct bucket *b = zoneset_bucket_acquire(zset, DEFAULT_ALLOC_CLASS_ID);
+		struct bucket *b = mbrt_bucket_acquire(mb, DEFAULT_ALLOC_CLASS_ID);
 
 		if (heap_free_chunk_reuse(heap, b, m) != 0) {
 			if (errno == EEXIST)
@@ -311,7 +354,7 @@ palloc_restore_free_chunk_state(struct palloc_heap *heap,
 			else
 				D_CRIT("unable to track runtime chunk state\n");
 		}
-		zoneset_bucket_release(b);
+		mbrt_bucket_release(b);
 	}
 }
 
@@ -374,11 +417,13 @@ static void
 palloc_heap_action_on_cancel(struct palloc_heap *heap,
 	struct dav_action_internal *act)
 {
+	void *uptr;
+
 	if (act->new_state == MEMBLOCK_FREE)
 		return;
 
-	VALGRIND_DO_MEMPOOL_FREE(heap->layout,
-		act->m.m_ops->get_user_data(&act->m));
+	uptr = act->m.m_ops->get_user_data(&act->m);
+	VALGRIND_DO_MEMPOOL_FREE(zone_get_base_address(heap, uptr), uptr);
 
 	act->m.m_ops->invalidate(&act->m);
 	palloc_restore_free_chunk_state(heap, &act->m);
@@ -401,11 +446,12 @@ palloc_heap_action_on_process(struct palloc_heap *heap,
 			STATS_INC(heap->stats, transient, heap_run_allocated,
 				act->m.m_ops->get_real_size(&act->m));
 		}
+		heap_mbrt_incrmb_usage(heap, act->m.zone_id, act->m.m_ops->get_real_size(&act->m));
 	} else if (act->new_state == MEMBLOCK_FREE) {
 		if (On_memcheck) {
 			void *ptr = act->m.m_ops->get_user_data(&act->m);
 
-			VALGRIND_DO_MEMPOOL_FREE(heap->layout, ptr);
+			VALGRIND_DO_MEMPOOL_FREE(zone_get_base_address(heap, ptr), ptr);
 		}
 
 		STATS_SUB(heap->stats, persistent, heap_curr_allocated,
@@ -415,6 +461,8 @@ palloc_heap_action_on_process(struct palloc_heap *heap,
 				act->m.m_ops->get_real_size(&act->m));
 		}
 		heap_memblock_on_free(heap, &act->m);
+		heap_mbrt_incrmb_usage(heap, act->m.zone_id,
+				       -(act->m.m_ops->get_real_size(&act->m)));
 	}
 }
 
@@ -579,14 +627,14 @@ palloc_exec_actions(struct palloc_heap *heap,
  */
 int
 palloc_reserve(struct palloc_heap *heap, size_t size, palloc_constr constructor, void *arg,
-	       uint64_t extra_field, uint16_t object_flags, uint16_t class_id, uint32_t zset_id,
+	       uint64_t extra_field, uint16_t object_flags, uint16_t class_id, uint32_t mb_id,
 	       struct dav_action *act)
 {
 	COMPILE_ERROR_ON(sizeof(struct dav_action) !=
 		sizeof(struct dav_action_internal));
 
 	return palloc_reservation_create(heap, size, constructor, arg, extra_field, object_flags,
-					 class_id, zset_id, (struct dav_action_internal *)act);
+					 class_id, mb_id, (struct dav_action_internal *)act);
 }
 
 /*
@@ -730,7 +778,7 @@ palloc_publish(struct palloc_heap *heap, struct dav_action *actv, size_t actvcnt
 int
 palloc_operation(struct palloc_heap *heap, uint64_t off, uint64_t *dest_off, size_t size,
 		 palloc_constr constructor, void *arg, uint64_t extra_field, uint16_t object_flags,
-		 uint16_t class_id, uint32_t zset_id, struct operation_context *ctx)
+		 uint16_t class_id, uint32_t mb_id, struct operation_context *ctx)
 {
 	size_t user_size = 0;
 
@@ -761,7 +809,7 @@ palloc_operation(struct palloc_heap *heap, uint64_t off, uint64_t *dest_off, siz
 	if (size != 0) {
 		alloc = &ops[nops++];
 		if (palloc_reservation_create(heap, size, constructor, arg, extra_field,
-					      object_flags, class_id, zset_id, alloc) != 0) {
+					      object_flags, class_id, mb_id, alloc) != 0) {
 			operation_cancel(ctx);
 			return -1;
 		}
@@ -895,56 +943,6 @@ palloc_next(struct palloc_heap *heap, uint64_t off)
 	return HEAP_PTR_TO_OFF(heap, uptr);
 }
 
-/*
- * palloc_boot -- initializes allocator section
- */
-int
-palloc_boot(struct palloc_heap *heap, void *heap_start,
-	    uint64_t heap_size, uint64_t *sizep,
-	    void *base, struct mo_ops *p_ops, struct stats *stats,
-	    struct pool_set *set)
-{
-	return heap_boot(heap, heap_start, heap_size, sizep,
-		base, p_ops, stats, set);
-}
-
-/*
- * palloc_init -- initializes palloc heap
- */
-int
-palloc_init(void *heap_start, uint64_t heap_size, uint64_t *sizep, struct mo_ops *p_ops)
-{
-	return heap_init(heap_start, heap_size, sizep, p_ops);
-}
-
-/*
- * palloc_heap_end -- returns first address after heap
- */
-void *
-palloc_heap_end(struct palloc_heap *h)
-{
-	return heap_end(h);
-}
-
-/*
- * palloc_heap_check -- verifies heap state
- */
-int
-palloc_heap_check(void *heap_start, uint64_t heap_size)
-{
-	return heap_check(heap_start, heap_size);
-}
-
-/*
- * palloc_heap_check_remote -- verifies state of remote replica
- */
-int
-palloc_heap_check_remote(void *heap_start, uint64_t heap_size,
-	struct remote_ops *ops)
-{
-	return heap_check_remote(heap_start, heap_size, ops);
-}
-
 #if VG_MEMCHECK_ENABLED
 /*
  * palloc_vg_register_alloc -- (internal) registers allocation header
@@ -960,7 +958,7 @@ palloc_vg_register_alloc(const struct memory_block *m, void *arg)
 	void *uptr = m->m_ops->get_user_data(m);
 	size_t usize = m->m_ops->get_user_size(m);
 
-	VALGRIND_DO_MEMPOOL_ALLOC(heap->layout, uptr, usize);
+	VALGRIND_DO_MEMPOOL_ALLOC(zone_get_base_address(heap, uptr), uptr, usize);
 	VALGRIND_DO_MAKE_MEM_DEFINED(uptr, usize);
 
 	return 0;
@@ -973,5 +971,11 @@ void
 palloc_heap_vg_open(struct palloc_heap *heap, int objects)
 {
 	heap_vg_open(heap, palloc_vg_register_alloc, heap, objects);
+}
+
+void
+palloc_heap_vg_zone_open(struct palloc_heap *heap, uint32_t zid, int objects)
+{
+	heap_vg_zone_open(heap, zid, palloc_vg_register_alloc, heap, objects);
 }
 #endif

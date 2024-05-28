@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2017-2023, Intel Corporation */
+/* Copyright 2017-2024, Intel Corporation */
 
 /*
  * stats.c -- implementation of statistics
@@ -25,8 +25,6 @@ stats_new(dav_obj_t *pop)
 		return NULL;
 	}
 
-	s->persistent = &pop->do_phdr->dp_stats_persistent;
-	VALGRIND_ADD_TO_GLOBAL_TX_IGNORE(s->persistent, sizeof(*s->persistent));
 	D_ALLOC_PTR(s->transient);
 	if (s->transient == NULL)
 		goto error_transient_alloc;

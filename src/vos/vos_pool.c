@@ -777,12 +777,6 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 			/* Custom scm_sz specified so use it (not regular DAOS pool case) */
 			meta_sz = scm_sz;
 		}
-	} else if ((scm_sz) && (meta_sz != scm_sz)) {
-		// See below comment on DAV allocator support and remove check when completed.
-		D_ERROR("scm_size != meta_size pool create case not supported, scm_sz: " DF_U64
-			" meta_sz: " DF_U64,
-			scm_sz, meta_sz);
-		return -DER_INVAL;
 	}
 
 	D_DEBUG(DB_MGMT, "Create BIO meta context for xs:%p pool:"DF_UUID" "

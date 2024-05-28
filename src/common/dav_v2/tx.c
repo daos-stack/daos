@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2015-2023, Intel Corporation */
+/* Copyright 2015-2024, Intel Corporation */
 
 /*
  * tx.c -- transactions implementation
@@ -390,7 +390,7 @@ tx_create_wal_entry(struct ulog_entry_base *e, void *arg,
 	uint64_t		*dst;
 
 	D_ASSERT(p_ops->base != NULL);
-	dst = (uint64_t *)((uintptr_t)((dav_obj_t *)p_ops->base)->do_base + offset);
+	dst = umem_cache_off2ptr(p_ops->umem_store, offset);
 
 	switch (ulog_entry_type(e)) {
 #ifdef	WAL_SUPPORTS_AND_OR_OPS
@@ -456,6 +456,11 @@ lw_tx_begin(dav_obj_t *pop)
 	int			 rc;
 	uint64_t		 wal_id;
 
+	rc = umem_cache_reserve(pop->do_store);
+	if (rc) {
+		D_ERROR("umem_cache_reserve failed, " DF_RC "\n", DP_RC(rc));
+		return rc;
+	}
 	rc = dav_wal_tx_reserve(pop, &wal_id);
 	if (rc) {
 		D_ERROR("so_wal_reserv failed, "DF_RC"\n", DP_RC(rc));
@@ -518,6 +523,13 @@ dav_tx_begin_v2(dav_obj_t *pop, jmp_buf env, ...)
 		struct umem_wal_tx *utx = NULL;
 
 		DAV_DBG("");
+		err = umem_cache_reserve(pop->do_store);
+		if (err) {
+			D_ERROR("umem_cache_reserve failed, " DF_RC "\n", DP_RC(err));
+			err = daos_der2errno(err);
+			goto err_abort;
+		}
+
 		err = dav_wal_tx_reserve(pop, &wal_id);
 		if (err) {
 			D_ERROR("so_wal_reserv failed, "DF_RC"\n", DP_RC(err));
@@ -1412,19 +1424,6 @@ dav_tx_free_v2(uint64_t off)
 	return dav_tx_xfree(off, 0);
 }
 
-DAV_FUNC_EXPORT void*
-dav_tx_off2ptr_v2(uint64_t off)
-{
-	struct tx *tx = get_tx();
-
-	ASSERT_IN_TX(tx);
-	ASSERT_TX_STAGE_WORK(tx);
-	ASSERT(tx->pop != NULL);
-
-	ASSERT(OBJ_OFF_IS_VALID(tx->pop, off));
-	return (void *)OBJ_OFF_TO_PTR(tx->pop, off);
-}
-
 /* arguments for constructor_alloc */
 struct constr_args {
 	int zero_init;
@@ -1495,8 +1494,8 @@ obj_alloc_root(dav_obj_t *pop, size_t size)
 
 	DAV_DBG("pop %p size %zu", pop, size);
 
-	carg.ptr = OBJ_OFF_TO_PTR(pop, pop->do_phdr->dp_root_offset);
-	carg.old_size = pop->do_phdr->dp_root_size;
+	carg.ptr = (*pop->do_root_offsetp == 0) ? 0 : OBJ_OFF_TO_PTR(pop, *pop->do_root_offsetp);
+	carg.old_size    = *pop->do_root_sizep;
 	carg.new_size = size;
 	carg.user_type = 0;
 	carg.constructor = NULL;
@@ -1510,12 +1509,11 @@ obj_alloc_root(dav_obj_t *pop, size_t size)
 	ctx = pop->external;
 	operation_start(ctx);
 
-	operation_add_entry(ctx, &pop->do_phdr->dp_root_size, size, ULOG_OPERATION_SET);
+	operation_add_entry(ctx, pop->do_root_sizep, size, ULOG_OPERATION_SET);
 
-	ret =
-	    palloc_operation(pop->do_heap, pop->do_phdr->dp_root_offset,
-			     &pop->do_phdr->dp_root_offset, size, constructor_zrealloc_root, &carg,
-			     0, 0, 0, 0, ctx); /* REVISIT: object_flags and type num ignored*/
+	ret = palloc_operation(pop->do_heap, *pop->do_root_offsetp, pop->do_root_offsetp, size,
+			       constructor_zrealloc_root, &carg, 0, 0, 0, 0,
+			       ctx); /* REVISIT: object_flags and type num ignored*/
 
 	lw_tx_end(pop, NULL);
 	return ret;
@@ -1537,15 +1535,14 @@ dav_root_v2(dav_obj_t *pop, size_t size)
 		return 0;
 	}
 
-	if (size == 0 && pop->do_phdr->dp_root_offset == 0) {
+	if (size == 0 && *pop->do_root_offsetp == 0) {
 		ERR("requested size cannot equals zero");
 		errno = EINVAL;
 		DAV_API_END();
 		return 0;
 	}
 
-	if (size > pop->do_phdr->dp_root_size &&
-			obj_alloc_root(pop, size)) {
+	if (size > *pop->do_root_sizep && obj_alloc_root(pop, size)) {
 		ERR("dav_root failed");
 		errno = ENOMEM;
 		DAV_API_END();
@@ -1553,7 +1550,7 @@ dav_root_v2(dav_obj_t *pop, size_t size)
 	}
 
 	DAV_API_END();
-	return pop->do_phdr->dp_root_offset;
+	return *pop->do_root_offsetp;
 }
 
 /*
@@ -1844,17 +1841,55 @@ dav_tx_publish_v2(struct dav_action *actv, size_t actvcnt)
 }
 
 /*
- * dav_get_zone_evictable -- Returns an evictable zone id that can be used for
- * allocations. If there are no evictable zone with sufficient free space then
- * zero is returned which maps to non-evictable zone.
+ * dav_allot_zone_evictable -- Returns an evictable memory bucket id that can be used
+ * for allocations. If there are no evictable zone with sufficient free space then
+ * zero is returned which maps to non-evictable memory bucket.
  */
 DAV_FUNC_EXPORT uint32_t
-dav_get_zone_evictable_v2(dav_obj_t *pop, int flags)
+dav_allot_mb_evictable_v2(dav_obj_t *pop, int flags)
 {
+	uint32_t mb_id;
+	int      err;
+
 	D_ASSERT(flags == 0);
-	/* REVISIT: TBD
-	 * Return evictable zone that is currently marked as in-use and has sufficient free space.
-	 * Else, find an evictable zone that has more that x% of free memory and mark it as in-use.
-	 */
-	return 0;
+	D_ASSERT((dav_tx_stage_v2() == DAV_TX_STAGE_NONE));
+
+	err = heap_get_evictable_mb(pop->do_heap, &mb_id);
+	if (err) {
+		errno = err;
+		return 0;
+	}
+
+	return mb_id;
+}
+
+/*
+ * obj_realloc -- (internal) reallocate zinfo object
+ */
+int
+obj_realloc(dav_obj_t *pop, uint64_t *offp, size_t *sizep, size_t size)
+{
+	struct operation_context *ctx;
+	struct carg_realloc       carg;
+	int                       ret;
+
+	DAV_DBG("pop %p size %zu", pop, size);
+
+	carg.ptr         = (*offp == 0) ? 0 : OBJ_OFF_TO_PTR(pop, *offp);
+	carg.old_size    = *sizep;
+	carg.new_size    = size;
+	carg.user_type   = 0;
+	carg.constructor = NULL;
+	carg.zero_init   = 1;
+	carg.arg         = NULL;
+
+	ctx = pop->external;
+	operation_start(ctx);
+
+	operation_add_entry(ctx, sizep, size, ULOG_OPERATION_SET);
+
+	ret = palloc_operation(pop->do_heap, *offp, offp, size, constructor_zrealloc_root, &carg, 0,
+			       0, 0, 0, ctx);
+
+	return ret;
 }

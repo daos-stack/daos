@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2015-2023, Intel Corporation */
+/* Copyright 2015-2024, Intel Corporation */
 
 /*
  * bucket.c -- bucket implementation
@@ -28,7 +28,7 @@ struct bucket {
 	struct block_container           *container;
 	const struct block_container_ops *c_ops;
 	struct memory_block_reserved     *active_memory_block;
-	struct zoneset                   *zset;
+	struct mbrt                      *mb;
 	int                               is_active;
 };
 
@@ -75,7 +75,7 @@ bucket_fini(struct bucket *b)
  * bucket_locked_new -- creates a new locked bucket instance
  */
 struct bucket_locked *
-bucket_locked_new(struct block_container *c, struct alloc_class *aclass, struct zoneset *zset)
+bucket_locked_new(struct block_container *c, struct alloc_class *aclass, struct mbrt *mb)
 {
 	ASSERTne(c, NULL);
 
@@ -90,7 +90,7 @@ bucket_locked_new(struct block_container *c, struct alloc_class *aclass, struct 
 
 	util_mutex_init(&b->lock);
 	b->bucket.locked = b;
-	b->bucket.zset   = zset;
+	b->bucket.mb     = mb;
 
 	return b;
 
@@ -268,8 +268,8 @@ bucket_active_block(struct bucket *b)
 	return b->is_active ? b->active_memory_block : NULL;
 }
 
-struct zoneset *
-bucket_get_zoneset(struct bucket *b)
+struct mbrt *
+bucket_get_mbrt(struct bucket *b)
 {
-	return b->zset;
+	return b->mb;
 }

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2015-2023, Intel Corporation */
+/* Copyright 2015-2024, Intel Corporation */
 
 /*
  * dav_flags.h -- Interfaces exported by DAOS internal Allocator for VOS (DAV)
@@ -32,25 +32,16 @@ enum dav_stats_enabled {
 
 #define	DAV_PHDR_SIZE	4096
 
-/* DAV header data that will be persisted */
-struct dav_phdr {
-	uint64_t		dp_uuid_lo;
-	uint64_t		dp_heap_offset;
-	uint64_t		dp_heap_size;
-	uint64_t		dp_root_offset;
-	uint64_t		dp_root_size;
-	struct stats_persistent dp_stats_persistent;
-	char	 dp_unused[DAV_PHDR_SIZE - sizeof(uint64_t)*5 -
-			sizeof(struct stats_persistent)];
-};
-
 /* DAV object handle */
 typedef struct dav_obj {
 	char				*do_path;
-	uint64_t			 do_size;
+	uint64_t                         do_size_meta;
+	uint64_t                         do_size_mem;
+	uint64_t                         do_size_mem_usable;
 	void				*do_base;
-	struct palloc_heap		*do_heap;
-	struct dav_phdr			*do_phdr;
+	uint64_t                        *do_root_offsetp;
+	uint64_t                        *do_root_sizep;
+	struct palloc_heap              *do_heap;
 	struct operation_context	*external;
 	struct operation_context	*undo;
 	struct mo_ops			 p_ops;	/* REVISIT */
@@ -59,6 +50,7 @@ typedef struct dav_obj {
 	int				 nested_tx;
 	struct umem_wal_tx		*do_utx;
 	struct umem_store               *do_store;
+	int                              do_booted;
 
 	struct dav_clogs		 clogs __attribute__ ((__aligned__(CACHELINE_SIZE)));
 } dav_obj_t;

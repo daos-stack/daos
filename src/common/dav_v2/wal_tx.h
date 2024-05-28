@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021-2023 Intel Corporation.
+ * (C) Copyright 2021-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -39,6 +39,6 @@ int dav_wal_tx_assign(void *hdl, void *addr, uint64_t val);
 int dav_wal_tx_clr_bits(void *hdl, void *addr, uint32_t pos, uint16_t num_bits);
 int dav_wal_tx_set_bits(void *hdl, void *addr, uint32_t pos, uint16_t num_bits);
 int dav_wal_tx_set(void *hdl, void *addr, char c, daos_size_t size);
-int dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *base);
+int dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *arg);
 
 #endif	/*__DAOS_COMMON_DAV_WAL_TX_*/

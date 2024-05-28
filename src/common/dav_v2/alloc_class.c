@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2016-2023, Intel Corporation */
+/* Copyright 2016-2024, Intel Corporation */
 
 /*
  * alloc_class.c -- implementation of allocation classes
@@ -607,7 +607,7 @@ alloc_class_by_run(struct alloc_class_collection *ac,
 
 	uint32_t map_idx_s = (uint32_t)map_idx;
 
-	ASSERT(size_idx <= UINT16_MAX);
+	ASSERT(size_idx <= MAX_CHUNK);
 
 	uint16_t size_idx_s = (uint16_t)size_idx;
 	uint16_t flags_s = (uint16_t)flags;

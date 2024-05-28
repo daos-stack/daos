@@ -12,7 +12,8 @@
 
 struct block_container_ravl {
 	struct block_container super;
-	struct ravl *tree;
+	struct memory_block    m;
+	struct ravl           *tree;
 };
 
 /*
@@ -55,15 +56,9 @@ container_ravl_insert_block(struct block_container *bc,
 	struct block_container_ravl *c =
 		(struct block_container_ravl *)bc;
 
-	struct memory_block *e = m->m_ops->get_user_data(m);
+	c->m = *m;
 
-	VALGRIND_DO_MAKE_MEM_DEFINED(e, sizeof(*e));
-	VALGRIND_ADD_TO_TX(e, sizeof(*e));
-	*e = *m;
-	VALGRIND_SET_CLEAN(e, sizeof(*e));
-	VALGRIND_REMOVE_FROM_TX(e, sizeof(*e));
-
-	return ravl_insert(c->tree, e);
+	return ravl_emplace_copy(c->tree, m);
 }
 
 /*
@@ -84,7 +79,13 @@ container_ravl_get_rm_block_bestfit(struct block_container *bc,
 		return ENOMEM;
 
 	struct memory_block *e = ravl_data(n);
-	*m = *e;
+	*m                     = c->m;
+	m->zone_id             = e->zone_id;
+	m->chunk_id            = e->chunk_id;
+	m->size_idx            = e->size_idx;
+	m->block_off           = e->block_off;
+	/* Rest of the fields in e should not be accessed. */
+
 	ravl_remove(c->tree, n);
 
 	return 0;
@@ -180,7 +181,8 @@ container_new_ravl(struct palloc_heap *heap)
 
 	bc->super.heap = heap;
 	bc->super.c_ops = &container_ravl_ops;
-	bc->tree = ravl_new(container_compare_memblocks);
+	bc->tree =
+	    ravl_new_sized(container_compare_memblocks, offsetof(struct memory_block, m_ops));
 	if (bc->tree == NULL)
 		goto error_ravl_new;
 

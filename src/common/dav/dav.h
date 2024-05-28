@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2015-2023, Intel Corporation */
+/* Copyright 2015-2024, Intel Corporation */
 
 /*
  * dav_flags.h -- Interfaces exported by DAOS internal Allocator for VOS (DAV)
@@ -29,7 +29,7 @@
 
 #define DAV_XALLOC_CLASS_MASK		((((uint64_t)1 << 16) - 1) << 48)
 #ifdef	DAV_V2_BUILD
-#define DAV_XALLOC_EZONE_MASK		((((uint64_t)1 << 16) - 1) << 32)
+#define DAV_XALLOC_EZONE_MASK		((((uint64_t)1 << 32) - 1) << 16)
 #else	/* DAV_V2_BUILD */
 #define DAV_XALLOC_EZONE_MASK		0
 #endif	/* DAV_V2_BUILD */

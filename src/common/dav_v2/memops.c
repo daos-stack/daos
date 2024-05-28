@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2016-2023, Intel Corporation */
+/* Copyright 2016-2024, Intel Corporation */
 
 /*
  * memops.c -- aggregated memory operations helper implementation
@@ -218,6 +218,7 @@ operation_new(struct ulog *ulog, size_t ulog_base_nbytes,
 	ctx->s_ops.flush = operation_transient_clean;
 	ctx->s_ops.memcpy = operation_transient_memcpy;
 	ctx->s_ops.drain = operation_transient_drain;
+	ctx->s_ops.umem_store = p_ops->umem_store;
 
 	VECQ_INIT(&ctx->merge_entries);
 

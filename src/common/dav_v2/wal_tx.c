@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2022-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -8,15 +8,14 @@
 #include "dav_internal.h"
 #include "wal_tx.h"
 #include "util.h"
+#include "heap.h"
 
 struct umem_wal_tx_ops dav_wal_tx_ops;
 
 static inline uint64_t
 mdblob_addr2offset(struct dav_obj *hdl, void *addr)
 {
-	D_ASSERT(((uintptr_t)addr >= (uintptr_t)hdl->do_base) &&
-		 ((uintptr_t)addr <= ((uintptr_t)hdl->do_base + hdl->do_size)));
-	return (uintptr_t)addr - (uintptr_t)hdl->do_base;
+	return umem_cache_ptr2off(hdl->do_store, addr);
 }
 
 #define AD_TX_ACT_ADD(tx, wa)							\
@@ -427,6 +426,27 @@ struct umem_wal_tx_ops dav_wal_tx_ops = {
 	.wtx_act_next = wal_tx_act_next,
 };
 
+static inline void *
+dav_wal_replay_heap_off2ptr(dav_obj_t *dav_hdl, uint64_t off)
+{
+	uint32_t                     z_id = OFFSET_TO_ZID(off);
+	struct umem_cache_range      rg   = {0};
+	int                          rc;
+	struct umem_store           *store = dav_hdl->do_store;
+
+	rg.cr_off  = GET_ZONE_OFFSET(z_id);
+	rg.cr_size = ((store->stor_size - rg.cr_off) > ZONE_MAX_SIZE)
+			 ? ZONE_MAX_SIZE
+			 : (store->stor_size - rg.cr_off);
+	rc         = umem_cache_load(store, &rg, 1, 0);
+	if (rc) {
+		D_ERROR("Failed to load pages to umem cache");
+		errno = daos_der2errno(rc);
+		return NULL;
+	}
+	return umem_cache_off2ptr(store, off);
+}
+
 int
 dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *arg)
 {
@@ -437,9 +457,9 @@ dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *arg)
 	int pos, num, val;
 	int rc = 0;
 	dav_obj_t         *dav_hdl = arg;
-	void              *base    = dav_hdl->do_base;
 	struct umem_store *store   = dav_hdl->do_store;
 
+	umem_cache_commit(store, tx_id);
 	switch (act->ac_opc) {
 	case UMEM_ACT_COPY:
 		D_DEBUG(DB_TRACE,
@@ -447,10 +467,14 @@ dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *arg)
 			tx_id,
 			act->ac_copy.addr / PAGESIZE, act->ac_copy.addr % PAGESIZE,
 			act->ac_copy.size);
-		off = act->ac_copy.addr;
-		dst = base + off;
+		off  = act->ac_copy.addr;
 		src = (void *)&act->ac_copy.payload;
 		size = act->ac_copy.size;
+		dst  = dav_wal_replay_heap_off2ptr(dav_hdl, off);
+		if (dst == NULL) {
+			rc = daos_errno2der(errno);
+			goto out;
+		}
 		memcpy(dst, src, size);
 		break;
 	case UMEM_ACT_ASSIGN:
@@ -460,7 +484,11 @@ dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *arg)
 			act->ac_assign.addr / PAGESIZE, act->ac_assign.addr % PAGESIZE,
 			act->ac_assign.size);
 		off = act->ac_assign.addr;
-		dst = base + off;
+		dst = dav_wal_replay_heap_off2ptr(dav_hdl, off);
+		if (dst == NULL) {
+			rc = daos_errno2der(errno);
+			goto out;
+		}
 		size = act->ac_assign.size;
 		ASSERT_rt(size == 1 || size == 2 || size == 4);
 		src = &act->ac_assign.val;
@@ -473,7 +501,11 @@ dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *arg)
 			act->ac_set.addr / PAGESIZE, act->ac_set.addr % PAGESIZE,
 			act->ac_set.size, act->ac_set.val);
 		off = act->ac_set.addr;
-		dst = base + off;
+		dst = dav_wal_replay_heap_off2ptr(dav_hdl, off);
+		if (dst == NULL) {
+			rc = daos_errno2der(errno);
+			goto out;
+		}
 		size = act->ac_set.size;
 		val = act->ac_set.val;
 		memset(dst, val, size);
@@ -487,7 +519,11 @@ dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *arg)
 			act->ac_op_bits.pos, act->ac_op_bits.num);
 		off = act->ac_op_bits.addr;
 		size = sizeof(uint64_t);
-		p = (uint64_t *)(base + off);
+		p    = dav_wal_replay_heap_off2ptr(dav_hdl, off);
+		if (p == NULL) {
+			rc = daos_errno2der(errno);
+			goto out;
+		}
 		num = act->ac_op_bits.num;
 		pos = act->ac_op_bits.pos;
 		ASSERT_rt((pos >= 0) && (pos + num) <= 64);
@@ -505,5 +541,6 @@ dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *arg)
 	if (rc == 0)
 		rc = umem_cache_touch(store, tx_id, off, size);
 
+out:
 	return rc;
 }
