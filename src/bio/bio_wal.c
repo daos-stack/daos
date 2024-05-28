@@ -587,7 +587,7 @@ fill_trans_blks(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct ume
 			left = blk_sz - entry_blk.tb_off;
 			/* Current entry block is full, move to next entry block */
 			if (left < entry_sz) {
-				/* Zeoring left bytes for csum calculation */
+				/* Zeroing left bytes for csum calculation */
 				if (left > 0)
 					memset(entry_blk.tb_buf + entry_blk.tb_off, 0, left);
 				next_trans_blk(bsgl, &entry_blk);

@@ -294,7 +294,7 @@ dtx_fetch_committable(void **state, bool punch)
 
 	/* Reset fail_loc, repeat fetch from any replica. If without specifying
 	 * the replica, and if fetch from non-leader hits non-committed DTX, it
-	 * will retry with leader, finially, the expected data will be returned
+	 * will retry with leader, finally, the expected data will be returned
 	 * from the leader replica.
 	 */
 	daos_fail_loc_set(0);

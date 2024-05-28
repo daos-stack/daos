@@ -427,7 +427,7 @@ int bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 		  unsigned int hugepage_size, unsigned int tgt_nr, bool bypass);
 
 /**
- * Global NVMe finilization.
+ * Global NVMe finalization.
  *
  * \return		N/A
  */
