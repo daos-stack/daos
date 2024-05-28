@@ -213,6 +213,7 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 	rc = daos_obj_fetch(oh, th, DAOS_COND_DKEY_FETCH, &dkey, xnr + 1, iods ? iods : iod,
 			    sgls ? sgls : sgl, NULL, NULL);
 	if (rc == -DER_NONEXIST) {
+		D_ERROR("Failed to fetch entry %s " DF_RC ", non-exist\n", name, DP_RC(rc));
 		*exists = false;
 		D_GOTO(out, rc = 0);
 	} else if (rc) {
@@ -250,6 +251,8 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 		if (rc) {
 			D_FREE(value);
 			if (rc == -DER_NONEXIST) {
+				D_ERROR("Failed to fetch entry %s " DF_RC ", non-exist\n",
+					name, DP_RC(rc));
 				*exists = false;
 				D_GOTO(out, rc = 0);
 			}
@@ -273,9 +276,10 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 		}
 	}
 
-	if (sgl->sg_nr_out == 0)
+	if (sgl->sg_nr_out == 0) {
+		D_ERROR("fetch entry %s " DF_RC ", zero sg_nr_out\n", name, DP_RC(rc));
 		*exists = false;
-	else
+	} else
 		*exists = true;
 out:
 	if (xnr) {
