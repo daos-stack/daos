@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1994,7 +1994,7 @@ btr_update(struct btr_context *tcx, d_iov_t *key, d_iov_t *val, d_iov_t *val_out
 	struct btr_record *rec;
 	int		   rc;
 	char		   sbuf[BTR_PRINT_BUF];
-	struct btr_trace  *trace = &tcx->tc_trace.ti_trace[tcx->tc_depth - 1];
+	struct btr_trace  *trace = &tcx->tc_trace[tcx->tc_depth - 1];
 
 	rec = btr_trace2rec(tcx, tcx->tc_depth - 1);
 
