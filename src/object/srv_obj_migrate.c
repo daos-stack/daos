@@ -3561,6 +3561,7 @@ migrate_ult(void *arg)
 	int			rc;
 
 	D_ASSERT(pool_tls != NULL);
+retry:
 	while (!dbtree_is_empty(pool_tls->mpt_root_hdl) && !pool_tls->mpt_fini) {
 		rc = dbtree_iterate(pool_tls->mpt_root_hdl,
 				    DAOS_INTENT_PURGE, false,
@@ -3571,6 +3572,10 @@ migrate_ult(void *arg)
 				pool_tls->mpt_status = rc;
 			break;
 		}
+	}
+	if (pool_tls->mpt_new_insert) {
+		pool_tls->mpt_new_insert = 0;
+		goto retry;
 	}
 
 	pool_tls->mpt_ult_running = 0;
@@ -3709,6 +3714,7 @@ ds_migrate_object(struct ds_pool *pool, uuid_t po_hdl, uuid_t co_hdl, uuid_t co_
 	if (rc < 0)
 		D_GOTO(out, rc);
 
+	tls->mpt_new_insert = 1;
 	if (tls->mpt_ult_running)
 		D_GOTO(out, rc);
 
