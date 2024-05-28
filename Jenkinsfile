@@ -17,6 +17,10 @@
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
 
+// Next version should be higher than the release or a very large number for master
+base_branch = 'release/2.6'
+next_version = '2.7'
+
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
 
@@ -31,19 +35,15 @@ void job_step_update(def value=currentBuild.currentResult) {
     jobStatusUpdate(job_status_internal, env.STAGE_NAME, value)
 }
 
-// For master, this is just some wildly high number
-next_version = '2.7'
-
 // Don't define this as a type or it loses it's global scope
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
 String sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
-    (!env.BRANCH_NAME.startsWith('daily-testing') &&
-     !env.BRANCH_NAME.startsWith('weekly-testing') &&
-     !env.BRANCH_NAME.startsWith('release/') &&
-     !env.BRANCH_NAME.startsWith('ci-') &&
+    (env.BRANCH_NAME != branchTypeRE('testing') &&
+     env.BRANCH_NAME != branchTypeRE('release') &&
+     env.BRANCH_NAME != branchTypeRE('downstream') &&
      env.BRANCH_NAME != 'master')) {
    currentBuild.result = 'SUCCESS'
    return
@@ -118,7 +118,7 @@ pipeline {
                defaultValue: '',
                description: 'Package version to use instead of latest. example: 1.3.103-1, 1.2-2')
         string(name: 'BaseBranch',
-               defaultValue: 'release/2.6',
+               defaultValue: base_branch,
                description: 'The base branch to run daily-testing against (i.e. master, or a PR\'s branch)')
         // TODO: add parameter support for per-distro CI_PR_REPOS
         string(name: 'CI_PR_REPOS',
