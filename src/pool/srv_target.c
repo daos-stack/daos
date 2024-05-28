@@ -1596,7 +1596,7 @@ update_pool_group(struct ds_pool *pool, struct pool_map *map)
 	D_DEBUG(DB_MD, DF_UUID": %u -> %u\n", DP_UUID(pool->sp_uuid), version,
 		pool_map_get_version(map));
 
-	rc = map_ranks_init(map, POOL_GROUP_MAP_STATUS, &ranks);
+	rc = map_ranks_init(map, POOL_GROUP_MAP_STATES, &ranks);
 	if (rc != 0)
 		return rc;
 
@@ -1642,7 +1642,7 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		       unsigned int map_version)
 {
 	struct pool_map *map = NULL;
-	bool		update_map = false;
+	bool		map_updated = false;
 	int		rc = 0;
 
 	if (buf != NULL) {
@@ -1661,11 +1661,10 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 	     pool_map_get_version(pool->sp_map) < map_version)) {
 		struct pool_map *tmp = pool->sp_map;
 
-		D_DEBUG(DB_MD, DF_UUID
-			": update pool_map version: %p/%d -> %p/%d\n",
-			DP_UUID(pool->sp_uuid), pool->sp_map,
-			pool->sp_map ? pool_map_get_version(pool->sp_map) : -1,
-			map, pool_map_get_version(map));
+		D_DEBUG(DB_MD, DF_UUID ": updating pool map: version=%u->%u pointer=%p->%p\n",
+			DP_UUID(pool->sp_uuid),
+			pool->sp_map == NULL ? 0 : pool_map_get_version(pool->sp_map),
+			pool_map_get_version(map), pool->sp_map, map);
 
 		rc = update_pool_group(pool, map);
 		if (rc != 0) {
@@ -1690,26 +1689,33 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 			D_GOTO(out, rc);
 		}
 
-		update_map = true;
-		/* drop the stale map */
+		/* Swap pool->sp_map and map. */
 		pool->sp_map = map;
 		map = tmp;
+
+		map_updated = true;
+		D_INFO(DF_UUID ": updated pool map: version=%u->%u pointer=%p->%p\n",
+		       DP_UUID(pool->sp_uuid), map == NULL ? 0 : pool_map_get_version(map),
+		       pool_map_get_version(pool->sp_map), map, pool->sp_map);
 	}
 
 	/* Check if the pool map on each xstream needs to update */
 	if (pool->sp_map_version < map_version) {
-		D_DEBUG(DB_MD, DF_UUID
-			": changed cached map version: %u -> %u\n",
-			DP_UUID(pool->sp_uuid), pool->sp_map_version,
-			map_version);
+		unsigned int map_version_before = pool->sp_map_version;
+
+		D_DEBUG(DB_MD, DF_UUID ": updating cached pool map version: %u->%u\n",
+			DP_UUID(pool->sp_uuid), map_version_before, map_version);
 
 		pool->sp_map_version = map_version;
 		rc = dss_task_collective(update_child_map, pool, 0);
 		D_ASSERT(rc == 0);
-		update_map = true;
+
+		map_updated = true;
+		D_INFO(DF_UUID ": updated cached pool map version: %u->%u\n",
+		       DP_UUID(pool->sp_uuid), map_version_before, map_version);
 	}
 
-	if (update_map) {
+	if (map_updated) {
 		struct dtx_scan_args	*arg;
 		int ret;
 
@@ -1729,9 +1735,10 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 			D_FREE(arg);
 		}
 	} else {
-		D_WARN("Ignore update pool "DF_UUID" %d -> %d\n",
-		       DP_UUID(pool->sp_uuid), pool->sp_map_version,
-		       map_version);
+		/* This should be a D_DEBUG eventually. */
+		D_INFO(DF_UUID ": ignored pool map update: version=%u->%u cached_version=%u\n",
+		       DP_UUID(pool->sp_uuid), pool_map_get_version(pool->sp_map), map_version,
+		       pool->sp_map_version);
 	}
 out:
 	ABT_rwlock_unlock(pool->sp_lock);

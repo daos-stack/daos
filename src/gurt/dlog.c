@@ -775,7 +775,7 @@ static int d_log_str2pri(const char *pstr, size_t len)
 	 * handle some quirks
 	 */
 
-	if (strncasecmp(pstr, "ERR", len) == 0)
+	if (strncasecmp(pstr, "ERR", len) == 0 || strncasecmp(pstr, "ERROR", len) == 0)
 		/* has trailing space in the array */
 		return DLOG_ERR;
 	if (((strncasecmp(pstr, "DEBUG", len) == 0) ||

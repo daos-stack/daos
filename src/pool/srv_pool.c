@@ -65,12 +65,12 @@ struct pool_svc_events {
 
 /* Pool service schedule state */
 struct pool_svc_sched {
-	int		psc_svc_rf;
-	bool		psc_force_notify;	/* for pool_svc_step_up_cb */
 	ABT_mutex	psc_mutex;		/* only for psc_cv */
 	ABT_cond	psc_cv;
 	bool		psc_in_progress;
 	bool		psc_canceled;
+	void	       *psc_arg;
+	int		psc_rc;
 };
 
 static int
@@ -89,10 +89,10 @@ sched_init(struct pool_svc_sched *sched)
 		return dss_abterr2der(rc);
 	}
 
-	sched->psc_svc_rf = -1;
-	sched->psc_force_notify = false;
 	sched->psc_in_progress = false;
 	sched->psc_canceled = false;
+	sched->psc_arg = NULL;
+	sched->psc_rc = 0;
 	return 0;
 }
 
@@ -104,10 +104,12 @@ sched_fini(struct pool_svc_sched *sched)
 }
 
 static void
-sched_begin(struct pool_svc_sched *sched)
+sched_begin(struct pool_svc_sched *sched, void *arg)
 {
 	sched->psc_in_progress = true;
 	sched->psc_canceled = false;
+	sched->psc_arg = arg;
+	sched->psc_rc = 0;
 }
 
 static void
@@ -118,18 +120,30 @@ sched_end(struct pool_svc_sched *sched)
 }
 
 static void
-sched_cancel_and_wait(struct pool_svc_sched *sched)
+sched_cancel(struct pool_svc_sched *sched)
+{
+	if (sched->psc_in_progress)
+		sched->psc_canceled = true;
+}
+
+static void
+sched_wait(struct pool_svc_sched *sched)
 {
 	/*
 	 * The CV requires a mutex. We don't otherwise need it for ULTs within
 	 * the same xstream.
 	 */
 	ABT_mutex_lock(sched->psc_mutex);
-	if (sched->psc_in_progress)
-		sched->psc_canceled = true;
 	while (sched->psc_in_progress)
 		ABT_cond_wait(sched->psc_cv, sched->psc_mutex);
 	ABT_mutex_unlock(sched->psc_mutex);
+}
+
+static void
+sched_cancel_and_wait(struct pool_svc_sched *sched)
+{
+	sched_cancel(sched);
+	sched_wait(sched);
 }
 
 /* Pool service */
@@ -144,8 +158,9 @@ struct pool_svc {
 	struct ds_pool	       *ps_pool;
 	struct pool_svc_events	ps_events;
 	uint32_t		ps_global_version;
+	int			ps_svc_rf;
+	bool			ps_force_notify;/* MS of PS membership */
 	struct pool_svc_sched	ps_reconf_sched;
-
 	/* Check all containers RF for the pool */
 	struct pool_svc_sched	ps_rfcheck_sched;
 	/* The global pool map version on all pool targets */
@@ -1043,6 +1058,8 @@ pool_svc_alloc_cb(d_iov_t *id, struct ds_rsvc **rsvc)
 	uuid_copy(svc->ps_uuid, id->iov_buf);
 	D_INIT_LIST_HEAD(&svc->ps_events.pse_queue);
 	svc->ps_events.pse_handler = ABT_THREAD_NULL;
+	svc->ps_svc_rf = -1;
+	svc->ps_force_notify = false;
 
 	rc = ABT_rwlock_create(&svc->ps_lock);
 	if (rc != ABT_SUCCESS) {
@@ -1519,9 +1536,9 @@ check_map:
 	svc_rf_entry = daos_prop_entry_get(*prop, DAOS_PROP_PO_SVC_REDUN_FAC);
 	D_ASSERT(svc_rf_entry != NULL);
 	if (daos_prop_is_set(svc_rf_entry))
-		svc->ps_reconf_sched.psc_svc_rf = svc_rf_entry->dpe_val;
+		svc->ps_svc_rf = svc_rf_entry->dpe_val;
 	else
-		svc->ps_reconf_sched.psc_svc_rf = -1;
+		svc->ps_svc_rf = -1;
 
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
@@ -1750,9 +1767,11 @@ pool_svc_step_down_metrics(struct pool_svc *svc)
 	d_tm_set_gauge(metrics->total_ranks, 0);
 }
 
-static void pool_svc_schedule(struct pool_svc *svc, struct pool_svc_sched *sched,
-			      void (*func)(void *));
 static void pool_svc_reconf_ult(void *arg);
+static int pool_svc_schedule(struct pool_svc *svc, struct pool_svc_sched *sched,
+			     void (*func)(void *), void *arg);
+static int pool_svc_schedule_reconf(struct pool_svc *svc, struct pool_map *map,
+				    uint32_t map_version_for, bool sync_remove);
 static void pool_svc_rfcheck_ult(void *arg);
 
 static int
@@ -1766,7 +1785,6 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	daos_prop_t	       *prop = NULL;
 	bool			cont_svc_up = false;
 	bool			events_initialized = false;
-	bool			svc_scheduled = false;
 	d_rank_t		rank = dss_self_rank();
 	int			rc;
 
@@ -1813,10 +1831,22 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	 * Just in case the previous leader didn't finish the last series of
 	 * reconfigurations or the last MS notification.
 	 */
-	svc->ps_reconf_sched.psc_force_notify = true;
-	pool_svc_schedule(svc, &svc->ps_reconf_sched, pool_svc_reconf_ult);
-	pool_svc_schedule(svc, &svc->ps_rfcheck_sched, pool_svc_rfcheck_ult);
-	svc_scheduled = true;
+	svc->ps_force_notify = true;
+	rc = pool_svc_schedule_reconf(svc, NULL /* map */, map_version, false /* sync_remove */);
+	if (rc == -DER_OP_CANCELED) {
+		DL_INFO(rc, DF_UUID": not scheduling pool service reconfiguration",
+			DP_UUID(svc->ps_uuid));
+	} else if (rc != 0) {
+		DL_ERROR(rc, DF_UUID": failed to schedule pool service reconfiguration",
+			 DP_UUID(svc->ps_uuid));
+		goto out;
+	}
+
+	rc = pool_svc_schedule(svc, &svc->ps_rfcheck_sched, pool_svc_rfcheck_ult, NULL /* arg */);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID": failed to schedule RF check", DP_UUID(svc->ps_uuid));
+		goto out;
+	}
 
 	rc = ds_pool_iv_prop_update(svc->ps_pool, prop);
 	if (rc) {
@@ -1862,11 +1892,8 @@ out:
 	if (rc != 0) {
 		if (events_initialized)
 			fini_events(svc);
-		if (svc_scheduled) {
-			sched_cancel_and_wait(&svc->ps_reconf_sched);
-			sched_cancel_and_wait(&svc->ps_rfcheck_sched);
-		}
-
+		sched_cancel_and_wait(&svc->ps_rfcheck_sched);
+		sched_cancel_and_wait(&svc->ps_reconf_sched);
 		if (cont_svc_up)
 			ds_cont_svc_step_down(svc->ps_cont_svc);
 		if (svc->ps_pool != NULL)
@@ -5875,27 +5902,47 @@ out:
 	return rc;
 }
 
+struct pool_svc_reconf_arg {
+	struct pool_map	       *sca_map;
+	uint32_t		sca_map_version_for;
+	bool			sca_sync_remove;
+};
+
+/* Must be used with pool_svc.ps_reconf_sched (see container_of below). */
 static void
-pool_svc_reconf_ult(void *arg)
+pool_svc_reconf_ult(void *varg)
 {
-	struct pool_svc		*svc = arg;
-	struct pool_svc_sched	*reconf = &svc->ps_reconf_sched;
-	d_rank_list_t		*current;
-	d_rank_list_t		*to_add;
-	d_rank_list_t		*to_remove;
-	d_rank_list_t		*new;
-	int			 rc;
+	struct pool_svc_sched		*reconf = varg;
+	struct pool_svc_reconf_arg	*arg = reconf->psc_arg;
+	struct pool_svc			*svc;
+	struct pool_map			*map;
+	d_rank_list_t			*current;
+	d_rank_list_t			*to_add;
+	d_rank_list_t			*to_remove;
+	d_rank_list_t			*new;
+	int				 rc;
+
+	svc = container_of(reconf, struct pool_svc, ps_reconf_sched);
+
+	if (arg->sca_map == NULL)
+		map = svc->ps_pool->sp_map;
+	else
+		map = arg->sca_map;
 
 	D_DEBUG(DB_MD, DF_UUID": begin\n", DP_UUID(svc->ps_uuid));
 
-	if (reconf->psc_canceled)
+	if (reconf->psc_canceled) {
+		rc = -DER_OP_CANCELED;
 		goto out;
+	}
 
 	/* When there are pending events, the pool map may be unstable. */
-	while (events_pending(svc)) {
+	while (!arg->sca_sync_remove && events_pending(svc)) {
 		dss_sleep(3000 /* ms */);
-		if (reconf->psc_canceled)
+		if (reconf->psc_canceled) {
+			rc = -DER_OP_CANCELED;
 			goto out;
+		}
 	}
 
 	rc = rdb_get_ranks(svc->ps_rsvc.s_db, &current);
@@ -5905,10 +5952,12 @@ pool_svc_reconf_ult(void *arg)
 		goto out;
 	}
 
-	ABT_rwlock_rdlock(svc->ps_pool->sp_lock);
-	rc = ds_pool_plan_svc_reconfs(reconf->psc_svc_rf, svc->ps_pool->sp_map, current,
-				      dss_self_rank(), &to_add, &to_remove);
-	ABT_rwlock_unlock(svc->ps_pool->sp_lock);
+	if (arg->sca_map == NULL)
+		ABT_rwlock_rdlock(svc->ps_pool->sp_lock);
+	rc = ds_pool_plan_svc_reconfs(svc->ps_svc_rf, map, current, dss_self_rank(), &to_add,
+				      &to_remove);
+	if (arg->sca_map == NULL)
+		ABT_rwlock_unlock(svc->ps_pool->sp_lock);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": cannot plan pool service reconfigurations: "DF_RC"\n",
 			DP_UUID(svc->ps_uuid), DP_RC(rc));
@@ -5916,7 +5965,7 @@ pool_svc_reconf_ult(void *arg)
 	}
 
 	D_DEBUG(DB_MD, DF_UUID": svc_rf=%d current=%u to_add=%u to_remove=%u\n",
-		DP_UUID(svc->ps_uuid), reconf->psc_svc_rf, current->rl_nr, to_add->rl_nr,
+		DP_UUID(svc->ps_uuid), svc->ps_svc_rf, current->rl_nr, to_add->rl_nr,
 		to_remove->rl_nr);
 
 	/*
@@ -5927,14 +5976,17 @@ pool_svc_reconf_ult(void *arg)
 	 * of the two calls returns an error, we still need to report any
 	 * membership changes to the MS.
 	 */
-	if (to_add->rl_nr > 0)
+	if (!arg->sca_sync_remove && to_add->rl_nr > 0) {
 		ds_rsvc_add_replicas_s(&svc->ps_rsvc, to_add, ds_rsvc_get_md_cap());
-	if (reconf->psc_canceled)
-		goto out_to_add_remove;
-	if (to_add->rl_nr > to_remove->rl_nr)
-		to_remove->rl_nr = 0;
-	else
-		to_remove->rl_nr -= to_add->rl_nr;
+		if (reconf->psc_canceled) {
+			rc = -DER_OP_CANCELED;
+			goto out_to_add_remove;
+		}
+		if (to_add->rl_nr > to_remove->rl_nr)
+			to_remove->rl_nr = 0;
+		else
+			to_remove->rl_nr -= to_add->rl_nr;
+	}
 	if (to_remove->rl_nr > 0) {
 		d_rank_list_t *tmp;
 
@@ -5963,26 +6015,35 @@ pool_svc_reconf_ult(void *arg)
 		d_rank_list_sort(current);
 		d_rank_list_sort(new);
 
-		if (reconf->psc_force_notify || !d_rank_list_identical(new, current)) {
+		if (svc->ps_force_notify || !d_rank_list_identical(new, current)) {
+			int rc_tmp;
+
 			/*
 			 * Send RAS event to control-plane over dRPC to indicate
 			 * change in pool service replicas.
 			 */
-			rc = ds_notify_pool_svc_update(&svc->ps_uuid, new, svc->ps_rsvc.s_term);
-			if (rc == 0)
-				reconf->psc_force_notify = false;
+			rc_tmp = ds_notify_pool_svc_update(&svc->ps_uuid, new, svc->ps_rsvc.s_term);
+			if (rc_tmp == 0)
+				svc->ps_force_notify = false;
 			else
-				D_ERROR(DF_UUID": replica update notify failure: "DF_RC"\n",
-					DP_UUID(svc->ps_uuid), DP_RC(rc));
+				DL_ERROR(rc_tmp, DF_UUID": replica update notify failure",
+					 DP_UUID(svc->ps_uuid));
 		}
 
 		d_rank_list_free(new);
 	}
-	if (reconf->psc_canceled)
+	if (reconf->psc_canceled) {
+		rc = -DER_OP_CANCELED;
 		goto out_to_add_remove;
+	}
 
-	/* Ignore the return value of this ds_rsvc_dist_stop call. */
-	if (to_remove->rl_nr > 0)
+	/*
+	 * Don't attempt to destroy any removed replicas in the "synchronous
+	 * remove" mode, so that we don't delay pool_svc_update_map_internal
+	 * for too long. Ignore the return value of this ds_rsvc_dist_stop
+	 * call.
+	 */
+	if (!arg->sca_sync_remove && to_remove->rl_nr > 0)
 		ds_rsvc_dist_stop(svc->ps_rsvc.s_class, &svc->ps_rsvc.s_id, to_remove,
 				  NULL /* excluded */, svc->ps_rsvc.s_term, true /* destroy */);
 
@@ -5992,14 +6053,17 @@ out_to_add_remove:
 out_cur:
 	d_rank_list_free(current);
 out:
+	/* Do not yield between the D_FREE and the sched_end. */
+	D_FREE(reconf->psc_arg);
+	reconf->psc_rc = rc;
 	sched_end(reconf);
 	ABT_cond_broadcast(reconf->psc_cv);
-	D_DEBUG(DB_MD, DF_UUID": end\n", DP_UUID(svc->ps_uuid));
+	D_DEBUG(DB_MD, DF_UUID": end: "DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
 }
 
-static void
-pool_svc_schedule(struct pool_svc *svc, struct pool_svc_sched *sched,
-		  void (*func)(void *))
+static int
+pool_svc_schedule(struct pool_svc *svc, struct pool_svc_sched *sched, void (*func)(void *),
+		  void *arg)
 {
 	enum ds_rsvc_state	state;
 	int			rc;
@@ -6014,13 +6078,13 @@ pool_svc_schedule(struct pool_svc *svc, struct pool_svc_sched *sched,
 	if (state == DS_RSVC_DRAINING) {
 		D_DEBUG(DB_MD, DF_UUID": end: service %s\n", DP_UUID(svc->ps_uuid),
 			ds_rsvc_state_str(state));
-		return;
+		return -DER_OP_CANCELED;
 	}
 
 	D_ASSERT(&svc->ps_reconf_sched == sched || &svc->ps_rfcheck_sched == sched);
 	sched_cancel_and_wait(sched);
 
-	sched_begin(sched);
+	sched_begin(sched, arg);
 
 	/*
 	 * An extra svc leader reference is not required, because
@@ -6028,14 +6092,16 @@ pool_svc_schedule(struct pool_svc *svc, struct pool_svc_sched *sched,
 	 *
 	 * ULT tracking is achieved through sched, not a ULT handle.
 	 */
-	rc = dss_ult_create(func, svc, DSS_XS_SELF, 0, 0, NULL /* ult */);
+	rc = dss_ult_create(func, sched, DSS_XS_SELF, 0, 0, NULL /* ult */);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create ULT: "DF_RC"\n",
 			DP_UUID(svc->ps_uuid), DP_RC(rc));
 		sched_end(sched);
+		return rc;
 	}
 
 	D_DEBUG(DB_MD, DF_UUID": end: "DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
+	return 0;
 }
 
 static int pool_find_all_targets_by_addr(struct pool_map *map,
@@ -6065,11 +6131,12 @@ cont_rf_check_cb(uuid_t pool_uuid, uuid_t cont_uuid, struct rdb_tx *tx, void *ar
 	return 0;
 }
 
+/* Must be used with pool_svc.ps_rfcheck_sched (see container_of below). */
 static void
 pool_svc_rfcheck_ult(void *arg)
 {
-	struct pool_svc	*svc = arg;
-	int rc;
+	struct pool_svc	       *svc = container_of(arg, struct pool_svc, ps_rfcheck_sched);
+	int			rc;
 
 	do {
 		/* retry until some one stop the pool svc(rc == 1) or succeed */
@@ -6087,6 +6154,69 @@ pool_svc_rfcheck_ult(void *arg)
 	sched_end(&svc->ps_rfcheck_sched);
 	D_INFO("RF check finished for "DF_UUID"\n", DP_UUID(svc->ps_uuid));
 	ABT_cond_broadcast(svc->ps_rfcheck_sched.psc_cv);
+}
+
+/*
+ * If map is NULL, map_version_for must be provided, and svc->ps_pool->sp_map
+ * will be used during reconfiguration; otherwise, map_version_for is ignored.
+ */
+static int
+pool_svc_schedule_reconf(struct pool_svc *svc, struct pool_map *map, uint32_t map_version_for,
+			 bool sync_remove)
+{
+	struct pool_svc_reconf_arg     *reconf_arg;
+	uint32_t			v;
+	int				rc;
+
+	if (map == NULL)
+		v = map_version_for;
+	else
+		v = pool_map_get_version(map);
+
+	if (svc->ps_reconf_sched.psc_in_progress) {
+		uint32_t v_in_progress;
+
+		/* Safe to access psc_arg as long as we don't yield. */
+		reconf_arg = svc->ps_reconf_sched.psc_arg;
+		if (reconf_arg->sca_map == NULL)
+			v_in_progress = reconf_arg->sca_map_version_for;
+		else
+			v_in_progress = pool_map_get_version(reconf_arg->sca_map);
+		if (v_in_progress >= v) {
+			D_DEBUG(DB_MD, DF_UUID": stale request: v_in_progress=%u v=%u\n",
+				DP_UUID(svc->ps_uuid), v_in_progress, v);
+			return -DER_OP_CANCELED;
+		}
+	}
+
+	D_ALLOC_PTR(reconf_arg);
+	if (reconf_arg == NULL)
+		return -DER_NOMEM;
+	reconf_arg->sca_map = map;
+	reconf_arg->sca_map_version_for = v;
+	reconf_arg->sca_sync_remove = sync_remove;
+
+	/*
+	 * If successful, this call passes the ownership of reconf_arg to
+	 * pool_svc_reconf_ult.
+	 */
+	rc = pool_svc_schedule(svc, &svc->ps_reconf_sched, pool_svc_reconf_ult, reconf_arg);
+	if (rc != 0) {
+		D_FREE(reconf_arg);
+		return rc;
+	}
+
+	if (sync_remove) {
+		sched_wait(&svc->ps_reconf_sched);
+
+		rc = svc->ps_reconf_sched.psc_rc;
+		if (rc != 0) {
+			DL_ERROR(rc, DF_UUID": pool service reconfigurator", DP_UUID(svc->ps_uuid));
+			return rc;
+		}
+	}
+
+	return 0;
 }
 
 /*
@@ -6128,6 +6258,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 	uint32_t		map_version_before;
 	uint32_t		map_version;
 	struct pool_buf	       *map_buf = NULL;
+	struct pool_domain     *node;
 	bool			updated = false;
 	int			rc;
 
@@ -6197,13 +6328,13 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 			}
 		}
 	}
+
 	/*
 	 * Attempt to modify the temporary pool map and save its versions
 	 * before and after. If the version hasn't changed, we are done.
 	 */
 	map_version_before = pool_map_get_version(map);
-	rc = ds_pool_map_tgts_update(map, tgts, opc, exclude_rank, tgt_map_ver,
-				     true);
+	rc = ds_pool_map_tgts_update(map, tgts, opc, exclude_rank, tgt_map_ver, true);
 	if (rc != 0)
 		D_GOTO(out_map, rc);
 	map_version = pool_map_get_version(map);
@@ -6212,6 +6343,35 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 	if (map_version == map_version_before)
 		D_GOTO(out_map, rc = 0);
 
+	/*
+	 * If the map modification affects myself, leave it to a new PS leader
+	 * if there's another PS replica, or reject it.
+	 */
+	node = pool_map_find_node_by_rank(map, dss_self_rank());
+	if (node == NULL || !(node->do_comp.co_status & POOL_SVC_MAP_STATES)) {
+		d_rank_list_t *replicas;
+
+		rc = rdb_get_ranks(svc->ps_rsvc.s_db, &replicas);
+		if (replicas->rl_nr == 1) {
+			D_ERROR(DF_UUID": rejecting rank exclusion: self removal requested\n",
+				DP_UUID(svc->ps_uuid));
+			rc = -DER_INVAL;
+		} else {
+			/*
+			 * The handling is unreliable, for we may become a new
+			 * PS leader again; a more reliable implementation
+			 * requires the currently unavailable Raft leadership
+			 * transfer support.
+			 */
+			D_INFO(DF_UUID": resigning PS leadership: self removal requested\n",
+			       DP_UUID(svc->ps_uuid));
+			rdb_resign(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term);
+			rc = -DER_NOTLEADER;
+		}
+		d_rank_list_free(replicas);
+		goto out_map;
+	}
+
 	/* Write the new pool map. */
 	rc = pool_buf_extract(map, &map_buf);
 	if (rc != 0)
@@ -6219,6 +6379,17 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 	rc = write_map_buf(&tx, &svc->ps_root, map_buf, map_version);
 	if (rc != 0)
 		goto out_map_buf;
+
+	/*
+	 * Remove all undesired PS replicas (if any) before committing map, so
+	 * that the set of PS replicas remains a subset of the pool groups.
+	 */
+	rc = pool_svc_schedule_reconf(svc, map, 0 /* map_version_for */, true /* sync_remove */);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID": failed to remove undesired pool service replicas",
+			 DP_UUID(svc->ps_uuid));
+		goto out_map;
+	}
 
 	rc = rdb_tx_commit(&tx);
 	if (rc != 0) {
@@ -6245,9 +6416,17 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 
 	ds_rsvc_request_map_dist(&svc->ps_rsvc);
 
-	pool_svc_schedule(svc, &svc->ps_reconf_sched, pool_svc_reconf_ult);
-	if (opc == MAP_EXCLUDE)
-		pool_svc_schedule(svc, &svc->ps_rfcheck_sched, pool_svc_rfcheck_ult);
+	rc = pool_svc_schedule_reconf(svc, NULL /* map */, map_version, false /* sync_remove */);
+	if (rc != 0)
+		DL_INFO(rc, DF_UUID": failed to schedule pool service reconfiguration",
+			DP_UUID(svc->ps_uuid));
+
+	if (opc == POOL_EXCLUDE) {
+		rc = pool_svc_schedule(svc, &svc->ps_rfcheck_sched, pool_svc_rfcheck_ult,
+				       NULL /* arg */);
+		if (rc != 0)
+			DL_INFO(rc, DF_UUID": failed to schedule RF check", DP_UUID(svc->ps_uuid));
+	}
 
 	rc = pool_svc_update_map_metrics(svc->ps_uuid, map,
 					 svc->ps_pool->sp_metrics[DAOS_POOL_MODULE]);
@@ -7117,7 +7296,7 @@ ds_pool_ranks_get_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = -DER_INVAL);
 
 	/* Get available ranks */
-	rc = ds_pool_get_ranks(in->prgi_op.pi_uuid, POOL_GROUP_MAP_STATUS, &out_ranks);
+	rc = ds_pool_get_ranks(in->prgi_op.pi_uuid, POOL_GROUP_MAP_STATES, &out_ranks);
 	if (rc != 0) {
 		D_ERROR(DF_UUID ": get ranks failed, " DF_RC "\n",
 			DP_UUID(in->prgi_op.pi_uuid), DP_RC(rc));
