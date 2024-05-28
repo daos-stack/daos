@@ -215,12 +215,15 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 	rc = fetch_entry(dfs->layout_v, parent->oh, DAOS_TX_NONE, file->name, len, false, &exists,
 			 entry, 0, NULL, NULL, NULL);
 	if (rc) {
-		D_DEBUG(DB_TRACE, "fetch_entry %s failed %d.\n", file->name, rc);
+		D_ERROR("fetch_entry %s failed %d.\n", file->name, rc);
 		return rc;
 	}
 
-	if (!exists)
-		return ENOENT;
+	if (!exists) {
+		rc = ENOENT;
+		D_ERROR("fetch_entry %s failed %d, non-exists.\n", file->name, rc);
+		return rc;
+	}
 
 	if (!S_ISREG(entry->mode)) {
 		D_FREE(entry->value);
@@ -383,14 +386,14 @@ open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, int flag
 		rc = open_file(dfs, parent, flags, cid, chunk_size, &entry,
 			       stbuf ? &file_size : NULL, len, obj);
 		if (rc) {
-			D_DEBUG(DB_TRACE, "Failed to open file (%d)\n", rc);
+			D_ERROR("Failed to open file %s (%d)\n", name, rc);
 			D_GOTO(out, rc);
 		}
 		break;
 	case S_IFDIR:
 		rc = open_dir(dfs, parent, flags, cid, &entry, len, obj);
 		if (rc) {
-			D_DEBUG(DB_TRACE, "Failed to open dir (%d)\n", rc);
+			D_ERROR("Failed to open dir (%d)\n", rc);
 			D_GOTO(out, rc);
 		}
 		file_size = sizeof(entry);
@@ -398,7 +401,7 @@ open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, int flag
 	case S_IFLNK:
 		rc = open_symlink(dfs, parent, flags, cid, value, &entry, len, obj);
 		if (rc) {
-			D_DEBUG(DB_TRACE, "Failed to open symlink (%d)\n", rc);
+			D_ERROR("Failed to open symlink (%d)\n", rc);
 			D_GOTO(out, rc);
 		}
 		file_size = entry.value_len;
