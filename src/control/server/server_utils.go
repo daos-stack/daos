@@ -829,18 +829,18 @@ func checkFabricInterface(name string, lookup ifLookupFn) error {
 	return nil
 }
 
-// Convert byte array to formatted string of hex byte characters, 16 bytes per line.
-func byteArrayToString(ba []byte, sb *strings.Builder) {
-	for i, b := range ba {
-		rem := i % 16
+// Convert bytestring to format accepted by lspci, 16 bytes per line.
+func formatBytestring(in string, sb *strings.Builder) {
+	for i, s := range in {
+		rem := i % 32
 		if rem == 0 {
-			sb.WriteString(fmt.Sprintf("%02x: ", i))
+			sb.WriteString(fmt.Sprintf("%02x: ", i/2))
 		}
-		sb.WriteString(fmt.Sprintf("%02x", b))
-		if i != (len(ba) - 1) {
-			if rem == 15 {
+		sb.WriteString(fmt.Sprintf("%01x", s))
+		if i != (len(in) - 1) {
+			if rem == 31 {
 				sb.WriteString("\n")
-			} else {
+			} else if (i % 2) == 0 {
 				sb.WriteString(" ")
 			}
 		}

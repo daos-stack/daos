@@ -305,19 +305,12 @@ struct  _Ctl__NvmeController
   /*
    * PCIe configuration space
    */
-  ProtobufCBinaryData              pci_cfg;
+  char *pci_cfg;
 };
-#define CTL__NVME_CONTROLLER__INIT                                                                 \
-  {                                                                                                \
-	  PROTOBUF_C_MESSAGE_INIT(&ctl__nvme_controller__descriptor)                               \
-	  , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string,                      \
-	      (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, NULL, 0, NULL,  \
-	      0, NULL, CTL__NVME_DEV_STATE__UNKNOWN, CTL__LED_STATE__NA,                           \
-	      (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string,                    \
-	  {                                                                                        \
-		  0, NULL                                                                          \
-	  }                                                                                        \
-  }
+#define CTL__NVME_CONTROLLER__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&ctl__nvme_controller__descriptor) \
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, NULL, 0,NULL, 0,NULL, CTL__NVME_DEV_STATE__UNKNOWN, CTL__LED_STATE__NA, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+
 
 /*
  * SmdDevice represents a DAOS BIO device, identified by a UUID written into a label stored on a
@@ -397,11 +390,10 @@ struct  _Ctl__SmdDevReq
    */
   protobuf_c_boolean fetch_pci_cfg;
 };
-#define CTL__SMD_DEV_REQ__INIT                                                                     \
-  {                                                                                                \
-	  PROTOBUF_C_MESSAGE_INIT(&ctl__smd_dev_req__descriptor)                                   \
-	  , 0                                                                                      \
-  }
+#define CTL__SMD_DEV_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&ctl__smd_dev_req__descriptor) \
+    , 0 }
+
 
 struct  _Ctl__SmdDevResp
 {

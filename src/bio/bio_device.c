@@ -469,8 +469,13 @@ fetch_pci_dev_info(struct nvme_ctrlr_t *w_ctrlr, const char *tr_addr, bool fetch
 	spdk_pci_for_each_device(&opts, pci_device_cb);
 
 	if (fetch_pci_cfg) {
-		D_INFO("device pcie config starts: %02X %02X %02X %02X\n", w_ctrlr->pci_cfg[0],
-		       w_ctrlr->pci_cfg[1], w_ctrlr->pci_cfg[2], w_ctrlr->pci_cfg[3]);
+		D_INFO("device PCIe config space begins (%02X %02X %02X %02X %02X %02X %02X %02X "
+		       "%02X %02X)\n",
+		       w_ctrlr->pci_cfg[0] & 0xff, w_ctrlr->pci_cfg[1] & 0xff,
+		       w_ctrlr->pci_cfg[2] & 0xff, w_ctrlr->pci_cfg[3] & 0xff,
+		       w_ctrlr->pci_cfg[4] & 0xff, w_ctrlr->pci_cfg[5] & 0xff,
+		       w_ctrlr->pci_cfg[6] & 0xff, w_ctrlr->pci_cfg[7] & 0xff,
+		       w_ctrlr->pci_cfg[8] & 0xff, w_ctrlr->pci_cfg[9] & 0xff);
 	}
 
 	return opts.status;

@@ -336,6 +336,7 @@ ctrlr_reset_str_fields(Ctl__NvmeController *ctrlr)
 	ctrlr->fw_rev       = NULL;
 	ctrlr->vendor_id    = NULL;
 	ctrlr->pci_dev_type = NULL;
+	ctrlr->pci_cfg      = NULL;
 }
 
 static int
@@ -368,14 +369,27 @@ add_ctrlr_details(Ctl__NvmeController *ctrlr, struct bio_dev_info *dev_info, boo
 		ctrlr->socket_id);
 
 	if (fetch_pci_cfg) {
-		ctrlr->pci_cfg.data = (uint8_t *)dev_info->bdi_ctrlr->pci_cfg;
-		ctrlr->pci_cfg.len  = dev_info->bdi_ctrlr->pci_cfg_sz;
-		D_DEBUG(DB_MGMT, "ctrlr PCIe config space begins (%02X %02X %02X %02X)\n",
-			ctrlr->pci_cfg.data[0], ctrlr->pci_cfg.data[1], ctrlr->pci_cfg.data[2],
-			ctrlr->pci_cfg.data[3]);
+		size_t      buflen = (NVME_PCI_CFG_SPC_MAX_LEN << 1) + 1;
+		char        buf[buflen];
+		char       *cur                                     = buf;
+		const char *end                                     = buf + sizeof(buf);
+
+		for (int i = 0; i < NVME_PCI_CFG_SPC_MAX_LEN; i++) {
+			D_DEBUG(DB_MGMT, "i 0x%x, buf %p, len 0x%lx, cur %p, end %p, end-cur 0x%lx",
+				i, buf, buflen, cur, end, end - cur);
+
+			cur += snprintf(cur, end - cur, "%02x",
+					dev_info->bdi_ctrlr->pci_cfg[i] & 0xff);
+			D_DEBUG(DB_MGMT, "written (rem: %ld): %s ", end - cur, buf);
+			if (cur >= end) {
+				D_ERROR("buffer not big enough");
+				return -DER_INVAL;
+			}
+		}
+		D_STRNDUP(ctrlr->pci_cfg, buf, strnlen(buf, buflen - 1));
+		D_DEBUG(DB_MGMT, "ctrlr PCIe config space: %s\n", ctrlr->pci_cfg);
 	} else {
-		ctrlr->pci_cfg.data = NULL;
-		ctrlr->pci_cfg.len  = 0;
+		ctrlr->pci_cfg = NULL;
 	}
 
 	/* Populate NVMe namespace id and capacity */

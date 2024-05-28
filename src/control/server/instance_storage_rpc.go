@@ -168,11 +168,11 @@ func (ei *EngineInstance) StorageFormatSCM(ctx context.Context, force bool) (mRe
 	return
 }
 
-func addLinkInfoToHealthStats(log logging.DebugLogger, health *ctlpb.BioHealthResp, pciCfg []byte) error {
+func addLinkInfoToHealthStats(log logging.DebugLogger, health *ctlpb.BioHealthResp, pciCfg string) error {
 	// Convert byte array to lspci-format.
 	sb := new(strings.Builder)
 	sb.WriteString("01:00.0 device #1\n") // Spoof preamble required for lspci to parse.
-	byteArrayToString(pciCfg, sb)
+	formatBytestring(pciCfg, sb)
 	pciCfgStr := sb.String()
 	log.Debugf(pciCfgStr)
 

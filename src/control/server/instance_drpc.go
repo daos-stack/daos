@@ -214,5 +214,6 @@ func listSmdDevices(ctx context.Context, engine Engine, req *ctlpb.SmdDevReq) (*
 		return nil, errors.Wrap(daos.Status(resp.Status), "ListSmdDevices failed")
 	}
 
+	engine.Debugf("XXX DBG XXX: %s\n\n", resp.Devices[0].Ctrlr.PciCfg)
 	return resp, nil
 }
