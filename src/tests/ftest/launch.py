@@ -347,8 +347,8 @@ class Launch():
             group.update_test_yaml(
                 logger, args.scm_size, args.scm_mount, args.extra_yaml,
                 args.timeout_multiplier, args.override, args.verbose, args.include_localhost)
-        except (RunException, YamlException):
-            message = "Error modifying the test yaml files"
+        except (RunException, YamlException) as e:
+            message = "Error modifying the test yaml files: {}".format(e)
             status |= self.get_exit_status(1, message, "Setup", sys.exc_info())
         except StorageException:
             message = "Error detecting storage information for test yaml files"
@@ -370,7 +370,7 @@ class Launch():
             logger, self.result, self.repeat, self.slurm_setup, args.sparse, args.failfast,
             not args.disable_stop_daos, args.archive, args.rename, args.jenkinslog, core_files,
             args.logs_threshold, args.user_create, code_coverage, self.job_results_dir,
-            self.logdir)
+            self.logdir, args.clear_mounts)
 
         # Convert the test status to a launch.py status
         status |= summarize_run(logger, self.mode, test_status)
@@ -435,6 +435,28 @@ def __arg_type_find_size(val):
     """
     if not re.match(r'^[0-9]+[bcwkMG]?$', val):
         raise ArgumentTypeError(f'Invalid find -size argument: {val}')
+    return val
+
+
+def __arg_type_mount_point(val):
+    """Parse a mount point argument.
+
+    The mount point does not need to exist on this host.
+
+    Args:
+        val (str): the mount point to parse
+
+    Raises:
+        ArgumentTypeError: if the value is not a string starting with '/'
+
+    Returns:
+        str: the mount point
+    """
+    try:
+        if not val.startswith(os.sep):
+            raise ValueError(f'Mount point does not start with {os.sep}')
+    except Exception as err:  # pylint: disable=broad-except
+        raise ArgumentTypeError(f'Invalid mount point: {val}') from err
     return val
 
 
@@ -507,6 +529,12 @@ def main():
         "-a", "--archive",
         action="store_true",
         help="archive host log files in the avocado job-results directory")
+    parser.add_argument(
+        "-c", "--clear_mounts",
+        action="append",
+        default=[],
+        type=__arg_type_mount_point,
+        help="mount points to remove before running each test")
     parser.add_argument(
         "-dsd", "--disable_stop_daos",
         action="store_true",
@@ -705,6 +733,9 @@ def main():
         args.slurm_install = True
         args.slurm_setup = True
         args.user_create = True
+        args.clear_mounts.append("/mnt/daos")
+        args.clear_mounts.append("/mnt/daos0")
+        args.clear_mounts.append("/mnt/daos1")
 
     # Setup the Launch object
     launch = Launch(args.name, args.mode, args.slurm_install, args.slurm_setup)

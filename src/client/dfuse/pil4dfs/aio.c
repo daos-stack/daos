@@ -20,40 +20,18 @@
 
 #include "pil4dfs_int.h"
 
-/* the number of EQs for aio contexts. (d_aio_eq_count_g + d_eq_count) <= d_eq_count_max */
-uint16_t                 d_aio_eq_count_g;
-
 extern _Atomic bool      d_daos_inited;
 extern bool              d_compatible_mode;
-extern pthread_mutex_t   d_lock_aio_eqs_g;
-extern uint16_t          d_eq_count_max;
-extern uint16_t          d_eq_count;
 extern bool              d_hook_enabled;
 extern struct file_obj  *d_file_list[MAX_OPENED_FILE];
 
 extern int
 d_get_fd_redirected(int fd);
 
-struct d_aio_eq {
-	daos_handle_t    eq;
-	pthread_mutex_t  lock;
-	_Atomic uint64_t n_op_queued;
-	_Atomic uint64_t n_op_done;
-};
-
 typedef struct d_aio_req_args {
 	d_iov_t	    iov;
 	d_sg_list_t sgl;
 }d_aio_req_args_t;
-
-/* The max number of event queues dedicated to AIO */
-#define MAX_NUM_EQ_AIO  (16)
-/* list of EQs dedicated for aio contexts. */
-static struct d_aio_eq aio_eq_list[MAX_NUM_EQ_AIO];
-/* The accumulated sum of all created aio contexts. It is used to assign an event queue to a newly
- * created aio context.
- */
-static long int        aio_ctx_total_g;
 
 struct d_aio_ev {
 	daos_event_t      ev;
@@ -63,22 +41,15 @@ struct d_aio_ev {
 
 struct d_aio_ctx {
 	/* the real io_context_t used in libaio */
-	io_context_t      ctx;
+	io_context_t  ctx;
 	/* the depth of context set by io_setup */
-	int               depth;
-	/* the index of the event queue assigned to current aio context */
-	int               idx_eq;
-	bool              inited;
+	int           depth;
+	daos_handle_t eq;
+	bool          inited;
 	/* DFS is involved or not for current context */
-	bool              on_dfs;
-	_Atomic uint64_t  num_op_submitted;
-	_Atomic uint64_t  num_op_done;
-	pthread_mutex_t   lock;
-	/* The array of finished ev. ev is removed from the array by io_getevents(). */
-	struct d_aio_ev **ev_done_array;
-	int               ev_done_h;
-	int               ev_done_t;
-	int               ev_queue_len;
+	bool          on_dfs;
+	uint64_t      n_op_queued;
+	uint64_t      n_op_done;
 };
 
 typedef struct d_aio_ctx d_aio_ctx_t;
@@ -90,24 +61,8 @@ static int (*next_io_cancel)(io_context_t ctx, struct iocb *iocb, struct io_even
 static int (*next_io_getevents)(io_context_t ctx, long min_nr, long nr, struct io_event *events,
 				struct timespec *timeout);
 
-/* free all EQs allocated for aio */
-
-void
-d_free_aio_ctx(void)
-{
-	int i;
-	int rc;
-
-	for (i = 0; i < d_aio_eq_count_g; i++) {
-		rc = daos_eq_destroy(aio_eq_list[i].eq, 0);
-		if (rc)
-			DL_ERROR(rc, "daos_eq_destroy() failed");
-		D_MUTEX_DESTROY(&aio_eq_list[i].lock);
-	}
-	d_aio_eq_count_g = 0;
-}
-
 /* aio functions return negative errno in case of failure */
+
 static int
 create_ev_eq_for_aio(d_aio_ctx_t *aio_ctx);
 
@@ -131,24 +86,14 @@ io_setup(int maxevents, io_context_t *ctxp)
 		io_destroy(*ctxp);
 		return -ENOMEM;
 	}
-	aio_ctx_obj->ctx   = *ctxp;
-	aio_ctx_obj->depth = maxevents;
-	atomic_init(&aio_ctx_obj->num_op_submitted, 0);
-	atomic_init(&aio_ctx_obj->num_op_done, 0);
-	aio_ctx_obj->inited        = false;
-	aio_ctx_obj->on_dfs        = false;
-	aio_ctx_obj->ev_done_array = NULL;
-	aio_ctx_obj->ev_done_h     = 0;
-	aio_ctx_obj->ev_done_t     = 0;
-	aio_ctx_obj->ev_queue_len  = 0;
-	*ctxp                      = (io_context_t)aio_ctx_obj;
-
-	rc = D_MUTEX_INIT(&aio_ctx_obj->lock, NULL);
-	if (rc) {
-		io_destroy(*ctxp);
-		D_FREE(aio_ctx_obj);
-		return -daos_der2errno(rc);
-	}
+	aio_ctx_obj->ctx         = *ctxp;
+	aio_ctx_obj->depth       = maxevents;
+	aio_ctx_obj->eq.cookie   = 0;
+	aio_ctx_obj->n_op_queued = 0;
+	aio_ctx_obj->n_op_done   = 0;
+	aio_ctx_obj->inited      = false;
+	aio_ctx_obj->on_dfs      = false;
+	*ctxp                    = (io_context_t)aio_ctx_obj;
 
 	if (!d_daos_inited)
 		/* daos_init() is not called yet. Call create_ev_eq_for_aio() inside io_submit() */
@@ -166,6 +111,7 @@ io_setup(int maxevents, io_context_t *ctxp)
 int
 io_destroy(io_context_t ctx)
 {
+	int          rc;
 	d_aio_ctx_t *aio_ctx_obj = (d_aio_ctx_t *)ctx;
 	io_context_t ctx_save    = aio_ctx_obj->ctx;
 
@@ -173,64 +119,32 @@ io_destroy(io_context_t ctx)
 		next_io_destroy = dlsym(RTLD_NEXT, "io_destroy");
 		D_ASSERT(next_io_destroy != NULL);
 	}
-	D_MUTEX_DESTROY(&aio_ctx_obj->lock);
-	D_FREE(aio_ctx_obj->ev_done_array);
+	rc = daos_eq_destroy(aio_ctx_obj->eq, 0);
 	D_FREE(aio_ctx_obj);
+	if (rc)
+		return (-daos_der2errno(rc));
+
 	return next_io_destroy(ctx_save);
 }
 
 static int
 create_ev_eq_for_aio(d_aio_ctx_t *aio_ctx)
 {
-	int rc;
-	int num_aio_eq_free, num_aio_eq_create;
+	int          rc;
 
-	D_MUTEX_LOCK(&d_lock_aio_eqs_g);
-	num_aio_eq_free   = (int)d_eq_count_max - (int)d_eq_count - (int)d_aio_eq_count_g;
-	num_aio_eq_create = min(MAX_NUM_EQ_AIO - d_aio_eq_count_g, num_aio_eq_free);
-	/* only one EQ for an aio context*/
-	num_aio_eq_create = min(num_aio_eq_create, 1);
+	if (aio_ctx->inited)
+		return 0;
 
-	if (num_aio_eq_create > 0) {
-		/* allocate EQs for aio context*/
-		rc  = daos_eq_create(&aio_eq_list[d_aio_eq_count_g].eq);
-		if (rc)
-			goto err;
-		D_MUTEX_INIT(&aio_eq_list[d_aio_eq_count_g].lock, NULL);
-		atomic_store_relaxed(&aio_eq_list[d_aio_eq_count_g].n_op_queued, 0);
-		atomic_store_relaxed(&aio_eq_list[d_aio_eq_count_g].n_op_done, 0);
-		d_aio_eq_count_g += num_aio_eq_create;
-	}
-	aio_ctx->idx_eq = aio_ctx_total_g % d_aio_eq_count_g;
-	aio_ctx_total_g ++;
-	D_MUTEX_UNLOCK(&d_lock_aio_eqs_g);
-
-	if (d_aio_eq_count_g == 0) {
-		DS_ERROR(EBUSY, "no EQs created for AIO contexts");
-		return EBUSY;
-	}
-
-	D_MUTEX_LOCK(&aio_ctx->lock);
-	if (aio_ctx->inited == false) {
-		D_ALLOC_ARRAY(aio_ctx->ev_done_array, aio_ctx->depth);
-		if (aio_ctx->ev_done_array == NULL) {
-			D_MUTEX_UNLOCK(&aio_ctx->lock);
-			return ENOMEM;
-		}
-		/* empty queue */
-		aio_ctx->ev_done_h        = 0;
-		aio_ctx->ev_done_t        = 0;
-		aio_ctx->ev_done_array[0] = NULL;
-		aio_ctx->ev_queue_len     = 0;
-		aio_ctx->inited           = true;
-	}
+	/* allocate EQs for aio context*/
+	rc  = daos_eq_create(&aio_ctx->eq);
+	if (rc)
+		goto err;
 	aio_ctx->on_dfs = true;
-	D_MUTEX_UNLOCK(&aio_ctx->lock);
+	aio_ctx->inited = true;
 
 	return 0;
 
 err:
-	D_MUTEX_UNLOCK(&d_lock_aio_eqs_g);
 	return daos_der2errno(rc);
 }
 
@@ -250,7 +164,6 @@ io_submit(io_context_t ctx, long nr, struct iocb *ios[])
 	struct d_aio_ev  *ctx_ev      = NULL;
 	d_aio_req_args_t *req_args;
 	int               i, n_op_dfs, fd, io_depth;
-	int               idx_aio_eq;
 	int               rc, rc2;
 	short             op;
 	int              *fd_directed = NULL;
@@ -301,7 +214,6 @@ io_submit(io_context_t ctx, long nr, struct iocb *ios[])
 			D_GOTO(err, rc);
 	}
 
-	idx_aio_eq = aio_ctx_obj->idx_eq;
 	for (i = 0; i < nr; i++) {
 		op = ios[i]->aio_lio_opcode;
 		fd = fd_directed[i] - FD_FILE_BASE;
@@ -310,7 +222,7 @@ io_submit(io_context_t ctx, long nr, struct iocb *ios[])
 		if (ctx_ev == NULL)
 			D_GOTO(err_loop, rc = ENOMEM);
 
-		rc = daos_event_init(&ctx_ev->ev, aio_eq_list[idx_aio_eq].eq, NULL);
+		rc = daos_event_init(&ctx_ev->ev, aio_ctx_obj->eq, NULL);
 		if (rc) {
 			DL_ERROR(rc, "daos_event_init() failed");
 			D_GOTO(err_loop, rc = daos_der2errno(rc));
@@ -355,8 +267,7 @@ io_submit(io_context_t ctx, long nr, struct iocb *ios[])
 				D_GOTO(err_loop, rc);
 			}
 		}
-		atomic_fetch_add_relaxed(&aio_ctx_obj->num_op_submitted, 1);
-		atomic_fetch_add_relaxed(&aio_eq_list[idx_aio_eq].n_op_queued, 1);
+		aio_ctx_obj->n_op_queued++;
 	}
 
 	D_FREE(fd_directed);
@@ -398,72 +309,21 @@ io_cancel(io_context_t ctx, struct iocb *iocb, struct io_event *evt)
 	return (-ENOSYS);
 }
 
-static int
-ev_enqueue(struct d_aio_ctx *ctx, struct d_aio_ev *ev)
-{
-	D_MUTEX_LOCK(&ctx->lock);
-        D_ASSERT(ctx->depth > ctx->ev_queue_len);
-	ctx->ev_done_array[ctx->ev_done_t] = ev;
-	ctx->ev_done_t++;
-	if (ctx->ev_done_t >= ctx->depth)
-		ctx->ev_done_t = 0;
-	ctx->ev_queue_len++;
-	D_MUTEX_UNLOCK(&ctx->lock);
-	return 0;
-}
-
-static void
-ev_dequeue_batch(struct d_aio_ctx *ctx, long min_nr, long nr, struct io_event *events, int *num_ev)
-{
-	int              rc;
-	struct d_aio_ev *ev;
-
-	D_MUTEX_LOCK(&ctx->lock);
-	while (ctx->ev_queue_len > 0 && *num_ev < min_nr) {
-		/* dequeue one ev record */
-		ev = ctx->ev_done_array[ctx->ev_done_h];
-		ctx->ev_done_h++;
-		if (ctx->ev_done_h >= ctx->depth)
-			ctx->ev_done_h = 0;
-		ctx->ev_queue_len--;
-
-		events[*num_ev].obj = ev->piocb;
-		events[*num_ev].res = ev->piocb->u.c.nbytes;
-
-		rc = daos_event_fini(&ev->ev);
-		if (rc)
-			DL_ERROR(rc, "daos_event_fini() failed");
-		D_FREE(ev);
-		(*num_ev)++;
-	}
-	D_MUTEX_UNLOCK(&ctx->lock);
-}
-
 #define AIO_EQ_DEPTH MAX_EQ
 
-/* poll all EQs in our list */
+/* poll the event queue of current aio context */
 static void
-aio_poll_eqs(struct d_aio_ctx *ctx, long min_nr, long nr, struct io_event *events, int *num_ev)
+aio_poll_eq(struct d_aio_ctx *ctx, long min_nr, long nr, struct io_event *events, int *num_ev)
 {
-	int                j, idx_eq;
+	int                j;
 	int                rc, rc2;
 	struct daos_event *eps[AIO_EQ_DEPTH + 1] = {0};
 	struct d_aio_ev   *p_aio_ev;
 
-	/* If there exist large number of aio context (larger than the number of EQs), other aio
-	 * contexs could poll the same EQ and append to ev_done_array. ev_dequeue_batch() and
-	 * ev_dequeue_batch() are needed to handle such situations.
-	 */
-	ev_dequeue_batch(ctx, min_nr, nr, events, num_ev);
-	if (*num_ev >= min_nr)
+	if (ctx->n_op_queued == 0)
 		return;
 
-	/* poll the assigned EQ */
-	idx_eq = ctx->idx_eq;
-	if (atomic_load_relaxed(&aio_eq_list[idx_eq].n_op_queued) == 0)
-		goto after_poll;
-
-	rc = daos_eq_poll(aio_eq_list[idx_eq].eq, 0, DAOS_EQ_NOWAIT, AIO_EQ_DEPTH, eps);
+	rc = daos_eq_poll(ctx->eq, 0, DAOS_EQ_NOWAIT, min(AIO_EQ_DEPTH, nr - (*num_ev)), eps);
 	if (rc < 0)
 		DL_ERROR(rc, "daos_eq_poll() failed");
 
@@ -471,33 +331,22 @@ aio_poll_eqs(struct d_aio_ctx *ctx, long min_nr, long nr, struct io_event *event
 		if (eps[j]->ev_error) {
 			DS_ERROR(eps[j]->ev_error, "daos_eq_poll() error");
 		} else {
-			atomic_fetch_add_relaxed(&aio_eq_list[idx_eq].n_op_queued, -1);
-			atomic_fetch_add_relaxed(&aio_eq_list[idx_eq].n_op_done, 1);
+			ctx->n_op_queued--;
+			ctx->n_op_done++;
 			p_aio_ev = container_of(eps[j], struct d_aio_ev, ev);
-			if (p_aio_ev->ctx == ctx) {
-				/* append to event list */
-				D_MUTEX_LOCK(&ctx->lock);
-				events[*num_ev].obj = p_aio_ev->piocb;
-				events[*num_ev].res = p_aio_ev->piocb->u.c.nbytes;
+			/* append to event list */
+			events[*num_ev].obj = p_aio_ev->piocb;
+			events[*num_ev].res = p_aio_ev->piocb->u.c.nbytes;
 
-				rc2 = daos_event_fini(&p_aio_ev->ev);
-				if (rc2)
-					DL_ERROR(rc, "daos_event_fini() failed");
-				(*num_ev)++;
-				D_MUTEX_UNLOCK(&ctx->lock);
-				D_FREE(p_aio_ev);
-			} else {
-				/* need to append context's finished queue */
-				ev_enqueue(p_aio_ev->ctx, p_aio_ev);
-			}
+			rc2 = daos_event_fini(&p_aio_ev->ev);
+			if (rc2)
+				DL_ERROR(rc2, "daos_event_fini() failed");
+			(*num_ev)++;
+			D_FREE(p_aio_ev);
 		}
 	}
 
-after_poll:
-	/* try again after polling */
-	ev_dequeue_batch(ctx, min_nr, nr, events, num_ev);
-	if (*num_ev >= min_nr)
-		return;
+	return;
 }
 
 static int
@@ -539,7 +388,7 @@ io_getevents(io_context_t ctx, long min_nr, long nr, struct io_event *events,
 		min_nr = AIO_EQ_DEPTH;
 
 	while (1) {
-		aio_poll_eqs(aio_ctx_obj, min_nr, nr, events, &op_done);
+		aio_poll_eq(aio_ctx_obj, min_nr, nr, events, &op_done);
 		if (op_done >= min_nr)
 			return op_done;
 		if (timeout) {
