@@ -16,8 +16,17 @@
 #include <daos_security.h>
 #include <gurt/telemetry_common.h>
 
-/* Map status of ranks that make up the pool group */
-#define POOL_GROUP_MAP_STATUS (PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN)
+/* Map states of ranks that make up the pool group */
+#define POOL_GROUP_MAP_STATES (PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN)
+
+/* Map states of ranks that make up the pool service */
+#define POOL_SVC_MAP_STATES (PO_COMP_ST_UP | PO_COMP_ST_UPIN)
+
+/*
+ * Since we want all PS replicas to belong to the pool group,
+ * POOL_SVC_MAP_STATES must be a subset of POOL_GROUP_MAP_STATES.
+ */
+D_CASSERT((POOL_SVC_MAP_STATES & POOL_GROUP_MAP_STATES) == POOL_SVC_MAP_STATES);
 
 /**
  * Global pool metrics
