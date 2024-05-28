@@ -577,7 +577,8 @@ out:
 static int
 migrate_pool_tls_lookup_create(struct ds_pool *pool, unsigned int version, unsigned int generation,
 			       uuid_t pool_hdl_uuid, uuid_t co_hdl_uuid, uint64_t max_eph,
-			       uint32_t new_layout_ver, uint32_t opc, struct migrate_pool_tls **p_tls)
+			       uint32_t new_layout_ver, uint32_t opc,
+			       struct migrate_pool_tls **p_tls, bool req_pending)
 {
 	struct migrate_pool_tls *tls = NULL;
 	struct migrate_pool_tls_create_arg arg = { 0 };
@@ -599,8 +600,10 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, unsigned int version, unsig
 			}
 		}
 
-		if (rc == 0)
+		if (rc == 0) {
+			tls->mpt_req_pending = req_pending;
 			*p_tls = tls;
+		}
 
 		return rc;
 	}
@@ -662,10 +665,12 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, unsigned int version, unsig
 
 out:
 	if (tls != NULL && tls->mpt_init_tls) {
-		tls->mpt_init_tls = 0;
 		/* Set init failed, so the waiting lookup(above) can be notified */
 		if (rc != 0)
 			tls->mpt_init_err = rc;
+		else
+			tls->mpt_req_pending = req_pending;
+		tls->mpt_init_tls = 0;
 		ABT_mutex_lock(tls->mpt_init_mutex);
 		ABT_cond_broadcast(tls->mpt_init_cond);
 		ABT_mutex_unlock(tls->mpt_init_mutex);
@@ -3679,16 +3684,24 @@ ds_migrate_object(struct ds_pool *pool, uuid_t po_hdl, uuid_t co_hdl, uuid_t co_
 
 	/* Check if the pool tls exists */
 	rc = migrate_pool_tls_lookup_create(pool, version, generation, po_hdl, co_hdl, max_eph,
-					    new_layout_ver, opc, &tls);
+					    new_layout_ver, opc, &tls, true);
 	if (rc != 0)
 		D_GOTO(out, rc);
-	if (tls->mpt_fini)
-		D_GOTO(out, rc = -DER_SHUTDOWN);
+	if (tls->mpt_fini) {
+		tls->mpt_req_pending = 0;
+		rc = -DER_SHUTDOWN;
+		for (i = 0; i < count; i++)
+			D_ERROR(DF_UOID"/"DF_U64"/"DF_UUID"/%u failed as mpt_fini set, %d\n",
+				DP_UOID(oids[i]), epochs[i], DP_UUID(co_uuid), shards[i], rc);
+		D_GOTO(out, rc);
+	}
 
 	/* NB: only create this tree on xstream 0 */
 	rc = migrate_try_create_object_tree(tls);
-	if (rc)
+	if (rc) {
+		tls->mpt_req_pending = 0;
 		D_GOTO(out, rc);
+	}
 
 	/* Insert these oids/conts into the local tree */
 	for (i = 0; i < count; i++) {
@@ -3706,6 +3719,7 @@ ds_migrate_object(struct ds_pool *pool, uuid_t po_hdl, uuid_t co_hdl, uuid_t co_
 			break;
 		}
 	}
+	tls->mpt_req_pending = 0;
 	if (rc < 0)
 		D_GOTO(out, rc);
 
@@ -3803,6 +3817,9 @@ ds_obj_migrate_handler(crt_rpc_t *rpc)
 			       migrate_in->om_generation, migrate_in->om_max_eph,
 			       migrate_in->om_opc, oids, ephs, punched_ephs, shards, oids_count,
 			       migrate_in->om_tgt_idx, migrate_in->om_new_layout_ver);
+	if (rc)
+		DL_ERROR(rc, DF_UUID" om version %u failed",
+			 DP_UUID(migrate_in->om_pool_uuid),migrate_in->om_version);
 out:
 	if (pool)
 		ds_pool_put(pool);
@@ -3874,7 +3891,8 @@ ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver, unsigned int generation,
 	if (rc)
 		D_GOTO(out, rc);
 
-	if (arg.total_ult_cnt > 0 || tls->mpt_ult_running)
+	if (arg.total_ult_cnt > 0 || tls->mpt_ult_running ||
+	    tls->mpt_init_tls || tls->mpt_req_pending)
 		arg.dms.dm_migrating = 1;
 	else
 		arg.dms.dm_migrating = 0;
