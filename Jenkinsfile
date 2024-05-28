@@ -41,9 +41,9 @@ String sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceA
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
-    (env.BRANCH_NAME != branchTypeRE('testing') &&
-     env.BRANCH_NAME != branchTypeRE('release') &&
-     env.BRANCH_NAME != branchTypeRE('downstream') &&
+    (env.BRANCH_NAME !~ branchTypeRE('testing') &&
+     env.BRANCH_NAME !~ branchTypeRE('release') &&
+     env.BRANCH_NAME !~ branchTypeRE('downstream') &&
      env.BRANCH_NAME != 'master')) {
     currentBuild.result = 'SUCCESS'
     return
