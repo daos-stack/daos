@@ -2134,8 +2134,7 @@ obj_ioc_fini(struct obj_io_context *ioc, int err)
 	}
 
 	if (ioc->ioc_coc != NULL) {
-		if (obj_is_modification_opc(ioc->ioc_opc) && err == 0 &&
-		    daos_oclass_is_ec(&ioc->ioc_oca))
+		if (ioc->ioc_update_ec_ts && err == 0)
 			ds_cont_ec_timestamp_update(ioc->ioc_coc);
 		ds_cont_child_put(ioc->ioc_coc);
 		ioc->ioc_coc = NULL;
@@ -2281,7 +2280,7 @@ obj_ioc_end(struct obj_io_context *ioc, int err)
 }
 
 static int
-obj_ioc_init_oca(struct obj_io_context *ioc, daos_obj_id_t oid)
+obj_ioc_init_oca(struct obj_io_context *ioc, daos_obj_id_t oid, bool for_modify)
 {
 	struct daos_oclass_attr *oca;
 	uint32_t                 nr_grps;
@@ -2296,6 +2295,8 @@ obj_ioc_init_oca(struct obj_io_context *ioc, daos_obj_id_t oid)
 	if (daos_oclass_is_ec(oca)) {
 		ioc->ioc_oca.u.ec.e_len = ioc->ioc_coc->sc_props.dcp_ec_cell_sz;
 		D_ASSERT(ioc->ioc_oca.u.ec.e_len != 0);
+		if (for_modify)
+			ioc->ioc_update_ec_ts = 1;
 	}
 
 	return 0;
@@ -2313,7 +2314,7 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc,
 		}
 	}
 
-	if (!obj_is_modification_opc(opc))
+	if (!obj_is_modification_opc(opc) && (opc != DAOS_OBJ_RPC_CPD || flags & ORF_CPD_RDONLY))
 		return 0;
 
 	if (child->sc_pool->spc_pool->sp_rebuilding) {
@@ -2381,7 +2382,7 @@ obj_ioc_begin(daos_obj_id_t oid, uint32_t rpc_map_ver, uuid_t pool_uuid,
 	if (rc != 0)
 		goto failed;
 
-	rc = obj_ioc_init_oca(ioc, oid);
+	rc = obj_ioc_init_oca(ioc, oid, obj_is_modification_opc(opc));
 	if (rc != 0)
 		goto failed;
 	return 0;
@@ -4466,7 +4467,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 		/* There is no object associated with this ioc while
 		 * initializing, we have to do it at here.
 		 */
-		rc = obj_ioc_init_oca(ioc, dcsr->dcsr_oid.id_pub);
+		rc = obj_ioc_init_oca(ioc, dcsr->dcsr_oid.id_pub, true);
 		if (rc)
 			D_GOTO(out, rc);
 
@@ -4963,31 +4964,6 @@ comp:
 	return ds_obj_cpd_dispatch(dlh, arg, idx, comp_cb);
 }
 
-static int
-ds_obj_dtx_leader_prep_handle(struct daos_cpd_sub_head *dcsh,
-			      struct daos_cpd_sub_req *dcsrs,
-			      struct daos_shard_tgt *tgts,
-			      int tgt_cnt, int req_cnt, struct obj_io_context *ioc,
-			      uint32_t *flags)
-{
-	int			 rc = 0;
-	int			 i;
-
-	for (i = 0; i < req_cnt; i++) {
-		struct daos_cpd_sub_req	*dcsr;
-
-		dcsr = &dcsrs[i];
-
-		if (dcsr->dcsr_opc != DCSO_UPDATE)
-			continue;
-
-		rc = obj_ioc_init_oca(ioc, dcsr->dcsr_oid.id_pub);
-		if (rc)
-			break;
-	}
-	return rc;
-}
-
 static void
 ds_obj_dtx_leader(struct daos_cpd_args *dca)
 {
@@ -5088,11 +5064,6 @@ again:
 	if (dcde->dcde_write_cnt != 0 &&
 	    dcsh->dcsh_epoch.oe_value < dss_get_start_epoch())
 		D_GOTO(out, rc = -DER_TX_RESTART);
-
-	rc = ds_obj_dtx_leader_prep_handle(dcsh, dcsrs, tgts, tgt_cnt,
-					   req_cnt, dca->dca_ioc, &flags);
-	if (rc != 0)
-		goto out;
 
 	/* 'tgts[0]' is for current dtx leader. */
 	if (tgt_cnt == 1)
