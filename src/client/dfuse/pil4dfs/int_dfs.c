@@ -220,24 +220,24 @@ struct statx {
 #endif
 
 /* working dir of current process */
-static char            cur_dir[DFS_MAX_PATH] = "";
-static bool            segv_handler_inited;
+static char             cur_dir[DFS_MAX_PATH] = "";
+static bool             segv_handler_inited;
 /* Old segv handler */
-struct sigaction       old_segv;
+struct sigaction        old_segv;
 
 /* the flag to indicate whether initlization is finished or not */
-bool                   d_hook_enabled;
-static bool            hook_enabled_bak;
-static pthread_mutex_t lock_reserve_fd;
-static pthread_mutex_t lock_dfs;
-static pthread_mutex_t lock_fd;
-static pthread_mutex_t lock_dirfd;
-static pthread_mutex_t lock_mmap;
-static pthread_mutex_t lock_fd_dup2ed;
-static pthread_mutex_t lock_eqh;
+bool                    d_hook_enabled;
+static bool             hook_enabled_bak;
+static pthread_mutex_t  lock_reserve_fd;
+static pthread_mutex_t  lock_dfs;
+static pthread_mutex_t  lock_fd;
+static pthread_mutex_t  lock_dirfd;
+static pthread_mutex_t  lock_mmap;
+static pthread_rwlock_t lock_fd_dup2ed;
+static pthread_mutex_t  lock_eqh;
 
 /* store ! umask to apply on mode when creating file to honor system umask */
-static mode_t          mode_not_umask;
+static mode_t           mode_not_umask;
 
 static void
 finalize_dfs(void);
@@ -502,8 +502,8 @@ register_handler(int sig, struct sigaction *old_handler);
 static void
 print_summary(void);
 
-static int       num_fd_dup2ed;
-struct fd_dup2   fd_dup2_list[MAX_FD_DUP2ED];
+static _Atomic uint32_t  num_fd_dup2ed;
+struct fd_dup2           fd_dup2_list[MAX_FD_DUP2ED];
 
 static void
 init_fd_dup2_list(void);
@@ -1393,7 +1393,7 @@ init_fd_list(void)
 	rc = D_MUTEX_INIT(&lock_mmap, NULL);
 	if (rc)
 		return 1;
-	rc = D_MUTEX_INIT(&lock_fd_dup2ed, NULL);
+	rc = D_RWLOCK_INIT(&lock_fd_dup2ed, NULL);
 	if (rc)
 		return 1;
 
@@ -1708,7 +1708,7 @@ free_map(int idx)
 int
 d_get_fd_redirected(int fd)
 {
-	int i, fd_ret = fd;
+	int i, rc, fd_ret = fd;
 
 	if (atomic_load_relaxed(&d_daos_inited) == false)
 		return fd;
@@ -1728,16 +1728,24 @@ d_get_fd_redirected(int fd)
 		}
 	}
 
-	D_MUTEX_LOCK(&lock_fd_dup2ed);
-	if (num_fd_dup2ed > 0) {
+	if (atomic_load_relaxed(&num_fd_dup2ed) > 0) {
+		rc = pthread_rwlock_rdlock(&lock_fd_dup2ed);
+		if (rc != 0) {
+			DS_ERROR(rc, "pthread_rwlock_rdlock() failed");
+			return fd_ret;
+		}
 		for (i = 0; i < MAX_FD_DUP2ED; i++) {
 			if (fd_dup2_list[i].fd_src == fd) {
 				fd_ret = fd_dup2_list[i].fd_dest;
 				break;
 			}
 		}
+		rc = pthread_rwlock_unlock(&lock_fd_dup2ed);
+		if (rc != 0) {
+			DS_ERROR(rc, "pthread_rwlock_unlock() failed");
+			return fd_ret;
+		}
 	}
-	D_MUTEX_UNLOCK(&lock_fd_dup2ed);
 
 	return fd_ret;
 }
@@ -1761,8 +1769,8 @@ close_dup_fd(int (*next_close)(int fd), int fd, bool close_fd)
 	}
 
 	/* remove the fd_dup entry */
-	D_MUTEX_LOCK(&lock_fd_dup2ed);
-	if (num_fd_dup2ed > 0) {
+	if (atomic_load_relaxed(&num_fd_dup2ed) > 0) {
+		D_RWLOCK_WRLOCK(&lock_fd_dup2ed);
 		for (i = 0; i < MAX_FD_DUP2ED; i++) {
 			if (fd_dup2_list[i].fd_src == fd) {
 				idx_dup = i;
@@ -1770,12 +1778,12 @@ close_dup_fd(int (*next_close)(int fd), int fd, bool close_fd)
 				/* clear the value to free */
 				fd_dup2_list[i].fd_src  = -1;
 				fd_dup2_list[i].fd_dest = -1;
-				num_fd_dup2ed--;
+				atomic_fetch_add_relaxed(&num_fd_dup2ed, -1);
 				break;
 			}
 		}
+		D_RWLOCK_UNLOCK(&lock_fd_dup2ed);
 	}
-	D_MUTEX_UNLOCK(&lock_fd_dup2ed);
 
 	if (idx_dup < 0) {
 		D_DEBUG(DB_ANY, "failed to find fd %d in fd_dup2_list[]: %d (%s)\n", fd, EINVAL,
@@ -1793,12 +1801,12 @@ init_fd_dup2_list(void)
 {
 	int i;
 
-	D_MUTEX_LOCK(&lock_fd_dup2ed);
+	D_RWLOCK_WRLOCK(&lock_fd_dup2ed);
 	for (i = 0; i < MAX_FD_DUP2ED; i++) {
 		fd_dup2_list[i].fd_src  = -1;
 		fd_dup2_list[i].fd_dest = -1;
 	}
-	D_MUTEX_UNLOCK(&lock_fd_dup2ed);
+	D_RWLOCK_UNLOCK(&lock_fd_dup2ed);
 }
 
 static int
@@ -1810,19 +1818,19 @@ allocate_dup2ed_fd(const int fd_src, const int fd_dest)
 	inc_dup_ref_count(fd_dest);
 
 	/* Not many applications use dup2(). Normally the number of fd duped is small. */
-	D_MUTEX_LOCK(&lock_fd_dup2ed);
-	if (num_fd_dup2ed < MAX_FD_DUP2ED) {
+	if (atomic_load_relaxed(&num_fd_dup2ed) < MAX_FD_DUP2ED) {
+		D_RWLOCK_WRLOCK(&lock_fd_dup2ed);
 		for (i = 0; i < MAX_FD_DUP2ED; i++) {
 			if (fd_dup2_list[i].fd_src == -1) {
 				fd_dup2_list[i].fd_src  = fd_src;
 				fd_dup2_list[i].fd_dest = fd_dest;
-				num_fd_dup2ed++;
-				D_MUTEX_UNLOCK(&lock_fd_dup2ed);
+				atomic_fetch_add_relaxed(&num_fd_dup2ed, 1);
+				D_RWLOCK_UNLOCK(&lock_fd_dup2ed);
 				return i;
 			}
 		}
+		D_RWLOCK_UNLOCK(&lock_fd_dup2ed);
 	}
-	D_MUTEX_UNLOCK(&lock_fd_dup2ed);
 
 	/* decrease dup reference count in error */
 	dec_dup_ref_count(fd_dest);
@@ -1836,17 +1844,17 @@ query_fd_forward_dest(int fd_src)
 {
 	int i, fd_dest = -1;
 
-	D_MUTEX_LOCK(&lock_fd_dup2ed);
-	if (num_fd_dup2ed > 0) {
+	if (atomic_load_relaxed(&num_fd_dup2ed) > 0) {
+		D_RWLOCK_RDLOCK(&lock_fd_dup2ed);
 		for (i = 0; i < MAX_FD_DUP2ED; i++) {
 			if (fd_src == fd_dup2_list[i].fd_src) {
 				fd_dest = fd_dup2_list[i].fd_dest;
-				D_MUTEX_UNLOCK(&lock_fd_dup2ed);
+				D_RWLOCK_UNLOCK(&lock_fd_dup2ed);
 				return fd_dest;
 			}
 		}
+		D_RWLOCK_UNLOCK(&lock_fd_dup2ed);
 	}
-	D_MUTEX_UNLOCK(&lock_fd_dup2ed);
 	return -1;
 }
 
@@ -1862,14 +1870,14 @@ close_all_duped_fd(void)
 {
 	int i;
 
-	if (num_fd_dup2ed == 0)
+	if (atomic_load_relaxed(&num_fd_dup2ed) == 0)
 		return;
 	/* Only the main thread will call this function in the destruction phase */
 	for (i = 0; i < MAX_FD_DUP2ED; i++) {
 		if (fd_dup2_list[i].fd_src >= 0)
 			close_dup_fd(libc_close, fd_dup2_list[i].fd_src, true);
 	}
-	num_fd_dup2ed = 0;
+	atomic_store_relaxed(&num_fd_dup2ed, 0);
 }
 
 static int
@@ -4247,10 +4255,10 @@ setup_fd_0_1_2(void)
 	int   i, fd, idx, fd_tmp, fd_new, open_flag, error_save;
 	off_t offset;
 
-	if (num_fd_dup2ed == 0)
+	if (atomic_load_relaxed(&num_fd_dup2ed) == 0)
 		return 0;
 
-	D_MUTEX_LOCK(&lock_fd_dup2ed);
+	D_RWLOCK_RDLOCK(&lock_fd_dup2ed);
 	for (i = 0; i < MAX_FD_DUP2ED; i++) {
 		/* only check fd 0, 1, and 2 */
 		if (fd_dup2_list[i].fd_src >= 0 && fd_dup2_list[i].fd_src <= 2) {
@@ -4286,11 +4294,11 @@ setup_fd_0_1_2(void)
 			}
 		}
 	}
-	D_MUTEX_UNLOCK(&lock_fd_dup2ed);
+	D_RWLOCK_UNLOCK(&lock_fd_dup2ed);
 	return 0;
 
 err:
-	D_MUTEX_UNLOCK(&lock_fd_dup2ed);
+	D_RWLOCK_UNLOCK(&lock_fd_dup2ed);
 	return error_save;
 }
 
@@ -4320,6 +4328,8 @@ reset_daos_env_before_exec(void)
 		d_daos_inited     = false;
 		daos_debug_inited = false;
 		context_reset     = false;
+		/* all IO requests go through dfuse */
+		d_hook_enabled    = false;
 	}
 	return 0;
 }
@@ -6945,7 +6955,7 @@ finalize_myhook(void)
 		D_MUTEX_DESTROY(&lock_dirfd);
 		D_MUTEX_DESTROY(&lock_fd);
 		D_MUTEX_DESTROY(&lock_mmap);
-		D_MUTEX_DESTROY(&lock_fd_dup2ed);
+		D_RWLOCK_DESTROY(&lock_fd_dup2ed);
 
 		if (fd_255_reserved)
 			libc_close(255);
