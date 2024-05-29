@@ -105,7 +105,7 @@ class EcodAggregationOffRebuild(ErasureCodeIor):
         :avocado: tags=ec,aggregation,ec_array,ec_aggregation,rebuild
         :avocado: tags=EcodAggregationOffRebuild,test_ec_offline_agg_during_rebuild
         """
-        # Disable the aggregation
+        # Disable the aggregation.
         self.pool.set_property("reclaim", "disabled")
         self.pool.connect()
 
