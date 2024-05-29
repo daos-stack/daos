@@ -835,13 +835,16 @@ cr_cont_create(void **state, struct test_pool *pool, struct test_cont *cont, int
 	char		 uuid_str[DAOS_UUID_STR_SIZE];
 	test_arg_t	*arg = *state;
 	daos_prop_t	*prop = NULL;
+	mode_t		 saved;
 	daos_handle_t	 coh;
 	int		 fd;
 	int		 rc;
 	int		 rc1;
 
+	saved = umask(0);
 	strncpy(cont->label, "/tmp/cr_cont_XXXXXX", sizeof(cont->label) - 1);
 	fd = mkstemp(cont->label);
+	umask(saved);
 	if (fd < 0) {
 		print_message("CR: cont generate label failed: %s\n", strerror(errno));
 		return d_errno2der(errno);
@@ -1848,6 +1851,7 @@ cr_pause(void **state, bool force)
 	uint32_t			 class = TCC_POOL_BAD_LABEL;
 	uint32_t			 action = TCA_INTERACT;
 	int				 rc;
+	int				 i;
 
 	rc = cr_pool_create(state, &pool, false, class);
 	assert_rc_equal(rc, 0);
@@ -1875,12 +1879,17 @@ cr_pause(void **state, bool force)
 	rc = cr_system_start();
 	assert_rc_equal(rc, 0);
 
-	/* Sleep for a while after system re-started under check mode. */
-	sleep(5);
+	for (i = 0; i < CR_WAIT_MAX; i += 5) {
+		/* Sleep for a while after system re-started under check mode. */
+		sleep(5);
 
-	cr_dci_fini(&dci);
-	rc = cr_check_query(1,  &pool.pool_uuid, &dci);
-	assert_rc_equal(rc, 0);
+		cr_dci_fini(&dci);
+		rc = cr_check_query(1, &pool.pool_uuid, &dci);
+		if (rc == 0)
+			break;
+
+		assert_rc_equal(rc, -DER_INVAL);
+	}
 
 	rc = cr_ins_verify(&dci, TCIS_PAUSED);
 	assert_rc_equal(rc, 0);

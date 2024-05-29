@@ -764,7 +764,7 @@ vos_iter_cb(vos_iter_cb_t iter_cb, daos_handle_t ih, vos_iter_entry_t *iter_ent,
 		*acts |= VOS_ITER_CB_YIELD;
 		if (rc == 0 && iter->it_parent != NULL &&
 		    (param->ip_flags &
-		     (VOS_IT_RECX_VISIBLE | VOS_IT_FOR_PURGE | VOS_IT_FOR_DISCARD)) == 0) {
+		     (VOS_IT_RECX_VISIBLE | VOS_IT_FOR_AGG | VOS_IT_FOR_DISCARD)) == 0) {
 			/** If scanning the whole tree, we need to revalidate the parent
 			 * chain and possibly jump back to another level to continue */
 			rc = vos_iter_validate_internal(iter->it_parent);

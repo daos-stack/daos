@@ -12,14 +12,14 @@ from os.path import join
 from command_utils_base import BasicParameter, EnvironmentVariables
 from data_mover_utils import (ContClone, DcpCommand, DdeserializeCommand, DserializeCommand,
                               DsyncCommand, FsCopy, uuid_from_obj)
+from dfuse_utils import get_dfuse, start_dfuse
 from duns_utils import format_path
 from exception_utils import CommandFailure
 from general_utils import create_string_buffer, get_log_file
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
-from pydaos.raw import DaosContainer, DaosObj, IORequest, str_to_c_uuid
+from pydaos.raw import DaosObj, IORequest
 from run_utils import run_remote
-from test_utils_container import TestContainer
 
 
 class DataMoverTestBase(IorTestBase, MdtestBase):
@@ -355,35 +355,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.pool.append(pool)
 
         return pool
-
-    def get_cont(self, pool, cont):
-        """Get an existing container.
-
-        Args:
-            pool (TestPool): pool to open the container in.
-            cont (str): container uuid or label.
-
-        Returns:
-            TestContainer: the container object
-
-        """
-        # Query the container for existence and to get the uuid from a label
-        query_response = self.daos_cmd.container_query(pool=pool.uuid, cont=cont)['response']
-        cont_uuid = query_response['container_uuid']
-
-        cont_label = query_response.get('container_label')
-
-        # Create a TestContainer and DaosContainer instance
-        container = TestContainer(pool, daos_command=self.daos_cmd)
-        container.container = DaosContainer(pool.context)
-        container.container.uuid = str_to_c_uuid(cont_uuid)
-        container.container.poh = pool.pool.handle
-        container.uuid = container.container.get_uuid_str()
-        container.update_params(label=cont_label, type=query_response['container_type'])
-        container.control_method.update(
-            self.params.get('control_method', container.namespace, container.control_method.value))
-
-        return container
 
     def parse_create_cont_label(self, output):
         """Parse a uuid or label from create container output.
@@ -794,7 +765,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             self.ior_cmd.api.update("DFS", display_api)
             self.ior_cmd.test_file.update(path, display_test_file)
             if pool:
-                self.ior_cmd.set_daos_params(self.server_group, pool, cont_uuid or None)
+                self.ior_cmd.set_daos_params(pool, cont_uuid or None)
 
     def run_ior_with_params(self, param_type, path, pool=None, cont=None,
                             path_suffix=None, flags=None, display=True,
@@ -856,9 +827,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             self.mdtest_cmd.api.update("DFS", display_api)
             self.mdtest_cmd.test_dir.update(path, display_test_dir)
             if pool and cont_uuid:
-                self.mdtest_cmd.set_daos_params(self.server_group, pool, cont_uuid)
+                self.mdtest_cmd.update_params(dfs_pool=pool.identifier, dfs_cont=cont_uuid)
             elif pool:
-                self.mdtest_cmd.set_daos_params(self.server_group, pool, None)
+                self.mdtest_cmd.update_params(dfs_pool=pool.identifier, dfs_cont=None)
 
     def run_mdtest_with_params(self, param_type, path, pool=None, cont=None,
                                flags=None, display=True):
@@ -1025,8 +996,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             tool (str): specify the tool name to be used
             pool (TestPool): source pool object
             cont (TestContainer): source container object
-            create_dataset (bool): boolean to create initial set of
-                                   data using ior. Defaults to False.
+            create_dataset (bool, optional): boolean to create initial set of data using ior.
+                Defaults to False.
         """
         # Set the tool to use
         self.set_tool(tool)
@@ -1039,6 +1010,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         cont2 = self.get_container(pool, oclass=self.ior_cmd.dfs_oclass.value)
 
         # perform various datamover activities
+        daos_path = None
+        read_back_cont = None
+        read_back_pool = None
         if tool == 'CONT_CLONE':
             result = self.run_datamover(
                 self.test_id + " (cont to cont2)",
@@ -1051,7 +1025,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             pool2 = self.get_pool()
             # Use dfuse as a shared intermediate for serialize + deserialize
             dfuse_cont = self.get_container(pool, oclass=self.ior_cmd.dfs_oclass.value)
-            self.start_dfuse(self.dfuse_hosts, pool, dfuse_cont)
+            self.dfuse = get_dfuse(self, self.dfuse_hosts)
+            start_dfuse(self, self.dfuse, pool, dfuse_cont)
             self.serial_tmp_dir = self.dfuse.mount_dir.value
 
             # Serialize/Deserialize container 1 to a new cont2 in pool2

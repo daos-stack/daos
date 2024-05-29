@@ -593,9 +593,9 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, unsigned int version, unsig
 			ABT_mutex_lock(tls->mpt_init_mutex);
 			ABT_cond_wait(tls->mpt_init_cond, tls->mpt_init_mutex);
 			ABT_mutex_unlock(tls->mpt_init_mutex);
-			if (tls->mpt_init_failed) {
+			if (tls->mpt_init_err) {
 				migrate_pool_tls_put(tls);
-				rc = -DER_NOMEM;
+				rc = tls->mpt_init_err;
 			}
 		}
 
@@ -651,7 +651,9 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, unsigned int version, unsig
 	arg.svc_list = (d_rank_list_t *)entry->dpe_val_ptr;
 	arg.obj_ult_cnts = tls->mpt_obj_ult_cnts;
 	arg.dkey_ult_cnts = tls->mpt_dkey_ult_cnts;
-	rc = dss_task_collective(migrate_pool_tls_create_one, &arg, 0);
+	rc = ds_pool_task_collective(pool->sp_uuid,
+				     PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+				     migrate_pool_tls_create_one, &arg, 0);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create migrate tls: "DF_RC"\n",
 			DP_UUID(pool->sp_uuid), DP_RC(rc));
@@ -663,7 +665,7 @@ out:
 		tls->mpt_init_tls = 0;
 		/* Set init failed, so the waiting lookup(above) can be notified */
 		if (rc != 0)
-			tls->mpt_init_failed = 1;
+			tls->mpt_init_err = rc;
 		ABT_mutex_lock(tls->mpt_init_mutex);
 		ABT_cond_broadcast(tls->mpt_init_cond);
 		ABT_mutex_unlock(tls->mpt_init_mutex);

@@ -5,6 +5,7 @@
 """
 
 import re
+import traceback
 
 import avocado
 from control_test_base import ControlTestBase
@@ -138,7 +139,7 @@ class DmgStorageQuery(ControlTestBase):
         targets = self.server_managers[-1].get_config_value('targets')
 
         # Create pool and get the storage smd information, then verify info
-        self.prepare_pool()
+        self.add_pool()
         pool_info = get_storage_query_pool_info(self.dmg, verbose=True)
 
         # Check the dmg storage query list-pools output for inaccuracies
@@ -244,7 +245,8 @@ class DmgStorageQuery(ControlTestBase):
             try:
                 self.dmg.storage_set_faulty(uuid=device['uuid'])
             except CommandFailure:
-                self.fail("Error setting the faulty state for {}".format(device['uuid']))
+                if not expect_failed_engine:
+                    self.fail("Error setting the faulty state for {}".format(device['uuid']))
 
         # Check that devices are in FAULTY state
         try:
@@ -253,7 +255,10 @@ class DmgStorageQuery(ControlTestBase):
         except CommandFailure as error:
             if not expect_failed_engine:
                 raise
-            if "DAOS I/O Engine instance not started or not responding on dRPC" not in str(error):
+            # The expected error is included in the DaosTestError exception which is the cause of
+            # the CommandFailure exception
+            expected_error = "DAOS I/O Engine instance not started or not responding on dRPC"
+            if expected_error not in traceback.format_exc():
                 self.log.debug(error)
                 self.fail("dmg storage query list-devices failed for an unexpected reason")
 

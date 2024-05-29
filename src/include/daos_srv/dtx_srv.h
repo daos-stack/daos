@@ -118,7 +118,7 @@ struct dtx_handle {
 
 	/* The count the DTXs in the dth_dti_cos array. */
 	uint32_t			 dth_dti_cos_count;
-	/* The array of the DTXs for Commit on Share (conflcit). */
+	/* The array of the DTXs for Commit on Share (conflict). */
 	struct dtx_id			*dth_dti_cos;
 	/** Pointer to the DTX entry in DRAM. */
 	void				*dth_ent;
@@ -323,11 +323,13 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 
 int dtx_cont_open(struct ds_cont_child *cont);
 
-void dtx_cont_close(struct ds_cont_child *cont);
+void dtx_cont_close(struct ds_cont_child *cont, bool force);
 
 int dtx_cont_register(struct ds_cont_child *cont);
 
 void dtx_cont_deregister(struct ds_cont_child *cont);
+
+void stop_dtx_reindex_ult(struct ds_cont_child *cont, bool force);
 
 int dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 		 daos_epoch_t epoch);

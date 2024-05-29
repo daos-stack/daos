@@ -734,8 +734,8 @@ tgt_vos_create_one(void *varg)
 	if (rc)
 		return rc;
 
-	rc = vos_pool_create(path, (unsigned char *)vpa->vpa_uuid,
-			     vpa->vpa_scm_size, vpa->vpa_nvme_size, 0, NULL);
+	rc = vos_pool_create(path, (unsigned char *)vpa->vpa_uuid, vpa->vpa_scm_size,
+			     vpa->vpa_nvme_size, 0, 0 /* version */, NULL);
 	if (rc)
 		D_ERROR(DF_UUID": failed to init vos pool %s: %d\n",
 			DP_UUID(vpa->vpa_uuid), path, rc);
@@ -1212,7 +1212,7 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 	tc_out->tc_ranks.ca_arrays = rank;
 	tc_out->tc_ranks.ca_count  = 1;
 
-	rc = ds_pool_start(tc_in->tc_pool_uuid);
+	rc = ds_pool_start(tc_in->tc_pool_uuid, false);
 	if (rc) {
 		D_ERROR(DF_UUID": failed to start pool: "DF_RC"\n",
 			DP_UUID(tc_in->tc_pool_uuid), DP_RC(rc));
@@ -1382,6 +1382,15 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 	ABT_mutex_unlock(pooltgts->dpt_mutex);
 	D_DEBUG(DB_MGMT, DF_UUID": ready to destroy targets\n",
 		DP_UUID(td_in->td_pool_uuid));
+
+	if (engine_in_check()) {
+		rc = chk_engine_pool_stop(td_in->td_pool_uuid, true);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to stop check engine on pool: "DF_RC"\n",
+				DP_UUID(td_in->td_pool_uuid), DP_RC(rc));
+			goto out;
+		}
+	}
 
 	/*
 	 * If there is a local PS replica, its RDB file will be deleted later
@@ -1583,6 +1592,10 @@ ds_mgmt_hdlr_tgt_shard_destroy(crt_rpc_t *req)
 	 * stop the pool service.
 	 */
 
+	rc = ds_pool_child_stop(tsdi->tsdi_pool_uuid, true);
+	if (rc != 0 && rc != -DER_NONEXIST)
+		goto out;
+
 	rc = ds_mgmt_tgt_file(tsdi->tsdi_pool_uuid, VOS_FILE, &tsdi->tsdi_shard_idx, &path);
 	if (rc == 0) {
 		rc = unlink(path);
@@ -1596,6 +1609,7 @@ ds_mgmt_hdlr_tgt_shard_destroy(crt_rpc_t *req)
 		D_FREE(path);
 	}
 
+out:
 	D_DEBUG(DB_MGMT, "Processed rpc %p to destroy pool "DF_UUIDF" shard %u: "DF_RC"\n",
 		req, DP_UUID(tsdi->tsdi_pool_uuid), tsdi->tsdi_shard_idx, DP_RC(rc));
 
