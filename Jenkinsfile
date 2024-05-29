@@ -15,6 +15,9 @@
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
 
+// Name of branch to be tested
+test_branch = 'release/2.6'
+
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
 
@@ -29,11 +32,6 @@ void job_step_update(def value=currentBuild.currentResult) {
     jobStatusUpdate(job_status_internal, env.STAGE_NAME, value)
 }
 
-// Should try to figure this out automatically
-/* groovylint-disable-next-line CompileStatic, VariableName */
-String base_branch = 'release/2.6'
-String next_version = base_branch
-
 // Don't define this as a type or it loses it's global scope
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
 /* groovylint-disable-next-line UnusedVariable, VariableName */
@@ -41,10 +39,10 @@ String sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceA
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
-    (!env.BRANCH_NAME.startsWith('provider-testing') &&
-     !env.BRANCH_NAME.startsWith('weekly-testing') &&
-     !env.BRANCH_NAME.startsWith('release/') &&
-     env.BRANCH_NAME != 'master')) {
+    !(env.BRANCH_NAME =~ branchTypeRE('testing') ||
+      env.BRANCH_NAME =~ branchTypeRE('release') ||
+      env.BRANCH_NAME =~ branchTypeRE('downstream') ||
+      env.BRANCH_NAME == 'master')) {
    currentBuild.result = 'SUCCESS'
    return
 }
@@ -98,7 +96,7 @@ pipeline {
                defaultValue: 'ucx+ud_x',
                description: 'Provider to use for the Functional Hardware Medium/Large stages of this run (i.e. ucx+ud_x, ucx+dc_x)')
         string(name: 'BaseBranch',
-               defaultValue: base_branch,
+               defaultValue: test_branch,
                description: 'The base branch to run testing against (i.e. master, or a PR\'s branch)')
         string(name: 'CI_RPM_TEST_VERSION',
                defaultValue: '',
@@ -201,7 +199,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-tcp',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_TCP_LABEL,
-                            next_version: next_version,
+                            next_version: test_branch,
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'test_create_max_pool',
                             default_nvme: 'auto',
@@ -215,7 +213,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-tcp-provider',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_TCP_PROVIDER_LABEL,
-                            next_version: next_version,
+                            next_version: test_branch,
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'test_daos_management',
                             default_nvme: 'auto',
@@ -229,7 +227,7 @@ pipeline {
                             pragma_suffix: '-hw-large-tcp',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_LARGE_TCP_LABEL,
-                            next_version: next_version,
+                            next_version: test_branch,
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'test_daos_dfs_sys',
                             default_nvme: 'auto',
@@ -243,7 +241,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-ucx',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_LABEL,
-                            next_version: next_version,
+                            next_version: test_branch,
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'test_create_max_pool',
                             default_nvme: 'auto',
@@ -258,7 +256,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-ucx-provider',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
-                            next_version: next_version,
+                            next_version: test_branch,
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'test_daos_management',
                             default_nvme: 'auto',
@@ -273,7 +271,7 @@ pipeline {
                             pragma_suffix: '-hw-large-ucx',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_LARGE_UCX_LABEL,
-                            next_version: next_version,
+                            next_version: test_branch,
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'test_daos_dfs_sys',
                             default_nvme: 'auto',
