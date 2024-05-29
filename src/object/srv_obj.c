@@ -2232,7 +2232,7 @@ obj_ioc_begin_lite(uint32_t rpc_map_ver, uuid_t pool_uuid,
 		 *	2. The current replica was NOT the old leader if
 		 *	   with the old pool map version. But it becomes
 		 *	   the new leader with the new pool map version.
-		 *	   In the subsequent modificaiton, it may hit
+		 *	   In the subsequent modification, it may hit
 		 *	   some 'prepared' DTX when make availability
 		 *	   check, it will return -DER_INPROGRESS that
 		 *	   will cause client to retry. It is possible
