@@ -14,7 +14,7 @@ from thread_manager import ThreadManager
 
 
 class DuplicateRpcDetection(TestWithServers):
-    """Create system level tests that cover dulicate rpc detection tests and functionality.
+    """Create system level tests that cover duplicate rpc detection tests and functionality.
 
     Test Class Description:
         Create pools run test with and without duplicate rpc detection feature and verify time
@@ -22,10 +22,6 @@ class DuplicateRpcDetection(TestWithServers):
 
     :avocado: recursive
     """
-
-    def __init__(self, *args, **kwargs):
-        """Initialize a DuplicateRpcDetectionTest object."""
-        super().__init__(*args, **kwargs)
 
     def setUp(self):
         """Set Up DuplicateRpcDetectionTest"""
@@ -55,7 +51,7 @@ class DuplicateRpcDetection(TestWithServers):
             self.log.info("Successfully created #%s container", cont_num)
         except (DaosTestError, TestFail) as err:
             self.fail(
-                "#({}.{}) container create failed. err={}".format(pool1.label, cont_num, err))
+                "#({}.{}) container create failed. err={}".format(pool.label, cont_num, err))
         for ind in range(test_loops):
             start = time.time()
             for _ in range(workload_cycles):
@@ -63,7 +59,7 @@ class DuplicateRpcDetection(TestWithServers):
                 container.open()
             elapsed_time = time.time() - start
             self.log.info("Completed container Metadata test-loop: %d, elapsed_time: %f",
-                          ind+1, elapsed_time)
+                          ind + 1, elapsed_time)
             test_time.append(elapsed_time)
         for ind in range(test_loops):
             self.log.info("Test time of Metadata test-loop: %d,  %f",
@@ -132,12 +128,12 @@ class DuplicateRpcDetection(TestWithServers):
 
         self.log_step(
             "Compare metadata workload test time with and without duplicate rpc detection.")
-        self.log.info("===>pool1 results = %s", results[0].result)
-        self.log.info("===>baseline results = %s", base_results[0].result)
-        self.log.info("===>average baseline result= %s", average_time)
+        self.log.info("pool1 results = %s", results[0].result)
+        self.log.info("baseline results = %s", base_results[0].result)
+        self.log.info("average baseline result= %s", average_time)
         for result in results[0].result:
             if result > average_time * threshold_factor:
                 self.fail(
-                    "#Dup rpc dectection time consuming {} > threshold {} * {}".format(result,
-                    average_time, threshold_factor))
+                    "#Dup rpc detection time consuming {} > threshold {} * {}".format(
+                        result, average_time, threshold_factor))
         self.log.info("Test passed")
