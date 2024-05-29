@@ -7,7 +7,6 @@
 package server
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"os/exec"
@@ -177,20 +176,35 @@ func addLinkInfoToHealthStats(log logging.DebugLogger, health *ctlpb.BioHealthRe
 	log.Debugf(pciCfgStr)
 
 	// Pipe string representation of PCI config space into lspci.
-	cmd := exec.Command(system.GetLspciPath(), "-F", "<"+pciCfgStr)
-	r, _ := cmd.StdoutPipe()
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-	if err := cmd.Wait(); err != nil {
-		return err
+	//	cmd := []string{
+	//		system.GetLspciPath(), "-F", "<(printf '%s\n' \"" + pciCfgStr + "\")",
+	//	}
+	//	out, err := exec.Command(cmd[0], cmd[1:]...).CombinedOutput()
+	//	if err != nil {
+	//		return errors.Wrapf(err, "Error running %v: %s", cmd, out)
+	//	}
+
+	cmd := exec.Command(system.GetLspciPath(), "-vvv", "-F", "/dev/stdin")
+	cmd.Stdin = strings.NewReader(pciCfgStr) // String input to be linefeed-terminated.
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return errors.Wrapf(err, "Error running %v: %s", cmd, out)
 	}
 
+	//	r, _ := cmd.StdoutPipe()
+	//	if err := cmd.Start(); err != nil {
+	//		return errors.Wrap(err, "lspci -F cmd start")
+	//	}
+	//	if err := cmd.Wait(); err != nil {
+	//		return errors.Wrap(err, "lspci -F cmd wait")
+	//	}
+
 	// Extract Lnk entries.
-	scanner := bufio.NewScanner(r)
-	for scanner.Scan() {
-		log.Debugf(scanner.Text())
-	}
+	//scanner := bufio.NewScanner(r)
+	//for scanner.Scan() {
+	log.Debugf("lspci -F output: %q", out)
+	//log.Debugf("lspci -F output: %q", scanner.Text())
+	//}
 
 	// Add extracted entries to health stats.
 

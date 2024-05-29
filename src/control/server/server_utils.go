@@ -836,13 +836,15 @@ func formatBytestring(in string, sb *strings.Builder) {
 		if rem == 0 {
 			sb.WriteString(fmt.Sprintf("%02x: ", i/2))
 		}
-		sb.WriteString(fmt.Sprintf("%01x", s))
+		sb.WriteString(string(s))
 		if i != (len(in) - 1) {
 			if rem == 31 {
 				sb.WriteString("\n")
-			} else if (i % 2) == 0 {
+			} else if (i % 2) != 0 {
 				sb.WriteString(" ")
 			}
+			continue
 		}
+		sb.WriteString("\n")
 	}
 }
