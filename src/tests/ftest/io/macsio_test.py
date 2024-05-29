@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -77,15 +77,14 @@ class MacsioTest(TestWithServers):
         job_manager.working_dir.value = working_dir
 
         # Run MACSio
-        result = None
         try:
-            result = job_manager.run()
+            return job_manager.run()
 
         except CommandFailure as error:
             self.log.error("MACSio Failed: %s", str(error))
             self.fail("MACSio Failed")
 
-        return result
+        return None
 
     def test_macsio(self):
         """JIRA ID: DAOS-3658.
@@ -151,14 +150,12 @@ class MacsioTest(TestWithServers):
         container = self.get_container(pool)
 
         # Create dfuse mount point
+        #   VOL needs to run from a file system that supports xattr.  Currently
+        #   nfs does not have this attribute so it was recommended to create and
+        #   use a dfuse dir and run vol tests from there.
         self.log_step('Starting dfuse')
         dfuse = get_dfuse(self, self.hostlist_clients)
         start_dfuse(self, dfuse, pool, container)
-
-        # VOL needs to run from a file system that supports xattr.  Currently
-        # nfs does not have this attribute so it was recommended to create and
-        # use a dfuse dir and run vol tests from there.
-        # self.job_manager.working_dir.value = dfuse.mount_dir.value
 
         # Run macsio
         self.log_step("Running MACSio with DAOS VOL connector")

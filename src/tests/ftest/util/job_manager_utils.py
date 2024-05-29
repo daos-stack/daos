@@ -43,11 +43,12 @@ def get_job_manager(test, class_name=None, job=None, subprocess=None, mpi_type=N
             to "/run/job_manager/*".
         class_name_default (str, optional): default class_name to use when. Defaults to "Mpirun".
 
+    Raises:
+        DaosTestError: if an invalid JobManager class name is specified.
+
     Returns:
         JobManager: a JobManager class, e.g. Orterun, Mpirun, Srun, etc.
-
     """
-    job_manager = None
     if class_name is None:
         class_name = test.params.get("class_name", namespace, default=class_name_default)
     if subprocess is None:
@@ -62,29 +63,6 @@ def get_job_manager(test, class_name=None, job=None, subprocess=None, mpi_type=N
             timeout = test.params.get("timeout", namespace, None)
 
     # Setup a job manager command for running the test command
-    if class_name is not None:
-        job_manager = add_job_manager(test, class_name, job, subprocess, mpi_type, timeout)
-
-    return job_manager
-
-
-def add_job_manager(test, class_name, job, subprocess, mpi_type, timeout):
-    """Add a new JobManager object to the test.
-
-    Use this method to ensure the cleanup of processes started by JobManager.run() are handled in
-    the correct order in the test tearDown() method.
-
-    Args:
-        test (Test): the test to which the job manager will be added
-        class_name (_type_): _description_
-        job (_type_): _description_
-        subprocess (_type_): _description_
-        mpi_type (_type_): _description_
-        timeout (_type_): _description_
-
-    Returns:
-        JobManager: a JobManager class, e.g. Orterun, Mpirun, Srun, etc.
-    """
     job_manager = get_job_manager_class(class_name, job, subprocess, mpi_type)
     job_manager.get_params(test)
     job_manager.timeout = timeout

@@ -23,7 +23,7 @@ from run_utils import run_remote
 
 
 def cleanup_mounted_path(test, hosts, path):
-    """cleanup mounted paths.
+    """Cleanup mounted paths.
 
     Args:
         test (Test): the test which created the mount points
@@ -34,20 +34,21 @@ def cleanup_mounted_path(test, hosts, path):
         list: a list of any errors detected when removing the pool
     """
     # need to remove contents before umount
-    error_list = cleanup_path(test, hosts, path)
+    error_list = cleanup_path(test, hosts, os.path.join(path, '*'))
     result = run_remote(test.log, hosts, f"sudo umount -f '{path}'")
     if not result.passed:
         error_list.append(f"Error unmounting directory '{path}' from {result.failed_hosts}")
+    error_list.extend(cleanup_path(test, hosts, path))
     return error_list
 
 
 def cleanup_path(test, hosts, path):
-    """Cleanup mounted paths.
+    """Cleanup paths.
 
     Args:
         test (Test): the test which mounted the paths
         hosts (NodeSet): hosts from which to remove the paths
-        posix_local_test_path (_type_): _description_
+        path (str): the posix test path to cleanup
 
     Returns:
         list: a list of any errors detected when removing the pool
@@ -224,22 +225,25 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         # make directory name unique to datamover test
         method = self.get_test_name()
         dir_name = "{}{}".format(method, len(self.posix_local_test_paths))
-
         path = join(parent or self.posix_root.value, dir_name)
 
         # Add to the list of posix paths
-        if shared:
-            self.register_cleanup(
-                cleanup_path, test=self, hosts=self.hostlist_clients[0:1], path=path)
-        else:
+        if not shared:
             self.posix_local_test_paths.append(path)
-            self.register_cleanup(cleanup_path, test=self, hosts=self.hostlist_clients, path=path)
 
         if create:
             # Create the directory
             cmd = f"mkdir -p '{path}'"
             if not run_remote(self.log, self.hostlist_clients, cmd).passed:
                 self.fail(f"Failed to mkdir {path}")
+
+        # Remove the path during test tearDown. Not needed when using the path as a mount point as
+        # cleanup_path() is called as part of cleanup_mounted_path()
+        if not mount_dir_size and shared:
+            self.register_cleanup(
+                cleanup_path, test=self, hosts=self.hostlist_clients[0:1], path=path)
+        elif not mount_dir_size:
+            self.register_cleanup(cleanup_path, test=self, hosts=self.hostlist_clients, path=path)
 
         # mount small tmpfs filesystem on posix path, using size required sudo
         # add mount_dir to mounted list for use when umounting
