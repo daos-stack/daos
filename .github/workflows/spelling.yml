@@ -15,6 +15,6 @@ jobs:
       - name: Run check
         uses: codespell-project/actions-codespell@master
         with:
-          skip: ./src/control/vendor,./.git
+          skip: ./src/control/vendor,./.git,./src/control/security/testdata/certs/source.txt
           ignore_words_file: ci/codespell.ignores
           builtin: clear,rare,informal,names,en-GB_to_en-US
