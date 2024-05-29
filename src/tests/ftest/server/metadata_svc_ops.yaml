@@ -1,0 +1,36 @@
+hosts:
+  test_servers: 3
+  test_clients: 1
+timeout: 850
+server_config:
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 1
+      log_mask: ERR
+      env_vars:
+        - DD_MASK=group_metadata_only
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+pool:
+  scm_size: 2G
+  control_method: dmg
+  label: pool
+  set_logmasks: False
+  prop:
+    svc_ops_entry_age_60:
+      properties: svc_ops_entry_age:60
+      # svc_ops_entry_age_150:
+      #   properties: svc_ops_entry_age:150
+      # svc_ops_entry_age_300:
+      #   properties: svc_ops_entry_age:300
+      # svc_ops_entry_age_600:
+      #   properties: svc_ops_entry_age:600
+metadata:
+  number_thread: 1
+  workload_test_cycles: 5000
+  test_loops: 10
+  threshold_factor: 1.75
