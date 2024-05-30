@@ -452,10 +452,9 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 
 	D_DEBUG(DB_REBUILD,
 		DF_RB " scanning %d/%d rebuilding=%s, obj_count=" DF_U64 ", "
-		       "tobe_obj=" DF_U64 " rec_count=" DF_U64 " size= " DF_U64 "\n",
-		DP_RB_RPT(rpt), status->scanning, status->status,
-		status->rebuilding ? "yes" : "no", status->obj_count, status->tobe_obj_count,
-		status->rec_count, status->size);
+		      "tobe_obj=" DF_U64 " rec_count=" DF_U64 " size= " DF_U64 "\n",
+		DP_RB_RPT(rpt), status->scanning, status->status, status->rebuilding ? "yes" : "no",
+		status->obj_count, status->tobe_obj_count, status->rec_count, status->size);
 out:
 	return rc;
 }
@@ -2165,7 +2164,7 @@ rebuild_fini_one(void *arg)
 	} else {
 		D_DEBUG(DB_REBUILD,
 			DF_RB ": pool is still being rebuilt rt_rebuild_fence " DF_U64
-			       " spc_rebuild_fence " DF_U64 "\n",
+			      " spc_rebuild_fence " DF_U64 "\n",
 			DP_RB_RPT(rpt), rpt->rt_rebuild_fence, dpc->spc_rebuild_fence);
 	}
 
@@ -2346,7 +2345,7 @@ rebuild_tgt_status_check_ult(void *arg)
 		}
 
 		D_INFO(DF_RB " obj " DF_U64 " rec " DF_U64 " size " DF_U64 " scan done %d "
-			      "pull done %d scan gl done %d gl done %d status %d abort %s\n",
+			     "pull done %d scan gl done %d gl done %d status %d abort %s\n",
 		       DP_RB_RPT(rpt), iv.riv_obj_count, iv.riv_rec_count, iv.riv_size,
 		       rpt->rt_scan_done, iv.riv_pull_done, rpt->rt_global_scan_done,
 		       rpt->rt_global_done, iv.riv_status, rpt->rt_abort ? "yes" : "no");

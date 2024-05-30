@@ -751,7 +751,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	for (i = 0; i < rebuild_nr; i++) {
 		D_DEBUG(DB_REBUILD,
 			DF_RB " cont " DF_UUID " rebuild obj " DF_UOID " on %d for shard %d"
-			       " eph " DF_U64 " visible %s\n",
+			      " eph " DF_U64 " visible %s\n",
 			DP_RB_RPT(rpt), DP_UUID(arg->co_uuid), DP_UOID(oid), tgts[i], shards[i],
 			ent->ie_epoch, ent->ie_vis_flags & VOS_VIS_FLAG_COVERED ? "no" : "yes");
 
@@ -759,9 +759,8 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		if ((int)tgts[i] == -1 || oid.id_shard / grp_size != shards[i] / grp_size) {
 			D_DEBUG(DB_REBUILD,
 				DF_RB " i %d stale object " DF_UOID " shards %u "
-				       "grp_size %u tgt %d\n",
-				DP_RB_RPT(rpt), i, DP_UOID(oid), shards[i], grp_size,
-				(int)tgts[i]);
+				      "grp_size %u tgt %d\n",
+				DP_RB_RPT(rpt), i, DP_UOID(oid), shards[i], grp_size, (int)tgts[i]);
 			continue;
 		}
 
@@ -813,8 +812,8 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	int				rc;
 
 	if (uuid_compare(arg->co_uuid, entry->ie_couuid) == 0) {
-		D_DEBUG(DB_REBUILD, DF_RB " co_uuid " DF_UUID " already scanned\n",
-			DP_RB_RPT(rpt), DP_UUID(arg->co_uuid));
+		D_DEBUG(DB_REBUILD, DF_RB " co_uuid " DF_UUID " already scanned\n", DP_RB_RPT(rpt),
+			DP_UUID(arg->co_uuid));
 		return 0;
 	}
 
