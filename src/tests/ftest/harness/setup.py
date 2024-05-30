@@ -1,5 +1,5 @@
 """
-(C) Copyright 2021-2023 Intel Corporation.
+(C) Copyright 2021-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -22,6 +22,7 @@ class HarnessSetupTest(TestWithServers):
         :avocado: tags=harness
         :avocado: tags=HarnessSetupTest,test_setup
         """
+
         prepare_timeout = self.params.get('storage_prepare_timeout')
         format_timeout = self.params.get('storage_format_timeout')
         if self.server_managers[0].storage_prepare_timeout.value != prepare_timeout:
