@@ -1,5 +1,7 @@
 #!/bin/bash
 
+PYTHON3_VERSION="3.9"
+
 bootstrap_dnf() {
     rm -rf "$REPOS_DIR"
     ln -s ../zypp/repos.d "$REPOS_DIR"
@@ -19,7 +21,7 @@ distro_custom() {
 
     # Use a more recent python version for unit testing, this allows us to also test installing
     # pydaos into virtual environments.
-    dnf -y install python3.11 python3.11-devel
-    sudo update-alternatives --set python3 /usr/bin/python3.11
-    update-alternatives --list
+    dnf -y install python${PYTHON3_VERSION} python${PYTHON3_VERSION}-devel
+    sudo update-alternatives --set python3 /usr/bin/python${PYTHON3_VERSION}
+    update-alternatives --list python3
 }
