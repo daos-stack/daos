@@ -99,7 +99,7 @@ struct crt_gdata {
 	uint32_t		cg_timeout;
 
 	/** cart context index used by SWIM */
-	int32_t			 cg_swim_ctx_idx;
+	int32_t                  cg_swim_ctx_idx;
 
 	/** credits limitation for #in-flight RPCs per target EP CTX */
 	uint32_t		cg_credit_ep_ctx;
