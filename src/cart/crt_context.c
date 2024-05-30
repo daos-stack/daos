@@ -743,12 +743,12 @@ int
 crt_context_destroy(crt_context_t crt_ctx, int force)
 {
 	struct crt_context	*ctx;
-	uint32_t                 timeout_sec;
-	int			 ctx_idx;
-	int                      provider;
-	int			 rc = 0;
-	int			 hg_rc = 0;
-	int			 i;
+	uint32_t		timeout_sec;
+	int			ctx_idx;
+	int			provider;
+	int			rc = 0;
+	int			hg_rc = 0;
+	int			i;
 
 	D_RWLOCK_RDLOCK(&crt_context_destroy_lock);
 
