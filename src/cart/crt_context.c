@@ -316,8 +316,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 			DL_WARN(rc, "Failed to create SWIM delay gauge");
 	}
 
-	if (crt_is_service() &&
-	    crt_gdata.cg_auto_swim_disable == 0 &&
+	if (crt_is_service() && crt_gdata.cg_auto_swim_disable == 0 &&
 	    ctx->cc_idx == crt_gdata.cg_swim_ctx_idx) {
 		rc = crt_swim_init(crt_gdata.cg_swim_ctx_idx);
 		if (rc) {
@@ -326,6 +325,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 			D_GOTO(out, rc);
 		}
 
+		/* TODO: Address this hack */
 		if (provider == CRT_PROV_OFI_SOCKETS || provider == CRT_PROV_OFI_TCP_RXM) {
 			struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 			struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
@@ -745,7 +745,7 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 	struct crt_context	*ctx;
 	uint32_t		 timeout_sec;
 	int			 provider;
-	int                      ctx_idx;
+	int			 ctx_idx;
 	int			 rc = 0;
 	int			 hg_rc = 0;
 	int			 i;
