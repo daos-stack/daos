@@ -6886,6 +6886,7 @@ ds_pool_extend_handler(crt_rpc_t *rpc)
 	uint32_t		ndomains;
 	uint32_t		*domains;
 	int			rc;
+	uint32_t		rebuild_ver;
 
 	D_DEBUG(DB_MD, DF_UUID": processing rpc %p\n", DP_UUID(in->pei_op.pi_uuid), rpc);
 
@@ -6898,13 +6899,24 @@ ds_pool_extend_handler(crt_rpc_t *rpc)
 	rc = pool_svc_lookup_leader(in->pei_op.pi_uuid, &svc, &out->peo_op.po_hint);
 	if (rc != 0)
 		goto out;
+	/**
+	 * Check if there are ongoing rebuild jobs for extend/reint/drain, to avoid
+	 * updating the pool map during rebuild, which might screw the object layout.
+	 */
+	ds_rebuild_running_query(svc->ps_uuid, -1, &rebuild_ver, NULL, NULL);
+	if (rebuild_ver != 0) {
+		D_ERROR(DF_UUID": other rebuild job rebuild ver %u is ongoing,"
+			"extending can not be done: %d\n",
+			DP_UUID(svc->ps_uuid), rebuild_ver, -DER_BUSY);
+		D_GOTO(put, rc = -DER_BUSY);
+	}
 
 	rc = pool_svc_update_map(svc, pool_opc_2map_opc(opc_get(rpc->cr_opc)),
 				 false /* exclude_rank */,
 				 &rank_list, domains, ndomains,
 				 NULL, NULL, &out->peo_op.po_map_version,
 				 &out->peo_op.po_hint);
-
+put:
 	pool_svc_put_leader(svc);
 out:
 	out->peo_op.po_rc = rc;
@@ -6981,6 +6993,7 @@ ds_pool_update_handler(crt_rpc_t *rpc, int handler_version)
 	struct pool_target_addr_list	list = { 0 };
 	struct pool_target_addr_list	inval_list_out = { 0 };
 	int				rc;
+	uint32_t			rebuild_ver;
 
 	pool_tgt_update_in_get_data(rpc, &list.pta_addrs, &list.pta_number);
 
@@ -6994,6 +7007,21 @@ ds_pool_update_handler(crt_rpc_t *rpc, int handler_version)
 				    &out->pto_op.po_hint);
 	if (rc != 0)
 		goto out;
+
+	if (opc_get(rpc->cr_opc) == POOL_REINT || opc_get(rpc->cr_opc) == POOL_DRAIN) {
+		/**
+		 * Check if there are ongoing rebuild jobs for extend/reint/drain, to avoid
+		 * updating the pool map during rebuild, which might screw the object layout.
+		 */
+		ds_rebuild_running_query(svc->ps_uuid, -1, &rebuild_ver, NULL, NULL);
+		if (rebuild_ver != 0) {
+			D_ERROR(DF_UUID": other rebuild job rebuild ver %u is ongoing,"
+				" so current opc %d can not be done: %d\n",
+				DP_UUID(svc->ps_uuid), rebuild_ver, opc_get(rpc->cr_opc),
+				-DER_BUSY);
+			D_GOTO(out_svc, rc = -DER_BUSY);
+		}
+	}
 
 	if (opc_get(rpc->cr_opc) == POOL_REINT &&
 	    svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_DATA_SYNC) {
