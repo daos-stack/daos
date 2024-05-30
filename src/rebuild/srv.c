@@ -68,11 +68,6 @@ rebuild_pool_tls_lookup(uuid_t pool_uuid, unsigned int ver, uint32_t gen)
 	return found;
 }
 
-#if 0
-static struct rebuild_pool_tls *
-rebuild_pool_tls_create(uuid_t pool_uuid, uuid_t poh_uuid, uuid_t coh_uuid,
-			unsigned int ver, uint32_t gen)
-#endif
 static struct rebuild_pool_tls *
 rebuild_pool_tls_create(struct rebuild_tgt_pool_tracker *rpt)
 {
@@ -99,7 +94,6 @@ rebuild_pool_tls_create(struct rebuild_tgt_pool_tracker *rpt)
 	d_list_add(&rebuild_pool_tls->rebuild_pool_list,
 		   &tls->rebuild_pool_list);
 
-	// D_DEBUG(DB_REBUILD, DF_RBF" TLS create\n", DP_UUID(pool_uuid), ver);
 	D_DEBUG(DB_REBUILD, DF_RBF " TLS create\n", DP_RBF_RPT(rpt));
 	return rebuild_pool_tls;
 }
@@ -711,18 +705,6 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 
 		rs->rs_seconds =
 			(d_timeus_secdiff(0) - rgt->rgt_time_start) / 1e6;
-#if 0
-		snprintf(sbuf, RBLD_SBUF_LEN,
-			 "%s [%s] (pool "DF_UUID" leader %u term "DF_U64" dtx gl %u ver=%u,"
-			 "gen %u toberb_obj=" DF_U64", rb_obj="DF_U64", rec="DF_U64", size="DF_U64
-			 " done %d status %d/%d  stable "DF_X64" reclaim "DF_X64
-			 " duration=%d secs)\n",
-			 RB_OP_STR(op), str, DP_UUID(pool->sp_uuid), myrank,
-			 rgt->rgt_leader_term, rgt->rgt_dtx_resync_version, rgt->rgt_rebuild_ver,
-			 rgt->rgt_rebuild_gen, rs->rs_toberb_obj_nr, rs->rs_obj_nr, rs->rs_rec_nr,
-			 rs->rs_size, rs->rs_state, rs->rs_errno, rs->rs_fail_rank,
-			 rgt->rgt_stable_epoch, rgt->rgt_reclaim_epoch, rs->rs_seconds);
-#endif
 		snprintf(sbuf, RBLD_SBUF_LEN,
 			 DF_RB " [%s] (leader %u dtx_gl %u toberb_obj=" DF_U64 ", rb_obj=" DF_U64
 			       ", rec=" DF_U64 ", size=" DF_U64 " done %d status %d/%d "
@@ -733,15 +715,6 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 			 rgt->rgt_reclaim_epoch, rs->rs_seconds);
 
 		D_INFO("%s", sbuf);
-#if 0
-		D_INFO(DF_RB" [%s] (leader %u dtx_gl %u toberb_obj="DF_U64", rb_obj="DF_U64", "
-		       "rec="DF_U64", size="DF_U64" done %d status %d/%d stable "DF_X64" reclaim "
-		       DF_X64" duration=%d secs)\n", DP_RB_RGT(rgt), str, myrank,
-		       rgt->rgt_dtx_resync_version, rs->rs_toberb_obj_nr, rs->rs_obj_nr,
-		       rs->rs_rec_nr, rs->rs_size, rs->rs_state, rs->rs_errno, rs->rs_fail_rank,
-		       rgt->rgt_stable_epoch, rgt->rgt_reclaim_epoch, rs->rs_seconds);
-#endif
-
 		if (rs->rs_state == DRS_COMPLETED || rebuild_gst.rg_abort ||
 		    rgt->rgt_abort) {
 			D_PRINT("%s", sbuf);

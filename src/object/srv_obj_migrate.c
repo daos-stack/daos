@@ -3874,7 +3874,6 @@ ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver, unsigned int generation,
 
 	rc = ds_pool_thread_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
 				       PO_COMP_ST_DOWNOUT, migrate_check_one, &arg, 0);
-
 	if (rc)
 		D_GOTO(out, rc);
 

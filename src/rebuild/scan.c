@@ -1192,10 +1192,6 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 				      rsi->rsi_rebuild_gen);
 	if (tls != NULL) {
 		D_WARN("previous not cleaned up yet " DF_RBF, DP_RBF_RSI(rsi));
-#if 0
-		D_WARN("the previous rebuild "DF_UUID"/%d is not cleanup yet\n",
-		       DP_UUID(rsi->rsi_pool_uuid), rsi->rsi_rebuild_ver);
-#endif
 		D_GOTO(out, rc = -DER_BUSY);
 	}
 
