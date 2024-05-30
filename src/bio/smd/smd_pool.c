@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -36,9 +36,9 @@ struct smd_pool {
 };
 
 char TABLE_POOLS_EX[SMD_DEV_TYPE_MAX][SMD_DEV_NAME_MAX] = {
-	"data_pool_ex",
-	"meta_pool_ex",
-	"wal_pool_ex",
+	"ex_data_pool",
+	"ex_meta_pool",
+	"ex_wal_pool",
 };
 
 struct smd_pool_meta {
