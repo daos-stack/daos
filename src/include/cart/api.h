@@ -2118,35 +2118,6 @@ crt_get_nr_secondary_providers(void);
 int crt_self_incarnation_get(uint64_t *incarnation);
 
 /**
- * Retrieve group information containing ranks and associated uris
- *
- * This call will allocate memory for buffers in passed \a grp_info.
- * User is responsible for freeing the memory once not needed anymore.
- *
- * Returned data in \a grp_info can be passed to crt_group_info_set
- * call in order to setup group on a different node.
- *
- * \param[in] group             Group identifier
- * \param[in] grp_info          group info to be filled.
- *
- * \return                      DER_SUCCESS on success, negative value
- *                              on failure.
- */
-int crt_group_info_get(crt_group_t *group, d_iov_t *grp_info);
-
-/**
- * Sets group info (nodes and associated uris) baesd on passed
- * grp_info data. \a grp_info is to be retrieved via \a crt_group_info_get
- * call.
- *
- * \param[in] grp_info          Group information to set
- *
- * \return                      DER_SUCCESS on success, negative value
- *                              on failure.
- */
-int crt_group_info_set(d_iov_t *grp_info);
-
-/**
  * Sets the number of the remote tags for the secondary provider.
  *
  * Each tag corresponds to a remote context or an endpoint.
@@ -2374,8 +2345,7 @@ void crt_swim_fini(void);
 #define crt_proc_d_rank_t		crt_proc_uint32_t
 #define crt_proc_int			crt_proc_int32_t
 #define crt_proc_crt_status_t		crt_proc_int32_t
-#define crt_proc_crt_group_id_t		crt_proc_d_string_t
-#define crt_proc_crt_phy_addr_t		crt_proc_d_string_t
+#define crt_proc_crt_group_id_t         crt_proc_d_string_t
 
 /**
  * \a err is an error that ought to be logged at a less serious level than ERR.

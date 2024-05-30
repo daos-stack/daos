@@ -29,13 +29,17 @@ func (ei *EngineInstance) GetStorage() *storage.Provider {
 
 // MountMetadata mounts the configured control metadata location.
 func (ei *EngineInstance) MountMetadata() error {
-	ei.log.Debug("checking if metadata is mounted")
+	msgIdx := fmt.Sprintf("instance %d", ei.Index())
+
+	msgCheck := fmt.Sprintf("%s: checking if metadata is mounted", msgIdx)
+	ei.log.Trace(msgCheck)
+
 	isMounted, err := ei.storage.ControlMetadataIsMounted()
 	if err != nil {
-		return errors.Wrap(err, "checking if metadata is mounted")
+		return errors.WithMessage(err, msgCheck)
 	}
 
-	ei.log.Debugf("IsMounted: %v", isMounted)
+	ei.log.Debugf("%s: IsMounted: %v", msgIdx, isMounted)
 	if isMounted {
 		return nil
 	}
@@ -47,10 +51,17 @@ func (ei *EngineInstance) MountMetadata() error {
 // at the mountpoint specified in the configuration. If the device is already
 // mounted, the function returns nil, indicating success.
 func (ei *EngineInstance) MountScm() error {
+	msgIdx := fmt.Sprintf("instance %d", ei.Index())
+
+	msgCheck := fmt.Sprintf("%s: checking if scm is mounted", msgIdx)
+	ei.log.Trace(msgCheck)
+
 	isMounted, err := ei.storage.ScmIsMounted()
 	if err != nil && !os.IsNotExist(errors.Cause(err)) {
-		return errors.WithMessage(err, "failed to check SCM mount")
+		return errors.WithMessage(err, msgCheck)
 	}
+
+	ei.log.Debugf("%s: IsMounted: %v", msgIdx, isMounted)
 	if isMounted {
 		return nil
 	}

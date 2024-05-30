@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -246,7 +246,7 @@ dss_module_init_all(uint64_t *mod_facs)
 
 	/*
 	 * first register global tls accessible to all modules,
-	 * it'll be first initialized and last finialized.
+	 * it'll be first initialized and last finalized.
 	 */
 	dss_register_key(&daos_srv_modkey);
 

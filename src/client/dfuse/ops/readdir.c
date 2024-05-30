@@ -388,7 +388,7 @@ restart:
 		/* If there is no seekdir but there is valid cache data then use the cache.
 		 *
 		 * Directory handles may not have up-to-date values for doh_rd_nextc in some cases
-		 * so perform a seek here if necessairy.
+		 * so perform a seek here if necessary.
 		 */
 		struct dfuse_readdir_c *drc;
 		size_t                  written     = 0;

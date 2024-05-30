@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -159,7 +159,7 @@ func TestParseFsType(t *testing.T) {
 	}
 }
 
-func TestSystemLinux_GetFsType(t *testing.T) {
+func TestSystemLinux_GetfsType(t *testing.T) {
 	for name, tc := range map[string]struct {
 		path      string
 		expResult *FsType
@@ -181,7 +181,7 @@ func TestSystemLinux_GetFsType(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			result, err := DefaultProvider().GetFsType(tc.path)
+			result, err := DefaultProvider().GetfsType(tc.path)
 
 			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
