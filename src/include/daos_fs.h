@@ -998,9 +998,12 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf);
 #define DFS_SET_ATTR_GID	(1 << 5)
 
 /**
- * set stat attributes for a file and fetch new values.  If the object is a
+ * Set stat attributes for a file and fetch new values.  If the object is a
  * symlink the link itself is modified.  See dfs_stat() for which entries
  * are filled.
+ * While the set-user/group-id bits in stbuf::st_mode are stored by libdfs, it
+ * up to the caller to implement support for the associated functionality
+ * since libdfs does not provide any way to execute binaries.
  *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	obj	Open object (File, dir or syml) to modify.
@@ -1184,12 +1187,14 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
  *
  * \param[in]	coh	Open container handle
  * \param[in]	user	New owner user (NULL if not updating)
+ * \param[in]	uid	New owner uid, if different from user's on local system (-1 otherwise)
  * \param[in]	group	New owner group (NULL if not updating)
+ * \param[in]	gid	New owner gid, if different from group's on local system (-1 otherwise)
  *
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group);
+dfs_cont_set_owner(daos_handle_t coh, d_string_t user, uid_t uid, d_string_t group, gid_t gid);
 
 /*
  * The Pipeline DFS API (everything under this comment) is under heavy development and should not be

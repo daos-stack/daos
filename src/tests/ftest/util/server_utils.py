@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -62,9 +62,9 @@ class DaosServerManager(SubprocessManager):
 
     # Mapping of environment variable names to daos_server config param names
     ENVIRONMENT_VARIABLE_MAPPING = {
-        "CRT_PHY_ADDR_STR": "provider",
-        "OFI_INTERFACE": "fabric_iface",
-        "OFI_PORT": "fabric_iface_port",
+        "D_PROVIDER": "provider",
+        "D_INTERFACE": "fabric_iface",
+        "D_PORT": "fabric_iface_port",
     }
 
     # Defined in telemetry_common.h
@@ -132,7 +132,7 @@ class DaosServerManager(SubprocessManager):
 
         # Parameters to set storage prepare and format timeout
         self.storage_prepare_timeout = BasicParameter(None, 40)
-        self.storage_format_timeout = BasicParameter(None, 40)
+        self.storage_format_timeout = BasicParameter(None, 64)
         self.storage_reset_timeout = BasicParameter(None, 120)
         self.collect_log_timeout = BasicParameter(None, 120)
 
@@ -467,9 +467,9 @@ class DaosServerManager(SubprocessManager):
         cmd = DaosServerCommand(self.manager.job.command_path)
         cmd.run_user = "daos_server"
         cmd.debug.value = False
-        cmd.config.value = get_default_config_file("server")
-        self.log.info("Support collect-log on servers: %s", str(cmd))
+        kwargs['config'] = get_default_config_file("server")
         cmd.set_command(("support", "collect-log"), **kwargs)
+        self.log.info("Support collect-log on servers: %s", str(cmd))
         return run_remote(
             self.log, self._hosts, cmd.with_exports, timeout=self.collect_log_timeout.value)
 
@@ -477,7 +477,7 @@ class DaosServerManager(SubprocessManager):
         """Display server hosts memory info."""
         self.log.debug("#" * 80)
         self.log.debug("<SERVER> Collection debug memory info")
-        run_remote(self.log, self._hosts, "free -m")
+        run_remote(self.log, self._hosts, "free -m && df -h --type=tmpfs")
         run_remote(self.log, self._hosts, "ps -eo size,pid,user,command --sort -size | head -n 6")
         self.log.debug("#" * 80)
 
@@ -719,6 +719,9 @@ class DaosServerManager(SubprocessManager):
 
             # Make sure the mount directory belongs to non-root user
             self.set_scm_mount_ownership()
+
+        # Collective memory usage after stop.
+        self.display_memory_info()
 
         # Report any errors after all stop actions have been attempted
         if messages:
@@ -1020,6 +1023,71 @@ class DaosServerManager(SubprocessManager):
                 "investigate/report.***", regex, detected)
         # set stopped servers state to make teardown happy
         self.update_expected_states(None, ["stopped", "excluded", "errored"])
+
+    @fail_on(CommandFailure)
+    def system_exclude(self, ranks, copy=False, rank_hosts=None):
+        """Exclude the specific server ranks.
+
+        Args:
+            ranks (list): a list of daos server ranks (int) to exclude
+            copy (bool, optional): Copy dmg command. Defaults to False.
+            rank_hosts (str): hostlist representing hosts whose managed ranks are to be
+                operated on.
+
+        Raises:
+            avocado.core.exceptions.TestFail: if there is an issue excluding the server
+                ranks.
+
+        """
+        msg = "Excluding DAOS ranks {} from server group {}".format(
+            ranks, self.get_config_value("name"))
+        self.log.info(msg)
+
+        # Exclude desired ranks using dmg.
+        if copy:
+            self.dmg.copy().system_exclude(
+                ranks=list_to_str(value=ranks), rank_hosts=rank_hosts)
+        else:
+            self.dmg.system_exclude(ranks=list_to_str(value=ranks), rank_hosts=rank_hosts)
+
+        # Update the expected status of the excluded ranks
+        self.update_expected_states(ranks, "adminexcluded")
+
+        # Verify current state is adminexcluded.
+        self.check_rank_state(ranks=ranks, valid_states=["adminexcluded"])
+
+    @fail_on(CommandFailure)
+    def system_clear_exclude(self, ranks, copy=False, rank_hosts=None):
+        """Clear the exclusion of the specific server ranks.
+
+        Args:
+            ranks (list): a list of daos server ranks (int) to clear the exclusion
+            copy (bool, optional): Copy dmg command. Defaults to False.
+            rank_hosts (str): hostlist representing hosts whose managed ranks are to be
+                operated on.
+
+        Raises:
+            avocado.core.exceptions.TestFail: if there is an issue clearing the exclusion
+                of the server ranks.
+
+        """
+        msg = "Clear the exclusion for DAOS ranks {} from server group {}".format(
+            ranks, self.get_config_value("name"))
+        self.log.info(msg)
+
+        # Clear the exclusion for desired ranks using dmg.
+        if copy:
+            self.dmg.copy().system_clear_exclude(
+                ranks=list_to_str(value=ranks), rank_hosts=rank_hosts)
+        else:
+            self.dmg.system_clear_exclude(
+                ranks=list_to_str(value=ranks), rank_hosts=rank_hosts)
+
+        # Update the expected status of the excluded ranks
+        self.update_expected_states(ranks, "excluded")
+
+        # Verify current state is excluded.
+        self.check_rank_state(ranks=ranks, valid_states=["excluded"])
 
     def get_host(self, rank):
         """Get the host name that matches the specified rank.

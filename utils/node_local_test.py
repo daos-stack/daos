@@ -759,10 +759,7 @@ class DaosServer():
         self._yaml_file.write(yaml.dump(scyaml, encoding='utf-8'))
         self._yaml_file.flush()
 
-        cmd = [daos_server, f'--config={self._yaml_file.name}', 'start', '--insecure']
-
-        if self.conf.args.no_root:
-            cmd.append('--recreate-superblocks')
+        cmd = [daos_server, 'start', f'--config={self._yaml_file.name}', '--insecure']
 
         # pylint: disable=consider-using-with
         self._sp = subprocess.Popen(cmd, env=plain_env)
@@ -1105,9 +1102,9 @@ class DaosServer():
             # pylint: disable-next=consider-using-with
             tmp_dir = tempfile.TemporaryDirectory(prefix='pil4dfs_mount')
             cwd = tmp_dir.name
-            cmd_env['DAOS_MOUNT_POINT'] = cwd
-            cmd_env['DAOS_POOL'] = container.pool.id()
-            cmd_env['DAOS_CONTAINER'] = container.id()
+            cmd_env['D_IL_MOUNT_POINT'] = cwd
+            cmd_env['D_IL_POOL'] = container.pool.id()
+            cmd_env['D_IL_CONTAINER'] = container.id()
         else:
             cwd = None
 
@@ -1156,8 +1153,8 @@ class DaosServer():
         """Run the client code to set server params"""
         cmd_env = get_base_env()
 
-        cmd_env['OFI_INTERFACE'] = self.network_interface
-        cmd_env['CRT_PHY_ADDR_STR'] = self.network_provider
+        cmd_env['D_INTERFACE'] = self.network_interface
+        cmd_env['D_PROVIDER'] = self.network_provider
         valgrind_hdl = ValgrindHelper(self.conf)
 
         if self.conf.args.memcheck == 'no':
@@ -1612,11 +1609,8 @@ def assert_file_size(ofd, size):
     assert_file_size_fd(ofd.fileno(), size)
 
 
-def import_daos(server, conf):
+def import_daos(server):
     """Return a handle to the pydaos module"""
-    pydir = f'python{sys.version_info.major}.{sys.version_info.minor}'
-
-    sys.path.append(join(conf['PREFIX'], 'lib64', pydir, 'site-packages'))
 
     os.environ['DD_MASK'] = 'all'
     os.environ['DD_SUBSYS'] = 'all'
@@ -2084,10 +2078,13 @@ class PosixTests():
         """Test container object class options"""
         container = create_cont(self.conf, self.pool, ctype="POSIX", label='oclass_test',
                                 oclass='S1', dir_oclass='S2', file_oclass='S4')
-        run_daos_cmd(self.conf,
-                     ['container', 'query',
-                      self.pool.id(), container.id()],
-                     show_stdout=True)
+        rc = run_daos_cmd(self.conf,
+                          ['container', 'query',
+                           self.pool.id(), container.id()],
+                          show_stdout=True, use_json=True)
+        print(rc)
+        assert rc.returncode == 0
+        assert rc.json['response']['object_class'] == 'S1'
 
         dfuse = DFuse(self.server, self.conf, container=container)
         dfuse.use_valgrind = False
@@ -5245,7 +5242,7 @@ def test_pydaos_kv(server, conf):
                                                   delete=False)
 
     os.environ['D_LOG_FILE'] = pydaos_log_file.name
-    daos = import_daos(server, conf)
+    daos = import_daos(server)
 
     pool = server.get_test_pool_obj()
 
@@ -5309,7 +5306,7 @@ def test_pydaos_kv_obj_class(server, conf):
         log_name = tmp_file.name
         os.environ['D_LOG_FILE'] = log_name
 
-    daos = import_daos(server, conf)
+    daos = import_daos(server)
 
     pool = server.get_test_pool_obj()
 

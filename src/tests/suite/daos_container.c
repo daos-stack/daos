@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1079,7 +1079,7 @@ co_acl(void **state)
 	rc = daos_cont_open(arg->pool.poh, arg->co_str, DAOS_COO_RW, &arg->coh, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
-	rc = daos_cont_set_owner(arg->coh, exp_owner, exp_owner_grp, NULL);
+	rc = daos_cont_set_owner_no_check(arg->coh, exp_owner, exp_owner_grp, NULL);
 	assert_rc_equal(rc, 0);
 
 	rc = daos_cont_close(arg->coh, NULL);
@@ -1438,7 +1438,7 @@ create_cont_with_user_perms(test_arg_t *arg, uint64_t perms)
 	assert_rc_equal(rc, 0);
 
 	/* remove current user's ownership, so they don't have owner perms */
-	rc = daos_cont_set_owner(coh, "nobody@", NULL, NULL);
+	rc = daos_cont_set_owner_no_check(coh, "nobody@", NULL, NULL);
 	assert_rc_equal(rc, 0);
 
 	acl = get_daos_acl_with_user_perms(perms);
@@ -2126,8 +2126,8 @@ co_set_owner(void **state)
 	test_arg_t	*arg = NULL;
 	d_string_t	 original_user;
 	d_string_t	 original_grp;
-	d_string_t	 new_user = "newuser@";
-	d_string_t	 new_grp = "newgrp@";
+	d_string_t       fake_user = "newuser@";
+	d_string_t       fake_grp  = "newgrp@";
 	int		 rc;
 
 	rc = test_setup((void **)&arg, SETUP_CONT_CONNECT, arg0->multi_rank,
@@ -2148,39 +2148,50 @@ co_set_owner(void **state)
 		assert_rc_equal(rc, -DER_INVAL);
 
 		print_message("Set owner with invalid user\n");
-		rc = daos_cont_set_owner(arg->coh, "not_a_valid_user", new_grp,
-					 NULL);
+		rc = daos_cont_set_owner(arg->coh, "notvaliduser!", NULL, NULL);
 		assert_rc_equal(rc, -DER_INVAL);
 
 		print_message("Set owner with invalid grp\n");
-		rc = daos_cont_set_owner(arg->coh, new_user, "not_a_valid_grp",
-					 NULL);
+		rc = daos_cont_set_owner(arg->coh, NULL, "notvalidgrp!", NULL);
 		assert_rc_equal(rc, -DER_INVAL);
 
-		print_message("Set owner user\n");
-		rc = daos_cont_set_owner(arg->coh, new_user, NULL, NULL);
+		print_message("Set owner user to nonexistent\n");
+		rc = daos_cont_set_owner(arg->coh, fake_user, NULL, NULL);
+		assert_rc_equal(rc, -DER_NONEXIST);
+
+		print_message("Set owner user to nonexistent with no_check\n");
+		rc = daos_cont_set_owner_no_check(arg->coh, fake_user, NULL, NULL);
 		assert_rc_equal(rc, 0);
-		expect_ownership(arg, new_user, original_grp);
+		expect_ownership(arg, fake_user, original_grp);
 
 		print_message("Change owner user back\n");
 		rc = daos_cont_set_owner(arg->coh, original_user, NULL, NULL);
 		assert_rc_equal(rc, 0);
 		expect_ownership(arg, original_user, original_grp);
 
-		print_message("Set owner group\n");
-		rc = daos_cont_set_owner(arg->coh, NULL, new_grp, NULL);
+		print_message("Set owner group to nonexistent\n");
+		rc = daos_cont_set_owner(arg->coh, NULL, fake_grp, NULL);
+		assert_rc_equal(rc, -DER_NONEXIST);
+
+		print_message("Set owner group to nonexistent with no_check\n");
+		rc = daos_cont_set_owner_no_check(arg->coh, NULL, fake_grp, NULL);
 		assert_rc_equal(rc, 0);
-		expect_ownership(arg, original_user, new_grp);
+		expect_ownership(arg, original_user, fake_grp);
 
 		print_message("Change owner group back\n");
 		rc = daos_cont_set_owner(arg->coh, NULL, original_grp, NULL);
 		assert_rc_equal(rc, 0);
 		expect_ownership(arg, original_user, original_grp);
 
-		print_message("Set both owner user and group\n");
-		rc = daos_cont_set_owner(arg->coh, new_user, new_grp, NULL);
+		print_message("Set both owner user and group with no_check\n");
+		rc = daos_cont_set_owner_no_check(arg->coh, fake_user, fake_grp, NULL);
 		assert_rc_equal(rc, 0);
-		expect_ownership(arg, new_user, new_grp);
+		expect_ownership(arg, fake_user, fake_grp);
+
+		print_message("Set both owner user and group back to original\n");
+		rc = daos_cont_set_owner(arg->coh, original_user, original_grp, NULL);
+		assert_rc_equal(rc, 0);
+		expect_ownership(arg, original_user, original_grp);
 	}
 
 	D_FREE(original_user);
@@ -2219,32 +2230,39 @@ co_set_owner_access(void **state)
 	test_arg_t	*arg0 = *state;
 	test_arg_t	*arg = NULL;
 	int		 rc;
-	uint64_t	 no_perm = DAOS_ACL_PERM_CONT_ALL &
-				   ~DAOS_ACL_PERM_SET_OWNER;
+	uid_t            uid     = geteuid();
+	gid_t            gid     = getegid();
+	char            *user    = NULL;
+	char            *group   = NULL;
+	uint64_t         no_perm = DAOS_ACL_PERM_CONT_ALL & ~DAOS_ACL_PERM_SET_OWNER;
+
+	rc = daos_acl_uid_to_principal(uid, &user);
+	assert_success(rc);
+
+	rc = daos_acl_gid_to_principal(gid, &group);
+	assert_success(rc);
 
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
 			SMALL_POOL_SIZE, 0, NULL);
 	assert_success(rc);
 
 	print_message("Set owner user denied with no set-owner perm\n");
-	expect_co_set_owner_access(arg, "user@", NULL, no_perm,
-				   -DER_NO_PERM);
+	expect_co_set_owner_access(arg, user, NULL, no_perm, -DER_NO_PERM);
 
 	print_message("Set owner group denied with no set-owner perm\n");
-	expect_co_set_owner_access(arg, NULL, "group@", no_perm,
-				   -DER_NO_PERM);
+	expect_co_set_owner_access(arg, NULL, group, no_perm, -DER_NO_PERM);
 
 	print_message("Set both owner and grp denied with no set-owner perm\n");
-	expect_co_set_owner_access(arg, "user@", "group@", no_perm,
-				   -DER_NO_PERM);
+	expect_co_set_owner_access(arg, user, group, no_perm, -DER_NO_PERM);
 
-	print_message("Set owner allowed with set-owner perm\n");
-	expect_co_set_owner_access(arg, "user@", "group@",
-				   DAOS_ACL_PERM_READ |
-				   DAOS_ACL_PERM_SET_OWNER,
+	print_message("Set owner succeeds with set-owner perm\n");
+	expect_co_set_owner_access(arg, user, group, DAOS_ACL_PERM_READ | DAOS_ACL_PERM_SET_OWNER,
 				   0);
 
 	test_teardown((void **)&arg);
+
+	D_FREE(user);
+	D_FREE(group);
 }
 
 static void
@@ -2295,6 +2313,16 @@ co_owner_implicit_access(void **state)
 	struct daos_acl	*acl;
 	daos_prop_t	*tmp_prop;
 	daos_prop_t	*acl_prop;
+	uid_t            uid   = geteuid();
+	gid_t            gid   = getegid();
+	char            *user  = NULL;
+	char            *group = NULL;
+
+	rc = daos_acl_uid_to_principal(uid, &user);
+	assert_success(rc);
+
+	rc = daos_acl_gid_to_principal(gid, &group);
+	assert_success(rc);
 
 	/*
 	 * An owner with no permissions still has get/set ACL access
@@ -2330,7 +2358,7 @@ co_owner_implicit_access(void **state)
 	daos_prop_free(tmp_prop);
 
 	print_message("- Verify set-owner denied\n");
-	rc = daos_cont_set_owner(arg->coh, "somebody@", "somegroup@", NULL);
+	rc = daos_cont_set_owner(arg->coh, user, group, NULL);
 	assert_rc_equal(rc, -DER_NO_PERM);
 
 	print_message("Owner has get-ACL access implicitly\n");
@@ -2363,6 +2391,8 @@ co_owner_implicit_access(void **state)
 	daos_acl_free(acl);
 	daos_prop_free(owner_deny_prop);
 	test_teardown((void **)&arg);
+	D_FREE(user);
+	D_FREE(group);
 }
 
 static void
@@ -3790,6 +3820,227 @@ co_evict_hdls(void **state)
 	assert_rc_equal(rc, 0);
 }
 
+static void
+co_op_dup_timing(void **state)
+{
+	test_arg_t        *arg0              = *state;
+	test_arg_t        *arg               = NULL;
+	daos_prop_t       *prop              = NULL;
+	daos_prop_t       *cprop             = NULL;
+	const char         plabel[]          = "co_op_dup_timing_pool";
+	char const *const  names[]           = {"TestAttrName0", "TestAttrName1"};
+	void const *const  in_values[]       = {"TestAttrValue0", "TestAttrValue1"};
+	size_t const       in_sizes[]        = {strlen(in_values[0]), strlen(in_values[1])};
+	int                n                 = (int)ARRAY_SIZE(names);
+	const unsigned int NUM_FP            = 3;
+	const uint32_t     NUM_OPS           = 200;
+	uint32_t           num_failures      = 0;
+	const uint32_t     SVC_OPS_ENABLED   = 1;
+	const uint32_t     SVC_OPS_ENTRY_AGE = 60;
+	bool               fp_loop_failed    = false;
+	double             dummy_wl_elapsed  = 0.0;
+	daos_pool_info_t   pinfo;
+	d_rank_t           leader_rank;
+	int                i; /* loop over NUM_FP */
+	int                j; /* loop over NUM_OPS */
+	uint64_t           t_begin;
+	uint64_t           t_end;
+	uint32_t           fail_periods[NUM_FP];
+	double             fail_pct[NUM_FP];
+	double             t_fp_loop[NUM_FP];
+	int                rc;
+
+	/* Create a separate pool with svc_ops_entry_age property (dummy workload duration). */
+	prop = daos_prop_alloc(3);
+	/* label - set arg->pool_label to use daos_pool_connect() */
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_LABEL;
+	D_STRNDUP_S(prop->dpp_entries[0].dpe_str, plabel);
+	assert_ptr_not_equal(prop->dpp_entries[0].dpe_str, NULL);
+	prop->dpp_entries[1].dpe_type = DAOS_PROP_PO_SVC_OPS_ENTRY_AGE;
+	prop->dpp_entries[1].dpe_val  = SVC_OPS_ENTRY_AGE; /* seconds */
+	prop->dpp_entries[2].dpe_type = DAOS_PROP_PO_SVC_OPS_ENABLED;
+	prop->dpp_entries[2].dpe_val  = SVC_OPS_ENABLED;
+
+	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank, SMALL_POOL_SIZE, 0, NULL);
+	assert_rc_equal(rc, 0);
+
+	D_STRNDUP_S(arg->pool_label, plabel);
+	assert_ptr_not_equal(arg->pool_label, NULL);
+
+	while (!rc && arg->setup_state != SETUP_POOL_CONNECT)
+		rc = test_setup_next_step((void **)&arg, NULL, prop, NULL);
+	assert_rc_equal(rc, 0);
+	daos_prop_free(prop);
+
+	print_message("querying pool info... ");
+	memset(&pinfo, 'D', sizeof(pinfo));
+	pinfo.pi_bits = DPI_ALL;
+	rc            = daos_pool_query(arg->pool.poh, NULL, &pinfo, NULL, NULL /* ev */);
+	assert_rc_equal(rc, 0);
+	leader_rank = pinfo.pi_leader;
+	print_message("success\n");
+	print_message("leader rank=%d\n", leader_rank);
+
+	cprop = daos_prop_alloc(1);
+	assert_non_null(cprop);
+	cprop->dpp_entries[0].dpe_type = DAOS_PROP_CO_SNAPSHOT_MAX;
+	cprop->dpp_entries[0].dpe_val  = 8191;
+
+	/* Reduce engine logging since we're about to start timing operations. */
+	rc = dmg_server_set_logmasks(arg->dmg_config, "ERR" /* masks */, NULL /* streams */,
+				     NULL /* subsystems */);
+	assert_success(rc);
+
+	/* Run a dummy workload */
+	if (SVC_OPS_ENABLED) {
+		uuid_t        dummy_cuuid;
+		daos_handle_t dummy_coh;
+		uint32_t      num_opens = 0;
+		char          contstr[DAOS_PROP_LABEL_MAX_LEN + 1];
+
+		assert_true(SVC_OPS_ENTRY_AGE > 0);
+		print_message("start dummy workload for %u sec\n", SVC_OPS_ENTRY_AGE);
+		rc = daos_cont_create(arg->pool.poh, &dummy_cuuid, NULL /* prop */, NULL /* ev */);
+		assert_rc_equal(rc, 0);
+		uuid_unparse(dummy_cuuid, contstr);
+
+		t_begin = daos_get_ntime();
+		for (;;) {
+			rc = daos_cont_open(arg->pool.poh, contstr, DAOS_COO_RW, &dummy_coh,
+					    NULL /* info */, NULL /* ev */);
+			assert_rc_equal(rc, 0);
+
+			rc = daos_cont_close(dummy_coh, NULL /* ev */);
+			assert_rc_equal(rc, 0);
+
+			num_opens++;
+			t_end            = daos_get_ntime();
+			dummy_wl_elapsed = (double)(t_end - t_begin) / NSEC_PER_SEC;
+			if (dummy_wl_elapsed >= SVC_OPS_ENTRY_AGE)
+				break;
+		}
+		t_end            = daos_get_ntime();
+		dummy_wl_elapsed = (double)(t_end - t_begin) / NSEC_PER_SEC;
+		rc               = daos_cont_destroy(arg->pool.poh, contstr, 0 /* force */, NULL);
+		assert_rc_equal(rc, 0);
+
+		print_message("done dummy workload: %u open/close pairs in %8.3f sec\n", num_opens,
+			      dummy_wl_elapsed);
+	}
+
+	/* configure periodic fault injection loops */
+	fail_periods[0] = NUM_OPS + 1; /* (i.e., 0% fault injection rate) */
+	fail_periods[1] = 3;           /* 33% */
+	fail_periods[2] = 2;           /* 50% */
+	fail_pct[0]     = 0.0;
+	for (i = 1; i < NUM_FP; i++)
+		fail_pct[i] = (1.0 / (double)fail_periods[i]) * 100.0;
+
+	for (i = 0; i < NUM_FP; i++) {
+		uint32_t fp = fail_periods[i];
+
+		print_message("Measure container metadata workload %u loops, %2.0f%% fault rate\n",
+			      NUM_OPS, fail_pct[i]);
+		t_begin = daos_get_ntime();
+		for (j = 0; j < NUM_OPS; j++) {
+			uuid_t             tmp_cuuid;
+			char               str[DAOS_UUID_STR_SIZE];
+			daos_handle_t      coh;
+			daos_epoch_t       epoch;
+			daos_epoch_range_t epr;
+			bool               fault_inject = (((j + 1) % fp) == 0);
+			const uint64_t     fail_loc     = DAOS_MD_OP_PASS_NOREPLY | DAOS_FAIL_ONCE;
+
+			if (fault_inject)
+				test_set_engine_fail_loc_quiet(arg, leader_rank, fail_loc);
+			rc = daos_cont_create(arg->pool.poh, &tmp_cuuid, NULL, NULL);
+			assert_rc_equal(rc, 0);
+
+			uuid_unparse(tmp_cuuid, str);
+
+			if (fault_inject)
+				test_set_engine_fail_loc_quiet(arg, leader_rank, fail_loc);
+			rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW, &coh, NULL, NULL);
+			assert_rc_equal(rc, 0);
+
+			if (fault_inject)
+				test_set_engine_fail_loc_quiet(arg, leader_rank, fail_loc);
+			rc = daos_cont_create_snap(coh, &epoch, NULL, NULL /* ev */);
+			assert_rc_equal(rc, 0);
+
+			epr.epr_lo = epr.epr_hi = epoch;
+			if (fault_inject)
+				test_set_engine_fail_loc_quiet(arg, leader_rank, fail_loc);
+			rc = daos_cont_destroy_snap(coh, epr, NULL /* ev */);
+			assert_rc_equal(rc, 0);
+
+			if (fault_inject)
+				test_set_engine_fail_loc_quiet(arg, leader_rank, fail_loc);
+			rc = daos_cont_set_attr(coh, n, names, in_values, in_sizes, NULL /* ev */);
+			assert_rc_equal(rc, 0);
+
+			if (fault_inject)
+				test_set_engine_fail_loc_quiet(arg, leader_rank, fail_loc);
+			rc = daos_cont_del_attr(coh, n, names, NULL /* ev */);
+			assert_rc_equal(rc, 0);
+
+			if (fault_inject)
+				test_set_engine_fail_loc_quiet(arg, leader_rank, fail_loc);
+			rc = daos_cont_set_prop(coh, cprop, NULL);
+			assert_rc_equal(rc, 0);
+
+			if (fault_inject)
+				test_set_engine_fail_loc_quiet(arg, leader_rank, fail_loc);
+			rc = daos_cont_close(coh, NULL);
+			assert_rc_equal(rc, 0);
+
+			if (fault_inject)
+				test_set_engine_fail_loc_quiet(arg, leader_rank, fail_loc);
+			rc = daos_cont_destroy(arg->pool.poh, str, 1 /* force */, NULL);
+			assert_rc_equal(rc, 0);
+		}
+		t_end        = daos_get_ntime();
+		t_fp_loop[i] = (double)(t_end - t_begin) / NSEC_PER_SEC;
+
+		/* verify performance in each failure rate */
+		if (i > 0) {
+			double fail_rate           = (1.0 / (double)fp);
+			double max_time_multiplier = (1.0 + fail_rate);
+			double act_time_multiplier;
+
+			act_time_multiplier = (double)t_fp_loop[i] / (double)t_fp_loop[0];
+			if (act_time_multiplier >= max_time_multiplier) {
+				num_failures++;
+				fp_loop_failed = true;
+			}
+		}
+	}
+
+	/* Print timing summary (NB: assumes NUM_FP=3 */
+	print_message("status, op (%u loops), time(sec), %2.0f%% faults time(sec), "
+		      "%2.0f%% faults time(sec), %2.0f%% faults extra loop time(%%), "
+		      "%2.0f%% faults extra loop time(%%)\n",
+		      NUM_OPS, fail_pct[1], fail_pct[2], fail_pct[1], fail_pct[2]);
+
+	print_message("%s, cont_md_workload, %8.3f, %8.3f, %8.3f, %2.2f, %2.2f\n",
+		      fp_loop_failed ? "FAIL" : "PASS", t_fp_loop[0], t_fp_loop[1], t_fp_loop[2],
+		      ((double)t_fp_loop[1] / (double)t_fp_loop[0] - 1.0) * 100.0,
+		      ((double)t_fp_loop[2] / (double)t_fp_loop[0] - 1.0) * 100.0);
+
+	/* Restore engine logging after timing operations have concluded. */
+	rc = dmg_server_set_logmasks(arg->dmg_config, NULL /* masks */, NULL /* streams */,
+				     NULL /* subsystems */);
+	assert_success(rc);
+
+	if (num_failures > 0) {
+		print_message("%u timings failed to meet criteria\n", num_failures);
+		test_teardown((void **)&arg);
+	}
+	assert_true(num_failures == 0);
+
+	test_teardown((void **)&arg);
+}
+
 static int
 co_setup_sync(void **state)
 {
@@ -3861,6 +4112,7 @@ static const struct CMUnitTest co_tests[] = {
     {"CONT32: container get perms", co_get_perms, NULL, test_case_teardown},
     {"CONT33: exclusive open", co_exclusive_open, NULL, test_case_teardown},
     {"CONT34: evict handles", co_evict_hdls, NULL, test_case_teardown},
+    {"CONT35: container duplicate op detection timing", co_op_dup_timing, NULL, test_case_teardown},
 };
 
 int

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -53,7 +53,8 @@
 	X(DAOS_SEC_MODULE, 9)     /** security framework */                                        \
 	X(DAOS_DTX_MODULE, 10)    /** DTX */                                                       \
 	X(DAOS_PIPELINE_MODULE, 11)                                                                \
-	X(DAOS_NR_MODULE, 12)  /** number of defined modules */                                    \
+	X(DAOS_CHK_MODULE, 12)  /** check */                                                       \
+	X(DAOS_NR_MODULE, 13)  /** number of defined modules */                                    \
 	X(DAOS_MAX_MODULE, 64) /** Size of uint64_t see dmg profile */
 
 enum daos_module_id {
@@ -114,23 +115,15 @@ enum daos_rpc_type {
 	DAOS_REQ_SWIM,
 	/** Per VOS target request */
 	DAOS_REQ_TGT,
+	/** The DAOS check request handled by cart, send/recv by tag 0. */
+	DAOS_REQ_CHK,
 };
 
 struct daos_req_comm_in {
-	/** Request user ID, reserved for NRS */
-	uint32_t	req_in_uid;
-	/** Request group ID, reserved for NRS */
-	uint32_t	req_in_gid;
-	/** Request project ID, reserved for NRS */
-	uint32_t	req_in_projid;
 	/** Enqueue ID of the request on the server side, for server overloaded retry */
 	uint64_t	req_in_enqueue_id;
 	/** Reserved for future extension */
 	uint64_t	req_in_paddings[4];
-	/** Request client address, reserved for NRS */
-	d_string_t	req_in_addr;
-	/** Job ID of the request, reserved for NRS */
-	d_string_t	req_in_jobid;
 };
 
 struct daos_req_comm_out {
@@ -172,6 +165,7 @@ daos_rpc_tag(int req_type, int tgt_idx)
 	case DAOS_REQ_REBUILD:
 	case DAOS_REQ_IV:
 	case DAOS_REQ_BCAST:
+	case DAOS_REQ_CHK:
 		return 0;
 	default:
 		D_ASSERTF(0, "bad req_type %d.\n", req_type);

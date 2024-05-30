@@ -563,7 +563,7 @@ dfs_obj_local2global(dfs_t *dfs, dfs_obj_t *obj, d_iov_t *glob)
 	daos_size_t          glob_buf_size;
 	int                  rc = 0;
 
-	if (obj == NULL || !S_ISREG(obj->mode))
+	if (obj == NULL || (!S_ISREG(obj->mode) && !S_ISDIR(obj->mode)))
 		return EINVAL;
 
 	if (glob == NULL) {
@@ -611,7 +611,9 @@ dfs_obj_local2global(dfs_t *dfs, dfs_obj_t *obj, d_iov_t *glob)
 	uuid_copy(obj_glob->cont_uuid, cont_uuid);
 	strncpy(obj_glob->name, obj->name, DFS_MAX_NAME + 1);
 	obj_glob->name[DFS_MAX_NAME] = 0;
-	rc                           = dfs_get_chunk_size(obj, &obj_glob->chunk_size);
+	if (S_ISDIR(obj_glob->mode))
+		return 0;
+	rc = dfs_get_chunk_size(obj, &obj_glob->chunk_size);
 	if (rc)
 		return rc;
 
@@ -671,8 +673,19 @@ dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **_obj)
 	obj->flags              = flags ? flags : obj_glob->flags;
 
 	daos_mode = get_daos_obj_mode(obj->flags);
-	rc        = daos_array_open_with_attr(dfs->coh, obj->oid, DAOS_TX_NONE, daos_mode, 1,
-					      obj_glob->chunk_size, &obj->oh, NULL);
+	if (S_ISDIR(obj->mode)) {
+		rc = daos_obj_open(dfs->coh, obj->oid, daos_mode, &obj->oh, NULL);
+		if (rc) {
+			D_ERROR("daos_obj_open() failed, " DF_RC "\n", DP_RC(rc));
+			D_FREE(obj);
+			return daos_der2errno(rc);
+		}
+		*_obj = obj;
+		return 0;
+	}
+
+	rc = daos_array_open_with_attr(dfs->coh, obj->oid, DAOS_TX_NONE, daos_mode, 1,
+				       obj_glob->chunk_size, &obj->oh, NULL);
 	if (rc) {
 		D_ERROR("daos_array_open_with_attr() failed, " DF_RC "\n", DP_RC(rc));
 		D_FREE(obj);
@@ -1144,9 +1157,9 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 		oh = parent->oh;
 	}
 
-	/** sticky bit, set-user-id and set-group-id, are not supported */
-	if (mode & S_ISVTX || mode & S_ISGID || mode & S_ISUID) {
-		D_ERROR("setuid, setgid, & sticky bit are not supported.\n");
+	/** sticky bit is not supported */
+	if (mode & S_ISVTX) {
+		D_ERROR("sticky bit is not supported.\n");
 		return ENOTSUP;
 	}
 
@@ -1399,12 +1412,11 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	if (flags & DFS_SET_ATTR_MODE) {
 		if ((stbuf->st_mode & S_IFMT) != (obj->mode & S_IFMT))
 			return EINVAL;
-		/** sticky bit, set-user-id and set-group-id not supported */
-		if (stbuf->st_mode & S_ISVTX || stbuf->st_mode & S_ISGID ||
-		    stbuf->st_mode & S_ISUID) {
-			D_DEBUG(DB_TRACE, "setuid, setgid, & sticky bit are not"
-					  " supported.\n");
-			return EINVAL;
+
+		/** sticky bit is not supported */
+		if (stbuf->st_mode & S_ISVTX) {
+			D_DEBUG(DB_TRACE, "sticky bit is not supported.\n");
+			return ENOTSUP;
 		}
 	}
 

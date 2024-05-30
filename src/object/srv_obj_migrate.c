@@ -472,7 +472,8 @@ migrate_pool_tls_create_one(void *data)
 	struct migrate_pool_tls_create_arg *arg = data;
 	struct obj_tls			   *tls = obj_tls_get();
 	struct migrate_pool_tls		   *pool_tls;
-	int rc;
+	struct ds_pool_child		   *pool_child = NULL;
+	int				    rc = 0;
 
 	pool_tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version, arg->generation);
 	if (pool_tls != NULL) {
@@ -481,6 +482,16 @@ migrate_pool_tls_create_one(void *data)
 		 */
 		migrate_pool_tls_put(pool_tls);
 		return 0;
+	}
+
+	pool_child = ds_pool_child_lookup(arg->pool_uuid);
+	if (pool_child == NULL) {
+		D_ASSERTF(dss_get_module_info()->dmi_xs_id == 0,
+			  "Cannot find the pool "DF_UUIDF"\n", DP_UUID(arg->pool_uuid));
+	} else if (unlikely(pool_child->spc_no_storage)) {
+		D_DEBUG(DB_REBUILD, DF_UUID" "DF_UUID" lost pool shard, ver %d, skip.\n",
+			DP_UUID(arg->pool_uuid), DP_UUID(arg->pool_hdl_uuid), arg->version);
+		D_GOTO(out, rc = 0);
 	}
 
 	D_ALLOC_PTR(pool_tls);
@@ -557,6 +568,9 @@ out:
 	if (rc && pool_tls)
 		migrate_pool_tls_destroy(pool_tls);
 
+	if (pool_child != NULL)
+		ds_pool_child_put(pool_child);
+
 	return rc;
 }
 
@@ -579,9 +593,9 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, unsigned int version, unsig
 			ABT_mutex_lock(tls->mpt_init_mutex);
 			ABT_cond_wait(tls->mpt_init_cond, tls->mpt_init_mutex);
 			ABT_mutex_unlock(tls->mpt_init_mutex);
-			if (tls->mpt_init_failed) {
+			if (tls->mpt_init_err) {
 				migrate_pool_tls_put(tls);
-				rc = -DER_NOMEM;
+				rc = tls->mpt_init_err;
 			}
 		}
 
@@ -637,7 +651,9 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, unsigned int version, unsig
 	arg.svc_list = (d_rank_list_t *)entry->dpe_val_ptr;
 	arg.obj_ult_cnts = tls->mpt_obj_ult_cnts;
 	arg.dkey_ult_cnts = tls->mpt_dkey_ult_cnts;
-	rc = dss_task_collective(migrate_pool_tls_create_one, &arg, 0);
+	rc = ds_pool_task_collective(pool->sp_uuid,
+				     PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+				     migrate_pool_tls_create_one, &arg, 0);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create migrate tls: "DF_RC"\n",
 			DP_UUID(pool->sp_uuid), DP_RC(rc));
@@ -649,7 +665,7 @@ out:
 		tls->mpt_init_tls = 0;
 		/* Set init failed, so the waiting lookup(above) can be notified */
 		if (rc != 0)
-			tls->mpt_init_failed = 1;
+			tls->mpt_init_err = rc;
 		ABT_mutex_lock(tls->mpt_init_mutex);
 		ABT_cond_broadcast(tls->mpt_init_cond);
 		ABT_mutex_unlock(tls->mpt_init_mutex);
@@ -1867,7 +1883,7 @@ enum {
 
 /* Check if there are enough resource for the migration to proceed. */
 static int
-migrate_system_enter(struct migrate_pool_tls *tls, int tgt_idx)
+migrate_system_enter(struct migrate_pool_tls *tls, int tgt_idx, bool *yielded)
 {
 	uint32_t tgt_cnt = 0;
 	int	 rc = 0;
@@ -1881,6 +1897,7 @@ migrate_system_enter(struct migrate_pool_tls *tls, int tgt_idx)
 	while ((tls->mpt_inflight_max_ult / dss_tgt_nr) <= tgt_cnt) {
 		D_DEBUG(DB_REBUILD, "tgt%d:%u max %u\n",
 			tgt_idx, tgt_cnt, tls->mpt_inflight_max_ult / dss_tgt_nr);
+		*yielded = true;
 		ABT_mutex_lock(tls->mpt_inflight_mutex);
 		ABT_cond_wait(tls->mpt_inflight_cond, tls->mpt_inflight_mutex);
 		ABT_mutex_unlock(tls->mpt_inflight_mutex);
@@ -2013,11 +2030,11 @@ migrate_one_ult(void *arg)
 	D_DEBUG(DB_REBUILD, "mrone %p inflight_size "DF_U64" max "DF_U64"\n",
 		mrone, tls->mpt_inflight_size, tls->mpt_inflight_max_size);
 
-	while (tls->mpt_inflight_size + data_size >=
-	       tls->mpt_inflight_max_size && tls->mpt_inflight_max_size != 0
-	       && !tls->mpt_fini) {
-		D_DEBUG(DB_REBUILD, "mrone %p wait "DF_U64"/"DF_U64"\n", mrone,
-			tls->mpt_inflight_size, tls->mpt_inflight_max_size);
+	while (tls->mpt_inflight_size + data_size >= tls->mpt_inflight_max_size &&
+	       tls->mpt_inflight_max_size != 0 && tls->mpt_inflight_size != 0 &&
+	       !tls->mpt_fini) {
+		D_DEBUG(DB_REBUILD, "mrone %p wait "DF_U64"/"DF_U64"/"DF_U64"\n", mrone,
+			tls->mpt_inflight_size, tls->mpt_inflight_max_size, data_size);
 		ABT_mutex_lock(tls->mpt_inflight_mutex);
 		ABT_cond_wait(tls->mpt_inflight_cond, tls->mpt_inflight_mutex);
 		ABT_mutex_unlock(tls->mpt_inflight_mutex);
@@ -3147,7 +3164,8 @@ ds_migrate_stop(struct ds_pool *pool, unsigned int version, unsigned int generat
 	uuid_copy(arg.pool_uuid, pool->sp_uuid);
 	arg.version = version;
 	arg.generation = generation;
-	rc = dss_thread_collective(migrate_fini_one_ult, &arg, 0);
+
+	rc = ds_pool_thread_collective(pool->sp_uuid, 0, migrate_fini_one_ult, &arg, 0);
 	if (rc)
 		D_ERROR(DF_UUID" migrate stop: %d\n", DP_UUID(pool->sp_uuid), rc);
 
@@ -3376,6 +3394,8 @@ migrate_obj_iter_cb(daos_handle_t ih, d_iov_t *key_iov, d_iov_t *val_iov, void *
 	daos_epoch_t			punched_epoch = obj_val->punched_epoch;
 	unsigned int			tgt_idx = obj_val->tgt_idx;
 	unsigned int			shard = obj_val->shard;
+	d_iov_t				tmp_iov;
+	bool				yielded = false;
 	int				rc;
 
 	if (arg->pool_tls->mpt_fini)
@@ -3385,7 +3405,7 @@ migrate_obj_iter_cb(daos_handle_t ih, d_iov_t *key_iov, d_iov_t *val_iov, void *
 		" eph "DF_U64" start\n", DP_UUID(arg->cont_uuid), DP_UOID(*oid),
 		ih.cookie, epoch);
 
-	rc = migrate_system_enter(arg->pool_tls, tgt_idx);
+	rc = migrate_system_enter(arg->pool_tls, tgt_idx, &yielded);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID" enter migrate failed.", DP_UUID(arg->cont_uuid));
 		return rc;
@@ -3397,6 +3417,17 @@ migrate_obj_iter_cb(daos_handle_t ih, d_iov_t *key_iov, d_iov_t *val_iov, void *
 			DP_UOID(*oid), DP_RC(rc));
 		migrate_system_exit(arg->pool_tls, tgt_idx);
 		return rc;
+	}
+
+	/* migrate_system_enter possibly yielded the ULT, let's re-probe before delete  */
+	if (yielded) {
+		d_iov_set(&tmp_iov, oid, sizeof(*oid));
+		rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, DAOS_INTENT_MIGRATION, &tmp_iov, NULL);
+		if (rc) {
+			D_ASSERT(rc != -DER_NONEXIST);
+			D_ERROR("obj "DF_UOID" probe failed: "DF_RC"\n", DP_UOID(*oid), DP_RC(rc));
+			return rc;
+		}
 	}
 
 	rc = dbtree_iter_delete(ih, NULL);
@@ -3852,7 +3883,8 @@ ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver, unsigned int generation,
 	if (rc != ABT_SUCCESS)
 		D_GOTO(out, rc);
 
-	rc = dss_thread_collective(migrate_check_one, &arg, 0);
+	rc = ds_pool_thread_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
+				       PO_COMP_ST_DOWNOUT, migrate_check_one, &arg, 0);
 	if (rc)
 		D_GOTO(out, rc);
 

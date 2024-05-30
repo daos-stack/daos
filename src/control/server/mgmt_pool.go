@@ -299,7 +299,7 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 			return nil, errors.Wrap(err, "query on already-created pool failed")
 		}
 
-		resp.Leader = qr.Leader
+		resp.SvcLdr = qr.SvcLdr
 		resp.SvcReps = ranklist.RanksToUint32(ps.Replicas)
 		resp.TgtRanks = ranklist.RanksToUint32(ps.Storage.CreationRanks())
 		resp.TierBytes = ps.Storage.PerRankTierStorage
@@ -895,6 +895,19 @@ func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReinteg
 	if err != nil {
 		return nil, err
 	}
+
+	r := ranklist.Rank(req.Rank)
+
+	m, err := svc.membership.Get(r)
+	if err != nil {
+		return nil, err
+	}
+
+	if m.State&system.AvailableMemberFilter == 0 {
+		invalid := []ranklist.Rank{r}
+		return nil, FaultPoolInvalidRanks(invalid)
+	}
+
 	req.Tierbytes = ps.Storage.PerRankTierStorage
 
 	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolReintegrate, req)
@@ -916,6 +929,10 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 		return nil, err
 	}
 
+	if req.QueryMask == 0 {
+		req.QueryMask = uint64(daos.DefaultPoolQueryMask)
+	}
+
 	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolQuery, req)
 	if err != nil {
 		return nil, err
@@ -925,6 +942,9 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal PoolQuery response")
 	}
+
+	// Preserve compatibility with pre-2.6 callers.
+	resp.Leader = resp.SvcLdr
 
 	return resp, nil
 }
@@ -1190,7 +1210,7 @@ func (svc *mgmtSvc) PoolDeleteACL(ctx context.Context, req *mgmtpb.DeleteACLReq)
 
 // ListPools returns a set of all pools in the system.
 func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*mgmtpb.ListPoolsResp, error) {
-	if err := svc.checkReplicaRequest(req); err != nil {
+	if err := svc.checkReplicaRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
 

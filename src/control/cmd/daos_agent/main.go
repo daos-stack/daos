@@ -20,6 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -132,9 +133,16 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			logCmd.SetLog(log)
 		}
 
+		daosLogMask := daos.DefaultErrorMask
 		if opts.Debug {
 			log.SetLevel(logging.LogLevelTrace)
+			daosLogMask = daos.DefaultDebugMask
 		}
+		fini, err := daos.InitLogging(daosLogMask)
+		if err != nil {
+			return err
+		}
+		defer fini()
 
 		if jsonCmd, ok := cmd.(cmdutil.JSONOutputter); ok && opts.JSON {
 			jsonCmd.EnableJSONOutput(os.Stdout, &wroteJSON)

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,7 +7,6 @@
 
 #include <daos/rpc.h>
 #include <daos/event.h>
-#include <daos/rsvc.h>
 #include <daos/mgmt.h>
 
 static void
@@ -97,14 +96,15 @@ daos_rpc_send_wait(crt_rpc_t *rpc)
 }
 
 struct rpc_proto {
-	struct rsvc_client	cli;
-	crt_endpoint_t		ep;
-	int			version;
-	int			rc;
-	bool			completed;
-	crt_opcode_t		base_opc;
-	uint32_t		*ver_array;
-	uint32_t		 array_size;
+	int            nr_ranks;
+	crt_endpoint_t ep;
+	int            version;
+	int            rc;
+	bool           completed;
+	crt_opcode_t   base_opc;
+	uint32_t      *ver_array;
+	uint32_t       array_size;
+	uint32_t       timeout;
 };
 
 static void
@@ -114,16 +114,11 @@ query_cb(struct crt_proto_query_cb_info *cb_info)
 	int			 rc;
 
 	if (daos_rpc_retryable_rc(cb_info->pq_rc)) {
-		rc = rsvc_client_choose(&rproto->cli, &rproto->ep);
-		if (rc) {
-			D_ERROR("rsvc_client_choose() failed: "DF_RC"\n", DP_RC(rc));
-			rproto->rc = rc;
-			rproto->completed = true;
-		}
-
-		rc = crt_proto_query_with_ctx(&rproto->ep, rproto->base_opc,
-					      rproto->ver_array, rproto->array_size,
-					      query_cb, rproto, daos_get_crt_ctx());
+		rproto->ep.ep_rank = (rproto->ep.ep_rank + 1) % rproto->nr_ranks;
+		rproto->timeout += 3;
+		rc = crt_proto_query_with_ctx(&rproto->ep, rproto->base_opc, rproto->ver_array,
+					      rproto->array_size, rproto->timeout, query_cb, rproto,
+					      daos_get_crt_ctx());
 		if (rc) {
 			D_ERROR("crt_proto_query_with_ctx() failed: "DF_RC"\n", DP_RC(rc));
 			rproto->rc = rc;
@@ -142,8 +137,7 @@ daos_rpc_proto_query(crt_opcode_t base_opc, uint32_t *ver_array, int count, int 
 	struct dc_mgmt_sys	*sys;
 	struct rpc_proto	*rproto = NULL;
 	crt_context_t		 ctx = daos_get_crt_ctx();
-	int			 rc;
-	int			 num_ranks;
+	int                      rc;
 	int			 i;
 
 	rc = dc_mgmt_sys_attach(NULL, &sys);
@@ -156,39 +150,35 @@ daos_rpc_proto_query(crt_opcode_t base_opc, uint32_t *ver_array, int count, int 
 	if (rproto == NULL)
 		D_GOTO(out_detach, rc = -DER_NOMEM);
 
-	rc = rsvc_client_init(&rproto->cli, sys->sy_info.ms_ranks);
-	if (rc) {
-		D_ERROR("rsvc_client_init() failed: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_free, rc);
-	}
-
-	num_ranks = dc_mgmt_net_get_num_srv_ranks();
-	rproto->ep.ep_rank = d_rand() % num_ranks;
+	/** select a random rank to issue the proto query rpc to */
+	rproto->nr_ranks   = dc_mgmt_net_get_num_srv_ranks();
+	rproto->ep.ep_rank = d_rand() % rproto->nr_ranks;
+	rproto->ep.ep_tag  = 0;
 	rproto->ver_array = ver_array;
 	rproto->array_size = count;
-	rproto->ep.ep_grp = sys->sy_group;
-	rproto->ep.ep_tag = 0;
+	rproto->ep.ep_grp  = sys->sy_group;
 	rproto->base_opc = base_opc;
+	rproto->timeout    = 3;
 
-	rc = crt_proto_query_with_ctx(&rproto->ep, base_opc,
-				      ver_array, count, query_cb, rproto, ctx);
+	rc = crt_proto_query_with_ctx(&rproto->ep, base_opc, ver_array, count, rproto->timeout,
+				      query_cb, rproto, ctx);
 	if (rc) {
 		D_ERROR("crt_proto_query_with_ctx() failed: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_rsvc, rc);
+		D_GOTO(out_free, rc);
 	}
 
 	while (!rproto->completed) {
 		rc = crt_progress(ctx, 0);
 		if (rc && rc != -DER_TIMEDOUT) {
 			D_ERROR("failed to progress CART context: %d\n", rc);
-			D_GOTO(out_rsvc, rc);
+			D_GOTO(out_free, rc);
 		}
 	}
 
 	if (rproto->rc != -DER_SUCCESS) {
 		rc = rproto->rc;
 		D_ERROR("crt_proto_query()failed: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_rsvc, rc);
+		D_GOTO(out_free, rc);
 	}
 	rc = 0;
 
@@ -202,8 +192,6 @@ daos_rpc_proto_query(crt_opcode_t base_opc, uint32_t *ver_array, int count, int 
 	} else {
 		*ret_ver = rproto->version;
 	}
-out_rsvc:
-	rsvc_client_fini(&rproto->cli);
 out_free:
 	D_FREE(rproto);
 out_detach:
