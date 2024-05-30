@@ -94,7 +94,7 @@ rebuild_pool_tls_create(struct rebuild_tgt_pool_tracker *rpt)
 	d_list_add(&rebuild_pool_tls->rebuild_pool_list,
 		   &tls->rebuild_pool_list);
 
-	D_DEBUG(DB_REBUILD, DF_RBF " TLS create\n", DP_RBF_RPT(rpt));
+	D_DEBUG(DB_REBUILD, DF_RB " TLS create\n", DP_RB_RPT(rpt));
 	return rebuild_pool_tls;
 }
 
@@ -388,7 +388,7 @@ dss_rebuild_check_one(void *data)
 	if (pool_tls == NULL)
 		return 0;
 
-	D_DEBUG(DB_REBUILD, DF_RBF " scanning %d status: " DF_RC "\n", DP_RBF_RPT(rpt),
+	D_DEBUG(DB_REBUILD, DF_RB " scanning %d status: " DF_RC "\n", DP_RB_RPT(rpt),
 		pool_tls->rebuild_pool_scanning, DP_RC(pool_tls->rebuild_pool_status));
 
 	ABT_mutex_lock(status->lock);
@@ -451,9 +451,9 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 	ABT_mutex_unlock(rpt->rt_lock);
 
 	D_DEBUG(DB_REBUILD,
-		DF_RBF " scanning %d/%d rebuilding=%s, obj_count=" DF_U64 ", "
+		DF_RB " scanning %d/%d rebuilding=%s, obj_count=" DF_U64 ", "
 		       "tobe_obj=" DF_U64 " rec_count=" DF_U64 " size= " DF_U64 "\n",
-		DP_RBF_RPT(rpt), status->scanning, status->status,
+		DP_RB_RPT(rpt), status->scanning, status->status,
 		status->rebuilding ? "yes" : "no", status->obj_count, status->tobe_obj_count,
 		status->rec_count, status->size);
 out:
@@ -2160,13 +2160,13 @@ rebuild_fini_one(void *arg)
 	if (rpt->rt_rebuild_fence == dpc->spc_rebuild_fence) {
 		dpc->spc_rebuild_fence = 0;
 		dpc->spc_rebuild_end_hlc = d_hlc_get();
-		D_DEBUG(DB_REBUILD, DF_RBF ": Reset aggregation end hlc " DF_U64 "\n",
-			DP_RBF_RPT(rpt), dpc->spc_rebuild_end_hlc);
+		D_DEBUG(DB_REBUILD, DF_RB ": Reset aggregation end hlc " DF_U64 "\n",
+			DP_RB_RPT(rpt), dpc->spc_rebuild_end_hlc);
 	} else {
 		D_DEBUG(DB_REBUILD,
-			DF_RBF ": pool is still being rebuilt rt_rebuild_fence " DF_U64
+			DF_RB ": pool is still being rebuilt rt_rebuild_fence " DF_U64
 			       " spc_rebuild_fence " DF_U64 "\n",
-			DP_RBF_RPT(rpt), rpt->rt_rebuild_fence, dpc->spc_rebuild_fence);
+			DP_RB_RPT(rpt), rpt->rt_rebuild_fence, dpc->spc_rebuild_fence);
 	}
 
 	ds_pool_child_put(dpc);
@@ -2245,7 +2245,7 @@ rebuild_tgt_status_check_ult(void *arg)
 		rc = rebuild_tgt_query(rpt, &status);
 		ABT_mutex_free(&status.lock);
 		if (rc || status.status != 0) {
-			DL_ERROR(rc == 0 ? status.status : rc, DF_RBF " failed", DP_RBF_RPT(rpt));
+			DL_ERROR(rc == 0 ? status.status : rc, DF_RB " failed", DP_RB_RPT(rpt));
 			if (status.status == 0)
 				status.status = rc;
 			if (rpt->rt_errno == 0)
@@ -2328,7 +2328,7 @@ rebuild_tgt_status_check_ult(void *arg)
 				rpt->rt_reported_rec_cnt = status.rec_count;
 				rpt->rt_reported_size = status.size;
 			} else {
-				DL_WARN(rc, DF_RBF " rebuild iv update failed", DP_RBF_RPT(rpt));
+				DL_WARN(rc, DF_RB " rebuild iv update failed", DP_RB_RPT(rpt));
 				/* Already finish rebuilt, but it can not
 				 * its rebuild status on the leader, i.e.
 				 * it can not find the IV see crt_iv_hdlr_xx().
@@ -2338,16 +2338,16 @@ rebuild_tgt_status_check_ult(void *arg)
 					rpt->rt_global_done = 1;
 
 				if (ns->iv_stop) {
-					D_DEBUG(DB_REBUILD, "abort rebuild " DF_RBF "\n",
-						DP_RBF_RPT(rpt));
+					D_DEBUG(DB_REBUILD, "abort rebuild " DF_RB "\n",
+						DP_RB_RPT(rpt));
 					rpt->rt_abort = 1;
 				}
 			}
 		}
 
-		D_INFO(DF_RBF " obj " DF_U64 " rec " DF_U64 " size " DF_U64 " scan done %d "
+		D_INFO(DF_RB " obj " DF_U64 " rec " DF_U64 " size " DF_U64 " scan done %d "
 			      "pull done %d scan gl done %d gl done %d status %d abort %s\n",
-		       DP_RBF_RPT(rpt), iv.riv_obj_count, iv.riv_rec_count, iv.riv_size,
+		       DP_RB_RPT(rpt), iv.riv_obj_count, iv.riv_rec_count, iv.riv_size,
 		       rpt->rt_scan_done, iv.riv_pull_done, rpt->rt_global_scan_done,
 		       rpt->rt_global_done, iv.riv_status, rpt->rt_abort ? "yes" : "no");
 		if (rpt->rt_global_done || rpt->rt_abort)
@@ -2397,8 +2397,8 @@ rebuild_prepare_one(void *data)
 	 */
 	D_ASSERT(rpt->rt_rebuild_fence != 0);
 	dpc->spc_rebuild_fence = rpt->rt_rebuild_fence;
-	D_DEBUG(DB_REBUILD, DF_RBF " open local container " DF_UUID " rebuild eph " DF_X64 "\n",
-		DP_RBF_RPT(rpt), DP_UUID(rpt->rt_coh_uuid), rpt->rt_rebuild_fence);
+	D_DEBUG(DB_REBUILD, DF_RB " open local container " DF_UUID " rebuild eph " DF_X64 "\n",
+		DP_RB_RPT(rpt), DP_UUID(rpt->rt_coh_uuid), rpt->rt_rebuild_fence);
 
 put:
 	ds_pool_child_put(dpc);

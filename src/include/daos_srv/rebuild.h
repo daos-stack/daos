@@ -40,8 +40,10 @@ typedef enum {
  */
 #define DF_RB  "rb=" DF_UUID "/%u/%u/%s"
 
-/* Full rebuild identifying information includes <term>/<rebuild_gen> */
-#define DF_RBF DF_RB " " DF_U64 "/%u"
+/* Full rebuild identifying information includes <leader_rank>/<term>
+ * Instead of this, use DF_RB most of the time (use this for leader change scenarios, etc.)
+ */
+#define DF_RBF DF_RB " ld=%u/" DF_U64
 
 /* arguments for log rebuild identifier given a struct rebuild_global_pool_tracker * */
 #define DP_RB_RGT(rgt)                                                                             \
@@ -52,18 +54,18 @@ typedef enum {
 #define DP_RB_RPT(rpt)                                                                             \
 	DP_UUID((rpt)->rt_pool_uuid), (rpt)->rt_rebuild_ver, (rpt)->rt_rebuild_gen,                \
 	    RB_OP_STR((rpt)->rt_rebuild_op)
-#define DP_RBF_RPT(rpt) DP_RB_RPT(rpt), (rpt)->rt_leader_term, (rpt)->rt_leader_rank
+#define DP_RBF_RPT(rpt) DP_RB_RPT(rpt), (rpt)->rt_leader_rank, (rpt)->rt_leader_term
 
 /* arguments for log rebuild identifier given a struct rebuild_scan_in *rsin */
 #define DP_RB_RSI(rsi)                                                                             \
 	DP_UUID((rsi)->rsi_pool_uuid), (rsi)->rsi_rebuild_ver, (rsi)->rsi_rebuild_gen,             \
 	    RB_OP_STR((rsi)->rsi_rebuild_op)
-#define DP_RBF_RSI(rsi) DP_RB_RSI(rsi), (rsi)->rsi_leader_term, (rsi)->rsi_master_rank
+#define DP_RBF_RSI(rsi) DP_RB_RSI(rsi), (rsi)->rsi_master_rank, (rsi)->rsi_leader_term
 
 /* arguments for log rebuild identifier given a struct migrate_query_arg * */
 #define DP_RB_MQA(mqa)                                                                             \
 	DP_UUID((mqa)->pool_uuid), (mqa)->version, (mqa)->generation, RB_OP_STR((mqa)->rebuild_op)
-#define DP_RBF_MQA(mqa) DP_RB_MQA(mqa), (mqa)->leader_term, (mqa)->leader_rank
+#define DP_RBF_MQA(mqa) DP_RB_MQA(mqa), (mqa)->leader_rank, (mqa)->leader_term
 
 int ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver,
 			daos_epoch_t stable_eph, uint32_t layout_version,

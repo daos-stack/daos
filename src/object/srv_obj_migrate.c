@@ -4011,11 +4011,8 @@ ds_object_migrate_send(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_h
 		*max_delay = rpc_timeout;
 	}
 out:
-	/* DF_RB format macro would be as follows (but we don't know leader rank and term here):
-	 * rb=<pool_uuid>/<rebuild_ver>/<term>/<rebuild_gen>/<ldr_engine_rank>/<opstring>
-	 */
-	D_DEBUG(DB_REBUILD, DF_UUID "/%u/term-unk/%u/ldr-unk/%s migrate object: rc=%d\n",
-		DP_UUID(pool->sp_uuid), version, generation, RB_OP_STR(migrate_opc), rc);
+	D_DEBUG(DB_REBUILD, DF_RB ": rc=%d\n", DP_UUID(pool->sp_uuid), version, generation,
+		RB_OP_STR(migrate_opc), rc);
 	if (rpc)
 		crt_req_decref(rpc);
 
