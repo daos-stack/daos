@@ -286,7 +286,8 @@ class PoolListConsolidationTest(RecoveryTestBase):
             node = NodeSet(host)
             check_out = check_file_exists(hosts=node, filename=rdb_pool_path, sudo=True)
             if check_out[0]:
-                run_remote(log=self.log, hosts=node, command=command)
+                if not run_remote(log=self.log, hosts=node, command=command).passed:
+                    self.fail(f'Failed to remove {rdb_pool_path} on {host}')
                 self.log.info("rm rdb-pool from %s", str(node))
                 count += 1
                 if count > 1:
@@ -382,6 +383,8 @@ class PoolListConsolidationTest(RecoveryTestBase):
             return
         command = f"sudo rm {rdb_pool_path}"
         remove_result = run_remote(log=self.log, hosts=self.hostlist_servers, command=command)
+        if not remove_result.passed:
+            self.fail(f"Failed to remove {rdb_pool_path} from {self.hostlist_servers}")
         success_nodes = remove_result.passed_hosts
         if self.hostlist_servers != success_nodes:
             msg = (f"Failed to remove rdb-pool! All = {self.hostlist_servers}, "
