@@ -2007,6 +2007,22 @@ exit:
 	return rc;
 }
 
+int
+crt_context_get_timeout(crt_context_t crt_ctx, uint32_t *timeout_sec)
+{
+	struct crt_context	*ctx = crt_ctx;
+	int			 rc = 0;
+
+	if (crt_ctx == CRT_CONTEXT_NULL) {
+		D_ERROR("NULL context passed\n");
+		rc = -DER_INVAL;
+	} else {
+		*timeout_sec = ctx->cc_timeout_sec;
+	}
+
+	return rc;
+}
+
 /* Force complete the rpc. Used for handling of unreachable rpcs */
 void
 crt_req_force_completion(struct crt_rpc_priv *rpc_priv)
