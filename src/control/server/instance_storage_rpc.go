@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -167,46 +168,64 @@ func (ei *EngineInstance) StorageFormatSCM(ctx context.Context, force bool) (mRe
 	return
 }
 
-func addLinkInfoToHealthStats(log logging.DebugLogger, health *ctlpb.BioHealthResp, pciCfg string) error {
-	// Convert byte array to lspci-format.
+func setLnkStats(log logging.TraceLogger, inStr string, health *ctlpb.BioHealthResp) error {
+	healthVal := reflect.Indirect(reflect.ValueOf(health))
+	if !healthVal.IsValid() || healthVal.Kind() != reflect.Struct {
+		return errors.Errorf("reflect failed on %T", health)
+	}
+
+	for _, line := range strings.Split(inStr, "\n") {
+		toks := strings.Split(strings.TrimSpace(line), ":")
+		if len(toks) != 2 {
+			continue // Not valid key:val entry.
+		}
+		lineKey := strings.TrimSpace(toks[0])
+		if !strings.HasPrefix(lineKey, "Lnk") {
+			continue // Bail early to reduce chance of false-positive lookups.
+		}
+
+		field := healthVal.FieldByName(lineKey)
+		// Check that matching field exists in health stats resp and that field is settable
+		// (exported) and of type string before attempting to set it.
+		if !field.IsValid() || !field.CanSet() || field.Kind() != reflect.String {
+			log.Tracef("setLnkStats: skip %q line (reflect valid/canset/isstr %b/%b/%b)",
+				lineKey, field.IsValid(), field.CanSet(),
+				field.Kind() == reflect.String)
+			continue
+		}
+
+		lineVal := strings.TrimSpace(toks[1])
+		log.Tracef("link info %q found (%q)", lineKey, lineVal)
+
+		field.SetString(lineVal)
+	}
+
+	return nil
+}
+
+func addLinkInfoToHealthStats(log logging.TraceLogger, health *ctlpb.BioHealthResp, pciCfg string) error {
+	// Convert byte-string to lspci-format.
 	sb := new(strings.Builder)
 	sb.WriteString("01:00.0 device #1\n") // Spoof preamble required for lspci to parse.
 	formatBytestring(pciCfg, sb)
 	pciCfgStr := sb.String()
-	log.Debugf(pciCfgStr)
-
-	// Pipe string representation of PCI config space into lspci.
-	//	cmd := []string{
-	//		system.GetLspciPath(), "-F", "<(printf '%s\n' \"" + pciCfgStr + "\")",
-	//	}
-	//	out, err := exec.Command(cmd[0], cmd[1:]...).CombinedOutput()
-	//	if err != nil {
-	//		return errors.Wrapf(err, "Error running %v: %s", cmd, out)
-	//	}
+	log.Tracef("formatted pci config space: %s", pciCfgStr)
 
 	cmd := exec.Command(system.GetLspciPath(), "-vvv", "-F", "/dev/stdin")
 	cmd.Stdin = strings.NewReader(pciCfgStr) // String input to be linefeed-terminated.
-	out, err := cmd.CombinedOutput()
+	out, err := cmd.Output()
 	if err != nil {
-		return errors.Wrapf(err, "Error running %v: %s", cmd, out)
+		return &system.RunCmdError{
+			Wrapped: errors.Wrapf(err, "Error running %s: %s", cmd, out),
+			Stdout:  string(out),
+		}
 	}
+	log.Tracef("lspci -F output: %q", out)
 
-	//	r, _ := cmd.StdoutPipe()
-	//	if err := cmd.Start(); err != nil {
-	//		return errors.Wrap(err, "lspci -F cmd start")
-	//	}
-	//	if err := cmd.Wait(); err != nil {
-	//		return errors.Wrap(err, "lspci -F cmd wait")
-	//	}
-
-	// Extract Lnk entries.
-	//scanner := bufio.NewScanner(r)
-	//for scanner.Scan() {
-	log.Debugf("lspci -F output: %q", out)
-	//log.Debugf("lspci -F output: %q", scanner.Text())
-	//}
-
-	// Add extracted entries to health stats.
+	// Extract from lspci output and add Lnk{Ctl|Sta|Cap} field values to health stats.
+	if err := setLnkStats(log, string(out), health); err != nil {
+		return err
+	}
 
 	return nil
 }

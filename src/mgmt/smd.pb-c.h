@@ -216,11 +216,41 @@ struct  _Ctl__BioHealthResp
    * RDB WAL blob size
    */
   uint64_t rdb_wal_size;
+  /*
+   * PCIe config space link capability register
+   */
+  char              *lnk_cap;
+  /*
+   * PCIe config space link capability register 2
+   */
+  char              *lnk_cap2;
+  /*
+   * PCIe config space link control register
+   */
+  char              *lnk_ctl;
+  /*
+   * PCIe config space link control register 2
+   */
+  char              *lnk_ctl2;
+  /*
+   * PCIe config space link status register
+   */
+  char              *lnk_sta;
+  /*
+   * PCIe config space link control register 2
+   */
+  char              *lnk_sta2;
 };
-#define CTL__BIO_HEALTH_RESP__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&ctl__bio_health_resp__descriptor) \
-    , 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (char *)protobuf_c_empty_string, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
-
+#define CTL__BIO_HEALTH_RESP__INIT                                                                 \
+  {                                                                                                \
+	  PROTOBUF_C_MESSAGE_INIT(&ctl__bio_health_resp__descriptor)                               \
+	  , 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,                            \
+	      (char *)protobuf_c_empty_string, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  \
+	      0, 0, 0, 0, 0, 0, 0, (char *)protobuf_c_empty_string,                                \
+	      (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string,                    \
+	      (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string,                    \
+	      (char *)protobuf_c_empty_string                                                      \
+  }
 
 /*
  * Namespace represents a namespace created on an NvmeController.

@@ -73,6 +73,13 @@ message BioHealthResp {
 	uint64 cluster_size = 46;		// blobstore cluster size in bytes
 	uint64 meta_wal_size = 47;		// metadata WAL blob size
 	uint64 rdb_wal_size = 48;		// RDB WAL blob size
+	// PCI config space link stats
+	string lnk_cap  = 49;
+	string lnk_cap2 = 50;
+	string lnk_ctl  = 51;
+	string lnk_ctl2 = 52;
+	string lnk_sta  = 53;
+	string lnk_sta2 = 54;
 }
 
 enum NvmeDevState {

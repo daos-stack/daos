@@ -831,6 +831,9 @@ func checkFabricInterface(name string, lookup ifLookupFn) error {
 
 // Convert bytestring to format accepted by lspci, 16 bytes per line.
 func formatBytestring(in string, sb *strings.Builder) {
+	if sb == nil {
+		return
+	}
 	for i, s := range in {
 		rem := i % 32
 		if rem == 0 {
