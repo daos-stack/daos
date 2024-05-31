@@ -42,17 +42,17 @@ class MacsioTestBase(TestWithServers):
 
         return macsio
 
-    def run_macsio(self, pool_uuid, pool_svcl, processes, cont_uuid=None, plugin=None, slots=None):
+    def run_macsio(self, pool, pool_svcl, processes, cont=None, plugin=None, slots=None):
         """Run the macsio test.
 
         Parameters for the macsio command are obtained from the test yaml file,
         including the path to the macsio executable.
 
         Args:
-            pool_uuid (str): pool uuid
+            pool (TestPool): pool to run with
             pool_svcl (str): pool service replica
             processes (int): total number of processes to use to run macsio
-            cont_uuid (str, optional): container uuid. Defaults to None.
+            cont (TestContainer, optional): container to run with. Defaults to None.
             plugin (str, optional): plugin path to use with DAOS VOL connector
             slots (int, optional): slots per host to specify in the hostfile.
                 Defaults to None.
@@ -64,9 +64,9 @@ class MacsioTestBase(TestWithServers):
         """
         # Update the MACSio pool and container info before gathering manager
         # environment information to ensure they are included.
-        self.macsio.daos_pool = pool_uuid
+        self.macsio.daos_pool = pool.identifier
         self.macsio.daos_svcl = pool_svcl
-        self.macsio.daos_cont = cont_uuid
+        self.macsio.daos_cont = cont.identifier
 
         # Setup the job manager to run the macsio command
         env = self.macsio.env.copy()
@@ -88,6 +88,6 @@ class MacsioTestBase(TestWithServers):
 
         except CommandFailure as error:
             self.log.error("MACSio Failed: %s", str(error))
-            self.fail("MACSio Failed.\n")
+            self.fail("MACSio Failed")
 
         return result

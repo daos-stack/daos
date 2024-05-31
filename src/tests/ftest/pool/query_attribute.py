@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -52,7 +52,7 @@ class QueryAttributeTest(TestWithServers):
 
         # Call daos pool query, obtain pool UUID and SCM size, and compare
         # against those used when creating the pool.
-        query_result = daos_cmd.pool_query(pool=self.pool.uuid)
+        query_result = daos_cmd.pool_query(pool=self.pool.identifier)
         actual_uuid = query_result["response"]["uuid"]
         actual_size = query_result["response"]["tier_stats"][0]["total"]
         actual_size_roundup = int(actual_size / 100000) * 100000
@@ -82,11 +82,11 @@ class QueryAttributeTest(TestWithServers):
             sample_attrs.append(sample_attr)
             sample_vals.append(sample_val)
             daos_cmd.pool_set_attr(
-                pool=self.pool.uuid, attr=sample_attr, value=sample_val)
+                pool=self.pool.identifier, attr=sample_attr, value=sample_val)
             expected_attrs.append(sample_attr)
 
         # List the attribute names and compare against those set.
-        attrs = daos_cmd.pool_list_attrs(pool=self.pool.uuid)
+        attrs = daos_cmd.pool_list_attrs(pool=self.pool.identifier)
         for attr in attrs["response"]:
             actual_attrs.append(attr)
 
@@ -102,7 +102,7 @@ class QueryAttributeTest(TestWithServers):
         # Get each attribute's value and compare against those set.
         for idx in range(5):
             output = daos_cmd.pool_get_attr(
-                pool=self.pool.uuid, attr=sample_attrs[idx])
+                pool=self.pool.identifier, attr=sample_attrs[idx])
             actual_val = base64.b64decode(output["response"]["value"]).decode()
             if sample_vals[idx] != actual_val:
                 msg = "Unexpected attribute value! " +\

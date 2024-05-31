@@ -44,7 +44,7 @@ class MacsioTest(MacsioTestBase):
         # Run macsio
         self.log_step("Running MACSio")
         status = self.macsio.check_results(
-            self.run_macsio(pool.uuid, list_to_str(pool.svc_ranks), processes, container.uuid),
+            self.run_macsio(pool, list_to_str(pool.svc_ranks), processes, container),
             self.hostlist_clients)
         if status:
             self.log.info("Test passed")
@@ -90,8 +90,7 @@ class MacsioTest(MacsioTestBase):
         # Run macsio
         self.log_step("Running MACSio with DAOS VOL connector")
         status = self.macsio.check_results(
-            self.run_macsio(
-                pool.uuid, list_to_str(pool.svc_ranks), processes, container.uuid, plugin_path),
+            self.run_macsio(pool, list_to_str(pool.svc_ranks), processes, container, plugin_path),
             self.hostlist_clients)
         if status:
             self.log.info("Test passed")
