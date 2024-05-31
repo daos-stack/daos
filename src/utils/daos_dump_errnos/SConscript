@@ -1,4 +1,4 @@
-"""Build crt_launch"""
+"""Build daos_dump_errnos"""
 
 SRC_FILE = 'daos_dump_errnos.c'
 
