@@ -454,6 +454,8 @@ static int (*next_execvp)(const char *filename, char *const argv[]);
 static int (*next_execvpe)(const char *filename, char *const argv[], char *const envp[]);
 static int (*next_fexecve)(int fd, char *const argv[], char *const envp[]);
 
+static void * (*real_dlsym)(void *handle, const char *symbol);
+
 static pid_t (*next_fork)(void);
 
 /* start NOT supported by DAOS */
@@ -2494,7 +2496,7 @@ pread(int fd, void *buf, size_t size, off_t offset)
 		return 0;
 
 	if (next_pread == NULL) {
-		next_pread = dlsym(RTLD_NEXT, "pread64");
+		next_pread = real_dlsym(RTLD_NEXT, "pread64");
 		D_ASSERT(next_pread != NULL);
 	}
 	if (!d_hook_enabled)
@@ -2647,7 +2649,7 @@ pwrite(int fd, const void *buf, size_t size, off_t offset)
 		return 0;
 
 	if (next_pwrite == NULL) {
-		next_pwrite = dlsym(RTLD_NEXT, "pwrite64");
+		next_pwrite = real_dlsym(RTLD_NEXT, "pwrite64");
 		D_ASSERT(next_pwrite != NULL);
 	}
 	if (!d_hook_enabled)
@@ -2842,7 +2844,7 @@ readv(int fd, const struct iovec *iov, int iovcnt)
 	ssize_t size_sum;
 
 	if (next_readv == NULL) {
-		next_readv = dlsym(RTLD_NEXT, "readv");
+		next_readv = real_dlsym(RTLD_NEXT, "readv");
 		D_ASSERT(next_readv != NULL);
 	}
 	if (!d_hook_enabled)
@@ -2867,7 +2869,7 @@ writev(int fd, const struct iovec *iov, int iovcnt)
 	ssize_t size_sum;
 
 	if (next_writev == NULL) {
-		next_writev = dlsym(RTLD_NEXT, "writev");
+		next_writev = real_dlsym(RTLD_NEXT, "writev");
 		D_ASSERT(next_writev != NULL);
 	}
 	if (!d_hook_enabled)
@@ -2924,7 +2926,7 @@ fstat(int fd, struct stat *buf)
 	int rc, fd_directed;
 
 	if (next_fstat == NULL) {
-		next_fstat = dlsym(RTLD_NEXT, "fstat");
+		next_fstat = real_dlsym(RTLD_NEXT, "fstat");
 		D_ASSERT(next_fstat != NULL);
 	}
 	if (!d_hook_enabled)
@@ -3208,7 +3210,7 @@ statx(int dirfd, const char *path, int flags, unsigned int mask, struct statx *s
 	char        *full_path = NULL;
 
 	if (next_statx == NULL) {
-		next_statx = dlsym(RTLD_NEXT, "statx");
+		next_statx = real_dlsym(RTLD_NEXT, "statx");
 		D_ASSERT(next_statx != NULL);
 	}
 	if (!d_hook_enabled)
@@ -3328,7 +3330,7 @@ statfs(const char *pathname, struct statfs *sfs)
 	char              *full_path  = NULL;
 
 	if (next_statfs == NULL) {
-		next_statfs = dlsym(RTLD_NEXT, "statfs");
+		next_statfs = real_dlsym(RTLD_NEXT, "statfs");
 		D_ASSERT(next_statfs != NULL);
 	}
 
@@ -3382,7 +3384,7 @@ fstatfs(int fd, struct statfs *sfs)
 	daos_pool_info_t info = {.pi_bits = DPI_SPACE};
 
 	if (next_fstatfs == NULL) {
-		next_fstatfs = dlsym(RTLD_NEXT, "fstatfs");
+		next_fstatfs = real_dlsym(RTLD_NEXT, "fstatfs");
 		D_ASSERT(next_fstatfs != NULL);
 	}
 
@@ -3434,7 +3436,7 @@ statvfs(const char *pathname, struct statvfs *svfs)
 	char              *full_path  = NULL;
 
 	if (next_statvfs == NULL) {
-		next_statvfs = dlsym(RTLD_NEXT, "statvfs");
+		next_statvfs = real_dlsym(RTLD_NEXT, "statvfs");
 		D_ASSERT(next_statvfs != NULL);
 	}
 
@@ -3500,8 +3502,12 @@ opendir(const char *path)
 	struct ht_fd      *fd_ht_obj   = NULL;
 
 	if (next_opendir == NULL) {
-		next_opendir = dlsym(RTLD_NEXT, "opendir");
-		D_ASSERT(next_opendir != NULL);
+		if (real_dlsym == NULL) {
+			real_dlsym = dlsym(RTLD_NEXT, "dlsym");
+			assert(real_dlsym != NULL);
+		}
+		next_opendir = real_dlsym(RTLD_NEXT, "opendir");
+		assert(next_opendir != NULL);
 	}
 	if (!d_hook_enabled)
 		return next_opendir(path);
@@ -3621,7 +3627,7 @@ fdopendir(int fd)
 	int fd_directed;
 
 	if (next_fdopendir == NULL) {
-		next_fdopendir = dlsym(RTLD_NEXT, "fdopendir");
+		next_fdopendir = real_dlsym(RTLD_NEXT, "fdopendir");
 		D_ASSERT(next_fdopendir != NULL);
 	}
 	if (!d_hook_enabled)
@@ -3645,7 +3651,7 @@ openat(int dirfd, const char *path, int oflags, ...)
 	char         *full_path = NULL;
 
 	if (next_openat == NULL) {
-		next_openat = dlsym(RTLD_NEXT, "openat");
+		next_openat = real_dlsym(RTLD_NEXT, "openat");
 		D_ASSERT(next_openat != NULL);
 	}
 
@@ -3723,7 +3729,7 @@ __openat_2(int dirfd, const char *path, int oflags)
 	_Pragma("GCC diagnostic pop")
 
 	if (next_openat_2 == NULL) {
-		next_openat_2 = dlsym(RTLD_NEXT, "__openat_2");
+		next_openat_2 = real_dlsym(RTLD_NEXT, "__openat_2");
 		D_ASSERT(next_openat_2 != NULL);
 	}
 	if (!d_hook_enabled)
@@ -3759,7 +3765,7 @@ closedir(DIR *dirp)
 	int fd;
 
 	if (next_closedir == NULL) {
-		next_closedir = dlsym(RTLD_NEXT, "closedir");
+		next_closedir = real_dlsym(RTLD_NEXT, "closedir");
 		D_ASSERT(next_closedir != NULL);
 	}
 	if (!d_hook_enabled)
@@ -3803,7 +3809,7 @@ telldir(DIR *dirp)
 	int fd;
 
 	if (next_telldir == NULL) {
-		next_telldir = dlsym(RTLD_NEXT, "telldir");
+		next_telldir = real_dlsym(RTLD_NEXT, "telldir");
 		D_ASSERT(next_telldir != NULL);
 	}
 	if (!d_hook_enabled)
@@ -3822,7 +3828,7 @@ rewinddir(DIR *dirp)
 	int fd, idx;
 
 	if (next_rewinddir == NULL) {
-		next_rewinddir = dlsym(RTLD_NEXT, "rewinddir");
+		next_rewinddir = real_dlsym(RTLD_NEXT, "rewinddir");
 		D_ASSERT(next_rewinddir != NULL);
 	}
 	if (!d_hook_enabled)
@@ -3851,7 +3857,7 @@ seekdir(DIR *dirp, long loc)
 	uint32_t num_to_read;
 
 	if (next_seekdir == NULL) {
-		next_seekdir = dlsym(RTLD_NEXT, "seekdir");
+		next_seekdir = real_dlsym(RTLD_NEXT, "seekdir");
 		D_ASSERT(next_seekdir != NULL);
 	}
 	if (!d_hook_enabled)
@@ -3928,7 +3934,7 @@ scandirat(int dirfd, const char *restrict path, struct dirent ***restrict nameli
 	char *full_path = NULL;
 
 	if (next_scandirat == NULL) {
-		next_scandirat = dlsym(RTLD_NEXT, "scandirat");
+		next_scandirat = real_dlsym(RTLD_NEXT, "scandirat");
 		D_ASSERT(next_scandirat != NULL);
 	}
 	if (!d_hook_enabled)
@@ -4341,7 +4347,7 @@ execve(const char *filename, char *const argv[], char *const envp[])
 	int    rc;
 
 	if (next_execve == NULL) {
-		next_execve = dlsym(RTLD_NEXT, "execve");
+		next_execve = real_dlsym(RTLD_NEXT, "execve");
 		D_ASSERT(next_execve != NULL);
 	}
 	if (!d_hook_enabled)
@@ -4371,7 +4377,7 @@ execvpe(const char *filename, char *const argv[], char *const envp[])
 	int    rc;
 
 	if (next_execvpe == NULL) {
-		next_execvpe = dlsym(RTLD_NEXT, "execvpe");
+		next_execvpe = real_dlsym(RTLD_NEXT, "execvpe");
 		D_ASSERT(next_execvpe != NULL);
 	}
 	if (!d_hook_enabled)
@@ -4401,7 +4407,7 @@ execv(const char *filename, char *const argv[])
 	int    rc;
 
 	if (next_execv == NULL) {
-		next_execv = dlsym(RTLD_NEXT, "execv");
+		next_execv = real_dlsym(RTLD_NEXT, "execv");
 		D_ASSERT(next_execv != NULL);
 	}
 	if (!d_hook_enabled)
@@ -4422,7 +4428,7 @@ execvp(const char *filename, char *const argv[])
 	int    rc;
 
 	if (next_execvp == NULL) {
-		next_execvp = dlsym(RTLD_NEXT, "execvp");
+		next_execvp = real_dlsym(RTLD_NEXT, "execvp");
 		D_ASSERT(next_execvp != NULL);
 	}
 	if (!d_hook_enabled)
@@ -4444,7 +4450,7 @@ fexecve(int fd, char *const argv[], char *const envp[])
 	int    rc;
 
 	if (next_fexecve == NULL) {
-		next_fexecve = dlsym(RTLD_NEXT, "fexecve");
+		next_fexecve = real_dlsym(RTLD_NEXT, "fexecve");
 		D_ASSERT(next_fexecve != NULL);
 	}
 	if (!d_hook_enabled)
@@ -4474,7 +4480,7 @@ fork(void)
 	pid_t pid;
 
 	if (next_fork == NULL) {
-		next_fork = dlsym(RTLD_NEXT, "fork");
+		next_fork = real_dlsym(RTLD_NEXT, "fork");
 		D_ASSERT(next_fork != NULL);
 	}
 	if (!d_hook_enabled)
@@ -4502,7 +4508,7 @@ mkdir(const char *path, mode_t mode)
 	char              *full_path  = NULL;
 
 	if (next_mkdir == NULL) {
-		next_mkdir = dlsym(RTLD_NEXT, "mkdir");
+		next_mkdir = real_dlsym(RTLD_NEXT, "mkdir");
 		D_ASSERT(next_mkdir != NULL);
 	}
 	if (!d_hook_enabled)
@@ -4548,7 +4554,7 @@ mkdirat(int dirfd, const char *path, mode_t mode)
 	char *full_path = NULL;
 
 	if (next_mkdirat == NULL) {
-		next_mkdirat = dlsym(RTLD_NEXT, "mkdirat");
+		next_mkdirat = real_dlsym(RTLD_NEXT, "mkdirat");
 		D_ASSERT(next_mkdirat != NULL);
 	}
 	if (!d_hook_enabled)
@@ -4589,7 +4595,7 @@ rmdir(const char *path)
 	char              *full_path  = NULL;
 
 	if (next_rmdir == NULL) {
-		next_rmdir = dlsym(RTLD_NEXT, "rmdir");
+		next_rmdir = real_dlsym(RTLD_NEXT, "rmdir");
 		D_ASSERT(next_rmdir != NULL);
 	}
 	if (!d_hook_enabled)
@@ -4643,7 +4649,7 @@ symlink(const char *symvalue, const char *path)
 	char              *full_path  = NULL;
 
 	if (next_symlink == NULL) {
-		next_symlink = dlsym(RTLD_NEXT, "symlink");
+		next_symlink = real_dlsym(RTLD_NEXT, "symlink");
 		D_ASSERT(next_symlink != NULL);
 	}
 	if (!d_hook_enabled)
@@ -4690,7 +4696,7 @@ symlinkat(const char *symvalue, int dirfd, const char *path)
 	char *full_path = NULL;
 
 	if (next_symlinkat == NULL) {
-		next_symlinkat = dlsym(RTLD_NEXT, "symlinkat");
+		next_symlinkat = real_dlsym(RTLD_NEXT, "symlinkat");
 		D_ASSERT(next_symlinkat != NULL);
 	}
 	if (!d_hook_enabled)
@@ -4733,7 +4739,7 @@ readlink(const char *path, char *buf, size_t size)
 	char              *full_path  = NULL;
 
 	if (next_readlink == NULL) {
-		next_readlink = dlsym(RTLD_NEXT, "readlink");
+		next_readlink = real_dlsym(RTLD_NEXT, "readlink");
 		D_ASSERT(next_readlink != NULL);
 	}
 	if (!d_hook_enabled)
@@ -4788,7 +4794,7 @@ readlinkat(int dirfd, const char *path, char *buf, size_t size)
 	char *full_path = NULL;
 
 	if (next_readlinkat == NULL) {
-		next_readlinkat = dlsym(RTLD_NEXT, "readlinkat");
+		next_readlinkat = real_dlsym(RTLD_NEXT, "readlinkat");
 		D_ASSERT(next_readlinkat != NULL);
 	}
 	if (!d_hook_enabled)
@@ -4833,7 +4839,7 @@ rename(const char *old_name, const char *new_name)
 	char              *full_path_new  = NULL;
 
 	if (next_rename == NULL) {
-		next_rename = dlsym(RTLD_NEXT, "rename");
+		next_rename = real_dlsym(RTLD_NEXT, "rename");
 		D_ASSERT(next_rename != NULL);
 	}
 	if (!d_hook_enabled)
@@ -4899,7 +4905,7 @@ char *
 getcwd(char *buf, size_t size)
 {
 	if (next_getcwd == NULL) {
-		next_getcwd = dlsym(RTLD_NEXT, "getcwd");
+		next_getcwd = real_dlsym(RTLD_NEXT, "getcwd");
 		D_ASSERT(next_getcwd != NULL);
 	}
 
@@ -4935,7 +4941,7 @@ isatty(int fd)
 	int fd_directed;
 
 	if (next_isatty == NULL) {
-		next_isatty = dlsym(RTLD_NEXT, "isatty");
+		next_isatty = real_dlsym(RTLD_NEXT, "isatty");
 		D_ASSERT(next_isatty != NULL);
 	}
 	if (!d_hook_enabled)
@@ -4964,7 +4970,7 @@ access(const char *path, int mode)
 	char              *full_path  = NULL;
 
 	if (next_access == NULL) {
-		next_access = dlsym(RTLD_NEXT, "access");
+		next_access = real_dlsym(RTLD_NEXT, "access");
 		D_ASSERT(next_access != NULL);
 	}
 	if (!d_hook_enabled)
@@ -5009,7 +5015,7 @@ faccessat(int dirfd, const char *path, int mode, int flags)
 	char *full_path = NULL;
 
 	if (next_faccessat == NULL) {
-		next_faccessat = dlsym(RTLD_NEXT, "faccessat");
+		next_faccessat = real_dlsym(RTLD_NEXT, "faccessat");
 		D_ASSERT(next_faccessat != NULL);
 	}
 	if (!d_hook_enabled)
@@ -5051,7 +5057,7 @@ chdir(const char *path)
 	char              *full_path  = NULL;
 
 	if (next_chdir == NULL) {
-		next_chdir = dlsym(RTLD_NEXT, "chdir");
+		next_chdir = real_dlsym(RTLD_NEXT, "chdir");
 		D_ASSERT(next_chdir != NULL);
 	}
 	if (!d_hook_enabled)
@@ -5105,7 +5111,7 @@ fchdir(int dirfd)
 	char *pt_end = NULL;
 
 	if (next_fchdir == NULL) {
-		next_fchdir = dlsym(RTLD_NEXT, "fchdir");
+		next_fchdir = real_dlsym(RTLD_NEXT, "fchdir");
 		D_ASSERT(next_fchdir != NULL);
 	}
 	if (!d_hook_enabled)
@@ -5117,7 +5123,7 @@ fchdir(int dirfd)
 
 	/* assume dfuse is running. call chdir() to update cwd. */
 	if (next_chdir == NULL) {
-		next_chdir = dlsym(RTLD_NEXT, "chdir");
+		next_chdir = real_dlsym(RTLD_NEXT, "chdir");
 		D_ASSERT(next_chdir != NULL);
 	}
 	rc = next_chdir(dir_list[fd_directed - FD_DIR_BASE]->path);
@@ -5197,7 +5203,7 @@ unlinkat(int dirfd, const char *path, int flags)
 	char              *full_path_dummy = NULL;
 
 	if (next_unlinkat == NULL) {
-		next_unlinkat = dlsym(RTLD_NEXT, "unlinkat");
+		next_unlinkat = real_dlsym(RTLD_NEXT, "unlinkat");
 		D_ASSERT(next_unlinkat != NULL);
 	}
 	if (!d_hook_enabled)
@@ -5268,7 +5274,7 @@ fsync(int fd)
 	int fd_directed;
 
 	if (next_fsync == NULL) {
-		next_fsync = dlsym(RTLD_NEXT, "fsync");
+		next_fsync = real_dlsym(RTLD_NEXT, "fsync");
 		D_ASSERT(next_fsync != NULL);
 	}
 	if (!d_hook_enabled)
@@ -5293,7 +5299,7 @@ ftruncate(int fd, off_t length)
 	int rc, fd_directed;
 
 	if (next_ftruncate == NULL) {
-		next_ftruncate = dlsym(RTLD_NEXT, "ftruncate");
+		next_ftruncate = real_dlsym(RTLD_NEXT, "ftruncate");
 		D_ASSERT(next_ftruncate != NULL);
 	}
 	if (!d_hook_enabled)
@@ -5332,7 +5338,7 @@ truncate(const char *path, off_t length)
 	char              *full_path  = NULL;
 
 	if (next_truncate == NULL) {
-		next_truncate = dlsym(RTLD_NEXT, "truncate");
+		next_truncate = real_dlsym(RTLD_NEXT, "truncate");
 		D_ASSERT(next_truncate != NULL);
 	}
 	if (!d_hook_enabled)
@@ -5390,7 +5396,7 @@ chmod_with_flag(const char *path, mode_t mode, int flag)
 	char              *full_path  = NULL;
 
 	if (next_chmod == NULL) {
-		next_chmod = dlsym(RTLD_NEXT, "chmod");
+		next_chmod = real_dlsym(RTLD_NEXT, "chmod");
 		D_ASSERT(next_chmod != NULL);
 	}
 
@@ -5437,7 +5443,7 @@ int
 chmod(const char *path, mode_t mode)
 {
 	if (next_chmod == NULL) {
-		next_chmod = dlsym(RTLD_NEXT, "chmod");
+		next_chmod = real_dlsym(RTLD_NEXT, "chmod");
 		D_ASSERT(next_chmod != NULL);
 	}
 
@@ -5453,7 +5459,7 @@ fchmod(int fd, mode_t mode)
 	int rc, fd_directed;
 
 	if (next_fchmod == NULL) {
-		next_fchmod = dlsym(RTLD_NEXT, "fchmod");
+		next_fchmod = real_dlsym(RTLD_NEXT, "fchmod");
 		D_ASSERT(next_fchmod != NULL);
 	}
 
@@ -5486,7 +5492,7 @@ fchmodat(int dirfd, const char *path, mode_t mode, int flag)
 	char *full_path = NULL;
 
 	if (next_fchmodat == NULL) {
-		next_fchmodat = dlsym(RTLD_NEXT, "fchmodat");
+		next_fchmodat = real_dlsym(RTLD_NEXT, "fchmodat");
 		D_ASSERT(next_fchmodat != NULL);
 	}
 
@@ -5532,7 +5538,7 @@ utime(const char *path, const struct utimbuf *times)
 	char              *full_path  = NULL;
 
 	if (next_utime == NULL) {
-		next_utime = dlsym(RTLD_NEXT, "utime");
+		next_utime = real_dlsym(RTLD_NEXT, "utime");
 		D_ASSERT(next_utime != NULL);
 	}
 	if (!d_hook_enabled)
@@ -5611,7 +5617,7 @@ utimes(const char *path, const struct timeval times[2])
 	char              *full_path  = NULL;
 
 	if (next_utimes == NULL) {
-		next_utimes = dlsym(RTLD_NEXT, "utimes");
+		next_utimes = real_dlsym(RTLD_NEXT, "utimes");
 		D_ASSERT(next_utimes != NULL);
 	}
 	if (!d_hook_enabled)
@@ -5697,7 +5703,7 @@ utimens_timespec(const char *path, const struct timespec times[2], int flags)
 		D_GOTO(out_err, rc);
 	if (!is_target_path) {
 		if (next_utimes == NULL) {
-			next_utimes = dlsym(RTLD_NEXT, "utimes");
+			next_utimes = real_dlsym(RTLD_NEXT, "utimes");
 			D_ASSERT(next_utimes != NULL);
 		}
 		times_us[0].tv_sec  = times[0].tv_sec;
@@ -5762,7 +5768,7 @@ utimensat(int dirfd, const char *path, const struct timespec times[2], int flags
 	char *full_path = NULL;
 
 	if (next_utimensat == NULL) {
-		next_utimensat = dlsym(RTLD_NEXT, "utimensat");
+		next_utimensat = real_dlsym(RTLD_NEXT, "utimensat");
 		D_ASSERT(next_utimensat != NULL);
 	}
 	if (!d_hook_enabled)
@@ -5811,7 +5817,7 @@ futimens(int fd, const struct timespec times[2])
 	struct stat     stbuf;
 
 	if (next_futimens == NULL) {
-		next_futimens = dlsym(RTLD_NEXT, "futimens");
+		next_futimens = real_dlsym(RTLD_NEXT, "futimens");
 		D_ASSERT(next_futimens != NULL);
 	}
 	if (!d_hook_enabled)
@@ -5957,7 +5963,7 @@ ioctl(int fd, unsigned long request, ...)
 	va_end(arg);
 
 	if (next_ioctl == NULL) {
-		next_ioctl = dlsym(RTLD_NEXT, "ioctl");
+		next_ioctl = real_dlsym(RTLD_NEXT, "ioctl");
 		D_ASSERT(next_ioctl != NULL);
 	}
 	if (!d_hook_enabled)
@@ -5990,7 +5996,7 @@ dup(int oldfd)
 	int fd_directed;
 
 	if (next_dup == NULL) {
-		next_dup = dlsym(RTLD_NEXT, "dup");
+		next_dup = real_dlsym(RTLD_NEXT, "dup");
 		D_ASSERT(next_dup != NULL);
 	}
 	if (!d_hook_enabled)
@@ -6010,7 +6016,7 @@ dup2(int oldfd, int newfd)
 
 	/* Need more work later. */
 	if (next_dup2 == NULL) {
-		next_dup2 = dlsym(RTLD_NEXT, "dup2");
+		next_dup2 = real_dlsym(RTLD_NEXT, "dup2");
 		D_ASSERT(next_dup2 != NULL);
 	}
 	if (!d_hook_enabled)
@@ -6300,7 +6306,7 @@ posix_fadvise(int fd, off_t offset, off_t len, int advice)
 	int fd_directed;
 
 	if (next_posix_fadvise == NULL) {
-		next_posix_fadvise = dlsym(RTLD_NEXT, "posix_fadvise");
+		next_posix_fadvise = real_dlsym(RTLD_NEXT, "posix_fadvise");
 		D_ASSERT(next_posix_fadvise != NULL);
 	}
 	if (!d_hook_enabled)
@@ -6333,7 +6339,7 @@ flock(int fd, int operation)
 	int fd_directed;
 
 	if (next_flock == NULL) {
-		next_flock = dlsym(RTLD_NEXT, "flock");
+		next_flock = real_dlsym(RTLD_NEXT, "flock");
 		D_ASSERT(next_flock != NULL);
 	}
 	if (!d_hook_enabled)
@@ -6358,7 +6364,7 @@ fallocate(int fd, int mode, off_t offset, off_t len)
 	int fd_directed;
 
 	if (next_fallocate == NULL) {
-		next_fallocate = dlsym(RTLD_NEXT, "fallocate");
+		next_fallocate = real_dlsym(RTLD_NEXT, "fallocate");
 		D_ASSERT(next_fallocate != NULL);
 	}
 	if (!d_hook_enabled)
@@ -6382,7 +6388,7 @@ posix_fallocate(int fd, off_t offset, off_t len)
 	int fd_directed;
 
 	if (next_posix_fallocate == NULL) {
-		next_posix_fallocate = dlsym(RTLD_NEXT, "posix_fallocate");
+		next_posix_fallocate = real_dlsym(RTLD_NEXT, "posix_fallocate");
 		D_ASSERT(next_posix_fallocate != NULL);
 	}
 	if (!d_hook_enabled)
@@ -6406,7 +6412,7 @@ posix_fallocate64(int fd, off64_t offset, off64_t len)
 	int fd_directed;
 
 	if (next_posix_fallocate64 == NULL) {
-		next_posix_fallocate64 = dlsym(RTLD_NEXT, "posix_fallocate64");
+		next_posix_fallocate64 = real_dlsym(RTLD_NEXT, "posix_fallocate64");
 		D_ASSERT(next_posix_fallocate64 != NULL);
 	}
 	if (!d_hook_enabled)
@@ -6430,7 +6436,7 @@ tcgetattr(int fd, void *termios_p)
 	int fd_directed;
 
 	if (next_tcgetattr == NULL) {
-		next_tcgetattr = dlsym(RTLD_NEXT, "tcgetattr");
+		next_tcgetattr = real_dlsym(RTLD_NEXT, "tcgetattr");
 		D_ASSERT(next_tcgetattr != NULL);
 	}
 	if (!d_hook_enabled)
@@ -6653,6 +6659,11 @@ init_myhook(void)
 	char    *env_log;
 	int      rc;
 	uint64_t eq_count_loc = 0;
+
+	if (real_dlsym == NULL) {
+		real_dlsym = dlsym(RTLD_NEXT, "dlsym");
+		assert(real_dlsym != NULL);
+	}
 
 	umask_old = umask(0);
 	umask(umask_old);
@@ -7086,7 +7097,7 @@ void __attribute__ ((__noreturn__))
 _exit(int rc)
 {
 	if (next__exit == NULL) {
-		next__exit = dlsym(RTLD_NEXT, "_exit");
+		next__exit = real_dlsym(RTLD_NEXT, "_exit");
 		D_ASSERT(next__exit != NULL);
 	}
 	if (context_reset) {
