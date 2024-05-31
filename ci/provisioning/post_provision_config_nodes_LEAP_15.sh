@@ -1,6 +1,6 @@
 #!/bin/bash
 
-PYTHON3_VERSION="3.9"
+PYTHON3_VERSION="3.11"
 
 bootstrap_dnf() {
     rm -rf "$REPOS_DIR"
