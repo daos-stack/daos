@@ -324,8 +324,7 @@ out:
 	if (punched_ephs != NULL)
 		D_FREE(punched_ephs);
 	if (rc != 0 && tls->rebuild_pool_status == 0) {
-		D_DEBUG(DB_REBUILD, DF_RB " objects send error: " DF_RC "\n", DP_RB_RPT(rpt),
-			DP_RC(rc));
+		DL_ERROR(rc, DF_RB " objects send error", DP_RB_RPT(rpt));
 		tls->rebuild_pool_status = rc;
 	}
 

@@ -1422,8 +1422,8 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 
 		if (task->dst_rebuild_op == RB_OP_RECLAIM ||
 		    task->dst_rebuild_op == RB_OP_FAIL_RECLAIM) {
-			DL_INFO(ret, DF_RB " retry, dst_map_ver %u", DP_RB_RGT(rgt),
-				task->dst_map_ver);
+			DL_INFO(ret, DF_UUID " retry opc %u/%u", DP_UUID(task->dst_pool_uuid),
+				task->dst_rebuild_op, task->dst_map_ver);
 			rc = ds_rebuild_schedule(pool, task->dst_map_ver, rgt->rgt_stable_epoch,
 						 task->dst_new_layout_version, &task->dst_tgts,
 						 task->dst_rebuild_op, 5);
@@ -1439,14 +1439,16 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 			 * (reclaim - 1 see obj_reclaim()), but keep the in-flight I/O data.
 			 */
 			DL_INFO(rgt->rgt_status.rs_errno,
-				DF_RB " dst_map_ver %u, schedule RB_OP_FAIL_RECLAIM.",
-				DP_RB_RGT(rgt), task->dst_map_ver);
+				DF_UUID " opc %u/%u, schedule RB_OP_FAIL_RECLAIM.",
+				DP_UUID(task->dst_pool_uuid), task->dst_rebuild_op,
+				task->dst_map_ver);
 			rc = ds_rebuild_schedule(pool, task->dst_reclaim_ver - 1,
 						 rgt->rgt_stable_epoch,
 						 task->dst_new_layout_version,
 						 &task->dst_tgts, RB_OP_FAIL_RECLAIM, 5);
 			if (rc)
-				DL_ERROR(rc, DF_RB "schedule reclaim fail", DP_RB_RGT(rgt));
+				DL_ERROR(rc, DF_UUID " schedule reclaim fail",
+					 DP_UUID(task->dst_pool_uuid));
 		}
 
 		/* Then check if it needs to retry */
