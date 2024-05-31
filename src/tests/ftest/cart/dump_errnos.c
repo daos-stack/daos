@@ -6,11 +6,10 @@
 /**
  * Small utility to dump all descriptions of errcodes
  */
-#include <stdlib.h>
 #include <stdio.h>
-#include <unistd.h>
-#include <cart/types.h>
-#include <cart/api.h>
+#include <stdlib.h>
+#include <string.h>
+#include <daos_errno.h>
 
 int
 main(int argc, char **argv)
