@@ -32,6 +32,9 @@ def scons():
     # Build cart_ctl
     SConscript('ctl/SConscript')
 
+    # Build daos_dump_errnos
+    SConscript('daos_dump_errnos/SConscript')
+
     denv = env.Clone()
     denv.AppendUnique(LIBPATH=[Dir('../client/dfs')])
     libs = ['daos', 'daos_common', 'uuid', 'dfs', 'duns', 'gurt', 'cart', 'dl']
