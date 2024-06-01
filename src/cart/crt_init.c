@@ -311,7 +311,6 @@ static int data_init(int server, crt_init_options_t *opt)
 		crt_gdata.cg_timeout = CRT_DEFAULT_TIMEOUT_S;
 	else
 		crt_gdata.cg_timeout = timeout;
-
 	crt_gdata.cg_swim_crt_idx = CRT_DEFAULT_PROGRESS_CTX_IDX;
 
 	/* Override defaults and environment if option is set */
