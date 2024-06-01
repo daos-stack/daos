@@ -8,6 +8,7 @@ from apricot import TestWithServers
 from daos_perf_utils import DaosPerfCommand
 from exception_utils import CommandFailure
 from general_utils import get_log_file
+from job_manager_utils import get_job_manager
 
 
 class DaosPerfBase(TestWithServers):
@@ -40,15 +41,16 @@ class DaosPerfBase(TestWithServers):
         daos_perf_env["D_LOG_FILE"] = get_log_file("{}_daos.log".format(daos_perf.command))
 
         # Create the orterun command
-        self.job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
-        self.job_manager.assign_processes(processes)
-        self.job_manager.assign_environment(daos_perf_env)
-        self.job_manager.job = daos_perf
-        self.log.info("orterun command: %s", str(self.job_manager))
+        job_manager = get_job_manager(self)
+        job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
+        job_manager.assign_processes(processes)
+        job_manager.assign_environment(daos_perf_env)
+        job_manager.job = daos_perf
+        self.log.info("orterun command: %s", str(job_manager))
 
         # Run the daos_perf command and check for errors
         try:
-            return self.job_manager.run()
+            return job_manager.run()
 
         except CommandFailure as error:
             self.log.error("DAOS PERF Failed: %s", str(error))
