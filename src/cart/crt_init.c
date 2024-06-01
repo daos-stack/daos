@@ -315,9 +315,9 @@ static int data_init(int server, crt_init_options_t *opt)
 	D_DEBUG(DB_ALL, "set the global timeout value as %d second.\n",
 		crt_gdata.cg_timeout);
 
-	crt_gdata.cg_swim_crt_idx = CRT_DEFAULT_PROGRESS_CTX_IDX;
+	crt_gdata.cg_swim_ctx_idx = CRT_DEFAULT_PROGRESS_CTX_IDX;
 
-	D_DEBUG(DB_ALL, "SWIM context idx=%d\n", crt_gdata.cg_swim_crt_idx);
+	D_DEBUG(DB_ALL, "SWIM context idx=%d\n", crt_gdata.cg_swim_ctx_idx);
 
 	/* Override defaults and environment if option is set */
 	if (opt && opt->cio_use_credits) {
