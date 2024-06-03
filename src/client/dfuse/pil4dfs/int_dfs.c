@@ -1952,7 +1952,7 @@ out_readlink:
 	return (-1);
 }
 
-void inline query_real_dlsym(void)
+static inline void query_real_dlsym(void)
 {
 	if (real_dlsym == NULL) {
 		real_dlsym = dlsym(RTLD_NEXT, "dlsym");
