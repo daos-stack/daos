@@ -28,6 +28,7 @@ type SystemProvider interface {
 	system.IsMountedProvider
 	GetfsUsage(string) (uint64, uint64, error)
 	ReadFile(string) ([]byte, error)
+	RunLspciWithInput(string) (string, error)
 }
 
 // Provider provides storage specific capabilities.

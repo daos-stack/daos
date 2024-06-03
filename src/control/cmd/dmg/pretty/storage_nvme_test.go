@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -195,6 +195,10 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
     PLL Lock Loss Count:%d
     NAND Bytes Written:%d
     Host Bytes Written:%d
+  PCIe Link Info:
+    Capabilities: %s
+    Control: %s
+    Status: %s
 
 PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
   Health Stats:
@@ -236,6 +240,10 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
     PLL Lock Loss Count:%d
     NAND Bytes Written:%d
     Host Bytes Written:%d
+  PCIe Link Info:
+    Capabilities: %s
+    Control: %s
+    Status: %s
 
 `,
 				controllerA.PciAddr, controllerA.Model, controllerA.FwRev,
@@ -257,6 +265,8 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
 				controllerA.HealthStats.RetryBufferOverflowCnt,
 				controllerA.HealthStats.PllLockLossCnt,
 				controllerA.HealthStats.NandBytesWritten, controllerA.HealthStats.HostBytesWritten,
+				controllerA.HealthStats.LnkCap, controllerA.HealthStats.LnkCtl,
+				controllerA.HealthStats.LnkSta,
 
 				controllerB.PciAddr, controllerB.Model, controllerB.FwRev, controllerB.SocketID,
 				humanize.Bytes(controllerB.Capacity()),
@@ -277,6 +287,8 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
 				controllerB.HealthStats.RetryBufferOverflowCnt,
 				controllerB.HealthStats.PllLockLossCnt,
 				controllerB.HealthStats.NandBytesWritten, controllerB.HealthStats.HostBytesWritten,
+				controllerA.HealthStats.LnkCap, controllerA.HealthStats.LnkCtl,
+				controllerA.HealthStats.LnkSta,
 			),
 		},
 		"1 host; 1 device, fetched over drpc": {
@@ -339,6 +351,10 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
     PLL Lock Loss Count:%d
     NAND Bytes Written:%d
     Host Bytes Written:%d
+  PCIe Link Info:
+    Capabilities: %s
+    Control: %s
+    Status: %s
 
 `,
 				controllerAwTS.PciAddr, controllerAwTS.Model, controllerAwTS.FwRev,
@@ -362,6 +378,8 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
 				controllerAwTS.HealthStats.RetryBufferOverflowCnt,
 				controllerAwTS.HealthStats.PllLockLossCnt,
 				controllerAwTS.HealthStats.NandBytesWritten, controllerAwTS.HealthStats.HostBytesWritten,
+				controllerA.HealthStats.LnkCap, controllerA.HealthStats.LnkCtl,
+				controllerA.HealthStats.LnkSta,
 			),
 		},
 	} {

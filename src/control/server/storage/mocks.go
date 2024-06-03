@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -83,6 +83,9 @@ func MockNvmeHealth(varIdx ...int32) *NvmeHealth {
 		PllLockLossCnt:          uint64(idx),
 		NandBytesWritten:        uint64(idx),
 		HostBytesWritten:        uint64(idx),
+		LnkCap:                  "Port #0, Speed 8GT/s, Width x4, ASPM L0s L1, Exit Latency L0s <4us, L1 <4us",
+		LnkCtl:                  "ASPM Disabled; RCB 64 bytes, Disabled- CommClk-",
+		LnkSta:                  "Speed 8GT/s (ok), Width x4 (ok)",
 	}
 }
 

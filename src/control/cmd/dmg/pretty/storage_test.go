@@ -1652,6 +1652,10 @@ host1
         PLL Lock Loss Count:%d
         NAND Bytes Written:%d
         Host Bytes Written:%d
+      PCIe Link Info:
+        Capabilities: %s
+        Control: %s
+        Status: %s
 
 `,
 				mockController.HealthStats.TempK(), mockController.HealthStats.TempC(),
@@ -1671,6 +1675,8 @@ host1
 				mockController.HealthStats.RetryBufferOverflowCnt,
 				mockController.HealthStats.PllLockLossCnt,
 				mockController.HealthStats.NandBytesWritten, mockController.HealthStats.HostBytesWritten,
+				mockController.HealthStats.LnkCap, mockController.HealthStats.LnkCtl,
+				mockController.HealthStats.LnkSta,
 			),
 		},
 		"identify led": {

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -193,9 +193,12 @@ func Test_Convert_SmdDevice(t *testing.T) {
 		`_throttle_status":1,"thermal_throttle_event_cnt":1,"retry_buffer` +
 		`_overflow_cnt":1,"pll_lock_loss_cnt":1,"nand_bytes_written":1,"` +
 		`host_bytes_written":1,"cluster_size":0,"meta_wal_size":0,"rdb_wal` +
-		`_size":0},"namespaces":[{"id":1,"size":2000000000000}],"smd_devices` +
-		`":null,"dev_state":"EVICTED","led_state":"ON"},"ctrlr_namespace` +
-		`_id":0}`
+		`_size":0,"lnk_cap":"Port #0, Speed 8GT/s, Width x4, ASPM L0s L1,` +
+		` Exit Latency L0s \u003c4us, L1 \u003c4us","lnk_sta":"Speed 8GT/s` +
+		` (ok), Width x4 (ok)","lnk_ctl":"ASPM Disabled; RCB 64 bytes, ` +
+		`Disabled- CommClk-"},"namespaces":[{"id":1,"size":2000000000000}]` +
+		`,"smd_devices":null,"dev_state":"EVICTED","led_state":"ON"},"ctrlr` +
+		`_namespace_id":0}`
 	if diff := cmp.Diff(expOut, string(out)); diff != "" {
 		t.Fatalf("expected json output to match (-want, +got):\n%s\n", diff)
 	}

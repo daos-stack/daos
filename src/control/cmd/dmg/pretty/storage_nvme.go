@@ -157,6 +157,11 @@ func printNvmeHealth(stat *storage.NvmeHealth, out io.Writer, opts ...PrintConfi
 			uint64(stat.HostBytesWritten))
 	}
 
+	fmt.Fprintf(out, "PCIe Link Info:\n")
+	fmt.Fprintf(iw, "Capabilities: %s\n", stat.LnkCap)
+	fmt.Fprintf(iw, "Control: %s\n", stat.LnkCtl)
+	fmt.Fprintf(iw, "Status: %s\n", stat.LnkSta)
+
 	return w.Err
 }
 

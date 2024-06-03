@@ -216,6 +216,9 @@ type NvmeHealth struct {
 	ClusterSize             uint64 `json:"cluster_size"`
 	MetaWalSize             uint64 `json:"meta_wal_size"`
 	RdbWalSize              uint64 `json:"rdb_wal_size"`
+	LnkCap                  string `json:"lnk_cap"`
+	LnkSta                  string `json:"lnk_sta"`
+	LnkCtl                  string `json:"lnk_ctl"`
 }
 
 // TempK returns controller temperature in degrees Kelvin.

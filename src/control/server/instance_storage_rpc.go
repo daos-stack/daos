@@ -9,7 +9,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"os/exec"
 	"reflect"
 	"sort"
 	"strings"
@@ -24,7 +23,6 @@ import (
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -203,28 +201,23 @@ func setLnkStats(log logging.TraceLogger, inStr string, health *ctlpb.BioHealthR
 	return nil
 }
 
-func addLinkInfoToHealthStats(log logging.TraceLogger, health *ctlpb.BioHealthResp, pciCfg string) error {
+func addLinkInfoToHealthStats(engine Engine, health *ctlpb.BioHealthResp, pciCfg string) error {
 	// Convert byte-string to lspci-format.
 	sb := new(strings.Builder)
 	sb.WriteString("01:00.0 device #1\n") // Spoof preamble required for lspci to parse.
 	formatBytestring(pciCfg, sb)
 	pciCfgStr := sb.String()
-	log.Tracef("formatted pci config space: %s", pciCfgStr)
+	engine.Tracef("formatted pci config space: %s", pciCfgStr)
 
-	cmd := exec.Command(system.GetLspciPath(), "-vvv", "-F", "/dev/stdin")
-	cmd.Stdin = strings.NewReader(pciCfgStr) // String input to be linefeed-terminated.
-	out, err := cmd.Output()
+	out, err := engine.GetStorage().Sys.RunLspciWithInput(pciCfgStr)
 	if err != nil {
-		return &system.RunCmdError{
-			Wrapped: errors.Wrapf(err, "Error running %s: %s", cmd, out),
-			Stdout:  string(out),
-		}
+		return errors.Wrap(err, "RunLspciWithInput")
 	}
-	log.Tracef("lspci -F output: %q", out)
+	engine.Tracef("lspci -F output: %q", out)
 
 	// Extract from lspci output and add Lnk{Ctl|Sta|Cap} field values to health stats.
-	if err := setLnkStats(log, string(out), health); err != nil {
-		return err
+	if err := setLnkStats(engine, string(out), health); err != nil {
+		return errors.Wrap(err, "setLnkStats")
 	}
 
 	return nil
