@@ -23,7 +23,6 @@ static const char      *crt_env_names[] = {
     "D_INTERFACE",
     "D_DOMAIN",
     "D_PORT",
-    "CRT_PHY_ADDR_STR",
     "D_LOG_STDERR_IN_LOG",
     "D_LOG_SIZE",
     "D_LOG_FILE",
@@ -34,11 +33,7 @@ static const char      *crt_env_names[] = {
     "DD_SUBSYS",
     "CRT_TIMEOUT",
     "CRT_ATTACH_INFO_PATH",
-    "OFI_PORT",
-    "OFI_INTERFACE",
-    "OFI_DOMAIN",
     "CRT_CREDIT_EP_CTX",
-    "CRT_CTX_SHARE_ADDR",
     "CRT_CTX_NUM",
     "D_FI_CONFIG",
     "FI_UNIVERSE_SIZE",
@@ -134,6 +129,18 @@ dump_opt(crt_init_options_t *opt)
 	D_INFO("provider = %s\n", opt->cio_provider);
 	D_INFO("interface = %s\n", opt->cio_interface);
 	D_INFO("domain = %s\n", opt->cio_domain);
+	D_INFO("port = %s\n", opt->cio_port);
+	D_INFO("Flags: fi: %d, use_credits: %d, use_esnsors: %d\n", opt->cio_fault_inject,
+	       opt->cio_use_credits, opt->cio_use_sensors);
+
+	if (opt->cio_use_expected_size)
+		D_INFO("max_expected_size = %d\n", opt->cio_max_expected_size);
+	if (opt->cio_use_unexpected_size)
+		D_INFO("max_unexpect_size = %d\n", opt->cio_max_unexpected_size);
+
+	/* Handle similar to D_PROVIDER_AUTH_KEY in dump_envariables() */
+	if (opt->cio_auth_key)
+		D_INFO("auth_key is set\n");
 }
 
 static int
@@ -190,7 +197,6 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	       bool primary, crt_init_options_t *opt)
 
 {
-	bool		set_sep = false;
 	uint32_t	ctx_num = 0;
 	uint32_t	max_expect_size = 0;
 	uint32_t	max_unexpect_size = 0;
@@ -225,13 +231,6 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 
 	D_DEBUG(DB_ALL, "Max number of contexts set to %d\n", max_num_ctx);
 
-	d_getenv_bool("CRT_CTX_SHARE_ADDR", &set_sep);
-	if (set_sep)
-		D_WARN("Unsupported SEP mode requested. Unset CRT_CTX_SHARE_ADDR\n");
-
-	if (opt && opt->cio_sep_override && opt->cio_use_sep)
-		D_WARN("Unsupported SEP mode requested in init options\n");
-
 	if (opt && opt->cio_use_expected_size)
 		max_expect_size = opt->cio_max_expected_size;
 
@@ -241,7 +240,7 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	prov_data->cpg_inited = true;
 	prov_data->cpg_provider = provider;
 	prov_data->cpg_ctx_num = 0;
-	prov_data->cpg_sep_mode = set_sep;
+	prov_data->cpg_sep_mode       = false;
 	prov_data->cpg_contig_ports = true;
 	prov_data->cpg_ctx_max_num = max_num_ctx;
 	prov_data->cpg_max_exp_size = max_expect_size;
@@ -255,14 +254,13 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	prov_data->cpg_num_remote_tags = 1;
 	prov_data->cpg_last_remote_tag = 0;
 
-	D_DEBUG(DB_ALL, "prov_idx: %d primary: %d sep_mode: %d sizes: (%d/%d) max_ctx: %d\n",
-		provider, primary, set_sep, max_expect_size, max_unexpect_size, max_num_ctx);
+	D_DEBUG(DB_ALL, "prov_idx: %d primary: %d sizes: (%d/%d) max_ctx: %d\n", provider, primary,
+		max_expect_size, max_unexpect_size, max_num_ctx);
 
 	D_INIT_LIST_HEAD(&prov_data->cpg_ctx_list);
 
 	return DER_SUCCESS;
 }
-
 
 /* first step init - for initializing crt_gdata */
 static int data_init(int server, crt_init_options_t *opt)
@@ -317,9 +315,9 @@ static int data_init(int server, crt_init_options_t *opt)
 	D_DEBUG(DB_ALL, "set the global timeout value as %d second.\n",
 		crt_gdata.cg_timeout);
 
-	crt_gdata.cg_swim_crt_idx = CRT_DEFAULT_PROGRESS_CTX_IDX;
+	crt_gdata.cg_swim_ctx_idx = CRT_DEFAULT_PROGRESS_CTX_IDX;
 
-	D_DEBUG(DB_ALL, "SWIM context idx=%d\n", crt_gdata.cg_swim_crt_idx);
+	D_DEBUG(DB_ALL, "SWIM context idx=%d\n", crt_gdata.cg_swim_ctx_idx);
 
 	/* Override defaults and environment if option is set */
 	if (opt && opt->cio_use_credits) {
@@ -550,14 +548,6 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 	if (g_prov_settings_applied[prov] == true)
 		return;
 
-	/* rxm and verbs providers only works with regular EP */
-	if (prov != CRT_PROV_OFI_SOCKETS &&
-	    crt_provider_is_sep(primary, prov)) {
-		D_WARN("set CRT_CTX_SHARE_ADDR as 1 is invalid "
-		       "for current provider, ignoring it.\n");
-		crt_provider_set_sep(prov, primary, false);
-	}
-
 	if (prov == CRT_PROV_OFI_VERBS_RXM ||
 	    prov == CRT_PROV_OFI_TCP_RXM) {
 		/* Use shared receive queues to avoid large mem consumption */
@@ -596,12 +586,6 @@ void
 crt_protocol_info_free(struct crt_protocol_info *protocol_info)
 {
 	crt_hg_free_protocol_info((struct na_protocol_info *)protocol_info);
-}
-
-static inline void
-warn_deprecated(const char *old_env, const char *new_env)
-{
-	D_WARN("Usage of %s is deprecated. Set %s instead\n", old_env, new_env);
 }
 
 int
@@ -703,11 +687,6 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			provider = opt->cio_provider;
 		else {
 			d_agetenv_str(&provider_env, "D_PROVIDER");
-			if (provider_env == NULL) {
-				d_agetenv_str(&provider_env, CRT_PHY_ADDR_ENV);
-				if (provider_env != NULL)
-					warn_deprecated(CRT_PHY_ADDR_ENV, "D_PROVIDER");
-			}
 			provider = provider_env;
 		}
 
@@ -715,11 +694,6 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			interface = opt->cio_interface;
 		else {
 			d_agetenv_str(&interface_env, "D_INTERFACE");
-			if (interface_env == NULL) {
-				d_agetenv_str(&interface_env, "OFI_INTERFACE");
-				if (interface_env != NULL)
-					warn_deprecated("OFI_INTERFACE", "D_INTERFACE");
-			}
 			interface = interface_env;
 		}
 
@@ -727,11 +701,6 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			domain = opt->cio_domain;
 		else {
 			d_agetenv_str(&domain_env, "D_DOMAIN");
-			if (domain_env == NULL) {
-				d_agetenv_str(&domain_env, "OFI_DOMAIN");
-				if (domain_env != NULL)
-					warn_deprecated("OFI_DOMAIN", "D_DOMAIN");
-			}
 			domain = domain_env;
 		}
 
@@ -739,11 +708,6 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			port = opt->cio_port;
 		else {
 			d_agetenv_str(&port_env, "D_PORT");
-			if (port_env == NULL) {
-				d_agetenv_str(&port_env, "OFI_PORT");
-				if (port_env != NULL)
-					warn_deprecated("OFI_PORT", "D_PORT");
-			}
 			port = port_env;
 		}
 
@@ -987,10 +951,10 @@ crt_initialized()
 int
 crt_finalize(void)
 {
-	int local_rc;
-	int rc = 0;
-	int i;
 	struct crt_prov_gdata *prov_data;
+	int                    local_rc;
+	int                    rc = 0;
+	int                    i;
 
 	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
 
@@ -1008,16 +972,14 @@ crt_finalize(void)
 		prov_data = &crt_gdata.cg_prov_gdata_primary;
 
 		if (prov_data->cpg_ctx_num > 0) {
-			D_ASSERT(!crt_context_empty(crt_gdata.cg_primary_prov,
-				 CRT_LOCKED));
+			D_ASSERT(!crt_context_empty(crt_gdata.cg_primary_prov, CRT_LOCKED));
 			D_ERROR("cannot finalize, current ctx_num(%d).\n",
 				prov_data->cpg_ctx_num);
 			crt_gdata.cg_refcount++;
 			D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 			D_GOTO(out, rc = -DER_BUSY);
 		} else {
-			D_ASSERT(crt_context_empty(crt_gdata.cg_primary_prov,
-				 CRT_LOCKED));
+			D_ASSERT(crt_context_empty(crt_gdata.cg_primary_prov, CRT_LOCKED));
 		}
 
 		if (crt_plugin_gdata.cpg_inited == 1)
@@ -1040,7 +1002,6 @@ crt_finalize(void)
 
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
-		/* allow the same program to re-initialize */
 		crt_gdata.cg_refcount = 0;
 		crt_gdata.cg_inited = 0;
 		gdata_init_flag = 0;
@@ -1096,8 +1057,8 @@ static inline bool is_integer_str(char *str)
 static inline int
 crt_get_port_opx(int *port)
 {
-	int     rc = 0;
-	uint16_t    pid;
+	int      rc = 0;
+	uint16_t pid;
 
 	pid = getpid();
 	*port = pid;
@@ -1226,12 +1187,6 @@ crt_na_config_init(bool primary, crt_provider_t provider,
 			save_ptr++;
 		}
 
-		if (crt_provider_is_sep(primary, provider) && count > 1) {
-			D_ERROR("Multi-interface not available with SEP\n");
-			D_GOTO(out, rc = -DER_NOSYS);
-		}
-
-
 		D_ALLOC_ARRAY(na_cfg->noc_iface_str, count);
 		if (!na_cfg->noc_iface_str)
 			D_GOTO(out, rc = -DER_NOMEM);
@@ -1255,7 +1210,7 @@ crt_na_config_init(bool primary, crt_provider_t provider,
 
 	if (crt_is_service() && port_str != NULL && strlen(port_str) > 0) {
 		if (!is_integer_str(port_str)) {
-			D_DEBUG(DB_ALL, "ignoring invalid OFI_PORT %s.", port_str);
+			D_DEBUG(DB_ALL, "ignoring invalid D_PORT %s.", port_str);
 		} else {
 			port = atoi(port_str);
 
@@ -1273,7 +1228,7 @@ crt_na_config_init(bool primary, crt_provider_t provider,
 				}
 			}
 
-			D_DEBUG(DB_ALL, "OFI_PORT %d, using it as service port.\n", port);
+			D_DEBUG(DB_ALL, "D_PORT %d, using it as service port.\n", port);
 		}
 	} else if (provider == CRT_PROV_OFI_OPX) {
 		rc = crt_get_port_opx(&port);

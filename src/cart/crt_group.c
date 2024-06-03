@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,9 +12,8 @@
 #include <sys/stat.h>
 #include "crt_internal.h"
 
-static int crt_group_primary_add_internal(struct crt_grp_priv *grp_priv,
-					  d_rank_t rank, int tag,
-					  char *uri);
+static int
+crt_group_primary_add_internal(struct crt_grp_priv *grp_priv, d_rank_t rank, int tag, char *uri);
 
 /* global CRT group list */
 D_LIST_HEAD(crt_grp_list);
@@ -377,8 +376,8 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 	struct crt_uri_item	*ui;
 	d_list_t		*rlink;
 	struct crt_grp_priv	*grp_priv;
-	crt_phy_addr_t		nul_str = NULL;
-	crt_phy_addr_t		uri_dup;
+	char                    *nul_str = NULL;
+	char                    *uri_dup;
 	d_rank_t		rank;
 	int			rc = 0;
 	int			i;
@@ -819,8 +818,8 @@ crt_grp_ctx_invalid(struct crt_context *ctx, bool locked)
 	if (!locked)
 		D_RWLOCK_RDLOCK(&grp_gdata->gg_rwlock);
 	grp_priv = grp_gdata->gg_primary_grp;
+
 	if (grp_priv != NULL) {
-		crt_swim_disable_all();
 		rc = crt_grp_lc_ctx_invalid(grp_priv, ctx);
 		if (rc != 0) {
 			D_ERROR("crt_grp_lc_ctx_invalid failed, group %s, "
@@ -922,9 +921,8 @@ out:
  * (base_addr == NULL) means the caller only want to lookup the hg_addr.
  */
 void
-crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
-		  d_rank_t rank, uint32_t tag,
-		  crt_phy_addr_t *uri, hg_addr_t *hg_addr)
+crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx, d_rank_t rank, uint32_t tag,
+		  char **uri, hg_addr_t *hg_addr)
 {
 	struct crt_lookup_item	*li;
 	d_list_t		*rlink;
@@ -1004,8 +1002,7 @@ crt_grp_lookup_locked(crt_group_id_t grp_id)
 	bool			found = false;
 
 	d_list_for_each_entry(grp_priv, &crt_grp_list, gp_link) {
-		if (crt_grp_id_identical(grp_priv->gp_pub.cg_grpid,
-					 grp_id)) {
+		if (crt_grp_id_identical(grp_priv->gp_pub.cg_grpid, grp_id)) {
 			found = true;
 			break;
 		}
@@ -1022,8 +1019,7 @@ crt_grp_lookup_grpid(crt_group_id_t grp_id)
 
 	D_RWLOCK_RDLOCK(&crt_grp_list_rwlock);
 	d_list_for_each_entry(grp_priv, &crt_grp_list, gp_link) {
-		if (crt_grp_id_identical(grp_priv->gp_pub.cg_grpid,
-					 grp_id)) {
+		if (crt_grp_id_identical(grp_priv->gp_pub.cg_grpid, grp_id)) {
 			found = true;
 			break;
 		}
@@ -1118,6 +1114,8 @@ crt_grp_priv_destroy(struct crt_grp_priv *grp_priv)
 			if (ctx == NULL)
 				continue;
 
+			crt_swim_disable_all();
+
 			rc = crt_grp_ctx_invalid(ctx, true);
 			if (rc != 0) {
 				D_ERROR("crt_grp_ctx_invalid failed, rc: %d.\n",
@@ -1172,7 +1170,7 @@ crt_grp_priv_destroy(struct crt_grp_priv *grp_priv)
 		d_hash_table_destroy_inplace(&grp_priv->gp_s2p_table, true);
 	}
 
-	D_FREE(grp_priv->gp_psr_phy_addr);
+	D_FREE(grp_priv->gp_psr_uri);
 	D_FREE(grp_priv->gp_pub.cg_grpid);
 
 	D_RWLOCK_DESTROY(&grp_priv->gp_rwlock);
@@ -1907,7 +1905,7 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 	char			*tmp_name = NULL;
 	crt_group_id_t		 grpid;
 	d_rank_t		 rank;
-	crt_phy_addr_t		 addr = NULL;
+	char                    *addr      = NULL;
 	bool			 addr_free = false;
 	bool			 locked = false;
 	d_rank_list_t		*membs = NULL;
@@ -2086,7 +2084,7 @@ crt_grp_config_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank)
 	crt_group_id_t	grpid = NULL, grpname = NULL;
 	char		all_or_self[8] = {'\0'};
 	char		fmt[64] = {'\0'};
-	crt_phy_addr_t	addr_str = NULL;
+	char            *addr_str       = NULL;
 	d_rank_t	rank;
 	int		grp_size;
 	int		rc = 0;
@@ -2312,7 +2310,7 @@ int
 crt_grp_psr_reload(struct crt_grp_priv *grp_priv)
 {
 	d_rank_t	psr_rank;
-	crt_phy_addr_t	uri = NULL;
+	char           *uri = NULL;
 	int		rc = 0;
 
 	psr_rank = grp_priv->gp_psr_rank;
@@ -2619,7 +2617,7 @@ int
 crt_rank_uri_get(crt_group_t *group, d_rank_t rank, int tag, char **uri_str)
 {
 	struct crt_grp_priv	*grp_priv;
-	crt_phy_addr_t		uri;
+	char                    *uri;
 	hg_addr_t		hg_addr;
 	int			rc = 0;
 
@@ -2798,20 +2796,6 @@ out:
 }
 
 int
-crt_group_info_get(crt_group_t *group, d_iov_t *grp_info)
-{
-	D_ERROR("API is currently not supported\n");
-	return -DER_NOSYS;
-}
-
-int
-crt_group_info_set(d_iov_t *grp_info)
-{
-	D_ERROR("API is currently not supported\n");
-	return -DER_NOSYS;
-}
-
-int
 crt_group_ranks_get(crt_group_t *group, d_rank_list_t **list)
 {
 	d_rank_list_t		*membs;
@@ -2829,8 +2813,7 @@ crt_group_ranks_get(crt_group_t *group, d_rank_list_t **list)
 }
 
 int
-crt_group_view_create(crt_group_id_t srv_grpid,
-		      crt_group_t **ret_grp)
+crt_group_view_create(crt_group_id_t srv_grpid, crt_group_t **ret_grp)
 {
 	struct crt_grp_gdata	*grp_gdata;
 	struct crt_grp_priv	*grp_priv = NULL;
@@ -3031,11 +3014,6 @@ out:
 	return rc;
 }
 
-/*
- * TODO: This is a temporary function until switch to non-PMIX
- * mode is complete. At that point this function will be
- * replaced by the generic crt_group_destroy().
- */
 int
 crt_group_secondary_destroy(crt_group_t *grp)
 {
