@@ -159,6 +159,7 @@ int ds_mgmt_tgt_setup(void);
 void ds_mgmt_tgt_cleanup(void);
 void ds_mgmt_hdlr_tgt_create(crt_rpc_t *rpc_req);
 void ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *rpc_req);
+int ds_mgmt_tgt_destroy_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv);
 void ds_mgmt_hdlr_tgt_shard_destroy(crt_rpc_t *rpc_req);
 int ds_mgmt_tgt_create_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				  void *priv);
