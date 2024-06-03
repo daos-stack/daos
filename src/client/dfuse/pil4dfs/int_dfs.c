@@ -1952,6 +1952,14 @@ out_readlink:
 	return (-1);
 }
 
+void inline query_real_dlsym(void)
+{
+	if (real_dlsym == NULL) {
+		real_dlsym = dlsym(RTLD_NEXT, "dlsym");
+		assert(real_dlsym != NULL);
+	}
+}
+
 static int
 open_common(int (*real_open)(const char *pathname, int oflags, ...), const char *caller_name,
 	    const char *pathname, int oflags, ...)
@@ -2496,6 +2504,7 @@ pread(int fd, void *buf, size_t size, off_t offset)
 		return 0;
 
 	if (next_pread == NULL) {
+		query_real_dlsym();
 		next_pread = real_dlsym(RTLD_NEXT, "pread64");
 		D_ASSERT(next_pread != NULL);
 	}
@@ -2649,6 +2658,7 @@ pwrite(int fd, const void *buf, size_t size, off_t offset)
 		return 0;
 
 	if (next_pwrite == NULL) {
+		query_real_dlsym();
 		next_pwrite = real_dlsym(RTLD_NEXT, "pwrite64");
 		D_ASSERT(next_pwrite != NULL);
 	}
@@ -2844,6 +2854,7 @@ readv(int fd, const struct iovec *iov, int iovcnt)
 	ssize_t size_sum;
 
 	if (next_readv == NULL) {
+		query_real_dlsym();
 		next_readv = real_dlsym(RTLD_NEXT, "readv");
 		D_ASSERT(next_readv != NULL);
 	}
@@ -2869,6 +2880,7 @@ writev(int fd, const struct iovec *iov, int iovcnt)
 	ssize_t size_sum;
 
 	if (next_writev == NULL) {
+		query_real_dlsym();
 		next_writev = real_dlsym(RTLD_NEXT, "writev");
 		D_ASSERT(next_writev != NULL);
 	}
@@ -2926,6 +2938,7 @@ fstat(int fd, struct stat *buf)
 	int rc, fd_directed;
 
 	if (next_fstat == NULL) {
+		query_real_dlsym();
 		next_fstat = real_dlsym(RTLD_NEXT, "fstat");
 		D_ASSERT(next_fstat != NULL);
 	}
@@ -3210,6 +3223,7 @@ statx(int dirfd, const char *path, int flags, unsigned int mask, struct statx *s
 	char        *full_path = NULL;
 
 	if (next_statx == NULL) {
+		query_real_dlsym();
 		next_statx = real_dlsym(RTLD_NEXT, "statx");
 		D_ASSERT(next_statx != NULL);
 	}
@@ -3330,6 +3344,7 @@ statfs(const char *pathname, struct statfs *sfs)
 	char              *full_path  = NULL;
 
 	if (next_statfs == NULL) {
+		query_real_dlsym();
 		next_statfs = real_dlsym(RTLD_NEXT, "statfs");
 		D_ASSERT(next_statfs != NULL);
 	}
@@ -3384,6 +3399,7 @@ fstatfs(int fd, struct statfs *sfs)
 	daos_pool_info_t info = {.pi_bits = DPI_SPACE};
 
 	if (next_fstatfs == NULL) {
+		query_real_dlsym();
 		next_fstatfs = real_dlsym(RTLD_NEXT, "fstatfs");
 		D_ASSERT(next_fstatfs != NULL);
 	}
@@ -3436,6 +3452,7 @@ statvfs(const char *pathname, struct statvfs *svfs)
 	char              *full_path  = NULL;
 
 	if (next_statvfs == NULL) {
+		query_real_dlsym();
 		next_statvfs = real_dlsym(RTLD_NEXT, "statvfs");
 		D_ASSERT(next_statvfs != NULL);
 	}
@@ -3502,10 +3519,7 @@ opendir(const char *path)
 	struct ht_fd      *fd_ht_obj   = NULL;
 
 	if (next_opendir == NULL) {
-		if (real_dlsym == NULL) {
-			real_dlsym = dlsym(RTLD_NEXT, "dlsym");
-			assert(real_dlsym != NULL);
-		}
+		query_real_dlsym();
 		next_opendir = real_dlsym(RTLD_NEXT, "opendir");
 		assert(next_opendir != NULL);
 	}
@@ -3627,6 +3641,7 @@ fdopendir(int fd)
 	int fd_directed;
 
 	if (next_fdopendir == NULL) {
+		query_real_dlsym();
 		next_fdopendir = real_dlsym(RTLD_NEXT, "fdopendir");
 		D_ASSERT(next_fdopendir != NULL);
 	}
@@ -3651,6 +3666,7 @@ openat(int dirfd, const char *path, int oflags, ...)
 	char         *full_path = NULL;
 
 	if (next_openat == NULL) {
+		query_real_dlsym();
 		next_openat = real_dlsym(RTLD_NEXT, "openat");
 		D_ASSERT(next_openat != NULL);
 	}
@@ -3729,6 +3745,7 @@ __openat_2(int dirfd, const char *path, int oflags)
 	_Pragma("GCC diagnostic pop")
 
 	if (next_openat_2 == NULL) {
+		query_real_dlsym();
 		next_openat_2 = real_dlsym(RTLD_NEXT, "__openat_2");
 		D_ASSERT(next_openat_2 != NULL);
 	}
@@ -3765,6 +3782,7 @@ closedir(DIR *dirp)
 	int fd;
 
 	if (next_closedir == NULL) {
+		query_real_dlsym();
 		next_closedir = real_dlsym(RTLD_NEXT, "closedir");
 		D_ASSERT(next_closedir != NULL);
 	}
@@ -3809,6 +3827,7 @@ telldir(DIR *dirp)
 	int fd;
 
 	if (next_telldir == NULL) {
+		query_real_dlsym();
 		next_telldir = real_dlsym(RTLD_NEXT, "telldir");
 		D_ASSERT(next_telldir != NULL);
 	}
@@ -3828,6 +3847,7 @@ rewinddir(DIR *dirp)
 	int fd, idx;
 
 	if (next_rewinddir == NULL) {
+		query_real_dlsym();
 		next_rewinddir = real_dlsym(RTLD_NEXT, "rewinddir");
 		D_ASSERT(next_rewinddir != NULL);
 	}
@@ -3857,6 +3877,7 @@ seekdir(DIR *dirp, long loc)
 	uint32_t num_to_read;
 
 	if (next_seekdir == NULL) {
+		query_real_dlsym();
 		next_seekdir = real_dlsym(RTLD_NEXT, "seekdir");
 		D_ASSERT(next_seekdir != NULL);
 	}
@@ -3934,6 +3955,7 @@ scandirat(int dirfd, const char *restrict path, struct dirent ***restrict nameli
 	char *full_path = NULL;
 
 	if (next_scandirat == NULL) {
+		query_real_dlsym();
 		next_scandirat = real_dlsym(RTLD_NEXT, "scandirat");
 		D_ASSERT(next_scandirat != NULL);
 	}
@@ -4347,6 +4369,7 @@ execve(const char *filename, char *const argv[], char *const envp[])
 	int    rc;
 
 	if (next_execve == NULL) {
+		query_real_dlsym();
 		next_execve = real_dlsym(RTLD_NEXT, "execve");
 		D_ASSERT(next_execve != NULL);
 	}
@@ -4377,6 +4400,7 @@ execvpe(const char *filename, char *const argv[], char *const envp[])
 	int    rc;
 
 	if (next_execvpe == NULL) {
+		query_real_dlsym();
 		next_execvpe = real_dlsym(RTLD_NEXT, "execvpe");
 		D_ASSERT(next_execvpe != NULL);
 	}
@@ -4407,6 +4431,7 @@ execv(const char *filename, char *const argv[])
 	int    rc;
 
 	if (next_execv == NULL) {
+		query_real_dlsym();
 		next_execv = real_dlsym(RTLD_NEXT, "execv");
 		D_ASSERT(next_execv != NULL);
 	}
@@ -4428,6 +4453,7 @@ execvp(const char *filename, char *const argv[])
 	int    rc;
 
 	if (next_execvp == NULL) {
+		query_real_dlsym();
 		next_execvp = real_dlsym(RTLD_NEXT, "execvp");
 		D_ASSERT(next_execvp != NULL);
 	}
@@ -4450,6 +4476,7 @@ fexecve(int fd, char *const argv[], char *const envp[])
 	int    rc;
 
 	if (next_fexecve == NULL) {
+		query_real_dlsym();
 		next_fexecve = real_dlsym(RTLD_NEXT, "fexecve");
 		D_ASSERT(next_fexecve != NULL);
 	}
@@ -4480,6 +4507,7 @@ fork(void)
 	pid_t pid;
 
 	if (next_fork == NULL) {
+		query_real_dlsym();
 		next_fork = real_dlsym(RTLD_NEXT, "fork");
 		D_ASSERT(next_fork != NULL);
 	}
@@ -4508,6 +4536,7 @@ mkdir(const char *path, mode_t mode)
 	char              *full_path  = NULL;
 
 	if (next_mkdir == NULL) {
+		query_real_dlsym();
 		next_mkdir = real_dlsym(RTLD_NEXT, "mkdir");
 		D_ASSERT(next_mkdir != NULL);
 	}
@@ -4554,6 +4583,7 @@ mkdirat(int dirfd, const char *path, mode_t mode)
 	char *full_path = NULL;
 
 	if (next_mkdirat == NULL) {
+		query_real_dlsym();
 		next_mkdirat = real_dlsym(RTLD_NEXT, "mkdirat");
 		D_ASSERT(next_mkdirat != NULL);
 	}
@@ -4595,6 +4625,7 @@ rmdir(const char *path)
 	char              *full_path  = NULL;
 
 	if (next_rmdir == NULL) {
+		query_real_dlsym();
 		next_rmdir = real_dlsym(RTLD_NEXT, "rmdir");
 		D_ASSERT(next_rmdir != NULL);
 	}
@@ -4649,6 +4680,7 @@ symlink(const char *symvalue, const char *path)
 	char              *full_path  = NULL;
 
 	if (next_symlink == NULL) {
+		query_real_dlsym();
 		next_symlink = real_dlsym(RTLD_NEXT, "symlink");
 		D_ASSERT(next_symlink != NULL);
 	}
@@ -4696,6 +4728,7 @@ symlinkat(const char *symvalue, int dirfd, const char *path)
 	char *full_path = NULL;
 
 	if (next_symlinkat == NULL) {
+		query_real_dlsym();
 		next_symlinkat = real_dlsym(RTLD_NEXT, "symlinkat");
 		D_ASSERT(next_symlinkat != NULL);
 	}
@@ -4739,6 +4772,7 @@ readlink(const char *path, char *buf, size_t size)
 	char              *full_path  = NULL;
 
 	if (next_readlink == NULL) {
+		query_real_dlsym();
 		next_readlink = real_dlsym(RTLD_NEXT, "readlink");
 		D_ASSERT(next_readlink != NULL);
 	}
@@ -4794,6 +4828,7 @@ readlinkat(int dirfd, const char *path, char *buf, size_t size)
 	char *full_path = NULL;
 
 	if (next_readlinkat == NULL) {
+		query_real_dlsym();
 		next_readlinkat = real_dlsym(RTLD_NEXT, "readlinkat");
 		D_ASSERT(next_readlinkat != NULL);
 	}
@@ -4839,6 +4874,7 @@ rename(const char *old_name, const char *new_name)
 	char              *full_path_new  = NULL;
 
 	if (next_rename == NULL) {
+		query_real_dlsym();
 		next_rename = real_dlsym(RTLD_NEXT, "rename");
 		D_ASSERT(next_rename != NULL);
 	}
@@ -4905,6 +4941,7 @@ char *
 getcwd(char *buf, size_t size)
 {
 	if (next_getcwd == NULL) {
+		query_real_dlsym();
 		next_getcwd = real_dlsym(RTLD_NEXT, "getcwd");
 		D_ASSERT(next_getcwd != NULL);
 	}
@@ -4941,6 +4978,7 @@ isatty(int fd)
 	int fd_directed;
 
 	if (next_isatty == NULL) {
+		query_real_dlsym();
 		next_isatty = real_dlsym(RTLD_NEXT, "isatty");
 		D_ASSERT(next_isatty != NULL);
 	}
@@ -4970,6 +5008,7 @@ access(const char *path, int mode)
 	char              *full_path  = NULL;
 
 	if (next_access == NULL) {
+		query_real_dlsym();
 		next_access = real_dlsym(RTLD_NEXT, "access");
 		D_ASSERT(next_access != NULL);
 	}
@@ -5015,6 +5054,7 @@ faccessat(int dirfd, const char *path, int mode, int flags)
 	char *full_path = NULL;
 
 	if (next_faccessat == NULL) {
+		query_real_dlsym();
 		next_faccessat = real_dlsym(RTLD_NEXT, "faccessat");
 		D_ASSERT(next_faccessat != NULL);
 	}
@@ -5057,6 +5097,7 @@ chdir(const char *path)
 	char              *full_path  = NULL;
 
 	if (next_chdir == NULL) {
+		query_real_dlsym();
 		next_chdir = real_dlsym(RTLD_NEXT, "chdir");
 		D_ASSERT(next_chdir != NULL);
 	}
@@ -5111,6 +5152,7 @@ fchdir(int dirfd)
 	char *pt_end = NULL;
 
 	if (next_fchdir == NULL) {
+		query_real_dlsym();
 		next_fchdir = real_dlsym(RTLD_NEXT, "fchdir");
 		D_ASSERT(next_fchdir != NULL);
 	}
@@ -5123,6 +5165,7 @@ fchdir(int dirfd)
 
 	/* assume dfuse is running. call chdir() to update cwd. */
 	if (next_chdir == NULL) {
+		query_real_dlsym();
 		next_chdir = real_dlsym(RTLD_NEXT, "chdir");
 		D_ASSERT(next_chdir != NULL);
 	}
@@ -5203,6 +5246,7 @@ unlinkat(int dirfd, const char *path, int flags)
 	char              *full_path_dummy = NULL;
 
 	if (next_unlinkat == NULL) {
+		query_real_dlsym();
 		next_unlinkat = real_dlsym(RTLD_NEXT, "unlinkat");
 		D_ASSERT(next_unlinkat != NULL);
 	}
@@ -5274,6 +5318,7 @@ fsync(int fd)
 	int fd_directed;
 
 	if (next_fsync == NULL) {
+		query_real_dlsym();
 		next_fsync = real_dlsym(RTLD_NEXT, "fsync");
 		D_ASSERT(next_fsync != NULL);
 	}
@@ -5299,6 +5344,7 @@ ftruncate(int fd, off_t length)
 	int rc, fd_directed;
 
 	if (next_ftruncate == NULL) {
+		query_real_dlsym();
 		next_ftruncate = real_dlsym(RTLD_NEXT, "ftruncate");
 		D_ASSERT(next_ftruncate != NULL);
 	}
@@ -5338,6 +5384,7 @@ truncate(const char *path, off_t length)
 	char              *full_path  = NULL;
 
 	if (next_truncate == NULL) {
+		query_real_dlsym();
 		next_truncate = real_dlsym(RTLD_NEXT, "truncate");
 		D_ASSERT(next_truncate != NULL);
 	}
@@ -5396,6 +5443,7 @@ chmod_with_flag(const char *path, mode_t mode, int flag)
 	char              *full_path  = NULL;
 
 	if (next_chmod == NULL) {
+		query_real_dlsym();
 		next_chmod = real_dlsym(RTLD_NEXT, "chmod");
 		D_ASSERT(next_chmod != NULL);
 	}
@@ -5443,6 +5491,7 @@ int
 chmod(const char *path, mode_t mode)
 {
 	if (next_chmod == NULL) {
+		query_real_dlsym();
 		next_chmod = real_dlsym(RTLD_NEXT, "chmod");
 		D_ASSERT(next_chmod != NULL);
 	}
@@ -5459,6 +5508,7 @@ fchmod(int fd, mode_t mode)
 	int rc, fd_directed;
 
 	if (next_fchmod == NULL) {
+		query_real_dlsym();
 		next_fchmod = real_dlsym(RTLD_NEXT, "fchmod");
 		D_ASSERT(next_fchmod != NULL);
 	}
@@ -5492,6 +5542,7 @@ fchmodat(int dirfd, const char *path, mode_t mode, int flag)
 	char *full_path = NULL;
 
 	if (next_fchmodat == NULL) {
+		query_real_dlsym();
 		next_fchmodat = real_dlsym(RTLD_NEXT, "fchmodat");
 		D_ASSERT(next_fchmodat != NULL);
 	}
@@ -5538,6 +5589,7 @@ utime(const char *path, const struct utimbuf *times)
 	char              *full_path  = NULL;
 
 	if (next_utime == NULL) {
+		query_real_dlsym();
 		next_utime = real_dlsym(RTLD_NEXT, "utime");
 		D_ASSERT(next_utime != NULL);
 	}
@@ -5617,6 +5669,7 @@ utimes(const char *path, const struct timeval times[2])
 	char              *full_path  = NULL;
 
 	if (next_utimes == NULL) {
+		query_real_dlsym();
 		next_utimes = real_dlsym(RTLD_NEXT, "utimes");
 		D_ASSERT(next_utimes != NULL);
 	}
@@ -5703,6 +5756,7 @@ utimens_timespec(const char *path, const struct timespec times[2], int flags)
 		D_GOTO(out_err, rc);
 	if (!is_target_path) {
 		if (next_utimes == NULL) {
+			query_real_dlsym();
 			next_utimes = real_dlsym(RTLD_NEXT, "utimes");
 			D_ASSERT(next_utimes != NULL);
 		}
@@ -5768,6 +5822,7 @@ utimensat(int dirfd, const char *path, const struct timespec times[2], int flags
 	char *full_path = NULL;
 
 	if (next_utimensat == NULL) {
+		query_real_dlsym();
 		next_utimensat = real_dlsym(RTLD_NEXT, "utimensat");
 		D_ASSERT(next_utimensat != NULL);
 	}
@@ -5817,6 +5872,7 @@ futimens(int fd, const struct timespec times[2])
 	struct stat     stbuf;
 
 	if (next_futimens == NULL) {
+		query_real_dlsym();
 		next_futimens = real_dlsym(RTLD_NEXT, "futimens");
 		D_ASSERT(next_futimens != NULL);
 	}
@@ -5963,6 +6019,7 @@ ioctl(int fd, unsigned long request, ...)
 	va_end(arg);
 
 	if (next_ioctl == NULL) {
+		query_real_dlsym();
 		next_ioctl = real_dlsym(RTLD_NEXT, "ioctl");
 		D_ASSERT(next_ioctl != NULL);
 	}
@@ -5996,6 +6053,7 @@ dup(int oldfd)
 	int fd_directed;
 
 	if (next_dup == NULL) {
+		query_real_dlsym();
 		next_dup = real_dlsym(RTLD_NEXT, "dup");
 		D_ASSERT(next_dup != NULL);
 	}
@@ -6016,6 +6074,7 @@ dup2(int oldfd, int newfd)
 
 	/* Need more work later. */
 	if (next_dup2 == NULL) {
+		query_real_dlsym();
 		next_dup2 = real_dlsym(RTLD_NEXT, "dup2");
 		D_ASSERT(next_dup2 != NULL);
 	}
@@ -6306,6 +6365,7 @@ posix_fadvise(int fd, off_t offset, off_t len, int advice)
 	int fd_directed;
 
 	if (next_posix_fadvise == NULL) {
+		query_real_dlsym();
 		next_posix_fadvise = real_dlsym(RTLD_NEXT, "posix_fadvise");
 		D_ASSERT(next_posix_fadvise != NULL);
 	}
@@ -6339,6 +6399,7 @@ flock(int fd, int operation)
 	int fd_directed;
 
 	if (next_flock == NULL) {
+		query_real_dlsym();
 		next_flock = real_dlsym(RTLD_NEXT, "flock");
 		D_ASSERT(next_flock != NULL);
 	}
@@ -6364,6 +6425,7 @@ fallocate(int fd, int mode, off_t offset, off_t len)
 	int fd_directed;
 
 	if (next_fallocate == NULL) {
+		query_real_dlsym();
 		next_fallocate = real_dlsym(RTLD_NEXT, "fallocate");
 		D_ASSERT(next_fallocate != NULL);
 	}
@@ -6388,6 +6450,7 @@ posix_fallocate(int fd, off_t offset, off_t len)
 	int fd_directed;
 
 	if (next_posix_fallocate == NULL) {
+		query_real_dlsym();
 		next_posix_fallocate = real_dlsym(RTLD_NEXT, "posix_fallocate");
 		D_ASSERT(next_posix_fallocate != NULL);
 	}
@@ -6412,6 +6475,7 @@ posix_fallocate64(int fd, off64_t offset, off64_t len)
 	int fd_directed;
 
 	if (next_posix_fallocate64 == NULL) {
+		query_real_dlsym();
 		next_posix_fallocate64 = real_dlsym(RTLD_NEXT, "posix_fallocate64");
 		D_ASSERT(next_posix_fallocate64 != NULL);
 	}
@@ -6436,6 +6500,7 @@ tcgetattr(int fd, void *termios_p)
 	int fd_directed;
 
 	if (next_tcgetattr == NULL) {
+		query_real_dlsym();
 		next_tcgetattr = real_dlsym(RTLD_NEXT, "tcgetattr");
 		D_ASSERT(next_tcgetattr != NULL);
 	}
@@ -6660,10 +6725,6 @@ init_myhook(void)
 	int      rc;
 	uint64_t eq_count_loc = 0;
 
-	if (real_dlsym == NULL) {
-		real_dlsym = dlsym(RTLD_NEXT, "dlsym");
-		assert(real_dlsym != NULL);
-	}
 
 	umask_old = umask(0);
 	umask(umask_old);
@@ -7097,6 +7158,7 @@ void __attribute__ ((__noreturn__))
 _exit(int rc)
 {
 	if (next__exit == NULL) {
+		query_real_dlsym();
 		next__exit = real_dlsym(RTLD_NEXT, "_exit");
 		D_ASSERT(next__exit != NULL);
 	}
