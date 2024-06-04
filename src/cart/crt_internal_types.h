@@ -239,7 +239,8 @@ struct crt_envs_t {
 #undef ENV_STR_NO_PRINT
 
 extern struct crt_envs_t g_envs;
-static inline void crt_env_fini(void);
+static inline void
+crt_env_fini(void);
 
 static inline void
 crt_env_init(void)
@@ -292,7 +293,7 @@ crt_env_fini(void)
 
 /* Returns value if env was present at load time */
 #define crt_env_get(name, val)                                                                     \
-	D_ASSERT(g_envs.inited);                                                                     \
+	D_ASSERT(g_envs.inited);                                                                   \
 	if (g_envs._rc_##name == 0)                                                                \
 		*val = g_envs._##name;
 
