@@ -53,6 +53,9 @@ crt_lib_init(void)
 	crt_gdata.cg_rpcid = start_rpcid;
 	crt_gdata.cg_num_cores = sysconf(_SC_NPROCESSORS_ONLN);
 	crt_gdata.cg_iv_inline_limit = 19456; /* 19KB */
+
+	/* envs not inited until crt_init() time */
+	memset(&g_envs, 0x0, sizeof(struct crt_envs_t));
 }
 
 /* Library deinit */
@@ -560,7 +563,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 	crt_setup_log_fac();
 
-	D_INFO("libcart version %s initializing\n", CART_VERSION);
+	D_INFO("libcart (%s) v%s initializing\n", server ? "server" : "client", CART_VERSION);
 	crt_env_init();
 
 	if (opt)

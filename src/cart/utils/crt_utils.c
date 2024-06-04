@@ -652,9 +652,6 @@ crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 	if (opts.assert_on_error)
 		D_ASSERTF(opts.is_initialized == true, "crtu_test_init not called.\n");
 
-	crt_env_get(CRT_L_RANK, &my_rank);
-	D_ASSERTF(rc == DER_SUCCESS, "Rank can not be retrieve: " DF_RC "\n", DP_RC(rc));
-
 	rc = d_log_init();
 	if (rc != 0)
 		D_GOTO(out, rc);
@@ -669,6 +666,12 @@ crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 
 	if (rc != 0)
 		D_GOTO(out, rc);
+
+	crt_env_get(CRT_L_RANK, &my_rank);
+	if (my_rank == CRT_NO_RANK) {
+		D_ERROR("CRT_L_RANK environment variable should have been set by crt_launch\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
 
 	*grp = crt_group_lookup(NULL);
 	if (!(*grp)) {

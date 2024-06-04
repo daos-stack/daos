@@ -231,6 +231,7 @@ struct crt_event_cb_priv {
 
 struct crt_envs_t {
 	CRT_ENV_LIST;
+	bool inited;
 };
 
 #undef ENV
@@ -238,11 +239,15 @@ struct crt_envs_t {
 #undef ENV_STR_NO_PRINT
 
 extern struct crt_envs_t g_envs;
+static inline void crt_env_fini(void);
 
 static inline void
 crt_env_init(void)
 {
-	memset(&g_envs, 0x0, sizeof(struct crt_envs_t));
+	/* release strings if already inited previously */
+	if (g_envs.inited)
+		crt_env_fini();
+
 #define ENV(x)                                                                                     \
 	do {                                                                                       \
 		g_envs._rc_##x       = d_getenv_uint(#x, &g_envs._##x);                            \
@@ -265,6 +270,8 @@ crt_env_init(void)
 #undef ENV
 #undef ENV_STR
 #undef ENV_STR_NO_PRINT
+
+	g_envs.inited = true;
 }
 
 static inline void
@@ -279,10 +286,13 @@ crt_env_fini(void)
 #undef ENV
 #undef ENV_STR
 #undef ENV_STR_NO_PRINT
+
+	g_envs.inited = false;
 }
 
 /* Returns value if env was present at load time */
 #define crt_env_get(name, val)                                                                     \
+	D_ASSERT(g_envs.inited);                                                                     \
 	if (g_envs._rc_##name == 0)                                                                \
 		*val = g_envs._##name;
 
