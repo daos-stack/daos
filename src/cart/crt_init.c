@@ -519,23 +519,23 @@ crt_protocol_info_free(struct crt_protocol_info *protocol_info)
 int
 crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 {
-	char          *provider;
-	char          *provider_env = NULL;
-	char          *interface;
-	char          *interface_env = NULL;
-	char          *domain;
-	char          *domain_env = NULL;
-	char          *auth_key;
-	char          *auth_key_env = NULL;
-	char          *path;
 	bool           server        = flags & CRT_FLAG_BIT_SERVER;
 	int            rc            = 0;
-	char          *provider_str0 = NULL;
-	char          *provider_str1 = NULL;
 	crt_provider_t primary_provider;
 	crt_provider_t secondary_provider;
 	crt_provider_t tmp_prov;
-	char          *port;
+	char          *provider         = NULL;
+	char          *provider_env     = NULL;
+	char          *interface        = NULL;
+	char          *interface_env    = NULL;
+	char          *domain           = NULL;
+	char          *domain_env       = NULL;
+	char          *auth_key         = NULL;
+	char          *auth_key_env     = NULL;
+	char          *path             = NULL;
+	char          *provider_str0    = NULL;
+	char          *provider_str1    = NULL;
+	char          *port             = NULL;
 	char          *port_env         = NULL;
 	char          *port0            = NULL;
 	char          *port1            = NULL;

@@ -242,6 +242,7 @@ extern struct crt_envs_t g_envs;
 static inline void
 crt_env_init(void)
 {
+	memset(&g_envs, 0x0, sizeof(struct crt_envs_t));
 #define ENV(x)                                                                                     \
 	do {                                                                                       \
 		g_envs._rc_##x       = d_getenv_uint(#x, &g_envs._##x);                            \
