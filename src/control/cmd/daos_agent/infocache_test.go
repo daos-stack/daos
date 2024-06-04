@@ -287,15 +287,13 @@ func TestAgent_cachedAttachInfo_Refresh(t *testing.T) {
 }
 
 func TestAgent_newCachedFabricInfo(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
-
-	cfi := newCachedFabricInfo(log, func(ctx context.Context, providers ...string) (*NUMAFabric, error) {
+	cfi := newCachedFabricInfo(func(ctx context.Context, providers ...string) (*NUMAFabric, error) {
 		return nil, nil
-	})
+	}, "one", "two")
 
 	test.AssertEqual(t, time.Duration(0), cfi.refreshInterval, "")
 	test.AssertEqual(t, time.Time{}, cfi.lastCached, "")
+	test.AssertEqual(t, []string{"one", "two"}, cfi.providers, "")
 	if cfi.lastResults != nil {
 		t.Fatalf("expected nothing cached, found:\n%+v", cfi.lastResults)
 	}
@@ -310,7 +308,7 @@ func TestAgent_cachedFabricInfo_Key(t *testing.T) {
 	}{
 		"nil": {},
 		"normal": {
-			cfi: newCachedFabricInfo(nil, nil),
+			cfi: newCachedFabricInfo(nil),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -337,12 +335,9 @@ func TestAgent_cachedFabricInfo_NeedsRefresh(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer test.ShowBufferOnFailure(t, buf)
-
 			var cfi *cachedFabricInfo
 			if !tc.nilCache {
-				cfi = newCachedFabricInfo(log, nil)
+				cfi = newCachedFabricInfo(nil)
 				cfi.cacheItem.lastCached = tc.cacheTime
 			}
 
@@ -352,12 +347,12 @@ func TestAgent_cachedFabricInfo_NeedsRefresh(t *testing.T) {
 }
 
 func TestAgent_cachedFabricInfo_Refresh(t *testing.T) {
-	scan1 := map[int][]*FabricInterface{
+	scan1 := NUMAFabricMap{
 		2: {
 			{Name: "two"},
 		},
 	}
-	scan2 := map[int][]*FabricInterface{
+	scan2 := NUMAFabricMap{
 		1: {
 			{Name: "one"},
 		},
@@ -369,11 +364,11 @@ func TestAgent_cachedFabricInfo_Refresh(t *testing.T) {
 	for name, tc := range map[string]struct {
 		nilCache      bool
 		disabled      bool
-		fabricResult  map[int][]*FabricInterface
+		fabricResult  NUMAFabricMap
 		fabricErr     error
-		alreadyCached map[int][]*FabricInterface
+		alreadyCached NUMAFabricMap
 		expErr        error
-		expCached     map[int][]*FabricInterface
+		expCached     NUMAFabricMap
 	}{
 		"nil": {
 			nilCache: true,
@@ -394,12 +389,9 @@ func TestAgent_cachedFabricInfo_Refresh(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer test.ShowBufferOnFailure(t, buf)
-
 			var cfi *cachedFabricInfo
 			if !tc.nilCache {
-				cfi = newCachedFabricInfo(log, nil)
+				cfi = newCachedFabricInfo(nil)
 				cfi.fetch = func(_ context.Context, _ ...string) (*NUMAFabric, error) {
 					if tc.fabricResult != nil {
 						return &NUMAFabric{
@@ -1165,6 +1157,94 @@ func TestAgent_InfoCache_GetFabricDevice(t *testing.T) {
 	}
 }
 
+func TestAgent_InfoCache_GetNUMAFabricMap(t *testing.T) {
+	testMap := NUMAFabricMap{
+		0: {
+			{
+				Name:        "t1",
+				Domain:      "t1",
+				NetDevClass: hardware.Infiniband,
+				hw: &hardware.FabricInterface{
+					Providers: hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "p1"}),
+				},
+			},
+			{
+				Name:        "t2",
+				Domain:      "t2",
+				NetDevClass: hardware.Infiniband,
+				hw: &hardware.FabricInterface{
+					Providers: hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "p1"}),
+				},
+			},
+			{
+				Name:        "t2",
+				Domain:      "d2",
+				NetDevClass: hardware.Infiniband,
+				hw: &hardware.FabricInterface{
+					Providers: hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "p1"}),
+				},
+			},
+		},
+	}
+
+	for name, tc := range map[string]struct {
+		getInfoCache func(logging.Logger) *InfoCache
+		expErr       error
+		expResult    NUMAFabricMap
+		expFunc      bool
+	}{
+		"nil": {
+			expErr: errors.New("nil"),
+		},
+		"fabric scan failed": {
+			getInfoCache: func(l logging.Logger) *InfoCache {
+				return newTestInfoCache(t, l, testInfoCacheParams{
+					mockScanFabric: func(_ context.Context, _ ...string) (*NUMAFabric, error) {
+						return nil, errors.New("mock fabric scan")
+					},
+				})
+			},
+			expErr: errors.New("mock fabric scan"),
+		},
+		"success": {
+			getInfoCache: func(l logging.Logger) *InfoCache {
+				return newTestInfoCache(t, l, testInfoCacheParams{
+					mockScanFabric: func(_ context.Context, _ ...string) (*NUMAFabric, error) {
+						return &NUMAFabric{
+							log:     l,
+							numaMap: testMap,
+						}, nil
+					},
+				})
+			},
+			expResult: testMap,
+			expFunc:   true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			var ic *InfoCache
+			if tc.getInfoCache != nil {
+				ic = tc.getInfoCache(log)
+			}
+
+			result, release, err := ic.GetNUMAFabricMap(test.Context(t), hardware.Ether, "ofi+tcp")
+			if release != nil {
+				defer release()
+			}
+
+			test.CmpErr(t, tc.expErr, err)
+			if diff := cmp.Diff(tc.expResult, result, fiCmpOpt); diff != "" {
+				t.Fatalf("-want, +got:\n%s", diff)
+			}
+
+			test.AssertEqual(t, tc.expFunc, release != nil, "expected release function")
+		})
+	}
+}
+
 func TestAgent_InfoCache_Refresh(t *testing.T) {
 	ctlResp := &control.GetAttachInfoResp{
 		System:       "dontcare",
@@ -1216,7 +1296,7 @@ func TestAgent_InfoCache_Refresh(t *testing.T) {
 							func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
 								return ctlResp, nil
 							}),
-						newCachedFabricInfo(l,
+						newCachedFabricInfo(
 							func(_ context.Context, _ ...string) (*NUMAFabric, error) {
 								return NUMAFabricFromScan(test.Context(t), l, testSet), nil
 							}),
@@ -1235,7 +1315,7 @@ func TestAgent_InfoCache_Refresh(t *testing.T) {
 							func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
 								return ctlResp, nil
 							}),
-						newCachedFabricInfo(l,
+						newCachedFabricInfo(
 							func(_ context.Context, _ ...string) (*NUMAFabric, error) {
 								return nil, errors.New("shouldn't call fabric")
 							}),
@@ -1253,7 +1333,7 @@ func TestAgent_InfoCache_Refresh(t *testing.T) {
 							func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
 								return nil, errors.New("shouldn't call GetAttachInfo")
 							}),
-						newCachedFabricInfo(l,
+						newCachedFabricInfo(
 							func(_ context.Context, _ ...string) (*NUMAFabric, error) {
 								return NUMAFabricFromScan(test.Context(t), l, testSet), nil
 							}),

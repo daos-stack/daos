@@ -68,7 +68,14 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 			NetInterfaces: common.NewStringSet("test1"),
 			DeviceClass:   hardware.Ether,
 			NUMANode:      1,
-			Providers:     hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "ofi+tcp"}),
+			Providers:     hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "ofi+tcp"}, &hardware.FabricProvider{Name: "ucx+tcp"}),
+		},
+		&hardware.FabricInterface{
+			Name:          "dev2",
+			NetInterfaces: common.NewStringSet("test2"),
+			DeviceClass:   hardware.Infiniband,
+			NUMANode:      1,
+			Providers:     hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "ofi+verbs"}),
 		})
 
 	testFabric := NUMAFabricFromScan(test.Context(t), logging.NewCommandLineLogger(), testFIS)
@@ -83,7 +90,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		return bytes
 	}
 
-	respWith := func(in *control.GetAttachInfoResp, iface, domain string) *mgmtpb.GetAttachInfoResp {
+	respWith := func(in *control.GetAttachInfoResp, iface, domain string, numaMap map[uint32]*mgmtpb.FabricInterfaces) *mgmtpb.GetAttachInfoResp {
 		t.Helper()
 		out := new(mgmtpb.GetAttachInfoResp)
 		if err := convert.Types(in, out); err != nil {
@@ -91,6 +98,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		}
 		out.ClientNetHint.Interface = iface
 		out.ClientNetHint.Domain = domain
+		out.NumaFabricInterfaces = numaMap
 		return out
 	}
 
@@ -140,11 +148,49 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		},
 		"success": {
 			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{Sys: testSys}),
-			expResp:  respWith(testResp, "test1", "dev1"),
+			expResp: respWith(testResp, "test1", "dev1", map[uint32]*mgmtpb.FabricInterfaces{
+				0: {
+					Ifaces: []*mgmtpb.FabricInterface{
+						{
+							Interface: "test0",
+							Provider:  "ofi+tcp",
+						},
+					},
+				},
+				1: {
+					Ifaces: []*mgmtpb.FabricInterface{
+						{
+							NumaNode:  1,
+							Interface: "test1",
+							Domain:    "dev1",
+							Provider:  "ofi+tcp",
+						},
+					},
+				},
+			}),
 		},
 		"no sys succeeds": {
 			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{}),
-			expResp:  respWith(testResp, "test1", "dev1"),
+			expResp: respWith(testResp, "test1", "dev1", map[uint32]*mgmtpb.FabricInterfaces{
+				0: {
+					Ifaces: []*mgmtpb.FabricInterface{
+						{
+							Interface: "test0",
+							Provider:  "ofi+tcp",
+						},
+					},
+				},
+				1: {
+					Ifaces: []*mgmtpb.FabricInterface{
+						{
+							NumaNode:  1,
+							Interface: "test1",
+							Domain:    "dev1",
+							Provider:  "ofi+tcp",
+						},
+					},
+				},
+			}),
 		},
 		"incompatible error": {
 			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{}),
@@ -231,6 +277,8 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 				mgmtpb.GetAttachInfoResp{},
 				mgmtpb.GetAttachInfoResp_RankUri{},
 				mgmtpb.ClientNetHint{},
+				mgmtpb.FabricInterface{},
+				mgmtpb.FabricInterfaces{},
 			)); diff != "" {
 				t.Fatalf("want-, got+:\n%s", diff)
 			}

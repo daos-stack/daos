@@ -91,6 +91,17 @@ message ClientNetHint {
 	uint32 provider_idx = 9;	// Provider index - anything > 0 is a secondary provider
 }
 
+message FabricInterface {
+	uint32 numa_node = 1;
+	string interface = 2;
+	string domain = 3;
+	string provider = 4;
+}
+
+message FabricInterfaces {
+	repeated FabricInterface ifaces = 1;
+}
+
 message GetAttachInfoResp {
 	int32 status = 1;		// DAOS error code
 	message RankUri {
@@ -108,6 +119,7 @@ message GetAttachInfoResp {
 	string sys = 6;			// Name of the DAOS system
 	repeated RankUri secondary_rank_uris = 7; // Rank URIs for additional providers
 	repeated ClientNetHint secondary_client_net_hints = 8; // Hints for additional providers
+	map<uint32,FabricInterfaces> numa_fabric_interfaces = 9; // Usable fabric interfaces by NUMA node (populated by agent)
 }
 
 message PrepShutdownReq {

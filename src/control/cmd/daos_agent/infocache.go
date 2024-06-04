@@ -158,12 +158,14 @@ func (ci *cachedAttachInfo) Refresh(ctx context.Context) error {
 type cachedFabricInfo struct {
 	cacheItem
 	fetch       fabricScanFn
+	providers   []string
 	lastResults *NUMAFabric
 }
 
-func newCachedFabricInfo(log logging.Logger, fetchFn fabricScanFn) *cachedFabricInfo {
+func newCachedFabricInfo(fetchFn fabricScanFn, providers ...string) *cachedFabricInfo {
 	return &cachedFabricInfo{
-		fetch: fetchFn,
+		fetch:     fetchFn,
+		providers: providers,
 	}
 }
 
@@ -441,7 +443,7 @@ func (c *InfoCache) getNUMAFabric(ctx context.Context, netDevClass hardware.NetD
 		if err := c.waitFabricReady(ctx, netDevClass); err != nil {
 			return nil, err
 		}
-		return newCachedFabricInfo(c.log, c.fabricScan), nil
+		return newCachedFabricInfo(c.fabricScan, providers...), nil
 	}
 
 	item, release, err := c.cache.GetOrCreate(ctx, fabricKey, createItem)
@@ -456,6 +458,19 @@ func (c *InfoCache) getNUMAFabric(ctx context.Context, netDevClass hardware.NetD
 	}
 
 	return cfi.lastResults, nil
+}
+
+// GetNUMAFabricMap gets all of the fabric interfaces with a given provider, mapped by NUMA nodes.
+// The data is read-locked, and must be released by the returned closure.
+func (c *InfoCache) GetNUMAFabricMap(ctx context.Context, devClass hardware.NetDevClass, provider string) (NUMAFabricMap, func(), error) {
+	if c == nil {
+		return nil, nil, errors.New("InfoCache is nil")
+	}
+	nf, err := c.getNUMAFabric(ctx, devClass, provider)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "getting the NUMA fabric")
+	}
+	return nf.RLockedMap()
 }
 
 func (c *InfoCache) waitFabricReady(ctx context.Context, netDevClass hardware.NetDevClass) error {
