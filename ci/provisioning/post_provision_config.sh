@@ -19,8 +19,7 @@ source ci/provisioning/post_provision_config_common_functions.sh
 # shellcheck disable=SC1091
 source ci/junit.sh
 
-
-: "${MLNX_VER_NUM:=24.04-0.6.6.0}"
+: "${MLNX_VER_NUM:=latest-5.8}"
 
 : "${DISTRO:=EL_7}"
 DSL_REPO_var="DAOS_STACK_${DISTRO}_LOCAL_REPO"
