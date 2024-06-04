@@ -67,8 +67,8 @@ largefilecount:
     - HDF5-VOL
     - DFS
   object_class:
-    - [SX, EC_16P2GX]
-    - [S1, EC_16P2G1]
+    - [SX, EC_2P1GX]
+    - [S1, EC_2P1G1]
 ior:
   client_processes:
     ppn: 30
