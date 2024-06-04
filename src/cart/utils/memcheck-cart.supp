@@ -581,5 +581,4 @@
    fun:runtime.asmcgocall.abi0
    ...
    fun:racecall
-   fun:runtime.systemstack.abi0
 }
