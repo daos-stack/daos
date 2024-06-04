@@ -576,7 +576,9 @@ recreate_pooltgts()
 				DP_UUID(pool_info->spi_id), DP_RC(rc));
 			goto out;
 		}
-		rc = tgt_recreate(pool_info->spi_id, pool_info->spi_blob_sz[SMD_DEV_TYPE_META],
+
+		D_ASSERT(pool_info->spi_scm_sz > 0);
+		rc = tgt_recreate(pool_info->spi_id, pool_info->spi_scm_sz,
 				  pool_info->spi_tgt_cnt[SMD_DEV_TYPE_META], rdb_blob_sz);
 		if (rc)
 			goto out;

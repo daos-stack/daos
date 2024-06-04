@@ -780,10 +780,10 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 	}
 
 	D_DEBUG(DB_MGMT, "Create BIO meta context for xs:%p pool:"DF_UUID" "
-		"meta_sz: %zu, nvme_sz: %zu wal_sz:%zu\n",
-		xs_ctxt, DP_UUID(pool_id), meta_sz, nvme_sz, wal_sz);
+		"scm_sz: %zu meta_sz: %zu, nvme_sz: %zu wal_sz:%zu\n",
+		xs_ctxt, DP_UUID(pool_id), scm_sz, meta_sz, nvme_sz, wal_sz);
 
-	rc = bio_mc_create(xs_ctxt, pool_id, meta_sz, wal_sz, nvme_sz, mc_flags);
+	rc = bio_mc_create(xs_ctxt, pool_id, scm_sz, meta_sz, wal_sz, nvme_sz, mc_flags);
 	if (rc != 0) {
 		D_ERROR("Failed to create BIO meta context for xs:%p pool:"DF_UUID". "DF_RC"\n",
 			xs_ctxt, DP_UUID(pool_id), DP_RC(rc));

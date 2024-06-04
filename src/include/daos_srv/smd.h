@@ -56,6 +56,7 @@ struct smd_dev_info {
 struct smd_pool_info {
 	d_list_t	 spi_link;
 	uuid_t		 spi_id;
+	uint64_t	 spi_scm_sz;
 	uint64_t	 spi_blob_sz[SMD_DEV_TYPE_MAX];
 	uint16_t	 spi_flags[SMD_DEV_TYPE_MAX];
 	uint16_t	 spi_tgt_cnt[SMD_DEV_TYPE_MAX];
@@ -169,12 +170,13 @@ int smd_dev_replace(uuid_t old_id, uuid_t new_id, unsigned int old_roles);
  * \param [IN]	tgt_id		Target ID
  * \param [IN]	blob_id		Blob ID
  * \param [IN]	smd_type	SMD type
- * \param [IN]	blob_sz		Blob size
+ * \param [IN]	blob_sz		Blob size in bytes
+ * \param [IN]	scm_sz		VOS file size in bytes
  *
  * \return			Zero on success, negative value on error
  */
 int smd_pool_add_tgt(uuid_t pool_id, uint32_t tgt_id, uint64_t blob_id,
-		     enum smd_dev_type smd_type, uint64_t blob_sz);
+		     enum smd_dev_type smd_type, uint64_t blob_sz, uint64_t scm_sz);
 
 /* Assign a blob to a RDB pool target */
 int smd_rdb_add_tgt(uuid_t pool_id, uint32_t tgt_id, uint64_t blob_id,

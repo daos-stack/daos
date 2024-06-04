@@ -21,7 +21,7 @@
 #include <daos/sys_db.h>
 
 #define SMD_STORAGE_PATH	"/mnt/daos"
-#define DB_LIST_NR		(SMD_DEV_TYPE_MAX * 2 + 1)
+#define DB_LIST_NR		(SMD_DEV_TYPE_MAX * 2 + 2)
 
 struct ut_db {
 	struct sys_db	ud_db;
@@ -46,11 +46,14 @@ db_name2list(struct sys_db *db, char *name)
 
 	if (!strcmp(name, TABLE_DEV))
 		return &ud->ud_lists[0];
+	if (!strcmp(name, TABLE_POOLS_EX[SMD_DEV_TYPE_META]))
+		return &ud->ud_lists[1];
+
 	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
 		if (!strcmp(name, TABLE_TGTS[st]))
-			return &ud->ud_lists[st + 1];
+			return &ud->ud_lists[st + 2];
 		if (!strcmp(name, TABLE_POOLS[st]))
-			return &ud->ud_lists[st + SMD_DEV_TYPE_MAX + 1];
+			return &ud->ud_lists[st + SMD_DEV_TYPE_MAX + 2];
 	}
 	D_ASSERT(0);
 	return NULL;
@@ -325,12 +328,13 @@ ut_device(void **state)
 }
 
 static void
-verify_pool(struct smd_pool_info *pool_info, uuid_t id, int shift)
+verify_pool(struct smd_pool_info *pool_info, uuid_t id, int shift, uint64_t scm_sz)
 {
 	enum smd_dev_type	st;
 	int			i, j;
 
 	assert_int_equal(uuid_compare(pool_info->spi_id, id), 0);
+	assert_int_equal(pool_info->spi_scm_sz, scm_sz);
 	assert_int_equal(pool_info->spi_tgt_cnt[SMD_DEV_TYPE_DATA], 4);
 	assert_int_equal(pool_info->spi_tgt_cnt[SMD_DEV_TYPE_META], 1);
 	assert_int_equal(pool_info->spi_tgt_cnt[SMD_DEV_TYPE_WAL], 1);
@@ -359,35 +363,42 @@ ut_pool(void **state)
 
 	for (i = 0; i < 6; i++) {
 		st = (i < 4) ? SMD_DEV_TYPE_DATA : SMD_DEV_TYPE_DATA + i - 3;
-		rc = smd_pool_add_tgt(id1, i, i << 10, st, 100);
+		rc = smd_pool_add_tgt(id1, i, i << 10, st, 100, 0);
 		assert_rc_equal(rc, 0);
 
-		rc = smd_pool_add_tgt(id2, i, i << 20, st, 200);
+		if (st == SMD_DEV_TYPE_META)
+			rc = smd_pool_add_tgt(id2, i, i << 20, st, 200, 50);
+		else
+			rc = smd_pool_add_tgt(id2, i, i << 20, st, 200, 0);
 		assert_rc_equal(rc, 0);
 	}
 
-	rc = smd_pool_add_tgt(id1, 0, 5000, SMD_DEV_TYPE_DATA, 100);
+	rc = smd_pool_add_tgt(id1, 0, 5000, SMD_DEV_TYPE_DATA, 100, 0);
 	assert_rc_equal(rc, -DER_EXIST);
 
-	rc = smd_pool_add_tgt(id1, 4, 4 << 10, SMD_DEV_TYPE_DATA, 200);
+	rc = smd_pool_add_tgt(id1, 4, 4 << 10, SMD_DEV_TYPE_DATA, 200, 0);
 	assert_rc_equal(rc, -DER_INVAL);
 
-	rc = smd_pool_add_tgt(id1, 4, 5000, SMD_DEV_TYPE_META, 100);
+	rc = smd_pool_add_tgt(id1, 4, 5000, SMD_DEV_TYPE_META, 100, 0);
 	assert_rc_equal(rc, -DER_EXIST);
 
-	rc = smd_pool_add_tgt(id1, 0, 4 << 10, SMD_DEV_TYPE_META, 200);
+	rc = smd_pool_add_tgt(id1, 0, 4 << 10, SMD_DEV_TYPE_META, 200, 0);
 	assert_rc_equal(rc, -DER_INVAL);
 
-	rc = smd_pool_add_tgt(id1, 5, 5000, SMD_DEV_TYPE_WAL, 100);
+	rc = smd_pool_add_tgt(id1, 5, 5000, SMD_DEV_TYPE_WAL, 100, 0);
 	assert_rc_equal(rc, -DER_EXIST);
 
-	rc = smd_pool_add_tgt(id1, 0, 4 << 10, SMD_DEV_TYPE_WAL, 200);
+	rc = smd_pool_add_tgt(id1, 0, 4 << 10, SMD_DEV_TYPE_WAL, 200, 0);
 	assert_rc_equal(rc, -DER_INVAL);
 
 	rc = smd_pool_get_info(id1, &pool_info);
 	assert_rc_equal(rc, 0);
-	verify_pool(pool_info, id1, 10);
+	verify_pool(pool_info, id1, 10, 100);
+	smd_pool_free_info(pool_info);
 
+	rc = smd_pool_get_info(id2, &pool_info);
+	assert_rc_equal(rc, 0);
+	verify_pool(pool_info, id2, 20, 50);
 	smd_pool_free_info(pool_info);
 
 	rc = smd_pool_get_info(id3, &pool_info);
@@ -416,9 +427,9 @@ ut_pool(void **state)
 
 	d_list_for_each_entry_safe(pool_info, tmp, &pool_list, spi_link) {
 		if (uuid_compare(pool_info->spi_id, id1) == 0)
-			verify_pool(pool_info, id1, 10);
+			verify_pool(pool_info, id1, 10, 100);
 		else if (uuid_compare(pool_info->spi_id, id2) == 0)
-			verify_pool(pool_info, id2, 20);
+			verify_pool(pool_info, id2, 20, 50);
 		else
 			assert_true(false);
 
