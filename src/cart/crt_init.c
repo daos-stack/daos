@@ -13,7 +13,7 @@
 #include "crt_internal.h"
 
 struct crt_gdata	crt_gdata;
-struct crt_envs_t	g_envs;
+struct crt_envs_t       g_envs;
 static volatile int	gdata_init_flag;
 struct crt_plugin_gdata crt_plugin_gdata;
 static bool		g_prov_settings_applied[CRT_PROV_COUNT];
@@ -23,7 +23,6 @@ crt_lib_init(void) __attribute__((__constructor__));
 
 static void
 crt_lib_fini(void) __attribute__((__destructor__));
-
 
 /* Library initialization/constructor */
 static void
@@ -213,7 +212,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	uint32_t	credits;
 	uint32_t	fi_univ_size = 0;
 	uint32_t	mem_pin_enable = 0;
-	uint32_t	is_secondary;
+	uint32_t        is_secondary;
 	uint32_t        post_init = CRT_HG_POST_INIT, post_incr = CRT_HG_POST_INCR;
 	int		rc = 0;
 
@@ -309,13 +308,13 @@ static int data_init(int server, crt_init_options_t *opt)
 				      "total number of URI requests for self",
 				      "", "net/uri/lookup_self");
 		if (ret)
-			D_WARN("Failed to create uri self sensor: "DF_RC"\n", DP_RC(ret));
+			D_WARN("Failed to create uri self sensor: " DF_RC "\n", DP_RC(ret));
 
 		ret = d_tm_add_metric(&crt_gdata.cg_uri_other, D_TM_COUNTER,
 				      "total number of URI requests for other "
 				      "ranks", "", "net/uri/lookup_other");
 		if (ret)
-			D_WARN("Failed to create uri other sensor: "DF_RC"\n", DP_RC(ret));
+			D_WARN("Failed to create uri other sensor: " DF_RC "\n", DP_RC(ret));
 	}
 
 	gdata_init_flag = 1;

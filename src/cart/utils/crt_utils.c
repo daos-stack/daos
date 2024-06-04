@@ -98,13 +98,13 @@ void
 write_completion_file(void)
 {
 	FILE	*fptr;
-	char	*dir = NULL;
+	char    *dir             = NULL;
 	char	*completion_file = NULL;
 
 	crt_env_get(DAOS_TEST_SHARED_DIR, &dir);
 
 	D_ASSERTF(dir != NULL,
-		"DAOS_TEST_SHARED_DIR must be set for --write_completion_file option.\n");
+		  "DAOS_TEST_SHARED_DIR must be set for --write_completion_file option.\n");
 	D_ASPRINTF(completion_file, "%s/test-servers-completed.txt.%d", dir, getpid());
 	D_ASSERTF(completion_file != NULL, "Error allocating completion_file string\n");
 
@@ -414,8 +414,8 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 {
 	int                      rc;
 	char                    *provider;
-	int			cli_srx_set = 0;
-	int			crt_timeout = 0;
+	int                      cli_srx_set = 0;
+	int                      crt_timeout = 0;
 	char                    *d_interface;
 	char                    *d_interface_env = NULL;
 	char                    *d_domain;
@@ -453,7 +453,8 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 		crt_env_get(FI_OFI_RXM_USE_SRX, &cli_srx_set);
 		if (cli_srx_set) {
 			D_ERROR("Client set FI_OFI_RXM_USE_SRX to %d, "
-				"but server is unset!\n", cli_srx_set);
+				"but server is unset!\n",
+				cli_srx_set);
 			D_GOTO(cleanup, rc = -DER_INVAL);
 		}
 	}
@@ -518,8 +519,8 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 		     unsigned int total_srv_ctx, bool use_cfg,
 		     crt_init_options_t *init_opt, bool use_daos_agent_env)
 {
-	char		*grp_cfg_file = NULL;
-	uint32_t	 grp_size = 0;
+	char            *grp_cfg_file = NULL;
+	uint32_t         grp_size     = 0;
 	int		 rc = 0;
 
 	if (opts.assert_on_error)
@@ -581,8 +582,7 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 			/* load group info from a config file and
 			 * delete file upon return
 			 */
-			rc = crtu_load_group_from_file(grp_cfg_file,
-						       *crt_ctx, *grp, -1, true);
+			rc = crtu_load_group_from_file(grp_cfg_file, *crt_ctx, *grp, -1, true);
 			if (rc != 0)
 				D_GOTO(out, rc);
 		}
@@ -644,9 +644,9 @@ crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 		     pthread_t *progress_thread, crt_group_t **grp,
 		     uint32_t *grp_size, crt_init_options_t *init_opt)
 {
-	char		*grp_cfg_file = NULL;
-	char		*my_uri = NULL;
-	d_rank_t	 my_rank = CRT_NO_RANK;
+	char            *grp_cfg_file = NULL;
+	char            *my_uri       = NULL;
+	d_rank_t         my_rank      = CRT_NO_RANK;
 	int		 rc = 0;
 
 	if (opts.assert_on_error)
