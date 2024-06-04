@@ -180,7 +180,7 @@ def reset_server_storage(logger, test):
         commands = [
             "if lspci | grep -i nvme",
             f"then export COVFILE={test_env.bullseye_file} && "
-            "daos_server storage prepare -n --reset && "
+            "daos_server nvme reset && "
             "sudo -n rmmod vfio_pci && sudo -n modprobe vfio_pci",
             "fi"]
         logger.info("Resetting server storage on %s after running '%s'", hosts, test)

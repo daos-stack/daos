@@ -72,11 +72,9 @@ ENV PATH=/home/daos/venv/bin:$PATH
 ENV VIRTUAL_ENV=/home/daos/venv/
 
 # Install latest versions of python tools.
-# wheel is needed first to avoid a warning when installing pyyaml.
-COPY requirements.txt .
+COPY requirements-build.txt requirements-utest.txt ./
 RUN python3 -m pip --no-cache-dir install --upgrade pip && \
-    python3 -m pip --no-cache-dir install wheel && \
-    python3 -m pip --no-cache-dir install --requirement requirements.txt
+    python3 -m pip --no-cache-dir install -r requirements-build.txt -r requirements-utest.txt
 
 WORKDIR /home/daos/pre
 RUN mkdir -p /home/daos/pre/site_scons/prereq_tools /home/daos/pre/site_scons/components
@@ -124,7 +122,7 @@ USER daos_server:daos_server
 LABEL DAOS=true
 
 WORKDIR /home/daos/daos/
-COPY --chown=daos_server:daos_server VERSION LICENSE ftest.sh SConstruct .clang-format ./
+COPY --chown=daos_server:daos_server VERSION LICENSE ftest.sh SConstruct requirements-ftest.txt .clang-format ./
 COPY --chown=daos_server:daos_server site_scons site_scons
 COPY --chown=daos_server:daos_server utils utils
 COPY --chown=daos_server:daos_server src src

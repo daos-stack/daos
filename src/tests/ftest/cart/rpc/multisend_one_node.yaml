@@ -5,19 +5,14 @@ customENV:
   MY_CUSTOM_ENV: "pineapple"
 ENV:
   default:
-    # !filter-only : /run/env_CRT_CTX_SHARE_ADDR/sep
     # !filter-only : /run/tests/proto_np
     - D_LOG_MASK: "INFO"
-    - OFI_INTERFACE: "eth0"
+    - D_INTERFACE: "eth0"
     - test_servers_CRT_CTX_NUM: "16"
     - test_clients_CRT_CTX_NUM: "16"
-env_CRT_CTX_SHARE_ADDR: !mux
-  no_sep:
-    env: no_sep
-    CRT_CTX_SHARE_ADDR: "0"
-env_CRT_PHY_ADDR_STR: !mux
+env_D_PROVIDER: !mux
   ofi_tcp:
-    CRT_PHY_ADDR_STR: "ofi+tcp"
+    D_PROVIDER: "ofi+tcp"
 hosts: !mux
   hosts_1:
     config: one_node

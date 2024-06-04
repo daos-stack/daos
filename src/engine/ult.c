@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -370,6 +370,34 @@ out:
 	return rc;
 }
 
+static inline uint32_t
+sched_ult2xs_multisocket(int xs_type, int tgt_id)
+{
+	static __thread uint32_t offload;
+	uint32_t                 socket = tgt_id / dss_tgt_per_numa_nr;
+	uint32_t                 base;
+	uint32_t                 target;
+
+	if (dss_tgt_offload_xs_nr == 0) {
+		if (xs_type == DSS_XS_IOFW && dss_forward_neighbor) {
+			/* Keep the old forwarding behavior, but NUMA aware */
+			target = (socket * dss_tgt_per_numa_nr) +
+				 (tgt_id + offload) % dss_tgt_per_numa_nr;
+			target = DSS_MAIN_XS_ID(target);
+			goto check;
+		}
+		return DSS_XS_SELF;
+	}
+
+	base   = dss_sys_xs_nr + dss_tgt_nr + (socket * dss_offload_per_numa_nr);
+	target = base + ((offload + tgt_id) % dss_offload_per_numa_nr);
+
+check:
+	D_ASSERT(target < DSS_XS_NR_TOTAL && target >= dss_sys_xs_nr);
+	offload = target + 17; /* Seed next selection */
+	return target;
+}
+
 /* ============== ULT create functions =================================== */
 
 static inline int
@@ -389,6 +417,8 @@ sched_ult2xs(int xs_type, int tgt_id)
 	case DSS_XS_DRPC:
 		return 2;
 	case DSS_XS_IOFW:
+		if (dss_numa_nr > 1)
+			return sched_ult2xs_multisocket(xs_type, tgt_id);
 		if (!dss_helper_pool) {
 			if (dss_tgt_offload_xs_nr > 0)
 				xs_id = DSS_MAIN_XS_ID(tgt_id) + 1;
@@ -427,6 +457,8 @@ sched_ult2xs(int xs_type, int tgt_id)
 			xs_id = (DSS_MAIN_XS_ID(tgt_id) + 1) % dss_tgt_nr;
 		break;
 	case DSS_XS_OFFLOAD:
+		if (dss_numa_nr > 1)
+			xs_id = sched_ult2xs_multisocket(xs_type, tgt_id);
 		if (!dss_helper_pool) {
 			if (dss_tgt_offload_xs_nr > 0)
 				xs_id = DSS_MAIN_XS_ID(tgt_id) + dss_tgt_offload_xs_nr / dss_tgt_nr;
@@ -758,6 +790,7 @@ dss_chore_queue_ult(void *arg)
 	D_DEBUG(DB_TRACE, "begin\n");
 
 	for (;;) {
+		d_list_t          list_tmp = D_LIST_HEAD_INIT(list_tmp);
 		struct dss_chore *chore;
 		struct dss_chore *chore_tmp;
 		bool              stop = false;
@@ -790,16 +823,26 @@ dss_chore_queue_ult(void *arg)
 			break;
 
 		d_list_for_each_entry_safe(chore, chore_tmp, &list, cho_link) {
-			bool is_reentrance = (chore->cho_status == DSS_CHORE_YIELD);
+			enum dss_chore_status status;
 
+			/*
+			 * CAUTION: When cho_func returns DSS_CHORE_DONE, chore
+			 * may have been freed already!
+			 */
+			d_list_del_init(&chore->cho_link);
 			D_DEBUG(DB_TRACE, "%p: before: status=%d\n", chore, chore->cho_status);
-			chore->cho_status = chore->cho_func(chore, is_reentrance);
-			D_ASSERT(chore->cho_status != DSS_CHORE_NEW);
-			D_DEBUG(DB_TRACE, "%p: after: status=%d\n", chore, chore->cho_status);
-			if (chore->cho_status == DSS_CHORE_DONE)
-				d_list_del_init(&chore->cho_link);
+			status = chore->cho_func(chore, chore->cho_status == DSS_CHORE_YIELD);
+			D_DEBUG(DB_TRACE, "%p: after: status=%d\n", chore, status);
+			if (status == DSS_CHORE_YIELD) {
+				chore->cho_status = status;
+				d_list_add_tail(&chore->cho_link, &list_tmp);
+			} else {
+				D_ASSERTF(status == DSS_CHORE_DONE, "status=%d\n", status);
+			}
 			ABT_thread_yield();
 		}
+
+		d_list_splice_init(&list_tmp, &list);
 	}
 
 	D_DEBUG(DB_TRACE, "end\n");

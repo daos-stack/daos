@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -36,10 +37,12 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/checker"
 	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
 const fabricProviderProp = "fabric_providers"
+const groupUpdatePauseProp = "group_update_paused"
 
 // GetAttachInfo handles a request to retrieve a map of ranks to fabric URIs, in addition
 // to client network autoconfiguration hints.
@@ -189,6 +192,7 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 		SecondaryFabricContexts: req.SecondaryNctxs,
 		FaultDomain:             fd,
 		Incarnation:             req.Incarnation,
+		CheckMode:               req.CheckMode,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to join system")
@@ -203,10 +207,21 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 			member.Rank, member.PrimaryFabricURI, member.SecondaryFabricURIs, joinResponse.PrevState, member.State)
 	}
 
+	joinState := mgmtpb.JoinResp_IN
+	if svc.checkerIsEnabled() {
+		joinState = mgmtpb.JoinResp_CHECK
+	}
 	resp := &mgmtpb.JoinResp{
-		State:      mgmtpb.JoinResp_IN,
+		State:      joinState,
 		Rank:       member.Rank.Uint32(),
 		MapVersion: joinResponse.MapVersion,
+	}
+
+	if svc.isGroupUpdatePaused() && svc.allRanksJoined() {
+		if err := svc.resumeGroupUpdate(); err != nil {
+			svc.log.Errorf("failed to resume group update: %s", err.Error())
+		}
+		// join loop will trigger a new group update after this
 	}
 
 	// If the rank is local to the MS leader, then we need to wire up at least
@@ -226,6 +241,29 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 	}
 
 	return resp, nil
+}
+
+// allRanksJoined checks whether all ranks that the system knows about, and that are not admin
+// excluded, are joined.
+//
+// NB: This checks the state to determine if the rank is joined. There is a potential hole here,
+// in a case where the system was killed with ranks in the joined state, rather than stopping the
+// ranks first. In that case we may fire this off too early.
+func (svc *mgmtSvc) allRanksJoined() bool {
+	var total int
+	var joined int
+	var err error
+	if total, err = svc.sysdb.MemberCount(); err != nil {
+		svc.log.Errorf("failed to get total member count: %s", err)
+		return false
+	}
+
+	if joined, err = svc.sysdb.MemberCount(system.MemberStateJoined, system.MemberStateAdminExcluded); err != nil {
+		svc.log.Errorf("failed to get joined member count: %s", err)
+		return false
+	}
+
+	return total == joined
 }
 
 func (svc *mgmtSvc) checkReqFabricProvider(req *mgmtpb.JoinReq, peerAddr *net.TCPAddr, publisher events.Publisher) error {
@@ -266,6 +304,27 @@ func (svc *mgmtSvc) setFabricProviders(val string) error {
 	return system.SetMgmtProperty(svc.sysdb, fabricProviderProp, val)
 }
 
+func (svc *mgmtSvc) isGroupUpdatePaused() bool {
+	propStr, err := system.GetMgmtProperty(svc.sysdb, groupUpdatePauseProp)
+	if err != nil {
+		return false
+	}
+	result, err := strconv.ParseBool(propStr)
+	if err != nil {
+		svc.log.Errorf("invalid value for mgmt prop %q: %s", groupUpdatePauseProp, err.Error())
+		return false
+	}
+	return result
+}
+
+func (svc *mgmtSvc) pauseGroupUpdate() error {
+	return system.SetMgmtProperty(svc.sysdb, groupUpdatePauseProp, "true")
+}
+
+func (svc *mgmtSvc) resumeGroupUpdate() error {
+	return system.SetMgmtProperty(svc.sysdb, groupUpdatePauseProp, "false")
+}
+
 func (svc *mgmtSvc) updateFabricProviders(provList []string, publisher events.Publisher) error {
 	provStr := strings.Join(provList, ",")
 
@@ -292,7 +351,16 @@ func (svc *mgmtSvc) updateFabricProviders(provList []string, publisher events.Pu
 				curProv, provStr, numJoined)
 		}
 
+		if err := svc.pauseGroupUpdate(); err != nil {
+			return errors.Wrapf(err, "unable to pause group update before provider change")
+		}
+
 		if err := svc.setFabricProviders(provStr); err != nil {
+			if guErr := svc.resumeGroupUpdate(); guErr != nil {
+				// something is very wrong if this happens
+				svc.log.Errorf("unable to resume group update after provider change failed: %s", guErr.Error())
+			}
+
 			return errors.Wrapf(err, "changing fabric provider prop")
 		}
 		publisher.Publish(newFabricProvChangedEvent(curProv, provStr))
@@ -320,6 +388,11 @@ func (svc *mgmtSvc) reqGroupUpdate(ctx context.Context, sync bool) {
 // NB: This method must not be called concurrently, as out-of-order
 // group updates may trigger engine assertions.
 func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, forced bool) error {
+	if svc.isGroupUpdatePaused() {
+		svc.log.Debugf("group update requested (force: %v), but temporarily paused", forced)
+		return nil
+	}
+
 	if forced {
 		if err := svc.sysdb.IncMapVer(); err != nil {
 			return err
@@ -396,7 +469,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, forced bool) error {
 // with listening port from joining instance's host addr contained in the
 // provided request.
 func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (resp *mgmtpb.JoinResp, err error) {
-	if err := svc.checkLeaderRequest(req); err != nil {
+	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
 
@@ -417,6 +490,7 @@ type (
 		Ranks      *ranklist.RankSet
 		Force      bool
 		FullSystem bool
+		CheckMode  bool
 	}
 
 	fanoutResponse struct {
@@ -530,7 +604,9 @@ func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fan
 	}
 
 	ranksReq := &control.RanksReq{
-		Ranks: req.Ranks.String(), Force: req.Force,
+		Ranks:     req.Ranks.String(),
+		Force:     req.Force,
+		CheckMode: req.CheckMode,
 	}
 
 	funcName := func(i interface{}) string {
@@ -601,7 +677,7 @@ func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fan
 // same name in lib/control/system.go and returns results from all selected
 // ranks.
 func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq) (*mgmtpb.SystemQueryResp, error) {
-	if err := svc.checkReplicaRequest(req); err != nil {
+	if err := svc.checkReplicaRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
 
@@ -725,7 +801,7 @@ func (svc *mgmtSvc) getFanout(req systemReq) (*fanoutRequest, *fanoutResponse, e
 // This control service method is triggered from the control API method of the
 // same name in lib/control/system.go and returns results from all selected ranks.
 func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (*mgmtpb.SystemStopResp, error) {
-	if err := svc.checkLeaderRequest(req); err != nil {
+	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
 	svc.log.Debug("Received SystemStop RPC")
@@ -792,6 +868,41 @@ func processStartResp(fr *fanoutResponse, publisher events.Publisher) (*mgmtpb.S
 	return sr, nil
 }
 
+func (svc *mgmtSvc) checkMemberStates(requiredStates ...system.MemberState) error {
+	var stateMask system.MemberState
+	for _, state := range requiredStates {
+		stateMask |= state
+	}
+
+	allMembers, err := svc.sysdb.AllMembers()
+	if err != nil {
+		return err
+	}
+	invalidMembers := &ranklist.RankSet{}
+
+	svc.log.Tracef("checking %d members", len(allMembers))
+	for _, m := range allMembers {
+		svc.log.Tracef("member %d: %s", m.Rank.Uint32(), m.State)
+		if m.State&stateMask == 0 {
+			invalidMembers.Add(m.Rank)
+		}
+	}
+
+	stopRequired := false
+	if stateMask&system.MemberStateStopped != 0 {
+		stopRequired = true
+	}
+	if invalidMembers.Count() > 0 {
+		states := make([]string, len(requiredStates))
+		for i, state := range requiredStates {
+			states[i] = state.String()
+		}
+		return checker.FaultIncorrectMemberStates(stopRequired, invalidMembers.String(), strings.Join(states, "|"))
+	}
+
+	return nil
+}
+
 // SystemStart implements the method defined for the Management Service.
 //
 // Initiate controlled start of DAOS system instances (system members)
@@ -801,7 +912,7 @@ func processStartResp(fr *fanoutResponse, publisher events.Publisher) (*mgmtpb.S
 // This control service method is triggered from the control API method of the
 // same name in lib/control/system.go and returns results from all selected ranks.
 func (svc *mgmtSvc) SystemStart(ctx context.Context, req *mgmtpb.SystemStartReq) (*mgmtpb.SystemStartResp, error) {
-	if err := svc.checkLeaderRequest(req); err != nil {
+	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
 	svc.log.Debug("Received SystemStart RPC")
@@ -811,6 +922,7 @@ func (svc *mgmtSvc) SystemStart(ctx context.Context, req *mgmtpb.SystemStartReq)
 		return nil, err
 	}
 
+	fReq.CheckMode = req.CheckMode
 	fReq.Method = control.StartRanks
 	fResp, _, err = svc.rpcFanout(ctx, fReq, fResp, true)
 	if err != nil {
@@ -827,7 +939,7 @@ func (svc *mgmtSvc) SystemStart(ctx context.Context, req *mgmtpb.SystemStartReq)
 
 // SystemExclude marks the specified ranks as administratively excluded from the system.
 func (svc *mgmtSvc) SystemExclude(ctx context.Context, req *mgmtpb.SystemExcludeReq) (*mgmtpb.SystemExcludeResp, error) {
-	if err := svc.checkLeaderRequest(req); err != nil {
+	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
 
@@ -877,7 +989,7 @@ func (svc *mgmtSvc) SystemExclude(ctx context.Context, req *mgmtpb.SystemExclude
 // from control-plane instances attempting to notify the MS of a cluster event
 // in the DAOS system (this handler should only get called on the MS leader).
 func (svc *mgmtSvc) ClusterEvent(ctx context.Context, req *sharedpb.ClusterEventReq) (*sharedpb.ClusterEventResp, error) {
-	if err := svc.checkLeaderRequest(req); err != nil {
+	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
 
@@ -1169,7 +1281,7 @@ func (svc *mgmtSvc) updatePoolPropsWithSysProps(ctx context.Context, systemPrope
 
 // SystemGetProp gets user-visible system properties.
 func (svc *mgmtSvc) SystemGetProp(ctx context.Context, req *mgmtpb.SystemGetPropReq) (resp *mgmtpb.SystemGetPropResp, err error) {
-	if err := svc.checkReplicaRequest(req); err != nil {
+	if err := svc.checkReplicaRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
 

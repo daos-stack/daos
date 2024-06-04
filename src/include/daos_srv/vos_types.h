@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,6 +11,7 @@
 #include <daos_pool.h>
 #include <daos_srv/bio.h>
 #include <daos_srv/vea.h>
+#include <daos_srv/daos_chk.h>
 #include <daos/object.h>
 #include <daos/dtx.h>
 #include <daos/checksum.h>
@@ -88,6 +89,8 @@ enum vos_pool_open_flags {
 	VOS_POF_RDB	= (1 << 4),
 	/** SYS DB pool */
 	VOS_POF_SYSDB	= (1 << 5),
+	/** Open the pool for daos check query, that will bypass EXEL flags. */
+	VOS_POF_FOR_CHECK_QUERY = (1 << 6),
 };
 
 enum vos_oi_attr {
@@ -130,6 +133,17 @@ struct vos_pool_space {
 #define NVME_FREE(vps)	((vps)->vps_space.s_free[DAOS_MEDIA_NVME])
 #define NVME_SYS(vps)	((vps)->vps_space_sys[DAOS_MEDIA_NVME])
 
+struct chk_pool_info {
+	/** DAOS check phase on the pool shard. */
+	uint32_t		cpi_phase;
+	/** DAOS check instance status on the pool shard. */
+	uint32_t		cpi_ins_status;
+	/** Inconsistency information for DAOS check on the pool shard. */
+	struct chk_statistics	cpi_statistics;
+	/** Time information for DAOS check on the pool shard. */
+	struct chk_time		cpi_time;
+};
+
 /**
  * pool attributes returned to query
  */
@@ -140,6 +154,8 @@ typedef struct {
 	struct vos_pool_space	pif_space;
 	/** garbage collector statistics */
 	struct vos_gc_stat	pif_gc_stat;
+	/** DAOS check related information */
+	struct chk_pool_info	pif_chk;
 	/** TODO */
 } vos_pool_info_t;
 
@@ -337,29 +353,31 @@ D_CASSERT((VOS_USE_TIMESTAMPS & (VOS_GET_MAX | VOS_GET_MIN | VOS_GET_DKEY |
 
 enum {
 	/** The absence of any flags means iterate all unsorted extents */
-	VOS_IT_RECX_ALL		= 0,
+	VOS_IT_RECX_ALL = 0,
 	/** Include visible extents in sorted iteration */
-	VOS_IT_RECX_VISIBLE	= (1 << 0),
+	VOS_IT_RECX_VISIBLE = (1 << 0),
 	/** Include covered extents, implies VOS_IT_RECX_VISIBLE */
-	VOS_IT_RECX_COVERED	= (1 << 1) | VOS_IT_RECX_VISIBLE,
+	VOS_IT_RECX_COVERED = (1 << 1) | VOS_IT_RECX_VISIBLE,
 	/** Include hole extents in sorted iteration
 	 *  Only applicable if VOS_IT_RECX_COVERED is not set
 	 */
-	VOS_IT_RECX_SKIP_HOLES	= (1 << 2),
+	VOS_IT_RECX_SKIP_HOLES = (1 << 2),
 	/** When sorted iteration is enabled, iterate in reverse */
-	VOS_IT_RECX_REVERSE	= (1 << 3),
+	VOS_IT_RECX_REVERSE = (1 << 3),
 	/** The iterator is for purge operation */
-	VOS_IT_FOR_PURGE	= (1 << 4),
+	VOS_IT_FOR_PURGE = (1 << 4),
 	/** The iterator is for data migration scan */
-	VOS_IT_FOR_MIGRATION	= (1 << 5),
+	VOS_IT_FOR_MIGRATION = (1 << 5),
 	/** Iterate only show punched records in interval */
-	VOS_IT_PUNCHED		= (1 << 6),
+	VOS_IT_PUNCHED = (1 << 6),
 	/** Cleanup stale DTX entry. */
-	VOS_IT_FOR_DISCARD	= (1 << 7),
+	VOS_IT_FOR_DISCARD = (1 << 7),
 	/** Entry is not committed */
-	VOS_IT_UNCOMMITTED	= (1 << 8),
+	VOS_IT_UNCOMMITTED = (1 << 8),
+	/** The iterator is for an aggregation operation (EC or VOS) */
+	VOS_IT_FOR_AGG = (1 << 9),
 	/** Mask for all flags */
-	VOS_IT_MASK		= (1 << 9) - 1,
+	VOS_IT_MASK = (1 << 10) - 1,
 };
 
 typedef struct {

@@ -7,13 +7,14 @@
 import os
 from collections import OrderedDict
 
+from apricot import TestWithServers
 from cmocka_utils import CmockaUtils
-from dfuse_test_base import DfuseTestBase
+from dfuse_utils import get_dfuse, start_dfuse
 from general_utils import create_directory, get_log_file
 from job_manager_utils import get_job_manager
 
 
-class DaosCoreTestDfuse(DfuseTestBase):
+class DaosCoreTestDfuse(TestWithServers):
     """Runs DAOS DFuse tests.
 
     :avocado: recursive
@@ -29,11 +30,11 @@ class DaosCoreTestDfuse(DfuseTestBase):
         if il_lib is None:
             self.fail('il_lib is not defined.')
 
-        self.daos_test = os.path.join(self.bin, 'dfuse_test')
+        daos_test = os.path.join(self.bin, 'dfuse_test')
 
         # Create a pool, container and start dfuse.
-        self.add_pool(connect=False)
-        self.add_container(self.pool)
+        pool = self.get_pool(connect=False)
+        container = self.get_container(pool)
 
         cont_attrs = OrderedDict()
 
@@ -67,14 +68,15 @@ class DaosCoreTestDfuse(DfuseTestBase):
         elif cache_mode == 'native':
             use_dfuse = False
         else:
-            self.fail('Invalid cache_mode: {}'.format(cache_mode))
+            self.fail(f'Invalid cache_mode: {cache_mode}')
 
         if use_dfuse:
-            self.container.set_attr(attrs=cont_attrs)
+            container.set_attr(attrs=cont_attrs)
 
-            self.start_dfuse(self.hostlist_clients, self.pool, self.container)
+            dfuse = get_dfuse(self, self.hostlist_clients)
+            start_dfuse(self, dfuse, pool, container)
 
-            mount_dir = self.dfuse.mount_dir.value
+            mount_dir = dfuse.mount_dir.value
         else:
             # Bypass, simply create a remote directory and use that.
             mount_dir = '/tmp/dfuse-test'
@@ -93,22 +95,31 @@ class DaosCoreTestDfuse(DfuseTestBase):
             daos_test_env['D_LOG_MASK'] = 'INFO,IL=DEBUG'
 
             if il_lib == 'libpil4dfs.so':
-                daos_test_env['DAOS_MOUNT_POINT'] = mount_dir
-                daos_test_env['DAOS_POOL'] = self.pool.identifier
-                daos_test_env['DAOS_CONTAINER'] = self.container.identifier
+                daos_test_env['D_IL_MOUNT_POINT'] = mount_dir
+                daos_test_env['D_IL_POOL'] = pool.identifier
+                daos_test_env['D_IL_CONTAINER'] = container.identifier
                 daos_test_env['D_IL_REPORT'] = '0'
                 daos_test_env['D_IL_MAX_EQ'] = '2'
                 daos_test_env['D_IL_ENFORCE_EXEC_ENV'] = '1'
 
-        command = [self.daos_test, '--test-dir', mount_dir,
-                   '--io', '--stream', '--mmap', '--exec', '--directory']
+        command = [
+            daos_test,
+            '--test-dir',
+            mount_dir,
+            '--io',
+            '--stream',
+            '--mmap',
+            '--exec',
+            '--directory',
+            '--cache'
+        ]
         if use_dfuse:
             command.append('--lowfd')
         else:
-            # make DAOS_MOUNT_POINT different from mount_dir so it tests a non-DAOS filesystem
+            # make D_IL_MOUNT_POINT different from mount_dir so it tests a non-DAOS filesystem
             dummy_dir = '/tmp/dummy'
             create_directory(self.hostlist_clients, dummy_dir)
-            daos_test_env['DAOS_MOUNT_POINT'] = dummy_dir
+            daos_test_env['D_IL_MOUNT_POINT'] = dummy_dir
         if cache_mode != 'writeback':
             command.append('--metadata')
 

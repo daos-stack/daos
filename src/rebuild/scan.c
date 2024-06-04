@@ -339,9 +339,9 @@ rebuild_scan_done(void *data)
 
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
 				      rpt->rt_rebuild_gen);
-	D_ASSERT(tls != NULL);
+	if (tls != NULL)
+		tls->rebuild_pool_scanning = 0;
 
-	tls->rebuild_pool_scanning = 0;
 	return 0;
 }
 
@@ -839,6 +839,17 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			DP_UUID(entry->ie_couuid), DP_RC(rc));
 		D_GOTO(close, rc);
 	}
+
+	/*
+	 * The container may has been closed by the application, but some resource (DRAM) occupied
+	 * by DTX may be not released because DTX resync was in-progress at that time. When arrive
+	 * here, DTX resync must has completed globally. Let's release related resource.
+	 */
+	if (unlikely(cont_child->sc_dtx_delay_reset == 1)) {
+		stop_dtx_reindex_ult(cont_child, true);
+		vos_dtx_cache_reset(cont_child->sc_hdl, false);
+	}
+
 	cont_child->sc_rebuilding = 1;
 
 	rc = ds_cont_fetch_snaps(rpt->rt_pool->sp_iv_ns, entry->ie_couuid, NULL,
@@ -962,7 +973,8 @@ rebuild_scanner(void *data)
 
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
 				      rpt->rt_rebuild_gen);
-	D_ASSERT(tls != NULL);
+	if (tls == NULL)
+		return 0;
 
 	if (!is_rebuild_scanning_tgt(rpt)) {
 		D_DEBUG(DB_REBUILD, DF_UUID" skip scan\n", DP_UUID(rpt->rt_pool_uuid));
@@ -1228,8 +1240,11 @@ out:
 	if (tls && tls->rebuild_pool_status == 0 && rc != 0)
 		tls->rebuild_pool_status = rc;
 
-	if (rpt)
+	if (rpt) {
+		if (rc)
+			rpt_delete(rpt);
 		rpt_put(rpt);
+	}
 	ro = crt_reply_get(rpc);
 	ro->rso_status = rc;
 	ro->rso_stable_epoch = d_hlc_get();

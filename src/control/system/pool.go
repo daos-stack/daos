@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,45 +8,31 @@ package system
 
 import (
 	"fmt"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
-	"github.com/pkg/errors"
 
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	. "github.com/daos-stack/daos/src/control/lib/ranklist"
-)
-
-const (
-	// PoolServiceStateCreating indicates that the pool service is being created
-	PoolServiceStateCreating PoolServiceState = iota
-	// PoolServiceStateReady indicates that the pool service is ready to be used
-	PoolServiceStateReady
-	// PoolServiceStateDestroying indicates that the pool service is being destroyed
-	PoolServiceStateDestroying
-	// PoolServiceStateDegraded indicates that the pool service is being Degraded
-	PoolServiceStateDegraded
-	// PoolServiceStateUnknown indicates that the pool service is Unknown state
-	PoolServiceStateUnknown
+	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
 
 type (
-	// PoolServiceState is used to represent the state of the pool service
-	PoolServiceState uint
-
 	// PoolServiceStorage holds information about the pool storage.
 	PoolServiceStorage struct {
 		sync.Mutex
-		CreationRankStr    string   // string rankset set at creation
-		creationRanks      *RankSet // used to reconstitute the rankset
-		CurrentRankStr     string   // string rankset representing current ranks
-		currentRanks       *RankSet // used to reconstitute the rankset
-		PerRankTierStorage []uint64 // storage allocated to each tier on a rank
+		CreationRankStr    string            // string rankset set at creation
+		creationRanks      *ranklist.RankSet // used to reconstitute the rankset
+		CurrentRankStr     string            // string rankset representing current ranks
+		currentRanks       *ranklist.RankSet // used to reconstitute the rankset
+		PerRankTierStorage []uint64          // storage allocated to each tier on a rank
 	}
+
+	// PoolServiceState is a local type alias for daos.PoolServiceState.
+	// NB: We use this to insulate the system DB from any incompatible
+	// changes made to the daos.PoolServiceState type.
+	PoolServiceState daos.PoolServiceState
 
 	// PoolService represents a pool service created to manage metadata
 	// for a DAOS Pool.
@@ -54,15 +40,25 @@ type (
 		PoolUUID   uuid.UUID
 		PoolLabel  string
 		State      PoolServiceState
-		Replicas   []Rank
+		Replicas   []ranklist.Rank
 		Storage    *PoolServiceStorage
 		LastUpdate time.Time
 	}
 )
 
+const (
+	PoolServiceStateCreating   = PoolServiceState(daos.PoolServiceStateCreating)
+	PoolServiceStateReady      = PoolServiceState(daos.PoolServiceStateReady)
+	PoolServiceStateDestroying = PoolServiceState(daos.PoolServiceStateDestroying)
+)
+
+func (pss PoolServiceState) String() string {
+	return daos.PoolServiceState(pss).String()
+}
+
 // NewPoolService returns a properly-initialized *PoolService.
-func NewPoolService(uuid uuid.UUID, tierStorage []uint64, ranks []Rank) *PoolService {
-	rs := RankSetFromRanks(ranks)
+func NewPoolService(uuid uuid.UUID, tierStorage []uint64, ranks []ranklist.Rank) *PoolService {
+	rs := ranklist.RankSetFromRanks(ranks)
 	return &PoolService{
 		PoolUUID: uuid,
 		State:    PoolServiceStateCreating,
@@ -76,13 +72,13 @@ func NewPoolService(uuid uuid.UUID, tierStorage []uint64, ranks []Rank) *PoolSer
 
 // CreationRanks returns the set of target ranks associated
 // with the pool's creation.
-func (pss *PoolServiceStorage) CreationRanks() []Rank {
+func (pss *PoolServiceStorage) CreationRanks() []ranklist.Rank {
 	pss.Lock()
 	defer pss.Unlock()
 
 	if pss.creationRanks == nil {
 		var err error
-		pss.creationRanks, err = CreateRankSet(pss.CreationRankStr)
+		pss.creationRanks, err = ranklist.CreateRankSet(pss.CreationRankStr)
 		if err != nil {
 			return nil
 		}
@@ -92,13 +88,13 @@ func (pss *PoolServiceStorage) CreationRanks() []Rank {
 
 // CurrentRanks returns the set of target ranks associated
 // with the pool's current.
-func (pss *PoolServiceStorage) CurrentRanks() []Rank {
+func (pss *PoolServiceStorage) CurrentRanks() []ranklist.Rank {
 	pss.Lock()
 	defer pss.Unlock()
 
 	if pss.currentRanks == nil {
 		var err error
-		pss.currentRanks, err = CreateRankSet(pss.CurrentRankStr)
+		pss.currentRanks, err = ranklist.CreateRankSet(pss.CurrentRankStr)
 		if err != nil {
 			return nil
 		}
@@ -137,44 +133,4 @@ func (pss *PoolServiceStorage) String() string {
 	return fmt.Sprintf("total SCM: %s, total NVMe: %s",
 		humanize.Bytes(pss.TotalSCM()),
 		humanize.Bytes(pss.TotalNVMe()))
-}
-
-func (pss PoolServiceState) String() string {
-	return [...]string{
-		"Creating",
-		"Ready",
-		"Destroying",
-		"Degraded",
-		"Unknown",
-	}[pss]
-}
-
-func (pss PoolServiceState) MarshalJSON() ([]byte, error) {
-	stateStr, ok := mgmtpb.PoolServiceState_name[int32(pss)]
-	if !ok {
-		return nil, errors.Errorf("invalid Pool Service state %d", pss)
-	}
-	return []byte(`"` + stateStr + `"`), nil
-}
-
-func (pss *PoolServiceState) UnmarshalJSON(data []byte) error {
-	stateStr := strings.Trim(string(data), "\"")
-
-	state, ok := mgmtpb.PoolServiceState_value[stateStr]
-	if !ok {
-		// Try converting the string to an int32, to handle the
-		// conversion from protobuf message using convert.Types().
-		si, err := strconv.ParseInt(stateStr, 0, 32)
-		if err != nil {
-			return errors.Errorf("invalid Pool Service state number parse %q", stateStr)
-		}
-
-		if _, ok = mgmtpb.PoolServiceState_name[int32(si)]; !ok {
-			return errors.Errorf("invalid Pool Service state name lookup %q", stateStr)
-		}
-		state = int32(si)
-	}
-	*pss = PoolServiceState(state)
-
-	return nil
 }

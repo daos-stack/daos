@@ -108,7 +108,8 @@ void fixup_rpmlintrc() {
                     '/usr/bin/hello_drpc',
                     '/usr/bin/daos_firmware',
                     '/usr/bin/daos_admin',
-                    '/usr/bin/daos_server']
+                    '/usr/bin/daos_server',
+                    '/usr/bin/ddb']
 
     String content = readFile(file: 'utils/rpms/daos.rpmlintrc') + '\n\n' +
                      '# https://daosio.atlassian.net/browse/DAOS-11534\n'
@@ -133,6 +134,19 @@ void rpm_test_post(String stage_name, String node) {
                env.STAGE_NAME + '/"'
     archiveArtifacts artifacts: env.STAGE_NAME + '/**'
     job_status_update()
+}
+
+/**
+ * Update default commit pragmas based on files modified.
+ */
+Map update_default_commit_pragmas() {
+    String default_pragmas_str = sh(script: 'ci/gen_commit_pragmas.py --target origin/' + target_branch,
+                                    returnStdout: true).trim()
+    println("pragmas from gen_commit_pragmas.py:")
+    println(default_pragmas_str)
+    if (default_pragmas_str) {
+        updatePragmas(default_pragmas_str, false)
+    }
 }
 
 pipeline {
@@ -259,22 +273,22 @@ pipeline {
         booleanParam(name: 'CI_medium_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium test stage')
-        booleanParam(name: 'CI_medium-md-on-ssd_TEST',
+        booleanParam(name: 'CI_medium_md_on_ssd_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium MD on SSD test stage')
-        booleanParam(name: 'CI_medium-verbs-provider_TEST',
+        booleanParam(name: 'CI_medium_verbs_provider_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium Verbs Provider test stage')
-        booleanParam(name: 'CI_medium-verbs-provider-md-on-ssd_TEST',
+        booleanParam(name: 'CI_medium_verbs_provider_md_on_ssd_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium Verbs Provider MD on SSD test stage')
-        booleanParam(name: 'CI_medium-ucx-provider_TEST',
+        booleanParam(name: 'CI_medium_ucx_provider_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium UCX Provider test stage')
         booleanParam(name: 'CI_large_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Large test stage')
-        booleanParam(name: 'CI_large-md-on-ssd_TEST',
+        booleanParam(name: 'CI_large_md_on_ssd_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Large MD on SSD test stage')
         string(name: 'CI_UNIT_VM1_LABEL',
@@ -328,6 +342,7 @@ pipeline {
                 stage('Get Commit Message') {
                     steps {
                         pragmasToEnv()
+                        update_default_commit_pragmas()
                     }
                 }
                 stage('Determine Release Branch') {
@@ -782,7 +797,6 @@ pipeline {
                                          valgrind_stash: 'el8-gcc-nlt-memcheck'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
-                                         ignoreFailedBuilds: true,
                                          ignoreQualityGate: true,
                                          name: 'NLT server leaks',
                                          qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
@@ -1017,10 +1031,10 @@ pipeline {
                     post {
                         always {
                             discoverGitReferenceBuild referenceJob: 'daos-stack/daos/master',
-                                                      scm: 'daos-stack/daos'
+                                                      scm: 'daos-stack/daos',
+                                                      requiredResult: hudson.model.Result.UNSTABLE
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
-                                         ignoreFailedBuilds: true,
                                          ignoreQualityGate: true,
                                          qualityGates: [[threshold: 1, type: 'TOTAL_ERROR'],
                                                         [threshold: 1, type: 'TOTAL_HIGH'],

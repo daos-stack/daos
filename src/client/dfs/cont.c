@@ -62,6 +62,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 		if (attr->da_oclass_id) {
 			dattr.da_dir_oclass_id  = attr->da_oclass_id;
 			dattr.da_file_oclass_id = attr->da_oclass_id;
+			dattr.da_oclass_id      = attr->da_oclass_id;
 		}
 		if (attr->da_file_oclass_id)
 			dattr.da_file_oclass_id = attr->da_file_oclass_id;
@@ -1255,11 +1256,21 @@ dfs_get_size_by_oid(dfs_t *dfs, daos_obj_id_t oid, daos_size_t chunk_size, daos_
 	return daos_der2errno(rc);
 }
 
-int
-dfs_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group)
+inline static bool
+is_uid_invalid(uid_t uid)
 {
-	uid_t                      uid;
-	gid_t                      gid;
+	return uid == (uid_t)-1;
+}
+
+inline static bool
+is_gid_invalid(gid_t gid)
+{
+	return gid == (gid_t)-1;
+}
+
+int
+dfs_cont_set_owner(daos_handle_t coh, d_string_t user, uid_t uid, d_string_t group, gid_t gid)
+{
 	daos_key_t                 dkey;
 	d_sg_list_t                sgl;
 	d_iov_t                    sg_iovs[4];
@@ -1324,10 +1335,13 @@ dfs_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group)
 	i++;
 
 	if (user != NULL) {
-		rc = daos_acl_principal_to_uid(user, &uid);
-		if (rc) {
-			D_ERROR("daos_acl_principal_to_uid() failed: " DF_RC "\n", DP_RC(rc));
-			D_GOTO(out_prop, rc = daos_der2errno(rc));
+		if (is_uid_invalid(uid)) {
+			rc = daos_acl_principal_to_uid(user, &uid);
+			if (rc) {
+				D_ERROR("daos_acl_principal_to_uid() failed: " DF_RC "\n",
+					DP_RC(rc));
+				D_GOTO(out_prop, rc = EINVAL);
+			}
 		}
 		d_iov_set(&sg_iovs[i], &uid, sizeof(uid_t));
 		recxs[i].rx_idx = UID_IDX;
@@ -1336,10 +1350,13 @@ dfs_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group)
 	}
 
 	if (group != NULL) {
-		rc = daos_acl_principal_to_gid(group, &gid);
-		if (rc) {
-			D_ERROR("daos_acl_principal_to_gid() failed: " DF_RC "\n", DP_RC(rc));
-			D_GOTO(out_prop, rc = daos_der2errno(rc));
+		if (is_gid_invalid(gid)) {
+			rc = daos_acl_principal_to_gid(group, &gid);
+			if (rc) {
+				D_ERROR("daos_acl_principal_to_gid() failed: " DF_RC "\n",
+					DP_RC(rc));
+				D_GOTO(out_prop, rc = EINVAL);
+			}
 		}
 		d_iov_set(&sg_iovs[i], &gid, sizeof(gid_t));
 		recxs[i].rx_idx = GID_IDX;
@@ -1347,8 +1364,8 @@ dfs_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group)
 		i++;
 	}
 
-	/** set the owner ACL */
-	rc = daos_cont_set_owner(coh, user, group, NULL);
+	/* set the owner ACL - already checked user/group are real above, if needed */
+	rc = daos_cont_set_owner_no_check(coh, user, group, NULL);
 	if (rc) {
 		D_ERROR("daos_cont_set_owner() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out_prop, rc = daos_der2errno(rc));
@@ -1546,8 +1563,9 @@ dfs_cont_scan(daos_handle_t poh, const char *cont, uint64_t flags, const char *s
 	D_PRINT("DFS scanner: " DF_U64 " directories\n", scan_args.num_dirs);
 	D_PRINT("DFS scanner: " DF_U64 " max tree depth\n", scan_args.max_depth);
 	D_PRINT("DFS scanner: " DF_U64 " bytes of total data\n", scan_args.total_bytes);
-	D_PRINT("DFS scanner: " DF_U64 " bytes per file on average\n",
-		scan_args.total_bytes / scan_args.num_files);
+	if (scan_args.num_files > 0)
+		D_PRINT("DFS scanner: " DF_U64 " bytes per file on average\n",
+			scan_args.total_bytes / scan_args.num_files);
 	D_PRINT("DFS scanner: " DF_U64 " bytes is largest file size\n", scan_args.largest_file);
 	D_PRINT("DFS scanner: " DF_U64 " entries in the largest directory\n",
 		scan_args.largest_dir);

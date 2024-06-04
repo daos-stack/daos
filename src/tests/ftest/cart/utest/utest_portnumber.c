@@ -192,8 +192,8 @@ child2_error:
 static void
 test_port_tcp(void **state)
 {
-	d_setenv("OFI_INTERFACE", "lo", 1);
-	d_setenv("CRT_PHY_ADDR_STR", "ofi+tcp", 1);
+	d_setenv("D_INTERFACE", "lo", 1);
+	d_setenv("D_PROVIDER", "ofi+tcp", 1);
 	run_test_fork(state);
 }
 
@@ -201,9 +201,9 @@ test_port_tcp(void **state)
 static void
 test_port_verb(void **state)
 {
-	d_setenv("OFI_INTERFACE", "eth0", 1);
-	d_setenv("OFI_DOMAIN", "Must define here", 1);
-	d_setenv("CRT_PHY_ADDR_STR", "ofi+verbs;ofi_rxm", 1);
+	d_setenv("D_INTERFACE", "eth0", 1);
+	d_setenv("D_DOMAIN", "Must define here", 1);
+	d_setenv("D_PROVIDER", "ofi+verbs;ofi_rxm", 1);
 	run_test_fork(state);
 };
 #endif
@@ -290,7 +290,7 @@ int main(int argc, char **argv)
 	d_setenv("FI_UNIVERSE_SIZE", "2048", 1);
 	d_setenv("FI_OFI_RXM_USE_SRX", "1", 1);
 	d_setenv("D_LOG_MASK", "CRIT", 1);
-	d_setenv("OFI_PORT", "34571", 1);
+	d_setenv("D_PORT", "34571", 1);
 
 	d_register_alt_assert(mock_assert);
 

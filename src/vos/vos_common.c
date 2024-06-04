@@ -13,6 +13,7 @@
 
 #include <fcntl.h>
 #include <daos/common.h>
+#include <daos/metrics.h>
 #include <daos/rpc.h>
 #include <daos/lru.h>
 #include <daos/btree_class.h>
@@ -352,7 +353,7 @@ cancel:
 
 		dae = dth->dth_ent;
 		if (dae != NULL) {
-			if (err == 0 && unlikely(dae->dae_preparing && dae->dae_aborting)) {
+			if (unlikely(dae->dae_preparing && dae->dae_aborting)) {
 				rc = vos_dtx_abort_internal(cont, dae, true);
 				D_CDEBUG(rc != 0, DLOG_ERR, DB_IO,
 					 "Delay abort DTX "DF_DTI" (1): rc = %d\n",
@@ -821,6 +822,19 @@ vos_metrics_alloc(const char *path, int tgt_id)
 	if (rc)
 		D_WARN("Failed to create 'merged_size' telemetry : "DF_RC"\n", DP_RC(rc));
 
+	/* VOS aggregation conflicts with discard */
+	rc = d_tm_add_metric(&vam->vam_agg_blocked, D_TM_COUNTER, "aggregation blocked by discard",
+			     NULL, "%s/%s/agg_blocked/tgt_%u", path, VOS_AGG_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'agg_blocked' telemetry : " DF_RC "\n", DP_RC(rc));
+
+	/* VOS discard conflicts with aggregation */
+	rc = d_tm_add_metric(&vam->vam_discard_blocked, D_TM_COUNTER,
+			     "discard blocked by aggregation", NULL, "%s/%s/discard_blocked/tgt_%u",
+			     path, VOS_AGG_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'discard_blocked' telemetry : " DF_RC "\n", DP_RC(rc));
+
 	/* VOS aggregation failed */
 	rc = d_tm_add_metric(&vam->vam_fail_count, D_TM_COUNTER, "aggregation failures", NULL,
 			     "%s/%s/fail_count/tgt_%u", path, VOS_AGG_DIR, tgt_id);
@@ -866,11 +880,11 @@ vos_metrics_alloc(const char *path, int tgt_id)
 	return vp_metrics;
 }
 
-struct dss_module_metrics vos_metrics = {
-	.dmm_tags = DAOS_TGT_TAG,
-	.dmm_init = vos_metrics_alloc,
-	.dmm_fini = vos_metrics_free,
-	.dmm_nr_metrics = vos_metrics_count,
+struct daos_module_metrics vos_metrics = {
+    .dmm_tags       = DAOS_TGT_TAG,
+    .dmm_init       = vos_metrics_alloc,
+    .dmm_fini       = vos_metrics_free,
+    .dmm_nr_metrics = vos_metrics_count,
 };
 
 struct dss_module vos_srv_module =  {
@@ -981,7 +995,7 @@ vos_self_fini(void)
 #define LMMDB_PATH	"/var/daos/"
 
 int
-vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
+vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool nvme_init)
 {
 	char		*evt_mode;
 	int		 rc = 0;
@@ -1006,9 +1020,11 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 		goto out;
 	}
 #endif
-	rc = vos_self_nvme_init(db_path);
-	if (rc)
-		goto failed;
+	if (nvme_init) {
+		rc = vos_self_nvme_init(db_path);
+		if (rc)
+			goto failed;
+	}
 
 	rc = vos_mod_init();
 	if (rc)
@@ -1063,4 +1079,10 @@ failed:
 	vos_self_fini_locked();
 	D_MUTEX_UNLOCK(&self_mode.self_lock);
 	return rc;
+}
+
+int
+vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
+{
+	return vos_self_init_ext(db_path, use_sys_db, tgt_id, true);
 }

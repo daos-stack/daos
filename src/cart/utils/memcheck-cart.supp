@@ -567,3 +567,8 @@
    write(buf)
    fun:runtime/internal/syscall.Syscall6
 }
+{
+   DAOS-15548
+   Memcheck:Addr1
+   fun:racecallatomic
+}

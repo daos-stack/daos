@@ -84,10 +84,9 @@ static void *progress_fn(void *arg)
 	pthread_exit(NULL);
 }
 
-static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
-			  crt_group_t **srv_grp, pthread_t *tid,
-			  char *attach_info_path, bool listen,
-			  bool use_daos_agent_vars)
+static int
+self_test_init(char *dest_name, crt_context_t *crt_ctx, crt_group_t **srv_grp, pthread_t *tid,
+	       char *attach_info_path, bool listen, bool use_agent)
 {
 	uint32_t	 init_flags = 0;
 	uint32_t	 grp_size;
@@ -100,7 +99,7 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(0, attach_retries, false, false);
 
-	if (use_daos_agent_vars) {
+	if (use_agent) {
 		ret = dc_agent_init();
 		if (ret != 0) {
 			fprintf(stderr, "dc_agent_init() failed. ret: %d\n", ret);
@@ -134,7 +133,7 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 	}
 	g_context_created = true;
 
-	if (use_daos_agent_vars) {
+	if (use_agent) {
 		ret = crt_group_view_create(dest_name, srv_grp);
 		if (!*srv_grp || ret != 0) {
 			D_ERROR("Failed to create group view; ret=%d\n", ret);
@@ -802,14 +801,11 @@ randomize_endpts(struct st_endpoint *endpts, uint32_t num_endpts)
 	printf("\n");
 }
 
-static int run_self_test(struct st_size_params all_params[],
-			 int num_msg_sizes, int rep_count, int max_inflight,
-			 char *dest_name, struct st_endpoint *ms_endpts_in,
-			 uint32_t num_ms_endpts_in,
-			 struct st_endpoint *endpts, uint32_t num_endpts,
-			 int output_megabits, int16_t buf_alignment,
-			 char *attach_info_path,
-			 bool use_daos_agent_vars)
+static int
+run_self_test(struct st_size_params all_params[], int num_msg_sizes, int rep_count,
+	      int max_inflight, char *dest_name, struct st_endpoint *ms_endpts_in,
+	      uint32_t num_ms_endpts_in, struct st_endpoint *endpts, uint32_t num_endpts,
+	      int output_megabits, int16_t buf_alignment, char *attach_info_path, bool use_agent)
 {
 	crt_context_t		  crt_ctx;
 	crt_group_t		 *srv_grp;
@@ -841,9 +837,8 @@ static int run_self_test(struct st_size_params all_params[],
 	if (ms_endpts_in == NULL)
 		listen = true;
 	/* Initialize CART */
-	ret = self_test_init(dest_name, &crt_ctx, &srv_grp, &tid,
-			     attach_info_path, listen /* run as server */,
-			     use_daos_agent_vars);
+	ret = self_test_init(dest_name, &crt_ctx, &srv_grp, &tid, attach_info_path,
+			     listen /* run as server */, use_agent);
 	if (ret != 0) {
 		D_ERROR("self_test_init failed; ret = %d\n", ret);
 		D_GOTO(cleanup_nothread, ret);
@@ -1076,184 +1071,183 @@ cleanup_nothread:
 	return ret;
 }
 
-static void print_usage(const char *prog_name, const char *msg_sizes_str,
-			int rep_count,
-			int max_inflight)
+static void
+print_usage(const char *prog_name, const char *msg_sizes_str, int rep_count, int max_inflight)
 {
-	/* TODO --randomize-endpoints */
 	/* TODO --verbose */
-	printf("Usage: %s --group-name <name> --endpoint <ranks:tags> [optional arguments]\n"
-	       "\n"
-	       "Required Arguments\n"
-	       "  --group-name <group_name>\n"
-	       "      Short version: -g\n"
-	       "      The name of the process set to test against\n"
-	       "\n"
-	       "  --endpoint <ranks:tags>\n"
-	       "      Short version: -e\n"
-	       "      Describes an endpoint (or range of endpoints) to connect to\n"
-	       "        Note: Can be specified multiple times\n"
-	       "\n"
-	       "      ranks and tags are comma-separated lists to connect to\n"
-	       "        Supports both ranges and lists - for example, \"1-5,3,8\"\n"
-	       "\n"
-	       "      Example: --endpoint 1-3,2:0-1\n"
-	       "        This would create these endpoints:\n"
-	       "          1:0\n"
-	       "          1:1\n"
-	       "          2:0\n"
-	       "          2:1\n"
-	       "          3:0\n"
-	       "          3:1\n"
-	       "          2:0\n"
-	       "          2:1\n"
-	       "\n"
-	       "        By default, self-test will send test messages to these\n"
-	       "        endpoints in the order listed above. See --randomize-endpoints\n"
-	       "        for more information\n"
-	       "\n"
-	       "Optional Arguments\n"
-	       "  --message-sizes <(a b),(c d),...>\n"
-	       "      Short version: -s\n"
-	       "      List of size tuples (in bytes) to use for the self test.\n"
-	       "\n"
-	       "      Note that the ( ) are not strictly necessary\n"
-	       "      Providing a single size (a) is interpreted as an alias for (a a)\n"
-	       "\n"
-	       "      For each tuple, the first value is the sent size, and the second value is the reply size\n"
-	       "      Valid sizes are [0-%d]\n"
-	       "      Performance results will be reported individually for each tuple.\n"
-	       "\n"
-	       "      Each size integer can be prepended with a single character to specify\n"
-	       "      the underlying transport mechanism. Available types are:\n"
-	       "        'e' - Empty (no payload)\n"
-	       "        'i' - I/O vector (IOV)\n"
-	       "        'b' - Bulk transfer\n"
-	       "      For example, (b1000) would transfer 1000 bytes via bulk in both directions\n"
-	       "      Similarly, (i100 b1000) would use IOV to send and bulk to reply\n"
-	       "      Only reasonable combinations are permitted (i.e. e1000 is not allowed)\n"
-	       "      If no type specifier is specified, one will be chosen automatically. The simple\n"
-	       "        heuristic is that bulk will be used if a specified size is >= %u\n"
-	       "      BULK_GET will be used on the service side to 'send' data from client\n"
-	       "        to service, and BULK_PUT will be used on the service side to 'reply'\n"
-	       "        (assuming bulk transfers specified)\n"
-	       "\n"
-	       "      Note that different messages are sent internally via different structures.\n"
-	       "      These are enumerated as follows, with x,y > 0:\n"
-	       "        (0  0)  - Empty payload sent in both directions\n"
-	       "        (ix 0)  - 8-byte session_id + x-byte iov sent, empty reply\n"
-	       "        (0  iy) - 8-byte session_id sent, y-byte iov reply\n"
-	       "        (ix iy) - 8-byte session_id + x-byte iov sent, y-byte iov reply\n"
-	       "        (0  by) - 8-byte session_id + 8-byte bulk handle sent\n"
-	       "                  y-byte BULK_PUT, empty reply\n"
-	       "        (bx 0)  - 8-byte session_id + 8-byte bulk_handle sent\n"
-	       "                  x-byte BULK_GET, empty reply\n"
-	       "        (ix by) - 8-byte session_id + x-byte iov + 8-byte bulk_handle sent\n"
-	       "                  y-byte BULK_PUT, empty reply\n"
-	       "        (bx iy) - 8-byte session_id + 8-byte bulk_handle sent\n"
-	       "                  x-byte BULK_GET, y-byte iov reply\n"
-	       "        (bx by) - 8-byte session_id + 8-byte bulk_handle sent\n"
-	       "                  x-byte BULK_GET, y-byte BULK_PUT, empty reply\n"
-	       "\n"
-	       "      Note also that any message size other than (0 0) will use test sessions.\n"
-	       "        A self-test session will be negotiated with the service before sending\n"
-	       "        any traffic, and the session will be closed after testing this size completes.\n"
-	       "        The time to create and tear down these sessions is NOT measured.\n"
-	       "\n"
-	       "      Default: \"%s\"\n"
-	       "\n"
-	       "  --master-endpoint <ranks:tags>\n"
-	       "      Short version: -m\n"
-	       "      Describes an endpoint (or range of endpoints) that will each run a\n"
-	       "        1:many self-test against the list of endpoints given via the\n"
-	       "        --endpoint argument.\n"
-	       "\n"
-	       "      Specifying multiple --master-endpoint ranks/tags sets up a many:many\n"
-	       "        self-test - the first 'many' is the list of master endpoints, each\n"
-	       "        which executes a separate concurrent test against the second\n"
-	       "        'many' (the list of test endpoints)\n"
-	       "\n"
-	       "      The argument syntax for this option is identical to that for\n"
-	       "        --endpoint. Also, like --endpoint, --master-endpoint can be\n"
-	       "        specified multiple times\n"
-	       "\n"
-	       "      Unlike --endpoint, the list of master endpoints is sorted and\n"
-	       "        any duplicate entries are removed automatically. This is because\n"
-	       "        each instance of self-test can only manage one 1:many test at\n"
-	       "        a time\n"
-	       "\n"
-	       "      If not specified, the default value is to use this command-line\n"
-	       "        application itself to run a 1:many test against the test endpoints\n"
-	       "\n"
-	       "      This client application sends all of the self-test parameters to\n"
-	       "        this master node and instructs it to run a self-test session against\n"
-	       "        the other endpoints specified by the --endpoint argument\n"
-	       "\n"
-	       "      This allows self-test to be run between any arbitrary CART-enabled\n"
-	       "        applications without having to make them self-test aware. These\n"
-	       "        other applications can be busy doing something else entirely and\n"
-	       "        self-test will have no impact on that workload beyond consuming\n"
-	       "        additional network and compute resources\n"
-	       "\n"
-	       "  --repetitions-per-size <N>\n"
-	       "      Short version: -r\n"
-	       "      Number of samples per message size per endpt.\n"
-	       "      RPCs for each particular size will be repeated this many times per endpt.\n"
-	       "      Default: %d\n"
-	       "\n"
-	       "  --max-inflight-rpcs <N>\n"
-	       "      Short version: -i\n"
-	       "      Maximum number of RPCs allowed to be executing concurrently.\n"
-	       "\n"
-	       "      Note that at the beginning of each test run, a buffer of size send_size\n"
-	       "        is allocated for each in-flight RPC (total max_inflight * send_size).\n"
-	       "        This could be a lot of memory. Also, if the reply uses bulk, the\n"
-	       "        size increases to (max_inflight * max(send_size, reply_size))\n"
-	       "\n"
-	       "      Default: %d\n"
-	       "\n"
-	       "  --align <alignment>\n"
-	       "      Short version: -a\n"
-	       "\n"
-	       "      Forces all test buffers to be aligned (or misaligned) as specified.\n"
-	       "\n"
-	       "      The argument specifies what the least-significant byte of all test buffer\n"
-	       "        addresses should be forced to be. For example, if --align 0 is specified,\n"
-	       "        all test buffer addresses will end in 0x00 (thus aligned to 256 bytes).\n"
-	       "        To force misalignment, use something like --align 3. For 64-bit (8-byte)\n"
-	       "        alignment, use something like --align 8 or --align 24 (0x08 and 0x18)\n"
-	       "\n"
-	       "      Alignment should be specified as a decimal value in the range [%d:%d]\n"
-	       "\n"
-	       "      If specified, buffers will be allocated with an extra 256 bytes of\n"
-	       "        alignment padding and the buffer to transfer will start at the point which\n"
-	       "        the least - significant byte of the address matches the requested alignment.\n"
-	       "\n"
-	       "      Default is no alignment - whatever is returned by the allocator is used\n"
-	       "\n"
-	       "  --Mbits\n"
-	       "      Short version: -b\n"
-	       "      By default, self-test outputs performance results in MB (#Bytes/1024^2)\n"
-	       "      Specifying --Mbits switches the output to megabits (#bits/1000000)\n"
-	       "  --path  /path/to/attach_info_file/directory/\n"
-	       "      Short version: -p  prefix\n"
-	       "      This option implies --singleton is set.\n"
-	       "        If specified, self_test will use the address information in:\n"
-	       "        /tmp/group_name.attach_info_tmp, if prefix is specified, self_test will use\n"
-	       "        the address information in: prefix/group_name.attach_info_tmp.\n"
-	       "        Note the = sign in the option.\n"
-	       "\n"
-	       "  --use-daos-agent-env\n"
-	       "      Short version: -u\n"
-	       "      This option sets the following env vars through a running daos_agent.\n"
-	       "         - OFI_INTERFACE\n"
-	       "         - CRT_PHY_ADDR_STR\n"
-	       "         - CRT_CTX_SHARE_ADDR\n"
-	       "         - OFI_DOMAIN\n"
-	       "         - CRT_TIMEOUT\n",
-	       prog_name, UINT32_MAX,
-	       CRT_SELF_TEST_AUTO_BULK_THRESH, msg_sizes_str, rep_count,
-	       max_inflight, CRT_ST_BUF_ALIGN_MIN, CRT_ST_BUF_ALIGN_MIN);
+	printf(
+	    "Usage: %s --group-name <name> --endpoint <ranks:tags> [optional arguments]\n"
+	    "\n"
+	    "Required Arguments\n"
+	    "  --group-name <group_name>\n"
+	    "      Short version: -g\n"
+	    "      The name of the process set to test against\n"
+	    "\n"
+	    "  --endpoint <ranks:tags>\n"
+	    "      Short version: -e\n"
+	    "      Describes an endpoint (or range of endpoints) to connect to\n"
+	    "        Note: Can be specified multiple times\n"
+	    "\n"
+	    "      ranks and tags are comma-separated lists to connect to\n"
+	    "        Supports both ranges and lists - for example, \"1-5,3,8\"\n"
+	    "\n"
+	    "      Example: --endpoint 1-3,2:0-1\n"
+	    "        This would create these endpoints:\n"
+	    "          1:0\n"
+	    "          1:1\n"
+	    "          2:0\n"
+	    "          2:1\n"
+	    "          3:0\n"
+	    "          3:1\n"
+	    "          2:0\n"
+	    "          2:1\n"
+	    "\n"
+	    "        By default, self-test will send test messages to these\n"
+	    "        endpoints in the order listed above. See --randomize-endpoints\n"
+	    "        for more information\n"
+	    "\n"
+	    "Optional Arguments\n"
+	    "  --message-sizes <(a b),(c d),...>\n"
+	    "      Short version: -s\n"
+	    "      List of size tuples (in bytes) to use for the self test.\n"
+	    "\n"
+	    "      Note that the ( ) are not strictly necessary\n"
+	    "      Providing a single size (a) is interpreted as an alias for (a a)\n"
+	    "\n"
+	    "      For each tuple, the first value is the sent size, and the second value is the "
+	    "reply size\n"
+	    "      Valid sizes are [0-%d]\n"
+	    "      Performance results will be reported individually for each tuple.\n"
+	    "\n"
+	    "      Each size integer can be prepended with a single character to specify\n"
+	    "      the underlying transport mechanism. Available types are:\n"
+	    "        'e' - Empty (no payload)\n"
+	    "        'i' - I/O vector (IOV)\n"
+	    "        'b' - Bulk transfer\n"
+	    "      For example, (b1000) would transfer 1000 bytes via bulk in both directions\n"
+	    "      Similarly, (i100 b1000) would use IOV to send and bulk to reply\n"
+	    "      Only reasonable combinations are permitted (i.e. e1000 is not allowed)\n"
+	    "      If no type specifier is specified, one will be chosen automatically. The "
+	    "simple\n"
+	    "        heuristic is that bulk will be used if a specified size is >= %u\n"
+	    "      BULK_GET will be used on the service side to 'send' data from client\n"
+	    "        to service, and BULK_PUT will be used on the service side to 'reply'\n"
+	    "        (assuming bulk transfers specified)\n"
+	    "\n"
+	    "      Note that different messages are sent internally via different structures.\n"
+	    "      These are enumerated as follows, with x,y > 0:\n"
+	    "        (0  0)  - Empty payload sent in both directions\n"
+	    "        (ix 0)  - 8-byte session_id + x-byte iov sent, empty reply\n"
+	    "        (0  iy) - 8-byte session_id sent, y-byte iov reply\n"
+	    "        (ix iy) - 8-byte session_id + x-byte iov sent, y-byte iov reply\n"
+	    "        (0  by) - 8-byte session_id + 8-byte bulk handle sent\n"
+	    "                  y-byte BULK_PUT, empty reply\n"
+	    "        (bx 0)  - 8-byte session_id + 8-byte bulk_handle sent\n"
+	    "                  x-byte BULK_GET, empty reply\n"
+	    "        (ix by) - 8-byte session_id + x-byte iov + 8-byte bulk_handle sent\n"
+	    "                  y-byte BULK_PUT, empty reply\n"
+	    "        (bx iy) - 8-byte session_id + 8-byte bulk_handle sent\n"
+	    "                  x-byte BULK_GET, y-byte iov reply\n"
+	    "        (bx by) - 8-byte session_id + 8-byte bulk_handle sent\n"
+	    "                  x-byte BULK_GET, y-byte BULK_PUT, empty reply\n"
+	    "\n"
+	    "      Note also that any message size other than (0 0) will use test sessions.\n"
+	    "        A self-test session will be negotiated with the service before sending\n"
+	    "        any traffic, and the session will be closed after testing this size "
+	    "completes.\n"
+	    "        The time to create and tear down these sessions is NOT measured.\n"
+	    "\n"
+	    "      Default: \"%s\"\n"
+	    "\n"
+	    "  --master-endpoint <ranks:tags>\n"
+	    "      Short version: -m\n"
+	    "      Describes an endpoint (or range of endpoints) that will each run a\n"
+	    "        1:many self-test against the list of endpoints given via the\n"
+	    "        --endpoint argument.\n"
+	    "\n"
+	    "      Specifying multiple --master-endpoint ranks/tags sets up a many:many\n"
+	    "        self-test - the first 'many' is the list of master endpoints, each\n"
+	    "        which executes a separate concurrent test against the second\n"
+	    "        'many' (the list of test endpoints)\n"
+	    "\n"
+	    "      The argument syntax for this option is identical to that for\n"
+	    "        --endpoint. Also, like --endpoint, --master-endpoint can be\n"
+	    "        specified multiple times\n"
+	    "\n"
+	    "      Unlike --endpoint, the list of master endpoints is sorted and\n"
+	    "        any duplicate entries are removed automatically. This is because\n"
+	    "        each instance of self-test can only manage one 1:many test at\n"
+	    "        a time\n"
+	    "\n"
+	    "      If not specified, the default value is to use this command-line\n"
+	    "        application itself to run a 1:many test against the test endpoints\n"
+	    "\n"
+	    "      This client application sends all of the self-test parameters to\n"
+	    "        this master node and instructs it to run a self-test session against\n"
+	    "        the other endpoints specified by the --endpoint argument\n"
+	    "\n"
+	    "      This allows self-test to be run between any arbitrary CART-enabled\n"
+	    "        applications without having to make them self-test aware. These\n"
+	    "        other applications can be busy doing something else entirely and\n"
+	    "        self-test will have no impact on that workload beyond consuming\n"
+	    "        additional network and compute resources\n"
+	    "\n"
+	    "  --repetitions-per-size <N>\n"
+	    "      Short version: -r\n"
+	    "      Number of samples per message size per endpt.\n"
+	    "      RPCs for each particular size will be repeated this many times per endpt.\n"
+	    "      Default: %d\n"
+	    "\n"
+	    "  --max-inflight-rpcs <N>\n"
+	    "      Short version: -i\n"
+	    "      Maximum number of RPCs allowed to be executing concurrently.\n"
+	    "\n"
+	    "      Note that at the beginning of each test run, a buffer of size send_size\n"
+	    "        is allocated for each in-flight RPC (total max_inflight * send_size).\n"
+	    "        This could be a lot of memory. Also, if the reply uses bulk, the\n"
+	    "        size increases to (max_inflight * max(send_size, reply_size))\n"
+	    "\n"
+	    "      Default: %d\n"
+	    "\n"
+	    "  --align <alignment>\n"
+	    "      Short version: -a\n"
+	    "\n"
+	    "      Forces all test buffers to be aligned (or misaligned) as specified.\n"
+	    "\n"
+	    "      The argument specifies what the least-significant byte of all test buffer\n"
+	    "        addresses should be forced to be. For example, if --align 0 is specified,\n"
+	    "        all test buffer addresses will end in 0x00 (thus aligned to 256 bytes).\n"
+	    "        To force misalignment, use something like --align 3. For 64-bit (8-byte)\n"
+	    "        alignment, use something like --align 8 or --align 24 (0x08 and 0x18)\n"
+	    "\n"
+	    "      Alignment should be specified as a decimal value in the range [%d:%d]\n"
+	    "\n"
+	    "      If specified, buffers will be allocated with an extra 256 bytes of\n"
+	    "        alignment padding and the buffer to transfer will start at the point which\n"
+	    "        the least - significant byte of the address matches the requested alignment.\n"
+	    "\n"
+	    "      Default is no alignment - whatever is returned by the allocator is used\n"
+	    "\n"
+	    "  --Mbits\n"
+	    "      Short version: -b\n"
+	    "      By default, self-test outputs performance results in MB (#Bytes/1024^2)\n"
+	    "      Specifying --Mbits switches the output to megabits (#bits/1000000)\n"
+	    "  --path  /path/to/attach_info_file/directory/\n"
+	    "      Short version: -p  prefix\n"
+	    "        If specified, self_test will use the address information in:\n"
+	    "        /tmp/group_name.attach_info_tmp, if prefix is specified, self_test will use\n"
+	    "        the address information in: prefix/group_name.attach_info_tmp.\n"
+	    "        Note the = sign in the option.\n"
+	    "\n"
+	    "  --use-daos-agent-env\n"
+	    "      Short version: -u\n"
+	    "      This option sets the following env vars through a running daos_agent.\n"
+	    "         - D_INTERFACE\n"
+	    "         - D_PROVIDER\n"
+	    "         - D_DOMAIN\n"
+	    "         - CRT_TIMEOUT\n",
+	    prog_name, UINT32_MAX, CRT_SELF_TEST_AUTO_BULK_THRESH, msg_sizes_str, rep_count,
+	    max_inflight, CRT_ST_BUF_ALIGN_MIN, CRT_ST_BUF_ALIGN_MIN);
 }
 
 #define ST_ENDPT_RANK_IDX 0
@@ -1714,10 +1708,9 @@ int main(int argc, char *argv[])
 	uint32_t			 num_endpts = 0;
 	uint32_t			 num_ms_endpts = 0;
 	int				 output_megabits = 0;
-	int16_t				 buf_alignment =
-		CRT_ST_BUF_ALIGN_DEFAULT;
+	int16_t                          buf_alignment    = CRT_ST_BUF_ALIGN_DEFAULT;
 	char				*attach_info_path = NULL;
-	bool				 use_daos_agent_vars = false;
+	bool                             use_agent        = false;
 
 	ret = d_log_init();
 	if (ret != 0) {
@@ -1727,25 +1720,21 @@ int main(int argc, char *argv[])
 	/********************* Parse user arguments *********************/
 	while (1) {
 		static struct option long_options[] = {
-			{"group-name", required_argument, 0, 'g'},
-			{"master-endpoint", required_argument, 0, 'm'},
-			{"endpoint", required_argument, 0, 'e'},
-			{"message-sizes", required_argument, 0, 's'},
-			{"repetitions-per-size", required_argument, 0, 'r'},
-			{"max-inflight-rpcs", required_argument, 0, 'i'},
-			{"align", required_argument, 0, 'a'},
-			{"Mbits", no_argument, 0, 'b'},
-			{"singleton", no_argument, 0, 't'},
-			{"randomize-endpoints", no_argument, 0, 'q'},
-			{"path", required_argument, 0, 'p'},
-			{"nopmix", no_argument, 0, 'n'},
-			{"use-daos-agent-env", no_argument, 0, 'u'},
-			{"help", no_argument, 0, 'h'},
-			{0, 0, 0, 0}
-		};
+		    {"group-name", required_argument, 0, 'g'},
+		    {"master-endpoint", required_argument, 0, 'm'},
+		    {"endpoint", required_argument, 0, 'e'},
+		    {"message-sizes", required_argument, 0, 's'},
+		    {"repetitions-per-size", required_argument, 0, 'r'},
+		    {"max-inflight-rpcs", required_argument, 0, 'i'},
+		    {"align", required_argument, 0, 'a'},
+		    {"Mbits", no_argument, 0, 'b'},
+		    {"randomize-endpoints", no_argument, 0, 'q'},
+		    {"path", required_argument, 0, 'p'},
+		    {"use-daos-agent-env", no_argument, 0, 'u'},
+		    {"help", no_argument, 0, 'h'},
+		    {0, 0, 0, 0}};
 
-		c = getopt_long(argc, argv, "g:m:e:s:r:i:a:bthnqp:u",
-				long_options, NULL);
+		c = getopt_long(argc, argv, "g:m:e:s:r:i:a:bhqp:u", long_options, NULL);
 		if (c == -1)
 			break;
 
@@ -1798,47 +1787,38 @@ int main(int argc, char *argv[])
 			attach_info_path = optarg;
 			break;
 		case 'u':
-			use_daos_agent_vars = true;
+			use_agent = true;
 			break;
 		case 'q':
 			g_randomize_endpoints = true;
 			break;
 
-		/* 't' and 'n' options are deprecated */
-		case 't':
-			printf("Warning: 't' argument is deprecated\n");
-			break;
-		case 'n':
-			printf("Warning: 'n' argument is deprecated\n");
-			break;
 		case 'h':
 		case '?':
-			print_usage(argv[0], default_msg_sizes_str,
-				    default_rep_count,
+			print_usage(argv[0], default_msg_sizes_str, default_rep_count,
 				    default_max_inflight);
 			D_GOTO(cleanup, ret = 0);
 			break;
 		default:
-			print_usage(argv[0], default_msg_sizes_str,
-				    default_rep_count,
+			print_usage(argv[0], default_msg_sizes_str, default_rep_count,
 				    default_max_inflight);
 			D_GOTO(cleanup, ret = -DER_INVAL);
 		}
 	}
 
-	if (use_daos_agent_vars == false) {
+	if (use_agent == false) {
 		char *attach_path;
 		char *attach_path_env = NULL;
 
-		if (!d_isenv_def("CRT_PHY_ADDR_STR")) {
-			printf("Error: provider (CRT_PHY_ADDR_STR) is not set\n");
-			printf("Example: export CRT_PHY_ADDR_STR='ofi+tcp'\n");
+		if (!d_isenv_def("D_PROVIDER")) {
+			printf("Error: provider (D_PROVIDER) is not set\n");
+			printf("Example: export D_PROVIDER='ofi+tcp'\n");
 			D_GOTO(cleanup, ret = -DER_INVAL);
 		}
 
-		if (!d_isenv_def("OFI_INTERFACE")) {
-			printf("Error: interface (OFI_INTERFACE) is not set\n");
-			printf("Example: export OFI_INTERFACE=eth0\n");
+		if (!d_isenv_def("D_INTERFACE")) {
+			printf("Error: interface (D_INTERFACE) is not set\n");
+			printf("Example: export D_INTERFACE=eth0\n");
 			D_GOTO(cleanup, ret = -DER_INVAL);
 		}
 
@@ -1859,8 +1839,6 @@ int main(int argc, char *argv[])
 	}
 
 	/******************** Parse message sizes argument ********************/
-
-
 	/*
 	 * Count the number of tuple tokens (',') in the user-specified string
 	 * This gives an upper limit on the number of arguments the user passed
@@ -1899,8 +1877,7 @@ int main(int argc, char *argv[])
 	while (pch != NULL) {
 		D_ASSERTF(num_msg_sizes <= num_tokens, "Token counting err\n");
 
-		ret = parse_message_sizes_string(pch,
-						 &all_params[num_msg_sizes]);
+		ret = parse_message_sizes_string(pch, &all_params[num_msg_sizes]);
 		if (ret == 0)
 			num_msg_sizes++;
 		else
@@ -1922,8 +1899,7 @@ int main(int argc, char *argv[])
 		struct st_size_params *realloced_mem;
 
 		/* This should always succeed since the buffer is shrinking.. */
-		D_REALLOC_ARRAY(realloced_mem, all_params, num_tokens + 1,
-				num_msg_sizes);
+		D_REALLOC_ARRAY(realloced_mem, all_params, num_tokens + 1, num_msg_sizes);
 		if (realloced_mem == NULL)
 			D_GOTO(cleanup, ret = -DER_NOMEM);
 		all_params = (struct st_size_params *)realloced_mem;
@@ -1940,19 +1916,24 @@ int main(int argc, char *argv[])
 		printf("--group-name argument not specified or is invalid\n");
 		D_GOTO(cleanup, ret = -DER_INVAL);
 	}
+
 	if (ms_endpts == NULL)
 		printf("Warning: No --master-endpoint specified; using this"
 		       " command line application as the master endpoint\n");
 
-
 	if (endpts == NULL || num_endpts == 0) {
-		printf("Warning: No --endpoint specified; using 0:2 default\n");
+		int tag = 0; /* use context 0 as a default one for non-daos case */
+
+		/* In case of the DAOS engines first 2 contexts are reserved */
+		if (use_agent)
+			tag = 2;
+
+		printf("Warning: No --endpoint specified; using 0:%d default\n", tag);
 		num_endpts = 1;
 		D_ALLOC_ARRAY(endpts, 1);
 		endpts[0].rank = 0;
-		endpts[0].tag = 2;
+		endpts[0].tag  = tag;
 	}
-
 
 	/* repeat rep_count for each endpoint */
 	rep_count = rep_count * num_endpts;
@@ -1999,28 +1980,19 @@ int main(int argc, char *argv[])
 	       rep_count, max_inflight);
 
 	/********************* Run the self test *********************/
-	ret = run_self_test(all_params, num_msg_sizes, rep_count,
-			    max_inflight, dest_name, ms_endpts,
-			    num_ms_endpts, endpts, num_endpts,
-			    output_megabits, buf_alignment, attach_info_path,
-			    use_daos_agent_vars);
+	ret = run_self_test(all_params, num_msg_sizes, rep_count, max_inflight, dest_name,
+			    ms_endpts, num_ms_endpts, endpts, num_endpts, output_megabits,
+			    buf_alignment, attach_info_path, use_agent);
 
 	/********************* Clean up *********************/
 cleanup:
-	if (ms_endpts != NULL) {
-		D_FREE(ms_endpts);
-		ms_endpts = NULL;
-	}
-	if (endpts != NULL) {
-		D_FREE(endpts);
-		endpts = NULL;
-	}
-	if (all_params != NULL)
-		D_FREE(all_params);
+	D_FREE(ms_endpts);
+	D_FREE(endpts);
+	D_FREE(all_params);
 
-	if (use_daos_agent_vars) {
+	if (use_agent)
 		dc_mgmt_fini();
-	}
+
 	d_log_fini();
 
 	return ret;

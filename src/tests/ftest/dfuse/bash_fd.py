@@ -7,7 +7,9 @@
 import os
 import stat
 
-from dfuse_test_base import DfuseTestBase
+from apricot import TestWithServers
+from dfuse_utils import get_dfuse, start_dfuse
+from host_utils import get_local_host
 from run_utils import run_remote
 
 OUTER = """#!/bin/bash
@@ -77,7 +79,7 @@ exit 0
 """
 
 
-class DFuseFdTest(DfuseTestBase):
+class DFuseFdTest(TestWithServers):
     """Base FdTest test class.
 
     :avocado: recursive
@@ -98,27 +100,34 @@ class DFuseFdTest(DfuseTestBase):
         else:
             env_str = ""
 
+        self.log_step('Creating a single pool and container')
         pool = self.get_pool(connect=False)
         container = self.get_container(pool)
-        self.start_dfuse(self.hostlist_clients, pool, container)
 
-        fuse_root_dir = self.dfuse.mount_dir.value
+        self.log_step('Starting dfuse')
+        dfuse_hosts = get_local_host()
+        dfuse = get_dfuse(self, dfuse_hosts)
+        start_dfuse(self, dfuse, pool, container)
+        fuse_root_dir = dfuse.mount_dir.value
 
-        with open(os.path.join(fuse_root_dir, "bash_fd_inner.sh"), "w") as fd:
+        self.log_step("Setting up the 'bash_fd_inner.sh' script")
+        with open(os.path.join(fuse_root_dir, "bash_fd_inner.sh"), "w", encoding="utf-8") as fd:
             fd.write(INNER)
-
         os.chmod(os.path.join(fuse_root_dir, "bash_fd_inner.sh"), stat.S_IXUSR | stat.S_IRUSR)
 
-        with open(os.path.join(fuse_root_dir, "bash_fd_outer.sh"), "w") as fd:
+        self.log_step("Setting up the 'bash_fd_outer.sh' script")
+        with open(os.path.join(fuse_root_dir, "bash_fd_outer.sh"), "w", encoding="utf-8") as fd:
             fd.write(OUTER)
-
         os.chmod(os.path.join(fuse_root_dir, "bash_fd_outer.sh"), stat.S_IXUSR | stat.S_IRUSR)
 
         cmd = f"cd {fuse_root_dir}; ./bash_fd_outer.sh"
 
-        result = run_remote(self.log, self.hostlist_clients, env_str + cmd)
+        self.log_step("Executing the 'bash_fd_outer.sh' script")
+        result = run_remote(self.log, dfuse_hosts, env_str + cmd)
         if not result.passed:
             self.fail(f'"{cmd}" failed on {result.failed_hosts}')
+
+        self.log.info('Test passed')
 
     def test_bashfd(self):
         """
@@ -141,7 +150,7 @@ class DFuseFdTest(DfuseTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=dfuse,il,dfs
+        :avocado: tags=dfuse,dfs,ioil
         :avocado: tags=DFuseFdTest,test_bashfd_ioil
         """
         self.run_bashfd(il_lib="libioil.so")
@@ -154,7 +163,7 @@ class DFuseFdTest(DfuseTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=pil4dfs,dfs
+        :avocado: tags=dfuse,dfs,pil4dfs
         :avocado: tags=DFuseFdTest,test_bashfd_pil4dfs
         """
         self.run_bashfd(il_lib="libpil4dfs.so")
