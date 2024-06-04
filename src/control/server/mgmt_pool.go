@@ -929,6 +929,10 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 		return nil, err
 	}
 
+	if req.QueryMask == 0 {
+		req.QueryMask = uint64(daos.DefaultPoolQueryMask)
+	}
+
 	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolQuery, req)
 	if err != nil {
 		return nil, err

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -212,7 +212,7 @@ lookup_object(struct io_test_args *arg, daos_unit_oid_t oid)
 			  vos_hdl2cont(arg->ctx.tc_co_hdl), oid, &epr, 0,
 			  VOS_OBJ_VISIBLE, DAOS_INTENT_DEFAULT, &obj, 0);
 	if (rc == 0)
-		vos_obj_release(vos_obj_cache_current(true), obj, false);
+		vos_obj_release(vos_obj_cache_current(true), obj, 0, false);
 	return rc;
 }
 

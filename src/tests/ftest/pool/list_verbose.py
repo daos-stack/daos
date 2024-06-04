@@ -61,6 +61,7 @@ class ListVerboseTest(IorTestBase):
         upgrade_layout_ver = p_query["response"]["upgrade_layout_ver"]
 
         return {
+            "query_mask": "rebuild,space",
             "state": state,
             "uuid": pool.uuid.lower(),
             "label": pool.label.value,
