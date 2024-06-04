@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -23,7 +23,7 @@ class DaosPerfBase(TestWithServers):
     def run_daos_perf(self):
         """Run the daos_perf command."""
         # Create pool
-        self.add_pool()
+        self.add_pool(connect=False)
         # Create container
         self.add_container(self.pool)
         # Obtain the number of processes listed with the daos_perf options
