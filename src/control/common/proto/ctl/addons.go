@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -62,5 +62,3 @@ func (nc *NvmeController) IsScannable() bool {
 func (nc *NvmeController) CanSupplyHealthStats() bool {
 	return nc.DevState == NvmeDevState_NORMAL || nc.DevState == NvmeDevState_EVICTED
 }
-
-//func (sd *SmdDevice) UnmarshalJSON(data []byte) error {
