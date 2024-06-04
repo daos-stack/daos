@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -88,6 +88,7 @@ type (
 		log                logging.Logger
 		cfg                *DatabaseConfig
 		initialized        atm.Bool
+		steppingUp         atm.Bool
 		replicaAddr        *net.TCPAddr
 		raftTransport      raft.Transport
 		raft               syncRaft
@@ -531,16 +532,23 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 
 			var gainedCtx context.Context
 			gainedCtx, cancelGainedCtx = context.WithCancel(parent)
-			for _, fn := range db.onLeadershipGained {
-				if err := fn(gainedCtx); err != nil {
-					db.log.Errorf("failure in onLeadershipGained callback: %s", err)
-					cancelGainedCtx()
-					if err = db.ResignLeadership(err); err != nil {
-						db.log.Errorf("raft ResignLeadership() failed: %s", err)
-					}
-					break // break out of the inner loop; restart the monitoring loop
-				}
+			db.stepUp(gainedCtx, cancelGainedCtx)
+		}
+	}
+}
+
+func (db *Database) stepUp(ctx context.Context, cancel context.CancelFunc) {
+	db.steppingUp.SetTrue()
+	defer db.steppingUp.SetFalse()
+
+	for _, fn := range db.onLeadershipGained {
+		if err := fn(ctx); err != nil {
+			db.log.Errorf("failure in onLeadershipGained callback: %s", err)
+			cancel()
+			if err = db.ResignLeadership(err); err != nil {
+				db.log.Errorf("raft ResignLeadership() failed: %s", err)
 			}
+			break
 		}
 	}
 }

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -148,8 +148,19 @@ func (db *Database) Barrier() error {
 			db.log.Errorf("lost leadership during Barrier(): %s", err)
 			return errNotSysLeader(svc, db)
 		}
-		return err
+		if err != nil {
+			return err
+		}
+
+		db.waitForLeaderStepUp()
+		return nil
 	})
+}
+
+func (db *Database) waitForLeaderStepUp() {
+	for db.steppingUp.IsTrue() {
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 // ShutdownRaft signals that the raft implementation should shut down

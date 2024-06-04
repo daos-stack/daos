@@ -2508,8 +2508,21 @@ func TestMgmtSvc_checkReqFabricProvider(t *testing.T) {
 			joinURI: "tcp://10.10.10.10",
 			expErr:  &system.ErrNotReplica{},
 		},
+		"prop not set": {
+			getSvc: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				ms := mgmtSystemTestSetup(t, l, system.Members{}, []*control.HostResponse{})
+				if err := ms.setFabricProviders(""); err != nil {
+					t.Fatal(err)
+				}
+				return ms
+			},
+			joinProv: "tcp",
+			joinURI:  "tcp://10.10.10.10",
+			expErr:   system.ErrLeaderStepUpInProgress,
+		},
 		"success": {
-			joinURI: "tcp://10.10.10.10",
+			joinProv: "tcp",
+			joinURI:  "tcp://10.10.10.10",
 		},
 		"does not match": {
 			joinProv:     "verbs",
