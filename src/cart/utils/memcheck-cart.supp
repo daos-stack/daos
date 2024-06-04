@@ -572,3 +572,14 @@
    Memcheck:Addr1
    fun:racecallatomic
 }
+{
+   Go runtime cgo malloc
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:_cgo_b68ed06c1ed7_Cfunc__Cmalloc
+   fun:runtime.asmcgocall.abi0
+   ...
+   fun:racecall
+   fun:runtime.systemstack.abi0
+}
