@@ -738,6 +738,10 @@ class TestWithServers(TestWithoutServers):
                 self.access_points, self.access_points_suffix)
         self.host_info.access_points = self.access_points
 
+        # Toggle whether to dump server ULT stacks on failure
+        self.dump_engine_ult_on_failure = self.params.get(
+            "dump_engine_ult_on_failure", "/run/*", True)
+
         # # Find a configuration that meets the test requirements
         # self.config = Configuration(
         #     self.params, self.hostlist_servers, debug=self.debug)
@@ -1344,6 +1348,15 @@ class TestWithServers(TestWithoutServers):
             errors.append("Error removing temporary test files on {}".format(result.failed_hosts))
         return errors
 
+    def __dump_engines_stacks(self, message):
+        """Dump the engines ULT stacks if self.dump_engine_ult_on_failure is True.
+
+        Args:
+            message (str): see dump_engines_stacks()
+        """
+        if self.dump_engine_ult_on_failure:
+            self.dump_engines_stacks(message)
+
     def dump_engines_stacks(self, message):
         """Dump the engines ULT stacks.
 
@@ -1360,17 +1373,17 @@ class TestWithServers(TestWithoutServers):
         super().report_timeout()
         if self.timeout is not None and self.time_elapsed > self.timeout:
             # dump engines ULT stacks upon test timeout
-            self.dump_engines_stacks("Test has timed-out")
+            self.__dump_engines_stacks("Test has timed-out")
 
     def fail(self, message=None):
         """Dump engines ULT stacks upon test failure."""
-        self.dump_engines_stacks("Test has failed")
+        self.__dump_engines_stacks("Test has failed")
         super().fail(message)
 
     def error(self, message=None):
         # pylint: disable=arguments-renamed
         """Dump engines ULT stacks upon test error."""
-        self.dump_engines_stacks("Test has errored")
+        self.__dump_engines_stacks("Test has errored")
         super().error(message)
 
     def tearDown(self):
@@ -1383,7 +1396,7 @@ class TestWithServers(TestWithoutServers):
         # class (see DAOS-1452/DAOS-9941 and Avocado issue #5217 with
         # associated PR-5224)
         if self.status is not None and self.status != 'PASS' and self.status != 'SKIP':
-            self.dump_engines_stacks("Test status is {}".format(self.status))
+            self.__dump_engines_stacks("Test status is {}".format(self.status))
 
         # Report whether or not the timeout has expired
         self.report_timeout()
@@ -1595,7 +1608,7 @@ class TestWithServers(TestWithoutServers):
                     "ERROR: At least one multi-variant server was not found in "
                     "its expected state; stopping all servers")
                 # dump engines stacks if not already done
-                self.dump_engines_stacks("Some engine not in expected state")
+                self.__dump_engines_stacks("Some engine not in expected state")
             self.test_log.info(
                 "Stopping %s group(s) of servers", len(self.server_managers))
             errors.extend(self._stop_managers(self.server_managers, "servers"))
