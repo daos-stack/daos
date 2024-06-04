@@ -374,13 +374,10 @@ add_ctrlr_details(Ctl__NvmeController *ctrlr, struct bio_dev_info *dev_info, boo
 		char       *cur                                     = buf;
 		const char *end                                     = buf + sizeof(buf);
 
+		/* Print config space byte-array to output string */
 		for (int i = 0; i < NVME_PCI_CFG_SPC_MAX_LEN; i++) {
-			D_DEBUG(DB_MGMT, "i 0x%x, buf %p, len 0x%lx, cur %p, end %p, end-cur 0x%lx",
-				i, buf, buflen, cur, end, end - cur);
-
 			cur += snprintf(cur, end - cur, "%02x",
 					dev_info->bdi_ctrlr->pci_cfg[i] & 0xff);
-			D_DEBUG(DB_MGMT, "written (rem: %ld): %s ", end - cur, buf);
 			if (cur >= end) {
 				D_ERROR("buffer not big enough");
 				return -DER_INVAL;

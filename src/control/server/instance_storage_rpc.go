@@ -242,6 +242,7 @@ func populateCtrlrHealth(ctx context.Context, engine Engine, req *ctlpb.BioHealt
 	}
 
 	ctrlr.HealthStats = health
+	ctrlr.PciCfg = ""
 	return true, nil
 }
 
