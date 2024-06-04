@@ -209,7 +209,7 @@ ctl_parse_fi_attr(char *arg_str, struct crt_ctl_fi_attr_set_in *fi_attr_in)
 		tokens[++token_cnt] = strtok_r(NULL, ",", &saveptr);
 	} while (tokens[token_cnt] != NULL && token_cnt < FI_ATTR_MAX_TOKENS);
 
-	if (token_cnt < FI_ATTR_MAX_TOKENS - 1 || token_cnt > FI_ATTR_MAX_TOKENS)
+	if (token_cnt < FI_ATTR_MAX_TOKENS - 2 || token_cnt > FI_ATTR_MAX_TOKENS)
 		goto error_out;
 
 	fi_attr_in->fa_fault_id      = strtoull(tokens[0], NULL, 10);
