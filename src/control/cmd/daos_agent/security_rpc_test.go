@@ -295,7 +295,7 @@ func TestAgent_SecurityRPC_getCredential(t *testing.T) {
 			defer cleanup()
 
 			mod := NewSecurityModule(log, tc.secCfg)
-			mod.signCredential = func() func(req *auth.CredentialRequest) (*auth.Credential, error) {
+			mod.signCredential = func() credSignerFn {
 				var idx int
 				return func(req *auth.CredentialRequest) (*auth.Credential, error) {
 					defer func() {

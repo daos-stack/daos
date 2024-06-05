@@ -95,7 +95,7 @@ func TestAuthSysFromAuthToken_SucceedsWithGoodToken(t *testing.T) {
 		"Secctx don't match")
 }
 
-func testHostnameFn(expErr error, hostname string) func() (string, error) {
+func testHostnameFn(expErr error, hostname string) getHostnameFn {
 	return func() (string, error) {
 		if expErr != nil {
 			return "", expErr
@@ -104,7 +104,7 @@ func testHostnameFn(expErr error, hostname string) func() (string, error) {
 	}
 }
 
-func testUserFn(expErr error, userName string) func(string) (*user.User, error) {
+func testUserFn(expErr error, userName string) getUserFn {
 	return func(uid string) (*user.User, error) {
 		if expErr != nil {
 			return nil, expErr
@@ -117,7 +117,7 @@ func testUserFn(expErr error, userName string) func(string) (*user.User, error) 
 	}
 }
 
-func testGroupFn(expErr error, groupName string) func(string) (*user.Group, error) {
+func testGroupFn(expErr error, groupName string) getGroupFn {
 	return func(gid string) (*user.Group, error) {
 		if expErr != nil {
 			return nil, expErr
@@ -129,8 +129,17 @@ func testGroupFn(expErr error, groupName string) func(string) (*user.Group, erro
 	}
 }
 
-func testGroupNamesFn(expErr error, groupNames ...string) func() ([]string, error) {
-	return func() ([]string, error) {
+func testGroupIdsFn(expErr error, groupNames ...string) getGroupIdsFn {
+	return func(*CredentialRequest) ([]string, error) {
+		if expErr != nil {
+			return nil, expErr
+		}
+		return groupNames, nil
+	}
+}
+
+func testGroupNamesFn(expErr error, groupNames ...string) getGroupNamesFn {
+	return func(*CredentialRequest) ([]string, error) {
 		if expErr != nil {
 			return nil, expErr
 		}
@@ -212,7 +221,7 @@ func TestAuth_GetSignedCred(t *testing.T) {
 		"bad hostname": {
 			req: func() *CredentialRequest {
 				req := NewCredentialRequest(getTestCreds(1, 2), nil)
-				req.getHostnameFn = testHostnameFn(errors.New("bad hostname"), "")
+				req.getHostname = testHostnameFn(errors.New("bad hostname"), "")
 				return req
 			}(),
 			expErr: errors.New("bad hostname"),
@@ -220,7 +229,7 @@ func TestAuth_GetSignedCred(t *testing.T) {
 		"bad uid": {
 			req: func() *CredentialRequest {
 				req := NewCredentialRequest(getTestCreds(1, 2), nil)
-				req.getUserFn = testUserFn(errors.New("bad uid"), "")
+				req.getUser = testUserFn(errors.New("bad uid"), "")
 				return req
 			}(),
 			expErr: errors.New("bad uid"),
@@ -228,7 +237,7 @@ func TestAuth_GetSignedCred(t *testing.T) {
 		"bad gid": {
 			req: func() *CredentialRequest {
 				req := NewCredentialRequest(getTestCreds(1, 2), nil)
-				req.getGroupFn = testGroupFn(errors.New("bad gid"), "")
+				req.getGroup = testGroupFn(errors.New("bad gid"), "")
 				return req
 			}(),
 			expErr: errors.New("bad gid"),
@@ -236,7 +245,7 @@ func TestAuth_GetSignedCred(t *testing.T) {
 		"bad group IDs": {
 			req: func() *CredentialRequest {
 				req := NewCredentialRequest(getTestCreds(1, 2), nil)
-				req.getGroupIdsFn = testGroupNamesFn(errors.New("bad group IDs"))
+				req.getGroupIds = testGroupIdsFn(errors.New("bad group IDs"))
 				return req
 			}(),
 			expErr: errors.New("bad group IDs"),
@@ -244,7 +253,7 @@ func TestAuth_GetSignedCred(t *testing.T) {
 		"bad group names": {
 			req: func() *CredentialRequest {
 				req := NewCredentialRequest(getTestCreds(1, 2), nil)
-				req.getGroupNamesFn = testGroupNamesFn(errors.New("bad group names"))
+				req.getGroupNames = testGroupNamesFn(errors.New("bad group names"))
 				return req
 			}(),
 			expErr: errors.New("bad group names"),
@@ -252,10 +261,10 @@ func TestAuth_GetSignedCred(t *testing.T) {
 		"valid": {
 			req: func() *CredentialRequest {
 				req := NewCredentialRequest(getTestCreds(1, 2), nil)
-				req.getHostnameFn = testHostnameFn(nil, testHostname)
-				req.getUserFn = testUserFn(nil, testUsername)
-				req.getGroupFn = testGroupFn(nil, testGroup)
-				req.getGroupNamesFn = testGroupNamesFn(nil, testGroupList...)
+				req.getHostname = testHostnameFn(nil, testHostname)
+				req.getUser = testUserFn(nil, testUsername)
+				req.getGroup = testGroupFn(nil, testGroup)
+				req.getGroupNames = testGroupNamesFn(nil, testGroupList...)
 				return req
 			}(),
 		},
@@ -274,7 +283,7 @@ func TestAuth_GetSignedCred(t *testing.T) {
 
 func TestAuth_CredentialRequestOverrides(t *testing.T) {
 	req := NewCredentialRequest(getTestCreds(1, 2), nil)
-	req.getHostnameFn = testHostnameFn(nil, "test-host")
+	req.getHostname = testHostnameFn(nil, "test-host")
 	req.WithUserAndGroup("test-user", "test-group", "test-secondary")
 
 	cred, err := GetSignedCredential(req)

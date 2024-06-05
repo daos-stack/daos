@@ -83,61 +83,69 @@ func GetMachineName() (string, error) {
 }
 
 type (
+	getHostnameFn   func() (string, error)
+	getUserFn       func(string) (*user.User, error)
+	getGroupFn      func(string) (*user.Group, error)
+	getGroupIdsFn   func(*CredentialRequest) ([]string, error)
+	getGroupNamesFn func(*CredentialRequest) ([]string, error)
+
 	// CredentialRequest defines the request parameters for GetSignedCredential.
 	CredentialRequest struct {
-		DomainInfo      *security.DomainInfo
-		SigningKey      crypto.PrivateKey
-		getHostnameFn   func() (string, error)
-		getUserFn       func(string) (*user.User, error)
-		getGroupFn      func(string) (*user.Group, error)
-		getGroupIdsFn   func() ([]string, error)
-		getGroupNamesFn func() ([]string, error)
+		DomainInfo    *security.DomainInfo
+		SigningKey    crypto.PrivateKey
+		getHostname   getHostnameFn
+		getUser       getUserFn
+		getGroup      getGroupFn
+		getGroupIds   getGroupIdsFn
+		getGroupNames getGroupNamesFn
 	}
 )
 
+func getGroupIds(req *CredentialRequest) ([]string, error) {
+	u, err := req.user()
+	if err != nil {
+		return nil, err
+	}
+	return u.GroupIds()
+}
+
+func getGroupNames(req *CredentialRequest) ([]string, error) {
+	groupIds, err := req.getGroupIds(req)
+	if err != nil {
+		return nil, err
+	}
+
+	groupNames := make([]string, len(groupIds))
+	for i, gID := range groupIds {
+		g, err := req.getGroup(gID)
+		if err != nil {
+			return nil, err
+		}
+		groupNames[i] = g.Name
+	}
+
+	return groupNames, nil
+}
+
 // NewCredentialRequest returns a properly initialized CredentialRequest.
 func NewCredentialRequest(info *security.DomainInfo, key crypto.PrivateKey) *CredentialRequest {
-	req := &CredentialRequest{
+	return &CredentialRequest{
 		DomainInfo:    info,
 		SigningKey:    key,
-		getHostnameFn: GetMachineName,
-		getUserFn:     user.LookupId,
-		getGroupFn:    user.LookupGroupId,
+		getHostname:   GetMachineName,
+		getUser:       user.LookupId,
+		getGroup:      user.LookupGroupId,
+		getGroupIds:   getGroupIds,
+		getGroupNames: getGroupNames,
 	}
-	req.getGroupIdsFn = func() ([]string, error) {
-		u, err := req.user()
-		if err != nil {
-			return nil, err
-		}
-		return u.GroupIds()
-	}
-	req.getGroupNamesFn = func() ([]string, error) {
-		groupIds, err := req.getGroupIdsFn()
-		if err != nil {
-			return nil, err
-		}
-
-		groupNames := make([]string, len(groupIds))
-		for i, gID := range groupIds {
-			g, err := req.getGroupFn(gID)
-			if err != nil {
-				return nil, err
-			}
-			groupNames[i] = g.Name
-		}
-
-		return groupNames, nil
-	}
-
-	return req
 }
 
 func (r *CredentialRequest) hostname() (string, error) {
-	if r.getHostnameFn == nil {
+	if r.getHostname == nil {
 		return "", errors.New("hostname lookup function not set")
 	}
 
-	hostname, err := r.getHostnameFn()
+	hostname, err := r.getHostname()
 	if err != nil {
 		return "", errors.Wrap(err, "failed to get hostname")
 	}
@@ -145,10 +153,10 @@ func (r *CredentialRequest) hostname() (string, error) {
 }
 
 func (r *CredentialRequest) user() (*user.User, error) {
-	if r.getUserFn == nil {
+	if r.getUser == nil {
 		return nil, errors.New("user lookup function not set")
 	}
-	return r.getUserFn(strconv.Itoa(int(r.DomainInfo.Uid())))
+	return r.getUser(strconv.Itoa(int(r.DomainInfo.Uid())))
 }
 
 func (r *CredentialRequest) userPrincipal() (string, error) {
@@ -160,10 +168,10 @@ func (r *CredentialRequest) userPrincipal() (string, error) {
 }
 
 func (r *CredentialRequest) group() (*user.Group, error) {
-	if r.getGroupFn == nil {
+	if r.getGroup == nil {
 		return nil, errors.New("group lookup function not set")
 	}
-	return r.getGroupFn(strconv.Itoa(int(r.DomainInfo.Gid())))
+	return r.getGroup(strconv.Itoa(int(r.DomainInfo.Gid())))
 }
 
 func (r *CredentialRequest) groupPrincipal() (string, error) {
@@ -175,11 +183,11 @@ func (r *CredentialRequest) groupPrincipal() (string, error) {
 }
 
 func (r *CredentialRequest) groupPrincipals() ([]string, error) {
-	if r.getGroupNamesFn == nil {
+	if r.getGroupNames == nil {
 		return nil, errors.New("groupNames function not set")
 	}
 
-	groupNames, err := r.getGroupNamesFn()
+	groupNames, err := r.getGroupNames(r)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get group names")
 	}
@@ -193,20 +201,20 @@ func (r *CredentialRequest) groupPrincipals() ([]string, error) {
 // WithUserAndGroup provides an override to set the user, group, and optional list
 // of group names to be used for the request.
 func (r *CredentialRequest) WithUserAndGroup(userStr, groupStr string, groupStrs ...string) {
-	r.getUserFn = func(id string) (*user.User, error) {
+	r.getUser = func(id string) (*user.User, error) {
 		return &user.User{
 			Uid:      id,
 			Gid:      id,
 			Username: userStr,
 		}, nil
 	}
-	r.getGroupFn = func(id string) (*user.Group, error) {
+	r.getGroup = func(id string) (*user.Group, error) {
 		return &user.Group{
 			Gid:  id,
 			Name: groupStr,
 		}, nil
 	}
-	r.getGroupNamesFn = func() ([]string, error) {
+	r.getGroupNames = func(*CredentialRequest) ([]string, error) {
 		return groupStrs, nil
 	}
 }
