@@ -413,7 +413,7 @@ int
 crtu_dc_mgmt_net_cfg_setenv(const char *name, crt_init_options_t *opt)
 {
 	int                      rc;
-	int                      cli_srx_set = 0;
+	int                      cli_srx_set      = 0;
 	struct dc_mgmt_sys_info  crt_net_cfg_info = {0};
 
 	Mgmt__GetAttachInfoResp *crt_net_cfg_resp = NULL;
@@ -445,8 +445,8 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name, crt_init_options_t *opt)
 
 	/* Interface and provider must be set */
 	if (opt->cio_provider == NULL || opt->cio_interface == NULL) {
-		D_ERROR("Invalid provider/interface : %s/%s\n",
-			opt->cio_provider, opt->cio_interface);
+		D_ERROR("Invalid provider/interface : %s/%s\n", opt->cio_provider,
+			opt->cio_interface);
 		D_GOTO(cleanup, rc = -DER_NOMEM);
 	}
 
@@ -478,11 +478,10 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 		     unsigned int total_srv_ctx, bool use_cfg,
 		     crt_init_options_t *init_opt, bool use_daos_agent_env)
 {
-	char            		*grp_cfg_file = NULL;
-	uint32_t        		grp_size     = 0;
-	int		 		rc = 0;
-	crt_init_options_t	local_opt = {0};
-
+	char              *grp_cfg_file = NULL;
+	uint32_t           grp_size     = 0;
+	int                rc           = 0;
+	crt_init_options_t local_opt    = {0};
 
 	if (opts.assert_on_error)
 		D_ASSERTF(opts.is_initialized == true, "crtu_test_init not called.\n");

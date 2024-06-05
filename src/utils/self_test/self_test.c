@@ -95,9 +95,8 @@ self_test_init(char *dest_name, crt_context_t *crt_ctx, crt_group_t **srv_grp, p
 	int		 i;
 	d_rank_t	 max_rank = 0;
 	int		 ret;
-	crt_init_options_t opt = {0};
+	crt_init_options_t  opt = {0};
 	crt_init_options_t *init_opt;
-
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(0, attach_retries, false, false);
