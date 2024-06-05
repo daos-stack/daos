@@ -166,41 +166,6 @@ func (ei *EngineInstance) StorageFormatSCM(ctx context.Context, force bool) (mRe
 	return
 }
 
-func setLnkStats(log logging.TraceLogger, inStr string, health *ctlpb.BioHealthResp) error {
-	healthVal := reflect.Indirect(reflect.ValueOf(health))
-	if !healthVal.IsValid() || healthVal.Kind() != reflect.Struct {
-		return errors.Errorf("reflect failed on %T", health)
-	}
-
-	for _, line := range strings.Split(inStr, "\n") {
-		toks := strings.Split(strings.TrimSpace(line), ":")
-		if len(toks) != 2 {
-			continue // Not valid key:val entry.
-		}
-		lineKey := strings.TrimSpace(toks[0])
-		if !strings.HasPrefix(lineKey, "Lnk") {
-			continue // Bail early to reduce chance of false-positive lookups.
-		}
-
-		field := healthVal.FieldByName(lineKey)
-		// Check that matching field exists in health stats resp and that field is settable
-		// (exported) and of type string before attempting to set it.
-		if !field.IsValid() || !field.CanSet() || field.Kind() != reflect.String {
-			log.Tracef("setLnkStats: skip %q line (reflect valid/canset/isstr %b/%b/%b)",
-				lineKey, field.IsValid(), field.CanSet(),
-				field.Kind() == reflect.String)
-			continue
-		}
-
-		lineVal := strings.TrimSpace(toks[1])
-		log.Tracef("link info %q found (%q)", lineKey, lineVal)
-
-		field.SetString(lineVal)
-	}
-
-	return nil
-}
-
 func addLinkInfoToHealthStats(engine Engine, health *ctlpb.BioHealthResp, pciCfg string) error {
 	// Convert byte-string to lspci-format.
 	sb := new(strings.Builder)
@@ -216,11 +181,7 @@ func addLinkInfoToHealthStats(engine Engine, health *ctlpb.BioHealthResp, pciCfg
 	engine.Tracef("lspci -F output: %q", out)
 
 	// Extract from lspci output and add Lnk{Ctl|Sta|Cap} field values to health stats.
-	if err := setLnkStats(engine, string(out), health); err != nil {
-		return errors.Wrap(err, "setLnkStats")
-	}
-
-	return nil
+	return hardware.SetPciLinkStats(engine, string(out), reflect.ValueOf(health))
 }
 
 func populateCtrlrHealth(ctx context.Context, engine Engine, req *ctlpb.BioHealthReq, ctrlr *ctlpb.NvmeController) (bool, error) {

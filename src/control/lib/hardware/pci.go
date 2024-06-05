@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -586,6 +587,45 @@ func (d PCIDevices) Get(addr *PCIAddress) []*PCIDevice {
 
 	if devs, found := d[*addr]; found {
 		return devs
+	}
+
+	return nil
+}
+
+// SetPciLinkStats uses reflection to populate proto health resp fields without having a typeswitch
+// to handle all fields which are matched on string line prefixes. Cautious usage with numerous
+// checks avoids potential for unexpected runtime errors associated with reflection. Reflect value
+// should be associated with proto.BioHealthResp struct.
+func SetPciLinkStats(log logging.TraceLogger, inStr string, healthVal reflect.Value) error {
+	healthVal = reflect.Indirect(healthVal)
+	if !healthVal.IsValid() || healthVal.Kind() != reflect.Struct {
+		return errors.Errorf("reflect failed on %T", health)
+	}
+
+	for _, line := range strings.Split(inStr, "\n") {
+		toks := strings.Split(strings.TrimSpace(line), ":")
+		if len(toks) != 2 {
+			continue // Not valid key:val entry.
+		}
+		lineKey := strings.TrimSpace(toks[0])
+		if !strings.HasPrefix(lineKey, "Lnk") {
+			continue // Bail early to reduce chance of false-positive lookups.
+		}
+
+		field := healthVal.FieldByName(lineKey)
+		// Check that matching field exists in health stats resp and that field is settable
+		// (exported) and of type string before attempting to set it.
+		if !field.IsValid() || !field.CanSet() || field.Kind() != reflect.String {
+			log.Tracef("setLnkStats: skip %q line (reflect valid/canset/isstr %b/%b/%b)",
+				lineKey, field.IsValid(), field.CanSet(),
+				field.Kind() == reflect.String)
+			continue
+		}
+
+		lineVal := strings.TrimSpace(toks[1])
+		log.Tracef("link info %q found (%q)", lineKey, lineVal)
+
+		field.SetString(lineVal)
 	}
 
 	return nil
