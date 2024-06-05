@@ -95,6 +95,9 @@ self_test_init(char *dest_name, crt_context_t *crt_ctx, crt_group_t **srv_grp, p
 	int		 i;
 	d_rank_t	 max_rank = 0;
 	int		 ret;
+	crt_init_options_t opt = {0};
+	crt_init_options_t *init_opt;
+
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(0, attach_retries, false, false);
@@ -105,19 +108,27 @@ self_test_init(char *dest_name, crt_context_t *crt_ctx, crt_group_t **srv_grp, p
 			fprintf(stderr, "dc_agent_init() failed. ret: %d\n", ret);
 			return ret;
 		}
-		ret = crtu_dc_mgmt_net_cfg_setenv(dest_name);
+		ret = crtu_dc_mgmt_net_cfg_setenv(dest_name, &opt);
 		if (ret != 0) {
 			D_ERROR("crtu_dc_mgmt_net_cfg_setenv() failed; ret = %d\n", ret);
 			return ret;
 		}
+
+		init_opt = &opt;
+	} else {
+		init_opt = NULL;
 	}
 
 	if (listen)
 		init_flags |= (CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
-	ret = crt_init(CRT_SELF_TEST_GROUP_NAME, init_flags);
+
+	ret = crt_init_opt(CRT_SELF_TEST_GROUP_NAME, init_flags, init_opt);
 	if (ret != 0)
 		return ret;
 
+	D_FREE(opt.cio_provider);
+	D_FREE(opt.cio_interface);
+	D_FREE(opt.cio_domain);
 	g_cart_inited = true;
 
 	if (attach_info_path) {
