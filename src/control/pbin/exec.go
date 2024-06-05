@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,6 +16,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -149,7 +150,7 @@ func ExecReq(parent context.Context, log logging.Logger, binPath string, req *Re
 	// ensure that /sbin and /usr/sbin are in child's $PATH
 	for i, env := range child.Env {
 		if strings.HasPrefix(env, "PATH=") {
-			child.Env[i] = env + ":/sbin:/usr/sbin"
+			child.Env[i] = common.AppendToEnv(env, "/sbin", "/usr/sbin")
 		}
 	}
 

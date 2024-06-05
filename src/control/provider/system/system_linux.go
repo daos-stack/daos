@@ -367,7 +367,12 @@ func (s LinuxProvider) RemoveAll(path string) error {
 // RunLspciWithInput passes formatted byte-string pci config space input param to lspci cmd and
 // returns human readable (-vv) output.
 func (s LinuxProvider) RunLspciWithInput(pciCfgStr string) (string, error) {
-	cmd := exec.Command(GetLspciPath(), "-vv", "-F", "/dev/stdin")
+	lspciPath, err := GetLspciPath()
+	if err != nil {
+		return "", errors.Wrap(err, "lookup lspci binary path")
+	}
+
+	cmd := exec.Command(lspciPath, "-vv", "-F", "/dev/stdin")
 	cmd.Stdin = strings.NewReader(pciCfgStr) // String input to be linefeed-terminated.
 	out, err := cmd.Output()
 	if err != nil {

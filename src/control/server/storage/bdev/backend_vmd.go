@@ -145,7 +145,11 @@ func DetectVMD() (*hardware.PCIAddressSet, error) {
 	// Check available VMD devices with command:
 	// "$lspci | grep  -i -E "Volume Management Device"
 
-	lspciCmd := exec.Command(system.GetLspciPath())
+	lspciPath, err := system.GetLspciPath()
+	if err != nil {
+		return nil, errors.Wrap(err, "lookup lspci binary path")
+	}
+	lspciCmd := exec.Command(lspciPath)
 
 	vmdCmd := exec.Command("grep", "-i", "-E", "Volume Management Device")
 	var cmdOut bytes.Buffer

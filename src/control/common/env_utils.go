@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -153,4 +153,22 @@ func MergeKeyValues(curVars []string, newVars []string) (merged []string) {
 	}
 
 	return
+}
+
+// AppendToEnv appends entries to the supplied colon-separated string if non-existent.
+func AppendToEnv(envVal string, toAdd ...string) string {
+	for _, add := range toAdd {
+		found := false
+		for _, elem := range strings.Split(envVal, ":") {
+			if elem == add {
+				found = true
+				break
+			}
+		}
+		if !found {
+			envVal += ":" + add
+		}
+	}
+
+	return envVal
 }

@@ -10,10 +10,13 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common"
 )
 
 type (
@@ -189,12 +192,19 @@ func GetDistribution() Distribution {
 }
 
 // GetLspciPath returns binary path based on distribution.
-func GetLspciPath() string {
+func GetLspciPath() (string, error) {
 	distro := GetDistribution()
 
-	if distro.ID == "opensuse-leap" || distro.ID == "opensuse" || distro.ID == "sles" {
-		return "/sbin/lspci"
+	switch distro.ID {
+	case "opensuse-leap", "opensuse", "sles":
+		envPath, ok := os.LookupEnv("PATH")
+		if !ok {
+			return "", errors.New("couldn't find PATH env")
+		}
+		if err := os.Setenv("PATH", common.AppendToEnv(envPath, "/sbin")); err != nil {
+			return "", errors.Wrap(err, "adding /sbin to path env")
+		}
 	}
 
-	return "lspci"
+	return exec.LookPath("lspci")
 }
