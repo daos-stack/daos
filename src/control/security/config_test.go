@@ -14,6 +14,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
+	"syscall"
 	"testing"
 	"time"
 
@@ -22,6 +24,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/fault"
 )
 
 func InsecureTC() *TransportConfig {
@@ -113,9 +116,13 @@ func setExpiredVerifyTime(t *testing.T, cfg *TransportConfig) {
 }
 
 func TestPreLoadCertData(t *testing.T) {
+	clientDir := func(dir string) string {
+		return filepath.Join(dir, "client")
+	}
+
 	for name, tc := range map[string]struct {
-		getCfg    func(t *testing.T) *TransportConfig
-		setup     func(t *testing.T)
+		getCfg    func(t *testing.T, dir string) *TransportConfig
+		setup     func(t *testing.T) (string, func())
 		config    *TransportConfig
 		expLoaded bool
 		expErr    error
@@ -124,12 +131,12 @@ func TestPreLoadCertData(t *testing.T) {
 			expErr: errors.New("nil"),
 		},
 		"insecure": {
-			getCfg: func(t *testing.T) *TransportConfig {
+			getCfg: func(t *testing.T, _ string) *TransportConfig {
 				return InsecureTC()
 			},
 		},
 		"cert success": {
-			getCfg: func(t *testing.T) *TransportConfig {
+			getCfg: func(t *testing.T, _ string) *TransportConfig {
 				serverTC := ServerTC()
 				setValidVerifyTime(t, serverTC)
 				SetupTCFilePerms(t, serverTC)
@@ -138,25 +145,58 @@ func TestPreLoadCertData(t *testing.T) {
 			expLoaded: true,
 		},
 		"bad cert": {
-			getCfg: func(t *testing.T) *TransportConfig {
+			getCfg: func(t *testing.T, _ string) *TransportConfig {
 				badTC := BadTC()
 				SetupTCFilePerms(t, badTC)
 				return badTC
 			},
 			expErr: errors.New("insecure permissions"),
 		},
-		"bad client dir": {
-			getCfg: func(t *testing.T) *TransportConfig {
+		"client dir doesn't exist": {
+			setup: test.CreateTestDir,
+			getCfg: func(t *testing.T, dir string) *TransportConfig {
+				conf := ServerTC()
+				setValidVerifyTime(t, conf)
+				conf.ClientCertDir = "a thing that does not exist"
+				return conf
+			},
+			expErr: syscall.ENOENT,
+		},
+		"client dir not a directory": {
+			setup: test.CreateTestDir,
+			getCfg: func(t *testing.T, dir string) *TransportConfig {
 				clientDirTC := ServerTC()
 				setValidVerifyTime(t, clientDirTC)
-				clientDirTC.ClientCertDir = "testdata/badperms"
-				SetupTCFilePerms(t, clientDirTC)
+
+				filePath := clientDir(dir)
+				if err := os.WriteFile(filePath, []byte("some stuff"), 0400); err != nil {
+					t.Fatal(err)
+				}
+				clientDirTC.ClientCertDir = filePath
 				return clientDirTC
 			},
-			expErr: FaultUnreadableCertFile("testdata/badperms"),
+			expErr: syscall.ENOTDIR,
+		},
+		"can't access client dir": {
+			setup: func(t *testing.T) (string, func()) {
+				dir, cleanup := test.CreateTestDir(t)
+				if err := os.Mkdir(clientDir(dir), 0220); err != nil {
+					t.Fatal(err)
+				}
+
+				return dir, cleanup
+			},
+			getCfg: func(t *testing.T, dir string) *TransportConfig {
+				clientDirTC := ServerTC()
+				setValidVerifyTime(t, clientDirTC)
+
+				clientDirTC.ClientCertDir = clientDir(dir)
+				return clientDirTC
+			},
+			expErr: FaultUnreadableCertFile(""),
 		},
 		"expired cert": {
-			getCfg: func(t *testing.T) *TransportConfig {
+			getCfg: func(t *testing.T, _ string) *TransportConfig {
 				serverTC := ServerTC()
 				setExpiredVerifyTime(t, serverTC)
 				SetupTCFilePerms(t, serverTC)
@@ -167,14 +207,30 @@ func TestPreLoadCertData(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			var testDir string
+			if tc.setup != nil {
+				dir, teardown := tc.setup(t)
+				defer teardown()
+				testDir = dir
+			}
+
 			var cfg *TransportConfig
 			if tc.getCfg != nil {
-				cfg = tc.getCfg(t)
+				cfg = tc.getCfg(t, testDir)
 			}
 
 			err := cfg.PreLoadCertData()
 
-			test.CmpErr(t, tc.expErr, err)
+			// If it's a fault, we don't need to check the exact paths passed in
+			if fault.IsFault(tc.expErr) && fault.IsFault(err) {
+				expCode := tc.expErr.(*fault.Fault).Code
+				if !fault.IsFaultCode(err, expCode) {
+					t.Fatalf("expected fault: %s, got: %s", tc.expErr, err)
+				}
+			} else {
+				test.CmpErr(t, tc.expErr, err)
+			}
+
 			if cfg == nil {
 				return
 			}

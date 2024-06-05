@@ -435,9 +435,8 @@ type (
 	// PoolQueryReq contains the parameters for a pool query request.
 	PoolQueryReq struct {
 		poolRequest
-		ID                   string
-		IncludeEnabledRanks  bool
-		IncludeDisabledRanks bool
+		ID        string
+		QueryMask daos.PoolQueryMask
 	}
 
 	// PoolQueryResp contains the pool query response.
@@ -551,10 +550,9 @@ func PoolQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq) (
 // that will be filled out with the query details.
 func poolQueryInt(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq, resp *PoolQueryResp) (*PoolQueryResp, error) {
 	pbReq := &mgmtpb.PoolQueryReq{
-		Sys:                  req.getSystem(rpcClient),
-		Id:                   req.ID,
-		IncludeEnabledRanks:  req.IncludeEnabledRanks,
-		IncludeDisabledRanks: req.IncludeDisabledRanks,
+		Sys:       req.getSystem(rpcClient),
+		Id:        req.ID,
+		QueryMask: uint64(req.QueryMask),
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolQuery(ctx, pbReq)
