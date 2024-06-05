@@ -606,7 +606,6 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			else
 				D_DEBUG(DB_ALL, "set group_config_path as %s.\n", path);
 		}
-		d_freeenv_str(&path);
 
 		if (opt && opt->cio_auth_key)
 			auth_key = opt->cio_auth_key;
