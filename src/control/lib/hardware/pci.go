@@ -596,10 +596,11 @@ func (d PCIDevices) Get(addr *PCIAddress) []*PCIDevice {
 // to handle all fields which are matched on string line prefixes. Cautious usage with numerous
 // checks avoids potential for unexpected runtime errors associated with reflection. Reflect value
 // should be associated with proto.BioHealthResp struct.
-func SetPciLinkStats(log logging.TraceLogger, inStr string, healthVal reflect.Value) error {
+func SetPciLinkStats(inStr string, healthVal reflect.Value) error {
 	healthVal = reflect.Indirect(healthVal)
 	if !healthVal.IsValid() || healthVal.Kind() != reflect.Struct {
-		return errors.Errorf("reflect failed on %T", health)
+		return errors.Errorf("reflect failed (valid/isstruct %v/%v)", healthVal.IsValid(),
+			healthVal.Kind() == reflect.Struct)
 	}
 
 	for _, line := range strings.Split(inStr, "\n") {
@@ -616,14 +617,10 @@ func SetPciLinkStats(log logging.TraceLogger, inStr string, healthVal reflect.Va
 		// Check that matching field exists in health stats resp and that field is settable
 		// (exported) and of type string before attempting to set it.
 		if !field.IsValid() || !field.CanSet() || field.Kind() != reflect.String {
-			log.Tracef("setLnkStats: skip %q line (reflect valid/canset/isstr %b/%b/%b)",
-				lineKey, field.IsValid(), field.CanSet(),
-				field.Kind() == reflect.String)
 			continue
 		}
 
 		lineVal := strings.TrimSpace(toks[1])
-		log.Tracef("link info %q found (%q)", lineKey, lineVal)
 
 		field.SetString(lineVal)
 	}

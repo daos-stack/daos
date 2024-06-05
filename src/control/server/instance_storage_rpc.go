@@ -22,7 +22,6 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
-	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -181,7 +180,7 @@ func addLinkInfoToHealthStats(engine Engine, health *ctlpb.BioHealthResp, pciCfg
 	engine.Tracef("lspci -F output: %q", out)
 
 	// Extract from lspci output and add Lnk{Ctl|Sta|Cap} field values to health stats.
-	return hardware.SetPciLinkStats(engine, string(out), reflect.ValueOf(health))
+	return hardware.SetPciLinkStats(string(out), reflect.ValueOf(health))
 }
 
 func populateCtrlrHealth(ctx context.Context, engine Engine, req *ctlpb.BioHealthReq, ctrlr *ctlpb.NvmeController) (bool, error) {
