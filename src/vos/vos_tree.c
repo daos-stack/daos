@@ -674,7 +674,12 @@ svt_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	if (rc != 0)
 		return rc;
 
-	return svt_rec_alloc_common(tins, rec, skey, rbund);
+	rc = svt_rec_alloc_common(tins, rec, skey, rbund);
+	if (rc != 0)
+		return rc;
+
+	/* Inform btr_update() that the original record is replaced */
+	return 1;
 }
 
 static int

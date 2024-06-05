@@ -376,11 +376,7 @@ struct evt_entry_array {
 	/** Maximum size of array */
 	uint32_t			 ea_max;
 	/** Number of bytes per index */
-	uint32_t			 ea_inob;
-	/** Index of first delete record, valid if ea_delete_nr != 0 */
-	uint32_t			 ea_first_delete;
-	/** Number of delete records */
-	uint32_t			 ea_delete_nr;
+	uint32_t                         ea_inob;
 	/* Small array of embedded entries */
 	struct evt_list_entry		 ea_embedded_ents[0];
 };
