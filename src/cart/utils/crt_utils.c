@@ -10,9 +10,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include <cart/api.h>
-#include <unistd.h>
 #include <daos/mgmt.h>
 #include <daos/event.h>
 
@@ -53,34 +53,6 @@ crtu_test_init(d_rank_t rank, int num_attach_retries, bool is_server,
 	opts.delay_shutdown_sec	= 2;
 }
 
-static inline int
-crtu_drain_queue(crt_context_t ctx)
-{
-	int	rc;
-	int	i;
-
-	/* TODO: Need better mechanism for tests to drain all queues */
-	for (i = 0; i < 1000; i++)
-		crt_progress(ctx, 1000);
-
-	/* Drain the queue. Progress until 1 second timeout.  We need
-	 * a more robust method
-	 */
-	do {
-		rc = crt_progress(ctx, 1000000);
-		if (rc != 0 && rc != -DER_TIMEDOUT) {
-			D_ERROR("crt_progress failed rc: %d.\n", rc);
-			return rc;
-		}
-
-		if (rc == -DER_TIMEDOUT)
-			break;
-	} while (1);
-
-	D_DEBUG(DB_TEST, "Done draining queue\n");
-	return 0;
-}
-
 void
 crtu_set_shutdown_delay(int delay_sec)
 {
@@ -103,8 +75,7 @@ write_completion_file(void)
 
 	d_agetenv_str(&dir, "DAOS_TEST_SHARED_DIR");
 	D_ASSERTF(dir != NULL,
-		"DAOS_TEST_SHARED_DIR must be set for --write_completion_file "
-		"option.\n");
+		  "DAOS_TEST_SHARED_DIR must be set for --write_completion_file option.\n");
 	D_ASPRINTF(completion_file, "%s/test-servers-completed.txt.%d", dir, getpid());
 	d_freeenv_str(&dir);
 	D_ASSERTF(completion_file != NULL, "Error allocating completion_file string\n");
@@ -120,17 +91,14 @@ write_completion_file(void)
 void *
 crtu_progress_fn(void *data)
 {
-	int		rc;
 	int		idx = -1;
 	crt_context_t	*p_ctx = (crt_context_t *)data;
+	int              rc;
 
 	D_ASSERTF(opts.is_initialized == true, "crtu_test_init not called.\n");
 
 	rc = crt_context_idx(*p_ctx, &idx);
-	if (rc != 0) {
-		D_ERROR("crt_context_idx() failed; rc=%d\n", rc);
-		assert(0);
-	}
+	D_ASSERTF(rc == 0, "crt_context_idx() failed; rc=%d\n", rc);
 
 	while (opts.shutdown == 0)
 		crt_progress(*p_ctx, 1000);
@@ -138,9 +106,6 @@ crtu_progress_fn(void *data)
 	if (opts.is_server) {
 		if (opts.is_swim_enabled && idx == 0)
 			crt_swim_disable_all();
-
-		rc = crtu_drain_queue(*p_ctx);
-		D_ASSERTF(rc == 0, "crtu_drain_queue() failed with rc=%d\n", rc);
 
 		if (opts.delay_shutdown_sec > 0)
 			sleep(opts.delay_shutdown_sec);
@@ -150,7 +115,6 @@ crtu_progress_fn(void *data)
 	D_ASSERTF(rc == 0, "Failed to destroy context %p rc=%d\n", p_ctx, rc);
 
 	pthread_exit(rc ? *p_ctx : NULL);
-
 	return NULL;
 }
 
@@ -169,12 +133,9 @@ ctl_client_cb(const struct crt_cb_info *info)
 		wfrs->num_ctx = out_ls_args->cel_ctx_num;
 		wfrs->rc = out_ls_args->cel_rc;
 
-		D_DEBUG(DB_TEST, "ctx_num: %d\n",
-			out_ls_args->cel_ctx_num);
 		addr_str = out_ls_args->cel_addr_str.iov_buf;
 		for (i = 0; i < out_ls_args->cel_ctx_num; i++) {
-			D_DEBUG(DB_TEST, "    %s\n", addr_str);
-				addr_str += (strlen(addr_str) + 1);
+			addr_str += (strlen(addr_str) + 1);
 		}
 	} else {
 		wfrs->rc = info->cci_rc;
@@ -184,31 +145,30 @@ ctl_client_cb(const struct crt_cb_info *info)
 }
 
 static inline void
-crtu_sync_timedwait(struct wfr_status *wfrs, int sec, int line_number)
+crtu_sync_timedwait(struct wfr_status *wfrs, int sec, int line_num)
 {
 	struct timespec	deadline;
 	int		rc;
 
 	rc = clock_gettime(CLOCK_REALTIME, &deadline);
-	if (opts.assert_on_error) {
-		D_ASSERTF(rc == 0, "clock_gettime() failed at line %d "
-			  "rc: %d\n",
-			  line_number, rc);
-	} else {
+	if (opts.assert_on_error)
+		D_ASSERTF(rc == 0, "clock_gettime() failed line=%d rc=%d\n", line_num, rc);
+	else
 		wfrs->rc = rc;
-	}
 
 	deadline.tv_sec += sec;
 
 	rc = sem_timedwait(&wfrs->sem, &deadline);
-	if (opts.assert_on_error) {
-		D_ASSERTF(rc == 0, "Sync timed out at line %d rc: %d\n",
-			  line_number, rc);
-	} else {
+	if (opts.assert_on_error)
+		D_ASSERTF(rc == 0, "Sync timed out line=%d rc=%d\n", line_num, rc);
+	else
 		wfrs->rc = rc;
-	}
 }
 
+/*
+ * Wait for ranks by sending 'list contexts' internal RPC (CRT_OPC_CTL_LS)
+ * to each rank in 'rank_list'.
+ */
 int
 crtu_wait_for_ranks(crt_context_t ctx, crt_group_t *grp,
 		    d_rank_list_t *rank_list, int tag, int total_ctx,
@@ -260,18 +220,15 @@ crtu_wait_for_ranks(crt_context_t ctx, crt_group_t *grp,
 			ws.rc = rc;
 
 		while (ws.rc != 0 && time_s < total_timeout) {
-			rc = crt_req_create(ctx, &server_ep,
-					    CRT_OPC_CTL_LS, &rpc);
-			D_ASSERTF(rc == 0,
-				  "crt_req_create failed; rc=%d\n", rc);
+			rc = crt_req_create(ctx, &server_ep, CRT_OPC_CTL_LS, &rpc);
+			D_ASSERTF(rc == 0, "crt_req_create failed; rc=%d\n", rc);
 
 			in_args = crt_req_get(rpc);
 			in_args->cel_grp_id = grp->cg_grpid;
 			in_args->cel_rank = rank;
 
 			rc = crt_req_set_timeout(rpc, ping_timeout);
-			D_ASSERTF(rc == 0,
-				  "crt_req_set_timeout failed; rc=%d\n", rc);
+			D_ASSERTF(rc == 0, "crt_req_set_timeout failed; rc=%d\n", rc);
 
 			ws.rc = 0;
 			ws.num_ctx = 0;
@@ -308,14 +265,13 @@ crtu_wait_for_ranks(crt_context_t ctx, crt_group_t *grp,
 }
 
 int
-crtu_load_group_from_file(const char *grp_cfg_file, crt_context_t ctx,
-			  crt_group_t *grp, d_rank_t my_rank,
-			  bool delete_file)
+crtu_load_group_from_file(const char *grp_cfg_file, crt_context_t ctx, crt_group_t *grp,
+			  d_rank_t my_rank, bool delete_file)
 {
-	FILE		*f;
-	int		parsed_rank;
-	char		parsed_addr[255];
-	int		rc = 0;
+	FILE *f;
+	int   parsed_rank;
+	char  parsed_addr[255];
+	int   rc = 0;
 
 	D_ASSERTF(opts.is_initialized == true, "crtu_test_init not called.\n");
 
@@ -340,12 +296,10 @@ crtu_load_group_from_file(const char *grp_cfg_file, crt_context_t ctx,
 		if (parsed_rank == my_rank)
 			continue;
 
-		rc = crt_group_primary_rank_add(ctx, grp,
-						parsed_rank, parsed_addr);
+		rc = crt_group_primary_rank_add(ctx, grp, parsed_rank, parsed_addr);
 
 		if (rc != 0) {
-			D_ERROR("Failed to add %d %s; rc=%d\n",
-				parsed_rank, parsed_addr, rc);
+			D_ERROR("Failed to add %d %s; rc=%d\n", parsed_rank, parsed_addr, rc);
 			break;
 		}
 	}
@@ -354,7 +308,6 @@ crtu_load_group_from_file(const char *grp_cfg_file, crt_context_t ctx,
 
 	if (delete_file)
 		unlink(grp_cfg_file);
-
 out:
 	return rc;
 }
@@ -362,20 +315,16 @@ out:
 #define SYS_INFO_BUF_SIZE 16
 
 int
-crtu_dc_mgmt_net_cfg_rank_add(const char *name, crt_group_t *group,
-		    crt_context_t *context)
+crtu_load_group_from_agent(const char *name, crt_group_t *group, crt_context_t *context)
 {
 	int				  i;
 	int				  rc = 0;
-	struct dc_mgmt_sys_info		  crt_net_cfg_info = {0};
-	Mgmt__GetAttachInfoResp		 *crt_net_cfg_resp = NULL;
+	struct dc_mgmt_sys_info           info = {0};
+	Mgmt__GetAttachInfoResp          *resp = NULL;
 	Mgmt__GetAttachInfoResp__RankUri *rank_uri;
 
 	/* Query the agent for the CaRT network configuration parameters */
-	rc = dc_get_attach_info(name,
-				true /* all_ranks */,
-				&crt_net_cfg_info,
-				&crt_net_cfg_resp);
+	rc = dc_get_attach_info(name, true, &info, &resp);
 	if (opts.assert_on_error)
 		D_ASSERTF(rc == 0, "dc_get_attach_info() failed, rc=%d\n", rc);
 
@@ -384,8 +333,8 @@ crtu_dc_mgmt_net_cfg_rank_add(const char *name, crt_group_t *group,
 		D_GOTO(err_group, rc);
 	}
 
-	for (i = 0; i < crt_net_cfg_resp->n_rank_uris; i++) {
-		rank_uri = crt_net_cfg_resp->rank_uris[i];
+	for (i = 0; i < resp->n_rank_uris; i++) {
+		rank_uri = resp->rank_uris[i];
 
 		rc = crt_group_primary_rank_add(context, group,
 						rank_uri->rank,
@@ -405,7 +354,7 @@ crtu_dc_mgmt_net_cfg_rank_add(const char *name, crt_group_t *group,
 	}
 
 err_group:
-	dc_put_attach_info(&crt_net_cfg_info, crt_net_cfg_resp);
+	dc_put_attach_info(&info, resp);
 
 	return rc;
 }
@@ -421,12 +370,11 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 	char                    *d_interface_env = NULL;
 	char                    *d_domain;
 	char                    *d_domain_env   = NULL;
-	struct dc_mgmt_sys_info  crt_net_cfg_info = {0};
-	Mgmt__GetAttachInfoResp *crt_net_cfg_resp = NULL;
+	struct dc_mgmt_sys_info  info           = {0};
+	Mgmt__GetAttachInfoResp *resp           = NULL;
 
 	/* Query the agent for the CaRT network configuration parameters */
-	rc = dc_get_attach_info(name, true /* all_ranks */,
-				&crt_net_cfg_info, &crt_net_cfg_resp);
+	rc = dc_get_attach_info(name, true /* all_ranks */, &info, &resp);
 	if (opts.assert_on_error)
 		D_ASSERTF(rc == 0, "dc_get_attach_info() failed, rc=%d\n", rc);
 
@@ -436,15 +384,15 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 	}
 
 	/* These two are always set */
-	provider = crt_net_cfg_info.provider;
+	provider = info.provider;
 	D_INFO("setenv D_PROVIDER=%s\n", provider);
 	rc = d_setenv("D_PROVIDER", provider, 1);
 	if (rc != 0)
 		D_GOTO(cleanup, rc = d_errno2der(errno));
 
 	/* If the server has set this, the client must use the same value. */
-	if (crt_net_cfg_info.srv_srx_set != -1) {
-		rc = asprintf(&cli_srx_set, "%d", crt_net_cfg_info.srv_srx_set);
+	if (info.srv_srx_set != -1) {
+		rc = asprintf(&cli_srx_set, "%d", info.srv_srx_set);
 		if (rc < 0) {
 			cli_srx_set = NULL;
 			D_GOTO(cleanup, rc = -DER_NOMEM);
@@ -466,7 +414,7 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 	/* Allow client env overrides for these three */
 	d_agetenv_str(&crt_timeout, "CRT_TIMEOUT");
 	if (!crt_timeout) {
-		rc = asprintf(&crt_timeout, "%d", crt_net_cfg_info.crt_timeout);
+		rc = asprintf(&crt_timeout, "%d", info.crt_timeout);
 		if (rc < 0) {
 			crt_timeout = NULL;
 			D_GOTO(cleanup, rc = -DER_NOMEM);
@@ -481,7 +429,7 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 
 	d_agetenv_str(&d_interface_env, "D_INTERFACE");
 	if (!d_interface_env) {
-		d_interface = crt_net_cfg_info.interface;
+		d_interface = info.interface;
 		D_INFO("Setting D_INTERFACE=%s\n", d_interface);
 		rc = d_setenv("D_INTERFACE", d_interface, 1);
 		if (rc != 0)
@@ -493,7 +441,7 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 
 	d_agetenv_str(&d_domain_env, "D_DOMAIN");
 	if (!d_domain_env) {
-		d_domain = crt_net_cfg_info.domain;
+		d_domain = info.domain;
 		D_INFO("Setting D_DOMAIN=%s\n", d_domain);
 		rc = d_setenv("D_DOMAIN", d_domain, 1);
 		if (rc != 0)
@@ -512,7 +460,7 @@ cleanup:
 	d_freeenv_str(&d_interface_env);
 	d_freeenv_str(&crt_timeout);
 	d_freeenv_str(&cli_srx_set);
-	dc_put_attach_info(&crt_net_cfg_info, crt_net_cfg_resp);
+	dc_put_attach_info(&info, resp);
 
 	return rc;
 }
@@ -587,9 +535,7 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 			/* load group info from a config file and
 			 * delete file upon return
 			 */
-			rc = crtu_load_group_from_file(grp_cfg_file,
-						       *crt_ctx, *grp,
-						       -1, true);
+			rc = crtu_load_group_from_file(grp_cfg_file, *crt_ctx, *grp, -1, true);
 			d_freeenv_str(&grp_cfg_file);
 			if (rc != 0)
 				D_GOTO(out, rc);
@@ -602,8 +548,7 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 		if (*grp == NULL)
 			D_GOTO(out, rc = -DER_INVAL);
 
-		rc = crtu_dc_mgmt_net_cfg_rank_add(srv_group_name,
-						   *grp, *crt_ctx);
+		rc = crtu_load_group_from_agent(srv_group_name, *grp, *crt_ctx);
 		if (rc != 0) {
 			crt_group_view_destroy(*grp);
 			D_GOTO(out, rc);
@@ -661,7 +606,7 @@ crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 		D_ASSERTF(opts.is_initialized == true, "crtu_test_init not called.\n");
 
 	rc = d_getenv_uint32_t("CRT_L_RANK", &my_rank);
-	D_ASSERTF(rc == DER_SUCCESS, "Rank can not be retrieve: " DF_RC "\n", DP_RC(rc));
+	D_ASSERTF(rc == DER_SUCCESS, "Rank can not be retrieved: " DF_RC "\n", DP_RC(rc));
 
 	rc = d_log_init();
 	if (rc != 0)
@@ -720,10 +665,8 @@ crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 		D_GOTO(out, rc);
 
 out:
-	if (opts.assert_on_error && rc != 0) {
-		D_ERROR("Failed to start server. Asserting\n");
-		assert(0);
-	}
+	if (opts.assert_on_error)
+		D_ASSERTF(rc == 0, "Failed to start server. Asserting\n");
 
 	return rc;
 }
@@ -737,11 +680,7 @@ crtu_log_msg_cb(const struct crt_cb_info *info)
 {
 	struct crtu_log_msg_cb_resp	*resp;
 
-	if (info->cci_rc != 0) {
-		D_WARN("Add Log message CB failed\n");
-		D_ASSERTF(info->cci_rc == 0,
-			  "Send Log RPC did not respond\n");
-	}
+	D_ASSERTF(info->cci_rc == 0, "Send Log RPC did not respond\n");
 	resp = (struct crtu_log_msg_cb_resp *)info->cci_arg;
 	sem_post(&resp->sem);
 }
