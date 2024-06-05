@@ -15,7 +15,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@grom72/DAOS-15936') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -174,11 +174,6 @@ pipeline {
     agent { label 'lightweight' }
 
     // Timed builds disabled on 2-Apr-2024
-    // triggers {
-    //     /* groovylint-disable-next-line AddEmptyString */
-    //     cron(env.BRANCH_NAME == 'release/2.4' ? 'TZ=America/Toronto\n0 12 * * 6\n' : '')
-    // }
-
     environment {
         BULLSEYE = credentials('bullseye_license_key')
         GITHUB_USER = credentials('daos-jenkins-review-posting')
