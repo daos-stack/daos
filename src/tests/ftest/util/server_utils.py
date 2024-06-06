@@ -691,6 +691,9 @@ class DaosServerManager(SubprocessManager):
         # Wait for all the engines to start
         self.detect_engine_start()
 
+        # Debug
+        self.log.debug("DEBUG: Server engine pids: %s", self.manager.job.pattern_matches)
+
         return True
 
     def stop(self):

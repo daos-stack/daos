@@ -1094,6 +1094,9 @@ class Systemctl(JobManager):
         start = time.time()
         duration = 0
 
+        # Optionally collect the pattern matches per host
+        self.job.pattern_matches = {}
+
         # Search for patterns in the subprocess output until:
         #   - the expected number of pattern matches are detected (success)
         #   - the time out is reached (failure)
@@ -1104,6 +1107,7 @@ class Systemctl(JobManager):
             for entry in log_data:
                 match = re.findall(pattern, "\n".join(entry["data"]))
                 detected += len(match) if match else 0
+                self.job.pattern_matches[str(entry["host"])] = match
 
             complete = detected == quantity
             duration = time.time() - start
