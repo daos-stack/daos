@@ -665,8 +665,10 @@ class TestWithServers(TestWithoutServers):
         self.config_file_base = "test"
         self.log_dir = os.path.split(
             os.getenv("D_LOG_FILE", "/tmp/server.log"))[0]
-        # whether engines ULT stacks have been already dumped
-        self.dumped_engines_stacks = False
+        # Whether to dump engines ULT stacks on failure
+        self.__dump_engine_ult_on_failure = True
+        # Whether engines ULT stacks have been already dumped
+        self.__have_dumped_ult_stacks = False
         # Suffix to append to each access point name
         self.access_points_suffix = None
 
@@ -739,7 +741,7 @@ class TestWithServers(TestWithoutServers):
         self.host_info.access_points = self.access_points
 
         # Toggle whether to dump server ULT stacks on failure
-        self.dump_engine_ult_on_failure = self.params.get(
+        self.__dump_engine_ult_on_failure = self.params.get(
             "dump_engine_ult_on_failure", "/run/*", True)
 
         # # Find a configuration that meets the test requirements
@@ -1349,22 +1351,13 @@ class TestWithServers(TestWithoutServers):
         return errors
 
     def __dump_engines_stacks(self, message):
-        """Dump the engines ULT stacks if self.dump_engine_ult_on_failure is True.
-
-        Args:
-            message (str): see dump_engines_stacks()
-        """
-        if self.dump_engine_ult_on_failure:
-            self.dump_engines_stacks(message)
-
-    def dump_engines_stacks(self, message):
         """Dump the engines ULT stacks.
 
         Args:
-            message (str): reason for dumping the ULT stacks. Defaults to None.
+            message (str): reason for dumping the ULT stacks
         """
-        if self.dumped_engines_stacks is False:
-            self.dumped_engines_stacks = True
+        if self.__dump_engine_ult_on_failure and not self.__have_dumped_ult_stacks:
+            self.__have_dumped_ult_stacks = True
             self.log.info("%s, dumping ULT stacks", message)
             dump_engines_stacks(self.hostlist_servers)
 
