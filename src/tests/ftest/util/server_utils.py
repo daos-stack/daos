@@ -1083,6 +1083,7 @@ class DaosServerManager(SubprocessManager):
                     "Error extracting rank/pid from pattern matches: rank: %s, pid: %s "
                     "pattern_matches: %s", rank, pid, self.manager.job.pattern_matches)
                 raise ServerFailed("Error collecting engine pid information") from error
+        self.log.debug("Updated pid mapping: %s", self.__pids)
 
     @fail_on(CommandFailure)
     def system_exclude(self, ranks, copy=False, rank_hosts=None):
