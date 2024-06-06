@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -765,6 +765,7 @@ func TestSystem_Membership_Join(t *testing.T) {
 		"not leader": {
 			notLeader: true,
 			req: &JoinRequest{
+				ControlAddr:      curMember.Addr,
 				PrimaryFabricURI: curMember.Addr.String(),
 				FaultDomain:      fd1,
 			},
@@ -817,6 +818,16 @@ func TestSystem_Membership_Join(t *testing.T) {
 				FaultDomain:      curMember.FaultDomain,
 			},
 			expErr: ErrUuidChanged(newUUID, curMember.UUID, curMember.Rank),
+		},
+		"rejoin with different address": {
+			req: &JoinRequest{
+				Rank:             curMember.Rank,
+				UUID:             curMember.UUID,
+				ControlAddr:      newMember.Addr,
+				PrimaryFabricURI: curMember.Addr.String(),
+				FaultDomain:      curMember.FaultDomain,
+			},
+			expErr: ErrControlAddrChanged(newMember.Addr, curMember.Addr, curMember.UUID, curMember.Rank),
 		},
 		"successful join": {
 			req: &JoinRequest{

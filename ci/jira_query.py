@@ -39,7 +39,7 @@ VALID_TICKET_PREFIX = ('DAOS', 'CORCI', 'SRE')
 FIELDS = 'summary,status,labels,customfield_10044,customfield_10045'
 
 # Labels in GitHub which this script will set/clear based on the logic below.
-MANAGED_LABELS = ('release-2.2', 'release-2.4', 'priority')
+MANAGED_LABELS = ('release-2.2', 'release-2.4', 'release-2.6', 'priority')
 
 
 def set_output(key, value):
@@ -175,6 +175,8 @@ def main():
                 gh_label.add('release-2.2')
             if str(version) in ('2.4 Community Release'):
                 gh_label.add('release-2.4')
+            if str(version) in ('2.6 Community Release'):
+                gh_label.add('release-2.6')
 
         # If a PR does not otherwise have priority then use custom values from above.
         if priority is None and not pr_data['base']['ref'].startswith('release'):
