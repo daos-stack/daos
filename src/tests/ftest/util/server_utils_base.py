@@ -27,7 +27,7 @@ class AutosizeCancel(Exception):
 class DaosServerCommand(YamlCommand):
     """Defines an object representing the daos_server command."""
 
-    NORMAL_PATTERN = r"DAOS I/O Engine.*process (\d+) started on rank (\d+).*host ([\w\d_-]+)"
+    NORMAL_PATTERN = r"DAOS I/O Engine.*process (\d+) started on rank (\d+)"
     FORMAT_PATTERN = "(SCM format required)(?!;)"
     REFORMAT_PATTERN = "Metadata format required"
     SYSTEM_QUERY_PATTERN = "joined"

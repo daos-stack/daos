@@ -21,7 +21,7 @@ from exception_utils import CommandFailure
 from general_utils import (get_default_config_file, get_display_size, get_log_file, list_to_str,
                            pcmd, run_pcmd)
 from host_utils import get_local_host
-from run_utils import run_remote, stop_processes
+from run_utils import run_remote, stop_process_id, stop_processes
 from server_utils_base import DaosServerCommand, DaosServerInformation, ServerFailed
 from server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
 from user_utils import get_chown_command
@@ -140,6 +140,9 @@ class DaosServerManager(SubprocessManager):
         # defined in the self.manager.job.yaml object.
         self._external_yaml_data = None
 
+        # The process ID for each rank. Populated after starting the engines.
+        self.__pids = {}
+
     @property
     def engines(self):
         """Get the total number of engines.
@@ -179,6 +182,17 @@ class DaosServerManager(SubprocessManager):
 
         """
         return self.get_host_ranks(self.management_service_hosts)
+
+    @property
+    def rank_pids(self):
+        """Get the pid for each engine.
+
+        This data is only updated when starting the servers with systemctl.
+
+        Returns:
+            dict: dictionary of rank keys and process ID values
+        """
+        return self.__pids
 
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
@@ -528,6 +542,9 @@ class DaosServerManager(SubprocessManager):
             self.manager.kill()
             raise ServerFailed("Failed to start servers after format")
 
+        # Parse the engine rank/pid info from the server start detection messages (systemctl only)
+        self.__update_pids()
+
         # Update the dmg command host list to work with pool create/destroy
         self._prepare_dmg_hostlist()
 
@@ -690,9 +707,6 @@ class DaosServerManager(SubprocessManager):
 
         # Wait for all the engines to start
         self.detect_engine_start()
-
-        # Debug
-        self.log.debug("DEBUG: Server engine pids: %s", self.manager.job.pattern_matches)
 
         return True
 
@@ -1012,20 +1026,63 @@ class DaosServerManager(SubprocessManager):
         """Forcibly terminate any server process running on hosts."""
         regex = self.manager.job.command_regex
         detected, running = stop_processes(self.log, self._hosts, regex)
+        self.__report_killed(f"remote server {regex} process", detected, running, None)
+
+    def kill_rank(self, rank):
+        """Forcibly terminate the server process for the specified rank.
+
+        Args:
+            rank (int): engine rank to kill
+
+        Raises:
+            ServerFailed: if there is a problem determining the process ID or host for the rank
+        """
+        try:
+            pid = self.rank_pids[rank]
+            host = NodeSet(self.ranks[rank])
+        except KeyError as error:
+            raise ServerFailed(f"Unable to kill rank {rank}, no process ID assigned") from error
+        detected, running = stop_process_id(self.log, host, pid)
+        self.__report_killed(f"remote server rank {rank} process", detected, running, pid)
+
+    def __report_killed(self, description, detected, running, ranks):
+        """Report the status of killing engine ranks.
+
+        Args:
+            description (str): description of what ranks were killed
+            detected (NodeSet): hosts on which the ranks were initially detected
+            running (NodeSet): hosts on which the ranks are still running
+            ranks (object): job ranks to update. Can be a single rank (int), multiple ranks (list),
+                or all the ranks (None).
+        """
         if not detected:
-            self.log.info(
-                "No remote %s server processes killed on %s (none found), done.",
-                regex, self._hosts)
+            self.log.info("No %ses killed on %s (none found), done.", description, self._hosts)
         elif running:
             self.log.info(
-                "***Unable to kill remote server %s process on %s! Please investigate/report.***",
-                regex, running)
+                "***Unable to kill %s on %s! Please investigate/report.***", description, running)
         else:
             self.log.info(
-                "***At least one remote server %s process needed to be killed on %s! Please "
-                "investigate/report.***", regex, detected)
+                "***At least one %s needed to be killed on %s! Please investigate/report.***",
+                description, detected)
         # set stopped servers state to make teardown happy
-        self.update_expected_states(None, ["stopped", "excluded", "errored"])
+        self.update_expected_states(ranks, ["stopped", "excluded", "errored"])
+
+    def __update_pids(self):
+        """Parse the most recent engine start detection pattern matches for engine rank/pid info.
+
+        Raises:
+            ServerFailed: if there is an error parsing the rank/pid information from the engine
+                started messages
+        """
+        self.__pids.clear()
+        for pid, rank in self.manager.job.pattern_matches:
+            try:
+                self.__pids[int(rank)] = int(pid)
+            except ValueError as error:
+                self.log.debug(
+                    "Error extracting rank/pid from pattern matches: rank: %s, pid: %s "
+                    "pattern_matches: %s", rank, pid, self.manager.job.pattern_matches)
+                raise ServerFailed("Error collecting engine pid information") from error
 
     @fail_on(CommandFailure)
     def system_exclude(self, ranks, copy=False, rank_hosts=None):

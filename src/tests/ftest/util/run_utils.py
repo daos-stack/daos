@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -490,27 +490,75 @@ def stop_processes(log, hosts, pattern, verbose=True, timeout=60, exclude=None, 
             matching the pattern were initially detected and the second NodeSet indicates on which
             hosts the processes matching the pattern are still running (will be empty if every
             process was killed or no process matching the pattern were found).
+    """
+    description = f"that match '{pattern}'"
+    commands = [f"/usr/bin/pgrep --list-full {pattern}", "sudo /usr/bin/kill"]
+    if exclude:
+        commands[0] = f"/usr/bin/ps xa | grep -E {pattern} | grep -vE {exclude}"
+        description += f" but does not match '{exclude}'"
+    return __kill_process(log, hosts, pattern, description, commands, verbose, timeout, force)
 
+
+def stop_process_id(log, hosts, pid, verbose=True, timeout=60, force=False):
+    """Stop the process ID on each hosts.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        hosts (NodeSet): hosts on which to stop any processes matching the pattern
+        pid (int): process ID to kill
+        verbose (bool, optional): display command output. Defaults to True.
+        timeout (int, optional): command timeout in seconds. Defaults to 60 seconds.
+        force (bool, optional): if set use the KILL signal to immediately stop any running
+            processes. Defaults to False which will attempt to kill w/o a signal, then with the ABRT
+            signal, and finally with the KILL signal.
+
+    Returns:
+        tuple: (NodeSet, NodeSet) where the first NodeSet indicates on which hosts processes
+            matching the pattern were initially detected and the second NodeSet indicates on which
+            hosts the processes matching the pattern are still running (will be empty if every
+            process was killed or no process matching the pattern were found).
+    """
+    description = f"with the {pid} PID"
+    commands = [f"/usr/bin/ps aux | grep -w {pid} | grep -v grep", "sudo /usr/bin/pkill"]
+    return __kill_process(log, hosts, pid, description, commands, verbose, timeout, force)
+
+
+def __kill_process(log, hosts, process, description, commands, verbose, timeout, force):
+    """Stop the processes on each hosts that match the pattern.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        hosts (NodeSet): hosts on which to stop the process(es)
+        process (str): the process pattern or ID to stop
+        description (str): text indicating what is being stopped
+        commands (list): a list of the command used to detect if the process pattern or ID is
+            running and the command used to kill the process pattern or ID
+        verbose (bool): display command output. Defaults to True.
+        timeout (int): command timeout in seconds.
+        force (bool): if set use the KILL signal to immediately stop any running processes. If not
+            set attempt to kill w/o a signal, then with the ABRT signal, and finally with the KILL
+            signal.
+
+    Returns:
+        tuple: (NodeSet, NodeSet) where the first NodeSet indicates on which hosts processes
+            matching the pattern were initially detected and the second NodeSet indicates on which
+            hosts the processes matching the pattern are still running (will be empty if every
+            process was killed or no process matching the pattern were found).
     """
     processes_detected = NodeSet()
     processes_running = NodeSet()
-    command = f"/usr/bin/pgrep --list-full {pattern}"
-    pattern_match = str(pattern)
-    if exclude:
-        command = f"/usr/bin/ps xa | grep -E {pattern} | grep -vE {exclude}"
-        pattern_match += " and doesn't match " + str(exclude)
 
     # Search for any active processes
-    log.debug("Searching for any processes on %s that match %s", hosts, pattern_match)
-    result = run_remote(log, hosts, command, verbose, timeout)
+    log.debug("Searching for any processes on %s %s", hosts, description)
+    result = run_remote(log, hosts, commands[0], verbose, timeout)
     if not result.passed_hosts:
-        log.debug("No processes found on %s that match %s", result.failed_hosts, pattern_match)
+        log.debug("No processes found on %s %s", result.failed_hosts, description)
         return processes_detected, processes_running
 
-    # Indicate on which hosts processes matching the pattern were found running in the return status
+    # Indicate on which hosts processes were found running in the return status
     processes_detected.add(result.passed_hosts)
 
-    # Initialize on which hosts the processes matching the pattern are still running
+    # Initialize on which hosts the processes are still running
     processes_running.add(result.passed_hosts)
 
     # Attempt to kill any processes found on any of the hosts with increasing force
@@ -520,19 +568,19 @@ def stop_processes(log, hosts, pattern, verbose=True, timeout=60, exclude=None, 
     while steps and result.passed_hosts:
         step = steps.pop(0)
         log.debug(
-            "Killing%s any processes on %s that match %s and then waiting %s seconds",
-            step[0], result.passed_hosts, pattern_match, step[1])
-        kill_command = f"sudo /usr/bin/pkill{step[0]} {pattern}"
+            "Killing%s any processes on %s %s and then waiting %s seconds",
+            step[0], result.passed_hosts, description, step[1])
+        kill_command = f"{commands[1]}{step[0]} {process}"
         run_remote(log, result.passed_hosts, kill_command, verbose, timeout)
         time.sleep(step[1])
-        result = run_remote(log, result.passed_hosts, command, verbose, timeout)
+        result = run_remote(log, result.passed_hosts, commands[0], verbose, timeout)
         if not result.passed_hosts:
-            # Indicate all running processes matching the pattern were stopped in the return status
+            # Indicate all running processes were stopped in the return status
             log.debug(
-                "All processes running on %s that match %s have been stopped.",
-                result.failed_hosts, pattern_match)
-        # Update the set of hosts on which the processes matching the pattern are still running
+                "All processes running on %s %s have been stopped.",
+                result.failed_hosts, description)
+        # Update the set of hosts on which the processes are still running
         processes_running.difference_update(result.failed_hosts)
     if processes_running:
-        log.debug("Processes still running on %s that match: %s", processes_running, pattern_match)
+        log.debug("Processes still running on %s %s", processes_running, description)
     return processes_detected, processes_running
