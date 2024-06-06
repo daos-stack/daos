@@ -1107,7 +1107,7 @@ class Systemctl(JobManager):
             for entry in log_data:
                 match = re.findall(pattern, "\n".join(entry["data"]))
                 detected += len(match) if match else 0
-                self.job.pattern_matches[str(entry["host"])] = match
+                self.job.pattern_matches[str(entry["hosts"])] = match
 
             complete = detected == quantity
             duration = time.time() - start
