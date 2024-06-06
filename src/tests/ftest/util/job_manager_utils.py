@@ -1094,23 +1094,21 @@ class Systemctl(JobManager):
         start = time.time()
         duration = 0
 
-        # Optionally collect the pattern matches per host
-        self.job.pattern_matches = {}
-
         # Search for patterns in the subprocess output until:
         #   - the expected number of pattern matches are detected (success)
         #   - the time out is reached (failure)
         #   - the service is no longer running (failure)
         while not complete and not timed_out and self.service_running():
             detected = 0
+            self.job.pattern_matches = []
             log_data = self.get_log_data(self._hosts, command, timeout)
             for entry in log_data:
                 match = re.findall(pattern, "\n".join(entry["data"]))
                 detected += len(match) if match else 0
-                self.job.pattern_matches[str(entry["hosts"])] = match
+                self.job.pattern_matches.extend(match)
 
             complete = detected == quantity
-            duration = time.time() - start
+            duration = round(time.time() - start, 2)
             if timeout is not None:
                 timed_out = duration > timeout
 
@@ -1118,22 +1116,23 @@ class Systemctl(JobManager):
                 self.display_log_data(log_data)
 
         # Summarize results
-        msg = "{}/{} '{}' messages detected in".format(detected, quantity, pattern)
-        runtime = "{}/{} seconds".format(duration, timeout)
+        msg = f"{detected}/{quantity} '{pattern}' messages detected in"
+        runtime = f"{duration}/{timeout} seconds"
+        matches = f"with pattern matches: {self.job.pattern_matches}"
 
         if not complete:
             # Report the error / timeout
             reason = "ERROR detected"
             details = ""
             if timed_out:
-                reason = "TIMEOUT detected, exceeded {} seconds".format(timeout)
-                runtime = "{} seconds".format(duration)
+                reason = f"TIMEOUT detected, exceeded {timeout} seconds"
+                runtime = f"{duration} seconds"
             if log_data:
-                details = ":\n{}".format(self.str_log_data(log_data))
+                details = f":\n{self.str_log_data(log_data)}"
             self.log.info("%s - %s %s%s", reason, msg, runtime, details)
             self.log_additional_debug_data(self._hosts, since, until)
 
-        return complete, " ".join([msg, runtime])
+        return complete, " ".join([msg, runtime, matches])
 
     def check_logs(self, pattern, since, until, quantity=1, timeout=60):
         """Check the command logs on each host for a specified string.
