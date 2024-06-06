@@ -231,6 +231,15 @@ obj_metrics_alloc_internal(const char *path, int tgt_id, bool server)
 	if (rc)
 		D_WARN("Failed to create EC partial update counter: " DF_RC "\n", DP_RC(rc));
 
+	/** Total number of times EC aggregation conflicts with discard or VOS
+	 * aggregation
+	 */
+	rc = d_tm_add_metric(&metrics->opm_ec_agg_blocked, D_TM_COUNTER,
+			     "total number of EC agg pauses due to VOS discard or agg", NULL,
+			     "%s/EC_agg/blocked%s", path, tgt_path);
+	if (rc)
+		D_WARN("Failed to create EC agg blocked counter: " DF_RC "\n", DP_RC(rc));
+
 	return metrics;
 }
 

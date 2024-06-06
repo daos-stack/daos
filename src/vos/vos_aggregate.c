@@ -1,10 +1,10 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
-  * Implementation for aggregation and discard
+ * Implementation for aggregation and discard
  */
 #define D_LOGFAC	DD_FAC(vos)
 
@@ -2486,6 +2486,10 @@ aggregate_enter(struct vos_container *cont, int agg_mode, daos_epoch_range_t *ep
 	struct vos_agg_metrics	*vam = agg_cont2metrics(cont);
 	int			 rc;
 
+	/** TODO: Now that we have per object mutual exclusion, perhaps we can
+	 * remove the top level mutual exclusion.  Keep it for now to avoid too
+	 * much change at once.
+	 */
 	switch (agg_mode) {
 	default:
 		D_ASSERT(0);
@@ -2499,7 +2503,7 @@ aggregate_enter(struct vos_container *cont, int agg_mode, daos_epoch_range_t *ep
 		}
 
 		if (cont->vc_obj_discard_count != 0) {
-			D_ERROR(DF_CONT": In object discard epr["DF_U64", "DF_U64"]\n",
+			D_ERROR(DF_CONT ": In object discard epr[" DF_U64 ", " DF_U64 "]\n",
 				DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
 				cont->vc_epr_discard.epr_lo, cont->vc_epr_discard.epr_hi);
 			return -DER_BUSY;
@@ -2526,13 +2530,6 @@ aggregate_enter(struct vos_container *cont, int agg_mode, daos_epoch_range_t *ep
 			return -DER_BUSY;
 		}
 
-		if (cont->vc_obj_discard_count != 0) {
-			D_ERROR(DF_CONT": In object discard epr["DF_U64", "DF_U64"]\n",
-				DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
-				cont->vc_epr_discard.epr_lo, cont->vc_epr_discard.epr_hi);
-			return -DER_BUSY;
-		}
-
 		if (cont->vc_in_discard &&
 		    cont->vc_epr_discard.epr_lo <= epr->epr_hi) {
 			D_ERROR(DF_CONT": Discard epr["DF_U64", "DF_U64"], "
@@ -2552,21 +2549,18 @@ aggregate_enter(struct vos_container *cont, int agg_mode, daos_epoch_range_t *ep
 
 		break;
 	case AGG_MODE_OBJ_DISCARD:
+		/** Theoretically, this could overlap with vos_discard as well
+		 * as aggregation but it makes the logic in vos_obj_hold more
+		 * complicated so defer for now and just disallow it. We can
+		 * conflict with aggregation, however without issues.
+		 */
 		if (cont->vc_in_discard) {
-			D_ERROR(DF_CONT": In discard epr["DF_U64", "DF_U64"]\n",
+			D_ERROR(DF_CONT ": Already in discard epr[" DF_U64 ", " DF_U64 "]\n",
 				DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
 				cont->vc_epr_discard.epr_lo, cont->vc_epr_discard.epr_hi);
 			return -DER_BUSY;
 		}
 
-		if (cont->vc_in_aggregation) {
-			D_ERROR(DF_CONT": In aggregation epr["DF_U64", "DF_U64"]\n",
-				DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
-				cont->vc_epr_aggregation.epr_lo, cont->vc_epr_aggregation.epr_hi);
-			return -DER_BUSY;
-		}
-
-		/** Allow discard from multiple objects */
 		cont->vc_obj_discard_count++;
 		break;
 	}
@@ -2645,12 +2639,14 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	      int (*yield_func)(void *arg), void *yield_arg, uint32_t flags)
 {
 	struct vos_container	*cont = vos_hdl2cont(coh);
+	struct vos_agg_metrics  *vam  = agg_cont2metrics(cont);
 	struct agg_data		*ad;
 	uint64_t		 feats;
 	daos_epoch_t		 agg_write;
 	bool			 has_agg_write;
 	int			 rc;
 	bool			 run_agg = false;
+	int                      blocks  = 0;
 
 	D_DEBUG(DB_TRACE, "epr: %lu -> %lu\n", epr->epr_lo, epr->epr_hi);
 	D_ASSERT(epr != NULL);
@@ -2705,11 +2701,25 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	merge_window_init(&ad->ad_agg_param.ap_window);
 	ad->ad_agg_param.ap_flags = flags;
 
-	ad->ad_iter_param.ip_flags |= VOS_IT_FOR_PURGE;
+	ad->ad_iter_param.ip_flags |= VOS_IT_FOR_PURGE | VOS_IT_FOR_AGG;
+retry:
 	rc = vos_iterate(&ad->ad_iter_param, VOS_ITER_OBJ, true, &ad->ad_anchors,
 			 vos_aggregate_pre_cb, vos_aggregate_post_cb,
 			 &ad->ad_agg_param, NULL);
-	if (rc != 0 || ad->ad_agg_param.ap_nospc_err) {
+	if (rc == -DER_BUSY) {
+		/** Hit a conflict with obj_discard.   Rather than exiting, let's
+		 * yield and try again.
+		 */
+		if (vam && vam->vam_agg_blocked)
+			d_tm_inc_counter(vam->vam_agg_blocked, 1);
+		blocks++;
+		/** Warn once if it goes over 20 times */
+		D_CDEBUG(blocks == 20, DLOG_WARN, DB_EPC,
+			 "VOS aggrregation hit conflict (nr=%d), retrying...\n", blocks);
+		close_merge_window(&ad->ad_agg_param.ap_window, rc);
+		vos_aggregate_yield(&ad->ad_agg_param);
+		goto retry;
+	} else if (rc != 0 || ad->ad_agg_param.ap_nospc_err) {
 		close_merge_window(&ad->ad_agg_param.ap_window, rc);
 		goto exit;
 	} else if (ad->ad_agg_param.ap_csum_err) {
@@ -2744,8 +2754,6 @@ free_agg_data:
 	D_FREE(ad);
 
 	if (rc < 0) {
-		struct vos_agg_metrics *vam = agg_cont2metrics(cont);
-
 		if (vam && vam->vam_fail_count)
 			d_tm_inc_counter(vam->vam_fail_count, 1);
 	}
@@ -2757,12 +2765,13 @@ int
 vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
 	    int (*yield_func)(void *arg), void *yield_arg)
 {
-	struct vos_container	*cont = vos_hdl2cont(coh);
-	struct vos_object	*obj;
+	struct vos_container    *cont = vos_hdl2cont(coh);
+	struct vos_agg_metrics  *vam  = agg_cont2metrics(cont);
 	struct agg_data		*ad;
 	int			 type = VOS_ITER_OBJ;
 	int			 rc;
 	int			 mode = oidp == NULL ? AGG_MODE_DISCARD : AGG_MODE_OBJ_DISCARD;
+	int                      blocks = 0;
 
 	D_ASSERT(epr != NULL);
 	D_ASSERTF(epr->epr_lo <= epr->epr_hi,
@@ -2773,22 +2782,9 @@ vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
 	if (ad == NULL)
 		return -DER_NOMEM;
 
-	if (oidp != NULL) {
-		rc = vos_obj_discard_hold(vos_obj_cache_current(cont->vc_pool->vp_sysdb),
-					  cont, *oidp, &obj);
-		if (rc != 0) {
-			if (rc == -DER_NONEXIST)
-				rc = 0;
-			goto free_agg_data;
-		}
-
-		D_ASSERT(obj != NULL);
-		D_ASSERT(obj->obj_discard);
-	}
-
 	rc = aggregate_enter(cont, mode, epr);
 	if (rc != 0)
-		goto release_obj;
+		goto exit;
 
 	if (oidp != NULL) {
 		D_DEBUG(DB_EPC, "Discard "DF_UOID" epr "DF_X64"-"DF_X64"\n", DP_UOID(*oidp),
@@ -2823,17 +2819,26 @@ vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
 	ad->ad_agg_param.ap_yield_arg = yield_arg;
 
 	ad->ad_iter_param.ip_flags |= VOS_IT_FOR_DISCARD;
-	rc = vos_iterate(&ad->ad_iter_param, type, true, &ad->ad_anchors,
-			 vos_aggregate_pre_cb, vos_aggregate_post_cb,
-			 &ad->ad_agg_param, NULL);
+retry:
+	rc = vos_iterate(&ad->ad_iter_param, type, true, &ad->ad_anchors, vos_aggregate_pre_cb,
+			 vos_aggregate_post_cb, &ad->ad_agg_param, NULL);
+	if (rc == -DER_BUSY) {
+		/** Hit an object conflict with EC aggregation.   Rather than exiting, let's
+		 * yield and try again.
+		 */
+		blocks++;
+		/** Warn once if it goes over 20 times */
+		D_CDEBUG(blocks == 20, DLOG_WARN, DB_EPC,
+			 "VOS discard hit conflict (nr=%d), retrying...\n", blocks);
+		if (vam && vam->vam_discard_blocked)
+			d_tm_inc_counter(vam->vam_discard_blocked, 1);
+		vos_aggregate_yield(&ad->ad_agg_param);
+		goto retry;
+	}
 
 	aggregate_exit(cont, mode);
 
-release_obj:
-	if (oidp != NULL)
-		vos_obj_discard_release(vos_obj_cache_current(cont->vc_pool->vp_sysdb), obj);
-
-free_agg_data:
+exit:
 	D_FREE(ad);
 
 	return rc;

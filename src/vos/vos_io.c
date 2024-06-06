@@ -571,8 +571,8 @@ vos_ioc_destroy(struct vos_io_context *ioc, bool evict)
 	dcs_csum_info_list_fini(&ioc->ic_csum_list);
 
 	if (ioc->ic_obj)
-		vos_obj_release(vos_obj_cache_current(ioc->ic_cont->vc_pool->vp_sysdb),
-				ioc->ic_obj, evict);
+		vos_obj_release(vos_obj_cache_current(ioc->ic_cont->vc_pool->vp_sysdb), ioc->ic_obj,
+				0, evict);
 
 	vos_ioc_reserve_fini(ioc);
 	vos_ilog_fetch_finish(&ioc->ic_dkey_info);
