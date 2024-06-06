@@ -435,20 +435,10 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name, crt_init_options_t *opt)
 
 	D_STRNDUP(opt->cio_provider, crt_net_cfg_info.provider, DAOS_SYS_INFO_STRING_MAX);
 	D_STRNDUP(opt->cio_interface, crt_net_cfg_info.interface, DAOS_SYS_INFO_STRING_MAX);
+	D_STRNDUP(opt->cio_domain, crt_net_cfg_info.domain, DAOS_SYS_INFO_STRING_MAX);
 
-	/* Domain is optional */
-	if (crt_net_cfg_info.domain) {
-		D_STRNDUP(opt->cio_domain, crt_net_cfg_info.domain, DAOS_SYS_INFO_STRING_MAX);
-		if (opt->cio_domain == NULL)
-			D_GOTO(cleanup, rc = -DER_NOMEM);
-	}
-
-	/* Interface and provider must be set */
-	if (opt->cio_provider == NULL || opt->cio_interface == NULL) {
-		D_ERROR("Invalid provider/interface : %s/%s\n", opt->cio_provider,
-			opt->cio_interface);
+	if (!opt->cio_provider || !opt->cio_interface || !opt->cio_domain)
 		D_GOTO(cleanup, rc = -DER_NOMEM);
-	}
 
 	/* If the server has set this, the client must use the same value. */
 	if (crt_net_cfg_info.srv_srx_set != -1)
