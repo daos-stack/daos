@@ -476,7 +476,8 @@ def compress_files(logger, hosts, source, pattern, depth, test_result):
     """
     logger.debug("-" * 80)
     logger.debug("Compressing any %s files in %s on %s larger than 1M", pattern, source, hosts)
-    other = ["-size", "+1M", "-print0", "|", "sudo", "-n", "xargs", "-0", "-r0", "lbzip2", "-v"]
+    other = ("-size +1M -print0 "
+             "| xargs -0 -r0 -n1 -P $(nproc) sh -c 'sudo chown $USER: $0 && lbzip2 -v $0'")
     result = run_remote(logger, hosts, find_command(source, pattern, depth, other))
     if not result.passed:
         message = (f"Error compressing {os.path.join(source, pattern)} files larger than 1M on "
