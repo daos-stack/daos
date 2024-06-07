@@ -742,7 +742,7 @@ class TestWithServers(TestWithoutServers):
 
         # Toggle whether to dump server ULT stacks on failure
         self.__dump_engine_ult_on_failure = self.params.get(
-            "dump_engine_ult_on_failure", "/run/*", True)
+            "dump_engine_ult_on_failure", "/run/setup/*", True)
 
         # # Find a configuration that meets the test requirements
         # self.config = Configuration(
