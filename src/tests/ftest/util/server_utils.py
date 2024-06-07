@@ -164,6 +164,21 @@ class DaosServerManager(SubprocessManager):
         return {rank: value["host"] for rank, value in self._expected_states.items()}
 
     @property
+    def host_ranks(self):
+        """Get the engine rank(s) running on each host.
+
+        Returns:
+            dict: host key (str) with list of rank (int) values
+        """
+        host_ranks = {}
+        for rank, value in self._expected_states.items():
+            host = str(value["host"])
+            if host not in host_ranks:
+                host_ranks[host] = []
+            host_ranks[host].append(rank)
+        return host_ranks
+
+    @property
     def management_service_hosts(self):
         """Get the hosts running the management service.
 
@@ -932,7 +947,7 @@ class DaosServerManager(SubprocessManager):
 
     @fail_on(CommandFailure)
     def stop_ranks(self, ranks, daos_log, force=False, copy=False):
-        """Kill/Stop the specific server ranks using this pool.
+        """Stop the specific server ranks using this pool.
 
         Args:
             ranks (list): a list of daos server ranks (int) to kill
@@ -960,7 +975,7 @@ class DaosServerManager(SubprocessManager):
         self.update_expected_states(ranks, ["stopped", "excluded"])
 
     def stop_random_rank(self, daos_log, force=False, exclude_ranks=None):
-        """Kill/Stop a random server rank that is expected to be running.
+        """Stop a random server rank that is expected to be running.
 
         Args:
             daos_log (DaosLog): object for logging messages
@@ -974,25 +989,7 @@ class DaosServerManager(SubprocessManager):
             ServerFailed: if there are no available ranks to stop.
 
         """
-        # Exclude non-running ranks
-        rank_state = self.get_expected_states()
-        candidate_ranks = []
-        for rank, state in rank_state.items():
-            for running_state in self._states["running"]:
-                if running_state in state:
-                    candidate_ranks.append(rank)
-                    continue
-
-        # Exclude specified ranks
-        for rank in exclude_ranks or []:
-            if rank in candidate_ranks:
-                del candidate_ranks[candidate_ranks.index(rank)]
-
-        if len(candidate_ranks) < 1:
-            raise ServerFailed("No available candidate ranks to stop.")
-
-        # Stop a random rank
-        random_rank = random.choice(candidate_ranks)  # nosec
+        random_rank = self.get_random_rank(True, True, exclude_ranks)
         return self.stop_ranks([random_rank], daos_log=daos_log, force=force)
 
     def start_ranks(self, ranks, daos_log):
@@ -1324,3 +1321,41 @@ class DaosServerManager(SubprocessManager):
             "Found %s total matches for '%s' in the %s logs",
             matches, pattern, self.manager.job.command)
         return matches
+
+    def get_random_rank(self, running=True, management_service=False, exclude=None):
+        """Get a random engine rank.
+
+        Args:
+            running (bool, optional): should the random rank be in a running state. Defaults to
+                True.
+            management_service (bool, optional): should the rank rank be running the management
+                service. Defaults to False.
+            exclude (list, optional): list of other rank numbers to exclude. Defaults to None.
+
+        Returns:
+            int: random rank number
+        """
+        self.log.debug("Selecting a random engine rank")
+        if not exclude:
+            exclude = []
+        else:
+            self.log.debug("  Excluding requested rank(s): %s", exclude)
+        if running:
+            not_running = []
+            for rank, expected_states in self.get_expected_states().items():
+                for running_state in self._states["running"]:
+                    if running_state not in expected_states and rank not in exclude:
+                        not_running.append(rank)
+            if not_running:
+                self.log.debug("  Excluding non-running rank(s): %s", not_running)
+                exclude.extend(not_running)
+        if not management_service:
+            ms_ranks = self.management_service_ranks
+            self.log.debug("  Excluding management service rank(s) %s ", ms_ranks)
+            exclude.extend(ms_ranks)
+        available_ranks = [rank for rank in self.ranks.keys() if rank not in exclude]
+        if len(available_ranks) < 1:
+            raise ServerFailed("No available ranks from which to chose one randomly.")
+        random_rank = random.choice(available_ranks)
+        self.log.debug("  Selected rank %s from %s", random_rank, available_ranks)
+        return random_rank

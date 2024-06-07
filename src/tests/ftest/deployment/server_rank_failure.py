@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -7,13 +7,11 @@ import os
 import threading
 import time
 
-from ClusterShell.NodeSet import NodeSet
 from command_utils_base import CommandFailure
 from general_utils import report_errors
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
 from job_manager_utils import get_job_manager
-from run_utils import stop_processes
 
 
 class ServerRankFailure(IorTestBase):
@@ -85,20 +83,14 @@ class ServerRankFailure(IorTestBase):
         self.log.info("Start daos_server and detect the DAOS I/O engine message")
         self.server_managers[0].restart(hosts=self.hostlist_servers)
 
-    def kill_engine(self, engine_kill_host):
-        """Kill engine on the given host.
-
-        Args:
-            engine_kill_host (str): Hostname to kill engine.
-        """
-        pattern = self.server_managers[0].manager.job.command_regex
-        detected, running = stop_processes(self.log, NodeSet(engine_kill_host), pattern)
+    def kill_engine(self):
+        """Kill engine on the given host."""
+        rank = self.server_managers[0].get_random_rank()
+        detected, running = self.server_managers[0].kill_rank(rank)
         if not detected:
-            self.log.info("No daos_engine process killed on %s!", engine_kill_host)
-        elif running:
-            self.log.info("Unable to kill daos_engine processes on %s!", running)
-        else:
-            self.log.info("daos_engine processes on %s killed", detected)
+            self.fail(f"Error killing server engine rank {rank} - not detected")
+        if running:
+            self.fail(f"Error killing server engine rank {rank} - still running")
 
     def verify_ior_worked(self, ior_results, job_num, errors):
         """Verify that the IOR worked.
@@ -154,8 +146,7 @@ class ServerRankFailure(IorTestBase):
         time.sleep(5)
 
         # 3. While IOR is running, kill all daos_engine on a non-access-point node
-        engine_kill_host = self.hostlist_servers[1]
-        self.kill_engine(engine_kill_host=engine_kill_host)
+        self.kill_engine()
 
         # 4. Wait for IOR to complete.
         ior_thread.join()
@@ -291,15 +282,6 @@ class ServerRankFailure(IorTestBase):
                 break
         self.log.info("rank_r = %s", rank_r)
 
-        # Find the hostname that's different from rank_0_host. We'll kill engines on it.
-        engine_kill_host = None
-        for member in members:
-            host = member["addr"].split(":")[0]
-            if rank_0_host != host:
-                engine_kill_host = host
-                break
-        self.log.info("engine_kill_host = %s", engine_kill_host)
-
         # 2. Create a pool across two ranks on the same node; 0 and rank_r.
         self.add_pool(namespace="/run/pool_size_value/*", target_list=[0, rank_r])
 
@@ -324,7 +306,7 @@ class ServerRankFailure(IorTestBase):
         time.sleep(5)
 
         # 5. Kill daos_engine from the host where the pool isn't created.
-        self.kill_engine(engine_kill_host=engine_kill_host)
+        self.kill_engine()
 
         # Wait for IOR to complete.
         ior_thread.join()
