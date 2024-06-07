@@ -11,7 +11,6 @@
 #include <stdlib.h>
 #include <getopt.h>
 #include <errno.h>
-#include <execinfo.h>
 
 #include <daos/btree_class.h>
 #include <daos/common.h>
