@@ -1238,6 +1238,61 @@ enum d_vec_flag {
 
 D_VEC_DECLARE(pointers, void *, elem)
 
+#ifndef DAOS_BUILD_RELEASE
+#define DAOS_WITH_REF_TRACKER
+#endif
+
+struct d_ref_tracker_rec;
+
+D_VEC_DECLARE(ref_tracker_rec, struct d_ref_tracker_rec, *elem);
+
+/**
+ * Reference tracker. The common usage is:
+ *
+ *   #ifdef DAOS_WITH_REF_TRACKER
+ *     struct d_ref_tracker <prefix>_ref_tracker
+ *   #endif
+ */
+struct d_ref_tracker {
+	struct d_vec_ref_tracker_rec rft_vec;
+};
+
+#ifdef DAOS_WITH_REF_TRACKER
+void d_ref_tracker_init(struct d_ref_tracker *tracker);
+void d_ref_tracker_fini(struct d_ref_tracker *tracker);
+void d_ref_tracker_dump(struct d_ref_tracker *tracker, const char *func, int line);
+void d_ref_tracker_track(struct d_ref_tracker *tracker, void *addr, const char *func, int line);
+void d_ref_tracker_untrack(struct d_ref_tracker *tracker, void *addr);
+void d_ref_tracker_retrack(struct d_ref_tracker *tracker, void *new_addr, void *old_addr,
+			   const char *func, int line);
+#else
+#define d_ref_tracker_init(tracker)					do {} while (0)
+#define d_ref_tracker_fini(tracker)					do {} while (0)
+#define d_ref_tracker_dump(tracker, func, line)				do {} while (0)
+#define d_ref_tracker_track(tracker, addr, func, line)			do {} while (0)
+#define d_ref_tracker_untrack(tracker, addr)				do {} while (0)
+#define d_ref_tracker_retrack(tracker, new_addr, old_addr, func, line)	do {} while (0)
+#endif
+
+/** Add a record for \a addr in \a tracker. */
+#define D_REF_TRACKER_TRACK(tracker, addr) d_ref_tracker_track(tracker, addr, __func__, __LINE__)
+
+/** Remove the record for \a addr in \a tracker. */
+#define D_REF_TRACKER_UNTRACK(tracker, addr) d_ref_tracker_untrack(tracker, addr)
+
+/**
+ * Move \a src to \a dst and update \a tracker. NULL will be assigned to \a src.
+ */
+#define D_REF_TRACKER_MOVE(tracker, dst, src)                                                      \
+	do {                                                                                       \
+		d_ref_tracker_retrack(tracker, &dst, &src, __func__, __LINE__);                    \
+		dst = src;                                                                         \
+		src = NULL;                                                                        \
+	} while (0)
+
+/** Print all references currently tracked by \a tracker. */
+#define D_REF_TRACKER_DUMP(tracker) d_ref_tracker_dump(tracker, __func__, __LINE__)
+
 /** Change the default setting for if a signal handler should be installed in crt_init()
  *
  * This is controlled by DAOS_SIGNAL_REGISTER however calling this function changes the default

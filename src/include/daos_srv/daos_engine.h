@@ -756,4 +756,32 @@ void dss_chore_diy(struct dss_chore *chore, dss_chore_func_t func);
 
 bool engine_in_check(void);
 
+struct dss_ref_tracker_dumper {
+	struct sched_request *rftd_req;
+	struct d_ref_tracker *rftd_tracker;
+	const char           *rftd_func;
+	int                   rftd_line;
+};
+
+#ifdef DAOS_WITH_REF_TRACKER
+
+void dss_ref_tracker_init_dumper(struct dss_ref_tracker_dumper *dumper,
+				 struct d_ref_tracker *tracker, const char *func, int line);
+void dss_ref_tracker_fini_dumper(struct dss_ref_tracker_dumper *dumper);
+
+#define DSS_REF_TRACKER_DECLARE_DUMPER(dumper) struct dss_ref_tracker_dumper dumper
+
+#define DSS_REF_TRACKER_INIT_DUMPER(dumper, tracker)                                               \
+	dss_ref_tracker_init_dumper(&dumper, &tracker, __func__, __LINE__)
+
+#define DSS_REF_TRACKER_FINI_DUMPER(dumper) dss_ref_tracker_fini_dumper(&dumper)
+
+#else
+#define dss_ref_tracker_init_dumper(dumper, tracker, func, line)	do {} while (0)
+#define dss_ref_tracker_fini_dumper(dumper)				do {} while (0)
+#define DSS_REF_TRACKER_DECLARE_DUMPER(dumper)
+#define DSS_REF_TRACKER_INIT_DUMPER(dumper, tracker)			do {} while (0)
+#define DSS_REF_TRACKER_FINI_DUMPER(dumper)				do {} while (0)
+#endif /* DAOS_WITH_REF_TRACER */
+
 #endif /* __DSS_API_H__ */

@@ -176,10 +176,13 @@ struct ds_pool_child {
 	/* The HLC when current rebuild ends, which will be used to compare
 	 * with the aggregation full scan start HLC to know whether the
 	 * aggregation needs to be restarted from 0. */
-	uint64_t	spc_rebuild_end_hlc;
-	uint32_t	spc_map_version;
-	int		spc_ref;
-	ABT_eventual	spc_ref_eventual;
+	uint64_t		spc_rebuild_end_hlc;
+	uint32_t		spc_map_version;
+	int			spc_ref;
+#ifdef DAOS_WITH_REF_TRACKER
+	struct d_ref_tracker	spc_ref_tracker;
+#endif
+	ABT_eventual		spc_ref_eventual;
 
 	uint64_t	spc_discard_done:1,
 			spc_no_storage:1; /* The pool shard has no storage. */
@@ -248,15 +251,37 @@ int
 ds_pool_svc_ops_save(struct rdb_tx *tx, void *pool_svc, uuid_t pool_uuid, uuid_t *cli_uuidp,
 		     uint64_t cli_time, bool dup_op, int rc_in, struct ds_pool_svc_op_val *op_valp);
 
-/* Find ds_pool_child in cache, hold one reference */
+/**
+ * Look up the ds_pool_child object with \a uuid and assign a reference to
+ * *\a child.
+ *
+ * \param[in]	uuid	pool UUID (uuid_t)
+ * \param[out]	child	pool child (struct ds_pool_child **)
+ */
+#define DS_POOL_CHILD_LOOKUP(uuid, child)                                                          \
+	do {                                                                                       \
+		*child = ds_pool_child_lookup(uuid);                                               \
+		if (*child == NULL)                                                                \
+			break;                                                                     \
+		D_REF_TRACKER_TRACK(&(*child)->spc_ref_tracker, child);                            \
+	} while (0)
+
+/**
+ * Put the ds_pool_child reference and assign NULL to *\a child.
+ *
+ * \param[in]	child	pool child (struct ds_pool_child **)
+ */
+#define DS_POOL_CHILD_PUT(child)                                                                   \
+	do {                                                                                       \
+		D_REF_TRACKER_UNTRACK(&(*child)->spc_ref_tracker, child);                          \
+		ds_pool_child_put(*child);                                                         \
+		*child = NULL;                                                                     \
+	} while (0)
+
 struct ds_pool_child *ds_pool_child_lookup(const uuid_t uuid);
-/* Put the reference held by ds_pool_child_lookup() */
 void ds_pool_child_put(struct ds_pool_child *child);
-/* Start ds_pool child */
 int ds_pool_child_start(uuid_t pool_uuid, bool recreate);
-/* Stop ds_pool_child */
 int ds_pool_child_stop(uuid_t pool_uuid, bool free);
-/* Query pool child state */
 uint32_t ds_pool_child_state(uuid_t pool_uuid, uint32_t tgt_id);
 
 int ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,

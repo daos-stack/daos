@@ -2149,7 +2149,7 @@ rebuild_fini_one(void *arg)
 	/* close the opened local ds_cont on main XS */
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
 
-	dpc = ds_pool_child_lookup(rpt->rt_pool_uuid);
+	DS_POOL_CHILD_LOOKUP(rpt->rt_pool_uuid, &dpc);
 	/* The pool child could be stopped */
 	if (dpc == NULL)
 		return 0;
@@ -2170,7 +2170,7 @@ rebuild_fini_one(void *arg)
 			DP_RB_RPT(rpt), rpt->rt_rebuild_fence, dpc->spc_rebuild_fence);
 	}
 
-	ds_pool_child_put(dpc);
+	DS_POOL_CHILD_PUT(&dpc);
 
 	return 0;
 }
@@ -2379,7 +2379,7 @@ rebuild_prepare_one(void *data)
 	struct ds_pool_child		*dpc;
 	int				 rc = 0;
 
-	dpc = ds_pool_child_lookup(rpt->rt_pool_uuid);
+	DS_POOL_CHILD_LOOKUP(rpt->rt_pool_uuid, &dpc);
 	/* The pool child could be stopped */
 	if (dpc == NULL)
 		return 0;
@@ -2402,7 +2402,7 @@ rebuild_prepare_one(void *data)
 		DP_RB_RPT(rpt), DP_UUID(rpt->rt_coh_uuid), rpt->rt_rebuild_fence);
 
 put:
-	ds_pool_child_put(dpc);
+	DS_POOL_CHILD_PUT(&dpc);
 
 	return rc;
 }

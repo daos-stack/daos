@@ -2772,13 +2772,13 @@ chk_engine_cont_list_one(void *args)
 	int				 rc = 0;
 
 	ccla = streams[dss_get_module_info()->dmi_tgt_id].st_arg;
-	pool = ds_pool_child_lookup(ccla->ccla_pool);
+	DS_POOL_CHILD_LOOKUP(ccla->ccla_pool, &pool);
 	/* non-exist pool is not fatal. */
 	if (pool != NULL) {
 		param.ip_hdl = pool->spc_hdl;
 		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
 				 chk_engine_cont_list_local_cb, NULL, ccla, NULL);
-		ds_pool_child_put(pool);
+		DS_POOL_CHILD_PUT(&pool);
 	}
 
 	return rc;

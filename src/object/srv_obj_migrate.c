@@ -389,7 +389,7 @@ migrate_pool_tls_destroy(struct migrate_pool_tls *tls)
 	D_DEBUG(DB_REBUILD, "TLS destroy for "DF_UUID" ver %d\n",
 		DP_UUID(tls->mpt_pool_uuid), tls->mpt_version);
 	if (tls->mpt_pool)
-		ds_pool_child_put(tls->mpt_pool);
+		DS_POOL_CHILD_PUT(&tls->mpt_pool);
 	if (tls->mpt_svc_list.rl_ranks)
 		D_FREE(tls->mpt_svc_list.rl_ranks);
 	if (tls->mpt_done_eventual)
@@ -484,7 +484,7 @@ migrate_pool_tls_create_one(void *data)
 		return 0;
 	}
 
-	pool_child = ds_pool_child_lookup(arg->pool_uuid);
+	DS_POOL_CHILD_LOOKUP(arg->pool_uuid, &pool_child);
 	if (pool_child == NULL) {
 		D_ASSERTF(dss_get_module_info()->dmi_xs_id == 0,
 			  "Cannot find the pool "DF_UUIDF"\n", DP_UUID(arg->pool_uuid));
@@ -542,7 +542,7 @@ migrate_pool_tls_create_one(void *data)
 	} else {
 		int tgt_id = dss_get_module_info()->dmi_tgt_id;
 
-		pool_tls->mpt_pool = ds_pool_child_lookup(arg->pool_uuid);
+		DS_POOL_CHILD_LOOKUP(arg->pool_uuid, &pool_tls->mpt_pool);
 		if (pool_tls->mpt_pool == NULL)
 			D_GOTO(out, rc = -DER_NO_HDL);
 		pool_tls->mpt_inflight_max_size = MIGRATE_MAX_SIZE / dss_tgt_nr;
@@ -569,7 +569,7 @@ out:
 		migrate_pool_tls_destroy(pool_tls);
 
 	if (pool_child != NULL)
-		ds_pool_child_put(pool_child);
+		DS_POOL_CHILD_PUT(&pool_child);
 
 	return rc;
 }

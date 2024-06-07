@@ -637,7 +637,7 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 		goto out_scrub_cond;
 	}
 
-	cont->sc_pool = ds_pool_child_lookup(po_uuid);
+	DS_POOL_CHILD_LOOKUP(po_uuid, &cont->sc_pool);
 	if (cont->sc_pool == NULL) {
 		rc = -DER_NO_HDL;
 		goto out_rebuild_cond;
@@ -669,7 +669,7 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 	return 0;
 
 out_pool:
-	ds_pool_child_put(cont->sc_pool);
+	DS_POOL_CHILD_PUT(&cont->sc_pool);
 out_rebuild_cond:
 	ABT_cond_free(&cont->sc_rebuild_cond);
 out_scrub_cond:
@@ -696,7 +696,7 @@ cont_child_free_ref(struct daos_llink *llink)
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
 
 	vos_cont_close(cont->sc_hdl);
-	ds_pool_child_put(cont->sc_pool);
+	DS_POOL_CHILD_PUT(&cont->sc_pool);
 	daos_csummer_destroy(&cont->sc_csummer);
 	D_FREE(cont->sc_snapshots);
 	ABT_cond_free(&cont->sc_dtx_resync_cond);
@@ -1174,7 +1174,7 @@ cont_child_destroy_one(void *vin)
 	struct ds_pool_child	       *pool;
 	int				rc, retry_cnt = 0;
 
-	pool = ds_pool_child_lookup(in->tdi_pool_uuid);
+	DS_POOL_CHILD_LOOKUP(in->tdi_pool_uuid, &pool);
 	if (pool == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
 
@@ -1256,7 +1256,7 @@ cont_child_destroy_one(void *vin)
 	}
 
 out_pool:
-	ds_pool_child_put(pool);
+	DS_POOL_CHILD_PUT(&pool);
 out:
 	return rc;
 }
@@ -1366,7 +1366,7 @@ cont_child_create_start(uuid_t pool_uuid, uuid_t cont_uuid, uint32_t pm_ver,
 	struct ds_pool_child	*pool_child;
 	int rc;
 
-	pool_child = ds_pool_child_lookup(pool_uuid);
+	DS_POOL_CHILD_LOOKUP(pool_uuid, &pool_child);
 	if (pool_child == NULL) {
 		D_ERROR(DF_CONT" : failed to find pool child\n",
 			DP_CONT(pool_uuid, cont_uuid));
@@ -1379,7 +1379,7 @@ cont_child_create_start(uuid_t pool_uuid, uuid_t cont_uuid, uint32_t pm_ver,
 			D_ASSERT(*cont_out != NULL);
 			(*cont_out)->sc_status_pm_ver = pm_ver;
 		}
-		ds_pool_child_put(pool_child);
+		DS_POOL_CHILD_PUT(&pool_child);
 		return rc;
 	}
 
@@ -1401,7 +1401,7 @@ cont_child_create_start(uuid_t pool_uuid, uuid_t cont_uuid, uint32_t pm_ver,
 		}
 	}
 
-	ds_pool_child_put(pool_child);
+	DS_POOL_CHILD_PUT(&pool_child);
 	return rc == 0 ? 1 : rc;
 }
 
@@ -1455,7 +1455,7 @@ ds_dtx_resync(void *arg)
 		       "operations: rc = " DF_RC "\n",
 		       DP_UUID(ddra->pool->spc_uuid), DP_UUID(ddra->co_uuid), DP_RC(rc));
 
-	ds_pool_child_put(ddra->pool);
+	DS_POOL_CHILD_PUT(&ddra->pool);
 	D_FREE(ddra);
 }
 
@@ -1592,7 +1592,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		if (ddra == NULL)
 			D_GOTO(err_dtx, rc = -DER_NOMEM);
 
-		ddra->pool = ds_pool_child_lookup(hdl->sch_cont->sc_pool->spc_uuid);
+		DS_POOL_CHILD_LOOKUP(hdl->sch_cont->sc_pool->spc_uuid, &ddra->pool);
 		if (ddra->pool == NULL) {
 			D_FREE(ddra);
 			D_GOTO(err_dtx, rc = -DER_NO_HDL);
@@ -1601,7 +1601,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		rc = dss_ult_create(ds_dtx_resync, ddra, DSS_XS_SELF,
 				    0, 0, NULL);
 		if (rc != 0) {
-			ds_pool_child_put(hdl->sch_cont->sc_pool);
+			DS_POOL_CHILD_PUT(&ddra->pool);
 			D_FREE(ddra);
 			D_GOTO(err_dtx, rc);
 		}
@@ -1825,7 +1825,7 @@ cont_query_one(void *vin)
 	if (pool_hdl == NULL)
 		return -DER_NO_HDL;
 
-	pool_child = ds_pool_child_lookup(pool_hdl->sph_pool->sp_uuid);
+	DS_POOL_CHILD_LOOKUP(pool_hdl->sph_pool->sp_uuid, &pool_child);
 	if (pool_child == NULL)
 		D_GOTO(ds_pool_hdl, rc = -DER_NO_HDL);
 
@@ -1847,7 +1847,7 @@ cont_query_one(void *vin)
 out:
 	vos_cont_close(vos_chdl);
 ds_child:
-	ds_pool_child_put(pool_child);
+	DS_POOL_CHILD_PUT(&pool_child);
 ds_pool_hdl:
 	ds_pool_hdl_put(pool_hdl);
 	return rc;
