@@ -112,7 +112,7 @@ class DfuseBashCmd(TestWithServers):
             # f'more {fuse_root_dir}/src.c', # more hangs over ssh somehow
             f"dos2unix {fuse_root_dir}/src.c",
             f"gcc -o {fuse_root_dir}/output {fuse_root_dir}/src.c",
-            f"size {fuse_root_dir}/output",
+            f"valgrind size {fuse_root_dir}/output",
             f"readelf -s {fuse_root_dir}/output",
             f"strip -s {fuse_root_dir}/output",
             f"g++ -o {fuse_root_dir}/output {fuse_root_dir}/src.c",
