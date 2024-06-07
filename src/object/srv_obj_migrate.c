@@ -569,7 +569,7 @@ migrate_pool_tls_destroy(struct migrate_pool_tls *tls)
 	D_DEBUG(DB_REBUILD, "TLS destroy for "DF_UUID" ver %d\n",
 		DP_UUID(tls->mpt_pool_uuid), tls->mpt_version);
 	if (tls->mpt_pool)
-		ds_pool_child_put(tls->mpt_pool);
+		DS_POOL_CHILD_PUT(&tls->mpt_pool);
 	if (tls->mpt_svc_list.rl_ranks)
 		D_FREE(tls->mpt_svc_list.rl_ranks);
 	if (tls->mpt_done_eventual)
@@ -636,7 +636,7 @@ migrate_pool_tls_create(uuid_t pool_uuid, unsigned int version, unsigned int gen
 
 	D_ASSERT(generation != (unsigned int)(-1));
 
-	pool_child = ds_pool_child_lookup(pool_uuid);
+	DS_POOL_CHILD_LOOKUP(pool_uuid, &pool_child);
 	if (pool_child == NULL) {
 		/* Local ds_pool_child isn't started yet, return a retry-able error */
 		if (dss_get_module_info()->dmi_xs_id != 0) {
@@ -673,7 +673,7 @@ migrate_pool_tls_create(uuid_t pool_uuid, unsigned int version, unsigned int gen
 	pool_tls->mpt_max_eph        = max_eph;
 	pool_tls->mpt_new_layout_ver = new_layout_ver;
 	pool_tls->mpt_opc            = opc;
-	pool_tls->mpt_pool           = ds_pool_child_lookup(pool_uuid);
+	DS_POOL_CHILD_LOOKUP(pool_uuid, &pool_tls->mpt_pool);
 	if (pool_tls->mpt_pool == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
 	pool_tls->mpt_tgt_obj_ult_cnt   = 0;
@@ -694,7 +694,7 @@ migrate_pool_tls_create(uuid_t pool_uuid, unsigned int version, unsigned int gen
 	migrate_pool_tls_get(pool_tls);
 out:
 	if (pool_child != NULL)
-		ds_pool_child_put(pool_child);
+		DS_POOL_CHILD_PUT(&pool_child);
 
 	D_DEBUG(DB_TRACE, "create tls " DF_UUID ": " DF_RC "\n", DP_UUID(pool_uuid), DP_RC(rc));
 	if (rc != 0) {

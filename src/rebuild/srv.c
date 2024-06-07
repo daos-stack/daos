@@ -2310,14 +2310,14 @@ rebuild_fini_one(void *arg)
 	/* close the opened local ds_cont on main XS */
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
 
-	dpc = ds_pool_child_lookup(rpt->rt_pool_uuid);
+	DS_POOL_CHILD_LOOKUP(rpt->rt_pool_uuid, &dpc);
 	/* The ds_pool_child is already stopped */
 	if (dpc == NULL)
 		return 0;
 
 	D_DEBUG(DB_REBUILD, DF_RB ": rebuild fini for stable epoch " DF_U64 "\n", DP_RB_RPT(rpt),
 		rpt->rt_stable_epoch);
-	ds_pool_child_put(dpc);
+	DS_POOL_CHILD_PUT(&dpc);
 	return 0;
 }
 
@@ -2551,7 +2551,7 @@ rebuild_prepare_one(void *data)
 	struct ds_pool_child		*dpc;
 	int				 rc = 0;
 
-	dpc = ds_pool_child_lookup(rpt->rt_pool_uuid);
+	DS_POOL_CHILD_LOOKUP(rpt->rt_pool_uuid, &dpc);
 	/* Local ds_pool_child isn't started yet, return a retry-able error */
 	if (dpc == NULL) {
 		D_INFO(DF_UUID ": Local VOS pool isn't ready yet.\n", DP_UUID(rpt->rt_pool_uuid));
@@ -2573,7 +2573,7 @@ rebuild_prepare_one(void *data)
 		DP_RB_RPT(rpt), DP_UUID(rpt->rt_coh_uuid), rpt->rt_stable_epoch);
 
 put:
-	ds_pool_child_put(dpc);
+	DS_POOL_CHILD_PUT(&dpc);
 
 	return rc;
 }

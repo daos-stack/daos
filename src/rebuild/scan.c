@@ -1046,7 +1046,7 @@ rebuild_scanner(void *data)
 	if (tls == NULL)
 		return 0;
 
-	child = ds_pool_child_lookup(rpt->rt_pool_uuid);
+	DS_POOL_CHILD_LOOKUP(rpt->rt_pool_uuid, &child);
 	if (child == NULL)
 		D_GOTO(out, rc = -DER_NONEXIST);
 
@@ -1103,7 +1103,7 @@ rebuild_scanner(void *data)
 	rc = 0; /* rc might be 1 if rebuild is aborted */
 out:
 	if (child)
-		ds_pool_child_put(child);
+		DS_POOL_CHILD_PUT(&child);
 	tls->rebuild_pool_scan_done = 1;
 	if (ult_send != ABT_THREAD_NULL)
 		ABT_thread_free(&ult_send);
