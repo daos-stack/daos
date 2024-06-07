@@ -1462,7 +1462,7 @@ check_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, bool reint,
 	int			 i, nr, rc = 0;
 
 	/* Get pool map to check the target status */
-	pool_child = ds_pool_child_lookup(pool_id);
+	DS_POOL_CHILD_LOOKUP(pool_id, &pool_child);
 	if (pool_child == NULL) {
 		D_ERROR(DF_UUID": Pool child not found\n", DP_UUID(pool_id));
 		/*
@@ -1521,7 +1521,7 @@ check_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, bool reint,
 	}
 
 	ABT_rwlock_unlock(pool->sp_lock);
-	ds_pool_child_put(pool_child);
+	DS_POOL_CHILD_PUT(&pool_child);
 
 	if (rc)
 		return rc;
