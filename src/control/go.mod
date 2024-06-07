@@ -17,7 +17,7 @@ require (
 	github.com/prometheus/client_model v0.2.0
 	github.com/prometheus/common v0.32.1
 	go.etcd.io/bbolt v1.3.5
-	golang.org/x/net v0.22.0
+	golang.org/x/net v0.23.0
 	golang.org/x/sys v0.18.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240304212257-790db918fca8
 	google.golang.org/grpc v1.62.1
