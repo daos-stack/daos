@@ -118,7 +118,7 @@ class PosixSimul(TestWithServers):
             self.fail("##Both include and exclude tests are selected both or empty.")
 
         self.log_step("Running simul on %s", mpi_type)
-        return run_command(cmd, output_check="combined", raise_exception=raise_exception)
+        return run_command(cmd, raise_exception=raise_exception)
 
     def test_posix_simul(self):
         """Test simul.

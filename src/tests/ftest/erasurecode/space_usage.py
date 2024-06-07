@@ -34,7 +34,7 @@ class EcodSpaceUsage(IorTestBase):
         :avocado: tags=ec,ior,pool,query_targets
         :avocado: tags=EcodSpaceUsage,test_ec_space_balanced_ec_4p1gx
         """
-        self._run_test(ior_namespace='/run/ior_ec_4p1gx/*')
+        self._execute_test(ior_namespace='/run/ior_ec_4p1gx/*')
 
     def test_ec_space_balanced_ec_4p2gx(self):
         """Jira ID: DAOS-10912.
@@ -46,9 +46,9 @@ class EcodSpaceUsage(IorTestBase):
         :avocado: tags=ec,ior,pool,query_targets
         :avocado: tags=EcodSpaceUsage,test_ec_space_balanced_ec_4p2gx
         """
-        self._run_test(ior_namespace='/run/ior_ec_4p2gx/*')
+        self._execute_test(ior_namespace='/run/ior_ec_4p2gx/*')
 
-    def _run_test(self, ior_namespace):
+    def _execute_test(self, ior_namespace):
         """Run the test.
 
         Args:
