@@ -884,6 +884,108 @@ dtx_21(void **state)
 	ioreq_fini(&req);
 }
 
+static void
+dtx_22(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	daos_handle_t	 oh;
+	daos_iod_t	 iod = { 0 };
+	d_sg_list_t	 sgl = { 0 };
+	daos_recx_t	 recx[2];
+	d_iov_t		 val_iov[2];
+	d_iov_t		 dkey;
+	d_iov_t		 akey;
+	uint64_t	 dkey_val = 100;
+	uint64_t	 akey_val = 200;
+	uint32_t	 update_var0 = 0x1234;
+	uint32_t	 update_var1 = 0x6789;
+	uint32_t	 update_var2 = 0xbcdf;
+	uint32_t	 flags = DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_RECX | DAOS_GET_MAX;
+	int		 rc;
+
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("iteration does not return aborted DTX\n");
+
+	if (!test_runable(arg, dts_dtx_replica_cnt))
+		return;
+
+	oid = daos_test_oid_gen(arg->coh, dts_dtx_class, DAOS_OT_MULTI_UINT64, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	d_iov_set(&dkey, &dkey_val, sizeof(uint64_t));
+	d_iov_set(&akey, &akey_val, sizeof(uint64_t));
+	iod.iod_name = akey;
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_size = sizeof(update_var0);
+
+	d_iov_set(&val_iov[0], &update_var0, sizeof(update_var0));
+	d_iov_set(&val_iov[1], &update_var1, sizeof(update_var1));
+	sgl.sg_nr = 2;
+	sgl.sg_iovs = val_iov;
+	recx[0].rx_idx = 30;
+	recx[0].rx_nr = 1;
+	recx[1].rx_idx = 50;
+	recx[1].rx_nr = 1;
+	iod.iod_nr = 2;
+	iod.iod_recxs = recx;
+
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+	assert_rc_equal(rc, 0);
+
+	dkey_val = 0;
+	akey_val = 0;
+	rc = daos_obj_query_key(oh, DAOS_TX_NONE, flags, &dkey, &akey, &recx[0], NULL);
+	assert_rc_equal(rc, 0);
+
+	assert_int_equal(*(uint64_t *)dkey.iov_buf, 100);
+	assert_int_equal(*(uint64_t *)akey.iov_buf, 200);
+	assert_int_equal(recx[0].rx_idx, 50);
+	assert_int_equal(recx[0].rx_nr, 1);
+
+	par_barrier(PAR_COMM_WORLD);
+	if (arg->myrank == 0)
+		/* Simulate the case of TX IO error on the shard_1. */
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_DTX_FAIL_IO | DAOS_FAIL_ALWAYS, 0, NULL);
+	par_barrier(PAR_COMM_WORLD);
+
+	d_iov_set(&val_iov[0], &update_var2, sizeof(update_var2));
+	sgl.sg_nr = 1;
+	sgl.sg_iovs = &val_iov[0];
+	recx[0].rx_idx = 70;
+	recx[0].rx_nr = 1;
+	iod.iod_nr = 1;
+	iod.iod_recxs = &recx[0];
+
+	/* Update the same dkey & akey with higher index. */
+	dkey_val = 100;
+	akey_val = 200;
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+	assert_rc_equal(rc, -DER_IO);
+
+	dkey_val = 0;
+	akey_val = 0;
+	rc = daos_obj_query_key(oh, DAOS_TX_NONE, flags, &dkey, &akey, &recx[0], NULL);
+	assert_rc_equal(rc, 0);
+
+	/* Since the 2nd update failed, query should return old value. */
+	assert_int_equal(*(uint64_t *)dkey.iov_buf, 100);
+	assert_int_equal(*(uint64_t *)akey.iov_buf, 200);
+	assert_int_equal(recx[0].rx_idx, 50);
+	assert_int_equal(recx[0].rx_nr, 1);
+
+	rc = daos_obj_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	par_barrier(PAR_COMM_WORLD);
+	if (arg->myrank == 0)
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+	par_barrier(PAR_COMM_WORLD);
+}
+
 static int
 dtx_base_rf0_setup(void **state)
 {
@@ -947,6 +1049,8 @@ static const struct CMUnitTest dtx_tests[] = {
 	 dtx_20, dtx_base_rf1_setup, rebuild_sub_teardown},
 	{"DTX21: do not abort partially committed DTX",
 	 dtx_21, dtx_base_rf0_setup, rebuild_sub_teardown},
+	{"DTX22: iteration does not return aborted DTX",
+	 dtx_22, NULL, test_case_teardown},
 };
 
 static int
