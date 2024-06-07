@@ -755,7 +755,7 @@ dtx_resync_one(void *data)
 	struct dtx_container_scan_arg	 cb_arg = { 0 };
 	int				 rc;
 
-	child = ds_pool_child_lookup(arg->pool_uuid);
+	DS_POOL_CHILD_LOOKUP(arg->pool_uuid, &child);
 	if (child == NULL)
 		D_GOTO(out, rc = -DER_NONEXIST);
 
@@ -780,7 +780,7 @@ out:
 	D_FREE(param);
 	D_FREE(anchor);
 	if (child != NULL)
-		ds_pool_child_put(child);
+		DS_POOL_CHILD_PUT(&child);
 
 	D_DEBUG(DB_TRACE, DF_UUID" iterate pool done: rc %d\n",
 		DP_UUID(arg->pool_uuid), rc);
