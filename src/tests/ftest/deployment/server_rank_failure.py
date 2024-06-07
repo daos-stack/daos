@@ -84,8 +84,8 @@ class ServerRankFailure(IorTestBase):
         self.server_managers[0].restart(hosts=self.hostlist_servers)
 
     def kill_engine(self):
-        """Kill engine on the given host."""
-        rank = self.server_managers[0].get_random_rank()
+        """Kill a random, running, non-management service engine rank."""
+        rank = self.server_managers[0].get_random_ranks(1)[0]
         detected, running = self.server_managers[0].kill_rank(rank)
         if not detected:
             self.fail(f"Error killing server engine rank {rank} - not detected")

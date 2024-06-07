@@ -798,7 +798,7 @@ class SubProcessCommand(CommandWithSubCommand):
                 self.pattern_matches = re.findall(self.pattern, get_subprocess_stdout(sub_process))
                 detected = len(self.pattern_matches)
                 complete = detected == self.pattern_count
-                elapsed = time.time() - start
+                elapsed = round(time.time() - start, 2)
                 timed_out = elapsed > self.pattern_timeout.value
 
             # Summarize results
@@ -818,6 +818,7 @@ class SubProcessCommand(CommandWithSubCommand):
         """
         msg = "{}/{} '{}' messages detected in".format(detected, self.pattern_count, self.pattern)
         runtime = "{}/{} seconds".format(elapsed, self.pattern_timeout.value)
+        matches = f"with pattern matches: {self.pattern_matches}"
 
         if not complete:
             # Report the error / timeout
@@ -840,7 +841,8 @@ class SubProcessCommand(CommandWithSubCommand):
                 self.stop()
         else:
             # Report the successful start
-            self.log.info("%s subprocess startup detected - %s %s", self._command, msg, runtime)
+            self.log.info(
+                "%s subprocess startup detected - %s %s %s", self._command, msg, runtime, matches)
 
     def _get_new(self):
         """Get a new object based upon this one.

@@ -72,6 +72,9 @@ class RebuildMdtest(MdtestBase):
 
         self.log_step("Kill 1 random rank")
         times["kill_rank"] = datetime.now()
+        random_ranks = self.server_managers[0].get_random_ranks(1)
+        self.server_managers[0].stop_ranks(random_ranks, self.d_log, force=True)
+
         self.server_managers[0].stop_random_rank(self.d_log, force=True)
 
         self.log_step("Wait for rebuild to start")

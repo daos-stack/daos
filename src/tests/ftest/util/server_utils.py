@@ -21,7 +21,7 @@ from exception_utils import CommandFailure
 from general_utils import (get_default_config_file, get_display_size, get_log_file, list_to_str,
                            pcmd, run_pcmd)
 from host_utils import get_local_host
-from run_utils import run_remote, stop_process_id, stop_processes
+from run_utils import run_remote, stop_process_ids, stop_processes
 from server_utils_base import DaosServerCommand, DaosServerInformation, ServerFailed
 from server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
 from user_utils import get_chown_command
@@ -974,24 +974,6 @@ class DaosServerManager(SubprocessManager):
         # Update the expected status of the stopped/excluded ranks
         self.update_expected_states(ranks, ["stopped", "excluded"])
 
-    def stop_random_rank(self, daos_log, force=False, exclude_ranks=None):
-        """Stop a random server rank that is expected to be running.
-
-        Args:
-            daos_log (DaosLog): object for logging messages
-            force (bool, optional): whether to use --force option to dmg system
-                stop. Defaults to False.
-            exclude_ranks (list, optional): ranks to exclude from the random selection.
-                Default is None.
-
-        Raises:
-            avocado.core.exceptions.TestFail: if there is an issue stopping the server ranks.
-            ServerFailed: if there are no available ranks to stop.
-
-        """
-        random_rank = self.get_random_rank(True, True, exclude_ranks)
-        return self.stop_ranks([random_rank], daos_log=daos_log, force=force)
-
     def start_ranks(self, ranks, daos_log):
         """Start the specific server ranks.
 
@@ -1025,22 +1007,34 @@ class DaosServerManager(SubprocessManager):
         detected, running = stop_processes(self.log, self._hosts, regex)
         self.__report_killed(f"remote server {regex} process", detected, running, None)
 
-    def kill_rank(self, rank):
-        """Forcibly terminate the server process for the specified rank.
+    def kill_ranks(self, ranks):
+        """Forcibly terminate the specified server ranks.
 
         Args:
-            rank (int): engine rank to kill
+            ranks (list): list of engine ranks to kill
 
         Raises:
             ServerFailed: if there is a problem determining the process ID or host for the rank
         """
-        try:
-            pid = self.rank_pids[rank]
-            host = NodeSet(self.ranks[rank])
-        except KeyError as error:
-            raise ServerFailed(f"Unable to kill rank {rank}, no process ID assigned") from error
-        detected, running = stop_process_id(self.log, host, pid)
-        self.__report_killed(f"remote server rank {rank} process", detected, running, pid)
+        host_info = {}
+        for rank in ranks:
+            try:
+                pid = self.rank_pids[rank]
+            except KeyError as error:
+                raise ServerFailed(f"Unable to kill rank {rank}, no process ID assigned") from error
+            try:
+                host = str(self.ranks[rank])
+            except KeyError as error:
+                raise ServerFailed(f"Unable to kill rank {rank}, no host assigned") from error
+            if host not in host_info:
+                host_info[host] = {"ranks": [], "pids": []}
+            host_info[host]["pids"].append(pid)
+            host_info[host]["ranks"].append(rank)
+
+        for host, info in host_info.items():
+            detected, running = stop_process_ids(self.log, host, info["pids"])
+            self.__report_killed(
+                f"remote server {info['pids']} process", detected, running, info["ranks"])
 
     def __report_killed(self, description, detected, running, ranks):
         """Report the status of killing engine ranks.
@@ -1322,10 +1316,11 @@ class DaosServerManager(SubprocessManager):
             matches, pattern, self.manager.job.command)
         return matches
 
-    def get_random_rank(self, running=True, management_service=False, exclude=None):
-        """Get a random engine rank.
+    def get_random_ranks(self, quantity, running=True, management_service=False, exclude=None):
+        """Get one or more random engine ranks.
 
         Args:
+            quantity (int): number of random ranks to return.
             running (bool, optional): should the random rank be in a running state. Defaults to
                 True.
             management_service (bool, optional): should the rank rank be running the management
@@ -1333,7 +1328,7 @@ class DaosServerManager(SubprocessManager):
             exclude (list, optional): list of other rank numbers to exclude. Defaults to None.
 
         Returns:
-            int: random rank number
+            list: a unique list of the requested number of random ranks
         """
         self.log.debug("Selecting a random engine rank")
         if not exclude:
@@ -1354,8 +1349,8 @@ class DaosServerManager(SubprocessManager):
             self.log.debug("  Excluding management service rank(s) %s ", ms_ranks)
             exclude.extend(ms_ranks)
         available_ranks = [rank for rank in self.ranks.keys() if rank not in exclude]
-        if len(available_ranks) < 1:
-            raise ServerFailed("No available ranks from which to chose one randomly.")
-        random_rank = random.choice(available_ranks)
-        self.log.debug("  Selected rank %s from %s", random_rank, available_ranks)
+        if len(available_ranks) < quantity:
+            raise ServerFailed(f"Not enough ranks from which to chose {quantity} randomly.")
+        random_rank = random.sample(available_ranks, quantity)
+        self.log.debug("  Selected rank(s) %s from %s", random_rank, available_ranks)
         return random_rank

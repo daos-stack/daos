@@ -499,13 +499,13 @@ def stop_processes(log, hosts, pattern, verbose=True, timeout=60, exclude=None, 
     return __kill_process(log, hosts, pattern, description, commands, verbose, timeout, force)
 
 
-def stop_process_id(log, hosts, pid, verbose=True, timeout=60, force=False):
+def stop_process_ids(log, hosts, pids, verbose=True, timeout=60, force=False):
     """Stop the process ID on each hosts.
 
     Args:
         log (logger): logger for the messages produced by this method
         hosts (NodeSet): hosts on which to stop any processes matching the pattern
-        pid (int): process ID to kill
+        pids (list): list of process IDs to kill
         verbose (bool, optional): display command output. Defaults to True.
         timeout (int, optional): command timeout in seconds. Defaults to 60 seconds.
         force (bool, optional): if set use the KILL signal to immediately stop any running
@@ -518,9 +518,11 @@ def stop_process_id(log, hosts, pid, verbose=True, timeout=60, force=False):
             hosts the processes matching the pattern are still running (will be empty if every
             process was killed or no process matching the pattern were found).
     """
-    description = f"with the {pid} PID"
-    commands = [f"/usr/bin/ps aux | grep -w {pid} | grep -v grep", "sudo /usr/bin/pkill"]
-    return __kill_process(log, hosts, pid, description, commands, verbose, timeout, force)
+    description = f"with the {pids} process IDs"
+    pids_grep = "|".join([str(pid) for pid in pids])
+    pids_kill = " ".join([str(pid) for pid in pids])
+    commands = [f"/usr/bin/ps aux | grep -wE '({pids_grep})' | grep -v grep", "sudo /usr/bin/pkill"]
+    return __kill_process(log, hosts, pids_kill, description, commands, verbose, timeout, force)
 
 
 def __kill_process(log, hosts, process, description, commands, verbose, timeout, force):
