@@ -1449,6 +1449,15 @@ agg_peer_update(struct ec_agg_entry *entry, bool write_parity)
 
 	D_ASSERT(!write_parity ||
 		 entry->ae_sgl.sg_iovs[AGG_IOV_PARITY].iov_buf);
+	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
+
+	/* If rebuild started, abort it before sending RPC to save conflict window with rebuild
+	 * (see obj_inflight_io_check()).
+	 */
+	if (agg_param->ap_pool_info.api_pool->sp_rebuilding > 0) {
+		D_DEBUG(DB_EPC, DF_UOID" abort as rebuild started\n", DP_UOID(entry->ae_oid));
+		return -1;
+	}
 
 	rc = agg_get_obj_handle(entry);
 	if (rc) {
@@ -1456,7 +1465,6 @@ agg_peer_update(struct ec_agg_entry *entry, bool write_parity)
 		return rc;
 	}
 
-	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
 	rc = pool_map_find_failed_tgts(agg_param->ap_pool_info.api_pool->sp_map,
 				       &targets, &failed_tgts_cnt);
 	if (rc) {
@@ -1728,6 +1736,15 @@ agg_process_holes(struct ec_agg_entry *entry)
 	int			 tid, rc = 0;
 	int			*status;
 
+	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
+	/* If rebuild started, abort it before sending RPC to save conflict window with rebuild
+	 * (see obj_inflight_io_check()).
+	 */
+	if (agg_param->ap_pool_info.api_pool->sp_rebuilding > 0) {
+		D_DEBUG(DB_EPC, DF_UOID" abort as rebuild started\n", DP_UOID(entry->ae_oid));
+		return -1;
+	}
+
 	D_ALLOC_ARRAY(stripe_ud.asu_recxs,
 		      entry->ae_cur_stripe.as_extent_cnt + 1);
 	if (stripe_ud.asu_recxs == NULL) {
@@ -1745,8 +1762,6 @@ agg_process_holes(struct ec_agg_entry *entry)
 	if (rc)
 		goto out;
 
-	agg_param = container_of(entry, struct ec_agg_param,
-				 ap_agg_entry);
 	rc = ABT_eventual_create(sizeof(*status), &stripe_ud.asu_eventual);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
@@ -2672,15 +2687,7 @@ retry:
 		ec_agg_param->ap_agg_entry.ae_obj_hdl = DAOS_HDL_INVAL;
 	}
 
-	if (cont->sc_pool->spc_pool->sp_rebuilding > 0 && !cont->sc_stopping) {
-		/* There is rebuild going on, and we can't proceed EC aggregate boundary,
-		 * Let's wait for 5 seconds for another EC aggregation.
-		 */
-		D_ASSERT(cont->sc_ec_agg_req != NULL);
-		sched_req_sleep(cont->sc_ec_agg_req, 5 * 1000);
-	}
-
-	if (rc == -DER_BUSY) {
+	if (rc == -DER_BUSY && cont->sc_pool->spc_pool->sp_rebuilding == 0) {
 		/** Hit an object conflict VOS aggregation or discard.   Rather than exiting, let's
 		 * yield and try again.
 		 */
@@ -2696,6 +2703,12 @@ retry:
 	}
 
 update_hae:
+	/* clear the flag before next turn's cont_aggregate_runnable(), to save conflict
+	 * window with rebuild (see obj_inflight_io_check()).
+	 */
+	if (cont->sc_pool->spc_pool->sp_rebuilding > 0)
+		cont->sc_ec_agg_active = 0;
+
 	if (rc == 0) {
 		cont->sc_ec_agg_eph = max(cont->sc_ec_agg_eph, epr->epr_hi);
 		if (!cont->sc_stopping && cont->sc_ec_query_agg_eph) {
