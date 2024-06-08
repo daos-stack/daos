@@ -34,6 +34,7 @@
 #include <sys/uio.h>
 
 #include <dfuse_ioctl.h>
+#include <daos_fs.h>
 
 /* Tests can be run by specifying the appropriate argument for a test or all will be run if no test
  * is specified.
