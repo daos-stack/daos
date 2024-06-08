@@ -13,7 +13,7 @@
 #include "crt_internal.h"
 
 struct crt_gdata	crt_gdata;
-struct crt_envs_t       g_envs;
+struct crt_envs         crt_genvs;
 static volatile int	gdata_init_flag;
 struct crt_plugin_gdata crt_plugin_gdata;
 static bool		g_prov_settings_applied[CRT_PROV_COUNT];
@@ -55,7 +55,7 @@ crt_lib_init(void)
 	crt_gdata.cg_iv_inline_limit = 19456; /* 19KB */
 
 	/* envs not inited until crt_init() time */
-	memset(&g_envs, 0x0, sizeof(struct crt_envs_t));
+	memset(&crt_genvs, 0x0, sizeof(crt_genvs));
 }
 
 /* Library deinit */

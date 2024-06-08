@@ -229,7 +229,7 @@ struct crt_event_cb_priv {
 
 #define ENV_STR_NO_PRINT(x) ENV_STR(x)
 
-struct crt_envs_t {
+struct crt_envs {
 	CRT_ENV_LIST;
 	bool inited;
 };
@@ -238,7 +238,8 @@ struct crt_envs_t {
 #undef ENV_STR
 #undef ENV_STR_NO_PRINT
 
-extern struct crt_envs_t g_envs;
+extern struct crt_envs crt_genvs;
+
 static inline void
 crt_env_fini(void);
 
@@ -246,25 +247,25 @@ static inline void
 crt_env_init(void)
 {
 	/* release strings if already inited previously */
-	if (g_envs.inited)
+	if (crt_genvs.inited)
 		crt_env_fini();
 
 #define ENV(x)                                                                                     \
 	do {                                                                                       \
-		g_envs._rc_##x       = d_getenv_uint(#x, &g_envs._##x);                            \
-		g_envs._no_print_##x = 0;                                                          \
+		crt_genvs._rc_##x       = d_getenv_uint(#x, &crt_genvs._##x);                      \
+		crt_genvs._no_print_##x = 0;                                                       \
 	} while (0);
 
 #define ENV_STR(x)                                                                                 \
 	do {                                                                                       \
-		g_envs._rc_##x       = d_agetenv_str(&g_envs._##x, #x);                            \
-		g_envs._no_print_##x = 0;                                                          \
+		crt_genvs._rc_##x       = d_agetenv_str(&crt_genvs._##x, #x);                      \
+		crt_genvs._no_print_##x = 0;                                                       \
 	} while (0);
 
 #define ENV_STR_NO_PRINT(x)                                                                        \
 	do {                                                                                       \
-		g_envs._rc_##x       = d_agetenv_str(&g_envs._##x, #x);                            \
-		g_envs._no_print_##x = 1;                                                          \
+		crt_genvs._rc_##x       = d_agetenv_str(&crt_genvs._##x, #x);                      \
+		crt_genvs._no_print_##x = 1;                                                       \
 	} while (0);
 
 	CRT_ENV_LIST;
@@ -272,14 +273,14 @@ crt_env_init(void)
 #undef ENV_STR
 #undef ENV_STR_NO_PRINT
 
-	g_envs.inited = true;
+	crt_genvs.inited = true;
 }
 
 static inline void
 crt_env_fini(void)
 {
 #define ENV(x)           (void)
-#define ENV_STR(x)       d_freeenv_str(&g_envs._##x);
+#define ENV_STR(x)       d_freeenv_str(&crt_genvs._##x);
 #define ENV_STR_NO_PRINT ENV_STR
 
 	CRT_ENV_LIST
@@ -288,14 +289,14 @@ crt_env_fini(void)
 #undef ENV_STR
 #undef ENV_STR_NO_PRINT
 
-	g_envs.inited = false;
+	crt_genvs.inited = false;
 }
 
 /* Returns value if env was present at load time */
 #define crt_env_get(name, val)                                                                     \
-	D_ASSERT(g_envs.inited);                                                                   \
-	if (g_envs._rc_##name == 0)                                                                \
-		*val = g_envs._##name;
+	D_ASSERT(crt_genvs.inited);                                                                \
+	if (crt_genvs._rc_##name == 0)                                                             \
+		*val = crt_genvs._##name;
 
 static inline void
 crt_env_dump(void)
@@ -304,12 +305,12 @@ crt_env_dump(void)
 
 	/* Only dump envariables that were set */
 #define ENV(x)                                                                                     \
-	if (!g_envs._rc_##x && g_envs._no_print_##x == 0)                                          \
-		D_INFO("%s = %d\n", #x, g_envs._##x);
+	if (!crt_genvs._rc_##x && crt_genvs._no_print_##x == 0)                                    \
+		D_INFO("%s = %d\n", #x, crt_genvs._##x);
 
 #define ENV_STR(x)                                                                                 \
-	if (!g_envs._rc_##x)                                                                       \
-		D_INFO("%s = %s\n", #x, g_envs._no_print_##x ? "****" : g_envs._##x);
+	if (!crt_genvs._rc_##x)                                                                    \
+		D_INFO("%s = %s\n", #x, crt_genvs._no_print_##x ? "****" : crt_genvs._##x);
 
 #define ENV_STR_NO_PRINT ENV_STR
 
