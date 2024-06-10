@@ -852,10 +852,8 @@ ostatx_cb(tse_task_t *task, void *data)
 		D_GOTO(out, rc = daos_errno2der(rc));
 
 	if (S_ISREG(args->obj->mode)) {
-		args->stbuf->st_size    = op_args->array_stbuf.st_size;
-		args->stbuf->st_blocks  = (args->stbuf->st_size + (1 << 9) - 1) >> 9;
-		args->stbuf->st_blksize = op_args->entry.chunk_size ? op_args->entry.chunk_size :
-			args->dfs->attr.da_chunk_size;
+		args->stbuf->st_size   = op_args->array_stbuf.st_size;
+		args->stbuf->st_blocks = (args->stbuf->st_size + (1 << 9) - 1) >> 9;
 	} else if (S_ISDIR(args->obj->mode)) {
 		args->stbuf->st_size = sizeof(op_args->entry);
 	} else if (S_ISLNK(args->obj->mode)) {

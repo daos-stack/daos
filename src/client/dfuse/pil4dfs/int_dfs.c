@@ -6725,7 +6725,6 @@ init_myhook(void)
 	int      rc;
 	uint64_t eq_count_loc = 0;
 
-
 	umask_old = umask(0);
 	umask(umask_old);
 	mode_not_umask = ~umask_old;
