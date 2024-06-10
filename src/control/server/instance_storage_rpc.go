@@ -166,6 +166,13 @@ func (ei *EngineInstance) StorageFormatSCM(ctx context.Context, force bool) (mRe
 }
 
 func addLinkInfoToHealthStats(engine Engine, health *ctlpb.BioHealthResp, pciCfg string) error {
+	pciDev, err := hardware.PCIDeviceFromConfig(pciCfg)
+	if err != nil {
+		return err
+	}
+
+	// TODO: Copy link details from PCIDevice to health stats.
+
 	// Convert byte-string to lspci-format.
 	sb := new(strings.Builder)
 	sb.WriteString("01:00.0 device #1\n") // Spoof preamble required for lspci to parse.

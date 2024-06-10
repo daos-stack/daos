@@ -546,6 +546,10 @@ func (d *PCIDevice) PCIDevice() *PCIDevice {
 	return d
 }
 
+// PCIDeviceFromConfig populates PCIDevice details from PCIe config space contents in the form of a
+// byte string.
+func PCIDeviceFromConfig(cfgBytes string) (*PCIDevice, error)
+
 func (d PCIDevices) MarshalJSON() ([]byte, error) {
 	strMap := make(map[string][]*PCIDevice)
 	for k, v := range d {

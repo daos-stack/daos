@@ -201,7 +201,7 @@ func GetLspciPath() (string, error) {
 		if !ok {
 			return "", errors.New("couldn't find PATH env")
 		}
-		if err := os.Setenv("PATH", common.AppendToEnv(envPath, "/sbin")); err != nil {
+		if err := os.Setenv("PATH", common.AppendToPathEnv(envPath, "/sbin")); err != nil {
 			return "", errors.Wrap(err, "adding /sbin to path env")
 		}
 	}

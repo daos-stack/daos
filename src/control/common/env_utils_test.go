@@ -214,25 +214,25 @@ func TestCommon_MergeKeyValues(t *testing.T) {
 	}
 }
 
-func TestCommon_AppendToEnv(t *testing.T) {
+func TestCommon_AppendToPathEnv(t *testing.T) {
 	for name, tc := range map[string]struct {
-		envVal string
-		toAdd  []string
-		expVal string
+		pathEnv string
+		toAdd   []string
+		expVal  string
 	}{
 		"already exists": {
-			envVal: "/bin:/usr/bin:/sbin:/usr/sbin",
-			toAdd:  []string{"/sbin", "/usr/sbin"},
-			expVal: "/bin:/usr/bin:/sbin:/usr/sbin",
+			pathEnv: "/bin:/usr/bin:/sbin:/usr/sbin",
+			toAdd:   []string{"/sbin", "/usr/sbin"},
+			expVal:  "/bin:/usr/bin:/sbin:/usr/sbin",
 		},
 		"missing path added": {
-			envVal: "/bin:/usr/bin:/usr/sbin",
-			toAdd:  []string{"/sbin", "/usr/sbin"},
-			expVal: "/bin:/usr/bin:/usr/sbin:/sbin",
+			pathEnv: "/bin:/usr/bin:/usr/sbin",
+			toAdd:   []string{"/sbin", "/usr/sbin"},
+			expVal:  "/bin:/usr/bin:/usr/sbin:/sbin",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			gotVal := AppendToEnv(tc.envVal, tc.toAdd...)
+			gotVal := AppendToPathEnv(tc.pathEnv, tc.toAdd...)
 			if diff := cmp.Diff(tc.expVal, gotVal, defCmpOpts...); diff != "" {
 				t.Fatalf("(-want, +got):\n%s", diff)
 			}

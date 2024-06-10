@@ -150,7 +150,7 @@ func ExecReq(parent context.Context, log logging.Logger, binPath string, req *Re
 	// ensure that /sbin and /usr/sbin are in child's $PATH
 	for i, env := range child.Env {
 		if strings.HasPrefix(env, "PATH=") {
-			child.Env[i] = common.AppendToEnv(env, "/sbin", "/usr/sbin")
+			child.Env[i] = common.AppendToPathEnv(env, "/sbin", "/usr/sbin")
 		}
 	}
 

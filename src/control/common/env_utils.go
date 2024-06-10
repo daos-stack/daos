@@ -155,20 +155,20 @@ func MergeKeyValues(curVars []string, newVars []string) (merged []string) {
 	return
 }
 
-// AppendToEnv appends entries to the supplied colon-separated string if non-existent.
-func AppendToEnv(envVal string, toAdd ...string) string {
+// AppendToPathEnv appends entries to the supplied colon-separated string if non-existent.
+func AppendToPathEnv(pathEnv string, toAdd ...string) string {
 	for _, add := range toAdd {
 		found := false
-		for _, elem := range strings.Split(envVal, ":") {
+		for _, elem := range strings.Split(pathEnv, ":") {
 			if elem == add {
 				found = true
 				break
 			}
 		}
 		if !found {
-			envVal += ":" + add
+			pathEnv += ":" + add
 		}
 	}
 
-	return envVal
+	return pathEnv
 }
