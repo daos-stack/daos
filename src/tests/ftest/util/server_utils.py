@@ -1066,13 +1066,15 @@ class DaosServerManager(SubprocessManager):
                 started messages
         """
         self.__pids.clear()
-        for pid, rank in self.manager.job.pattern_matches:
+        for match in self.manager.job.pattern_matches:
+            if len(match) < 2:
+                continue
             try:
-                self.__pids[int(rank)] = int(pid)
+                self.__pids[int(match[1])] = int(match[0])
             except ValueError as error:
                 self.log.debug(
                     "Error extracting rank/pid from pattern matches: rank: %s, pid: %s "
-                    "pattern_matches: %s", rank, pid, self.manager.job.pattern_matches)
+                    "pattern_matches: %s", match[1], match[0], self.manager.job.pattern_matches)
                 raise ServerFailed("Error collecting engine pid information") from error
         self.log.debug("Updated pid mapping: %s", self.__pids)
 

@@ -492,7 +492,7 @@ def stop_processes(log, hosts, pattern, verbose=True, timeout=60, exclude=None, 
             process was killed or no process matching the pattern were found).
     """
     description = f"that match '{pattern}'"
-    commands = [f"/usr/bin/pgrep --list-full {pattern}", "sudo /usr/bin/kill"]
+    commands = [f"/usr/bin/pgrep --list-full {pattern}", "sudo /usr/bin/pkill"]
     if exclude:
         commands[0] = f"/usr/bin/ps xa | grep -E {pattern} | grep -vE {exclude}"
         description += f" but does not match '{exclude}'"
