@@ -833,6 +833,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	if (rc != ABT_SUCCESS)
 		D_GOTO(err_cond, rc = dss_abterr2der(rc));
 
+	d_ref_tracker_init(&pool->sp_ref_tracker);
 	D_INIT_LIST_HEAD(&pool->sp_ec_ephs_list);
 	uuid_copy(pool->sp_uuid, key);
 	D_INIT_LIST_HEAD(&pool->sp_hdls);
@@ -917,6 +918,7 @@ pool_free_ref(struct daos_llink *llink)
 	/** release metrics */
 	ds_pool_metrics_stop(pool);
 
+	d_ref_tracker_fini(&pool->sp_ref_tracker);
 	ABT_cond_free(&pool->sp_fetch_hdls_cond);
 	ABT_cond_free(&pool->sp_fetch_hdls_done_cond);
 	ABT_mutex_free(&pool->sp_mutex);
@@ -1264,10 +1266,11 @@ ds_pool_stop(uuid_t uuid)
 {
 	struct ds_pool *pool;
 	int             rc;
+	DSS_REF_TRACKER_DECLARE_DUMPER(dumper);
 
 	ds_pool_failed_remove(uuid);
 
-	ds_pool_lookup_internal(uuid, &pool);
+	DS_POOL_LOOKUP_INTERNAL(uuid, &pool);
 	if (pool == NULL) {
 		D_INFO(DF_UUID ": not found\n", DP_UUID(uuid));
 		return 0;
@@ -1275,7 +1278,7 @@ ds_pool_stop(uuid_t uuid)
 	if (pool->sp_stopping) {
 		rc = -DER_AGAIN;
 		DL_INFO(rc, DF_UUID ": already stopping", DP_UUID(uuid));
-		ds_pool_put(pool);
+		DS_POOL_PUT(&pool);
 		return rc;
 	}
 	pool->sp_stopping = 1;
@@ -1297,13 +1300,15 @@ ds_pool_stop(uuid_t uuid)
 
 	ds_pool_put(pool); /* held by ds_pool_start */
 
+	DSS_REF_TRACKER_INIT_DUMPER(dumper, pool->sp_ref_tracker);
 	while (!daos_lru_is_last_user(&pool->sp_entry))
 		dss_sleep(1000 /* ms */);
+	DSS_REF_TRACKER_FINI_DUMPER(dumper);
 	D_INFO(DF_UUID ": completed reference wait\n", DP_UUID(uuid));
 
 	pool_child_delete_all(pool);
 
-	ds_pool_put(pool);
+	DS_POOL_PUT(&pool);
 	D_INFO(DF_UUID ": stopped\n", DP_UUID(uuid));
 	return 0;
 }
@@ -1372,7 +1377,7 @@ pool_hdl_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 	D_ASSERT(d_list_empty(&hdl->sph_pool_entry));
 	D_ASSERTF(hdl->sph_ref == 0, "%d\n", hdl->sph_ref);
 	daos_iov_free(&hdl->sph_cred);
-	ds_pool_put(hdl->sph_pool);
+	DS_POOL_PUT(&hdl->sph_pool);
 	D_FREE(hdl);
 }
 
@@ -1650,21 +1655,20 @@ ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic)
 	hdl->sph_sec_capas = pic->pic_capas;
 	hdl->sph_global_ver = pic->pic_global_ver;
 	hdl->sph_obj_ver = pic->pic_obj_ver;
-	ds_pool_get(pool);
-	hdl->sph_pool = pool;
+	DS_POOL_GET(&hdl->sph_pool, pool);
 
 	cred_iov.iov_len = pic->pic_cred_size;
 	cred_iov.iov_buf_len = pic->pic_cred_size;
 	cred_iov.iov_buf = &pic->pic_creds[0];
 	rc = daos_iov_copy(&hdl->sph_cred, &cred_iov);
 	if (rc != 0) {
-		ds_pool_put(pool);
+		DS_POOL_PUT(&hdl->sph_pool);
 		D_GOTO(out, rc);
 	}
 
 	if (pool->sp_stopping) {
 		daos_iov_free(&hdl->sph_cred);
-		ds_pool_put(pool);
+		DS_POOL_PUT(&hdl->sph_pool);
 		rc = -DER_SHUTDOWN;
 		goto out;
 	}
@@ -1675,7 +1679,7 @@ ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic)
 	if (rc != 0) {
 		d_list_del_init(&hdl->sph_pool_entry);
 		daos_iov_free(&hdl->sph_cred);
-		ds_pool_put(pool);
+		DS_POOL_PUT(&hdl->sph_pool);
 		D_GOTO(out, rc);
 	}
 
@@ -1938,7 +1942,7 @@ ds_pool_tgt_query_handler(crt_rpc_t *rpc)
 	}
 
 	/* Aggregate query over all targets on the node */
-	rc = ds_pool_lookup(in->tqi_op.pi_uuid, &pool);
+	rc = DS_POOL_LOOKUP(in->tqi_op.pi_uuid, &pool);
 	if (rc) {
 		D_ERROR("Failed to find pool "DF_UUID": %d\n",
 			DP_UUID(in->tqi_op.pi_uuid), rc);
@@ -1948,7 +1952,7 @@ ds_pool_tgt_query_handler(crt_rpc_t *rpc)
 	rc = pool_tgt_query(pool, &out->tqo_space);
 	if (rc != 0)
 		rc = 1;	/* For query aggregator */
-	ds_pool_put(pool);
+	DS_POOL_PUT(&pool);
 out:
 	out->tqo_rc = rc;
 	crt_reply_send(rpc);
@@ -2106,15 +2110,14 @@ ds_pool_tgt_query_map_handler(crt_rpc_t *rpc)
 			rc = -DER_NO_HDL;
 			goto out;
 		}
-		ds_pool_get(hdl->sph_pool);
-		pool = hdl->sph_pool;
+		DS_POOL_GET(&pool, hdl->sph_pool);
 		ds_pool_hdl_put(hdl);
 	} else {
 		/*
 		 * See the comment on validating the pool handle in
 		 * ds_pool_query_handler.
 		 */
-		rc = ds_pool_lookup(in->tmi_op.pi_uuid, &pool);
+		rc = DS_POOL_LOOKUP(in->tmi_op.pi_uuid, &pool);
 		if (rc) {
 			D_ERROR(DF_UUID": failed to look up pool: %d\n",
 				DP_UUID(in->tmi_op.pi_uuid), rc);
@@ -2157,7 +2160,7 @@ ds_pool_tgt_query_map_handler(crt_rpc_t *rpc)
 out_version:
 	out->tmo_op.po_map_version = version;
 out_pool:
-	ds_pool_put(pool);
+	DS_POOL_PUT(&pool);
 out:
 	out->tmo_op.po_rc = rc;
 	D_DEBUG(DB_TRACE, DF_UUID ": replying rpc: %p " DF_RC "\n", DP_UUID(in->tmi_op.pi_uuid),
@@ -2484,7 +2487,7 @@ ds_pool_tgt_discard_ult(void *data)
 	 * still succeed, though it might leave some garbage on the reintegration
 	 * target, the future scrub tool might fix it. XXX
 	 */
-	rc = ds_pool_lookup(arg->pool_uuid, &pool);
+	rc = DS_POOL_LOOKUP(arg->pool_uuid, &pool);
 	if (pool == NULL) {
 		D_INFO(DF_UUID" can not be found: %d\n", DP_UUID(arg->pool_uuid), rc);
 		D_GOTO(free, rc = 0);
@@ -2497,7 +2500,7 @@ ds_pool_tgt_discard_ult(void *data)
 
 	pool->sp_need_discard = 0;
 	pool->sp_discard_status = rc;
-	ds_pool_put(pool);
+	DS_POOL_PUT(&pool);
 free:
 	tgt_discard_arg_free(arg);
 }
@@ -2524,7 +2527,7 @@ ds_pool_tgt_discard_handler(crt_rpc_t *rpc)
 	 */
 	uuid_copy(arg->pool_uuid, in->ptdi_uuid);
 	arg->epoch = DAOS_EPOCH_MAX;
-	rc = ds_pool_lookup(arg->pool_uuid, &pool);
+	rc = DS_POOL_LOOKUP(arg->pool_uuid, &pool);
 	if (rc) {
 		D_INFO(DF_UUID" can not be found: %d\n", DP_UUID(arg->pool_uuid), rc);
 		D_GOTO(out, rc = 0);
@@ -2534,7 +2537,7 @@ ds_pool_tgt_discard_handler(crt_rpc_t *rpc)
 	pool->sp_discard_status = 0;
 	rc = dss_ult_create(ds_pool_tgt_discard_ult, arg, DSS_XS_SYS, 0, 0, NULL);
 
-	ds_pool_put(pool);
+	DS_POOL_PUT(&pool);
 out:
 	out->ptdo_rc = rc;
 	D_DEBUG(DB_MD, DF_UUID": replying rpc "DF_RC"\n", DP_UUID(in->ptdi_uuid),

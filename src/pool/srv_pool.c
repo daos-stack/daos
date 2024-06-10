@@ -1187,7 +1187,7 @@ pool_svc_alloc_cb(d_iov_t *id, struct ds_rsvc **rsvc)
 	svc->ps_svc_rf = -1;
 	svc->ps_force_notify = false;
 
-	rc = ds_pool_lookup(svc->ps_uuid, &svc->ps_pool);
+	rc = DS_POOL_LOOKUP(svc->ps_uuid, &svc->ps_pool);
 	if (rc != 0) {
 		DL_INFO(rc, DF_UUID ": look up pool", DP_UUID(svc->ps_uuid));
 		goto err_svc;
@@ -1274,7 +1274,7 @@ err_root:
 err_lock:
 	ABT_rwlock_free(&svc->ps_lock);
 err_pool:
-	ds_pool_put(svc->ps_pool);
+	DS_POOL_PUT(&svc->ps_pool);
 err_svc:
 	D_FREE(svc);
 err:
@@ -1541,7 +1541,7 @@ pool_svc_free_cb(struct ds_rsvc *rsvc)
 	rdb_path_fini(&svc->ps_handles);
 	rdb_path_fini(&svc->ps_root);
 	ABT_rwlock_free(&svc->ps_lock);
-	ds_pool_put(svc->ps_pool);
+	DS_POOL_PUT(&svc->ps_pool);
 	D_FREE(svc);
 }
 
@@ -8179,7 +8179,7 @@ is_pool_from_srv(uuid_t pool_uuid, uuid_t poh_uuid)
 	struct ds_pool	*pool;
 	int		rc;
 
-	rc = ds_pool_lookup(pool_uuid, &pool);
+	rc = DS_POOL_LOOKUP(pool_uuid, &pool);
 	if (rc) {
 		D_ERROR(DF_UUID": failed to get ds_pool: %d\n",
 			DP_UUID(pool_uuid), rc);
@@ -8187,7 +8187,7 @@ is_pool_from_srv(uuid_t pool_uuid, uuid_t poh_uuid)
 	}
 
 	rc = ds_pool_hdl_is_from_srv(pool, poh_uuid);
-	ds_pool_put(pool);
+	DS_POOL_PUT(&pool);
 	if (rc < 0) {
 		D_ERROR(DF_UUID" fetch srv hdl: %d\n", DP_UUID(pool_uuid), rc);
 		return false;

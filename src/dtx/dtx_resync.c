@@ -789,7 +789,7 @@ dtx_resync_ult(void *data)
 	struct ds_pool		*pool = NULL;
 	int			rc;
 
-	rc = ds_pool_lookup(arg->pool_uuid, &pool);
+	rc = DS_POOL_LOOKUP(arg->pool_uuid, &pool);
 	if (rc != 0) {
 		D_WARN("Cannot find the pool "DF_UUID" for DTX resync: "DF_RC"\n",
 		       DP_UUID(arg->pool_uuid), DP_RC(rc));
@@ -824,6 +824,6 @@ dtx_resync_ult(void *data)
 
 out:
 	if (pool != NULL)
-		ds_pool_put(pool);
+		DS_POOL_PUT(&pool);
 	D_FREE(arg);
 }
