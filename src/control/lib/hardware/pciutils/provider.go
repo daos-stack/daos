@@ -27,7 +27,7 @@ type (
 )
 
 func Init(parent context.Context) (context.Context, error) {
-	api, err := initAPI()
+	api, err := getAPI()
 	if err != nil {
 		return nil, err
 	}

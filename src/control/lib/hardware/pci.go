@@ -437,13 +437,17 @@ func NewPCIAddressSetFromString(addrs string) (*PCIAddressSet, error) {
 type (
 	// PCIDevice represents an individual hardware device.
 	PCIDevice struct {
-		Name        string       `json:"name"`
-		Type        DeviceType   `json:"type"`
-		NUMANode    *NUMANode    `json:"-"`
-		Bus         *PCIBus      `json:"-"`
-		PCIAddr     PCIAddress   `json:"pci_address"`
-		LinkSpeed   float64      `json:"link_speed,omitempty"`
-		BlockDevice *BlockDevice `json:"-"`
+		Name         string       `json:"name"`
+		Type         DeviceType   `json:"type"`
+		NUMANode     *NUMANode    `json:"-"`
+		Bus          *PCIBus      `json:"-"`
+		PCIAddr      PCIAddress   `json:"pci_address"`
+		LinkPortID   uint16       `json:"port_id"`
+		LinkMaxSpeed float64      `json:"link_max_speed,omitempty"`
+		LinkMaxWidth uint16       `json:"link_max_width,omitempty"`
+		LinkNegSpeed float64      `json:"link_neg_speed,omitempty"`
+		LinkNegWidth uint16       `json:"link_neg_width,omitempty"`
+		BlockDevice  *BlockDevice `json:"-"`
 	}
 
 	// PCIBus represents the root of a PCI bus hierarchy.
@@ -515,8 +519,8 @@ func (b *PCIBus) IsZero() bool {
 
 func (d *PCIDevice) String() string {
 	var speedStr string
-	if d.LinkSpeed > 0 {
-		speedStr = fmt.Sprintf(" @ %.2f GB/s", d.LinkSpeed)
+	if d.LinkNegSpeed > 0 {
+		speedStr = fmt.Sprintf(" @ %.2f GT/s", d.LinkNegSpeed)
 	}
 	var sizeStr string
 	if d.BlockDevice != nil {

@@ -3,7 +3,10 @@ package pciutils_test
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hardware/pciutils"
 )
 
@@ -37,5 +40,14 @@ f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 		t.Fatal(err)
 	}
 
-	t.Fatalf("dev: %+v", dev)
+	expDev := &hardware.PCIDevice{
+		LinkMaxSpeed: 8e+12,
+		LinkMaxWidth: 4,
+		LinkNegSpeed: 8e+12,
+		LinkNegWidth: 4,
+	}
+
+	if diff := cmp.Diff(expDev, dev); diff != "" {
+		t.Fatalf("(-want, +got)\n%s\n", diff)
+	}
 }
