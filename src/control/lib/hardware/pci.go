@@ -443,9 +443,9 @@ type (
 		Bus          *PCIBus      `json:"-"`
 		PCIAddr      PCIAddress   `json:"pci_address"`
 		LinkPortID   uint16       `json:"port_id"`
-		LinkMaxSpeed float64      `json:"link_max_speed,omitempty"`
+		LinkMaxSpeed float32      `json:"link_max_speed,omitempty"`
 		LinkMaxWidth uint16       `json:"link_max_width,omitempty"`
-		LinkNegSpeed float64      `json:"link_neg_speed,omitempty"`
+		LinkNegSpeed float32      `json:"link_neg_speed,omitempty"`
 		LinkNegWidth uint16       `json:"link_neg_width,omitempty"`
 		BlockDevice  *BlockDevice `json:"-"`
 	}
@@ -520,7 +520,7 @@ func (b *PCIBus) IsZero() bool {
 func (d *PCIDevice) String() string {
 	var speedStr string
 	if d.LinkNegSpeed > 0 {
-		speedStr = fmt.Sprintf(" @ %.2f GT/s", d.LinkNegSpeed)
+		speedStr = fmt.Sprintf(" @ %.2f GT/s", d.LinkNegSpeed/1e+9)
 	}
 	var sizeStr string
 	if d.BlockDevice != nil {
@@ -552,7 +552,7 @@ func (d *PCIDevice) PCIDevice() *PCIDevice {
 
 // PCIDeviceFromConfig populates PCIDevice details from PCIe config space contents in the form of a
 // byte string.
-func PCIDeviceFromConfig(cfgBytes string) (*PCIDevice, error)
+//func PCIDeviceFromConfig(cfgBytes string) (*PCIDevice, error)
 
 func (d PCIDevices) MarshalJSON() ([]byte, error) {
 	strMap := make(map[string][]*PCIDevice)

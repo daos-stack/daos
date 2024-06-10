@@ -40,23 +40,23 @@ func getAPI() (*api, error) {
 
 func (api *api) Cleanup() {}
 
-func speedToFloat(speed uint16) float64 {
+func speedToFloat(speed uint16) float32 {
 	giga := 1000000000
 	tera := 1000 * giga
 
 	switch speed {
 	case 1:
-		return float64(giga) * 2.5
+		return float32(giga) * 2.5
 	case 2:
-		return float64(tera) * 5
+		return float32(tera) * 5
 	case 3:
-		return float64(tera) * 8
+		return float32(tera) * 8
 	case 4:
-		return float64(tera) * 16
+		return float32(tera) * 16
 	case 5:
-		return float64(tera) * 32
+		return float32(tera) * 32
 	case 6:
-		return float64(tera) * 64
+		return float32(tera) * 64
 	default:
 		return 0
 	}

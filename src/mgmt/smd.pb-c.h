@@ -217,19 +217,20 @@ struct  _Ctl__BioHealthResp
    */
   uint64_t rdb_wal_size;
   /*
-   * PCI config space link stats
+   * PCIe config space link stats
    */
-  char              *lnk_cap;
-  char              *lnk_ctl;
-  char              *lnk_sta;
+  uint32_t           link_port_id;
+  float              link_max_speed;
+  uint32_t           link_max_width;
+  float              link_neg_speed;
+  uint32_t           link_neg_width;
 };
 #define CTL__BIO_HEALTH_RESP__INIT                                                                 \
   {                                                                                                \
 	  PROTOBUF_C_MESSAGE_INIT(&ctl__bio_health_resp__descriptor)                               \
 	  , 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,                            \
 	      (char *)protobuf_c_empty_string, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  \
-	      0, 0, 0, 0, 0, 0, 0, (char *)protobuf_c_empty_string,                                \
-	      (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string                     \
+	      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0                                                   \
   }
 
 /*

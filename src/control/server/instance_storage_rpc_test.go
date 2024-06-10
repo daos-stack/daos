@@ -69,9 +69,9 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 `
 	healthWithoutLinkStats := func() *ctlpb.BioHealthResp {
 		bhr := proto.MockNvmeHealth()
-		bhr.LnkSta = ""
-		bhr.LnkCap = ""
-		bhr.LnkCtl = ""
+		//		bhr.LnkSta = ""
+		//		bhr.LnkCap = ""
+		//		bhr.LnkCtl = ""
 
 		return bhr
 	}

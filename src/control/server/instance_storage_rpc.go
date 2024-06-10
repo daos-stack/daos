@@ -9,7 +9,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -22,6 +21,7 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/hardware/pciutils"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -165,29 +165,24 @@ func (ei *EngineInstance) StorageFormatSCM(ctx context.Context, force bool) (mRe
 	return
 }
 
-func addLinkInfoToHealthStats(engine Engine, health *ctlpb.BioHealthResp, pciCfg string) error {
-	pciDev, err := hardware.PCIDeviceFromConfig(pciCfg)
+func addLinkInfoToHealthStats(ctx context.Context, pciCfg string, health *ctlpb.BioHealthResp) error {
+	// Convert byte-string to lspci-format.
+	sb := new(strings.Builder)
+	formatBytestring(pciCfg, sb)
+
+	pciDev, err := pciutils.PCIDeviceFromConfig(ctx, []byte(sb.String()))
 	if err != nil {
 		return err
 	}
 
-	// TODO: Copy link details from PCIDevice to health stats.
+	// Copy link details from PCIDevice to health stats.
+	health.LinkPortId = uint32(pciDev.LinkPortID)
+	health.LinkMaxSpeed = pciDev.LinkMaxSpeed
+	health.LinkMaxWidth = uint32(pciDev.LinkMaxWidth)
+	health.LinkNegSpeed = pciDev.LinkNegSpeed
+	health.LinkNegWidth = uint32(pciDev.LinkNegWidth)
 
-	// Convert byte-string to lspci-format.
-	sb := new(strings.Builder)
-	sb.WriteString("01:00.0 device #1\n") // Spoof preamble required for lspci to parse.
-	formatBytestring(pciCfg, sb)
-	pciCfgStr := sb.String()
-	engine.Tracef("formatted pci config space: %s", pciCfgStr)
-
-	out, err := engine.GetStorage().Sys.RunLspciWithInput(pciCfgStr)
-	if err != nil {
-		return errors.Wrap(err, "RunLspciWithInput")
-	}
-	engine.Tracef("lspci -F output: %q", out)
-
-	// Extract from lspci output and add Lnk{Ctl|Sta|Cap} field values to health stats.
-	return hardware.SetPciLinkStats(string(out), reflect.ValueOf(health))
+	return nil
 }
 
 func populateCtrlrHealth(ctx context.Context, engine Engine, req *ctlpb.BioHealthReq, ctrlr *ctlpb.NvmeController) (bool, error) {
@@ -204,7 +199,7 @@ func populateCtrlrHealth(ctx context.Context, engine Engine, req *ctlpb.BioHealt
 			stateName)
 	}
 
-	if err := addLinkInfoToHealthStats(engine, health, ctrlr.PciCfg); err != nil {
+	if err := addLinkInfoToHealthStats(ctx, ctrlr.PciCfg, health); err != nil {
 		return false, errors.Wrapf(err, "add link stats for %q", ctrlr)
 	}
 

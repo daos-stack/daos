@@ -827,7 +827,7 @@ const ProtobufCMessageDescriptor ctl__bio_health_req__descriptor =
   (ProtobufCMessageInit) ctl__bio_health_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor ctl__bio_health_resp__field_descriptors[48] = {
+static const ProtobufCFieldDescriptor ctl__bio_health_resp__field_descriptors[50] = {
     {
 	"timestamp", 3, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT64, 0, /* quantifier_offset */
 	offsetof(Ctl__BioHealthResp, timestamp), NULL, NULL, 0,           /* flags */
@@ -1090,19 +1090,34 @@ static const ProtobufCFieldDescriptor ctl__bio_health_resp__field_descriptors[48
 	0, NULL, NULL                                              /* reserved1,reserved2, etc */
     },
     {
-	"lnk_cap", 49, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0, /* quantifier_offset */
-	offsetof(Ctl__BioHealthResp, lnk_cap), NULL, &protobuf_c_empty_string, 0, /* flags */
-	0, NULL, NULL /* reserved1,reserved2, etc */
+	"link_port_id", 49, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32,
+	0,                                                         /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, link_port_id), NULL, NULL, 0, /* flags */
+	0, NULL, NULL                                              /* reserved1,reserved2, etc */
     },
     {
-	"lnk_ctl", 50, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0, /* quantifier_offset */
-	offsetof(Ctl__BioHealthResp, lnk_ctl), NULL, &protobuf_c_empty_string, 0, /* flags */
-	0, NULL, NULL /* reserved1,reserved2, etc */
+	"link_max_speed", 50, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_FLOAT,
+	0,                                                           /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, link_max_speed), NULL, NULL, 0, /* flags */
+	0, NULL, NULL                                                /* reserved1,reserved2, etc */
     },
     {
-	"lnk_sta", 51, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0, /* quantifier_offset */
-	offsetof(Ctl__BioHealthResp, lnk_sta), NULL, &protobuf_c_empty_string, 0, /* flags */
-	0, NULL, NULL /* reserved1,reserved2, etc */
+	"link_max_width", 51, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32,
+	0,                                                           /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, link_max_width), NULL, NULL, 0, /* flags */
+	0, NULL, NULL                                                /* reserved1,reserved2, etc */
+    },
+    {
+	"link_neg_speed", 52, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_FLOAT,
+	0,                                                           /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, link_neg_speed), NULL, NULL, 0, /* flags */
+	0, NULL, NULL                                                /* reserved1,reserved2, etc */
+    },
+    {
+	"link_neg_width", 53, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32,
+	0,                                                           /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, link_neg_width), NULL, NULL, 0, /* flags */
+	0, NULL, NULL                                                /* reserved1,reserved2, etc */
     },
 };
 static const unsigned ctl__bio_health_resp__field_indices_by_name[] = {
@@ -1124,9 +1139,11 @@ static const unsigned ctl__bio_health_resp__field_indices_by_name[] = {
     8,  /* field[8] = err_log_entries */
     41, /* field[41] = host_bytes_written */
     34, /* field[34] = host_reads_raw */
-    45, /* field[45] = lnk_cap */
-    46, /* field[46] = lnk_ctl */
-    47, /* field[47] = lnk_sta */
+    46, /* field[46] = link_max_speed */
+    47, /* field[47] = link_max_width */
+    48, /* field[48] = link_neg_speed */
+    49, /* field[49] = link_neg_width */
+    45, /* field[45] = link_port_id */
     7,  /* field[7] = media_errs */
     33, /* field[33] = media_wear_raw */
     43, /* field[43] = meta_wal_size */
@@ -1156,7 +1173,7 @@ static const unsigned ctl__bio_health_resp__field_indices_by_name[] = {
     35, /* field[35] = workload_timer_raw */
 };
 static const ProtobufCIntRange ctl__bio_health_resp__number_ranges[2 + 1] = {
-    {3, 0}, {5, 1}, {0, 48}};
+    {3, 0}, {5, 1}, {0, 50}};
 const ProtobufCMessageDescriptor ctl__bio_health_resp__descriptor = {
     PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
     "ctl.BioHealthResp",
@@ -1164,7 +1181,7 @@ const ProtobufCMessageDescriptor ctl__bio_health_resp__descriptor = {
     "Ctl__BioHealthResp",
     "ctl",
     sizeof(Ctl__BioHealthResp),
-    48,
+    50,
     ctl__bio_health_resp__field_descriptors,
     ctl__bio_health_resp__field_indices_by_name,
     2,
