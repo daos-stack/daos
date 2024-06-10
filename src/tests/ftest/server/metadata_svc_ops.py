@@ -75,9 +75,7 @@ class DuplicateRpcDetection(TestWithServers):
             1. Bring up DAOS server.
             2. Create pool1 with specified property svc_ops_entry_age.
             3. Create containers by ThreadManager.
-            4. Run specified metadata workload cycles in multiple test loops (N cycles per loop),
-               calculate average time per loop, for those loops executed after svc_ops_entry_age
-               time has passed.
+            4. Run specified metadata workload cycles in multiple test loops (N cycles per loop).
             5. Create pool2 with property svc_ops_enable:0.
             6. Create containers by ThreadManager on pool2.
             7. To establish a "baseline" time (without duplicate rpc detection), perform test
