@@ -34,7 +34,6 @@
 #include <sys/uio.h>
 
 #include <dfuse_ioctl.h>
-#include <daos_fs.h>
 
 /* Tests can be run by specifying the appropriate argument for a test or all will be run if no test
  * is specified.
@@ -66,15 +65,14 @@ char *test_dir;
 void
 do_openat(void **state)
 {
-	struct stat           stbuf0;
-	struct stat           stbuf;
-	int                   fd;
-	int                   rc;
-	char                  output_buf[10];
-	char                  input_buf[] = "hello";
-	off_t                 offset;
-	int                   root = open(test_dir, O_PATH | O_DIRECTORY);
-	struct dfuse_il_reply il_reply;
+	struct stat stbuf0;
+	struct stat stbuf;
+	int         fd;
+	int         rc;
+	char        output_buf[10];
+	char        input_buf[] = "hello";
+	off_t       offset;
+	int         root = open(test_dir, O_PATH | O_DIRECTORY);
 
 	assert_return_code(root, errno);
 
@@ -89,11 +87,6 @@ do_openat(void **state)
 	rc = fstat(fd, &stbuf0);
 	assert_return_code(rc, errno);
 	assert_int_equal(stbuf0.st_size, sizeof(input_buf));
-
-	rc = ioctl(fd, DFUSE_IOCTL_IL, &il_reply);
-	/* verify st_blksize equals DFS_DEFAULT_CHUNK_SIZE for the file on DFS */
-	if (rc == 0)
-		assert_int_equal(stbuf0.st_blksize, DFS_DEFAULT_CHUNK_SIZE);
 
 	/* Second fstat.  IL will bypass the kernel for this one */
 	rc = fstat(fd, &stbuf);
