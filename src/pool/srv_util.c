@@ -1366,7 +1366,7 @@ int ds_pool_get_ranks(const uuid_t pool_uuid, int status,
 	struct ds_pool	*pool;
 	int		rc;
 
-	rc = ds_pool_lookup(pool_uuid, &pool);
+	rc = DS_POOL_LOOKUP(pool_uuid, &pool);
 	if (rc != 0) {
 		D_DEBUG(DB_MD, "Lookup "DF_UUID": %d\n", DP_UUID(pool_uuid), rc);
 		return 0;
@@ -1388,7 +1388,7 @@ out_lock:
 		D_ERROR(DF_UUID": failed to create rank list: %d\n",
 			DP_UUID(pool->sp_uuid), rc);
 
-	ds_pool_put(pool);
+	DS_POOL_PUT(&pool);
 	return rc;
 }
 
@@ -1402,7 +1402,7 @@ int ds_pool_get_tgt_idx_by_state(const uuid_t pool_uuid, unsigned int status, in
 	int			rc;
 
 	*tgts_cnt = 0;
-	rc = ds_pool_lookup(pool_uuid, &pool);
+	rc = DS_POOL_LOOKUP(pool_uuid, &pool);
 	if (pool == NULL || pool->sp_map == NULL) {
 		D_DEBUG(DB_MD, "pool look "DF_UUID": %d\n", DP_UUID(pool_uuid), rc);
 		D_GOTO(output, rc = 0);
@@ -1434,7 +1434,7 @@ int ds_pool_get_tgt_idx_by_state(const uuid_t pool_uuid, unsigned int status, in
 
 output:
 	if (pool)
-		ds_pool_put(pool);
+		DS_POOL_PUT(&pool);
 	if (pool_tgts)
 		D_FREE(pool_tgts);
 	return rc;
