@@ -789,7 +789,7 @@ dtx_resync_ult(void *data)
 	struct ds_pool		*pool;
 	int			rc = 0;
 
-	rc = ds_pool_lookup(arg->pool_uuid, &pool);
+	rc = DS_POOL_LOOKUP(arg->pool_uuid, &pool);
 	D_ASSERTF(pool != NULL, DF_UUID" rc %d\n", DP_UUID(arg->pool_uuid), rc);
 	if (pool->sp_dtx_resync_version >= arg->version) {
 		D_DEBUG(DB_MD, DF_UUID" ignore dtx resync version %u/%u\n",
@@ -817,6 +817,6 @@ dtx_resync_ult(void *data)
 	}
 	pool->sp_dtx_resync_version = arg->version;
 out_put:
-	ds_pool_put(pool);
+	DS_POOL_PUT(&pool);
 	D_FREE(arg);
 }

@@ -45,6 +45,7 @@ struct ds_pool_svc;
  */
 struct ds_pool {
 	struct daos_llink	sp_entry;
+	struct d_ref_tracker	sp_ref_tracker;
 	uuid_t			sp_uuid;	/* pool UUID */
 	d_list_t		sp_hdls;
 	ABT_rwlock		sp_lock;
@@ -115,6 +116,28 @@ struct ds_pool {
 	uint32_t                 sp_checkpoint_thresh;
 	uint32_t		 sp_reint_mode;
 };
+
+#define DS_POOL_LOOKUP(uuid, pool)                                                                 \
+	({                                                                                         \
+		int ds_pool_lookup_rc = ds_pool_lookup(uuid, pool);                                \
+		if (ds_pool_lookup_rc == 0)                                                        \
+			D_REF_TRACKER_TRACK(&(*pool)->sp_ref_tracker, pool);                       \
+		ds_pool_lookup_rc;                                                                 \
+	})
+
+#define DS_POOL_PUT(pool)                                                                          \
+	do {                                                                                       \
+		D_REF_TRACKER_UNTRACK(&(*pool)->sp_ref_tracker, pool);                             \
+		ds_pool_put(*pool);                                                                \
+		*pool = NULL;                                                                      \
+	} while (0)
+
+#define DS_POOL_GET(to, from)                                                                      \
+	do {                                                                                       \
+		ds_pool_get(from);                                                                 \
+		*to = from;                                                                        \
+		D_REF_TRACKER_TRACK(&(*to)->sp_ref_tracker, to);                                   \
+	} while (0)
 
 int ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool);
 void ds_pool_put(struct ds_pool *pool);

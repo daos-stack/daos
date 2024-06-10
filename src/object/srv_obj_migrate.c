@@ -3481,7 +3481,7 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 	D_DEBUG(DB_REBUILD, "iter cont "DF_UUID"/%"PRIx64" %"PRIx64" start\n",
 		DP_UUID(cont_uuid), ih.cookie, root->root_hdl.cookie);
 
-	rc = ds_pool_lookup(tls->mpt_pool_uuid, &dp);
+	rc = DS_POOL_LOOKUP(tls->mpt_pool_uuid, &dp);
 	if (rc) {
 		D_ERROR(DF_UUID" ds_pool_lookup failed: "DF_RC"\n",
 			DP_UUID(tls->mpt_pool_uuid), DP_RC(rc));
@@ -3565,7 +3565,7 @@ out_put:
 	if (tls->mpt_status == 0 && rc < 0)
 		tls->mpt_status = rc;
 	if (dp != NULL)
-		ds_pool_put(dp);
+		DS_POOL_PUT(&dp);
 	return rc;
 }
 
@@ -3797,7 +3797,7 @@ ds_obj_migrate_handler(crt_rpc_t *rpc)
 	uuid_copy(po_uuid, migrate_in->om_pool_uuid);
 	uuid_copy(po_hdl_uuid, migrate_in->om_poh_uuid);
 
-	rc = ds_pool_lookup(po_uuid, &pool);
+	rc = DS_POOL_LOOKUP(po_uuid, &pool);
 	if (rc != 0) {
 		if (rc == -DER_SHUTDOWN) {
 			D_DEBUG(DB_REBUILD, DF_UUID" pool service is stopping.\n",
@@ -3825,7 +3825,7 @@ ds_obj_migrate_handler(crt_rpc_t *rpc)
 			       migrate_in->om_tgt_idx, migrate_in->om_new_layout_ver);
 out:
 	if (pool)
-		ds_pool_put(pool);
+		DS_POOL_PUT(&pool);
 
 	migrate_out = crt_reply_get(rpc);
 	migrate_out->om_status = rc;
