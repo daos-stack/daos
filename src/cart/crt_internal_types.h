@@ -98,8 +98,8 @@ struct crt_gdata {
 	/** global timeout value (second) for all RPCs */
 	uint32_t		cg_timeout;
 
-	/** global swim index for all servers */
-	int32_t			cg_swim_crt_idx;
+	/** cart context index used by SWIM */
+	int32_t                  cg_swim_ctx_idx;
 
 	/** credits limitation for #in-flight RPCs per target EP CTX */
 	uint32_t		cg_credit_ep_ctx;

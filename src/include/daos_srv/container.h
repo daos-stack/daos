@@ -73,6 +73,8 @@ struct ds_cont_child {
 				 sc_stopping:1,
 				 sc_vos_agg_active:1,
 				 sc_ec_agg_active:1,
+				 /* flag of CONT_CAPA_READ_DATA/_WRITE_DATA disabled */
+				 sc_rw_disabled:1,
 				 sc_scrubbing:1,
 				 sc_rebuilding:1;
 	uint32_t		 sc_dtx_batched_gen;
@@ -131,8 +133,6 @@ struct ds_cont_child {
 	d_list_t		 sc_dtx_coll_list;
 	/* the pool map version of updating DAOS_PROP_CO_STATUS prop */
 	uint32_t		 sc_status_pm_ver;
-	/* flag of CONT_CAPA_READ_DATA/_WRITE_DATA disabled */
-	uint32_t		 sc_rw_disabled:1;
 };
 
 struct agg_param {

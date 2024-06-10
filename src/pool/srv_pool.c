@@ -1834,7 +1834,7 @@ pool_svc_check_node_status(struct pool_svc *svc)
 	D_PRINT(fmt, ## __VA_ARGS__);								\
 } while (0)
 
-static int
+static void
 pool_svc_update_map_metrics(uuid_t uuid, struct pool_map *map, struct pool_metrics *metrics)
 {
 	unsigned int   num_total    = 0;
@@ -1844,50 +1844,46 @@ pool_svc_update_map_metrics(uuid_t uuid, struct pool_map *map, struct pool_metri
 	d_rank_list_t *ranks;
 	int            rc;
 
-	if (map == NULL || metrics == NULL)
-		return -DER_INVAL;
+	D_ASSERT(map != NULL && metrics != NULL);
 
 	rc = pool_map_find_failed_tgts(map, NULL, &num_disabled);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID ": failed to get failed targets", DP_UUID(uuid));
-		D_GOTO(out, rc);
+		return;
 	}
 	d_tm_set_gauge(metrics->disabled_targets, num_disabled);
 
 	rc = pool_map_find_tgts_by_state(map, PO_COMP_ST_DRAIN, NULL, &num_draining);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID ": failed to get draining targets", DP_UUID(uuid));
-		D_GOTO(out, rc);
+		return;
 	}
 	d_tm_set_gauge(metrics->draining_targets, num_draining);
 
 	rc = pool_map_find_tgts_by_state(map, -1, NULL, &num_total);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID ": failed to get total targets", DP_UUID(uuid));
-		D_GOTO(out, rc);
+		return;
 	}
 	d_tm_set_gauge(metrics->total_targets, num_total);
 
 	rc = pool_map_get_ranks(uuid, map, false, &ranks);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID ": failed to get degraded ranks", DP_UUID(uuid));
-		D_GOTO(out, rc);
+		return;
 	}
 	num_disabled = ranks->rl_nr;
 	d_tm_set_gauge(metrics->degraded_ranks, num_disabled);
-
 	d_rank_list_free(ranks);
+
 	rc = pool_map_get_ranks(uuid, map, true, &ranks);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID ": failed to get enabled ranks", DP_UUID(uuid));
-		D_GOTO(out, rc);
+		return;
 	}
 	num_enabled = ranks->rl_nr;
 	d_tm_set_gauge(metrics->total_ranks, num_enabled + num_disabled);
-
 	d_rank_list_free(ranks);
-out:
-	return rc;
 }
 
 static int
@@ -1921,11 +1917,7 @@ pool_svc_step_up_metrics(struct pool_svc *svc, d_rank_t leader, uint32_t map_ver
 	d_tm_set_gauge(metrics->service_leader, leader);
 	d_tm_set_counter(metrics->map_version, map_version);
 
-	rc = pool_svc_update_map_metrics(svc->ps_uuid, map, metrics);
-	if (rc != 0) {
-		DL_WARN(rc, DF_UUID ": failed to update pool metrics", DP_UUID(svc->ps_uuid));
-		rc = 0; /* not fatal */
-	}
+	pool_svc_update_map_metrics(svc->ps_uuid, map, metrics);
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0) {
@@ -6643,12 +6635,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 			DL_INFO(rc, DF_UUID": failed to schedule RF check", DP_UUID(svc->ps_uuid));
 	}
 
-	rc = pool_svc_update_map_metrics(svc->ps_uuid, map,
-					 svc->ps_pool->sp_metrics[DAOS_POOL_MODULE]);
-	if (rc != 0) {
-		DL_WARN(rc, DF_UUID ": failed to update pool metrics", DP_UUID(svc->ps_uuid));
-		rc = 0; /* not fatal */
-	}
+	pool_svc_update_map_metrics(svc->ps_uuid, map, svc->ps_pool->sp_metrics[DAOS_POOL_MODULE]);
 
 out_map_buf:
 	pool_buf_free(map_buf);
