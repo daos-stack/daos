@@ -1067,7 +1067,8 @@ class DaosServerManager(SubprocessManager):
         """
         self.__pids.clear()
         for match in self.manager.job.pattern_matches:
-            if len(match) < 2:
+            if not isinstance(match, tuple) and len(match) == 2:
+                # Lines regex matches for pids will contain a rank and pid; ignore any other matches
                 continue
             try:
                 self.__pids[int(match[1])] = int(match[0])
