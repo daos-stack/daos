@@ -150,7 +150,7 @@ class WalMetrics(TestWithTelemetry):
         ranges = self.telemetry.collect_data(wal_metrics)
         for metric in list(ranges):
             for label in ranges[metric]:
-                # Initially all metrics should be 0
+                # Initially all metrics should be 0 for the first pool after creation
                 ranges[metric][label] = [0, 0]
 
         self.log_step(
@@ -167,29 +167,8 @@ class WalMetrics(TestWithTelemetry):
         ranges = self.telemetry.collect_data(wal_metrics)
         for metric in list(ranges):
             for label in ranges[metric]:
-                uuid = pool.uuid
-                if uuid in label and self.server_managers[0].manager.job.using_control_metadata:
-                    if '_sumsquares' in metric:
-                        # Check point sum squares should be > 0 after pool create for MD on SSD
-                        ranges[metric][label] = [1]
-                    elif '_dirty_chunks' in metric:
-                        # Check point dirty chunks should be 0-300 after pool create for MD on SSD
-                        ranges[metric][label] = [0, 300]
-                    elif '_dirty_pages' in metric:
-                        # Check point dirty pages should be 0-3 after pool create for MD on SSD
-                        ranges[metric][label] = [0, 3]
-                    elif '_duration' in metric:
-                        # Check point duration should be 0-1,000,000 after pool create for MD on SSD
-                        ranges[metric][label] = [0, 1000000]
-                    elif '_iovs_copied' in metric:
-                        # Check point iovs copied should be >= 0 after pool create for MD on SSD
-                        ranges[metric][label] = [0]
-                    elif '_wal_purged' in metric:
-                        # Check point wal purged should be >= 0 after pool create for MD on SSD
-                        ranges[metric][label] = [0]
-                else:
-                    # All metrics for the pool w/o check pointing or w/o MD on SSD should be 0
-                    ranges[metric][label] = [0, 0]
+                # All metrics should be 0 for both pools after creation
+                ranges[metric][label] = [0, 0]
         self.log_step('Verifying WAL check point metrics after creating a pool w/ check pointing')
         if not self.telemetry.verify_data(ranges):
             self.fail('WAL replay metrics verification failed after pool w/ check pointing create')
@@ -209,9 +188,28 @@ class WalMetrics(TestWithTelemetry):
         if self.server_managers[0].manager.job.using_control_metadata:
             for metric in list(ranges):
                 for label in ranges[metric]:
-                    if pool.uuid in label:
-                        if '_wal_purged' in metric:
-                            # Check point wal purged should be > 0 after check point for MD on SSD
+                    if pool.uuid.casefold() in label.casefold():
+                        # After check pointing has occurred for a pool with for MD on SSD
+                        if '_sumsquares' in metric:
+                            # Check point sum squares should be > 0
+                            ranges[metric][label] = [1]
+                        elif '_stddev' in metric:
+                            # Check point stddev should be >= 0
+                            ranges[metric][label] = [0]
+                        elif '_dirty_chunks' in metric:
+                            # Check point dirty chunks should be 1-300
+                            ranges[metric][label] = [1, 300]
+                        elif '_dirty_pages' in metric:
+                            # Check point dirty pages should be 1-3
+                            ranges[metric][label] = [1, 3]
+                        elif '_duration' in metric:
+                            # Check point duration should be 1-1,000,000
+                            ranges[metric][label] = [1, 1000000]
+                        elif '_iovs_copied' in metric:
+                            # Check point iovs copied should be >= 0
+                            ranges[metric][label] = [1]
+                        elif '_wal_purged' in metric:
+                            # Check point wal purged should be > 0
                             ranges[metric][label] = [1]
         self.log_step(
             'Verify WAL checkpoint metrics after check pointing is complete '
