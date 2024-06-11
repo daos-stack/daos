@@ -44,10 +44,12 @@ pool_jobs:
   size: 90%
   rebuild_timeout: 600
   pool_query_timeout: 120
+  rebuild_query_timeout: 10
 pool_reserved:
   size: 5%
   rebuild_timeout: 600
   pool_query_timeout: 120
+  rebuild_query_timeout: 10
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
