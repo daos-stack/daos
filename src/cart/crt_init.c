@@ -270,7 +270,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	uint32_t	fi_univ_size = 0;
 	uint32_t	mem_pin_enable = 0;
 	uint32_t	is_secondary;
-	char		ucx_ib_fork_init = 0;
+	char*		ucx_ib_fork_init = NULL;
 	uint32_t        post_init = CRT_HG_POST_INIT, post_incr = CRT_HG_POST_INCR;
 	int		rc = 0;
 
@@ -332,18 +332,18 @@ static int data_init(int server, crt_init_options_t *opt)
 
 	d_getenv_uint("D_QUOTA_RPCS", &crt_gdata.cg_rpc_quota);
 
-	/* Must be set on the server when using UCX, will not affect OFI */
-	d_getenv_char("UCX_IB_FORK_INIT", &ucx_ib_fork_init);
-	if (ucx_ib_fork_init) {
-		if (server) {
-			D_INFO("UCX_IB_FORK_INIT was set to %c, setting to n\n", ucx_ib_fork_init);
-		} else {
-			D_INFO("UCX_IB_FORK_INIT was set to %c on client\n", ucx_ib_fork_init);
-		}
-	}
-	if (server)
-		d_setenv("UCX_IB_FORK_INIT", "n", 1);
+	/* Must be set on the server when using UCX
+         * also on client to allow daos_test/suite system out of dmg to succeed,
+         * will not affect OFI */
+	d_agetenv_str(&ucx_ib_fork_init, "UCX_IB_FORK_INIT");
+	if (ucx_ib_fork_init)
+		D_INFO("UCX_IB_FORK_INIT was set to %s in the environment\n", ucx_ib_fork_init);
+	else if (server)
+		d_setenv("UCX_IB_FORK_INIT", "no", 1);
 
+	if (!server)
+		d_setenv("UCX_RCACHE_PURGE_ON_FORK", "n", 1);
+	 
 	/* This is a workaround for CART-871 if universe size is not set */
 	d_getenv_uint("FI_UNIVERSE_SIZE", &fi_univ_size);
 	if (fi_univ_size == 0) {
