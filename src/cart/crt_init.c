@@ -89,7 +89,10 @@ crt_lib_init(void)
 
 	crt_gdata.cg_rpcid = start_rpcid;
 	crt_gdata.cg_num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+
 	crt_gdata.cg_iv_inline_limit = 19456; /* 19KB */
+
+	RPT_INIT();
 }
 
 /* Library deinit */
