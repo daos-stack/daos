@@ -261,6 +261,8 @@ int
 rebuild_global_status_update(struct rebuild_global_pool_tracker *rgt,
 			     struct rebuild_iv *iv)
 {
+	rgt->rgt_servers_last_update[iv->riv_rank] = ABT_get_wtime();
+
 	D_DEBUG(DB_REBUILD, "iv rank %d scan_done %d pull_done %d resync dtx %u\n",
 		iv->riv_rank, iv->riv_scan_done, iv->riv_pull_done,
 		iv->riv_dtx_resyc_version);
@@ -598,6 +600,38 @@ enum {
 	RB_BCAST_QUERY,
 };
 
+static void
+warn_for_slow_engine_updates(struct rebuild_global_pool_tracker *rgt)
+{
+	int    i;
+	double now    = ABT_get_wtime();
+	double tw     = now - rgt->rgt_last_warn; /* time since last warning logged */
+	bool   warned = false;
+
+	for (i = 0; i < rgt->rgt_servers_number; i++) {
+		/* tu: time since the most recent update from engine rank rgt_server[i].rank */
+		double   tu = now - rgt->rgt_servers_last_update[i];
+		d_rank_t r  = rgt->rgt_servers[i].rank;
+
+		if (rgt->rgt_servers[i].scan_done && rgt->rgt_servers[i].pull_done)
+			continue;
+
+		/* Warn if it's been a while (> 30 seconds) since receiving an update from the rank.
+		 * And throttle warnings - do not print more than once per 2 minutes period.
+		 */
+		if ((tu > 30) && (tw > 120)) {
+			D_WARN(DF_RB ": no updates from rank %u in %8.3f seconds. "
+				     "scan_done=%d pull_done=%d\n",
+			       DP_RB_RGT(rgt), r, tu, rgt->rgt_servers[i].scan_done,
+			       rgt->rgt_servers[i].pull_done);
+			warned = true;
+		}
+	}
+
+	if (warned)
+		rgt->rgt_last_warn = now;
+}
+
 /*
  * Check rebuild status on the leader. Every other target sends
  * its own rebuild status by IV.
@@ -727,6 +761,7 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 			D_PRINT("%s", sbuf);
 		}
 sleep:
+		warn_for_slow_engine_updates(rgt);
 		sched_req_sleep(rgt->rgt_ult, RBLD_CHECK_INTV);
 	}
 
@@ -741,6 +776,8 @@ rebuild_global_pool_tracker_destroy(struct rebuild_global_pool_tracker *rgt)
 	d_list_del(&rgt->rgt_list);
 	if (rgt->rgt_servers)
 		D_FREE(rgt->rgt_servers);
+	if (rgt->rgt_servers_last_update)
+		D_FREE(rgt->rgt_servers_last_update);
 
 	if (rgt->rgt_lock)
 		ABT_mutex_free(&rgt->rgt_lock);
@@ -759,6 +796,7 @@ rebuild_global_pool_tracker_create(struct ds_pool *pool, uint32_t ver, uint32_t 
 	struct rebuild_global_pool_tracker *rgt;
 	int node_nr;
 	struct pool_domain *doms;
+	double                              now;
 	int i;
 	int rc = 0;
 
@@ -774,6 +812,14 @@ rebuild_global_pool_tracker_create(struct ds_pool *pool, uint32_t ver, uint32_t 
 	D_ALLOC_ARRAY(rgt->rgt_servers, node_nr);
 	if (rgt->rgt_servers == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
+	D_ALLOC_ARRAY(rgt->rgt_servers_last_update, node_nr);
+	if (rgt->rgt_servers_last_update == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	now                = ABT_get_wtime();
+	rgt->rgt_last_warn = now;
+	for (i = 0; i < node_nr; i++)
+		rgt->rgt_servers_last_update[i] = now;
 
 	rc = ABT_mutex_create(&rgt->rgt_lock);
 	if (rc != ABT_SUCCESS)
@@ -898,10 +944,10 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 		ret = rebuild_global_pool_tracker_create(pool, rebuild_ver, rebuild_gen,
 							leader_term, reclaim_eph, rebuild_op, rgt);
 		if (ret) {
+			rc = ret;
 			DL_ERROR(rc, DF_RB " rebuild_global_pool_tracker create failed",
 				 DP_UUID(pool->sp_uuid), rebuild_ver, rebuild_gen,
 				 RB_OP_STR(rebuild_op));
-			rc = ret;
 		}
 	}
 
