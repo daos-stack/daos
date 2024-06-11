@@ -27,12 +27,13 @@ extern "C" {
 
 /** DAOS operation codes for task creation */
 typedef enum {
-	DAOS_OPC_INVALID	= -1,
+	DAOS_OPC_INVALID = -1,
 
 	/** Management APIs */
 	/* Starting at 0 will break Application Binary Interface backward
 	 * compatibility */
-	DAOS_OPC_SET_PARAMS = 3,
+	DAOS_OPC_MGMT_LIST_POOLS = 2,
+	DAOS_OPC_SET_PARAMS,
 	DAOS_OPC_MGMT_GET_BS_STATE,
 
 	/** Pool APIs */
@@ -185,6 +186,16 @@ struct daos_obj_register_class_t {
 	/** Object class attributes. */
 	struct daos_oclass_attr	*cattr;
 };
+
+/** pool management pool list args */
+typedef struct {
+	/** Process set name of the DAOS servers managing the pool */
+	const char            *grp;
+	/** Array of pool mgmt information structures. */
+	daos_mgmt_pool_info_t *pools;
+	/** length of array */
+	daos_size_t           *npools;
+} daos_mgmt_pool_list_t;
 
 /** pool query args */
 typedef struct {

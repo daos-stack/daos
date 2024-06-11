@@ -261,9 +261,12 @@ func (m srvMethod) ID() int32 {
 
 func (m srvMethod) String() string {
 	if s, ok := map[srvMethod]string{
-		MethodNotifyReady:  "notify ready",
-		MethodBIOError:     "block i/o error",
-		MethodClusterEvent: "cluster event",
+		MethodNotifyReady:         "notify ready",
+		MethodBIOError:            "block i/o error",
+		MethodClusterEvent:        "cluster event",
+		MethodGetPoolServiceRanks: "get pool service ranks",
+		MethodPoolFindByLabel:     "find pool by label",
+		MethodListPools:           "list pools",
 	}[m]; ok {
 		return s
 	}
@@ -293,6 +296,8 @@ const (
 	MethodPoolFindByLabel srvMethod = C.DRPC_METHOD_SRV_POOL_FIND_BYLABEL
 	// MethodClusterEvent notifies of a cluster event in the I/O Engine.
 	MethodClusterEvent srvMethod = C.DRPC_METHOD_SRV_CLUSTER_EVENT
+	// MethodListPools requests the list of pools in the system
+	MethodListPools srvMethod = C.DRPC_METHOD_SRV_LIST_POOLS
 )
 
 type securityMethod int32

@@ -243,6 +243,8 @@ int ds_pool_svc_upgrade(uuid_t pool_uuid, d_rank_list_t *ranks);
 int ds_pool_failed_add(uuid_t uuid, int rc);
 void ds_pool_failed_remove(uuid_t uuid);
 int ds_pool_failed_lookup(uuid_t uuid);
+int
+ds_pool_check_access(uuid_t pool_uuid, d_rank_list_t *ps_ranks, unsigned int flags, d_iov_t *cred);
 
 /*
  * Called by dmg on the pool service leader to list all pool handles of a pool.

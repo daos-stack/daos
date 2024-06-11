@@ -52,3 +52,19 @@ message PoolFindByLabelResp {
 	string uuid = 2; // Pool UUID
 	repeated uint32 svcreps = 3; // Pool service replica ranks
 }
+
+message ListPoolsReq
+{
+	bool includeAll = 1; // Include all pools in response, regardless of state
+}
+
+message ListPoolsResp
+{
+	message Pool
+	{
+		string          uuid    = 1; // Pool UUID
+		string          label   = 2; // Pool label
+		repeated uint32 svcreps = 3; // Pool service ranks
+	}
+	repeated Pool pools = 1; // List of pools
+}

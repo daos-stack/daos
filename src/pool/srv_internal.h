@@ -162,6 +162,8 @@ void ds_pool_connect_handler_v5(crt_rpc_t *rpc);
 void ds_pool_disconnect_handler(crt_rpc_t *rpc);
 void ds_pool_query_handler_v4(crt_rpc_t *rpc);
 void ds_pool_query_handler_v5(crt_rpc_t *rpc);
+void
+     ds_pool_check_access_handler(crt_rpc_t *rpc);
 void ds_pool_prop_get_handler(crt_rpc_t *rpc);
 void ds_pool_prop_set_handler(crt_rpc_t *rpc);
 void ds_pool_acl_update_handler(crt_rpc_t *rpc);

@@ -79,3 +79,29 @@ daos_mgmt_put_sys_info(struct daos_sys_info *info)
 {
 	dc_mgmt_put_sys_info(info);
 }
+
+int
+daos_mgmt_list_pools(const char *group, daos_size_t *npools, daos_mgmt_pool_info_t *pools,
+		     daos_event_t *ev)
+{
+	daos_mgmt_pool_list_t  *args;
+	tse_task_t             *task;
+	int                     rc;
+
+	DAOS_API_ARG_ASSERT(*args, MGMT_LIST_POOLS);
+
+	if (npools == NULL) {
+		D_ERROR("npools must be non-NULL\n");
+		return -DER_INVAL;
+	}
+
+	rc = dc_task_create(dc_mgmt_pool_list, NULL, ev, &task);
+	if (rc)
+		return rc;
+	args         = dc_task_get_args(task);
+	args->grp    = group;
+	args->pools  = pools;
+	args->npools = npools;
+
+	return dc_task_schedule(task, true);
+}

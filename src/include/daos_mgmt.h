@@ -53,6 +53,8 @@ typedef struct {
 	 * daos_pool_info_t		 mgpi_info;
 	 */
 	uuid_t				 mgpi_uuid;
+	/** Pool label */
+	d_string_t                       mgpi_label;
 	/** List of current pool service replica ranks */
 	d_rank_list_t			*mgpi_svc;
 	/** Current pool service leader */
@@ -76,6 +78,10 @@ typedef struct {
  */
 int
 daos_pool_stop_svc(daos_handle_t poh, daos_event_t *ev);
+
+int
+daos_mgmt_list_pools(const char *group, daos_size_t *npools, daos_mgmt_pool_info_t *pools,
+		     daos_event_t *ev);
 
 /**
  * The operation code for DAOS client to set different parameters globally

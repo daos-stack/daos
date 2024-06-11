@@ -104,6 +104,9 @@
 		ds_pool_filter_cont_handler, NULL)
 
 #define POOL_PROTO_SRV_RPC_LIST						\
+	X(POOL_CHECK_ACCESS,						\
+		0, &CQF_pool_check_access,				\
+		ds_pool_check_access_handler, NULL),			\
 	X(POOL_TGT_DISCONNECT,						\
 		0, &CQF_pool_tgt_disconnect,				\
 		ds_pool_tgt_disconnect_handler,				\
@@ -261,6 +264,17 @@ CRT_RPC_DECLARE(pool_connect_v5, DAOS_ISEQ_POOL_CONNECT_V5, DAOS_OSEQ_POOL_CONNE
 
 CRT_RPC_DECLARE(pool_disconnect, DAOS_ISEQ_POOL_DISCONNECT,
 		DAOS_OSEQ_POOL_DISCONNECT)
+
+#define DAOS_ISEQ_POOL_CHECK_ACCESS	/* input fields */	 \
+	((struct pool_op_in)	(pcai_op)		CRT_VAR) \
+	((d_iov_t)		(pcai_cred)		CRT_VAR) \
+	((uint64_t)		(pcai_flags)		CRT_VAR)
+
+#define DAOS_OSEQ_POOL_CHECK_ACCESS	/* output fields */	 \
+	((struct pool_op_out)	(pcao_op)		CRT_VAR) \
+	((int32_t)		(pcao_rc)		CRT_VAR)
+
+CRT_RPC_DECLARE(pool_check_access, DAOS_ISEQ_POOL_CHECK_ACCESS, DAOS_OSEQ_POOL_CHECK_ACCESS)
 
 #define DAOS_ISEQ_POOL_QUERY	/* input fields */		 \
 	((struct pool_op_in)	(pqi_op)		CRT_VAR) \

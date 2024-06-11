@@ -20,6 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/ui"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 /*
@@ -180,6 +181,7 @@ func (cmd *poolBaseCmd) getAttr(name string) (*attribute, error) {
 }
 
 type poolCmd struct {
+	List         poolListCmd         `command:"list" description:"list pools to which this user has access"`
 	Query        poolQueryCmd        `command:"query" description:"query pool info"`
 	QueryTargets poolQueryTargetsCmd `command:"query-targets" description:"query pool target info"`
 	ListConts    containerListCmd    `command:"list-containers" alias:"list-cont" description:"list all containers in pool"`
@@ -598,6 +600,81 @@ func (cmd *poolAutoTestCmd) Execute(_ []string) error {
 		return errors.Wrapf(err, "failed to run autotest for pool %s",
 			cmd.poolUUID)
 	}
+
+	return nil
+}
+
+func getPoolList(log logging.Logger, queryEnabled bool) ([]*daos.PoolInfo, error) {
+	var rc C.int
+	bufSize := C.size_t(0)
+
+	// First, fetch the total number of pools in the system.
+	// We may not have access to all of them, so this is an upper bound.
+	rc = C.daos_mgmt_list_pools(nil, &bufSize, nil, nil)
+	if err := daosError(rc); err != nil {
+		return nil, err
+	}
+
+	if bufSize < 1 {
+		return nil, nil
+	}
+
+	// Now, we actually fetch the pools into the buffer that we've created.
+	cPools := make([]C.daos_mgmt_pool_info_t, bufSize)
+	rc = C.daos_mgmt_list_pools(nil, &bufSize, &cPools[0], nil)
+	if err := daosError(rc); err != nil {
+		return nil, err
+	}
+	pools := make([]*daos.PoolInfo, 0, bufSize)
+	for i := 0; i < int(bufSize); i++ {
+		poolUUID, err := uuidFromC(cPools[i].mgpi_uuid)
+		if err != nil {
+			return nil, err
+		}
+		svcRanks, err := rankSetFromC(cPools[i].mgpi_svc)
+		if err != nil {
+			return nil, err
+		}
+
+		// Populate the basic info.
+		pool := &daos.PoolInfo{
+			UUID:            poolUUID,
+			Label:           C.GoString(cPools[i].mgpi_label),
+			ServiceReplicas: svcRanks.Ranks(),
+			State:           daos.PoolServiceStateReady,
+		}
+
+		if queryEnabled {
+			// TODO: rework query logic to be callable standalone.
+		}
+		pools = append(pools, pool)
+	}
+
+	log.Debugf("fetched %d/%d pools", len(pools), len(cPools))
+	return pools, nil
+}
+
+type poolListCmd struct {
+	daosCmd
+	Verbose bool `short:"v" long:"verbose" description:"Add pool UUIDs and service replica lists to display"`
+	NoQuery bool `short:"n" long:"no-query" description:"Disable query of listed pools"`
+}
+
+func (cmd *poolListCmd) Execute(_ []string) error {
+	pools, err := getPoolList(cmd.Logger, !cmd.NoQuery)
+	if err != nil {
+		return err
+	}
+
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(pools, nil)
+	}
+
+	var buf strings.Builder
+	if err := pretty.PrintPoolList(pools, &buf, cmd.Verbose); err != nil {
+		return err
+	}
+	cmd.Info(buf.String())
 
 	return nil
 }

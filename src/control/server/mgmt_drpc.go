@@ -47,6 +47,7 @@ func (mod *mgmtModule) ID() drpc.ModuleID {
 type poolResolver interface {
 	FindPoolServiceByLabel(string) (*system.PoolService, error)
 	FindPoolServiceByUUID(uuid.UUID) (*system.PoolService, error)
+	PoolServiceList(bool) ([]*system.PoolService, error)
 }
 
 // srvModule represents the daos_server dRPC module. It handles dRPCs sent by
@@ -70,7 +71,15 @@ func newSrvModule(log logging.Logger, sysdb poolResolver, engines []Engine, even
 }
 
 // HandleCall is the handler for calls to the srvModule.
-func (mod *srvModule) HandleCall(_ context.Context, session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
+func (mod *srvModule) HandleCall(_ context.Context, session *drpc.Session, method drpc.Method, req []byte) (_ []byte, err error) {
+	defer func() {
+		msg := ": success"
+		if err != nil {
+			msg = ", failed: " + err.Error()
+		}
+		mod.log.Tracef("srv upcall: %s%s", method, msg)
+	}()
+
 	switch method {
 	case drpc.MethodNotifyReady:
 		return nil, mod.handleNotifyReady(req)
@@ -82,6 +91,8 @@ func (mod *srvModule) HandleCall(_ context.Context, session *drpc.Session, metho
 		return mod.handlePoolFindByLabel(req)
 	case drpc.MethodClusterEvent:
 		return mod.handleClusterEvent(req)
+	case drpc.MethodListPools:
+		return mod.handleListPools(req)
 	default:
 		return nil, drpc.UnknownMethodFailure()
 	}
@@ -195,6 +206,32 @@ func (mod *srvModule) handleClusterEvent(reqb []byte) ([]byte, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "handle cluster event %+v", req)
 	}
+
+	return proto.Marshal(resp)
+}
+
+func (mod *srvModule) handleListPools(reqb []byte) ([]byte, error) {
+	req := new(srvpb.ListPoolsReq)
+	if err := proto.Unmarshal(reqb, req); err != nil {
+		return nil, drpc.UnmarshalingPayloadFailure()
+	}
+
+	mod.log.Tracef("%T: %+v", req, req)
+	pools, err := mod.sysdb.PoolServiceList(req.IncludeAll)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to list system pools")
+	}
+
+	resp := new(srvpb.ListPoolsResp)
+	resp.Pools = make([]*srvpb.ListPoolsResp_Pool, len(pools))
+	for i, ps := range pools {
+		resp.Pools[i] = &srvpb.ListPoolsResp_Pool{
+			Uuid:    ps.PoolUUID.String(),
+			Label:   ps.PoolLabel,
+			Svcreps: ranklist.RanksToUint32(ps.Replicas),
+		}
+	}
+	mod.log.Tracef("%T %+v", resp, resp)
 
 	return proto.Marshal(resp)
 }

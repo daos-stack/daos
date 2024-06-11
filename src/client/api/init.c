@@ -37,7 +37,7 @@ const struct daos_task_api dc_funcs[] = {
 	/** Management */
 	{dc_deprecated, 0},
 	{dc_deprecated, 0},
-	{dc_deprecated, 0},
+	{dc_mgmt_pool_list, sizeof(daos_mgmt_pool_list_t)},
 	{dc_debug_set_params, sizeof(daos_set_params_t)},
 	{dc_mgmt_get_bs_state, sizeof(daos_mgmt_get_bs_state_t)},
 
