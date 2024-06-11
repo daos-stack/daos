@@ -80,11 +80,13 @@ func getFabricScanFn(log logging.Logger, cfg *Config, scanner *hardware.FabricSc
 }
 
 type cacheItem struct {
-	sync.Mutex
+	sync.RWMutex
 	lastCached      time.Time
 	refreshInterval time.Duration
 }
 
+// isStale returns true if the cache item is stale.
+// NB: Should be run under a lock to protect lastCached.
 func (ci *cacheItem) isStale() bool {
 	if ci.refreshInterval == 0 {
 		return false
@@ -92,6 +94,8 @@ func (ci *cacheItem) isStale() bool {
 	return ci.lastCached.Add(ci.refreshInterval).Before(time.Now())
 }
 
+// isCached returns true if the cache item is cached.
+// NB: Should be run under at least a read lock to protect lastCached.
 func (ci *cacheItem) isCached() bool {
 	return !ci.lastCached.Equal(time.Time{})
 }
@@ -130,16 +134,30 @@ func (ci *cachedAttachInfo) Key() string {
 	return sysAttachInfoKey(ci.system)
 }
 
-// NeedsRefresh checks whether the cached data needs to be refreshed.
-func (ci *cachedAttachInfo) NeedsRefresh() bool {
+// needsRefresh checks whether the cached data needs to be refreshed.
+func (ci *cachedAttachInfo) needsRefresh() bool {
 	if ci == nil {
 		return false
 	}
 	return !ci.isCached() || ci.isStale()
 }
 
-// Refresh contacts the remote management server and refreshes the GetAttachInfo cache.
-func (ci *cachedAttachInfo) Refresh(ctx context.Context) error {
+// RefreshIfNeeded refreshes the cached data if it needs to be refreshed.
+func (ci *cachedAttachInfo) RefreshIfNeeded(ctx context.Context) (func(), bool, error) {
+	if ci == nil {
+		return cache.NoopRelease, false, errors.New("cachedAttachInfo is nil")
+	}
+
+	ci.Lock()
+	if ci.needsRefresh() {
+		return ci.Unlock, true, ci.refresh(ctx)
+	}
+	return ci.Unlock, false, nil
+}
+
+// refresh implements the actual refresh logic.
+// NB: Should be run under a lock.
+func (ci *cachedAttachInfo) refresh(ctx context.Context) error {
 	if ci == nil {
 		return errors.New("cachedAttachInfo is nil")
 	}
@@ -153,6 +171,16 @@ func (ci *cachedAttachInfo) Refresh(ctx context.Context) error {
 	ci.lastResponse = resp
 	ci.lastCached = time.Now()
 	return nil
+}
+
+// Refresh contacts the remote management server and refreshes the GetAttachInfo cache.
+func (ci *cachedAttachInfo) Refresh(ctx context.Context) (func(), error) {
+	if ci == nil {
+		return cache.NoopRelease, errors.New("cachedAttachInfo is nil")
+	}
+
+	ci.Lock()
+	return ci.Unlock, ci.refresh(ctx)
 }
 
 type cachedFabricInfo struct {
@@ -172,17 +200,31 @@ func (cfi *cachedFabricInfo) Key() string {
 	return fabricKey
 }
 
-// NeedsRefresh indicates that the fabric information does not need to be refreshed unless it has
+// needsRefresh indicates that the fabric information does not need to be refreshed unless it has
 // never been populated.
-func (cfi *cachedFabricInfo) NeedsRefresh() bool {
+func (cfi *cachedFabricInfo) needsRefresh() bool {
 	if cfi == nil {
 		return false
 	}
 	return !cfi.isCached()
 }
 
-// Refresh scans the hardware for information about the fabric devices and caches the result.
-func (cfi *cachedFabricInfo) Refresh(ctx context.Context) error {
+// RefreshIfNeeded refreshes the cached fabric information if it needs to be refreshed.
+func (cfi *cachedFabricInfo) RefreshIfNeeded(ctx context.Context) (func(), bool, error) {
+	if cfi == nil {
+		return cache.NoopRelease, false, errors.New("cachedFabricInfo is nil")
+	}
+
+	cfi.Lock()
+	if cfi.needsRefresh() {
+		return cfi.Unlock, true, cfi.refresh(ctx)
+	}
+	return cfi.Unlock, false, nil
+}
+
+// refresh implements the actual refresh logic.
+// NB: Should be run under a lock.
+func (cfi *cachedFabricInfo) refresh(ctx context.Context) error {
 	if cfi == nil {
 		return errors.New("cachedFabricInfo is nil")
 	}
@@ -195,6 +237,16 @@ func (cfi *cachedFabricInfo) Refresh(ctx context.Context) error {
 	cfi.lastResults = results
 	cfi.lastCached = time.Now()
 	return nil
+}
+
+// Refresh scans the hardware for information about the fabric devices and caches the result.
+func (cfi *cachedFabricInfo) Refresh(ctx context.Context) (func(), error) {
+	if cfi == nil {
+		return cache.NoopRelease, errors.New("cachedFabricInfo is nil")
+	}
+
+	cfi.Lock()
+	return cfi.Unlock, cfi.refresh(ctx)
 }
 
 // InfoCache is a cache for the results of expensive operations needed by the agent.
@@ -349,15 +401,14 @@ func (c *InfoCache) GetAttachInfo(ctx context.Context, sys string) (*control.Get
 	}
 	createItem := func() (cache.Item, error) {
 		c.log.Debugf("cache miss for %s", sysAttachInfoKey(sys))
-		cai := newCachedAttachInfo(c.attachInfoRefresh, sys, c.client, c.getAttachInfo)
-		return cai, nil
+		return newCachedAttachInfo(c.attachInfoRefresh, sys, c.client, c.getAttachInfo), nil
 	}
 
 	item, release, err := c.cache.GetOrCreate(ctx, sysAttachInfoKey(sys), createItem)
-	defer release()
 	if err != nil {
 		return nil, errors.Wrap(err, "getting attach info from cache")
 	}
+	defer release()
 
 	cai, ok := item.(*cachedAttachInfo)
 	if !ok {

@@ -27,6 +27,7 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
+	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
@@ -347,7 +348,7 @@ func TestAgent_mgmtModule_getNUMANode(t *testing.T) {
 
 			mod := &mgmtModule{
 				log:            log,
-				useDefaultNUMA: tc.useDefaultNUMA,
+				useDefaultNUMA: atm.NewBool(tc.useDefaultNUMA),
 				numaGetter:     tc.numaGetter,
 			}
 
