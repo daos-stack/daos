@@ -3833,7 +3833,8 @@ co_op_dup_timing(void **state)
 	size_t const       in_sizes[]        = {strlen(in_values[0]), strlen(in_values[1])};
 	int                n                 = (int)ARRAY_SIZE(names);
 	const unsigned int NUM_FP            = 3;
-	const uint32_t     NUM_OPS           = 200;
+	const uint32_t     NUM_OPS           = 500;
+	const uint32_t     NUM_REPEAT        = 50;
 	uint32_t           num_failures      = 0;
 	const uint32_t     SVC_OPS_ENABLED   = 1;
 	const uint32_t     SVC_OPS_ENTRY_AGE = 60;
@@ -3841,6 +3842,7 @@ co_op_dup_timing(void **state)
 	double             dummy_wl_elapsed  = 0.0;
 	daos_pool_info_t   pinfo;
 	d_rank_t           leader_rank;
+	int                r; /* repeat benchamrk NUM_REPEAT times */
 	int                i; /* loop over NUM_FP */
 	int                j; /* loop over NUM_OPS */
 	uint64_t           t_begin;
@@ -3848,6 +3850,7 @@ co_op_dup_timing(void **state)
 	uint32_t           fail_periods[NUM_FP];
 	double             fail_pct[NUM_FP];
 	double             t_fp_loop[NUM_FP];
+	double             worst_time_multiplier[NUM_FP];
 	int                rc;
 
 	/* Create a separate pool with svc_ops_entry_age property (dummy workload duration). */
@@ -3933,99 +3936,119 @@ co_op_dup_timing(void **state)
 	fail_periods[1] = 3;           /* 33% */
 	fail_periods[2] = 2;           /* 50% */
 	fail_pct[0]     = 0.0;
-	for (i = 1; i < NUM_FP; i++)
+	for (i = 1; i < NUM_FP; i++) {
 		fail_pct[i] = (1.0 / (double)fail_periods[i]) * 100.0;
-
-	for (i = 0; i < NUM_FP; i++) {
-		uint32_t fp = fail_periods[i];
-
-		print_message("Measure container metadata workload %u loops, %2.0f%% fault rate\n",
-			      NUM_OPS, fail_pct[i]);
-		t_begin = daos_get_ntime();
-		for (j = 0; j < NUM_OPS; j++) {
-			uuid_t             tmp_cuuid;
-			char               str[DAOS_UUID_STR_SIZE];
-			daos_handle_t      coh;
-			daos_epoch_t       epoch;
-			daos_epoch_range_t epr;
-			bool               fault_inject = (((j + 1) % fp) == 0);
-			const uint64_t     fail_loc     = DAOS_MD_OP_PASS_NOREPLY | DAOS_FAIL_ONCE;
-
-			if (fault_inject)
-				test_set_engine_fail_loc_quiet(arg, leader_rank, fail_loc);
-			rc = daos_cont_create(arg->pool.poh, &tmp_cuuid, NULL, NULL);
-			assert_rc_equal(rc, 0);
-
-			uuid_unparse(tmp_cuuid, str);
-
-			if (fault_inject)
-				test_set_engine_fail_loc_quiet(arg, leader_rank, fail_loc);
-			rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW, &coh, NULL, NULL);
-			assert_rc_equal(rc, 0);
-
-			if (fault_inject)
-				test_set_engine_fail_loc_quiet(arg, leader_rank, fail_loc);
-			rc = daos_cont_create_snap(coh, &epoch, NULL, NULL /* ev */);
-			assert_rc_equal(rc, 0);
-
-			epr.epr_lo = epr.epr_hi = epoch;
-			if (fault_inject)
-				test_set_engine_fail_loc_quiet(arg, leader_rank, fail_loc);
-			rc = daos_cont_destroy_snap(coh, epr, NULL /* ev */);
-			assert_rc_equal(rc, 0);
-
-			if (fault_inject)
-				test_set_engine_fail_loc_quiet(arg, leader_rank, fail_loc);
-			rc = daos_cont_set_attr(coh, n, names, in_values, in_sizes, NULL /* ev */);
-			assert_rc_equal(rc, 0);
-
-			if (fault_inject)
-				test_set_engine_fail_loc_quiet(arg, leader_rank, fail_loc);
-			rc = daos_cont_del_attr(coh, n, names, NULL /* ev */);
-			assert_rc_equal(rc, 0);
-
-			if (fault_inject)
-				test_set_engine_fail_loc_quiet(arg, leader_rank, fail_loc);
-			rc = daos_cont_set_prop(coh, cprop, NULL);
-			assert_rc_equal(rc, 0);
-
-			if (fault_inject)
-				test_set_engine_fail_loc_quiet(arg, leader_rank, fail_loc);
-			rc = daos_cont_close(coh, NULL);
-			assert_rc_equal(rc, 0);
-
-			if (fault_inject)
-				test_set_engine_fail_loc_quiet(arg, leader_rank, fail_loc);
-			rc = daos_cont_destroy(arg->pool.poh, str, 1 /* force */, NULL);
-			assert_rc_equal(rc, 0);
-		}
-		t_end        = daos_get_ntime();
-		t_fp_loop[i] = (double)(t_end - t_begin) / NSEC_PER_SEC;
-
-		/* verify performance in each failure rate */
-		if (i > 0) {
-			double fail_rate           = (1.0 / (double)fp);
-			double max_time_multiplier = (1.0 + fail_rate);
-			double act_time_multiplier;
-
-			act_time_multiplier = (double)t_fp_loop[i] / (double)t_fp_loop[0];
-			if (act_time_multiplier >= max_time_multiplier) {
-				num_failures++;
-				fp_loop_failed = true;
-			}
-		}
+		worst_time_multiplier[i] = 0.0;
 	}
 
-	/* Print timing summary (NB: assumes NUM_FP=3 */
-	print_message("status, op (%u loops), time(sec), %2.0f%% faults time(sec), "
-		      "%2.0f%% faults time(sec), %2.0f%% faults extra loop time(%%), "
-		      "%2.0f%% faults extra loop time(%%)\n",
-		      NUM_OPS, fail_pct[1], fail_pct[2], fail_pct[1], fail_pct[2]);
+	for (r = 0; r < NUM_REPEAT; r++) {
+		fp_loop_failed = false;
 
-	print_message("%s, cont_md_workload, %8.3f, %8.3f, %8.3f, %2.2f, %2.2f\n",
-		      fp_loop_failed ? "FAIL" : "PASS", t_fp_loop[0], t_fp_loop[1], t_fp_loop[2],
-		      ((double)t_fp_loop[1] / (double)t_fp_loop[0] - 1.0) * 100.0,
-		      ((double)t_fp_loop[2] / (double)t_fp_loop[0] - 1.0) * 100.0);
+		for (i = 0; i < NUM_FP; i++) {
+			uint32_t fp = fail_periods[i];
+
+#if 0
+			print_message("Measure container metadata workload %u loops, %2.0f%% fault rate\n",
+				      NUM_OPS, fail_pct[i]);
+#endif
+			t_begin = daos_get_ntime();
+			for (j = 0; j < NUM_OPS; j++) {
+				uuid_t             tmp_cuuid;
+				char               str[DAOS_UUID_STR_SIZE];
+				daos_handle_t      coh;
+				daos_epoch_t       epoch;
+				daos_epoch_range_t epr;
+				bool               fault_inject = (((j + 1) % fp) == 0);
+				const uint64_t     fail_loc     = DAOS_MD_OP_PASS_NOREPLY | DAOS_FAIL_ONCE;
+
+				if (fault_inject)
+					test_set_engine_fail_loc_quiet(arg, leader_rank, fail_loc);
+				rc = daos_cont_create(arg->pool.poh, &tmp_cuuid, NULL, NULL);
+				assert_rc_equal(rc, 0);
+
+				uuid_unparse(tmp_cuuid, str);
+
+				if (fault_inject)
+					test_set_engine_fail_loc_quiet(arg, leader_rank, fail_loc);
+				rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW, &coh, NULL, NULL);
+				assert_rc_equal(rc, 0);
+
+				if (fault_inject)
+					test_set_engine_fail_loc_quiet(arg, leader_rank, fail_loc);
+				rc = daos_cont_create_snap(coh, &epoch, NULL, NULL /* ev */);
+				assert_rc_equal(rc, 0);
+
+				epr.epr_lo = epr.epr_hi = epoch;
+				if (fault_inject)
+					test_set_engine_fail_loc_quiet(arg, leader_rank, fail_loc);
+				rc = daos_cont_destroy_snap(coh, epr, NULL /* ev */);
+				assert_rc_equal(rc, 0);
+
+				if (fault_inject)
+					test_set_engine_fail_loc_quiet(arg, leader_rank, fail_loc);
+				rc = daos_cont_set_attr(coh, n, names, in_values, in_sizes, NULL /* ev */);
+				assert_rc_equal(rc, 0);
+
+				if (fault_inject)
+					test_set_engine_fail_loc_quiet(arg, leader_rank, fail_loc);
+				rc = daos_cont_del_attr(coh, n, names, NULL /* ev */);
+				assert_rc_equal(rc, 0);
+
+				if (fault_inject)
+					test_set_engine_fail_loc_quiet(arg, leader_rank, fail_loc);
+				rc = daos_cont_set_prop(coh, cprop, NULL);
+				assert_rc_equal(rc, 0);
+
+				if (fault_inject)
+					test_set_engine_fail_loc_quiet(arg, leader_rank, fail_loc);
+				rc = daos_cont_close(coh, NULL);
+				assert_rc_equal(rc, 0);
+
+				if (fault_inject)
+					test_set_engine_fail_loc_quiet(arg, leader_rank, fail_loc);
+				rc = daos_cont_destroy(arg->pool.poh, str, 1 /* force */, NULL);
+				assert_rc_equal(rc, 0);
+			}
+			t_end        = daos_get_ntime();
+			t_fp_loop[i] = (double)(t_end - t_begin) / NSEC_PER_SEC;
+
+			/* verify performance in each failure rate */
+			if (i > 0) {
+				double fail_rate           = (1.0 / (double)fp);
+				double max_time_multiplier = (1.0 + fail_rate);
+				double act_time_multiplier;
+
+				act_time_multiplier = (double)t_fp_loop[i] / (double)t_fp_loop[0];
+				if (act_time_multiplier >= max_time_multiplier) {
+					num_failures++;
+					fp_loop_failed = true;
+				}
+				if (act_time_multiplier > worst_time_multiplier[i])
+					worst_time_multiplier[i] = act_time_multiplier;
+			}
+		}
+
+		/* Print timing summary (NB: assumes NUM_FP=3 */
+#if 0
+		print_message("status, op (%u loops), time(sec), %2.0f%% faults time(sec), "
+			      "%2.0f%% faults time(sec), %2.0f%% faults extra loop time(%%), "
+			      "%2.0f%% faults extra loop time(%%)\n",
+			      NUM_OPS, fail_pct[1], fail_pct[2], fail_pct[1], fail_pct[2]);
+#endif
+
+		print_message("trial %d/%u %s, cont_md_workload, %8.3f, %8.3f, %8.3f, %2.2f, %2.2f\n",
+			      r, NUM_REPEAT, fp_loop_failed ? "FAIL" : "PASS", t_fp_loop[0], t_fp_loop[1], t_fp_loop[2],
+			      ((double)t_fp_loop[1] / (double)t_fp_loop[0] - 1.0) * 100.0,
+			      ((double)t_fp_loop[2] / (double)t_fp_loop[0] - 1.0) * 100.0);
+	}
+
+	print_message("%u failures over %u trials (each trial running %u loops)\n",
+		      num_failures, NUM_REPEAT, NUM_OPS);
+	for (i = 1; i < NUM_FP; i++) {
+		if (i > 0)
+			print_message("worst_time_multiplier[%2.0f%%] = %8.3f\n",
+				      fail_pct[i], worst_time_multiplier[i]);
+	}
 
 	/* Restore engine logging after timing operations have concluded. */
 	rc = dmg_server_set_logmasks(arg->dmg_config, NULL /* masks */, NULL /* streams */,
