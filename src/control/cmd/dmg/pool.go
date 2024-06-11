@@ -614,10 +614,6 @@ func (cmd *PoolQueryCmd) Execute(args []string) error {
 	if cmd.HealthOnly {
 		req.QueryMask = daos.HealthOnlyPoolQueryMask
 	}
-	// TODO (DAOS-10250) The two options should not be incompatible (i.e. engine limitation)
-	if cmd.ShowEnabledRanks && cmd.ShowDisabledRanks {
-		return errIncompatFlags("show-enabled-ranks", "show-disabled-ranks")
-	}
 	if cmd.ShowEnabledRanks {
 		req.QueryMask.SetOptions(daos.PoolQueryOptionEnabledEngines)
 	}

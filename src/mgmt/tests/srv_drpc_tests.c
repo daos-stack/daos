@@ -1263,22 +1263,6 @@ expect_drpc_pool_query_resp_with_error(Drpc__Response *resp, int expected_err)
 }
 
 static void
-test_drpc_pool_query_incompat_ranks_flags(void **state)
-{
-	Drpc__Call     call = DRPC__CALL__INIT;
-	Drpc__Response resp = DRPC__RESPONSE__INIT;
-
-	setup_pool_query_drpc_call(&call, TEST_UUID, DPI_ENGINES_DISABLED | DPI_ENGINES_ENABLED);
-
-	ds_mgmt_drpc_pool_query(&call, &resp);
-
-	expect_drpc_pool_query_resp_with_error(&resp, -DER_NOTSUPPORTED);
-
-	D_FREE(call.body.data);
-	D_FREE(resp.body.data);
-}
-
-static void
 test_drpc_pool_query_bad_uuid(void **state)
 {
 	Drpc__Call	call = DRPC__CALL__INIT;
@@ -1422,7 +1406,7 @@ test_drpc_pool_query_success(void **state)
 	init_test_rebuild_status(&exp_info.pi_rebuild_st);
 	ds_mgmt_pool_query_info_out = exp_info;
 
-	setup_pool_query_drpc_call(&call, TEST_UUID, DPI_ENGINES_ENABLED);
+	setup_pool_query_drpc_call(&call, TEST_UUID, DPI_ENGINES_ENABLED | DPI_ENGINES_DISABLED);
 
 	ds_mgmt_drpc_pool_query(&call, &resp);
 
@@ -1431,9 +1415,10 @@ test_drpc_pool_query_success(void **state)
 		return;
 	assert_int_equal(uuid_compare(exp_uuid, ds_mgmt_pool_query_uuid), 0);
 	assert_non_null(ds_mgmt_pool_query_info_ptr);
-	assert_non_null(ds_mgmt_pool_query_ranks_out);
+	assert_non_null(ds_mgmt_pool_query_enabled_ranks_out);
+	assert_non_null(ds_mgmt_pool_query_disabled_ranks_out);
 	assert_int_equal(ds_mgmt_pool_query_info_in.pi_bits,
-			 DEFAULT_QUERY_BITS | DPI_ENGINES_ENABLED);
+			 DEFAULT_QUERY_BITS | DPI_ENGINES_ENABLED | DPI_ENGINES_DISABLED);
 
 	expect_query_resp_with_info(&exp_info,
 				    MGMT__POOL_REBUILD_STATUS__STATE__IDLE,
@@ -3049,7 +3034,6 @@ main(void)
 	    POOL_EXTEND_TEST(test_drpc_extend_mgmt_svc_fails),
 	    POOL_EXTEND_TEST(test_drpc_extend_success),
 	    REINTEGRATE_TEST(test_drpc_reintegrate_bad_uuid),
-	    QUERY_TEST(test_drpc_pool_query_incompat_ranks_flags),
 	    QUERY_TEST(test_drpc_pool_query_bad_uuid),
 	    QUERY_TEST(test_drpc_pool_query_mgmt_svc_fails),
 	    QUERY_TEST(test_drpc_pool_query_success),
