@@ -794,7 +794,7 @@ crt_hg_init(void)
 	if (!d_isenv_def("HG_LOG_SUBSYS")) {
 		if (!d_isenv_def("HG_LOG_LEVEL"))
 			HG_Set_log_level("warning");
-		HG_Set_log_subsys("hg,na");
+		HG_Set_log_subsys("hg,na,libfabric");
 	}
 
 	/* import HG log */
