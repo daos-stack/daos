@@ -13,7 +13,7 @@ def configure_lustre(denv):
         print("No installed Lustre version detected")
     else:
         print("Installed Lustre version detected")
-        if not conf.CheckFunc('llapi_unlink_foreign'):
+        if not denv.CheckFunc('llapi_unlink_foreign'):
             print("Lustre version is not compatible")
         else:
             print("Lustre version is compatible")

@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.4.2
-Release:       4%{?relval}%{?dist}
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -112,6 +112,14 @@ BuildRequires: libucs-devel
 BuildRequires: libuct-devel
 %else
 BuildRequires: ucx-devel
+%endif
+
+# Needed for support tasks
+%if (0%{?rhel} >= 8)
+BuildRequires: libasan
+%endif
+%if (0%{?suse_version} > 0)
+BuildRequires: libasan8
 %endif
 
 Requires: openssl
@@ -555,6 +563,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri May 31 2024 Cedric Koch-Hofer <cedric.koch-hofer@intel.com> 2.4.2-5
+- Support release candidate for 2.4.2
+
 * Mon Mar 04 2024 Phillip Henderson <phillip.henderson@intel.com> 2.4.2-4
 - Third release candidate for 2.4.2
 

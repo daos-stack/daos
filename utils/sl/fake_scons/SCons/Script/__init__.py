@@ -338,6 +338,10 @@ class DefaultEnvironment():
         """Fake require"""
         return
 
+    def CheckFunc(self, func_name):
+        """Fake CheckFunc"""
+        return
+
 
 class Variables():
     """Fake variables"""

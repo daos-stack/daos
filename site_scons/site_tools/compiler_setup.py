@@ -51,6 +51,12 @@ def _base_setup(env):
                         '-Wall',
                         '-fpic'])
 
+    if env["ADDRESS_SANITIZER"] == 1:
+        print('Enabling Address Sanitizer')
+        # Enable Address Sanitizer, a fast memory error detector.
+        env.Prepend(LINKFLAGS=['-fsanitize=address'])
+        env.Prepend(CCFLAGS=['-fsanitize=address'])
+
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
 
     if build_type == 'debug':
@@ -160,10 +166,26 @@ def _append_if_supported(env, **kwargs):
     config.Finish()
 
 
+def _check_func(env, func_name):
+    """Check if a function is usable"""
+    denv = env.Clone()
+    if denv["ADDRESS_SANITIZER"] == 1:
+        # NOTE Remove address sanitizer to not scramble the test output
+        denv["LINKFLAGS"].remove('-fsanitize=address')
+        denv["CCFLAGS"].remove('-fsanitize=address')
+
+    config = Configure(denv)
+    res = config.CheckFunc(func_name)
+    config.Finish()
+
+    return res
+
+
 def generate(env):
     """Add daos specific method to environment"""
     env.AddMethod(_base_setup, 'compiler_setup')
     env.AddMethod(_append_if_supported, "AppendIfSupported")
+    env.AddMethod(_check_func, "CheckFunc")
 
 
 def exists(_env):
