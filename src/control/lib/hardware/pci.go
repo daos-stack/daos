@@ -520,7 +520,7 @@ func (b *PCIBus) IsZero() bool {
 func (d *PCIDevice) String() string {
 	var speedStr string
 	if d.LinkNegSpeed > 0 {
-		speedStr = fmt.Sprintf(" @ %.2f GT/s", d.LinkNegSpeed/1e+9)
+		speedStr = fmt.Sprintf(" @ %s", humanize.SI(float64(d.LinkNegSpeed), "T/s"))
 	}
 	var sizeStr string
 	if d.BlockDevice != nil {

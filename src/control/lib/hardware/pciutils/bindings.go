@@ -41,25 +41,26 @@ func getAPI() (*api, error) {
 func (api *api) Cleanup() {}
 
 func speedToFloat(speed uint16) float32 {
-	giga := 1000000000
-	tera := 1000 * giga
+	var mant float32
 
 	switch speed {
 	case 1:
-		return float32(giga) * 2.5
+		mant = 2.5
 	case 2:
-		return float32(tera) * 5
+		mant = 5
 	case 3:
-		return float32(tera) * 8
+		mant = 8
 	case 4:
-		return float32(tera) * 16
+		mant = 16
 	case 5:
-		return float32(tera) * 32
+		mant = 32
 	case 6:
-		return float32(tera) * 64
+		mant = 64
 	default:
 		return 0
 	}
+
+	return mant * 1e+9
 }
 
 func (api *api) PCIDeviceFromConfig(cfgBytes []byte, dev *hardware.PCIDevice) error {
@@ -102,10 +103,6 @@ func (api *api) PCIDeviceFromConfig(cfgBytes []byte, dev *hardware.PCIDevice) er
 		C.pci_fill_info(pciDev,
 			C.PCI_FILL_IDENT|C.PCI_FILL_BASES|C.PCI_FILL_CLASS|C.PCI_FILL_EXT_CAPS)
 
-		//		fmt.Printf("%04x:%02x:%02x.%d vendor=%04x device=%04x class=%04x irq=%d base0=%x\n",
-		//			pciDev.domain, pciDev.bus, pciDev.dev, pciDev._func, pciDev.vendor_id,
-		//			pciDev.device_id, pciDev.device_class, pciDev.irq, pciDev.base_addr[0])
-
 		cp = C.pci_find_cap(pciDev, C.PCI_CAP_ID_EXP, C.PCI_CAP_NORMAL)
 		if cp == nil {
 			return errors.New("no pci-express capabilities found")
@@ -121,11 +118,6 @@ func (api *api) PCIDeviceFromConfig(cfgBytes []byte, dev *hardware.PCIDevice) er
 		dev.LinkMaxWidth = uint16(tLnkCap & C.PCI_EXP_LNKCAP_WIDTH >> 4)
 		dev.LinkNegSpeed = speedToFloat(uint16(tLnkCap & C.PCI_EXP_LNKSTA_SPEED))
 		dev.LinkNegWidth = uint16(tLnkSta & C.PCI_EXP_LNKSTA_WIDTH >> 4)
-
-		//		fmt.Printf("link port/max_speed/max_width/neg_speed/neg_width: %d/%d/%d/%d/%d\n",
-		//			cpAddr>>24, tLnkCap&C.PCI_EXP_LNKCAP_SPEED,
-		//			tLnkCap&C.PCI_EXP_LNKCAP_WIDTH>>4, tLnkSta&C.PCI_EXP_LNKSTA_SPEED,
-		//			tLnkSta&C.PCI_EXP_LNKSTA_WIDTH>>4)
 	}
 
 	return nil

@@ -41,9 +41,9 @@ f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 	}
 
 	expDev := &hardware.PCIDevice{
-		LinkMaxSpeed: 8e+12,
+		LinkMaxSpeed: 8e+9,
 		LinkMaxWidth: 4,
-		LinkNegSpeed: 8e+12,
+		LinkNegSpeed: 8e+9,
 		LinkNegWidth: 4,
 	}
 

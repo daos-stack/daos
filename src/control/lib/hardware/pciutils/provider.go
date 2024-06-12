@@ -8,15 +8,15 @@ package pciutils
 
 import (
 	"context"
-	"errors"
 
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/pkg/errors"
 )
 
 type ctxKey string
 
 const (
-	accessKey ctxKey = "pciutilsAccess"
+	AccessKey ctxKey = "pciutilsAccess"
 )
 
 type (
@@ -32,11 +32,11 @@ func Init(parent context.Context) (context.Context, error) {
 		return nil, err
 	}
 
-	return context.WithValue(parent, accessKey, api), nil
+	return context.WithValue(parent, AccessKey, api), nil
 }
 
 func accessFromContext(ctx context.Context) (accessProvider, error) {
-	ap, ok := ctx.Value(accessKey).(accessProvider)
+	ap, ok := ctx.Value(AccessKey).(accessProvider)
 	if !ok {
 		return nil, errors.New("pciutils access not initialized")
 	}

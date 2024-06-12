@@ -1653,9 +1653,11 @@ host1
         NAND Bytes Written:%d
         Host Bytes Written:%d
       PCIe Link Info:
-        Capabilities: %s
-        Control: %s
-        Status: %s
+        Port: #1
+        Max Speed: 1 GT/s
+        Negotiated Speed: 1 GT/s
+        Max Width: x4
+        Negotiated Width: x4
 
 `,
 				mockController.HealthStats.TempK(), mockController.HealthStats.TempC(),
@@ -1675,8 +1677,6 @@ host1
 				mockController.HealthStats.RetryBufferOverflowCnt,
 				mockController.HealthStats.PllLockLossCnt,
 				mockController.HealthStats.NandBytesWritten, mockController.HealthStats.HostBytesWritten,
-				mockController.HealthStats.LnkCap, mockController.HealthStats.LnkCtl,
-				mockController.HealthStats.LnkSta,
 			),
 		},
 		"identify led": {

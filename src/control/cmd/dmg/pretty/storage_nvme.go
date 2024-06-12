@@ -158,9 +158,11 @@ func printNvmeHealth(stat *storage.NvmeHealth, out io.Writer, opts ...PrintConfi
 	}
 
 	fmt.Fprintf(out, "PCIe Link Info:\n")
-	fmt.Fprintf(iw, "Capabilities: %s\n", stat.LnkCap)
-	fmt.Fprintf(iw, "Control: %s\n", stat.LnkCtl)
-	fmt.Fprintf(iw, "Status: %s\n", stat.LnkSta)
+	fmt.Fprintf(iw, "Port: #%d\n", stat.LinkPortId)
+	fmt.Fprintf(iw, "Max Speed: %s\n", humanize.SI(float64(stat.LinkMaxSpeed), "T/s"))
+	fmt.Fprintf(iw, "Negotiated Speed: %s\n", humanize.SI(float64(stat.LinkNegSpeed), "T/s"))
+	fmt.Fprintf(iw, "Max Width: x%d\n", stat.LinkMaxWidth)
+	fmt.Fprintf(iw, "Negotiated Width: x%d\n", stat.LinkNegWidth)
 
 	return w.Err
 }

@@ -199,8 +199,12 @@ func populateCtrlrHealth(ctx context.Context, engine Engine, req *ctlpb.BioHealt
 			stateName)
 	}
 
-	if err := addLinkInfoToHealthStats(ctx, ctrlr.PciCfg, health); err != nil {
-		return false, errors.Wrapf(err, "add link stats for %q", ctrlr)
+	if ctrlr.PciCfg != "" {
+		if err := addLinkInfoToHealthStats(ctx, ctrlr.PciCfg, health); err != nil {
+			return false, errors.Wrapf(err, "add link stats for %q", ctrlr)
+		}
+	} else {
+		engine.Debugf("no pcie config space received for %q, skip add link stats", ctrlr)
 	}
 
 	ctrlr.HealthStats = health
@@ -210,11 +214,20 @@ func populateCtrlrHealth(ctx context.Context, engine Engine, req *ctlpb.BioHealt
 
 // Scan SMD devices over dRPC and reconstruct NVMe scan response from results.
 func scanEngineBdevsOverDrpc(ctx context.Context, engine Engine, pbReq *ctlpb.ScanNvmeReq) (*ctlpb.ScanNvmeResp, error) {
-	// In order to add link info to health-stats, request PCI config space fetch when health
-	// flag is set in scan-NVMe request.
-	scanSmdResp, err := scanSmd(ctx, engine, &ctlpb.SmdDevReq{
-		FetchPciCfg: pbReq.Health,
-	})
+	scanSmdReq := ctlpb.SmdDevReq{}
+	if pbReq.Health {
+		// Fetch PCIe config space and add pciutils lib in ctx to add link info to health.
+		scanSmdReq.FetchPciCfg = true
+
+		var err error
+		ctx, err = pciutils.Init(ctx)
+		if err != nil {
+			return nil, errors.Wrap(err, "pciutils init")
+		}
+		defer pciutils.Fini(ctx)
+	}
+
+	scanSmdResp, err := scanSmd(ctx, engine, &scanSmdReq)
 	if err != nil {
 		return nil, errors.Wrap(err, "scan smd")
 	}
@@ -423,24 +436,35 @@ func smdQueryEngine(ctx context.Context, engine Engine, pbReq *ctlpb.SmdQueryReq
 		return nil, errors.Wrapf(err, "instance %d GetRank", engine.Index())
 	}
 
-	rResp := new(ctlpb.SmdQueryResp_RankResp)
-	rResp.Rank = engineRank.Uint32()
+	scanSmdReq := ctlpb.SmdDevReq{}
+	if pbReq.IncludeBioHealth {
+		// Fetch PCIe config space and add pciutils lib in ctx to add link info to health.
+		scanSmdReq.FetchPciCfg = true
 
-	// In order to add link info to health-stats, request PCI config space fetch when
-	// IncludeBioHealth flag is set in SMD-query request.
-	listDevsResp, err := listSmdDevices(ctx, engine, &ctlpb.SmdDevReq{
-		FetchPciCfg: pbReq.IncludeBioHealth,
-	})
-	if err != nil {
-		return nil, errors.Wrapf(err, "rank %d", engineRank)
+		var err error
+		ctx, err = pciutils.Init(ctx)
+		if err != nil {
+			return nil, errors.Wrap(err, "pciutils init")
+		}
+		defer pciutils.Fini(ctx)
 	}
 
-	if len(listDevsResp.Devices) == 0 {
+	scanSmdResp, err := scanSmd(ctx, engine, &scanSmdReq)
+	if err != nil {
+		return nil, errors.Wrapf(err, "rank %d; scan smd", engineRank)
+	}
+	if scanSmdResp == nil {
+		return nil, errors.New("nil smd scan resp")
+	}
+
+	rResp := new(ctlpb.SmdQueryResp_RankResp)
+	rResp.Rank = engineRank.Uint32()
+	if len(scanSmdResp.Devices) == 0 {
 		rResp.Devices = nil
 		return rResp, nil
 	}
 
-	for _, sd := range listDevsResp.Devices {
+	for _, sd := range scanSmdResp.Devices {
 		if sd != nil {
 			rResp.Devices = append(rResp.Devices, sd)
 		}

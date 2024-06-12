@@ -196,9 +196,11 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
     NAND Bytes Written:%d
     Host Bytes Written:%d
   PCIe Link Info:
-    Capabilities: %s
-    Control: %s
-    Status: %s
+    Port: #1
+    Max Speed: 1 GT/s
+    Negotiated Speed: 1 GT/s
+    Max Width: x4
+    Negotiated Width: x4
 
 PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
   Health Stats:
@@ -241,9 +243,11 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
     NAND Bytes Written:%d
     Host Bytes Written:%d
   PCIe Link Info:
-    Capabilities: %s
-    Control: %s
-    Status: %s
+    Port: #2
+    Max Speed: 2 GT/s
+    Negotiated Speed: 2 GT/s
+    Max Width: x8
+    Negotiated Width: x8
 
 `,
 				controllerA.PciAddr, controllerA.Model, controllerA.FwRev,
@@ -265,8 +269,6 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
 				controllerA.HealthStats.RetryBufferOverflowCnt,
 				controllerA.HealthStats.PllLockLossCnt,
 				controllerA.HealthStats.NandBytesWritten, controllerA.HealthStats.HostBytesWritten,
-				controllerA.HealthStats.LnkCap, controllerA.HealthStats.LnkCtl,
-				controllerA.HealthStats.LnkSta,
 
 				controllerB.PciAddr, controllerB.Model, controllerB.FwRev, controllerB.SocketID,
 				humanize.Bytes(controllerB.Capacity()),
@@ -287,8 +289,6 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
 				controllerB.HealthStats.RetryBufferOverflowCnt,
 				controllerB.HealthStats.PllLockLossCnt,
 				controllerB.HealthStats.NandBytesWritten, controllerB.HealthStats.HostBytesWritten,
-				controllerA.HealthStats.LnkCap, controllerA.HealthStats.LnkCtl,
-				controllerA.HealthStats.LnkSta,
 			),
 		},
 		"1 host; 1 device, fetched over drpc": {
@@ -352,9 +352,11 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
     NAND Bytes Written:%d
     Host Bytes Written:%d
   PCIe Link Info:
-    Capabilities: %s
-    Control: %s
-    Status: %s
+    Port: #1
+    Max Speed: 1 GT/s
+    Negotiated Speed: 1 GT/s
+    Max Width: x4
+    Negotiated Width: x4
 
 `,
 				controllerAwTS.PciAddr, controllerAwTS.Model, controllerAwTS.FwRev,
@@ -378,8 +380,6 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
 				controllerAwTS.HealthStats.RetryBufferOverflowCnt,
 				controllerAwTS.HealthStats.PllLockLossCnt,
 				controllerAwTS.HealthStats.NandBytesWritten, controllerAwTS.HealthStats.HostBytesWritten,
-				controllerA.HealthStats.LnkCap, controllerA.HealthStats.LnkCtl,
-				controllerA.HealthStats.LnkSta,
 			),
 		},
 	} {

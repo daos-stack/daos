@@ -78,8 +78,8 @@ NUMA Node 0
       0000:00:1f.2
         0000:00:1f.2 test2-block (512 GB block device) @ 1.75 GT/s
       0000:01:01.1
-        0000:01:01.1 test0 (network interface) @ 2.50 GT/s
-        0000:01:01.1 test0-peer (OFI domain) @ 1.20 GT/s
+        0000:01:01.1 test0 (network interface) @ 2.5 GT/s
+        0000:01:01.1 test0-peer (OFI domain) @ 1.2 GT/s
 `,
 		},
 		"virtual": {
@@ -107,12 +107,12 @@ NUMA Node 0
       0000:00:1f.2
         0000:00:1f.2 test2-block (512 GB block device) @ 1.75 GT/s
       0000:01:01.1
-        0000:01:01.1 test0 (network interface) @ 2.50 GT/s
-        0000:01:01.1 test0-peer (OFI domain) @ 1.20 GT/s
+        0000:01:01.1 test0 (network interface) @ 2.5 GT/s
+        0000:01:01.1 test0-peer (OFI domain) @ 1.2 GT/s
 Virtual Devices
   virt0 (network interface)
   virt1 (network interface)
-    backed by: 0000:01:01.1 test0 (network interface) @ 2.50 GT/s
+    backed by: 0000:01:01.1 test0 (network interface) @ 2.5 GT/s
 `,
 		},
 		"multiple NUMA nodes and pmem": {
@@ -190,7 +190,7 @@ NUMA Node 0
   PCI buses:
     0000:[80-88]
       0000:80:01.1
-        0000:80:01.1 test0-net (network interface) @ 2.50 GT/s
+        0000:80:01.1 test0-net (network interface) @ 2.5 GT/s
       0000:83:00.0
         0000:83:00.0 test0-block (block device)
   Non-PCI block devices:
@@ -202,7 +202,7 @@ NUMA Node 2
       0000:00:1f.2
         0000:00:1f.2 test2-block (512 GB block device) @ 1.75 GT/s
       0000:01:01.1
-        0000:01:01.1 test2-net (network interface) @ 2.50 GT/s
+        0000:01:01.1 test2-net (network interface) @ 2.5 GT/s
   Non-PCI block devices:
     pmem2 (4.4 TB NVDIMM)
 `,

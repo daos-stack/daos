@@ -83,9 +83,11 @@ func MockNvmeHealth(varIdx ...int32) *NvmeHealth {
 		PllLockLossCnt:          uint64(idx),
 		NandBytesWritten:        uint64(idx),
 		HostBytesWritten:        uint64(idx),
-		LnkCap:                  "Port #0, Speed 8GT/s, Width x4, ASPM L0s L1, Exit Latency L0s <4us, L1 <4us",
-		LnkCtl:                  "ASPM Disabled; RCB 64 bytes, Disabled- CommClk-",
-		LnkSta:                  "Speed 8GT/s (ok), Width x4 (ok)",
+		LinkPortId:              uint32(idx),
+		LinkMaxSpeed:            float32(idx) * 1e+9,
+		LinkMaxWidth:            uint32(idx) * 4,
+		LinkNegSpeed:            float32(idx) * 1e+9,
+		LinkNegWidth:            uint32(idx) * 4,
 	}
 }
 

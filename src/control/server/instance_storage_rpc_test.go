@@ -16,9 +16,10 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/hardware/pciutils"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -26,60 +27,38 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
+type mockAccessProvider struct {
+	pciDev    *hardware.PCIDevice
+	pciDevErr error
+}
+
+func (ap *mockAccessProvider) Cleanup() {}
+
+func (ap *mockAccessProvider) PCIDeviceFromConfig(cfgBytes []byte, dev *hardware.PCIDevice) error {
+	if ap.pciDevErr != nil {
+		return ap.pciDevErr
+	}
+	*dev = *ap.pciDev
+	return nil
+}
+
 func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
-	mockLspciOut := `01:00.0 Non-Volatile memory controller: Intel Corporation PCIe Data Center SSD (rev 01) (prog-if 02 [NVM Express])
-        Subsystem: Hewlett Packard Enterprise Device 00a8
-        Control: I/O- Mem+ BusMaster+ SpecCycle- MemWINV- VGASnoop- ParErr- Stepping- SERR- FastB2B- DisINTx+
-        Status: Cap+ 66MHz- UDF- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort- <MAbort- >SERR- <PERR- INTx-
-        Latency: 0
-        Interrupt: pin A routed to IRQ 0
-        Region 0: Memory at bc000000 (64-bit, non-prefetchable)
-        Capabilities: [40] Power Management version 3
-                Flags: PMEClk- DSI- D1- D2- AuxCurrent=0mA PME(D0-,D1-,D2-,D3hot-,D3cold-)
-                Status: D0 NoSoftRst+ PME-Enable- DSel=0 DScale=0 PME-
-        Capabilities: [50] MSI-X: Enable- Count=32 Masked-
-                Vector table: BAR=0 offset=00002000
-                PBA: BAR=0 offset=00003000
-        Capabilities: [60] Express (v2) Endpoint, MSI 00
-                DevCap: MaxPayload 256 bytes, PhantFunc 0, Latency L0s <4us, L1 <4us
-                        ExtTag+ AttnBtn- AttnInd- PwrInd- RBE+ FLReset+ SlotPowerLimit 0.000W
-                DevCtl: CorrErr- NonFatalErr- FatalErr- UnsupReq-
-                        RlxdOrd+ ExtTag+ PhantFunc- AuxPwr- NoSnoop+ FLReset-
-                        MaxPayload 128 bytes, MaxReadReq 512 bytes
-                DevSta: CorrErr+ NonFatalErr- FatalErr- UnsupReq+ AuxPwr- TransPend-
-                LnkCap: Port #0, Speed 8GT/s, Width x4, ASPM L0s L1, Exit Latency L0s <4us, L1 <4us
-                        ClockPM- Surprise- LLActRep- BwNot- ASPMOptComp+
-                LnkCtl: ASPM Disabled; RCB 64 bytes, Disabled- CommClk-
-                        ExtSynch- ClockPM- AutWidDis- BWInt- AutBWInt-
-                LnkSta: Speed 8GT/s (ok), Width x4 (ok)
-                        TrErr- Train- SlotClk- DLActive- BWMgmt- ABWMgmt-
-                DevCap2: Completion Timeout: Range ABCD, TimeoutDis+ NROPrPrP- LTR-
-                         10BitTagComp- 10BitTagReq- OBFF Not Supported, ExtFmt- EETLPPrefix-
-                         EmergencyPowerReduction Not Supported, EmergencyPowerReductionInit-
-                         FRS- TPHComp- ExtTPHComp-
-                DevCtl2: Completion Timeout: 50us to 50ms, TimeoutDis- LTR- OBFF Disabled,
-                         AtomicOpsCtl: ReqEn-
-                LnkCap2: Supported Link Speeds: 2.5-8GT/s, Crosslink- Retimer- 2Retimers- DRS-
-                LnkCtl2: Target Link Speed: 8GT/s, EnterCompliance- SpeedDis-
-                         Transmit Margin: Normal Operating Range, EnterModifiedCompliance- ComplianceSOS-
-                         Compliance De-emphasis: -6dB
-                LnkSta2: Current De-emphasis Level: -3.5dB, EqualizationComplete+ EqualizationPhase1+
-                         EqualizationPhase2+ EqualizationPhase3+ LinkEqualizationRequest-
-                         Retimer- 2Retimers- CrosslinkRes: unsupported
-`
 	healthWithoutLinkStats := func() *ctlpb.BioHealthResp {
 		bhr := proto.MockNvmeHealth()
-		//		bhr.LnkSta = ""
-		//		bhr.LnkCap = ""
-		//		bhr.LnkCtl = ""
+		bhr.LinkPortId = 0
+		bhr.LinkMaxSpeed = 0
+		bhr.LinkNegSpeed = 0
+		bhr.LinkMaxWidth = 0
+		bhr.LinkNegWidth = 0
 
 		return bhr
 	}
 
 	for name, tc := range map[string]struct {
-		inDevState ctlpb.NvmeDevState
-		lspciOut   string
-		lspciErr   error
+		devState   ctlpb.NvmeDevState
+		pciCfgSpc  string
+		pciDev     *hardware.PCIDevice
+		pciDevErr  error
 		healthRes  *ctlpb.BioHealthResp
 		healthErr  error
 		expCtrlr   *ctlpb.NvmeController
@@ -90,46 +69,46 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 			healthRes: healthWithoutLinkStats(),
 			expCtrlr:  &ctlpb.NvmeController{},
 		},
-		"good state; update health": {
-			inDevState: ctlpb.NvmeDevState_NORMAL,
-			healthRes:  healthWithoutLinkStats(),
+		"update health; add link stats skipped as empty pci config space": {
+			devState: ctlpb.NvmeDevState_NORMAL,
+			pciDev: &hardware.PCIDevice{
+				LinkNegSpeed: 8e+9,
+			},
+			healthRes: healthWithoutLinkStats(),
 			expCtrlr: &ctlpb.NvmeController{
 				DevState:    ctlpb.NvmeDevState_NORMAL,
 				HealthStats: healthWithoutLinkStats(),
 			},
 			expUpdated: true,
 		},
-		"update health; add link stats; invalid lspci output": {
-			inDevState: ctlpb.NvmeDevState_NORMAL,
-			lspciOut:   "nothing to see here",
-			healthRes:  healthWithoutLinkStats(),
-			expCtrlr: &ctlpb.NvmeController{
-				DevState:    ctlpb.NvmeDevState_NORMAL,
-				HealthStats: healthWithoutLinkStats(),
+		"update health; add link stats; pciutils lib error": {
+			devState:  ctlpb.NvmeDevState_NORMAL,
+			pciCfgSpc: "ABCD",
+			pciDev: &hardware.PCIDevice{
+				LinkNegSpeed: 8e+9,
 			},
-			expUpdated: true,
+			pciDevErr: errors.New("fail"),
+			expErr:    errors.New("fail"),
 		},
 		"update health; add link stats": {
-			inDevState: ctlpb.NvmeDevState_NORMAL,
-			lspciOut:   mockLspciOut,
-			healthRes:  healthWithoutLinkStats(),
+			devState:  ctlpb.NvmeDevState_NORMAL,
+			pciCfgSpc: "ABCD",
+			pciDev: &hardware.PCIDevice{
+				LinkPortID:   1,
+				LinkNegSpeed: 1e+9,
+				LinkMaxSpeed: 1e+9,
+				LinkNegWidth: 4,
+				LinkMaxWidth: 4,
+			},
+			healthRes: healthWithoutLinkStats(),
 			expCtrlr: &ctlpb.NvmeController{
 				DevState:    ctlpb.NvmeDevState_NORMAL,
 				HealthStats: proto.MockNvmeHealth(),
 			},
 			expUpdated: true,
 		},
-		"update health; add link stats; lspci fails": {
-			inDevState: ctlpb.NvmeDevState_NORMAL,
-			lspciErr:   errors.New("fail"),
-			healthRes:  healthWithoutLinkStats(),
-			expErr:     errors.New("fail"),
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer test.ShowBufferOnFailure(t, buf)
-
 			getCtrlrHealth = func(_ context.Context, _ Engine, _ *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
 				return tc.healthRes, tc.healthErr
 			}
@@ -137,21 +116,19 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 				getCtrlrHealth = getBioHealth
 			}()
 
-			sysCfg := system.MockSysConfig{
-				RunLspciWithInputOut: tc.lspciOut,
-				RunLspciWithInputErr: tc.lspciErr,
-			}
-			cs := newMockControlServiceFromBackends(t, log,
-				config.DefaultServer().WithEngines(engine.MockConfig()),
-				nil, nil, &sysCfg)
-			ei := cs.harness.Instances()[0].(*EngineInstance)
+			ctx := context.WithValue(test.Context(t), pciutils.AccessKey,
+				&mockAccessProvider{
+					pciDev:    tc.pciDev,
+					pciDevErr: tc.pciDevErr,
+				})
+
 			ctrlr := &ctlpb.NvmeController{
-				PciCfg:   tc.lspciOut,
-				DevState: tc.inDevState,
+				PciCfg:   tc.pciCfgSpc,
+				DevState: tc.devState,
 			}
 
-			upd, err := populateCtrlrHealth(test.Context(t), ei, &ctlpb.BioHealthReq{},
-				ctrlr)
+			upd, err := populateCtrlrHealth(ctx, NewMockInstance(nil),
+				&ctlpb.BioHealthReq{}, ctrlr)
 			test.CmpErr(t, tc.expErr, err)
 			if err != nil {
 				return
