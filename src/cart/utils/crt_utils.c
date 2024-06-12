@@ -360,7 +360,7 @@ err_group:
 }
 
 int
-crtu_agent_set_opt(const char *name, crt_init_options_t *opt)
+crtu_agent_populate_opt(const char *name, crt_init_options_t *opt)
 {
 	int                      cli_srx_set = 0;
 	struct dc_mgmt_sys_info  info        = {0};
@@ -403,10 +403,6 @@ crtu_agent_set_opt(const char *name, crt_init_options_t *opt)
 
 cleanup:
 	dc_put_attach_info(&info, resp);
-	D_FREE(opt->cio_provider);
-	D_FREE(opt->cio_interface);
-	D_FREE(opt->cio_domain);
-
 	return rc;
 }
 
@@ -430,7 +426,7 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 		D_GOTO(out, rc);
 
 	if (use_daos_agent_env) {
-		rc = crtu_agent_set_opt(srv_group_name, &local_opt);
+		rc = crtu_agent_populate_opt(srv_group_name, &local_opt);
 		if (rc != 0)
 			D_GOTO(out, rc);
 		init_opt = &local_opt;

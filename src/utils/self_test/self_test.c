@@ -107,9 +107,9 @@ self_test_init(char *dest_name, crt_context_t *crt_ctx, crt_group_t **srv_grp, p
 			fprintf(stderr, "dc_agent_init() failed. ret: %d\n", ret);
 			return ret;
 		}
-		ret = crtu_agent_set_opt(dest_name, &opt);
+		ret = crtu_agent_populate_opt(dest_name, &opt);
 		if (ret != 0) {
-			D_ERROR("crtu_agent_set_opt() failed; ret = %d\n", ret);
+			D_ERROR("crtu_agent_populate_opt() failed; ret = %d\n", ret);
 			return ret;
 		}
 
