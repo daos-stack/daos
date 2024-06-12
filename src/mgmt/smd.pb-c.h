@@ -396,15 +396,11 @@ struct  _Ctl__SmdDevice
 struct  _Ctl__SmdDevReq
 {
   ProtobufCMessage base;
-  /*
-   * Retrieve parent NVMe device's PCIe config space contents.
-   */
-  protobuf_c_boolean fetch_pci_cfg;
 };
-#define CTL__SMD_DEV_REQ__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&ctl__smd_dev_req__descriptor) \
-    , 0 }
-
+#define CTL__SMD_DEV_REQ__INIT                                                                     \
+  {                                                                                                \
+	  PROTOBUF_C_MESSAGE_INIT(&ctl__smd_dev_req__descriptor)                                   \
+  }
 
 struct  _Ctl__SmdDevResp
 {

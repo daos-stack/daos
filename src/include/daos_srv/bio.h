@@ -378,15 +378,14 @@ bio_free_dev_info(struct bio_dev_info *dev_info)
 /**
  * List all devices.
  *
- * \param[IN] ctxt		Per xstream NVMe context
- * \param[IN] fetch_pci_cfg	Pull PCIe config space of NVMe device
- * \param[OUT] dev_list		Returned device list
- * \param[OUT] dev_cnt		Device count in the list
+ * \param[IN] ctxt	Per xstream NVMe context
+ * \param[OUT] dev_list	Returned device list
+ * \param[OUT] dev_cnt	Device count in the list
  *
  * \return		Zero on success, negative value on error
  */
 int
-bio_dev_list(struct bio_xs_context *ctxt, bool fetch_pci_cfg, d_list_t *dev_list, int *dev_cnt);
+bio_dev_list(struct bio_xs_context *ctxt, d_list_t *dev_list, int *dev_cnt);
 
 /**
  * Callbacks called on NVMe device state transition

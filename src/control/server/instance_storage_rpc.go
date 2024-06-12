@@ -214,11 +214,8 @@ func populateCtrlrHealth(ctx context.Context, engine Engine, req *ctlpb.BioHealt
 
 // Scan SMD devices over dRPC and reconstruct NVMe scan response from results.
 func scanEngineBdevsOverDrpc(ctx context.Context, engine Engine, pbReq *ctlpb.ScanNvmeReq) (*ctlpb.ScanNvmeResp, error) {
-	scanSmdReq := ctlpb.SmdDevReq{}
 	if pbReq.Health {
-		// Fetch PCIe config space and add pciutils lib in ctx to add link info to health.
-		scanSmdReq.FetchPciCfg = true
-
+		// Add pciutils lib in ctx to add link info to health.
 		var err error
 		ctx, err = pciutils.Init(ctx)
 		if err != nil {
@@ -227,7 +224,7 @@ func scanEngineBdevsOverDrpc(ctx context.Context, engine Engine, pbReq *ctlpb.Sc
 		defer pciutils.Fini(ctx)
 	}
 
-	scanSmdResp, err := scanSmd(ctx, engine, &scanSmdReq)
+	scanSmdResp, err := scanSmd(ctx, engine, &ctlpb.SmdDevReq{})
 	if err != nil {
 		return nil, errors.Wrap(err, "scan smd")
 	}
@@ -436,11 +433,8 @@ func smdQueryEngine(ctx context.Context, engine Engine, pbReq *ctlpb.SmdQueryReq
 		return nil, errors.Wrapf(err, "instance %d GetRank", engine.Index())
 	}
 
-	scanSmdReq := ctlpb.SmdDevReq{}
 	if pbReq.IncludeBioHealth {
-		// Fetch PCIe config space and add pciutils lib in ctx to add link info to health.
-		scanSmdReq.FetchPciCfg = true
-
+		// Add pciutils lib in ctx to add link info to health.
 		var err error
 		ctx, err = pciutils.Init(ctx)
 		if err != nil {
@@ -449,7 +443,7 @@ func smdQueryEngine(ctx context.Context, engine Engine, pbReq *ctlpb.SmdQueryReq
 		defer pciutils.Fini(ctx)
 	}
 
-	scanSmdResp, err := scanSmd(ctx, engine, &scanSmdReq)
+	scanSmdResp, err := scanSmd(ctx, engine, &ctlpb.SmdDevReq{})
 	if err != nil {
 		return nil, errors.Wrapf(err, "rank %d; scan smd", engineRank)
 	}
