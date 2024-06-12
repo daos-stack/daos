@@ -24,31 +24,24 @@ class DuplicateRpcDetection(TestWithServers):
     :avocado: recursive
     """
 
-    def setUp(self):
-        """Set Up DuplicateRpcDetectionTest"""
-        super().setUp()
-        self.dmg = self.get_dmg_command()
-
-    def metadata_workload_test(self, pool=None, num_of_cont=1, workload_cycles=5000, test_loops=1):
+    def metadata_workload_test(self, pool, num_of_cont, workload_cycles, test_loops):
         """To create single container and perform metadata workload tests.
 
         Args:
-            pool (str): pool handle to create container. Defaults to None.
-            num_of_cont (int): Number of container to be created. Defaults to 1.
+            pool (str): pool handle to create container.
+            num_of_cont (int): Number of container to be created.
             workload_cycles (int): Number of metadata workload test cycles per test loop.
-                Defaults to 5000.
-            test_loops (int): Number of metadata workload test loops. Defaults to 1.
+            test_loops (int): Number of metadata workload test loops.
 
         Returns:
-            test_time: List of time consumed per test loops of metadata workload test cycles.
+            list: List of time consumed per test loops of metadata workload test cycles.
 
         """
         test_time = []
         try:
-            container = self.get_container(pool, create=False)
-            if container.daos:
-                container.daos.verbose = False
-            container.create()
+            daos = self.get_daos_command()
+            daos.verbose = False
+            container = self.get_container(pool, daos=daos)
             self.log.info("Successfully created #%s container", num_of_cont)
         except (DaosTestError, TestFail) as err:
             self.fail(
@@ -56,8 +49,8 @@ class DuplicateRpcDetection(TestWithServers):
         for ind in range(test_loops):
             start = time.time()
             for _ in range(workload_cycles):
-                container.close()
                 container.open()
+                container.close()
             elapsed_time = time.time() - start
             self.log.info("Completed container Metadata test-loop: %d, elapsed_time: %f",
                           ind + 1, elapsed_time)
@@ -65,7 +58,6 @@ class DuplicateRpcDetection(TestWithServers):
         for ind in range(test_loops):
             self.log.info("Test time of Metadata test-loop: %d,  %f",
                           ind, test_time[ind])
-        container.close()
         return test_time
 
     def test_metadata_dup_rpc(self):
@@ -94,7 +86,7 @@ class DuplicateRpcDetection(TestWithServers):
         threshold_factor = self.params.get("threshold_factor", '/run/metadata/*', default=1.75)
 
         self.log_step("Create pool with properties svc_ops_entry_age.")
-        pool1 = self.get_pool(dmg=self.dmg.copy())
+        pool1 = self.get_pool(dmg=self.get_dmg_command().copy())
 
         self.log_step("Create containers by ThreadManager.")
         container_manager = ThreadManager(
@@ -109,9 +101,7 @@ class DuplicateRpcDetection(TestWithServers):
             self.fail('#{} container create threads failed'.format(num_failed))
 
         self.log_step("Create pool2 with property svc_ops_enable:0.")
-        params = {}
-        params['properties'] = "svc_ops_enabled:0"
-        self.add_pool(**params)
+        self.add_pool(properties="svc_ops_enabled:0")
 
         self.log_step("Create containers by ThreadManager on pool2.")
         container_manager = ThreadManager(
@@ -123,10 +113,10 @@ class DuplicateRpcDetection(TestWithServers):
             "To establish a baseline time without duplicate rpc detection, ",
             "calculating average time per loop executed on pool2.")
         base_results = container_manager.run()
-        base_average_time = statistics.mean(base_results[0].result)
         num_failed = len(list(filter(lambda r: not r.passed, base_results)))
         if num_failed > 0:
             self.fail('#{} container create threads failed'.format(num_failed))
+        base_average_time = statistics.mean(base_results[0].result)
 
         self.log_step(
             "Compare metadata workload test time with and without duplicate rpc detection.")
