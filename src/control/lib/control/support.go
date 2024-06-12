@@ -29,6 +29,7 @@ type (
 		LogStartTime string
 		LogEndTime   string
 		StopOnError  bool
+		CloudDest    string
 	}
 
 	// CollectLogResp contains the results of a collect-log
@@ -56,6 +57,7 @@ func CollectLog(ctx context.Context, rpcClient UnaryInvoker, req *CollectLogReq)
 			LogStartTime: req.LogStartTime,
 			LogEndTime:   req.LogEndTime,
 			StopOnError:  req.StopOnError,
+			CloudDest:    req.CloudDest,
 		})
 	})
 

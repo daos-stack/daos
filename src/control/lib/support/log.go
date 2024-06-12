@@ -12,13 +12,17 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/fs"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
+
+	"cloud.google.com/go/storage"
 
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
@@ -55,6 +59,7 @@ type CollectLogSubCmd struct {
 	LogEndDate   string `short:"F" long:"end-date" description:"Specify the end date, the day till the log will be collected, Format: MM-DD"`
 	LogStartTime string `short:"S" long:"log-start-time" description:"Specify the log collection start time, Format: HH:MM:SS"`
 	LogEndTime   string `short:"E" long:"log-end-time" description:"Specify the log collection end time, Format: HH:MM:SS"`
+	CloudDest    string `short:"C" long:"cloud-storage" description:"Specify the destination in cloud storage"`
 }
 
 type LogTypeSubCmd struct {
@@ -153,6 +158,7 @@ type CollectLogsParams struct {
 	LogStartTime string
 	LogEndTime   string
 	StopOnError  bool
+	CloudDest    string
 }
 
 type logCopy struct {
@@ -435,8 +441,84 @@ func getSysNameFromQuery(configPath string, log logging.Logger) ([]string, error
 	return hostNames, nil
 }
 
+func subtractTargetFolder(path, targetFolder string) string {
+	// Ensure both paths are absolute
+	path = filepath.Clean(path)
+	targetFolder = filepath.Clean(targetFolder)
+
+	// Check if targetFolder is a prefix of path
+	if !strings.HasPrefix(path, targetFolder) {
+		return path // Target folder is not a prefix, return the original path
+	}
+
+	// Remove the targetFolder prefix from the path
+	return path[(len(targetFolder) + 1):]
+}
+
+func gryncLogs(log logging.Logger, opts ...CollectLogsParams) error {
+
+	ctx := context.Background()
+	client, err := storage.NewClient(ctx)
+	if err != nil {
+		return errors.Wrapf(err, "Error creating storage client %s", opts[0].TargetFolder)
+	}
+
+	defer client.Close()
+
+	url, err := url.Parse(opts[0].CloudDest)
+	if err != nil {
+		return errors.Wrapf(err, "Error parsing destination %s", opts[0].CloudDest)
+	}
+
+	// Read the object1 from bucket.
+	bucket := client.Bucket(url.Host)
+	filepath.WalkDir(opts[0].TargetFolder, func(path string, d fs.DirEntry, err error) error {
+		if d.IsDir() {
+			return nil
+		}
+
+		file, err := os.Open(path)
+		if err != nil {
+			return errors.Wrapf(err, "Error opening object %s", path)
+		}
+		defer file.Close()
+
+		reader := bufio.NewReader(file)
+		newFilename := url.Path + "/" + subtractTargetFolder(path, opts[0].TargetFolder)
+
+		writer := bucket.Object(newFilename).NewWriter(ctx)
+
+		bytesCopied, err := io.Copy(writer, reader)
+		if err != nil {
+			return errors.Wrapf(err, "Error copying object %s", opts[0].TargetFolder)
+		}
+
+		log.Infof("grsyncCmd:= io.Copy %d bytes copied. From %s to %s %s\n", bytesCopied, path, url.Host, newFilename)
+
+		err = writer.Close()
+		if err != nil {
+			log.Infof("%s Error copying object %s to %s %s", err, opts[0].TargetFolder, url.Host, newFilename)
+		}
+		return nil
+	})
+
+	return nil
+}
+
 // R sync logs from individual servers to Admin node
 func rsyncLog(log logging.Logger, opts ...CollectLogsParams) error {
+
+	if opts[0].CloudDest != "" {
+		url, err := url.Parse(opts[0].CloudDest)
+		if err != nil {
+			return errors.Wrapf(err, "Error parsing destination %s", opts[0].CloudDest)
+		}
+		if url.Scheme == "gcs" {
+			return gryncLogs(log, opts...)
+		}
+		return errors.New(fmt.Sprintf("Error, unsupported scheme %s", url.Scheme))
+	}
+
 	targetLocation, err := createHostFolder(opts[0].TargetFolder, log)
 	if err != nil {
 		return err
@@ -869,7 +951,7 @@ func collectServerLog(log logging.Logger, opts ...CollectLogsParams) error {
 		}
 
 		err = cpLinesFromLog(log, serverConfig.HelperLogFile, targetAdminLogs, opts...)
-		if err != nil {
+		if err != os.ErrNotExist && err != nil {
 			return err
 		}
 	}

@@ -125,6 +125,19 @@ var file_ctl_ctl_proto_goTypes = []interface{}{
 	(*SetLogMasksResp)(nil),    // 21: ctl.SetLogMasksResp
 	(*RanksResp)(nil),          // 22: ctl.RanksResp
 	(*CollectLogResp)(nil),     // 23: ctl.CollectLogResp
+	(*CollectLogReq)(nil),      // 11: ctl.CollectLogReq
+	(*StorageScanResp)(nil),    // 12: ctl.StorageScanResp
+	(*StorageFormatResp)(nil),  // 13: ctl.StorageFormatResp
+	(*NvmeRebindResp)(nil),     // 14: ctl.NvmeRebindResp
+	(*NvmeAddDeviceResp)(nil),  // 15: ctl.NvmeAddDeviceResp
+	(*NetworkScanResp)(nil),    // 16: ctl.NetworkScanResp
+	(*FirmwareQueryResp)(nil),  // 17: ctl.FirmwareQueryResp
+	(*FirmwareUpdateResp)(nil), // 18: ctl.FirmwareUpdateResp
+	(*SmdQueryResp)(nil),       // 19: ctl.SmdQueryResp
+	(*SmdManageResp)(nil),      // 20: ctl.SmdManageResp
+	(*SetLogMasksResp)(nil),    // 21: ctl.SetLogMasksResp
+	(*RanksResp)(nil),          // 22: ctl.RanksResp
+	(*CollectLogResp)(nil),     // 23: ctl.CollectLogResp
 }
 var file_ctl_ctl_proto_depIdxs = []int32{
 	0,  // 0: ctl.CtlSvc.StorageScan:input_type -> ctl.StorageScanReq
@@ -175,6 +188,7 @@ func file_ctl_ctl_proto_init() {
 	file_ctl_smd_proto_init()
 	file_ctl_ranks_proto_init()
 	file_ctl_server_proto_init()
+	file_ctl_support_proto_init()
 	file_ctl_support_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
