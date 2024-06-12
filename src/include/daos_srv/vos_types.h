@@ -65,7 +65,9 @@ struct dtx_entry {
 	/** The pool map version when the DTX happened. */
 	uint32_t			 dte_ver;
 	/** The reference count. */
-	uint32_t			 dte_refs;
+	uint16_t			 dte_refs;
+	uint16_t			 dte_remote_cmt:1, /* committed on all non-leaders. */
+					 dte_padding:15;
 	/** The DAOS targets participating in the DTX. */
 	struct dtx_memberships		*dte_mbs;
 };

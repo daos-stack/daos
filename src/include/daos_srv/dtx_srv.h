@@ -47,19 +47,7 @@ struct dtx_local_oid_record {
  * is explicit so it could be used in the future.
  */
 struct dtx_handle {
-	union {
-		struct dtx_entry		 dth_dte;
-		struct {
-			/** The identifier of the DTX. */
-			struct dtx_id		 dth_xid;
-			/** Pool map version. */
-			uint32_t		 dth_ver;
-			/** Match dtx_entry::dte_refs. */
-			uint32_t		 dth_refs;
-			/** The DTX participants information. */
-			struct dtx_memberships	*dth_mbs;
-		};
-	};
+	struct dtx_entry		 dth_dte;
 	union {
 		/** The container handle or pool handle (local transactions only) */
 		daos_handle_t dth_coh;
@@ -113,8 +101,10 @@ struct dtx_handle {
 	    dth_ignore_uncommitted                : 1,
 	    /* Local transaction */
 	    dth_local                             : 1,
+	    /* Related modification touches all targets in single redundancy group. */
+	    dth_srdg_all			  : 1,
 	    /* Flag to commit the local transaction */
-	    dth_local_complete : 1, padding1 : 13;
+	    dth_local_complete : 1, padding1 : 12;
 
 	/* The count the DTXs in the dth_dti_cos array. */
 	uint32_t			 dth_dti_cos_count;
@@ -176,6 +166,13 @@ struct dtx_handle {
 	int                               dth_share_tbd_count;
 	uint32_t                          padding5;
 };
+
+#define dth_xid		dth_dte.dte_xid
+#define dth_ver		dth_dte.dte_ver
+#define dth_refs	dth_dte.dte_refs
+#define dth_remote_cmt	dth_dte.dte_remote_cmt
+#define dth_padding0	dth_dte.dte_padding
+#define dth_mbs		dth_dte.dte_mbs
 
 /* Each sub transaction handle to manage each sub thandle */
 struct dtx_sub_status {
@@ -287,6 +284,8 @@ enum dtx_flags {
 	DTX_RELAY = (1 << 10),
 	/** Local transaction */
 	DTX_LOCAL = (1 << 11),
+	/** Related modification touches all targets in single redundancy group. */
+	DTX_SRDG_ALL = (1 << 12),
 };
 
 void
@@ -315,8 +314,11 @@ dtx_begin(daos_handle_t xoh, struct dtx_id *dti, struct dtx_epoch *epoch,
 int
 dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result);
 int
-dtx_list_cos(struct ds_cont_child *cont, daos_unit_oid_t *oid,
-	     uint64_t dkey_hash, int max, struct dtx_id **dtis);
+dtx_cos_get_piggyback(struct ds_cont_child *cont, daos_unit_oid_t *oid, uint64_t dkey_hash,
+		      int max, struct dtx_id **dtis);
+void
+dtx_cos_put_piggyback(struct ds_cont_child *cont, struct dtx_id *xid,
+		      daos_unit_oid_t *oid, uint64_t dkey_hash, uint32_t flags);
 int
 dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 		    dtx_agg_cb_t agg_cb, int allow_failure, void *func_arg);

@@ -626,7 +626,7 @@ dtx_batched_commit_one(void *arg)
 		int			  rc;
 
 		cnt = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT, NULL,
-					    DAOS_EPOCH_MAX, &dtes, &dcks, &dce);
+					    DAOS_EPOCH_MAX, false, &dtes, &dcks, &dce);
 		if (cnt == 0)
 			break;
 
@@ -922,7 +922,8 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t xoh, struct dtx_epoch *epoch, 
 	dth->dth_aborted = 0;
 	dth->dth_already = 0;
 	dth->dth_need_validation = 0;
-	dth->dth_local              = (flags & DTX_LOCAL) ? 1 : 0;
+	dth->dth_local = (flags & DTX_LOCAL) ? 1 : 0;
+	dth->dth_srdg_all = (flags & DTX_SRDG_ALL) ? 1 : 0;
 
 	dth->dth_dti_cos = dti_cos;
 	dth->dth_dti_cos_count = dti_cos_cnt;
@@ -1267,6 +1268,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 	uint32_t			 flags;
 	int				 status = -1;
 	int				 rc = 0;
+	int				 i;
 	bool				 aborted = false;
 	bool				 unpin = false;
 
@@ -1366,7 +1368,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 	D_ASSERT(dth->dth_mbs != NULL);
 
 	if (dlh->dlh_coll) {
-		rc = dtx_add_cos(cont, dlh->dlh_coll_entry, &dth->dth_leader_oid,
+		rc = dtx_cos_add(cont, dlh->dlh_coll_entry, &dth->dth_leader_oid,
 				 dth->dth_dkey_hash, dth->dth_epoch, DCF_EXP_CMT | DCF_COLL);
 	} else {
 		size = sizeof(*dte) + sizeof(*mbs) + dth->dth_mbs->dm_data_size;
@@ -1384,14 +1386,14 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 		dte->dte_refs = 1;
 		dte->dte_mbs = mbs;
 
-		if (!(mbs->dm_flags & DMF_SRDG_REP))
+		if (!(mbs->dm_flags & DMF_SRDG))
 			flags = DCF_EXP_CMT;
 		else if (dth->dth_modify_shared)
 			flags = DCF_SHARED;
 		else
 			flags = 0;
 
-		rc = dtx_add_cos(cont, dte, &dth->dth_leader_oid, dth->dth_dkey_hash,
+		rc = dtx_cos_add(cont, dte, &dth->dth_leader_oid, dth->dth_dkey_hash,
 				 dth->dth_epoch, flags);
 		dtx_entry_put(dte);
 	}
@@ -1476,21 +1478,37 @@ out:
 
 	D_ASSERTF(result <= 0, "unexpected return value %d\n", result);
 
-	/* If piggyback DTX has been done everywhere, then need to handle CoS cache.
-	 * It is harmless to keep some partially committed DTX entries in CoS cache.
+	/*
+	 * NOTE: For non-leader, commit the CoS DTX via current IO local transaction.
+	 *	 As for leader case, related DTX in CoS cache must be committable, it
+	 *	 will not affect related data visibility even if we do not commit it.
+	 *
+	 *	 On the other hand, if the DTX leader commit the DTX in CoS cache via
+	 *	 current IO local transaction but some non-leader failed to commit it,
+	 *	 then we will miss to commit related DTX on those non-leader(s) under
+	 *	 the following conditions:
+	 *
+	 *	 1. The leader is restart, then lost original CoS cache.
+	 *	 2. The committed DTX entry on leader is removed by DTX aggregation.
+	 *
+	 *	 So for leader, we will keep it in CoS cache until DTX batched commit
+	 *	 logic to commit it explicitly. If all non-leaders have committed the
+	 *	 CoS DTX via current forwarded IO RPCs piggyback, then related batched
+	 *	 commit will be only local operation without additional RPCs. That will
+	 *	 not cause too much overhead.
 	 */
-	if (result == 0 && dth->dth_cos_done) {
-		int	i;
+	if (result == 0 && dth->dth_srdg_all)
+		flags = DCF_REMOTE_CMT;
+	else
+		flags = 0;
 
-		for (i = 0; i < dth->dth_dti_cos_count; i++)
-			dtx_del_cos(cont, &dth->dth_dti_cos[i],
-				    &dth->dth_leader_oid, dth->dth_dkey_hash);
-	}
+	for (i = 0; i < dth->dth_dti_cos_count; i++)
+		dtx_cos_put_piggyback(cont, &dth->dth_dti_cos[i],
+				      &dth->dth_leader_oid, dth->dth_dkey_hash, flags);
 
-	D_DEBUG(DB_IO, "Stop the DTX "DF_DTI" ver %u, dkey %lu, %s, cos %d/%d: result "DF_RC"\n",
+	D_DEBUG(DB_IO, "Stop the DTX "DF_DTI" ver %u, dkey %lu, %s, cos %d: result "DF_RC"\n",
 		DP_DTI(&dth->dth_xid), dth->dth_ver, (unsigned long)dth->dth_dkey_hash,
-		dth->dth_sync ? "sync" : "async", dth->dth_dti_cos_count,
-		dth->dth_cos_done ? dth->dth_dti_cos_count : 0, DP_RC(result));
+		dth->dth_sync ? "sync" : "async", dth->dth_dti_cos_count, DP_RC(result));
 
 	D_FREE(dth->dth_oid_array);
 	D_FREE(dlh);
@@ -1644,7 +1662,7 @@ dtx_flush_on_close(struct dss_module_info *dmi, struct dtx_batched_cont_args *db
 		struct dtx_coll_entry	 *dce = NULL;
 
 		cnt = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT,
-					    NULL, DAOS_EPOCH_MAX, &dtes, &dcks, &dce);
+					    NULL, DAOS_EPOCH_MAX, true, &dtes, &dcks, &dce);
 		if (cnt <= 0)
 			D_GOTO(out, rc = cnt);
 
@@ -1967,7 +1985,7 @@ dtx_handle_resend(daos_handle_t coh,  struct dtx_id *dti,
 		 */
 		return -DER_NONEXIST;
 
-	rc = vos_dtx_check(coh, dti, epoch, pm_ver, NULL, NULL, false);
+	rc = vos_dtx_check(coh, dti, epoch, pm_ver, NULL, false);
 	switch (rc) {
 	case DTX_ST_INITED:
 		return -DER_INPROGRESS;
@@ -1999,14 +2017,6 @@ dtx_handle_resend(daos_handle_t coh,  struct dtx_id *dti,
 		return rc >= 0 ? -DER_INVAL : rc;
 	}
 }
-
-/*
- * If a large transaction has sub-requests to dispatch to a lot of DTX participants,
- * then we may have to split the dispatch process to multiple steps; otherwise, the
- * dispatch process may trigger too many in-flight or in-queued RPCs that will hold
- * too much resource as to server maybe out of memory.
- */
-#define DTX_EXEC_STEP_LENGTH	DTX_THRESHOLD_COUNT
 
 struct dtx_chore {
 	struct dss_chore		 chore;
@@ -2186,8 +2196,8 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 	dlh->dlh_need_agg = 0;
 	dlh->dlh_agg_done = 0;
 
-	if (sub_cnt > DTX_EXEC_STEP_LENGTH) {
-		dlh->dlh_forward_cnt = DTX_EXEC_STEP_LENGTH;
+	if (sub_cnt > DTX_RPC_STEP_LENGTH) {
+		dlh->dlh_forward_cnt = DTX_RPC_STEP_LENGTH;
 	} else {
 		dlh->dlh_forward_cnt = sub_cnt;
 		if (likely(dlh->dlh_delay_sub_cnt == 0) && agg_cb != NULL)
@@ -2237,7 +2247,7 @@ exec:
 	sub_cnt -= dlh->dlh_forward_cnt;
 	if (sub_cnt > 0) {
 		dlh->dlh_forward_idx += dlh->dlh_forward_cnt;
-		if (sub_cnt <= DTX_EXEC_STEP_LENGTH) {
+		if (sub_cnt <= DTX_RPC_STEP_LENGTH) {
 			dlh->dlh_forward_cnt = sub_cnt;
 			if (likely(dlh->dlh_delay_sub_cnt == 0) && agg_cb != NULL)
 				dlh->dlh_need_agg = 1;
@@ -2337,7 +2347,7 @@ dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 		struct dtx_coll_entry	 *dce = NULL;
 
 		cnt = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT, oid,
-					    epoch, &dtes, &dcks, &dce);
+					    epoch, true, &dtes, &dcks, &dce);
 		if (cnt <= 0) {
 			rc = cnt;
 			if (rc < 0)

@@ -102,8 +102,7 @@ obj_gen_dtx_mbs(uint32_t flags, uint32_t *tgt_cnt, struct daos_shard_tgt **p_tgt
 	--(*tgt_cnt);
 	*p_tgts = ++tgts;
 
-	if (!(flags & ORF_EC))
-		mbs->dm_flags |= DMF_SRDG_REP;
+	mbs->dm_flags |= DMF_SRDG;
 
 out:
 	*p_mbs = mbs;
@@ -2932,9 +2931,8 @@ again2:
 	 * them before real modifications to avoid availability issues.
 	 */
 	D_FREE(dti_cos);
-	dti_cos_cnt = dtx_list_cos(ioc.ioc_coc, &orw->orw_oid,
-				   orw->orw_dkey_hash, DTX_THRESHOLD_COUNT,
-				   &dti_cos);
+	dti_cos_cnt = dtx_cos_get_piggyback(ioc.ioc_coc, &orw->orw_oid, orw->orw_dkey_hash,
+					    DTX_THRESHOLD_COUNT, &dti_cos);
 	if (dti_cos_cnt < 0)
 		D_GOTO(out, rc = dti_cos_cnt);
 
@@ -2958,6 +2956,9 @@ again2:
 		dtx_flags |= DTX_PREPARED;
 	else
 		dtx_flags &= ~DTX_PREPARED;
+
+	if (!daos_oclass_is_ec(&ioc.ioc_oca) || tgt_cnt + 1 == obj_ec_tgt_nr(&ioc.ioc_oca))
+		dtx_flags |= DTX_SRDG_ALL;
 
 	rc = dtx_leader_begin(ioc.ioc_vos_coh, &orw->orw_dti, &epoch, 1,
 			      version, &orw->orw_oid, dti_cos, dti_cos_cnt,
@@ -3850,9 +3851,8 @@ again2:
 	 * them before real modifications to avoid availability issues.
 	 */
 	D_FREE(dti_cos);
-	dti_cos_cnt = dtx_list_cos(ioc.ioc_coc, &opi->opi_oid,
-				   opi->opi_dkey_hash, DTX_THRESHOLD_COUNT,
-				   &dti_cos);
+	dti_cos_cnt = dtx_cos_get_piggyback(ioc.ioc_coc, &opi->opi_oid, opi->opi_dkey_hash,
+					    DTX_THRESHOLD_COUNT, &dti_cos);
 	if (dti_cos_cnt < 0)
 		D_GOTO(out, rc = dti_cos_cnt);
 
@@ -3876,6 +3876,9 @@ again2:
 		dtx_flags |= DTX_PREPARED;
 	else
 		dtx_flags &= ~DTX_PREPARED;
+
+	if (!daos_oclass_is_ec(&ioc.ioc_oca) || tgt_cnt + 1 == obj_ec_tgt_nr(&ioc.ioc_oca))
+		dtx_flags |= DTX_SRDG_ALL;
 
 	rc = dtx_leader_begin(ioc.ioc_vos_coh, &opi->opi_dti, &epoch, 1,
 			      version, &opi->opi_oid, dti_cos, dti_cos_cnt,
@@ -5077,6 +5080,16 @@ again:
 		dtx_flags |= DTX_PREPARED;
 	else
 		dtx_flags &= ~DTX_PREPARED;
+
+	if (dcde->dcde_write_cnt > 0 && dcsh->dcsh_mbs->dm_flags & DMF_SRDG) {
+		rc = obj_ioc_init_oca(dca->dca_ioc, dcsh->dcsh_leader_oid.id_pub, true);
+		if (rc != 0)
+			D_GOTO(out, rc);
+
+		if (!daos_oclass_is_ec(&dca->dca_ioc->ioc_oca) ||
+		    tgt_cnt == obj_ec_tgt_nr(&dca->dca_ioc->ioc_oca))
+			dtx_flags |= DTX_SRDG_ALL;
+	}
 
 	rc = dtx_leader_begin(dca->dca_ioc->ioc_vos_coh, &dcsh->dcsh_xid, &dcsh->dcsh_epoch,
 			      dcde->dcde_write_cnt, oci->oci_map_ver, &dcsh->dcsh_leader_oid,

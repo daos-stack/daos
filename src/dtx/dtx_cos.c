@@ -60,8 +60,9 @@ struct dtx_cos_rec_child {
 	};
 	/* The DTX epoch. */
 	daos_epoch_t			 dcrc_epoch;
-	/* For non-collective DTX, it points to the dtx_cos_rec. */
 	struct dtx_cos_rec		*dcrc_ptr;
+	uint32_t			 dcrc_piggyback_refs;
+	uint32_t			 dcrc_coll:1; /* For collective DTX. */
 };
 
 struct dtx_cos_rec_bundle {
@@ -129,14 +130,13 @@ dtx_cos_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	}
 
 	dcrc->dcrc_epoch = rbund->epoch;
+	dcrc->dcrc_ptr = dcr;
 	if (rbund->flags & DCF_COLL) {
-		/* Set dcrc_ptr as NULL to indicate that it is collective DTX. */
-		dcrc->dcrc_ptr = NULL;
+		dcrc->dcrc_coll = 1;
 		dcrc->dcrc_dce = dtx_coll_entry_get(rbund->entry);
 		d_list_add_tail(&dcrc->dcrc_gl_committable, &cont->sc_dtx_coll_list);
 		cont->sc_dtx_committable_coll_count++;
 	} else {
-		dcrc->dcrc_ptr = dcr;
 		dcrc->dcrc_dte = dtx_entry_get(rbund->entry);
 		d_list_add_tail(&dcrc->dcrc_gl_committable, &cont->sc_dtx_cos_list);
 	}
@@ -177,11 +177,11 @@ dtx_cos_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 				   dcrc_lo_link) {
 		d_list_del(&dcrc->dcrc_lo_link);
 		d_list_del(&dcrc->dcrc_gl_committable);
-		if (dcrc->dcrc_ptr != NULL) {
-			dtx_entry_put(dcrc->dcrc_dte);
-		} else {
+		if (dcrc->dcrc_coll) {
 			dtx_coll_entry_put(dcrc->dcrc_dce);
 			coll++;
+		} else {
+			dtx_entry_put(dcrc->dcrc_dte);
 		}
 		D_FREE(dcrc);
 		dec++;
@@ -190,11 +190,11 @@ dtx_cos_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 				   dcrc_lo_link) {
 		d_list_del(&dcrc->dcrc_lo_link);
 		d_list_del(&dcrc->dcrc_gl_committable);
-		if (dcrc->dcrc_ptr != NULL) {
-			dtx_entry_put(dcrc->dcrc_dte);
-		} else {
+		if (dcrc->dcrc_coll) {
 			dtx_coll_entry_put(dcrc->dcrc_dce);
 			coll++;
+		} else {
+			dtx_entry_put(dcrc->dcrc_dte);
 		}
 		D_FREE(dcrc);
 		dec++;
@@ -203,11 +203,11 @@ dtx_cos_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 				   dcrc_lo_link) {
 		d_list_del(&dcrc->dcrc_lo_link);
 		d_list_del(&dcrc->dcrc_gl_committable);
-		if (dcrc->dcrc_ptr != NULL) {
-			dtx_entry_put(dcrc->dcrc_dte);
-		} else {
+		if (dcrc->dcrc_coll) {
 			dtx_coll_entry_put(dcrc->dcrc_dce);
 			coll++;
+		} else {
+			dtx_entry_put(dcrc->dcrc_dte);
 		}
 		D_FREE(dcrc);
 		dec++;
@@ -257,14 +257,13 @@ dtx_cos_rec_update(struct btr_instance *tins, struct btr_record *rec,
 		return -DER_NOMEM;
 
 	dcrc->dcrc_epoch = rbund->epoch;
+	dcrc->dcrc_ptr = dcr;
 	if (rbund->flags & DCF_COLL) {
-		/* Set dcrc_ptr as NULL to indicate that it is collective DTX. */
-		dcrc->dcrc_ptr = NULL;
+		dcrc->dcrc_coll = 1;
 		dcrc->dcrc_dce = dtx_coll_entry_get(rbund->entry);
 		d_list_add_tail(&dcrc->dcrc_gl_committable, &cont->sc_dtx_coll_list);
 		cont->sc_dtx_committable_coll_count++;
 	} else {
-		dcrc->dcrc_ptr = dcr;
 		dcrc->dcrc_dte = dtx_entry_get(rbund->entry);
 		d_list_add_tail(&dcrc->dcrc_gl_committable, &cont->sc_dtx_cos_list);
 	}
@@ -297,7 +296,7 @@ btr_ops_t dtx_btr_cos_ops = {
 
 int
 dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
-		      daos_unit_oid_t *oid, daos_epoch_t epoch,
+		      daos_unit_oid_t *oid, daos_epoch_t epoch, bool force,
 		      struct dtx_entry ***dtes, struct dtx_cos_key **dcks,
 		      struct dtx_coll_entry **p_dce)
 {
@@ -307,9 +306,11 @@ dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
 	uint32_t			  count;
 	uint32_t			  i = 0;
 
+	/* Process collective DXT with higher priority. */
 	if (!d_list_empty(&cont->sc_dtx_coll_list) && oid == NULL) {
 		d_list_for_each_entry(dcrc, &cont->sc_dtx_coll_list, dcrc_gl_committable) {
-			if (epoch >= dcrc->dcrc_epoch) {
+			if (epoch >= dcrc->dcrc_epoch &&
+			    (dcrc->dcrc_piggyback_refs == 0 || force)) {
 				D_ALLOC_PTR(dck_buf);
 				if (dck_buf == NULL)
 					return -DER_NOMEM;
@@ -346,17 +347,16 @@ dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
 		    daos_unit_oid_compare(dcrc->dcrc_ptr->dcr_oid, *oid) != 0)
 			continue;
 
-		if (epoch < dcrc->dcrc_epoch)
+		if (epoch < dcrc->dcrc_epoch || (dcrc->dcrc_piggyback_refs > 0 && !force))
 			continue;
 
-		dck_buf[i].oid = dcrc->dcrc_ptr->dcr_oid;
-		dck_buf[i].dkey_hash = dcrc->dcrc_ptr->dcr_dkey_hash;
-
-		if (unlikely(oid != NULL && dcrc->dcrc_ptr == NULL)) {
+		if (unlikely(oid != NULL && dcrc->dcrc_coll)) {
 			if (i > 0)
 				continue;
 
 			D_FREE(dte_buf);
+			dck_buf[i].oid = dcrc->dcrc_ptr->dcr_oid;
+			dck_buf[i].dkey_hash = dcrc->dcrc_ptr->dcr_dkey_hash;
 			*dcks = dck_buf;
 			*p_dce = dtx_coll_entry_get(dcrc->dcrc_dce);
 
@@ -364,6 +364,9 @@ dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
 		}
 
 		dte_buf[i] = dtx_entry_get(dcrc->dcrc_dte);
+		dck_buf[i].oid = dcrc->dcrc_ptr->dcr_oid;
+		dck_buf[i].dkey_hash = dcrc->dcrc_ptr->dcr_dkey_hash;
+
 		if (++i >= count)
 			break;
 	}
@@ -381,8 +384,8 @@ dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
 }
 
 int
-dtx_list_cos(struct ds_cont_child *cont, daos_unit_oid_t *oid,
-	     uint64_t dkey_hash, int max, struct dtx_id **dtis)
+dtx_cos_get_piggyback(struct ds_cont_child *cont, daos_unit_oid_t *oid,
+		      uint64_t dkey_hash, int max, struct dtx_id **dtis)
 {
 	struct dtx_cos_key		 key;
 	d_iov_t				 kiov;
@@ -422,19 +425,59 @@ dtx_list_cos(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 		return -DER_NOMEM;
 
 	d_list_for_each_entry(dcrc, &dcr->dcr_prio_list, dcrc_lo_link) {
-		dti[i] = dcrc->dcrc_dte->dte_xid;
-		if (++i >= count)
-			break;
+		if (dcrc->dcrc_dte->dte_remote_cmt == 0) {
+			dti[i] = dcrc->dcrc_dte->dte_xid;
+			dcrc->dcrc_piggyback_refs++;
+			if (++i >= count)
+				break;
+		}
 	}
 
-	D_ASSERTF(i == count, "Invalid count %d/%d\n", i, count);
-	*dtis = dti;
+	if (unlikely(i == 0)) {
+		D_FREE(dti);
+		return 0;
+	}
 
+	*dtis = dti;
 	return count;
 }
 
+void
+dtx_cos_put_piggyback(struct ds_cont_child *cont, struct dtx_id *xid,
+		      daos_unit_oid_t *oid, uint64_t dkey_hash, uint32_t flags)
+{
+	struct dtx_cos_key		 key;
+	d_iov_t				 kiov;
+	d_iov_t				 riov;
+	struct dtx_cos_rec		*dcr;
+	struct dtx_cos_rec_child	*dcrc;
+	int				 rc;
+
+	key.oid = *oid;
+	key.dkey_hash = dkey_hash;
+	d_iov_set(&kiov, &key, sizeof(key));
+	d_iov_set(&riov, NULL, 0);
+
+	/* It is normal that the DTX entry (to be put) in CoS has already been removed by race. */
+
+	rc = dbtree_lookup(cont->sc_dtx_cos_hdl, &kiov, &riov);
+	if (rc != 0)
+		return;
+
+	dcr = (struct dtx_cos_rec *)riov.iov_buf;
+
+	d_list_for_each_entry(dcrc, &dcr->dcr_prio_list, dcrc_lo_link) {
+		if (memcmp(&dcrc->dcrc_dte->dte_xid, xid, sizeof(*xid)) == 0) {
+			if (flags & DCF_REMOTE_CMT)
+				dcrc->dcrc_dte->dte_remote_cmt = 1;
+			dcrc->dcrc_piggyback_refs--;
+			return;
+		}
+	}
+}
+
 int
-dtx_add_cos(struct ds_cont_child *cont, void *entry, daos_unit_oid_t *oid,
+dtx_cos_add(struct ds_cont_child *cont, void *entry, daos_unit_oid_t *oid,
 	    uint64_t dkey_hash, daos_epoch_t epoch, uint32_t flags)
 {
 	struct dtx_cos_key		key;
@@ -475,7 +518,7 @@ dtx_add_cos(struct ds_cont_child *cont, void *entry, daos_unit_oid_t *oid,
 }
 
 int
-dtx_del_cos(struct ds_cont_child *cont, struct dtx_id *xid,
+dtx_cos_del(struct ds_cont_child *cont, struct dtx_id *xid,
 	    daos_unit_oid_t *oid, uint64_t dkey_hash)
 {
 	struct dtx_cos_key		 key;
@@ -503,11 +546,11 @@ dtx_del_cos(struct ds_cont_child *cont, struct dtx_id *xid,
 
 		d_list_del(&dcrc->dcrc_gl_committable);
 		d_list_del(&dcrc->dcrc_lo_link);
-		if (dcrc->dcrc_ptr != NULL) {
-			dtx_entry_put(dcrc->dcrc_dte);
-		} else {
+		if (dcrc->dcrc_coll) {
 			dtx_coll_entry_put(dcrc->dcrc_dce);
 			cont->sc_dtx_committable_coll_count--;
+		} else {
+			dtx_entry_put(dcrc->dcrc_dte);
 		}
 		D_FREE(dcrc);
 
@@ -523,11 +566,11 @@ dtx_del_cos(struct ds_cont_child *cont, struct dtx_id *xid,
 
 		d_list_del(&dcrc->dcrc_gl_committable);
 		d_list_del(&dcrc->dcrc_lo_link);
-		if (dcrc->dcrc_ptr != NULL) {
-			dtx_entry_put(dcrc->dcrc_dte);
-		} else {
+		if (dcrc->dcrc_coll) {
 			dtx_coll_entry_put(dcrc->dcrc_dce);
 			cont->sc_dtx_committable_coll_count--;
+		} else {
+			dtx_entry_put(dcrc->dcrc_dte);
 		}
 		D_FREE(dcrc);
 
@@ -543,11 +586,11 @@ dtx_del_cos(struct ds_cont_child *cont, struct dtx_id *xid,
 
 		d_list_del(&dcrc->dcrc_gl_committable);
 		d_list_del(&dcrc->dcrc_lo_link);
-		if (dcrc->dcrc_ptr != NULL) {
-			dtx_entry_put(dcrc->dcrc_dte);
-		} else {
+		if (dcrc->dcrc_coll) {
 			dtx_coll_entry_put(dcrc->dcrc_dce);
 			cont->sc_dtx_committable_coll_count--;
+		} else {
+			dtx_entry_put(dcrc->dcrc_dte);
 		}
 		D_FREE(dcrc);
 
@@ -590,4 +633,64 @@ dtx_cos_oldest(struct ds_cont_child *cont)
 			    struct dtx_cos_rec_child, dcrc_gl_committable);
 
 	return dcrc->dcrc_epoch;
+}
+
+void
+dtx_cos_prio(struct ds_cont_child *cont, struct dtx_id *xid,
+	     daos_unit_oid_t *oid, uint64_t dkey_hash)
+{
+	struct dtx_cos_key		 key;
+	d_iov_t				 kiov;
+	d_iov_t				 riov;
+	struct dtx_cos_rec		*dcr;
+	struct dtx_cos_rec_child	*dcrc;
+	int				 rc;
+	bool				 found = false;
+
+	key.oid = *oid;
+	key.dkey_hash = dkey_hash;
+	d_iov_set(&kiov, &key, sizeof(key));
+	d_iov_set(&riov, NULL, 0);
+
+	rc = dbtree_lookup(cont->sc_dtx_cos_hdl, &kiov, &riov);
+	if (rc != 0)
+		goto out;
+
+	dcr = (struct dtx_cos_rec *)riov.iov_buf;
+
+	d_list_for_each_entry(dcrc, &dcr->dcr_reg_list, dcrc_lo_link) {
+		if (memcmp(&dcrc->dcrc_dte->dte_xid, xid, sizeof(*xid)) == 0) {
+			d_list_del(&dcrc->dcrc_lo_link);
+			d_list_add(&dcrc->dcrc_lo_link, &dcr->dcr_prio_list);
+			dcr->dcr_reg_count--;
+			dcr->dcr_prio_count++;
+
+			D_GOTO(out, found = true);
+		}
+	}
+
+	d_list_for_each_entry(dcrc, &dcr->dcr_prio_list, dcrc_lo_link) {
+		if (memcmp(&dcrc->dcrc_dte->dte_xid, xid, sizeof(*xid)) == 0) {
+			d_list_del(&dcrc->dcrc_lo_link);
+			d_list_add(&dcrc->dcrc_lo_link, &dcr->dcr_prio_list);
+
+			D_GOTO(out, found = true);
+		}
+	}
+
+	d_list_for_each_entry(dcrc, &dcr->dcr_expcmt_list, dcrc_lo_link) {
+		if (memcmp(&dcrc->dcrc_dte->dte_xid, xid, sizeof(*xid)) == 0)
+			D_GOTO(out, found = true);
+	}
+
+out:
+	if (found) {
+		d_list_del(&dcrc->dcrc_gl_committable);
+		if (dcrc->dcrc_coll)
+			d_list_add(&dcrc->dcrc_gl_committable, &cont->sc_dtx_coll_list);
+		else
+			d_list_add(&dcrc->dcrc_gl_committable, &cont->sc_dtx_cos_list);
+	}
+
+	/* It is normal that the DTX entry (for priority) in CoS has been committed by race. */
 }

@@ -429,10 +429,10 @@ dvt_dtx_begin_helper(daos_handle_t coh, const daos_unit_oid_t *oid, daos_epoch_t
 	mbs->dm_tgts[0].ddt_id = 1;
 
 	/** Use unique API so new UUID is generated even on same thread */
-	daos_dti_gen_unique(&(&dth->dth_dte)->dte_xid);
-	dth->dth_dte.dte_ver = 1;
-	dth->dth_dte.dte_refs = 1;
-	dth->dth_dte.dte_mbs = mbs;
+	daos_dti_gen_unique(&dth->dth_xid);
+	dth->dth_ver = 1;
+	dth->dth_refs = 1;
+	dth->dth_mbs = mbs;
 
 	dth->dth_coh = coh;
 	dth->dth_epoch = epoch;
@@ -460,7 +460,7 @@ static void
 dvt_dtx_end(struct dtx_handle *dth)
 {
 	vos_dtx_detach(dth);
-	D_FREE(dth->dth_dte.dte_mbs);
+	D_FREE(dth->dth_mbs);
 	D_FREE(dth);
 }
 
