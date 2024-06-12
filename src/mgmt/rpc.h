@@ -44,29 +44,16 @@
 	X(MGMT_GET_BS_STATE,						\
 		0, &CQF_mgmt_get_bs_state,				\
 		ds_mgmt_hdlr_get_bs_state, NULL)
-#define MGMT_PROTO_SRV_RPC_LIST						\
-	X(MGMT_TGT_CREATE,						\
-		0, &CQF_mgmt_tgt_create,				\
-		ds_mgmt_hdlr_tgt_create,				\
-		&ds_mgmt_hdlr_tgt_create_co_ops),			\
-	X(MGMT_TGT_DESTROY,						\
-		0, &CQF_mgmt_tgt_destroy,				\
-		ds_mgmt_hdlr_tgt_destroy, NULL),			\
-	X(MGMT_TGT_PARAMS_SET,						\
-		0, &CQF_mgmt_tgt_params_set,				\
-		ds_mgmt_tgt_params_set_hdlr, NULL),			\
-	X(MGMT_TGT_PROFILE,						\
-		0, &CQF_mgmt_profile,					\
-		ds_mgmt_tgt_profile_hdlr, NULL),			\
-	X(MGMT_TGT_MAP_UPDATE,						\
-		0, &CQF_mgmt_tgt_map_update,				\
-		ds_mgmt_hdlr_tgt_map_update,				\
-		&ds_mgmt_hdlr_tgt_map_update_co_ops),			\
-	X(MGMT_TGT_MARK,						\
-		0, &CQF_mgmt_mark,					\
-		ds_mgmt_tgt_mark_hdlr, NULL)
-
-
+#define MGMT_PROTO_SRV_RPC_LIST                                                                    \
+	X(MGMT_TGT_CREATE, 0, &CQF_mgmt_tgt_create, ds_mgmt_hdlr_tgt_create,                       \
+	  &ds_mgmt_hdlr_tgt_create_co_ops),                                                        \
+	X(MGMT_TGT_DESTROY, 0, &CQF_mgmt_tgt_destroy, ds_mgmt_hdlr_tgt_destroy,                    \
+	  &ds_mgmt_hdlr_tgt_destroy_co_ops),                                                       \
+	X(MGMT_TGT_PARAMS_SET, 0, &CQF_mgmt_tgt_params_set, ds_mgmt_tgt_params_set_hdlr, NULL),    \
+	X(MGMT_TGT_PROFILE, 0, &CQF_mgmt_profile, ds_mgmt_tgt_profile_hdlr, NULL),                 \
+	X(MGMT_TGT_MAP_UPDATE, 0, &CQF_mgmt_tgt_map_update, ds_mgmt_hdlr_tgt_map_update,           \
+	  &ds_mgmt_hdlr_tgt_map_update_co_ops),                                                    \
+	X(MGMT_TGT_MARK, 0, &CQF_mgmt_mark, ds_mgmt_tgt_mark_hdlr, NULL)
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a

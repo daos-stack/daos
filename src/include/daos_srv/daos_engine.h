@@ -419,9 +419,11 @@ int dss_parameters_set(unsigned int key_id, uint64_t value);
 
 enum dss_ult_flags {
 	/* Periodically created ULTs */
-	DSS_ULT_FL_PERIODIC	= (1 << 0),
+	DSS_ULT_FL_PERIODIC = (1 << 0),
 	/* Use DSS_DEEP_STACK_SZ as the stack size */
-	DSS_ULT_DEEP_STACK	= (1 << 1),
+	DSS_ULT_DEEP_STACK = (1 << 1),
+	/* Use current ULT (instead of creating new one) for the task. */
+	DSS_USE_CURRENT_ULT = (1 << 2),
 };
 
 int dss_ult_create(void (*func)(void *), void *arg, int xs_type, int tgt_id,
@@ -491,8 +493,14 @@ struct dss_coll_args {
 	/** Arguments for dss_collective func (Mandatory) */
 	void				*ca_func_args;
 	void				*ca_aggregator;
-	int				*ca_exclude_tgts;
-	unsigned int			ca_exclude_tgts_cnt;
+	/* Specify on which targets to execute the task. */
+	uint8_t                         *ca_tgt_bitmap;
+	/*
+	 * The size (in byte) of ca_tgt_bitmap. It may be smaller than dss_tgt_nr if only some
+	 * VOS targets are involved. It also may be larger than dss_tgt_nr if dss_tgt_nr is not
+	 * 2 ^ n aligned.
+	 */
+	uint32_t                         ca_tgt_bitmap_sz;
 	/** Stream arguments for all streams */
 	struct dss_coll_stream_args	ca_stream_args;
 };
@@ -514,6 +522,9 @@ dss_thread_collective_reduce(struct dss_coll_ops *ops,
 			     unsigned int flags);
 int dss_task_collective(int (*func)(void *), void *arg, unsigned int flags);
 int dss_thread_collective(int (*func)(void *), void *arg, unsigned int flags);
+int
+dss_build_coll_bitmap(int *exclude_tgts, uint32_t exclude_cnt, uint8_t **p_bitmap,
+		      uint32_t *bitmap_sz);
 
 /**
  * Loaded module management metholds
