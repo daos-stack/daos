@@ -922,7 +922,8 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t xoh, struct dtx_epoch *epoch, 
 	dth->dth_aborted = 0;
 	dth->dth_already = 0;
 	dth->dth_need_validation = 0;
-	dth->dth_local              = (flags & DTX_LOCAL) ? 1 : 0;
+	dth->dth_local = (flags & DTX_LOCAL) ? 1 : 0;
+	dth->dth_srdg_all = (flags & DTX_SRDG_ALL) ? 1 : 0;
 
 	dth->dth_dti_cos = dti_cos;
 	dth->dth_dti_cos_count = dti_cos_cnt;
@@ -1385,7 +1386,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 		dte->dte_refs = 1;
 		dte->dte_mbs = mbs;
 
-		if (!(mbs->dm_flags & DMF_SRDG_REP))
+		if (!(mbs->dm_flags & DMF_SRDG))
 			flags = DCF_EXP_CMT;
 		else if (dth->dth_modify_shared)
 			flags = DCF_SHARED;
@@ -1477,23 +1478,37 @@ out:
 
 	D_ASSERTF(result <= 0, "unexpected return value %d\n", result);
 
-	/* If piggyback DTX has been done everywhere, then need to handle CoS cache.
-	 * It is harmless to keep some partially committed DTX entries in CoS cache.
+	/*
+	 * NOTE: For non-leader, commit the CoS DTX via current IO local transaction.
+	 *	 As for leader case, related DTX in CoS cache must be committable, it
+	 *	 will not affect related data visibility even if we do not commit it.
+	 *
+	 *	 On the other hand, if the DTX leader commit the DTX in CoS cache via
+	 *	 current IO local transaction but some non-leader failed to commit it,
+	 *	 then we will miss to commit related DTX on those non-leader(s) under
+	 *	 the following conditions:
+	 *
+	 *	 1. The leader is restart, then lost original CoS cache.
+	 *	 2. The committed DTX entry on leader is removed by DTX aggregation.
+	 *
+	 *	 So for leader, we will keep it in CoS cache until DTX batched commit
+	 *	 logic to commit it explicitly. If all non-leaders have committed the
+	 *	 CoS DTX via current forwarded IO RPCs piggyback, then related batched
+	 *	 commit will be only local operation without additional RPCs. That will
+	 *	 not cause too much overhead.
 	 */
-	if (result == 0 && dth->dth_cos_done) {
-		for (i = 0; i < dth->dth_dti_cos_count; i++)
-			dtx_cos_del(cont, &dth->dth_dti_cos[i],
-				    &dth->dth_leader_oid, dth->dth_dkey_hash);
-	} else {
-		for (i = 0; i < dth->dth_dti_cos_count; i++)
-			dtx_cos_put_piggyback(cont, &dth->dth_dti_cos[i],
-					      &dth->dth_leader_oid, dth->dth_dkey_hash);
-	}
+	if (result == 0 && dth->dth_srdg_all)
+		flags = DCF_REMOTE_CMT;
+	else
+		flags = 0;
 
-	D_DEBUG(DB_IO, "Stop the DTX "DF_DTI" ver %u, dkey %lu, %s, cos %d/%d: result "DF_RC"\n",
+	for (i = 0; i < dth->dth_dti_cos_count; i++)
+		dtx_cos_put_piggyback(cont, &dth->dth_dti_cos[i],
+				      &dth->dth_leader_oid, dth->dth_dkey_hash, flags);
+
+	D_DEBUG(DB_IO, "Stop the DTX "DF_DTI" ver %u, dkey %lu, %s, cos %d: result "DF_RC"\n",
 		DP_DTI(&dth->dth_xid), dth->dth_ver, (unsigned long)dth->dth_dkey_hash,
-		dth->dth_sync ? "sync" : "async", dth->dth_dti_cos_count,
-		dth->dth_cos_done ? dth->dth_dti_cos_count : 0, DP_RC(result));
+		dth->dth_sync ? "sync" : "async", dth->dth_dti_cos_count, DP_RC(result));
 
 	D_FREE(dth->dth_oid_array);
 	D_FREE(dlh);

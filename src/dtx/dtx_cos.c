@@ -425,21 +425,26 @@ dtx_cos_get_piggyback(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 		return -DER_NOMEM;
 
 	d_list_for_each_entry(dcrc, &dcr->dcr_prio_list, dcrc_lo_link) {
-		dti[i] = dcrc->dcrc_dte->dte_xid;
-		dcrc->dcrc_piggyback_refs++;
-		if (++i >= count)
-			break;
+		if (dcrc->dcrc_dte->dte_remote_cmt == 0) {
+			dti[i] = dcrc->dcrc_dte->dte_xid;
+			dcrc->dcrc_piggyback_refs++;
+			if (++i >= count)
+				break;
+		}
 	}
 
-	D_ASSERTF(i == count, "Invalid count %d/%d\n", i, count);
-	*dtis = dti;
+	if (unlikely(i == 0)) {
+		D_FREE(dti);
+		return 0;
+	}
 
+	*dtis = dti;
 	return count;
 }
 
 void
 dtx_cos_put_piggyback(struct ds_cont_child *cont, struct dtx_id *xid,
-		      daos_unit_oid_t *oid, uint64_t dkey_hash)
+		      daos_unit_oid_t *oid, uint64_t dkey_hash, uint32_t flags)
 {
 	struct dtx_cos_key		 key;
 	d_iov_t				 kiov;
@@ -463,6 +468,8 @@ dtx_cos_put_piggyback(struct ds_cont_child *cont, struct dtx_id *xid,
 
 	d_list_for_each_entry(dcrc, &dcr->dcr_prio_list, dcrc_lo_link) {
 		if (memcmp(&dcrc->dcrc_dte->dte_xid, xid, sizeof(*xid)) == 0) {
+			if (flags & DCF_REMOTE_CMT)
+				dcrc->dcrc_dte->dte_remote_cmt = 1;
 			dcrc->dcrc_piggyback_refs--;
 			return;
 		}

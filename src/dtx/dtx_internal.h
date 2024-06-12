@@ -313,6 +313,8 @@ enum dtx_cos_flags {
 	DCF_EXP_CMT		= (1 << 1),
 	/* For collective DTX. */
 	DCF_COLL		= (1 << 2),
+	/* The DTX has been committed on all non-leaders. */
+	DCF_REMOTE_CMT		= (1 << 3),
 };
 
 #endif /* __DTX_INTERNAL_H__ */

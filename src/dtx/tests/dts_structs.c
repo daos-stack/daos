@@ -42,10 +42,6 @@ struct_dtx_handle(void **state)
 
 	/* Fill up all existing fields with a pattern. */
 	SET_FIELD(dummy, dth_dte);
-	SET_FIELD(dummy, dth_xid);
-	SET_FIELD(dummy, dth_ver);
-	SET_FIELD(dummy, dth_refs);
-	SET_FIELD(dummy, dth_mbs);
 	SET_FIELD(dummy, dth_coh);
 	SET_FIELD(dummy, dth_poh);
 	SET_FIELD(dummy, dth_epoch);
@@ -70,8 +66,9 @@ struct_dtx_handle(void **state)
 	SET_BITFIELD_1(dummy, dth_need_validation);
 	SET_BITFIELD_1(dummy, dth_ignore_uncommitted);
 	SET_BITFIELD_1(dummy, dth_local);
+	SET_BITFIELD_1(dummy, dth_srdg_all);
 	SET_BITFIELD_1(dummy, dth_local_complete);
-	SET_BITFIELD(dummy, padding1, 13);
+	SET_BITFIELD(dummy, padding1, 12);
 
 	SET_FIELD(dummy, dth_dti_cos_count);
 	SET_FIELD(dummy, dth_dti_cos);

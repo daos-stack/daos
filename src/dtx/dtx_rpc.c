@@ -690,12 +690,15 @@ dtx_rpc(struct ds_cont_child *cont,d_list_t *dti_list,  struct dtx_entry **dtes,
 
 		ABT_rwlock_rdlock(pool->sp_lock);
 		for (i = 0; i < dca->dca_count; i++) {
-			rc = dtx_classify_one(pool, dca->dca_tree_hdl, &dca->dca_head, &length,
-					      dca->dca_dtes[i], dca->dca_count,
-					      dca->dca_rank, dca->dca_tgtid, dca->dca_dra.dra_opc);
-			if (rc != 0) {
-				ABT_rwlock_unlock(pool->sp_lock);
-				goto out;
+			if (dca->dca_dtes[i]->dte_remote_cmt == 0) {
+				rc = dtx_classify_one(pool, dca->dca_tree_hdl, &dca->dca_head,
+						      &length, dca->dca_dtes[i], dca->dca_count,
+						      dca->dca_rank, dca->dca_tgtid,
+						      dca->dca_dra.dra_opc);
+				if (rc != 0) {
+					ABT_rwlock_unlock(pool->sp_lock);
+					goto out;
+				}
 			}
 
 			daos_dti_copy(&dca->dca_dtis[i], &dca->dca_dtes[i]->dte_xid);
@@ -819,6 +822,8 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 	int			 rc;
 	int			 rc1 = 0;
 	int			 i;
+	int			 j;
+	int			 first;
 
 	/*
 	 * NOTE: Before committing the DTX on remote participants, we cannot remove the active
@@ -839,9 +844,21 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 		 * the DTX entries (in the dtis) as "PARTIAL_COMMITTED" and re-commit them later.
 		 * It is harmless to re-commit the DTX that has ever been committed.
 		 */
-		if (dra->dra_committed > 0)
-			rc1 = vos_dtx_set_flags(cont->sc_hdl, dca.dca_dtis, count,
-						DTE_PARTIAL_COMMITTED);
+		if (dra->dra_committed > 0) {
+			for (i = 0, j = 0, first = -1; i < count; i++) {
+				if (dtes[i]->dte_remote_cmt == 0) {
+					if (first == -1)
+						first = i;
+					else
+						dca.dca_dtis[first + j] = dca.dca_dtis[i];
+					j++;
+				}
+			}
+
+			if (j > 0)
+				rc1 = vos_dtx_set_flags(cont->sc_hdl, &dca.dca_dtis[first], j,
+							DTE_PARTIAL_COMMITTED);
+		}
 	} else {
 		if (dcks != NULL) {
 			if (count > 1) {
