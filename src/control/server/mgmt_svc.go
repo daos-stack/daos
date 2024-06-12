@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2023 Intel Corporation.
+// (C) Copyright 2018-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -135,7 +135,13 @@ func (svc *mgmtSvc) checkLeaderRequest(req proto.Message) error {
 	if err := svc.checkSystemRequest(unwrapped); err != nil {
 		return err
 	}
-	return svc.sysdb.CheckLeader()
+
+	if err := svc.sysdb.CheckLeader(); err != nil {
+		return err
+	}
+
+	svc.sysdb.WaitForLeaderStepUp()
+	return nil
 }
 
 // checkReplicaRequest performs sanity-checking on a request that must

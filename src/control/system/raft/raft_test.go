@@ -20,9 +20,8 @@ import (
 
 func TestRaft_Database_Barrier(t *testing.T) {
 	for name, tc := range map[string]struct {
-		raftSvcCfg  *mockRaftServiceConfig
-		stepUpDelay time.Duration
-		expErr      error
+		raftSvcCfg *mockRaftServiceConfig
+		expErr     error
 	}{
 		"raft svc barrier failed": {
 			raftSvcCfg: &mockRaftServiceConfig{
@@ -43,10 +42,6 @@ func TestRaft_Database_Barrier(t *testing.T) {
 		"success": {
 			raftSvcCfg: &mockRaftServiceConfig{},
 		},
-		"waits for step up": {
-			raftSvcCfg:  &mockRaftServiceConfig{},
-			stepUpDelay: 500 * time.Millisecond,
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -56,8 +51,35 @@ func TestRaft_Database_Barrier(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-
 			db.raft.setSvc(newMockRaftService(tc.raftSvcCfg, (*fsm)(db)))
+			db.initialized.SetTrue()
+
+			err = db.Barrier()
+			test.CmpErr(t, tc.expErr, err)
+		})
+	}
+}
+
+func TestRaft_Database_WaitForLeaderStepUp(t *testing.T) {
+	for name, tc := range map[string]struct {
+		stepUpDelay time.Duration
+	}{
+		"no delay": {},
+		"10 ms": {
+			stepUpDelay: 10 * time.Millisecond,
+		},
+		"25 ms": {
+			stepUpDelay: 25 * time.Millisecond,
+		},
+		"500 ms": {
+			stepUpDelay: 500 * time.Millisecond,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			db := MockDatabase(t, log)
 			db.initialized.SetTrue()
 			db.steppingUp.SetTrue()
 			fullDelay := tc.stepUpDelay + 10*time.Millisecond
@@ -67,11 +89,13 @@ func TestRaft_Database_Barrier(t *testing.T) {
 			}()
 
 			start := time.Now()
-			err = db.Barrier()
+			db.WaitForLeaderStepUp()
 			duration := time.Since(start)
 
-			test.CmpErr(t, tc.expErr, err)
 			test.AssertTrue(t, duration >= tc.stepUpDelay, "")
+
+			// Wiggle room for the total duration: 10ms for loop interval + a little more for potentially slow machines
+			test.AssertTrue(t, duration <= tc.stepUpDelay+50*time.Millisecond, "")
 		})
 	}
 }

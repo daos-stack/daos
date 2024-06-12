@@ -522,13 +522,6 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 			}
 
 			db.log.Debugf("node %s gained MS leader state", db.replicaAddr)
-			if err := db.Barrier(); err != nil {
-				db.log.Errorf("raft Barrier() failed: %s", err)
-				if err = db.ResignLeadership(err); err != nil {
-					db.log.Errorf("raft ResignLeadership() failed: %s", err)
-				}
-				continue // restart the monitoring loop
-			}
 
 			var gainedCtx context.Context
 			gainedCtx, cancelGainedCtx = context.WithCancel(parent)
@@ -541,14 +534,24 @@ func (db *Database) stepUp(ctx context.Context, cancel context.CancelFunc) {
 	db.steppingUp.SetTrue()
 	defer db.steppingUp.SetFalse()
 
-	for _, fn := range db.onLeadershipGained {
+	if err := db.Barrier(); err != nil {
+		db.log.Errorf("raft Barrier() failed: %s", err)
+		if err = db.ResignLeadership(err); err != nil {
+			db.log.Errorf("raft ResignLeadership() failed: %s", err)
+		}
+		return // restart the monitoring loop
+	}
+
+	for i, fn := range db.onLeadershipGained {
+		db.log.Tracef("executing onLeadershipGained[%d]", i)
+
 		if err := fn(ctx); err != nil {
 			db.log.Errorf("failure in onLeadershipGained callback: %s", err)
 			cancel()
 			if err = db.ResignLeadership(err); err != nil {
 				db.log.Errorf("raft ResignLeadership() failed: %s", err)
 			}
-			break
+			return
 		}
 	}
 }

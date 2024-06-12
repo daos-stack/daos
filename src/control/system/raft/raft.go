@@ -151,14 +151,14 @@ func (db *Database) Barrier() error {
 		if err != nil {
 			return err
 		}
-
-		db.waitForLeaderStepUp()
 		return nil
 	})
 }
 
-func (db *Database) waitForLeaderStepUp() {
+// WaitForLeaderStepUp waits for all OnLeadershipGained functions to finish executing.
+func (db *Database) WaitForLeaderStepUp() {
 	for db.steppingUp.IsTrue() {
+		// short interval to keep this polling loop from consuming too many cycles
 		time.Sleep(10 * time.Millisecond)
 	}
 }
