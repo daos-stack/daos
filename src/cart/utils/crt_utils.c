@@ -432,11 +432,7 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 		init_opt = &local_opt;
 	}
 
-	if (init_opt)
-		rc = crt_init_opt(local_group_name, 0, init_opt);
-	else
-		rc = crt_init(local_group_name, 0);
-
+	rc = crt_init_opt(local_group_name, 0, init_opt);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
