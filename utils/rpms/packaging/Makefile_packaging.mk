@@ -35,6 +35,7 @@ TEST_PACKAGES ?= ${NAME}
 # unfortunately we cannot always name the repo the same as the project
 REPO_NAME ?= $(NAME)
 
+$(info CI_PR_REPOS: $(CI_PR_REPOS))
 ifneq ($(CI_PR_REPOS),)
 PR_REPOS                 ?= $(CI_PR_REPOS)
 else
