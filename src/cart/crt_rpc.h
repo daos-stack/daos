@@ -158,7 +158,7 @@ struct crt_rpc_priv {
 
 	int			crp_ul_idx; /* index last tried */
 
-	struct timespec		crp_ts_alloced; /* when rpc got allocated */
+	struct timespec          crp_ts_alloced; /* when rpc got allocated */
 	struct crt_grp_priv	*crp_grp_priv; /* group private pointer */
 	/*
 	 * RPC request flag, see enum crt_rpc_flags/crt_rpc_flags_internal,
