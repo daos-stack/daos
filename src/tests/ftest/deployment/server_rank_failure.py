@@ -8,6 +8,8 @@ import threading
 import time
 
 from ClusterShell.NodeSet import NodeSet
+from collections import defaultdict
+
 from command_utils_base import CommandFailure
 from general_utils import report_errors
 from ior_test_base import IorTestBase
@@ -15,6 +17,20 @@ from ior_utils import IorCommand
 from job_manager_utils import get_job_manager
 from run_utils import stop_processes
 
+
+HOST_GROUPS = []
+GROUP_1_HOSTS = list(NodeSet("aurora-daos-[0001-0128]"))
+GROUP_2_HOSTS = list(NodeSet("aurora-daos-[0129-0256]"))
+GROUP_3_HOSTS = list(NodeSet("aurora-daos-[0257-0384]"))
+GROUP_4_HOSTS = list(NodeSet("aurora-daos-[0385-0512]"))
+GROUP_5_HOSTS = list(NodeSet("aurora-daos-[0513-0640]"))
+GROUP_6_HOSTS = list(NodeSet("aurora-daos-[0641-0768]"))
+GROUP_7_HOSTS = list(NodeSet("aurora-daos-[0769-0896]"))
+GROUP_8_HOSTS = list(NodeSet("aurora-daos-[0897-1024]"))
+HOST_GROUPS = [
+    GROUP_1_HOSTS, GROUP_2_HOSTS, GROUP_3_HOSTS, GROUP_4_HOSTS, GROUP_5_HOSTS, GROUP_6_HOSTS,
+    GROUP_7_HOSTS, GROUP_8_HOSTS
+]
 
 class ServerRankFailure(IorTestBase):
     # pylint: disable=too-many-ancestors
@@ -154,8 +170,38 @@ class ServerRankFailure(IorTestBase):
         time.sleep(5)
 
         # 3. While IOR is running, kill all daos_engine on a non-access-point node
-        engine_kill_host = self.hostlist_servers[1]
-        self.kill_engine(engine_kill_host=engine_kill_host)
+        ex_env = self.params.get("ex_env", "/run/*")
+        if ex_env == "ci":
+            # Original implementation. Need to be changed to kill one engine process from two
+            # different nodes in two different groups.
+            engine_kill_host = self.hostlist_servers[1]
+            self.kill_engine(engine_kill_host=engine_kill_host)
+        else:
+            # Workaround for Aurora. Stop up to two ranks in different groups using
+            # "dmg system stop"
+            ranks = self.server_managers[0].ranks
+            self.log.info("Ranks = %s", ranks)
+            # Create a list of list that contains the ranks in each group. e.g.,
+            # First element is a list of ranks for group 1 nodes, or the list of nodes in
+            # the first element of host_groups.
+            rank_groups = defaultdict(list)
+            for rank, host in ranks.items():
+                for group in range(8):
+                    if host in HOST_GROUPS[group]:
+                        rank_groups[group].append(rank)
+            self.log.info("Rank groups = %s", rank_groups)
+            # Stop a rank from each group up to two groups.
+            dmg_command = self.get_dmg_command()
+            count = 0
+            for ranks in rank_groups.values():
+                self.log.info("rank_group = %s", ranks)
+                if count == 2:
+                    break
+                # Select an arbitrary rank.
+                rank_to_stop = str(ranks[0])
+                self.log.info("Stopping rank %s", rank_to_stop)
+                dmg_command.system_stop(force=True, ranks=rank_to_stop)
+                count += 1
 
         # 4. Wait for IOR to complete.
         ior_thread.join()
@@ -177,13 +223,13 @@ class ServerRankFailure(IorTestBase):
         self.restart_all_servers()
 
         # 8. Verify the system status by calling dmg system query.
-        output = self.get_dmg_command().system_query()
+        output = dmg_command.system_query()
         for member in output["response"]["members"]:
             if member["state"] != "joined":
                 errors.append("Server rank {} state isn't joined!".format(member["rank"]))
 
         # 9. Call dmg pool query -b to find the disabled ranks.
-        output = self.get_dmg_command().pool_query(pool=self.pool.identifier, show_disabled=True)
+        output = dmg_command.pool_query(pool=self.pool.identifier, show_disabled=True)
         disabled_ranks = output["response"]["disabled_ranks"]
         self.log.info("Disabled ranks = %s", disabled_ranks)
 
