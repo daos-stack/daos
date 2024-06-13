@@ -7,8 +7,8 @@ import os
 import threading
 import time
 
-from ClusterShell.NodeSet import NodeSet
 from collections import defaultdict
+from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import CommandFailure
 from general_utils import report_errors
@@ -31,6 +31,7 @@ HOST_GROUPS = [
     GROUP_1_HOSTS, GROUP_2_HOSTS, GROUP_3_HOSTS, GROUP_4_HOSTS, GROUP_5_HOSTS, GROUP_6_HOSTS,
     GROUP_7_HOSTS, GROUP_8_HOSTS
 ]
+
 
 class ServerRankFailure(IorTestBase):
     # pylint: disable=too-many-ancestors
