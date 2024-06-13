@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.7.100
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -82,6 +82,7 @@ BuildRequires: libcmocka-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
 BuildRequires: go >= 1.17
+BuildRequires: pciutils-devel
 %if (0%{?rhel} >= 8)
 BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
@@ -146,6 +147,7 @@ Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 03.00.00.0423
+Requires: pciutils
 Requires: libpmemobj1 >= 2.0.0-1.suse1500
 Requires: libfabric1 >= %{libfabric_version}
 %else
@@ -157,6 +159,7 @@ Requires: mercury >= %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 Requires: numactl
+Requires: pciutils
 %{?systemd_requires}
 
 %description server
@@ -588,6 +591,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu Jun 3 2024 Tom Nabarro <tom.nabarro@intel.com> 2.7.100-2
+- Add pciutils runtime dep for daos_server lspci call
+- Add pciutils-devel build dep for pciutils CGO bindings
+
 * Mon May 20 2024 Phillip Henderson <phillip.henderson@intel.com> 2.7.100-1
 - Bump version to 2.7.100
 
