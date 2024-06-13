@@ -9,8 +9,11 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path"
+	"runtime/pprof"
+	"strconv"
 
 	flags "github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
@@ -299,19 +302,40 @@ and access control settings, along with system wide operations.`
 }
 
 func main() {
+	n := 1
+	cpuprofile := os.Getenv("DAOS_DMG_CPUPROFILE")
+	if cpuprofile != "" {
+		f, err := os.Create(cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		nString := os.Getenv("DAOS_DMG_CPUPROFILE_N")
+		if nString == "" {
+			nString = "100"
+		}
+		n, err = strconv.Atoi(nString)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
+
 	var opts cliOptions
 	log := logging.NewCommandLineLogger()
 
-	ctlInvoker := control.NewClient(
-		control.WithClientLogger(log),
-		control.WithClientComponent(build.ComponentAdmin),
-	)
+	for i := 0; i < n; i++ {
+		ctlInvoker := control.NewClient(
+			control.WithClientLogger(log),
+			control.WithClientComponent(build.ComponentAdmin),
+		)
 
-	if err := parseOpts(os.Args[1:], &opts, ctlInvoker, log); err != nil {
-		if fe, ok := errors.Cause(err).(*flags.Error); ok && fe.Type == flags.ErrHelp {
-			log.Info(fe.Error())
-			os.Exit(0)
+		if err := parseOpts(os.Args[1:], &opts, ctlInvoker, log); err != nil {
+			if fe, ok := errors.Cause(err).(*flags.Error); ok && fe.Type == flags.ErrHelp {
+				log.Info(fe.Error())
+				os.Exit(0)
+			}
+			exitWithError(log, err)
 		}
-		exitWithError(log, err)
 	}
 }
