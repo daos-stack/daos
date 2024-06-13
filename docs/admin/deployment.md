@@ -149,7 +149,7 @@ only four or five NVMe SSDs per engine, it is natural to assign all three roles 
 configured as a single NVMe tier.
 
 
-2. Dwo NVMe tiers, one SSD assigned wal role (tier-1) and three SSDs assigned both meta and data
+2. Two NVMe tiers, one SSD assigned wal role (tier-1) and three SSDs assigned both meta and data
    roles (tier-2):
 
 ```bash
