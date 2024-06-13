@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -107,7 +107,8 @@ class VmdLedStatus(OSAUtils):
             uuid_list = sorted(uuid_dict.keys())
             self.log.info("Devices on hosts %s: %s", hosts, uuid_list)
             for uuid in uuid_list:
-                resp = set_device_faulty(self, self.dmg, hosts.split(':')[0], uuid)
+                _sys_xs = uuid_dict[uuid]['has_sys_xs']
+                resp = set_device_faulty(self, self.dmg, hosts.split(':')[0], uuid, None, _sys_xs)
                 self.log.info("Sleeping for 15 seconds ...")
                 time.sleep(15)
                 self.log.info(resp)
