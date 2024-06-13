@@ -3,11 +3,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+from collections import defaultdict
 import os
 import threading
 import time
 
-from collections import defaultdict
 from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import CommandFailure
