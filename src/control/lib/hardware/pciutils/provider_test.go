@@ -35,7 +35,7 @@ e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 100: 01 00 01 15 00 00 00 00 00 00 00 00 30 20 06 00`)
 
-	dev, err := pciutils.PCIDeviceFromConfig(ctx, cfgBytes)
+	dev, err := pciutils.PCIeCapsFromConfig(ctx, cfgBytes)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -522,11 +521,16 @@ func (d *PCIDevice) String() string {
 	if d.LinkNegSpeed > 0 {
 		speedStr = fmt.Sprintf(" @ %s", humanize.SI(float64(d.LinkNegSpeed), "T/s"))
 	}
+	var widthStr string
+	if d.LinkNegWidth > 0 {
+		widthStr = fmt.Sprintf(" (x%d)", d.LinkNegWidth)
+	}
 	var sizeStr string
 	if d.BlockDevice != nil {
 		sizeStr = fmt.Sprintf("%s ", humanize.Bytes(d.BlockDevice.Size))
 	}
-	return fmt.Sprintf("%s %s (%s%s)%s", &d.PCIAddr, d.Name, sizeStr, d.Type, speedStr)
+	return fmt.Sprintf("%s %s (%s%s)%s%s", &d.PCIAddr, d.Name, sizeStr, d.Type, speedStr,
+		widthStr)
 }
 
 // DeviceName returns the system name of the PCI device.
@@ -549,10 +553,6 @@ func (d *PCIDevice) DeviceType() DeviceType {
 func (d *PCIDevice) PCIDevice() *PCIDevice {
 	return d
 }
-
-// PCIDeviceFromConfig populates PCIDevice details from PCIe config space contents in the form of a
-// byte string.
-//func PCIDeviceFromConfig(cfgBytes string) (*PCIDevice, error)
 
 func (d PCIDevices) MarshalJSON() ([]byte, error) {
 	strMap := make(map[string][]*PCIDevice)
@@ -595,42 +595,6 @@ func (d PCIDevices) Get(addr *PCIAddress) []*PCIDevice {
 
 	if devs, found := d[*addr]; found {
 		return devs
-	}
-
-	return nil
-}
-
-// SetPciLinkStats uses reflection to populate proto health resp fields without having a typeswitch
-// to handle all fields which are matched on string line prefixes. Cautious usage with numerous
-// checks avoids potential for unexpected runtime errors associated with reflection. Reflect value
-// should be associated with proto.BioHealthResp struct.
-func SetPciLinkStats(inStr string, healthVal reflect.Value) error {
-	healthVal = reflect.Indirect(healthVal)
-	if !healthVal.IsValid() || healthVal.Kind() != reflect.Struct {
-		return errors.Errorf("reflect failed (valid/isstruct %v/%v)", healthVal.IsValid(),
-			healthVal.Kind() == reflect.Struct)
-	}
-
-	for _, line := range strings.Split(inStr, "\n") {
-		toks := strings.Split(strings.TrimSpace(line), ":")
-		if len(toks) != 2 {
-			continue // Not valid key:val entry.
-		}
-		lineKey := strings.TrimSpace(toks[0])
-		if !strings.HasPrefix(lineKey, "Lnk") {
-			continue // Bail early to reduce chance of false-positive lookups.
-		}
-
-		field := healthVal.FieldByName(lineKey)
-		// Check that matching field exists in health stats resp and that field is settable
-		// (exported) and of type string before attempting to set it.
-		if !field.IsValid() || !field.CanSet() || field.Kind() != reflect.String {
-			continue
-		}
-
-		lineVal := strings.TrimSpace(toks[1])
-
-		field.SetString(lineVal)
 	}
 
 	return nil

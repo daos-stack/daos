@@ -63,7 +63,7 @@ func speedToFloat(speed uint16) float32 {
 	return mant * 1e+9
 }
 
-func (api *api) PCIDeviceFromConfig(cfgBytes []byte, dev *hardware.PCIDevice) error {
+func (api *api) PCIeCapsFromConfig(cfgBytes []byte, dev *hardware.PCIDevice) error {
 	if len(cfgBytes) == 0 {
 		return errors.New("empty config")
 	}

@@ -363,24 +363,3 @@ func (s LinuxProvider) Mkdir(name string, perm os.FileMode) error {
 func (s LinuxProvider) RemoveAll(path string) error {
 	return os.RemoveAll(path)
 }
-
-// RunLspciWithInput passes formatted byte-string pci config space input param to lspci cmd and
-// returns human readable (-vv) output.
-func (s LinuxProvider) RunLspciWithInput(pciCfgStr string) (string, error) {
-	lspciPath, err := GetLspciPath()
-	if err != nil {
-		return "", errors.Wrap(err, "lookup lspci binary path")
-	}
-
-	cmd := exec.Command(lspciPath, "-vv", "-F", "/dev/stdin")
-	cmd.Stdin = strings.NewReader(pciCfgStr) // String input to be linefeed-terminated.
-	out, err := cmd.Output()
-	if err != nil {
-		return "", &RunCmdError{
-			Wrapped: errors.Wrapf(err, "Error running %s: %s", cmd, out),
-			Stdout:  string(out),
-		}
-	}
-
-	return string(out), nil
-}

@@ -34,7 +34,7 @@ type mockAccessProvider struct {
 
 func (ap *mockAccessProvider) Cleanup() {}
 
-func (ap *mockAccessProvider) PCIDeviceFromConfig(cfgBytes []byte, dev *hardware.PCIDevice) error {
+func (ap *mockAccessProvider) PCIeCapsFromConfig(cfgBytes []byte, dev *hardware.PCIDevice) error {
 	if ap.pciDevErr != nil {
 		return ap.pciDevErr
 	}

@@ -170,7 +170,7 @@ func addLinkInfoToHealthStats(ctx context.Context, pciCfg string, health *ctlpb.
 	sb := new(strings.Builder)
 	formatBytestring(pciCfg, sb)
 
-	pciDev, err := pciutils.PCIDeviceFromConfig(ctx, []byte(sb.String()))
+	pciDev, err := pciutils.PCIeCapsFromConfig(ctx, []byte(sb.String()))
 	if err != nil {
 		return err
 	}

@@ -353,8 +353,17 @@ func (t *Topology) Merge(newTopo *Topology) error {
 							oldDev.Type = newDev.Type
 						}
 
+						if oldDev.LinkMaxSpeed == 0 {
+							oldDev.LinkMaxSpeed = newDev.LinkMaxSpeed
+						}
 						if oldDev.LinkNegSpeed == 0 {
 							oldDev.LinkNegSpeed = newDev.LinkNegSpeed
+						}
+						if oldDev.LinkMaxWidth == 0 {
+							oldDev.LinkMaxWidth = newDev.LinkMaxWidth
+						}
+						if oldDev.LinkNegWidth == 0 {
+							oldDev.LinkNegWidth = newDev.LinkNegWidth
 						}
 					}
 				}

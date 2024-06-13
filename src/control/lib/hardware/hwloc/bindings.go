@@ -251,6 +251,8 @@ const (
 
 	bridgeTypeHost = C.HWLOC_OBJ_BRIDGE_HOST
 	bridgeTypePCI  = C.HWLOC_OBJ_BRIDGE_PCI
+
+	giga = 1e+9
 )
 
 // object is a thin wrapper for hwloc_obj_t and related functions.
@@ -555,7 +557,7 @@ func (o *object) linkSpeed() (float32, error) {
 		return 0, errors.Errorf("device %q attrs are nil", o.name())
 	}
 	// Attribute in Giga units, return raw transactions per sec.
-	return float32(pciDevAttr.linkspeed) * 1e+9, nil
+	return float32(pciDevAttr.linkspeed) * giga, nil
 }
 
 func newObject(topo *topology, cObj C.hwloc_obj_t) *object {

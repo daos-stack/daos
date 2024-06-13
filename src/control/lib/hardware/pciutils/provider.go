@@ -21,7 +21,7 @@ const (
 
 type (
 	accessProvider interface {
-		PCIDeviceFromConfig(cfgBytes []byte, dev *hardware.PCIDevice) error
+		PCIeCapsFromConfig(cfgBytes []byte, dev *hardware.PCIDevice) error
 		Cleanup()
 	}
 )
@@ -53,7 +53,7 @@ func Fini(ctx context.Context) {
 	ap.Cleanup()
 }
 
-func PCIDeviceFromConfig(ctx context.Context, cfgBytes []byte) (*hardware.PCIDevice, error) {
+func PCIeCapsFromConfig(ctx context.Context, cfgBytes []byte) (*hardware.PCIDevice, error) {
 	dev := &hardware.PCIDevice{}
 
 	ap, err := accessFromContext(ctx)
@@ -61,7 +61,7 @@ func PCIDeviceFromConfig(ctx context.Context, cfgBytes []byte) (*hardware.PCIDev
 		return nil, err
 	}
 
-	if err := ap.PCIDeviceFromConfig(cfgBytes, dev); err != nil {
+	if err := ap.PCIeCapsFromConfig(cfgBytes, dev); err != nil {
 		return nil, err
 	}
 

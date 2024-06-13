@@ -481,8 +481,7 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		ctrlr_reset_str_fields(resp->devices[i]->ctrlr);
 
 		if (dev_info->bdi_ctrlr != NULL) {
-			rc = add_ctrlr_details(resp->devices[i]->ctrlr, dev_info
-		};
+			rc = add_ctrlr_details(resp->devices[i]->ctrlr, dev_info);
 			if (rc != 0)
 				break;
 			resp->devices[i]->ctrlr_namespace_id = dev_info->bdi_ctrlr->nss->id;

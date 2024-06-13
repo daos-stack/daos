@@ -32,33 +32,31 @@ type (
 
 	// MockSysConfig alters mock SystemProvider behavior.
 	MockSysConfig struct {
-		IsMountedBool        bool
-		IsMountedErr         error
-		MountErr             error
-		UnmountErr           error
-		MkfsErr              error
-		ChmodErr             error
-		ChownErr             error
-		GetfsStr             string
-		GetfsErr             error
-		SourceToTarget       map[string]string
-		GetfsIndex           int
-		GetfsUsageResps      []GetfsUsageRetval
-		GetfsTypeRes         *FsType
-		GetfsTypeErr         []error
-		StatErrors           map[string]error
-		RealStat             bool
-		ReadFileResults      map[string][]byte
-		ReadFileErrors       map[string]error
-		RealReadFile         bool
-		GeteuidRes           int
-		GetegidRes           int
-		MkdirErr             error
-		RealMkdir            bool
-		RemoveAllErr         error
-		RealRemoveAll        bool
-		RunLspciWithInputOut string
-		RunLspciWithInputErr error
+		IsMountedBool   bool
+		IsMountedErr    error
+		MountErr        error
+		UnmountErr      error
+		MkfsErr         error
+		ChmodErr        error
+		ChownErr        error
+		GetfsStr        string
+		GetfsErr        error
+		SourceToTarget  map[string]string
+		GetfsIndex      int
+		GetfsUsageResps []GetfsUsageRetval
+		GetfsTypeRes    *FsType
+		GetfsTypeErr    []error
+		StatErrors      map[string]error
+		RealStat        bool
+		ReadFileResults map[string][]byte
+		ReadFileErrors  map[string]error
+		RealReadFile    bool
+		GeteuidRes      int
+		GetegidRes      int
+		MkdirErr        error
+		RealMkdir       bool
+		RemoveAllErr    error
+		RealRemoveAll   bool
 	}
 
 	// MockSysProvider gives a mock SystemProvider implementation.
@@ -244,13 +242,6 @@ func (msp *MockSysProvider) RemoveAll(path string) error {
 		return os.RemoveAll(path)
 	}
 	return msp.cfg.RemoveAllErr
-}
-
-func (msp *MockSysProvider) RunLspciWithInput(_ string) (string, error) {
-	if msp.cfg.RunLspciWithInputErr != nil {
-		return "", msp.cfg.RunLspciWithInputErr
-	}
-	return msp.cfg.RunLspciWithInputOut, nil
 }
 
 func NewMockSysProvider(log logging.Logger, cfg *MockSysConfig) *MockSysProvider {
