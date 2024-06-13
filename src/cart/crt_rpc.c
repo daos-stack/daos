@@ -535,6 +535,10 @@ crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
 	if (rpc_priv == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
+	rc = clock_gettime(CLOCK_REALTIME, &rpc_priv->crp_ts_alloced);
+	if (rc != 0)
+		D_ERROR("clock_gettime() failed; rc=%d\n", rc);
+
 	rpc_priv->crp_opc_info = opc_info;
 	rpc_priv->crp_forward = forward;
 	rpc_priv->crp_pub.cr_opc = opc;
@@ -555,6 +559,7 @@ crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
 	RPC_TRACE(DB_TRACE, rpc_priv, "(opc: %#x rpc_pub: %p) allocated.\n",
 		  rpc_priv->crp_opc_info->coi_opc,
 		  &rpc_priv->crp_pub);
+
 
 	*priv_allocated = rpc_priv;
 out:
@@ -1539,8 +1544,15 @@ out:
 int
 crt_reply_send(crt_rpc_t *req)
 {
+	struct timespec 	now;
+	unsigned long 		delta_ms;
+	unsigned long 		ms_now;
+	unsigned long 		ms_alloc;
+	int			recv, reply;
 	struct crt_rpc_priv	*rpc_priv = NULL;
 	int			rc = 0;
+	struct crt_context	*crt_ctx;
+
 
 	if (req == NULL) {
 		D_ERROR("invalid parameter (NULL req).\n");
@@ -1548,6 +1560,37 @@ crt_reply_send(crt_rpc_t *req)
 	}
 
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
+	crt_ctx = req->cr_ctx;
+
+	atomic_fetch_add(&crt_ctx->num_reply, 1);
+
+	rc = clock_gettime(CLOCK_REALTIME, &now);
+	if (rc != 0)
+		D_ERROR("gettime() now failed; rc=%d\n", rc);
+
+	ms_alloc = rpc_priv->crp_ts_alloced.tv_sec * 1000 +
+		   rpc_priv->crp_ts_alloced.tv_nsec / 1000000;
+
+	ms_now = now.tv_sec * 1000 + now.tv_nsec / 1000000;
+	delta_ms = ms_now - ms_alloc;
+
+	/* For experiment warn if 100ms or more to respond */
+	if (delta_ms > 100)
+		RPC_ERROR(rpc_priv, "Delta between alloc (%ld:%ld) and response (%ld:%ld) = %ld ms\n",
+			 rpc_priv->crp_ts_alloced.tv_sec, rpc_priv->crp_ts_alloced.tv_nsec,
+			 now.tv_sec, now.tv_nsec,
+			 delta_ms);
+
+
+	/* Make copies to avoid race */
+	recv = crt_ctx->num_recv;
+	reply = crt_ctx->num_reply;
+
+	/* For experiment warn if more than 50 unreplied rpcs on this context */
+	if (recv - reply > 50) {
+		D_WARN("Number of incoming rpcs exceeds number replies by %d (%d %d)\n",
+			recv - reply, recv, reply);
+	}
 
 	if (rpc_priv->crp_coll == 1) {
 		struct crt_cb_info	cb_info;
@@ -1564,6 +1607,7 @@ crt_reply_send(crt_rpc_t *req)
 		if (rc != 0)
 			D_ERROR("crt_hg_reply_send failed, rc: %d,opc: %#x.\n",
 				rc, rpc_priv->crp_pub.cr_opc);
+
 	}
 
 	rpc_priv->crp_reply_pending = 0;

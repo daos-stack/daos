@@ -245,6 +245,9 @@ struct crt_context {
 
 	/** Stores quotas */
 	struct crt_quotas	cc_quotas;
+
+	ATOMIC uint32_t num_recv;
+	ATOMIC uint32_t num_reply;
 };
 
 /* in-flight RPC req list, be tracked per endpoint for every crt_context */
