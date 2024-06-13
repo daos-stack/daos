@@ -39,6 +39,7 @@ daos_dev_deps:
     - libevent-devel
     - libyaml-devel
     - openssl-devel
+    - pciutils-devel
     - python3.11
     - python3.11-devel
     - python3-clustershell
@@ -72,6 +73,8 @@ daos_server_deps:
     - libuuid
     - lz4-libs
     - ndctl
+    - pciutils
+    - pciutils-libs
     - spdk-tools
 
 mlnx_deps:
