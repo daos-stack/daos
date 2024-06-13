@@ -294,11 +294,11 @@ crt_env_fini(void)
 
 /* Returns value if env was present at load time */
 #define crt_env_get(name, val)                                                                     \
-do {                                                                                               \
-	D_ASSERT(crt_genvs.inited);                                                                \
-	if (crt_genvs._rc_##name == 0)                                                             \
-		*val = crt_genvs._##name;                                                          \
-} while (0)
+	do {                                                                                       \
+		D_ASSERT(crt_genvs.inited);                                                        \
+		if (crt_genvs._rc_##name == 0)                                                     \
+			*val = crt_genvs._##name;                                                  \
+	} while (0)
 
 static inline void
 crt_env_dump(void)
