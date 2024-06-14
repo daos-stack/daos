@@ -47,7 +47,23 @@
 ## default 0 (do not retain telemetry after client exit)
 #telemetry_retain: 1m
 
-## Transport Credentials Specifying certificates to secure communications
+## Configuration for user credential management.
+#
+#credential_config:
+#  # If the agent should be able to resolve unknown client uids and gids
+#  # (e.g. when running in a container) into ACL principal names, then a
+#  # client user map may be defined. The optional "default" uid is a special
+#  # case and applies if no other matches are found.
+#  client_user_map:
+#    default:
+#      user: nobody
+#      group: nobody
+#    1000:
+#      user: ralph
+#      group: stanley
+
+## Configuration for SSL certificates used to secure management traffic
+# and authenticate/authorize management components.
 #
 #transport_config:
 #  # In order to disable transport security, uncomment and set allow_insecure
@@ -60,7 +76,7 @@
 #  cert: /etc/daos/certs/agent.crt
 #  # Key portion of Agent Certificate
 #  key: /etc/daos/certs/agent.key
-
+#
 # Use the given directory for creating unix domain sockets
 #
 # NOTE: Do not change this when running under systemd control. If it needs to

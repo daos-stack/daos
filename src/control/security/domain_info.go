@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -61,6 +61,11 @@ func (d *DomainInfo) String() string {
 		outStr += fmt.Sprintf(" (%s)", gName)
 	}
 	return outStr
+}
+
+// Pid returns the PID obtained from the domain socket
+func (d *DomainInfo) Pid() int32 {
+	return d.creds.Pid
 }
 
 // Uid returns the UID obtained from the domain socket

@@ -146,7 +146,7 @@ container uuids/labels.
 Create a container with a path on dfuse or lustre, or any file system that supports extended
 attributes:
 ```bash
-daos cont create mypool --label mycont --path=/mnt/dfuse/ --type POSIX
+daos cont create mypool mycont --path=/mnt/dfuse/ --type POSIX
 ```
 
 Then using that path, one can start creating files using the DAOS MPIIO driver by just appending

@@ -1585,7 +1585,7 @@ host1
   No devices found
 `,
 		},
-		"device-health": {
+		"list-devices; with health": {
 			noPools: true,
 			hsm: mockHostStorageMap(t,
 				&mockHostStorage{
