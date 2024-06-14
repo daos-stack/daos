@@ -1664,6 +1664,15 @@ crt_rpc_inout_buff_init(struct crt_rpc_priv *rpc_priv)
 	}
 }
 
+uint64_t
+crt_rpc_get_rpcid(crt_rpc_t *rpc)
+{
+	struct crt_rpc_priv	*rpc_priv;
+
+	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
+	return rpc_priv->crp_req_hdr.cch_rpcid;
+}
+
 static inline void
 crt_common_hdr_init(struct crt_rpc_priv *rpc_priv, crt_opcode_t opc)
 {
