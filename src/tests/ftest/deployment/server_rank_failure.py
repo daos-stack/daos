@@ -193,11 +193,10 @@ class ServerRankFailure(IorTestBase):
             dmg_command = self.get_dmg_command()
             count = 0
             for ranks in rank_groups.values():
-                self.log.info("rank_group = %s", ranks)
                 if count == 2:
                     break
                 # Select an arbitrary rank.
-                rank_to_stop = str(ranks[0])
+                rank_to_stop = str(self.random.choice(ranks))
                 self.log.info("Stopping rank %s", rank_to_stop)
                 dmg_command.system_stop(force=True, ranks=rank_to_stop)
                 count += 1
