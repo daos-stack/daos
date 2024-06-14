@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,10 +18,10 @@
 #define POOL_MAP_VER_2		(2)
 #define POOL_MAP_VERSION	POOL_MAP_VER_2
 
-#define DF_TARGET "Target[%d] (rank %u idx %u status %u ver %u in/out ver %u fseq %u)"
+#define DF_TARGET "Target[%d] (rank %u idx %u status %u flags %u ver %u in/out ver %u fseq %u)"
 #define DP_TARGET(t) t->ta_comp.co_id, t->ta_comp.co_rank, t->ta_comp.co_index,\
-		     t->ta_comp.co_status, t->ta_comp.co_ver, t->ta_comp.co_in_ver, \
-		     t->ta_comp.co_fseq
+		     t->ta_comp.co_status, t->ta_comp.co_flags, t->ta_comp.co_ver, \
+		     t->ta_comp.co_in_ver, t->ta_comp.co_fseq
 
 /**
  * pool component types
@@ -371,6 +371,19 @@ static inline bool
 pool_target_is_up_or_drain(struct pool_target *tgt)
 {
 	return tgt->ta_comp.co_status & (PO_COMP_ST_UP | PO_COMP_ST_DRAIN);
+}
+
+static inline bool
+pool_target_is_up(struct pool_target *tgt)
+{
+	return (tgt->ta_comp.co_status == PO_COMP_ST_UP);
+}
+
+static inline bool
+pool_target_is_down2up(struct pool_target *tgt)
+{
+	return (tgt->ta_comp.co_status == PO_COMP_ST_UP) &&
+	       (tgt->ta_comp.co_flags & PO_COMPF_DOWN2UP);
 }
 
 /** Check if the target is in PO_COMP_ST_DOWN status */

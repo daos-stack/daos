@@ -76,9 +76,11 @@ remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
 	f_new->fs_fseq = tgt->ta_comp.co_fseq;
 	f_new->fs_status = tgt->ta_comp.co_status;
 	f_new->fs_data = data;
+	if (pool_target_is_down2up(tgt))
+		f_new->fs_down2up = 1;
 
-	D_DEBUG(DB_PL, "tgt %u status %u reint %s\n", tgt->ta_comp.co_id,
-		tgt->ta_comp.co_status, for_reint ? "yes" : "no");
+	D_DEBUG(DB_PL, "tgt %u status %u flags %u reint %s\n", tgt->ta_comp.co_id,
+		tgt->ta_comp.co_status, tgt->ta_comp.co_flags, for_reint ? "yes" : "no");
 	if (!for_reint) {
 		f_new->fs_tgt_id = -1;
 		remap_add_one(remap_list, f_new);
@@ -251,7 +253,13 @@ is_comp_avaible(struct pool_component *comp, uint32_t allow_version,
 			status = PO_COMP_ST_UPIN;
 		} else if (status == PO_COMP_ST_UP) {
 			if (comp->co_flags & PO_COMPF_DOWN2UP) {
-				status = PO_COMP_ST_UPIN;
+				/* PO_COMP_ST_UP status with PO_COMPF_DOWN2UP flag
+				 * is the case of delay_rebuild exclude+reint.
+				 * Cannot mark it as UPIN to avoid it be used for
+				 * rebuild enumerate/fetch, as the data will be
+				 * discarded in reintegrate.
+				 */
+				/* status = PO_COMP_ST_UPIN; */
 			} else {
 				if (comp->co_fseq <= 1)
 					status = PO_COMP_ST_NEW;
@@ -387,12 +395,12 @@ next_fail:
 		l_shard->po_fseq = f_shard->fs_fseq;
 
 		/*
-		 * Mark the shard as 'rebuilding' so that read will
-		 * skip this shard.
+		 * Mark the shard as 'rebuilding' so that read will skip this shard.
+		 * f_shard->fs_down2up is the case of delay_rebuild exclude+reint.
 		 */
 		if (f_shard->fs_status == PO_COMP_ST_DOWN ||
 		    f_shard->fs_status == PO_COMP_ST_DRAIN ||
-		    pool_target_down(spare_tgt))
+		    f_shard->fs_down2up || pool_target_down(spare_tgt))
 			l_shard->po_rebuilding = 1;
 	} else {
 		l_shard->po_shard = -1;
