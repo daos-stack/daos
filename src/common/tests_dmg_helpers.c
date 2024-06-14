@@ -838,9 +838,9 @@ dmg_pool_extend(const char *dmg_config_file, const uuid_t uuid,
 	rank_list.rl_ranks = ranks;
 	rank_list.rl_nr = rank_nr;
 
-	rank_str = d_rank_list_to_str(&rank_list);
-	if (rank_str == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+	rc = d_rank_list_to_str(&rank_list, &rank_str);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	uuid_unparse_lower(uuid, uuid_str);
 	args = cmd_push_arg(args, &argcount, "%s ", uuid_str);
