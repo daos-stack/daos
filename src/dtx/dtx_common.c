@@ -49,6 +49,7 @@ struct dtx_batched_cont_args {
 	struct dtx_batched_pool_args	*dbca_pool;
 	int				 dbca_refs;
 	uint32_t			 dbca_reg_gen;
+	uint32_t			 dbca_cleanup_thd;
 	uint32_t			 dbca_deregister:1,
 					 dbca_cleanup_done:1,
 					 dbca_commit_done:1,
@@ -68,6 +69,7 @@ struct dtx_cleanup_cb_args {
 	d_list_t		dcca_pc_list;
 	int			dcca_st_count;
 	int			dcca_pc_count;
+	uint32_t		dcca_cleanup_thd;
 };
 
 static inline void
@@ -226,7 +228,7 @@ dtx_cleanup_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 		return 0;
 
 	/* Stop the iteration if current DTX is not too old. */
-	if (dtx_sec2age(ent->ie_dtx_start_time) <= DTX_CLEANUP_THD_AGE_LO)
+	if (dtx_sec2age(ent->ie_dtx_start_time) <= dcca->dcca_cleanup_thd)
 		return 1;
 
 	D_ASSERT(ent->ie_dtx_mbs_dsize > 0);
@@ -336,6 +338,8 @@ dtx_cleanup(void *arg)
 	D_INIT_LIST_HEAD(&dcca.dcca_pc_list);
 	dcca.dcca_st_count = 0;
 	dcca.dcca_pc_count = 0;
+	/* Cleanup stale DTX entries within about 10 seconds windows each time. */
+	dcca.dcca_cleanup_thd = dbca->dbca_cleanup_thd - 10;
 	rc = ds_cont_iter(cont->sc_pool->spc_hdl, cont->sc_uuid,
 			  dtx_cleanup_iter_cb, &dcca, VOS_ITER_DTX, 0);
 	if (rc < 0)
@@ -754,7 +758,7 @@ dtx_batched_commit(void *arg)
 		if (dtx_cont_opened(cont) &&
 		    !dbca->dbca_deregister && dbca->dbca_cleanup_req == NULL &&
 		    stat.dtx_oldest_active_time != 0 &&
-		    dtx_sec2age(stat.dtx_oldest_active_time) >= DTX_CLEANUP_THD_AGE_UP) {
+		    dtx_sec2age(stat.dtx_oldest_active_time) >= dbca->dbca_cleanup_thd) {
 			D_ASSERT(!dbca->dbca_cleanup_done);
 			dtx_get_dbca(dbca);
 
@@ -1777,6 +1781,7 @@ dtx_cont_register(struct ds_cont_child *cont)
 	struct dtx_batched_pool_args	*dbpa = NULL;
 	struct dtx_batched_cont_args	*dbca = NULL;
 	struct umem_attr		 uma;
+	uint32_t			 timeout;
 	int				 rc;
 	bool				 new_pool = true;
 
@@ -1814,6 +1819,19 @@ dtx_cont_register(struct ds_cont_child *cont)
 	D_ALLOC_PTR(dbca);
 	if (dbca == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = crt_context_get_timeout(dmi->dmi_ctx, &timeout);
+	if (rc != 0) {
+		D_ERROR("Failed to get DTX cleanup timeout: "DF_RC"\n", DP_RC(rc));
+		goto out;
+	}
+
+	/*
+	 * Give related DTX leader sometime after default RPC timeout to commit or abort
+	 * the DTX. If the DTX is still prepared after that, then trigger DTX cleanup to
+	 * handle potential stale DTX entries.
+	 */
+	dbca->dbca_cleanup_thd = timeout + DTX_COMMIT_THRESHOLD_AGE * 2;
 
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;

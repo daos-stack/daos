@@ -94,17 +94,6 @@ CRT_RPC_DECLARE(dtx_coll, DAOS_ISEQ_COLL_DTX, DAOS_OSEQ_COLL_DTX);
 
 #define DTX_YIELD_CYCLE		(DTX_THRESHOLD_COUNT >> 3)
 
-/* The time threshold for triggering DTX cleanup of stale entries.
- * If the oldest active DTX exceeds such threshold, it will trigger
- * DTX cleanup locally.
- */
-#define DTX_CLEANUP_THD_AGE_UP	90
-
-/* If DTX cleanup for stale entries is triggered, then the DTXs with
- * older ages than this threshold will be cleanup.
- */
-#define DTX_CLEANUP_THD_AGE_LO	75
-
 /* The count threshold (per pool) for triggering DTX aggregation. */
 #define DTX_AGG_THD_CNT_MAX	(1 << 24)
 #define DTX_AGG_THD_CNT_MIN	(1 << 20)
