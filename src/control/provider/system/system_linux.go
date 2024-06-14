@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -205,8 +205,8 @@ type FsType struct {
 	NoSUID bool
 }
 
-// GetFsType retrieves the filesystem type for a path.
-func (s LinuxProvider) GetFsType(path string) (*FsType, error) {
+// GetfsType retrieves the filesystem type for a path.
+func (s LinuxProvider) GetfsType(path string) (*FsType, error) {
 	stBuf := new(unix.Statfs_t)
 
 	if err := unix.Statfs(path, stBuf); err != nil {
@@ -313,6 +313,11 @@ func (s LinuxProvider) Stat(path string) (os.FileInfo, error) {
 	return os.Stat(path)
 }
 
+// ReadFile reads the named file and returns the contents.
+func (s LinuxProvider) ReadFile(path string) ([]byte, error) {
+	return os.ReadFile(path)
+}
+
 // Chmod changes the mode of the specified path.
 func (s LinuxProvider) Chmod(path string, mode os.FileMode) error {
 	return os.Chmod(path, mode)
@@ -336,4 +341,25 @@ func parseFsType(input string) string {
 	default:
 		return FsTypeUnknown
 	}
+}
+
+// Geteuid returns the numeric effective user id of the caller.
+func (s LinuxProvider) Geteuid() int {
+	return os.Geteuid()
+}
+
+// Getegid returns the numeric effective group id of the caller.
+func (s LinuxProvider) Getegid() int {
+	return os.Getegid()
+}
+
+// Mkdir creates a new directory with the specified name and permission
+// bits (before umask).
+func (s LinuxProvider) Mkdir(name string, perm os.FileMode) error {
+	return os.Mkdir(name, perm)
+}
+
+// RemoveAll removes path and any children it contains.
+func (s LinuxProvider) RemoveAll(path string) error {
+	return os.RemoveAll(path)
 }

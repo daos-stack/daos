@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,6 +14,7 @@
 
 #include <daos_errno.h>
 #include <daos/common.h>
+#include <daos/metrics.h>
 #include <gurt/list.h>
 #include <daos/rpc.h>
 #include "drpc_handler.h"
@@ -245,7 +246,7 @@ dss_module_init_all(uint64_t *mod_facs)
 
 	/*
 	 * first register global tls accessible to all modules,
-	 * it'll be first initialized and last finialized.
+	 * it'll be first initialized and last finalized.
 	 */
 	dss_register_key(&daos_srv_modkey);
 
@@ -387,7 +388,7 @@ dss_module_init_metrics(enum dss_module_tag tag, void **metrics,
 	struct loaded_mod *mod;
 
 	d_list_for_each_entry(mod, &loaded_mod_list, lm_lk) {
-		struct dss_module_metrics *met = mod->lm_dss_mod->sm_metrics;
+		struct daos_module_metrics *met = mod->lm_dss_mod->sm_metrics;
 
 		if (met == NULL)
 			continue;
@@ -415,7 +416,7 @@ dss_module_fini_metrics(enum dss_module_tag tag, void **metrics)
 	struct loaded_mod *mod;
 
 	d_list_for_each_entry(mod, &loaded_mod_list, lm_lk) {
-		struct dss_module_metrics *met = mod->lm_dss_mod->sm_metrics;
+		struct daos_module_metrics *met = mod->lm_dss_mod->sm_metrics;
 
 		if (met == NULL)
 			continue;
@@ -442,7 +443,7 @@ dss_module_nr_pool_metrics(void)
 	int			 total = 0, nr;
 
 	d_list_for_each_entry(mod, &loaded_mod_list, lm_lk) {
-		struct dss_module_metrics *met = mod->lm_dss_mod->sm_metrics;
+		struct daos_module_metrics *met = mod->lm_dss_mod->sm_metrics;
 
 		if (met == NULL)
 			continue;

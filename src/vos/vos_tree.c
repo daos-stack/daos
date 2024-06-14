@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -154,7 +154,9 @@ ktr_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 {
 	struct ktr_hkey		*kkey = (struct ktr_hkey *)hkey;
 	struct umem_pool        *umm_pool = tins->ti_umm.umm_pool;
+	struct vos_pool         *pool     = (struct vos_pool *)tins->ti_priv;
 
+	D_ASSERT(key_iov->iov_len < pool->vp_pool_df->pd_scm_sz);
 	hkey_common_gen(key_iov, hkey);
 
 	if (key_iov->iov_len > KH_INLINE_MAX)
@@ -688,7 +690,12 @@ svt_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	if (rc != 0)
 		return rc;
 
-	return svt_rec_alloc_common(tins, rec, skey, rbund);
+	rc = svt_rec_alloc_common(tins, rec, skey, rbund);
+	if (rc != 0)
+		return rc;
+
+	/* Inform btr_update() that the original record is replaced */
+	return 1;
 }
 
 static int

@@ -33,6 +33,10 @@ static struct crt_corpc_ops ds_mgmt_hdlr_tgt_create_co_ops = {
 	.co_post_reply = ds_mgmt_tgt_create_post_reply,
 };
 
+static struct crt_corpc_ops ds_mgmt_hdlr_tgt_destroy_co_ops = {
+	.co_aggregate	= ds_mgmt_tgt_destroy_aggregator
+};
+
 static struct crt_corpc_ops ds_mgmt_hdlr_tgt_map_update_co_ops = {
 	.co_aggregate	= ds_mgmt_tgt_map_update_aggregator,
 	.co_pre_forward	= ds_mgmt_tgt_map_update_pre_forward,
@@ -149,6 +153,21 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		break;
 	case DRPC_METHOD_MGMT_LED_MANAGE:
 		ds_mgmt_drpc_dev_manage_led(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_CHK_START:
+		ds_mgmt_drpc_check_start(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_CHK_STOP:
+		ds_mgmt_drpc_check_stop(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_CHK_QUERY:
+		ds_mgmt_drpc_check_query(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_CHK_PROP:
+		ds_mgmt_drpc_check_prop(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_CHK_ACT:
+		ds_mgmt_drpc_check_act(drpc_req, drpc_resp);
 		break;
 	default:
 		drpc_resp->status = DRPC__STATUS__UNKNOWN_METHOD;

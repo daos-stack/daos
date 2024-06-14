@@ -148,9 +148,9 @@ used by DAOS and NVME SSDs will be identified.
 		pmem0			0 			3.2 TB
 		pmem1 			0 			3.2 TB
 
-4. Scan the available storage on the Server nodes:
+4. Scan the available nvme storage on the Server nodes:
 
-		daos_server storage scan
+		daos_server nvme scan
 		Scanning locally-attached storage\...
 
 		NVMe PCI		Model				FW Revision	Socket ID	Capacity
@@ -158,6 +158,9 @@ used by DAOS and NVME SSDs will be identified.
 		0000:81:00.0	INTEL SSDPE2KE016T8 VDV10170 	0 			1.6 TB
 		0000:83:00.0	INTEL SSDPE2KE016T8 VDV10170 	1 			1.6 TB
 
+5. Scan the available scm storage on the Server nodes:
+
+		daos_server scm scan
 		SCM Namespace	Socket ID	Capacity
 		-------------	---------	--------
 		pmem0 			0 			3.2 TB

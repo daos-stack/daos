@@ -1,0 +1,39 @@
+hosts:
+  test_servers: 2
+
+timeout: 360
+
+server_config:
+  engines_per_host: 2
+  engines:
+    0:
+      storage: auto
+      fabric_iface_port: 31416
+      log_file: daos_server_0.log
+      pinned_numa_node: 0
+      fabric_iface: ib0
+      targets: 8
+    1:
+      storage: auto
+      fabric_iface_port: 31516
+      log_file: daos_server_1.log
+      pinned_numa_node: 1
+      fabric_iface: ib1
+      targets: 8
+
+pool:
+  size: 100G
+
+container:
+  control_method: daos
+  type: POSIX
+
+ior:
+  client_processes:
+    ppn: 1
+  flags: -k -v -w -W
+  api: DFS
+  transfer_size: 1M
+  block_size: 10G
+  dfs_oclass: SX
+  dfs_dir_oclass: SX

@@ -18,7 +18,7 @@ def scons():
     tenv.Append(OBJPREFIX="b_")
 
     test_src = ['dtx_tests.c', 'sched_mock.c', 'ult_mock.c', 'srv_mock.c', 'pl_map_mock.c',
-                '../../engine/tls.c', 'dts_utils.c', 'dts_local.c', 'dts_local_rdb.c',
+                '../../common/tls.c', 'dts_utils.c', 'dts_local.c', 'dts_local_rdb.c',
                 'dts_structs.c', vts_objs]
     dtx_tests = tenv.d_program('dtx_tests', test_src, LIBS=libraries)
 

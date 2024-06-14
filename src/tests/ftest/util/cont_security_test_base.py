@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -40,13 +40,14 @@ class ContSecurityTestBase(TestWithServers):
         self.co_prop = self.params.get("container_properties", "/run/container/*")
         self.dmg = self.get_dmg_command()
 
-    def create_container_with_daos(self, pool, acl_type=None, acl_file=None):
+    def create_container_with_daos(self, pool, acl_type=None, acl_file=None, cont_type=None):
         """Create a container with the daos tool.
 
         Args:
             pool (TestPool): Pool object.
             acl_type (str, optional): valid or invalid.
             acl_file (str, optional): acl file
+            cont_type (str, optional): container type
 
         Returns:
             TestContainer: the new container
@@ -61,7 +62,7 @@ class ContSecurityTestBase(TestWithServers):
                 acl_file = os.path.join(self.tmp, "acl_{}.txt".format(acl_type))
 
         try:
-            return self.get_container(pool, acl_file=acl_file)
+            return self.get_container(pool, type=cont_type, acl_file=acl_file)
         except TestFail as error:
             if acl_type != "invalid":
                 raise DaosTestError("Could not create expected container ") from error

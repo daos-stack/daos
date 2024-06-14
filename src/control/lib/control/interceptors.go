@@ -12,7 +12,6 @@ import (
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	"github.com/daos-stack/daos/src/control/build"
@@ -88,10 +87,10 @@ func unaryVersionedComponentInterceptor(comp build.Component) grpc.UnaryClientIn
 				return errors.Wrap(err, "unable to determine component from method")
 			}
 		}
-		ctx := metadata.AppendToOutgoingContext(parent,
-			proto.DaosComponentHeader, comp.String(),
-			proto.DaosVersionHeader, build.DaosVersion,
-		)
+		ctx, err := build.ToContext(parent, comp, build.DaosVersion)
+		if err != nil {
+			return err
+		}
 		return invoker(ctx, method, req, reply, cc, opts...)
 	}
 }

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -48,8 +48,11 @@ dfuse_cb_read_complete(struct dfuse_event *ev)
 	DFUSE_REPLY_BUFQ(oh, ev->de_req, ev->de_iov.iov_buf, ev->de_len);
 release:
 	daos_event_fini(&ev->de_ev);
+	d_slab_restock(ev->de_eqt->de_read_slab);
 	d_slab_release(ev->de_eqt->de_read_slab, ev);
 }
+
+#define K128 (1024 * 128)
 
 static bool
 dfuse_readahead_reply(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
@@ -62,20 +65,27 @@ dfuse_readahead_reply(fuse_req_t req, size_t len, off_t position, struct dfuse_o
 	}
 
 	if (!oh->doh_linear_read || oh->doh_readahead->dra_ev == NULL) {
-		DFUSE_TRA_DEBUG(oh, "Readahead disabled");
+		DFUSE_TRA_DEBUG(oh, "Pre read disabled");
 		return false;
 	}
 
-	if (oh->doh_linear_read_pos != position) {
-		DFUSE_TRA_DEBUG(oh, "disabling readahead");
+	if (((position % K128) == 0) && ((len % K128) == 0)) {
+		DFUSE_TRA_INFO(oh, "allowing out-of-order pre read");
+		/* Do not closely track the read position in this case, just the maximum,
+		 * later checks will determine if the file is read to the end.
+		 */
+		oh->doh_linear_read_pos = max(oh->doh_linear_read_pos, position + len);
+	} else if (oh->doh_linear_read_pos != position) {
+		DFUSE_TRA_DEBUG(oh, "disabling pre read");
 		daos_event_fini(&oh->doh_readahead->dra_ev->de_ev);
-		d_slab_release(oh->doh_readahead->dra_ev->de_eqt->de_read_slab,
+		d_slab_release(oh->doh_readahead->dra_ev->de_eqt->de_pre_read_slab,
 			       oh->doh_readahead->dra_ev);
 		oh->doh_readahead->dra_ev = NULL;
 		return false;
+	} else {
+		oh->doh_linear_read_pos = position + len;
 	}
 
-	oh->doh_linear_read_pos = position + len;
 	if (position + len >= oh->doh_readahead->dra_ev->de_readahead_len) {
 		oh->doh_linear_read_eof = true;
 	}
@@ -96,6 +106,7 @@ dfuse_readahead_reply(fuse_req_t req, size_t len, off_t position, struct dfuse_o
 				position + reply_len - 1, position + reply_len, position + len - 1);
 	}
 
+	DFUSE_IE_STAT_ADD(oh->doh_ie, DS_PRE_READ);
 	DFUSE_REPLY_BUFQ(oh, req, oh->doh_readahead->dra_ev->de_iov.iov_buf + position, reply_len);
 	return true;
 }
@@ -127,7 +138,8 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 
 			if (ev) {
 				daos_event_fini(&ev->de_ev);
-				d_slab_release(ev->de_eqt->de_read_slab, ev);
+				d_slab_release(ev->de_eqt->de_pre_read_slab, ev);
+				DFUSE_IE_STAT_ADD(oh->doh_ie, DS_PRE_READ);
 			}
 		}
 		DFUSE_REPLY_BUFQ(oh, req, NULL, 0);
@@ -141,9 +153,8 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 		replied = dfuse_readahead_reply(req, len, position, oh);
 		D_MUTEX_UNLOCK(&oh->doh_readahead->dra_lock);
 
-		if (replied) {
+		if (replied)
 			return;
-		}
 	}
 
 	eqt_idx = atomic_fetch_add_relaxed(&dfuse_info->di_eqt_idx, 1);
@@ -186,6 +197,8 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 
 	ev->de_complete_cb = dfuse_cb_read_complete;
 
+	DFUSE_IE_WFLUSH(oh->doh_ie);
+
 	rc = dfs_read(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, position, &ev->de_len, &ev->de_ev);
 	if (rc != 0) {
 		D_GOTO(err, rc);
@@ -217,7 +230,7 @@ dfuse_cb_pre_read_complete(struct dfuse_event *ev)
 	if (ev->de_ev.ev_error != 0) {
 		oh->doh_readahead->dra_rc = ev->de_ev.ev_error;
 		daos_event_fini(&ev->de_ev);
-		d_slab_release(ev->de_eqt->de_read_slab, ev);
+		d_slab_release(ev->de_eqt->de_pre_read_slab, ev);
 		oh->doh_readahead->dra_ev = NULL;
 	}
 
@@ -227,7 +240,7 @@ dfuse_cb_pre_read_complete(struct dfuse_event *ev)
 	 */
 	if (ev->de_len != ev->de_readahead_len) {
 		daos_event_fini(&ev->de_ev);
-		d_slab_release(ev->de_eqt->de_read_slab, ev);
+		d_slab_release(ev->de_eqt->de_pre_read_slab, ev);
 		oh->doh_readahead->dra_ev = NULL;
 	}
 
@@ -246,7 +259,7 @@ dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh)
 	eqt_idx = atomic_fetch_add_relaxed(&dfuse_info->di_eqt_idx, 1);
 	eqt     = &dfuse_info->di_eqt[eqt_idx % dfuse_info->di_eq_count];
 
-	ev = d_slab_acquire(eqt->de_read_slab);
+	ev = d_slab_acquire(eqt->de_pre_read_slab);
 	if (ev == NULL)
 		D_GOTO(err, rc = ENOMEM);
 
@@ -277,7 +290,7 @@ err:
 	oh->doh_readahead->dra_rc = rc;
 	if (ev) {
 		daos_event_fini(&ev->de_ev);
-		d_slab_release(eqt->de_read_slab, ev);
+		d_slab_release(eqt->de_pre_read_slab, ev);
 		oh->doh_readahead->dra_ev = NULL;
 	}
 	D_MUTEX_UNLOCK(&oh->doh_readahead->dra_lock);

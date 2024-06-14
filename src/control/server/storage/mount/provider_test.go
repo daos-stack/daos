@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -270,6 +270,11 @@ func TestProvider_ClearMountpoint(t *testing.T) {
 			testDir, cleanupDir := test.CreateTestDir(t)
 			defer cleanupDir()
 
+			if tc.msc == nil {
+				tc.msc = new(system.MockSysConfig)
+			}
+			tc.msc.RealRemoveAll = true
+
 			if tc.setup == nil {
 				tc.setup = func(t *testing.T, testDir string) func(*testing.T) {
 					t.Helper()
@@ -374,6 +379,7 @@ func TestProvider_MakeMountPath(t *testing.T) {
 
 			msc := &system.MockSysConfig{
 				StatErrors: make(map[string]error),
+				RealMkdir:  true,
 			}
 			for mp, err := range tc.statErrs {
 				// mocked stat return errors updated for paths

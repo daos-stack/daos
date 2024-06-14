@@ -8,14 +8,14 @@ on:
   # for testing before landing
   workflow_dispatch:
 
-permissions:
-  contents: read
-  actions: read
-  checks: write
+permissions: {}
 
 jobs:
   report-vm-1:
     runs-on: [self-hosted, docker]
+    # https://github.com/dorny/test-reporter/issues/149
+    permissions:
+      checks: write
     strategy:
       matrix:
         # TODO: figure out how to determine this matrix

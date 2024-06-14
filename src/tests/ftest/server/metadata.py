@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2019-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -86,9 +86,19 @@ class ObjectMetadata(TestWithServers):
             self.log.debug("no pre-teardown steps defined")
         return error_list
 
-    def create_pool(self):
-        """Create a pool and display the svc ranks."""
-        self.add_pool()
+    def create_pool(self, svc_ops_enabled=True):
+        """Create a pool and display the svc ranks.
+
+        Args:
+            svc_ops_enabled (bool, optional): pool create with svc_ops_enabled. Defaults to True.
+
+        """
+        if svc_ops_enabled:
+            self.add_pool()
+        else:
+            params = {}
+            params['properties'] = "svc_ops_enabled:0"
+            self.add_pool(**params)
         self.log.info("Created pool %s: svc ranks:", self.pool.uuid)
         for index, rank in enumerate(self.pool.svc_ranks):
             self.log.info("[%d]: %d", index, rank)
@@ -236,24 +246,21 @@ class ObjectMetadata(TestWithServers):
 
         return True
 
-    def test_metadata_fillup(self):
-        """JIRA ID: DAOS-1512.
+    def metadata_fillup(self, svc_ops_enabled=True):
+        """Run test to verify number of resources that can be created until metadata is full.
 
-        Test Description:
-            Test to verify no IO happens after metadata is full.
+        Args:
+            svc_ops_enabled (bool): Pool create properties svc_ops_enabled. Defaults to True.
 
-        Use Cases:
-            ?
-
-        :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
-        :avocado: tags=server,metadata
-        :avocado: tags=ObjectMetadata,test_metadata_fillup
         """
-        self.create_pool()
-        svc_ops_entry_age = self.pool.get_property("svc_ops_entry_age")
-        if not self.run_dummy_metadata_workload(duration=svc_ops_entry_age):
-            self.fail("failed to run dummy metadata workload")
+        self.log_step("Create pool with properties svc_ops_enabled: {}".format(svc_ops_enabled))
+        self.create_pool(svc_ops_enabled=svc_ops_enabled)
+        # Run dummy_metadata_workload when feature is enabled
+        if svc_ops_enabled:
+            self.log.info("svc_ops_enabled enabled, run dummy_metadata_workload")
+            svc_ops_entry_age = self.pool.get_property("svc_ops_entry_age")
+            if not self.run_dummy_metadata_workload(duration=svc_ops_entry_age):
+                self.fail("Failed to run dummy metadata workload")
         sequential_fail_max = self.params.get("fillup_seq_fail_max", "/run/metadata/*")
         num_cont_to_destroy = self.params.get("num_cont_to_destroy", "/run/metadata/*")
 
@@ -266,10 +273,7 @@ class ObjectMetadata(TestWithServers):
         # Phase 2: if Phase 1 passed:
         #          clean up several (not all) containers created (prove "critical" destroy
         #          in rdb (and vos) works without cascading no space errors
-
-        # Phase 1 sustained container creates even after no space error
-        self.log.info(
-            "Phase 1: sustained container creates: to no space and beyond")
+        self.log_step("Sustained container creates: to no space and beyond.")
         self.container = []
         sequential_fail_counter = 0
         in_failure = False
@@ -285,48 +289,90 @@ class ObjectMetadata(TestWithServers):
                     sequential_fail_counter += 1
                 if sequential_fail_counter >= sequential_fail_max:
                     self.log.info(
-                        "Phase 1: container %d - %d/%d sequential no space "
+                        "Container %d - %d/%d sequential no space "
                         "container create errors", sequential_fail_counter,
                         sequential_fail_max, loop)
                     break
 
                 if status and in_failure:
                     self.log.info(
-                        "Phase 1: container: %d - no space -> available "
+                        "Container: %d - no space -> available "
                         "transition, sequential no space failures: %d",
                         loop, sequential_fail_counter)
                     in_failure = False
                 elif not status and not in_failure:
                     self.log.info(
-                        "Phase 1: container: %d - available -> no space "
+                        "Container: %d - available -> no space "
                         "transition, sequential no space failures: %d",
                         loop, sequential_fail_counter)
                     in_failure = True
 
             except TestFail as error:
                 self.log.error(str(error))
-                self.fail("Phase 1: fail (unexpected container create error)")
+                self.fail("fail (unexpected container create error)")
+        self.log_step("Verify number of container within limit.")
         if len(self.container) >= self.created_containers_limit:
-            self.log.error("Phase 1: Created too many containers: %d > %d", len(self.container),
+            self.log.error("Created too many containers: %d > %d", len(self.container),
                            self.created_containers_limit)
-            self.fail("Phase 1: Created too many containers")
+            self.fail("Created too many containers")
         if len(self.container) < self.created_containers_min:
-            self.log.info("Phase 1: Created too few containers: %d < %d", len(self.container),
+            self.log.info("Created too few containers: %d < %d", len(self.container),
                           self.created_containers_min)
-            self.fail("Phase 1: Created too few containers")
+            self.fail("Created too few containers")
         self.log.info(
-            "Phase 1: passed (created %d / %d containers)", len(self.container), loop)
+            "Successfully created %d / %d containers)", len(self.container), loop)
 
         # Phase 2 clean up some containers (expected to succeed)
-        self.log.info("Phase 2: Cleaning up %d containers (expected to work)", num_cont_to_destroy)
+        msg = "Cleaning up {} containers after pool is full.".format(num_cont_to_destroy)
+        self.log_step(msg)
         if not self.destroy_num_containers(num_cont_to_destroy):
-            self.fail("Phase 2: fail (unexpected container destroy error)")
-        self.log.info("Phase 2: passed")
+            self.fail("Fail (unexpected container destroy error)")
 
         # Do not destroy containers in teardown (destroy pool while metadata rdb is full)
-        self.container = None
+        for container in self.container:
+            container.skip_cleanup()
         self.log.info("Leaving pool metadata rdb full (containers will not be destroyed)")
         self.log.info("Test passed")
+
+    def test_metadata_fillup_svc_ops_disabled(self):
+        """JIRA ID: DAOS-15628.
+
+        Test Description:
+            Test to verify number of resources that can be created until metadata is full,
+            when svc_ops disabled.
+        Use Cases:
+            1. Create pool with properties svc_ops_enabled:0.
+            2. Create container until no space.
+            3. Verify number of container within limit.
+            4. Cleaning up containers after pool is full.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=server,metadata
+        :avocado: tags=ObjectMetadata,test_metadata_fillup_svc_ops_disabled
+        """
+        self.metadata_fillup(False)
+
+    def test_metadata_fillup_svc_ops_enabled(self):
+        """JIRA ID: DAOS-15628.
+
+        Test Description:
+            Test to verify number of resources that can be created until metadata is full,
+            when svc_ops_enabled.
+
+        Use Cases:
+            1. Create pool with properties svc_ops_enabled:1.
+               and run dummy metadata workload to fill up svc ops.
+            2. Create container until no space.
+            3. Verify number of container within limit.
+            4. Cleaning up containers after pool is full.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=server,metadata
+        :avocado: tags=ObjectMetadata,test_metadata_fillup_svc_ops_enabled
+        """
+        self.metadata_fillup(True)
 
     def test_metadata_addremove(self):
         """JIRA ID: DAOS-1512.
@@ -343,9 +389,13 @@ class ObjectMetadata(TestWithServers):
         :avocado: tags=ObjectMetadata,test_metadata_addremove
         """
         self.create_pool()
-        if not self.run_dummy_metadata_workload():
-            self.fail("failed to run dummy metadata workload")
-
+        svc_ops_enabled = self.pool.get_property("svc_ops_enabled")
+        if svc_ops_enabled:
+            svc_ops_entry_age = self.pool.get_property("svc_ops_entry_age")
+            if not self.run_dummy_metadata_workload(duration=svc_ops_entry_age):
+                self.fail("failed to run dummy metadata workload")
+        else:
+            self.fail("svc_ops_enabled:0 is not supported for this testcase.")
         self.container = []
         mean_cont_cnt = 0
         percent_cont = self.params.get("mean_percent", "/run/metadata/*")
@@ -433,7 +483,7 @@ class ObjectMetadata(TestWithServers):
                 # Define the arguments for the run_ior_loop method
                 ior_cmd = IorCommand()
                 ior_cmd.get_params(self)
-                ior_cmd.set_daos_params(self.server_group, self.pool, None)
+                ior_cmd.set_daos_params(self.pool, None)
                 ior_cmd.flags.value = self.params.get("ior{}flags".format(operation), "/run/ior/*")
 
                 # Define the job manager for the IOR command

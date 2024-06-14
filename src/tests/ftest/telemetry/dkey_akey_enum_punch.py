@@ -6,8 +6,10 @@
 import ctypes
 
 from general_utils import create_string_buffer
-from pydaos.raw import DaosContainer, DaosObjClass, IORequest
+from pydaos.raw import DaosObjClass, IORequest
 from telemetry_test_base import TestWithTelemetry
+from test_utils_container import add_container
+from test_utils_pool import add_pool
 
 
 class DkeyAkeyEnumPunch(TestWithTelemetry):
@@ -20,41 +22,45 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
     def __init__(self, *args, **kwargs):
         """Initialize a DkeyAkeyEnumPunch object."""
         super().__init__(*args, **kwargs)
-        self.total_targets = None
-        self.targets_per_rank = None
-        self.errors = []
         self.ioreqs = []
         self.dkeys_a = []
         self.dkeys_b = []
         self.dkey_strs_a = []
         self.dkey_strs_b = []
         self.akey_strs = []
-        self.obj_count = 100
 
-    def set_num_targets(self):
+    def set_num_targets(self, pool):
         """Define total number of targets and targets per rank from pool query.
 
         Sometimes the total number of targets and targets per rank are different
         from what we specify in the server config.
+
+        Args:
+            pool (TestPool): pool from which to query the target information
+
+        Returns:
+            tuple: total number of targets, number of targets per server host
         """
-        self.pool.set_query_data()
-        self.total_targets = self.pool.query_data["response"]["total_targets"]
+        pool.set_query_data()
+        total_targets = pool.query_data["response"]["total_targets"]
 
         # Calculate targets per rank from the total targets.
         server_count = len(self.server_managers[0].hosts)
-        self.targets_per_rank = int(self.total_targets / server_count)
+        targets_per_rank = int(total_targets / server_count)
+        return total_targets, targets_per_rank
 
-    def write_objects_insert_keys(self, container, objtype):
+    def write_objects_insert_keys(self, container, obj_type, obj_count):
         """Write objects and insert dkeys and akeys in them.
 
         Args:
-            container (DaosContainer): Container.
-            objtype (str): Object class.
+            container (TestContainer): Container.
+            obj_type (str): Object class.
+            obj_count (int): number of objects to write
         """
-        for idx in range(self.obj_count):
+        for idx in range(obj_count):
             self.ioreqs.append(IORequest(
-                context=self.context, container=container, obj=None,
-                objtype=objtype))
+                context=self.context, container=container.container, obj=None,
+                objtype=obj_type))
 
             # Prepare 2 dkeys and 1 akey in each dkey. Use the same akey for
             # both dkeys.
@@ -83,10 +89,13 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
             self.ioreqs[-1].single_insert(
                 dkey=self.dkeys_b[-1], akey=akey, value=data, size=c_size)
 
-    def punch_all_keys(self):
+    def punch_all_keys(self, obj_count):
         """Punch all dkeys and akeys in the objects.
+
+        Args:
+            obj_count (int): number of objects
         """
-        for idx in range(self.obj_count):
+        for idx in range(obj_count):
             self.ioreqs[idx].obj.punch_akeys(
                 0, dkey=self.dkey_strs_a[idx], akeys=[self.akey_strs[idx]])
             self.ioreqs[idx].obj.punch_akeys(
@@ -97,7 +106,7 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
             if idx % 10 == 0:
                 self.log.info("Keys punched %d", idx)
 
-    def verify_active_latency(self, prefix, test_latency):
+    def verify_active_latency(self, prefix, test_latency, total_targets, targets_per_rank):
         """Call the dmg telemetry command with given prefix and verify.
 
         Obtain and verify the io metrics 1 to 4 in test_dkey_akey_enum_punch()
@@ -106,15 +115,30 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
             prefix (str): Metrics prefix for the metric that has min, max,
                 mean, or stddev at the end.
             test_latency (bool): Whether to verify the latency metric.
-        """
-        metrics = self.get_min_max_mean_stddev(
-            prefix=prefix, total_targets=self.total_targets,
-            targets_per_rank=self.targets_per_rank)
+            total_targets (int): total number of targets
+            targets_per_rank (int): number of targets per rank
 
-        self.errors.extend(
-            self.verify_stats(
-                enum_metrics=metrics, metric_prefix=prefix,
-                test_latency=test_latency))
+        Returns:
+            list: a list of errors
+        """
+        metrics = self.get_min_max_mean_stddev(prefix, total_targets, targets_per_rank)
+        return self.verify_stats(metrics, prefix, test_latency)
+
+    def report_status(self, errors):
+        """Report any detected errors.
+
+        Args:
+            errors (list): list of errors
+        """
+        if errors:
+            self.log.error("Detected errors:")
+            first_error = None
+            for error in errors:
+                if not first_error:
+                    first_error = error
+                self.log.error("  - %s", error)
+            self.fail(first_error)
+        self.log.info("Test passed")
 
     def test_dkey_akey_enum_punch(self):
         """Test count and active for enum and punch.
@@ -207,26 +231,23 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
         :avocado: tags=telemetry
         :avocado: tags=DkeyAkeyEnumPunch,test_dkey_akey_enum_punch
         """
-        self.add_pool()
-
-        self.set_num_targets()
-
-        container = DaosContainer(self.context)
-        container.create(self.pool.pool.handle)
+        errors = []
+        pool = add_pool(self)
+        container = add_container(self, pool)
         container.open()
+        total_targets, targets_per_rank = self.set_num_targets(pool)
+        obj_count = 100
 
-        # Object type needs to be OC_S1 so that the objects are spread across
-        # all targets.
-        self.write_objects_insert_keys(
-            container=container, objtype=DaosObjClass.OC_S1)
+        # Object type needs to be OC_S1 so that the objects are spread across all targets.
+        self.write_objects_insert_keys(container, DaosObjClass.OC_S1, obj_count)
 
         # Call list_dkey() and list_akey() on each object.
-        for idx in range(self.obj_count):
+        for idx in range(obj_count):
             _ = self.ioreqs[idx].list_dkey()
             _ = self.ioreqs[idx].list_akey(dkey=self.dkeys_a[idx])
             _ = self.ioreqs[idx].list_akey(dkey=self.dkeys_b[idx])
 
-        self.punch_all_keys()
+        self.punch_all_keys(obj_count)
 
         self.telemetry.dmg.verbose = False
 
@@ -243,76 +264,78 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
             pool_dkey_enum, pool_akey_enum,
             pool_dkey_punch, pool_akey_punch,
         ]
-        pool_out = self.telemetry.get_pool_metrics(
-            specific_metrics=specific_metrics)
+        pool_out = self.telemetry.get_pool_metrics(specific_metrics)
 
         # Verify dkey_enum total is 100.
         dkey_enum_total = self.sum_values(metric_out=pool_out[pool_dkey_enum])
         if dkey_enum_total != 100:
             msg = "dkey enum total is not 100! Actual = {}".format(
                 dkey_enum_total)
-            self.errors.append(msg)
+            errors.append(msg)
 
         # Verify akey_enum total is 200.
         akey_enum_total = self.sum_values(metric_out=pool_out[pool_akey_enum])
         if akey_enum_total != 200:
             msg = "akey enum total is not 200! Actual = {}".format(
                 akey_enum_total)
-            self.errors.append(msg)
+            errors.append(msg)
 
         # Verify dkey_punch total is 200.
         dkey_punch_total = self.sum_values(metric_out=pool_out[pool_dkey_punch])
         if dkey_punch_total != 200:
             msg = "dkey punch total is not 200! Actual = {}".format(
                 dkey_punch_total)
-            self.errors.append(msg)
+            errors.append(msg)
 
         # Verify akey_punch total is 200.
         akey_punch_total = self.sum_values(metric_out=pool_out[pool_akey_punch])
         if akey_punch_total != 200:
             msg = "akey punch total is not 200! Actual = {}".format(
                 akey_punch_total)
-            self.errors.append(msg)
+            errors.append(msg)
 
         # Verify active and latency; metrics 5 to 8. ###
         # Verify dkey enum active.
-        self.verify_active_latency(
-            prefix="engine_io_ops_dkey_enum_active_", test_latency=False)
+        errors.extend(
+            self.verify_active_latency(
+                "engine_io_ops_dkey_enum_active_", False, total_targets, targets_per_rank))
 
         # Verify akey enum active.
-        self.verify_active_latency(
-            prefix="engine_io_ops_akey_enum_active_", test_latency=False)
+        errors.extend(
+            self.verify_active_latency(
+                "engine_io_ops_akey_enum_active_", False, total_targets, targets_per_rank))
 
         # Verify dkey enum latency.
-        self.verify_active_latency(
-            prefix="engine_io_ops_dkey_enum_latency_", test_latency=True)
+        errors.extend(
+            self.verify_active_latency(
+                "engine_io_ops_dkey_enum_latency_", True, total_targets, targets_per_rank))
 
         # Verify akey enum latency.
-        self.verify_active_latency(
-            prefix="engine_io_ops_akey_enum_latency_", test_latency=True)
+        errors.extend(
+            self.verify_active_latency(
+                "engine_io_ops_akey_enum_latency_", True, total_targets, targets_per_rank))
 
         # Verify dkey punch active.
-        self.verify_active_latency(
-            prefix="engine_io_ops_dkey_punch_active_", test_latency=False)
+        errors.extend(
+            self.verify_active_latency(
+                "engine_io_ops_dkey_punch_active_", False, total_targets, targets_per_rank))
 
         # Verify akey punch active.
-        self.verify_active_latency(
-            prefix="engine_io_ops_akey_punch_active_", test_latency=False)
+        errors.extend(
+            self.verify_active_latency(
+                "engine_io_ops_akey_punch_active_", False, total_targets, targets_per_rank))
 
         # Verify dkey punch latency.
-        self.verify_active_latency(
-            prefix="engine_io_ops_dkey_punch_latency_", test_latency=True)
+        errors.extend(
+            self.verify_active_latency(
+                "engine_io_ops_dkey_punch_latency_", True, total_targets, targets_per_rank))
 
         # Verify akey punch latency.
-        self.verify_active_latency(
-            prefix="engine_io_ops_akey_punch_latency_", test_latency=True)
+        errors.extend(
+            self.verify_active_latency(
+                "engine_io_ops_akey_punch_latency_", True, total_targets, targets_per_rank))
 
-        if self.errors:
-            self.fail("\n----- Errors detected! -----\n{}".format(
-                "\n".join(self.errors)))
-
-        container.destroy()
-        self.pool.destroy(disconnect=0)
+        self.report_status(errors)
 
     def test_pool_tgt_dkey_akey_punch(self):
         """Test punch count for tgt values.
@@ -340,20 +363,17 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
         :avocado: tags=telemetry
         :avocado: tags=DkeyAkeyEnumPunch,test_pool_tgt_dkey_akey_punch
         """
-        self.add_pool()
-
-        self.set_num_targets()
-
-        container = DaosContainer(self.context)
-        container.create(self.pool.pool.handle)
+        errors = []
+        pool = add_pool(self)
+        container = add_container(self, pool)
         container.open()
+        obj_count = 100
 
         # Create objects and dkey/akey in it. Use RP_2G1 for tgt metrics.
-        self.write_objects_insert_keys(
-            container=container, objtype=DaosObjClass.OC_RP_2G1)
+        self.write_objects_insert_keys(container, DaosObjClass.OC_RP_2G1, obj_count)
 
         # Punch the akeys and the dkeys in the objects.
-        self.punch_all_keys()
+        self.punch_all_keys(obj_count)
 
         self.telemetry.dmg.verbose = False
 
@@ -370,7 +390,7 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
         if tgt_dkey_punch_total != 200:
             msg = "tgt dkey punch total is not 200! Actual = {}".format(
                 tgt_dkey_punch_total)
-            self.errors.append(msg)
+            errors.append(msg)
 
         # Verify tgt_akey_punch total is 200.
         tgt_akey_punch_total = self.sum_values(
@@ -378,14 +398,9 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
         if tgt_akey_punch_total != 200:
             msg = "tgt akey punch total is not 200! Actual = {}".format(
                 tgt_akey_punch_total)
-            self.errors.append(msg)
+            errors.append(msg)
 
-        if self.errors:
-            self.fail("\n----- Errors detected! -----\n{}".format(
-                "\n".join(self.errors)))
-
-        container.destroy()
-        self.pool.destroy(disconnect=0)
+        self.report_status(errors)
 
     def test_tgt_dkey_akey_punch(self):
         """Test active and latency for tgt punch.
@@ -426,42 +441,39 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
         :avocado: tags=telemetry
         :avocado: tags=DkeyAkeyEnumPunch,test_tgt_dkey_akey_punch
         """
-        self.add_pool()
-
-        self.set_num_targets()
-
-        container = DaosContainer(self.context)
-        container.create(self.pool.pool.handle)
+        errors = []
+        pool = add_pool(self)
+        container = add_container(self, pool)
         container.open()
+        total_targets, targets_per_rank = self.set_num_targets(pool)
+        obj_count = 100
 
         # Object type needs to be OC_RP_2G1 because we're testing tgt.
-        self.write_objects_insert_keys(
-            container=container, objtype=DaosObjClass.OC_RP_2G1)
+        self.write_objects_insert_keys(container, DaosObjClass.OC_RP_2G1, obj_count)
 
-        self.punch_all_keys()
+        self.punch_all_keys(obj_count)
 
         self.telemetry.dmg.verbose = False
 
         # Verify active and latency; metrics 1 and 2. ###
         # Verify tgt dkey punch active.
-        self.verify_active_latency(
-            prefix="engine_io_ops_tgt_dkey_punch_active_", test_latency=False)
+        errors.extend(
+            self.verify_active_latency(
+                "engine_io_ops_tgt_dkey_punch_active_", False, total_targets, targets_per_rank))
 
         # Verify dkey punch latency.
-        self.verify_active_latency(
-            prefix="engine_io_ops_tgt_dkey_punch_latency_", test_latency=True)
+        errors.extend(
+            self.verify_active_latency(
+                "engine_io_ops_tgt_dkey_punch_latency_", True, total_targets, targets_per_rank))
 
         # Verify akey punch active.
-        self.verify_active_latency(
-            prefix="engine_io_ops_tgt_akey_punch_active_", test_latency=False)
+        errors.extend(
+            self.verify_active_latency(
+                "engine_io_ops_tgt_akey_punch_active_", False, total_targets, targets_per_rank))
 
         # Verify akey punch latency.
-        self.verify_active_latency(
-            prefix="engine_io_ops_tgt_akey_punch_latency_", test_latency=True)
+        errors.extend(
+            self.verify_active_latency(
+                "engine_io_ops_tgt_akey_punch_latency_", True, total_targets, targets_per_rank))
 
-        if self.errors:
-            self.fail("\n----- Errors detected! -----\n{}".format(
-                "\n".join(self.errors)))
-
-        container.destroy()
-        self.pool.destroy(disconnect=0)
+        self.report_status(errors)

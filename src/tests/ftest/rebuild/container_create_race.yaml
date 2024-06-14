@@ -7,6 +7,7 @@ timeout: 360
 server_config:
   name: daos_server
   engines_per_host: 2
+  crt_timeout: 10
   engines:
     0:
       targets: 2

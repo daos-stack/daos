@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -33,7 +33,7 @@ class AgentFailure(IorTestBase):
         """
         ior_cmd = IorCommand()
         ior_cmd.get_params(self)
-        ior_cmd.set_daos_params(self.server_group, self.pool, self.container.identifier)
+        ior_cmd.set_daos_params(self.pool, self.container.identifier)
         testfile = os.path.join(os.sep, file_name)
         ior_cmd.update_params(test_file=testfile)
 
@@ -41,8 +41,7 @@ class AgentFailure(IorTestBase):
         clients_nodeset = NodeSet.fromlist(clients)
 
         manager = get_job_manager(
-            test=self, class_name="Mpirun", job=ior_cmd, subprocess=self.subprocess,
-            mpi_type="mpich")
+            test=self, class_name="Mpirun", job=ior_cmd, subprocess=self.subprocess)
         manager.assign_hosts(clients_nodeset, self.workdir, self.hostfile_clients_slots)
         ppn = self.params.get("ppn", '/run/ior/client_processes/*')
         manager.assign_processes(ppn=ppn)

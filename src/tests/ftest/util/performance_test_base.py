@@ -342,7 +342,9 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         self._run_performance_ior_single(intercept)
 
         # Manually stop dfuse after ior write completes
-        self.stop_dfuse()
+        if self.dfuse:
+            self.dfuse.stop()
+            self.dfuse = None
 
         # Wait between write and read
         self.phase_barrier()
@@ -352,7 +354,9 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         self._run_performance_ior_single(intercept)
 
         # Manually stop dfuse after ior read completes
-        self.stop_dfuse()
+        if self.dfuse:
+            self.dfuse.stop()
+            self.dfuse = None
 
         self._log_daos_metrics()
 
@@ -438,6 +442,8 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
             self.verify_system_status(self.pool, self.container)
 
         # Manually stop dfuse after mdtest completes
-        self.stop_dfuse()
+        if self.dfuse:
+            self.dfuse.stop()
+            self.dfuse = None
 
         self._log_daos_metrics()

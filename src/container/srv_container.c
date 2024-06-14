@@ -246,7 +246,7 @@ ds_cont_bcast_create(crt_context_t ctx, struct cont_svc *svc,
 		     crt_opcode_t opcode, crt_rpc_t **rpc)
 {
 	return ds_pool_bcast_create(ctx, svc->cs_pool, DAOS_CONT_MODULE, opcode,
-				    DAOS_CONT_VERSION, rpc, NULL, NULL);
+				    DAOS_CONT_VERSION, rpc, NULL, NULL, NULL);
 }
 
 void
@@ -3554,7 +3554,7 @@ capas_can_set_prop(struct cont *cont, uint64_t sec_capas,
 
 /* Sanity check set-prop label, and update cs_uuids KVS */
 static int
-check_set_prop_label(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
+check_set_prop_label(struct rdb_tx *tx, struct cont *cont,
 		     daos_prop_t *prop_in, daos_prop_t *prop_old)
 {
 	struct daos_prop_entry	*in_ent;
@@ -3591,17 +3591,37 @@ check_set_prop_label(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
 		return -DER_INVAL;
 	}
 
+	d_iov_set(&val, match_cuuid, sizeof(uuid_t));
+
 	/* If specified label matches existing label, nothing more to do */
 	old_ent = daos_prop_entry_get(prop_old, DAOS_PROP_CO_LABEL);
 	if (old_ent) {
 		old_lbl = old_ent->dpe_str;
 		if (strncmp(old_lbl, in_lbl, DAOS_PROP_LABEL_MAX_LEN) == 0)
 			return 0;
+
+		d_iov_set(&key, old_lbl, strnlen(old_lbl, DAOS_PROP_MAX_LABEL_BUF_LEN));
+		rc = rdb_tx_lookup(tx, &cont->c_svc->cs_uuids, &key, &val);
+		if (rc == 0) {
+			if (uuid_compare(cont->c_uuid, match_cuuid) != 0) {
+				D_ERROR("The old label %s is used for different container "
+					DF_UUIDF", cannot be removed when set label %s for "
+					DF_UUIDF"\n", old_lbl, DP_UUID(match_cuuid),
+					in_lbl, DP_UUID(cont->c_uuid));
+				return -DER_NO_PERM;
+			}
+		} else if (rc == -DER_NONEXIST) {
+			/* The old label does not exist, do not need to remove from cs_uuids. */
+			old_lbl = NULL;
+		} else {
+			D_ERROR(DF_UUID": lookup old label (%s) failed: "DF_RC"\n",
+				DP_UUID(cont->c_uuid), old_lbl, DP_RC(rc));
+			return rc;
+		}
 	}
 
 	/* Insert new label into cs_uuids KVS, fail if already in use */
 	d_iov_set(&key, in_lbl, strnlen(in_lbl, DAOS_PROP_MAX_LABEL_BUF_LEN));
-	d_iov_set(&val, match_cuuid, sizeof(uuid_t));
 	rc = rdb_tx_lookup(tx, &cont->c_svc->cs_uuids, &key, &val);
 	if (rc != -DER_NONEXIST) {
 		if (rc != 0) {
@@ -3691,8 +3711,11 @@ set_prop(struct rdb_tx *tx, struct ds_pool *pool,
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	/* If label property given, run sanity checks & update cs_uuids */
-	rc = check_set_prop_label(tx, pool, cont, prop_in, prop_old);
+	rc = check_set_prop_label(tx, cont, prop_in, prop_old);
 	if (rc != 0)
+		goto out;
+
+	if (DAOS_FAIL_CHECK(DAOS_CHK_CONT_BAD_LABEL))
 		goto out;
 
 	rc = cont_prop_write(tx, &cont->c_prop, prop_in, false);
@@ -5867,4 +5890,175 @@ put:
 	D_DEBUG(DB_MD, DF_CONT "lookup rc %d.\n", DP_CONT(pool_uuid, cont_hdl_uuid), rc);
 	cont_svc_put_leader(svc);
 	return rc;
+}
+
+/*
+ * Check whether the specified container exists in the container service or not.
+ * If yes, return the container label via the @prop.
+ */
+int
+ds_cont_existence_check(struct cont_svc *svc, uuid_t uuid, daos_prop_t **prop)
+{
+	struct cont	*cont = NULL;
+	daos_prop_t	*tmp = NULL;
+	struct rdb_tx	 tx;
+	int		 rc;
+
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+	if (rc != 0)
+		goto out;
+
+	ABT_rwlock_rdlock(svc->cs_lock);
+	rc = cont_lookup(&tx, svc, uuid, &cont);
+	if (rc != 0)
+		goto out_tx;
+
+	rc = cont_prop_read(&tx, cont, DAOS_CO_QUERY_PROP_LABEL, &tmp, true);
+	if (rc != 0)
+		D_GOTO(out_cont, rc = (rc == -DER_NONEXIST ? 0 : rc));
+
+	if (tmp->dpp_entries[0].dpe_str == NULL ||
+	    strncmp(DAOS_PROP_NO_CO_LABEL, tmp->dpp_entries[0].dpe_str,
+		    DAOS_PROP_LABEL_MAX_LEN) == 0)
+		daos_prop_free(tmp);
+	else
+		*prop = tmp;
+
+out_cont:
+	cont_put(cont);
+out_tx:
+	ABT_rwlock_unlock(svc->cs_lock);
+	rdb_tx_end(&tx);
+out:
+	return rc;
+}
+
+/*
+ * Destroy the orphan container that is not registered
+ * to the container service (then without open handle).
+ */
+int
+ds_cont_destroy_orphan(struct cont_svc *svc, uuid_t uuid)
+{
+	struct rdb_tx	tx;
+	d_iov_t		key;
+	d_iov_t		tmp;
+	int		rc;
+
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+	if (rc != 0)
+		goto out;
+
+	ABT_rwlock_rdlock(svc->cs_lock);
+	d_iov_set(&key, uuid, sizeof(uuid_t));
+	d_iov_set(&tmp, NULL, 0);
+	rc = rdb_tx_lookup(&tx, &svc->cs_conts, &key, &tmp);
+	ABT_rwlock_unlock(svc->cs_lock);
+	rdb_tx_end(&tx);
+	if (rc == 0)
+		/* Forbid to destroy non-orphan container. */
+		D_GOTO(out, rc = -DER_BUSY);
+
+	rc = cont_destroy_bcast(dss_get_module_info()->dmi_ctx, svc, uuid);
+	if (rc == 0)
+		cont_ec_agg_delete(svc, uuid);
+
+out:
+	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
+		 DF_CONT" destroy orphan container: "DF_RC"\n",
+		 DP_CONT(svc->cs_pool->sp_uuid, uuid), DP_RC(rc));
+
+	return rc;
+}
+
+int
+ds_cont_iterate_labels(struct cont_svc *svc, rdb_iterate_cb_t cb, void *arg)
+{
+	struct rdb_tx	tx;
+	int		rc;
+
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+	if (rc == 0) {
+		ABT_rwlock_rdlock(svc->cs_lock);
+		rc = rdb_tx_iterate(&tx, &svc->cs_uuids, false /* !backward */, cb, arg);
+		ABT_rwlock_unlock(svc->cs_lock);
+		rdb_tx_end(&tx);
+	}
+
+	return rc;
+}
+
+int
+ds_cont_set_label(struct cont_svc *svc, uuid_t uuid, daos_prop_t *prop_in,
+		  daos_prop_t *prop_old, bool for_svc)
+{
+	struct ds_pool		*pool = svc->cs_pool;
+	daos_prop_t		*prop_cur = NULL;
+	daos_prop_t		*prop_iv = NULL;
+	struct cont		*cont = NULL;
+	struct daos_prop_entry	*entry;
+	struct rdb_tx		 tx;
+	int			 rc = 0;
+
+	D_ASSERT(prop_in != NULL);
+
+	if (!daos_prop_valid(prop_in, false, true))
+		D_GOTO(out, rc = -DER_INVAL);
+
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+	if (rc != 0)
+		goto out;
+
+	ABT_rwlock_wrlock(svc->cs_lock);
+	rc = cont_lookup(&tx, svc, uuid, &cont);
+	if (rc != 0)
+		goto out_tx;
+
+	if (!for_svc) {
+		/* Read all props for prop IV update */
+		rc = cont_prop_read(&tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop_cur, true);
+		if (rc != 0)
+			D_GOTO(out_cont, rc);
+
+		D_ASSERT(prop_cur != NULL);
+
+		entry = daos_prop_entry_get(prop_cur, DAOS_PROP_CO_LABEL);
+		D_ASSERT(entry != NULL);
+
+		/* If specified label matches existing label, do nothing. */
+		if (strncmp(entry->dpe_str, prop_in->dpp_entries[0].dpe_str,
+			    DAOS_PROP_LABEL_MAX_LEN) == 0)
+			D_GOTO(out_cont, rc = 1);
+
+		prop_iv = daos_prop_merge(prop_cur, prop_in);
+		if (prop_iv == NULL)
+			D_GOTO(out_cont, rc = -DER_NOMEM);
+
+		rc = cont_prop_write(&tx, &cont->c_prop, prop_in, false);
+		if (rc != 0)
+			D_GOTO(out_cont, rc);
+
+		/* Update prop IV with merged prop */
+		rc = cont_iv_prop_update(pool->sp_iv_ns, uuid, prop_iv, true);
+	} else {
+		rc = check_set_prop_label(&tx, cont, prop_in, prop_old);
+	}
+
+	if (rc == 0)
+		rc = rdb_tx_commit(&tx);
+
+out_cont:
+	cont_put(cont);
+out_tx:
+	ABT_rwlock_unlock(svc->cs_lock);
+	rdb_tx_end(&tx);
+out:
+	daos_prop_free(prop_iv);
+	daos_prop_free(prop_cur);
+
+	D_CDEBUG(rc < 0, DLOG_INFO, DLOG_ERR,
+		 "set label %s for container "DF_UUIDF", svc %s: rc = %d\n",
+		 prop_in->dpp_entries[0].dpe_str, DP_UUID(uuid), for_svc ? "yes" : "no", rc);
+
+	return rc > 0 ? 0 : rc;
 }

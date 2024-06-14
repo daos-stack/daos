@@ -293,6 +293,8 @@ func (svc *ControlService) StartRanks(ctx context.Context, req *ctlpb.RanksReq) 
 		return nil, err
 	}
 	for _, ei := range instances {
+		ei.SetCheckerMode(req.CheckMode)
+
 		if ei.IsStarted() {
 			continue
 		}

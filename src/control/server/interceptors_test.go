@@ -21,7 +21,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -152,48 +151,48 @@ func TestServer_checkVersion(t *testing.T) {
 		"insecure prelease agent with 2.4.0 server": {
 			selfVersion: "2.4.0",
 			ctx: metadata.NewIncomingContext(test.Context(t), metadata.Pairs(
-				proto.DaosComponentHeader, build.ComponentAgent.String(),
-				proto.DaosVersionHeader, "2.3.108",
+				build.DaosComponentHeader, build.ComponentAgent.String(),
+				build.DaosVersionHeader, "2.3.108",
 			)),
 			nonSysMsg: true,
 		},
 		"insecure 2.4.1 agent with 2.4.0 server": {
 			selfVersion: "2.4.0",
 			ctx: metadata.NewIncomingContext(test.Context(t), metadata.Pairs(
-				proto.DaosComponentHeader, build.ComponentAgent.String(),
-				proto.DaosVersionHeader, "2.4.1",
+				build.DaosComponentHeader, build.ComponentAgent.String(),
+				build.DaosVersionHeader, "2.4.1",
 			)),
 			nonSysMsg: true,
 		},
 		"insecure 2.4.0 agent with 2.4.1 server": {
 			selfVersion: "2.4.1",
 			ctx: metadata.NewIncomingContext(test.Context(t), metadata.Pairs(
-				proto.DaosComponentHeader, build.ComponentAgent.String(),
-				proto.DaosVersionHeader, "2.4.0",
+				build.DaosComponentHeader, build.ComponentAgent.String(),
+				build.DaosVersionHeader, "2.4.0",
 			)),
 			nonSysMsg: true,
 		},
 		"insecure 2.6.0 agent with 2.4.1 server": {
 			selfVersion: "2.4.1",
 			ctx: metadata.NewIncomingContext(test.Context(t), metadata.Pairs(
-				proto.DaosComponentHeader, build.ComponentAgent.String(),
-				proto.DaosVersionHeader, "2.6.0",
+				build.DaosComponentHeader, build.ComponentAgent.String(),
+				build.DaosVersionHeader, "2.6.0",
 			)),
 			nonSysMsg: true,
 		},
 		"insecure 2.4.1 dmg with 2.4.0 server": {
 			selfVersion: "2.4.0",
 			ctx: metadata.NewIncomingContext(test.Context(t), metadata.Pairs(
-				proto.DaosComponentHeader, build.ComponentAdmin.String(),
-				proto.DaosVersionHeader, "2.4.1",
+				build.DaosComponentHeader, build.ComponentAdmin.String(),
+				build.DaosVersionHeader, "2.4.1",
 			)),
 			nonSysMsg: true,
 		},
 		"insecure 2.6.0 dmg with 2.4.0 server": {
 			selfVersion: "2.4.0",
 			ctx: metadata.NewIncomingContext(test.Context(t), metadata.Pairs(
-				proto.DaosComponentHeader, build.ComponentAdmin.String(),
-				proto.DaosVersionHeader, "2.6.0",
+				build.DaosComponentHeader, build.ComponentAdmin.String(),
+				build.DaosVersionHeader, "2.6.0",
 			)),
 			nonSysMsg: true,
 			expErr:    errors.New("not compatible"),
@@ -201,16 +200,16 @@ func TestServer_checkVersion(t *testing.T) {
 		"insecure 2.4.0 server with 2.4.1 server": {
 			selfVersion: "2.4.1",
 			ctx: metadata.NewIncomingContext(test.Context(t), metadata.Pairs(
-				proto.DaosComponentHeader, build.ComponentServer.String(),
-				proto.DaosVersionHeader, "2.4.0",
+				build.DaosComponentHeader, build.ComponentServer.String(),
+				build.DaosVersionHeader, "2.4.0",
 			)),
 			nonSysMsg: true,
 		},
 		"insecure 2.6.0 server with 2.4.1 server": {
 			selfVersion: "2.4.1",
 			ctx: metadata.NewIncomingContext(test.Context(t), metadata.Pairs(
-				proto.DaosComponentHeader, build.ComponentServer.String(),
-				proto.DaosVersionHeader, "2.6.0",
+				build.DaosComponentHeader, build.ComponentServer.String(),
+				build.DaosVersionHeader, "2.6.0",
 			)),
 			nonSysMsg: true,
 			expErr:    errors.New("not compatible"),
@@ -218,8 +217,8 @@ func TestServer_checkVersion(t *testing.T) {
 		"invalid component": {
 			selfVersion: "2.4.1",
 			ctx: metadata.NewIncomingContext(test.Context(t), metadata.Pairs(
-				proto.DaosComponentHeader, "banana",
-				proto.DaosVersionHeader, "2.6.0",
+				build.DaosComponentHeader, "banana",
+				build.DaosVersionHeader, "2.6.0",
 			)),
 			nonSysMsg: true,
 			expErr:    errors.New("invalid component"),
@@ -228,8 +227,8 @@ func TestServer_checkVersion(t *testing.T) {
 			selfVersion: "2.4.0",
 			ctx: newTestAuthCtx(
 				metadata.NewIncomingContext(test.Context(t), metadata.Pairs(
-					proto.DaosComponentHeader, build.ComponentServer.String(),
-					proto.DaosVersionHeader, "2.6.0"),
+					build.DaosComponentHeader, build.ComponentServer.String(),
+					build.DaosVersionHeader, "2.6.0"),
 				), "agent"),
 			nonSysMsg: true,
 			expErr:    errors.New("component mismatch"),

@@ -80,10 +80,15 @@ struct dtx_req_rec {
 	uint32_t			 drr_tag; /* The VOS ID */
 	int				 drr_count; /* DTX count */
 	int				 drr_result; /* The RPC result */
-	uint32_t			 drr_comp:1;
+	uint32_t			 drr_comp:1,
+					 drr_single_dti:1;
+	uint32_t			 drr_inline_flags;
 	struct dtx_id			*drr_dti; /* The DTX array */
 	uint32_t			*drr_flags;
-	struct dtx_share_peer		**drr_cb_args; /* Used by dtx_req_cb. */
+	union {
+		struct dtx_share_peer	**drr_cb_args; /* Used by dtx_req_cb. */
+		struct dtx_share_peer	*drr_single_cb_arg;
+	};
 };
 
 struct dtx_cf_rec_bundle {
@@ -116,15 +121,22 @@ dtx_drr_cleanup(struct dtx_req_rec *drr)
 {
 	int	i;
 
-	if (drr->drr_cb_args != NULL) {
-		for (i = 0; i < drr->drr_count; i++) {
-			if (drr->drr_cb_args[i] != NULL)
-				dtx_dsp_free(drr->drr_cb_args[i]);
+	if (drr->drr_single_dti == 0) {
+		D_ASSERT(drr->drr_flags != &drr->drr_inline_flags);
+
+		if (drr->drr_cb_args != NULL) {
+			for (i = 0; i < drr->drr_count; i++) {
+				if (drr->drr_cb_args[i] != NULL)
+					dtx_dsp_free(drr->drr_cb_args[i]);
+			}
+			D_FREE(drr->drr_cb_args);
 		}
-		D_FREE(drr->drr_cb_args);
+		D_FREE(drr->drr_dti);
+		D_FREE(drr->drr_flags);
+	} else if (drr->drr_single_cb_arg != NULL) {
+		dtx_dsp_free(drr->drr_single_cb_arg);
 	}
-	D_FREE(drr->drr_dti);
-	D_FREE(drr->drr_flags);
+
 	D_FREE(drr);
 }
 
@@ -164,13 +176,19 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 		struct dtx_share_peer	*dsp;
 		int			*ret;
 
-		dsp = drr->drr_cb_args[i];
+		if (drr->drr_single_dti == 0) {
+			dsp = drr->drr_cb_args[i];
+			drr->drr_cb_args[i] = NULL;
+		} else {
+			dsp = drr->drr_single_cb_arg;
+			drr->drr_single_cb_arg = NULL;
+		}
+
 		if (dsp == NULL)
 			continue;
 
 		D_ASSERT(d_list_empty(&dsp->dsp_link));
 
-		drr->drr_cb_args[i] = NULL;
 		ret = (int *)dout->do_sub_rets.ca_arrays + i;
 
 		switch (*ret) {
@@ -498,7 +516,8 @@ btr_ops_t dbtree_dtx_cf_ops = {
 
 static int
 dtx_classify_one(struct ds_pool *pool, daos_handle_t tree, d_list_t *head, int *length,
-		 struct dtx_entry *dte, int count, d_rank_t my_rank, uint32_t my_tgtid)
+		 struct dtx_entry *dte, int count, d_rank_t my_rank, uint32_t my_tgtid,
+		 uint32_t opc)
 {
 	struct dtx_memberships		*mbs = dte->dte_mbs;
 	struct pool_target		*target;
@@ -561,20 +580,28 @@ dtx_classify_one(struct ds_pool *pool, daos_handle_t tree, d_list_t *head, int *
 		} else {
 			struct dtx_req_rec	*drr;
 
+			D_ASSERT(count == 1);
+
 			D_ALLOC_PTR(drr);
 			if (drr == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 
-			D_ALLOC_PTR(drr->drr_dti);
-			if (drr->drr_dti == NULL) {
-				dtx_drr_cleanup(drr);
-				D_GOTO(out, rc = -DER_NOMEM);
+			drr->drr_single_dti = 1;
+
+			/*
+			 * Usually, sync commit handles single DTX and batched commit handles
+			 * multiple ones. So we roughly regard single DTX commit case as sync
+			 * commit for metrics purpose.
+			 */
+			if (opc == DTX_COMMIT) {
+				drr->drr_inline_flags = DRF_SYNC_COMMIT;
+				drr->drr_flags = &drr->drr_inline_flags;
 			}
 
 			drr->drr_rank = target->ta_comp.co_rank;
 			drr->drr_tag = target->ta_comp.co_index;
 			drr->drr_count = 1;
-			drr->drr_dti[0] = dte->dte_xid;
+			drr->drr_dti = &dte->dte_xid;
 			d_list_add_tail(&drr->drr_link, head);
 			(*length)++;
 		}
@@ -614,7 +641,7 @@ dtx_rpc_helper(struct dss_chore *chore, bool is_reentrance)
 		for (i = 0; i < dca->dca_count; i++) {
 			rc = dtx_classify_one(pool, dca->dca_tree_hdl, &dca->dca_head, &length,
 					      dca->dca_dtes[i], dca->dca_count,
-					      dca->dca_rank, dca->dca_tgtid);
+					      dca->dca_rank, dca->dca_tgtid, dca->dca_dra.dra_opc);
 			if (rc < 0) {
 				ABT_rwlock_unlock(pool->sp_lock);
 				goto done;
@@ -1003,6 +1030,8 @@ again:
 		d_list_for_each_entry(drr, &head, drr_link) {
 			if (drr->drr_rank == target->ta_comp.co_rank &&
 			    drr->drr_tag == target->ta_comp.co_index) {
+				D_ASSERT(drr->drr_single_dti == 0);
+
 				drr->drr_dti[drr->drr_count] = dsp->dsp_xid;
 				drr->drr_flags[drr->drr_count] = flags;
 				drr->drr_cb_args[drr->drr_count++] = dsp;
@@ -1014,21 +1043,30 @@ again:
 		if (drr == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 
-		D_ALLOC_ARRAY(drr->drr_dti, *check_count);
-		D_ALLOC_ARRAY(drr->drr_flags, *check_count);
-		D_ALLOC_ARRAY(drr->drr_cb_args, *check_count);
+		if (*check_count == 1) {
+			drr->drr_single_dti = 1;
+			drr->drr_dti = &dsp->dsp_xid;
+			drr->drr_inline_flags = flags;
+			drr->drr_flags = &drr->drr_inline_flags;
+			drr->drr_single_cb_arg = dsp;
+		} else {
+			D_ALLOC_ARRAY(drr->drr_dti, *check_count);
+			D_ALLOC_ARRAY(drr->drr_flags, *check_count);
+			D_ALLOC_ARRAY(drr->drr_cb_args, *check_count);
+			if (drr->drr_dti == NULL || drr->drr_flags == NULL ||
+			    drr->drr_cb_args == NULL) {
+				dtx_drr_cleanup(drr);
+				D_GOTO(out, rc = -DER_NOMEM);
+			}
 
-		if (drr->drr_dti == NULL || drr->drr_flags == NULL || drr->drr_cb_args == NULL) {
-			dtx_drr_cleanup(drr);
-			D_GOTO(out, rc = -DER_NOMEM);
+			drr->drr_dti[0] = dsp->dsp_xid;
+			drr->drr_flags[0] = flags;
+			drr->drr_cb_args[0] = dsp;
 		}
 
 		drr->drr_rank = target->ta_comp.co_rank;
 		drr->drr_tag = target->ta_comp.co_index;
 		drr->drr_count = 1;
-		drr->drr_dti[0] = dsp->dsp_xid;
-		drr->drr_flags[0] = flags;
-		drr->drr_cb_args[0] = dsp;
 		d_list_add_tail(&drr->drr_link, &head);
 		len++;
 
@@ -1061,12 +1099,19 @@ next:
 				if (drr->drr_cb_args == NULL)
 					goto next2;
 
-				for (i = 0; i < drr->drr_count; i++) {
-					if (drr->drr_cb_args[i] == NULL)
-						continue;
+				if (drr->drr_single_dti == 0) {
+					for (i = 0; i < drr->drr_count; i++) {
+						if (drr->drr_cb_args[i] == NULL)
+							continue;
 
-					dsp = drr->drr_cb_args[i];
-					drr->drr_cb_args[i] = NULL;
+						dsp = drr->drr_cb_args[i];
+						drr->drr_cb_args[i] = NULL;
+						dsp->dsp_status = -DER_INPROGRESS;
+						d_list_add_tail(&dsp->dsp_link, act_list);
+					}
+				} else {
+					dsp = drr->drr_single_cb_arg;
+					drr->drr_single_cb_arg = NULL;
 					dsp->dsp_status = -DER_INPROGRESS;
 					d_list_add_tail(&dsp->dsp_link, act_list);
 				}

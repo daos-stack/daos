@@ -171,7 +171,6 @@ dfuse_bg(struct dfuse_info *dfuse_info)
 int
 dfuse_launch_fuse(struct dfuse_info *dfuse_info, struct fuse_args *args)
 {
-	pthread_t self;
 	int       rc;
 
 	dfuse_info->di_session = dfuse_session_new(args, dfuse_info);
@@ -204,9 +203,6 @@ dfuse_launch_fuse(struct dfuse_info *dfuse_info, struct fuse_args *args)
 	if (rc != -DER_SUCCESS)
 		DFUSE_TRA_ERROR(dfuse_info, "Error sending signal to fg: "DF_RC, DP_RC(rc));
 
-	self = pthread_self();
-	pthread_setname_np(self, "main");
-
 	/* Blocking */
 	if (dfuse_info->di_threaded)
 		rc = dfuse_loop(dfuse_info);
@@ -232,7 +228,7 @@ static void
 parse_mount_option(char *mnt_string, struct dfuse_info *dfuse_info, char *pool_name,
 		   char *cont_name)
 {
-	char *tok;
+	char *tok = NULL;
 	char *token;
 
 	while ((token = strtok_r(mnt_string, ",", &tok))) {

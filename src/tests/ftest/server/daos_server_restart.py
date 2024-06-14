@@ -110,7 +110,8 @@ class DaosServerTest(TestWithServers):
         self.log.info("(5) Verify after server restarted.")
         self.verify_pool_list()
 
-        self.container = None
+        for container in self.container:
+            container.skip_cleanup()
 
     def test_engine_restart(self):
         """JIRA ID: DAOS-3593.

@@ -211,7 +211,7 @@ class SlurmSetup():
                 script_file.write('#!/bin/bash\n#\n')
                 script_file.write('/usr/bin/bash -c \'pkill --signal 9 dfuse\'\n')
                 script_file.write(
-                    '/usr/bin/bash -c \'for dir in $(find /tmp/daos_dfuse);'
+                    '/usr/bin/bash -c \'for dir in $(find /tmp/soak_dfuse_*);'
                     'do fusermount3 -uz $dir;rm -rf $dir; done\'\n')
                 script_file.write('exit 0\n')
         except IOError as error:

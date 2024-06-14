@@ -20,6 +20,13 @@
 #include <daos/mem.h>
 #include <daos/btree.h>
 
+/* Common free extent structure for both SCM & in-memory index */
+struct vea_free_extent {
+	uint64_t vfe_blk_off; /* Block offset of the extent */
+	uint32_t vfe_blk_cnt; /* Total blocks of the extent */
+	uint32_t vfe_age;     /* Monotonic timestamp */
+};
+
 /* Reserved extent(s) */
 struct vea_resrvd_ext {
 	/* Link to a list for a series of vea_reserve() calls */
@@ -71,6 +78,8 @@ struct vea_unmap_context {
 };
 
 #define	VEA_COMPAT_FEATURE_BITMAP	(1 << 0)
+#define	VEA_COMPAT_END			(1 << 1)
+#define	VEA_COMPAT_MASK			(VEA_COMPAT_END - 1)
 
 /* Free space tracking information on SCM */
 struct vea_space_df {
@@ -116,6 +125,8 @@ struct vea_space_info;
 
 /* Callback to initialize block device header */
 typedef int (*vea_format_callback_t)(void *cb_data);
+/* Callback for vea free tree enumeration */
+typedef int (*vea_free_callback_t)(void *cb_arg, struct vea_free_extent *vfe);
 
 /**
  * Initialize the space tracking information on SCM and the header of the
@@ -130,6 +141,7 @@ typedef int (*vea_format_callback_t)(void *cb_data);
  * \param cb       [IN]	Callback to initialize block device header
  * \param cb_data  [IN]	Callback data
  * \param force    [IN]	Forcibly re-initialize an already initialized device
+ * \param compat   [IN]	Compatibility bits (e.g., VEA_COMPAT_FEATURE_BITMAP)
  *
  * \return		Zero on success; -DER_EXIST when try to format an
  *			already initialized device without setting @force to
@@ -138,7 +150,7 @@ typedef int (*vea_format_callback_t)(void *cb_data);
 int vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 	       struct vea_space_df *md, uint32_t blk_sz, uint32_t hdr_blks,
 	       uint64_t capacity, vea_format_callback_t cb, void *cb_data,
-	       bool force);
+	       bool force, uint32_t compat);
 /**
  * Upgrade VEA to support latest disk format
  *
@@ -333,5 +345,16 @@ void *vea_metrics_alloc(const char *path, int tgt_id);
  * Get VEA metrics count
  */
 int vea_metrics_count(void);
+
+/**
+ * Enumerate the free extents/regions vea tracks
+ *
+ * \param vsi        [IN]	In-memory compound index
+ * \param cb         [IN]	callback function for each entry
+ * \param cb_arg     [IN]	callback arg
+ *
+ * \return			0 on success, otherwise error code
+ */
+int vea_enumerate_free(struct vea_space_info *vsi, vea_free_callback_t cb, void *cb_arg);
 
 #endif /* __VEA_API_H__ */

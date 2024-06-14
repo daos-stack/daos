@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -65,6 +65,7 @@ test_run()
 	uint32_t		 s_high_ver = 0xFFFFFFFF;
 	uint32_t		 c_high_ver = test.tg_num_proto - 1;
 	int			 rc;
+	uint32_t                 timeout;
 
 	fprintf(stderr, "local group: %s remote group: %s\n",
 		test.tg_local_group_name, test.tg_remote_group_name);
@@ -119,8 +120,11 @@ test_run()
 	server_ep.ep_rank = 0;
 
 	DBG_PRINT("proto query\n");
-	rc = crt_proto_query(&server_ep, OPC_MY_PROTO, my_ver_array, 7,
-			     query_cb, &s_high_ver);
+	timeout = 1;
+	do {
+		rc = crt_proto_query(&server_ep, OPC_MY_PROTO, my_ver_array, 7, timeout++, query_cb,
+				     &s_high_ver);
+	} while (rc == -DER_TIMEDOUT);
 	D_ASSERT(rc == 0);
 
 	while (s_high_ver == 0xFFFFFFFF)

@@ -206,7 +206,7 @@ vos_obj_cache_current(bool standalone)
 static __thread struct vos_object	 obj_local = {0};
 
 void
-vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj, bool evict)
+vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj, uint64_t flags, bool evict)
 {
 
 	if (obj == &obj_local) {
@@ -216,40 +216,15 @@ vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj, bool evict)
 	}
 
 	D_ASSERT((occ != NULL) && (obj != NULL));
+	if (flags & VOS_OBJ_AGGREGATE)
+		obj->obj_aggregate = 0;
+	else if (flags & VOS_OBJ_DISCARD)
+		obj->obj_discard = 0;
 
 	if (evict)
 		daos_lru_ref_evict(occ, &obj->obj_llink);
 
 	daos_lru_ref_release(occ, &obj->obj_llink);
-}
-
-int
-vos_obj_discard_hold(struct daos_lru_cache *occ, struct vos_container *cont, daos_unit_oid_t oid,
-		     struct vos_object **objp)
-{
-	struct vos_object	*obj = NULL;
-	daos_epoch_range_t	 epr = {0, DAOS_EPOCH_MAX};
-	int			 rc;
-
-	rc = vos_obj_hold(occ, cont, oid, &epr, 0, VOS_OBJ_DISCARD,
-			  DAOS_INTENT_DISCARD, &obj, NULL);
-	if (rc != 0)
-		return rc;
-
-	D_ASSERTF(!obj->obj_discard, "vos_obj_hold should return an error if already in discard\n");
-
-	obj->obj_discard = true;
-	*objp = obj;
-
-	return 0;
-}
-
-void
-vos_obj_discard_release(struct daos_lru_cache *occ, struct vos_object *obj)
-{
-	obj->obj_discard = false;
-
-	vos_obj_release(occ, obj, false);
 }
 
 /** Move local object to the lru cache */
@@ -296,6 +271,37 @@ cache_object(struct daos_lru_cache *occ, struct vos_object **objp)
 	return 0;
 }
 
+static bool
+vos_obj_op_conflict(struct vos_object *obj, uint64_t flags, uint32_t intent, bool create)
+{
+	bool discard = flags & VOS_OBJ_DISCARD;
+	bool agg     = flags & VOS_OBJ_AGGREGATE;
+
+	/* VOS aggregation is mutually exclusive with VOS discard.
+	 * Object discard is mutually exclusive with VOS discard.
+	 * EC aggregation is not mutually exclusive with anything.
+	 * For simplicity, we do make all of them mutually exclusive on the same
+	 * object.
+	 */
+
+	if (obj->obj_discard) {
+		/** Mutually exclusive with create, discard and aggregation */
+		if (create || discard || agg) {
+			D_DEBUG(DB_EPC, "Conflict detected, discard already running on object\n");
+			return true;
+		}
+	} else if (obj->obj_aggregate) {
+		/** Mutually exclusive with discard */
+		if (discard || agg) {
+			D_DEBUG(DB_EPC,
+				"Conflict detected, aggregation already running on object\n");
+			return true;
+		}
+	}
+
+	return false;
+}
+
 int
 vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	     daos_unit_oid_t oid, daos_epoch_range_t *epr, daos_epoch_t bound,
@@ -310,12 +316,13 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	uint32_t		 cond_mask = 0;
 	bool			 create;
 	void			*create_flag = NULL;
-	bool			 visible_only;
+	bool                     visible_only;
 
 	D_ASSERT(cont != NULL);
 	D_ASSERT(cont->vc_pool);
 
-	*obj_p = NULL;
+	if (obj_p != NULL)
+		*obj_p = NULL;
 
 	if (cont->vc_pool->vp_dying)
 		return -DER_SHUTDOWN;
@@ -340,6 +347,10 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	rc = daos_lru_ref_hold(occ, &lkey, sizeof(lkey), create_flag, &lret);
 	if (rc == -DER_NONEXIST) {
 		D_ASSERT(obj_local.obj_cont == NULL);
+		if (flags & VOS_OBJ_NO_HOLD) {
+			/** Object is not cached, so there can be no other holders */
+			return 0;
+		}
 		obj = &obj_local;
 		init_object(obj, oid, cont);
 	} else if (rc != 0) {
@@ -406,13 +417,24 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	}
 
 check_object:
-	if (obj->obj_discard && (create || (flags & VOS_OBJ_DISCARD) != 0)) {
-		/** Cleanup before assert so unit test that triggers doesn't corrupt the state */
-		vos_obj_release(occ, obj, false);
+	if (vos_obj_op_conflict(obj, flags, intent, create)) {
+		/** Cleanup so unit test that triggers doesn't corrupt the state */
+		vos_obj_release(occ, obj, 0, false);
 		/* Update request will retry with this error */
-		rc = -DER_UPDATE_AGAIN;
+		if (create)
+			rc = -DER_UPDATE_AGAIN;
+		else
+			rc = -DER_BUSY;
 		goto failed_2;
 	}
+
+	if (flags & VOS_OBJ_NO_HOLD) {
+		/** Just checking for conflicts, so we are done */
+		vos_obj_release(occ, obj, 0, false);
+		return 0;
+	}
+
+	D_ASSERT(obj_p != NULL);
 
 	if ((flags & VOS_OBJ_DISCARD) || intent == DAOS_INTENT_KILL || intent == DAOS_INTENT_PUNCH)
 		goto out;
@@ -497,13 +519,18 @@ out:
 			goto failed_2;
 	}
 
+	if (flags & VOS_OBJ_AGGREGATE)
+		obj->obj_aggregate = 1;
+	else if (flags & VOS_OBJ_DISCARD)
+		obj->obj_discard = 1;
 	*obj_p = obj;
 
 	return 0;
 failed:
-	vos_obj_release(occ, obj, true);
+	vos_obj_release(occ, obj, 0, true);
 failed_2:
-	VOS_TX_LOG_FAIL(rc, "failed to hold object, rc="DF_RC"\n", DP_RC(rc));
+	VOS_TX_LOG_FAIL(rc, "failed to hold object " DF_UOID ", rc=" DF_RC "\n", DP_UOID(oid),
+			DP_RC(rc));
 
 	return	rc;
 }

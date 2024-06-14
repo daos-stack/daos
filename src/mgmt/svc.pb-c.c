@@ -649,6 +649,96 @@ void   mgmt__pool_monitor_req__free_unpacked
   assert(message->base.descriptor == &mgmt__pool_monitor_req__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   mgmt__client_telemetry_req__init
+                     (Mgmt__ClientTelemetryReq         *message)
+{
+  static const Mgmt__ClientTelemetryReq init_value = MGMT__CLIENT_TELEMETRY_REQ__INIT;
+  *message = init_value;
+}
+size_t mgmt__client_telemetry_req__get_packed_size
+                     (const Mgmt__ClientTelemetryReq *message)
+{
+  assert(message->base.descriptor == &mgmt__client_telemetry_req__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__client_telemetry_req__pack
+                     (const Mgmt__ClientTelemetryReq *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__client_telemetry_req__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__client_telemetry_req__pack_to_buffer
+                     (const Mgmt__ClientTelemetryReq *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__client_telemetry_req__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__ClientTelemetryReq *
+       mgmt__client_telemetry_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__ClientTelemetryReq *)
+     protobuf_c_message_unpack (&mgmt__client_telemetry_req__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__client_telemetry_req__free_unpacked
+                     (Mgmt__ClientTelemetryReq *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__client_telemetry_req__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   mgmt__client_telemetry_resp__init
+                     (Mgmt__ClientTelemetryResp         *message)
+{
+  static const Mgmt__ClientTelemetryResp init_value = MGMT__CLIENT_TELEMETRY_RESP__INIT;
+  *message = init_value;
+}
+size_t mgmt__client_telemetry_resp__get_packed_size
+                     (const Mgmt__ClientTelemetryResp *message)
+{
+  assert(message->base.descriptor == &mgmt__client_telemetry_resp__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__client_telemetry_resp__pack
+                     (const Mgmt__ClientTelemetryResp *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__client_telemetry_resp__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__client_telemetry_resp__pack_to_buffer
+                     (const Mgmt__ClientTelemetryResp *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__client_telemetry_resp__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__ClientTelemetryResp *
+       mgmt__client_telemetry_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__ClientTelemetryResp *)
+     protobuf_c_message_unpack (&mgmt__client_telemetry_resp__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__client_telemetry_resp__free_unpacked
+                     (Mgmt__ClientTelemetryResp *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__client_telemetry_resp__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 static const ProtobufCFieldDescriptor mgmt__daos_resp__field_descriptors[1] =
 {
   {
@@ -840,7 +930,7 @@ const ProtobufCMessageDescriptor mgmt__group_update_resp__descriptor =
   (ProtobufCMessageInit) mgmt__group_update_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__join_req__field_descriptors[11] =
+static const ProtobufCFieldDescriptor mgmt__join_req__field_descriptors[12] =
 {
   {
     "sys",
@@ -974,9 +1064,22 @@ static const ProtobufCFieldDescriptor mgmt__join_req__field_descriptors[11] =
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "check_mode",
+    12,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BOOL,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__JoinReq, check_mode),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__join_req__field_indices_by_name[] = {
   5,   /* field[5] = addr */
+  11,   /* field[11] = check_mode */
   7,   /* field[7] = idx */
   8,   /* field[8] = incarnation */
   4,   /* field[4] = nctxs */
@@ -991,7 +1094,7 @@ static const unsigned mgmt__join_req__field_indices_by_name[] = {
 static const ProtobufCIntRange mgmt__join_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 11 }
+  { 0, 12 }
 };
 const ProtobufCMessageDescriptor mgmt__join_req__descriptor =
 {
@@ -1001,23 +1104,25 @@ const ProtobufCMessageDescriptor mgmt__join_req__descriptor =
   "Mgmt__JoinReq",
   "mgmt",
   sizeof(Mgmt__JoinReq),
-  11,
+  12,
   mgmt__join_req__field_descriptors,
   mgmt__join_req__field_indices_by_name,
   1,  mgmt__join_req__number_ranges,
   (ProtobufCMessageInit) mgmt__join_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCEnumValue mgmt__join_resp__state__enum_values_by_number[2] =
+static const ProtobufCEnumValue mgmt__join_resp__state__enum_values_by_number[3] =
 {
   { "IN", "MGMT__JOIN_RESP__STATE__IN", 0 },
   { "OUT", "MGMT__JOIN_RESP__STATE__OUT", 1 },
+  { "CHECK", "MGMT__JOIN_RESP__STATE__CHECK", 2 },
 };
 static const ProtobufCIntRange mgmt__join_resp__state__value_ranges[] = {
-{0, 0},{0, 2}
+{0, 0},{0, 3}
 };
-static const ProtobufCEnumValueIndex mgmt__join_resp__state__enum_values_by_name[2] =
+static const ProtobufCEnumValueIndex mgmt__join_resp__state__enum_values_by_name[3] =
 {
+  { "CHECK", 2 },
   { "IN", 0 },
   { "OUT", 1 },
 };
@@ -1028,9 +1133,9 @@ const ProtobufCEnumDescriptor mgmt__join_resp__state__descriptor =
   "State",
   "Mgmt__JoinResp__State",
   "mgmt",
-  2,
+  3,
   mgmt__join_resp__state__enum_values_by_number,
-  2,
+  3,
   mgmt__join_resp__state__enum_values_by_name,
   1,
   mgmt__join_resp__state__value_ranges,
@@ -1331,7 +1436,7 @@ const ProtobufCMessageDescriptor mgmt__get_attach_info_req__descriptor =
   (ProtobufCMessageInit) mgmt__get_attach_info_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__client_net_hint__field_descriptors[9] =
+static const ProtobufCFieldDescriptor mgmt__client_net_hint__field_descriptors[8] =
 {
   {
     "provider",
@@ -1366,18 +1471,6 @@ static const ProtobufCFieldDescriptor mgmt__client_net_hint__field_descriptors[9
     offsetof(Mgmt__ClientNetHint, domain),
     NULL,
     &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "crt_ctx_share_addr",
-    4,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__ClientNetHint, crt_ctx_share_addr),
-    NULL,
-    NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
@@ -1443,20 +1536,20 @@ static const ProtobufCFieldDescriptor mgmt__client_net_hint__field_descriptors[9
   },
 };
 static const unsigned mgmt__client_net_hint__field_indices_by_name[] = {
-  3,   /* field[3] = crt_ctx_share_addr */
-  4,   /* field[4] = crt_timeout */
+  3,   /* field[3] = crt_timeout */
   2,   /* field[2] = domain */
-  7,   /* field[7] = env_vars */
+  6,   /* field[6] = env_vars */
   1,   /* field[1] = interface */
-  5,   /* field[5] = net_dev_class */
+  4,   /* field[4] = net_dev_class */
   0,   /* field[0] = provider */
-  8,   /* field[8] = provider_idx */
-  6,   /* field[6] = srv_srx_set */
+  7,   /* field[7] = provider_idx */
+  5,   /* field[5] = srv_srx_set */
 };
-static const ProtobufCIntRange mgmt__client_net_hint__number_ranges[1 + 1] =
+static const ProtobufCIntRange mgmt__client_net_hint__number_ranges[2 + 1] =
 {
   { 1, 0 },
-  { 0, 9 }
+  { 5, 3 },
+  { 0, 8 }
 };
 const ProtobufCMessageDescriptor mgmt__client_net_hint__descriptor =
 {
@@ -1466,10 +1559,10 @@ const ProtobufCMessageDescriptor mgmt__client_net_hint__descriptor =
   "Mgmt__ClientNetHint",
   "mgmt",
   sizeof(Mgmt__ClientNetHint),
-  9,
+  8,
   mgmt__client_net_hint__field_descriptors,
   mgmt__client_net_hint__field_indices_by_name,
-  1,  mgmt__client_net_hint__number_ranges,
+  2,  mgmt__client_net_hint__number_ranges,
   (ProtobufCMessageInit) mgmt__client_net_hint__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
@@ -1881,5 +1974,120 @@ const ProtobufCMessageDescriptor mgmt__pool_monitor_req__descriptor =
   mgmt__pool_monitor_req__field_indices_by_name,
   1,  mgmt__pool_monitor_req__number_ranges,
   (ProtobufCMessageInit) mgmt__pool_monitor_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__client_telemetry_req__field_descriptors[3] =
+{
+  {
+    "sys",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__ClientTelemetryReq, sys),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "jobid",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__ClientTelemetryReq, jobid),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "shm_key",
+    3,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__ClientTelemetryReq, shm_key),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__client_telemetry_req__field_indices_by_name[] = {
+  1,   /* field[1] = jobid */
+  2,   /* field[2] = shm_key */
+  0,   /* field[0] = sys */
+};
+static const ProtobufCIntRange mgmt__client_telemetry_req__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 3 }
+};
+const ProtobufCMessageDescriptor mgmt__client_telemetry_req__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.ClientTelemetryReq",
+  "ClientTelemetryReq",
+  "Mgmt__ClientTelemetryReq",
+  "mgmt",
+  sizeof(Mgmt__ClientTelemetryReq),
+  3,
+  mgmt__client_telemetry_req__field_descriptors,
+  mgmt__client_telemetry_req__field_indices_by_name,
+  1,  mgmt__client_telemetry_req__number_ranges,
+  (ProtobufCMessageInit) mgmt__client_telemetry_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__client_telemetry_resp__field_descriptors[2] =
+{
+  {
+    "status",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__ClientTelemetryResp, status),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "agent_uid",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__ClientTelemetryResp, agent_uid),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__client_telemetry_resp__field_indices_by_name[] = {
+  1,   /* field[1] = agent_uid */
+  0,   /* field[0] = status */
+};
+static const ProtobufCIntRange mgmt__client_telemetry_resp__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 2 }
+};
+const ProtobufCMessageDescriptor mgmt__client_telemetry_resp__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.ClientTelemetryResp",
+  "ClientTelemetryResp",
+  "Mgmt__ClientTelemetryResp",
+  "mgmt",
+  sizeof(Mgmt__ClientTelemetryResp),
+  2,
+  mgmt__client_telemetry_resp__field_descriptors,
+  mgmt__client_telemetry_resp__field_indices_by_name,
+  1,  mgmt__client_telemetry_resp__number_ranges,
+  (ProtobufCMessageInit) mgmt__client_telemetry_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };

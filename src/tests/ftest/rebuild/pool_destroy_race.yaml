@@ -3,7 +3,9 @@
 hosts:
   test_servers: 2
   test_clients: 1
+
 timeout: 360
+
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -24,28 +26,28 @@ server_config:
       fabric_iface_port: 31417
       log_file: daos_server1.log
       storage: auto
+
 testparams:
   ranks:
     rank_to_kill: 3
+
 pool:
   scm_size: 2G
   nvme_size: 28G
   svcn: 3
   control_method: dmg
   pool_query_timeout: 15
+
 container:
   type: POSIX
   control_method: daos
   oclass: RP_2GX
-ior:
-  client_processes:
-    np_8:
-      np: 8
+
+ior_write:
+  processes: 8
   repetitions: 1
   api: DFS
-  dfs_oclass: "RP_2GX"
+  dfs_oclass: RP_2GX
   flags: "-w -W -k -G 1"
-  transfersize_blocksize:
-    1M:
-      transfer_size: '1M'
-      block_size: '1G'
+  transfer_size: 1M
+  block_size: 1G

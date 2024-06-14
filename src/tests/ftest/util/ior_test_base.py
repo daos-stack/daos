@@ -1,19 +1,21 @@
 """
-(C) Copyright 2018-2023 Intel Corporation.
+(C) Copyright 2018-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 
+from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
-from dfuse_test_base import DfuseTestBase
+from dfuse_utils import get_dfuse, start_dfuse
 from exception_utils import CommandFailure
 from general_utils import get_random_string, pcmd
+from host_utils import get_local_host
 from ior_utils import IorCommand
 from job_manager_utils import get_job_manager
 
 
-class IorTestBase(DfuseTestBase):
+class IorTestBase(TestWithServers):
     """Base IOR test class.
 
     :avocado: recursive
@@ -31,6 +33,7 @@ class IorTestBase(DfuseTestBase):
         self.container = None
         self.ior_timeout = None
         self.ppn = None
+        self.dfuse = None
 
     def setUp(self):
         """Set up each test case."""
@@ -46,6 +49,10 @@ class IorTestBase(DfuseTestBase):
         self.ppn = self.params.get("ppn", '/run/ior/client_processes/*')
         self.subprocess = self.params.get("subprocess", '/run/ior/*', False)
         self.ior_timeout = self.params.get("ior_timeout", '/run/ior/*', None)
+
+        # Use the local host as a client for hostfile/dfuse if the client list is empty
+        if not self.hostlist_clients:
+            self.hostlist_clients = get_local_host()
 
     def create_pool(self):
         """Create a TestPool object to use with ior."""
@@ -71,10 +78,9 @@ class IorTestBase(DfuseTestBase):
         return self.container
 
     def run_ior_with_pool(self, intercept=None, display_space=True, test_file_suffix="",
-                          test_file="daos:/testFile", create_pool=True,
-                          create_cont=True, stop_dfuse=True, plugin_path=None,
-                          timeout=None, fail_on_warning=False,
-                          mount_dir=None, out_queue=None, env=None):
+                          test_file="daos:/testFile", create_pool=True, create_cont=True,
+                          stop_dfuse=True, plugin_path=None, timeout=None, fail_on_warning=False,
+                          mount_dir=None, out_queue=None, env=None, job_manager=None):
         # pylint: disable=too-many-arguments
         """Execute ior with optional overrides for ior flags and object_class.
 
@@ -107,6 +113,7 @@ class IorTestBase(DfuseTestBase):
                 Defaults to None
             env (EnvironmentVariables, optional): Pass the environment to be
                 used when calling run_ior. Defaults to None
+            job_manager (JobManager, optional): job manager used to run ior. Defaults to None.
 
         Returns:
             CmdResult: result of the ior command execution
@@ -118,7 +125,7 @@ class IorTestBase(DfuseTestBase):
         # start dfuse if api is POSIX or HDF5 with vol connector
         if (self.ior_cmd.api.value == "POSIX" or plugin_path) and not self.dfuse:
             # Initialize dfuse instance
-            self.load_dfuse(self.hostlist_clients)
+            self.dfuse = get_dfuse(self, self.hostlist_clients)
             # Default mount_dir to value in dfuse instance
             mount_dir = mount_dir or self.dfuse.mount_dir.value
             # Add a substring in case of HDF5-VOL
@@ -126,7 +133,7 @@ class IorTestBase(DfuseTestBase):
                 sub_dir = get_random_string(5)
                 mount_dir = os.path.join(mount_dir, sub_dir)
             # Connect to the pool, create container and then start dfuse
-            self.start_dfuse(self.hostlist_clients, self.pool, self.container, mount_dir=mount_dir)
+            start_dfuse(self, self.dfuse, self.pool, self.container, mount_dir=mount_dir)
 
         # setup test file for POSIX or HDF5 with vol connector
         if self.ior_cmd.api.value == "POSIX" or plugin_path:
@@ -135,7 +142,8 @@ class IorTestBase(DfuseTestBase):
             test_file = os.path.join("/", "testfile")
 
         self.ior_cmd.test_file.update("".join([test_file, test_file_suffix]))
-        job_manager = self.get_ior_job_manager_command()
+        if job_manager is None:
+            job_manager = self.get_ior_job_manager_command()
         job_manager.timeout = timeout
         try:
             out = self.run_ior(job_manager, self.processes,
@@ -144,8 +152,9 @@ class IorTestBase(DfuseTestBase):
                                fail_on_warning=fail_on_warning,
                                out_queue=out_queue, env=env)
         finally:
-            if stop_dfuse:
-                self.stop_dfuse()
+            if stop_dfuse and self.dfuse:
+                self.dfuse.stop()
+                self.dfuse = None
 
         return out
 
@@ -165,8 +174,7 @@ class IorTestBase(DfuseTestBase):
             self.pool.connect()
             self.create_cont()
         # Update IOR params with the pool and container params
-        self.ior_cmd.set_daos_params(self.server_group, self.pool,
-                                     self.container.uuid)
+        self.ior_cmd.set_daos_params(self.pool, self.container.uuid)
 
     def get_ior_job_manager_command(self):
         """Get the MPI job manager command for IOR.
@@ -177,7 +185,7 @@ class IorTestBase(DfuseTestBase):
         """
         return get_job_manager(self, job=self.ior_cmd, subprocess=self.subprocess)
 
-    def check_subprocess_status(self, operation="write"):
+    def check_subprocess_status(self, job_manager, operation="write"):
         """Check subprocess status."""
         if operation == "write":
             self.ior_cmd.pattern = self.IOR_WRITE_PATTERN
@@ -186,7 +194,7 @@ class IorTestBase(DfuseTestBase):
         else:
             self.fail("Exiting Test: Inappropriate operation type for subprocess status check")
 
-        if not self.ior_cmd.check_subprocess_status(self.job_manager.process):
+        if not self.ior_cmd.check_subprocess_status(job_manager.process):
             self.fail("IOR subprocess not running")
 
     def run_ior(self, manager, processes, intercept=None, display_space=True,
@@ -268,19 +276,19 @@ class IorTestBase(DfuseTestBase):
 
         return None
 
-    def stop_ior(self):
+    def stop_ior(self, job_manager):
         """Stop IOR process.
 
         Args:
-            manager (str): mpi job manager command
+            job_manager (JobManager, optional): job manager used to run ior.
 
         Returns:
             Object: result of job manager stop
         """
-        self.log.info("<IOR> Stopping in-progress IOR command: %s", str(self.job_manager))
+        self.log.info("<IOR> Stopping in-progress IOR command: %s", str(job_manager))
 
         try:
-            return self.job_manager.stop()
+            return job_manager.stop()
         except CommandFailure as error:
             self.log.error("IOR stop Failed: %s", str(error))
             self.fail("Failed to stop in-progress IOR command")

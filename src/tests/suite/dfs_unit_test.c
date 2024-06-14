@@ -1493,7 +1493,7 @@ dfs_test_chown(void **state)
 	rc = dfs_stat(dfs_mt, NULL, filename_file1, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_uid, geteuid());
-	assert_int_equal(stbuf.st_uid, getegid());
+	assert_int_equal(stbuf.st_gid, getegid());
 
 	/* Now do a create with uid/gid set */
 	stbuf2.st_uid = 14;
@@ -2449,10 +2449,10 @@ dfs_test_xattrs(void **state)
 		      0, 0, NULL, &obj);
 	assert_int_equal(rc, 0);
 
+	size = 0;
 	rc = dfs_getxattr(dfs_mt, obj, xname1, NULL, &size);
 	assert_int_equal(rc, ENODATA);
 
-	size = 0;
 	rc = dfs_setxattr(dfs_mt, obj, xname1, NULL, size, 0);
 	assert_int_equal(rc, 0);
 
@@ -2461,6 +2461,7 @@ dfs_test_xattrs(void **state)
 	assert_int_equal(rc, 0);
 	assert_int_equal(size, 0);
 
+	size = 0;
 	rc = dfs_getxattr(dfs_mt, obj, xname2, NULL, &size);
 	assert_int_equal(rc, ENODATA);
 

@@ -57,19 +57,20 @@ ut_format(void **state)
 	/* format */
 	print_message("format\n");
 	rc = vea_format(&args->vua_umm, &args->vua_txd, args->vua_md, blk_sz,
-			hdr_blks, capacity, NULL, NULL, false);
+			hdr_blks, capacity, NULL, NULL, false, VEA_COMPAT_MASK);
 	assert_rc_equal(rc, 0);
 
 	/* reformat without setting 'force' */
 	print_message("reformat without setting 'force'\n");
 	rc = vea_format(&args->vua_umm, &args->vua_txd, args->vua_md, blk_sz,
-			hdr_blks, capacity, NULL, NULL, false);
+			hdr_blks, capacity, NULL, NULL, false, VEA_COMPAT_MASK);
 	assert_rc_equal(rc, -DER_EXIST);
 
 	/* reformat with 'force' */
+	/* turn off bitmap feature to test legacy allocation */
 	print_message("reformat with 'force'\n");
 	rc = vea_format(&args->vua_umm, &args->vua_txd, args->vua_md, blk_sz,
-			hdr_blks, capacity, NULL, NULL, true);
+			hdr_blks, capacity, NULL, NULL, true, 0 /* compat */);
 	assert_rc_equal(rc, 0);
 }
 
@@ -83,8 +84,6 @@ ut_load(void **state)
 	rc = vea_load(&args->vua_umm, &args->vua_txd, args->vua_md, &unmap_ctxt,
 		      NULL, &args->vua_vsi);
 	assert_rc_equal(rc, 0);
-	/* turn off bitmap feature to test legacy allocation */
-	args->vua_md->vsd_compat = 0;
 }
 
 static void
@@ -277,7 +276,7 @@ ut_reserve_bitmap(void **state)
 	int			 i;
 
 	rc = vea_format(&args->vua_umm, &args->vua_txd, args->vua_md, 0,
-			hdr_blks, capacity, NULL, NULL, true);
+			hdr_blks, capacity, NULL, NULL, true, VEA_COMPAT_MASK);
 	assert_rc_equal(rc, 0);
 
 	rc = vea_load(&args->vua_umm, &args->vua_txd, args->vua_md, &unmap_ctxt,
@@ -741,7 +740,7 @@ ut_reserve_special(void **state)
 	ut_setup(&args);
 
 	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, blk_sz,
-			hdr_blks, capacity, NULL, NULL, false);
+			hdr_blks, capacity, NULL, NULL, false, VEA_COMPAT_MASK);
 	assert_rc_equal(rc, 0);
 
 	rc = vea_load(&args.vua_umm, &args.vua_txd, args.vua_md, &unmap_ctxt,
@@ -796,55 +795,55 @@ ut_inval_params_format(void **state)
 	/* vea_format: Test null umem */
 	expect_assert_failure(vea_format(NULL, &args.vua_txd, args.vua_md,
 					 block_size, header_blocks, capacity,
-					 NULL, NULL, false));
+					 NULL, NULL, false, VEA_COMPAT_MASK));
 
 	/* vea_format: Test null md */
 	expect_assert_failure(vea_format(&args.vua_umm, &args.vua_txd, NULL,
 					 block_size, header_blocks, capacity,
-					 NULL, NULL, false));
+					 NULL, NULL, false, VEA_COMPAT_MASK));
 
 	/* vea_format: Test large block_size */
 	block_size = UINT32_MAX;
 	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, block_size,
-			header_blocks, capacity, NULL, NULL, false);
+			header_blocks, capacity, NULL, NULL, false, VEA_COMPAT_MASK);
 	assert_rc_equal(rc, -DER_INVAL);
 
 	/* vea_format: Test non-4k aligned block_size */
 	block_size = 4095;
 	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, block_size,
-			header_blocks, capacity, NULL, NULL, false);
+			header_blocks, capacity, NULL, NULL, false, VEA_COMPAT_MASK);
 	assert_rc_equal(rc, -DER_INVAL);
 
 	/* vea_format: Test no header blocks */
 	block_size = 0; /* Set to 0 to use the default 4K block size */
 	header_blocks = 0;
 	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, block_size,
-			header_blocks, capacity, NULL, NULL, false);
+			header_blocks, capacity, NULL, NULL, false, VEA_COMPAT_MASK);
 	assert_rc_equal(rc, -DER_INVAL);
 
 	/* vea_format: Test large value for header_blocks */
 	header_blocks = UINT32_MAX;
 	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, block_size,
-			header_blocks, capacity, NULL, NULL, false);
+			header_blocks, capacity, NULL, NULL, false, VEA_COMPAT_MASK);
 	assert_rc_equal(rc, -DER_NOSPACE);
 
 	/* vea_format: Test small value for capacity */
 	header_blocks = 1;
 	capacity = 0;
 	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, block_size,
-			header_blocks, capacity, NULL, NULL, false);
+			header_blocks, capacity, NULL, NULL, false, VEA_COMPAT_MASK);
 	assert_rc_equal(rc, -DER_NOSPACE);
 
 	/* vea_format: Make capacity and block_size equal */
 	capacity = 4096;
 	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, block_size,
-			header_blocks, capacity, NULL, NULL, false);
+			header_blocks, capacity, NULL, NULL, false, VEA_COMPAT_MASK);
 	assert_rc_equal(rc, -DER_NOSPACE);
 
 	/* vea_format: Test upper bound of largest extent < UINT32_MAX */
 	capacity = (16ULL << 40) + 4096; /* 16TB + 1 4k header block */
 	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, block_size,
-			header_blocks, capacity, NULL, NULL, false);
+			header_blocks, capacity, NULL, NULL, false, VEA_COMPAT_MASK);
 	assert_rc_equal(rc, -DER_INVAL);
 
 	ut_teardown(&args);
@@ -872,7 +871,7 @@ ut_inval_params_load(void **state)
 	/* First correctly format the blob */
 	capacity = ((VEA_LARGE_EXT_MB * 2) << 20); /* 128 MB */
 	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, block_size,
-			header_blocks, capacity, NULL, NULL, false);
+			header_blocks, capacity, NULL, NULL, false, VEA_COMPAT_MASK);
 	assert_rc_equal(rc, 0);
 	expect_assert_failure(vea_load(NULL, &args.vua_txd, args.vua_md,
 				       &unmap_ctxt, NULL, &args.vua_vsi));
@@ -910,7 +909,7 @@ ut_inval_params_reserve(void **state)
 	ut_setup(&args);
 	print_message("Testing invalid parameters to vea_reserve\n");
 	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, block_size,
-			header_blocks, capacity, NULL, NULL, false);
+			header_blocks, capacity, NULL, NULL, false, VEA_COMPAT_MASK);
 	assert_rc_equal(rc, 0);
 
 	rc = vea_load(&args.vua_umm, &args.vua_txd, args.vua_md, &unmap_ctxt,
@@ -944,7 +943,7 @@ ut_inval_params_cancel(void **state)
 	print_message("Testing invalid parameters to vea_cancel\n");
 	ut_setup(&args);
 	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, block_size,
-			header_blocks, capacity, NULL, NULL, false);
+			header_blocks, capacity, NULL, NULL, false, VEA_COMPAT_MASK);
 	assert_rc_equal(rc, 0);
 
 	rc = vea_load(&args.vua_umm, &args.vua_txd, args.vua_md, &unmap_ctxt,
@@ -974,7 +973,7 @@ ut_inval_params_tx_publish(void **state)
 	print_message("Testing invalid parameters to vea_tx_publish\n");
 	ut_setup(&args);
 	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, block_size,
-			header_blocks, capacity, NULL, NULL, false);
+			header_blocks, capacity, NULL, NULL, false, VEA_COMPAT_MASK);
 	assert_rc_equal(rc, 0);
 
 	rc = vea_load(&args.vua_umm, &args.vua_txd, args.vua_md, &unmap_ctxt,
@@ -1014,7 +1013,7 @@ ut_inval_params_free(void **state)
 	print_message("Testing invalid parameters to vea_free\n");
 	ut_setup(&args);
 	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, block_size,
-			header_blocks, capacity, NULL, NULL, false);
+			header_blocks, capacity, NULL, NULL, false, VEA_COMPAT_MASK);
 	assert_rc_equal(rc, 0);
 
 	rc = vea_load(&args.vua_umm, &args.vua_txd, args.vua_md, &unmap_ctxt,
@@ -1087,7 +1086,7 @@ ut_free_invalid_space(void **state)
 	print_message("Try to free space that's not valid\n");
 	ut_setup(&args);
 	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, block_size,
-			header_blocks, capacity, NULL, NULL, false);
+			header_blocks, capacity, NULL, NULL, false, VEA_COMPAT_MASK);
 	assert_int_equal(rc, 0);
 
 	rc = vea_load(&args.vua_umm, &args.vua_txd, args.vua_md, &unmap_ctxt,
@@ -1163,7 +1162,7 @@ ut_interleaved_ops(void **state)
 	print_message("Test interleaved operations\n");
 	ut_setup(&args);
 	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, block_size,
-			header_blocks, capacity, NULL, NULL, false);
+			header_blocks, capacity, NULL, NULL, false, VEA_COMPAT_MASK);
 	assert_int_equal(rc, 0);
 
 	rc = vea_load(&args.vua_umm, &args.vua_txd, args.vua_md, &unmap_ctxt,
@@ -1391,7 +1390,7 @@ ut_fragmentation(void **state)
 	print_message("Test allocation on fragmented device\n");
 	ut_setup(&args);
 	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, block_size,
-			header_blocks, capacity, NULL, NULL, false);
+			header_blocks, capacity, NULL, NULL, false, VEA_COMPAT_MASK);
 	assert_rc_equal(rc, 0);
 
 	rc = vea_load(&args.vua_umm, &args.vua_txd, args.vua_md, &unmap_ctxt,
@@ -1505,7 +1504,7 @@ ut_reclaim_unused_bitmap(void **state)
 	print_message("Test bitmap allocation\n");
 	ut_setup(&args);
 	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, block_size,
-			header_blocks, capacity, NULL, NULL, false);
+			header_blocks, capacity, NULL, NULL, false, VEA_COMPAT_MASK);
 	assert_rc_equal(rc, 0);
 
 	rc = vea_load(&args.vua_umm, &args.vua_txd, args.vua_md, &unmap_ctxt,

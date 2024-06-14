@@ -217,7 +217,9 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 						cfg.setResponseDelay(tc.responseDelay)
 					}
 				}
-				srv.setDrpcClient(newMockDrpcClient(cfg))
+				srv.getDrpcClientFn = func(s string) drpc.DomainSocketClient {
+					return newMockDrpcClient(cfg)
+				}
 			}
 
 			var cancel context.CancelFunc
@@ -911,7 +913,9 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 						cfg.setResponseDelay(tc.responseDelay)
 					}
 				}
-				srv.setDrpcClient(newMockDrpcClient(cfg))
+				srv.getDrpcClientFn = func(s string) drpc.DomainSocketClient {
+					return newMockDrpcClient(cfg)
+				}
 			}
 
 			gotResp, gotErr := svc.SetEngineLogMasks(test.Context(t), tc.req)

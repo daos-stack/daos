@@ -13,6 +13,7 @@
 
 #include <daos_srv/pool.h>
 #include <daos/rpc.h>
+#include <daos/metrics.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/bio.h>
 #include "rpc.h"
@@ -77,9 +78,12 @@ setup(void)
 {
 	bool start = true;
 
-	d_getenv_bool("DAOS_START_POOL_SVC", &start);
-	if (start)
-		return ds_pool_start_all();
+	if (!engine_in_check()) {
+		d_getenv_bool("DAOS_START_POOL_SVC", &start);
+		if (start)
+			return ds_pool_start_all();
+	}
+
 	return 0;
 }
 
@@ -170,11 +174,11 @@ struct dss_module_key pool_module_key = {
 	.dmk_fini = pool_tls_fini,
 };
 
-struct dss_module_metrics pool_metrics = {
-	.dmm_tags = DAOS_SYS_TAG,
-	.dmm_init = ds_pool_metrics_alloc,
-	.dmm_fini = ds_pool_metrics_free,
-	.dmm_nr_metrics = ds_pool_metrics_count,
+struct daos_module_metrics pool_metrics = {
+    .dmm_tags       = DAOS_SYS_TAG,
+    .dmm_init       = ds_pool_metrics_alloc,
+    .dmm_fini       = ds_pool_metrics_free,
+    .dmm_nr_metrics = ds_pool_metrics_count,
 };
 
 struct dss_module pool_module = {

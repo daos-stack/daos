@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -274,17 +274,18 @@ void mock_ds_mgmt_pool_list_cont_teardown(void)
 	}
 }
 
-int			ds_mgmt_pool_query_return;
-uuid_t			ds_mgmt_pool_query_uuid;
-daos_pool_info_t	ds_mgmt_pool_query_info_out;
-daos_pool_info_t	ds_mgmt_pool_query_info_in;
-void			*ds_mgmt_pool_query_info_ptr;
-d_rank_list_t		*ds_mgmt_pool_query_ranks_out;
+int              ds_mgmt_pool_query_return;
+uuid_t           ds_mgmt_pool_query_uuid;
+daos_pool_info_t ds_mgmt_pool_query_info_out;
+daos_pool_info_t ds_mgmt_pool_query_info_in;
+void            *ds_mgmt_pool_query_info_ptr;
+d_rank_list_t   *ds_mgmt_pool_query_enabled_ranks_out;
+d_rank_list_t   *ds_mgmt_pool_query_disabled_ranks_out;
 
 int
-ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **ranks,
-		   daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
-		   uint32_t *upgrade_layout_ver)
+ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **enabled_ranks,
+		   d_rank_list_t **disabled_ranks, daos_pool_info_t *pool_info,
+		   uint32_t *pool_layout_ver, uint32_t *upgrade_layout_ver)
 {
 	/* If function is to return with an error, pool_info and ranks will not be filled. */
 	if (ds_mgmt_pool_query_return != 0)
@@ -292,14 +293,26 @@ ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **r
 
 	uuid_copy(ds_mgmt_pool_query_uuid, pool_uuid);
 	ds_mgmt_pool_query_info_ptr = (void *)pool_info;
-	if (pool_info != NULL) {
-		ds_mgmt_pool_query_info_in = *pool_info;
-		*pool_info = ds_mgmt_pool_query_info_out;
+
+	if (pool_info == NULL)
+		return ds_mgmt_pool_query_return;
+
+	if ((pool_info->pi_bits & DPI_ENGINES_ENABLED) != 0) {
+		D_ASSERT(enabled_ranks != NULL);
+
+		*enabled_ranks = d_rank_list_alloc(8); /* 0-7 ; caller must free this */
+		ds_mgmt_pool_query_enabled_ranks_out = *enabled_ranks;
 	}
-	if (ranks != NULL) {
-		*ranks = d_rank_list_alloc(8);		/* 0-7 ; caller must free this */
-		ds_mgmt_pool_query_ranks_out = *ranks;
+	if ((pool_info->pi_bits & DPI_ENGINES_DISABLED) != 0) {
+		D_ASSERT(disabled_ranks != NULL);
+
+		*disabled_ranks = d_rank_list_alloc(4); /* 0-3 ; caller must free this */
+		ds_mgmt_pool_query_disabled_ranks_out = *disabled_ranks;
 	}
+
+	ds_mgmt_pool_query_info_in = *pool_info;
+	*pool_info                 = ds_mgmt_pool_query_info_out;
+
 	return ds_mgmt_pool_query_return;	/* 0 */
 }
 
@@ -310,7 +323,8 @@ mock_ds_mgmt_pool_query_setup(void)
 	uuid_clear(ds_mgmt_pool_query_uuid);
 	ds_mgmt_pool_query_info_ptr = NULL;
 	memset(&ds_mgmt_pool_query_info_out, 0, sizeof(daos_pool_info_t));
-	ds_mgmt_pool_query_ranks_out = NULL;
+	ds_mgmt_pool_query_enabled_ranks_out  = NULL;
+	ds_mgmt_pool_query_disabled_ranks_out = NULL;
 }
 
 int			ds_mgmt_pool_query_targets_return;
@@ -611,4 +625,43 @@ mock_ds_mgmt_dev_set_faulty_setup(void)
 {
 	ds_mgmt_dev_set_faulty_return = 0;
 	uuid_clear(ds_mgmt_dev_set_faulty_uuid);
+}
+
+int
+ds_mgmt_check_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
+		    Mgmt__CheckInconsistPolicy **policies, int pool_nr, char **pools,
+		    uint32_t flags, int phase)
+{
+	return 0;
+}
+
+int
+ds_mgmt_check_stop(int pool_nr, char **pools)
+{
+	return 0;
+}
+
+int
+ds_mgmt_check_query(int pool_nr, char **pools, chk_query_head_cb_t head_cb,
+		    chk_query_pool_cb_t pool_cb, void *buf)
+{
+	return 0;
+}
+
+int
+ds_mgmt_check_prop(chk_prop_cb_t prop_cb, void *buf)
+{
+	return 0;
+}
+
+int
+ds_mgmt_check_act(uint64_t seq, uint32_t act, bool for_all)
+{
+	return 0;
+}
+
+bool
+ds_mgmt_check_enabled(void)
+{
+	return true;
 }

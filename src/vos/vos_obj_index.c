@@ -847,11 +847,13 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 {
 	struct vos_iterator	*iter = vos_hdl2iter(ih);
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
+	struct vos_container    *cont  = oiter->oit_cont;
 	struct vos_obj_df	*obj;
 	daos_unit_oid_t		 oid;
 	d_iov_t			 rec_iov;
 	bool			 delete = false, invisible = false;
 	int			 rc;
+	uint64_t                 base_flag = range_discard ? VOS_OBJ_DISCARD : VOS_OBJ_AGGREGATE;
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 
@@ -864,6 +866,18 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_obj_df));
 	obj = (struct vos_obj_df *)rec_iov.iov_buf;
 	oid = obj->vo_id;
+
+	rc = vos_obj_hold(vos_obj_cache_current(cont->vc_pool->vp_sysdb), cont, oid,
+			  &oiter->oit_epr, iter->it_bound, base_flag | VOS_OBJ_NO_HOLD,
+			  DAOS_INTENT_PURGE, NULL, NULL);
+	if (rc != 0) {
+		/** -DER_BUSY means the object is in-use already.  We will after a yield in this
+		 * case.
+		 */
+		D_CDEBUG(rc == -DER_BUSY, DB_EPC, DLOG_ERR, "Hold check failed for " DF_UOID "\n",
+			 DP_UOID(oid));
+		return rc;
+	}
 
 	rc = umem_tx_begin(vos_cont2umm(oiter->oit_cont), NULL);
 	if (rc != 0)

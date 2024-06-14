@@ -1,12 +1,18 @@
 #!/bin/bash
-
+#
+#  Copyright 2022-2024 Intel Corporation.
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
 # A git hook to validate and correct the copyright date in source files.
 
-echo "Copyright update:"
+_print_githook_header "Copyright"
 if [ -e .git/MERGE_HEAD ]; then
-    echo "  Merge commit"
+    echo "Merge commit. Skipping"
     exit 0
 fi
+
+echo "Updating copyright headers"
 
 regex='(^[[:blank:]]*[\*/]*.*)((Copyright[[:blank:]]*)([0-9]{4})(-([0-9]{4}))?)([[:blank:]]*(Intel.*$))'
 year=$(date +%Y)
@@ -39,19 +45,15 @@ targets=(
     '.env'
 )
 
+if [ -z "$files" ]; then
+    files=$(git diff "$TARGET" --cached --diff-filter=AM --name-only -- "${targets[@]}")
+else
+    echo "  Checking against custom files"
+fi
+
 os=$(uname -s)
 
 . utils/githooks/git-version.sh
-
-if [ -z "$files" ]; then
-    if [ "$TARGET" = "HEAD" ]; then
-        echo "  Checking against HEAD"
-        files=$(git diff HEAD  --diff-filter=AM --name-only -- "${targets[@]}")
-    else
-        echo "  Checking against branch ${TARGET}"
-        files=$(git diff "$TARGET"... --diff-filter=AM --name-only -- "${targets[@]}")
-    fi
-fi
 
 for file in $files; do
     if [[ "$file" == *vendor* ]] || [[ "$file" == *pb.go ]]    ||

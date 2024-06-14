@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,6 +14,7 @@
 #include <daos_types.h>
 #include <daos_api.h>
 #include <daos_srv/daos_engine.h>
+#include <daos_srv/dtx_srv.h>
 #include <daos_srv/vos.h>
 #include "rdb_internal.h"
 
@@ -226,6 +227,46 @@ rdb_anchor_from_hashes(struct rdb_anchor *anchor, daos_anchor_t *obj_anchor,
 {
 	anchor->da_object = *obj_anchor;
 	anchor->da_akey = *akey_anchor;
+}
+
+/*
+ * The nvops parameter must be equal to or larger than the number of VOS
+ * operations that will be executed in vtx.
+ */
+int
+rdb_vos_tx_begin(struct rdb *db, int nvops, rdb_vos_tx_t *vtx)
+{
+	struct dtx_handle *dth;
+	int                rc;
+
+	rc = dtx_begin(db->d_pool, NULL /* dti */, NULL /* epoch */, nvops, 0 /* pm_ver */,
+		       NULL /* leader_oid */, NULL /* dti_cos */, 0 /* dti_cos_cnt */, DTX_LOCAL,
+		       NULL /* mbs */, &dth);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_DB ": failed to begin VOS TX", DP_DB(db));
+		return rc;
+	}
+
+	*vtx = dth;
+	return 0;
+}
+
+/* Note that if there are two errors, we return the first one. */
+int
+rdb_vos_tx_end(struct rdb *db, rdb_vos_tx_t vtx, int err)
+{
+	struct dtx_handle *dth = vtx;
+	int                rc;
+
+	rc = dtx_end(dth, NULL /* cont */, err);
+	if (rc != err)
+		DL_ERROR(rc, DF_DB ": failed to %s VOS TX", DP_DB(db),
+			 err == 0 ? "commit" : "abort");
+
+	if (err != 0)
+		rc = err;
+
+	return rc;
 }
 
 enum rdb_vos_op {
@@ -522,7 +563,7 @@ out:
 
 int
 rdb_vos_update(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, bool crit,
-	       int n, d_iov_t akeys[], d_iov_t values[])
+	       int n, d_iov_t akeys[], d_iov_t values[], rdb_vos_tx_t vtx)
 {
 	daos_unit_oid_t	uoid;
 	daos_iod_t	iods[n];
@@ -533,20 +574,19 @@ rdb_vos_update(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, bool crit,
 	rdb_oid_to_uoid(oid, &uoid);
 	rdb_vos_set_iods(RDB_VOS_UPDATE, n, akeys, values, iods);
 	rdb_vos_set_sgls(RDB_VOS_UPDATE, n, values, sgls);
-	return vos_obj_update(cont, uoid, epoch, RDB_PM_VER, vos_flags,
-			      &rdb_dkey, n, iods, NULL, sgls);
+	return vos_obj_update_ex(cont, uoid, epoch, RDB_PM_VER, vos_flags, &rdb_dkey, n, iods,
+				 NULL /* iods_csums */, sgls, vtx);
 }
 
 int
-rdb_vos_punch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, int n,
-	      d_iov_t akeys[])
+rdb_vos_punch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, int n, d_iov_t akeys[],
+	      rdb_vos_tx_t vtx)
 {
 	daos_unit_oid_t	uoid;
 
 	rdb_oid_to_uoid(oid, &uoid);
-	return vos_obj_punch(cont, uoid, epoch, RDB_PM_VER, 0,
-			     n == 0 ? NULL : &rdb_dkey, n,
-			     n == 0 ? NULL : akeys, NULL);
+	return vos_obj_punch(cont, uoid, epoch, RDB_PM_VER, 0, n == 0 ? NULL : &rdb_dkey, n,
+			     n == 0 ? NULL : akeys, vtx);
 }
 
 int

@@ -35,3 +35,8 @@ func IsIncompatComponents(err error) bool {
 	_, ok := errors.Cause(err).(ErrIncompatComponents)
 	return ok
 }
+
+var (
+	// ErrNoCtxMetadata is returned when no component/version metadata is found in the context.
+	ErrNoCtxMetadata = errors.New("no component/version metadata found in context")
+)

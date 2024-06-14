@@ -3,7 +3,6 @@
 
 ENV:
   default:
-    # !filter-only : /run/env_CRT_CTX_SHARE_ADDR/no_sep
     # !filter-only : /run/tests/iv
     - D_LOG_MASK: "WARN,IV=DEBUG"
     - D_INTERFACE: "eth0"
@@ -13,10 +12,6 @@ ENV:
 env_D_PROVIDER: !mux
   ofi_tcp:
     D_PROVIDER: "ofi+tcp"
-env_CRT_CTX_SHARE_ADDR: !mux
-  no_sep:
-    env: no_sep
-    CRT_CTX_SHARE_ADDR: "0"
 hosts: !mux
   hosts_1:
     config: two_node

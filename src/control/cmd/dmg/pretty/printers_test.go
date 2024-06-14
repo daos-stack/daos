@@ -203,3 +203,57 @@ host2 hostname command not available
 		})
 	}
 }
+
+func TestPretty_PrintHostStorageSuccesses(t *testing.T) {
+	for name, tc := range map[string]struct {
+		hsm       control.HostStorageMap
+		expStdout string
+		expErr    error
+	}{
+		"empty response": {
+			expStdout: ``,
+		},
+		"one success": {
+			hsm: control.MockHostStorageMap(t,
+				&control.MockStorageScan{
+					Hosts:    "host2",
+					HostScan: control.MockServerScanResp(t, "standard"),
+				}),
+			expStdout: "updated successfully on the following host: host2\n",
+		},
+		"two successes": {
+			hsm: control.MockHostStorageMap(t,
+				&control.MockStorageScan{
+					Hosts:    "host[1-2]",
+					HostScan: control.MockServerScanResp(t, "standard"),
+				}),
+			expStdout: "updated successfully on the following hosts: host[1-2]\n",
+		},
+		"multiple scan entries in map": {
+			hsm: control.MockHostStorageMap(t,
+				&control.MockStorageScan{
+					Hosts:    "host[1-2]",
+					HostScan: control.MockServerScanResp(t, "standard"),
+				},
+				&control.MockStorageScan{
+					Hosts:    "host[3-4]",
+					HostScan: control.MockServerScanResp(t, "noStorage"),
+				}),
+			expErr: errors.New("unexpected number of keys"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var out strings.Builder
+
+			gotErr := PrintHostStorageSuccesses("updated", tc.hsm, &out)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if gotErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expStdout, "\n"), out.String()); diff != "" {
+				t.Fatalf("unexpected print output (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}

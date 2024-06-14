@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +8,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"strings"
 	"sync"
@@ -22,6 +23,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
+	"github.com/daos-stack/daos/src/control/lib/telemetry"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -36,16 +38,19 @@ type fabricScanFn func(ctx context.Context, providers ...string) (*NUMAFabric, e
 // NewInfoCache creates a new InfoCache with appropriate parameters set.
 func NewInfoCache(ctx context.Context, log logging.Logger, client control.UnaryInvoker, cfg *Config) *InfoCache {
 	ic := &InfoCache{
-		log:            log,
-		ignoreIfaces:   cfg.ExcludeFabricIfaces,
-		client:         client,
-		cache:          cache.NewItemCache(log),
-		getAttachInfo:  control.GetAttachInfo,
-		fabricScan:     getFabricScanFn(log, cfg, hwprov.DefaultFabricScanner(log)),
-		netIfaces:      net.Interfaces,
-		devClassGetter: hwprov.DefaultNetDevClassProvider(log),
-		devStateGetter: hwprov.DefaultNetDevStateProvider(log),
+		log:             log,
+		ignoreIfaces:    cfg.ExcludeFabricIfaces,
+		client:          client,
+		cache:           cache.NewItemCache(log),
+		getAttachInfoCb: control.GetAttachInfo,
+		fabricScan:      getFabricScanFn(log, cfg, hwprov.DefaultFabricScanner(log)),
+		netIfaces:       net.Interfaces,
+		devClassGetter:  hwprov.DefaultNetDevClassProvider(log),
+		devStateGetter:  hwprov.DefaultNetDevStateProvider(log),
 	}
+
+	ic.clientTelemetryEnabled.Store(cfg.TelemetryEnabled)
+	ic.clientTelemetryRetain.Store(cfg.TelemetryRetain > 0)
 
 	if cfg.DisableCache {
 		ic.DisableAttachInfoCache()
@@ -198,12 +203,14 @@ type InfoCache struct {
 	cache                   *cache.ItemCache
 	fabricCacheDisabled     atm.Bool
 	attachInfoCacheDisabled atm.Bool
+	clientTelemetryEnabled  atm.Bool
+	clientTelemetryRetain   atm.Bool
 
-	getAttachInfo  getAttachInfoFn
-	fabricScan     fabricScanFn
-	netIfaces      func() ([]net.Interface, error)
-	devClassGetter hardware.NetDevClassProvider
-	devStateGetter hardware.NetDevStateProvider
+	getAttachInfoCb getAttachInfoFn
+	fabricScan      fabricScanFn
+	netIfaces       func() ([]net.Interface, error)
+	devClassGetter  hardware.NetDevClassProvider
+	devStateGetter  hardware.NetDevStateProvider
 
 	client            control.UnaryInvoker
 	attachInfoRefresh time.Duration
@@ -291,6 +298,41 @@ func (c *InfoCache) EnableStaticFabricCache(ctx context.Context, nf *NUMAFabric)
 	c.EnableFabricCache()
 }
 
+func (c *InfoCache) getAttachInfo(ctx context.Context, rpcClient control.UnaryInvoker, req *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
+	if c == nil {
+		return nil, errors.New("InfoCache is nil")
+	}
+	if c.getAttachInfoCb == nil {
+		return nil, errors.New("getAttachInfoFn is nil")
+	}
+
+	resp, err := c.getAttachInfoCb(ctx, rpcClient, req)
+	if err != nil {
+		return nil, err
+	}
+	c.addTelemetrySettings(resp)
+	return resp, nil
+}
+
+// addTelemetrySettings modifies the response by adding telemetry settings
+// before returning it.
+func (c *InfoCache) addTelemetrySettings(resp *control.GetAttachInfoResp) {
+	if c == nil || resp == nil {
+		return
+	}
+
+	if c.clientTelemetryEnabled.IsTrue() {
+		resp.ClientNetHint.EnvVars = append(resp.ClientNetHint.EnvVars,
+			fmt.Sprintf("%s=1", telemetry.ClientMetricsEnabledEnv),
+		)
+		if c.clientTelemetryRetain.IsTrue() {
+			resp.ClientNetHint.EnvVars = append(resp.ClientNetHint.EnvVars,
+				fmt.Sprintf("%s=1", telemetry.ClientMetricsRetainEnv),
+			)
+		}
+	}
+}
+
 // GetAttachInfo fetches the attach info from the cache, and refreshes if necessary.
 func (c *InfoCache) GetAttachInfo(ctx context.Context, sys string) (*control.GetAttachInfoResp, error) {
 	if c == nil {
@@ -307,7 +349,8 @@ func (c *InfoCache) GetAttachInfo(ctx context.Context, sys string) (*control.Get
 	}
 	createItem := func() (cache.Item, error) {
 		c.log.Debugf("cache miss for %s", sysAttachInfoKey(sys))
-		return newCachedAttachInfo(c.attachInfoRefresh, sys, c.client, c.getAttachInfo), nil
+		cai := newCachedAttachInfo(c.attachInfoRefresh, sys, c.client, c.getAttachInfo)
+		return cai, nil
 	}
 
 	item, release, err := c.cache.GetOrCreate(ctx, sysAttachInfoKey(sys), createItem)

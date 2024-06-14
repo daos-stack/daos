@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -158,7 +158,6 @@ func TestRunnerNormalExit(t *testing.T) {
 		WithLogMask("DEBUG,MGMT=DEBUG,RPC=ERR,MEM=ERR").
 		WithPinnedNumaNode(1).
 		WithBypassHealthChk(&bypass).
-		WithCrtCtxShareAddr(1).
 		WithCrtTimeout(30).
 		WithStorage(
 			storage.NewTierConfig().
@@ -182,7 +181,6 @@ func TestRunnerNormalExit(t *testing.T) {
 	var gotArgs string
 	env := []string{
 		"FI_OFI_RXM_USE_SRX=1",
-		"CRT_CTX_SHARE_ADDR=1",
 		"CRT_TIMEOUT=30",
 		"D_INTERFACE=qib0",
 		"D_LOG_MASK=DEBUG,MGMT=DEBUG,RPC=ERR,MEM=ERR",

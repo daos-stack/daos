@@ -1,7 +1,7 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
 hosts:
-  test_servers: 2
+  test_servers: 1
   test_clients: 1
 timeout: 1200
 server_config:

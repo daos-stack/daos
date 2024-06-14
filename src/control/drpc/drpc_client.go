@@ -186,7 +186,7 @@ func (c *ClientConnection) GetSocketPath() string {
 }
 
 // NewClientConnection creates a new dRPC client
-func NewClientConnection(socket string) *ClientConnection {
+func NewClientConnection(socket string) DomainSocketClient {
 	return &ClientConnection{
 		socketPath: socket,
 		dialer:     &clientDialer{},

@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from data_mover_test_base import DataMoverTestBase
+from dfuse_utils import get_dfuse, start_dfuse
 from duns_utils import format_path
 
 
@@ -54,8 +55,9 @@ class DmvrSerialLargePosix(DataMoverTestBase):
 
         # Use dfuse as a shared intermediate for serialize + deserialize
         dfuse_cont = self.get_container(pool1)
-        self.start_dfuse(self.dfuse_hosts, pool1, dfuse_cont)
-        self.serial_tmp_dir = self.dfuse.mount_dir.value
+        dfuse = get_dfuse(self, self.dfuse_hosts)
+        start_dfuse(self, dfuse, pool1, dfuse_cont)
+        self.serial_tmp_dir = dfuse.mount_dir.value
 
         # Serialize/Deserialize cont1 to a new cont2 in pool2
         result = self.run_datamover(

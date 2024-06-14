@@ -39,7 +39,7 @@ def get_ior(test, manager, hosts, path, slots, namespace="/run/ior/*", ior_param
     return ior
 
 
-def run_ior(test, manager, log, hosts, path, slots, group, pool, container, processes, ppn=None,
+def run_ior(test, manager, log, hosts, path, slots, pool, container, processes, ppn=None,
             intercept=None, plugin_path=None, dfuse=None, display_space=True, fail_on_warning=False,
             namespace="/run/ior/*", ior_params=None):
     # pylint: disable=too-many-arguments
@@ -52,7 +52,6 @@ def run_ior(test, manager, log, hosts, path, slots, group, pool, container, proc
         hosts (NodeSet): hosts on which to run the ior command
         path (str): hostfile path.
         slots (int): hostfile number of slots per host.
-        group (str): DAOS server group name
         pool (TestPool): DAOS test pool object
         container (TestContainer): DAOS test container object.
         processes (int): number of processes to run
@@ -80,11 +79,11 @@ def run_ior(test, manager, log, hosts, path, slots, group, pool, container, proc
     ior = get_ior(test, manager, hosts, path, slots, namespace, ior_params)
     ior.update_log_file(log)
     return ior.run(
-        group, pool, container, processes, ppn, intercept, plugin_path, dfuse, display_space,
+        pool, container, processes, ppn, intercept, plugin_path, dfuse, display_space,
         fail_on_warning, False)
 
 
-def thread_run_ior(thread_queue, job_id, test, manager, log, hosts, path, slots, group,
+def thread_run_ior(thread_queue, job_id, test, manager, log, hosts, path, slots,
                    pool, container, processes, ppn, intercept, plugin_path, dfuse,
                    display_space, fail_on_warning, namespace, ior_params):
     # pylint: disable=too-many-arguments
@@ -99,7 +98,6 @@ def thread_run_ior(thread_queue, job_id, test, manager, log, hosts, path, slots,
         hosts (NodeSet): hosts on which to run the ior command
         path (str): hostfile path.
         slots (int): hostfile number of slots per host.
-        group (str): DAOS server group name
         pool (TestPool): DAOS test pool object
         container (TestContainer): DAOS test container object.
         processes (int): number of processes to run
@@ -129,7 +127,7 @@ def thread_run_ior(thread_queue, job_id, test, manager, log, hosts, path, slots,
     saved_verbose = manager.verbose
     manager.verbose = False
     try:
-        thread_result["result"] = run_ior(test, manager, log, hosts, path, slots, group,
+        thread_result["result"] = run_ior(test, manager, log, hosts, path, slots,
                                           pool, container, processes, ppn, intercept,
                                           plugin_path, dfuse, display_space, fail_on_warning,
                                           namespace, ior_params)
@@ -177,7 +175,7 @@ def write_data(test, container, namespace='/run/ior_write/*', **ior_run_params):
     elif 'ppn' not in ior_run_params:
         ior_run_params['ppn'] = test.params.get('ppn', namespace, None)
 
-    ior.run(test.server_group, container.pool, container, **ior_run_params)
+    ior.run(container.pool, container, **ior_run_params)
     return ior
 
 
@@ -214,7 +212,7 @@ def read_data(test, ior, container, namespace='/run/ior_read/*', **ior_run_param
     elif 'ppn' not in ior_run_params:
         ior_run_params['ppn'] = test.params.get('ppn', namespace, 1)
     ior.update('flags', test.params.get('flags', namespace))
-    ior.run(test.server_group, container.pool, container, **ior_run_params)
+    ior.run(container.pool, container, **ior_run_params)
 
 
 class IorCommand(SubProcessCommand):
@@ -226,7 +224,7 @@ class IorCommand(SubProcessCommand):
         >>> # Typical use inside of a DAOS avocado test method.
         >>> ior_cmd = IorCommand()
         >>> ior_cmd.get_params(self)
-        >>> ior_cmd.set_daos_params(self.server_group, self.pool)
+        >>> ior_cmd.set_daos_params(pool, container)
         >>> mpirun = Mpirun()
         >>> server_manager = self.server_manager[0]
         >>> env = self.ior_cmd.get_default_env(server_manager, self.client_log)
@@ -339,11 +337,10 @@ class IorCommand(SubProcessCommand):
 
         return param_names
 
-    def set_daos_params(self, group, pool, cont):
-        """Set the IOR parameters for the DAOS group, pool, and container uuid.
+    def set_daos_params(self, pool, cont):
+        """Set the IOR parameters for the pool and container.
 
         Args:
-            group (str): DAOS server group name
             pool (TestPool/str): DAOS test pool object or pool uuid/label
             cont (str): the container uuid or label
         """
@@ -353,7 +350,6 @@ class IorCommand(SubProcessCommand):
             except AttributeError:
                 dfs_pool = pool
             self.update_params(
-                dfs_group=group,
                 dfs_pool=dfs_pool,
                 dfs_cont=cont)
 
@@ -590,13 +586,12 @@ class Ior:
             parts.append('read')
         return '.'.join(['_'.join(parts), 'log'])
 
-    def run(self, group, pool, container, processes, ppn=None, intercept=None, plugin_path=None,
+    def run(self, pool, container, processes, ppn=None, intercept=None, plugin_path=None,
             dfuse=None, display_space=True, fail_on_warning=False, unique_log=True, il_report=1):
         # pylint: disable=too-many-arguments
         """Run ior.
 
         Args:
-            group (str): DAOS server group name
             pool (TestPool): DAOS test pool object
             container (TestContainer): DAOS test container object.
             processes (int): number of processes to run
@@ -625,7 +620,7 @@ class Ior:
         result = None
         error_message = None
 
-        self.command.set_daos_params(group, pool, container.identifier)
+        self.command.set_daos_params(pool, container.identifier)
 
         if intercept:
             self.env["LD_PRELOAD"] = intercept

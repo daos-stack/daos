@@ -143,6 +143,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
                     self.run_ior_thread("Read", oclass, test_seq)
                     self.run_mdtest_thread(oclass)
                     self.container = self.pool_cont_dict[self.pool][0]
+                    self.container.daos.env['UCX_LOG_LEVEL'] = 'error'
                     self.container.check()
 
     def test_osa_offline_drain(self):

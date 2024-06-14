@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -27,6 +27,8 @@ class DaosCommandBase(CommandWithSubCommand):
             self.sub_command_class = self.PoolSubCommand()
         elif self.sub_command.value == "container":
             self.sub_command_class = self.ContainerSubCommand()
+        elif self.sub_command.value == "faults":
+            self.sub_command_class = self.FaultsSubCommand()
         elif self.sub_command.value == "object":
             self.sub_command_class = self.ObjectSubCommand()
         elif self.sub_command.value == "filesystem":
@@ -436,6 +438,9 @@ class DaosCommandBase(CommandWithSubCommand):
                 super().__init__("set-owner")
                 self.user = FormattedParameter("--user={}")
                 self.group = FormattedParameter("--group={}")
+                self.uid = FormattedParameter("--uid={}")
+                self.gid = FormattedParameter("--gid={}")
+                self.no_check = FormattedParameter("--no-check", False)
 
         class SetPropSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container set-prop command."""
@@ -460,6 +465,55 @@ class DaosCommandBase(CommandWithSubCommand):
                 super().__init__("update-acl")
                 self.acl_file = FormattedParameter("--acl-file={}")
                 self.entry = FormattedParameter("--entry={}")
+
+    class FaultsSubCommand(CommandWithSubCommand):
+        """Defines an object for the daos faults sub command."""
+
+        def __init__(self):
+            """Create a daos faults subcommand object."""
+            super().__init__("/run/daos/faults/*", "faults")
+
+        def get_sub_command_class(self):
+            # pylint: disable=redefined-variable-type
+            """Get the daos faults sub command object."""
+            if self.sub_command.value == "container":
+                self.sub_command_class = self.ContainerSubCommand()
+            elif self.sub_command.value == "set-param":
+                self.sub_command_class = self.SetParamSubCommand()
+            else:
+                self.sub_command_class = None
+
+        class CommonFaultsSubCommand(CommandWithParameters):
+            """Defines an object for the common daos faults sub-command."""
+
+            def __init__(self, sub_command):
+                """Create a common daos faults sub-command object.
+
+                Args:
+                    sub_command (str): sub-command name
+                """
+                super().__init__("/run/daos/faults/{}/*".format(sub_command), sub_command)
+                self.rank = FormattedParameter("--rank={}")
+                self.frequency = FormattedParameter("--frequency={}", None)
+                self.location = FormattedParameter("--location={}", None)
+
+        class ContainerSubCommand(CommonFaultsSubCommand):
+            """Defines an object for the daos faults container command."""
+
+            def __init__(self):
+                """Create a daos faults container object."""
+                super().__init__("container")
+                self.pool = BasicParameter(None, position=1)
+                self.cont = BasicParameter(None, position=2)
+                self.sys_name = FormattedParameter("--sys-name={}", None)
+                self.path = FormattedParameter("--path={}", None)
+
+        class SetParamSubCommand(CommonFaultsSubCommand):
+            """Defines an object for the daos faults set-param command."""
+
+            def __init__(self):
+                """Create a daos faults set-param object."""
+                super().__init__("set-param")
 
     class ObjectSubCommand(CommandWithSubCommand):
         """Defines an object for the daos object sub command."""

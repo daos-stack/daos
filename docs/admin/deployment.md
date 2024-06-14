@@ -100,10 +100,163 @@ Refer to the example configuration file
 [`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
 for latest information and examples.
 
+#### MD-on-SSD Configuration
+
+To enable MD-on-SSD, the Control-Plane-Metadata ('control_metadata') global section of the
+configuration file
+[`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+needs to specify a persistent location to store control-plane specific metadata (which would be
+stored on PMem in non MD-on-SSD mode). Either set 'control_metadata:path' to an existing (mounted)
+local filesystem path or set 'control_metadata:device' to a storage partition which can be mounted
+and formatted by the control-plane during storage format. In the latter case when specifying a
+device the path parameter value will be used as the mountpoint path.
+
+The MD-on-SSD code path will only be used if it is explicitly enabled by specifying the new
+'bdev_role' property for the NVMe storage tier(s) in the 'daos_server.yml' file. There are three
+types of 'bdev_role': wal, meta, and data. Each role must be assigned to exactly one NVMe tier.
+Depending on the number of NVMe SSDs per DAOS engine there may be one, two or three NVMe tiers with
+different 'bdev_role' assignments.
+
+For a complete server configuration file example enabling MD-on-SSD, see
+[`daos_server_mdonssd.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml).
+
+Below are four different 'daos_server.yml' storage configuration snippets that represent scenarios
+for a DAOS engine with four NVMe SSDs and MD-on-SSD enabled.
+
+
+1. One NVMe tier where four SSDs are each assigned wal, meta and data roles:
+
+```bash
+storage:
+-
+  class: ram
+  scm_mount: /mnt/dram1
+-
+  class: nvme
+  bdev_roles:
+  - wal
+  - meta
+  - data
+  bdev_list:
+  - "0000:e3:00.0"
+  - "0000:e4:00.0"
+  - "0000:e5:00.0"
+  - "0000:e6:00.0"
+```
+
+This example shows the typical use case for a DAOS server with a small number of NVMe SSDs. With
+only four or five NVMe SSDs per engine, it is natural to assign all three roles to all NVMe SSDs
+configured as a single NVMe tier.
+
+
+2. Two NVMe tiers, one SSD assigned wal role (tier-1) and three SSDs assigned both meta and data
+   roles (tier-2):
+
+```bash
+storage:
+-
+  class: ram
+  scm_mount: /mnt/dram1
+-
+  class: nvme
+  bdev_roles:
+  - wal
+  bdev_list:
+  - "0000:e3:00.0"
+-
+  class: nvme
+  bdev_roles:
+  - meta
+  - data
+  bdev_list:
+  - "0000:e4:00.0"
+  - "0000:e5:00.0"
+  - "0000:e6:00.0"
+```
+
+This example shows where one NVMe SSD is dedicated for the wal, while the remaining three NVMe SSDs
+are assigned to hold the VOS checkpoints (meta) and the user data. Using two NVMe tiers makes it
+possible to use a higher endurance and higher performance SSD for the wal tier. It should be noted
+that the performance of a single high-performance SSD may still be lower than the aggregate
+performance of multiple lower-performance SSDs in the previous scenario.
+
+
+3. Two NVMe tiers, one SSD assigned both wal and meta roles (tier-1) and three SSDs assigned both
+   meta and data roles (tier-2):
+
+```bash
+storage:
+-
+  class: ram
+  scm_mount: /mnt/dram1
+-
+  class: nvme
+  bdev_roles:
+  - wal
+  - meta
+  bdev_list:
+  - "0000:e3:00.0"
+-
+  class: nvme
+  bdev_roles:
+  - data
+  bdev_list:
+  - "0000:e4:00.0"
+  - "0000:e5:00.0"
+  - "0000:e6:00.0"
+```
+
+This example uses two NVMe tiers but co-locates the wal and meta blobs on the same tier. This may be
+a better choice than co-locating meta and data if the endurance of the data NVMe SSDs is too low for
+the relatively frequent VOS checkpointing. It should be noted that performance may be impacted by
+reducing the number of NVMe SSDs available for VOS checkpointing from three to one.
+
+The other option to use two NVMe tiers would be to co-locate wal and data and dedicate the other
+tier for meta but this configuration is invalid. Sharing wal and data roles on the same tier is not
+allowed.
+
+
+4. Three NVMe tiers, one for each role (each device will have a single distinct role), one SSD
+   assigned wal role (tier-1), one SSD assigned meta role (tier-2) and two SSDs assigned data role
+   (tier-3):
+
+```bash
+storage:
+-
+  class: ram
+  scm_mount: /mnt/dram1
+-
+  class: nvme
+  bdev_roles:
+  - wal
+  bdev_list:
+  - "0000:e3:00.0"
+-
+  class: nvme
+  bdev_roles:
+  - meta
+  bdev_list:
+  - "0000:e4:00.0"
+-
+  class: nvme
+  bdev_roles:
+  - data
+  bdev_list:
+  - "0000:e5:00.0"
+  - "0000:e6:00.0"
+```
+
+Using three NVMe tiers (one per role) is not reasonable when there are only four NVMe SSDs per
+engine but maybe practical with a larger number of SSDs and so illustrated here for completeness.
+
 #### Auto Generate Configuration File
 
 DAOS can attempt to produce a server configuration file that makes optimal use of hardware on a
 given set of hosts either through the `dmg` or `daos_server` tools.
+
+To generate an MD-on-SSD configurations set both '--control-metadata-path' and '--use-tmpfs-scm'
+options as detailed below. Note that due to the number of variables considered when generating a
+configuration automatically the result may not be the most optimal in all situations.
 
 ##### Generating Configuration File Using daos_server Tool
 
@@ -1409,18 +1562,18 @@ When the command is run, the pmem kernel devices created on SCM/PMem regions are
 formatted and mounted based on the parameters provided in the server config file.
 
 - `scm_mount` specifies the location of the mountpoint to create.
-- `scm_class` can be set to `ram` to use a tmpfs in the situation that no SCM/PMem
+- `class` can be set to `ram` to use a tmpfs in the situation that no SCM/PMem
   is available (`scm_size` dictates the size of tmpfs in GB), when set to `dcpm` the device
   specified under `scm_list` will be mounted at `scm_mount` path.
 
 ### NVMe Format
 
 When the command is run, NVMe SSDs are formatted and set up to be used by DAOS
-based on the parameters provided in the server config file.
+based on the parameters provided in the server config file engine storage sections.
 
-`bdev_class` can be set to `nvme` to use actual NVMe devices with SPDK for DAOS
+`class` can be set to `nvme` to use actual NVMe devices with SPDK for DAOS
 storage.
-Other `bdev_class` values can be used for emulation of NVMe storage as specified
+Other `class` values can be used for emulation of NVMe storage as specified
 in the server config file.
 `bdev_list` identifies devices to use with a list of PCI addresses (this can be
 populated after viewing results from `storage scan` command).

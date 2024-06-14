@@ -3,10 +3,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import avocado
+
 from dmg_utils import check_system_query_status
 from ior_test_base import IorTestBase
-from pydaos.raw import DaosApiError
 
 
 class NvmeIoVerification(IorTestBase):
@@ -18,18 +17,6 @@ class NvmeIoVerification(IorTestBase):
     :avocado: recursive
     """
 
-    def setUp(self):
-        """Set up for test case."""
-        super().setUp()
-        self.ior_processes = self.params.get("np", '/run/ior/*')
-        self.ior_transfer_size = self.params.get("tsize", '/run/ior/transfersize/*/')
-        self.ior_block_size = self.ior_cmd.block_size.value
-        self.ior_seq_pool_qty = self.params.get("ior_sequence_pool_qty", '/run/pool/*')
-        self.ior_flag_write = self.params.get("write", '/run/ior/*/')
-        self.ior_flag_read = self.params.get("read", '/run/ior/*/')
-        self.job_manager = self.get_ior_job_manager_command()
-
-    @avocado.fail_on(DaosApiError)
     def test_nvme_io_verification(self):
         """Jira ID: DAOS-2649.
 
@@ -56,15 +43,21 @@ class NvmeIoVerification(IorTestBase):
         :avocado: tags=nvme,daosio
         :avocado: tags=NvmeIoVerification,test_nvme_io_verification
         """
+        ior_processes = self.params.get("np", '/run/ior/*')
+        ior_transfer_size = self.params.get("tsize", '/run/ior/transfersize/*/')
+        ior_block_size = self.ior_cmd.block_size.value
+        ior_seq_pool_qty = self.params.get("ior_sequence_pool_qty", '/run/pool/*')
+        job_manager = self.get_ior_job_manager_command()
+
         # Loop for every pool size
-        for index in range(self.ior_seq_pool_qty):
+        for index in range(ior_seq_pool_qty):
             # Create and connect to a pool with namespace
             self.add_pool(namespace="/run/pool/pool_{}/*".format(index))
 
             # get pool info
             self.pool.get_info()
 
-            for tsize in self.ior_transfer_size:
+            for tsize in ior_transfer_size:
                 # Get the current pool sizes
                 size_before_ior = self.pool.info
 
@@ -75,11 +68,11 @@ class NvmeIoVerification(IorTestBase):
                 if tsize <= 1000:
                     self.ior_cmd.block_size.update(32000)
                 else:
-                    self.ior_cmd.block_size.update(self.ior_block_size)
+                    self.ior_cmd.block_size.update(ior_block_size)
                 container = self.get_container(self.pool)
                 container.open()  # Workaround for pydaos handles
-                self.ior_cmd.set_daos_params(self.server_group, self.pool, container.identifier)
-                self.run_ior(self.job_manager, self.ior_processes)
+                self.ior_cmd.set_daos_params(self.pool, container.identifier)
+                self.run_ior(job_manager, ior_processes)
 
                 # Verify IOR consumed the expected amount from the pool
                 self.verify_pool_size(size_before_ior, self.processes)
@@ -90,7 +83,6 @@ class NvmeIoVerification(IorTestBase):
             # destroy pool
             self.pool.destroy()
 
-    @avocado.fail_on(DaosApiError)
     def test_nvme_server_restart(self):
         """Jira ID: DAOS-2650.
 
@@ -117,27 +109,35 @@ class NvmeIoVerification(IorTestBase):
         :avocado: tags=nvme,daosio
         :avocado: tags=NvmeIoVerification,test_nvme_server_restart
         """
+        ior_processes = self.params.get("np", '/run/ior/*')
+        ior_transfer_size = self.params.get("tsize", '/run/ior/transfersize/*/')
+        ior_block_size = self.ior_cmd.block_size.value
+        ior_seq_pool_qty = self.params.get("ior_sequence_pool_qty", '/run/pool/*')
+        ior_flag_write = self.params.get("write", '/run/ior/*/')
+        ior_flag_read = self.params.get("read", '/run/ior/*/')
+        job_manager = self.get_ior_job_manager_command()
+
         # Loop for every pool size
-        for index in range(self.ior_seq_pool_qty):
+        for index in range(ior_seq_pool_qty):
             # Create and connect to a pool with namespace
             self.add_pool(namespace="/run/pool/pool_{}/*".format(index))
 
             # get pool info
             self.pool.get_info()
 
-            for tsize in self.ior_transfer_size:
+            for tsize in ior_transfer_size:
                 # Run ior with the parameters specified for this pass
                 self.ior_cmd.transfer_size.update(tsize)
-                self.ior_cmd.flags.update(self.ior_flag_write)
+                self.ior_cmd.flags.update(ior_flag_write)
                 # if transfer size is less thank 1K
                 # update block size to 32K to keep it small
                 if tsize <= 1000:
                     self.ior_cmd.block_size.update(32000)
                 else:
-                    self.ior_cmd.block_size.update(self.ior_block_size)
+                    self.ior_cmd.block_size.update(ior_block_size)
                 container = self.get_container(self.pool)
-                self.ior_cmd.set_daos_params(self.server_group, self.pool, container.identifier)
-                self.run_ior(self.job_manager, self.ior_processes)
+                self.ior_cmd.set_daos_params(self.pool, container.identifier)
+                self.run_ior(job_manager, ior_processes)
 
                 # Stop all servers
                 self.get_dmg_command().system_stop(True)
@@ -151,8 +151,8 @@ class NvmeIoVerification(IorTestBase):
                     self.fail("One or more servers crashed")
 
                 # read all the data written before server restart
-                self.ior_cmd.flags.update(self.ior_flag_read)
-                self.run_ior(self.job_manager, self.ior_processes)
+                self.ior_cmd.flags.update(ior_flag_read)
+                self.run_ior(job_manager, ior_processes)
 
                 # destroy the container
                 container.destroy()

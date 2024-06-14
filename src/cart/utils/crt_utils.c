@@ -98,15 +98,14 @@ void
 write_completion_file(void)
 {
 	FILE	*fptr;
-	char	*dir;
+	char    *dir             = NULL;
 	char	*completion_file = NULL;
 
-	d_agetenv_str(&dir, "DAOS_TEST_SHARED_DIR");
+	crt_env_get(DAOS_TEST_SHARED_DIR, &dir);
+
 	D_ASSERTF(dir != NULL,
-		"DAOS_TEST_SHARED_DIR must be set for --write_completion_file "
-		"option.\n");
+		  "DAOS_TEST_SHARED_DIR must be set for --write_completion_file option.\n");
 	D_ASPRINTF(completion_file, "%s/test-servers-completed.txt.%d", dir, getpid());
-	d_freeenv_str(&dir);
 	D_ASSERTF(completion_file != NULL, "Error allocating completion_file string\n");
 
 	unlink(completion_file);
@@ -411,23 +410,21 @@ err_group:
 }
 
 int
-crtu_dc_mgmt_net_cfg_setenv(const char *name)
+crtu_dc_mgmt_net_cfg_setenv(const char *name, crt_init_options_t *opt)
 {
 	int                      rc;
-	char                    *provider;
-	char                    *crt_ctx_share_addr = NULL;
-	char                    *cli_srx_set        = NULL;
-	char                    *crt_timeout        = NULL;
-	char                    *d_interface;
-	char                    *d_interface_env = NULL;
-	char                    *d_domain;
-	char                    *d_domain_env   = NULL;
+	int                      cli_srx_set      = 0;
 	struct dc_mgmt_sys_info  crt_net_cfg_info = {0};
+
 	Mgmt__GetAttachInfoResp *crt_net_cfg_resp = NULL;
 
+	if (opt == NULL) {
+		D_ERROR("Wrong NULL opt\n");
+		return -DER_INVAL;
+	}
+
 	/* Query the agent for the CaRT network configuration parameters */
-	rc = dc_get_attach_info(name, true /* all_ranks */,
-				&crt_net_cfg_info, &crt_net_cfg_resp);
+	rc = dc_get_attach_info(name, true, &crt_net_cfg_info, &crt_net_cfg_resp);
 	if (opts.assert_on_error)
 		D_ASSERTF(rc == 0, "dc_get_attach_info() failed, rc=%d\n", rc);
 
@@ -436,100 +433,30 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 		D_GOTO(cleanup, rc);
 	}
 
-	/* These two are always set */
-	provider = crt_net_cfg_info.provider;
-	D_INFO("setenv D_PROVIDER=%s\n", provider);
-	rc = d_setenv("D_PROVIDER", provider, 1);
-	if (rc != 0)
-		D_GOTO(cleanup, rc = d_errno2der(errno));
+	D_STRNDUP(opt->cio_provider, crt_net_cfg_info.provider, DAOS_SYS_INFO_STRING_MAX);
+	D_STRNDUP(opt->cio_interface, crt_net_cfg_info.interface, DAOS_SYS_INFO_STRING_MAX);
+	D_STRNDUP(opt->cio_domain, crt_net_cfg_info.domain, DAOS_SYS_INFO_STRING_MAX);
 
-	rc = asprintf(&crt_ctx_share_addr, "%d", crt_net_cfg_info.crt_ctx_share_addr);
-	if (rc < 0) {
-		crt_ctx_share_addr = NULL;
+	if (!opt->cio_provider || !opt->cio_interface || !opt->cio_domain)
 		D_GOTO(cleanup, rc = -DER_NOMEM);
-	}
-	D_INFO("setenv CRT_CTX_SHARE_ADDR=%s\n", crt_ctx_share_addr);
-	rc = d_setenv("CRT_CTX_SHARE_ADDR", crt_ctx_share_addr, 1);
-	if (rc != 0)
-		D_GOTO(cleanup, rc = d_errno2der(errno));
 
 	/* If the server has set this, the client must use the same value. */
-	if (crt_net_cfg_info.srv_srx_set != -1) {
-		rc = asprintf(&cli_srx_set, "%d", crt_net_cfg_info.srv_srx_set);
-		if (rc < 0) {
-			cli_srx_set = NULL;
-			D_GOTO(cleanup, rc = -DER_NOMEM);
-		}
-		D_INFO("setenv FI_OFI_RXM_USE_SRX=%s\n", cli_srx_set);
-		rc = d_setenv("FI_OFI_RXM_USE_SRX", cli_srx_set, 1);
-		if (rc != 0)
-			D_GOTO(cleanup, rc = d_errno2der(errno));
+	if (crt_net_cfg_info.srv_srx_set != -1)
+		cli_srx_set = crt_net_cfg_info.srv_srx_set;
+	else
+		cli_srx_set = 0;
 
-		D_DEBUG(DB_MGMT, "Using server's value for FI_OFI_RXM_USE_SRX: %s\n", cli_srx_set);
-	} else {
-		/* Client may not set it if the server hasn't. */
-		d_agetenv_str(&cli_srx_set, "FI_OFI_RXM_USE_SRX");
-		if (cli_srx_set) {
-			D_ERROR("Client set FI_OFI_RXM_USE_SRX to %s, "
-				"but server is unset!\n", cli_srx_set);
-			D_GOTO(cleanup, rc = -DER_INVAL);
-		}
-	}
+	rc = d_setenv("FI_OFI_RXM_USE_SRX", cli_srx_set ? "1" : "0", 1);
+	if (rc != 0)
+		D_GOTO(cleanup, rc = d_errno2der(errno));
 
-	/* Allow client env overrides for these three */
-	d_agetenv_str(&crt_timeout, "CRT_TIMEOUT");
-	if (!crt_timeout) {
-		rc = asprintf(&crt_timeout, "%d", crt_net_cfg_info.crt_timeout);
-		if (rc < 0) {
-			crt_timeout = NULL;
-			D_GOTO(cleanup, rc = -DER_NOMEM);
-		}
-		D_INFO("setenv CRT_TIMEOUT=%s\n", crt_timeout);
-		rc = d_setenv("CRT_TIMEOUT", crt_timeout, 1);
-		if (rc != 0)
-			D_GOTO(cleanup, rc = d_errno2der(errno));
-	} else {
-		D_DEBUG(DB_MGMT, "Using client provided CRT_TIMEOUT: %s\n", crt_timeout);
-	}
-
-	d_agetenv_str(&d_interface_env, "D_INTERFACE");
-	if (!d_interface_env) {
-		d_interface = crt_net_cfg_info.interface;
-		D_INFO("Setting D_INTERFACE=%s\n", d_interface);
-		rc = d_setenv("D_INTERFACE", d_interface, 1);
-		if (rc != 0)
-			D_GOTO(cleanup, rc = d_errno2der(errno));
-	} else {
-		d_interface = d_interface_env;
-		D_DEBUG(DB_MGMT,
-			"Using client provided D_INTERFACE: %s\n",
-			d_interface);
-	}
-
-	d_agetenv_str(&d_domain_env, "D_DOMAIN");
-	if (!d_domain_env) {
-		d_domain = crt_net_cfg_info.domain;
-		D_INFO("Setting D_DOMAIN=%s\n", d_domain);
-		rc = d_setenv("D_DOMAIN", d_domain, 1);
-		if (rc != 0)
-			D_GOTO(cleanup, rc = d_errno2der(errno));
-	} else {
-		d_domain = d_domain_env;
-		D_DEBUG(DB_MGMT, "Using client provided D_DOMAIN: %s\n", d_domain);
-	}
-
-	D_INFO("CaRT env setup with:\n"
-	       "\tD_INTERFACE=%s, D_DOMAIN: %s, D_PROVIDER: %s, "
-	       "CRT_CTX_SHARE_ADDR: %s, CRT_TIMEOUT: %s\n",
-	       d_interface, d_domain, provider, crt_ctx_share_addr, crt_timeout);
+	opt->cio_crt_timeout = crt_net_cfg_info.crt_timeout;
 
 cleanup:
-	d_freeenv_str(&d_domain_env);
-	d_freeenv_str(&d_interface_env);
-	d_freeenv_str(&crt_timeout);
-	d_freeenv_str(&cli_srx_set);
-	d_freeenv_str(&crt_ctx_share_addr);
 	dc_put_attach_info(&crt_net_cfg_info, crt_net_cfg_resp);
+	D_FREE(opt->cio_provider);
+	D_FREE(opt->cio_interface);
+	D_FREE(opt->cio_domain);
 
 	return rc;
 }
@@ -541,9 +468,10 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 		     unsigned int total_srv_ctx, bool use_cfg,
 		     crt_init_options_t *init_opt, bool use_daos_agent_env)
 {
-	char		*grp_cfg_file;
-	uint32_t	 grp_size;
-	int		 rc = 0;
+	char              *grp_cfg_file = NULL;
+	uint32_t           grp_size     = 0;
+	int                rc           = 0;
+	crt_init_options_t local_opt    = {0};
 
 	if (opts.assert_on_error)
 		D_ASSERTF(opts.is_initialized == true, "crtu_test_init not called.\n");
@@ -553,9 +481,10 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 		D_GOTO(out, rc);
 
 	if (use_daos_agent_env) {
-		rc = crtu_dc_mgmt_net_cfg_setenv(srv_group_name);
+		rc = crtu_dc_mgmt_net_cfg_setenv(srv_group_name, &local_opt);
 		if (rc != 0)
 			D_GOTO(out, rc);
+		init_opt = &local_opt;
 	}
 
 	if (init_opt)
@@ -599,15 +528,12 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 			if (*grp == NULL)
 				D_GOTO(out, rc = -DER_INVAL);
 
-			d_agetenv_str(&grp_cfg_file, "CRT_L_GRP_CFG");
+			crt_env_get(CRT_L_GRP_CFG, &grp_cfg_file);
 
 			/* load group info from a config file and
 			 * delete file upon return
 			 */
-			rc = crtu_load_group_from_file(grp_cfg_file,
-						       *crt_ctx, *grp,
-						       -1, true);
-			d_freeenv_str(&grp_cfg_file);
+			rc = crtu_load_group_from_file(grp_cfg_file, *crt_ctx, *grp, -1, true);
 			if (rc != 0)
 				D_GOTO(out, rc);
 		}
@@ -661,6 +587,9 @@ out:
 		assert(0);
 	}
 
+	D_FREE(local_opt.cio_provider);
+	D_FREE(local_opt.cio_interface);
+	D_FREE(local_opt.cio_domain);
 	return rc;
 }
 
@@ -669,16 +598,13 @@ crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 		     pthread_t *progress_thread, crt_group_t **grp,
 		     uint32_t *grp_size, crt_init_options_t *init_opt)
 {
-	char		*grp_cfg_file;
-	char		*my_uri;
-	d_rank_t	 my_rank;
+	char            *grp_cfg_file = NULL;
+	char            *my_uri       = NULL;
+	d_rank_t         my_rank      = CRT_NO_RANK;
 	int		 rc = 0;
 
 	if (opts.assert_on_error)
 		D_ASSERTF(opts.is_initialized == true, "crtu_test_init not called.\n");
-
-	rc = d_getenv_uint32_t("CRT_L_RANK", &my_rank);
-	D_ASSERTF(rc == DER_SUCCESS, "Rank can not be retrieve: " DF_RC "\n", DP_RC(rc));
 
 	rc = d_log_init();
 	if (rc != 0)
@@ -694,6 +620,12 @@ crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 
 	if (rc != 0)
 		D_GOTO(out, rc);
+
+	crt_env_get(CRT_L_RANK, &my_rank);
+	if (my_rank == CRT_NO_RANK) {
+		D_ERROR("CRT_L_RANK environment variable should have been set by crt_launch\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
 
 	*grp = crt_group_lookup(NULL);
 	if (!(*grp)) {
@@ -724,11 +656,10 @@ crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 		D_GOTO(out, rc);
 	D_FREE(my_uri);
 
-	rc = d_agetenv_str(&grp_cfg_file, "CRT_L_GRP_CFG");
+	crt_env_get(CRT_L_GRP_CFG, &grp_cfg_file);
 
 	/* load group info from a config file and delete file upon return */
 	rc = crtu_load_group_from_file(grp_cfg_file, crt_ctx[0], *grp, my_rank, true);
-	d_freeenv_str(&grp_cfg_file);
 	if (rc != 0)
 		D_GOTO(out, rc);
 

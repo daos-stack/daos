@@ -16,9 +16,14 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 )
 
+// FabricScan performs a scan of fabric interfaces given a list of providers.
+func (cs *ControlService) FabricScan(ctx context.Context, providers ...string) (*hardware.FabricInterfaceSet, error) {
+	return cs.fabric.Scan(ctx, providers...)
+}
+
 // NetworkScan retrieves details of network interfaces on remote hosts.
-func (c *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkScanReq) (*ctlpb.NetworkScanResp, error) {
-	providers, err := c.srvCfg.Fabric.GetProviders()
+func (cs *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkScanReq) (*ctlpb.NetworkScanResp, error) {
+	providers, err := cs.srvCfg.Fabric.GetProviders()
 	if err != nil {
 		return nil, err
 	}
@@ -30,21 +35,21 @@ func (c *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkScan
 		providers = []string{req.GetProvider()}
 	}
 
-	topo, err := hwprov.DefaultTopologyProvider(c.log).GetTopology(ctx)
+	topo, err := hwprov.DefaultTopologyProvider(cs.log).GetTopology(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := c.fabric.CacheTopology(topo); err != nil {
+	if err := cs.fabric.CacheTopology(topo); err != nil {
 		return nil, err
 	}
 
-	result, err := c.fabric.Scan(ctx, providers...)
+	result, err := cs.fabric.Scan(ctx, providers...)
 	if err != nil {
 		return nil, err
 	}
 
-	resp := c.fabricInterfaceSetToNetworkScanResp(result)
+	resp := cs.fabricInterfaceSetToNetworkScanResp(result)
 
 	resp.Numacount = int32(topo.NumNUMANodes())
 	resp.Corespernuma = int32(topo.NumCoresPerNUMA())
@@ -52,13 +57,13 @@ func (c *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkScan
 	return resp, nil
 }
 
-func (c *ControlService) fabricInterfaceSetToNetworkScanResp(fis *hardware.FabricInterfaceSet) *ctlpb.NetworkScanResp {
+func (cs *ControlService) fabricInterfaceSetToNetworkScanResp(fis *hardware.FabricInterfaceSet) *ctlpb.NetworkScanResp {
 	resp := new(ctlpb.NetworkScanResp)
 	resp.Interfaces = make([]*ctlpb.FabricInterface, 0, fis.NumNetDevices())
 	for _, name := range fis.Names() {
 		fi, err := fis.GetInterface(name)
 		if err != nil {
-			c.log.Errorf("unexpected error getting IF %q: %s", name, err.Error())
+			cs.log.Errorf("unexpected error getting IF %q: %s", name, err.Error())
 			continue
 		}
 

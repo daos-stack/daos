@@ -9,6 +9,7 @@ import avocado
 from data_mover_test_base import DataMoverTestBase
 from duns_utils import format_path
 from pydaos.raw import DaosApiError
+from test_utils_container import get_existing_container
 
 
 class DmvrDstCreate(DataMoverTestBase):
@@ -71,7 +72,7 @@ class DmvrDstCreate(DataMoverTestBase):
             src_path=format_path(pool1, cont1),
             dst_path=format_path(pool1))
         cont2_label = self.parse_create_cont_label(result.stdout_text)
-        cont2 = self.get_cont(pool1, cont2_label)
+        cont2 = get_existing_container(self, pool1, cont2_label)
         cont2.type.update(cont1.type.value, "type")
         self.verify_cont(cont2, api, check_props, src_props)
 
@@ -80,7 +81,7 @@ class DmvrDstCreate(DataMoverTestBase):
             src_path=format_path(pool1, cont1),
             dst_path=format_path(pool1, 'cont3_label'))
         cont3_label = self.parse_create_cont_label(result.stdout_text)
-        cont3 = self.get_cont(pool1, cont3_label)
+        cont3 = get_existing_container(self, pool1, cont3_label)
         cont3.type.update(cont1.type.value, "type")
         self.verify_cont(cont3, api, check_props, src_props)
 
@@ -90,7 +91,7 @@ class DmvrDstCreate(DataMoverTestBase):
             src_path=format_path(pool1, cont1),
             dst_path=format_path(pool1, special_label))
         cont3_label = self.parse_create_cont_label(result.stdout_text)
-        cont3 = self.get_cont(pool1, cont3_label)
+        cont3 = get_existing_container(self, pool1, cont3_label)
         if cont3.label.value != special_label:
             self.fail(f'Expected dst cont label "{special_label}" but got "{cont3.label.value}"')
         cont3.type.update(cont1.type.value, "type")
@@ -105,7 +106,7 @@ class DmvrDstCreate(DataMoverTestBase):
             src_path=format_path(pool1, cont1),
             dst_path=format_path(pool2))
         cont4_label = self.parse_create_cont_label(result.stdout_text)
-        cont4 = self.get_cont(pool2, cont4_label)
+        cont4 = get_existing_container(self, pool2, cont4_label)
         cont4.type.update(cont1.type.value, "type")
         self.verify_cont(cont4, api, check_props, src_props)
 
@@ -120,7 +121,7 @@ class DmvrDstCreate(DataMoverTestBase):
                 src_path=posix_path,
                 dst_path=format_path(pool1))
             cont6_label = self.parse_create_cont_label(result.stdout_text)
-            cont6 = self.get_cont(pool1, cont6_label)
+            cont6 = get_existing_container(self, pool1, cont6_label)
             cont6.type.update(cont1.type.value, "type")
             self.verify_cont(cont6, api, False)
 

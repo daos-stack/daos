@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -25,8 +25,10 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
+	sysprov "github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/scm"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -113,26 +115,40 @@ func TestServer_Instance_updateFaultDomainInSuperblock(t *testing.T) {
 			testDir, cleanupDir := test.CreateTestDir(t)
 			defer cleanupDir()
 
-			inst := getTestEngineInstance(log).WithHostFaultDomain(tc.newDomain)
-			inst.fsRoot = testDir
-			inst._superblock = tc.superblock
+			// Use real os.ReadFile in MockSysProvider to test superblock logic.
+			cfg := engine.MockConfig().WithStorage(
+				storage.NewTierConfig().
+					WithStorageClass("ram").
+					WithScmMountPoint("/foo/bar"),
+			)
+			runner := engine.NewRunner(log, cfg)
+			sysCfg := sysprov.MockSysConfig{RealReadFile: true}
+			sysProv := sysprov.NewMockSysProvider(log, &sysCfg)
+			scmProv := scm.NewMockProvider(log, &scm.MockBackendConfig{}, &sysCfg)
+			storage := storage.MockProvider(log, 0, &cfg.Storage, sysProv, scmProv,
+				nil, nil)
 
-			sbPath := inst.superblockPath()
+			ei := NewEngineInstance(log, storage, nil, runner).
+				WithHostFaultDomain(tc.newDomain)
+			ei.fsRoot = testDir
+			ei._superblock = tc.superblock
+
+			sbPath := ei.superblockPath()
 			if err := os.MkdirAll(filepath.Dir(sbPath), 0755); err != nil {
 				t.Fatalf("failed to make test superblock dir: %s", err.Error())
 			}
 
-			err := inst.updateFaultDomainInSuperblock()
-
+			err := ei.updateFaultDomainInSuperblock()
 			test.CmpErr(t, tc.expErr, err)
 
 			// Ensure the newer value in the instance was written to the superblock
-			newSB, err := ReadSuperblock(sbPath)
+			err = ei.ReadSuperblock()
 			if tc.expWritten {
 				if err != nil {
 					t.Fatalf("can't read expected superblock: %s", err.Error())
 				}
 
+				newSB := ei.getSuperblock()
 				if newSB == nil {
 					t.Fatalf("expected non-nil superblock")
 				}
@@ -161,6 +177,7 @@ type (
 		Index               uint32
 		Started             atm.Bool
 		Ready               atm.Bool
+		CheckerMode         atm.Bool
 		LocalState          system.MemberState
 		RemoveSuperblockErr error
 		SetupRankErr        error
@@ -186,6 +203,10 @@ func NewMockInstance(cfg *MockInstanceConfig) *MockInstance {
 
 func DefaultMockInstance() *MockInstance {
 	return NewMockInstance(nil)
+}
+
+func (mi *MockInstance) SetCheckerMode(enabled bool) {
+	mi.cfg.CheckerMode.Store(enabled)
 }
 
 func (mi *MockInstance) CallDrpc(_ context.Context, _ drpc.Method, _ proto.Message) (*drpc.Response, error) {

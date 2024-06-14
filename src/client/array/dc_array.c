@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1646,7 +1646,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 				/*
 				 * verify that the dkey is the same as the one we are working on
 				 * given the array index, and also compute the number of records
-				 * left in the dkey and the record indexin the dkey.
+				 * left in the dkey and the record index in the dkey.
 				 */
 				rc = compute_dkey(array, array_idx, &num_records, &record_i,
 						  &dkey_val);

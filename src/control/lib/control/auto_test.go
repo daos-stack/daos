@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -1501,60 +1501,102 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 }
 
 func TestControl_AutoConfig_getThreadCounts(t *testing.T) {
-	defaultScmTier := storage.NewTierConfig().
-		WithStorageClass(storage.ClassDcpm.String()).
-		WithScmMountPoint("/mnt/test0").
-		WithScmDeviceList("/dev/pmem0")
-
 	for name, tc := range map[string]struct {
-		numaCoreCount int // physical( cores per NUMA node
-		nrSSDs        int32
+		nodeSet       []int // set of NUMA nodes
+		numaCoreCount int   // physical( cores per NUMA node
+		numaSSDs      numaSSDsMap
 		expNrTgts     int
 		expNrHlprs    int
 		expErr        error
 	}{
-		"no cores":         {0, 0, 0, 0, errors.Errorf(errInvalNrCores, 0)},
-		"simplest case":    {5, 1, 4, 1, nil},
-		"24 cores no ssds": {24, 0, 16, 0, nil},
-		"24 cores 1 ssds":  {24, 1, 19, 4, nil},
-		"24 cores 2 ssds":  {24, 2, 18, 4, nil},
-		"24 cores 3 ssds":  {24, 3, 18, 4, nil},
-		"24 cores 4 ssds":  {24, 4, 16, 4, nil},
-		"24 cores 5 ssds":  {24, 5, 15, 3, nil},
-		"24 cores 8 ssds":  {24, 8, 16, 4, nil},
-		"24 cores 9 ssds":  {24, 9, 18, 4, nil},
-		"24 cores 10 ssds": {24, 10, 10, 2, nil},
-		"24 cores 16 ssds": {24, 16, 16, 4, nil},
-		"18 cores no ssds": {18, 0, 16, 0, nil},
-		"18 cores 1 ssds":  {18, 1, 14, 3, nil},
-		"18 cores 2 ssds":  {18, 2, 14, 3, nil},
-		"18 cores 3 ssds":  {18, 3, 12, 3, nil},
-		"18 cores 4 ssds":  {18, 4, 12, 3, nil},
-		"18 cores 5 ssds":  {18, 5, 10, 2, nil},
-		"18 cores 8 ssds":  {18, 8, 8, 2, nil},
-		"18 cores 9 ssds":  {18, 9, 9, 2, nil},
-		"18 cores 10 ssds": {18, 10, 10, 2, nil},
-		"18 cores 16 ssds": {18, 16, 16, 0, nil},
+		"no nodes": {
+			expErr: errors.New("empty nodeSet"),
+		},
+		"no cores": {
+			nodeSet: []int{0},
+			expErr:  errors.Errorf(errInvalNrCores, 0),
+		},
+		"numa missing in map": {
+			nodeSet:       []int{0},
+			numaCoreCount: 26,
+			numaSSDs:      numaSSDsMap{1: {}},
+			expErr:        errors.New("not in numa-ssds"),
+		},
+		"18 cores no ssds": {
+			nodeSet:       []int{0},
+			numaCoreCount: 18,
+			numaSSDs:      numaSSDsMap{0: {}},
+			expNrTgts:     16,
+		},
+		"14 cores no ssds": {
+			nodeSet:       []int{0},
+			numaCoreCount: 16,
+			numaSSDs:      numaSSDsMap{0: {}},
+			expNrTgts:     14,
+		},
+		"12 cores 8 ssds (min for 1 ssd-per-tgt)": {
+			nodeSet:       []int{1},
+			numaCoreCount: 12,
+			numaSSDs: numaSSDsMap{1: hardware.MustNewPCIAddressSet(
+				test.MockPCIAddrs(0, 1, 2, 3, 4, 5, 6, 7)...)},
+			expNrTgts:  8,
+			expNrHlprs: 2,
+		},
+		"10 cores 8 ssds (below min for 1 ssd-per-tgt)": {
+			nodeSet:       []int{1},
+			numaCoreCount: 10,
+			numaSSDs: numaSSDsMap{1: hardware.MustNewPCIAddressSet(
+				test.MockPCIAddrs(0, 1, 2, 3, 4, 5, 6, 7)...)},
+			expNrTgts: 8,
+		},
+		"8 cores 8 ssds (below min for 1 ssd-per-tgt)": {
+			nodeSet:       []int{1},
+			numaCoreCount: 8,
+			numaSSDs: numaSSDsMap{1: hardware.MustNewPCIAddressSet(
+				test.MockPCIAddrs(0, 1, 2, 3, 4, 5, 6, 7)...)},
+			expNrTgts: 6,
+		},
+		"26 cores 1 ssd": {
+			nodeSet:       []int{1},
+			numaCoreCount: 26,
+			numaSSDs: numaSSDsMap{1: hardware.MustNewPCIAddressSet(
+				test.MockPCIAddr(0))},
+			expNrTgts:  19,
+			expNrHlprs: 4,
+		},
+		"16 cores 2 ssd": {
+			nodeSet:       []int{1},
+			numaCoreCount: 16,
+			numaSSDs: numaSSDsMap{1: hardware.MustNewPCIAddressSet(
+				test.MockPCIAddrs(0, 1)...)},
+			expNrTgts:  10, // 12 if reservation not applied
+			expNrHlprs: 2,  // 3 if reservations not applied
+		},
+		"26 cores 2 ssd": {
+			nodeSet:       []int{1},
+			numaCoreCount: 26,
+			numaSSDs: numaSSDsMap{1: hardware.MustNewPCIAddressSet(
+				test.MockPCIAddrs(0, 1)...)},
+			expNrTgts:  18,
+			expNrHlprs: 4,
+		},
+		"26 cores 8 ssd": {
+			nodeSet:       []int{1},
+			numaCoreCount: 26,
+			numaSSDs: numaSSDsMap{1: hardware.MustNewPCIAddressSet(
+				test.MockPCIAddrs(0, 1, 2, 3, 4, 5, 6, 7)...)},
+			expNrTgts:  16,
+			expNrHlprs: 4,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			var addrs []string
-			for i := int32(0); i < tc.nrSSDs; i++ {
-				addrs = append(addrs, test.MockPCIAddr(i))
-			}
-
 			// TODO DAOS-11859: Test calculation based on MD-on-SSD (bdev tiers)
-			tiers := storage.TierConfigs{
-				defaultScmTier,
-				storage.NewTierConfig().
-					WithStorageClass(storage.ClassNvme.String()).
-					WithBdevDeviceList(addrs...),
-			}
-			cfg := testEngineCfg(0).WithStorage(tiers...)
 
-			gotCounts, gotErr := getThreadCounts(log, cfg, tc.numaCoreCount)
+			gotCounts, gotErr := getThreadCounts(log, tc.nodeSet, tc.numaCoreCount,
+				tc.numaSSDs)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

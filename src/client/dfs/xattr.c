@@ -62,7 +62,10 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, const void *value, da
 	iods[0].iod_recxs = NULL;
 	iods[0].iod_type  = DAOS_IOD_SINGLE;
 	iods[0].iod_size  = size;
-	d_iov_set(&sg_iovs[0], (void *)value, size);
+	if (value == NULL)
+		d_iov_set(&sg_iovs[0], NULL, 0);
+	else
+		d_iov_set(&sg_iovs[0], (void *)value, size);
 	sgls[0].sg_nr     = 1;
 	sgls[0].sg_nr_out = 0;
 	sgls[0].sg_iovs   = &sg_iovs[0];
@@ -168,7 +171,10 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value, daos_siz
 		iod.iod_size = *size;
 
 		/** set sgl for fetch */
-		d_iov_set(&sg_iov, value, *size);
+		if (value == NULL)
+			d_iov_set(&sg_iov, NULL, 0);
+		else
+			d_iov_set(&sg_iov, value, *size);
 		sgl.sg_nr     = 1;
 		sgl.sg_nr_out = 0;
 		sgl.sg_iovs   = &sg_iov;

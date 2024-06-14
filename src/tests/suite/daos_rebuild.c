@@ -1534,6 +1534,34 @@ rebuild_delay_and_extend(void **state)
 	rebuild_io_verify(arg, update_oids, OBJ_NR);
 }
 
+static void
+rebuild_cont_destroy_and_reintegrate(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oids[OBJ_NR];
+	int		rc;
+	int		i;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	for (i = 0; i < OBJ_NR; i++) {
+		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0, arg->myrank);
+		oids[i] = dts_oid_set_rank(oids[i], 5);
+	}
+
+	rebuild_io(arg, oids, OBJ_NR);
+	rebuild_single_pool_rank(arg, 5, true);
+
+	rc = daos_cont_close(arg->coh, NULL);
+	assert_rc_equal(rc, 0);
+	arg->coh = DAOS_HDL_INVAL;
+
+	daos_cont_destroy(arg->pool.poh, arg->co_str, 0 /* force */, NULL /* ev */);
+	uuid_clear(arg->co_uuid);
+	reintegrate_single_pool_rank(arg, 5, true);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD0: drop rebuild scan reply",
@@ -1623,6 +1651,9 @@ static const struct CMUnitTest rebuild_tests[] = {
 	  rebuild_delay_and_reintegrate, rebuild_sub_setup, rebuild_sub_teardown},
 	{"REBUILD34: delay rebuild and extend",
 	  rebuild_delay_and_extend, rebuild_sub_6nodes_rf1_setup, rebuild_sub_teardown},
+	{"REBUILD35: destroy container then reintegrate",
+	  rebuild_cont_destroy_and_reintegrate, rebuild_sub_6nodes_rf1_setup,
+	  rebuild_sub_teardown},
 };
 
 /* TODO: Enable aggregation once stable view rebuild is done. */

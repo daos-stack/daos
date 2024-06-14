@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -794,7 +794,7 @@ out:
 		*max_write = obj->obj_df->vo_max_write;
 
 	if (obj != NULL)
-		vos_obj_release(vos_obj_cache_current(is_sysdb), obj, false);
+		vos_obj_release(vos_obj_cache_current(is_sysdb), obj, 0, false);
 
 	if (rc == 0 || rc == -DER_NONEXIST) {
 		if (vos_ts_wcheck(query->qt_ts_set, obj_epr.epr_hi,

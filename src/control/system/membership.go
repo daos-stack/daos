@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -104,6 +104,7 @@ type JoinRequest struct {
 	SecondaryFabricContexts []uint32
 	FaultDomain             *FaultDomain
 	Incarnation             uint64
+	CheckMode               bool
 }
 
 // JoinResponse contains information returned from join membership update.
@@ -156,6 +157,9 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		if curMember.UUID != req.UUID {
 			return nil, ErrUuidChanged(req.UUID, curMember.UUID, curMember.Rank)
 		}
+		if curMember.Addr.String() != req.ControlAddr.String() {
+			return nil, ErrControlAddrChanged(req.ControlAddr, curMember.Addr, curMember.UUID, curMember.Rank)
+		}
 
 		if !curMember.FaultDomain.Equals(req.FaultDomain) {
 			m.log.Infof("fault domain for rank %d changed from %q to %q",
@@ -165,7 +169,11 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		}
 
 		resp.PrevState = curMember.State
-		curMember.State = MemberStateJoined
+		if req.CheckMode {
+			curMember.State = MemberStateCheckerStarted
+		} else {
+			curMember.State = MemberStateJoined
+		}
 		curMember.Info = ""
 		curMember.Addr = req.ControlAddr
 		curMember.PrimaryFabricURI = req.PrimaryFabricURI

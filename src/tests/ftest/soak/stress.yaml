@@ -46,11 +46,11 @@ server_config:
       storage: auto
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
-  size: 75%
+  size: 90%
 pool_reserved:
-  size: 10%
+  size: 5%
 pool_racer:
-  size: 10%
+  size: 5%
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
@@ -126,6 +126,7 @@ ior_stress:
   transfer_size:
     - '1m'
     - '32k'
+    - '4k'
   dfs_oclass:
     - ["SX","SX"]
     - ["EC_2P1GX", "RP_2GX"]
@@ -134,7 +135,7 @@ ior_stress:
     #  - ["EC_8P2G1", "RP_3GX"]
     #  - ["EC_16P2GX", "RP_3GX"]
   dfuse:
-    mount_dir: "/tmp/daos_dfuse/ior/"
+    mount_dir: "/tmp/soak_dfuse_ior/"
     disable_caching: true
     thread_count: 8
     cores: '0-7'
@@ -149,7 +150,7 @@ fio_stress:
     - test
   global:
     create_serialize: 0
-    directory: "/tmp/daos_dfuse/fio/"
+    directory: "/tmp/soak_dfuse_fio/"
     ioengine: 'libaio'
     thread: 1
     group_reporting: 1
@@ -176,7 +177,7 @@ fio_stress:
       #  - ["EC_8P2G1", "RP_3GX"]
       #  - ["EC_16P2GX", "RP_3GX"]
   dfuse:
-    mount_dir: "/tmp/daos_dfuse/fio/"
+    mount_dir: "/tmp/soak_dfuse_fio/"
     disable_caching: true
     thread_count: 8
     cores: '0-7'
@@ -194,14 +195,14 @@ vpic_stress:
     - POSIX
     - POSIX-LIBIOIL
     - POSIX-LIBPIL4DFS
-  workdir: "/tmp/daos_dfuse/vpic/"
+  workdir: "/tmp/soak_dfuse_vpic/"
   dfuse:
-    mount_dir: "/tmp/daos_dfuse/vpic/"
+    mount_dir: "/tmp/soak_dfuse_vpic/"
     disable_caching: true
   oclass:
     - ["EC_2P1GX", "RP_2GX"]
 lammps_stress:
-  job_timeout: 45
+  job_timeout: 55
   nodesperjob:
     - 8
   taskspernode:
@@ -211,9 +212,9 @@ lammps_stress:
     - POSIX
     - POSIX-LIBIOIL
     - POSIX-LIBPIL4DFS
-  workdir: "/tmp/daos_dfuse/lammps/"
+  workdir: "/tmp/soak_dfuse_lammps/"
   dfuse:
-    mount_dir: "/tmp/daos_dfuse/lammps/"
+    mount_dir: "/tmp/soak_dfuse_lammps/"
     disable_caching: true
     thread_count: 8
     cores: '0-7'
@@ -254,7 +255,7 @@ mdtest_stress:
     #  - ["EC_16P2G1", "RP_3G1"]
   dfs_destroy: false
   dfuse:
-    mount_dir: "/tmp/daos_dfuse/mdtest/"
+    mount_dir: "/tmp/soak_dfuse_mdtest/"
     disable_caching: true
     thread_count: 8
     cores: '0-7'
@@ -285,18 +286,15 @@ macsio_stress:
     #  - ["EC_8P2G1", "RP_3GX"]
     #  - ["EC_16P2GX", "RP_3GX"]
   dfuse:
-    mount_dir: "/tmp/daos_dfuse/macsio/"
+    mount_dir: "/tmp/soak_dfuse_macsio/"
     disable_caching: true
     thread_count: 8
     cores: '0-7'
 datamover_stress:
   job_timeout: 10
   nodesperjob:
-    - 1
-    - 4
     - 8
   taskspernode:
-    - 16
     - 32
   oclass:
     - ["SX","SX"]

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -21,13 +21,27 @@
 #include <daos_srv/rdb.h>
 #include <daos_srv/rsvc.h>
 #include <daos_srv/smd.h>
+#include <daos_srv/daos_chk.h>
 #include <daos_security.h>
 #include <daos_prop.h>
 
+#include "check.pb-c.h"
 #include "svc.pb-c.h"
 #include "smd.pb-c.h"
 #include "rpc.h"
 #include "srv_layout.h"
+
+/*
+ * Use a fixed timeout that matches what the control plane uses for the
+ * moment.
+ *
+ * TODO: Pass the deadline from dmg (or daos_server).
+ */
+static inline uint64_t
+mgmt_ps_call_deadline(void)
+{
+	return daos_getmtime_coarse() + 5 * 60 * 1000;
+}
 
 /** srv.c */
 void ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc);
@@ -97,15 +111,27 @@ int ds_mgmt_pool_delete_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 int ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
 			   struct daos_pool_cont_info **containers,
 			   uint64_t *ncontainers);
-int ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **ranks,
-		       daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
-		       uint32_t *upgrade_layout_ver);
+int
+     ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **enabled_ranks,
+			d_rank_list_t **disabled_ranks, daos_pool_info_t *pool_info,
+			uint32_t *pool_layout_ver, uint32_t *upgrade_layout_ver);
 int ds_mgmt_pool_query_targets(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_t rank,
 			       d_rank_list_t *tgts, daos_target_info_t **infos);
 
 int ds_mgmt_cont_set_owner(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			   uuid_t cont_uuid, const char *user,
 			   const char *group);
+
+/** srv_chk.c */
+int ds_mgmt_check_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
+			Mgmt__CheckInconsistPolicy **policies, int pool_nr, char **pools,
+			uint32_t flags, int phase);
+int ds_mgmt_check_stop(int pool_nr, char **pools);
+int ds_mgmt_check_query(int pool_nr, char **pools, chk_query_head_cb_t head_cb,
+			chk_query_pool_cb_t pool_cb, void *buf);
+int ds_mgmt_check_prop(chk_prop_cb_t prop_cb, void *buf);
+int ds_mgmt_check_act(uint64_t seq, uint32_t act, bool for_all);
+bool ds_mgmt_check_enabled(void);
 
 /** srv_query.c */
 
@@ -133,6 +159,8 @@ int ds_mgmt_tgt_setup(void);
 void ds_mgmt_tgt_cleanup(void);
 void ds_mgmt_hdlr_tgt_create(crt_rpc_t *rpc_req);
 void ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *rpc_req);
+int ds_mgmt_tgt_destroy_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv);
+void ds_mgmt_hdlr_tgt_shard_destroy(crt_rpc_t *rpc_req);
 int ds_mgmt_tgt_create_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				  void *priv);
 int ds_mgmt_tgt_create_post_reply(crt_rpc_t *rpc, void *priv);

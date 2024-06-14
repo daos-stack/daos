@@ -1,7 +1,7 @@
 hosts:
   test_servers: 2
   test_clients: 2
-timeout: 5000
+timeout: 1800
 server_config:
   name: daos_server
   engines_per_host: 1
@@ -13,15 +13,14 @@ server_config:
 pool:
   mode: 146
   name: daos_server
-  control_method: dmg
 pool_qty_1:
-  size: "50%"
+  size: 50%
 pool_qty_2:
-  size: "25%"
+  size: 25%
 pool_qty_3:
-  size: "16%"
+  size: 16%
 pool_qty_10:
-  size: "5%"
+  size: 5%
 container:
   type: POSIX
   control_method: daos
@@ -34,15 +33,15 @@ ior:
   dfs_destroy: false
   iorflags:
     ior_flags:
-      - "-w -r -R -k -G 1"
+      - -w -r -R -k -G 1
     ior_api:
       - DFS
     obj_class:
-      - "SX"
+      - SX
   ior_test_sequence:
-    # - [scmsize, nvmesize, transfersize, blocksize, PASS/FAIL(Expected) ]
+    # - [scmsize, nvmesize, transfer_size, block_size, PASS/FAIL(Expected) ]
     #  The values are set to be in the multiples of 10.
     #  Values are appx GB.
-    - ["NA", "NA", 1000000, 500000000, PASS]          # [NA, NA, 1M, 512M, PASS]
-    - ["NA", "NA", 1000000, 3000000000, FAIL]         # [NA, NA, 1M, 3G, FAIL]
-    - ["NA", "NA", 1000000000, 8000000000, PASS]   # [NA, NA, 1G, 8G, PASS]
+    - [NA, NA, 1000000, 500000000, PASS]          # [NA, NA, 1M, 512M, PASS]
+    - [NA, NA, 1000000, 3000000000, FAIL]         # [NA, NA, 1M, 3G, FAIL]
+    - [NA, NA, 1000000000, 8000000000, PASS]      # [NA, NA, 1G, 8G, PASS]

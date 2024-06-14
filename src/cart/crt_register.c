@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -572,13 +572,14 @@ out:
 
 int
 crt_proto_query_int(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, uint32_t *ver, int count,
-		    crt_proto_query_cb_t cb, void *arg, crt_context_t ctx)
+		    uint32_t timeout, crt_proto_query_cb_t cb, void *arg, crt_context_t ctx)
 {
 	crt_rpc_t			*rpc_req = NULL;
 	crt_context_t			 crt_ctx;
 	struct crt_proto_query_in	*rpc_req_input;
 	struct proto_query_t		*proto_query = NULL;
 	uint32_t			*tmp_array = NULL;
+	uint32_t                         default_timeout;
 	int				 rc = DER_SUCCESS;
 
 	if (ver == NULL) {
@@ -629,6 +630,21 @@ crt_proto_query_int(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, uint32_t *ver
 	proto_query->pq_user_arg = arg;
 	proto_query->pq_coq->coq_base = base_opc;
 
+	if (timeout != 0) {
+		/** The global timeout may be overwritten by the per context timeout
+		 * so let's use the API to get the actual setting.
+		 */
+		rc = crt_req_get_timeout(rpc_req, &default_timeout);
+		/** Should only fail if invalid parameter */
+		D_ASSERT(rc == 0);
+
+		if (timeout < default_timeout) {
+			rc = crt_req_set_timeout(rpc_req, timeout);
+			/** Should only fail if invalid parameter */
+			D_ASSERT(rc == 0);
+		}
+	}
+
 	rc = crt_req_send(rpc_req, proto_query_cb, proto_query);
 	if (rc != 0)
 		D_ERROR("crt_req_send() failed: "DF_RC"\n", DP_RC(rc));
@@ -650,17 +666,17 @@ out:
 }
 
 int
-crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
-		uint32_t *ver, int count, crt_proto_query_cb_t cb, void *arg)
+crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, uint32_t *ver, int count,
+		uint32_t timeout, crt_proto_query_cb_t cb, void *arg)
 {
-	return crt_proto_query_int(tgt_ep, base_opc, ver, count, cb, arg, NULL);
+	return crt_proto_query_int(tgt_ep, base_opc, ver, count, timeout, cb, arg, NULL);
 }
 
 int
 crt_proto_query_with_ctx(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, uint32_t *ver, int count,
-			 crt_proto_query_cb_t cb, void *arg, crt_context_t ctx)
+			 uint32_t timeout, crt_proto_query_cb_t cb, void *arg, crt_context_t ctx)
 {
-	return crt_proto_query_int(tgt_ep, base_opc, ver, count, cb, arg, ctx);
+	return crt_proto_query_int(tgt_ep, base_opc, ver, count, timeout, cb, arg, ctx);
 }
 
 /* local operation, query if base_opc with version number ver is registered. */

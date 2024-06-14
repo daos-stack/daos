@@ -2431,7 +2431,7 @@ fetch_size(void **state)
 	char		*akey[NUM_AKEYS];
 	const char	*akey_fmt = "akey%d";
 	int		 i, rc;
-	daos_size_t	 size = 131071;
+	daos_size_t	 size = 131071, tmp_sz;
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
@@ -2480,6 +2480,17 @@ fetch_size(void **state)
 	for (i = 0; i < NUM_AKEYS; i++)
 		assert_int_equal(iod[i].iod_size, size * (i+1));
 
+	print_message("fetch with invalid sgl - NULL sg_iovs with non-zero sg_nr\n");
+	sgl->sg_iovs = NULL;
+	tmp_sz = iod->iod_size;
+	iod->iod_size = 0;
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, NUM_AKEYS, iod, sgl,
+			    NULL, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	iod->iod_size = tmp_sz;
+	for (i = 0; i < NUM_AKEYS; i++)
+		sgl[i].sg_iovs		= &sg_iov[i];
 	print_message("fetch with unknown iod_size and less buffer\n");
 	for (i = 0; i < NUM_AKEYS; i++) {
 		d_iov_set(&sg_iov[i], buf[i], size * (i+1) - 1);

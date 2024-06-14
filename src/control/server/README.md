@@ -186,7 +186,7 @@ storage media which will remove blobstores and remove any filesystem signatures
 from the SSD controller namespaces.
 
 Formatting will be performed on devices identified by PCI addresses specified
-in config file parameter `bdev_list` when `bdev_class` is equal to `nvme`.
+in config file parameter `bdev_list` when `class` is equal to `nvme`.
 
 In order to designate NVMe devices to be used by DAOS data plane instances, the
 control plane will generate a `daos_nvme.conf` file to be consumed by SPDK

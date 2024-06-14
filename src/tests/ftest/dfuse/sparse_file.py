@@ -8,6 +8,7 @@ import os
 from getpass import getuser
 
 import paramiko
+from dfuse_utils import get_dfuse, start_dfuse
 from general_utils import get_remote_file_size
 from ior_test_base import IorTestBase
 
@@ -50,14 +51,15 @@ class SparseFile(IorTestBase):
         # Create a pool, container and start dfuse.
         self.create_pool()
         self.create_cont()
-        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
+        dfuse = get_dfuse(self, self.hostlist_clients)
+        start_dfuse(self, dfuse, self.pool, self.container)
 
         # get scm space before write
         self.space_before = self.pool.get_pool_free_space("nvme")
 
         # create large file and perform write to it so that if goes out of
         # space.
-        sparse_file = os.path.join(self.dfuse.mount_dir.value, 'sparsefile.txt')
+        sparse_file = os.path.join(dfuse.mount_dir.value, 'sparsefile.txt')
         self.execute_cmd("touch {}".format(sparse_file))
         self.log.info("File size (in bytes) before truncate: %s",
                       get_remote_file_size(self.hostlist_clients[0], sparse_file))

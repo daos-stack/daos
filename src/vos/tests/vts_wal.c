@@ -292,7 +292,7 @@ wal_tst_pool_cont(void **state)
 	assert_int_equal(rc, 0);
 
 	/* Create pool: Create meta & WAL blobs, write meta & WAL header */
-	rc = vos_pool_create(pool_name, pool_id, 0, VPOOL_1G, 0, NULL);
+	rc = vos_pool_create(pool_name, pool_id, 0, VPOOL_1G, 0, 0 /* version */, NULL);
 	assert_int_equal(rc, 0);
 
 	/* Create cont: write WAL */

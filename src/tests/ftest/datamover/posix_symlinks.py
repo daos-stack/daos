@@ -6,6 +6,7 @@
 from os.path import join
 
 from data_mover_test_base import DataMoverTestBase
+from dfuse_utils import get_dfuse, start_dfuse
 
 
 class DmvrPosixSymlinks(DataMoverTestBase):
@@ -55,7 +56,8 @@ class DmvrPosixSymlinks(DataMoverTestBase):
         self.set_tool(tool)
 
         # Start dfuse to hold all pools/containers
-        self.start_dfuse(self.dfuse_hosts)
+        dfuse = get_dfuse(self, self.dfuse_hosts)
+        start_dfuse(self, dfuse)
 
         # Create 1 pool
         pool1 = self.create_pool()
@@ -64,19 +66,19 @@ class DmvrPosixSymlinks(DataMoverTestBase):
         uns_cont = self.get_container(pool1)
 
         # Test links that point forward
-        container1_path = join(self.dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns1')
+        container1_path = join(dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns1')
         container1 = self.get_container(pool1, path=container1_path)
         self.run_dm_posix_symlinks_fun(
             pool1, container1, self.create_links_forward, "forward")
 
         # Test links that point backward
-        container2_path = join(self.dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns2')
+        container2_path = join(dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns2')
         container2 = self.get_container(pool1, path=container2_path)
         self.run_dm_posix_symlinks_fun(
             pool1, container2, self.create_links_backward, "backward")
 
         # Test a mix of forward and backward links
-        container3_path = join(self.dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns3')
+        container3_path = join(dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns3')
         container3 = self.get_container(pool1, path=container3_path)
         self.run_dm_posix_symlinks_fun(
             pool1, container3, self.create_links_mixed, "mixed")

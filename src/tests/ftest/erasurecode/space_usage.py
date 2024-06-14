@@ -70,8 +70,7 @@ class EcodSpaceUsage(IorTestBase):
         # Run IOR
         self.ior_cmd.namespace = ior_namespace
         self.ior_cmd.get_params(self)
-        self.ior_cmd.set_daos_params(
-            self.server_group, self.pool.identifier, self.container.identifier)
+        self.ior_cmd.set_daos_params(self.pool.identifier, self.container.identifier)
         self.run_ior_with_pool(create_pool=False, create_cont=False, display_space=False)
 
         # Save space per target after running IOR

@@ -32,6 +32,7 @@ Build-Depends: debhelper (>= 10),
                libraft-dev (= 0.11.0-1416.g12dbc15),
                python3-tabulate,
                liblz4-dev,
+               libaio-dev,
                libcapstone-dev
 Standards-Version: 4.1.2
 Homepage: https://docs.daos.io/

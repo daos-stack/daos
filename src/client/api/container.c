@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -444,9 +444,9 @@ daos_cont_delete_acl(daos_handle_t coh, enum daos_acl_principal_type type,
 	return dc_task_schedule(task, true);
 }
 
-int
-daos_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group,
-		    daos_event_t *ev)
+static int
+cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group, bool check_exists,
+	       daos_event_t *ev)
 {
 	daos_prop_t	*prop;
 	uint32_t	nr = 0;
@@ -459,6 +459,16 @@ daos_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group,
 			return -DER_INVAL;
 		}
 
+		if (check_exists) {
+			uid_t uid;
+
+			rc = daos_acl_principal_to_uid(user, &uid);
+			if (rc != 0) {
+				DL_ERROR(rc, "unable to determine local ID for user %s", user);
+				return rc;
+			}
+		}
+
 		nr++;
 	}
 
@@ -466,6 +476,16 @@ daos_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group,
 		if (!daos_acl_principal_is_valid(group)) {
 			D_ERROR("group principal invalid\n");
 			return -DER_INVAL;
+		}
+
+		if (check_exists) {
+			gid_t gid;
+
+			rc = daos_acl_principal_to_gid(group, &gid);
+			if (rc != 0) {
+				DL_ERROR(rc, "unable to determine local ID for group %s", group);
+				return rc;
+			}
 		}
 
 		nr++;
@@ -498,6 +518,18 @@ daos_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group,
 
 	daos_prop_free(prop);
 	return rc;
+}
+
+int
+daos_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group, daos_event_t *ev)
+{
+	return cont_set_owner(coh, user, group, true, ev);
+}
+
+int
+daos_cont_set_owner_no_check(daos_handle_t coh, d_string_t user, d_string_t group, daos_event_t *ev)
+{
+	return cont_set_owner(coh, user, group, false, ev);
 }
 
 int

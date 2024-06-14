@@ -40,7 +40,8 @@ runs:
       run: |
         . ci/gha_functions.sh
         inst_repos="${{ env.CP_PR_REPOS }} ${{ github.event.inputs.pr-repos }}"
-        if [[ $inst_repos != *daos@* ]]; then
+        if [ -z "${{ env.CP_RPM_TEST_VERSION }}" ] &&
+           [[ $inst_repos != *daos@* ]]; then
             inst_repos+=" daos@PR-${{ github.event.pull_request.number }}"
             inst_repos+=":${{ github.run_number }}"
         fi

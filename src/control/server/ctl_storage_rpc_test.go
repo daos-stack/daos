@@ -1659,6 +1659,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				IsMountedBool:  tc.scmMounted,
 				GetfsStr:       getFsRetStr,
 				SourceToTarget: devToMount,
+				RealReadFile:   true,
 			}
 			if tc.sClass == storage.ClassRam {
 				total := uint64(1234)

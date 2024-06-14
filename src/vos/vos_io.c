@@ -245,7 +245,8 @@ vos_dedup_update(struct vos_pool *pool, struct dcs_csum_info *csum,
 	    BIO_ADDR_IS_DEDUP(&biov->bi_addr))
 		return;
 
-	if (bio_addr_is_hole(&biov->bi_addr))
+	/* NVMe extent dedup isn't supported yet */
+	if (bio_addr_is_hole(&biov->bi_addr) || bio_iov2media(biov) != DAOS_MEDIA_SCM)
 		return;
 
 	if (vos_dedup_lookup(pool, csum, csum_len, NULL))
@@ -570,8 +571,8 @@ vos_ioc_destroy(struct vos_io_context *ioc, bool evict)
 	dcs_csum_info_list_fini(&ioc->ic_csum_list);
 
 	if (ioc->ic_obj)
-		vos_obj_release(vos_obj_cache_current(ioc->ic_cont->vc_pool->vp_sysdb),
-				ioc->ic_obj, evict);
+		vos_obj_release(vos_obj_cache_current(ioc->ic_cont->vc_pool->vp_sysdb), ioc->ic_obj,
+				0, evict);
 
 	vos_ioc_reserve_fini(ioc);
 	vos_ilog_fetch_finish(&ioc->ic_dkey_info);

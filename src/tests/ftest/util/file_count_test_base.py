@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -27,13 +27,12 @@ class FileCountTestBase(IorTestBase, MdtestBase):
         container = self.get_container(self.pool, create=False)
         # don't include oclass in daos cont cmd; include rd_fac based on the class
         if oclass:
+            properties = container.properties.value
             container.oclass.update(oclass)
             redundancy_factor = extract_redundancy_factor(oclass)
             rd_fac = 'rd_fac:{}'.format(str(redundancy_factor))
-        properties = container.properties.value
-        cont_properties = (",").join(filter(None, [properties, rd_fac]))
-        if cont_properties is not None:
-            container.properties.update(cont_properties)
+            properties = (",").join(filter(None, [properties, rd_fac]))
+            container.properties.update(properties)
         container.create()
 
         return container

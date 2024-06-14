@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -24,13 +24,17 @@ const (
 )
 
 type (
-	// SystemProvider defines a set of methods to be implemented by a provider
-	// of system capabilities.
+	// SystemProvider provides operating system capabilities.
 	SystemProvider interface {
 		system.IsMountedProvider
 		system.MountProvider
 		system.UnmountProvider
 		Chmod(string, os.FileMode) error
+		Chown(string, int, int) error
+		Getegid() int
+		Geteuid() int
+		Mkdir(string, os.FileMode) error
+		RemoveAll(string) error
 		Stat(string) (os.FileInfo, error)
 	}
 
@@ -140,7 +144,7 @@ func (p *Provider) ClearMountpoint(mntpt string) error {
 		}
 	}
 
-	if err := os.RemoveAll(mntpt); err != nil && !os.IsNotExist(err) {
+	if err := p.sys.RemoveAll(mntpt); err != nil && !os.IsNotExist(err) {
 		return errors.Wrapf(err, "failed to remove %s", mntpt)
 	}
 
@@ -169,12 +173,12 @@ func (p *Provider) MakeMountPath(path string, tgtUID, tgtGID int) error {
 		switch {
 		case os.IsNotExist(err):
 			// subdir missing, attempt to create and chown
-			if err := os.Mkdir(ps, defaultMountPointPerms); err != nil {
+			if err := p.sys.Mkdir(ps, defaultMountPointPerms); err != nil {
 				return errors.Wrapf(err, "failed to create directory %q", ps)
 			}
-			if err := os.Chown(ps, tgtUID, tgtGID); err != nil {
+			if err := p.sys.Chown(ps, tgtUID, tgtGID); err != nil {
 				return errors.Wrapf(err, "failed to set ownership of %s to %d.%d from %d.%d",
-					ps, tgtUID, tgtGID, os.Geteuid(), os.Getegid())
+					ps, tgtUID, tgtGID, p.sys.Geteuid(), p.sys.Getegid())
 			}
 		case err != nil:
 			return errors.Wrapf(err, "unable to stat %q", ps)

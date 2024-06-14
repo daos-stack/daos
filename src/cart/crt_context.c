@@ -316,16 +316,16 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 			DL_WARN(rc, "Failed to create SWIM delay gauge");
 	}
 
-	if (crt_is_service() &&
-	    crt_gdata.cg_auto_swim_disable == 0 &&
-	    ctx->cc_idx == crt_gdata.cg_swim_crt_idx) {
-		rc = crt_swim_init(crt_gdata.cg_swim_crt_idx);
+	if (crt_is_service() && crt_gdata.cg_auto_swim_disable == 0 &&
+	    ctx->cc_idx == crt_gdata.cg_swim_ctx_idx) {
+		rc = crt_swim_init(crt_gdata.cg_swim_ctx_idx);
 		if (rc) {
 			D_ERROR("crt_swim_init() failed rc: %d.\n", rc);
 			crt_context_destroy(ctx, true);
 			D_GOTO(out, rc);
 		}
 
+		/* TODO: Address this hack */
 		if (provider == CRT_PROV_OFI_SOCKETS || provider == CRT_PROV_OFI_TCP_RXM) {
 			struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 			struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
@@ -743,10 +743,12 @@ int
 crt_context_destroy(crt_context_t crt_ctx, int force)
 {
 	struct crt_context	*ctx;
-	uint32_t		 timeout_sec;
-	int			 provider;
-	int			 rc = 0;
-	int			 i;
+	uint32_t                 timeout_sec;
+	int                      ctx_idx;
+	int                      provider;
+	int                      rc    = 0;
+	int                      hg_rc = 0;
+	int                      i;
 
 	D_RWLOCK_RDLOCK(&crt_context_destroy_lock);
 
@@ -767,6 +769,22 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 	}
 
 	ctx = crt_ctx;
+
+	rc = crt_context_idx(crt_ctx, &ctx_idx);
+	if (rc != 0) {
+		D_ERROR("crt_context_idx() failed: " DF_RC "\n", DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	hg_rc = HG_Context_unpost(ctx->cc_hg_ctx.chc_hgctx);
+	if (hg_rc != 0) {
+		if (!force)
+			D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (crt_gdata.cg_swim_inited && crt_gdata.cg_swim_ctx_idx == ctx_idx)
+		crt_swim_disable_all();
+
 	rc = crt_grp_ctx_invalid(ctx, false /* locked */);
 	if (rc) {
 		DL_ERROR(rc, "crt_grp_ctx_invalid() failed");
@@ -797,6 +815,9 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 
 	if (!force && rc && i == CRT_SWIM_FLUSH_ATTEMPTS)
 		D_GOTO(out, rc);
+
+	if (crt_gdata.cg_swim_inited && crt_gdata.cg_swim_ctx_idx == ctx_idx)
+		crt_swim_fini();
 
 	D_MUTEX_LOCK(&ctx->cc_mutex);
 

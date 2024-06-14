@@ -7,6 +7,8 @@ concurrency:
   group: ci2-${{ github.head_ref }}
   cancel-in-progress: true
 
+permissions: {}
+
 jobs:
 
   # reuse the cache from the landing-builds workflow if available, if not then build the images
@@ -14,6 +16,10 @@ jobs:
   Build-and-test:
     name: Run DAOS/NLT tests
     runs-on: ubuntu-22.04
+    permissions:
+      # https://github.com/EnricoMi/publish-unit-test-result-action#permissions
+      checks: write
+      pull-requests: write
     strategy:
       matrix:
         distro: [ubuntu]

@@ -64,6 +64,10 @@
   memcheck: False
   tests:
     - cmd: ["src/rdb/raft_tests/raft_tests.py"]
+- name: rsvc
+  base: "BUILD_DIR"
+  tests:
+    - cmd: ["src/common/tests/rsvc_tests"]
 - name: security
   base: "BUILD_DIR"
   tests:
@@ -173,7 +177,6 @@
       warn_if_missing: "bin/nvme_control_ctests is missing, SPDK_SRC not available when built?"
 - name: ddb
   base: "PREFIX"
-  required_src: ["src/ddb/tests/SConscript"]
   tests:
     - cmd: ["bin/ddb_tests"]
 - name: Source metadata testing

@@ -40,25 +40,21 @@ Build instructions for these tools can be found
 
 There are two mandatory command-line options; these are:
 
-| **Command-line Option**               | **Description**      |
-| ------------------------------------- | -------------------- |
-| --src=daos://<pool/cont\> \| <path\>  | the source path      |
-| --dst=daos://<pool/cont\> \| <path\>  | the destination path |
-
-!!! note
-    In DAOS 1.2, only directories are supported as the source or destination.
-    Files, directories, and symbolic links are copied from the source directory.
+| **Command-line Option**                 | **Description**      |
+| --------------------------------------- | -------------------- |
+| --src=daos://<pool\>/<cont\> \| <path\> | the source path      |
+| --dst=daos://<pool\>/<cont\> \| <path\> | the destination path |
 
 #### Examples
 
 Copy a POSIX container to a POSIX filesystem:
 ```shell
-$ daos filesystem copy --src daos://<pool_uuid>/<cont_uuid> --dst <posix_path>
+$ daos filesystem copy --src daos://<pool>/<cont> --dst <posix_path>
 ```
 
 Copy from a POSIX filesystem to a sub-directory in a POSIX container:
 ```shell
-$ daos filesystem copy --src <posix_path> --dst daos://<pool_uuid>/<cont_uuid>/<sub_dir>
+$ daos filesystem copy --src <posix_path> --dst daos://<pool>/<cont>/<sub_dir>
 ```
 
 Copy from a POSIX container by specifying a UNS path:
@@ -72,19 +68,19 @@ There are two mandatory command-line options; these are:
 
 | **Command-line Option**                   | **Description**           |
 | ----------------------------------------- | ------------------------- |
-| --src=daos://<pool/cont\> \| <path\>      | the source container      |
-| --dst=daos://<pool\>[/cont\>] \| <path\>  | the destination container |
+| --src=daos://<pool\>/<cont\> \| <path\>   | the source container      |
+| --dst=daos://<pool\>[/<cont\>] \| <path\> | the destination container |
 
 The destination container must not already exist.
 
 #### Examples
 
-Clone a container to a new container with a given UUID:
+Clone a container to a new container with a given label:
 ```shell
-$ daos container clone --src /<pool_uuid>/<cont_uuid> --dst /<pool_uuid>/<new_cont_uuid>
+$ daos container clone --src /<pool>/<cont> --dst /<pool>/<new_cont>
 ```
 
 Clone a container to a new container with an auto-generated UUID:
 ```shell
-$ daos container clone --src /<pool_uuid>/<cont_uuid> --dst /<pool_uuid>
+$ daos container clone --src /<pool>/<cont> --dst /<pool>
 ```

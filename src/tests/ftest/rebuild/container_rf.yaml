@@ -4,6 +4,7 @@ hosts:
 timeout: 480
 server_config:
   name: daos_server
+  crt_timeout: 10
   engines_per_host: 1
   engines:
     0:

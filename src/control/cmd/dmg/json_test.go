@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -67,7 +67,7 @@ func TestDmg_JsonOutput(t *testing.T) {
 			testArgs := append([]string{"-i", "--json"}, args...)
 			switch strings.Join(args, " ") {
 			case "version", "telemetry config", "telemetry run", "config generate",
-				"manpage", "system set-prop", "support collect-log":
+				"manpage", "system set-prop", "support collect-log", "check repair":
 				return
 			case "storage nvme-rebind":
 				testArgs = append(testArgs, "-l", "foo.com", "-a",
@@ -75,8 +75,6 @@ func TestDmg_JsonOutput(t *testing.T) {
 			case "storage nvme-add-device":
 				testArgs = append(testArgs, "-l", "foo.com", "-a",
 					test.MockPCIAddr(), "-e", "0")
-			case "storage query device-health":
-				testArgs = append(testArgs, "-u", test.MockUUID())
 			case "storage set nvme-faulty":
 				testArgs = append(testArgs, "--force", "-u", test.MockUUID())
 			case "storage replace nvme":
@@ -109,6 +107,8 @@ func TestDmg_JsonOutput(t *testing.T) {
 				return // These commands query via http directly
 			case "system cleanup":
 				testArgs = append(testArgs, "hostname")
+			case "check set-policy":
+				testArgs = append(testArgs, "POOL_BAD_LABEL:IGNORE")
 			case "system set-attr":
 				testArgs = append(testArgs, "foo:bar")
 			case "system del-attr":

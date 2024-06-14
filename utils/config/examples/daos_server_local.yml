@@ -25,13 +25,13 @@ engines:
     # Storage definitions (one per tier)
     storage:
       -
-        # When scm_class is set to ram, tmpfs will be used to emulate SCM.
+        # When class is set to ram, tmpfs will be used to emulate SCM.
         # The size of ram is specified by scm_size in GB units.
         class: ram
         scm_size: 8
         scm_mount: /mnt/daos
       -
-        # When bdev_class is set to file, Linux AIO will be used to emulate NVMe.
+        # When class is set to file, Linux AIO will be used to emulate NVMe.
         # The size of file that will be created is specified by bdev_size in GB units.
         # The location of the files that will be created is specified in bdev_list.
         class: file

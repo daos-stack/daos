@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -44,10 +44,19 @@ type (
 		SourceToTarget  map[string]string
 		GetfsIndex      int
 		GetfsUsageResps []GetfsUsageRetval
-		GetFsTypeRes    *FsType
-		GetFsTypeErr    []error
+		GetfsTypeRes    *FsType
+		GetfsTypeErr    []error
 		StatErrors      map[string]error
 		RealStat        bool
+		ReadFileResults map[string][]byte
+		ReadFileErrors  map[string]error
+		RealReadFile    bool
+		GeteuidRes      int
+		GetegidRes      int
+		MkdirErr        error
+		RealMkdir       bool
+		RemoveAllErr    error
+		RealRemoveAll   bool
 	}
 
 	// MockSysProvider gives a mock SystemProvider implementation.
@@ -57,7 +66,7 @@ type (
 		cfg             MockSysConfig
 		isMounted       MountMap
 		IsMountedInputs []string
-		GetFsTypeCount  int
+		GetfsTypeCount  int
 	}
 )
 
@@ -162,17 +171,17 @@ func (msp *MockSysProvider) GetfsUsage(_ string) (uint64, uint64, error) {
 	return resp.Total, resp.Avail, resp.Err
 }
 
-func (msp *MockSysProvider) GetFsType(path string) (*FsType, error) {
-	idx := msp.GetFsTypeCount
-	msp.GetFsTypeCount++
+func (msp *MockSysProvider) GetfsType(path string) (*FsType, error) {
+	idx := msp.GetfsTypeCount
+	msp.GetfsTypeCount++
 	var err error
 	var result *FsType
-	if idx < len(msp.cfg.GetFsTypeErr) {
-		err = msp.cfg.GetFsTypeErr[idx]
+	if idx < len(msp.cfg.GetfsTypeErr) {
+		err = msp.cfg.GetfsTypeErr[idx]
 	}
 
 	if err == nil {
-		result = msp.cfg.GetFsTypeRes
+		result = msp.cfg.GetfsTypeRes
 	}
 
 	return result, err
@@ -189,6 +198,50 @@ func (msp *MockSysProvider) Stat(path string) (os.FileInfo, error) {
 	// default return value for missing key is nil so
 	// add entries to indicate path failure e.g. perms or not-exist
 	return nil, msp.cfg.StatErrors[path]
+}
+
+func (msp *MockSysProvider) ReadFile(path string) ([]byte, error) {
+	msp.RLock()
+	defer msp.RUnlock()
+
+	if msp.cfg.RealReadFile {
+		return os.ReadFile(path)
+	}
+
+	// default return value for missing key is nil so
+	// add entries to indicate path failure e.g. perms or not-exist
+	if msp.cfg.ReadFileErrors[path] != nil {
+		return nil, msp.cfg.ReadFileErrors[path]
+	}
+
+	return msp.cfg.ReadFileResults[path], nil
+}
+
+// Geteuid returns the numeric effective user id of the caller.
+func (msp *MockSysProvider) Geteuid() int {
+	return msp.cfg.GeteuidRes
+}
+
+// Getegid returns the numeric effective group id of the caller.
+func (msp *MockSysProvider) Getegid() int {
+	return msp.cfg.GetegidRes
+}
+
+// Mkdir creates a new directory with the specified name and permission
+// bits (before umask).
+func (msp *MockSysProvider) Mkdir(path string, flags os.FileMode) error {
+	if msp.cfg.RealMkdir {
+		return os.Mkdir(path, flags)
+	}
+	return msp.cfg.MkdirErr
+}
+
+// RemoveAll removes path and any children it contains.
+func (msp *MockSysProvider) RemoveAll(path string) error {
+	if msp.cfg.RealRemoveAll {
+		return os.RemoveAll(path)
+	}
+	return msp.cfg.RemoveAllErr
 }
 
 func NewMockSysProvider(log logging.Logger, cfg *MockSysConfig) *MockSysProvider {

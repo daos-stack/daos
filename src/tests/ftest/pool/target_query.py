@@ -1,8 +1,9 @@
 '''
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
+from data_utils import dict_extract_values
 from ior_test_base import IorTestBase
 
 
@@ -12,31 +13,6 @@ class PoolTargetQueryTest(IorTestBase):
                             it's type.
     :avocado: recursive
     """
-    def setUp(self):
-        """Set up each test case."""
-        super().setUp()
-        engine_count = self.server_managers[0].get_config_value("engines_per_host")
-        self.server_count = len(self.hostlist_servers) * engine_count
-        self.target_usage_count = self.params.get("target_usage_count", '/run/ior/objectclass/*')
-        self.notes = self.params.get("notes", '/run/ior/objectclass/*')
-
-    def target_space_info(self):
-        """Get the NVMe Target Space Information from all Targets.
-
-        return:
-            nvme_rank_space (list): nvme free space list from all targets.
-
-        """
-        nvme_rank_space = []
-        self.pool.connect()
-
-        # Collect the space information for all the ranks and targets
-        for _rank in range(self.server_count):
-            for _target in range(self.server_managers[0].get_config_value("targets")):
-                result = self.pool.pool.target_query(_target, _rank)
-                nvme_rank_space.append(result.ta_space.s_free[1])
-
-        return nvme_rank_space
 
     def test_pool_target_query(self):
         """Jira ID: DAOS-4661.
@@ -52,43 +28,56 @@ class PoolTargetQueryTest(IorTestBase):
         :avocado: tags=pool
         :avocado: tags=PoolTargetQueryTest,test_pool_target_query
         """
-        self.update_ior_cmd_with_pool()
-        # Check the initial size of all targets
-        initial_nvme_size = self.target_space_info()
-        if not initial_nvme_size.count(initial_nvme_size[0]) == len(initial_nvme_size):
-            self.fail("Initial Target Free space is not equal for all targets {}"
-                      .format(initial_nvme_size))
+        target_usage_count = self.params.get('target_usage_count', '/run/ior/objectclass/*')
+        notes = self.params.get('notes', '/run/ior/objectclass/*')
 
-        # Write the IOR data
+        rank_list = list(range(self.server_managers[0].engines))
+        targets_per_rank = self.server_managers[0].get_config_value('targets')
+        target_idx = ','.join(map(str, range(targets_per_rank)))
+
+        self.update_ior_cmd_with_pool()
+
+        self.log_step('Get initial NVMe free space for each target')
+        initial_space = self.pool.get_space_per_target(ranks=rank_list, target_idx=target_idx)
+        unique_nvme_free = set(dict_extract_values(initial_space, ['nvme', 'free']))
+        if len(unique_nvme_free) != 1:
+            self.log.error('unique_nvme_free = %s', str(unique_nvme_free))
+            self.fail('Initial nvme free space not equal for all targets')
+
+        self.log_step('Write data with IOR')
         self.run_ior_with_pool()
 
-        # Get the size after writing the IOR data
-        latest_nvme_size = self.target_space_info()
+        self.log_step('Get NVMe free space for each target')
+        current_space = self.pool.get_space_per_target(ranks=rank_list, target_idx=target_idx)
 
-        # Verify the target sizes is only increasing based on object layout
-        # specified in yaml file
-        target_count = 0
-        self.log.info("Verify that target pool space has decrease for %s targets after running "
-                      "IOR with %s oclass", self.target_usage_count, self.ior_cmd.dfs_oclass.value)
-        self.log.info("Target\t initial_nvme_size\t latest_nvme_size\t Change")
-        self.log.info("------\t -----------------\t ----------------\t ------")
-        status = ""
-        for count, initial_size in enumerate(initial_nvme_size):
-            if latest_nvme_size[count] < initial_size:
-                target_count += 1
-                status = "Decrease"
-            elif latest_nvme_size[count] > initial_size:
-                status = "Increase"
-            elif latest_nvme_size[count] == initial_size:
-                status = "No Change"
-            self.log.info("%s\t %s\t %s\t %s",
-                          str(count).ljust(6),
-                          str(initial_size).ljust(20),
-                          str(latest_nvme_size[count]).ljust(20),
-                          status)
+        self.log_step(
+            f'Verify NVMe free space decreased for {target_usage_count} targets '
+            f'with oclass {self.ior_cmd.dfs_oclass.value}')
+        self.log.info("Rank\t Target\t Initial NVMe Free\t Latest NVMe Free\t Change")
+        self.log.info("----\t ------\t -----------------\t ----------------\t ------")
+        num_decrease = 0
+        for rank, targets in initial_space.items():
+            for target, devices in targets.items():
+                intitial_nvme_free = devices['nvme']['free']
+                latest_nvme_free = current_space[rank][target]['nvme']['free']
+                if latest_nvme_free < intitial_nvme_free:
+                    num_decrease += 1
+                    status = 'Decrease'
+                elif intitial_nvme_free < latest_nvme_free:
+                    status = 'Increase'
+                else:
+                    status = 'No Change'
+                self.log.info(
+                    "%s\t %s\t %s\t %s\t %s",
+                    str(rank).ljust(4),
+                    str(target).ljust(6),
+                    str(intitial_nvme_free).ljust(20),
+                    str(latest_nvme_free).ljust(20),
+                    status)
 
-        if target_count != self.target_usage_count:
-            self.fail("ERROR: Detected free space reduction in only {}/{} targets, {}"
-                      .format(target_count, self.target_usage_count, self.notes))
-        else:
-            self.log.info("Test passed")
+        if num_decrease != target_usage_count:
+            self.fail(
+                f'Detected free space reduction in only {num_decrease}/{target_usage_count} '
+                f'targets, {notes}')
+
+        self.log_step('Test passed')

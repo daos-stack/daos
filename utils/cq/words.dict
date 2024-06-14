@@ -63,6 +63,7 @@ Uncomment
 VMD
 XUnitResult
 acl
+adminexcluded
 akey
 akeys
 allocator
@@ -100,6 +101,7 @@ centric
 chdir
 checksum
 chgrp
+chk
 chmod
 chown
 chowned
@@ -129,6 +131,7 @@ datamover
 dataset
 dbench
 dcp
+ddb
 ddict
 dealloc
 debian
@@ -162,6 +165,8 @@ dsync
 dtx
 eg
 enablement
+endian
+endianness
 endswith
 enospace
 enum
@@ -171,6 +176,7 @@ epcrange
 epilog
 errored
 ethernet
+fallocate
 fchmod
 fcntl
 filename
@@ -223,7 +229,9 @@ io
 iod
 iodepth
 ioengine
+ioengines
 ior
+ioreqs
 iotype
 iov
 ip
@@ -334,6 +342,7 @@ posix
 postfix
 pparent
 ppn
+pragmas
 prebuild
 prebuilding
 prebuilt
@@ -351,6 +360,7 @@ procs
 profiler
 protoc
 ps
+psync
 puuid
 py
 pydaos
@@ -381,6 +391,7 @@ rpaths
 rpc
 rpms
 rsvc
+rsync
 runtime
 runuser
 rw
@@ -498,6 +509,7 @@ vm
 vos
 wildcard
 wipefs
+xargs
 xattr
 xattrs
 xfer

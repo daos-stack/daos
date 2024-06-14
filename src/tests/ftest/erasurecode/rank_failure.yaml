@@ -1,7 +1,7 @@
 hosts:
   test_servers: 6
   test_clients: 1
-timeout: 2100
+timeout: 1800
 setup:
   start_agents_once: false
   start_servers_once: false
@@ -30,9 +30,9 @@ pool:
   control_method: dmg
 gen_io_conf:
   ranks: "11"
-  targets: "7"
-  dkeys: "3"
-  akeys: "3"
+  targets: "4"
+  dkeys: "2"
+  akeys: "2"
   record_size: "1000"
   obj_num: "3"
   obj_class: "EC_8P2GX"
