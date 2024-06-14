@@ -201,8 +201,10 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev, d_rank_l
 			D_GOTO(out, rc);
 
 		rc = d_rank_list_to_str(targets, &tgt_str);
-		if (rc != 0)
+		if (rc != 0) {
+			D_FREE(pg_str);
 			D_GOTO(out, rc);
+		}
 
 		D_ERROR(DF_UUID": targets (%s) contains ranks not in pg (%s)\n",
 			DP_UUID(pool_uuid), tgt_str, pg_str);
