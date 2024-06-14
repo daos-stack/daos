@@ -3,20 +3,18 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from collections import defaultdict
 import os
 import threading
 import time
+from collections import defaultdict
 
 from ClusterShell.NodeSet import NodeSet
-
 from command_utils_base import CommandFailure
 from general_utils import report_errors
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
 from job_manager_utils import get_job_manager
 from run_utils import stop_processes
-
 
 HOST_GROUPS = []
 GROUP_1_HOSTS = list(NodeSet("aurora-daos-[0001-0128]"))
