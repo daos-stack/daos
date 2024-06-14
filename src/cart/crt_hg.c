@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1266,13 +1266,16 @@ crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv)
 				  DP_HG_RC(hg_ret));
 		}
 	}
+
 	if (rpc_priv->crp_input_got != 0) {
-		hg_ret = HG_Free_input(rpc_priv->crp_hg_hdl,
-				       &rpc_priv->crp_pub.cr_input);
-		if (hg_ret != HG_SUCCESS)
-			RPC_ERROR(rpc_priv,
-				  "HG_Free_input failed, hg_ret: " DF_HG_RC "\n",
-				  DP_HG_RC(hg_ret));
+		if (rpc_priv->crp_buf_is_copy == 1) {
+			D_FREE(rpc_priv->crp_pub.cr_input);
+		} else {
+			hg_ret = HG_Free_input(rpc_priv->crp_hg_hdl, &rpc_priv->crp_pub.cr_input);
+			if (hg_ret != HG_SUCCESS)
+				RPC_ERROR(rpc_priv, "HG_Free_input failed, hg_ret: " DF_HG_RC "\n",
+					  DP_HG_RC(hg_ret));
+		}
 	}
 
 	crt_rpc_priv_fini(rpc_priv);

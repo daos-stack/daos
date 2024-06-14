@@ -148,6 +148,8 @@ struct crt_gdata {
 	long			 cg_num_cores;
 	/** Inflight rpc quota limit */
 	uint32_t		cg_rpc_quota;
+	/** RPC size above which to make a copy of an rpc input */
+	uint32_t                 cg_rpc_copy_limit;
 };
 
 extern struct crt_gdata		crt_gdata;
@@ -182,6 +184,7 @@ struct crt_event_cb_priv {
 	ENV(CRT_SECONDARY_PROVIDER)                                                                \
 	ENV(CRT_TIMEOUT)                                                                           \
 	ENV(DAOS_RPC_SIZE_LIMIT)                                                                   \
+	ENV(DAOS_RPC_COPY_SIZE_LIMIT)                                                              \
 	ENV(DAOS_SIGNAL_REGISTER)                                                                  \
 	ENV_STR(DAOS_TEST_SHARED_DIR)                                                              \
 	ENV_STR(DD_MASK)                                                                           \
@@ -294,9 +297,11 @@ crt_env_fini(void)
 
 /* Returns value if env was present at load time */
 #define crt_env_get(name, val)                                                                     \
-	D_ASSERT(crt_genvs.inited);                                                                \
-	if (crt_genvs._rc_##name == 0)                                                             \
-		*val = crt_genvs._##name;
+	do {                                                                                       \
+		D_ASSERT(crt_genvs.inited);                                                        \
+		if (crt_genvs._rc_##name == 0)                                                     \
+			*val = crt_genvs._##name;                                                  \
+	} while (0)
 
 static inline void
 crt_env_dump(void)

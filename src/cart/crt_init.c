@@ -217,6 +217,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	uint32_t	mem_pin_enable = 0;
 	uint32_t        is_secondary;
 	uint32_t        post_init = CRT_HG_POST_INIT, post_incr = CRT_HG_POST_INCR;
+	uint32_t        copy_limit = 0; /* 0 = disabled */
 	int		rc = 0;
 
 	D_DEBUG(DB_ALL, "initializing crt_gdata...\n");
@@ -229,6 +230,10 @@ static int data_init(int server, crt_init_options_t *opt)
 	crt_gdata.cg_post_init = post_init;
 	crt_env_get(D_POST_INCR, &post_incr);
 	crt_gdata.cg_post_incr = post_incr;
+
+	/* Set limit above which to make a copy of rpc input */
+	crt_env_get(DAOS_RPC_COPY_SIZE_LIMIT, &copy_limit);
+	crt_gdata.cg_rpc_copy_limit = copy_limit;
 
 	is_secondary = 0;
 	/* Apply CART-890 workaround for server side only */

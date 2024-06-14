@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -405,6 +405,7 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 	 * later, and the hard-coded method HG_CRC32 used below which maybe
 	 * different with future's mercury code change.
 	 */
+	void                    *copy_buf = NULL;
 	void			*in_buf = NULL;
 	hg_size_t		 in_buf_size;
 	hg_class_t		*hg_class;
@@ -429,6 +430,24 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 			RPC_ERROR(rpc_priv, "HG_Get_input_buf failed: %d\n", hg_ret);
 			D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 		}
+	}
+
+	if (crt_gdata.cg_rpc_copy_limit > 0 && in_buf_size > crt_gdata.cg_rpc_copy_limit) {
+		D_ALLOC_ARRAY(copy_buf, in_buf_size);
+		if (copy_buf == NULL) {
+			RPC_ERROR(rpc_priv, "Failed to allocate buffer size %ld\n", in_buf_size);
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
+
+		memcpy(copy_buf, in_buf, in_buf_size);
+		hg_ret = HG_Release_input_buf(handle);
+		if (hg_ret != HG_SUCCESS) {
+			RPC_ERROR(rpc_priv, "Failed to free input; hg_ret = %d\n", hg_ret);
+			D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
+		}
+
+		in_buf                    = copy_buf;
+		rpc_priv->crp_buf_is_copy = 1;
 	}
 
 	/* Create a new decoding proc */
@@ -480,6 +499,9 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 	*proc = hg_proc;
 
 out:
+	if (rc != 0)
+		D_FREE(copy_buf); /* ok to free if null */
+
 	return rc;
 }
 
