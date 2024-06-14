@@ -2270,6 +2270,8 @@ cont_discard_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 put:
 	ds_cont_child_put(cont);
+	if (rc == 0)
+		rc = ds_cont_child_destroy(arg->tgt_discard->pool_uuid, entry->ie_couuid);
 	return rc;
 }
 
