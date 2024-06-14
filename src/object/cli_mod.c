@@ -132,6 +132,8 @@ dc_obj_init(void)
 	uint32_t ver_array[2] = {DAOS_OBJ_VERSION - 1, DAOS_OBJ_VERSION};
 	int      rc;
 
+	D_ERROR("test DAOS with PR14582 on ECB\n");
+
 	if (daos_client_metric) {
 		daos_register_key(&dc_obj_module_key);
 		rc = daos_metrics_init(DAOS_CLI_TAG, DAOS_OBJ_MODULE, &dc_obj_metrics);
