@@ -514,7 +514,7 @@ int dmg_storage_set_nvme_fault(const char *dmg_config_file,
  * Get NVMe Device health stats.
  *
  * \param[in] dmg_config_file	DMG config file
- * \param[in] host		Get list-devices --health from the given host.
+ * \param[in] host		Get device health from the given host.
  * \param[in] uuid		UUID of the device.
  * \param[in,out] stats		[in] Health stats for which to get counter value.
  *				[out] Stats counter value.
