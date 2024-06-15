@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
+import re
 import threading
 import time
 from collections import defaultdict
@@ -15,20 +16,6 @@ from ior_test_base import IorTestBase
 from ior_utils import IorCommand
 from job_manager_utils import get_job_manager
 from run_utils import stop_processes
-
-HOST_GROUPS = []
-GROUP_1_HOSTS = list(NodeSet("aurora-daos-[0001-0128]"))
-GROUP_2_HOSTS = list(NodeSet("aurora-daos-[0129-0256]"))
-GROUP_3_HOSTS = list(NodeSet("aurora-daos-[0257-0384]"))
-GROUP_4_HOSTS = list(NodeSet("aurora-daos-[0385-0512]"))
-GROUP_5_HOSTS = list(NodeSet("aurora-daos-[0513-0640]"))
-GROUP_6_HOSTS = list(NodeSet("aurora-daos-[0641-0768]"))
-GROUP_7_HOSTS = list(NodeSet("aurora-daos-[0769-0896]"))
-GROUP_8_HOSTS = list(NodeSet("aurora-daos-[0897-1024]"))
-HOST_GROUPS = [
-    GROUP_1_HOSTS, GROUP_2_HOSTS, GROUP_3_HOSTS, GROUP_4_HOSTS, GROUP_5_HOSTS, GROUP_6_HOSTS,
-    GROUP_7_HOSTS, GROUP_8_HOSTS
-]
 
 
 class ServerRankFailure(IorTestBase):
@@ -128,6 +115,17 @@ class ServerRankFailure(IorTestBase):
             ior_error = ior_results[job_num][1]
             errors.append("Error found in IOR job {}! {}".format(job_num, ior_error))
 
+    def aurora_host_to_group(self, host):
+        """Return group number from Aurora DAOS hostname.
+
+        Args:
+            host (str): Hostname.
+
+        Returns:
+            int: Group number.
+        """
+        return ((int(re.findall(r'[0-9]+', host)[0]) - 1) // 128) + 1
+
     def verify_rank_failure(self, ior_namespace):
         """Verify engine failure can be recovered by restarting daos_server.
 
@@ -185,9 +183,7 @@ class ServerRankFailure(IorTestBase):
             # the first element of host_groups.
             rank_groups = defaultdict(list)
             for rank, host in ranks.items():
-                for group in range(8):
-                    if host in HOST_GROUPS[group]:
-                        rank_groups[group].append(rank)
+                rank_groups[self.aurora_host_to_group(host)].append(rank)
             self.log.info("Rank groups = %s", rank_groups)
             # Stop a rank from each group up to two groups.
             dmg_command = self.get_dmg_command()
@@ -238,7 +234,7 @@ class ServerRankFailure(IorTestBase):
                     self.pool.reintegrate(rank=disabled_rank)
                     break
                 except CommandFailure as error:
-                    self.log.debug("## pool reintegrate error: %s", error)
+                    self.log.info("Pool reintegrate error: %s", error)
 
             # Wait for rebuild to finish
             self.log.info("Wait for rebuild to start.")
