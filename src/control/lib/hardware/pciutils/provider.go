@@ -27,12 +27,7 @@ type (
 )
 
 func Init(parent context.Context) (context.Context, error) {
-	api, err := getAPI()
-	if err != nil {
-		return nil, err
-	}
-
-	return context.WithValue(parent, AccessKey, api), nil
+	return context.WithValue(parent, AccessKey, &api{}), nil
 }
 
 func accessFromContext(ctx context.Context) (accessProvider, error) {

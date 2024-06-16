@@ -7,11 +7,11 @@
 package pciutils
 
 import (
-	"errors"
 	"os"
 	"unsafe"
 
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/pkg/errors"
 )
 
 /*
@@ -22,21 +22,7 @@ import (
 */
 import "C"
 
-type api struct {
-	access *C.struct_pci_access
-}
-
-func getAPI() (*api, error) {
-	api := &api{
-		access: C.pci_alloc(),
-	}
-
-	if api.access == nil {
-		return nil, errors.New("pci_alloc() failed")
-	}
-
-	return api, nil
-}
+type api struct{}
 
 func (api *api) Cleanup() {}
 
@@ -71,11 +57,18 @@ func (api *api) PCIeCapsFromConfig(cfgBytes []byte, dev *hardware.PCIDevice) err
 		return errors.New("nil dev")
 	}
 
+	access := C.pci_alloc()
+	if access == nil {
+		return errors.New("pci_alloc() failed")
+	}
+	access.method = C.PCI_ACCESS_DUMP
+
 	tmpFile, err := os.CreateTemp("", "pciutils")
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmpFile.Name())
+	fName := tmpFile.Name()
+	defer os.Remove(fName)
 
 	cfgBytes = append([]byte("01:00.0 device #1\n"), cfgBytes...)
 	cfgBytes = append(cfgBytes, []byte("\n")...)
@@ -83,23 +76,26 @@ func (api *api) PCIeCapsFromConfig(cfgBytes []byte, dev *hardware.PCIDevice) err
 		return err
 	}
 
-	cParam := C.CString("dump.name")
+	pName := "dump.name"
+	cParam := C.CString(pName)
 	defer C.free(unsafe.Pointer(cParam))
-	cFileName := C.CString(tmpFile.Name())
+	cFileName := C.CString(fName)
 	defer C.free(unsafe.Pointer(cFileName))
-	C.pci_set_param(api.access, cParam, cFileName)
-	api.access.method = C.PCI_ACCESS_DUMP
 
-	C.pci_init(api.access)
-	defer C.pci_cleanup(api.access)
+	if rc := C.pci_set_param(access, cParam, cFileName); rc != 0 {
+		return errors.Errorf("pci_set_param: rc=%d", rc)
+	}
 
-	C.pci_scan_bus(api.access)
+	C.pci_init(access)
+	defer C.pci_cleanup(access)
+
+	C.pci_scan_bus(access)
 
 	var pciDev *C.struct_pci_dev
 	var cp *C.struct_pci_cap
 	var tLnkCap, tLnkSta C.u16
 
-	for pciDev = api.access.devices; pciDev != nil; pciDev = pciDev.next {
+	for pciDev = access.devices; pciDev != nil; pciDev = pciDev.next {
 		C.pci_fill_info(pciDev,
 			C.PCI_FILL_IDENT|C.PCI_FILL_BASES|C.PCI_FILL_CLASS|C.PCI_FILL_EXT_CAPS)
 
@@ -116,7 +112,7 @@ func (api *api) PCIeCapsFromConfig(cfgBytes []byte, dev *hardware.PCIDevice) err
 
 		dev.LinkMaxSpeed = speedToFloat(uint16(tLnkCap & C.PCI_EXP_LNKCAP_SPEED))
 		dev.LinkMaxWidth = uint16(tLnkCap & C.PCI_EXP_LNKCAP_WIDTH >> 4)
-		dev.LinkNegSpeed = speedToFloat(uint16(tLnkCap & C.PCI_EXP_LNKSTA_SPEED))
+		dev.LinkNegSpeed = speedToFloat(uint16(tLnkSta & C.PCI_EXP_LNKSTA_SPEED))
 		dev.LinkNegWidth = uint16(tLnkSta & C.PCI_EXP_LNKSTA_WIDTH >> 4)
 	}
 

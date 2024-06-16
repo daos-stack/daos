@@ -1,6 +1,7 @@
 package pciutils_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -49,5 +50,20 @@ f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 
 	if diff := cmp.Diff(expDev, dev); diff != "" {
 		t.Fatalf("(-want, +got)\n%s\n", diff)
+	}
+
+	// Try again with updated values for negotiated speed and width.
+	newCfgBytes := strings.Replace(string(cfgBytes), `70: 00 00 43`, `70: 00 00 82`, 1)
+
+	dev, err = pciutils.PCIeCapsFromConfig(ctx, []byte(newCfgBytes))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expDev.LinkNegWidth = 8
+	expDev.LinkNegSpeed = 5e+9
+
+	if diff := cmp.Diff(expDev, dev); diff != "" {
+		t.Fatalf("2nd try: (-want +got)\n%s\n", diff)
 	}
 }
