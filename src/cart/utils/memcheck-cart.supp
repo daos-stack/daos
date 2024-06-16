@@ -594,3 +594,27 @@
    fun:__tsan_go_atomic64_compare_exchange
    fun:racecall
 }
+{
+   go 1.22.3 race
+   Memcheck:Value8
+   fun:__tsan_write_pc
+   fun:racecall
+}
+{
+   go 1.22.3 race
+   Memcheck:Value8
+   fun:_ZN6__tsan24TraceRestartMemoryAccessEPNS_11ThreadStateEmmmm
+   fun:racecall
+}
+{
+   go 1.22.3 race
+   Memcheck:Value8
+   fun:_ZN6__tsan18MemoryAccessRangeTILb0EEEvPNS_11ThreadStateEmmm
+   fun:racecall
+}
+{
+   go 1.22.3 race
+   Memcheck:Value8
+   fun:__tsan_read
+   fun:racecall
+}
