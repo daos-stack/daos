@@ -1,3 +1,9 @@
+daos (2.6.0-1) unstable; urgency=medium
+  [ Phillip Henderson ]
+  * First release candidate for 2.6.0
+
+ -- Phillip Henderson <phillip.henderson@intel.com>  Mon, 17 Jun 2024 10:55:00 -0500
+
 daos (2.5.101-5) unstable; urgency=medium
   [ Lei Huang ]
   * Add libaio as a dependent package
