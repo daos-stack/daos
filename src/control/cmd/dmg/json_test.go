@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -75,8 +75,6 @@ func TestDmg_JsonOutput(t *testing.T) {
 			case "storage nvme-add-device":
 				testArgs = append(testArgs, "-l", "foo.com", "-a",
 					test.MockPCIAddr(), "-e", "0")
-			case "storage query device-health":
-				testArgs = append(testArgs, "-u", test.MockUUID())
 			case "storage set nvme-faulty":
 				testArgs = append(testArgs, "--force", "-u", test.MockUUID())
 			case "storage replace nvme":

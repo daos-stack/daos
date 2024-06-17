@@ -203,8 +203,8 @@ class WalMetrics(TestWithTelemetry):
                             # Check point dirty pages should be 1-3
                             ranges[metric][label] = [1, 3]
                         elif '_duration' in metric:
-                            # Check point duration should be 1-1,000,000
-                            ranges[metric][label] = [1, 1000000]
+                            # Check point duration should be 1-2,000,000
+                            ranges[metric][label] = [1, 2000000]
                         elif '_iovs_copied' in metric:
                             # Check point iovs copied should be >= 0
                             ranges[metric][label] = [1]

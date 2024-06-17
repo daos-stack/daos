@@ -27,7 +27,7 @@ To create and then query a container labeled `mycont` on a pool
 labeled `tank`:
 
 ```bash
-$ daos cont create tank --label mycont
+$ daos cont create tank mycont
   Container UUID : daefe12c-45d4-44f7-8e56-995d02549041
   Container Label: mycont
   Container Type : unknown
@@ -45,7 +45,7 @@ $ daos cont query tank mycont
   Snapshot Epochs            :
 ```
 
-While a label is not mandatory, it is highly recommended. Like pools, container
+Like pools, container
 labels can be up to 127 characters long and must only include alphanumeric
 characters, colon (':'), period ('.'), hyphen ('-') or underscore ('\_').
 Labels that can be parsed as UUID are not allowed.
@@ -58,7 +58,7 @@ are stored in an extended attribute of the target file or directory that can
 then be used in subsequent command invocations to identify the container.
 
 ```bash
-$ daos cont create tank --label mycont --path /tmp/mycontainer --type POSIX --oclass=SX
+$ daos cont create tank mycont --path /tmp/mycontainer --type POSIX --oclass=SX
   Container UUID : 30e5d364-62c9-4ddf-9284-1021359455f2
   Container Type : POSIX
 
@@ -83,7 +83,7 @@ To create a container that can support one engine failure, use a redundancy
 factor of 1 as follows:
 
 ```bash
-$ daos cont create tank --label mycont1 --type POSIX --properties rd_fac:1
+$ daos cont create tank mycont1 --type POSIX --properties rd_fac:1
   Container UUID : b396e2ca-2077-4908-9ff2-1af4b4b2fd4a
   Container Label: mycont1
   Container Type : unknown
@@ -174,7 +174,7 @@ By default, a container will inherit a set of default value for each property.
 Those can be overridden at container creation time via the `--properties` option.
 
 ```bash
-$ daos cont create tank --label mycont2 --properties cksum:sha1,dedup:hash,rd_fac:1
+$ daos cont create tank mycont2 --properties cksum:sha1,dedup:hash,rd_fac:1
   Container UUID : a6286ead-1952-4faa-bf87-00fc0f3785aa
   Container Label: mycont2
   Container Type : unknown
@@ -340,7 +340,7 @@ The redundancy factor can be set at container creation time and cannot be
 modified after creation.
 
 ```bash
-$ daos cont create tank --label mycont1 --type POSIX --properties rd_fac:1
+$ daos cont create tank mycont1 --type POSIX --properties rd_fac:1
   Container UUID : b396e2ca-2077-4908-9ff2-1af4b4b2fd4a
   Container Label: mycont1
   Container Type : unknown
@@ -440,7 +440,7 @@ checksum verification on the server side, one can use the following command
 line:
 
 ```bash
-$ daos cont create tank --label mycont --properties cksum:crc64,srv_cksum:on
+$ daos cont create tank mycont --properties cksum:crc64,srv_cksum:on
 Successfully created container dfa09efd-4529-482c-b7cd-748c29ef7419
 
 $ daos cont get-prop  tank mycont4 | grep cksum
@@ -464,7 +464,7 @@ default `ec_cell_sz`, which was 1MiB in DAOS 2.0 and has been reduced to
 container creation time via the `--property` option:
 
 ```bash
-$ daos cont create tank --label mycont5 --type POSIX --properties rd_fac:1,cell_size:131072
+$ daos cont create tank mycont5 --type POSIX --properties rd_fac:1,cell_size:131072
   Container UUID : 90185799-0e22-4a0b-be9d-1a20900a35ee
   Container Label: mycont5
   Container Type : unknown
@@ -501,9 +501,10 @@ For example:
 
 
 ### Checksum Background Scrubbing
+
 A pool ULT can be configured to scan the VOS trees to discover silent data
 corruption proactively. (see data_integrity.md for more details). This can be
-disabled per container using the ```DAOS_PROP_CO_SCRUBBER_DISABLED``` container
+disabled per container using the `DAOS_PROP_CO_SCRUBBER_DISABLED` container
 property.
 
 ### Deduplication (Preview)
@@ -659,7 +660,7 @@ To create a container labeled mycont in a pool labeled tank with a custom ACL:
 ```bash
 $ export DAOS_POOL="tank"
 $ export DAOS_CONT="mycont"
-$ daos cont create $DAOS_POOL --label $DAOS_CONT --acl-file=<path>
+$ daos cont create $DAOS_POOL $DAOS_CONT --acl-file=<path>
 ```
 
 The ACL file format is detailed in the
