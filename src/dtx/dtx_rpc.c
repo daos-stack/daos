@@ -367,7 +367,6 @@ struct dtx_common_args {
 	int			  dca_i;
 };
 
-/* If is_reentrance, this function ignores len. */
 static int
 dtx_req_list_send(struct dtx_common_args *dca, bool is_reentrance)
 {

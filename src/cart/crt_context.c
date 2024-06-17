@@ -2016,8 +2016,10 @@ crt_context_get_timeout(crt_context_t crt_ctx, uint32_t *timeout_sec)
 	if (crt_ctx == CRT_CONTEXT_NULL) {
 		D_ERROR("NULL context passed\n");
 		rc = -DER_INVAL;
-	} else {
+	} else if (ctx->cc_timeout_sec != 0) {
 		*timeout_sec = ctx->cc_timeout_sec;
+	} else {
+		*timeout_sec = crt_gdata.cg_timeout;
 	}
 
 	return rc;
