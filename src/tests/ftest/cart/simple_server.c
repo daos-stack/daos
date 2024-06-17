@@ -5,6 +5,9 @@
  */
 /**
  * Server that accepts ping RPCs with an option of specifying response delay.
+ *
+ * Delayed RPCs are processed by context[0] today as simple_client only
+ * sends to tag=0.
  */
 
 #include <stdlib.h>
@@ -24,8 +27,10 @@
 #define MY_RANK 0
 #define GRP_VER 1
 
-static D_LIST_HEAD(delayed_rpcs_list);
+static int do_shutdown;
 
+/* TODO: needs to be per-context. For assumes this is context0 list */
+static D_LIST_HEAD(delayed_rpcs_list);
 static pthread_mutex_t list_lock = PTHREAD_MUTEX_INITIALIZER;
 
 struct list_entry {
@@ -49,27 +54,18 @@ process_delayed_rpcs(void)
 	d_list_for_each_entry_safe(entry, tmp, &delayed_rpcs_list, link) {
 		if (now.tv_sec > entry->when.tv_sec) {
 			crt_reply_send(entry->rpc);
+
 			/* addref was done in handler_pin */
 			crt_req_decref(entry->rpc);
-
 			d_list_del(&entry->link);
 			num_replied++;
 		}
 	}
 	D_MUTEX_UNLOCK(&list_lock);
 
-	if (num_replied > 0) {
-		DBG_PRINT("delayed replied to %d rpc%s\n", num_replied,
+	if (num_replied > 0)
+		DBG_PRINT("Replied to %d delayed rpc%s\n", num_replied,
 			  num_replied == 1 ? "" : "s");
-	}
-}
-
-static int do_shutdown;
-
-int
-handler_set_group_info(crt_rpc_t *rpc)
-{
-	return 0;
 }
 
 int
@@ -77,11 +73,16 @@ handler_shutdown(crt_rpc_t *rpc)
 {
 	DBG_PRINT("Shutdown handler called!\n");
 	crt_reply_send(rpc);
-
 	do_shutdown = 1;
 	return 0;
 }
 
+/*
+ * Ping handler.
+ * Replies right away if input->delay_sec == 0, else queues it for
+ * context0 to process at a later time.
+ * Assumes today that delayed rpcs only arrive to context0
+ **/
 int
 handler_ping(crt_rpc_t *rpc)
 {
@@ -91,9 +92,9 @@ handler_ping(crt_rpc_t *rpc)
 
 	input  = crt_req_get(rpc);
 	output = crt_reply_get(rpc);
+	output->seq = input->seq;
 
 	if (input->delay_sec == 0) {
-		output->seq = input->seq;
 		crt_reply_send(rpc);
 	} else {
 		struct list_entry *entry;
@@ -106,6 +107,8 @@ handler_ping(crt_rpc_t *rpc)
 
 		entry->when.tv_sec += input->delay_sec;
 		entry->rpc = rpc;
+
+		/* decref in process_delayed_rpcs() */
 		crt_req_addref(rpc);
 
 		D_MUTEX_LOCK(&list_lock);
