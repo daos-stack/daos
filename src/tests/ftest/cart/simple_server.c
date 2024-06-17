@@ -29,16 +29,18 @@ static D_LIST_HEAD(delayed_rpcs_list);
 static pthread_mutex_t list_lock = PTHREAD_MUTEX_INITIALIZER;
 
 struct list_entry {
-	crt_rpc_t	*rpc;
-	d_list_t	link;
+	crt_rpc_t      *rpc;
+	d_list_t        link;
 	struct timespec when;
 };
 
-void process_delayed_rpcs(void) {
+void
+process_delayed_rpcs(void)
+{
 	struct list_entry *entry, *tmp;
-	struct timespec now;
-	int rc;
-	int num_replied = 0;
+	struct timespec    now;
+	int                rc;
+	int                num_replied = 0;
 
 	rc = clock_gettime(CLOCK_REALTIME, &now);
 	D_ASSERTF(rc == 0, "clock_gettime() failed; rc=%d\n", rc);
@@ -49,28 +51,29 @@ void process_delayed_rpcs(void) {
 			crt_reply_send(entry->rpc);
 			/* addref was done in handler_pin */
 			crt_req_decref(entry->rpc);
-	
+
 			d_list_del(&entry->link);
 			num_replied++;
 		}
-		
 	}
 	D_MUTEX_UNLOCK(&list_lock);
 
 	if (num_replied > 0) {
-		DBG_PRINT("delayed replied to %d rpc%s\n",
-			  num_replied, num_replied == 1 ? "" : "s");
+		DBG_PRINT("delayed replied to %d rpc%s\n", num_replied,
+			  num_replied == 1 ? "" : "s");
 	}
 }
 
 static int do_shutdown;
 
-int handler_set_group_info(crt_rpc_t *rpc)
+int
+handler_set_group_info(crt_rpc_t *rpc)
 {
 	return 0;
 }
 
-int handler_shutdown(crt_rpc_t *rpc)
+int
+handler_shutdown(crt_rpc_t *rpc)
 {
 	DBG_PRINT("Shutdown handler called!\n");
 	crt_reply_send(rpc);
@@ -79,14 +82,14 @@ int handler_shutdown(crt_rpc_t *rpc)
 	return 0;
 }
 
-
-int handler_ping(crt_rpc_t *rpc)
+int
+handler_ping(crt_rpc_t *rpc)
 {
-	struct RPC_PING_in	*input;
-	struct RPC_PING_out	*output;
-	int 			rc;
+	struct RPC_PING_in  *input;
+	struct RPC_PING_out *output;
+	int                  rc;
 
-	input = crt_req_get(rpc);
+	input  = crt_req_get(rpc);
 	output = crt_reply_get(rpc);
 
 	if (input->delay_sec == 0) {
@@ -102,7 +105,7 @@ int handler_ping(crt_rpc_t *rpc)
 		D_ASSERTF(rc == 0, "clock_gettime() failed; rc=%d\n", rc);
 
 		entry->when.tv_sec += input->delay_sec;
-		entry->rpc = rpc; 
+		entry->rpc = rpc;
 		crt_req_addref(rpc);
 
 		D_MUTEX_LOCK(&list_lock);
@@ -113,14 +116,13 @@ int handler_ping(crt_rpc_t *rpc)
 	return 0;
 }
 
-
-static void*
+static void *
 progress_fn(void *data)
 {
-	int		rc;
-	int		idx = -1;
-	char		*uri = NULL;
-	crt_context_t	*p_ctx = (crt_context_t *)data;
+	int            rc;
+	int            idx   = -1;
+	char          *uri   = NULL;
+	crt_context_t *p_ctx = (crt_context_t *)data;
 
 	rc = crt_context_idx(*p_ctx, &idx);
 	D_ASSERTF(rc == 0, "crt_context_idx() failed; rc=%d\n", rc);
@@ -148,12 +150,13 @@ progress_fn(void *data)
 	return NULL;
 }
 
-int main(int argc, char **argv)
+int
+main(int argc, char **argv)
 {
-	crt_context_t		crt_ctx[NUM_SERVER_CTX];
-	pthread_t		progress_thread[NUM_SERVER_CTX];
-	int			i;
-	int			rc;
+	crt_context_t crt_ctx[NUM_SERVER_CTX];
+	pthread_t     progress_thread[NUM_SERVER_CTX];
+	int           i;
+	int           rc;
 
 	rc = d_log_init();
 	assert(rc == 0);

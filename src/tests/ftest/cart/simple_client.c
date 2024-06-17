@@ -22,8 +22,7 @@
 
 #define TEST_IOV_SIZE_IN 4096
 
-static int
-g_do_shutdown;
+static int g_do_shutdown;
 
 /* stubs, not needed for client */
 int
@@ -55,7 +54,7 @@ progress_function(void *data)
 static void
 rpc_handle_reply(const struct crt_cb_info *info)
 {
-	sem_t	*sem;
+	sem_t *sem;
 
 	D_ASSERTF(info->cci_rc == 0, "rpc response failed. rc: %d\n", info->cci_rc);
 	sem = (sem_t *)info->cci_arg;
@@ -65,8 +64,8 @@ rpc_handle_reply(const struct crt_cb_info *info)
 int
 wait_for_sem(sem_t *sem, int sec)
 {
-	struct timespec	deadline;
-	int		rc;
+	struct timespec deadline;
+	int             rc;
 
 	rc = clock_gettime(CLOCK_REALTIME, &deadline);
 	D_ASSERTF(rc == 0, "clock_gettime() failed; rc=%d\n", rc);
@@ -78,33 +77,32 @@ wait_for_sem(sem_t *sem, int sec)
 	return rc;
 }
 
-int main(int argc, char **argv)
+int
+main(int argc, char **argv)
 {
-	crt_context_t		crt_ctx;
-	crt_group_t		*grp;
-	int			rc;
-	sem_t			sem;
-	pthread_t		progress_thread;
-	crt_rpc_t		*rpc = NULL;
-	struct RPC_PING_in	*input;
-	crt_endpoint_t		server_ep;
-	d_rank_t		rank;
-	d_iov_t			iov;
-	int			tag;
-	int			opt_idx;
-	int			rpc_count = 4096;
-	bool			send_shutdown = false;
-	int			rpc_delay = 0;
-	int			seq = 0;
-	int			rpc_timeout = 2;
-	int			i;
+	crt_context_t       crt_ctx;
+	crt_group_t        *grp;
+	int                 rc;
+	sem_t               sem;
+	pthread_t           progress_thread;
+	crt_rpc_t          *rpc = NULL;
+	struct RPC_PING_in *input;
+	crt_endpoint_t      server_ep;
+	d_rank_t            rank;
+	d_iov_t             iov;
+	int                 tag;
+	int                 opt_idx;
+	int                 rpc_count     = 4096;
+	bool                send_shutdown = false;
+	int                 rpc_delay     = 0;
+	int                 seq           = 0;
+	int                 rpc_timeout   = 2;
+	int                 i;
 
-	struct option		long_options[] = {
-		{"count", required_argument, 0, 'c'},
-		{"delay", required_argument, 0, 'd'},
-		{"shutdown", no_argument, 0, 's'},
-		{0, 0, 0, 0}
-	};
+	struct option       long_options[] = {{"count", required_argument, 0, 'c'},
+					      {"delay", required_argument, 0, 'd'},
+					      {"shutdown", no_argument, 0, 's'},
+					      {0, 0, 0, 0}};
 
 	rc = d_log_init();
 	assert(rc == 0);
@@ -120,7 +118,6 @@ int main(int argc, char **argv)
 	}
 
 	while (1) {
-
 		rc = getopt_long(argc, argv, "c:d:s", long_options, &opt_idx);
 		if (rc == -1)
 			break;
@@ -142,10 +139,9 @@ int main(int argc, char **argv)
 			DBG_PRINT("Unknown option\n");
 			return -1;
 		}
-
 	}
-	DBG_PRINT("Client starting up. count=%d delay=%d shutdown=%d\n",
-		rpc_count, rpc_delay, send_shutdown);
+	DBG_PRINT("Client starting up. count=%d delay=%d shutdown=%d\n", rpc_count, rpc_delay,
+		  send_shutdown);
 
 	rc = sem_init(&sem, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed; rc=%d\n", rc);
@@ -171,28 +167,27 @@ int main(int argc, char **argv)
 	memset(iov.iov_buf, 'a', TEST_IOV_SIZE_IN);
 
 	iov.iov_buf_len = TEST_IOV_SIZE_IN;
-	iov.iov_len = TEST_IOV_SIZE_IN;
-
+	iov.iov_len     = TEST_IOV_SIZE_IN;
 
 	rank = 0;
-	tag = 0;
+	tag  = 0;
 
 	for (i = 0; i < rpc_count; i++) {
 		DBG_PRINT("Sending ping [%d/%d] to %d:%d\n", i + 1, rpc_count, rank, tag);
 
 		server_ep.ep_rank = rank;
-		server_ep.ep_tag = tag;
-		server_ep.ep_grp = grp;
+		server_ep.ep_tag  = tag;
+		server_ep.ep_grp  = grp;
 
 		rc = crt_req_create(crt_ctx, &server_ep, RPC_PING, &rpc);
 		D_ASSERTF(rc == 0, "crt_req_create() failed; rc=%d\n", rc);
 
-		input = crt_req_get(rpc);
-		input->seq = seq;
+		input            = crt_req_get(rpc);
+		input->seq       = seq;
 		input->delay_sec = rpc_delay;
 
 		rpc_timeout = input->delay_sec + 5;
-		rc = crt_req_set_timeout(rpc, rpc_timeout);
+		rc          = crt_req_set_timeout(rpc, rpc_timeout);
 		D_ASSERTF(rc == 0, "crt_req_set_timeout() failed; rc=%d\n", rc);
 
 		rc = crt_req_send(rpc, rpc_handle_reply, &sem);
@@ -210,8 +205,8 @@ int main(int argc, char **argv)
 		rpc_timeout = 2;
 
 		server_ep.ep_rank = rank;
-		server_ep.ep_tag = 0;
-		server_ep.ep_grp = grp;
+		server_ep.ep_tag  = 0;
+		server_ep.ep_grp  = grp;
 
 		rc = crt_req_create(crt_ctx, &server_ep, RPC_SHUTDOWN, &rpc);
 		D_ASSERTF(rc == 0, "crt_req_create() failed; rc=%d\n", rc);
@@ -221,7 +216,7 @@ int main(int argc, char **argv)
 
 		rc = crt_req_send(rpc, rpc_handle_reply, &sem);
 		D_ASSERTF(rc == 0, "crt_req_send() failed; rc=%d\n", rc);
-	
+
 		wait_for_sem(&sem, rpc_timeout + 1);
 		DBG_PRINT("RPC response received from rank=%d\n", rank);
 	}
