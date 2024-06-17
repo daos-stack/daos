@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -20,8 +20,8 @@ from command_utils_base import (BasicParameter, CommandWithParameters, Environme
                                 LogParameter, ObjectWithParameters)
 from exception_utils import CommandFailure
 from general_utils import (DaosTestError, change_file_owner, check_file_exists, create_directory,
-                           distribute_files, get_file_listing, get_job_manager_class,
-                           get_subprocess_stdout, run_command, run_pcmd)
+                           distribute_files, get_job_manager_class, get_subprocess_stdout,
+                           list_remote_files, run_command, run_pcmd)
 from run_utils import command_as_user
 from user_utils import get_primary_group
 from yaml_utils import get_yaml_data
@@ -997,6 +997,9 @@ class YamlCommand(SubProcessCommand):
         Args:
             source (str): source of the certificate files.
             hosts (NodeSet): list of the destination hosts.
+
+        Raises:
+            CommandFailure: if there is an error running the commands
         """
         names = set()
         yaml = self.yaml
@@ -1028,8 +1031,8 @@ class YamlCommand(SubProcessCommand):
             self.log.debug(
                 "Copied certificates for %s (in %s):",
                 self._command, ", ".join(names))
-            for line in get_file_listing(hosts, names).stdout_text.splitlines():
-                self.log.debug("  %s", line)
+            if not list_remote_files(self.log, hosts, names).passed:
+                raise CommandFailure("Failed to list remote certificates")
 
     def copy_configuration(self, hosts):
         """Copy the yaml configuration file to the hosts.

@@ -26,8 +26,8 @@ from environment_utils import TestEnvironment
 from exception_utils import CommandFailure
 from fault_config_utils import FaultInjection
 from general_utils import (DaosTestError, dict_to_str, dump_engines_stacks,
-                           get_avocado_config_value, get_default_config_file, get_file_listing,
-                           nodeset_append_suffix, pcmd, run_command, set_avocado_config_value)
+                           get_avocado_config_value, get_default_config_file, list_remote_files,
+                           nodeset_append_suffix, run_command, set_avocado_config_value)
 from host_utils import HostException, HostInfo, HostRole, get_host_parameters, get_local_host
 from logger_utils import TestLogger
 from pydaos.raw import DaosApiError, DaosContext, DaosLog
@@ -769,9 +769,8 @@ class TestWithServers(TestWithoutServers):
             hosts.add(self.hostlist_clients)
         # Copy the fault injection files to the hosts.
         self.fault_injection.copy_fault_files(hosts)
-        lines = get_file_listing(hosts, self.test_dir).stdout_text.splitlines()
-        for line in lines:
-            self.log.debug("  %s", line)
+        if not list_remote_files(self.log, hosts, self.test_dir).passed:
+            self.fail("Failed to list remote fault injection files")
 
         if not self.start_servers_once or self.name.uid == 1:
             # Kill commands left running on the hosts (from a previous test)
@@ -791,7 +790,8 @@ class TestWithServers(TestWithoutServers):
                 self.log.info(
                     "Updating file permissions for %s for use with systemctl",
                     log_dir)
-                pcmd(hosts, "chmod a+rw {}".format(log_dir))
+                if not run_remote(self.log, hosts, "chmod a+rw {}".format(log_dir)).passed:
+                    self.fail(f"Failed to updated file permissions for {log_dir}")
 
         # Start the servers
         force_agent_start = False
