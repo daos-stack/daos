@@ -33,6 +33,8 @@ extend_dkeys(void **state)
 	int		j;
 	int		rc;
 
+	print_message("BEGIN %s\n", __FUNCTION__);
+
 	if (!test_runable(arg, 3))
 		return;
 
@@ -73,6 +75,8 @@ extend_akeys(void **state)
 	int		j;
 	int		rc;
 
+	print_message("BEGIN %s\n", __FUNCTION__);
+
 	if (!test_runable(arg, 3))
 		return;
 
@@ -112,6 +116,8 @@ extend_indexes(void **state)
 	int		j;
 	int		k;
 	int		rc;
+
+	print_message("BEGIN %s\n", __FUNCTION__);
 
 	if (!test_runable(arg, 3))
 		return;
@@ -155,6 +161,8 @@ extend_large_rec(void **state)
 	int		j;
 	int		rc;
 
+	print_message("BEGIN %s\n", __FUNCTION__);
+
 	if (!test_runable(arg, 3))
 		return;
 
@@ -191,6 +199,8 @@ extend_objects(void **state)
 	struct ioreq	req;
 	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
+
+	print_message("BEGIN %s\n", __FUNCTION__);
 
 	if (!test_runable(arg, 3))
 		return;
@@ -494,6 +504,7 @@ dfs_extend_internal(void **state, int opc, test_rebuild_cb_t extend_cb, bool kil
 void
 dfs_extend_punch_kill(void **state)
 {
+	print_message("BEGIN %s\n", __FUNCTION__);
 	dfs_extend_internal(state, EXTEND_PUNCH, extend_cb_internal, true);
 }
 
@@ -502,12 +513,14 @@ dfs_extend_punch_extend(void **state)
 {
 	FAULT_INJECTION_REQUIRED();
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	dfs_extend_internal(state, EXTEND_PUNCH, extend_cb_internal, false);
 }
 
 void
 dfs_extend_stat_kill(void **state)
 {
+	print_message("BEGIN %s\n", __FUNCTION__);
 	dfs_extend_internal(state, EXTEND_STAT, extend_cb_internal, true);
 }
 
@@ -516,12 +529,14 @@ dfs_extend_stat_extend(void **state)
 {
 	FAULT_INJECTION_REQUIRED();
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	dfs_extend_internal(state, EXTEND_STAT, extend_cb_internal, false);
 }
 
 void
 dfs_extend_enumerate_kill(void **state)
 {
+	print_message("BEGIN %s\n", __FUNCTION__);
 	dfs_extend_internal(state, EXTEND_ENUMERATE, extend_cb_internal, true);
 }
 
@@ -530,12 +545,14 @@ dfs_extend_enumerate_extend(void **state)
 {
 	FAULT_INJECTION_REQUIRED();
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	dfs_extend_internal(state, EXTEND_ENUMERATE, extend_cb_internal, false);
 }
 
 void
 dfs_extend_fetch_kill(void **state)
 {
+	print_message("BEGIN %s\n", __FUNCTION__);
 	dfs_extend_internal(state, EXTEND_FETCH, extend_cb_internal, true);
 }
 
@@ -544,12 +561,14 @@ dfs_extend_fetch_extend(void **state)
 {
 	FAULT_INJECTION_REQUIRED();
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	dfs_extend_internal(state, EXTEND_FETCH, extend_cb_internal, false);
 }
 
 void
 dfs_extend_write_kill(void **state)
 {
+	print_message("BEGIN %s\n", __FUNCTION__);
 	dfs_extend_internal(state, EXTEND_UPDATE, extend_cb_internal, true);
 }
 
@@ -558,6 +577,7 @@ dfs_extend_write_extend(void **state)
 {
 	FAULT_INJECTION_REQUIRED();
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	dfs_extend_internal(state, EXTEND_UPDATE, extend_cb_internal, false);
 }
 
@@ -574,6 +594,8 @@ dfs_extend_fail_retry(void **state)
 	int		rc;
 
 	FAULT_INJECTION_REQUIRED();
+
+	print_message("BEGIN %s\n", __FUNCTION__);
 
 	attr.da_props = daos_prop_alloc(1);
 	assert_non_null(attr.da_props);
