@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -71,27 +71,16 @@ class DmgPoolQueryRanks(ControlTestBase):
             "Invalid disabled_ranks field: want=[], got={}".format(
                 data['response']['disabled_ranks']))
 
-    def test_pool_query_ranks_error(self):
-        """Test that ranks state option are mutually exclusive.
-
-        Test Description:
-            Check that options '--show-enabled' and '--show-disabled" are mutually exclusive.
-
-        :avocado: tags=all,daily_regression
-        :avocado: tags=vm
-        :avocado: tags=dmg,control,pool_query,pool_query_ranks
-        :avocado: tags=DmgPoolQueryRanks,test_pool_query_ranks_error
-        """
-        self.log.info("Tests of pool query with incompatible options")
-
-        # Disable raising an exception if the dmg command fails
-        self.dmg.exit_status_exception = False
-        try:
-            data = self.dmg.pool_query(self.pool.identifier, show_enabled=True, show_disabled=True)
-            self.assertIsNotNone(data["error"], "Expected error not returned")
-            self.assertIn(r'may not be mixed with', str(data['error']), "Invalid error message")
-        finally:
-            self.dmg.exit_status_exception = True
+        self.log.debug("Checking enabled and disabled ranks state information")
+        data = self.dmg.pool_query(self.pool.identifier, show_enabled=True, show_disabled=True)
+        self.assertListEqual(
+            data['response']['enabled_ranks'], [0, 1, 2],
+            "Invalid enabled_ranks field: want=[0, 1, 2], got={}".format(
+                data['response']['enabled_ranks']))
+        self.assertListEqual(
+            data['response']['disabled_ranks'], [],
+            "Invalid disabled_ranks field: want=[], got={}".format(
+                data['response']['disabled_ranks']))
 
     def test_pool_query_ranks_mgmt(self):
         """Test the state of ranks after excluding and reintegrate them.
@@ -121,14 +110,12 @@ class DmgPoolQueryRanks(ControlTestBase):
             disabled_ranks = sorted(disabled_ranks + [rank])
 
             self.log.debug("Checking enabled ranks state information")
-            data = self.dmg.pool_query(self.pool.identifier, show_enabled=True)
+            data = self.dmg.pool_query(
+                self.pool.identifier, show_enabled=True, show_disabled=True)
             self.assertListEqual(
                 data['response']['enabled_ranks'], enabled_ranks,
                 "Invalid enabled_ranks field: want={}, got={}".format(
                     enabled_ranks, data['response']['enabled_ranks']))
-
-            self.log.debug("Checking disabled ranks state information")
-            data = self.dmg.pool_query(self.pool.identifier, show_disabled=True)
             self.assertListEqual(
                 data['response']['disabled_ranks'], disabled_ranks,
                 "Invalid disabled_ranks field: want={}, got={}".format(
@@ -158,14 +145,11 @@ class DmgPoolQueryRanks(ControlTestBase):
             disabled_ranks.remove(rank)
 
             self.log.debug("Checking enabled ranks state information")
-            data = self.dmg.pool_query(self.pool.identifier, show_enabled=True)
+            data = self.dmg.pool_query(self.pool.identifier, show_enabled=True, show_disabled=True)
             self.assertListEqual(
                 data['response']['enabled_ranks'], enabled_ranks,
                 "Invalid enabled_ranks field: want={}, got={}".format(
                     enabled_ranks, data['response']['enabled_ranks']))
-
-            self.log.debug("Checking disabled ranks state information")
-            data = self.dmg.pool_query(self.pool.identifier, show_disabled=True)
             self.assertListEqual(
                 data['response']['disabled_ranks'], disabled_ranks,
                 "Invalid disabled_ranks field: want={}, got={}".format(

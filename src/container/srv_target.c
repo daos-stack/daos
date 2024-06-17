@@ -1165,7 +1165,7 @@ cont_destroy_wait(struct ds_pool_child *child, uuid_t co_uuid)
  * Called via dss_collective() to destroy the ds_cont object as well as the vos
  * container.
  */
-static int
+int
 cont_child_destroy_one(void *vin)
 {
 	struct dsm_tls		       *tls = dsm_tls_get();
@@ -1257,6 +1257,19 @@ cont_child_destroy_one(void *vin)
 out_pool:
 	ds_pool_child_put(pool);
 out:
+	return rc;
+}
+
+int
+ds_cont_child_destroy(uuid_t pool_uuid, uuid_t cont_uuid)
+{
+	struct cont_tgt_destroy_in  destroy_in;
+	int rc;
+
+	uuid_copy(destroy_in.tdi_pool_uuid, pool_uuid);
+	uuid_copy(destroy_in.tdi_uuid, cont_uuid);
+	rc = cont_child_destroy_one(&destroy_in);
+
 	return rc;
 }
 

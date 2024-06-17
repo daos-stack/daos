@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -41,8 +41,7 @@ class AgentFailure(IorTestBase):
         clients_nodeset = NodeSet.fromlist(clients)
 
         manager = get_job_manager(
-            test=self, class_name="Mpirun", job=ior_cmd, subprocess=self.subprocess,
-            mpi_type="mpich")
+            test=self, class_name="Mpirun", job=ior_cmd, subprocess=self.subprocess)
         manager.assign_hosts(clients_nodeset, self.workdir, self.hostfile_clients_slots)
         ppn = self.params.get("ppn", '/run/ior/client_processes/*')
         manager.assign_processes(ppn=ppn)

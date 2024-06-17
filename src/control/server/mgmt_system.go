@@ -195,6 +195,9 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 		CheckMode:               req.CheckMode,
 	})
 	if err != nil {
+		if system.IsJoinFailure(err) {
+			publishJoinFailedEvent(req, peerAddr, svc.events, err.Error())
+		}
 		return nil, errors.Wrap(err, "failed to join system")
 	}
 
@@ -281,11 +284,15 @@ func (svc *mgmtSvc) checkReqFabricProvider(req *mgmtpb.JoinReq, peerAddr *net.TC
 		msg := fmt.Sprintf("rank %d fabric provider %q does not match system provider %q",
 			req.Rank, joinProv, sysProv)
 
-		publisher.Publish(events.NewEngineJoinFailedEvent(peerAddr.String(), req.Idx, req.Rank, msg))
+		publishJoinFailedEvent(req, peerAddr, publisher, msg)
 		return errors.New(msg)
 	}
 
 	return nil
+}
+
+func publishJoinFailedEvent(req *mgmtpb.JoinReq, peerAddr *net.TCPAddr, publisher events.Publisher, msg string) {
+	publisher.Publish(events.NewEngineJoinFailedEvent(peerAddr.String(), req.Idx, req.Rank, msg))
 }
 
 func getProviderFromURI(uri string) (string, error) {

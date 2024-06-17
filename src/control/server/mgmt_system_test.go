@@ -1959,6 +1959,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 		},
 		"dupe host same rank diff uuid": {
 			req: &mgmtpb.JoinReq{
+				Addr: curMember.Addr.String(),
 				Rank: curMember.Rank.Uint32(),
 				Uuid: test.MockUUID(5),
 			},
@@ -1966,13 +1967,23 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 		},
 		"dupe host diff rank same uuid": {
 			req: &mgmtpb.JoinReq{
+				Addr: curMember.Addr.String(),
 				Rank: 22,
 				Uuid: curMember.UUID.String(),
 			},
 			expErr: errors.New("already exists"),
 		},
+		"dupe host addr changed": {
+			req: &mgmtpb.JoinReq{
+				Addr: newMember.Addr.String(),
+				Rank: curMember.Rank.Uint32(),
+				Uuid: curMember.UUID.String(),
+			},
+			expErr: errors.New("control address changed"),
+		},
 		"rejoining host": {
 			req: &mgmtpb.JoinReq{
+				Addr:        curMember.Addr.String(),
 				Rank:        curMember.Rank.Uint32(),
 				Uuid:        curMember.UUID.String(),
 				Incarnation: curMember.Incarnation + 1,
@@ -1997,6 +2008,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 		},
 		"rejoining host; NilRank": {
 			req: &mgmtpb.JoinReq{
+				Addr:        curMember.Addr.String(),
 				Rank:        uint32(ranklist.NilRank),
 				Uuid:        curMember.UUID.String(),
 				Incarnation: curMember.Incarnation + 1,
@@ -2022,6 +2034,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 		"provider doesn't match": {
 			pauseGroupUpdate: true,
 			req: &mgmtpb.JoinReq{
+				Addr:        curMember.Addr.String(),
 				Rank:        curMember.Rank.Uint32(),
 				Uuid:        curMember.UUID.String(),
 				Uri:         newProviderMember.PrimaryFabricURI,
@@ -2042,6 +2055,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 		"group update resumed": {
 			pauseGroupUpdate: true,
 			req: &mgmtpb.JoinReq{
+				Addr:        curMember.Addr.String(),
 				Rank:        curMember.Rank.Uint32(),
 				Uuid:        curMember.UUID.String(),
 				Uri:         curMember.PrimaryFabricURI,
@@ -2066,6 +2080,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 		},
 		"new host (non local)": {
 			req: &mgmtpb.JoinReq{
+				Addr:        curMember.Addr.String(),
 				Rank:        uint32(ranklist.NilRank),
 				Incarnation: newMember.Incarnation,
 			},

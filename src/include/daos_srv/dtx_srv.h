@@ -118,7 +118,7 @@ struct dtx_handle {
 
 	/* The count the DTXs in the dth_dti_cos array. */
 	uint32_t			 dth_dti_cos_count;
-	/* The array of the DTXs for Commit on Share (conflcit). */
+	/* The array of the DTXs for Commit on Share (conflict). */
 	struct dtx_id			*dth_dti_cos;
 	/** Pointer to the DTX entry in DRAM. */
 	void				*dth_ent;

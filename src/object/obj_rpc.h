@@ -187,6 +187,8 @@ enum obj_rpc_flags {
 	ORF_REBUILDING_IO	= (1 << 23),
 	/* 'sgls' is NULL, for update sub-request of CPD RPC. */
 	ORF_EMPTY_SGL		= (1 << 24),
+	/* The CPD RPC only contains read-only transaction. */
+	ORF_CPD_RDONLY		= (1 << 25),
 };
 
 /* common for update/fetch */

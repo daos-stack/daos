@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -47,7 +47,7 @@ out:
 static int
 crt_ctl_fill_buffer_cb(d_list_t *rlink, void *arg)
 {
-	crt_phy_addr_t		 uri;
+	char                    *uri;
 	struct crt_uri_cache	*uri_cache = arg;
 	struct crt_uri_item	*ui;
 	uint32_t		*idx;

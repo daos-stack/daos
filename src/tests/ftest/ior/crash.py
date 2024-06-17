@@ -52,6 +52,7 @@ class IorCrash(IorTestBase):
         :avocado: tags=IorCrash,test_ior_crash
         """
         dmg = self.get_dmg_command()
+        job_manager = self.get_ior_job_manager_command()
 
         # Create pool and container
         self.pool = self.get_pool(connect=False)
@@ -62,9 +63,9 @@ class IorCrash(IorTestBase):
         self.ior_cmd.pattern = None
 
         # Start IOR and crash it in the middle of Write
-        self.run_ior_with_pool(create_pool=False, create_cont=False)
+        self.run_ior_with_pool(create_pool=False, create_cont=False, job_manager=job_manager)
         time.sleep(self.ior_cmd.sw_deadline.value / 2)
-        self.stop_ior()
+        self.stop_ior(job_manager)
 
         # Verify engines did not crash
         scan_info = dmg.system_query(verbose=True)
@@ -78,9 +79,9 @@ class IorCrash(IorTestBase):
         # Run IOR and crash it in the middle of Read.
         # Must wait for Write to complete first.
         # Assumes Write and Read performance are about the same.
-        self.run_ior_with_pool(create_pool=False, create_cont=False)
+        self.run_ior_with_pool(create_pool=False, create_cont=False, job_manager=job_manager)
         time.sleep(self.ior_cmd.sw_deadline.value * 1.5)
-        self.stop_ior()
+        self.stop_ior(job_manager)
 
         # Verify engines did not crash
         scan_info = dmg.system_query(verbose=True)
@@ -91,7 +92,7 @@ class IorCrash(IorTestBase):
         self.assertTrue(self.verify_cont_handles(), "Error confirming container info nhandles")
 
         # Run IOR and verify it completes successfully
-        self.run_ior_with_pool(create_pool=False, create_cont=False)
+        self.run_ior_with_pool(create_pool=False, create_cont=False, job_manager=job_manager)
 
         # Verify engines did not crash
         scan_info = dmg.system_query(verbose=True)
