@@ -19,7 +19,7 @@ from command_utils_base import EnvironmentVariables
 from daos_racer_utils import DaosRacerCommand
 from data_mover_utils import DcpCommand, FsCopy
 from dfuse_utils import get_dfuse
-from dmg_utils import get_storage_query_device_info
+from dmg_utils import get_storage_query_device_info, get_storage_query_device_uuids
 from duns_utils import format_path
 from exception_utils import CommandFailure
 from fio_utils import FioCommand
@@ -419,8 +419,9 @@ def launch_vmd_identify_check(self, name, results, args):
         results (queue): multiprocessing queue
         args (queue): multiprocessing queue
     """
-    status = True
+    # pylint: disable=too-many-nested-blocks
     failing_vmd = []
+    dmg = self.get_dmg_command().copy()
     device_info = get_storage_query_device_info(self.dmg_command)
     uuid_list = [device['uuid'] for device in device_info]
     # limit the number of leds to blink to 1024
@@ -429,19 +430,26 @@ def launch_vmd_identify_check(self, name, results, args):
     else:
         uuids = uuid_list
     self.log.info("VMD device UUIDs: %s", uuids)
+    host_uuids = get_storage_query_device_uuids(self.dmg_command)
+    for host, uuid_dict in host_uuids.items():
+        uuid_list = sorted(uuid_dict.keys())
+        self.log.info("Devices on hosts %s: %s", host, uuid_list)
+        # Now check whether the random uuid belongs to a particular host.
+        for uuid in uuids:
+            if uuid in uuid_list:
+                dmg.hostlist = host
+                # Blink led
+                dmg.storage_led_identify(ids=uuid, timeout=2)
+                # check if led is blinking
+                result = dmg.storage_led_check(ids=uuid)
+                # determine if leds are blinking as expected
+                for value in list(result['response']['host_storage_map'].values()):
+                    if value['storage']['smd_info']['devices']:
+                        for device in value['storage']['smd_info']['devices']:
+                            if device['ctrlr']['led_state'] != "QUICK_BLINK":
+                                failing_vmd.append([device['ctrlr']['pci_addr'], value['hosts']])
+                                status = False
 
-    for uuid in uuids:
-        # Blink led
-        self.dmg_command.storage_led_identify(ids=uuid, timeout=2)
-        # check if led is blinking
-        result = self.dmg_command.storage_led_check(ids=uuid)
-        # determine if leds are blinking as expected
-        for value in list(result['response']['host_storage_map'].values()):
-            if value['storage']['smd_info']['devices']:
-                for device in value['storage']['smd_info']['devices']:
-                    if device['ctrlr']['led_state'] != "QUICK_BLINK":
-                        failing_vmd.append([device['ctrlr']['pci_addr'], value['hosts']])
-                        status = False
     # reset leds to previous state
     for uuid in uuids:
         self.dmg_command.storage_led_identify(ids=uuid, reset=True)
