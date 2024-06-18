@@ -1962,7 +1962,7 @@ cont_snap_update_one(void *vin)
 	struct ds_cont_child	*cont;
 	int			 rc;
 
-	rc = ds_cont_child_lookup(args->pool_uuid, args->cont_uuid, &cont);
+	rc = DS_CONT_CHILD_LOOKUP(args->pool_uuid, args->cont_uuid, &cont);
 	if (rc != 0)
 		return rc;
 	if (args->snap_count == 0) {
@@ -1993,7 +1993,7 @@ cont_snap_update_one(void *vin)
 	cont->sc_snapshots_nr = args->snap_count;
 	cont->sc_aggregation_max = DAOS_EPOCH_MAX;
 out_cont:
-	ds_cont_child_put(cont);
+	DS_CONT_CHILD_PUT(&cont);
 	return rc;
 }
 
@@ -2072,7 +2072,7 @@ cont_snap_notify_one(void *vin)
 	struct ds_cont_child	*cont;
 	int			 rc;
 
-	rc = ds_cont_child_lookup(args->pool_uuid, args->cont_uuid, &cont);
+	rc = DS_CONT_CHILD_LOOKUP(args->pool_uuid, args->cont_uuid, &cont);
 	if (rc != 0)
 		return rc;
 
@@ -2086,7 +2086,7 @@ cont_snap_notify_one(void *vin)
 	if (args->snap_opts & DAOS_SNAP_OPT_CR)
 		cont->sc_aggregation_max = d_hlc_get();
 out_cont:
-	ds_cont_child_put(cont);
+	DS_CONT_CHILD_PUT(&cont);
 	return rc;
 }
 

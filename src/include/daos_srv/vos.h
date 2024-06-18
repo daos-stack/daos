@@ -1368,7 +1368,7 @@ struct cont_scrub {
  */
 typedef int(*sc_get_cont_fn_t)(uuid_t pool_uuid, uuid_t cont_uuid, void *arg,
 			       struct cont_scrub *cont);
-typedef void(*sc_put_cont_fn_t)(void *cont);
+typedef void(*sc_put_cont_fn_t)(void **cont);
 typedef bool(*sc_cont_is_stopping_fn_t)(void *cont);
 
 typedef bool (*sc_is_idle_fn_t)();

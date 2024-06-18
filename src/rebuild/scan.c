@@ -829,7 +829,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		return rc;
 	}
 
-	rc = ds_cont_child_lookup(rpt->rt_pool_uuid, entry->ie_couuid, &cont_child);
+	rc = DS_CONT_CHILD_LOOKUP(rpt->rt_pool_uuid, entry->ie_couuid, &cont_child);
 	if (rc == -DER_NONEXIST || rc == -DER_SHUTDOWN) {
 		D_DEBUG(DB_REBUILD, DF_RB " co_uuid " DF_UUID " already destroyed or destroying\n",
 			DP_RB_RPT(rpt), DP_UUID(arg->co_uuid));
@@ -838,7 +838,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	if (rc != 0) {
-		DL_ERROR(rc, DF_RB " Container " DF_UUID ", ds_cont_child_lookup failed",
+		DL_ERROR(rc, DF_RB " Container " DF_UUID ", DS_CONT_CHILD_LOOKUP failed",
 			 DP_RB_RPT(rpt), DP_UUID(entry->ie_couuid));
 		D_GOTO(close, rc);
 	}
@@ -919,7 +919,7 @@ close:
 	if (cont_child != NULL) {
 		cont_child->sc_rebuilding = 0;
 		ABT_cond_broadcast(cont_child->sc_rebuild_cond);
-		ds_cont_child_put(cont_child);
+		DS_CONT_CHILD_PUT(&cont_child);
 	}
 
 	D_DEBUG(DB_REBUILD, DF_RB " " DF_UUID " iterate cont done: " DF_RC "\n", DP_RB_RPT(rpt),

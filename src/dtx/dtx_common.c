@@ -169,9 +169,9 @@ dtx_free_dbca(struct dtx_batched_cont_args *dbca)
 		D_FREE(dbpa);
 	}
 
-	D_FREE(dbca);
 	cont->sc_dtx_registered = 0;
-	ds_cont_child_put(cont);
+	DS_CONT_CHILD_PUT(&dbca->dbca_cont);
+	D_FREE(dbca);
 }
 
 static inline uint64_t
@@ -1683,15 +1683,15 @@ out:
 void
 dtx_reindex_ult(void *arg)
 {
-	struct ds_cont_child		*cont	= arg;
-	struct dss_module_info		*dmi	= dss_get_module_info();
-	int				 rc	= 0;
+	struct ds_cont_child  **cont = arg;
+	struct dss_module_info *dmi  = dss_get_module_info();
+	int                     rc   = 0;
 
 	D_DEBUG(DB_MD, DF_CONT": starting DTX reindex ULT on xstream %d, ver %u\n",
-		DP_CONT(NULL, cont->sc_uuid), dmi->dmi_tgt_id, dtx_cont2ver(cont));
+		DP_CONT(NULL, (*cont)->sc_uuid), dmi->dmi_tgt_id, dtx_cont2ver(*cont));
 
-	while (!cont->sc_dtx_reindex_abort && !dss_xstream_exiting(dmi->dmi_xstream)) {
-		rc = vos_dtx_cmt_reindex(cont->sc_hdl);
+	while (!(*cont)->sc_dtx_reindex_abort && !dss_xstream_exiting(dmi->dmi_xstream)) {
+		rc = vos_dtx_cmt_reindex((*cont)->sc_hdl);
 		if (rc != 0)
 			break;
 
@@ -1700,16 +1700,18 @@ dtx_reindex_ult(void *arg)
 
 	D_CDEBUG(rc < 0, DLOG_ERR, DLOG_DBG,
 		 DF_CONT": stopping DTX reindex ULT on stream %d, ver %u: rc = %d\n",
-		 DP_CONT(NULL, cont->sc_uuid), dmi->dmi_tgt_id, dtx_cont2ver(cont), rc);
+		 DP_CONT(NULL, (*cont)->sc_uuid), dmi->dmi_tgt_id, dtx_cont2ver(*cont), rc);
 
-	cont->sc_dtx_reindex = 0;
-	ds_cont_child_put(cont);
+	(*cont)->sc_dtx_reindex = 0;
+	DS_CONT_CHILD_PUT(&*cont);
+	D_FREE(arg);
 }
 
 int
 start_dtx_reindex_ult(struct ds_cont_child *cont)
 {
-	int rc;
+	struct ds_cont_child **arg;
+	int                    rc;
 
 	D_ASSERT(cont != NULL);
 
@@ -1724,14 +1726,23 @@ start_dtx_reindex_ult(struct ds_cont_child *cont)
 	if (cont->sc_dtx_reindex)
 		return 0;
 
-	ds_cont_child_get(cont);
+	D_ALLOC_PTR(arg);
+	if (arg == NULL) {
+		D_ERROR(DF_UUID ": Failed to allocate DTX reindex ULT argument\n",
+			DP_UUID(cont->sc_uuid));
+		cont->sc_dtx_reindex = 0;
+		return -DER_NOMEM;
+	}
+
+	DS_CONT_CHILD_GET(arg, cont);
 	cont->sc_dtx_reindex = 1;
-	rc = dss_ult_create(dtx_reindex_ult, cont, DSS_XS_SELF, 0, 0, NULL);
+	rc = dss_ult_create(dtx_reindex_ult, arg, DSS_XS_SELF, 0, 0, NULL);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": Failed to create DTX reindex ULT: "DF_RC"\n",
 			DP_UUID(cont->sc_uuid), DP_RC(rc));
 		cont->sc_dtx_reindex = 0;
-		ds_cont_child_put(cont);
+		DS_CONT_CHILD_PUT(arg);
+		D_FREE(arg);
 	}
 
 	return rc;
@@ -1825,9 +1836,8 @@ dtx_cont_register(struct ds_cont_child *cont)
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
-	ds_cont_child_get(cont);
+	DS_CONT_CHILD_GET(&dbca->dbca_cont, cont);
 	dbca->dbca_refs = 0;
-	dbca->dbca_cont = cont;
 	dbca->dbca_pool = dbpa;
 	dbca->dbca_agg_gen = tls->dt_agg_gen;
 	d_list_add_tail(&dbca->dbca_sys_link, &dmi->dmi_dtx_batched_cont_close_list);

@@ -1790,7 +1790,7 @@ cont_refresh_vos_agg_eph_one(void *data)
 	struct ds_cont_child	*cont_child;
 	int			rc;
 
-	rc = ds_cont_child_lookup(arg->pool_uuid, arg->cont_uuid, &cont_child);
+	rc = DS_CONT_CHILD_LOOKUP(arg->pool_uuid, arg->cont_uuid, &cont_child);
 	if (rc)
 		return rc;
 
@@ -1802,7 +1802,7 @@ cont_refresh_vos_agg_eph_one(void *data)
 	if (cont_child->sc_ec_agg_eph_boundary < arg->min_eph)
 		cont_child->sc_ec_agg_eph_boundary = arg->min_eph;
 
-	ds_cont_child_put(cont_child);
+	DS_CONT_CHILD_PUT(&cont_child);
 	return rc;
 }
 

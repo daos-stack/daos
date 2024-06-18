@@ -2244,8 +2244,7 @@ cont_discard_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		return 0;
 	}
 
-	rc = ds_cont_child_lookup(arg->tgt_discard->pool_uuid, entry->ie_couuid,
-				  &cont);
+	rc = DS_CONT_CHILD_LOOKUP(arg->tgt_discard->pool_uuid, entry->ie_couuid, &cont);
 	if (rc != DER_SUCCESS) {
 		D_ERROR("Lookup container '"DF_UUIDF"' failed: "DF_RC"\n",
 			DP_UUID(entry->ie_couuid), DP_RC(rc));
@@ -2287,7 +2286,7 @@ cont_discard_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		DP_RC(rc));
 
 put:
-	ds_cont_child_put(cont);
+	DS_CONT_CHILD_PUT(&cont);
 	if (rc == 0)
 		rc = ds_cont_child_destroy(arg->tgt_discard->pool_uuid, entry->ie_couuid);
 	return rc;
