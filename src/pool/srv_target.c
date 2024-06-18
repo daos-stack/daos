@@ -1170,6 +1170,7 @@ ds_pool_start(uuid_t uuid, bool aft_chk)
 	else
 		pool->sp_cr_checked = 0;
 
+	pool->sp_starting = 1;
 	rc = pool_child_add_all(pool);
 	if (rc != 0)
 		goto failure_pool;
@@ -1194,8 +1195,9 @@ ds_pool_start(uuid_t uuid, bool aft_chk)
 	}
 
 	ds_iv_ns_start(pool->sp_iv_ns);
+	pool->sp_starting = 0;
 
-	return rc;
+	return 0;
 
 failure_ult:
 	pool_fetch_hdls_ult_abort(pool);
