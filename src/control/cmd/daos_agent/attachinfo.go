@@ -7,6 +7,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -17,11 +18,24 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
 
-type dumpAttachInfoCmd struct {
+type attachInfoCmd struct {
 	configCmd
 	ctlInvokerCmd
 	cmdutil.LogCmd
 	cmdutil.JSONOutputCmd
+}
+
+func (cmd *attachInfoCmd) getAttachInfo(ctx context.Context) (*control.GetAttachInfoResp, error) {
+	req := &control.GetAttachInfoReq{
+		AllRanks: true,
+	}
+	req.SetSystem(cmd.cfg.SystemName)
+	resp, err := control.GetAttachInfo(ctx, cmd.ctlInvoker, req)
+	return resp, errors.Wrap(err, "GetAttachInfo failed")
+}
+
+type dumpAttachInfoCmd struct {
+	attachInfoCmd
 	Output string `short:"o" long:"output" default:"stdout" description:"Dump output to this location"`
 }
 
@@ -37,13 +51,9 @@ func (cmd *dumpAttachInfoCmd) Execute(_ []string) error {
 	}
 
 	ctx := cmd.MustLogCtx()
-	req := &control.GetAttachInfoReq{
-		AllRanks: true,
-	}
-	req.SetSystem(cmd.cfg.SystemName)
-	resp, err := control.GetAttachInfo(ctx, cmd.ctlInvoker, req)
+	resp, err := cmd.getAttachInfo(ctx)
 	if err != nil {
-		return errors.Wrap(err, "GetAttachInfo failed")
+		return err
 	}
 
 	if cmd.JSONOutputEnabled() {

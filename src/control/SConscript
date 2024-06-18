@@ -2,6 +2,7 @@
 # pylint: disable=too-many-locals
 import os
 import socket
+import subprocess  # nosec
 from binascii import b2a_hex
 from datetime import datetime, timezone
 from os import urandom
@@ -45,6 +46,16 @@ def gen_build_id():
     return '0x' + buildid.decode()
 
 
+def get_build_info():
+    """Attempt to retrieve commit/tag details from the build environment."""
+    try:
+        cmd = subprocess.run(['git', 'describe', '--tags', '--dirty', '--always'],
+                             stdout=subprocess.PIPE, check=True)  # nosec
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return ''
+    return cmd.stdout.decode().strip()
+
+
 def go_ldflags(benv):
     "Create the ldflags option for the Go build."
 
@@ -52,6 +63,7 @@ def go_ldflags(benv):
     if not is_release_build(benv):
         build_host = socket.getfqdn()
     build_time = datetime.now(timezone.utc).astimezone().isoformat()
+    build_info = get_build_info()
     Import('daos_version', 'conf_dir')
     path = 'github.com/daos-stack/daos/src/control/build'
     return ' '.join([f'-X {path}.DaosVersion={daos_version}',
@@ -59,6 +71,7 @@ def go_ldflags(benv):
                      f'-X {path}.BuildHost={build_host}',
                      # NB: dynamic values should be enclosed in $(...$)
                      # to avoid unnecessary rebuilds
+                     f'-X $({path}.BuildInfo={build_info}$)',
                      f'-X $({path}.BuildTime={build_time}$)',
                      f'-B $({gen_build_id()}$)'])
 

@@ -82,6 +82,14 @@ message ClientNetHint {
 	repeated string env_vars = 8;	// Client-side environment variables to set
 }
 
+message BuildInfo
+{
+	uint32 major = 1;
+	uint32 minor = 2;
+	uint32 patch = 3;
+	string tag   = 4;
+}
+
 message GetAttachInfoResp {
 	int32 status = 1;		// DAOS error code
 	message RankUri {
@@ -95,6 +103,8 @@ message GetAttachInfoResp {
 	ClientNetHint client_net_hint = 4;
 	uint64 data_version = 5;	// Version of the system database.
 	string sys = 6;			// Name of the DAOS system
+	reserved 7, 8;            // 2.6 servers use these for secondary attachinfo
+	BuildInfo build_info = 9; // Structured server build information
 }
 
 message PrepShutdownReq {

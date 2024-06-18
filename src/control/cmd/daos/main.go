@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -24,16 +24,17 @@ import (
 )
 
 type cliOptions struct {
-	Debug      bool           `long:"debug" description:"enable debug output"`
-	Verbose    bool           `long:"verbose" description:"enable verbose output (when applicable)"`
-	JSON       bool           `long:"json" short:"j" description:"enable JSON output"`
-	Container  containerCmd   `command:"container" alias:"cont" description:"perform tasks related to DAOS containers"`
-	Pool       poolCmd        `command:"pool" description:"perform tasks related to DAOS pools"`
-	Filesystem fsCmd          `command:"filesystem" alias:"fs" description:"POSIX filesystem operations"`
-	Object     objectCmd      `command:"object" alias:"obj" description:"DAOS object operations"`
-	System     systemCmd      `command:"system" alias:"sys" description:"DAOS system operations"`
-	Version    versionCmd     `command:"version" description:"print daos version"`
-	ManPage    cmdutil.ManCmd `command:"manpage" hidden:"true"`
+	Debug         bool             `long:"debug" description:"enable debug output"`
+	Verbose       bool             `long:"verbose" description:"enable verbose output (when applicable)"`
+	JSON          bool             `long:"json" short:"j" description:"enable JSON output"`
+	Container     containerCmd     `command:"container" alias:"cont" description:"perform tasks related to DAOS containers"`
+	Pool          poolCmd          `command:"pool" description:"perform tasks related to DAOS pools"`
+	Filesystem    fsCmd            `command:"filesystem" alias:"fs" description:"POSIX filesystem operations"`
+	Object        objectCmd        `command:"object" alias:"obj" description:"DAOS object operations"`
+	System        systemCmd        `command:"system" alias:"sys" description:"DAOS system operations"`
+	Version       versionCmd       `command:"version" description:"print daos version"`
+	ServerVersion serverVersionCmd `command:"server-version" description:"Print server version"`
+	ManPage       cmdutil.ManCmd   `command:"manpage" hidden:"true"`
 }
 
 type versionCmd struct {
@@ -52,6 +53,29 @@ func (cmd *versionCmd) Execute(_ []string) error {
 	fmt.Printf("%s, libdaos v%s\n", build.String(build.CLIUtilName), apiVersion())
 	os.Exit(0)
 	return nil
+}
+
+type serverVersionCmd struct {
+	daosCmd
+	cmdutil.JSONOutputCmd
+}
+
+func (cmd *serverVersionCmd) Execute(_ []string) error {
+	buildInfo, err := srvBuildInfo()
+	if err != nil {
+		return errors.Wrap(err, "failed to get server build info")
+	}
+
+	if cmd.JSONOutputEnabled() {
+		buf, err := json.Marshal(buildInfo)
+		if err != nil {
+			return err
+		}
+		return cmd.OutputJSON(json.RawMessage(buf), nil)
+	}
+
+	_, err = fmt.Println(build.VersionString(build.ControlPlaneName, buildInfo.Version))
+	return err
 }
 
 func exitWithError(log logging.Logger, err error) {
