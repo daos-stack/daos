@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021-2022 Intel Corporation.
+ * (C) Copyright 2021-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -248,6 +248,26 @@ struct daos_obj_class daos_obj_classes[] = {
 	OC_EC_DEF(4, 2, 16),
 	OC_EC_DEF(4, 2, 32),
 	OC_EC_DEF_GX(4, 2),
+
+	/* EC(5+1) classes */
+	OC_EC_DEF(5, 1, 1),
+	OC_EC_DEF(5, 1, 2),
+	OC_EC_DEF(5, 1, 4),
+	OC_EC_DEF(5, 1, 8),
+	OC_EC_DEF(5, 1, 12),
+	OC_EC_DEF(5, 1, 16),
+	OC_EC_DEF(5, 1, 32),
+	OC_EC_DEF_GX(5, 1),
+
+	/* EC(4+2) classes */
+	OC_EC_DEF(5, 2, 1),
+	OC_EC_DEF(5, 2, 2),
+	OC_EC_DEF(5, 2, 4),
+	OC_EC_DEF(5, 2, 8),
+	OC_EC_DEF(5, 2, 12),
+	OC_EC_DEF(5, 2, 16),
+	OC_EC_DEF(5, 2, 32),
+	OC_EC_DEF_GX(5, 2),
 
 	/* EC(8+1) classes */
 	OC_EC_DEF(8, 1, 1),
