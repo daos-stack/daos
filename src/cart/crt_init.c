@@ -220,7 +220,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	/*
 	 * TODO: For experiment setting this to 4 to copy any non-empty rpc
 	 * to ensure that copy does not introduce any regressions in CI.
-	 * Revert back to 0 before landing
+	 * Revert back to 0/disabled before landing
 	 */
 	uint32_t        copy_limit = 4; /* 0 = disabled */
 	int		rc = 0;
