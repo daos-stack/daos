@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path"
 
@@ -24,6 +25,9 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
+
+	"net/http"
+	_ "net/http/pprof"
 )
 
 const defaultConfigFile = "daos_server.yml"
@@ -171,6 +175,10 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 }
 
 func main() {
+	go func() {
+		log.Println(http.ListenAndServe(":6060", nil))
+	}()
+
 	log := logging.NewCommandLineLogger()
 	opts := mainOpts{
 		preExecTests: []execTestFn{
