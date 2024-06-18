@@ -420,6 +420,7 @@ def launch_vmd_identify_check(self, name, results, args):
         args (queue): multiprocessing queue
     """
     # pylint: disable=too-many-nested-blocks
+    status = True
     failing_vmd = []
     dmg = self.get_dmg_command().copy()
     device_info = get_storage_query_device_info(self.dmg_command)
