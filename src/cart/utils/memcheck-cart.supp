@@ -594,3 +594,13 @@
    fun:__tsan_go_atomic64_compare_exchange
    fun:racecall
 }
+{
+   DAOS-16052
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:_cgo_b68ed06c1ed7_Cfunc__Cmalloc
+   fun:runtime.asmcgocall.abi0
+   ...
+   fun:runtime.persistentalloc
+}
