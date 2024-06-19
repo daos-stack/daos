@@ -35,4 +35,4 @@ pool_1:
 pool_50:
   size: 2%
   control_method: dmg
-  quantity: 5
+  quantity: 50
