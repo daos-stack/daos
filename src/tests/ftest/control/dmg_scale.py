@@ -3,7 +3,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from pool_create_all_base import PoolCreateAllTestBase
+from apricot import TestWithServers
 from telemetry_utils import TelemetryUtils
 from test_utils_pool import time_pool_create
 
@@ -97,7 +97,7 @@ ENGINE_POOL_METRICS_SHORT = [
 ]
 
 
-class DmgScale(PoolCreateAllTestBase):
+class DmgScale(TestWithServers):
     """Verify dmg commands works as expected in a large scale system.
 
     :avocado: recursive
