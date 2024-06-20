@@ -59,19 +59,21 @@ type (
 	}
 )
 
+var _ cache.ExpirableItem = (*cachedCredential)(nil)
+
 // NewSecurityModule creates a new module with the given initialized TransportConfig.
 func NewSecurityModule(log logging.Logger, cfg *securityConfig) *SecurityModule {
 	var credCache *credentialCache
 	credSigner := auth.GetSignedCredential
-	if cfg.credentials.CacheLifetime > 0 {
-		cache := &credentialCache{
+	if cfg.credentials.CacheExpiration > 0 {
+		credCache = &credentialCache{
 			log:          log,
 			cache:        cache.NewItemCache(log),
-			credLifetime: cfg.credentials.CacheLifetime,
+			credLifetime: cfg.credentials.CacheExpiration,
 			cacheMissFn:  auth.GetSignedCredential,
 		}
-		credSigner = cache.getSignedCredential
-		log.Noticef("credential cache enabled (entry lifetime: %s)", cfg.credentials.CacheLifetime)
+		credSigner = credCache.getSignedCredential
+		log.Noticef("credential cache enabled (entry lifetime: %s)", cfg.credentials.CacheExpiration)
 	}
 
 	return &SecurityModule{
@@ -86,6 +88,7 @@ func credReqKey(req *auth.CredentialRequest) string {
 	return fmt.Sprintf("%d:%d:%s", req.DomainInfo.Uid(), req.DomainInfo.Gid(), req.DomainInfo.Ctx())
 }
 
+// Key returns the key for the cached credential.
 func (cred *cachedCredential) Key() string {
 	if cred == nil {
 		return ""
@@ -94,6 +97,7 @@ func (cred *cachedCredential) Key() string {
 	return cred.key
 }
 
+// IsExpired returns true if the cached credential is expired.
 func (cred *cachedCredential) IsExpired() bool {
 	if cred == nil || cred.cred == nil || cred.expiredAt.IsZero() {
 		return true

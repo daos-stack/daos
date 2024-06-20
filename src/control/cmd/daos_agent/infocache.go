@@ -86,7 +86,6 @@ type cacheItem struct {
 }
 
 // isStale returns true if the cache item is stale.
-// NB: Should be run under a lock to protect lastCached.
 func (ci *cacheItem) isStale() bool {
 	if ci.refreshInterval == 0 {
 		return false
@@ -95,10 +94,11 @@ func (ci *cacheItem) isStale() bool {
 }
 
 // isCached returns true if the cache item is cached.
-// NB: Should be run under at least a read lock to protect lastCached.
 func (ci *cacheItem) isCached() bool {
 	return !ci.lastCached.Equal(time.Time{})
 }
+
+var _ cache.RefreshableItem = (*cachedAttachInfo)(nil)
 
 type cachedAttachInfo struct {
 	cacheItem
@@ -143,20 +143,18 @@ func (ci *cachedAttachInfo) needsRefresh() bool {
 }
 
 // RefreshIfNeeded refreshes the cached data if it needs to be refreshed.
-func (ci *cachedAttachInfo) RefreshIfNeeded(ctx context.Context) (func(), bool, error) {
+func (ci *cachedAttachInfo) RefreshIfNeeded(ctx context.Context) (bool, error) {
 	if ci == nil {
-		return cache.NoopRelease, false, errors.New("cachedAttachInfo is nil")
+		return false, errors.New("cachedAttachInfo is nil")
 	}
 
-	ci.Lock()
 	if ci.needsRefresh() {
-		return ci.Unlock, true, ci.refresh(ctx)
+		return true, ci.refresh(ctx)
 	}
-	return ci.Unlock, false, nil
+	return false, nil
 }
 
 // refresh implements the actual refresh logic.
-// NB: Should be run under a lock.
 func (ci *cachedAttachInfo) refresh(ctx context.Context) error {
 	if ci == nil {
 		return errors.New("cachedAttachInfo is nil")
@@ -174,14 +172,15 @@ func (ci *cachedAttachInfo) refresh(ctx context.Context) error {
 }
 
 // Refresh contacts the remote management server and refreshes the GetAttachInfo cache.
-func (ci *cachedAttachInfo) Refresh(ctx context.Context) (func(), error) {
+func (ci *cachedAttachInfo) Refresh(ctx context.Context) error {
 	if ci == nil {
-		return cache.NoopRelease, errors.New("cachedAttachInfo is nil")
+		return errors.New("cachedAttachInfo is nil")
 	}
 
-	ci.Lock()
-	return ci.Unlock, ci.refresh(ctx)
+	return ci.refresh(ctx)
 }
+
+var _ cache.RefreshableItem = (*cachedFabricInfo)(nil)
 
 type cachedFabricInfo struct {
 	cacheItem
@@ -200,30 +199,20 @@ func (cfi *cachedFabricInfo) Key() string {
 	return fabricKey
 }
 
-// needsRefresh indicates that the fabric information does not need to be refreshed unless it has
-// never been populated.
-func (cfi *cachedFabricInfo) needsRefresh() bool {
-	if cfi == nil {
-		return false
-	}
-	return !cfi.isCached()
-}
-
 // RefreshIfNeeded refreshes the cached fabric information if it needs to be refreshed.
-func (cfi *cachedFabricInfo) RefreshIfNeeded(ctx context.Context) (func(), bool, error) {
+func (cfi *cachedFabricInfo) RefreshIfNeeded(ctx context.Context) (bool, error) {
 	if cfi == nil {
-		return cache.NoopRelease, false, errors.New("cachedFabricInfo is nil")
+		return false, errors.New("cachedFabricInfo is nil")
 	}
 
-	cfi.Lock()
-	if cfi.needsRefresh() {
-		return cfi.Unlock, true, cfi.refresh(ctx)
+	if !cfi.isCached() {
+		return true, cfi.refresh(ctx)
 	}
-	return cfi.Unlock, false, nil
+
+	return false, nil
 }
 
 // refresh implements the actual refresh logic.
-// NB: Should be run under a lock.
 func (cfi *cachedFabricInfo) refresh(ctx context.Context) error {
 	if cfi == nil {
 		return errors.New("cachedFabricInfo is nil")
@@ -240,13 +229,12 @@ func (cfi *cachedFabricInfo) refresh(ctx context.Context) error {
 }
 
 // Refresh scans the hardware for information about the fabric devices and caches the result.
-func (cfi *cachedFabricInfo) Refresh(ctx context.Context) (func(), error) {
+func (cfi *cachedFabricInfo) Refresh(ctx context.Context) error {
 	if cfi == nil {
-		return cache.NoopRelease, errors.New("cachedFabricInfo is nil")
+		return errors.New("cachedFabricInfo is nil")
 	}
 
-	cfi.Lock()
-	return cfi.Unlock, cfi.refresh(ctx)
+	return cfi.refresh(ctx)
 }
 
 // InfoCache is a cache for the results of expensive operations needed by the agent.

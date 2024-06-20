@@ -37,6 +37,8 @@ func TestCache_NewItemCache(t *testing.T) {
 	}
 }
 
+var _ RefreshableItem = (*mockItem)(nil)
+
 type mockItem struct {
 	ItemKey            string
 	ID                 string
@@ -52,15 +54,15 @@ func (m *mockItem) Key() string {
 	return m.ItemKey
 }
 
-func (m *mockItem) Refresh(ctx context.Context) (func(), error) {
-	return NoopRelease, m.RefreshErr
+func (m *mockItem) Refresh(ctx context.Context) error {
+	return m.RefreshErr
 }
 
-func (m *mockItem) RefreshIfNeeded(ctx context.Context) (func(), bool, error) {
+func (m *mockItem) RefreshIfNeeded(ctx context.Context) (bool, error) {
 	if m.needsRefresh() {
-		return NoopRelease, true, m.RefreshErr
+		return true, m.RefreshErr
 	}
-	return NoopRelease, false, nil
+	return false, nil
 }
 
 func (m *mockItem) needsRefresh() bool {

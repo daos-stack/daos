@@ -34,8 +34,8 @@ type (
 	// RefreshableItem is an Item that defines its own refresh criteria and method.
 	RefreshableItem interface {
 		Item
-		Refresh(ctx context.Context) (func(), error)
-		RefreshIfNeeded(ctx context.Context) (func(), bool, error)
+		Refresh(ctx context.Context) error
+		RefreshIfNeeded(ctx context.Context) (bool, error)
 	}
 
 	// ItemCache is a mechanism for caching Items to keys.
@@ -132,24 +132,24 @@ func (e *errKeyNotFound) Error() string {
 	return fmt.Sprintf("key %q not found", e.key)
 }
 
-// NoopRelease is a no-op function that does nothing, but can
+// noopRelease is a no-op function that does nothing, but can
 // be safely returned in lieu of a real lock release function.
-func NoopRelease() {}
+func noopRelease() {}
 
 // GetOrCreate returns an item from the cache if it exists, otherwise it creates
 // the item using the given function and caches it. The item must be released
 // by the caller when it is safe to be modified.
 func (ic *ItemCache) GetOrCreate(ctx context.Context, key string, missFn ItemCreateFunc) (Item, func(), error) {
 	if ic == nil {
-		return nil, NoopRelease, errors.New("nil ItemCache")
+		return nil, noopRelease, errors.New("nil ItemCache")
 	}
 
 	if key == "" {
-		return nil, NoopRelease, errors.Errorf("empty string is an invalid key")
+		return nil, noopRelease, errors.Errorf("empty string is an invalid key")
 	}
 
 	if missFn == nil {
-		return nil, NoopRelease, errors.Errorf("item create function is required")
+		return nil, noopRelease, errors.Errorf("item create function is required")
 	}
 
 	ic.mutex.Lock()
@@ -160,39 +160,36 @@ func (ic *ItemCache) GetOrCreate(ctx context.Context, key string, missFn ItemCre
 		ic.log.Debugf("failed to get item for key %q: %s", key, err.Error())
 		item, err = missFn()
 		if err != nil {
-			return nil, NoopRelease, errors.Wrapf(err, "create item for %q", key)
+			return nil, noopRelease, errors.Wrapf(err, "create item for %q", key)
 		}
 		ic.log.Debugf("created item for key %q", key)
 		ic.set(item)
 	}
 
-	var release func()
+	item.Lock()
 	if ri, ok := item.(RefreshableItem); ok {
-		var refreshed bool
-		release, refreshed, err = ri.RefreshIfNeeded(ctx)
+		refreshed, err := ri.RefreshIfNeeded(ctx)
 		if err != nil {
-			return nil, NoopRelease, errors.Wrapf(err, "fetch data for %q", key)
+			item.Unlock()
+			return nil, noopRelease, errors.Wrapf(err, "fetch data for %q", key)
 		}
 		if refreshed {
 			ic.log.Debugf("refreshed item %q", key)
 		}
-	} else {
-		item.Lock()
-		release = item.Unlock
 	}
 
-	return item, release, nil
+	return item, item.Unlock, nil
 }
 
 // Get returns an item from the cache if it exists, otherwise it returns an
 // error. The item must be released by the caller when it is safe to be modified.
 func (ic *ItemCache) Get(ctx context.Context, key string) (Item, func(), error) {
 	if ic == nil {
-		return nil, NoopRelease, errors.New("nil ItemCache")
+		return nil, noopRelease, errors.New("nil ItemCache")
 	}
 
 	if key == "" {
-		return nil, NoopRelease, errors.Errorf("empty string is an invalid key")
+		return nil, noopRelease, errors.Errorf("empty string is an invalid key")
 	}
 
 	ic.mutex.Lock()
@@ -200,25 +197,22 @@ func (ic *ItemCache) Get(ctx context.Context, key string) (Item, func(), error) 
 
 	item, err := ic.get(key)
 	if err != nil {
-		return nil, NoopRelease, err
+		return nil, noopRelease, err
 	}
 
-	var release func()
+	item.Lock()
 	if ri, ok := item.(RefreshableItem); ok {
-		var refreshed bool
-		release, refreshed, err = ri.RefreshIfNeeded(ctx)
+		refreshed, err := ri.RefreshIfNeeded(ctx)
 		if err != nil {
-			return nil, NoopRelease, errors.Wrapf(err, "fetch data for %q", key)
+			item.Unlock()
+			return nil, noopRelease, errors.Wrapf(err, "fetch data for %q", key)
 		}
 		if refreshed {
 			ic.log.Debugf("refreshed item %q", key)
 		}
-	} else {
-		item.Lock()
-		release = item.Unlock
 	}
 
-	return item, release, nil
+	return item, item.Unlock, nil
 }
 
 func (ic *ItemCache) get(key string) (Item, error) {
@@ -261,11 +255,11 @@ func (ic *ItemCache) refreshItem(ctx context.Context, key string) error {
 	}
 
 	if ri, ok := item.(RefreshableItem); ok {
-		release, err := ri.Refresh(ctx)
-		if err != nil {
+		item.Lock()
+		defer item.Unlock()
+		if err := ri.Refresh(ctx); err != nil {
 			return errors.Wrapf(err, "failed to refresh cached item %q", item.Key())
 		}
-		release()
 	}
 
 	return nil

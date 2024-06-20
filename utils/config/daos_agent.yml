@@ -70,7 +70,8 @@
 #  # with many frequent (e.g. hundreds per minute) client connections,
 #  # a lifetime of 1-5 minutes may be a reasonable tradeoff between
 #  # performance and responsiveness to user/group database updates.
-#  cred_cache_lifetime: 1m
+#  # If no expiration is set, credential caching is not enabled.
+#  cache_expiration: 1m
 #
 ## Configuration for SSL certificates used to secure management traffic
 # and authenticate/authorize management components.

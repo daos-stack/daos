@@ -22,7 +22,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/lib/cache"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
@@ -382,31 +381,29 @@ func TestAgent_SecurityCachedCredentials(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			cache := &credentialCache{
-				log:          log,
-				cache:        cache.NewItemCache(log),
-				credLifetime: tc.lifetime,
-				cacheMissFn: func() func(_ context.Context, req *auth.CredentialRequest) (*auth.Credential, error) {
-					var idx int
-					return func(_ context.Context, req *auth.CredentialRequest) (*auth.Credential, error) {
-						defer func() {
-							if idx < len(tc.responses)-1 {
-								idx++
-							}
-						}()
-						t.Logf("returning response %d: %+v", idx, tc.responses[idx])
-						return tc.responses[idx].cred, tc.responses[idx].err
-					}
-				}(),
-			}
+			cfg := defaultTestSecurityConfig()
+			cfg.credentials.CacheExpiration = tc.lifetime
+			mod := NewSecurityModule(log, cfg)
+			mod.credCache.cacheMissFn = func() func(_ context.Context, req *auth.CredentialRequest) (*auth.Credential, error) {
+				var idx int
+				return func(_ context.Context, req *auth.CredentialRequest) (*auth.Credential, error) {
+					defer func() {
+						if idx < len(tc.responses)-1 {
+							idx++
+						}
+					}()
+					t.Logf("returning response %d: %+v", idx, tc.responses[idx])
+					return tc.responses[idx].cred, tc.responses[idx].err
+				}
+			}()
 
 			// Prime the cache with a single entry.
-			_, err := cache.getSignedCredential(test.Context(t), tc.req)
+			_, err := mod.credCache.getSignedCredential(test.Context(t), tc.req)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
 			// Request a second time with the same credentials.
-			cred, err := cache.getSignedCredential(test.Context(t), tc.req)
+			cred, err := mod.credCache.getSignedCredential(test.Context(t), tc.req)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}

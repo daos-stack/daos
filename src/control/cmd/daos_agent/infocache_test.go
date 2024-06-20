@@ -202,7 +202,7 @@ func TestAgent_cachedAttachInfo_RefreshIfNeeded(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, refreshed, _ := tc.ai.RefreshIfNeeded(test.Context(t))
+			refreshed, _ := tc.ai.RefreshIfNeeded(test.Context(t))
 			test.AssertEqual(t, tc.expResult, refreshed, "")
 		})
 	}
@@ -286,9 +286,7 @@ func TestAgent_cachedAttachInfo_Refresh(t *testing.T) {
 				}
 			}
 
-			release, err := ai.Refresh(test.Context(t))
-			release()
-
+			err := ai.Refresh(test.Context(t))
 			test.CmpErr(t, tc.expErr, err)
 
 			if ai == nil {
@@ -364,7 +362,7 @@ func TestAgent_cachedFabricInfo_RefreshIfNeeded(t *testing.T) {
 				cfi.cacheItem.lastCached = tc.cacheTime
 			}
 
-			_, refreshed, _ := cfi.RefreshIfNeeded(test.Context(t))
+			refreshed, _ := cfi.RefreshIfNeeded(test.Context(t))
 			test.AssertEqual(t, tc.expResult, refreshed, "")
 		})
 	}
@@ -435,9 +433,7 @@ func TestAgent_cachedFabricInfo_Refresh(t *testing.T) {
 				}
 			}
 
-			release, err := cfi.Refresh(test.Context(t))
-			release()
-
+			err := cfi.Refresh(test.Context(t))
 			test.CmpErr(t, tc.expErr, err)
 
 			if cfi == nil {
