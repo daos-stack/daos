@@ -1727,6 +1727,7 @@ void
 crt_rpc_priv_fini(struct crt_rpc_priv *rpc_priv)
 {
 	D_ASSERT(rpc_priv != NULL);
+	D_FREE(rpc_priv->crp_buf_copy);
 	crt_rpc_inout_buff_fini(rpc_priv);
 }
 

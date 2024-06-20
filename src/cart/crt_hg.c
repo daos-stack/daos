@@ -1272,7 +1272,6 @@ crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv)
 		if (hg_ret != HG_SUCCESS)
 			RPC_ERROR(rpc_priv, "HG_Free_input failed, hg_ret: " DF_HG_RC "\n",
 				  DP_HG_RC(hg_ret));
-		D_FREE(rpc_priv->crp_buf_copy);
 	}
 
 	crt_rpc_priv_fini(rpc_priv);
