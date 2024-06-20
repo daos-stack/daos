@@ -434,7 +434,7 @@ def launch_vmd_identify_check(self, name, results, args):
     host_uuids = get_storage_query_device_uuids(self.dmg_command)
     for host, uuid_dict in host_uuids.items():
         uuid_list = sorted(uuid_dict.keys())
-        self.log.info("Devices on hosts %s: %s", host, uuid_list)
+        self.log.info("Devices on host %s: %s", host, uuid_list)
         # Now check whether the random uuid belongs to a particular host.
         for uuid in uuids:
             if uuid in uuid_list:
@@ -450,10 +450,8 @@ def launch_vmd_identify_check(self, name, results, args):
                             if device['ctrlr']['led_state'] != "QUICK_BLINK":
                                 failing_vmd.append([device['ctrlr']['pci_addr'], value['hosts']])
                                 status = False
-
-    # reset leds to previous state
-    for uuid in uuids:
-        self.dmg_command.storage_led_identify(ids=uuid, reset=True)
+                            # reset leds to previous state
+                            dmg.storage_led_identify(ids=uuid, reset=True)
 
     params = {"name": name,
               "status": status,
