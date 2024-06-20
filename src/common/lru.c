@@ -299,5 +299,5 @@ daos_lru_ref_wait_evict(struct daos_lru_cache *lcache, struct daos_llink *llink)
 {
 	D_ASSERT(lcache->dlc_ops->lop_wait);
 
-	lru_ref_release_internal(lcache, llink, false);
+	lru_ref_release_internal(lcache, llink, true);
 }
