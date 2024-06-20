@@ -1145,6 +1145,8 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 
 	crt_rpc_priv_init(rpc_priv, crt_ctx, true /* srv_flag */);
 
+	rpc_priv->crp_buf_copy = rpc_tmp.crp_buf_copy;
+
 	D_ASSERT(rpc_priv->crp_srv != 0);
 	if (rpc_pub->cr_input_size > 0) {
 		D_ASSERT(rpc_pub->cr_input != NULL);
@@ -1192,8 +1194,6 @@ decref:
 	if (rc != 0)
 		RPC_DECREF(rpc_priv);
 out:
-	/* Finalize tmp handle to free copy buffer if needed */
-	crt_rpc_priv_fini(&rpc_tmp);
 	return hg_ret;
 }
 
