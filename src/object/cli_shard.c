@@ -105,6 +105,10 @@ struct rw_cb_args {
 	crt_endpoint_t		tgt_ep;
 	struct shard_rw_args	*shard_args;
 	uint64_t                 send_time;
+	uint32_t		 sgls_cnt;
+	uint32_t		 bulks_cnt;
+	uint32_t		 tgts_cnt;
+	bool			 csum_enabled;
 };
 
 static d_iov_t *
@@ -733,6 +737,171 @@ obj_shard_update_metrics_end(crt_rpc_t *rpc, uint64_t send_time, void *arg, int 
 		d_tm_set_gauge(lat, time);
 }
 
+static void
+dc_rw_buf_verify_iov(d_iov_t *iov, bool dkey, uint32_t idx)
+{
+	uint8_t		*p = iov->iov_buf;
+
+	D_WARN("Verifying %s, idx %u\n", dkey ? "dkey" : "akey", idx);
+
+	D_ASSERTF(iov->iov_len > 0, "Invalid IOV data len 0\n");
+	D_ASSERTF(iov->iov_buf_len >= iov->iov_len, "Invalid IOV buffer len: %u vs %u\n",
+		  (uint32_t)iov->iov_buf_len, (uint32_t)iov->iov_len);
+
+	D_ASSERTF(p != NULL, "Invalid IOV NULL buffer\n");
+	if (p[iov->iov_len - 1] == '\0')
+		D_INFO("KEY last character is still accessible\n");
+}
+
+static void
+dc_rw_buf_verify_csum(struct dcs_csum_info *info, bool enabled, bool dkey, uint32_t idx)
+{
+	uint32_t	len;
+
+	D_WARN("Verifying %s CSUM, idx %u\n", dkey ? "dkey" : "akey", idx);
+
+	if (!enabled) {
+		D_ASSERTF(info == NULL, "CSUM corrupted (1)\n");
+	} else {
+		D_ASSERTF(info != NULL, "CSUM corrupted (2)\n");
+		D_ASSERTF(info->cs_nr > 0, "CSUM corrupted (3)\n");
+		D_ASSERTF(info->cs_len > 0, "CSUM corrupted (4)\n");
+		D_ASSERTF(info->cs_buf_len > 0, "CSUM corrupted (5)\n");
+
+		len = info->cs_len * info->cs_nr;
+		D_ASSERTF(info->cs_buf_len >= len, "CSUM corrupted (6): len %u vs %u * %u\n",
+			  info->cs_buf_len, info->cs_len, info->cs_nr);
+		D_ASSERTF(info->cs_csum != NULL, "CSUM corrupted (7)\n");
+		if (info->cs_csum[len - 1] == '\0')
+			D_INFO("CSUM last character is still accessible\n");
+	}
+}
+
+static void
+dc_rw_buf_verify_dkey(struct obj_rw_in *orw, struct rw_cb_args *args)
+{
+	dc_rw_buf_verify_iov(&orw->orw_dkey, true, 0);
+	dc_rw_buf_verify_csum(orw->orw_dkey_csum, args->csum_enabled, true, 0);
+}
+
+static void
+dc_rw_buf_verify_sgls(struct obj_rw_in *orw, struct rw_cb_args *args)
+{
+	d_sg_list_t	*sgls;
+	int		 i;
+	int		 j;
+
+	D_ASSERTF(orw->orw_sgls.ca_count == args->sgls_cnt, "SGL corrupted (0): %u vs %u\n",
+		  (uint32_t)orw->orw_sgls.ca_count, args->sgls_cnt);
+
+	sgls = orw->orw_sgls.ca_arrays;
+
+	if (args->sgls_cnt == 0) {
+		D_ASSERTF(sgls == NULL, "SGL corrupted (1)\n");
+		return;
+	}
+
+	D_ASSERT(sgls != NULL);
+	for (i = 0; i < args->sgls_cnt; i++) {
+		if (sgls[i].sg_nr == 0)
+			continue;
+
+		D_ASSERTF(sgls[i].sg_iovs != NULL, "SGL corrupted (3) at %d\n", i);
+		for (j = 0; j < sgls[i].sg_nr; j++) {
+			if (sgls[i].sg_iovs[j].iov_buf_len == 0)
+				D_ASSERTF(sgls[i].sg_iovs[j].iov_buf == NULL,
+					  "SGL corrupted (4) at %d/%d\n", i, j);
+			else
+				D_ASSERTF(sgls[i].sg_iovs[j].iov_buf != NULL,
+					  "SGL corrupted (5) at %d/%d\n", i, j);
+		}
+	}
+}
+
+static void
+dc_rw_buf_verify_bulks(struct obj_rw_in *orw, struct rw_cb_args *args)
+{
+	crt_bulk_t	*bulks;
+	int		 i;
+
+	D_ASSERTF(orw->orw_bulks.ca_count == args->bulks_cnt, "BULK corrupted (0): %u vs %u\n",
+		  (uint32_t)orw->orw_bulks.ca_count, args->bulks_cnt);
+
+	bulks = orw->orw_bulks.ca_arrays;
+
+	if (args->bulks_cnt == 0) {
+		D_ASSERTF(bulks == NULL, "BULK corrupted (1)\n");
+	} else {
+		D_ASSERTF(bulks != NULL, "BULK corrupted (2)\n");
+		for (i = 0; i < args->bulks_cnt; i++)
+			D_ASSERTF(bulks[i] != CRT_BULK_NULL, "BULK corrupted (3) at %d\n", i);
+	}
+}
+
+static void
+dc_rw_buf_verify_tgts(struct obj_rw_in *orw, struct rw_cb_args *args)
+{
+	struct daos_shard_tgt	*tgts;
+	int			 i;
+
+	D_ASSERTF(orw->orw_shard_tgts.ca_count == args->tgts_cnt, "TGT corrupted (0): %u vs %u\n",
+		  (uint32_t)orw->orw_shard_tgts.ca_count, args->tgts_cnt);
+
+	tgts = orw->orw_shard_tgts.ca_arrays;
+
+	if (args->tgts_cnt == 0) {
+		D_ASSERTF(tgts == NULL, "TGT corrupted (1)\n");
+	} else {
+		D_ASSERTF(tgts != NULL, "TGT corrupted (2)\n");
+		for (i = 0; i < args->tgts_cnt; i++)
+			D_ASSERTF(tgts[i].st_tgt_idx != -1, "TGT corrupted (3) at %d\n", i);
+	}
+}
+
+static void
+dc_rw_buf_verify_rp_iods(struct obj_rw_in *orw, struct rw_cb_args *args)
+{
+	struct obj_iod_array	*iod_array = &orw->orw_iod_array;
+	struct dcs_iod_csums	*csum;
+	daos_iod_t		*iods;
+	uint64_t		 nr;
+	int			 i;
+	int			 j;
+
+	D_ASSERTF(iod_array != NULL, "IODS corrupted (0)\n");
+	D_ASSERTF(iod_array->oia_iod_nr == orw->orw_nr, "IODS corrupted (2): nr %u vs %u\n",
+		  iod_array->oia_iod_nr, orw->orw_nr);
+	D_ASSERTF(iod_array->oia_oiod_nr == 0, "IODS corrupted (3): oiod nr %u\n",
+		  iod_array->oia_oiod_nr);
+	D_ASSERTF(iod_array->oia_oiods == NULL, "IODS corrupted (4)\n");
+	D_ASSERTF(iod_array->oia_offs == NULL, "IODS corrupted (5)\n");
+
+	iods = iod_array->oia_iods;
+	D_ASSERTF(iods != NULL, "IODS corrupted (6)\n");
+
+	for (i = 0; i < orw->orw_nr; i++) {
+		dc_rw_buf_verify_iov(&iods[i].iod_name, false, i);
+		D_ASSERTF(iods[i].iod_nr > 0, "IODS corrupted (6) at %d\n", i);
+		if (iods[i].iod_type == DAOS_IOD_SINGLE)
+			continue;
+
+		D_ASSERTF(iods[i].iod_recxs != NULL, "IODS corrupted (7) at %d\n", i);
+		for (j = 0, nr = 0; j < iods[i].iod_nr; j++)
+			nr += iods[i].iod_recxs[j].rx_nr;
+		if (nr == 0)
+			D_ERROR("IODS corrupted (8) at %d\n", i);
+	}
+
+	csum = iod_array->oia_iod_csums;
+	if (!args->csum_enabled) {
+		D_ASSERTF(csum == NULL, "IODS corrupted (9)\n");
+	} else {
+		D_ASSERTF(csum != NULL, "IODS corrupted (10)\n");
+		for (i = 0; i < orw->orw_nr; i++)
+			dc_rw_buf_verify_csum(&csum[i].ic_akey, true, false, i);
+	}
+}
+
 static int
 dc_rw_cb(tse_task_t *task, void *arg)
 {
@@ -789,6 +958,18 @@ dc_rw_cb(tse_task_t *task, void *arg)
 			(unsigned long)orw->orw_api_flags, orw->orw_flags, task,
 			orw->orw_bulks.ca_arrays != NULL ||
 			orw->orw_bulks.ca_count != 0 ? "DMA" : "non-DMA", DP_RC(ret));
+
+		if (ret == -DER_MISC && opc == DAOS_OBJ_RPC_FETCH && !is_ec_obj) {
+			D_ASSERTF(orw->orw_dti_cos.ca_count == 0,
+				  "Unexpeced DTX cos count %u\n", (uint32_t)orw->orw_dti_cos.ca_count);
+			D_ASSERTF(orw->orw_dti_cos.ca_arrays == NULL, "Unexpeced DTX cos array\n");
+
+			dc_rw_buf_verify_dkey(orw, rw_args);
+			dc_rw_buf_verify_sgls(orw, rw_args);
+			dc_rw_buf_verify_bulks(orw, rw_args);
+			dc_rw_buf_verify_tgts(orw, rw_args);
+			dc_rw_buf_verify_rp_iods(orw, rw_args);
+		}
 
 		D_GOTO(out, ret);
 	}
@@ -1082,7 +1263,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	crt_rpc_t		*req = NULL;
 	struct obj_rw_in	*orw;
 	struct obj_rw_v10_in	*orw_v10;
-	struct rw_cb_args	 rw_args;
+	struct rw_cb_args	 rw_args = { 0 };
 	crt_endpoint_t		 tgt_ep;
 	uuid_t			 cont_hdl_uuid;
 	uuid_t			 cont_uuid;
@@ -1257,6 +1438,12 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 
 	if (DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_RW_CRT_ERROR))
 		D_GOTO(out_args, rc = -DER_HG);
+
+	rw_args.sgls_cnt = orw->orw_sgls.ca_count;
+	rw_args.bulks_cnt = orw->orw_bulks.ca_count;
+	rw_args.tgts_cnt = orw->orw_shard_tgts.ca_count;
+	if (orw->orw_dkey_csum != NULL)
+		rw_args.csum_enabled = true;
 
 	rc = tse_task_register_comp_cb(task, dc_rw_cb, &rw_args,
 				       sizeof(rw_args));
