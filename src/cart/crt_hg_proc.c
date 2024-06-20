@@ -440,8 +440,8 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 		}
 
 		memcpy(copy_buf, in_buf, in_buf_size);
-		in_buf                    = copy_buf;
-		rpc_priv->crp_buf_copy    = copy_buf;
+		in_buf                 = copy_buf;
+		rpc_priv->crp_buf_copy = copy_buf;
 
 		hg_ret = HG_Release_input_buf(handle);
 		if (hg_ret != HG_SUCCESS) {
