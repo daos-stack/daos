@@ -1192,6 +1192,8 @@ decref:
 	if (rc != 0)
 		RPC_DECREF(rpc_priv);
 out:
+	/* Finalize tmp handle to free copy buffer if needed */
+	crt_rpc_priv_fini(&rpc_tmp);
 	return hg_ret;
 }
 
