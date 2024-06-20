@@ -460,8 +460,8 @@ trigger_and_wait_ec_aggreation_2dkeys(test_arg_t *arg, daos_obj_id_t *oids,
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 			      DAOS_OBJ_EC_AGG_LEADER_DIFF | DAOS_FAIL_ALWAYS, 0, NULL);
 
-	print_message("wait for 30 seconds for EC aggregation.\n");
-	sleep(30);
+	print_message("wait for 35 seconds for EC aggregation.\n");
+	sleep(35);
 
 	for (i = 0; i < oids_nr; i++) {
 		ec_agg_check_replica_on_parity(arg, oids[i], dkey, akey, offset, size, false);
