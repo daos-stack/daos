@@ -185,10 +185,9 @@ struct crt_rpc_priv {
 	    /* RPC completed flag */
 	    crp_completed      : 1,
 	    /* RPC originated from a primary provider */
-	    crp_src_is_primary : 1,
-	    /* RPC uses copy of an input buffer */
-	    crp_buf_is_copy    : 1;
+	    crp_src_is_primary : 1;
 
+	void                    *crp_buf_copy;
 	struct crt_opc_info	*crp_opc_info;
 	/* corpc info, only valid when (crp_coll == 1) */
 	struct crt_corpc_info	*crp_corpc_info;

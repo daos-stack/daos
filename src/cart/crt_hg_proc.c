@@ -441,14 +441,13 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 
 		memcpy(copy_buf, in_buf, in_buf_size);
 		in_buf                    = copy_buf;
-		rpc_priv->crp_buf_is_copy = 1;
+		rpc_priv->crp_buf_copy    = copy_buf;
 
 		hg_ret = HG_Release_input_buf(handle);
 		if (hg_ret != HG_SUCCESS) {
 			RPC_ERROR(rpc_priv, "Failed to free input; hg_ret = %d\n", hg_ret);
 			D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 		}
-
 	}
 
 	/* Create a new decoding proc */
