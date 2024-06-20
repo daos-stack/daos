@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -741,9 +741,7 @@ class DmgCommandBase(YamlCommand):
             def get_sub_command_class(self):
                 # pylint: disable=redefined-variable-type
                 """Get the dmg storage query sub command object."""
-                if self.sub_command.value == "device-health":
-                    self.sub_command_class = self.DeviceHealthSubCommand()
-                elif self.sub_command.value == "list-devices":
+                if self.sub_command.value == "list-devices":
                     self.sub_command_class = self.ListDevicesSubCommand()
                 elif self.sub_command.value == "list-pools":
                     self.sub_command_class = self.ListPoolsSubCommand()
@@ -751,14 +749,6 @@ class DmgCommandBase(YamlCommand):
                     self.sub_command_class = self.UsageSubCommand()
                 else:
                     self.sub_command_class = None
-
-            class DeviceHealthSubCommand(CommandWithParameters):
-                """Defines a dmg storage query device-health object."""
-
-                def __init__(self):
-                    """Create a dmg storage query device-health object."""
-                    super().__init__("/run/dmg/storage/query/device-health/*", "device-health")
-                    self.uuid = FormattedParameter("-u {}", None)
 
             class ListDevicesSubCommand(CommandWithParameters):
                 """Defines a dmg storage query list-devices object."""

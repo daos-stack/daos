@@ -133,7 +133,6 @@ $ dmg pool create --help
 [create command options]
       -g, --group=      DAOS pool to be owned by given group, format name@domain
       -u, --user=       DAOS pool to be owned by given user, format name@domain
-      -p, --label=      Unique label for pool (deprecated, use positional argument)
       -P, --properties= Pool properties to be set
       -a, --acl-file=   Access Control List file path for DAOS pool
       -z, --size=       Total size of DAOS pool (auto)
