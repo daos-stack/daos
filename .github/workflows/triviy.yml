@@ -1,0 +1,86 @@
+name: Trivy scan
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '46 8 * * 0'
+  push:
+    branches: ["master"]
+  pull_request:
+
+# Declare default permissions as nothing.
+permissions: {}
+
+jobs:
+  trivy-scan:
+    name: Trivy scan
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        branch: [master, release/2.6]
+      fail-fast: false
+
+    steps:
+      - name: Install trivy package
+        run: |
+          sudo apt-get install wget apt-transport-https gnupg lsb-release
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+          echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | \
+          sudo tee -a /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install trivy
+
+      - name: Checkout code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1
+        with:
+          ref: ${{ matrix.branch }}
+          persist-credentials: false
+
+      - name: Checkout latest trivy configuration
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+        with:
+          ref: grom72/trivy  # 'grom72/trivy' to be changed to 'master' before the merge
+          path: trivy
+          persist-credentials: false
+
+      - name: Update trivy configuration
+        run: |
+          cp -f -r ./trivy/utils/trivy ./utils
+          rm -rf ./trivy
+
+      - name: Scan with trivy
+        run: |
+          trivy fs -c utils/trivy/trivy.yaml -f table --dependency-tree \
+          --skip-files "src/client/java/hadoop-daos/pom.xml" \
+          --show-suppressed --exit-code 1 .
+
+      # generate trivy report only if no errors detected
+      - name: Generate trivy report file extension
+        id: gen_extension
+        run: |
+          EXTENSION=$(echo "${{ matrix.branch }}" | sed -e 's/release\///' | sed -e's/\//_/' )
+          echo "EXTENSION=$EXTENSION" >> $GITHUB_OUTPUT
+
+      - name: Generate trivy report
+        run: |
+          trivy fs -c utils/trivy/trivy.yaml \
+          --skip-files "src/client/java/hadoop-daos/pom.xml" \
+          --show-suppressed \
+          --output trivy-report-daos.${{ steps.gen_extension.outputs.EXTENSION }}.txt .
+
+      - name: Print trivy report
+        run: cat trivy-report-daos.${{ steps.gen_extension.outputs.EXTENSION }}.txt
+
+      - name: Prepare the report to be uploaded to the GitHub artifactory
+        run: |
+          mkdir report
+          cp trivy-report-daos.${{ steps.gen_extension.outputs.EXTENSION }}.txt report
+          cp utils/trivy/.trivyignore report/trivyignore.txt
+
+      - name: Upload the report to the GitHub artifactory
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808  # v4.3.3
+        env:
+          EXTENSION: ${{ steps.gen_extension.outputs.EXTENSION }}
+        with:
+          path: report/*
+          name: trivy-report-daos.${{ steps.gen_extension.outputs.EXTENSION }}

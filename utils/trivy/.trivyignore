@@ -1,0 +1,31 @@
+## Ignored hadoop related CVE
+## CVE-2023-52428,MEDIUM,,"Denial of Service in Connect2id Nimbus JOSE+JWT","com.nimbusds:nimbus-jose-jwt","9.8.1","9.37.2",https://avd.aquasec.com/nvd/cve-2023-52428
+CVE-2023-52428
+## CVE-2023-39410,HIGH,7.5,"apache-avro: Apache Avro Java SDK: Memory when deserializing untrusted data in Avro Java SDK","org.apache.avro:avro","1.7.7","1.11.3",https://avd.aquasec.com/nvd/cve-2023-39410
+CVE-2023-39410
+## CVE-2024-25710,HIGH,5.5,"commons-compress: Denial of service caused by an infinite loop for a corrupted DUMP file","org.apache.commons:commons-compress","1.21","1.26.0",https://avd.aquasec.com/nvd/cve-2024-25710
+CVE-2024-25710
+## CVE-2024-26308,HIGH,5.5,"commons-compress: OutOfMemoryError unpacking broken Pack200 file","org.apache.commons:commons-compress","1.21","1.26.0",https://avd.aquasec.com/nvd/cve-2024-26308
+CVE-2024-26308
+## CVE-2024-29131,MEDIUM,,"commons-configuration: StackOverflowError adding property in AbstractListDelimiterHandler.flattenIterator()","org.apache.commons:commons-configuration2","2.8.0","2.10.1",https://avd.aquasec.com/nvd/cve-2024-29131
+CVE-2024-29131
+## CVE-2024-29133,MEDIUM,,"commons-configuration: StackOverflowError calling ListDelimiterHandler.flatten(Object, int) with a cyclical object tree","org.apache.commons:commons-configuration2","2.8.0","2.10.1",https://avd.aquasec.com/nvd/cve-2024-29133
+CVE-2024-29133
+## CVE-2022-40150,HIGH,7.5,"jettison: memory exhaustion via user-supplied XML or JSON data","org.codehaus.jettison:jettison","1.1","1.5.2",https://avd.aquasec.com/nvd/cve-2022-40150
+CVE-2022-40150
+## CVE-2022-45685,HIGH,7.5,"jettison: stack overflow in JSONObject() allows attackers to cause a Denial of Service (DoS) via crafted JSON data","org.codehaus.jettison:jettison","1.1","1.5.2",https://avd.aquasec.com/nvd/cve-2022-45685
+CVE-2022-45685
+## CVE-2022-45693,HIGH,7.5,"jettison:  If the value in map is the map's self, the new new JSONObject(map) cause StackOverflowError which may lead to dos","org.codehaus.jettison:jettison","1.1","1.5.2",https://avd.aquasec.com/nvd/cve-2022-45693
+CVE-2022-45693
+## CVE-2023-1436,HIGH,7.5,"jettison: Uncontrolled Recursion in JSONArray","org.codehaus.jettison:jettison","1.1","1.5.4",https://avd.aquasec.com/nvd/cve-2023-1436
+CVE-2023-1436
+## CVE-2022-40149,MEDIUM,7.5,"jettison: parser crash by stackoverflow","org.codehaus.jettison:jettison","1.1","1.5.1",https://avd.aquasec.com/nvd/cve-2022-40149
+CVE-2022-40149
+## CVE-2023-34455,HIGH,7.5,"snappy-java: Unchecked chunk length leads to DoS","org.xerial.snappy:snappy-java","1.1.8.2","1.1.10.1",https://avd.aquasec.com/nvd/cve-2023-34455
+CVE-2023-34455
+## CVE-2023-43642,HIGH,7.5,"snappy-java: Missing upper bound check on chunk length in snappy-java can lead to Denial of Service (DoS) impact","org.xerial.snappy:snappy-java","1.1.8.2","1.1.10.4",https://avd.aquasec.com/nvd/cve-2023-43642
+CVE-2023-43642
+## CVE-2023-34453,MEDIUM,7.5,"snappy-java: Integer overflow in shuffle leads to DoS","org.xerial.snappy:snappy-java","1.1.8.2","1.1.10.1",https://avd.aquasec.com/nvd/cve-2023-34453
+CVE-2023-34453
+## CVE-2023-34454,MEDIUM,7.5,"snappy-java: Integer overflow in compress leads to DoS","org.xerial.snappy:snappy-java","1.1.8.2","1.1.10.1",https://avd.aquasec.com/nvd/cve-2023-34454
+CVE-2023-34454
