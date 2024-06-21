@@ -2694,6 +2694,116 @@ test_d_rank_range_list_str(void **state)
 	d_rank_range_list_free(range_list);
 }
 
+#define assert_vec_sane(vec)                                                                       \
+	do {                                                                                       \
+		assert_true((vec)->p_len >= 0);                                                    \
+		assert_true((vec)->p_cap >= (vec)->p_len);                                         \
+		if ((vec)->p_cap > 0)                                                              \
+			assert_non_null((vec)->p_buf);                                             \
+	} while (0)
+
+D_VEC_DECLARE(uint16, uint16_t, elem);
+D_VEC_DEFINE(uint16, uint16_t, elem, D_);
+D_VEC_DECLARE(uuid, struct d_uuid, *elem);
+D_VEC_DEFINE(uuid, struct d_uuid, *elem, D_VEC_A_);
+
+static void
+test_vec(void **state)
+{
+	struct d_vec_uint16 v_uint16;
+	struct d_vec_uuid   v_uuid;
+	struct d_uuid       e_uuids[3];
+	int                 i;
+	int                 rc;
+
+	rc = d_vec_uint16_init(&v_uint16, 0 /* cap */);
+	assert_int_equal(rc, 0);
+	assert_null(v_uint16.p_buf);
+	assert_vec_sane(&v_uint16);
+	d_vec_uint16_fini(&v_uint16);
+
+	rc = d_vec_uint16_init(&v_uint16, 0 /* cap */);
+	assert_int_equal(rc, 0);
+	/* Append at 0. */
+	rc = d_vec_uint16_append(&v_uint16, 0);
+	assert_int_equal(rc, 0);
+	assert_int_equal(v_uint16.p_len, 1);
+	assert_vec_sane(&v_uint16);
+	assert_true(v_uint16.p_buf[0] == 0);
+	/* Append at 1 and 2. */
+	rc = d_vec_uint16_append(&v_uint16, 1);
+	assert_int_equal(rc, 0);
+	rc = d_vec_uint16_append(&v_uint16, 2);
+	assert_int_equal(rc, 0);
+	assert_int_equal(v_uint16.p_len, 3);
+	assert_vec_sane(&v_uint16);
+	assert_true(v_uint16.p_buf[0] == 0);
+	assert_true(v_uint16.p_buf[1] == 1);
+	assert_true(v_uint16.p_buf[2] == 2);
+	d_vec_uint16_fini(&v_uint16);
+
+	rc = d_vec_uint16_init(&v_uint16, 1 /* cap */);
+	assert_int_equal(rc, 0);
+	rc = d_vec_uint16_append(&v_uint16, 0);
+	assert_int_equal(rc, 0);
+	rc = d_vec_uint16_append(&v_uint16, 1);
+	assert_int_equal(rc, 0);
+	rc = d_vec_uint16_append(&v_uint16, 2);
+	assert_int_equal(rc, 0);
+	rc = d_vec_uint16_append(&v_uint16, 3);
+	assert_int_equal(rc, 0);
+	rc = d_vec_uint16_append(&v_uint16, 4);
+	assert_int_equal(rc, 0);
+	/* Delete at 0. */
+	rc = d_vec_uint16_delete_at(&v_uint16, 0, D_VEC_F_SHRINK);
+	assert_int_equal(rc, 0);
+	assert_int_equal(v_uint16.p_len, 4);
+	assert_vec_sane(&v_uint16);
+	assert_true(v_uint16.p_buf[0] == 1);
+	assert_true(v_uint16.p_buf[1] == 2);
+	assert_true(v_uint16.p_buf[2] == 3);
+	assert_true(v_uint16.p_buf[3] == 4);
+	/* Delete at 0 with D_VEC_F_REORDER. */
+	rc = d_vec_uint16_delete_at(&v_uint16, 0, D_VEC_F_SHRINK | D_VEC_F_REORDER);
+	assert_int_equal(rc, 0);
+	assert_int_equal(v_uint16.p_len, 3);
+	assert_vec_sane(&v_uint16);
+	assert_true(v_uint16.p_buf[0] == 4);
+	assert_true(v_uint16.p_buf[1] == 2);
+	assert_true(v_uint16.p_buf[2] == 3);
+	/* Delete at the last element. Shrink. */
+	rc = d_vec_uint16_delete_at(&v_uint16, 2, D_VEC_F_SHRINK);
+	assert_int_equal(rc, 0);
+	assert_int_equal(v_uint16.p_len, 2);
+	assert_int_equal(v_uint16.p_cap, 4);
+	assert_vec_sane(&v_uint16);
+	assert_true(v_uint16.p_buf[0] == 4);
+	assert_true(v_uint16.p_buf[1] == 2);
+	d_vec_uint16_fini(&v_uint16);
+
+	for (i = 0; i < ARRAY_SIZE(e_uuids); i++)
+		uuid_generate(e_uuids[i].uuid);
+	rc = d_vec_uuid_init(&v_uuid, 0 /* cap */);
+	assert_int_equal(rc, 0);
+	/* Append at 0. */
+	rc = d_vec_uuid_append(&v_uuid, &e_uuids[0]);
+	assert_int_equal(rc, 0);
+	assert_int_equal(v_uuid.p_len, 1);
+	assert_vec_sane(&v_uuid);
+	assert_true(memcmp(&v_uuid.p_buf[0], &e_uuids[0], sizeof(e_uuids[0])) == 0);
+	/* Append at 1 and 2. */
+	rc = d_vec_uuid_append(&v_uuid, &e_uuids[1]);
+	assert_int_equal(rc, 0);
+	rc = d_vec_uuid_append(&v_uuid, &e_uuids[2]);
+	assert_int_equal(rc, 0);
+	assert_int_equal(v_uuid.p_len, 3);
+	assert_vec_sane(&v_uuid);
+	assert_true(memcmp(&v_uuid.p_buf[0], &e_uuids[0], sizeof(e_uuids[0])) == 0);
+	assert_true(memcmp(&v_uuid.p_buf[1], &e_uuids[1], sizeof(e_uuids[0])) == 0);
+	assert_true(memcmp(&v_uuid.p_buf[2], &e_uuids[2], sizeof(e_uuids[0])) == 0);
+	d_vec_uuid_fini(&v_uuid);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -2733,7 +2843,8 @@ main(int argc, char **argv)
 	    cmocka_unit_test(test_d_setenv),
 	    cmocka_unit_test(test_d_rank_list_to_str),
 	    cmocka_unit_test(test_d_rank_range_list_create_from_ranks),
-	    cmocka_unit_test(test_d_rank_range_list_str)};
+	    cmocka_unit_test(test_d_rank_range_list_str),
+	    cmocka_unit_test(test_vec)};
 
 	d_register_alt_assert(mock_assert);
 
