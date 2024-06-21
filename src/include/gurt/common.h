@@ -1049,16 +1049,194 @@ d_hlc_age2sec(uint64_t hlc);
 uint64_t d_hlct_get(void);
 void d_hlct_sync(uint64_t msg);
 
-/** Vector of pointers */
-struct d_vec_pointers {
-	void		**p_buf;
-	uint32_t	  p_cap;
-	uint32_t	  p_len;
+/** Define the type of the vector. */
+#define D_VEC_DEFINE_TYPE(name, type)                                                              \
+	struct d_vec_##name {                                                                      \
+		type *p_buf;                                                                       \
+		int   p_len;                                                                       \
+		int   p_cap;                                                                       \
+	}
+
+#define D_VEC_A_ALLOC_ARRAY(ptr, count)                                                            \
+	do {                                                                                       \
+		ptr = calloc(count, sizeof(*ptr));                                                 \
+	} while (0)
+
+#define D_VEC_A_FREE(ptr)                                                                          \
+	do {                                                                                       \
+		free(ptr);                                                                         \
+		ptr = NULL;                                                                        \
+	} while (0)
+
+#define D_VEC_A_REALLOC_ARRAY(newptr, oldptr, oldcount, count)                                     \
+	do {                                                                                       \
+		newptr = realloc(oldptr, count * sizeof(*newptr));                                 \
+		oldptr = NULL;                                                                     \
+	} while (0)
+
+/**
+ * Initialize \a vec to be an empty vector that can store \a cap elements
+ * without reallocating \a vec.p_buf.
+ *
+ * \param[in]	vec	vector
+ * \param[in]	cap	initial capacity (i.e., number of slots for elements)
+ *
+ * \return error code
+ */
+#define D_VEC_DECLARE_INIT(name, type)                                                             \
+	int d_vec_##name##_init(struct d_vec_##name *vec, uint32_t cap)
+#define D_VEC_DEFINE_INIT(name, type, allocator)                                                   \
+	D_VEC_DECLARE_INIT(name, type)                                                             \
+	{                                                                                          \
+		type *buf = NULL;                                                                  \
+                                                                                                   \
+		if (cap > 0) {                                                                     \
+			allocator##ALLOC_ARRAY(buf, cap);                                          \
+			if (buf == NULL)                                                           \
+				return -DER_NOMEM;                                                 \
+		}                                                                                  \
+                                                                                                   \
+		vec->p_buf = buf;                                                                  \
+		vec->p_cap = cap;                                                                  \
+		vec->p_len = 0;                                                                    \
+		return 0;                                                                          \
+	}
+
+/**
+ * Finalize \a vec, which must have been initialized by the init function.
+ *
+ * \param[in]	vec	vector
+ */
+#define D_VEC_DECLARE_FINI(name, type) void d_vec_##name##_fini(struct d_vec_##name *vec)
+#define D_VEC_DEFINE_FINI(name, type, allocator)                                                   \
+	D_VEC_DECLARE_FINI(name, type)                                                             \
+	{                                                                                          \
+		allocator##FREE(vec->p_buf);                                                       \
+		vec->p_cap = 0;                                                                    \
+		vec->p_len = 0;                                                                    \
+	}
+
+/**
+ * Append \a elem to \a vec.
+ *
+ * \param[in]	vec	vector
+ * \param[in]	elem	element value or pointer (see D_VEC_DECLARE)
+ *
+ * \return error code
+ */
+#define D_VEC_DECLARE_APPEND(name, type, elem)                                                     \
+	int d_vec_##name##_append(struct d_vec_##name *vec, type elem)
+#define D_VEC_DEFINE_APPEND(name, type, elem, allocator)                                           \
+	D_VEC_DECLARE_APPEND(name, type, elem)                                                     \
+	{                                                                                          \
+		if (vec->p_len == vec->p_cap) {                                                    \
+			type    *buf;                                                              \
+			uint32_t cap;                                                              \
+                                                                                                   \
+			if (vec->p_cap == 0)                                                       \
+				cap = 1;                                                           \
+			else                                                                       \
+				cap = 2 * vec->p_cap;                                              \
+                                                                                                   \
+			allocator##REALLOC_ARRAY(buf, vec->p_buf, vec->p_cap, cap);                \
+			if (buf == NULL)                                                           \
+				return -DER_NOMEM;                                                 \
+                                                                                                   \
+			vec->p_buf = buf;                                                          \
+			vec->p_cap = cap;                                                          \
+		}                                                                                  \
+                                                                                                   \
+		vec->p_buf[vec->p_len] = elem;                                                     \
+		vec->p_len++;                                                                      \
+		return 0;                                                                          \
+	}
+
+enum d_vec_flag {
+	/** When deleting an element, see if the capacity can be shrunk. */
+	D_VEC_F_SHRINK = 1U << 0,
+	/**
+	 * When deleting an element, fill the gap with the last element, instead
+	 * of moving all elements after the gap.
+	 */
+	D_VEC_F_REORDER = 1U << 1
 };
 
-int d_vec_pointers_init(struct d_vec_pointers *pointers, uint32_t cap);
-void d_vec_pointers_fini(struct d_vec_pointers *pointers);
-int d_vec_pointers_append(struct d_vec_pointers *pointers, void *pointer);
+/**
+ * Delete the element at index \a i in \a vec.
+ *
+ * \param[in]	vec	vector
+ * \param[in]	i	index in \a vec.p_buf
+ * \param[in]	flags	D_VEC_F_SHRINK or D_VEC_F_REORDER
+ *
+ * \return error code
+ */
+#define D_VEC_DECLARE_DELETE_AT(name, type)                                                        \
+	int d_vec_##name##_delete_at(struct d_vec_##name *vec, int i, unsigned int flags)
+#define D_VEC_DEFINE_DELETE_AT(name, type, allocator)                                              \
+	D_VEC_DECLARE_DELETE_AT(name, type)                                                        \
+	{                                                                                          \
+		D_ASSERTF(0 <= i && i < vec->p_len, "out of range: i=%d len=%d\n", i, vec->p_len); \
+		if (i < vec->p_len - 1) {                                                          \
+			if (flags & D_VEC_F_REORDER)                                               \
+				vec->p_buf[i] = vec->p_buf[vec->p_len - 1];                        \
+			else                                                                       \
+				memmove(&vec->p_buf[i], &vec->p_buf[i + 1],                        \
+					(vec->p_len - i - 1) * sizeof(*vec->p_buf));               \
+		}                                                                                  \
+		vec->p_len--;                                                                      \
+                                                                                                   \
+		if (flags & D_VEC_F_SHRINK && vec->p_len <= vec->p_cap / 4) {                      \
+			type    *buf;                                                              \
+			uint32_t cap;                                                              \
+                                                                                                   \
+			cap = vec->p_cap / 2;                                                      \
+                                                                                                   \
+			allocator##REALLOC_ARRAY(buf, vec->p_buf, vec->p_cap, cap);                \
+			if (buf == NULL)                                                           \
+				return -DER_NOMEM;                                                 \
+                                                                                                   \
+			vec->p_buf = buf;                                                          \
+			vec->p_cap = cap;                                                          \
+		}                                                                                  \
+		return 0;                                                                          \
+	}
+
+/**
+ * Declare a vector type and the following functions.
+ *
+ *   d_vec_<\a name>_init(vec, cap)
+ *   d_vec_<\a name>_fini(vec)
+ *   d_vec_<\a name>_append(vec, <\a elem>)
+ *   d_vec_<\a name>_delete_at(vec, i, flags)
+ *
+ * If \a elem is elem, the append function takes a \a type elem; if \a elem is
+ * *elem, the append function takes a \a type *elem.
+ *
+ * \param[in]	name	for prefix d_vec_<\a name>
+ * \param[in]	type	of elements
+ * \param[in]	elem	parameter form for d_vec_<\a name>_append
+ */
+#define D_VEC_DECLARE(name, type, elem)                                                            \
+	D_VEC_DEFINE_TYPE(name, type);                                                             \
+	D_VEC_DECLARE_INIT(name, type);                                                            \
+	D_VEC_DECLARE_FINI(name, type);                                                            \
+	D_VEC_DECLARE_APPEND(name, type, elem);                                                    \
+	D_VEC_DECLARE_DELETE_AT(name, type);
+
+/**
+ * Define a vector type and its functions. See D_VEC_DECLARE.
+ *
+ * In most cases, \a allocator shall be D_ (the standard D_FREE, etc.); for
+ * special cases where injection of memory allocation errors is undesirable,
+ * \a allocator can be D_VEC_A_ (the plain free, etc.).
+ */
+#define D_VEC_DEFINE(name, type, elem, allocator)                                                  \
+	D_VEC_DEFINE_INIT(name, type, allocator)                                                   \
+	D_VEC_DEFINE_FINI(name, type, allocator)                                                   \
+	D_VEC_DEFINE_APPEND(name, type, elem, allocator)                                           \
+	D_VEC_DEFINE_DELETE_AT(name, type, allocator)
+
+D_VEC_DECLARE(pointers, void *, elem)
 
 /** Change the default setting for if a signal handler should be installed in crt_init()
  *
