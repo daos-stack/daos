@@ -111,10 +111,10 @@ class DmgScale(TestWithServers):
         2. Create a 100% pool that spans all engines
         3. Pool query
         4. Pool destroy
-        5. Create 50 pools spanning all the engines with each pool using a 1/50th of the capacity
+        5. Create 49 pools spanning all the engines with each pool using a 1/50th of the capacity
         6. Pool list
         7. Query around 80 pool metrics
-        8. Destroy all 50 pools
+        8. Destroy all 49 pools
         9. System stop
         10. System start
 
@@ -126,7 +126,7 @@ class DmgScale(TestWithServers):
         :avocado: tags=DmgScale,test_dmg_scale
         """
         # This is a manual test and we need to find the durations from job.log, so add "##" to make
-        # it easy to search. The log is usually over 100K lines.
+        # it easy to search. The log is usually over 1 million lines.
         self.log_step("## System query")
         dmg_command = self.get_dmg_command()
         dmg_command.system_query()
@@ -142,20 +142,28 @@ class DmgScale(TestWithServers):
         self.log_step("## Pool destroy")
         dmg_command.pool_destroy(pool.identifier, force=1)
 
-        msg = ("## Create 50 pools spanning all the engines with each pool using a 1/50th of the "
-               "capacity")
+        quantity = self.params.get("quantity", "/run/pool_2_percent/*", 1)
+        msg = (f"## Create {quantity} pools spanning all the engines with each pool using a 1/50th "
+               "of the capacity")
         self.log_step(msg)
-        quantity = self.params.get("quantity", "/run/pool_50/*", 1)
-        durations = []
-        pools = []
-        for count in range(quantity):
-            pools.append(self.get_pool(namespace="/run/pool_50/*", create=False))
+        pool_0 = self.get_pool(namespace="/run/pool_2_percent/*", create=False)
+        duration_0 = time_pool_create(log=self.log, number=0, pool=pool_0)
+        pools = [pool_0]
+        durations = [duration_0]
+        for count in range(1, quantity):
+            pools.append(self.get_pool(create=False))
+            # Use the SCM and NVMe size of the first pool, which uses 2% of the total size.
+            pools[-1].scm_size.update(pool_0.scm_per_rank)
+            pools[-1].nvme_size.update(pool_0.nvme_per_rank)
             durations.append(time_pool_create(log=self.log, number=count, pool=pools[-1]))
+            msg = (f"Pool {count} created. SCM = {pools[-1].scm_per_rank}; "
+                   f"NVMe = {pools[-1].nvme_per_rank}")
+            self.log.info(msg)
         self.log.info("## durations = %s", durations)
         total_duration = 0
         for duration in durations:
             total_duration += duration
-        self.log.info("## 50 pools create duration = %.1f", total_duration)
+        self.log.info("## %d pools create duration = %.1f", quantity, total_duration)
 
         self.log_step("## Pool list")
         dmg_command.pool_list()
@@ -167,7 +175,7 @@ class DmgScale(TestWithServers):
             dmg=dmg_command, servers=[self.server_managers[0].hosts[0]])
         telemetry_utils.get_metrics(name=",".join(ENGINE_POOL_METRICS_SHORT))
 
-        self.log_step("## Destroy all 50 pools")
+        self.log_step(f"## Destroy all {quantity} pools")
         self.destroy_pools(pools=pools)
 
         self.log_step("## System stop")

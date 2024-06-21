@@ -31,8 +31,7 @@ server_config:
 
 pool_1:
   size: 100%
-  control_method: dmg
-pool_50:
+pool_2_percent:
   size: 2%
-  control_method: dmg
-  quantity: 50
+  # If we use --size=2% during pool create, we can only create up to 49 pools.
+  quantity: 49
