@@ -304,7 +304,6 @@ class PoolSecurityTestBase(TestWithServers):
             "At setup_container_acl_and_permission, setup %s, %s, %s, with %s",
             user_type, user_name, perm_type, permission)
         with container.no_exception():
-#            result = container.update_acl(
             container.update_acl(
                 entry=secTestBase.acl_entry(user_type, user_name, permission))
 #        if result.stderr_text:
