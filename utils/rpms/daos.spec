@@ -147,7 +147,6 @@ Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 03.00.00.0423
-Requires: pciutils
 Requires: libpmemobj1 >= 2.0.0-1.suse1500
 Requires: libfabric1 >= %{libfabric_version}
 %else
