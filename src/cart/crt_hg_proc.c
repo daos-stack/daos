@@ -537,7 +537,7 @@ crt_hg_unpack_body(struct crt_rpc_priv *rpc_priv, crt_proc_t proc)
 	/* Decode input parameters */
 	rc = crt_proc_input(rpc_priv, proc);
 	if (rc != 0) {
-		RPC_ERROR(rpc_priv, "crt_proc_input failed: "DF_RC"\n", DP_RC(rc));
+		RPC_ERROR(rpc_priv, "crt_proc_input failed: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
