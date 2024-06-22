@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -537,8 +537,7 @@ crt_hg_unpack_body(struct crt_rpc_priv *rpc_priv, crt_proc_t proc)
 	/* Decode input parameters */
 	rc = crt_proc_input(rpc_priv, proc);
 	if (rc != 0) {
-		RPC_ERROR(rpc_priv, "crt_proc_input failed: "DF_RC"\n",
-			  DP_RC(rc));
+		RPC_ERROR(rpc_priv, "crt_proc_input failed: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -546,8 +545,15 @@ crt_hg_unpack_body(struct crt_rpc_priv *rpc_priv, crt_proc_t proc)
 	hg_ret = hg_proc_flush(proc);
 	if (hg_ret != HG_SUCCESS) {
 		RPC_ERROR(rpc_priv, "hg_proc_flush failed: %d\n", hg_ret);
-		D_GOTO(out, rc);
+		D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 	}
+
+	hg_ret = HG_Release_input_buf(rpc_priv->crp_hg_hdl);
+	if (hg_ret != HG_SUCCESS) {
+		RPC_ERROR(rpc_priv, "HG_Release_input_buf() failed: %d\n", hg_ret);
+		D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
+	}
+
 out:
 	crt_hg_unpack_cleanup(proc);
 	return rc;
