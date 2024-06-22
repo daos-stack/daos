@@ -121,7 +121,6 @@ class DmgScale(TestWithServers):
         Jira ID: DAOS-10508.
 
         :avocado: tags=all,manual
-        :avocado: tags=hw,medium
         :avocado: tags=deployment
         :avocado: tags=DmgScale,test_dmg_scale
         """
@@ -137,10 +136,10 @@ class DmgScale(TestWithServers):
         self.log.info("## Single pool create duration = %.1f", duration)
 
         self.log_step("## Pool query")
-        dmg_command.pool_query(pool.identifier)
+        pool.query()
 
         self.log_step("## Pool destroy")
-        dmg_command.pool_destroy(pool.identifier, force=1)
+        pool.destroy()
 
         quantity = self.params.get("quantity", "/run/pool_2_percent/*", 1)
         msg = (f"## Create {quantity} pools spanning all the engines with each pool using a 1/50th "
@@ -160,9 +159,7 @@ class DmgScale(TestWithServers):
                    f"NVMe = {pools[-1].nvme_per_rank}")
             self.log.info(msg)
         self.log.info("## durations = %s", durations)
-        total_duration = 0
-        for duration in durations:
-            total_duration += duration
+        total_duration = sum(durations)
         self.log.info("## %d pools create duration = %.1f", quantity, total_duration)
 
         self.log_step("## Pool list")
