@@ -431,6 +431,8 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 		}
 	}
 
+	/* Note: Input buffer is released in crt_hg_unpack_body() */
+
 	/* Create a new decoding proc */
 	ctx = rpc_priv->crp_pub.cr_ctx;
 	hg_ctx = &ctx->cc_hg_ctx;
