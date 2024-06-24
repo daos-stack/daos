@@ -262,10 +262,10 @@ bio_storage_dev_manage_led(void *arg)
 }
 
 struct bio_list_devs_info {
-	d_list_t         dev_list;
-	int              dev_list_cnt;
-	uuid_t           devid;
-	int             *state;
+	d_list_t dev_list;
+	int      dev_list_cnt;
+	uuid_t   devid;
+	int     *state;
 };
 
 static int
