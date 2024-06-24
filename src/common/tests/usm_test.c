@@ -26,7 +26,7 @@ usage(char *name, FILE *out)
 	fprintf(out,
 		"Usage:\n"
 		"\t%s -h\n"
-		"\t%s [-p] [-t thread_name] [-s stack_size] [-m] [-G]\n"
+		"\t%s [-p] [-t] [-s stack_size] [-m var_size] [-m] [-G]\n"
 		"\n"
 		"Options:\n"
 		"\t--help, -h\n"
@@ -47,10 +47,21 @@ usage(char *name, FILE *out)
 static void
 stack_fill(void *arg)
 {
-	size_t var_size = (size_t)arg;
-	void  *sp       = NULL;
+	void      *sp       = NULL;
+	ABT_thread thread;
+	size_t     var_size = (size_t)arg;
+	size_t     stack_size;
+	int        rc;
 
-	printf("Starting filling stack...\n");
+	rc = ABT_thread_self(&thread);
+	D_ASSERT(rc == ABT_SUCCESS);
+	rc = ABT_thread_get_stacksize(thread, &stack_size);
+	D_ASSERT(rc == ABT_SUCCESS);
+	printf("Starting filling stack:\n"
+	       "\t- stack size: %zu\n"
+	       "\t- var size:   %zu\n",
+	       stack_size, var_size);
+
 	g_stack_start = &sp;
 	for (;;) {
 		g_stack_end = alloca(var_size);
