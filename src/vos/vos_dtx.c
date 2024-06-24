@@ -687,6 +687,13 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 	}
 
 	if (dbd->dbd_count > 1 || dbd->dbd_index < dbd->dbd_cap) {
+		rc = umem_tx_add_ptr(umm, &dbd->dbd_count,
+				     sizeof(dbd->dbd_count));
+		if (rc != 0)
+			return rc;
+
+		dbd->dbd_count--;
+
 		rc = umem_tx_add_ptr(umm, &dae_df->dae_flags,
 				sizeof(dae_df->dae_flags));
 		if (rc != 0)
@@ -694,13 +701,6 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 
 		/* Mark the DTX entry as invalid in SCM. */
 		dae_df->dae_flags = DTE_INVALID;
-
-		rc = umem_tx_add_ptr(umm, &dbd->dbd_count,
-				     sizeof(dbd->dbd_count));
-		if (rc != 0)
-			return rc;
-
-		dbd->dbd_count--;
 	} else {
 		struct vos_cont_df	*cont_df = cont->vc_cont_df;
 		umem_off_t		 dbd_off;
