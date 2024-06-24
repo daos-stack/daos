@@ -40,6 +40,9 @@ def scons():
     # dfuse
     SConscript('dfuse/utest/SConscript')
 
+    # server
+    SConscript('server/utest/SConscript')
+
 
 if __name__ == "SCons.Script":
     scons()

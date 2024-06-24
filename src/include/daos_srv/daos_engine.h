@@ -556,6 +556,20 @@ dss_abterr2der(int abt_errno)
 	}
 }
 
+/* Convert DAOS errno to Argobots ones. */
+static inline int
+dss_der2abterr(int der)
+{
+	switch (der) {
+	case -DER_SUCCESS:
+		return ABT_SUCCESS;
+	case -DER_NOMEM:
+		return ABT_ERR_MEM;
+	default:
+		return ABT_ERR_OTHER;
+	}
+}
+
 /** Helper converting ABT error code into human readable string */
 static inline const char *
 dss_abterr2str(int rc)
