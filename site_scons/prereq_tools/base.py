@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Intel Corporation
+# Copyright 2016-2024 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -443,7 +443,6 @@ class PreReqComponent():
         opts.Add('USE_INSTALLED', 'Comma separated list of preinstalled dependencies', 'none')
         opts.Add(('MPI_PKG', 'Specifies name of pkg-config to load for MPI', None))
         opts.Add(BoolVariable('FIRMWARE_MGMT', 'Build in device firmware management.', False))
-        opts.Add(BoolVariable('STACK_MMAP', 'Allocate ABT ULTs stacks with mmap()', False))
         opts.Add(BoolVariable('STATIC_FUSE', "Build with static libfuse library", False))
         opts.Add(EnumVariable('BUILD_TYPE', "Set the build type", 'release',
                               ['dev', 'debug', 'release'], ignorecase=1))

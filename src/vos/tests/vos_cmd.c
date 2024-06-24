@@ -2,7 +2,8 @@
 
 #include <fcntl.h>
 #include "vts_io.h"
-#include <daos/stack_mmap.h>
+#include <daos/daos_abt.h>
+#include <daos/ult_stack_mmap.h>
 #include <gurt/atomic.h>
 
 static pthread_once_t     once_control = PTHREAD_ONCE_INIT;
@@ -135,6 +136,8 @@ print_usage(const char *prog)
 	printf("\t--iterate, -i                            Iterate\n");
 	printf("\t--aggregate, -a                          Aggregate\n");
 	printf("\t--discard, -r                            Discard writes\n");
+	printf("\n\tMiscellaneous options\n");
+	printf("\t--mmap_stack, -m                         Use mmap()'ed ULT stack\n");
 	exit(0);
 }
 
@@ -642,8 +645,8 @@ handle_op(struct cmd_info *cinfo, bool async)
 	if (async)
 		d_list_add(&ult_info->link, &active_list);
 
-	rc = daos_abt_thread_create_on_xstream(NULL, NULL, abt_xstream, ult_func, ult_info,
-					       ABT_THREAD_ATTR_NULL, &ult_info->thread);
+	rc = da_thread_create_on_xstream(abt_xstream, ult_func, ult_info, ABT_THREAD_ATTR_NULL,
+					 &ult_info->thread);
 	assert_int_equal(rc, ABT_SUCCESS);
 
 	if (!async) {
@@ -765,16 +768,16 @@ abit_start(void)
 {
 	int rc;
 
-	rc = ABT_init(0, NULL);
+	rc = da_initialize(0, NULL);
 	if (rc != ABT_SUCCESS) {
-		fprintf(stderr, "ABT init failed: %d\n", rc);
+		D_ERROR("Failed to init ABT: " AF_RC "\n", AP_RC(rc));
 		return -1;
 	}
 
 	rc = ABT_xstream_self(&abt_xstream);
 	if (rc != ABT_SUCCESS) {
-		ABT_finalize();
-		printf("ABT get self xstream failed: %d\n", rc);
+		da_finalize();
+		printf("ABT get self xstream failed: " AF_RC "\n", AP_RC(rc));
 		return -1;
 	}
 
@@ -786,7 +789,7 @@ abit_fini(void)
 {
 	ABT_xstream_join(abt_xstream);
 	ABT_xstream_free(&abt_xstream);
-	ABT_finalize();
+	da_finalize();
 }
 
 struct args {
@@ -977,7 +980,7 @@ run_vos_command(const char *arg0, const char *cmd)
 
 	optind = 1;
 
-	while ((c = getopt_long(args.a_nr, args.a_argv, "c:o:dw:p:ahrsP:R:ix:A:D", long_options,
+	while ((c = getopt_long(args.a_nr, args.a_argv, "c:o:dw:p:ahrsP:R:ix:A:Dm", long_options,
 				&option_index)) != -1) {
 		cinfo = &args.a_cmds[args.a_cmd_nr];
 		switch (c) {
@@ -1059,6 +1062,10 @@ run_vos_command(const char *arg0, const char *cmd)
 		case 's':
 			cinfo->type = SIZE_QUERY;
 			args.a_cmd_nr++;
+			break;
+		case 'm':
+			rc = d_setenv("DAOS_ULT_STACK_MMAP", "1", 1);
+			D_ASSERT(rc == 0);
 			break;
 		}
 	}

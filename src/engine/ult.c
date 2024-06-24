@@ -8,6 +8,7 @@
 
 #include <abt.h>
 #include <daos/common.h>
+#include <daos/daos_abt.h>
 #include <daos_errno.h>
 #include "srv_internal.h"
 
@@ -879,9 +880,8 @@ dss_chore_queue_start(struct dss_xstream *dx)
 	struct dss_chore_queue *queue = &dx->dx_chore_queue;
 	int                     rc;
 
-	rc = daos_abt_thread_create(dx->dx_sp, dss_free_stack_cb, dx->dx_pools[DSS_POOL_GENERIC],
-				    dss_chore_queue_ult, queue, ABT_THREAD_ATTR_NULL,
-				    &queue->chq_ult);
+	rc = da_thread_create_on_pool(dx->dx_pools[DSS_POOL_GENERIC], dss_chore_queue_ult, queue,
+				      ABT_THREAD_ATTR_NULL, &queue->chq_ult);
 	if (rc != 0) {
 		D_ERROR("failed to create chore queue ULT: %d\n", rc);
 		return dss_abterr2der(rc);
