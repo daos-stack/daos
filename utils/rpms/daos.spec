@@ -590,7 +590,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Thu Jun 3 2024 Tom Nabarro <tom.nabarro@intel.com> 2.7.100-2
+* Thu Jun 24 2024 Tom Nabarro <tom.nabarro@intel.com> 2.7.100-2
 - Add pciutils runtime dep for daos_server lspci call
 - Add pciutils-devel build dep for pciutils CGO bindings
 

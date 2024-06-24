@@ -33,7 +33,7 @@ Build-Depends: debhelper (>= 10),
                python3-tabulate,
                liblz4-dev,
                libaio-dev,
-               libcapstone-dev
+               libcapstone-dev,
                libpci-dev
 Standards-Version: 4.1.2
 Homepage: https://docs.daos.io/
