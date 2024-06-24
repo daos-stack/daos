@@ -483,6 +483,7 @@ usm_initialize(void)
 {
 	int rc;
 
+	g_smp.smp_rec_btree = NULL;
 	g_smp.smp_page_size = (size_t)getpagesize();
 
 	rc = ABT_info_query_config(ABT_INFO_QUERY_KIND_DEFAULT_THREAD_STACKSIZE,
