@@ -53,6 +53,7 @@ dnf --nodocs install \
     openssl-devel \
     patch \
     patchelf \
+    pciutils \
     pciutils-devel \
     protobuf-c-devel \
     python3-devel \
