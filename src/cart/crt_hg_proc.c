@@ -551,10 +551,12 @@ crt_hg_unpack_body(struct crt_rpc_priv *rpc_priv, crt_proc_t proc)
 	}
 
 	/* Release the input buffer acquired in crt_hg_unpack_header() */
-	hg_ret = HG_Release_input_buf(rpc_priv->crp_hg_hdl);
-	if (hg_ret != HG_SUCCESS) {
-		RPC_ERROR(rpc_priv, "HG_Release_input_buf() failed: %d\n", hg_ret);
-		D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
+	if (crt_gdata.cg_release_input_early) {
+		hg_ret = HG_Release_input_buf(rpc_priv->crp_hg_hdl);
+		if (hg_ret != HG_SUCCESS) {
+			RPC_ERROR(rpc_priv, "HG_Release_input_buf() failed: %d\n", hg_ret);
+			D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
+		}
 	}
 
 out:

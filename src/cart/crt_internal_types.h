@@ -117,16 +117,15 @@ struct crt_gdata {
 	volatile unsigned int	cg_refcount;
 
 	/** flags to keep track of states */
-	unsigned int		cg_inited		: 1,
-				cg_grp_inited		: 1,
-				cg_swim_inited		: 1,
-				cg_auto_swim_disable	: 1,
-				/** whether it is a client or server */
-				cg_server		: 1,
-				/** whether scalable endpoint is enabled */
-				cg_use_sensors		: 1,
-				/** whether we are on a primary provider */
-				cg_provider_is_primary	: 1;
+	unsigned int cg_inited : 1, cg_grp_inited : 1, cg_swim_inited : 1, cg_auto_swim_disable : 1,
+	    /** whether it is a client or server */
+	    cg_server              : 1,
+	    /** whether scalable endpoint is enabled */
+	    cg_use_sensors         : 1,
+	    /** whether we are on a primary provider */
+	    cg_provider_is_primary : 1,
+	    /** whether to release input early */
+	    cg_release_input_early : 1;
 
 	ATOMIC uint64_t		cg_rpcid; /* rpc id */
 
@@ -180,6 +179,7 @@ struct crt_event_cb_priv {
 	ENV(CRT_L_RANK)                                                                            \
 	ENV(CRT_MRC_ENABLE)                                                                        \
 	ENV(CRT_SECONDARY_PROVIDER)                                                                \
+	ENV(CRT_RELEASE_INPUT_EARLY)                                                               \
 	ENV(CRT_TIMEOUT)                                                                           \
 	ENV(DAOS_RPC_SIZE_LIMIT)                                                                   \
 	ENV(DAOS_SIGNAL_REGISTER)                                                                  \

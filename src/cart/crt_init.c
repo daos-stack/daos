@@ -592,9 +592,14 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
 	if (crt_gdata.cg_inited == 0) {
+		int release_input_early = 0;
+
 		crt_gdata.cg_server = server;
 		crt_gdata.cg_auto_swim_disable =
 			(flags & CRT_FLAG_BIT_AUTO_SWIM_DISABLE) ? 1 : 0;
+
+		crt_env_get(CRT_RELEASE_INPUT_EARLY, &release_input_early);
+		crt_gdata.cg_release_input_early = release_input_early ? 1 : 0;
 
 		crt_env_get(CRT_ATTACH_INFO_PATH, &path);
 		if (path != NULL && strlen(path) > 0) {
