@@ -33,6 +33,7 @@ daos_dev_deps:
     - gcc-c++
     - gcc-gfortran
     - golang
+    - hdf5-devel
     - libaec-devel
     - libattr-devel
     - libcmocka-devel
@@ -40,6 +41,7 @@ daos_dev_deps:
     - libyaml-devel
     - openssl-devel
     - pciutils-devel
+    - protobuf-c-devel
     - python3.11
     - python3.11-devel
     - python3-clustershell
