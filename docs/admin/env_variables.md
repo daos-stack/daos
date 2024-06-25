@@ -53,7 +53,7 @@ Environment variables in this section only apply to the server side.
 |DAOS\_DTX\_RPC\_HELPER\_THD|DTX RPC helper threshold. The valid range is [18, unlimited). The default value is 513.|
 |DAOS\_DTX\_BATCHED\_ULT\_MAX|The max count of DTX batched commit ULTs. The valid range is [0, unlimited). 0 means to commit DTX synchronously. The default value is 32.|
 |DAOS\_FORWARD\_NEIGHBOR|Set to enable I/O forwarding on neighbor xstream in the absence of helper threads.|
-|DAOS\_SCRUB\_DISABLE|Set to completly disable the scrubbing ULT on the engine.|
+|DAOS\_SCRUB\_DISABLE|Set to completely disable the scrubbing ULT on the engine.|
 
 ## Server and Client environment variables
 
