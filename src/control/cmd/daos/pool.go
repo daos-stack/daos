@@ -18,7 +18,6 @@ import (
 	"github.com/daos-stack/daos/src/control/cmd/daos/pretty"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/daos"
-	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/ui"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -265,21 +264,43 @@ func convertPoolInfo(pinfo *C.daos_pool_info_t) (*daos.PoolInfo, error) {
 	return poolInfo, nil
 }
 
-func generateRankSet(ranklist *C.d_rank_list_t) string {
-	if ranklist.rl_nr == 0 {
-		return ""
+func queryPool(poolHdl C.daos_handle_t, queryMask daos.PoolQueryMask) (*daos.PoolInfo, error) {
+	var rlPtr **C.d_rank_list_t = nil
+	var rl *C.d_rank_list_t = nil
+
+	if queryMask.HasOption(daos.PoolQueryOptionEnabledEngines) || queryMask.HasOption(daos.PoolQueryOptionDisabledEngines) {
+		rlPtr = &rl
 	}
-	ranks := uintptr(unsafe.Pointer(ranklist.rl_ranks))
-	const size = unsafe.Sizeof(uint32(0))
-	rankset := "["
-	for i := 0; i < int(ranklist.rl_nr); i++ {
-		if i > 0 {
-			rankset += ","
+
+	cPoolInfo := C.daos_pool_info_t{
+		pi_bits: C.uint64_t(queryMask),
+	}
+
+	rc := C.daos_pool_query(poolHdl, rlPtr, &cPoolInfo, nil, nil)
+	defer C.d_rank_list_free(rl)
+	if err := daosError(rc); err != nil {
+		return nil, err
+	}
+
+	poolInfo, err := convertPoolInfo(&cPoolInfo)
+	if err != nil {
+		return nil, err
+	}
+
+	if rlPtr != nil {
+		rs, err := rankSetFromC(rl)
+		if err != nil {
+			return nil, err
 		}
-		rankset += fmt.Sprint(*(*uint32)(unsafe.Pointer(ranks + uintptr(i)*size)))
+		if queryMask.HasOption(daos.PoolQueryOptionEnabledEngines) {
+			poolInfo.EnabledRanks = rs
+		}
+		if queryMask.HasOption(daos.PoolQueryOptionDisabledEngines) {
+			poolInfo.DisabledRanks = rs
+		}
 	}
-	rankset += "]"
-	return rankset
+
+	return poolInfo, nil
 }
 
 func (cmd *poolQueryCmd) Execute(_ []string) error {
@@ -297,42 +318,15 @@ func (cmd *poolQueryCmd) Execute(_ []string) error {
 		queryMask.SetOptions(daos.PoolQueryOptionDisabledEngines)
 	}
 
-	var rlPtr **C.d_rank_list_t = nil
-	var rl *C.d_rank_list_t = nil
-
-	if cmd.ShowEnabledRanks || cmd.ShowDisabledRanks {
-		rlPtr = &rl
-	}
-
 	cleanup, err := cmd.resolveAndConnect(C.DAOS_PC_RO, nil)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	cPoolInfo := C.daos_pool_info_t{
-		pi_bits: C.uint64_t(queryMask),
-	}
-
-	rc := C.daos_pool_query(cmd.cPoolHandle, rlPtr, &cPoolInfo, nil, nil)
-	defer C.d_rank_list_free(rl)
-	if err := daosError(rc); err != nil {
-		return errors.Wrapf(err,
-			"failed to query pool %s", cmd.poolUUID)
-	}
-
-	poolInfo, err := convertPoolInfo(&cPoolInfo)
+	poolInfo, err := queryPool(cmd.cPoolHandle, queryMask)
 	if err != nil {
-		return err
-	}
-
-	if rlPtr != nil {
-		if cmd.ShowEnabledRanks {
-			poolInfo.EnabledRanks = ranklist.MustCreateRankSet(generateRankSet(rl))
-		}
-		if cmd.ShowDisabledRanks {
-			poolInfo.DisabledRanks = ranklist.MustCreateRankSet(generateRankSet(rl))
-		}
+		return errors.Wrapf(err, "failed to query pool %q", cmd.PoolID())
 	}
 
 	if cmd.JSONOutputEnabled() {
@@ -604,7 +598,7 @@ func (cmd *poolAutoTestCmd) Execute(_ []string) error {
 	return nil
 }
 
-func getPoolList(log logging.Logger, queryEnabled bool) ([]*daos.PoolInfo, error) {
+func getPoolList(log logging.Logger, sysName string, queryEnabled bool) ([]*daos.PoolInfo, error) {
 	var rc C.int
 	bufSize := C.size_t(0)
 
@@ -619,6 +613,12 @@ func getPoolList(log logging.Logger, queryEnabled bool) ([]*daos.PoolInfo, error
 		return nil, nil
 	}
 
+	var cSysName *C.char
+	if sysName != "" {
+		cSysName := C.CString(sysName)
+		defer freeString(cSysName)
+	}
+
 	// Now, we actually fetch the pools into the buffer that we've created.
 	cPools := make([]C.daos_mgmt_pool_info_t, bufSize)
 	rc = C.daos_mgmt_list_pools(nil, &bufSize, &cPools[0], nil)
@@ -627,26 +627,53 @@ func getPoolList(log logging.Logger, queryEnabled bool) ([]*daos.PoolInfo, error
 	}
 	pools := make([]*daos.PoolInfo, 0, bufSize)
 	for i := 0; i < int(bufSize); i++ {
-		poolUUID, err := uuidFromC(cPools[i].mgpi_uuid)
+		cPool := &cPools[i]
+
+		svcRanks, err := rankSetFromC(cPool.mgpi_svc)
 		if err != nil {
 			return nil, err
 		}
-		svcRanks, err := rankSetFromC(cPools[i].mgpi_svc)
-		if err != nil {
-			return nil, err
-		}
+		poolLabel := C.GoString(cPool.mgpi_label)
 
-		// Populate the basic info.
-		pool := &daos.PoolInfo{
-			UUID:            poolUUID,
-			Label:           C.GoString(cPools[i].mgpi_label),
-			ServiceReplicas: svcRanks.Ranks(),
-			State:           daos.PoolServiceStateReady,
-		}
-
+		var pool *daos.PoolInfo
 		if queryEnabled {
-			// TODO: rework query logic to be callable standalone.
+			var poolInfo C.daos_pool_info_t
+			var poolHandle C.daos_handle_t
+			if err := daosError(C.daos_pool_connect(cPool.mgpi_label, cSysName, C.DAOS_PC_RO,
+				&poolHandle, &poolInfo, nil)); err != nil {
+				log.Errorf("failed to connect to pool %q: %s", poolLabel, err)
+				continue
+			}
+
+			var qErr error
+			pool, qErr = queryPool(poolHandle, daos.DefaultPoolQueryMask)
+			if qErr != nil {
+				log.Errorf("failed to query pool %q: %s", poolLabel, qErr)
+			}
+			pool.Label = poolLabel
+			pool.ServiceReplicas = svcRanks.Ranks()
+
+			if err := daosError(C.daos_pool_disconnect(poolHandle, nil)); err != nil {
+				log.Errorf("failed to disconnect from pool %q: %s", poolLabel, err)
+			}
+			if qErr != nil {
+				continue
+			}
+		} else {
+			// Just populate the basic info.
+			poolUUID, err := uuidFromC(cPool.mgpi_uuid)
+			if err != nil {
+				return nil, err
+			}
+
+			pool = &daos.PoolInfo{
+				UUID:            poolUUID,
+				Label:           poolLabel,
+				ServiceReplicas: svcRanks.Ranks(),
+				State:           daos.PoolServiceStateReady,
+			}
 		}
+
 		pools = append(pools, pool)
 	}
 
@@ -656,12 +683,13 @@ func getPoolList(log logging.Logger, queryEnabled bool) ([]*daos.PoolInfo, error
 
 type poolListCmd struct {
 	daosCmd
-	Verbose bool `short:"v" long:"verbose" description:"Add pool UUIDs and service replica lists to display"`
-	NoQuery bool `short:"n" long:"no-query" description:"Disable query of listed pools"`
+	SysName string `long:"sys-name" short:"G" description:"DAOS system name"`
+	Verbose bool   `short:"v" long:"verbose" description:"Add pool UUIDs and service replica lists to display"`
+	NoQuery bool   `short:"n" long:"no-query" description:"Disable query of listed pools"`
 }
 
 func (cmd *poolListCmd) Execute(_ []string) error {
-	pools, err := getPoolList(cmd.Logger, !cmd.NoQuery)
+	pools, err := getPoolList(cmd.Logger, cmd.SysName, !cmd.NoQuery)
 	if err != nil {
 		return err
 	}

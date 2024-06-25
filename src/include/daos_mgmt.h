@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -79,6 +79,18 @@ typedef struct {
 int
 daos_pool_stop_svc(daos_handle_t poh, daos_event_t *ev);
 
+/**
+ * List the pools to which the requesting user has access.
+ *
+ * \param[in] 	  group		Name of DAOS system managing the pool.
+ * \param[in,out] npools	[in] Pool array size. [out] If pools is NULL,
+ * 				only the number of pools is retrieved.
+ * \param[out]    pools		Array of \a n pool info structs. If NULL,
+ * 				only the number of pools is retrieved.
+ * \param[in] 	  ev		Completion event, it is optional and can be
+ * 				NULL. The function will run in blocking mode if
+ * 				\a ev is NULL.
+ */
 int
 daos_mgmt_list_pools(const char *group, daos_size_t *npools, daos_mgmt_pool_info_t *pools,
 		     daos_event_t *ev);
