@@ -55,4 +55,5 @@ ior_wo_rf:
   dfs_oclass: SX
 ior_with_ec:
   <<: *ior_base
-  dfs_oclass: EC_16P2GX
+  dfs_oclass: EC_2P2GX  # CI
+  # dfs_oclass: EC_16P2GX  # Aurora
