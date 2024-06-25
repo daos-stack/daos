@@ -633,13 +633,21 @@ func getPoolList(log logging.Logger, sysName string, queryEnabled bool) ([]*daos
 		if err != nil {
 			return nil, err
 		}
+		poolUUID, err := uuidFromC(cPool.mgpi_uuid)
+		if err != nil {
+			return nil, err
+		}
+
 		poolLabel := C.GoString(cPool.mgpi_label)
 
 		var pool *daos.PoolInfo
 		if queryEnabled {
 			var poolInfo C.daos_pool_info_t
 			var poolHandle C.daos_handle_t
-			if err := daosError(C.daos_pool_connect(cPool.mgpi_label, cSysName, C.DAOS_PC_RO,
+			cPoolUUID := C.CString(poolUUID.String())
+			defer freeString(cPoolUUID)
+
+			if err := daosError(C.daos_pool_connect(cPoolUUID, cSysName, C.DAOS_PC_RO,
 				&poolHandle, &poolInfo, nil)); err != nil {
 				log.Errorf("failed to connect to pool %q: %s", poolLabel, err)
 				continue
@@ -661,11 +669,6 @@ func getPoolList(log logging.Logger, sysName string, queryEnabled bool) ([]*daos
 			}
 		} else {
 			// Just populate the basic info.
-			poolUUID, err := uuidFromC(cPool.mgpi_uuid)
-			if err != nil {
-				return nil, err
-			}
-
 			pool = &daos.PoolInfo{
 				UUID:            poolUUID,
 				Label:           poolLabel,
