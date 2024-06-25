@@ -58,7 +58,7 @@ jobs:
       - name: Generate trivy report file extension
         id: gen_extension
         run: |
-          EXTENSION=$(echo "${{ matrix.branch }}" | sed -e 's/release\///' | sed -e's/\//_/' )
+          EXTENSION=$(echo "${{ matrix.branch }}" | sed -e 's/release\///' -e's/\//_/' )
           echo "EXTENSION=$EXTENSION" >> $GITHUB_OUTPUT
 
       - name: Generate trivy report
@@ -71,13 +71,13 @@ jobs:
       - name: Print trivy report
         run: cat trivy-report-daos.${{ steps.gen_extension.outputs.EXTENSION }}.txt
 
-      - name: Prepare the report to be uploaded to the GitHub artifactory
+      - name: Prepare the report to be uploaded to the GitHub artifact store
         run: |
           mkdir report
           cp trivy-report-daos.${{ steps.gen_extension.outputs.EXTENSION }}.txt report
           cp utils/trivy/.trivyignore report/trivyignore.txt
 
-      - name: Upload the report to the GitHub artifactory
+      - name: Upload the report to the GitHub artifact store
         uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808  # v4.3.3
         env:
           EXTENSION: ${{ steps.gen_extension.outputs.EXTENSION }}
