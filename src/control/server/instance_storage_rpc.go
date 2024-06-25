@@ -170,11 +170,11 @@ func addLinkInfoToHealthStats(ctx context.Context, pciCfg string, health *ctlpb.
 	sb := new(strings.Builder)
 	formatBytestring(pciCfg, sb)
 
-	// This dummy preamble is expected by the library when reading config from file (lspci "-F"
-	// option). The actual address is irrelevant because only the config content is being used.
-	// Without an address and device values in the preamble, the library will refuse to parse
-	// the file content.
-	cfgBytes := append([]byte("01:00.0 device #1\n"), []byte(sb.String())...)
+	// Prefix config bytes with dummy preamble which is expected by the library when reading
+	// config from file (lspci "-F" option). The actual address is irrelevant because only the
+	// config content is being used. Without an address and device values in the preamble, the
+	// library will refuse to parse the file content.
+	cfgBytes := append([]byte(pciutils.DummyPreamble), []byte(sb.String())...)
 
 	pciDev, err := pciutils.PCIeCapsFromConfig(ctx, cfgBytes)
 	if err != nil {

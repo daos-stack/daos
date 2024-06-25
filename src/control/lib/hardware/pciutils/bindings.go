@@ -22,9 +22,19 @@ import (
 */
 import "C"
 
+const giga = 1e+9
+
+// DummyPreamble provides a prefix expected by library when reading a configuration dump. The actual
+// address is irrelevant because only the config content is being used. Without an address and
+// device values in the preamble, the library will refuse to parse the config dump file content.
+var DummyPreamble = []byte("01:00.0 device #1\n")
+
+// Error values for common invalid situations.
 var (
-	ErrNoDevice     = errors.New("no pci device scanned")
-	ErrMultiDevices = errors.New("want single device config got multiple")
+	ErrNoDevice         = errors.New("no pci device scanned")
+	ErrMultiDevices     = errors.New("want single device config got multiple")
+	ErrCfgNotTerminated = errors.New("device config content not new-line terminated")
+	ErrCfgMissing       = errors.New("incomplete device config")
 )
 
 type api struct{}
@@ -49,7 +59,7 @@ func speedToFloat(speed uint16) float32 {
 		return 0
 	}
 
-	return mant * 1e+9
+	return mant * giga
 }
 
 // PCIeCapsFromConfig takes a PCIe config space dump (of the format output by lspci -xxx) in the
@@ -58,11 +68,18 @@ func speedToFloat(speed uint16) float32 {
 // slice is written to a temporary file that is read on pci_scan_bus(). The device that has been
 // populated on scan is used to populate the output PCIDevice field values.
 func (api *api) PCIeCapsFromConfig(cfgBytes []byte, dev *hardware.PCIDevice) error {
-	if len(cfgBytes) == 0 {
+	lenCfg := len(cfgBytes)
+	if lenCfg == 0 {
 		return errors.New("empty config")
 	}
 	if dev == nil {
 		return errors.New("nil device reference")
+	}
+	if cfgBytes[lenCfg-1] != '\n' {
+		return ErrCfgNotTerminated
+	}
+	if lenCfg <= len(DummyPreamble) {
+		return ErrCfgMissing
 	}
 
 	access := C.pci_alloc()
