@@ -1,3 +1,9 @@
+//
+// (C) Copyright 2024 Intel Corporation.
+//
+// SPDX-License-Identifier: BSD-2-Clause-Patent
+//
+
 package pciutils_test
 
 import (
@@ -5,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
@@ -12,13 +19,8 @@ import (
 )
 
 func TestProvider(t *testing.T) {
-	ctx, err := pciutils.Init(test.Context(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer pciutils.Fini(ctx)
-
-	cfgBytes := []byte(`00: 86 80 53 09 06 04 10 00 01 02 08 01 00 00 00 00
+	mockPreamble := []byte(`01:00.0 device #1`)
+	mockBytes := []byte(`00: 86 80 53 09 06 04 10 00 01 02 08 01 00 00 00 00
 10: 04 00 00 bc 00 00 00 00 00 00 00 00 00 00 00 00
 20: 00 00 00 00 00 00 00 00 00 00 00 00 90 15 a8 00
 30: 00 00 00 00 40 00 00 00 00 00 00 00 00 01 00 00
@@ -34,36 +36,72 @@ c0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-100: 01 00 01 15 00 00 00 00 00 00 00 00 30 20 06 00`)
+100: 01 00 01 15 00 00 00 00 00 00 00 00 30 20 06 00
+`)
 
-	dev, err := pciutils.PCIeCapsFromConfig(ctx, cfgBytes)
-	if err != nil {
-		t.Fatal(err)
-	}
+	for name, tc := range map[string]struct {
+		cfgBytes []byte
+		expDev   *hardware.PCIDevice
+		expErr   error
+	}{
+		"empty config": {
+			expErr: errors.New("empty config"),
+		},
+		"no preamble": {
+			cfgBytes: mockBytes,
+			expErr:   pciutils.ErrNoDevice,
+		},
+		"multiple devices input": {
+			cfgBytes: append(append(append(mockPreamble, mockBytes...),
+				[]byte("\n\n")...), append(mockPreamble, mockBytes...)...),
+			expErr: pciutils.ErrMultiDevices,
+		},
+		"success": {
+			cfgBytes: append(mockPreamble, mockBytes...),
+			expDev: &hardware.PCIDevice{
+				LinkMaxSpeed: 8e+9,
+				LinkMaxWidth: 4,
+				LinkNegSpeed: 8e+9,
+				LinkNegWidth: 4,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Log("initializing library")
 
-	expDev := &hardware.PCIDevice{
-		LinkMaxSpeed: 8e+9,
-		LinkMaxWidth: 4,
-		LinkNegSpeed: 8e+9,
-		LinkNegWidth: 4,
-	}
+			ctx, err := pciutils.Init(test.Context(t))
+			if err != nil {
+				t.Fatal(err)
+			}
 
-	if diff := cmp.Diff(expDev, dev); diff != "" {
-		t.Fatalf("(-want, +got)\n%s\n", diff)
-	}
+			t.Log("calling PCIeCapsFromConfig API")
 
-	// Try again with updated values for negotiated speed and width.
-	newCfgBytes := strings.Replace(string(cfgBytes), `70: 00 00 43`, `70: 00 00 82`, 1)
+			dev, err := pciutils.PCIeCapsFromConfig(ctx, tc.cfgBytes)
+			test.CmpErr(t, tc.expErr, err)
+			if err != nil {
+				return
+			}
 
-	dev, err = pciutils.PCIeCapsFromConfig(ctx, []byte(newCfgBytes))
-	if err != nil {
-		t.Fatal(err)
-	}
+			if diff := cmp.Diff(tc.expDev, dev); diff != "" {
+				t.Fatalf("(-want, +got)\n%s\n", diff)
+			}
 
-	expDev.LinkNegWidth = 8
-	expDev.LinkNegSpeed = 5e+9
+			// Try again with updated values for negotiated speed and width to verify
+			// multiple consecutive library calls.
+			newCfgBytes := strings.Replace(string(tc.cfgBytes), `70: 00 00 43`,
+				`70: 00 00 82`, 1)
 
-	if diff := cmp.Diff(expDev, dev); diff != "" {
-		t.Fatalf("2nd try: (-want +got)\n%s\n", diff)
+			dev, err = pciutils.PCIeCapsFromConfig(ctx, []byte(newCfgBytes))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			tc.expDev.LinkNegWidth = 8
+			tc.expDev.LinkNegSpeed = 5e+9
+
+			if diff := cmp.Diff(tc.expDev, dev); diff != "" {
+				t.Fatalf("2nd try: (-want +got)\n%s\n", diff)
+			}
+		})
 	}
 }

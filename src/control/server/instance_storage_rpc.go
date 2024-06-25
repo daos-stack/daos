@@ -170,7 +170,13 @@ func addLinkInfoToHealthStats(ctx context.Context, pciCfg string, health *ctlpb.
 	sb := new(strings.Builder)
 	formatBytestring(pciCfg, sb)
 
-	pciDev, err := pciutils.PCIeCapsFromConfig(ctx, []byte(sb.String()))
+	// This dummy preamble is expected by the library when reading config from file (lspci "-F"
+	// option). The actual address is irrelevant because only the config content is being used.
+	// Without an address and device values in the preamble, the library will refuse to parse
+	// the file content.
+	cfgBytes := append([]byte("01:00.0 device #1\n"), []byte(sb.String())...)
+
+	pciDev, err := pciutils.PCIeCapsFromConfig(ctx, cfgBytes)
 	if err != nil {
 		return err
 	}
@@ -221,7 +227,6 @@ func scanEngineBdevsOverDrpc(ctx context.Context, engine Engine, pbReq *ctlpb.Sc
 		if err != nil {
 			return nil, errors.Wrap(err, "pciutils init")
 		}
-		defer pciutils.Fini(ctx)
 	}
 
 	scanSmdResp, err := scanSmd(ctx, engine, &ctlpb.SmdDevReq{})
@@ -440,7 +445,6 @@ func smdQueryEngine(ctx context.Context, engine Engine, pbReq *ctlpb.SmdQueryReq
 		if err != nil {
 			return nil, errors.Wrap(err, "pciutils init")
 		}
-		defer pciutils.Fini(ctx)
 	}
 
 	scanSmdResp, err := scanSmd(ctx, engine, &ctlpb.SmdDevReq{})
