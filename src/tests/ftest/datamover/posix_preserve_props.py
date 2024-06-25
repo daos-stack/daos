@@ -9,6 +9,7 @@ import avocado
 from data_mover_test_base import DataMoverTestBase
 from duns_utils import format_path
 from pydaos.raw import DaosApiError
+from test_utils_container import get_existing_container
 
 
 class DmvrPreserveProps(DataMoverTestBase):
@@ -85,7 +86,7 @@ class DmvrPreserveProps(DataMoverTestBase):
             dst_path=format_path(pool1))
 
         cont2_label = self.parse_create_cont_label(result.stdout_text)
-        cont2 = self.get_cont(pool1, cont2_label)
+        cont2 = get_existing_container(self, pool1, cont2_label)
         cont2.type.update(cont1.type.value, "type")
         self.verify_cont(cont2, api, True, src_props)
 

@@ -31,6 +31,9 @@
 /* Standard max length of addresses e.g. URI, PCI */
 #define ADDR_STR_MAX_LEN 128
 
+/** DAOS system name (corresponds to crt group ID) */
+extern char             *daos_sysname;
+
 /** number of target (XS set) per engine */
 extern unsigned int	 dss_tgt_nr;
 
@@ -153,6 +156,7 @@ enum {
 	SCHED_REQ_FL_NO_DELAY	= (1 << 0),
 	SCHED_REQ_FL_PERIODIC	= (1 << 1),
 	SCHED_REQ_FL_NO_REJECT	= (1 << 2),
+	SCHED_REQ_FL_RESENT	= (1 << 3),
 };
 
 struct sched_req_attr {

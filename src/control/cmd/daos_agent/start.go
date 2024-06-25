@@ -73,14 +73,6 @@ func (cmd *startCmd) Execute(_ []string) error {
 	}
 	cmd.Debugf("created dRPC server: %s", time.Since(createDrpcStart))
 
-	hwprovInitStart := time.Now()
-	hwprovFini, err := hwprov.Init(cmd.Logger)
-	if err != nil {
-		return err
-	}
-	defer hwprovFini()
-	cmd.Debugf("initialized hardware providers: %s", time.Since(hwprovInitStart))
-
 	cacheStart := time.Now()
 	cache := NewInfoCache(ctx, cmd.Logger, cmd.ctlInvoker, cmd.cfg)
 	if cmd.attachInfoCacheDisabled() {
@@ -101,7 +93,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 
 	var clientMetricSource *promexp.ClientSource
 	if cmd.cfg.TelemetryExportEnabled() {
-		if clientMetricSource, err = promexp.NewClientSource(ctx); err != nil {
+		if ctx, clientMetricSource, err = promexp.NewClientSource(ctx); err != nil {
 			return errors.Wrap(err, "unable to create client metrics source")
 		}
 		telemetryStart := time.Now()
@@ -114,7 +106,11 @@ func (cmd *startCmd) Execute(_ []string) error {
 	}
 
 	drpcRegStart := time.Now()
-	drpcServer.RegisterRPCModule(NewSecurityModule(cmd.Logger, cmd.cfg.TransportConfig))
+	secCfg := &securityConfig{
+		transport:   cmd.cfg.TransportConfig,
+		credentials: cmd.cfg.CredentialConfig,
+	}
+	drpcServer.RegisterRPCModule(NewSecurityModule(cmd.Logger, secCfg))
 	mgmtMod := &mgmtModule{
 		log:           cmd.Logger,
 		sys:           cmd.cfg.SystemName,

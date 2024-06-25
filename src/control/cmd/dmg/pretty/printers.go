@@ -190,3 +190,21 @@ func UpdateErrorSummary(resp hostErrorsGetter, cmd string, out io.Writer, opts .
 
 	return nil
 }
+
+// PrintHostStorageSuccess displays a success message for the host set that completed the operation
+// successfully. To be used to print responses that are expected to contain one or zero successful
+// host sets.
+func PrintHostStorageSuccesses(desc string, hsm control.HostStorageMap, out io.Writer) error {
+	switch len(hsm) {
+	case 0:
+	case 1:
+		for _, hss := range hsm {
+			fmt.Fprintf(out, "%s successfully on the following %s: %s\n", desc,
+				common.Pluralise("host", hss.HostSet.Count()), hss.HostSet)
+		}
+	default:
+		return errors.New("unexpected number of keys in HostStorageMap")
+	}
+
+	return nil
+}

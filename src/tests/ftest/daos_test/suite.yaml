@@ -10,7 +10,7 @@ timeouts:
   test_daos_degraded_mode: 450
   test_daos_management: 110
   test_daos_pool: 180
-  test_daos_container: 600
+  test_daos_container: 700
   test_daos_epoch: 125
   test_daos_verify_consistency: 105
   test_daos_io: 290
@@ -176,8 +176,6 @@ daos_tests:
     test_daos_drain_simple: -s3
     test_daos_extend_simple: -s3
     test_daos_oid_allocator: -s5
-  scalable_endpoint:
-    test_daos_degraded_mode: true
   stopped_ranks:
     test_daos_degraded_mode: [5, 6, 7]
     test_daos_oid_allocator: [6, 7]

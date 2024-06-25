@@ -259,7 +259,7 @@ rdb_vos_tx_end(struct rdb *db, rdb_vos_tx_t vtx, int err)
 	int                rc;
 
 	rc = dtx_end(dth, NULL /* cont */, err);
-	if (rc != 0)
+	if (rc != err)
 		DL_ERROR(rc, DF_DB ": failed to %s VOS TX", DP_DB(db),
 			 err == 0 ? "commit" : "abort");
 

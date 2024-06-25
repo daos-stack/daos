@@ -60,7 +60,7 @@ bool                bio_vmd_enabled;
 unsigned int bio_spdk_subsys_timeout = 25000;	/* ms */
 /* How many blob unmap calls can be called in a row */
 unsigned int bio_spdk_max_unmap_cnt = 32;
-unsigned int bio_max_async_sz = (1UL << 20) /* 1MB */;
+unsigned int bio_max_async_sz = (1UL << 15) /* 32k */;
 
 struct bio_nvme_data {
 	ABT_mutex		 bd_mutex;
@@ -172,6 +172,9 @@ bio_spdk_env_init(void)
 		}
 	}
 
+	if (geteuid() != 0) {
+		opts.iova_mode = "va"; // workaround for spdk issue #2683 when running as non-root
+	}
 	rc = spdk_env_init(&opts);
 	if (rc != 0) {
 		rc = -DER_INVAL; /* spdk_env_init() returns -1 */

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2022-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -827,7 +827,13 @@ chk_engine_find_dangling_pm(struct chk_pool_rec *cpr, struct pool_map *map)
 			t_comp->co_flags |= PO_COMPF_CHK_DONE;
 		}
 
-		/* dangling parent domain. */
+		/*
+		 * dangling parent domain.
+		 *
+		 * NOTE: When we arrive here, all the pool membership information have already been
+		 *	 scanned via chk_engine_pool_mbs_one(). No service for this pool is started
+		 *	 on the rank (dangling parent domain). So it is safe to "DOWN{OUT}" it.
+		 */
 		rc = chk_engine_pm_dangling(cpr, map, r_comp,
 					    down ? PO_COMP_ST_DOWN : PO_COMP_ST_DOWNOUT);
 		if (rc != 0)
@@ -1672,6 +1678,7 @@ chk_engine_pool_ult(void *args)
 	int				 rc1 = 0;
 	int				 rc2 = 0;
 	bool				 update = true;
+	bool				 svc_ref = true;
 
 	D_ASSERT(svc != NULL);
 	D_ASSERT(cpr != NULL);
@@ -1821,27 +1828,42 @@ out:
 		}
 		chk_engine_pool_notify(cpr);
 		cbk->cb_time.ct_stop_time = time(NULL);
-		if (likely(update))
+		if (likely(update)) {
 			rc1 = chk_bk_update_pool(cbk, uuid_str);
+			if (unlikely(rc1 != 0))
+				goto log;
+		}
 
+		/*
+		 * The pool may has been marked as non-connectable before corruption, re-enable
+		 * it to allow new connection.
+		 *
+		 * NOTE: After chk_pool_restart_svc(), current rank may be not PS leader again.
+		 *	 To simplify the logic, we enable such flag on current PS leader before
+		 *	 chk_pool_restart_svc(). If some client tries to connect the pool after
+		 *	 that (mark connectable) but before chk_pool_restart_svc(), it will get
+		 *	 -DER_BUSY temporarily until the rank is ready for full pool service.
+		 */
 		if (cbk->cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_CHECKED &&
 		    !cpr->cpr_not_export_ps) {
-			chk_pool_start_svc(cpr, &rc2);
-			if (cpr->cpr_started && cpr->cpr_start_post)
-				/*
-				 * The pool may has been marked as non-connectable before
-				 * corruption, re-enable it to allow new connection.
-				 */
-				rc2 = ds_pool_mark_connectable(svc);
+			rc1 = ds_pool_mark_connectable(svc);
+			if (rc1 == 0) {
+				svc_ref = false;
+				ds_pool_svc_put_leader(svc);
+				rc2 = chk_pool_restart_svc(cpr);
+			}
 		}
 	}
 
+log:
 	D_CDEBUG(rc != 0 || rc1 != 0 || rc2 != 0, DLOG_ERR, DLOG_INFO,
 		 DF_ENGINE" on rank %u exit pool ULT for "DF_UUIDF" with %s stop: %d/%d/%d\n",
 		 DP_ENGINE(ins), dss_self_rank(), DP_UUID(cpr->cpr_uuid),
 		 cpr->cpr_stop ? "external" : "self", rc, rc1, rc2);
 
-	ds_pool_svc_put_leader(svc);
+	if (svc_ref)
+		ds_pool_svc_put_leader(svc);
+
 	cpr->cpr_done = 1;
 	if (ins->ci_sched_running && !ins->ci_sched_exiting &&
 	    (cbk->cb_pool_status != CHK__CHECK_POOL_STATUS__CPS_CHECKED || cpr->cpr_not_export_ps))
@@ -2928,12 +2950,12 @@ chk_engine_pool_start(uint64_t gen, uuid_t uuid, uint32_t phase, uint32_t flags)
 	cbk = &cpr->cpr_bk;
 	chk_pool_get(cpr);
 
-	rc = ds_pool_start(uuid);
+	rc = ds_pool_start(uuid, false);
 	if (rc != 0)
 		D_GOTO(put, rc = (rc == -DER_NONEXIST ? 1 : rc));
 
 	if (cbk->cb_phase < phase) {
-		cbk->cb_phase = cbk->cb_phase;
+		cbk->cb_phase = phase;
 		/* QUEST: How to estimate the left time? */
 		cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__CSP_DONE - cbk->cb_phase;
 		rc = chk_bk_update_pool(cbk, uuid_str);
@@ -3513,4 +3535,27 @@ void
 chk_engine_fini(void)
 {
 	chk_ins_fini(&chk_engine);
+}
+
+int
+chk_engine_pool_stop(uuid_t pool_uuid, bool destroy)
+{
+	uint32_t	status;
+	uint32_t	phase;
+	int		rc = 0;
+
+	if (destroy) {
+		status = CHK__CHECK_POOL_STATUS__CPS_CHECKED;
+		phase = CHK__CHECK_SCAN_PHASE__CSP_DONE;
+	} else {
+		status = CHK__CHECK_POOL_STATUS__CPS_PAUSED;
+		phase = CHK_INVAL_PHASE;
+	}
+
+	chk_pool_stop_one(chk_engine, pool_uuid, status, phase, &rc);
+
+	D_INFO(DF_ENGINE" stop pool "DF_UUIDF" with %s: "DF_RC"\n", DP_ENGINE(chk_engine),
+	       DP_UUID(pool_uuid), destroy ? "destroy" : "non-destroy", DP_RC(rc));
+
+	return rc;
 }

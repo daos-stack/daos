@@ -139,8 +139,8 @@ struct rdb_clue {
 
 /** Database storage methods */
 int rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t size,
-	       const d_rank_list_t *replicas, struct rdb_cbs *cbs, void *arg,
-	       struct rdb_storage **storagep);
+	       uint32_t vos_df_version, const d_rank_list_t *replicas, struct rdb_cbs *cbs,
+	       void *arg, struct rdb_storage **storagep);
 int rdb_open(const char *path, const uuid_t uuid, uint64_t caller_term, struct rdb_cbs *cbs,
 	     void *arg, struct rdb_storage **storagep);
 void rdb_close(struct rdb_storage *storage);
@@ -188,8 +188,7 @@ int rdb_campaign(struct rdb *db);
 bool rdb_is_leader(struct rdb *db, uint64_t *term);
 int rdb_get_leader(struct rdb *db, uint64_t *term, d_rank_t *rank);
 int rdb_get_ranks(struct rdb *db, d_rank_list_t **ranksp);
-int
-		rdb_get_size(struct rdb *db, size_t *sizep);
+int rdb_get_size(struct rdb *db, size_t *sizep);
 int rdb_add_replicas(struct rdb *db, d_rank_list_t *replicas);
 int rdb_remove_replicas(struct rdb *db, d_rank_list_t *replicas);
 int rdb_ping(struct rdb *db, uint64_t caller_term);
@@ -264,8 +263,7 @@ struct rdb_tx {
 /** TX methods */
 int rdb_tx_begin(struct rdb *db, uint64_t term, struct rdb_tx *tx);
 int rdb_tx_begin_local(struct rdb_storage *storage, struct rdb_tx *tx);
-void
-     rdb_tx_discard(struct rdb_tx *tx);
+void rdb_tx_discard(struct rdb_tx *tx);
 int rdb_tx_commit(struct rdb_tx *tx);
 void rdb_tx_end(struct rdb_tx *tx);
 

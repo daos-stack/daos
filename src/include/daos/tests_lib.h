@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -514,7 +514,7 @@ int dmg_storage_set_nvme_fault(const char *dmg_config_file,
  * Get NVMe Device health stats.
  *
  * \param[in] dmg_config_file	DMG config file
- * \param[in] host		Get device-health from the given host.
+ * \param[in] host		Get device health from the given host.
  * \param[in] uuid		UUID of the device.
  * \param[in,out] stats		[in] Health stats for which to get counter value.
  *				[out] Stats counter value.
@@ -572,6 +572,22 @@ int dmg_system_reint_rank(const char *dmg_config_file, d_rank_t rank);
  * \param rank	[IN]	Rank to be excluded.
  */
 int dmg_system_exclude_rank(const char *dmg_config_file, d_rank_t rank);
+
+/**
+ * Dynamically change engine logging.
+ *
+ * \param dmg_config_file.
+ *			[IN]	DMG config file.
+ * \param masks		[IN]	log_mask setting.
+ *				If NULL, reset to the value set in server configuration file.
+ * \param streams	[IN]	DD_MASK environment engine variable value.
+ * \param subsystems	[IN]	DD_SUBSYS environment engine variable value.
+ *				If NULL, reset to the value set in server configuration file.
+ *
+ */
+int
+dmg_server_set_logmasks(const char *dmg_config_file, const char *masks, const char *streams,
+			const char *subsystems);
 
 const char *daos_target_state_enum_to_str(int state);
 

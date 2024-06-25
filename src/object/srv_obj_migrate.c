@@ -593,9 +593,9 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, unsigned int version, unsig
 			ABT_mutex_lock(tls->mpt_init_mutex);
 			ABT_cond_wait(tls->mpt_init_cond, tls->mpt_init_mutex);
 			ABT_mutex_unlock(tls->mpt_init_mutex);
-			if (tls->mpt_init_failed) {
+			if (tls->mpt_init_err) {
 				migrate_pool_tls_put(tls);
-				rc = -DER_NOMEM;
+				rc = tls->mpt_init_err;
 			}
 		}
 
@@ -651,7 +651,9 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, unsigned int version, unsig
 	arg.svc_list = (d_rank_list_t *)entry->dpe_val_ptr;
 	arg.obj_ult_cnts = tls->mpt_obj_ult_cnts;
 	arg.dkey_ult_cnts = tls->mpt_dkey_ult_cnts;
-	rc = dss_task_collective(migrate_pool_tls_create_one, &arg, 0);
+	rc = ds_pool_task_collective(pool->sp_uuid,
+				     PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+				     migrate_pool_tls_create_one, &arg, 0);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create migrate tls: "DF_RC"\n",
 			DP_UUID(pool->sp_uuid), DP_RC(rc));
@@ -663,7 +665,7 @@ out:
 		tls->mpt_init_tls = 0;
 		/* Set init failed, so the waiting lookup(above) can be notified */
 		if (rc != 0)
-			tls->mpt_init_failed = 1;
+			tls->mpt_init_err = rc;
 		ABT_mutex_lock(tls->mpt_init_mutex);
 		ABT_cond_broadcast(tls->mpt_init_cond);
 		ABT_mutex_unlock(tls->mpt_init_mutex);
@@ -1150,7 +1152,7 @@ __migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 			ptr += size * iods[i].iod_size;
 			offset = recx->rx_idx;
 			size = recx->rx_nr;
-			parity_eph = ephs[i][j];
+			parity_eph = encode ? ephs[i][j] : mrone->mo_epoch;
 		}
 
 		if (size > 0)
@@ -1212,9 +1214,8 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 
 			update_eph = mrone->mo_iods_update_ephs_from_parity[i][j];
 			update_eph_p = &update_eph;
-			rc = __migrate_fetch_update_parity(mrone, oh, &iod, fetch_eph, &update_eph_p,
-							   mrone->mo_iods_num_from_parity, ds_cont,
-							   true);
+			rc = __migrate_fetch_update_parity(mrone, oh, &iod, fetch_eph,
+							   &update_eph_p, 1, ds_cont, true);
 			if (rc)
 				return rc;
 		}
@@ -1566,7 +1567,8 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 				fetch_eph = mrone->mo_iods_update_ephs_from_parity[i][j];
 			rc = __migrate_fetch_update_bulk(mrone, oh, &iod, 1, fetch_eph,
 						mrone->mo_iods_update_ephs_from_parity[i][j],
-						DIOF_EC_RECOV_FROM_PARITY, ds_cont);
+						DIOF_EC_RECOV_FROM_PARITY | DIOF_FOR_MIGRATION,
+						ds_cont);
 			if (rc != 0)
 				D_GOTO(out, rc);
 		}
@@ -1881,7 +1883,7 @@ enum {
 
 /* Check if there are enough resource for the migration to proceed. */
 static int
-migrate_system_enter(struct migrate_pool_tls *tls, int tgt_idx)
+migrate_system_enter(struct migrate_pool_tls *tls, int tgt_idx, bool *yielded)
 {
 	uint32_t tgt_cnt = 0;
 	int	 rc = 0;
@@ -1895,6 +1897,7 @@ migrate_system_enter(struct migrate_pool_tls *tls, int tgt_idx)
 	while ((tls->mpt_inflight_max_ult / dss_tgt_nr) <= tgt_cnt) {
 		D_DEBUG(DB_REBUILD, "tgt%d:%u max %u\n",
 			tgt_idx, tgt_cnt, tls->mpt_inflight_max_ult / dss_tgt_nr);
+		*yielded = true;
 		ABT_mutex_lock(tls->mpt_inflight_mutex);
 		ABT_cond_wait(tls->mpt_inflight_cond, tls->mpt_inflight_mutex);
 		ABT_mutex_unlock(tls->mpt_inflight_mutex);
@@ -3391,6 +3394,8 @@ migrate_obj_iter_cb(daos_handle_t ih, d_iov_t *key_iov, d_iov_t *val_iov, void *
 	daos_epoch_t			punched_epoch = obj_val->punched_epoch;
 	unsigned int			tgt_idx = obj_val->tgt_idx;
 	unsigned int			shard = obj_val->shard;
+	d_iov_t				tmp_iov;
+	bool				yielded = false;
 	int				rc;
 
 	if (arg->pool_tls->mpt_fini)
@@ -3400,7 +3405,7 @@ migrate_obj_iter_cb(daos_handle_t ih, d_iov_t *key_iov, d_iov_t *val_iov, void *
 		" eph "DF_U64" start\n", DP_UUID(arg->cont_uuid), DP_UOID(*oid),
 		ih.cookie, epoch);
 
-	rc = migrate_system_enter(arg->pool_tls, tgt_idx);
+	rc = migrate_system_enter(arg->pool_tls, tgt_idx, &yielded);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID" enter migrate failed.", DP_UUID(arg->cont_uuid));
 		return rc;
@@ -3412,6 +3417,17 @@ migrate_obj_iter_cb(daos_handle_t ih, d_iov_t *key_iov, d_iov_t *val_iov, void *
 			DP_UOID(*oid), DP_RC(rc));
 		migrate_system_exit(arg->pool_tls, tgt_idx);
 		return rc;
+	}
+
+	/* migrate_system_enter possibly yielded the ULT, let's re-probe before delete  */
+	if (yielded) {
+		d_iov_set(&tmp_iov, oid, sizeof(*oid));
+		rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, DAOS_INTENT_MIGRATION, &tmp_iov, NULL);
+		if (rc) {
+			D_ASSERT(rc != -DER_NONEXIST);
+			D_ERROR("obj "DF_UOID" probe failed: "DF_RC"\n", DP_UOID(*oid), DP_RC(rc));
+			return rc;
+		}
 	}
 
 	rc = dbtree_iter_delete(ih, NULL);
