@@ -50,11 +50,12 @@ jobs:
 
       # generate trivy report only if no errors detected
       - name: Generate trivy report file extension
+        # github.base_ref-based for PR and github.ref_name-based for schedule/workflow_dispatch
         id: gen_extension
         run: |
-          EXTENSION=$(echo "${{ github.ref }}" | sed -e 's/release\///' -e's/\//_/' )
-          if [ -z "${VAR}" ]; then
-            EXTENSION=$(echo "${{ github.base_ref }}" | sed -e 's/release\///' -e's/\//_/' )
+          EXTENSION=$(echo "${{ github.base_ref }}" | sed -e 's/release\///' -e's/\//_/' )
+          if [ -z "${EXTENSION}" ]; then
+            EXTENSION=$(echo "${{ github.ref_name }}" | sed -e 's/release\///' -e's/\//_/' )
           fi
           echo "EXTENSION=$EXTENSION" >> $GITHUB_OUTPUT
 
