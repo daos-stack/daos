@@ -449,10 +449,10 @@ func smdQueryEngine(ctx context.Context, engine Engine, pbReq *ctlpb.SmdQueryReq
 
 	scanSmdResp, err := scanSmd(ctx, engine, &ctlpb.SmdDevReq{})
 	if err != nil {
-		return nil, errors.Wrapf(err, "rank %d; scan smd", engineRank)
+		return nil, errors.Wrapf(err, "rank %d: scan smd", engineRank)
 	}
 	if scanSmdResp == nil {
-		return nil, errors.New("nil smd scan resp")
+		return nil, errors.Errorf("rank %d: nil scan smd response", engineRank)
 	}
 
 	rResp := new(ctlpb.SmdQueryResp_RankResp)

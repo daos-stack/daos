@@ -219,10 +219,25 @@ struct  _Ctl__BioHealthResp
   /*
    * PCIe config space link stats
    */
+  /*
+   * port identifier
+   */
   uint32_t           link_port_id;
+  /*
+   * maximum speed in transactions per second
+   */
   float              link_max_speed;
+  /*
+   * maximum width (number of lanes)
+   */
   uint32_t           link_max_width;
+  /*
+   * negotiated speed in transactions per second
+   */
   float              link_neg_speed;
+  /*
+   * negotiated width (number of lanes)
+   */
   uint32_t           link_neg_width;
 };
 #define CTL__BIO_HEALTH_RESP__INIT                                                                 \

@@ -74,11 +74,11 @@ message BioHealthResp {
 	uint64 meta_wal_size = 47;		// metadata WAL blob size
 	uint64 rdb_wal_size = 48;		// RDB WAL blob size
 	// PCIe config space link stats
-	uint32 link_port_id   = 49;
-	float  link_max_speed = 50;
-	uint32 link_max_width = 51;
-	float  link_neg_speed = 52;
-	uint32 link_neg_width = 53;
+	uint32 link_port_id   = 49; // port identifier
+	float  link_max_speed = 50; // maximum speed in transactions per second
+	uint32 link_max_width = 51; // maximum width (number of lanes)
+	float  link_neg_speed = 52; // negotiated speed in transactions per second
+	uint32 link_neg_width = 53; // negotiated width (number of lanes)
 }
 
 enum NvmeDevState {

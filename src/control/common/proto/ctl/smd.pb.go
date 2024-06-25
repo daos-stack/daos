@@ -306,11 +306,11 @@ type BioHealthResp struct {
 	MetaWalSize uint64 `protobuf:"varint,47,opt,name=meta_wal_size,json=metaWalSize,proto3" json:"meta_wal_size,omitempty"` // metadata WAL blob size
 	RdbWalSize  uint64 `protobuf:"varint,48,opt,name=rdb_wal_size,json=rdbWalSize,proto3" json:"rdb_wal_size,omitempty"`    // RDB WAL blob size
 	// PCIe config space link stats
-	LinkPortId   uint32  `protobuf:"varint,49,opt,name=link_port_id,json=linkPortId,proto3" json:"link_port_id,omitempty"`
-	LinkMaxSpeed float32 `protobuf:"fixed32,50,opt,name=link_max_speed,json=linkMaxSpeed,proto3" json:"link_max_speed,omitempty"`
-	LinkMaxWidth uint32  `protobuf:"varint,51,opt,name=link_max_width,json=linkMaxWidth,proto3" json:"link_max_width,omitempty"`
-	LinkNegSpeed float32 `protobuf:"fixed32,52,opt,name=link_neg_speed,json=linkNegSpeed,proto3" json:"link_neg_speed,omitempty"`
-	LinkNegWidth uint32  `protobuf:"varint,53,opt,name=link_neg_width,json=linkNegWidth,proto3" json:"link_neg_width,omitempty"`
+	LinkPortId   uint32  `protobuf:"varint,49,opt,name=link_port_id,json=linkPortId,proto3" json:"link_port_id,omitempty"`        // port identifier
+	LinkMaxSpeed float32 `protobuf:"fixed32,50,opt,name=link_max_speed,json=linkMaxSpeed,proto3" json:"link_max_speed,omitempty"` // maximum speed in transactions per second
+	LinkMaxWidth uint32  `protobuf:"varint,51,opt,name=link_max_width,json=linkMaxWidth,proto3" json:"link_max_width,omitempty"`  // maximum width (number of lanes)
+	LinkNegSpeed float32 `protobuf:"fixed32,52,opt,name=link_neg_speed,json=linkNegSpeed,proto3" json:"link_neg_speed,omitempty"` // negotiated speed in transactions per second
+	LinkNegWidth uint32  `protobuf:"varint,53,opt,name=link_neg_width,json=linkNegWidth,proto3" json:"link_neg_width,omitempty"`  // negotiated width (number of lanes)
 }
 
 func (x *BioHealthResp) Reset() {
