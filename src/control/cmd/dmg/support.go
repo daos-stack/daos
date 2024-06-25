@@ -158,6 +158,9 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	params.LogFunction = support.CollectDmgCmdEnum
 	params.TargetFolder = cmd.TargetFolder
 	params.LogCmd = "dmg system query"
+	if cmd.cfgCmd.config.TransportConfig.AllowInsecure {
+		params.LogCmd += " -i"
+	}
 
 	err = support.CollectSupportLog(cmd.Logger, params)
 
@@ -171,15 +174,16 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 			cmd.Debugf("Log Function %d -- Log Collect Cmd %s ", logFunc, logCmd)
 			ctx := cmd.MustLogCtx()
 			req := &control.CollectLogReq{
-				TargetFolder: cmd.TargetFolder,
-				ExtraLogsDir: cmd.ExtraLogsDir,
-				LogFunction:  logFunc,
-				LogCmd:       logCmd,
-				LogStartDate: cmd.LogStartDate,
-				LogEndDate:   cmd.LogEndDate,
-				LogStartTime: cmd.LogStartTime,
-				LogEndTime:   cmd.LogEndTime,
-				StopOnError:  cmd.StopOnError,
+				TargetFolder:          cmd.TargetFolder,
+				ExtraLogsDir:          cmd.ExtraLogsDir,
+				LogFunction:           logFunc,
+				LogCmd:                logCmd,
+				LogStartDate:          cmd.LogStartDate,
+				LogEndDate:            cmd.LogEndDate,
+				LogStartTime:          cmd.LogStartTime,
+				LogEndTime:            cmd.LogEndTime,
+				StopOnError:           cmd.StopOnError,
+				ExtraArgsCollectRsync: cmd.ExtraArgsCollectRsync,
 			}
 			req.SetHostList(cmd.hostlist)
 
@@ -222,6 +226,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 		fmt.Printf(progress.Display())
 	}
 
+	params.ExtraArgsCollectRsync = cmd.ExtraArgsCollectRsync
 	// R sync the logs from servers
 	rsyncerr := cmd.rsyncLog()
 	fmt.Printf(progress.Display())

@@ -84,6 +84,9 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	params.LogEndDate = cmd.LogEndDate
 	params.LogStartTime = cmd.LogStartTime
 	params.LogEndTime = cmd.LogEndTime
+	params.ExtraArgsCollectRsync = cmd.ExtraArgsCollectRsync
+	params.FileTransferExec = cmd.config.SupportConfig.FileTransferExec
+
 	for logFunc, logCmdSet := range LogCollection {
 		for _, logCmd := range logCmdSet {
 			cmd.Debugf("Log Function Enum = %d -- Log Collect Cmd = %s ", logFunc, logCmd)

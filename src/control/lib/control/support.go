@@ -18,17 +18,18 @@ type (
 	// CollectLogReq contains the parameters for a collect-log request.
 	CollectLogReq struct {
 		unaryRequest
-		TargetFolder string
-		AdminNode    string
-		ExtraLogsDir string
-		JsonOutput   bool
-		LogFunction  int32
-		LogCmd       string
-		LogStartDate string
-		LogEndDate   string
-		LogStartTime string
-		LogEndTime   string
-		StopOnError  bool
+		TargetFolder          string
+		AdminNode             string
+		ExtraLogsDir          string
+		JsonOutput            bool
+		LogFunction           int32
+		LogCmd                string
+		LogStartDate          string
+		LogEndDate            string
+		LogStartTime          string
+		LogEndTime            string
+		StopOnError           bool
+		ExtraArgsCollectRsync string
 	}
 
 	// CollectLogResp contains the results of a collect-log
@@ -45,17 +46,18 @@ type (
 func CollectLog(ctx context.Context, rpcClient UnaryInvoker, req *CollectLogReq) (*CollectLogResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return ctlpb.NewCtlSvcClient(conn).CollectLog(ctx, &ctlpb.CollectLogReq{
-			TargetFolder: req.TargetFolder,
-			AdminNode:    req.AdminNode,
-			ExtraLogsDir: req.ExtraLogsDir,
-			JsonOutput:   req.JsonOutput,
-			LogFunction:  req.LogFunction,
-			LogCmd:       req.LogCmd,
-			LogStartDate: req.LogStartDate,
-			LogEndDate:   req.LogEndDate,
-			LogStartTime: req.LogStartTime,
-			LogEndTime:   req.LogEndTime,
-			StopOnError:  req.StopOnError,
+			TargetFolder:          req.TargetFolder,
+			AdminNode:             req.AdminNode,
+			ExtraLogsDir:          req.ExtraLogsDir,
+			JsonOutput:            req.JsonOutput,
+			LogFunction:           req.LogFunction,
+			LogCmd:                req.LogCmd,
+			LogStartDate:          req.LogStartDate,
+			LogEndDate:            req.LogEndDate,
+			LogStartTime:          req.LogStartTime,
+			LogEndTime:            req.LogEndTime,
+			StopOnError:           req.StopOnError,
+			ExtraArgsCollectRsync: req.ExtraArgsCollectRsync,
 		})
 	})
 

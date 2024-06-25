@@ -7,6 +7,7 @@
 package support
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -364,6 +365,48 @@ func TestSupport_rsyncLog(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			rsLog.TargetFolder = tc.targetFolder
 			rsLog.AdminNode = tc.AdminNode
+			gotErr := rsyncLog(log, rsLog)
+			test.CmpErr(t, tc.expErr, gotErr)
+		})
+	}
+}
+
+func TestSupport_rsyncAlternateCopy(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+	targetTestDir, targetCleanup := test.CreateTestDir(t)
+	defer targetCleanup()
+
+	rsLog := CollectLogsParams{}
+
+	// Get the current PATH environment variable.
+	oldPathEnv := os.Getenv("PATH")
+	defer os.Setenv("PATH", oldPathEnv)
+	if err := os.Setenv("PATH", fmt.Sprintf("%s:%s", oldPathEnv, targetTestDir)); err != nil {
+		t.Fatal(err)
+	}
+
+	binaryPath := filepath.Join(targetTestDir, "daos_alt_rsync")
+	if err := os.WriteFile(binaryPath, []byte("#!/bin/bash\necho \"Hello, world!\"\n"), 0755); err != nil {
+		t.Fatalf("Failed to create custom binary: %v", err)
+	}
+
+	rsLog.FileTransferExec = binaryPath
+	for name, tc := range map[string]struct {
+		fileTransferExec string
+		expErr           error
+	}{
+		"valid path": {
+			fileTransferExec: binaryPath,
+			expErr:           nil,
+		},
+		"non existent binary": {
+			fileTransferExec: "foo",
+			expErr:           errors.New("Error running command foo"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			rsLog.FileTransferExec = tc.fileTransferExec
 			gotErr := rsyncLog(log, rsLog)
 			test.CmpErr(t, tc.expErr, gotErr)
 		})
