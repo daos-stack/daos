@@ -24,19 +24,20 @@
 #define DF_POOL_DIR "%s/tgt_%d/scrubber"
 #define DP_POOL_DIR(ctx) (ctx)->sc_pool->sp_path, (ctx)->sc_dmi->dmi_tgt_id
 
-#define M_CSUM_COUNTER "csums/current"
-#define M_CSUM_COUNTER_TOTAL "csums/total"
-#define M_CSUM_COUNTER_PREV "csums/prev"
-#define M_BYTES_SCRUBBED "bytes_scrubbed/current"
-#define M_BYTES_SCRUBBED_TOTAL "bytes_scrubbed/total"
-#define M_BYTES_SCRUBBED_PREV "bytes_scrubbed/prev"
-#define M_CSUM_CORRUPTION "corruption/current"
-#define M_CSUM_CORRUPTION_TOTAL "corruption/total"
-#define M_STARTED "scrubber_started"
-#define M_LAST_DURATION "prev_duration"
+#define M_CSUM_COUNTER		"csums/current"
+#define M_CSUM_COUNTER_TOTAL	"csums/total"
+#define M_CSUM_COUNTER_PREV	"csums/prev"
+#define M_BYTES_SCRUBBED	"bytes_scrubbed/current"
+#define M_BYTES_SCRUBBED_TOTAL	"bytes_scrubbed/total"
+#define M_BYTES_SCRUBBED_PREV	"bytes_scrubbed/prev"
+#define M_CSUM_CORRUPTION	"corruption/current"
+#define M_CSUM_CORRUPTION_TOTAL	"corruption/total"
+#define M_READ_ERROR_TOTAL	"read_error_total"
+#define M_STARTED		"scrubber_started"
+#define M_LAST_DURATION		"prev_duration"
 
 /*
- * DAOS_CSUM_SCRUB_DISABLED can be set in the server config to disable the
+ * DAOS_SCRUB_DISABLED can be set in the server config to disable the
  * scrubbing ULT completely for the engine.
  */
 static inline bool
@@ -44,7 +45,7 @@ scrubbing_is_enabled()
 {
 	bool result = false;
 
-	d_getenv_bool("DAOS_CSUM_SCRUB_DISABLED", &result);
+	d_getenv_bool("DAOS_SCRUB_DISABLED", &result);
 	return !result;
 }
 
@@ -149,8 +150,6 @@ sc_add_pool_metrics(struct scrub_ctx *ctx)
 	if (rc)
 		D_WARN("Failed to create scm_next_tree_scrub metric: "DF_RC"\n", DP_RC(rc));
 
-
-
 	rc = d_tm_add_metric(&ctx->sc_metrics.scm_last_duration,
 			     D_TM_DURATION,
 			     "The duration the previous tree scrub took", "ms",
@@ -213,6 +212,15 @@ sc_add_pool_metrics(struct scrub_ctx *ctx)
 					   "the pool was created)",
 			     NULL,
 			     DF_POOL_DIR"/"M_CSUM_CORRUPTION_TOTAL,
+			     DP_POOL_DIR(ctx));
+	if (rc)
+		D_WARN("Failed to create scm_corruption_total metric: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&ctx->sc_metrics.scm_read_error_total,
+			     D_TM_COUNTER, "Total number of read media errors hit (since "
+					   "the pool was created)",
+			     NULL,
+			     DF_POOL_DIR"/"M_READ_ERROR_TOTAL,
 			     DP_POOL_DIR(ctx));
 	if (rc)
 		D_WARN("Failed to create scm_corruption_total metric: "DF_RC"\n", DP_RC(rc));
@@ -370,12 +378,12 @@ ds_start_scrubbing_ult(struct ds_pool_child *child)
 
 	/** Don't even create the ULT if scrubbing is disabled. */
 	if (!scrubbing_is_enabled()) {
-		C_TRACE("Checksum scrubbing DISABLED. xs_id: %d, tgt_id: %d, ctx_id: %d\n",
+		C_TRACE("Scrubber DISABLED. xs_id: %d, tgt_id: %d, ctx_id: %d\n",
 			dmi->dmi_xs_id, dmi->dmi_tgt_id, dmi->dmi_ctx_id);
 		return 0;
 	}
 
-	C_TRACE("Checksum scrubbing ENABLED. xs_id: %d, tgt_id: %d, ctx_id: %d\n",
+	C_TRACE("Scrubber ENABLED. xs_id: %d, tgt_id: %d, ctx_id: %d\n",
 		dmi->dmi_xs_id, dmi->dmi_tgt_id, dmi->dmi_ctx_id);
 
 	/* There will be several levels iteration, such as pool, container, object, and lower,

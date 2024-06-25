@@ -304,7 +304,6 @@ sc_verify_finish(struct scrub_ctx *ctx)
 {
 	sc_csum_calc_inc(ctx);
 	sc_m_pool_csum_inc(ctx);
-	sc_wait_until_should_continue(ctx);
 }
 
 static int
@@ -538,18 +537,32 @@ sc_verify_obj_value(struct scrub_ctx *ctx, struct bio_iov *biov, daos_handle_t i
 			d_tm_inc_counter(ctx->sc_metrics.scm_corruption_total, 1);
 		D_GOTO(out, rc = DER_SUCCESS);
 	} else if (rc != 0) {
+		/** Media error from NVMe are accounted and reported via bio_media_error() */
+		if (sc_is_first_pass(ctx))
+			d_tm_inc_counter(ctx->sc_metrics.scm_read_error_total, 1);
 		D_WARN("Unable to fetch data for scrubber: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
-	ctx->sc_cur_biov = biov;
-	rc = iod->iod_type == DAOS_IOD_ARRAY ?
-	     sc_verify_recx(ctx, &data) :
-	     sc_verify_sv(ctx, &data);
-	ctx->sc_cur_biov = NULL;
-	if (rc != 0)
-		D_ERROR("Error while scrubbing: "DF_RC"\n", DP_RC(rc));
+	if (daos_csummer_initialized(sc_csummer(ctx))) {
+		/** Checksum is enabled on the container, validate them */
+		ctx->sc_cur_biov = biov;
+		rc = iod->iod_type == DAOS_IOD_ARRAY ?
+			sc_verify_recx(ctx, &data) :
+			sc_verify_sv(ctx, &data);
+		ctx->sc_cur_biov = NULL;
+		if (rc != 0)
+			D_ERROR("Error while scrubbing: "DF_RC"\n", DP_RC(rc));
+	} else {
+		/**
+		 * Checksum is disabled on the container, so scrubber is running mostly to
+		 * proactively detect UBER errors. No need to look into the details of the
+		 * records since vos_media_read() was successful.
+		 */
+		sc_scrub_bytes_scrubbed(ctx, data->iov_len);
+	}
 
+	sc_wait_until_should_continue(ctx);
 out:
 	D_FREE(data.iov_buf);
 
@@ -715,10 +728,6 @@ sc_scrub_cont(struct scrub_ctx *ctx)
 	vos_iter_param_t		param = {0};
 	struct vos_iter_anchors		anchor = {0};
 	int				rc;
-
-	/* not all containers in the pool will have checksums enabled */
-	if (!daos_csummer_initialized(sc_csummer(ctx)))
-		return 0;
 
 	param.ip_hdl = sc_cont_hdl(ctx);
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
