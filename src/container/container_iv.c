@@ -497,8 +497,15 @@ again:
 					}
 					prop_entry = daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS);
 					D_ASSERT(prop_entry != NULL);
-
 					daos_prop_val_2_co_status(prop_entry->dpe_val, &stat);
+
+					rc = ds_cont_tgt_open(entry->ns->iv_pool_uuid,
+							      civ_key->cont_uuid, chdl.ch_cont,
+							      chdl.ch_flags, chdl.ch_sec_capas,
+							      stat.dcs_pm_ver);
+					if (rc != 0)
+						D_GOTO(out, rc);
+
 					iv_entry.iv_capa.status_pm_ver = stat.dcs_pm_ver;
 					daos_prop_free(prop);
 					/* Only happens on xstream 0 */
@@ -510,6 +517,11 @@ again:
 					rc = dbtree_update(root_hdl, &key_iov, &val_iov);
 					if (rc == 0)
 						goto again;
+					/*
+					 * It seems that not rolling back the ds_cont_tgt_open call
+					 * above is harmless. Also, an error from the dbtree_update
+					 * call should be rare.
+					 */
 				} else {
 					rc = -DER_NONEXIST;
 				}
@@ -640,7 +652,7 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		}
 		if (entry->iv_class->iv_class_id == IV_CONT_CAPA &&
 		    !uuid_is_null(civ_key->cont_uuid)) {
-			rc = ds_cont_tgt_close(civ_key->cont_uuid);
+			rc = ds_cont_tgt_close(entry->ns->iv_pool_uuid, civ_key->cont_uuid);
 			if (rc)
 				D_GOTO(out, rc);
 		}

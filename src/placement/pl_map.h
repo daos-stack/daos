@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -70,6 +70,7 @@ struct failed_shard {
 	uint32_t        fs_fseq;
 	uint32_t        fs_tgt_id;
 	uint8_t         fs_status;
+	uint32_t	fs_down2up:1;
 };
 
 #define	DF_FAILEDSHARD "shard_idx: %d, fseq: %d, tgt_id: %d, status: %d"

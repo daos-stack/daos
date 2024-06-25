@@ -207,7 +207,8 @@ int ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 			   unsigned int map_version);
 
 int ds_pool_start(uuid_t uuid);
-void ds_pool_stop(uuid_t uuid);
+int
+     ds_pool_stop(uuid_t uuid);
 int ds_pool_extend(uuid_t pool_uuid, int ntargets, const d_rank_list_t *rank_list, int ndomains,
 		   const uint32_t *domains, d_rank_list_t *svc_ranks);
 int ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
@@ -231,11 +232,13 @@ int ds_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
 			   enum daos_acl_principal_type principal_type,
 			   const char *principal_name);
 
-int ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_list_t **ranks,
-		      daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
-		      uint32_t *upgrade_layout_ver);
-int ds_pool_svc_query_target(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_t rank,
-			     uint32_t tgt_idx, daos_target_info_t *ti);
+int
+ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_list_t **enabled_ranks,
+		  d_rank_list_t **disabled_ranks, daos_pool_info_t *pool_info,
+		  uint32_t *pool_layout_ver, uint32_t *upgrade_layout_ver);
+int
+ds_pool_svc_query_target(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_t rank, uint32_t tgt_idx,
+			 daos_target_info_t *ti);
 
 int ds_pool_prop_fetch(struct ds_pool *pool, unsigned int bit,
 		       daos_prop_t **prop_out);
@@ -321,6 +324,23 @@ int ds_pool_tgt_discard(uuid_t pool_uuid, uint64_t epoch);
 
 int
 ds_pool_mark_upgrade_completed(uuid_t pool_uuid, int ret);
+
+struct dss_coll_args;
+struct dss_coll_ops;
+
+int
+ds_pool_thread_collective_reduce(uuid_t pool_uuid, uint32_t ex_status,
+				 struct dss_coll_ops *coll_ops, struct dss_coll_args *coll_args,
+				 uint32_t flags);
+int
+ds_pool_task_collective_reduce(uuid_t pool_uuid, uint32_t ex_status, struct dss_coll_ops *coll_ops,
+			       struct dss_coll_args *coll_args, uint32_t flags);
+int
+ds_pool_thread_collective(uuid_t pool_uuid, uint32_t ex_status, int (*coll_func)(void *), void *arg,
+			  uint32_t flags);
+int
+ds_pool_task_collective(uuid_t pool_uuid, uint32_t ex_status, int (*coll_func)(void *), void *arg,
+			uint32_t flags);
 
 /**
  * Verify if pool status satisfy Redundancy Factor requirement, by checking
