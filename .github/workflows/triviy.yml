@@ -14,10 +14,6 @@ jobs:
   trivy-scan:
     name: Trivy scan
     runs-on: ubuntu-22.04
-    strategy:
-      matrix:
-        branch: [master, release/2.6]
-      fail-fast: false
 
     steps:
       - name: Install trivy package
@@ -32,7 +28,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1
         with:
-          ref: ${{ matrix.branch }}
           persist-credentials: false
 
       - name: Checkout latest trivy configuration
@@ -57,7 +52,10 @@ jobs:
       - name: Generate trivy report file extension
         id: gen_extension
         run: |
-          EXTENSION=$(echo "${{ matrix.branch }}" | sed -e 's/release\///' -e's/\//_/' )
+          EXTENSION=$(echo "${{ github.ref }}" | sed -e 's/release\///' -e's/\//_/' )
+          if [ -z "${VAR}" ]; then
+            EXTENSION=$(echo "${{ github.base_ref }}" | sed -e 's/release\///' -e's/\//_/' )
+          fi
           echo "EXTENSION=$EXTENSION" >> $GITHUB_OUTPUT
 
       - name: Generate trivy report
