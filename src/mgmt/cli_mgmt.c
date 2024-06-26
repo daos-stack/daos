@@ -54,6 +54,27 @@ dc_deprecated(tse_task_t *task)
 }
 
 int
+dc_mgmt_srv_version(uint32_t *major, uint32_t *minor, uint32_t *patch, char **tag)
+{
+	if (major == NULL || minor == NULL || patch == NULL || tag == NULL) {
+		D_ERROR("major, minor, patch, tag must be non-null\n");
+		return -DER_INVAL;
+	}
+
+	if (resp_g == NULL || resp_g->build_info == NULL) {
+		D_ERROR("server build info unavailable\n");
+		return -DER_UNINIT;
+	}
+
+	*major = resp_g->build_info->major;
+	*minor = resp_g->build_info->minor;
+	*patch = resp_g->build_info->patch;
+	*tag   = resp_g->build_info->tag;
+
+	return 0;
+}
+
+int
 dc_mgmt_profile(char *path, int avg, bool start)
 {
 	struct dc_mgmt_sys	*sys;

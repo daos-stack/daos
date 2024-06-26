@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -224,13 +224,45 @@ type (
 		EnvVars         []string `json:"env_vars"`
 	}
 
+	BuildInfo struct {
+		Major uint32 `json:"major"`
+		Minor uint32 `json:"minor"`
+		Patch uint32 `json:"patch"`
+		Tag   string `json:"tag,omitempty"`
+	}
+
 	GetAttachInfoResp struct {
 		System        string                `json:"sys"`
 		ServiceRanks  []*PrimaryServiceRank `json:"rank_uris"`
 		MSRanks       []uint32              `json:"ms_ranks"`
 		ClientNetHint ClientNetworkHint     `json:"client_net_hint"`
+		BuildInfo     BuildInfo             `json:"build_info"`
 	}
 )
+
+func (bi *BuildInfo) VersionString() string {
+	if bi == nil {
+		return ""
+	}
+	return (&mgmtpb.BuildInfo{
+		Major: bi.Major,
+		Minor: bi.Minor,
+		Patch: bi.Patch,
+		Tag:   bi.Tag,
+	}).VersionString()
+}
+
+func (bi *BuildInfo) String() string {
+	if bi == nil {
+		return ""
+	}
+	return (&mgmtpb.BuildInfo{
+		Major: bi.Major,
+		Minor: bi.Minor,
+		Patch: bi.Patch,
+		Tag:   bi.Tag,
+	}).BuildString()
+}
 
 func (gair *GetAttachInfoResp) String() string {
 	// gair.ServiceRanks may contain thousands of elements. Print a few

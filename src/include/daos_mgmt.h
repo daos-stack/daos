@@ -134,6 +134,20 @@ int
 daos_mgmt_get_bs_state(const char *group, uuid_t blobstore_uuid,
 		       int *blobstore_state, daos_event_t *ev);
 
+/**
+ * Query DAOS server version.
+ *
+ * \param[out] major	Major version number.
+ * \param[out] minor	Minor version number.
+ * \param[out] patch	Patch version number.
+ * \param[out] tag	Version tag.
+ *
+ * \return		0			Success
+ *
+ */
+int
+dc_mgmt_srv_version(uint32_t *major, uint32_t *minor, uint32_t *patch, char **tag);
+
 #if defined(__cplusplus)
 }
 #endif
