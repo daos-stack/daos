@@ -14,13 +14,13 @@
 #include "dfs_internal.h"
 
 int
-lookup_rel_path(dfs_t *dfs, dfs_obj_t *root, const char *path, int flags, dfs_obj_t **_obj,
-		mode_t *mode, struct stat *stbuf, size_t depth)
+lookup_rel_path(dfs_t *dfs, dfs_obj_t *root, char *rem, int flags, dfs_obj_t **_obj, mode_t *mode,
+		struct stat *stbuf, size_t depth)
 {
 	dfs_obj_t        parent;
 	dfs_obj_t       *obj = NULL;
 	char            *token;
-	char            *rem, *sptr = NULL; /* bogus compiler warning */
+	char            *sptr = NULL; /* bogus compiler warning */
 	bool             exists;
 	bool             is_root = true;
 	int              daos_mode;
@@ -34,16 +34,12 @@ lookup_rel_path(dfs_t *dfs, dfs_obj_t *root, const char *path, int flags, dfs_ob
 		return ELOOP;
 
 	/* Only paths from root can be absolute */
-	if (path[0] == '/' && daos_oid_cmp(root->oid, dfs->root.oid) != 0)
+	if (rem[0] == '/' && daos_oid_cmp(root->oid, dfs->root.oid) != 0)
 		return EINVAL;
 
 	daos_mode = get_daos_obj_mode(flags);
 	if (daos_mode == -1)
 		return EINVAL;
-
-	D_STRNDUP(rem, path, DFS_MAX_PATH - 1);
-	if (rem == NULL)
-		return ENOMEM;
 
 	if (stbuf)
 		memset(stbuf, 0, sizeof(struct stat));
@@ -86,7 +82,7 @@ lookup_rel_path_loop:
 			/* Cannot go outside the container */
 			if (daos_oid_cmp(parent.oid, dfs->root.oid) == 0) {
 				D_DEBUG(DB_TRACE, "Failed to lookup path outside container: %s\n",
-					path);
+					rem);
 				D_GOTO(err_obj, rc = ENOENT);
 			}
 
@@ -111,8 +107,7 @@ lookup_rel_path_loop:
 				D_GOTO(err_obj, rc = ENOTSUP);
 		}
 
-		len = strlen(token);
-
+		len              = strlen(token);
 		entry.chunk_size = 0;
 		rc = fetch_entry(dfs->layout_v, parent.oh, DAOS_TX_NONE, token, len, true, &exists,
 				 &entry, 0, NULL, NULL, NULL);
@@ -355,7 +350,6 @@ lookup_rel_path_loop:
 	obj->flags = flags;
 
 out:
-	D_FREE(rem);
 	*_obj = obj;
 	return rc;
 err_obj:
@@ -364,57 +358,15 @@ err_obj:
 }
 
 int
-dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj, mode_t *mode,
-	   struct stat *stbuf)
-{
-	if (dfs == NULL || !dfs->mounted)
-		return EINVAL;
-	if (flags & O_APPEND)
-		return ENOTSUP;
-	if (_obj == NULL)
-		return EINVAL;
-	if (path == NULL || strnlen(path, DFS_MAX_PATH) > DFS_MAX_PATH - 1)
-		return EINVAL;
-	if (path[0] != '/')
-		return EINVAL;
-
-	/** if we added a prefix, check and skip over it */
-	if (dfs->prefix) {
-		if (strncmp(dfs->prefix, path, dfs->prefix_len) != 0)
-			return EINVAL;
-
-		path += dfs->prefix_len;
-	}
-
-	return lookup_rel_path(dfs, &dfs->root, path, flags, _obj, mode, stbuf, 0);
-}
-
-static int
-lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags, dfs_obj_t **_obj,
-	       mode_t *mode, struct stat *stbuf, int xnr, char *xnames[], void *xvals[],
-	       daos_size_t *xsizes)
+lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, size_t len, int flags,
+	       dfs_obj_t **_obj, mode_t *mode, struct stat *stbuf, int xnr, char *xnames[],
+	       void *xvals[], daos_size_t *xsizes, daos_size_t dcache_key_len)
 {
 	dfs_obj_t       *obj;
 	struct dfs_entry entry = {0};
 	bool             exists;
 	int              daos_mode;
-	size_t           len;
 	int              rc = 0;
-
-	if (dfs == NULL || !dfs->mounted)
-		return EINVAL;
-	if (_obj == NULL)
-		return EINVAL;
-	if (parent == NULL)
-		parent = &dfs->root;
-	else if (!S_ISDIR(parent->mode))
-		return ENOTDIR;
-	if (flags & O_APPEND)
-		return ENOTSUP;
-
-	rc = check_name(name, &len);
-	if (rc)
-		return rc;
 
 	daos_mode = get_daos_obj_mode(flags);
 	if (daos_mode == -1)
@@ -431,7 +383,10 @@ lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags, dfs_o
 	if (stbuf)
 		memset(stbuf, 0, sizeof(struct stat));
 
-	D_ALLOC_PTR(obj);
+	if (dcache_key_len == 0)
+		D_ALLOC_PTR(obj);
+	else
+		D_ALLOC(obj, sizeof(*obj) + dcache_key_len);
 	if (obj == NULL) {
 		D_FREE(entry.value);
 		return ENOMEM;
@@ -571,7 +526,6 @@ lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags, dfs_o
 out:
 	obj->flags = flags;
 	*_obj      = obj;
-
 	return rc;
 err_obj:
 	D_FREE(obj);
@@ -579,10 +533,70 @@ err_obj:
 }
 
 int
+dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj, mode_t *mode,
+	   struct stat *stbuf)
+{
+	char *rem;
+	int   rc;
+
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+	if (flags & O_APPEND)
+		return ENOTSUP;
+	if (_obj == NULL)
+		return EINVAL;
+	if (path == NULL || strnlen(path, DFS_MAX_PATH) > DFS_MAX_PATH - 1)
+		return EINVAL;
+	if (path[0] != '/')
+		return EINVAL;
+
+	/** if we added a prefix, check and skip over it */
+	if (dfs->prefix) {
+		if (strncmp(dfs->prefix, path, dfs->prefix_len) != 0)
+			return EINVAL;
+
+		path += dfs->prefix_len;
+	}
+
+	D_STRNDUP(rem, path, DFS_MAX_PATH - 1);
+	if (rem == NULL)
+		return ENOMEM;
+
+	if (dfs->dcache)
+		rc = dcache_find_insert(dfs, rem, strlen(rem), flags, _obj, mode, stbuf);
+	else
+		rc = lookup_rel_path(dfs, &dfs->root, rem, flags, _obj, mode, stbuf, 0);
+	D_FREE(rem);
+	return rc;
+}
+
+int
 dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags, dfs_obj_t **obj,
 	       mode_t *mode, struct stat *stbuf)
 {
-	return lookup_rel_int(dfs, parent, name, flags, obj, mode, stbuf, 0, NULL, NULL, NULL);
+	daos_size_t len;
+	int         rc;
+
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+	if (obj == NULL)
+		return EINVAL;
+	if (parent == NULL)
+		parent = &dfs->root;
+	else if (!S_ISDIR(parent->mode))
+		return ENOTDIR;
+	if (flags & O_APPEND)
+		return ENOTSUP;
+
+	rc = check_name(name, &len);
+	if (rc)
+		return rc;
+
+	if (dfs->dcache)
+		return dcache_find_insert_rel(dfs, parent, name, len, flags, obj, mode, stbuf);
+	else
+		return lookup_rel_int(dfs, parent, name, len, flags, obj, mode, stbuf, 0, NULL,
+				      NULL, NULL, 0);
 }
 
 int
@@ -590,6 +604,24 @@ dfs_lookupx(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags, dfs_obj_
 	    mode_t *mode, struct stat *stbuf, int xnr, char *xnames[], void *xvals[],
 	    daos_size_t *xsizes)
 {
-	return lookup_rel_int(dfs, parent, name, flags, obj, mode, stbuf, xnr, xnames, xvals,
-			      xsizes);
+	daos_size_t len;
+	int         rc;
+
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+	if (obj == NULL)
+		return EINVAL;
+	if (parent == NULL)
+		parent = &dfs->root;
+	else if (!S_ISDIR(parent->mode))
+		return ENOTDIR;
+	if (flags & O_APPEND)
+		return ENOTSUP;
+
+	rc = check_name(name, &len);
+	if (rc)
+		return rc;
+
+	return lookup_rel_int(dfs, parent, name, len, flags, obj, mode, stbuf, xnr, xnames, xvals,
+			      xsizes, 0);
 }

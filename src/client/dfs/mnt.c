@@ -701,9 +701,22 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 
 	dfs->mounted = DFS_MOUNT;
 	*_dfs        = dfs;
+
+	if (amode == O_RDONLY) {
+		bool d_enable_dcache = false;
+
+		d_getenv_bool("DFS_ENABLE_DCACHE", &d_enable_dcache);
+		if (d_enable_dcache) {
+			rc = dcache_create(dfs, DCACHE_SIZE_BITS, 0, 0, 0);
+			if (rc) {
+				D_ERROR("Failed to create dcache: %d (%s)\n", rc, strerror(rc));
+				goto err_root;
+			}
+		}
+	}
+
 	daos_prop_free(prop);
 	return rc;
-
 err_root:
 	daos_obj_close(dfs->root.oh, NULL);
 err_super:
@@ -725,6 +738,15 @@ dfs_umount(dfs_t *dfs)
 		return EINVAL;
 	}
 
+	if (dfs->dcache) {
+		int rc;
+
+		rc = dcache_destroy(dfs);
+		if (rc != 0) {
+			D_ERROR("Failed to destroy dcache: %d (%s)\n", rc, strerror(rc));
+			return rc;
+		}
+	}
 	D_MUTEX_LOCK(&dfs->lock);
 	if (dfs->poh_refcount != 0) {
 		D_ERROR("Pool open handle refcount not 0\n");

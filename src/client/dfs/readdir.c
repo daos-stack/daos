@@ -65,13 +65,24 @@ readdir_int(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr, str
 
 			/** stat the entry if requested */
 			if (stbufs) {
-				rc = entry_stat(dfs, DAOS_TX_NONE, obj->oh, dirs[key_nr].d_name,
-						kds[i].kd_key_len, NULL, true, &stbufs[key_nr],
-						NULL);
-				if (rc) {
-					D_ERROR("Failed to stat entry '%s': %d (%s)\n",
-						dirs[key_nr].d_name, rc, strerror(rc));
-					D_GOTO(out, rc);
+				if (dfs->dcache) {
+					dfs_obj_t *ent;
+
+					rc = dcache_find_insert_rel(dfs, obj, dirs[key_nr].d_name,
+								    kds[i].kd_key_len, O_NOFOLLOW,
+								    &ent, NULL, &stbufs[key_nr]);
+					if (rc)
+						D_GOTO(out, rc);
+					drec_decref(dfs->dcache, ent);
+				} else {
+					rc = entry_stat(dfs, DAOS_TX_NONE, obj->oh,
+							dirs[key_nr].d_name, kds[i].kd_key_len,
+							NULL, true, &stbufs[key_nr], NULL);
+					if (rc) {
+						D_ERROR("Failed to stat entry '%s': %d (%s)\n",
+							dirs[key_nr].d_name, rc, strerror(rc));
+						D_GOTO(out, rc);
+					}
 				}
 			}
 			key_nr++;
