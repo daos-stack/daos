@@ -3833,12 +3833,14 @@ out:
 }
 
 struct migrate_query_arg {
-	uuid_t	pool_uuid;
-	ABT_mutex status_lock;
+	uuid_t                   pool_uuid;
+	ABT_mutex                status_lock;
 	struct ds_migrate_status dms;
-	uint32_t version;
-	uint32_t total_ult_cnt;
-	uint32_t generation;
+	uint32_t                 version;
+	uint32_t                 total_ult_cnt;
+	uint32_t                 generation;
+	daos_rebuild_opc_t       rebuild_op;
+	uint32_t                 pad;
 };
 
 static int
@@ -3860,18 +3862,18 @@ migrate_check_one(void *data)
 	arg->total_ult_cnt += atomic_load(tls->mpt_tgt_obj_ult_cnt) +
 			      atomic_load(tls->mpt_tgt_dkey_ult_cnt);
 	ABT_mutex_unlock(arg->status_lock);
-	D_DEBUG(DB_REBUILD, "status %d/%d/ ult %u/%u  rec/obj/size "
-		DF_U64"/"DF_U64"/"DF_U64"\n", tls->mpt_status,
-		arg->dms.dm_status, atomic_load(tls->mpt_tgt_obj_ult_cnt),
-		atomic_load(tls->mpt_tgt_dkey_ult_cnt), tls->mpt_rec_count,
-		tls->mpt_obj_count, tls->mpt_size);
+	D_DEBUG(DB_REBUILD,
+		DF_RB " status %d/%d/ ult %u/%u  rec/obj/size " DF_U64 "/" DF_U64 "/" DF_U64 "\n",
+		DP_RB_MQA(arg), tls->mpt_status, arg->dms.dm_status,
+		atomic_load(tls->mpt_tgt_obj_ult_cnt), atomic_load(tls->mpt_tgt_dkey_ult_cnt),
+		tls->mpt_rec_count, tls->mpt_obj_count, tls->mpt_size);
 
 	migrate_pool_tls_put(tls);
 	return 0;
 }
 
 int
-ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver, unsigned int generation,
+ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver, unsigned int generation, int op,
 			struct ds_migrate_status *dms)
 {
 	struct migrate_query_arg	arg = { 0 };
@@ -3885,6 +3887,7 @@ ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver, unsigned int generation,
 	uuid_copy(arg.pool_uuid, pool_uuid);
 	arg.version = ver;
 	arg.generation = generation;
+	arg.rebuild_op = op;
 	rc = ABT_mutex_create(&arg.status_lock);
 	if (rc != ABT_SUCCESS)
 		D_GOTO(out, rc);
@@ -3903,12 +3906,12 @@ ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver, unsigned int generation,
 		*dms = arg.dms;
 
 	migrate_system_try_wakeup(tls);
-	D_DEBUG(DB_REBUILD, "pool "DF_UUID" ver %u migrating=%s,"
-		" obj_count="DF_U64", rec_count="DF_U64
-		" size="DF_U64" ult cnt %u status %d\n",
-		DP_UUID(pool_uuid), ver, arg.dms.dm_migrating ? "yes" : "no",
-		arg.dms.dm_obj_count, arg.dms.dm_rec_count, arg.dms.dm_total_size,
-		arg.total_ult_cnt, arg.dms.dm_status);
+	D_DEBUG(DB_REBUILD,
+		DF_RB " migrating=%s, obj_count=" DF_U64 ", rec_count=" DF_U64 ", size=" DF_U64
+		      " ult_cnt %u status %d\n",
+		DP_RB_MQA(&arg), arg.dms.dm_migrating ? "yes" : "no", arg.dms.dm_obj_count,
+		arg.dms.dm_rec_count, arg.dms.dm_total_size, arg.total_ult_cnt, arg.dms.dm_status);
+
 out:
 	ABT_mutex_free(&arg.status_lock);
 	migrate_pool_tls_put(tls);
@@ -4028,8 +4031,8 @@ ds_object_migrate_send(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_h
 		*max_delay = rpc_timeout;
 	}
 out:
-	D_DEBUG(DB_REBUILD, DF_UUID" migrate object: %d\n",
-		DP_UUID(pool->sp_uuid), rc);
+	D_DEBUG(DB_REBUILD, DF_RB ": rc=%d\n", DP_UUID(pool->sp_uuid), version, generation,
+		RB_OP_STR(migrate_opc), rc);
 	if (rpc)
 		crt_req_decref(rpc);
 
