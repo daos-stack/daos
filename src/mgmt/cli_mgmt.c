@@ -1270,7 +1270,7 @@ dc_mgmt_init()
 		rc = daos_rpc_register(&mgmt_proto_fmt_v3, MGMT_PROTO_CLI_COUNT,
 				       NULL, DAOS_MGMT_MODULE);
 	} else {
-		D_ERROR("%d version mgmt RPC not supported.\n", dc_mgmt_proto_version);
+		D_ERROR("version %d mgmt RPC not supported.\n", dc_mgmt_proto_version);
 		rc = -DER_PROTO;
 	}
 	if (rc != 0)
