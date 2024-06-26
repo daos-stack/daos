@@ -20,6 +20,7 @@
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/rsvc.h>
 #include <daos_srv/pool.h>
+#include <daos_srv/security.h>
 #include <daos/drpc_modules.h>
 #include <daos_mgmt.h>
 
@@ -416,6 +417,53 @@ void ds_mgmt_pool_find_hdlr(crt_rpc_t *rpc)
 	d_rank_list_free(out->pfo_ranks);
 }
 
+static int
+check_cred_pool_access(uuid_t pool_uuid, d_rank_list_t *svc_ranks, int flags, d_iov_t *cred)
+{
+	daos_prop_t            *props           = NULL;
+	struct daos_prop_entry *acl_entry       = NULL;
+	struct daos_prop_entry *owner_entry     = NULL;
+	struct daos_prop_entry *owner_grp_entry = NULL;
+	struct d_ownership      owner;
+	uint64_t                sec_capas;
+	int                     rc;
+
+	rc = ds_mgmt_pool_get_acl(pool_uuid, svc_ranks, &props);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": failed to retrieve ACL props", DP_UUID(pool_uuid));
+		return rc;
+	}
+
+	acl_entry = daos_prop_entry_get(props, DAOS_PROP_PO_ACL);
+	D_ASSERT(acl_entry != NULL);
+	D_ASSERT(acl_entry->dpe_val_ptr != NULL);
+
+	owner_entry = daos_prop_entry_get(props, DAOS_PROP_PO_OWNER);
+	D_ASSERT(owner_entry != NULL);
+	D_ASSERT(owner_entry->dpe_str != NULL);
+
+	owner_grp_entry = daos_prop_entry_get(props, DAOS_PROP_PO_OWNER_GROUP);
+	D_ASSERT(owner_grp_entry != NULL);
+	D_ASSERT(owner_grp_entry->dpe_str != NULL);
+
+	owner.user  = owner_entry->dpe_str;
+	owner.group = owner_grp_entry->dpe_str;
+
+	rc = ds_sec_pool_get_capabilities(flags, cred, &owner, acl_entry->dpe_val_ptr, &sec_capas);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": failed to read sec capabilities", DP_UUID(pool_uuid));
+		D_GOTO(out_props, rc);
+	}
+
+	if (!ds_sec_pool_can_connect(sec_capas)) {
+		D_GOTO(out_props, rc = -DER_NO_PERM);
+	}
+
+out_props:
+	daos_prop_free(props);
+	return rc;
+}
+
 void
 ds_mgmt_pool_list_hdlr(crt_rpc_t *rpc)
 {
@@ -462,13 +510,13 @@ ds_mgmt_pool_list_hdlr(crt_rpc_t *rpc)
 	for (i = 0; i < n_mgmt; i++) {
 		daos_mgmt_pool_info_t      *mgmt_pool = &mgmt_pools[i];
 		struct mgmt_pool_list_pool *rpc_pool  = &rpc_pools[n_rpc];
-		chk_rc = ds_pool_check_access(mgmt_pool->mgpi_uuid, mgmt_pool->mgpi_svc, DAOS_PC_RO,
-					      &in->pli_cred);
+		chk_rc = check_cred_pool_access(mgmt_pool->mgpi_uuid, mgmt_pool->mgpi_svc,
+						DAOS_PC_RO, &in->pli_cred);
 		if (chk_rc != 0) {
-			if (chk_rc == -DER_NO_PERM)
-				continue;
-			else
-				D_GOTO(send_resp, rc = chk_rc);
+			if (chk_rc != -DER_NO_PERM)
+				DL_ERROR(chk_rc, DF_UUID ": failed to check pool access",
+					 DP_UUID(mgmt_pool->mgpi_uuid));
+			continue;
 		}
 		uuid_copy(rpc_pool->plp_uuid, mgmt_pool->mgpi_uuid);
 		rpc_pool->plp_label    = mgmt_pool->mgpi_label;
