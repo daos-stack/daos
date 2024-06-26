@@ -21,7 +21,7 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
-	"github.com/daos-stack/daos/src/control/lib/hardware/pciutils"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -165,7 +165,7 @@ func (ei *EngineInstance) StorageFormatSCM(ctx context.Context, force bool) (mRe
 	return
 }
 
-func addLinkInfoToHealthStats(ctx context.Context, pciCfg string, health *ctlpb.BioHealthResp) error {
+func addLinkInfoToHealthStats(prov hardware.PCIeLinkStatsProvider, pciCfg string, health *ctlpb.BioHealthResp) error {
 	// Convert byte-string to lspci-format.
 	sb := new(strings.Builder)
 	formatBytestring(pciCfg, sb)
@@ -176,8 +176,8 @@ func addLinkInfoToHealthStats(ctx context.Context, pciCfg string, health *ctlpb.
 	// library will refuse to parse the file content.
 	cfgBytes := append([]byte(pciutils.DummyPreamble), []byte(sb.String())...)
 
-	pciDev, err := pciutils.PCIeCapsFromConfig(ctx, cfgBytes)
-	if err != nil {
+	pciDev := &hardware.PCIDevice{}
+	if err := prov.PCIeCapsFromConfig(cfgBytes, pciDev); err != nil {
 		return err
 	}
 
@@ -191,7 +191,7 @@ func addLinkInfoToHealthStats(ctx context.Context, pciCfg string, health *ctlpb.
 	return nil
 }
 
-func populateCtrlrHealth(ctx context.Context, engine Engine, req *ctlpb.BioHealthReq, ctrlr *ctlpb.NvmeController) (bool, error) {
+func populateCtrlrHealth(ctx context.Context, engine Engine, req *ctlpb.BioHealthReq, ctrlr *ctlpb.NvmeController, prov hardware.PCIeLinkStatsProvider) (bool, error) {
 	stateName := ctlpb.NvmeDevState_name[int32(ctrlr.DevState)]
 	if !ctrlr.CanSupplyHealthStats() {
 		engine.Debugf("skip fetching health stats on device %q in %q state",
@@ -206,7 +206,7 @@ func populateCtrlrHealth(ctx context.Context, engine Engine, req *ctlpb.BioHealt
 	}
 
 	if ctrlr.PciCfg != "" {
-		if err := addLinkInfoToHealthStats(ctx, ctrlr.PciCfg, health); err != nil {
+		if err := addLinkInfoToHealthStats(prov, ctrlr.PciCfg, health); err != nil {
 			return false, errors.Wrapf(err, "add link stats for %q", ctrlr)
 		}
 	} else {
@@ -220,15 +220,6 @@ func populateCtrlrHealth(ctx context.Context, engine Engine, req *ctlpb.BioHealt
 
 // Scan SMD devices over dRPC and reconstruct NVMe scan response from results.
 func scanEngineBdevsOverDrpc(ctx context.Context, engine Engine, pbReq *ctlpb.ScanNvmeReq) (*ctlpb.ScanNvmeResp, error) {
-	if pbReq.Health {
-		// Add pciutils lib in ctx to add link info to health.
-		var err error
-		ctx, err = pciutils.Init(ctx)
-		if err != nil {
-			return nil, errors.Wrap(err, "pciutils init")
-		}
-	}
-
 	scanSmdResp, err := scanSmd(ctx, engine, &ctlpb.SmdDevReq{})
 	if err != nil {
 		return nil, errors.Wrap(err, "scan smd")
@@ -287,7 +278,8 @@ func scanEngineBdevsOverDrpc(ctx context.Context, engine Engine, pbReq *ctlpb.Sc
 				MetaSize: pbReq.MetaSize,
 				RdbSize:  pbReq.RdbSize,
 			}
-			upd, err := populateCtrlrHealth(ctx, engine, bhReq, c)
+			upd, err := populateCtrlrHealth(ctx, engine, bhReq, c,
+				hwprov.DefaultPCIeLinkStatsProvider())
 			if err != nil {
 				return nil, err
 			}
@@ -438,15 +430,6 @@ func smdQueryEngine(ctx context.Context, engine Engine, pbReq *ctlpb.SmdQueryReq
 		return nil, errors.Wrapf(err, "instance %d GetRank", engine.Index())
 	}
 
-	if pbReq.IncludeBioHealth {
-		// Add pciutils lib in ctx to add link info to health.
-		var err error
-		ctx, err = pciutils.Init(ctx)
-		if err != nil {
-			return nil, errors.Wrap(err, "pciutils init")
-		}
-	}
-
 	scanSmdResp, err := scanSmd(ctx, engine, &ctlpb.SmdDevReq{})
 	if err != nil {
 		return nil, errors.Wrapf(err, "rank %d: scan smd", engineRank)
@@ -475,7 +458,8 @@ func smdQueryEngine(ctx context.Context, engine Engine, pbReq *ctlpb.SmdQueryReq
 		}
 		if pbReq.IncludeBioHealth {
 			bhReq := &ctlpb.BioHealthReq{DevUuid: dev.Uuid}
-			if _, err := populateCtrlrHealth(ctx, engine, bhReq, dev.Ctrlr); err != nil {
+			if _, err := populateCtrlrHealth(ctx, engine, bhReq, dev.Ctrlr,
+				hwprov.DefaultPCIeLinkStatsProvider()); err != nil {
 				return nil, err
 			}
 		}

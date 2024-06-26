@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,6 +10,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hardware/cart"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwloc"
+	"github.com/daos-stack/daos/src/control/lib/hardware/pciutils"
 	"github.com/daos-stack/daos/src/control/lib/hardware/sysfs"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -73,4 +74,9 @@ func DefaultNetDevStateProvider(log logging.Logger) hardware.NetDevStateProvider
 // DefaultIOMMUDetector gets the default provider for the IOMMU detector.
 func DefaultIOMMUDetector(log logging.Logger) hardware.IOMMUDetector {
 	return sysfs.NewProvider(log)
+}
+
+// DefaultPCIeLinkStatsProvider gets the default provider for retrieving PCIe link stats.
+func DefaultPCIeLinkStatsProvider(log logging.Logger) hardware.PCIeLinkStatsProvider {
+	return pciutils.NewPCIeLinkStatsProvider()
 }

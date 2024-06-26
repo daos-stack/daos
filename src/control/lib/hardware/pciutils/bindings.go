@@ -10,8 +10,9 @@ import (
 	"os"
 	"unsafe"
 
-	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 )
 
 /*
@@ -37,7 +38,9 @@ var (
 	ErrCfgMissing       = errors.New("incomplete device config")
 )
 
-type api struct{}
+// API provides the PCIeLinkStatsProvider interface by exposing a concrete implementation of
+// PCIeCapsFromConfig().
+type API struct{}
 
 func speedToFloat(speed uint16) float32 {
 	var mant float32
@@ -67,7 +70,7 @@ func speedToFloat(speed uint16) float32 {
 // The library access method parameters are set to read the config dump from file and the input byte
 // slice is written to a temporary file that is read on pci_scan_bus(). The device that has been
 // populated on scan is used to populate the output PCIDevice field values.
-func (api *api) PCIeCapsFromConfig(cfgBytes []byte, dev *hardware.PCIDevice) error {
+func (api *API) PCIeCapsFromConfig(cfgBytes []byte, dev *hardware.PCIDevice) error {
 	lenCfg := len(cfgBytes)
 	if lenCfg == 0 {
 		return errors.New("empty config")
@@ -149,4 +152,8 @@ func (api *api) PCIeCapsFromConfig(cfgBytes []byte, dev *hardware.PCIDevice) err
 	dev.LinkNegWidth = uint16(tLnkSta & C.PCI_EXP_LNKSTA_WIDTH >> 4)
 
 	return nil
+}
+
+func NewPCIeLinkStatsProvider() hardware.PCIeLinkStatsProvider {
+	return &API{}
 }

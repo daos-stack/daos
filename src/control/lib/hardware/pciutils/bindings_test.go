@@ -18,7 +18,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware/pciutils"
 )
 
-func TestProvider(t *testing.T) {
+func TestAPI_PCIeCapsFromConfig(t *testing.T) {
 	mockBytes := []byte(`00: 86 80 53 09 06 04 10 00 01 02 08 01 00 00 00 00
 10: 04 00 00 bc 00 00 00 00 00 00 00 00 00 00 00 00
 20: 00 00 00 00 00 00 00 00 00 00 00 00 90 15 a8 00
@@ -75,12 +75,10 @@ f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			ctx, err := pciutils.Init(test.Context(t))
-			if err != nil {
-				t.Fatal(err)
-			}
+			ap := &pciutils.API{}
+			dev := &hardware.PCIDevice{}
 
-			dev, err := pciutils.PCIeCapsFromConfig(ctx, tc.cfgBytes)
+			err := ap.PCIeCapsFromConfig(tc.cfgBytes, dev)
 			test.CmpErr(t, tc.expErr, err)
 			if err != nil {
 				return
@@ -94,9 +92,9 @@ f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 			// multiple consecutive library calls.
 			newCfgBytes := strings.Replace(string(tc.cfgBytes), `70: 00 00 43`,
 				`70: 00 00 82`, 1)
+			dev = &hardware.PCIDevice{}
 
-			dev, err = pciutils.PCIeCapsFromConfig(ctx, []byte(newCfgBytes))
-			if err != nil {
+			if err = ap.PCIeCapsFromConfig([]byte(newCfgBytes), dev); err != nil {
 				t.Fatal(err)
 			}
 

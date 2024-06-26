@@ -27,6 +27,14 @@ const (
 
 var ErrNotVMDBackingAddress = errors.New("not a vmd backing device address")
 
+// PCIeLinkStatsProvider is an interface for acquiring NVMe PCIe link info.
+type PCIeLinkStatsProvider interface {
+	// PCIeCapsFromConfig takes a PCIe config space dump (of the format output by lspci
+	// -xxx) in the form of a byte slice. The second parameter is a reference to a
+	// PCIDevice struct to be populated.
+	PCIeCapsFromConfig([]byte, *PCIDevice) error
+}
+
 // parseVMDAddress returns the domain string interpreted as the VMD address.
 func parseVMDAddress(addr string) (*PCIAddress, error) {
 	// Left-pad domain string as necessary make it a valid PCI address.
