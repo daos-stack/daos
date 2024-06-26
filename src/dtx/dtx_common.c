@@ -1279,7 +1279,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 
 	dtx_shares_fini(dth);
 
-	if (daos_is_zero_dti(&dth->dth_xid) || unlikely(result == -DER_ALREADY) || dlh->dlh_relay)
+	if (daos_is_zero_dti(&dth->dth_xid) || unlikely(result == -DER_ALREADY))
 		goto out;
 
 	if (unlikely(coh->sch_closed)) {
@@ -1332,6 +1332,9 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 	default:
 		D_ASSERTF(0, "Unexpected DTX "DF_DTI" status %d\n", DP_DTI(&dth->dth_xid), status);
 	}
+
+	if (dlh->dlh_relay)
+		goto out;
 
 	/*
 	 * Even if the transaction modifies nothing locally, we still need to store
