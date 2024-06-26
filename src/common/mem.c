@@ -2151,6 +2151,7 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 					d_list_add(&pinfo->pi_link, &cache->ca_pgs_copying);
 				}
 				d_list_add(&chkpt_data->cd_link, &free_list);
+				rc = 0;
 				break;
 			}
 

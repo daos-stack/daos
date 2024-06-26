@@ -13,7 +13,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/proto"
@@ -228,11 +227,10 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if diff := cmp.Diff(tc.expResp, resp, cmpopts.IgnoreUnexported(
-				mgmtpb.GetAttachInfoResp{},
-				mgmtpb.GetAttachInfoResp_RankUri{},
-				mgmtpb.ClientNetHint{},
-			)); diff != "" {
+			cmpOpts := cmp.Options{
+				protocmp.Transform(),
+			}
+			if diff := cmp.Diff(tc.expResp, resp, cmpOpts...); diff != "" {
 				t.Fatalf("want-, got+:\n%s", diff)
 			}
 		})
