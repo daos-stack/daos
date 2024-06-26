@@ -1285,7 +1285,7 @@ dc_mgmt_init()
 void
 dc_mgmt_fini()
 {
-	int rc;
+	int	rc = 0;
 
 	if (dc_mgmt_proto_version == DAOS_MGMT_VERSION - 1)
 		rc = daos_rpc_unregister(&mgmt_proto_fmt_v2);
