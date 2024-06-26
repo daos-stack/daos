@@ -492,7 +492,7 @@ iterate_common(struct cmd_info *cinfo, bool visible)
 	param.ip_epr.epr_hi = d_hlc_get();
 	param.ip_flags      = VOS_IT_RECX_VISIBLE;
 	if (!visible)
-		param.ip_flags      |= VOS_IT_RECX_COVERED;
+		param.ip_flags |= VOS_IT_RECX_COVERED;
 
 	rc = vos_iterate(&param, VOS_ITER_DKEY, true, &anchors, iter_cb, NULL, &count, NULL);
 	if (rc != 0) {
