@@ -342,9 +342,9 @@ $ dmg pool get-prop pool1
    Pool redundancy factor (rd_fac)                                                  0
    Reclaim strategy (reclaim)                                                       lazy
    Performance domain affinity level of RP (rp_pda)                                 3
-   Checksum scrubbing mode (scrub)                                                  value not set
-   Checksum scrubbing frequency (scrub_freq)                                        not set
-   Checksum scrubbing threshold (scrub_thresh)                                      not set
+   Scrubbing mode (scrub)                                                           value not set
+   Scrubbing frequency (scrub_freq)                                                 604800
+   Scrubbing threshold (scrub_thresh)                                               not set
    Self-healing policy (self_heal)                                                  exclude
    Rebuild space ratio (space_rb)                                                   0%
    Pool service replica list (svc_list)                                             [0]
@@ -371,9 +371,9 @@ $ dmg pool get-prop pool1
    Pool redundancy factor (rd_fac)                                                  0
    Reclaim strategy (reclaim)                                                       lazy
    Performance domain affinity level of RP (rp_pda)                                 3
-   Checksum scrubbing mode (scrub)                                                  off
-   Checksum scrubbing frequency (scrub_freq)                                        604800
-   Checksum scrubbing threshold (scrub_thresh)                                      0
+   Scrubbing mode (scrub)                                                           off
+   Scrubbing frequency (scrub_freq)                                                 604800
+   Scrubbing threshold (scrub_thresh)                                               0
    Self-healing policy (self_heal)                                                  exclude
    Rebuild space ratio (space_rb)                                                   0%
    Pool service replica list (svc_list)                                             [0]
@@ -435,9 +435,9 @@ $ dmg pool get-prop tank
    Reclaim strategy (reclaim)                                                       disabled
    Reintegration mode (reintegration)                                               data_sync
    Performance domain affinity level of RP (rp_pda)                                 3
-   Checksum scrubbing mode (scrub)                                                  off
-   Checksum scrubbing frequency (scrub_freq)                                        604800
-   Checksum scrubbing threshold (scrub_thresh)                                      0
+   Scrubbing mode (scrub)                                                           off
+   Scrubbing frequency (scrub_freq)                                                 604800
+   Scrubbing threshold (scrub_thresh)                                               0
    Self-healing policy (self_heal)                                                  exclude,rebuild
    Rebuild space ratio (space_rb)                                                   0%
    Pool service replica list (svc_list)                                             [0]
@@ -477,9 +477,9 @@ $ dmg pool get-prop tank2
    Reclaim strategy (reclaim)                                                       disabled
    Reintegration mode (reintegration)                                               data_sync
    Performance domain affinity level of RP (rp_pda)                                 3
-   Checksum scrubbing mode (scrub)                                                  off
-   Checksum scrubbing frequency (scrub_freq)                                        604800
-   Checksum scrubbing threshold (scrub_thresh)                                      0
+   Scrubbing mode (scrub)                                                           off
+   Scrubbing frequency (scrub_freq)                                                 604800
+   Scrubbing threshold (scrub_thresh)                                               0
    Self-healing policy (self_heal)                                                  exclude,rebuild
    Rebuild space ratio (space_rb)                                                   0%
    Pool service replica list (svc_list)                                             [0]
@@ -627,6 +627,26 @@ only updates pool map to include rank.
 NB: with "no_data_sync" enabled, containers will be turned to read-only, daos won't trigger
 rebuild to restore the pool data redundancy on the surviving storage engines if there are
 dead rank events.
+
+### Scrubber (scrub{,_freq,_thresh})
+
+The scrubber regularly scans DAOS metadata and data in the background. For containers that have
+checksum support enabled, it verifies that the checksum matches the data/metadata. Otherwise,
+it just verifies that the data can be read from the SSD in order to proactively detect
+uncorrectable bit errors of SSDs.
+
+The `scrub` property is the main one defining whether the scrubber is enabled, and if so, what
+strategy is used:
+* "off"   : The scrubber is disabled and will not run.
+* "lazy"  : The scrubber is enaled and will run when there is no I/O activities on the system.
+* "timed" : The scrubber is enabled and will be triggered on a regular time basis.
+
+The `scrub_freq` property is used to defined the frequency at which a full pass of the scrubber
+will be accomplished. The time is in seconds. The default value is 604,800s which is 7 days (i.e.
+once a week).
+
+The `scrub_freq` property defines the number of checksum errors above which the target should be
+excluded. The default value is 0, which means that automatic exclusion is disabled.
 
 ## Access Control Lists
 

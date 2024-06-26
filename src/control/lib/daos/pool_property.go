@@ -314,7 +314,7 @@ func PoolProperties() PoolPropertyMap {
 		"scrub": {
 			Property: PoolProperty{
 				Number:      PoolPropertyScrubMode,
-				Description: "Checksum scrubbing mode",
+				Description: "Scrubbing mode",
 			},
 			values: map[string]uint64{
 				"off":   PoolScrubModeOff,
@@ -325,7 +325,7 @@ func PoolProperties() PoolPropertyMap {
 		"scrub_freq": {
 			Property: PoolProperty{
 				Number:      PoolPropertyScrubFreq,
-				Description: "Checksum scrubbing frequency",
+				Description: "Scrubbing frequency",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
 					rbErr := errors.Errorf("invalid Scrubbing Frequency value %s", s)
 					rsPct, err := strconv.ParseUint(strings.ReplaceAll(s, "%", ""), 10, 64)
@@ -347,7 +347,7 @@ func PoolProperties() PoolPropertyMap {
 		"scrub_thresh": {
 			Property: PoolProperty{
 				Number:      PoolPropertyScrubThresh,
-				Description: "Checksum scrubbing threshold",
+				Description: "Scrubbing threshold",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
 					rbErr := errors.Errorf("invalid Scrubbing Threshold value %q", s)
 					rsPct, err := strconv.ParseUint(strings.ReplaceAll(s, "%", ""), 10, 64)
