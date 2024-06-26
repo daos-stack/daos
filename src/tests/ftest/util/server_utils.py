@@ -48,6 +48,7 @@ def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None):
     common_config = CommonConfig(group, transport_config)
     config = DaosServerYamlParameters(config_file, common_config)
     command = DaosServerCommand(bin_dir, config, None)
+
     if config_temp:
         # Setup the DaosServerCommand to write the config file data to the
         # temporary file and then copy the file to all the hosts using the

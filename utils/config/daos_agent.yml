@@ -56,17 +56,6 @@
 #  # DAOS client is the HTTPS server to open secure telemetry endpoint.
 #  server_key: /etc/daos/certs/telemetryserver.key
 
-## Enable HTTP endpoint for remote telemetry collection.
-# Note that enabling the endpoint automatically enables
-# client telemetry collection.
-#
-
-## Retain client telemetry for a period of time after the client
-# process exits.
-#
-## default 0 (do not retain telemetry after client exit)
-#telemetry_retain: 1m
-
 ## Transport Credentials Specifying certificates to secure communications
 #
 #transport_config:

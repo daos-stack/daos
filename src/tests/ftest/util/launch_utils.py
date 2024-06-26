@@ -801,6 +801,8 @@ class TestRunner():
         certgen_dir = os.path.abspath(
             os.path.join("..", "..", "..", "..", "lib64", "daos", "certgen"))
         command = os.path.join(certgen_dir, "gen_certificates.sh")
+        logger.info("================ SAMIR ==============")
+        logger.info(command)
         try:
             run_local(logger, f"/usr/bin/rm -rf {certs_dir}")
             run_local(logger, f"{command} {test_env.log_dir}")
@@ -808,6 +810,17 @@ class TestRunner():
             message = "Error generating certificates"
             self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
             return 128
+
+        command = os.path.join(certgen_dir, "gen_telemetry_certificates.sh")
+        logger.info("================ SAMIR1 ==============")
+        logger.info(command)
+        try:
+            run_local(logger, f"{command} {test_env.log_dir}")
+        except RunException:
+            message = "Error generating telemtry certificates"
+            self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
+            return 128
+
         return 0
 
     def _collect_crash_files(self, logger):

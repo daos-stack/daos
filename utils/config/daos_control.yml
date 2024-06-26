@@ -47,4 +47,4 @@
 #  allow_insecure: false
 #
 #  # Custom CA Root certificate for generated telemetry certs
-#  ca_cert: /etc/daos/certs/telemetryca.crt
+#  ca_cert: /etc/daos/certs/daosCA.crt

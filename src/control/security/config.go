@@ -29,7 +29,7 @@ const (
 	defaultAgentKey            = certDir + "agent.key"
 	defaultTelemetryServerCert = certDir + "telemetryserver.crt"
 	defaultTelemetryServerKey  = certDir + "telemetryserver.key"
-	defaultTelemetryCACert     = certDir + "telemetryca.crt"
+	defaultTelemetryCACert     = certDir + "daosCA.crt"
 	defaultClientCertDir       = certDir + "clients"
 	defaultServer              = "server"
 	defaultInsecure            = false
