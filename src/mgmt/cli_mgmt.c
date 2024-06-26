@@ -1374,10 +1374,8 @@ rechoose:
 	}
 
 	rc = out->plo_op.mo_rc;
-	if (rc != 0) {
-		DL_ERROR(rc, "failed to list pools");
+	if (rc != 0)
 		D_GOTO(out_put_req, rc);
-	}
 
 	*args->npools = out->plo_npools;
 

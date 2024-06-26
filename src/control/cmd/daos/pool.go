@@ -599,34 +599,48 @@ func (cmd *poolAutoTestCmd) Execute(_ []string) error {
 }
 
 func getPoolList(log logging.Logger, sysName string, queryEnabled bool) ([]*daos.PoolInfo, error) {
-	var rc C.int
-	bufSize := C.size_t(0)
-
-	// First, fetch the total number of pools in the system.
-	// We may not have access to all of them, so this is an upper bound.
-	rc = C.daos_mgmt_list_pools(nil, &bufSize, nil, nil)
-	if err := daosError(rc); err != nil {
-		return nil, err
-	}
-
-	if bufSize < 1 {
-		return nil, nil
-	}
-
 	var cSysName *C.char
 	if sysName != "" {
 		cSysName := C.CString(sysName)
 		defer freeString(cSysName)
 	}
 
-	// Now, we actually fetch the pools into the buffer that we've created.
-	cPools := make([]C.daos_mgmt_pool_info_t, bufSize)
-	rc = C.daos_mgmt_list_pools(nil, &bufSize, &cPools[0], nil)
-	if err := daosError(rc); err != nil {
+	var cPools []C.daos_mgmt_pool_info_t
+	for {
+		var rc C.int
+		var poolCount C.size_t
+
+		// First, fetch the total number of pools in the system.
+		// We may not have access to all of them, so this is an upper bound.
+		rc = C.daos_mgmt_list_pools(cSysName, &poolCount, nil, nil)
+		if err := daosError(rc); err != nil {
+			return nil, err
+		}
+		log.Debugf("pools in system: %d", poolCount)
+
+		if poolCount < 1 {
+			return nil, nil
+		}
+
+		// Now, we actually fetch the pools into the buffer that we've created.
+		cPools = make([]C.daos_mgmt_pool_info_t, poolCount)
+		rc = C.daos_mgmt_list_pools(cSysName, &poolCount, &cPools[0], nil)
+		err := daosError(rc)
+		if err == nil {
+			cPools = cPools[:poolCount] // adjust the slice to the number of pools retrieved
+			log.Debugf("fetched %d pools", len(cPools))
+			break
+		}
+		if err == daos.StructTooSmall {
+			log.Notice("server-side pool list changed; re-fetching")
+			continue
+		}
+		log.Errorf("failed to fetch pool list: %s", err)
 		return nil, err
 	}
-	pools := make([]*daos.PoolInfo, 0, bufSize)
-	for i := 0; i < int(bufSize); i++ {
+
+	pools := make([]*daos.PoolInfo, 0, len(cPools))
+	for i := 0; i < len(cPools); i++ {
 		cPool := &cPools[i]
 
 		svcRanks, err := rankSetFromC(cPool.mgpi_svc)
@@ -658,15 +672,16 @@ func getPoolList(log logging.Logger, sysName string, queryEnabled bool) ([]*daos
 			if qErr != nil {
 				log.Errorf("failed to query pool %q: %s", poolLabel, qErr)
 			}
-			pool.Label = poolLabel
-			pool.ServiceReplicas = svcRanks.Ranks()
-
 			if err := daosError(C.daos_pool_disconnect(poolHandle, nil)); err != nil {
 				log.Errorf("failed to disconnect from pool %q: %s", poolLabel, err)
 			}
 			if qErr != nil {
 				continue
 			}
+
+			// Add a few missing pieces that the query doesn't fill in.
+			pool.Label = poolLabel
+			pool.ServiceReplicas = svcRanks.Ranks()
 		} else {
 			// Just populate the basic info.
 			pool = &daos.PoolInfo{

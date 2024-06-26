@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -459,7 +459,7 @@ ds_get_pool_list(uint64_t *npools, daos_mgmt_pool_info_t *pools)
 	if (*npools > 0 && lp_resp->n_pools > *npools) {
 		D_ERROR("pool list exceeds request buffer (req: %lu, actual: %lu)", *npools,
 			lp_resp->n_pools);
-		D_GOTO(out_resp, rc = -DER_TRUNC);
+		D_GOTO(out_resp, rc = -DER_OVERFLOW);
 	}
 
 	*npools = lp_resp->n_pools;

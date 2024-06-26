@@ -530,6 +530,15 @@ ds_mgmt_pool_list_hdlr(crt_rpc_t *rpc)
 send_resp:
 	out->plo_op.mo_rc = rc;
 
+	if (rc == 0) {
+		if (n_rpc > 0)
+			D_DEBUG(DB_MGMT, "returning %zu/%zu pools\n", n_rpc, n_mgmt);
+		else
+			D_DEBUG(DB_MGMT, "returning %zu pools\n", n_mgmt);
+	} else {
+		DL_ERROR(rc, "failed to list pools");
+	}
+
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		DL_ERROR(rc, "crt_reply_send() failed");
