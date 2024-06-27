@@ -481,6 +481,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos_agent
 %{_bindir}/dfuse
 %{_bindir}/daos
+%{_bindir}/tune-dfuse.sh
 %{_libdir}/libdaos_cmd_hdlrs.so
 %{_libdir}/libdfs.so
 %{_libdir}/libds3.so
