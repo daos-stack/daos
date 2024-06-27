@@ -745,12 +745,6 @@ class TestWithServers(TestWithoutServers):
         self.__dump_engine_ult_on_failure = self.params.get(
             "dump_engine_ult_on_failure", "/run/setup/*", True)
 
-        # # Find a configuration that meets the test requirements
-        # self.config = Configuration(
-        #     self.params, self.hostlist_servers, debug=self.debug)
-        # if not self.config.set_config(self):
-        #     self.cancel("Test requirements not met!")
-
         # Create host files - In the future this should be the responsibility of
         # tests/classes that need a host file and hostfile_clients should not be
         # a property of this class.
