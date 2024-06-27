@@ -1213,6 +1213,7 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 		crt_req_timeout_untrack(rpc_priv);
 		rpc_priv->crp_timeout_ts = 0;
 
+		D_ASSERT(d_list_empty(&rpc_priv->crp_tmp_link));
 		d_list_add_tail(&rpc_priv->crp_tmp_link, &timeout_list);
 	};
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
@@ -1320,6 +1321,7 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 		rc = CRT_REQ_TRACK_IN_WAITQ;
 	} else if (crt_gdata.cg_credit_ep_ctx != 0 &&
 	    (epi->epi_req_num - epi->epi_reply_num) >= crt_gdata.cg_credit_ep_ctx) {
+		D_ASSERT(d_list_empty(&rpc_priv->crp_epi_link));
 		if (rpc_priv->crp_opc_info->coi_queue_front)
 			d_list_add(&rpc_priv->crp_epi_link, &epi->epi_req_waitq);
 		else
@@ -1333,6 +1335,7 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 		rc = crt_req_timeout_track(rpc_priv);
 		D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 		if (rc == 0) {
+			D_ASSERT(d_list_empty(&rpc_priv->crp_epi_link));
 			d_list_add_tail(&rpc_priv->crp_epi_link, &epi->epi_req_q);
 			epi->epi_req_num++;
 			rc = CRT_REQ_TRACK_IN_INFLIGHQ;
@@ -1350,8 +1353,10 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
 	d_hash_rec_decref(&crt_ctx->cc_epi_table, &epi->epi_link);
 
-	if (quota_rc == -DER_QUOTA_LIMIT)
+	if (quota_rc == -DER_QUOTA_LIMIT) {
+		D_ASSERT(d_list_empty(&rpc_priv->crp_waitq_link));
 		d_list_add_tail(&rpc_priv->crp_waitq_link, &crt_ctx->cc_quotas.rpc_waitq);
+	}
 
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
@@ -1517,6 +1522,7 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 			D_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
 
 			/* add to resend list */
+			D_ASSERT(d_list_empty(&tmp_rpc->crp_tmp_link));
 			d_list_add_tail(&tmp_rpc->crp_tmp_link, &submit_list);
 		}
 		D_MUTEX_UNLOCK(&epi->epi_mutex);
