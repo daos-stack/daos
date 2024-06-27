@@ -100,6 +100,7 @@ class DaosServerManager(SubprocessManager):
         self.group = group
         server_command = get_server_command(
             group, svr_cert_dir, bin_dir, svr_config_file, svr_config_temp)
+        server_command.run_user = 'root'
         super().__init__(server_command, manager, namespace)
         self.manager.job.sub_command_override = "start"
 

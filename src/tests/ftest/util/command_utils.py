@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -35,7 +35,8 @@ class ExecutableCommand(CommandWithParameters):
     # values from the standard output yielded by the method.
     METHOD_REGEX = {"run": r"(.*)"}
 
-    def __init__(self, namespace, command, path="", subprocess=False, check_results=None):
+    def __init__(self, namespace, command, path="", subprocess=False, check_results=None,
+                 run_user=None):
         """Create a ExecutableCommand object.
 
         Uses Avocado's utils.process module to run a command str provided.
@@ -48,6 +49,7 @@ class ExecutableCommand(CommandWithParameters):
                 Defaults to False.
             check_results (list, optional): list of words used to mark the command as failed if
                 any are found in the command output. Defaults to None.
+            run_user (str, optional): user to run as. Defaults to None, which uses the current user.
         """
         super().__init__(namespace, command, path)
         self._process = None
@@ -59,7 +61,7 @@ class ExecutableCommand(CommandWithParameters):
         self.env = EnvironmentVariables()
 
         # User to run the command as. "root" is equivalent to sudo
-        self.run_user = None
+        self.run_user = run_user
 
         # List of CPU cores to pass to taskset
         self.bind_cores = None
@@ -482,13 +484,13 @@ class ExecutableCommand(CommandWithParameters):
         """
         return ExecutableCommand(
             self.namespace, self._command, self._path, self.run_as_subprocess,
-            self.check_results_list)
+            self.check_results_list, self.run_user)
 
 
 class CommandWithSubCommand(ExecutableCommand):
     """A class for a command with a sub command."""
 
-    def __init__(self, namespace, command, path="", subprocess=False):
+    def __init__(self, namespace, command, path="", subprocess=False, run_user=None):
         """Create a CommandWithSubCommand object.
 
         Args:
@@ -497,9 +499,9 @@ class CommandWithSubCommand(ExecutableCommand):
             path (str, optional): path to location of command binary file. Defaults to "".
             subprocess (bool, optional): whether the command is run as a subprocess.
                 Defaults to False.
-
+            run_user (str, optional): user to run as. Defaults to None, which uses the current user.
         """
-        super().__init__(namespace, command, path)
+        super().__init__(namespace, command, path, run_user=run_user)
 
         # Define the sub-command parameter whose value is used to assign the
         # sub-command's CommandWithParameters-based class.  Use the command to
@@ -715,7 +717,8 @@ class CommandWithSubCommand(ExecutableCommand):
         Returns:
             CommandWithSubCommand: a new CommandWithSubCommand object
         """
-        return CommandWithSubCommand(self.namespace, self._command, self._path)
+        return CommandWithSubCommand(
+            self.namespace, self._command, self._path, self.run_as_subprocess, self.run_user)
 
 
 class SubProcessCommand(CommandWithSubCommand):
@@ -724,7 +727,7 @@ class SubProcessCommand(CommandWithSubCommand):
     Example commands: daos_agent, daos_server
     """
 
-    def __init__(self, namespace, command, path="", timeout=10):
+    def __init__(self, namespace, command, path="", timeout=10, run_user=None):
         """Create a SubProcessCommand object.
 
         Args:
@@ -734,8 +737,9 @@ class SubProcessCommand(CommandWithSubCommand):
                 Defaults to "".
             timeout (int, optional): number of seconds to wait for patterns to
                 appear in the subprocess output. Defaults to 10 seconds.
+            run_user (str, optional): user to run as. Defaults to None, which uses the current user.
         """
-        super().__init__(namespace, command, path, True)
+        super().__init__(namespace, command, path, True, run_user)
 
         # Attributes used to determine command success when run as a subprocess
         # See self.check_subprocess_status() for details.
@@ -846,7 +850,7 @@ class SubProcessCommand(CommandWithSubCommand):
             SubProcessCommand: a new SubProcessCommand object
         """
         return SubProcessCommand(
-            self.namespace, self._command, self._path, self.pattern_timeout.value)
+            self.namespace, self._command, self._path, self.pattern_timeout.value, self.run_user)
 
 
 class YamlCommand(SubProcessCommand):
@@ -855,7 +859,7 @@ class YamlCommand(SubProcessCommand):
     Example commands: daos_agent, daos_server, dmg
     """
 
-    def __init__(self, namespace, command, path="", yaml_cfg=None, timeout=10):
+    def __init__(self, namespace, command, path="", yaml_cfg=None, timeout=10, run_user=None):
         """Create a YamlCommand command object.
 
         Args:
@@ -867,8 +871,9 @@ class YamlCommand(SubProcessCommand):
                 Defaults to ""
             timeout (int, optional): number of seconds to wait for patterns to
                 appear in the subprocess output. Defaults to 10 seconds.
+            run_user (str, optional): user to run as. Defaults to None, which uses the current user.
         """
-        super().__init__(namespace, command, path, timeout)
+        super().__init__(namespace, command, path, timeout, run_user)
 
         # Command configuration yaml file
         self.yaml = yaml_cfg
@@ -997,7 +1002,9 @@ class YamlCommand(SubProcessCommand):
         Args:
             source (str): source of the certificate files.
             hosts (NodeSet): list of the destination hosts.
+            user (str): user to use to distributed the files
         """
+        user = self.run_user or 'root'
         names = set()
         yaml = self.yaml
         while yaml is not None and hasattr(yaml, "other_params"):
@@ -1013,9 +1020,8 @@ class YamlCommand(SubProcessCommand):
                         dst_file = os.path.join(name, file_name)
                         self.log.debug("  %s -> %s", src_file, dst_file)
                         result = distribute_files(
-                            hosts, src_file, dst_file, mkdir=False,
-                            verbose=False, raise_exception=False, sudo=True,
-                            owner=self.certificate_owner)
+                            hosts, src_file, dst_file, mkdir=False, verbose=False,
+                            raise_exception=False, user=user, owner=self.certificate_owner)
                         if result.exit_status != 0:
                             self.log.info(
                                 "    WARNING: %s copy failed on %s:\n%s",
@@ -1028,7 +1034,7 @@ class YamlCommand(SubProcessCommand):
             self.log.debug(
                 "Copied certificates for %s (in %s):",
                 self._command, ", ".join(names))
-            for line in get_file_listing(hosts, names).stdout_text.splitlines():
+            for line in get_file_listing(hosts, names, user).stdout_text.splitlines():
                 self.log.debug("  %s", line)
 
     def copy_configuration(self, hosts):
@@ -1052,11 +1058,10 @@ class YamlCommand(SubProcessCommand):
                 try:
                     distribute_files(
                         hosts, self.temporary_file, self.yaml.filename,
-                        verbose=False, sudo=True)
+                        verbose=False, user=self.run_user or 'root')
                 except DaosTestError as error:
                     raise CommandFailure(
-                        "ERROR: Copying yaml configuration file to {}: "
-                        "{}".format(hosts, error)) from error
+                        f"ERROR: Copying yaml configuration file to {hosts}: {error}") from error
 
     def verify_socket_directory(self, user, hosts):
         """Verify the domain socket directory is present and owned by this user.
@@ -1079,15 +1084,14 @@ class YamlCommand(SubProcessCommand):
                 self.log.info(
                     "%s: creating socket directory %s for user %s on %s",
                     self.command, directory, user, nodes)
+                user = self.run_user or 'root'
                 try:
-                    create_directory(nodes, directory, sudo=True)
-                    change_file_owner(nodes, directory, user, get_primary_group(user), sudo=True)
+                    create_directory(nodes, directory, user=user)
+                    change_file_owner(nodes, directory, user, get_primary_group(user), user=user)
                 except DaosTestError as error:
                     raise CommandFailure(
-                        "{}: error setting up missing socket directory {} for "
-                        "user {} on {}:\n{}".format(
-                            self.command, directory, user, nodes,
-                            error)) from error
+                        f"{self.command}: error setting up missing socket directory {directory} "
+                        f"for user {user} on {nodes}:\n{error}") from error
 
     def get_user_file(self):
         """Get the file defined in the yaml file that must be owned by the user.
@@ -1105,7 +1109,8 @@ class YamlCommand(SubProcessCommand):
             YamlCommand: a new YamlCommand object
         """
         return YamlCommand(
-            self.namespace, self._command, self._path, self.yaml, self.pattern_timeout.value)
+            self.namespace, self._command, self._path, self.yaml, self.pattern_timeout.value,
+            self.run_user)
 
 
 class SubprocessManager(ObjectWithParameters):
@@ -1480,9 +1485,13 @@ class SystemctlCommand(ExecutableCommand):
     # pylint: disable=too-few-public-methods
     """Defines an object representing the systemctl command."""
 
-    def __init__(self):
-        """Create a SystemctlCommand object."""
-        super().__init__("/run/systemctl/*", "systemctl", subprocess=False)
+    def __init__(self, run_user=None):
+        """Create a SystemctlCommand object.
+
+        Args:
+            run_user (str, optional): user to run as. Defaults to None, which uses the current user.
+        """
+        super().__init__("/run/systemctl/*", "systemctl", subprocess=False, run_user=run_user)
         self.sudo = True
 
         self.unit_command = BasicParameter(None)

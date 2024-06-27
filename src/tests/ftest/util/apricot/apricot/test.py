@@ -68,8 +68,8 @@ class Test(avocadoTest):
         self.test_id = self.get_test_name()
 
         # Define a test unique temporary directory
-        self.base_test_dir = os.getenv("DAOS_TEST_LOG_DIR", "/tmp")
-        self.test_dir = os.path.join(self.base_test_dir, self.test_id)
+        self.test_env = TestEnvironment()
+        self.test_dir = os.path.join(self.test_env.log_dir, self.test_id)
         if not os.path.exists(self.test_dir):
             os.makedirs(self.test_dir)
 
@@ -545,7 +545,8 @@ class TestWithoutServers(Test):
         """Tear down after each test case."""
         self.report_timeout()
         if self.fault_injection:
-            self._teardown_errors.extend(self.fault_injection.stop())
+            self._teardown_errors.extend(
+                self.fault_injection.stop(self.test_env.agent_user or "root"))
         super().tearDown()
 
     def stop_leftover_processes(self, processes, hosts):
@@ -769,8 +770,8 @@ class TestWithServers(TestWithoutServers):
             hosts.add(self.hostlist_clients)
         # Copy the fault injection files to the hosts.
         self.fault_injection.copy_fault_files(hosts)
-        lines = get_file_listing(hosts, self.test_dir).stdout_text.splitlines()
-        for line in lines:
+        listing = get_file_listing(hosts, self.test_dir, self.test_env.agent_user or "root")
+        for line in listing.stdout_text.splitlines():
             self.log.debug("  %s", line)
 
         if not self.start_servers_once or self.name.uid == 1:
@@ -1117,8 +1118,7 @@ class TestWithServers(TestWithoutServers):
             group = self.server_group
         if svr_config_file is None and self.server_manager_class == "Systemctl":
             svr_config_file = get_default_config_file("server")
-            svr_config_temp = self.get_config_file(
-                group, "server", self.test_dir)
+            svr_config_temp = self.get_config_file(group, "server", self.test_dir)
         elif svr_config_file is None:
             svr_config_file = self.get_config_file(group, "server")
             svr_config_temp = None
@@ -1345,7 +1345,8 @@ class TestWithServers(TestWithoutServers):
             "Removing temporary test files in %s from %s",
             self.test_dir, str(NodeSet.fromlist(all_hosts)))
         result = run_remote(
-            self.log, all_hosts, command_as_user("rm -fr {}".format(self.test_dir), "root"))
+            self.log, all_hosts,
+            command_as_user("rm -fr {}".format(self.test_dir), self.test_env.agent_user or "root"))
         if not result.passed:
             errors.append("Error removing temporary test files on {}".format(result.failed_hosts))
         return errors

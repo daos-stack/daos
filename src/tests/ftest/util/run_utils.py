@@ -7,6 +7,7 @@ import os
 import shlex
 import subprocess  # nosec
 import time
+from getpass import getuser
 from socket import gethostname
 
 from ClusterShell.NodeSet import NodeSet
@@ -276,7 +277,7 @@ def log_result_data(log, data):
             log.debug("%s%s", " " * indent, line)
 
 
-def get_clush_command(hosts, args=None, command="", command_env=None, command_sudo=False):
+def get_clush_command(hosts, args=None, command="", command_env=None, user=None):
     """Get the clush command with optional sudo arguments.
 
     Args:
@@ -285,7 +286,7 @@ def get_clush_command(hosts, args=None, command="", command_env=None, command_su
         command (str, optional): command to execute with clush. Defaults to empty string.
         command_env (EnvironmentVariables, optional): environment variables to export with the
             command. Defaults to None.
-        sudo (bool, optional): whether to run the command with sudo privileges. Defaults to False.
+        user (str, optional): user with which to run the command. Defaults to None.
 
     Returns:
         str: the clush command
@@ -297,7 +298,7 @@ def get_clush_command(hosts, args=None, command="", command_env=None, command_su
     cmd_list.extend(["-w", str(hosts)])
     # If ever needed, this is how to disable host key checking:
     # cmd_list.extend(["-o", "-oStrictHostKeyChecking=no"])
-    cmd_list.append(command_as_user(command, "root" if command_sudo else "", command_env))
+    cmd_list.append(command_as_user(command, user, command_env))
     return " ".join(cmd_list)
 
 
@@ -441,7 +442,7 @@ def command_as_user(command, user, env=None):
         str: command adjusted to run as another user
 
     """
-    if not user:
+    if not user or user == getuser():
         if not env:
             return command
         return " ".join([env.to_export_str(), command]).strip()

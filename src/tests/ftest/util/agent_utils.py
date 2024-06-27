@@ -1,12 +1,11 @@
 """
-  (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2019-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 import re
 import socket
-from getpass import getuser
 
 from agent_utils_params import DaosAgentTransportCredentials, DaosAgentYamlParameters
 from ClusterShell.NodeSet import NodeSet
@@ -65,7 +64,7 @@ def get_agent_command(group, cert_dir, bin_dir, config_file, config_temp=None):
 class DaosAgentCommand(YamlCommand):
     """Defines an object representing a daos_agent command."""
 
-    def __init__(self, path="", yaml_cfg=None, timeout=15):
+    def __init__(self, path="", yaml_cfg=None, timeout=15, run_user=None):
         """Create a daos_agent command object.
 
         Args:
@@ -74,10 +73,12 @@ class DaosAgentCommand(YamlCommand):
                 parameters. Defaults to None.
             timeout (int, optional): number of seconds to wait for patterns to
                 appear in the subprocess output. Defaults to 60 seconds.
+            run_user (str, optional): user to run as. Defaults to None, which uses the current user.
         """
         super().__init__(
-            "/run/agent_config/*", "daos_agent", path, yaml_cfg, timeout)
+            "/run/agent_config/*", "daos_agent", path, yaml_cfg, timeout, run_user)
         self.pattern = "listening on "
+        self.run_user = run_user
 
         # If specified use the configuration file from the YamlParameters object
         default_yaml_file = None
@@ -206,7 +207,7 @@ class DaosAgentManager(SubprocessManager):
     """Manages the daos_agent execution on one or more hosts."""
 
     def __init__(self, group, bin_dir, cert_dir, config_file, config_temp=None,
-                 manager="Orterun", outputdir=None):
+                 manager="Orterun", outputdir=None, run_user=None):
         """Initialize a DaosAgentManager object.
 
         Args:
@@ -223,8 +224,8 @@ class DaosAgentManager(SubprocessManager):
             outputdir (str, optional): path to avocado test outputdir. Defaults
                 to None.
         """
-        agent_command = get_agent_command(
-            group, cert_dir, bin_dir, config_file, config_temp)
+        agent_command = get_agent_command(group, cert_dir, bin_dir, config_file, config_temp)
+        agent_command.run_user = 'root'
         super().__init__(agent_command, manager)
 
         # Set the correct certificate file ownership
@@ -265,11 +266,10 @@ class DaosAgentManager(SubprocessManager):
             self._hosts, self.manager.command)
 
         # Copy certificates
-        self.manager.job.copy_certificates(
-            get_log_file("daosCA/certs"), self._hosts)
+        self.manager.job.copy_certificates(get_log_file("daosCA/certs"), self._hosts)
 
         # Verify the socket directory exists when using a non-systemctl manager
-        self.verify_socket_directory(getuser())
+        self.verify_socket_directory(self.manager.job.certificate_owner)
 
         super().start()
 

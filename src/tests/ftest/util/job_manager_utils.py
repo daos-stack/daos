@@ -651,7 +651,7 @@ class Systemctl(JobManager):
         """
         super().__init__("/run/systemctl/*", "systemd", job)
         self.job = job
-        self._systemctl = SystemctlCommand()
+        self._systemctl = SystemctlCommand(run_user=self.job.run_user)
         self._systemctl.service.value = self.job.service_name
 
         self.timestamps = {
