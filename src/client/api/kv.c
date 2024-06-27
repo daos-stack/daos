@@ -8,6 +8,7 @@
  *
  * src/client/api/daos_kv.c
  */
+
 #define D_LOGFAC	DD_FAC(client)
 
 #include <daos/common.h>
