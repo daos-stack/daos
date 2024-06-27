@@ -369,6 +369,113 @@ class DaosCommand(DaosCommandBase):
             ("pool", "list-attrs"), pool=pool, sys_name=sys_name,
             verbose=verbose)
 
+    def pool_list_containers(self, pool, sys_name=None):
+        """List containers in the pool.
+
+        Args:
+            pool (str): pool label or UUID
+            sys_name (str): DAOS system name. Defaults to None.
+
+        Returns:
+            dict: JSON output
+
+        Raises:
+            CommandFailure: if the daos pool list-containers command fails.
+
+        """
+        return self._get_json_result(
+            ("pool", "list-containers"), pool=pool, sys_name=sys_name)
+
+    def pool_list(self, no_query=False, verbose=False):
+        """List pools.
+
+        Args:
+            no_query (bool, optional): If True, do not query for pool stats.
+            verbose (bool, optional): If True, use verbose mode.
+
+        Raises:
+            CommandFailure: if the daos pool list command fails.
+
+        Returns:
+            dict: the daos json command output converted to a python dictionary
+
+        """
+        # Sample verbose JSON Output:
+        # {
+        #     "response": {
+        #         "status": 0,
+        #         "pools": [
+        #         {
+        #             "uuid": "517217db-47c4-4bb9-aae5-e38ca7b3dafc",
+        #             "label": "mkp1",
+        #             "svc_reps": [
+        #             0
+        #             ],
+        #             "total_targets": 8,
+        #             "disabled_targets": 0,
+        #             "usage": [
+        #             {
+        #                 "tier_name": "SCM",
+        #                 "size": 3000000000,
+        #                 "free": 2995801112,
+        #                 "imbalance": 0
+        #             },
+        #             {
+        #                 "tier_name": "NVME",
+        #                 "size": 47000000000,
+        #                 "free": 26263322624,
+        #                 "imbalance": 36
+        #             }
+        #             ]
+        #         }
+        #         ]
+        #     },
+        #     "error": null,
+        #     "status": 0
+        # }
+        return self._get_json_result(
+            ("pool", "list"), no_query=no_query, verbose=verbose)
+
+    def _parse_pool_list(self, key=None, **kwargs):
+        """Parse the daos pool list json output for the requested information.
+
+        Args:
+            key (str, optional): pool list json dictionary key in
+                ["response"]["pools"]. Defaults to None.
+
+        Raises:
+            CommandFailure: if the daos pool list command fails.
+
+        Returns:
+            list: list of all the pool items in the daos pool list json output
+                for the requested json dictionary key. This will be an empty
+                list if the key does not exist or the json output was not in
+                the expected format.
+
+        """
+        pool_list = self.pool_list(**kwargs)
+        try:
+            if pool_list["response"]["pools"] is None:
+                return []
+            if key:
+                return [pool[key] for pool in pool_list["response"]["pools"]]
+            return pool_list["response"]["pools"]
+        except KeyError:
+            return []
+
+    def get_pool_list_all(self, **kwargs):
+        """Get a list of all the pool information from daos pool list.
+
+        Raises:
+            CommandFailure: if the daos pool list command fails.
+
+        Returns:
+            list: a list of dictionaries containing information for each pool
+                from the daos pool list json output
+
+        """
+        return self._parse_pool_list(**kwargs)
+
     def container_query(self, pool, cont, sys_name=None):
         """Query a container.
 
