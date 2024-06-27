@@ -102,6 +102,14 @@ message FabricInterfaces {
 	repeated FabricInterface ifaces = 1;
 }
 
+message BuildInfo
+{
+	uint32 major = 1;
+	uint32 minor = 2;
+	uint32 patch = 3;
+	string tag   = 4;
+}
+
 message GetAttachInfoResp {
 	int32 status = 1;		// DAOS error code
 	message RankUri {
@@ -119,7 +127,8 @@ message GetAttachInfoResp {
 	string sys = 6;			// Name of the DAOS system
 	repeated RankUri secondary_rank_uris = 7; // Rank URIs for additional providers
 	repeated ClientNetHint secondary_client_net_hints = 8; // Hints for additional providers
-	map<uint32,FabricInterfaces> numa_fabric_interfaces = 9; // Usable fabric interfaces by NUMA node (populated by agent)
+	BuildInfo              build_info = 9; // Structured server build information
+	map<uint32,FabricInterfaces> numa_fabric_interfaces = 10; // Usable fabric interfaces by NUMA node (populated by agent)
 }
 
 message PrepShutdownReq {
