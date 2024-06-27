@@ -3567,8 +3567,12 @@ obj_tgt_punch(struct obj_tgt_punch_args *otpa, uint32_t *shards, uint32_t count)
 			goto out;
 	}
 
-	if (dth != NULL)
+	if (dth != NULL) {
+		if (dth->dth_prepared)
+			D_GOTO(out, rc = 0);
+
 		goto exec;
+	}
 
 	if (opi->opi_flags & ORF_RESEND) {
 		tmp = opi->opi_epoch;
