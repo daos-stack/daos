@@ -652,7 +652,9 @@ $
 
 ```
 
-### Caching
+### Tuning
+
+#### Caching
 
 For performance reasons caching will be enabled by default in DFuse, including both
 data and metadata caching.  It is possible to tune these settings both at a high level
@@ -682,8 +684,6 @@ to be set to 0 or off, except dentry-dir-time which defaults to dentry-time
 | dfuse-dentry-time       | How long directory entries are cached                                  |
 | dfuse-dentry-dir-time   | How long dentries are cached, if the entry is itself a directory       |
 | dfuse-ndentry-time      | How long negative dentries are cached                                  |
-| dfuse-data-cache        | Data caching enabled, duration or ("on"/"true"/"off"/"false"/"otoc")   |
-| dfuse-direct-io-disable | Force use of page cache for this container ("on"/"true"/"off"/"false") |
 
 For metadata caching attributes specify the duration that the cache should be
 valid for, specified in seconds or with a 's', 'm', 'h' or 'd' suffix for seconds,
@@ -702,17 +702,60 @@ Processes running with a working directory within the dfuse mount do not hold a 
 directory so cache expiry can in this case cause getcwd() to fail.  Should this happen then a
 larger value for "dfuse-dentry-dir-time" should avoid the issue.
 
-dfuse-direct-io-disable will enable data caching, similar to dfuse-data-cache,
-however if this is enabled then the O\_DIRECT flag will be ignored, and all
-files will use the page cache.  This default value for this is disabled.
-
-With no options specified attr and dentry timeouts will be 1 second, dentry-dir
-and ndentry timeouts will be 5 seconds, and data caching will be set to 10 minutes.
+With no options specified attr and dentry timeouts will be 60 second, dentry-dir timeout will be
+300s and ndentry timeout will be set to 5 seconds.
 
 Readdir caching is available when supported by libfuse; however, on many distributions the system
 libfuse is not able to support this feature. Libfuse version 3.5.0 or newer is required at both
 compile and run-time.  Use `dfuse --version` or the runtime logs to see the fuse version used and if
 the feature is compiled into dfuse.  Readdir caching is controlled by the dfuse-dentry-time setting.
+
+### Readahead
+
+By default, the FUSE readahead window is enforced to 128KB. More aggressive readahead has demonstrated
+substantial performance boost with some AI workload. Changing the readahead value on the mountpoint
+required root access and can be modified as follow:
+
+```sh
+$ cat /sys/class/bdi/`mountpoint -d $FUSE_MOUNTPOINT`/read_ahead_kb
+128
+$ echo 4096 | sudo tee -a /sys/class/bdi/`mountpoint -d $FUSE_MOUNTPOINT`/read_ahead_kb
+4096
+```
+
+### Writeback Cache
+
+Writeback caching of data is also supported via dfuse.
+
+To selectively control writeback caching within a container the following container
+attributes should be used:
+
+| **Attribute name**      | **Description**                                                             |
+| ----------------------- | --------------------------------------------------------------------------- |
+| dfuse-data-cache        | Writeback caching enabled, duration or ("on"/"true"/"off"/"false"/"otoc")   |
+| dfuse-direct-io-disable | Force use of page cache for this container ("on"/"true"/"off"/"false")      |
+
+dfuse-direct-io-disable will enable data caching, similar to dfuse-data-cache,
+however if this is enabled then the O\_DIRECT flag will be ignored, and all
+files will use the page cache.  This default value for this is disabled.
+
+With no options specified, data caching will be set to 10 minutes.
+
+By default FUSE filesystems have a `max_ratio` of 1%, meaning only 1% of dirty pages on the system
+can belong to a FUSE filesystem before starting writing back pages (and throttling, if writeback
+can't keep up). This limit is fairly low for high-performance storage system can be bumped (to 50%
+for instance, to avoid needless throttling) as followed (require priviledged access):
+
+```sh
+$ cat /sys/class/bdi/`mountpoint -d $FUSE_MOUNTPOINT`/max_ratio
+1
+$ echo 50 | sudo tee -a /sys/class/bdi/`mountpoint -d $FUSE_MOUNTPOINT`/max_ratio
+50
+```
+
+#### Per-mountpoint Caching
+
+It is also possible to control the caching behavior on a per-mountpoint basis (vs per-container as detailed before).
 
 These are two command line options to control the DFuse process itself.
 

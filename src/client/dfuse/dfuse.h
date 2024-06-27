@@ -536,7 +536,7 @@ struct dfuse_cont {
 	double                  dfc_data_timeout;
 	bool                    dfc_data_otoc;
 	bool                    dfc_direct_io_disable;
-	bool                          dfc_wb_cache;
+	bool                    dfc_wb_cache;
 
 	/* Set to true if the inode was allocated to this structure, so should be kept on close*/
 	bool                    dfc_save_ino;
