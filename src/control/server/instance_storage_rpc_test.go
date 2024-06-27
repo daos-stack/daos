@@ -17,7 +17,6 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
-	"github.com/daos-stack/daos/src/control/lib/hardware/pciutils"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -27,18 +26,16 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
-type mockAccessProvider struct {
+type mockPCIeLinkStatsProvider struct {
 	pciDev    *hardware.PCIDevice
 	pciDevErr error
 }
 
-func (ap *mockAccessProvider) Cleanup() {}
-
-func (ap *mockAccessProvider) PCIeCapsFromConfig(cfgBytes []byte, dev *hardware.PCIDevice) error {
-	if ap.pciDevErr != nil {
-		return ap.pciDevErr
+func (mp *mockPCIeLinkStatsProvider) PCIeCapsFromConfig(cfgBytes []byte, dev *hardware.PCIDevice) error {
+	if mp.pciDevErr != nil {
+		return mp.pciDevErr
 	}
-	*dev = *ap.pciDev
+	*dev = *mp.pciDev
 	return nil
 }
 
@@ -116,19 +113,18 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 				getCtrlrHealth = getBioHealth
 			}()
 
-			ctx := context.WithValue(test.Context(t), pciutils.AccessKey,
-				&mockAccessProvider{
-					pciDev:    tc.pciDev,
-					pciDevErr: tc.pciDevErr,
-				})
+			mockProv := &mockPCIeLinkStatsProvider{
+				pciDev:    tc.pciDev,
+				pciDevErr: tc.pciDevErr,
+			}
 
 			ctrlr := &ctlpb.NvmeController{
 				PciCfg:   tc.pciCfgSpc,
 				DevState: tc.devState,
 			}
 
-			upd, err := populateCtrlrHealth(ctx, NewMockInstance(nil),
-				&ctlpb.BioHealthReq{}, ctrlr)
+			upd, err := populateCtrlrHealth(test.Context(t), NewMockInstance(nil),
+				&ctlpb.BioHealthReq{}, ctrlr, mockProv)
 			test.CmpErr(t, tc.expErr, err)
 			if err != nil {
 				return

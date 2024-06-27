@@ -170,14 +170,8 @@ func addLinkInfoToHealthStats(prov hardware.PCIeLinkStatsProvider, pciCfg string
 	sb := new(strings.Builder)
 	formatBytestring(pciCfg, sb)
 
-	// Prefix config bytes with dummy preamble which is expected by the library when reading
-	// config from file (lspci "-F" option). The actual address is irrelevant because only the
-	// config content is being used. Without an address and device values in the preamble, the
-	// library will refuse to parse the file content.
-	cfgBytes := append([]byte(pciutils.DummyPreamble), []byte(sb.String())...)
-
 	pciDev := &hardware.PCIDevice{}
-	if err := prov.PCIeCapsFromConfig(cfgBytes, pciDev); err != nil {
+	if err := prov.PCIeCapsFromConfig([]byte(sb.String()), pciDev); err != nil {
 		return err
 	}
 

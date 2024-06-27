@@ -44,28 +44,22 @@ f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 		expErr   error
 	}{
 		"empty config": {
-			expErr: errors.New("empty config"),
+			expErr: pciutils.ErrCfgMissing,
 		},
-		"no preamble": {
-			cfgBytes: mockBytes,
-			expErr:   pciutils.ErrNoDevice,
+		"incomplete config; no pci-express caps": {
+			cfgBytes: append(mockBytes[:10], byte('\n')),
+			expErr:   errors.New("no pci-express capabilities"),
 		},
 		"multiple devices input": {
-			cfgBytes: append(append(append(pciutils.DummyPreamble, mockBytes...),
-				[]byte("\n\n")...),
-				append(pciutils.DummyPreamble, mockBytes...)...),
-			expErr: pciutils.ErrMultiDevices,
+			cfgBytes: append(append(mockBytes, []byte("\n\n")...), mockBytes...),
+			expErr:   pciutils.ErrMultiDevices,
 		},
 		"no final new-line char": {
-			cfgBytes: append(pciutils.DummyPreamble, mockBytes[:len(mockBytes)-1]...),
+			cfgBytes: mockBytes[:len(mockBytes)-1],
 			expErr:   pciutils.ErrCfgNotTerminated,
 		},
-		"no config space contents": {
-			cfgBytes: pciutils.DummyPreamble,
-			expErr:   pciutils.ErrCfgMissing,
-		},
 		"success": {
-			cfgBytes: append(pciutils.DummyPreamble, mockBytes...),
+			cfgBytes: mockBytes,
 			expDev: &hardware.PCIDevice{
 				LinkMaxSpeed: 8e+9,
 				LinkMaxWidth: 4,
@@ -75,7 +69,7 @@ f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			ap := &pciutils.API{}
+			ap := pciutils.NewPCIeLinkStatsProvider()
 			dev := &hardware.PCIDevice{}
 
 			err := ap.PCIeCapsFromConfig(tc.cfgBytes, dev)

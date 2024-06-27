@@ -8,6 +8,7 @@ package pciutils
 
 import (
 	"os"
+	"strings"
 	"unsafe"
 
 	"github.com/pkg/errors"
@@ -23,12 +24,15 @@ import (
 */
 import "C"
 
-const giga = 1e+9
+const (
+	giga = 1e+9
 
-// DummyPreamble provides a prefix expected by library when reading a configuration dump. The actual
-// address is irrelevant because only the config content is being used. Without an address and
-// device values in the preamble, the library will refuse to parse the config dump file content.
-var DummyPreamble = []byte("01:00.0 device #1\n")
+	// dummyPreamble provides a prefix expected by library when reading a configuration dump.
+	// The actual address is irrelevant because only the config content is being used. Without
+	// an address and device values in the preamble, the library will refuse to parse the config
+	// dump file content.
+	dummyPreamble = "01:00.0 device #1\n"
+)
 
 // Error values for common invalid situations.
 var (
@@ -38,9 +42,9 @@ var (
 	ErrCfgMissing       = errors.New("incomplete device config")
 )
 
-// API provides the PCIeLinkStatsProvider interface by exposing a concrete implementation of
+// api provides the PCIeLinkStatsProvider interface by exposing a concrete implementation of
 // PCIeCapsFromConfig().
-type API struct{}
+type api struct{}
 
 func speedToFloat(speed uint16) float32 {
 	var mant float32
@@ -70,20 +74,29 @@ func speedToFloat(speed uint16) float32 {
 // The library access method parameters are set to read the config dump from file and the input byte
 // slice is written to a temporary file that is read on pci_scan_bus(). The device that has been
 // populated on scan is used to populate the output PCIDevice field values.
-func (api *API) PCIeCapsFromConfig(cfgBytes []byte, dev *hardware.PCIDevice) error {
-	lenCfg := len(cfgBytes)
-	if lenCfg == 0 {
-		return errors.New("empty config")
-	}
+func (ap *api) PCIeCapsFromConfig(cfgBytes []byte, dev *hardware.PCIDevice) error {
 	if dev == nil {
 		return errors.New("nil device reference")
+	}
+
+	// Multiple device config dumps unsupported.
+	if strings.Contains(string(cfgBytes), "\n\n") {
+		return ErrMultiDevices
+	}
+
+	lenCfg := len(cfgBytes)
+	if lenCfg == 0 {
+		return ErrCfgMissing
 	}
 	if cfgBytes[lenCfg-1] != '\n' {
 		return ErrCfgNotTerminated
 	}
-	if lenCfg <= len(DummyPreamble) {
-		return ErrCfgMissing
-	}
+
+	// Prefix config bytes with dummy preamble which is expected by the library when reading
+	// config from file (lspci "-F" option). The actual address is irrelevant because only the
+	// config content is being used. Without an address and device values in the preamble, the
+	// library will refuse to parse the file content.
+	cfgBytes = append([]byte(dummyPreamble), cfgBytes...)
 
 	access := C.pci_alloc()
 	if access == nil {
@@ -155,5 +168,5 @@ func (api *API) PCIeCapsFromConfig(cfgBytes []byte, dev *hardware.PCIDevice) err
 }
 
 func NewPCIeLinkStatsProvider() hardware.PCIeLinkStatsProvider {
-	return &API{}
+	return &api{}
 }

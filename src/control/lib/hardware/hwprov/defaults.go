@@ -77,6 +77,6 @@ func DefaultIOMMUDetector(log logging.Logger) hardware.IOMMUDetector {
 }
 
 // DefaultPCIeLinkStatsProvider gets the default provider for retrieving PCIe link stats.
-func DefaultPCIeLinkStatsProvider(log logging.Logger) hardware.PCIeLinkStatsProvider {
+func DefaultPCIeLinkStatsProvider() hardware.PCIeLinkStatsProvider {
 	return pciutils.NewPCIeLinkStatsProvider()
 }
