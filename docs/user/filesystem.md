@@ -723,6 +723,12 @@ $ echo 4096 | sudo tee -a /sys/class/bdi/`mountpoint -d $FUSE_MOUNTPOINT`/read_a
 4096
 ```
 
+This can also be done for all mounted dfuse filesystems with the following command:
+
+```sh
+awk '{if ($9=="fuse.daos") {print "echo 4096 > /sys/class/bdi/" $3 "/read_ahead_kb"}}' /proc/self/mountinfo | sh
+```
+
 #### Writeback Cache
 
 Writeback caching of data is also supported via dfuse.
@@ -751,6 +757,12 @@ $ cat /sys/class/bdi/`mountpoint -d $FUSE_MOUNTPOINT`/max_ratio
 1
 $ echo 50 | sudo tee -a /sys/class/bdi/`mountpoint -d $FUSE_MOUNTPOINT`/max_ratio
 50
+```
+
+This can also be done for all mounted dfuse filesystems with the following command:
+
+```sh
+awk '{if ($9=="fuse.daos") {print "echo 50 > /sys/class/bdi/" $3 "/max_ratio"}}' /proc/self/mountinfo | sh
 ```
 
 #### Per-mountpoint Caching
