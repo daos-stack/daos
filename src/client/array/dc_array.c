@@ -2068,7 +2068,7 @@ free_set_size_cb(tse_task_t *task, void *data)
 }
 
 static int
-punch_dkey_or_extent(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val, daos_off_t record_i,
+punch_dkey_or_extent(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val, daos_off_t start,
 		     daos_size_t num_records, bool punch_dkey, tse_task_t *task,
 		     d_list_t *task_list)
 {
@@ -2085,7 +2085,7 @@ punch_dkey_or_extent(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val, d
 		D_DEBUG(DB_IO, "Punching dkey %zu\n", dkey_val);
 	else
 		D_DEBUG(DB_IO, "Punching (%zu, %zu) in Key %zu\n",
-			record_i + 1, num_records, dkey_val);
+			start, num_records, dkey_val);
 
 	D_ALLOC_PTR(params);
 	if (params == NULL)
@@ -2120,7 +2120,7 @@ punch_dkey_or_extent(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val, d
 		D_ALLOC_PTR(iod->iod_recxs);
 		if (iod->iod_recxs == NULL)
 			D_GOTO(free, rc = -DER_NOMEM);
-		iod->iod_recxs[0].rx_idx = record_i + 1;
+		iod->iod_recxs[0].rx_idx = start;
 		iod->iod_recxs[0].rx_nr = num_records;
 
 		rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, tse_task2sched(task), 0, NULL, &io_task);
@@ -2453,12 +2453,12 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 			if (dkey_val == 1) {
 				D_DEBUG(DB_IO, "Punch full extent in key " DF_U64 "\n", dkey_val);
 				rc = punch_dkey_or_extent(args->oh, args->th, dkey_val,
-							  (daos_off_t)-1, props->chunk_size, false,
+							  0, props->chunk_size, false,
 							  props->ptask, &task_list);
 			} else {
 				D_DEBUG(DB_IO, "Punch dkey " DF_U64 "\n", dkey_val);
 				rc = punch_dkey_or_extent(args->oh, args->th, dkey_val,
-							  (daos_off_t)-1, props->chunk_size, true,
+							  0, props->chunk_size, true,
 							  props->ptask, &task_list);
 			}
 			if (rc)
@@ -2472,7 +2472,7 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 				/** Punch all records above record_i */
 				D_DEBUG(DB_IO, "Punch extent in key "DF_U64"\n", dkey_val);
 				rc = punch_dkey_or_extent(args->oh, args->th, dkey_val,
-							  props->record_i, props->num_records,
+							  props->record_i + 1, props->num_records,
 							  false, props->ptask, &task_list);
 				if (rc)
 					goto out;
