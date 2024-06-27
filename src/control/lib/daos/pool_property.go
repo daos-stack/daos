@@ -29,7 +29,7 @@ func numericMarshaler(v *PoolPropertyValue) ([]byte, error) {
 }
 
 const (
-	defDurationUnit = time.Second
+	defDurationUnit = "s"
 )
 
 // parseDuration parses a duration string into a time.Duration.
@@ -40,8 +40,7 @@ func parseDuration(s string) (time.Duration, error) {
 
 	// Append the duration unit if it is missing.
 	if s[len(s)-1] >= '0' && s[len(s)-1] <= '9' {
-		dduStr := defDurationUnit.String()
-		s += dduStr[len(dduStr)-1:]
+		s += defDurationUnit
 	}
 
 	// For convenience, parse custom duration units beyond
