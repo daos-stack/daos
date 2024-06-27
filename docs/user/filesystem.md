@@ -710,7 +710,7 @@ libfuse is not able to support this feature. Libfuse version 3.5.0 or newer is r
 compile and run-time.  Use `dfuse --version` or the runtime logs to see the fuse version used and if
 the feature is compiled into dfuse.  Readdir caching is controlled by the dfuse-dentry-time setting.
 
-### Readahead
+#### Readahead
 
 By default, the FUSE readahead window is enforced to 128KB. More aggressive readahead has demonstrated
 substantial performance boost with some AI workload. Changing the readahead value on the mountpoint
@@ -723,7 +723,7 @@ $ echo 4096 | sudo tee -a /sys/class/bdi/`mountpoint -d $FUSE_MOUNTPOINT`/read_a
 4096
 ```
 
-### Writeback Cache
+#### Writeback Cache
 
 Writeback caching of data is also supported via dfuse.
 
@@ -744,7 +744,7 @@ With no options specified, data caching will be set to 10 minutes.
 By default FUSE filesystems have a `max_ratio` of 1%, meaning only 1% of dirty pages on the system
 can belong to a FUSE filesystem before starting writing back pages (and throttling, if writeback
 can't keep up). This limit is fairly low for high-performance storage system can be bumped (to 50%
-for instance, to avoid needless throttling) as followed (require priviledged access):
+for instance, to avoid needless throttling) as followed (require privileged access):
 
 ```sh
 $ cat /sys/class/bdi/`mountpoint -d $FUSE_MOUNTPOINT`/max_ratio
