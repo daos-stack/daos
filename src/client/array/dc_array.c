@@ -2441,19 +2441,26 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 		memcpy(&dkey_val, ptr, args->kds[i].kd_key_len);
 		ptr += args->kds[i].kd_key_len;
 
+		/*
+		 * Either punch the entire dkey or an extent in that dkey depending on the offset
+		 * where we are truncating to. The first dkey of the array (dkey 1) will always be
+		 * an extent punch to maintain an epoch there.
+		 */
 		if (props->size == 0 || dkey_val > props->dkey_val) {
 			/** Do nothing for DKEY 0 (metadata) */
 			if (dkey_val == 0)
 				continue;
-			/*
-			 * The dkey is higher than the adjustded size so we could punch it here.
-			 * But it's better to punch the extent so that the max_write for the object
-			 * doesn't get lost by aggregation.
-			 */
-			D_DEBUG(DB_IO, "Punch full extent in key "DF_U64"\n", dkey_val);
-			rc = punch_dkey_or_extent(args->oh, args->th, dkey_val, (daos_off_t)-1,
-						  props->chunk_size, true, props->ptask,
-						  &task_list);
+			if (dkey_val == 1) {
+				D_DEBUG(DB_IO, "Punch full extent in key " DF_U64 "\n", dkey_val);
+				rc = punch_dkey_or_extent(args->oh, args->th, dkey_val,
+							  (daos_off_t)-1, props->chunk_size, false,
+							  props->ptask, &task_list);
+			} else {
+				D_DEBUG(DB_IO, "Punch dkey " DF_U64 "\n", dkey_val);
+				rc = punch_dkey_or_extent(args->oh, args->th, dkey_val,
+							  (daos_off_t)-1, props->chunk_size, true,
+							  props->ptask, &task_list);
+			}
 			if (rc)
 				goto out;
 		} else if (dkey_val == props->dkey_val && props->record_i) {
