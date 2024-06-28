@@ -9,6 +9,7 @@ package server
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
@@ -16,6 +17,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -52,15 +54,17 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		devState   ctlpb.NvmeDevState
-		pciCfgSpc  string
-		pciDev     *hardware.PCIDevice
-		pciDevErr  error
-		healthRes  *ctlpb.BioHealthResp
-		healthErr  error
-		expCtrlr   *ctlpb.NvmeController
-		expUpdated bool
-		expErr     error
+		devState      ctlpb.NvmeDevState
+		pciAddr       string
+		pciCfgSpc     string
+		pciDev        *hardware.PCIDevice
+		pciDevErr     error
+		healthRes     *ctlpb.BioHealthResp
+		healthErr     error
+		expCtrlr      *ctlpb.NvmeController
+		expUpdated    bool
+		expErr        error
+		expDispatched []*events.RASEvent
 	}{
 		"bad state; skip health": {
 			healthRes: healthWithoutLinkStats(),
@@ -104,8 +108,40 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 			},
 			expUpdated: true,
 		},
+		"update health; add link stats; speed downgraded": {
+			devState:  ctlpb.NvmeDevState_NORMAL,
+			pciAddr:   test.MockPCIAddr(1),
+			pciCfgSpc: "ABCD",
+			pciDev: &hardware.PCIDevice{
+				LinkPortID:   1,
+				LinkNegSpeed: 1e+9,
+				LinkMaxSpeed: 2.5e+9,
+				LinkNegWidth: 4,
+				LinkMaxWidth: 4,
+			},
+			healthRes: healthWithoutLinkStats(),
+			expCtrlr: &ctlpb.NvmeController{
+				PciAddr:  test.MockPCIAddr(1),
+				DevState: ctlpb.NvmeDevState_NORMAL,
+				HealthStats: func() *ctlpb.BioHealthResp {
+					mh := proto.MockNvmeHealth()
+					mh.LinkMaxSpeed *= float32(2.5)
+					return mh
+				}(),
+			},
+			expUpdated: true,
+			expDispatched: []*events.RASEvent{
+				events.NewGenericEvent(events.RASNVMeLinkSpeedDown,
+					events.RASSeverityError, "nvme ssd \"0000:01:00.0\" link "+
+						"speed downgraded (port: 1, max: 2.5 GT/s, "+
+						"negotiated: 1 GT/s)", ""),
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
 			getCtrlrHealth = func(_ context.Context, _ Engine, _ *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
 				return tc.healthRes, tc.healthErr
 			}
@@ -119,11 +155,21 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 			}
 
 			ctrlr := &ctlpb.NvmeController{
+				PciAddr:  tc.pciAddr,
 				PciCfg:   tc.pciCfgSpc,
 				DevState: tc.devState,
 			}
 
-			upd, err := populateCtrlrHealth(test.Context(t), NewMockInstance(nil),
+			ctx, cancel := context.WithTimeout(test.Context(t), 200*time.Millisecond)
+			defer cancel()
+
+			ps := events.NewPubSub(ctx, log)
+			ei := NewEngineInstance(log, nil, nil, nil, ps)
+
+			dispatched := &eventsDispatched{cancel: cancel}
+			ps.Subscribe(events.RASTypeInfoOnly, dispatched)
+
+			upd, err := populateCtrlrHealth(test.Context(t), ei,
 				&ctlpb.BioHealthReq{}, ctrlr, mockProv)
 			test.CmpErr(t, tc.expErr, err)
 			if err != nil {
@@ -135,6 +181,12 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 				t.Fatalf("unexpected controller output (-want, +got):\n%s\n", diff)
 			}
 			test.AssertEqual(t, tc.expUpdated, upd, "")
+
+			<-ctx.Done()
+
+			if diff := cmp.Diff(tc.expDispatched, dispatched.rx, defEvtCmpOpts...); diff != "" {
+				t.Fatalf("unexpected events dispatched (-want, +got)\n%s\n", diff)
+			}
 		})
 	}
 }

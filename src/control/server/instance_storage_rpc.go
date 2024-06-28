@@ -13,12 +13,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
@@ -185,6 +187,32 @@ func addLinkInfoToHealthStats(prov hardware.PCIeLinkStatsProvider, pciCfg string
 	return nil
 }
 
+func newLinkEvent(id events.RASID, typ, addr, maxVal, negVal string, port uint32) *events.RASEvent {
+	msg := fmt.Sprintf("nvme ssd %q link %s downgraded (port: %d, max: %s, negotiated: %s)",
+		addr, typ, port, maxVal, negVal)
+	return events.NewGenericEvent(id, events.RASSeverityError, msg, "")
+}
+
+func publishLinkStatWarning(engine Engine, pciAddr string, health *ctlpb.BioHealthResp) {
+	if health.LinkMaxSpeed != health.LinkNegSpeed {
+		engine.Debugf("downgraded link speed on %s, publishing ras event", pciAddr)
+		event := newLinkEvent(events.RASNVMeLinkSpeedDown, "speed", pciAddr,
+			humanize.SI(float64(health.LinkMaxSpeed), "T/s"),
+			humanize.SI(float64(health.LinkNegSpeed), "T/s"),
+			health.LinkPortId)
+		engine.Publish(event)
+	}
+
+	if health.LinkMaxWidth != health.LinkNegWidth {
+		engine.Debugf("downgraded link width on %s, publishing ras event", pciAddr)
+		event := newLinkEvent(events.RASNVMeLinkWidthDown, "width", pciAddr,
+			fmt.Sprintf("x%d", health.LinkMaxWidth),
+			fmt.Sprintf("x%d", health.LinkNegWidth),
+			health.LinkPortId)
+		engine.Publish(event)
+	}
+}
+
 func populateCtrlrHealth(ctx context.Context, engine Engine, req *ctlpb.BioHealthReq, ctrlr *ctlpb.NvmeController, prov hardware.PCIeLinkStatsProvider) (bool, error) {
 	stateName := ctlpb.NvmeDevState_name[int32(ctrlr.DevState)]
 	if !ctrlr.CanSupplyHealthStats() {
@@ -203,6 +231,7 @@ func populateCtrlrHealth(ctx context.Context, engine Engine, req *ctlpb.BioHealt
 		if err := addLinkInfoToHealthStats(prov, ctrlr.PciCfg, health); err != nil {
 			return false, errors.Wrapf(err, "add link stats for %q", ctrlr)
 		}
+		publishLinkStatWarning(engine, ctrlr.PciAddr, health)
 	} else {
 		engine.Debugf("no pcie config space received for %q, skip add link stats", ctrlr)
 	}
