@@ -713,7 +713,11 @@ func (cmd *poolListCmd) Execute(_ []string) error {
 	}
 
 	if cmd.JSONOutputEnabled() {
-		return cmd.OutputJSON(pools, nil)
+		return cmd.OutputJSON(struct {
+			Pools []*daos.PoolInfo `json:"pools"` // compatibility with dmg
+		}{
+			Pools: pools,
+		}, nil)
 	}
 
 	var buf strings.Builder
