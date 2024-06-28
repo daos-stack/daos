@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -1007,14 +1007,14 @@ class YamlCommand(SubProcessCommand):
                     yaml.get_attribute_names(LogParameter))
                 for name in data:
                     create_directory(
-                        hosts, name, verbose=False, raise_exception=False)
+                        hosts, name, verbose=True, raise_exception=False)
                     for file_name in data[name]:
                         src_file = os.path.join(source, file_name)
                         dst_file = os.path.join(name, file_name)
                         self.log.debug("  %s -> %s", src_file, dst_file)
                         result = distribute_files(
                             hosts, src_file, dst_file, mkdir=False,
-                            verbose=False, raise_exception=False, sudo=True,
+                            verbose=True, raise_exception=False, sudo=True,
                             owner=self.certificate_owner)
                         if result.exit_status != 0:
                             self.log.info(
@@ -1052,7 +1052,7 @@ class YamlCommand(SubProcessCommand):
                 try:
                     distribute_files(
                         hosts, self.temporary_file, self.yaml.filename,
-                        verbose=False, sudo=True)
+                        verbose=True, sudo=True)
                 except DaosTestError as error:
                     raise CommandFailure(
                         "ERROR: Copying yaml configuration file to {}: "
