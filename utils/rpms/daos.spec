@@ -430,6 +430,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # set daos_server to be setgid daos_server in order to invoke daos_server_helper
 # and/or daos_firmware_helper
 %attr(2755,root,daos_server) %{_bindir}/daos_server
+# set daos_metrics to be setgid daos_serer to allow attchment to shmem segment
+%attr(2755,root,daos_server) %{_bindir}/daos_metrics
 %{_bindir}/daos_engine
 %{_bindir}/daos_metrics
 %{_bindir}/ddb
@@ -588,6 +590,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Jun 28 2024 Michael Hennecke <michael.hennecke@intel.com> 2.7.100-2
+- Fix daos_metrics permissions
+
 * Mon May 20 2024 Phillip Henderson <phillip.henderson@intel.com> 2.7.100-1
 - Bump version to 2.7.100
 
