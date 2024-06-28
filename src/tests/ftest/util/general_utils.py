@@ -916,6 +916,7 @@ def create_directory(hosts, directory, timeout=15, verbose=True,
                 - stdout (only set if capture_output=True)
                 - stderr (not used; included in stdout)
     """
+    verbose = True  # TODO: remove
     log = getLogger()
     mkdir_command = "/usr/bin/mkdir -p {}".format(directory)
     command = get_clush_command(hosts, args="-S -v", command=mkdir_command, user=user)
@@ -949,6 +950,7 @@ def change_file_owner(hosts, filename, owner, group, timeout=15, verbose=True,
                 - stdout (only set if capture_output=True)
                 - stderr (not used; included in stdout)
     """
+    verbose = True  # TODO: remove
     log = getLogger()
     chown_command = get_chown_command(owner, group, file=filename)
     command = get_clush_command(hosts, args="-S -B -v", command=chown_command, user=user)
@@ -990,6 +992,7 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
                 - stdout (only set if capture_output=True)
                 - stderr (not used; included in stdout)
     """
+    verbose = True  # TODO: remove
     log = getLogger()
     result = None
     if mkdir:
