@@ -545,6 +545,19 @@ func checkEngineTmpfsMem(srv *server, ei *EngineInstance, mi *common.MemInfo) er
 	return nil
 }
 
+// createPublishFormatRequiredFunc returns onAwaitFormatFn which will publish an
+// event using the provided publish function to indicate that host is awaiting
+// storage format.
+func createPublishFormatRequiredFunc(publish func(*events.RASEvent), hostname string) onAwaitFormatFn {
+	return func(_ context.Context, engineIdx uint32, formatType string) error {
+		evt := events.NewEngineFormatRequiredEvent(hostname, engineIdx, formatType).
+			WithRank(uint32(ranklist.NilRank))
+		publish(evt)
+
+		return nil
+	}
+}
+
 func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarted *sync.WaitGroup) {
 	// Register callback to publish engine process exit events.
 	engine.OnInstanceExit(createPublishInstanceExitFunc(srv.pubSub.Publish, srv.hostname))

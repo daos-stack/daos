@@ -98,7 +98,7 @@ func TestIOEngineInstance_MountControlMetadata(t *testing.T) {
 			sysProv := system.NewMockSysProvider(log, tc.sysCfg)
 			provider := storage.MockProvider(log, 0, &mockRamCfg, sysProv, nil, nil,
 				tc.meta)
-			instance := NewEngineInstance(log, provider, nil, runner)
+			instance := NewEngineInstance(log, provider, nil, runner, nil)
 
 			gotErr := instance.MountMetadata()
 			test.CmpErr(t, tc.expErr, gotErr)
@@ -204,7 +204,7 @@ func TestIOEngineInstance_MountScmDevice(t *testing.T) {
 			sys := system.NewMockSysProvider(log, tc.msCfg)
 			scm := scm.NewMockProvider(log, nil, tc.msCfg)
 			provider := storage.MockProvider(log, 0, tc.cfg, sys, scm, nil, nil)
-			instance := NewEngineInstance(log, provider, nil, runner)
+			instance := NewEngineInstance(log, provider, nil, runner, nil)
 
 			gotErr := instance.MountScm()
 			test.CmpErr(t, tc.expErr, gotErr)
@@ -325,7 +325,7 @@ func TestEngineInstance_NeedsScmFormat(t *testing.T) {
 				system.NewMockSysProvider(log, tc.msCfg),
 				scm.NewMockProvider(log, tc.mbCfg, tc.msCfg),
 				nil, nil)
-			instance := NewEngineInstance(log, mp, nil, runner)
+			instance := NewEngineInstance(log, mp, nil, runner, nil)
 
 			gotNeedsFormat, gotErr := instance.GetStorage().ScmNeedsFormat()
 			test.CmpErr(t, tc.expErr, gotErr)
@@ -520,7 +520,7 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 				system.NewMockSysProvider(log, &msc),
 				scm.NewMockProvider(log, &smbc, &msc),
 				nil, mmp)
-			engine := NewEngineInstance(log, mp, nil, runner)
+			engine := NewEngineInstance(log, mp, nil, runner, nil)
 
 			engine.setIndex(tc.engineIndex)
 

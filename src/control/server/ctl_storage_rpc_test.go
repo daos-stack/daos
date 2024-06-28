@@ -1717,7 +1717,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				esp := storage.MockProvider(log, 0, &ec.Storage, sysProv,
 					scmProv, ebp, nil)
 
-				ei := NewEngineInstance(log, esp, nil, runner)
+				ei := NewEngineInstance(log, esp, nil, runner, nil)
 				ei.ready.Store(tc.instancesStarted)
 
 				// if the instance is expected to have a valid superblock, create one

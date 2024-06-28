@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -61,7 +61,9 @@
 	X(RAS_DEVICE_PLUGGED, "device_plugged")                                                    \
 	X(RAS_DEVICE_REPLACE, "device_replace")                                                    \
 	X(RAS_SYSTEM_FABRIC_PROV_CHANGED, "system_fabric_provider_changed")                        \
-	X(RAS_ENGINE_JOIN_FAILED, "engine_join_failed")
+	X(RAS_ENGINE_JOIN_FAILED, "engine_join_failed")                                            \
+	X(RAS_DEVICE_LINK_SPEED_DOWN, "device_link_speed_downgraded")                              \
+	X(RAS_DEVICE_LINK_WIDTH_DOWN, "device_link_width_downgraded")
 
 /** Define RAS event enum */
 typedef enum {

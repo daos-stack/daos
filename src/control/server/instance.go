@@ -18,6 +18,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
@@ -42,6 +43,8 @@ type (
 // be used with EngineHarness to manage and monitor multiple instances
 // per node.
 type EngineInstance struct {
+	events.Publisher
+
 	log             logging.Logger
 	runner          EngineRunner
 	storage         *storage.Provider
@@ -69,9 +72,8 @@ type EngineInstance struct {
 	_lastErr    error // populated when harness receives signal
 }
 
-// NewEngineInstance returns an *EngineInstance initialized with
-// its dependencies.
-func NewEngineInstance(l logging.Logger, p *storage.Provider, jf systemJoinFn, r EngineRunner) *EngineInstance {
+// NewEngineInstance returns an *EngineInstance initialized with its dependencies.
+func NewEngineInstance(l logging.Logger, p *storage.Provider, jf systemJoinFn, r EngineRunner, ps *events.PubSub) *EngineInstance {
 	return &EngineInstance{
 		log:            l,
 		runner:         r,
@@ -80,6 +82,7 @@ func NewEngineInstance(l logging.Logger, p *storage.Provider, jf systemJoinFn, r
 		drpcReady:      make(chan *srvpb.NotifyReadyReq),
 		storageReady:   make(chan bool),
 		startRequested: make(chan bool),
+		Publisher:      ps,
 	}
 }
 
