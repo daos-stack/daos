@@ -430,7 +430,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # set daos_server to be setgid daos_server in order to invoke daos_server_helper
 # and/or daos_firmware_helper
 %attr(2755,root,daos_server) %{_bindir}/daos_server
-# set daos_metrics to be setgid daos_serer to allow attchment to shmem segment
+# set daos_metrics to be setgid daos_server to allow attchment to shmem segment
 %attr(2755,root,daos_server) %{_bindir}/daos_metrics
 %{_bindir}/daos_engine
 %{_bindir}/daos_metrics
