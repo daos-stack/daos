@@ -1022,10 +1022,9 @@ class YamlCommand(SubProcessCommand):
                         result = distribute_files(
                             hosts, src_file, dst_file, mkdir=False, verbose=False,
                             raise_exception=False, user=user, owner=self.certificate_owner)
-                        if result.exit_status != 0:
+                        if result.returncode != 0:
                             self.log.info(
-                                "    WARNING: %s copy failed on %s:\n%s",
-                                dst_file, hosts, result)
+                                "    WARNING: %s copy failed on %s:\n%s", dst_file, hosts, result)
                     names.add(name)
             yaml = yaml.other_params
 
