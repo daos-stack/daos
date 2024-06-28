@@ -74,10 +74,10 @@ class ResultData():
         return self.returncode == 0
 
 
-class RemoteCommandResult():
-    """Stores the command result from a Task object."""
+class CommandResult():
+    """Stores the command result from a Task or CompletedProcess object in a common format."""
 
-    def __init__(self, command, task):
+    def __init__(self):
         """Create a RemoteCommandResult object.
 
         Args:
@@ -85,7 +85,6 @@ class RemoteCommandResult():
             task (Task): object containing the results from an executed clush command
         """
         self.output = []
-        self._process_task(task, command)
 
     @property
     def homogeneous(self):
@@ -164,13 +163,52 @@ class RemoteCommandResult():
             stderr[str(data.hosts)] = '\n'.join(data.stderr)
         return stderr
 
-    def _process_task(self, task, command):
-        """Populate the output list and determine the passed result for the specified task.
+    def log_output(self, log):
+        """Log the command result.
 
         Args:
-            task (Task): a ClusterShell.Task.Task object for the executed command
-            command (str): the executed command
+            log (logger): logger for the messages produced by this method
+
         """
+        for data in self.output:
+            log_result_data(log, data)
+
+
+class LocalCommandResult(CommandResult):
+    """Stores the command result from a CompletedProcess object."""
+
+    def __init__(self, command, return_code, stdout, stderr, timeout):
+        """Create a RemoteCommandResult object.
+
+        Args:
+            command (str): command executed
+            return_code (int): executed command's return code
+            stdout (str): executed command's stdout
+            stderr (str): executed command's stderr
+            timed_out (bool) did the executed command time out
+        """
+        super().__init__()
+        local_host = gethostname().split(".")[0]
+        if stdout is not None:
+            stdout = stdout.splitlines()
+        if stderr is not None:
+            stderr = stderr.splitlines()
+        self.output.append(
+            ResultData(command, return_code, NodeSet(local_host), stdout, stderr, timeout))
+
+
+class RemoteCommandResult(CommandResult):
+    """Stores the command result from a Task object."""
+
+    def __init__(self, command, task):
+        """Create a RemoteCommandResult object.
+
+        Args:
+            command (str): command executed
+            task (Task): object containing the results from an executed clush command
+        """
+        super().__init__()
+
         # Get a dictionary of host list values for each unique return code key
         results = dict(task.iter_retcodes())
 
@@ -240,16 +278,6 @@ class RemoteCommandResult():
             else:
                 msg_tree_elem_list.append(line)
         return msg_tree_elem_list
-
-    def log_output(self, log):
-        """Log the command result.
-
-        Args:
-            log (logger): logger for the messages produced by this method
-
-        """
-        for data in self.output:
-            log_result_data(log, data)
 
 
 def log_result_data(log, data):
@@ -545,3 +573,60 @@ def stop_processes(log, hosts, pattern, verbose=True, timeout=60, exclude=None, 
     if processes_running:
         log.debug("Processes still running on %s that match: %s", processes_running, pattern_match)
     return processes_detected, processes_running
+
+
+def run_local_new(log, command, verbose=True, timeout=None):
+    """Run the command locally.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        command (str): command from which to obtain the output
+        capture_output(bool, optional): whether or not to include the command output in the
+            subprocess.CompletedProcess.stdout returned by this method. Defaults to True.
+        timeout (int, optional): number of seconds to wait for the command to complete.
+            Defaults to None.
+        check (bool, optional): if set the method will raise an exception if the command does not
+            yield a return code equal to zero. Defaults to False.
+        verbose (bool, optional): if set log the output of the command (capture_output must also be
+            set). Defaults to True.
+
+    Returns:
+        LocalCommandResult: a grouping of the command results from the same hosts with the same
+            return status
+
+    """
+    local_host = gethostname().split(".")[0]
+    kwargs = {
+        "encoding": "utf-8",
+        "shell": False,
+        "check": False,
+        "timeout": timeout,
+        "stdout": subprocess.PIPE,
+        "stderr": subprocess.STDOUT,
+    }
+    if timeout and verbose:
+        log.debug("Running on %s with a %s timeout: %s", local_host, timeout, command)
+    elif verbose:
+        log.debug("Running on %s: %s", local_host, command)
+
+    try:
+        # pylint: disable=subprocess-run-check
+        task = subprocess.run(shlex.split(command), **kwargs)     # nosec
+        results = LocalCommandResult(command, task.returncode, task.stdout, task.stderr, False)
+
+    except subprocess.TimeoutExpired as error:
+        # Raised if command times out
+        results = LocalCommandResult(command, 124, error.stdout, error.stderr, True)
+
+    except Exception as error:   # pylint: disable=broad-except
+        # Catch all
+        results = LocalCommandResult(command, 255, None, str(error), False)
+
+    if verbose:
+        results.log_output(log)
+    else:
+        # Always log any failed commands
+        for data in results.output:
+            if not data.passed:
+                log_result_data(log, data)
+    return results

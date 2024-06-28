@@ -19,9 +19,9 @@ from ClusterShell.NodeSet import NodeSet
 from command_utils_base import (BasicParameter, CommandWithParameters, EnvironmentVariables,
                                 LogParameter, ObjectWithParameters)
 from exception_utils import CommandFailure
-from general_utils import (DaosTestError, change_file_owner, check_file_exists, create_directory,
-                           distribute_files, get_file_listing, get_job_manager_class,
-                           get_subprocess_stdout, run_command, run_pcmd)
+from file_utils import change_file_owner, create_directory, distribute_files
+from general_utils import (DaosTestError, check_file_exists, get_file_listing,
+                           get_job_manager_class, get_subprocess_stdout, run_command, run_pcmd)
 from run_utils import command_as_user
 from user_utils import get_primary_group
 from yaml_utils import get_yaml_data
@@ -1003,6 +1003,9 @@ class YamlCommand(SubProcessCommand):
             source (str): source of the certificate files.
             hosts (NodeSet): list of the destination hosts.
             user (str): user to use to distributed the files
+
+        Raises:
+            CommandFailure: if there is an error copying certificates
         """
         user = self.run_user or 'root'
         names = set()
@@ -1013,18 +1016,21 @@ class YamlCommand(SubProcessCommand):
                 data = yaml.get_certificate_data(
                     yaml.get_attribute_names(LogParameter))
                 for name in data:
-                    create_directory(
-                        hosts, name, verbose=False, raise_exception=False)
+                    if not create_directory(hosts, name).passed:
+                        raise CommandFailure(f"Error copy certificates - create {name} failed")
                     for file_name in data[name]:
                         src_file = os.path.join(source, file_name)
                         dst_file = os.path.join(name, file_name)
                         self.log.debug("  %s -> %s", src_file, dst_file)
                         result = distribute_files(
-                            hosts, src_file, dst_file, mkdir=False, verbose=False,
-                            raise_exception=False, user=user, owner=self.certificate_owner)
-                        if result.returncode != 0:
+                            hosts, src_file, dst_file, mkdir=False, user=user,
+                            owner=self.certificate_owner)
+                        if not result.passed:
                             self.log.info(
                                 "    WARNING: %s copy failed on %s:\n%s", dst_file, hosts, result)
+                            # raise CommandFailure(
+                            #     f"Error copy certificates - copy {dst_file} failed on "
+                            #     f"{result.failed_hosts}")
                     names.add(name)
             yaml = yaml.other_params
 
@@ -1054,13 +1060,12 @@ class YamlCommand(SubProcessCommand):
                 self.log.info(
                     "Copying %s yaml configuration file to %s on %s",
                     self.temporary_file, self.yaml.filename, hosts)
-                try:
-                    distribute_files(
-                        hosts, self.temporary_file, self.yaml.filename,
-                        verbose=False, user=self.run_user or 'root')
-                except DaosTestError as error:
+                result = distribute_files(
+                    hosts, self.temporary_file, self.yaml.filename, user=self.run_user or 'root')
+                if not result.passed:
                     raise CommandFailure(
-                        f"ERROR: Copying yaml configuration file to {hosts}: {error}") from error
+                        f"{self.command}: error copying yaml configuration file to "
+                        f"{result.failed_hosts}")
 
     def verify_socket_directory(self, user, hosts):
         """Verify the domain socket directory is present and owned by this user.
@@ -1084,13 +1089,17 @@ class YamlCommand(SubProcessCommand):
                     "%s: creating socket directory %s for user %s on %s",
                     self.command, directory, user, nodes)
                 user = self.run_user or 'root'
-                try:
-                    create_directory(nodes, directory, user=user)
-                    change_file_owner(nodes, directory, user, get_primary_group(user), user=user)
-                except DaosTestError as error:
+                result = create_directory(nodes, directory, user=user)
+                if not result.passed:
                     raise CommandFailure(
-                        f"{self.command}: error setting up missing socket directory {directory} "
-                        f"for user {user} on {nodes}:\n{error}") from error
+                        f"{self.command}: error creating missing socket directory {directory} for "
+                        f"user {user} on {result.failed_hosts}")
+                result = change_file_owner(
+                    nodes, directory, user, get_primary_group(user), user=user)
+                if not result.passed:
+                    raise CommandFailure(
+                        f"{self.command}: error setting permissions for socket directory "
+                        f"{directory} for user {user} on {result.failed_hosts}")
 
     def get_user_file(self):
         """Get the file defined in the yaml file that must be owned by the user.
