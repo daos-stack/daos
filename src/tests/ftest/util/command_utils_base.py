@@ -229,7 +229,7 @@ class FormattedParameter(BasicParameter):
     # pylint: disable=too-few-public-methods
     """A class for test parameters whose values are read from a yaml file."""
 
-    def __init__(self, str_format, default=None, yaml_key=None):
+    def __init__(self, str_format, default=None, yaml_key=None, position=None, mapped_values=None):
         """Create a FormattedParameter  object.
 
         Normal use includes assigning this object to an attribute name that
@@ -245,10 +245,12 @@ class FormattedParameter(BasicParameter):
             yaml_key (str, optional): alternative yaml key name to use when
                 assigning the value from a yaml file. Default is None which
                 will use the object's variable name as the yaml key.
+            position (int, optional): position of the parameter for sorting. Default is None
+            mapped_values (dict, optional): dict of values to replace. Default is None,
+                which uses the direct value.
         """
-        super().__init__(default, default)
+        super().__init__(default, default, yaml_key, position, mapped_values)
         self._str_format = str_format
-        self._yaml_key = yaml_key
 
     def __str__(self):
         """Return a FormattedParameter object as a string.
