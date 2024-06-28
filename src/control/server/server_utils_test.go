@@ -725,7 +725,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			}
 
 			runner := engine.NewRunner(log, srv.cfg.Engines[0])
-			ei := NewEngineInstance(log, srv.ctlSvc.storage, nil, runner)
+			ei := NewEngineInstance(log, srv.ctlSvc.storage, nil, runner, nil)
 
 			mi.HugepagesFree = tc.hugepagesFree
 
@@ -829,7 +829,7 @@ func TestServer_checkEngineTmpfsMem(t *testing.T) {
 			sysMock := sysprov.NewMockSysProvider(log, sysMockCfg)
 			scmMock := &storage.MockScmProvider{}
 			provider := storage.MockProvider(log, 0, &ec.Storage, sysMock, scmMock, nil, nil)
-			instance := NewEngineInstance(log, provider, nil, runner)
+			instance := NewEngineInstance(log, provider, nil, runner, nil)
 
 			srv, err := newServer(log, cfg, &system.FaultDomain{})
 			if err != nil {

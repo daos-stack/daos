@@ -569,7 +569,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 
 				mp := storage.NewProvider(log, 0, &engineCfg.Storage,
 					nil, nil, nil, nil)
-				srv := NewEngineInstance(log, mp, nil, r)
+				srv := NewEngineInstance(log, mp, nil, r, nil)
 				srv.setDrpcSocket("/dontcare")
 				srv.ready.SetTrue()
 

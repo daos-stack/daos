@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -55,6 +55,8 @@ const (
 	RASSystemStopFailed        RASID = C.RAS_SYSTEM_STOP_FAILED         // error
 	RASEngineJoinFailed        RASID = C.RAS_ENGINE_JOIN_FAILED         // error
 	RASSystemFabricProvChanged RASID = C.RAS_SYSTEM_FABRIC_PROV_CHANGED // info
+	RASNVMeLinkSpeedDown       RASID = C.RAS_DEVICE_LINK_SPEED_DOWN     // error
+	RASNVMeLinkWidthDown       RASID = C.RAS_DEVICE_LINK_WIDTH_DOWN     // error
 )
 
 func (id RASID) String() string {

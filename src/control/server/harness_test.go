@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -267,7 +267,7 @@ func TestServer_Harness_Start(t *testing.T) {
 					}, nil
 				}
 
-				ei := NewEngineInstance(log, provider, joinFn, runner)
+				ei := NewEngineInstance(log, provider, joinFn, runner, nil)
 				var isAP bool
 				if tc.isAP && i == 0 { // first instance will be AP & bootstrap MS
 					isAP = true
