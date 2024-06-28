@@ -104,7 +104,7 @@ class DmgScale(TestWithServers):
     """
 
     def test_dmg_scale(self):
-        """Run the following steps at Aurora and manually collect duration for each step.
+        """Run the following steps and manually collect duration for each step.
 
         0. Format storage
         1. System query
@@ -131,7 +131,7 @@ class DmgScale(TestWithServers):
         dmg_command.system_query()
 
         self.log_step("## Create a 100% pool that spans all engines")
-        pool = self.get_pool(namespace="/run/pool_1/*", create=False)
+        pool = self.get_pool(namespace="/run/pool_100/*", create=False)
         duration = time_pool_create(log=self.log, number=1, pool=pool)
         self.log.info("## Single pool create duration = %.1f", duration)
 
@@ -141,17 +141,17 @@ class DmgScale(TestWithServers):
         self.log_step("## Pool destroy")
         pool.destroy()
 
-        quantity = self.params.get("quantity", "/run/pool_2_percent/*", 1)
-        msg = (f"## Create {quantity} pools spanning all the engines with each pool using a 1/50th "
-               "of the capacity")
+        quantity = self.params.get("quantity", "/run/pool_small/*", 1)
+        msg = (f"## Create {quantity} small pools spanning all the engines where the pools fill up "
+               f"the capacity")
         self.log_step(msg)
-        pool_0 = self.get_pool(namespace="/run/pool_2_percent/*", create=False)
+        pool_0 = self.get_pool(namespace="/run/pool_small/*", create=False)
         duration_0 = time_pool_create(log=self.log, number=0, pool=pool_0)
         pools = [pool_0]
         durations = [duration_0]
         for count in range(1, quantity):
             pools.append(self.get_pool(create=False))
-            # Use the SCM and NVMe size of the first pool, which uses 2% of the total size.
+            # Use the SCM and NVMe size of the first pool for the rest of the (quantity - 1) pools.
             pools[-1].scm_size.update(pool_0.scm_per_rank)
             pools[-1].nvme_size.update(pool_0.nvme_per_rank)
             durations.append(time_pool_create(log=self.log, number=count, pool=pools[-1]))
@@ -176,7 +176,7 @@ class DmgScale(TestWithServers):
         self.destroy_pools(pools=pools)
 
         self.log_step("## System stop")
-        dmg_command.system_stop(force=True)
+        self.server_managers[0].system_stop()
 
         self.log_step("## System start")
-        dmg_command.system_start()
+        self.server_managers[0].system_start()
