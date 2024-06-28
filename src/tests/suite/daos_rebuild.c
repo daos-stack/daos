@@ -1557,7 +1557,8 @@ rebuild_cont_destroy_and_reintegrate(void **state)
 	assert_rc_equal(rc, 0);
 	arg->coh = DAOS_HDL_INVAL;
 
-	daos_cont_destroy(arg->pool.poh, arg->co_str, 0 /* force */, NULL /* ev */);
+	rc = daos_cont_destroy(arg->pool.poh, arg->co_str, 0 /* force */, NULL /* ev */);
+	assert_rc_equal(rc, 0);
 	uuid_clear(arg->co_uuid);
 	reintegrate_single_pool_rank(arg, 5, true);
 }
