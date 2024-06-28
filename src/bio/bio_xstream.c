@@ -105,7 +105,7 @@ bio_spdk_conf_read(struct spdk_env_opts *opts)
 		return rc;
 	}
 	nvme_glb.bd_nvme_roles = roles;
-	bio_vmd_enabled        = vmd_enabled;
+	bio_vmd_enabled        = vmd_enabled && (nvme_glb.bd_bdev_class == BDEV_CLASS_NVME);
 
 	rc = bio_set_hotplug_filter(nvme_glb.bd_nvme_conf);
 	if (rc != 0) {
