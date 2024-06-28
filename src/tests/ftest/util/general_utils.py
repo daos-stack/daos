@@ -906,23 +906,20 @@ def create_directory(hosts, directory, timeout=15, verbose=True,
         user (str, optional): user with which to run the command. Defaults to None.
 
     Raises:
-        DaosTestError: if there is an error running the command
+        RunException: if there is an error running the command and raise_exception=True
 
     Returns:
-        CmdResult: an avocado.utils.process CmdResult object containing the
-            result of the command execution.  A CmdResult object has the
-            following properties:
-                command         - command string
-                exit_status     - exit_status of the command
-                stdout          - the stdout
-                stderr          - the stderr
-                duration        - command execution time
-                interrupted     - whether the command completed within timeout
-                pid             - command's pid
+        subprocess.CompletedProcess: an object representing the result of the command execution with
+            the following properties:
+                - args (the command argument)
+                - returncode
+                - stdout (only set if capture_output=True)
+                - stderr (not used; included in stdout)
     """
+    log = getLogger()
     mkdir_command = "/usr/bin/mkdir -p {}".format(directory)
     command = get_clush_command(hosts, args="-S -v", command=mkdir_command, user=user)
-    return run_command(command, timeout=timeout, verbose=verbose, raise_exception=raise_exception)
+    return run_local(log, command, timeout=timeout, check=raise_exception, verbose=verbose)
 
 
 def change_file_owner(hosts, filename, owner, group, timeout=15, verbose=True,
@@ -942,23 +939,20 @@ def change_file_owner(hosts, filename, owner, group, timeout=15, verbose=True,
         user (str, optional): user with which to run the command. Defaults to None.
 
     Raises:
-        DaosTestError: if there is an error running the command
+        RunException: if there is an error running the command and raise_exception=True
 
     Returns:
-        CmdResult: an avocado.utils.process CmdResult object containing the
-            result of the command execution.  A CmdResult object has the
-            following properties:
-                command         - command string
-                exit_status     - exit_status of the command
-                stdout          - the stdout
-                stderr          - the stderr
-                duration        - command execution time
-                interrupted     - whether the command completed within timeout
-                pid             - command's pid
+        subprocess.CompletedProcess: an object representing the result of the command execution with
+            the following properties:
+                - args (the command argument)
+                - returncode
+                - stdout (only set if capture_output=True)
+                - stderr (not used; included in stdout)
     """
+    log = getLogger()
     chown_command = get_chown_command(owner, group, file=filename)
     command = get_clush_command(hosts, args="-S -B -v", command=chown_command, user=user)
-    return run_command(command, timeout=timeout, verbose=verbose, raise_exception=raise_exception)
+    return run_local(log, command, timeout=timeout, check=raise_exception, verbose=verbose)
 
 
 def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
@@ -986,26 +980,23 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
             the copied file. Defaults to None.
 
     Raises:
-        DaosTestError: if there is an error running the command
+        RunException: if there is an error running the command and raise_exception=True
 
     Returns:
-        CmdResult: an avocado.utils.process CmdResult object containing the
-            result of the command execution.  A CmdResult object has the
-            following properties:
-                command         - command string
-                exit_status     - exit_status of the command
-                stdout          - the stdout
-                stderr          - the stderr
-                duration        - command execution time
-                interrupted     - whether the command completed within timeout
-                pid             - command's pid
+        subprocess.CompletedProcess: an object representing the result of the command execution with
+            the following properties:
+                - args (the command argument)
+                - returncode
+                - stdout (only set if capture_output=True)
+                - stderr (not used; included in stdout)
     """
+    log = getLogger()
     result = None
     if mkdir:
         result = create_directory(
             hosts, os.path.dirname(destination), verbose=verbose,
             raise_exception=raise_exception)
-    if result is None or result.exit_status == 0:
+    if result is None or result.returncode == 0:
         if user != getuser():
             # In order to copy a protected file to a remote host in CI the
             # source will first be copied as is to the remote host
@@ -1016,25 +1007,25 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
                 # subsequent non-sudo copy to fail, so remove the file first
                 rm_command = get_clush_command(
                     other_hosts, args="-S -v", command=f"rm -f {source}", user='root')
-                run_command(rm_command, verbose=verbose, raise_exception=False)
+                run_local(log, rm_command, check=raise_exception, verbose=verbose)
                 result = distribute_files(
                     other_hosts, source, source, mkdir=True, timeout=timeout, verbose=verbose,
                     raise_exception=raise_exception, user=user, owner=None)
-            if result is None or result.exit_status == 0:
+            if result is None or result.returncode == 0:
                 # Then a local sudo copy will be executed on the remote node to
                 # copy the source to the destination
                 command = get_clush_command(
                     hosts, args="-S -v", command=f"cp {source} {destination}", user='root')
-                result = run_command(command, timeout, verbose, raise_exception)
+                result = run_local(log, command, True, timeout, raise_exception, verbose)
         else:
             # Without the sudo requirement copy the source to the destination
             # directly with clush
             command = get_clush_command(
                 hosts, args=f"-S -v --copy {source} --dest {destination}", user=user)
-            result = run_command(command, timeout, verbose, raise_exception)
+            result = run_local(log, command, True, timeout, raise_exception, verbose)
 
         # If requested update the ownership of the destination file
-        if owner is not None and result.exit_status == 0:
+        if owner is not None and result.returncode == 0:
             change_file_owner(
                 hosts, destination, owner, get_primary_group(owner), timeout=timeout,
                 verbose=verbose, raise_exception=raise_exception, user=user)
