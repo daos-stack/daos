@@ -289,10 +289,11 @@ func TestAgent_cachedAttachInfo_Refresh(t *testing.T) {
 func TestAgent_newCachedFabricInfo(t *testing.T) {
 	cfi := newCachedFabricInfo(func(ctx context.Context, providers ...string) (*NUMAFabric, error) {
 		return nil, nil
-	}, "one", "two")
+	}, hardware.Ether, "one", "two")
 
 	test.AssertEqual(t, time.Duration(0), cfi.refreshInterval, "")
 	test.AssertEqual(t, time.Time{}, cfi.lastCached, "")
+	test.AssertEqual(t, hardware.Ether, cfi.devClass, "")
 	test.AssertEqual(t, []string{"one", "two"}, cfi.providers, "")
 	if cfi.lastResults != nil {
 		t.Fatalf("expected nothing cached, found:\n%+v", cfi.lastResults)
@@ -308,7 +309,7 @@ func TestAgent_cachedFabricInfo_Key(t *testing.T) {
 	}{
 		"nil": {},
 		"normal": {
-			cfi: newCachedFabricInfo(nil),
+			cfi: newCachedFabricInfo(nil, hardware.Netrom),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -337,7 +338,7 @@ func TestAgent_cachedFabricInfo_NeedsRefresh(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			var cfi *cachedFabricInfo
 			if !tc.nilCache {
-				cfi = newCachedFabricInfo(nil)
+				cfi = newCachedFabricInfo(nil, hardware.Netrom)
 				cfi.cacheItem.lastCached = tc.cacheTime
 			}
 
@@ -346,18 +347,56 @@ func TestAgent_cachedFabricInfo_NeedsRefresh(t *testing.T) {
 	}
 }
 
+func copyNUMAFabricMap(in NUMAFabricMap) NUMAFabricMap {
+	out := make(NUMAFabricMap)
+	for key, val := range in {
+		out[key] = make([]*FabricInterface, len(val))
+		copy(out[key], val)
+	}
+	return out
+}
+
 func TestAgent_cachedFabricInfo_Refresh(t *testing.T) {
 	scan1 := NUMAFabricMap{
 		2: {
-			{Name: "two"},
+			{
+				Name:        "two",
+				NetDevClass: hardware.Ether,
+			},
 		},
 	}
 	scan2 := NUMAFabricMap{
 		1: {
-			{Name: "one"},
+			{
+				Name:        "one",
+				NetDevClass: hardware.Ether,
+			},
 		},
 		3: {
-			{Name: "three"},
+			{
+				Name:        "three",
+				NetDevClass: hardware.Ether,
+			},
+		},
+	}
+	scan3 := NUMAFabricMap{
+		1: {
+			{
+				Name:        "one",
+				NetDevClass: hardware.Ether,
+			},
+		},
+		2: {
+			{
+				Name:        "two",
+				NetDevClass: hardware.Infiniband,
+			},
+		},
+		3: {
+			{
+				Name:        "three",
+				NetDevClass: hardware.Ether,
+			},
 		},
 	}
 
@@ -387,22 +426,26 @@ func TestAgent_cachedFabricInfo_Refresh(t *testing.T) {
 			alreadyCached: scan1,
 			expCached:     scan2,
 		},
+		"filter out dev class": {
+			fabricResult: scan3,
+			expCached:    scan2,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var cfi *cachedFabricInfo
 			if !tc.nilCache {
-				cfi = newCachedFabricInfo(nil)
+				cfi = newCachedFabricInfo(nil, hardware.Ether)
 				cfi.fetch = func(_ context.Context, _ ...string) (*NUMAFabric, error) {
 					if tc.fabricResult != nil {
 						return &NUMAFabric{
-							numaMap: tc.fabricResult,
+							numaMap: copyNUMAFabricMap(tc.fabricResult),
 						}, nil
 					}
 					return nil, tc.fabricErr
 				}
 				if tc.alreadyCached != nil {
 					cfi.lastResults = &NUMAFabric{
-						numaMap: tc.alreadyCached,
+						numaMap: copyNUMAFabricMap(tc.alreadyCached),
 					}
 					cfi.lastCached = time.Now()
 				}
@@ -1163,7 +1206,7 @@ func TestAgent_InfoCache_GetNUMAFabricMap(t *testing.T) {
 			{
 				Name:        "t1",
 				Domain:      "t1",
-				NetDevClass: hardware.Infiniband,
+				NetDevClass: hardware.Ether,
 				hw: &hardware.FabricInterface{
 					Providers: hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "p1"}),
 				},
@@ -1173,7 +1216,9 @@ func TestAgent_InfoCache_GetNUMAFabricMap(t *testing.T) {
 				Domain:      "t2",
 				NetDevClass: hardware.Infiniband,
 				hw: &hardware.FabricInterface{
-					Providers: hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "p1"}),
+					Providers: hardware.NewFabricProviderSet(
+						&hardware.FabricProvider{Name: "p1"},
+					),
 				},
 			},
 			{
@@ -1181,7 +1226,10 @@ func TestAgent_InfoCache_GetNUMAFabricMap(t *testing.T) {
 				Domain:      "d2",
 				NetDevClass: hardware.Infiniband,
 				hw: &hardware.FabricInterface{
-					Providers: hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "p1"}),
+					Providers: hardware.NewFabricProviderSet(
+						&hardware.FabricProvider{Name: "p2"},
+						&hardware.FabricProvider{Name: "p3"},
+					),
 				},
 			},
 		},
@@ -1189,6 +1237,8 @@ func TestAgent_InfoCache_GetNUMAFabricMap(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		getInfoCache func(logging.Logger) *InfoCache
+		providers    []string
+		devClass     hardware.NetDevClass
 		expErr       error
 		expResult    NUMAFabricMap
 		expFunc      bool
@@ -1220,6 +1270,54 @@ func TestAgent_InfoCache_GetNUMAFabricMap(t *testing.T) {
 			expResult: testMap,
 			expFunc:   true,
 		},
+		"providers passed through": {
+			providers: []string{"p1", "p2"},
+			getInfoCache: func(l logging.Logger) *InfoCache {
+				return newTestInfoCache(t, l, testInfoCacheParams{
+					mockScanFabric: func(_ context.Context, gotProv ...string) (*NUMAFabric, error) {
+						t.Helper()
+
+						wantProv := []string{"p1", "p2"}
+						test.AssertEqual(t, len(wantProv), len(gotProv), "wantProv and gotProv are different lengths")
+						for i, prov := range wantProv {
+							test.AssertEqual(t, prov, gotProv[i], "")
+						}
+						return &NUMAFabric{
+							log:     l,
+							numaMap: testMap,
+						}, nil
+					},
+				})
+			},
+			expResult: testMap,
+			expFunc:   true,
+		},
+		"filter on dev class": {
+			devClass: hardware.Ether,
+			getInfoCache: func(l logging.Logger) *InfoCache {
+				return newTestInfoCache(t, l, testInfoCacheParams{
+					mockScanFabric: func(_ context.Context, gotProv ...string) (*NUMAFabric, error) {
+						return &NUMAFabric{
+							log:     l,
+							numaMap: testMap,
+						}, nil
+					},
+				})
+			},
+			expResult: NUMAFabricMap{
+				0: {
+					{
+						Name:        "t1",
+						Domain:      "t1",
+						NetDevClass: hardware.Ether,
+						hw: &hardware.FabricInterface{
+							Providers: hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "p1"}),
+						},
+					},
+				},
+			},
+			expFunc: true,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -1230,7 +1328,7 @@ func TestAgent_InfoCache_GetNUMAFabricMap(t *testing.T) {
 				ic = tc.getInfoCache(log)
 			}
 
-			result, release, err := ic.GetNUMAFabricMap(test.Context(t), hardware.Ether, "ofi+tcp")
+			result, release, err := ic.GetNUMAFabricMap(test.Context(t), hardware.Ether, tc.providers...)
 			if release != nil {
 				defer release()
 			}
@@ -1299,7 +1397,7 @@ func TestAgent_InfoCache_Refresh(t *testing.T) {
 						newCachedFabricInfo(
 							func(_ context.Context, _ ...string) (*NUMAFabric, error) {
 								return NUMAFabricFromScan(test.Context(t), l, testSet), nil
-							}),
+							}, hardware.Ether),
 					},
 				})
 			},
@@ -1318,7 +1416,7 @@ func TestAgent_InfoCache_Refresh(t *testing.T) {
 						newCachedFabricInfo(
 							func(_ context.Context, _ ...string) (*NUMAFabric, error) {
 								return nil, errors.New("shouldn't call fabric")
-							}),
+							}, hardware.Ether),
 					},
 				})
 			},
@@ -1336,7 +1434,7 @@ func TestAgent_InfoCache_Refresh(t *testing.T) {
 						newCachedFabricInfo(
 							func(_ context.Context, _ ...string) (*NUMAFabric, error) {
 								return NUMAFabricFromScan(test.Context(t), l, testSet), nil
-							}),
+							}, hardware.Ether),
 					},
 				})
 			},

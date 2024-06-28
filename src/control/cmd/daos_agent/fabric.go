@@ -160,6 +160,20 @@ func (n *NUMAFabric) RLockedMap() (NUMAFabricMap, func(), error) {
 	return n.numaMap, n.mutex.RUnlock, nil
 }
 
+// LockedMap write-locks the map and returns it, along with a release function.
+func (n *NUMAFabric) LockedMap() (NUMAFabricMap, func(), error) {
+	if n == nil {
+		return nil, nil, errors.New("nil NUMAFabric")
+	}
+
+	n.mutex.Lock()
+	if n.numaMap == nil {
+		n.mutex.Unlock()
+		return nil, nil, errors.New("NUMAFabric is uninitialized")
+	}
+	return n.numaMap, n.mutex.Unlock, nil
+}
+
 // FabricIfaceParams is a set of parameters associated with a fabric interface.
 type FabricIfaceParams struct {
 	Interface string

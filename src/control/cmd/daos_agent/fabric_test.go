@@ -1306,6 +1306,65 @@ func TestAgent_NUMAFabric_RLockedMap(t *testing.T) {
 	}
 }
 
+func TestAgent_NUMAFabric_LockedMap(t *testing.T) {
+	fullMap := NUMAFabricMap{
+		0: {
+			{
+				Name:        "t1",
+				Domain:      "t1",
+				NetDevClass: hardware.Infiniband,
+				hw: &hardware.FabricInterface{
+					Providers: hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "p1"}),
+				},
+			},
+			{
+				Name:        "t2",
+				Domain:      "t2",
+				NetDevClass: hardware.Infiniband,
+				hw: &hardware.FabricInterface{
+					Providers: hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "p1"}),
+				},
+			},
+		},
+	}
+
+	for name, tc := range map[string]struct {
+		nf        *NUMAFabric
+		expResult NUMAFabricMap
+		expFunc   bool
+		expErr    error
+	}{
+		"nil": {
+			expErr: errors.New("nil"),
+		},
+		"nil map": {
+			nf:     &NUMAFabric{},
+			expErr: errors.New("uninitialized"),
+		},
+		"success": {
+			nf: &NUMAFabric{
+				numaMap: fullMap,
+			},
+			expResult: fullMap,
+			expFunc:   true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			result, release, err := tc.nf.LockedMap()
+			if release != nil {
+				defer release()
+			}
+
+			test.CmpErr(t, tc.expErr, err)
+			if diff := cmp.Diff(tc.expResult, result, fiCmpOpt); diff != "" {
+				t.Fatalf("-want, +got:\n%s", diff)
+			}
+
+			test.AssertEqual(t, tc.expFunc, release != nil, "expected release function")
+		})
+	}
+}
+
 func TestAgent_NUMAFabricFromScan(t *testing.T) {
 	for name, tc := range map[string]struct {
 		input     *hardware.FabricInterfaceSet
