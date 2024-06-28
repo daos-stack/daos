@@ -318,12 +318,13 @@ class Launch():
             return self.get_exit_status(0, "Listing tests complete")
 
         # Setup the fuse configuration
-        try:
-            setup_fuse_config(logger, args.test_servers | args.test_clients)
-        except LaunchException:
-            # Warn but don't fail
-            message = "Issue detected setting up the fuse configuration"
-            setup_result.warn_test(logger, "Setup", message, sys.exc_info())
+        if args.fuse_setup:
+            try:
+                setup_fuse_config(logger, args.test_servers | args.test_clients)
+            except LaunchException:
+                # Warn but don't fail
+                message = "Issue detected setting up the fuse configuration"
+                setup_result.warn_test(logger, "Setup", message, sys.exc_info())
 
         # Get the core file pattern information
         core_files = {}
@@ -558,6 +559,10 @@ def main():
         action="store_true",
         help="stop the test suite after the first failure")
     parser.add_argument(
+        "-fs", "--fuse_setup",
+        action="store_true",
+        help="enable setting up fuse configuration files")
+    parser.add_argument(
         "-i", "--include_localhost",
         action="store_true",
         help="include the local host when cleaning and archiving")
@@ -745,6 +750,7 @@ def main():
         args.slurm_install = True
         args.slurm_setup = True
         args.user_create = True
+        args.fuse_setup = True
         args.clear_mounts.append("/mnt/daos")
         args.clear_mounts.append("/mnt/daos0")
         args.clear_mounts.append("/mnt/daos1")
@@ -762,6 +768,7 @@ def main():
         args.slurm_install = False
         args.slurm_setup = False
         args.user_create = False
+        args.fuse_setup = False
 
     # Setup the Launch object
     launch = Launch(args.name, args.mode, args.slurm_install, args.slurm_setup)
