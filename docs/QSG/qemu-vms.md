@@ -180,7 +180,7 @@ After OS installation is finished. Remove the `-cdrom` and `-boot` options from 
     sudo qemu-system-x86_64 -M q35,accel=kvm,kernel-irqchip=split -cpu host -smp 3 -m 12288 -device intel-iommu,intremap=on -drive file=<image-dir>/daos-server.qcow2,if=virtio -device virtio-net,netdev=mynet0,mac=52:54:00:12:34:56 -netdev tap,id=mynet0 -drive file=<image-dir>/qemu-nvm-disk1.qcow2,if=none,id=nvm1 -device nvme,serial=deadbeef,drive=nvm1 &
     sudo qemu-system-x86_64  -M q35,accel=kvm,kernel-irqchip=split -cpu host -smp 1 -m 2048 -device intel-iommu,intremap=on -drive file=<image-dir>/daos-client.qcow2,if=virtio -device virtio-net,netdev=mynet1,mac=52:54:00:12:34:57 -netdev tap,id=mynet1 
 ```
-I follow these [steps](https://docs.daos.io/v2.4/QSG/setup_rhel/#start-the-daos-agents) to install both the DAOS server, DAOS admin, and DAOS client. I install daos-server on the first VM, and install both daos-admin and daos-client on the second VM. If you have issues with Ceph Pacific Repo you can edit `/etc/yum.repos.d/CentOS-Ceph-Pacific.repo` by commenting out mirrorlist and changing baseurl as below.
+I follow these [steps](https://docs.daos.io/latest/QSG/setup_rhel/) to install both the DAOS server, DAOS admin, and DAOS client. I install daos-server and daos-admin on the first VM, and install daos-client on the second VM. If you have issues with Ceph Pacific Repo you can edit `/etc/yum.repos.d/CentOS-Ceph-Pacific.repo` by commenting out mirrorlist and changing baseurl as below.
 ```
 ...
 [centos-ceph-pacific]
@@ -213,6 +213,7 @@ Update the daos-server config file `/etc/daos/daos_server.yml` on daos-server. Y
         ca_cert: /etc/daos/certs/daosCA.crt
         cert: /etc/daos/certs/server.crt
         key: /etc/daos/certs/server.key
+    # Haven't got ofi+tcp to work with QEMU. Need further investigation.
     provider: ofi+sockets
     control_log_mask: DEBUG
     control_log_file: /tmp/daos_server.log
