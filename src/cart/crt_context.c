@@ -1213,14 +1213,13 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 		crt_req_timeout_untrack(rpc_priv);
 		rpc_priv->crp_timeout_ts = 0;
 
-		d_list_add_tail(&rpc_priv->crp_tmp_link, &timeout_list);
+		d_list_add_tail(&rpc_priv->crp_tmp_link_timeout, &timeout_list);
 	};
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
 	/* handle the timeout RPCs */
-	while ((rpc_priv = d_list_pop_entry(&timeout_list,
-					    struct crt_rpc_priv,
-					    crp_tmp_link))) {
+	while ((rpc_priv =
+		    d_list_pop_entry(&timeout_list, struct crt_rpc_priv, crp_tmp_link_timeout))) {
 		RPC_ERROR(rpc_priv,
 			  "ctx_id %d, (status: %#x) timed out (%d seconds), "
 			  "target (%d:%d)\n",
@@ -1439,6 +1438,12 @@ dispatch_rpc(struct crt_rpc_priv *rpc) {
 
 	crt_rpc_lock(rpc);
 
+	/* RPC got cancelled or timed out before it got here, it got already completed*/
+	if (rpc->crp_timeout_ts == 0) {
+		crt_rpc_unlock(rpc);
+		return;
+	}
+
 	rc = crt_req_send_internal(rpc);
 	if (rc == 0) {
 		crt_rpc_unlock(rpc);
@@ -1516,8 +1521,12 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 			epi->epi_req_num++;
 			D_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
 
-			/* add to resend list */
-			d_list_add_tail(&tmp_rpc->crp_tmp_link, &submit_list);
+			/* add to resend list if not cancelled or timed out already  */
+			if (tmp_rpc->crp_timeout_ts != 0) {
+				/* prevent rpc from being released before it is resubmitted below */
+				RPC_ADDREF(tmp_rpc);
+				d_list_add_tail(&tmp_rpc->crp_tmp_link_submit, &submit_list);
+			}
 		}
 		D_MUTEX_UNLOCK(&epi->epi_mutex);
 		crt_rpc_unlock(tmp_rpc);
@@ -1529,8 +1538,12 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 	D_MUTEX_UNLOCK(&epi->epi_mutex);
 
 	/* re-submit the rpc req */
-	while ((tmp_rpc = d_list_pop_entry(&submit_list, struct crt_rpc_priv, crp_tmp_link)))
+	while (
+	    (tmp_rpc = d_list_pop_entry(&submit_list, struct crt_rpc_priv, crp_tmp_link_submit))) {
 		dispatch_rpc(tmp_rpc);
+		/* addref done above during d_list_add_tail */
+		RPC_DECREF(tmp_rpc);
+	}
 }
 
 /* TODO: Need per-provider call */
