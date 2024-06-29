@@ -1521,9 +1521,9 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 			epi->epi_req_num++;
 			D_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
 
-			/* add to resend list if not cancelled or timed out already  */
+			/* add to submit list if not cancelled or timed out already  */
 			if (tmp_rpc->crp_timeout_ts != 0) {
-				/* prevent rpc from being released before it is resubmitted below */
+				/* prevent rpc from being released before it is dispatched below */
 				RPC_ADDREF(tmp_rpc);
 				d_list_add_tail(&tmp_rpc->crp_tmp_link_submit, &submit_list);
 			}
