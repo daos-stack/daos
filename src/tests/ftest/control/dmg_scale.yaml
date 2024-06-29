@@ -19,7 +19,7 @@ server_config:
       fabric_iface_port: 31317
       log_file: daos_server0.log
       storage: auto
-      targets: 16
+      targets: 8
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -27,7 +27,7 @@ server_config:
       fabric_iface_port: 31417
       log_file: daos_server1.log
       storage: auto
-      targets: 16
+      targets: 8
 
 pool_100:
   size: 100%
