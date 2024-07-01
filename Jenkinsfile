@@ -69,11 +69,6 @@ String vm9_label(String distro) {
 pipeline {
     agent { label 'lightweight' }
 
-    triggers {
-        /* groovylint-disable-next-line AddEmptyString */
-        cron(env.BRANCH_NAME == 'weekly-2.6-testing' ? 'TZ=UTC\n0 6 * * 6' : '')
-    }
-
     environment {
         BULLSEYE = credentials('bullseye_license_key')
         GITHUB_USER = credentials('daos-jenkins-review-posting')
