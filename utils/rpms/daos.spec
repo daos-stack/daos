@@ -433,7 +433,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # set daos_metrics to be setgid daos_server to allow attachment to shmem segment
 %attr(2755,root,daos_server) %{_bindir}/daos_metrics
 %{_bindir}/daos_engine
-%{_bindir}/daos_metrics
 %{_bindir}/ddb
 %{_sysconfdir}/ld.so.conf.d/daos.conf
 %dir %{_libdir}/daos_srv

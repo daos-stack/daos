@@ -73,3 +73,4 @@ override_dh_fixperms:
 	chmod 4750 debian/tmp$(prefix)/bin/daos_server_helper
 	# set daos_server to be setgid daos_server in order to invoke daos_server_helper
 	chmod 2755 debian/tmp$(prefix)/bin/daos_server
+	chmod 2755 debian/tmp$(prefix)/bin/daos_metrics
