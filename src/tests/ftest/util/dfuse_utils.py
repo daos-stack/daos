@@ -47,6 +47,11 @@ class DfuseCommand(ExecutableCommand):
                 DAOS_TEST_LOG_DIR path with which to assign D_LOG_FILE
         """
         self.env["D_LOG_FILE"] = get_log_file(log_file or "{}_daos.log".format(self.command))
+        # TODO proper
+        # Not sure if we need this, but safer to keep until we know for sure
+        _ld_library_path = os.environ.get("DAOS_TEST_SYSTEMD_LIBRARY_PATH")
+        if _ld_library_path:
+            self.env["LD_LIBRARY_PATH"] = _ld_library_path
 
 
 class Dfuse(DfuseCommand):
