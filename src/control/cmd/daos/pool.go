@@ -416,6 +416,17 @@ func (cmd *poolQueryTargetsCmd) Execute(_ []string) error {
 		return errors.WithMessage(err, "parsing target list")
 	}
 
+	if len(idxList) == 0 {
+		pi, err := queryPool(cmd.cPoolHandle, daos.HealthOnlyPoolQueryMask)
+		if err != nil || (pi.TotalTargets == 0 || pi.TotalEngines == 0) {
+			return errors.Wrap(err, "no target indexes supplied and pool query failed")
+		}
+		tgtCount := pi.TotalTargets / pi.TotalEngines
+		for i := uint32(0); i < tgtCount; i++ {
+			idxList = append(idxList, i)
+		}
+	}
+
 	ptInfo := new(C.daos_target_info_t)
 	var rc C.int
 
