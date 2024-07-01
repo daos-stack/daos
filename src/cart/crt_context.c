@@ -1128,7 +1128,7 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 	case RPC_STATE_INITED:
 	case RPC_STATE_QUEUED:
 		RPC_ERROR(rpc_priv, "aborting %s rpc to group %s, tgt %d:%d, tgt_uri %s\n",
-			  rpc_priv->crp_stae == RPC_STATE_QUEUED ? "queued" : "inited",
+			  rpc_priv->crp_state == RPC_STATE_QUEUED ? "queued" : "inited",
 			  grp_priv->gp_pub.cg_grpid, tgt_ep->ep_rank, tgt_ep->ep_tag,
 			  rpc_priv->crp_tgt_uri);
 		crt_context_req_untrack(rpc_priv);
