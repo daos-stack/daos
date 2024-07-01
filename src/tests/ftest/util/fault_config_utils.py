@@ -9,7 +9,7 @@ import os
 
 import yaml
 from general_utils import distribute_files
-from run_utils import run_command
+from run_utils import issue_command
 
 # a lookup table of predefined faults
 #
@@ -316,7 +316,7 @@ class FaultInjection():
 
         # Remove the fault injection files on the hosts.
         error_list = []
-        result = run_command(logging.getLogger(), f"rm -f {self.fault_file}", self._hosts)
+        result = issue_command(logging.getLogger(), f"rm -f {self.fault_file}", self._hosts)
         if not result.passed:
             error_list.append(f"Error removing fault injection file: {self.fault_file}")
         return error_list

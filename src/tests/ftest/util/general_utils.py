@@ -23,7 +23,7 @@ from avocado.core.version import MAJOR
 from avocado.utils import process
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
-from run_utils import RunException, command_as_user, get_clush_command, run_local, run_remote
+from run_utils import command_as_user, get_clush_command, issue_command, run_remote
 from user_utils import get_chown_command, get_primary_group
 
 
@@ -1077,7 +1077,7 @@ def get_file_listing(hosts, files, user):
             return status
     """
     ls_command = command_as_user(f"/usr/bin/ls -la {convert_string(files, ' ')}", user)
-    return run_remote(getLogger(), hosts, ls_command, False)
+    return issue_command(getLogger(), ls_command, hosts, False)
 
 
 def get_subprocess_stdout(subprocess):
@@ -1347,12 +1347,8 @@ def check_ping(log, host, expected_ping=True, cmd_timeout=60, verbose=True):
         bool: True if the expected number of pings were returned; False otherwise.
     """
     log.debug("Checking for %s to be %sresponsive", host, "" if expected_ping else "un")
-    try:
-        run_local(
-            log, "ping -c 1 {}".format(host), check=True, timeout=cmd_timeout, verbose=verbose)
-    except RunException:
-        return not expected_ping
-    return expected_ping
+    result = issue_command(log, f"ping -c 1 {host}", None, verbose=verbose, timeout=cmd_timeout)
+    return expected_ping == result.passed
 
 
 def check_ssh(log, hosts, cmd_timeout=60, verbose=True):

@@ -623,9 +623,9 @@ def __run_local(log, command, verbose=True, timeout=None):
     return results
 
 
-def run_command(log, command, hosts=None, verbose=True, timeout=None, task_debug=False,
-                stderr=False, fanout=None):
-    """Run the command locally or remote.
+def issue_command(log, command, hosts=None, verbose=True, timeout=None, task_debug=False,
+                  stderr=False, fanout=None):
+    """Issue the command locally or remote.
 
     The command will be run locally if no hosts are specified or the only host specified is the
     local host.

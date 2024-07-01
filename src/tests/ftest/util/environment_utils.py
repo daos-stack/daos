@@ -625,8 +625,7 @@ def set_test_environment(logger, test_env=None, servers=None, clients=None, prov
         os.environ["D_LOG_FILE_APPEND_RANK"] = "1"
 
         # Default agent socket dir to be accessible by agent user
-        if os.environ.get("DAOS_AGENT_DRPC_DIR") is None \
-                and test_env.agent_user is not None and test_env.agent_user != 'root':
+        if os.environ.get("DAOS_AGENT_DRPC_DIR") is None and test_env.agent_user != 'root':
             os.environ["DAOS_AGENT_DRPC_DIR"] = os.path.join(test_env.log_dir, "daos_agent")
 
     # Python paths required for functional testing

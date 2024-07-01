@@ -25,13 +25,13 @@ from dmg_utils import get_dmg_command
 from environment_utils import TestEnvironment
 from exception_utils import CommandFailure
 from fault_config_utils import FaultInjection
-from general_utils import (DaosTestError, dict_to_str, dump_engines_stacks,
-                           get_avocado_config_value, get_default_config_file, get_file_listing,
-                           nodeset_append_suffix, pcmd, run_command, set_avocado_config_value)
+from general_utils import (dict_to_str, dump_engines_stacks, get_avocado_config_value,
+                           get_default_config_file, get_file_listing, nodeset_append_suffix,
+                           set_avocado_config_value)
 from host_utils import HostException, HostInfo, HostRole, get_host_parameters, get_local_host
 from logger_utils import TestLogger
 from pydaos.raw import DaosApiError, DaosContext, DaosLog
-from run_utils import command_as_user, run_remote, stop_processes
+from run_utils import command_as_user, issue_command, stop_processes
 from server_utils import DaosServerManager
 from slurm_utils import SlurmFailed, get_partition_hosts, get_reservation_hosts
 from test_utils_container import CONT_NAMESPACE, add_container
@@ -70,8 +70,7 @@ class Test(avocadoTest):
         # Define a test unique temporary directory
         self.test_env = TestEnvironment()
         self.test_dir = os.path.join(self.test_env.log_dir, self.test_id)
-        if not os.path.exists(self.test_dir):
-            os.makedirs(self.test_dir)
+        self.setup_temp_test_dir()
 
         # Support unique test case timeout values.  These test case specific
         # timeouts are read from the test yaml using the test case method name
@@ -378,6 +377,17 @@ class Test(avocadoTest):
         # Disable reporting the timeout upon subsequent inherited calls
         self._timeout_reported = True
 
+    def setup_temp_test_dir(self):
+        """Setup the test-specific temporary directory."""
+        if not os.path.exists(self.test_dir):
+            os.makedirs(self.test_dir)
+
+    def list_temp_test_dir(self):
+        """List the contents of the test-specific temporary directory on all hosts."""
+        self.log.info("-" * 100)
+        self.log.debug("Common test directory (%s) contents:", self.test_dir)
+        get_file_listing(None, self.test_dir, self.test_env.agent_user).log_output(self.log)
+
     def remove_temp_test_dir(self):
         """Remove the test-specific temporary directory and its contents.
 
@@ -387,10 +397,8 @@ class Test(avocadoTest):
         """
         errors = []
         self.log.info("Removing temporary test files in %s", self.test_dir)
-        try:
-            run_command("rm -fr {}".format(self.test_dir))
-        except DaosTestError as error:
-            errors.append("Error removing temporary test files: {}".format(error))
+        if not issue_command(self.log, "rm -fr {}".format(self.test_dir)).passed:
+            errors.append("Error removing temporary test files")
         return errors
 
     def _cleanup(self):
@@ -767,9 +775,10 @@ class TestWithServers(TestWithoutServers):
         hosts = self.hostlist_servers.copy()
         if self.hostlist_clients:
             hosts.add(self.hostlist_clients)
+        all_hosts = include_local_host(hosts)
         # Copy the fault injection files to the hosts.
         self.fault_injection.copy_fault_files(hosts)
-        get_file_listing(hosts, self.test_dir, self.test_env.agent_user).log_output(self.log)
+        get_file_listing(all_hosts, self.test_dir, self.test_env.agent_user).log_output(self.log)
 
         if not self.start_servers_once or self.name.uid == 1:
             # Kill commands left running on the hosts (from a previous test)
@@ -786,10 +795,8 @@ class TestWithServers(TestWithoutServers):
             if "Systemctl" in (self.agent_manager_class, self.server_manager_class):
                 log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
                 self.log.info("-" * 100)
-                self.log.info(
-                    "Updating file permissions for %s for use with systemctl",
-                    log_dir)
-                pcmd(hosts, "chmod a+rw {}".format(log_dir))
+                self.log.info("Updating file permissions for %s for use with systemctl", log_dir)
+                issue_command(self.log, f"chmod a+rw {log_dir}", hosts)
 
         # Start the servers
         force_agent_start = False
@@ -1084,7 +1091,7 @@ class TestWithServers(TestWithoutServers):
 
         self.agent_managers.append(
             DaosAgentManager(
-                group, self.bin, cert_dir, config_file, config_temp,
+                group, self.bin, cert_dir, config_file, self.test_env.agent_user, config_temp,
                 self.agent_manager_class, outputdir=self.outputdir)
         )
 
@@ -1327,6 +1334,16 @@ class TestWithServers(TestWithoutServers):
             except CommandFailure:
                 pass
 
+    def setup_temp_test_dir(self):
+        """Setup the test-specific temporary directory on all hosts."""
+        hosts = self.hostlist_servers.copy()
+        if self.hostlist_clients:
+            hosts.add(self.hostlist_clients)
+        all_hosts = include_local_host(hosts)
+        result = issue_command(self.log, f"mkdir -p {self.test_dir}", all_hosts)
+        if not result.passed:
+            self.fail(f"Error creating test-specific temporary directory on {result.failed_hosts}")
+
     def remove_temp_test_dir(self):
         """Remove the test-specific temporary directory and its contents on all hosts.
 
@@ -1342,8 +1359,8 @@ class TestWithServers(TestWithoutServers):
         self.log.info(
             "Removing temporary test files in %s from %s",
             self.test_dir, str(NodeSet.fromlist(all_hosts)))
-        result = run_remote(
-            self.log, all_hosts, command_as_user("rm -fr {}".format(self.test_dir), "root"))
+        result = issue_command(
+            self.log, command_as_user("rm -fr {}".format(self.test_dir), "root"), all_hosts)
         if not result.passed:
             errors.append("Error removing temporary test files on {}".format(result.failed_hosts))
         return errors
