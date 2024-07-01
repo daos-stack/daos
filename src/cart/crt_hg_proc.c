@@ -304,9 +304,9 @@ crt_proc_d_sg_list_t(crt_proc_t proc, crt_proc_op_t proc_op, d_sg_list_t *p)
 	for (i = 0; i < p->sg_nr; i++) {
 		rc = crt_proc_d_iov_t(proc, proc_op, &p->sg_iovs[i]);
 		if (unlikely(rc)) {
-			int k;
-
 			if (DECODING(proc_op)) {
+				int k;
+
 				/* Free all the iovs allocated up to this point */
 				if (crt_gdata.cg_copy_input_buf) {
 					for (k = 0; k < i; k++)
