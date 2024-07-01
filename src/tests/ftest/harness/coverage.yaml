@@ -1,0 +1,38 @@
+hosts:
+  test_servers: 1
+  test_clients: 1
+
+timeout: 270
+
+server_config:
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+
+pool:
+  size: 2G
+
+container:
+  control_method: daos
+  type: POSIX
+
+ior: &ior_base
+  ppn: 4
+  api: DFS
+  transfer_size: 64K
+  block_size: 128K
+
+ior_write:
+  <<: *ior_base
+  flags: "-k -v -w -W -G 1"
+
+ior_read:
+  <<: *ior_base
+  flags: "-v -r -R -G 1"

@@ -70,6 +70,8 @@ class Test(avocadoTest):
         # Define a test unique temporary directory
         self.test_env = TestEnvironment()
         self.test_dir = os.path.join(self.test_env.log_dir, self.test_id)
+
+        # Create a test unique temporary directory on this host
         os.makedirs(self.test_dir, exist_ok=True)
 
         # Support unique test case timeout values.  These test case specific
@@ -124,8 +126,6 @@ class Test(avocadoTest):
         self._teardown_cancel = set()
         self._teardown_errors = []
         self.prefix = None
-
-        # Define a test unique temporary directory on this host
         self.cancel_file = os.path.join(os.sep, "scratch", "CI-skip-list-master")
 
         # List of methods to call during tearDown to cleanup after the steps

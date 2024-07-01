@@ -17,12 +17,12 @@ from logging import getLogger
 from avocado.utils import process
 from ClusterShell.NodeSet import NodeSet
 from command_utils_base import (BasicParameter, CommandWithParameters, EnvironmentVariables,
-                                LogParameter, ObjectWithParameters)
+                                FormattedParameter, LogParameter, ObjectWithParameters)
 from exception_utils import CommandFailure
 from general_utils import (DaosTestError, change_file_owner, check_file_exists, create_directory,
                            distribute_files, get_file_listing, get_job_manager_class,
-                           get_subprocess_stdout, run_command, run_pcmd)
-from run_utils import command_as_user
+                           get_subprocess_stdout, run_command)
+from run_utils import command_as_user, issue_command
 from user_utils import get_primary_group
 from yaml_utils import get_yaml_data
 
@@ -1011,11 +1011,9 @@ class YamlCommand(SubProcessCommand):
         while yaml is not None and hasattr(yaml, "other_params"):
             if hasattr(yaml, "get_certificate_data"):
                 self.log.debug("Copying certificates for %s:", self._command)
-                data = yaml.get_certificate_data(
-                    yaml.get_attribute_names(LogParameter))
+                data = yaml.get_certificate_data(yaml.get_attribute_names(LogParameter))
                 for name in data:
-                    create_directory(
-                        hosts, name, verbose=True, raise_exception=False)
+                    create_directory(hosts, name, verbose=True, raise_exception=False)
                     for file_name in data[name]:
                         src_file = os.path.join(source, file_name)
                         dst_file = os.path.join(name, file_name)
@@ -1138,9 +1136,6 @@ class SubprocessManager(ObjectWithParameters):
         # Define the hosts that will execute the daos command
         self._hosts = NodeSet()
 
-        # The socket directory verification is not required with systemctl
-        self._verify_socket_dir = manager != "Systemctl"
-
         # An internal dictionary used to define the expected states of each
         # job process. It will be populated when any of the following methods
         # are called:
@@ -1256,7 +1251,7 @@ class SubprocessManager(ObjectWithParameters):
                 owned by the user
 
         """
-        if self._hosts and self._verify_socket_dir:
+        if self._hosts:
             self.manager.job.verify_socket_directory(user, self._hosts)
 
     def set_config_value(self, name, value):
@@ -1300,22 +1295,27 @@ class SubprocessManager(ObjectWithParameters):
                     {"host": <>, "uuid": <>, "state": <>}
                 This will be empty if there was error obtaining the dmg system
                 query output.
-
         """
-        data = {}
+        current_state = {}
         ranks = {host: rank for rank, host in enumerate(self._hosts)}
-        if not self._verify_socket_dir:
-            command = "systemctl is-active {}".format(
-                self.manager.job.service_name)
+        if hasattr(self.manager, '_systemctl'):
+            if self.manager.job.run_user == "root":
+                command = f"systemctl is-active {self.manager.job.service_name}"
+            else:
+                command = command_as_user(
+                    f"systemctl --user is-active {self.manager.job.service_name}",
+                    self.manager.job.run_user)
         else:
-            command = "pgrep {}".format(self.manager.job.command)
-        results = run_pcmd(self._hosts, command, 30)
-        for result in results:
-            for node in result["hosts"]:
-                # expecting single line output from run_pcmd
-                stdout = result["stdout"][-1] if result["stdout"] else "unknown"
-                data[ranks[node]] = {"host": node, "uuid": "-", "state": stdout}
-        return data
+            _arg_u = "-u " if self.manager.job.run_user != "root" else ""
+            command = command_as_user(
+                f"pgrep {_arg_u}{self.manager.job.command}", self.manager.job.run_user)
+        result = issue_command(self.log, command, self._hosts, 30)
+        for _result in result.output:
+            # expect single line output
+            stdout = _result.stdout[-1] if _result.stdout else "unknown"
+            for host in _result.hosts:
+                current_state[ranks[host]] = {"host": host, "uuid": "-", "state": stdout}
+        return current_state
 
     def update_expected_states(self, ranks, state):
         """Update the expected state of the specified job rank(s).
@@ -1484,28 +1484,20 @@ class SubprocessManager(ObjectWithParameters):
 
 
 class SystemctlCommand(ExecutableCommand):
-    # pylint: disable=too-few-public-methods
     """Defines an object representing the systemctl command."""
 
-    def __init__(self):
-        """Create a SystemctlCommand object."""
-        super().__init__("/run/systemctl/*", "systemctl", subprocess=False)
-        self.sudo = True
+    def __init__(self, run_user='root'):
+        """Create a SystemctlCommand object.
 
-        self.unit_command = BasicParameter(None)
-        self.service = BasicParameter(None)
-
-    def get_str_param_names(self):
-        """Get a sorted list of the names of the command attributes.
-
-        Ensure the correct order of the attributes for the systemctl command,
-        e.g.:
-            systemctl <unit_command> <service>
-
-        Returns:
-            list: a list of class attribute names used to define parameters
-                for the command.
-
+        Args:
+            run_user (str, optional): user to run as. Defaults to 'root'.
         """
-        return list(
-            reversed(super().get_str_param_names()))
+        if run_user not in (None, "root", getuser()):
+            raise ValueError(f"Unsupported run_user: {run_user}")
+        super().__init__("/run/systemctl/*", "systemctl", subprocess=False, run_user=run_user)
+
+        # Use --user for anyone other than root
+        self.user = FormattedParameter("--user", self.run_user != 'root', position=0)
+
+        self.unit_command = BasicParameter(None, position=1)
+        self.service = BasicParameter(None, position=2)

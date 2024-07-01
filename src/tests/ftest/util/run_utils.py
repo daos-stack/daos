@@ -189,10 +189,8 @@ class LocalCommandResult(CommandResult):
         """
         super().__init__()
         local_host = gethostname().split(".")[0]
-        if stdout is not None:
-            stdout = stdout.splitlines()
-        if stderr is not None:
-            stderr = stderr.splitlines()
+        stdout = stdout.splitlines() if stdout is not None else []
+        stderr = stderr.splitlines() if stderr is not None else []
         self.output.append(
             ResultData(command, return_code, NodeSet(local_host), stdout, stderr, timeout))
 
