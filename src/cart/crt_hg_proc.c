@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -219,6 +219,10 @@ crt_proc_d_iov_t(crt_proc_t proc, crt_proc_op_t proc_op, d_iov_t *div)
 		div->iov_buf = NULL;
 		div->iov_buf_len = 0;
 		div->iov_len = 0;
+
+		if (crt_gdata.cg_copy_input_buf)
+			D_FREE(div->iov_buf);
+
 		D_GOTO(out, rc = 0);
 	}
 
@@ -240,11 +244,21 @@ crt_proc_d_iov_t(crt_proc_t proc, crt_proc_op_t proc_op, d_iov_t *div)
 		if (div->iov_buf_len == 0) {
 			div->iov_buf = NULL;
 		} else {
-			/**
-			 * Don't allocate/memcpy like we do for others.
-			 * Just point at memory in request buffer instead.
-			 */
-			div->iov_buf = hg_proc_save_ptr(proc, div->iov_len);
+			if (crt_gdata.cg_copy_input_buf) {
+				D_ALLOC_ARRAY(div->iov_buf, div->iov_len);
+				if (div->iov_buf == NULL) {
+					D_ERROR("Failed to allocate iov of size %ld\n",
+						div->iov_len);
+					D_GOTO(out, rc = -DER_HG);
+				}
+				rc = crt_proc_memcpy(proc, proc_op, div->iov_buf, div->iov_len);
+			} else {
+				/**
+				 * Don't allocate/memcpy like we do for others.
+				 * Just point at memory in request buffer instead.
+				 */
+				div->iov_buf = hg_proc_save_ptr(proc, div->iov_len);
+			}
 		}
 	} else { /* ENCODING(proc_op) */
 		rc = crt_proc_memcpy(proc, proc_op, div->iov_buf, div->iov_len);
@@ -261,7 +275,11 @@ crt_proc_d_sg_list_t(crt_proc_t proc, crt_proc_op_t proc_op, d_sg_list_t *p)
 	int		rc;
 
 	if (FREEING(proc_op)) {
-		/* NB: don't need free in crt_proc_d_iov_t() */
+		if (crt_gdata.cg_copy_input_buf) {
+			for (i = 0; i < p->sg_nr; i++)
+				crt_proc_d_iov_t(proc, proc_op, &p->sg_iovs[i]);
+		}
+
 		D_FREE(p->sg_iovs);
 		return 0;
 	}
@@ -286,8 +304,16 @@ crt_proc_d_sg_list_t(crt_proc_t proc, crt_proc_op_t proc_op, d_sg_list_t *p)
 	for (i = 0; i < p->sg_nr; i++) {
 		rc = crt_proc_d_iov_t(proc, proc_op, &p->sg_iovs[i]);
 		if (unlikely(rc)) {
-			if (DECODING(proc_op))
+			int k;
+
+			if (DECODING(proc_op)) {
+				/* Free all the iovs allocated up to this point */
+				if (crt_gdata.cg_copy_input_buf) {
+					for (k = 0; k < i; k++)
+						D_FREE(p->sg_iovs[i].iov_buf);
+				}
 				D_FREE(p->sg_iovs);
+			}
 			return rc;
 		}
 	}
@@ -406,6 +432,7 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 	 * different with future's mercury code change.
 	 */
 	void			*in_buf = NULL;
+	void                    *copy_buf = NULL;
 	hg_size_t		 in_buf_size;
 	hg_class_t		*hg_class;
 	struct crt_context	*ctx;
@@ -429,6 +456,18 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 			RPC_ERROR(rpc_priv, "HG_Get_input_buf failed: %d\n", hg_ret);
 			D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 		}
+	}
+
+	if (crt_gdata.cg_copy_input_buf) {
+		D_ALLOC_ARRAY(copy_buf, in_buf_size);
+		if (copy_buf == NULL) {
+			RPC_ERROR(rpc_priv, "Failed to allocate buffer, size=%ld\n", in_buf_size);
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
+
+		memcpy(copy_buf, in_buf, in_buf_size);
+		in_buf                 = copy_buf;
+		rpc_priv->crp_buf_copy = copy_buf;
 	}
 
 	/* Create a new decoding proc */
@@ -480,6 +519,9 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 	*proc = hg_proc;
 
 out:
+	if (rc != 0)
+		D_FREE(copy_buf);
+
 	return rc;
 }
 
@@ -548,8 +590,18 @@ crt_hg_unpack_body(struct crt_rpc_priv *rpc_priv, crt_proc_t proc)
 		RPC_ERROR(rpc_priv, "hg_proc_flush failed: %d\n", hg_ret);
 		D_GOTO(out, rc);
 	}
+
 out:
 	crt_hg_unpack_cleanup(proc);
+
+	if (crt_gdata.cg_copy_input_buf) {
+		hg_ret = HG_Release_input_buf(rpc_priv->crp_hg_hdl);
+		if (hg_ret != HG_SUCCESS) {
+			RPC_ERROR(rpc_priv, "HG_Release_input_buf() failed; hg_ret=%d\n", hg_ret);
+			rc = crt_hgret_2_der(hg_ret);
+		}
+	}
+
 	return rc;
 }
 
