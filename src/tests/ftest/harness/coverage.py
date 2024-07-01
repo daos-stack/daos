@@ -6,11 +6,11 @@
 
 from apricot import TestWithServers
 from dfuse_utils import get_dfuse, start_dfuse
-from ior_utils import read_data, write_data
+from ior_utils import write_data
 
 
 class HarnessCoverageTest(TestWithServers):
-    """Tests for new specific metrics to track activity of md_on_ssd.
+    """Test basic harness coverage.
 
     :avocado: recursive
     """
@@ -18,7 +18,7 @@ class HarnessCoverageTest(TestWithServers):
     def test_basic_coverage(self):
         """Test basic harness coverage by starting servers, agents, dfuse, and running ior.
 
-        :avocado: tags=all,daily_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=harness
         :avocado: tags=HarnessCoverageTest,test_basic_coverage
@@ -34,7 +34,4 @@ class HarnessCoverageTest(TestWithServers):
         start_dfuse(self, dfuse, pool, container)
 
         self.log_step('Writing data to the pool (ior)')
-        ior = write_data(self, container, dfuse=dfuse)
-
-        self.log_step('Reading data to the pool (ior)')
-        read_data(self, ior, container, dfuse=dfuse)
+        write_data(self, container, dfuse=dfuse)

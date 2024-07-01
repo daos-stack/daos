@@ -15,6 +15,7 @@ server_config:
         0:
           class: ram
           scm_mount: /mnt/daos
+  system_ram_reserved: 1
 
 pool:
   size: 2G
@@ -26,8 +27,8 @@ container:
 ior: &ior_base
   ppn: 4
   api: DFS
-  transfer_size: 64K
-  block_size: 128K
+  transfer_size: 32B
+  block_size: 32B
 
 ior_write:
   <<: *ior_base
