@@ -189,6 +189,20 @@ rebuild_leader_set_status(struct rebuild_global_pool_tracker *rgt,
 		status->pull_done = 1;
 }
 
+static void
+rebuild_leader_set_update_time(struct rebuild_global_pool_tracker *rgt, d_rank_t rank)
+{
+	int i;
+
+	for (i = 0; i < rgt->rgt_servers_number; i++) {
+		if (rgt->rgt_servers[i].rank == rank) {
+			rgt->rgt_servers_last_update[i]  = ABT_get_wtime();
+			return;
+		}
+	}
+	D_INFO("rank %u is not included in this rebuild.\n", rank);
+}
+
 static uint32_t
 rebuild_get_global_dtx_resync_ver(struct rebuild_global_pool_tracker *rgt)
 {
@@ -261,7 +275,7 @@ int
 rebuild_global_status_update(struct rebuild_global_pool_tracker *rgt,
 			     struct rebuild_iv *iv)
 {
-	rgt->rgt_servers_last_update[iv->riv_rank] = ABT_get_wtime();
+	rebuild_leader_set_update_time(rgt, iv->riv_rank);
 
 	D_DEBUG(DB_REBUILD, "iv rank %d scan_done %d pull_done %d resync dtx %u\n",
 		iv->riv_rank, iv->riv_scan_done, iv->riv_pull_done,
