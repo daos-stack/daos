@@ -31,7 +31,7 @@ from general_utils import (dict_to_str, dump_engines_stacks, get_avocado_config_
 from host_utils import HostException, HostInfo, HostRole, get_host_parameters, get_local_host
 from logger_utils import TestLogger
 from pydaos.raw import DaosApiError, DaosContext, DaosLog
-from run_utils import command_as_user, issue_command, stop_processes
+from run_utils import issue_command, stop_processes
 from server_utils import DaosServerManager
 from slurm_utils import SlurmFailed, get_partition_hosts, get_reservation_hosts
 from test_utils_container import CONT_NAMESPACE, add_container
@@ -760,17 +760,18 @@ class TestWithServers(TestWithoutServers):
         # Display host information
         self.host_info.display(self.log)
 
-        # Define a test unique temporary directory on the other hosts
+        # Create a test unique temporary directory on the other hosts
         result = issue_command(self.log, f"mkdir -p {self.test_dir}", self.host_info.all_hosts)
         if not result.passed:
             self.fail(f"Error creating test-specific temporary directory on {result.failed_hosts}")
+
+        # Copy the fault injection files to the hosts.
+        self.fault_injection.copy_fault_files(self.host_info.all_hosts)
 
         # List common test directory contents before running the test
         self.log.info("-" * 100)
         self.log.debug("Common test directory (%s) contents:", self.test_dir)
         all_hosts = include_local_host(self.host_info.all_hosts)
-        # Copy the fault injection files to the hosts.
-        self.fault_injection.copy_fault_files(self.host_info.all_hosts)
         get_file_listing(all_hosts, self.test_dir, self.test_env.agent_user).log_output(self.log)
 
         if not self.start_servers_once or self.name.uid == 1:
@@ -1335,17 +1336,11 @@ class TestWithServers(TestWithoutServers):
 
         """
         errors = []
-        hosts = self.hostlist_servers.copy()
-        if self.hostlist_clients:
-            hosts.add(self.hostlist_clients)
-        all_hosts = include_local_host(hosts)
-        self.log.info(
-            "Removing temporary test files in %s from %s",
-            self.test_dir, str(NodeSet.fromlist(all_hosts)))
-        result = issue_command(
-            self.log, command_as_user("rm -fr {}".format(self.test_dir), "root"), all_hosts)
+        all_hosts = include_local_host(self.host_info.all_hosts)
+        self.log.info("Removing temporary test files in %s from %s", self.test_dir, all_hosts)
+        result = issue_command(self.log, f"rm -fr {self.test_dir}", all_hosts)
         if not result.passed:
-            errors.append("Error removing temporary test files on {}".format(result.failed_hosts))
+            errors.append(f"Error removing temporary test files on {result.failed_hosts}")
         return errors
 
     def __dump_engines_stacks(self, message):

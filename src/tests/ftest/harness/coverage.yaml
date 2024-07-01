@@ -33,7 +33,3 @@ ior: &ior_base
 ior_write:
   <<: *ior_base
   flags: "-k -v -w -W -G 1"
-
-ior_read:
-  <<: *ior_base
-  flags: "-v -r -R -G 1"

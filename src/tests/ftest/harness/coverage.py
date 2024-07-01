@@ -24,7 +24,7 @@ class HarnessCoverageTest(TestWithServers):
         :avocado: tags=HarnessCoverageTest,test_basic_coverage
         """
         self.log_step('Creating a pool (dmg pool create)')
-        pool = self.get_pool(self)
+        pool = self.get_pool()
 
         self.log_step('Creating a container for the pool (daos container create)')
         container = self.get_container(pool)
