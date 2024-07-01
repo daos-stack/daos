@@ -196,7 +196,7 @@ rebuild_leader_set_update_time(struct rebuild_global_pool_tracker *rgt, d_rank_t
 
 	for (i = 0; i < rgt->rgt_servers_number; i++) {
 		if (rgt->rgt_servers[i].rank == rank) {
-			rgt->rgt_servers_last_update[i]  = ABT_get_wtime();
+			rgt->rgt_servers_last_update[i] = ABT_get_wtime();
 			return;
 		}
 	}
