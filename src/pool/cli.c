@@ -802,14 +802,16 @@ warmup(struct dc_pool *pool)
 		crt_rpc_t                 *rpc = NULL;
 		struct pool_tgt_warmup_in *rpc_in;
 		int                        idx;
+		crt_opcode_t               opcode;
 
 		idx        = (i + shift) % nr;
 		ep.ep_grp  = pool->dp_sys->sy_group;
 		ep.ep_rank = tgts[idx].ta_comp.co_rank;
 		ep.ep_tag  = daos_rpc_tag(DAOS_REQ_TGT, tgts[idx].ta_comp.co_index);
-
-		rc = pool_req_create(ctx, &ep, POOL_TGT_WARMUP, pool->dp_pool, pool->dp_pool_hdl,
-				     NULL, &rpc);
+		opcode     = DAOS_RPC_OPCODE(POOL_TGT_WARMUP, DAOS_POOL_MODULE,
+                                         dc_pool_proto_version ? dc_pool_proto_version
+								   : DAOS_POOL_VERSION);
+		rc         = crt_req_create(ctx, &ep, opcode, &rpc);
 		if (rc != 0) {
 			D_ERROR("Failed to allocate req " DF_RC "\n", DP_RC(rc));
 			goto exit;

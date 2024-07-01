@@ -319,6 +319,12 @@ daos_cleanup(void)
 		D_ERROR("failed to finalize eq: "DF_RC"\n", DP_RC(rc));
 		ret = rc;
 	}
+	/** clean up all registered per-module metrics */
+	daos_metrics_fini();
+#if BUILD_PIPELINE
+	dc_pipeline_fini();
+#endif
+
 	dc_obj_fini();
 	dc_cont_fini();
 	dc_pool_fini();
@@ -332,6 +338,8 @@ daos_cleanup(void)
 			ret = rc;
 	}
 
+	dc_tm_fini();
+	dc_mgmt_drop_attach_info();
 	dc_agent_fini();
 	dc_job_fini();
 
