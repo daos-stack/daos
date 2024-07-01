@@ -1,0 +1,12 @@
+"""Build DAOS util scripts"""
+
+
+def scons():
+    """Execute build"""
+    Import('env', 'prereqs')
+
+    if prereqs.client_requested():
+        env.Install(os.path.join("$PREFIX", 'bin'), ['tune-dfuse.sh'])
+
+if __name__ == "SCons.Script":
+    scons()

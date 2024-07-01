@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.7.100
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -589,6 +589,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Mon Jul 01 2024 Johann Lombardi <johann.lombardi@gmail.com> 2.7.100-2
+- Add tune-dfuse.sh script to bump readahead and max dirty ratio
+
 * Mon May 20 2024 Phillip Henderson <phillip.henderson@intel.com> 2.7.100-1
 - Bump version to 2.7.100
 
