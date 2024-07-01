@@ -641,11 +641,11 @@ strategy is used:
 * "lazy"  : The scrubber is enaled and will run when there is no I/O activities on the system.
 * "timed" : The scrubber is enabled and will be triggered on a regular time basis.
 
-The `scrub_freq` property is used to defined the frequency at which a full pass of the scrubber
+The `scrub_freq` property is used to define the frequency at which a full pass of the scrubber
 will be accomplished. The time is in seconds. The default value is 604,800s which is 7 days (i.e.
 once a week).
 
-The `scrub_freq` property defines the number of checksum errors above which the target should be
+The `scrub_thresh` property defines the number of checksum errors above which the target should be
 excluded. The default value is 0, which means that automatic exclusion is disabled.
 
 ## Access Control Lists
