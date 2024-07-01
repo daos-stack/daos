@@ -216,13 +216,13 @@ crt_proc_d_iov_t(crt_proc_t proc, crt_proc_op_t proc_op, d_iov_t *div)
 		D_GOTO(out, rc = -DER_INVAL);
 
 	if (FREEING(proc_op)) {
-		div->iov_buf = NULL;
 		div->iov_buf_len = 0;
 		div->iov_len = 0;
 
 		if (crt_gdata.cg_copy_input_buf)
 			D_FREE(div->iov_buf);
 
+		div->iov_buf = NULL;
 		D_GOTO(out, rc = 0);
 	}
 
