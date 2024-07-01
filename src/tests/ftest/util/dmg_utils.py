@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import re
+from getpass import getuser
 from grp import getgrgid
 # pylint: disable=too-many-lines
 from logging import getLogger
@@ -41,6 +42,7 @@ def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None, hos
     transport_config = DmgTransportCredentials(cert_dir)
     config = DmgYamlParameters(config_file, group, transport_config)
     command = DmgCommand(bin_dir, config, hostlist_suffix)
+    command.run_user = getuser()  # TODO proper
     if config_temp:
         # Setup the DaosServerCommand to write the config file data to the
         # temporary file and then copy the file to all the hosts using the

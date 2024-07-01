@@ -16,7 +16,7 @@ from env_modules import load_mpi
 from exception_utils import CommandFailure, MPILoadError
 from general_utils import (get_job_manager_class, get_journalctl_command, journalctl_time, pcmd,
                            run_pcmd)
-from run_utils import run_remote, stop_processes
+from run_utils import command_as_user, run_remote, stop_processes
 from write_host_file import write_host_file
 
 
@@ -253,7 +253,6 @@ class JobManager(ExecutableCommand):
         self.log.debug(
             "%s processes still running remotely%s:", self.command,
             " {}".format(message) if message else "")
-        self.log.debug("Running (on %s): %s", self._hosts, command)
         results = pcmd(self._hosts, command, True, 10, None)
 
         # The pcmd method will return a dictionary with a single key, e.g.
@@ -651,7 +650,7 @@ class Systemctl(JobManager):
         """
         super().__init__("/run/systemctl/*", "systemd", job)
         self.job = job
-        self._systemctl = SystemctlCommand()
+        self._systemctl = SystemctlCommand(run_user=job.run_user)
         self._systemctl.service.value = self.job.service_name
 
         self.timestamps = {
@@ -697,6 +696,7 @@ class Systemctl(JobManager):
             raise_exception = self.exit_status_exception
 
         # Start the daos_server.service
+        self.override_config()
         self.service_enable()
         result = self.service_start()
         # result = self.service_status()
@@ -806,6 +806,115 @@ class Systemctl(JobManager):
             state = [remote_state]
         return state
 
+    def override_config(self):
+        """Override the service config.
+
+        Raises:
+            CommandFailure: if the command fails
+        """
+        # Get the existing service file
+        service_file = self._get_service_file()
+
+        # If in a shared filesystem, only update the config on one host
+        if self._is_file_shared(service_file):
+            config_nodes = NodeSet(self._hosts[0])
+        else:
+            config_nodes = self._hosts
+
+        # Create the override directory
+        override_directory = f"{service_file}.d"
+        command = command_as_user(f"mkdir -p {override_directory}", self.job.run_user)
+        result = run_remote(self.log, config_nodes, command, self.verbose, self.timeout)
+        if not result.passed:
+            raise CommandFailure(f"Error occurred running '{command}'")
+
+        # Create the override file
+        # TODO would be better to create the file locally and copy it
+        override_file = os.path.join(override_directory, "override.conf")
+        exec_path = os.path.join(self.job.command_path, self.job.command)
+        exec_config = self.job.yaml.filename
+        override_contents = [
+            "[Service]",
+            "ExecStart=",
+            f"ExecStart={exec_path} start -o {exec_config}"
+        ]
+        # TODO proper
+        _ld_library_path = os.environ.get("DAOS_TEST_SYSTEMD_LIBRARY_PATH")
+        if _ld_library_path:
+            override_contents.append(f'Environment="LD_LIBRARY_PATH={_ld_library_path}"')
+        override_contents = '\n'.join(override_contents)
+        command = command_as_user(
+            f"bash -c \"echo '{override_contents}' > {override_file}\"", self.job.run_user)
+        result = run_remote(self.log, config_nodes, command, self.verbose, self.timeout)
+        if not result.passed:
+            raise CommandFailure(f"Error occurred running '{command}'")
+
+        # Reload on all hosts to pick up changes
+        self.daemon_reload()
+
+    def daemon_reload(self):
+        """Run systemctl daemon-reload.
+
+        Raises:
+            CommandFailure: if the command fails
+
+        Returns:
+            RemoteCommandResult: a grouping of the command results from the same hosts with the
+                same return status
+
+        """
+        # Service name not needed. Restore after
+        self._systemctl.service.value = None
+        try:
+            return self._run_unit_command("daemon-reload")
+        finally:
+            self._systemctl.service.value = self.job.service_name
+
+    def _get_service_file(self):
+        """Get the service file path.
+
+        Raises:
+            CommandFailure: if there is an issue running the command
+
+        Returns:
+            str: the service file path
+
+        """
+        self._systemctl.unit_command.value = "status"
+        self.timestamps["status"] = journalctl_time()
+        command = ' | '.join([
+            str(self),
+            "grep 'Loaded:'",
+            "grep -oE '/.*service'",
+            "xargs -r sh -c '[ -e \"$0\" ] && echo \"$0\"'"
+        ])
+        result = run_remote(self.log, self._hosts, command, self.verbose, self.timeout)
+        if not result.passed:
+            raise CommandFailure(f"Error occurred running '{command}'")
+        if not result.homogeneous:
+            raise CommandFailure(f"Non-homogenous output from '{command}'")
+        return list(result.all_stdout.values())[0].strip()
+
+    def _is_file_shared(self, path):
+        """Determine whether a file is in a shared filesystem.
+
+        Assumes "df -l" failure indicates a shared filesystem.
+
+        Raises:
+            CommandFailure: if there is an issue running the command
+
+        Returns:
+            bool: whether the path is thought to be shared
+
+        """
+        self.log.info("Checking if %s is in a shared filesystem", path)
+        command = f"df -l {path}"
+        result = run_remote(self.log, self._hosts, command, self.verbose, self.timeout)
+        shared = not result.passed
+        if shared:
+            self.log.info("Assuming %s is in a shared filesystem", path)
+        return shared
+
     def _run_unit_command(self, command):
         """Run the systemctl command.
 
@@ -816,25 +925,16 @@ class Systemctl(JobManager):
             CommandFailure: if there is an issue running the command
 
         Returns:
-            dict: a dictionary of return codes keys and accompanying NodeSet
-                values indicating which hosts yielded the return code.
+            RemoteCommandResult: a grouping of the command results from the same hosts with the
+                same return status
 
         """
         self._systemctl.unit_command.value = command
         self.timestamps[command] = journalctl_time()
-        result = pcmd(self._hosts, str(self), self.verbose, self.timeout)
-        if 255 in result:
+        result = run_remote(self.log, self._hosts, str(self), self.verbose, self.timeout)
+        if not result.passed:
             raise CommandFailure(
-                "Timeout detected running '{}' with a {}s timeout on {}".format(
-                    str(self), self.timeout, NodeSet.fromlist(result[255])))
-
-        if 0 not in result or len(result) > 1:
-            failed = []
-            for item, value in list(result.items()):
-                if item != 0:
-                    failed.extend(value)
-            raise CommandFailure(
-                "Error occurred running '{}' on {}".format(str(self), NodeSet.fromlist(failed)))
+                "Error occurred running '{}' on {}".format(str(self), result.failed_hosts))
         return result
 
     def _report_unit_command(self, command):
@@ -847,8 +947,8 @@ class Systemctl(JobManager):
             CommandFailure: if there is an issue running the command
 
         Returns:
-            dict: a dictionary of return codes keys and accompanying NodeSet
-                values indicating which hosts yielded the return code.
+            RemoteCommandResult: a grouping of the command results from the same hosts with the
+                same return status
 
         """
         try:
@@ -856,7 +956,8 @@ class Systemctl(JobManager):
         except CommandFailure as error:
             self.log.info(error)
             command = get_journalctl_command(
-                self.timestamps[command], units=self._systemctl.service.value)
+                self.timestamps[command], units=self._systemctl.service.value,
+                run_user=self.job.run_user)
             self.display_log_data(self.get_log_data(self._hosts, command))
             raise CommandFailure(error) from error
 
@@ -867,8 +968,8 @@ class Systemctl(JobManager):
             CommandFailure: if unable to enable
 
         Returns:
-            dict: a dictionary of return codes keys and accompanying NodeSet
-                values indicating which hosts yielded the return code.
+            RemoteCommandResult: a grouping of the command results from the same hosts with the
+                same return status
 
         """
         return self._report_unit_command("enable")
@@ -880,8 +981,8 @@ class Systemctl(JobManager):
             CommandFailure: if unable to disable
 
         Returns:
-            dict: a dictionary of return codes keys and accompanying NodeSet
-                values indicating which hosts yielded the return code.
+            RemoteCommandResult: a grouping of the command results from the same hosts with the
+                same return status
 
         """
         return self._report_unit_command("disable")
@@ -893,8 +994,8 @@ class Systemctl(JobManager):
             CommandFailure: if unable to start
 
         Returns:
-            dict: a dictionary of return codes keys and accompanying NodeSet
-                values indicating which hosts yielded the return code.
+            RemoteCommandResult: a grouping of the command results from the same hosts with the
+                same return status
 
         """
         return self._report_unit_command("start")
@@ -906,8 +1007,8 @@ class Systemctl(JobManager):
             CommandFailure: if unable to stop
 
         Returns:
-            dict: a dictionary of return codes keys and accompanying NodeSet
-                values indicating which hosts yielded the return code.
+            RemoteCommandResult: a grouping of the command results from the same hosts with the
+                same return status
 
         """
         return self._report_unit_command("stop")
@@ -919,8 +1020,8 @@ class Systemctl(JobManager):
             CommandFailure: if unable to get the status
 
         Returns:
-            dict: a dictionary of return codes keys and accompanying NodeSet
-                values indicating which hosts yielded the return code.
+            RemoteCommandResult: a grouping of the command results from the same hosts with the
+                same return status
 
         """
         return self._report_unit_command("status")
@@ -1084,7 +1185,8 @@ class Systemctl(JobManager):
                 (str)  - string indicating the number of patterns found in what duration
 
         """
-        command = get_journalctl_command(since, until, units=self._systemctl.service.value)
+        command = get_journalctl_command(
+            since, until, units=self._systemctl.service.value, run_user=self.job.run_user)
         self.log.info("Searching for '%s' in '%s' output on %s", pattern, command, self._hosts)
 
         log_data = None
@@ -1171,7 +1273,8 @@ class Systemctl(JobManager):
         if timestamp:
             if hosts is None:
                 hosts = self._hosts
-            command = get_journalctl_command(timestamp, units=self._systemctl.service.value)
+            command = get_journalctl_command(
+                timestamp, units=self._systemctl.service.value, run_user=self.job.run_user)
             self.display_log_data(self.get_log_data(hosts, command))
 
     def log_additional_debug_data(self, hosts, since, until):
@@ -1184,7 +1287,8 @@ class Systemctl(JobManager):
                 to None, in which case it is not utilized.
         """
         command = get_journalctl_command(
-            since, until, True, identifiers=["kernel", self._systemctl.service.value])
+            since, until, True, identifiers=["kernel", self._systemctl.service.value],
+            run_user=self.job.run_user)
         details = self.str_log_data(self.get_log_data(hosts, command))
         self.log.info("Additional '%s' output:\n%s", command, details)
 
