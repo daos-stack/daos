@@ -1125,9 +1125,12 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		d_tm_inc_counter(crt_ctx->cc_timedout, 1);
 
 	switch (rpc_priv->crp_state) {
+	case RPC_STATE_INITED:
 	case RPC_STATE_QUEUED:
-		RPC_ERROR(rpc_priv, "aborting waiting to group %s, rank %d, tgt_uri %s\n",
-			  grp_priv->gp_pub.cg_grpid, tgt_ep->ep_rank, rpc_priv->crp_tgt_uri);
+		RPC_ERROR(rpc_priv, "aborting %s rpc to group %s, tgt %d:%d, tgt_uri %s\n",
+			  rpc_priv->crp_stae == RPC_STATE_QUEUED ? "queued" : "inited",
+			  grp_priv->gp_pub.cg_grpid, tgt_ep->ep_rank, tgt_ep->ep_tag,
+			  rpc_priv->crp_tgt_uri);
 		crt_context_req_untrack(rpc_priv);
 		crt_rpc_complete_and_unlock(rpc_priv, -DER_TIMEDOUT);
 		break;
@@ -1509,11 +1512,11 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 		if (tmp_rpc->crp_state == RPC_STATE_QUEUED && credits_available(epi) > 0) {
 			bool submit_rpc = true;
 
+			tmp_rpc->crp_state = RPC_STATE_INITED;
 			/* RPC got cancelled or timed out before it got here */
 			if (tmp_rpc->crp_timeout_ts == 0) {
 				submit_rpc = false;
 			} else {
-				tmp_rpc->crp_state = RPC_STATE_INITED;
 				crt_set_timeout(tmp_rpc);
 
 				D_MUTEX_LOCK(&crt_ctx->cc_mutex);
