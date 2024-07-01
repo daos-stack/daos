@@ -55,9 +55,11 @@ container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
   control_method: daos
-container_acl:
-  new_user: daos_ci_tester_1
-  new_group: daos_ci_test_grp_1
+
+# User:group to be created by launch.py --user_create
+# Or expected to already exist
+client_users:
+  - daos_ci_tester_1:daos_ci_test_grp_1
 
 largefilecount:
   api:
