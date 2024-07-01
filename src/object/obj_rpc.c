@@ -586,7 +586,6 @@ crt_proc_daos_iod_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_iod_t *iod)
 		return rc;
 
 	if (FREEING(proc_op)) {
-		/* NB: don't need free in crt_proc_d_iov_t() */
 		D_FREE(iod->iod_recxs);
 		return 0;
 	}

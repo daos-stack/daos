@@ -252,6 +252,8 @@ crt_proc_d_iov_t(crt_proc_t proc, crt_proc_op_t proc_op, d_iov_t *div)
 					D_GOTO(out, rc = -DER_HG);
 				}
 				rc = crt_proc_memcpy(proc, proc_op, div->iov_buf, div->iov_len);
+				if (rc != 0)
+					D_FREE(div->iov_buf);
 			} else {
 				/**
 				 * Don't allocate/memcpy like we do for others.

@@ -45,8 +45,7 @@ crt_proc_struct_daos_acl(crt_proc_t proc, crt_proc_op_t proc_op,
 	switch (proc_op) {
 	case CRT_PROC_ENCODE:
 		if (*data != NULL) {
-			d_iov_set(&iov, (void *)*data,
-				  daos_acl_get_size(*data));
+			d_iov_set(&iov, (void *)*data, daos_acl_get_size(*data));
 		} else {
 			iov.iov_buf = NULL;
 			iov.iov_buf_len = 0;
@@ -59,6 +58,8 @@ crt_proc_struct_daos_acl(crt_proc_t proc, crt_proc_op_t proc_op,
 			*data = (struct daos_acl *)iov.iov_buf;
 		break;
 	case CRT_PROC_FREE:
+		d_iov_set(&iov, (void *)*data, daos_acl_get_size(*data));
+		crt_proc_d_iov_t(proc, proc_op, &iov);
 		*data = NULL;
 		break;
 	default:
