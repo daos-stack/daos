@@ -11,9 +11,8 @@ addFilter("daos\.spec: W: invalid-url Source0: daos-[\d\.]+\.tar\.gz")
 addFilter("daos-firmware\.x86_64: E: (setuid-binary|non-standard-executable-perm) \/usr\/bin\/daos_firmware")
 addFilter("daos-server\.x86_64: E: (setuid-binary|non-standard-executable-perm) \/usr\/bin\/daos_admin")
 addFilter("daos-server\.x86_64: E: (setuid-binary|non-standard-executable-perm) \/usr\/bin\/daos_server")
-addFilter("daos-server\.x86_64: E: setgid-binary \/usr\/bin\/daos_server daos_server 2755")
+addFilter("daos-server\.x86_64: E: setgid-binary \/usr\/bin\/daos_metrics daos_server 2755")
 addFilter("daos-server\.x86_64: E: (setuid-binary|non-standard-executable-perm) \/usr\/bin\/daos_metrics")
-addFilter("daos-server\.x86_64: E: setgid-binary \/usr\/bin\/daos_metrics daos_metrics 2755")
 
 # https://github.com/rpm-software-management/rpmlint/issues/922
 addFilter("daos-client\.x86_64: E: post(i|u)n-without-ldconfig \/usr\/lib64\/libdaos.so.[\d\.]+")
