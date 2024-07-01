@@ -48,6 +48,7 @@ def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None):
     common_config = CommonConfig(group, transport_config)
     config = DaosServerYamlParameters(config_file, common_config)
     command = DaosServerCommand(bin_dir, config, None)
+    command.run_user = "root"
     if config_temp:
         # Setup the DaosServerCommand to write the config file data to the
         # temporary file and then copy the file to all the hosts using the
@@ -106,7 +107,8 @@ class DaosServerManager(SubprocessManager):
         # Dmg command to access this group of servers which will be configured
         # to access the daos_servers when they are started
         self.dmg = get_dmg_command(
-            group, dmg_cert_dir, bin_dir, dmg_config_file, dmg_config_temp, access_points_suffix)
+            group, dmg_cert_dir, bin_dir, dmg_config_file, dmg_config_temp, access_points_suffix,
+            os.environ.get('DAOS_TEST_AGENT_USER', 'root'))  # TODO proper
 
         # Set the correct certificate file ownership
         if manager == "Systemctl":
@@ -264,7 +266,7 @@ class DaosServerManager(SubprocessManager):
                     self.manager.mca.update({"plm_rsh_args": "-l root"}, "orterun.mca", True)
 
         # Verify the socket directory exists when using a non-systemctl manager
-        self.verify_socket_directory(getuser())
+        self.verify_socket_directory(self.manager.job.certificate_owner)
 
     def clean_files(self, verbose=True):
         """Clean up the daos server files.
@@ -1179,11 +1181,10 @@ class DaosServerManager(SubprocessManager):
         """
         engines_per_host = self.get_config_value("engines_per_host") or 1
         engines = []
-        daos_metrics_exe = os.path.join(self.manager.job.command_path, "daos_metrics")
         for engine in range(engines_per_host):
             results = run_pcmd(
                 hosts=self._hosts, verbose=verbose, timeout=timeout,
-                command="sudo {} -S {} --csv".format(daos_metrics_exe, engine))
+                command=f"sudo daos_metrics -S {engine} --csv")
             engines.append(results)
         return engines
 

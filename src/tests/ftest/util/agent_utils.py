@@ -6,7 +6,6 @@
 import os
 import re
 import socket
-from getpass import getuser
 
 from agent_utils_params import DaosAgentTransportCredentials, DaosAgentYamlParameters
 from ClusterShell.NodeSet import NodeSet
@@ -193,11 +192,11 @@ class DaosAgentCommand(YamlCommand):
         self.set_command(("support", "collect-log"), **kwargs)
         return self._get_json_result()
 
-    def get_user_file(self):
-        """Get the file defined in the yaml file that must be owned by the user.
+    def get_socket_dir(self):
+        """Get the socket directory.
 
         Returns:
-            str: file defined in the yaml file that must be owned by the user
+            str: the socket directory
 
         """
         return self.get_config_value("runtime_dir")
@@ -207,7 +206,7 @@ class DaosAgentManager(SubprocessManager):
     """Manages the daos_agent execution on one or more hosts."""
 
     def __init__(self, group, bin_dir, cert_dir, config_file, run_user, config_temp=None,
-                 manager="Orterun", outputdir=None):
+                 manager="Systemctl", outputdir=None):
         """Initialize a DaosAgentManager object.
 
         Args:
@@ -221,9 +220,8 @@ class DaosAgentManager(SubprocessManager):
                 the hosts using the config_file specification. Defaults to None.
             manager (str, optional): the name of the JobManager class used to
                 manage the YamlCommand defined through the "job" attribute.
-                Defaults to "Orterun".
-            outputdir (str, optional): path to avocado test outputdir. Defaults
-                to None.
+                Defaults to "Systemctl".
+            outputdir (str, optional): path to avocado test outputdir. Defaults to None.
         """
         agent_command = get_agent_command(
             group, cert_dir, bin_dir, config_file, run_user, config_temp)
@@ -272,11 +270,10 @@ class DaosAgentManager(SubprocessManager):
             self._hosts, self.manager.command)
 
         # Copy certificates
-        self.manager.job.copy_certificates(
-            get_log_file("daosCA/certs"), self._hosts)
+        self.manager.job.copy_certificates(get_log_file("daosCA/certs"), self._hosts)
 
         # Verify the socket directory exists when using a non-systemctl manager
-        self.verify_socket_directory(getuser())
+        self.verify_socket_directory(self.manager.job.certificate_owner)
 
         super().start()
 
@@ -368,11 +365,11 @@ class DaosAgentManager(SubprocessManager):
             raise CommandFailure(
                 "Failed to stop agents:\n  {}".format("\n  ".join(messages)))
 
-    def get_user_file(self):
-        """Get the file defined in the yaml file that must be owned by the user.
+    def get_socket_dir(self):
+        """Get the socket directory.
 
         Returns:
-            str: file defined in the yaml file that must be owned by the user
+            str: the socket directory
 
         """
         return self.get_config_value("runtime_dir")
