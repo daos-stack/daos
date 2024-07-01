@@ -116,6 +116,10 @@ def build_misc(build_prefix):
     path = os.path.join(build_prefix, common)
     SConscript(os.path.join(common, 'SConscript'), variant_dir=path, duplicate=0)
 
+    # install util scripts
+    common = os.path.join('utils', 'scripts')
+    path = os.path.join(build_prefix, common)
+    SConscript(os.path.join(common, 'SConscript'), variant_dir=path, duplicate=0)
 
 def update_rpm_version(version, tag):
     """ Update the version (and release) in the RPM spec file """
