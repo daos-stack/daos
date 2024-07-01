@@ -573,7 +573,7 @@ class TestEnvironment():
         Returns:
             str: the default daos_agent user
         """
-        return None
+        return 'root'
 
 
 def set_test_environment(logger, test_env=None, servers=None, clients=None, provider=None,

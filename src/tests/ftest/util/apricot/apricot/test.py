@@ -769,9 +769,7 @@ class TestWithServers(TestWithoutServers):
             hosts.add(self.hostlist_clients)
         # Copy the fault injection files to the hosts.
         self.fault_injection.copy_fault_files(hosts)
-        lines = get_file_listing(hosts, self.test_dir).stdout_text.splitlines()
-        for line in lines:
-            self.log.debug("  %s", line)
+        get_file_listing(hosts, self.test_dir, self.test_env.agent_user).log_output(self.log)
 
         if not self.start_servers_once or self.name.uid == 1:
             # Kill commands left running on the hosts (from a previous test)

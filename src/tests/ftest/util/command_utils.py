@@ -35,7 +35,8 @@ class ExecutableCommand(CommandWithParameters):
     # values from the standard output yielded by the method.
     METHOD_REGEX = {"run": r"(.*)"}
 
-    def __init__(self, namespace, command, path="", subprocess=False, check_results=None):
+    def __init__(self, namespace, command, path="", subprocess=False, check_results=None,
+                 run_user=None):
         """Create a ExecutableCommand object.
 
         Uses Avocado's utils.process module to run a command str provided.
@@ -48,6 +49,8 @@ class ExecutableCommand(CommandWithParameters):
                 Defaults to False.
             check_results (list, optional): list of words used to mark the command as failed if
                 any are found in the command output. Defaults to None.
+            run_user (str, optional): user to run as. Defaults to None, which will run commands as
+                the current user.
         """
         super().__init__(namespace, command, path)
         self._process = None
@@ -59,7 +62,7 @@ class ExecutableCommand(CommandWithParameters):
         self.env = EnvironmentVariables()
 
         # User to run the command as. "root" is equivalent to sudo
-        self.run_user = None
+        self.run_user = run_user
 
         # List of CPU cores to pass to taskset
         self.bind_cores = None
@@ -488,7 +491,7 @@ class ExecutableCommand(CommandWithParameters):
 class CommandWithSubCommand(ExecutableCommand):
     """A class for a command with a sub command."""
 
-    def __init__(self, namespace, command, path="", subprocess=False):
+    def __init__(self, namespace, command, path="", subprocess=False, run_user=None):
         """Create a CommandWithSubCommand object.
 
         Args:
@@ -497,9 +500,10 @@ class CommandWithSubCommand(ExecutableCommand):
             path (str, optional): path to location of command binary file. Defaults to "".
             subprocess (bool, optional): whether the command is run as a subprocess.
                 Defaults to False.
-
+            run_user (str, optional): user to run as. Defaults to None, which will run commands as
+                the current user.
         """
-        super().__init__(namespace, command, path)
+        super().__init__(namespace, command, path, run_user=run_user)
 
         # Define the sub-command parameter whose value is used to assign the
         # sub-command's CommandWithParameters-based class.  Use the command to
@@ -724,7 +728,7 @@ class SubProcessCommand(CommandWithSubCommand):
     Example commands: daos_agent, daos_server
     """
 
-    def __init__(self, namespace, command, path="", timeout=10):
+    def __init__(self, namespace, command, path="", timeout=10, run_user=None):
         """Create a SubProcessCommand object.
 
         Args:
@@ -734,8 +738,10 @@ class SubProcessCommand(CommandWithSubCommand):
                 Defaults to "".
             timeout (int, optional): number of seconds to wait for patterns to
                 appear in the subprocess output. Defaults to 10 seconds.
+            run_user (str, optional): user to run as. Defaults to None, which will run commands as
+                the current user.
         """
-        super().__init__(namespace, command, path, True)
+        super().__init__(namespace, command, path, True, run_user)
 
         # Attributes used to determine command success when run as a subprocess
         # See self.check_subprocess_status() for details.
@@ -855,7 +861,7 @@ class YamlCommand(SubProcessCommand):
     Example commands: daos_agent, daos_server, dmg
     """
 
-    def __init__(self, namespace, command, path="", yaml_cfg=None, timeout=10):
+    def __init__(self, namespace, command, path="", yaml_cfg=None, timeout=10, run_user=None):
         """Create a YamlCommand command object.
 
         Args:
@@ -867,8 +873,10 @@ class YamlCommand(SubProcessCommand):
                 Defaults to ""
             timeout (int, optional): number of seconds to wait for patterns to
                 appear in the subprocess output. Defaults to 10 seconds.
+            run_user (str, optional): user to run as. Defaults to None, which will run commands as
+                the current user.
         """
-        super().__init__(namespace, command, path, timeout)
+        super().__init__(namespace, command, path, timeout, run_user)
 
         # Command configuration yaml file
         self.yaml = yaml_cfg
@@ -1028,8 +1036,7 @@ class YamlCommand(SubProcessCommand):
             self.log.debug(
                 "Copied certificates for %s (in %s):",
                 self._command, ", ".join(names))
-            for line in get_file_listing(hosts, names).stdout_text.splitlines():
-                self.log.debug("  %s", line)
+            get_file_listing(hosts, names, self.run_user).log_output(self.log)
 
     def copy_configuration(self, hosts):
         """Copy the yaml configuration file to the hosts.
