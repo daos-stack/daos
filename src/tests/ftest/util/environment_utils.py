@@ -108,7 +108,7 @@ class TestEnvironment():
         'bullseye_file': 'COVFILE',
         'daos_prefix': 'DAOS_TEST_PREFIX',
         'agent_user': 'DAOS_TEST_AGENT_USER',
-        'server_ld_library_path': 'DAOS_TEST_SERVER_LD_LIBRARY_PATH',
+        'systemd_library_path': 'DAOS_TEST_SYSTEMD_LIBRARY_PATH',
     }
 
     def __init__(self):
@@ -151,7 +151,7 @@ class TestEnvironment():
         if agent_user is not None:
             self.agent_user = agent_user
         if server_ld_lib is not None:
-            self.server_ld_library_path = server_ld_lib
+            self.systemd_library_path = server_ld_lib
 
         # Set defaults for any unset values
         if self.log_dir is None:
@@ -176,8 +176,8 @@ class TestEnvironment():
             self.daos_prefix = self._default_daos_prefix(logger)
         if self.agent_user is None:
             self.agent_user = self._default_agent_user()
-        if self.server_ld_library_path is None:
-            self.server_ld_library_path = self._default_server_ld_library_path()
+        if self.systemd_library_path is None:
+            self.systemd_library_path = self._default_systemd_library_path()
 
     def __set_value(self, key, value):
         """Set the test environment variable.
@@ -582,29 +582,29 @@ class TestEnvironment():
         return 'root'
 
     @property
-    def server_ld_library_path(self):
-        """Get the daos_server LD_LIBRARY_PATH.
+    def systemd_library_path(self):
+        """Get the daos_server and daos_agent systemd LD_LIBRARY_PATH.
 
         Returns:
-            str: the daos_server LD_LIBRARY_PATH
+            str: the daos_server and daos_agent systemd LD_LIBRARY_PATH
         """
-        return os.environ.get(self.__ENV_VAR_MAP['server_ld_library_path'])
+        return os.environ.get(self.__ENV_VAR_MAP['systemd_library_path'])
 
-    @server_ld_library_path.setter
-    def server_ld_library_path(self, value):
-        """Set the daos_server LD_LIBRARY_PATH.
+    @systemd_library_path.setter
+    def systemd_library_path(self, value):
+        """Set the daos_server and daos_agent systemd LD_LIBRARY_PATH.
 
         Args:
-            value (str): the daos_server LD_LIBRARY_PATH
+            value (str): the daos_server and daos_agent systemd LD_LIBRARY_PATH
         """
-        self.__set_value('server_ld_library_path', value)
+        self.__set_value('systemd_library_path', value)
 
     @staticmethod
-    def _default_server_ld_library_path():
-        """Get the default daos_server LD_LIBRARY_PATH.
+    def _default_systemd_library_path():
+        """Get the default daos_server and daos_agent systemd LD_LIBRARY_PATH.
 
         Returns:
-            str: the default daos_server LD_LIBRARY_PATH
+            str: the default daos_server and daos_agent systemd LD_LIBRARY_PATH
         """
         return None
 
