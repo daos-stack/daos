@@ -2,9 +2,10 @@
 # required quantity is indicated by the placeholders
 hosts:
   test_servers: 6
-timeout: 900
+timeout: 600
 server_config:
   name: daos_server
+  crt_timeout: 10
   engines_per_host: 1
   engines:
     0:

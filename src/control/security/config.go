@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -128,8 +128,10 @@ func (tc *TransportConfig) PreLoadCertData() error {
 	}
 
 	if tc.ClientCertDir != "" {
-		if _, err := os.ReadDir(tc.ClientCertDir); err != nil {
+		if _, err := os.ReadDir(tc.ClientCertDir); errors.Is(err, fs.ErrPermission) {
 			return FaultUnreadableCertFile(tc.ClientCertDir)
+		} else if err != nil {
+			return errors.Wrap(err, "checking client cert directory")
 		}
 	}
 

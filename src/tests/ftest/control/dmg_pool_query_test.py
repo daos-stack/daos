@@ -87,6 +87,7 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
                 }
             ],
             "pool_layout_ver": 3,
+            "query_mask": self.params.get("query_mask", path="/run/exp_vals/*"),
             "upgrade_layout_ver": 3,
             "usage": [
                 {

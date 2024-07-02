@@ -17,6 +17,10 @@
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
 
+// The trusted-pipeline-lib daosLatestVersion() method will convert this into a number
+/* groovylint-disable-next-line CompileStatic, VariableName */
+String next_version = 'release/2.6'
+
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
 
@@ -66,9 +70,6 @@ Map nlt_test() {
     Map runData = ['nlttest_time': runTime]
     return runData
 }
-
-// For master, this is just some wildly high number
-String next_version = '1000'
 
 // Don't define this as a type or it loses it's global scope
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1646,7 +1646,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 				/*
 				 * verify that the dkey is the same as the one we are working on
 				 * given the array index, and also compute the number of records
-				 * left in the dkey and the record indexin the dkey.
+				 * left in the dkey and the record index in the dkey.
 				 */
 				rc = compute_dkey(array, array_idx, &num_records, &record_i,
 						  &dkey_val);
@@ -2068,18 +2068,24 @@ free_set_size_cb(tse_task_t *task, void *data)
 }
 
 static int
-punch_extent(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val, daos_off_t record_i,
-	     daos_size_t num_records, tse_task_t *task, d_list_t *task_list)
+punch_dkey_or_extent(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val, daos_off_t start,
+		     daos_size_t num_records, bool punch_dkey, tse_task_t *task,
+		     d_list_t *task_list)
 {
 	daos_obj_update_t	*io_arg;
+	daos_obj_punch_t	*dkey_punch_arg;
 	daos_iod_t		*iod;
 	d_sg_list_t		*sgl;
 	daos_key_t		*dkey;
 	struct io_params	*params = NULL;
 	tse_task_t		*io_task = NULL;
-	int			rc;
+	int			 rc;
 
-	D_DEBUG(DB_IO, "Punching (%zu, %zu) in Key %zu\n", record_i + 1, num_records, dkey_val);
+	if (punch_dkey)
+		D_DEBUG(DB_IO, "Punching dkey %zu\n", dkey_val);
+	else
+		D_DEBUG(DB_IO, "Punching (%zu, %zu) in Key %zu\n",
+			start, num_records, dkey_val);
 
 	D_ALLOC_PTR(params);
 	if (params == NULL)
@@ -2093,28 +2099,42 @@ punch_extent(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val, daos_off_
 	dkey = &params->dkey;
 	d_iov_set(dkey, &params->dkey_val, sizeof(uint64_t));
 
-	/* set descriptor for KV object */
-	d_iov_set(&iod->iod_name, &params->akey_val, 1);
-	iod->iod_nr = 1;
-	iod->iod_size = 0; /* 0 to punch */
-	iod->iod_type = DAOS_IOD_ARRAY;
-	D_ALLOC_PTR(iod->iod_recxs);
-	if (iod->iod_recxs == NULL)
-		D_GOTO(free, rc = -DER_NOMEM);
-	iod->iod_recxs[0].rx_idx = record_i + 1;
-	iod->iod_recxs[0].rx_nr = num_records;
+	if (punch_dkey) {
+		rc = daos_task_create(DAOS_OPC_OBJ_PUNCH_DKEYS, tse_task2sched(task), 0, NULL,
+				      &io_task);
+		if (rc)
+			D_GOTO(free_reqs, rc);
 
-	rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, tse_task2sched(task), 0, NULL, &io_task);
-	if (rc)
-		D_GOTO(free_reqs, rc);
+		dkey_punch_arg		= daos_task_get_args(io_task);
+		dkey_punch_arg->oh	= oh;
+		dkey_punch_arg->th	= th;
+		dkey_punch_arg->dkey	= dkey;
+		dkey_punch_arg->akeys	= NULL;
+		dkey_punch_arg->akey_nr	= 0;
+	} else {
+		/* set descriptor for KV object */
+		d_iov_set(&iod->iod_name, &params->akey_val, 1);
+		iod->iod_nr = 1;
+		iod->iod_size = 0; /* 0 to punch */
+		iod->iod_type = DAOS_IOD_ARRAY;
+		D_ALLOC_PTR(iod->iod_recxs);
+		if (iod->iod_recxs == NULL)
+			D_GOTO(free, rc = -DER_NOMEM);
+		iod->iod_recxs[0].rx_idx = start;
+		iod->iod_recxs[0].rx_nr = num_records;
 
-	io_arg = daos_task_get_args(io_task);
-	io_arg->oh	= oh;
-	io_arg->th	= th;
-	io_arg->dkey	= dkey;
-	io_arg->nr	= 1;
-	io_arg->iods	= iod;
-	io_arg->sgls	= sgl;
+		rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, tse_task2sched(task), 0, NULL, &io_task);
+		if (rc)
+			D_GOTO(free_reqs, rc);
+
+		io_arg = daos_task_get_args(io_task);
+		io_arg->oh	= oh;
+		io_arg->th	= th;
+		io_arg->dkey	= dkey;
+		io_arg->nr	= 1;
+		io_arg->iods	= iod;
+		io_arg->sgls	= sgl;
+	}
 
 	rc = tse_task_register_comp_cb(io_task, free_io_params_cb, &params, sizeof(params));
 	if (rc)
@@ -2421,18 +2441,26 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 		memcpy(&dkey_val, ptr, args->kds[i].kd_key_len);
 		ptr += args->kds[i].kd_key_len;
 
+		/*
+		 * Either punch the entire dkey or an extent in that dkey depending on the offset
+		 * where we are truncating to. The first dkey of the array (dkey 1) will always be
+		 * an extent punch to maintain an epoch there.
+		 */
 		if (props->size == 0 || dkey_val > props->dkey_val) {
 			/** Do nothing for DKEY 0 (metadata) */
 			if (dkey_val == 0)
 				continue;
-			/*
-			 * The dkey is higher than the adjustded size so we could punch it here.
-			 * But it's better to punch the extent so that the max_write for the object
-			 * doesn't get lost by aggregation.
-			 */
-			D_DEBUG(DB_IO, "Punch full extent in key "DF_U64"\n", dkey_val);
-			rc = punch_extent(args->oh, args->th, dkey_val, (daos_off_t)-1,
-					  props->chunk_size, props->ptask, &task_list);
+			if (dkey_val == 1) {
+				D_DEBUG(DB_IO, "Punch full extent in key " DF_U64 "\n", dkey_val);
+				rc = punch_dkey_or_extent(args->oh, args->th, dkey_val,
+							  0, props->chunk_size, false,
+							  props->ptask, &task_list);
+			} else {
+				D_DEBUG(DB_IO, "Punch dkey " DF_U64 "\n", dkey_val);
+				rc = punch_dkey_or_extent(args->oh, args->th, dkey_val,
+							  0, props->chunk_size, true,
+							  props->ptask, &task_list);
+			}
 			if (rc)
 				goto out;
 		} else if (dkey_val == props->dkey_val && props->record_i) {
@@ -2443,8 +2471,9 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 					 props->chunk_size);
 				/** Punch all records above record_i */
 				D_DEBUG(DB_IO, "Punch extent in key "DF_U64"\n", dkey_val);
-				rc = punch_extent(args->oh, args->th, dkey_val, props->record_i,
-						  props->num_records, props->ptask, &task_list);
+				rc = punch_dkey_or_extent(args->oh, args->th, dkey_val,
+							  props->record_i + 1, props->num_records,
+							  false, props->ptask, &task_list);
 				if (rc)
 					goto out;
 			}

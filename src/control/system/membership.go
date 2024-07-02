@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -156,6 +156,9 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		}
 		if curMember.UUID != req.UUID {
 			return nil, ErrUuidChanged(req.UUID, curMember.UUID, curMember.Rank)
+		}
+		if curMember.Addr.String() != req.ControlAddr.String() {
+			return nil, ErrControlAddrChanged(req.ControlAddr, curMember.Addr, curMember.UUID, curMember.Rank)
 		}
 
 		if !curMember.FaultDomain.Equals(req.FaultDomain) {

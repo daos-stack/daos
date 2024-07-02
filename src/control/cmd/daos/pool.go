@@ -194,6 +194,7 @@ type poolQueryCmd struct {
 	poolBaseCmd
 	ShowEnabledRanks  bool `short:"e" long:"show-enabled" description:"Show engine unique identifiers (ranks) which are enabled"`
 	ShowDisabledRanks bool `short:"b" long:"show-disabled" description:"Show engine unique identifiers (ranks) which are disabled"`
+	HealthOnly        bool `short:"t" long:"health-only" description:"Only perform pool health related queries"`
 }
 
 func convertPoolSpaceInfo(in *C.struct_daos_pool_space, mt C.uint) *daos.StorageUsageStats {
@@ -238,6 +239,7 @@ func convertPoolRebuildStatus(in *C.struct_daos_rebuild_status) *daos.PoolRebuil
 func convertPoolInfo(pinfo *C.daos_pool_info_t) (*daos.PoolInfo, error) {
 	poolInfo := new(daos.PoolInfo)
 
+	poolInfo.QueryMask = daos.PoolQueryMask(pinfo.pi_bits)
 	poolInfo.UUID = uuid.Must(uuidFromC(pinfo.pi_uuid))
 	poolInfo.TotalTargets = uint32(pinfo.pi_ntargets)
 	poolInfo.DisabledTargets = uint32(pinfo.pi_ndisabled)
@@ -251,19 +253,15 @@ func convertPoolInfo(pinfo *C.daos_pool_info_t) (*daos.PoolInfo, error) {
 	}
 
 	poolInfo.Rebuild = convertPoolRebuildStatus(&pinfo.pi_rebuild_st)
-	poolInfo.TierStats = []*daos.StorageUsageStats{
-		convertPoolSpaceInfo(&pinfo.pi_space, C.DAOS_MEDIA_SCM),
-		convertPoolSpaceInfo(&pinfo.pi_space, C.DAOS_MEDIA_NVME),
+	if poolInfo.QueryMask.HasOption(daos.PoolQueryOptionSpace) {
+		poolInfo.TierStats = []*daos.StorageUsageStats{
+			convertPoolSpaceInfo(&pinfo.pi_space, C.DAOS_MEDIA_SCM),
+			convertPoolSpaceInfo(&pinfo.pi_space, C.DAOS_MEDIA_NVME),
+		}
 	}
 
 	return poolInfo, nil
 }
-
-const (
-	dpiQuerySpace   = C.DPI_SPACE
-	dpiQueryRebuild = C.DPI_REBUILD_STATUS
-	dpiQueryAll     = C.uint64_t(^uint64(0)) // DPI_ALL is -1
-)
 
 func generateRankSet(ranklist *C.d_rank_list_t) string {
 	if ranklist.rl_nr == 0 {
@@ -283,9 +281,20 @@ func generateRankSet(ranklist *C.d_rank_list_t) string {
 }
 
 func (cmd *poolQueryCmd) Execute(_ []string) error {
+	queryMask := daos.DefaultPoolQueryMask
+	if cmd.HealthOnly {
+		queryMask = daos.HealthOnlyPoolQueryMask
+	}
 	if cmd.ShowEnabledRanks && cmd.ShowDisabledRanks {
 		return errors.New("show-enabled and show-disabled can't be used at the same time.")
 	}
+	if cmd.ShowEnabledRanks {
+		queryMask.SetOptions(daos.PoolQueryOptionEnabledEngines)
+	}
+	if cmd.ShowDisabledRanks {
+		queryMask.SetOptions(daos.PoolQueryOptionDisabledEngines)
+	}
+
 	var rlPtr **C.d_rank_list_t = nil
 	var rl *C.d_rank_list_t = nil
 
@@ -300,10 +309,7 @@ func (cmd *poolQueryCmd) Execute(_ []string) error {
 	defer cleanup()
 
 	cPoolInfo := C.daos_pool_info_t{
-		pi_bits: dpiQueryAll,
-	}
-	if cmd.ShowDisabledRanks {
-		cPoolInfo.pi_bits &= C.uint64_t(^(uint64(C.DPI_ENGINES_ENABLED)))
+		pi_bits: C.uint64_t(queryMask),
 	}
 
 	rc := C.daos_pool_query(cmd.cPoolHandle, rlPtr, &cPoolInfo, nil, nil)
@@ -336,6 +342,7 @@ func (cmd *poolQueryCmd) Execute(_ []string) error {
 		return err
 	}
 
+	cmd.Debugf("Pool query options: %s", poolInfo.QueryMask)
 	cmd.Info(bld.String())
 
 	return nil

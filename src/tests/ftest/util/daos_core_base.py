@@ -33,7 +33,7 @@ class DaosCoreBase(TestWithServers):
         self.subtest_name = self.subtest_name.replace(" ", "_")
 
         # obtain separate logs
-        self.update_log_file_names(self.subtest_name)
+        self.update_log_file_names(f"{self.name.str_uid}-{self.subtest_name}")
 
         super().setUp()
 

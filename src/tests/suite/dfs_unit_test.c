@@ -3193,6 +3193,9 @@ dfs_test_oflags(void **state)
 static void
 dfs_test_pipeline_find(void **state)
 {
+#ifndef BUILD_PIPELINE
+	skip();
+#endif
 	dfs_obj_t	*dir1, *f1;
 	int		i;
 	time_t		ts = 0;

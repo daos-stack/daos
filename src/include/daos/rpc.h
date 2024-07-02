@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -120,20 +120,10 @@ enum daos_rpc_type {
 };
 
 struct daos_req_comm_in {
-	/** Request user ID, reserved for NRS */
-	uint32_t	req_in_uid;
-	/** Request group ID, reserved for NRS */
-	uint32_t	req_in_gid;
-	/** Request project ID, reserved for NRS */
-	uint32_t	req_in_projid;
 	/** Enqueue ID of the request on the server side, for server overloaded retry */
 	uint64_t	req_in_enqueue_id;
 	/** Reserved for future extension */
 	uint64_t	req_in_paddings[4];
-	/** Request client address, reserved for NRS */
-	d_string_t	req_in_addr;
-	/** Job ID of the request, reserved for NRS */
-	d_string_t	req_in_jobid;
 };
 
 struct daos_req_comm_out {

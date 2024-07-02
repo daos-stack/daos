@@ -519,7 +519,7 @@ obj_coll_query_agg_cb(struct dtx_leader_handle *dlh, void *arg)
 	/*
 	 * If keys_allocated is not set on current engine, then query for current engine is either
 	 * not triggered because of some earlier failure or the query on current engine hit trouble
-	 * and cannot copy the keys. Under such cases, cleanup RPCs instead of merge query resutls.
+	 * and cannot copy the keys. Under such cases, cleanup RPCs instead of merge query results.
 	 */
 	if (unlikely(!otqa->otqa_keys_allocated)) {
 		cleanup = true;

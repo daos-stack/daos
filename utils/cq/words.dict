@@ -229,6 +229,7 @@ io
 iod
 iodepth
 ioengine
+ioengines
 ior
 ioreqs
 iotype
@@ -359,6 +360,7 @@ procs
 profiler
 protoc
 ps
+psync
 puuid
 py
 pydaos

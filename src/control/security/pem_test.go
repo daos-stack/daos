@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,9 +8,14 @@ package security
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/pkg/errors"
 )
 
 func TestLoadPEMData(t *testing.T) {
@@ -158,40 +163,43 @@ func TestLoadCertificate(t *testing.T) {
 		})
 	}
 }
-func TestValidateCertDirectory(t *testing.T) {
-	goodDirPath := "testdata/certs/goodperms"
-	badDirPerm := "testdata/certs/badperms"
-	notDir := "testdata/certs/daosCA.crt"
-	badDirPermError := &badPermsError{badDirPerm, 0777, MaxDirPerm}
-	notDirError := fmt.Sprintf("Certificate directory path (%s) is not a directory", notDir)
-	testCases := []struct {
-		pathname string
-		testname string
-		expected string
+func TestSecurity_Pem_ValidateCertDirectory(t *testing.T) {
+	for name, tc := range map[string]struct {
+		perms  fs.FileMode
+		notDir bool
+		expErr error
 	}{
-		{goodDirPath, "GoodPermissions", ""},
-		{badDirPerm, "ImproperPermissions", badDirPermError.Error()},
-		{notDir, "NotADirectory", notDirError},
-	}
+		"max acceptable perms": {
+			perms: MaxDirPerm,
+		},
+		"perms too open": {
+			perms:  0777,
+			expErr: errors.New("insecure permissions"),
+		},
+		"not a directory": {
+			perms:  MaxDirPerm,
+			notDir: true,
+			expErr: errors.New("not a directory"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir, cleanupDir := test.CreateTestDir(t)
+			defer cleanupDir()
 
-	if err := os.Chmod(goodDirPath, MaxDirPerm); err != nil {
-		t.Fatal(err)
-	}
-	// Intentionall safe cert perm as to be incorrect
-	if err := os.Chmod(badDirPerm, 0777); err != nil {
-		t.Fatal(err)
-	}
+			testDir := filepath.Join(dir, "test_dir")
+			if err := os.Mkdir(testDir, tc.perms); err != nil {
+				t.Fatal(err)
+			}
+			testFile := test.CreateTestFile(t, dir, "some content")
 
-	for _, tc := range testCases {
-		t.Run(tc.testname, func(t *testing.T) {
-			result := ""
-			err := ValidateCertDirectory(tc.pathname)
-			if err != nil {
-				result = err.Error()
+			path := testDir
+			if tc.notDir {
+				path = testFile
 			}
-			if strings.Compare(result, tc.expected) != 0 {
-				t.Errorf("result %s; expected %s", result, tc.expected)
-			}
+
+			err := ValidateCertDirectory(path)
+
+			test.CmpErr(t, tc.expErr, err)
 		})
 	}
 }
