@@ -72,10 +72,9 @@ crtu_load_group_from_file(const char *grp_cfg_file, crt_context_t ctx,
 			  bool delete_file);
 
 int
-crtu_dc_mgmt_net_cfg_rank_add(const char *name, crt_group_t *group,
-			      crt_context_t *context);
+crtu_load_group_from_agent(const char *name, crt_group_t *group, crt_context_t *context);
 int
-crtu_dc_mgmt_net_cfg_setenv(const char *name, crt_init_options_t *opt);
+crtu_agent_populate_opt(const char *name, crt_init_options_t *opt);
 
 int
 crtu_cli_start_basic(char *local_group_name, char *srv_group_name,

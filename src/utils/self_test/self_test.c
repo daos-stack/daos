@@ -107,9 +107,9 @@ self_test_init(char *dest_name, crt_context_t *crt_ctx, crt_group_t **srv_grp, p
 			fprintf(stderr, "dc_agent_init() failed. ret: %d\n", ret);
 			return ret;
 		}
-		ret = crtu_dc_mgmt_net_cfg_setenv(dest_name, &opt);
+		ret = crtu_agent_populate_opt(dest_name, &opt);
 		if (ret != 0) {
-			D_ERROR("crtu_dc_mgmt_net_cfg_setenv() failed; ret = %d\n", ret);
+			D_ERROR("crtu_agent_populate_opt() failed; ret = %d\n", ret);
 			return ret;
 		}
 
@@ -150,9 +150,9 @@ self_test_init(char *dest_name, crt_context_t *crt_ctx, crt_group_t **srv_grp, p
 			assert(0);
 		}
 
-		ret = crtu_dc_mgmt_net_cfg_rank_add(dest_name, *srv_grp, *crt_ctx);
+		ret = crtu_load_group_from_agent(dest_name, *srv_grp, *crt_ctx);
 		if (ret != 0) {
-			fprintf(stderr, "crtu_dc_mgmt_net_cfg_rank_add() failed. ret: %d\n", ret);
+			fprintf(stderr, "crtu_load_group_from_agent() failed. ret: %d\n", ret);
 			return ret;
 		}
 	} else {
@@ -219,7 +219,7 @@ self_test_init(char *dest_name, crt_context_t *crt_ctx, crt_group_t **srv_grp, p
 
 	d_rank_list_free(rank_list);
 
-	ret = crt_rank_self_set(max_rank+1, 1 /* group_version_min */);
+	ret = crt_rank_self_set(max_rank + 1, 1 /* group_version_min */);
 	if (ret != 0) {
 		D_ERROR("crt_rank_self_set failed; ret = %d\n", ret);
 		return ret;
@@ -1084,14 +1084,9 @@ cleanup_nothread:
 static void
 print_usage(const char *prog_name, const char *msg_sizes_str, int rep_count, int max_inflight)
 {
-	/* TODO --verbose */
 	printf(
-	    "Usage: %s --group-name <name> --endpoint <ranks:tags> [optional arguments]\n"
-	    "\n"
+	    "Usage: %s [--group-name <name>] --endpoint <ranks:tags> [optional arguments]\n"
 	    "Required Arguments\n"
-	    "  --group-name <group_name>\n"
-	    "      Short version: -g\n"
-	    "      The name of the process set to test against\n"
 	    "\n"
 	    "  --endpoint <ranks:tags>\n"
 	    "      Short version: -e\n"
@@ -1117,6 +1112,11 @@ print_usage(const char *prog_name, const char *msg_sizes_str, int rep_count, int
 	    "        for more information\n"
 	    "\n"
 	    "Optional Arguments\n"
+	    "  --group-name <group_name>\n"
+	    "      Short version: -g\n"
+	    "      The name of the process set to test against.\n"
+	    "      If not specified 'daos_server' is used\n"
+	    "\n"
 	    "  --message-sizes <(a b),(c d),...>\n"
 	    "      Short version: -s\n"
 	    "      List of size tuples (in bytes) to use for the self test.\n"
@@ -1697,7 +1697,7 @@ int main(int argc, char *argv[])
 {
 	/* Default parameters */
 	char				 default_msg_sizes_str[] = "0 0,0 b1048578,b1048578 0";
-	const int			 default_rep_count = 100000;
+	const int                        default_rep_count       = 1000;
 	const int			 default_max_inflight = 16;
 	char				*default_dest_name = "daos_server";
 	char				*dest_name = NULL;
@@ -1923,7 +1923,7 @@ int main(int argc, char *argv[])
 	}
 
 	if (crt_validate_grpid(dest_name) != 0) {
-		printf("--group-name argument not specified or is invalid\n");
+		printf("invalid group name '%s'\n", dest_name);
 		D_GOTO(cleanup, ret = -DER_INVAL);
 	}
 
