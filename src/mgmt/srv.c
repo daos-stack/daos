@@ -25,6 +25,8 @@
 #include "srv_internal.h"
 #include "drpc_internal.h"
 
+/* Only for test. */
+
 const int max_svc_nreplicas = 13;
 
 static struct crt_corpc_ops ds_mgmt_hdlr_tgt_create_co_ops = {
