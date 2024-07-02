@@ -195,7 +195,6 @@ int dtx_handle_reinit(struct dtx_handle *dth);
 void dtx_batched_commit(void *arg);
 void dtx_aggregation_main(void *arg);
 int start_dtx_reindex_ult(struct ds_cont_child *cont);
-void stop_dtx_reindex_ult(struct ds_cont_child *cont);
 
 /* dtx_cos.c */
 int dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,

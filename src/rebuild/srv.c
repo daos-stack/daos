@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -207,13 +207,38 @@ rebuild_get_global_dtx_resync_ver(struct rebuild_global_pool_tracker *rgt)
 	return min;
 }
 
+static void
+rpt_insert(struct rebuild_tgt_pool_tracker *rpt)
+{
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	ABT_rwlock_wrlock(rebuild_gst.rg_ttl_rwlock);
+	d_list_add(&rpt->rt_list, &rebuild_gst.rg_tgt_tracker_list);
+	ABT_rwlock_unlock(rebuild_gst.rg_ttl_rwlock);
+}
+
+void
+rpt_delete(struct rebuild_tgt_pool_tracker *rpt)
+{
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	ABT_rwlock_wrlock(rebuild_gst.rg_ttl_rwlock);
+	d_list_del_init(&rpt->rt_list);
+	ABT_rwlock_unlock(rebuild_gst.rg_ttl_rwlock);
+}
+
 struct rebuild_tgt_pool_tracker *
 rpt_lookup(uuid_t pool_uuid, uint32_t opc, unsigned int ver, unsigned int gen)
 {
 	struct rebuild_tgt_pool_tracker	*rpt;
 	struct rebuild_tgt_pool_tracker	*found = NULL;
+	bool				 locked = false;
 
-	/* Only stream 0 will access the list */
+	/* System XS or VOS target XS (obj_inflight_io_check() -> ds_rebuild_running_query())
+	 * possibly access the list, need to hold rdlock only for VOS XS.
+	 */
+	if (dss_get_module_info()->dmi_xs_id != 0) {
+		ABT_rwlock_rdlock(rebuild_gst.rg_ttl_rwlock);
+		locked = true;
+	}
 	d_list_for_each_entry(rpt, &rebuild_gst.rg_tgt_tracker_list, rt_list) {
 		if (uuid_compare(rpt->rt_pool_uuid, pool_uuid) == 0 &&
 		    rpt->rt_finishing == 0 &&
@@ -225,6 +250,8 @@ rpt_lookup(uuid_t pool_uuid, uint32_t opc, unsigned int ver, unsigned int gen)
 			break;
 		}
 	}
+	if (locked)
+		ABT_rwlock_unlock(rebuild_gst.rg_ttl_rwlock);
 
 	return found;
 }
@@ -1037,16 +1064,45 @@ rpt_get(struct rebuild_tgt_pool_tracker	*rpt)
 	ABT_mutex_unlock(rpt->rt_lock);
 }
 
-void
-rpt_put(struct rebuild_tgt_pool_tracker	*rpt)
+static int
+rpt_put_destroy(void *data)
 {
+	struct rebuild_tgt_pool_tracker	*rpt = data;
+
+	rpt_destroy(rpt);
+	return 0;
+}
+
+void
+rpt_put(struct rebuild_tgt_pool_tracker *rpt)
+{
+	bool	zombie;
+	int	rc;
+
 	ABT_mutex_lock(rpt->rt_lock);
 	rpt->rt_refcount--;
 	D_ASSERT(rpt->rt_refcount >= 0);
 	D_DEBUG(DB_REBUILD, "rpt %p ref %d\n", rpt, rpt->rt_refcount);
 	if (rpt->rt_refcount == 1 && rpt->rt_finishing)
 		ABT_cond_signal(rpt->rt_fini_cond);
+	zombie = (rpt->rt_refcount == 0);
 	ABT_mutex_unlock(rpt->rt_lock);
+	if (!zombie)
+		return;
+
+	if (dss_get_module_info()->dmi_xs_id == 0) {
+		rpt_destroy(rpt);
+	} else {
+		/* Possibly triggered by VOS target XS by obj_inflight_io_check() ->
+		 * ds_rebuild_running_query(), but rpt_destroy() -> ds_pool_put() can only
+		 * be called in system XS.
+		 * If dss_ult_execute failed that due to fatal system error (no memory
+		 * or ABT failure), throw an ERR log.
+		 */
+		rc = dss_ult_execute(rpt_put_destroy, rpt, NULL, NULL, DSS_XS_SYS, 0, 0);
+		if (rc)
+			DL_ERROR(rc, "failed to destroy rpt %p", rpt);
+	}
 }
 
 static void
@@ -1706,7 +1762,6 @@ void
 ds_rebuild_abort(uuid_t pool_uuid, unsigned int ver, unsigned int gen, uint64_t term)
 {
 	struct rebuild_tgt_pool_tracker *rpt;
-	struct rebuild_tgt_pool_tracker	*tmp;
 
 	rebuild_leader_stop(pool_uuid, ver, gen, term);
 
@@ -1714,11 +1769,14 @@ ds_rebuild_abort(uuid_t pool_uuid, unsigned int ver, unsigned int gen, uint64_t 
 	while(1) {
 		bool aborted = true;
 
-		d_list_for_each_entry_safe(rpt, tmp, &rebuild_gst.rg_tgt_tracker_list, rt_list) {
+		d_list_for_each_entry(rpt, &rebuild_gst.rg_tgt_tracker_list, rt_list) {
 			if (uuid_compare(rpt->rt_pool_uuid, pool_uuid) == 0 &&
 			    (ver == (unsigned int)(-1) || rpt->rt_rebuild_ver == ver) &&
 			    (gen == (unsigned int)(-1) || rpt->rt_rebuild_gen == gen) &&
 			    (term == (uint64_t)(-1) || rpt->rt_leader_term == term)) {
+				D_INFO(DF_UUID" try abort the rpt %p op %s ver %u gen %u\n",
+				       DP_UUID(rpt->rt_pool_uuid), rpt, RB_OP_STR(rpt->rt_rebuild_op),
+				       rpt->rt_rebuild_ver, rpt->rt_rebuild_gen);
 				rpt->rt_abort = 1;
 				aborted = false;
 			}
@@ -2139,16 +2197,11 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 		       DP_UUID(rpt->rt_pool_uuid), DP_RC(rc));
 	/* destroy the migrate_tls of 0-xstream */
 	ds_migrate_stop(rpt->rt_pool, rpt->rt_rebuild_ver, rpt->rt_rebuild_gen);
-	d_list_del_init(&rpt->rt_list);
-	rpt_put(rpt);
-	/* No one should access rpt after rebuild_fini_one.
-	 */
-	D_ASSERT(rpt->rt_refcount == 0);
-
+	/* No one should access rpt after rebuild_fini_one. */
 	D_INFO("Finalized rebuild for "DF_UUID", map_ver=%u.\n",
 	       DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver);
-
-	rpt_destroy(rpt);
+	rpt_delete(rpt);
+	rpt_put(rpt);
 }
 
 void
@@ -2447,6 +2500,11 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 
 	rpt->rt_rebuild_op = rsi->rsi_rebuild_op;
 
+	/* Let's add the rpt to the tracker list before IV fetch, which might yield,
+	 * to make sure the new coming request can find the rpt in the list.
+	 */
+	rpt_get(rpt);
+	rpt_insert(rpt);
 	rc = ds_pool_iv_srv_hdl_fetch(pool, &rpt->rt_poh_uuid,
 				      &rpt->rt_coh_uuid);
 	if (rc)
@@ -2486,14 +2544,16 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	rpt->rt_pool = pool; /* pin it */
 	ABT_mutex_unlock(rpt->rt_lock);
 
-	rpt_get(rpt);
-	d_list_add(&rpt->rt_list, &rebuild_gst.rg_tgt_tracker_list);
 	*p_rpt = rpt;
 out:
 	if (rc) {
-		if (rpt)
+		if (rpt) {
+			if (!d_list_empty(&rpt->rt_list)) {
+				rpt_delete(rpt);
+				rpt_put(rpt);
+			}
 			rpt_put(rpt);
-
+		}
 		ds_pool_put(pool);
 	}
 	daos_prop_fini(&prop);
@@ -2539,6 +2599,10 @@ init(void)
 	D_INIT_LIST_HEAD(&rebuild_gst.rg_queue_list);
 	D_INIT_LIST_HEAD(&rebuild_gst.rg_running_list);
 
+	rc = ABT_rwlock_create(&rebuild_gst.rg_ttl_rwlock);
+	if (rc != ABT_SUCCESS)
+		return dss_abterr2der(rc);
+
 	rc = ABT_mutex_create(&rebuild_gst.rg_lock);
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
@@ -2556,6 +2620,7 @@ fini(void)
 		ABT_cond_free(&rebuild_gst.rg_stop_cond);
 
 	ABT_mutex_free(&rebuild_gst.rg_lock);
+	ABT_rwlock_free(&rebuild_gst.rg_ttl_rwlock);
 
 	rebuild_iv_fini();
 	return 0;

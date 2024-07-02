@@ -2478,6 +2478,8 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 	D_ASSERT(ioc.ioc_coc != NULL);
 	dkey = (daos_key_t *)&oer->er_dkey;
 	iod = (daos_iod_t *)&oer->er_iod;
+	if (iod->iod_nr == 0) /* nothing to replicate, directly remove parity */
+		goto remove_parity;
 	iod_csums = oer->er_iod_csums.ca_arrays;
 	rc        = vos_update_begin(ioc.ioc_coc->sc_hdl, oer->er_oid, oer->er_epoch_range.epr_hi,
 				     VOS_OF_REBUILD, dkey, 1, iod, iod_csums, 0, &ioh, NULL);
@@ -2510,6 +2512,7 @@ end:
 			DP_RC(rc));
 		goto out;
 	}
+remove_parity:
 	recx.rx_nr = obj_ioc2ec_cs(&ioc);
 	recx.rx_idx = (oer->er_stripenum * recx.rx_nr) | PARITY_INDICATOR;
 	rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl, oer->er_oid, &oer->er_epoch_range, dkey,
