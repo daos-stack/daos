@@ -972,6 +972,18 @@ cont_iv_capa_refresh_ult(void *data)
 		D_GOTO(out, rc);
 
 	D_ASSERT(pool != NULL);
+
+	/*
+	 * NOTE: Pool start is in-processing, related data structure (such as other containers that
+	 *	 share the per-pool based pre-allocated DTX array) may be not ready yet. Under such
+	 *	 case, forbid IO against any container.
+	 */
+	if (pool->sp_starting)
+		D_GOTO(out, rc = -DER_BUSY);
+
+	if (pool->sp_stopping)
+		D_GOTO(out, rc = -DER_SHUTDOWN);
+
 	if (arg->invalidate_current) {
 		rc = cont_iv_capability_invalidate(pool->sp_iv_ns,
 						   arg->cont_hdl_uuid,
