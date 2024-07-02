@@ -479,6 +479,7 @@ class DaosServerManager(SubprocessManager):
         self.log.debug("<SERVER> Collection debug memory info")
         run_remote(self.log, self._hosts, "free -m && df -h --type=tmpfs")
         run_remote(self.log, self._hosts, "ps -eo size,pid,user,command --sort -size | head -n 6")
+        run_remote(self.log, self._hosts, "cat /proc/meminfo | grep Huge")
         self.log.debug("#" * 80)
 
     def detect_format_ready(self, reformat=False):
@@ -677,7 +678,6 @@ class DaosServerManager(SubprocessManager):
         self.detect_format_ready()
 
         # Collect storage and network information from the servers.
-        self.display_memory_info()
         self.information.collect_storage_information()
         self.information.collect_network_information()
         self.display_memory_info()
@@ -724,6 +724,7 @@ class DaosServerManager(SubprocessManager):
         self.display_memory_info()
 
         # Report any errors after all stop actions have been attempted
+        self.display_memory_info()
         if messages:
             raise ServerFailed("Failed to stop servers:\n  {}".format("\n  ".join(messages)))
 
