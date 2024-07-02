@@ -501,6 +501,7 @@ class EngineYamlParameters(YamlParameters):
             if name in self.REQUIRED_ENV_VARS:
                 default_env_vars.extend(self.REQUIRED_ENV_VARS[name])
         self.env_vars = BasicParameter(None, default_env_vars)
+        self.env_pass_through = BasicParameter(None, None)
 
         # the storage configuration for this engine
         self.storage = StorageYamlParameters(self.namespace, max_storage_tiers)
@@ -534,6 +535,13 @@ class EngineYamlParameters(YamlParameters):
         if test.fault_injection.fault_file is not None:
             self.log.debug("Enabling fault injection")
             required_env_vars["D_FI_CONFIG"] = test.fault_injection.fault_file
+
+        # Enable LD_LIBRARY_PATH if specified
+        if test.test_env.server_ld_library_path is not None:
+            self.log.debug(
+                "Overriding LD_LIBRARY_PATH with %s", test.test_env.server_ld_library_path)
+            required_env_vars["LD_LIBRARY_PATH"] = test.test_env.server_ld_library_path
+            self.env_pass_through.value = ["LD_LIBRARY_PATH"]
 
         # Update the env vars with any missing or different required setting
         update = False
