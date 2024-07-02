@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1077,6 +1077,9 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		D_ERROR("HG_Context_get_data failed.\n");
 		D_GOTO(out, hg_ret = HG_PROTOCOL_ERROR);
 	}
+
+	atomic_fetch_add(&crt_ctx->num_recv, 1);
+
 	hg_ctx = &crt_ctx->cc_hg_ctx;
 	D_ASSERT(hg_ctx->chc_hgcla == hg_info->hg_class);
 	D_ASSERT(hg_ctx->chc_hgctx == hg_info->context);
