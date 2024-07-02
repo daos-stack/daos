@@ -1183,7 +1183,7 @@ class DaosServerManager(SubprocessManager):
         for engine in range(engines_per_host):
             results = run_pcmd(
                 hosts=self._hosts, verbose=verbose, timeout=timeout,
-                command="sudo {} -S {} --csv".format(daos_metrics_exe, engine))
+                command=f"{daos_metrics_exe} -S {engine} --csv")
             engines.append(results)
         return engines
 
