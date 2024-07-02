@@ -4141,7 +4141,7 @@ pre_envp(char *const envp[], char ***new_envp)
 					continue;
 				if (!env_found[i]) {
 					if (memcmp(envp[num_entry], env_list[i],
-					    strlen(env_list[i])) == 0) {
+						   strlen(env_list[i])) == 0) {
 						env_found[i] = true;
 						num_entry_found++;
 					}
