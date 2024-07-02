@@ -648,6 +648,7 @@ ctl_init()
 	if (rc != 0)
 		error_exit("Semaphore init failed; rc=%d\n", rc);
 
+	/* -n option controls cg_no_wait_for_ranks */
 	if (!ctl_gdata.cg_no_wait_for_ranks) {
 		rc = crtu_wait_for_ranks(ctl_gdata.cg_crt_ctx, grp, rank_list,
 					 0 /* tag */, 1 /* num contexts to query */,
