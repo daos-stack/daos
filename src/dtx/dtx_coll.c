@@ -305,7 +305,7 @@ dtx_coll_local_one(void *args)
 		rc = vos_dtx_abort(cont->sc_hdl, &dcla->dcla_xid, dcla->dcla_epoch);
 		break;
 	case DTX_COLL_CHECK:
-		rc = vos_dtx_check(cont->sc_hdl, &dcla->dcla_xid, NULL, NULL, NULL, NULL, false);
+		rc = vos_dtx_check(cont->sc_hdl, &dcla->dcla_xid, NULL, NULL, NULL, false);
 		if (rc == DTX_ST_INITED) {
 			/*
 			 * For DTX_CHECK, non-ready one is equal to non-exist. Do not directly
