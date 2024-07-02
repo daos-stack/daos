@@ -46,15 +46,27 @@ func PrintPoolInfo(pi *daos.PoolInfo, out io.Writer) error {
 		fmt.Fprintf(w, "Pool layout out of date (%d < %d) -- see `dmg pool upgrade` for details.\n",
 			pi.PoolLayoutVer, pi.UpgradeLayoutVer)
 	}
-	fmt.Fprintln(w, "Pool space info:")
-	if pi.EnabledRanks != nil {
+	fmt.Fprintln(w, "Pool health info:")
+	if pi.EnabledRanks != nil && pi.EnabledRanks.Count() > 0 {
 		fmt.Fprintf(w, "- Enabled ranks: %s\n", pi.EnabledRanks)
 	}
-	if pi.DisabledRanks != nil {
+	if pi.DisabledRanks != nil && pi.DisabledRanks.Count() > 0 {
 		fmt.Fprintf(w, "- Disabled ranks: %s\n", pi.DisabledRanks)
 	}
-	fmt.Fprintf(w, "- Target(VOS) count:%d\n", pi.ActiveTargets)
-	if pi.TierStats != nil {
+	if pi.Rebuild != nil {
+		if pi.Rebuild.Status == 0 {
+			fmt.Fprintf(w, "- Rebuild %s, %d objs, %d recs\n",
+				pi.Rebuild.State, pi.Rebuild.Objects, pi.Rebuild.Records)
+		} else {
+			fmt.Fprintf(w, "- Rebuild failed, status=%d\n", pi.Rebuild.Status)
+		}
+	} else {
+		fmt.Fprintln(w, "- No rebuild status available.")
+	}
+
+	if pi.QueryMask.HasOption(daos.PoolQueryOptionSpace) && pi.TierStats != nil {
+		fmt.Fprintln(w, "Pool space info:")
+		fmt.Fprintf(w, "- Target(VOS) count:%d\n", pi.ActiveTargets)
 		for tierIdx, tierStats := range pi.TierStats {
 			fmt.Fprintln(w, getTierNameText(tierIdx))
 			fmt.Fprintf(w, "  Total size: %s\n", humanize.Bytes(tierStats.Total))
@@ -63,15 +75,6 @@ func PrintPoolInfo(pi *daos.PoolInfo, out io.Writer) error {
 				humanize.Bytes(tierStats.Max), humanize.Bytes(tierStats.Mean))
 		}
 	}
-	if pi.Rebuild != nil {
-		if pi.Rebuild.Status == 0 {
-			fmt.Fprintf(w, "Rebuild %s, %d objs, %d recs\n",
-				pi.Rebuild.State, pi.Rebuild.Objects, pi.Rebuild.Records)
-		} else {
-			fmt.Fprintf(w, "Rebuild failed, status=%d\n", pi.Rebuild.Status)
-		}
-	}
-
 	return w.Err
 }
 

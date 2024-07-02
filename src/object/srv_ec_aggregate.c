@@ -500,26 +500,28 @@ agg_count_cells(uint8_t *fcbit_map, uint8_t *tbit_map, uint64_t estart,
  * initialized and share to other servers at higher(pool/container) layer.
  */
 static int
-agg_get_obj_handle(struct ec_agg_entry *entry)
+agg_get_obj_handle(struct ec_agg_entry *entry, bool reset_peer)
 {
 	struct ec_agg_param	*agg_param;
 	uint32_t		grp_start;
 	uint32_t		tgt_ec_idx;
 	struct dc_object	*obj;
 	int			i;
-	int			rc;
+	int			rc = 0;
 
-	if (daos_handle_is_valid(entry->ae_obj_hdl))
+	if (daos_handle_is_valid(entry->ae_obj_hdl) && !reset_peer)
 		return 0;
 
 	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
-	rc = dsc_obj_open(agg_param->ap_pool_info.api_cont_hdl,
-			  entry->ae_oid.id_pub, DAOS_OO_RW,
-			  &entry->ae_obj_hdl);
-	if (rc)
-		goto out;
+	if (!daos_handle_is_valid(entry->ae_obj_hdl)) {
+		rc = dsc_obj_open(agg_param->ap_pool_info.api_cont_hdl,
+				  entry->ae_oid.id_pub, DAOS_OO_RW,
+				  &entry->ae_obj_hdl);
+		if (rc)
+			goto out;
+	}
 
-	if (entry->ae_peer_pshards[0].sd_rank != DAOS_TGT_IGNORE)
+	if (!reset_peer && entry->ae_peer_pshards[0].sd_rank != DAOS_TGT_IGNORE)
 		D_GOTO(out, rc = 0);
 
 	grp_start = entry->ae_grp_idx * entry->ae_obj_layout->ol_grp_size;
@@ -599,7 +601,7 @@ agg_fetch_odata_cells(struct ec_agg_entry *entry, uint8_t *bit_map,
 	for (i = 0; i < cell_cnt; i++)
 		d_iov_set(&sgl.sg_iovs[i], &buf[i * cell_b], cell_b);
 
-	rc = agg_get_obj_handle(entry);
+	rc = agg_get_obj_handle(entry, false);
 	if (rc) {
 		D_ERROR("Failed to open object: "DF_RC"\n", DP_RC(rc));
 		goto out;
@@ -1315,9 +1317,9 @@ retry:
 		rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
 				    DAOS_OBJ_RPC_EC_AGGREGATE, &rpc);
 		if (rc) {
-			D_ERROR(DF_UOID" pidx %d to peer %d, obj_req_create "
+			D_ERROR(DF_UOID" pidx %d to peer %d, rank %d tag %d obj_req_create "
 				DF_RC"\n", DP_UOID(entry->ae_oid), pidx, peer,
-				DP_RC(rc));
+				tgt_ep.ep_rank, tgt_ep.ep_tag, DP_RC(rc));
 			goto out;
 		}
 		ec_agg_in = crt_req_get(rpc);
@@ -1449,14 +1451,22 @@ agg_peer_update(struct ec_agg_entry *entry, bool write_parity)
 
 	D_ASSERT(!write_parity ||
 		 entry->ae_sgl.sg_iovs[AGG_IOV_PARITY].iov_buf);
+	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
 
-	rc = agg_get_obj_handle(entry);
+	/* If rebuild started, abort it before sending RPC to save conflict window with rebuild
+	 * (see obj_inflight_io_check()).
+	 */
+	if (agg_param->ap_pool_info.api_pool->sp_rebuilding > 0) {
+		D_DEBUG(DB_EPC, DF_UOID" abort as rebuild started\n", DP_UOID(entry->ae_oid));
+		return -1;
+	}
+
+	rc = agg_get_obj_handle(entry, false);
 	if (rc) {
 		D_ERROR("Failed to open object: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
-	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
 	rc = pool_map_find_failed_tgts(agg_param->ap_pool_info.api_pool->sp_map,
 				       &targets, &failed_tgts_cnt);
 	if (rc) {
@@ -1728,6 +1738,15 @@ agg_process_holes(struct ec_agg_entry *entry)
 	int			 tid, rc = 0;
 	int			*status;
 
+	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
+	/* If rebuild started, abort it before sending RPC to save conflict window with rebuild
+	 * (see obj_inflight_io_check()).
+	 */
+	if (agg_param->ap_pool_info.api_pool->sp_rebuilding > 0) {
+		D_DEBUG(DB_EPC, DF_UOID" abort as rebuild started\n", DP_UOID(entry->ae_oid));
+		return -1;
+	}
+
 	D_ALLOC_ARRAY(stripe_ud.asu_recxs,
 		      entry->ae_cur_stripe.as_extent_cnt + 1);
 	if (stripe_ud.asu_recxs == NULL) {
@@ -1736,7 +1755,7 @@ agg_process_holes(struct ec_agg_entry *entry)
 	}
 
 	stripe_ud.asu_agg_entry = entry;
-	rc = agg_get_obj_handle(entry);
+	rc = agg_get_obj_handle(entry, false);
 	if (rc) {
 		D_ERROR("Failed to open object: "DF_RC"\n", DP_RC(rc));
 		goto out;
@@ -1745,8 +1764,6 @@ agg_process_holes(struct ec_agg_entry *entry)
 	if (rc)
 		goto out;
 
-	agg_param = container_of(entry, struct ec_agg_param,
-				 ap_agg_entry);
 	rc = ABT_eventual_create(sizeof(*status), &stripe_ud.asu_eventual);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
@@ -2120,9 +2137,16 @@ agg_shard_is_parity(struct ds_pool *pool, struct ec_agg_entry *agg_entry)
 		uint32_t shard_idx;
 		struct pl_obj_shard *shard;
 
-		ec_tgt_idx = obj_ec_shard_idx_by_layout_ver(agg_entry->ae_oid.id_layout_ver,
-							    agg_entry->ae_dkey_hash, oca,
-							    daos_oclass_grp_size(oca) - i - 1);
+		if (unlikely(DAOS_FAIL_CHECK(DAOS_OBJ_EC_AGG_LEADER_DIFF) &&
+			     agg_entry->ae_dkey_hash % obj_ec_parity_tgt_nr(oca) == 0))
+			ec_tgt_idx = obj_ec_shard_idx_by_layout_ver(agg_entry->ae_oid.id_layout_ver,
+								    agg_entry->ae_dkey_hash, oca,
+								    obj_ec_data_tgt_nr(oca) + i);
+		else
+			ec_tgt_idx = obj_ec_shard_idx_by_layout_ver(agg_entry->ae_oid.id_layout_ver,
+								    agg_entry->ae_dkey_hash, oca,
+								    daos_oclass_grp_size(oca)
+								    - i - 1);
 
 		shard_idx = grp_start + ec_tgt_idx;
 		shard = pl_obj_get_shard(agg_entry->ae_obj_layout, shard_idx);
@@ -2169,6 +2193,8 @@ agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 	 struct ec_agg_param *agg_param, struct ec_agg_entry *agg_entry,
 	 unsigned int *acts)
 {
+	int	rc = 0;
+
 	if (!agg_key_compare(agg_entry->ae_dkey, entry->ie_key)) {
 		D_DEBUG(DB_EPC, "Skip dkey: "DF_KEY" ec agg on re-probe\n",
 			DP_KEY(&entry->ie_key));
@@ -2187,11 +2213,12 @@ agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 			DP_UOID(agg_entry->ae_oid), DP_KEY(&agg_entry->ae_dkey),
 			agg_entry->ae_is_leader ? "yes" : "no");
 		agg_reset_dkey_entry(&agg_param->ap_agg_entry, entry);
+		rc = agg_get_obj_handle(agg_entry, true);
 	} else {
 		*acts |= VOS_ITER_CB_SKIP;
 	}
 
-	return 0;
+	return rc;
 }
 
 /* Handles akeys returned by the iterator. */
@@ -2672,15 +2699,7 @@ retry:
 		ec_agg_param->ap_agg_entry.ae_obj_hdl = DAOS_HDL_INVAL;
 	}
 
-	if (cont->sc_pool->spc_pool->sp_rebuilding > 0 && !cont->sc_stopping) {
-		/* There is rebuild going on, and we can't proceed EC aggregate boundary,
-		 * Let's wait for 5 seconds for another EC aggregation.
-		 */
-		D_ASSERT(cont->sc_ec_agg_req != NULL);
-		sched_req_sleep(cont->sc_ec_agg_req, 5 * 1000);
-	}
-
-	if (rc == -DER_BUSY) {
+	if (rc == -DER_BUSY && cont->sc_pool->spc_pool->sp_rebuilding == 0) {
 		/** Hit an object conflict VOS aggregation or discard.   Rather than exiting, let's
 		 * yield and try again.
 		 */
@@ -2696,6 +2715,12 @@ retry:
 	}
 
 update_hae:
+	/* clear the flag before next turn's cont_aggregate_runnable(), to save conflict
+	 * window with rebuild (see obj_inflight_io_check()).
+	 */
+	if (cont->sc_pool->spc_pool->sp_rebuilding > 0)
+		cont->sc_ec_agg_active = 0;
+
 	if (rc == 0) {
 		cont->sc_ec_agg_eph = max(cont->sc_ec_agg_eph, epr->epr_hi);
 		if (!cont->sc_stopping && cont->sc_ec_query_agg_eph) {
