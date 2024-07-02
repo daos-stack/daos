@@ -60,9 +60,9 @@ def add_command_line_options():
     AddOption('--build-deps',
               dest='build_deps',
               type='choice',
-              choices=['yes', 'no', 'only', 'build-only'],
+              choices=['fetch', 'yes', 'no', 'only', 'build-only'],
               default='no',
-              help="Automatically download and build sources.  (yes|no|only|build-only) [no]")
+              help="Automatically download and build sources.  (fetch|yes|no|only|build-only) [no]")
 
     # We want to be able to check what dependencies are needed without
     # doing a build, similar to --dry-run.  We can not use --dry-run
@@ -439,7 +439,7 @@ def scons():
     # This will add a final 'DEPS' value to opts but it will not be persistent.
     prereqs.run_build(opts)
 
-    if GetOption('build_deps') == 'only':
+    if GetOption('build_deps') in ['only', 'build-only']:
         print('Exiting because --build-deps=only was set')
         Exit(0)
 
