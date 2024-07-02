@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -71,12 +71,15 @@ type addrFI interface {
 	Addrs() ([]net.Addr, error)
 }
 
+// NUMAFabricMap is an iterable map type that maps from a NUMA node ID to a set of FabricInterfaces.
+type NUMAFabricMap map[int][]*FabricInterface
+
 // NUMAFabric represents a set of fabric interfaces organized by NUMA node.
 type NUMAFabric struct {
 	log   logging.Logger
 	mutex sync.RWMutex
 
-	numaMap map[int][]*FabricInterface
+	numaMap NUMAFabricMap
 
 	currentNumaDevIdx map[int]int // current device idx to use on each NUMA node
 	currentNUMANode   int         // current NUMA node to search
@@ -141,6 +144,34 @@ func (n *NUMAFabric) NumNUMANodes() int {
 
 func (n *NUMAFabric) getNumNUMANodes() int {
 	return len(n.numaMap)
+}
+
+// RLockedMap read-locks the map and returns it, along with a release function.
+func (n *NUMAFabric) RLockedMap() (NUMAFabricMap, func(), error) {
+	if n == nil {
+		return nil, nil, errors.New("nil NUMAFabric")
+	}
+
+	n.mutex.RLock()
+	if n.numaMap == nil {
+		n.mutex.RUnlock()
+		return nil, nil, errors.New("NUMAFabric is uninitialized")
+	}
+	return n.numaMap, n.mutex.RUnlock, nil
+}
+
+// LockedMap write-locks the map and returns it, along with a release function.
+func (n *NUMAFabric) LockedMap() (NUMAFabricMap, func(), error) {
+	if n == nil {
+		return nil, nil, errors.New("nil NUMAFabric")
+	}
+
+	n.mutex.Lock()
+	if n.numaMap == nil {
+		n.mutex.Unlock()
+		return nil, nil, errors.New("NUMAFabric is uninitialized")
+	}
+	return n.numaMap, n.mutex.Unlock, nil
 }
 
 // FabricIfaceParams is a set of parameters associated with a fabric interface.
