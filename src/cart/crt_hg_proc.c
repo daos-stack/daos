@@ -245,8 +245,7 @@ crt_proc_d_iov_t(crt_proc_t proc, crt_proc_op_t proc_op, d_iov_t *div)
 			div->iov_buf = NULL;
 		} else {
 			if (crt_gdata.cg_copy_input_buf) {
-				/* TODO: temporarily avoid fault injecting here with D_ALLOC */
-				div->iov_buf = malloc(sizeof(char) * div->iov_len);
+				D_ALLOC_ARRAY(div->iov_buf, div->iov_len);
 				if (div->iov_buf == NULL) {
 					D_ERROR("Failed to allocate iov of size %ld\n",
 						div->iov_len);
