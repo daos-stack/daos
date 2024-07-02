@@ -31,6 +31,8 @@ char agent_sys_name[DAOS_SYS_NAME_MAX + 1] = DAOS_DEFAULT_SYS_NAME;
 static struct dc_mgmt_sys_info info_g;
 static Mgmt__GetAttachInfoResp *resp_g;
 
+int	dc_mgmt_proto_version;
+
 int
 dc_cp(tse_task_t *task, void *data)
 {
@@ -93,8 +95,7 @@ dc_mgmt_profile(char *path, int avg, bool start)
 	ep.ep_grp = sys->sy_group;
 	ep.ep_rank = 0;
 	ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
-	opc = DAOS_RPC_OPCODE(MGMT_PROFILE, DAOS_MGMT_MODULE,
-			      DAOS_MGMT_VERSION);
+	opc = DAOS_RPC_OPCODE(MGMT_PROFILE, DAOS_MGMT_MODULE, dc_mgmt_proto_version);
 	rc = crt_req_create(daos_get_crt_ctx(), &ep, opc, &rpc);
 	if (rc != 0) {
 		D_ERROR("crt_req_create failed, rc: "DF_RC"\n", DP_RC(rc));
@@ -1067,8 +1068,7 @@ dc_mgmt_pool_find(struct dc_mgmt_sys *sys, const char *label, uuid_t puuid,
 	D_ASSERT(ms_ranks->rl_nr > 0);
 	idx = d_rand() % ms_ranks->rl_nr;
 	ctx = daos_get_crt_ctx();
-	opc = DAOS_RPC_OPCODE(MGMT_POOL_FIND, DAOS_MGMT_MODULE,
-			      DAOS_MGMT_VERSION);
+	opc = DAOS_RPC_OPCODE(MGMT_POOL_FIND, DAOS_MGMT_MODULE, dc_mgmt_proto_version);
 
 	srv_ep.ep_grp = sys->sy_group;
 	srv_ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
@@ -1430,10 +1430,23 @@ out:
 int
 dc_mgmt_init()
 {
-	int rc;
+	int		rc;
+	uint32_t        ver_array[2] = {DAOS_MGMT_VERSION - 1, DAOS_MGMT_VERSION};
 
-	rc = daos_rpc_register(&mgmt_proto_fmt, MGMT_PROTO_CLI_COUNT,
-				NULL, DAOS_MGMT_MODULE);
+	rc = daos_rpc_proto_query(mgmt_proto_fmt_v2.cpf_base, ver_array, 2, &dc_mgmt_proto_version);
+	if (rc)
+		return rc;
+
+	if (dc_mgmt_proto_version == DAOS_MGMT_VERSION - 1) {
+		rc = daos_rpc_register(&mgmt_proto_fmt_v2, MGMT_PROTO_CLI_COUNT,
+				       NULL, DAOS_MGMT_MODULE);
+	} else if (dc_mgmt_proto_version == DAOS_MGMT_VERSION) {
+		rc = daos_rpc_register(&mgmt_proto_fmt_v3, MGMT_PROTO_CLI_COUNT,
+				       NULL, DAOS_MGMT_MODULE);
+	} else {
+		D_ERROR("version %d mgmt RPC not supported.\n", dc_mgmt_proto_version);
+		rc = -DER_PROTO;
+	}
 	if (rc != 0)
 		D_ERROR("failed to register mgmt RPCs: "DF_RC"\n", DP_RC(rc));
 
@@ -1446,9 +1459,13 @@ dc_mgmt_init()
 void
 dc_mgmt_fini()
 {
-	int rc;
+	int	rc = 0;
 
-	rc = daos_rpc_unregister(&mgmt_proto_fmt);
+	if (dc_mgmt_proto_version == DAOS_MGMT_VERSION - 1)
+		rc = daos_rpc_unregister(&mgmt_proto_fmt_v2);
+	else if (dc_mgmt_proto_version == DAOS_MGMT_VERSION)
+		rc = daos_rpc_unregister(&mgmt_proto_fmt_v3);
+
 	if (rc != 0)
 		D_ERROR("failed to unregister mgmt RPCs: "DF_RC"\n", DP_RC(rc));
 }
