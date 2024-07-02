@@ -1619,6 +1619,8 @@ crt_rpc_inout_buff_fini(struct crt_rpc_priv *rpc_priv)
 	D_ASSERT(rpc_priv != NULL);
 	rpc_pub = &rpc_priv->crp_pub;
 
+	D_FREE(rpc_priv->crp_buf_copy);
+
 	if (rpc_pub->cr_input != NULL) {
 		D_ASSERT(rpc_pub->cr_input_size != 0);
 		rpc_pub->cr_input_size = 0;
