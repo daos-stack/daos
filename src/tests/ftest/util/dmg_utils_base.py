@@ -14,7 +14,7 @@ from general_utils import nodeset_append_suffix
 class DmgCommandBase(YamlCommand):
     """Defines a base object representing a dmg command."""
 
-    def __init__(self, path, yaml_cfg=None, hostlist_suffix=None):
+    def __init__(self, path, yaml_cfg=None, hostlist_suffix=None, run_user=None):
         """Create a dmg Command object.
 
         Args:
@@ -23,8 +23,9 @@ class DmgCommandBase(YamlCommand):
                 settings. Defaults to None, in which case settings
                 must be supplied as command-line parameters.
             hostlist_suffix (str, optional): Suffix to append to each host name. Defaults to None.
+            run_user (str, optional): user to run as. Defaults to None, which uses the current user.
         """
-        super().__init__("/run/dmg/*", "dmg", path, yaml_cfg)
+        super().__init__("/run/dmg/*", "dmg", path, yaml_cfg, run_user=run_user)
 
         # If running dmg on remote hosts, this list needs to include those hosts
         self.temporary_file_hosts = NodeSet(gethostname().split(".")[0])

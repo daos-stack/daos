@@ -304,8 +304,11 @@ class FaultInjection():
             self._hosts = hosts
             distribute_files(self._hosts, self.fault_file, self.fault_file)
 
-    def stop(self):
+    def stop(self, user=None):
         """Remove the fault injection file created during testing.
+
+        Args:
+            user (str, optional): user with which to run the command. Defaults to None.
 
         Returns:
            error_list (list) : Errors during removing fault files (if any).
@@ -317,8 +320,7 @@ class FaultInjection():
         error_list = []
         command = "rm -f {}".format(self.fault_file)
         if self._hosts:
-            command = get_clush_command(
-                self._hosts, args="-S -v", command=command, command_sudo=True)
+            command = get_clush_command(self._hosts, args="-S -v", command=command, user=user)
         try:
             run_command(command, verbose=True, raise_exception=False)
         except DaosTestError as error:
