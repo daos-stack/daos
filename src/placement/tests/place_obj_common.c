@@ -52,6 +52,10 @@ plt_obj_place(daos_obj_id_t oid, uint32_t pda, struct pl_obj_layout **layout,
 	md.omd_pda = pda;
 	D_ASSERT(pl_map != NULL);
 	md.omd_ver = pool_map_get_version(pl_map->pl_poolmap);
+	if (fail_domain_node)
+		md.omd_fdom_lvl  = PO_COMP_TP_NODE;
+	else
+		md.omd_fdom_lvl = PO_COMP_TP_RANK;
 
 	rc = pl_obj_place(pl_map, PLT_LAYOUT_VERSION, &md, 0, NULL, layout);
 	if (print_layout_flag) {
