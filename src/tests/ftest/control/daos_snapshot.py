@@ -3,7 +3,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 
 
 class DaosSnapshotTest(TestWithServers):
@@ -90,7 +90,6 @@ class DaosSnapshotTest(TestWithServers):
         if len(epochs) > 0:
             self.fail("Expected all container snapshots to be destroyed")
 
-    @skipForTicket("DAOS-4691")
     def test_epcrange(self):
         """JIRA ID: DAOS-4872
 
