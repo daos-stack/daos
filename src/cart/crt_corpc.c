@@ -499,6 +499,7 @@ corpc_add_child_rpc(struct crt_rpc_priv *parent_rpc_priv,
 	RPC_ADDREF(child_rpc_priv);
 
 	D_SPIN_LOCK(&parent_rpc_priv->crp_lock);
+	D_ASSERT(d_list_empty(&child_rpc_priv->crp_parent_link));
 	d_list_add_tail(&child_rpc_priv->crp_parent_link,
 			&co_info->co_child_rpcs);
 	D_SPIN_UNLOCK(&parent_rpc_priv->crp_lock);
