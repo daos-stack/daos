@@ -227,7 +227,7 @@ main(int argc, char **argv)
 
 	if (filter == 0)
 		filter = D_TM_COUNTER | D_TM_DURATION | D_TM_TIMESTAMP | D_TM_MEMINFO |
-			 D_TM_TIMER_SNAPSHOT | D_TM_GAUGE | D_TM_STATS_GAUGE;
+			 D_TM_TIMER_SNAPSHOT | D_TM_GAUGE | D_TM_STATS_GAUGE | D_TM_MEMUSAGE;
 
 	if (show_when_read)
 		extra_descriptors |= D_TM_INCLUDE_TIMESTAMP;
