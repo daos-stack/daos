@@ -1,5 +1,9 @@
 name: 'Import Commit Pragmas'
 description: 'Import Commit Pragmas'
+inputs:
+  commit-message:
+    description: 'Commit Message'
+    required: true
 runs:
   using: "composite"
   steps:
@@ -8,7 +12,8 @@ runs:
       with:
         ref: ${{ github.event.pull_request.head.sha }}
     - run: . ci/gha_functions.sh;
-           git show -s --format=%B | sed -e "s/'/'\"'\"'/g" |
+           echo '${{ inputs.commit-message }}' |
+             sed -e "s/'/'\"'\"'/g" |
              get_commit_pragmas |
              sed -e 's/^/CP_/' >> $GITHUB_ENV
       shell: bash

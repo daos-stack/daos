@@ -26,3 +26,4 @@ runs:
            set -eu
            eval $(echo '${{ inputs.commit_message }}' | get_commit_pragmas)
            echo "value=${${{ inputs.pragma }}:-${{ inputs.default }}}" >> $GITHUB_OUTPUT
+           cat "$GITHUB_OUTPUT"
