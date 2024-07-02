@@ -56,7 +56,7 @@ type Config struct {
 	EvictOnStart        bool                       `yaml:"enable_evict_on_start,omitempty"`
 	ExcludeFabricIfaces common.StringSet           `yaml:"exclude_fabric_ifaces,omitempty"`
 	FabricInterfaces    []*NUMAFabricConfig        `yaml:"fabric_ifaces,omitempty"`
-	ProviderIdx         uint                       // TODO SRS-31: Enable with multiprovider functionality
+	ProviderIdx         uint                       `yaml:"provider_idx"`
 	TelemetryPort       int                        `yaml:"telemetry_port,omitempty"`
 	TelemetryEnabled    bool                       `yaml:"telemetry_enabled,omitempty"`
 	TelemetryRetain     time.Duration              `yaml:"telemetry_retain,omitempty"`

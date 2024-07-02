@@ -251,6 +251,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithSocketDir("./.daos/daos_server").
 		WithFabricProvider("ofi+verbs;ofi_rxm").
 		WithCrtTimeout(30).
+		WithNumSecondaryEndpoints([]int{2}).
 		WithAccessPoints("hostname1").
 		WithFaultCb("./.daos/fd_callback").
 		WithFaultPath("/vcdu0/rack1/hostname").
@@ -283,6 +284,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithFabricProvider("ofi+verbs;ofi_rxm").
 			WithFabricAuthKey("foo:bar").
 			WithCrtTimeout(30).
+			WithNumSecondaryEndpoints([]int{2}).
 			WithPinnedNumaNode(0).
 			WithBypassHealthChk(&bypass).
 			WithEnvVars("CRT_TIMEOUT=30").
@@ -311,6 +313,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithFabricProvider("ofi+verbs;ofi_rxm").
 			WithFabricAuthKey("foo:bar").
 			WithCrtTimeout(30).
+			WithNumSecondaryEndpoints([]int{2}).
 			WithBypassHealthChk(&bypass).
 			WithEnvVars("CRT_TIMEOUT=100").
 			WithLogFile("/tmp/daos_engine.1.log").
@@ -352,7 +355,7 @@ func TestServerConfig_updateServerConfig(t *testing.T) {
 				Fabric: engine.FabricConfig{
 					Provider:              "provider",
 					Interface:             "iface",
-					InterfacePort:         1111,
+					InterfacePort:         "1111",
 					NumSecondaryEndpoints: []int{2, 3, 4},
 				},
 			},
@@ -366,7 +369,7 @@ func TestServerConfig_updateServerConfig(t *testing.T) {
 				Fabric: engine.FabricConfig{
 					Provider:              "provider",
 					Interface:             "iface",
-					InterfacePort:         1111,
+					InterfacePort:         "1111",
 					NumSecondaryEndpoints: []int{2, 3, 4},
 				},
 			},
