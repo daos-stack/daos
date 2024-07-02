@@ -30,7 +30,7 @@
 #include "srv_internal.h"
 
 static int
-obj_verify_bio_csum(daos_obj_id_t oid, daos_iod_t *iods,
+obj_verify_bio_csum(crt_rpc_t *rpc, daos_obj_id_t oid, daos_iod_t *iods,
 		    struct dcs_iod_csums *iod_csums, struct bio_desc *biod,
 		    struct daos_csummer *csummer, uint32_t iods_nr);
 
@@ -1663,7 +1663,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 		if (rc)
 			goto post;
 
-		rc = obj_verify_bio_csum(orw->orw_oid.id_pub, iods, iod_csums,
+		rc = obj_verify_bio_csum(rpc, orw->orw_oid.id_pub, iods, iod_csums,
 					 biod, ioc->ioc_coc->sc_csummer, iods_nr);
 		if (rc != 0)
 			D_ERROR(DF_C_UOID_DKEY " verify_bio_csum failed: "
@@ -4247,7 +4247,7 @@ out:
 }
 
 static int
-obj_verify_bio_csum(daos_obj_id_t oid, daos_iod_t *iods,
+obj_verify_bio_csum(crt_rpc_t *rpc, daos_obj_id_t oid, daos_iod_t *iods,
 		    struct dcs_iod_csums *iod_csums, struct bio_desc *biod,
 		    struct daos_csummer *csummer, uint32_t iods_nr)
 {
@@ -4290,8 +4290,9 @@ obj_verify_bio_csum(daos_obj_id_t oid, daos_iod_t *iods,
 					DF_OID"): %d\n",
 					DP_OID(oid), rc);
 			} else if (iod->iod_type == DAOS_IOD_ARRAY) {
-				D_ERROR("Data Verification failed (object: "
+				D_ERROR("rpcid "DF_U64", Data Verification failed (object: "
 					DF_OID", extent: "DF_RECX"): %d\n",
+					crt_rpc_get_rpcid(rpc),
 					DP_OID(oid), DP_RECX(iod->iod_recxs[i]), rc);
 			}
 			break;
@@ -4621,7 +4622,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 			goto out;
 		}
 
-		rc = obj_verify_bio_csum(dcsr->dcsr_oid.id_pub, piods[i], pcsums[i], biods[i],
+		rc = obj_verify_bio_csum(rpc, dcsr->dcsr_oid.id_pub, piods[i], pcsums[i], biods[i],
 					 ioc->ioc_coc->sc_csummer, piod_nrs[i]);
 		if (rc != 0) {
 			if (rc == -DER_CSUM)
