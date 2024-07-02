@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -208,6 +208,32 @@ func TestCommon_MergeKeyValues(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			gotVars := MergeKeyValues(tc.baseVars, tc.mergeVars)
 			if diff := cmp.Diff(tc.wantVars, gotVars, defCmpOpts...); diff != "" {
+				t.Fatalf("(-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestCommon_AppendToPathEnv(t *testing.T) {
+	for name, tc := range map[string]struct {
+		pathEnv string
+		toAdd   []string
+		expVal  string
+	}{
+		"already exists": {
+			pathEnv: "/bin:/usr/bin:/sbin:/usr/sbin",
+			toAdd:   []string{"/sbin", "/usr/sbin"},
+			expVal:  "/bin:/usr/bin:/sbin:/usr/sbin",
+		},
+		"missing path added": {
+			pathEnv: "/bin:/usr/bin:/usr/sbin",
+			toAdd:   []string{"/sbin", "/usr/sbin"},
+			expVal:  "/bin:/usr/bin:/usr/sbin:/sbin",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotVal := AppendToPathEnv(tc.pathEnv, tc.toAdd...)
+			if diff := cmp.Diff(tc.expVal, gotVal, defCmpOpts...); diff != "" {
 				t.Fatalf("(-want, +got):\n%s", diff)
 			}
 		})
