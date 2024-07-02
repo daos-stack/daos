@@ -15,11 +15,12 @@ class FileCountTestBase(IorTestBase, MdtestBase):
     :avocado: recursive
     """
 
-    def add_containers(self, oclass=None):
+    def add_containers(self, oclass=None, dir_oclass=None):
         """Create a list of containers that the various jobs use for storage.
 
         Args:
             oclass: object class of container
+            dir_oclass: dir object of container
 
 
         """
@@ -33,6 +34,8 @@ class FileCountTestBase(IorTestBase, MdtestBase):
             rd_fac = 'rd_fac:{}'.format(str(redundancy_factor))
             properties = (",").join(filter(None, [properties, rd_fac]))
             container.properties.update(properties)
+        if dir_oclass:
+            container.dir_oclass.update(dir_oclass)
         container.create()
 
         return container
@@ -41,6 +44,7 @@ class FileCountTestBase(IorTestBase, MdtestBase):
         """Run the file count test."""
         saved_containers = []
         results = []
+        dir_oclass = None
         apis = self.params.get("api", "/run/largefilecount/*")
         object_class = self.params.get("object_class", '/run/largefilecount/*')
         hdf5_plugin_path = self.params.get("plugin_path", '/run/hdf5_vol/*')
@@ -49,21 +53,27 @@ class FileCountTestBase(IorTestBase, MdtestBase):
         ior_ppn = self.params.get("ppn", '/run/ior/client_processes/*', None)
         mdtest_np = self.params.get("np", '/run/mdtest/client_processes/*', 1)
         mdtest_ppn = self.params.get("ppn", '/run/mdtest/client_processes/*', None)
+        intercept = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
+
+        ior_oclass = object_class[0]
+        mdtest_oclass = object_class[1]
+        
         # create pool
         self.add_pool(connect=False)
 
-        for oclass in object_class:
-            self.ior_cmd.dfs_oclass.update(oclass)
-            self.mdtest_cmd.dfs_oclass.update(oclass)
-            self.ior_cmd.dfs_dir_oclass.update(oclass)
+        for idx, _ in enumerate(object_class):
+            self.ior_cmd.dfs_oclass.update(ior_oclass[idx])
+            self.mdtest_cmd.dfs_oclass.update(mdtest_oclass[idx])
+            self.ior_cmd.dfs_dir_oclass.update(ior_oclass[idx])
             # oclass_dir can not be EC must be RP based on rd_fac
-            rd_fac = extract_redundancy_factor(oclass)
+            rd_fac = extract_redundancy_factor(mdtest_oclass[idx])
             if rd_fac >= 2:
-                self.mdtest_cmd.dfs_dir_oclass.update("RP_3G1")
+                dir_oclass = "RP_3GX"
             elif rd_fac == 1:
-                self.mdtest_cmd.dfs_dir_oclass.update("RP_2G1")
+                dir_oclass = "RP_2GX"
             else:
-                self.mdtest_cmd.dfs_dir_oclass.update("SX")
+                dir_oclass = "SX"
+            self.mdtest_cmd.dfs_dir_oclass.update(dir_oclass)
             for api in apis:
                 self.ior_cmd.api.update(api)
                 self.mdtest_cmd.api.update(api)
@@ -73,11 +83,14 @@ class FileCountTestBase(IorTestBase, MdtestBase):
                 # run mdtest
                 if self.mdtest_cmd.api.value in ['DFS', 'POSIX']:
                     self.log.info("=======>>>Starting MDTEST with %s and %s", api, oclass)
-                    self.container = self.add_containers(oclass)
+                    self.container = self.add_containers(mdtest_oclass[idx], dir_oclass)
                     try:
                         self.processes = mdtest_np
                         self.ppn = mdtest_ppn
-                        self.execute_mdtest()
+                        if self.mdtest_cmd.api.value == 'POSIX':
+                            self.execute_mdtest(intercept=intercept)
+                        else:
+                            self.execute_mdtest()
                         results.append(["PASS", str(self.mdtest_cmd)])
                     except TestFail:
                         results.append(["FAIL", str(self.mdtest_cmd)])
@@ -86,7 +99,7 @@ class FileCountTestBase(IorTestBase, MdtestBase):
                     saved_containers.append(self.container)
                 # run ior
                 self.log.info("=======>>>Starting IOR with %s and %s", api, oclass)
-                self.container = self.add_containers(oclass)
+                self.container = self.add_containers(ior_oclass[idx])
                 self.update_ior_cmd_with_pool(False)
                 try:
                     self.processes = ior_np
@@ -95,6 +108,8 @@ class FileCountTestBase(IorTestBase, MdtestBase):
                         self.ior_cmd.api.update('HDF5')
                         self.run_ior_with_pool(
                             create_pool=False, plugin_path=hdf5_plugin_path, mount_dir=mount_dir)
+                    elif self.ior_cmd.api.value == 'POSIX':
+                        self.run_ior_with_pool(create_pool=False, intercept=intercept)
                     else:
                         self.run_ior_with_pool(create_pool=False)
                     results.append(["PASS", str(self.ior_cmd)])
