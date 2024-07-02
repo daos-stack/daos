@@ -270,7 +270,7 @@ func TestAuth_GetSignedCred(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			cred, gotErr := GetSignedCredential(tc.req)
+			cred, gotErr := GetSignedCredential(test.Context(t), tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -286,7 +286,7 @@ func TestAuth_CredentialRequestOverrides(t *testing.T) {
 	req.getHostname = testHostnameFn(nil, "test-host")
 	req.WithUserAndGroup("test-user", "test-group", "test-secondary")
 
-	cred, err := GetSignedCredential(req)
+	cred, err := GetSignedCredential(test.Context(t), req)
 	if err != nil {
 		t.Fatalf("Failed to get credential: %s", err)
 	}

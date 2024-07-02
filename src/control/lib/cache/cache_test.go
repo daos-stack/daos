@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2023 Intel Corporation.
+// (C) Copyright 2023-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,11 +10,12 @@ import (
 	"context"
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/common/test"
-	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func TestCache_NewItemCache(t *testing.T) {
@@ -36,6 +37,8 @@ func TestCache_NewItemCache(t *testing.T) {
 	}
 }
 
+var _ RefreshableItem = (*mockItem)(nil)
+
 type mockItem struct {
 	ItemKey            string
 	ID                 string
@@ -55,7 +58,14 @@ func (m *mockItem) Refresh(ctx context.Context) error {
 	return m.RefreshErr
 }
 
-func (m *mockItem) NeedsRefresh() bool {
+func (m *mockItem) RefreshIfNeeded(ctx context.Context) (bool, error) {
+	if m.needsRefresh() {
+		return true, m.RefreshErr
+	}
+	return false, nil
+}
+
+func (m *mockItem) needsRefresh() bool {
 	return m.NeedsRefreshResult
 }
 
