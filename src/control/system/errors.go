@@ -20,9 +20,10 @@ import (
 )
 
 var (
-	ErrEmptyGroupMap = errors.New("empty group map (all ranks excluded?)")
-	ErrRaftUnavail   = errors.New("raft service unavailable (not started yet?)")
-	ErrUninitialized = errors.New("system is uninitialized (storage format required?)")
+	ErrEmptyGroupMap          = errors.New("empty group map (all ranks excluded?)")
+	ErrRaftUnavail            = errors.New("raft service unavailable (not started yet?)")
+	ErrUninitialized          = errors.New("system is uninitialized (storage format required?)")
+	ErrLeaderStepUpInProgress = errors.New("leader step-up in progress (try again)")
 )
 
 // IsNotReady is a convenience function for checking if an error
@@ -37,7 +38,8 @@ func IsUnavailable(err error) bool {
 	if err == nil {
 		return false
 	}
-	return strings.Contains(errors.Cause(err).Error(), ErrRaftUnavail.Error())
+	cause := errors.Cause(err).Error()
+	return strings.Contains(cause, ErrRaftUnavail.Error()) || strings.Contains(cause, ErrLeaderStepUpInProgress.Error())
 }
 
 // IsEmptyGroupMap returns a boolean indicating whether or not the
