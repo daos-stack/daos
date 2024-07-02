@@ -67,6 +67,21 @@ typedef enum {
 	DP_UUID((mqa)->pool_uuid), (mqa)->version, (mqa)->generation, RB_OP_STR((mqa)->rebuild_op)
 #define DP_RBF_MQA(mqa) DP_RB_MQA(mqa), (mqa)->leader_rank, (mqa)->leader_term
 
+/* arguments for log rebuild identifier given a struct obj_migrate_in *omi */
+#define DP_RB_OMI(omi)                                                                             \
+	DP_UUID((omi)->om_pool_uuid), (omi)->om_version, (omi)->om_generation,                     \
+	    RB_OP_STR((omi)->om_opc)
+
+/* arguments for log rebuild identifier given a struct migrate_pool_tls *mpt */
+#define DP_RB_MPT(mpt)                                                                             \
+	DP_UUID((mpt)->mpt_pool_uuid), (mpt)->mpt_version, (mpt)->mpt_generation,                  \
+	    RB_OP_STR((mpt)->mpt_opc)
+
+/* arguments for log rebuild identifier given a struct migrate_one *mro */
+#define DP_RB_MRO(mro)                                                                             \
+	DP_UUID((mro)->mo_pool_uuid), (mro)->mo_pool_tls_version, (mro)->mo_generation,            \
+	    RB_OP_STR((mro)->mo_opc)
+
 int ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver,
 			daos_epoch_t stable_eph, uint32_t layout_version,
 			struct pool_target_id_list *tgts,
