@@ -27,6 +27,14 @@ BLOCK_NAMES_FILTER = [
 ]
 
 
+BLOCK_TO_PARAM_NAME_MAP = {
+    'Functional Hardware Medium': 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
+    'Functional Hardware Medium Verbs Provider': 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL',
+    'Functional Hardware Medium UCX Provider': 'FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL',
+    'Functional Hardware Medium MD on SSD': 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
+}
+
+
 def je_load(pr: str, jid=None, what=None, tree=None):
     """Fetch something from Jenkins and return as native type."""
     url = f"{JENKINS_HOME}/job/daos/job/{pr}"
@@ -42,14 +50,15 @@ def je_load(pr: str, jid=None, what=None, tree=None):
 
 
 def get_runner(pr: str, jid: int) -> str:
+    param_name = BLOCK_TO_PARAM_NAME_MAP[BLOCK_NAMES_FILTER[0]]
     data = je_load(pr, jid)
     for action in data['actions']:
         # Filter out the non-parameters object
-        if action['_class'] != 'hudson.model.ParametersAction':
+        if action.get('_class', '') != 'hudson.model.ParametersAction':
             continue
         # Lookup the runner's label
         for param in action['parameters']:
-            if param['name'] == 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL':
+            if param['name'] == param_name:
                 return param['value']
     return ''
 
