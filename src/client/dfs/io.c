@@ -76,7 +76,7 @@ dfs_read_int(dfs_t *dfs, dfs_obj_t *obj, daos_off_t off, dfs_iod_t *iod, d_sg_li
 
 	args      = dc_task_get_args(task);
 	args->oh  = obj->oh;
-	args->th  = DAOS_TX_NONE;
+	args->th  = dfs->th;
 	args->sgl = sgl;
 	args->iod = &params->arr_iod;
 
@@ -140,7 +140,7 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off, daos_size
 		rg.rg_idx   = off;
 		iod.arr_rgs = &rg;
 
-		rc = daos_array_read(obj->oh, DAOS_TX_NONE, &iod, sgl, NULL);
+		rc = daos_array_read(obj->oh, dfs->th, &iod, sgl, NULL);
 		if (rc) {
 			D_ERROR("daos_array_read() failed, " DF_RC "\n", DP_RC(rc));
 			return daos_der2errno(rc);
@@ -183,7 +183,7 @@ dfs_readx(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl, daos_siz
 		arr_iod.arr_nr  = iod->iod_nr;
 		arr_iod.arr_rgs = iod->iod_rgs;
 
-		rc = daos_array_read(obj->oh, DAOS_TX_NONE, &arr_iod, sgl, ev);
+		rc = daos_array_read(obj->oh, dfs->th, &arr_iod, sgl, ev);
 		if (rc) {
 			D_ERROR("daos_array_read() failed (%d)\n", rc);
 			return daos_der2errno(rc);
@@ -237,7 +237,7 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off, daos_eve
 	if (ev)
 		daos_event_errno_rc(ev);
 
-	rc = daos_array_write(obj->oh, DAOS_TX_NONE, &iod, sgl, ev);
+	rc = daos_array_write(obj->oh, dfs->th, &iod, sgl, ev);
 	if (rc)
 		D_ERROR("daos_array_write() failed, " DF_RC "\n", DP_RC(rc));
 
@@ -276,7 +276,7 @@ dfs_writex(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl, daos_ev
 	if (ev)
 		daos_event_errno_rc(ev);
 
-	rc = daos_array_write(obj->oh, DAOS_TX_NONE, &arr_iod, sgl, ev);
+	rc = daos_array_write(obj->oh, dfs->th, &arr_iod, sgl, ev);
 	if (rc)
 		D_ERROR("daos_array_write() failed (%d)\n", rc);
 

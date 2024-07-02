@@ -118,7 +118,7 @@ dfs_move_internal(dfs_t *dfs, unsigned int flags, dfs_obj_t *parent, const char 
 		  daos_obj_id_t *oid)
 {
 	struct dfs_entry entry = {0}, new_entry = {0};
-	daos_handle_t    th = DAOS_TX_NONE;
+	daos_handle_t    th = dfs->th;
 	bool             exists;
 	daos_key_t       dkey;
 	size_t           len;
@@ -324,7 +324,7 @@ dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, const char *name1, dfs_obj_t *paren
 	     const char *name2)
 {
 	struct dfs_entry entry1 = {0}, entry2 = {0};
-	daos_handle_t    th = DAOS_TX_NONE;
+	daos_handle_t    th = dfs->th;
 	bool             exists;
 	daos_key_t       dkey;
 	size_t           len1;
