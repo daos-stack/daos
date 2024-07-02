@@ -42,7 +42,7 @@ enum {
 		D_DEBUG(DB_TRACE, "Evicting lid "DF_DTI": lid=%lx\n",			\
 			DP_DTI(&DAE_XID(dae)), DAE_LID(dae) & DTX_LID_SOLO_MASK);	\
 		d_list_del_init(&dae->dae_link);					\
-		lrua_evictx(cont->vc_dtx_array,						\
+		lrua_evictx(cont->vc_pool->vp_dtx_array,				\
 			    (DAE_LID(dae) & DTX_LID_SOLO_MASK) - DTX_LID_RESERVED,	\
 			    DAE_EPOCH(dae));						\
 	} while (0)
@@ -175,13 +175,13 @@ out:
 }
 
 static void
-dtx_act_ent_cleanup(struct vos_container *cont, struct vos_dtx_act_ent *dae,
-		    struct dtx_handle *dth, bool evict)
+dtx_act_ent_cleanup(struct vos_container *cont, struct vos_dtx_act_ent *dae, bool evict)
 {
 	if (evict) {
-		daos_unit_oid_t	*oids;
-		int		 count;
-		int		 i;
+		struct dtx_handle	*dth = dae->dae_dth;
+		daos_unit_oid_t		*oids;
+		int			 count;
+		int			 i;
 
 		if (dth != NULL) {
 			if (dth->dth_oid_array != NULL) {
@@ -258,22 +258,17 @@ static int
 dtx_act_ent_free(struct btr_instance *tins, struct btr_record *rec,
 		 void *args)
 {
+	struct vos_container	*cont = tins->ti_priv;
 	struct vos_dtx_act_ent	*dae;
+	bool			*force = args;
 
 	dae = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	rec->rec_off = UMOFF_NULL;
 
-	if (dae != NULL)
+	if (dae != NULL) {
 		d_list_del_init(&dae->dae_link);
-
-	if (args != NULL) {
-		/* Return the record addreass (offset in DRAM).
-		* The caller will release it after using.
-		*/
-		D_ASSERT(dae != NULL);
-		*(struct vos_dtx_act_ent **)args = dae;
-	} else if (dae != NULL) {
-		dtx_act_ent_cleanup(tins->ti_priv, dae, NULL, true);
+		dtx_act_ent_cleanup(cont, dae, force == NULL || *force ? true : false);
+		dtx_evict_lid(cont, dae);
 	}
 
 	return 0;
@@ -769,6 +764,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti, daos_epoch_t 
 	d_iov_t				 kiov;
 	d_iov_t				 riov;
 	int				 rc = 0;
+	bool				 force = false;
 
 	d_iov_set(&kiov, dti, sizeof(*dti));
 	/* For single replicated object, we trigger commit just after local
@@ -808,12 +804,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti, daos_epoch_t 
 		 */
 		if (unlikely(dae->dae_committed)) {
 			rc = dbtree_delete(cont->vc_dtx_active_hdl,
-					   BTR_PROBE_BYPASS, &kiov, &dae);
-			if (rc == 0) {
-				dtx_act_ent_cleanup(cont, dae, NULL, false);
-				dtx_evict_lid(cont, dae);
-			}
-
+					   BTR_PROBE_BYPASS, &kiov, &force);
 			goto out;
 		}
 
@@ -970,7 +961,8 @@ vos_dtx_alloc(struct umem_instance *umm, struct vos_dtx_blob_df *dbd, struct dtx
 	cont = vos_hdl2cont(dth->dth_coh);
 	D_ASSERT(cont != NULL);
 
-	rc = lrua_allocx(cont->vc_dtx_array, &idx, dth->dth_epoch, &dae, &dth->dth_local_stub);
+	rc = lrua_allocx(cont->vc_pool->vp_dtx_array, &idx, dth->dth_epoch, &dae,
+			 &dth->dth_local_stub);
 	if (rc != 0) {
 		/* The array is full, need to commit some transactions first */
 		if (rc == -DER_BUSY)
@@ -1162,8 +1154,8 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 
 	D_ASSERTF(epoch != 0, "Invalid epoch for DTX (lid: %x) availability check\n", entry);
 
-	found = lrua_lookupx(cont->vc_dtx_array, (entry & DTX_LID_SOLO_MASK) - DTX_LID_RESERVED,
-			     epoch, &dae);
+	found = lrua_lookupx(cont->vc_pool->vp_dtx_array,
+			     (entry & DTX_LID_SOLO_MASK) - DTX_LID_RESERVED, epoch, &dae);
 	if (!found) {
 		D_ASSERTF(!(entry & DTX_LID_SOLO_FLAG),
 			  "non-committed solo entry %lu must be there, epoch "DF_X64", boundary "
@@ -1594,7 +1586,7 @@ vos_dtx_deregister_record(struct umem_instance *umm, daos_handle_t coh,
 	if (cont == NULL)
 		return;
 
-	found = lrua_lookupx(cont->vc_dtx_array, entry - DTX_LID_RESERVED,
+	found = lrua_lookupx(cont->vc_pool->vp_dtx_array, entry - DTX_LID_RESERVED,
 			     epoch, &dae);
 	if (!found) {
 		D_WARN("Could not find active DTX record for lid=%d, epoch="
@@ -2178,11 +2170,11 @@ vos_dtx_post_handle(struct vos_container *cont,
 			continue;
 
 		d_iov_set(&kiov, &DAE_XID(daes[i]), sizeof(DAE_XID(daes[i])));
-		rc = dbtree_delete(cont->vc_dtx_active_hdl, BTR_PROBE_EQ,
-				   &kiov, NULL);
-		if (rc == 0 || rc == -DER_NONEXIST) {
+		rc = dbtree_delete(cont->vc_dtx_active_hdl, BTR_PROBE_EQ, &kiov, &abort);
+		if (rc == -DER_NONEXIST) {
+			dtx_act_ent_cleanup(cont, daes[i], abort);
 			dtx_evict_lid(cont, daes[i]);
-		} else {
+		} else if (rc != 0) {
 			/* The DTX entry has been committed or aborted, but we
 			 * cannot remove it from the active table, can mark it
 			 * as 'committed' or 'aborted'. That will consume some
@@ -2199,14 +2191,13 @@ vos_dtx_post_handle(struct vos_container *cont,
 
 				daes[i]->dae_aborted = 1;
 				daes[i]->dae_aborting = 0;
-				dtx_act_ent_cleanup(cont, daes[i], NULL, true);
 			} else {
 				D_ASSERT(daes[i]->dae_aborting == 0);
 
 				daes[i]->dae_committed = 1;
 				daes[i]->dae_committing = 0;
-				dtx_act_ent_cleanup(cont, daes[i], NULL, false);
 			}
+			dtx_act_ent_cleanup(cont, daes[i], abort);
 			DAE_FLAGS(daes[i]) &= ~(DTE_CORRUPTED | DTE_ORPHAN | DTE_PARTIAL_COMMITTED);
 		}
 	}
@@ -2284,17 +2275,6 @@ vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, 
 		rc = umem_tx_abort(umm, rc);
 	}
 
-	if (rc == 0 && dth != NULL) {
-		dae->dae_dth = NULL;
-		dth->dth_aborted = 1;
-		dth->dth_ent = NULL;
-		dth->dth_pinned = 0;
-		/*
-		 * dtx_act_ent_cleanup() will be triggered via vos_dtx_post_handle()
-		 * when remove the DTX entry from active DTX table.
-		 */
-	}
-
 	/*
 	 * NOTE: Do not reset dth_need_validation for "else" case,
 	 *	 because it may be also co-set (shared) by others.
@@ -2305,6 +2285,13 @@ out:
 		vos_dtx_post_handle(cont, &dae, NULL, 1, true, false);
 	else if (rc != 0)
 		dae->dae_aborting = 0;
+
+	if (rc == 0 && dth != NULL) {
+		dae->dae_dth = NULL;
+		dth->dth_aborted = 1;
+		dth->dth_ent = NULL;
+		dth->dth_pinned = 0;
+	}
 
 	return rc;
 }
@@ -2502,7 +2489,7 @@ vos_dtx_aggregate(daos_handle_t coh)
 
 	D_ASSERT(cont->vc_pool->vp_sysdb == false);
 	/* Take the opportunity to free some memory if we can */
-	lrua_array_aggregate(cont->vc_dtx_array);
+	lrua_array_aggregate(cont->vc_pool->vp_dtx_array);
 
 	rc = umem_tx_begin(umm, NULL);
 	if (rc != 0) {
@@ -2759,7 +2746,7 @@ vos_dtx_act_reindex(struct vos_container *cont)
 					" is invalid\n", dae_df->dae_lid);
 				D_GOTO(out, rc = -DER_IO);
 			}
-			rc = lrua_allocx_inplace(cont->vc_dtx_array,
+			rc = lrua_allocx_inplace(cont->vc_pool->vp_dtx_array,
 					 dae_df->dae_lid - DTX_LID_RESERVED,
 					 dae_df->dae_epoch, &dae);
 			if (rc != 0) {
@@ -2935,7 +2922,7 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth)
 		 * remove DTX records, purge related VOS objects from cache.
 		 */
 		if (dae != NULL)
-			dtx_act_ent_cleanup(cont, dae, dth, true);
+			dtx_act_ent_cleanup(cont, dae, true);
 	} else {
 		d_iov_set(&kiov, &dth->dth_xid, sizeof(dth->dth_xid));
 		d_iov_set(&riov, NULL, 0);
@@ -2957,15 +2944,16 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth)
 		if (DAE_EPOCH(dae) != dth->dth_epoch)
 			goto out;
 
-		dtx_act_ent_cleanup(cont, dae, dth, true);
-
 		rc = dbtree_delete(cont->vc_dtx_active_hdl,
 				   riov.iov_buf != NULL ? BTR_PROBE_BYPASS : BTR_PROBE_EQ,
-				   &kiov, &dae);
-		if (rc == 0 || rc == -DER_NONEXIST)
-			dtx_evict_lid(cont, dae);
-		else
-			dae->dae_aborted = 1;
+				   &kiov, NULL);
+		if (rc != 0) {
+			dtx_act_ent_cleanup(cont, dae, true);
+			if (rc == -DER_NONEXIST)
+				dtx_evict_lid(cont, dae);
+			else
+				dae->dae_aborted = 1;
+		}
 
 out:
 		dth->dth_ent = NULL;
@@ -3185,31 +3173,25 @@ vos_dtx_rsrvd_fini(struct dtx_handle *dth)
 	}
 }
 
-static const struct lru_callbacks lru_dtx_cache_cbs = {
-	.lru_on_alloc = vos_lru_alloc_track,
-	.lru_on_free = vos_lru_free_track,
-};
-
 int
 vos_dtx_cache_reset(daos_handle_t coh, bool force)
 {
 	struct vos_container	*cont;
+	struct vos_pool		*pool;
 	struct umem_attr	 uma;
 	int			 rc = 0;
 
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
+	D_ASSERT(daos_handle_is_valid(cont->vc_dtx_active_hdl));
+	D_ASSERT(daos_handle_is_valid(cont->vc_dtx_committed_hdl));
+
+	pool = cont->vc_pool;
 
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
 
-	if (!force) {
-		if (cont->vc_dtx_array)
-			lrua_array_aggregate(cont->vc_dtx_array);
-		goto cmt;
-	}
-
-	if (daos_handle_is_valid(cont->vc_dtx_active_hdl)) {
+	if (force) {
 		rc = dbtree_destroy(cont->vc_dtx_active_hdl, NULL);
 		if (rc != 0) {
 			D_ERROR("Failed to destroy active DTX tree for "DF_UUID": "DF_RC"\n",
@@ -3218,54 +3200,42 @@ vos_dtx_cache_reset(daos_handle_t coh, bool force)
 		}
 
 		cont->vc_dtx_active_hdl = DAOS_HDL_INVAL;
-	}
-
-	if (cont->vc_dtx_array)
-		lrua_array_free(cont->vc_dtx_array);
-
-	rc = lrua_array_alloc(&cont->vc_dtx_array, DTX_ARRAY_LEN, DTX_ARRAY_NR,
-			      sizeof(struct vos_dtx_act_ent), LRU_FLAG_REUSE_UNIQUE,
-			      &lru_dtx_cache_cbs, vos_tls_get(false));
-	if (rc != 0) {
-		D_ERROR("Failed to re-create DTX active array for "DF_UUID": "DF_RC"\n",
-			DP_UUID(cont->vc_id), DP_RC(rc));
-		return rc;
-	}
-
-	rc = dbtree_create_inplace_ex(VOS_BTR_DTX_ACT_TABLE, 0, DTX_BTREE_ORDER, &uma,
-				      &cont->vc_dtx_active_btr, DAOS_HDL_INVAL, cont,
-				      &cont->vc_dtx_active_hdl);
-	if (rc != 0) {
-		D_ERROR("Failed to re-create DTX active tree for "DF_UUID": "DF_RC"\n",
-			DP_UUID(cont->vc_id), DP_RC(rc));
-		return rc;
-	}
-
-	rc = vos_dtx_act_reindex(cont);
-	if (rc != 0) {
-		D_ERROR("Fail to reindex active DTX table for "DF_UUID": "DF_RC"\n",
-			DP_UUID(cont->vc_id), DP_RC(rc));
-		return rc;
-	}
-
-cmt:
-	if (daos_handle_is_valid(cont->vc_dtx_committed_hdl)) {
-		rc = dbtree_destroy(cont->vc_dtx_committed_hdl, NULL);
+		rc = dbtree_create_inplace_ex(VOS_BTR_DTX_ACT_TABLE, 0, DTX_BTREE_ORDER, &uma,
+					      &cont->vc_dtx_active_btr, DAOS_HDL_INVAL, cont,
+					      &cont->vc_dtx_active_hdl);
 		if (rc != 0) {
-			D_ERROR("Failed to destroy committed DTX tree for "DF_UUID": "DF_RC"\n",
+			D_ERROR("Failed to re-create DTX active tree for "DF_UUID": "DF_RC"\n",
 				DP_UUID(cont->vc_id), DP_RC(rc));
 			return rc;
 		}
-
-		cont->vc_pool->vp_dtx_committed_count -= cont->vc_dtx_committed_count;
-		D_ASSERT(cont->vc_pool->vp_sysdb == false);
-		d_tm_dec_gauge(vos_tls_get(false)->vtl_committed, cont->vc_dtx_committed_count);
-
-		cont->vc_dtx_committed_hdl = DAOS_HDL_INVAL;
-		cont->vc_dtx_committed_count = 0;
-		cont->vc_cmt_dtx_indexed = 0;
-		cont->vc_cmt_dtx_reindex_pos = cont->vc_cont_df->cd_dtx_committed_head;
 	}
+
+	lrua_array_aggregate(pool->vp_dtx_array);
+
+	if (force) {
+		rc = vos_dtx_act_reindex(cont);
+		if (rc != 0) {
+			D_ERROR("Fail to reindex active DTX table for "DF_UUID": "DF_RC"\n",
+				DP_UUID(cont->vc_id), DP_RC(rc));
+			return rc;
+		}
+	}
+
+	rc = dbtree_destroy(cont->vc_dtx_committed_hdl, NULL);
+	if (rc != 0) {
+		D_ERROR("Failed to destroy committed DTX tree for "DF_UUID": "DF_RC"\n",
+			DP_UUID(cont->vc_id), DP_RC(rc));
+		return rc;
+	}
+
+	cont->vc_pool->vp_dtx_committed_count -= cont->vc_dtx_committed_count;
+	D_ASSERT(cont->vc_pool->vp_sysdb == false);
+	d_tm_dec_gauge(vos_tls_get(false)->vtl_committed, cont->vc_dtx_committed_count);
+
+	cont->vc_dtx_committed_hdl = DAOS_HDL_INVAL;
+	cont->vc_dtx_committed_count = 0;
+	cont->vc_cmt_dtx_indexed = 0;
+	cont->vc_cmt_dtx_reindex_pos = cont->vc_cont_df->cd_dtx_committed_head;
 
 	rc = dbtree_create_inplace_ex(VOS_BTR_DTX_CMT_TABLE, 0, DTX_BTREE_ORDER, &uma,
 				      &cont->vc_dtx_committed_btr, DAOS_HDL_INVAL, cont,
