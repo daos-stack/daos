@@ -9,6 +9,7 @@ import re
 
 from ClusterShell.NodeSet import NodeSet
 # pylint: disable=import-error,no-name-in-module
+from util.host_utils import get_local_host
 from util.run_utils import run_remote
 
 # Order here is used to select default provider in environment_utils
@@ -397,6 +398,7 @@ def get_fastest_interface(logger, hosts, verbose=True):
     Returns:
         str: the fastest active interface common to all hosts specified
     """
+    hosts = NodeSet(hosts) | NodeSet(get_local_host())
     common_interfaces = get_common_interfaces(logger, hosts, verbose)
 
     # Find the speed of each common active interface in order to be able to choose the fastest
