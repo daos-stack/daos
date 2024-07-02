@@ -32,7 +32,7 @@ def scons():
                'srv_cli.c', 'profile.c', 'rpc.c',
                'server_iv.c', 'srv.c', 'srv.pb-c.c',
                'sched.c', 'ult.c', 'event.pb-c.c',
-               'srv_metrics.c'] + libdaos_tgts
+               'srv_metrics.c', 'util.c'] + libdaos_tgts
 
     if denv["STACK_MMAP"] == 1:
         denv.Append(CCFLAGS=['-DULT_MMAP_STACK'])

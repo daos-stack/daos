@@ -88,6 +88,7 @@ pool_child_lookup_noref(const uuid_t uuid)
 	return NULL;
 }
 
+/** Use DS_POOL_CHILD_LOOKUP instead. */
 struct ds_pool_child *
 ds_pool_child_lookup(const uuid_t uuid)
 {
@@ -109,6 +110,7 @@ ds_pool_child_lookup(const uuid_t uuid)
 	return child;
 }
 
+/** Use DS_POOL_CHILD_PUT instead. */
 void
 ds_pool_child_put(struct ds_pool_child *child)
 {
@@ -289,6 +291,7 @@ pool_child_free(struct ds_pool_child *child)
 	D_ASSERT(child->spc_ref == 0);
 
 	/* Remove from cache */
+	d_ref_tracker_fini(&child->spc_ref_tracker);
 	d_list_del_init(&child->spc_list);
 	dss_module_fini_metrics(DAOS_TGT_TAG, child->spc_metrics);
 	ABT_eventual_free(&child->spc_ref_eventual);
@@ -327,6 +330,7 @@ pool_child_create(uuid_t pool_uuid, struct ds_pool *pool, uint32_t pool_map_ver)
 	child->spc_pool = pool;
 	D_INIT_LIST_HEAD(&child->spc_list);
 	D_INIT_LIST_HEAD(&child->spc_cont_list);
+	d_ref_tracker_init(&child->spc_ref_tracker);
 
 	D_ASSERT(info->dmi_tgt_id < dss_tgt_nr);
 	child->spc_state = &pool->sp_states[info->dmi_tgt_id];
@@ -444,7 +448,6 @@ out:
 	return rc;
 
 }
-
 
 static int
 pool_child_start(struct ds_pool_child *child, bool recreate)
@@ -599,11 +602,15 @@ pool_child_stop(struct ds_pool_child *child)
 wait:
 	/* Wait for all references dropped */
 	if (child->spc_ref > 0) {
+		DSS_REF_TRACKER_DECLARE_DUMPER(dumper);
+
 		D_DEBUG(DB_MGMT, DF_UUID": Wait on pool child refs (%d) dropping.\n",
 			DP_UUID(child->spc_uuid), child->spc_ref);
+		DSS_REF_TRACKER_INIT_DUMPER(dumper, child->spc_ref_tracker);
 		rc = ABT_eventual_wait(child->spc_ref_eventual, (void **)&ref);
 		D_ASSERT(rc == ABT_SUCCESS);
 		ABT_eventual_reset(child->spc_ref_eventual);
+		DSS_REF_TRACKER_FINI_DUMPER(dumper);
 	}
 	D_DEBUG(DB_MGMT, DF_UUID": Pool child refs dropped.\n", DP_UUID(child->spc_uuid));
 
@@ -1491,7 +1498,7 @@ pool_query_space(uuid_t pool_uuid, struct daos_pool_space *x_ps)
 	struct vos_pool_space	*vps = &vos_pool_info.pif_space;
 	int			 i, rc;
 
-	pool_child = ds_pool_child_lookup(pool_uuid);
+	DS_POOL_CHILD_LOOKUP(pool_uuid, &pool_child);
 	if (pool_child == NULL)
 		return -DER_NO_HDL;
 
@@ -1525,7 +1532,7 @@ pool_query_space(uuid_t pool_uuid, struct daos_pool_space *x_ps)
 		x_ps->ps_free_min[i] = x_ps->ps_space.s_free[i];
 	}
 out:
-	ds_pool_child_put(pool_child);
+	DS_POOL_CHILD_PUT(&pool_child);
 	return rc;
 }
 
@@ -1766,7 +1773,7 @@ update_child_map(void *data)
 	struct ds_pool_child	*child;
 
 	/* The pool child could be stopped */
-	child = ds_pool_child_lookup(pool->sp_uuid);
+	DS_POOL_CHILD_LOOKUP(pool->sp_uuid, &child);
 	if (child == NULL) {
 		D_DEBUG(DB_MD, DF_UUID": Pool child isn't found.", DP_UUID(pool->sp_uuid));
 		return 0;
@@ -1774,7 +1781,7 @@ update_child_map(void *data)
 
 	ds_cont_child_reset_ec_agg_eph_all(child);
 	child->spc_map_version = pool->sp_map_version;
-	ds_pool_child_put(child);
+	DS_POOL_CHILD_PUT(&child);
 	return 0;
 }
 
@@ -1950,7 +1957,7 @@ update_vos_prop_on_targets(void *in)
 	uint32_t                    df_version;
 	int                         ret = 0;
 
-	child = ds_pool_child_lookup(pool->sp_uuid);
+	DS_POOL_CHILD_LOOKUP(pool->sp_uuid, &child);
 	if (child == NULL)
 		return -DER_NONEXIST;	/* no child created yet? */
 
@@ -1983,7 +1990,7 @@ update_vos_prop_on_targets(void *in)
 	}
 	child->spc_reint_mode = pool->sp_reint_mode;
 out:
-	ds_pool_child_put(child);
+	DS_POOL_CHILD_PUT(&child);
 
 	return ret;
 }
@@ -2321,7 +2328,7 @@ pool_child_discard(void *data)
 	 * It is important to note that manual reintegration may be initiated
 	 * before step 3, in which case, the function should return “DER_AGAIN."
 	 */
-	child = ds_pool_child_lookup(arg->pool_uuid);
+	DS_POOL_CHILD_LOOKUP(arg->pool_uuid, &child);
 	if (child == NULL)
 		return -DER_AGAIN;
 
@@ -2348,7 +2355,7 @@ pool_child_discard(void *data)
 
 	d_backoff_seq_fini(&backoff_seq);
 
-	ds_pool_child_put(child);
+	DS_POOL_CHILD_PUT(&child);
 
 	return rc;
 }
