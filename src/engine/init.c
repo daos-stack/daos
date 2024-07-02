@@ -1191,6 +1191,7 @@ main(int argc, char **argv)
 	sigdelset(&set, SIGFPE);
 	sigdelset(&set, SIGBUS);
 	sigdelset(&set, SIGSEGV);
+	sigdelset(&set, SIGTRAP);
 	/** also allow abort()/assert() to trigger */
 	sigdelset(&set, SIGABRT);
 
@@ -1281,6 +1282,8 @@ main(int argc, char **argv)
 		if (sig == SIGUSR1) {
 			D_INFO("got SIGUSR1, dumping Argobots infos and ULTs stacks\n");
 			dss_dump_ABT_state(abt_infos);
+			/* re-add SIGUSR2 to set */
+			sigaddset(&set, SIGUSR1);
 			continue;
 		}
 
@@ -1292,6 +1295,8 @@ main(int argc, char **argv)
 			ABT_info_trigger_print_all_thread_stacks(abt_infos,
 								 10.0, NULL,
 								 NULL);
+			/* re-add SIGUSR2 to set */
+			sigaddset(&set, SIGUSR2);
 			continue;
 		}
 
