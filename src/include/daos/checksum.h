@@ -334,13 +334,12 @@ daos_csummer_calc_key(struct daos_csummer *csummer, daos_key_t *key,
  */
 int
 daos_csummer_verify_iods(struct daos_csummer *obj, daos_iod_t *iods, d_sg_list_t *sgls,
-			 struct dcs_iod_csums *iods_csum, uint32_t nr,
-			 struct dcs_layout *singv_lo, int singv_idx, daos_iom_t *map);
+			 struct dcs_iod_csums *iods_csum, uint32_t nr, struct dcs_layout *singv_lo,
+			 int singv_idx, daos_iom_t *map);
 
 int
-daos_csummer_verify_iod(struct daos_csummer *obj, daos_iod_t *iod,
-			d_sg_list_t *sgl, struct dcs_iod_csums *iod_csum,
-			struct dcs_layout *singv_lo, int singv_idx,
+daos_csummer_verify_iod(struct daos_csummer *obj, daos_iod_t *iod, d_sg_list_t *sgl,
+			struct dcs_iod_csums *iod_csum, struct dcs_layout *singv_lo, int singv_idx,
 			daos_iom_t *map);
 
 /**
