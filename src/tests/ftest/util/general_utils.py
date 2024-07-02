@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -1064,30 +1064,21 @@ def get_default_config_file(name):
     return os.path.join(os.sep, "etc", "daos", file_name)
 
 
-def get_file_listing(hosts, files):
-    """Get the file listing from multiple hosts.
+def list_remote_files(log, hosts, files):
+    """List remote files.
 
     Args:
-        hosts (NodeSet): hosts with which to use the clush command
+        log (logger): logger for the messages produced by this method
+        hosts (NodeSet): hosts to list files on
         files (object): list of multiple files to list or a single file as a str
 
     Returns:
-        CmdResult: an avocado.utils.process CmdResult object containing the
-            result of the command execution.  A CmdResult object has the
-            following properties:
-                command         - command string
-                exit_status     - exit_status of the command
-                stdout          - the stdout
-                stderr          - the stderr
-                duration        - command execution time
-                interrupted     - whether the command completed within timeout
-                pid             - command's pid
+        RemoteCommandResult: a grouping of the command results from the same hosts with the same
+            return status
 
     """
-    ls_command = "/usr/bin/ls -la {}".format(convert_string(files, " "))
-    command = get_clush_command(hosts, args="-S -v", command=ls_command, command_sudo=True)
-    result = run_command(command, verbose=False, raise_exception=False)
-    return result
+    ls_command = f"/usr/bin/ls -la {convert_string(files, ' ')}"
+    return run_remote(log, hosts, ls_command)
 
 
 def get_subprocess_stdout(subprocess):
