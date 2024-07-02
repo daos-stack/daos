@@ -211,8 +211,12 @@ check_for_uns_ep(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, ch
 	}
 	ie->ie_obj = NULL;
 
+	ie->ie_obj = 0;
+
+	/* This is where a I/O failure will happen when accessing a idle but evicted container */
 	rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, &ie->ie_stat);
 	if (rc) {
+		ie->ie_stat.st_ino = dfs->dfs_ino;
 		if (rc == EINVAL) {
 			rc = ENOLINK;
 			DHS_INFO(dfs, rc, "dfs_lookup() failed");
@@ -247,8 +251,7 @@ out_err:
 }
 
 void
-dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
-		const char *name)
+dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name)
 {
 	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
 	struct dfuse_inode_entry *ie;
@@ -256,6 +259,9 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	char                      out[DUNS_MAX_XATTR_LEN];
 	char                     *outp     = &out[0];
 	daos_size_t               attr_len = DUNS_MAX_XATTR_LEN;
+	bool                      evict    = false;
+	ino_t                     pinode   = parent->ie_stat.st_ino;
+	ino_t                     cinode   = 0;
 
 	DFUSE_TRA_DEBUG(parent, "Parent:%#lx " DF_DE, parent->ie_stat.st_ino, DP_DE(name));
 
@@ -286,14 +292,21 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 
-	dfuse_compute_inode(ie->ie_dfs, &ie->ie_oid,
-			    &ie->ie_stat.st_ino);
+	dfuse_compute_inode(ie->ie_dfs, &ie->ie_oid, &ie->ie_stat.st_ino);
 
 	if (S_ISDIR(ie->ie_stat.st_mode) && attr_len) {
 		rc = check_for_uns_ep(dfuse_info, ie, out, attr_len);
 		DFUSE_TRA_DEBUG(ie, "check_for_uns_ep() returned %d", rc);
-		if (rc != 0)
-			D_GOTO(out_release, rc);
+		if (rc != 0) {
+			/* At this point, we know the dentry exists but there's an error, so try and
+			 * evict the dentry afterwards
+			 */
+			if (rc == EINVAL || rc == EIO) {
+				evict  = true;
+				cinode = ie->ie_stat.st_ino;
+			}
+			goto out_release;
+		}
 	}
 
 	dfuse_reply_entry(dfuse_info, ie, NULL, false, req);
@@ -308,4 +321,23 @@ out:
 		DFUSE_REPLY_NO_ENTRY(parent, req, parent->ie_dfs->dfc_ndentry_timeout);
 	else
 		DFUSE_REPLY_ERR_RAW(parent, req, rc);
+
+	if (evict) {
+		D_INFO("Calling inval_entry %#lx " DF_DE " cinode %#lx", pinode, DP_DE(name),
+		       cinode);
+		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, pinode, name,
+						      strnlen(name, NAME_MAX));
+		if (rc && rc != -ENOENT)
+			DS_ERROR(-rc, "inval_entry() failed");
+
+		if (cinode != 0) {
+			rc = fuse_lowlevel_notify_inval_inode(dfuse_info->di_session, cinode, 0, 0);
+			if (rc && rc != -ENOENT)
+				DS_ERROR(-rc, "inval_inode() cinode %#lx failed", cinode);
+		}
+
+		rc = fuse_lowlevel_notify_inval_inode(dfuse_info->di_session, pinode, 0, 0);
+		if (rc && rc != -ENOENT)
+			DS_ERROR(-rc, "inval_inode() pinode %#lx failed", pinode);
+	}
 }
