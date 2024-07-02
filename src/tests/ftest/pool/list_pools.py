@@ -44,8 +44,8 @@ class ListPoolsTest(TestWithServers):
         # Remove the default ACLs that allow the creator to access the pool.
         # These ACLs don't apply to dmg, but do apply to users.
         offlimits = self.pool[0]
-        self.get_dmg_command().pool_delete_acl(offlimits.uuid, 'OWNER@')
-        self.get_dmg_command().pool_delete_acl(offlimits.uuid, 'GROUP@')
+        offlimits.delete_acl('OWNER@')
+        offlimits.delete_acl('GROUP@')
         expected_user_uuids = expected_admin_uuids.copy()
         del expected_user_uuids[offlimits.uuid.lower()]
 
