@@ -491,9 +491,27 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (rc != 0)
 		goto reset;
 
-	/* Commit the CoS DTXs via the PUNCH PMDK transaction. */
-	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0 &&
-	    !dth->dth_cos_done) {
+	/*
+	 * NOTE: For non-leader, commit the CoS DTX via current IO local transaction.
+	 *	 As for leader case, related DTX in CoS cache must be committable, it
+	 *	 will not affect related data visibility even if we do not commit it.
+	 *
+	 *	 On the other hand, if the DTX leader commit the DTX in CoS cache via
+	 *	 current IO local transaction but some non-leader failed to commit it,
+	 *	 then we will miss to commit related DTX on those non-leader(s) under
+	 *	 the following conditions:
+	 *
+	 *	 1. The leader is restart, then lost original CoS cache.
+	 *	 2. The committed DTX entry on leader is removed by DTX aggregation.
+	 *
+	 *	 So for leader case, we will keep it in CoS cache until the up layer
+	 *	 DTX batched commit logic to commit it explicitly. If all non-leaders
+	 *	 have committed related DTX via some forwarded IO RPC piggyback, then
+	 *	 related batched commit will be local operation without additional RPCs.
+	 *	 That will not cause too much overhead.
+	 */
+	if (dtx_is_valid_handle(dth) && !(dth->dth_flags & DTE_LEADER) &&
+	    dth->dth_dti_cos_count > 0 && !dth->dth_cos_done) {
 		D_ALLOC_ARRAY(daes, dth->dth_dti_cos_count);
 		if (daes == NULL)
 			D_GOTO(reset, rc = -DER_NOMEM);

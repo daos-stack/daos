@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -49,10 +49,8 @@ enum dtx_grp_flags {
 };
 
 enum dtx_mbs_flags {
-	/* The targets being modified via the DTX belong to a replicated
-	 * object within single redundancy group.
-	 */
-	DMF_SRDG_REP			= (1 << 0),
+	/* The targets being modified via the DTX belong to a single redundancy group. */
+	DMF_SRDG			= (1 << 0),
 	/* The MBS contains the DTX leader information, usually used for
 	 * distributed transaction. In old release (before 2.4), for some
 	 * stand-alone modification, leader information may be not stored
