@@ -271,8 +271,11 @@ func (m srvMethod) ID() int32 {
 
 func (m srvMethod) String() string {
 	if s, ok := map[srvMethod]string{
-		MethodNotifyReady:  "notify ready",
-		MethodClusterEvent: "cluster event",
+		MethodNotifyReady:         "notify ready",
+		MethodClusterEvent:        "cluster event",
+		MethodGetPoolServiceRanks: "get pool service ranks",
+		MethodPoolFindByLabel:     "find pool by label",
+		MethodListPools:           "list pools",
 	}[m]; ok {
 		return s
 	}
@@ -301,13 +304,15 @@ const (
 	// MethodClusterEvent notifies of a cluster event in the I/O Engine.
 	MethodClusterEvent srvMethod = C.DRPC_METHOD_SRV_CLUSTER_EVENT
 	// MethodCheckerListPools requests the list of pools from the MS
-	MethodCheckerListPools srvMethod = C.DRPC_METHOD_CHK_LIST_POOL
+	MethodCheckerListPools srvMethod = C.DRPC_METHOD_CHK_LIST_POOL // TODO (DAOS-16126): Merge with MethodListPools
 	// MethodCheckerRegisterPool registers a pool with the MS
 	MethodCheckerRegisterPool srvMethod = C.DRPC_METHOD_CHK_REG_POOL
 	// MethodCheckerDeregisterPool deregisters a pool with the MS
 	MethodCheckerDeregisterPool srvMethod = C.DRPC_METHOD_CHK_DEREG_POOL
 	// MethodCheckerReport reports a checker finding to the MS
 	MethodCheckerReport srvMethod = C.DRPC_METHOD_CHK_REPORT
+	// MethodListPools requests the list of pools in the system
+	MethodListPools srvMethod = C.DRPC_METHOD_SRV_LIST_POOLS
 )
 
 type securityMethod int32

@@ -20,6 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -118,6 +119,20 @@ func uuidToC(in uuid.UUID) (out C.uuid_t) {
 
 func uuidFromC(cUUID C.uuid_t) (uuid.UUID, error) {
 	return uuid.FromBytes(C.GoBytes(unsafe.Pointer(&cUUID[0]), C.int(len(cUUID))))
+}
+
+func rankSetFromC(cRankList *C.d_rank_list_t) (*ranklist.RankSet, error) {
+	if cRankList == nil {
+		return nil, errors.New("nil ranklist")
+	}
+
+	cRankSlice := unsafe.Slice(cRankList.rl_ranks, cRankList.rl_nr)
+	rs := ranklist.NewRankSet()
+	for _, cRank := range cRankSlice {
+		rs.Add(ranklist.Rank(cRank))
+	}
+
+	return rs, nil
 }
 
 func iterStringsBuf(cBuf unsafe.Pointer, expected C.size_t, cb func(string)) error {

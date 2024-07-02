@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -637,7 +637,11 @@ class CommandWithSubCommand(ExecutableCommand):
         if sub_command_list is not None:
             for sub_command in sub_command_list:
                 full_command.set_sub_command(sub_command)
-                full_command = full_command.sub_command_class
+
+                if full_command.sub_command_class is not None:
+                    full_command = full_command.sub_command_class
+                else:
+                    raise CommandFailure(f"invalid sub command: {sub_command}")
 
         # Update any argument values for the full command
         full_command.update_params(**kwargs)

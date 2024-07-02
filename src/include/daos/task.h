@@ -16,6 +16,8 @@
 #include <daos/common.h>
 #include <daos_task.h>
 
+/* clang-format off */
+
 /* size of daos_task_args should within limitation of TSE_TASK_ARG_LEN */
 struct daos_task_args {
 	uint32_t			ta_magic;
@@ -26,6 +28,7 @@ struct daos_task_args {
 		daos_pool_replicas_t	pool_add_replicas;
 		daos_pool_replicas_t	pool_remove_replicas;
 		daos_mgmt_get_bs_state_t mgmt_get_bs_state;
+		daos_mgmt_pool_list_t	mgmt_pool_list;
 
 		/** Pool */
 		daos_pool_connect_t	pool_connect;
@@ -106,6 +109,8 @@ struct daos_task_args {
 	}		 ta_u;
 	daos_event_t	*ta_ev;
 };
+
+/* clang-format on */
 
 /**
  * Push to task stack space. This API only reserves space on the task stack, no
