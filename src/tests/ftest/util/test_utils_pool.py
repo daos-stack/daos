@@ -221,6 +221,7 @@ class TestPool(TestDaosApiBase):
         self.prop_value = BasicParameter(None)      # value of property
         self.properties = BasicParameter(None)      # string of cs name:value
         self.rebuild_timeout = BasicParameter(None)
+        self.rebuild_query_delay = BasicParameter(0)
         self.pool_query_timeout = BasicParameter(None)
         self.pool_query_delay = BasicParameter(None)
         self.acl_file = BasicParameter(None)
@@ -1354,7 +1355,7 @@ class TestPool(TestDaosApiBase):
                         "TIMEOUT detected after {} seconds while for waiting for rebuild to be {}. "
                         "This timeout can be adjusted via the 'pool/rebuild_timeout' test yaml "
                         "parameter.".format(self.rebuild_timeout.value, expected))
-            sleep(interval)
+            sleep(interval + self.rebuild_query_delay.value)
             self._update_rebuild_data()
 
         self.log.info("Wait for rebuild complete: rebuild %s", self._rebuild_data["check"])
