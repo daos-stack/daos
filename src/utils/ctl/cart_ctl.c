@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -431,8 +431,12 @@ ctl_cli_cb(const struct crt_cb_info *cb_info)
 
 	cmd_str = cmd2str(info->cmd);
 
-	if (cb_info->cci_rc != 0)
-		error_exit("command %s failed with rc=%d\n", cmd_str, cb_info->cci_rc);
+	if (cb_info->cci_rc != 0) {
+		msg("command %s (target=%d:%d) failed with rc=%d\n", cmd_str,
+		    cb_info->cci_rpc->cr_ep.ep_rank, cb_info->cci_rpc->cr_ep.ep_tag,
+		    cb_info->cci_rc);
+		goto out;
+	}
 
 	switch (info->cmd) {
 	case CMD_ENABLE_FI:
@@ -524,6 +528,7 @@ ctl_cli_cb(const struct crt_cb_info *cb_info)
 		break;
 	}
 
+out:
 	sem_post(&ctl_gdata.cg_num_reply);
 }
 
@@ -614,8 +619,11 @@ ctl_init()
 	d_rank_t		*ranks_to_send = NULL;
 	d_rank_list_t		*rank_list = NULL;
 	int			 num_ranks;
+	/* wait times for sync. see crtu_wait_for_ranks() below */
 	int			 wait_time = 60;
 	int			 total_wait = 150;
+	/* Set low rpc timeout to avoid delays when pinging dead targets */
+	int                      rpc_timeout = 3;
 	int			 rc = 0;
 
 	if (D_ON_VALGRIND) {
@@ -644,8 +652,19 @@ ctl_init()
 		rc = crtu_wait_for_ranks(ctl_gdata.cg_crt_ctx, grp, rank_list,
 					 0 /* tag */, 1 /* num contexts to query */,
 					 wait_time, total_wait);
-		if (rc != 0)
-			error_exit("Connection timeout; rc=%d\n", rc);
+		if (rc != 0) {
+			/*
+			 * When invoked to use daos_agent, the ranks retrieved can contain already
+			 * dead ranks in some tests due to agent caching. As such, wait for such
+			 * ranks can fail and should not be considered a fatal error. For non-daos
+			 * usages, list of ranks is static. If any rank is not present in such
+			 * situation then it indicates an actual error.
+			 */
+			if (ctl_gdata.cg_use_daos_agent_env)
+				msg("crtu_wait_for_ranks() failed with rc=%d\n", rc);
+			else
+				error_exit("crtu_wait_for_ranks() failed with rc=%d\n", rc);
+		}
 	}
 
 	ctl_gdata.cg_target_group = grp;
@@ -707,14 +726,18 @@ ctl_init()
 		D_DEBUG(DB_NET, "rpc_req %p rank %d tag %d seq %d\n",
 			rpc_req, ep.ep_rank, ep.ep_tag, i);
 
+		/* Set short timeout to not delay for long in case the rank is not present */
+		rc = crt_req_set_timeout(rpc_req, rpc_timeout);
+		if (rc != 0)
+			error_exit("failed to set rpc timeout; rc=%d\n", rc);
+
 		rc = crt_req_send(rpc_req, ctl_cli_cb, &info);
 		if (rc != 0)
 			error_exit("Failed to send RPC; rc=%d\n", rc);
 
 		rc = crtu_sem_timedwait(&ctl_gdata.cg_num_reply, wait_time, __LINE__);
 		if (rc != 0)
-			error_exit("No response from the server after %d sec; rc=%d\n",
-				   wait_time, rc);
+			msg("No response from the server after %d sec; rc=%d\n", wait_time, rc);
 	}
 
 	d_rank_list_free(rank_list);
