@@ -91,7 +91,14 @@ print_backtrace(int signo, siginfo_t *info, void *p)
 		PRINT_ERROR("No useful backtrace available");
 	}
 
-	/* re-register old handler */
+	/* re-register old handler
+	 *
+	 * XXX we may choose to forget about old handler and simply register
+	 * signal again as SIG_DFL and raise it for corefile creation
+	 *
+	 * XXX will old handler get accurate/original siginfo_t/ucontext_t ?
+	 * should we instead call it with the same params we got ?
+	 */
 	rc = sigaction(signo, &old_handlers[signo], NULL);
 	if (rc != 0) {
 		D_ERROR("sigaction() failure registering new and reading old %d signal handler",
@@ -102,17 +109,8 @@ print_backtrace(int signo, siginfo_t *info, void *p)
 		exit(EXIT_FAILURE);
 	}
 
-	/* XXX we may choose to forget about old handler and simply register
-	 * signal again as SIG_DFL and raise it for corefile creation
-	 */
-	if (old_handlers[signo].sa_sigaction != NULL || old_handlers[signo].sa_handler != SIG_IGN) {
-		/* XXX will old handler get accurate siginfo_t/ucontext_t ?
-		 * we may prefer to call it with the same params we got ?
-		 */
-		raise(signo);
-	}
-
-	memset(&old_handlers[signo], 0, sizeof(struct sigaction));
+	/* raise signal again for either old handler or system default action */
+	raise(signo);
 }
 
 static bool register_handler = false;
@@ -142,6 +140,7 @@ d_signal_register()
 	daos_register_sighand(SIGBUS, print_backtrace);
 	daos_register_sighand(SIGSEGV, print_backtrace);
 	daos_register_sighand(SIGABRT, print_backtrace);
+	daos_register_sighand(SIGTRAP, print_backtrace);
 
 	registered = true;
 }
