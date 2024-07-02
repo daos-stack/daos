@@ -195,7 +195,7 @@ def combine(jobs: Dict, fname: str) -> None:
         data[key] = values
     df = pd.DataFrame(data=data)
     df.to_excel(f'{fname}.xlsx', index=False)
-    print(f'File has been writte: {fname}.xlsx')
+    print(f'File has been written: {fname}.xlsx')
 
 
 def get_repo(token: str) -> github.Repository:
