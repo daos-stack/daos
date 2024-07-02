@@ -1396,6 +1396,7 @@ struct scrub_ctx_metrics {
 	struct d_tm_node_t	*scm_bytes_scrubbed_total;
 	struct d_tm_node_t	*scm_corruption;
 	struct d_tm_node_t	*scm_corruption_total;
+	struct d_tm_node_t	*scm_read_error_total;
 	struct d_tm_node_t	*scm_scrub_count;
 	struct timespec		 scm_busy_start;
 
