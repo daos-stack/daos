@@ -280,7 +280,8 @@ class Launch():
             else:
                 set_test_environment(
                     logger, test_env, args.test_servers, args.test_clients, args.provider,
-                    args.insecure_mode, self.details, args.agent_user, args.test_log_dir)
+                    args.insecure_mode, self.details, args.agent_user, args.test_log_dir,
+                    args.server_ld_lib)
         except TestEnvironmentException as error:
             message = f"Error setting up test environment: {str(error)}"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
@@ -649,6 +650,12 @@ def main():
         "-si", "--slurm_install",
         action="store_true",
         help="enable installing slurm RPMs if required by the tests")
+    parser.add_argument(
+        "-sl", "--server_ld_lib",
+        action="store",
+        default=None,
+        type=str,
+        help="LD_LIBRARY_PATH environment variable to use in the daos_server config file")
     parser.add_argument(
         "--scm_mount",
         action="store",

@@ -108,6 +108,7 @@ class TestEnvironment():
         'bullseye_file': 'COVFILE',
         'daos_prefix': 'DAOS_TEST_PREFIX',
         'agent_user': 'DAOS_TEST_AGENT_USER',
+        'server_ld_library_path': 'DAOS_TEST_SERVER_LD_LIBRARY_PATH',
     }
 
     def __init__(self):
@@ -115,7 +116,7 @@ class TestEnvironment():
         self.set_defaults(None)
 
     def set_defaults(self, logger, servers=None, clients=None, provider=None, insecure_mode=None,
-                     agent_user=None, log_dir=None):
+                     agent_user=None, log_dir=None, server_ld_lib=None):
         """Set the default test environment variable values with optional inputs.
 
         Args:
@@ -130,6 +131,7 @@ class TestEnvironment():
             agent_user (str, optional): user account to use when running the daos_agent. Defaults
                 to None.
             log_dir (str, optional): test log directory base path. Defaults to None.
+            server_ld_lib (str, optional): ld library path for daos_server. Defaults to None.
 
         Raises:
             TestEnvironmentException: if there are any issues setting environment variable default
@@ -148,6 +150,8 @@ class TestEnvironment():
             self.insecure_mode = insecure_mode
         if agent_user is not None:
             self.agent_user = agent_user
+        if server_ld_lib is not None:
+            self.server_ld_library_path = server_ld_lib
 
         # Set defaults for any unset values
         if self.log_dir is None:
@@ -172,6 +176,8 @@ class TestEnvironment():
             self.daos_prefix = self._default_daos_prefix(logger)
         if self.agent_user is None:
             self.agent_user = self._default_agent_user()
+        if self.server_ld_library_path is None:
+            self.server_ld_library_path = self._default_server_ld_library_path()
 
     def __set_value(self, key, value):
         """Set the test environment variable.
@@ -553,7 +559,7 @@ class TestEnvironment():
         """Get the daos_agent user.
 
         Returns:
-            str: the user directory path
+            str: the daos_agent user
         """
         return os.environ.get(self.__ENV_VAR_MAP['agent_user'])
 
@@ -562,7 +568,7 @@ class TestEnvironment():
         """Set the daos_agent user.
 
         Args:
-            value (str): the agent user
+            value (str): the daos_agent user
         """
         self.__set_value('agent_user', value)
 
@@ -575,9 +581,37 @@ class TestEnvironment():
         """
         return 'root'
 
+    @property
+    def server_ld_library_path(self):
+        """Get the daos_server LD_LIBRARY_PATH.
+
+        Returns:
+            str: the daos_server LD_LIBRARY_PATH
+        """
+        return os.environ.get(self.__ENV_VAR_MAP['server_ld_library_path'])
+
+    @server_ld_library_path.setter
+    def server_ld_library_path(self, value):
+        """Set the daos_server LD_LIBRARY_PATH.
+
+        Args:
+            value (str): the daos_server LD_LIBRARY_PATH
+        """
+        self.__set_value('server_ld_library_path', value)
+
+    @staticmethod
+    def _default_server_ld_library_path():
+        """Get the default daos_server LD_LIBRARY_PATH.
+
+        Returns:
+            str: the default daos_server LD_LIBRARY_PATH
+        """
+        return None
+
 
 def set_test_environment(logger, test_env=None, servers=None, clients=None, provider=None,
-                         insecure_mode=False, details=None, agent_user=None, log_dir=None):
+                         insecure_mode=False, details=None, agent_user=None, log_dir=None,
+                         server_ld_lib=None):
     """Set up the test environment.
 
     Args:
@@ -595,6 +629,7 @@ def set_test_environment(logger, test_env=None, servers=None, clients=None, prov
         agent_user (str, optional): user account to use when running the daos_agent. Defaults to
             None.
         log_dir (str, optional): test log directory base path. Defaults to None.
+        server_ld_lib (str, optional): ld library path for daos_server. Defaults to None.
 
     Raises:
         TestEnvironmentException: if there is a problem setting up the test environment
@@ -606,7 +641,7 @@ def set_test_environment(logger, test_env=None, servers=None, clients=None, prov
     if test_env:
         # Get the default fabric interface, provider, and daos prefix
         test_env.set_defaults(
-            logger, servers, clients, provider, insecure_mode, agent_user, log_dir)
+            logger, servers, clients, provider, insecure_mode, agent_user, log_dir, server_ld_lib)
         logger.info("Testing with interface:   %s", test_env.interface)
         logger.info("Testing with provider:    %s", test_env.provider)
         logger.info("Testing with daos_prefix: %s", test_env.daos_prefix)
