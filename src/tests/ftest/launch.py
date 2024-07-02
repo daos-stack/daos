@@ -585,7 +585,7 @@ def main():
         help="modify the test yaml files but do not run the tests")
     parser.add_argument(
         "-mo", "--mode",
-        choices=['normal', 'manual', 'ci', 'agent_user'],
+        choices=['normal', 'manual', 'ci', 'custom_a'],
         default='normal',
         help="provide the mode of test to be run under. Default is normal, "
              "in which the final return code of launch.py is still zero if "
@@ -762,7 +762,7 @@ def main():
         args.clear_mounts.append("/mnt/daos0")
         args.clear_mounts.append("/mnt/daos1")
 
-    elif args.mode == "agent_user":
+    elif args.mode == "custom_a":
         if args.agent_user is None:
             # Run the agent with the current user by default
             args.agent_user = getpass.getuser()
