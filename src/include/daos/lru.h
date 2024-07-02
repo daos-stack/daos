@@ -27,13 +27,18 @@ struct daos_llink_ops {
 	uint32_t (*lop_rec_hash)(struct daos_llink *link);
 	/** Optional print_key function for debugging */
 	void	 (*lop_print_key)(void *key, unsigned int ksize);
+	/** Optional wait for last ref */
+	void	 (*lop_wait)(struct daos_llink *llink);
+	/** Optional wake up if it is last ref */
+	void	 (*lop_wakeup)(struct daos_llink *llink);
 };
 
 struct daos_llink {
 	d_list_t		 ll_link;	/**< LRU hash link */
 	d_list_t		 ll_qlink;	/**< Temp link for traverse */
 	uint32_t		 ll_ref;	/**< refcount for this ref */
-	uint32_t		 ll_evicted:1;	/**< has been evicted */
+	uint32_t		 ll_evicted:1,	/**< has been evicted */
+				 ll_evicting:1; /**< been evicting */
 	struct daos_llink_ops	*ll_ops;	/**< ops to maintain refs */
 };
 
@@ -114,6 +119,17 @@ daos_lru_ref_hold(struct daos_lru_cache *lcache, void *key, unsigned int ksize,
  */
 void
 daos_lru_ref_release(struct daos_lru_cache *lcache, struct daos_llink *llink);
+
+/**
+ * Evicts the LRU link from the DAOS LRU cache after waiting
+ * for all references to be released.
+ *
+ * \param[in] lcache		DAOS LRU cache
+ * \param[in] llink		DAOS LRU link to be evicted
+ *
+ */
+void
+daos_lru_ref_wait_evict(struct daos_lru_cache *lcache, struct daos_llink *llink);
 
 /**
  * Flush old items from LRU.
