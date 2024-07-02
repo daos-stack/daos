@@ -57,6 +57,7 @@ lookup_rel_path(dfs_t *dfs, dfs_obj_t *root, const char *path, int flags, dfs_ob
 	obj->d.oclass     = root->d.oclass;
 	obj->d.chunk_size = root->d.chunk_size;
 	obj->mode         = root->mode;
+	obj->dfs          = dfs;
 	strncpy(obj->name, root->name, DFS_MAX_NAME + 1);
 
 	rc = daos_obj_open(dfs->coh, obj->oid, daos_mode, &obj->oh, NULL);
@@ -441,6 +442,7 @@ lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags, dfs_o
 	oid_cp(&obj->parent_oid, parent->oid);
 	oid_cp(&obj->oid, entry.oid);
 	obj->mode = entry.mode;
+	obj->dfs  = dfs;
 
 	/** if entry is a file, open the array object and return */
 	switch (entry.mode & S_IFMT) {
