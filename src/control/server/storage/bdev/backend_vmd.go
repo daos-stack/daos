@@ -158,13 +158,14 @@ func DetectVMD() (*hardware.PCIAddressSet, error) {
 	vmdCmd.Stdin, _ = lspciCmd.StdoutPipe()
 	vmdCmd.Stdout = &cmdOut
 	if err := lspciCmd.Start(); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "lspci start")
 	}
 	if err := vmdCmd.Run(); err != nil {
-		return nil, err
+		// Grep will return 1 if no results.
+		return hardware.NewPCIAddressSet()
 	}
 	if err := lspciCmd.Wait(); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "lspci wait")
 	}
 
 	if cmdOut.Len() == 0 {
