@@ -26,7 +26,6 @@ class HarnessBasicTest(TestWithoutServers):
         :avocado: tags=harness,harness_basic_test
         :avocado: tags=HarnessBasicTest,always_fails,test_always_fails
         """
-
         self.fail("NOOP test to do nothing but fail")
 
     def test_always_fails_hw(self):
