@@ -208,7 +208,7 @@ self_test_init(char *dest_name, crt_context_t *crt_ctx, crt_group_t **srv_grp, p
 	 * 60 - ping timeout
 	 * 120 - total timeout
 	 */
-	/* Only pre-ping ranks if not using agent, and user didnt ask for no-sync  */
+	/* Only pre-ping ranks if not using agent, and user didn't ask for no-sync  */
 	if (!use_agent && !no_sync) {
 		ret = crtu_wait_for_ranks(*crt_ctx, *srv_grp, rank_list, 0, 1, 60, 120);
 		D_ASSERTF(ret == 0, "wait_for_ranks() failed; ret=%d\n", ret);
