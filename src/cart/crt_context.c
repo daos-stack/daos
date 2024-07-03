@@ -317,8 +317,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 
 		ret = d_tm_add_metric(&ctx->cc_quotas.rpc_waitq_depth, D_TM_GAUGE,
 				      "Current count of enqueued RPCs", "rpcs",
-				      "net/%s/waitq_depth/ctx_%u",
-				      prov, ctx->cc_idx);
+				      "net/%s/waitq_depth/ctx_%u", prov, ctx->cc_idx);
 		if (ret)
 			DL_WARN(rc, "Failed to create rpc waitq gauge");
 
