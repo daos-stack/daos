@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -704,9 +704,6 @@ fail:
 	ABT_mutex_unlock(cont->sc_mutex);
 
 out:
-	if (!dtx_cont_opened(cont))
-		stop_dtx_reindex_ult(cont);
-
 	D_DEBUG(DB_MD, "Exit DTX resync (%s) for "DF_UUID"/"DF_UUID" with ver %u, rc = %d\n",
 		block ? "block" : "non-block", DP_UUID(po_uuid), DP_UUID(co_uuid), ver, rc);
 
@@ -751,8 +748,8 @@ dtx_resync_one(void *data)
 {
 	struct dtx_scan_args		*arg = data;
 	struct ds_pool_child		*child;
-	vos_iter_param_t		 param = { 0 };
-	struct vos_iter_anchors		 anchor = { 0 };
+	vos_iter_param_t		*param = NULL;
+	struct vos_iter_anchors		*anchor = NULL;
 	struct dtx_container_scan_arg	 cb_arg = { 0 };
 	int				 rc;
 
@@ -760,14 +757,26 @@ dtx_resync_one(void *data)
 	if (child == NULL)
 		D_GOTO(out, rc = -DER_NONEXIST);
 
+	D_ALLOC_PTR(param);
+	if (param == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	D_ALLOC_PTR(anchor);
+	if (anchor == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
 	cb_arg.arg = *arg;
-	param.ip_hdl = child->spc_hdl;
-	param.ip_flags = VOS_IT_FOR_MIGRATION;
-	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
+	param->ip_hdl = child->spc_hdl;
+	param->ip_flags = VOS_IT_FOR_MIGRATION;
+	rc = vos_iterate(param, VOS_ITER_COUUID, false, anchor,
 			 container_scan_cb, NULL, &cb_arg, NULL);
 
-	ds_pool_child_put(child);
 out:
+	D_FREE(param);
+	D_FREE(anchor);
+	if (child != NULL)
+		ds_pool_child_put(child);
+
 	D_DEBUG(DB_TRACE, DF_UUID" iterate pool done: rc %d\n",
 		DP_UUID(arg->pool_uuid), rc);
 

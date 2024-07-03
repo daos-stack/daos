@@ -319,6 +319,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 
 	if (unlikely(DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG) ||
 		     DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG_FAIL) ||
+		     DAOS_FAIL_CHECK(DAOS_OBJ_EC_AGG_LEADER_DIFF) ||
 		     DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG_PEER_FAIL)))
 		interval = 0;
 	else
@@ -627,13 +628,18 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 	rc = ABT_cond_create(&cont->sc_scrub_cond);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
-		goto out_mutex;
+		goto out_resync_cond;
+	}
+	rc = ABT_cond_create(&cont->sc_rebuild_cond);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto out_scrub_cond;
 	}
 
 	cont->sc_pool = ds_pool_child_lookup(po_uuid);
 	if (cont->sc_pool == NULL) {
 		rc = -DER_NO_HDL;
-		goto out_cond;
+		goto out_rebuild_cond;
 	}
 
 	rc = vos_cont_open(cont->sc_pool->spc_hdl, co_uuid, &cont->sc_hdl);
@@ -659,7 +665,11 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 
 out_pool:
 	ds_pool_child_put(cont->sc_pool);
-out_cond:
+out_rebuild_cond:
+	ABT_cond_free(&cont->sc_rebuild_cond);
+out_scrub_cond:
+	ABT_cond_free(&cont->sc_scrub_cond);
+out_resync_cond:
 	ABT_cond_free(&cont->sc_dtx_resync_cond);
 out_mutex:
 	ABT_mutex_free(&cont->sc_mutex);
@@ -686,6 +696,7 @@ cont_child_free_ref(struct daos_llink *llink)
 	D_FREE(cont->sc_snapshots);
 	ABT_cond_free(&cont->sc_dtx_resync_cond);
 	ABT_cond_free(&cont->sc_scrub_cond);
+	ABT_cond_free(&cont->sc_rebuild_cond);
 	ABT_mutex_free(&cont->sc_mutex);
 	D_FREE(cont);
 }
@@ -740,6 +751,12 @@ ds_cont_child_cache_destroy(struct daos_lru_cache *cache)
 	daos_lru_cache_destroy(cache);
 }
 
+static void
+cont_child_put(struct daos_lru_cache *cache, struct ds_cont_child *cont)
+{
+	daos_lru_ref_release(cache, &cont->sc_list);
+}
+
 /*
  * If create == false, then this is assumed to be a pure lookup. In this case,
  * -DER_NONEXIST is returned if the ds_cont_child object does not exist.
@@ -774,12 +791,6 @@ cont_child_lookup(struct daos_lru_cache *cache, const uuid_t co_uuid,
 	return 0;
 }
 
-static void
-cont_child_put(struct daos_lru_cache *cache, struct ds_cont_child *cont)
-{
-	daos_lru_ref_release(cache, &cont->sc_list);
-}
-
 static inline bool
 cont_child_started(struct ds_cont_child *cont_child)
 {
@@ -805,13 +816,17 @@ cont_child_stop(struct ds_cont_child *cont_child)
 	/* Some ds_cont_child will only created by ds_cont_child_lookup().
 	 * never be started at all
 	 */
+	cont_child->sc_stopping = 1;
+
+	/* Stop DTX reindex by force. */
+	stop_dtx_reindex_ult(cont_child, true);
+
 	if (cont_child_started(cont_child)) {
 		D_DEBUG(DB_MD, DF_CONT"[%d]: Stopping container\n",
 			DP_CONT(cont_child->sc_pool->spc_uuid,
 				cont_child->sc_uuid),
 			dss_get_module_info()->dmi_tgt_id);
 
-		cont_child->sc_stopping = 1;
 		d_list_del_init(&cont_child->sc_link);
 
 		dtx_cont_deregister(cont_child);
@@ -1164,6 +1179,7 @@ cont_child_destroy_one(void *vin)
 				       &cont);
 		if (rc == -DER_NONEXIST)
 			break;
+
 		if (rc != 0)
 			D_GOTO(out_pool, rc);
 
@@ -1187,16 +1203,18 @@ cont_child_destroy_one(void *vin)
 			ABT_cond_wait(cont->sc_dtx_resync_cond, cont->sc_mutex);
 		ABT_mutex_unlock(cont->sc_mutex);
 
-		/* Give chance to DTX reindex ULT for exit. */
-		if (unlikely(cont->sc_dtx_reindex))
-			ABT_thread_yield();
-
 		/* Make sure checksum scrubbing has stopped */
 		ABT_mutex_lock(cont->sc_mutex);
 		if (cont->sc_scrubbing) {
 			sched_req_wakeup(cont->sc_pool->spc_scrubbing_req);
 			ABT_cond_wait(cont->sc_scrub_cond, cont->sc_mutex);
 		}
+		ABT_mutex_unlock(cont->sc_mutex);
+
+		/* Make sure rebuild has stopped */
+		ABT_mutex_lock(cont->sc_mutex);
+		if (cont->sc_rebuilding)
+			ABT_cond_wait(cont->sc_rebuild_cond, cont->sc_mutex);
 		ABT_mutex_unlock(cont->sc_mutex);
 
 		retry_cnt++;
@@ -1300,9 +1318,20 @@ ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 		     struct ds_cont_child **ds_cont)
 {
 	struct dsm_tls		*tls = dsm_tls_get();
+	int			 rc;
 
-	return cont_child_lookup(tls->dt_cont_cache, cont_uuid, pool_uuid,
-				 true /* create */, ds_cont);
+	rc = cont_child_lookup(tls->dt_cont_cache, cont_uuid, pool_uuid,
+			       true /* create */, ds_cont);
+	if (rc != 0)
+		return rc;
+
+	if ((*ds_cont)->sc_stopping) {
+		cont_child_put(tls->dt_cont_cache, *ds_cont);
+		*ds_cont = NULL;
+		return -DER_SHUTDOWN;
+	}
+
+	return 0;
 }
 
 /**
@@ -1572,7 +1601,7 @@ err_dtx:
 		  DF_UUID": %d\n", DP_UUID(cont_uuid), hdl->sch_cont->sc_open);
 
 	hdl->sch_cont->sc_open--;
-	dtx_cont_close(hdl->sch_cont);
+	dtx_cont_close(hdl->sch_cont, true);
 
 err_cont:
 	if (daos_handle_is_valid(poh)) {
@@ -1694,7 +1723,7 @@ cont_close_hdl(uuid_t cont_hdl_uuid)
 		D_ASSERT(cont_child->sc_open > 0);
 		cont_child->sc_open--;
 		if (cont_child->sc_open == 0)
-			dtx_cont_close(cont_child);
+			dtx_cont_close(cont_child, false);
 
 		D_DEBUG(DB_MD, DF_CONT": closed (%d): hdl="DF_UUID"\n",
 			DP_CONT(cont_child->sc_pool->spc_uuid, cont_child->sc_uuid),
