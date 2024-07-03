@@ -67,6 +67,8 @@ type Engine interface {
 	SetCheckerMode(bool)
 	Debugf(format string, args ...interface{})
 	Tracef(format string, args ...interface{})
+	GetLastHealthStats() *ctlpb.BioHealthResp
+	SetLastHealthStats(*ctlpb.BioHealthResp)
 }
 
 // EngineHarness is responsible for managing Engine instances.

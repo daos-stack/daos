@@ -15,6 +15,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
@@ -66,10 +67,11 @@ type EngineInstance struct {
 	sync.RWMutex
 	// these must be protected by a mutex in order to
 	// avoid racy access.
-	_drpcSocket string
-	_cancelCtx  context.CancelFunc
-	_superblock *Superblock
-	_lastErr    error // populated when harness receives signal
+	_drpcSocket      string
+	_cancelCtx       context.CancelFunc
+	_superblock      *Superblock
+	_lastErr         error // populated when harness receives signal
+	_lastHealthStats *ctlpb.BioHealthResp
 }
 
 // NewEngineInstance returns an *EngineInstance initialized with its dependencies.
@@ -393,4 +395,18 @@ func (ei *EngineInstance) Debugf(format string, args ...interface{}) {
 
 func (ei *EngineInstance) Tracef(format string, args ...interface{}) {
 	ei.log.Tracef(format, args...)
+}
+
+func (ei *EngineInstance) GetLastHealthStats() *ctlpb.BioHealthResp {
+	ei.RLock()
+	defer ei.RUnlock()
+
+	return ei._lastHealthStats
+}
+
+func (ei *EngineInstance) SetLastHealthStats(bhr *ctlpb.BioHealthResp) {
+	ei.Lock()
+	defer ei.Unlock()
+
+	ei._lastHealthStats = bhr
 }

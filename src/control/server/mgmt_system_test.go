@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -298,11 +299,14 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 }
 
 type eventsDispatched struct {
+	sync.RWMutex
 	rx     []*events.RASEvent
 	cancel context.CancelFunc
 }
 
 func (d *eventsDispatched) OnEvent(ctx context.Context, e *events.RASEvent) {
+	d.Lock()
+	defer d.Unlock()
 	d.rx = append(d.rx, e)
 	d.cancel()
 }
@@ -342,6 +346,8 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 			defer cancel()
 
 			ps := events.NewPubSub(ctx, log)
+			defer ps.Close()
+
 			svc.events = ps
 
 			dispatched := &eventsDispatched{cancel: cancel}
@@ -376,6 +382,9 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
+
+			dispatched.RLock()
+			defer dispatched.RUnlock()
 
 			if diff := cmp.Diff(tc.expDispatched, dispatched.rx, defEvtCmpOpts...); diff != "" {
 				t.Fatalf("unexpected events dispatched (-want, +got)\n%s\n", diff)

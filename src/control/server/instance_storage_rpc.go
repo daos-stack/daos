@@ -187,30 +187,59 @@ func addLinkInfoToHealthStats(prov hardware.PCIeLinkStatsProvider, pciCfg string
 	return nil
 }
 
-func newLinkEvent(id events.RASID, typ, addr, maxVal, negVal string, port uint32) *events.RASEvent {
-	msg := fmt.Sprintf("nvme ssd %q link %s downgraded (port: %d, max: %s, negotiated: %s)",
-		addr, typ, port, maxVal, negVal)
-	return events.NewGenericEvent(id, events.RASSeverityError, msg, "")
+// Only raise events if speed or width state is:
+// - Currently at maximum but was previously downgraded
+// - Currently downgraded but is now at maximum
+// - Currently downgraded and was previously at a different downgraded speed
+func checkPublishEvent(engine Engine, id events.RASID, typ, pciAddr, maximum, negotiated, lastMax, lastNeg string, port uint32) {
+
+	// Return early if previous and current stats are both in the expected state.
+	if lastNeg == lastMax && negotiated == maximum {
+		return
+	}
+
+	// Return if stats have not changed since when last seen.
+	if negotiated == lastNeg && maximum == lastMax {
+		return
+	}
+
+	// Otherwise publish event indicating link state change.
+
+	engine.Debugf("link %s changed on %s, was %s (max %s) now %s (max %s)",
+		typ, pciAddr, lastNeg, lastMax, negotiated, maximum)
+	msg := fmt.Sprintf("NVMe PCIe device at %q port-%d: link %s changed to %s "+
+		"(max %s)", pciAddr, port, typ, negotiated, maximum)
+
+	sev := events.RASSeverityWarning
+	if negotiated == maximum {
+		sev = events.RASSeverityNotice
+	}
+
+	engine.Publish(events.NewGenericEvent(id, sev, msg, ""))
 }
 
-func publishLinkStatWarning(engine Engine, pciAddr string, health *ctlpb.BioHealthResp) {
-	if health.LinkMaxSpeed != health.LinkNegSpeed {
-		engine.Debugf("downgraded link speed on %s, publishing ras event", pciAddr)
-		event := newLinkEvent(events.RASNVMeLinkSpeedDown, "speed", pciAddr,
-			humanize.SI(float64(health.LinkMaxSpeed), "T/s"),
-			humanize.SI(float64(health.LinkNegSpeed), "T/s"),
-			health.LinkPortId)
-		engine.Publish(event)
+// Evaluate PCIe link state on NVMe SSD and raise events when negotiated speed or width changes.
+func publishLinkStatEvents(engine Engine, pciAddr string, stats *ctlpb.BioHealthResp) {
+	lastStats := engine.GetLastHealthStats()
+	engine.SetLastHealthStats(stats)
+
+	lastMaxSpeedStr, lastSpeedStr, lastMaxWidthStr, lastWidthStr := "-", "-", "-", "-"
+	if lastStats != nil {
+		lastMaxSpeedStr = humanize.SI(float64(lastStats.LinkMaxSpeed), "T/s")
+		lastSpeedStr = humanize.SI(float64(lastStats.LinkNegSpeed), "T/s")
+		lastMaxWidthStr = fmt.Sprintf("x%d", lastStats.LinkMaxWidth)
+		lastWidthStr = fmt.Sprintf("x%d", lastStats.LinkNegWidth)
 	}
 
-	if health.LinkMaxWidth != health.LinkNegWidth {
-		engine.Debugf("downgraded link width on %s, publishing ras event", pciAddr)
-		event := newLinkEvent(events.RASNVMeLinkWidthDown, "width", pciAddr,
-			fmt.Sprintf("x%d", health.LinkMaxWidth),
-			fmt.Sprintf("x%d", health.LinkNegWidth),
-			health.LinkPortId)
-		engine.Publish(event)
-	}
+	checkPublishEvent(engine, events.RASNVMeLinkSpeedChanged, "speed", pciAddr,
+		humanize.SI(float64(stats.LinkMaxSpeed), "T/s"),
+		humanize.SI(float64(stats.LinkNegSpeed), "T/s"),
+		lastMaxSpeedStr, lastSpeedStr, stats.LinkPortId)
+
+	checkPublishEvent(engine, events.RASNVMeLinkWidthChanged, "width", pciAddr,
+		fmt.Sprintf("x%d", stats.LinkMaxWidth),
+		fmt.Sprintf("x%d", stats.LinkNegWidth),
+		lastMaxWidthStr, lastWidthStr, stats.LinkPortId)
 }
 
 func populateCtrlrHealth(ctx context.Context, engine Engine, req *ctlpb.BioHealthReq, ctrlr *ctlpb.NvmeController, prov hardware.PCIeLinkStatsProvider) (bool, error) {
@@ -231,7 +260,7 @@ func populateCtrlrHealth(ctx context.Context, engine Engine, req *ctlpb.BioHealt
 		if err := addLinkInfoToHealthStats(prov, ctrlr.PciCfg, health); err != nil {
 			return false, errors.Wrapf(err, "add link stats for %q", ctrlr)
 		}
-		publishLinkStatWarning(engine, ctrlr.PciAddr, health)
+		publishLinkStatEvents(engine, ctrlr.PciAddr, health)
 	} else {
 		engine.Debugf("no pcie config space received for %q, skip add link stats", ctrlr)
 	}

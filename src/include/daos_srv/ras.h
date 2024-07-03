@@ -42,7 +42,7 @@
 	X(RAS_ENGINE_DIED, "engine_died")                                                          \
 	X(RAS_ENGINE_ASSERTED, "engine_asserted")                                                  \
 	X(RAS_ENGINE_CLOCK_DRIFT, "engine_clock_drift")                                            \
-	X(RAS_POOL_CORRUPTION_DETECTED, "corruption_detected")                                     \
+	X(RAS_POOL_CORRUPTION_DETECTED, "pool_corruption_detected")                                \
 	X(RAS_POOL_REBUILD_START, "pool_rebuild_started")                                          \
 	X(RAS_POOL_REBUILD_END, "pool_rebuild_finished")                                           \
 	X(RAS_POOL_REBUILD_FAILED, "pool_rebuild_failed")                                          \
@@ -62,8 +62,8 @@
 	X(RAS_DEVICE_REPLACE, "device_replace")                                                    \
 	X(RAS_SYSTEM_FABRIC_PROV_CHANGED, "system_fabric_provider_changed")                        \
 	X(RAS_ENGINE_JOIN_FAILED, "engine_join_failed")                                            \
-	X(RAS_DEVICE_LINK_SPEED_DOWN, "device_link_speed_downgraded")                              \
-	X(RAS_DEVICE_LINK_WIDTH_DOWN, "device_link_width_downgraded")
+	X(RAS_DEVICE_LINK_SPEED_CHANGED, "device_link_speed_changed")                              \
+	X(RAS_DEVICE_LINK_WIDTH_CHANGED, "device_link_width_changed")
 
 /** Define RAS event enum */
 typedef enum {

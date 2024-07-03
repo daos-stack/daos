@@ -185,6 +185,7 @@ type (
 		StopErr             error
 		ScmTierConfig       *storage.TierConfig
 		ScanBdevTiersResult []storage.BdevTierScanResult
+		LastHealthStats     *ctlpb.BioHealthResp
 	}
 
 	MockInstance struct {
@@ -313,4 +314,12 @@ func (mi *MockInstance) Tracef(format string, args ...interface{}) {
 
 func (mi *MockInstance) Publish(event *events.RASEvent) {
 	return
+}
+
+func (mi *MockInstance) GetLastHealthStats() *ctlpb.BioHealthResp {
+	return mi.cfg.LastHealthStats
+}
+
+func (mi *MockInstance) SetLastHealthStats(bhr *ctlpb.BioHealthResp) {
+	mi.cfg.LastHealthStats = bhr
 }
