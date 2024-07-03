@@ -356,9 +356,9 @@ struct crt_quotas {
 	pthread_mutex_t		mutex;
 	d_list_t		rpc_waitq;
 	/** Stats gauge of wait queue depth */
-	struct d_tm_node_t      *rpc_waitq_depth;
+	struct d_tm_node_t     *rpc_waitq_depth;
 	/** Counter for exceeded quota */
-	struct d_tm_node_t      *rpc_quota_exceeded;
+	struct d_tm_node_t     *rpc_quota_exceeded;
 };
 
 /* crt_context */

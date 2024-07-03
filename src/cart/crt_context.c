@@ -323,11 +323,9 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 
 		ret = d_tm_add_metric(&ctx->cc_quotas.rpc_quota_exceeded, D_TM_COUNTER,
 				      "Total number of exceeded RPC quota errors",
-				      "errors", "net/%s/quota_exceeded/ctx_%u",
-				      prov, ctx->cc_idx);
+				      "errors", "net/%s/quota_exceeded/ctx_%u", prov, ctx->cc_idx);
 		if (ret)
 			DL_WARN(rc, "Failed to create quota exceeded counter");
-
 	}
 
 	if (crt_is_service() && crt_gdata.cg_auto_swim_disable == 0 &&
