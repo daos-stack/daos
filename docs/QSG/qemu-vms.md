@@ -168,7 +168,7 @@ Then add a sudo rule for qemu-system-x86<sub>64</sub> in *etc/sudoers.d*.
 ```
 3.  Install guest operating systems.
 
-Run these two comands. Select "boot from cdrom". Follow the installation guide to install the OSes.
+Run these two commands. Select "boot from cdrom". Follow the installation guide to install the OSes.
 ```
     sudo qemu-system-x86_64 -M q35,accel=kvm,kernel-irqchip=split -cpu host -smp 3 -m 12288 -device intel-iommu,intremap=on -drive file=<image-dir>/daos-server.qcow2,if=virtio -device virtio-net,netdev=mynet0,mac=52:54:00:12:34:56 -netdev tap,id=mynet0 -drive file=<image-dir>/qemu-nvm-disk1.qcow2,if=none,id=nvm1 -device nvme,serial=deadbeef,drive=nvm1 -cdrom <iso-dir>/Rocky-8.9-x86_64-minimal.iso -boot menu=on &
     sudo qemu-system-x86_64  -M q35,accel=kvm,kernel-irqchip=split -cpu host -smp 1 -m 2048 -device intel-iommu,intremap=on -drive file=<image-dir>/daos-client.qcow2,if=virtio -device virtio-net,netdev=mynet1,mac=52:54:00:12:34:57 -netdev tap,id=mynet1 -cdrom <iso-dir>/Rocky-8.9-x86_64-minimal.iso -boot menu=on
@@ -246,7 +246,7 @@ Because we disable VFIO and use UIO, we need to run daos<sub>server.service</sub
     Group=root
     ...
 ```
-Update the control config file `/etc/daos/daos_control.yml` and the agent config file `/etc/daos/daos_agent.yml` on the other VM.
+Update the control config file `/etc/daos/daos_control.yml` which is also on daos-server, then update the agent config file `/etc/daos/daos_agent.yml` on daos-client.
 ```
     name: daos_server
     port: 10001
