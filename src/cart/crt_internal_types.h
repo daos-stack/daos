@@ -198,8 +198,10 @@ struct crt_quotas {
 	bool			enabled[CRT_QUOTA_COUNT];
 	pthread_mutex_t		mutex;
 	d_list_t		rpc_waitq;
-	struct d_tm_node_t     *rpc_waitq_depth;
-	struct d_tm_node_t     *rpc_quota_exceeded;
+	/** Stats gauge of wait queue depth */
+	struct d_tm_node_t      *rpc_waitq_depth;
+	/** Counter for exceeded quota */
+	struct d_tm_node_t      *rpc_quota_exceeded;
 };
 
 /* crt_context */
