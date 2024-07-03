@@ -40,7 +40,7 @@ typedef struct tse_task {
 
 /** struct for a schedule object that is used for tracking a number of tasks */
 typedef struct {
-	/** culmulative result of all task operations - valid after schedule completion */
+	/** cumulative result of all task operations - valid after schedule completion */
 	int		ds_result;
 
 	/** user data associated with the scheduler (completion cb data, etc.) */

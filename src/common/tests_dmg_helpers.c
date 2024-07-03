@@ -1439,8 +1439,8 @@ dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 	if (args == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rc = daos_dmg_json_pipe("storage query device-health ", dmg_config_file,
-				args, argcount, &dmg_out);
+	rc = daos_dmg_json_pipe("storage query list-devices --health ", dmg_config_file, args,
+				argcount, &dmg_out);
 	if (rc != 0) {
 		D_ERROR("dmg command failed\n");
 		goto out_json;

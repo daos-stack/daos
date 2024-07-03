@@ -100,7 +100,7 @@ func (ei *EngineInstance) checkScmNeedFormat() (bool, error) {
 		if cfg.Class != "ram" {
 			return false, storage.FaultBdevConfigRolesWithDCPM
 		}
-		if !ei.storage.BdevRoleMetaConfigured() {
+		if !ei.storage.BdevRoleMetaConfigured() && !ei.storage.GetControlMetadata().DisableMdOnSSD {
 			return false, storage.FaultBdevConfigControlMetadataNoRoles
 		}
 		ei.log.Debugf("scm class is ram and bdev role meta configured")

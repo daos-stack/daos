@@ -14,8 +14,8 @@
 %endif
 
 Name:          daos
-Version:       2.5.101
-Release:       5%{?relval}%{?dist}
+Version:       2.6.0
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -590,6 +590,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Jun 18 2024 Phillip Henderson <phillip.henderson@intel.com> 2.6.0-1
+- First release candidate for 2.6.0
+
 * Fri May 03 2024 Lei Huang <lei.huang@intel.com> 2.5.101-5
 - Add libaio as a dependent package
 
