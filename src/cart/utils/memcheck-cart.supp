@@ -628,3 +628,20 @@
    ...
    fun:runtime.persistentalloc
 }
+{
+   go 1.22.3 race
+   Memcheck:Addr8
+   fun:racecallatomic
+}
+{
+   go 1.22.3 race
+   Memcheck:Param
+   read(buf)
+   fun:runtime/internal/syscall.Syscall6
+}
+{
+   go 1.22.3 race
+   Memcheck:Addr4
+   fun:__tsan_go_atomic32_load
+   fun:racecall
+}
