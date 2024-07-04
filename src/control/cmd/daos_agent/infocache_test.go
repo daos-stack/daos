@@ -16,9 +16,12 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/cache"
 	"github.com/daos-stack/daos/src/control/lib/control"
@@ -112,7 +115,7 @@ func TestAgent_newCachedAttachInfo(t *testing.T) {
 	expClient := control.NewMockInvoker(log, &control.MockInvokerConfig{})
 
 	ai := newCachedAttachInfo(expRefreshInterval, expSys, expClient,
-		func(ctx context.Context, rpcClient control.UnaryInvoker, req *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
+		func(ctx context.Context, rpcClient control.UnaryInvoker, req *control.GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error) {
 			return nil, nil
 		})
 
@@ -149,14 +152,22 @@ func TestAgent_cachedAttachInfo_Key(t *testing.T) {
 	}
 }
 
-func TestAgent_cachedAttachInfo_NeedsRefresh(t *testing.T) {
+func TestAgent_cachedAttachInfo_RefreshIfNeeded(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+	mockClient := control.NewMockInvoker(log, &control.MockInvokerConfig{})
+
+	noopGetAttachInfo := func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error) {
+		return nil, nil
+	}
+
 	for name, tc := range map[string]struct {
 		ai        *cachedAttachInfo
 		expResult bool
 	}{
 		"nil": {},
 		"never cached": {
-			ai:        newCachedAttachInfo(0, "test", nil, nil),
+			ai:        newCachedAttachInfo(0, "test", mockClient, noopGetAttachInfo),
 			expResult: true,
 		},
 		"no refresh": {
@@ -164,7 +175,9 @@ func TestAgent_cachedAttachInfo_NeedsRefresh(t *testing.T) {
 				cacheItem: cacheItem{
 					lastCached: time.Now().Add(-time.Minute),
 				},
-				lastResponse: &control.GetAttachInfoResp{},
+				rpcClient:    mockClient,
+				fetch:        noopGetAttachInfo,
+				lastResponse: &mgmtpb.GetAttachInfoResp{},
 			},
 		},
 		"expired": {
@@ -173,7 +186,9 @@ func TestAgent_cachedAttachInfo_NeedsRefresh(t *testing.T) {
 					lastCached:      time.Now().Add(-time.Minute),
 					refreshInterval: time.Second,
 				},
-				lastResponse: &control.GetAttachInfoResp{},
+				rpcClient:    mockClient,
+				fetch:        noopGetAttachInfo,
+				lastResponse: &mgmtpb.GetAttachInfoResp{},
 			},
 			expResult: true,
 		},
@@ -183,20 +198,23 @@ func TestAgent_cachedAttachInfo_NeedsRefresh(t *testing.T) {
 					lastCached:      time.Now().Add(-time.Second),
 					refreshInterval: time.Minute,
 				},
-				lastResponse: &control.GetAttachInfoResp{},
+				rpcClient:    mockClient,
+				fetch:        noopGetAttachInfo,
+				lastResponse: &mgmtpb.GetAttachInfoResp{},
 			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			test.AssertEqual(t, tc.expResult, tc.ai.NeedsRefresh(), "")
+			_, refreshed, _ := tc.ai.RefreshIfNeeded(test.Context(t))
+			test.AssertEqual(t, tc.expResult, refreshed, "")
 		})
 	}
 }
 
 func TestAgent_cachedAttachInfo_Refresh(t *testing.T) {
-	resp1 := &control.GetAttachInfoResp{
-		System: "resp1",
-		ServiceRanks: []*control.PrimaryServiceRank{
+	resp1 := &mgmtpb.GetAttachInfoResp{
+		Sys: "resp1",
+		RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 			{
 				Rank: 1,
 				Uri:  "rank one",
@@ -206,16 +224,16 @@ func TestAgent_cachedAttachInfo_Refresh(t *testing.T) {
 				Uri:  "rank two",
 			},
 		},
-		MSRanks: []uint32{0, 1, 2},
-		ClientNetHint: control.ClientNetworkHint{
+		MsRanks: []uint32{0, 1, 2},
+		ClientNetHint: &mgmtpb.ClientNetHint{
 			Provider:    "prov",
 			NetDevClass: uint32(hardware.Ether),
 		},
 	}
 
-	resp2 := &control.GetAttachInfoResp{
-		System: "resp2",
-		ServiceRanks: []*control.PrimaryServiceRank{
+	resp2 := &mgmtpb.GetAttachInfoResp{
+		Sys: "resp2",
+		RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 			{
 				Rank: 3,
 				Uri:  "rank three",
@@ -225,8 +243,8 @@ func TestAgent_cachedAttachInfo_Refresh(t *testing.T) {
 				Uri:  "rank four",
 			},
 		},
-		MSRanks: []uint32{1, 3},
-		ClientNetHint: control.ClientNetworkHint{
+		MsRanks: []uint32{1, 3},
+		ClientNetHint: &mgmtpb.ClientNetHint{
 			Provider:    "other",
 			NetDevClass: uint32(hardware.Infiniband),
 		},
@@ -234,11 +252,11 @@ func TestAgent_cachedAttachInfo_Refresh(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		nilCache      bool
-		ctlResult     *control.GetAttachInfoResp
+		ctlResult     *mgmtpb.GetAttachInfoResp
 		ctlErr        error
-		alreadyCached *control.GetAttachInfoResp
+		alreadyCached *mgmtpb.GetAttachInfoResp
 		expErr        error
-		expCached     *control.GetAttachInfoResp
+		expCached     *mgmtpb.GetAttachInfoResp
 	}{
 		"nil": {
 			nilCache: true,
@@ -262,7 +280,7 @@ func TestAgent_cachedAttachInfo_Refresh(t *testing.T) {
 			var ai *cachedAttachInfo
 			if !tc.nilCache {
 				ai = newCachedAttachInfo(0, "test", control.DefaultClient(),
-					func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
+					func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error) {
 						return tc.ctlResult, tc.ctlErr
 					})
 				ai.lastResponse = tc.alreadyCached
@@ -271,7 +289,8 @@ func TestAgent_cachedAttachInfo_Refresh(t *testing.T) {
 				}
 			}
 
-			err := ai.Refresh(test.Context(t))
+			release, err := ai.Refresh(test.Context(t))
+			release()
 
 			test.CmpErr(t, tc.expErr, err)
 
@@ -279,7 +298,10 @@ func TestAgent_cachedAttachInfo_Refresh(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expCached, ai.lastResponse); diff != "" {
+			cmpOpts := cmp.Options{
+				protocmp.Transform(),
+			}
+			if diff := cmp.Diff(tc.expCached, ai.lastResponse, cmpOpts...); diff != "" {
 				t.Fatalf("-want, +got:\n%s", diff)
 			}
 		})
@@ -342,11 +364,14 @@ func TestAgent_cachedFabricInfo_NeedsRefresh(t *testing.T) {
 
 			var cfi *cachedFabricInfo
 			if !tc.nilCache {
-				cfi = newCachedFabricInfo(log, nil)
+				cfi = newCachedFabricInfo(log, func(_ context.Context, _ ...string) (*NUMAFabric, error) {
+					return nil, nil
+				})
 				cfi.cacheItem.lastCached = tc.cacheTime
 			}
 
-			test.AssertEqual(t, tc.expResult, cfi.NeedsRefresh(), "")
+			_, refreshed, _ := cfi.RefreshIfNeeded(test.Context(t))
+			test.AssertEqual(t, tc.expResult, refreshed, "")
 		})
 	}
 }
@@ -416,7 +441,8 @@ func TestAgent_cachedFabricInfo_Refresh(t *testing.T) {
 				}
 			}
 
-			err := cfi.Refresh(test.Context(t))
+			release, err := cfi.Refresh(test.Context(t))
+			release()
 
 			test.CmpErr(t, tc.expErr, err)
 
@@ -713,31 +739,48 @@ func TestAgent_InfoCache_AddProvider(t *testing.T) {
 }
 
 func TestAgent_InfoCache_GetAttachInfo(t *testing.T) {
-	ctlResp := &control.GetAttachInfoResp{
-		System:       "dontcare",
-		ServiceRanks: []*control.PrimaryServiceRank{{Rank: 1, Uri: "my uri"}},
-		MSRanks:      []uint32{0, 1, 2, 3},
-		ClientNetHint: control.ClientNetworkHint{
+	ctlResp := &mgmtpb.GetAttachInfoResp{
+		Sys:      "dontcare",
+		RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{{Rank: 1, Uri: "my uri"}},
+		MsRanks:  []uint32{0, 1, 2, 3},
+		ClientNetHint: &mgmtpb.ClientNetHint{
 			Provider:    "ofi+tcp",
 			NetDevClass: uint32(hardware.Ether),
 		},
 	}
-	telemEnabledResp := copyGetAttachInfoResp(ctlResp)
-	telemEnabledResp.ClientNetHint.EnvVars = append(telemEnabledResp.ClientNetHint.EnvVars,
-		fmt.Sprintf("%s=1", telemetry.ClientMetricsEnabledEnv),
-	)
-	telemRetainedResp := copyGetAttachInfoResp(telemEnabledResp)
-	telemRetainedResp.ClientNetHint.EnvVars = append(telemRetainedResp.ClientNetHint.EnvVars,
-		fmt.Sprintf("%s=1", telemetry.ClientMetricsRetainEnv),
-	)
+	telemEnabledResp := &mgmtpb.GetAttachInfoResp{
+		Sys:      ctlResp.Sys,
+		RankUris: ctlResp.RankUris,
+		MsRanks:  ctlResp.MsRanks,
+		ClientNetHint: &mgmtpb.ClientNetHint{
+			Provider:    ctlResp.ClientNetHint.Provider,
+			NetDevClass: ctlResp.ClientNetHint.NetDevClass,
+			EnvVars: append(ctlResp.ClientNetHint.EnvVars,
+				fmt.Sprintf("%s=1", telemetry.ClientMetricsEnabledEnv),
+			),
+		},
+	}
+	telemRetainedResp := &mgmtpb.GetAttachInfoResp{
+		Sys:      ctlResp.Sys,
+		RankUris: ctlResp.RankUris,
+		MsRanks:  ctlResp.MsRanks,
+		ClientNetHint: &mgmtpb.ClientNetHint{
+			Provider:    ctlResp.ClientNetHint.Provider,
+			NetDevClass: ctlResp.ClientNetHint.NetDevClass,
+			EnvVars: append(ctlResp.ClientNetHint.EnvVars,
+				fmt.Sprintf("%s=1", telemetry.ClientMetricsEnabledEnv),
+				fmt.Sprintf("%s=1", telemetry.ClientMetricsRetainEnv),
+			),
+		},
+	}
 
 	for name, tc := range map[string]struct {
 		getInfoCache func(logging.Logger) *InfoCache
 		system       string
-		remoteResp   *control.GetAttachInfoResp
+		remoteResp   *mgmtpb.GetAttachInfoResp
 		remoteErr    error
 		expErr       error
-		expResp      *control.GetAttachInfoResp
+		expResp      *mgmtpb.GetAttachInfoResp
 		expRemote    bool
 		expCached    bool
 	}{
@@ -750,7 +793,7 @@ func TestAgent_InfoCache_GetAttachInfo(t *testing.T) {
 					disableAttachInfoCache: true,
 				})
 			},
-			remoteResp: copyGetAttachInfoResp(ctlResp),
+			remoteResp: ctlResp,
 			expResp:    ctlResp,
 			expRemote:  true,
 		},
@@ -771,7 +814,7 @@ func TestAgent_InfoCache_GetAttachInfo(t *testing.T) {
 					enableClientTelemetry:  true,
 				})
 			},
-			remoteResp: copyGetAttachInfoResp(ctlResp),
+			remoteResp: proto.Clone(ctlResp).(*mgmtpb.GetAttachInfoResp),
 			expResp:    telemEnabledResp,
 			expRemote:  true,
 		},
@@ -781,7 +824,7 @@ func TestAgent_InfoCache_GetAttachInfo(t *testing.T) {
 					enableClientTelemetry: true,
 				})
 			},
-			remoteResp: copyGetAttachInfoResp(ctlResp),
+			remoteResp: proto.Clone(ctlResp).(*mgmtpb.GetAttachInfoResp),
 			expResp:    telemEnabledResp,
 			expRemote:  true,
 			expCached:  true,
@@ -793,7 +836,7 @@ func TestAgent_InfoCache_GetAttachInfo(t *testing.T) {
 					retainClientTelemetry: true,
 				})
 			},
-			remoteResp: copyGetAttachInfoResp(ctlResp),
+			remoteResp: proto.Clone(ctlResp).(*mgmtpb.GetAttachInfoResp),
 			expResp:    telemRetainedResp,
 			expRemote:  true,
 			expCached:  true,
@@ -802,7 +845,7 @@ func TestAgent_InfoCache_GetAttachInfo(t *testing.T) {
 			getInfoCache: func(l logging.Logger) *InfoCache {
 				return newTestInfoCache(t, l, testInfoCacheParams{})
 			},
-			remoteResp: copyGetAttachInfoResp(ctlResp),
+			remoteResp: ctlResp,
 			expResp:    ctlResp,
 			expRemote:  true,
 			expCached:  true,
@@ -819,10 +862,10 @@ func TestAgent_InfoCache_GetAttachInfo(t *testing.T) {
 			getInfoCache: func(l logging.Logger) *InfoCache {
 				ic := newTestInfoCache(t, l, testInfoCacheParams{})
 				ic.cache.Set(&cachedAttachInfo{
-					fetch: func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
+					fetch: func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error) {
 						return nil, errors.New("shouldn't call cached remote")
 					},
-					lastResponse: copyGetAttachInfoResp(ctlResp),
+					lastResponse: ctlResp,
 					cacheItem:    cacheItem{lastCached: time.Now()},
 					system:       "test",
 				})
@@ -837,10 +880,10 @@ func TestAgent_InfoCache_GetAttachInfo(t *testing.T) {
 			getInfoCache: func(l logging.Logger) *InfoCache {
 				ic := newTestInfoCache(t, l, testInfoCacheParams{})
 				ic.cache.Set(&cachedAttachInfo{
-					fetch: func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
+					fetch: func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error) {
 						return nil, errors.New("shouldn't call cached remote")
 					},
-					lastResponse: copyGetAttachInfoResp(ctlResp),
+					lastResponse: ctlResp,
 					cacheItem:    cacheItem{lastCached: time.Now()},
 					system:       build.DefaultSystemName,
 				})
@@ -854,17 +897,17 @@ func TestAgent_InfoCache_GetAttachInfo(t *testing.T) {
 			getInfoCache: func(l logging.Logger) *InfoCache {
 				ic := newTestInfoCache(t, l, testInfoCacheParams{})
 				ic.cache.Set(&cachedAttachInfo{
-					fetch: func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
+					fetch: func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error) {
 						return nil, errors.New("shouldn't call cached remote")
 					},
-					lastResponse: &control.GetAttachInfoResp{},
+					lastResponse: &mgmtpb.GetAttachInfoResp{},
 					cacheItem:    cacheItem{lastCached: time.Now()},
 					system:       "test",
 				})
 				return ic
 			},
 			system:     "somethingelse",
-			remoteResp: copyGetAttachInfoResp(ctlResp),
+			remoteResp: ctlResp,
 			expResp:    ctlResp,
 			expCached:  true,
 			expRemote:  true,
@@ -881,7 +924,7 @@ func TestAgent_InfoCache_GetAttachInfo(t *testing.T) {
 
 			calledRemote := false
 			if ic != nil {
-				ic.getAttachInfoCb = func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
+				ic.getAttachInfoCb = func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error) {
 					calledRemote = true
 					return tc.remoteResp, tc.remoteErr
 				}
@@ -893,7 +936,10 @@ func TestAgent_InfoCache_GetAttachInfo(t *testing.T) {
 			resp, err := ic.GetAttachInfo(test.Context(t), tc.system)
 
 			test.CmpErr(t, tc.expErr, err)
-			if diff := cmp.Diff(tc.expResp, resp); diff != "" {
+			cmpOpts := []cmp.Option{
+				protocmp.Transform(),
+			}
+			if diff := cmp.Diff(tc.expResp, resp, cmpOpts...); diff != "" {
 				t.Fatalf("want-, got+:\n%s", diff)
 			}
 
@@ -911,7 +957,10 @@ func TestAgent_InfoCache_GetAttachInfo(t *testing.T) {
 				defer unlockItem()
 				cached, ok := cachedItem.(*cachedAttachInfo)
 				test.AssertTrue(t, ok, "wrong type cached")
-				if diff := cmp.Diff(tc.expResp, cached.lastResponse); diff != "" {
+				cmpOpts := []cmp.Option{
+					protocmp.Transform(),
+				}
+				if diff := cmp.Diff(tc.expResp, cached.lastResponse, cmpOpts...); diff != "" {
 					t.Fatalf("want-, got+:\n%s", diff)
 				}
 			}
@@ -1166,11 +1215,11 @@ func TestAgent_InfoCache_GetFabricDevice(t *testing.T) {
 }
 
 func TestAgent_InfoCache_Refresh(t *testing.T) {
-	ctlResp := &control.GetAttachInfoResp{
-		System:       "dontcare",
-		ServiceRanks: []*control.PrimaryServiceRank{{Rank: 1, Uri: "my uri"}},
-		MSRanks:      []uint32{0, 1, 2, 3},
-		ClientNetHint: control.ClientNetworkHint{
+	ctlResp := &mgmtpb.GetAttachInfoResp{
+		Sys:      "dontcare",
+		RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{{Rank: 1, Uri: "my uri"}},
+		MsRanks:  []uint32{0, 1, 2, 3},
+		ClientNetHint: &mgmtpb.ClientNetHint{
 			Provider:    "ofi+tcp",
 			NetDevClass: uint32(hardware.Ether),
 		},
@@ -1189,7 +1238,7 @@ func TestAgent_InfoCache_Refresh(t *testing.T) {
 		getInfoCache        func(logging.Logger) *InfoCache
 		expErr              error
 		expCachedFabric     *hardware.FabricInterfaceSet
-		expCachedAttachInfo *control.GetAttachInfoResp
+		expCachedAttachInfo *mgmtpb.GetAttachInfoResp
 	}{
 		"nil": {
 			expErr: errors.New("nil"),
@@ -1213,7 +1262,7 @@ func TestAgent_InfoCache_Refresh(t *testing.T) {
 				return newTestInfoCache(t, l, testInfoCacheParams{
 					cachedItems: []cache.Item{
 						newCachedAttachInfo(0, testSys, nil,
-							func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
+							func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error) {
 								return ctlResp, nil
 							}),
 						newCachedFabricInfo(l,
@@ -1232,7 +1281,7 @@ func TestAgent_InfoCache_Refresh(t *testing.T) {
 					disableFabricCache: true,
 					cachedItems: []cache.Item{
 						newCachedAttachInfo(0, testSys, nil,
-							func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
+							func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error) {
 								return ctlResp, nil
 							}),
 						newCachedFabricInfo(l,
@@ -1250,7 +1299,7 @@ func TestAgent_InfoCache_Refresh(t *testing.T) {
 					disableAttachInfoCache: true,
 					cachedItems: []cache.Item{
 						newCachedAttachInfo(0, testSys, nil,
-							func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
+							func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error) {
 								return nil, errors.New("shouldn't call GetAttachInfo")
 							}),
 						newCachedFabricInfo(l,
@@ -1302,7 +1351,10 @@ func TestAgent_InfoCache_Refresh(t *testing.T) {
 				cached, ok := data.(*cachedAttachInfo)
 				test.AssertTrue(t, ok, "bad cached data type")
 
-				if diff := cmp.Diff(tc.expCachedAttachInfo, cached.lastResponse); diff != "" {
+				cmpOpts := []cmp.Option{
+					protocmp.Transform(),
+				}
+				if diff := cmp.Diff(tc.expCachedAttachInfo, cached.lastResponse, cmpOpts...); diff != "" {
 					t.Fatalf("want-, got+:\n%s", diff)
 				}
 			}

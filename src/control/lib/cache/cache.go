@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2023 Intel Corporation.
+// (C) Copyright 2023-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,11 +19,10 @@ import (
 )
 
 type Item interface {
-	Lock()
-	Unlock()
+	sync.Locker
 	Key() string
-	Refresh(ctx context.Context) error
-	NeedsRefresh() bool
+	Refresh(ctx context.Context) (func(), error)
+	RefreshIfNeeded(ctx context.Context) (func(), bool, error)
 }
 
 // ItemCache is a mechanism for caching Items to keys.
@@ -119,22 +118,24 @@ func (e *errKeyNotFound) Error() string {
 	return fmt.Sprintf("key %q not found", e.key)
 }
 
-func noopRelease() {}
+// NoopRelease is a no-op function that does nothing, but can
+// be safely returned in lieu of a real lock release function.
+func NoopRelease() {}
 
 // GetOrCreate returns an item from the cache if it exists, otherwise it creates
 // the item using the given function and caches it. The item must be released
 // by the caller when it is safe to be modified.
 func (ic *ItemCache) GetOrCreate(ctx context.Context, key string, missFn ItemCreateFunc) (Item, func(), error) {
 	if ic == nil {
-		return nil, noopRelease, errors.New("nil ItemCache")
+		return nil, NoopRelease, errors.New("nil ItemCache")
 	}
 
 	if key == "" {
-		return nil, noopRelease, errors.Errorf("empty string is an invalid key")
+		return nil, NoopRelease, errors.Errorf("empty string is an invalid key")
 	}
 
 	if missFn == nil {
-		return nil, noopRelease, errors.Errorf("item create function is required")
+		return nil, NoopRelease, errors.Errorf("item create function is required")
 	}
 
 	ic.mutex.Lock()
@@ -145,33 +146,32 @@ func (ic *ItemCache) GetOrCreate(ctx context.Context, key string, missFn ItemCre
 		ic.log.Debugf("failed to get item for key %q: %s", key, err.Error())
 		item, err = missFn()
 		if err != nil {
-			return nil, noopRelease, errors.Wrapf(err, "create item for %q", key)
+			return nil, NoopRelease, errors.Wrapf(err, "create item for %q", key)
 		}
 		ic.log.Debugf("created item for key %q", key)
 		ic.set(item)
 	}
 
-	item.Lock()
-	if item.NeedsRefresh() {
-		if err := item.Refresh(ctx); err != nil {
-			item.Unlock()
-			return nil, noopRelease, errors.Wrapf(err, "fetch data for %q", key)
-		}
+	release, refreshed, err := item.RefreshIfNeeded(ctx)
+	if err != nil {
+		return nil, NoopRelease, errors.Wrapf(err, "fetch data for %q", key)
+	}
+	if refreshed {
 		ic.log.Debugf("refreshed item %q", key)
 	}
 
-	return item, item.Unlock, nil
+	return item, release, nil
 }
 
 // Get returns an item from the cache if it exists, otherwise it returns an
 // error. The item must be released by the caller when it is safe to be modified.
 func (ic *ItemCache) Get(ctx context.Context, key string) (Item, func(), error) {
 	if ic == nil {
-		return nil, noopRelease, errors.New("nil ItemCache")
+		return nil, NoopRelease, errors.New("nil ItemCache")
 	}
 
 	if key == "" {
-		return nil, noopRelease, errors.Errorf("empty string is an invalid key")
+		return nil, NoopRelease, errors.Errorf("empty string is an invalid key")
 	}
 
 	ic.mutex.Lock()
@@ -179,19 +179,18 @@ func (ic *ItemCache) Get(ctx context.Context, key string) (Item, func(), error) 
 
 	item, err := ic.get(key)
 	if err != nil {
-		return nil, noopRelease, err
+		return nil, NoopRelease, err
 	}
 
-	item.Lock()
-	if item.NeedsRefresh() {
-		if err := item.Refresh(ctx); err != nil {
-			item.Unlock()
-			return nil, noopRelease, errors.Wrapf(err, "fetch data for %q", key)
-		}
+	release, refreshed, err := item.RefreshIfNeeded(ctx)
+	if err != nil {
+		return nil, NoopRelease, errors.Wrapf(err, "fetch data for %q", key)
+	}
+	if refreshed {
 		ic.log.Debugf("refreshed item %q", key)
 	}
 
-	return item, item.Unlock, nil
+	return item, release, nil
 }
 
 func (ic *ItemCache) get(key string) (Item, error) {
@@ -229,11 +228,11 @@ func (ic *ItemCache) refreshItem(ctx context.Context, key string) error {
 		return err
 	}
 
-	item.Lock()
-	defer item.Unlock()
-	if err := item.Refresh(ctx); err != nil {
+	release, err := item.Refresh(ctx)
+	if err != nil {
 		return errors.Wrapf(err, "failed to refresh cached item %q", item.Key())
 	}
+	release()
 
 	return nil
 }
