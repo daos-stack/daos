@@ -71,20 +71,21 @@ type EngineInstance struct {
 	_cancelCtx       context.CancelFunc
 	_superblock      *Superblock
 	_lastErr         error // populated when harness receives signal
-	_lastHealthStats *ctlpb.BioHealthResp
+	_lastHealthStats map[string]*ctlpb.BioHealthResp
 }
 
 // NewEngineInstance returns an *EngineInstance initialized with its dependencies.
 func NewEngineInstance(l logging.Logger, p *storage.Provider, jf systemJoinFn, r EngineRunner, ps *events.PubSub) *EngineInstance {
 	return &EngineInstance{
-		log:            l,
-		runner:         r,
-		storage:        p,
-		joinSystem:     jf,
-		drpcReady:      make(chan *srvpb.NotifyReadyReq),
-		storageReady:   make(chan bool),
-		startRequested: make(chan bool),
-		Publisher:      ps,
+		log:              l,
+		runner:           r,
+		storage:          p,
+		joinSystem:       jf,
+		drpcReady:        make(chan *srvpb.NotifyReadyReq),
+		storageReady:     make(chan bool),
+		startRequested:   make(chan bool),
+		Publisher:        ps,
+		_lastHealthStats: make(map[string]*ctlpb.BioHealthResp),
 	}
 }
 
@@ -397,16 +398,22 @@ func (ei *EngineInstance) Tracef(format string, args ...interface{}) {
 	ei.log.Tracef(format, args...)
 }
 
-func (ei *EngineInstance) GetLastHealthStats() *ctlpb.BioHealthResp {
+func (ei *EngineInstance) GetLastHealthStats(pciAddr string) *ctlpb.BioHealthResp {
 	ei.RLock()
 	defer ei.RUnlock()
 
-	return ei._lastHealthStats
+	if ei._lastHealthStats == nil {
+		ei._lastHealthStats = make(map[string]*ctlpb.BioHealthResp)
+	}
+	return ei._lastHealthStats[pciAddr]
 }
 
-func (ei *EngineInstance) SetLastHealthStats(bhr *ctlpb.BioHealthResp) {
+func (ei *EngineInstance) SetLastHealthStats(pciAddr string, bhr *ctlpb.BioHealthResp) {
 	ei.Lock()
 	defer ei.Unlock()
 
-	ei._lastHealthStats = bhr
+	if ei._lastHealthStats == nil {
+		ei._lastHealthStats = make(map[string]*ctlpb.BioHealthResp)
+	}
+	ei._lastHealthStats[pciAddr] = bhr
 }

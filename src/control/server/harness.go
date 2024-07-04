@@ -65,10 +65,10 @@ type Engine interface {
 	OnReady(...onReadyFn)
 	GetStorage() *storage.Provider
 	SetCheckerMode(bool)
-	Debugf(format string, args ...interface{})
-	Tracef(format string, args ...interface{})
-	GetLastHealthStats() *ctlpb.BioHealthResp
-	SetLastHealthStats(*ctlpb.BioHealthResp)
+	Debugf(string, ...interface{})
+	Tracef(string, ...interface{})
+	GetLastHealthStats(string) *ctlpb.BioHealthResp
+	SetLastHealthStats(string, *ctlpb.BioHealthResp)
 }
 
 // EngineHarness is responsible for managing Engine instances.

@@ -218,10 +218,11 @@ func checkPublishEvent(engine Engine, id events.RASID, typ, pciAddr, maximum, ne
 	engine.Publish(events.NewGenericEvent(id, sev, msg, ""))
 }
 
-// Evaluate PCIe link state on NVMe SSD and raise events when negotiated speed or width changes.
+// Evaluate PCIe link state on NVMe SSD and raise events when negotiated speed or width changes in
+// relation to last recorded stats for the given PCI address.
 func publishLinkStatEvents(engine Engine, pciAddr string, stats *ctlpb.BioHealthResp) {
-	lastStats := engine.GetLastHealthStats()
-	engine.SetLastHealthStats(stats)
+	lastStats := engine.GetLastHealthStats(pciAddr)
+	engine.SetLastHealthStats(pciAddr, stats)
 
 	lastMaxSpeedStr, lastSpeedStr, lastMaxWidthStr, lastWidthStr := "-", "-", "-", "-"
 	if lastStats != nil {
