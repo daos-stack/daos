@@ -208,7 +208,7 @@ self_test_init(char *dest_name, crt_context_t *crt_ctx, crt_group_t **srv_grp, p
 	 * 60 - ping timeout
 	 * 120 - total timeout
 	 */
-	/* Only pre-ping ranks if not using agent, and user didn't ask for no-sync  */
+	/* Only ping ranks if not using agent, and user didn't ask for no-sync  */
 	if (!use_agent && !no_sync) {
 		ret = crtu_wait_for_ranks(*crt_ctx, *srv_grp, rank_list, 0, 1, 60, 120);
 		D_ASSERTF(ret == 0, "wait_for_ranks() failed; ret=%d\n", ret);
@@ -1264,7 +1264,7 @@ print_usage(const char *prog_name, const char *msg_sizes_str, int rep_count, int
 	    "  --no-sync\n"
 	    "      Short version: -n\n"
 	    "      This option avoids pre-pinging each rank in the group before running the test\n"
-	    "      Only applicable when running in non agent mode (no -u option)\n",
+	    "      Only applicable when running in without agent (without -u option)\n",
 	    prog_name, UINT32_MAX, CRT_SELF_TEST_AUTO_BULK_THRESH, msg_sizes_str, rep_count,
 	    max_inflight, CRT_ST_BUF_ALIGN_MIN, CRT_ST_BUF_ALIGN_MIN);
 }
