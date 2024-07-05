@@ -6829,10 +6829,10 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 
 	if (svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_NO_DATA_SYNC) {
 		D_DEBUG(DB_MD, "self healing is disabled for no_data_sync reintegration mode.\n");
-		if (opc == POOL_EXCLUDE || opc == POOL_DRAIN) {
-			rc = ds_pool_tgt_exclude_out(svc->ps_pool->sp_uuid, &target_list);
+		if (opc == MAP_REINT) {
+			rc = ds_pool_tgt_finish_rebuild(svc->ps_pool->sp_uuid, &target_list);
 			if (rc)
-				D_INFO("mark failed target %d of "DF_UUID " as DOWNOUT: "DF_RC"\n",
+				D_INFO("mark target %d of "DF_UUID " as UPIN: "DF_RC"\n",
 					target_list.pti_ids[0].pti_id,
 					DP_UUID(svc->ps_pool->sp_uuid), DP_RC(rc));
 		}
