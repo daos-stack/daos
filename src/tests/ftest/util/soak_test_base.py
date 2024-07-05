@@ -92,7 +92,8 @@ class SoakTestBase(TestWithServers):
         self.soak_dir = self.base_test_dir + "/soak"
         self.soaktest_dir = self.soak_dir + "/pass" + str(self.loop)
         # Create the a shared directory for logs
-        self.sharedsoak_dir = self.tmp + "/soak"
+        shared_dir = os.getenv('DAOS_TEST_SHARED_DIR', os.path.expanduser('~/daos_test'))
+        self.sharedsoak_dir = shared_dir + "/soak"
         self.sharedsoaktest_dir = self.sharedsoak_dir + "/pass" + str(self.loop)
         # Initialize dmg cmd
         self.dmg_command = self.get_dmg_command()
