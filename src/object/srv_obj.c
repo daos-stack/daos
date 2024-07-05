@@ -2441,7 +2441,7 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 			DP_RC(rc));
 		goto end;
 	}
-	rc = obj_bulk_transfer(rpc, CRT_BULK_PUT, false, &oer->er_bulk, NULL, NULL,
+	rc = obj_bulk_transfer(rpc, CRT_BULK_GET, false, &oer->er_bulk, NULL, NULL,
 			       ioh, NULL, 1, NULL, ioc.ioc_coh);
 	if (rc)
 		D_ERROR(DF_UOID " bulk transfer failed: " DF_RC "\n", DP_UOID(oer->er_oid),
