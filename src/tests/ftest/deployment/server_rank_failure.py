@@ -7,9 +7,10 @@ import os
 import re
 import threading
 import time
-from collections import defaultdict
 
+from collections import defaultdict
 from ClusterShell.NodeSet import NodeSet
+
 from command_utils_base import CommandFailure
 from general_utils import report_errors
 from ior_test_base import IorTestBase
@@ -50,6 +51,9 @@ class ServerRankFailure(IorTestBase):
         ior_cmd.set_daos_params(pool, container.identifier)
         ior_cmd.update_params(test_file=os.path.join(os.sep, file_name))
 
+        # Set timeout to the job manager so the IOR process ends at timeout. The alternative is to
+        # use -D (sw_deadline in test yaml), but the IOR process may get stuck indefinitely in that
+        # approach.
         manager = get_job_manager(
             test=self, job=ior_cmd, subprocess=self.subprocess, timeout=timeout)
         manager.assign_hosts(self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
@@ -153,13 +157,12 @@ class ServerRankFailure(IorTestBase):
         ior_results = {}
         errors = []
         job_num = 1
-        mpirun_timeout = self.params.get('sw_deadline', ior_namespace)
-        self.log.info("Running Mpirun-IOR with Mpirun timeout of %s sec", mpirun_timeout)
+        ior_job_timeout = self.params.get("ior_job_timeout", ior_namespace)
+        self.log.info("Running Mpirun-IOR with job manager timeout of %s sec", ior_job_timeout)
         ior_thread = threading.Thread(
             target=self.run_ior_report_error,
-            args=[ior_results, job_num, "test_file_1", self.pool, self.container,
-                  ior_namespace, mpirun_timeout])
-
+            args=[ior_results, job_num, "test_file_1", self.pool, self.container, ior_namespace,
+                  ior_job_timeout])
         ior_thread.start()
 
         # Wait for a few seconds for IOR to start.

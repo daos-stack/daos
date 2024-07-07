@@ -54,13 +54,13 @@ ior: &ior_base
     ppn: 4
   flags: -k -v -w -W
   api: DFS
-  # We wait for a few seconds before killing an engine. If the IOR finishes too
-  # quickly, the test will not work. We use -D (deadlineForStonewalling) 120, so the
-  # process ends in about 120 sec. Adjust the transfer_size - block_size combination
-  # based on the system so that it takes longer than the -D value.
+  # We wait for a few seconds before killing an engine. If the IOR finishes too quickly, the test
+  # will not work. We use job manager timeout of 120 sec, so the process ends in about 120 sec.
+  # Adjust the transfer_size - block_size combination based on the system so that it takes longer
+  # than the -D value.
   transfer_size: 512K  # CI
   # transfer_size: 1G  # Aurora
-  sw_deadline: 120
+  ior_job_timeout: 120
 ior_wo_rf:
   <<: *ior_base
   # Total size is block_size * ppn.
