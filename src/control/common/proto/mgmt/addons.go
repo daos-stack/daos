@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +8,7 @@ package mgmt
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/google/uuid"
 )
@@ -212,4 +213,24 @@ func (r *ListContReq) SetSvcRanks(rl []uint32) {
 // SetUUID sets the request's ID to a UUID.
 func (r *ListContReq) SetUUID(id uuid.UUID) {
 	r.Id = id.String()
+}
+
+func (bi *BuildInfo) BuildString() string {
+	if bi == nil {
+		return ""
+	}
+
+	baseString := bi.VersionString()
+	if bi.Tag != "" {
+		baseString += " (" + bi.Tag + ")"
+	}
+	return baseString
+}
+
+func (bi *BuildInfo) VersionString() string {
+	if bi == nil {
+		return ""
+	}
+
+	return fmt.Sprintf("%d.%d.%d", bi.Major, bi.Minor, bi.Patch)
 }
