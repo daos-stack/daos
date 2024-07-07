@@ -7,10 +7,9 @@ import os
 import re
 import threading
 import time
-
 from collections import defaultdict
-from ClusterShell.NodeSet import NodeSet
 
+from ClusterShell.NodeSet import NodeSet
 from command_utils_base import CommandFailure
 from general_utils import report_errors
 from ior_test_base import IorTestBase
