@@ -18,7 +18,6 @@ wrap scons-3.""")
 
 SCons.Warnings.warningAsException()
 
-
 def add_command_line_options():
     """Add command line options"""
 
@@ -372,6 +371,9 @@ def scons():
     check_for_release_target()
 
     deps_env = Environment()
+
+    # Silence deprecation warning so it doesn't fail the build
+    SetOption('warn', ['no-python-version'])
 
     add_command_line_options()
 
