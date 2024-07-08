@@ -1,9 +1,12 @@
 # DAOS Set-Up on RHEL and Clones
 
-The following instructions detail how to install, set up and start DAOS servers and clients on
-two or more nodes.
-This document includes instructions for RHEL8-compatible distributions. This includes
-RHEL8, Rocky Linux and AlmaLinux.
+The following instructions detail how to install, set up and start DAOS servers
+and clients on two or more nodes.
+This document includes instructions for RHEL8-compatible distributions.
+This includes RHEL8, Rocky Linux 8 and AlmaLinux 8.
+The same instructions also apply to RHEL9-compatible distributions,
+including RHEL9, Rocky Linux 9 and AlmaLinux 9 (replace EL8 by EL9 in
+the description below to use the EL9 packages).
 
 For setup instructions on OpenSuse, refer to [OpenSuse setup](setup_suse.md).
 
@@ -91,6 +94,9 @@ daos-server RPM.
 
 In this section, PMem (Intel(R) Optane(TM) persistent memory) will be prepared and configured to be
 used by DAOS and NVME SSDs will be identified.
+If the DAOS servers do not use Optane Persistent Memory, then please refer to
+[Metadata-on-SSD configuration](https://docs.daos.io/v2.6/admin/deployment/#md-on-ssd-configuration)
+for instructions how to configure the servers without PMem.
 
 1. Prepare the pmem devices on Server nodes:
 
