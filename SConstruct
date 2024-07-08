@@ -18,6 +18,7 @@ wrap scons-3.""")
 
 SCons.Warnings.warningAsException()
 
+
 def add_command_line_options():
     """Add command line options"""
 
