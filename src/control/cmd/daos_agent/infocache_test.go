@@ -149,14 +149,22 @@ func TestAgent_cachedAttachInfo_Key(t *testing.T) {
 	}
 }
 
-func TestAgent_cachedAttachInfo_NeedsRefresh(t *testing.T) {
+func TestAgent_cachedAttachInfo_RefreshIfNeeded(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+	mockClient := control.NewMockInvoker(log, &control.MockInvokerConfig{})
+
+	noopGetAttachInfo := func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
+		return nil, nil
+	}
+
 	for name, tc := range map[string]struct {
 		ai        *cachedAttachInfo
 		expResult bool
 	}{
 		"nil": {},
 		"never cached": {
-			ai:        newCachedAttachInfo(0, "test", nil, nil),
+			ai:        newCachedAttachInfo(0, "test", mockClient, noopGetAttachInfo),
 			expResult: true,
 		},
 		"no refresh": {
@@ -164,6 +172,8 @@ func TestAgent_cachedAttachInfo_NeedsRefresh(t *testing.T) {
 				cacheItem: cacheItem{
 					lastCached: time.Now().Add(-time.Minute),
 				},
+				rpcClient:    mockClient,
+				fetch:        noopGetAttachInfo,
 				lastResponse: &control.GetAttachInfoResp{},
 			},
 		},
@@ -173,6 +183,8 @@ func TestAgent_cachedAttachInfo_NeedsRefresh(t *testing.T) {
 					lastCached:      time.Now().Add(-time.Minute),
 					refreshInterval: time.Second,
 				},
+				rpcClient:    mockClient,
+				fetch:        noopGetAttachInfo,
 				lastResponse: &control.GetAttachInfoResp{},
 			},
 			expResult: true,
@@ -183,12 +195,15 @@ func TestAgent_cachedAttachInfo_NeedsRefresh(t *testing.T) {
 					lastCached:      time.Now().Add(-time.Second),
 					refreshInterval: time.Minute,
 				},
+				rpcClient:    mockClient,
+				fetch:        noopGetAttachInfo,
 				lastResponse: &control.GetAttachInfoResp{},
 			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			test.AssertEqual(t, tc.expResult, tc.ai.NeedsRefresh(), "")
+			refreshed, _ := tc.ai.RefreshIfNeeded(test.Context(t))
+			test.AssertEqual(t, tc.expResult, refreshed, "")
 		})
 	}
 }
@@ -272,7 +287,6 @@ func TestAgent_cachedAttachInfo_Refresh(t *testing.T) {
 			}
 
 			err := ai.Refresh(test.Context(t))
-
 			test.CmpErr(t, tc.expErr, err)
 
 			if ai == nil {
@@ -319,7 +333,7 @@ func TestAgent_cachedFabricInfo_Key(t *testing.T) {
 	}
 }
 
-func TestAgent_cachedFabricInfo_NeedsRefresh(t *testing.T) {
+func TestAgent_cachedFabricInfo_RefreshIfNeeded(t *testing.T) {
 	for name, tc := range map[string]struct {
 		nilCache  bool
 		cacheTime time.Time
@@ -338,11 +352,14 @@ func TestAgent_cachedFabricInfo_NeedsRefresh(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			var cfi *cachedFabricInfo
 			if !tc.nilCache {
-				cfi = newCachedFabricInfo(nil, hardware.Netrom)
+				cfi = newCachedFabricInfo(func(_ context.Context, _ ...string) (*NUMAFabric, error) {
+					return nil, nil
+				}, hardware.Netrom)
 				cfi.cacheItem.lastCached = tc.cacheTime
 			}
 
-			test.AssertEqual(t, tc.expResult, cfi.NeedsRefresh(), "")
+			refreshed, _ := cfi.RefreshIfNeeded(test.Context(t))
+			test.AssertEqual(t, tc.expResult, refreshed, "")
 		})
 	}
 }
@@ -452,7 +469,6 @@ func TestAgent_cachedFabricInfo_Refresh(t *testing.T) {
 			}
 
 			err := cfi.Refresh(test.Context(t))
-
 			test.CmpErr(t, tc.expErr, err)
 
 			if cfi == nil {
