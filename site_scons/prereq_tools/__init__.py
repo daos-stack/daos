@@ -1,4 +1,4 @@
-# Copyright 2016-2022 Intel Corporation
+# Copyright 2016-2024 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -20,5 +20,10 @@
 # -*- coding: utf-8 -*-
 """Tools for prebuilding external components from a SCons script"""
 
+from SCons.Script import SetOption
+
 # pylint: disable=wildcard-import
 from .base import *  # noqa: F403,F401
+
+# scons 4.8.0 deprecated python <= 3.7.0
+SetOption('warn', ['no-python-version'])
