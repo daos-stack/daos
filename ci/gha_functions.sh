@@ -6,15 +6,6 @@ error_exit() {
     exit 1
 }
 
-get_repo_path() {
-    # shellcheck disable=SC2153
-    local repo_path="$REPO_PATH$GITHUB_RUN_NUMBER/artifact/artifacts/"
-    mkdir -p "$repo_path"
-
-    echo "$repo_path"
-
-}
-
 cleanup_provision_request () {
     local reqid="$1"
     local file="/scratch/Get a cluster/$reqid"
@@ -76,14 +67,6 @@ get_test_tags() {
 }
 
 
-get_commit_pragmas() {
-    sed -Ene 's/^([-[:alnum:]]+): *([-\._, [:alnum:]]+)$/\1 \2/p' | while read -r a b; do
-        echo -n "${a//-/_}" | tr '[:lower:]' '[:upper:]'
-        # escape special characters in the value
-        echo "=$b" | sed -e 's/\([<> ]\)/\\\1/g'
-    done
-}
-
 wait_nodes_ready() {
 
     local wait_seconds=600
@@ -102,10 +85,6 @@ wait_nodes_ready() {
           fi;
     done;
     exit 1
-}
-
-escape_single_quotes() {
-    sed -e "s/'/'\"'\"'/g"
 }
 
 # Persist these across calls
@@ -252,41 +231,6 @@ test_test_tag_and_features() {
     # Features: and Test-tag:
     assert_equals "$(REQ_TEST_TAG="always_passes always_fails"
                      CP_FEATURES="foo bar" get_test_tags "-hw")" "always_passes,-hw always_fails,-hw"
-}
-
-test_get_commit_pragmas() {
-    local msg='Escape spaces also
-
-'"'"'Will-not-be-a-pragma: false'"'"' should not be considered a commit
-pragma, but:
-Should-not-be-a-pragma: bar will be because it was not quoted.
-
-Skip-func-test-leap15: false
-RPM-test-version: 2.5.100-13.10036.g65926e32
-Skip-PR-comments: true
-Test-tag: always_passes always_fails
-EL8-VM9-label: all_vm9
-EL9-VM9-label: all_vm9
-Leap15-VM9-label: all_vm9
-HW-medium-label: new_icx5
-HW-large-label: new_icx9
-
-Required-githooks: true
-
-Signed-off-by: Brian J. Murrell <brian.murrell@intel.com>
-'
-    assert_equals "$(echo "$msg" | get_commit_pragmas)" 'SHOULD_NOT_BE_A_PRAGMA=bar\ will\ be\ because\ it\ was\ not\ quoted.
-SKIP_FUNC_TEST_LEAP15=false
-RPM_TEST_VERSION=2.5.100-13.10036.g65926e32
-SKIP_PR_COMMENTS=true
-TEST_TAG=always_passes\ always_fails
-EL8_VM9_LABEL=all_vm9
-EL9_VM9_LABEL=all_vm9
-LEAP15_VM9_LABEL=all_vm9
-HW_MEDIUM_LABEL=new_icx5
-HW_LARGE_LABEL=new_icx9
-REQUIRED_GITHOOKS=true'
-
 }
 
 test_jenkins_curl() {
