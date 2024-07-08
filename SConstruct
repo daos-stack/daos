@@ -375,6 +375,9 @@ def scons():
 
     deps_env = Environment()
 
+    # Silence deprecation warning so it doesn't fail the build
+    SetOption('warn', ['no-python-version'])
+
     add_command_line_options()
 
     # Scons strips out the environment, however that is not always desirable so add back in
