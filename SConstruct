@@ -5,6 +5,7 @@ import subprocess  # nosec
 import sys
 import time
 
+
 import SCons.Warnings
 from prereq_tools import PreReqComponent  # pylint: disable=reimported
 
