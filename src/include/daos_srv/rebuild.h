@@ -43,7 +43,7 @@ typedef enum {
 /* Full rebuild identifying information includes <leader_rank>/<term>
  * Instead of this, use DF_RB most of the time (use this for leader change scenarios, etc.)
  */
-#define DF_RBF DF_RB " ld=%u/" DF_U64
+#define DF_RBF DF_RB "  ld=%u/" DF_U64
 
 /* arguments for log rebuild identifier given a struct rebuild_global_pool_tracker * */
 #define DP_RB_RGT(rgt)                                                                             \
