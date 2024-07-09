@@ -98,7 +98,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Import commit pragmas
-        uses: ./.github/actions/import-commit-pragmas
+        uses: daos-stack/action-import-commit-pragmas@bmurrell/initial
         with:
           commit-message: ${{ needs.Call-RPM-Build.outputs.dequoted-commit-message }}
       - name: Calculate Functional Testing Matrix
@@ -225,7 +225,7 @@ jobs:
           fetch-depth: 500
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Import commit pragmas
-        uses: ./.github/actions/import-commit-pragmas
+        uses: daos-stack/action-import-commit-pragmas@bmurrell/initial
         with:
           commit-message: ${{ needs.Call-RPM-Build.outputs.dequoted-commit-message }}
       - name: Set variables
@@ -380,7 +380,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Import commit pragmas
-        uses: ./.github/actions/import-commit-pragmas
+        uses: daos-stack/action-import-commit-pragmas@bmurrell/initial
         with:
           commit-message: ${{ needs.Call-RPM-Build.outputs.dequoted-commit-message }}
       - name: Calculate Functional Testing Matrix
@@ -492,7 +492,7 @@ jobs:
           fetch-depth: 500
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Import commit pragmas
-        uses: ./.github/actions/import-commit-pragmas
+        uses: daos-stack/action-import-commit-pragmas@bmurrell/initial
         with:
           commit-message: ${{ needs.Call-RPM-Build.outputs.dequoted-commit-message }}
       - name: Set variables
