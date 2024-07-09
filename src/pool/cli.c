@@ -763,8 +763,7 @@ warmup(struct dc_pool *pool)
 	D_ALLOC(bulk_buf, bulk_len);
 	if (bulk_buf == NULL) {
 		D_ERROR("Failed to alloc mem\n");
-		D_MUTEX_UNLOCK(&warmup_lock);
-		return;
+		goto out_unlock;
 	}
 
 	ctx = daos_get_crt_ctx();
@@ -776,15 +775,13 @@ warmup(struct dc_pool *pool)
 	rc            = crt_bulk_create(ctx, &sgl, CRT_BULK_RW, &bulk_hdl);
 	if (rc < 0) {
 		D_ERROR("Failed to create bulk handle\n");
-		D_MUTEX_UNLOCK(&warmup_lock);
-		return;
+		goto out_bulk;
 	}
 
 	rc = sem_init(&sem, 0, 0);
 	if (rc < 0) {
 		D_ERROR("Failed to initialize semaphore\n");
-		D_MUTEX_UNLOCK(&warmup_lock);
-		return;
+		goto out_hdl;
 	}
 
 	/** retrieve all targets from the pool map */
@@ -805,6 +802,9 @@ warmup(struct dc_pool *pool)
 		crt_opcode_t               opcode;
 
 		idx        = (i + shift) % nr;
+		if (tgts[idx].ta_comp.co_status == PO_COMP_ST_DOWN ||
+		    tgts[idx].ta_comp.co_status == PO_COMP_ST_DOWNOUT)
+			continue;
 		ep.ep_grp  = pool->dp_sys->sy_group;
 		ep.ep_rank = tgts[idx].ta_comp.co_rank;
 		ep.ep_tag  = daos_rpc_tag(DAOS_REQ_TGT, tgts[idx].ta_comp.co_index);
@@ -814,7 +814,7 @@ warmup(struct dc_pool *pool)
 		rc         = crt_req_create(ctx, &ep, opcode, &rpc);
 		if (rc != 0) {
 			D_ERROR("Failed to allocate req " DF_RC "\n", DP_RC(rc));
-			goto exit;
+			goto out_sem;
 		}
 		D_ASSERTF(rc == 0, "crt_req_create failed; rc=%d\n", rc);
 		rpc_in          = crt_req_get(rpc);
@@ -824,7 +824,7 @@ warmup(struct dc_pool *pool)
 		if (rc != 0) {
 			D_ERROR("Failed to ping rank=%d:%d, " DF_RC "\n", ep.ep_rank, ep.ep_tag,
 				DP_RC(rc));
-			goto exit;
+			goto out_sem;
 		}
 
 		while (sem_trywait(&sem) == -1) {
@@ -838,10 +838,13 @@ warmup(struct dc_pool *pool)
 	}
 	D_DEBUG(DB_TRACE, "Pinging done\n");
 
-exit:
+out_sem:
 	(void)sem_destroy(&sem);
+out_hdl:
 	crt_bulk_free(bulk_hdl);
+out_bulk:
 	D_FREE(bulk_buf);
+out_unlock:
 	D_MUTEX_UNLOCK(&warmup_lock);
 }
 
