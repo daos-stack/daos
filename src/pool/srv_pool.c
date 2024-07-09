@@ -1510,7 +1510,7 @@ init_svc_pool(struct pool_svc *svc, struct pool_buf *map_buf,
 	struct ds_pool *pool;
 	int		rc;
 
-	rc = ds_pool_lookup(svc->ps_uuid, &pool);
+	rc = DS_POOL_LOOKUP(svc->ps_uuid, &pool);
 	if (rc) {
 		D_ERROR(DF_UUID": failed to get ds_pool: %d\n",
 			DP_UUID(svc->ps_uuid), rc);
@@ -1518,13 +1518,13 @@ init_svc_pool(struct pool_svc *svc, struct pool_buf *map_buf,
 	}
 	rc = ds_pool_tgt_map_update(pool, map_buf, map_version);
 	if (rc != 0) {
-		ds_pool_put(pool);
+		DS_POOL_PUT(&pool);
 		return rc;
 	}
 	ds_pool_iv_ns_update(pool, dss_self_rank(), term);
 
 	D_ASSERT(svc->ps_pool == NULL);
-	svc->ps_pool = pool;
+	D_REF_TRACKER_MOVE(&pool->sp_ref_tracker, svc->ps_pool, pool);
 	return 0;
 }
 
@@ -1533,7 +1533,7 @@ static void
 fini_svc_pool(struct pool_svc *svc)
 {
 	D_ASSERT(svc->ps_pool != NULL);
-	ds_pool_put(svc->ps_pool);
+	DS_POOL_PUT(&svc->ps_pool);
 	svc->ps_pool = NULL;
 }
 
@@ -8034,7 +8034,7 @@ is_pool_from_srv(uuid_t pool_uuid, uuid_t poh_uuid)
 	struct ds_pool	*pool;
 	int		rc;
 
-	rc = ds_pool_lookup(pool_uuid, &pool);
+	rc = DS_POOL_LOOKUP(pool_uuid, &pool);
 	if (rc) {
 		D_ERROR(DF_UUID": failed to get ds_pool: %d\n",
 			DP_UUID(pool_uuid), rc);
@@ -8042,7 +8042,7 @@ is_pool_from_srv(uuid_t pool_uuid, uuid_t poh_uuid)
 	}
 
 	rc = ds_pool_hdl_is_from_srv(pool, poh_uuid);
-	ds_pool_put(pool);
+	DS_POOL_PUT(&pool);
 	if (rc < 0) {
 		D_ERROR(DF_UUID" fetch srv hdl: %d\n", DP_UUID(pool_uuid), rc);
 		return false;

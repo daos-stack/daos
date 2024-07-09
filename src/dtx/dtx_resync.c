@@ -598,7 +598,7 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, b
 	int				 rc = 0;
 	int				 rc1 = 0;
 
-	rc = ds_cont_child_lookup(po_uuid, co_uuid, &cont);
+	rc = DS_CONT_CHILD_LOOKUP(po_uuid, co_uuid, &cont);
 	if (rc != 0) {
 		D_ERROR("Failed to open container for resync DTX "
 			DF_UUID"/"DF_UUID": rc = %d\n",
@@ -703,7 +703,7 @@ out:
 	D_DEBUG(DB_MD, "Exit DTX resync (%s) for "DF_UUID"/"DF_UUID" with ver %u, rc = %d\n",
 		block ? "block" : "non-block", DP_UUID(po_uuid), DP_UUID(co_uuid), ver, rc);
 
-	ds_cont_child_put(cont);
+	DS_CONT_CHILD_PUT(&cont);
 	return rc > 0 ? 0 : rc;
 }
 
@@ -789,7 +789,7 @@ dtx_resync_ult(void *data)
 	struct ds_pool		*pool;
 	int			rc = 0;
 
-	rc = ds_pool_lookup(arg->pool_uuid, &pool);
+	rc = DS_POOL_LOOKUP(arg->pool_uuid, &pool);
 	D_ASSERTF(pool != NULL, DF_UUID" rc %d\n", DP_UUID(arg->pool_uuid), rc);
 	if (pool->sp_dtx_resync_version >= arg->version) {
 		D_DEBUG(DB_MD, DF_UUID" ignore dtx resync version %u/%u\n",
@@ -817,6 +817,6 @@ dtx_resync_ult(void *data)
 	}
 	pool->sp_dtx_resync_version = arg->version;
 out_put:
-	ds_pool_put(pool);
+	DS_POOL_PUT(&pool);
 	D_FREE(arg);
 }

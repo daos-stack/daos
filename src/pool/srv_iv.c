@@ -846,7 +846,7 @@ pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	d_rank_t		rank;
 	int			rc;
 
-	rc = ds_pool_lookup(entry->ns->iv_pool_uuid, &pool);
+	rc = DS_POOL_LOOKUP(entry->ns->iv_pool_uuid, &pool);
 	if (rc) {
 		D_WARN("No pool "DF_UUID": %d\n", DP_UUID(entry->ns->iv_pool_uuid), rc);
 		if (rc == -DER_NONEXIST)
@@ -936,7 +936,7 @@ out_put:
 	D_DEBUG(DB_MD, DF_UUID": key %u rc %d\n",
 		DP_UUID(entry->ns->iv_pool_uuid), key->class_id, rc);
 	if (pool != NULL)
-		ds_pool_put(pool);
+		DS_POOL_PUT(&pool);
 	return rc;
 }
 
@@ -950,7 +950,7 @@ pool_iv_ent_invalid(struct ds_iv_entry *entry, struct ds_iv_key *key)
 	if (entry->iv_class->iv_class_id == IV_POOL_HDL) {
 		if (!uuid_is_null(iv_entry->piv_hdl.pih_cont_hdl)) {
 			entry->iv_valid = false;
-			rc = ds_pool_lookup(entry->ns->iv_pool_uuid, &pool);
+			rc = DS_POOL_LOOKUP(entry->ns->iv_pool_uuid, &pool);
 			if (rc) {
 				if (rc == -DER_NONEXIST)
 					rc = 0;
@@ -961,7 +961,7 @@ pool_iv_ent_invalid(struct ds_iv_entry *entry, struct ds_iv_key *key)
 			uuid_clear(pool->sp_srv_cont_hdl);
 			uuid_clear(pool->sp_srv_pool_hdl);
 			uuid_clear(iv_entry->piv_hdl.pih_cont_hdl);
-			ds_pool_put(pool);
+			DS_POOL_PUT(&pool);
 			return 0;
 		}
 	} else if (entry->iv_class->iv_class_id == IV_POOL_CONN) {
@@ -986,9 +986,9 @@ pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	int			rc;
 
 	if (src == NULL)
-		rc = ds_pool_lookup_internal(entry->ns->iv_pool_uuid, &pool);
+		rc = DS_POOL_LOOKUP_INTERNAL(entry->ns->iv_pool_uuid, &pool);
 	else
-		rc = ds_pool_lookup(entry->ns->iv_pool_uuid, &pool);
+		rc = DS_POOL_LOOKUP(entry->ns->iv_pool_uuid, &pool);
 	if (rc) {
 		D_WARN("No pool "DF_UUID": %d\n", DP_UUID(entry->ns->iv_pool_uuid), rc);
 		if (rc == -DER_NONEXIST)
@@ -1078,7 +1078,7 @@ out_put:
 	D_DEBUG(DB_MD, DF_UUID": key %u rc %d\n",
 		DP_UUID(entry->ns->iv_pool_uuid), key->class_id, rc);
 	if (pool)
-		ds_pool_put(pool);
+		DS_POOL_PUT(&pool);
 
 	return rc;
 }
@@ -1104,7 +1104,7 @@ pool_iv_pre_sync(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	if (entry->iv_class->iv_class_id != IV_POOL_MAP)
 		return 0;
 
-	rc = ds_pool_lookup(entry->ns->iv_pool_uuid, &pool);
+	rc = DS_POOL_LOOKUP(entry->ns->iv_pool_uuid, &pool);
 	if (rc != 0) {
 		D_DEBUG(DB_TRACE, DF_UUID": pool not found: %d\n",
 			DP_UUID(entry->ns->iv_pool_uuid), rc);
@@ -1128,7 +1128,7 @@ pool_iv_pre_sync(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	ABT_cond_signal(pool->sp_fetch_hdls_cond);
 	ABT_mutex_unlock(pool->sp_mutex);
 
-	ds_pool_put(pool);
+	DS_POOL_PUT(&pool);
 	return rc;
 }
 
@@ -1389,7 +1389,7 @@ ds_pool_map_refresh_ult(void *arg)
 
 	/* Pool IV fetch should only be done in xstream 0 */
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
-	rc = ds_pool_lookup(iv_arg->iua_pool_uuid, &pool);
+	rc = DS_POOL_LOOKUP(iv_arg->iua_pool_uuid, &pool);
 	if (rc != 0) {
 		D_WARN(DF_UUID" refresh pool map: %d\n", DP_UUID(iv_arg->iua_pool_uuid), rc);
 		goto out;
@@ -1432,7 +1432,7 @@ unlock:
 	ABT_mutex_unlock(pool->sp_mutex);
 out:
 	if (pool != NULL)
-		ds_pool_put(pool);
+		DS_POOL_PUT(&pool);
 	if (iv_arg->iua_eventual)
 		ABT_eventual_set(iv_arg->iua_eventual, (void *)&rc, sizeof(rc));
 	D_FREE(iv_arg);

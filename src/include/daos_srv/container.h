@@ -51,6 +51,7 @@ int ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
  */
 struct ds_cont_child {
 	struct daos_llink	 sc_list;
+	struct d_ref_tracker	 sc_ref_tracker;
 	daos_handle_t		 sc_hdl;	/* vos_container handle */
 	uuid_t			 sc_uuid;	/* container UUID */
 	uuid_t			 sc_pool_uuid;	/* pool UUID */
@@ -188,6 +189,36 @@ int ds_cont_local_close(uuid_t cont_hdl_uuid);
 
 int ds_cont_child_start_all(struct ds_pool_child *pool_child);
 void ds_cont_child_stop_all(struct ds_pool_child *pool_child);
+
+/**
+ * Look up the ds_cont_child object with <\a pool_uuid, \a cont_uuid>, assign
+ * a reference to \a child, and return a return code.
+ */
+#define DS_CONT_CHILD_LOOKUP(pool_uuid, cont_uuid, child)                                          \
+	({                                                                                         \
+		int ds_cont_child_lookup_rc;                                                       \
+                                                                                                   \
+		ds_cont_child_lookup_rc = ds_cont_child_lookup(pool_uuid, cont_uuid, child);       \
+		if (ds_cont_child_lookup_rc == 0)                                                  \
+			d_ref_tracker_track(&(*child)->sc_ref_tracker, child, __func__, __LINE__); \
+		ds_cont_child_lookup_rc;                                                           \
+	})
+
+/** Get a ds_cont_child reference from \a child. */
+#define DS_CONT_CHILD_GET(to, from)                                                                \
+	do {                                                                                       \
+		ds_cont_child_get(from);                                                           \
+		*to = from;                                                                        \
+		d_ref_tracker_track(&(*to)->sc_ref_tracker, to, __func__, __LINE__);              \
+	} while (0)
+
+/** Put the ds_cont_child reference and assign NULL to \a child. */
+#define DS_CONT_CHILD_PUT(child)                                                                   \
+	do {                                                                                       \
+		d_ref_tracker_untrack(&(*child)->sc_ref_tracker, child);                           \
+		ds_cont_child_put(*child);                                                         \
+		*child = NULL;                                                                     \
+	} while (0)
 
 int ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 			 struct ds_cont_child **ds_cont);

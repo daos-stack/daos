@@ -55,7 +55,7 @@ dtx_coll_prep_ult(void *arg)
 	uint32_t			 opc = opc_get(dcpa->dcpa_rpc->cr_opc);
 	int				 rc = 0;
 
-	dcpa->dcpa_result = ds_cont_child_lookup(dci->dci_po_uuid, dci->dci_co_uuid, &cont);
+	dcpa->dcpa_result = DS_CONT_CHILD_LOOKUP(dci->dci_po_uuid, dci->dci_co_uuid, &cont);
 	if (dcpa->dcpa_result != 0) {
 		D_ERROR("Failed to locate pool="DF_UUID" cont="DF_UUID" for DTX "
 			DF_DTI" with opc %u: "DF_RC"\n",
@@ -93,7 +93,7 @@ dtx_coll_prep_ult(void *arg)
 
 out:
 	if (cont != NULL)
-		ds_cont_child_put(cont);
+		DS_CONT_CHILD_PUT(&cont);
 
 	rc = ABT_future_set(dcpa->dcpa_future, NULL);
 	D_ASSERT(rc == ABT_SUCCESS);
@@ -289,7 +289,7 @@ dtx_coll_local_one(void *args)
 	int				 rc;
 	int				 rc1;
 
-	rc = ds_cont_child_lookup(dcla->dcla_po_uuid, dcla->dcla_co_uuid, &cont);
+	rc = DS_CONT_CHILD_LOOKUP(dcla->dcla_po_uuid, dcla->dcla_co_uuid, &cont);
 	if (rc != 0) {
 		D_ERROR("Failed to locate "DF_UUID"/"DF_UUID" for collective DTX "
 			DF_DTI" rpc %u: "DF_RC"\n", DP_UUID(dcla->dcla_po_uuid),
@@ -331,7 +331,7 @@ dtx_coll_local_one(void *args)
 out:
 	dcla->dcla_results[dmi->dmi_tgt_id] = rc;
 	if (cont != NULL)
-		ds_cont_child_put(cont);
+		DS_CONT_CHILD_PUT(&cont);
 
 	return 0;
 }

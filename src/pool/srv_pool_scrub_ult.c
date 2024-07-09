@@ -71,7 +71,7 @@ cont_lookup_cb(uuid_t pool_uuid, uuid_t cont_uuid, void *arg,
 	struct ds_cont_child	*cont_child = NULL;
 	int			 rc;
 
-	rc = ds_cont_child_lookup(pool_uuid, cont_uuid, &cont_child);
+	rc = DS_CONT_CHILD_LOOKUP(pool_uuid, cont_uuid, &cont_child);
 	if (rc != 0) {
 		D_ERROR("failed to get cont: "DF_RC"\n", DP_RC(rc));
 		return rc;
@@ -80,27 +80,28 @@ cont_lookup_cb(uuid_t pool_uuid, uuid_t cont_uuid, void *arg,
 	cont->scs_cont_csummer = cont_child->sc_csummer;
 	cont->scs_cont_hdl = cont_child->sc_hdl;
 	uuid_copy(cont->scs_cont_uuid, cont_uuid);
-	cont->scs_cont_src = cont_child;
+	DS_CONT_CHILD_GET(&cont->scs_cont_src, cont_child);
 	cont->scs_props_fetched = cont_child->sc_props_fetched;
 
 	ABT_mutex_lock(cont_child->sc_mutex);
 	cont_child->sc_scrubbing = 1;
 	ABT_mutex_unlock(cont_child->sc_mutex);
 
+	DS_CONT_CHILD_PUT(&cont_child);
 	return 0;
 }
 
 static inline void
-cont_put_cb(void *cont)
+cont_put_cb(void **cont)
 {
-	struct ds_cont_child *cont_child = cont;
+	struct ds_cont_child *cont_child = *cont;
 
 	ABT_mutex_lock(cont_child->sc_mutex);
 	cont_child->sc_scrubbing = 0;
 	ABT_cond_broadcast(cont_child->sc_scrub_cond);
 	ABT_mutex_unlock(cont_child->sc_mutex);
 
-	ds_cont_child_put(cont_child);
+	DS_CONT_CHILD_PUT((struct ds_cont_child **)cont);
 }
 
 static inline bool

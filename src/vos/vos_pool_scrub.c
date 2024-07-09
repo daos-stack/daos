@@ -776,7 +776,7 @@ static void
 sc_cont_teardown(struct scrub_ctx *ctx)
 {
 	if (ctx->sc_cont_put_fn != NULL)
-		ctx->sc_cont_put_fn(ctx->sc_cont.scs_cont_src);
+		ctx->sc_cont_put_fn(&ctx->sc_cont.scs_cont_src);
 }
 
 /** vos_iter_cb_t */

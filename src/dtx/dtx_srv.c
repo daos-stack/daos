@@ -163,7 +163,7 @@ dtx_handler(crt_rpc_t *rpc)
 	int			 rc1 = 0;
 	int			 rc;
 
-	rc = ds_cont_child_lookup(din->di_po_uuid, din->di_co_uuid, &cont);
+	rc = DS_CONT_CHILD_LOOKUP(din->di_po_uuid, din->di_co_uuid, &cont);
 	if (rc != 0) {
 		D_ERROR("Failed to locate pool="DF_UUID" cont="DF_UUID
 			" for DTX rpc %u: rc = "DF_RC"\n",
@@ -385,7 +385,7 @@ out:
 	dout->do_sub_rets.ca_count = 0;
 
 	if (cont != NULL)
-		ds_cont_child_put(cont);
+		DS_CONT_CHILD_PUT(&cont);
 }
 
 static void

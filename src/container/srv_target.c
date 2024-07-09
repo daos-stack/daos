@@ -1281,7 +1281,7 @@ ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid)
 	struct cont_tgt_destroy_in in;
 	int rc;
 
-	rc = ds_pool_lookup(pool_uuid, &pool);
+	rc = DS_POOL_LOOKUP(pool_uuid, &pool);
 	if (rc != 0) {
 		D_DEBUG(DB_MD, DF_UUID" lookup pool failed: %d\n",
 			DP_UUID(pool_uuid), rc);
@@ -1292,7 +1292,7 @@ ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid)
 	uuid_copy(in.tdi_uuid, cont_uuid);
 
 	cont_iv_entry_delete(pool->sp_iv_ns, pool_uuid, cont_uuid);
-	ds_pool_put(pool);
+	DS_POOL_PUT(&pool);
 
 	rc = ds_pool_thread_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
 				       PO_COMP_ST_DOWNOUT, cont_child_destroy_one, &in, 0);
@@ -1692,7 +1692,7 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 	int			rc;
 
 	/* Only for debugging purpose to compare srv_cont_hdl with cont_hdl_uuid */
-	rc = ds_pool_lookup(pool_uuid, &pool);
+	rc = DS_POOL_LOOKUP(pool_uuid, &pool);
 	if (rc != 0) {
 		D_DEBUG(DB_MD, DF_UUID" lookup pool failed: "DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
@@ -1703,7 +1703,7 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 	if (uuid_compare(pool->sp_srv_cont_hdl, cont_hdl_uuid) == 0 && sec_capas == 0)
 		D_WARN("srv hdl "DF_UUID" capas is "DF_X64"\n",
 		       DP_UUID(cont_hdl_uuid), sec_capas);
-	ds_pool_put(pool);
+	DS_POOL_PUT(&pool);
 
 	uuid_copy(arg.pool_uuid, pool_uuid);
 	uuid_copy(arg.cont_hdl_uuid, cont_hdl_uuid);
@@ -1962,7 +1962,7 @@ cont_snap_update_one(void *vin)
 	struct ds_cont_child	*cont;
 	int			 rc;
 
-	rc = ds_cont_child_lookup(args->pool_uuid, args->cont_uuid, &cont);
+	rc = DS_CONT_CHILD_LOOKUP(args->pool_uuid, args->cont_uuid, &cont);
 	if (rc != 0)
 		return rc;
 	if (args->snap_count == 0) {
@@ -1993,7 +1993,7 @@ cont_snap_update_one(void *vin)
 	cont->sc_snapshots_nr = args->snap_count;
 	cont->sc_aggregation_max = DAOS_EPOCH_MAX;
 out_cont:
-	ds_cont_child_put(cont);
+	DS_CONT_CHILD_PUT(&cont);
 	return rc;
 }
 
@@ -2030,7 +2030,7 @@ cont_snapshots_refresh_ult(void *data)
 	struct ds_pool		*pool;
 	int			 rc;
 
-	rc = ds_pool_lookup(args->pool_uuid, &pool);
+	rc = DS_POOL_LOOKUP(args->pool_uuid, &pool);
 	if (rc != 0) {
 		D_DEBUG(DB_MD, DF_UUID" lookup pool failed: "DF_RC"\n",
 			DP_UUID(args->pool_uuid), DP_RC(rc));
@@ -2038,7 +2038,7 @@ cont_snapshots_refresh_ult(void *data)
 		goto out;
 	}
 	rc = cont_iv_snapshots_refresh(pool->sp_iv_ns, args->cont_uuid);
-	ds_pool_put(pool);
+	DS_POOL_PUT(&pool);
 out:
 	if (rc != 0)
 		D_DEBUG(DB_TRACE, DF_UUID": failed to refresh snapshots IV: "
@@ -2072,7 +2072,7 @@ cont_snap_notify_one(void *vin)
 	struct ds_cont_child	*cont;
 	int			 rc;
 
-	rc = ds_cont_child_lookup(args->pool_uuid, args->cont_uuid, &cont);
+	rc = DS_CONT_CHILD_LOOKUP(args->pool_uuid, args->cont_uuid, &cont);
 	if (rc != 0)
 		return rc;
 
@@ -2086,7 +2086,7 @@ cont_snap_notify_one(void *vin)
 	if (args->snap_opts & DAOS_SNAP_OPT_CR)
 		cont->sc_aggregation_max = d_hlc_get();
 out_cont:
-	ds_cont_child_put(cont);
+	DS_CONT_CHILD_PUT(&cont);
 	return rc;
 }
 

@@ -194,7 +194,7 @@ ds_cont_svc_step_up(struct cont_svc *svc)
 	int rc;
 
 	D_ASSERT(svc->cs_pool == NULL);
-	rc = ds_pool_lookup(svc->cs_pool_uuid, &svc->cs_pool);
+	rc = DS_POOL_LOOKUP(svc->cs_pool_uuid, &svc->cs_pool);
 	if (rc != 0)  {
 		D_ERROR(DF_UUID": pool lookup failed: "DF_RC"\n",
 			DP_UUID(svc->cs_pool_uuid), DP_RC(rc));
@@ -215,7 +215,7 @@ ds_cont_svc_step_down(struct cont_svc *svc)
 {
 	cont_svc_ec_agg_leader_stop(svc);
 	D_ASSERT(svc->cs_pool != NULL);
-	ds_pool_put(svc->cs_pool);
+	DS_POOL_PUT(&svc->cs_pool);
 	svc->cs_pool = NULL;
 }
 
@@ -1790,7 +1790,7 @@ cont_refresh_vos_agg_eph_one(void *data)
 	struct ds_cont_child	*cont_child;
 	int			rc;
 
-	rc = ds_cont_child_lookup(arg->pool_uuid, arg->cont_uuid, &cont_child);
+	rc = DS_CONT_CHILD_LOOKUP(arg->pool_uuid, arg->cont_uuid, &cont_child);
 	if (rc)
 		return rc;
 
@@ -1802,7 +1802,7 @@ cont_refresh_vos_agg_eph_one(void *data)
 	if (cont_child->sc_ec_agg_eph_boundary < arg->min_eph)
 		cont_child->sc_ec_agg_eph_boundary = arg->min_eph;
 
-	ds_cont_child_put(cont_child);
+	DS_CONT_CHILD_PUT(&cont_child);
 	return rc;
 }
 
