@@ -3441,7 +3441,7 @@ class PosixTests():
         if dfuse.stop():
             self.fatal_errors = True
 
-    @needs_dfuse
+    @needs_dfuse_with_opt(caching=False)
     def test_complex_rename(self):
         """Test for rename semantics
 
