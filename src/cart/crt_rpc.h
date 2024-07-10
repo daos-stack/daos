@@ -131,8 +131,10 @@ struct crt_rpc_priv {
 	crt_rpc_t		crp_pub; /* public part */
 	/* link to crt_ep_inflight::epi_req_q/::epi_req_waitq */
 	d_list_t		crp_epi_link;
-	/* tmp_link used in crt_context_req_untrack */
-	d_list_t		crp_tmp_link;
+	/* link for temp list used during timeout processing */
+	d_list_t                 crp_tmp_link_timeout;
+	/* link for temp list used for wait q processing */
+	d_list_t                 crp_tmp_link_submit;
 	/* link for crt_context::cc_quotas.rpc_waitq */
 	d_list_t		crp_waitq_link;
 	/* link to parent RPC crp_opc_info->co_child_rpcs/co_replied_rpcs */

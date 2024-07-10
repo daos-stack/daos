@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -83,6 +83,11 @@ func MockNvmeHealth(varIdx ...int32) *NvmeHealth {
 		PllLockLossCnt:          uint64(idx),
 		NandBytesWritten:        uint64(idx),
 		HostBytesWritten:        uint64(idx),
+		LinkPortId:              uint32(idx),
+		LinkMaxSpeed:            float32(idx) * 1e+9,
+		LinkMaxWidth:            uint32(idx) * 4,
+		LinkNegSpeed:            float32(idx) * 1e+9,
+		LinkNegWidth:            uint32(idx) * 4,
 	}
 }
 

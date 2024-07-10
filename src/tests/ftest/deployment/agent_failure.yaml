@@ -37,7 +37,7 @@ container:
   type: POSIX
   control_method: daos
 
-ior:
+ior: &ior_base
   client_processes:
     ppn: 4
   iorflags:
@@ -46,8 +46,14 @@ ior:
     # This test doesn't work if the IOR runs too fast. In that case, increase
     # block_size and/or decrease transfer_size. To decrease transfer_size, divide it
     # by 2, 4, 8, etc.
-    transfer_size: 256K
+    transfer_size: 256K  # CI
+    # transfer_size: 1G  # Aurora
     block_size: 100G
     sw_deadline: 60
-    dfs_oclass: SX
-    dfs_dir_oclass: SX
+ior_wo_rf:
+  <<: *ior_base
+  dfs_oclass: SX
+ior_with_ec:
+  <<: *ior_base
+  dfs_oclass: EC_2P2GX  # CI
+  # dfs_oclass: EC_16P2GX  # Aurora

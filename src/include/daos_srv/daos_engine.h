@@ -679,33 +679,6 @@ obj_tree_insert(daos_handle_t toh, uuid_t co_uuid, uint64_t tgt_id,
 int
 obj_tree_destroy(daos_handle_t btr_hdl);
 
-/* Per xstream migrate status */
-struct ds_migrate_status {
-	uint64_t dm_rec_count;	/* migrated record size */
-	uint64_t dm_obj_count;	/* migrated object count */
-	uint64_t dm_total_size;	/* migrated total size */
-	int	 dm_status;	/* migrate status */
-	uint32_t dm_migrating:1; /* if it is migrating */
-};
-
-int
-ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver, uint32_t generation,
-			struct ds_migrate_status *dms);
-int
-ds_object_migrate_send(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_uuid,
-		       uuid_t cont_hdl_uuid, int tgt_id, uint32_t version, unsigned int generation,
-		       uint64_t max_eph, daos_unit_oid_t *oids, daos_epoch_t *ephs,
-		       daos_epoch_t *punched_ephs, unsigned int *shards, int cnt,
-		       uint32_t new_gl_ver, unsigned int migrate_opc, uint64_t *enqueue_id,
-		       uint32_t *max_delay);
-int
-ds_migrate_object(struct ds_pool *pool, uuid_t po_hdl, uuid_t co_hdl, uuid_t co_uuid,
-		  uint32_t version, uint32_t generation, uint64_t max_eph, uint32_t opc,
-		  daos_unit_oid_t *oids, daos_epoch_t *epochs, daos_epoch_t *punched_epochs,
-		  unsigned int *shards, uint32_t count, unsigned int tgt_idx, uint32_t new_gl_ver);
-void
-ds_migrate_stop(struct ds_pool *pool, uint32_t ver, unsigned int generation);
-
 int
 obj_layout_diff(struct pl_map *map, daos_unit_oid_t oid, uint32_t new_ver, uint32_t old_ver,
 		struct daos_obj_md *md, uint32_t *tgts, uint32_t *shards, int array_size);

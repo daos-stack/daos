@@ -633,6 +633,8 @@ co_op_retry(void **state)
 	daos_prop_t       *prop = NULL;
 	int                rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	if (arg->myrank != 0)
 		return;
 
