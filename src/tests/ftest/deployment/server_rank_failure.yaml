@@ -57,7 +57,7 @@ ior: &ior_base
   # We wait for a few seconds before killing an engine. If the IOR finishes too quickly, the test
   # will not work. We use job manager timeout of 120 sec, so the process ends in about 120 sec.
   # Adjust the transfer_size - block_size combination based on the system so that it takes longer
-  # than the -D value.
+  # than the ior_job_timeout value.
   transfer_size: 512K  # CI
   # transfer_size: 1G  # Aurora
   ior_job_timeout: 120
@@ -71,8 +71,8 @@ ior_with_rp:
   <<: *ior_base
   # Total size is block_size * ppn * number of clients. Because we frequently change the number of
   # clients while debugging on Aurora, we may have to adjust block_size to make sure that IOR
-  # finishes before sw_deadline. (Smaller block_size for larger number of clients.) Use the second
-  # commented line for Aurora.
+  # finishes before the IOR job timeout. (Smaller block_size for larger number of clients.) Use the
+  # second commented line for Aurora.
   block_size: 150G  # CI
   # block_size: 50G  # Aurora
   dfs_oclass: RP_3GX
