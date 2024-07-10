@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -122,22 +122,22 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 									PCIAddr: *hardware.MustNewPCIAddress("0000:00:11.5"),
 								},
 								{
-									Name:      "ens259f0",
-									Type:      hardware.DeviceTypeNetInterface,
-									PCIAddr:   *hardware.MustNewPCIAddress("0000:04:00.0"),
-									LinkSpeed: 7.876923084259033,
+									Name:         "ens259f0",
+									Type:         hardware.DeviceTypeNetInterface,
+									PCIAddr:      *hardware.MustNewPCIAddress("0000:04:00.0"),
+									LinkNegSpeed: 7.876923084259033e+9,
 								},
 								{
-									Name:      "ens259f1",
-									Type:      hardware.DeviceTypeNetInterface,
-									PCIAddr:   *hardware.MustNewPCIAddress("0000:04:00.1"),
-									LinkSpeed: 7.876923084259033,
+									Name:         "ens259f1",
+									Type:         hardware.DeviceTypeNetInterface,
+									PCIAddr:      *hardware.MustNewPCIAddress("0000:04:00.1"),
+									LinkNegSpeed: 7.876923084259033e+9,
 								},
 								{
-									Name:      "hsn0",
-									Type:      hardware.DeviceTypeNetInterface,
-									PCIAddr:   *hardware.MustNewPCIAddress("0000:0a:00.0"),
-									LinkSpeed: 31.507692337036133,
+									Name:         "hsn0",
+									Type:         hardware.DeviceTypeNetInterface,
+									PCIAddr:      *hardware.MustNewPCIAddress("0000:0a:00.0"),
+									LinkNegSpeed: 31.507692337036133e+9,
 								},
 								{
 									Name:    "nvme0n1",
@@ -311,10 +311,10 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 						WithDevices(
 							[]*hardware.PCIDevice{
 								{
-									Name:      "hsn1",
-									Type:      hardware.DeviceTypeNetInterface,
-									PCIAddr:   *hardware.MustNewPCIAddress("0000:83:00.0"),
-									LinkSpeed: 31.507692337036133,
+									Name:         "hsn1",
+									Type:         hardware.DeviceTypeNetInterface,
+									PCIAddr:      *hardware.MustNewPCIAddress("0000:83:00.0"),
+									LinkNegSpeed: 31.507692337036133e+9,
 								},
 								{
 									Name:    "nvme11n1",
@@ -815,7 +815,6 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 				t.Errorf("(-want, +got)\n%s\n", diff)
 			}
 		})
-
 	}
 }
 
