@@ -956,7 +956,7 @@ dev_uuid2pci_addr(struct spdk_pci_addr *pci_addr, uuid_t dev_uuid)
 	}
 
 	rc = fill_in_traddr(&b_info, d_bdev->bb_name);
-	if (rc) {
+	if (rc || b_info.bdi_traddr == NULL) {
 		D_DEBUG(DB_MGMT, "Unable to get traddr for device %s\n", d_bdev->bb_name);
 		return -DER_INVAL;
 	}
