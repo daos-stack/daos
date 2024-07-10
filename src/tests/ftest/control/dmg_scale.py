@@ -120,8 +120,9 @@ class DmgScale(TestWithServers):
 
         Jira ID: DAOS-10508.
 
-        :avocado: tags=all,manual
-        :avocado: tags=deployment
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=control
         :avocado: tags=DmgScale,test_dmg_scale
         """
         # This is a manual test and we need to find the durations from job.log, so add "##" to make

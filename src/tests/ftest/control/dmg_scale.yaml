@@ -1,7 +1,5 @@
-# Note: We usually use the extra yaml in aurora-tools, but that extra yaml has test_clients while
-# this test doesn't need any client, so update the extra yaml or provide some dummy client to -tc.
 hosts:
-  test_servers: 256
+  test_servers: 3
 
 timeout: 900
 
