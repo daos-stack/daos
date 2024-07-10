@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2023 Intel Corporation.
+  (C) Copyright 2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -7,8 +7,9 @@ import time
 
 from avocado.core.exceptions import TestFail
 from ClusterShell.NodeSet import NodeSet
-from general_utils import check_file_exists, pcmd, report_errors
+from general_utils import check_file_exists, report_errors
 from recovery_test_base import RecoveryTestBase
+from run_utils import run_remote
 
 
 class PoolListConsolidationTest(RecoveryTestBase):
@@ -109,9 +110,9 @@ class PoolListConsolidationTest(RecoveryTestBase):
 
         Jira ID: DAOS-11711
 
-        :avocado: tags=all,pr
+        :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,pool_list_consolidation
+        :avocado: tags=recovery,cat_recov,pool_list_consolidation,faults
         :avocado: tags=PoolListConsolidationTest,test_dangling_pool
         """
         # 1. Create a pool.
@@ -189,10 +190,9 @@ class PoolListConsolidationTest(RecoveryTestBase):
             list: Error list.
 
         """
-        hosts = list(set(self.server_managers[0].ranks.values()))
-        nodeset_hosts = NodeSet.fromlist(hosts)
         pool_path = f"/mnt/daos0/{self.pool.uuid.lower()}"
-        check_out = check_file_exists(hosts=nodeset_hosts, filename=pool_path)
+        check_out = check_file_exists(
+            hosts=self.hostlist_servers, filename=pool_path, directory=True)
         if check_out[0]:
             msg = f"Pool path still exists! Node without pool path = {check_out[1]}"
             errors.append(msg)
@@ -204,9 +204,9 @@ class PoolListConsolidationTest(RecoveryTestBase):
 
         Jira ID: DAOS-11712
 
-        :avocado: tags=all,pr
+        :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,pool_list_consolidation
+        :avocado: tags=recovery,cat_recov,pool_list_consolidation,faults
         :avocado: tags=PoolListConsolidationTest,test_orphan_pool_trust_ps
         """
         errors = []
@@ -226,9 +226,9 @@ class PoolListConsolidationTest(RecoveryTestBase):
 
         Jira ID: DAOS-11712
 
-        :avocado: tags=all,pr
+        :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,pool_list_consolidation
+        :avocado: tags=recovery,cat_recov,pool_list_consolidation,faults
         :avocado: tags=PoolListConsolidationTest,test_orphan_pool_trust_ms
         """
         errors = []
@@ -255,7 +255,7 @@ class PoolListConsolidationTest(RecoveryTestBase):
 
         1. Create a pool with --nsvc=3. Rank 0, 1, and 2 will be pool service replicas.
         2. Stop servers.
-        3. Remove /mnt/daos/<pool_uuid>/rdb-pool from rank 0 and 2.
+        3. Remove <scm_mount>/<pool_uuid>/rdb-pool from rank 0 and 2.
         4. Start servers.
         5. Run DAOS checker under kinds of mode.
         6. Try creating a container. The pool can be started now, so create should succeed.
@@ -264,42 +264,52 @@ class PoolListConsolidationTest(RecoveryTestBase):
 
         Jira ID: DAOS-12029
 
-        :avocado: tags=all,pr
+        :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,pool_list_consolidation
+        :avocado: tags=recovery,cat_recov,pool_list_consolidation
         :avocado: tags=PoolListConsolidationTest,test_lost_majority_ps_replicas
         """
-        # 1. Create a pool with --nsvc=3.
+        self.log_step("Create a pool with --nsvc=3.")
         self.pool = self.get_pool(svcn=3)
 
-        # 2. Stop servers.
+        self.log_step("Stop servers")
         dmg_command = self.get_dmg_command()
         dmg_command.system_stop()
 
-        # 3. Remove /mnt/daos/<pool_uuid>/rdb-pool from two ranks.
-        rdb_pool_path = f"/mnt/daos0/{self.pool.uuid.lower()}/rdb-pool"
-        command = f"sudo rm /mnt/daos0/{self.pool.uuid.lower()}/rdb-pool"
+        self.log_step("Remove <scm_mount>/<pool_uuid>/rdb-pool from two ranks.")
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
+        rdb_pool_path = f"{scm_mount}/{self.pool.uuid.lower()}/rdb-pool"
+        command = f"sudo rm {rdb_pool_path}"
         hosts = list(set(self.server_managers[0].ranks.values()))
         count = 0
         for host in hosts:
             node = NodeSet(host)
             check_out = check_file_exists(hosts=node, filename=rdb_pool_path, sudo=True)
             if check_out[0]:
-                pcmd(hosts=node, command=command)
+                if not run_remote(log=self.log, hosts=node, command=command).passed:
+                    self.fail(f'Failed to remove {rdb_pool_path} on {host}')
                 self.log.info("rm rdb-pool from %s", str(node))
                 count += 1
                 if count > 1:
                     break
+        using_control_metadata = self.server_managers[0].manager.job.using_control_metadata
+        if count == 0 or using_control_metadata:
+            msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
+                   "after system stop.")
+            self.log.info(msg)
+            dmg_command.system_start()
+            # return results in PASS.
+            return
 
-        # 4. Start servers.
+        self.log_step("Start servers.")
         dmg_command.system_start()
 
+        self.log_step("Run DAOS checker under kinds of mode.")
         errors = []
-        # 5. Run DAOS checker under kinds of mode.
         errors = self.chk_dist_checker(
             inconsistency="corrupted pool without quorum")
 
-        # 6. Try creating a container. It should succeed.
+        self.log_step("Try creating a container. It should succeed.")
         cont_create_success = False
         for _ in range(5):
             time.sleep(5)
@@ -315,8 +325,9 @@ class PoolListConsolidationTest(RecoveryTestBase):
         if not cont_create_success:
             errors.append("Container create failed after running checker!")
 
-        # 7. Show that rdb-pool are recovered. i.e., at least three out of four ranks
-        # should have rdb-pool.
+        msg = ("Show that rdb-pool are recovered. i.e., at least three out of four ranks should "
+               "have rdb-pool.")
+        self.log_step(msg)
         hosts = list(set(self.server_managers[0].ranks.values()))
         count = 0
         for host in hosts:
@@ -338,7 +349,7 @@ class PoolListConsolidationTest(RecoveryTestBase):
 
         1. Create a pool.
         2. Stop servers.
-        3. Remove /mnt/daos0/<pool_uuid>/rdb-pool from all ranks.
+        3. Remove <scm_mount>/<pool_uuid>/rdb-pool from all ranks.
         4. Start servers.
         5. Run DAOS checker under kinds of mode.
         6. Check that the pool does not appear with dmg pool list.
@@ -346,43 +357,55 @@ class PoolListConsolidationTest(RecoveryTestBase):
 
         Jira ID: DAOS-12067
 
-        :avocado: tags=all,pr
+        :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,pool_list_consolidation
+        :avocado: tags=recovery,cat_recov,pool_list_consolidation
         :avocado: tags=PoolListConsolidationTest,test_lost_all_rdb
         """
-        # 1. Create a pool.
+        self.log_step("Create a pool.")
         self.pool = self.get_pool()
 
-        # 2. Stop servers.
+        self.log_step("Stop servers.")
         dmg_command = self.get_dmg_command()
         dmg_command.system_stop()
 
-        # 3. Remove /mnt/daos/<pool_uuid>/rdb-pool from all ranks.
-        hosts = list(set(self.server_managers[0].ranks.values()))
-        nodeset_hosts = NodeSet.fromlist(hosts)
-        command = f"sudo rm /mnt/daos0/{self.pool.uuid.lower()}/rdb-pool"
-        remove_result = pcmd(hosts=nodeset_hosts, command=command)
-        success_nodes = remove_result[0]
-        if nodeset_hosts != success_nodes:
-            msg = (f"Failed to remove rdb-pool! All = {nodeset_hosts}, "
+        self.log_step("Remove <scm_mount>/<pool_uuid>/rdb-pool from all ranks.")
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
+        rdb_pool_path = f"{scm_mount}/{self.pool.uuid.lower()}/rdb-pool"
+        rdb_pool_out = check_file_exists(
+            hosts=self.hostlist_servers, filename=rdb_pool_path, sudo=True)
+        if not rdb_pool_out[0]:
+            msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
+                   "after system stop.")
+            self.log.info(msg)
+            dmg_command.system_start()
+            # return results in PASS.
+            return
+        command = f"sudo rm {rdb_pool_path}"
+        remove_result = run_remote(log=self.log, hosts=self.hostlist_servers, command=command)
+        if not remove_result.passed:
+            self.fail(f"Failed to remove {rdb_pool_path} from {self.hostlist_servers}")
+        success_nodes = remove_result.passed_hosts
+        if self.hostlist_servers != success_nodes:
+            msg = (f"Failed to remove rdb-pool! All = {self.hostlist_servers}, "
                    f"Success = {success_nodes}")
             self.fail(msg)
 
         # 4. Start servers.
+        self.log_step("Start servers.")
         dmg_command.system_start()
 
+        self.log_step("Run DAOS checker under kinds of mode.")
         errors = []
-        # 5. Run DAOS checker under kinds of mode.
         errors = self.chk_dist_checker(
             inconsistency="corrupted pool without quorum")
 
-        # 6. Check that the pool does not appear with dmg pool list.
+        self.log_step("Check that the pool does not appear with dmg pool list.")
         pools = dmg_command.get_pool_list_all()
         if pools:
             errors.append(f"Pool still exists after running checker! {pools}")
 
-        # 7. Verify that the pool directory was removed from the mount point.
+        self.log_step("Verify that the pool directory was removed from the mount point.")
         errors = self.verify_pool_dir_removed(errors=errors)
 
         # Don't try to destroy the pool during tearDown.

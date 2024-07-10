@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -64,14 +64,18 @@ struct ds_cont_child {
 	ABT_cond		 sc_dtx_resync_cond;
 	ABT_cond		 sc_scrub_cond;
 	ABT_cond		 sc_rebuild_cond;
+	ABT_cond		 sc_fini_cond;
 	uint32_t		 sc_dtx_resyncing:1,
 				 sc_dtx_reindex:1,
 				 sc_dtx_reindex_abort:1,
+				 sc_dtx_delay_reset:1,
 				 sc_dtx_registered:1,
 				 sc_props_fetched:1,
 				 sc_stopping:1,
 				 sc_vos_agg_active:1,
 				 sc_ec_agg_active:1,
+				 /* flag of CONT_CAPA_READ_DATA/_WRITE_DATA disabled */
+				 sc_rw_disabled:1,
 				 sc_scrubbing:1,
 				 sc_rebuilding:1;
 	uint32_t		 sc_dtx_batched_gen;
@@ -130,8 +134,6 @@ struct ds_cont_child {
 	d_list_t		 sc_dtx_coll_list;
 	/* the pool map version of updating DAOS_PROP_CO_STATUS prop */
 	uint32_t		 sc_status_pm_ver;
-	/* flag of CONT_CAPA_READ_DATA/_WRITE_DATA disabled */
-	uint32_t		 sc_rw_disabled:1;
 };
 
 struct agg_param {
@@ -185,12 +187,14 @@ int ds_cont_close_by_pool_hdls(uuid_t pool_uuid, uuid_t *pool_hdls,
 			       int n_pool_hdls, crt_context_t ctx);
 int ds_cont_local_close(uuid_t cont_hdl_uuid);
 
-int ds_cont_chk_post(struct ds_pool_child *pool_child);
 int ds_cont_child_start_all(struct ds_pool_child *pool_child);
 void ds_cont_child_stop_all(struct ds_pool_child *pool_child);
 
 int ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 			 struct ds_cont_child **ds_cont);
+int
+ds_cont_child_destroy(uuid_t pool_uuid, uuid_t cont_uuid);
+
 void
 ds_cont_child_reset_ec_agg_eph_all(struct ds_pool_child *pool_child);
 /** initialize a csummer based on container properties. Will retrieve the

@@ -9,7 +9,6 @@ package main
 import (
 	"net"
 	"strings"
-	"sync"
 
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -23,9 +22,12 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
+	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/telemetry"
+	"github.com/daos-stack/daos/src/control/lib/telemetry/promexp"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -33,15 +35,13 @@ import (
 // Management Service proxy, handling dRPCs sent by libdaos by forwarding them
 // to MS.
 type mgmtModule struct {
-	attachInfoMutex sync.RWMutex
-	fabricMutex     sync.RWMutex
-
 	log            logging.Logger
 	sys            string
 	ctlInvoker     control.Invoker
 	cache          *InfoCache
 	monitor        *procMon
-	useDefaultNUMA bool
+	cliMetricsSrc  *promexp.ClientSource
+	useDefaultNUMA atm.Bool
 
 	numaGetter  hardware.ProcessNUMAProvider
 	providerIdx uint
@@ -73,6 +73,8 @@ func (mod *mgmtModule) HandleCall(ctx context.Context, session *drpc.Session, me
 	switch method {
 	case drpc.MethodGetAttachInfo:
 		return mod.handleGetAttachInfo(ctx, req, cred.Pid)
+	case drpc.MethodSetupClientTelemetry:
+		return mod.handleSetupClientTelemetry(ctx, req, cred)
 	case drpc.MethodNotifyPoolConnect:
 		return nil, mod.handleNotifyPoolConnect(ctx, req, cred.Pid)
 	case drpc.MethodNotifyPoolDisconnect:
@@ -158,14 +160,14 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 }
 
 func (mod *mgmtModule) getNUMANode(ctx context.Context, pid int32) (uint, error) {
-	if mod.useDefaultNUMA {
+	if mod.useDefaultNUMA.IsTrue() {
 		return 0, nil
 	}
 
 	numaNode, err := mod.numaGetter.GetNUMANodeIDForPID(ctx, pid)
 	if errors.Is(err, hardware.ErrNoNUMANodes) {
 		mod.log.Debug("system is not NUMA-aware")
-		mod.useDefaultNUMA = true
+		mod.useDefaultNUMA.SetTrue()
 		return 0, nil
 	} else if err != nil {
 		return 0, errors.Wrapf(err, "failed to get NUMA node ID for pid %d", pid)
@@ -334,6 +336,37 @@ func (mod *mgmtModule) getProviderIdxURIs(srvResp *mgmtpb.GetAttachInfoResp, idx
 
 func (mod *mgmtModule) getFabricInterface(ctx context.Context, params *FabricIfaceParams) (*FabricInterface, error) {
 	return mod.cache.GetFabricDevice(ctx, params)
+}
+
+func (mod *mgmtModule) handleSetupClientTelemetry(ctx context.Context, reqb []byte, cred *unix.Ucred) ([]byte, error) {
+	if len(reqb) == 0 {
+		return nil, errors.New("empty request")
+	}
+
+	pbReq := new(mgmtpb.ClientTelemetryReq)
+	if err := proto.Unmarshal(reqb, pbReq); err != nil {
+		return nil, drpc.UnmarshalingPayloadFailure()
+	}
+	if pbReq.Jobid == "" {
+		return nil, errors.New("empty jobid")
+	}
+	if pbReq.ShmKey == 0 {
+		return nil, errors.New("unset shm key")
+	}
+	if cred == nil {
+		return nil, errors.New("nil user credentials")
+	}
+
+	resp := &mgmtpb.ClientTelemetryResp{AgentUid: int32(unix.Getuid())}
+	if err := telemetry.SetupClientRoot(ctx, pbReq.Jobid, int(cred.Pid), int(pbReq.ShmKey)); err != nil {
+		if cause, ok := errors.Cause(err).(daos.Status); ok {
+			resp.Status = int32(cause)
+		} else {
+			return nil, err
+		}
+	}
+	mod.log.Tracef("%d: %s", cred.Pid, pblog.Debug(resp))
+	return proto.Marshal(resp)
 }
 
 func (mod *mgmtModule) handleNotifyPoolConnect(ctx context.Context, reqb []byte, pid int32) error {

@@ -156,6 +156,9 @@ char *DP_UUID(const void *uuid);
 #define DF_DE        "de[%zi]"
 #define DP_DE(_de)   strnlen(_de, NAME_MAX)
 
+#define DF_PATH        "path[%zi]"
+#define DP_PATH(_path) strnlen((_path), PATH_MAX)
+
 #else
 
 char *
@@ -169,6 +172,12 @@ daos_de2str(const char *de);
 
 #define DF_DE       "de'%s'"
 #define DP_DE(_de)  daos_de2str(_de)
+
+char *
+daos_path2str(const char *path);
+
+#define DF_PATH        "path'%s'"
+#define DP_PATH(_path) daos_path2str(_path)
 
 #endif
 
@@ -873,6 +882,7 @@ enum {
 #define DAOS_SHARD_OBJ_RW_DROP_REPLY (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x80)
 #define DAOS_OBJ_FETCH_DATA_LOST	(DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x81)
 #define DAOS_OBJ_TRY_SPECIAL_SHARD	(DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x82)
+#define DAOS_OBJ_EC_AGG_LEADER_DIFF	(DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x83)
 
 #define DAOS_VOS_AGG_RANDOM_YIELD	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x90)
 #define DAOS_VOS_AGG_MW_THRESH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x91)

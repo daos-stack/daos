@@ -14,8 +14,8 @@
 %endif
 
 Name:          daos
-Version:       2.5.101
-Release:       4%{?relval}%{?dist}
+Version:       2.7.100
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -65,6 +65,7 @@ BuildRequires: protobuf-c-devel
 BuildRequires: lz4-devel
 BuildRequires: capstone-devel
 %endif
+BuildRequires: libaio-devel
 BuildRequires: spdk-devel >= 22.01.2
 %if (0%{?rhel} >= 8)
 BuildRequires: isa-l-devel
@@ -81,6 +82,7 @@ BuildRequires: libcmocka-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
 BuildRequires: go >= 1.17
+BuildRequires: pciutils-devel
 %if (0%{?rhel} >= 8)
 BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
@@ -156,6 +158,7 @@ Requires: mercury >= %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 Requires: numactl
+Requires: pciutils
 %{?systemd_requires}
 
 %description server
@@ -587,6 +590,16 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu Jun 24 2024 Tom Nabarro <tom.nabarro@intel.com> 2.7.100-2
+- Add pciutils runtime dep for daos_server lspci call
+- Add pciutils-devel build dep for pciutils CGO bindings
+
+* Mon May 20 2024 Phillip Henderson <phillip.henderson@intel.com> 2.7.100-1
+- Bump version to 2.7.100
+
+* Fri May 03 2024 Lei Huang <lei.huang@intel.com> 2.5.101-5
+- Add libaio as a dependent package
+
 * Fri Apr 05 2024 Fan Yong <fan.yong@intel.com> 2.5.101-4
 - Catastrophic Recovery
 

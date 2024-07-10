@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +8,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"strings"
 	"sync"
@@ -22,6 +23,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
+	"github.com/daos-stack/daos/src/control/lib/telemetry"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -36,16 +38,19 @@ type fabricScanFn func(ctx context.Context, providers ...string) (*NUMAFabric, e
 // NewInfoCache creates a new InfoCache with appropriate parameters set.
 func NewInfoCache(ctx context.Context, log logging.Logger, client control.UnaryInvoker, cfg *Config) *InfoCache {
 	ic := &InfoCache{
-		log:            log,
-		ignoreIfaces:   cfg.ExcludeFabricIfaces,
-		client:         client,
-		cache:          cache.NewItemCache(log),
-		getAttachInfo:  control.GetAttachInfo,
-		fabricScan:     getFabricScanFn(log, cfg, hwprov.DefaultFabricScanner(log)),
-		netIfaces:      net.Interfaces,
-		devClassGetter: hwprov.DefaultNetDevClassProvider(log),
-		devStateGetter: hwprov.DefaultNetDevStateProvider(log),
+		log:             log,
+		ignoreIfaces:    cfg.ExcludeFabricIfaces,
+		client:          client,
+		cache:           cache.NewItemCache(log),
+		getAttachInfoCb: control.GetAttachInfo,
+		fabricScan:      getFabricScanFn(log, cfg, hwprov.DefaultFabricScanner(log)),
+		netIfaces:       net.Interfaces,
+		devClassGetter:  hwprov.DefaultNetDevClassProvider(log),
+		devStateGetter:  hwprov.DefaultNetDevStateProvider(log),
 	}
+
+	ic.clientTelemetryEnabled.Store(cfg.TelemetryEnabled)
+	ic.clientTelemetryRetain.Store(cfg.TelemetryRetain > 0)
 
 	if cfg.DisableCache {
 		ic.DisableAttachInfoCache()
@@ -75,11 +80,12 @@ func getFabricScanFn(log logging.Logger, cfg *Config, scanner *hardware.FabricSc
 }
 
 type cacheItem struct {
-	sync.Mutex
+	sync.RWMutex
 	lastCached      time.Time
 	refreshInterval time.Duration
 }
 
+// isStale returns true if the cache item is stale.
 func (ci *cacheItem) isStale() bool {
 	if ci.refreshInterval == 0 {
 		return false
@@ -87,9 +93,12 @@ func (ci *cacheItem) isStale() bool {
 	return ci.lastCached.Add(ci.refreshInterval).Before(time.Now())
 }
 
+// isCached returns true if the cache item is cached.
 func (ci *cacheItem) isCached() bool {
 	return !ci.lastCached.Equal(time.Time{})
 }
+
+var _ cache.RefreshableItem = (*cachedAttachInfo)(nil)
 
 type cachedAttachInfo struct {
 	cacheItem
@@ -125,16 +134,28 @@ func (ci *cachedAttachInfo) Key() string {
 	return sysAttachInfoKey(ci.system)
 }
 
-// NeedsRefresh checks whether the cached data needs to be refreshed.
-func (ci *cachedAttachInfo) NeedsRefresh() bool {
+// needsRefresh checks whether the cached data needs to be refreshed.
+func (ci *cachedAttachInfo) needsRefresh() bool {
 	if ci == nil {
 		return false
 	}
 	return !ci.isCached() || ci.isStale()
 }
 
-// Refresh contacts the remote management server and refreshes the GetAttachInfo cache.
-func (ci *cachedAttachInfo) Refresh(ctx context.Context) error {
+// RefreshIfNeeded refreshes the cached data if it needs to be refreshed.
+func (ci *cachedAttachInfo) RefreshIfNeeded(ctx context.Context) (bool, error) {
+	if ci == nil {
+		return false, errors.New("cachedAttachInfo is nil")
+	}
+
+	if ci.needsRefresh() {
+		return true, ci.refresh(ctx)
+	}
+	return false, nil
+}
+
+// refresh implements the actual refresh logic.
+func (ci *cachedAttachInfo) refresh(ctx context.Context) error {
 	if ci == nil {
 		return errors.New("cachedAttachInfo is nil")
 	}
@@ -149,6 +170,17 @@ func (ci *cachedAttachInfo) Refresh(ctx context.Context) error {
 	ci.lastCached = time.Now()
 	return nil
 }
+
+// Refresh contacts the remote management server and refreshes the GetAttachInfo cache.
+func (ci *cachedAttachInfo) Refresh(ctx context.Context) error {
+	if ci == nil {
+		return errors.New("cachedAttachInfo is nil")
+	}
+
+	return ci.refresh(ctx)
+}
+
+var _ cache.RefreshableItem = (*cachedFabricInfo)(nil)
 
 type cachedFabricInfo struct {
 	cacheItem
@@ -167,17 +199,21 @@ func (cfi *cachedFabricInfo) Key() string {
 	return fabricKey
 }
 
-// NeedsRefresh indicates that the fabric information does not need to be refreshed unless it has
-// never been populated.
-func (cfi *cachedFabricInfo) NeedsRefresh() bool {
+// RefreshIfNeeded refreshes the cached fabric information if it needs to be refreshed.
+func (cfi *cachedFabricInfo) RefreshIfNeeded(ctx context.Context) (bool, error) {
 	if cfi == nil {
-		return false
+		return false, errors.New("cachedFabricInfo is nil")
 	}
-	return !cfi.isCached()
+
+	if !cfi.isCached() {
+		return true, cfi.refresh(ctx)
+	}
+
+	return false, nil
 }
 
-// Refresh scans the hardware for information about the fabric devices and caches the result.
-func (cfi *cachedFabricInfo) Refresh(ctx context.Context) error {
+// refresh implements the actual refresh logic.
+func (cfi *cachedFabricInfo) refresh(ctx context.Context) error {
 	if cfi == nil {
 		return errors.New("cachedFabricInfo is nil")
 	}
@@ -192,18 +228,29 @@ func (cfi *cachedFabricInfo) Refresh(ctx context.Context) error {
 	return nil
 }
 
+// Refresh scans the hardware for information about the fabric devices and caches the result.
+func (cfi *cachedFabricInfo) Refresh(ctx context.Context) error {
+	if cfi == nil {
+		return errors.New("cachedFabricInfo is nil")
+	}
+
+	return cfi.refresh(ctx)
+}
+
 // InfoCache is a cache for the results of expensive operations needed by the agent.
 type InfoCache struct {
 	log                     logging.Logger
 	cache                   *cache.ItemCache
 	fabricCacheDisabled     atm.Bool
 	attachInfoCacheDisabled atm.Bool
+	clientTelemetryEnabled  atm.Bool
+	clientTelemetryRetain   atm.Bool
 
-	getAttachInfo  getAttachInfoFn
-	fabricScan     fabricScanFn
-	netIfaces      func() ([]net.Interface, error)
-	devClassGetter hardware.NetDevClassProvider
-	devStateGetter hardware.NetDevStateProvider
+	getAttachInfoCb getAttachInfoFn
+	fabricScan      fabricScanFn
+	netIfaces       func() ([]net.Interface, error)
+	devClassGetter  hardware.NetDevClassProvider
+	devStateGetter  hardware.NetDevStateProvider
 
 	client            control.UnaryInvoker
 	attachInfoRefresh time.Duration
@@ -291,6 +338,41 @@ func (c *InfoCache) EnableStaticFabricCache(ctx context.Context, nf *NUMAFabric)
 	c.EnableFabricCache()
 }
 
+func (c *InfoCache) getAttachInfo(ctx context.Context, rpcClient control.UnaryInvoker, req *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
+	if c == nil {
+		return nil, errors.New("InfoCache is nil")
+	}
+	if c.getAttachInfoCb == nil {
+		return nil, errors.New("getAttachInfoFn is nil")
+	}
+
+	resp, err := c.getAttachInfoCb(ctx, rpcClient, req)
+	if err != nil {
+		return nil, err
+	}
+	c.addTelemetrySettings(resp)
+	return resp, nil
+}
+
+// addTelemetrySettings modifies the response by adding telemetry settings
+// before returning it.
+func (c *InfoCache) addTelemetrySettings(resp *control.GetAttachInfoResp) {
+	if c == nil || resp == nil {
+		return
+	}
+
+	if c.clientTelemetryEnabled.IsTrue() {
+		resp.ClientNetHint.EnvVars = append(resp.ClientNetHint.EnvVars,
+			fmt.Sprintf("%s=1", telemetry.ClientMetricsEnabledEnv),
+		)
+		if c.clientTelemetryRetain.IsTrue() {
+			resp.ClientNetHint.EnvVars = append(resp.ClientNetHint.EnvVars,
+				fmt.Sprintf("%s=1", telemetry.ClientMetricsRetainEnv),
+			)
+		}
+	}
+}
+
 // GetAttachInfo fetches the attach info from the cache, and refreshes if necessary.
 func (c *InfoCache) GetAttachInfo(ctx context.Context, sys string) (*control.GetAttachInfoResp, error) {
 	if c == nil {
@@ -311,10 +393,10 @@ func (c *InfoCache) GetAttachInfo(ctx context.Context, sys string) (*control.Get
 	}
 
 	item, release, err := c.cache.GetOrCreate(ctx, sysAttachInfoKey(sys), createItem)
-	defer release()
 	if err != nil {
 		return nil, errors.Wrap(err, "getting attach info from cache")
 	}
+	defer release()
 
 	cai, ok := item.(*cachedAttachInfo)
 	if !ok {

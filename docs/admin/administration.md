@@ -308,7 +308,6 @@ Usage:
 ...
 
 Available commands:
-  device-health  Query the device health
   list-devices   List storage devices on the server
   list-pools     List pools on the server
   usage          Show SCM & NVMe storage space utilization per storage server
@@ -372,6 +371,8 @@ Usage:
 ...
 
 [list-devices command options]
+      -l, --host-list=    A comma separated list of addresses <ipv4addr/hostname> to
+                          connect to
       -r, --rank=         Constrain operation to the specified server rank
       -b, --health        Include device health in results
       -u, --uuid=         Device UUID (all devices if blank)
@@ -388,18 +389,6 @@ Usage:
       -r, --rank=     Constrain operation to the specified server rank
       -u, --uuid=     Pool UUID (all pools if blank)
       -v, --verbose   Show more detail about pools
-```
-```bash
-$ dmg storage scan --nvme-meta --help
-Usage:
-  dmg [OPTIONS] storage scan [scan-OPTIONS]
-
-...
-
-[scan command options]
-      -v, --verbose      List SCM & NVMe device details
-      -n, --nvme-health  Display NVMe device health statistics
-      -m, --nvme-meta    Display server meta data held on NVMe storage
 ```
 
 The NVMe storage query list-devices and list-pools commands query the persistently
@@ -464,14 +453,19 @@ boro-11
 
 - Query Storage Device Health Data:
 ```bash
-$ dmg storage query device-health --help
+$ dmg storage query list-devices --health --help
 Usage:
-  dmg [OPTIONS] storage query device-health [device-health-OPTIONS]
+  dmg [OPTIONS] storage query list-devices [list-devices-OPTIONS]
 
 ...
 
-[device-health command options]
-      -u, --uuid=     Device UUID. All devices queried if arg not set
+[list-devices command options]
+      -l, --host-list=    A comma separated list of addresses <ipv4addr/hostname> to
+                          connect to
+      -r, --rank=         Constrain operation to the specified server rank
+      -b, --health        Include device health in results
+      -u, --uuid=         Device UUID (all devices if blank)
+      -e, --show-evicted  Show only evicted faulty devices
 ```
 ```bash
 $ dmg storage scan --nvme-health --help
@@ -481,27 +475,31 @@ Usage:
 ...
 
 [scan command options]
+      -l, --host-list=   A comma separated list of addresses <ipv4addr/hostname>
+                         to connect to
       -v, --verbose      List SCM & NVMe device details
       -n, --nvme-health  Display NVMe device health statistics
-      -m, --nvme-meta    Display server meta data held on NVMe storage
 ```
 
-The NVMe storage query device-health command queries the device health data, including
-NVMe SSD health stats and in-memory I/O error and checksum error counters.
-The server rank and device state are also listed.
-Additionally, vendor-specific SMART stats are displayed, currently for Intel devices only.
+The 'dmg storage scan --nvme-health' command queries the device health data, including
+NVMe SSD health stats and in-memory I/O error and checksum error counters and prefixes the stat
+list with NVMe controller details.
+The 'dmg storage query list-devices --health' command displays the same health data and SMD UUID,
+bdev roles, server rank and device state.
+
+Vendor-specific SMART stats are displayed, currently for Intel devices only.
 Note: A reasonable timed workload > 60 min must be ran for the SMART stats to register
 (Raw values are 65535).
 Media wear percentage can be calculated by dividing by 1024 to find the percentage of the
 maximum rated cycles.
 ```bash
-$ dmg -l boro-11 storage query device-health --uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
+$ dmg -l boro-11 storage query list-devices --health --uuid=d5ec1227-6f39-40db-a1f6-70245aa079f1
 -------
 boro-11
 -------
   Devices
-    UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 [TrAddr:0000:8a:00.0]
-      Targets:[0 1 2 3] Rank:0 State:NORMAL
+    UUID:d5ec1227-6f39-40db-a1f6-70245aa079f1 [TrAddr:d70505:03:00.0 NSID:1]
+      Roles:NA Targets:[3 7] Rank:0 State:NORMAL LED:OFF
       Health Stats:
         Timestamp:2021-09-13T11:12:34.000+00:00
         Temperature:289K(15C)
@@ -580,7 +578,7 @@ The engine's NVMe config (produced during format) then contains the following
 JSON to apply the criteria:
 
 ```json
-[tanabarr@wolf-310 ~]$ cat /mnt/daos0/daos_nvme.conf
+cat /mnt/daos0/daos_nvme.conf
 {
   "daos_data": {
     "config": [

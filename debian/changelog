@@ -1,3 +1,22 @@
+daos (2.7.100-2) unstable; urgency=medium
+  [ Tom Nabarro ]
+  * Add pciutils runtime dep for daos_server lspci call
+  * Add libpci-dev build dep for pciutils CGO bindings
+
+ -- Tom Nabarro <tom.nabarro@intel.com>>  Thu, 24 Jun 2024 16:55:00 -0000
+
+daos (2.7.100-1) unstable; urgency=medium
+  [ Phillip Henderson ]
+  * Bump version to 2.7.100
+
+ -- Phillip Henderson <phillip.henderson@intel.com>  Mon, 20 May 2024 12:37:00 -0500
+
+daos (2.5.101-5) unstable; urgency=medium
+  [ Lei Huang ]
+  * Add libaio as a dependent package
+
+ -- Lei Huang <lei.huang@intel.com> Fri, 03 May 2024 16:40:00 -0600
+
 daos (2.5.101-4) unstable; urgency=medium
   [ Fan Yong ]
   * NOOP change to keep in parity with RPM version

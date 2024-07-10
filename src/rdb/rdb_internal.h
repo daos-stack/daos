@@ -298,11 +298,6 @@ int rdb_send_raft_rpc(crt_rpc_t *rpc, struct rdb *db);
 int rdb_abort_raft_rpcs(struct rdb *db);
 void rdb_recvd(void *arg);
 
-/* rdb_tx.c *******************************************************************/
-
-int rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
-		 void *result, bool *critp);
-
 /* rdb_kvs.c ******************************************************************/
 
 /* KVS cache entry */
@@ -352,6 +347,11 @@ void rdb_anchor_from_hashes(struct rdb_anchor *anchor,
 			    daos_anchor_t *akey_anchor,
 			    daos_anchor_t *ev_anchor, daos_anchor_t *sv_anchor);
 
+struct dtx_handle;
+typedef struct dtx_handle *rdb_vos_tx_t;
+
+int rdb_vos_tx_begin(struct rdb *db, int nvops, rdb_vos_tx_t *vtx);
+int rdb_vos_tx_end(struct rdb *db, rdb_vos_tx_t vtx, int err);
 int rdb_vos_fetch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 		  daos_key_t *akey, d_iov_t *value);
 int rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
@@ -362,10 +362,10 @@ int rdb_vos_iter_fetch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 		       daos_key_t *akey_out, d_iov_t *value);
 int rdb_vos_iterate(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 		    bool backward, rdb_iterate_cb_t cb, void *arg);
-int rdb_vos_update(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
-		   bool crit, int n, d_iov_t akeys[], d_iov_t values[]);
-int rdb_vos_punch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, int n,
-		  d_iov_t akeys[]);
+int rdb_vos_update(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, bool crit, int n,
+		   d_iov_t akeys[], d_iov_t values[], rdb_vos_tx_t vtx);
+int rdb_vos_punch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, int n, d_iov_t akeys[],
+		  rdb_vos_tx_t vtx);
 int rdb_vos_discard(daos_handle_t cont, daos_epoch_t low, daos_epoch_t high);
 int rdb_vos_aggregate(daos_handle_t cont, daos_epoch_t high);
 
@@ -378,14 +378,13 @@ int rdb_vos_aggregate(daos_handle_t cont, daos_epoch_t high);
 
 /* Update n (<= RDB_VOS_BATCH_MAX) a-keys atomically. */
 static inline int
-rdb_mc_update(daos_handle_t mc, rdb_oid_t oid, int n, d_iov_t akeys[],
-	      d_iov_t values[])
+rdb_mc_update(daos_handle_t mc, rdb_oid_t oid, int n, d_iov_t akeys[], d_iov_t values[],
+	      rdb_vos_tx_t vtx)
 {
 	D_DEBUG(DB_TRACE, "mc="DF_X64" oid="DF_X64" n=%d akeys[0]=<%p, %zd> "
 		"values[0]=<%p, %zd>\n", mc.cookie, oid, n, akeys[0].iov_buf,
 		akeys[0].iov_len, values[0].iov_buf, values[0].iov_len);
-	return rdb_vos_update(mc, RDB_MC_EPOCH, oid, true /* crit */, n,
-			      akeys, values);
+	return rdb_vos_update(mc, RDB_MC_EPOCH, oid, true /* crit */, n, akeys, values, vtx);
 }
 
 static inline int
@@ -400,19 +399,19 @@ rdb_mc_lookup(daos_handle_t mc, rdb_oid_t oid, d_iov_t *akey,
 }
 
 static inline int
-rdb_lc_update(daos_handle_t lc, uint64_t index, rdb_oid_t oid, bool crit,
-	      int n, d_iov_t akeys[], d_iov_t values[])
+rdb_lc_update(daos_handle_t lc, uint64_t index, rdb_oid_t oid, bool crit, int n, d_iov_t akeys[],
+	      d_iov_t values[], rdb_vos_tx_t vtx)
 {
 	D_DEBUG(DB_TRACE, "lc="DF_X64" index="DF_U64" oid="DF_X64
 		" n=%d akeys[0]=<%p, %zd> values[0]=<%p, %zd>\n", lc.cookie,
 		index, oid, n, akeys[0].iov_buf, akeys[0].iov_len,
 		values[0].iov_buf, values[0].iov_len);
-	return rdb_vos_update(lc, index, oid, crit, n, akeys, values);
+	return rdb_vos_update(lc, index, oid, crit, n, akeys, values, vtx);
 }
 
 static inline int
-rdb_lc_punch(daos_handle_t lc, uint64_t index, rdb_oid_t oid, int n,
-	     d_iov_t akeys[])
+rdb_lc_punch(daos_handle_t lc, uint64_t index, rdb_oid_t oid, int n, d_iov_t akeys[],
+	     rdb_vos_tx_t vtx)
 {
 	if (n > 0)
 		D_DEBUG(DB_TRACE, "lc="DF_X64" index="DF_U64" oid="DF_X64
@@ -421,7 +420,7 @@ rdb_lc_punch(daos_handle_t lc, uint64_t index, rdb_oid_t oid, int n,
 	else
 		D_DEBUG(DB_TRACE, "lc="DF_X64" index="DF_U64" oid="DF_X64
 			" n=%d\n", lc.cookie, index, oid, n);
-	return rdb_vos_punch(lc, index, oid, n, akeys);
+	return rdb_vos_punch(lc, index, oid, n, akeys, vtx);
 }
 
 /* Discard index range [low, high]. */
@@ -489,7 +488,17 @@ rdb_lc_iterate(daos_handle_t lc, uint64_t index, rdb_oid_t oid, bool backward,
 	return rdb_vos_iterate(lc, index, oid, backward, cb, arg);
 }
 
-int
-rdb_scm_left(struct rdb *db, daos_size_t *scm_left_outp);
+int rdb_scm_left(struct rdb *db, daos_size_t *scm_left_outp);
+
+/* rdb_tx.c *******************************************************************/
+
+int rdb_tx_count_vops(struct rdb *db, const void *buf, size_t len);
+
+enum rdb_tx_apply_err {
+	RDB_TX_APPLY_ERR_DETERMINISTIC = 1
+};
+
+int rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len, void *result,
+		 bool *critp, rdb_vos_tx_t vtx);
 
 #endif /* RDB_INTERNAL_H */

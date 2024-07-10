@@ -1,12 +1,12 @@
 """
-  (C) Copyright 2023 Intel Corporation.
+  (C) Copyright 2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
 
 from ClusterShell.NodeSet import NodeSet
-from general_utils import report_errors
+from general_utils import check_file_exists, report_errors
 from ior_test_base import IorTestBase
 from run_utils import run_remote
 
@@ -72,15 +72,15 @@ class PoolMembershipTest(IorTestBase):
         6. Enable and start the checker.
         7. Query the checker and verify that the issue was fixed.
         i.e., Current status is COMPLETED.
-        8. Disable the checker.
+        8. Disable the checker and start server.
         9. Call dmg storage query usage to verify that the pool usage is back to the
         original value.
 
         Jira ID: DAOS-11734
 
-        :avocado: tags=all,pr
+        :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,pool_membership
+        :avocado: tags=recovery,cat_recov,pool_membership
         :avocado: tags=PoolMembershipTest,test_orphan_pool_shard
         """
         # 1. Create a pool.
@@ -135,6 +135,17 @@ class PoolMembershipTest(IorTestBase):
         # 4. Stop servers.
         self.log_step("Stop servers.")
         self.server_managers[0].system_stop()
+
+        pool_directory = f"{src_mount}/{pool.uuid.lower()}"
+        pool_directory_result = check_file_exists(
+            hosts=self.hostlist_servers, filename=pool_directory, directory=True)
+        if not pool_directory_result[0]:
+            msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
+                   "after system stop.")
+            self.log.info(msg)
+            dmg_command.system_start()
+            # return results in PASS.
+            return
 
         # 5. Copy /mnt/daos?/<pool_path> from the engine where we created the pool to
         # another engine where we didn’t create.
@@ -213,8 +224,8 @@ class PoolMembershipTest(IorTestBase):
             errors.append(
                 "Checker didn't fix orphan pool shard! msg = {}".format(query_msg))
 
-        # 8. Disable the checker.
-        self.log_step("Disable and start the checker.")
+        # 8. Disable the checker and start server.
+        self.log_step("Disable the checker and start server.")
         dmg_command.check_disable()
 
         # 9. Call dmg storage query usage to verify that the pool usage is back to the
@@ -242,32 +253,39 @@ class PoolMembershipTest(IorTestBase):
         4. Enable and start the checker.
         5. Query the checker and verify that the issue was fixed. i.e., Current status is
         COMPLETED.
-        6. Disable the checker.
+        6. Disable the checker and start server.
         7. Verify that the pool has one less target.
 
         Jira ID: DAOS-11736
 
-        :avocado: tags=all,pr
+        :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,pool_membership
+        :avocado: tags=recovery,cat_recov,pool_membership
         :avocado: tags=PoolMembershipTest,test_dangling_pool_map
         """
-        # 1. Create a pool.
-        self.log_step("Creating a pool (dmg pool create)")
+        self.log_step("Create a pool.")
         pool = self.get_pool(connect=False)
 
-        # 2. Stop servers.
+        self.log_step("Stop servers.")
         dmg_command = self.get_dmg_command()
         dmg_command.system_stop()
 
-        # 3. Manually remove /<scm_mount>/<pool_uuid>/vos-0 from rank 0 node.
+        self.log_step("Manually remove /<scm_mount>/<pool_uuid>/vos-0 from rank 0 node.")
         rank_0_host = NodeSet(self.server_managers[0].get_host(0))
         scm_mount = self.server_managers[0].get_config_value("scm_mount")
-        rm_cmd = f"sudo rm {scm_mount}/{pool.uuid.lower()}/vos-0"
+        vos_0_path = f"{scm_mount}/{pool.uuid.lower()}/vos-0"
+        vos_0_result = check_file_exists(hosts=self.hostlist_servers, filename=vos_0_path)
+        if not vos_0_result[0]:
+            msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
+                   "after system stop.")
+            self.log.info(msg)
+            dmg_command.system_start()
+            # return results in PASS.
+            return
+        rm_cmd = f"sudo rm {vos_0_path}"
         if not run_remote(log=self.log, hosts=rank_0_host, command=rm_cmd).passed:
             self.fail(f"Following command failed on {rank_0_host}! {rm_cmd}")
 
-        # 4. Enable and start the checker.
         self.log_step("Enable and start the checker.")
         dmg_command.check_enable(stop=False)
 
@@ -275,10 +293,9 @@ class PoolMembershipTest(IorTestBase):
         # the fault. Developer is fixing this issue.
         time.sleep(3)
 
-        # Start checker.
         dmg_command.check_start()
 
-        # 5. Query the checker and verify that the issue was fixed.
+        self.log_step("Query the checker and verify that the issue was fixed.")
         repair_reports = self.wait_for_check_complete()
 
         errors = []
@@ -287,11 +304,10 @@ class PoolMembershipTest(IorTestBase):
             errors.append(
                 "Checker didn't fix orphan pool shard! msg = {}".format(query_msg))
 
-        # 6. Disable the checker.
-        self.log_step("Disable and start the checker.")
+        self.log_step("Disable the checker and start server.")
         dmg_command.check_disable()
 
-        # 7. Verify that the pool has one less target.
+        self.log_step("Verify that the pool has one less target.")
         query_out = pool.query()
         total_targets = query_out["response"]["total_targets"]
         active_targets = query_out["response"]["active_targets"]
@@ -317,39 +333,43 @@ class PoolMembershipTest(IorTestBase):
 
         Jira ID: DAOS-11735
 
-        :avocado: tags=all,pr
+        :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,pool_membership
+        :avocado: tags=recovery,cat_recov,pool_membership
         :avocado: tags=PoolMembershipTest,test_dangling_rank_entry
         """
         targets = self.params.get("targets", "/run/server_config/engines/0/*")
         exp_msg = "dangling rank entry"
 
-        # 1. Create a pool and a container.
         self.log_step("Create a pool and a container.")
         self.pool = self.get_pool(connect=False)
         self.container = self.get_container(pool=self.pool)
 
-        # 2. Write some data with IOR using SX.
         self.log_step("Write some data with IOR.")
-        self.ior_cmd.set_daos_params(
-            self.server_group, self.pool, self.container.identifier)
+        self.ior_cmd.set_daos_params(self.pool, self.container.identifier)
         self.run_ior_with_pool(create_pool=False, create_cont=False)
 
-        # 3. Stop servers.
         self.log_step("Stop servers.")
         dmg_command = self.get_dmg_command()
         dmg_command.system_stop()
 
-        # 4. Remove pool directory from one of the mount points.
         self.log_step("Remove pool directory from one of the mount points.")
         rank_1_host = NodeSet(self.server_managers[0].get_host(1))
         scm_mount = self.server_managers[0].get_config_value("scm_mount")
-        rm_cmd = f"sudo rm -rf {scm_mount}/{self.pool.uuid.lower()}"
+        pool_directory = f"{scm_mount}/{self.pool.uuid.lower()}"
+        pool_directory_result = check_file_exists(
+            hosts=self.hostlist_servers, filename=pool_directory, directory=True)
+        if not pool_directory_result[0]:
+            msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
+                   "after system stop.")
+            self.log.info(msg)
+            dmg_command.system_start()
+            # return results in PASS.
+            return
+        rm_cmd = f"sudo rm -rf {pool_directory}"
         if not run_remote(log=self.log, hosts=rank_1_host, command=rm_cmd).passed:
             self.fail(f"Following command failed on {rank_1_host}! {rm_cmd}")
 
-        # 5. Enable checker.
         self.log_step("Enable checker.")
         dmg_command.check_enable(stop=False)
 
@@ -357,11 +377,9 @@ class PoolMembershipTest(IorTestBase):
         # the fault. Developer is fixing this issue.
         time.sleep(3)
 
-        # 6. Start checker.
         self.log_step("Start checker.")
         dmg_command.check_start()
 
-        # 7. Query the checker until expected number of inconsistencies are repaired.
         self.log_step(
             "Query the checker until expected number of inconsistencies are repaired.")
         repair_reports = self.wait_for_check_complete()
@@ -385,7 +403,6 @@ class PoolMembershipTest(IorTestBase):
         if not exp_msg_found:
             errors.append(f"{exp_msg} not in repair message!")
 
-        # 8. Disable checker.
         self.log_step("Disable checker.")
         dmg_command.check_disable()
 

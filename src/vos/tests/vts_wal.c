@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2022-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -280,6 +280,9 @@ wal_tst_pool_cont(void **state)
 	vos_pool_info_t		 pool_info1 = { 0 }, pool_info2 = { 0 };
 	int			 rc;
 
+	if (arg->wta_no_replay)
+		FAULT_INJECTION_REQUIRED();
+
 	uuid_generate(pool_id);
 	uuid_generate(cont_id);
 
@@ -292,7 +295,7 @@ wal_tst_pool_cont(void **state)
 	assert_int_equal(rc, 0);
 
 	/* Create pool: Create meta & WAL blobs, write meta & WAL header */
-	rc = vos_pool_create(pool_name, pool_id, 0, VPOOL_1G, 0, NULL);
+	rc = vos_pool_create(pool_name, pool_id, 0, VPOOL_1G, 0, 0 /* version */, NULL);
 	assert_int_equal(rc, 0);
 
 	/* Create cont: write WAL */
@@ -456,6 +459,9 @@ wal_kv_basic(void **state)
 	char			*buf_v;
 	unsigned int		 small_sz = 16, large_sz = 8192;
 	int			 i;
+
+	if (arg->no_replay)
+		FAULT_INJECTION_REQUIRED();
 
 	oid = dts_unit_oid_gen(0, 0);
 
@@ -798,6 +804,9 @@ wal_io_multiple_updates(void **state)
 	char			*dkey_buf = NULL;
 	char			*up, *f, *ak, *dk;
 	int			 i, j, rc = 0;
+
+	if (arg->fail_checkpoint || arg->no_replay || arg->fail_replay)
+		FAULT_INJECTION_REQUIRED();
 
 	num_keys = WAL_IO_MULTI_KEYS;
 	if (arg->fail_checkpoint)

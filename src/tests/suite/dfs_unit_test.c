@@ -1056,6 +1056,7 @@ dfs_test_rename(void **state)
 	rc = dfs_ostatx(dfs_mt, obj2, &stbuf, NULL);
 	assert_int_equal(rc, 0);
 	assert_true(stbuf.st_size == 128);
+	assert_int_equal(stbuf.st_blksize, DFS_DEFAULT_CHUNK_SIZE);
 
 	rc = dfs_chmod(dfs_mt, NULL, f1, S_IFREG | S_IRUSR | S_IWUSR);
 	assert_int_equal(rc, 0);
@@ -1493,7 +1494,7 @@ dfs_test_chown(void **state)
 	rc = dfs_stat(dfs_mt, NULL, filename_file1, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_uid, geteuid());
-	assert_int_equal(stbuf.st_uid, getegid());
+	assert_int_equal(stbuf.st_gid, getegid());
 
 	/* Now do a create with uid/gid set */
 	stbuf2.st_uid = 14;
@@ -2449,10 +2450,10 @@ dfs_test_xattrs(void **state)
 		      0, 0, NULL, &obj);
 	assert_int_equal(rc, 0);
 
+	size = 0;
 	rc = dfs_getxattr(dfs_mt, obj, xname1, NULL, &size);
 	assert_int_equal(rc, ENODATA);
 
-	size = 0;
 	rc = dfs_setxattr(dfs_mt, obj, xname1, NULL, size, 0);
 	assert_int_equal(rc, 0);
 
@@ -2461,6 +2462,7 @@ dfs_test_xattrs(void **state)
 	assert_int_equal(rc, 0);
 	assert_int_equal(size, 0);
 
+	size = 0;
 	rc = dfs_getxattr(dfs_mt, obj, xname2, NULL, &size);
 	assert_int_equal(rc, ENODATA);
 
@@ -3192,6 +3194,9 @@ dfs_test_oflags(void **state)
 static void
 dfs_test_pipeline_find(void **state)
 {
+#ifndef BUILD_PIPELINE
+	skip();
+#endif
 	dfs_obj_t	*dir1, *f1;
 	int		i;
 	time_t		ts = 0;

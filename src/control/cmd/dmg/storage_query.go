@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -39,50 +39,40 @@ type smdQueryCmd struct {
 
 func (cmd *smdQueryCmd) makeRequest(ctx context.Context, req *control.SmdQueryReq, opts ...pretty.PrintConfigOption) error {
 	req.SetHostList(cmd.getHostList())
+
 	resp, err := control.SmdQuery(ctx, cmd.ctlInvoker, req)
+	if err != nil {
+		return err // control api returned an error, disregard response
+	}
 
 	if cmd.JSONOutputEnabled() {
-		return cmd.OutputJSON(resp, err)
+		return cmd.OutputJSON(resp, resp.Errors())
 	}
 
-	if err != nil {
+	var outErr strings.Builder
+	if err := pretty.PrintResponseErrors(resp, &outErr, opts...); err != nil {
 		return err
+	}
+	if outErr.Len() > 0 {
+		cmd.Error(outErr.String())
 	}
 
-	var bld strings.Builder
-	if err := pretty.PrintResponseErrors(resp, &bld, opts...); err != nil {
+	var out strings.Builder
+	if err := pretty.PrintSmdInfoMap(req.OmitDevices, req.OmitPools, resp.HostStorage, &out, opts...); err != nil {
 		return err
 	}
-	if err := pretty.PrintSmdInfoMap(req.OmitDevices, req.OmitPools, resp.HostStorage, &bld, opts...); err != nil {
-		return err
+	if out.Len() > 0 {
+		cmd.Info(out.String())
 	}
-	cmd.Info(bld.String())
 
 	return resp.Errors()
 }
 
 // storageQueryCmd is the struct representing the storage query subcommand
 type storageQueryCmd struct {
-	DeviceHealth devHealthQueryCmd   `command:"device-health" description:"Query the device health"`
-	ListPools    listPoolsQueryCmd   `command:"list-pools" description:"List pools with NVMe on the server"`
-	ListDevices  listDevicesQueryCmd `command:"list-devices" description:"List storage devices on the server"`
-	Usage        usageQueryCmd       `command:"usage" description:"Show SCM & NVMe storage space utilization per storage server"`
-}
-
-type devHealthQueryCmd struct {
-	smdQueryCmd
-	UUID string `short:"u" long:"uuid" description:"Device UUID. All devices queried if arg not set"`
-}
-
-func (cmd *devHealthQueryCmd) Execute(_ []string) error {
-	ctx := cmd.MustLogCtx()
-	req := &control.SmdQueryReq{
-		OmitPools:        true,
-		IncludeBioHealth: true,
-		Rank:             ranklist.NilRank,
-		UUID:             cmd.UUID,
-	}
-	return cmd.makeRequest(ctx, req)
+	ListPools   listPoolsQueryCmd   `command:"list-pools" description:"List pools with NVMe on the server"`
+	ListDevices listDevicesQueryCmd `command:"list-devices" description:"List storage devices on the server"`
+	Usage       usageQueryCmd       `command:"usage" description:"Show SCM & NVMe storage space utilization per storage server"`
 }
 
 type listDevicesQueryCmd struct {
@@ -171,24 +161,30 @@ type smdManageCmd struct {
 
 func (cmd *smdManageCmd) makeRequest(ctx context.Context, req *control.SmdManageReq, opts ...pretty.PrintConfigOption) error {
 	req.SetHostList(cmd.getHostList())
+
+	cmd.Tracef("smd manage request: %+v", req)
+
 	resp, err := control.SmdManage(ctx, cmd.ctlInvoker, req)
+	if err != nil {
+		return err // control api returned an error, disregard response
+	}
+
+	cmd.Tracef("smd managee response: %+v", resp)
 
 	if cmd.JSONOutputEnabled() {
-		return cmd.OutputJSON(resp, err)
+		return cmd.OutputJSON(resp, resp.Errors())
 	}
 
-	if err != nil {
+	var out, outErr strings.Builder
+	if err := pretty.PrintSmdManageResp(req.Operation, resp, &out, &outErr, opts...); err != nil {
 		return err
 	}
-
-	var bld strings.Builder
-	if err := pretty.PrintResponseErrors(resp, &bld, opts...); err != nil {
-		return err
+	if outErr.Len() > 0 {
+		cmd.Error(outErr.String())
 	}
-	if err := pretty.PrintSmdInfoMap(false, true, resp.HostStorage, &bld, opts...); err != nil {
-		return err
+	if out.Len() > 0 {
+		cmd.Info(out.String())
 	}
-	cmd.Info(bld.String())
 
 	return resp.Errors()
 }

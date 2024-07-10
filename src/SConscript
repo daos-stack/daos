@@ -129,9 +129,6 @@ def scons():
     # Build utilities
     SConscript('utils/SConscript')
 
-    # Build ddb
-    SConscript('ddb/SConscript')
-
     # Build the control plane components
     SConscript('control/SConscript')
 

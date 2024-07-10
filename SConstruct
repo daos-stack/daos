@@ -363,7 +363,7 @@ MINIMAL_ENV = ('HOME', 'TERM', 'SSH_AUTH_SOCK', 'http_proxy', 'https_proxy', 'PK
 
 # Environment variables that are also kept when LD_PRELOAD is set.
 PRELOAD_ENV = ('LD_PRELOAD', 'D_LOG_FILE', 'DAOS_AGENT_DRPC_DIR', 'D_LOG_MASK', 'DD_MASK',
-               'DD_SUBSYS', 'D_IL_MAX_EQ')
+               'DD_SUBSYS', 'D_IL_MAX_EQ', 'D_IL_ENFORCE_EXEC_ENV', 'D_IL_COMPATIBLE')
 
 
 def scons():
@@ -374,6 +374,9 @@ def scons():
     deps_env = Environment()
     # Ensure 'install-sandbox' option is defined early
     deps_env.Tool('install')
+
+    # Silence deprecation warning so it doesn't fail the build
+    SetOption('warn', ['no-python-version'])
 
     add_command_line_options()
 

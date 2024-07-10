@@ -61,7 +61,7 @@ class NvmeFragmentation(TestWithServers):
             ior_cmd = IorCommand()
             ior_cmd.get_params(self)
             cont_label = self.label_generator.get_label('cont')
-            ior_cmd.set_daos_params(self.server_group, self.pool, cont_label)
+            ior_cmd.set_daos_params(self.pool, cont_label)
             ior_cmd.dfs_oclass.update(oclass)
             ior_cmd.api.update(api)
             ior_cmd.transfer_size.update(test[0])

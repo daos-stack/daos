@@ -154,6 +154,17 @@ func (hem HostErrorsMap) Keys() []string {
 	return keys
 }
 
+// ErrorCount returns a count of errors in map.
+func (hem HostErrorsMap) ErrorCount() (nrErrs int) {
+	for _, set := range hem {
+		if set != nil {
+			nrErrs += set.HostSet.Count()
+		}
+	}
+
+	return nrErrs
+}
+
 // UnaryResponse contains a slice of *HostResponse items returned
 // from synchronous unary RPC invokers.
 type UnaryResponse struct {

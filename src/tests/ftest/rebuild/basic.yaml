@@ -2,9 +2,10 @@
 # required quantity is indicated by the placeholders
 hosts:
   test_servers: 6
-timeout: 900
+timeout: 600
 server_config:
   name: daos_server
+  crt_timeout: 10
   engines_per_host: 1
   engines:
     0:
@@ -19,13 +20,14 @@ server_config:
           scm_mount: /mnt/daos
   system_ram_reserved: 1
 pool:
-  scm_size: 1G
-  control_method: dmg
+  size: 1G
   pool_query_timeout: 30
   properties: rd_fac:2
 container:
   akey_size: 5
   dkey_size: 5
+  debug: true
+  properties: rd_fac:2
   data: !mux
     small_data:
       data_size: 32
@@ -33,6 +35,9 @@ container:
       data_size: 250
   objects: !mux
     zero_objects:
+      # Don't run duplicate variants when there are zero objects
+      !filter-only : "/run/container/data/small_data"  # yamllint disable-line rule:colons
+      !filter-only : "/run/container/records/one_record"  # yamllint disable-line rule:colons
       object_qty: 0
     one_object:
       object_qty: 1
@@ -43,8 +48,6 @@ container:
       record_qty: 1
     ten_records:
       record_qty: 10
-  debug: true
-  properties: rd_fac:2
 testparams:
   ranks: !mux
     rank1:
@@ -53,5 +56,5 @@ testparams:
       rank: 2
     rank3:
       rank: 3
-  quantity: 2
+  pool_quantity: 2
   object_class: OC_RP_3G1

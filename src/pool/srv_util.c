@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -90,7 +90,7 @@ ds_pool_map_rank_up(struct pool_map *map, d_rank_t rank)
 		return false;
 	D_ASSERTF(rc == 1, "%d\n", rc);
 
-	return node->do_comp.co_status & POOL_GROUP_MAP_STATES;
+	return node->do_comp.co_status & DC_POOL_GROUP_MAP_STATES;
 }
 
 int
@@ -240,22 +240,14 @@ compute_svc_reconf_objective(int svc_rf, d_rank_list_t *replicas)
 	return ds_pool_svc_rf_to_nreplicas(svc_rf);
 }
 
-static void
-rank_list_del_at(d_rank_list_t *list, int index)
-{
-	D_ASSERTF(0 <= index && index < list->rl_nr, "index=%d rl_nr=%u\n", index, list->rl_nr);
-	memmove(&list->rl_ranks[index], &list->rl_ranks[index + 1],
-		(list->rl_nr - index - 1) * sizeof(list->rl_ranks[0]));
-	list->rl_nr--;
-}
-
 /*
  * Ephermal "reconfiguration domain" used by ds_pool_plan_svc_reconfs to track
- * aspects of domains that include at least one engine in POOL_SVC_MAP_STATES.
+ * aspects of domains that include at least one engine in
+ * DC_POOL_SVC_MAP_STATES.
  *
  * The rcd_n_replicas field is the number of replicas in this domain.
  *
- * The rcd_n_engines field is the number of POOL_SVC_MAP_STATES engines.
+ * The rcd_n_engines field is the number of DC_POOL_SVC_MAP_STATES engines.
  *
  * The number of vacant engines is therefore rcd_n_engines - rcd_n_replicas. We
  * always have 0 <= rcd_n_replicas <= rcd_n_engines and rcd_n_engines > 0.
@@ -271,7 +263,7 @@ struct reconf_domain {
  * aspects of the pool map and the replicas.
  *
  * The rcm_domains field points to a shuffle of all domains that include at
- * least one engine in POOL_SVC_MAP_STATES.
+ * least one engine in DC_POOL_SVC_MAP_STATES.
  *
  * The rcm_domains_n_engines_max field stores the maximum of the rcd_n_engines
  * field across rcm_domains.
@@ -342,14 +334,14 @@ init_reconf_map(struct pool_map *map, d_rank_list_t *replicas, d_rank_t self,
 			int                 k;
 			d_rank_list_t      *list;
 
-			is_desired = engine->do_comp.co_status & POOL_SVC_MAP_STATES;
+			is_desired = engine->do_comp.co_status & DC_POOL_SVC_MAP_STATES;
 			if (is_desired)
 				n_engines++;
 
 			if (!d_rank_list_find(replicas_left, engine->do_comp.co_rank, &k))
 				continue;
 
-			rank_list_del_at(replicas_left, k);
+			d_rank_list_del_at(replicas_left, k);
 			if (is_desired) {
 				list = rmap.rcm_replicas;
 				n_replicas++;
@@ -438,7 +430,7 @@ find_vacancy_in_domain(struct reconf_domain *rdomain, d_rank_list_t *replicas)
 	for (i = 0; i < rdomain->rcd_domain->do_comp.co_nr; i++) {
 		struct pool_domain *engine = &rdomain->rcd_domain->do_children[i];
 
-		if ((engine->do_comp.co_status & POOL_SVC_MAP_STATES) &&
+		if ((engine->do_comp.co_status & DC_POOL_SVC_MAP_STATES) &&
 		    !d_rank_list_find(replicas, engine->do_comp.co_rank, NULL /* idx */)) {
 			/* Pick this vacant engine with a probability of 1/n. */
 			if (d_rand() % n == 0)
@@ -475,7 +467,7 @@ find_replica_in_domain(struct reconf_domain *rdomain, d_rank_list_t *replicas, d
 	for (i = 0; i < rdomain->rcd_domain->do_comp.co_nr; i++) {
 		struct pool_domain *engine = &rdomain->rcd_domain->do_children[i];
 
-		if ((engine->do_comp.co_status & POOL_SVC_MAP_STATES) &&
+		if ((engine->do_comp.co_status & DC_POOL_SVC_MAP_STATES) &&
 		    engine->do_comp.co_rank != self &&
 		    d_rank_list_find(replicas, engine->do_comp.co_rank, NULL /* idx */)) {
 			if (d_rand() % n == 0)
@@ -562,7 +554,7 @@ remove_replica_in_domain(struct reconf_domain *rdomain, d_rank_list_t *replicas,
 
 	found = d_rank_list_find(replicas, rank, &k);
 	D_ASSERT(found);
-	rank_list_del_at(replicas, k);
+	d_rank_list_del_at(replicas, k);
 
 	rdomain->rcd_n_replicas--;
 	return 0;
@@ -673,8 +665,8 @@ balance_replicas(struct reconf_map *rmap, d_rank_t self, d_rank_list_t *to_add,
  * caller is responsible for freeing \a to_add_out and \a to_remove_out with
  * d_rank_list_free.
  *
- * We desire replicas in POOL_SVC_MAP_STATES. The \a self replica must be in a
- * desired state in \a map, or this function will return -DER_INVAL. All
+ * We desire replicas in DC_POOL_SVC_MAP_STATES. The \a self replica must be in
+ * a desired state in \a map, or this function will return -DER_INVAL. All
  * undesired replicas, if any, will be appended to \a to_remove, so that no
  * replica is outside the pool group.
  *
@@ -691,7 +683,7 @@ balance_replicas(struct reconf_map *rmap, d_rank_t self, d_rank_list_t *to_add,
  * \param[in]	map		pool map
  * \param[in]	replicas	current PS membership (may be empty if \a svc_rf >= 0)
  * \param[in]	self		self replica rank (may be CRT_NO_RANK if we're not a replica)
- * \param[in]	filter_only	only filter out replicas not in POOL_SVC_MAP_STATES
+ * \param[in]	filter_only	only filter out replicas not in DC_POOL_SVC_MAP_STATES
  * \param[out]	to_add_out	PS replicas to add
  * \param[out]	to_remove_out	PS replicas to remove
  */
@@ -827,7 +819,7 @@ testu_rank_sets_subtract(d_rank_t *x_ranks, int x_ranks_len, d_rank_list_t *y)
 		int j;
 
 		if (d_rank_list_find(z, y->rl_ranks[i], &j))
-			rank_list_del_at(z, j);
+			d_rank_list_del_at(z, j);
 	}
 
 	return z;
@@ -1710,7 +1702,7 @@ manage_target(bool start)
 		if (start)
 			rc = ds_pool_child_start(pool_info->spi_id, true);
 		else
-			rc = ds_pool_child_stop(pool_info->spi_id);
+			rc = ds_pool_child_stop(pool_info->spi_id, false);
 
 		if (rc < 0) {
 			DL_ERROR(rc, DF_UUID": Failed to %s pool child.",

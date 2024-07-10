@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -485,7 +485,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 			},
 			expErr: daos.Busy,
 		},
-		"device-health": {
+		"list-devices; with health": {
 			req: &ctlpb.SmdQueryReq{
 				OmitPools:        true,
 				Rank:             uint32(ranklist.NilRank),
@@ -531,7 +531,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				},
 			},
 		},
-		"device-health; no uuid in request": {
+		"list-devices; with health; no uuid in request": {
 			req: &ctlpb.SmdQueryReq{
 				OmitPools:        true,
 				Rank:             uint32(ranklist.NilRank),
@@ -589,7 +589,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				},
 			},
 		},
-		"device-health (NEW SMD); skip health collection": {
+		"list-devices; with health (NEW SMD); skip health collection": {
 			req: &ctlpb.SmdQueryReq{
 				OmitPools:        true,
 				Rank:             uint32(ranklist.NilRank),
@@ -628,7 +628,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				},
 			},
 		},
-		"device-health; DAOS Failure": {
+		"list-devices; with health; DAOS failure": {
 			req: &ctlpb.SmdQueryReq{
 				OmitPools:        true,
 				Rank:             uint32(ranklist.NilRank),
@@ -702,7 +702,10 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						cfg.setSendMsgResponseList(t, mock)
 					}
 				}
-				srv.setDrpcClient(newMockDrpcClient(cfg))
+				mdc := newMockDrpcClient(cfg)
+				srv.getDrpcClientFn = func(s string) drpc.DomainSocketClient {
+					return mdc
+				}
 				srv.ready.SetTrue()
 			}
 			if tc.harnessStopped {
@@ -1305,9 +1308,7 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 			expResp: &ctlpb.SmdManageResp{
 				Ranks: []*ctlpb.SmdManageResp_RankResp{
 					{
-						Results: []*ctlpb.SmdManageResp_Result{
-							{Device: pbFaultDev(1)},
-						},
+						Results: []*ctlpb.SmdManageResp_Result{{}},
 					},
 				},
 			},
@@ -1344,10 +1345,8 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 			expResp: &ctlpb.SmdManageResp{
 				Ranks: []*ctlpb.SmdManageResp_RankResp{
 					{
-						Rank: 1,
-						Results: []*ctlpb.SmdManageResp_Result{
-							{Device: pbFaultDev(1)},
-						},
+						Rank:    1,
+						Results: []*ctlpb.SmdManageResp_Result{{}},
 					},
 				},
 			},
@@ -1397,9 +1396,7 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 			expResp: &ctlpb.SmdManageResp{
 				Ranks: []*ctlpb.SmdManageResp_RankResp{
 					{
-						Results: []*ctlpb.SmdManageResp_Result{
-							{Device: pbNormDev(2)},
-						},
+						Results: []*ctlpb.SmdManageResp_Result{{}},
 					},
 				},
 			},
@@ -1437,9 +1434,7 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 			expResp: &ctlpb.SmdManageResp{
 				Ranks: []*ctlpb.SmdManageResp_RankResp{
 					{
-						Results: []*ctlpb.SmdManageResp_Result{
-							{Device: pbNormDev(2)},
-						},
+						Results: []*ctlpb.SmdManageResp_Result{{}},
 					},
 				},
 			},
@@ -1468,9 +1463,7 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 			expResp: &ctlpb.SmdManageResp{
 				Ranks: []*ctlpb.SmdManageResp_RankResp{
 					{
-						Results: []*ctlpb.SmdManageResp_Result{
-							{Device: pbNormDev(2)},
-						},
+						Results: []*ctlpb.SmdManageResp_Result{{}},
 					},
 				},
 			},
@@ -1506,7 +1499,6 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 					{
 						Results: []*ctlpb.SmdManageResp_Result{
 							{
-								Device: pbNormDev(1),
 								Status: int32(daos.TimedOut),
 							},
 						},
@@ -1542,7 +1534,6 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 					{
 						Results: []*ctlpb.SmdManageResp_Result{
 							{
-								Device: pbNormDev(1),
 								Status: int32(daos.Busy),
 							},
 						},
@@ -1589,7 +1580,10 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 						cfg.setSendMsgResponseList(t, mock)
 					}
 				}
-				ei.setDrpcClient(newMockDrpcClient(cfg))
+				mdc := newMockDrpcClient(cfg)
+				ei.getDrpcClientFn = func(s string) drpc.DomainSocketClient {
+					return mdc
+				}
 				ei.ready.SetTrue()
 			}
 			if tc.harnessStopped {

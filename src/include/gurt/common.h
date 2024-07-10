@@ -401,7 +401,7 @@ d_realpath(const char *path, char *resolved_path) _dalloc_;
 #define D_SPIN_INIT(x, y)	__D_PTHREAD_INIT(pthread_spin_init, x, y)
 #define D_RWLOCK_INIT(x, y)	__D_PTHREAD_INIT(pthread_rwlock_init, x, y)
 
-#ifdef DAOS_BUILD_RELEASE
+#if defined(DAOS_BUILD_RELEASE) || defined(__COVERITY__)
 
 #define D_MUTEX_LOCK(x)    __D_PTHREAD(pthread_mutex_lock, x)
 #define D_RWLOCK_WRLOCK(x) __D_PTHREAD(pthread_rwlock_wrlock, x)
@@ -471,6 +471,7 @@ int d_rank_list_copy(d_rank_list_t *dst, d_rank_list_t *src);
 void d_rank_list_shuffle(d_rank_list_t *rank_list);
 void d_rank_list_sort(d_rank_list_t *rank_list);
 bool d_rank_list_find(d_rank_list_t *rank_list, d_rank_t rank, int *idx);
+void d_rank_list_del_at(d_rank_list_t *list, int idx);
 int d_rank_list_del(d_rank_list_t *rank_list, d_rank_t rank);
 bool d_rank_list_identical(d_rank_list_t *rank_list1,
 			   d_rank_list_t *rank_list2);
@@ -480,12 +481,14 @@ int d_rank_list_append(d_rank_list_t *rank_list, d_rank_t rank);
 int d_rank_list_dump(d_rank_list_t *rank_list, d_string_t name, int name_len);
 d_rank_list_t *uint32_array_to_rank_list(uint32_t *ints, size_t len);
 int rank_list_to_uint32_array(d_rank_list_t *rl, uint32_t **ints, size_t *len);
-char *d_rank_list_to_str(d_rank_list_t *rank_list);
+int
+		     d_rank_list_to_str(d_rank_list_t *rank_list, char **rank_str);
 
 d_rank_range_list_t *d_rank_range_list_alloc(uint32_t size);
 d_rank_range_list_t *d_rank_range_list_realloc(d_rank_range_list_t *range_list, uint32_t size);
 d_rank_range_list_t *d_rank_range_list_create_from_ranks(d_rank_list_t *rank_list);
-char *d_rank_range_list_str(d_rank_range_list_t *list, bool *truncated);
+int
+     d_rank_range_list_str(d_rank_range_list_t *list, char **ranks_str);
 void d_rank_range_list_free(d_rank_range_list_t *range_list);
 
 #ifdef FAULT_INJECTION

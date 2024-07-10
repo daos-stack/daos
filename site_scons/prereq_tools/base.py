@@ -525,7 +525,7 @@ class PreReqComponent():
         # argobots is not really needed by client but it's difficult to separate
         common_reqs = ['ucx', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid', 'crypto', 'protobufc',
                        'lz4', 'isal', 'isal_crypto']
-        client_reqs = ['fuse', 'json-c', 'capstone']
+        client_reqs = ['fuse', 'json-c', 'capstone', 'aio']
         server_reqs = ['argobots', 'pmdk', 'spdk', 'ipmctl']
         test_reqs = ['cmocka']
 
@@ -1300,8 +1300,6 @@ class _Component():
                 lib_paths.append(full_path)
                 # will adjust this to be a relative rpath later
                 env.AppendUnique(RPATH_FULL=[full_path])
-                # For binaries run during build
-                env.AppendENVPath("LD_LIBRARY_PATH", full_path)
 
             # Ensure RUNPATH is used rather than RPATH.  RPATH is deprecated
             # and this allows LD_LIBRARY_PATH to override RPATH

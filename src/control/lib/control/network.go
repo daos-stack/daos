@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -216,15 +216,21 @@ type (
 	ClientNetworkHint struct {
 		// These CaRT settings are shared with the
 		// libdaos client to aid in CaRT initialization.
-		Provider        string   `json:"provider"`
-		Interface       string   `json:"interface"`
-		Domain          string   `json:"domain"`
-		CrtCtxShareAddr uint32   `json:"crt_ctx_share_addr"`
-		CrtTimeout      uint32   `json:"crt_timeout"`
-		NetDevClass     uint32   `json:"net_dev_class"`
-		SrvSrxSet       int32    `json:"srv_srx_set"`
-		EnvVars         []string `json:"env_vars"`
-		ProviderIdx     uint32   `json:"provider_idx"`
+		Provider    string   `json:"provider"`
+		Interface   string   `json:"interface"`
+		Domain      string   `json:"domain"`
+		CrtTimeout  uint32   `json:"crt_timeout"`
+		NetDevClass uint32   `json:"net_dev_class"`
+		SrvSrxSet   int32    `json:"srv_srx_set"`
+		EnvVars     []string `json:"env_vars"`
+		ProviderIdx uint32   `json:"provider_idx"`
+	}
+
+	BuildInfo struct {
+		Major uint32 `json:"major"`
+		Minor uint32 `json:"minor"`
+		Patch uint32 `json:"patch"`
+		Tag   string `json:"tag,omitempty"`
 	}
 
 	GetAttachInfoResp struct {
@@ -234,8 +240,33 @@ type (
 		MSRanks                 []uint32              `json:"ms_ranks"`
 		ClientNetHint           ClientNetworkHint     `json:"client_net_hint"`
 		AlternateClientNetHints []ClientNetworkHint   `json:"secondary_client_net_hints"`
+		BuildInfo               BuildInfo             `json:"build_info"`
 	}
 )
+
+func (bi *BuildInfo) VersionString() string {
+	if bi == nil {
+		return ""
+	}
+	return (&mgmtpb.BuildInfo{
+		Major: bi.Major,
+		Minor: bi.Minor,
+		Patch: bi.Patch,
+		Tag:   bi.Tag,
+	}).VersionString()
+}
+
+func (bi *BuildInfo) String() string {
+	if bi == nil {
+		return ""
+	}
+	return (&mgmtpb.BuildInfo{
+		Major: bi.Major,
+		Minor: bi.Minor,
+		Patch: bi.Patch,
+		Tag:   bi.Tag,
+	}).BuildString()
+}
 
 func (gair *GetAttachInfoResp) String() string {
 	// gair.ServiceRanks may contain thousands of elements. Print a few
@@ -244,9 +275,9 @@ func (gair *GetAttachInfoResp) String() string {
 
 	// Condensed format for debugging...
 	ch := gair.ClientNetHint
-	return fmt.Sprintf("p=%s i=%s d=%s a=%d t=%d c=%d x=%d, rus(%d)=%s, mss=%v",
+	return fmt.Sprintf("p=%s i=%s d=%s t=%d c=%d x=%d, rus(%d)=%s, mss=%v",
 		ch.Provider, ch.Interface, ch.Domain,
-		ch.CrtCtxShareAddr, ch.CrtTimeout, ch.NetDevClass, ch.SrvSrxSet,
+		ch.CrtTimeout, ch.NetDevClass, ch.SrvSrxSet,
 		len(gair.ServiceRanks), rankURI, gair.MSRanks,
 	)
 }

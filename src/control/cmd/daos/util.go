@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -42,6 +42,7 @@ init_op_vals(struct cmd_args_s *ap)
 	ap->o_op = -1;
 	ap->fs_op = -1;
 	ap->sh_op = -1;
+	ap->sysname = NULL;
 }
 
 void
@@ -60,6 +61,25 @@ func apiVersion() string {
 		C.DAOS_API_VERSION_MINOR,
 		C.DAOS_API_VERSION_FIX,
 	)
+}
+
+func srvBuildInfo() (*build.Info, error) {
+	var major uint32
+	var minor uint32
+	var patch uint32
+	var tagPtr *C.char
+
+	rc := C.dc_mgmt_srv_version((*C.uint)(&major), (*C.uint)(&minor), (*C.uint)(&patch), &tagPtr)
+	if err := daosError(rc); err != nil {
+		return nil, err
+	}
+	tagStr := C.GoString(tagPtr)
+
+	return &build.Info{
+		Name:      build.ControlPlaneName,
+		Version:   (&build.Version{Major: int(major), Minor: int(minor), Patch: int(patch)}).String(),
+		BuildInfo: tagStr,
+	}, nil
 }
 
 func daosError(rc C.int) error {
@@ -184,8 +204,6 @@ func freeCmdArgs(ap *C.struct_cmd_args_s) {
 		return
 	}
 
-	freeString(ap.sysname)
-
 	C.free(unsafe.Pointer(ap.dfs_path))
 	C.free(unsafe.Pointer(ap.dfs_prefix))
 
@@ -213,7 +231,6 @@ func allocCmdArgs(log logging.Logger) (ap *C.struct_cmd_args_s, cleanFn func(), 
 	// allocate the struct using C memory to avoid any issues with Go GC
 	ap = (*C.struct_cmd_args_s)(C.calloc(1, C.sizeof_struct_cmd_args_s))
 	C.init_op_vals(ap)
-	ap.sysname = C.CString(build.DefaultSystemName)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	outStream, outCleanup, err := createWriteStream(ctx, log.Info)
