@@ -1652,6 +1652,12 @@ host1
         PLL Lock Loss Count:%d
         NAND Bytes Written:%d
         Host Bytes Written:%d
+      PCIe Link Info:
+        Port: #1
+        Max Speed: 1 GT/s
+        Negotiated Speed: 1 GT/s
+        Max Width: x4
+        Negotiated Width: x4
 
 `,
 				mockController.HealthStats.TempK(), mockController.HealthStats.TempC(),
