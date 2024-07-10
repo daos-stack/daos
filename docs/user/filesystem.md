@@ -268,7 +268,8 @@ the daos container using dfuse.
 #### Via mount.fuse3 command
 
 ```
-$  dmg pool create --scm-size=8G --nvme-size=64G --label=samirrav_pool -u samirrav@
+$  dmg pool create --scm-size=8G --nvme-size=64G -u samirrav@ samirrav_pool
+
 Creating DAOS pool with manual per-engine storage allocation: 8.0 GB SCM, 64 GB NVMe (12.50% ratio)
 Pool created with 11.11%,88.89% storage tier ratio
 --------------------------------------------------
@@ -327,7 +328,7 @@ $
 Only root can run 'mount -a' command so this example should be run as root user.
 
 ```
-$  dmg pool create --scm-size=8G --nvme-size=64G --label=admin_pool
+$  dmg pool create --scm-size=8G --nvme-size=64G admin_pool
 Creating DAOS pool with manual per-engine storage allocation: 8.0 GB SCM, 64 GB NVMe (12.50% ratio)
 Pool created with 11.11%,88.89% storage tier ratio
 --------------------------------------------------
@@ -595,7 +596,7 @@ To create a new container and link it into the namespace of an existing one,
 use the following command.
 
 ```bash
-$ daos container create <pool_label> --type POSIX --path <path_to_entry_point>
+$ daos container create <pool_label> <cont_label> --type POSIX --path <path_to_entry_point>
 ```
 
 The pool should already exist, and the path should specify a location

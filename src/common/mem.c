@@ -2825,6 +2825,7 @@ cache_flush_pages(struct umem_cache *cache, d_list_t *dirty_list,
 					d_list_add(&pinfo->pi_dirty_link, dirty_list);
 				}
 				d_list_add(&chkpt_data->cd_link, &free_list);
+				rc = 0;
 				break;
 			}
 

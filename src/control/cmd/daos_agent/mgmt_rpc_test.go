@@ -13,7 +13,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/proto"
@@ -27,6 +26,7 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
+	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
@@ -227,11 +227,10 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if diff := cmp.Diff(tc.expResp, resp, cmpopts.IgnoreUnexported(
-				mgmtpb.GetAttachInfoResp{},
-				mgmtpb.GetAttachInfoResp_RankUri{},
-				mgmtpb.ClientNetHint{},
-			)); diff != "" {
+			cmpOpts := cmp.Options{
+				protocmp.Transform(),
+			}
+			if diff := cmp.Diff(tc.expResp, resp, cmpOpts...); diff != "" {
 				t.Fatalf("want-, got+:\n%s", diff)
 			}
 		})
@@ -347,7 +346,7 @@ func TestAgent_mgmtModule_getNUMANode(t *testing.T) {
 
 			mod := &mgmtModule{
 				log:            log,
-				useDefaultNUMA: tc.useDefaultNUMA,
+				useDefaultNUMA: atm.NewBool(tc.useDefaultNUMA),
 				numaGetter:     tc.numaGetter,
 			}
 

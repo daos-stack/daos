@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2023 Intel Corporation.
+// (C) Copyright 2023-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,20 +18,33 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-type Item interface {
-	Lock()
-	Unlock()
-	Key() string
-	Refresh(ctx context.Context) error
-	NeedsRefresh() bool
-}
+type (
+	// Item defines an interface for a cached item.
+	Item interface {
+		sync.Locker
+		Key() string
+	}
 
-// ItemCache is a mechanism for caching Items to keys.
-type ItemCache struct {
-	log   logging.Logger
-	mutex sync.RWMutex
-	items map[string]Item
-}
+	// ExpirableItem is an Item that defines its own expiration criteria.
+	ExpirableItem interface {
+		Item
+		IsExpired() bool
+	}
+
+	// RefreshableItem is an Item that defines its own refresh criteria and method.
+	RefreshableItem interface {
+		Item
+		Refresh(ctx context.Context) error
+		RefreshIfNeeded(ctx context.Context) (bool, error)
+	}
+
+	// ItemCache is a mechanism for caching Items to keys.
+	ItemCache struct {
+		log   logging.Logger
+		mutex sync.RWMutex
+		items map[string]Item
+	}
+)
 
 // NewItemCache creates a new ItemCache.
 func NewItemCache(log logging.Logger) *ItemCache {
@@ -119,6 +132,8 @@ func (e *errKeyNotFound) Error() string {
 	return fmt.Sprintf("key %q not found", e.key)
 }
 
+// noopRelease is a no-op function that does nothing, but can
+// be safely returned in lieu of a real lock release function.
 func noopRelease() {}
 
 // GetOrCreate returns an item from the cache if it exists, otherwise it creates
@@ -152,12 +167,15 @@ func (ic *ItemCache) GetOrCreate(ctx context.Context, key string, missFn ItemCre
 	}
 
 	item.Lock()
-	if item.NeedsRefresh() {
-		if err := item.Refresh(ctx); err != nil {
+	if ri, ok := item.(RefreshableItem); ok {
+		refreshed, err := ri.RefreshIfNeeded(ctx)
+		if err != nil {
 			item.Unlock()
 			return nil, noopRelease, errors.Wrapf(err, "fetch data for %q", key)
 		}
-		ic.log.Debugf("refreshed item %q", key)
+		if refreshed {
+			ic.log.Debugf("refreshed item %q", key)
+		}
 	}
 
 	return item, item.Unlock, nil
@@ -183,21 +201,28 @@ func (ic *ItemCache) Get(ctx context.Context, key string) (Item, func(), error) 
 	}
 
 	item.Lock()
-	if item.NeedsRefresh() {
-		if err := item.Refresh(ctx); err != nil {
+	if ri, ok := item.(RefreshableItem); ok {
+		refreshed, err := ri.RefreshIfNeeded(ctx)
+		if err != nil {
 			item.Unlock()
 			return nil, noopRelease, errors.Wrapf(err, "fetch data for %q", key)
 		}
-		ic.log.Debugf("refreshed item %q", key)
+		if refreshed {
+			ic.log.Debugf("refreshed item %q", key)
+		}
 	}
 
 	return item, item.Unlock, nil
 }
 
 func (ic *ItemCache) get(key string) (Item, error) {
-	val, ok := ic.items[key]
+	item, ok := ic.items[key]
 	if ok {
-		return val, nil
+		if ei, ok := item.(ExpirableItem); ok && ei.IsExpired() {
+			delete(ic.items, key)
+		} else {
+			return item, nil
+		}
 	}
 	return nil, &errKeyNotFound{key: key}
 }
@@ -229,10 +254,12 @@ func (ic *ItemCache) refreshItem(ctx context.Context, key string) error {
 		return err
 	}
 
-	item.Lock()
-	defer item.Unlock()
-	if err := item.Refresh(ctx); err != nil {
-		return errors.Wrapf(err, "failed to refresh cached item %q", item.Key())
+	if ri, ok := item.(RefreshableItem); ok {
+		item.Lock()
+		defer item.Unlock()
+		if err := ri.Refresh(ctx); err != nil {
+			return errors.Wrapf(err, "failed to refresh cached item %q", item.Key())
+		}
 	}
 
 	return nil

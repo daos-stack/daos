@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -34,7 +34,8 @@
 #define MGMT_PROTO_SRV_RPC_LIST                                                                    \
 	X(MGMT_TGT_CREATE, 0, &CQF_mgmt_tgt_create, ds_mgmt_hdlr_tgt_create,                       \
 	  &ds_mgmt_hdlr_tgt_create_co_ops)                                                         \
-	X(MGMT_TGT_DESTROY, 0, &CQF_mgmt_tgt_destroy, ds_mgmt_hdlr_tgt_destroy, NULL)              \
+	X(MGMT_TGT_DESTROY, 0, &CQF_mgmt_tgt_destroy, ds_mgmt_hdlr_tgt_destroy,                    \
+	  &ds_mgmt_hdlr_tgt_destroy_co_ops)                                                        \
 	X(MGMT_TGT_PARAMS_SET, 0, &CQF_mgmt_tgt_params_set, ds_mgmt_tgt_params_set_hdlr, NULL)     \
 	X(MGMT_TGT_PROFILE, 0, &CQF_mgmt_profile, ds_mgmt_tgt_profile_hdlr, NULL)                  \
 	X(MGMT_TGT_MAP_UPDATE, 0, &CQF_mgmt_tgt_map_update, ds_mgmt_hdlr_tgt_map_update,           \
@@ -42,6 +43,16 @@
 	X(MGMT_TGT_MARK, 0, &CQF_mgmt_mark, ds_mgmt_tgt_mark_hdlr, NULL)                           \
 	X(MGMT_TGT_SHARD_DESTROY, 0, &CQF_mgmt_tgt_shard_destroy, ds_mgmt_hdlr_tgt_shard_destroy,  \
 	  NULL)
+
+#define MGMT_PROTO_SRV_RPC_LIST_V2                                                                    \
+	X(MGMT_TGT_CREATE, 0, &CQF_mgmt_tgt_create, ds_mgmt_hdlr_tgt_create,                       \
+	  &ds_mgmt_hdlr_tgt_create_co_ops)                                                         \
+	X(MGMT_TGT_DESTROY, 0, &CQF_mgmt_tgt_destroy, ds_mgmt_hdlr_tgt_destroy, NULL)              \
+	X(MGMT_TGT_PARAMS_SET, 0, &CQF_mgmt_tgt_params_set, ds_mgmt_tgt_params_set_hdlr, NULL)     \
+	X(MGMT_TGT_PROFILE, 0, &CQF_mgmt_profile, ds_mgmt_tgt_profile_hdlr, NULL)                  \
+	X(MGMT_TGT_MAP_UPDATE, 0, &CQF_mgmt_tgt_map_update, ds_mgmt_hdlr_tgt_map_update,           \
+	  &ds_mgmt_hdlr_tgt_map_update_co_ops)                                                     \
+	X(MGMT_TGT_MARK, 0, &CQF_mgmt_mark, ds_mgmt_tgt_mark_hdlr, NULL)
 
 /* Define for RPC enum population below */
 #define X(a, ...) a,
@@ -59,7 +70,9 @@ enum mgmt_profile_op {
 	MGMT_PROFILE_STOP
 };
 
-extern struct crt_proto_format mgmt_proto_fmt;
+extern struct crt_proto_format mgmt_proto_fmt_v3;
+extern struct crt_proto_format mgmt_proto_fmt_v2;
+extern int dc_mgmt_proto_version;
 
 #define DAOS_ISEQ_MGMT_SVR_RIP	/* input fields */		 \
 	((uint32_t)		(rip_flags)		CRT_VAR)

@@ -280,6 +280,9 @@ wal_tst_pool_cont(void **state)
 	vos_pool_info_t		 pool_info1 = { 0 }, pool_info2 = { 0 };
 	int			 rc;
 
+	if (arg->wta_no_replay)
+		FAULT_INJECTION_REQUIRED();
+
 	uuid_generate(pool_id);
 	uuid_generate(cont_id);
 
@@ -457,6 +460,9 @@ wal_kv_basic(void **state)
 	char			*buf_v;
 	unsigned int		 small_sz = 16, large_sz = 8192;
 	int			 i;
+
+	if (arg->no_replay)
+		FAULT_INJECTION_REQUIRED();
 
 	oid = dts_unit_oid_gen(0, 0);
 
@@ -830,7 +836,7 @@ wal_io_multiple_updates(void **state)
 	char			*up, *f, *ak, *dk;
 	int			 i, j, rc = 0;
 
-	if (arg->fail_checkpoint || arg->fail_replay)
+	if (arg->fail_checkpoint || arg->no_replay || arg->fail_replay)
 		FAULT_INJECTION_REQUIRED();
 
 	num_keys = WAL_IO_MULTI_KEYS;

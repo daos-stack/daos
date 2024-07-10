@@ -466,7 +466,8 @@ class SoakTestBase(TestWithServers):
             cmd = f"/usr/bin/rsync -avtr --min-size=1B {self.soak_log_dir} {self.outputsoak_dir}/"
             cmd2 = f"/usr/bin/rm -rf {self.soak_log_dir}"
             if self.enable_remote_logging:
-                result = run_remote(self.log, self.hostlist_clients, cmd, timeout=600)
+                # Limit fan out to reduce burden on filesystem
+                result = run_remote(self.log, self.hostlist_clients, cmd, timeout=600, fanout=64)
                 if result.passed:
                     result = run_remote(self.log, self.hostlist_clients, cmd2, timeout=600)
                 if not result.passed:

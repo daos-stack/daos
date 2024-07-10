@@ -197,16 +197,13 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev, d_rank_l
 	if (!d_rank_list_identical(pg_targets, targets)) {
 		char *pg_str, *tgt_str;
 
-		pg_str = d_rank_list_to_str(pg_ranks);
-		if (pg_str == NULL) {
-			rc = -DER_NOMEM;
+		rc = d_rank_list_to_str(pg_ranks, &pg_str);
+		if (rc != 0)
 			D_GOTO(out, rc);
-		}
 
-		tgt_str = d_rank_list_to_str(targets);
-		if (tgt_str == NULL) {
+		rc = d_rank_list_to_str(targets, &tgt_str);
+		if (rc != 0) {
 			D_FREE(pg_str);
-			rc = -DER_NOMEM;
 			D_GOTO(out, rc);
 		}
 
@@ -391,13 +388,8 @@ ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
  *
  * \param[in]		pool_uuid	   UUID of the pool.
  * \param[in]		svc_ranks	   Ranks of pool svc replicas.
- * \param[out]		ranks		   Optional, returned storage ranks in this pool.
- *					   If #pool_info is NULL, engines with disabled targets.
- *					   If #pool_info is passed, engines with enabled or
- *					   disabled targets according to
- *					   #pi_bits (DPI_ENGINES_ENABLED bit).
- *					   Note: ranks may be empty (i.e., *ranks->rl_nr may be 0).
- *					   The caller must free the list with d_rank_list_free().
+ * \param[out]		enabled_ranks	   Optional, returned storage ranks with enabled targets.
+ * \param[out]		disabled_ranks	   Optional, returned storage ranks with disabled targets.
  * \param[in][out]	pool_info	   Query results
  * \param[in][out]	pool_layout_ver	   Pool global version
  * \param[in][out]	upgrade_layout_ver Latest pool global version this pool might be upgraded
@@ -407,9 +399,9 @@ ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
  *			Negative value	   Other error
  */
 int
-ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **ranks,
-		   daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
-		   uint32_t *upgrade_layout_ver)
+ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **enabled_ranks,
+		   d_rank_list_t **disabled_ranks, daos_pool_info_t *pool_info,
+		   uint32_t *pool_layout_ver, uint32_t *upgrade_layout_ver)
 {
 	if (pool_info == NULL) {
 		D_ERROR("pool_info was NULL\n");
@@ -418,8 +410,8 @@ ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **r
 
 	D_DEBUG(DB_MGMT, "Querying pool "DF_UUID"\n", DP_UUID(pool_uuid));
 
-	return dsc_pool_svc_query(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), ranks, pool_info,
-				  pool_layout_ver, upgrade_layout_ver);
+	return dsc_pool_svc_query(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), enabled_ranks,
+				  disabled_ranks, pool_info, pool_layout_ver, upgrade_layout_ver);
 }
 
 /**
