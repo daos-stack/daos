@@ -686,13 +686,13 @@ class PreReqComponent():
     def __parse_build_deps(self):
         """Parse the build dependencies command line flag"""
         build_deps = GetOption('build_deps')
+        skip_download = GetOption('skip_download')
         if build_deps in ('fetch'):
             self.fetch_only = True
         elif build_deps in ('yes', 'only'):
-            self.download_deps = True
             self.build_deps = True
-        elif build_deps == 'build-only':
-            self.build_deps = True
+            if not skip_download:
+                self.download_deps = True
 
     def _sub_path(self, path):
         """Resolve the real path"""

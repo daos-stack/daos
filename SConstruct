@@ -60,9 +60,15 @@ def add_command_line_options():
     AddOption('--build-deps',
               dest='build_deps',
               type='choice',
-              choices=['fetch', 'yes', 'no', 'only', 'build-only'],
+              choices=['fetch', 'yes', 'no', 'only'],
               default='no',
-              help="Automatically download and build sources.  (fetch|yes|no|only|build-only) [no]")
+              help="Automatically download and build sources.  (fetch|yes|no|only) [no]")
+
+    AddOption('--skip-download',
+              dest='skip_download',
+              action='store_true',
+              default=False,
+              help="Assume the source for prerequisites is already downloaded")
 
     # We want to be able to check what dependencies are needed without
     # doing a build, similar to --dry-run.  We can not use --dry-run
