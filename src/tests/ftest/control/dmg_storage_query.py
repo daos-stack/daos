@@ -3,8 +3,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
 import re
+import time
 import traceback
 
 import avocado
@@ -50,12 +50,17 @@ class DmgStorageQuery(ControlTestBase):
             self.log.info('  %s', dict_to_str(bdev, items_joiner=':'))
         return bdev_info
 
-    def check_dev_state(self, device_info, state):
+    def check_dev_state(self, device_info, state, fail_test):
         """Check the state of the device.
 
         Args:
             device_info (list): list of device information.
             state (str): device state to verify.
+            fail_test (bool): Whether to fail the test if device isn't in the expected state.
+
+        Returns:
+            int: Number of devices with error.
+
         """
         errors = 0
         for device in device_info:
@@ -64,8 +69,10 @@ class DmgStorageQuery(ControlTestBase):
                     "Device %s not found in the %s state: %s",
                     device['uuid'], state, device['ctrlr']['dev_state'])
                 errors += 1
-        if errors:
+        if fail_test and errors:
             self.fail("Found {} device(s) not in the {} state".format(errors, state))
+
+        return errors
 
     @avocado.fail_on(CommandFailure)
     def test_dmg_storage_query_devices(self):
@@ -218,10 +225,9 @@ class DmgStorageQuery(ControlTestBase):
         """
         JIRA ID: DAOS-3925
 
-        Test Description: Test 'dmg storage query list-devices' command.
-
-        In addition this test also does a basic test of nvme-faulty cmd:
-        'dmg storage set nvme-faulty'
+        1. Call "dmg storage query list-devices" and check that the state is NORMAL.
+        2. Set SysXS device to faulty with "dmg set nvme-faulty".
+        3. Check that devices are in EVICTED state.
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
@@ -230,11 +236,12 @@ class DmgStorageQuery(ControlTestBase):
         """
         expect_failed_engine = False
 
-        # Get device info and check state is NORMAL
+        msg = 'Call "dmg storage query list-devices" and check that the state is NORMAL.'
+        self.log_step(msg)
         device_info = get_storage_query_device_info(self.dmg)
-        self.check_dev_state(device_info, "NORMAL")
+        self.check_dev_state(device_info=device_info, state="NORMAL", fail_test=True)
 
-        # Set device to faulty state and check that it's in FAULTY state
+        self.log_step('Set SysXS device to faulty with "dmg set nvme-faulty".')
         for device in device_info:
             if str(device['has_sys_xs']).lower() == 'true':
                 # Setting a SysXS device faulty will kill the engine
@@ -247,11 +254,25 @@ class DmgStorageQuery(ControlTestBase):
             except CommandFailure:
                 if not expect_failed_engine:
                     self.fail("Error setting the faulty state for {}".format(device['uuid']))
+            # Set only one SysXS device faulty.
+            if expect_failed_engine:
+                break
 
-        # Check that devices are in FAULTY state
+        self.log_step("Check that devices are in EVICTED state.")
         try:
-            device_info = get_storage_query_device_info(self.dmg)
-            self.check_dev_state(device_info, "EVICTED")
+            device_evicted = False
+            for count in range(3):
+                time.sleep(10)
+                device_info = get_storage_query_device_info(self.dmg)
+                errors = self.check_dev_state(
+                    device_info=device_info, state="EVICTED", fail_test=False)
+                if errors:
+                    self.log.info("Device state isn't EVICTED at count = %d. Query again.", count)
+                else:
+                    device_evicted = True
+                    break
+            if not device_evicted:
+                self.fail("Devices aren't in the EVICTED state after setting SysXS device faulty!")
         except CommandFailure as error:
             if not expect_failed_engine:
                 raise
