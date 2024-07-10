@@ -115,6 +115,15 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 
 	resp.Sys = svc.sysdb.SystemName()
 
+	if dv, err := build.NewVersion(build.DaosVersion); err == nil {
+		resp.BuildInfo = &mgmtpb.BuildInfo{
+			Major: uint32(dv.Major),
+			Minor: uint32(dv.Minor),
+			Patch: uint32(dv.Patch),
+			Tag:   build.BuildInfo,
+		}
+	}
+
 	return resp, nil
 }
 
