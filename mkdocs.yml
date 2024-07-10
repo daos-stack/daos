@@ -1,5 +1,5 @@
 # Project Information
-site_name: DAOS v2.5
+site_name: DAOS v2.6
 site_description: Distributed Asynchronous Object Storage
 site_author: DAOS Project
 
@@ -57,9 +57,9 @@ markdown_extensions:
 nav:
   - Release Information:
       - 'index.md'
-      - 'Release Notes v2.5': 'release/release_notes.md'
-      - 'Support Matrix v2.5': 'release/support_matrix.md'
-      - 'Upgrading to v2.5': 'release/upgrading.md'
+      - 'Release Notes v2.6': 'release/release_notes.md'
+      - 'Support Matrix v2.6': 'release/support_matrix.md'
+      - 'Upgrading to v2.6': 'release/upgrading.md'
   - Overview:
       - 'Architecture': 'overview/architecture.md'
       - 'Storage Model': 'overview/storage.md'
@@ -108,5 +108,5 @@ nav:
       - 'Dev Environment': 'dev/development.md'
       - 'Contributing': 'dev/contributing.md'
       - 'DAOS Internals': 'https://github.com/daos-stack/daos/blob/master/src/README.md'
-      - 'DAOS API Documentation': 'https://docs.daos.io/v2.5/doxygen/html/index.html'
+      - 'DAOS API Documentation': 'https://docs.daos.io/v2.6/doxygen/html/index.html'
       # Attention: Don't change that doxygen path to a relative path, or mkdocs will stumble...
