@@ -3,6 +3,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import os
 import queue
 import re
 import threading
@@ -10,9 +11,9 @@ import time
 
 from avocado import fail_on
 from exception_utils import CommandFailure
-from general_utils import run_command
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
+from run_utils import issue_command
 
 
 class OSAUtils(MdtestBase, IorTestBase):
@@ -104,35 +105,26 @@ class OSAUtils(MdtestBase, IorTestBase):
         # Create the expected port list
         # expected_ports = [port0] - Single engine/server
         # expected_ports = [port0, port1] - Two engine/server
-        expected_ports = [engine_param.get_value("fabric_iface_port")
-                          for engine_param in self.server_managers[-1].
-                          manager.job.yaml.engine_params]
+        expected_ports = [
+            engine_param.get_value("fabric_iface_port")
+            for engine_param in self.server_managers[-1].manager.job.yaml.engine_params]
         self.log.info("Expected ports : %s", expected_ports)
         if ip_addr is None or port_num is None:
             self.log.info("ip_addr : %s port_number: %s", ip_addr, port_num)
             self.fail("No IP Address or Port number provided")
+        vos_dir = None
+        if len(expected_ports) == 1:
+            vos_dir = os.path.join(os.sep, "mnt", "daos", self.pool.uuid, "vos-*")
         else:
-            if self.engine_count == 1:
-                self.log.info("Single Engine per Server")
-                cmd = "/usr/bin/ssh {} -oStrictHostKeyChecking=no \
-                      sudo rm -rf /mnt/daos/{}/vos-*". \
-                      format(ip_addr, self.pool.uuid)
-            elif self.engine_count == 2:
-                if port_num == str(expected_ports[0]):
-                    port_val = 0
-                elif port_num == str(expected_ports[1]):
-                    port_val = 1
-                else:
-                    port_val = None  # To appease pylint
-                    self.log.info("port_number: %s", port_num)
-                    self.fail("Invalid port number")
-                cmd = "/usr/bin/ssh {} -oStrictHostKeyChecking=no \
-                      sudo rm -rf /mnt/daos{}/{}/vos-*". \
-                      format(ip_addr, port_val, self.pool.uuid)
-            else:
-                cmd = None  # To appease pylint
-                self.fail("Not supported engine per server configuration")
-            run_command(cmd)
+            for index, port in enumerate(expected_ports):
+                if port_num == str(port):
+                    vos_dir = os.path.join(os.sep, "mnt", f"daos{index}", self.pool.uuid, "vos-*")
+                    break
+        if vos_dir is None:
+            self.fail(f"Invalid port number {port_num} for {expected_ports}")
+        command = f"/usr/bin/ssh {ip_addr} -oStrictHostKeyChecking=no sudo rm -rf {vos_dir}"
+        if not issue_command(self.log, command).passed:
+            raise CommandFailure(f"Error removing {vos_dir}")
 
     def set_container(self, container):
         """Set the OSA utils container object.

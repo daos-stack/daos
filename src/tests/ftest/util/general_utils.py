@@ -1073,8 +1073,7 @@ def get_file_listing(hosts, files, user):
         user (str): user used to run the ls command
 
     Returns:
-        RemoteCommandResult: a grouping of the command results from the same hosts with the same
-            return status
+        CommandResult: groups of command results from the same hosts with the same return status
     """
     ls_command = command_as_user(f"/usr/bin/ls -la {convert_string(files, ' ')}", user)
     return issue_command(getLogger(), ls_command, hosts, False)

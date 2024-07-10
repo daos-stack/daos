@@ -193,12 +193,13 @@ class DaosAgentCommand(YamlCommand):
         self.set_command(("support", "collect-log"), **kwargs)
         return self._get_json_result()
 
-    def get_user_file(self):
-        """Get the file defined in the yaml file that must be owned by the user.
+    def get_socket_dir(self):
+        """Get the socket directory.
+
+        The socket directory is defined in the agent yaml file and must be owned by the user.
 
         Returns:
-            str: file defined in the yaml file that must be owned by the user
-
+            str: the socket directory
         """
         return self.get_config_value("runtime_dir")
 
@@ -301,7 +302,7 @@ class DaosAgentManager(SubprocessManager):
             CommandFailure: if the daos_agent command fails.
 
         Returns:
-            RemoteCommandResult: a grouping of the command results from
+            CommandResult: a grouping of the command results from
                 the same hosts with the same return status
 
         """
@@ -368,11 +369,12 @@ class DaosAgentManager(SubprocessManager):
             raise CommandFailure(
                 "Failed to stop agents:\n  {}".format("\n  ".join(messages)))
 
-    def get_user_file(self):
-        """Get the file defined in the yaml file that must be owned by the user.
+    def get_socket_dir(self):
+        """Get the socket directory.
+
+        The socket directory is defined in the agent yaml file and must be owned by the user.
 
         Returns:
-            str: file defined in the yaml file that must be owned by the user
-
+            str: the socket directory
         """
         return self.get_config_value("runtime_dir")

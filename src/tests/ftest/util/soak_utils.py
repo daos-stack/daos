@@ -24,15 +24,15 @@ from duns_utils import format_path
 from exception_utils import CommandFailure
 from fio_utils import FioCommand
 from general_utils import (DaosTestError, check_ping, check_ssh, get_host_data, get_log_file,
-                           get_random_bytes, get_random_string, list_to_str, pcmd, run_command,
-                           run_pcmd, wait_for_result)
+                           get_random_bytes, get_random_string, list_to_str, pcmd, run_pcmd,
+                           wait_for_result)
 from ior_utils import IorCommand
 from job_manager_utils import Mpirun
 from macsio_util import MacsioCommand
 from mdtest_utils import MdtestCommand
 from oclass_utils import extract_redundancy_factor
 from pydaos.raw import DaosApiError, DaosSnapshot
-from run_utils import run_remote
+from run_utils import get_clush_command, issue_command, run_remote
 from test_utils_container import add_container
 
 H_LOCK = threading.Lock()
@@ -237,11 +237,11 @@ def get_daos_server_logs(self):
     hosts = self.hostlist_servers
     if not os.path.exists(daos_dir):
         os.mkdir(daos_dir)
-        command = ["clush", "-w", str(hosts), "-v", "--rcopy", logs_dir, "--dest", daos_dir]
-        try:
-            run_command(" ".join(command), timeout=600)
-        except DaosTestError as error:
-            raise SoakTestError(f"<<FAILED: daos logs file from {hosts} not copied>>") from error
+        command = get_clush_command(hosts, f"-v --rcopy {logs_dir} --dest {daos_dir}")
+        result = issue_command(self.log, command)
+        if not result.passed:
+            raise SoakTestError(
+                f"<<FAILED: daos logs file from {hosts} not copied from {result.failed_hosts}>>")
 
 
 def run_monitor_check(self):

@@ -887,7 +887,7 @@ class YamlCommand(SubProcessCommand):
         self.temporary_file = None
         self.temporary_file_hosts = None
 
-        # Owner of the certificate files
+        # Default owner of the certificate files
         self.certificate_owner = getuser()
 
     @property
@@ -1076,7 +1076,7 @@ class YamlCommand(SubProcessCommand):
 
         """
         if self.yaml is not None:
-            directory = self.get_user_file()
+            directory = self.get_socket_dir()
             self.log.info(
                 "Verifying %s socket directory: %s", self.command, directory)
             status, nodes = check_file_exists(hosts, directory, user)
@@ -1094,12 +1094,13 @@ class YamlCommand(SubProcessCommand):
                             self.command, directory, user, nodes,
                             error)) from error
 
-    def get_user_file(self):
-        """Get the file defined in the yaml file that must be owned by the user.
+    def get_socket_dir(self):
+        """Get the socket directory.
+
+        The socket directory is defined in the yaml file and must be owned by the user.
 
         Returns:
-            str: file defined in the yaml file that must be owned by the user
-
+            str: the socket directory
         """
         return self.get_config_value("socket_dir")
 
