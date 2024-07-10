@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -52,7 +52,8 @@ static struct crt_corpc_ops ds_mgmt_hdlr_tgt_map_update_co_ops = {
 	    .dr_corpc_ops = e,                                                                     \
 	},
 
-static struct daos_rpc_handler mgmt_handlers[] = {MGMT_PROTO_CLI_RPC_LIST MGMT_PROTO_SRV_RPC_LIST};
+static struct daos_rpc_handler mgmt_handlers_v2[] = {MGMT_PROTO_CLI_RPC_LIST MGMT_PROTO_SRV_RPC_LIST_V2};
+static struct daos_rpc_handler mgmt_handlers_v3[] = {MGMT_PROTO_CLI_RPC_LIST MGMT_PROTO_SRV_RPC_LIST};
 
 #undef X
 
@@ -464,16 +465,16 @@ ds_mgmt_cleanup()
 }
 
 struct dss_module mgmt_module = {
-    .sm_name          = "mgmt",
-    .sm_mod_id        = DAOS_MGMT_MODULE,
-    .sm_ver           = DAOS_MGMT_VERSION,
-    .sm_proto_count   = 1,
-    .sm_init          = ds_mgmt_init,
-    .sm_fini          = ds_mgmt_fini,
-    .sm_setup         = ds_mgmt_setup,
-    .sm_cleanup       = ds_mgmt_cleanup,
-    .sm_proto_fmt     = {&mgmt_proto_fmt},
-    .sm_cli_count     = {MGMT_PROTO_CLI_COUNT},
-    .sm_handlers      = {mgmt_handlers},
-    .sm_drpc_handlers = mgmt_drpc_handlers,
+	.sm_name          = "mgmt",
+	.sm_mod_id        = DAOS_MGMT_MODULE,
+	.sm_ver           = DAOS_MGMT_VERSION,
+	.sm_proto_count   = 2,
+	.sm_init          = ds_mgmt_init,
+	.sm_fini          = ds_mgmt_fini,
+	.sm_setup         = ds_mgmt_setup,
+	.sm_cleanup       = ds_mgmt_cleanup,
+	.sm_proto_fmt     = {&mgmt_proto_fmt_v2, &mgmt_proto_fmt_v3},
+	.sm_cli_count     = {MGMT_PROTO_CLI_COUNT, MGMT_PROTO_CLI_COUNT},
+	.sm_handlers      = {mgmt_handlers_v2, mgmt_handlers_v3},
+	.sm_drpc_handlers = mgmt_drpc_handlers,
 };

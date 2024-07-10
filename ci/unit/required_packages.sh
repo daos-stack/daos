@@ -26,6 +26,7 @@ pkgs="argobots                         \
       numactl-devel                    \
       openmpi$OPENMPI_VER              \
       patchelf                         \
+      pciutils-devel                   \
       pmix                             \
       protobuf-c                       \
       spdk-devel                       \

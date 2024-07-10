@@ -2,7 +2,7 @@
 # required quantity is indicated by the placeholders
 hosts:
   test_servers: 5
-timeout: 300
+timeout: 360
 daos_server:
   pattern_timeout: 60
 server_config:

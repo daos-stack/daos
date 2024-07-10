@@ -144,7 +144,8 @@ struct mgmt_bio_health {
 };
 
 int ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid);
-int ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp);
+int
+ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp);
 void
      ds_mgmt_smd_free_dev(Ctl__SmdDevice *dev);
 int ds_mgmt_smd_list_pools(Ctl__SmdPoolResp *resp);

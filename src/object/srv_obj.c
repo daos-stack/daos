@@ -2424,6 +2424,8 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 	D_ASSERT(ioc.ioc_coc != NULL);
 	dkey = (daos_key_t *)&oer->er_dkey;
 	iod = (daos_iod_t *)&oer->er_iod;
+	if (iod->iod_nr == 0) /* nothing to replicate, directly remove parity */
+		goto remove_parity;
 	iod_csums = oer->er_iod_csums.ca_arrays;
 	rc = vos_update_begin(ioc.ioc_coc->sc_hdl, oer->er_oid, oer->er_epoch_range.epr_hi,
 			      VOS_OF_REBUILD, dkey, 1, iod, iod_csums, 0, &ioh, NULL);
@@ -2439,7 +2441,7 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 			DP_RC(rc));
 		goto end;
 	}
-	rc = obj_bulk_transfer(rpc, CRT_BULK_PUT, false, &oer->er_bulk, NULL, NULL,
+	rc = obj_bulk_transfer(rpc, CRT_BULK_GET, false, &oer->er_bulk, NULL, NULL,
 			       ioh, NULL, 1, NULL, ioc.ioc_coh);
 	if (rc)
 		D_ERROR(DF_UOID " bulk transfer failed: " DF_RC "\n", DP_UOID(oer->er_oid),
@@ -2456,6 +2458,7 @@ end:
 			DP_RC(rc));
 		goto out;
 	}
+remove_parity:
 	recx.rx_nr = obj_ioc2ec_cs(&ioc);
 	recx.rx_idx = (oer->er_stripenum * recx.rx_nr) | PARITY_INDICATOR;
 	rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl, oer->er_oid, &oer->er_epoch_range, dkey,
