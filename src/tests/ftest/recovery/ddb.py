@@ -598,10 +598,10 @@ class DdbTest(RecoveryTestBase):
 
         # Copy them from remote server node to local test node.
         copy_remote_to_local(
-            remote_file_path=akey1_file_path, test_dir=self.test_dir,
+            self.log, remote_file_path=akey1_file_path, test_dir=self.test_dir,
             remote=self.hostlist_servers[0])
         copy_remote_to_local(
-            remote_file_path=akey2_file_path, test_dir=self.test_dir,
+            self.log, remote_file_path=akey2_file_path, test_dir=self.test_dir,
             remote=self.hostlist_servers[0])
 
         # 6. Verify the content of the files.

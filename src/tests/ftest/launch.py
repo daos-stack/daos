@@ -281,7 +281,7 @@ class Launch():
                 set_test_environment(
                     logger, test_env, args.test_servers, args.test_clients, args.provider,
                     args.insecure_mode, self.details, args.agent_user, args.test_log_dir,
-                    args.server_ld_lib)
+                    args.systemd_lib_path)
         except TestEnvironmentException as error:
             message = f"Error setting up test environment: {str(error)}"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
@@ -651,11 +651,11 @@ def main():
         action="store_true",
         help="enable installing slurm RPMs if required by the tests")
     parser.add_argument(
-        "-sl", "--server_ld_lib",
+        "-sl", "--systemd_lib_path",
         action="store",
         default=None,
         type=str,
-        help="LD_LIBRARY_PATH environment variable to use in the daos_server config file")
+        help="the daos_server and daos_agent systemd LD_LIBRARY_PATH to define in the config")
     parser.add_argument(
         "--scm_mount",
         action="store",
