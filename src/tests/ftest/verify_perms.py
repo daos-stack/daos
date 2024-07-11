@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -17,7 +17,7 @@ from multiprocessing import Process, Queue  # MUST be a multiprocessing Queue
 
 # pylint: disable=import-error,no-name-in-module
 from util.logger_utils import get_console_handler
-from util.run_utils import RunException, run_local
+from util.run_utils import run_local
 from util.user_utils import get_user_uid_gid
 
 # Set up a logger for the console messages
@@ -290,10 +290,7 @@ def _real_x(entry_type, path):
 
     '''
     if entry_type == 'file':
-        try:
-            return run_local(logger, path, check=True, verbose=False).returncode == 0
-        except RunException:
-            return False
+        return run_local(logger, path, verbose=False).passed
     if entry_type == 'dir':
         try:
             os.chdir(path)
@@ -324,8 +321,8 @@ def _as_user(uid_gid, target, *args):
         '''Set uid/gid before executing the method.'''
         try:
             try:
-                os.setregid(gid, gid)
-                os.setreuid(uid, uid)
+                os.setregid(gid, gid)       # pylint: disable=no-member
+                os.setreuid(uid, uid)       # pylint: disable=no-member
             except PermissionError as error:
                 raise PermissionError(f'Failed to set uid={uid}, gid={gid}') from error
             target(*args)
