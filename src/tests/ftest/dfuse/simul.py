@@ -10,7 +10,7 @@ from apricot import TestWithServers
 from dfuse_utils import get_dfuse, start_dfuse
 from env_modules import load_mpi
 from exception_utils import MPILoadError
-from general_utils import run_command
+from run_utils import issue_command
 
 
 class PosixSimul(TestWithServers):
@@ -69,7 +69,7 @@ class PosixSimul(TestWithServers):
     :avocado: recursive
     """
 
-    def run_simul(self, include=None, exclude=None, raise_exception=True):
+    def run_simul(self, include=None, exclude=None):
         """Run simul.
 
         If an include value is set, the exclude value is ignored and vice versa.
@@ -77,14 +77,12 @@ class PosixSimul(TestWithServers):
         Args:
             include (str, optional): comma-separated list of tests to include. Defaults to None.
             exclude (str, optional): comma-separated list of tests to exclude. Defaults to None.
-            raise_exception (bool, optional): whether to raise an exception. Defaults to True.
 
         Raises:
             MPILoadError: if there is an error loading the MPI
 
         Returns:
-            CmdResult: result from the simul command
-
+            CommandResult: groups of command results from the same hosts with the same return status
         """
         mpi_type = self.params.get("mpi_type", "/run/*", "")
         simul_path = self.params.get("simul_path", "/run/*", "")
@@ -110,15 +108,15 @@ class PosixSimul(TestWithServers):
         # Run simul
         simul_cmd = os.path.join(simul_path, "simul")
         if include and not exclude:
-            cmd = "{0} -vv -d {1} -i {2}".format(simul_cmd, dfuse.mount_dir.value, include)
+            cmd = f"{simul_cmd} -vv -d {dfuse.mount_dir.value} -i {include}"
         elif exclude and not include:
-            cmd = "{0} -vv -d {1} -e {2}".format(simul_cmd, dfuse.mount_dir.value, exclude)
+            cmd = f"{simul_cmd} -vv -d {dfuse.mount_dir.value} -e {exclude}"
         else:
             cmd = None  # appease pylint
             self.fail("##Both include and exclude tests are selected both or empty.")
 
         self.log_step("Running simul on %s", mpi_type)
-        return run_command(cmd, output_check="combined", raise_exception=raise_exception)
+        return issue_command(self.log, cmd)
 
     def test_posix_simul(self):
         """Test simul.
@@ -128,7 +126,8 @@ class PosixSimul(TestWithServers):
         :avocado: tags=posix,simul,dfuse
         :avocado: tags=PosixSimul,test_posix_simul
         """
-        self.run_simul(exclude="9,18,30,39,40")
+        if not self.run_simul(exclude="9,18,30,39,40").passed:
+            self.fail('Test failed')
         self.log.info('Test passed')
 
     def test_posix_expected_failures(self):
@@ -141,10 +140,10 @@ class PosixSimul(TestWithServers):
         """
         expected_failures = {"9": None, "18": None, "30": None, "39": None, "40": None}
         for test in sorted(expected_failures):
-            expected_failures[test] = self.run_simul(include=test, raise_exception=False)
+            expected_failures[test] = self.run_simul(include=test)
         failed = []
         for test in sorted(expected_failures):
-            if "FAILED in simul" in expected_failures[test].stdout_text:
+            if "FAILED in simul" in expected_failures[test].all_stdout:
                 self.log.info("Test %s failed as expected", test)
             else:
                 self.log.info("Test %s was expected to fail, but passed", test)

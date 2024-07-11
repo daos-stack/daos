@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2023 Intel Corporation.
+  (C) Copyright 2023-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -17,10 +17,10 @@ class HarnessUnitTest(TestWithoutServers):
 
     def _verify_remote_command_result(self, result, passed, expected, timeout, homogeneous,
                                       passed_hosts, failed_hosts, all_stdout, all_stderr):
-        """Verify a RemoteCommandResult object.
+        """Verify a CommandResult object.
 
         Args:
-            result (RemoteCommandResult): object to verify
+            result (CommandResult): object to verify
             passed (bool): expected passed command state
             expected (list): expected list of ResultData objects
             timeout (bool): expected command timeout state
@@ -30,25 +30,24 @@ class HarnessUnitTest(TestWithoutServers):
             all_stdout (dict): expected stdout str per host key
             all_stderr (dict): expected stderr str per host key
         """
-        self.assertEqual(passed, result.passed, 'Incorrect RemoteCommandResult.passed')
+        self.assertEqual(passed, result.passed, 'Incorrect CommandResult.passed')
         self.assertEqual(
-            len(expected), len(result.output), 'Incorrect RemoteCommandResult.output count')
+            len(expected), len(result.output), 'Incorrect CommandResult.output count')
         sorted_output = sorted(result.output)
         for index, expect in enumerate(sorted(expected)):
             actual = sorted_output[index]
             for key in ('command', 'returncode', 'hosts', 'stdout', 'stderr', 'timeout'):
                 self.assertEqual(
-                    getattr(expect, key), getattr(actual, key),
-                    'Incorrect ResultData.{}'.format(key))
-        self.assertEqual(timeout, result.timeout, 'Incorrect RemoteCommandResult.timeout')
+                    getattr(expect, key), getattr(actual, key), f'Incorrect ResultData.{key}')
+        self.assertEqual(timeout, result.timeout, 'Incorrect CommandResult.timeout')
         self.assertEqual(
-            homogeneous, result.homogeneous, 'Incorrect RemoteCommandResult.homogeneous')
+            homogeneous, result.homogeneous, 'Incorrect CommandResult.homogeneous')
         self.assertEqual(
-            passed_hosts, result.passed_hosts, 'Incorrect RemoteCommandResult.passed_hosts')
+            passed_hosts, result.passed_hosts, 'Incorrect CommandResult.passed_hosts')
         self.assertEqual(
-            failed_hosts, result.failed_hosts, 'Incorrect RemoteCommandResult.failed_hosts')
-        self.assertEqual(all_stdout, result.all_stdout, 'Incorrect RemoteCommandResult.all_stdout')
-        self.assertEqual(all_stderr, result.all_stderr, 'Incorrect RemoteCommandResult.all_stderr')
+            failed_hosts, result.failed_hosts, 'Incorrect CommandResult.failed_hosts')
+        self.assertEqual(all_stdout, result.all_stdout, 'Incorrect CommandResult.all_stdout')
+        self.assertEqual(all_stderr, result.all_stderr, 'Incorrect CommandResult.all_stderr')
 
     def test_harness_unit_list_unique(self):
         """Verify list_unique().

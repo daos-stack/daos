@@ -8,10 +8,10 @@ import os
 import pwd
 import re
 
-import general_utils
 from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
 from general_utils import DaosTestError
+from run_utils import issue_command
 from security_test_base import acl_entry
 
 
@@ -170,8 +170,8 @@ class ContSecurityTestBase(TestWithServers):
         for typ in types:
             get_acl_file = "acl_{}.txt".format(typ)
             file_name = os.path.join(self.tmp, get_acl_file)
-            cmd = "rm -r {}".format(file_name)
-            general_utils.run_command(cmd)
+            if not issue_command(self.log, f"rm -r {file_name}").passed:
+                raise DaosTestError(f"Error removing {file_name}")
 
     def error_handling(self, results, err_msg):
         """Handle errors when test fails and when command unexpectedly passes.

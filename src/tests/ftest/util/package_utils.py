@@ -1,5 +1,5 @@
 """
-(C) Copyright 2023 Intel Corporation.
+(C) Copyright 2023-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -40,7 +40,7 @@ def install_packages(log, hosts, packages, user=None, timeout=600):
         timeout (int, optional): timeout for the dnf install command. Defaults to 600.
 
     Returns:
-        RemoteCommandResult: the 'dnf install' command results
+        CommandResult: groups of command results from the same hosts with the same return status
     """
     log.info('Installing packages on %s: %s', hosts, ', '.join(packages))
     command = command_as_user(' '.join(['dnf', 'install', '-y'] + packages), user)
@@ -58,7 +58,7 @@ def remove_packages(log, hosts, packages, user=None, timeout=600):
         timeout (int, optional): timeout for the dnf remove command. Defaults to 600.
 
     Returns:
-        RemoteCommandResult: the 'dnf remove' command results
+        CommandResult: groups of command results from the same hosts with the same return status
     """
     log.info('Removing packages on %s: %s', hosts, ', '.join(packages))
     command = command_as_user(' '.join(['dnf', 'remove', '-y'] + packages), user)

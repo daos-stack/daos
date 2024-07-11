@@ -6,11 +6,9 @@
 
 import time
 
-import security_test_base as secTestBase
 from data_mover_test_base import DataMoverTestBase
 from file_count_test_base import FileCountTestBase
 from general_utils import human_to_bytes
-from host_utils import get_local_host
 from test_utils_pool import check_pool_creation
 
 
@@ -39,15 +37,11 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
         :avocado: tags=IoSysAdmin,test_io_sys_admin
         """
         # local param
-        new_test_user = self.params.get("new_user", "/run/container_acl/*")
-        new_test_group = self.params.get("new_group", "/run/container_acl/*")
+        client_users = self.params.get("client_users", "/run/*")
+        new_test_user, new_test_group = client_users[0].split(":")
 
         dmg = self.get_dmg_command()
         daos = self.get_daos_command()
-
-        all_clients = self.hostlist_clients | get_local_host()
-        secTestBase.add_del_user(all_clients, "useradd", new_test_user)
-        secTestBase.add_del_user(all_clients, "groupadd", new_test_group)
 
         for idx in range(1, 4):
             self.add_pool_qty(1, namespace="/run/pool_{}/".format(idx), create=False)

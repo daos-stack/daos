@@ -1,7 +1,9 @@
 hosts:
   test_servers: 3
   test_clients: 1
+
 timeout: 700
+
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -20,29 +22,36 @@ server_config:
       fabric_iface_port: 31417
       log_file: daos_server1.log
       storage: auto
+
 dmg:
   dmg_sub_command: storage
   storage:
     storage_sub_command: scan
+
 pool_1:
   control_method: dmg
   scm_size: 256MiB
   nvme_size: 16GiB
+
 pool_2:
   control_method: dmg
   scm_size: 10GiB
   nvme_size: 50GiB
+
 pool_3:
   control_method: dmg
   size: 90%
+
 container_1:
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
   control_method: daos
+
 container_2:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
   control_method: daos
   oclass: RP_2GX
+
 container_3:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
@@ -51,13 +60,16 @@ container_3:
 
 pool:
   size: 40%
+
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
   control_method: daos
-container_acl:
-  new_user: daos_ci_tester_1
-  new_group: daos_ci_test_grp_1
+
+# User:group to be created by launch.py --user_create
+# Or expected to already exist
+client_users:
+  - daos_ci_tester_1:daos_ci_test_grp_1
 
 largefilecount:
   api:
@@ -69,6 +81,7 @@ largefilecount:
   object_class:
     - SX
     - EC_2P1GX
+
 ior:
   client_processes:
     ppn: 30
@@ -79,6 +92,7 @@ ior:
   signature: 123
   transfer_size: '1Mib'
   block_size: '1Mib'
+
 dfuse:
   disable_caching: True
 
@@ -94,10 +108,12 @@ mdtest:
   write_bytes: 4096
   read_bytes: 4096
   depth: 0
+
 dcp:
   bufsize: "64MB"
   chunksize: "128MB"
   client_processes:
     np: 16
+
 hdf5_vol:
   plugin_path: /usr/lib64/mpich/lib

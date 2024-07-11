@@ -1,5 +1,5 @@
 """
-(C) Copyright 2019-2023 Intel Corporation.
+(C) Copyright 2019-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -30,8 +30,7 @@ def cancel_jobs(log, control, job_id):
         job_id (int): slurm job id
 
     Returns:
-        RemoteCommandResult: results from the scancel command
-
+        CommandResult: groups of command results from the same hosts with the same return status
     """
     command = ['scancel', str(job_id)]
     return run_remote(log, control, ' '.join(command))
@@ -52,8 +51,7 @@ def create_partition(log, control, name, hosts, default='yes', max_time='UNLIMIT
         state (str, optional): state of jobs that can be allocated. Defaults to 'up'.
 
     Returns:
-        RemoteCommandResult: results from the scontrol command
-
+        CommandResult: groups of command results from the same hosts with the same return status
     """
     command = ['scontrol', 'create']
     command.append('='.join(['PartitionName', str(name)]))
@@ -90,8 +88,7 @@ def show_partition(log, control, name):
         name (str): slurm partition name
 
     Returns:
-        RemoteCommandResult: results from the scontrol command
-
+        CommandResult: groups of command results from the same hosts with the same return status
     """
     command = ['scontrol', 'show', 'partition', str(name)]
     return run_remote(log, control, ' '.join(command))
@@ -106,8 +103,7 @@ def show_reservation(log, control, name):
         name (str): slurm reservation name
 
     Returns:
-        RemoteCommandResult: results from the scontrol command
-
+        CommandResult: groups of command results from the same hosts with the same return status
     """
     command = ['scontrol', 'show', 'reservation', str(name)]
     return run_remote(log, control, ' '.join(command))
@@ -121,8 +117,7 @@ def sinfo(log, control):
         control (NodeSet): slurm control host
 
     Returns:
-        RemoteCommandResult: results from the sinfo command
-
+        CommandResult: groups of command results from the same hosts with the same return status
     """
     return run_remote(log, control, 'sinfo')
 
@@ -401,8 +396,7 @@ def srun(log, control, hosts, cmd, srun_params=None, timeout=60):
         timeout (int, optional): timeout for the srun command. Defaults to 60.
 
     Returns:
-        RemoteCommandResult: results from the srun command
-
+        CommandResult: groups of command results from the same hosts with the same return status
     """
     srun_time = max(int(timeout / 60), 1)
     cmd = srun_str(hosts, cmd, srun_params, str(srun_time))

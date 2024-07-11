@@ -364,7 +364,7 @@ class SlurmSetup():
             echo_command (str): command adding contents to the config file
 
         Returns:
-            RemoteCommandResult: the result from the echo | tee command
+            CommandResult: the result from the echo | tee command
         """
         tee_command = command_as_user(f'tee -a {self.SLURM_CONF}', self.root)
         return run_remote(self.log, self.all_nodes, f'{echo_command} | {tee_command}')

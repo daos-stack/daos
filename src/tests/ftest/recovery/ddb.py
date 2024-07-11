@@ -11,9 +11,10 @@ from ClusterShell.NodeSet import NodeSet
 from ddb_utils import DdbCommand
 from exception_utils import CommandFailure
 from general_utils import (DaosTestError, create_string_buffer, distribute_files,
-                           get_clush_command, get_random_string, report_errors, run_command)
+                           get_random_string, report_errors)
 from pydaos.raw import DaosObjClass, IORequest
 from recovery_test_base import RecoveryTestBase
+from run_utils import get_clush_command, issue_command
 
 
 def insert_objects(context, container, object_count, dkey_count, akey_count, base_dkey,
@@ -76,35 +77,32 @@ def insert_objects(context, container, object_count, dkey_count, akey_count, bas
     return (ioreqs, dkeys, akeys, data_list)
 
 
-def copy_remote_to_local(remote_file_path, test_dir, remote):
+def copy_remote_to_local(log, remote_file_path, test_dir, remote):
     """Copy the given file from the server node to the local test node and retrieve
     the original name.
 
     Args:
+        log (logger): logger for the messages produced by this method
         remote_file_path (str): File path to copy to local.
         test_dir (str): Test directory. Usually self.test_dir.
         remote (str): Remote hostname to copy file from.
     """
     # Use clush --rcopy to copy the file from the remote server node to the local test
     # node. clush will append .<server_hostname> to the file when copying.
-    args = "--rcopy {} --dest {}".format(remote_file_path, test_dir)
+    args = f"--rcopy {remote_file_path} --dest {test_dir}"
     clush_command = get_clush_command(hosts=remote, args=args)
-    try:
-        run_command(command=clush_command)
-    except DaosTestError as error:
-        print("ERROR: Copying {} from {}: {}".format(remote_file_path, remote, error))
-        raise error
+    if not issue_command(log, clush_command).passed:
+        error = f"ERROR: Copying {remote_file_path} from {remote}"
+        log.info(error)
+        raise DaosTestError(error)
 
     # Remove the appended .<server_hostname> from the copied file.
     current_file_path = "".join([remote_file_path, ".", remote])
-    mv_command = "mv {} {}".format(current_file_path, remote_file_path)
-    try:
-        run_command(command=mv_command)
-    except DaosTestError as error:
-        print(
-            "ERROR: Moving {} to {}: {}".format(
-                current_file_path, remote_file_path, error))
-        raise error
+    mv_command = f"mv {current_file_path} {remote_file_path}"
+    if not issue_command(log, mv_command).passed:
+        error = f"ERROR: Moving {current_file_path} to {remote_file_path}"
+        log.info(error)
+        raise DaosTestError(error)
 
 
 class DdbTest(RecoveryTestBase):
@@ -600,10 +598,10 @@ class DdbTest(RecoveryTestBase):
 
         # Copy them from remote server node to local test node.
         copy_remote_to_local(
-            remote_file_path=akey1_file_path, test_dir=self.test_dir,
+            self.log, remote_file_path=akey1_file_path, test_dir=self.test_dir,
             remote=self.hostlist_servers[0])
         copy_remote_to_local(
-            remote_file_path=akey2_file_path, test_dir=self.test_dir,
+            self.log, remote_file_path=akey2_file_path, test_dir=self.test_dir,
             remote=self.hostlist_servers[0])
 
         # 6. Verify the content of the files.
