@@ -321,8 +321,8 @@ def _as_user(uid_gid, target, *args):
         '''Set uid/gid before executing the method.'''
         try:
             try:
-                os.setregid(gid, gid)       # pylint: disable=no-member
-                os.setreuid(uid, uid)       # pylint: disable=no-member
+                os.setregid(gid, gid)
+                os.setreuid(uid, uid)
             except PermissionError as error:
                 raise PermissionError(f'Failed to set uid={uid}, gid={gid}') from error
             target(*args)

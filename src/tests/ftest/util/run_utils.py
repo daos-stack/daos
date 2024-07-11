@@ -183,7 +183,7 @@ class CommandResult():
             log_result_data(log, data)
 
 
-def get_local_result(command, return_code, stdout, stderr, timeout):
+def __get_local_result(command, return_code, stdout, stderr, timeout):
     """Get a CommandResult object for a command issued on the local host.
 
     Args:
@@ -205,7 +205,7 @@ def get_local_result(command, return_code, stdout, stderr, timeout):
     return result
 
 
-def get_remote_result(command, task):
+def __get_remote_result(command, task):
     """Get a CommandResult object for a command issued on remote hosts.
 
     Args:
@@ -339,7 +339,7 @@ def get_clush_command(hosts, args=None, command="", command_env=None, command_su
     return " ".join(cmd_list)
 
 
-def run_local(log, command, verbose=True, timeout=None):
+def run_local(log, command, verbose=True, timeout=None, stderr=False):
     """Run the command locally.
 
     Args:
@@ -349,6 +349,7 @@ def run_local(log, command, verbose=True, timeout=None):
             set). Defaults to True.
         timeout (int, optional): number of seconds to wait for the command to complete.
             Defaults to None.
+        stderr (bool, optional): whether to enable stdout/stderr separation. Defaults to False.
 
     Returns:
         CommandResult: groups of command results from the same hosts with the same return status
@@ -360,7 +361,7 @@ def run_local(log, command, verbose=True, timeout=None):
         "check": False,
         "timeout": timeout,
         "stdout": subprocess.PIPE,
-        "stderr": subprocess.STDOUT,
+        "stderr": subprocess.PIPE if stderr else subprocess.STDOUT,
     }
     if timeout and verbose:
         log.debug("Running on %s with a %s timeout: %s", local_host, timeout, command)
@@ -370,15 +371,15 @@ def run_local(log, command, verbose=True, timeout=None):
     try:
         # pylint: disable=subprocess-run-check
         task = subprocess.run(shlex.split(command), **kwargs)     # nosec
-        results = get_local_result(command, task.returncode, task.stdout, task.stderr, False)
+        results = __get_local_result(command, task.returncode, task.stdout, task.stderr, False)
 
     except subprocess.TimeoutExpired as error:
         # Raised if command times out
-        results = get_local_result(command, 124, error.stdout, error.stderr, True)
+        results = __get_local_result(command, 124, error.stdout, error.stderr, True)
 
     except Exception as error:  # pylint: disable=broad-except
         # Catch all
-        results = get_local_result(command, 255, None, str(error), False)
+        results = __get_local_result(command, 255, None, str(error), False)
 
     if verbose:
         results.log_output(log)
@@ -414,7 +415,7 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False,
     task.set_default("stderr", stderr)
     # Set fan out to the max of the default or number of logical cores
     if fanout is None:
-        fanout = max(task.info('fanout'), len(os.sched_getaffinity(0)))  # pylint: disable=no-member
+        fanout = max(task.info('fanout'), len(os.sched_getaffinity(0)))
     task.set_info('fanout', fanout)
     # Enable forwarding of the ssh authentication agent connection
     task.set_info("ssh_options", "-oForwardAgent=yes")
@@ -424,7 +425,7 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False,
         else:
             log.debug("Running on %s with a %s second timeout: %s", hosts, timeout, command)
     task.run(command=command, nodes=hosts, timeout=timeout)
-    results = get_remote_result(command, task)
+    results = __get_remote_result(command, task)
     if verbose:
         results.log_output(log)
     else:

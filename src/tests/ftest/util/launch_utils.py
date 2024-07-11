@@ -391,13 +391,7 @@ class TestRunner():
         start_time = int(time.time())
         result = run_local(logger, " ".join(command))
         end_time = int(time.time())
-
         return_code = result.output[0].returncode
-        if not result.passed:
-            message = f"Error executing {test} on repeat {repeat}"
-            self.test_result.fail_test(logger, "Execute", message, sys.exc_info())
-            return_code = 1
-
         if return_code == 0:
             logger.debug("All avocado test variants passed")
         elif return_code & 2 == 2:
@@ -407,6 +401,10 @@ class TestRunner():
             self.test_result.fail_test(logger, "Execute", message)
         elif return_code & 8 == 8:
             logger.debug("At least one avocado test variant was interrupted")
+        else:
+            message = f"Unhandled rc={return_code} while executing {test} on repeat {repeat}"
+            self.test_result.fail_test(logger, "Execute", message, sys.exc_info())
+            return_code = 1
         if return_code:
             self._collect_crash_files(logger)
 

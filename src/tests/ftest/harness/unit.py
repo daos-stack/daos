@@ -253,6 +253,30 @@ class HarnessUnitTest(TestWithoutServers):
         )
         self.log_step('Unit Test Passed')
 
+    def test_harness_unit_run_local_separated(self):
+        """Verify run_local() with separate stdout and stderr.
+
+        :avocado: tags=all
+        :avocado: tags=vm
+        :avocado: tags=harness,run_utils
+        :avocado: tags=HarnessUnitTest,test_harness_unit_run_local_separated
+        """
+        host = get_local_host()
+        command = 'echo stdout; echo stderr 1>&2'
+        self.log_step('Verify run_local() w/ no stdout')
+        self._verify_command_result(
+            result=run_local(self.log, command, stderr=True),
+            passed=True,
+            expected=[ResultData(command, 0, host, ['stdout'], ['stderr'], False)],
+            timeout=False,
+            homogeneous=True,
+            passed_hosts=host,
+            failed_hosts=NodeSet(),
+            all_stdout={str(host): 'stdout'},
+            all_stderr={str(host): 'stderr'}
+        )
+        self.log_step('Unit Test Passed')
+
     def test_harness_unit_run_local_no_stdout(self):
         """Verify run_local() with no stdout.
 
@@ -265,7 +289,7 @@ class HarnessUnitTest(TestWithoutServers):
         command = 'echo stderr 1>&2'
         self.log_step('Verify run_local() w/ no stdout')
         self._verify_command_result(
-            result=run_local(self.log, command),
+            result=run_local(self.log, command, stderr=True),
             passed=True,
             expected=[ResultData(command, 0, host, [], ['stderr'], False)],
             timeout=False,
@@ -291,7 +315,7 @@ class HarnessUnitTest(TestWithoutServers):
         self._verify_command_result(
             result=run_local(self.log, command),
             passed=False,
-            expected=[ResultData(command, 0, host, ['fail'], [], False)],
+            expected=[ResultData(command, 1, host, ['fail'], [], False)],
             timeout=False,
             homogeneous=True,
             passed_hosts=NodeSet(),
@@ -554,7 +578,7 @@ class HarnessUnitTest(TestWithoutServers):
             passed=False,
             expected=[
                 ResultData(command, 0, NodeSet(hosts[0]), ['pass'], [], False),
-                ResultData(command, 1, NodeSet(hosts[1]), ['wait'], [], True),
+                ResultData(command, 124, NodeSet(hosts[1]), ['wait'], [], True),
             ],
             timeout=True,
             homogeneous=False,

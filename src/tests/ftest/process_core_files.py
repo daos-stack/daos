@@ -382,8 +382,6 @@ class CoreFileProcessing():
             command = " ".join(
                 ["rpm", "-q", "--qf", "'%{name} %{version} %{release} %{epoch}'", pkg])
             result = run_local(self.log, command)
-            if not result.passed:
-                raise RunException(f"Error running {command}")
             name, version, release, epoch = result.joined_stdout.split()
 
             debuginfo_map = {"glibc": "glibc-debuginfo-common"}
