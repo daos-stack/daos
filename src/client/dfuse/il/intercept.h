@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -39,7 +39,6 @@
 	ACTION(int, fseeko, (FILE *, off_t, int))                                                  \
 	ACTION(ssize_t, preadv, (int, const struct iovec *, int, off_t))                           \
 	ACTION(ssize_t, pwritev, (int, const struct iovec *, int, off_t))                          \
-	ACTION(void *, mmap, (void *, size_t, int, int, int, off_t))                               \
 	ACTION(off_t, ftello, (FILE *))                                                            \
 	ACTION(int, ftruncate, (int, off_t))
 

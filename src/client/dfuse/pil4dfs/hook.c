@@ -314,6 +314,11 @@ determine_lib_path(void)
 	}	
 	D_FREE(lib_dir_str);
 
+	if (strstr(read_buff_map, "libioil.so")) {
+		D_FREE(read_buff_map);
+		return;
+	}
+
 	pos = strstr(read_buff_map, "libpil4dfs.so");
 	if (pos == NULL) {
 		D_ERROR("Failed to find the path of libpil4dfs.so.\n");

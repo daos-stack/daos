@@ -32,7 +32,7 @@ OPS_SRC = ['create',
            'write',
            'statfs']
 
-IOIL_SRC = ['int_posix.c', 'int_read.c', 'int_write.c']
+IOIL_SRC = ['int_posix.c', 'int_read.c', 'int_write.c', '../pil4dfs/hook.c']
 PIL4DFS_SRC = ['int_dfs.c', 'hook.c', 'dfs_dcache', 'aio.c']
 
 
@@ -58,6 +58,7 @@ def build_client_libs_shared(env, prereqs):
     ilenv.AppendUnique(LIBPATH=[Dir('../dfs')])
     ilenv.AppendUnique(LIBPATH=[Dir('../api')])
     ilenv.AppendUnique(LIBS=['dfs'])
+    ilenv.require('capstone')
     penv = ilenv.Clone()
     penv.AppendUnique(CPPDEFINES=['_FILE_OFFSET_BITS=64'])
 

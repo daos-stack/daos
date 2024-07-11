@@ -34,6 +34,7 @@
 #include "dfuse_common.h"
 
 #include "ioil.h"
+#include "../pil4dfs/hook.h"
 
 FOREACH_INTERCEPT(IOIL_FORWARD_DECL)
 
@@ -75,6 +76,9 @@ static vector_t	fd_table;
 static struct ioil_global ioil_iog;
 
 static __thread int saved_errno;
+
+static void * (*real_mmap)(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
+static void * dfuse_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
 
 #define SAVE_ERRNO(is_error)                 \
 	do {                                 \
@@ -344,6 +348,9 @@ ioil_init(void)
 		ioil_iog.iog_eq_count_max = IOIL_MAX_EQ;
 	}
 
+	register_a_hook("libc", "mmap", (void *)dfuse_mmap, (long int *)(&real_mmap));
+	install_hook();
+
 	ioil_iog.iog_initialized = true;
 }
 
@@ -375,6 +382,7 @@ ioil_fini(void)
 		return;
 	}
 
+	uninstall_hook();
 	ioil_iog.iog_initialized = false;
 
 	DFUSE_TRA_DOWN(&ioil_iog);
@@ -1754,7 +1762,7 @@ do_real_pwritev:
 	return __real_pwritev(fd, vector, iovcnt, offset);
 }
 
-DFUSE_PUBLIC void *
+static void *
 dfuse_mmap(void *address, size_t length, int prot, int flags, int fd,
 	   off_t offset)
 {
@@ -1783,7 +1791,7 @@ dfuse_mmap(void *address, size_t length, int prot, int flags, int fd,
 			return MAP_FAILED;
 	}
 
-	return __real_mmap(address, length, prot, flags, fd, offset);
+	return real_mmap(address, length, prot, flags, fd, offset);
 }
 
 DFUSE_PUBLIC int
