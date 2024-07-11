@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -20,6 +21,7 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -163,7 +165,27 @@ func (ei *EngineInstance) StorageFormatSCM(ctx context.Context, force bool) (mRe
 	return
 }
 
-func populateCtrlrHealth(ctx context.Context, engine Engine, req *ctlpb.BioHealthReq, ctrlr *ctlpb.NvmeController) (bool, error) {
+func addLinkInfoToHealthStats(prov hardware.PCIeLinkStatsProvider, pciCfg string, health *ctlpb.BioHealthResp) error {
+	// Convert byte-string to lspci-format.
+	sb := new(strings.Builder)
+	formatBytestring(pciCfg, sb)
+
+	pciDev := &hardware.PCIDevice{}
+	if err := prov.PCIeCapsFromConfig([]byte(sb.String()), pciDev); err != nil {
+		return err
+	}
+
+	// Copy link details from PCIDevice to health stats.
+	health.LinkPortId = uint32(pciDev.LinkPortID)
+	health.LinkMaxSpeed = pciDev.LinkMaxSpeed
+	health.LinkMaxWidth = uint32(pciDev.LinkMaxWidth)
+	health.LinkNegSpeed = pciDev.LinkNegSpeed
+	health.LinkNegWidth = uint32(pciDev.LinkNegWidth)
+
+	return nil
+}
+
+func populateCtrlrHealth(ctx context.Context, engine Engine, req *ctlpb.BioHealthReq, ctrlr *ctlpb.NvmeController, prov hardware.PCIeLinkStatsProvider) (bool, error) {
 	stateName := ctlpb.NvmeDevState_name[int32(ctrlr.DevState)]
 	if !ctrlr.CanSupplyHealthStats() {
 		engine.Debugf("skip fetching health stats on device %q in %q state",
@@ -176,8 +198,17 @@ func populateCtrlrHealth(ctx context.Context, engine Engine, req *ctlpb.BioHealt
 		return false, errors.Wrapf(err, "retrieve health stats for %q (state %q)", ctrlr,
 			stateName)
 	}
-	ctrlr.HealthStats = health
 
+	if ctrlr.PciCfg != "" {
+		if err := addLinkInfoToHealthStats(prov, ctrlr.PciCfg, health); err != nil {
+			return false, errors.Wrapf(err, "add link stats for %q", ctrlr)
+		}
+	} else {
+		engine.Debugf("no pcie config space received for %q, skip add link stats", ctrlr)
+	}
+
+	ctrlr.HealthStats = health
+	ctrlr.PciCfg = ""
 	return true, nil
 }
 
@@ -241,7 +272,8 @@ func scanEngineBdevsOverDrpc(ctx context.Context, engine Engine, pbReq *ctlpb.Sc
 				MetaSize: pbReq.MetaSize,
 				RdbSize:  pbReq.RdbSize,
 			}
-			upd, err := populateCtrlrHealth(ctx, engine, bhReq, c)
+			upd, err := populateCtrlrHealth(ctx, engine, bhReq, c,
+				hwprov.DefaultPCIeLinkStatsProvider())
 			if err != nil {
 				return nil, err
 			}
@@ -392,20 +424,22 @@ func smdQueryEngine(ctx context.Context, engine Engine, pbReq *ctlpb.SmdQueryReq
 		return nil, errors.Wrapf(err, "instance %d GetRank", engine.Index())
 	}
 
-	rResp := new(ctlpb.SmdQueryResp_RankResp)
-	rResp.Rank = engineRank.Uint32()
-
-	listDevsResp, err := listSmdDevices(ctx, engine, new(ctlpb.SmdDevReq))
+	scanSmdResp, err := scanSmd(ctx, engine, &ctlpb.SmdDevReq{})
 	if err != nil {
-		return nil, errors.Wrapf(err, "rank %d", engineRank)
+		return nil, errors.Wrapf(err, "rank %d: scan smd", engineRank)
+	}
+	if scanSmdResp == nil {
+		return nil, errors.Errorf("rank %d: nil scan smd response", engineRank)
 	}
 
-	if len(listDevsResp.Devices) == 0 {
+	rResp := new(ctlpb.SmdQueryResp_RankResp)
+	rResp.Rank = engineRank.Uint32()
+	if len(scanSmdResp.Devices) == 0 {
 		rResp.Devices = nil
 		return rResp, nil
 	}
 
-	for _, sd := range listDevsResp.Devices {
+	for _, sd := range scanSmdResp.Devices {
 		if sd != nil {
 			rResp.Devices = append(rResp.Devices, sd)
 		}
@@ -418,7 +452,8 @@ func smdQueryEngine(ctx context.Context, engine Engine, pbReq *ctlpb.SmdQueryReq
 		}
 		if pbReq.IncludeBioHealth {
 			bhReq := &ctlpb.BioHealthReq{DevUuid: dev.Uuid}
-			if _, err := populateCtrlrHealth(ctx, engine, bhReq, dev.Ctrlr); err != nil {
+			if _, err := populateCtrlrHealth(ctx, engine, bhReq, dev.Ctrlr,
+				hwprov.DefaultPCIeLinkStatsProvider()); err != nil {
 				return nil, err
 			}
 		}
