@@ -77,8 +77,9 @@ static struct ioil_global ioil_iog;
 
 static __thread int saved_errno;
 
-static void * (*real_mmap)(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
-static void * dfuse_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
+static void *(*real_mmap)(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
+static void *
+dfuse_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
 
 #define SAVE_ERRNO(is_error)                 \
 	do {                                 \
@@ -1763,8 +1764,7 @@ do_real_pwritev:
 }
 
 static void *
-dfuse_mmap(void *address, size_t length, int prot, int flags, int fd,
-	   off_t offset)
+dfuse_mmap(void *address, size_t length, int prot, int flags, int fd, off_t offset)
 {
 	struct fd_entry *entry;
 	int rc;
