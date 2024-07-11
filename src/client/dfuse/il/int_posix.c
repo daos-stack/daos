@@ -383,7 +383,10 @@ ioil_fini(void)
 		return;
 	}
 
-	uninstall_hook();
+	if (ioil_iog.iog_initialized)
+		uninstall_hook();
+	else
+		free_memory_in_hook();
 	ioil_iog.iog_initialized = false;
 
 	DFUSE_TRA_DOWN(&ioil_iog);
