@@ -279,7 +279,7 @@ def run_slurm_script(log, script, logfile=None):
     """
     job_id = None
     result = sbatch(log, script, logfile)
-    match = re.search(r"Submitted\s+batch\s+job\s+(\d+)", result.joined_stdout.splitlines())
+    match = re.search(r"Submitted\s+batch\s+job\s+(\d+)", result.joined_stdout)
     if match is not None:
         job_id = match.group(1)
     else:

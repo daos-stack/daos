@@ -709,9 +709,7 @@ def rename_avocado_test_dir(logger, test, job_results_dir, test_result, jenkins_
         return 1024
 
     # Remove latest symlink directory to avoid inclusion in the Jenkins build artifacts
-    try:
-        run_local(logger, f"rm -fr '{test_logs_lnk}'")
-    except RunException:
+    if not run_local(logger, f"rm -fr '{test_logs_lnk}'").passed:
         message = f"Error removing {test_logs_lnk}"
         test_result.fail_test(logger, "Process", message, sys.exc_info())
         return 1024

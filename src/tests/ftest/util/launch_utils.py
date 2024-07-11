@@ -927,9 +927,8 @@ class TestGroup():
         logger.info("Detecting tests matching tags: %s", " ".join(command))
         result = run_local(logger, " ".join(command))
         if not result.passed:
-            raise RunException("Error running avocaod list")
-        unique_test_files = set(
-            re.findall(self._avocado.get_list_regex(), result.joined_stdout.splitlines()))
+            raise RunException("Error running avocado list")
+        unique_test_files = set(re.findall(self._avocado.get_list_regex(), result.joined_stdout))
         for index, test_file in enumerate(unique_test_files):
             self.tests.append(TestInfo(test_file, index + 1, self._yaml_extension))
             logger.info("  %s", self.tests[-1])
