@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -17,12 +17,12 @@ from logging import getLogger
 from avocado.utils import process
 from ClusterShell.NodeSet import NodeSet
 from command_utils_base import (BasicParameter, CommandWithParameters, EnvironmentVariables,
-                                LogParameter, ObjectWithParameters)
+                                FormattedParameter, LogParameter, ObjectWithParameters)
 from exception_utils import CommandFailure
 from general_utils import (DaosTestError, change_file_owner, check_file_exists, create_directory,
                            distribute_files, get_file_listing, get_job_manager_class,
-                           get_subprocess_stdout, run_command, run_pcmd)
-from run_utils import command_as_user
+                           get_subprocess_stdout, run_command)
+from run_utils import command_as_user, run_remote
 from user_utils import get_primary_group
 from yaml_utils import get_yaml_data
 
@@ -35,7 +35,8 @@ class ExecutableCommand(CommandWithParameters):
     # values from the standard output yielded by the method.
     METHOD_REGEX = {"run": r"(.*)"}
 
-    def __init__(self, namespace, command, path="", subprocess=False, check_results=None):
+    def __init__(self, namespace, command, path="", subprocess=False, check_results=None,
+                 run_user=None):
         """Create a ExecutableCommand object.
 
         Uses Avocado's utils.process module to run a command str provided.
@@ -48,6 +49,8 @@ class ExecutableCommand(CommandWithParameters):
                 Defaults to False.
             check_results (list, optional): list of words used to mark the command as failed if
                 any are found in the command output. Defaults to None.
+            run_user (str, optional): user to run as. Defaults to None, which will run commands as
+                the current user.
         """
         super().__init__(namespace, command, path)
         self._process = None
@@ -59,7 +62,7 @@ class ExecutableCommand(CommandWithParameters):
         self.env = EnvironmentVariables()
 
         # User to run the command as. "root" is equivalent to sudo
-        self.run_user = None
+        self.run_user = run_user
 
         # List of CPU cores to pass to taskset
         self.bind_cores = None
@@ -488,7 +491,7 @@ class ExecutableCommand(CommandWithParameters):
 class CommandWithSubCommand(ExecutableCommand):
     """A class for a command with a sub command."""
 
-    def __init__(self, namespace, command, path="", subprocess=False):
+    def __init__(self, namespace, command, path="", subprocess=False, run_user=None):
         """Create a CommandWithSubCommand object.
 
         Args:
@@ -497,9 +500,10 @@ class CommandWithSubCommand(ExecutableCommand):
             path (str, optional): path to location of command binary file. Defaults to "".
             subprocess (bool, optional): whether the command is run as a subprocess.
                 Defaults to False.
-
+            run_user (str, optional): user to run as. Defaults to None, which will run commands as
+                the current user.
         """
-        super().__init__(namespace, command, path)
+        super().__init__(namespace, command, path, run_user=run_user)
 
         # Define the sub-command parameter whose value is used to assign the
         # sub-command's CommandWithParameters-based class.  Use the command to
@@ -724,7 +728,7 @@ class SubProcessCommand(CommandWithSubCommand):
     Example commands: daos_agent, daos_server
     """
 
-    def __init__(self, namespace, command, path="", timeout=10):
+    def __init__(self, namespace, command, path="", timeout=10, run_user=None):
         """Create a SubProcessCommand object.
 
         Args:
@@ -734,8 +738,10 @@ class SubProcessCommand(CommandWithSubCommand):
                 Defaults to "".
             timeout (int, optional): number of seconds to wait for patterns to
                 appear in the subprocess output. Defaults to 10 seconds.
+            run_user (str, optional): user to run as. Defaults to None, which will run commands as
+                the current user.
         """
-        super().__init__(namespace, command, path, True)
+        super().__init__(namespace, command, path, True, run_user)
 
         # Attributes used to determine command success when run as a subprocess
         # See self.check_subprocess_status() for details.
@@ -855,7 +861,7 @@ class YamlCommand(SubProcessCommand):
     Example commands: daos_agent, daos_server, dmg
     """
 
-    def __init__(self, namespace, command, path="", yaml_cfg=None, timeout=10):
+    def __init__(self, namespace, command, path="", yaml_cfg=None, timeout=10, run_user=None):
         """Create a YamlCommand command object.
 
         Args:
@@ -867,8 +873,10 @@ class YamlCommand(SubProcessCommand):
                 Defaults to ""
             timeout (int, optional): number of seconds to wait for patterns to
                 appear in the subprocess output. Defaults to 10 seconds.
+            run_user (str, optional): user to run as. Defaults to None, which will run commands as
+                the current user.
         """
-        super().__init__(namespace, command, path, timeout)
+        super().__init__(namespace, command, path, timeout, run_user)
 
         # Command configuration yaml file
         self.yaml = yaml_cfg
@@ -879,7 +887,7 @@ class YamlCommand(SubProcessCommand):
         self.temporary_file = None
         self.temporary_file_hosts = None
 
-        # Owner of the certificate files
+        # Default owner of the certificate files
         self.certificate_owner = getuser()
 
     @property
@@ -1003,11 +1011,9 @@ class YamlCommand(SubProcessCommand):
         while yaml is not None and hasattr(yaml, "other_params"):
             if hasattr(yaml, "get_certificate_data"):
                 self.log.debug("Copying certificates for %s:", self._command)
-                data = yaml.get_certificate_data(
-                    yaml.get_attribute_names(LogParameter))
+                data = yaml.get_certificate_data(yaml.get_attribute_names(LogParameter))
                 for name in data:
-                    create_directory(
-                        hosts, name, verbose=False, raise_exception=False)
+                    create_directory(hosts, name, verbose=True, raise_exception=False)
                     for file_name in data[name]:
                         src_file = os.path.join(source, file_name)
                         dst_file = os.path.join(name, file_name)
@@ -1028,8 +1034,7 @@ class YamlCommand(SubProcessCommand):
             self.log.debug(
                 "Copied certificates for %s (in %s):",
                 self._command, ", ".join(names))
-            for line in get_file_listing(hosts, names).stdout_text.splitlines():
-                self.log.debug("  %s", line)
+            get_file_listing(hosts, names, self.run_user).log_output(self.log)
 
     def copy_configuration(self, hosts):
         """Copy the yaml configuration file to the hosts.
@@ -1071,7 +1076,7 @@ class YamlCommand(SubProcessCommand):
 
         """
         if self.yaml is not None:
-            directory = self.get_user_file()
+            directory = self.get_socket_dir()
             self.log.info(
                 "Verifying %s socket directory: %s", self.command, directory)
             status, nodes = check_file_exists(hosts, directory, user)
@@ -1089,12 +1094,13 @@ class YamlCommand(SubProcessCommand):
                             self.command, directory, user, nodes,
                             error)) from error
 
-    def get_user_file(self):
-        """Get the file defined in the yaml file that must be owned by the user.
+    def get_socket_dir(self):
+        """Get the socket directory.
+
+        The socket directory is defined in the yaml file and must be owned by the user.
 
         Returns:
-            str: file defined in the yaml file that must be owned by the user
-
+            str: the socket directory
         """
         return self.get_config_value("socket_dir")
 
@@ -1130,9 +1136,6 @@ class SubprocessManager(ObjectWithParameters):
 
         # Define the hosts that will execute the daos command
         self._hosts = NodeSet()
-
-        # The socket directory verification is not required with systemctl
-        self._verify_socket_dir = manager != "Systemctl"
 
         # An internal dictionary used to define the expected states of each
         # job process. It will be populated when any of the following methods
@@ -1249,7 +1252,7 @@ class SubprocessManager(ObjectWithParameters):
                 owned by the user
 
         """
-        if self._hosts and self._verify_socket_dir:
+        if self._hosts:
             self.manager.job.verify_socket_directory(user, self._hosts)
 
     def set_config_value(self, name, value):
@@ -1293,22 +1296,27 @@ class SubprocessManager(ObjectWithParameters):
                     {"host": <>, "uuid": <>, "state": <>}
                 This will be empty if there was error obtaining the dmg system
                 query output.
-
         """
-        data = {}
+        current_state = {}
         ranks = {host: rank for rank, host in enumerate(self._hosts)}
-        if not self._verify_socket_dir:
-            command = "systemctl is-active {}".format(
-                self.manager.job.service_name)
+        if hasattr(self.manager, '_systemctl'):
+            if self.manager.job.run_user == "root":
+                command = f"systemctl is-active {self.manager.job.service_name}"
+            else:
+                command = command_as_user(
+                    f"systemctl --user is-active {self.manager.job.service_name}",
+                    self.manager.job.run_user)
         else:
-            command = "pgrep {}".format(self.manager.job.command)
-        results = run_pcmd(self._hosts, command, 30)
-        for result in results:
-            for node in result["hosts"]:
-                # expecting single line output from run_pcmd
-                stdout = result["stdout"][-1] if result["stdout"] else "unknown"
-                data[ranks[node]] = {"host": node, "uuid": "-", "state": stdout}
-        return data
+            _arg_u = "-u " if self.manager.job.run_user != "root" else ""
+            command = command_as_user(
+                f"pgrep {_arg_u}{self.manager.job.command}", self.manager.job.run_user)
+        result = run_remote(self.log, self._hosts, command, 30)
+        for _result in result.output:
+            # expect single line output
+            stdout = _result.stdout[-1] if _result.stdout else "unknown"
+            for host in _result.hosts:
+                current_state[ranks[host]] = {"host": host, "uuid": "-", "state": stdout}
+        return current_state
 
     def update_expected_states(self, ranks, state):
         """Update the expected state of the specified job rank(s).
@@ -1477,28 +1485,20 @@ class SubprocessManager(ObjectWithParameters):
 
 
 class SystemctlCommand(ExecutableCommand):
-    # pylint: disable=too-few-public-methods
     """Defines an object representing the systemctl command."""
 
-    def __init__(self):
-        """Create a SystemctlCommand object."""
-        super().__init__("/run/systemctl/*", "systemctl", subprocess=False)
-        self.sudo = True
+    def __init__(self, run_user='root'):
+        """Create a SystemctlCommand object.
 
-        self.unit_command = BasicParameter(None)
-        self.service = BasicParameter(None)
-
-    def get_str_param_names(self):
-        """Get a sorted list of the names of the command attributes.
-
-        Ensure the correct order of the attributes for the systemctl command,
-        e.g.:
-            systemctl <unit_command> <service>
-
-        Returns:
-            list: a list of class attribute names used to define parameters
-                for the command.
-
+        Args:
+            run_user (str, optional): user to run as. Defaults to 'root'.
         """
-        return list(
-            reversed(super().get_str_param_names()))
+        if run_user not in (None, "root", getuser()):
+            raise ValueError(f"Unsupported run_user: {run_user}")
+        super().__init__("/run/systemctl/*", "systemctl", subprocess=False, run_user=run_user)
+
+        # Use --user for anyone other than root
+        self.user = FormattedParameter("--user", self.run_user != 'root', position=0)
+
+        self.unit_command = BasicParameter(None, position=1)
+        self.service = BasicParameter(None, position=2)
