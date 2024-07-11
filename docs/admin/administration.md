@@ -578,7 +578,7 @@ The engine's NVMe config (produced during format) then contains the following
 JSON to apply the criteria:
 
 ```json
-[tanabarr@wolf-310 ~]$ cat /mnt/daos0/daos_nvme.conf
+cat /mnt/daos0/daos_nvme.conf
 {
   "daos_data": {
     "config": [
