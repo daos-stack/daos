@@ -8,7 +8,7 @@ import traceback
 
 import avocado
 from control_test_base import ControlTestBase
-from dmg_utils import (check_system_query_status,get_storage_query_device_info,
+from dmg_utils import (check_system_query_status, get_storage_query_device_info,
                        get_storage_query_pool_info)
 from exception_utils import CommandFailure
 from general_utils import dict_to_str, list_to_str, wait_for_result
