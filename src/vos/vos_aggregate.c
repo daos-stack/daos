@@ -1524,6 +1524,10 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw, bool last, unsign
 
 	/** Remove processed removal records */
 	rc = process_removals(mw, oiter, &mw->mw_rmv_ents, last, true);
+	if (rc != 0) {
+		DL_ERROR(rc, "Unable to process extent removals");
+		goto abort;
+	}
 
 	/* Insert new segments into EV tree */
 	for (i = 0; i < io->ic_seg_cnt; i++) {
