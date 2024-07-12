@@ -31,6 +31,8 @@ class HarnessUnitTest(TestWithoutServers):
             all_stdout (dict): expected stdout str per host key
             all_stderr (dict): expected stderr str per host key
         """
+        join_stdout = '\n'.join(all_stdout.values())
+        join_stderr = '\n'.join(all_stderr.values())
         self.assertEqual(passed, result.passed, 'Incorrect CommandResult.passed')
         self.assertEqual(len(expected), len(result.output), 'Incorrect CommandResult.output count')
         sorted_output = sorted(result.output)
@@ -45,6 +47,8 @@ class HarnessUnitTest(TestWithoutServers):
         self.assertEqual(failed_hosts, result.failed_hosts, 'Incorrect CommandResult.failed_hosts')
         self.assertEqual(all_stdout, result.all_stdout, 'Incorrect CommandResult.all_stdout')
         self.assertEqual(all_stderr, result.all_stderr, 'Incorrect CommandResult.all_stderr')
+        self.assertEqual(join_stdout, result.joined_stdout, 'Incorrect CommandResult.joined_stdout')
+        self.assertEqual(join_stderr, result.joined_stderr, 'Incorrect CommandResult.joined_stderr')
 
     def test_harness_unit_list_unique(self):
         """Verify list_unique().
@@ -262,7 +266,7 @@ class HarnessUnitTest(TestWithoutServers):
         :avocado: tags=HarnessUnitTest,test_harness_unit_run_local_separated
         """
         host = get_local_host()
-        command = 'sh -c "echo stdout; echo stderr 1>&2"'
+        command = 'echo stdout; echo stderr 1>&2'
         self.log_step('Verify run_local() w/ no stdout')
         self._verify_command_result(
             result=run_local(self.log, command, stderr=True),
@@ -286,7 +290,7 @@ class HarnessUnitTest(TestWithoutServers):
         :avocado: tags=HarnessUnitTest,test_harness_unit_run_local_no_stdout
         """
         host = get_local_host()
-        command = 'sh -c "echo stderr 1>&2"'
+        command = 'echo stderr 1>&2'
         self.log_step('Verify run_local() w/ no stdout')
         self._verify_command_result(
             result=run_local(self.log, command, stderr=True),
@@ -310,7 +314,7 @@ class HarnessUnitTest(TestWithoutServers):
         :avocado: tags=HarnessUnitTest,test_harness_unit_run_local_failure
         """
         host = get_local_host()
-        command = 'sh -c "echo fail; exit 1"'
+        command = 'echo fail; exit 1'
         self.log_step('Verify run_local() w/ a failure')
         self._verify_command_result(
             result=run_local(self.log, command),
@@ -334,7 +338,7 @@ class HarnessUnitTest(TestWithoutServers):
         :avocado: tags=HarnessUnitTest,test_harness_unit_run_local_timeout
         """
         host = get_local_host()
-        command = 'sh -c "echo wait; sleep 5"'
+        command = 'echo wait; sleep 5'
         self.log_step('Verify run_local() w/ a timeout')
         self._verify_command_result(
             result=run_local(self.log, command, True, 2),
