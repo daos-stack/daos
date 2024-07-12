@@ -19,7 +19,8 @@ class DmgJsonCommandFailure(CommandFailure):
     """Exception raised when a dmg --json command fails."""
 
 
-def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None, hostlist_suffix=None):
+def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None, hostlist_suffix=None,
+                    run_user=None):
     """Get a dmg command object.
 
     Args:
@@ -33,6 +34,8 @@ def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None, hos
             utilizes the file specified by config_file.
         hostlist_suffix (str, optional): Suffix to append to each host name.
             Defaults to None.
+        run_user (str, optional): user to run as. Defaults to None, which will run commands as
+            the current user.
 
     Returns:
         DmgCommand: the dmg command object
@@ -40,7 +43,7 @@ def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None, hos
     """
     transport_config = DmgTransportCredentials(cert_dir)
     config = DmgYamlParameters(config_file, group, transport_config)
-    command = DmgCommand(bin_dir, config, hostlist_suffix)
+    command = DmgCommand(bin_dir, config, hostlist_suffix, run_user)
     if config_temp:
         # Setup the DaosServerCommand to write the config file data to the
         # temporary file and then copy the file to all the hosts using the

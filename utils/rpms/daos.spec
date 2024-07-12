@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.6.0
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -588,9 +588,18 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+<<<<<<< HEAD
 * Thu Jun 27 2024 Jerome Soumagne <jerome.soumagne@intel.com> 2.6.0-2
 - Bump mercury version to 2.4.0rc3
 
+=======
+* Mon Jul 08 2024 Jerome Soumagne <jerome.soumagne@intel.com> 2.6.0-3
+- Bump mercury version to 2.4.0rc3
+
+* Wed Jul 03 2024 Phillip Henderson <phillip.henderson@intel.com> 2.6.0-2
+- Second release candidate for 2.6.0
+
+>>>>>>> dbohning/daos-16072-2.6
 * Tue Jun 18 2024 Phillip Henderson <phillip.henderson@intel.com> 2.6.0-1
 - First release candidate for 2.6.0
 

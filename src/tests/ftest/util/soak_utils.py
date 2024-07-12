@@ -853,6 +853,10 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
         self.test_name + "_" + name + "_`hostname -s`_"
         "" + "${SLURM_JOB_ID}_" + "daos_dfuse.log")
     dfuse_env = f"export D_LOG_FILE_APPEND_PID=1;export D_LOG_MASK=ERR;export D_LOG_FILE={dfuselog}"
+    # TODO proper
+    _ld_library_path = os.environ.get("DAOS_TEST_SYSTEMD_LIBRARY_PATH")
+    if _ld_library_path:
+        dfuse_env += f"; export LD_LIBRARY_PATH={_ld_library_path}"
     module_load = f"module use {self.mpi_module_use};module load {self.mpi_module}"
 
     dfuse_start_cmds = [
