@@ -4,14 +4,14 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import re
-import time
 import traceback
 
 import avocado
 from control_test_base import ControlTestBase
-from dmg_utils import get_storage_query_device_info, get_storage_query_pool_info
+from dmg_utils import check_system_query_status,get_storage_query_device_info, \
+    get_storage_query_pool_info
 from exception_utils import CommandFailure
-from general_utils import dict_to_str, list_to_str
+from general_utils import dict_to_str, list_to_str, wait_for_result
 
 
 class DmgStorageQuery(ControlTestBase):
@@ -50,17 +50,12 @@ class DmgStorageQuery(ControlTestBase):
             self.log.info('  %s', dict_to_str(bdev, items_joiner=':'))
         return bdev_info
 
-    def check_dev_state(self, device_info, state, fail_test):
+    def check_dev_state(self, device_info, state):
         """Check the state of the device.
 
         Args:
             device_info (list): list of device information.
             state (str): device state to verify.
-            fail_test (bool): Whether to fail the test if device isn't in the expected state.
-
-        Returns:
-            int: Number of devices with error.
-
         """
         errors = 0
         for device in device_info:
@@ -69,10 +64,17 @@ class DmgStorageQuery(ControlTestBase):
                     "Device %s not found in the %s state: %s",
                     device['uuid'], state, device['ctrlr']['dev_state'])
                 errors += 1
-        if fail_test and errors:
+        if errors:
             self.fail("Found {} device(s) not in the {} state".format(errors, state))
 
-        return errors
+    def check_engine_down(self):
+        """Check if engine is down.
+
+        Returns:
+            bool: True if any of the engines is down. False otherwise.
+
+        """
+        return not check_system_query_status(self.dmg.system_query())
 
     @avocado.fail_on(CommandFailure)
     def test_dmg_storage_query_devices(self):
@@ -239,7 +241,7 @@ class DmgStorageQuery(ControlTestBase):
         msg = 'Call "dmg storage query list-devices" and check that the state is NORMAL.'
         self.log_step(msg)
         device_info = get_storage_query_device_info(self.dmg)
-        self.check_dev_state(device_info=device_info, state="NORMAL", fail_test=True)
+        self.check_dev_state(device_info=device_info, state="NORMAL")
 
         self.log_step('Set SysXS device to faulty with "dmg set nvme-faulty".')
         for device in device_info:
@@ -260,19 +262,8 @@ class DmgStorageQuery(ControlTestBase):
 
         self.log_step("Check that devices are in EVICTED state.")
         try:
-            device_evicted = False
-            for count in range(3):
-                time.sleep(10)
-                device_info = get_storage_query_device_info(self.dmg)
-                errors = self.check_dev_state(
-                    device_info=device_info, state="EVICTED", fail_test=False)
-                if errors:
-                    self.log.info("Device state isn't EVICTED at count = %d. Query again.", count)
-                else:
-                    device_evicted = True
-                    break
-            if not device_evicted:
-                self.fail("Devices aren't in the EVICTED state after setting SysXS device faulty!")
+            device_info = get_storage_query_device_info(self.dmg)
+            self.check_dev_state(device_info=device_info, state="EVICTED")
         except CommandFailure as error:
             if not expect_failed_engine:
                 raise
@@ -282,5 +273,12 @@ class DmgStorageQuery(ControlTestBase):
             if expected_error not in traceback.format_exc():
                 self.log.debug(error)
                 self.fail("dmg storage query list-devices failed for an unexpected reason")
+
+        timeout = 30
+        engine_down_detected = wait_for_result(
+            log=self.log, get_method=self.check_engine_down, timeout=timeout, delay=10,
+            add_log=False)
+        if not engine_down_detected:
+            self.fail(f"Engine down NOT detected after {timeout} sec!")
 
         self.log.info("Test passed")
