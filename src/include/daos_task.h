@@ -194,7 +194,7 @@ struct daos_obj_register_class_t {
 
 /** pool management pool list args */
 typedef struct {
-	/** Process set name of the DAOS servers managing the pool */
+	/** Process set name of the DAOS servers managing the system. */
 	const char            *grp;
 	/** Array of pool mgmt information structures. */
 	daos_mgmt_pool_info_t *pools;
