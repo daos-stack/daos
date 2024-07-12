@@ -51,4 +51,5 @@ class DaosSystemQuery(TestWithServers):
 
         num_ap_ranks = len(query_output["access_point_rank_uris"])
         if num_ap_ranks != exp_num_ap_ranks:
-            self.fail("expected {} access point rank URIs, got '{}'".format(exp_num_ap_ranks, num_ap_ranks))
+            self.fail("expected {} access point rank URIs, got '{}'".format(exp_num_ap_ranks,
+                                                                            num_ap_ranks))
