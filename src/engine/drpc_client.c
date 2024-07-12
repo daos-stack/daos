@@ -374,14 +374,15 @@ ds_get_pool_list(uint64_t *npools, daos_mgmt_pool_info_t *pools)
 	uint8_t            *req;
 	size_t              req_size;
 	d_rank_list_t      *svc_ranks;
-	int                 i, rc;
+	int                 i;
+	int                 rc;
 
 	if (npools == NULL) {
 		D_ERROR("npools may not be NULL\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	lp_req.includeall = false; /* only list Ready pools */
+	lp_req.include_all = false; /* only list Ready pools */
 
 	req_size = srv__list_pools_req__get_packed_size(&lp_req);
 	D_ALLOC(req, req_size);

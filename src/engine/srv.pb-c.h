@@ -305,53 +305,53 @@ struct  _Srv__CheckReportResp
     , 0 }
 
 struct _Srv__ListPoolsReq {
-  ProtobufCMessage   base;
-  /*
-   * Include all pools in response, regardless of state
-   */
-  protobuf_c_boolean includeall;
+	ProtobufCMessage   base;
+	/*
+	 * Include all pools in response, regardless of state
+	 */
+	protobuf_c_boolean include_all;
 };
 #define SRV__LIST_POOLS_REQ__INIT                                                                  \
-  {                                                                                                \
-	  PROTOBUF_C_MESSAGE_INIT(&srv__list_pools_req__descriptor)                                \
-	  , 0                                                                                      \
-  }
+	{                                                                                          \
+		PROTOBUF_C_MESSAGE_INIT(&srv__list_pools_req__descriptor)                          \
+		, 0                                                                                \
+	}
 
 struct _Srv__ListPoolsResp__Pool {
-  ProtobufCMessage base;
-  /*
-   * Pool UUID
-   */
-  char            *uuid;
-  /*
-   * Pool label
-   */
-  char            *label;
-  /*
-   * Pool service ranks
-   */
-  size_t           n_svcreps;
-  uint32_t        *svcreps;
+	ProtobufCMessage base;
+	/*
+	 * Pool UUID
+	 */
+	char            *uuid;
+	/*
+	 * Pool label
+	 */
+	char            *label;
+	/*
+	 * Pool service ranks
+	 */
+	size_t           n_svcreps;
+	uint32_t        *svcreps;
 };
 #define SRV__LIST_POOLS_RESP__POOL__INIT                                                           \
-  {                                                                                                \
-	  PROTOBUF_C_MESSAGE_INIT(&srv__list_pools_resp__pool__descriptor)                         \
-	  , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, NULL              \
-  }
+	{                                                                                          \
+		PROTOBUF_C_MESSAGE_INIT(&srv__list_pools_resp__pool__descriptor)                   \
+		, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, NULL        \
+	}
 
 struct _Srv__ListPoolsResp {
-  ProtobufCMessage           base;
-  /*
-   * List of pools
-   */
-  size_t                     n_pools;
-  Srv__ListPoolsResp__Pool **pools;
+	ProtobufCMessage           base;
+	/*
+	 * List of pools
+	 */
+	size_t                     n_pools;
+	Srv__ListPoolsResp__Pool **pools;
 };
 #define SRV__LIST_POOLS_RESP__INIT                                                                 \
-  {                                                                                                \
-	  PROTOBUF_C_MESSAGE_INIT(&srv__list_pools_resp__descriptor)                               \
-	  , 0, NULL                                                                                \
-  }
+	{                                                                                          \
+		PROTOBUF_C_MESSAGE_INIT(&srv__list_pools_resp__descriptor)                         \
+		, 0, NULL                                                                          \
+	}
 
 /* Srv__NotifyReadyReq methods */
 void   srv__notify_ready_req__init

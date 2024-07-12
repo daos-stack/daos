@@ -1272,6 +1272,14 @@ out:
 	return rc;
 }
 
+static void
+wipe_cred_iov(d_iov_t *cred)
+{
+	/* Ensure credential memory is wiped clean */
+	explicit_bzero(cred->iov_buf, cred->iov_buf_len);
+	daos_iov_free(cred);
+}
+
 int
 dc_mgmt_pool_list(tse_task_t *task)
 {
@@ -1284,7 +1292,8 @@ dc_mgmt_pool_list(tse_task_t *task)
 	struct mgmt_pool_list_in  *in  = NULL;
 	struct mgmt_pool_list_out *out = NULL;
 	struct dc_mgmt_sys        *sys;
-	int                        rc, pidx;
+	int                        pidx;
+	int                        rc;
 
 	args = dc_task_get_args(task);
 	if (args->npools == NULL) {
@@ -1377,6 +1386,7 @@ rechoose:
 
 			uuid_copy(cli_pool->mgpi_uuid, rpc_pool->plp_uuid);
 
+			cli_pool->mgpi_label = NULL;
 			D_STRNDUP(cli_pool->mgpi_label, rpc_pool->plp_label,
 				  DAOS_PROP_LABEL_MAX_LEN);
 			if (cli_pool->mgpi_label == NULL) {
@@ -1385,6 +1395,7 @@ rechoose:
 			}
 
 			/* allocate rank list for caller (simplifies API) */
+			cli_pool->mgpi_svc = NULL;
 			rc = d_rank_list_dup(&cli_pool->mgpi_svc, rpc_pool->plp_svc_list);
 			if (rc != 0) {
 				D_ERROR("copy RPC reply svc list failed\n");
@@ -1409,12 +1420,7 @@ out_put_req:
 		DL_ERROR(rc, "failed to list pools");
 
 	crt_req_decref(rpc);
-
-	if (in != NULL) {
-		/* Ensure credential memory is wiped clean */
-		explicit_bzero(in->pli_cred.iov_buf, in->pli_cred.iov_buf_len);
-		daos_iov_free(&in->pli_cred);
-	}
+	wipe_cred_iov(&in->pli_cred);
 out_client:
 	rsvc_client_fini(&ms_client);
 out_grp:

@@ -80,6 +80,7 @@ extern int dc_mgmt_proto_version;
 
 #define DAOS_OSEQ_MGMT_OP /* output fields */                    \
 	((int32_t)		(mo_rc)			CRT_VAR) \
+	((uint32_t)		(mo_pad32)		CRT_VAR) \
 	((struct rsvc_hint)	(mo_hint)		CRT_VAR)
 
 CRT_GEN_STRUCT(mgmt_op_out, DAOS_OSEQ_MGMT_OP);
@@ -144,6 +145,7 @@ CRT_RPC_DECLARE(mgmt_pool_find, DAOS_ISEQ_MGMT_POOL_FIND,
 	((uuid_t)		(plp_uuid)		CRT_VAR) \
 	((d_string_t)		(plp_label)		CRT_VAR) \
 	((d_rank_t)		(plp_svc_ldr)		CRT_VAR) \
+	((uint32_t)		(plp_pad32)		CRT_VAR) \
 	((d_rank_list_t)	(plp_svc_list)		CRT_PTR)
 
 CRT_GEN_STRUCT(mgmt_pool_list_pool, DAOS_SEQ_MGMT_POOL_LIST_POOL);

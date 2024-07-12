@@ -92,7 +92,7 @@ message CheckReportResp {
 
 message ListPoolsReq
 {
-	bool includeAll = 1; // Include all pools in response, regardless of state
+	bool include_all = 1; // Include all pools in response, regardless of state
 }
 
 message ListPoolsResp

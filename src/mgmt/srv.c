@@ -483,10 +483,13 @@ ds_mgmt_pool_list_hdlr(crt_rpc_t *rpc)
 {
 	struct mgmt_pool_list_in   *in;
 	struct mgmt_pool_list_out  *out;
-	size_t                      n_mgmt = 0, n_rpc = 0;
+	size_t                      n_mgmt     = 0;
+	size_t                      n_rpc      = 0;
 	daos_mgmt_pool_info_t      *mgmt_pools = NULL;
 	struct mgmt_pool_list_pool *rpc_pools  = NULL;
-	int                         i, rc, chk_rc;
+	int                         i;
+	int                         rc;
+	int                         chk_rc;
 
 	in = crt_req_get(rpc);
 	D_ASSERT(in != NULL);
@@ -524,6 +527,7 @@ ds_mgmt_pool_list_hdlr(crt_rpc_t *rpc)
 	for (i = 0; i < n_mgmt; i++) {
 		daos_mgmt_pool_info_t      *mgmt_pool = &mgmt_pools[i];
 		struct mgmt_pool_list_pool *rpc_pool  = &rpc_pools[n_rpc];
+
 		chk_rc = check_cred_pool_access(mgmt_pool->mgpi_uuid, mgmt_pool->mgpi_svc,
 						DAOS_PC_RO, &in->pli_cred);
 		if (chk_rc != 0) {

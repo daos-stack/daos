@@ -74,7 +74,7 @@ class ListPoolsTest(TestWithServers):
             for data in self.get_daos_command().get_pool_list_all():
                 detected_user_uuids[data["uuid"]] = data["svc_reps"]
         except KeyError as error:
-            self.fail("Error parsing dmg pool list output: {}".format(error))
+            self.fail("Error parsing daos pool list output: {}".format(error))
 
         self.log.info("Expected user pool info: %s", str(expected_user_uuids))
         self.log.info("Detected user pool info: %s", str(detected_user_uuids))
