@@ -1207,16 +1207,15 @@ def get_journalctl_command(since, until=None, system=False, units=None, identifi
         str: journalctl command to capture all unit activity
 
     """
-    _unit = "unit" if run_user == "root" else "user-unit"
     command = [os.path.join(os.sep, "usr", "bin", "journalctl")]
     if system:
         command.append("--system")
-    for key, values in {_unit: units or [], "identifier": identifiers or []}.items():
+    if run_user != "root":
+        command.append("--user")
+    for key, values in {"unit": units or [], "identifier": identifiers or []}.items():
         for item in values if isinstance(values, (list, tuple)) else [values]:
             command.append(f"--{key}={item}")
     command.append(f'--since="{since}"')
-    if run_user != "root":
-        command.append("-q")
     if until:
         command.append(f'--until="{until}"')
     return command_as_user(" ".join(command), run_user)
