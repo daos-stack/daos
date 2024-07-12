@@ -191,8 +191,8 @@ time_cmp(uint64_t t1, uint64_t t2, int *out, bool exact)
  * second rectangle \a rt2 should be the one being searched/inserted.
  */
 static void
-evt_rect_overlap(const struct evt_rect *rt1, const struct evt_rect *rt2,
-		 int *range, int *time, bool exact)
+evt_rect_overlap(const struct evt_rect *rt1, const struct evt_rect *rt2, int *range, int *time,
+		 bool exact)
 {
 	*time = *range = RT_OVERLAP_NO;
 
@@ -2639,8 +2639,8 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 			if (find_opc == EVT_FIND_OVERWRITE)
 				has_agg = true;
 
-			evt_rect_overlap(&rtmp, rect, &range_overlap,
-					 &time_overlap, find_opc == EVT_FIND_SAME);
+			evt_rect_overlap(&rtmp, rect, &range_overlap, &time_overlap,
+					 find_opc == EVT_FIND_SAME);
 			switch (range_overlap) {
 			default:
 				D_ASSERT(0);
