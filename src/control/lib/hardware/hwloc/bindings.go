@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -251,6 +251,8 @@ const (
 
 	bridgeTypeHost = C.HWLOC_OBJ_BRIDGE_HOST
 	bridgeTypePCI  = C.HWLOC_OBJ_BRIDGE_PCI
+
+	giga = 1e+9
 )
 
 // object is a thin wrapper for hwloc_obj_t and related functions.
@@ -543,7 +545,7 @@ func (o *object) blockDevice() (*hardware.BlockDevice, error) {
 	return bd, nil
 }
 
-func (o *object) linkSpeed() (float64, error) {
+func (o *object) linkSpeed() (float32, error) {
 	o.topo.RLock()
 	defer o.topo.RUnlock()
 
@@ -554,7 +556,8 @@ func (o *object) linkSpeed() (float64, error) {
 	if pciDevAttr == nil {
 		return 0, errors.Errorf("device %q attrs are nil", o.name())
 	}
-	return float64(pciDevAttr.linkspeed), nil
+	// Attribute in Giga units, return raw transactions per sec.
+	return float32(pciDevAttr.linkspeed) * giga, nil
 }
 
 func newObject(topo *topology, cObj C.hwloc_obj_t) *object {
