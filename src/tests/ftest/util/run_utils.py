@@ -304,7 +304,7 @@ def get_clush_command(hosts, args=None, command="", command_env=None, command_su
 
 
 def run_local(log, command, verbose=True, timeout=None, task_debug=False, stderr=False):
-    """Run the command on the remote hosts.
+    """Run the command on the local host.
 
     Args:
         log (logger): logger for the messages produced by this method
