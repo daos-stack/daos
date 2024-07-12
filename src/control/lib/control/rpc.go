@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,8 +8,10 @@ package control
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"os"
+	"regexp"
 	"sync"
 	"time"
 
@@ -486,6 +488,29 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 			// If the RPC handler is unimplemented, then we shouldn't retry.
 			if status.Code(errors.Cause(err)) == codes.Unimplemented {
 				return nil, err
+			}
+
+			// b/352550886: Add a forced-compatibility shim for Jumpbox code to be able to
+			// perform admin RPCs regardless of server version.
+			//
+			// NB: This workaround does not guarantee compatibility between admin:server
+			// versions! In most cases, calling admin RPCs from different versions should
+			// work fine, but there may be additional work needed to handle version differences.
+			if fault.IsFaultCode(err, code.ServerIncompatibleComponents) {
+				if f, ok := err.(*fault.Fault); ok {
+					verRe := regexp.MustCompile(fmt.Sprintf(`%s:(\d+\.\d+\.\d+)`, build.ComponentServer))
+					if matches := verRe.FindStringSubmatch(f.Description); len(matches) > 1 {
+						srvVer := matches[1]
+						log.Debugf("setting %s version to %s and retrying", c.GetComponent(), srvVer)
+						var ctxErr error
+						reqCtx, ctxErr = build.ToContext(reqCtx, c.GetComponent(), srvVer)
+						if ctxErr != nil {
+							log.Debugf("failed to set override version: %v", ctxErr)
+							return nil, errors.Wrapf(err, "unable to override %s version to match server's", c.GetComponent())
+						}
+						break
+					}
+				}
 			}
 
 			// In the case that the request specifies that the error

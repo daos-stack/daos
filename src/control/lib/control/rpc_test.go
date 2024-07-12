@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -21,10 +21,14 @@ import (
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -502,6 +506,39 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 				},
 			},
 		},
+		"server rejects initial request due to version incompatibility": {
+			req: &testRequest{
+				HostList: []string{leaderHost},
+				toMS:     true,
+				rpcFn: func(ctx context.Context, cc *grpc.ClientConn) (proto.Message, error) {
+					srvVer := "1.2.3"
+					if md, exists := metadata.FromOutgoingContext(ctx); !exists {
+						return nil, &fault.Fault{Code: code.ServerIncompatibleComponents, Description: build.ComponentServer.String() + ":" + srvVer}
+					} else {
+						if cliVer := md[build.DaosVersionHeader][0]; cliVer != srvVer {
+							t.Fatalf("unexpected client version %q", cliVer)
+						}
+					}
+
+					return defaultMessage, nil
+				},
+				retryableRequest: retryableRequest{
+					// set a retry function that always returns false
+					// to simulate a request with custom logic
+					retryTestFn: func(_ error, _ uint) bool {
+						return false
+					},
+				},
+			},
+			expResp: &UnaryResponse{
+				Responses: []*HostResponse{
+					{
+						Addr:    leaderHost,
+						Message: defaultMessage,
+					},
+				},
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
@@ -510,6 +547,7 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 			client := NewClient(
 				WithConfig(clientCfg),
 				WithClientLogger(log),
+				WithClientComponent(build.ComponentAdmin),
 			)
 
 			outerCtx := test.Context(t)
