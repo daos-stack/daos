@@ -394,8 +394,10 @@ class TestRunner():
         return_code = result.output[0].returncode
         if return_code == 0:
             logger.debug("All avocado test variants passed")
-        elif return_code & 2 == 2:
+        elif return_code & 1 == 1:
             logger.debug("At least one avocado test variant failed")
+        elif return_code & 2 == 2:
+            logger.debug("At least one avocado job failed")
         elif return_code & 4 == 4:
             message = "Failed avocado commands detected"
             self.test_result.fail_test(logger, "Execute", message)

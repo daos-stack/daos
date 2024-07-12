@@ -183,7 +183,7 @@ class CommandResult():
             log_result_data(log, data)
 
 
-def __get_local_result(command, return_code, stdout, stderr, timeout):
+def __local_command_result(command, return_code, stdout, stderr, timeout):
     """Get a CommandResult object for a command issued on the local host.
 
     Args:
@@ -205,7 +205,7 @@ def __get_local_result(command, return_code, stdout, stderr, timeout):
     return result
 
 
-def __get_remote_result(command, task):
+def __remote_command_result(command, task):
     """Get a CommandResult object for a command issued on remote hosts.
 
     Args:
@@ -220,8 +220,12 @@ def __get_remote_result(command, task):
     # Get a dictionary of host list values for each unique return code key
     return_codes = dict(task.iter_retcodes())
 
-    # Get a list of any hosts that timed out
-    timed_out = [str(hosts) for hosts in task.iter_keys_timeout()]
+    # Add any hosts that timed out with an rc=124
+    timed_out_hosts = list(task.iter_keys_timeout())
+    if timed_out_hosts and 124 in return_codes:
+        return_codes[124].extend(timed_out_hosts)
+    elif timed_out_hosts:
+        return_codes[124] = timed_out_hosts
 
     # Populate the a list of unique output for each NodeSet
     for code in sorted(return_codes):
@@ -238,10 +242,8 @@ def __get_remote_result(command, task):
                 stderr = __msg_tree_elem_to_list(stderr_raw)
                 result.output.append(
                     ResultData(
-                        command, code, NodeSet.fromlist(stderr_hosts), stdout, stderr, False))
-    if timed_out:
-        result.output.append(
-            ResultData(command, 124, NodeSet.fromlist(timed_out), None, None, True))
+                        command, code, NodeSet.fromlist(stderr_hosts), stdout, stderr,
+                        bool(code == 124)))
 
     return result
 
@@ -371,15 +373,15 @@ def run_local(log, command, verbose=True, timeout=None, stderr=False):
     try:
         # pylint: disable=subprocess-run-check
         task = subprocess.run(shlex.split(command), **kwargs)     # nosec
-        results = __get_local_result(command, task.returncode, task.stdout, task.stderr, False)
+        results = __local_command_result(command, task.returncode, task.stdout, task.stderr, False)
 
     except subprocess.TimeoutExpired as error:
         # Raised if command times out
-        results = __get_local_result(command, 124, error.stdout, error.stderr, True)
+        results = __local_command_result(command, 124, error.stdout, error.stderr, True)
 
     except Exception as error:  # pylint: disable=broad-except
         # Catch all
-        results = __get_local_result(command, 255, None, str(error), False)
+        results = __local_command_result(command, 255, None, str(error), False)
 
     if verbose:
         results.log_output(log)
@@ -425,7 +427,7 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False,
         else:
             log.debug("Running on %s with a %s second timeout: %s", hosts, timeout, command)
     task.run(command=command, nodes=hosts, timeout=timeout)
-    results = __get_remote_result(command, task)
+    results = __remote_command_result(command, task)
     if verbose:
         results.log_output(log)
     else:
