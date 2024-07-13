@@ -1721,6 +1721,12 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf_out,
 			DP_UUID(svc->ps_uuid), svc->ps_ops_enabled ? "enabled" : "disabled",
 			rdb_size, rdb_size_ok ? ">=" : "<", DUP_OP_MIN_RDB_SIZE, svc->ps_ops_max,
 			svc->ps_ops_age);
+	} else {
+		svc->ps_ops_enabled = 0;
+		svc->ps_ops_age     = 0;
+		svc->ps_ops_max     = 0;
+		D_DEBUG(DB_MD, DF_UUID ": duplicate ops detection unavailable\n",
+			DP_UUID(svc->ps_uuid));
 	}
 
 	D_ASSERTF(rc == 0, DF_RC"\n", DP_RC(rc));
