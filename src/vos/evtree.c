@@ -2640,7 +2640,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 				has_agg = true;
 
 			evt_rect_overlap(&rtmp, rect, &range_overlap, &time_overlap,
-					 find_opc == EVT_FIND_OVERLAP);
+					 find_opc == EVT_FIND_OVERWRITE);
 			switch (range_overlap) {
 			default:
 				D_ASSERT(0);
