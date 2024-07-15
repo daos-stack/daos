@@ -854,7 +854,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 		goto out;
 	}
 
-	if (flags & SUBTR_EVT) {
+	if (flags & SUBTR_EVT && expected_flag == KREC_BF_EVT) {
 		rc = evt_open(&krec->kr_evt, uma, &cbs, sub_toh);
 	} else {
 		rc = dbtree_open_inplace_ex(&krec->kr_btr, uma, coh, pool, sub_toh);
