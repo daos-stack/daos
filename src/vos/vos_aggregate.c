@@ -1331,7 +1331,6 @@ dump_trace(struct agg_merge_window *mw)
 		D_ASSERT(cond);                                                                    \
 	} while (0)
 
-
 static int
 process_removals(struct agg_merge_window *mw, struct vos_obj_iter *oiter, d_list_t *head, bool last,
 		 bool top)
