@@ -233,7 +233,7 @@ class CommandResult():
         Returns:
             str: all of the stdout from each host joined by newlines
         """
-        return '\n'.join(self.all_stdout.values())
+        return '\n'.join(filter(None, self.all_stdout.values()))
 
     @property
     def joined_stderr(self):
@@ -242,7 +242,7 @@ class CommandResult():
         Returns:
             str: all of the stderr from each host joined by newlines
         """
-        return '\n'.join(self.all_stderr.values())
+        return '\n'.join(filter(None, self.all_stderr.values()))
 
     def log_output(self, log):
         """Log the command result.

@@ -279,7 +279,7 @@ class CoreFileProcessing():
             cmds.append(["sudo", "rm", "-f", path])
 
         if self.USE_DEBUGINFO_INSTALL:
-            dnf_args = ["--exclude", "ompi-debuginfo"]
+            dnf_args = ["--nobest", "--exclude", "ompi-debuginfo"]
             if os.getenv("TEST_RPMS", 'false') == 'true':
                 if "suse" in self.distro_info.name.lower():
                     dnf_args.extend(["libpmemobj1", "python3", "openmpi3"])
