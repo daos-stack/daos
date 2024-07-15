@@ -1300,7 +1300,8 @@ process_removals(struct agg_merge_window *mw, struct vos_obj_iter *oiter, d_list
 			D_DEBUG(DB_EPC, "Removing physical removal record: "DF_RECT"\n",
 				DP_RECT(&rm_ent->re_rect));
 			rc = evt_delete(oiter->it_hdl, &rect, NULL);
-			d_list_del(&rm_ent->re_phy_link);
+			if (rc == 0)
+				d_list_del(&rm_ent->re_phy_link);
 		} else if (!d_list_empty(&rm_ent->re_contained)) {
 			D_ASSERT(top);
 			D_DEBUG(DB_EPC, "Removing logical removal record: "DF_RECT"\n",
@@ -1378,8 +1379,8 @@ dump_trace(struct agg_merge_window *mw)
 	i = agg_param->ap_trace_start;
 	do {
 		entry = &agg_param->ap_evt_trace[i];
-		D_ERROR("  " DF_U64 " recs@" DF_U64 " (" DF_U64 " recs@ " DF_U64 ")@" DF_X64
-			".%d tx=%d hole=%d flg=%x rsz=" DF_U64 " gsz=" DF_U64 "\n",
+		D_ERROR("  0x" DF_X64 " recs@0x" DF_X64 " (0x" DF_X64 " recs@0x" DF_X64 ")@0x"
+			DF_X64 ".%d tx=%d hole=%d flg=%x rsz=0x" DF_X64 " gsz=0x" DF_X64 "\n",
 			entry->ie_recx.rx_nr, entry->ie_recx.rx_idx, entry->ie_orig_recx.rx_nr,
 			entry->ie_orig_recx.rx_idx, entry->ie_epoch, entry->ie_minor_epc,
 			entry->ie_dtx_state, bio_addr_is_hole(&entry->ie_biov.bi_addr),

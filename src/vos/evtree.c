@@ -158,7 +158,7 @@ evt_mbr_same(const struct evt_node *node, const struct evt_rect *rect)
 }
 
 static bool
-time_cmp(uint64_t t1, uint64_t t2, int *out, bool exact)
+time_cmp(uint64_t t1, uint64_t t2, int *out, bool rebuild_overlap)
 {
 	if (t1 == t2) {
 		*out = RT_OVERLAP_SAME;
@@ -170,7 +170,7 @@ time_cmp(uint64_t t1, uint64_t t2, int *out, bool exact)
 		*out = RT_OVERLAP_OVER;
 	} else {
 		*out = RT_OVERLAP_UNDER;
-		if (!exact && t2 == EVT_REBUILD_MINOR_MIN) {
+		if (rebuild_overlap && t2 == EVT_REBUILD_MINOR_MIN) {
 			/** If t1 is also a rebuild, we should return
 			 * RT_OVERLAP_SAME to force adjustment of new rebuild
 			 * minor epoch.
@@ -192,7 +192,7 @@ time_cmp(uint64_t t1, uint64_t t2, int *out, bool exact)
  */
 static void
 evt_rect_overlap(const struct evt_rect *rt1, const struct evt_rect *rt2, int *range, int *time,
-		 bool exact)
+		 bool overlap)
 {
 	*time = *range = RT_OVERLAP_NO;
 
@@ -204,8 +204,8 @@ evt_rect_overlap(const struct evt_rect *rt1, const struct evt_rect *rt2, int *ra
 	 * updates are from epc to INF.  Determine here what kind
 	 * of overlap exists.
 	 */
-	if (time_cmp(rt1->rc_epc, rt2->rc_epc, time, exact))
-		time_cmp(rt1->rc_minor_epc, rt2->rc_minor_epc, time, exact);
+	if (time_cmp(rt1->rc_epc, rt2->rc_epc, time, false))
+		time_cmp(rt1->rc_minor_epc, rt2->rc_minor_epc, time, overlap);
 
 	if (evt_same_extent(&rt1->rc_ex, &rt2->rc_ex))
 		*range = RT_OVERLAP_SAME;
@@ -2640,7 +2640,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 				has_agg = true;
 
 			evt_rect_overlap(&rtmp, rect, &range_overlap, &time_overlap,
-					 find_opc == EVT_FIND_SAME);
+					 find_opc == EVT_FIND_OVERLAP);
 			switch (range_overlap) {
 			default:
 				D_ASSERT(0);
