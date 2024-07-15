@@ -117,7 +117,7 @@ class DaosAgentCommand(YamlCommand):
         """Get the daos_agent sub command object based on the sub-command."""
         if self.sub_command.value == "dump-attachinfo":
             self.sub_command_class = self.DumpAttachInfoSubCommand()
-        if self.sub_command.value == "support":
+        elif self.sub_command.value == "support":
             self.sub_command_class = self.SupportSubCommand()
         else:
             self.sub_command_class = None
