@@ -1382,11 +1382,11 @@ dump_trace(struct agg_merge_window *mw)
 		entry = &agg_param->ap_evt_trace[i];
 		D_ERROR("  0x" DF_X64 " recs@0x" DF_X64 " (0x" DF_X64 " recs@0x" DF_X64
 			")@0x" DF_X64 ".%d tx=%d hole=%d flg=%x rsz=0x" DF_X64 " gsz=0x" DF_X64
-			"\n", entry->ie_recx.rx_nr, entry->ie_recx.rx_idx,
-			entry->ie_orig_recx.rx_nr, entry->ie_orig_recx.rx_idx, entry->ie_epoch,
-			entry->ie_minor_epc, entry->ie_dtx_state,
-			bio_addr_is_hole(&entry->ie_biov.bi_addr), entry->ie_vis_flags,
-			entry->ie_rsize, entry->ie_gsize);
+			"\n",
+			entry->ie_recx.rx_nr, entry->ie_recx.rx_idx, entry->ie_orig_recx.rx_nr,
+			entry->ie_orig_recx.rx_idx, entry->ie_epoch, entry->ie_minor_epc,
+			entry->ie_dtx_state, bio_addr_is_hole(&entry->ie_biov.bi_addr),
+			entry->ie_vis_flags, entry->ie_rsize, entry->ie_gsize);
 		i = (i + 1) % EV_TRACE_MAX;
 	} while (i != last);
 }
