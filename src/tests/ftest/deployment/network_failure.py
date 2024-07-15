@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -29,12 +29,12 @@ class NetworkFailureTest(IorTestBase):
         super().__init__(*args, **kwargs)
         self.network_down_host = None
         self.interface = None
-        self.test_env = self.params.get("test_environment", "/run/*")
+        self.__test_environment = self.params.get("test_environment", "/run/*")
 
     def pre_tear_down(self):
         """Bring ib0 back up in case the test crashed in the middle."""
         error_list = []
-        if self.test_env == "ci":
+        if self.__test_environment == "ci":
             self.log.debug("Call ip link set before tearDown.")
             if self.network_down_host:
                 update_network_interface(
@@ -60,7 +60,7 @@ class NetworkFailureTest(IorTestBase):
                 infinite.
         """
         # Update the object class depending on the test case.
-        ior_cmd = IorCommand(namespace=namespace)
+        ior_cmd = IorCommand(self.test_env.log_dir, namespace=namespace)
         ior_cmd.get_params(self)
 
         # Standard IOR prep sequence.
@@ -203,7 +203,7 @@ class NetworkFailureTest(IorTestBase):
         self.interface = self.server_managers[0].get_config_value("fabric_iface")
         self.log.info("interface to update = %s", self.interface)
 
-        if self.test_env == "ci":
+        if self.__test_environment == "ci":
             # wolf
             update_network_interface(
                 self.log, interface=self.interface, state="down", hosts=self.network_down_host,
@@ -225,7 +225,7 @@ class NetworkFailureTest(IorTestBase):
         self.log.info(ior_results)
 
         # 4. Bring up the network interface.
-        if self.test_env == "ci":
+        if self.__test_environment == "ci":
             # wolf
             update_network_interface(
                 self.log, interface=self.interface, state="up", hosts=self.network_down_host,
@@ -390,7 +390,7 @@ class NetworkFailureTest(IorTestBase):
         self.interface = self.server_managers[0].get_config_value("fabric_iface")
 
         # wolf
-        if self.test_env == "ci":
+        if self.__test_environment == "ci":
             update_network_interface(
                 self.log, interface=self.interface, state="down", hosts=self.network_down_host,
                 errors=errors)
@@ -428,7 +428,7 @@ class NetworkFailureTest(IorTestBase):
         self.verify_ior_worked(ior_results=ior_results, job_num=job_num, errors=errors)
 
         # 9. Bring up the network interface.
-        if self.test_env == "ci":
+        if self.__test_environment == "ci":
             # wolf
             update_network_interface(
                 self.log, interface=self.interface, state="up", hosts=self.network_down_host,
