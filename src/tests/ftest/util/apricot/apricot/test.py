@@ -68,10 +68,11 @@ class Test(avocadoTest):
         self.test_id = self.get_test_name()
 
         # Define a test unique temporary directory
-        self.base_test_dir = os.getenv("DAOS_TEST_LOG_DIR", "/tmp")
-        self.test_dir = os.path.join(self.base_test_dir, self.test_id)
-        if not os.path.exists(self.test_dir):
-            os.makedirs(self.test_dir)
+        self.test_env = TestEnvironment()
+        self.test_dir = os.path.join(self.test_env.log_dir, self.test_id)
+
+        # Create a test unique temporary directory on this host
+        os.makedirs(self.test_dir, exist_ok=True)
 
         # Support unique test case timeout values.  These test case specific
         # timeouts are read from the test yaml using the test case method name

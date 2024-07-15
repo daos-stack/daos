@@ -131,7 +131,7 @@ class ServerFillUp(IorTestBase):
         # Start the servers and agents
         super().setUp()
         self.hostfile_clients = None
-        self.ior_local_cmd = IorCommand()
+        self.ior_local_cmd = IorCommand(self.test_env.log_dir)
         self.ior_local_cmd.get_params(self)
         self.ior_default_flags = self.ior_local_cmd.flags.value
         self.ior_scm_xfersize = self.params.get("transfer_size",
