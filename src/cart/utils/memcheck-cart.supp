@@ -645,3 +645,9 @@
    fun:__tsan_go_atomic32_load
    fun:racecall
 }
+{
+   go 1.22.3 race
+   Memcheck:Addr4
+   fun:__tsan_go_atomic32_store
+   fun:racecall
+}
