@@ -478,7 +478,7 @@ dc_mgmt_get_sys_info(const char *sys, struct daos_sys_info **out)
 	D_ALLOC_ARRAY(info->dsi_ms_ranks, resp->n_ms_ranks);
 	if (info->dsi_ms_ranks == NULL)
 		D_GOTO(err_info, rc = -DER_NOMEM);
-	memcpy(info->dsi_ms_ranks, resp->ms_ranks, resp->n_ms_ranks);
+	memcpy(info->dsi_ms_ranks, resp->ms_ranks, resp->n_ms_ranks * sizeof(uint32_t));
 	info->dsi_nr_ms_ranks = resp->n_ms_ranks;
 
 	rc = alloc_rank_uris(resp, &ranks);
