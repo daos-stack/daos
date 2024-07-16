@@ -31,8 +31,8 @@ class HarnessUnitTest(TestWithoutServers):
             all_stdout (dict): expected stdout str per host key
             all_stderr (dict): expected stderr str per host key
         """
-        join_stdout = '\n'.join(all_stdout.values())
-        join_stderr = '\n'.join(all_stderr.values())
+        join_stdout = '\n'.join(filter(None, all_stdout.values()))
+        join_stderr = '\n'.join(filter(None, all_stderr.values()))
         self.assertEqual(passed, result.passed, 'Incorrect CommandResult.passed')
         self.assertEqual(len(expected), len(result.output), 'Incorrect CommandResult.output count')
         sorted_output = sorted(result.output)
