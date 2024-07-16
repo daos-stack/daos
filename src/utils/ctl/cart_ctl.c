@@ -709,8 +709,10 @@ ctl_init()
 	}
 
 	/* We cycled through all ranks and none were successful */
-	if (!target_found)
-		error_exit("Failed to register cart_ctl ops\n");
+	if (!target_found) {
+		error_warn("Exhausted all ranks for PROTO_QUERY\n");
+		return -1;
+	}
 
 	for (i = 0; i < num_ranks; i++) {
 		ep.ep_grp  = grp;
