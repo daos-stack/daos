@@ -1115,7 +1115,7 @@ crt_issue_uri_lookup(crt_context_t ctx, crt_group_t *group,
 
 	rc = crt_req_create(ctx, &target_ep, CRT_OPC_URI_LOOKUP, &rpc);
 	if (rc != 0) {
-		D_ERROR("URI_LOOKUP rpc create failed; rc="DF_RC"\n", DP_RC(rc));
+		D_ERROR("URI_LOOKUP rpc create failed; rc=" DF_RC "\n", DP_RC(rc));
 		D_GOTO(exit, rc);
 	}
 
@@ -1128,7 +1128,7 @@ crt_issue_uri_lookup(crt_context_t ctx, crt_group_t *group,
 	if (chained_rpc_priv->crp_timeout_sec) {
 		rc = crt_req_set_timeout(rpc, chained_rpc_priv->crp_timeout_sec);
 		if (rc != 0) {
-			D_ERROR("crt_req_set_timeout() failed; rc="DF_RC"\n", DP_RC(rc));
+			D_ERROR("crt_req_set_timeout() failed; rc=" DF_RC "\n", DP_RC(rc));
 			/* destroy the URI_LOOKUP rpc */
 			RPC_PUB_DECREF(rpc);
 			D_GOTO(exit, rc);
