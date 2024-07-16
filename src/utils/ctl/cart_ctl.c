@@ -26,14 +26,24 @@
 #define CRT_CTL_MAX		1024
 #define MAX_ARG_LEN		(1 << 16)
 
-#define error_exit(x...)	\
-do {				\
-	fprintf(stderr, x);	\
-	exit(-1);		\
-} while (0)
+#define error_exit(x...)                                                                           \
+	do {                                                                                       \
+		fprintf(stderr, x);                                                                \
+		D_ERROR(x);                                                                        \
+		exit(-1);                                                                          \
+	} while (0)
 
-#define error_warn(x...)	fprintf(stderr, x)
-#define msg(x...)		fprintf(stdout, x)
+#define error_warn(x...)                                                                           \
+	do {                                                                                       \
+		fprintf(stderr, x);                                                                \
+		D_WARN(x);                                                                         \
+	} while (0)
+
+#define msg(x...)                                                                                  \
+	do {                                                                                       \
+		fprintf(stdout, x);                                                                \
+		D_INFO(x);                                                                         \
+	} while (0)
 
 enum cmd_t {
 	CMD_GET_URI_CACHE,
@@ -254,42 +264,42 @@ static void
 print_usage_msg(const char *msg)
 {
 	if (msg)
-		printf("\nERROR: %s\n", msg);
+		msg("\nERROR: %s\n", msg);
 
-	printf("Usage: cart_ctl <cmd> --group-name name --rank "
-	       "start-end,start-end,rank,rank\n");
-	printf("\ncmds: get_uri_cache, list_ctx, get_hostname, get_pid, ");
-	printf("set_log, set_fi_attr, add_log_msg\n");
-	printf("\nset_log:\n");
-	printf("\tSet log to mask passed via -l <mask> argument\n");
-	printf("\nget_uri_cache:\n");
-	printf("\tPrint rank, tag and uri from uri cache\n");
-	printf("\nlist_ctx:\n");
-	printf("\tPrint # of contexts on each rank and uri for each context\n");
-	printf("\nget_hostname:\n");
-	printf("\tPrint hostnames of specified ranks\n");
-	printf("\nget_pid:\n");
-	printf("\tReturn pids of the specified ranks\n");
-	printf("\nset_fi_attr\n");
-	printf("\tset fault injection attributes for a fault ID. This command\n"
-	       "\tmust be accompanied by the option\n"
-	       "\t--attr fault_id,max_faults,probability,err_code"
-	       "[,argument]\n");
-	printf("\noptions:\n");
-	printf("--group-name name\n");
-	printf("\tspecify the name of the remote group\n");
-	printf("--cfg_path path\n");
-	printf("\tPath to group config file\n");
-	printf("--rank start-end,start-end,rank,rank\n");
-	printf("\tspecify target ranks; 'all' specifies every known rank\n");
-	printf("-l log_mask\n");
-	printf("\tSpecify log_mask to be set remotely\n");
-	printf("-n\n");
-	printf("\tdon't perform 'wait for ranks' sync\n");
-	printf("-m 'log_message'\n");
-	printf("\tSpecify log message to be sent to remote server\n");
-	printf("--use_daos_agent_env\n");
-	printf("\tSet OFI and CRT_* vars through daos_agent\n\n");
+	msg("Usage: cart_ctl <cmd> --group-name name --rank "
+	    "start-end,start-end,rank,rank\n");
+	msg("\ncmds: get_uri_cache, list_ctx, get_hostname, get_pid, ");
+	msg("set_log, set_fi_attr, add_log_msg\n");
+	msg("\nset_log:\n");
+	msg("\tSet log to mask passed via -l <mask> argument\n");
+	msg("\nget_uri_cache:\n");
+	msg("\tPrint rank, tag and uri from uri cache\n");
+	msg("\nlist_ctx:\n");
+	msg("\tPrint # of contexts on each rank and uri for each context\n");
+	msg("\nget_hostname:\n");
+	msg("\tPrint hostnames of specified ranks\n");
+	msg("\nget_pid:\n");
+	msg("\tReturn pids of the specified ranks\n");
+	msg("\nset_fi_attr\n");
+	msg("\tset fault injection attributes for a fault ID. This command\n"
+	    "\tmust be accompanied by the option\n"
+	    "\t--attr fault_id,max_faults,probability,err_code"
+	    "[,argument]\n");
+	msg("\noptions:\n");
+	msg("--group-name name\n");
+	msg("\tspecify the name of the remote group\n");
+	msg("--cfg_path path\n");
+	msg("\tPath to group config file\n");
+	msg("--rank start-end,start-end,rank,rank\n");
+	msg("\tspecify target ranks; 'all' specifies every known rank\n");
+	msg("-l log_mask\n");
+	msg("\tSpecify log_mask to be set remotely\n");
+	msg("-n\n");
+	msg("\tdon't perform 'wait for ranks' sync\n");
+	msg("-m 'log_message'\n");
+	msg("\tSpecify log message to be sent to remote server\n");
+	msg("--use_daos_agent_env\n");
+	msg("\tSet OFI and CRT_* vars through daos_agent\n\n");
 }
 
 static int
@@ -413,9 +423,9 @@ print_uri_cache(struct crt_ctl_get_uri_cache_out *out_uri_cache_args)
 	grp_cache = out_uri_cache_args->cguc_grp_cache.ca_arrays;
 
 	for (i = 0; i < count; i++) {
-		fprintf(stdout, "rank = %d, ", grp_cache[i].gc_rank);
-		fprintf(stdout, "tag  = %d, ", grp_cache[i].gc_tag);
-		fprintf(stdout, "uri  = %s\n", grp_cache[i].gc_uri);
+		msg("rank = %d, ", grp_cache[i].gc_rank);
+		msg("tag  = %d, ", grp_cache[i].gc_tag);
+		msg("uri  = %s\n", grp_cache[i].gc_uri);
 	}
 }
 
@@ -444,36 +454,36 @@ ctl_cli_cb(const struct crt_cb_info *cb_info)
 		cmd_rc = ((struct crt_ctl_fi_toggle_out *)
 				crt_reply_get(cb_info->cci_rpc))->rc;
 		if (cmd_rc != 0)
-			error_exit("%s failed with rc=%d\n", cmd_str, cmd_rc);
-
-		msg("%s completed successfully", cmd_str);
+			error_warn("%s failed with rc=%d\n", cmd_str, cmd_rc);
+		else
+			msg("%s completed successfully", cmd_str);
 		break;
 
 	case CMD_SET_FI_ATTR:
 		cmd_rc = ((struct crt_ctl_fi_attr_set_out *)
 				crt_reply_get(cb_info->cci_rpc))->fa_ret;
 		if (cmd_rc != 0)
-			error_exit("%s failed with rc=%d\n", cmd_str, cmd_rc);
-
-		msg("%s completed successfully", cmd_str);
+			error_warn("%s failed with rc=%d\n", cmd_str, cmd_rc);
+		else
+			msg("%s completed successfully", cmd_str);
 		break;
 
 	case CMD_LOG_SET:
 		cmd_rc = ((struct crt_ctl_log_set_out *)
 				crt_reply_get(cb_info->cci_rpc))->rc;
 		if (cmd_rc != 0)
-			error_exit("%s failed with rc=%d\n", cmd_str, cmd_rc);
-
-		msg("%s completed successfully", cmd_str);
+			error_warn("%s failed with rc=%d\n", cmd_str, cmd_rc);
+		else
+			msg("%s completed successfully", cmd_str);
 		break;
 
 	case CMD_LOG_ADD_MSG:
 		cmd_rc = ((struct crt_ctl_log_add_msg_out *)
 				crt_reply_get(cb_info->cci_rpc))->rc;
 		if (cmd_rc != 0)
-			error_exit("%s failed with rc=%d\n", cmd_str, cmd_rc);
-
-		msg("%s completed successfully", cmd_str);
+			error_warn("%s failed with rc=%d\n", cmd_str, cmd_rc);
+		else
+			msg("%s completed successfully", cmd_str);
 		break;
 
 	case CMD_GET_URI_CACHE:
@@ -483,9 +493,9 @@ ctl_cli_cb(const struct crt_cb_info *cb_info)
 			out = crt_reply_get(cb_info->cci_rpc);
 
 			if (out->cguc_rc != 0 || cb_info->cci_rc != 0)
-				error_exit("get_uri_cache failed\n");
-
-			print_uri_cache(out);
+				error_warn("get_uri_cache failed\n");
+			else
+				print_uri_cache(out);
 		}
 		break;
 
@@ -662,7 +672,7 @@ ctl_init()
 			 * situation then it indicates an actual error.
 			 */
 			if (ctl_gdata.cg_use_daos_agent_env)
-				msg("crtu_wait_for_ranks() failed with rc=%d\n", rc);
+				error_warn("crtu_wait_for_ranks() failed with rc=%d\n", rc);
 			else
 				error_exit("crtu_wait_for_ranks() failed with rc=%d\n", rc);
 		}
@@ -679,20 +689,30 @@ ctl_init()
 		ranks_to_send = ctl_gdata.cg_ranks;
 	}
 
-	ep.ep_grp = grp;
-	ep.ep_rank = ranks_to_send[0];
-	ep.ep_tag = 0;
+	/*
+	 * ranks in this loop are used as a destionation for PROTO_QUERY rpc
+	 * done inside of ctl_register_fi()/ctl_register_ctl().
+	 * Some ranks specified by the client might be dead or unreachable
+	 *
+	 * Cycle through all known ranks trying to do protocol query
+	 * until first success
+	 */
+	for (i = 0; i < num_ranks; i++) {
+		ep.ep_grp  = grp;
+		ep.ep_rank = ranks_to_send[i];
+		ep.ep_tag  = 0;
 
-	if (ctl_gdata.cg_cmd_code == CMD_SET_FI_ATTR ||
-	    ctl_gdata.cg_cmd_code == CMD_DISABLE_FI ||
-	    ctl_gdata.cg_cmd_code == CMD_ENABLE_FI) {
-		rc = ctl_register_fi(&ep);
-		if (rc != -DER_SUCCESS)
-			return rc;
-	} else {
-		rc = ctl_register_ctl(&ep);
-		if (rc != -DER_SUCCESS)
-			return rc;
+		if (ctl_gdata.cg_cmd_code == CMD_SET_FI_ATTR ||
+		    ctl_gdata.cg_cmd_code == CMD_DISABLE_FI ||
+		    ctl_gdata.cg_cmd_code == CMD_ENABLE_FI) {
+			rc = ctl_register_fi(&ep);
+			if (rc == DER_SUCCESS)
+				break;
+		} else {
+			rc = ctl_register_ctl(&ep);
+			if (rc == DER_SUCCESS)
+				break;
+		}
 	}
 
 	for (i = 0; i < num_ranks; i++) {
@@ -738,7 +758,8 @@ ctl_init()
 
 		rc = crtu_sem_timedwait(&ctl_gdata.cg_num_reply, wait_time, __LINE__);
 		if (rc != 0)
-			msg("No response from the server after %d sec; rc=%d\n", wait_time, rc);
+			error_warn("No response from the server after %d sec; rc=%d\n", wait_time,
+				   rc);
 	}
 
 	d_rank_list_free(rank_list);
@@ -779,6 +800,8 @@ int
 main(int argc, char **argv)
 {
 	int rc = 0;
+
+	setenv("D_LOG_MASK", "DEBUG", 1);
 
 	rc = d_log_init();
 	if (rc != 0)
