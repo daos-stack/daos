@@ -7,7 +7,7 @@
  * This file is part of CaRT. It implements client side of the cart_ctl command
  * line utility.
  */
-#define D_LOGFAC	DD_FAC(ctl)
+#define D_LOGFAC DD_FAC(ctl)
 
 #include <stdio.h>
 #include <pthread.h>
@@ -21,10 +21,9 @@
 #include <daos/mgmt.h>
 #include "svc.pb-c.h"
 
-
 /* max number of ranks that can be queried at once */
-#define CRT_CTL_MAX		1024
-#define MAX_ARG_LEN		(1 << 16)
+#define CRT_CTL_MAX 1024
+#define MAX_ARG_LEN (1 << 16)
 
 #define error_exit(x...)                                                                           \
 	do {                                                                                       \
@@ -58,27 +57,30 @@ enum cmd_t {
 };
 
 struct cmd_info {
-	enum cmd_t	cmd;
-	int		opcode;
-	char		*cmd_str;
+	enum cmd_t cmd;
+	int        opcode;
+	char      *cmd_str;
 };
 
 /* Helper macro to fill out cmd_info struct entry */
-#define DEF_CMD(cmd, opc)	{cmd, opc, #cmd}
+#define DEF_CMD(cmd, opc)                                                                          \
+	{                                                                                          \
+		cmd, opc, #cmd                                                                     \
+	}
 
 struct cmd_info cmds[] = {
-	DEF_CMD(CMD_LIST_CTX,		CRT_OPC_CTL_LS),
-	DEF_CMD(CMD_GET_URI_CACHE,	CRT_OPC_CTL_GET_URI_CACHE),
-	DEF_CMD(CMD_GET_HOSTNAME,	CRT_OPC_CTL_GET_HOSTNAME),
-	DEF_CMD(CMD_GET_PID,		CRT_OPC_CTL_GET_PID),
-	DEF_CMD(CMD_ENABLE_FI,		CRT_OPC_CTL_FI_TOGGLE),
-	DEF_CMD(CMD_DISABLE_FI,		CRT_OPC_CTL_FI_TOGGLE),
-	DEF_CMD(CMD_SET_FI_ATTR,	CRT_OPC_CTL_FI_SET_ATTR),
-	DEF_CMD(CMD_LOG_SET,		CRT_OPC_CTL_LOG_SET),
-	DEF_CMD(CMD_LOG_ADD_MSG,	CRT_OPC_CTL_LOG_ADD_MSG),
+    DEF_CMD(CMD_LIST_CTX, CRT_OPC_CTL_LS),
+    DEF_CMD(CMD_GET_URI_CACHE, CRT_OPC_CTL_GET_URI_CACHE),
+    DEF_CMD(CMD_GET_HOSTNAME, CRT_OPC_CTL_GET_HOSTNAME),
+    DEF_CMD(CMD_GET_PID, CRT_OPC_CTL_GET_PID),
+    DEF_CMD(CMD_ENABLE_FI, CRT_OPC_CTL_FI_TOGGLE),
+    DEF_CMD(CMD_DISABLE_FI, CRT_OPC_CTL_FI_TOGGLE),
+    DEF_CMD(CMD_SET_FI_ATTR, CRT_OPC_CTL_FI_SET_ATTR),
+    DEF_CMD(CMD_LOG_SET, CRT_OPC_CTL_LOG_SET),
+    DEF_CMD(CMD_LOG_ADD_MSG, CRT_OPC_CTL_LOG_ADD_MSG),
 };
 
-static char*
+static char *
 cmd2str(enum cmd_t cmd)
 {
 	int i;
@@ -109,25 +111,25 @@ struct cb_info {
 };
 
 struct ctl_g {
-	enum cmd_t			 cg_cmd_code;
-	char				*cg_group_name;
-	crt_group_t			*cg_target_group;
-	int				 cg_num_ranks;
-	d_rank_t			 cg_ranks[CRT_CTL_MAX];
-	crt_context_t			 cg_crt_ctx;
-	pthread_t			 cg_tid;
-	int				 cg_complete;
-	bool				 cg_save_cfg;
-	char				*cg_cfg_path;
-	sem_t				 cg_num_reply;
-	struct crt_ctl_fi_attr_set_in	 cg_fi_attr;
-	int				 cg_fi_attr_inited;
-	char				*cg_log_mask;
-	int				 cg_log_mask_set;
-	bool				 cg_no_wait_for_ranks;
-	char				*cg_log_msg;
-	bool				 cg_log_msg_set;
-	bool				 cg_use_daos_agent_env;
+	enum cmd_t                    cg_cmd_code;
+	char                         *cg_group_name;
+	crt_group_t                  *cg_target_group;
+	int                           cg_num_ranks;
+	d_rank_t                      cg_ranks[CRT_CTL_MAX];
+	crt_context_t                 cg_crt_ctx;
+	pthread_t                     cg_tid;
+	int                           cg_complete;
+	bool                          cg_save_cfg;
+	char                         *cg_cfg_path;
+	sem_t                         cg_num_reply;
+	struct crt_ctl_fi_attr_set_in cg_fi_attr;
+	int                           cg_fi_attr_inited;
+	char                         *cg_log_mask;
+	int                           cg_log_mask_set;
+	bool                          cg_no_wait_for_ranks;
+	char                         *cg_log_msg;
+	bool                          cg_log_msg_set;
+	bool                          cg_use_daos_agent_env;
 };
 
 static struct ctl_g ctl_gdata;
@@ -135,14 +137,14 @@ static struct ctl_g ctl_gdata;
 static void
 parse_rank_string(char *arg_str, d_rank_t *ranks, int *num_ranks)
 {
-	char		*token;
-	char		*saveptr;
-	char		*ptr;
-	uint32_t	 num_ranks_l = 0;
-	uint32_t	 index = 0;
-	int		 rstart;
-	int		 rend;
-	int		 i;
+	char    *token;
+	char    *saveptr;
+	char    *ptr;
+	uint32_t num_ranks_l = 0;
+	uint32_t index       = 0;
+	int      rstart;
+	int      rend;
+	int      i;
 
 	D_ASSERT(ranks != NULL);
 	D_ASSERT(num_ranks != NULL);
@@ -162,7 +164,6 @@ parse_rank_string(char *arg_str, d_rank_t *ranks, int *num_ranks)
 
 	token = strtok_r(arg_str, ",", &saveptr);
 	while (token != NULL) {
-
 		ptr = strchr(token, '-');
 
 		if (ptr == NULL) {
@@ -180,7 +181,7 @@ parse_rank_string(char *arg_str, d_rank_t *ranks, int *num_ranks)
 			error_exit("Invalid rank range.\n");
 
 		rstart = atoi(token);
-		rend = atoi(ptr + 1);
+		rend   = atoi(ptr + 1);
 		num_ranks_l += (rend - rstart + 1);
 
 		if (num_ranks_l > CRT_CTL_MAX)
@@ -305,9 +306,9 @@ print_usage_msg(const char *msg)
 static int
 parse_args(int argc, char **argv)
 {
-	int	option_index = 0;
-	int	opt;
-	int	rc = 0;
+	int option_index = 0;
+	int opt;
+	int rc = 0;
 
 	ctl_gdata.cg_use_daos_agent_env = false;
 
@@ -344,20 +345,19 @@ parse_args(int argc, char **argv)
 	optind = 2;
 
 	static struct option long_options[] = {
-		{"group-name", required_argument, 0, 'g'},
-		{"rank", required_argument, 0, 'r'},
-		{"attr", required_argument, 0, 'a'},
-		{"cfg_path", required_argument, 0, 's'},
-		{"log_mask", required_argument, 0, 'l'},
-		{"no_sync", optional_argument, 0, 'n'},
-		{"message", required_argument, 0, 'm'},
-		{"use_daos_agent_env", no_argument, 0, 'u'},
-		{0, 0, 0, 0},
+	    {"group-name", required_argument, 0, 'g'},
+	    {"rank", required_argument, 0, 'r'},
+	    {"attr", required_argument, 0, 'a'},
+	    {"cfg_path", required_argument, 0, 's'},
+	    {"log_mask", required_argument, 0, 'l'},
+	    {"no_sync", optional_argument, 0, 'n'},
+	    {"message", required_argument, 0, 'm'},
+	    {"use_daos_agent_env", no_argument, 0, 'u'},
+	    {0, 0, 0, 0},
 	};
 
 	while (1) {
-		opt = getopt_long(argc, argv, "g:r:a:p:l:m:nu", long_options,
-				  &option_index);
+		opt = getopt_long(argc, argv, "g:r:a:p:l:m:nu", long_options, &option_index);
 		if (opt == -1)
 			break;
 		switch (opt) {
@@ -368,8 +368,7 @@ parse_args(int argc, char **argv)
 			ctl_gdata.cg_group_name = optarg;
 			break;
 		case 'r':
-			parse_rank_string(optarg, ctl_gdata.cg_ranks,
-					  &ctl_gdata.cg_num_ranks);
+			parse_rank_string(optarg, ctl_gdata.cg_ranks, &ctl_gdata.cg_num_ranks);
 			break;
 		case 'a':
 			ctl_parse_fi_attr(optarg, &ctl_gdata.cg_fi_attr);
@@ -380,14 +379,14 @@ parse_args(int argc, char **argv)
 			ctl_gdata.cg_cfg_path = optarg;
 			break;
 		case 'l':
-			ctl_gdata.cg_log_mask = optarg;
+			ctl_gdata.cg_log_mask     = optarg;
 			ctl_gdata.cg_log_mask_set = 1;
 			break;
 		case 'n':
 			ctl_gdata.cg_no_wait_for_ranks = true;
 			break;
 		case 'm':
-			ctl_gdata.cg_log_msg = optarg;
+			ctl_gdata.cg_log_msg     = optarg;
 			ctl_gdata.cg_log_msg_set = true;
 			break;
 		case 'u':
@@ -414,9 +413,9 @@ out:
 static void
 print_uri_cache(struct crt_ctl_get_uri_cache_out *out_uri_cache_args)
 {
-	struct crt_grp_cache	*grp_cache;
-	int			 count;
-	int			 i;
+	struct crt_grp_cache *grp_cache;
+	int                   count;
+	int                   i;
 
 	count = out_uri_cache_args->cguc_grp_cache.ca_count;
 
@@ -432,10 +431,10 @@ print_uri_cache(struct crt_ctl_get_uri_cache_out *out_uri_cache_args)
 static void
 ctl_cli_cb(const struct crt_cb_info *cb_info)
 {
-	struct cb_info		*info;
-	int			cmd_rc = 0;
-	char			*cmd_str = "";
-	int			i = 0;
+	struct cb_info *info;
+	int             cmd_rc  = 0;
+	char           *cmd_str = "";
+	int             i       = 0;
 
 	info = cb_info->cci_arg;
 
@@ -451,8 +450,7 @@ ctl_cli_cb(const struct crt_cb_info *cb_info)
 	switch (info->cmd) {
 	case CMD_ENABLE_FI:
 	case CMD_DISABLE_FI:
-		cmd_rc = ((struct crt_ctl_fi_toggle_out *)
-				crt_reply_get(cb_info->cci_rpc))->rc;
+		cmd_rc = ((struct crt_ctl_fi_toggle_out *)crt_reply_get(cb_info->cci_rpc))->rc;
 		if (cmd_rc != 0)
 			error_warn("%s failed with rc=%d\n", cmd_str, cmd_rc);
 		else
@@ -460,8 +458,8 @@ ctl_cli_cb(const struct crt_cb_info *cb_info)
 		break;
 
 	case CMD_SET_FI_ATTR:
-		cmd_rc = ((struct crt_ctl_fi_attr_set_out *)
-				crt_reply_get(cb_info->cci_rpc))->fa_ret;
+		cmd_rc =
+		    ((struct crt_ctl_fi_attr_set_out *)crt_reply_get(cb_info->cci_rpc))->fa_ret;
 		if (cmd_rc != 0)
 			error_warn("%s failed with rc=%d\n", cmd_str, cmd_rc);
 		else
@@ -469,8 +467,7 @@ ctl_cli_cb(const struct crt_cb_info *cb_info)
 		break;
 
 	case CMD_LOG_SET:
-		cmd_rc = ((struct crt_ctl_log_set_out *)
-				crt_reply_get(cb_info->cci_rpc))->rc;
+		cmd_rc = ((struct crt_ctl_log_set_out *)crt_reply_get(cb_info->cci_rpc))->rc;
 		if (cmd_rc != 0)
 			error_warn("%s failed with rc=%d\n", cmd_str, cmd_rc);
 		else
@@ -478,61 +475,52 @@ ctl_cli_cb(const struct crt_cb_info *cb_info)
 		break;
 
 	case CMD_LOG_ADD_MSG:
-		cmd_rc = ((struct crt_ctl_log_add_msg_out *)
-				crt_reply_get(cb_info->cci_rpc))->rc;
+		cmd_rc = ((struct crt_ctl_log_add_msg_out *)crt_reply_get(cb_info->cci_rpc))->rc;
 		if (cmd_rc != 0)
 			error_warn("%s failed with rc=%d\n", cmd_str, cmd_rc);
 		else
 			msg("%s completed successfully", cmd_str);
 		break;
 
-	case CMD_GET_URI_CACHE:
-		{
-			struct crt_ctl_get_uri_cache_out *out;
+	case CMD_GET_URI_CACHE: {
+		struct crt_ctl_get_uri_cache_out *out;
 
-			out = crt_reply_get(cb_info->cci_rpc);
+		out = crt_reply_get(cb_info->cci_rpc);
 
-			if (out->cguc_rc != 0 || cb_info->cci_rc != 0)
-				error_warn("get_uri_cache failed\n");
-			else
-				print_uri_cache(out);
+		if (out->cguc_rc != 0 || cb_info->cci_rc != 0)
+			error_warn("get_uri_cache failed\n");
+		else
+			print_uri_cache(out);
+	} break;
+
+	case CMD_LIST_CTX: {
+		char                     *addr_str;
+		struct crt_ctl_ep_ls_out *out;
+
+		out = crt_reply_get(cb_info->cci_rpc);
+		msg("Number of remote contexts (endpoints): %d\n", out->cel_ctx_num);
+
+		addr_str = out->cel_addr_str.iov_buf;
+
+		for (i = 0; i < out->cel_ctx_num; i++) {
+			msg("    %s\n", addr_str);
+			addr_str += (strlen(addr_str) + 1);
 		}
-		break;
+	} break;
 
-	case CMD_LIST_CTX:
-		{
-			char				*addr_str;
-			struct crt_ctl_ep_ls_out	*out;
+	case CMD_GET_HOSTNAME: {
+		struct crt_ctl_get_host_out *out;
 
-			out = crt_reply_get(cb_info->cci_rpc);
-			msg("Number of remote contexts (endpoints): %d\n", out->cel_ctx_num);
+		out = crt_reply_get(cb_info->cci_rpc);
+		msg("hostname: %s\n", (char *)out->cgh_hostname.iov_buf);
+	} break;
 
-			addr_str = out->cel_addr_str.iov_buf;
+	case CMD_GET_PID: {
+		struct crt_ctl_get_pid_out *out;
 
-			for (i = 0; i < out->cel_ctx_num; i++) {
-				msg("    %s\n", addr_str);
-				addr_str += (strlen(addr_str) + 1);
-			}
-		}
-		break;
-
-	case CMD_GET_HOSTNAME:
-		{
-			struct crt_ctl_get_host_out *out;
-
-			out = crt_reply_get(cb_info->cci_rpc);
-			msg("hostname: %s\n", (char *)out->cgh_hostname.iov_buf);
-		}
-		break;
-
-	case CMD_GET_PID:
-		{
-			struct crt_ctl_get_pid_out *out;
-
-			out = crt_reply_get(cb_info->cci_rpc);
-			msg("pid: %d\n", out->cgp_pid);
-		}
-		break;
+		out = crt_reply_get(cb_info->cci_rpc);
+		msg("pid: %d\n", out->cgp_pid);
+	} break;
 
 	default:
 		break;
@@ -553,27 +541,27 @@ out:
 static void
 ctl_fill_fi_toggle_rpc_args(crt_rpc_t *rpc_req, int op)
 {
-	struct crt_ctl_fi_toggle_in	*in_args;
+	struct crt_ctl_fi_toggle_in *in_args;
 
 	D_ASSERTF(op == 0 || op == 1, "op should be 0 or 1.\n");
 
-	in_args = crt_req_get(rpc_req);
+	in_args     = crt_req_get(rpc_req);
 	in_args->op = op;
 }
 
 static void
 crt_fill_log_add_msg(crt_rpc_t *rpc_req)
 {
-	struct crt_ctl_log_add_msg_in	*in_args;
+	struct crt_ctl_log_add_msg_in *in_args;
 
-	in_args = crt_req_get(rpc_req);
+	in_args          = crt_req_get(rpc_req);
 	in_args->log_msg = ctl_gdata.cg_log_msg;
 }
 
 static void
 crt_fill_set_log(crt_rpc_t *rpc_req)
 {
-	struct crt_ctl_log_set_in	*in_args;
+	struct crt_ctl_log_set_in *in_args;
 
 	in_args = crt_req_get(rpc_req);
 
@@ -583,27 +571,27 @@ crt_fill_set_log(crt_rpc_t *rpc_req)
 static void
 ctl_fill_fi_set_attr_rpc_args(crt_rpc_t *rpc_req)
 {
-	struct crt_ctl_fi_attr_set_in	*in_args;
+	struct crt_ctl_fi_attr_set_in *in_args;
 
 	in_args = crt_req_get(rpc_req);
 
-	in_args->fa_fault_id = ctl_gdata.cg_fi_attr.fa_fault_id;
-	in_args->fa_max_faults = ctl_gdata.cg_fi_attr.fa_max_faults;
+	in_args->fa_fault_id      = ctl_gdata.cg_fi_attr.fa_fault_id;
+	in_args->fa_max_faults    = ctl_gdata.cg_fi_attr.fa_max_faults;
 	in_args->fa_probability_x = ctl_gdata.cg_fi_attr.fa_probability_x;
 	in_args->fa_probability_y = ctl_gdata.cg_fi_attr.fa_probability_y;
-	in_args->fa_err_code = ctl_gdata.cg_fi_attr.fa_err_code;
-	in_args->fa_interval = ctl_gdata.cg_fi_attr.fa_interval;
+	in_args->fa_err_code      = ctl_gdata.cg_fi_attr.fa_err_code;
+	in_args->fa_interval      = ctl_gdata.cg_fi_attr.fa_interval;
 }
 
 static void
 ctl_fill_rpc_args(crt_rpc_t *rpc_req, int index)
 {
-	struct crt_ctl_ep_ls_in		*in_args;
+	struct crt_ctl_ep_ls_in *in_args;
 
 	in_args = crt_req_get(rpc_req);
 
 	in_args->cel_grp_id = ctl_gdata.cg_target_group->cg_grpid;
-	in_args->cel_rank = ctl_gdata.cg_ranks[index];
+	in_args->cel_rank   = ctl_gdata.cg_ranks[index];
 }
 
 static int
@@ -621,20 +609,20 @@ ctl_register_ctl(crt_endpoint_t *ep)
 static int
 ctl_init()
 {
-	int			 i;
-	crt_rpc_t		*rpc_req;
-	crt_endpoint_t		 ep;
-	struct cb_info		 info;
-	crt_group_t		*grp = NULL;
-	d_rank_t		*ranks_to_send = NULL;
-	d_rank_list_t		*rank_list = NULL;
-	int			 num_ranks;
+	int            i;
+	crt_rpc_t     *rpc_req;
+	crt_endpoint_t ep;
+	struct cb_info info;
+	crt_group_t   *grp           = NULL;
+	d_rank_t      *ranks_to_send = NULL;
+	d_rank_list_t *rank_list     = NULL;
+	int            num_ranks;
 	/* wait times for sync. see crtu_wait_for_ranks() below */
-	int			 wait_time = 60;
-	int			 total_wait = 150;
+	int            wait_time  = 60;
+	int            total_wait = 150;
 	/* Set low rpc timeout to avoid delays when pinging dead targets */
-	int                      rpc_timeout = 3;
-	int			 rc = 0;
+	int            rpc_timeout = 3;
+	int            rc          = 0;
 
 	if (D_ON_VALGRIND) {
 		wait_time *= 3;
@@ -647,9 +635,8 @@ ctl_init()
 			error_exit("Failed to set config path; rc=%d\n", rc);
 	}
 
-	rc = crtu_cli_start_basic("crt_ctl", ctl_gdata.cg_group_name, &grp,
-				  &rank_list, &ctl_gdata.cg_crt_ctx,
-				  &ctl_gdata.cg_tid, 1, true, NULL,
+	rc = crtu_cli_start_basic("crt_ctl", ctl_gdata.cg_group_name, &grp, &rank_list,
+				  &ctl_gdata.cg_crt_ctx, &ctl_gdata.cg_tid, 1, true, NULL,
 				  ctl_gdata.cg_use_daos_agent_env);
 	if (rc != 0)
 		error_exit("Failed to start client; rc=%d\n", rc);
@@ -660,9 +647,8 @@ ctl_init()
 
 	/* -n option controls cg_no_wait_for_ranks */
 	if (!ctl_gdata.cg_no_wait_for_ranks) {
-		rc = crtu_wait_for_ranks(ctl_gdata.cg_crt_ctx, grp, rank_list,
-					 0 /* tag */, 1 /* num contexts to query */,
-					 wait_time, total_wait);
+		rc = crtu_wait_for_ranks(ctl_gdata.cg_crt_ctx, grp, rank_list, 0 /* tag */,
+					 1 /* num contexts to query */, wait_time, total_wait);
 		if (rc != 0) {
 			/*
 			 * When invoked to use daos_agent, the ranks retrieved can contain already
@@ -679,18 +665,18 @@ ctl_init()
 	}
 
 	ctl_gdata.cg_target_group = grp;
-	info.cmd = ctl_gdata.cg_cmd_code;
+	info.cmd                  = ctl_gdata.cg_cmd_code;
 
 	if (ctl_gdata.cg_num_ranks == -1) {
-		num_ranks = rank_list->rl_nr;
+		num_ranks     = rank_list->rl_nr;
 		ranks_to_send = rank_list->rl_ranks;
 	} else {
-		num_ranks = ctl_gdata.cg_num_ranks;
+		num_ranks     = ctl_gdata.cg_num_ranks;
 		ranks_to_send = ctl_gdata.cg_ranks;
 	}
 
 	/*
-	 * ranks in this loop are used as a destionation for PROTO_QUERY rpc
+	 * ranks in this loop are used as a destination for PROTO_QUERY rpc
 	 * done inside of ctl_register_fi()/ctl_register_ctl().
 	 * Some ranks specified by the client might be dead or unreachable
 	 *
@@ -716,11 +702,10 @@ ctl_init()
 	}
 
 	for (i = 0; i < num_ranks; i++) {
-		ep.ep_grp = grp;
+		ep.ep_grp  = grp;
 		ep.ep_rank = ranks_to_send[i];
-		ep.ep_tag = 0;
-		rc = crt_req_create(ctl_gdata.cg_crt_ctx, &ep,
-				    cmd2opcode(info.cmd), &rpc_req);
+		ep.ep_tag  = 0;
+		rc = crt_req_create(ctl_gdata.cg_crt_ctx, &ep, cmd2opcode(info.cmd), &rpc_req);
 		if (rc != 0)
 			error_exit("Failed to create RPC; rc=%d\n", rc);
 
@@ -744,8 +729,8 @@ ctl_init()
 			ctl_fill_rpc_args(rpc_req, i);
 		}
 
-		D_DEBUG(DB_NET, "rpc_req %p rank %d tag %d seq %d\n",
-			rpc_req, ep.ep_rank, ep.ep_tag, i);
+		D_DEBUG(DB_NET, "rpc_req %p rank %d tag %d seq %d\n", rpc_req, ep.ep_rank,
+			ep.ep_tag, i);
 
 		/* Set short timeout to not delay for long in case the rank is not present */
 		rc = crt_req_set_timeout(rpc_req, rpc_timeout);
