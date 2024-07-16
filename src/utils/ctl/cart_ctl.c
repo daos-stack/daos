@@ -623,6 +623,7 @@ ctl_init()
 	int            total_wait = 150;
 	/* Set low rpc timeout to avoid delays when pinging dead targets */
 	int            rpc_timeout = 3;
+	bool           target_found = false;
 	int            rc          = 0;
 
 	if (D_ON_VALGRIND) {
@@ -685,6 +686,7 @@ ctl_init()
 	 * until first success
 	 */
 	for (i = 0; i < num_ranks; i++) {
+		/* select target endpoint for protocol query */
 		ep.ep_grp  = grp;
 		ep.ep_rank = ranks_to_send[i];
 		ep.ep_tag  = 0;
@@ -693,14 +695,22 @@ ctl_init()
 		    ctl_gdata.cg_cmd_code == CMD_DISABLE_FI ||
 		    ctl_gdata.cg_cmd_code == CMD_ENABLE_FI) {
 			rc = ctl_register_fi(&ep);
-			if (rc == DER_SUCCESS)
+			if (rc == DER_SUCCESS) {
+				target_found = true;
 				break;
+			}
 		} else {
 			rc = ctl_register_ctl(&ep);
-			if (rc == DER_SUCCESS)
+			if (rc == DER_SUCCESS) {
+				target_found = true;
 				break;
+			}
 		}
 	}
+
+	/* We cycled through all ranks and none were successful */
+	if (!target_found)
+		error_exit("Failed to register cart_ctl ops\n");
 
 	for (i = 0; i < num_ranks; i++) {
 		ep.ep_grp  = grp;
