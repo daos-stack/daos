@@ -8,13 +8,14 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 import os
 import random
 import re
+import stat
 import threading
 import time
-from itertools import product
+from itertools import count, product
 
-import slurm_utils
 from avocado.core.exceptions import TestFail
 from avocado.utils.distro import detect
+from ClusterShell.NodeSet import NodeSet
 from command_utils_base import EnvironmentVariables
 from daos_racer_utils import DaosRacerCommand
 from data_mover_utils import DcpCommand, FsCopy
@@ -36,6 +37,7 @@ from run_utils import run_remote
 from test_utils_container import add_container
 
 H_LOCK = threading.Lock()
+id_counter = count(start=1)
 
 
 def ddhhmmss_format(seconds):
@@ -54,6 +56,10 @@ def ddhhmmss_format(seconds):
     return "{} {} {}".format(
         num_days, 'Day' if num_days == 1 else 'Days', time.strftime(
             "%H:%M:%S", time.gmtime(seconds % 86400)))
+
+
+def get_id():
+    return next(id_counter)
 
 
 def add_pools(self, pool_names, ranks=None):
@@ -335,6 +341,79 @@ def wait_for_pool_rebuild(self, pool, name):
             f"<<<FAILED:{name} rebuild failed due to test issue: {error1}", exc_info=error1)
     self.dmg_command.server_set_logmasks(raise_exception=False)
     return rebuild_status
+
+
+def launch_jobscript(log, job_queue, job_id, host_list, script, job_log, error_log, timeout, test):
+    """_summary_
+
+    Args:
+        log (_type_): _description_
+        job_queue (_type_): _description_
+        job_id (_type_): _description_
+        host_list (_type_): _description_
+        script (_type_): _description_
+        job_log (_type_): _description_
+        error_log (_type_): _description_
+        timeout (_type_): _description_
+        test (_type_): _description_
+    """
+    log.debug(f"DBG: JOB {job_id} ENTERED launch_jobscript")
+    job_results = []
+    node_results = []
+    state = "UNKNOWN"
+    if time.time() >= test.end_time:
+        results = {"handle": job_id, "state": "CANCELLED", "host_list": host_list}
+        log.debug(f"DBG: JOB {job_id} EXITED launch_jobscript")
+        job_queue.put(results)
+        # give time to update the queue before exiting
+        time.sleep(0.5)
+        return
+    if isinstance(host_list, str):
+        # assume one host in list
+        hosts = host_list
+        rhost = host_list
+    else:
+        hosts = ",".join(sorted(host_list))
+        rhost = NodeSet(hosts)[0]
+    job_log1 = job_log.replace("JOBID", str(job_id))
+    error_log1 = error_log.replace("JOBID", str(job_id))
+    joblog = job_log1.replace("RHOST", str(rhost))
+    errorlog = error_log1.replace("RHOST", str(rhost))
+    cmd = f"{script} {hosts} {job_id} > {joblog} 2> {errorlog}"
+    job_results = run_remote(
+        log, rhost, cmd, verbose=True, timeout=timeout * 60, task_debug=True, stderr=True)
+    if job_results:
+        if job_results.timeout:
+            state = "TIMEOUT"
+        elif job_results.passed:
+            state = "COMPLETED"
+        elif not job_results.passed:
+            state = "FAILED"
+        else:
+            state = "UNKNOWN"
+    if time.time() >= test.end_time:
+        results = {"handle": job_id, "state": "CANCELLED", "host_list": host_list}
+        log.debug(f"DBG: JOB {job_id} EXITED launch_jobscript")
+        job_queue.put(results)
+        # give time to update the queue before exiting
+        time.sleep(0.5)
+        return
+
+    # check if all nodes are available
+    cmd = "hostname -s"
+    node_results = run_remote(log, NodeSet(hosts), cmd, verbose=False)
+    if node_results.failed_hosts:
+        for node in node_results.failed_hosts:
+            host_list.remove(node)
+            log.debug("DBG: Node {node} is marked as DOWN in job {job_id}")
+
+    log.info("FINAL STATE: soak job %s completed with : %s at %s", job_id, state, time.ctime())
+    results = {"handle": job_id, "state": state, "host_list": host_list}
+    log.debug(f"DBG: JOB {job_id} EXITED launch_jobscript")
+    job_queue.put(results)
+    # give time to update the queue before exiting
+    time.sleep(0.5)
+    return
 
 
 def launch_snapshot(self, pool, name):
@@ -858,16 +937,16 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
     dfuselog = os.path.join(
         self.soak_log_dir,
         self.test_name + "_" + name + "_`hostname -s`_"
-        "" + "${SLURM_JOB_ID}_" + "daos_dfuse.log")
+        "" + "${JOB_ID}_" + "daos_dfuse.log")
     dfuse_env = f"export D_LOG_FILE_APPEND_PID=1;export D_LOG_MASK=ERR;export D_LOG_FILE={dfuselog}"
     module_load = f"module use {self.mpi_module_use};module load {self.mpi_module}"
 
     dfuse_start_cmds = [
-        "clush -S -w $SLURM_JOB_NODELIST \"mkdir -p {}\"".format(dfuse.mount_dir.value),
-        "clush -S -w $SLURM_JOB_NODELIST \"cd {};{};{};{}\"".format(
+        "clush -S -w $HOSTLIST \"mkdir -p {}\"".format(dfuse.mount_dir.value),
+        "clush -S -w $HOSTLIST \"cd {};{};{};{}\"".format(
             dfuse.mount_dir.value, dfuse_env, module_load, str(dfuse)),
         "sleep 10",
-        "clush -S -w $SLURM_JOB_NODELIST \"df -h {}\"".format(dfuse.mount_dir.value),
+        "clush -S -w $HOSTLIST \"df -h {}\"".format(dfuse.mount_dir.value),
     ]
     return dfuse, dfuse_start_cmds
 
@@ -889,8 +968,8 @@ def stop_dfuse(dfuse, vol=False):
                 dfuse.mount_dir.value)])
 
     dfuse_stop_cmds.extend([
-        "clush -S -w $SLURM_JOB_NODELIST \"fusermount3 -uz {0}\"".format(dfuse.mount_dir.value),
-        "clush -S -w $SLURM_JOB_NODELIST \"rm -rf {0}\"".format(dfuse.mount_dir.value)])
+        "clush -S -w $HOSTLIST \"fusermount3 -uz {0}\"".format(dfuse.mount_dir.value),
+        "clush -S -w $HOSTLIST \"rm -rf {0}\"".format(dfuse.mount_dir.value)])
     return dfuse_stop_cmds
 
 
@@ -986,7 +1065,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None,
                 file_dir_oclass[0], nodesperjob * ppn, nodesperjob, ppn)
             daos_log = os.path.join(
                 self.soak_log_dir, self.test_name + "_" + log_name
-                + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
+                + "_`hostname -s`_${JOB_ID}_daos.log")
             env = ior_cmd.get_default_env("mpirun", log_file=daos_log)
             env["D_LOG_FILE_APPEND_PID"] = "1"
             sbatch_cmds = [f"module use {self.mpi_module_use}", f"module load {self.mpi_module}"]
@@ -1013,6 +1092,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None,
             mpirun_cmd.assign_processes(nodesperjob * ppn)
             mpirun_cmd.assign_environment(env, True)
             mpirun_cmd.ppn.update(ppn)
+            mpirun_cmd.hostlist.update("$HOSTLIST")
             sbatch_cmds.append(str(mpirun_cmd))
             sbatch_cmds.append("status=$?")
             if api in ["HDF5-VOL", "POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
@@ -1058,13 +1138,13 @@ def create_macsio_cmdline(self, job_spec, pool, ppn, nodesperjob):
                 job_spec, api, file_oclass, nodesperjob * ppn, nodesperjob, ppn)
             daos_log = os.path.join(
                 self.soak_log_dir, self.test_name
-                + "_" + log_name + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
+                + "_" + log_name + "_`hostname -s`_${JOB_ID}_daos.log")
             macsio_log = os.path.join(
                 self.soak_log_dir, self.test_name
-                + "_" + log_name + "_`hostname -s`_${SLURM_JOB_ID}_macsio-log.log")
+                + "_" + log_name + "_`hostname -s`_${JOB_ID}_macsio-log.log")
             macsio_timing_log = os.path.join(
                 self.soak_log_dir, self.test_name
-                + "_" + log_name + "_`hostname -s`_${SLURM_JOB_ID}_macsio-timing.log")
+                + "_" + log_name + "_`hostname -s`_${JOB_ID}_macsio-timing.log")
             macsio.log_file_name.update(macsio_log)
             macsio.timings_file_name.update(macsio_timing_log)
             env = macsio.env.copy()
@@ -1086,6 +1166,7 @@ def create_macsio_cmdline(self, job_spec, pool, ppn, nodesperjob):
                 mpirun_cmd.working_dir.update(dfuse.mount_dir.value)
             mpirun_cmd.assign_environment(env, True)
             mpirun_cmd.ppn.update(ppn)
+            mpirun_cmd.hostlist.update("$HOSTLIST")
             sbatch_cmds.append(str(mpirun_cmd))
             sbatch_cmds.append("status=$?")
             if api in ["HDF5-VOL"]:
@@ -1157,7 +1238,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                 ppn)
             daos_log = os.path.join(
                 self.soak_log_dir, self.test_name + "_" + log_name
-                + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
+                + "_`hostname -s`_${JOB_ID}_daos.log")
             env = mdtest_cmd.get_default_env("mpirun", log_file=daos_log)
             env["D_LOG_FILE_APPEND_PID"] = "1"
             sbatch_cmds = [f"module use {self.mpi_module_use}", f"module load {self.mpi_module}"]
@@ -1179,6 +1260,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
             mpirun_cmd.assign_processes(nodesperjob * ppn)
             mpirun_cmd.assign_environment(env, True)
             mpirun_cmd.ppn.update(ppn)
+            mpirun_cmd.hostlist.update("$HOSTLIST")
             sbatch_cmds.append(str(mpirun_cmd))
             sbatch_cmds.append("status=$?")
             if api in ["POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
@@ -1214,7 +1296,7 @@ def create_racer_cmdline(self, job_spec):
     racer_log = os.path.join(
         self.soak_log_dir,
         self.test_name + "_" + job_spec + "_`hostname -s`_"
-        "${SLURM_JOB_ID}_" + "racer_log")
+        "${JOB_ID}_" + "racer_log")
     daos_racer.env["D_LOG_FILE"] = get_log_file(racer_log)
     log_name = job_spec
     cmds = []
@@ -1383,6 +1465,7 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
             mpirun_cmd.assign_environment(env, True)
             mpirun_cmd.assign_processes(nodesperjob * ppn)
             mpirun_cmd.ppn.update(ppn)
+            mpirun_cmd.hostlist.update("$HOSTLIST")
             if api in ["POSIX", "POSIX-LIBIOIL", "POSIX-LIBPIL4DFS"]:
                 mpirun_cmd.working_dir.update(dfuse.mount_dir.value)
             cmdline = str(mpirun_cmd)
@@ -1433,7 +1516,7 @@ def create_dm_cmdline(self, job_spec, pool, ppn, nodesperjob):
         dcp_cmd.set_params(src=src_file, dst=dst_file)
         env_vars = {
             "D_LOG_FILE": os.path.join(self.soak_log_dir, self.test_name + "_"
-                                       + log_name + "_`hostname -s`_${SLURM_JOB_ID}_daos.log"),
+                                       + log_name + "_`hostname -s`_${JOB_ID}_daos.log"),
             "D_LOG_FILE_APPEND_PID": "1"
         }
         mpirun_cmd = Mpirun(dcp_cmd, mpi_type=self.mpi_module)
@@ -1441,6 +1524,7 @@ def create_dm_cmdline(self, job_spec, pool, ppn, nodesperjob):
         mpirun_cmd.assign_processes(nodesperjob * ppn)
         mpirun_cmd.assign_environment(EnvironmentVariables(env_vars), True)
         mpirun_cmd.ppn.update(ppn)
+        mpirun_cmd.hostlist.update("$HOSTLIST")
         sbatch_cmds.append(str(mpirun_cmd))
         sbatch_cmds.append("status=$?")
 
@@ -1456,52 +1540,114 @@ def create_dm_cmdline(self, job_spec, pool, ppn, nodesperjob):
 
 
 def build_job_script(self, commands, job, nodesperjob, ppn):
-    """Create a slurm batch script that will execute a list of cmdlines.
+    """Generate a script that will execute a list of commands.
 
     Args:
-        self (obj): soak obj
-        commands(list): command lines and cmd specific log_name
-        job(str): the job name that will be defined in the slurm script
+        path (str): where to write the script file
+        name (str): job name
+        output (str): where to put the output (full path)
+        nodecount (int): number of compute nodes to execute on
+        cmds (list): shell commands that are to be executed
+        uniq (str): a unique string to append to the job and log files
+        sbatch_params (dict, optional): dictionary containing other less often used parameters to
+                sbatch, e.g. mem:100. Defaults to None.
+
+    Raises:
+        SoakTestError: if missing require parameters for the job script
 
     Returns:
-        script_list: list of slurm batch scripts
+        str: the full path of the script
 
     """
-    job_timeout = self.params.get("job_timeout", "/run/" + job + "/*", 10)
-    self.log.info("<<Build Script>> at %s", time.ctime())
+    self.log.info("<<Create Job Script>> at %s", time.ctime())
     script_list = []
-    # if additional cmds are needed in the batch script
+    # Additional commands needed in the job script
     prepend_cmds = ["set +e",
                     "echo Job_Start_Time `date \\+\"%Y-%m-%d %T\"`",
                     "daos pool query {} ".format(self.pool[1].identifier),
                     "daos pool query {} ".format(self.pool[0].identifier)]
+
     append_cmds = ["daos pool query {} ".format(self.pool[1].identifier),
                    "daos pool query {} ".format(self.pool[0].identifier),
                    "echo Job_End_Time `date \\+\"%Y-%m-%d %T\"`"]
     exit_cmd = ["exit $status"]
-    # Create the sbatch script for each list of cmdlines
+
     for cmd, log_name in commands:
+        unique = get_random_string(5, self.used)
+        self.used.append(unique)
         if isinstance(cmd, str):
             cmd = [cmd]
-        output = os.path.join(
-            self.soak_log_dir, self.test_name + "_" + log_name + "_%N_" + "%j_")
-        error = os.path.join(str(output) + "ERROR_")
-        sbatch = {
-            "time": str(job_timeout) + ":00",
-            "exclude": str(self.slurm_exclude_nodes),
-            "error": str(error),
-            "export": "ALL",
-            "exclusive": None,
-            "ntasks": str(nodesperjob * ppn)
-        }
-        # include the cluster specific params
-        sbatch.update(self.srun_params)
-        unique = get_random_string(5, self.used)
-        script = slurm_utils.write_slurm_script(
-            self.soak_log_dir, job, output, nodesperjob,
-            prepend_cmds + cmd + append_cmds + exit_cmd, unique, sbatch)
-        script_list.append(script)
-        self.used.append(unique)
+        if self.job_scheduler == "slurm":
+            job_timeout = self.params.get("job_timeout", "/run/" + job + "/*", 10)
+            job_log = os.path.join(
+                self.soak_log_dir, self.test_name + "_" + log_name + "_%N_" + "%j_")
+            output = job_log + unique
+            error = job_log + "ERROR_" + unique
+            sbatch_params = {
+                "time": str(job_timeout) + ":00",
+                "exclude": str(self.slurm_exclude_nodes),
+                "error": str(error),
+                "export": "ALL",
+                "exclusive": None,
+                "ntasks": str(nodesperjob * ppn)
+            }
+            # include the cluster specific params
+            sbatch_params.update(self.srun_params)
+        else:
+            job_log = os.path.join(
+                self.soak_log_dir, self.test_name + "_" + log_name + "_RHOST" + "_JOBID_")
+            output = job_log + unique
+            error = job_log + "ERROR_" + unique
+
+        job_cmds = prepend_cmds + cmd + append_cmds + exit_cmd
+        # Write script file to shared dir
+        sharedscript_dir = self.sharedsoak_dir + "/pass" + str(self.loop)
+        scriptfile = sharedscript_dir + '/jobscript' + "_" + str(unique) + ".sh"
+        with open(scriptfile, 'w') as script_file:
+            script_file.write("#!/bin/bash\n#\n")
+            if self.job_scheduler == "slurm":
+                # write the slurm directives in the job script
+                script_file.write("#SBATCH --job-name={}\n".format(job))
+                script_file.write("#SBATCH --nodes={}\n".format(nodesperjob))
+                script_file.write("#SBATCH --distribution=cyclic\n")
+                script_file.write("#SBATCH --output={}\n".format(output))
+                if sbatch_params:
+                    for key, value in list(sbatch_params.items()):
+                        if value is not None:
+                            if key == "error":
+                                value = value
+                            script_file.write("#SBATCH --{}={}\n".format(key, value))
+                        else:
+                            script_file.write("#SBATCH --{}\n".format(key))
+                script_file.write("\n")
+                script_file.write("if [ -z \"$VIRTUAL_ENV\" ]; then \n")
+                script_file.write("    echo \"VIRTUAL_ENV not defined\" \n")
+                script_file.write("else \n")
+                script_file.write("    source $VIRTUAL_ENV/bin/activate \n")
+                script_file.write("fi \n")
+                script_file.write("HOSTLIST=`nodeset -e -S \",\" $SLURM_JOB_NODELIST` \n")
+                script_file.write("JOB_ID=$SLURM_JOB_ID \n")
+                script_file.write("echo \"SLURM NODES: \" $SLURM_JOB_NODELIST \n")
+                script_file.write("echo \"NODE COUNT: \" $SLURM_JOB_NUM_NODES \n")
+                script_file.write("echo \"JOB ID: \" $JOB_ID \n")
+                script_file.write("echo \"HOSTLIST: \" $HOSTLIST \n")
+                script_file.write("\n")
+            else:
+                script_file.write("HOSTLIST=$1 \n")
+                script_file.write("JOB_ID=$2 \n")
+                script_file.write("echo \"JOB NODES: \" $HOSTLIST \n")
+                script_file.write("echo \"JOB ID: \" $JOB_ID \n")
+                script_file.write("if [ -z \"$VIRTUAL_ENV\" ]; then \n")
+                script_file.write("    echo \"VIRTUAL_ENV not defined\" \n")
+                script_file.write("else \n")
+                script_file.write("    source $VIRTUAL_ENV/bin/activate \n")
+                script_file.write("fi \n")
+
+            for cmd in list(job_cmds):
+                script_file.write(cmd + "\n")
+            script_file.close()
+        os.chmod(scriptfile, stat.S_IXUSR | stat.S_IRUSR)
+        script_list.append([scriptfile, output, error])
     return script_list
 
 
