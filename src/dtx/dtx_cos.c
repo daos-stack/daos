@@ -341,16 +341,14 @@ dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
 		return -DER_NOMEM;
 	}
 
-	d_list_for_each_entry(dcrc, &cont->sc_dtx_cos_list,
-			      dcrc_gl_committable) {
-		if (oid != NULL &&
-		    daos_unit_oid_compare(dcrc->dcrc_ptr->dcr_oid, *oid) != 0)
+	d_list_for_each_entry(dcrc, &cont->sc_dtx_cos_list, dcrc_gl_committable) {
+		if (oid != NULL && daos_unit_oid_compare(dcrc->dcrc_ptr->dcr_oid, *oid) != 0)
 			continue;
 
 		if (epoch < dcrc->dcrc_epoch || (dcrc->dcrc_piggyback_refs > 0 && !force))
 			continue;
 
-		if (unlikely(oid != NULL && dcrc->dcrc_coll)) {
+		if (unlikely(dcrc->dcrc_coll)) {
 			if (i > 0)
 				continue;
 
@@ -456,15 +454,13 @@ dtx_cos_put_piggyback(struct ds_cont_child *cont, struct dtx_id *xid,
 	/* It is normal that the DTX entry (to be put) in CoS has already been removed by race. */
 
 	rc = dbtree_lookup(cont->sc_dtx_cos_hdl, &kiov, &riov);
-	if (rc != 0)
-		return;
-
-	dcr = (struct dtx_cos_rec *)riov.iov_buf;
-
-	d_list_for_each_entry(dcrc, &dcr->dcr_prio_list, dcrc_lo_link) {
-		if (memcmp(&dcrc->dcrc_dte->dte_xid, xid, sizeof(*xid)) == 0) {
-			dcrc->dcrc_piggyback_refs--;
-			return;
+	if (rc == 0) {
+		dcr = (struct dtx_cos_rec *)riov.iov_buf;
+		d_list_for_each_entry(dcrc, &dcr->dcr_prio_list, dcrc_lo_link) {
+			if (memcmp(&dcrc->dcrc_dte->dte_xid, xid, sizeof(*xid)) == 0) {
+				dcrc->dcrc_piggyback_refs--;
+				return;
+			}
 		}
 	}
 }
