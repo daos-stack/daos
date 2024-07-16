@@ -428,6 +428,7 @@ print_uri_cache(struct crt_ctl_get_uri_cache_out *out_uri_cache_args)
 	}
 }
 
+/* response handler */
 static void
 ctl_cli_cb(const struct crt_cb_info *cb_info)
 {
