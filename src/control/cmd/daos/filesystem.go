@@ -294,7 +294,7 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 		if C.mode_is_dir(cmode) {
 			jsonAttrs := struct {
 				ObjAttr struct {
-					OID      string `json:"OID"`
+					OID      string `json:"oid"`
 					ObjClass string `json:"oclass"`
 				} `json:"object"`
 				DirAttr struct {
@@ -304,7 +304,7 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 				} `json:"directory"`
 			}{
 				ObjAttr: struct {
-					OID      string `json:"OID"`
+					OID      string `json:"oid"`
 					ObjClass string `json:"oclass"`
 				}{
 					OID:      oidStr,
@@ -323,7 +323,7 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 			return cmd.OutputJSON(jsonAttrs, nil)
 		} else {
 			jsonAttrs := &struct {
-				OID       string `json:"OID"`
+				OID       string `json:"oid"`
 				ObjClass  string `json:"oclass"`
 				ChunkSize uint64 `json:"chunk_size"`
 			}{
@@ -335,7 +335,7 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 		}
 	}
 
-	cmd.Infof("OID = %s", oidStr)
+	cmd.Infof("oid = %s", oidStr)
 	cmd.Infof("Object Class = %s", C.GoString(&oclassName[0]))
 	if C.mode_is_dir(cmode) {
 		cmd.Infof("Directory Creation Object Class = %s", C.GoString(&diroclassName[0]))
