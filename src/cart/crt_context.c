@@ -1146,9 +1146,12 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		d_tm_inc_counter(crt_ctx->cc_timedout, 1);
 
 	switch (rpc_priv->crp_state) {
+	case RPC_STATE_INITED:
 	case RPC_STATE_QUEUED:
-		RPC_ERROR(rpc_priv, "aborting waiting to group %s, rank %d, tgt_uri %s\n",
-			  grp_priv->gp_pub.cg_grpid, tgt_ep->ep_rank, rpc_priv->crp_tgt_uri);
+		RPC_ERROR(rpc_priv, "aborting %s rpc to group %s, tgt %d:%d, tgt_uri %s\n",
+			  rpc_priv->crp_state == RPC_STATE_QUEUED ? "queued" : "inited",
+			  grp_priv->gp_pub.cg_grpid, tgt_ep->ep_rank, tgt_ep->ep_tag,
+			  rpc_priv->crp_tgt_uri);
 		crt_context_req_untrack(rpc_priv);
 		crt_rpc_complete_and_unlock(rpc_priv, -DER_TIMEDOUT);
 		break;
@@ -1234,14 +1237,15 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 		crt_req_timeout_untrack(rpc_priv);
 		rpc_priv->crp_timeout_ts = 0;
 
-		d_list_add_tail(&rpc_priv->crp_tmp_link, &timeout_list);
+		D_ASSERTF(d_list_empty(&rpc_priv->crp_tmp_link_timeout),
+			  "already on timeout list\n");
+		d_list_add_tail(&rpc_priv->crp_tmp_link_timeout, &timeout_list);
 	};
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
 	/* handle the timeout RPCs */
-	while ((rpc_priv = d_list_pop_entry(&timeout_list,
-					    struct crt_rpc_priv,
-					    crp_tmp_link))) {
+	while ((rpc_priv =
+		    d_list_pop_entry(&timeout_list, struct crt_rpc_priv, crp_tmp_link_timeout))) {
 		RPC_ERROR(rpc_priv,
 			  "ctx_id %d, (status: %#x) timed out (%d seconds), "
 			  "target (%d:%d)\n",
@@ -1460,6 +1464,12 @@ dispatch_rpc(struct crt_rpc_priv *rpc) {
 
 	crt_rpc_lock(rpc);
 
+	/* RPC got cancelled or timed out before it got here, it got already completed*/
+	if (rpc->crp_timeout_ts == 0) {
+		crt_rpc_unlock(rpc);
+		return;
+	}
+
 	rc = crt_req_send_internal(rpc);
 	if (rc == 0) {
 		crt_rpc_unlock(rpc);
@@ -1521,14 +1531,22 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 		crt_rpc_lock(tmp_rpc);
 		D_MUTEX_LOCK(&epi->epi_mutex);
 		if (tmp_rpc->crp_state == RPC_STATE_QUEUED && credits_available(epi) > 0) {
-			tmp_rpc->crp_state = RPC_STATE_INITED;
-			crt_set_timeout(tmp_rpc);
+			bool submit_rpc = true;
 
-			D_MUTEX_LOCK(&crt_ctx->cc_mutex);
-			rc = crt_req_timeout_track(tmp_rpc);
-			D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
-			if (rc != 0)
-				RPC_ERROR(tmp_rpc, "crt_req_timeout_track failed, rc: %d.\n", rc);
+			tmp_rpc->crp_state = RPC_STATE_INITED;
+			/* RPC got cancelled or timed out before it got here */
+			if (tmp_rpc->crp_timeout_ts == 0) {
+				submit_rpc = false;
+			} else {
+				crt_set_timeout(tmp_rpc);
+
+				D_MUTEX_LOCK(&crt_ctx->cc_mutex);
+				rc = crt_req_timeout_track(tmp_rpc);
+				D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
+				if (rc != 0)
+					RPC_ERROR(tmp_rpc,
+						  "crt_req_timeout_track failed, rc: %d.\n", rc);
+			}
 
 			/* remove from waitq and add to in-flight queue */
 			d_list_move_tail(&tmp_rpc->crp_epi_link, &epi->epi_req_q);
@@ -1537,8 +1555,15 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 			epi->epi_req_num++;
 			D_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
 
-			/* add to resend list */
-			d_list_add_tail(&tmp_rpc->crp_tmp_link, &submit_list);
+			/* add to submit list if not cancelled or timed out already  */
+			if (submit_rpc) {
+				/* prevent rpc from being released before it is dispatched below */
+				RPC_ADDREF(tmp_rpc);
+
+				D_ASSERTF(d_list_empty(&tmp_rpc->crp_tmp_link_submit),
+					  "already on submit list\n");
+				d_list_add_tail(&tmp_rpc->crp_tmp_link_submit, &submit_list);
+			}
 		}
 		D_MUTEX_UNLOCK(&epi->epi_mutex);
 		crt_rpc_unlock(tmp_rpc);
@@ -1550,8 +1575,12 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 	D_MUTEX_UNLOCK(&epi->epi_mutex);
 
 	/* re-submit the rpc req */
-	while ((tmp_rpc = d_list_pop_entry(&submit_list, struct crt_rpc_priv, crp_tmp_link)))
+	while (
+	    (tmp_rpc = d_list_pop_entry(&submit_list, struct crt_rpc_priv, crp_tmp_link_submit))) {
 		dispatch_rpc(tmp_rpc);
+		/* addref done above during d_list_add_tail */
+		RPC_DECREF(tmp_rpc);
+	}
 }
 
 /* TODO: Need per-provider call */
