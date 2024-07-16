@@ -1124,7 +1124,7 @@ crt_issue_uri_lookup(crt_context_t ctx, crt_group_t *group,
 	ul_in->ul_rank = query_rank;
 	ul_in->ul_tag = query_tag;
 
-	/* Inherit origianl RPC timeout if set */
+	/* Inherit original RPC timeout if set */
 	if (chained_rpc_priv->crp_timeout_sec) {
 		rc = crt_req_set_timeout(rpc, chained_rpc_priv->crp_timeout_sec);
 		if (rc != 0) {
