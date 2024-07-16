@@ -622,9 +622,9 @@ ctl_init()
 	int            wait_time  = 60;
 	int            total_wait = 150;
 	/* Set low rpc timeout to avoid delays when pinging dead targets */
-	int            rpc_timeout = 3;
+	int            rpc_timeout  = 3;
 	bool           target_found = false;
-	int            rc          = 0;
+	int            rc           = 0;
 
 	if (D_ON_VALGRIND) {
 		wait_time *= 3;
