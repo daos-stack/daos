@@ -1263,7 +1263,7 @@ print_usage(const char *prog_name, const char *msg_sizes_str, int rep_count, int
 	    "      Note: Selecting -u automatically sets '--no-sync' option as well\n"
 	    "  --no-sync\n"
 	    "      Short version: -n\n"
-	    "      This option avoids pre-pinging each rank in the group before running the test\n"
+	    "      This option avoids pinging each rank in the group before running the test\n"
 	    "      Only applicable when running in without agent (without -u option)\n",
 	    prog_name, UINT32_MAX, CRT_SELF_TEST_AUTO_BULK_THRESH, msg_sizes_str, rep_count,
 	    max_inflight, CRT_ST_BUF_ALIGN_MIN, CRT_ST_BUF_ALIGN_MIN);
