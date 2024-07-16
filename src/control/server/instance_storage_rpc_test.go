@@ -406,11 +406,12 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 				t.Fatalf("unexpected last health stats (-want, +got)\n%s\n", diff)
 			}
 
+			// Compare events received with expected, sort received first.
 			dispatched := subscriber.getRx()
 			sort.Strings(dispatched)
 			var expEvtStrs []string
 			for _, e := range tc.expDispatched {
-				e.Timestamp = ""
+				e.Timestamp = "" // Remove TS before comparing.
 				expEvtStrs = append(expEvtStrs, e.String())
 			}
 			if diff := cmp.Diff(expEvtStrs, dispatched, defEvtCmpOpts...); diff != "" {
