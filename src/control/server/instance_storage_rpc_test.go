@@ -384,8 +384,8 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 			ei := NewEngineInstance(log, nil, nil, nil, ps)
 			ei._lastHealthStats = tc.lastStats
 
-			dispatched := &eventsDispatched{cancel: cancel}
-			ps.Subscribe(events.RASTypeInfoOnly, dispatched)
+			subscriber := newMockSubscriber(2)
+			ps.Subscribe(events.RASTypeInfoOnly, subscriber)
 
 			upd, err := populateCtrlrHealth(test.Context(t), ei,
 				&ctlpb.BioHealthReq{}, ctrlr, mockProv)
@@ -406,13 +406,14 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 				t.Fatalf("unexpected last health stats (-want, +got)\n%s\n", diff)
 			}
 
-			dispatched.Lock()
-			defer dispatched.Unlock()
-
-			sort.Slice(dispatched.rx, func(i, j int) bool {
-				return dispatched.rx[i].ID < dispatched.rx[j].ID
-			})
-			if diff := cmp.Diff(tc.expDispatched, dispatched.rx, defEvtCmpOpts...); diff != "" {
+			dispatched := subscriber.getRx()
+			sort.Strings(dispatched)
+			var expEvtStrs []string
+			for _, e := range tc.expDispatched {
+				e.Timestamp = ""
+				expEvtStrs = append(expEvtStrs, e.String())
+			}
+			if diff := cmp.Diff(expEvtStrs, dispatched, defEvtCmpOpts...); diff != "" {
 				t.Fatalf("unexpected events dispatched (-want, +got)\n%s\n", diff)
 			}
 		})

@@ -13,7 +13,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -298,19 +297,6 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 	}
 }
 
-type eventsDispatched struct {
-	sync.RWMutex
-	rx     []*events.RASEvent
-	cancel context.CancelFunc
-}
-
-func (d *eventsDispatched) OnEvent(ctx context.Context, e *events.RASEvent) {
-	d.Lock()
-	defer d.Unlock()
-	d.rx = append(d.rx, e)
-	d.cancel()
-}
-
 func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 	eventEngineDied := mockEvtEngineDied(t)
 
@@ -350,8 +336,8 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 
 			svc.events = ps
 
-			dispatched := &eventsDispatched{cancel: cancel}
-			svc.events.Subscribe(events.RASTypeStateChange, dispatched)
+			subscriber := newMockSubscriber(1)
+			svc.events.Subscribe(events.RASTypeStateChange, subscriber)
 
 			var pbReq *sharedpb.ClusterEventReq
 			switch {
@@ -383,10 +369,7 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 
-			dispatched.RLock()
-			defer dispatched.RUnlock()
-
-			if diff := cmp.Diff(tc.expDispatched, dispatched.rx, defEvtCmpOpts...); diff != "" {
+			if diff := cmp.Diff(tc.expDispatched, subscriber.getRx(), defEvtCmpOpts...); diff != "" {
 				t.Fatalf("unexpected events dispatched (-want, +got)\n%s\n", diff)
 			}
 		})
@@ -1270,8 +1253,8 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 			defer ps.Close()
 			svc.events = ps
 
-			dispatched := &eventsDispatched{cancel: cancel}
-			svc.events.Subscribe(events.RASTypeStateChange, dispatched)
+			subscriber := newMockSubscriber(1)
+			svc.events.Subscribe(events.RASTypeStateChange, subscriber)
 
 			if !tc.emptyDb {
 				for _, m := range defaultMembers {
@@ -1457,8 +1440,8 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 			ps := events.NewPubSub(ctx, log)
 			svc.events = ps
 
-			dispatched := &eventsDispatched{cancel: cancel}
-			svc.events.Subscribe(events.RASTypeInfoOnly, dispatched)
+			subscriber := newMockSubscriber(1)
+			svc.events.Subscribe(events.RASTypeInfoOnly, subscriber)
 
 			if tc.req != nil && tc.req.Sys == "" {
 				tc.req.Sys = build.DefaultSystemName
@@ -1476,7 +1459,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 
 			<-ctx.Done()
 
-			if diff := cmp.Diff(tc.expDispatched, dispatched.rx, defEvtCmpOpts...); diff != "" {
+			if diff := cmp.Diff(tc.expDispatched, subscriber.getRx(), defEvtCmpOpts...); diff != "" {
 				t.Fatalf("unexpected events dispatched (-want, +got)\n%s\n", diff)
 			}
 		})
@@ -1646,8 +1629,8 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 			ps := events.NewPubSub(ctx, log)
 			svc.events = ps
 
-			dispatched := &eventsDispatched{cancel: cancel}
-			svc.events.Subscribe(events.RASTypeInfoOnly, dispatched)
+			subscriber := newMockSubscriber(1)
+			svc.events.Subscribe(events.RASTypeInfoOnly, subscriber)
 
 			if tc.req != nil && tc.req.Sys == "" {
 				tc.req.Sys = build.DefaultSystemName
@@ -1665,7 +1648,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 
 			<-ctx.Done()
 
-			if diff := cmp.Diff(tc.expDispatched, dispatched.rx, defEvtCmpOpts...); diff != "" {
+			if diff := cmp.Diff(tc.expDispatched, subscriber.getRx(), defEvtCmpOpts...); diff != "" {
 				t.Fatalf("unexpected events dispatched (-want, +got)\n%s\n", diff)
 			}
 
