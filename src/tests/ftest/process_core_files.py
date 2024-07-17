@@ -377,11 +377,10 @@ class CoreFileProcessing():
 
         """
         package_info = None
-        try:
-            # Eventually use python libraries for this rather than exec()ing out to rpm
-            command = " ".join(
-                ["rpm", "-q", "--qf", "'%{name} %{version} %{release} %{epoch}'", pkg])
-            result = run_local(self.log, command)
+        # Eventually use python libraries for this rather than exec()ing out to rpm
+        command = f"rpm -q --qf '%{{name}} %{{version}} %{{release}} %{{epoch}}' {pkg}"
+        result = run_local(self.log, command)
+        if result.passed:
             name, version, release, epoch = result.joined_stdout.split()
 
             debuginfo_map = {"glibc": "glibc-debuginfo-common"}
@@ -395,7 +394,7 @@ class CoreFileProcessing():
                 "release": release,
                 "epoch": epoch
             }
-        except ValueError:
+        else:
             self.log.debug("Package %s not installed, skipping debuginfo", pkg)
 
         return package_info

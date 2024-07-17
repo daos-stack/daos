@@ -16,7 +16,7 @@ from process_core_files import CoreFileException, CoreFileProcessing
 # pylint: disable=import-error,no-name-in-module
 from util.environment_utils import TestEnvironment
 from util.host_utils import get_local_host
-from util.run_utils import RunException, find_command, run_local, run_remote, stop_processes
+from util.run_utils import find_command, run_local, run_remote, stop_processes
 from util.user_utils import get_chown_command
 from util.yaml_utils import get_test_category
 
