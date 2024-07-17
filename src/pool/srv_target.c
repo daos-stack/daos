@@ -1195,7 +1195,12 @@ ds_pool_start(uuid_t uuid, bool aft_chk)
 
 	ds_iv_ns_start(pool->sp_iv_ns);
 
-	return rc;
+	/* Ignore errors, for other PS replicas may work. */
+	rc = ds_pool_svc_start(uuid);
+	if (rc != 0)
+		DL_ERROR(rc, DF_UUID": failed to start pool service", DP_UUID(uuid));
+
+	return 0;
 
 failure_ult:
 	pool_fetch_hdls_ult_abort(pool);
@@ -1235,6 +1240,7 @@ int
 ds_pool_stop(uuid_t uuid)
 {
 	struct ds_pool *pool;
+	int             rc;
 
 	ds_pool_failed_remove(uuid);
 
@@ -1244,14 +1250,18 @@ ds_pool_stop(uuid_t uuid)
 		return 0;
 	}
 	if (pool->sp_stopping) {
-		int rc = -DER_AGAIN;
-
+		rc = -DER_AGAIN;
 		DL_INFO(rc, DF_UUID ": already stopping", DP_UUID(uuid));
 		ds_pool_put(pool);
 		return rc;
 	}
 	pool->sp_stopping = 1;
 	D_INFO(DF_UUID ": stopping\n", DP_UUID(uuid));
+
+	/* An error means the PS is stopping. Ignore it. */
+	rc = ds_pool_svc_stop(uuid);
+	if (rc != 0)
+		DL_INFO(rc, DF_UUID": stop pool service", DP_UUID(uuid));
 
 	pool_tgt_disconnect_all(pool);
 
