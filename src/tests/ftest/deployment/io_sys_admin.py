@@ -6,11 +6,9 @@
 
 import time
 
-import security_test_base as secTestBase
 from data_mover_test_base import DataMoverTestBase
 from file_count_test_base import FileCountTestBase
 from general_utils import human_to_bytes
-from host_utils import get_local_host
 from test_utils_pool import check_pool_creation
 
 
@@ -39,30 +37,24 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
         :avocado: tags=IoSysAdmin,test_io_sys_admin
         """
         # local param
-        new_test_user = self.params.get("new_user", "/run/container_acl/*")
-        new_test_group = self.params.get("new_group", "/run/container_acl/*")
+        new_cont_user = self.params.get("user", "/run/container_set_owner/*")
+        new_cont_group = self.params.get("group", "/run/container_set_owner/*")
 
         dmg = self.get_dmg_command()
         daos = self.get_daos_command()
 
-        all_clients = self.hostlist_clients | get_local_host()
-        secTestBase.add_del_user(all_clients, "useradd", new_test_user)
-        secTestBase.add_del_user(all_clients, "groupadd", new_test_group)
-
         for idx in range(1, 4):
-            self.add_pool_qty(1, namespace="/run/pool_{}/".format(idx), create=False)
-            check_pool_creation(self, self.pool, 60)
-            self.pool[-1].connect()
+            pool = self.get_pool(namespace=f"/run/pool_{idx}/", create=False)
+            check_pool_creation(self, [pool], 60)
+            containers = []
             for cont_idx in range(1, 4):
-                self.add_container_qty(1, self.pool[-1],
-                                       namespace="/run/container_{}/".format(cont_idx))
-                self.container[-1].set_owner(f"{new_test_user}@", f"{new_test_group}@")
+                containers.append(
+                    self.get_container(pool, namespace=f"/run/container_{cont_idx}/"))
+                containers[-1].set_owner(f"{new_cont_user}@", f"{new_cont_group}@")
 
-            daos.container_list(self.pool[-1].identifier)
-            self.destroy_containers(self.container)
-            self.container = None
-            self.destroy_pools(self.pool)
-            self.pool = None
+            daos.container_list(pool.identifier)
+            self.destroy_containers(containers)
+            pool.destroy()
 
         # dmg storage scan
         dmg.storage_scan()

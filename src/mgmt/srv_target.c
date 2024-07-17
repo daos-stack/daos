@@ -1392,19 +1392,9 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 		}
 	}
 
-	/*
-	 * If there is a local PS replica, its RDB file will be deleted later
-	 * together with the other pool files by the tgt_destroy call below; if
-	 * there is no local PS replica, rc will be zero.
-	 */
-	rc = ds_pool_svc_stop(td_in->td_pool_uuid);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to stop pool service replica (if any): "DF_RC"\n",
-			DP_UUID(td_in->td_pool_uuid), DP_RC(rc));
+	rc = ds_pool_stop(td_in->td_pool_uuid);
+	if (rc != 0)
 		goto out;
-	}
-
-	ds_pool_stop(td_in->td_pool_uuid);
 
 	/** generate path to the target directory */
 	rc = ds_mgmt_tgt_file(td_in->td_pool_uuid, NULL, NULL, &path);
@@ -1447,6 +1437,17 @@ out_path:
 out:
 	td_out->td_rc = rc;
 	crt_reply_send(td_req);
+}
+
+int
+ds_mgmt_tgt_destroy_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
+{
+	struct mgmt_tgt_destroy_out *out_source = crt_reply_get(source);
+	struct mgmt_tgt_destroy_out *out_result = crt_reply_get(result);
+
+	if (out_source->td_rc != 0)
+		out_result->td_rc = out_source->td_rc;
+	return 0;
 }
 
 /**

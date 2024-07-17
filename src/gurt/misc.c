@@ -744,24 +744,39 @@ out:
  * Create a ranged string representation of a rank list.
  *
  * \param[in]  rank_list	the rank list to represent
+ * \param[out] ranks_str	Returned ranged string (caller must free)
  *
- * \return			a ranged string (caller must free)
+ * \return			0 on success, a negative value on error
  */
-char *
-d_rank_list_to_str(d_rank_list_t *rank_list)
+int
+d_rank_list_to_str(d_rank_list_t *ranks, char **ranks_str)
 {
-	char			*str;
-	bool			 truncated = false;
-	d_rank_range_list_t	*range_list;
+	d_rank_range_list_t *range_list = NULL;
+	char                *range_list_str;
+	int                  rc;
 
-	range_list = d_rank_range_list_create_from_ranks(rank_list);
+	D_ASSERT(ranks_str != NULL);
+
+	if (ranks == NULL) {
+		range_list_str = NULL;
+		D_GOTO(out, rc = -DER_SUCCESS);
+	}
+
+	range_list = d_rank_range_list_create_from_ranks(ranks);
 	if (range_list == NULL)
-		return NULL;
-	str = d_rank_range_list_str(range_list, &truncated);
+		D_GOTO(error, rc = -DER_NOMEM);
 
+	rc = d_rank_range_list_str(range_list, &range_list_str);
+	if (rc != 0)
+		D_GOTO(error, rc);
+
+out:
+	*ranks_str = range_list_str;
+
+error:
 	d_rank_range_list_free(range_list);
 
-	return str;
+	return rc;
 }
 
 d_rank_list_t *
@@ -844,7 +859,6 @@ d_rank_range_list_realloc(d_rank_range_list_t *range_list, uint32_t size)
 	return range_list;
 }
 
-/* TODO (DAOS-10253) Add unit tests for this function */
 d_rank_range_list_t *
 d_rank_range_list_create_from_ranks(d_rank_list_t *rank_list)
 {
@@ -890,56 +904,51 @@ d_rank_range_list_create_from_ranks(d_rank_list_t *rank_list)
 	return range_list;
 }
 
-/* TODO (DAOS-10253) Add unit tests for this function */
-char *
-d_rank_range_list_str(d_rank_range_list_t *list, bool *truncated)
+int
+d_rank_range_list_str(d_rank_range_list_t *list, char **ranks_str)
 {
-	const size_t	MAXBYTES = 512;
-	char	       *line;
-	char	       *linepos;
-	int		ret = 0;
-	size_t		remaining = MAXBYTES - 2u;
-	int		i;
-	int		err = 0;
+	const size_t MAXBYTES  = 512u;
+	size_t       remaining = MAXBYTES - 2u;
+	char        *line;
+	char        *linepos;
+	int          i;
+	int          len;
+	int          rc;
 
-	*truncated = false;
+	D_ASSERT(list != NULL);
+
 	D_ALLOC(line, MAXBYTES);
 	if (line == NULL)
-		return NULL;
+		D_GOTO(error, rc = -DER_NOMEM);
 
 	*line = '[';
 	linepos = line + 1;
 	for (i = 0; i < list->rrl_nr; i++) {
-		uint32_t	lo = list->rrl_ranges[i].lo;
-		uint32_t	hi = list->rrl_ranges[i].hi;
-		bool		lastrange = (i == (list->rrl_nr - 1));
+		uint32_t lo        = list->rrl_ranges[i].lo;
+		uint32_t hi        = list->rrl_ranges[i].hi;
+		bool     lastrange = (i == (list->rrl_nr - 1));
 
 		if (lo == hi)
-			ret = snprintf(linepos, remaining, "%u%s", lo, lastrange ? "" : ",");
+			len = snprintf(linepos, remaining, "%u%s", lo, lastrange ? "" : ",");
 		else
-			ret = snprintf(linepos, remaining, "%u-%u%s", lo, hi, lastrange ? "" : ",");
+			len = snprintf(linepos, remaining, "%u-%u%s", lo, hi, lastrange ? "" : ",");
+		if (len < 0)
+			D_GOTO(error, rc = -DER_INVAL);
+		if (len >= remaining)
+			D_GOTO(error, rc = -DER_TRUNC);
 
-		if (ret < 0) {
-			err = errno;
-			D_ERROR("rank set could not be serialized: %s (%d)\n", strerror(err), err);
-			break;
-		}
-
-		if (ret >= remaining) {
-			err = EOVERFLOW;
-			D_WARN("rank set has been partially serialized\n");
-			break;
-		}
-
-		remaining -= ret;
-		linepos += ret;
+		remaining -= len;
+		linepos += len;
 	}
 	memcpy(linepos, "]", 2u);
 
-	if (err != 0)
-		*truncated = true;
+	*ranks_str = line;
+	D_GOTO(out, rc = -DER_SUCCESS);
 
-	return line;
+error:
+	D_FREE(line);
+out:
+	return rc;
 }
 
 void

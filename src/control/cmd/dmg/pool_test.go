@@ -1013,6 +1013,32 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Query pool with UUID, enabled ranks and disabled ranks",
+			"pool query --show-disabled --show-enabled 12345678-1234-1234-1234-1234567890ab",
+			strings.Join([]string{
+				printRequest(t, &control.PoolQueryReq{
+					ID: "12345678-1234-1234-1234-1234567890ab",
+					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) {
+						qm.SetOptions(daos.PoolQueryOptionEnabledEngines, daos.PoolQueryOptionDisabledEngines)
+					}),
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query pool with UUID, enabled ranks and disabled ranks",
+			"pool query -b -e 12345678-1234-1234-1234-1234567890ab",
+			strings.Join([]string{
+				printRequest(t, &control.PoolQueryReq{
+					ID: "12345678-1234-1234-1234-1234567890ab",
+					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) {
+						qm.SetOptions(daos.PoolQueryOptionEnabledEngines, daos.PoolQueryOptionDisabledEngines)
+					}),
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Query pool for health only",
 			"pool query --health-only 12345678-1234-1234-1234-1234567890ab",
 			strings.Join([]string{
@@ -1055,12 +1081,6 @@ func TestPoolCommands(t *testing.T) {
 			"pool quack",
 			"",
 			fmt.Errorf("Unknown command"),
-		},
-		{
-			"Query pool with incompatible arguments",
-			"pool query --show-disabled --show-enabled 12345678-1234-1234-1234-1234567890ab",
-			"",
-			errors.New("may not be mixed"),
 		},
 	})
 }

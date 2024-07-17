@@ -9,7 +9,6 @@ package main
 import (
 	"net"
 	"strings"
-	"sync"
 
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -23,6 +22,7 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
+	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
@@ -35,16 +35,13 @@ import (
 // Management Service proxy, handling dRPCs sent by libdaos by forwarding them
 // to MS.
 type mgmtModule struct {
-	attachInfoMutex sync.RWMutex
-	fabricMutex     sync.RWMutex
-
 	log            logging.Logger
 	sys            string
 	ctlInvoker     control.Invoker
 	cache          *InfoCache
 	monitor        *procMon
 	cliMetricsSrc  *promexp.ClientSource
-	useDefaultNUMA bool
+	useDefaultNUMA atm.Bool
 
 	numaGetter  hardware.ProcessNUMAProvider
 	providerIdx uint
@@ -163,14 +160,14 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 }
 
 func (mod *mgmtModule) getNUMANode(ctx context.Context, pid int32) (uint, error) {
-	if mod.useDefaultNUMA {
+	if mod.useDefaultNUMA.IsTrue() {
 		return 0, nil
 	}
 
 	numaNode, err := mod.numaGetter.GetNUMANodeIDForPID(ctx, pid)
 	if errors.Is(err, hardware.ErrNoNUMANodes) {
 		mod.log.Debug("system is not NUMA-aware")
-		mod.useDefaultNUMA = true
+		mod.useDefaultNUMA.SetTrue()
 		return 0, nil
 	} else if err != nil {
 		return 0, errors.Wrapf(err, "failed to get NUMA node ID for pid %d", pid)

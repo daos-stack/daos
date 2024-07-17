@@ -1811,6 +1811,17 @@ vos_fake_anchor_create(daos_anchor_t *anchor)
 	anchor->da_type = DAOS_ANCHOR_TYPE_HKEY;
 }
 
+/**
+ * If subtree is already created, it could have been created by an older pool
+ * version so if the dkey is not flat, we need to use KREC_BF_BTR here.
+ **/
+static inline bool
+key_tree_is_evt(int flags, enum vos_tree_class tclass, struct vos_krec_df *krec)
+{
+	return (flags & SUBTR_EVT && (tclass == VOS_BTR_AKEY ||
+				     (krec->kr_bmap & KREC_BF_NO_AKEY)));
+}
+
 static inline bool
 vos_io_scm(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size, enum vos_io_stream ios)
 {

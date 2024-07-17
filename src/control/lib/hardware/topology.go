@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -353,8 +353,17 @@ func (t *Topology) Merge(newTopo *Topology) error {
 							oldDev.Type = newDev.Type
 						}
 
-						if oldDev.LinkSpeed == 0 {
-							oldDev.LinkSpeed = newDev.LinkSpeed
+						if oldDev.LinkMaxSpeed == 0 {
+							oldDev.LinkMaxSpeed = newDev.LinkMaxSpeed
+						}
+						if oldDev.LinkNegSpeed == 0 {
+							oldDev.LinkNegSpeed = newDev.LinkNegSpeed
+						}
+						if oldDev.LinkMaxWidth == 0 {
+							oldDev.LinkMaxWidth = newDev.LinkMaxWidth
+						}
+						if oldDev.LinkNegWidth == 0 {
+							oldDev.LinkNegWidth = newDev.LinkNegWidth
 						}
 					}
 				}

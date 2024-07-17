@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.7.100
-Release:       1%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -82,6 +82,7 @@ BuildRequires: libcmocka-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
 BuildRequires: go >= 1.17
+BuildRequires: pciutils-devel
 %if (0%{?rhel} >= 8)
 BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
@@ -157,6 +158,7 @@ Requires: mercury >= %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 Requires: numactl
+Requires: pciutils
 %{?systemd_requires}
 
 %description server
@@ -229,6 +231,7 @@ Requires: fuse3-devel >= 3
 %else
 Requires: fuse3-devel >= 3.4.2
 %endif
+Requires: pciutils-devel
 
 %description client-tests
 This is the package needed to run the DAOS test suite (client tests)
@@ -588,6 +591,13 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu Jul 11 2024 Dalton Bohning <dalton.bohning@intel.com> 2.7.100-3
+- Add pciutils-devel build dep for client-tests package
+
+* Thu Jun 24 2024 Tom Nabarro <tom.nabarro@intel.com> 2.7.100-2
+- Add pciutils runtime dep for daos_server lspci call
+- Add pciutils-devel build dep for pciutils CGO bindings
+
 * Mon May 20 2024 Phillip Henderson <phillip.henderson@intel.com> 2.7.100-1
 - Bump version to 2.7.100
 

@@ -382,6 +382,7 @@ struct pci_dev_opts {
 	bool                 finished;
 	int                 *socket_id;
 	char               **pci_type;
+	char               **pci_cfg;
 	int                  status;
 };
 
@@ -391,6 +392,7 @@ pci_device_cb(void *ctx, struct spdk_pci_device *pci_device)
 	struct pci_dev_opts *opts = ctx;
 	const char          *device_type;
 	int                  len;
+	int                  rc;
 
 	if (opts->status != 0)
 		return;
@@ -422,6 +424,13 @@ pci_device_cb(void *ctx, struct spdk_pci_device *pci_device)
 		opts->status = -DER_NOMEM;
 		return;
 	}
+
+	rc = spdk_pci_device_cfg_read(pci_device, *opts->pci_cfg, NVME_PCI_CFG_SPC_MAX_LEN, 0);
+	if (rc != 0) {
+		D_ERROR("Failed to read config space of device (%s)\n", spdk_strerror(-rc));
+		opts->status = -DER_INVAL;
+		return;
+	}
 }
 
 static int
@@ -443,6 +452,7 @@ fetch_pci_dev_info(struct nvme_ctrlr_t *w_ctrlr, const char *tr_addr)
 	opts.pci_addr  = pci_addr;
 	opts.socket_id = &w_ctrlr->socket_id;
 	opts.pci_type  = &w_ctrlr->pci_type;
+	opts.pci_cfg   = &w_ctrlr->pci_cfg;
 
 	spdk_pci_for_each_device(&opts, pci_device_cb);
 
@@ -485,6 +495,10 @@ alloc_ctrlr_info(uuid_t dev_id, char *dev_name, struct bio_dev_info *b_info)
 	if (b_info->bdi_ctrlr->nss == NULL)
 		return -DER_NOMEM;
 
+	D_ALLOC(b_info->bdi_ctrlr->pci_cfg, NVME_PCI_CFG_SPC_MAX_LEN);
+	if (b_info->bdi_ctrlr->pci_cfg == NULL)
+		return -DER_NOMEM;
+
 	/* Namespace capacity by direct query of SPDK bdev object */
 	blk_sz                       = spdk_bdev_get_block_size(bdev);
 	nr_blks                      = spdk_bdev_get_num_blocks(bdev);
@@ -497,13 +511,8 @@ alloc_ctrlr_info(uuid_t dev_id, char *dev_name, struct bio_dev_info *b_info)
 		return rc;
 	}
 
-	/* Fetch socket ID and PCI device type by enumerating spdk_pci_device list */
-	rc = fetch_pci_dev_info(b_info->bdi_ctrlr, b_info->bdi_traddr);
-	if (rc != 0) {
-		return rc;
-	}
-
-	return 0;
+	/* Fetch PCI details by enumerating spdk_pci_device list */
+	return fetch_pci_dev_info(b_info->bdi_ctrlr, b_info->bdi_traddr);
 }
 
 int
@@ -956,7 +965,7 @@ dev_uuid2pci_addr(struct spdk_pci_addr *pci_addr, uuid_t dev_uuid)
 	}
 
 	rc = fill_in_traddr(&b_info, d_bdev->bb_name);
-	if (rc) {
+	if (rc || b_info.bdi_traddr == NULL) {
 		D_DEBUG(DB_MGMT, "Unable to get traddr for device %s\n", d_bdev->bb_name);
 		return -DER_INVAL;
 	}

@@ -290,7 +290,7 @@ int main(int argc, char **argv)
 	d_setenv("FI_UNIVERSE_SIZE", "2048", 1);
 	d_setenv("FI_OFI_RXM_USE_SRX", "1", 1);
 	d_setenv("D_LOG_MASK", "CRIT", 1);
-	d_setenv("OFI_PORT", "34571", 1);
+	d_setenv("D_PORT", "34571", 1);
 
 	d_register_alt_assert(mock_assert);
 

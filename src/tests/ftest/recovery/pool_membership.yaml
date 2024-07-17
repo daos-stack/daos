@@ -31,7 +31,7 @@ container:
 ior:
   client_processes:
     ppn: 1
-  flags: -k -D 10 -v -w -W
+  flags: -k -v -w -W
   api: DFS
   transfer_size: 1M
   block_size: 10G

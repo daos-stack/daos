@@ -49,6 +49,9 @@ const (
 	// scanMinHugepageCount is the minimum number of hugepages to allocate in order to satisfy
 	// SPDK memory requirements when performing a NVMe device scan.
 	scanMinHugepageCount = 128
+
+	// maxLineChars is the maximum number of chars per line in a formatted byte string.
+	maxLineChars = 32
 )
 
 // netListenerFn is a type alias for the net.Listener function signature.
@@ -827,4 +830,25 @@ func checkFabricInterface(name string, lookup ifLookupFn) error {
 	}
 
 	return nil
+}
+
+// Convert bytestring to format accepted by lspci, 16 bytes per line.
+func formatBytestring(in string, sb *strings.Builder) {
+	if sb == nil {
+		return
+	}
+	for i, s := range in {
+		remainder := i % maxLineChars
+		if remainder == 0 {
+			sb.WriteString(fmt.Sprintf("%02x: ", i/2))
+		}
+		sb.WriteString(string(s))
+		if i == (len(in)-1) || remainder == maxLineChars-1 {
+			// Print newline after last char on line.
+			sb.WriteString("\n")
+		} else if (i % 2) != 0 {
+			// Print space after each double char group.
+			sb.WriteString(" ")
+		}
+	}
 }

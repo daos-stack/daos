@@ -320,6 +320,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 
 	if (unlikely(DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG) ||
 		     DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG_FAIL) ||
+		     DAOS_FAIL_CHECK(DAOS_OBJ_EC_AGG_LEADER_DIFF) ||
 		     DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG_PEER_FAIL)))
 		interval = 0;
 	else
@@ -635,11 +636,16 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 		rc = dss_abterr2der(rc);
 		goto out_scrub_cond;
 	}
+	rc = ABT_cond_create(&cont->sc_fini_cond);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto out_rebuild_cond;
+	}
 
 	cont->sc_pool = ds_pool_child_lookup(po_uuid);
 	if (cont->sc_pool == NULL) {
 		rc = -DER_NO_HDL;
-		goto out_rebuild_cond;
+		goto out_finish_cond;
 	}
 
 	rc = vos_cont_open(cont->sc_pool->spc_hdl, co_uuid, &cont->sc_hdl);
@@ -669,6 +675,8 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 
 out_pool:
 	ds_pool_child_put(cont->sc_pool);
+out_finish_cond:
+	ABT_cond_free(&cont->sc_fini_cond);
 out_rebuild_cond:
 	ABT_cond_free(&cont->sc_rebuild_cond);
 out_scrub_cond:
@@ -701,6 +709,7 @@ cont_child_free_ref(struct daos_llink *llink)
 	ABT_cond_free(&cont->sc_dtx_resync_cond);
 	ABT_cond_free(&cont->sc_scrub_cond);
 	ABT_cond_free(&cont->sc_rebuild_cond);
+	ABT_cond_free(&cont->sc_fini_cond);
 	ABT_mutex_free(&cont->sc_mutex);
 	D_FREE(cont);
 }
@@ -731,11 +740,31 @@ cont_child_rec_hash(struct daos_llink *llink)
 				 2 * sizeof(uuid_t));
 }
 
+static void
+cont_child_wait(struct daos_llink *llink)
+{
+	struct ds_cont_child *cont = cont_child_obj(llink);
+
+	ABT_mutex_lock(cont->sc_mutex);
+	ABT_cond_wait(cont->sc_fini_cond, cont->sc_mutex);
+	ABT_mutex_unlock(cont->sc_mutex);
+}
+
+static void
+cont_child_wakeup(struct daos_llink *llink)
+{
+	struct ds_cont_child *cont = cont_child_obj(llink);
+
+	ABT_cond_broadcast(cont->sc_fini_cond);
+}
+
 static struct daos_llink_ops cont_child_cache_ops = {
 	.lop_alloc_ref	= cont_child_alloc_ref,
 	.lop_free_ref	= cont_child_free_ref,
 	.lop_cmp_keys	= cont_child_cmp_keys,
 	.lop_rec_hash	= cont_child_rec_hash,
+	.lop_wait	= cont_child_wait,
+	.lop_wakeup	= cont_child_wakeup,
 };
 
 int
@@ -1165,7 +1194,7 @@ cont_destroy_wait(struct ds_pool_child *child, uuid_t co_uuid)
  * Called via dss_collective() to destroy the ds_cont object as well as the vos
  * container.
  */
-static int
+int
 cont_child_destroy_one(void *vin)
 {
 	struct dsm_tls		       *tls = dsm_tls_get();
@@ -1232,8 +1261,7 @@ cont_child_destroy_one(void *vin)
 			D_GOTO(out_pool, rc = -DER_BUSY);
 		} /* else: resync should have completed, try again */
 
-		/* If it is the last user, ds_cont_child will be removed from hash & freed. */
-		cont_child_put(tls->dt_cont_cache, cont);
+		daos_lru_ref_wait_evict(tls->dt_cont_cache, &cont->sc_list);
 	}
 
 	D_DEBUG(DB_MD, DF_CONT": destroying vos container\n",
@@ -1257,6 +1285,19 @@ cont_child_destroy_one(void *vin)
 out_pool:
 	ds_pool_child_put(pool);
 out:
+	return rc;
+}
+
+int
+ds_cont_child_destroy(uuid_t pool_uuid, uuid_t cont_uuid)
+{
+	struct cont_tgt_destroy_in  destroy_in;
+	int rc;
+
+	uuid_copy(destroy_in.tdi_pool_uuid, pool_uuid);
+	uuid_copy(destroy_in.tdi_uuid, cont_uuid);
+	rc = cont_child_destroy_one(&destroy_in);
+
 	return rc;
 }
 

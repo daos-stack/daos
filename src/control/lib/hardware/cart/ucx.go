@@ -30,20 +30,23 @@ func getProviderSetFromUCXTransport(transport string) *hardware.FabricProviderSe
 	}
 	genericTransport := strings.Split(transport, "_")[0]
 
+	providers := hardware.NewFabricProviderSet()
 	priority := 0 // by default use the highest
-	daosProv := ucxTransportToDAOSProvider(transport)
-	if daosProv == "ucx+tcp" {
-		priority = ucxTCPPriority // TCP is less desirable than other options if this is Infiniband
+	daosProv := ucxTransportToDAOSProviders(transport)
+	for _, p := range daosProv {
+		if p == "ucx+tcp" {
+			priority = ucxTCPPriority // TCP is less desirable than other options if this is Infiniband
+		}
+		providers.Add(
+			&hardware.FabricProvider{
+				Name:     p,
+				Priority: priority,
+			},
+		)
 	}
-	providers := hardware.NewFabricProviderSet(
-		&hardware.FabricProvider{
-			Name:     daosProv,
-			Priority: priority,
-		},
-	)
 	if shouldAddGeneric(transport) {
 		providers.Add(&hardware.FabricProvider{
-			Name:     ucxTransportToDAOSProvider(genericTransport),
+			Name:     "ucx+" + genericTransport,
 			Priority: priority,
 		})
 	}
@@ -65,12 +68,22 @@ func shouldAddGeneric(transport string) bool {
 	return false
 }
 
-// ucxTransportToDAOSProvider translates the UCX transport type to a DAOS fabric provider string.
-func ucxTransportToDAOSProvider(transport string) string {
+// ucxTransportToDAOSProviders translates the UCX transport type to a set of DAOS fabric provider
+// strings.
+func ucxTransportToDAOSProviders(transport string) []string {
 	prefix := "ucx+"
+	provs := []string{prefix + transport}
+	alias := ucxTransportToAlias(transport)
+	if alias != transport {
+		provs = append(provs, prefix+alias)
+	}
+	return provs
+}
+
+func ucxTransportToAlias(transport string) string {
 	transportPieces := strings.Split(transport, "_")
 	if len(transportPieces) < 2 {
-		return prefix + transport
+		return transport
 	}
 
 	// Transport strings from the library need to be translated to the supported aliases.
@@ -83,5 +96,5 @@ func ucxTransportToDAOSProvider(transport string) string {
 		// accelerated Mellanox transport
 		transportPieces[1] = "x"
 	}
-	return prefix + strings.Join(transportPieces, "_")
+	return strings.Join(transportPieces, "_")
 }

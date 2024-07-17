@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -31,6 +31,7 @@ type (
 		ServerAddress         raft.ServerAddress
 		State                 raft.RaftState
 		LeadershipTransferErr error
+		BarrierReturn         raft.Future
 	}
 	mockRaftService struct {
 		cfg mockRaftServiceConfig
@@ -85,7 +86,10 @@ func (mrs *mockRaftService) State() raft.RaftState {
 }
 
 func (mrs *mockRaftService) Barrier(time.Duration) raft.Future {
-	return &mockRaftFuture{}
+	if mrs.cfg.BarrierReturn == nil {
+		return &mockRaftFuture{}
+	}
+	return mrs.cfg.BarrierReturn
 }
 
 func newMockRaftService(cfg *mockRaftServiceConfig, fsm raft.FSM) *mockRaftService {

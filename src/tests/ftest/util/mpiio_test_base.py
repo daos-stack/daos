@@ -62,7 +62,6 @@ class MpiioTests(TestWithServers):
             kwargs_list[1]["command"] = "t_shapesame"
             env["HDF5_PARAPREFIX"] = "daos:"
 
-        self.job_manager = []
         job_managers = []
         for kwargs in kwargs_list:
             manager = get_job_manager(self)
@@ -76,7 +75,6 @@ class MpiioTests(TestWithServers):
                 romio_job = self._test_name_class[test_name](**kwargs)
                 romio_job.env = env
                 job_managers.append(romio_job)
-                self.job_manager[-1] = romio_job
             else:
                 # finish job manager setup
                 job_managers.append(manager)

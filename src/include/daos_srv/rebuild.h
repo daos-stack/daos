@@ -35,6 +35,38 @@ typedef enum {
 			  (rb_op) == RB_OP_NONE ? "None" : \
 			  "Unknown")
 
+/* Common rebuild identifying information for INFO/DEBUG logging:
+ * rb=<pool_uuid>/<rebuild_ver>/<rebuild_gen>/<opstring>
+ */
+#define DF_RB  "rb=" DF_UUID "/%u/%u/%s"
+
+/* Full rebuild identifying information includes <leader_rank>/<term>
+ * Instead of this, use DF_RB most of the time (use this for leader change scenarios, etc.)
+ */
+#define DF_RBF DF_RB " ld=%u/" DF_U64
+
+/* arguments for log rebuild identifier given a struct rebuild_global_pool_tracker * */
+#define DP_RB_RGT(rgt)                                                                             \
+	DP_UUID((rgt)->rgt_pool_uuid), (rgt)->rgt_rebuild_ver, (rgt)->rgt_rebuild_gen,             \
+	    RB_OP_STR((rgt)->rgt_opc)
+
+/* arguments for log rebuild identifier given a struct rebuild_tgt_pool_tracker *rpt */
+#define DP_RB_RPT(rpt)                                                                             \
+	DP_UUID((rpt)->rt_pool_uuid), (rpt)->rt_rebuild_ver, (rpt)->rt_rebuild_gen,                \
+	    RB_OP_STR((rpt)->rt_rebuild_op)
+#define DP_RBF_RPT(rpt) DP_RB_RPT(rpt), (rpt)->rt_leader_rank, (rpt)->rt_leader_term
+
+/* arguments for log rebuild identifier given a struct rebuild_scan_in *rsin */
+#define DP_RB_RSI(rsi)                                                                             \
+	DP_UUID((rsi)->rsi_pool_uuid), (rsi)->rsi_rebuild_ver, (rsi)->rsi_rebuild_gen,             \
+	    RB_OP_STR((rsi)->rsi_rebuild_op)
+#define DP_RBF_RSI(rsi) DP_RB_RSI(rsi), (rsi)->rsi_master_rank, (rsi)->rsi_leader_term
+
+/* arguments for log rebuild identifier given a struct migrate_query_arg * */
+#define DP_RB_MQA(mqa)                                                                             \
+	DP_UUID((mqa)->pool_uuid), (mqa)->version, (mqa)->generation, RB_OP_STR((mqa)->rebuild_op)
+#define DP_RBF_MQA(mqa) DP_RB_MQA(mqa), (mqa)->leader_rank, (mqa)->leader_term
+
 int ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver,
 			daos_epoch_t stable_eph, uint32_t layout_version,
 			struct pool_target_id_list *tgts,

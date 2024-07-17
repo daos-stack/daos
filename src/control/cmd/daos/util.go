@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -60,6 +61,25 @@ func apiVersion() string {
 		C.DAOS_API_VERSION_MINOR,
 		C.DAOS_API_VERSION_FIX,
 	)
+}
+
+func srvBuildInfo() (*build.Info, error) {
+	var major uint32
+	var minor uint32
+	var patch uint32
+	var tagPtr *C.char
+
+	rc := C.dc_mgmt_srv_version((*C.uint)(&major), (*C.uint)(&minor), (*C.uint)(&patch), &tagPtr)
+	if err := daosError(rc); err != nil {
+		return nil, err
+	}
+	tagStr := C.GoString(tagPtr)
+
+	return &build.Info{
+		Name:      build.ControlPlaneName,
+		Version:   (&build.Version{Major: int(major), Minor: int(minor), Patch: int(patch)}).String(),
+		BuildInfo: tagStr,
+	}, nil
 }
 
 func daosError(rc C.int) error {

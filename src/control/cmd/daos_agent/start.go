@@ -106,7 +106,11 @@ func (cmd *startCmd) Execute(_ []string) error {
 	}
 
 	drpcRegStart := time.Now()
-	drpcServer.RegisterRPCModule(NewSecurityModule(cmd.Logger, cmd.cfg.TransportConfig))
+	secCfg := &securityConfig{
+		transport:   cmd.cfg.TransportConfig,
+		credentials: cmd.cfg.CredentialConfig,
+	}
+	drpcServer.RegisterRPCModule(NewSecurityModule(cmd.Logger, secCfg))
 	mgmtMod := &mgmtModule{
 		log:           cmd.Logger,
 		sys:           cmd.cfg.SystemName,

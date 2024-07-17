@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1013,9 +1013,11 @@ bio_export_health_stats(struct bio_blobstore *bb, char *bdev_name)
 #define X(field, fname, desc, unit, type)				\
 	memset(binfo, 0, sizeof(*binfo));				\
 	rc = fill_in_traddr(binfo, bdev_name);				\
-	if (rc || binfo->bdi_traddr == NULL) {				\
+	if (rc) {							\
 		D_WARN("Failed to extract %s addr: "DF_RC"\n",		\
 		       bdev_name, DP_RC(rc));				\
+	} else if (binfo->bdi_traddr == NULL) {				\
+		D_WARN("No health stats for %s\n", bdev_name);		\
 	} else {							\
 		rc = d_tm_add_metric(&bb->bb_dev_health.field,		\
 				     type,				\
@@ -1052,9 +1054,11 @@ bio_export_vendor_health_stats(struct bio_blobstore *bb, char *bdev_name)
 #define Y(field, fname, desc, unit, type)				\
 	memset(binfo, 0, sizeof(*binfo));				\
 	rc = fill_in_traddr(binfo, bdev_name);				\
-	if (rc || binfo->bdi_traddr == NULL) {				\
+	if (rc) {							\
 		D_WARN("Failed to extract %s addr: "DF_RC"\n",		\
 		       bdev_name, DP_RC(rc));				\
+	} else if (binfo->bdi_traddr == NULL) {				\
+		D_WARN("No vendor health stats for %s\n", bdev_name);	\
 	} else {							\
 		rc = d_tm_add_metric(&bb->bb_dev_health.field,		\
 				     type,				\
@@ -1097,8 +1101,10 @@ bio_set_vendor_id(struct bio_blobstore *bb, char *bdev_name)
 	int				 rc;
 
 	rc = fill_in_traddr(&binfo, bdev_name);
-	if (rc || binfo.bdi_traddr == NULL) {
+	if (rc) {
 		D_ERROR("Unable to get traddr for device:%s\n", bdev_name);
+		return;
+	} else if (binfo.bdi_traddr == NULL) {
 		return;
 	}
 

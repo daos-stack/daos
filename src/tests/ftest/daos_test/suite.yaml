@@ -10,12 +10,12 @@ timeouts:
   test_daos_degraded_mode: 450
   test_daos_management: 110
   test_daos_pool: 180
-  test_daos_container: 600
+  test_daos_container: 700
   test_daos_epoch: 125
   test_daos_verify_consistency: 105
   test_daos_io: 290
   test_daos_ec_io: 450
-  test_daos_ec_obj: 700
+  test_daos_ec_obj: 750
   test_daos_object_array: 105
   test_daos_array: 106
   test_daos_kv: 105
