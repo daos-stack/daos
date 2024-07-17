@@ -60,6 +60,9 @@ func TestCart_getProviderSetFromUCXTransport(t *testing.T) {
 			in: "dc_mlx5",
 			expSet: hardware.NewFabricProviderSet(
 				&hardware.FabricProvider{
+					Name: "ucx+dc_mlx5",
+				},
+				&hardware.FabricProvider{
 					Name: "ucx+dc_x",
 				},
 				&hardware.FabricProvider{
@@ -88,6 +91,9 @@ func TestCart_getProviderSetFromUCXTransport(t *testing.T) {
 			in: "rc_verbs",
 			expSet: hardware.NewFabricProviderSet(
 				&hardware.FabricProvider{
+					Name: "ucx+rc_verbs",
+				},
+				&hardware.FabricProvider{
 					Name: "ucx+rc_v",
 				},
 				&hardware.FabricProvider{
@@ -102,6 +108,9 @@ func TestCart_getProviderSetFromUCXTransport(t *testing.T) {
 		"add generic ud": {
 			in: "ud_mlx5",
 			expSet: hardware.NewFabricProviderSet(
+				&hardware.FabricProvider{
+					Name: "ucx+ud_mlx5",
+				},
 				&hardware.FabricProvider{
 					Name: "ucx+ud_x",
 				},
@@ -125,54 +134,54 @@ func TestCart_getProviderSetFromUCXTransport(t *testing.T) {
 	}
 }
 
-func TestCart_ucxTransportToDAOSProvider(t *testing.T) {
+func TestCart_ucxTransportToAlias(t *testing.T) {
 	for name, tc := range map[string]struct {
 		in  string
 		exp string
 	}{
 		"custom": {
 			in:  "custom",
-			exp: "ucx+custom",
+			exp: "custom",
 		},
 		"rc_verbs": {
 			in:  "rc_verbs",
-			exp: "ucx+rc_v",
+			exp: "rc_v",
 		},
 		"rc_mlx5": {
 			in:  "rc_mlx5",
-			exp: "ucx+rc_x",
+			exp: "rc_x",
 		},
 		"ud_verbs": {
 			in:  "ud_verbs",
-			exp: "ucx+ud_v",
+			exp: "ud_v",
 		},
 		"ud_mlx5": {
 			in:  "ud_mlx5",
-			exp: "ucx+ud_x",
+			exp: "ud_x",
 		},
 		"dc_mlx5": {
 			in:  "dc_mlx5",
-			exp: "ucx+dc_x",
+			exp: "dc_x",
 		},
 		"dc": {
 			in:  "dc",
-			exp: "ucx+dc",
+			exp: "dc",
 		},
 		"tcp": {
 			in:  "tcp",
-			exp: "ucx+tcp",
+			exp: "tcp",
 		},
 		"rc": {
 			in:  "rc",
-			exp: "ucx+rc",
+			exp: "rc",
 		},
 		"ud": {
 			in:  "ud",
-			exp: "ucx+ud",
+			exp: "ud",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			test.AssertEqual(t, tc.exp, ucxTransportToDAOSProvider(tc.in), "")
+			test.AssertEqual(t, tc.exp, ucxTransportToAlias(tc.in), "")
 		})
 	}
 }
