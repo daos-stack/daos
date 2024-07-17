@@ -213,6 +213,15 @@ void ds_pool_upgrade_handler(crt_rpc_t *rpc);
 int ds_pool_cache_init(void);
 void ds_pool_cache_fini(void);
 int ds_pool_lookup_internal(const uuid_t uuid, struct ds_pool **pool);
+#define DS_POOL_LOOKUP_INTERNAL(uuid, pool)                                                        \
+	({                                                                                         \
+		int ds_pool_lookup_internal_rc;                                                    \
+                                                                                                   \
+		ds_pool_lookup_internal_rc = ds_pool_lookup_internal(uuid, pool);                  \
+		if (ds_pool_lookup_internal_rc == 0)                                               \
+			D_REF_TRACKER_TRACK(&(*pool)->sp_ref_tracker, pool);                       \
+		ds_pool_lookup_internal_rc;                                                        \
+	})
 int ds_pool_hdl_hash_init(void);
 void ds_pool_hdl_hash_fini(void);
 void ds_pool_tgt_disconnect_handler(crt_rpc_t *rpc);

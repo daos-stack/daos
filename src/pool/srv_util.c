@@ -1366,7 +1366,7 @@ int ds_pool_get_ranks(const uuid_t pool_uuid, int status,
 	struct ds_pool	*pool;
 	int		rc;
 
-	rc = ds_pool_lookup(pool_uuid, &pool);
+	rc = DS_POOL_LOOKUP(pool_uuid, &pool);
 	if (rc != 0) {
 		D_DEBUG(DB_MD, "Lookup "DF_UUID": %d\n", DP_UUID(pool_uuid), rc);
 		return 0;
@@ -1388,7 +1388,7 @@ out_lock:
 		D_ERROR(DF_UUID": failed to create rank list: %d\n",
 			DP_UUID(pool->sp_uuid), rc);
 
-	ds_pool_put(pool);
+	DS_POOL_PUT(&pool);
 	return rc;
 }
 
@@ -1402,7 +1402,7 @@ int ds_pool_get_tgt_idx_by_state(const uuid_t pool_uuid, unsigned int status, in
 	int			rc;
 
 	*tgts_cnt = 0;
-	rc = ds_pool_lookup(pool_uuid, &pool);
+	rc = DS_POOL_LOOKUP(pool_uuid, &pool);
 	if (pool == NULL || pool->sp_map == NULL) {
 		D_DEBUG(DB_MD, "pool look "DF_UUID": %d\n", DP_UUID(pool_uuid), rc);
 		D_GOTO(output, rc = 0);
@@ -1434,7 +1434,7 @@ int ds_pool_get_tgt_idx_by_state(const uuid_t pool_uuid, unsigned int status, in
 
 output:
 	if (pool)
-		ds_pool_put(pool);
+		DS_POOL_PUT(&pool);
 	if (pool_tgts)
 		D_FREE(pool_tgts);
 	return rc;
@@ -1462,7 +1462,7 @@ check_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, bool reint,
 	int			 i, nr, rc = 0;
 
 	/* Get pool map to check the target status */
-	pool_child = ds_pool_child_lookup(pool_id);
+	DS_POOL_CHILD_LOOKUP(pool_id, &pool_child);
 	if (pool_child == NULL) {
 		D_ERROR(DF_UUID": Pool child not found\n", DP_UUID(pool_id));
 		/*
@@ -1521,7 +1521,7 @@ check_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, bool reint,
 	}
 
 	ABT_rwlock_unlock(pool->sp_lock);
-	ds_pool_child_put(pool_child);
+	DS_POOL_CHILD_PUT(&pool_child);
 
 	if (rc)
 		return rc;
