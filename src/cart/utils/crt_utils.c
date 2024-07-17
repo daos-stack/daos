@@ -433,6 +433,9 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name, crt_init_options_t *opt)
 		D_GOTO(cleanup, rc);
 	}
 
+	D_INFO("Agent response: provider: '%s', domain: '%s', interface: '%s'\n",
+	       crt_net_cfg_info.provider, crt_net_cfg_info.domain, crt_net_cfg_info.interface);
+
 	D_STRNDUP(opt->cio_provider, crt_net_cfg_info.provider, DAOS_SYS_INFO_STRING_MAX);
 	D_STRNDUP(opt->cio_interface, crt_net_cfg_info.interface, DAOS_SYS_INFO_STRING_MAX);
 	D_STRNDUP(opt->cio_domain, crt_net_cfg_info.domain, DAOS_SYS_INFO_STRING_MAX);
