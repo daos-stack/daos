@@ -457,10 +457,6 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name, crt_init_options_t *opt)
 
 cleanup:
 	dc_put_attach_info(&crt_net_cfg_info, crt_net_cfg_resp);
-	D_FREE(opt->cio_provider);
-	D_FREE(opt->cio_interface);
-	D_FREE(opt->cio_domain);
-
 	return rc;
 }
 
@@ -490,10 +486,13 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 		init_opt = &local_opt;
 	}
 
-	if (init_opt)
-		rc = crt_init_opt(local_group_name, 0, init_opt);
-	else
-		rc = crt_init(local_group_name, 0);
+	rc = crt_init_opt(local_group_name, 0, init_opt);
+	/* Free strings upon init */
+	if (init_opt) {
+		D_FREE(init_opt->cio_interface);
+		D_FREE(init_opt->cio_domain);
+		D_FREE(init_opt->cio_provider);
+	}
 
 	if (rc != 0)
 		D_GOTO(out, rc);
