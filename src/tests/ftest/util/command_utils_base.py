@@ -282,13 +282,15 @@ class FormattedParameter(BasicParameter):
         Returns:
             FormattedParameter: a new FormattedParameter object
         """
-        return FormattedParameter(self._str_format, self._value, self._yaml_key)
+        return FormattedParameter(
+            self._str_format, self._value, self._yaml_key, self._position, self._mapped_values)
 
 
 class LogParameter(FormattedParameter):
     """A class for a test log file parameter which is read from a yaml file."""
 
-    def __init__(self, directory, str_format, default=None):
+    def __init__(self, directory, str_format, default=None, yaml_key=None, position=None,
+                 mapped_values=None):
         """Create a LogParameter  object.
 
         Args:
@@ -297,8 +299,14 @@ class LogParameter(FormattedParameter):
             str_format (str): format string used to convert the value into an
                 command line argument string
             default (object): default value for the param
+            yaml_key (str, optional): alternative yaml key name to use when
+                assigning the value from a yaml file. Default is None which
+                will use the object's variable name as the yaml key.
+            position (int, optional): position of the parameter for sorting. Default is None
+            mapped_values (dict, optional): dict of values to replace. Default is None,
+                which uses the direct value.
         """
-        super().__init__(str_format, default)
+        super().__init__(str_format, default, yaml_key, position, mapped_values)
         self._directory = directory
         self._add_directory()
 
@@ -351,7 +359,9 @@ class LogParameter(FormattedParameter):
         Returns:
             LogParameter: a new LogParameter object
         """
-        return LogParameter(self._directory, self._str_format, self._value)
+        return LogParameter(
+            self._directory, self._str_format, self._value, self._yaml_key, self._position,
+            self._mapped_values)
 
 
 class ObjectWithParameters():

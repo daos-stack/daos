@@ -485,7 +485,7 @@ class ExecutableCommand(CommandWithParameters):
         """
         return ExecutableCommand(
             self.namespace, self._command, self._path, self.run_as_subprocess,
-            self.check_results_list)
+            self.check_results_list, self.run_user)
 
 
 class CommandWithSubCommand(ExecutableCommand):
@@ -641,6 +641,8 @@ class CommandWithSubCommand(ExecutableCommand):
         if sub_command_list is not None:
             for sub_command in sub_command_list:
                 full_command.set_sub_command(sub_command)
+                if full_command.sub_command_class is None:
+                    break
                 full_command = full_command.sub_command_class
 
         # Update any argument values for the full command
@@ -719,7 +721,8 @@ class CommandWithSubCommand(ExecutableCommand):
         Returns:
             CommandWithSubCommand: a new CommandWithSubCommand object
         """
-        return CommandWithSubCommand(self.namespace, self._command, self._path)
+        return CommandWithSubCommand(
+            self.namespace, self._command, self._path, self.run_as_subprocess, self.run_user)
 
 
 class SubProcessCommand(CommandWithSubCommand):
@@ -852,7 +855,7 @@ class SubProcessCommand(CommandWithSubCommand):
             SubProcessCommand: a new SubProcessCommand object
         """
         return SubProcessCommand(
-            self.namespace, self._command, self._path, self.pattern_timeout.value)
+            self.namespace, self._command, self._path, self.pattern_timeout.value, self.run_user)
 
 
 class YamlCommand(SubProcessCommand):
@@ -1111,7 +1114,8 @@ class YamlCommand(SubProcessCommand):
             YamlCommand: a new YamlCommand object
         """
         return YamlCommand(
-            self.namespace, self._command, self._path, self.yaml, self.pattern_timeout.value)
+            self.namespace, self._command, self._path, self.yaml, self.pattern_timeout.value,
+            self.run_user)
 
 
 class SubprocessManager(ObjectWithParameters):
