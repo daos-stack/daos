@@ -17,7 +17,7 @@ class HarnessUnitTest(TestWithoutServers):
     """
 
     def _verify_command_result(self, result, passed, expected, timeout, homogeneous, passed_hosts,
-                               failed_hosts, all_stdout, all_stderr):
+                               failed_hosts, all_stdout, all_stderr, join_stdout, join_stderr):
         """Verify a CommandResult object.
 
         Args:
@@ -30,9 +30,9 @@ class HarnessUnitTest(TestWithoutServers):
             failed_hosts (NodeSet): expected set of hosts on which the command failed
             all_stdout (dict): expected stdout str per host key
             all_stderr (dict): expected stderr str per host key
+            join_stdout (str): expected all stdout joined into one string
+            join_stderr (str): expected all stderr joined into one string
         """
-        join_stdout = '\n'.join(filter(None, all_stdout.values()))
-        join_stderr = '\n'.join(filter(None, all_stderr.values()))
         self.assertEqual(passed, result.passed, 'Incorrect CommandResult.passed')
         self.assertEqual(len(expected), len(result.output), 'Incorrect CommandResult.output count')
         sorted_output = sorted(result.output)
@@ -253,7 +253,9 @@ class HarnessUnitTest(TestWithoutServers):
             passed_hosts=host,
             failed_hosts=NodeSet(),
             all_stdout={str(host): 'GNU/Linux'},
-            all_stderr={str(host): ''}
+            all_stderr={str(host): ''},
+            join_stdout='GNU/Linux',
+            join_stderr='',
         )
         self.log_step('Unit Test Passed')
 
@@ -277,7 +279,9 @@ class HarnessUnitTest(TestWithoutServers):
             passed_hosts=host,
             failed_hosts=NodeSet(),
             all_stdout={str(host): 'stdout'},
-            all_stderr={str(host): 'stderr'}
+            all_stderr={str(host): 'stderr'},
+            join_stdout='stdout',
+            join_stderr='stderr',
         )
         self.log_step('Unit Test Passed')
 
@@ -301,7 +305,9 @@ class HarnessUnitTest(TestWithoutServers):
             passed_hosts=host,
             failed_hosts=NodeSet(),
             all_stdout={str(host): ''},
-            all_stderr={str(host): 'stderr'}
+            all_stderr={str(host): 'stderr'},
+            join_stdout='',
+            join_stderr='stderr',
         )
         self.log_step('Unit Test Passed')
 
@@ -325,7 +331,9 @@ class HarnessUnitTest(TestWithoutServers):
             passed_hosts=NodeSet(),
             failed_hosts=host,
             all_stdout={str(host): 'fail'},
-            all_stderr={str(host): ''}
+            all_stderr={str(host): ''},
+            join_stdout='fail',
+            join_stderr='',
         )
         self.log_step('Unit Test Passed')
 
@@ -349,7 +357,9 @@ class HarnessUnitTest(TestWithoutServers):
             passed_hosts=NodeSet(),
             failed_hosts=host,
             all_stdout={str(host): 'wait'},
-            all_stderr={str(host): ''}
+            all_stderr={str(host): ''},
+            join_stdout='wait',
+            join_stderr='',
         )
         self.log_step('Unit Test Passed')
 
@@ -373,7 +383,9 @@ class HarnessUnitTest(TestWithoutServers):
             passed_hosts=NodeSet(hosts[0]),
             failed_hosts=NodeSet(),
             all_stdout={hosts[0]: 'GNU/Linux'},
-            all_stderr={hosts[0]: ''}
+            all_stderr={hosts[0]: ''},
+            join_stdout='GNU/Linux',
+            join_stderr='',
         )
         self.log_step('Unit Test Passed')
 
@@ -397,7 +409,9 @@ class HarnessUnitTest(TestWithoutServers):
             passed_hosts=hosts,
             failed_hosts=NodeSet(),
             all_stdout={str(hosts): 'GNU/Linux'},
-            all_stderr={str(hosts): ''}
+            all_stderr={str(hosts): ''},
+            join_stdout='\n'.join(['GNU/Linux'] * len(hosts)),
+            join_stderr='',
         )
         self.log_step('Unit Test Passed')
 
@@ -431,6 +445,8 @@ class HarnessUnitTest(TestWithoutServers):
                 hosts[0]: '',
                 hosts[1]: ''
             },
+            join_stdout='\n'.join(hosts),
+            join_stderr='',
         )
         self.log_step('Unit Test Passed')
 
@@ -463,7 +479,9 @@ class HarnessUnitTest(TestWithoutServers):
             all_stderr={
                 hosts[0]: '',
                 hosts[1]: ''
-            }
+            },
+            join_stdout='stdout\nstdout\nstderr',
+            join_stderr='',
         )
         self.log_step('Unit Test Passed')
 
@@ -496,7 +514,9 @@ class HarnessUnitTest(TestWithoutServers):
             all_stderr={
                 hosts[0]: '',
                 hosts[1]: 'stderr'
-            }
+            },
+            join_stdout='stdout\nstdout',
+            join_stderr='stderr',
         )
         self.log_step('Unit Test Passed')
 
@@ -529,7 +549,9 @@ class HarnessUnitTest(TestWithoutServers):
             all_stderr={
                 hosts[0]: '',
                 hosts[1]: 'stderr'
-            }
+            },
+            join_stdout='',
+            join_stderr='stderr',
         )
         self.log_step('Unit Test Passed')
 
@@ -562,7 +584,9 @@ class HarnessUnitTest(TestWithoutServers):
             all_stderr={
                 hosts[0]: '',
                 hosts[1]: ''
-            }
+            },
+            join_stdout='pass\nfail',
+            join_stderr='',
         )
         self.log_step('Unit Test Passed')
 
@@ -595,6 +619,8 @@ class HarnessUnitTest(TestWithoutServers):
             all_stderr={
                 hosts[0]: '',
                 hosts[1]: ''
-            }
+            },
+            join_stdout='pass\nwait',
+            join_stderr='',
         )
         self.log_step('Unit Test Passed')
