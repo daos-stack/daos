@@ -4,6 +4,7 @@ provider: ofi+tcp
 disable_hugepages: true
 control_log_mask: DEBUG
 access_points: ['localhost:10001']
+system_ram_reserved: 8
 engines:
   -
     targets: 4
@@ -19,4 +20,3 @@ engines:
       -
         class: ram
         scm_mount: /mnt/daos
-    system_ram_reserved: 8
