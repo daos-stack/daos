@@ -304,6 +304,8 @@ struct vos_pool {
 	vos_chkpt_update_cb_t    vp_update_cb;
 	vos_chkpt_wait_cb_t      vp_wait_cb;
 	void                    *vp_chkpt_arg;
+	/** Array for active DTX records */
+	struct lru_array	*vp_dtx_array;
 	/* The count of committed DTXs for the whole pool. */
 	uint32_t		 vp_dtx_committed_count;
 	/** Data threshold size */
@@ -324,8 +326,6 @@ struct vos_container {
 	uuid_t			vc_id;
 	/* DAOS handle for object index btree */
 	daos_handle_t		vc_btr_hdl;
-	/** Array for active DTX records */
-	struct lru_array	*vc_dtx_array;
 	/* The handle for active DTX table */
 	daos_handle_t		vc_dtx_active_hdl;
 	/* The handle for committed DTX table */

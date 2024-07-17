@@ -83,6 +83,7 @@ struct ds_pool {
 	uuid_t			sp_srv_cont_hdl;
 	uuid_t			sp_srv_pool_hdl;
 	uint32_t		sp_stopping:1,
+				sp_starting:1,
 				sp_cr_checked:1,
 				sp_fetch_hdls:1,
 				sp_need_discard:1,
