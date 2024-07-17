@@ -1034,7 +1034,7 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont_svc *sv
 		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 
-	cont_create_in_get_data(rpc, CONT_CREATE, DAOS_CONT_VERSION, &cprop);
+	cont_create_in_get_data(rpc, CONT_CREATE, cont_proto_ver, &cprop);
 
 	/* Determine if the label property was supplied, and if so,
 	 * verify that it is not the default unset label.
