@@ -410,7 +410,7 @@ class HarnessUnitTest(TestWithoutServers):
             failed_hosts=NodeSet(),
             all_stdout={str(hosts): 'GNU/Linux'},
             all_stderr={str(hosts): ''},
-            join_stdout='\n'.join(['GNU/Linux'] * len(hosts)),
+            join_stdout='GNU/Linux',
             join_stderr='',
         )
         self.log_step('Unit Test Passed')
