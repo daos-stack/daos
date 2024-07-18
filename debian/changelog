@@ -1,3 +1,9 @@
+daos (2.7.100-3) unstable; urgency=medium
+  [ Dalton Bohning ]
+  * Add pciutils-devel build dep for client-tests package
+
+ -- Dalton Bohning <dalton.bohning@intel.com>>  Thu, 11 Jul 2024 10:00:00 -0800
+
 daos (2.7.100-2) unstable; urgency=medium
   [ Tom Nabarro ]
   * Add pciutils runtime dep for daos_server lspci call
