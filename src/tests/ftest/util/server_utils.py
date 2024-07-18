@@ -5,7 +5,6 @@
 """
 # pylint: disable=too-many-lines
 
-import os
 import random
 import re
 import time
@@ -108,7 +107,7 @@ class DaosServerManager(SubprocessManager):
         # to access the daos_servers when they are started
         self.dmg = get_dmg_command(
             group, dmg_cert_dir, bin_dir, dmg_config_file, dmg_config_temp, access_points_suffix,
-            os.environ.get('DAOS_TEST_AGENT_USER', 'root'))  # TODO proper
+            getuser())
 
         # Set the correct certificate file ownership
         if manager == "Systemctl":

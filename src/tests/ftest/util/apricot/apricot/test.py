@@ -1688,7 +1688,7 @@ class TestWithServers(TestWithoutServers):
 
         dmg_cmd = get_dmg_command(
             self.server_group, dmg_cert_dir, self.bin, dmg_config_file,
-            dmg_config_temp, self.access_points_suffix, self.test_env.agent_user)
+            dmg_config_temp, self.access_points_suffix, getuser())
         dmg_cmd.hostlist = self.access_points
         return dmg_cmd
 

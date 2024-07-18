@@ -1027,7 +1027,9 @@ class YamlCommand(SubProcessCommand):
                         dst_file = os.path.join(name, file_name)
                         self.log.debug("  %s -> %s", src_file, dst_file)
                         # Don't use sudo if running as the current user
-                        _sudo = self.run_user != getuser()
+                        # TODO proper
+                        _sudo = self.run_user != getuser() or self.certificate_owner != getuser() or \
+                            dst_file.startswith('/etc')
                         _owner = self.certificate_owner if _sudo else None
                         result = distribute_files(
                             hosts, src_file, dst_file, mkdir=False,
@@ -1069,7 +1071,9 @@ class YamlCommand(SubProcessCommand):
                     self.temporary_file, self.yaml.filename, hosts)
                 try:
                     # Don't use sudo if running as the current user
-                    _sudo = self.run_user != getuser()
+                    # TODO proper
+                    _sudo = self.run_user != getuser() or self.certificate_owner != getuser() or \
+                            self.yaml.filename.startswith('/etc')
                     _owner = self.certificate_owner if _sudo else None
                     distribute_files(
                         hosts, self.temporary_file, self.yaml.filename,
