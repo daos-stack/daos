@@ -18,6 +18,7 @@ class HarnessUnitTest(TestWithoutServers):
 
     def _verify_command_result(self, result, passed, expected, timeout, homogeneous, passed_hosts,
                                failed_hosts, all_stdout, all_stderr, join_stdout, join_stderr):
+        # pylint: disable=too-many-arguments
         """Verify a CommandResult object.
 
         Args:
