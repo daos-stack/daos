@@ -2120,7 +2120,7 @@ class PosixTests():
         assert check_dir_attr(data, 'S2', 'S2', 'S4', 1048576)
 
         data = run_fs_get_attr(self.conf, '--path', file1)
-        assert check_file_attr(data, 'S4', '1048576')
+        assert check_file_attr(data, 'S4', 1048576)
 
         if dfuse.stop():
             self.fatal_errors = True
@@ -3798,7 +3798,7 @@ class PosixTests():
         assert check_dir_attr(data, 'S1', 'S2', 'S2', 16)
 
         data = run_fs_get_attr(self.conf, '--path', file2)
-        assert check_file_attr(data, 'S1', '16')
+        assert check_file_attr(data, 'S1', 16)
 
     def test_cont_copy(self):
         """Verify that copying into a container works"""
@@ -4314,14 +4314,14 @@ class PosixTests():
 
         # Check entries after fixing
         data = run_fs_get_attr(self.conf, '--path', fname1)
-        assert check_file_attr(data, None, '1048576')
+        assert check_file_attr(data, None, 1048576)
         with open(fname1, 'r', encoding='ascii', errors='ignore') as fd:
             data = fd.read()
             if data != 'test1':
                 print('/test_dir/f1 data is corrupted')
 
         data = run_fs_get_attr(self.conf, '--path', fname3)
-        assert check_file_attr(data, None, '1048576')
+        assert check_file_attr(data, None, 1048576)
         with open(fname3, 'r', encoding='ascii', errors='ignore') as fd:
             data = fd.read()
             if data != 'test3':
