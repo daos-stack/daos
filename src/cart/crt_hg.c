@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -900,8 +900,10 @@ crt_hg_class_init(crt_provider_t provider, int ctx_idx, bool primary, int iface_
 
 	init_info.request_post_init = crt_gdata.cg_post_init;
 	init_info.request_post_incr = crt_gdata.cg_post_incr;
+	init_info.multi_recv_op_max = crt_gdata.cg_mrecv_buf;
+	init_info.copy_on_multi_recv = true;
 
-	hg_class = HG_Init_opt(info_string, crt_is_service(), &init_info);
+	hg_class = HG_Init_opt2(info_string, crt_is_service(), HG_VERSION(2, 4), &init_info);
 	if (hg_class == NULL) {
 		D_ERROR("Could not initialize HG class.\n");
 		D_GOTO(out, rc = -DER_HG);
