@@ -335,7 +335,7 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 		}
 	}
 
-	cmd.Infof("oid = %s", oidStr)
+	cmd.Infof("OID = %s", oidStr)
 	cmd.Infof("Object Class = %s", C.GoString(&oclassName[0]))
 	if C.mode_is_dir(cmode) {
 		cmd.Infof("Directory Creation Object Class = %s", C.GoString(&diroclassName[0]))
