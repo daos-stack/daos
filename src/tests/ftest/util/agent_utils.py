@@ -203,6 +203,14 @@ class DaosAgentCommand(YamlCommand):
         """
         return self.get_config_value("runtime_dir")
 
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            DaosAgentCommand: a new DaosAgentCommand object
+        """
+        return DaosAgentCommand(self._path, self.yaml, self.pattern_timeout.value, self.run_user)
+
 
 class DaosAgentManager(SubprocessManager):
     """Manages the daos_agent execution on one or more hosts."""
