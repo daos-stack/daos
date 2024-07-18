@@ -115,6 +115,13 @@ const (
 	PoolQueryOptionEnabledEngines = "enabled_engines"
 	// PoolQueryOptionDisabledEngines retrieves disabled engines as part of the pool query.
 	PoolQueryOptionDisabledEngines = "disabled_engines"
+
+	// PoolConnectFlagReadOnly indicates that the connection is read-only.
+	PoolConnectFlagReadOnly = C.DAOS_PC_RO
+	// PoolConnectFlagReadWrite indicates that the connection is read-write.
+	PoolConnectFlagReadWrite = C.DAOS_PC_RW
+	// PoolConnectFlagExclusive indicates that the connection is exclusive.
+	PoolConnectFlagExclusive = C.DAOS_PC_EX
 )
 
 var poolQueryOptMap = map[C.int]string{
