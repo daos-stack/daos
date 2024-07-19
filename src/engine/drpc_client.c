@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -360,6 +360,105 @@ out_req:
 	D_FREE(req);
 out_label:
 	D_FREE(frq.label);
+out:
+	return rc;
+}
+
+int
+ds_get_pool_list(uint64_t *npools, daos_mgmt_pool_info_t *pools)
+{
+	struct drpc_alloc   alloc   = PROTO_ALLOCATOR_INIT(alloc);
+	Srv__ListPoolsReq   lp_req  = SRV__LIST_POOLS_REQ__INIT;
+	Srv__ListPoolsResp *lp_resp = NULL;
+	Drpc__Response     *dresp;
+	uint8_t            *req;
+	size_t              req_size;
+	d_rank_list_t      *svc_ranks;
+	int                 i;
+	int                 rc;
+
+	if (npools == NULL) {
+		D_ERROR("npools may not be NULL\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	lp_req.include_all = false; /* only list Ready pools */
+
+	req_size = srv__list_pools_req__get_packed_size(&lp_req);
+	D_ALLOC(req, req_size);
+	if (req == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+	srv__list_pools_req__pack(&lp_req, req);
+
+	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_LIST_POOLS, req, req_size,
+			   0 /* flags */, &dresp);
+	if (rc != 0)
+		goto out_req;
+	if (dresp->status != DRPC__STATUS__SUCCESS) {
+		D_ERROR("received erroneous dRPC response: %d\n", dresp->status);
+		D_GOTO(out_dresp, rc = -DER_IO);
+	}
+
+	lp_resp = srv__list_pools_resp__unpack(&alloc.alloc, dresp->body.len, dresp->body.data);
+	if (alloc.oom) {
+		D_GOTO(out_dresp, rc = -DER_NOMEM);
+	} else if (lp_resp == NULL) {
+		D_ERROR("failed to unpack resp (list pools)\n");
+		D_GOTO(out_dresp, rc = -DER_NOMEM);
+	}
+
+	if (*npools > 0 && lp_resp->n_pools > *npools) {
+		D_ERROR("pool list exceeds request buffer (req: %lu, actual: %lu)", *npools,
+			lp_resp->n_pools);
+		D_GOTO(out_resp, rc = -DER_OVERFLOW);
+	}
+
+	*npools = lp_resp->n_pools;
+	if (pools == NULL) {
+		/* caller just needs the # of pools */
+		D_GOTO(out_resp, rc);
+	}
+
+	for (i = 0; i < lp_resp->n_pools; i++) {
+		daos_mgmt_pool_info_t    *mgmt_pool = &pools[i];
+		Srv__ListPoolsResp__Pool *resp_pool = lp_resp->pools[i];
+
+		rc = uuid_parse(resp_pool->uuid, mgmt_pool->mgpi_uuid);
+		if (rc != 0) {
+			D_ERROR("failed to parse pool uuid: %d\n", rc);
+			D_GOTO(out_free_pools, rc = -DER_INVAL);
+		}
+
+		D_STRNDUP(mgmt_pool->mgpi_label, resp_pool->label, DAOS_PROP_LABEL_MAX_LEN);
+		if (mgmt_pool->mgpi_label == NULL) {
+			D_ERROR("failed to copy pool label\n");
+			D_GOTO(out_free_pools, rc = -DER_NOMEM);
+		}
+
+		svc_ranks = uint32_array_to_rank_list(resp_pool->svcreps, resp_pool->n_svcreps);
+		if (svc_ranks == NULL) {
+			D_ERROR("failed to create svc ranks list\n");
+			D_GOTO(out_free_pools, rc = -DER_NOMEM);
+		}
+		mgmt_pool->mgpi_svc = svc_ranks;
+	}
+
+out_free_pools:
+	if (rc != 0 && pools != NULL) {
+		for (i = 0; i < lp_resp->n_pools; i++) {
+			daos_mgmt_pool_info_t *mgmt_pool = &pools[i];
+			if (mgmt_pool->mgpi_label)
+				D_FREE(mgmt_pool->mgpi_label);
+			if (mgmt_pool->mgpi_svc)
+				d_rank_list_free(mgmt_pool->mgpi_svc);
+		}
+	}
+out_resp:
+	srv__list_pools_resp__free_unpacked(lp_resp, &alloc.alloc);
+out_dresp:
+	drpc_response_free(dresp);
+out_req:
+	D_FREE(req);
 out:
 	return rc;
 }
