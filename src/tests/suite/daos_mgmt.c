@@ -485,6 +485,45 @@ pool_destroy_disconnect_all(void **state)
 	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
 }
 
+/*
+ * pool_svc_rfcheck_ult shall exit when canceled during a pool destroy
+ * operation. Since it needs to create and destroy a pool, this pool test is
+ * added among the MGMT tests.
+ */
+static void
+pool_destroy_cancel_rfcheck(void **state)
+{
+	test_arg_t   *arg = *state;
+	uuid_t        uuid;
+	int           rc;
+
+	FAULT_INJECTION_REQUIRED();
+
+	if (arg->myrank != 0)
+		return;
+
+	/*
+	 * This will make the pool_svc_rfcheck_ult created during the pool
+	 * create operation loop until it's canceled by the pool destroy
+	 * operation.
+	 */
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_POOL_RFCHECK_FAIL | DAOS_FAIL_ALWAYS);
+
+	print_message("creating pool synchronously ... ");
+	rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL /* tgts */,
+			     256 * 1024 * 1024 /* minimal size */, 0 /* nvme size */,
+			     NULL /* prop */, arg->pool.svc, uuid);
+	assert_rc_equal(rc, 0);
+	print_message("success uuid = "DF_UUIDF"\n", DP_UUID(uuid));
+
+	print_message("destroying pool synchronously ... ");
+	rc = dmg_pool_destroy(dmg_config_file, uuid, arg->group, 1);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
+}
+
 static const struct CMUnitTest tests[] = {
 	{ "MGMT1: create/destroy pool on all tgts",
 	  pool_create_all, async_disable, test_case_teardown},
@@ -501,7 +540,9 @@ static const struct CMUnitTest tests[] = {
 	{ "MGMT7: create: PS steps down from UP_EMPTY",
 	  pool_create_steps_down_from_up_empty, async_disable, test_case_teardown},
 	{ "MGMT8: pool destroy disconnect all",
-	  pool_destroy_disconnect_all, async_disable, test_case_teardown}
+	  pool_destroy_disconnect_all, async_disable, test_case_teardown},
+	{ "MGMT9: pool destroy cancels rfcheck",
+	  pool_destroy_cancel_rfcheck, NULL, test_case_teardown}
 };
 
 static int
