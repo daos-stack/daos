@@ -20,6 +20,11 @@
 #include "evt_priv.h"
 #include <daos/mem.h>
 
+struct vos_sv_addr {
+	umem_off_t	sa_umoff;	/* SV record address */
+	bio_addr_t	sa_addr;	/* SV payload address */
+};
+
 /** I/O context */
 struct vos_io_context {
 	EVT_ENT_ARRAY_LG_PTR(ic_ent_array);
@@ -49,7 +54,10 @@ struct vos_io_context {
 	/** reserved offsets for SCM update */
 	umem_off_t		*ic_umoffs;
 	unsigned int		 ic_umoffs_cnt;
-	unsigned int		 ic_umoffs_at;
+	/** reserved SV addresses */
+	struct vos_sv_addr	*ic_sv_addrs;
+	unsigned int		 ic_sv_addr_cnt;
+	unsigned int		 ic_sv_addr_at;
 	/** reserved NVMe extents */
 	d_list_t		 ic_blk_exts;
 	daos_size_t		 ic_space_held[DAOS_MEDIA_MAX];
@@ -518,6 +526,7 @@ vos_ioc_reserve_fini(struct vos_io_context *ioc)
 	D_ASSERT(d_list_empty(&ioc->ic_blk_exts));
 	D_ASSERT(d_list_empty(&ioc->ic_dedup_entries));
 	D_FREE(ioc->ic_umoffs);
+	D_FREE(ioc->ic_sv_addrs);
 }
 
 static int
@@ -525,6 +534,7 @@ vos_ioc_reserve_init(struct vos_io_context *ioc, struct dtx_handle *dth)
 {
 	struct umem_rsrvd_act	*scm;
 	int			 total_acts = 0;
+	unsigned int		 gang_nr, sv_nr = 0;
 	int			 i;
 
 	if (!ioc->ic_update)
@@ -533,7 +543,24 @@ vos_ioc_reserve_init(struct vos_io_context *ioc, struct dtx_handle *dth)
 	for (i = 0; i < ioc->ic_iod_nr; i++) {
 		daos_iod_t *iod = &ioc->ic_iods[i];
 
+		if (iod->iod_type == DAOS_IOD_SINGLE) {
+			gang_nr = vos_irec_gang_nr(ioc->ic_cont->vc_pool, iod->iod_size);
+			if (gang_nr > UINT8_MAX) {
+				D_ERROR("Too large SV:"DF_U64", gang_nr:%u\n",
+					iod->iod_size, gang_nr);
+				return -DER_REC2BIG;
+			}
+			total_acts += gang_nr;
+			sv_nr++;
+		}
 		total_acts += iod->iod_nr;
+	}
+
+	if (sv_nr > 0) {
+		D_ALLOC_ARRAY(ioc->ic_sv_addrs, sv_nr);
+		if (ioc->ic_sv_addrs == NULL)
+			return -DER_NOMEM;
+		ioc->ic_sv_addr_cnt = sv_nr;
 	}
 
 	D_ALLOC_ARRAY(ioc->ic_umoffs, total_acts);
@@ -685,7 +712,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_remove = ((vos_flags & VOS_OF_REMOVE) != 0);
 	ioc->ic_ec = ((vos_flags & VOS_OF_EC) != 0);
 	ioc->ic_rebuild    = ((vos_flags & VOS_OF_REBUILD) != 0);
-	ioc->ic_umoffs_cnt = ioc->ic_umoffs_at = 0;
+	ioc->ic_umoffs_cnt = 0;
 	ioc->ic_iod_csums = iod_csums;
 	vos_ilog_fetch_init(&ioc->ic_dkey_info);
 	vos_ilog_fetch_init(&ioc->ic_akey_info);
@@ -741,13 +768,26 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 
 	for (i = 0; i < iod_nr; i++) {
 		int iov_nr = iods[i].iod_nr;
+		unsigned int gang_nr;
 		struct bio_sglist *bsgl;
 
-		if ((iods[i].iod_type == DAOS_IOD_SINGLE && iov_nr != 1)) {
-			D_ERROR("Invalid iod_nr=%d, iod_type %d.\n",
-				iov_nr, iods[i].iod_type);
-			rc = -DER_IO_INVAL;
-			goto error;
+		if (iods[i].iod_type == DAOS_IOD_SINGLE) {
+			if (iov_nr != 1) {
+				D_ERROR("Invalid iod_nr=%d, iod_type %d.\n",
+					iov_nr, iods[i].iod_type);
+				rc = -DER_IO_INVAL;
+				goto error;
+			}
+
+			gang_nr = vos_irec_gang_nr(cont->vc_pool, iods[i].iod_size);
+			if (gang_nr > UINT8_MAX) {
+				D_ERROR("Too large SV:"DF_U64", gang_nr:%u\n",
+					iods[i].iod_size, gang_nr);
+				rc = -DER_REC2BIG;
+				goto error;
+			}
+			if (gang_nr > 1)
+				iov_nr = gang_nr;
 		}
 
 		/* Don't bother to initialize SGLs for size fetch */
@@ -820,6 +860,55 @@ save_csum(struct vos_io_context *ioc, struct dcs_csum_info *csum_info,
 	return dcs_csum_info_save(&ioc->ic_csum_list, &ci_duplicate);
 }
 
+static int
+iod_gang_fetch(struct vos_io_context *ioc, struct bio_iov *biov)
+{
+	struct bio_iov	sub_iov = { 0 };
+	uint64_t	tot_len;
+	uint32_t	data_len;
+	int		i, rc = 0;
+
+	if (ioc->ic_size_fetch)
+		return 0;
+
+	if (biov->bi_addr.ba_gang_nr < 2) {
+		D_ERROR("Invalid gang address nr:%u\n", biov->bi_addr.ba_gang_nr);
+		return -DER_INVAL;
+	}
+
+	tot_len = bio_iov2len(biov);
+	if (tot_len == 0) {
+		D_ERROR("Invalid gang addr, nr:%u, rsize:"DF_U64"\n",
+			biov->bi_addr.ba_gang_nr, bio_iov2len(biov));
+		return -DER_INVAL;
+	}
+
+	for (i = 0; i < biov->bi_addr.ba_gang_nr; i++) {
+		bio_gaddr_get(vos_ioc2umm(ioc), &biov->bi_addr, i, &sub_iov.bi_addr.ba_type,
+			      &data_len, &sub_iov.bi_addr.ba_off);
+
+		bio_iov_set_len(&sub_iov, data_len);
+		if (tot_len < data_len) {
+			D_ERROR("Invalid gang addr[%d], nr:%u, rsize:"DF_U64", len:"DF_U64"/%u\n",
+				i, biov->bi_addr.ba_gang_nr, bio_iov2len(biov), tot_len, data_len);
+			return -DER_INVAL;
+		}
+		tot_len -= data_len;
+
+		rc = iod_fetch(ioc, &sub_iov);
+		if (rc)
+			return rc;
+	}
+
+	if (tot_len != 0) {
+		D_ERROR("Invalid gang addr, nr:%u, rsize:"DF_U64", left:"DF_U64"\n",
+			biov->bi_addr.ba_gang_nr, bio_iov2len(biov), tot_len);
+		return -DER_INVAL;
+	}
+
+	return 0;
+}
+
 /** Fetch the single value within the specified epoch range of an key */
 static int
 akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
@@ -874,7 +963,11 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 		return -DER_CSUM;
 	}
 
-	rc = iod_fetch(ioc, &biov);
+	if (BIO_ADDR_IS_HOLE(&biov.bi_addr) || !BIO_ADDR_IS_GANG(&biov.bi_addr))
+		rc = iod_fetch(ioc, &biov);
+	else
+		rc = iod_gang_fetch(ioc, &biov);
+
 	if (rc != 0)
 		goto out;
 
@@ -1614,21 +1707,6 @@ out:
 	return rc;
 }
 
-static umem_off_t
-iod_update_umoff(struct vos_io_context *ioc)
-{
-	umem_off_t umoff;
-
-	D_ASSERTF(ioc->ic_umoffs_at < ioc->ic_umoffs_cnt,
-		  "Invalid ioc_reserve at/cnt: %u/%u\n",
-		  ioc->ic_umoffs_at, ioc->ic_umoffs_cnt);
-
-	umoff = ioc->ic_umoffs[ioc->ic_umoffs_at];
-	ioc->ic_umoffs_at++;
-
-	return umoff;
-}
-
 static struct bio_iov *
 iod_update_biov(struct vos_io_context *ioc)
 {
@@ -1645,6 +1723,20 @@ iod_update_biov(struct vos_io_context *ioc)
 	return biov;
 }
 
+static inline struct vos_sv_addr *
+iod_get_sv_addr(struct vos_io_context *ioc)
+{
+	struct vos_sv_addr	*sv_addr;
+
+	D_ASSERTF(ioc->ic_sv_addr_at < ioc->ic_sv_addr_cnt, "sv_at:%u >= sv_cnt:%u\n",
+		  ioc->ic_sv_addr_at, ioc->ic_sv_addr_cnt);
+
+	sv_addr = &ioc->ic_sv_addrs[ioc->ic_sv_addr_at];
+	ioc->ic_sv_addr_at++;
+
+	return sv_addr;
+}
+
 static int
 akey_update_single(daos_handle_t toh, uint32_t pm_ver, daos_size_t rsize,
 		   daos_size_t gsize, struct vos_io_context *ioc,
@@ -1654,22 +1746,22 @@ akey_update_single(daos_handle_t toh, uint32_t pm_ver, daos_size_t rsize,
 	struct vos_rec_bundle	 rbund;
 	struct dcs_csum_info	 csum;
 	d_iov_t			 kiov, riov;
-	struct bio_iov		*biov;
+	struct bio_iov		 biov;
 	struct dcs_csum_info	*value_csum;
-	umem_off_t		 umoff;
+	struct vos_sv_addr	*sv_addr;
 	daos_epoch_t		 epoch = ioc->ic_epr.epr_hi;
 	int			 rc;
+
+	D_ASSERT(ioc->ic_iov_at == 0);
 
 	ci_set_null(&csum);
 	d_iov_set(&kiov, &key, sizeof(key));
 	key.sk_epoch		= epoch;
 	key.sk_minor_epc	= minor_epc;
 
-	umoff = iod_update_umoff(ioc);
-	D_ASSERT(!UMOFF_IS_NULL(umoff));
-
-	D_ASSERT(ioc->ic_iov_at == 0);
-	biov = iod_update_biov(ioc);
+	sv_addr = iod_get_sv_addr(ioc);
+	D_ASSERT(!UMOFF_IS_NULL(sv_addr->sa_umoff));
+	bio_iov_set(&biov, sv_addr->sa_addr, rsize);
 
 	tree_rec_bundle2iov(&rbund, &riov);
 
@@ -1680,10 +1772,10 @@ akey_update_single(daos_handle_t toh, uint32_t pm_ver, daos_size_t rsize,
 	else
 		rbund.rb_csum	= &csum;
 
-	rbund.rb_biov		= biov;
+	rbund.rb_biov		= &biov;
 	rbund.rb_rsize		= rsize;
 	rbund.rb_gsize		= gsize;
-	rbund.rb_off		= umoff;
+	rbund.rb_off		= sv_addr->sa_umoff;
 	rbund.rb_ver		= pm_ver;
 
 	rc = dbtree_update(toh, &kiov, &riov);
@@ -1832,10 +1924,7 @@ update_value(struct vos_io_context *ioc, daos_iod_t *iod, struct dcs_csum_info *
 	}
 
 	for (i = 0; i < iod->iod_nr; i++) {
-		umem_off_t umoff = iod_update_umoff(ioc);
-
 		if (iod->iod_recxs[i].rx_nr == 0) {
-			D_ASSERT(UMOFF_IS_NULL(umoff));
 			D_DEBUG(DB_IO, "Skip empty write IOD at %d: idx %lu, nr %lu\n", i,
 				(unsigned long)iod->iod_recxs[i].rx_idx,
 				(unsigned long)iod->iod_recxs[i].rx_nr);
@@ -1999,6 +2088,7 @@ dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey,
 		goto out;
 	}
 
+	ioc->ic_sv_addr_at = 0;
 	if (krec->kr_bmap & KREC_BF_NO_AKEY) {
 		struct dcs_csum_info *iod_csums = vos_csum_at(ioc->ic_iod_csums, 0);
 		iod_set_cursor(ioc, 0);
@@ -2027,17 +2117,6 @@ release:
 		rc = vos_key_mark_agg(ioc->ic_cont, krec, ioc->ic_epr.epr_hi);
 
 	return rc;
-}
-
-daos_size_t
-vos_recx2irec_size(daos_size_t rsize, struct dcs_csum_info *csum)
-{
-	struct vos_rec_bundle	rbund;
-
-	rbund.rb_csum	= csum;
-	rbund.rb_rsize	= rsize;
-
-	return vos_irec_size(&rbund);
 }
 
 umem_off_t
@@ -2129,7 +2208,7 @@ reserve_space(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
 	return rc;
 }
 
-static int
+static void
 iod_reserve(struct vos_io_context *ioc, struct bio_iov *biov)
 {
 	struct bio_sglist *bsgl;
@@ -2146,37 +2225,102 @@ iod_reserve(struct vos_io_context *ioc, struct bio_iov *biov)
 	D_DEBUG(DB_TRACE, "media %d offset "DF_X64" size %zd\n",
 		biov->bi_addr.ba_type, biov->bi_addr.ba_off,
 		bio_iov2len(biov));
+}
+
+static inline void
+iod_set_sv_addr(struct vos_io_context *ioc, umem_off_t umoff, bio_addr_t *addr)
+{
+	struct vos_sv_addr	*sv_addr;
+
+	D_ASSERTF(ioc->ic_sv_addr_at < ioc->ic_sv_addr_cnt, "sv_at:%u >= sv_cnt:%u\n",
+		  ioc->ic_sv_addr_at, ioc->ic_sv_addr_cnt);
+
+	sv_addr = &ioc->ic_sv_addrs[ioc->ic_sv_addr_at];
+	sv_addr->sa_umoff = umoff;
+	sv_addr->sa_addr = *addr;
+	ioc->ic_sv_addr_at++;
+}
+
+static int
+gang_reserve_sv(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
+		umem_off_t umoff, unsigned int gang_nr)
+{
+	struct vos_irec_df	*irec;
+	struct bio_iov		 biov = { 0 };
+	bio_addr_t		 gaddr = { 0 };
+	daos_size_t		 alloc_sz;
+	uint64_t		 off;
+	char			*gaddr_ptr;
+	int			 i, rc;
+
+	D_ASSERT(gang_nr > 1);
+	D_ASSERT(size > VOS_GANG_SIZE_THRESH);
+
+	irec = (struct vos_irec_df *)umem_off2ptr(vos_ioc2umm(ioc), umoff);
+	gaddr_ptr = vos_irec2data(irec);
+
+	bio_addr_set(&gaddr, DAOS_MEDIA_SCM, umem_ptr2off(vos_ioc2umm(ioc), gaddr_ptr));
+	gaddr.ba_gang_nr = gang_nr;
+	BIO_ADDR_SET_GANG(&gaddr);
+
+	iod_set_sv_addr(ioc, umoff, &gaddr);
+
+	for (i = 0; i < gang_nr; i++) {
+		D_ASSERT(size > 0);
+		alloc_sz = min(size, VOS_GANG_SIZE_THRESH);
+
+		rc = reserve_space(ioc, media, alloc_sz, &off);
+		if (rc) {
+			DL_ERROR(rc, "Reserve SV on %s failed.",
+				 media == DAOS_MEDIA_SCM ? "SCM" : "NVMe");
+			return rc;
+		}
+
+		bio_addr_set(&biov.bi_addr, media, off);
+		bio_iov_set_len(&biov, alloc_sz);
+		iod_reserve(ioc, &biov);
+
+		/*
+		 * Update the SV record metadata on SCM, tx_add_range() will be called by
+		 * svt_rec_alloc_common() later.
+		 */
+		bio_gaddr_set(vos_ioc2umm(ioc), &gaddr, i, media, alloc_sz, off);
+
+		size -= alloc_sz;
+	}
+	D_ASSERT(size == 0);
+
 	return 0;
 }
 
 /* Reserve single value record on specified media */
 static int
-vos_reserve_single(struct vos_io_context *ioc, uint16_t media,
-		   daos_size_t size)
+vos_reserve_single(struct vos_io_context *ioc, uint16_t media, daos_size_t size)
 {
 	struct vos_irec_df	*irec;
 	daos_size_t		 scm_size;
 	umem_off_t		 umoff;
 	struct bio_iov		 biov;
 	uint64_t		 off = 0;
-	int			 rc;
+	struct vos_rec_bundle	 rbund = { 0 };
+	int			 rc, gang_nr;
 	struct dcs_csum_info	*value_csum = vos_csum_at(ioc->ic_iod_csums, ioc->ic_sgl_at);
 
-	/*
-	 * TODO:
-	 * To eliminate internal fragmentaion, misaligned record (record size
-	 * isn't aligned with 4K) on NVMe could be split into two parts, large
-	 * aligned part will be stored on NVMe and being referenced by
-	 * vos_irec_df->ir_ex_addr, small unaligned part will be stored on SCM
-	 * along with vos_irec_df, being referenced by vos_irec_df->ir_body.
-	 */
-	scm_size = (media == DAOS_MEDIA_SCM) ?
-		vos_recx2irec_size(size, value_csum) :
-		vos_recx2irec_size(0, value_csum);
+	gang_nr = vos_irec_gang_nr(ioc->ic_cont->vc_pool, size);
+	D_ASSERT(gang_nr <= UINT8_MAX);
 
+	rbund.rb_csum	= value_csum;
+	rbund.rb_rsize	= size;
+	scm_size = vos_irec_msize(ioc->ic_cont->vc_pool, &rbund);
+
+	/* Payload is allocated along with the SV meta record */
+	if (media == DAOS_MEDIA_SCM && gang_nr == 0)
+		scm_size += size;
+
+	/* Reserve SCM for SV meta record */
 	rc = reserve_space(ioc, DAOS_MEDIA_SCM, scm_size, &off);
 	if (rc) {
-		D_ERROR("Reserve SCM for SV failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Reserve SCM for SV meta failed.");
 		return rc;
 	}
 
@@ -2185,13 +2329,14 @@ vos_reserve_single(struct vos_io_context *ioc, uint16_t media,
 	irec = (struct vos_irec_df *)umem_off2ptr(vos_ioc2umm(ioc), umoff);
 	vos_irec_init_csum(irec, value_csum);
 
+	/* The SV is huge, turn to gang allocation */
+	if (gang_nr > 0)
+		return gang_reserve_sv(ioc, media, size, umoff, gang_nr);
+
 	memset(&biov, 0, sizeof(biov));
 	if (size == 0) { /* punch */
 		bio_addr_set_hole(&biov.bi_addr, 1);
-		goto done;
-	}
-
-	if (media == DAOS_MEDIA_SCM) {
+	} else if (media == DAOS_MEDIA_SCM) {
 		char *payload_addr;
 
 		/* Get the record payload offset */
@@ -2201,15 +2346,16 @@ vos_reserve_single(struct vos_io_context *ioc, uint16_t media,
 	} else {
 		rc = reserve_space(ioc, DAOS_MEDIA_NVME, size, &off);
 		if (rc) {
-			D_ERROR("Reserve NVMe for SV failed. "DF_RC"\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "Reserve SV on NVMe failed.");
 			return rc;
 		}
 	}
-done:
+
 	bio_addr_set(&biov.bi_addr, media, off);
 	bio_iov_set_len(&biov, size);
-	rc = iod_reserve(ioc, &biov);
+	iod_reserve(ioc, &biov);
+
+	iod_set_sv_addr(ioc, umoff, &biov.bi_addr);
 
 	return rc;
 }
@@ -2220,38 +2366,25 @@ vos_reserve_recx(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
 {
 	struct bio_iov	biov;
 	uint64_t	off = 0;
-	int		rc;
+	int		rc = 0;
 
 	memset(&biov, 0, sizeof(biov));
 	/* recx punch */
-	if (size == 0 || media != DAOS_MEDIA_SCM) {
-		ioc->ic_umoffs[ioc->ic_umoffs_cnt] = UMOFF_NULL;
-		ioc->ic_umoffs_cnt++;
-		if (size == 0) {
-			bio_addr_set_hole(&biov.bi_addr, 1);
-			goto done;
-		}
+	if (size == 0) {
+		bio_addr_set_hole(&biov.bi_addr, 1);
+		goto done;
 	}
 
 	if (ioc->ic_dedup && size >= ioc->ic_dedup_th &&
-	    vos_dedup_lookup(vos_cont2pool(ioc->ic_cont), csum, csum_len,
-			     &biov)) {
+	    vos_dedup_lookup(vos_cont2pool(ioc->ic_cont), csum, csum_len, &biov)) {
 		if (biov.bi_data_len == size) {
 			D_ASSERT(biov.bi_addr.ba_off != 0);
-			ioc->ic_umoffs[ioc->ic_umoffs_cnt] =
-							biov.bi_addr.ba_off;
-			ioc->ic_umoffs_cnt++;
-			return iod_reserve(ioc, &biov);
+			iod_reserve(ioc, &biov);
+			return 0;
 		}
 		memset(&biov, 0, sizeof(biov));
 	}
 
-	/*
-	 * TODO:
-	 * To eliminate internal fragmentaion, misaligned recx (total recx size
-	 * isn't aligned with 4K) on NVMe could be split into two evtree rects,
-	 * larger rect will be stored on NVMe and small reminder on SCM.
-	 */
 	rc = reserve_space(ioc, media, size, &off);
 	if (rc) {
 		D_ERROR("Reserve recx failed. "DF_RC"\n", DP_RC(rc));
@@ -2260,7 +2393,7 @@ vos_reserve_recx(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
 done:
 	bio_addr_set(&biov.bi_addr, media, off);
 	bio_iov_set_len(&biov, size);
-	rc = iod_reserve(ioc, &biov);
+	iod_reserve(ioc, &biov);
 
 	return rc;
 }

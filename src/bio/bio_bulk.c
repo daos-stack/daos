@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021-2022 Intel Corporation.
+ * (C) Copyright 2021-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -640,6 +640,7 @@ bulk_map_one(struct bio_desc *biod, struct bio_iov *biov, void *data)
 		goto done;
 	}
 	D_ASSERT(!BIO_ADDR_IS_DEDUP(&biov->bi_addr));
+	D_ASSERT(!BIO_ADDR_IS_GANG(&biov->bi_addr));
 
 	hdl = bulk_get_hdl(biod, biov, roundup_pgs(pg_cnt), pg_off, arg);
 	if (hdl == NULL) {
