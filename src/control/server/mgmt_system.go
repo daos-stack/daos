@@ -391,9 +391,9 @@ func (svc *mgmtSvc) updateFabricProviders(provList []string, publisher events.Pu
 	return nil
 }
 
-func newFabricProvChangedEvent(old, new string) *events.RASEvent {
+func newFabricProvChangedEvent(o, n string) *events.RASEvent {
 	return events.NewGenericEvent(events.RASSystemFabricProvChanged, events.RASSeverityNotice,
-		fmt.Sprintf("system fabric provider has changed: %s -> %s", old, new), "")
+		fmt.Sprintf("system fabric provider has changed: %s -> %s", o, n), "")
 }
 
 // reqGroupUpdate requests a group update.
