@@ -349,24 +349,29 @@ func (mod *mgmtModule) populateNUMAFabricMap(ctx context.Context, resp *mgmtpb.G
 	}
 	defer unlockMap()
 
-	resp.NumaFabricInterfaces = make(map[uint32]*mgmtpb.FabricInterfaces)
-	for numaNode, fis := range numaMap {
+	numNUMANodes := numaMap.MaxNUMANode() + 1 // NUMA indexed by zero
+	resp.NumaFabricInterfaces = make([]*mgmtpb.FabricInterfaces, numNUMANodes)
+	for numaNode := 0; numaNode < numNUMANodes; numaNode++ {
 		pbFIs := &mgmtpb.FabricInterfaces{
-			Ifaces: make([]*mgmtpb.FabricInterface, 0, len(fis)),
+			NumaNode: uint32(numaNode),
 		}
 
-		for _, fi := range fis {
-			if fi.HasProvider(resp.ClientNetHint.Provider) {
-				pbFIs.Ifaces = append(pbFIs.Ifaces, &mgmtpb.FabricInterface{
-					NumaNode:  uint32(numaNode),
-					Interface: fi.Name,
-					Domain:    fi.Domain,
-					Provider:  resp.ClientNetHint.Provider,
-				})
+		fis, exists := numaMap[numaNode]
+		if exists {
+			pbFIs.Ifaces = make([]*mgmtpb.FabricInterface, 0, len(fis))
+			for _, fi := range fis {
+				if fi.HasProvider(resp.ClientNetHint.Provider) {
+					pbFIs.Ifaces = append(pbFIs.Ifaces, &mgmtpb.FabricInterface{
+						NumaNode:  uint32(numaNode),
+						Interface: fi.Name,
+						Domain:    fi.Domain,
+						Provider:  resp.ClientNetHint.Provider,
+					})
+				}
 			}
 		}
 
-		resp.NumaFabricInterfaces[uint32(numaNode)] = pbFIs
+		resp.NumaFabricInterfaces[numaNode] = pbFIs
 	}
 
 	return nil

@@ -32,6 +32,46 @@ func testFabricProviderSet(prov ...string) *hardware.FabricProviderSet {
 	return hardware.NewFabricProviderSet(providers...)
 }
 
+func TestAgent_NUMAFabricMap_MaxNUMANode(t *testing.T) {
+	for name, tc := range map[string]struct {
+		nfm       NUMAFabricMap
+		expResult int
+	}{
+		"nil": {
+			expResult: -1,
+		},
+		"empty": {
+			nfm:       NUMAFabricMap{},
+			expResult: -1,
+		},
+		"single node 0": {
+			nfm: NUMAFabricMap{
+				0: []*FabricInterface{},
+			},
+			expResult: 0,
+		},
+		"consecutive": {
+			nfm: NUMAFabricMap{
+				0: []*FabricInterface{},
+				1: []*FabricInterface{},
+				2: []*FabricInterface{},
+			},
+			expResult: 2,
+		},
+		"non-consecutive": {
+			nfm: NUMAFabricMap{
+				2: []*FabricInterface{},
+				7: []*FabricInterface{},
+			},
+			expResult: 7,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.AssertEqual(t, tc.expResult, tc.nfm.MaxNUMANode(), "")
+		})
+	}
+}
+
 func TestAgent_NewNUMAFabric(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)

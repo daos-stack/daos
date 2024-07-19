@@ -74,6 +74,17 @@ type addrFI interface {
 // NUMAFabricMap is an iterable map type that maps from a NUMA node ID to a set of FabricInterfaces.
 type NUMAFabricMap map[int][]*FabricInterface
 
+// MaxNUMANode gets the maximum NUMA node ID in the map.
+func (nfm NUMAFabricMap) MaxNUMANode() int {
+	max := -1
+	for numa := range nfm {
+		if numa > max {
+			max = numa
+		}
+	}
+	return max
+}
+
 // NUMAFabric represents a set of fabric interfaces organized by NUMA node.
 type NUMAFabric struct {
 	log   logging.Logger
