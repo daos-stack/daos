@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -561,4 +561,56 @@ func TestFlags_FsCheckFlag(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestFlags_ModeBitsFlag(t *testing.T) {
+	for name, tc := range map[string]struct {
+		arg     string
+		expFlag *ModeBitsFlag
+		expErr  error
+	}{
+		"unset": {
+			expErr: errors.New("empty file mode flag"),
+		},
+		"not an integer": {
+			arg:    "foo",
+			expErr: errors.New("invalid mode: \"foo\""),
+		},
+		"invalid octal": {
+			arg:    "0999",
+			expErr: errors.New("invalid mode: \"0999\""),
+		},
+		"negative value": {
+			arg:    "-0755",
+			expErr: errors.New("invalid mode: \"-0755\""),
+		},
+		"valid": {
+			arg: "0755",
+			expFlag: &ModeBitsFlag{
+				Set:  true,
+				Mode: 0755,
+			},
+		},
+		"valid with leading zero": {
+			arg: "755",
+			expFlag: &ModeBitsFlag{
+				Set:  true,
+				Mode: 0755,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := ModeBitsFlag{}
+			gotErr := f.UnmarshalFlag(tc.arg)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expFlag, &f); diff != "" {
+				t.Fatalf("unexpected flag value: (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+
 }
