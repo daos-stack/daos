@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -401,10 +401,6 @@ int main(int argc, char **argv)
 
 	if (my_rank != 0)
 		D_GOTO(join, 0);
-
-	/* Wait for all servers to load up */
-	/* TODO: This will be replaced by proper sync when CART-715 is done */
-	sleep(2);
 
 	rc = crt_group_ranks_get(grp, &rank_list);
 	if (rc != 0) {
