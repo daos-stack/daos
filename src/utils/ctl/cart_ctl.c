@@ -799,7 +799,7 @@ main(int argc, char **argv)
 {
 	int rc = 0;
 
-	setenv("D_LOG_MASK", "DEBUG", 1);
+	setenv("D_LOG_MASK", "INFO", 0); /* Don't overwrite if set */
 
 	rc = d_log_init();
 	if (rc != 0)
