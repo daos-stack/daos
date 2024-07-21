@@ -800,8 +800,7 @@ out:
 
 static int
 key_iter_ilog_check(struct vos_krec_df *krec, struct vos_obj_iter *oiter,
-		    vos_iter_type_t type, daos_epoch_range_t *epr,
-		    bool check_existence, struct vos_ts_set *ts_set)
+		    daos_epoch_range_t *epr, bool check_existence, struct vos_ts_set *ts_set)
 {
 	struct umem_instance	*umm;
 	int			 rc;
@@ -828,7 +827,8 @@ out:
 }
 
 static int
-key_ilog_prepare(struct vos_obj_iter *oiter, daos_handle_t toh, int key_type, daos_key_t *key,
+key_ilog_prepare(struct vos_obj_iter *oiter, daos_handle_t toh,
+		 enum vos_tree_class tclass, daos_key_t *key,
 		 int flags, daos_handle_t *sub_toh, struct vos_krec_df **krecp,
 		 daos_epoch_range_t *epr, struct vos_punch_record *punched,
 		 struct vos_ilog_info *info, struct vos_ts_set *ts_set)
@@ -840,7 +840,7 @@ key_ilog_prepare(struct vos_obj_iter *oiter, daos_handle_t toh, int key_type, da
 	if (krecp != NULL)
 		*krecp = NULL;
 
-	rc = key_tree_prepare(obj, toh, key_type, key, flags,
+	rc = key_tree_prepare(obj, toh, tclass, key, flags,
 			      vos_iter_intent(&oiter->it_iter), &krec,
 			      sub_toh, ts_set);
 	if (rc == -DER_NONEXIST)
@@ -853,7 +853,7 @@ key_ilog_prepare(struct vos_obj_iter *oiter, daos_handle_t toh, int key_type, da
 	}
 
 	/* Update the lower bound for nested iterator */
-	rc = key_iter_ilog_check(krec, oiter, key_type, epr, true, ts_set);
+	rc = key_iter_ilog_check(krec, oiter, epr, true, ts_set);
 	if (rc != 0)
 		goto fail;
 
@@ -866,8 +866,10 @@ key_ilog_prepare(struct vos_obj_iter *oiter, daos_handle_t toh, int key_type, da
 
 	return 0;
 fail:
-	if (sub_toh)
-		key_tree_release(*sub_toh, flags & SUBTR_EVT);
+	if (sub_toh) {
+		D_ASSERT(krec != NULL);
+		key_tree_release(*sub_toh, key_tree_is_evt(flags, tclass, krec));
+	}
 	return rc;
 }
 
@@ -919,8 +921,7 @@ key_iter_fill(struct vos_krec_df *krec, struct vos_obj_iter *oiter, bool check_e
 		ts_type = VOS_TS_TYPE_DKEY;
 	}
 
-	rc = key_iter_ilog_check(krec, oiter, oiter->it_iter.it_type, &epr,
-				 check_existence, NULL);
+	rc = key_iter_ilog_check(krec, oiter, &epr, check_existence, NULL);
 	if (rc == -DER_NONEXIST)
 		return VOS_ITER_CB_SKIP;
 	if (rc != 0) {
@@ -1038,7 +1039,7 @@ key_iter_fetch_root(struct vos_obj_iter *oiter, vos_iter_type_t type,
 	info->ii_filter_cb = oiter->it_iter.it_filter_cb;
 	info->ii_filter_arg = oiter->it_iter.it_filter_arg;
 	/* Update the lower bound for nested iterator */
-	rc = key_iter_ilog_check(krec, oiter, type, &info->ii_epr, false, NULL);
+	rc = key_iter_ilog_check(krec, oiter, &info->ii_epr, false, NULL);
 	if (rc != 0)
 		return rc;
 
