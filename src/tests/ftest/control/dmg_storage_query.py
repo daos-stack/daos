@@ -274,11 +274,12 @@ class DmgStorageQuery(ControlTestBase):
                 self.log.debug(error)
                 self.fail("dmg storage query list-devices failed for an unexpected reason")
 
-        timeout = 30
-        engine_down_detected = wait_for_result(
-            log=self.log, get_method=self.check_engine_down, timeout=timeout, delay=10,
-            add_log=False)
-        if not engine_down_detected:
-            self.fail(f"Engine down NOT detected after {timeout} sec!")
+        if expect_failed_engine:
+            timeout = 30
+            engine_down_detected = wait_for_result(
+                log=self.log, get_method=self.check_engine_down, timeout=timeout, delay=10,
+                add_log=False)
+            if not engine_down_detected:
+                self.fail(f"Engine down NOT detected after {timeout} sec!")
 
         self.log.info("Test passed")
