@@ -1857,20 +1857,28 @@ def run_fs_get_attr(conf, *args):
     return data
 
 
+def check_fs_get_attr_oid(data_in, check_type):
+    """Verify a valid oid in output"""
+    if check_type not in data_in:
+        print(f"{check_type} not found")
+        return False
+    data = data_in[check_type]
+    if 'oid' not in data:
+        print("oid is not found!!!")
+        return False
+    oid = data['oid']
+    if not re.match(r"^\d+\.\d+$", oid):
+        print(f"oid does not match expected pattern {oid}")
+        return False
+    return True
+
+
 def check_fs_get_attr(data_in, check_type, **checks):
     """Verify daos fs tool output"""
     if check_type not in data_in:
         print(f"{check_type} not found")
         return False
     data = data_in[check_type]
-    if check_type == 'object':
-        if 'oid' not in data:
-            print("oid is not found!!!")
-            return False
-        oid = data['oid']
-        if not re.match(r"^\d+\.\d+$", oid):
-            print(f"oid does not match expected pattern {oid}")
-            return False
     for key, value in checks.items():
         if value is None:
             continue
@@ -1886,11 +1894,15 @@ def check_fs_get_attr(data_in, check_type, **checks):
 
 def check_file_attr(data, oclass, csize):
     """Verify daos fs tool output"""
-    return check_fs_get_attr(data['response'], 'object', oclass=oclass, chunk_size=csize)
+    if not check_fs_get_attr_oid(data, 'response'):
+        return False
+    return check_fs_get_attr(data, 'response', oclass=oclass, chunk_size=csize)
 
 
 def check_dir_attr(data, oclass, file_oclass, dir_oclass, csize):
     """Verify daos fs tool output"""
+    if not check_fs_get_attr_oid(data['response'], 'object'):
+        return False
     if not check_fs_get_attr(data['response'], 'object', oclass=oclass):
         return False
 
