@@ -591,7 +591,7 @@ func TestFlags_ModeBitsFlag(t *testing.T) {
 				Mode: 0755,
 			},
 		},
-		"valid with leading zero": {
+		"valid without leading zero": {
 			arg: "755",
 			expFlag: &ModeBitsFlag{
 				Set:  true,
