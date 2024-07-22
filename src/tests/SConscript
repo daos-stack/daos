@@ -35,7 +35,7 @@ def build_tests(env):
     daos_perf = denv.d_program('daos_perf', ['daos_perf.c', perf_common], LIBS=libs_client)
     denv.Install('$PREFIX/bin/', daos_perf)
 
-    libs_server += ['vos', 'bio', 'abt']
+    libs_server += ['vos', 'bio', 'abt', 'numa']
     vos_engine = denv.StaticObject(['vos_engine.c'])
 
     if denv["STACK_MMAP"] == 1:

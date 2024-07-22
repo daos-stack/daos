@@ -12,17 +12,17 @@
 
 #define D_LOGFAC	DD_FAC(mgmt)
 
-#include <daos/mgmt.h>
-
 #include <daos/agent.h>
 #include <daos/drpc_modules.h>
 #include <daos/event.h>
 #include <daos/job.h>
+#include <daos/mgmt.h>
 #include <daos/pool.h>
 #include <daos/security.h>
 #include "svc.pb-c.h"
 #include "rpc.h"
 #include <errno.h>
+#include <numa.h>
 #include <stdlib.h>
 #include <sys/ipc.h>
 
@@ -31,6 +31,7 @@ char agent_sys_name[DAOS_SYS_NAME_MAX + 1] = DAOS_DEFAULT_SYS_NAME;
 static struct dc_mgmt_sys_info info_g;
 static Mgmt__GetAttachInfoResp *resp_g;
 
+bool                            d_dynamic_ctx_g;
 int	dc_mgmt_proto_version;
 
 int
@@ -241,6 +242,7 @@ put_attach_info(struct dc_mgmt_sys_info *info, Mgmt__GetAttachInfoResp *resp)
 	if (resp != NULL)
 		free_get_attach_info_resp(resp);
 	d_rank_list_free(info->ms_ranks);
+	D_FREE(info->numa_iface_idx_rr);
 }
 
 void
@@ -413,9 +415,23 @@ dc_get_attach_info(const char *name, bool all_ranks, struct dc_mgmt_sys_info *in
 int
 dc_mgmt_cache_attach_info(const char *name)
 {
+	int rc;
+
 	if (name != NULL && strcmp(name, agent_sys_name) != 0)
 		return -DER_INVAL;
-	return get_attach_info(name, true, &info_g, &resp_g);
+	rc = get_attach_info(name, true, &info_g, &resp_g);
+	if (rc)
+		return rc;
+
+	info_g.numa_entries_nr = resp_g->n_numa_fabric_interfaces;
+	D_ALLOC_ARRAY(info_g.numa_iface_idx_rr, info_g.numa_entries_nr);
+	if (info_g.numa_iface_idx_rr == NULL)
+		D_GOTO(err_rank_list, rc = -DER_NOMEM);
+	return 0;
+
+err_rank_list:
+	put_attach_info(&info_g, resp_g);
+	return rc;
 }
 
 static void
@@ -625,14 +641,51 @@ dc_mgmt_net_cfg(const char *name, crt_init_options_t *crt_info)
 	D_STRNDUP(crt_info->cio_provider, info->provider, DAOS_SYS_INFO_STRING_MAX);
 	if (NULL == crt_info->cio_provider)
 		D_GOTO(cleanup, rc = -DER_NOMEM);
-	D_STRNDUP(crt_info->cio_interface, info->interface, DAOS_SYS_INFO_STRING_MAX);
-	if (NULL == crt_info->cio_interface)
-		D_GOTO(cleanup, rc = -DER_NOMEM);
-	D_STRNDUP(crt_info->cio_domain, info->domain, DAOS_SYS_INFO_STRING_MAX);
-	if (NULL == crt_info->cio_domain)
-		D_GOTO(cleanup, rc = -DER_NOMEM);
 
-	D_INFO("Network interface: %s, Domain: %s\n", info->interface, info->domain);
+	d_getenv_bool("D_DYNAMIC_CTX", &d_dynamic_ctx_g);
+	if (d_dynamic_ctx_g) {
+		int i;
+
+		D_ALLOC(crt_info->cio_interface,
+			DAOS_SYS_INFO_STRING_MAX * resp->n_numa_fabric_interfaces);
+		if (crt_info->cio_interface == NULL)
+			D_GOTO(cleanup, rc = -DER_NOMEM);
+		D_ALLOC(crt_info->cio_domain,
+			DAOS_SYS_INFO_STRING_MAX * resp->n_numa_fabric_interfaces);
+		if (crt_info->cio_domain == NULL)
+			D_GOTO(cleanup, rc = -DER_NOMEM);
+
+		for (i = 0; i < resp->n_numa_fabric_interfaces; i++) {
+			Mgmt__FabricInterfaces *numa_ifaces = resp_g->numa_fabric_interfaces[i];
+			int                     j;
+
+			for (j = 0; j < numa_ifaces->n_ifaces; j++) {
+				if (i != 0 || j != 0) {
+					strcat(crt_info->cio_interface, ",");
+					strcat(crt_info->cio_domain, ",");
+				}
+				strcat(crt_info->cio_interface, numa_ifaces->ifaces[j]->interface);
+				strcat(crt_info->cio_domain, numa_ifaces->ifaces[j]->domain);
+			}
+			/*
+			 * If we have multiple interfaces per numa node, we want to randomize the
+			 * first interface selected in case we have multiple processes running
+			 * there. So initialize the index array at that interface to -1 to know that
+			 * this is the first selection later.
+			 */
+			if (numa_ifaces->n_ifaces)
+				info_g.numa_iface_idx_rr[i] = -1;
+		}
+	} else {
+		D_STRNDUP(crt_info->cio_interface, info->interface, DAOS_SYS_INFO_STRING_MAX);
+		if (NULL == crt_info->cio_interface)
+			D_GOTO(cleanup, rc = -DER_NOMEM);
+		D_STRNDUP(crt_info->cio_domain, info->domain, DAOS_SYS_INFO_STRING_MAX);
+		if (NULL == crt_info->cio_domain)
+			D_GOTO(cleanup, rc = -DER_NOMEM);
+	}
+	D_INFO("Network interface: %s, Domain: %s, Provider: %s\n", crt_info->cio_interface,
+	       crt_info->cio_domain, crt_info->cio_provider);
 	D_DEBUG(DB_MGMT,
 		"CaRT initialization with:\n"
 		"\tD_PROVIDER: %s, CRT_TIMEOUT: %d, CRT_SECONDARY_PROVIDER: %s\n",
@@ -663,6 +716,64 @@ int dc_mgmt_net_cfg_check(const char *name)
 			d_freeenv_str(&cli_srx_set);
 			return -DER_INVAL;
 		}
+	}
+	return 0;
+}
+
+int
+dc_mgmt_get_iface(char *iface)
+{
+	int cpu;
+	int numa;
+	int i;
+
+	cpu = sched_getcpu();
+	if (cpu < 0) {
+		D_ERROR("sched_getcpu() failed: %d (%s)\n", errno, strerror(errno));
+		return d_errno2der(errno);
+	}
+
+	numa = numa_node_of_cpu(cpu);
+	if (numa < 0) {
+		D_ERROR("numa_node_of_cpu() failed: %d (%s)\n", errno, strerror(errno));
+		return d_errno2der(errno);
+	}
+
+	if (resp_g->n_numa_fabric_interfaces <= 0) {
+		D_ERROR("No fabric interfaces initialized.\n");
+		return -DER_INVAL;
+	}
+
+	for (i = 0; i < resp_g->n_numa_fabric_interfaces; i++) {
+		Mgmt__FabricInterfaces *numa_ifaces = resp_g->numa_fabric_interfaces[i];
+		int                     idx;
+
+		if (numa_ifaces->numa_node != numa)
+			continue;
+
+		/*
+		 * Randomize the first interface used to avoid multiple processes starting on the
+		 * first interface (if there is more than 1).
+		 */
+		if (info_g.numa_iface_idx_rr[i] == -1) {
+			d_srand(getpid());
+			info_g.numa_iface_idx_rr[i] = d_rand() % numa_ifaces->n_ifaces;
+		}
+		idx = info_g.numa_iface_idx_rr[i] % numa_ifaces->n_ifaces;
+		D_ASSERT(numa_ifaces->ifaces[idx]->numa_node == numa);
+		info_g.numa_iface_idx_rr[i]++;
+
+		if (copy_str(iface, numa_ifaces->ifaces[idx]->interface) != 0) {
+			D_ERROR("Interface string too long.\n");
+			return -DER_INVAL;
+		}
+		D_DEBUG(DB_MGMT, "Numa: %d, Interface Selected: IDX: %d, Name = %s\n", numa, idx,
+			iface);
+		break;
+	}
+	if (i == resp_g->n_numa_fabric_interfaces) {
+		D_DEBUG(DB_MGMT, "No iface on numa %d\n", numa);
+		return -DER_NONEXIST;
 	}
 	return 0;
 }

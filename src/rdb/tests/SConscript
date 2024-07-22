@@ -15,7 +15,7 @@ def scons():
     # rdbt client
     rdbt = tenv.d_program('rdbt', ['rdbt.c', 'rpc.c'] + libdaos_tgts,
                           LIBS=['daos_common_pmem', 'cart', 'gurt', 'uuid', 'isal', 'protobuf-c',
-                                'pthread'])
+                                'pthread', 'numa'])
     tenv.Install('$PREFIX/bin', rdbt)
 
 

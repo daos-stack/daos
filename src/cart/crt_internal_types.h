@@ -14,7 +14,7 @@
 #define CRT_CONTEXT_NULL         (NULL)
 
 #ifndef CRT_SRV_CONTEXT_NUM
-#define CRT_SRV_CONTEXT_NUM (64)	/* Maximum number of contexts */
+#define CRT_SRV_CONTEXT_NUM (128) /* Maximum number of contexts */
 #endif
 
 
