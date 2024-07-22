@@ -6859,7 +6859,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 
 	if (svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_NO_DATA_SYNC) {
 		D_DEBUG(DB_MD, "self healing is disabled for no_data_sync reintegration mode.\n");
-		if (opc == MAP_EXCLUDE || opc == MAP_DRAIN) {
+		if (opc == MAP_EXCLUDE) {
 			rc = ds_pool_tgt_exclude(svc->ps_pool->sp_uuid, &target_list);
 		} else if (opc == MAP_REINT) {
 			rc = ds_pool_tgt_finish_rebuild(svc->ps_pool->sp_uuid, &target_list);
