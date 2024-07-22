@@ -77,6 +77,18 @@ export LD_LIBRARY_PATH="$PREFIX/lib:$LD_LIBRARY_PATH"
 export INCLUDE="$PREFIX/include:$INCLUDE"
 ```
 
+To use MPI-IO in MPICH with DAOS, the following
+environment variable can be used to instruct the runtime
+to interpret all file paths in MPI-IO calls as DAOS paths:
+
+```bash
+export ROMIO_FSTYPE_FORCE="daos:"
+```
+
+Alternatively, the individual file paths can be prefixed with `daos:`.
+Using either of these two methods will enable the MPI-IO DFS backend.
+More information can be found in the
+[ANL ROMIO pages](https://wordpress.cels.anl.gov/romio/2019/02/20/useful-environment-variables/).
 
 ### Intel MPI
 
@@ -118,6 +130,20 @@ ensure proper functionality with the DAOS MPIIO driver, including:
 export FI_UNIVERSE_SIZE=16383
 export FI_OFI_RXM_USE_SRX=1
 ```
+
+To use MPI-IO in Intel MPI with DAOS, the following two
+environment variables can be used to instruct the runtime
+to interpret all file paths in MPI-IO calls as DAOS paths:
+
+```bash
+export I_MPI_EXTRA_FILESYSTEM=on
+export I_MPI_EXTRA_FILESYSTEM_FORCE=daos
+```
+
+Alternatively, the individual file paths can be prefixed with `daos:`.
+Using either of these two methods will enable the MPI-IO DFS backend.
+More information on the `I_MPI` variables can be found in the
+[Intel MPI documentation](https://www.intel.com/content/www/us/en/docs/mpi-library/developer-reference-linux/2021-13/other-environment-variables.html).
 
 ### Open MPI
 
