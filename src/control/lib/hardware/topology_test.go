@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -468,9 +468,9 @@ func TestHardware_Topology_Merge(t *testing.T) {
 			MockNUMANode(1, 4).
 				WithDevices([]*PCIDevice{
 					{
-						Name:      "test0",
-						PCIAddr:   *MustNewPCIAddress("0000:00:00.1"),
-						LinkSpeed: 60,
+						Name:         "test0",
+						PCIAddr:      *MustNewPCIAddress("0000:00:00.1"),
+						LinkNegSpeed: 8e+12,
 					},
 				}).
 				WithCPUCores([]CPUCore{}).
@@ -548,9 +548,9 @@ func TestHardware_Topology_Merge(t *testing.T) {
 					1: MockNUMANode(1, 0).
 						WithDevices([]*PCIDevice{
 							{
-								Name:      "test0",
-								PCIAddr:   *MustNewPCIAddress("0000:00:00.1"),
-								LinkSpeed: 60,
+								Name:         "test0",
+								PCIAddr:      *MustNewPCIAddress("0000:00:00.1"),
+								LinkNegSpeed: 8e+12,
 							},
 						}),
 				},
@@ -560,9 +560,9 @@ func TestHardware_Topology_Merge(t *testing.T) {
 					1: MockNUMANode(1, 4).
 						WithDevices([]*PCIDevice{
 							{
-								Name:      "test0",
-								PCIAddr:   *MustNewPCIAddress("0000:00:00.1"),
-								LinkSpeed: 60,
+								Name:         "test0",
+								PCIAddr:      *MustNewPCIAddress("0000:00:00.1"),
+								LinkNegSpeed: 8e+12,
 							},
 						}).
 						WithCPUCores([]CPUCore{}).
@@ -659,10 +659,10 @@ func TestHardware_Topology_Merge(t *testing.T) {
 								PCIAddr: *MustNewPCIAddress("0000:00:00.1"),
 							},
 							{
-								Name:      "test1",
-								Type:      DeviceTypeNetInterface,
-								PCIAddr:   *MustNewPCIAddress("0000:00:00.2"),
-								LinkSpeed: 75,
+								Name:         "test1",
+								Type:         DeviceTypeNetInterface,
+								PCIAddr:      *MustNewPCIAddress("0000:00:00.2"),
+								LinkNegSpeed: 16e+12,
 							},
 						}).
 						WithPCIBuses([]*PCIBus{
@@ -679,16 +679,16 @@ func TestHardware_Topology_Merge(t *testing.T) {
 					testNuma(0).ID: MockNUMANode(testNuma(0).ID, 5).
 						WithDevices([]*PCIDevice{
 							{
-								Name:      "test0",
-								Type:      DeviceTypeNetInterface,
-								PCIAddr:   *MustNewPCIAddress("0000:00:00.1"),
-								LinkSpeed: 60,
+								Name:         "test0",
+								Type:         DeviceTypeNetInterface,
+								PCIAddr:      *MustNewPCIAddress("0000:00:00.1"),
+								LinkNegSpeed: 8e+12,
 							},
 							{
-								Name:      "test1",
-								Type:      DeviceTypeNetInterface,
-								PCIAddr:   *MustNewPCIAddress("0000:00:00.2"),
-								LinkSpeed: 75,
+								Name:         "test1",
+								Type:         DeviceTypeNetInterface,
+								PCIAddr:      *MustNewPCIAddress("0000:00:00.2"),
+								LinkNegSpeed: 16e+12,
 							},
 						}).
 						WithPCIBuses([]*PCIBus{
@@ -783,10 +783,10 @@ func TestHardware_Topology_Merge(t *testing.T) {
 					testNuma(0).ID: MockNUMANode(testNuma(0).ID, 5).
 						WithDevices([]*PCIDevice{
 							{
-								Name:      "test0",
-								Type:      DeviceTypeNetInterface,
-								PCIAddr:   *MustNewPCIAddress("0000:00:00.1"),
-								LinkSpeed: 60,
+								Name:         "test0",
+								Type:         DeviceTypeNetInterface,
+								PCIAddr:      *MustNewPCIAddress("0000:00:00.1"),
+								LinkNegSpeed: 8e+12,
 							},
 						}).
 						WithPCIBuses([]*PCIBus{
@@ -798,10 +798,10 @@ func TestHardware_Topology_Merge(t *testing.T) {
 						Name: "virt0",
 						Type: DeviceTypeNetInterface,
 						BackingDevice: &PCIDevice{
-							Name:      "test0",
-							Type:      DeviceTypeNetInterface,
-							PCIAddr:   *MustNewPCIAddress("0000:00:00.1"),
-							LinkSpeed: 60,
+							Name:         "test0",
+							Type:         DeviceTypeNetInterface,
+							PCIAddr:      *MustNewPCIAddress("0000:00:00.1"),
+							LinkNegSpeed: 8e+12,
 						},
 					},
 					{

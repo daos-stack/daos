@@ -92,7 +92,7 @@ func TestEngineInstance_CallDrpc(t *testing.T) {
 			trc := engine.TestRunnerConfig{}
 			trc.Running.Store(!tc.notStarted)
 			runner := engine.NewTestRunner(&trc, engine.MockConfig())
-			instance := NewEngineInstance(log, nil, nil, runner)
+			instance := NewEngineInstance(log, nil, nil, runner, nil)
 			instance.ready.Store(!tc.notReady)
 
 			if !tc.noSocket {
@@ -190,7 +190,7 @@ func TestEngineInstance_CallDrpc_Parallel(t *testing.T) {
 	trc := engine.TestRunnerConfig{}
 	trc.Running.Store(true)
 	runner := engine.NewTestRunner(&trc, engine.MockConfig())
-	instance := NewEngineInstance(log, nil, nil, runner)
+	instance := NewEngineInstance(log, nil, nil, runner, nil)
 	instance.ready.Store(true)
 
 	instance.getDrpcClientFn = func(s string) drpc.DomainSocketClient {

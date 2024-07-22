@@ -650,6 +650,8 @@ pool_op_retry(void **state)
 	const char       *principal   = "EVERYONE@";
 	int               rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	par_barrier(PAR_COMM_WORLD);
 
 	if (arg->myrank != 0)
