@@ -786,16 +786,21 @@ void
 dtx_resync_ult(void *data)
 {
 	struct dtx_scan_args	*arg = data;
-	struct ds_pool		*pool;
-	int			rc = 0;
+	struct ds_pool		*pool = NULL;
+	int			rc;
 
 	rc = ds_pool_lookup(arg->pool_uuid, &pool);
-	D_ASSERTF(pool != NULL, DF_UUID" rc %d\n", DP_UUID(arg->pool_uuid), rc);
+	if (rc != 0) {
+		D_WARN("Cannot find the pool "DF_UUID" for DTX resync: "DF_RC"\n",
+		       DP_UUID(arg->pool_uuid), DP_RC(rc));
+		goto out;
+	}
+
 	if (pool->sp_dtx_resync_version >= arg->version) {
 		D_DEBUG(DB_MD, DF_UUID" ignore dtx resync version %u/%u\n",
 			DP_UUID(arg->pool_uuid), pool->sp_dtx_resync_version,
 			arg->version);
-		D_GOTO(out_put, rc);
+		goto out;
 	}
 	D_DEBUG(DB_MD, DF_UUID" update dtx resync version %u->%u\n",
 		DP_UUID(arg->pool_uuid), pool->sp_dtx_resync_version,
@@ -816,7 +821,9 @@ dtx_resync_ult(void *data)
 			DP_UUID(arg->pool_uuid), rc);
 	}
 	pool->sp_dtx_resync_version = arg->version;
-out_put:
-	ds_pool_put(pool);
+
+out:
+	if (pool != NULL)
+		ds_pool_put(pool);
 	D_FREE(arg);
 }
