@@ -747,9 +747,8 @@ bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 	D_ASSERT(d_bdev->bb_desc != NULL);
 	d_bdev->bb_removed = 1;
 
-	ras_notify_eventf(RAS_DEVICE_UNPLUGGED, RAS_TYPE_INFO,
-			  RAS_SEV_NOTICE, NULL, NULL, NULL, NULL, NULL,
-			  NULL, NULL, NULL, NULL, "Dev: "DF_UUID" unplugged\n",
+	ras_notify_eventf(RAS_DEVICE_UNPLUGGED, RAS_TYPE_INFO, RAS_SEV_NOTICE, NULL, NULL, NULL,
+			  NULL, NULL, NULL, NULL, NULL, NULL, "Device: " DF_UUID " unplugged\n",
 			  DP_UUID(d_bdev->bb_uuid));
 
 	/* The bio_bdev is still under construction */

@@ -13,12 +13,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
@@ -185,6 +187,62 @@ func addLinkInfoToHealthStats(prov hardware.PCIeLinkStatsProvider, pciCfg string
 	return nil
 }
 
+// Only raise events if speed or width state is:
+// - Currently at maximum but was previously downgraded
+// - Currently downgraded but is now at maximum
+// - Currently downgraded and was previously at a different downgraded speed
+func checkPublishEvent(engine Engine, id events.RASID, typ, pciAddr, maximum, negotiated, lastMax, lastNeg string, port uint32) {
+
+	// Return early if previous and current stats are both in the expected state.
+	if lastNeg == lastMax && negotiated == maximum {
+		return
+	}
+
+	// Return if stats have not changed since when last seen.
+	if negotiated == lastNeg && maximum == lastMax {
+		return
+	}
+
+	// Otherwise publish event indicating link state change.
+
+	engine.Debugf("link %s changed on %s, was %s (max %s) now %s (max %s)",
+		typ, pciAddr, lastNeg, lastMax, negotiated, maximum)
+	msg := fmt.Sprintf("NVMe PCIe device at %q port-%d: link %s changed to %s "+
+		"(max %s)", pciAddr, port, typ, negotiated, maximum)
+
+	sev := events.RASSeverityWarning
+	if negotiated == maximum {
+		sev = events.RASSeverityNotice
+	}
+
+	engine.Publish(events.NewGenericEvent(id, sev, msg, ""))
+}
+
+// Evaluate PCIe link state on NVMe SSD and raise events when negotiated speed or width changes in
+// relation to last recorded stats for the given PCI address.
+func publishLinkStatEvents(engine Engine, pciAddr string, stats *ctlpb.BioHealthResp) {
+	lastStats := engine.GetLastHealthStats(pciAddr)
+	engine.SetLastHealthStats(pciAddr, stats)
+
+	lastMaxSpeedStr, lastSpeedStr, lastMaxWidthStr, lastWidthStr := "-", "-", "-", "-"
+	if lastStats != nil {
+		lastMaxSpeedStr = humanize.SI(float64(lastStats.LinkMaxSpeed), "T/s")
+		lastSpeedStr = humanize.SI(float64(lastStats.LinkNegSpeed), "T/s")
+		lastMaxWidthStr = fmt.Sprintf("x%d", lastStats.LinkMaxWidth)
+		lastWidthStr = fmt.Sprintf("x%d", lastStats.LinkNegWidth)
+	}
+
+	checkPublishEvent(engine, events.RASNVMeLinkSpeedChanged, "speed", pciAddr,
+		humanize.SI(float64(stats.LinkMaxSpeed), "T/s"),
+		humanize.SI(float64(stats.LinkNegSpeed), "T/s"),
+		lastMaxSpeedStr, lastSpeedStr, stats.LinkPortId)
+
+	checkPublishEvent(engine, events.RASNVMeLinkWidthChanged, "width", pciAddr,
+		fmt.Sprintf("x%d", stats.LinkMaxWidth),
+		fmt.Sprintf("x%d", stats.LinkNegWidth),
+		lastMaxWidthStr, lastWidthStr, stats.LinkPortId)
+}
+
 func populateCtrlrHealth(ctx context.Context, engine Engine, req *ctlpb.BioHealthReq, ctrlr *ctlpb.NvmeController, prov hardware.PCIeLinkStatsProvider) (bool, error) {
 	stateName := ctlpb.NvmeDevState_name[int32(ctrlr.DevState)]
 	if !ctrlr.CanSupplyHealthStats() {
@@ -203,6 +261,7 @@ func populateCtrlrHealth(ctx context.Context, engine Engine, req *ctlpb.BioHealt
 		if err := addLinkInfoToHealthStats(prov, ctrlr.PciCfg, health); err != nil {
 			return false, errors.Wrapf(err, "add link stats for %q", ctrlr)
 		}
+		publishLinkStatEvents(engine, ctrlr.PciAddr, health)
 	} else {
 		engine.Debugf("no pcie config space received for %q, skip add link stats", ctrlr)
 	}
