@@ -15,10 +15,8 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
-	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
-	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -29,13 +27,17 @@ func (ei *EngineInstance) GetStorage() *storage.Provider {
 
 // MountMetadata mounts the configured control metadata location.
 func (ei *EngineInstance) MountMetadata() error {
-	ei.log.Debug("checking if metadata is mounted")
+	msgIdx := fmt.Sprintf("instance %d", ei.Index())
+
+	msgCheck := fmt.Sprintf("%s: checking if metadata is mounted", msgIdx)
+	ei.log.Trace(msgCheck)
+
 	isMounted, err := ei.storage.ControlMetadataIsMounted()
 	if err != nil {
-		return errors.Wrap(err, "checking if metadata is mounted")
+		return errors.WithMessage(err, msgCheck)
 	}
 
-	ei.log.Debugf("IsMounted: %v", isMounted)
+	ei.log.Debugf("%s: IsMounted: %v", msgIdx, isMounted)
 	if isMounted {
 		return nil
 	}
@@ -47,10 +49,17 @@ func (ei *EngineInstance) MountMetadata() error {
 // at the mountpoint specified in the configuration. If the device is already
 // mounted, the function returns nil, indicating success.
 func (ei *EngineInstance) MountScm() error {
+	msgIdx := fmt.Sprintf("instance %d", ei.Index())
+
+	msgCheck := fmt.Sprintf("%s: checking if scm is mounted", msgIdx)
+	ei.log.Trace(msgCheck)
+
 	isMounted, err := ei.storage.ScmIsMounted()
 	if err != nil && !os.IsNotExist(errors.Cause(err)) {
-		return errors.WithMessage(err, "failed to check SCM mount")
+		return errors.WithMessage(err, msgCheck)
 	}
+
+	ei.log.Debugf("%s: IsMounted: %v", msgIdx, isMounted)
 	if isMounted {
 		return nil
 	}
@@ -63,19 +72,6 @@ func (ei *EngineInstance) NotifyStorageReady() {
 	go func() {
 		ei.storageReady <- true
 	}()
-}
-
-// createPublishFormatRequiredFunc returns onAwaitFormatFn which will publish an
-// event using the provided publish function to indicate that host is awaiting
-// storage format.
-func createPublishFormatRequiredFunc(publish func(*events.RASEvent), hostname string) onAwaitFormatFn {
-	return func(_ context.Context, engineIdx uint32, formatType string) error {
-		evt := events.NewEngineFormatRequiredEvent(hostname, engineIdx, formatType).
-			WithRank(uint32(ranklist.NilRank))
-		publish(evt)
-
-		return nil
-	}
 }
 
 func (ei *EngineInstance) checkScmNeedFormat() (bool, error) {

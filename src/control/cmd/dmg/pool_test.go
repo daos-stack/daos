@@ -187,6 +187,12 @@ func TestPoolCommands(t *testing.T) {
 		return prop
 	}
 
+	setQueryMask := func(xfrm func(qm *daos.PoolQueryMask)) daos.PoolQueryMask {
+		qm := daos.DefaultPoolQueryMask
+		xfrm(&qm)
+		return qm
+	}
+
 	runCmdTests(t, []cmdTest{
 		{
 			"Pool create with extra argument",
@@ -956,7 +962,8 @@ func TestPoolCommands(t *testing.T) {
 			"pool query 12345678-1234-1234-1234-1234567890ab",
 			strings.Join([]string{
 				printRequest(t, &control.PoolQueryReq{
-					ID: "12345678-1234-1234-1234-1234567890ab",
+					ID:        "12345678-1234-1234-1234-1234567890ab",
+					QueryMask: daos.DefaultPoolQueryMask,
 				}),
 			}, " "),
 			nil,
@@ -966,8 +973,8 @@ func TestPoolCommands(t *testing.T) {
 			"pool query --show-enabled 12345678-1234-1234-1234-1234567890ab",
 			strings.Join([]string{
 				printRequest(t, &control.PoolQueryReq{
-					ID:                  "12345678-1234-1234-1234-1234567890ab",
-					IncludeEnabledRanks: true,
+					ID:        "12345678-1234-1234-1234-1234567890ab",
+					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) { qm.SetOptions(daos.PoolQueryOptionEnabledEngines) }),
 				}),
 			}, " "),
 			nil,
@@ -977,8 +984,8 @@ func TestPoolCommands(t *testing.T) {
 			"pool query -e 12345678-1234-1234-1234-1234567890ab",
 			strings.Join([]string{
 				printRequest(t, &control.PoolQueryReq{
-					ID:                  "12345678-1234-1234-1234-1234567890ab",
-					IncludeEnabledRanks: true,
+					ID:        "12345678-1234-1234-1234-1234567890ab",
+					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) { qm.SetOptions(daos.PoolQueryOptionEnabledEngines) }),
 				}),
 			}, " "),
 			nil,
@@ -988,8 +995,8 @@ func TestPoolCommands(t *testing.T) {
 			"pool query --show-disabled 12345678-1234-1234-1234-1234567890ab",
 			strings.Join([]string{
 				printRequest(t, &control.PoolQueryReq{
-					ID:                   "12345678-1234-1234-1234-1234567890ab",
-					IncludeDisabledRanks: true,
+					ID:        "12345678-1234-1234-1234-1234567890ab",
+					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) { qm.SetOptions(daos.PoolQueryOptionDisabledEngines) }),
 				}),
 			}, " "),
 			nil,
@@ -999,8 +1006,45 @@ func TestPoolCommands(t *testing.T) {
 			"pool query -b 12345678-1234-1234-1234-1234567890ab",
 			strings.Join([]string{
 				printRequest(t, &control.PoolQueryReq{
-					ID:                   "12345678-1234-1234-1234-1234567890ab",
-					IncludeDisabledRanks: true,
+					ID:        "12345678-1234-1234-1234-1234567890ab",
+					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) { qm.SetOptions(daos.PoolQueryOptionDisabledEngines) }),
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query pool with UUID, enabled ranks and disabled ranks",
+			"pool query --show-disabled --show-enabled 12345678-1234-1234-1234-1234567890ab",
+			strings.Join([]string{
+				printRequest(t, &control.PoolQueryReq{
+					ID: "12345678-1234-1234-1234-1234567890ab",
+					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) {
+						qm.SetOptions(daos.PoolQueryOptionEnabledEngines, daos.PoolQueryOptionDisabledEngines)
+					}),
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query pool with UUID, enabled ranks and disabled ranks",
+			"pool query -b -e 12345678-1234-1234-1234-1234567890ab",
+			strings.Join([]string{
+				printRequest(t, &control.PoolQueryReq{
+					ID: "12345678-1234-1234-1234-1234567890ab",
+					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) {
+						qm.SetOptions(daos.PoolQueryOptionEnabledEngines, daos.PoolQueryOptionDisabledEngines)
+					}),
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query pool for health only",
+			"pool query --health-only 12345678-1234-1234-1234-1234567890ab",
+			strings.Join([]string{
+				printRequest(t, &control.PoolQueryReq{
+					ID:        "12345678-1234-1234-1234-1234567890ab",
+					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) { *qm = daos.HealthOnlyPoolQueryMask }),
 				}),
 			}, " "),
 			nil,
@@ -1010,7 +1054,8 @@ func TestPoolCommands(t *testing.T) {
 			"pool query test_label",
 			strings.Join([]string{
 				printRequest(t, &control.PoolQueryReq{
-					ID: "test_label",
+					ID:        "test_label",
+					QueryMask: daos.DefaultPoolQueryMask,
 				}),
 			}, " "),
 			nil,
@@ -1036,12 +1081,6 @@ func TestPoolCommands(t *testing.T) {
 			"pool quack",
 			"",
 			fmt.Errorf("Unknown command"),
-		},
-		{
-			"Query pool with incompatible arguments",
-			"pool query --show-disabled --show-enabled 12345678-1234-1234-1234-1234567890ab",
-			"",
-			errors.New("may not be mixed"),
 		},
 	})
 }

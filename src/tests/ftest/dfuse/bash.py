@@ -112,7 +112,7 @@ class DfuseBashCmd(TestWithServers):
             # f'more {fuse_root_dir}/src.c', # more hangs over ssh somehow
             f"dos2unix {fuse_root_dir}/src.c",
             f"gcc -o {fuse_root_dir}/output {fuse_root_dir}/src.c",
-            f"size {fuse_root_dir}/output",
+            f"valgrind size {fuse_root_dir}/output",
             f"readelf -s {fuse_root_dir}/output",
             f"strip -s {fuse_root_dir}/output",
             f"g++ -o {fuse_root_dir}/output {fuse_root_dir}/src.c",
@@ -131,7 +131,7 @@ class DfuseBashCmd(TestWithServers):
             f'{fuse_root_dir}/ --bs=1M --numjobs="4" --ioengine=psync '
             "--group_reporting --exitall_on_error --continue_on_error=none",
             'fio --readwrite=randwrite --name=test --size="2M" --directory '
-            f'{fuse_root_dir}/ --bs=1M --numjobs="1" --ioengine=libaio --iodepth=4'
+            f'{fuse_root_dir}/ --bs=1M --numjobs="1" --ioengine=libaio --iodepth=16'
             '--group_reporting --exitall_on_error --continue_on_error=none',
             f'curl "https://www.google.com" -o {fuse_root_dir}/download.html',
         ]

@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -123,12 +123,14 @@ class OSAUtils(MdtestBase, IorTestBase):
                 elif port_num == str(expected_ports[1]):
                     port_val = 1
                 else:
+                    port_val = None  # To appease pylint
                     self.log.info("port_number: %s", port_num)
                     self.fail("Invalid port number")
                 cmd = "/usr/bin/ssh {} -oStrictHostKeyChecking=no \
                       sudo rm -rf /mnt/daos{}/{}/vos-*". \
                       format(ip_addr, port_val, self.pool.uuid)
             else:
+                cmd = None  # To appease pylint
                 self.fail("Not supported engine per server configuration")
             run_command(cmd)
 

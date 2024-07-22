@@ -665,6 +665,8 @@ struct obj_pool_metrics {
 	struct d_tm_node_t *opm_update_ec_full;
 	/** Total number of EC partial update operations (type = counter) */
 	struct d_tm_node_t *opm_update_ec_partial;
+	/** Total number of EC agg conflicts with VOS aggregation or discard */
+	struct d_tm_node_t *opm_ec_agg_blocked;
 };
 
 void
@@ -916,6 +918,7 @@ struct obj_io_context {
 	uint64_t		 ioc_start_time;
 	uint64_t		 ioc_io_size;
 	uint32_t		 ioc_began:1,
+				 ioc_update_ec_ts:1,
 				 ioc_free_sgls:1,
 				 ioc_lost_reply:1,
 				 ioc_fetch_snap:1;

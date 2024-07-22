@@ -68,6 +68,7 @@ class SoakTestBase(TestWithServers):
         self.initial_resv_file = None
         self.resv_cont = None
         self.mpi_module = None
+        self.mpi_module_use = None
         self.sudo_cmd = None
         self.slurm_exclude_servers = True
         self.control = get_local_host()
@@ -465,7 +466,8 @@ class SoakTestBase(TestWithServers):
             cmd = f"/usr/bin/rsync -avtr --min-size=1B {self.soak_log_dir} {self.outputsoak_dir}/"
             cmd2 = f"/usr/bin/rm -rf {self.soak_log_dir}"
             if self.enable_remote_logging:
-                result = run_remote(self.log, self.hostlist_clients, cmd, timeout=600)
+                # Limit fan out to reduce burden on filesystem
+                result = run_remote(self.log, self.hostlist_clients, cmd, timeout=600, fanout=64)
                 if result.passed:
                     result = run_remote(self.log, self.hostlist_clients, cmd2, timeout=600)
                 if not result.passed:
@@ -559,6 +561,8 @@ class SoakTestBase(TestWithServers):
         self.check_errors = []
         self.used = []
         self.mpi_module = self.params.get("mpi_module", "/run/*", default="mpi/mpich-x86_64")
+        self.mpi_module_use = self.params.get(
+            "mpi_module_use", "/run/*", default="/usr/share/modulefiles")
         enable_sudo = self.params.get("enable_sudo", "/run/*", default=True)
         test_to = self.params.get(self.test_id, os.path.join(test_param, "test_timeout", "*"))
         self.test_name = self.params.get("name", test_param + "*")

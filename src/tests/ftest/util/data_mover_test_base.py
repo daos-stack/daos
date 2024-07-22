@@ -22,6 +22,44 @@ from pydaos.raw import DaosObj, IORequest
 from run_utils import run_remote
 
 
+def cleanup_mounted_path(test, hosts, path):
+    """Cleanup mounted paths.
+
+    Args:
+        test (Test): the test which created the mount points
+        hosts (NodeSet): hosts from which to unmount the paths
+        path (str): the mounted posix test path to cleanup
+
+    Returns:
+        list: a list of any errors detected when removing the pool
+    """
+    # need to remove contents before umount
+    error_list = cleanup_path(test, hosts, os.path.join(path, '*'))
+    result = run_remote(test.log, hosts, f"sudo umount -f '{path}'")
+    if not result.passed:
+        error_list.append(f"Error unmounting directory '{path}' from {result.failed_hosts}")
+    error_list.extend(cleanup_path(test, hosts, path))
+    return error_list
+
+
+def cleanup_path(test, hosts, path):
+    """Cleanup paths.
+
+    Args:
+        test (Test): the test which mounted the paths
+        hosts (NodeSet): hosts from which to remove the paths
+        path (str): the posix test path to cleanup
+
+    Returns:
+        list: a list of any errors detected when removing the pool
+    """
+    error_list = []
+    result = run_remote(test.log, hosts, f"rm -rf '{path}'")
+    if not result.passed:
+        error_list.append(f"Error removing created directory '{path}' from {result.failed_hosts}")
+    return error_list
+
+
 class DataMoverTestBase(IorTestBase, MdtestBase):
     # pylint: disable=too-many-instance-attributes
     """Base DataMover test class.
@@ -78,7 +116,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.pool = []
         self.dfuse_hosts = None
         self.num_run_datamover = 0  # Number of times run_datamover was called
-        self.job_manager = None
 
         # Override processes and np from IorTestBase and MdtestBase to use "datamover" namespace.
         # Define processes and np for each datamover tool, which defaults to the "datamover" one.
@@ -106,12 +143,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
         # List of local test paths to create and remove
         self.posix_local_test_paths = []
-
-        # List of shared test paths to create and remove
-        self.posix_shared_test_paths = []
-
-        # paths to unmount in teardown
-        self.mounted_posix_test_paths = []
 
         # List of daos test paths to keep track of
         self.daos_test_paths = []
@@ -149,58 +180,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         if tool:
             self.set_tool(tool)
 
-    def pre_tear_down(self):
-        """Tear down steps to run before tearDown().
-
-        Returns:
-            list: a list of error strings to report at the end of tearDown().
-
-        """
-        # doesn't append to error list because it reports an error if all
-        # processes completed successfully (nothing to stop), but this call is
-        # necessary in the case that mpi processes are ran across multiple nodes
-        # and a timeout occurs. If this happens then cleanup on shared posix
-        # directories causes errors (because an MPI process might still have it open)
-        error_list = []
-
-        if self.job_manager:
-            self.job_manager.kill()
-
-        # cleanup mounted paths
-        if self.mounted_posix_test_paths:
-            path_list = self._get_posix_test_path_list(path_list=self.mounted_posix_test_paths)
-            for item in path_list:
-                # need to remove contents before umount
-                rm_cmd = "rm -rf {}/*".format(item)
-                try:
-                    self._execute_command(rm_cmd)
-                except CommandFailure as error:
-                    error_list.append("Error removing directory contents: {}".format(error))
-                umount_cmd = "sudo umount -f {}".format(item)
-                try:
-                    self._execute_command(umount_cmd)
-                except CommandFailure as error:
-                    error_list.append("Error umounting posix test directory: {}".format(error))
-
-        # cleanup local paths
-        if self.posix_local_test_paths:
-            command = "rm -rf {}".format(self._get_posix_test_path_string())
-            try:
-                self._execute_command(command)
-            except CommandFailure as error:
-                error_list.append("Error removing created directories: {}".format(error))
-
-        # cleanup shared paths (only runs on one node in job)
-        if self.posix_shared_test_paths:
-            shared_path_strs = self._get_posix_test_path_string(path=self.posix_shared_test_paths)
-            command = "rm -rf {}".format(shared_path_strs)
-            try:
-                # only call rm on one client since this is cleaning up shared dir
-                self._execute_command(command, hosts=list(self.hostlist_clients)[0:1])
-            except CommandFailure as error:
-                error_list.append("Error removing created directories: {}".format(error))
-        return error_list
-
     def set_api(self, api):
         """Set the api.
 
@@ -226,27 +205,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         else:
             self.fail("Invalid tool: {}".format(_tool))
 
-    def _get_posix_test_path_list(self, path_list=None):
-        """Get a list of quoted posix test path strings.
-
-        Returns:
-            list: a list of quoted posix test path strings
-
-        """
-        if path_list is None:
-            path_list = self.posix_local_test_paths
-
-        return ["'{}'".format(item) for item in path_list]
-
-    def _get_posix_test_path_string(self, path=None):
-        """Get a string of all of the quoted posix test path strings.
-
-        Returns:
-            str: a string of all of the quoted posix test path strings
-
-        """
-        return " ".join(self._get_posix_test_path_list(path_list=path))
-
     def new_posix_test_path(self, shared=False, create=True, parent=None, mount_dir_size=None):
         """Generate a new, unique posix path.
 
@@ -267,13 +225,10 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         # make directory name unique to datamover test
         method = self.get_test_name()
         dir_name = "{}{}".format(method, len(self.posix_local_test_paths))
-
         path = join(parent or self.posix_root.value, dir_name)
 
         # Add to the list of posix paths
-        if shared:
-            self.posix_shared_test_paths.append(path)
-        else:
+        if not shared:
             self.posix_local_test_paths.append(path)
 
         if create:
@@ -282,13 +237,22 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             if not run_remote(self.log, self.hostlist_clients, cmd).passed:
                 self.fail(f"Failed to mkdir {path}")
 
+        # Remove the path during test tearDown. Not needed when using the path as a mount point as
+        # cleanup_path() is called as part of cleanup_mounted_path()
+        if not mount_dir_size and shared:
+            self.register_cleanup(
+                cleanup_path, test=self, hosts=self.hostlist_clients[0:1], path=path)
+        elif not mount_dir_size:
+            self.register_cleanup(cleanup_path, test=self, hosts=self.hostlist_clients, path=path)
+
         # mount small tmpfs filesystem on posix path, using size required sudo
         # add mount_dir to mounted list for use when umounting
         if mount_dir_size:
             cmd = f"sudo mount -t tmpfs none '{path}' -o size={mount_dir_size}"
             if not run_remote(self.log, self.hostlist_clients, cmd).passed:
                 self.fail(f"Failed to mount directory {path}")
-            self.mounted_posix_test_paths.append(path)
+            self.register_cleanup(
+                cleanup_mounted_path, test=self, hosts=self.hostlist_clients, path=path)
 
         return path
 
@@ -929,6 +893,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
         ppn = None
         result = None
+        job_manager = None
         try:
             if self.tool == "DCP":
                 if not processes:
@@ -936,14 +901,14 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                     ppn = self.dcp_ppn
                 # If we expect an rc other than 0, don't fail
                 self.dcp_cmd.exit_status_exception = expected_rc == 0
-                result = self.dcp_cmd.run(processes, self.job_manager, ppn, env)
+                result = self.dcp_cmd.run(processes, job_manager, ppn, env)
             elif self.tool == "DSYNC":
                 if not processes:
                     processes = self.dsync_np
                     ppn = self.dsync_ppn
                 # If we expect an rc other than 0, don't fail
                 self.dsync_cmd.exit_status_exception = expected_rc == 0
-                result = self.dsync_cmd.run(processes, self.job_manager, ppn, env)
+                result = self.dsync_cmd.run(processes, job_manager, ppn, env)
             elif self.tool == "DSERIAL":
                 if processes:
                     processes1 = processes2 = processes
@@ -953,8 +918,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                     ppn1 = self.dserialize_ppn
                     processes2 = self.ddeserialize_np
                     ppn2 = self.ddeserialize_ppn
-                result = self.dserialize_cmd.run(processes1, self.job_manager, ppn1, env)
-                result = self.ddeserialize_cmd.run(processes2, self.job_manager, ppn2, env)
+                result = self.dserialize_cmd.run(processes1, job_manager, ppn1, env)
+                result = self.ddeserialize_cmd.run(processes2, job_manager, ppn2, env)
             elif self.tool == "FS_COPY":
                 if expected_rc != 0:
                     with self.daos_cmd.no_exception():
@@ -1008,6 +973,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         cont2 = self.get_container(pool, oclass=self.ior_cmd.dfs_oclass.value)
 
         # perform various datamover activities
+        daos_path = None
+        read_back_cont = None
+        read_back_pool = None
         if tool == 'CONT_CLONE':
             result = self.run_datamover(
                 self.test_id + " (cont to cont2)",

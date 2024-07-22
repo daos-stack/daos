@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -190,7 +190,7 @@ extern "C" {
 	ACTION(DER_FETCH_AGAIN, Fetch again)                                                       \
 	/** Hit uncertain DTX, may need to try with other replica. */                              \
 	ACTION(DER_TX_UNCERTAIN, TX status is uncertain)                                           \
-	/** Communicatin issue with agent. */                                                      \
+	/** Communication issue with agent. */                                                      \
 	ACTION(DER_AGENT_COMM, Agent communication error)                                          \
 	/** ID mismatch */                                                                         \
 	ACTION(DER_ID_MISMATCH, ID mismatch)                                                       \
@@ -235,6 +235,8 @@ enum daos_errno {
 	/** Return value representing success */
 	DER_SUCCESS = 0,
 	D_FOREACH_ERR_RANGE(D_DEFINE_RANGE_ERRNO)
+	/** Last valid errno, used for dumping */
+	DER_LAST_VALID,
 	/** Unknown error value */
 	DER_UNKNOWN = (DER_ERR_GURT_BASE + 500000),
 };

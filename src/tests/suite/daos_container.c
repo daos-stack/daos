@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -633,6 +633,8 @@ co_op_retry(void **state)
 	daos_prop_t       *prop = NULL;
 	int                rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	if (arg->myrank != 0)
 		return;
 
@@ -1079,7 +1081,7 @@ co_acl(void **state)
 	rc = daos_cont_open(arg->pool.poh, arg->co_str, DAOS_COO_RW, &arg->coh, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
-	rc = daos_cont_set_owner(arg->coh, exp_owner, exp_owner_grp, NULL);
+	rc = daos_cont_set_owner_no_check(arg->coh, exp_owner, exp_owner_grp, NULL);
 	assert_rc_equal(rc, 0);
 
 	rc = daos_cont_close(arg->coh, NULL);
@@ -1438,7 +1440,7 @@ create_cont_with_user_perms(test_arg_t *arg, uint64_t perms)
 	assert_rc_equal(rc, 0);
 
 	/* remove current user's ownership, so they don't have owner perms */
-	rc = daos_cont_set_owner(coh, "nobody@", NULL, NULL);
+	rc = daos_cont_set_owner_no_check(coh, "nobody@", NULL, NULL);
 	assert_rc_equal(rc, 0);
 
 	acl = get_daos_acl_with_user_perms(perms);
@@ -2126,8 +2128,8 @@ co_set_owner(void **state)
 	test_arg_t	*arg = NULL;
 	d_string_t	 original_user;
 	d_string_t	 original_grp;
-	d_string_t	 new_user = "newuser@";
-	d_string_t	 new_grp = "newgrp@";
+	d_string_t       fake_user = "newuser@";
+	d_string_t       fake_grp  = "newgrp@";
 	int		 rc;
 
 	rc = test_setup((void **)&arg, SETUP_CONT_CONNECT, arg0->multi_rank,
@@ -2148,39 +2150,50 @@ co_set_owner(void **state)
 		assert_rc_equal(rc, -DER_INVAL);
 
 		print_message("Set owner with invalid user\n");
-		rc = daos_cont_set_owner(arg->coh, "not_a_valid_user", new_grp,
-					 NULL);
+		rc = daos_cont_set_owner(arg->coh, "notvaliduser!", NULL, NULL);
 		assert_rc_equal(rc, -DER_INVAL);
 
 		print_message("Set owner with invalid grp\n");
-		rc = daos_cont_set_owner(arg->coh, new_user, "not_a_valid_grp",
-					 NULL);
+		rc = daos_cont_set_owner(arg->coh, NULL, "notvalidgrp!", NULL);
 		assert_rc_equal(rc, -DER_INVAL);
 
-		print_message("Set owner user\n");
-		rc = daos_cont_set_owner(arg->coh, new_user, NULL, NULL);
+		print_message("Set owner user to nonexistent\n");
+		rc = daos_cont_set_owner(arg->coh, fake_user, NULL, NULL);
+		assert_rc_equal(rc, -DER_NONEXIST);
+
+		print_message("Set owner user to nonexistent with no_check\n");
+		rc = daos_cont_set_owner_no_check(arg->coh, fake_user, NULL, NULL);
 		assert_rc_equal(rc, 0);
-		expect_ownership(arg, new_user, original_grp);
+		expect_ownership(arg, fake_user, original_grp);
 
 		print_message("Change owner user back\n");
 		rc = daos_cont_set_owner(arg->coh, original_user, NULL, NULL);
 		assert_rc_equal(rc, 0);
 		expect_ownership(arg, original_user, original_grp);
 
-		print_message("Set owner group\n");
-		rc = daos_cont_set_owner(arg->coh, NULL, new_grp, NULL);
+		print_message("Set owner group to nonexistent\n");
+		rc = daos_cont_set_owner(arg->coh, NULL, fake_grp, NULL);
+		assert_rc_equal(rc, -DER_NONEXIST);
+
+		print_message("Set owner group to nonexistent with no_check\n");
+		rc = daos_cont_set_owner_no_check(arg->coh, NULL, fake_grp, NULL);
 		assert_rc_equal(rc, 0);
-		expect_ownership(arg, original_user, new_grp);
+		expect_ownership(arg, original_user, fake_grp);
 
 		print_message("Change owner group back\n");
 		rc = daos_cont_set_owner(arg->coh, NULL, original_grp, NULL);
 		assert_rc_equal(rc, 0);
 		expect_ownership(arg, original_user, original_grp);
 
-		print_message("Set both owner user and group\n");
-		rc = daos_cont_set_owner(arg->coh, new_user, new_grp, NULL);
+		print_message("Set both owner user and group with no_check\n");
+		rc = daos_cont_set_owner_no_check(arg->coh, fake_user, fake_grp, NULL);
 		assert_rc_equal(rc, 0);
-		expect_ownership(arg, new_user, new_grp);
+		expect_ownership(arg, fake_user, fake_grp);
+
+		print_message("Set both owner user and group back to original\n");
+		rc = daos_cont_set_owner(arg->coh, original_user, original_grp, NULL);
+		assert_rc_equal(rc, 0);
+		expect_ownership(arg, original_user, original_grp);
 	}
 
 	D_FREE(original_user);
@@ -2219,32 +2232,39 @@ co_set_owner_access(void **state)
 	test_arg_t	*arg0 = *state;
 	test_arg_t	*arg = NULL;
 	int		 rc;
-	uint64_t	 no_perm = DAOS_ACL_PERM_CONT_ALL &
-				   ~DAOS_ACL_PERM_SET_OWNER;
+	uid_t            uid     = geteuid();
+	gid_t            gid     = getegid();
+	char            *user    = NULL;
+	char            *group   = NULL;
+	uint64_t         no_perm = DAOS_ACL_PERM_CONT_ALL & ~DAOS_ACL_PERM_SET_OWNER;
+
+	rc = daos_acl_uid_to_principal(uid, &user);
+	assert_success(rc);
+
+	rc = daos_acl_gid_to_principal(gid, &group);
+	assert_success(rc);
 
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
 			SMALL_POOL_SIZE, 0, NULL);
 	assert_success(rc);
 
 	print_message("Set owner user denied with no set-owner perm\n");
-	expect_co_set_owner_access(arg, "user@", NULL, no_perm,
-				   -DER_NO_PERM);
+	expect_co_set_owner_access(arg, user, NULL, no_perm, -DER_NO_PERM);
 
 	print_message("Set owner group denied with no set-owner perm\n");
-	expect_co_set_owner_access(arg, NULL, "group@", no_perm,
-				   -DER_NO_PERM);
+	expect_co_set_owner_access(arg, NULL, group, no_perm, -DER_NO_PERM);
 
 	print_message("Set both owner and grp denied with no set-owner perm\n");
-	expect_co_set_owner_access(arg, "user@", "group@", no_perm,
-				   -DER_NO_PERM);
+	expect_co_set_owner_access(arg, user, group, no_perm, -DER_NO_PERM);
 
-	print_message("Set owner allowed with set-owner perm\n");
-	expect_co_set_owner_access(arg, "user@", "group@",
-				   DAOS_ACL_PERM_READ |
-				   DAOS_ACL_PERM_SET_OWNER,
+	print_message("Set owner succeeds with set-owner perm\n");
+	expect_co_set_owner_access(arg, user, group, DAOS_ACL_PERM_READ | DAOS_ACL_PERM_SET_OWNER,
 				   0);
 
 	test_teardown((void **)&arg);
+
+	D_FREE(user);
+	D_FREE(group);
 }
 
 static void
@@ -2295,6 +2315,16 @@ co_owner_implicit_access(void **state)
 	struct daos_acl	*acl;
 	daos_prop_t	*tmp_prop;
 	daos_prop_t	*acl_prop;
+	uid_t            uid   = geteuid();
+	gid_t            gid   = getegid();
+	char            *user  = NULL;
+	char            *group = NULL;
+
+	rc = daos_acl_uid_to_principal(uid, &user);
+	assert_success(rc);
+
+	rc = daos_acl_gid_to_principal(gid, &group);
+	assert_success(rc);
 
 	/*
 	 * An owner with no permissions still has get/set ACL access
@@ -2330,7 +2360,7 @@ co_owner_implicit_access(void **state)
 	daos_prop_free(tmp_prop);
 
 	print_message("- Verify set-owner denied\n");
-	rc = daos_cont_set_owner(arg->coh, "somebody@", "somegroup@", NULL);
+	rc = daos_cont_set_owner(arg->coh, user, group, NULL);
 	assert_rc_equal(rc, -DER_NO_PERM);
 
 	print_message("Owner has get-ACL access implicitly\n");
@@ -2363,6 +2393,8 @@ co_owner_implicit_access(void **state)
 	daos_acl_free(acl);
 	daos_prop_free(owner_deny_prop);
 	test_teardown((void **)&arg);
+	D_FREE(user);
+	D_FREE(group);
 }
 
 static void
@@ -3803,7 +3835,7 @@ co_op_dup_timing(void **state)
 	size_t const       in_sizes[]        = {strlen(in_values[0]), strlen(in_values[1])};
 	int                n                 = (int)ARRAY_SIZE(names);
 	const unsigned int NUM_FP            = 3;
-	const uint32_t     NUM_OPS           = 200;
+	const uint32_t     NUM_OPS           = 500;
 	uint32_t           num_failures      = 0;
 	const uint32_t     SVC_OPS_ENABLED   = 1;
 	const uint32_t     SVC_OPS_ENTRY_AGE = 60;

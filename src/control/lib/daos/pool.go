@@ -8,6 +8,7 @@ package daos
 
 import (
 	"encoding/json"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -17,6 +18,13 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
+
+/*
+#include <stdint.h>
+
+#include <daos_pool.h>
+*/
+import "C"
 
 type (
 	// PoolTierUsage describes usage of a single pool storage tier in
@@ -53,6 +61,7 @@ type (
 
 	// PoolInfo contains information about the pool.
 	PoolInfo struct {
+		QueryMask        PoolQueryMask        `json:"query_mask"`
 		State            PoolServiceState     `json:"state"`
 		UUID             uuid.UUID            `json:"uuid"`
 		Label            string               `json:"label,omitempty"`
@@ -87,7 +96,134 @@ type (
 		Free      uint64           `json:"free"`
 		MediaType StorageMediaType `json:"media_type"`
 	}
+
+	// PoolQueryMask implements a bitmask for pool query options.
+	PoolQueryMask C.uint64_t
 )
+
+const (
+	// DefaultPoolQueryMask defines the default pool query mask.
+	DefaultPoolQueryMask = PoolQueryMask(^uint64(0) &^ (C.DPI_ENGINES_ENABLED | C.DPI_ENGINES_DISABLED))
+	// HealthOnlyPoolQueryMask defines the mask for health-only queries.
+	HealthOnlyPoolQueryMask = PoolQueryMask(^uint64(0) &^ (C.DPI_ENGINES_ENABLED | C.DPI_SPACE))
+
+	// PoolQueryOptionSpace retrieves storage space usage as part of the pool query.
+	PoolQueryOptionSpace = "space"
+	// PoolQueryOptionRebuild retrieves pool rebuild status as part of the pool query.
+	PoolQueryOptionRebuild = "rebuild"
+	// PoolQueryOptionEnabledEngines retrieves enabled engines as part of the pool query.
+	PoolQueryOptionEnabledEngines = "enabled_engines"
+	// PoolQueryOptionDisabledEngines retrieves disabled engines as part of the pool query.
+	PoolQueryOptionDisabledEngines = "disabled_engines"
+
+	// PoolConnectFlagReadOnly indicates that the connection is read-only.
+	PoolConnectFlagReadOnly = C.DAOS_PC_RO
+	// PoolConnectFlagReadWrite indicates that the connection is read-write.
+	PoolConnectFlagReadWrite = C.DAOS_PC_RW
+	// PoolConnectFlagExclusive indicates that the connection is exclusive.
+	PoolConnectFlagExclusive = C.DAOS_PC_EX
+)
+
+var poolQueryOptMap = map[C.int]string{
+	C.DPI_SPACE:            PoolQueryOptionSpace,
+	C.DPI_REBUILD_STATUS:   PoolQueryOptionRebuild,
+	C.DPI_ENGINES_ENABLED:  PoolQueryOptionEnabledEngines,
+	C.DPI_ENGINES_DISABLED: PoolQueryOptionDisabledEngines,
+}
+
+func resolvePoolQueryOpt(name string) (C.int, error) {
+	for opt, optName := range poolQueryOptMap {
+		if name == optName {
+			return opt, nil
+		}
+	}
+	return 0, errors.Errorf("invalid pool query option: %q", name)
+}
+
+// SetOptions sets the pool query mask to include the specified options.
+func (pqm *PoolQueryMask) SetOptions(optNames ...string) error {
+	for _, optName := range optNames {
+		if opt, err := resolvePoolQueryOpt(optName); err != nil {
+			return err
+		} else {
+			*pqm |= PoolQueryMask(opt)
+		}
+	}
+	return nil
+}
+
+// ClearOptions clears the pool query mask of the specified options.
+func (pqm *PoolQueryMask) ClearOptions(optNames ...string) error {
+	for _, optName := range optNames {
+		if opt, err := resolvePoolQueryOpt(optName); err != nil {
+			return err
+		} else {
+			*pqm &^= PoolQueryMask(opt)
+		}
+	}
+	return nil
+}
+
+// SetAll sets the pool query mask to include all pool query options.
+func (pqm *PoolQueryMask) SetAll() {
+	*pqm = PoolQueryMask(^uint64(0)) // DPI_ALL is -1
+}
+
+// ClearAll clears the pool query mask of all pool query options.
+func (pqm *PoolQueryMask) ClearAll() {
+	*pqm = 0
+}
+
+// HasOption returns true if the pool query mask includes the specified option.
+func (pqm PoolQueryMask) HasOption(optName string) bool {
+	return strings.Contains(pqm.String(), optName)
+}
+
+func (pqm PoolQueryMask) String() string {
+	var flags []string
+	for i := 0; i < (C.sizeof_int*8)-1; i++ {
+		opt := C.int(1 << i)
+		if flag, ok := poolQueryOptMap[opt]; ok {
+			if pqm&PoolQueryMask(opt) != 0 {
+				flags = append(flags, flag)
+			}
+		}
+	}
+	sort.Strings(flags)
+	return strings.Join(flags, ",")
+}
+
+func (pqm PoolQueryMask) MarshalJSON() ([]byte, error) {
+	return json.Marshal(pqm.String())
+}
+
+func (pqm *PoolQueryMask) UnmarshalJSON(data []byte) error {
+	if len(data) == 0 {
+		*pqm = 0
+		return nil
+	}
+
+	val, err := strconv.ParseUint(string(data), 10, 64)
+	if err == nil {
+		*pqm = PoolQueryMask(val)
+		return nil
+	}
+
+	var newVal PoolQueryMask
+	for _, opt := range strings.Split(string(data), ",") {
+		for k, v := range poolQueryOptMap {
+			if v == opt {
+				newVal |= PoolQueryMask(k)
+				goto next
+			}
+		}
+		return errors.Errorf("invalid pool query option: %s", opt)
+	next:
+	}
+	*pqm = newVal
+
+	return nil
+}
 
 func (srs *StorageUsageStats) calcImbalance(targCount uint32) uint32 {
 	spread := srs.Max - srs.Min

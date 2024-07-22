@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -345,8 +345,8 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 			defer ps.Close()
 			svc.events = ps
 
-			dispatched := &eventsDispatched{cancel: cancel}
-			svc.events.Subscribe(events.RASTypeStateChange, dispatched)
+			subscriber := newMockSubscriber(1)
+			svc.events.Subscribe(events.RASTypeStateChange, subscriber)
 
 			for i, e := range svc.harness.instances {
 				ei := e.(*EngineInstance)
@@ -393,7 +393,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 			if tc.timeout != time.Duration(0) {
 				<-ctx.Done()
 			}
-			test.AssertEqual(t, 0, len(dispatched.rx), "number of events published")
+			test.AssertEqual(t, 0, len(subscriber.getRx()), "number of events published")
 
 			if diff := cmp.Diff(tc.expResults, gotResp.Results, defRankCmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
