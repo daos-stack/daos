@@ -451,8 +451,11 @@ obj_coll_prep_one(struct coll_oper_args *coa, struct dc_object *obj,
 
 	dcs->dcs_buf[dcs->dcs_nr++] = shard->do_id.id_shard;
 
-	if (unlikely(dct->dct_tgt_nr == (uint8_t)(-1)))
+	if (unlikely(dct->dct_tgt_nr == (uint8_t)(-1))) {
+		D_WARN("Too much shards for obj "DF_OID"reside on the same target %u/%u\n",
+		       DP_OID(obj->cob_md.omd_id), shard->do_target_rank, shard->do_target_idx);
 		goto out;
+	}
 
 	if (coa->coa_for_modify) {
 		if (dct->dct_tgt_nr >= dct->dct_tgt_cap) {
