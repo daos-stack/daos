@@ -2,7 +2,7 @@
 
 ## Goal
 
-This document gives the basic steps to set up an experimental DAOS system using QEMU VMs. This system has the minimal configuration of two VMs. One VM acts as the DAOS server. The other one acts as the DAOS admin and client. You can create pools, containers, and access containers through FUSE. This setup can provide a small playground if you don't have a spare NVMe disk.
+This document gives the basic steps to set up an experimental DAOS system using QEMU VMs. This system has the minimal configuration of two VMs. One VM acts as the DAOS server and admin. The other one acts as the DAOS client. You can create pools, containers, and access containers through FUSE. You can experiment with DAOS even if you don't have no spare NVMe disk.
 
 ## Prerequisites
 
@@ -10,7 +10,7 @@ This document gives the basic steps to set up an experimental DAOS system using 
     - Check your CPU by running `cat /proc/cpuinfo` and finding the `vmx` `sse4_2` flags. Your CPU should have at least 4 cores.
 2.  16GB RAM or more
 3.  QEMU
-    - It is demonstrated to use a Linux based operating system. In principle it should also work but how to setup network is quite different from this document.
+    - It is suggested to use a Linux based operating system. In principle you can also use other OSes but how to setup network is quite different from this document.
 4.  libvirt and QEMU driver
 5.  dnsmasq
 6.  Rocky Linux 8.9 minimal ISO
@@ -25,11 +25,12 @@ Assume you have both hardware and software prepared.
 # the disk image for daos-server
 qemu-img create -f qcow2 daos-server.qcow2 40G
 # the disk image for the emulated nvme disk for DAOS Tier 1
-qemu-img create -f qcow2 qemu-nvm-disk1 16G
+qemu-img create -f qcow2 qemu-nvm-disk1.qcow2 16G
 # the disk image for daos-client
 qemu-img create -f qcow2 daos-client.qcow2 20G
 ```
-2.  Set up the network. Here we use tap networks to connect the VMs. To automatically set up the guest network create a create a script at /etc/qemu-ifup on your host. This script will be called by QEMU. Put these contents in this script, more info on [this page](https://wiki.qemu.org/Documentation/Networking/NAT). It basically creates a network bridge if non-existent, and runs a dnsmasq service on this bridge to assign IP addresses and act as a gateway. Make sure that systemd dnsmasq is not running as it may conflict with our dnsmasq.
+2.  Set up the network.
+We use tap networks to connect the VMs. To automatically set up the guest network this can be done with `/etc/qemu-ifup`. This script will be called by QEMU. Put these contents in this script, more info on [this page](https://wiki.qemu.org/Documentation/Networking/NAT). It basically creates a network bridge if non-existent, and runs a dnsmasq service on this bridge to assign IP addresses and act as a gateway. Make sure that there is no other dnsmasq running as it may conflict with our dnsmasq. If you have virt-manager installed, make sure dnsmasq processes started by virt-manager are closed first.
 ```
 #!/bin/sh
 #
@@ -168,23 +169,37 @@ Then add a sudo rule for qemu-system-x86\_64 in *etc/sudoers.d*.
 ```
 3.  Install guest operating systems.
 
-Run these two commands. Select "boot from cdrom". Follow the installation guide to install the OSes.
+Run these two commands. Select "boot from cdrom". Follow the installation guide to install the OSes. I use Rocky Linux 8.9 in this guide.
 ```
 sudo qemu-system-x86_64 -M q35,accel=kvm,kernel-irqchip=split -cpu host -smp 3 -m 12288 -device intel-iommu,intremap=on -drive file=<image-dir>/daos-server.qcow2,if=virtio -device virtio-net,netdev=mynet0,mac=52:54:00:12:34:56 -netdev tap,id=mynet0 -drive file=<image-dir>/qemu-nvm-disk1.qcow2,if=none,id=nvm1 -device nvme,serial=deadbeef,drive=nvm1 -cdrom <iso-dir>/Rocky-8.9-x86_64-minimal.iso -boot menu=on &
 sudo qemu-system-x86_64  -M q35,accel=kvm,kernel-irqchip=split -cpu host -smp 1 -m 2048 -device intel-iommu,intremap=on -drive file=<image-dir>/daos-client.qcow2,if=virtio -device virtio-net,netdev=mynet1,mac=52:54:00:12:34:57 -netdev tap,id=mynet1 -cdrom <iso-dir>/Rocky-8.9-x86_64-minimal.iso -boot menu=on
 ```
-4.  Install DAOS software.
-
 After OS installation is finished. Remove the `-cdrom` and `-boot` options from the QEMU commands to boot VMs normally. Next is to install DAOS software.
 ```
 sudo qemu-system-x86_64 -M q35,accel=kvm,kernel-irqchip=split -cpu host -smp 3 -m 12288 -device intel-iommu,intremap=on -drive file=<image-dir>/daos-server.qcow2,if=virtio -device virtio-net,netdev=mynet0,mac=52:54:00:12:34:56 -netdev tap,id=mynet0 -drive file=<image-dir>/qemu-nvm-disk1.qcow2,if=none,id=nvm1 -device nvme,serial=deadbeef,drive=nvm1 &
 sudo qemu-system-x86_64  -M q35,accel=kvm,kernel-irqchip=split -cpu host -smp 1 -m 2048 -device intel-iommu,intremap=on -drive file=<image-dir>/daos-client.qcow2,if=virtio -device virtio-net,netdev=mynet1,mac=52:54:00:12:34:57 -netdev tap,id=mynet1 
 ```
-I follow these [steps](https://docs.daos.io/latest/QSG/setup_rhel/) to install both the DAOS server, DAOS admin, and DAOS client. I install daos-server and daos-admin on the first VM, and install daos-client on the second VM. After DAOS software installation you need to use these config files instead of the configuration in the origional setup guide.
+By default the network won't automatically connect in Rocky Linux 8.9, and ssh service is also not enabled as well. Run these commands to enable autoconnect behaviour and sshd service. You can use ssh to connect to your VMs next time.
+```
+# enable the default connection
+nmcli c up enp0s2
+# enable autoconnect for this connection
+nmcli c modify enp0s2 connection.autoconnect "yes"
+# check if connection.autoconnect is enabled
+nmcli c c show enp0s2
+# enable sshd service
+systemctl enable sshd.service
+# start sshd service
+systemctl start sshd.service
+```
+
+4.  Install DAOS software.
+
+I follow these [steps](https://docs.daos.io/latest/QSG/setup_rhel/) to install both the DAOS server, DAOS admin, and DAOS client. I install daos-server and daos-admin on the first VM, and install daos-client on the second VM. You can follow the steps before Step "Create Configuration Files" to intall DAOS software. Then come back to update config files.
 
 5.  Update config files.
 
-Update the daos-server config file `/etc/daos/daos_server.yml` on daos-server. You may need to change fabric\_iface and bdev\_list if they are different.
+Update the daos-server config file `/etc/daos/daos_server.yml` on daos-server. You may need to update "access\_points", "fabric\_iface" and "bdev\_list". Update "access\_points" accordingly if you name daos-server differently. Check if the network device has the same name as listed under "fabric\_iface". Look in the output of `lspci` for "bdev\_list". The info for our NVMe controller is like *??:??:? Non-Volatile memory controller: Red Hat, Inc. QEMU NVM Express Controller (rev 02)*. Prefix *??:??.?* is the address of the NVMe devices.
 ```
 name: daos_server
 access_points:
@@ -225,7 +240,7 @@ engines:
         bdev_list:
         - "0000:00:03.0"
 ```
-Because we disable VFIO and use UIO, we need to run daos\_server.service as root. Open `/usr/lib/systemd/system/daos_server.service`, then change User and Group to root. Then run `systemctl daemon-reload` to reload systemd scripts.
+Because we disable VFIO and use UIO, we have to run daos\_server.service as root. Open `/usr/lib/systemd/system/daos_server.service`, then change User and Group to root. Then run `systemctl daemon-reload` to reload systemd scripts.
 ```
 ...
 [Service]
@@ -234,7 +249,11 @@ User=root
 Group=root
 ...
 ```
-Update the control config file `/etc/daos/daos_control.yml` which is also on daos-server.
+Add the following line to `/etc/sysctl.conf` to preallocate huagepages. You need to reboot daos-server after updating `/etc/sysctl.conf`.
+```
+vm.nr_hugepages = 1024
+```
+Update the control config file `/etc/daos/daos_control.yml` on daos-server. You may need to update "hostlist" if the hostname of daos-server is different.
 ```
 name: daos_server
 port: 10001
@@ -247,7 +266,7 @@ transport_config:
     cert: /etc/daos/certs/admin.crt
     key: /etc/daos/certs/admin.key  
 ```
-Then update the agent config file `/etc/daos/daos_agent.yml` on daos-client.
+Then update the agent config file `/etc/daos/daos_agent.yml` on daos-client. You may need to update "access\_points" if the hostname of daos-server is different.
 ```
 name: daos_server
 access_points:
@@ -263,12 +282,11 @@ transport_config:
 log_file: /tmp/daos_agent.log
 control_log_mask: DEBUG
 ```
-6.  Restart services.
-    On daos-server VM run `systemctl restart daos_server`. On daos-client VM run `systemctl restart daos_agent`. If everything is correct, you should be able to experiment with this minimal DAOS setup. Try to create pools, containers, and mount POSIX FSes.
-
+6.  Start services.
+    On daos-server VM run `systemctl enable daos_server` to enable daos\_server service. Run `systemctl start daos_server` to start it. On daos-client VM run `systemctl enable daos_agent` to enable daos\_agent service. Run `systemctl start daos_agent` to start it. If everything is correct, you should be able to experiment with this minimal DAOS setup. Try to create pools, containers, and mount POSIX FSes.
 
 ## Possible Issues
 
-1.  If `dmg` returns error complaining not knowing daos-server. You can add the daos-server IP and name to /etc/hosts.
-2.  daos-server fails. Check the `/tmp/daos_server.log` for ERROR messages.
-3.  daos-server is up, but connections are rejected. Check if you have firewalld still turned on. Turn off firewalld `systemctl stop firewalld; systemctl disable firewalld`.
+1. If `dmg` returns error complaining not knowing daos-server. You can add the daos-server IP and name to /etc/hosts.
+2. daos-server fails. Check the `/tmp/daos_server.log` for ERROR messages.
+3. daos-server is up, but connections are rejected. Check if you have firewalld still turned on. Turn off firewalld `systemctl stop firewalld; systemctl disable firewalld`.
