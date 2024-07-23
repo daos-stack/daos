@@ -66,8 +66,10 @@ largefilecount:
     - HDF5-VOL
     - DFS
   object_class:
-    - [SX, EC_2P1GX]
-    - [S1, EC_2P1G1]
+    ior_oclass:
+      - [SX, EC_16P2GX]  # Run once with SX and then with EC_16P2GX
+    mdtest_oclass:
+      - [S1, EC_16P2G1]  # Run once with S1 and then with EC_16P2G1
 ior:
   client_processes:
     ppn: 30
