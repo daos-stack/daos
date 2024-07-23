@@ -1993,8 +1993,8 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		leader_oid.id_pub = obj->cob_md.omd_id;
 		leader_oid.id_shard = i;
 		leader_dtrg_idx = obj_get_shard(obj, i)->po_target;
-		if (!obj_is_ec(obj) && act_grp_cnt == 1)
-			mbs->dm_flags |= DMF_SRDG_REP;
+		if (act_grp_cnt == 1)
+			mbs->dm_flags |= DMF_SRDG;
 
 		/* If there is only one redundancy group to be modified,
 		 * then such redundancy group information should already
