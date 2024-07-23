@@ -31,5 +31,7 @@ pool_100:
   size: 100%
 pool_small:
   size: 2%
-  # If we use --size=2% during pool create, we can only create up to 49 pools.
-  quantity: 49
+  # If we use --size=2% during pool create, we can create up to 49 pools in Aurora and 48 pools in
+  # CI. We don't want the test person to update the value at every RC, so use 48 because creating
+  # a bunch of small pools is the goal here; not to fill up the storage as much as possible.
+  quantity: 48
