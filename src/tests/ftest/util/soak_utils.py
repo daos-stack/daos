@@ -33,7 +33,7 @@ from macsio_util import MacsioCommand
 from mdtest_utils import MdtestCommand
 from oclass_utils import extract_redundancy_factor
 from pydaos.raw import DaosApiError, DaosSnapshot
-from run_utils import run_remote
+from run_utils import RunException, run_local, run_remote
 from test_utils_container import add_container
 
 H_LOCK = threading.Lock()
@@ -60,6 +60,18 @@ def ddhhmmss_format(seconds):
 
 def get_id():
     return next(id_counter)
+
+
+def debug_logging(log, enable_debug_msg, log_msg):
+    """_summary_
+
+    Args:
+        log (_type_): _description_
+        enable_debug_msg (_type_): _description_
+        log_msg (_type_): _description_
+    """
+    if enable_debug_msg:
+        log.debug(log_msg)
 
 
 def add_pools(self, pool_names, ranks=None):
@@ -250,6 +262,36 @@ def get_daos_server_logs(self):
             raise SoakTestError(f"<<FAILED: daos logs file from {hosts} not copied>>") from error
 
 
+def get_job_logs(self):
+    """Gather all job logs for the current pass of soak."""
+
+    # gather all the logfiles for this pass and cleanup client nodes
+    cmd = f"/usr/bin/rsync -avtr --min-size=1B {self.soak_log_dir} {self.outputsoak_dir}/"
+    cmd2 = f"/usr/bin/rm -rf {self.soak_log_dir}"
+    if self.enable_remote_logging:
+        # Limit fan out to reduce burden on filesystem
+        result = run_remote(self.log, self.hostlist_clients, cmd, timeout=600, fanout=64)
+        if result.passed:
+            result = run_remote(self.log, self.hostlist_clients, cmd2, timeout=600)
+        if not result.passed:
+            self.log.error("Remote copy failed on %s", str(result.failed_hosts))
+        # copy script files from shared dir
+        sharedscr_dir = self.sharedsoak_dir + "/pass" + str(self.loop)
+        cmd3 = f"/usr/bin/rsync -avtr --min-size=1B {sharedscr_dir} {self.outputsoak_dir}/"
+        cmd4 = f"/usr/bin/rm -rf {sharedscr_dir}"
+        try:
+            run_local(self.log, cmd3, timeout=600)
+            run_local(self.log, cmd4, timeout=600)
+        except RunException as error:
+            self.log.info("Script file copy failed with %s", error)
+    # copy the local files; local host not included in hostlist_client
+    try:
+        run_local(self.log, cmd, timeout=600)
+        run_local(self.log, cmd2, timeout=600)
+    except RunException as error:
+        self.log.info("Local copy failed with %s", error)
+
+
 def run_monitor_check(self):
     """Monitor server cpu, memory usage periodically.
 
@@ -334,11 +376,11 @@ def wait_for_pool_rebuild(self, pool, name):
         pool.wait_for_rebuild_to_end()
         rebuild_status = True
     except DaosTestError as error:
-        self.log.error(f"<<<FAILED:{name} rebuild timed out: {error}", exc_info=error)
+        self.log.error(f"<<<FAILED: {name} rebuild timed out: {error}", exc_info=error)
         rebuild_status = False
     except TestFail as error1:
         self.log.error(
-            f"<<<FAILED:{name} rebuild failed due to test issue: {error1}", exc_info=error1)
+            f"<<<FAILED: {name} rebuild failed due to test issue: {error1}", exc_info=error1)
     self.dmg_command.server_set_logmasks(raise_exception=False)
     return rebuild_status
 
@@ -357,13 +399,13 @@ def launch_jobscript(log, job_queue, job_id, host_list, script, job_log, error_l
         timeout (_type_): _description_
         test (_type_): _description_
     """
-    log.debug(f"DBG: JOB {job_id} ENTERED launch_jobscript")
+    debug_logging(log, test.enable_debug_msg, f"DBG: JOB {job_id} ENTERED launch_jobscript")
     job_results = []
     node_results = []
     state = "UNKNOWN"
     if time.time() >= test.end_time:
         results = {"handle": job_id, "state": "CANCELLED", "host_list": host_list}
-        log.debug(f"DBG: JOB {job_id} EXITED launch_jobscript")
+        debug_logging(log, test.enable_debug_msg, f"DBG: JOB {job_id} EXITED launch_jobscript")
         job_queue.put(results)
         # give time to update the queue before exiting
         time.sleep(0.5)
@@ -381,7 +423,7 @@ def launch_jobscript(log, job_queue, job_id, host_list, script, job_log, error_l
     errorlog = error_log1.replace("RHOST", str(rhost))
     cmd = f"{script} {hosts} {job_id} > {joblog} 2> {errorlog}"
     job_results = run_remote(
-        log, rhost, cmd, verbose=True, timeout=timeout * 60, task_debug=True, stderr=True)
+        log, rhost, cmd, verbose=False, timeout=timeout * 60, task_debug=False, stderr=False)
     if job_results:
         if job_results.timeout:
             state = "TIMEOUT"
@@ -393,7 +435,7 @@ def launch_jobscript(log, job_queue, job_id, host_list, script, job_log, error_l
             state = "UNKNOWN"
     if time.time() >= test.end_time:
         results = {"handle": job_id, "state": "CANCELLED", "host_list": host_list}
-        log.debug(f"DBG: JOB {job_id} EXITED launch_jobscript")
+        debug_logging(log, test.enable_debug_msg, f"DBG: JOB {job_id} EXITED launch_jobscript")
         job_queue.put(results)
         # give time to update the queue before exiting
         time.sleep(0.5)
@@ -405,11 +447,12 @@ def launch_jobscript(log, job_queue, job_id, host_list, script, job_log, error_l
     if node_results.failed_hosts:
         for node in node_results.failed_hosts:
             host_list.remove(node)
-            log.debug("DBG: Node {node} is marked as DOWN in job {job_id}")
+            debug_logging(
+                log, test.enable_debug_msg, "DBG: Node {node} is marked as DOWN in job {job_id}")
 
     log.info("FINAL STATE: soak job %s completed with : %s at %s", job_id, state, time.ctime())
     results = {"handle": job_id, "state": state, "host_list": host_list}
-    log.debug(f"DBG: JOB {job_id} EXITED launch_jobscript")
+    debug_logging(log, test.enable_debug_msg, f"DBG: JOB {job_id} EXITED launch_jobscript")
     job_queue.put(results)
     # give time to update the queue before exiting
     time.sleep(0.5)
@@ -938,8 +981,10 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
         self.soak_log_dir,
         self.test_name + "_" + name + "_`hostname -s`_"
         "" + "${JOB_ID}_" + "daos_dfuse.log")
-    dfuse_env = f"export D_LOG_FILE_APPEND_PID=1;export D_LOG_MASK=ERR;export D_LOG_FILE={dfuselog}"
-    module_load = f"module use {self.mpi_module_use};module load {self.mpi_module}"
+    dfuse_env = ";".join(["export D_LOG_FILE_APPEND_PID=1",
+                          "export D_LOG_MASK=ERR",
+                          f"export D_LOG_FILE={dfuselog}"])
+    module_load = ";".join([f"module use {self.mpi_module_use}", f"module load {self.mpi_module}"])
 
     dfuse_start_cmds = [
         "clush -S -w $HOSTLIST \"mkdir -p {}\"".format(dfuse.mount_dir.value),
@@ -1098,7 +1143,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None,
             if api in ["HDF5-VOL", "POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
                 sbatch_cmds.extend(stop_dfuse(dfuse, vol))
             commands.append([sbatch_cmds, log_name])
-            self.log.info(f"<<IOR {api} cmdlines>>:")
+            self.log.info(f"<<IOR {api} cmdlines>>: ")
             for cmd in sbatch_cmds:
                 self.log.info(cmd)
     return commands
@@ -1172,7 +1217,7 @@ def create_macsio_cmdline(self, job_spec, pool, ppn, nodesperjob):
             if api in ["HDF5-VOL"]:
                 sbatch_cmds.extend(stop_dfuse(dfuse, vol=True))
             commands.append([sbatch_cmds, log_name])
-            self.log.info("<<MACSio cmdlines>>:")
+            self.log.info("<<MACSio cmdlines>>: ")
             for cmd in sbatch_cmds:
                 self.log.info(cmd)
     return commands
@@ -1266,7 +1311,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
             if api in ["POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
                 sbatch_cmds.extend(stop_dfuse(dfuse))
             commands.append([sbatch_cmds, log_name])
-            self.log.info(f"<<MDTEST {api} cmdlines>>:")
+            self.log.info(f"<<MDTEST {api} cmdlines>>: ")
             for cmd in sbatch_cmds:
                 self.log.info(cmd)
     return commands
@@ -1304,7 +1349,7 @@ def create_racer_cmdline(self, job_spec):
     cmds.append("status=$?")
     # add exit code
     commands.append([cmds, log_name])
-    self.log.info("<<DAOS racer cmdlines>>:")
+    self.log.info("<<DAOS racer cmdlines>>: ")
     for cmd in cmds:
         self.log.info(cmd)
     return commands
@@ -1392,7 +1437,7 @@ def create_fio_cmdline(self, job_spec, pool):
         cmds.append("cd -")
         cmds.extend(stop_dfuse(dfuse))
         commands.append([cmds, log_name])
-        self.log.info("<<Fio cmdlines>>:")
+        self.log.info("<<Fio cmdlines>>: ")
         for cmd in cmds:
             self.log.info(cmd)
     return commands
@@ -1474,7 +1519,7 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
             if api in ["POSIX", "POSIX-LIBIOIL", "POSIX-LIBPIL4DFS"]:
                 sbatch_cmds.extend(stop_dfuse(dfuse))
             commands.append([sbatch_cmds, log_name])
-            self.log.info(f"<<{job_spec.upper()} cmdlines>>:")
+            self.log.info(f"<<{job_spec.upper()} cmdlines>>: ")
             for cmd in sbatch_cmds:
                 self.log.info("%s", cmd)
     if mpi_module != self.mpi_module:
@@ -1532,7 +1577,7 @@ def create_dm_cmdline(self, job_spec, pool, ppn, nodesperjob):
         dm_commands = create_ior_cmdline(
             self, ior_spec, pool, ppn, nodesperjob, [[file_oclass, dir_oclass]], cont_2)
         sbatch_cmds.extend(dm_commands[0][0])
-        self.log.info("<<DATA_MOVER cmdlines>>:")
+        self.log.info("<<DATA_MOVER cmdlines>>: ")
         for cmd in sbatch_cmds:
             self.log.info("%s", cmd)
         commands.append([sbatch_cmds, log_name])

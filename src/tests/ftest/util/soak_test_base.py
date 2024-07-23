@@ -25,11 +25,13 @@ from run_utils import RunException, run_local, run_remote
 from soak_utils import (SoakTestError, add_pools, build_job_script, cleanup_dfuse,
                         create_app_cmdline, create_dm_cmdline, create_fio_cmdline,
                         create_ior_cmdline, create_macsio_cmdline, create_mdtest_cmdline,
-                        create_racer_cmdline, ddhhmmss_format, get_daos_server_logs, get_harassers,
-                        get_id, get_journalctl, launch_exclude_reintegrate, launch_extend,
-                        launch_jobscript, launch_reboot, launch_server_stop_start, launch_snapshot,
-                        launch_vmd_identify_check, reserved_file_copy, run_event_check,
-                        run_metrics_check, run_monitor_check)
+                        create_racer_cmdline, ddhhmmss_format, debug_logging, get_daos_server_logs,
+                        get_harassers, get_id, get_job_logs, get_journalctl,
+                        launch_exclude_reintegrate, launch_extend, launch_jobscript, launch_reboot,
+                        launch_server_stop_start, launch_snapshot, launch_vmd_identify_check,
+                        reserved_file_copy, run_event_check, run_metrics_check, run_monitor_check)
+
+J_LOCK = threading.Lock()
 
 
 class SoakTestBase(TestWithServers):
@@ -81,6 +83,7 @@ class SoakTestBase(TestWithServers):
         self.enable_scrubber = False
         self.job_scheduler = None
         self.Job_List = None
+        self.enable_debug_msg = False
 
     def setUp(self):
         """Define test setup to be done."""
@@ -100,30 +103,28 @@ class SoakTestBase(TestWithServers):
         # Initialize dmg cmd
         self.dmg_command = self.get_dmg_command()
         self.job_scheduler = self.params.get("job_scheduler", "/run/*", default="slurm")
-        # Fail if slurm partition is not defined
-        # NOTE: Slurm reservation and partition are created before soak runs.
-        # CI uses partition=daos_client and no reservation.
-        # A21 uses partition=normal/default and reservation=daos-test.
-        # Partition and reservation names are updated in the yaml file.
-        # It is assumed that if there is no reservation (CI only), then all
-        # the nodes in the partition will be used for soak.
-        if not self.host_info.clients.partition.name:
-            raise SoakTestError(
-                "<<FAILED: Partition is not correctly setup for daos "
-                "slurm partition>>")
-        self.srun_params = {"partition": self.host_info.clients.partition.name}
-        if self.host_info.clients.partition.reservation:
-            self.srun_params["reservation"] = self.host_info.clients.partition.reservation
-        # Include test node for log cleanup; remove from client list
+        # soak jobs do not run on the local node
         local_host_list = include_local_host(None)
-        self.slurm_exclude_nodes.add(local_host_list)
         if local_host_list[0] in self.hostlist_clients:
             self.hostlist_clients.remove((local_host_list[0]))
         if not self.hostlist_clients:
-            self.fail(
-                "There are no valid nodes in this partition to run "
-                "soak. Check partition {} for valid nodes".format(
-                    self.host_info.clients.partition.name))
+            self.fail("There are no valid nodes to run soak")
+        if self.job_scheduler == "slurm":
+            # Fail if slurm partition is not defined
+            # NOTE: Slurm reservation and partition are created before soak runs.
+            # CI uses partition=daos_client and no reservation.
+            # A21 uses partition=normal/default and reservation=daos-test.
+            # Partition and reservation names are updated in the yaml file.
+            # It is assumed that if there is no reservation (CI only), then all
+            # the nodes in the partition will be used for soak.
+            if not self.host_info.clients.partition.name:
+                raise SoakTestError(
+                    "<<FAILED: Partition is not correctly setup for daos slurm partition>>")
+            self.srun_params = {"partition": self.host_info.clients.partition.name}
+            if self.host_info.clients.partition.reservation:
+                self.srun_params["reservation"] = self.host_info.clients.partition.reservation
+            # Include test node for log cleanup; remove from client list
+            self.slurm_exclude_nodes.add(local_host_list)
 
     def pre_tear_down(self):
         """Tear down any test-specific steps prior to running tearDown().
@@ -169,7 +170,8 @@ class SoakTestBase(TestWithServers):
 
         # display final metrics
         run_metrics_check(self, prefix="final")
-        # Gather server logs
+        # Gather logs
+        get_job_logs(self)
         try:
             get_daos_server_logs(self)
         except SoakTestError as error:
@@ -302,7 +304,7 @@ class SoakTestBase(TestWithServers):
 
     def schedule_jobs(self):
         """Schedule jobs with internal scheduler."""
-        self.log.debug("DBG: schedule_jobs ENTERED ")
+        debug_logging(self.log, self.enable_debug_msg, "DBG: schedule_jobs ENTERED ")
         job_queue = multiprocessing.Queue()
         jobid_list = []
         node_list = self.hostlist_clients
@@ -319,10 +321,17 @@ class SoakTestBase(TestWithServers):
                 if job_id in jobid_list:
                     node_count = job_dict["nodesperjob"]
                     if len(node_list) >= node_count:
-                        self.log.debug(f"DBG: node_count {node_count}")
-                        self.log.debug(f"DBG: node_list initial/queue {node_list}")
+                        debug_logging(
+                            self.log, self.enable_debug_msg, f"DBG: node_count {node_count}")
+                        debug_logging(
+                            self.log,
+                            self.enable_debug_msg,
+                            f"DBG: node_list initial/queue {node_list}")
                         job_node_list = node_list[:node_count]
-                        self.log.debug(f"DBG: node_list before launch_job {node_list}")
+                        debug_logging(
+                            self.log,
+                            self.enable_debug_msg,
+                            f"DBG: node_list before launch_job {node_list}")
                         script = job_dict["jobscript"]
                         timeout = job_dict["jobtimeout"]
                         log = job_dict["joblog"]
@@ -335,23 +344,28 @@ class SoakTestBase(TestWithServers):
                         jobs.append(threading.Thread(target=method, args=params, name=name))
                         jobid_list.remove(job_id)
                         node_list = node_list[node_count:]
-                        self.log.debug(f"DBG: node_list after launch_job {node_list}")
+                        debug_logging(
+                            self.log,
+                            self.enable_debug_msg,
+                            f"DBG: node_list after launch_job {node_list}")
             # run job scripts on all available nodes
             for job in jobs:
                 job.start()
-            self.log.debug("DBG: all jobs started")
+            debug_logging(self.log, self.enable_debug_msg, "DBG: all jobs started")
             for job in jobs:
                 job.join()
-            self.log.debug("DBG: all jobs joined")
+            debug_logging(self.log, self.enable_debug_msg, "DBG: all jobs joined")
             while not job_queue.empty():
                 job_results = job_queue.get()
                 # Results to return in queue
                 node_list.update(job_results["host_list"])
-                self.log.debug("DBG: Updating soak results")
+                debug_logging(self.log, self.enable_debug_msg, "DBG: Updating soak results")
                 self.soak_results[job_results["handle"]] = job_results["state"]
-                self.log.debug(f"DBG: node_list returned from queue {node_list}")
-
-        self.log.debug("DBG: schedule_jobs EXITED ")
+                debug_logging(
+                    self.log,
+                    self.enable_debug_msg,
+                    f"DBG: node_list returned from queue {node_list}")
+        debug_logging(self.log, self.enable_debug_msg, "DBG: schedule_jobs EXITED ")
 
     def job_setup(self, jobs, pool):
         """Create the cmdline needed to launch job.
@@ -450,7 +464,7 @@ class SoakTestBase(TestWithServers):
                     # one of the jobs failed to queue; exit on first fail for now.
                     err_msg = f"Job failed to run for {script}"
                     job_id_list = []
-                    raise SoakTestError(f"<<FAILED:  Soak {self.test_name}: {err_msg}>>")
+                    raise SoakTestError(f"<<FAILED: Soak {self.test_name}: {err_msg}>>")
         else:
             for job_dict in self.Job_List:
                 job_dict["jobid"] = get_id()
@@ -488,7 +502,8 @@ class SoakTestBase(TestWithServers):
         if job_id_list:
             # wait for all the jobs to finish
             while len(self.soak_results) < len(job_id_list):
-                self.log.debug(f"DBG: SOAK RESULTS 1 {self.soak_results}")
+                debug_logging(
+                    self.log, self.enable_debug_msg, f"DBG: SOAK RESULTS 1 {self.soak_results}")
                 # wait for the jobs to complete unless test_timeout occurred
                 if time.time() > self.end_time:
                     self.log.info("<< SOAK test timeout in Job Completion at %s >>", time.ctime())
@@ -538,37 +553,14 @@ class SoakTestBase(TestWithServers):
             if failed_harasser_msg is not None:
                 self.all_failed_harassers.append(failed_harasser_msg)
             # check for JobStatus = COMPLETED or CANCELLED (i.e. TEST TO)
-            self.log.debug(f"DBG: SOAK RESULTS 2 {self.soak_results}")
+            debug_logging(
+                self.log, self.enable_debug_msg, f"DBG: SOAK RESULTS 2 {self.soak_results}")
             for job, result in list(self.soak_results.items()):
                 if result in ["COMPLETED", "CANCELLED"]:
                     job_id_list.remove(int(job))
                 else:
                     self.log.info("<< Job %s failed with status %s>>", job, result)
-            # gather all the logfiles for this pass and cleanup test nodes
-            cmd = f"/usr/bin/rsync -avtr --min-size=1B {self.soak_log_dir} {self.outputsoak_dir}/"
-            cmd2 = f"/usr/bin/rm -rf {self.soak_log_dir}"
-            if self.enable_remote_logging:
-                # Limit fan out to reduce burden on filesystem
-                result = run_remote(self.log, self.hostlist_clients, cmd, timeout=600, fanout=64)
-                if result.passed:
-                    result = run_remote(self.log, self.hostlist_clients, cmd2, timeout=600)
-                if not result.passed:
-                    self.log.error("Remote copy failed on %s", str(result.failed_hosts))
-                # copy script files from shared dir
-                sharedscr_dir = self.sharedsoak_dir + "/pass" + str(self.loop)
-                cmd3 = f"/usr/bin/rsync -avtr --min-size=1B {sharedscr_dir} {self.outputsoak_dir}/"
-                cmd4 = f"/usr/bin/rm -rf {sharedscr_dir}"
-                try:
-                    run_local(self.log, cmd3, timeout=600)
-                    run_local(self.log, cmd4, timeout=600)
-                except RunException as error:
-                    self.log.info("Script file copy failed with %s", error)
-            # copy the local files; local host not included in hostlist_client
-            try:
-                run_local(self.log, cmd, timeout=600)
-                run_local(self.log, cmd2, timeout=600)
-            except RunException as error:
-                self.log.info("Local copy failed with %s", error)
+            get_job_logs(self)
             self.soak_results = {}
         return job_id_list
 
@@ -591,7 +583,6 @@ class SoakTestBase(TestWithServers):
             SoakTestError
 
         """
-        job_script_list = []
         jobid_list = []
         self.Job_List = []
         # Update the remote log directories from new loop/pass
@@ -651,6 +642,7 @@ class SoakTestBase(TestWithServers):
         self.soak_errors = []
         self.check_errors = []
         self.used = []
+        self.enable_debug_msg = self.params.get("enable_debug_msg", "/run/*", default=False)
         self.mpi_module = self.params.get("mpi_module", "/run/*", default="mpi/mpich-x86_64")
         self.mpi_module_use = self.params.get(
             "mpi_module_use", "/run/*", default="/usr/share/modulefiles")
