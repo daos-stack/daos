@@ -1831,8 +1831,7 @@ vos_dtx_pack_mbs(struct umem_instance *umm, struct vos_dtx_act_ent *dae)
 
 int
 vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
-	      uint32_t *pm_ver, struct dtx_memberships **mbs, struct dtx_cos_key *dck,
-	      bool for_refresh)
+	      uint32_t *pm_ver, struct dtx_cos_key *dck, bool for_refresh)
 {
 	struct vos_container	*cont;
 	struct vos_dtx_act_ent	*dae;
@@ -1878,9 +1877,6 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 		}
 
 		if (dae->dae_committable || DAE_FLAGS(dae) & DTE_PARTIAL_COMMITTED) {
-			if (mbs != NULL)
-				*mbs = vos_dtx_pack_mbs(vos_cont2umm(cont), dae);
-
 			if (epoch != NULL)
 				*epoch = DAE_EPOCH(dae);
 
