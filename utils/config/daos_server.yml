@@ -602,6 +602,9 @@
 #  bdev_auto_faulty:
 #    enable: false
 #
-## rather than use rsync to copy files. use the specify binary to copy files.
+## Override the default file transfer mechanism for dmg support collect-log by supplying
+## the path to an alternative script or binary that will be used to copy log off of the servers.
+## Note that the --transfer-args flag to the collect-log command may be used to supply
+## extra runtime arguments used by the copy tool (e.g. a cloud bucket name, etc.)
 #support:
 #  file_transfer_exec: /usr/bin/copy_tool.sh
