@@ -174,16 +174,16 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 			cmd.Debugf("Log Function %d -- Log Collect Cmd %s ", logFunc, logCmd)
 			ctx := cmd.MustLogCtx()
 			req := &control.CollectLogReq{
-				TargetFolder:          cmd.TargetFolder,
-				ExtraLogsDir:          cmd.ExtraLogsDir,
-				LogFunction:           logFunc,
-				LogCmd:                logCmd,
-				LogStartDate:          cmd.LogStartDate,
-				LogEndDate:            cmd.LogEndDate,
-				LogStartTime:          cmd.LogStartTime,
-				LogEndTime:            cmd.LogEndTime,
-				StopOnError:           cmd.StopOnError,
-				ExtraArgsCollectRsync: cmd.ExtraArgsCollectRsync,
+				TargetFolder:         cmd.TargetFolder,
+				ExtraLogsDir:         cmd.ExtraLogsDir,
+				LogFunction:          logFunc,
+				LogCmd:               logCmd,
+				LogStartDate:         cmd.LogStartDate,
+				LogEndDate:           cmd.LogEndDate,
+				LogStartTime:         cmd.LogStartTime,
+				LogEndTime:           cmd.LogEndTime,
+				StopOnError:          cmd.StopOnError,
+				FileTransferExecArgs: cmd.FileTransferExecArgs,
 			}
 			req.SetHostList(cmd.hostlist)
 
@@ -226,7 +226,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 		fmt.Printf(progress.Display())
 	}
 
-	params.ExtraArgsCollectRsync = cmd.ExtraArgsCollectRsync
+	params.FileTransferExecArgs = cmd.FileTransferExecArgs
 	// R sync the logs from servers
 	rsyncerr := cmd.rsyncLog()
 	fmt.Printf(progress.Display())

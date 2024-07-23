@@ -42,7 +42,7 @@ type CollectLogReq struct {
 	LogStartTime string `protobuf:"bytes,9,opt,name=LogStartTime,proto3" json:"LogStartTime,omitempty"`
 	LogEndTime   string `protobuf:"bytes,10,opt,name=LogEndTime,proto3" json:"LogEndTime,omitempty"`
 	StopOnError  bool   `protobuf:"varint,11,opt,name=StopOnError,proto3" json:"StopOnError,omitempty"`
-	ExtraArgsCollectRsync    string `protobuf:"bytes,12,opt,name=ExtraArgsCollectRsync,proto3" json:"ExtraArgsCollectRsync,omitempty"`
+	FileTransferExecArgs    string `protobuf:"bytes,12,opt,name=FileTransferExecArgs,proto3" json:"FileTransferExecArgs,omitempty"`
 }
 
 func (x *CollectLogReq) Reset() {
@@ -154,9 +154,9 @@ func (x *CollectLogReq) GetStopOnError() bool {
 	return false
 }
 
-func (x *CollectLogReq) GetExtraArgsCollectRsync() string {
+func (x *CollectLogReq) GetFileTransferExecArgs() string {
 	if x != nil {
-		return x.ExtraArgsCollectRsync
+		return x.FileTransferExecArgs
 	}
 	return ""
 }

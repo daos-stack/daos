@@ -47,15 +47,15 @@ const (
 )
 
 type CollectLogSubCmd struct {
-	StopOnError           bool   `short:"s" long:"stop-on-error" description:"Stop the collect-log command on very first error"`
-	TargetFolder          string `short:"t" long:"target-folder" description:"Target Folder location where log will be copied"`
-	Archive               bool   `short:"z" long:"archive" description:"Archive the log/config files"`
-	ExtraLogsDir          string `short:"c" long:"extra-logs-dir" description:"Collect the Logs from given directory"`
-	LogStartDate          string `short:"D" long:"start-date" description:"Specify the start date, the day from log will be collected, Format: MM-DD"`
-	LogEndDate            string `short:"F" long:"end-date" description:"Specify the end date, the day till the log will be collected, Format: MM-DD"`
-	LogStartTime          string `short:"S" long:"log-start-time" description:"Specify the log collection start time, Format: HH:MM:SS"`
-	LogEndTime            string `short:"E" long:"log-end-time" description:"Specify the log collection end time, Format: HH:MM:SS"`
-FileTransferExecArgs string `short:"T" long:"transfer-args" description:"Extra arguments for alternate file transfer tool"`
+	StopOnError          bool   `short:"s" long:"stop-on-error" description:"Stop the collect-log command on very first error"`
+	TargetFolder         string `short:"t" long:"target-folder" description:"Target Folder location where log will be copied"`
+	Archive              bool   `short:"z" long:"archive" description:"Archive the log/config files"`
+	ExtraLogsDir         string `short:"c" long:"extra-logs-dir" description:"Collect the Logs from given directory"`
+	LogStartDate         string `short:"D" long:"start-date" description:"Specify the start date, the day from log will be collected, Format: MM-DD"`
+	LogEndDate           string `short:"F" long:"end-date" description:"Specify the end date, the day till the log will be collected, Format: MM-DD"`
+	LogStartTime         string `short:"S" long:"log-start-time" description:"Specify the log collection start time, Format: HH:MM:SS"`
+	LogEndTime           string `short:"E" long:"log-end-time" description:"Specify the log collection end time, Format: HH:MM:SS"`
+	FileTransferExecArgs string `short:"T" long:"transfer-args" description:"Extra arguments for alternate file transfer tool"`
 }
 
 type LogTypeSubCmd struct {
@@ -141,21 +141,21 @@ type ProgressBar struct {
 }
 
 type CollectLogsParams struct {
-	Config                string
-	Hostlist              string
-	TargetFolder          string
-	AdminNode             string
-	ExtraLogsDir          string
-	JsonOutput            bool
-	LogFunction           int32
-	LogCmd                string
-	LogStartDate          string
-	LogEndDate            string
-	LogStartTime          string
-	LogEndTime            string
-	StopOnError           bool
-	ExtraArgsCollectRsync string
-	FileTransferExec      string
+	Config               string
+	Hostlist             string
+	TargetFolder         string
+	AdminNode            string
+	ExtraLogsDir         string
+	JsonOutput           bool
+	LogFunction          int32
+	LogCmd               string
+	LogStartDate         string
+	LogEndDate           string
+	LogStartTime         string
+	LogEndTime           string
+	StopOnError          bool
+	FileTransferExecArgs string
+	FileTransferExec     string
 }
 
 type logCopy struct {
@@ -442,7 +442,7 @@ func rsyncAlternateCopy(log logging.Logger, opts ...CollectLogsParams) error {
 	cmd := strings.Join([]string{
 		opts[0].FileTransferExec,
 		opts[0].TargetFolder,
-		opts[0].ExtraArgsCollectRsync},
+		opts[0].FileTransferExecArgs},
 		" ")
 
 	out, err := exec.Command("sh", "-c", cmd).Output()
