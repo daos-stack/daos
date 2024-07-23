@@ -86,6 +86,7 @@ export ROMIO_FSTYPE_FORCE="daos:"
 ```
 
 Alternatively, the individual file paths can be prefixed with `daos:`.
+
 Using either of these two methods will enable the MPI-IO DFS backend.
 More information can be found in the
 [ANL ROMIO pages](https://wordpress.cels.anl.gov/romio/2019/02/20/useful-environment-variables/).
@@ -136,11 +137,15 @@ environment variables can be used to instruct the runtime
 to interpret all file paths in MPI-IO calls as DAOS paths:
 
 ```bash
-export I_MPI_EXTRA_FILESYSTEM=on
-export I_MPI_EXTRA_FILESYSTEM_FORCE=daos
+export I_MPI_FILESYSTEM=on
+export I_MPI_FILESYSTEM_FORCE=daos
 ```
+(Note that in older versions of Intel MPI, the environment variables
+`I_MPI_EXTRA_FILESYSTEM=on` and `I_MPI_EXTRA_FILESYSTEM_FORCE=daos`
+were used.)
 
 Alternatively, the individual file paths can be prefixed with `daos:`.
+
 Using either of these two methods will enable the MPI-IO DFS backend.
 More information on the `I_MPI` variables can be found in the
 [Intel MPI documentation](https://www.intel.com/content/www/us/en/docs/mpi-library/developer-reference-linux/2021-13/other-environment-variables.html).
