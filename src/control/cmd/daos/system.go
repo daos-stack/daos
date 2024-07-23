@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2023 Intel Corporation.
+// (C) Copyright 2023-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -23,9 +23,10 @@ type rankURI struct {
 }
 
 type systemInfo struct {
-	Name     string     `json:"system_name"`
-	Provider string     `json:"fabric_provider"`
-	RankURIs []*rankURI `json:"rank_uris"`
+	Name                string     `json:"system_name"`
+	Provider            string     `json:"fabric_provider"`
+	RankURIs            []*rankURI `json:"rank_uris"`
+	AccessPointRankURIs []*rankURI `json:"access_point_rank_uris"`
 }
 
 type systemCmd struct {
@@ -49,11 +50,19 @@ func (cmd *systemQueryCmd) Execute(_ []string) error {
 		Provider: C.GoString(&cSysInfo.dsi_fabric_provider[0]),
 	}
 
+	rankURIs := make(map[uint32]*rankURI)
+
 	for _, cRank := range unsafe.Slice(cSysInfo.dsi_ranks, int(cSysInfo.dsi_nr_ranks)) {
-		sysInfo.RankURIs = append(sysInfo.RankURIs, &rankURI{
+		rankURI := &rankURI{
 			Rank: uint32(cRank.dru_rank),
 			URI:  C.GoString(cRank.dru_uri),
-		})
+		}
+		sysInfo.RankURIs = append(sysInfo.RankURIs, rankURI)
+		rankURIs[rankURI.Rank] = rankURI
+	}
+
+	for _, cMSRank := range unsafe.Slice(cSysInfo.dsi_ms_ranks, int(cSysInfo.dsi_nr_ms_ranks)) {
+		sysInfo.AccessPointRankURIs = append(sysInfo.AccessPointRankURIs, rankURIs[uint32(cMSRank)])
 	}
 
 	if cmd.JSONOutputEnabled() {
@@ -63,6 +72,10 @@ func (cmd *systemQueryCmd) Execute(_ []string) error {
 	cmd.Infof("connected to DAOS system:")
 	cmd.Infof("\tname: %s", sysInfo.Name)
 	cmd.Infof("\tfabric provider: %s", sysInfo.Provider)
+	cmd.Info("\taccess point ranks:")
+	for _, apRankURI := range sysInfo.AccessPointRankURIs {
+		cmd.Infof("\t\trank[%d]: %s", apRankURI.Rank, apRankURI.URI)
+	}
 	cmd.Info("\trank URIs:")
 	for _, rankURI := range sysInfo.RankURIs {
 		cmd.Infof("\t\trank[%d]: %s", rankURI.Rank, rankURI.URI)

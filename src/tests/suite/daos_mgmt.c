@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -409,6 +409,9 @@ get_sys_info_test(void **state)
 	for (i = 0; i < info->dsi_nr_ranks; i++)
 		print_message("rank %u, uri: %s\n", info->dsi_ranks[i].dru_rank,
 			      info->dsi_ranks[i].dru_uri);
+	print_message("number of MS ranks: %d\n", info->dsi_nr_ms_ranks);
+	for (i = 0; i < info->dsi_nr_ms_ranks; i++)
+		print_message("rank %u\n", info->dsi_ms_ranks[i]);
 
 	daos_mgmt_put_sys_info(info);
 }
