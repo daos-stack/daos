@@ -85,7 +85,7 @@ dtx_resync_commit(struct ds_cont_child *cont,
 		 * committed or aborted the DTX during we handling other
 		 * DTXs. So double check the status before current commit.
 		 */
-		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid, NULL, NULL, NULL, NULL, false);
+		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid, NULL, NULL, NULL, false);
 
 		/* Skip this DTX since it has been committed or aggregated. */
 		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE || rc == -DER_NONEXIST)
@@ -301,7 +301,7 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 		 * committed or aborted the DTX during we handling other
 		 * DTXs. So double check the status before next action.
 		 */
-		rc = vos_dtx_check(cont->sc_hdl, &dte->dte_xid, NULL, NULL, NULL, NULL, false);
+		rc = vos_dtx_check(cont->sc_hdl, &dte->dte_xid, NULL, NULL, NULL, false);
 
 		/* Skip the DTX that may has been committed or aborted. */
 		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE || rc == -DER_NONEXIST)
