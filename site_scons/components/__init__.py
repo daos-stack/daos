@@ -180,7 +180,7 @@ def define_mercury(reqs):
                      '-DMERCURY_USE_CHECKSUMS:BOOL=OFF',
                      '-DNA_USE_SM:BOOL=ON',
                      '-DNA_USE_OFI:BOOL=ON',
-                     '-DNA_USE_UCX:BOOL=ON',
+                     '-DNA_USE_UCX:BOOL=OFF',
                      '../mercury']
 
     if reqs.target_type == 'debug':
@@ -195,7 +195,7 @@ def define_mercury(reqs):
                           ['make', 'install']],
                 libs=['mercury'],
                 pkgconfig='mercury',
-                requires=['boost', 'ofi', 'ucx'] + libs,
+                requires=['boost', 'ofi'] + libs,
                 out_of_src_build=True,
                 package='mercury-devel' if inst(reqs, 'mercury') else None,
                 build_env={'CFLAGS': '-fstack-usage'})
