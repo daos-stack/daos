@@ -1507,14 +1507,7 @@ crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 
 	RPC_ADDREF(rpc_priv);
 
-	/* Release input buffer */
-	hg_ret = HG_Release_input_buf(rpc_priv->crp_hg_hdl);
-	if (hg_ret != HG_SUCCESS) {
-		RPC_ERROR(rpc_priv, "HG_Release_input_buf failed, hg_ret: " DF_HG_RC "\n",
-			  DP_HG_RC(hg_ret));
-		/* Fall through */
-	}
-
+	/* Input buffer still used during HG_Respond*/
 	hg_ret = HG_Respond(rpc_priv->crp_hg_hdl, crt_hg_reply_send_cb,
 			    rpc_priv, &rpc_priv->crp_pub.cr_output);
 	if (hg_ret != HG_SUCCESS) {
@@ -1523,6 +1516,14 @@ crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 		/* should success as addref above */
 		RPC_DECREF(rpc_priv);
 		rc = crt_hgret_2_der(hg_ret);
+	}
+
+	/* Release input buffer */
+	hg_ret = HG_Release_input_buf(rpc_priv->crp_hg_hdl);
+	if (hg_ret != HG_SUCCESS) {
+		RPC_ERROR(rpc_priv, "HG_Release_input_buf failed, hg_ret: " DF_HG_RC "\n",
+			  DP_HG_RC(hg_ret));
+		/* Fall through */
 	}
 
 	return rc;
@@ -1549,6 +1550,15 @@ crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code)
 			  "Sent CART level error message back to client. error_code: %d\n",
 			  error_code);
 	}
+
+	/* Release input buffer */
+	hg_ret = HG_Release_input_buf(rpc_priv->crp_hg_hdl);
+	if (hg_ret != HG_SUCCESS) {
+		RPC_ERROR(rpc_priv, "HG_Release_input_buf failed, hg_ret: " DF_HG_RC "\n",
+			  DP_HG_RC(hg_ret));
+		/* Fall through */
+	}
+
 	rpc_priv->crp_reply_pending = 0;
 }
 
