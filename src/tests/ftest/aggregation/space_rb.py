@@ -43,7 +43,7 @@ class SpaceRb(IorTestBase):
             transfer_size (str): Transfer size parameter for the IOR.
             errors (list): List to collect the errors occurred during the test.
         """
-        ior_cmd = IorCommand(namespace=namespace)
+        ior_cmd = IorCommand(self.test_env.log_dir, namespace=namespace)
         ior_cmd.get_params(self)
         ior_cmd.set_daos_params(pool, container.identifier)
         testfile = os.path.join(os.sep, f"test_file_{job_num}")
