@@ -64,7 +64,7 @@ type Server struct {
 	TelemetryPort     int                       `yaml:"telemetry_port,omitempty"`
 	CoreDumpFilter    uint8                     `yaml:"core_dump_filter,omitempty"`
 	ClientEnvVars     []string                  `yaml:"client_env_vars,omitempty"`
-	SupportConfig     SupportConfig             `yaml:"support_config"`
+	SupportConfig     SupportConfig             `yaml:"support_config,omitempty"`
 
 	// duplicated in engine.Config
 	SystemName string              `yaml:"name"`

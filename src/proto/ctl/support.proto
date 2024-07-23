@@ -23,7 +23,7 @@ message CollectLogReq {
   string LogStartTime = 9;
   string LogEndTime = 10;
   bool StopOnError = 11;
-  string ExtraArgsCollectRsync = 12;
+  string FileTransferExecArgs = 12;
 }
 
 message CollectLogResp {
