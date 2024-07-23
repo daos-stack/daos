@@ -74,7 +74,6 @@ vos_dtx_validation(struct dtx_handle *dth);
  * \param[in,out] epoch		Pointer to current epoch, if it is zero and if the DTX exists, then
  *				the DTX's epoch will be saved in it.
  * \param[out] pm_ver		Hold the DTX's pool map version.
- * \param[out] mbs		Pointer to the DTX participants information.
  * \param[out] dck		Pointer to the key for CoS cache.
  * \param[in] for_refresh	It is for DTX_REFRESH or not.
  *
@@ -95,8 +94,7 @@ vos_dtx_validation(struct dtx_handle *dth);
  */
 int
 vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
-	      uint32_t *pm_ver, struct dtx_memberships **mbs, struct dtx_cos_key *dck,
-	      bool for_refresh);
+	      uint32_t *pm_ver, struct dtx_cos_key *dck, bool for_refresh);
 
 /**
  * Load participants information for the given DTX.
