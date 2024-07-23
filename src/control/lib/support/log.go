@@ -55,7 +55,7 @@ type CollectLogSubCmd struct {
 	LogEndDate            string `short:"F" long:"end-date" description:"Specify the end date, the day till the log will be collected, Format: MM-DD"`
 	LogStartTime          string `short:"S" long:"log-start-time" description:"Specify the log collection start time, Format: HH:MM:SS"`
 	LogEndTime            string `short:"E" long:"log-end-time" description:"Specify the log collection end time, Format: HH:MM:SS"`
-	ExtraArgsCollectRsync string `short:"C" long:"cloud-storage" description:"Specify the destination in cloud storage"`
+FileTransferExecArgs string `short:"T" long:"transfer-args" description:"Extra arguments for alternate file transfer tool"`
 }
 
 type LogTypeSubCmd struct {
