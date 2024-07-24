@@ -424,7 +424,7 @@ def launch_jobscript(
     error_log1 = error_log.replace("JOBID", str(job_id))
     joblog = job_log1.replace("RHOST", str(rhost))
     errorlog = error_log1.replace("RHOST", str(rhost))
-    cmd = f"{env} {script} {hosts} {job_id} > {joblog} 2> {errorlog}"
+    cmd = ";".join([env, f"{script} {hosts} {job_id} > {joblog} 2> {errorlog}"])
     job_results = run_remote(
         log, rhost, cmd, verbose=False, timeout=timeout * 60, task_debug=False, stderr=False)
     if job_results:
