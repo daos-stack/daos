@@ -312,7 +312,9 @@ class SoakTestBase(TestWithServers):
         lib_path = os.getenv("LD_LIBRARY_PATH")
         path = os.getenv("PATH")
         v_env = os.getenv("VIRTUAL_ENV")
-        env = f"export LD_LIBRARY_PATH={lib_path}; export PATH={path}; export VIRTUAL_ENV={v_env}"
+        env = ";".join([f"export LD_LIBRARY_PATH={lib_path}",
+                        f"export PATH={path}",
+                        f"export VIRTUAL_ENV={v_env}"])
         for job_dict in self.Job_List:
             jobid_list.append(job_dict["jobid"])
         self.log.info(f"Submitting {len(jobid_list)} jobs at {time.ctime()}")
