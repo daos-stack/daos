@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -29,7 +29,7 @@ D_CASSERT(sizeof(struct wal_header) <= WAL_BLK_SZ);
 D_CASSERT(sizeof(struct wal_trans_tail) == WAL_CSUM_LEN);
 
 #define WAL_MIN_CAPACITY	(8192 * WAL_BLK_SZ)	/* Minimal WAL capacity, in bytes */
-#define WAL_MAX_TRANS_BLKS	2048			/* Maximal blocks used by a transaction */
+#define WAL_MAX_TRANS_BLKS	4096			/* Maximal blocks used by a transaction */
 #define WAL_HDR_BLKS		1			/* Ensure atomic header write */
 
 #define META_BLK_SZ		WAL_BLK_SZ
@@ -577,7 +577,7 @@ fill_trans_blks(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct ume
 			left = blk_sz - entry_blk.tb_off;
 			/* Current entry block is full, move to next entry block */
 			if (left < entry_sz) {
-				/* Zeoring left bytes for csum calculation */
+				/* Zeroing left bytes for csum calculation */
 				if (left > 0)
 					memset(entry_blk.tb_buf + entry_blk.tb_off, 0, left);
 				next_trans_blk(bsgl, &entry_blk);

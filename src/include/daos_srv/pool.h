@@ -278,18 +278,16 @@ int ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 bool ds_pool_skip_for_check(struct ds_pool *pool);
 int ds_pool_start_after_check(uuid_t uuid);
 int ds_pool_start(uuid_t uuid, bool aft_chk);
-void ds_pool_stop(uuid_t uuid);
+int ds_pool_stop(uuid_t uuid);
 int dsc_pool_svc_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uint64_t deadline, int ntargets,
 			const d_rank_list_t *rank_list, int ndomains, const uint32_t *domains);
 int dsc_pool_svc_update_target_state(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline,
 				     struct pool_target_addr_list *target_list,
 				     pool_comp_state_t state);
 
-int
-     ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
-			     d_rank_list_t *target_addrs, int ndomains, uint32_t *domains,
-			     daos_prop_t *prop, d_rank_list_t **svc_addrs);
-int ds_pool_svc_stop(uuid_t pool_uuid);
+int ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
+			    d_rank_list_t *target_addrs, int ndomains, uint32_t *domains,
+			    daos_prop_t *prop, d_rank_list_t **svc_addrs);
 int ds_pool_svc_rf_to_nreplicas(int svc_rf);
 int ds_pool_svc_rf_from_nreplicas(int nreplicas);
 
@@ -304,8 +302,9 @@ int dsc_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t dea
 			    const char *principal_name);
 
 int dsc_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, uint64_t deadline,
-		       d_rank_list_t **ranks, daos_pool_info_t *pool_info,
-		       uint32_t *pool_layout_ver, uint32_t *upgrade_layout_ver);
+		       d_rank_list_t **enabled_ranks, d_rank_list_t **disabled_ranks,
+		       daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
+		       uint32_t *upgrade_layout_ver);
 int dsc_pool_svc_query_target(uuid_t pool_uuid, d_rank_list_t *ps_ranks, uint64_t deadline,
 			      d_rank_t rank, uint32_t tgt_idx, daos_target_info_t *ti);
 

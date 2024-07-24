@@ -85,7 +85,7 @@ dtx_resync_commit(struct ds_cont_child *cont,
 		 * committed or aborted the DTX during we handling other
 		 * DTXs. So double check the status before current commit.
 		 */
-		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid, NULL, NULL, NULL, NULL, false);
+		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid, NULL, NULL, NULL, false);
 
 		/* Skip this DTX since it has been committed or aggregated. */
 		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE || rc == -DER_NONEXIST)
@@ -301,7 +301,7 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 		 * committed or aborted the DTX during we handling other
 		 * DTXs. So double check the status before next action.
 		 */
-		rc = vos_dtx_check(cont->sc_hdl, &dte->dte_xid, NULL, NULL, NULL, NULL, false);
+		rc = vos_dtx_check(cont->sc_hdl, &dte->dte_xid, NULL, NULL, NULL, false);
 
 		/* Skip the DTX that may has been committed or aborted. */
 		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE || rc == -DER_NONEXIST)
@@ -786,16 +786,21 @@ void
 dtx_resync_ult(void *data)
 {
 	struct dtx_scan_args	*arg = data;
-	struct ds_pool		*pool;
-	int			rc = 0;
+	struct ds_pool		*pool = NULL;
+	int			rc;
 
 	rc = ds_pool_lookup(arg->pool_uuid, &pool);
-	D_ASSERTF(pool != NULL, DF_UUID" rc %d\n", DP_UUID(arg->pool_uuid), rc);
+	if (rc != 0) {
+		D_WARN("Cannot find the pool "DF_UUID" for DTX resync: "DF_RC"\n",
+		       DP_UUID(arg->pool_uuid), DP_RC(rc));
+		goto out;
+	}
+
 	if (pool->sp_dtx_resync_version >= arg->version) {
 		D_DEBUG(DB_MD, DF_UUID" ignore dtx resync version %u/%u\n",
 			DP_UUID(arg->pool_uuid), pool->sp_dtx_resync_version,
 			arg->version);
-		D_GOTO(out_put, rc);
+		goto out;
 	}
 	D_DEBUG(DB_MD, DF_UUID" update dtx resync version %u->%u\n",
 		DP_UUID(arg->pool_uuid), pool->sp_dtx_resync_version,
@@ -816,7 +821,9 @@ dtx_resync_ult(void *data)
 			DP_UUID(arg->pool_uuid), rc);
 	}
 	pool->sp_dtx_resync_version = arg->version;
-out_put:
-	ds_pool_put(pool);
+
+out:
+	if (pool != NULL)
+		ds_pool_put(pool);
 	D_FREE(arg);
 }

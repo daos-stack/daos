@@ -60,7 +60,7 @@ bool                bio_vmd_enabled;
 unsigned int bio_spdk_subsys_timeout = 25000;	/* ms */
 /* How many blob unmap calls can be called in a row */
 unsigned int bio_spdk_max_unmap_cnt = 32;
-unsigned int bio_max_async_sz = (1UL << 20) /* 1MB */;
+unsigned int bio_max_async_sz = (1UL << 15) /* 32k */;
 
 struct bio_nvme_data {
 	ABT_mutex		 bd_mutex;
@@ -105,7 +105,7 @@ bio_spdk_conf_read(struct spdk_env_opts *opts)
 		return rc;
 	}
 	nvme_glb.bd_nvme_roles = roles;
-	bio_vmd_enabled        = vmd_enabled;
+	bio_vmd_enabled        = vmd_enabled && (nvme_glb.bd_bdev_class == BDEV_CLASS_NVME);
 
 	rc = bio_set_hotplug_filter(nvme_glb.bd_nvme_conf);
 	if (rc != 0) {
@@ -172,6 +172,9 @@ bio_spdk_env_init(void)
 		}
 	}
 
+	if (geteuid() != 0) {
+		opts.iova_mode = "va"; // workaround for spdk issue #2683 when running as non-root
+	}
 	rc = spdk_env_init(&opts);
 	if (rc != 0) {
 		rc = -DER_INVAL; /* spdk_env_init() returns -1 */
@@ -744,9 +747,8 @@ bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 	D_ASSERT(d_bdev->bb_desc != NULL);
 	d_bdev->bb_removed = 1;
 
-	ras_notify_eventf(RAS_DEVICE_UNPLUGGED, RAS_TYPE_INFO,
-			  RAS_SEV_NOTICE, NULL, NULL, NULL, NULL, NULL,
-			  NULL, NULL, NULL, NULL, "Dev: "DF_UUID" unplugged\n",
+	ras_notify_eventf(RAS_DEVICE_UNPLUGGED, RAS_TYPE_INFO, RAS_SEV_NOTICE, NULL, NULL, NULL,
+			  NULL, NULL, NULL, NULL, NULL, NULL, "Device: " DF_UUID " unplugged\n",
 			  DP_UUID(d_bdev->bb_uuid));
 
 	/* The bio_bdev is still under construction */

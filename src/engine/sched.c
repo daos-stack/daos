@@ -1389,9 +1389,6 @@ sched_req_enqueue(struct dss_xstream *dx, struct sched_req_attr *attr,
 	struct sched_request	*req;
 	struct sched_info	*info = &dx->dx_sched_info;
 
-	if (!should_enqueue_req(dx, attr))
-		return req_kickoff_internal(dx, attr, func, arg);
-
 	if (attr->sra_enqueue_id == 0)
 		attr->sra_enqueue_id = ++info->si_cur_id;
 	else
@@ -1412,6 +1409,9 @@ sched_req_enqueue(struct dss_xstream *dx, struct sched_req_attr *attr,
 		d_tm_inc_counter(info->si_stats.ss_total_reject, 1);
 		return -DER_OVERLOAD_RETRY;
 	}
+
+	if (!should_enqueue_req(dx, attr))
+		return req_kickoff_internal(dx, attr, func, arg);
 
 	D_ASSERT(attr->sra_type < SCHED_REQ_MAX);
 	req = req_get(dx, attr, func, arg, ABT_THREAD_NULL, false);
