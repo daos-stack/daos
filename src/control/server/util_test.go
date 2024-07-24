@@ -214,7 +214,7 @@ func newTestEngine(log logging.Logger, isAP bool, provider *storage.Provider, en
 	rCfg.Running.SetTrue()
 	r := engine.NewTestRunner(rCfg, engineCfg[0])
 
-	e := NewEngineInstance(log, provider, nil, r)
+	e := NewEngineInstance(log, provider, nil, r, nil)
 	e.setDrpcSocket("/dontcare")
 	e.setSuperblock(&Superblock{
 		Rank: ranklist.NewRankPtr(0),
