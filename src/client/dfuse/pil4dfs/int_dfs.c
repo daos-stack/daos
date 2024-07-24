@@ -4082,7 +4082,7 @@ pre_env_bypass_all(char *const envp[], char ***new_envp)
 	bool  include_bypass_all = false;
 	char *env_bypass_all     = NULL;
 
-	*new_envp = (char**)envp;
+	*new_envp = (char **)envp;
 	if (envp == environ)
 		return 0;
 
@@ -4130,11 +4130,22 @@ err_out0:
 /* This is the number of environmental variables that would be forced to set in child process.
  * "LD_PRELOAD" is a special case and it is not included in the list.
  */
-static char  *env_list[] = {"D_IL_REPORT", "D_IL_MOUNT_POINT", "D_IL_POOL", "D_IL_CONTAINER",
-			    "D_IL_MAX_EQ", "D_LOG_FILE", "D_IL_ENFORCE_EXEC_ENV",  "DD_MASK",
-			    "DD_SUBSYS", "D_LOG_MASK", "D_IL_COMPATIBLE", "D_IL_NO_DCACHE_BASH",
-			    "BYPASS_ALL_CHILDREN", "D_IL_BYPASS_ALL_LIST", "D_IL_BYPASS_LIST",
-			    "D_IL_WHITELIST"};
+static char *env_list[] = {"D_IL_REPORT",
+			  "D_IL_MOUNT_POINT",
+			  "D_IL_POOL",
+			  "D_IL_CONTAINER",
+			  "D_IL_MAX_EQ",
+			  "D_LOG_FILE",
+			  "D_IL_ENFORCE_EXEC_ENV",
+			  "DD_MASK",
+			  "DD_SUBSYS",
+			  "D_LOG_MASK",
+			  "D_IL_COMPATIBLE",
+			  "D_IL_NO_DCACHE_BASH",
+			  "BYPASS_ALL_CHILDREN",
+			  "D_IL_BYPASS_ALL_LIST",
+			  "D_IL_BYPASS_LIST",
+			  "D_IL_WHITELIST"};
 
 /* Environmental variables could be cleared in some applications. To make sure all libpil4dfs
  * related env properly set, we intercept execve and its variants to check envp[] and append our
@@ -6785,10 +6796,10 @@ extract_exe_name_1st_arg(void)
 		exit(1);
 	}
 	first_arg = NULL;
-	end = buf + readsize;
+	end       = buf + readsize;
 	for (p = buf; p < end;) {
 		if (count == 1) {
-			if (p[0] == '/' || memcmp(p, "./", 2) == 0  || memcmp(p, "../", 3) == 0 ) {
+			if (p[0] == '/' || memcmp(p, "./", 2) == 0 || memcmp(p, "../", 3) == 0) {
 				/* Extract the first argument in command line */
 				first_arg = basename(p);
 				if (first_arg == NULL) {
@@ -6806,7 +6817,8 @@ extract_exe_name_1st_arg(void)
 			break;
 		}
 		count++;
-		while (*p++);
+		while (*p++)
+			;
 	}
 	free(buf);
 	/* We allocated buffers for exe_short_name and first_arg. Now buf can be deallocated. */
@@ -6851,13 +6863,13 @@ check_white_list(void)
 	if (is_bash && first_arg != NULL) {
 		/* built-in list of bash scripts to skip */
 		for (i = 0; i < ARRAY_SIZE(bypass_all_bash_cmd_list); i++) {
-			if (strncmp(first_arg, bypass_all_bash_cmd_list[i], 
-				strlen(bypass_all_bash_cmd_list[i]) + 1) == 0)
+			if (strncmp(first_arg, bypass_all_bash_cmd_list[i],
+				    strlen(bypass_all_bash_cmd_list[i]) + 1) == 0)
 				goto set_bypass_all;
 		}
 		/* user provided list to skip */
 		if (bypass_all_user_cmd_list) {
-			for (str = bypass_all_user_cmd_list; ; str = NULL) {
+			for (str = bypass_all_user_cmd_list;; str = NULL) {
 				token = strtok_r(str, ":", &saveptr);
 				if (token == NULL)
 					break;
@@ -6868,16 +6880,17 @@ check_white_list(void)
 	}
 
 	if ((memcmp(exe_short_name, STR_AND_SIZE("python")) == 0 ||
-	    memcmp(exe_short_name, STR_AND_SIZE("python3")) == 0) && first_arg) {
+	     memcmp(exe_short_name, STR_AND_SIZE("python3")) == 0) &&
+	    first_arg) {
 		/* built-in list of python scripts to skip */
 		for (i = 0; i < ARRAY_SIZE(bypass_all_python3_cmd_list); i++) {
 			if (strncmp(first_arg, bypass_all_python3_cmd_list[i],
-				strlen(bypass_all_python3_cmd_list[i]) + 1) == 0)
+				    strlen(bypass_all_python3_cmd_list[i]) + 1) == 0)
 				goto set_bypass_all;
 		}
 		/* user provided list to skip */
 		if (bypass_all_user_cmd_list) {
-			for (str = bypass_all_user_cmd_list; ; str = NULL) {
+			for (str = bypass_all_user_cmd_list;; str = NULL) {
 				token = strtok_r(str, ":", &saveptr);
 				if (token == NULL)
 					break;
@@ -6889,12 +6902,12 @@ check_white_list(void)
 
 	for (i = 0; i < ARRAY_SIZE(bypass_all_app_list); i++) {
 		if (strncmp(exe_short_name, bypass_all_app_list[i],
-			strlen(bypass_all_app_list[i]) + 1) == 0)
+			    strlen(bypass_all_app_list[i]) + 1) == 0)
 			goto set_bypass_all;
 	}
 
 	if (bypass_all_user_cmd_list) {
-		for (str = bypass_all_user_cmd_list; ; str = NULL) {
+		for (str = bypass_all_user_cmd_list;; str = NULL) {
 			token = strtok_r(str, ":", &saveptr);
 			if (token == NULL)
 				break;
@@ -6909,7 +6922,7 @@ check_white_list(void)
 	}
 
 	if (bypass_user_cmd_list) {
-		for (str = bypass_user_cmd_list; ; str = NULL) {
+		for (str = bypass_user_cmd_list;; str = NULL) {
 			token = strtok_r(str, ":", &saveptr);
 			if (token == NULL)
 				break;

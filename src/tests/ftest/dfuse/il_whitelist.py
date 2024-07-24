@@ -6,9 +6,8 @@
 
 import os
 
-from ClusterShell.NodeSet import NodeSet
-
 from apricot import TestWithServers
+from ClusterShell.NodeSet import NodeSet
 from dfuse_utils import WhiteListCmd, get_dfuse, start_dfuse
 
 

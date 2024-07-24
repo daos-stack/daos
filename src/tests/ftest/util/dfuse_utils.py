@@ -9,7 +9,6 @@ import os
 import time
 
 from ClusterShell.NodeSet import NodeSet
-
 from command_utils import ExecutableCommand
 from command_utils_base import BasicParameter, FormattedParameter
 from exception_utils import CommandFailure

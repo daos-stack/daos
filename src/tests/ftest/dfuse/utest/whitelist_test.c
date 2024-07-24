@@ -46,7 +46,7 @@ task_child(void)
 
 	/* ls to list dfuse mount point */
 	argv[1] = fuse_mnt;
-	pid = fork();
+	pid     = fork();
 	if (pid == 0)
 		/* run "ls" as child process */
 		execve("/usr/bin/ls", argv, envp);
@@ -94,4 +94,3 @@ main(int argc, char *argv[])
 
 	return cmocka_run_group_tests_name("utest_whitelist_jobs", tests, NULL, NULL);
 }
-
