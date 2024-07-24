@@ -4131,21 +4131,21 @@ err_out0:
  * "LD_PRELOAD" is a special case and it is not included in the list.
  */
 static char *env_list[] = {"D_IL_REPORT",
-			  "D_IL_MOUNT_POINT",
-			  "D_IL_POOL",
-			  "D_IL_CONTAINER",
-			  "D_IL_MAX_EQ",
-			  "D_LOG_FILE",
-			  "D_IL_ENFORCE_EXEC_ENV",
-			  "DD_MASK",
-			  "DD_SUBSYS",
-			  "D_LOG_MASK",
-			  "D_IL_COMPATIBLE",
-			  "D_IL_NO_DCACHE_BASH",
-			  "BYPASS_ALL_CHILDREN",
-			  "D_IL_BYPASS_ALL_LIST",
-			  "D_IL_BYPASS_LIST",
-			  "D_IL_WHITELIST"};
+			   "D_IL_MOUNT_POINT",
+			   "D_IL_POOL",
+			   "D_IL_CONTAINER",
+			   "D_IL_MAX_EQ",
+			   "D_LOG_FILE",
+			   "D_IL_ENFORCE_EXEC_ENV",
+			   "DD_MASK",
+			   "DD_SUBSYS",
+			   "D_LOG_MASK",
+			   "D_IL_COMPATIBLE",
+			   "D_IL_NO_DCACHE_BASH",
+			   "BYPASS_ALL_CHILDREN",
+			   "D_IL_BYPASS_ALL_LIST",
+			   "D_IL_BYPASS_LIST",
+			   "D_IL_WHITELIST"};
 
 /* Environmental variables could be cleared in some applications. To make sure all libpil4dfs
  * related env properly set, we intercept execve and its variants to check envp[] and append our
@@ -6752,7 +6752,7 @@ check_exe_sh_bash(void)
 		is_bash = true;
 }
 
-#define CMDLINE_BUF_SIZE (2*DFS_MAX_PATH + 2)
+#define CMDLINE_BUF_SIZE (2 * DFS_MAX_PATH + 2)
 
 static void
 extract_exe_name_1st_arg(void)
