@@ -60,7 +60,7 @@ class CartCtlCommand(ExecutableCommand):
         self.directory = FormattedParameter("--directory {}")
         self.rank = FormattedParameter("--rank {}")
         self.log_mask = FormattedParameter("-l {}")  # noqa: E741
-        self.no_sync = BasicParameter("-n")
+        self.no_sync = FormattedParameter("-n", False)
         self.log_message = FormattedParameter("-m {}")
         self.use_daos_agent_env = FormattedParameter("--use_daos_agent_env", True)
 

@@ -22,6 +22,7 @@ import (
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -46,7 +47,7 @@ func getTestEngineInstance(log logging.Logger) *EngineInstance {
 	)
 	runner := engine.NewRunner(log, cfg)
 	storage := storage.MockProvider(log, 0, &cfg.Storage, nil, nil, nil, nil)
-	return NewEngineInstance(log, storage, nil, runner)
+	return NewEngineInstance(log, storage, nil, runner, nil)
 }
 
 func TestServer_Instance_WithHostFaultDomain(t *testing.T) {
@@ -128,7 +129,7 @@ func TestServer_Instance_updateFaultDomainInSuperblock(t *testing.T) {
 			storage := storage.MockProvider(log, 0, &cfg.Storage, sysProv, scmProv,
 				nil, nil)
 
-			ei := NewEngineInstance(log, storage, nil, runner).
+			ei := NewEngineInstance(log, storage, nil, runner, nil).
 				WithHostFaultDomain(tc.newDomain)
 			ei.fsRoot = testDir
 			ei._superblock = tc.superblock
@@ -184,6 +185,7 @@ type (
 		StopErr             error
 		ScmTierConfig       *storage.TierConfig
 		ScanBdevTiersResult []storage.BdevTierScanResult
+		LastHealthStats     map[string]*ctlpb.BioHealthResp
 	}
 
 	MockInstance struct {
@@ -308,4 +310,16 @@ func (mi *MockInstance) Debugf(format string, args ...interface{}) {
 
 func (mi *MockInstance) Tracef(format string, args ...interface{}) {
 	return
+}
+
+func (mi *MockInstance) Publish(event *events.RASEvent) {
+	return
+}
+
+func (mi *MockInstance) GetLastHealthStats(pciAddr string) *ctlpb.BioHealthResp {
+	return mi.cfg.LastHealthStats[pciAddr]
+}
+
+func (mi *MockInstance) SetLastHealthStats(pciAddr string, bhr *ctlpb.BioHealthResp) {
+	mi.cfg.LastHealthStats[pciAddr] = bhr
 }
