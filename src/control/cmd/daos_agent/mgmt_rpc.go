@@ -217,6 +217,10 @@ func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, req *mgm
 			resp.ClientNetHint.Interface, resp.ClientNetHint.Domain)
 	}
 
+	if err := mod.populateNUMAFabricMap(ctx, resp); err != nil {
+		return nil, err
+	}
+
 	return resp, nil
 }
 
@@ -336,6 +340,36 @@ func (mod *mgmtModule) getProviderIdxURIs(srvResp *mgmtpb.GetAttachInfoResp, idx
 
 func (mod *mgmtModule) getFabricInterface(ctx context.Context, params *FabricIfaceParams) (*FabricInterface, error) {
 	return mod.cache.GetFabricDevice(ctx, params)
+}
+
+func (mod *mgmtModule) populateNUMAFabricMap(ctx context.Context, resp *mgmtpb.GetAttachInfoResp) error {
+	numaMap, unlockMap, err := mod.cache.GetNUMAFabricMap(ctx, hardware.NetDevClass(resp.ClientNetHint.NetDevClass), resp.ClientNetHint.Provider)
+	if err != nil {
+		return err
+	}
+	defer unlockMap()
+
+	resp.NumaFabricInterfaces = make(map[uint32]*mgmtpb.FabricInterfaces)
+	for numaNode, fis := range numaMap {
+		pbFIs := &mgmtpb.FabricInterfaces{
+			Ifaces: make([]*mgmtpb.FabricInterface, 0, len(fis)),
+		}
+
+		for _, fi := range fis {
+			if fi.HasProvider(resp.ClientNetHint.Provider) {
+				pbFIs.Ifaces = append(pbFIs.Ifaces, &mgmtpb.FabricInterface{
+					NumaNode:  uint32(numaNode),
+					Interface: fi.Name,
+					Domain:    fi.Domain,
+					Provider:  resp.ClientNetHint.Provider,
+				})
+			}
+		}
+
+		resp.NumaFabricInterfaces[uint32(numaNode)] = pbFIs
+	}
+
+	return nil
 }
 
 func (mod *mgmtModule) handleSetupClientTelemetry(ctx context.Context, reqb []byte, cred *unix.Ucred) ([]byte, error) {

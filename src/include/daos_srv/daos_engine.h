@@ -22,6 +22,7 @@
 #include <daos_srv/ras.h>
 #include <daos_event.h>
 #include <daos_task.h>
+#include <daos_mgmt.h>
 #include <pthread.h>
 #include <hwloc.h>
 #include <abt.h>
@@ -704,6 +705,8 @@ int dss_module_setup_all(void);
 int ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks);
 int ds_pool_find_bylabel(d_const_string_t label, uuid_t pool_uuid,
 			 d_rank_list_t **svc_ranks);
+int
+ds_get_pool_list(uint64_t *npools, daos_mgmt_pool_info_t *pools);
 
 /** Flags for dss_drpc_call */
 enum dss_drpc_call_flag {
