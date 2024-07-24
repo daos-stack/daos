@@ -33,6 +33,9 @@ class OSAOfflineParallelTest(OSAUtils):
         self.extra_servers = self.get_hosts_from_yaml(
             "test_servers", "server_partition", "server_reservation", "/run/extra_servers/*")
         self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
+        # Get the engine count
+        self.engine_count = self.params.get("engines_per_host", '/run/server_config/*',
+                                            default=1)
         self.out_queue = queue.Queue()
         self.dmg_command.exit_status_exception = True
         self.server_boot = None
@@ -83,9 +86,8 @@ class OSAOfflineParallelTest(OSAUtils):
             oclass = self.ior_cmd.dfs_oclass.value
 
         # Exclude target : random two targets (target idx : 0-7)
-        exc = random.randint(0, 6)  # nosec
-        target_list.append(exc)
-        target_list.append(exc + 1)
+        targets = self.server_managers[0].get_config_value("targets")
+        target_list = random.sample(list(range(0, targets)), 2)  # nosec
         t_string = "{},{}".format(target_list[0], target_list[1])
 
         # Exclude rank 2.
