@@ -425,7 +425,7 @@ def launch_jobscript(
     errorlog = error_log1.replace("RHOST", str(rhost))
     cmd = ";".join([env, f"{script} {hosts} {job_id} > {joblog} 2> {errorlog}"])
     job_results = run_remote(
-        log, rhost, cmd, verbose=True, timeout=timeout * 60, task_debug=False, stderr=False)
+        log, rhost, cmd, verbose=False, timeout=timeout * 60, task_debug=False, stderr=False)
     if job_results:
         if job_results.timeout:
             state = "TIMEOUT"
