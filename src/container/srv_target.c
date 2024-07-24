@@ -1373,11 +1373,7 @@ ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 	if (rc != 0)
 		return rc;
 
-	if ((*ds_cont)->sc_stopping) {
-		cont_child_put(tls->dt_cont_cache, *ds_cont);
-		*ds_cont = NULL;
-		return -DER_SHUTDOWN;
-	}
+	D_ASSERT((*ds_cont)->sc_stopping == 0);
 
 	return 0;
 }
