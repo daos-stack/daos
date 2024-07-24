@@ -385,7 +385,8 @@ def wait_for_pool_rebuild(self, pool, name):
     return rebuild_status
 
 
-def launch_jobscript(log, job_queue, job_id, host_list, script, job_log, error_log, timeout, test):
+def launch_jobscript(
+        log, job_queue, job_id, host_list, env, script, job_log, error_log, timeout, test):
     """_summary_
 
     Args:
@@ -393,12 +394,14 @@ def launch_jobscript(log, job_queue, job_id, host_list, script, job_log, error_l
         job_queue (_type_): _description_
         job_id (_type_): _description_
         host_list (_type_): _description_
+        env (_type_): _description_
         script (_type_): _description_
         job_log (_type_): _description_
         error_log (_type_): _description_
         timeout (_type_): _description_
         test (_type_): _description_
     """
+
     debug_logging(log, test.enable_debug_msg, f"DBG: JOB {job_id} ENTERED launch_jobscript")
     job_results = []
     node_results = []
@@ -421,7 +424,7 @@ def launch_jobscript(log, job_queue, job_id, host_list, script, job_log, error_l
     error_log1 = error_log.replace("JOBID", str(job_id))
     joblog = job_log1.replace("RHOST", str(rhost))
     errorlog = error_log1.replace("RHOST", str(rhost))
-    cmd = f"{script} {hosts} {job_id} > {joblog} 2> {errorlog}"
+    cmd = f"{env} {script} {hosts} {job_id} > {joblog} 2> {errorlog}"
     job_results = run_remote(
         log, rhost, cmd, verbose=False, timeout=timeout * 60, task_debug=False, stderr=False)
     if job_results:

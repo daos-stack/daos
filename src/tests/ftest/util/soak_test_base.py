@@ -309,6 +309,10 @@ class SoakTestBase(TestWithServers):
         job_queue = multiprocessing.Queue()
         jobid_list = []
         node_list = self.hostlist_clients
+        lib_path = os.getenv("LD_LIBRARY_PATH")
+        path = os.getenv("PATH")
+        v_env = os.getenv("VIRTUAL_ENV")
+        env = f"export LD_LIBRARY_PATH={lib_path}; export PATH={path}; export VIRTUAL_ENV={v_env}"
         for job_dict in self.Job_List:
             jobid_list.append(job_dict["jobid"])
         self.log.info(f"Submitting {len(jobid_list)} jobs at {time.ctime()}")
@@ -339,7 +343,7 @@ class SoakTestBase(TestWithServers):
                         error_log = job_dict["joberrlog"]
                         method = launch_jobscript
                         params = (self.log, job_queue, job_id, job_node_list,
-                                  script, log, error_log, timeout, self)
+                                  env, script, log, error_log, timeout, self)
                         name = f"SOAK JOB {job_id}"
 
                         jobs.append(threading.Thread(target=method, args=params, name=name))
