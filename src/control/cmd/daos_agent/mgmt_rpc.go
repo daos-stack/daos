@@ -191,8 +191,13 @@ func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, req *mgm
 	// Requested fabric interface/domain behave as a simple override. If we weren't able to
 	// validate them, we return them to the user with the understanding that perhaps the user
 	// knows what they're doing.
+	// When an interface is requested without a domain, the domain is the same as the interface.
 	iface := req.Interface
 	domain := req.Domain
+	if iface != "" && domain == "" {
+		domain = iface
+	}
+
 	if req.Interface == "" {
 		fabricIF, err := mod.getFabricInterface(ctx, &FabricIfaceParams{
 			NUMANode: numaNode,

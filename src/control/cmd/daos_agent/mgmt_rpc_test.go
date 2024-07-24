@@ -203,6 +203,69 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 				},
 			}),
 		},
+		"req interface/domain": {
+			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{
+				Sys:       testSys,
+				Interface: "test1",
+				Domain:    "dev1",
+			}),
+			expResp: respWith(testResp, "test1", "dev1", []*mgmtpb.FabricInterfaces{
+				{
+					Ifaces: []*mgmtpb.FabricInterface{
+						{
+							Interface: "test0",
+							Domain:    "test0",
+							Provider:  "ofi+tcp",
+						},
+					},
+				},
+				{
+					NumaNode: 1,
+				},
+				{
+					NumaNode: 2,
+					Ifaces: []*mgmtpb.FabricInterface{
+						{
+							NumaNode:  2,
+							Interface: "test1",
+							Domain:    "dev1",
+							Provider:  "ofi+tcp",
+						},
+					},
+				},
+			}),
+		},
+		"req interface only": {
+			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{
+				Sys:       testSys,
+				Interface: "test0",
+			}),
+			expResp: respWith(testResp, "test0", "test0", []*mgmtpb.FabricInterfaces{
+				{
+					Ifaces: []*mgmtpb.FabricInterface{
+						{
+							Interface: "test0",
+							Domain:    "test0",
+							Provider:  "ofi+tcp",
+						},
+					},
+				},
+				{
+					NumaNode: 1,
+				},
+				{
+					NumaNode: 2,
+					Ifaces: []*mgmtpb.FabricInterface{
+						{
+							NumaNode:  2,
+							Interface: "test1",
+							Domain:    "dev1",
+							Provider:  "ofi+tcp",
+						},
+					},
+				},
+			}),
+		},
 		"incompatible error": {
 			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{}),
 			mockGetAttachInfo: func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
