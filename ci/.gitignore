@@ -6,3 +6,8 @@
 *_list.xlsx
 *_artifacts.html
 *_artifacts.json
+
+builds/*
+jobs/*
+stages/*
+wfapi/*
