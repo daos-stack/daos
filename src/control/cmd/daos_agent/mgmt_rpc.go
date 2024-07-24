@@ -210,12 +210,9 @@ func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, req *mgm
 	}
 
 	resp.ClientNetHint.Interface = iface
-	resp.ClientNetHint.Domain = iface
-	if domain != "" {
-		resp.ClientNetHint.Domain = domain
-		mod.log.Tracef("D_DOMAIN for %s has been detected as: %s",
-			resp.ClientNetHint.Interface, resp.ClientNetHint.Domain)
-	}
+	resp.ClientNetHint.Domain = domain
+	mod.log.Tracef("D_DOMAIN for %s has been detected as: %s",
+		resp.ClientNetHint.Interface, resp.ClientNetHint.Domain)
 
 	if err := mod.populateNUMAFabricMap(ctx, resp); err != nil {
 		return nil, err

@@ -154,6 +154,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 					Ifaces: []*mgmtpb.FabricInterface{
 						{
 							Interface: "test0",
+							Domain:    "test0",
 							Provider:  "ofi+tcp",
 						},
 					},
@@ -181,6 +182,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 					Ifaces: []*mgmtpb.FabricInterface{
 						{
 							Interface: "test0",
+							Domain:    "test0",
 							Provider:  "ofi+tcp",
 						},
 					},

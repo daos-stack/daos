@@ -353,10 +353,12 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 			expResults: []*FabricInterface{
 				{
 					Name:        "t1",
+					Domain:      "t1",
 					NetDevClass: hardware.Infiniband,
 				},
 				{
 					Name:        "t1",
+					Domain:      "t1",
 					NetDevClass: hardware.Infiniband,
 				},
 			},
@@ -388,14 +390,17 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 			expResults: []*FabricInterface{
 				{
 					Name:        "t2",
+					Domain:      "t2",
 					NetDevClass: hardware.Infiniband,
 				},
 				{
 					Name:        "t2",
+					Domain:      "t2",
 					NetDevClass: hardware.Infiniband,
 				},
 				{
 					Name:        "t2",
+					Domain:      "t2",
 					NetDevClass: hardware.Infiniband,
 				},
 			},
@@ -420,10 +425,12 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 			expResults: []*FabricInterface{
 				{
 					Name:        "t1",
+					Domain:      "t1",
 					NetDevClass: hardware.Infiniband,
 				},
 				{
 					Name:        "t1",
+					Domain:      "t1",
 					NetDevClass: hardware.Infiniband,
 				},
 			},
@@ -453,14 +460,17 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 			expResults: []*FabricInterface{
 				{
 					Name:        "t2",
+					Domain:      "t2",
 					NetDevClass: hardware.Ether,
 				},
 				{
 					Name:        "t2",
+					Domain:      "t2",
 					NetDevClass: hardware.Ether,
 				},
 				{
 					Name:        "t2",
+					Domain:      "t2",
 					NetDevClass: hardware.Ether,
 				},
 			},
@@ -471,12 +481,14 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 					0: {
 						{
 							Name:        "t1",
+							Domain:      "t1",
 							NetDevClass: FabricDevClassManual,
 						},
 					},
 					1: {
 						{
 							Name:        "t2",
+							Domain:      "t2",
 							NetDevClass: FabricDevClassManual,
 						},
 					},
@@ -490,10 +502,12 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 			expResults: []*FabricInterface{
 				{
 					Name:        "t2",
+					Domain:      "t2",
 					NetDevClass: FabricDevClassManual,
 				},
 				{
 					Name:        "t2",
+					Domain:      "t2",
 					NetDevClass: FabricDevClassManual,
 				},
 			},
@@ -534,18 +548,22 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 			expResults: []*FabricInterface{
 				{
 					Name:        "t2",
+					Domain:      "t2",
 					NetDevClass: hardware.Ether,
 				},
 				{
 					Name:        "t3",
+					Domain:      "t3",
 					NetDevClass: hardware.Ether,
 				},
 				{
 					Name:        "t1",
+					Domain:      "t1",
 					NetDevClass: hardware.Ether,
 				},
 				{
 					Name:        "t2",
+					Domain:      "t2",
 					NetDevClass: hardware.Ether,
 				},
 			},
@@ -581,18 +599,22 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 			expResults: []*FabricInterface{
 				{
 					Name:        "t2",
+					Domain:      "t2",
 					NetDevClass: hardware.Ether,
 				},
 				{
 					Name:        "t3",
+					Domain:      "t3",
 					NetDevClass: hardware.Ether,
 				},
 				{
 					Name:        "t1",
+					Domain:      "t1",
 					NetDevClass: hardware.Ether,
 				},
 				{
 					Name:        "t2",
+					Domain:      "t2",
 					NetDevClass: hardware.Ether,
 				},
 			},
@@ -731,10 +753,12 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 			expResults: []*FabricInterface{
 				{
 					Name:        "t2",
+					Domain:      "t2",
 					NetDevClass: hardware.Ether,
 				},
 				{
 					Name:        "t2",
+					Domain:      "t2",
 					NetDevClass: hardware.Ether,
 				},
 			},
@@ -1435,6 +1459,7 @@ func TestAgent_NUMAFabricFromScan(t *testing.T) {
 
 					{
 						Name:        "lo",
+						Domain:      "lo",
 						NetDevClass: hardware.Loopback,
 					},
 					{
@@ -1619,6 +1644,7 @@ func TestAgent_NUMAFabricFromConfig(t *testing.T) {
 				0: {
 					{
 						Name:        "test1",
+						Domain:      "test1",
 						NetDevClass: FabricDevClassManual,
 					},
 					{
