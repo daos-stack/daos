@@ -9,6 +9,7 @@ import os
 import time
 
 from ClusterShell.NodeSet import NodeSet
+
 from command_utils import ExecutableCommand
 from command_utils_base import BasicParameter, FormattedParameter
 from exception_utils import CommandFailure
@@ -579,4 +580,59 @@ class Pil4dfsDcacheCmd(ExecutableCommand):
         result = run_remote(self.log, self._host, self.with_exports, timeout=None)
         if raise_exception and not result.passed:
             raise CommandFailure(f"Error running pil4dfs_dcache on host: {result.failed_hosts}\n")
+        return result
+
+
+class WhiteListCmd(ExecutableCommand):
+    """Defines an object representing a whitelist unit test command."""
+
+    def __init__(self, host, path):
+        """Create a WhiteListCmd object.
+
+        Args:
+            host (NodeSet): host on which to remotely run the command
+            path (str): path of the DAOS install directory
+        """
+        if len(host) != 1:
+            raise ValueError(f"Invalid nodeset '{host}': waiting one client host.")
+
+        test_dir = os.path.join(path, "lib", "daos", "TESTING", "tests")
+        super().__init__("/run/whitelist_test/*", "whitelist_test", test_dir)
+
+        self._host = host
+        self.test_id = BasicParameter(None)
+
+    @property
+    def host(self):
+        """Get the host on which to remotely run the command via run().
+
+        Returns:
+            NodeSet: remote host on which the command will run
+
+        """
+        return self._host
+
+    def _run_process(self, raise_exception=None):
+        """Run the command remotely as a foreground process.
+
+        Args:
+            raise_exception (bool, optional): whether or not to raise an exception if the command
+                fails. This overrides the self.exit_status_exception setting if defined.
+                Defaults to None.
+
+        Raises:
+            CommandFailure: if there is an error running the command
+
+        Returns:
+            RemoteCommandResult: a grouping of the command results from the same host with the
+                same return status
+
+        """
+        if raise_exception is None:
+            raise_exception = self.exit_status_exception
+
+        # Run whitelist_test remotely
+        result = run_remote(self.log, self._host, self.with_exports, timeout=None)
+        if raise_exception and not result.passed:
+            raise CommandFailure(f"Error running whitelist_test on host: {result.failed_hosts}\n")
         return result

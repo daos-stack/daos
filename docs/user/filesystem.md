@@ -1021,6 +1021,14 @@ libpil4dfs intercepting summary for ops on DFS:
 [op_sum ]  5003
 ```
 
+### Turn on whitelist mode in libpil4dfs
+libpil4dfs could boost IO performance considerably over using dfuse for IO intensive workloads. However, initializing daos environment in libpil4dfs is expensive. To alleviate the overhead of libpil4dfs, user could set env to disable function interception in specific applications, i.e., let dfuse handle all IO requests. "D_IL_WHITELIST=1" turns on whitelist mode. A list of common applications are hardcoded to be skipped in whitelist mode. User can set env "D_IL_BYPASS_ALL_LIST" to bypass function interceptions in target processes and their child processes. "D_IL_BYPASS_LIST" can be set to bypass function interceptions in target processes only. Setting "D_IL_BYPASS_ALL_LIST" or "D_IL_BYPASS_LIST" enables whitelist mode too even "D_IL_WHITELIST=1" is not set. Whitelist mode is recommended for short-lived processes that run a large number (more than 1,000) of times. Example to set env,
+```
+$ export D_IL_BYPASS_LIST="app_a:app_b:app_c:app_d"
+or
+$ export D_IL_BYPASS_ALL_LIST="scons:configure"
+```
+
 ### Turn on compatible mode in libpil4dfs
 Fake file descriptor (FD) is used in regular mode in libpil4dfs.so for efficiency. open() returns fake fd to applications. In cases of some APIs are not intercepted, applications could crash with the error "Bad File Descriptor". Compatible mode is provided to work around such situations.
 Setting env "D_IL_COMPATIBLE=1" turns on compatible mode. Kernel fd allocated by dfuse instead of fake fd will be returned to applications. This mode provides better compatibility with degraded performance in open, openat, and opendir, etc. Please start dfuse with "--disable-caching" to disable caching before using compatible mode.

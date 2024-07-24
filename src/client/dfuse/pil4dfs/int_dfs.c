@@ -166,6 +166,23 @@ static bool             daos_debug_inited;
 static int              num_dfs;
 static struct dfs_mt    dfs_list[MAX_DAOS_MT];
 
+bool                    whitelist_mode;
+/* bypass interception for current process. keep hook disabled. */
+static bool             bypass;
+/* bypass interception for current process and all child processes. */
+static bool             bypass_all;
+/* base name of the current application name */
+static char            *exe_short_name;
+static char            *first_arg;
+
+/* the list of apps provided by user including all child processes to be skipped for interception */
+static char            *bypass_all_user_cmd_list;
+/* the list of apps provided by user to be skipped for interception */
+static char            *bypass_user_cmd_list;
+
+static void
+extract_exe_name_1st_arg(void);
+
 static int
 init_dfs(int idx);
 static int
@@ -1142,6 +1159,7 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 			}
 
 			rc = daos_init();
+			D_DEBUG(DB_ANY, "called daos_init().\n");
 			if (rc) {
 				DL_ERROR(rc, "daos_init() failed");
 				*is_target_path = 0;
@@ -4053,12 +4071,70 @@ out_readdir:
 	return &mydir->ents[mydir->num_ents];
 }
 
+/* Append env "BYPASS_ALL_CHILDREN". This is needed to make sure BYPASS_ALL_CHILDREN is not removed
+ * in child processes if env BYPASS_ALL_CHILDREN is set.
+ */
+static int
+pre_env_bypass_all(char *const envp[], char ***new_envp)
+{
+	int   i, rc;
+	int   num_entry          = 0;
+	bool  include_bypass_all = false;
+	char *env_bypass_all     = NULL;
+
+	*new_envp = (char**)envp;
+	if (envp == environ)
+		return 0;
+
+	if (envp != NULL) {
+		while (envp[num_entry]) {
+			if (memcmp(envp[num_entry], STR_AND_SIZE_M1("BYPASS_ALL_CHILDREN")) == 0)
+				include_bypass_all = true;
+			num_entry++;
+		}
+	}
+
+	if (include_bypass_all)
+		return 0;
+
+	/* the new envp holds the existing envs & the env forced to append plus NULL at the end */
+	*new_envp = calloc(num_entry + 2, sizeof(char *));
+	if (*new_envp == NULL) {
+		rc = ENOMEM;
+		goto err_out0;
+	}
+
+	/* Copy all existing entries to the new envp[] */
+	for (i = 0; i < num_entry; i++) {
+		(*new_envp)[i] = envp[i];
+	}
+
+	/* Current function is called only when bypass_all is true */
+	env_bypass_all = strdup("BYPASS_ALL_CHILDREN=1");
+	if (env_bypass_all == NULL) {
+		rc = ENOMEM;
+		goto err_out1;
+	}
+	(*new_envp)[i] = env_bypass_all;
+	i++;
+
+	(*new_envp)[i] = NULL;
+	return 0;
+
+err_out1:
+	free(*new_envp);
+err_out0:
+	return rc;
+}
+
 /* This is the number of environmental variables that would be forced to set in child process.
  * "LD_PRELOAD" is a special case and it is not included in the list.
  */
 static char  *env_list[] = {"D_IL_REPORT", "D_IL_MOUNT_POINT", "D_IL_POOL", "D_IL_CONTAINER",
 			    "D_IL_MAX_EQ", "D_LOG_FILE", "D_IL_ENFORCE_EXEC_ENV",  "DD_MASK",
-			    "DD_SUBSYS", "D_LOG_MASK", "D_IL_COMPATIBLE", "D_IL_NO_DCACHE_BASH"};
+			    "DD_SUBSYS", "D_LOG_MASK", "D_IL_COMPATIBLE", "D_IL_NO_DCACHE_BASH",
+			    "BYPASS_ALL_CHILDREN", "D_IL_BYPASS_ALL_LIST", "D_IL_BYPASS_LIST",
+			    "D_IL_WHITELIST"};
 
 /* Environmental variables could be cleared in some applications. To make sure all libpil4dfs
  * related env properly set, we intercept execve and its variants to check envp[] and append our
@@ -4366,6 +4442,15 @@ execve(const char *filename, char *const argv[], char *const envp[])
 		next_execve = dlsym(RTLD_NEXT, "execve");
 		D_ASSERT(next_execve != NULL);
 	}
+
+	if (bypass_all) {
+		rc = pre_env_bypass_all(envp, &new_envp);
+		if (rc) {
+			errno = rc;
+			return (-1);
+		}
+		return next_execve(filename, argv, new_envp);
+	}
 	if (!d_hook_enabled)
 		return next_execve(filename, argv, envp);
 
@@ -4395,6 +4480,14 @@ execvpe(const char *filename, char *const argv[], char *const envp[])
 	if (next_execvpe == NULL) {
 		next_execvpe = dlsym(RTLD_NEXT, "execvpe");
 		D_ASSERT(next_execvpe != NULL);
+	}
+	if (bypass_all) {
+		rc = pre_env_bypass_all(envp, &new_envp);
+		if (rc) {
+			errno = rc;
+			return (-1);
+		}
+		return next_execvpe(filename, argv, new_envp);
 	}
 	if (!d_hook_enabled)
 		return next_execvpe(filename, argv, envp);
@@ -4468,6 +4561,14 @@ fexecve(int fd, char *const argv[], char *const envp[])
 	if (next_fexecve == NULL) {
 		next_fexecve = dlsym(RTLD_NEXT, "fexecve");
 		D_ASSERT(next_fexecve != NULL);
+	}
+	if (bypass_all) {
+		rc = pre_env_bypass_all(envp, &new_envp);
+		if (rc) {
+			errno = rc;
+			return (-1);
+		}
+		return next_fexecve(fd, argv, new_envp);
 	}
 	if (!d_hook_enabled)
 		return next_fexecve(fd, argv, envp);
@@ -6633,38 +6734,199 @@ register_handler(int sig, struct sigaction *old_handler)
 }
 
 /* Check whether current executable is sh/bash or not. Flag is_bash is set. */
-static void
+static inline void
 check_exe_sh_bash(void)
 {
-	int   readsize;
-	/* the exe name extract from /proc/self/exe */
-	char *exe_path;
-	/* the short exe name from exe_path */
-	char *exe_short = NULL;
-
-	D_ALLOC(exe_path, DFS_MAX_PATH);
-	if (exe_path == NULL)
-		return;
-
-	readsize = readlink("/proc/self/exe", exe_path, DFS_MAX_PATH);
-	if (readsize >= DFS_MAX_PATH) {
-		DS_ERROR(ENAMETOOLONG, "path from readlink() is too long");
-		goto out;
-	} else if (readsize < 0) {
-		DS_ERROR(errno, "readlink() failed");
-		goto out;
-	}
-
-	exe_short = basename(exe_path);
-	if (exe_short == NULL) {
-		DS_ERROR(errno, "basename() failed");
-		goto out;
-	}
-	if (strncmp(exe_short, "bash", 5) == 0 || strncmp(exe_short, "sh", 3) == 0)
+	if (memcmp(exe_short_name, "bash", 5) == 0 || memcmp(exe_short_name, "sh", 3) == 0)
 		is_bash = true;
+}
 
-out:
-	D_FREE(exe_path);
+#define CMDLINE_BUF_SIZE (2*DFS_MAX_PATH + 2)
+
+static void
+extract_exe_name_1st_arg(void)
+{
+	FILE *f;
+	int   readsize;
+	int   count = 0;
+	char *buf, *p, *end;
+
+	f = fopen("/proc/self/cmdline", "r");
+	if (f == NULL) {
+		fprintf(stderr, "Fail to open file: /proc/self/cmdline. %d (%s)\n", errno,
+			strerror(errno));
+		exit(1);
+	}
+	buf = malloc(CMDLINE_BUF_SIZE);
+	if (buf == NULL) {
+		fprintf(stderr, "Fail to allocate memory for buf %d (%s)\n", errno,
+			strerror(errno));
+		exit(1);
+	}
+	readsize = fread(buf, 1, CMDLINE_BUF_SIZE, f);
+	if (readsize <= 0) {
+		fprintf(stderr, "Fail to read /proc/self/cmdline %d (%s)\n", errno,
+			strerror(errno));
+		fclose(f);
+		exit(1);
+	}
+
+	fclose(f);
+
+	exe_short_name = basename(buf);
+	if (exe_short_name == NULL) {
+		fprintf(stderr, "Fail to determine exe_short_name %d (%s)\n", errno,
+			strerror(errno));
+		exit(1);
+	}
+	exe_short_name = strndup(exe_short_name, DFS_MAX_NAME);
+	if (exe_short_name == NULL) {
+		printf("Fail to allocate exe_short_name %d (%s)\n", errno, strerror(errno));
+		exit(1);
+	}
+	first_arg = NULL;
+	end = buf + readsize;
+	for (p = buf; p < end;) {
+		if (count == 1) {
+			if (p[0] == '/' || memcmp(p, "./", 2) == 0  || memcmp(p, "../", 3) == 0 ) {
+				/* Extract the first argument in command line */
+				first_arg = basename(p);
+				if (first_arg == NULL) {
+					fprintf(stderr, "Fail to determine first_arg %d (%s)\n",
+						errno, strerror(errno));
+					exit(1);
+				}
+				first_arg = strndup(first_arg, DFS_MAX_NAME);
+				if (exe_short_name == NULL) {
+					fprintf(stderr, "Fail to allocate exe_short_name %d (%s)\n",
+						errno, strerror(errno));
+					exit(1);
+				}
+			}
+			break;
+		}
+		count++;
+		while (*p++);
+	}
+	free(buf);
+	/* We allocated buffers for exe_short_name and first_arg. Now buf can be deallocated. */
+}
+
+static inline void
+check_env_bypass_all(void)
+{
+	char *env_bypass_all;
+
+	env_bypass_all = getenv("BYPASS_ALL_CHILDREN");
+	if (env_bypass_all) {
+		if (strncmp(env_bypass_all, "1", 2) == 0)
+			bypass_all = true;
+	}
+}
+
+static char *bypass_all_bash_cmd_list[] = {"configure", "libtool", "libtoolize"};
+
+static char *bypass_all_python3_cmd_list[] = {"scons", "scons-3", "dnf", "dnf-3", "meson"};
+
+static char *bypass_all_app_list[] = {"c++", "cc", "cmake", "cmake3", "cpp", "f77", "f90", "f95",
+				      "gcc", "gfortran", "git", "go", "gofmt", "g++", "m4", "make",
+				      "nasm", "yasm"};
+
+static char *elf_list[] = {"as", "awk", "basename", "bc", "cal", "chmod", "chown", "clang", "clear",
+			   "daos", "daos_agent", "daos_engine", "daos_server", "df", "dfuse", "dmg",
+			   "expr", "kill", "link", "ln", "ls", "mkdir", "mktemp", "nm", "numactl",
+			   "patchelf", "ping", "pkg-config", "ps", "pwd", "ranlib", "rename", "sed",
+			   "seq", "size", "sleep", "ssh", "stat", "strace", "su", "sudo", "tee",
+			   "telnet", "time", "top", "touch", "tr", "truncate", "uname", "vi", "vim",
+			   "whoami", "yes"};
+
+static void
+check_white_list(void)
+{
+	int   i;
+	char *saveptr, *str, *token;
+
+	/* Normally the list of app is not very big. strncmp() is used for simplicity. */
+
+	if (is_bash && first_arg != NULL) {
+		/* built-in list of bash scripts to skip */
+		for (i = 0; i < ARRAY_SIZE(bypass_all_bash_cmd_list); i++) {
+			if (strncmp(first_arg, bypass_all_bash_cmd_list[i], 
+				strlen(bypass_all_bash_cmd_list[i]) + 1) == 0)
+				goto set_bypass_all;
+		}
+		/* user provided list to skip */
+		if (bypass_all_user_cmd_list) {
+			for (str = bypass_all_user_cmd_list; ; str = NULL) {
+				token = strtok_r(str, ":", &saveptr);
+				if (token == NULL)
+					break;
+				if (strncmp(first_arg, token, strlen(token) + 1) == 0)
+					goto set_bypass_all;
+			}
+		}
+	}
+
+	if ((memcmp(exe_short_name, STR_AND_SIZE("python")) == 0 ||
+	    memcmp(exe_short_name, STR_AND_SIZE("python3")) == 0) && first_arg) {
+		/* built-in list of python scripts to skip */
+		for (i = 0; i < ARRAY_SIZE(bypass_all_python3_cmd_list); i++) {
+			if (strncmp(first_arg, bypass_all_python3_cmd_list[i],
+				strlen(bypass_all_python3_cmd_list[i]) + 1) == 0)
+				goto set_bypass_all;
+		}
+		/* user provided list to skip */
+		if (bypass_all_user_cmd_list) {
+			for (str = bypass_all_user_cmd_list; ; str = NULL) {
+				token = strtok_r(str, ":", &saveptr);
+				if (token == NULL)
+					break;
+				if (strncmp(first_arg, token, strlen(token) + 1) == 0)
+					goto set_bypass_all;
+			}
+		}
+	}
+
+	for (i = 0; i < ARRAY_SIZE(bypass_all_app_list); i++) {
+		if (strncmp(exe_short_name, bypass_all_app_list[i],
+			strlen(bypass_all_app_list[i]) + 1) == 0)
+			goto set_bypass_all;
+	}
+
+	if (bypass_all_user_cmd_list) {
+		for (str = bypass_all_user_cmd_list; ; str = NULL) {
+			token = strtok_r(str, ":", &saveptr);
+			if (token == NULL)
+				break;
+			if (strncmp(exe_short_name, token, strlen(token) + 1) == 0)
+				goto set_bypass_all;
+		}
+	}
+
+	for (i = 0; i < ARRAY_SIZE(elf_list); i++) {
+		if (memcmp(exe_short_name, elf_list[i], strlen(elf_list[i]) + 1) == 0)
+			goto set_bypass;
+	}
+
+	if (bypass_user_cmd_list) {
+		for (str = bypass_user_cmd_list; ; str = NULL) {
+			token = strtok_r(str, ":", &saveptr);
+			if (token == NULL)
+				break;
+			if (strncmp(exe_short_name, token, strlen(token) + 1) == 0)
+				goto set_bypass;
+		}
+	}
+
+	return;
+
+set_bypass:
+	bypass = true;
+	return;
+
+set_bypass_all:
+	setenv("BYPASS_ALL_CHILDREN", "1", 1);
+	bypass_all = true;
 	return;
 }
 
@@ -6673,8 +6935,31 @@ init_myhook(void)
 {
 	mode_t   umask_old;
 	char    *env_log;
+	char    *env_whitelist;
 	int      rc;
 	uint64_t eq_count_loc = 0;
+
+	env_whitelist = getenv("D_IL_WHITELIST");
+	if (env_whitelist) {
+		if (strncmp(env_whitelist, "1", 2) == 0)
+			whitelist_mode = true;
+	}
+	bypass_all_user_cmd_list = getenv("D_IL_BYPASS_ALL_LIST");
+	bypass_user_cmd_list     = getenv("D_IL_BYPASS_LIST");
+	if ((bypass_all_user_cmd_list != NULL) || (bypass_user_cmd_list != NULL))
+		whitelist_mode = true;
+
+	check_env_bypass_all();
+	extract_exe_name_1st_arg();
+	if (bypass_all)
+		return;
+
+	/* Need to check whether current process is bash or not under regular & compatible modes.*/
+	check_exe_sh_bash();
+	if (whitelist_mode)
+		check_white_list();
+	if (bypass || bypass_all)
+		return;
 
 	umask_old = umask(0);
 	umask(umask_old);
@@ -6831,8 +7116,6 @@ init_myhook(void)
 
 	init_fd_dup2_list();
 
-	/* Need to check whether current process is bash or not under regular & compatible modes.*/
-	check_exe_sh_bash();
 	if (is_bash && no_dcache_in_bash)
 		/* Disable directory caching inside bash. bash could remove a dir then recreate
 		 * it which causes cache inconsistency. Observed such issue in "configure" in ucx.
@@ -6938,6 +7221,9 @@ finalize_myhook(void)
 {
 	int       rc;
 	d_list_t *rlink;
+
+	if (bypass || bypass_all)
+		return;
 
 	if (context_reset) {
 		/* child processes after fork() */
