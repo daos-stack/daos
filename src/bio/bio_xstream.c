@@ -105,7 +105,7 @@ bio_spdk_conf_read(struct spdk_env_opts *opts)
 		return rc;
 	}
 	nvme_glb.bd_nvme_roles = roles;
-	bio_vmd_enabled        = vmd_enabled;
+	bio_vmd_enabled        = vmd_enabled && (nvme_glb.bd_bdev_class == BDEV_CLASS_NVME);
 
 	rc = bio_set_hotplug_filter(nvme_glb.bd_nvme_conf);
 	if (rc != 0) {
@@ -747,9 +747,8 @@ bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 	D_ASSERT(d_bdev->bb_desc != NULL);
 	d_bdev->bb_removed = 1;
 
-	ras_notify_eventf(RAS_DEVICE_UNPLUGGED, RAS_TYPE_INFO,
-			  RAS_SEV_NOTICE, NULL, NULL, NULL, NULL, NULL,
-			  NULL, NULL, NULL, NULL, "Dev: "DF_UUID" unplugged\n",
+	ras_notify_eventf(RAS_DEVICE_UNPLUGGED, RAS_TYPE_INFO, RAS_SEV_NOTICE, NULL, NULL, NULL,
+			  NULL, NULL, NULL, NULL, NULL, NULL, "Device: " DF_UUID " unplugged\n",
 			  DP_UUID(d_bdev->bb_uuid));
 
 	/* The bio_bdev is still under construction */
