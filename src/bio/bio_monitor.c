@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -221,15 +221,14 @@ bio_dev_set_faulty(struct bio_xs_context *xs, uuid_t dev_uuid)
 		rc = dss_abterr2der(rc);
 
 	if (rc == 0)
-		ras_notify_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO,
-				  RAS_SEV_NOTICE, NULL, NULL, NULL,
-				  NULL, NULL, NULL, NULL, NULL, NULL,
-				  "Dev: "DF_UUID" set faulty\n", DP_UUID(dev_uuid));
+		ras_notify_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO, RAS_SEV_NOTICE, NULL, NULL,
+				  NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+				  "Device: " DF_UUID " set faulty\n", DP_UUID(dev_uuid));
 	else
-		ras_notify_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO,
-				  RAS_SEV_ERROR, NULL, NULL, NULL,
-				  NULL, NULL, NULL, NULL, NULL, NULL,
-				  "Dev: "DF_UUID" set faulty failed: %d\n", DP_UUID(dev_uuid), rc);
+		ras_notify_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO, RAS_SEV_ERROR, NULL, NULL,
+				  NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+				  "Device: " DF_UUID " set faulty failed: %d\n", DP_UUID(dev_uuid),
+				  rc);
 	return rc;
 }
 
@@ -742,16 +741,14 @@ auto_faulty_detect(struct bio_blobstore *bbs)
 		D_ERROR("Failed to set FAULTY state. "DF_RC"\n", DP_RC(rc));
 
 	if (rc == 0)
-		ras_notify_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO,
-				  RAS_SEV_NOTICE, NULL, NULL, NULL,
-				  NULL, NULL, NULL, NULL, NULL, NULL,
-				  "Dev: "DF_UUID" auto faulty detect\n",
+		ras_notify_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO, RAS_SEV_NOTICE, NULL, NULL,
+				  NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+				  "Device: " DF_UUID " auto faulty detect\n",
 				  DP_UUID(bbs->bb_dev->bb_uuid));
 	else
-		ras_notify_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO,
-				  RAS_SEV_ERROR, NULL, NULL, NULL,
-				  NULL, NULL, NULL, NULL, NULL, NULL,
-				  "Dev: "DF_UUID" auto faulty detect failed: %d\n",
+		ras_notify_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO, RAS_SEV_ERROR, NULL, NULL,
+				  NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+				  "Device: " DF_UUID " auto faulty detect failed: %d\n",
 				  DP_UUID(bbs->bb_dev->bb_uuid), rc);
 }
 
@@ -1013,9 +1010,11 @@ bio_export_health_stats(struct bio_blobstore *bb, char *bdev_name)
 #define X(field, fname, desc, unit, type)				\
 	memset(binfo, 0, sizeof(*binfo));				\
 	rc = fill_in_traddr(binfo, bdev_name);				\
-	if (rc || binfo->bdi_traddr == NULL) {				\
+	if (rc) {							\
 		D_WARN("Failed to extract %s addr: "DF_RC"\n",		\
 		       bdev_name, DP_RC(rc));				\
+	} else if (binfo->bdi_traddr == NULL) {				\
+		D_WARN("No health stats for %s\n", bdev_name);		\
 	} else {							\
 		rc = d_tm_add_metric(&bb->bb_dev_health.field,		\
 				     type,				\
@@ -1052,9 +1051,11 @@ bio_export_vendor_health_stats(struct bio_blobstore *bb, char *bdev_name)
 #define Y(field, fname, desc, unit, type)				\
 	memset(binfo, 0, sizeof(*binfo));				\
 	rc = fill_in_traddr(binfo, bdev_name);				\
-	if (rc || binfo->bdi_traddr == NULL) {				\
+	if (rc) {							\
 		D_WARN("Failed to extract %s addr: "DF_RC"\n",		\
 		       bdev_name, DP_RC(rc));				\
+	} else if (binfo->bdi_traddr == NULL) {				\
+		D_WARN("No vendor health stats for %s\n", bdev_name);	\
 	} else {							\
 		rc = d_tm_add_metric(&bb->bb_dev_health.field,		\
 				     type,				\
@@ -1097,8 +1098,10 @@ bio_set_vendor_id(struct bio_blobstore *bb, char *bdev_name)
 	int				 rc;
 
 	rc = fill_in_traddr(&binfo, bdev_name);
-	if (rc || binfo.bdi_traddr == NULL) {
+	if (rc) {
 		D_ERROR("Unable to get traddr for device:%s\n", bdev_name);
+		return;
+	} else if (binfo.bdi_traddr == NULL) {
 		return;
 	}
 

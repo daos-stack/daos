@@ -115,6 +115,15 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 
 	resp.Sys = svc.sysdb.SystemName()
 
+	if dv, err := build.NewVersion(build.DaosVersion); err == nil {
+		resp.BuildInfo = &mgmtpb.BuildInfo{
+			Major: uint32(dv.Major),
+			Minor: uint32(dv.Minor),
+			Patch: uint32(dv.Patch),
+			Tag:   build.BuildInfo,
+		}
+	}
+
 	return resp, nil
 }
 
@@ -382,9 +391,9 @@ func (svc *mgmtSvc) updateFabricProviders(provList []string, publisher events.Pu
 	return nil
 }
 
-func newFabricProvChangedEvent(old, new string) *events.RASEvent {
+func newFabricProvChangedEvent(o, n string) *events.RASEvent {
 	return events.NewGenericEvent(events.RASSystemFabricProvChanged, events.RASSeverityNotice,
-		fmt.Sprintf("system fabric provider has changed: %s -> %s", old, new), "")
+		fmt.Sprintf("system fabric provider has changed: %s -> %s", o, n), "")
 }
 
 // reqGroupUpdate requests a group update.
