@@ -427,6 +427,34 @@ def run_local(log, command, verbose=True, timeout=None, stderr=False, capture_ou
     return results
 
 
+def daos_env_str(env):
+    """Return a copy of an env including only daos-relevant variables.
+
+    TODO ideally should be under EnvironmentVariables but the imports are broken
+
+    Args:
+        enc (dict): the original env
+
+    Returns:
+        str: a copy of env env including only daos-relevant variables,
+             converted to an export str
+    """
+    def _include(key):
+        return key.startswith('FI_') or \
+               key.startswith('OFI_') or \
+               key.startswith('DAOS_') or \
+               key.startswith('D_') or \
+               key.startswith('CRT_') or \
+               key.startswith('DD_') or \
+               key in ('PATH', 'LD_LIBRARY_PATH')
+    export_str = ';'.join(
+        f'export {key}' if value is None else "export {}='{}'".format(key, value)
+        for key, value in env.items() if _include(key))
+    if export_str:
+        export_str = "".join([export_str, ';'])
+    return export_str
+
+
 def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False, stderr=False,
                fanout=None):
     """Run the command on the remote hosts.
@@ -460,6 +488,8 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False,
             log.debug("Running on %s without a timeout: %s", hosts, command)
         else:
             log.debug("Running on %s with a %s second timeout: %s", hosts, timeout, command)
+    env_str = daos_env_str(os.environ)
+    command = f'{env_str}{command}'
     task.run(command=command, nodes=hosts, timeout=timeout)
     results = CommandResult(command, task)
     if verbose:
