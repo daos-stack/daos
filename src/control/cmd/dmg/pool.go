@@ -695,8 +695,11 @@ func (cmd *PoolQueryTargetsCmd) Execute(args []string) error {
 			ID:        cmd.PoolID().String(),
 			QueryMask: daos.DefaultPoolQueryMask,
 		})
-		if err != nil {
-			return errors.Wrap(err, "no target indexes supplied and pool query failed")
+		if err != nil || (pi.TotalTargets == 0 || pi.TotalEngines == 0) {
+			if err != nil {
+				return errors.Wrap(err, "pool query failed")
+			}
+			return errors.New("failed to derive target count from pool query")
 		}
 		tgtCount := pi.TotalTargets / pi.TotalEngines
 		for i := uint32(0); i < tgtCount; i++ {
