@@ -179,7 +179,7 @@ After OS installation is finished. Remove the `-cdrom` and `-boot` options from 
 sudo qemu-system-x86_64 -M q35,accel=kvm,kernel-irqchip=split -cpu host -smp 3 -m 12288 -device intel-iommu,intremap=on -drive file=<image-dir>/daos-server.qcow2,if=virtio -device virtio-net,netdev=mynet0,mac=52:54:00:12:34:56 -netdev tap,id=mynet0 -drive file=<image-dir>/qemu-nvm-disk1.qcow2,if=none,id=nvm1 -device nvme,serial=deadbeef,drive=nvm1 &
 sudo qemu-system-x86_64  -M q35,accel=kvm,kernel-irqchip=split -cpu host -smp 1 -m 2048 -device intel-iommu,intremap=on -drive file=<image-dir>/daos-client.qcow2,if=virtio -device virtio-net,netdev=mynet1,mac=52:54:00:12:34:57 -netdev tap,id=mynet1 
 ```
-By default the network won't automatically connect in Rocky Linux 8.9, and ssh service is also not enabled as well. Run these commands to enable autoconnect behaviour and sshd service. You can use ssh to connect to your VMs next time.
+By default the network won't automatically connect in Rocky Linux 8.9, and ssh service is also not enabled as well. Run these commands to enable autoconnect behavior and sshd service. You can use ssh to connect to your VMs next time.
 ```
 # enable the default connection
 nmcli c up enp0s2
@@ -195,7 +195,7 @@ systemctl start sshd.service
 
 4.  Install DAOS software.
 
-I follow these [steps](https://docs.daos.io/latest/QSG/setup_rhel/) to install both the DAOS server, DAOS admin, and DAOS client. I install daos-server and daos-admin on the first VM, and install daos-client on the second VM. You can follow the steps before Step "Create Configuration Files" to intall DAOS software. Then come back to update config files.
+I follow these [steps](https://docs.daos.io/latest/QSG/setup_rhel/) to install both the DAOS server, DAOS admin, and DAOS client. I install daos-server and daos-admin on the first VM, and install daos-client on the second VM. You can follow the steps before Step "Create Configuration Files" to install DAOS software. Then come back to update config files.
 
 5.  Update config files.
 
