@@ -26,7 +26,7 @@ from environment_utils import TestEnvironment
 from exception_utils import CommandFailure
 from fault_config_utils import FaultInjection
 from general_utils import (DaosTestError, dict_to_str, dump_engines_stacks,
-                           get_avocado_config_value, get_default_config_file, get_file_listing,
+                           get_avocado_config_value, get_default_config_file,
                            nodeset_append_suffix, pcmd, run_command, set_avocado_config_value)
 from host_utils import HostException, HostInfo, HostRole, get_host_parameters, get_local_host
 from logger_utils import TestLogger
