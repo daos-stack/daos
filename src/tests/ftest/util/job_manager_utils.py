@@ -839,6 +839,9 @@ class Systemctl(JobManager):
         _ld_library_path = os.environ.get("DAOS_TEST_SYSTEMD_LIBRARY_PATH")
         if _ld_library_path:
             override_contents.append(f'Environment="LD_LIBRARY_PATH={_ld_library_path}"')
+        _path = os.environ.get("DAOS_TEST_SYSTEMD_PATH")
+        if _path:
+            override_contents.append(f'Environment="PATH={_path}"')
         override_contents = '\n'.join(override_contents) + '\n'
 
         with tempfile.NamedTemporaryFile() as temp:
