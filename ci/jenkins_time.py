@@ -6,9 +6,11 @@ import re
 import hashlib
 import os
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 from urllib.request import urlopen
 from urllib.error import HTTPError
+import xml.etree.ElementTree as ET
 from typing import List, Dict, Tuple, Any
 
 
@@ -37,6 +39,16 @@ BLOCK_TO_PARAM_NAME_MAP = {
     'Functional Hardware Medium UCX Provider': 'FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL',
     'Functional Hardware Medium MD on SSD': 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
 }
+
+
+def je_load_xml(url: str) -> Any:
+    print(url)
+    try:
+        with urlopen(url) as f:  # nosec
+                return ET.fromstring(f.read().decode('utf-8'))
+    except HTTPError as err:
+        if err.getcode() == 404:
+            return None
 
 
 def je_load_basic(url: str, tree: str=None, api: str='/api/json', _404_allowed: bool = False) -> Any:
@@ -270,6 +282,13 @@ def sha256(value: str) -> str:
     return hashlib.sha256(value.encode('utf-8')).hexdigest()
 
 
+def build_url_split(url: str) -> Tuple[str, str]:
+    segs = url.split('/')
+    build_id = segs[-2]
+    job_url = '/'.join(segs[0:-2]) + '/'
+    return job_url, build_id
+
+
 def main():
     # args = PARSER.parse_args()
     # BLOCK_NAMES_FILTER[0] = args.block
@@ -494,25 +513,126 @@ def main():
     #             data = je_load_basic(url, api='', _404_allowed = True)
     #             dump(data, f'stages/{hash}')
 
-    PARSER = argparse.ArgumentParser()
-    PARSER.add_argument("--build_url", type=str, required=True)
-    args = PARSER.parse_args()
-    segs = args.build_url.split('/')
-    build_id = segs[-2]
-    job_url = '/'.join(segs[0:-2]) + '/'
-    print(job_url)
-    print(build_id)
+    # PARSER = argparse.ArgumentParser()
+    # PARSER.add_argument("--build_url", type=str, required=True)
+    # PARSER.add_argument("--include_filter", type=str, required=True)
+    # exclude_filter = 'hardware_prep'
+    # args = PARSER.parse_args()
+    # segs = args.build_url.split('/')
+    # build_id = segs[-2]
+    # job_url = '/'.join(segs[0:-2]) + '/'
+    # # print(job_url)
+    # # print(build_id)
+    # builds_index = restore('builds')
+    # build_record = builds_index[job_url]
+    # hash = build_record[build_id]
+    # # print(hash)
+    # build = restore(f'builds/{hash}')
+    # artifacts = build['artifacts']
+    # tests_total = 0
+    # passed = 0
+    # visited_dirs = []
+    # for art in artifacts:
+    #     if art['fileName'] not in ['results.xml', 'results.json']:
+    #         continue
+    #     if args.include_filter not in art['relativePath']:
+    #         continue
+    #     if exclude_filter in art['relativePath']:
+    #         continue
+    #     url = args.build_url + 'artifact/' + art['relativePath']
+    #     url = '%20'.join(url.split(' '))
+    #     dir = '/'.join(url.split('/')[0:-1])
+    #     if dir in visited_dirs:
+    #         # print(f'{url} - already visited - skip')
+    #         continue
+    #     visited_dirs.append(dir)
+    #     if '.xml' in art['fileName']:
+    #         data = je_load_xml(url)
+    #         if data is None:
+    #             visited_dirs = visited_dirs[0:-1]
+    #             continue
+    #         print(data.attrib)
+    #         tests_total += int(data.attrib['tests'])
+    #         passed += int(data.attrib['tests']) - int(data.attrib['errors']) - int(data.attrib['failures']) - int(data.attrib['skipped'])
+    #     else:
+    #         data = je_load_basic(url, api = '')
+    #         if data is None:
+    #             visited_dirs = visited_dirs[0:-1]
+    #             continue
+    #         tests_total += data['total']
+    #         passed += data['pass']
+    # print(f'Tests total: {tests_total}')
+    # print(f'Passed: {passed}')
+
+    status_translate = {
+        'PASSED': 'PASSED',
+        'FAILED': 'FAILED',
+        'REGRESSION': 'FAILED',
+        'SKIPPED': 'SKIPPED',
+        'FIXED': 'PASSED',
+    }
+
+    stage = 'Functional Hardware Medium UCX Provider'
+    builds_list = restore('durations_builds')[stage]
+    totals = []
+    pass_rate = []
     builds_index = restore('builds')
-    build_record = builds_index[job_url]
-    hash = build_record[build_id]
-    print(hash)
-    build = restore(f'builds/{hash}')
-    artifacts = build['artifacts']
-    for art in artifacts:
-        if art['fileName'] != 'results.xml':
+    # output = {}
+    for build_url in builds_list:
+        per_build = {'PASSED': 0, 'FAILED': 0, 'SKIPPED': 0}
+        job_url, build_id = build_url_split(build_url)
+        hash = builds_index[job_url][build_id]
+        # report_url = build_url + 'testReport/'
+        # report = je_load_basic(report_url)
+        # dump(report, f'testReport/{hash}')
+        print(hash)
+        report = restore(f'testReport/{hash}')
+        if report is None:
+            pass_rate.append(0)
+            totals.append(0)
             continue
-        
-        
+        for suite in report['suites']:
+            if suite['enclosingBlockNames'][0] != stage:
+                continue
+            for case in suite['cases']:
+                per_build[status_translate[case['status']]] += 1
+        # output[build_url] = per_build
+        total = per_build['PASSED'] + per_build['FAILED']
+        totals.append(total)
+        if total == 0:
+            pass_rate.append(0)
+        else:
+            pass_rate.append(per_build['PASSED'] / total)
+    # dump(output, 'temp')
+    duration = restore('durations')[stage]
+    assert(len(pass_rate) == len(duration))
+    df = pd.DataFrame(data={
+        'duration [m]': duration,
+        'pass rate [%]': pass_rate,
+        'total': totals
+    })
+    df = df[df['total'] != 0]
+    x = 'duration [m]'
+    y = 'pass rate [%]'
+    df = df[~((df[y] == 1) & (df[x] < 50))]
+    print(f'N={len(df[x])}')
+    _ = df.plot.scatter(x=x, y=y)
+    # linear regression
+    z = np.polyfit(df[x], df[y], 1)
+    p = np.poly1d(z)
+    plt.plot(df[x], p(df[x]), color="purple", linestyle='dashed')
+    plt.savefig(f'scatter_{stage}.png')
+
+    import scipy.stats as stats
+    result = stats.shapiro(df[x])
+    print(result)
+    assert(result.pvalue < 0.05) # not normally distributed
+    result = stats.shapiro(df[y])
+    print(result)
+    assert(result.pvalue < 0.05) # not normally distributed
+    # result = stats.pearsonr(df[x], df[y])
+    result = stats.spearmanr(df[x], df[y])
+    print(result)
 
 
 if __name__ == "__main__":

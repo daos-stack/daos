@@ -11,3 +11,4 @@ builds/*
 jobs/*
 stages/*
 wfapi/*
+testReport/*
