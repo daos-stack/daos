@@ -476,21 +476,30 @@ dc_mgmt_get_sys_info(const char *sys, struct daos_sys_info **out)
 	if (info == NULL)
 		D_GOTO(out_attach_info, rc = -DER_NOMEM);
 
+	D_ALLOC_ARRAY(info->dsi_ms_ranks, resp->n_ms_ranks);
+	if (info->dsi_ms_ranks == NULL)
+		D_GOTO(err_info, rc = -DER_NOMEM);
+	memcpy(info->dsi_ms_ranks, resp->ms_ranks, resp->n_ms_ranks * sizeof(uint32_t));
+	info->dsi_nr_ms_ranks = resp->n_ms_ranks;
+
 	rc = alloc_rank_uris(resp, &ranks);
 	if (rc != 0) {
 		D_ERROR("failed to allocate rank URIs: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(err_info, rc);
+		D_GOTO(err_ms_ranks, rc);
 	}
-
-	info->dsi_nr_ranks = resp->n_ms_ranks;
+	info->dsi_nr_ranks = resp->n_rank_uris;
 	info->dsi_ranks = ranks;
+
 	copy_str(info->dsi_system_name, internal.system_name);
 	copy_str(info->dsi_fabric_provider, internal.provider);
+	copy_str(info->dsi_agent_path, dc_agent_sockpath);
 
 	*out = info;
 
 	D_GOTO(out_attach_info, rc = 0);
 
+err_ms_ranks:
+	D_FREE(info->dsi_ms_ranks);
 err_info:
 	D_FREE(info);
 out_attach_info:

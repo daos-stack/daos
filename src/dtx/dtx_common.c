@@ -49,6 +49,7 @@ struct dtx_batched_cont_args {
 	struct dtx_batched_pool_args	*dbca_pool;
 	int				 dbca_refs;
 	uint32_t			 dbca_reg_gen;
+	uint32_t			 dbca_cleanup_thd;
 	uint32_t			 dbca_deregister:1,
 					 dbca_cleanup_done:1,
 					 dbca_commit_done:1,
@@ -68,6 +69,7 @@ struct dtx_cleanup_cb_args {
 	d_list_t		dcca_pc_list;
 	int			dcca_st_count;
 	int			dcca_pc_count;
+	uint32_t		dcca_cleanup_thd;
 };
 
 static inline void
@@ -226,7 +228,7 @@ dtx_cleanup_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 		return 0;
 
 	/* Stop the iteration if current DTX is not too old. */
-	if (dtx_sec2age(ent->ie_dtx_start_time) <= DTX_CLEANUP_THD_AGE_LO)
+	if (dtx_sec2age(ent->ie_dtx_start_time) <= dcca->dcca_cleanup_thd)
 		return 1;
 
 	D_ASSERT(ent->ie_dtx_mbs_dsize > 0);
@@ -336,6 +338,8 @@ dtx_cleanup(void *arg)
 	D_INIT_LIST_HEAD(&dcca.dcca_pc_list);
 	dcca.dcca_st_count = 0;
 	dcca.dcca_pc_count = 0;
+	/* Cleanup stale DTX entries within about 10 seconds windows each time. */
+	dcca.dcca_cleanup_thd = dbca->dbca_cleanup_thd - 10;
 	rc = ds_cont_iter(cont->sc_pool->spc_hdl, cont->sc_uuid,
 			  dtx_cleanup_iter_cb, &dcca, VOS_ITER_DTX, 0);
 	if (rc < 0)
@@ -626,7 +630,7 @@ dtx_batched_commit_one(void *arg)
 		int			  rc;
 
 		cnt = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT, NULL,
-					    DAOS_EPOCH_MAX, &dtes, &dcks, &dce);
+					    DAOS_EPOCH_MAX, false, &dtes, &dcks, &dce);
 		if (cnt == 0)
 			break;
 
@@ -754,7 +758,7 @@ dtx_batched_commit(void *arg)
 		if (dtx_cont_opened(cont) &&
 		    !dbca->dbca_deregister && dbca->dbca_cleanup_req == NULL &&
 		    stat.dtx_oldest_active_time != 0 &&
-		    dtx_sec2age(stat.dtx_oldest_active_time) >= DTX_CLEANUP_THD_AGE_UP) {
+		    dtx_sec2age(stat.dtx_oldest_active_time) >= dbca->dbca_cleanup_thd) {
 			D_ASSERT(!dbca->dbca_cleanup_done);
 			dtx_get_dbca(dbca);
 
@@ -1267,6 +1271,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 	uint32_t			 flags;
 	int				 status = -1;
 	int				 rc = 0;
+	int				 i;
 	bool				 aborted = false;
 	bool				 unpin = false;
 
@@ -1274,7 +1279,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 
 	dtx_shares_fini(dth);
 
-	if (daos_is_zero_dti(&dth->dth_xid) || unlikely(result == -DER_ALREADY) || dlh->dlh_relay)
+	if (daos_is_zero_dti(&dth->dth_xid) || unlikely(result == -DER_ALREADY))
 		goto out;
 
 	if (unlikely(coh->sch_closed)) {
@@ -1328,6 +1333,9 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 		D_ASSERTF(0, "Unexpected DTX "DF_DTI" status %d\n", DP_DTI(&dth->dth_xid), status);
 	}
 
+	if (dlh->dlh_relay)
+		goto out;
+
 	/*
 	 * Even if the transaction modifies nothing locally, we still need to store
 	 * it persistently. Otherwise, the subsequent DTX resync may not find it as
@@ -1366,7 +1374,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 	D_ASSERT(dth->dth_mbs != NULL);
 
 	if (dlh->dlh_coll) {
-		rc = dtx_add_cos(cont, dlh->dlh_coll_entry, &dth->dth_leader_oid,
+		rc = dtx_cos_add(cont, dlh->dlh_coll_entry, &dth->dth_leader_oid,
 				 dth->dth_dkey_hash, dth->dth_epoch, DCF_EXP_CMT | DCF_COLL);
 	} else {
 		size = sizeof(*dte) + sizeof(*mbs) + dth->dth_mbs->dm_data_size;
@@ -1391,7 +1399,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 		else
 			flags = 0;
 
-		rc = dtx_add_cos(cont, dte, &dth->dth_leader_oid, dth->dth_dkey_hash,
+		rc = dtx_cos_add(cont, dte, &dth->dth_leader_oid, dth->dth_dkey_hash,
 				 dth->dth_epoch, flags);
 		dtx_entry_put(dte);
 	}
@@ -1480,11 +1488,13 @@ out:
 	 * It is harmless to keep some partially committed DTX entries in CoS cache.
 	 */
 	if (result == 0 && dth->dth_cos_done) {
-		int	i;
-
 		for (i = 0; i < dth->dth_dti_cos_count; i++)
-			dtx_del_cos(cont, &dth->dth_dti_cos[i],
+			dtx_cos_del(cont, &dth->dth_dti_cos[i],
 				    &dth->dth_leader_oid, dth->dth_dkey_hash);
+	} else {
+		for (i = 0; i < dth->dth_dti_cos_count; i++)
+			dtx_cos_put_piggyback(cont, &dth->dth_dti_cos[i],
+					      &dth->dth_leader_oid, dth->dth_dkey_hash);
 	}
 
 	D_DEBUG(DB_IO, "Stop the DTX "DF_DTI" ver %u, dkey %lu, %s, cos %d/%d: result "DF_RC"\n",
@@ -1644,7 +1654,7 @@ dtx_flush_on_close(struct dss_module_info *dmi, struct dtx_batched_cont_args *db
 		struct dtx_coll_entry	 *dce = NULL;
 
 		cnt = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT,
-					    NULL, DAOS_EPOCH_MAX, &dtes, &dcks, &dce);
+					    NULL, DAOS_EPOCH_MAX, true, &dtes, &dcks, &dce);
 		if (cnt <= 0)
 			D_GOTO(out, rc = cnt);
 
@@ -1774,6 +1784,7 @@ dtx_cont_register(struct ds_cont_child *cont)
 	struct dtx_batched_pool_args	*dbpa = NULL;
 	struct dtx_batched_cont_args	*dbca = NULL;
 	struct umem_attr		 uma;
+	uint32_t			 timeout;
 	int				 rc;
 	bool				 new_pool = true;
 
@@ -1811,6 +1822,19 @@ dtx_cont_register(struct ds_cont_child *cont)
 	D_ALLOC_PTR(dbca);
 	if (dbca == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = crt_context_get_timeout(dmi->dmi_ctx, &timeout);
+	if (rc != 0) {
+		D_ERROR("Failed to get DTX cleanup timeout: "DF_RC"\n", DP_RC(rc));
+		goto out;
+	}
+
+	/*
+	 * Give related DTX leader sometime after default RPC timeout to commit or abort
+	 * the DTX. If the DTX is still prepared after that, then trigger DTX cleanup to
+	 * handle potential stale DTX entries.
+	 */
+	dbca->dbca_cleanup_thd = timeout + DTX_COMMIT_THRESHOLD_AGE * 2;
 
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
@@ -1967,7 +1991,7 @@ dtx_handle_resend(daos_handle_t coh,  struct dtx_id *dti,
 		 */
 		return -DER_NONEXIST;
 
-	rc = vos_dtx_check(coh, dti, epoch, pm_ver, NULL, NULL, false);
+	rc = vos_dtx_check(coh, dti, epoch, pm_ver, NULL, false);
 	switch (rc) {
 	case DTX_ST_INITED:
 		return -DER_INPROGRESS;
@@ -1999,14 +2023,6 @@ dtx_handle_resend(daos_handle_t coh,  struct dtx_id *dti,
 		return rc >= 0 ? -DER_INVAL : rc;
 	}
 }
-
-/*
- * If a large transaction has sub-requests to dispatch to a lot of DTX participants,
- * then we may have to split the dispatch process to multiple steps; otherwise, the
- * dispatch process may trigger too many in-flight or in-queued RPCs that will hold
- * too much resource as to server maybe out of memory.
- */
-#define DTX_EXEC_STEP_LENGTH	DTX_THRESHOLD_COUNT
 
 struct dtx_chore {
 	struct dss_chore		 chore;
@@ -2186,8 +2202,8 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 	dlh->dlh_need_agg = 0;
 	dlh->dlh_agg_done = 0;
 
-	if (sub_cnt > DTX_EXEC_STEP_LENGTH) {
-		dlh->dlh_forward_cnt = DTX_EXEC_STEP_LENGTH;
+	if (sub_cnt > DTX_RPC_STEP_LENGTH) {
+		dlh->dlh_forward_cnt = DTX_RPC_STEP_LENGTH;
 	} else {
 		dlh->dlh_forward_cnt = sub_cnt;
 		if (likely(dlh->dlh_delay_sub_cnt == 0) && agg_cb != NULL)
@@ -2237,7 +2253,7 @@ exec:
 	sub_cnt -= dlh->dlh_forward_cnt;
 	if (sub_cnt > 0) {
 		dlh->dlh_forward_idx += dlh->dlh_forward_cnt;
-		if (sub_cnt <= DTX_EXEC_STEP_LENGTH) {
+		if (sub_cnt <= DTX_RPC_STEP_LENGTH) {
 			dlh->dlh_forward_cnt = sub_cnt;
 			if (likely(dlh->dlh_delay_sub_cnt == 0) && agg_cb != NULL)
 				dlh->dlh_need_agg = 1;
@@ -2337,7 +2353,7 @@ dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 		struct dtx_coll_entry	 *dce = NULL;
 
 		cnt = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT, oid,
-					    epoch, &dtes, &dcks, &dce);
+					    epoch, true, &dtes, &dcks, &dce);
 		if (cnt <= 0) {
 			rc = cnt;
 			if (rc < 0)
