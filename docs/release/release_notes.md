@@ -96,29 +96,24 @@ For a complete list of supported hardware and software, refer to the
   of checksum errors on a single pool shard is reached, the pool target
   will be evicted.
 
-* DAOS Version 2.6 includes a Technical Preview of pil4dfs. Libpil4dfs
-  is similar to libioil, it intercepts read() and write(), other than that,
-  it also intercepts metadata related functions. This library provides
-  similar performance as using native DFS with POSIX interface.
+* DAOS Version 2.6 now providers a production version of libpil4dfs.
+  Libpil4dfs intercepts IO and metadata related functions unlike it's
+  coutnerpart (libioil) that intercepts only IO functions. This library 
+  provides similar performance as using native DFS with POSIX interface.
 
 * Technical Preview version of catastrophic recovery is added to DAOS in
   this version. This feature only supports offline check and repair of DAOS
   system metadata in this version.
 
-* DAOS client side metrics is added in this version. The daos\_agent
-  configuration file includes new parameters to control collection and
-  export of per-client telemetry. If the telemetry\_port option is set,
-  then per-client telemetry will be published in Prometheus format for
+* DAOS client side metrics is added as a technical preview in this version.
+  The daos\_agent configuration file includes new parameters to control
+  collection and export of per-client telemetry. If the telemetry\_port option
+  is set, then per-client telemetry will be published in Prometheus format for
   real-time sampling of client processes.
 
 * Flat KV object is added in this version, this object type only has one
   level key in low-level data mode. This feature can reduce metadata
   overhead of some data models built on top of DAOS, for example, POSIX file.
-
-* DAOS client can support multiple interfaces now. Interfaces can be
-  specified as either a coma-separated list or as an empty string,
-  e.g. "eth0,eth1" to both D\_INTERFACE environment variable and
-  cio\_interface init field.
 
 * DAOS client can query or query large object in collective mode, which
   propagagtes the RPC through a multi-level spanning tree.
@@ -154,7 +149,15 @@ For a complete list of supported hardware and software, refer to the
 
 ### Known Issues and limitations
 
-[TODO]
+* Some libc functions are not intercepted by pil4dfs. While most of those functions
+  have been added, using a function that is not intercepted yet can cause a client
+  program to crash. For that intermediate phase until all known functions are captured,
+  we introduced an environment variable that users can use with the pil4dfs library
+  to get file descriptors from dfuse. Setting D_IL_COMPATIBLE=1 would enable that mode.
+  It is expected that this mode would add a small overhead as it requires going through
+  the fuse kernel to obtain the file descriptor.
+
+... [TODO]
 
 ### Bug fixes
 
