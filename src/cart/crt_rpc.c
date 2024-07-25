@@ -1547,6 +1547,26 @@ out:
 }
 
 int
+crt_reply_send_input_free(crt_rpc_t *req)
+{
+	struct crt_rpc_priv *rpc_priv = NULL;
+	int                  rc       = 0;
+
+	if (req == NULL) {
+		D_ERROR("invalid parameter (NULL req).\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rpc_priv                          = container_of(req, struct crt_rpc_priv, crp_pub);
+	rpc_priv->crp_release_input_early = 1;
+
+	return crt_reply_send(req);
+
+out:
+	return rc;
+}
+
+int
 crt_reply_send(crt_rpc_t *req)
 {
 	struct crt_rpc_priv	*rpc_priv = NULL;
