@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,8 +10,25 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"strings"
 	"text/tabwriter"
+	"unicode"
 )
+
+// Title returns the string in Title Format.
+//
+// NB: This is basically a copy of strings.Title(), which is deprecated.
+func Title(s string) string {
+	prev := ' '
+	return strings.Map(func(r rune) rune {
+		if unicode.IsSpace(prev) {
+			prev = r
+			return unicode.ToTitle(r)
+		}
+		prev = r
+		return r
+	}, strings.ToLower(s))
+}
 
 // TableRow is a map of string values to be printed, keyed by column title.
 type TableRow map[string]string
