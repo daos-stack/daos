@@ -6,6 +6,7 @@
 
 from apricot import TestWithServers
 from dfuse_utils import get_dfuse, start_dfuse
+from general_utils import get_journalctl, journalctl_time, get_journalctl_command
 from ior_utils import write_data
 
 
