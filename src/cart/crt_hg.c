@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1514,6 +1514,16 @@ crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 		/* should success as addref above */
 		RPC_DECREF(rpc_priv);
 		rc = crt_hgret_2_der(hg_ret);
+	}
+
+	/* Release input buffer */
+	if (rpc_priv->crp_release_input_early && !rpc_priv->crp_forward) {
+		hg_ret = HG_Release_input_buf(rpc_priv->crp_hg_hdl);
+		if (hg_ret != HG_SUCCESS) {
+			RPC_ERROR(rpc_priv, "HG_Release_input_buf failed, hg_ret: " DF_HG_RC "\n",
+				  DP_HG_RC(hg_ret));
+			/* Fall through */
+		}
 	}
 
 	return rc;
