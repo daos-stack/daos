@@ -14,14 +14,12 @@ db:
   download-only: false
   java-repository: ghcr.io/aquasecurity/trivy-java-db
   java-skip-update: false
-  light: false
   no-progress: false
   repository: ghcr.io/aquasecurity/trivy-db
   skip-update: false
 debug: false
 dependency-tree: true
 exit-code: 0
-format: template
 generate-default-config: false
 ignore-policy: ""
 ignorefile: ./utils/trivy/.trivyignore
@@ -185,7 +183,6 @@ misconfiguration:
     values: []
   include-non-failures: false
   check-bundle-repository: ghcr.io/aquasecurity/trivy-policies:0
-  reset-checks-bundle: false
   # scanners:
   #  - azure-arm
   #  - cloudformation
@@ -200,7 +197,9 @@ misconfiguration:
 module:
   dir:
   enable-modules: []
-output: ""
+output: "trivy-report-daos.txt"
+format: template
+template: '@./utils/trivy/csv.tpl'
 output-plugin-arg: ""
 quiet: false
 registry:
@@ -214,12 +213,11 @@ rego:
   skip-policy-update: false
   trace: false
 report: all
-reset: false
 scan:
   compliance: ""
   file-patterns: []
   offline: false
-  parallel: 5
+  parallel: 1
   rekor-url: https://rekor.sigstore.dev
   sbom-sources: []
   scanners:
@@ -229,7 +227,6 @@ scan:
   skip-dirs:
     ./src/client/java/hadoop-daos
   skip-files: []
-  slow: false
   show-suppressed: true
 secret:
   config: trivy-secret.yaml
@@ -243,7 +240,6 @@ severity:
   - MEDIUM
   - HIGH
   - CRITICAL
-template: '@./utils/trivy/csv.tpl'
 timeout: 5m0s
 version: false
 vulnerability:
