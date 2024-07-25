@@ -880,16 +880,16 @@ class DaosCommand(DaosCommandBase):
         # Sample daos object query output.
         # oid: 1152922453794619396.1 ver 0 grp_nr: 2
         # grp: 0
-        # replica 0 1
-        # replica 1 0
+        # replica 0 1:?
+        # replica 1 0:?
         # grp: 1
-        # replica 0 0
-        # replica 1 1
+        # replica 0 0:?
+        # replica 1 1:?
         data = {}
         vals = re.findall(
             r"oid:\s+([\d.]+)\s+ver\s+(\d+)\s+grp_nr:\s+(\d+)|"
             r"grp:\s+(\d+)\s+|"
-            r"replica\s+(\d+)\s+(\d+)\s*", self.result.stdout_text)
+            r"replica\s+(\d+)\s+(\d+):\d+\s*", self.result.stdout_text)
 
         try:
             oid_vals = vals[0][0]
