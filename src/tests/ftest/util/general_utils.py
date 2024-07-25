@@ -1221,7 +1221,7 @@ def get_journalctl_command(since, until=None, system=False, units=None, identifi
     return command_as_user(" ".join(command), run_user)
 
 
-def get_journalctl(hosts, since, until, journalctl_type):
+def get_journalctl(hosts, since, until, journalctl_type, run_user="root"):
     """Run the journalctl on the hosts.
 
     Args:
@@ -1229,6 +1229,7 @@ def get_journalctl(hosts, since, until, journalctl_type):
         since (str): Start time to search the log.
         until (str): End time to search the log.
         journalctl_type (str): String to search in the log. -t param for journalctl.
+        run_user (str, optional): user to run as. Defaults to root
 
     Returns:
         list: a list of dictionaries containing the following key/value pairs:
@@ -1236,7 +1237,8 @@ def get_journalctl(hosts, since, until, journalctl_type):
             "data":  data requested for the group of hosts
 
     """
-    command = get_journalctl_command(since, until, True, identifiers=journalctl_type)
+    system = run_user != getuser()
+    command = get_journalctl_command(since, until, system, identifiers=journalctl_type, run_user=run_user)
     err = "Error gathering system log events"
     return get_host_data(hosts=hosts, command=command, text="journalctl", error=err)
 
