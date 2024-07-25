@@ -7,6 +7,7 @@ import os
 import shlex
 import subprocess  # nosec
 import time
+from getpass import getuser
 from socket import gethostname
 
 from ClusterShell.NodeSet import NodeSet
@@ -73,10 +74,10 @@ class ResultData():
         return self.returncode == 0
 
 
-class RemoteCommandResult():
-    """Stores the command result from a Task object."""
+class CommandResult():
+    """Stores the command result from a Task or CompletedProcess object in a common format."""
 
-    def __init__(self, command, task):
+    def __init__(self):
         """Create a RemoteCommandResult object.
 
         Args:
@@ -84,7 +85,6 @@ class RemoteCommandResult():
             task (Task): object containing the results from an executed clush command
         """
         self.output = []
-        self._process_task(task, command)
 
     @property
     def homogeneous(self):
@@ -163,13 +163,50 @@ class RemoteCommandResult():
             stderr[str(data.hosts)] = '\n'.join(data.stderr)
         return stderr
 
-    def _process_task(self, task, command):
-        """Populate the output list and determine the passed result for the specified task.
+    def log_output(self, log):
+        """Log the command result.
 
         Args:
-            task (Task): a ClusterShell.Task.Task object for the executed command
-            command (str): the executed command
+            log (logger): logger for the messages produced by this method
+
         """
+        for data in self.output:
+            log_result_data(log, data)
+
+
+class LocalCommandResult(CommandResult):
+    """Stores the command result from a CompletedProcess object."""
+
+    def __init__(self, command, return_code, stdout, stderr, timeout):
+        """Create a RemoteCommandResult object.
+
+        Args:
+            command (str): command executed
+            return_code (int): executed command's return code
+            stdout (str): executed command's stdout
+            stderr (str): executed command's stderr
+            timed_out (bool) did the executed command time out
+        """
+        super().__init__()
+        local_host = gethostname().split(".")[0]
+        stdout = stdout.splitlines() if stdout is not None else []
+        stderr = stderr.splitlines() if stderr is not None else []
+        self.output.append(
+            ResultData(command, return_code, NodeSet(local_host), stdout, stderr, timeout))
+
+
+class RemoteCommandResult(CommandResult):
+    """Stores the command result from a Task object."""
+
+    def __init__(self, command, task):
+        """Create a RemoteCommandResult object.
+
+        Args:
+            command (str): command executed
+            task (Task): object containing the results from an executed clush command
+        """
+        super().__init__()
+
         # Get a dictionary of host list values for each unique return code key
         results = dict(task.iter_retcodes())
 
@@ -240,16 +277,6 @@ class RemoteCommandResult():
                 msg_tree_elem_list.append(line)
         return msg_tree_elem_list
 
-    def log_output(self, log):
-        """Log the command result.
-
-        Args:
-            log (logger): logger for the messages produced by this method
-
-        """
-        for data in self.output:
-            log_result_data(log, data)
-
 
 def log_result_data(log, data):
     """Log a single command result data entry.
@@ -289,7 +316,6 @@ def get_clush_command(hosts, args=None, command="", command_env=None, command_su
 
     Returns:
         str: the clush command
-
     """
     cmd_list = ["clush"]
     if args:
@@ -328,7 +354,6 @@ def run_local(log, command, capture_output=True, timeout=None, check=False, verb
                 - returncode
                 - stdout (only set if capture_output=True)
                 - stderr (not used; included in stdout)
-
     """
     local_host = gethostname().split(".")[0]
     kwargs = {"encoding": "utf-8", "shell": False, "check": check, "timeout": timeout}
@@ -381,6 +406,34 @@ def run_local(log, command, capture_output=True, timeout=None, check=False, verb
     return result
 
 
+def daos_env_str(env):
+    """Return a copy of an env including only daos-relevant variables.
+
+    TODO ideally should be under EnvironmentVariables but the imports are broken
+
+    Args:
+        enc (dict): the original env
+
+    Returns:
+        str: a copy of env env including only daos-relevant variables,
+             converted to an export str
+    """
+    def _include(key):
+        return key.startswith('FI_') or \
+               key.startswith('OFI_') or \
+               key.startswith('DAOS_') or \
+               key.startswith('D_') or \
+               key.startswith('CRT_') or \
+               key.startswith('DD_') or \
+               key in ('PATH', 'LD_LIBRARY_PATH')
+    export_str = ';'.join(
+        f'export {key}' if value is None else "export {}='{}'".format(key, value)
+        for key, value in env.items() if _include(key))
+    if export_str:
+        export_str = "".join([export_str, ';'])
+    return export_str
+
+
 def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False, stderr=False,
                fanout=None):
     """Run the command on the remote hosts.
@@ -400,7 +453,6 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False,
     Returns:
         RemoteCommandResult: a grouping of the command results from the same hosts with the same
             return status
-
     """
     task = task_self()
     task.set_info('debug', task_debug)
@@ -416,6 +468,8 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False,
             log.debug("Running on %s without a timeout: %s", hosts, command)
         else:
             log.debug("Running on %s with a %s second timeout: %s", hosts, timeout, command)
+    env_str = daos_env_str(os.environ)
+    command = f'{env_str}{command}'
     task.run(command=command, nodes=hosts, timeout=timeout)
     results = RemoteCommandResult(command, task)
     if verbose:
@@ -439,9 +493,8 @@ def command_as_user(command, user, env=None):
 
     Returns:
         str: command adjusted to run as another user
-
     """
-    if not user:
+    if not user or user == getuser():
         if not env:
             return command
         return " ".join([env.to_export_str(), command]).strip()
@@ -469,7 +522,6 @@ def find_command(source, pattern, depth, other=None):
 
     Returns:
         str: the find command
-
     """
     command = ["find", source, "-maxdepth", str(depth), "-type", "f", "-name", f"'{pattern}'"]
     if isinstance(other, list):
@@ -498,7 +550,6 @@ def stop_processes(log, hosts, pattern, verbose=True, timeout=60, exclude=None, 
             matching the pattern were initially detected and the second NodeSet indicates on which
             hosts the processes matching the pattern are still running (will be empty if every
             process was killed or no process matching the pattern were found).
-
     """
     processes_detected = NodeSet()
     processes_running = NodeSet()
@@ -544,3 +595,88 @@ def stop_processes(log, hosts, pattern, verbose=True, timeout=60, exclude=None, 
     if processes_running:
         log.debug("Processes still running on %s that match: %s", processes_running, pattern_match)
     return processes_detected, processes_running
+
+
+def __run_local(log, command, verbose=True, timeout=None):
+    """Run the command locally.
+
+    Eventually replace run_local() with this function and make it public.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        command (str): command from which to obtain the output
+        verbose (bool, optional): if set log the output of the command (capture_output must also be
+            set). Defaults to True.
+        timeout (int, optional): number of seconds to wait for the command to complete.
+            Defaults to None.
+
+    Returns:
+        LocalCommandResult: a grouping of the command results from the same hosts with the same
+            return status
+    """
+    local_host = NodeSet(gethostname().split(".")[0])
+    kwargs = {
+        "encoding": "utf-8",
+        "shell": False,
+        "check": False,
+        "timeout": timeout,
+        "stdout": subprocess.PIPE,
+        "stderr": subprocess.STDOUT,
+    }
+    if timeout and verbose:
+        log.debug("Running on %s with a %s timeout: %s", local_host, timeout, command)
+    elif verbose:
+        log.debug("Running on %s: %s", local_host, command)
+
+    try:
+        # pylint: disable=subprocess-run-check
+        task = subprocess.run(shlex.split(command), **kwargs)     # nosec
+        results = LocalCommandResult(command, task.returncode, task.stdout, task.stderr, False)
+
+    except subprocess.TimeoutExpired as error:
+        # Raised if command times out
+        results = LocalCommandResult(command, 124, error.stdout, error.stderr, True)
+
+    except Exception as error:  # pylint: disable=broad-except
+        # Catch all
+        results = LocalCommandResult(command, 255, None, str(error), False)
+
+    if verbose:
+        results.log_output(log)
+    else:
+        # Always log any failed commands
+        for data in results.output:
+            if not data.passed:
+                log_result_data(log, data)
+    return results
+
+
+def issue_command(log, command, hosts=None, verbose=True, timeout=None, task_debug=False,
+                  stderr=False, fanout=None):
+    """Issue the command locally or remote.
+
+    The command will be run locally if no hosts are specified or the only host specified is the
+    local host.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        command (str): command from which to obtain the output
+        hosts (NodeSet, optional): hosts on which to run the command. Defaults to None and runs
+            locally.
+        verbose (bool, optional): if set log the output of the command (capture_output must also be
+            set). Defaults to True.
+        timeout (int, optional): number of seconds to wait for the command to complete.
+            Defaults to None.
+        task_debug (bool, optional): whether to enable debug for the task object. Defaults to False.
+        stderr (bool, optional): whether to enable stdout/stderr separation. Defaults to False.
+        fanout (int, optional): fanout to use. Default uses the max of the
+            clush default (64) or available cores
+
+    Returns:
+        CommandResult: a grouping of the command results from the same hosts with the same return
+            status
+    """
+    local_host = NodeSet(gethostname().split(".")[0])
+    if hosts and hosts != local_host:
+        return run_remote(log, hosts, command, verbose, timeout, task_debug, stderr, fanout)
+    return __run_local(log, command, verbose, timeout)

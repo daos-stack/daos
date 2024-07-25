@@ -853,6 +853,10 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
         self.test_name + "_" + name + "_`hostname -s`_"
         "" + "${SLURM_JOB_ID}_" + "daos_dfuse.log")
     dfuse_env = f"export D_LOG_FILE_APPEND_PID=1;export D_LOG_MASK=ERR;export D_LOG_FILE={dfuselog}"
+    # TODO proper
+    _ld_library_path = os.environ.get("DAOS_TEST_SYSTEMD_LIBRARY_PATH")
+    if _ld_library_path:
+        dfuse_env += f"; export LD_LIBRARY_PATH={_ld_library_path}"
     module_load = f"module use {self.mpi_module_use};module load {self.mpi_module}"
 
     dfuse_start_cmds = [
@@ -948,7 +952,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None,
         for b_size, t_size, file_dir_oclass in product(bsize_list,
                                                        tsize_list,
                                                        oclass_list):
-            ior_cmd = IorCommand()
+            ior_cmd = IorCommand(self.test_env.log_dir)
             ior_cmd.namespace = ior_params
             ior_cmd.get_params(self)
             ior_cmd.max_duration.update(ior_timeout)
@@ -1127,7 +1131,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                                                                        depth_list,
                                                                        oclass_list):
             # Get the parameters for Mdtest
-            mdtest_cmd = MdtestCommand()
+            mdtest_cmd = MdtestCommand(self.test_env.log_dir)
             mdtest_cmd.namespace = mdtest_params
             mdtest_cmd.get_params(self)
             if api in ["POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
