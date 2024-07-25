@@ -7,8 +7,9 @@
 import os
 
 from apricot import TestWithServers
-from ClusterShell.NodeSet import NodeSet
-from dfuse_utils import WhiteListCmd, get_dfuse, start_dfuse
+from dfuse_utils import get_dfuse, start_dfuse
+from host_utils import get_local_host
+from run_utils import run_remote
 
 
 class ILWhiteList(TestWithServers):
@@ -16,31 +17,6 @@ class ILWhiteList(TestWithServers):
 
     :avocado: recursive
     """
-
-    def setUp(self):
-        """Set up each test case."""
-        # obtain separate logs
-        self.update_log_file_names()
-
-        # Start the servers and agents
-        super().setUp()
-
-    def _mount_dfuse(self):
-        """Mount a DFuse mount point.
-
-        Returns:
-            Dfuse: a Dfuse object
-        """
-        self.log.info("Creating DAOS pool")
-        pool = self.get_pool()
-
-        self.log.info("Creating DAOS container")
-        container = self.get_container(pool)
-
-        self.log.info("Mounting DFuse mount point")
-        dfuse = get_dfuse(self, self.hostlist_clients)
-        start_dfuse(self, dfuse, pool, container)
-        return dfuse
 
     def run_test(self, il_lib='libpil4dfs.so', bypass_all=False, bypass=False):
         """Jira ID: DAOS-15583.
@@ -50,25 +26,32 @@ class ILWhiteList(TestWithServers):
             Run whitelist_test.
             Check the number of daos_init() with interception library
         """
-        dfuse = self._mount_dfuse()
-        hostname = self.hostlist_clients[0]
-        host = NodeSet(hostname)
-        cmd = WhiteListCmd(host, self.prefix)
-
-        cmd.env['D_DFUSE_MNT'] = dfuse.mount_dir.value
-        cmd.env['D_LOG_MASK'] = 'DEBUG'
-        cmd.env['DD_SUBSYS'] = 'il'
-        cmd.env['DD_MASK'] = 'DEBUG'
-
         if il_lib is not None:
-            lib_dir = os.path.join(self.prefix, 'lib64', il_lib)
-            cmd.env['LD_PRELOAD'] = lib_dir
-        if bypass_all:
-            cmd.env['D_IL_BYPASS_ALL_LIST'] = 'whitelist_test'
-        if bypass:
-            cmd.env['D_IL_BYPASS_LIST'] = 'whitelist_test'
+            lib_path = os.path.join(self.prefix, "lib64", il_lib)
+            env_str = f"export LD_PRELOAD={lib_path}; "
+        else:
+            env_str = ""
+        exe_path = os.path.join(self.prefix, "lib", 'daos/TESTING/tests/whitelist_test')
 
-        result = cmd.run(raise_exception=True)
+        pool = self.get_pool(connect=False)
+        container = self.get_container(pool)
+
+        self.log_step('Starting dfuse')
+        dfuse_hosts = get_local_host()
+        dfuse = get_dfuse(self, dfuse_hosts)
+        start_dfuse(self, dfuse, pool, container)
+        fuse_root_dir = dfuse.mount_dir.value
+
+        env_str += f'export D_DFUSE_MNT={fuse_root_dir}; '
+        env_str += 'export D_LOG_MASK=DEBUG; export DD_SUBSYS=il; export DD_MASK=DEBUG; '
+
+        if bypass_all:
+            env_str += 'export D_IL_BYPASS_ALL_LIST=whitelist_test; '
+        if bypass:
+            env_str += 'export D_IL_BYPASS_LIST=whitelist_test; '
+
+        result = run_remote(self.log, dfuse_hosts, env_str + exe_path)
+        hostname = self.hostlist_servers[0]
         lines = result.all_stdout[hostname].split('\n')
         num_daos_init = 0
         for line in lines:
