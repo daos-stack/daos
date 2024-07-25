@@ -50,6 +50,7 @@ type fsCmd struct {
 	DfuseQuery     fsDfuseQueryCmd     `command:"query" description:"Query dfuse for memory usage"`
 	DfuseEvict     fsDfuseEvictCmd     `command:"evict" description:"Evict object from dfuse"`
 	Scan           fsScanCmd           `command:"scan" description:"Scan POSIX container and report statistics"`
+	Chmod          fsChmodCmd          `command:"chmod" description:"Change file mode bits"`
 }
 
 type fsCopyCmd struct {
@@ -283,6 +284,8 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 
 	var diroclassName [16]C.char
 	var fileoclassName [16]C.char
+	var oid C.daos_obj_id_t = attrs.doi_oid
+	var oidStr string = fmt.Sprintf("%d.%d", oid.hi, oid.lo)
 	if C.mode_is_dir(cmode) {
 		C.daos_oclass_id2name(attrs.doi_dir_oclass_id, &diroclassName[0])
 		C.daos_oclass_id2name(attrs.doi_file_oclass_id, &fileoclassName[0])
@@ -292,6 +295,7 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 		if C.mode_is_dir(cmode) {
 			jsonAttrs := struct {
 				ObjAttr struct {
+					OID      string `json:"oid"`
 					ObjClass string `json:"oclass"`
 				} `json:"object"`
 				DirAttr struct {
@@ -301,8 +305,10 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 				} `json:"directory"`
 			}{
 				ObjAttr: struct {
+					OID      string `json:"oid"`
 					ObjClass string `json:"oclass"`
 				}{
+					OID:      oidStr,
 					ObjClass: C.GoString(&oclassName[0]),
 				},
 				DirAttr: struct {
@@ -318,9 +324,11 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 			return cmd.OutputJSON(jsonAttrs, nil)
 		} else {
 			jsonAttrs := &struct {
+				OID       string `json:"oid"`
 				ObjClass  string `json:"oclass"`
 				ChunkSize uint64 `json:"chunk_size"`
 			}{
+				OID:       oidStr,
 				ObjClass:  C.GoString(&oclassName[0]),
 				ChunkSize: uint64(attrs.doi_chunk_size),
 			}
@@ -328,6 +336,7 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 		}
 	}
 
+	cmd.Infof("OID = %s", oidStr)
 	cmd.Infof("Object Class = %s", C.GoString(&oclassName[0]))
 	if C.mode_is_dir(cmode) {
 		cmd.Infof("Directory Creation Object Class = %s", C.GoString(&diroclassName[0]))
@@ -663,5 +672,33 @@ func (cmd *fsScanCmd) Execute(_ []string) error {
 	if err := dfsError(rc); err != nil {
 		return errors.Wrapf(err, "failed to scan")
 	}
+	return nil
+}
+
+type fsChmodCmd struct {
+	fsAttrCmd
+
+	ModeBits ModeBitsFlag `long:"mode" short:"m" description:"file mode in octal, e.g. 0755" required:"1"`
+}
+
+func (cmd *fsChmodCmd) Execute(_ []string) error {
+	ap, deallocCmdArgs, err := setupFSAttrCmd(&cmd.fsAttrCmd)
+	if err != nil {
+		return err
+	}
+	defer deallocCmdArgs()
+
+	ap.object_mode = cmd.ModeBits.Mode
+
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
+	if err != nil {
+		return errors.Wrapf(err, "failed to connect")
+	}
+	defer cleanup()
+
+	if err := dfsError(C.fs_chmod_hdlr(ap)); err != nil {
+		return errors.Wrapf(err, "chmod failed")
+	}
+
 	return nil
 }
