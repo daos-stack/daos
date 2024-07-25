@@ -51,7 +51,7 @@ class ILWhiteList(TestWithServers):
             env_str += 'export D_IL_BYPASS_LIST=whitelist_test; '
 
         result = run_remote(self.log, dfuse_hosts, env_str + exe_path)
-        output = list(result.all_stdout.values())[0]
+        output = "\n".join(result.all_stdout.values())
         lines = output.split('\n')
         num_daos_init = 0
         for line in lines:
