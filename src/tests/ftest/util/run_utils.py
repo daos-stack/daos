@@ -341,7 +341,7 @@ def run_local(log, command, verbose=True, timeout=None, task_debug=False, stderr
     return results
 
 
-def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False, stderr=False,
+def run_remote(log, hosts, command, verbose=True, timeout=None, task_debug=False, stderr=False,
                fanout=None):
     """Run the command on the remote hosts.
 
@@ -350,8 +350,8 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False,
         hosts (NodeSet): hosts on which to run the command
         command (str): command from which to obtain the output
         verbose (bool, optional): log the command output. Defaults to True.
-        timeout (int, optional): number of seconds to wait for the command to complete.
-            Defaults to 120 seconds.
+        timeout (int, optional): number of seconds to wait for the command to complete. Defaults to
+            None.
         task_debug (bool, optional): whether to enable debug for the task object. Defaults to False.
         stderr (bool, optional): whether to enable stdout/stderr separation. Defaults to False.
         fanout (int, optional): fanout to use. Default uses the max of the
