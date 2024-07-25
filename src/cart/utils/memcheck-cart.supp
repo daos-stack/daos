@@ -604,3 +604,50 @@
    ...
    fun:runtime.persistentalloc
 }
+{
+   go 1.22.3 race
+   Memcheck:Value8
+   fun:__tsan_write_pc
+   fun:racecall
+}
+{
+   go 1.22.3 race
+   Memcheck:Value8
+   fun:_ZN6__tsan18MemoryAccessRangeTILb0EEEvPNS_11ThreadStateEmmm
+   fun:racecall
+}
+{
+   go 1.22.3 race
+   Memcheck:Value8
+   fun:_ZN6__tsan24TraceRestartMemoryAccessEPNS_11ThreadStateEmmmm
+   fun:racecall
+}
+{
+   go 1.22.3 race
+   Memcheck:Value8
+   fun:__tsan_read
+   fun:racecall
+}
+{
+   go 1.22.3 race
+   Memcheck:Addr8
+   fun:racecallatomic
+}
+{
+   go 1.22.3 race
+   Memcheck:Param
+   read(buf)
+   fun:runtime/internal/syscall.Syscall6
+}
+{
+   go 1.22.3 race
+   Memcheck:Addr4
+   fun:__tsan_go_atomic32_load
+   fun:racecall
+}
+{
+   go 1.22.3 race
+   Memcheck:Addr4
+   fun:__tsan_go_atomic32_store
+   fun:racecall
+}

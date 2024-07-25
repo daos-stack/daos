@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -196,9 +196,9 @@ find_pool(void **state, daos_mgmt_pool_info_t *pool)
 }
 
 /* Verify pool info returned by DAOS API
- * rc_ret:	return code from dmg_list_pool()
- * npools_in:	npools input argument to dmg_list_pool()
- * npools_out:	npools output argument value after dmg_list_pool()
+ * rc_ret:	return code from daos_mgmt_list_pools()
+ * npools_in:	npools input argument to daos_mgmt_list_pools()
+ * npools_out:	npools output argument value after daos_mgmt_list_pools()
  */
 static void
 verify_pool_info(void **state, int rc_ret, daos_size_t npools_in,
@@ -256,13 +256,13 @@ list_pools_test(void **state)
 	/***** Test: retrieve number of pools in system *****/
 	npools = npools_orig = 0xABC0; /* Junk value (e.g., uninitialized) */
 	/* test only */
-	rc = dmg_pool_list(dmg_config_file, arg->group, &npools, NULL);
+	rc = daos_mgmt_list_pools(arg->group, &npools, NULL, NULL);
 	assert_rc_equal(rc, 0);
 	verify_pool_info(state, rc, npools_orig, NULL /* pools */, npools);
 	print_message("success t%d: output npools=%zu\n", tnum++,
 		lparg->nsyspools);
 
-	/* Setup for next 2 tests: alloc pools[] */
+	/* Setup for next test: alloc pools[] */
 	npools_alloc = lparg->nsyspools + 10;
 	D_ALLOC_ARRAY(pools, npools_alloc);
 	assert_ptr_not_equal(pools, NULL);
@@ -271,29 +271,18 @@ list_pools_test(void **state)
 	 * and that many items in pools[] filled
 	 *****/
 	npools = npools_alloc;
-	rc = dmg_pool_list(dmg_config_file, arg->group, &npools, pools);
+	rc     = daos_mgmt_list_pools(arg->group, &npools, pools, NULL);
 	assert_rc_equal(rc, 0);
 	verify_pool_info(state, rc, npools_alloc, pools, npools);
 	clean_pool_info(npools_alloc, pools);
 	print_message("success t%d: pools[] over-sized\n", tnum++);
 
-	/***** Test: provide npools=0, non-NULL pools  ****/
-	npools = 0;
-	rc = dmg_pool_list(dmg_config_file, arg->group, &npools, pools);
-	if (lparg->nsyspools > 0)
-		assert_rc_equal(rc, -DER_TRUNC);
-	else
-		assert_rc_equal(rc, 0);
-	assert_int_equal(npools, lparg->nsyspools);
-	print_message("success t%d: npools=0, non-NULL pools[] rc=%d\n",
-		      tnum++, rc);
-
-	/* Teardown for above 2 tests */
+	/* Teardown for above test */
 	D_FREE(pools);	/* clean_pool_info() freed mgpi_svc */
 	pools = NULL;
 
 	/***** Test: invalid npools=NULL *****/
-	rc = dmg_pool_list(dmg_config_file, arg->group, NULL, NULL);
+	rc = daos_mgmt_list_pools(arg->group, NULL, NULL, NULL);
 	assert_rc_equal(rc, -DER_INVAL);
 	print_message("success t%d: in &npools NULL, -DER_INVAL\n", tnum++);
 
@@ -308,7 +297,7 @@ list_pools_test(void **state)
 
 		/* Test: Exact size buffer */
 		npools = npools_alloc;
-		rc = dmg_pool_list(dmg_config_file, arg->group, &npools, pools);
+		rc     = daos_mgmt_list_pools(arg->group, &npools, pools, NULL);
 		assert_rc_equal(rc, 0);
 		verify_pool_info(state, rc, npools_alloc, pools, npools);
 
@@ -317,7 +306,7 @@ list_pools_test(void **state)
 		pools = NULL;
 		print_message("success t%d: pools[] exact length\n", tnum++);
 
-		/***** Test: Under-sized buffer (negative) -DER_TRUNC *****/
+		/***** Test: Under-sized buffer (negative) -DER_OVERFLOW *****/
 		/* Setup */
 		npools_alloc = lparg->nsyspools - 1;
 		D_ALLOC_ARRAY(pools, npools_alloc);
@@ -325,9 +314,8 @@ list_pools_test(void **state)
 
 		/* Test: Under-sized buffer */
 		npools = npools_alloc;
-		rc = dmg_pool_list(dmg_config_file, arg->group, &npools, pools);
-		assert_rc_equal(rc, -DER_TRUNC);
-		verify_pool_info(state, rc, npools_alloc, pools, npools);
+		rc     = daos_mgmt_list_pools(arg->group, &npools, pools, NULL);
+		assert_rc_equal(rc, -DER_OVERFLOW);
 		print_message("success t%d: pools[] under-sized\n", tnum++);
 
 		/* Teardown */
@@ -409,6 +397,9 @@ get_sys_info_test(void **state)
 	for (i = 0; i < info->dsi_nr_ranks; i++)
 		print_message("rank %u, uri: %s\n", info->dsi_ranks[i].dru_rank,
 			      info->dsi_ranks[i].dru_uri);
+	print_message("number of MS ranks: %d\n", info->dsi_nr_ms_ranks);
+	for (i = 0; i < info->dsi_nr_ms_ranks; i++)
+		print_message("rank %u\n", info->dsi_ms_ranks[i]);
 
 	daos_mgmt_put_sys_info(info);
 }
@@ -497,6 +488,45 @@ pool_destroy_disconnect_all(void **state)
 	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
 }
 
+/*
+ * pool_svc_rfcheck_ult shall exit when canceled during a pool destroy
+ * operation. Since it needs to create and destroy a pool, this pool test is
+ * added among the MGMT tests.
+ */
+static void
+pool_destroy_cancel_rfcheck(void **state)
+{
+	test_arg_t   *arg = *state;
+	uuid_t        uuid;
+	int           rc;
+
+	FAULT_INJECTION_REQUIRED();
+
+	if (arg->myrank != 0)
+		return;
+
+	/*
+	 * This will make the pool_svc_rfcheck_ult created during the pool
+	 * create operation loop until it's canceled by the pool destroy
+	 * operation.
+	 */
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_POOL_RFCHECK_FAIL | DAOS_FAIL_ALWAYS);
+
+	print_message("creating pool synchronously ... ");
+	rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL /* tgts */,
+			     256 * 1024 * 1024 /* minimal size */, 0 /* nvme size */,
+			     NULL /* prop */, arg->pool.svc, uuid);
+	assert_rc_equal(rc, 0);
+	print_message("success uuid = "DF_UUIDF"\n", DP_UUID(uuid));
+
+	print_message("destroying pool synchronously ... ");
+	rc = dmg_pool_destroy(dmg_config_file, uuid, arg->group, 1);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
+}
+
 static const struct CMUnitTest tests[] = {
 	{ "MGMT1: create/destroy pool on all tgts",
 	  pool_create_all, async_disable, test_case_teardown},
@@ -513,7 +543,9 @@ static const struct CMUnitTest tests[] = {
 	{ "MGMT7: create: PS steps down from UP_EMPTY",
 	  pool_create_steps_down_from_up_empty, async_disable, test_case_teardown},
 	{ "MGMT8: pool destroy disconnect all",
-	  pool_destroy_disconnect_all, async_disable, test_case_teardown}
+	  pool_destroy_disconnect_all, async_disable, test_case_teardown},
+	{ "MGMT9: pool destroy cancels rfcheck",
+	  pool_destroy_cancel_rfcheck, NULL, test_case_teardown}
 };
 
 static int

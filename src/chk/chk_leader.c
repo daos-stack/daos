@@ -2814,6 +2814,7 @@ chk_leader_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr, struct c
 	struct umem_attr	 uma = { 0 };
 	uuid_t			 dummy_pool = { 0 };
 	char			 uuid_str[DAOS_UUID_STR_SIZE];
+	uint64_t		 old_gen = cbk->cb_gen;
 	d_rank_t		 myrank = dss_self_rank();
 	uint32_t		 flags = api_flags;
 	int			 c_pool_nr = 0;
@@ -2968,14 +2969,6 @@ remote:
 
 out_stop_pools:
 	chk_pool_stop_all(ins, CHK__CHECK_POOL_STATUS__CPS_IMPLICATED, NULL);
-	if (cbk->cb_ins_status == CHK__CHECK_INST_STATUS__CIS_RUNNING) {
-		cbk->cb_time.ct_stop_time = time(NULL);
-		cbk->cb_ins_status = CHK__CHECK_INST_STATUS__CIS_FAILED;
-		rc1 = chk_bk_update_leader(cbk);
-		if (rc1 != 0)
-			D_WARN(DF_LEADER" failed to update leader bookmark: "DF_RC"\n",
-			       DP_LEADER(ins), DP_RC(rc1));
-	}
 out_stop_remote:
 	rc1 = chk_stop_remote(ins->ci_ranks, cbk->cb_gen, c_pool_nr, c_pools, NULL, NULL);
 	if (rc1 < 0)
@@ -2984,6 +2977,17 @@ out_stop_remote:
 out_iv:
 	chk_iv_ns_cleanup(&ins->ci_iv_ns);
 out_group:
+	if (cbk->cb_ins_status == CHK__CHECK_INST_STATUS__CIS_RUNNING || cbk->cb_gen != old_gen) {
+		cbk->cb_gen = old_gen;
+		if (cbk->cb_ins_status == CHK__CHECK_INST_STATUS__CIS_RUNNING) {
+			cbk->cb_time.ct_stop_time = time(NULL);
+			cbk->cb_ins_status = CHK__CHECK_INST_STATUS__CIS_FAILED;
+		}
+		rc1 = chk_bk_update_leader(cbk);
+		if (rc1 != 0)
+			D_WARN(DF_LEADER" failed to update leader bookmark: "DF_RC"\n",
+			       DP_LEADER(ins), DP_RC(rc1));
+	}
 	crt_group_secondary_destroy(ins->ci_iv_group);
 	ins->ci_iv_group = NULL;
 out_tree:
