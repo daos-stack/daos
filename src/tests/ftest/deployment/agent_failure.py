@@ -122,7 +122,7 @@ class AgentFailure(IorTestBase):
         # 5. Verify journalctl shows the log that the agent is stopped.
         results = get_journalctl(
             hosts=self.hostlist_clients, since=since, until=until,
-            journalctl_type="daos_agent")
+            journalctl_type="daos_agent", run_user=self.test_env.agent_user)
         self.log.info("journalctl results = %s", results)
         if "shutting down" not in results[0]["data"]:
             msg = "Agent shut down message not found in journalctl! Output = {}".format(
@@ -240,7 +240,7 @@ class AgentFailure(IorTestBase):
         # stopped.
         results = get_journalctl(
             hosts=[agent_host_kill], since=since, until=until,
-            journalctl_type="daos_agent")
+            journalctl_type="daos_agent", run_user=self.test_env.agent_user)
         self.log.info("journalctl results (kill) = %s", results)
         if "shutting down" not in results[0]["data"]:
             msg = ("Agent shut down message not found in journalctl on killed client! "
@@ -251,7 +251,7 @@ class AgentFailure(IorTestBase):
         # in the previous step doesn't show that the agent is stopped.
         results = get_journalctl(
             hosts=[agent_host_keep], since=since, until=until,
-            journalctl_type="daos_agent")
+            journalctl_type="daos_agent", run_user=self.test_env.agent_user)
         self.log.info("journalctl results (keep) = %s", results)
         if "shutting down" in results[0]["data"]:
             msg = ("Agent shut down message found in journalctl on keep client! "
