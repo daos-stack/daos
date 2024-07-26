@@ -300,3 +300,51 @@ func (f *ModeBitsFlag) UnmarshalFlag(fv string) error {
 
 	return nil
 }
+
+type UserIdFlag struct {
+	Set bool
+	Id  C.uid_t
+}
+
+func (f *UserIdFlag) UnmarshalFlag(fv string) error {
+	if fv == "" {
+		return errors.New("empty user id flag")
+	}
+
+	uid, err := strconv.ParseInt(fv, 10, 32)
+	if err != nil {
+		return errors.Errorf("invalid user id: %q", fv)
+	}
+	if uid < 0 {
+		return errors.Errorf("invalid user id: %q", fv)
+	}
+
+	f.Set = true
+	f.Id = C.uid_t(uid)
+
+	return nil
+}
+
+type GroupIdFlag struct {
+	Set bool
+	Id  C.gid_t
+}
+
+func (f *GroupIdFlag) UnmarshalFlag(fv string) error {
+	if fv == "" {
+		return errors.New("empty group id flag")
+	}
+
+	gid, err := strconv.ParseInt(fv, 10, 32)
+	if err != nil {
+		return errors.Errorf("invalid group id: %q", fv)
+	}
+	if gid < 0 {
+		return errors.Errorf("invalid group id: %q", fv)
+	}
+
+	f.Set = true
+	f.Id = C.gid_t(gid)
+
+	return nil
+}
