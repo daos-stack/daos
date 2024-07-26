@@ -1,0 +1,4 @@
+hosts:
+  test_clients: 1
+
+timeout: 15

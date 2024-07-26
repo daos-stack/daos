@@ -24,10 +24,25 @@
 #include <search.h>
 #include <sys/mman.h>
 
+#include <gurt/atomic.h>
 #include <daos/common.h>
 #include <daos_srv/daos_engine.h>
 #include <daos/daos_abt.h>
 #include <daos/ult_stack_mmap.h>
+
+/**
+ * Minimum value for vm.max_map_count to allow for mmap()'ed ULT stacks usage.  Equal to the
+ * linux kernel's default value DEFAULT_MAX_MAP_COUNT.
+ */
+#define MIN_SYS_MAP_CT          65530
+/** Maximum percentage of allocated ULT stacks */
+#define MAX_ULT_STACK_PCT       50
+/** Maximum percentage of free ULT stacks */
+#define MAX_FREE_ULT_STACK_PCT  25
+/** Minimum number of free ULT stacks before triggering GC */
+#define MIN_FREE_ULT_STACK_CT   256
+/** Number of ULT stack to deallocate per GC iteration */
+#define GC_ULT_STACK_IT         64
 
 #define MMAP_ULT_STACK_PROT     PROT_READ | PROT_WRITE
 #define MMAP_ULT_STACK_FLAGS    MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE
@@ -55,27 +70,43 @@ enum thread_create_flags {
 /** Pool of mmap ULT free stack */
 struct stack_mmap_pool {
 	/** Binary tree holding list of ULT stacks */
-	void      *smp_rec_btree;
+	void           *smp_rec_btree;
 	/** Lock protecting the binary tree smp_rec_btree */
-	ABT_rwlock smp_rec_btree_rwlock;
+	ABT_rwlock      smp_rec_btree_rwlock;
 	/** ABT_key used for calling the callback free_mmap_cb() */
-	ABT_key    smp_free_mmap_key;
+	ABT_key         smp_free_mmap_key;
 	/** ABT thread default stack size */
-	size_t     smp_thread_stack_size;
+	size_t          smp_thread_stack_size;
 	/** Size of memory page */
-	size_t     smp_page_size;
+	size_t          smp_page_size;
+	/** Maximum number of memory map areas a process may have */
+	uint32_t        smp_max_stack_count;
+	/** Number of allocated stacks */
+	ATOMIC uint32_t smp_stack_count;
+	/** Number of free stacks */
+	ATOMIC uint32_t smp_free_stack_count;
+	/** True iff one ULT is running a free stack GC */
+	atomic_flag     smp_gc_running;
+	/** Entry head of the list of record containing one or more free stacks */
+	d_list_t        smp_gc_list;
+	/** Mutex protecting access to the list of record */
+	ABT_mutex       smp_gc_list_mutex;
 };
 
 /** Record of a btree holding a list of mmap ULT free stack with a given size */
 struct stack_mmap_rec {
 	/** List of free stacks */
-	d_list_t  smr_desc_list;
+	d_list_t        smr_desc_list;
 	/** Mutex protecting the list of available stack */
-	ABT_mutex smr_desc_list_mutex;
+	ABT_mutex       smr_desc_list_mutex;
+	/** Number of free stacks */
+	ATOMIC uint32_t smr_desc_list_count;
 	/** Size of the ULT mmap()'ed stack size */
-	size_t    smr_stack_size;
+	size_t          smr_stack_size;
 	/** Size of the mmap */
-	size_t    smr_mmap_size;
+	size_t          smr_mmap_size;
+	/** Entry in the list of record containing one or more free stacks */
+	d_list_t        smr_gc_list_entry;
 };
 
 /**
@@ -97,7 +128,7 @@ struct stack_mmap_desc {
 	/** Btree record holding this stack */
 	struct stack_mmap_rec *smd_rec;
 	/** Entry in the list of available mmap()'ed stack */
-	d_list_t               smd_entry;
+	d_list_t               smd_desc_list_entry;
 } __attribute__((aligned(sizeof(max_align_t))));
 
 /** Arguments of the thread_create_common() function */
@@ -123,6 +154,33 @@ struct thread_args {
 /** Pool of ULT mmap()'ed stack */
 static struct stack_mmap_pool g_smp = {0};
 
+static int
+get_max_map_count(uint32_t *count)
+{
+	FILE    *fp;
+	uint32_t tmp;
+	int      rc;
+
+	fp = fopen("/proc/sys/vm/max_map_count", "r");
+	if (fp == NULL) {
+		rc = errno;
+		DS_ERROR(rc, "Unable to open /proc/sys/vm/max_map_count");
+		D_GOTO(out, rc = d_errno2der(rc));
+	}
+
+	rc = fscanf(fp, "%" SCNu32, &tmp);
+	if (rc == EOF) {
+		rc = errno;
+		DS_ERROR(rc, "Unable to read vm.max_map_count value");
+		D_GOTO(out, rc = d_errno2der(rc));
+	}
+
+	*count = tmp;
+	rc     = -DER_SUCCESS;
+out:
+	return rc;
+}
+
 static inline size_t
 stack_size2mmap_size(size_t stack_size)
 {
@@ -138,6 +196,154 @@ stack_mmap_rec_cmp(const void *arg1, const void *arg2)
 	return rec1->smr_stack_size - rec2->smr_stack_size;
 }
 
+inline static void
+abt_mutex_lock(ABT_mutex mutex)
+{
+	int rc;
+
+	rc = ABT_mutex_lock(mutex);
+	D_ASSERT(rc == ABT_SUCCESS);
+}
+
+inline static void
+abt_mutex_unlock(ABT_mutex mutex)
+{
+	int rc;
+
+	rc = ABT_mutex_unlock(mutex);
+	D_ASSERT(rc == ABT_SUCCESS);
+}
+
+inline static void
+abt_rwlock_rdlock(ABT_rwlock lock)
+{
+	int rc;
+
+	rc = ABT_rwlock_rdlock(lock);
+	D_ASSERT(rc == ABT_SUCCESS);
+}
+
+inline static void
+abt_rwlock_wrlock(ABT_rwlock lock)
+{
+	int rc;
+
+	rc = ABT_rwlock_wrlock(lock);
+	D_ASSERT(rc == ABT_SUCCESS);
+}
+
+inline static void
+abt_rwlock_unlock(ABT_rwlock lock)
+{
+	int rc;
+
+	rc = ABT_rwlock_unlock(lock);
+	D_ASSERT(rc == ABT_SUCCESS);
+}
+
+inline static void
+free_desc(struct stack_mmap_desc *desc)
+{
+	int rc;
+
+	rc = munmap(desc->smd_guard_page, g_smp.smp_page_size);
+	if (unlikely(rc != 0))
+		DS_ERROR(errno,
+			 "Failed to unmap ULT stack guard page at %p: desc=%p, "
+			 "mmap_size=%zu, stack_size=%zu, page_size=%zu",
+			 desc->smd_guard_page, desc, desc->smd_rec->smr_mmap_size,
+			 desc->smd_rec->smr_stack_size, g_smp.smp_page_size);
+
+	rc = munmap(desc->smd_thread_stack, desc->smd_rec->smr_mmap_size);
+	if (unlikely(rc != 0))
+		DS_ERROR(errno,
+			 "Failed to unmap ULT stack at %p: desc=%p, mmap_size=%zu, stack_size=%zu",
+			 desc->smd_thread_stack, desc, desc->smd_rec->smr_mmap_size,
+			 desc->smd_rec->smr_stack_size);
+
+	atomic_fetch_sub_relaxed(&g_smp.smp_free_stack_count, 1);
+	atomic_fetch_sub_relaxed(&g_smp.smp_stack_count, 1);
+}
+
+static void
+gc_reclaim(void)
+{
+	uint32_t               stack_count;
+	uint32_t               free_stack_count;
+	uint32_t               idx;
+	struct stack_mmap_rec *rec;
+
+	if (atomic_flag_test_and_set(&g_smp.smp_gc_running))
+		return;
+
+	free_stack_count = atomic_load_relaxed(&g_smp.smp_free_stack_count);
+	if (free_stack_count < MIN_FREE_ULT_STACK_CT)
+		goto out;
+
+	stack_count = atomic_load_relaxed(&g_smp.smp_stack_count);
+	if (free_stack_count * 100 / stack_count < MAX_FREE_ULT_STACK_PCT &&
+	    stack_count < g_smp.smp_max_stack_count)
+		goto out;
+
+	rec = NULL;
+	abt_mutex_lock(g_smp.smp_gc_list_mutex);
+	if (!d_list_empty(&g_smp.smp_gc_list))
+		rec =
+		    d_list_entry(g_smp.smp_gc_list.next, struct stack_mmap_rec, smr_gc_list_entry);
+	abt_mutex_unlock(g_smp.smp_gc_list_mutex);
+	if (unlikely(rec == NULL))
+		goto out;
+
+	D_DEBUG(DB_MEM,
+		"Start GC reclaim with record %p (stack size=%zu): stack_count=%" PRIu32
+		", free_stack_count=%" PRIu32 "\n",
+		rec, rec->smr_stack_size, stack_count, free_stack_count);
+	for (idx = 0; idx < GC_ULT_STACK_IT; ++idx) {
+		struct stack_mmap_desc *desc;
+
+		abt_mutex_lock(rec->smr_desc_list_mutex);
+		desc = d_list_pop_entry(&rec->smr_desc_list, struct stack_mmap_desc,
+					smd_desc_list_entry);
+		if (desc == NULL) {
+			D_ASSERT(atomic_load(&rec->smr_desc_list_count) == 0);
+			abt_mutex_unlock(rec->smr_desc_list_mutex);
+			break;
+		}
+		D_ASSERT(atomic_load(&rec->smr_desc_list_count) > 0);
+
+		if (atomic_fetch_sub(&rec->smr_desc_list_count, 1) == 1) {
+			D_DEBUG(DB_MEM, "Remove record %p (stack size %zu) from GC list\n", rec,
+				rec->smr_stack_size);
+
+			abt_mutex_lock(g_smp.smp_gc_list_mutex);
+			d_list_del(&rec->smr_gc_list_entry);
+			abt_mutex_unlock(g_smp.smp_gc_list_mutex);
+		}
+		abt_mutex_unlock(rec->smr_desc_list_mutex);
+
+		D_DEBUG(DB_MEM, "Remove stack %p of record %p (stack size %zu)\n", desc, rec,
+			rec->smr_stack_size);
+		free_desc(desc);
+	}
+
+	abt_mutex_lock(rec->smr_desc_list_mutex);
+	if (!d_list_empty(&rec->smr_desc_list)) {
+		D_DEBUG(DB_MEM, "Move record %p (stack size %zu) at the end of the GC list\n", rec,
+			rec->smr_stack_size);
+
+		D_ASSERT(atomic_load(&rec->smr_desc_list_count) > 0);
+		abt_mutex_lock(g_smp.smp_gc_list_mutex);
+		d_list_move_tail(&rec->smr_gc_list_entry, &g_smp.smp_gc_list);
+		abt_mutex_unlock(g_smp.smp_gc_list_mutex);
+	}
+	abt_mutex_unlock(rec->smr_desc_list_mutex);
+
+	D_DEBUG(DB_MEM, "End of GC reclaim with record %p (stack size %zu)\n", rec,
+		rec->smr_stack_size);
+out:
+	atomic_flag_clear(&g_smp.smp_gc_running);
+}
+
 static void
 free_mmap_cb(void *arg)
 {
@@ -151,13 +357,24 @@ free_mmap_cb(void *arg)
 	rc = ABT_thread_attr_free(&desc->smd_thread_attr);
 	D_ASSERT(rc == ABT_SUCCESS);
 
-	rc = ABT_mutex_lock(rec->smr_desc_list_mutex);
-	D_ASSERT(rc == ABT_SUCCESS);
-	d_list_add_tail(&desc->smd_entry, &rec->smr_desc_list);
-	rc = ABT_mutex_unlock(rec->smr_desc_list_mutex);
-	D_ASSERT(rc == ABT_SUCCESS);
-	D_DEBUG(DB_MEM, "Recycling stack %p (desc %p) of size %zu\n", desc->smd_thread_stack, desc,
+	abt_mutex_lock(rec->smr_desc_list_mutex);
+	d_list_add_tail(&desc->smd_desc_list_entry, &rec->smr_desc_list);
+	if (atomic_fetch_add(&rec->smr_desc_list_count, 1) == 0) {
+		D_DEBUG(DB_MEM, "Add record %p (stack size %zu) to GC list\n", rec,
+			rec->smr_stack_size);
+
+		abt_mutex_lock(g_smp.smp_gc_list_mutex);
+		d_list_add_tail(&rec->smr_gc_list_entry, &g_smp.smp_gc_list);
+		abt_mutex_unlock(g_smp.smp_gc_list_mutex);
+	}
+	abt_mutex_unlock(rec->smr_desc_list_mutex);
+
+	atomic_fetch_add_relaxed(&g_smp.smp_free_stack_count, 1);
+
+	D_DEBUG(DB_MEM, "Recycled stack %p (desc %p) of size %zu\n", desc->smd_thread_stack, desc,
 		desc->smd_rec->smr_stack_size);
+
+	gc_reclaim();
 }
 
 static void
@@ -183,43 +400,38 @@ bt_node_destroy_cb(void *node)
 	struct stack_mmap_desc *desc;
 
 	rec = (struct stack_mmap_rec *)node;
-	while ((desc = d_list_pop_entry(&rec->smr_desc_list, struct stack_mmap_desc, smd_entry)) !=
-	       NULL) {
-		int rc;
+	D_DEBUG(DB_MEM, "Destroy of the record %p (stack size %zu)\n", rec, rec->smr_stack_size);
+	while ((desc = d_list_pop_entry(&rec->smr_desc_list, struct stack_mmap_desc,
+					smd_desc_list_entry)) != NULL) {
+		D_ASSERT(atomic_load(&rec->smr_desc_list_count) > 0);
+		atomic_fetch_sub(&rec->smr_desc_list_count, 1);
 
-		rc = munmap(desc->smd_guard_page, g_smp.smp_page_size);
-		if (unlikely(rc != 0))
-			DS_ERROR(errno,
-				 "Failed to unmap ULT stack guard page at %p: desc=%p, "
-				 "mmap_size=%zu, stack_size=%zu, page_size=%zu",
-				 desc->smd_guard_page, desc, desc->smd_rec->smr_mmap_size,
-				 desc->smd_rec->smr_stack_size, g_smp.smp_page_size);
-
-		rc = munmap(desc->smd_thread_stack, desc->smd_rec->smr_mmap_size);
-		if (unlikely(rc != 0))
-			DS_ERROR(errno,
-				 "Failed to unmap ULT stack at %p: desc=%p, mmap_size=%zu, "
-				 "stack_size=%zu",
-				 desc->smd_thread_stack, desc, desc->smd_rec->smr_mmap_size,
-				 desc->smd_rec->smr_stack_size);
+		D_DEBUG(DB_MEM, "Destroy stack %p of record %p (stack size %zu)\n", desc, rec,
+			rec->smr_stack_size);
+		free_desc(desc);
 	}
+	D_ASSERT(atomic_load(&rec->smr_desc_list_count) == 0);
+	D_ASSERT(atomic_load(&g_smp.smp_free_stack_count) == 0);
+
 	ABT_mutex_free(&rec->smr_desc_list_mutex);
 	D_FREE(rec);
+
+	if (atomic_load(&g_smp.smp_stack_count) != 0)
+		D_WARN("Memory leak detected: %" PRIu32 " ULT mmap stacks not free\n",
+		       atomic_load(&g_smp.smp_stack_count));
 };
 
 static int
-smd_find_insert_rec(size_t stack_size, struct stack_mmap_rec **rec)
+find_insert_rec(size_t stack_size, struct stack_mmap_rec **rec)
 {
 	struct stack_mmap_rec  bt_key  = {.smr_stack_size = stack_size};
 	struct stack_mmap_rec *rec_tmp = NULL;
 	void                  *tmp;
 	int                    rc;
 
-	rc = ABT_rwlock_rdlock(g_smp.smp_rec_btree_rwlock);
-	D_ASSERT(rc == ABT_SUCCESS);
+	abt_rwlock_rdlock(g_smp.smp_rec_btree_rwlock);
 	tmp = tfind((void *)&bt_key, &g_smp.smp_rec_btree, stack_mmap_rec_cmp);
-	rc  = ABT_rwlock_unlock(g_smp.smp_rec_btree_rwlock);
-	D_ASSERT(rc == ABT_SUCCESS);
+	abt_rwlock_unlock(g_smp.smp_rec_btree_rwlock);
 	if (tmp != NULL) {
 		*rec = *(struct stack_mmap_rec **)tmp;
 		D_GOTO(out, rc = -DER_SUCCESS);
@@ -231,18 +443,18 @@ smd_find_insert_rec(size_t stack_size, struct stack_mmap_rec **rec)
 
 	rec_tmp->smr_stack_size = stack_size;
 	rec_tmp->smr_mmap_size  = stack_size2mmap_size(stack_size);
+	D_INIT_LIST_HEAD(&rec_tmp->smr_gc_list_entry);
 	D_INIT_LIST_HEAD(&rec_tmp->smr_desc_list);
+	atomic_init(&rec_tmp->smr_desc_list_count, 0);
 	rc = ABT_mutex_create(&rec_tmp->smr_desc_list_mutex);
 	if (unlikely(rc != ABT_SUCCESS)) {
 		D_ERROR("Failed to create ABT mutex: " AF_RC "\n", AP_RC(rc));
 		D_GOTO(error_rec_tmp, rc = dss_abterr2der(rc));
 	}
 
-	rc = ABT_rwlock_wrlock(g_smp.smp_rec_btree_rwlock);
-	D_ASSERT(rc == ABT_SUCCESS);
+	abt_rwlock_wrlock(g_smp.smp_rec_btree_rwlock);
 	tmp = (struct stack_mmap_rec *)tsearch(rec_tmp, &g_smp.smp_rec_btree, stack_mmap_rec_cmp);
-	rc  = ABT_rwlock_unlock(g_smp.smp_rec_btree_rwlock);
-	D_ASSERT(rc == ABT_SUCCESS);
+	abt_rwlock_unlock(g_smp.smp_rec_btree_rwlock);
 
 	if (unlikely(tmp == NULL)) {
 		DL_ERROR(-DER_NOMEM, "Failed to create new btree node");
@@ -269,29 +481,42 @@ out:
 }
 
 static int
-smd_find_insert_desc(size_t stack_size, struct stack_mmap_desc **desc)
+find_insert_desc(size_t stack_size, struct stack_mmap_desc **desc)
 {
 	struct stack_mmap_rec  *rec;
-	struct stack_mmap_desc *tmp;
-	void                   *guard_page = NULL;
+	struct stack_mmap_desc *desc_tmp;
+	void                   *guard_page;
 	void                   *buf;
 	size_t                  buf_size;
 	int                     rc;
 
-	rc = smd_find_insert_rec(stack_size, &rec);
+	rc = find_insert_rec(stack_size, &rec);
 	if (unlikely(rc != 0))
 		D_GOTO(out, rc);
 
-	rc = ABT_mutex_lock(rec->smr_desc_list_mutex);
-	D_ASSERT(rc == ABT_SUCCESS);
-	tmp = d_list_pop_entry(&rec->smr_desc_list, struct stack_mmap_desc, smd_entry);
-	rc  = ABT_mutex_unlock(rec->smr_desc_list_mutex);
-	D_ASSERT(rc == ABT_SUCCESS);
+	abt_mutex_lock(rec->smr_desc_list_mutex);
+	desc_tmp =
+	    d_list_pop_entry(&rec->smr_desc_list, struct stack_mmap_desc, smd_desc_list_entry);
+	if (desc_tmp != NULL) {
+		D_ASSERT(atomic_load(&rec->smr_desc_list_count) > 0);
 
-	if (tmp != NULL) {
+		if (atomic_fetch_sub(&rec->smr_desc_list_count, 1) == 1) {
+			D_DEBUG(DB_MEM, "Remove record %p (stack size %zu) from GC list\n", rec,
+				rec->smr_stack_size);
+
+			abt_mutex_lock(g_smp.smp_gc_list_mutex);
+			d_list_del(&rec->smr_gc_list_entry);
+			abt_mutex_unlock(g_smp.smp_gc_list_mutex);
+		}
+	}
+	D_ASSERT(atomic_load(&rec->smr_desc_list_count) == 0);
+	abt_mutex_unlock(rec->smr_desc_list_mutex);
+
+	if (desc_tmp != NULL) {
+		atomic_fetch_sub_relaxed(&g_smp.smp_free_stack_count, 1);
+		*desc = desc_tmp;
 		D_DEBUG(DB_MEM, "Reuse recycled stack %p (desc %p) of size %zu\n",
-			tmp->smd_thread_stack, tmp, stack_size);
-		*desc = tmp;
+			(*desc)->smd_thread_stack, *desc, stack_size);
 		D_GOTO(out, rc = -DER_SUCCESS);
 	}
 
@@ -304,7 +529,7 @@ smd_find_insert_desc(size_t stack_size, struct stack_mmap_desc **desc)
 			 rec->smr_mmap_size);
 		D_GOTO(out, rc);
 	}
-	D_DEBUG(DB_MEM, "Reserved mmap()'ed stack at %p (mmap size %zu)\n", buf, buf_size);
+	D_DEBUG(DB_MEM, "Reserve mmap stack at %p (mmap size %zu)\n", buf, buf_size);
 
 	guard_page = mmap(buf, g_smp.smp_page_size, MMAP_GUARD_PAGE_PROT, MMAP_GUARD_PAGE_FLAGS,
 			  MMAP_GUARD_PAGE_FD, MMAP_GUARD_PAGE_OFFSET);
@@ -329,16 +554,18 @@ smd_find_insert_desc(size_t stack_size, struct stack_mmap_desc **desc)
 		D_GOTO(error_guard_page, rc);
 	}
 	D_ASSERT((char *)guard_page + g_smp.smp_page_size == buf);
-	D_DEBUG(DB_MEM, "Remap mmap()'ed stack at %p (mmap size %zu)\n", buf, buf_size);
+	D_DEBUG(DB_MEM, "Remap mmap stack at %p (mmap size %zu)\n", buf, buf_size);
 
-	tmp = (struct stack_mmap_desc *)(buf + rec->smr_mmap_size - sizeof(struct stack_mmap_desc));
-	tmp->smd_rec          = rec;
-	tmp->smd_thread_stack = buf;
-	tmp->smd_guard_page   = guard_page;
-	D_INIT_LIST_HEAD(&tmp->smd_entry);
+	desc_tmp =
+	    (struct stack_mmap_desc *)(buf + rec->smr_mmap_size - sizeof(struct stack_mmap_desc));
+	desc_tmp->smd_rec          = rec;
+	desc_tmp->smd_thread_stack = buf;
+	desc_tmp->smd_guard_page   = guard_page;
+	D_INIT_LIST_HEAD(&desc_tmp->smd_desc_list_entry);
 
-	*desc = tmp;
-	D_DEBUG(DB_MEM, "Created new mmap()'ed stack %p (desc %p) of size %zu (mmap size %zu)\n",
+	atomic_fetch_add_relaxed(&g_smp.smp_stack_count, 1);
+	*desc = desc_tmp;
+	D_DEBUG(DB_MEM, "Create new mmap stack %p (desc %p) of size %zu (mmap size %zu)\n",
 		(*desc)->smd_thread_stack, *desc, rec->smr_stack_size, rec->smr_mmap_size);
 	D_GOTO(out, rc = -DER_SUCCESS);
 
@@ -410,7 +637,7 @@ thread_create_common(struct thread_args *args)
 		D_GOTO(out, rc);
 	}
 
-	rc = smd_find_insert_desc(stack_size, &desc);
+	rc = find_insert_desc(stack_size, &desc);
 	if (unlikely(rc != 0)) {
 		DL_ERROR(rc, "Not using mmap stack ULT: Failed to find/create stack of size %zu",
 			 stack_size);
@@ -481,15 +708,25 @@ out:
 int
 usm_initialize(void)
 {
-	int rc;
+	uint32_t max_map_count = 0;
+	int      rc;
 
-	g_smp.smp_rec_btree = NULL;
-	g_smp.smp_page_size = (size_t)getpagesize();
+	rc = get_max_map_count(&max_map_count);
+	if (rc != 0) {
+		DL_ERROR(rc, "Init of ULT mmap stack allocation failed");
+		D_GOTO(out, rc = dss_der2abterr(rc));
+	}
+	if (max_map_count < MIN_SYS_MAP_CT) {
+		D_ERROR("Init of ULT mmap stack allocation failed: Number of memory map area "
+			"available per process (%" PRIu32 ") is too low (< %" PRIu32 ")\n",
+			max_map_count, MIN_SYS_MAP_CT);
+		D_GOTO(out, rc = ABT_ERR_MEM);
+	}
 
 	rc = ABT_info_query_config(ABT_INFO_QUERY_KIND_DEFAULT_THREAD_STACKSIZE,
 				   &g_smp.smp_thread_stack_size);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("Init of ULT mmap()'ed stack allocation failed: "
+		D_ERROR("Init of ULT mmap stack allocation failed: "
 			"Unable to retrieve default ULT stack size: " AF_RC "\n",
 			AP_RC(rc));
 		D_GOTO(out, rc);
@@ -497,7 +734,7 @@ usm_initialize(void)
 
 	rc = ABT_key_create(free_mmap_cb, &g_smp.smp_free_mmap_key);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("Init of ULT mmap()'ed stack allocation failed: "
+		D_ERROR("Init of ULT mmap stack allocation failed: "
 			"Creation of ABT key for calling free_mmap_cb() failed: " AF_RC "\n",
 			AP_RC(rc));
 		D_GOTO(out, rc);
@@ -505,14 +742,32 @@ usm_initialize(void)
 
 	rc = ABT_rwlock_create(&g_smp.smp_rec_btree_rwlock);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("Init of ULT mmap()'ed stack allocation failed: "
+		D_ERROR("Init of ULT mmap stack allocation failed: "
 			"Creation of btree's ABT lock failed: " AF_RC "\n",
 			AP_RC(rc));
 		D_GOTO(error_key, rc);
 	}
 
+	rc = ABT_mutex_create(&g_smp.smp_gc_list_mutex);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("Init of ULT mmap stack allocation failed: "
+			"Creation of GC mutex of ULT stack failed: " AF_RC "\n",
+			AP_RC(rc));
+		D_GOTO(error_rwlock, rc);
+	}
+
+	g_smp.smp_rec_btree       = NULL;
+	g_smp.smp_page_size       = (size_t)getpagesize();
+	g_smp.smp_max_stack_count = max_map_count * MAX_ULT_STACK_PCT / 100;
+	atomic_init(&g_smp.smp_stack_count, 0);
+	atomic_init(&g_smp.smp_free_stack_count, 0);
+	atomic_flag_clear(&g_smp.smp_gc_running);
+	D_INIT_LIST_HEAD(&g_smp.smp_gc_list);
+
 	D_GOTO(out, rc = ABT_SUCCESS);
 
+error_rwlock:
+	ABT_rwlock_free(&g_smp.smp_rec_btree_rwlock);
 error_key:
 	ABT_key_free(&g_smp.smp_free_mmap_key);
 out:
@@ -522,6 +777,7 @@ out:
 void
 usm_finalize(void)
 {
+	ABT_mutex_free(&g_smp.smp_gc_list_mutex);
 	ABT_rwlock_free(&g_smp.smp_rec_btree_rwlock);
 	ABT_key_free(&g_smp.smp_free_mmap_key);
 	tdestroy(g_smp.smp_rec_btree, bt_node_destroy_cb);

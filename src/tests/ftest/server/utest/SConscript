@@ -1,0 +1,28 @@
+# /*
+#  * (C) Copyright 2024 Intel Corporation.
+#  *
+#  * SPDX-License-Identifier: BSD-2-Clause-Patent
+# */
+"""Build server tests"""
+
+import os
+
+USM_TEST_SRC = ['ult_stack_mmap.c']
+
+
+def scons():
+    """scons function"""
+    Import('env')
+    test_env = env.Clone()
+    test_env.AppendUnique(LIBS=['daos_common_pmem', 'gurt', 'abt', 'cmocka'])
+    test_env.AppendUnique(CPPPATH=[Dir('..').srcnode()])
+    test_env.require('argobots', 'cmocka')
+
+    for test in USM_TEST_SRC:
+        tests_dir = os.path.join("$PREFIX", 'lib', 'daos', 'TESTING', 'tests')
+        test_exe = test_env.d_test_program(test)
+        test_env.Install(tests_dir, test_exe)
+
+
+if __name__ == "SCons.Script":
+    scons()
