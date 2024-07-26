@@ -96,13 +96,13 @@ For a complete list of supported hardware and software, refer to the
   of checksum errors on a single pool shard is reached, the pool target
   will be evicted.
 
-* DAOS Version 2.6 now providers a production version of libpil4dfs.
+* DAOS Version 2.6 now provides a production version of libpil4dfs.
   Libpil4dfs intercepts IO and metadata related functions unlike it's
-  coutnerpart (libioil) that intercepts only IO functions. This library 
+  coutnerpart (libioil) that intercepts only IO functions. This library
   provides similar performance as using native DFS with POSIX interface.
 
 * Technical Preview version of catastrophic recovery is added to DAOS in
-  this version. This feature only supports offline check and repair of DAOS
+  version 2.6. This feature only supports offline check and repair of DAOS
   system metadata in this version.
 
 * DAOS client side metrics is added as a technical preview in this version.
@@ -112,10 +112,10 @@ For a complete list of supported hardware and software, refer to the
   real-time sampling of client processes.
 
 * Flat KV object is added in this version, this object type only has one
-  level key in low-level data mode. This feature can reduce metadata
+  level key in low-level data structure. This feature can reduce metadata
   overhead of some data models built on top of DAOS, for example, POSIX file.
 
-* DAOS client can query or query large object in collective mode, which
+* DAOS client can query or punch large object in collective mode, which
   propagagtes the RPC through a multi-level spanning tree.
 
 * Extent allocator of DAOS uses bitmap to manage small block allocation
@@ -123,12 +123,12 @@ For a complete list of supported hardware and software, refer to the
   and reduce metadata overhead of extent allocator.
 
 * DAOS Version 2.6 implements server side RPC throttling, it can prevent
-  DAOS server from running into OOM when too many clients send RPC to the
-  server simmultaneously.
+  DAOS server from running out of memory when too many clients send RPC to
+  the server simmultaneously.
 
 #### Other notable changes
 
-* Remove dmg storage query device-health in favour of list-devices --health.
+* Remove dmg storage query device-health in favor of list-devices --health.
 
 * DAOS engine rejoins with different address will be rejected now, in
   previous version, it can be accepted but new address is silently ignored.
@@ -153,11 +153,17 @@ For a complete list of supported hardware and software, refer to the
   have been added, using a function that is not intercepted yet can cause a client
   program to crash. For that intermediate phase until all known functions are captured,
   we introduced an environment variable that users can use with the pil4dfs library
-  to get file descriptors from dfuse. Setting D_IL_COMPATIBLE=1 would enable that mode.
+  to get file descriptors from dfuse. Setting D\_IL\_COMPATIBLE=1 would enable that mode.
   It is expected that this mode would add a small overhead as it requires going through
   the fuse kernel to obtain the file descriptor.
 
-... [TODO]
+* High idle CPU load can occasionally happen on DAOS engine, the reason of it is still
+  under investigation
+
+* I/O performance of certain transfer size may be lower than expected in some
+  enviroments, the transfer size with lower performance can be different for
+  combinations of Operation Systems and OFED versions. The reason of it is still
+  under investigation.
 
 ### Bug fixes
 
