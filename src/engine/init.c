@@ -23,6 +23,7 @@
 #include <daos/common.h>
 #include <daos/placement.h>
 #include <daos/tls.h>
+#include <daos/ult_stack_mmap.h>
 #include "srv_internal.h"
 #include "drpc_internal.h"
 #include <gurt/telemetry_common.h>
@@ -573,57 +574,12 @@ abt_init(int argc, char *argv[])
 		return daos_errno2der(errno);
 
 	/* Now, initialize Argobots. */
-	rc = ABT_init(argc, argv);
+	rc = da_initialize(argc, argv);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("failed to init ABT: %d\n", rc);
 		return dss_abterr2der(rc);
 	}
 
-#ifdef ULT_MMAP_STACK
-	FILE *fp;
-
-	/* read vm.max_map_count from /proc instead of using sysctl() API
-	 * as it seems the preferred way ...
-	 */
-	fp = fopen("/proc/sys/vm/max_map_count", "r");
-	if (fp == NULL) {
-		D_ERROR("Unable to open /proc/sys/vm/max_map_count: %s\n",
-			strerror(errno));
-	} else {
-		int n;
-
-		n = fscanf(fp, "%d", &max_nb_mmap_stacks);
-		if (n == EOF) {
-			D_ERROR("Unable to read vm.max_map_count value: %s\n",
-				strerror(errno));
-			/* just in case, to ensure value can be later safely
-			 * compared and thus no ULT stack be mmap()'ed
-			 */
-			max_nb_mmap_stacks = 0;
-		} else {
-			/* need a minimum value to start mmap() ULT stacks */
-			if (max_nb_mmap_stacks < MIN_VM_MAX_MAP_COUNT) {
-				D_WARN("vm.max_map_count (%d) value is too low (< %d) to start mmap() ULT stacks\n",
-				       max_nb_mmap_stacks, MIN_VM_MAX_MAP_COUNT);
-				max_nb_mmap_stacks = 0;
-			} else {
-				/* consider half can be used to mmap() ULT
-				 * stacks
-				 */
-				max_nb_mmap_stacks /= 2;
-				D_INFO("Will be able to mmap() %d ULT stacks\n",
-				       max_nb_mmap_stacks);
-			}
-		}
-	}
-
-	rc = ABT_key_create(free_stack, &stack_key);
-	if (rc != ABT_SUCCESS) {
-		D_ERROR("ABT key for stack create failed: %d\n", rc);
-		ABT_finalize();
-		return dss_abterr2der(rc);
-	}
-#endif
 	dss_abt_init = true;
 
 	return 0;
@@ -632,11 +588,9 @@ abt_init(int argc, char *argv[])
 static void
 abt_fini(void)
 {
-#ifdef ULT_MMAP_STACK
-	ABT_key_free(&stack_key);
-#endif
 	dss_abt_init = false;
-	ABT_finalize();
+
+	da_finalize();
 }
 
 static void

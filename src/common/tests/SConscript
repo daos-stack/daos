@@ -26,8 +26,6 @@ def scons():
     tenv.d_test_program('sched', 'sched.c',
                         LIBS=['daos_common', 'gurt', 'cart', 'cmocka', 'pthread'])
     new_env = tenv.Clone()
-    if tenv["STACK_MMAP"] == 1:
-        new_env.Append(CCFLAGS=['-DULT_MMAP_STACK'])
     new_env.d_test_program('abt_perf', 'abt_perf.c',
                            LIBS=['daos_common_pmem', 'gurt', 'abt'])
     tenv.d_test_program('acl_real_tests', 'acl_util_real_tests.c',
@@ -42,6 +40,8 @@ def scons():
     tenv.d_test_program('compress_timing', 'compress_timing.c', LIBS=['daos_common', 'gurt'])
     tenv.d_test_program('rsvc_tests', ['rsvc_tests.c', '../rsvc.c'],
                         LIBS=['daos_common', 'gurt', 'cmocka'])
+    new_env.d_test_program('usm_test', 'usm_test.c',
+                           LIBS=['daos_common_pmem', 'gurt', 'abt'])
 
     unit_env = tenv.Clone()
     unit_env.AppendUnique(OBJPREFIX='utest_')

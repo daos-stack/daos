@@ -18,6 +18,7 @@
 #include <daos/lru.h>
 #include <daos/btree_class.h>
 #include <daos/sys_db.h>
+#include <daos/daos_abt.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/ras.h>
 #include <daos_srv/daos_engine.h>
@@ -971,7 +972,7 @@ vos_self_fini_locked(void)
 	vos_self_nvme_fini();
 
 	vos_standalone_tls_fini();
-	ABT_finalize();
+	da_finalize();
 }
 
 void
@@ -1007,7 +1008,7 @@ vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool nvme_in
 		goto out;
 	}
 
-	rc = ABT_init(0, NULL);
+	rc = da_initialize(0, NULL);
 	if (rc != 0)
 		goto out;
 
@@ -1016,7 +1017,7 @@ vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool nvme_in
 #if VOS_STANDALONE
 	rc = vos_standalone_tls_init(DAOS_TGT_TAG);
 	if (rc) {
-		ABT_finalize();
+		da_finalize();
 		goto out;
 	}
 #endif

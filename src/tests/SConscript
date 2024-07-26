@@ -38,16 +38,8 @@ def build_tests(env):
     libs_server += ['vos', 'bio', 'abt']
     vos_engine = denv.StaticObject(['vos_engine.c'])
 
-    if denv["STACK_MMAP"] == 1:
-        new_env = denv.Clone()
-        new_env.Append(CCFLAGS=['-DULT_MMAP_STACK'])
-        vos_perf = new_env.d_program('vos_perf',
-                                     ['vos_perf.c', perf_common, vos_engine] + libdaos_tgts,
-                                     LIBS=libs_server)
-    else:
-        vos_perf = denv.d_program('vos_perf',
-                                  ['vos_perf.c', perf_common, vos_engine] + libdaos_tgts,
-                                  LIBS=libs_server)
+    vos_perf = denv.d_program('vos_perf', ['vos_perf.c', perf_common, vos_engine] + libdaos_tgts,
+                              LIBS=libs_server)
     denv.Install('$PREFIX/bin/', vos_perf)
 
     obj_ctl = denv.d_program('obj_ctl',
