@@ -2424,9 +2424,11 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 	D_ASSERT(ioc.ioc_coc != NULL);
 	dkey = (daos_key_t *)&oer->er_dkey;
 	iod = (daos_iod_t *)&oer->er_iod;
+	if (iod->iod_nr == 0) /* nothing to replicate, directly remove parity */
+		goto remove_parity;
 	iod_csums = oer->er_iod_csums.ca_arrays;
-	rc = vos_update_begin(ioc.ioc_coc->sc_hdl, oer->er_oid, oer->er_epoch_range.epr_hi, 0,
-			      dkey, 1, iod, iod_csums, 0, &ioh, NULL);
+	rc = vos_update_begin(ioc.ioc_coc->sc_hdl, oer->er_oid, oer->er_epoch_range.epr_hi,
+			      VOS_OF_REBUILD, dkey, 1, iod, iod_csums, 0, &ioh, NULL);
 	if (rc) {
 		D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
 			DP_UOID(oer->er_oid), DP_RC(rc));
@@ -2439,7 +2441,7 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 			DP_RC(rc));
 		goto end;
 	}
-	rc = obj_bulk_transfer(rpc, CRT_BULK_PUT, false, &oer->er_bulk, NULL, NULL,
+	rc = obj_bulk_transfer(rpc, CRT_BULK_GET, false, &oer->er_bulk, NULL, NULL,
 			       ioh, NULL, 1, NULL, ioc.ioc_coh);
 	if (rc)
 		D_ERROR(DF_UOID " bulk transfer failed: " DF_RC "\n", DP_UOID(oer->er_oid),
@@ -2456,6 +2458,7 @@ end:
 			DP_RC(rc));
 		goto out;
 	}
+remove_parity:
 	recx.rx_nr = obj_ioc2ec_cs(&ioc);
 	recx.rx_idx = (oer->er_stripenum * recx.rx_nr) | PARITY_INDICATOR;
 	rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl, oer->er_oid, &oer->er_epoch_range, dkey,
@@ -2501,9 +2504,8 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 	D_ASSERT(ioc.ioc_coc != NULL);
 	dkey = (daos_key_t *)&oea->ea_dkey;
 	if (parity_bulk != CRT_BULK_NULL) {
-		rc = vos_update_begin(ioc.ioc_coc->sc_hdl, oea->ea_oid,
-				      oea->ea_epoch_range.epr_hi, 0, dkey, 1,
-				      iod, iod_csums, 0, &ioh, NULL);
+		rc = vos_update_begin(ioc.ioc_coc->sc_hdl, oea->ea_oid, oea->ea_epoch_range.epr_hi,
+				      VOS_OF_REBUILD, dkey, 1, iod, iod_csums, 0, &ioh, NULL);
 		if (rc) {
 			D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
 				DP_UOID(oea->ea_oid), DP_RC(rc));
@@ -2932,9 +2934,8 @@ again2:
 	 * them before real modifications to avoid availability issues.
 	 */
 	D_FREE(dti_cos);
-	dti_cos_cnt = dtx_list_cos(ioc.ioc_coc, &orw->orw_oid,
-				   orw->orw_dkey_hash, DTX_THRESHOLD_COUNT,
-				   &dti_cos);
+	dti_cos_cnt = dtx_cos_get_piggyback(ioc.ioc_coc, &orw->orw_oid, orw->orw_dkey_hash,
+					    DTX_THRESHOLD_COUNT, &dti_cos);
 	if (dti_cos_cnt < 0)
 		D_GOTO(out, rc = dti_cos_cnt);
 
@@ -3566,8 +3567,12 @@ obj_tgt_punch(struct obj_tgt_punch_args *otpa, uint32_t *shards, uint32_t count)
 			goto out;
 	}
 
-	if (dth != NULL)
+	if (dth != NULL) {
+		if (dth->dth_prepared)
+			D_GOTO(out, rc = 0);
+
 		goto exec;
+	}
 
 	if (opi->opi_flags & ORF_RESEND) {
 		tmp = opi->opi_epoch;
@@ -3850,9 +3855,8 @@ again2:
 	 * them before real modifications to avoid availability issues.
 	 */
 	D_FREE(dti_cos);
-	dti_cos_cnt = dtx_list_cos(ioc.ioc_coc, &opi->opi_oid,
-				   opi->opi_dkey_hash, DTX_THRESHOLD_COUNT,
-				   &dti_cos);
+	dti_cos_cnt = dtx_cos_get_piggyback(ioc.ioc_coc, &opi->opi_oid, opi->opi_dkey_hash,
+					    DTX_THRESHOLD_COUNT, &dti_cos);
 	if (dti_cos_cnt < 0)
 		D_GOTO(out, rc = dti_cos_cnt);
 

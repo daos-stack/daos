@@ -25,8 +25,12 @@ typedef struct _Mgmt__LeaderQueryReq Mgmt__LeaderQueryReq;
 typedef struct _Mgmt__LeaderQueryResp Mgmt__LeaderQueryResp;
 typedef struct _Mgmt__GetAttachInfoReq Mgmt__GetAttachInfoReq;
 typedef struct _Mgmt__ClientNetHint Mgmt__ClientNetHint;
+typedef struct _Mgmt__FabricInterface Mgmt__FabricInterface;
+typedef struct _Mgmt__FabricInterfaces Mgmt__FabricInterfaces;
+typedef struct _Mgmt__BuildInfo Mgmt__BuildInfo;
 typedef struct _Mgmt__GetAttachInfoResp Mgmt__GetAttachInfoResp;
 typedef struct _Mgmt__GetAttachInfoResp__RankUri Mgmt__GetAttachInfoResp__RankUri;
+typedef struct _Mgmt__GetAttachInfoResp__NumaFabricInterfacesEntry Mgmt__GetAttachInfoResp__NumaFabricInterfacesEntry;
 typedef struct _Mgmt__PrepShutdownReq Mgmt__PrepShutdownReq;
 typedef struct _Mgmt__PingRankReq Mgmt__PingRankReq;
 typedef struct _Mgmt__SetRankReq Mgmt__SetRankReq;
@@ -301,6 +305,43 @@ struct  _Mgmt__ClientNetHint
     , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, 0,NULL, 0 }
 
 
+struct  _Mgmt__FabricInterface
+{
+  ProtobufCMessage base;
+  uint32_t numa_node;
+  char *interface;
+  char *domain;
+  char *provider;
+};
+#define MGMT__FABRIC_INTERFACE__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__fabric_interface__descriptor) \
+    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+
+
+struct  _Mgmt__FabricInterfaces
+{
+  ProtobufCMessage base;
+  size_t n_ifaces;
+  Mgmt__FabricInterface **ifaces;
+};
+#define MGMT__FABRIC_INTERFACES__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__fabric_interfaces__descriptor) \
+    , 0,NULL }
+
+
+struct  _Mgmt__BuildInfo
+{
+  ProtobufCMessage base;
+  uint32_t major;
+  uint32_t minor;
+  uint32_t patch;
+  char *tag;
+};
+#define MGMT__BUILD_INFO__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__build_info__descriptor) \
+    , 0, 0, 0, (char *)protobuf_c_empty_string }
+
+
 struct  _Mgmt__GetAttachInfoResp__RankUri
 {
   ProtobufCMessage base;
@@ -312,6 +353,17 @@ struct  _Mgmt__GetAttachInfoResp__RankUri
 #define MGMT__GET_ATTACH_INFO_RESP__RANK_URI__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_attach_info_resp__rank_uri__descriptor) \
     , 0, (char *)protobuf_c_empty_string, 0, 0 }
+
+
+struct  _Mgmt__GetAttachInfoResp__NumaFabricInterfacesEntry
+{
+  ProtobufCMessage base;
+  uint32_t key;
+  Mgmt__FabricInterfaces *value;
+};
+#define MGMT__GET_ATTACH_INFO_RESP__NUMA_FABRIC_INTERFACES_ENTRY__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_attach_info_resp__numa_fabric_interfaces_entry__descriptor) \
+    , 0, NULL }
 
 
 struct  _Mgmt__GetAttachInfoResp
@@ -357,10 +409,19 @@ struct  _Mgmt__GetAttachInfoResp
    */
   size_t n_secondary_client_net_hints;
   Mgmt__ClientNetHint **secondary_client_net_hints;
+  /*
+   * Structured server build information
+   */
+  Mgmt__BuildInfo *build_info;
+  /*
+   * Usable fabric interfaces by NUMA node (populated by agent)
+   */
+  size_t n_numa_fabric_interfaces;
+  Mgmt__GetAttachInfoResp__NumaFabricInterfacesEntry **numa_fabric_interfaces;
 };
 #define MGMT__GET_ATTACH_INFO_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_attach_info_resp__descriptor) \
-    , 0, 0,NULL, 0,NULL, NULL, 0, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL }
+    , 0, 0,NULL, 0,NULL, NULL, 0, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, NULL, 0,NULL }
 
 
 struct  _Mgmt__PrepShutdownReq
@@ -643,9 +704,69 @@ Mgmt__ClientNetHint *
 void   mgmt__client_net_hint__free_unpacked
                      (Mgmt__ClientNetHint *message,
                       ProtobufCAllocator *allocator);
+/* Mgmt__FabricInterface methods */
+void   mgmt__fabric_interface__init
+                     (Mgmt__FabricInterface         *message);
+size_t mgmt__fabric_interface__get_packed_size
+                     (const Mgmt__FabricInterface   *message);
+size_t mgmt__fabric_interface__pack
+                     (const Mgmt__FabricInterface   *message,
+                      uint8_t             *out);
+size_t mgmt__fabric_interface__pack_to_buffer
+                     (const Mgmt__FabricInterface   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__FabricInterface *
+       mgmt__fabric_interface__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__fabric_interface__free_unpacked
+                     (Mgmt__FabricInterface *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__FabricInterfaces methods */
+void   mgmt__fabric_interfaces__init
+                     (Mgmt__FabricInterfaces         *message);
+size_t mgmt__fabric_interfaces__get_packed_size
+                     (const Mgmt__FabricInterfaces   *message);
+size_t mgmt__fabric_interfaces__pack
+                     (const Mgmt__FabricInterfaces   *message,
+                      uint8_t             *out);
+size_t mgmt__fabric_interfaces__pack_to_buffer
+                     (const Mgmt__FabricInterfaces   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__FabricInterfaces *
+       mgmt__fabric_interfaces__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__fabric_interfaces__free_unpacked
+                     (Mgmt__FabricInterfaces *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__BuildInfo methods */
+void   mgmt__build_info__init
+                     (Mgmt__BuildInfo         *message);
+size_t mgmt__build_info__get_packed_size
+                     (const Mgmt__BuildInfo   *message);
+size_t mgmt__build_info__pack
+                     (const Mgmt__BuildInfo   *message,
+                      uint8_t             *out);
+size_t mgmt__build_info__pack_to_buffer
+                     (const Mgmt__BuildInfo   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__BuildInfo *
+       mgmt__build_info__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__build_info__free_unpacked
+                     (Mgmt__BuildInfo *message,
+                      ProtobufCAllocator *allocator);
 /* Mgmt__GetAttachInfoResp__RankUri methods */
 void   mgmt__get_attach_info_resp__rank_uri__init
                      (Mgmt__GetAttachInfoResp__RankUri         *message);
+/* Mgmt__GetAttachInfoResp__NumaFabricInterfacesEntry methods */
+void   mgmt__get_attach_info_resp__numa_fabric_interfaces_entry__init
+                     (Mgmt__GetAttachInfoResp__NumaFabricInterfacesEntry         *message);
 /* Mgmt__GetAttachInfoResp methods */
 void   mgmt__get_attach_info_resp__init
                      (Mgmt__GetAttachInfoResp         *message);
@@ -811,8 +932,20 @@ typedef void (*Mgmt__GetAttachInfoReq_Closure)
 typedef void (*Mgmt__ClientNetHint_Closure)
                  (const Mgmt__ClientNetHint *message,
                   void *closure_data);
+typedef void (*Mgmt__FabricInterface_Closure)
+                 (const Mgmt__FabricInterface *message,
+                  void *closure_data);
+typedef void (*Mgmt__FabricInterfaces_Closure)
+                 (const Mgmt__FabricInterfaces *message,
+                  void *closure_data);
+typedef void (*Mgmt__BuildInfo_Closure)
+                 (const Mgmt__BuildInfo *message,
+                  void *closure_data);
 typedef void (*Mgmt__GetAttachInfoResp__RankUri_Closure)
                  (const Mgmt__GetAttachInfoResp__RankUri *message,
+                  void *closure_data);
+typedef void (*Mgmt__GetAttachInfoResp__NumaFabricInterfacesEntry_Closure)
+                 (const Mgmt__GetAttachInfoResp__NumaFabricInterfacesEntry *message,
                   void *closure_data);
 typedef void (*Mgmt__GetAttachInfoResp_Closure)
                  (const Mgmt__GetAttachInfoResp *message,
@@ -852,8 +985,12 @@ extern const ProtobufCMessageDescriptor mgmt__leader_query_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__leader_query_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__get_attach_info_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__client_net_hint__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__fabric_interface__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__fabric_interfaces__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__build_info__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__rank_uri__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__numa_fabric_interfaces_entry__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__prep_shutdown_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__ping_rank_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__set_rank_req__descriptor;

@@ -1692,11 +1692,12 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 			map_comp.co_flags = PO_COMPF_NONE;
 			map_comp.co_nr = 1;
 
-			D_DEBUG(DB_TRACE, "adding target: type=0x%hhx, status=%hhu, idx=%d, "
+			D_DEBUG(DB_TRACE, "adding target: type=0x%hhx, status=%hhu, idx=%d, id=%d, "
 				"rank=%d, ver=%d, in_ver=%d, fseq=%u, flags=0x%x, nr=%u\n",
 				map_comp.co_type, map_comp.co_status, map_comp.co_index,
-				map_comp.co_rank, map_comp.co_ver, map_comp.co_in_ver,
-				map_comp.co_fseq, map_comp.co_flags, map_comp.co_nr);
+				map_comp.co_id, map_comp.co_rank, map_comp.co_ver,
+				map_comp.co_in_ver, map_comp.co_fseq, map_comp.co_flags,
+				map_comp.co_nr);
 
 			rc = pool_buf_attach(map_buf, &map_comp, 1);
 			if (rc != 0)

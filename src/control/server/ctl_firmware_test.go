@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -806,7 +806,7 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 				rCfg := new(engine.TestRunnerConfig)
 				rCfg.Running.Store(tc.enginesRunning)
 				runner := engine.NewTestRunner(rCfg, engine.MockConfig())
-				instance := NewEngineInstance(log, nil, nil, runner)
+				instance := NewEngineInstance(log, nil, nil, runner, nil)
 				if !tc.noRankEngines {
 					instance._superblock = &Superblock{}
 					instance._superblock.ValidRank = true

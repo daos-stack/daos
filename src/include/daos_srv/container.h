@@ -64,6 +64,7 @@ struct ds_cont_child {
 	ABT_cond		 sc_dtx_resync_cond;
 	ABT_cond		 sc_scrub_cond;
 	ABT_cond		 sc_rebuild_cond;
+	ABT_cond		 sc_fini_cond;
 	uint32_t		 sc_dtx_resyncing:1,
 				 sc_dtx_reindex:1,
 				 sc_dtx_reindex_abort:1,
@@ -191,6 +192,9 @@ void ds_cont_child_stop_all(struct ds_pool_child *pool_child);
 
 int ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 			 struct ds_cont_child **ds_cont);
+int
+ds_cont_child_destroy(uuid_t pool_uuid, uuid_t cont_uuid);
+
 void
 ds_cont_child_reset_ec_agg_eph_all(struct ds_pool_child *pool_child);
 /** initialize a csummer based on container properties. Will retrieve the
