@@ -63,6 +63,7 @@ struct ioil_global {
 	bool		iog_daos_init;
 
 	bool		iog_show_summary;	/**< Should a summary be shown at teardown */
+	bool		iog_fini_done;		/**< Whether destructor function is finished */
 	unsigned	iog_report_count;	/**< Number of operations that should be logged */
 
 	ATOMIC uint64_t iog_file_count;  /**< Number of file opens intercepted */
@@ -378,6 +379,8 @@ ioil_fini(void)
 	int               rc;
 	pid_t             tid = syscall(SYS_gettid);
 
+	if (ioil_iog.iog_fini_done)
+		return;
 	if (tid != ioil_iog.iog_init_tid) {
 		DFUSE_TRA_INFO(&ioil_iog, "Ignoring destructor from alternate thread");
 		return;
@@ -427,6 +430,7 @@ ioil_fini(void)
 	}
 	ioil_iog.iog_daos_init = false;
 	daos_debug_fini();
+	ioil_iog.iog_fini_done = true;
 }
 
 int
