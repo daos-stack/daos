@@ -71,8 +71,7 @@ type poolBaseCmd struct {
 
 	cPoolHandle C.daos_handle_t
 
-	SysName string `long:"sys-name" short:"G" description:"DAOS system name"`
-	Args    struct {
+	Args struct {
 		Pool PoolID `positional-arg-name:"pool label or UUID" description:"required if --path is not used"`
 	} `positional-args:"yes"`
 }
@@ -254,6 +253,7 @@ func convertPoolRebuildStatus(in *C.struct_daos_rebuild_status) *daos.PoolRebuil
 		Status: int32(in.rs_errno),
 	}
 	if out.Status == 0 {
+		out.TotalObjects = uint64(in.rs_toberb_obj_nr)
 		out.Objects = uint64(in.rs_obj_nr)
 		out.Records = uint64(in.rs_rec_nr)
 		switch {
@@ -727,9 +727,8 @@ func getPoolList(log logging.Logger, sysName string, queryEnabled bool) ([]*daos
 
 type poolListCmd struct {
 	daosCmd
-	SysName string `long:"sys-name" short:"G" description:"DAOS system name"`
-	Verbose bool   `short:"v" long:"verbose" description:"Add pool UUIDs and service replica lists to display"`
-	NoQuery bool   `short:"n" long:"no-query" description:"Disable query of listed pools"`
+	Verbose bool `short:"v" long:"verbose" description:"Add pool UUIDs and service replica lists to display"`
+	NoQuery bool `short:"n" long:"no-query" description:"Disable query of listed pools"`
 }
 
 func (cmd *poolListCmd) Execute(_ []string) error {
