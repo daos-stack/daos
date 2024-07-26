@@ -687,7 +687,7 @@ class PreReqComponent():
         """Parse the build dependencies command line flag"""
         build_deps = GetOption('build_deps')
         skip_download = GetOption('skip_download')
-        if build_deps in ('fetch'):
+        if build_deps in ('fetch',):
             self.fetch_only = True
         elif build_deps in ('yes', 'only'):
             self.build_deps = True
