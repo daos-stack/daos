@@ -169,6 +169,7 @@ class ServerRankFailure(IorTestBase):
         time.sleep(5)
 
         # 3. While IOR is running, kill all daos_engine on a non-access-point node
+        dmg_command = self.get_dmg_command()
         ex_env = self.params.get("ex_env", "/run/*")
         if ex_env == "ci":
             # Original implementation. Need to be changed to kill one engine process from two
@@ -188,7 +189,6 @@ class ServerRankFailure(IorTestBase):
                 rank_groups[self.aurora_host_to_group(host)].append(rank)
             self.log.info("Rank groups = %s", rank_groups)
             # Stop a rank from each group up to two groups.
-            dmg_command = self.get_dmg_command()
             count = 0
             for ranks in rank_groups.values():
                 if count == 2:
