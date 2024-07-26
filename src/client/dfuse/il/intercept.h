@@ -84,7 +84,8 @@
 	ACTION(wint_t, getwc, (FILE * stream))                                                     \
 	ACTION(wint_t, getwc_unlocked, (FILE * stream))                                            \
 	ACTION(wint_t, fgetwc, (FILE * stream))                                                    \
-	ACTION(wint_t, fgetwc_unlocked, (FILE * stream))
+	ACTION(wint_t, fgetwc_unlocked, (FILE * stream))                                           \
+	ACTION(void, exit, (int))
 
 #define FOREACH_INTERCEPT(ACTION)            \
 	FOREACH_SINGLE_INTERCEPT(ACTION)     \

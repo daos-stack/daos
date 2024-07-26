@@ -104,7 +104,8 @@ static char     path_libpil4dfs[PATH_MAX];
 static void
 quit_hook_init(void)
 {
-	D_FATAL("pil4dfs failed to initialize, aborting.");
+	/* print to stdout instead of stderr to avoid fault injection errors */
+	printf("pil4dfs failed to initialize, aborting.\n");
 	exit(1);
 }
 
