@@ -159,7 +159,7 @@ obj_rw_complete(crt_rpc_t *rpc, struct obj_io_context *ioc,
 }
 
 static void
-obj_rw_reply(crt_rpc_t *rpc, int status, uint64_t epoch,
+obj_rw_reply(crt_rpc_t *rpc, int status, uint64_t epoch, bool release_input,
 	     struct obj_io_context *ioc)
 {
 	struct obj_rw_out	*orwo = crt_reply_get(rpc);
@@ -184,7 +184,11 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint64_t epoch,
 		ioc->ioc_map_ver, orwo->orw_epoch, status);
 
 	if (!ioc->ioc_lost_reply) {
-		rc = crt_reply_send_input_free(rpc);
+		if (release_input)
+			rc = crt_reply_send_input_free(rpc);
+		else
+			rc = crt_reply_send(rpc);
+
 		if (rc != 0)
 			D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
 	} else {
@@ -2064,6 +2068,8 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, crt_rpc_t *rpc
 
 	D_ASSERT(ioc != NULL);
 	memset(ioc, 0, sizeof(*ioc));
+
+	crt_req_addref(rpc);
 	ioc->ioc_rpc = rpc;
 	ioc->ioc_opc = opc_get(rpc->cr_opc);
 	rc = ds_cont_find_hdl(pool_uuid, coh_uuid, &coh);
@@ -2138,6 +2144,10 @@ obj_ioc_fini(struct obj_io_context *ioc, int err)
 			ds_cont_ec_timestamp_update(ioc->ioc_coc);
 		ds_cont_child_put(ioc->ioc_coc);
 		ioc->ioc_coc = NULL;
+	}
+	if (ioc->ioc_rpc) {
+		crt_req_decref(ioc->ioc_rpc);
+		ioc->ioc_rpc = NULL;
 	}
 }
 
@@ -2464,7 +2474,7 @@ remove_parity:
 	rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl, oer->er_oid, &oer->er_epoch_range, dkey,
 				  &iod->iod_name, &recx);
 out:
-	obj_rw_reply(rpc, rc, 0, &ioc);
+	obj_rw_reply(rpc, rc, 0, false, &ioc);
 	obj_ioc_end(&ioc, rc);
 }
 
@@ -2560,7 +2570,7 @@ end:
 		D_ERROR(DF_UOID ": array_remove failed: " DF_RC "\n", DP_UOID(oea->ea_oid),
 			DP_RC(rc1));
 out:
-	obj_rw_reply(rpc, rc, 0, &ioc);
+	obj_rw_reply(rpc, rc, 0, false, &ioc);
 	obj_ioc_end(&ioc, rc);
 }
 
@@ -2691,7 +2701,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 out:
 	if (dth != NULL)
 		rc = dtx_end(dth, ioc.ioc_coc, rc);
-	obj_rw_reply(rpc, rc, 0, &ioc);
+	obj_rw_reply(rpc, rc, 0, true, &ioc);
 	D_FREE(mbs);
 	obj_ioc_end(&ioc, rc);
 }
@@ -3037,7 +3047,7 @@ out:
 	if (ioc.ioc_map_ver < max_ver)
 		ioc.ioc_map_ver = max_ver;
 
-	obj_rw_reply(rpc, rc, epoch.oe_value, &ioc);
+	obj_rw_reply(rpc, rc, epoch.oe_value, false, &ioc);
 	D_FREE(mbs);
 	D_FREE(dti_cos);
 	obj_ioc_end(&ioc, rc);
@@ -3057,7 +3067,7 @@ obj_enum_complete(crt_rpc_t *rpc, int status, int map_version,
 	obj_reply_map_version_set(rpc, map_version);
 	oeo->oeo_epoch = epoch;
 
-	rc = crt_reply_send_input_free(rpc);
+	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
 
@@ -3418,7 +3428,7 @@ obj_punch_complete(crt_rpc_t *rpc, int status, uint32_t map_version)
 	obj_reply_set_status(rpc, status);
 	obj_reply_map_version_set(rpc, map_version);
 
-	rc = crt_reply_send_input_free(rpc);
+	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
 }
@@ -4200,7 +4210,7 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	obj_reply_map_version_set(rpc, version);
 	okqo->okqo_epoch = okqi->okqi_epoch;
 
-	rc = crt_reply_send_input_free(rpc);
+	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
 }
@@ -4244,7 +4254,7 @@ out:
 	D_DEBUG(DB_IO, "obj_sync stop: "DF_UOID", epc "DF_X64", rd = %d\n",
 		DP_UOID(osi->osi_oid), oso->oso_epoch, rc);
 
-	rc = crt_reply_send_input_free(rpc);
+	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
 }
@@ -4336,7 +4346,7 @@ obj_cpd_reply(crt_rpc_t *rpc, int status, uint32_t map_version)
 	D_DEBUG(DB_TRACE, "CPD rpc %p send reply, pmv %d, status %d.\n",
 		rpc, map_version, status);
 
-	rc = crt_reply_send_input_free(rpc);
+	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("Send CPD reply failed: "DF_RC"\n", DP_RC(rc));
 
@@ -5528,7 +5538,7 @@ out:
 	obj_reply_set_status(rpc, rc);
 	obj_reply_map_version_set(rpc, ioc.ioc_map_ver);
 	obj_ioc_end(&ioc, rc);
-	rc = crt_reply_send_input_free(rpc);
+	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
 }
@@ -5864,7 +5874,7 @@ out:
 			ocqo->ocqo_flags |= OCRF_RAW_RECX;
 	}
 
-	rc = crt_reply_send_input_free(rpc);
+	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
 
