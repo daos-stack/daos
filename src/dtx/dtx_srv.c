@@ -332,7 +332,7 @@ out:
 	dout->do_status = rc;
 	/* For DTX_COMMIT, it is the count of real committed DTX entries. */
 	dout->do_misc = committed;
-	rc = crt_reply_send(rpc);
+	rc = crt_reply_send_input_free(rpc);
 	if (rc != 0)
 		D_ERROR("send reply failed for DTX rpc %u: rc = "DF_RC"\n", opc,
 			DP_RC(rc));
