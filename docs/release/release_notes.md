@@ -31,15 +31,12 @@ Fabric and Network Provider Support:
     - ucx+ud\_x on InfiniBand fabrics
     - ucx+tcp on InfiniBand fabrics
 
-Storage Class Memory Support:
+Storage Class Memory Support (PMem and non-PMem servers):
 
 * DAOS Servers with 2nd gen Intel Xeon Scalable processors and
   Intel Optane Persistent Memory 100 Series.
 * DAOS Servers with 3rd gen Intel Xeon Scalable processors and
   Intel Optane Persistent Memory 200 Series.
-
-No Storage Class Memory support:
-
 * DAOS Servers without Intel Optane Persistent Memory, using the
   Metadata-on-SSD (Phase1) code path.
 
