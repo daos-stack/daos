@@ -768,7 +768,7 @@ class TestWithServers(TestWithoutServers):
         self.log.info("-" * 100)
         self.log.debug("Common test directory (%s) contents:", os.path.dirname(self.test_dir))
         all_hosts = include_local_host(self.host_info.all_hosts)
-        run_remote(self.log, all_hosts, f"du -sh {os.path.dirname(self.test_dir)}")
+        run_remote(self.log, all_hosts, f"du -sh {os.path.dirname(self.test_dir)}/*")
         self.log.info("-" * 100)
 
         if not self.start_servers_once or self.name.uid == 1:
