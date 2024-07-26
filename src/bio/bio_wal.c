@@ -29,7 +29,7 @@ D_CASSERT(sizeof(struct wal_header) <= WAL_BLK_SZ);
 D_CASSERT(sizeof(struct wal_trans_tail) == WAL_CSUM_LEN);
 
 #define WAL_MIN_CAPACITY	(8192 * WAL_BLK_SZ)	/* Minimal WAL capacity, in bytes */
-#define WAL_MAX_TRANS_BLKS	2048			/* Maximal blocks used by a transaction */
+#define WAL_MAX_TRANS_BLKS	4096			/* Maximal blocks used by a transaction */
 #define WAL_HDR_BLKS		1			/* Ensure atomic header write */
 
 #define META_BLK_SZ		WAL_BLK_SZ

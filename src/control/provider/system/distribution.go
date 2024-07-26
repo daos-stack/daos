@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,10 +10,13 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common"
 )
 
 type (
@@ -186,4 +189,22 @@ func getDistribution(open openFunc) Distribution {
 // GetDistribution returns information about the current Linux distribution.
 func GetDistribution() Distribution {
 	return getDistribution(os.Open)
+}
+
+// GetLspciPath returns binary path based on distribution.
+func GetLspciPath() (string, error) {
+	distro := GetDistribution()
+
+	switch distro.ID {
+	case "opensuse-leap", "opensuse", "sles":
+		envPath, ok := os.LookupEnv("PATH")
+		if !ok {
+			return "", errors.New("couldn't find PATH env")
+		}
+		if err := os.Setenv("PATH", common.AppendToPathEnv(envPath, "/sbin")); err != nil {
+			return "", errors.Wrap(err, "adding /sbin to path env")
+		}
+	}
+
+	return exec.LookPath("lspci")
 }

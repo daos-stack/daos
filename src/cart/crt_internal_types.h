@@ -294,9 +294,11 @@ crt_env_fini(void)
 
 /* Returns value if env was present at load time */
 #define crt_env_get(name, val)                                                                     \
-	D_ASSERT(crt_genvs.inited);                                                                \
-	if (crt_genvs._rc_##name == 0)                                                             \
-		*val = crt_genvs._##name;
+	do {                                                                                       \
+		D_ASSERT(crt_genvs.inited);                                                        \
+		if (crt_genvs._rc_##name == 0)                                                     \
+			*val = crt_genvs._##name;                                                  \
+	} while (0)
 
 static inline void
 crt_env_dump(void)
@@ -353,6 +355,10 @@ struct crt_quotas {
 	bool			enabled[CRT_QUOTA_COUNT];
 	pthread_mutex_t		mutex;
 	d_list_t		rpc_waitq;
+	/** Stats gauge of wait queue depth */
+	struct d_tm_node_t     *rpc_waitq_depth;
+	/** Counter for exceeded quota */
+	struct d_tm_node_t     *rpc_quota_exceeded;
 };
 
 /* crt_context */

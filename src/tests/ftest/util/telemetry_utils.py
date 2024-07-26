@@ -357,6 +357,8 @@ class TelemetryUtils():
         ENGINE_IO_OPS_TGT_UPDATE_ACTIVE_METRICS +\
         ENGINE_IO_OPS_UPDATE_ACTIVE_METRICS
     ENGINE_NET_METRICS = [
+        "engine_net_waitq_depth",
+        "engine_net_quota_exceeded",
         "engine_net_glitch",
         "engine_net_failed_addr",
         "engine_net_req_timeout",

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -598,7 +598,7 @@ func (svc *mgmtSvc) checkPools(parent context.Context, ignCreating bool, psList 
 			Id:        ps.PoolUUID.String(),
 		}
 
-		if _, err := svc.PoolDestroy(ctx, dr); err != nil {
+		if _, err := svc.poolDestroyNoLeaderCheck(ctx, dr); err != nil {
 			// Best effort cleanup. If the pool destroy fails here,
 			// another leadership step-up should get it eventually.
 			svc.log.Errorf("pool %s not destroyed: %s", ps.PoolUUID, err)
@@ -657,6 +657,10 @@ func (svc *mgmtSvc) PoolDestroy(parent context.Context, req *mgmtpb.PoolDestroyR
 		return nil, err
 	}
 
+	return svc.poolDestroyNoLeaderCheck(parent, req)
+}
+
+func (svc *mgmtSvc) poolDestroyNoLeaderCheck(parent context.Context, req *mgmtpb.PoolDestroyReq) (*mgmtpb.PoolDestroyResp, error) {
 	poolUUID, err := svc.resolvePoolID(req.Id)
 	if err != nil {
 		return nil, err

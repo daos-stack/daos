@@ -33,13 +33,13 @@ class DmvrNegativeTest(DataMoverTestBase):
         super().setUp()
 
         # Get the parameters
-        self.test_file = self.ior_cmd.test_file.value
+        test_file = self.ior_cmd.test_file.value
 
         # Setup the directory structures
-        self.new_posix_test_path()
-        self.posix_test_file = join(self.posix_local_test_paths[0], self.test_file)
-        self.daos_test_path = "/"
-        self.daos_test_file = join(self.daos_test_path, self.test_file)
+        self.__posix_test_path = self.new_posix_test_path()
+        self.__posix_test_file = join(self.__posix_test_path, test_file)
+        self.__daos_test_path = "/"
+        self.__daos_test_file = join(self.__daos_test_path, test_file)
 
     def test_dm_bad_params_dcp(self):
         """Jira ID: DAOS-5515 - Initial test case.
@@ -75,27 +75,27 @@ class DmvrNegativeTest(DataMoverTestBase):
         cont1 = self.get_container(pool1, path=cont1_path)
 
         # Create test files
-        self.run_ior_with_params("POSIX", self.posix_test_file)
-        self.run_ior_with_params("DAOS_UUID", self.daos_test_file, pool1, cont1)
+        self.run_ior_with_params("POSIX", self.__posix_test_file)
+        self.run_ior_with_params("DAOS_UUID", self.__daos_test_file, pool1, cont1)
 
         # Bad parameter: required arguments.
         self.run_datamover(
             self.test_id + " (missing source pool)",
             src_path=format_path(),
-            dst_path=self.posix_local_test_paths[0],
+            dst_path=self.__posix_test_path,
             expected_rc=1,
             expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
 
         self.run_datamover(
             self.test_id + " (missing source cont)",
             src_path=format_path(pool1),
-            dst_path=self.posix_local_test_paths[0],
+            dst_path=self.__posix_test_path,
             expected_rc=1,
             expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
 
         self.run_datamover(
             self.test_id + " (missing dest pool)",
-            src_path=self.posix_local_test_paths[0],
+            src_path=self.__posix_test_path,
             dst_path=format_path(),
             expected_rc=1,
             expected_output=self.MFU_ERR_DAOS_INVAL_ARG)
@@ -134,20 +134,20 @@ class DmvrNegativeTest(DataMoverTestBase):
         self.run_datamover(
             self.test_id + " (invalid source pool)",
             src_path=format_path(fake_uuid, cont1),
-            dst_path=self.posix_local_test_paths[0],
+            dst_path=self.__posix_test_path,
             expected_rc=1,
             expected_output="DER_NONEXIST")
 
         self.run_datamover(
             self.test_id + " (invalid source cont)",
             src_path=format_path(pool1, fake_uuid),
-            dst_path=self.posix_local_test_paths[0],
+            dst_path=self.__posix_test_path,
             expected_rc=1,
             expected_output="DER_NONEXIST")
 
         self.run_datamover(
             self.test_id + " (invalid dest pool)",
-            src_path=self.posix_local_test_paths[0],
+            src_path=self.__posix_test_path,
             dst_path=format_path(fake_uuid, cont1),
             expected_rc=1,
             expected_output="DER_NONEXIST")
@@ -155,20 +155,20 @@ class DmvrNegativeTest(DataMoverTestBase):
         self.run_datamover(
             self.test_id + " (invalid source cont path)",
             src_path=format_path(pool1, cont1, "/fake/fake"),
-            dst_path=self.posix_local_test_paths[0],
+            dst_path=self.__posix_test_path,
             expected_rc=1,
             expected_output="No such file or directory")
 
         self.run_datamover(
             self.test_id + " (invalid source cont UNS path)",
             src_path=cont1.path.value + "/fake/fake",
-            dst_path=self.posix_local_test_paths[0],
+            dst_path=self.__posix_test_path,
             expected_rc=1,
             expected_output="No such file or directory")
 
         self.run_datamover(
             self.test_id + " (invalid dest cont path)",
-            src_path=self.posix_local_test_paths[0],
+            src_path=self.__posix_test_path,
             dst_path=format_path(pool1, cont1, "/fake/fake"),
             expected_rc=1,
             expected_output="No such file or directory")
@@ -188,7 +188,7 @@ class DmvrNegativeTest(DataMoverTestBase):
             expected_output="No such file or directory")
 
         #  (4) Bad parameter: destination filename is invalid.
-        dst_path = join(self.posix_local_test_paths[0], "d" * 300)
+        dst_path = join(self.__posix_test_path, "d" * 300)
         self.run_datamover(
             self.test_id + " (filename is too long)",
             src_path=format_path(pool1, cont1),
@@ -225,7 +225,7 @@ class DmvrNegativeTest(DataMoverTestBase):
         cont1 = self.get_container(pool1, path=cont1_path)
 
         # Create test files
-        self.run_ior_with_params("DAOS", self.daos_test_file, pool1, cont1)
+        self.run_ior_with_params("DAOS", self.__daos_test_file, pool1, cont1)
 
         # (1) Bad parameter: source is destination.
         self.log_step("Verify error when label source is label dest")

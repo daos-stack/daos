@@ -48,7 +48,6 @@
 #telemetry_retain: 1m
 
 ## Configuration for user credential management.
-#
 #credential_config:
 #  # If the agent should be able to resolve unknown client uids and gids
 #  # (e.g. when running in a container) into ACL principal names, then a
@@ -61,10 +60,21 @@
 #    1000:
 #      user: ralph
 #      group: stanley
-
+#
+#  # Optionally cache generated credentials with the specified cache
+#  # lifetime. By default, a credential is generated for every client
+#  # process that connects to a pool. If the credential cache is
+#  # enabled, then local client processes connecting with stable
+#  # uid:gid associations may take advantage of the cached credential
+#  # and reduce some agent overhead. For heavily-loaded client nodes
+#  # with many frequent (e.g. hundreds per minute) client connections,
+#  # a lifetime of 1-5 minutes may be a reasonable tradeoff between
+#  # performance and responsiveness to user/group database updates.
+#  # If no expiration is set, credential caching is not enabled.
+#  cache_expiration: 1m
+#
 ## Configuration for SSL certificates used to secure management traffic
 # and authenticate/authorize management components.
-#
 #transport_config:
 #  # In order to disable transport security, uncomment and set allow_insecure
 #  # to true. Not recommended for production configurations.
@@ -77,6 +87,7 @@
 #  # Key portion of Agent Certificate
 #  key: /etc/daos/certs/agent.key
 #
+
 # Use the given directory for creating unix domain sockets
 #
 # NOTE: Do not change this when running under systemd control. If it needs to
