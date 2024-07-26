@@ -438,11 +438,11 @@ func getSysNameFromQuery(configPath string, log logging.Logger) ([]string, error
 	return hostNames, nil
 }
 
-func customCopy(log logging.Logger, opts ...CollectLogsParams) error {
+func customCopy(log logging.Logger, opts CollectLogsParams) error {
 	cmd := strings.Join([]string{
-		opts[0].FileTransferExec,
-		opts[0].TargetFolder,
-		opts[0].FileTransferExecArgs},
+		opts.FileTransferExec,
+		opts.TargetFolder,
+		opts.FileTransferExecArgs},
 		" ")
 
 	out, err := exec.Command("sh", "-c", cmd).Output()
@@ -457,7 +457,7 @@ func customCopy(log logging.Logger, opts ...CollectLogsParams) error {
 func rsyncLog(log logging.Logger, opts ...CollectLogsParams) error {
 
 	if opts[0].FileTransferExec != "" {
-		return customCopy(log, opts...)
+		return customCopy(log, opts[0])
 	}
 
 	targetLocation, err := createHostFolder(opts[0].TargetFolder, log)
