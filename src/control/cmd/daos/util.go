@@ -20,6 +20,8 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/daos/api"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -83,10 +85,7 @@ func srvBuildInfo() (*build.Info, error) {
 }
 
 func daosError(rc C.int) error {
-	if rc == 0 {
-		return nil
-	}
-	return daos.Status(rc)
+	return daos.ErrorFromRC(int(rc))
 }
 
 func goBool2int(in bool) (out C.int) {
@@ -118,6 +117,20 @@ func uuidToC(in uuid.UUID) (out C.uuid_t) {
 
 func uuidFromC(cUUID C.uuid_t) (uuid.UUID, error) {
 	return uuid.FromBytes(C.GoBytes(unsafe.Pointer(&cUUID[0]), C.int(len(cUUID))))
+}
+
+func rankSetFromC(cRankList *C.d_rank_list_t) (*ranklist.RankSet, error) {
+	if cRankList == nil {
+		return nil, errors.New("nil ranklist")
+	}
+
+	cRankSlice := unsafe.Slice(cRankList.rl_ranks, cRankList.rl_nr)
+	rs := ranklist.NewRankSet()
+	for _, cRank := range cRankSlice {
+		rs.Add(ranklist.Rank(cRank))
+	}
+
+	return rs, nil
 }
 
 func iterStringsBuf(cBuf unsafe.Pointer, expected C.size_t, cb func(string)) error {
@@ -266,20 +279,22 @@ type daosCmd struct {
 	cmdutil.NoArgsCmd
 	cmdutil.JSONOutputCmd
 	cmdutil.LogCmd
+	apiProvider *api.Provider
+	SysName     string
+}
+
+func (dc *daosCmd) setSysName(sysName string) {
+	dc.SysName = sysName
 }
 
 func (dc *daosCmd) initDAOS() (func(), error) {
-	if rc := C.daos_init(); rc != 0 {
-		// Do some inspection of the RC to display an informative error to the user
-		// e.g. "No DAOS Agent detected"...
-		return nil, errors.Wrap(daosError(rc), "daos_init() failed")
+	provider, err := api.NewProvider(dc.Logger)
+	if err != nil {
+		return func() {}, err
 	}
+	dc.apiProvider = provider
 
-	return func() {
-		if rc := C.daos_fini(); rc != 0 {
-			dc.Errorf("daos_fini() failed: %s", daosError(rc))
-		}
-	}, nil
+	return provider.Cleanup, nil
 }
 
 func initDaosDebug() (func(), error) {
