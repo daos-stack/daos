@@ -196,7 +196,7 @@ class NetworkFailureTest(IorTestBase):
             self.update_nic)
         self.register_cleanup(self.interface.restore, logger=self.log)
         self.log.info("interface to update = %s", self.interface)
-        errors.append(self.interface.bring_down(self.log))
+        errors.extend(self.interface.bring_down(self.log))
 
         # 3. Run IOR with given object class. It should fail.
         self.log_step("Expect IOR to fail with the down network interface.")
@@ -211,7 +211,7 @@ class NetworkFailureTest(IorTestBase):
 
         # 4. Bring up the network interface.
         self.log_step("Bring up the network interface.")
-        errors.append(self.interface.bring_up(self.log))
+        errors.extend(self.interface.bring_up(self.log))
 
         # 5. Restart DAOS with dmg.
         self.log_step("Restart DAOS with dmg.")
@@ -377,7 +377,7 @@ class NetworkFailureTest(IorTestBase):
             self.server_managers[0].get_config_value("fabric_iface"), self.network_down_host,
             self.update_nic)
         self.register_cleanup(self.interface.restore, logger=self.log)
-        errors.append(self.interface.bring_down(self.log))
+        errors.extend(self.interface.bring_down(self.log))
 
         # 5. Run IOR with oclass SX.
         self.log_step("Run IOR with oclass SX.")
@@ -395,8 +395,7 @@ class NetworkFailureTest(IorTestBase):
         # 7. Verify that the container Health is HEALTHY.
         self.log_step("Verify that the container Health is HEALTHY.")
         if not self.container[0].verify_prop({"status": "HEALTHY"}):
-            errors.append(
-                "Container health isn't HEALTHY after taking ib0 down!")
+            errors.append("Container health isn't HEALTHY after taking ib0 down!")
 
         # 8. Create a new container on the pool and run IOR.
         self.log_step("Create a new container on the pool")
@@ -416,7 +415,7 @@ class NetworkFailureTest(IorTestBase):
 
         # 9. Bring up the network interface.
         self.log_step("Bring up the network interface.")
-        errors.append(self.interface.bring_up(self.log))
+        errors.extend(self.interface.bring_up(self.log))
 
         # Some ranks may be excluded after bringing up the network interface. Check if
         # all ranks are joined. If not, restart the servers and check again.
