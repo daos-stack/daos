@@ -656,7 +656,7 @@ func (cmd *PoolQueryCmd) Execute(args []string) error {
 	resp, err := control.PoolQuery(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 
 	if cmd.JSONOutputEnabled() {
-		return cmd.OutputJSON(resp, err)
+		return cmd.OutputJSON(&resp.PoolInfo, err)
 	}
 
 	if err != nil {
