@@ -86,7 +86,7 @@ static void *progress_fn(void *arg)
 
 static int
 self_test_init(char *dest_name, crt_context_t *crt_ctx, crt_group_t **srv_grp, pthread_t *tid,
-	       char *attach_info_path, bool listen, bool use_agent)
+	       char *attach_info_path, bool listen, bool use_agent, bool no_sync)
 {
 	uint32_t	 init_flags = 0;
 	uint32_t	 grp_size;
@@ -95,6 +95,8 @@ self_test_init(char *dest_name, crt_context_t *crt_ctx, crt_group_t **srv_grp, p
 	int		 i;
 	d_rank_t	 max_rank = 0;
 	int		 ret;
+	crt_init_options_t  opt = {0};
+	crt_init_options_t *init_opt;
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(0, attach_retries, false, false);
@@ -105,19 +107,27 @@ self_test_init(char *dest_name, crt_context_t *crt_ctx, crt_group_t **srv_grp, p
 			fprintf(stderr, "dc_agent_init() failed. ret: %d\n", ret);
 			return ret;
 		}
-		ret = crtu_dc_mgmt_net_cfg_setenv(dest_name);
+		ret = crtu_dc_mgmt_net_cfg_setenv(dest_name, &opt);
 		if (ret != 0) {
 			D_ERROR("crtu_dc_mgmt_net_cfg_setenv() failed; ret = %d\n", ret);
 			return ret;
 		}
+
+		init_opt = &opt;
+	} else {
+		init_opt = NULL;
 	}
 
 	if (listen)
 		init_flags |= (CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
-	ret = crt_init(CRT_SELF_TEST_GROUP_NAME, init_flags);
+
+	ret = crt_init_opt(CRT_SELF_TEST_GROUP_NAME, init_flags, init_opt);
 	if (ret != 0)
 		return ret;
 
+	D_FREE(opt.cio_provider);
+	D_FREE(opt.cio_interface);
+	D_FREE(opt.cio_domain);
 	g_cart_inited = true;
 
 	if (attach_info_path) {
@@ -198,8 +208,11 @@ self_test_init(char *dest_name, crt_context_t *crt_ctx, crt_group_t **srv_grp, p
 	 * 60 - ping timeout
 	 * 120 - total timeout
 	 */
-	ret = crtu_wait_for_ranks(*crt_ctx, *srv_grp, rank_list, 0, 1, 60, 120);
-	D_ASSERTF(ret == 0, "wait_for_ranks() failed; ret=%d\n", ret);
+	/* Only ping ranks if not using agent, and user didn't ask for no-sync  */
+	if (!use_agent && !no_sync) {
+		ret = crtu_wait_for_ranks(*crt_ctx, *srv_grp, rank_list, 0, 1, 60, 120);
+		D_ASSERTF(ret == 0, "wait_for_ranks() failed; ret=%d\n", ret);
+	}
 
 	max_rank = rank_list->rl_ranks[0];
 	for (i = 1; i < rank_list->rl_nr; i++) {
@@ -805,7 +818,8 @@ static int
 run_self_test(struct st_size_params all_params[], int num_msg_sizes, int rep_count,
 	      int max_inflight, char *dest_name, struct st_endpoint *ms_endpts_in,
 	      uint32_t num_ms_endpts_in, struct st_endpoint *endpts, uint32_t num_endpts,
-	      int output_megabits, int16_t buf_alignment, char *attach_info_path, bool use_agent)
+	      int output_megabits, int16_t buf_alignment, char *attach_info_path, bool use_agent,
+	      bool no_sync)
 {
 	crt_context_t		  crt_ctx;
 	crt_group_t		 *srv_grp;
@@ -838,7 +852,7 @@ run_self_test(struct st_size_params all_params[], int num_msg_sizes, int rep_cou
 		listen = true;
 	/* Initialize CART */
 	ret = self_test_init(dest_name, &crt_ctx, &srv_grp, &tid, attach_info_path,
-			     listen /* run as server */, use_agent);
+			     listen /* run as server */, use_agent, no_sync);
 	if (ret != 0) {
 		D_ERROR("self_test_init failed; ret = %d\n", ret);
 		D_GOTO(cleanup_nothread, ret);
@@ -1245,7 +1259,12 @@ print_usage(const char *prog_name, const char *msg_sizes_str, int rep_count, int
 	    "         - D_INTERFACE\n"
 	    "         - D_PROVIDER\n"
 	    "         - D_DOMAIN\n"
-	    "         - CRT_TIMEOUT\n",
+	    "         - CRT_TIMEOUT\n"
+	    "      Note: Selecting -u automatically sets '--no-sync' option as well\n"
+	    "  --no-sync\n"
+	    "      Short version: -n\n"
+	    "      This option avoids pinging each rank in the group before running the test\n"
+	    "      Only applicable when running in without agent (without -u option)\n",
 	    prog_name, UINT32_MAX, CRT_SELF_TEST_AUTO_BULK_THRESH, msg_sizes_str, rep_count,
 	    max_inflight, CRT_ST_BUF_ALIGN_MIN, CRT_ST_BUF_ALIGN_MIN);
 }
@@ -1711,6 +1730,7 @@ int main(int argc, char *argv[])
 	int16_t                          buf_alignment    = CRT_ST_BUF_ALIGN_DEFAULT;
 	char				*attach_info_path = NULL;
 	bool                             use_agent        = false;
+	bool                             no_sync          = false;
 
 	ret = d_log_init();
 	if (ret != 0) {
@@ -1731,10 +1751,11 @@ int main(int argc, char *argv[])
 		    {"randomize-endpoints", no_argument, 0, 'q'},
 		    {"path", required_argument, 0, 'p'},
 		    {"use-daos-agent-env", no_argument, 0, 'u'},
+		    {"no-sync", no_argument, 0, 'n'},
 		    {"help", no_argument, 0, 'h'},
 		    {0, 0, 0, 0}};
 
-		c = getopt_long(argc, argv, "g:m:e:s:r:i:a:bhqp:u", long_options, NULL);
+		c = getopt_long(argc, argv, "g:m:e:s:r:i:a:bhqp:un", long_options, NULL);
 		if (c == -1)
 			break;
 
@@ -1788,6 +1809,9 @@ int main(int argc, char *argv[])
 			break;
 		case 'u':
 			use_agent = true;
+			break;
+		case 'n':
+			no_sync = true;
 			break;
 		case 'q':
 			g_randomize_endpoints = true;
@@ -1982,7 +2006,7 @@ int main(int argc, char *argv[])
 	/********************* Run the self test *********************/
 	ret = run_self_test(all_params, num_msg_sizes, rep_count, max_inflight, dest_name,
 			    ms_endpts, num_ms_endpts, endpts, num_endpts, output_megabits,
-			    buf_alignment, attach_info_path, use_agent);
+			    buf_alignment, attach_info_path, use_agent, no_sync);
 
 	/********************* Clean up *********************/
 cleanup:

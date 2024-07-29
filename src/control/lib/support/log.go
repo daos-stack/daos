@@ -86,7 +86,7 @@ const (
 )
 
 const DmgListDeviceCmd = "dmg storage query list-devices"
-const DmgDeviceHealthCmd = "dmg storage query device-health"
+const DmgDeviceHealthCmd = "dmg storage query list-devices --health"
 
 var DmgCmd = []string{
 	"dmg system get-prop",

@@ -19,6 +19,7 @@
 #include <daos/event.h>
 #include <daos/job.h>
 #include <daos/pool.h>
+#include <daos/security.h>
 #include "svc.pb-c.h"
 #include "rpc.h"
 #include <errno.h>
@@ -29,6 +30,8 @@ char agent_sys_name[DAOS_SYS_NAME_MAX + 1] = DAOS_DEFAULT_SYS_NAME;
 
 static struct dc_mgmt_sys_info info_g;
 static Mgmt__GetAttachInfoResp *resp_g;
+
+int	dc_mgmt_proto_version;
 
 int
 dc_cp(tse_task_t *task, void *data)
@@ -53,6 +56,27 @@ dc_deprecated(tse_task_t *task)
 }
 
 int
+dc_mgmt_srv_version(uint32_t *major, uint32_t *minor, uint32_t *patch, char **tag)
+{
+	if (major == NULL || minor == NULL || patch == NULL || tag == NULL) {
+		D_ERROR("major, minor, patch, tag must be non-null\n");
+		return -DER_INVAL;
+	}
+
+	if (resp_g == NULL || resp_g->build_info == NULL) {
+		D_ERROR("server build info unavailable\n");
+		return -DER_UNINIT;
+	}
+
+	*major = resp_g->build_info->major;
+	*minor = resp_g->build_info->minor;
+	*patch = resp_g->build_info->patch;
+	*tag   = resp_g->build_info->tag;
+
+	return 0;
+}
+
+int
 dc_mgmt_profile(char *path, int avg, bool start)
 {
 	struct dc_mgmt_sys	*sys;
@@ -71,8 +95,7 @@ dc_mgmt_profile(char *path, int avg, bool start)
 	ep.ep_grp = sys->sy_group;
 	ep.ep_rank = 0;
 	ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
-	opc = DAOS_RPC_OPCODE(MGMT_PROFILE, DAOS_MGMT_MODULE,
-			      DAOS_MGMT_VERSION);
+	opc = DAOS_RPC_OPCODE(MGMT_PROFILE, DAOS_MGMT_MODULE, dc_mgmt_proto_version);
 	rc = crt_req_create(daos_get_crt_ctx(), &ep, opc, &rpc);
 	if (rc != 0) {
 		D_ERROR("crt_req_create failed, rc: "DF_RC"\n", DP_RC(rc));
@@ -453,21 +476,30 @@ dc_mgmt_get_sys_info(const char *sys, struct daos_sys_info **out)
 	if (info == NULL)
 		D_GOTO(out_attach_info, rc = -DER_NOMEM);
 
+	D_ALLOC_ARRAY(info->dsi_ms_ranks, resp->n_ms_ranks);
+	if (info->dsi_ms_ranks == NULL)
+		D_GOTO(err_info, rc = -DER_NOMEM);
+	memcpy(info->dsi_ms_ranks, resp->ms_ranks, resp->n_ms_ranks * sizeof(uint32_t));
+	info->dsi_nr_ms_ranks = resp->n_ms_ranks;
+
 	rc = alloc_rank_uris(resp, &ranks);
 	if (rc != 0) {
 		D_ERROR("failed to allocate rank URIs: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(err_info, rc);
+		D_GOTO(err_ms_ranks, rc);
 	}
-
-	info->dsi_nr_ranks = resp->n_ms_ranks;
+	info->dsi_nr_ranks = resp->n_rank_uris;
 	info->dsi_ranks = ranks;
+
 	copy_str(info->dsi_system_name, internal.system_name);
 	copy_str(info->dsi_fabric_provider, internal.provider);
+	copy_str(info->dsi_agent_path, dc_agent_sockpath);
 
 	*out = info;
 
 	D_GOTO(out_attach_info, rc = 0);
 
+err_ms_ranks:
+	D_FREE(info->dsi_ms_ranks);
 err_info:
 	D_FREE(info);
 out_attach_info:
@@ -1045,8 +1077,7 @@ dc_mgmt_pool_find(struct dc_mgmt_sys *sys, const char *label, uuid_t puuid,
 	D_ASSERT(ms_ranks->rl_nr > 0);
 	idx = d_rand() % ms_ranks->rl_nr;
 	ctx = daos_get_crt_ctx();
-	opc = DAOS_RPC_OPCODE(MGMT_POOL_FIND, DAOS_MGMT_MODULE,
-			      DAOS_MGMT_VERSION);
+	opc = DAOS_RPC_OPCODE(MGMT_POOL_FIND, DAOS_MGMT_MODULE, dc_mgmt_proto_version);
 
 	srv_ep.ep_grp = sys->sy_group;
 	srv_ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
@@ -1250,16 +1281,189 @@ out:
 	return rc;
 }
 
+static void
+wipe_cred_iov(d_iov_t *cred)
+{
+	/* Ensure credential memory is wiped clean */
+	explicit_bzero(cred->iov_buf, cred->iov_buf_len);
+	daos_iov_free(cred);
+}
+
+int
+dc_mgmt_pool_list(tse_task_t *task)
+{
+	daos_mgmt_pool_list_t     *args;
+	d_rank_list_t             *ms_ranks;
+	struct rsvc_client         ms_client;
+	crt_endpoint_t             ep;
+	crt_rpc_t                 *rpc = NULL;
+	crt_opcode_t               opc;
+	struct mgmt_pool_list_in  *in  = NULL;
+	struct mgmt_pool_list_out *out = NULL;
+	struct dc_mgmt_sys        *sys;
+	int                        pidx;
+	int                        rc;
+
+	args = dc_task_get_args(task);
+	if (args->npools == NULL) {
+		D_ERROR("npools argument must not be NULL");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = dc_mgmt_sys_attach(args->grp, &sys);
+	if (rc != 0) {
+		DL_ERROR(rc, "cannot attach to DAOS system: %s", args->grp);
+		D_GOTO(out, rc);
+	}
+
+	ms_ranks = sys->sy_info.ms_ranks;
+	D_ASSERT(ms_ranks->rl_nr > 0);
+
+	rc = rsvc_client_init(&ms_client, ms_ranks);
+	if (rc != 0) {
+		DL_ERROR(rc, "failed to init ms client");
+		D_GOTO(out_grp, rc);
+	}
+
+	ep.ep_grp = sys->sy_group;
+	ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
+	opc       = DAOS_RPC_OPCODE(MGMT_POOL_LIST, DAOS_MGMT_MODULE, DAOS_MGMT_VERSION);
+
+rechoose:
+	rc = rsvc_client_choose(&ms_client, &ep);
+	if (rc != 0) {
+		DL_ERROR(rc, "failed to choose MS rank");
+		D_GOTO(out_client, rc);
+	}
+
+	rc = crt_req_create(daos_task2ctx(task), &ep, opc, &rpc);
+	if (rc != 0) {
+		DL_ERROR(rc, "crt_req_create(MGMT_POOL_LIST) failed");
+		D_GOTO(out_client, rc);
+	}
+
+	in          = crt_req_get(rpc);
+	in->pli_grp = (d_string_t)args->grp;
+	/* If provided pools is NULL, caller needs the number of pools
+	 * to be returned in npools. Set npools=0 in the request in this case
+	 * (caller value may be uninitialized).
+	 */
+	if (args->pools == NULL)
+		in->pli_npools = 0;
+	else
+		in->pli_npools = *args->npools;
+
+	/* Now fill in the client credential for the pool access checks. */
+	rc = dc_sec_request_creds(&in->pli_cred);
+	if (rc != 0) {
+		DL_ERROR(rc, "failed to obtain security credential");
+		D_GOTO(out_put_req, rc);
+	}
+
+	D_DEBUG(DB_MGMT, "req_npools=" DF_U64 " (pools=%p, *npools=" DF_U64 "\n", in->pli_npools,
+		args->pools, *args->npools);
+
+	crt_req_addref(rpc);
+	rc = daos_rpc_send_wait(rpc);
+	if (rc != 0) {
+		DL_ERROR(rc, "rpc send failed");
+		crt_req_decref(rpc);
+		wipe_cred_iov(&in->pli_cred);
+		goto rechoose;
+	}
+
+	out = crt_reply_get(rpc);
+	D_ASSERT(out != NULL);
+
+	rc = rsvc_client_complete_rpc(&ms_client, &ep, rc, out->plo_op.mo_rc, &out->plo_op.mo_hint);
+	if (rc == RSVC_CLIENT_RECHOOSE) {
+		crt_req_decref(rpc);
+		wipe_cred_iov(&in->pli_cred);
+		goto rechoose;
+	}
+
+	rc = out->plo_op.mo_rc;
+	if (rc != 0)
+		D_GOTO(out_put_req, rc);
+
+	*args->npools = out->plo_npools;
+
+	/* copy RPC response pools info to client buffer, if provided */
+	if (args->pools) {
+		/* Response ca_count expected <= client-specified npools */
+		for (pidx = 0; pidx < out->plo_pools.ca_count; pidx++) {
+			struct mgmt_pool_list_pool *rpc_pool = &out->plo_pools.ca_arrays[pidx];
+			daos_mgmt_pool_info_t      *cli_pool = &args->pools[pidx];
+
+			uuid_copy(cli_pool->mgpi_uuid, rpc_pool->plp_uuid);
+
+			cli_pool->mgpi_label = NULL;
+			D_STRNDUP(cli_pool->mgpi_label, rpc_pool->plp_label,
+				  DAOS_PROP_LABEL_MAX_LEN);
+			if (cli_pool->mgpi_label == NULL) {
+				D_ERROR("copy RPC reply label failed\n");
+				D_GOTO(out_free_args_pools, rc = -DER_NOMEM);
+			}
+
+			/* allocate rank list for caller (simplifies API) */
+			cli_pool->mgpi_svc = NULL;
+			rc = d_rank_list_dup(&cli_pool->mgpi_svc, rpc_pool->plp_svc_list);
+			if (rc != 0) {
+				D_ERROR("copy RPC reply svc list failed\n");
+				D_GOTO(out_free_args_pools, rc = -DER_NOMEM);
+			}
+		}
+	}
+
+out_free_args_pools:
+	if (args->pools && (rc != 0)) {
+		for (pidx = 0; pidx < out->plo_pools.ca_count; pidx++) {
+			daos_mgmt_pool_info_t *pool = &args->pools[pidx];
+
+			if (pool->mgpi_label)
+				D_FREE(pool->mgpi_label);
+			if (pool->mgpi_svc)
+				d_rank_list_free(pool->mgpi_svc);
+		}
+	}
+out_put_req:
+	if (rc != 0)
+		DL_ERROR(rc, "failed to list pools");
+
+	crt_req_decref(rpc);
+	wipe_cred_iov(&in->pli_cred);
+out_client:
+	rsvc_client_fini(&ms_client);
+out_grp:
+	dc_mgmt_sys_detach(sys);
+out:
+	tse_task_complete(task, rc);
+	return rc;
+}
+
 /**
  * Initialize management interface
  */
 int
 dc_mgmt_init()
 {
-	int rc;
+	int		rc;
+	uint32_t        ver_array[2] = {DAOS_MGMT_VERSION - 1, DAOS_MGMT_VERSION};
 
-	rc = daos_rpc_register(&mgmt_proto_fmt, MGMT_PROTO_CLI_COUNT,
-				NULL, DAOS_MGMT_MODULE);
+	rc = daos_rpc_proto_query(mgmt_proto_fmt_v2.cpf_base, ver_array, 2, &dc_mgmt_proto_version);
+	if (rc)
+		return rc;
+
+	if (dc_mgmt_proto_version == DAOS_MGMT_VERSION - 1) {
+		rc = daos_rpc_register(&mgmt_proto_fmt_v2, MGMT_PROTO_CLI_COUNT,
+				       NULL, DAOS_MGMT_MODULE);
+	} else if (dc_mgmt_proto_version == DAOS_MGMT_VERSION) {
+		rc = daos_rpc_register(&mgmt_proto_fmt_v3, MGMT_PROTO_CLI_COUNT,
+				       NULL, DAOS_MGMT_MODULE);
+	} else {
+		D_ERROR("version %d mgmt RPC not supported.\n", dc_mgmt_proto_version);
+		rc = -DER_PROTO;
+	}
 	if (rc != 0)
 		D_ERROR("failed to register mgmt RPCs: "DF_RC"\n", DP_RC(rc));
 
@@ -1272,9 +1476,13 @@ dc_mgmt_init()
 void
 dc_mgmt_fini()
 {
-	int rc;
+	int	rc = 0;
 
-	rc = daos_rpc_unregister(&mgmt_proto_fmt);
+	if (dc_mgmt_proto_version == DAOS_MGMT_VERSION - 1)
+		rc = daos_rpc_unregister(&mgmt_proto_fmt_v2);
+	else if (dc_mgmt_proto_version == DAOS_MGMT_VERSION)
+		rc = daos_rpc_unregister(&mgmt_proto_fmt_v3);
+
 	if (rc != 0)
 		D_ERROR("failed to unregister mgmt RPCs: "DF_RC"\n", DP_RC(rc));
 }

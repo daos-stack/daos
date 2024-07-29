@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -30,7 +30,7 @@ type LibHandle struct {
 // by the names specified in libs and returning the first that is successfully
 // opened. Callers are responsible for closing the handler. If no library can
 // be successfully opened, an error is returned.
-func GetHandle(libs []string) (*LibHandle, error) {
+func GetHandle(libs ...string) (*LibHandle, error) {
 	for _, name := range libs {
 		libname := C.CString(name)
 		defer C.free(unsafe.Pointer(libname))

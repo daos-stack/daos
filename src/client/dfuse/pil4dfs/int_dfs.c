@@ -2975,6 +2975,10 @@ new_xstat(int ver, const char *path, struct stat *stat_buf)
 
 	if (!d_hook_enabled)
 		return next_xstat(ver, path, stat_buf);
+	if (path[0] == 0) {
+		errno = ENOENT;
+		return (-1);
+	}
 
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
@@ -3032,6 +3036,10 @@ new_lxstat(int ver, const char *path, struct stat *stat_buf)
 
 	if (!d_hook_enabled)
 		return libc_lxstat(ver, path, stat_buf);
+	if (path[0] == 0) {
+		errno = ENOENT;
+		return (-1);
+	}
 
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
@@ -3076,6 +3084,10 @@ new_fxstatat(int ver, int dirfd, const char *path, struct stat *stat_buf, int fl
 
 	if (!d_hook_enabled)
 		return libc_fxstatat(ver, dirfd, path, stat_buf, flags);
+	if (path[0] == 0 && ((flags & AT_EMPTY_PATH) == 0)) {
+		errno = ENOENT;
+		return (-1);
+	}
 
 	if (path[0] == '/') {
 		/* Absolute path, dirfd is ignored */
@@ -3129,6 +3141,11 @@ new_fstatat(int dirfd, const char *__restrict path, struct stat *__restrict stat
 
 	if (!d_hook_enabled)
 		return libc_fstatat(dirfd, path, stat_buf, flags);
+
+	if (path[0] == 0 && ((flags & AT_EMPTY_PATH) == 0)) {
+		errno = ENOENT;
+		return (-1);
+	}
 
 	if (path[0] == '/') {
 		/* Absolute path, dirfd is ignored */
@@ -3211,6 +3228,11 @@ statx(int dirfd, const char *path, int flags, unsigned int mask, struct statx *s
 		next_statx = dlsym(RTLD_NEXT, "statx");
 		D_ASSERT(next_statx != NULL);
 	}
+	if (path[0] == 0 && ((flags & AT_EMPTY_PATH) == 0)) {
+		errno = ENOENT;
+		return (-1);
+	}
+
 	if (!d_hook_enabled)
 		return next_statx(dirfd, path, flags, mask, statx_buf);
 
@@ -4140,8 +4162,8 @@ pre_envp(char *const envp[], char ***new_envp)
 				if (!env_set[i])
 					continue;
 				if (!env_found[i]) {
-					if (memcmp(envp[num_entry], STR_AND_SIZE_M1(env_list[i]))
-					    == 0) {
+					if (memcmp(envp[num_entry], env_list[i],
+						   strlen(env_list[i])) == 0) {
 						env_found[i] = true;
 						num_entry_found++;
 					}

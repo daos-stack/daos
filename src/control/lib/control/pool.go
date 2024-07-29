@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"os/user"
 	"sort"
 	"strings"
 	"time"
@@ -28,7 +29,6 @@ import (
 	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
-	"github.com/daos-stack/daos/src/control/security/auth"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -50,22 +50,19 @@ func checkUUID(uuidStr string) error {
 
 // formatNameGroup converts system names to principals, If user or group is not
 // provided, the effective user and/or effective group will be used.
-func formatNameGroup(ext auth.UserExt, usr string, grp string) (string, string, error) {
+func formatNameGroup(usr string, grp string) (string, string, error) {
 	if usr == "" || grp == "" {
-		eUsr, err := ext.Current()
+		eUsr, err := user.Current()
 		if err != nil {
 			return "", "", err
 		}
 
 		if usr == "" {
-			usr = eUsr.Username()
+			usr = eUsr.Username
 		}
 		if grp == "" {
-			gid, err := eUsr.Gid()
-			if err != nil {
-				return "", "", err
-			}
-			eGrp, err := ext.LookupGroupID(gid)
+			gid := eUsr.Gid
+			eGrp, err := user.LookupGroupId(gid)
 			if err != nil {
 				return "", "", err
 			}
@@ -202,7 +199,6 @@ type (
 	// PoolCreateReq contains the parameters for a pool create request.
 	PoolCreateReq struct {
 		poolRequest
-		userExt    auth.UserExt
 		User       string
 		UserGroup  string
 		ACL        *AccessControlList `json:"-"`
@@ -287,11 +283,8 @@ func poolCreateReqChkSizes(log debugLogger, getMaxPoolSz maxPoolSizeGetter, req 
 }
 
 func poolCreateGenPBReq(ctx context.Context, rpcClient UnaryInvoker, in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err error) {
-	if in.userExt == nil {
-		in.userExt = &auth.External{}
-	}
 	// ensure pool ownership is set up correctly
-	in.User, in.UserGroup, err = formatNameGroup(in.userExt, in.User, in.UserGroup)
+	in.User, in.UserGroup, err = formatNameGroup(in.User, in.UserGroup)
 	if err != nil {
 		return
 	}
@@ -472,78 +465,17 @@ func (pqr *PoolQueryResp) MarshalJSON() ([]byte, error) {
 		return []byte("null"), nil
 	}
 
-	piJSON, err := json.Marshal(&pqr.PoolInfo)
-	if err != nil {
-		return nil, err
-	}
-
-	aux := &struct {
-		EnabledRanks  *[]ranklist.Rank `json:"enabled_ranks"`
-		DisabledRanks *[]ranklist.Rank `json:"disabled_ranks"`
-		Status        int32            `json:"status"`
-	}{
-		Status: pqr.Status,
-	}
-
-	if pqr.EnabledRanks != nil {
-		ranks := pqr.EnabledRanks.Ranks()
-		aux.EnabledRanks = &ranks
-	}
-
-	if pqr.DisabledRanks != nil {
-		ranks := pqr.DisabledRanks.Ranks()
-		aux.DisabledRanks = &ranks
-	}
-
-	auxJSON, err := json.Marshal(&aux)
-	if err != nil {
-		return nil, err
-	}
-
-	// Kinda gross, but needed to merge the embedded struct's MarshalJSON
-	// output with this one's.
-	piJSON[0] = ','
-	return append(auxJSON[:len(auxJSON)-1], piJSON...), nil
-}
-
-func unmarshallRankSet(ranks string) (*ranklist.RankSet, error) {
-	switch ranks {
-	case "":
-		return nil, nil
-	case "[]":
-		return &ranklist.RankSet{}, nil
-	default:
-		return ranklist.CreateRankSet(ranks)
-	}
-}
-
-func (pqr *PoolQueryResp) UnmarshalJSON(data []byte) error {
-	type Alias PoolQueryResp
-	aux := &struct {
-		EnabledRanks  string `json:"enabled_ranks"`
-		DisabledRanks string `json:"disabled_ranks"`
+	// Bypass the MarshalJSON() implementation in daos.PoolInfo,
+	// which would otherwise be promoted, resulting in the Status
+	// field not being included.
+	type Alias daos.PoolInfo
+	return json.Marshal(&struct {
 		*Alias
+		Status int32 `json:"status"`
 	}{
-		Alias: (*Alias)(pqr),
-	}
-
-	if err := json.Unmarshal(data, &aux); err != nil {
-		return err
-	}
-
-	if rankSet, err := unmarshallRankSet(aux.EnabledRanks); err != nil {
-		return err
-	} else {
-		pqr.EnabledRanks = rankSet
-	}
-
-	if rankSet, err := unmarshallRankSet(aux.DisabledRanks); err != nil {
-		return err
-	} else {
-		pqr.DisabledRanks = rankSet
-	}
-
-	return nil
+		Alias:  (*Alias)(&pqr.PoolInfo),
+		Status: pqr.Status,
+	})
 }
 
 // PoolQuery performs a pool query operation for the specified pool ID on a

@@ -28,7 +28,6 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/security/auth"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -511,7 +510,6 @@ func TestControl_poolCreateReqChkSizes(t *testing.T) {
 }
 
 func TestControl_PoolCreate(t *testing.T) {
-	mockExt := auth.NewMockExtWithUser("poolTest", 0, 0)
 	mockTierRatios := []float64{0.06, 0.94}
 	mockTierBytes := []uint64{humanize.GiByte * 6, humanize.GiByte * 94}
 	validReq := &PoolCreateReq{
@@ -704,9 +702,6 @@ func TestControl_PoolCreate(t *testing.T) {
 			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
-			if tc.req.userExt == nil {
-				tc.req.userExt = mockExt
-			}
 			gotResp, gotErr := PoolCreate(ctx, mi, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
@@ -796,7 +791,7 @@ func TestControl_PoolQueryResp_MarshalJSON(t *testing.T) {
 		},
 		"null rankset": {
 			pqr: &PoolQueryResp{
-				Status: 0,
+				Status: 42,
 				PoolInfo: daos.PoolInfo{
 					QueryMask:        daos.DefaultPoolQueryMask,
 					State:            daos.PoolServiceStateReady,
@@ -812,11 +807,11 @@ func TestControl_PoolQueryResp_MarshalJSON(t *testing.T) {
 					UpgradeLayoutVer: 8,
 				},
 			},
-			exp: `{"enabled_ranks":null,"disabled_ranks":null,"status":0,"query_mask":"rebuild,space","state":"Ready","uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":[0,1,2],"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
+			exp: `{"query_mask":"rebuild,space","state":"Ready","uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":[0,1,2],"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8,"status":42}`,
 		},
 		"valid rankset": {
 			pqr: &PoolQueryResp{
-				Status: 0,
+				Status: 42,
 				PoolInfo: daos.PoolInfo{
 					QueryMask:        daos.DefaultPoolQueryMask,
 					State:            daos.PoolServiceStateReady,
@@ -834,7 +829,7 @@ func TestControl_PoolQueryResp_MarshalJSON(t *testing.T) {
 					UpgradeLayoutVer: 8,
 				},
 			},
-			exp: `{"enabled_ranks":[0,1,2,3,5],"disabled_ranks":[],"status":0,"query_mask":"rebuild,space","state":"Ready","uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":[0,1,2],"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
+			exp: `{"query_mask":"rebuild,space","state":"Ready","uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":[0,1,2],"rebuild":null,"tier_stats":null,"enabled_ranks":[0,1,2,3,5],"disabled_ranks":[],"pool_layout_ver":7,"upgrade_layout_ver":8,"status":42}`,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
