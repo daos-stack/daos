@@ -569,7 +569,7 @@ class SoakTestBase(TestWithServers):
         resv_bytes = self.params.get("resv_bytes", test_param + "*", 500000000)
         ignore_soak_errors = self.params.get("ignore_soak_errors", test_param + "*", False)
         self.enable_il = self.params.get("enable_intercept_lib", test_param + "*", False)
-        self.sudo_cmd = "sudo" if enable_sudo else ""
+        self.sudo_cmd = "sudo -n" if enable_sudo else ""
         self.enable_remote_logging = self.params.get(
             "enable_remote_logging", os.path.join(test_param, "*"), False)
         self.enable_scrubber = self.params.get(
