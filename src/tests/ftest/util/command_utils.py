@@ -1021,7 +1021,7 @@ class YamlCommand(SubProcessCommand):
                     yaml.get_attribute_names(LogParameter))
                 for name in data:
                     create_directory(
-                        hosts, name, verbose=True, raise_exception=False)
+                        self.log, hosts, name, verbose=True, raise_exception=False)
                     for file_name in data[name]:
                         src_file = os.path.join(source, file_name)
                         dst_file = os.path.join(name, file_name)
@@ -1032,15 +1032,15 @@ class YamlCommand(SubProcessCommand):
                             dst_file.startswith('/etc')
                         _owner = self.certificate_owner if _sudo else None
                         result = distribute_files(
-                            hosts, src_file, dst_file, mkdir=False,
+                            self.log, hosts, src_file, dst_file, mkdir=False,
                             verbose=True, raise_exception=False, sudo=_sudo,
                             owner=_owner)
-                        if result.exit_status != 0:
+                        if not result.passed:
                             # TODO warns on copying dmg certs because it is done multiple times
                             # to the same destination
                             self.log.info(
                                 "    WARNING: %s copy failed on %s:\n%s",
-                                dst_file, hosts, result)
+                                dst_file, result.failed_hosts, result)
                     names.add(name)
             yaml = yaml.other_params
 
@@ -1076,7 +1076,7 @@ class YamlCommand(SubProcessCommand):
                             self.yaml.filename.startswith('/etc')
                     _owner = self.certificate_owner if _sudo else None
                     distribute_files(
-                        hosts, self.temporary_file, self.yaml.filename,
+                        self.log, hosts, self.temporary_file, self.yaml.filename,
                         verbose=True, sudo=_sudo, owner=_owner)
                 except DaosTestError as error:
                     raise CommandFailure(
@@ -1106,11 +1106,11 @@ class YamlCommand(SubProcessCommand):
                     self.command, directory, user, nodes)
                 try:
                     if user == getuser():
-                        create_directory(nodes, directory)
+                        create_directory(self.log, nodes, directory)
                     else:
-                        create_directory(nodes, directory, sudo=True)
+                        create_directory(self.log, nodes, directory, sudo=True)
                         change_file_owner(
-                            nodes, directory, user, get_primary_group(user), sudo=True)
+                            self.log, nodes, directory, user, get_primary_group(user), sudo=True)
                 except DaosTestError as error:
                     raise CommandFailure(
                         "{}: error setting up missing socket directory {} for "
