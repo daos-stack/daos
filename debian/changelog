@@ -1,3 +1,15 @@
+daos (2.6.0-3) unstable; urgency=medium
+  [ Phillip Henderson ]
+  * Third release candidate for 2.6.0
+
+ -- Phillip Henderson <phillip.henderson@intel.com>  Wed, 17 Jul 2024 11:17:00 -0500
+
+daos (2.6.0-2) unstable; urgency=medium
+  [ Phillip Henderson ]
+  * Second release candidate for 2.6.0
+
+ -- Phillip Henderson <phillip.henderson@intel.com>  Wed, 03 Jul 2024 15:43:00 -0500
+
 daos (2.6.0-1) unstable; urgency=medium
   [ Phillip Henderson ]
   * First release candidate for 2.6.0

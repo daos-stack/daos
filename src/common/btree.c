@@ -512,6 +512,7 @@ hkey_int_gen(d_iov_t *key,  void *hkey)
 	 * this is a little nicer to read.
 	 */
 	*(uint64_t *)hkey = 0;
+	D_ASSERT(key->iov_buf != NULL);
 	memcpy(hkey, key->iov_buf, key->iov_len);
 }
 
