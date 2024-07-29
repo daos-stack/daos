@@ -850,7 +850,7 @@ class Systemctl(JobManager):
             _sudo = self.job.run_user != getuser()
             _owner = self.job.run_user if _sudo else None
             distribute_files(
-                self._hosts, temp.name, override_file, mkdir=False,
+                self.log, self._hosts, temp.name, override_file, mkdir=False,
                 verbose=self.verbose, raise_exception=True, sudo=_sudo, owner=_owner)
 
         # Reload on all hosts to pick up changes
