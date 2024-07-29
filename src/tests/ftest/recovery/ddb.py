@@ -509,7 +509,7 @@ class DdbTest(RecoveryTestBase):
         # Copy the created file to server node.
         try:
             distribute_files(
-                hosts=host, source=load_file_path, destination=load_file_path,
+                self.log, hosts=host, source=load_file_path, destination=load_file_path,
                 mkdir=False)
         except DaosTestError as error:
             raise CommandFailure(

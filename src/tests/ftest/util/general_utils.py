@@ -896,11 +896,12 @@ def convert_string(item, separator=","):
     return item
 
 
-def create_directory(hosts, directory, timeout=15, verbose=True,
+def create_directory(log, hosts, directory, timeout=15, verbose=True,
                      raise_exception=True, sudo=False):
     """Create the specified directory on the specified hosts.
 
     Args:
+        log (logger): logger for the messages produced by this method.
         hosts (NodeSet): hosts on which to create the directory
         directory (str): the directory to create
         timeout (int, optional): command timeout. Defaults to 15 seconds.
@@ -915,28 +916,22 @@ def create_directory(hosts, directory, timeout=15, verbose=True,
         DaosTestError: if there is an error running the command
 
     Returns:
-        CmdResult: an avocado.utils.process CmdResult object containing the
-            result of the command execution.  A CmdResult object has the
-            following properties:
-                command         - command string
-                exit_status     - exit_status of the command
-                stdout          - the stdout
-                stderr          - the stderr
-                duration        - command execution time
-                interrupted     - whether the command completed within timeout
-                pid             - command's pid
+        CommandResult: groups of command results from the same hosts with the same return status
 
     """
-    mkdir_command = "/usr/bin/mkdir -p {}".format(directory)
-    command = get_clush_command(hosts, args="-S -B -v", command=mkdir_command, command_sudo=sudo)
-    return run_command(command, timeout=timeout, verbose=verbose, raise_exception=raise_exception)
+    mkdir_command = command_as_user(f"/usr/bin/mkdir -p {directory}", "root" if sudo else None)
+    result = run_remote(log, hosts, mkdir_command, verbose=verbose, timeout=timeout)
+    if raise_exception and not result.passed:
+        raise DaosTestError(f"Error running: {mkdir_command}")
+    return result
 
 
-def change_file_owner(hosts, filename, owner, group, timeout=15, verbose=True,
+def change_file_owner(log, hosts, filename, owner, group, timeout=15, verbose=True,
                       raise_exception=True, sudo=False):
     """Create the specified directory on the specified hosts.
 
     Args:
+        log (logger): logger for the messages produced by this method.
         hosts (NodeSet): hosts on which to create the directory
         filename (str): the file for which to change ownership
         owner (str): new owner of the file
@@ -953,24 +948,19 @@ def change_file_owner(hosts, filename, owner, group, timeout=15, verbose=True,
         DaosTestError: if there is an error running the command
 
     Returns:
-        CmdResult: an avocado.utils.process CmdResult object containing the
-            result of the command execution.  A CmdResult object has the
-            following properties:
-                command         - command string
-                exit_status     - exit_status of the command
-                stdout          - the stdout
-                stderr          - the stderr
-                duration        - command execution time
-                interrupted     - whether the command completed within timeout
-                pid             - command's pid
+        CommandResult: groups of command results from the same hosts with the same return status
 
     """
     chown_command = get_chown_command(owner, group, file=filename)
-    command = get_clush_command(hosts, args="-S -v", command=chown_command, command_sudo=sudo)
-    return run_command(command, timeout=timeout, verbose=verbose, raise_exception=raise_exception)
+
+    command = command_as_user(chown_command, "root" if sudo else None)
+    result = run_remote(log, hosts, command, verbose=verbose, timeout=timeout)
+    if raise_exception and not result.passed:
+        raise DaosTestError(f"Error running: {command}")
+    return result
 
 
-def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
+def distribute_files(log, hosts, source, destination, mkdir=True, timeout=60,
                      verbose=True, raise_exception=True, sudo=False,
                      owner=None):
     """Copy the source to the destination on each of the specified hosts.
@@ -979,6 +969,7 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
     the specified hosts prior to copying the source.
 
     Args:
+        log (logger): logger for the messages produced by this method.
         hosts (NodeSet): hosts on which to copy the source
         source (str): the file to copy to the hosts
         destination (str): the host location in which to copy the source
@@ -1014,9 +1005,9 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
     result = None
     if mkdir:
         result = create_directory(
-            hosts, os.path.dirname(destination), verbose=verbose,
+            log, hosts, os.path.dirname(destination), verbose=verbose,
             raise_exception=raise_exception)
-    if result is None or result.exit_status == 0:
+    if result is None or result.passed:
         if sudo:
             # In order to copy a protected file to a remote host in CI the
             # source will first be copied as is to the remote host
@@ -1025,32 +1016,32 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
             if other_hosts:
                 # Existing files with strict file permissions can cause the
                 # subsequent non-sudo copy to fail, so remove the file first
-                rm_command = get_clush_command(
-                    other_hosts, args="-S -v", command="rm -f {}".format(source),
-                    command_sudo=True)
-                run_command(rm_command, verbose=verbose, raise_exception=False)
+                rm_command = command_as_user(f"rm -f {source}", "root")
+                run_remote(log, other_hosts, rm_command, verbose=verbose)
                 result = distribute_files(
-                    other_hosts, source, source, mkdir=True,
+                    log, other_hosts, source, source, mkdir=True,
                     timeout=timeout, verbose=verbose,
                     raise_exception=raise_exception, sudo=False, owner=None)
-            if result is None or result.exit_status == 0:
+            if result is None or result.passed:
                 # Then a local sudo copy will be executed on the remote node to
                 # copy the source to the destination
-                command = get_clush_command(
-                    hosts, args="-S -v", command="cp {} {}".format(source, destination),
-                    command_sudo=True)
-                result = run_command(command, timeout, verbose, raise_exception)
+                cp_cmd = command_as_user(f"cp {source} {destination}", "root")
+                result = run_remote(log, hosts, cp_cmd, verbose=verbose, timeout=timeout)
+                if raise_exception and not result.passed:
+                    raise DaosTestError(f"Error running: {cp_cmd}")
         else:
             # Without the sudo requirement copy the source to the destination
             # directly with clush
             command = get_clush_command(
-                hosts, args="-S -v --copy {} --dest {}".format(source, destination))
-            result = run_command(command, timeout, verbose, raise_exception)
+                hosts, args=f"-S -v --copy {source} --dest {destination}", timeout=timeout)
+            result = run_local(log, command, verbose=verbose)
+            if raise_exception and not result.passed:
+                raise DaosTestError(f"Error running: {command}")
 
         # If requested update the ownership of the destination file
-        if owner is not None and result.exit_status == 0:
+        if owner is not None and result.passed:
             change_file_owner(
-                hosts, destination, owner, get_primary_group(owner), timeout=timeout,
+                log, hosts, destination, owner, get_primary_group(owner), timeout=timeout,
                 verbose=verbose, raise_exception=raise_exception, sudo=sudo)
     return result
 
