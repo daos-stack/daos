@@ -20,7 +20,7 @@ from util.environment_utils import TestEnvironment
 from util.host_utils import HostException, HostInfo, get_local_host, get_node_set
 from util.logger_utils import LOG_FILE_FORMAT, get_file_handler
 from util.results_utils import LaunchTestName
-from util.run_utils import RunException, run_local, run_remote
+from util.run_utils import RunException, run_local, run_local_subprocess, run_remote
 from util.slurm_utils import create_partition, delete_partition, show_partition
 from util.storage_utils import StorageException, StorageInfo
 from util.user_utils import get_group_id, get_user_groups, groupadd, useradd, userdel
@@ -389,9 +389,9 @@ class TestRunner():
             "[Test %s/%s] Running the %s test on repetition %s/%s",
             number, self.total_tests, test, repeat, self.total_repeats)
         start_time = int(time.time())
-        result = run_local(logger, " ".join(command))
+        return_code = run_local_subprocess(
+            logger, " ".join(command), capture_output=False, check=False).returncode
         end_time = int(time.time())
-        return_code = result.output[0].returncode
         if return_code == 0:
             logger.debug("All avocado test variants passed")
         elif return_code & 1 == 1:

@@ -4,6 +4,8 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
+import shlex
+import subprocess
 import time
 from getpass import getuser
 from socket import gethostname
@@ -541,3 +543,82 @@ def stop_processes(log, hosts, pattern, verbose=True, timeout=60, exclude=None, 
     if processes_running:
         log.debug("Processes still running on %s that match: %s", processes_running, pattern_match)
     return processes_detected, processes_running
+
+
+def run_local_subprocess(log, command, capture_output=True, timeout=None, check=False, verbose=True):
+    """Run the command locally.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        command (str): command from which to obtain the output
+        capture_output(bool, optional): whether or not to include the command output in the
+            subprocess.CompletedProcess.stdout returned by this method. Defaults to True.
+        timeout (int, optional): number of seconds to wait for the command to complete.
+            Defaults to None.
+        check (bool, optional): if set the method will raise an exception if the command does not
+            yield a return code equal to zero. Defaults to False.
+        verbose (bool, optional): if set log the output of the command (capture_output must also be
+            set). Defaults to True.
+
+    Raises:
+        RunException: if the command fails: times out (timeout must be specified),
+            yields a non-zero exit status (check must be True), is interrupted by the user, or
+            encounters some other exception.
+
+    Returns:
+        subprocess.CompletedProcess: an object representing the result of the command execution with
+            the following properties:
+                - args (the command argument)
+                - returncode
+                - stdout (only set if capture_output=True)
+                - stderr (not used; included in stdout)
+    """
+    local_host = gethostname().split(".")[0]
+    kwargs = {"encoding": "utf-8", "shell": False, "check": check, "timeout": timeout}
+    if capture_output:
+        kwargs["stdout"] = subprocess.PIPE
+        kwargs["stderr"] = subprocess.STDOUT
+    if timeout and verbose:
+        log.debug("Running on %s with a %s timeout: %s", local_host, timeout, command)
+    elif verbose:
+        log.debug("Running on %s: %s", local_host, command)
+
+    try:
+        # pylint: disable=subprocess-run-check
+        result = subprocess.run(shlex.split(command), **kwargs)     # nosec
+
+    except subprocess.TimeoutExpired as error:
+        # Raised if command times out
+        log.debug(str(error))
+        log.debug("  output: %s", error.output)
+        log.debug("  stderr: %s", error.stderr)
+        raise RunException(f"Command '{command}' exceed {timeout}s timeout") from error
+
+    except subprocess.CalledProcessError as error:
+        # Raised if command yields a non-zero return status with check=True
+        log.debug(str(error))
+        log.debug("  output: %s", error.output)
+        log.debug("  stderr: %s", error.stderr)
+        raise RunException(f"Command '{command}' returned non-zero status") from error
+
+    except KeyboardInterrupt as error:
+        # User Ctrl-C
+        message = f"Command '{command}' interrupted by user"
+        log.debug(message)
+        raise RunException(message) from error
+
+    except Exception as error:
+        # Catch all
+        message = f"Command '{command}' encountered unknown error"
+        log.debug(message)
+        log.debug(str(error))
+        raise RunException(message) from error
+
+    if capture_output and verbose:
+        # Log the output of the command
+        log.debug("  %s (rc=%s):", local_host, result.returncode)
+        if result.stdout:
+            for line in result.stdout.splitlines():
+                log.debug("    %s", line)
+
+    return result
