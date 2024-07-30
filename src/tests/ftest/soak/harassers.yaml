@@ -3,7 +3,7 @@ hosts:
   test_servers: 8
   # servers if a server partition is defined
   # server_partition: daos_server
-  # client_partition: daos_client
+  client_partition: daos_client
   # client_reservation: daos-test
 orterun:
   allow_run_as_root: true

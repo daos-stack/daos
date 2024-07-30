@@ -31,8 +31,6 @@ from soak_utils import (SoakTestError, add_pools, build_job_script, cleanup_dfus
                         launch_server_stop_start, launch_snapshot, launch_vmd_identify_check,
                         reserved_file_copy, run_event_check, run_metrics_check, run_monitor_check)
 
-J_LOCK = threading.Lock()
-
 
 class SoakTestBase(TestWithServers):
     # pylint: disable=too-many-public-methods
@@ -82,7 +80,7 @@ class SoakTestBase(TestWithServers):
         self.soak_dir = None
         self.enable_scrubber = False
         self.job_scheduler = None
-        self.Job_List = None
+        self.joblist = None
         self.enable_debug_msg = False
 
     def setUp(self):
@@ -315,7 +313,7 @@ class SoakTestBase(TestWithServers):
         env = ";".join([f"export LD_LIBRARY_PATH={lib_path}",
                         f"export PATH={path}",
                         f"export VIRTUAL_ENV={v_env}"])
-        for job_dict in self.Job_List:
+        for job_dict in self.joblist:
             jobid_list.append(job_dict["jobid"])
         self.log.info(f"Submitting {len(jobid_list)} jobs at {time.ctime()}")
         while True:
@@ -323,7 +321,7 @@ class SoakTestBase(TestWithServers):
                 break
             jobs = []
             job_results = {}
-            for job_dict in self.Job_List:
+            for job_dict in self.joblist:
                 job_id = job_dict["jobid"]
                 if job_id in jobid_list:
                     node_count = job_dict["nodesperjob"]
@@ -424,7 +422,7 @@ class SoakTestBase(TestWithServers):
                     # Create a dictionary of all job definitions
                     for jobscript in jobscripts:
                         jobtimeout = self.params.get("job_timeout", "/run/" + job + "/*", 10)
-                        self.Job_List.extend([{"jobscript": jobscript[0],
+                        self.joblist.extend([{"jobscript": jobscript[0],
                                                "nodesperjob": npj,
                                                "taskspernode": ppn,
                                                "hostlist": None,
@@ -434,8 +432,7 @@ class SoakTestBase(TestWithServers):
                                                "joberrlog": jobscript[2]}])
         # randomize job list
         random.seed(4)
-        random.shuffle(self.Job_List)
-        return
+        random.shuffle(self.joblist)
 
     def job_startup(self):
         """Launch the job script.
@@ -452,7 +449,7 @@ class SoakTestBase(TestWithServers):
             return job_id_list
 
         if self.job_scheduler == "slurm":
-            for job_dict in self.Job_List:
+            for job_dict in self.joblist:
                 script = job_dict["jobscript"]
                 try:
                     job_id = slurm_utils.run_slurm_script(self.log, str(script))
@@ -473,7 +470,7 @@ class SoakTestBase(TestWithServers):
                     job_id_list = []
                     raise SoakTestError(f"<<FAILED: Soak {self.test_name}: {err_msg}>>")
         else:
-            for job_dict in self.Job_List:
+            for job_dict in self.joblist:
                 job_dict["jobid"] = get_id()
                 job_id_list.append(job_dict["jobid"])
 
@@ -495,6 +492,8 @@ class SoakTestBase(TestWithServers):
             failed_job_id_list: IDs of each job that failed in slurm
 
         """
+        # pylint: disable=too-many-nested-blocks
+
         self.log.info("<<Job Completion - %s >> at %s", self.test_name, time.ctime())
         harasser_interval = 0
         failed_harasser_msg = None
@@ -591,7 +590,7 @@ class SoakTestBase(TestWithServers):
 
         """
         jobid_list = []
-        self.Job_List = []
+        self.joblist = []
         # Update the remote log directories from new loop/pass
         sharedsoaktest_dir = self.sharedsoak_dir + "/pass" + str(self.loop)
         outputsoaktest_dir = self.outputsoak_dir + "/pass" + str(self.loop)
@@ -638,7 +637,7 @@ class SoakTestBase(TestWithServers):
 
         """
         self.soak_results = {}
-        self.Job_List = []
+        self.joblist = []
         self.pool = []
         self.container = []
         self.harasser_results = {}

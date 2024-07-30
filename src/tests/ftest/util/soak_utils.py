@@ -59,16 +59,21 @@ def ddhhmmss_format(seconds):
 
 
 def get_id():
+    """Increment a counter to generate job ids
+
+    Returns:
+        int : next counter value
+    """
     return next(id_counter)
 
 
 def debug_logging(log, enable_debug_msg, log_msg):
-    """_summary_
+    """Enable debug messages in log file.
 
     Args:
-        log (_type_): _description_
-        enable_debug_msg (_type_): _description_
-        log_msg (_type_): _description_
+        log (logger): logger for the messages produced by this method
+        enable_debug_msg (boolean): If true, the debug message will be written to log
+        log_msg (str): debug message to write to log
     """
     if enable_debug_msg:
         log.debug(log_msg)
@@ -383,19 +388,19 @@ def wait_for_pool_rebuild(self, pool, name):
 
 def launch_jobscript(
         log, job_queue, job_id, host_list, env, script, job_log, error_log, timeout, test):
-    """_summary_
+    """Launch the job script on remote node.
 
     Args:
-        log (_type_): _description_
-        job_queue (_type_): _description_
-        job_id (_type_): _description_
-        host_list (_type_): _description_
-        env (_type_): _description_
-        script (_type_): _description_
-        job_log (_type_): _description_
-        error_log (_type_): _description_
-        timeout (_type_): _description_
-        test (_type_): _description_
+        log (logger): logger for the messages produced by this method
+        job_queue (Queue): job queue to post status of job
+        job_id (int): unique job identifier
+        host_list (list): list of node to pass to job script
+        env (str): environment variables for job script
+        script (str): full path to jobscript
+        job_log (str): job std out
+        error_log (str): job std error
+        timeout (int): job timeout
+        test (TestObj): soak test obj
     """
 
     debug_logging(log, test.enable_debug_msg, f"DBG: JOB {job_id} ENTERED launch_jobscript")
