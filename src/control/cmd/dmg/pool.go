@@ -201,7 +201,6 @@ type PoolCreateCmd struct {
 	NumSvcReps uint32              `short:"v" long:"nsvc" description:"Number of pool service replicas"`
 	ScmSize    sizeFlag            `short:"s" long:"scm-size" description:"Per-engine SCM allocation for DAOS pool (manual)"`
 	NVMeSize   sizeFlag            `short:"n" long:"nvme-size" description:"Per-engine NVMe allocation for DAOS pool (manual)"`
-	MetaSize   sizeFlag            `long:"meta-size" description:"In MD-on-SSD mode specify meta blob size to be used in DAOS pool (manual)"`
 	RankList   ui.RankSetFlag      `short:"r" long:"ranks" description:"Storage engine unique identifiers (ranks) for DAOS pool"`
 
 	Args struct {
@@ -213,12 +212,6 @@ func (cmd *PoolCreateCmd) checkSizeArgs() error {
 	if cmd.Size.IsSet() {
 		if cmd.ScmSize.IsSet() || cmd.NVMeSize.IsSet() {
 			return errIncompatFlags("size", "scm-size", "nvme-size")
-		}
-		if cmd.MetaSize.IsSet() {
-			// NOTE DAOS-14223: --meta-size value is currently not taken into account
-			//                  when storage tier sizes are auto-calculated so only
-			//                  support in manual mode.
-			return errors.New("--meta-size can only be set if --scm-size is set")
 		}
 	} else if !cmd.ScmSize.IsSet() {
 		return errors.New("either --size or --scm-size must be set")
@@ -289,21 +282,12 @@ func (cmd *PoolCreateCmd) storageManual(req *control.PoolCreateReq) error {
 
 	scmBytes := cmd.ScmSize.bytes
 	nvmeBytes := cmd.NVMeSize.bytes
-	metaBytes := cmd.MetaSize.bytes
-	if metaBytes > 0 && metaBytes < scmBytes {
-		return errors.Errorf("--meta-size (%s) can not be smaller than --scm-size (%s)",
-			humanize.Bytes(metaBytes), humanize.Bytes(scmBytes))
-	}
-	req.MetaBytes = metaBytes
 	req.TierBytes = []uint64{scmBytes, nvmeBytes}
 
 	msg := fmt.Sprintf("Creating DAOS pool with manual per-engine storage allocation:"+
 		" %s SCM, %s NVMe (%0.2f%% ratio)", humanize.Bytes(scmBytes),
 		humanize.Bytes(nvmeBytes),
 		ratio2Percentage(cmd.Logger, float64(scmBytes), float64(nvmeBytes)))
-	if metaBytes > 0 {
-		msg += fmt.Sprintf(" with %s meta-blob-size", humanize.Bytes(metaBytes))
-	}
 	cmd.Info(msg)
 
 	return nil
@@ -517,19 +501,19 @@ func (cmd *PoolEvictCmd) Execute(args []string) error {
 type PoolExcludeCmd struct {
 	poolCmd
 	Rank      uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be excluded"`
-	Targetidx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be excluded from the rank"`
+	TargetIdx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be excluded from the rank"`
 }
 
 // Execute is run when PoolExcludeCmd subcommand is activated
 func (cmd *PoolExcludeCmd) Execute(args []string) error {
 	msg := "succeeded"
 
-	var idxlist []uint32
-	if err := common.ParseNumberList(cmd.Targetidx, &idxlist); err != nil {
+	var idxList []uint32
+	if err := common.ParseNumberList(cmd.TargetIdx, &idxList); err != nil {
 		return errors.WithMessage(err, "parsing target list")
 	}
 
-	req := &control.PoolExcludeReq{ID: cmd.PoolID().String(), Rank: ranklist.Rank(cmd.Rank), Targetidx: idxlist}
+	req := &control.PoolExcludeReq{ID: cmd.PoolID().String(), Rank: ranklist.Rank(cmd.Rank), TargetIdx: idxList}
 
 	err := control.PoolExclude(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -545,20 +529,20 @@ func (cmd *PoolExcludeCmd) Execute(args []string) error {
 type PoolDrainCmd struct {
 	poolCmd
 	Rank      uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be drained"`
-	Targetidx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be drained on the rank"`
+	TargetIdx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be drained on the rank"`
 }
 
 // Execute is run when PoolDrainCmd subcommand is activated
 func (cmd *PoolDrainCmd) Execute(args []string) error {
 	msg := "succeeded"
 
-	var idxlist []uint32
-	if err := common.ParseNumberList(cmd.Targetidx, &idxlist); err != nil {
+	var idxList []uint32
+	if err := common.ParseNumberList(cmd.TargetIdx, &idxList); err != nil {
 		err = errors.WithMessage(err, "parsing target list")
 		return err
 	}
 
-	req := &control.PoolDrainReq{ID: cmd.PoolID().String(), Rank: ranklist.Rank(cmd.Rank), Targetidx: idxlist}
+	req := &control.PoolDrainReq{ID: cmd.PoolID().String(), Rank: ranklist.Rank(cmd.Rank), TargetIdx: idxList}
 
 	err := control.PoolDrain(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -599,15 +583,15 @@ func (cmd *PoolExtendCmd) Execute(args []string) error {
 type PoolReintegrateCmd struct {
 	poolCmd
 	Rank      uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be reintegrated"`
-	Targetidx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be reintegrated into the rank"`
+	TargetIdx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be reintegrated into the rank"`
 }
 
 // Execute is run when PoolReintegrateCmd subcommand is activated
 func (cmd *PoolReintegrateCmd) Execute(args []string) error {
 	msg := "succeeded"
 
-	var idxlist []uint32
-	if err := common.ParseNumberList(cmd.Targetidx, &idxlist); err != nil {
+	var idxList []uint32
+	if err := common.ParseNumberList(cmd.TargetIdx, &idxList); err != nil {
 		err = errors.WithMessage(err, "parsing target list")
 		return err
 	}
@@ -615,7 +599,7 @@ func (cmd *PoolReintegrateCmd) Execute(args []string) error {
 	req := &control.PoolReintegrateReq{
 		ID:        cmd.PoolID().String(),
 		Rank:      ranklist.Rank(cmd.Rank),
-		Targetidx: idxlist,
+		TargetIdx: idxList,
 	}
 
 	err := control.PoolReintegrate(cmd.MustLogCtx(), cmd.ctlInvoker, req)
