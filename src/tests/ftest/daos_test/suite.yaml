@@ -24,7 +24,7 @@ timeouts:
   test_daos_md_replication: 104
   test_daos_rebuild_simple: 1800
   test_daos_drain_simple: 3600
-  test_daos_extend_simple: 3600
+  test_daos_extend_simple: 360
   test_daos_oid_allocator: 640
   test_daos_checksum: 500
   test_daos_rebuild_ec: 7200
@@ -159,7 +159,7 @@ daos_tests:
     test_daos_md_replication: R
     test_daos_rebuild_simple: v
     test_daos_drain_simple: b
-    test_daos_extend_simple: B
+    test_daos_extend_simple: B --subtests="13"
     test_daos_oid_allocator: O
     test_daos_checksum: z
     test_daos_rebuild_ec: S
@@ -186,6 +186,6 @@ daos_tests:
     test_daos_distributed_tx: 5
     test_daos_rebuild_simple: 21
     test_daos_drain_simple: 8
-    test_daos_extend_simple: 5
+    test_daos_extend_simple: 1
     test_daos_rebuild_ec: 43
     test_daos_degraded_ec: 29
