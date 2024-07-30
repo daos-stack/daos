@@ -187,7 +187,8 @@ void
      ds_cont_op_handler_v8(crt_rpc_t *rpc);
 void ds_cont_op_handler_v7(crt_rpc_t *rpc);
 void ds_cont_op_handler_v6(crt_rpc_t *rpc);
-void ds_cont_set_prop_handler(crt_rpc_t *rpc);
+void
+     ds_cont_set_prop_srv_handler(crt_rpc_t *rpc);
 int ds_cont_bcast_create(crt_context_t ctx, struct cont_svc *svc,
 			 crt_opcode_t opcode, crt_rpc_t **rpc);
 int ds_cont_oid_fetch_add(uuid_t poh_uuid, uuid_t co_uuid, uint64_t num_oids, uint64_t *oid);

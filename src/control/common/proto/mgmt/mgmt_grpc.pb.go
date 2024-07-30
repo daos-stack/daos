@@ -121,7 +121,7 @@ type MgmtSvcClient interface {
 	// List all containers in a pool
 	ListContainers(ctx context.Context, in *ListContReq, opts ...grpc.CallOption) (*ListContResp, error)
 	// Change the owner of a DAOS container
-	ContSetOwner(ctx context.Context, in *ContSetOwnerReq, opts ...grpc.CallOption) (*ContSetOwnerResp, error)
+	ContSetOwner(ctx context.Context, in *ContSetOwnerReq, opts ...grpc.CallOption) (*DaosResp, error)
 	// Query DAOS system status
 	SystemQuery(ctx context.Context, in *SystemQueryReq, opts ...grpc.CallOption) (*SystemQueryResp, error)
 	// Stop DAOS system (shutdown data-plane instances)
@@ -365,8 +365,8 @@ func (c *mgmtSvcClient) ListContainers(ctx context.Context, in *ListContReq, opt
 	return out, nil
 }
 
-func (c *mgmtSvcClient) ContSetOwner(ctx context.Context, in *ContSetOwnerReq, opts ...grpc.CallOption) (*ContSetOwnerResp, error) {
-	out := new(ContSetOwnerResp)
+func (c *mgmtSvcClient) ContSetOwner(ctx context.Context, in *ContSetOwnerReq, opts ...grpc.CallOption) (*DaosResp, error) {
+	out := new(DaosResp)
 	err := c.cc.Invoke(ctx, MgmtSvc_ContSetOwner_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -620,7 +620,7 @@ type MgmtSvcServer interface {
 	// List all containers in a pool
 	ListContainers(context.Context, *ListContReq) (*ListContResp, error)
 	// Change the owner of a DAOS container
-	ContSetOwner(context.Context, *ContSetOwnerReq) (*ContSetOwnerResp, error)
+	ContSetOwner(context.Context, *ContSetOwnerReq) (*DaosResp, error)
 	// Query DAOS system status
 	SystemQuery(context.Context, *SystemQueryReq) (*SystemQueryResp, error)
 	// Stop DAOS system (shutdown data-plane instances)
@@ -735,7 +735,7 @@ func (UnimplementedMgmtSvcServer) ListPools(context.Context, *ListPoolsReq) (*Li
 func (UnimplementedMgmtSvcServer) ListContainers(context.Context, *ListContReq) (*ListContResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListContainers not implemented")
 }
-func (UnimplementedMgmtSvcServer) ContSetOwner(context.Context, *ContSetOwnerReq) (*ContSetOwnerResp, error) {
+func (UnimplementedMgmtSvcServer) ContSetOwner(context.Context, *ContSetOwnerReq) (*DaosResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ContSetOwner not implemented")
 }
 func (UnimplementedMgmtSvcServer) SystemQuery(context.Context, *SystemQueryReq) (*SystemQueryResp, error) {

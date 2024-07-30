@@ -197,12 +197,12 @@ func (r *ContSetOwnerReq) SetSvcRanks(rl []uint32) {
 
 // SetUUID sets the request's ID to a UUID.
 func (r *ContSetOwnerReq) SetUUID(id uuid.UUID) {
-	r.PoolUUID = id.String()
+	r.PoolId = id.String()
 }
 
 // GetId fetches the pool ID.
 func (r *ContSetOwnerReq) GetId() string {
-	return r.PoolUUID
+	return r.PoolId
 }
 
 // SetSvcRanks sets the request's Pool Service Ranks.

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -74,7 +74,8 @@
 	X(CONT_TGT_EPOCH_AGGREGATE, 0, &CQF_cont_tgt_epoch_aggregate,                              \
 	  ds_cont_tgt_epoch_aggregate_handler, &ds_cont_tgt_epoch_aggregate_co_ops)                \
 	X(CONT_TGT_SNAPSHOT_NOTIFY, 0, &CQF_cont_tgt_snapshot_notify,                              \
-	  ds_cont_tgt_snapshot_notify_handler, &ds_cont_tgt_snapshot_notify_co_ops)
+	  ds_cont_tgt_snapshot_notify_handler, &ds_cont_tgt_snapshot_notify_co_ops)                \
+	X(CONT_PROP_SET_BYLABEL, 0, &CQF_cont_prop_set_bylabel, ds_cont_set_prop_srv_handler, NULL)
 
 /* Define for RPC enum population below */
 #define X(a, ...) a,
@@ -919,24 +920,44 @@ CRT_RPC_DECLARE(cont_tgt_snapshot_notify, DAOS_ISEQ_CONT_TGT_SNAPSHOT_NOTIFY,
 CRT_RPC_DECLARE(cont_prop_set, DAOS_ISEQ_CONT_PROP_SET, DAOS_OSEQ_CONT_PROP_SET)
 CRT_RPC_DECLARE(cont_prop_set_v8, DAOS_ISEQ_CONT_PROP_SET_V8, DAOS_OSEQ_CONT_PROP_SET)
 
+#define DAOS_ISEQ_CONT_PROP_SET_BYLABEL		/* input fields */	 \
+	DAOS_ISEQ_CONT_PROP_SET_V8					 \
+	((d_const_string_t)		(cpsi_label)		CRT_VAR)
+
+CRT_RPC_DECLARE(cont_prop_set_bylabel, DAOS_ISEQ_CONT_PROP_SET_BYLABEL, DAOS_OSEQ_CONT_PROP_SET)
+
 /* clang-format on */
 
 static inline void
 cont_prop_set_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
-			  daos_prop_t **cpsi_propp, uuid_t *cpsi_pool_uuidp)
+			  daos_prop_t **cpsi_propp, uuid_t *cpsi_pool_uuidp, uuid_t *cpsi_co_uuidp,
+			  const char **cont_label)
 {
 	void *in = crt_req_get(rpc);
 
-	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY) {
+	if (opc == CONT_PROP_SET_BYLABEL) {
+		*cpsi_propp = ((struct cont_prop_set_bylabel_in *)in)->cpsi_prop;
+		if (cpsi_pool_uuidp)
+			uuid_copy(*cpsi_pool_uuidp,
+				  ((struct cont_prop_set_bylabel_in *)in)->cpsi_pool_uuid);
+		if (cont_label != NULL)
+			*cont_label = ((struct cont_prop_set_bylabel_in *)in)->cpsi_label;
+	} else if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY) {
 		*cpsi_propp = ((struct cont_prop_set_v8_in *)in)->cpsi_prop;
 		if (cpsi_pool_uuidp)
 			uuid_copy(*cpsi_pool_uuidp,
 				  ((struct cont_prop_set_v8_in *)in)->cpsi_pool_uuid);
+		if (cpsi_co_uuidp)
+			uuid_copy(*cpsi_co_uuidp,
+				  ((struct cont_prop_set_v8_in *)in)->cpsi_op.ci_uuid);
 	} else {
 		*cpsi_propp = ((struct cont_prop_set_in *)in)->cpsi_prop;
 		if (cpsi_pool_uuidp)
 			uuid_copy(*cpsi_pool_uuidp,
 				  ((struct cont_prop_set_in *)in)->cpsi_pool_uuid);
+		if (cpsi_co_uuidp)
+			uuid_copy(*cpsi_co_uuidp,
+				  ((struct cont_prop_set_v8_in *)in)->cpsi_op.ci_uuid);
 	}
 }
 
@@ -946,14 +967,40 @@ cont_prop_set_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
 {
 	void *in = crt_req_get(rpc);
 
-	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY) {
+	if (opc == CONT_PROP_SET_BYLABEL) {
+		((struct cont_prop_set_bylabel_in *)in)->cpsi_prop = cpsi_prop;
+		uuid_copy(((struct cont_prop_set_bylabel_in *)in)->cpsi_pool_uuid, cpsi_pool_uuid);
+	} else if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY) {
 		((struct cont_prop_set_v8_in *)in)->cpsi_prop = cpsi_prop;
 		uuid_copy(((struct cont_prop_set_v8_in *)in)->cpsi_pool_uuid, cpsi_pool_uuid);
-
 	} else {
 		((struct cont_prop_set_in *)in)->cpsi_prop = cpsi_prop;
 		uuid_copy(((struct cont_prop_set_in *)in)->cpsi_pool_uuid, cpsi_pool_uuid);
 	}
+}
+
+static inline void
+cont_prop_set_in_set_cont_uuid(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
+			       uuid_t cont_uuid)
+{
+	void *in = crt_req_get(rpc);
+
+	D_ASSERT(opc == CONT_PROP_SET);
+	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY)
+		uuid_copy(((struct cont_prop_set_v8_in *)in)->cpsi_op.ci_uuid, cont_uuid);
+	else
+		uuid_copy(((struct cont_prop_set_in *)in)->cpsi_op.ci_uuid, cont_uuid);
+}
+
+static inline void
+cont_prop_set_bylabel_in_set_label(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
+				   const char *label)
+{
+	void *in = crt_req_get(rpc);
+
+	D_ASSERT(opc == CONT_PROP_SET_BYLABEL);
+	/* NB: prop set by label is on the server side only - no version variants */
+	((struct cont_prop_set_bylabel_in *)in)->cpsi_label = label;
 }
 
 /* clang-format off */
