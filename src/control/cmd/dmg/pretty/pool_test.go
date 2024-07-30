@@ -386,8 +386,9 @@ Pool created with 5.66%%,94.34%% storage tier ratio
   Service Ranks    : [0-2]                               
   Storage Ranks    : [0-3]                               
   Total Size       : 42 GB                               
-  Metadata storage : 2.4 GB (600 MB / rank)              
-  Data storage     : 40 GB (10 GB / rank)                
+  Metadata Storage : 2.4 GB (600 MB / rank)              
+  Data Storage     : 40 GB (10 GB / rank)                
+  Memory File Size : 1.2 GB (300 MB / rank)              
 
 `, test.MockPoolUUID()),
 		},

@@ -77,13 +77,11 @@ func getPoolRespStorageRows(mdOnSSD bool, tierBytes []uint64, tierRatios []float
 		title += PrintTierRatio(tierRatio)
 		fmtName := fmt.Sprintf("Storage tier %d (%s)", tierIdx, tierName)
 		if mdOnSSD {
-			fmtName = tierName + " storage"
+			fmtName = tierName + " Storage"
 		}
 		rows = append(rows, printTierBytesRow(fmtName, tierBytes[tierIdx], numRanks))
 	}
 	title += " storage tier ratio"
-
-	// TODO: Print memory-file to meta-blob ratio for MD-on-SSD.
 
 	return title, rows
 }
@@ -125,8 +123,17 @@ func PrintPoolCreateResponse(pcr *control.PoolCreateResp, out io.Writer, opts ..
 		"Total Size": humanize.Bytes(totalSize * uint64(numRanks)),
 	})
 
-	title, tierRows := getPoolRespStorageRows(pcr.MemFileBytes != 0, pcr.TierBytes, tierRatios,
+	mdOnSsdEnabled := pcr.MemFileBytes > 0
+
+	title, tierRows := getPoolRespStorageRows(mdOnSsdEnabled, pcr.TierBytes, tierRatios,
 		numRanks)
+
+	// Print memory-file to meta-blob ratio for MD-on-SSD.
+	if mdOnSsdEnabled {
+		tierRows = append(tierRows, printTierBytesRow("Memory File Size",
+			pcr.MemFileBytes, numRanks))
+	}
+
 	fmtArgs = append(fmtArgs, tierRows...)
 
 	_, err := fmt.Fprintln(out, txtfmt.FormatEntity(title, fmtArgs))
