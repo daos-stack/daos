@@ -441,6 +441,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	daos_prop_t		*base_props = NULL;
 	uint8_t			*body;
 	size_t			 len;
+	size_t                   scm_size;
 	int			 rc;
 
 	/* Unpack the inner request from the drpc call body */
