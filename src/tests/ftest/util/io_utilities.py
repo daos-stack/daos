@@ -367,7 +367,7 @@ class DirectoryTreeCommand(ExecutableCommand):
         """Run the command.
 
         Returns:
-            RemoteCommandResult: result from run_remote
+            CommandResult: groups of command results from the same hosts with the same return status
         """
         self.log.info('Running directory_tree.py on %s', str(self.hosts))
         return run_remote(self.log, self.hosts, self.with_exports, timeout=self.timeout)
