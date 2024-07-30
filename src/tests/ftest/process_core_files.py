@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -141,7 +141,8 @@ class CoreFileProcessing():
                     if os.path.splitext(core_name)[-1] == ".bz2":
                         # Decompress the file
                         command = f"lbzip2 -d -v '{os.path.join(core_dir, core_name)}'"
-                        run_local(self.log, command)
+                        if not run_local(self.log, command).passed:
+                            raise CoreFileException(f"Error decompressing {core_name}")
                         core_name = os.path.splitext(core_name)[0]
                     exe_name = self._get_exe_name(os.path.join(core_dir, core_name))
                     self._create_stacktrace(core_dir, core_name, exe_name)
@@ -187,21 +188,22 @@ class CoreFileProcessing():
         stack_trace_file = os.path.join(core_dir, f"'{core_name}.stacktrace'")
 
         self.log.debug("Generating a stacktrace from the %s core file from %s", core_full, host)
-        run_local(self.log, f"ls -l '{core_full}'")
+        if not run_local(self.log, f"ls -l '{core_full}'").passed:
+            raise RunException(f"Error listing {core_full}")
 
         command = (
             f"gdb -cd='{core_dir}' -ex 'set pagination off' -ex 'thread apply all bt full' -ex "
             f"detach -ex quit '{exe_name}' '{core_name}'")
+        result = run_local(self.log, command, verbose=False)
+        if not result.passed:
+            raise RunException(f"Error creating {stack_trace_file}")
+
         try:
-            output = run_local(self.log, command, check=False, verbose=False)
             with open(stack_trace_file, "w", encoding="utf-8") as stack_trace:
-                stack_trace.writelines(output.stdout)
+                stack_trace.write(result.joined_stdout)
 
         except IOError as error:
             raise RunException(f"Error writing {stack_trace_file}") from error
-
-        except RunException as error:
-            raise RunException(f"Error creating {stack_trace_file}") from error
 
     def _get_exe_name(self, core_file):
         """Get the executable name from the core file.
@@ -219,7 +221,7 @@ class CoreFileProcessing():
         self.log.debug("Extracting the executable name from '%s'", core_file)
         command = f"gdb -c '{core_file}' -ex 'info proc exe' -ex quit"
         result = run_local(self.log, command, verbose=False)
-        last_line = result.stdout.splitlines()[-1]
+        last_line = result.joined_stdout.splitlines()[-1]
         self.log.debug("  last line:       %s", last_line)
         cmd = last_line[7:]
         self.log.debug("  last_line[7:-1]: %s", cmd)
@@ -277,7 +279,7 @@ class CoreFileProcessing():
             cmds.append(["sudo", "rm", "-f", path])
 
         if self.USE_DEBUGINFO_INSTALL:
-            dnf_args = ["--exclude", "ompi-debuginfo"]
+            dnf_args = ["--nobest", "--exclude", "ompi-debuginfo"]
             if os.getenv("TEST_RPMS", 'false') == 'true':
                 if "suse" in self.distro_info.name.lower():
                     dnf_args.extend(["libpmemobj1", "python3", "openmpi3"])
@@ -291,9 +293,8 @@ class CoreFileProcessing():
                 else:
                     raise RunException(f"Unsupported distro: {self.distro_info}")
                 cmds.append(["sudo", "dnf", "-y", "install"] + dnf_args)
-            output = run_local(
-                self.log, " ".join(["rpm", "-q", "--qf", "'%{evr}'", "daos"]), check=False)
-            rpm_version = output.stdout
+            result = run_local(self.log, " ".join(["rpm", "-q", "--qf", "'%{evr}'", "daos"]))
+            rpm_version = result.joined_stdout
             cmds.append(
                 ["sudo", "dnf", "debuginfo-install", "-y"] + dnf_args
                 + ["daos-" + rpm_version, "daos-*-" + rpm_version])
@@ -324,9 +325,7 @@ class CoreFileProcessing():
 
         retry = False
         for cmd in cmds:
-            try:
-                run_local(self.log, " ".join(cmd), check=True)
-            except RunException:
+            if not run_local(self.log, " ".join(cmd)).passed:
                 # got an error, so abort this list of commands and re-run
                 # it with a dnf clean, makecache first
                 retry = True
@@ -339,9 +338,7 @@ class CoreFileProcessing():
             cmds.insert(0, cmd_prefix + ["clean", "all"])
             cmds.insert(1, cmd_prefix + ["makecache"])
             for cmd in cmds:
-                try:
-                    run_local(self.log, " ".join(cmd))
-                except RunException:
+                if not run_local(self.log, " ".join(cmd)).passed:
                     break
 
     def is_el(self):
@@ -380,14 +377,11 @@ class CoreFileProcessing():
 
         """
         package_info = None
-        try:
-            # Eventually use python libraries for this rather than exec()ing out to rpm
-            output = run_local(
-                self.log,
-                " ".join(
-                    ["rpm", "-q", "--qf", "'%{name} %{version} %{release} %{epoch}'", pkg]),
-                check=False)
-            name, version, release, epoch = output.stdout.split()
+        # Eventually use python libraries for this rather than exec()ing out to rpm
+        command = f"rpm -q --qf '%{{name}} %{{version}} %{{release}} %{{epoch}}' {pkg}"
+        result = run_local(self.log, command)
+        if result.passed:
+            name, version, release, epoch = result.joined_stdout.split()
 
             debuginfo_map = {"glibc": "glibc-debuginfo-common"}
             try:
@@ -400,7 +394,7 @@ class CoreFileProcessing():
                 "release": release,
                 "epoch": epoch
             }
-        except ValueError:
+        else:
             self.log.debug("Package %s not installed, skipping debuginfo", pkg)
 
         return package_info
@@ -413,20 +407,16 @@ class CoreFileProcessing():
 
         """
         self.log.debug("Checking core files generated by core file processing")
-        try:
-            results = run_local(self.log, "cat /proc/sys/kernel/core_pattern", check=True)
-        except RunException:
+        result = run_local(self.log, "cat /proc/sys/kernel/core_pattern")
+        if not result.passed:
             self.log.error("Unable to find local core file pattern")
             self.log.debug("Stacktrace", exc_info=True)
             return 1
-        core_path = os.path.split(results.stdout.splitlines()[-1])[0]
+        core_path = os.path.split(result.joined_stdout.splitlines()[-1])[0]
 
         self.log.debug("Deleting core.gdb.*.* core files located in %s", core_path)
         other = ["-printf '%M %n %-12u %-12g %12k %t %p\n' -delete"]
-        try:
-            run_local(
-                self.log, find_command(core_path, "core.gdb.*.*", 1, other), check=True)
-        except RunException:
+        if not run_local(self.log, find_command(core_path, "core.gdb.*.*", 1, other)).passed:
             self.log.debug("core.gdb.*.* files could not be removed")
             return 1
         return 0
