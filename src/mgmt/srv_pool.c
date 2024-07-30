@@ -178,7 +178,8 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev, d_rank_l
 	int				rc;
 	int				rc_cleanup;
 
-	D_DEBUG(DB_MGMT, DF_UUID ": meta blob size %ld", DP_UUID(pool_uuid), meta_size);
+	D_DEBUG(DB_MGMT, DF_UUID ": create scm/meta/nvme sizes %ld/%ld/%ld\n", DP_UUID(pool_uuid),
+		scm_size, meta_size, nvme_size);
 
 	/* Sanity check targets versus cart's current primary group members.
 	 * If any targets not in PG, flag error before MGMT_TGT_ corpcs fail.

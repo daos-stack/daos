@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -24,6 +24,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/engine"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -160,9 +161,10 @@ func minPoolNvme(tgtCount, rankCount uint64) uint64 {
 	return minRankNvme(tgtCount) * rankCount
 }
 
-// calculateCreateStorage determines the amount of SCM/NVMe storage to
-// allocate per engine in order to fulfill the create request, if those
-// values are not already supplied as part of the request.
+// calculateCreateStorage determines the amount of SCM/NVMe storage to allocate per engine in order
+// to fulfill the create request, if those values are not already supplied as part of the request.
+//
+// TODO DAOS-16160: Update size calculations to handle MD-on-SSD mode.
 func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 	instances := svc.harness.Instances()
 	if len(instances) < 1 {
@@ -171,15 +173,20 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 	if len(req.GetRanks()) == 0 {
 		return errors.New("zero ranks in calculateCreateStorage()")
 	}
-	if req.MetaBlobBytes > 0 && !instances[0].GetStorage().BdevRoleMetaConfigured() {
-		return errors.New("meta size set in request but md-on-ssd is not enabled in config")
+
+	mdOnSSD := instances[0].GetStorage().BdevRoleMetaConfigured()
+	switch {
+	case !mdOnSSD && req.MemRatio > 0:
+		// Prevent MD-on-SSD parameters being used in incompatible mode.
+		return FaultPoolMemRatioNoRoles
+	case mdOnSSD && req.MemRatio == 0:
+		// Set reasonable default if not set in MD-on-SSD mode.
+		req.MemRatio = storage.DefaultMemoryFileRatio
 	}
 
-	// NB: The following logic is based on the assumption that
-	// a request will always include SCM as tier 0. Currently,
-	// we only support one additional tier, NVMe, which is
-	// optional. As we add support for other tiers, this logic
-	// will need to be updated.
+	// NB: The following logic is based on the assumption that a request will always include SCM
+	// as tier 0. Currently, we only support one additional tier, NVMe, which is optional. As we
+	// add support for other tiers, this logic will need to be updated.
 
 	nvmeMissing := !instances[0].GetStorage().HasBlockDevices()
 
@@ -254,6 +261,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 	if err != nil {
 		return nil, err
 	}
+
 	return msg.(*mgmtpb.PoolCreateResp), nil
 }
 
@@ -303,7 +311,6 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		resp.SvcReps = ranklist.RanksToUint32(ps.Replicas)
 		resp.TgtRanks = ranklist.RanksToUint32(ps.Storage.CreationRanks())
 		resp.TierBytes = ps.Storage.PerRankTierStorage
-		// TODO DAOS-14223: Store Meta-Blob-Size in sysdb.
 
 		return resp, nil
 	}
@@ -946,6 +953,16 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 	// Preserve compatibility with pre-2.6 callers.
 	resp.Leader = resp.SvcLdr
 
+	// Update media type of storage tier #0 if MD-on-SSD is enabled.
+	// TODO DAOS-14223: Do we need this if we are returning memory_file_bytes?
+	storage := svc.harness.Instances()[0].GetStorage()
+	if storage.ControlMetadataPathConfigured() {
+		if len(resp.TierStats) > 0 {
+			svc.log.Debugf("md-on-ssd pool query, set tier-0 to NVMe")
+			resp.TierStats[0].MediaType = mgmtpb.StorageMediaType_NVME
+		}
+	}
+
 	return resp, nil
 }
 
@@ -963,6 +980,17 @@ func (svc *mgmtSvc) PoolQueryTarget(ctx context.Context, req *mgmtpb.PoolQueryTa
 	resp := &mgmtpb.PoolQueryTargetResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal PoolQueryTarget response")
+	}
+
+	// Update media type of storage tier #0 if MD-on-SSD is enabled.
+	storage := svc.harness.Instances()[0].GetStorage()
+	if storage.ControlMetadataPathConfigured() {
+		svc.log.Debugf("md-on-ssd pool query-target, set tier-0 to NVMe")
+		for _, tgtInfo := range resp.Infos {
+			if len(tgtInfo.Space) > 0 {
+				tgtInfo.Space[0].MediaType = mgmtpb.StorageMediaType_NVME
+			}
+		}
 	}
 
 	return resp, nil

@@ -494,19 +494,33 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		base_props = NULL;
 	}
 
-	/* Ranks to allocate targets (in) & svc for pool replicas (out). */
-	rc = ds_mgmt_create_pool(pool_uuid, req->sys, "pmem", targets,
-				 req->tierbytes[DAOS_MEDIA_SCM], req->tierbytes[DAOS_MEDIA_NVME],
-				 prop, &svc, req->n_faultdomains, req->faultdomains,
-				 req->meta_blob_bytes);
+	/**
+	 * Ranks to allocate targets (in) & svc for pool replicas (out). Mapping of tierbytes in
+	 * MD-on-SSD mode is (tier0*mem_ratio)->scm_size (mem-file-size), tier0->meta_size and
+	 * tier1->nvme_size (data_size).
+	 */
+
+	scm_size = req->tierbytes[DAOS_MEDIA_SCM];
+	if (req->mem_ratio)
+		scm_size *= req->mem_ratio;
+
+	rc = ds_mgmt_create_pool(pool_uuid, req->sys, "pmem", targets, scm_size,
+				 req->tierbytes[DAOS_MEDIA_NVME], prop, &svc, req->n_faultdomains,
+				 req->faultdomains, req->tierbytes[DAOS_MEDIA_SCM]);
 	if (rc != 0) {
 		D_ERROR("failed to create pool: "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 
 	rc = pool_create_fill_resp(&resp, pool_uuid, svc);
-	resp.meta_blob_bytes = req->meta_blob_bytes;
 	d_rank_list_free(svc);
+
+	/**
+	 * FIXME DAOS-16209: Populate per-rank VOS-file sizes. For now just calculate here based on
+	 * the supplied input values but really should be returned from ds_mgmt_pool_query() through
+	 * the VOS query API and set in pool_create_fill_resp(). Return zero for non-MD-on-SSD mode.
+	 */
+	resp.mem_file_bytes = req->tierbytes[DAOS_MEDIA_SCM] * req->mem_ratio;
 
 out:
 	resp.status = rc;

@@ -759,7 +759,8 @@ tgt_vos_preallocate(uuid_t uuid, daos_size_t scm_size, int tgt_id)
 	if (rc)
 		goto out;
 
-	D_DEBUG(DB_MGMT, DF_UUID": creating vos file %s\n", DP_UUID(uuid), path);
+	D_DEBUG(DB_MGMT, DF_UUID ": creating vos file %s (%ld bytes)\n", DP_UUID(uuid), path,
+		scm_size);
 
 	fd = open(path, O_CREAT|O_RDWR, 0600);
 	if (fd < 0) {

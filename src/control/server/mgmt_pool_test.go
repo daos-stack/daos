@@ -200,10 +200,11 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 	nvmeTooSmallReq := nvmeTooSmallTotal
 
 	for name, tc := range map[string]struct {
-		disableNVMe bool
-		in          *mgmtpb.PoolCreateReq
-		expOut      *mgmtpb.PoolCreateReq
-		expErr      error
+		disableNVMe   bool
+		enableMdOnSsd bool
+		in            *mgmtpb.PoolCreateReq
+		expOut        *mgmtpb.PoolCreateReq
+		expErr        error
 	}{
 		"auto sizing": {
 			in: &mgmtpb.PoolCreateReq{
@@ -214,6 +215,7 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 			expOut: &mgmtpb.PoolCreateReq{
 				Tierbytes: []uint64{defaultScmBytes / 2, defaultNvmeBytes / 2},
 				Ranks:     []uint32{0, 1},
+				MemRatio:  1,
 			},
 		},
 		"auto sizing (not enough SCM)": {
@@ -243,6 +245,7 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 			expOut: &mgmtpb.PoolCreateReq{
 				Tierbytes: []uint64{defaultTotal, 0},
 				Ranks:     []uint32{0},
+				MemRatio:  1,
 			},
 		},
 		"tier bytes set for both (no NVMe in config)": {
@@ -262,15 +265,41 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 			expOut: &mgmtpb.PoolCreateReq{
 				Tierbytes: []uint64{defaultTotal, 0},
 				Ranks:     []uint32{0},
+				MemRatio:  1,
 			},
 		},
-		"meta size is set (mdonssd not configured)": {
+		"mem-ratio is set (mdonssd not configured)": {
 			in: &mgmtpb.PoolCreateReq{
-				Tierbytes:     []uint64{defaultScmBytes - 1, defaultNvmeBytes - 1},
-				Ranks:         []uint32{0},
-				MetaBlobBytes: humanize.GByte,
+				Tierbytes: []uint64{defaultScmBytes - 1, defaultNvmeBytes - 1},
+				Ranks:     []uint32{0},
+				MemRatio:  storage.DefaultMemoryFileRatio,
 			},
-			expErr: errors.New("md-on-ssd"),
+			expErr: FaultPoolMemRatioNoRoles,
+		},
+		"mem-ratio is unset (mdonssd configured)": {
+			enableMdOnSsd: true,
+			in: &mgmtpb.PoolCreateReq{
+				Tierbytes: []uint64{defaultScmBytes - 1, defaultNvmeBytes - 1},
+				Ranks:     []uint32{0},
+			},
+			expOut: &mgmtpb.PoolCreateReq{
+				Tierbytes: []uint64{defaultScmBytes - 1, defaultNvmeBytes - 1},
+				Ranks:     []uint32{0},
+				MemRatio:  storage.DefaultMemoryFileRatio,
+			},
+		},
+		"mem-ratio is set (mdonssd configured)": {
+			enableMdOnSsd: true,
+			in: &mgmtpb.PoolCreateReq{
+				Tierbytes: []uint64{defaultScmBytes - 1, defaultNvmeBytes - 1},
+				Ranks:     []uint32{0},
+				MemRatio:  0.25,
+			},
+			expOut: &mgmtpb.PoolCreateReq{
+				Tierbytes: []uint64{defaultScmBytes - 1, defaultNvmeBytes - 1},
+				Ranks:     []uint32{0},
+				MemRatio:  0.25,
+			},
 		},
 		"manual sizing": {
 			in: &mgmtpb.PoolCreateReq{
@@ -280,6 +309,7 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 			expOut: &mgmtpb.PoolCreateReq{
 				Tierbytes: []uint64{defaultScmBytes - 1, defaultNvmeBytes - 1},
 				Ranks:     []uint32{0, 1},
+				MemRatio:  1,
 			},
 		},
 		"manual sizing (not enough SCM)": {
@@ -309,7 +339,12 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 							WithStorageClass("nvme").
 							WithBdevDeviceList("foo", "bar"),
 					)
+				if tc.enableMdOnSsd {
+					engineCfg.Storage.Tiers[0].
+						WithBdevDeviceRoles(storage.BdevRoleAll)
+				}
 			}
+
 			svc := newTestMgmtSvc(t, log)
 			sp := storage.MockProvider(log, 0, &engineCfg.Storage, nil, nil, nil, nil)
 			svc.harness.instances[0] = newTestEngine(log, false, sp, engineCfg)
@@ -425,24 +460,24 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				TgtRanks:  []uint32{0, 1},
 			},
 		},
-		"successful creation with meta size": {
+		"successful creation with memory file ratio": {
 			targetCount:    8,
 			mdonssdEnabled: true,
 			req: &mgmtpb.PoolCreateReq{
-				Uuid:          test.MockUUID(1),
-				Tierbytes:     []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
-				MetaBlobBytes: 2 * humanize.GiByte,
-				Properties:    testPoolLabelProp(),
+				Uuid:       test.MockUUID(1),
+				Tierbytes:  []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
+				MemRatio:   storage.DefaultMemoryFileRatio,
+				Properties: testPoolLabelProp(),
 			},
 			drpcRet: &mgmtpb.PoolCreateResp{
-				TierBytes:     []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
-				MetaBlobBytes: 2 * humanize.GiByte,
-				TgtRanks:      []uint32{0, 1},
+				TierBytes:    []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
+				MemFileBytes: 50 * humanize.GiByte,
+				TgtRanks:     []uint32{0, 1},
 			},
 			expResp: &mgmtpb.PoolCreateResp{
-				TierBytes:     []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
-				MetaBlobBytes: 2 * humanize.GiByte,
-				TgtRanks:      []uint32{0, 1},
+				TierBytes:    []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
+				MemFileBytes: 50 * humanize.GiByte,
+				TgtRanks:     []uint32{0, 1},
 			},
 		},
 		"successful creation minimum size": {
@@ -680,6 +715,7 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 		uint64(float64(totalBytes)*DefaultPoolNvmeRatio) / 3,
 	}
 	wantReq.Tierratio = nil
+	wantReq.MemRatio = storage.DefaultMemoryFileRatio // Default value applied if unset.
 
 	_, err = mgmtSvc.PoolCreate(test.Context(t), req)
 	if err != nil {

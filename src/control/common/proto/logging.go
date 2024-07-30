@@ -97,7 +97,7 @@ func Debug(msg proto.Message) string {
 				fmt.Fprintf(&bld, "(%.02f%%) ", m.Tierratio[i])
 			}
 		}
-		fmt.Fprintf(&bld, "meta-blob-size:%s", humanize.Bytes(m.MetaBlobBytes))
+		fmt.Fprintf(&bld, "mem-ratio: %.02f ", m.MemRatio)
 	case *mgmtpb.PoolCreateResp:
 		fmt.Fprintf(&bld, "%T svc_ldr:%d ", m, m.SvcLdr)
 		ranks := &ranklist.RankSet{}
@@ -114,7 +114,7 @@ func Debug(msg proto.Message) string {
 		for i, b := range m.TierBytes {
 			fmt.Fprintf(&bld, "%d:%d ", i, b)
 		}
-		fmt.Fprintf(&bld, "meta-blob-size:%s", humanize.Bytes(m.MetaBlobBytes))
+		fmt.Fprintf(&bld, "meta-file-size:%s", humanize.Bytes(m.MemFileBytes))
 	case *mgmtpb.PoolEvictReq:
 		fmt.Fprintf(&bld, "%T pool:%s", m, m.Id)
 		if len(m.Handles) > 0 {

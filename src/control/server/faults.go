@@ -171,6 +171,14 @@ func FaultNoCompatibilityInsecure(self, other build.Version) *fault.Fault {
 	)
 }
 
+// FaultPoolMemRatioNoRoles indicates a fault when pool create request contains MD-on-SSD
+// parameters but MD-on-SSD has not been enabled on the server.
+var FaultPoolMemRatioNoRoles = serverFault(
+	code.ServerPoolMemRatioNoRoles,
+	"pool create request contains MD-on-SSD parameters but MD-on-SSD has not been enabled",
+	"either remove MD-on-SSD-specific options from the command request or set bdev_roles in "+
+		"server config file to enable MD-on-SSD")
+
 func serverFault(code code.Code, desc, res string) *fault.Fault {
 	return &fault.Fault{
 		Domain:      "server",

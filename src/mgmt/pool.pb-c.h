@@ -210,9 +210,9 @@ struct  _Mgmt__PoolCreateReq
   size_t n_tierbytes;
   uint64_t *tierbytes;
   /*
-   * Size in bytes of metadata blob on SSD (manual config)
+   * Fraction (<=1) of meta-blob-sz to use as mem-file-sz (md-on-ssd mode)
    */
-  uint64_t meta_blob_bytes;
+  float                mem_ratio;
 };
 #define MGMT__POOL_CREATE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_req__descriptor) \
@@ -244,14 +244,14 @@ struct  _Mgmt__PoolCreateResp
   size_t n_tgt_ranks;
   uint32_t *tgt_ranks;
   /*
-   * storage tiers allocated to pool
+   * per-rank storage tier sizes allocated in pool
    */
   size_t n_tier_bytes;
   uint64_t *tier_bytes;
   /*
-   * Size in bytes of metadata blob on SSD (manual config)
+   * per-rank accumulated value of memory file sizes
    */
-  uint64_t meta_blob_bytes;
+  uint64_t         mem_file_bytes;
 };
 #define MGMT__POOL_CREATE_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_resp__descriptor) \

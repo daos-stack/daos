@@ -334,6 +334,8 @@ const (
 	StorageMediaTypeScm = StorageMediaType(mgmtpb.StorageMediaType_SCM)
 	// StorageMediaTypeNvme indicates that the media is NVMe SSD
 	StorageMediaTypeNvme = StorageMediaType(mgmtpb.StorageMediaType_NVME)
+	// StorageMediaTypeMax indicates the end of the StorageMediaType array
+	StorageMediaTypeMax = StorageMediaType(StorageMediaTypeNvme + 1)
 )
 
 func (smt StorageMediaType) String() string {

@@ -32,7 +32,8 @@ message PoolCreateReq {
 	uint32 numranks = 11; // Number of target ranks to use (auto config)
 	repeated uint32 ranks = 12; // target ranks (manual config)
 	repeated uint64 tierbytes = 13; // Size in bytes of storage tiers (manual config)
-	uint64 meta_blob_bytes = 14; // Size in bytes of metadata blob on SSD (manual config)
+	float           mem_ratio =
+	    14; // Fraction (<=1) of meta-blob-sz to use as mem-file-sz (md-on-ssd mode)
 }
 
 // PoolCreateResp returns created pool uuid and ranks.
@@ -41,8 +42,8 @@ message PoolCreateResp {
 	uint32 svc_ldr = 2; // Current service leader rank
 	repeated uint32 svc_reps = 3; // pool service replica ranks
 	repeated uint32 tgt_ranks = 4; // pool target ranks
-	repeated uint64 tier_bytes = 5; // storage tiers allocated to pool
-	uint64 meta_blob_bytes = 6; // Size in bytes of metadata blob on SSD (manual config)
+	repeated uint64 tier_bytes     = 5; // per-rank storage tier sizes allocated in pool
+	uint64          mem_file_bytes = 6; // per-rank accumulated value of memory file sizes
 }
 
 // PoolDestroyReq supplies pool identifier and force flag.
@@ -240,7 +241,8 @@ message PoolQueryResp {
 	PoolServiceState state = 17; // pool state
 	uint32 svc_ldr = 18; // current raft leader (2.6+)
 	repeated uint32 svc_reps = 19; // service replica ranks
-	uint64 query_mask = 20; // Bitmask of pool query options used
+	uint64                     query_mask         = 20; // Bitmask of pool query options used
+							    // TODO DAOS-14223: Add mem_file_bytes.
 }
 
 message PoolProperty {

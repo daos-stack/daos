@@ -284,10 +284,22 @@ func TestPoolCommands(t *testing.T) {
 			errors.New("may not be mixed"),
 		},
 		{
-			"Create pool with incompatible arguments (auto with meta-blob)",
+			"Create pool with incompatible arguments (auto with meta-size)",
 			fmt.Sprintf("pool create label --size %s --meta-size 32G", testSizeStr),
 			"",
-			errors.New("can only be set"),
+			errors.New("may not be mixed"),
+		},
+		{
+			"Create pool with incompatible arguments (scm-size with meta-size)",
+			fmt.Sprintf("pool create label --scm-size %s --meta-size 32G", testSizeStr),
+			"",
+			errors.New("may not be mixed"),
+		},
+		{
+			"Create pool with incompatible arguments (scm-size with data-size)",
+			fmt.Sprintf("pool create label --scm-size %s --data-size 32G", testSizeStr),
+			"",
+			errors.New("may not be mixed"),
 		},
 		{
 			"Create pool with too-large tier-ratio (auto)",
@@ -388,16 +400,26 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
-			"Create pool with manual meta blob size",
-			fmt.Sprintf("pool create label --scm-size %s --meta-size 1024G",
+			"Create pool with manual memory file ratio; legacy syntax",
+			fmt.Sprintf("pool create label --scm-size %s --mem-ratio 0.25",
+				testSizeStr),
+			"",
+			errors.New("may not be mixed"),
+		},
+		{
+			"Create pool with default memory file ratio; MD-on-SSD syntax",
+			fmt.Sprintf("pool create label --meta-size %s --data-size 1024G",
 				testSizeStr),
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
 					User:      eUsr.Username + "@",
 					UserGroup: eGrp.Name + "@",
 					Ranks:     []ranklist.Rank{},
-					TierBytes: []uint64{uint64(testSize), 0},
-					MetaBytes: humanize.GByte * 1024,
+					TierBytes: []uint64{
+						uint64(testSize),
+						1024 * humanize.GByte,
+					},
+					MemRatio: 1,
 					Properties: []*daos.PoolProperty{
 						propWithVal("label", "label"),
 					},
@@ -406,10 +428,53 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
-			"Create pool with manual meta blob size smaller than scm",
-			"pool create label --scm-size 1026G --meta-size 1024G",
+			"Create pool with manual memory file ratio; MD-on-SSD syntax; single value",
+			fmt.Sprintf("pool create label --meta-size %s --data-size 1024G --mem-ratio 25.5",
+				testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					User:      eUsr.Username + "@",
+					UserGroup: eGrp.Name + "@",
+					Ranks:     []ranklist.Rank{},
+					TierBytes: []uint64{
+						uint64(testSize),
+						1024 * humanize.GByte,
+					},
+					MemRatio: 0.255,
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Create pool with manual memory file ratio; MD-on-SSD syntax; both tiers",
+			fmt.Sprintf("pool create label --meta-size %s --data-size 1024G --mem-ratio 25.5,74.5",
+				testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					User:      eUsr.Username + "@",
+					UserGroup: eGrp.Name + "@",
+					Ranks:     []ranklist.Rank{},
+					TierBytes: []uint64{
+						uint64(testSize),
+						1024 * humanize.GByte,
+					},
+					MemRatio: 0.255,
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Create pool with manual memory file ratio; MD-on-SSD syntax; three tiers",
+			fmt.Sprintf("pool create label --meta-size %s --data-size 1024G --mem-ratio 25.5,25.5,49",
+				testSizeStr),
 			"",
-			errors.New("can not be smaller than"),
+			errors.New("unexpected mem-ratio"),
 		},
 		{
 			"Create pool with manual ranks",
