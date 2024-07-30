@@ -388,6 +388,20 @@ func (cmd *poolQueryTargetsCmd) Execute(_ []string) error {
 		return errors.WithMessage(err, "parsing target list")
 	}
 
+	if len(idxList) == 0 {
+		pi, err := queryPool(cmd.cPoolHandle, daos.HealthOnlyPoolQueryMask)
+		if err != nil || (pi.TotalTargets == 0 || pi.TotalEngines == 0) {
+			if err != nil {
+				return errors.Wrap(err, "pool query failed")
+			}
+			return errors.New("failed to derive target count from pool query")
+		}
+		tgtCount := pi.TotalTargets / pi.TotalEngines
+		for i := uint32(0); i < tgtCount; i++ {
+			idxList = append(idxList, i)
+		}
+	}
+
 	ptInfo := new(C.daos_target_info_t)
 	var rc C.int
 
