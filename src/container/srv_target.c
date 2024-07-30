@@ -1989,9 +1989,14 @@ cont_snap_update_one(void *vin)
 	struct ds_cont_child	*cont;
 	int			 rc;
 
-	rc = ds_cont_child_lookup(args->pool_uuid, args->cont_uuid, &cont);
+	/* The container should be exist on the system at this point, if non-exist on this target
+	 * it should be the case of reintegrate the container was destroyed ahead, so just
+	 * open_create the container here.
+	 */
+	rc = ds_cont_child_open_create(args->pool_uuid, args->cont_uuid, &cont);
 	if (rc != 0)
 		return rc;
+
 	if (args->snap_count == 0) {
 		if (cont->sc_snapshots != NULL) {
 			D_ASSERT(cont->sc_snapshots_nr > 0);
