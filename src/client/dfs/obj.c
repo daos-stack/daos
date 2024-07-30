@@ -71,6 +71,8 @@ dfs_obj_get_info(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_info_t *info)
 	if (obj == NULL || info == NULL)
 		return EINVAL;
 
+	info->doi_oid = obj->oid;
+
 	switch (obj->mode & S_IFMT) {
 	case S_IFDIR:
 		/** the oclass of the directory object itself */
