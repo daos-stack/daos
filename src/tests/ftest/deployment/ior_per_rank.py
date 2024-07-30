@@ -1,8 +1,10 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+
+import math
 
 from avocado.core.exceptions import TestFail
 from ClusterShell.NodeSet import NodeSet
@@ -92,7 +94,7 @@ class IorPerRank(IorTestBase):
                               Large transfer size: 1M
                               Small transfer size: 256B
                           Compare results and isolate bad nodes.
-        :avocado: tags=manual
+        :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=ior,deployment
         :avocado: tags=IorPerRank,test_ior_per_rank
@@ -105,7 +107,11 @@ class IorPerRank(IorTestBase):
 
         # Write/Read performance thresholds and expectations
         self.write_x = self.params.get("write_x", self.ior_cmd.namespace, None)
+        if self.write_x == 'inf':
+            self.write_x = math.inf
         self.read_x = self.params.get("read_x", self.ior_cmd.namespace, None)
+        if self.read_x == 'inf':
+            self.read_x = math.inf
         self.expected_bw = self.params.get("expected_bw", self.ior_cmd.namespace, None)
         self.expected_iops = self.params.get("expected_iops", self.ior_cmd.namespace, None)
 
