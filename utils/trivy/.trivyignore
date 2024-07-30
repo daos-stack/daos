@@ -34,6 +34,6 @@ CVE-2024-25638
 
 ## Ignore DNSJava-related issues
 ## GHSA-crjg-w57m-rqqf,MEDIUM,,"DNSJava vulnerable to KeyTrap - Denial-of-Service Algorithmic Complexity Attacks","dnsjava:dnsjava","2.1.7","3.6.0",https://github.com/advisories/GHSA-crjg-w57m-rqqf
-GHSA-crjg-w57m-rqqf
+# GHSA-crjg-w57m-rqqf
 ## GHSA-mmwx-rj87-vfgr,MEDIUM,,"DNSJava affected by KeyTrap - NSEC3 closest encloser proof can exhaust CPU resources","dnsjava:dnsjava","2.1.7","3.6.0",https://github.com/advisories/GHSA-mmwx-rj87-vfgr
-GHSA-mmwx-rj87-vfgr
+# GHSA-mmwx-rj87-vfgr
