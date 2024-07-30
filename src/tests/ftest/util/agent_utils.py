@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2019-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -294,9 +294,7 @@ class DaosAgentManager(SubprocessManager):
             CommandFailure: if the daos_agent command fails.
 
         Returns:
-            RemoteCommandResult: a grouping of the command results from
-                the same hosts with the same return status
-
+            CommandResult: groups of command results from the same hosts with the same return status
         """
         cmd = DaosAgentCommand(self.manager.job.command_path)
         cmd.sudo = True
