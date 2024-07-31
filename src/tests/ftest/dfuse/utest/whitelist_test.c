@@ -31,7 +31,8 @@ task_child(void)
 	pid_t pid;
 	char *str_preload;
 	char *argv[3] = {"/usr/bin/ls", "", NULL};
-	char *envp[5] = {"LD_PRELOAD=/usr/lib64/libpil4dfs.so", "D_LOG_MASK=DEBUG", "DD_SUBSYS=il",
+	/* The first string in envp[5] is a placeholder. It will be overridden by str_preload. */
+	char *envp[5] = {"LD_PRELOAD=/dummy_path/libpil4dfs.so", "D_LOG_MASK=DEBUG", "DD_SUBSYS=il",
 			 "DD_MASK=DEBUG", NULL};
 
 	rc = asprintf(&str_preload, "LD_PRELOAD=%s", preload_path);

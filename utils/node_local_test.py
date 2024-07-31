@@ -1096,6 +1096,7 @@ class DaosServer():
         if report:
             cmd_env['D_IL_REPORT'] = '1'
         cmd_env['LD_PRELOAD'] = join(self.conf['PREFIX'], 'lib64', 'libpil4dfs.so')
+        cmd_env['D_IL_INTERCEPTION_ON'] = '1'
         if container is not None:
             # Create a temporary directory for the mount point, this will be removed as it goes out
             # scope so keep as a local for the rest of the function.
@@ -5805,6 +5806,7 @@ class AllocFailTest():
             cwd = tmp_dir.name
             cmd_env['DAOS_MOUNT_POINT'] = cwd
             cmd_env['LD_PRELOAD'] = join(self.conf['PREFIX'], 'lib64', 'libpil4dfs.so')
+            cmd_env['D_IL_INTERCEPTION_ON'] = '1'
             cmd_env['DAOS_POOL'] = self._use_pil4dfs.pool.id()
             cmd_env['DAOS_CONTAINER'] = self._use_pil4dfs.id()
 

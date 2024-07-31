@@ -166,9 +166,10 @@ static bool             daos_debug_inited;
 static int              num_dfs;
 static struct dfs_mt    dfs_list[MAX_DAOS_MT];
 
-bool                    whitelist_mode;
-/* bypass interception for current process. keep hook disabled. */
-static bool             bypass;
+/* turns whitelist mode on as default. Env "D_IL_INTERCEPTION_ON" can be set to disable whitelist
+ * mode in CI testing.
+ */
+bool                    whitelist_mode = true;
 /* bypass interception for current process and all child processes. */
 static bool             bypass_all;
 /* base name of the current application name */
@@ -177,8 +178,6 @@ static char            *first_arg;
 
 /* the list of apps provided by user including all child processes to be skipped for interception */
 static char            *bypass_all_user_cmd_list;
-/* the list of apps provided by user to be skipped for interception */
-static char            *bypass_user_cmd_list;
 
 static void
 extract_exe_name_1st_arg(void);
@@ -4144,8 +4143,7 @@ static char *env_list[] = {"D_IL_REPORT",
 			   "D_IL_NO_DCACHE_BASH",
 			   "BYPASS_ALL_CHILDREN",
 			   "D_IL_BYPASS_ALL_LIST",
-			   "D_IL_BYPASS_LIST",
-			   "D_IL_WHITELIST"};
+			   "D_IL_INTERCEPTION_ON"};
 
 /* Environmental variables could be cleared in some applications. To make sure all libpil4dfs
  * related env properly set, we intercept execve and its variants to check envp[] and append our
@@ -6824,41 +6822,29 @@ extract_exe_name_1st_arg(void)
 	/* We allocated buffers for exe_short_name and first_arg. Now buf can be deallocated. */
 }
 
-static inline void
-check_env_bypass_all(void)
-{
-	char *env_bypass_all;
-
-	env_bypass_all = getenv("BYPASS_ALL_CHILDREN");
-	if (env_bypass_all) {
-		if (strncmp(env_bypass_all, "1", 2) == 0)
-			bypass_all = true;
-	}
-}
-
 static char *bypass_all_bash_cmd_list[] = {"configure", "libtool", "libtoolize"};
 
 static char *bypass_all_python3_cmd_list[] = {"scons", "scons-3", "dnf", "dnf-3", "meson"};
 
-static char *bypass_all_app_list[] = {"c++", "cc", "cmake", "cmake3", "cpp", "f77", "f90", "f95",
-				      "gcc", "gfortran", "git", "go", "gofmt", "g++", "m4", "make",
-				      "nasm", "yasm"};
-
-static char *elf_list[] = {"as", "awk", "basename", "bc", "cal", "chmod", "chown", "clang", "clear",
-			   "daos", "daos_agent", "daos_engine", "daos_server", "df", "dfuse", "dmg",
-			   "expr", "kill", "link", "ln", "ls", "mkdir", "mktemp", "nm", "numactl",
-			   "patchelf", "ping", "pkg-config", "ps", "pwd", "ranlib", "rename", "sed",
-			   "seq", "size", "sleep", "ssh", "stat", "strace", "su", "sudo", "tee",
-			   "telnet", "time", "top", "touch", "tr", "truncate", "uname", "vi", "vim",
-			   "whoami", "yes"};
+static char *bypass_all_app_list[] = {"as", "awk", "basename", "bc", "c++", "cal", "cc", "chmod",
+				      "chown", "clang", "clear", "cmake", "cmake3", "cpp", "daos",
+				      "daos_agent", "daos_engine", "daos_server", "df", "dfuse",
+				      "dmg", "expr", "f77", "f90", "f95", "gcc", "gfortran", "git",
+				      "go", "gofmt", "g++", "link", "ln", "ls", "kill", "m4",
+				      "make", "mkdir", "mktemp", "nasm", "yasm", "nm", "numactl",
+				      "patchelf", "ping", "pkg-config", "ps", "pwd", "ranlib",
+				      "rename", "sed", "seq", "size", "sleep", "ssh", "stat",
+				      "strace", "su", "sudo", "tee", "telnet", "time", "top",
+				      "touch", "tr", "truncate", "uname", "vi", "vim", "whoami",
+				      "yes"};
 
 static void
-check_white_list(void)
+check_whitelist(void)
 {
 	int   i;
 	char *saveptr, *str, *token;
 
-	/* Normally the list of app is not very big. strncmp() is used for simplicity. */
+	/* Normally the list of app is not very long. strncmp() is used for simplicity. */
 
 	if (is_bash && first_arg != NULL) {
 		/* built-in list of bash scripts to skip */
@@ -6916,25 +6902,6 @@ check_white_list(void)
 		}
 	}
 
-	for (i = 0; i < ARRAY_SIZE(elf_list); i++) {
-		if (memcmp(exe_short_name, elf_list[i], strlen(elf_list[i]) + 1) == 0)
-			goto set_bypass;
-	}
-
-	if (bypass_user_cmd_list) {
-		for (str = bypass_user_cmd_list;; str = NULL) {
-			token = strtok_r(str, ":", &saveptr);
-			if (token == NULL)
-				break;
-			if (strncmp(exe_short_name, token, strlen(token) + 1) == 0)
-				goto set_bypass;
-		}
-	}
-
-	return;
-
-set_bypass:
-	bypass = true;
 	return;
 
 set_bypass_all:
@@ -6948,30 +6915,45 @@ init_myhook(void)
 {
 	mode_t   umask_old;
 	char    *env_log;
-	char    *env_whitelist;
+	char    *env_bypass_all;
+	char    *env_interception_on;
 	int      rc;
 	uint64_t eq_count_loc = 0;
 
-	env_whitelist = getenv("D_IL_WHITELIST");
-	if (env_whitelist) {
-		if (strncmp(env_whitelist, "1", 2) == 0)
-			whitelist_mode = true;
+	/* D_IL_INTERCEPTION_ON is only for testing. It turns off whitelist mode and keeps
+	 * function interception enabled all the time.
+	 */
+	env_interception_on = getenv("D_IL_INTERCEPTION_ON");
+	if (env_interception_on) {
+		if (strncmp(env_interception_on, "1", 2) == 0) {
+			whitelist_mode = false;
+			bypass_all     = false;
+			/* Set D_IL_ENFORCE_EXEC_ENV to make sure D_IL_INTERCEPTION_ON set in child
+			 * processes.
+			 */
+			setenv("D_IL_ENFORCE_EXEC_ENV", "1", 1);
+		}
 	}
-	bypass_all_user_cmd_list = getenv("D_IL_BYPASS_ALL_LIST");
-	bypass_user_cmd_list     = getenv("D_IL_BYPASS_LIST");
-	if ((bypass_all_user_cmd_list != NULL) || (bypass_user_cmd_list != NULL))
-		whitelist_mode = true;
+	if (whitelist_mode) {
+		/* Env "BYPASS_ALL_CHILDREN" is only for internal usage. */
+		env_bypass_all = getenv("BYPASS_ALL_CHILDREN");
+		if (env_bypass_all) {
+			if (strncmp(env_bypass_all, "1", 2) == 0) {
+				bypass_all = true;
+				return;
+			}
+		}
+	}
 
-	check_env_bypass_all();
+	bypass_all_user_cmd_list = getenv("D_IL_BYPASS_ALL_LIST");
 	extract_exe_name_1st_arg();
-	if (bypass_all)
-		return;
 
 	/* Need to check whether current process is bash or not under regular & compatible modes.*/
 	check_exe_sh_bash();
+
 	if (whitelist_mode)
-		check_white_list();
-	if (bypass || bypass_all)
+		check_whitelist();
+	if (bypass_all)
 		return;
 
 	umask_old = umask(0);
@@ -7235,7 +7217,7 @@ finalize_myhook(void)
 	int       rc;
 	d_list_t *rlink;
 
-	if (bypass || bypass_all)
+	if (bypass_all)
 		return;
 
 	if (context_reset) {

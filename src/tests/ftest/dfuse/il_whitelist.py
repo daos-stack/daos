@@ -19,7 +19,7 @@ class ILWhiteList(TestWithServers):
     :avocado: recursive
     """
 
-    def run_test(self, il_lib='libpil4dfs.so', bypass_all=False, bypass=False):
+    def run_test(self, il_lib='libpil4dfs.so', interception=False):
         """Jira ID: DAOS-15583.
 
         Test Description:
@@ -46,10 +46,9 @@ class ILWhiteList(TestWithServers):
         env["DD_SUBSYS"] = "il"
         env["DD_MASK"] = "DEBUG"
 
-        if bypass_all:
-            env["D_IL_BYPASS_ALL_LIST"] = "whitelist_test"
-        if bypass:
-            env["D_IL_BYPASS_LIST"] = "whitelist_test"
+        env["D_IL_BYPASS_ALL_LIST"] = "whitelist_test"
+        if interception:
+            env["D_IL_INTERCEPTION_ON"] = "1"
 
         result = run_remote(self.log, dfuse_hosts, env.to_export_str() + exe_path)
         output = "\n".join(result.all_stdout.values())
@@ -70,29 +69,18 @@ class ILWhiteList(TestWithServers):
         :avocado: tags=ILWhiteList,test_whitelist_pil4dfs
         """
         num_daos_init = self.run_test(il_lib='libpil4dfs.so')
-        if num_daos_init != 10:
-            self.fail(f"Test failed: num_daos_init = {num_daos_init}. Expected 10.")
-
-    def test_whitelist_pil4dfs_bypass(self):
-        """Jira ID: DAOS-15583.
-
-        :avocado: tags=all,daily_regression
-        :avocado: tags=vm
-        :avocado: tags=pil4dfs,dfuse
-        :avocado: tags=ILWhiteList,test_whitelist_pil4dfs_bypass
-        """
-        num_daos_init = self.run_test(il_lib='libpil4dfs.so', bypass=True)
-        if num_daos_init != 5:
-            self.fail(f"Test failed: num_daos_init = {num_daos_init}. Expected 5.")
-
-    def test_whitelist_pil4dfs_bypassall(self):
-        """Jira ID: DAOS-15583.
-
-        :avocado: tags=all,daily_regression
-        :avocado: tags=vm
-        :avocado: tags=pil4dfs,dfuse
-        :avocado: tags=ILWhiteList,test_whitelist_pil4dfs_bypassall
-        """
-        num_daos_init = self.run_test(il_lib='libpil4dfs.so', bypass_all=True)
         if num_daos_init != 0:
             self.fail(f"Test failed: num_daos_init = {num_daos_init}. Expected 0.")
+
+    def test_whitelist_pil4dfs_interception_on(self):
+        """Jira ID: DAOS-15583.
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=pil4dfs,dfuse
+        :avocado: tags=ILWhiteList,test_whitelist_pil4dfs_interception_on
+        """
+        # force function interception on which disables whitelist mode
+        num_daos_init = self.run_test(il_lib='libpil4dfs.so', interception=True)
+        if num_daos_init != 10:
+            self.fail(f"Test failed: num_daos_init = {num_daos_init}. Expected 10.")
