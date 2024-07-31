@@ -1690,7 +1690,8 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv
 	struct crt_context *ctx = crt_ctx;
 
 	D_INIT_LIST_HEAD(&rpc_priv->crp_epi_link);
-	D_INIT_LIST_HEAD(&rpc_priv->crp_tmp_link);
+	D_INIT_LIST_HEAD(&rpc_priv->crp_tmp_link_submit);
+	D_INIT_LIST_HEAD(&rpc_priv->crp_tmp_link_timeout);
 	D_INIT_LIST_HEAD(&rpc_priv->crp_parent_link);
 	rpc_priv->crp_complete_cb = NULL;
 	rpc_priv->crp_arg = NULL;

@@ -2,9 +2,9 @@
 
 ## Introduction
 
-The purpose of this guide is to provide a user with a set of command lines to quickly setup and use DAOS with POSIX on openSUSE/SLES 15.3.
+The purpose of this guide is to provide a user with a set of command lines to quickly setup and use DAOS with POSIX on openSUSE/SLES 15.5.
 
-This document covers installation of the DAOS rpms on openSUSE/SLES 15.3 and updating the DAOS configuration files needed by daos servers.
+This document covers installation of the DAOS rpms on openSUSE/SLES 15.5 and updating the DAOS configuration files needed by daos servers.
 
 This guide will also describe how to use dfuse in order to take advantage of DAOS support for POSIX.
 
@@ -21,7 +21,7 @@ This Guide requires a minimum of:
 - 1 server with PMEM and SSDs connected via infiniband storage network.
 - 1 client node.
 - 1 admin node without pmem/ssd but on the infiniband storage network.
-- All nodes have a base openSUSE or SLES 15.3 installed.
+- All nodes have a base openSUSE or SLES 15.5 installed.
 
 Install pdsh on the admin node
 The following steps require two or more hosts which will be divided up
@@ -108,10 +108,9 @@ daos-server RPM.
 
 In this section, PMem (Intel(R) Optane(TM) persistent memory) will be prepared and configured to be
 used by DAOS and NVME SSDs will be identified.
-
-!!! note
-	For OpenSUSE 15.3 installation, update ipmctl to the latest package available from
-        https://build.opensuse.org/package/binaries/hardware:nvdimm/ipmctl/openSUSE_Leap_15.3
+If the DAOS servers do not use Optane Persistent Memory, then please refer to
+[Metadata-on-SSD configuration](https://docs.daos.io/v2.6/admin/deployment/#md-on-ssd-configuration)
+for instructions how to configure the servers without PMem.
 
 1. Prepare the pmem devices on Server nodes:
 

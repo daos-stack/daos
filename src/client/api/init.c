@@ -34,7 +34,7 @@
 static pthread_mutex_t	module_lock = PTHREAD_MUTEX_INITIALIZER;
 
 /** refcount on how many times daos_init has been called */
-static int		module_initialized;
+static int                 module_initialized;
 
 const struct daos_task_api dc_funcs[] = {
 	/** Management */
@@ -309,7 +309,7 @@ unlock:
 int
 daos_fini(void)
 {
-	int	rc;
+	int rc;
 
 	D_MUTEX_LOCK(&module_lock);
 	if (module_initialized == 0) {
@@ -342,8 +342,7 @@ daos_fini(void)
 
 	rc = dc_mgmt_notify_exit();
 	if (rc != 0)
-		D_ERROR("failed to disconnect some resources may leak, "
-			DF_RC"\n", DP_RC(rc));
+		D_ERROR("failed to disconnect some resources may leak, " DF_RC "\n", DP_RC(rc));
 
 	dc_tm_fini();
 	dc_mgmt_drop_attach_info();
