@@ -244,7 +244,7 @@ func TestControl_PoolDrain(t *testing.T) {
 			req: &PoolDrainReq{
 				ID:        test.MockUUID(),
 				Rank:      2,
-				Targetidx: []uint32{1, 2, 3},
+				TargetIdx: []uint32{1, 2, 3},
 			},
 			mic: &MockInvokerConfig{
 				UnaryError: errors.New("local failed"),
@@ -255,7 +255,7 @@ func TestControl_PoolDrain(t *testing.T) {
 			req: &PoolDrainReq{
 				ID:        test.MockUUID(),
 				Rank:      2,
-				Targetidx: []uint32{1, 2, 3},
+				TargetIdx: []uint32{1, 2, 3},
 			},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
@@ -266,7 +266,7 @@ func TestControl_PoolDrain(t *testing.T) {
 			req: &PoolDrainReq{
 				ID:        test.MockUUID(),
 				Rank:      2,
-				Targetidx: []uint32{1, 2, 3},
+				TargetIdx: []uint32{1, 2, 3},
 			},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
@@ -368,7 +368,6 @@ func TestControl_PoolCreateReq_Convert(t *testing.T) {
 		NumRanks:   3,
 		Ranks:      []ranklist.Rank{1, 2, 3},
 		TierBytes:  []uint64{humanize.GiByte, 10 * humanize.GiByte},
-		MetaBytes:  2 * humanize.GiByte,
 		Properties: []*daos.PoolProperty{
 			{
 				Name:   "label",
@@ -382,15 +381,14 @@ func TestControl_PoolCreateReq_Convert(t *testing.T) {
 		t.Fatal(err)
 	}
 	expReqPB := &mgmtpb.PoolCreateReq{
-		User:         "bob",
-		Usergroup:    "work",
-		Numsvcreps:   2,
-		Totalbytes:   1,
-		Tierratio:    []float64{0.06, 0.94},
-		Numranks:     3,
-		Ranks:        []uint32{1, 2, 3},
-		Tierbytes:    []uint64{humanize.GiByte, 10 * humanize.GiByte},
-		MetaBlobSize: 2 * humanize.GiByte,
+		User:       "bob",
+		UserGroup:  "work",
+		NumSvcReps: 2,
+		TotalBytes: 1,
+		TierRatio:  []float64{0.06, 0.94},
+		NumRanks:   3,
+		Ranks:      []uint32{1, 2, 3},
+		TierBytes:  []uint64{humanize.GiByte, 10 * humanize.GiByte},
 		Properties: []*mgmtpb.PoolProperty{
 			{Number: 1, Value: &mgmtpb.PoolProperty_Strval{"foo"}},
 		},
