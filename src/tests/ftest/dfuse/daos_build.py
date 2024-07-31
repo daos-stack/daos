@@ -255,8 +255,10 @@ class DaosBuild(TestWithServers):
                 timeout = build_time * 60
             self.log_step(f"Running '{cmd}' with a {timeout}s timeout")
             start = time.time()
+            # Ideally we shouldn't use detach here but the scons environment is incorrect otherwise
             result = run_remote(
-                self.log, self.hostlist_clients, command, verbose=True, timeout=timeout)
+                self.log, self.hostlist_clients, command, verbose=True, timeout=timeout,
+                detach=True)
             elapsed = time.time() - start
             (minutes, seconds) = divmod(elapsed, 60)
             self.log.info('Command %s completed in %d:%02d (%d%% of timeout)',

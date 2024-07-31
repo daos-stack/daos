@@ -258,7 +258,7 @@ class Dfuse(DfuseCommand):
         self._setup_mount_point()
 
         # run dfuse command
-        result = run_remote(self.log, self.hosts, self.with_exports, timeout=30)
+        result = run_remote(self.log, self.hosts, self.with_exports, timeout=30, detach=True)
         self._running_hosts.add(result.passed_hosts)
         if mount_callback:
             mount_callback(result)

@@ -909,6 +909,7 @@ def get_file_listing(hosts, files, user):
     """Get the file listing from multiple hosts.
 
     Args:
+        log (logger): logger for the messages produced by this method.
         hosts (NodeSet): hosts with which to use the clush command
         files (object): list of multiple files to list or a single file as a str
         user (str): user used to run the ls command
