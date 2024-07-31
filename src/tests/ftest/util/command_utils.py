@@ -1011,19 +1011,19 @@ class YamlCommand(SubProcessCommand):
                     yaml.get_attribute_names(LogParameter))
                 for name in data:
                     create_directory(
-                        hosts, name, verbose=False, raise_exception=False)
+                        self.log, hosts, name, verbose=False, raise_exception=False)
                     for file_name in data[name]:
                         src_file = os.path.join(source, file_name)
                         dst_file = os.path.join(name, file_name)
                         self.log.debug("  %s -> %s", src_file, dst_file)
                         result = distribute_files(
-                            hosts, src_file, dst_file, mkdir=False,
+                            self.log, hosts, src_file, dst_file, mkdir=False,
                             verbose=False, raise_exception=False, sudo=True,
                             owner=self.certificate_owner)
-                        if result.exit_status != 0:
+                        if not result.passed:
                             self.log.info(
                                 "    WARNING: %s copy failed on %s:\n%s",
-                                dst_file, hosts, result)
+                                dst_file, result.failed_hosts, result)
                     names.add(name)
             yaml = yaml.other_params
 
@@ -1032,8 +1032,7 @@ class YamlCommand(SubProcessCommand):
             self.log.debug(
                 "Copied certificates for %s (in %s):",
                 self._command, ", ".join(names))
-            for line in get_file_listing(hosts, names).stdout_text.splitlines():
-                self.log.debug("  %s", line)
+            get_file_listing(self.log, hosts, names)
 
     def copy_configuration(self, hosts):
         """Copy the yaml configuration file to the hosts.
@@ -1055,7 +1054,7 @@ class YamlCommand(SubProcessCommand):
                     self.temporary_file, self.yaml.filename, hosts)
                 try:
                     distribute_files(
-                        hosts, self.temporary_file, self.yaml.filename,
+                        self.log, hosts, self.temporary_file, self.yaml.filename,
                         verbose=False, sudo=True)
                 except DaosTestError as error:
                     raise CommandFailure(
@@ -1084,8 +1083,9 @@ class YamlCommand(SubProcessCommand):
                     "%s: creating socket directory %s for user %s on %s",
                     self.command, directory, user, nodes)
                 try:
-                    create_directory(nodes, directory, sudo=True)
-                    change_file_owner(nodes, directory, user, get_primary_group(user), sudo=True)
+                    create_directory(self.log, nodes, directory, sudo=True)
+                    change_file_owner(
+                        self.log, nodes, directory, user, get_primary_group(user), sudo=True)
                 except DaosTestError as error:
                     raise CommandFailure(
                         "{}: error setting up missing socket directory {} for "
