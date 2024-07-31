@@ -52,12 +52,6 @@ jobs:
         with:
           sarif_file: 'trivy-results.sarif'
 
-      - name: Upload the Sarif report to the GitHub artifact store
-        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808  # v4.3.3
-        with:
-          path: trivy-results.sarif
-          name: trivy-results.sarif
-
       - name: Adjust config file to show and validate scan results
         run: |
           sed -i 's/output: "trivy-results.sarif"//g' utils/trivy/trivy.yaml
