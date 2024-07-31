@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -93,6 +93,98 @@ func TestRankList_RankSet(t *testing.T) {
 				t.Fatalf("unexpected ranks (-want, +got):\n%s\n", diff)
 			}
 
+		})
+	}
+}
+
+func TestRanklist_RankSet_MarshalJSON(t *testing.T) {
+	for name, tc := range map[string]struct {
+		rankSet *RankSet
+		expOut  string
+		expErr  error
+	}{
+		"nil rankset": {
+			expOut: "null",
+		},
+		"empty rankset": {
+			rankSet: &RankSet{},
+			expOut:  "[]",
+		},
+		"simple rankset": {
+			rankSet: MustCreateRankSet("[0-3]"),
+			expOut:  "[0,1,2,3]",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotBytes, gotErr := tc.rankSet.MarshalJSON()
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expOut, string(gotBytes)); diff != "" {
+				t.Fatalf("unexpected value (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestRanklist_RankSet_UnmarshalJSON(t *testing.T) {
+	for name, tc := range map[string]struct {
+		dataStr string
+		rankSet *RankSet
+		expSet  *RankSet
+		expErr  error
+	}{
+		"nil rankset": {
+			dataStr: "[0,1,2,3]",
+			expErr:  errors.New("nil RankSet"),
+		},
+		"invalid range string": {
+			dataStr: "3-0",
+			rankSet: &RankSet{},
+			expErr:  errors.New("invalid range"),
+		},
+		"empty data": {
+			rankSet: &RankSet{},
+			expSet:  &RankSet{},
+		},
+		"empty slice": {
+			dataStr: "[]",
+			rankSet: &RankSet{},
+			expSet:  &RankSet{},
+		},
+		"empty slice, quoted": {
+			dataStr: "\"[]\"",
+			rankSet: &RankSet{},
+			expSet:  &RankSet{},
+		},
+		"rankset from ranks": {
+			rankSet: &RankSet{},
+			dataStr: "[0,1,2,3,5]",
+			expSet:  MustCreateRankSet("[0-3,5]"),
+		},
+		"rankset from range": {
+			rankSet: &RankSet{},
+			dataStr: "[0-3,5]",
+			expSet:  MustCreateRankSet("[0-3,5]"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotErr := tc.rankSet.UnmarshalJSON([]byte(tc.dataStr))
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			cmpOpts := cmp.Options{
+				cmp.Comparer(func(x, y *RankSet) bool {
+					return x.String() == y.String()
+				}),
+			}
+			if diff := cmp.Diff(tc.expSet, tc.rankSet, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected RankSet (-want, +got):\n%s\n", diff)
+			}
 		})
 	}
 }

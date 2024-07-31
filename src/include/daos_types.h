@@ -19,6 +19,7 @@ extern "C" {
 #include <string.h>
 #include <stdbool.h>
 #include <ctype.h>
+#include <limits.h>
 
 /** uuid_t */
 #include <uuid/uuid.h>
@@ -274,6 +275,8 @@ struct daos_sys_info {
 	char			 dsi_system_name[DAOS_SYS_INFO_STRING_MAX + 1];
 	/** fabric provider in use by this system */
 	char			 dsi_fabric_provider[DAOS_SYS_INFO_STRING_MAX + 1];
+	/** path to agent socket */
+	char                     dsi_agent_path[PATH_MAX];
 	/** length of ranks array */
 	uint32_t		 dsi_nr_ranks;
 	/** ranks and their client-accessible URIs */

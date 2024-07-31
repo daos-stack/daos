@@ -33,7 +33,7 @@ from macsio_util import MacsioCommand
 from mdtest_utils import MdtestCommand
 from oclass_utils import extract_redundancy_factor
 from pydaos.raw import DaosApiError, DaosSnapshot
-from run_utils import RunException, run_local, run_remote
+from run_utils import run_local, run_remote
 from test_utils_container import add_container
 
 H_LOCK = threading.Lock()
@@ -280,17 +280,15 @@ def get_job_logs(self):
         sharedscr_dir = self.sharedsoak_dir + "/pass" + str(self.loop)
         cmd3 = f"/usr/bin/rsync -avtr --min-size=1B {sharedscr_dir} {self.outputsoak_dir}/"
         cmd4 = f"/usr/bin/rm -rf {sharedscr_dir}"
-        try:
-            run_local(self.log, cmd3, timeout=600)
-            run_local(self.log, cmd4, timeout=600)
-        except RunException as error:
-            self.log.info("Script file copy failed with %s", error)
+        if not run_local(self.log, cmd3, timeout=600).passed:
+            self.log.info("Script file copy failed with %s", cmd3)
+        if not run_local(self.log, cmd4, timeout=600).passed:
+            self.log.info("Script file copy failed with %s", cmd4)
     # copy the local files; local host not included in hostlist_client
-    try:
-        run_local(self.log, cmd, timeout=600)
-        run_local(self.log, cmd2, timeout=600)
-    except RunException as error:
-        self.log.info("Local copy failed with %s", error)
+    if not run_local(self.log, cmd, timeout=600).passed:
+        self.log.info("Local copy failed: %s", cmd)
+    if not run_local(self.log, cmd2, timeout=600).passed:
+        self.log.info("Local copy failed: %s", cmd2)
 
 
 def run_monitor_check(self):
