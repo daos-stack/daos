@@ -44,9 +44,10 @@ func (cmd *collectLogCmd) rsyncLog() error {
 	}
 
 	req := &control.CollectLogReq{
-		TargetFolder: cmd.TargetFolder,
-		AdminNode:    hostName,
-		LogFunction:  support.RsyncLogEnum,
+		TargetFolder:         cmd.TargetFolder,
+		AdminNode:            hostName,
+		LogFunction:          support.RsyncLogEnum,
+		FileTransferExecArgs: cmd.FileTransferExecArgs,
 	}
 	cmd.Debugf("Rsync logs from servers to %s:%s ", hostName, cmd.TargetFolder)
 	resp, err := control.CollectLog(cmd.MustLogCtx(), cmd.ctlInvoker, req)

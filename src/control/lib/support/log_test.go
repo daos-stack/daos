@@ -391,22 +391,31 @@ func TestSupport_rsyncAlternateCopy(t *testing.T) {
 		t.Fatalf("Failed to create custom binary: %v", err)
 	}
 
-	rsLog.FileTransferExec = binaryPath
+	validConfigPath := filepath.Join(targetTestDir, "daos_server_configset.yaml")
+	if err := os.WriteFile(binaryPath, []byte("support_config:\n  fileTransferExec: "+binaryPath+"\n"), 0755); err != nil {
+		t.Fatalf("Failed to create valid config file: %v", err)
+	}
+
+	invalidConfigPath := filepath.Join(targetTestDir, "daos_server_bad.yaml")
+	if err := os.WriteFile(binaryPath, []byte("support_config:\n  fileTransferExec: foo\n"), 0755); err != nil {
+		t.Fatalf("Failed to create invalid config file: %v", err)
+	}
+
 	for name, tc := range map[string]struct {
-		fileTransferExec string
-		expErr           error
+		configPath string
+		expErr     error
 	}{
 		"valid path": {
-			fileTransferExec: binaryPath,
-			expErr:           nil,
+			configPath: validConfigPath,
+			expErr:     nil,
 		},
 		"non existent binary": {
-			fileTransferExec: "foo",
-			expErr:           errors.New("Error running command foo"),
+			configPath: invalidConfigPath,
+			expErr:     errors.New("Error running command foo"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			rsLog.FileTransferExec = tc.fileTransferExec
+			rsLog.Config = tc.configPath
 			gotErr := rsyncLog(log, rsLog)
 			test.CmpErr(t, tc.expErr, gotErr)
 		})

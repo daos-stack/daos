@@ -14,6 +14,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/support"
+	"github.com/pkg/errors"
 )
 
 // supportCmd is the struct representing the top-level support subcommand.
@@ -53,6 +54,13 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 		}
 	}
 
+	if err := cmd.loadConfig(); err != nil {
+		return errors.Wrapf(err, "failed to load config from %s",
+			cmd.configPath())
+	} else if cmd.configPath() != "" {
+		cmd.Infof("DAOS Server config loaded from %s", cmd.configPath())
+	}
+
 	// Default 4 steps of log/conf collection.
 	progress := support.ProgressBar{
 		Total:     len(LogCollection),
@@ -85,7 +93,6 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	params.LogStartTime = cmd.LogStartTime
 	params.LogEndTime = cmd.LogEndTime
 	params.FileTransferExecArgs = cmd.FileTransferExecArgs
-	params.FileTransferExec = cmd.config.SupportConfig.FileTransferExec
 
 	for logFunc, logCmdSet := range LogCollection {
 		for _, logCmd := range logCmdSet {

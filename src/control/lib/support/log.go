@@ -155,7 +155,6 @@ type CollectLogsParams struct {
 	LogEndTime           string
 	StopOnError          bool
 	FileTransferExecArgs string
-	FileTransferExec     string
 }
 
 type logCopy struct {
@@ -438,9 +437,9 @@ func getSysNameFromQuery(configPath string, log logging.Logger) ([]string, error
 	return hostNames, nil
 }
 
-func customCopy(log logging.Logger, opts CollectLogsParams) error {
+func customCopy(log logging.Logger, opts CollectLogsParams, fileTransferExec string) error {
 	cmd := strings.Join([]string{
-		opts.FileTransferExec,
+		fileTransferExec,
 		opts.TargetFolder,
 		opts.FileTransferExecArgs},
 		" ")
@@ -456,8 +455,15 @@ func customCopy(log logging.Logger, opts CollectLogsParams) error {
 // R sync logs from individual servers to Admin node
 func rsyncLog(log logging.Logger, opts ...CollectLogsParams) error {
 
-	if opts[0].FileTransferExec != "" {
-		return customCopy(log, opts[0])
+	serverConfig := config.DefaultServer()
+	path, err := getServerConf(log, opts...)
+	if err == nil {
+		serverConfig.SetPath(path)
+		serverConfig.Load()
+
+		if serverConfig.SupportConfig.FileTransferExec != "" {
+			return customCopy(log, opts[0], serverConfig.SupportConfig.FileTransferExec)
+		}
 	}
 
 	targetLocation, err := createHostFolder(opts[0].TargetFolder, log)
