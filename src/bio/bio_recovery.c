@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -53,8 +53,17 @@ on_faulty(struct bio_blobstore *bbs)
 	rc = ract_ops->faulty_reaction(tgt_ids, tgt_cnt);
 	if (rc < 0)
 		D_ERROR("Faulty reaction failed. "DF_RC"\n", DP_RC(rc));
+	else if (rc == 0)
+		bbs->bb_faulty_done = 1;
 
 	return rc;
+}
+
+void
+trigger_faulty_reaction(struct bio_blobstore *bbs)
+{
+	D_ASSERT(!bbs->bb_faulty_done);
+	on_faulty(bbs);
 }
 
 static void
@@ -460,9 +469,10 @@ bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state)
 }
 
 int
-bio_xsctxt_health_check(struct bio_xs_context *xs_ctxt)
+bio_xsctxt_health_check(struct bio_xs_context *xs_ctxt, bool log_err, bool update)
 {
 	struct bio_xs_blobstore	*bxb;
+	struct media_error_msg	*mem;
 	enum smd_dev_type	 st;
 
 	/* sys xstream in pmem mode doesn't have NVMe context */
@@ -475,8 +485,21 @@ bio_xsctxt_health_check(struct bio_xs_context *xs_ctxt)
 		if (!bxb || !bxb->bxb_blobstore)
 			continue;
 
-		if (bxb->bxb_blobstore->bb_state != BIO_BS_STATE_NORMAL)
+		if (bxb->bxb_blobstore->bb_state != BIO_BS_STATE_NORMAL) {
+			if (log_err && bxb->bxb_blobstore->bb_state != BIO_BS_STATE_SETUP) {
+				D_ALLOC_PTR(mem);
+				if (mem == NULL) {
+					D_ERROR("Failed to allocate media error msg.\n");
+					return -DER_NVME_IO;
+				}
+
+				mem->mem_err_type = update ? MET_WRITE : MET_READ;
+				mem->mem_bs = bxb->bxb_blobstore;
+				mem->mem_tgt_id = xs_ctxt->bxc_tgt_id;
+				spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error, mem);
+			}
 			return -DER_NVME_IO;
+		}
 	}
 
 	return 0;
@@ -492,7 +515,7 @@ is_reint_ready(struct bio_blobstore *bbs)
 		xs_ctxt = bbs->bb_xs_ctxts[i];
 
 		D_ASSERT(xs_ctxt != NULL);
-		if (bio_xsctxt_health_check(xs_ctxt))
+		if (bio_xsctxt_health_check(xs_ctxt, false, false))
 			return false;
 	}
 	return true;
