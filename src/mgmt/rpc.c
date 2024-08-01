@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -58,15 +58,26 @@ CRT_RPC_DEFINE(mgmt_tgt_shard_destroy, DAOS_ISEQ_MGMT_TGT_SHARD_DESTROY,
 	    .prf_co_ops  = NULL,                                                                   \
 	},
 
-static struct crt_proto_rpc_format mgmt_proto_rpc_fmt[] = {
+static struct crt_proto_rpc_format mgmt_proto_rpc_fmt_v3[] = {
     MGMT_PROTO_CLI_RPC_LIST MGMT_PROTO_SRV_RPC_LIST};
+
+static struct crt_proto_rpc_format mgmt_proto_rpc_fmt_v2[] = {
+    MGMT_PROTO_CLI_RPC_LIST MGMT_PROTO_SRV_RPC_LIST_V2};
 
 #undef X
 
-struct crt_proto_format mgmt_proto_fmt = {
+struct crt_proto_format mgmt_proto_fmt_v2 = {
+	.cpf_name  = "management",
+	.cpf_ver   = DAOS_MGMT_VERSION - 1,
+	.cpf_count = ARRAY_SIZE(mgmt_proto_rpc_fmt_v2),
+	.cpf_prf   = mgmt_proto_rpc_fmt_v2,
+	.cpf_base  = DAOS_RPC_OPCODE(0, DAOS_MGMT_MODULE, 0)
+};
+
+struct crt_proto_format mgmt_proto_fmt_v3 = {
 	.cpf_name  = "management",
 	.cpf_ver   = DAOS_MGMT_VERSION,
-	.cpf_count = ARRAY_SIZE(mgmt_proto_rpc_fmt),
-	.cpf_prf   = mgmt_proto_rpc_fmt,
+	.cpf_count = ARRAY_SIZE(mgmt_proto_rpc_fmt_v3),
+	.cpf_prf   = mgmt_proto_rpc_fmt_v3,
 	.cpf_base  = DAOS_RPC_OPCODE(0, DAOS_MGMT_MODULE, 0)
 };

@@ -897,7 +897,7 @@ resetting modules into "MemoryMode" through resource allocations.
 A subsequent reboot is required for BIOS to read the new resource
 allocations.
 
-#### Multiple PMem namespaces per socket (Experimental)
+#### Multiple PMem namespaces per socket
 
 By default the `daos_server scm prepare` command will create one PMem namespace on each PMem
 region.

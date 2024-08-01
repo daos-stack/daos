@@ -1653,13 +1653,8 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf_out,
 	struct pool_buf	       *map_buf;
 	struct daos_prop_entry *svc_rf_entry;
 	daos_prop_t	       *prop = NULL;
-	uint32_t                svc_ops_enabled = 0;
-	uint32_t                svc_ops_max     = 0;
-	uint32_t                svc_ops_age     = 0;
-	uint32_t		map_version;
-	uint64_t                rdb_size;
-	bool                    rdb_size_ok     = false;
-	int			rc;
+	uint32_t                map_version;
+	int                     rc;
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
@@ -1686,48 +1681,53 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf_out,
 	else
 		svc->ps_svc_rf = -1;
 
-	/* Check if duplicate operations detection is enabled, for informative debug log */
-	rc = rdb_get_size(svc->ps_rsvc.s_db, &rdb_size);
-	if (rc != 0)
-		goto out_lock;
-	rdb_size_ok = (rdb_size >= DUP_OP_MIN_RDB_SIZE);
+	if (svc->ps_global_version >= DAOS_POOL_GLOBAL_VERSION_WITH_SVC_OPS_KVS) {
+		uint64_t rdb_size;
+		bool     rdb_size_ok;
 
-	d_iov_set(&value, &svc_ops_enabled, sizeof(svc_ops_enabled));
-	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_svc_ops_enabled, &value);
-	if (rc == -DER_NONEXIST) {
-		rc = 0;
-	} else if (rc != 0) {
-		D_ERROR(DF_UUID ": failed to lookup svc_ops_enabled: " DF_RC "\n",
-			DP_UUID(svc->ps_uuid), DP_RC(rc));
-		goto out_lock;
+		/* Check if duplicate operations detection is enabled, for informative debug log */
+		rc = rdb_get_size(svc->ps_rsvc.s_db, &rdb_size);
+		if (rc != 0)
+			goto out_lock;
+		rdb_size_ok = (rdb_size >= DUP_OP_MIN_RDB_SIZE);
+
+		d_iov_set(&value, &svc->ps_ops_enabled, sizeof(svc->ps_ops_enabled));
+		rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_svc_ops_enabled, &value);
+		if (rc != 0) {
+			D_ERROR(DF_UUID ": failed to lookup svc_ops_enabled: " DF_RC "\n",
+				DP_UUID(svc->ps_uuid), DP_RC(rc));
+			goto out_lock;
+		}
+
+		d_iov_set(&value, &svc->ps_ops_age, sizeof(svc->ps_ops_age));
+		rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_svc_ops_age, &value);
+		if (rc != 0) {
+			DL_ERROR(rc, DF_UUID ": failed to lookup svc_ops_age",
+				 DP_UUID(svc->ps_uuid));
+			goto out_lock;
+		}
+
+		d_iov_set(&value, &svc->ps_ops_max, sizeof(svc->ps_ops_max));
+		rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_svc_ops_max, &value);
+		if (rc != 0) {
+			DL_ERROR(rc, DF_UUID ": failed to lookup svc_ops_max",
+				 DP_UUID(svc->ps_uuid));
+			goto out_lock;
+		}
+
+		D_DEBUG(DB_MD,
+			DF_UUID ": duplicate ops detection %s (rdb size " DF_U64 " %s %u minimum), "
+				"max entries %u, max entry age %u sec\n",
+			DP_UUID(svc->ps_uuid), svc->ps_ops_enabled ? "enabled" : "disabled",
+			rdb_size, rdb_size_ok ? ">=" : "<", DUP_OP_MIN_RDB_SIZE, svc->ps_ops_max,
+			svc->ps_ops_age);
+	} else {
+		svc->ps_ops_enabled = 0;
+		svc->ps_ops_age     = 0;
+		svc->ps_ops_max     = 0;
+		D_DEBUG(DB_MD, DF_UUID ": duplicate ops detection unavailable\n",
+			DP_UUID(svc->ps_uuid));
 	}
-	svc->ps_ops_enabled = svc_ops_enabled;
-
-	d_iov_set(&value, &svc_ops_max, sizeof(svc_ops_max));
-	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_svc_ops_max, &value);
-	if (rc == -DER_NONEXIST) {
-		rc = 0;
-	} else if (rc != 0) {
-		DL_ERROR(rc, DF_UUID ": failed to lookup svc_ops_max", DP_UUID(svc->ps_uuid));
-		goto out_lock;
-	}
-	svc->ps_ops_max = svc_ops_max;
-
-	d_iov_set(&value, &svc_ops_age, sizeof(svc_ops_age));
-	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_svc_ops_age, &value);
-	if (rc == -DER_NONEXIST) {
-		rc = 0;
-	} else if (rc != 0) {
-		DL_ERROR(rc, DF_UUID ": failed to lookup svc_ops_age", DP_UUID(svc->ps_uuid));
-		goto out_lock;
-	}
-	svc->ps_ops_age = svc_ops_age;
-
-	D_DEBUG(DB_MD,
-		DF_UUID ": duplicate ops detection %s (rdb size " DF_U64 " %s %u minimum), "
-			"max entries %u, max entry age %u sec\n",
-		DP_UUID(svc->ps_uuid), svc_ops_enabled ? "enabled" : "disabled", rdb_size,
-		rdb_size_ok ? ">=" : "<", DUP_OP_MIN_RDB_SIZE, svc_ops_max, svc_ops_age);
 
 	D_ASSERTF(rc == 0, DF_RC"\n", DP_RC(rc));
 	*map_buf_out = map_buf;
@@ -5172,8 +5172,7 @@ pool_upgrade_one_prop_int32(struct rdb_tx *tx, struct pool_svc *svc, uuid_t uuid
 }
 
 static int
-pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
-			      uuid_t pool_uuid, crt_rpc_t *rpc)
+pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc, uuid_t pool_uuid, crt_rpc_t *rpc)
 {
 	d_iov_t			value;
 	uint64_t		val;
@@ -5185,6 +5184,8 @@ pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 	int			n_hdl_uuids = 0;
 	uint32_t		connectable;
 	uint32_t                svc_ops_enabled = 0;
+	uint32_t		svc_ops_age;
+	uint32_t                svc_ops_max;
 
 	if (rpc) {
 		rc = find_hdls_to_evict(tx, svc, &hdl_uuids, &hdl_uuids_size,
@@ -5408,7 +5409,6 @@ pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 
 	/* Upgrade for the pool/container service operations KVS */
 	D_DEBUG(DB_MD, DF_UUID ": check ds_pool_prop_svc_ops\n", DP_UUID(pool_uuid));
-
 	d_iov_set(&value, NULL, 0);
 	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_svc_ops, &value);
 	if (rc && rc != -DER_NONEXIST) {
@@ -5416,6 +5416,7 @@ pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 		D_GOTO(out_free, rc);
 	} else if (rc == -DER_NONEXIST) {
 		struct rdb_kvs_attr attr;
+		uint32_t            svc_ops_num;
 
 		D_DEBUG(DB_MD, DF_UUID ": creating service ops KVS\n", DP_UUID(pool_uuid));
 		attr.dsa_class = RDB_KVS_LEXICAL;
@@ -5424,6 +5425,14 @@ pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 		if (rc != 0) {
 			D_ERROR(DF_UUID ": failed to create service ops KVS: %d\n",
 				DP_UUID(pool_uuid), rc);
+			D_GOTO(out_free, rc);
+		}
+		svc_ops_num = 0;
+		d_iov_set(&value, &svc_ops_num, sizeof(svc_ops_num));
+		rc = rdb_tx_update(tx, &svc->ps_root, &ds_pool_prop_svc_ops_num, &value);
+		if (rc != 0) {
+			DL_ERROR(rc, DF_UUID ": failed to write upgrade svc_ops_num",
+				 DP_UUID(pool_uuid));
 			D_GOTO(out_free, rc);
 		}
 		need_commit = true;
@@ -5462,15 +5471,31 @@ pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 	}
 
 	D_DEBUG(DB_MD, DF_UUID ": check ds_pool_prop_svc_ops_age\n", DP_UUID(pool_uuid));
-	d_iov_set(&value, &val32, sizeof(val32));
+	d_iov_set(&value, &svc_ops_age, sizeof(svc_ops_age));
 	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_svc_ops_age, &value);
 	if (rc && rc != -DER_NONEXIST) {
 		D_GOTO(out_free, rc);
 	} else if (rc == -DER_NONEXIST) {
-		val32 = DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_DEFAULT;
+		svc_ops_age = DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_DEFAULT;
 		rc    = rdb_tx_update(tx, &svc->ps_root, &ds_pool_prop_svc_ops_age, &value);
 		if (rc != 0) {
 			DL_ERROR(rc, "failed to write upgrade svc_ops_age");
+			D_GOTO(out_free, rc);
+		}
+		need_commit = true;
+	}
+
+	D_DEBUG(DB_MD, DF_UUID ": check ds_pool_prop_svc_ops_max\n", DP_UUID(pool_uuid));
+	d_iov_set(&value, &svc_ops_max, sizeof(svc_ops_max));
+	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_svc_ops_max, &value);
+	if (rc && rc != -DER_NONEXIST) {
+		D_GOTO(out_free, rc);
+	} else if (rc == -DER_NONEXIST) {
+		svc_ops_max = PS_OPS_PER_SEC * svc_ops_age;
+		rc = rdb_tx_update(tx, &svc->ps_root, &ds_pool_prop_svc_ops_max, &value);
+		if (rc != 0) {
+			DL_ERROR(rc, DF_UUID ": failed to write upgrade svc_ops_max",
+				 DP_UUID(pool_uuid));
 			D_GOTO(out_free, rc);
 		}
 		need_commit = true;
@@ -5484,6 +5509,11 @@ pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 		rc = rdb_tx_commit(tx);
 		if (rc)
 			D_GOTO(out_free, rc);
+
+		svc->ps_ops_enabled = svc_ops_enabled;
+		svc->ps_ops_age     = svc_ops_age;
+		svc->ps_ops_max     = svc_ops_max;
+
 		rc = pool_prop_read(tx, svc, DAOS_PO_QUERY_PROP_ALL, &prop);
 		if (rc)
 			D_GOTO(out_free, rc);

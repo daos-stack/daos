@@ -1516,13 +1516,24 @@ dfs_test_chown(void **state)
 }
 
 static void
+printtimespec(struct timespec ts)
+{
+	char buf[128];
+
+	strftime(buf, sizeof(buf), "%D %T", gmtime(&ts.tv_sec));
+	print_message("\tTime: %s.%09ld UTC\n", buf, ts.tv_nsec);
+	print_message("\tRaw timespec.tv_sec: %jd\n", (intmax_t)ts.tv_sec);
+	print_message("\tRaw timespec.tv_nsec: %09ld\n", ts.tv_nsec);
+}
+
+static void
 run_time_tests(dfs_obj_t *obj, char *name, int mode)
 {
 	d_sg_list_t		sgl;
 	d_iov_t			iov;
 	char			buf[64];
 	struct stat		stbuf;
-	struct timespec		prev_ts, first_ts;
+	struct timespec          prev_ts, first_ts, now;
 	daos_size_t		size;
 	dfs_obj_t		*tmp_obj;
 	struct tm                tm = {0};
@@ -1540,6 +1551,9 @@ run_time_tests(dfs_obj_t *obj, char *name, int mode)
 	/** store the first modification timestamp (at creation time) */
 	first_ts.tv_sec = prev_ts.tv_sec;
 	first_ts.tv_nsec = prev_ts.tv_nsec;
+
+	printf("Start Time:\n");
+	printtimespec(first_ts);
 
 	if (S_ISREG(mode)) {
 		d_iov_set(&iov, buf, 64);
@@ -1575,15 +1589,21 @@ run_time_tests(dfs_obj_t *obj, char *name, int mode)
 		assert_int_equal(prev_ts.tv_sec, stbuf.st_mtim.tv_sec);
 		assert_int_equal(prev_ts.tv_nsec, stbuf.st_mtim.tv_nsec);
 	}
-
+	usleep(10000);
 	/** reset the mtime on the file/dir to the first timestamp */
+	print_message("Reset mtime to Start Time at:\n");
+	clock_gettime(CLOCK_REALTIME, &now);
+	printtimespec(now);
+	print_message("prev is:\n");
+	printtimespec(prev_ts);
 	memset(&stbuf, 0, sizeof(stbuf));
 	stbuf.st_mtim.tv_sec = first_ts.tv_sec;
 	stbuf.st_mtim.tv_nsec = first_ts.tv_nsec;
 	rc = dfs_osetattr(dfs_mt, obj, &stbuf, DFS_SET_ATTR_MTIME);
 	assert_int_equal(rc, 0);
+	print_message("ctime is:\n");
+	printtimespec(stbuf.st_ctim);
 	assert_true(check_ts(prev_ts, stbuf.st_ctim));
-
 	/** verify mtime is now the same as the one we just set */
 	memset(&stbuf, 0, sizeof(stbuf));
 	rc = dfs_ostatx(dfs_mt, obj, &stbuf, NULL);
@@ -1606,6 +1626,7 @@ run_time_tests(dfs_obj_t *obj, char *name, int mode)
 	assert_true(check_ts(prev_ts, stbuf.st_mtim));
 	assert_true(check_ts(prev_ts, stbuf.st_ctim));
 
+	usleep(10000);
 	memset(&stbuf, 0, sizeof(stbuf));
 	rc = dfs_lookupx(dfs_mt, NULL, name, O_RDWR, &tmp_obj, NULL, &stbuf, 0, NULL, NULL, NULL);
 	assert_int_equal(rc, 0);

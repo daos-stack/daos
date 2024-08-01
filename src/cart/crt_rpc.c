@@ -1115,8 +1115,7 @@ crt_issue_uri_lookup(crt_context_t ctx, crt_group_t *group,
 
 	rc = crt_req_create(ctx, &target_ep, CRT_OPC_URI_LOOKUP, &rpc);
 	if (rc != 0) {
-		D_ERROR("URI_LOOKUP rpc create failed; rc="DF_RC"\n",
-			DP_RC(rc));
+		D_ERROR("URI_LOOKUP rpc create failed; rc=" DF_RC "\n", DP_RC(rc));
 		D_GOTO(exit, rc);
 	}
 
@@ -1124,6 +1123,17 @@ crt_issue_uri_lookup(crt_context_t ctx, crt_group_t *group,
 	ul_in->ul_grp_id = group->cg_grpid;
 	ul_in->ul_rank = query_rank;
 	ul_in->ul_tag = query_tag;
+
+	/* Inherit original RPC timeout if set */
+	if (chained_rpc_priv->crp_timeout_sec) {
+		rc = crt_req_set_timeout(rpc, chained_rpc_priv->crp_timeout_sec);
+		if (rc != 0) {
+			D_ERROR("crt_req_set_timeout() failed; rc=" DF_RC "\n", DP_RC(rc));
+			/* destroy the URI_LOOKUP rpc */
+			RPC_PUB_DECREF(rpc);
+			D_GOTO(exit, rc);
+		}
+	}
 
 	RPC_PUB_ADDREF(rpc);
 	chained_rpc_priv->crp_ul_req = rpc;
@@ -1690,7 +1700,8 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv
 	struct crt_context *ctx = crt_ctx;
 
 	D_INIT_LIST_HEAD(&rpc_priv->crp_epi_link);
-	D_INIT_LIST_HEAD(&rpc_priv->crp_tmp_link);
+	D_INIT_LIST_HEAD(&rpc_priv->crp_tmp_link_submit);
+	D_INIT_LIST_HEAD(&rpc_priv->crp_tmp_link_timeout);
 	D_INIT_LIST_HEAD(&rpc_priv->crp_parent_link);
 	rpc_priv->crp_complete_cb = NULL;
 	rpc_priv->crp_arg = NULL;

@@ -286,7 +286,11 @@ func (svc *mgmtSvc) checkReqFabricProvider(req *mgmtpb.JoinReq, peerAddr *net.TC
 
 	sysProv, err := svc.getFabricProvider()
 	if err != nil {
-		return errors.Wrapf(err, "fetching system fabric provider")
+		if system.IsErrSystemAttrNotFound(err) {
+			svc.log.Debugf("error fetching system fabric provider: %s", err.Error())
+			return system.ErrLeaderStepUpInProgress
+		}
+		return errors.Wrap(err, "fetching system fabric provider")
 	}
 
 	if joinProv != sysProv {
