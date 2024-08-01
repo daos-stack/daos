@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -488,14 +488,6 @@ crt_provider_ctx0_port_get(bool primary, crt_provider_t provider)
 	return prov_data->cpg_na_config.noc_port;
 }
 
-static char*
-crt_provider_domain_get(bool primary, crt_provider_t provider)
-{
-	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(primary, provider);
-
-	return prov_data->cpg_na_config.noc_domain;
-}
-
 static struct crt_na_dict *
 crt_get_na_dict_entry(crt_provider_t provider)
 {
@@ -516,6 +508,19 @@ crt_provider_name_get(crt_provider_t provider)
 	struct crt_na_dict *entry = crt_get_na_dict_entry(provider);
 
 	return entry ? entry->nad_str : NULL;
+}
+
+char *
+crt_provider_domain_str_get(bool primary, crt_provider_t provider, int idx)
+{
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(primary, provider);
+
+	/* If the domain was not specified, return NULL */
+	if (prov_data->cpg_na_config.noc_domain == NULL)
+		return NULL;
+
+	D_ASSERTF(idx < prov_data->cpg_na_config.noc_domain_total, "Bad idx=%d\n", idx);
+	return prov_data->cpg_na_config.noc_domain_str[idx];
 }
 
 char*
@@ -716,7 +721,7 @@ crt_get_info_string(bool primary, crt_provider_t provider, int iface_idx,
 
 	provider_str = crt_provider_name_get(provider);
 	start_port = crt_provider_ctx0_port_get(primary, provider);
-	domain_str = crt_provider_domain_get(primary, provider);
+	domain_str   = crt_provider_domain_str_get(primary, provider, iface_idx);
 	iface_str = crt_provider_iface_str_get(primary, provider, iface_idx);
 
 	if (provider == CRT_PROV_SM) {
@@ -767,6 +772,8 @@ crt_get_info_string(bool primary, crt_provider_t provider, int iface_idx,
 		}
 	}
 
+	D_DEBUG(DB_ALL, "iface_idx:%d context:%d domain_str=%s iface_str=%s info_str=%s\n",
+		iface_idx, ctx_idx, domain_str, iface_str, *string);
 out:
 	if (rc == DER_SUCCESS && *string == NULL)
 		return -DER_NOMEM;

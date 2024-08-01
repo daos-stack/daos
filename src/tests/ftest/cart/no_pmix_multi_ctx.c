@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -110,6 +110,8 @@ int main(int argc, char **argv)
 	char		*env;
 	char		*cur_iface_str;
 	char		*new_iface_str;
+	char            *cur_domain_str = NULL;
+	char            *new_domain_str = NULL;
 	int		iface_idx = -1;
 	int		num_ifaces;
 	crt_context_t	c1,c2;
@@ -164,8 +166,23 @@ int main(int argc, char **argv)
 	/* Append loopback to the current interface list */
 	D_ASPRINTF(new_iface_str, "%s,lo", cur_iface_str);
 	D_ASSERTF(new_iface_str != NULL, "Failed to allocate string");
-
 	setenv("D_INTERFACE", new_iface_str, 1);
+
+	/* Append ',lo' to domain string as 'lo' should be available everywhere */
+	env = getenv("D_DOMAIN");
+
+	/* Domain is optional, can be set for manual testing */
+	if (env != NULL) {
+		/* Save current domain value */
+		D_ASPRINTF(cur_domain_str, "%s", env);
+		D_ASSERTF(cur_domain_str != NULL, "Failed to allocate string");
+
+		/* Append loopback to the current domain list */
+		D_ASPRINTF(new_domain_str, "%s,lo", cur_domain_str);
+		D_ASSERTF(new_domain_str != NULL, "Failed to allocate string");
+
+		setenv("D_DOMAIN", new_domain_str, 1);
+	}
 
 	/* Reinitialize as a client to be able to use multi-interface APIs */
 	rc = crt_init(0, 0);
@@ -204,6 +221,8 @@ int main(int argc, char **argv)
 
 	D_FREE(cur_iface_str);
 	D_FREE(new_iface_str);
+	D_FREE(cur_domain_str);
+	D_FREE(new_domain_str);
 	D_FREE(uri1);
 	D_FREE(uri2);
 
