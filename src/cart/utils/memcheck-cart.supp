@@ -583,13 +583,19 @@
    fun:racecall
 }
 {
-   go 1.22.3 race
+   __tsan_go_atomic64_load
    Memcheck:Addr8
    fun:__tsan_go_atomic64_load
    fun:racecall
 }
 {
-   go 1.22.3 race
+   __tsan_go_atomic64_store
+   Memcheck:Addr8
+   fun:__tsan_go_atomic64_store
+   fun:racecall
+}
+{
+   __tsan_go_atomic64_compare_exchange
    Memcheck:Addr8
    fun:__tsan_go_atomic64_compare_exchange
    fun:racecall
@@ -605,9 +611,15 @@
    fun:runtime.persistentalloc
 }
 {
-   go 1.22.3 race
+   __tsan_write_pc
    Memcheck:Value8
    fun:__tsan_write_pc
+   fun:racecall
+}
+{
+   __tsan_read_pc
+   Memcheck:Value8
+   fun:__tsan_read_pc
    fun:racecall
 }
 {
@@ -623,31 +635,48 @@
    fun:racecall
 }
 {
-   go 1.22.3 race
+   __tsan_read
    Memcheck:Value8
    fun:__tsan_read
    fun:racecall
 }
 {
-   go 1.22.3 race
+   __tsan_write
+   Memcheck:Value8
+   fun:__tsan_write
+   fun:racecall
+}
+{
+   racecallatomic
    Memcheck:Addr8
    fun:racecallatomic
 }
 {
-   go 1.22.3 race
+   racecalladdr
+   Memcheck:Addr8
+   fun:racecalladdr
+}
+{
+   Syscall6 param
    Memcheck:Param
    read(buf)
    fun:runtime/internal/syscall.Syscall6
 }
 {
-   go 1.22.3 race
+   __tsan_go_atomic32_load
    Memcheck:Addr4
    fun:__tsan_go_atomic32_load
    fun:racecall
 }
 {
-   go 1.22.3 race
+   __tsan_go_atomic32_store
    Memcheck:Addr4
    fun:__tsan_go_atomic32_store
+   fun:racecall
+}
+{
+   __tsan_go_atomic32_compare_exchange
+   Memcheck:Addr4
+   fun:__tsan_go_atomic32_compare_exchange
    fun:racecall
 }

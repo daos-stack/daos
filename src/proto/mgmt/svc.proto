@@ -99,7 +99,8 @@ message FabricInterface {
 }
 
 message FabricInterfaces {
-	repeated FabricInterface ifaces = 1;
+	uint32 numa_node = 1;
+	repeated FabricInterface ifaces = 2;
 }
 
 message BuildInfo
@@ -128,7 +129,7 @@ message GetAttachInfoResp {
 	repeated RankUri secondary_rank_uris = 7; // Rank URIs for additional providers
 	repeated ClientNetHint secondary_client_net_hints = 8; // Hints for additional providers
 	BuildInfo              build_info = 9; // Structured server build information
-	map<uint32,FabricInterfaces> numa_fabric_interfaces = 10; // Usable fabric interfaces by NUMA node (populated by agent)
+	repeated FabricInterfaces numa_fabric_interfaces = 10; // Usable fabric interfaces by NUMA node (populated by agent)
 }
 
 message PrepShutdownReq {
