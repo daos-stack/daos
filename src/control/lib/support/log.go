@@ -448,21 +448,26 @@ func customCopy(log logging.Logger, opts CollectLogsParams, fileTransferExec str
 	if err != nil {
 		return errors.Wrapf(err, "Error running command %s %s", cmd, string(out))
 	}
-	log.Infof("rsyncAlternateCopy:= %s stdout:\n%s\n\n", cmd, string(out))
+	log.Infof("customCopy:= %s stdout:\n%s\n\n", cmd, string(out))
 	return nil
 }
 
 // R sync logs from individual servers to Admin node
 func rsyncLog(log logging.Logger, opts ...CollectLogsParams) error {
+	var cfgPath string
+	if opts[0].Config != "" {
+		cfgPath = opts[0].Config
+	} else {
+		cfgPath, _ = getServerConf(log)
+	}
 
-	serverConfig := config.DefaultServer()
-	path, err := getServerConf(log, opts...)
-	if err == nil {
-		serverConfig.SetPath(path)
-		serverConfig.Load()
-
-		if serverConfig.SupportConfig.FileTransferExec != "" {
-			return customCopy(log, opts[0], serverConfig.SupportConfig.FileTransferExec)
+	if cfgPath != "" {
+		serverConfig := config.DefaultServer()
+		serverConfig.SetPath(cfgPath)
+		if err := serverConfig.Load(); err == nil {
+			if serverConfig.SupportConfig.FileTransferExec != "" {
+				return customCopy(log, opts[0], serverConfig.SupportConfig.FileTransferExec)
+			}
 		}
 	}
 

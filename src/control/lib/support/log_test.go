@@ -371,7 +371,7 @@ func TestSupport_rsyncLog(t *testing.T) {
 	}
 }
 
-func TestSupport_rsyncAlternateCopy(t *testing.T) {
+func TestSupport_customCopy(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 	targetTestDir, targetCleanup := test.CreateTestDir(t)
@@ -392,12 +392,12 @@ func TestSupport_rsyncAlternateCopy(t *testing.T) {
 	}
 
 	validConfigPath := filepath.Join(targetTestDir, "daos_server_configset.yaml")
-	if err := os.WriteFile(binaryPath, []byte("support_config:\n  fileTransferExec: "+binaryPath+"\n"), 0755); err != nil {
+	if err := os.WriteFile(validConfigPath, []byte("support_config:\n  file_transfer_exec: "+binaryPath+"\n"), 0755); err != nil {
 		t.Fatalf("Failed to create valid config file: %v", err)
 	}
 
 	invalidConfigPath := filepath.Join(targetTestDir, "daos_server_bad.yaml")
-	if err := os.WriteFile(binaryPath, []byte("support_config:\n  fileTransferExec: foo\n"), 0755); err != nil {
+	if err := os.WriteFile(invalidConfigPath, []byte("support_config:\n  file_transfer_exec: foo\n"), 0755); err != nil {
 		t.Fatalf("Failed to create invalid config file: %v", err)
 	}
 
@@ -411,7 +411,7 @@ func TestSupport_rsyncAlternateCopy(t *testing.T) {
 		},
 		"non existent binary": {
 			configPath: invalidConfigPath,
-			expErr:     errors.New("Error running command foo"),
+			expErr:     errors.New("Error running command"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
