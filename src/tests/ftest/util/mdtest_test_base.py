@@ -43,7 +43,8 @@ class MdtestBase(TestWithServers):
         super().setUp()
 
         # Get the parameters for Mdtest
-        self.mdtest_cmd = MdtestCommand()
+        # Makito added argument.
+        self.mdtest_cmd = MdtestCommand(self.test_env.log_dir)
         self.mdtest_cmd.get_params(self)
         self.ppn = self.params.get("ppn", '/run/mdtest/client_processes/*')
         self.processes = self.params.get("np", '/run/mdtest/client_processes/*')
@@ -69,14 +70,16 @@ class MdtestBase(TestWithServers):
             params['dir_oclass'] = self.mdtest_cmd.dfs_dir_oclass.value
         return self.get_container(pool, **params)
 
-    def execute_mdtest(self, out_queue=None, display_space=True, job_manager=None):
+    def execute_mdtest(self, out_queue=None, display_space=True, job_manager=None,
+                       intercept=None):
         """Runner method for Mdtest.
 
         Args:
             out_queue (queue, optional): Pass any exceptions in a queue. Defaults to None.
             display_space (bool, optional): Whether to display the pool space. Defaults to True.
             job_manager (JobManager, optional): job manager used to run mdtest. Defaults to None.
-
+            intercept (default None): path to intercept library
+ 
         Returns:
             object: result of job manager run
         """
@@ -102,7 +105,8 @@ class MdtestBase(TestWithServers):
 
         # Run Mdtest
         out = self.run_mdtest(
-            job_manager, self.processes, display_space=display_space, out_queue=out_queue)
+            job_manager, self.processes, display_space=display_space, out_queue=out_queue,
+            intercept=intercept)
 
         if self.subprocess:
             return out
@@ -134,7 +138,8 @@ class MdtestBase(TestWithServers):
             manager = get_job_manager(self, "Orterun", self.mdtest_cmd, self.subprocess)
         return manager
 
-    def run_mdtest(self, manager, processes, display_space=True, pool=None, out_queue=None):
+    def run_mdtest(self, manager, processes, display_space=True, pool=None, out_queue=None,
+                   intercept=None):
         """Run the Mdtest command.
 
         Args:
@@ -150,6 +155,10 @@ class MdtestBase(TestWithServers):
         env = self.mdtest_cmd.get_default_env(str(manager), self.client_log)
         manager.assign_hosts(self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
         # Pass only processes or ppn to be compatible with previous behavior
+        if intercept:
+            env['LD_PRELOAD'] = intercept
+            if 'D_IL_REPORT' not in env:
+                env['D_IL_REPORT'] = '1'
         if self.ppn is not None:
             manager.assign_processes(ppn=self.ppn)
         else:
