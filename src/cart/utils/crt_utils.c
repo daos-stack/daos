@@ -442,6 +442,9 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 	if (rc != 0)
 		D_GOTO(cleanup, rc = d_errno2der(errno));
 
+	D_INFO("Agent response: provider: '%s', domain: '%s', interface: '%s'\n",
+	       crt_net_cfg_info.provider, crt_net_cfg_info.domain, crt_net_cfg_info.interface);
+
 	/* If the server has set this, the client must use the same value. */
 	if (crt_net_cfg_info.srv_srx_set != -1) {
 		rc = asprintf(&cli_srx_set, "%d", crt_net_cfg_info.srv_srx_set);
@@ -513,7 +516,6 @@ cleanup:
 	d_freeenv_str(&crt_timeout);
 	d_freeenv_str(&cli_srx_set);
 	dc_put_attach_info(&crt_net_cfg_info, crt_net_cfg_resp);
-
 	return rc;
 }
 
@@ -541,10 +543,13 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 			D_GOTO(out, rc);
 	}
 
-	if (init_opt)
-		rc = crt_init_opt(local_group_name, 0, init_opt);
-	else
-		rc = crt_init(local_group_name, 0);
+	rc = crt_init_opt(local_group_name, 0, init_opt);
+	/* Free strings upon init */
+	if (init_opt) {
+		D_FREE(init_opt->cio_interface);
+		D_FREE(init_opt->cio_domain);
+		D_FREE(init_opt->cio_provider);
+	}
 
 	if (rc != 0)
 		D_GOTO(out, rc);
