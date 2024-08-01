@@ -581,7 +581,7 @@ class NetworkInterface():
             list: any errors detected setting the link state of the interface
         """
         errors = []
-        command = f'sudo ip link set {self.__name} {state}'
+        command = f'sudo -n ip link set {self.__name} {state}'
         if self.__execute:
             result = run_remote(logger, self.__hosts, command)
             if not result.passed:
