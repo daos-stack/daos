@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1051,6 +1051,62 @@ dfs_drain_extend(void **state)
 	assert_rc_equal(rc, 0);
 }
 
+static void
+drain_no_data_sync(void **state)
+{
+	test_arg_t		*arg = *state;
+	daos_obj_id_t		oid;
+	struct ioreq		req;
+	int			tgt = DEFAULT_FAIL_TGT;
+	int			i;
+	int			rc;
+
+	if (!test_runable(arg, 4))
+		return;
+
+	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
+				arg->myrank);
+	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
+	oid = dts_oid_set_tgt(oid, tgt);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	/** Insert 1000 records */
+	print_message("Insert %d kv record in object "DF_OID"\n",
+		      KEY_NR, DP_OID(oid));
+	for (i = 0; i < KEY_NR; i++) {
+		char	key[32] = {0};
+
+		sprintf(key, "dkey_0_%d", i);
+		insert_single(key, "a_key", 0, "data", strlen("data") + 1,
+			      DAOS_TX_NONE, &req);
+	}
+
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "reintegration", "no_data_sync");
+	assert_success(rc);
+
+	arg->pool.rebuild_expected_err = -1001;
+
+	arg->rebuild_cb = reintegrate_inflight_io;
+	arg->rebuild_cb_arg = &oid;
+	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+
+	ioreq_fini(&req);
+}
+
+static int
+test19_teardown(void **state)
+{
+	test_arg_t	*arg = *state;
+	int		 rc;
+
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "reintegration",
+				"data_sync");
+	assert_success(rc);
+	test_teardown(state);
+
+	return rc;
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest drain_tests[] = {
 	{"DRAIN0: drain small rec multiple dkeys",
@@ -1091,6 +1147,8 @@ static const struct CMUnitTest drain_tests[] = {
 	 dfs_drain_writeloop, rebuild_sub_rf0_setup, test_teardown},
 	{"DRAIN18: drain and extend at the same time",
 	 dfs_drain_extend, rebuild_sub_3nodes_rf0_setup, test_teardown},
+	{"DRAIN19: drain should fail with no_data_sync mode",
+	 drain_no_data_sync, rebuild_sub_3nodes_rf0_setup, test19_teardown},
 };
 
 int

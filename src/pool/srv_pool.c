@@ -6916,7 +6916,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		if (opc == MAP_REINT) {
 			rc = ds_pool_tgt_finish_rebuild(svc->ps_pool->sp_uuid, &target_list);
 			if (rc)
-				D_INFO("mark target %d of "DF_UUID " as UPIN: "DF_RC"\n",
+				D_INFO("mark target %d of " DF_UUID " as UPIN: " DF_RC "\n",
 					target_list.pti_ids[0].pti_id,
 					DP_UUID(svc->ps_pool->sp_uuid), DP_RC(rc));
 		}
