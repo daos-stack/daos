@@ -1,9 +1,8 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import random
 import threading
 import time
 
@@ -42,20 +41,16 @@ class OSAOnlineDrain(OSAUtils):
         """
         # Create a pool
         pool = {}
-        target_list = []
         if oclass is None:
             oclass = self.ior_cmd.dfs_oclass.value
         test_seq = self.ior_test_sequence[0]
-        drain_servers = (len(self.hostlist_servers) * 2) - 1
 
-        # Exclude target : random two targets  (target idx : 0-7)
-        exc = random.randint(0, 6)  # nosec
-        target_list.append(exc)
-        target_list.append(exc + 1)
-        t_string = "{},{}".format(target_list[0], target_list[1])
+        # Exclude two random targets
+        targets = int(self.server_managers[-1].get_config_value('targets'))
+        t_string = ','.join(map(str, self.random.sample(range(targets), 2)))
 
         # Drain one of the ranks (or server)
-        rank = random.randint(1, drain_servers)  # nosec
+        rank = self.random.choice(list(self.server_managers[0].ranks.keys()))
 
         for val in range(0, num_pool):
             pool[val] = add_pool(self, connect=False)
@@ -98,9 +93,9 @@ class OSAOnlineDrain(OSAUtils):
             pver_drain = self.pool.get_version(True)
             self.log.info("Pool Version after drain %s", pver_drain)
             # Check pool version incremented after pool exclude
-            self.assertTrue(pver_drain > pver_begin, "Pool Version Error:  After drain")
-            self.assertTrue(initial_free_space > free_space_after_drain,
-                            "Expected free space after drain is less than initial")
+            self.assertGreater(pver_drain, pver_begin, "Pool Version Error:  After drain")
+            self.assertGreater(initial_free_space, free_space_after_drain,
+                               "Expected free space after drain is less than initial")
             # Wait to finish the threads
             for thrd in threads:
                 thrd.join()

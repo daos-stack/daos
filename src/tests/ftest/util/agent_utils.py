@@ -310,8 +310,7 @@ class DaosAgentManager(SubprocessManager):
             CommandFailure: if the daos_agent command fails.
 
         Returns:
-            CommandResult: a grouping of the command results from
-                the same hosts with the same return status
+            CommandResult: groups of command results from the same hosts with the same return status
 
         """
         cmd = self.manager.job.copy()
