@@ -394,7 +394,7 @@ def launch_jobscript(
         job_id (int): unique job identifier
         host_list (list): list of node to pass to job script
         env (str): environment variables for job script
-        script (str): full path to jobscript
+        script (str): full path to job script
         job_log (str): job std out
         error_log (str): job std error
         timeout (int): job timeout

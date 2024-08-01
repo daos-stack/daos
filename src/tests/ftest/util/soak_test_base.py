@@ -421,13 +421,13 @@ class SoakTestBase(TestWithServers):
                     for jobscript in jobscripts:
                         jobtimeout = self.params.get("job_timeout", "/run/" + job + "/*", 10)
                         self.joblist.extend([{"jobscript": jobscript[0],
-                                               "nodesperjob": npj,
-                                               "taskspernode": ppn,
-                                               "hostlist": None,
-                                               "jobid": None,
-                                               "jobtimeout": jobtimeout,
-                                               "joblog": jobscript[1],
-                                               "joberrlog": jobscript[2]}])
+                                              "nodesperjob": npj,
+                                              "taskspernode": ppn,
+                                              "hostlist": None,
+                                              "jobid": None,
+                                              "jobtimeout": jobtimeout,
+                                              "joblog": jobscript[1],
+                                              "joberrlog": jobscript[2]}])
         # randomize job list
         random.seed(4)
         random.shuffle(self.joblist)
