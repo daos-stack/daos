@@ -32,7 +32,7 @@ from macsio_util import MacsioCommand
 from mdtest_utils import MdtestCommand
 from oclass_utils import extract_redundancy_factor
 from pydaos.raw import DaosApiError, DaosSnapshot
-from run_utils import run_remote
+from run_utils import daos_env_str, run_remote
 from test_utils_container import add_container
 
 H_LOCK = threading.Lock()
@@ -855,7 +855,8 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
         self.soak_log_dir,
         self.test_name + "_" + name + "_`hostname -s`_"
         "" + "${SLURM_JOB_ID}_" + "daos_dfuse.log")
-    dfuse_env = f"export D_LOG_FILE_APPEND_PID=1;export D_LOG_MASK=ERR;export D_LOG_FILE={dfuselog}"
+    dfuse_env = daos_env_str(os.environ) + \
+                f"export D_LOG_FILE_APPEND_PID=1;export D_LOG_MASK=ERR;export D_LOG_FILE={dfuselog}"
     module_load = f"module use {self.mpi_module_use};module load {self.mpi_module}"
 
     dfuse_start_cmds = [
@@ -884,9 +885,10 @@ def stop_dfuse(dfuse, vol=False):
             "do daos container destroy --path={0}/\"$file\" ; done".format(
                 dfuse.mount_dir.value)])
 
+    dfuse_env = daos_env_str(os.environ)
     dfuse_stop_cmds.extend([
-        "clush -S -w $SLURM_JOB_NODELIST \"fusermount3 -uz {0}\"".format(dfuse.mount_dir.value),
-        "clush -S -w $SLURM_JOB_NODELIST \"rm -rf {0}\"".format(dfuse.mount_dir.value)])
+        f'clush -S -w $SLURM_JOB_NODELIST "{dfuse_env}fusermount3 -uz {dfuse.mount_dir.value}"',
+        f'clush -S -w $SLURM_JOB_NODELIST "rm -rf {dfuse.mount_dir.value}"'])
     return dfuse_stop_cmds
 
 
