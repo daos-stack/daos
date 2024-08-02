@@ -31,7 +31,6 @@ set -e
 
     # Makito added for io sys admin. Make sure to use my branch; makito/DAOS-15960
     echo "## Copy io sys admin files start."
-    copy_from_dir=/scratchbox/daos/makito/io_sys_admin
     DAOS_REPO_FTEST=/scratchbox/daos/makito/daos/src/tests/ftest
     cmd1="cp -r ${DAOS_REPO_FTEST}/deployment/io_sys_admin.yaml ${ftest_path}/deployment/"
     cmd2="cp -r ${DAOS_REPO_FTEST}/util/file_count_test_base.py ${ftest_path}/util/"
@@ -39,9 +38,9 @@ set -e
     log "$cmd1"
     log "$cmd2"
     log "$cmd3"
-    eval $cmd1
-    eval $cmd2
-    eval $cmd3
+    eval "$cmd1"
+    eval "$cmd2"
+    eval "$cmd3"
     echo "## Copy io sys admin files finish."
 
     DAOS_TEST_LAUNCH_ARGS="${DAOS_TEST_LAUNCH_ARGS:-}"

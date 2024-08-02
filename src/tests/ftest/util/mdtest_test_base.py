@@ -79,7 +79,7 @@ class MdtestBase(TestWithServers):
             display_space (bool, optional): Whether to display the pool space. Defaults to True.
             job_manager (JobManager, optional): job manager used to run mdtest. Defaults to None.
             intercept (default None): path to intercept library
- 
+
         Returns:
             object: result of job manager run
         """
