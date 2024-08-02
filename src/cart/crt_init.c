@@ -1076,19 +1076,9 @@ crt_na_config_init(bool primary, crt_provider_t provider,
 	}
 
 	if (interface) {
-		if (provider == CRT_PROV_OFI_CXI) {
-			D_INFO("Interface '%s' ignored for CXI. Using domain '%s' instead\n",
-			       interface, domain);
-
-			/* Note: crt_provider_iface_str_get() returns interface name  */
-			D_STRNDUP(na_cfg->noc_interface, domain, 64);
-			if (!na_cfg->noc_interface)
-				D_GOTO(out, rc = -DER_NOMEM);
-		} else {
-			D_STRNDUP(na_cfg->noc_interface, interface, 64);
-			if (!na_cfg->noc_interface)
-				D_GOTO(out, rc = -DER_NOMEM);
-		}
+		D_STRNDUP(na_cfg->noc_interface, interface, 64);
+		if (!na_cfg->noc_interface)
+			D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	if (domain) {

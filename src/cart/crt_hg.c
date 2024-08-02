@@ -532,16 +532,8 @@ crt_provider_iface_str_get(bool primary, crt_provider_t provider, int iface_idx)
 	if (prov_data->cpg_na_config.noc_interface == NULL)
 		return NULL;
 
-	/*
- 	 * CXI provider requires domain names instead of interfaces.
- 	 * Returning NULL here will cause crt_get_info_string() to use domain names instead
-	 * */
-	if (provider == CRT_PROV_OFI_CXI)
-		return NULL;
-
-	D_ASSERTF(iface_idx < prov_data->cpg_na_config.noc_iface_total,
-		  "Bad iface_idx=%d\n", iface_idx);
-
+	D_ASSERTF(iface_idx < prov_data->cpg_na_config.noc_iface_total, "Bad iface_idx=%d\n",
+		  iface_idx);
 	return prov_data->cpg_na_config.noc_iface_str[iface_idx];
 }
 
@@ -722,7 +714,12 @@ crt_get_info_string(bool primary, crt_provider_t provider, int iface_idx,
 	provider_str = crt_provider_name_get(provider);
 	start_port = crt_provider_ctx0_port_get(primary, provider);
 	domain_str   = crt_provider_domain_str_get(primary, provider, iface_idx);
-	iface_str = crt_provider_iface_str_get(primary, provider, iface_idx);
+
+	/* CXI provider uses domain names for info string */
+	if (provider == CRT_PROV_OFI_CXI)
+		iface_str = NULL;
+	else
+		iface_str = crt_provider_iface_str_get(primary, provider, iface_idx);
 
 	if (provider == CRT_PROV_SM) {
 		D_ASPRINTF(*string, "%s://", provider_str);
