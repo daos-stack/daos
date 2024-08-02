@@ -25,8 +25,9 @@ from run_utils import run_local, run_remote
 from soak_utils import (SoakTestError, add_pools, build_job_script, cleanup_dfuse,
                         create_app_cmdline, create_dm_cmdline, create_fio_cmdline,
                         create_ior_cmdline, create_macsio_cmdline, create_mdtest_cmdline,
-                        create_racer_cmdline, ddhhmmss_format, get_daos_server_logs, get_harassers,
-                        get_journalctl, launch_exclude_reintegrate, launch_extend, launch_reboot,
+                        create_racer_cmdline, ddhhmmss_format, debug_logging, get_daos_server_logs,
+                        get_harassers, get_id, get_job_logs, get_journalctl_logs,
+                        launch_exclude_reintegrate, launch_extend, launch_jobscript, launch_reboot,
                         launch_server_stop_start, launch_snapshot, launch_vmd_identify_check,
                         reserved_file_copy, run_event_check, run_metrics_check, run_monitor_check)
 
@@ -78,6 +79,9 @@ class SoakTestBase(TestWithServers):
         self.soak_log_dir = None
         self.soak_dir = None
         self.enable_scrubber = False
+        self.job_scheduler = None
+        self.joblist = None
+        self.enable_debug_msg = False
 
     def setUp(self):
         """Define test setup to be done."""
@@ -96,30 +100,29 @@ class SoakTestBase(TestWithServers):
         self.sharedsoaktest_dir = self.sharedsoak_dir + "/pass" + str(self.loop)
         # Initialize dmg cmd
         self.dmg_command = self.get_dmg_command()
-        # Fail if slurm partition is not defined
-        # NOTE: Slurm reservation and partition are created before soak runs.
-        # CI uses partition=daos_client and no reservation.
-        # A21 uses partition=normal/default and reservation=daos-test.
-        # Partition and reservation names are updated in the yaml file.
-        # It is assumed that if there is no reservation (CI only), then all
-        # the nodes in the partition will be used for soak.
-        if not self.host_info.clients.partition.name:
-            raise SoakTestError(
-                "<<FAILED: Partition is not correctly setup for daos "
-                "slurm partition>>")
-        self.srun_params = {"partition": self.host_info.clients.partition.name}
-        if self.host_info.clients.partition.reservation:
-            self.srun_params["reservation"] = self.host_info.clients.partition.reservation
-        # Include test node for log cleanup; remove from client list
+        self.job_scheduler = self.params.get("job_scheduler", "/run/*", default="slurm")
+        # soak jobs do not run on the local node
         local_host_list = include_local_host(None)
-        self.slurm_exclude_nodes.add(local_host_list)
         if local_host_list[0] in self.hostlist_clients:
             self.hostlist_clients.remove((local_host_list[0]))
         if not self.hostlist_clients:
-            self.fail(
-                "There are no valid nodes in this partition to run "
-                "soak. Check partition {} for valid nodes".format(
-                    self.host_info.clients.partition.name))
+            self.fail("There are no valid nodes to run soak")
+        if self.job_scheduler == "slurm":
+            # Fail if slurm partition is not defined
+            # NOTE: Slurm reservation and partition are created before soak runs.
+            # CI uses partition=daos_client and no reservation.
+            # A21 uses partition=normal/default and reservation=daos-test.
+            # Partition and reservation names are updated in the yaml file.
+            # It is assumed that if there is no reservation (CI only), then all
+            # the nodes in the partition will be used for soak.
+            if not self.host_info.clients.partition.name:
+                raise SoakTestError(
+                    "<<FAILED: Partition is not correctly setup for daos slurm partition>>")
+            self.srun_params = {"partition": self.host_info.clients.partition.name}
+            if self.host_info.clients.partition.reservation:
+                self.srun_params["reservation"] = self.host_info.clients.partition.reservation
+            # Include test node for log cleanup; remove from client list
+            self.slurm_exclude_nodes.add(local_host_list)
 
     def pre_tear_down(self):
         """Tear down any test-specific steps prior to running tearDown().
@@ -132,7 +135,7 @@ class SoakTestBase(TestWithServers):
         self.log.info("<<preTearDown Started>> at %s", time.ctime())
         errors = []
         # clear out any jobs in squeue;
-        if self.failed_job_id_list:
+        if self.failed_job_id_list and self.job_scheduler == "slurm":
             job_id = " ".join([str(job) for job in self.failed_job_id_list])
             self.log.info("<<Cancel jobs in queue with ids %s >>", job_id)
             cmd = "scancel --partition {} -u {} {}".format(
@@ -163,7 +166,8 @@ class SoakTestBase(TestWithServers):
 
         # display final metrics
         run_metrics_check(self, prefix="final")
-        # Gather server logs
+        # Gather logs
+        get_job_logs(self)
         try:
             get_daos_server_logs(self)
         except SoakTestError as error:
@@ -173,7 +177,7 @@ class SoakTestBase(TestWithServers):
         since = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.start_time))
         until = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.end_time))
         for journalctl_type in ["kernel", "daos_server"]:
-            get_journalctl(self, hosts, since, until, journalctl_type, logging=True)
+            get_journalctl_logs(self, hosts, since, until, journalctl_type)
 
         if self.all_failed_harassers:
             errors.extend(self.all_failed_harassers)
@@ -294,6 +298,77 @@ class SoakTestBase(TestWithServers):
         self.harasser_results[args["name"]] = args["status"]
         self.harasser_args[args["name"]] = args["vars"]
 
+    def schedule_jobs(self):
+        """Schedule jobs with internal scheduler."""
+        debug_logging(self.log, self.enable_debug_msg, "DBG: schedule_jobs ENTERED ")
+        job_queue = multiprocessing.Queue()
+        jobid_list = []
+        node_list = self.hostlist_clients
+        lib_path = os.getenv("LD_LIBRARY_PATH")
+        path = os.getenv("PATH")
+        v_env = os.getenv("VIRTUAL_ENV")
+        env = ";".join([f"export LD_LIBRARY_PATH={lib_path}",
+                        f"export PATH={path}",
+                        f"export VIRTUAL_ENV={v_env}"])
+        for job_dict in self.joblist:
+            jobid_list.append(job_dict["jobid"])
+        self.log.info(f"Submitting {len(jobid_list)} jobs at {time.ctime()}")
+        while True:
+            if time.time() > self.end_time or len(jobid_list) == 0:
+                break
+            jobs = []
+            job_results = {}
+            for job_dict in self.joblist:
+                job_id = job_dict["jobid"]
+                if job_id in jobid_list:
+                    node_count = job_dict["nodesperjob"]
+                    if len(node_list) >= node_count:
+                        debug_logging(
+                            self.log, self.enable_debug_msg, f"DBG: node_count {node_count}")
+                        debug_logging(
+                            self.log,
+                            self.enable_debug_msg,
+                            f"DBG: node_list initial/queue {node_list}")
+                        job_node_list = node_list[:node_count]
+                        debug_logging(
+                            self.log,
+                            self.enable_debug_msg,
+                            f"DBG: node_list before launch_job {node_list}")
+                        script = job_dict["jobscript"]
+                        timeout = job_dict["jobtimeout"]
+                        log = job_dict["joblog"]
+                        error_log = job_dict["joberrlog"]
+                        method = launch_jobscript
+                        params = (self.log, job_queue, job_id, job_node_list,
+                                  env, script, log, error_log, timeout, self)
+                        name = f"SOAK JOB {job_id}"
+
+                        jobs.append(threading.Thread(target=method, args=params, name=name))
+                        jobid_list.remove(job_id)
+                        node_list = node_list[node_count:]
+                        debug_logging(
+                            self.log,
+                            self.enable_debug_msg,
+                            f"DBG: node_list after launch_job {node_list}")
+            # run job scripts on all available nodes
+            for job in jobs:
+                job.start()
+            debug_logging(self.log, self.enable_debug_msg, "DBG: all jobs started")
+            for job in jobs:
+                job.join()
+            debug_logging(self.log, self.enable_debug_msg, "DBG: all jobs joined")
+            while not job_queue.empty():
+                job_results = job_queue.get()
+                # Results to return in queue
+                node_list.update(job_results["host_list"])
+                debug_logging(self.log, self.enable_debug_msg, "DBG: Updating soak results")
+                self.soak_results[job_results["handle"]] = job_results["state"]
+                debug_logging(
+                    self.log,
+                    self.enable_debug_msg,
+                    f"DBG: node_list returned from queue {node_list}")
+        debug_logging(self.log, self.enable_debug_msg, "DBG: schedule_jobs EXITED ")
+
     def job_setup(self, jobs, pool):
         """Create the cmdline needed to launch job.
 
@@ -302,28 +377,24 @@ class SoakTestBase(TestWithServers):
             pool (obj): TestPool obj
 
         Returns:
-            job_cmdlist: list of sbatch scripts that can be launched
-                         by slurm job manager
+            job_cmdlist: list of dictionary of jobs that can be launched
 
         """
-        job_cmdlist = []
         self.log.info("<<Job_Setup %s >> at %s", self.test_name, time.ctime())
         for job in jobs:
-            jobscript = []
+            # list of all job scripts
+            jobscripts = []
+            # command is a list of [sbatch_cmds, log_name] to create a single job script
             commands = []
-            nodesperjob = self.params.get(
-                "nodesperjob", "/run/" + job + "/*", [1])
-            taskspernode = self.params.get(
-                "taskspernode", "/run/" + job + "/*", [1])
+            nodesperjob = self.params.get("nodesperjob", "/run/" + job + "/*", [1])
+            taskspernode = self.params.get("taskspernode", "/run/" + job + "/*", [1])
             for npj in list(nodesperjob):
                 # nodesperjob = -1 indicates to use all nodes in client hostlist
                 if npj < 0:
                     npj = len(self.hostlist_clients)
                 if len(self.hostlist_clients) / npj < 1:
-                    raise SoakTestError(
-                        "<<FAILED: There are only {} client nodes for this job."
-                        " Job requires {}".format(
-                            len(self.hostlist_clients), npj))
+                    raise SoakTestError(f"<<FAILED: There are only {len(self.hostlist_clients)}"
+                                        f" client nodes for this job. Job requires {npj}")
                 for ppn in list(taskspernode):
                     if "ior" in job:
                         commands = create_ior_cmdline(self, job, pool, ppn, npj)
@@ -343,47 +414,70 @@ class SoakTestBase(TestWithServers):
                         commands = create_dm_cmdline(self, job, pool, ppn, npj)
                     else:
                         raise SoakTestError(f"<<FAILED: Job {job} is not supported. ")
-                    jobscript = build_job_script(self, commands, job, npj, ppn)
-                    job_cmdlist.extend(jobscript)
-        return job_cmdlist
+                    jobscripts = build_job_script(self, commands, job, npj, ppn)
 
-    def job_startup(self, job_cmdlist):
-        """Submit job batch script.
+                    # Create a dictionary of all job definitions
+                    for jobscript in jobscripts:
+                        jobtimeout = self.params.get("job_timeout", "/run/" + job + "/*", 10)
+                        self.joblist.extend([{"jobscript": jobscript[0],
+                                              "nodesperjob": npj,
+                                              "taskspernode": ppn,
+                                              "hostlist": None,
+                                              "jobid": None,
+                                              "jobtimeout": jobtimeout,
+                                              "joblog": jobscript[1],
+                                              "joberrlog": jobscript[2]}])
+        # randomize job list
+        random.seed(4)
+        random.shuffle(self.joblist)
 
-        Args:
-            job_cmdlist (list): list of jobs to execute
+    def job_startup(self):
+        """Launch the job script.
 
         Returns:
-            job_id_list: IDs of each job submitted to slurm.
+            job_id_list:  list of job_ids for each job launched.
 
         """
         self.log.info("<<Job Startup - %s >> at %s", self.test_name, time.ctime())
         job_id_list = []
-        # before submitting the jobs to the queue, check the job timeout;
+        # before starting jobs, check the job timeout;
         if time.time() > self.end_time:
             self.log.info("<< SOAK test timeout in Job Startup>>")
             return job_id_list
-        # job_cmdlist is a list of batch script files
 
-        for script in job_cmdlist:
-            try:
-                job_id = slurm_utils.run_slurm_script(self.log, str(script))
-            except slurm_utils.SlurmFailed as error:
-                self.log.error(error)
-                # Force the test to exit with failure
-                job_id = None
-            if job_id:
-                self.log.info(
-                    "<<Job %s started with %s >> at %s",
-                    job_id, script, time.ctime())
-                slurm_utils.register_for_job_results(job_id, self, max_wait=self.test_timeout)
-                # keep a list of the job_id's
-                job_id_list.append(int(job_id))
-            else:
-                # one of the jobs failed to queue; exit on first fail for now.
-                err_msg = f"Slurm failed to submit job for {script}"
-                job_id_list = []
-                raise SoakTestError(f"<<FAILED:  Soak {self.test_name}: {err_msg}>>")
+        if self.job_scheduler == "slurm":
+            for job_dict in self.joblist:
+                script = job_dict["jobscript"]
+                try:
+                    job_id = slurm_utils.run_slurm_script(self.log, str(script))
+                except slurm_utils.SlurmFailed as error:
+                    self.log.error(error)
+                    # Force the test to exit with failure
+                    job_id = None
+                if job_id:
+                    self.log.info(
+                        "<<Job %s started with %s >> at %s", job_id, script, time.ctime())
+                    slurm_utils.register_for_job_results(job_id, self, max_wait=self.test_timeout)
+                    # Update Job_List with the job_id
+                    job_dict["job_id"] = int(job_id)
+                    job_id_list.append(int(job_id))
+                else:
+                    # one of the jobs failed to queue; exit on first fail for now.
+                    err_msg = f"Job failed to run for {script}"
+                    job_id_list = []
+                    raise SoakTestError(f"<<FAILED: Soak {self.test_name}: {err_msg}>>")
+        else:
+            for job_dict in self.joblist:
+                job_dict["jobid"] = get_id()
+                job_id_list.append(job_dict["jobid"])
+
+            # self.schedule_jobs()
+            method = self.schedule_jobs
+            name = "Job Scheduler"
+            scheduler = threading.Thread(target=method, name=name)
+            # scheduler = multiprocessing.Process(target=method, name=name)
+            scheduler.start()
+
         return job_id_list
 
     def job_completion(self, job_id_list):
@@ -395,8 +489,9 @@ class SoakTestBase(TestWithServers):
             failed_job_id_list: IDs of each job that failed in slurm
 
         """
-        self.log.info(
-            "<<Job Completion - %s >> at %s", self.test_name, time.ctime())
+        # pylint: disable=too-many-nested-blocks
+
+        self.log.info("<<Job Completion - %s >> at %s", self.test_name, time.ctime())
         harasser_interval = 0
         failed_harasser_msg = None
         harasser_timer = time.time()
@@ -405,21 +500,28 @@ class SoakTestBase(TestWithServers):
         since = journalctl_time()
         # loop time exists after the first pass; no harassers in the first pass
         if self.harasser_loop_time and self.harassers:
-            harasser_interval = self.harasser_loop_time / (
-                len(self.harassers) + 1)
+            harasser_interval = self.harasser_loop_time / (len(self.harassers) + 1)
         # If there is nothing to do; exit
         if job_id_list:
             # wait for all the jobs to finish
             while len(self.soak_results) < len(job_id_list):
-                # wait for the jobs to complete.
-                # enter tearDown before hitting the avocado timeout
+                debug_logging(
+                    self.log, self.enable_debug_msg, f"DBG: SOAK RESULTS 1 {self.soak_results}")
+                # wait for the jobs to complete unless test_timeout occurred
                 if time.time() > self.end_time:
-                    self.log.info(
-                        "<< SOAK test timeout in Job Completion at %s >>",
-                        time.ctime())
-                    for job in job_id_list:
-                        if not slurm_utils.cancel_jobs(self.log, self.control, int(job)).passed:
-                            self.fail(f"Error canceling Job {job}")
+                    self.log.info("<< SOAK test timeout in Job Completion at %s >>", time.ctime())
+                    if self.job_scheduler == "slurm":
+                        for job in job_id_list:
+                            if not slurm_utils.cancel_jobs(self.log, self.control, int(job)).passed:
+                                self.fail(f"Error canceling Job {job}")
+                    else:
+                        # update soak_results to include job id NOT run and set state = CANCELLED
+                        for job in job_id_list:
+                            if job not in list(self.soak_results.keys()):
+                                self.soak_results.update({job: "CANCELLED"})
+                                self.log.info("FINAL STATE: soak job %s completed with : %s at %s",
+                                              job, "CANCELLED", time.ctime())
+                    break
                 # monitor events every 15 min
                 if datetime.now() > check_time:
                     run_monitor_check(self)
@@ -454,27 +556,14 @@ class SoakTestBase(TestWithServers):
             if failed_harasser_msg is not None:
                 self.all_failed_harassers.append(failed_harasser_msg)
             # check for JobStatus = COMPLETED or CANCELLED (i.e. TEST TO)
+            debug_logging(
+                self.log, self.enable_debug_msg, f"DBG: SOAK RESULTS 2 {self.soak_results}")
             for job, result in list(self.soak_results.items()):
                 if result in ["COMPLETED", "CANCELLED"]:
                     job_id_list.remove(int(job))
                 else:
-                    self.log.info(
-                        "<< Job %s failed with status %s>>", job, result)
-            # gather all the logfiles for this pass and cleanup test nodes
-            cmd = f"/usr/bin/rsync -avtr --min-size=1B {self.soak_log_dir} {self.outputsoak_dir}/"
-            cmd2 = f"/usr/bin/rm -rf {self.soak_log_dir}"
-            if self.enable_remote_logging:
-                # Limit fan out to reduce burden on filesystem
-                result = run_remote(self.log, self.hostlist_clients, cmd, timeout=600, fanout=64)
-                if result.passed:
-                    result = run_remote(self.log, self.hostlist_clients, cmd2, timeout=600)
-                if not result.passed:
-                    self.log.error("Remote copy failed on %s", str(result.failed_hosts))
-            # copy the local files; local host not included in hostlist_client
-            if not run_local(self.log, cmd, timeout=600).passed:
-                self.log.info("Local copy failed: %s", cmd)
-            if not run_local(self.log, cmd2, timeout=600).passed:
-                self.log.info("Local copy failed: %s", cmd2)
+                    self.log.info("<< Job %s failed with status %s>>", job, result)
+            get_job_logs(self)
             self.soak_results = {}
         return job_id_list
 
@@ -497,7 +586,8 @@ class SoakTestBase(TestWithServers):
             SoakTestError
 
         """
-        job_script_list = []
+        jobid_list = []
+        self.joblist = []
         # Update the remote log directories from new loop/pass
         sharedsoaktest_dir = self.sharedsoak_dir + "/pass" + str(self.loop)
         outputsoaktest_dir = self.outputsoak_dir + "/pass" + str(self.loop)
@@ -517,18 +607,15 @@ class SoakTestBase(TestWithServers):
         else:
             self.soak_log_dir = sharedsoaktest_dir
         # create the batch scripts
-        job_script_list = self.job_setup(jobs, pools)
-        # randomize job list
-        random.seed(4)
-        random.shuffle(job_script_list)
+        self.job_setup(jobs, pools)
         # Gather the job_ids
-        job_id_list = self.job_startup(job_script_list)
+        jobid_list = self.job_startup()
         # Initialize the failed_job_list to job_list so that any
         # unexpected failures will clear the squeue in tearDown
-        self.failed_job_id_list = job_id_list
+        self.failed_job_id_list = jobid_list
 
         # Wait for jobs to finish and cancel/kill jobs if necessary
-        self.failed_job_id_list = self.job_completion(job_id_list)
+        self.failed_job_id_list = self.job_completion(jobid_list)
         # Log the failing job ID
         if self.failed_job_id_list:
             self.log.info(
@@ -547,6 +634,7 @@ class SoakTestBase(TestWithServers):
 
         """
         self.soak_results = {}
+        self.joblist = []
         self.pool = []
         self.container = []
         self.harasser_results = {}
@@ -557,6 +645,7 @@ class SoakTestBase(TestWithServers):
         self.soak_errors = []
         self.check_errors = []
         self.used = []
+        self.enable_debug_msg = self.params.get("enable_debug_msg", "/run/*", default=False)
         self.mpi_module = self.params.get("mpi_module", "/run/*", default="mpi/mpich-x86_64")
         self.mpi_module_use = self.params.get(
             "mpi_module_use", "/run/*", default="/usr/share/modulefiles")
