@@ -87,7 +87,8 @@ ior:
   repetitions: 1
   signature: 123
   transfer_size: '1Mib'
-  block_size: '2Gib'
+  # 8/1: 2Gib worked.
+  block_size: '4Gib'
 dfuse:
   disable_caching: True
 
