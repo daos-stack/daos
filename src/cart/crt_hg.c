@@ -770,7 +770,8 @@ crt_get_info_string(bool primary, crt_provider_t provider, int iface_idx,
 	}
 
 	D_DEBUG(DB_ALL, "iface_idx:%d context:%d domain_str=%s iface_str=%s info_str=%s\n",
-		iface_idx, ctx_idx, domain_str ? domain_str : "none", iface_str ? iface_str : "none" , *string);
+		iface_idx, ctx_idx, domain_str ? domain_str : "none",
+		iface_str ? iface_str : "none", *string);
 out:
 	if (rc == DER_SUCCESS && *string == NULL)
 		return -DER_NOMEM;
