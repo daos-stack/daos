@@ -709,6 +709,7 @@ crt_get_info_string(bool primary, crt_provider_t provider, int iface_idx,
 	int	 start_port;
 	char	*domain_str;
 	char	*iface_str;
+	bool	no_iface, no_domain;
 	int	rc = 0;
 
 	provider_str = crt_provider_name_get(provider);
@@ -733,39 +734,42 @@ crt_get_info_string(bool primary, crt_provider_t provider, int iface_idx,
 		D_GOTO(out, rc);
 	}
 
+	/* treat not set and set to empty as the same */
+	no_iface = (iface_str == NULL || *iface_str == '\0') ? true : false;
+	no_domain = (domain_str == NULL || *domain_str == '\0') ? true : false;
+
 	/* TODO: for now pass same info for all providers including CXI */
 	if (crt_provider_is_contig_ep(provider) && start_port != -1) {
-
-		if (iface_str == NULL) {
-			if (domain_str)
-				D_ASPRINTF(*string, "%s://%s:%d",
-					   provider_str, domain_str, start_port + ctx_idx);
-			else
+		if (no_iface) {
+			if (no_domain)
 				D_ASPRINTF(*string, "%s://:%d",
 					   provider_str, start_port + ctx_idx);
-		} else {
-			if (domain_str)
-				D_ASPRINTF(*string, "%s://%s/%s:%d",
-					   provider_str, domain_str, iface_str,
-					   start_port + ctx_idx);
 			else
+				D_ASPRINTF(*string, "%s://%s:%d",
+					   provider_str, domain_str, start_port + ctx_idx);
+		} else {
+			if (no_domain)
 				D_ASPRINTF(*string, "%s://%s:%d",
 					   provider_str, iface_str,
 					   start_port + ctx_idx);
+			else
+				D_ASPRINTF(*string, "%s://%s/%s:%d",
+					   provider_str, domain_str, iface_str,
+					   start_port + ctx_idx);
 		}
 	} else {
-		if (iface_str == NULL) {
-			if (domain_str)
+		if (no_iface) {
+			if (no_domain)
+				D_ASPRINTF(*string, "%s://", provider_str);
+			else
 				D_ASPRINTF(*string, "%s://%s",
 					   provider_str, domain_str);
-			else
-				D_ASPRINTF(*string, "%s://", provider_str);
 		} else {
-			if (domain_str)
+			if (no_domain)
+				D_ASPRINTF(*string, "%s://%s", provider_str, iface_str);
+			else
 				D_ASPRINTF(*string, "%s://%s/%s",
 					   provider_str, domain_str, iface_str);
-			else
-				D_ASPRINTF(*string, "%s://%s", provider_str, iface_str);
 		}
 	}
 
