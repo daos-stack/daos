@@ -34,7 +34,7 @@ struct crt_grp_gdata;
 struct crt_na_config {
 	int32_t		 noc_port;
 	int		 noc_iface_total;
-	int		 noc_domain_total;
+	int               noc_domain_total;
 	char		*noc_interface;
 	char		*noc_domain;
 	char		*noc_auth_key;
