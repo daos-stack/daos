@@ -1152,6 +1152,12 @@ crt_na_config_init(bool primary, crt_provider_t provider,
 	}
 	na_cfg->noc_domain_total = count;
 
+	if (na_cfg->noc_domain_total > 0 && na_cfg->noc_domain_total != na_cfg->noc_iface_total) {
+		D_ERROR("Mismatched number of domains (%d) and interfaces (%d) specified\n",
+			na_cfg->noc_domain_total, na_cfg->noc_iface_total);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
 	if (crt_is_service() && port_str != NULL && strlen(port_str) > 0) {
 		if (!is_integer_str(port_str)) {
 			D_DEBUG(DB_ALL, "ignoring invalid D_PORT %s.", port_str);
