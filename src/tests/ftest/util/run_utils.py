@@ -418,6 +418,8 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False,
     command = f'{env_str}{command}'
     task.run(command=command, nodes=hosts, timeout=timeout)
     results = CommandResult(command, task)
+    if results.timeout:
+        task.abort(kill=True)
     if verbose:
         results.log_output(log)
     else:

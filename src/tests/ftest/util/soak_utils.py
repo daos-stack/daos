@@ -1477,9 +1477,9 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
     # ${DAOS_TEST_APP_SRC}/suse             =>  apps built with suse and gnu-mpich
     # pylint: disable-next=wrong-spelling-in-comment,fixme
     # ${DAOS_TEST_APP_SRC}/suse/intelmpi    =>  apps built with suse and intelmpi
-    if "suse" in detect().name.lower():
+    if "suse" in detect().name.lower() and os.environ.get("DAOS_TEST_MODE") is None:
         os.environ["DAOS_TEST_APP_DIR"] += os.path.join(os.sep, "suse")
-    if "mpi/latest" in mpi_module:
+    if "mpi/latest" in mpi_module and os.environ.get("DAOS_TEST_MODE") is None:
         os.environ["DAOS_TEST_APP_DIR"] += os.path.join(os.sep, "intelmpi")
         os.environ["I_MPI_OFI_LIBRARY_INTERNAL"] = "0"
     app_cmd = os.path.expandvars(self.params.get("cmdline", app_params, default=None))
