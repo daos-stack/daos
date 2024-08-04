@@ -427,9 +427,6 @@ class SoakTestBase(TestWithServers):
                                               "jobtimeout": jobtimeout,
                                               "joblog": jobscript[1],
                                               "joberrlog": jobscript[2]}])
-        # randomize job list
-        random.seed(4)
-        random.shuffle(self.joblist)
 
     def job_startup(self):
         """Launch the job script.
