@@ -392,23 +392,29 @@ class TestRunner():
             "[Test %s/%s] Running the %s test on repetition %s/%s",
             number, self.total_tests, test, repeat, self.total_repeats)
         start_time = int(time.time())
-        return_code = self._run_subprocess(logger, " ".join(command)).returncode
-        end_time = int(time.time())
-        if return_code == 0:
-            logger.debug("All avocado test variants passed")
-        elif return_code & 1 == 1:
-            logger.debug("At least one avocado test variant failed")
-        elif return_code & 2 == 2:
-            logger.debug("At least one avocado job failed")
-        elif return_code & 4 == 4:
-            message = "Failed avocado commands detected"
-            self.test_result.fail_test(logger, "Execute", message)
-        elif return_code & 8 == 8:
-            logger.debug("At least one avocado test variant was interrupted")
-        else:
-            message = f"Unhandled rc={return_code} while executing {test} on repeat {repeat}"
+        try:
+            return_code = self._run_subprocess(logger, " ".join(command)).returncode
+            if return_code == 0:
+                logger.debug("All avocado test variants passed")
+            elif return_code & 1 == 1:
+                logger.debug("At least one avocado test variant failed")
+            elif return_code & 2 == 2:
+                logger.debug("At least one avocado job failed")
+            elif return_code & 4 == 4:
+                message = "Failed avocado commands detected"
+                self.test_result.fail_test(logger, "Execute", message)
+            elif return_code & 8 == 8:
+                logger.debug("At least one avocado test variant was interrupted")
+            else:
+                message = f"Unhandled rc={return_code} while executing {test} on repeat {repeat}"
+                self.test_result.fail_test(logger, "Execute", message, sys.exc_info())
+                return_code = 1
+        except RunException:
+            message = f"Error executing {test} on repeat {repeat}"
             self.test_result.fail_test(logger, "Execute", message, sys.exc_info())
             return_code = 1
+
+        end_time = int(time.time())
         if return_code:
             self._collect_crash_files(logger)
 
