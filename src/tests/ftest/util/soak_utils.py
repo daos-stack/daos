@@ -396,19 +396,14 @@ def job_cleanup(log, hosts):
         cmd = [f"/usr/bin/bash -c 'for pid in $(pgrep {job})",
                "do kill -HUP $pid",
                "done'"]
-        result = run_remote(log, hosts, ";".join(cmd), timeout=600)
-        if not result.passed:
-            log.info("Job processes not stopped")
+        run_remote(log, hosts, ";".join(cmd), timeout=600)
         if job == "dfuse":
             cmd2 = [
                 "/usr/bin/bash -c 'for dir in $(find /tmp/soak_dfuse_*/)",
                 "do fusermount3 -uz $dir",
                 "rm -rf $dir",
                 "done'"]
-
-            result = run_remote(log, hosts, ";".join(cmd2), timeout=600)
-            if not result.passed:
-                log.info("Dfuse mount points not deleted Error")
+            run_remote(log, hosts, ";".join(cmd2), verbose=False, timeout=600)
 
 
 def launch_jobscript(
