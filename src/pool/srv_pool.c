@@ -388,6 +388,7 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 		case DAOS_PROP_PO_CHECKPOINT_MODE:
 		case DAOS_PROP_PO_CHECKPOINT_THRESH:
 		case DAOS_PROP_PO_CHECKPOINT_FREQ:
+		case DAOS_PROP_PO_REINT_MODE:
 			entry_def->dpe_val = entry->dpe_val;
 			break;
 		case DAOS_PROP_PO_ACL:
