@@ -4,8 +4,10 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
+import re
 import threading
 import time
+from collections import defaultdict
 
 from ClusterShell.NodeSet import NodeSet
 from command_utils_base import CommandFailure
@@ -48,6 +50,9 @@ class ServerRankFailure(IorTestBase):
         ior_cmd.set_daos_params(pool, container.identifier)
         ior_cmd.update_params(test_file=os.path.join(os.sep, file_name))
 
+        # Set timeout to the job manager so the IOR process ends at timeout. The alternative is to
+        # use -D (sw_deadline in test yaml), but the IOR process may get stuck indefinitely in that
+        # approach.
         manager = get_job_manager(
             test=self, job=ior_cmd, subprocess=self.subprocess, timeout=timeout)
         manager.assign_hosts(self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
@@ -113,6 +118,17 @@ class ServerRankFailure(IorTestBase):
             ior_error = ior_results[job_num][1]
             errors.append("Error found in IOR job {}! {}".format(job_num, ior_error))
 
+    def aurora_host_to_group(self, host):
+        """Return group number from Aurora DAOS hostname.
+
+        Args:
+            host (str): Hostname.
+
+        Returns:
+            int: Group number.
+        """
+        return ((int(re.findall(r'[0-9]+', host)[0]) - 1) // 128) + 1
+
     def verify_rank_failure(self, ior_namespace):
         """Verify engine failure can be recovered by restarting daos_server.
 
@@ -140,13 +156,12 @@ class ServerRankFailure(IorTestBase):
         ior_results = {}
         errors = []
         job_num = 1
-        mpirun_timeout = self.params.get('sw_deadline', ior_namespace)
-        self.log.info("Running Mpirun-IOR with Mpirun timeout of %s sec", mpirun_timeout)
+        ior_job_timeout = self.params.get("ior_job_timeout", ior_namespace)
+        self.log.info("Running Mpirun-IOR with job manager timeout of %s sec", ior_job_timeout)
         ior_thread = threading.Thread(
             target=self.run_ior_report_error,
-            args=[ior_results, job_num, "test_file_1", self.pool, self.container,
-                  ior_namespace, mpirun_timeout])
-
+            args=[ior_results, job_num, "test_file_1", self.pool, self.container, ior_namespace,
+                  ior_job_timeout])
         ior_thread.start()
 
         # Wait for a few seconds for IOR to start.
@@ -154,8 +169,35 @@ class ServerRankFailure(IorTestBase):
         time.sleep(5)
 
         # 3. While IOR is running, kill all daos_engine on a non-access-point node
-        engine_kill_host = self.hostlist_servers[1]
-        self.kill_engine(engine_kill_host=engine_kill_host)
+        dmg_command = self.get_dmg_command()
+        ex_env = self.params.get("ex_env", "/run/*")
+        if ex_env == "ci":
+            # Original implementation. Need to be changed to kill one engine process from two
+            # different nodes in two different groups.
+            engine_kill_host = self.hostlist_servers[1]
+            self.kill_engine(engine_kill_host=engine_kill_host)
+        else:
+            # Workaround for Aurora. Stop up to two ranks in different groups using
+            # "dmg system stop"
+            ranks = self.server_managers[0].ranks
+            self.log.info("Ranks = %s", ranks)
+            # Create a list of list that contains the ranks in each group. e.g.,
+            # First element is a list of ranks for group 1 nodes, or the list of nodes in
+            # the first element of host_groups.
+            rank_groups = defaultdict(list)
+            for rank, host in ranks.items():
+                rank_groups[self.aurora_host_to_group(host)].append(rank)
+            self.log.info("Rank groups = %s", rank_groups)
+            # Stop a rank from each group up to two groups.
+            count = 0
+            for ranks in rank_groups.values():
+                if count == 2:
+                    break
+                # Select an arbitrary rank.
+                rank_to_stop = str(self.random.choice(ranks))
+                self.log.info("Stopping rank %s", rank_to_stop)
+                dmg_command.system_stop(force=True, ranks=rank_to_stop)
+                count += 1
 
         # 4. Wait for IOR to complete.
         ior_thread.join()
@@ -177,13 +219,13 @@ class ServerRankFailure(IorTestBase):
         self.restart_all_servers()
 
         # 8. Verify the system status by calling dmg system query.
-        output = self.get_dmg_command().system_query()
+        output = dmg_command.system_query()
         for member in output["response"]["members"]:
             if member["state"] != "joined":
                 errors.append("Server rank {} state isn't joined!".format(member["rank"]))
 
         # 9. Call dmg pool query -b to find the disabled ranks.
-        output = self.get_dmg_command().pool_query(pool=self.pool.identifier, show_disabled=True)
+        output = dmg_command.pool_query(pool=self.pool.identifier, show_disabled=True)
         disabled_ranks = output["response"]["disabled_ranks"]
         self.log.info("Disabled ranks = %s", disabled_ranks)
 
@@ -194,7 +236,7 @@ class ServerRankFailure(IorTestBase):
                     self.pool.reintegrate(rank=disabled_rank)
                     break
                 except CommandFailure as error:
-                    self.log.debug("## pool reintegrate error: %s", error)
+                    self.log.info("Pool reintegrate error: %s", error)
 
             # Wait for rebuild to finish
             self.log.info("Wait for rebuild to start.")
