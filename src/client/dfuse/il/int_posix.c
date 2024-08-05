@@ -807,11 +807,6 @@ child_hdlr(void)
 		DL_WARN(rc, "daos_eq_lib_init() failed in child process");
 	daos_dti_reset();
 	ioil_eqh = ioil_iog.iog_main_eqh = DAOS_HDL_INVAL;
-	rc = daos_eq_create(&ioil_eqh);
-	if (rc)
-		DFUSE_LOG_WARNING("daos_eq_create() failed: "DF_RC, DP_RC(rc));
-	else
-		ioil_iog.iog_main_eqh = ioil_eqh;
 }
 
 /* Returns true on success */
