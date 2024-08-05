@@ -2110,7 +2110,8 @@ ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop)
 	D_ASSERT(entry != NULL);
 	if (entry->dpe_val & (DAOS_SELF_HEAL_AUTO_REBUILD | DAOS_SELF_HEAL_DELAY_REBUILD)) {
 		D_INFO(DF_UUID ": self healing is enabled, %s rebuild (for any DOWN), "
-		       "immediate (for any DRAINING) tgts\n", DP_UUID(pool->sp_uuid),
+			       "immediate (for any DRAINING) tgts\n",
+		       DP_UUID(pool->sp_uuid),
 		       entry->dpe_val & DAOS_SELF_HEAL_DELAY_REBUILD ? "delayed" : "immediate");
 		rc = regenerate_task_of_type(pool, PO_COMP_ST_DOWN,
 					    entry->dpe_val & DAOS_SELF_HEAL_DELAY_REBUILD ? -1 : 0);
