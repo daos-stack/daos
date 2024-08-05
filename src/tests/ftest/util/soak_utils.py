@@ -16,7 +16,7 @@ from itertools import count, product
 from avocado.core.exceptions import TestFail
 from avocado.utils.distro import detect
 from ClusterShell.NodeSet import NodeSet
-from ClusterShell.Task import task
+from ClusterShell.Task import Task
 from command_utils import command_as_user
 from command_utils_base import EnvironmentVariables
 from daos_racer_utils import DaosRacerCommand
@@ -404,7 +404,7 @@ def run_job(log, hosts, command, verbose=True, timeout=120, task_debug=False, st
     Returns:
         CommandResult: groups of command results from the same hosts with the same return status
     """
-    task = task()
+    task = Task()
     task.set_info('debug', task_debug)
     task.set_default("stderr", stderr)
     # Set fan out to the max of the default or number of logical cores
