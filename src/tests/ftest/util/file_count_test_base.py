@@ -33,11 +33,10 @@ class FileCountTestBase(IorTestBase, MdtestBase):
             container.file_oclass.update(file_oclass)
             if dir_oclass:
                 container.dir_oclass.update(dir_oclass)
-            else:
-                redundancy_factor = extract_redundancy_factor(file_oclass)
-                rd_fac = 'rd_fac:{}'.format(str(redundancy_factor))
-                properties = (",").join(filter(None, [properties, rd_fac]))
-                container.properties.update(properties)
+            redundancy_factor = extract_redundancy_factor(file_oclass)
+            rd_fac = 'rd_fac:{}'.format(str(redundancy_factor))
+            properties = (",").join(filter(None, [properties, rd_fac]))
+            container.properties.update(properties)
         container.create()
 
         return container
@@ -77,30 +76,33 @@ class FileCountTestBase(IorTestBase, MdtestBase):
         # create pool
         self.add_pool(connect=False)
 
-        # iterating only twice as only two elements in ior_oclass and mdtest_oclass
-        for idx in range(2):
-            self.ior_cmd.dfs_oclass.update(ior_oclass[idx])
-            self.mdtest_cmd.dfs_oclass.update(mdtest_oclass[idx])
-            self.ior_cmd.dfs_dir_oclass.update(ior_oclass[idx])
-            # oclass_dir can not be EC must be RP based on rd_fac
-            dir_oclass = self.get_diroclass(extract_redundancy_factor(mdtest_oclass[idx]))
-            self.mdtest_cmd.dfs_dir_oclass.update(dir_oclass)
-            for api in apis:
-                self.ior_cmd.api.update(api)
-                self.mdtest_cmd.api.update(api)
-                # update test_dir for mdtest if api is DFS
-                if api == "DFS":
-                    self.mdtest_cmd.test_dir.update("/")
-                # run mdtest
-                if self.mdtest_cmd.api.value in ['DFS', 'POSIX']:
+        for api in apis:
+            self.ior_cmd.api.update(api)
+            self.mdtest_cmd.api.update(api)
+            if api == "DFS":
+                self.mdtest_cmd.test_dir.update("/")
+            #for _, oclass in enumerate(mdtest_oclass):
+            #    self.log.info("mdtest_oclass in use: %s", oclass)
+            #    self.mdtest_cmd.dfs_oclass.update(oclass)
+            #    rd_fac = extract_redundancy_factor(oclass)
+            #    dir_oclass = self.get_diroclass(rd_fac)
+            if self.mdtest_cmd.api.value in ['DFS', 'POSIX']:
+                #self.log.info("=======>>>Starting MDTEST with %s and %s", api,
+                #oclass)
+                for oclass in mdtest_oclass:
                     self.log.info("=======>>>Starting MDTEST with %s and %s", api,
-                    mdtest_oclass[idx])
-                    self.container = self.add_containers(mdtest_oclass[idx], dir_oclass)
+                    oclass)
+                    #self.log.info("mdtest_oclass in use: %s", oclass)
+                    self.mdtest_cmd.dfs_oclass.update(oclass)
+                    rd_fac = extract_redundancy_factor(oclass)
+                    dir_oclass = self.get_diroclass(rd_fac)
+                    self.mdtest_cmd.dfs_dir_oclass.update(dir_oclass)
+                    self.container = self.add_containers(oclass, dir_oclass)
                     try:
                         self.processes = mdtest_np
                         self.ppn = mdtest_ppn
                         if self.mdtest_cmd.api.value == 'POSIX':
-                            mdtest_cmd.env.update(LD_PRELOAD=intercept, D_IL_REPORT='1')
+                            self.mdtest_cmd.env.update(LD_PRELOAD=intercept, D_IL_REPORT='1')
                             self.execute_mdtest()
                         else:
                             self.execute_mdtest()
@@ -110,9 +112,11 @@ class FileCountTestBase(IorTestBase, MdtestBase):
                 # save the current container; to be destroyed later
                 if self.container is not None:
                     saved_containers.append(self.container)
+            for oclass in ior_oclass:
                 # run ior
-                self.log.info("=======>>>Starting IOR with %s and %s", api, ior_oclass[idx])
-                self.container = self.add_containers(ior_oclass[idx])
+                self.log.info("=======>>>Starting IOR with %s and %s", api, oclass)
+                self.ior_cmd.dfs_oclass.update(oclass)
+                self.container = self.add_containers(oclass)
                 self.update_ior_cmd_with_pool(False)
                 try:
                     self.processes = ior_np
