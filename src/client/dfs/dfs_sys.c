@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -538,6 +538,12 @@ int
 dfs_sys_umount(dfs_sys_t *dfs_sys)
 {
 	return fini_sys(dfs_sys, false);
+}
+
+int
+dfs_sys_set_prefix(dfs_sys_t *dfs_sys, const char *prefix)
+{
+	return dfs_set_prefix(dfs_sys->dfs, prefix);
 }
 
 int

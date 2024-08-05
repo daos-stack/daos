@@ -53,10 +53,11 @@ type (
 
 	// PoolRebuildStatus contains detailed information about the pool rebuild process.
 	PoolRebuildStatus struct {
-		Status  int32            `json:"status"`
-		State   PoolRebuildState `json:"state"`
-		Objects uint64           `json:"objects"`
-		Records uint64           `json:"records"`
+		Status       int32            `json:"status"`
+		State        PoolRebuildState `json:"state"`
+		Objects      uint64           `json:"objects"`
+		Records      uint64           `json:"records"`
+		TotalObjects uint64           `json:"total_objects"`
 	}
 
 	// PoolInfo contains information about the pool.
@@ -74,8 +75,8 @@ type (
 		ServiceReplicas  []ranklist.Rank      `json:"svc_reps,omitempty"`
 		Rebuild          *PoolRebuildStatus   `json:"rebuild"`
 		TierStats        []*StorageUsageStats `json:"tier_stats"`
-		EnabledRanks     *ranklist.RankSet    `json:"-"`
-		DisabledRanks    *ranklist.RankSet    `json:"-"`
+		EnabledRanks     *ranklist.RankSet    `json:"enabled_ranks,omitempty"`
+		DisabledRanks    *ranklist.RankSet    `json:"disabled_ranks,omitempty"`
 		PoolLayoutVer    uint32               `json:"pool_layout_ver"`
 		UpgradeLayoutVer uint32               `json:"upgrade_layout_ver"`
 	}
@@ -138,6 +139,15 @@ func resolvePoolQueryOpt(name string) (C.int, error) {
 		}
 	}
 	return 0, errors.Errorf("invalid pool query option: %q", name)
+}
+
+// MustNewPoolQueryMask returns a PoolQueryMask initialized with the specified options.
+// NB: If an error occurs due to an invalid option, it panics.
+func MustNewPoolQueryMask(options ...string) (mask PoolQueryMask) {
+	if err := mask.SetOptions(options...); err != nil {
+		panic(err)
+	}
+	return
 }
 
 // SetOptions sets the pool query mask to include the specified options.
@@ -210,7 +220,7 @@ func (pqm *PoolQueryMask) UnmarshalJSON(data []byte) error {
 	}
 
 	var newVal PoolQueryMask
-	for _, opt := range strings.Split(string(data), ",") {
+	for _, opt := range strings.Split(strings.Trim(string(data), "\""), ",") {
 		for k, v := range poolQueryOptMap {
 			if v == opt {
 				newVal |= PoolQueryMask(k)
@@ -355,6 +365,18 @@ func (smt StorageMediaType) MarshalJSON() ([]byte, error) {
 	return []byte(`"` + smt.String() + `"`), nil
 }
 
+func (smt *StorageMediaType) UnmarshalJSON(data []byte) error {
+	mediaTypeStr := strings.ToUpper(strings.Trim(string(data), "\""))
+
+	sm, err := unmarshalStrVal(mediaTypeStr, mgmtpb.StorageMediaType_value, mgmtpb.StorageMediaType_name)
+	if err != nil {
+		return errors.Wrap(err, "failed to unmarshal StorageMediaType")
+	}
+	*smt = StorageMediaType(sm)
+
+	return nil
+}
+
 // PoolRebuildState indicates the current state of the pool rebuild process.
 type PoolRebuildState int32
 
@@ -380,7 +402,7 @@ func (prs PoolRebuildState) MarshalJSON() ([]byte, error) {
 }
 
 func (prs *PoolRebuildState) UnmarshalJSON(data []byte) error {
-	stateStr := strings.ToUpper(string(data))
+	stateStr := strings.ToUpper(strings.Trim(string(data), "\""))
 
 	state, err := unmarshalStrVal(stateStr, mgmtpb.PoolRebuildStatus_State_value, mgmtpb.PoolRebuildStatus_State_name)
 	if err != nil {

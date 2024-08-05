@@ -94,17 +94,6 @@ CRT_RPC_DECLARE(dtx_coll, DAOS_ISEQ_COLL_DTX, DAOS_OSEQ_COLL_DTX);
 
 #define DTX_YIELD_CYCLE		(DTX_THRESHOLD_COUNT >> 3)
 
-/* The time threshold for triggering DTX cleanup of stale entries.
- * If the oldest active DTX exceeds such threshold, it will trigger
- * DTX cleanup locally.
- */
-#define DTX_CLEANUP_THD_AGE_UP	90
-
-/* If DTX cleanup for stale entries is triggered, then the DTXs with
- * older ages than this threshold will be cleanup.
- */
-#define DTX_CLEANUP_THD_AGE_LO	75
-
 /* The count threshold (per pool) for triggering DTX aggregation. */
 #define DTX_AGG_THD_CNT_MAX	(1 << 24)
 #define DTX_AGG_THD_CNT_MIN	(1 << 20)
@@ -192,6 +181,14 @@ extern uint32_t dtx_batched_ult_max;
  */
 #define DTX_COLL_TREE_WIDTH		8
 
+/*
+ * If a large transaction has sub-requests to dispatch to a lot of DTX participants,
+ * then we may have to split the dispatch process to multiple steps; otherwise, the
+ * dispatch process may trigger too many in-flight or in-queued RPCs that will hold
+ * too much resource as to server maybe out of memory.
+ */
+#define DTX_RPC_STEP_LENGTH	DTX_THRESHOLD_COUNT
+
 extern struct crt_corpc_ops	dtx_coll_commit_co_ops;
 extern struct crt_corpc_ops	dtx_coll_abort_co_ops;
 extern struct crt_corpc_ops	dtx_coll_check_co_ops;
@@ -255,14 +252,16 @@ int dtx_leader_get(struct ds_pool *pool, struct dtx_memberships *mbs,
 
 /* dtx_cos.c */
 int dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
-			  daos_unit_oid_t *oid, daos_epoch_t epoch,
+			  daos_unit_oid_t *oid, daos_epoch_t epoch, bool force,
 			  struct dtx_entry ***dtes, struct dtx_cos_key **dcks,
 			  struct dtx_coll_entry **p_dce);
-int dtx_add_cos(struct ds_cont_child *cont, void *entry, daos_unit_oid_t *oid,
+int dtx_cos_add(struct ds_cont_child *cont, void *entry, daos_unit_oid_t *oid,
 		uint64_t dkey_hash, daos_epoch_t epoch, uint32_t flags);
-int dtx_del_cos(struct ds_cont_child *cont, struct dtx_id *xid,
+int dtx_cos_del(struct ds_cont_child *cont, struct dtx_id *xid,
 		daos_unit_oid_t *oid, uint64_t dkey_hash);
 uint64_t dtx_cos_oldest(struct ds_cont_child *cont);
+void dtx_cos_prio(struct ds_cont_child *cont, struct dtx_id *xid,
+		  daos_unit_oid_t *oid, uint64_t dkey_hash);
 
 /* dtx_rpc.c */
 int dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte,
