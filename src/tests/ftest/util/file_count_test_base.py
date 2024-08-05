@@ -3,12 +3,13 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import os
+
 from avocado.core.exceptions import TestFail
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
 from oclass_utils import extract_redundancy_factor
 
-import os
 
 class FileCountTestBase(IorTestBase, MdtestBase):
     """Test class Description: Runs IOR and MDTEST to create specified number of files.
@@ -20,8 +21,10 @@ class FileCountTestBase(IorTestBase, MdtestBase):
         """Create a list of containers that the various jobs use for storage.
 
         Args:
-            file_oclass: file object class of container
-            dir_oclass: dir object class of container
+            file_oclass (str, optional): file object class of container.
+                                         Defaults to None.
+            dir_oclass (str, optional): dir object class of container.
+                                        Defaults to None.
 
 
         """
@@ -43,9 +46,11 @@ class FileCountTestBase(IorTestBase, MdtestBase):
 
     def get_diroclass(self, rd_fac):
         """
-        rd_fac: redundancy factor
+        Args
+            rd_fac (int): redundancy factor
 
-        Returns: value for dir_oclass
+        Returns:
+            str: value for dir_oclass
         """
 
         if rd_fac >= 2:
@@ -83,8 +88,7 @@ class FileCountTestBase(IorTestBase, MdtestBase):
                 self.mdtest_cmd.test_dir.update("/")
             if self.mdtest_cmd.api.value in ['DFS', 'POSIX']:
                 for oclass in mdtest_oclass:
-                    self.log.info("=======>>>Starting MDTEST with %s and %s", api,
-                    oclass)
+                    self.log.info("=======>>>Starting MDTEST with %s and %s", api, oclass)
                     self.mdtest_cmd.dfs_oclass.update(oclass)
                     rd_fac = extract_redundancy_factor(oclass)
                     dir_oclass = self.get_diroclass(rd_fac)
