@@ -26,7 +26,7 @@ from soak_utils import (SoakTestError, add_pools, build_job_script, cleanup_dfus
                         create_app_cmdline, create_dm_cmdline, create_fio_cmdline,
                         create_ior_cmdline, create_macsio_cmdline, create_mdtest_cmdline,
                         create_racer_cmdline, ddhhmmss_format, debug_logging, get_daos_server_logs,
-                        get_harassers, get_id, get_job_logs, get_journalctl_logs,
+                        get_harassers, get_id, get_job_logs, get_journalctl_logs, job_cleanup,
                         launch_exclude_reintegrate, launch_extend, launch_jobscript, launch_reboot,
                         launch_server_stop_start, launch_snapshot, launch_vmd_identify_check,
                         reserved_file_copy, run_event_check, run_metrics_check, run_monitor_check)
@@ -146,7 +146,8 @@ class SoakTestBase(TestWithServers):
         if self.all_failed_jobs:
             errors.append("SOAK FAILED: The following jobs failed {} ".format(
                 " ,".join(str(j_id) for j_id in self.all_failed_jobs)))
-
+        # cleanup any remaining jobs
+        job_cleanup(self.log, self.hostlist_clients)
         # verify reserved container data
         if self.resv_cont:
             final_resv_file = os.path.join(self.test_dir, "final", "resv_file")
