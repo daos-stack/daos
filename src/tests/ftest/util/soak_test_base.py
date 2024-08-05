@@ -344,7 +344,8 @@ class SoakTestBase(TestWithServers):
                                   env, script, log, error_log, timeout, self)
                         name = f"SOAK JOB {job_id}"
 
-                        jobs.append(threading.Thread(target=method, args=params, name=name))
+                        jobs.append(threading.Thread(
+                            target=method, args=params, name=name, daemon=True))
                         jobid_list.remove(job_id)
                         node_list = node_list[node_count:]
                         debug_logging(
