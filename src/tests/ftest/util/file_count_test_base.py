@@ -81,18 +81,10 @@ class FileCountTestBase(IorTestBase, MdtestBase):
             self.mdtest_cmd.api.update(api)
             if api == "DFS":
                 self.mdtest_cmd.test_dir.update("/")
-            #for _, oclass in enumerate(mdtest_oclass):
-            #    self.log.info("mdtest_oclass in use: %s", oclass)
-            #    self.mdtest_cmd.dfs_oclass.update(oclass)
-            #    rd_fac = extract_redundancy_factor(oclass)
-            #    dir_oclass = self.get_diroclass(rd_fac)
             if self.mdtest_cmd.api.value in ['DFS', 'POSIX']:
-                #self.log.info("=======>>>Starting MDTEST with %s and %s", api,
-                #oclass)
                 for oclass in mdtest_oclass:
                     self.log.info("=======>>>Starting MDTEST with %s and %s", api,
                     oclass)
-                    #self.log.info("mdtest_oclass in use: %s", oclass)
                     self.mdtest_cmd.dfs_oclass.update(oclass)
                     rd_fac = extract_redundancy_factor(oclass)
                     dir_oclass = self.get_diroclass(rd_fac)
