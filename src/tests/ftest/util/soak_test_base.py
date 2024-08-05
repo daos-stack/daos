@@ -473,7 +473,7 @@ class SoakTestBase(TestWithServers):
             # self.schedule_jobs()
             method = self.schedule_jobs
             name = "Job Scheduler"
-            scheduler = threading.Thread(target=method, name=name)
+            scheduler = threading.Thread(target=method, name=name, daemon=True)
             # scheduler = multiprocessing.Process(target=method, name=name)
             scheduler.start()
 
