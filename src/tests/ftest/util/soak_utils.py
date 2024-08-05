@@ -16,6 +16,7 @@ from itertools import count, product
 from avocado.core.exceptions import TestFail
 from avocado.utils.distro import detect
 from ClusterShell.NodeSet import NodeSet
+from ClusterShell.Task import task
 from command_utils import command_as_user
 from command_utils_base import EnvironmentVariables
 from daos_racer_utils import DaosRacerCommand
@@ -34,7 +35,7 @@ from macsio_util import MacsioCommand
 from mdtest_utils import MdtestCommand
 from oclass_utils import extract_redundancy_factor
 from pydaos.raw import DaosApiError, DaosSnapshot
-from run_utils import daos_env_str, run_local, run_remote
+from run_utils import CommandResult, daos_env_str, log_result_data, run_local, run_remote
 from test_utils_container import add_container
 
 H_LOCK = threading.Lock()
@@ -384,6 +385,54 @@ def wait_for_pool_rebuild(self, pool, name):
     self.dmg_command.server_set_logmasks(raise_exception=False)
     return rebuild_status
 
+def run_job(log, hosts, command, verbose=True, timeout=120, task_debug=False, stderr=False,
+               fanout=None):
+    """Run the jobscript on the remote hosts.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        hosts (NodeSet): hosts on which to run the command
+        command (str): command from which to obtain the output
+        verbose (bool, optional): log the command output. Defaults to True.
+        timeout (int, optional): number of seconds to wait for the command to complete.
+            Defaults to 120 seconds.
+        task_debug (bool, optional): whether to enable debug for the task object. Defaults to False.
+        stderr (bool, optional): whether to enable stdout/stderr separation. Defaults to False.
+        fanout (int, optional): fanout to use. Default uses the max of the
+            clush default (64) or available cores
+
+    Returns:
+        CommandResult: groups of command results from the same hosts with the same return status
+    """
+    task = task()
+    task.set_info('debug', task_debug)
+    task.set_default("stderr", stderr)
+    # Set fan out to the max of the default or number of logical cores
+    if fanout is None:
+        fanout = max(task.info('fanout'), len(os.sched_getaffinity(0)))
+    task.set_info('fanout', fanout)
+    # Enable forwarding of the ssh authentication agent connection.
+    # Force pseudo-terminal allocation so timed-out commands are killed remotely.
+    task.set_info("ssh_options", "-oForwardAgent=yes -q -t -t")
+    if verbose:
+        if timeout is None:
+            log.debug("Running on %s without a timeout: %s", hosts, command)
+        else:
+            log.debug("Running on %s with a %s second timeout: %s", hosts, timeout, command)
+    env_str = daos_env_str(os.environ)
+    command = f'{env_str}{command}'
+    task.run(command=command, nodes=hosts, timeout=timeout)
+    results = CommandResult(command, task)
+    if results.timeout:
+        task.abort(kill=True)
+    if verbose:
+        results.log_output(log)
+    else:
+        # Always log any failed commands
+        for data in results.output:
+            if not data.passed:
+                log_result_data(log, data)
+    return results
 
 def launch_jobscript(
         log, job_queue, job_id, host_list, env, script, job_log, error_log, timeout, test):
@@ -425,7 +474,7 @@ def launch_jobscript(
     joblog = job_log1.replace("RHOST", str(rhost))
     errorlog = error_log1.replace("RHOST", str(rhost))
     cmd = ";".join([env, f"{script} {hosts} {job_id} > {joblog} 2> {errorlog}"])
-    job_results = run_remote(
+    job_results = run_job(
         log, rhost, cmd, verbose=False, timeout=timeout * 60, task_debug=False, stderr=False)
     if job_results:
         if job_results.timeout:
