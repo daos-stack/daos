@@ -112,6 +112,9 @@ BuildRequires: systemd-rpm-macros
 %endif
 %endif
 BuildRequires: libuuid-devel
+%if (0%{?rhel} >= 8)
+BuildRequires: libasan
+%endif
 
 %if (0%{?suse_version} > 0)
 BuildRequires: libucp-devel
@@ -127,6 +130,9 @@ Requires: openssl
 # suffice
 Requires: mercury >= %{mercury_version}
 
+%if (0%{?rhel} >= 8)
+Requires: libasan
+%endif
 
 %description
 The Distributed Asynchronous Object Storage (DAOS) is an open-source

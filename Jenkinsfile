@@ -185,7 +185,7 @@ pipeline {
         //                     'stages of this run (i.e. auto, auto_md_on_ssd, auto:-3DNAND, ' +
         //                     '0000:81:00.0, etc.).  Does not apply to MD on SSD stages.')
         string(name: 'BuildType',
-               defaultValue: '',
+               defaultValue: 'debug',
                description: 'Type of build.  Passed to scons as BUILD_TYPE.  (I.e. dev, release, debug, etc.).  ' +
                             'Defaults to release on an RC or dev otherwise.')
         string(name: 'TestRepeat',

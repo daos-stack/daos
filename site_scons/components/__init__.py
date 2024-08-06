@@ -281,6 +281,8 @@ def define_components(reqs):
 
     if reqs.target_type == 'debug':
         abt_build.append('--enable-debug=most')
+        abt_build.append('--disable-mem-pool')
+        abt_build.append('--disable-aligned-alloc')
     else:
         abt_build.append('--disable-debug')
 
@@ -295,7 +297,7 @@ def define_components(reqs):
                           ['make'],
                           ['make', 'install']],
                 requires=['libunwind'],
-                libs=['abt'],
+#               libs=['abt'],
                 headers=['abt.h'])
 
     reqs.define('fuse', libs=['fuse3'], defines=['FUSE_USE_VERSION=35'],

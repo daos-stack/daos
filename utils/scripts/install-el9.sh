@@ -62,4 +62,5 @@ dnf --nodocs install \
     sudo \
     valgrind-devel \
     which \
-    yasm
+    yasm \
+    libasan

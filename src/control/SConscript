@@ -37,7 +37,7 @@ def get_build_flags(benv):
     if is_release_build(benv):
         return '-buildmode=pie'
     # enable race detector for non-release builds
-    return '-race'
+    return ''
 
 
 def gen_build_id():
@@ -140,6 +140,8 @@ def scons():
     # Sets CGO_LDFLAGS for rpath options
     denv.d_add_rpaths("..", True, True)
     denv.AppendENVPath("CGO_CFLAGS", denv.subst("$_CPPINCFLAGS"), sep=" ")
+    denv.AppendENVPath("CGO_CFLAGS", "-fsanitize=address", sep=" ")
+    denv.AppendENVPath("CGO_LDFLAGS", "-fsanitize=address", sep=" ")
     if prereqs.client_requested():
         install_go_bin(denv, "daos_agent")
         install_go_bin(denv, "dmg", install_man=True)

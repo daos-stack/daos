@@ -30,7 +30,8 @@ pkgs="argobots                         \
       pmix                             \
       protobuf-c                       \
       spdk-devel                       \
-      valgrind-devel"
+      valgrind-devel                   \
+      libasan"
 
 # output with trailing newline suppressed
 echo  -e "$pkgs\c"

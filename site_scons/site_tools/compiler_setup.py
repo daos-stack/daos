@@ -3,6 +3,8 @@
 from SCons.Script import Configure, Exit, GetOption
 
 DESIRED_FLAGS = ['-fstack-usage',
+                 '-fsanitize=address',
+                 '-fno-omit-frame-pointer',
                  '-Wno-sign-compare',
                  '-Wno-unused-parameter',
                  '-Wno-missing-field-initializers',
@@ -13,7 +15,7 @@ DESIRED_FLAGS = ['-fstack-usage',
                  '-Wno-unused-command-line-argument',
                  '-Wmismatched-dealloc',
                  '-Wfree-nonheap-object',
-                 '-Wframe-larger-than=4096']
+                 '-Wframe-larger-than=8192']
 
 # Compiler flags to prevent optimizing out security checks
 DESIRED_FLAGS.extend(['-fno-strict-overflow', '-fno-delete-null-pointer-checks', '-fwrapv'])
@@ -53,6 +55,7 @@ def _base_setup(env):
     env.Append(CCFLAGS=['-g', '-Wextra', '-Wshadow', '-Wall', '-fpic'])
 
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
+    env.AppendIfSupported(LINKFLAGS=['-fsanitize=address'])
 
     if '-Wmismatched-dealloc' in env['CCFLAGS']:
         env.AppendUnique(CPPDEFINES={'HAVE_DEALLOC': '1'})

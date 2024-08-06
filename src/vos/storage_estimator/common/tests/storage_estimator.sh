@@ -1,5 +1,7 @@
 #!/bin/bash
 
+export ASAN_OPTIONS=verify_asan_link_order=0
+
 TEST_DIR=$(mktemp -d)
 CURRENT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_DIR="${CURRENT_DIR}/../../../../.."

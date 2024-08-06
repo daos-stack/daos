@@ -215,6 +215,7 @@ set +e
 LD_LIBRARY_PATH="$LD_LIBRARY_PATH" \
 CGO_LDFLAGS="$CGO_LDFLAGS" \
 CGO_CFLAGS="$CGO_CFLAGS" \
+ASAN_OPTIONS=verify_asan_link_order=0 \
 	$GO_TEST_RUNNER "$GO_TEST_EXTRA_ARGS"
 testrc=$?
 popd >/dev/null
