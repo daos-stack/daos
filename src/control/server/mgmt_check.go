@@ -50,7 +50,8 @@ func (svc *mgmtSvc) disableChecker() error {
 func (svc *mgmtSvc) checkerIsEnabled() bool {
 	value, err := system.GetMgmtProperty(svc.sysdb, checkerEnabledKey)
 	if err != nil {
-		if !system.IsNotLeader(err) && !system.IsErrSystemAttrNotFound(err) {
+		if !system.IsNotLeader(err) && !system.IsErrSystemAttrNotFound(err) &&
+			!system.IsNotReplica(err) {
 			svc.log.Errorf("failed to get checker enabled value: %s", err)
 		}
 		return false

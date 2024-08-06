@@ -16,7 +16,7 @@ from process_core_files import CoreFileException, CoreFileProcessing
 # pylint: disable=import-error,no-name-in-module
 from util.environment_utils import TestEnvironment
 from util.host_utils import get_local_host
-from util.run_utils import RunException, find_command, run_local, run_remote, stop_processes
+from util.run_utils import find_command, run_local, run_remote, stop_processes
 from util.user_utils import get_chown_command
 from util.yaml_utils import get_test_category
 
@@ -562,20 +562,17 @@ def move_files(logger, hosts, source, pattern, destination, depth, timeout, test
     # Clush -rcopy the temporary remote directory to this host
     command = ["clush", "-w", str(hosts), "-pv", "--rcopy", f"'{tmp_copy_dir}'", "--dest",
                f"'{rcopy_dest}'"]
-    try:
-        run_local(logger, " ".join(command), check=True, timeout=timeout)
-    except RunException:
+    if not run_local(logger, " ".join(command), timeout=timeout).passed:
         message = f"Error copying remote files to {destination}"
         test_result.fail_test(logger, "Process", message, sys.exc_info())
         return_code = 16
 
-    finally:
-        # Remove the temporary remote directory on each host
-        command = f"{sudo_command}rm -fr '{tmp_copy_dir}'"
-        if not run_remote(logger, hosts, command).passed:
-            message = f"Error removing temporary remote copy directory '{tmp_copy_dir}'"
-            test_result.fail_test(logger, "Process", message)
-            return_code = 16
+    # Remove the temporary remote directory on each host
+    command = f"{sudo_command}rm -fr '{tmp_copy_dir}'"
+    if not run_remote(logger, hosts, command).passed:
+        message = f"Error removing temporary remote copy directory '{tmp_copy_dir}'"
+        test_result.fail_test(logger, "Process", message)
+        return_code = 16
 
     return return_code
 
@@ -648,14 +645,13 @@ def create_steps_log(logger, job_results_dir, test_result):
     job_log = os.path.join(test_logs_dir, 'job.log')
     step_log = os.path.join(test_logs_dir, 'steps.log')
     command = rf"grep -E '(INFO |ERROR)\| (==> Step|START|PASS|FAIL|ERROR)' {job_log}"
-    try:
-        result = run_local(logger, command)
-        with open(step_log, 'w', encoding="utf-8") as file:
-            file.write(result.stdout)
-    except Exception:   # pylint: disable=broad-except
+    result = run_local(logger, command)
+    if not result.passed:
         message = f"Error creating {step_log}"
         test_result.fail_test(logger, "Process", message, sys.exc_info())
         return 8192
+    with open(step_log, 'w', encoding="utf-8") as file:
+        file.write(result.joined_stdout)
     return 0
 
 
@@ -713,9 +709,7 @@ def rename_avocado_test_dir(logger, test, job_results_dir, test_result, jenkins_
         return 1024
 
     # Remove latest symlink directory to avoid inclusion in the Jenkins build artifacts
-    try:
-        run_local(logger, f"rm -fr '{test_logs_lnk}'")
-    except RunException:
+    if not run_local(logger, f"rm -fr '{test_logs_lnk}'").passed:
         message = f"Error removing {test_logs_lnk}"
         test_result.fail_test(logger, "Process", message, sys.exc_info())
         return 1024

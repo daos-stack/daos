@@ -7,9 +7,12 @@
 import logging
 import os
 import re
+import shlex
+import subprocess  # nosec
 import sys
 import time
 from pathlib import Path
+from socket import gethostname
 
 from ClusterShell.NodeSet import NodeSet
 from slurm_setup import SlurmSetup, SlurmSetupException
@@ -44,13 +47,11 @@ def fault_injection_enabled(logger):
     """
     logger.debug("-" * 80)
     logger.debug("Checking for fault injection enablement via 'fault_status':")
-    try:
-        run_local(logger, "fault_status", check=True)
+    if run_local(logger, "fault_status").passed:
         logger.debug("  Fault injection is enabled")
         return True
-    except RunException:
-        # Command failed or yielded a non-zero return status
-        logger.debug("  Fault injection is disabled")
+    # Command failed or yielded a non-zero return status
+    logger.debug("  Fault injection is disabled")
     return False
 
 
@@ -88,10 +89,7 @@ def display_disk_space(logger, path):
     """
     logger.debug("-" * 80)
     logger.debug("Current disk space usage of %s", path)
-    try:
-        run_local(logger, f"df -h {path}", check=False)
-    except RunException:
-        pass
+    run_local(logger, f"df -h {path}")
 
 
 def summarize_run(logger, mode, status):
@@ -153,9 +151,11 @@ def get_test_tag_info(logger, directory):
     test_tag_info = {}
     for test_file in sorted(list(map(str, Path(directory).rglob("*.py")))):
         command = f"grep -ER '(^class .*:|:avocado: tags=| def test_)' {test_file}"
-        output = run_local(logger, command, check=False, verbose=False)
+        result = run_local(logger, command, verbose=False)
+        if not result.passed:
+            continue
         data = re.findall(
-            r'(?:class (.*)\(.*\):|def (test_.*)\(|:avocado: tags=(.*))', output.stdout)
+            r'(?:class (.*)\(.*\):|def (test_.*)\(|:avocado: tags=(.*))', result.joined_stdout)
         class_key = None
         method_key = None
         for match in data:
@@ -392,28 +392,26 @@ class TestRunner():
             "[Test %s/%s] Running the %s test on repetition %s/%s",
             number, self.total_tests, test, repeat, self.total_repeats)
         start_time = int(time.time())
-
-        try:
-            return_code = run_local(
-                logger, " ".join(command), capture_output=False, check=False).returncode
-            if return_code == 0:
-                logger.debug("All avocado test variants passed")
-            elif return_code & 2 == 2:
-                logger.debug("At least one avocado test variant failed")
-            elif return_code & 4 == 4:
-                message = "Failed avocado commands detected"
-                self.test_result.fail_test(logger, "Execute", message)
-            elif return_code & 8 == 8:
-                logger.debug("At least one avocado test variant was interrupted")
-            if return_code:
-                self._collect_crash_files(logger)
-
-        except RunException:
-            message = f"Error executing {test} on repeat {repeat}"
+        return_code = self._run_subprocess(logger, " ".join(command)).returncode
+        end_time = int(time.time())
+        if return_code == 0:
+            logger.debug("All avocado test variants passed")
+        elif return_code & 1 == 1:
+            logger.debug("At least one avocado test variant failed")
+        elif return_code & 2 == 2:
+            logger.debug("At least one avocado job failed")
+        elif return_code & 4 == 4:
+            message = "Failed avocado commands detected"
+            self.test_result.fail_test(logger, "Execute", message)
+        elif return_code & 8 == 8:
+            logger.debug("At least one avocado test variant was interrupted")
+        else:
+            message = f"Unhandled rc={return_code} while executing {test} on repeat {repeat}"
             self.test_result.fail_test(logger, "Execute", message, sys.exc_info())
             return_code = 1
+        if return_code:
+            self._collect_crash_files(logger)
 
-        end_time = int(time.time())
         logger.info("Total test time: %ss", end_time - start_time)
         return return_code
 
@@ -801,10 +799,11 @@ class TestRunner():
         certgen_dir = os.path.abspath(
             os.path.join("..", "..", "..", "..", "lib64", "daos", "certgen"))
         command = os.path.join(certgen_dir, "gen_certificates.sh")
-        try:
-            run_local(logger, f"/usr/bin/rm -rf {certs_dir}")
-            run_local(logger, f"{command} {test_env.log_dir}")
-        except RunException:
+        if not run_local(logger, f"/usr/bin/rm -rf {certs_dir}").passed:
+            message = "Error removing old certificates"
+            self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
+            return 128
+        if not run_local(logger, f"{command} {test_env.log_dir}").passed:
             message = "Error generating certificates"
             self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
             return 128
@@ -826,15 +825,55 @@ class TestRunner():
 
             if crash_files:
                 latest_crash_dir = os.path.join(avocado_logs_dir, "latest", "crashes")
-                try:
-                    run_local(logger, f"mkdir -p {latest_crash_dir}", check=True)
+                if run_local(logger, f"mkdir -p {latest_crash_dir}").passed:
                     for crash_file in crash_files:
-                        run_local(logger, f"mv {crash_file} {latest_crash_dir}", check=True)
-                except RunException:
-                    message = "Error collecting crash files"
+                        if not run_local(logger, f"mv {crash_file} {latest_crash_dir}").passed:
+                            message = "Error collecting crash files: mv"
+                            self.test_result.fail_test(logger, "Execute", message, sys.exc_info())
+                else:
+                    message = "Error collecting crash files: mkdir"
                     self.test_result.fail_test(logger, "Execute", message, sys.exc_info())
             else:
                 logger.debug("No avocado crash files found in %s", crash_dir)
+
+    @staticmethod
+    def _run_subprocess(log, command):
+        """Run the command locally.
+
+        Args:
+            log (logger): logger for the messages produced by this method
+            command (str): command from which to obtain the output
+
+        Raises:
+            RunException: if the command fails: is interrupted by the user, or
+                encounters some other exception.
+
+        Returns:
+            subprocess.CompletedProcess: an object representing the result of the command
+                execution with the following properties:
+                    - args (the command argument)
+                    - returncode
+        """
+        local_host = gethostname().split(".")[0]
+        kwargs = {"encoding": "utf-8", "shell": False, "check": False, "timeout": None}
+        log.debug("Running on %s: %s", local_host, command)
+
+        try:
+            # pylint: disable=subprocess-run-check
+            return subprocess.run(shlex.split(command), **kwargs)  # nosec
+
+        except KeyboardInterrupt as error:
+            # User Ctrl-C
+            message = f"Command '{command}' interrupted by user"
+            log.debug(message)
+            raise RunException(message) from error
+
+        except Exception as error:
+            # Catch all
+            message = f"Command '{command}' encountered unknown error"
+            log.debug(message)
+            log.debug(str(error))
+            raise RunException(message) from error
 
 
 class TestGroup():
@@ -927,8 +966,10 @@ class TestGroup():
         # Find all the test files that contain tests matching the tags
         logger.debug("-" * 80)
         logger.info("Detecting tests matching tags: %s", " ".join(command))
-        output = run_local(logger, " ".join(command), check=True)
-        unique_test_files = set(re.findall(self._avocado.get_list_regex(), output.stdout))
+        result = run_local(logger, " ".join(command))
+        if not result.passed:
+            raise RunException("Error running avocado list")
+        unique_test_files = set(re.findall(self._avocado.get_list_regex(), result.joined_stdout))
         for index, test_file in enumerate(unique_test_files):
             self.tests.append(TestInfo(test_file, index + 1, self._yaml_extension))
             logger.info("  %s", self.tests[-1])
@@ -1015,7 +1056,8 @@ class TestGroup():
             if new_yaml_file:
                 if verbose > 0:
                     # Optionally display a diff of the yaml file
-                    run_local(logger, f"diff -y {test.yaml_file} {new_yaml_file}", check=False)
+                    if not run_local(logger, f"diff -y {test.yaml_file} {new_yaml_file}").passed:
+                        raise RunException(f"Error diff'ing {test.yaml_file}")
                 test.yaml_file = new_yaml_file
 
             # Display the modified yaml file variants with debug
@@ -1023,7 +1065,8 @@ class TestGroup():
             if test.extra_yaml:
                 command.extend(test.extra_yaml)
             command.extend(["--summary", "3"])
-            run_local(logger, " ".join(command))
+            if not run_local(logger, " ".join(command)).passed:
+                raise RunException(f"Error listing test variants for {test.yaml_file}")
 
             # Collect the host information from the updated test yaml
             test.set_yaml_info(logger, include_localhost)
@@ -1144,13 +1187,11 @@ class TestGroup():
             logger.debug("  Copying applications from the '%s' directory", self._test_env.app_src)
             run_local(logger, f"ls -al '{self._test_env.app_src}'")
             for app in os.listdir(self._test_env.app_src):
-                try:
-                    run_local(
-                        logger,
-                        f"cp -r '{os.path.join(self._test_env.app_src, app)}' "
-                        f"'{self._test_env.app_dir}'",
-                        check=True)
-                except RunException:
+                result = run_local(
+                    logger,
+                    f"cp -r '{os.path.join(self._test_env.app_src, app)}' "
+                    f"'{self._test_env.app_dir}'")
+                if not result.passed:
                     message = 'Error copying files to the application directory'
                     result.tests[-1].fail_test(logger, 'Run', message, sys.exc_info())
                     return 128
