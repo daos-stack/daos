@@ -52,6 +52,12 @@ permissions: {}
 
 jobs:
   Variables:
+    # What a dumb jobs this is
+    # Needed because of https://github.com/orgs/community/discussions/26671
+    # Ideally want to be able to use:
+    # with:
+    #    NAME: ${{ env.DISTROS }}
+    # in the Call-RPM-Build job but the above issue prevents it
     name: Compute outputs
     runs-on: [self-hosted, light]
     outputs:
@@ -70,9 +76,10 @@ jobs:
   Call-RPM-Build:
     name: Build RPM
     needs: Variables
+    if: inputs.rpm-test-version == ''
     permissions:
       statuses: write
-    uses: daos-stack/argobots/.github/workflows/rpm-build.yml@bmurrell/gha
+    uses: daos-stack/actions-lib/.github/workflows/rpm-build.yml@bmurrell/initial
     secrets: inherit
     with:
       NAME: ${{ needs.Variables.outputs.NAME }}
