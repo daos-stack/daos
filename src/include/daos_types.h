@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -278,6 +278,10 @@ struct daos_sys_info {
 	uint32_t		 dsi_nr_ranks;
 	/** ranks and their client-accessible URIs */
 	struct daos_rank_uri	*dsi_ranks;
+	/** length of MS ranks array */
+	uint32_t                 dsi_nr_ms_ranks;
+	/** MS rank numbers */
+	uint32_t                *dsi_ms_ranks;
 };
 
 /** max pool/cont attr size */
