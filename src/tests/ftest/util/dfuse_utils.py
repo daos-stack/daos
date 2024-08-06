@@ -107,6 +107,8 @@ class Dfuse(DfuseCommand):
         }
 
         self.log.info("Checking which hosts have the mount point directory created")
+        run_remote(self.log, self.hosts, f'stat {self.mount_dir.value}', detach=True)
+        run_remote(self.log, self.hosts, f'stat {self.mount_dir.value}', detach=False)
         command = f"test -d {self.mount_dir.value} -a ! -L {self.mount_dir.value}"
         test_result = self._run_as_owner(self.hosts, command)
         check_mounted = test_result.passed_hosts
@@ -258,7 +260,7 @@ class Dfuse(DfuseCommand):
         self._setup_mount_point()
 
         # run dfuse command
-        result = run_remote(self.log, self.hosts, self.with_exports, timeout=30, detach=True)
+        result = run_remote(self.log, self.hosts, self.with_exports, timeout=30, detach=False)
         self._running_hosts.add(result.passed_hosts)
         if mount_callback:
             mount_callback(result)
