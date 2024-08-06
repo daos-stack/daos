@@ -24,12 +24,12 @@ class DuplicateRpcDetection(TestWithServers):
     :avocado: recursive
     """
 
-    def metadata_workload_test(self, pool, num_of_cont, workload_cycles, test_loops):
+    def metadata_workload_test(self, pool, cont_num, workload_cycles, test_loops):
         """To create single container and perform metadata workload tests.
 
         Args:
             pool (str): pool handle to create container.
-            num_of_cont (int): Number of container to be created.
+            cont_num (int): Container number for logging.
             workload_cycles (int): Number of metadata workload test cycles per test loop.
             test_loops (int): Number of metadata workload test loops.
 
@@ -42,10 +42,10 @@ class DuplicateRpcDetection(TestWithServers):
             daos = self.get_daos_command()
             daos.verbose = False
             container = self.get_container(pool, daos=daos)
-            self.log.info("Successfully created #%s container", num_of_cont)
+            self.log.info("Successfully created #%s container", cont_num)
         except (DaosTestError, TestFail) as err:
             self.fail(
-                "#({}.{}) container create failed. err={}".format(pool.label, num_of_cont, err))
+                "#({}.{}) container create failed. err={}".format(pool.label, cont_num, err))
         for ind in range(test_loops):
             start = time.time()
             for _ in range(workload_cycles):
@@ -80,7 +80,7 @@ class DuplicateRpcDetection(TestWithServers):
         :avocado: tags=server,metadata
         :avocado: tags=DuplicateRpcDetection,test_metadata_dup_rpc
         """
-        num_of_cont = self.params.get("number_thread", '/run/metadata/*', default=1)
+        number_thread = self.params.get("number_thread", '/run/metadata/*', default=1)
         w_cycles = self.params.get("workload_test_cycles", '/run/metadata/*', default=5000)
         t_loops = self.params.get("test_loops", '/run/metadata/*', default=10)
         threshold_factor = self.params.get("threshold_factor", '/run/metadata/*', default=1.75)
@@ -88,11 +88,12 @@ class DuplicateRpcDetection(TestWithServers):
         self.log_step("Create pool with properties svc_ops_entry_age.")
         pool1 = self.get_pool(dmg=self.get_dmg_command().copy())
 
-        self.log_step("Create containers by ThreadManager.")
+        self.log_step("Create containers by ThreadManager on pool1.")
         container_manager = ThreadManager(
             self.metadata_workload_test, self.get_remaining_time() - 30)
-        container_manager.add(
-            pool=pool1, num_of_cont=num_of_cont, workload_cycles=w_cycles, test_loops=t_loops)
+        for cont_num in range(1, number_thread+1):
+            container_manager.add(
+                pool=pool1, cont_num=cont_num, workload_cycles=w_cycles, test_loops=t_loops)
 
         self.log_step("Run specified metadata workload cycles in multiple test loops.")
         results = container_manager.run()
@@ -106,8 +107,9 @@ class DuplicateRpcDetection(TestWithServers):
         self.log_step("Create containers by ThreadManager on pool2.")
         container_manager = ThreadManager(
             self.metadata_workload_test, self.get_remaining_time() - 30)
-        container_manager.add(
-            pool=self.pool, num_of_cont=num_of_cont, workload_cycles=w_cycles, test_loops=t_loops)
+        for cont_num in range(1, number_thread+1):
+            container_manager.add(
+                pool=self.pool, cont_num=cont_num, workload_cycles=w_cycles, test_loops=t_loops)
 
         self.log_step(
             "To establish a baseline time without duplicate rpc detection, ",
