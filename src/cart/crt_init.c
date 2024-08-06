@@ -536,12 +536,6 @@ crt_protocol_info_free(struct crt_protocol_info *protocol_info)
 	crt_hg_free_protocol_info((struct na_protocol_info *)protocol_info);
 }
 
-static inline void
-warn_deprecated(const char *old_env, const char *new_env)
-{
-	D_WARN("Usage of %s is deprecated. Set %s instead\n", old_env, new_env);
-}
-
 int
 crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 {
