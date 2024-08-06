@@ -3,7 +3,7 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.3.1-1%{?dist}
+%global mercury_version   2.4
 %global libfabric_version 1.15.1-1
 %global __python %{__python3}
 
@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.7.100
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -592,6 +592,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Mon Aug 05 2024 Jerome Soumagne <jerome.soumagne@intel.com> 2.7.100-4
+- Bump mercury version to 2.4.0rc4
+
 * Thu Jul 11 2024 Dalton Bohning <dalton.bohning@intel.com> 2.7.100-3
 - Add pciutils-devel build dep for client-tests package
 

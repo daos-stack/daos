@@ -501,7 +501,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	rc = ds_mgmt_create_pool(pool_uuid, req->sys, "pmem", targets,
 				 req->tier_bytes[DAOS_MEDIA_SCM], req->tier_bytes[DAOS_MEDIA_NVME],
 				 prop, &svc, req->n_fault_domains, req->fault_domains,
-				 req->meta_blob_bytes);
+				 req->tier_bytes[DAOS_MEDIA_SCM]);
 	if (rc != 0) {
 		D_ERROR("failed to create pool: "DF_RC"\n", DP_RC(rc));
 		goto out;

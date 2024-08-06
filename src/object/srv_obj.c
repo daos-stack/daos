@@ -5701,14 +5701,15 @@ out:
 		max_ver = version;
 
 	DL_CDEBUG(rc != 0 && rc != -DER_INPROGRESS && rc != -DER_TX_RESTART, DLOG_ERR, DB_IO, rc,
-		  "(%s) handled collective punch RPC %p for obj "
-		  DF_UOID" on XS %u/%u epc "DF_X64" pmv %u/%u, with dti "
-		  DF_DTI", forward width %u, forward depth %u",
+		  "(%s) handled collective punch RPC %p for obj "DF_UOID" on XS %u/%u epc "
+		  DF_X64" pmv %u/%u, with dti "DF_DTI", bulk_tgt_sz %u, bulk_tgt_nr %u, "
+		  "tgt_nr %u, forward width %u, forward depth %u",
 		  (ocpi->ocpi_flags & ORF_LEADER) ? "leader" :
 		  (ocpi->ocpi_tgts.ca_count == 1 ? "non-leader" : "relay-engine"), rpc,
 		  DP_UOID(ocpi->ocpi_oid), dmi->dmi_xs_id, dmi->dmi_tgt_id, ocpi->ocpi_epoch,
-		  ocpi->ocpi_map_ver, max_ver, DP_DTI(&ocpi->ocpi_xid), ocpi->ocpi_disp_width,
-		  ocpi->ocpi_disp_depth);
+		  ocpi->ocpi_map_ver, max_ver, DP_DTI(&ocpi->ocpi_xid), ocpi->ocpi_bulk_tgt_sz,
+		  ocpi->ocpi_bulk_tgt_nr, (unsigned int)ocpi->ocpi_tgts.ca_count,
+		  ocpi->ocpi_disp_width, ocpi->ocpi_disp_depth);
 
 	obj_punch_complete(rpc, rc, max_ver);
 
