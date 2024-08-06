@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -900,8 +900,9 @@ crt_hg_class_init(crt_provider_t provider, int ctx_idx, bool primary, int iface_
 
 	init_info.request_post_init = crt_gdata.cg_post_init;
 	init_info.request_post_incr = crt_gdata.cg_post_incr;
+	init_info.multi_recv_op_max = crt_gdata.cg_mrecv_buf;
 
-	hg_class = HG_Init_opt(info_string, crt_is_service(), &init_info);
+	hg_class = HG_Init_opt2(info_string, crt_is_service(), HG_VERSION(2, 4), &init_info);
 	if (hg_class == NULL) {
 		D_ERROR("Could not initialize HG class.\n");
 		D_GOTO(out, rc = -DER_HG);
@@ -1514,6 +1515,16 @@ crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 		/* should success as addref above */
 		RPC_DECREF(rpc_priv);
 		rc = crt_hgret_2_der(hg_ret);
+	}
+
+	/* Release input buffer */
+	if (rpc_priv->crp_release_input_early && !rpc_priv->crp_forward) {
+		hg_ret = HG_Release_input_buf(rpc_priv->crp_hg_hdl);
+		if (hg_ret != HG_SUCCESS) {
+			RPC_ERROR(rpc_priv, "HG_Release_input_buf failed, hg_ret: " DF_HG_RC "\n",
+				  DP_HG_RC(hg_ret));
+			/* Fall through */
+		}
 	}
 
 	return rc;

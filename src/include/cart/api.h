@@ -189,6 +189,19 @@ int
 crt_context_set_timeout(crt_context_t crt_ctx, uint32_t timeout_sec);
 
 /**
+ * Get the default timeout value for the RPC requests created on the specified context.
+ *
+ * This is an optional function.
+ *
+ * \param[in] req              pointer to RPC request
+ * \param[out] timeout_sec     timeout value in seconds
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+ */
+int
+crt_context_get_timeout(crt_context_t crt_ctx, uint32_t *timeout_sec);
+
+/**
  * Destroy CRT transport context.
  *
  * \param[in] crt_ctx          CRT transport context to be destroyed
@@ -460,6 +473,21 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg);
  */
 int
 crt_reply_send(crt_rpc_t *req);
+
+/**
+ * Send an RPC reply and free the input buffer immediately.
+ * Only to be called on the server side.
+ *
+ * \param[in] req              pointer to RPC request
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+ *
+ * \note the crt_rpc_t is exported to user, caller should fill the
+ *        crt_rpc_t::cr_output before sending the RPC reply.
+ *        See \ref crt_req_create.
+ */
+int
+crt_reply_send_input_free(crt_rpc_t *req);
 
 /**
  * Return request buffer
