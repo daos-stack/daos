@@ -522,13 +522,7 @@ class TestWithoutServers(Test):
         super().setUp()
         self.bin = os.path.join(self.prefix, 'bin')
         self.daos_test = os.path.join(self.prefix, 'bin', 'daos_test')
-
-        # set default shared dir for daos tests in case DAOS_TEST_SHARED_DIR
-        # is not set, for RPM env and non-RPM env.
-        if os.path.normpath(self.prefix) != os.path.join(os.sep, 'usr'):
-            self.tmp = os.path.join(self.prefix, 'tmp')
-        else:
-            self.tmp = os.getenv('DAOS_TEST_SHARED_DIR', os.path.expanduser('~/daos_test'))
+        self.tmp = os.getenv('DAOS_TEST_SHARED_DIR', os.path.expanduser('~/daos_test'))
         os.makedirs(self.tmp, exist_ok=True)
         self.log.debug("Shared test directory: %s", self.tmp)
         self.log.debug("Common test directory: %s", self.test_dir)
