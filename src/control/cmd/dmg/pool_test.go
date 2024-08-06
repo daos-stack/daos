@@ -15,7 +15,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
@@ -284,12 +283,6 @@ func TestPoolCommands(t *testing.T) {
 			errors.New("may not be mixed"),
 		},
 		{
-			"Create pool with incompatible arguments (auto with meta-blob)",
-			fmt.Sprintf("pool create label --size %s --meta-size 32G", testSizeStr),
-			"",
-			errors.New("can only be set"),
-		},
-		{
 			"Create pool with too-large tier-ratio (auto)",
 			fmt.Sprintf("pool create label --size %s --tier-ratio 200", testSizeStr),
 			"",
@@ -386,30 +379,6 @@ func TestPoolCommands(t *testing.T) {
 				}),
 			}, " "),
 			nil,
-		},
-		{
-			"Create pool with manual meta blob size",
-			fmt.Sprintf("pool create label --scm-size %s --meta-size 1024G",
-				testSizeStr),
-			strings.Join([]string{
-				printRequest(t, &control.PoolCreateReq{
-					User:      eUsr.Username + "@",
-					UserGroup: eGrp.Name + "@",
-					Ranks:     []ranklist.Rank{},
-					TierBytes: []uint64{uint64(testSize), 0},
-					MetaBytes: humanize.GByte * 1024,
-					Properties: []*daos.PoolProperty{
-						propWithVal("label", "label"),
-					},
-				}),
-			}, " "),
-			nil,
-		},
-		{
-			"Create pool with manual meta blob size smaller than scm",
-			"pool create label --scm-size 1026G --meta-size 1024G",
-			"",
-			errors.New("can not be smaller than"),
 		},
 		{
 			"Create pool with manual ranks",
@@ -534,7 +503,7 @@ func TestPoolCommands(t *testing.T) {
 				printRequest(t, &control.PoolExcludeReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
-					Targetidx: []uint32{1},
+					TargetIdx: []uint32{1},
 				}),
 			}, " "),
 			nil,
@@ -546,7 +515,7 @@ func TestPoolCommands(t *testing.T) {
 				printRequest(t, &control.PoolExcludeReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
-					Targetidx: []uint32{1, 2, 3},
+					TargetIdx: []uint32{1, 2, 3},
 				}),
 			}, " "),
 			nil,
@@ -558,7 +527,7 @@ func TestPoolCommands(t *testing.T) {
 				printRequest(t, &control.PoolExcludeReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
-					Targetidx: []uint32{},
+					TargetIdx: []uint32{},
 				}),
 			}, " "),
 			nil,
@@ -570,7 +539,7 @@ func TestPoolCommands(t *testing.T) {
 				printRequest(t, &control.PoolDrainReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
-					Targetidx: []uint32{1},
+					TargetIdx: []uint32{1},
 				}),
 			}, " "),
 			nil,
@@ -582,7 +551,7 @@ func TestPoolCommands(t *testing.T) {
 				printRequest(t, &control.PoolDrainReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
-					Targetidx: []uint32{1, 2, 3},
+					TargetIdx: []uint32{1, 2, 3},
 				}),
 			}, " "),
 			nil,
@@ -594,7 +563,7 @@ func TestPoolCommands(t *testing.T) {
 				printRequest(t, &control.PoolDrainReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
-					Targetidx: []uint32{},
+					TargetIdx: []uint32{},
 				}),
 			}, " "),
 			nil,
@@ -635,7 +604,7 @@ func TestPoolCommands(t *testing.T) {
 				printRequest(t, &control.PoolReintegrateReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
-					Targetidx: []uint32{1},
+					TargetIdx: []uint32{1},
 				}),
 			}, " "),
 			nil,
@@ -647,7 +616,7 @@ func TestPoolCommands(t *testing.T) {
 				printRequest(t, &control.PoolReintegrateReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
-					Targetidx: []uint32{1, 2, 3},
+					TargetIdx: []uint32{1, 2, 3},
 				}),
 			}, " "),
 			nil,
@@ -659,7 +628,7 @@ func TestPoolCommands(t *testing.T) {
 				printRequest(t, &control.PoolReintegrateReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
-					Targetidx: []uint32{},
+					TargetIdx: []uint32{},
 				}),
 			}, " "),
 			nil,

@@ -93,8 +93,7 @@ class SoakTestBase(TestWithServers):
         # Setup logging directories for soak logfiles
         # self.output dir is an avocado directory .../data/
         self.outputsoak_dir = self.outputdir + "/soak"
-        base_test_dir = os.getenv("DAOS_TEST_LOG_DIR", "/tmp/")
-        self.soak_dir = base_test_dir + "/soak"
+        self.soak_dir = self.test_env.log_dir + "/soak"
         self.soaktest_dir = self.soak_dir + "/pass" + str(self.loop)
         # Create the a shared directory for logs
         self.sharedsoak_dir = self.tmp + "/soak"
