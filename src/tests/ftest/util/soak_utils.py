@@ -5,6 +5,7 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
 
+import getpass
 import os
 import random
 import re
@@ -368,7 +369,8 @@ def wait_for_pool_rebuild(self, pool, name):
     """
     rebuild_status = False
     self.log.info("<<Wait for %s rebuild on %s>> at %s", name, pool.identifier, time.ctime())
-    self.dmg_command.server_set_logmasks("DEBUG", raise_exception=False)
+    # TODO - create yaml param to enable/disable rebuild debug logging
+    # self.dmg_command.server_set_logmasks("DEBUG", raise_exception=False)
     try:
         # # Wait for rebuild to start
         # pool.wait_for_rebuild_to_start()
@@ -381,7 +383,7 @@ def wait_for_pool_rebuild(self, pool, name):
     except TestFail as error1:
         self.log.error(
             f"<<<FAILED: {name} rebuild failed due to test issue: {error1}", exc_info=error1)
-    self.dmg_command.server_set_logmasks(raise_exception=False)
+    # self.dmg_command.server_set_logmasks(raise_exception=False)
     return rebuild_status
 
 
@@ -392,8 +394,9 @@ def job_cleanup(log, hosts):
         log (logger): logger for the messages produced by this method
         hosts (list): list of node to pass to job script
     """
+    current_user = getpass.getuser()
     for job in ["mpirun", "palsd", "dfuse"]:
-        cmd = [f"/usr/bin/bash -c 'for pid in $(pgrep {job})",
+        cmd = [f"/usr/bin/bash -c 'for pid in $(pgrep -u {current_user} {job})",
                "do kill -HUP $pid",
                "done'"]
         run_remote(
@@ -447,7 +450,7 @@ def launch_jobscript(
     error_log1 = error_log.replace("JOBID", str(job_id))
     joblog = job_log1.replace("RHOST", str(rhost))
     errorlog = error_log1.replace("RHOST", str(rhost))
-    cmd = ";".join([env, f"{script} {hosts} {job_id} > {joblog} 2> {errorlog}"])
+    cmd = ";".join([env, f"{script} {hosts} {job_id} {joblog} {errorlog}"])
     job_results = run_remote(
         log, rhost, cmd, verbose=False, timeout=timeout * 60, task_debug=False, stderr=False)
     if job_results:
@@ -1711,6 +1714,8 @@ def build_job_script(self, commands, job, nodesperjob, ppn):
             else:
                 script_file.write("HOSTLIST=$1 \n")
                 script_file.write("JOB_ID=$2 \n")
+                script_file.write("JOB_LOG=$3 \n")
+                script_file.write("JOB_ERROR_LOG=$4 \n")
                 script_file.write("echo \"JOB NODES: \" $HOSTLIST \n")
                 script_file.write("echo \"JOB ID: \" $JOB_ID \n")
                 script_file.write("if [ -z \"$VIRTUAL_ENV\" ]; then \n")
@@ -1718,6 +1723,8 @@ def build_job_script(self, commands, job, nodesperjob, ppn):
                 script_file.write("else \n")
                 script_file.write("    source $VIRTUAL_ENV/bin/activate \n")
                 script_file.write("fi \n")
+                script_file.write("exec 1> $JOB_LOG \n")
+                script_file.write("exec 2> $JOB_ERROR_LOG \n")
 
             for cmd in list(job_cmds):
                 script_file.write(cmd + "\n")
