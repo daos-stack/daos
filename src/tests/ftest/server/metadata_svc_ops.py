@@ -91,7 +91,7 @@ class DuplicateRpcDetection(TestWithServers):
         self.log_step("Create containers by ThreadManager on pool1.")
         container_manager = ThreadManager(
             self.metadata_workload_test, self.get_remaining_time() - 30)
-        for cont_num in range(1, number_thread+1):
+        for cont_num in range(1, number_thread + 1):
             container_manager.add(
                 pool=pool1, cont_num=cont_num, workload_cycles=w_cycles, test_loops=t_loops)
 
@@ -107,7 +107,7 @@ class DuplicateRpcDetection(TestWithServers):
         self.log_step("Create containers by ThreadManager on pool2.")
         container_manager = ThreadManager(
             self.metadata_workload_test, self.get_remaining_time() - 30)
-        for cont_num in range(1, number_thread+1):
+        for cont_num in range(1, number_thread + 1):
             container_manager.add(
                 pool=self.pool, cont_num=cont_num, workload_cycles=w_cycles, test_loops=t_loops)
 
