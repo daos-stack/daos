@@ -26,7 +26,7 @@ from environment_utils import TestEnvironment
 from exception_utils import CommandFailure
 from fault_config_utils import FaultInjection
 from general_utils import (DaosTestError, dict_to_str, dump_engines_stacks,
-                           get_avocado_config_value, get_default_config_file, get_file_listing,
+                           get_avocado_config_value, get_default_config_file,
                            nodeset_append_suffix, pcmd, run_command, set_avocado_config_value)
 from host_utils import HostException, HostInfo, HostRole, get_host_parameters, get_local_host
 from logger_utils import TestLogger
@@ -761,17 +761,15 @@ class TestWithServers(TestWithoutServers):
         # Display host information
         self.host_info.display(self.log)
 
+        # Copy the fault injection files to the hosts.
+        self.fault_injection.copy_fault_files(self.host_info.all_hosts)
+
         # List common test directory contents before running the test
         self.log.info("-" * 100)
-        self.log.debug("Common test directory (%s) contents:", self.test_dir)
-        hosts = self.hostlist_servers.copy()
-        if self.hostlist_clients:
-            hosts.add(self.hostlist_clients)
-        # Copy the fault injection files to the hosts.
-        self.fault_injection.copy_fault_files(hosts)
-        lines = get_file_listing(hosts, self.test_dir).stdout_text.splitlines()
-        for line in lines:
-            self.log.debug("  %s", line)
+        self.log.debug("Common test directory (%s) contents:", os.path.dirname(self.test_dir))
+        all_hosts = include_local_host(self.host_info.all_hosts)
+        run_remote(self.log, all_hosts, f"du -sh {os.path.dirname(self.test_dir)}/*")
+        self.log.info("-" * 100)
 
         if not self.start_servers_once or self.name.uid == 1:
             # Kill commands left running on the hosts (from a previous test)
