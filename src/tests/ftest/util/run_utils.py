@@ -4,6 +4,8 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
+import shlex
+import subprocess  # nosec
 import time
 from getpass import getuser
 from socket import gethostname
@@ -69,6 +71,71 @@ class ResultData():
             bool: if the command was successful
         """
         return self.returncode == 0
+
+
+class LocalTask():
+    """A mock ClusterShell.Task object for subprocess command output."""
+
+    def __init__(self, host, return_code, stdout, stderr, timed_out):
+        """Create a LocalTask.
+
+        Args:
+            host (NodeSet): host from which the command was executed
+            return_code (int): executed command's return code
+            stdout (str): executed command's stdout
+            stderr (str): executed command's stderr
+            timed_out (bool) did the executed command time out
+        """
+        self._return_codes = {return_code: [host]}
+        self._stdout = {stdout if stdout is not None else '': [host]}
+        self._stderr = {stderr if stderr is not None else '': [host]}
+        self._timeout_sources = []
+        if timed_out:
+            self._timeout_sources.append(host)
+
+    def iter_retcodes(self):
+        """Iterate over return codes of the local command result.
+
+        Yields:
+            tuple: return code (int), hosts (list)
+        """
+        for return_code, hosts in self._return_codes.items():
+            yield return_code, hosts
+
+    def iter_keys_timeout(self):
+        """Iterate over hosts that timed out.
+
+        Yields:
+            str: host where the command timed out
+        """
+        for host in self._timeout_sources:
+            yield host
+
+    def iter_buffers(self, match_keys=None):
+        """Iterate over the command stdout for each host.
+
+        Args:
+            match_keys (list, optional): only return output matching these hosts. Defaults to None.
+
+        Returns:
+            tuple: command stdout (str), hosts (list)
+        """
+        for output, hosts in self._stdout.items():
+            if match_keys is None or hosts[0] in match_keys:
+                yield output, hosts
+
+    def iter_errors(self, match_keys=None):
+        """Iterate over the command stderr for each host.
+
+        Args:
+            match_keys (list, optional): only return output matching these hosts. Defaults to None.
+
+        Returns:
+            tuple: command stderr (str), hosts (list)
+        """
+        for output, hosts in self._stderr.items():
+            if match_keys is None or hosts[0] in match_keys:
+                yield output, hosts
 
 
 class CommandResult():
@@ -305,7 +372,7 @@ def get_clush_command(hosts, args=None, command="", command_env=None, command_su
     return " ".join(cmd_list)
 
 
-def run_local(log, command, verbose=True, timeout=None, task_debug=False, stderr=False):
+def run_local(log, command, verbose=True, timeout=None, stderr=False, capture_output=True):
     """Run the command on the local host.
 
     Args:
@@ -314,22 +381,43 @@ def run_local(log, command, verbose=True, timeout=None, task_debug=False, stderr
         verbose (bool, optional): log the command output. Defaults to True.
         timeout (int, optional): number of seconds to wait for the command to complete.
             Defaults to None.
-        task_debug (bool, optional): whether to enable debug for the task object. Defaults to False.
         stderr (bool, optional): whether to enable stdout/stderr separation. Defaults to False.
+        capture_output (bool, optional): whether to include stdout/stderr in the CommandResult.
+            Defaults to True.
 
     Returns:
         CommandResult: groups of command results from the same hosts with the same return status
     """
     local_host = NodeSet(gethostname().split(".")[0])
-    task = task_self()
-    task.set_info('debug', task_debug)
-    task.set_default("stderr", stderr)
-    if verbose:
-        if timeout is None:
-            log.debug("Running on %s without a timeout: %s", local_host, command)
-        else:
-            log.debug("Running on %s with a %s second timeout: %s", local_host, timeout, command)
-    task.run(command=command, key=str(local_host), timeout=timeout)
+    kwargs = {
+        "encoding": "utf-8",
+        "shell": False,
+        "check": False,
+        "timeout": timeout,
+        "env": os.environ.copy()
+    }
+    if capture_output:
+        kwargs["stdout"] = subprocess.PIPE
+        kwargs["stderr"] = subprocess.PIPE if stderr else subprocess.STDOUT
+
+    if timeout and verbose:
+        log.debug("Running on %s with a %s timeout: %s", local_host, timeout, command)
+    elif verbose:
+        log.debug("Running on %s: %s", local_host, command)
+
+    try:
+        # pylint: disable=subprocess-run-check
+        process = subprocess.run(shlex.split(command), **kwargs)     # nosec
+        task = LocalTask(local_host, process.returncode, process.stdout, process.stderr, False)
+
+    except subprocess.TimeoutExpired as error:
+        # Raised if command times out
+        task = LocalTask(local_host, 124, error.stdout, error.stderr, True)
+
+    except Exception as error:  # pylint: disable=broad-except
+        # Catch all
+        task = LocalTask(local_host, 255, None, str(error), False)
+
     results = CommandResult(command, task)
     if verbose:
         results.log_output(log)
