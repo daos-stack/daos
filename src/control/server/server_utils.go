@@ -49,6 +49,9 @@ const (
 	// scanMinHugepageCount is the minimum number of hugepages to allocate in order to satisfy
 	// SPDK memory requirements when performing a NVMe device scan.
 	scanMinHugepageCount = 128
+
+	// maxLineChars is the maximum number of chars per line in a formatted byte string.
+	maxLineChars = 32
 )
 
 // netListenerFn is a type alias for the net.Listener function signature.
@@ -542,6 +545,19 @@ func checkEngineTmpfsMem(srv *server, ei *EngineInstance, mi *common.MemInfo) er
 	return nil
 }
 
+// createPublishFormatRequiredFunc returns onAwaitFormatFn which will publish an
+// event using the provided publish function to indicate that host is awaiting
+// storage format.
+func createPublishFormatRequiredFunc(publish func(*events.RASEvent), hostname string) onAwaitFormatFn {
+	return func(_ context.Context, engineIdx uint32, formatType string) error {
+		evt := events.NewEngineFormatRequiredEvent(hostname, engineIdx, formatType).
+			WithRank(uint32(ranklist.NilRank))
+		publish(evt)
+
+		return nil
+	}
+}
+
 func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarted *sync.WaitGroup) {
 	// Register callback to publish engine process exit events.
 	engine.OnInstanceExit(createPublishInstanceExitFunc(srv.pubSub.Publish, srv.hostname))
@@ -827,4 +843,25 @@ func checkFabricInterface(name string, lookup ifLookupFn) error {
 	}
 
 	return nil
+}
+
+// Convert bytestring to format accepted by lspci, 16 bytes per line.
+func formatBytestring(in string, sb *strings.Builder) {
+	if sb == nil {
+		return
+	}
+	for i, s := range in {
+		remainder := i % maxLineChars
+		if remainder == 0 {
+			sb.WriteString(fmt.Sprintf("%02x: ", i/2))
+		}
+		sb.WriteString(string(s))
+		if i == (len(in)-1) || remainder == maxLineChars-1 {
+			// Print newline after last char on line.
+			sb.WriteString("\n")
+		} else if (i % 2) != 0 {
+			// Print space after each double char group.
+			sb.WriteString(" ")
+		}
+	}
 }

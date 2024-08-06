@@ -368,6 +368,7 @@ bio_free_dev_info(struct bio_dev_info *dev_info)
 		D_FREE(dev_info->bdi_ctrlr->fw_rev);
 		D_FREE(dev_info->bdi_ctrlr->vendor_id);
 		D_FREE(dev_info->bdi_ctrlr->pci_type);
+		D_FREE(dev_info->bdi_ctrlr->pci_cfg);
 		D_FREE(dev_info->bdi_ctrlr->nss);
 		D_FREE(dev_info->bdi_ctrlr);
 	}
@@ -383,7 +384,8 @@ bio_free_dev_info(struct bio_dev_info *dev_info)
  *
  * \return		Zero on success, negative value on error
  */
-int bio_dev_list(struct bio_xs_context *ctxt, d_list_t *dev_list, int *dev_cnt);
+int
+bio_dev_list(struct bio_xs_context *ctxt, d_list_t *dev_list, int *dev_cnt);
 
 /**
  * Callbacks called on NVMe device state transition
