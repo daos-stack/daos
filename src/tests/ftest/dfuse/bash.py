@@ -8,7 +8,7 @@ import os
 from apricot import TestWithServers
 from dfuse_utils import get_dfuse, start_dfuse
 from host_utils import get_local_host
-from run_utils import run_remote
+from run_utils import run_local, run_remote
 
 
 class DfuseBashCmd(TestWithServers):
@@ -170,7 +170,15 @@ class DfuseBashCmd(TestWithServers):
         :avocado: tags=dfuse,dfs,ioil
         :avocado: tags=DfuseBashCmd,test_bashcmd_ioil
         """
-        self.run_bashcmd(il_lib="libioil.so")
+        self.log.info("local export -p")
+        run_local(self.log, "export -p")
+
+        self.log.info("remote detach=True export -p")
+        run_remote(self.log, get_local_host(), "export -p", detach=True)
+
+        self.log.info("remote detach=False export -p")
+        run_remote(self.log, get_local_host(), "export -p", detach=False)
+        # self.run_bashcmd(il_lib="libioil.so")
 
     def test_bashcmd_pil4dfs(self):
         """

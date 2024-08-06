@@ -80,7 +80,7 @@ class DaosCoreTestDfuse(TestWithServers):
         else:
             # Bypass, simply create a remote directory and use that.
             mount_dir = '/tmp/dfuse-test'
-            create_directory(self.hostlist_clients, mount_dir)
+            create_directory(self.log, self.hostlist_clients, mount_dir)
 
         cmocka_utils = CmockaUtils(
             self.hostlist_clients, "dfuse", self.outputdir, self.test_dir, self.log)
@@ -118,7 +118,7 @@ class DaosCoreTestDfuse(TestWithServers):
         else:
             # make D_IL_MOUNT_POINT different from mount_dir so it tests a non-DAOS filesystem
             dummy_dir = '/tmp/dummy'
-            create_directory(self.hostlist_clients, dummy_dir)
+            create_directory(self.log, self.hostlist_clients, dummy_dir)
             daos_test_env['D_IL_MOUNT_POINT'] = dummy_dir
         if cache_mode != 'writeback':
             command.append('--metadata')
