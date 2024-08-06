@@ -23,7 +23,7 @@ from avocado.core.version import MAJOR
 from avocado.utils import process
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
-from run_utils import get_clush_command, run_local, run_remote
+from run_utils import command_as_user, get_clush_command, run_local, run_remote
 from user_utils import get_chown_command, get_primary_group
 
 
@@ -1064,30 +1064,20 @@ def get_default_config_file(name):
     return os.path.join(os.sep, "etc", "daos", file_name)
 
 
-def get_file_listing(hosts, files):
+def get_file_listing(hosts, files, user):
     """Get the file listing from multiple hosts.
 
     Args:
         hosts (NodeSet): hosts with which to use the clush command
         files (object): list of multiple files to list or a single file as a str
+        user (str): user used to run the ls command
 
     Returns:
-        CmdResult: an avocado.utils.process CmdResult object containing the
-            result of the command execution.  A CmdResult object has the
-            following properties:
-                command         - command string
-                exit_status     - exit_status of the command
-                stdout          - the stdout
-                stderr          - the stderr
-                duration        - command execution time
-                interrupted     - whether the command completed within timeout
-                pid             - command's pid
-
+        CommandResult: groups of command results from the same hosts with the same return status
     """
-    ls_command = "/usr/bin/ls -la {}".format(convert_string(files, " "))
-    command = get_clush_command(hosts, args="-S -v", command=ls_command, command_sudo=True)
-    result = run_command(command, verbose=False, raise_exception=False)
-    return result
+    log = getLogger()
+    ls_command = command_as_user(f"/usr/bin/ls -la {convert_string(files, ' ')}", user)
+    return run_remote(log, hosts, ls_command, False)
 
 
 def get_subprocess_stdout(subprocess):
