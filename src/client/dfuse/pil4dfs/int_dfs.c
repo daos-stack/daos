@@ -399,6 +399,8 @@ static int (*next_unlinkat)(int dirfd, const char *path, int flags);
 
 static int (*next_fsync)(int fd);
 
+static int (*next_fdatasync)(int fd);
+
 static int (*next_truncate)(const char *path, off_t length);
 
 static int (*next_ftruncate)(int fd, off_t length);
@@ -5284,6 +5286,28 @@ fsync(int fd)
 	/* errno = ENOTSUP;
 	 * return (-1);
 	 */
+	return 0;
+}
+
+int
+fdatasync(int fd)
+{
+	int fd_directed;
+
+	if (next_fdatasync == NULL) {
+		next_fdatasync = dlsym(RTLD_NEXT, "fdatasync");
+		D_ASSERT(next_fdatasync != NULL);
+	}
+	if (!d_hook_enabled)
+		return next_fdatasync(fd);
+
+	fd_directed = d_get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
+		return next_fdatasync(fd);
+
+	if (fd < FD_DIR_BASE && d_compatible_mode)
+		return next_fdatasync(fd);
+
 	return 0;
 }
 

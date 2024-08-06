@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -938,6 +938,15 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 	D_ASSERT(uri != NULL || hg_addr != NULL);
 	D_ASSERT(ctx_idx >= 0 && ctx_idx < CRT_SRV_CONTEXT_NUM);
 
+	if (rank == CRT_NO_RANK) {
+		if (uri)
+			*uri = NULL;
+
+		if (hg_addr)
+			*hg_addr = NULL;
+		return;
+	}
+
 	provider = crt_gdata.cg_primary_prov;
 
 	/* TODO: Derive from context */
@@ -1590,6 +1599,11 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 
 	/* convert the requested rank to global rank */
 	g_rank = crt_grp_priv_get_primary_rank(grp_priv, ul_in->ul_rank);
+	if (g_rank == CRT_NO_RANK) {
+		D_INFO("%d rank is not known in group %s (size=%d)\n", ul_in->ul_rank,
+		       grp_priv->gp_pub.cg_grpid, grp_priv->gp_size);
+		D_GOTO(out, rc = -DER_OOG);
+	}
 
 	/* step 0, if I am the final target, reply with URI */
 	if (g_rank == grp_priv_primary->gp_self) {
@@ -1624,20 +1638,25 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 	 * step 2, if rank:tag is not found, lookup rank:tag=0
 	 */
 	ul_out->ul_tag = 0;
-	crt_grp_lc_lookup(grp_priv_primary, crt_ctx->cc_idx,
-			  g_rank, 0, &cached_uri, NULL);
+	crt_grp_lc_lookup(grp_priv_primary, crt_ctx->cc_idx, g_rank, 0, &cached_uri, NULL);
 	ul_out->ul_uri = cached_uri;
 	if (ul_out->ul_uri == NULL)
 		D_GOTO(out, rc = -DER_OOG);
 
 out:
+	ul_out->ul_rc = rc;
+
+	if (rc != DER_SUCCESS)
+		D_INFO("uri lookup of (rank=%d:tag=%d) group=%s failed; rc=%d\n", ul_in->ul_rank,
+		       ul_in->ul_tag, grp_priv->gp_pub.cg_grpid, rc);
+
 	if (should_decref)
 		crt_grp_priv_decref(grp_priv);
-	ul_out->ul_rc = rc;
+
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
-		D_ERROR("crt_reply_send failed, rc: %d, opc: %#x.\n",
-			rc, rpc_req->cr_opc);
+		D_ERROR("crt_reply_send failed, rc: %d\n", rc);
+
 	D_FREE(tmp_uri);
 }
 
