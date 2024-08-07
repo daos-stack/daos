@@ -160,7 +160,7 @@ struct  _Mgmt__PoolCreateReq
   /*
    * formatted group e.g. "builders@"
    */
-  char *usergroup;
+  char *user_group;
   /*
    * Access Control Entries in short string format
    */
@@ -180,39 +180,39 @@ struct  _Mgmt__PoolCreateReq
   /*
    * Fault domain tree, minimal format
    */
-  size_t n_faultdomains;
-  uint32_t *faultdomains;
+  size_t n_fault_domains;
+  uint32_t *fault_domains;
   /*
    * desired number of pool service replicas
    */
-  uint32_t numsvcreps;
+  uint32_t num_svc_reps;
   /*
-   * Total pool size in bytes (auto config)
+   * Total pool size in bytes
    */
-  uint64_t totalbytes;
+  uint64_t total_bytes;
   /*
-   * Ratio of storage tiers expressed as % of totalbytes (auto config)
+   * Ratio of storage tiers expressed as % of totalbytes
    */
-  size_t n_tierratio;
-  double *tierratio;
+  size_t n_tier_ratio;
+  double *tier_ratio;
   /*
-   * Number of target ranks to use (auto config)
+   * Number of target ranks to use
    */
-  uint32_t numranks;
+  uint32_t num_ranks;
   /*
-   * target ranks (manual config)
+   * target ranks
    */
   size_t n_ranks;
   uint32_t *ranks;
   /*
-   * Size in bytes of storage tiers (manual config)
+   * Size in bytes of storage tier
    */
-  size_t n_tierbytes;
-  uint64_t *tierbytes;
+  size_t n_tier_bytes;
+  uint64_t *tier_bytes;
   /*
-   * Fraction (<=1) of meta-blob-sz to use as mem-file-sz (md-on-ssd mode)
+   * Fraction of meta-blob-sz to use as mem-file-sz
    */
-  float                mem_ratio;
+  float mem_ratio;
 };
 #define MGMT__POOL_CREATE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_req__descriptor) \
@@ -251,7 +251,7 @@ struct  _Mgmt__PoolCreateResp
   /*
    * per-rank accumulated value of memory file sizes
    */
-  uint64_t         mem_file_bytes;
+  uint64_t mem_file_bytes;
 };
 #define MGMT__POOL_CREATE_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_resp__descriptor) \
@@ -390,8 +390,8 @@ struct  _Mgmt__PoolExcludeReq
   /*
    * target ranks
    */
-  size_t n_targetidx;
-  uint32_t *targetidx;
+  size_t n_target_idx;
+  uint32_t *target_idx;
   /*
    * List of pool service ranks
    */
@@ -440,8 +440,8 @@ struct  _Mgmt__PoolDrainReq
   /*
    * rank targets
    */
-  size_t n_targetidx;
-  uint32_t *targetidx;
+  size_t n_target_idx;
+  uint32_t *target_idx;
   /*
    * List of pool service ranks
    */
@@ -496,21 +496,17 @@ struct  _Mgmt__PoolExtendReq
   /*
    * Size in bytes of storage tiers
    */
-  size_t n_tierbytes;
-  uint64_t *tierbytes;
+  size_t n_tier_bytes;
+  uint64_t *tier_bytes;
   /*
    * fault domain tree, minimal format
    */
-  size_t n_faultdomains;
-  uint32_t *faultdomains;
-  /*
-   * Size in bytes of metadata blob on SSD
-   */
-  uint64_t meta_blob_bytes;
+  size_t n_fault_domains;
+  uint32_t *fault_domains;
 };
 #define MGMT__POOL_EXTEND_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_extend_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0,NULL, 0,NULL, 0 }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0,NULL, 0,NULL }
 
 
 /*
@@ -559,8 +555,8 @@ struct  _Mgmt__PoolReintegrateReq
   /*
    * target ranks
    */
-  size_t n_targetidx;
-  uint32_t *targetidx;
+  size_t n_target_idx;
+  uint32_t *target_idx;
   /*
    * List of pool service ranks
    */
@@ -569,16 +565,12 @@ struct  _Mgmt__PoolReintegrateReq
   /*
    * Size in bytes of storage tiers
    */
-  size_t n_tierbytes;
-  uint64_t *tierbytes;
-  /*
-   * Size in bytes of metadata blob on SSD
-   */
-  uint32_t meta_blob_bytes;
+  size_t n_tier_bytes;
+  uint64_t *tier_bytes;
 };
 #define MGMT__POOL_REINTEGRATE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_reintegrate_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0,NULL, 0,NULL, 0,NULL, 0 }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0,NULL, 0,NULL, 0,NULL }
 
 
 /*

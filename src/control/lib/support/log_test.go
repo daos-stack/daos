@@ -7,6 +7,7 @@
 package support
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -364,6 +365,57 @@ func TestSupport_rsyncLog(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			rsLog.TargetFolder = tc.targetFolder
 			rsLog.AdminNode = tc.AdminNode
+			gotErr := rsyncLog(log, rsLog)
+			test.CmpErr(t, tc.expErr, gotErr)
+		})
+	}
+}
+
+func TestSupport_customCopy(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+	targetTestDir, targetCleanup := test.CreateTestDir(t)
+	defer targetCleanup()
+
+	rsLog := CollectLogsParams{}
+
+	// Get the current PATH environment variable.
+	oldPathEnv := os.Getenv("PATH")
+	defer os.Setenv("PATH", oldPathEnv)
+	if err := os.Setenv("PATH", fmt.Sprintf("%s:%s", oldPathEnv, targetTestDir)); err != nil {
+		t.Fatal(err)
+	}
+
+	binaryPath := filepath.Join(targetTestDir, "daos_alt_rsync")
+	if err := os.WriteFile(binaryPath, []byte("#!/bin/bash\necho \"Hello, world!\"\n"), 0755); err != nil {
+		t.Fatalf("Failed to create custom binary: %v", err)
+	}
+
+	validConfigPath := filepath.Join(targetTestDir, "daos_server_configset.yaml")
+	if err := os.WriteFile(validConfigPath, []byte("support_config:\n  file_transfer_exec: "+binaryPath+"\n"), 0755); err != nil {
+		t.Fatalf("Failed to create valid config file: %v", err)
+	}
+
+	invalidConfigPath := filepath.Join(targetTestDir, "daos_server_bad.yaml")
+	if err := os.WriteFile(invalidConfigPath, []byte("support_config:\n  file_transfer_exec: foo\n"), 0755); err != nil {
+		t.Fatalf("Failed to create invalid config file: %v", err)
+	}
+
+	for name, tc := range map[string]struct {
+		configPath string
+		expErr     error
+	}{
+		"valid path": {
+			configPath: validConfigPath,
+			expErr:     nil,
+		},
+		"non existent binary": {
+			configPath: invalidConfigPath,
+			expErr:     errors.New("Error running command"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			rsLog.Config = tc.configPath
 			gotErr := rsyncLog(log, rsLog)
 			test.CmpErr(t, tc.expErr, gotErr)
 		})

@@ -599,7 +599,7 @@ func TestPoolCommands(t *testing.T) {
 				printRequest(t, &control.PoolExcludeReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
-					Targetidx: []uint32{1},
+					TargetIdx: []uint32{1},
 				}),
 			}, " "),
 			nil,
@@ -611,7 +611,7 @@ func TestPoolCommands(t *testing.T) {
 				printRequest(t, &control.PoolExcludeReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
-					Targetidx: []uint32{1, 2, 3},
+					TargetIdx: []uint32{1, 2, 3},
 				}),
 			}, " "),
 			nil,
@@ -623,7 +623,7 @@ func TestPoolCommands(t *testing.T) {
 				printRequest(t, &control.PoolExcludeReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
-					Targetidx: []uint32{},
+					TargetIdx: []uint32{},
 				}),
 			}, " "),
 			nil,
@@ -635,7 +635,7 @@ func TestPoolCommands(t *testing.T) {
 				printRequest(t, &control.PoolDrainReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
-					Targetidx: []uint32{1},
+					TargetIdx: []uint32{1},
 				}),
 			}, " "),
 			nil,
@@ -647,7 +647,7 @@ func TestPoolCommands(t *testing.T) {
 				printRequest(t, &control.PoolDrainReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
-					Targetidx: []uint32{1, 2, 3},
+					TargetIdx: []uint32{1, 2, 3},
 				}),
 			}, " "),
 			nil,
@@ -659,7 +659,7 @@ func TestPoolCommands(t *testing.T) {
 				printRequest(t, &control.PoolDrainReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
-					Targetidx: []uint32{},
+					TargetIdx: []uint32{},
 				}),
 			}, " "),
 			nil,
@@ -700,7 +700,7 @@ func TestPoolCommands(t *testing.T) {
 				printRequest(t, &control.PoolReintegrateReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
-					Targetidx: []uint32{1},
+					TargetIdx: []uint32{1},
 				}),
 			}, " "),
 			nil,
@@ -712,7 +712,7 @@ func TestPoolCommands(t *testing.T) {
 				printRequest(t, &control.PoolReintegrateReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
-					Targetidx: []uint32{1, 2, 3},
+					TargetIdx: []uint32{1, 2, 3},
 				}),
 			}, " "),
 			nil,
@@ -724,7 +724,7 @@ func TestPoolCommands(t *testing.T) {
 				printRequest(t, &control.PoolReintegrateReq{
 					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
-					Targetidx: []uint32{},
+					TargetIdx: []uint32{},
 				}),
 			}, " "),
 			nil,
@@ -1021,6 +1021,41 @@ func TestPoolCommands(t *testing.T) {
 				}),
 			}, " "),
 			nil,
+		},
+		{
+			"Query pool targets no arguments",
+			"pool query-targets mypool",
+			"",
+			errMissingFlag,
+		},
+		{
+			"Query pool targets no rank argument",
+			"pool query-targets mypool --target-idx=1",
+			"",
+			errMissingFlag,
+		},
+		{
+			"Query pool targets specific indices",
+			"pool query-targets mypool --rank=1 --target-idx=1,3",
+			strings.Join([]string{
+				printRequest(t, &control.PoolQueryTargetReq{
+					ID:      "mypool",
+					Rank:    1,
+					Targets: []uint32{1, 3},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query pool targets all indices; pool query fails",
+			"pool query-targets mypool --rank=1",
+			strings.Join([]string{
+				printRequest(t, &control.PoolQueryReq{
+					ID:        "mypool",
+					QueryMask: daos.DefaultPoolQueryMask,
+				}),
+			}, " "),
+			errors.New("pool query"),
 		},
 		{
 			"Query pool with UUID",

@@ -342,9 +342,6 @@ func (cmd *PoolCreateCmd) storageManual(req *control.PoolCreateReq) error {
 	}
 
 	scmBytes := cmd.ScmSize.bytes
-	if scmBytes == 0 {
-		return errors.New("either --size, --meta-size or --scm-size must be set non-zero")
-	}
 	nvmeBytes := cmd.NVMeSize.bytes
 	req.TierBytes = []uint64{scmBytes, nvmeBytes}
 
@@ -561,19 +558,19 @@ func (cmd *PoolEvictCmd) Execute(args []string) error {
 type PoolExcludeCmd struct {
 	poolCmd
 	Rank      uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be excluded"`
-	Targetidx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be excluded from the rank"`
+	TargetIdx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be excluded from the rank"`
 }
 
 // Execute is run when PoolExcludeCmd subcommand is activated
 func (cmd *PoolExcludeCmd) Execute(args []string) error {
 	msg := "succeeded"
 
-	var idxlist []uint32
-	if err := common.ParseNumberList(cmd.Targetidx, &idxlist); err != nil {
+	var idxList []uint32
+	if err := common.ParseNumberList(cmd.TargetIdx, &idxList); err != nil {
 		return errors.WithMessage(err, "parsing target list")
 	}
 
-	req := &control.PoolExcludeReq{ID: cmd.PoolID().String(), Rank: ranklist.Rank(cmd.Rank), Targetidx: idxlist}
+	req := &control.PoolExcludeReq{ID: cmd.PoolID().String(), Rank: ranklist.Rank(cmd.Rank), TargetIdx: idxList}
 
 	err := control.PoolExclude(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -589,20 +586,20 @@ func (cmd *PoolExcludeCmd) Execute(args []string) error {
 type PoolDrainCmd struct {
 	poolCmd
 	Rank      uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be drained"`
-	Targetidx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be drained on the rank"`
+	TargetIdx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be drained on the rank"`
 }
 
 // Execute is run when PoolDrainCmd subcommand is activated
 func (cmd *PoolDrainCmd) Execute(args []string) error {
 	msg := "succeeded"
 
-	var idxlist []uint32
-	if err := common.ParseNumberList(cmd.Targetidx, &idxlist); err != nil {
+	var idxList []uint32
+	if err := common.ParseNumberList(cmd.TargetIdx, &idxList); err != nil {
 		err = errors.WithMessage(err, "parsing target list")
 		return err
 	}
 
-	req := &control.PoolDrainReq{ID: cmd.PoolID().String(), Rank: ranklist.Rank(cmd.Rank), Targetidx: idxlist}
+	req := &control.PoolDrainReq{ID: cmd.PoolID().String(), Rank: ranklist.Rank(cmd.Rank), TargetIdx: idxList}
 
 	err := control.PoolDrain(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -643,15 +640,15 @@ func (cmd *PoolExtendCmd) Execute(args []string) error {
 type PoolReintegrateCmd struct {
 	poolCmd
 	Rank      uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be reintegrated"`
-	Targetidx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be reintegrated into the rank"`
+	TargetIdx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be reintegrated into the rank"`
 }
 
 // Execute is run when PoolReintegrateCmd subcommand is activated
 func (cmd *PoolReintegrateCmd) Execute(args []string) error {
 	msg := "succeeded"
 
-	var idxlist []uint32
-	if err := common.ParseNumberList(cmd.Targetidx, &idxlist); err != nil {
+	var idxList []uint32
+	if err := common.ParseNumberList(cmd.TargetIdx, &idxList); err != nil {
 		err = errors.WithMessage(err, "parsing target list")
 		return err
 	}
@@ -659,7 +656,7 @@ func (cmd *PoolReintegrateCmd) Execute(args []string) error {
 	req := &control.PoolReintegrateReq{
 		ID:        cmd.PoolID().String(),
 		Rank:      ranklist.Rank(cmd.Rank),
-		Targetidx: idxlist,
+		TargetIdx: idxList,
 	}
 
 	err := control.PoolReintegrate(cmd.MustLogCtx(), cmd.ctlInvoker, req)
@@ -722,15 +719,33 @@ type PoolQueryTargetsCmd struct {
 	poolCmd
 
 	Rank    uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be queried"`
-	Targets string `long:"target-idx" required:"1" description:"Comma-separated list of target idx(s) to be queried"`
+	Targets string `long:"target-idx" description:"Comma-separated list of target idx(s) to be queried"`
 }
 
 // Execute is run when PoolQueryTargetsCmd subcommand is activated
 func (cmd *PoolQueryTargetsCmd) Execute(args []string) error {
+	ctx := cmd.MustLogCtx()
 
 	var tgtsList []uint32
-	if err := common.ParseNumberList(cmd.Targets, &tgtsList); err != nil {
-		return errors.WithMessage(err, "parsing target list")
+	if len(cmd.Targets) > 0 {
+		if err := common.ParseNumberList(cmd.Targets, &tgtsList); err != nil {
+			return errors.WithMessage(err, "parsing target list")
+		}
+	} else {
+		pi, err := control.PoolQuery(ctx, cmd.ctlInvoker, &control.PoolQueryReq{
+			ID:        cmd.PoolID().String(),
+			QueryMask: daos.DefaultPoolQueryMask,
+		})
+		if err != nil || (pi.TotalTargets == 0 || pi.TotalEngines == 0) {
+			if err != nil {
+				return errors.Wrap(err, "pool query failed")
+			}
+			return errors.New("failed to derive target count from pool query")
+		}
+		tgtCount := pi.TotalTargets / pi.TotalEngines
+		for i := uint32(0); i < tgtCount; i++ {
+			tgtsList = append(tgtsList, i)
+		}
 	}
 
 	req := &control.PoolQueryTargetReq{
@@ -739,7 +754,7 @@ func (cmd *PoolQueryTargetsCmd) Execute(args []string) error {
 		Targets: tgtsList,
 	}
 
-	resp, err := control.PoolQueryTargets(cmd.MustLogCtx(), cmd.ctlInvoker, req)
+	resp, err := control.PoolQueryTargets(ctx, cmd.ctlInvoker, req)
 
 	if cmd.JSONOutputEnabled() {
 		return cmd.OutputJSON(resp, err)

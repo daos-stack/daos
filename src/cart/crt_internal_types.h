@@ -34,10 +34,12 @@ struct crt_grp_gdata;
 struct crt_na_config {
 	int32_t		 noc_port;
 	int		 noc_iface_total;
+	int               noc_domain_total;
 	char		*noc_interface;
 	char		*noc_domain;
 	char		*noc_auth_key;
 	char		**noc_iface_str; /* Array of interfaces */
+	char            **noc_domain_str; /* Array of domains */
 };
 
 struct crt_prov_gdata {
@@ -355,6 +357,10 @@ struct crt_quotas {
 	bool			enabled[CRT_QUOTA_COUNT];
 	pthread_mutex_t		mutex;
 	d_list_t		rpc_waitq;
+	/** Stats gauge of wait queue depth */
+	struct d_tm_node_t     *rpc_waitq_depth;
+	/** Counter for exceeded quota */
+	struct d_tm_node_t     *rpc_quota_exceeded;
 };
 
 /* crt_context */

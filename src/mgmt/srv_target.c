@@ -1398,18 +1398,6 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 		}
 	}
 
-	/*
-	 * If there is a local PS replica, its RDB file will be deleted later
-	 * together with the other pool files by the tgt_destroy call below; if
-	 * there is no local PS replica, rc will be zero.
-	 */
-	rc = ds_pool_svc_stop(td_in->td_pool_uuid);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to stop pool service replica (if any): "DF_RC"\n",
-			DP_UUID(td_in->td_pool_uuid), DP_RC(rc));
-		goto out;
-	}
-
 	rc = ds_pool_stop(td_in->td_pool_uuid);
 	if (rc != 0)
 		goto out;

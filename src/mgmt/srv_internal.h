@@ -50,6 +50,8 @@ void ds_mgmt_tgt_params_set_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_profile_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_pool_get_svcranks_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_pool_find_hdlr(crt_rpc_t *rpc);
+void
+     ds_mgmt_pool_list_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_mark_hdlr(crt_rpc_t *rpc);
 void dss_bind_to_xstream_cpuset(int tgt_id);
 
@@ -145,7 +147,8 @@ struct mgmt_bio_health {
 };
 
 int ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid);
-int ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp);
+int
+ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp);
 void
      ds_mgmt_smd_free_dev(Ctl__SmdDevice *dev);
 int ds_mgmt_smd_list_pools(Ctl__SmdPoolResp *resp);
