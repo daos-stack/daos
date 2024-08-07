@@ -316,7 +316,7 @@ class SoakTestBase(TestWithServers):
         self.log.info(f"Submitting {len(jobid_list)} jobs at {time.ctime()}")
         jobs_not_done = jobid_list
         while True:
-            if time.time() > self.end_time or len(jobs_not_done) == 0:
+            if time.time() > self.end_time or len(jobid_list) == 0:
                 break
             jobs = []
             job_results = {}
@@ -363,7 +363,6 @@ class SoakTestBase(TestWithServers):
             while not job_queue.empty():
                 job_results = job_queue.get()
                 # Results to return in queue
-                jobs_not_done.remove(job_results["handle"])
                 node_list.update(job_results["host_list"])
                 debug_logging(self.log, self.enable_debug_msg, "DBG: Updating soak results")
                 self.soak_results[job_results["handle"]] = job_results["state"]
