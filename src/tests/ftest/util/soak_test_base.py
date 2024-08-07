@@ -26,7 +26,7 @@ from soak_utils import (SoakTestError, add_pools, build_job_script, cleanup_dfus
                         create_app_cmdline, create_dm_cmdline, create_fio_cmdline,
                         create_ior_cmdline, create_macsio_cmdline, create_mdtest_cmdline,
                         create_racer_cmdline, ddhhmmss_format, debug_logging, get_daos_server_logs,
-                        get_harassers, get_id, get_job_logs, get_journalctl_logs,
+                        get_harassers, get_id, get_job_logs, get_journalctl_logs, job_cleanup,
                         launch_exclude_reintegrate, launch_extend, launch_jobscript, launch_reboot,
                         launch_server_stop_start, launch_snapshot, launch_vmd_identify_check,
                         reserved_file_copy, run_event_check, run_metrics_check, run_monitor_check)
@@ -146,7 +146,8 @@ class SoakTestBase(TestWithServers):
         if self.all_failed_jobs:
             errors.append("SOAK FAILED: The following jobs failed {} ".format(
                 " ,".join(str(j_id) for j_id in self.all_failed_jobs)))
-
+        # cleanup any remaining jobs
+        job_cleanup(self.log, self.hostlist_clients)
         # verify reserved container data
         if self.resv_cont:
             final_resv_file = os.path.join(self.test_dir, "final", "resv_file")
@@ -313,8 +314,9 @@ class SoakTestBase(TestWithServers):
         for job_dict in self.joblist:
             jobid_list.append(job_dict["jobid"])
         self.log.info(f"Submitting {len(jobid_list)} jobs at {time.ctime()}")
+        jobs_not_done = jobid_list
         while True:
-            if time.time() > self.end_time or len(jobid_list) == 0:
+            if time.time() > self.end_time or len(jobs_not_done) == 0:
                 break
             jobs = []
             job_results = {}
@@ -343,7 +345,8 @@ class SoakTestBase(TestWithServers):
                                   env, script, log, error_log, timeout, self)
                         name = f"SOAK JOB {job_id}"
 
-                        jobs.append(threading.Thread(target=method, args=params, name=name))
+                        jobs.append(threading.Thread(
+                            target=method, args=params, name=name, daemon=True))
                         jobid_list.remove(job_id)
                         node_list = node_list[node_count:]
                         debug_logging(
@@ -353,13 +356,14 @@ class SoakTestBase(TestWithServers):
             # run job scripts on all available nodes
             for job in jobs:
                 job.start()
-            debug_logging(self.log, self.enable_debug_msg, "DBG: all jobs started")
-            for job in jobs:
-                job.join()
-            debug_logging(self.log, self.enable_debug_msg, "DBG: all jobs joined")
+            # debug_logging(self.log, self.enable_debug_msg, "DBG: all jobs started")
+            # for job in jobs:
+            #     job.join()
+            # debug_logging(self.log, self.enable_debug_msg, "DBG: all jobs joined")
             while not job_queue.empty():
                 job_results = job_queue.get()
                 # Results to return in queue
+                jobs_not_done.remove(job_results["handle"])
                 node_list.update(job_results["host_list"])
                 debug_logging(self.log, self.enable_debug_msg, "DBG: Updating soak results")
                 self.soak_results[job_results["handle"]] = job_results["state"]
@@ -474,7 +478,7 @@ class SoakTestBase(TestWithServers):
             # self.schedule_jobs()
             method = self.schedule_jobs
             name = "Job Scheduler"
-            scheduler = threading.Thread(target=method, name=name)
+            scheduler = threading.Thread(target=method, name=name, daemon=True)
             # scheduler = multiprocessing.Process(target=method, name=name)
             scheduler.start()
 
@@ -658,7 +662,7 @@ class SoakTestBase(TestWithServers):
         resv_bytes = self.params.get("resv_bytes", test_param + "*", 500000000)
         ignore_soak_errors = self.params.get("ignore_soak_errors", test_param + "*", False)
         self.enable_il = self.params.get("enable_intercept_lib", test_param + "*", False)
-        self.sudo_cmd = "sudo" if enable_sudo else ""
+        self.sudo_cmd = "sudo -n" if enable_sudo else ""
         self.enable_remote_logging = self.params.get(
             "enable_remote_logging", os.path.join(test_param, "*"), False)
         self.enable_scrubber = self.params.get(
