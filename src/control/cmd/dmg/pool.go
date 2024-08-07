@@ -339,6 +339,10 @@ func (cmd *PoolCreateCmd) storageManual(req *control.PoolCreateReq) error {
 		return cmd.storageManualMdOnSsd(req)
 	case cmd.MemRatio.IsSet():
 		return errIncompatFlags("mem-ratio", "scm-size", "nvme-size")
+	case cmd.NVMeSize.IsSet() && !cmd.ScmSize.IsSet():
+		return errors.New("--nvme-size cannot be set without --scm-size")
+	case !cmd.ScmSize.IsSet():
+		return errors.New("at least one size parameter must be set")
 	}
 
 	scmBytes := cmd.ScmSize.bytes

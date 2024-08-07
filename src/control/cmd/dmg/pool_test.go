@@ -233,7 +233,7 @@ func TestPoolCommands(t *testing.T) {
 			"Create pool with missing size",
 			"pool create label",
 			"",
-			errors.New("must be set"),
+			errors.New("at least one size parameter must be set"),
 		},
 		{
 			"Create pool with missing label",
@@ -380,7 +380,7 @@ func TestPoolCommands(t *testing.T) {
 			"Create pool with incompatible arguments (-n without -s)",
 			fmt.Sprintf("pool create label --nvme-size %s", testSizeStr),
 			"",
-			errors.New("must be set"),
+			errors.New("cannot be set without --scm-size"),
 		},
 		{
 			"Create pool with minimal arguments",

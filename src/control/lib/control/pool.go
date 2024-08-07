@@ -210,19 +210,12 @@ type (
 		ACL        *AccessControlList   `json:"-"`
 		NumSvcReps uint32               `json:"num_svc_reps"`
 		Properties []*daos.PoolProperty `json:"-"`
-		// Auto-config params.
-		TotalBytes uint64
-		TierRatio  []float64
-		NumRanks   uint32
-		// Manual params.
-		Ranks      []ranklist.Rank
-		TierBytes  []uint64        // Per-rank values. Metadata/Data sizes in MD-on-SSD mode.
-		TotalBytes uint64          `json:"total_bytes"` // Auto-sizing param
-		TierRatio  []float64       `json:"tier_ratio"`  // Auto-sizing param
-		NumRanks   uint32          `json:"num_ranks"`   // Auto-sizing param
-		Ranks      []ranklist.Rank `json:"ranks"`       // Manual-sizing param
-		TierBytes  []uint64        `json:"tier_bytes"`  // Per-rank values
-		MemRatio   float32         `json:"mem_ratio"`   // mem_file_size:meta_blob_size
+		TotalBytes uint64               `json:"total_bytes"` // Auto-sizing param
+		TierRatio  []float64            `json:"tier_ratio"`  // Auto-sizing param
+		NumRanks   uint32               `json:"num_ranks"`   // Auto-sizing param
+		Ranks      []ranklist.Rank      `json:"ranks"`       // Manual-sizing param
+		TierBytes  []uint64             `json:"tier_bytes"`  // Per-rank values
+		MemRatio   float32              `json:"mem_ratio"`   // mem_file_size:meta_blob_size
 	}
 
 	// PoolCreateResp contains the response from a pool create request.

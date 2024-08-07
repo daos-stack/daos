@@ -118,7 +118,9 @@ func PrintPoolCreateResponse(pcr *control.PoolCreateResp, out io.Writer, opts ..
 	fmtArgs = append(fmtArgs, txtfmt.TableRow{"Service Leader": fmt.Sprintf("%d", pcr.Leader)})
 	fmtArgs = append(fmtArgs, txtfmt.TableRow{"Service Ranks": pretty.PrintRanks(pcr.SvcReps)})
 	fmtArgs = append(fmtArgs, txtfmt.TableRow{"Storage Ranks": pretty.PrintRanks(pcr.TgtRanks)})
-	fmtArgs = append(fmtArgs, txtfmt.TableRow{"Total Size": humanize.Bytes(totalSize * numRanks)})
+	fmtArgs = append(fmtArgs, txtfmt.TableRow{
+		"Total Size": humanize.Bytes(totalSize * uint64(numRanks)),
+	})
 
 	mdOnSsdEnabled := pcr.MemFileBytes > 0
 
