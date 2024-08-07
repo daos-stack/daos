@@ -98,8 +98,7 @@ class LocalTask():
         Yields:
             tuple: return code (int), hosts (list)
         """
-        for return_code, hosts in self._return_codes.items():
-            yield return_code, hosts
+        yield from self._return_codes.items()
 
     def iter_keys_timeout(self):
         """Iterate over hosts that timed out.
@@ -107,8 +106,7 @@ class LocalTask():
         Yields:
             str: host where the command timed out
         """
-        for host in self._timeout_sources:
-            yield host
+        yield from self._timeout_sources
 
     def iter_buffers(self, match_keys=None):
         """Iterate over the command stdout for each host.
@@ -418,10 +416,11 @@ def run_local(log, command, verbose=True, timeout=None, stderr=False, capture_ou
         task = LocalTask(local_host, 255, None, str(error), False)
 
     results = CommandResult(command, task)
-    if verbose:
+    if capture_output and verbose:
+        # Log any captured command output when requested
         results.log_output(log)
-    else:
-        # Always log any failed commands
+    elif capture_output:
+        # Always log any failed commands whose output was captured
         for data in results.output:
             if not data.passed:
                 log_result_data(log, data)
