@@ -82,13 +82,14 @@ ior:
   client_processes:
     ppn: 104
   dfs_destroy: False
-  flags: "-v -D 300 -W -w -k"
+  # 8/7: Removed -D 300
+  flags: -v -W -w -k
   test_file: daos:testFile
   repetitions: 1
   signature: 123
   transfer_size: '1Mib'
   # 8/1: 2Gib worked.
-  block_size: '4Gib'
+  block_size: '2Gib'
 dfuse:
   disable_caching: True
 
