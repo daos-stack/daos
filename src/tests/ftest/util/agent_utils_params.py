@@ -69,7 +69,8 @@ class DaosAgentYamlParameters(YamlParameters):
         #        Enable client telemetry for all client processes.
         #   - telemetry_retain: <str>, e.g. 5m
         #        Time to retain per-client telemetry data.
-        self.runtime_dir = BasicParameter(None, "/var/run/daos_agent")
+        self.runtime_dir = BasicParameter(
+            None, os.environ.get("DAOS_AGENT_DRPC_DIR", "/var/run/daos_agent"))
         self.log_file = LogParameter(log_dir, None, "daos_agent.log")
         self.control_log_mask = BasicParameter(None, "debug")
         self.exclude_fabric_ifaces = BasicParameter(None)

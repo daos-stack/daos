@@ -94,6 +94,7 @@ struct crt_gdata {
 	/** Hints to mercury for request post init (ignored for clients) */
 	uint32_t                 cg_post_init;
 	uint32_t                 cg_post_incr;
+	unsigned int             cg_mrecv_buf;
 
 	/** global timeout value (second) for all RPCs */
 	uint32_t		cg_timeout;

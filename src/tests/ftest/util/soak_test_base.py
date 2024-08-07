@@ -89,7 +89,7 @@ class SoakTestBase(TestWithServers):
         # Setup logging directories for soak logfiles
         # self.output dir is an avocado directory .../data/
         self.outputsoak_dir = self.outputdir + "/soak"
-        self.soak_dir = self.base_test_dir + "/soak"
+        self.soak_dir = self.test_env.log_dir + "/soak"
         self.soaktest_dir = self.soak_dir + "/pass" + str(self.loop)
         # Create the a shared directory for logs
         self.sharedsoak_dir = self.tmp + "/soak"
@@ -572,7 +572,7 @@ class SoakTestBase(TestWithServers):
         resv_bytes = self.params.get("resv_bytes", test_param + "*", 500000000)
         ignore_soak_errors = self.params.get("ignore_soak_errors", test_param + "*", False)
         self.enable_il = self.params.get("enable_intercept_lib", test_param + "*", False)
-        self.sudo_cmd = "sudo" if enable_sudo else ""
+        self.sudo_cmd = "sudo -n" if enable_sudo else ""
         self.enable_remote_logging = self.params.get(
             "enable_remote_logging", os.path.join(test_param, "*"), False)
         self.enable_scrubber = self.params.get(

@@ -43,7 +43,7 @@ class IorTestBase(TestWithServers):
         super().setUp()
 
         # Get the parameters for IOR
-        self.ior_cmd = IorCommand()
+        self.ior_cmd = IorCommand(self.test_env.log_dir)
         self.ior_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/ior/client_processes/*')
         self.ppn = self.params.get("ppn", '/run/ior/client_processes/*')
