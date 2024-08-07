@@ -1776,9 +1776,9 @@ setup_exclude_drpc_call(Drpc__Call *call, char *uuid, uint32_t rank)
 	Mgmt__PoolExcludeReq req = MGMT__POOL_EXCLUDE_REQ__INIT;
 
 	req.id = uuid;
-	req.n_targetidx = 3;
+	req.n_target_idx = 3;
 	req.rank = rank;
-	req.targetidx = TEST_IDXS;
+	req.target_idx   = TEST_IDXS;
 	pack_pool_exclude_req(call, &req);
 }
 
@@ -1881,9 +1881,9 @@ setup_drain_drpc_call(Drpc__Call *call, char *uuid, uint32_t rank)
 	Mgmt__PoolDrainReq req = MGMT__POOL_DRAIN_REQ__INIT;
 
 	req.id = uuid;
-	req.n_targetidx = 3;
+	req.n_target_idx = 3;
 	req.rank = rank;
-	req.targetidx = TEST_IDXS;
+	req.target_idx   = TEST_IDXS;
 	pack_pool_drain_req(call, &req);
 }
 
@@ -1984,12 +1984,12 @@ static void
 setup_extend_drpc_call(Drpc__Call *call, char *uuid)
 {
 	Mgmt__PoolExtendReq req = MGMT__POOL_EXTEND_REQ__INIT;
-	uint64_t tierbytes = 1000000000;
+	uint64_t            tier_bytes = 1000000000;
 
 	req.id = uuid;
 	req.n_ranks = 3;
-	req.n_tierbytes = 1;
-	req.tierbytes = &tierbytes;
+	req.n_tier_bytes = 1;
+	req.tier_bytes   = &tier_bytes;
 	req.ranks = TEST_RANKS;
 	pack_pool_extend_req(call, &req);
 }

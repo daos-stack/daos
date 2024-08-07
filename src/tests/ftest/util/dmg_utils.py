@@ -669,8 +669,8 @@ class DmgCommand(DmgCommandBase):
         #             "max": 3999993856,
         #             "mean": 3999993856
         #         },
-        #         "enabled_ranks": None,
-        #         "disabled_ranks": None
+        #         "enabled_ranks": [0,1,3],
+        #         "disabled_ranks": [2]
         #     },
         #     "error": null,
         #     "status": 0

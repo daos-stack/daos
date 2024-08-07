@@ -416,6 +416,9 @@ crt_iface_name2idx(const char *iface_name, int *idx)
 	for (i = 0; i < num_ifaces; i++) {
 		name = crt_provider_iface_str_get(true, crt_gdata.cg_primary_prov, i);
 
+		if (!name)
+			return -DER_INVAL;
+
 		if (strcmp(name, iface_name) == 0) {
 			*idx = i;
 			return DER_SUCCESS;
