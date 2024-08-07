@@ -1,3 +1,9 @@
+daos (2.6.0-4) unstable; urgency=medium
+  [ Jerome Soumagne ]
+  * Bump mercury version to 2.4.0rc4
+
+ -- Jerome Soumagne <jerome.soumagne@intel.com>  Mon, 05 Aug 2024 12:00:00 -0500
+
 daos (2.6.0-3) unstable; urgency=medium
   [ Phillip Henderson ]
   * Third release candidate for 2.6.0
