@@ -4,7 +4,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
-import shlex
 import subprocess  # nosec
 import time
 from getpass import getuser
@@ -391,7 +390,7 @@ def run_local(log, command, verbose=True, timeout=None, stderr=False, capture_ou
     local_host = NodeSet(gethostname().split(".")[0])
     kwargs = {
         "encoding": "utf-8",
-        "shell": False,
+        "shell": True,
         "check": False,
         "timeout": timeout,
         "env": os.environ.copy()
@@ -407,7 +406,7 @@ def run_local(log, command, verbose=True, timeout=None, stderr=False, capture_ou
 
     try:
         # pylint: disable=subprocess-run-check
-        process = subprocess.run(shlex.split(command), **kwargs)     # nosec
+        process = subprocess.run(command, **kwargs)     # nosec
         task = LocalTask(local_host, process.returncode, process.stdout, process.stderr, False)
 
     except subprocess.TimeoutExpired as error:
