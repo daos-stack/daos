@@ -42,6 +42,17 @@ struct crt_na_config {
 	char            **noc_domain_str; /* Array of domains */
 };
 
+#define CRT_TRAFFIC_CLASSES                                                                        \
+	X(CRT_TC_UNSPEC, "unspec")           /* Leave it upon plugin to choose */                  \
+	X(CRT_TC_BEST_EFFORT, "best_effort") /* Best effort */                                     \
+	X(CRT_TC_LOW_LATENCY, "low_latency") /* Low latency */                                     \
+	X(CRT_TC_BULK_DATA, "bulk_data")     /* Bulk data */                                       \
+	X(CRT_TC_UNKNOWN, "unknown")         /* Unknown */
+
+#define X(a, b) a,
+enum crt_traffic_class { CRT_TRAFFIC_CLASSES };
+#undef X
+
 struct crt_prov_gdata {
 	/** NA plugin type */
 	int			cpg_provider;
@@ -104,6 +115,9 @@ struct crt_gdata {
 
 	/** global swim index for all servers */
 	int32_t			cg_swim_crt_idx;
+
+	/** traffic class used by SWIM */
+	enum crt_traffic_class   cg_swim_tc;
 
 	/** credits limitation for #in-flight RPCs per target EP CTX */
 	uint32_t		cg_credit_ep_ctx;
@@ -220,6 +234,7 @@ struct crt_event_cb_priv {
 	ENV(SWIM_PING_TIMEOUT)                                                                     \
 	ENV(SWIM_PROTOCOL_PERIOD_LEN)                                                              \
 	ENV(SWIM_SUSPECT_TIMEOUT)                                                                  \
+	ENV_STR(SWIM_TRAFFIC_CLASS)                                                                \
 	ENV_STR(UCX_IB_FORK_INIT)
 
 /* uint env */
