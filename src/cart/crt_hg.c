@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -488,14 +488,6 @@ crt_provider_ctx0_port_get(bool primary, crt_provider_t provider)
 	return prov_data->cpg_na_config.noc_port;
 }
 
-static char*
-crt_provider_domain_get(bool primary, crt_provider_t provider)
-{
-	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(primary, provider);
-
-	return prov_data->cpg_na_config.noc_domain;
-}
-
 static struct crt_na_dict *
 crt_get_na_dict_entry(crt_provider_t provider)
 {
@@ -518,6 +510,19 @@ crt_provider_name_get(crt_provider_t provider)
 	return entry ? entry->nad_str : NULL;
 }
 
+char *
+crt_provider_domain_str_get(bool primary, crt_provider_t provider, int idx)
+{
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(primary, provider);
+
+	/* If the domain was not specified, return NULL */
+	if (prov_data->cpg_na_config.noc_domain == NULL)
+		return NULL;
+
+	D_ASSERTF(idx < prov_data->cpg_na_config.noc_domain_total, "Bad idx=%d\n", idx);
+	return prov_data->cpg_na_config.noc_domain_str[idx];
+}
+
 char*
 crt_provider_iface_str_get(bool primary, crt_provider_t provider, int iface_idx)
 {
@@ -527,16 +532,8 @@ crt_provider_iface_str_get(bool primary, crt_provider_t provider, int iface_idx)
 	if (prov_data->cpg_na_config.noc_interface == NULL)
 		return NULL;
 
-	/*
- 	 * CXI provider requires domain names instead of interfaces.
- 	 * Returning NULL here will cause crt_get_info_string() to use domain names instead
-	 * */
-	if (provider == CRT_PROV_OFI_CXI)
-		return NULL;
-
-	D_ASSERTF(iface_idx < prov_data->cpg_na_config.noc_iface_total,
-		  "Bad iface_idx=%d\n", iface_idx);
-
+	D_ASSERTF(iface_idx < prov_data->cpg_na_config.noc_iface_total, "Bad iface_idx=%d\n",
+		  iface_idx);
 	return prov_data->cpg_na_config.noc_iface_str[iface_idx];
 }
 
@@ -712,12 +709,18 @@ crt_get_info_string(bool primary, crt_provider_t provider, int iface_idx,
 	int	 start_port;
 	char	*domain_str;
 	char	*iface_str;
+	bool     no_iface, no_domain;
 	int	rc = 0;
 
 	provider_str = crt_provider_name_get(provider);
 	start_port = crt_provider_ctx0_port_get(primary, provider);
-	domain_str = crt_provider_domain_get(primary, provider);
-	iface_str = crt_provider_iface_str_get(primary, provider, iface_idx);
+	domain_str   = crt_provider_domain_str_get(primary, provider, iface_idx);
+
+	/* CXI provider uses domain names for info string */
+	if (provider == CRT_PROV_OFI_CXI)
+		iface_str = NULL;
+	else
+		iface_str = crt_provider_iface_str_get(primary, provider, iface_idx);
 
 	if (provider == CRT_PROV_SM) {
 		D_ASPRINTF(*string, "%s://", provider_str);
@@ -731,42 +734,45 @@ crt_get_info_string(bool primary, crt_provider_t provider, int iface_idx,
 		D_GOTO(out, rc);
 	}
 
+	/* treat not set and set to empty as the same */
+	no_iface  = (iface_str == NULL || *iface_str == '\0') ? true : false;
+	no_domain = (domain_str == NULL || *domain_str == '\0') ? true : false;
+
 	/* TODO: for now pass same info for all providers including CXI */
 	if (crt_provider_is_contig_ep(provider) && start_port != -1) {
-
-		if (iface_str == NULL) {
-			if (domain_str)
-				D_ASPRINTF(*string, "%s://%s:%d",
-					   provider_str, domain_str, start_port + ctx_idx);
+		if (no_iface) {
+			if (no_domain)
+				D_ASPRINTF(*string, "%s://:%d", provider_str, start_port + ctx_idx);
 			else
-				D_ASPRINTF(*string, "%s://:%d",
-					   provider_str, start_port + ctx_idx);
-		} else {
-			if (domain_str)
-				D_ASPRINTF(*string, "%s://%s/%s:%d",
-					   provider_str, domain_str, iface_str,
+				D_ASPRINTF(*string, "%s://%s:%d", provider_str, domain_str,
 					   start_port + ctx_idx);
-			else
+		} else {
+			if (no_domain)
 				D_ASPRINTF(*string, "%s://%s:%d",
 					   provider_str, iface_str,
 					   start_port + ctx_idx);
+			else
+				D_ASPRINTF(*string, "%s://%s/%s:%d", provider_str, domain_str,
+					   iface_str, start_port + ctx_idx);
 		}
 	} else {
-		if (iface_str == NULL) {
-			if (domain_str)
-				D_ASPRINTF(*string, "%s://%s",
-					   provider_str, domain_str);
-			else
+		if (no_iface) {
+			if (no_domain)
 				D_ASPRINTF(*string, "%s://", provider_str);
-		} else {
-			if (domain_str)
-				D_ASPRINTF(*string, "%s://%s/%s",
-					   provider_str, domain_str, iface_str);
 			else
+				D_ASPRINTF(*string, "%s://%s", provider_str, domain_str);
+		} else {
+			if (no_domain)
 				D_ASPRINTF(*string, "%s://%s", provider_str, iface_str);
+			else
+				D_ASPRINTF(*string, "%s://%s/%s", provider_str, domain_str,
+					   iface_str);
 		}
 	}
 
+	D_DEBUG(DB_ALL, "iface_idx:%d context:%d domain_str=%s iface_str=%s info_str=%s\n",
+		iface_idx, ctx_idx, domain_str ? domain_str : "none",
+		iface_str ? iface_str : "none", *string);
 out:
 	if (rc == DER_SUCCESS && *string == NULL)
 		return -DER_NOMEM;
