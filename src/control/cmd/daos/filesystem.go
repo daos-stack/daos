@@ -285,6 +285,8 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 
 	var diroclassName [16]C.char
 	var fileoclassName [16]C.char
+	var oid C.daos_obj_id_t = attrs.doi_oid
+	var oidStr string = fmt.Sprintf("%d.%d", oid.hi, oid.lo)
 	if C.mode_is_dir(cmode) {
 		C.daos_oclass_id2name(attrs.doi_dir_oclass_id, &diroclassName[0])
 		C.daos_oclass_id2name(attrs.doi_file_oclass_id, &fileoclassName[0])
@@ -294,6 +296,7 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 		if C.mode_is_dir(cmode) {
 			jsonAttrs := struct {
 				ObjAttr struct {
+					OID      string `json:"oid"`
 					ObjClass string `json:"oclass"`
 				} `json:"object"`
 				DirAttr struct {
@@ -303,8 +306,10 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 				} `json:"directory"`
 			}{
 				ObjAttr: struct {
+					OID      string `json:"oid"`
 					ObjClass string `json:"oclass"`
 				}{
+					OID:      oidStr,
 					ObjClass: C.GoString(&oclassName[0]),
 				},
 				DirAttr: struct {
@@ -320,9 +325,11 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 			return cmd.OutputJSON(jsonAttrs, nil)
 		} else {
 			jsonAttrs := &struct {
+				OID       string `json:"oid"`
 				ObjClass  string `json:"oclass"`
 				ChunkSize uint64 `json:"chunk_size"`
 			}{
+				OID:       oidStr,
 				ObjClass:  C.GoString(&oclassName[0]),
 				ChunkSize: uint64(attrs.doi_chunk_size),
 			}
@@ -330,6 +337,7 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 		}
 	}
 
+	cmd.Infof("OID = %s", oidStr)
 	cmd.Infof("Object Class = %s", C.GoString(&oclassName[0]))
 	if C.mode_is_dir(cmode) {
 		cmd.Infof("Directory Creation Object Class = %s", C.GoString(&diroclassName[0]))

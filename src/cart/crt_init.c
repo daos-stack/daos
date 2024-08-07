@@ -1188,19 +1188,9 @@ crt_na_config_init(bool primary, crt_provider_t provider,
 	}
 
 	if (interface) {
-		if (provider == CRT_PROV_OFI_CXI) {
-			D_INFO("Interface '%s' ignored for CXI. Using domain '%s' instead\n",
-			       interface, domain);
-
-			/* Note: crt_provider_iface_str_get() returns interface name  */
-			D_STRNDUP(na_cfg->noc_interface, domain, 64);
-			if (!na_cfg->noc_interface)
-				D_GOTO(out, rc = -DER_NOMEM);
-		} else {
-			D_STRNDUP(na_cfg->noc_interface, interface, 64);
-			if (!na_cfg->noc_interface)
-				D_GOTO(out, rc = -DER_NOMEM);
-		}
+		D_STRNDUP(na_cfg->noc_interface, interface, 64);
+		if (!na_cfg->noc_interface)
+			D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	if (domain) {
@@ -1238,10 +1228,9 @@ crt_na_config_init(bool primary, crt_provider_t provider,
 
 		/* store each interface name in the na_cfg->noc_iface_str[] array */
 		save_ptr = 0;
+		idx      = 0;
 		token = strtok_r(na_cfg->noc_interface, ",", &save_ptr);
 		while (token != NULL) {
-			D_DEBUG(DB_ALL, "Interface[%d] = %s\n", idx, token);
-
 			na_cfg->noc_iface_str[idx] = token;
 			token = strtok_r(NULL, ",", &save_ptr);
 			idx++;
@@ -1249,9 +1238,43 @@ crt_na_config_init(bool primary, crt_provider_t provider,
 	} else {
 		count = 0;
 	}
-
 	na_cfg->noc_iface_total = count;
-	D_DEBUG(DB_ALL, "Total %d interfaces parsed from %s\n", count, interface);
+
+	count = 0;
+	if (na_cfg->noc_domain) {
+		/* count number of ','-separated domains */
+		count    = 1;
+		save_ptr = na_cfg->noc_domain;
+
+		while (*save_ptr != '\0') {
+			if (*save_ptr == ',')
+				count++;
+			save_ptr++;
+		}
+
+		D_ALLOC_ARRAY(na_cfg->noc_domain_str, count);
+		if (!na_cfg->noc_domain_str)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		/* store each domain name in the na_cfg->noc_domain_str[] array */
+		save_ptr = 0;
+		idx      = 0;
+		token    = strtok_r(na_cfg->noc_domain, ",", &save_ptr);
+		while (token != NULL) {
+			na_cfg->noc_domain_str[idx] = token;
+			token                       = strtok_r(NULL, ",", &save_ptr);
+			idx++;
+		}
+	} else {
+		count = 0;
+	}
+	na_cfg->noc_domain_total = count;
+
+	if (na_cfg->noc_domain_total > 0 && na_cfg->noc_domain_total != na_cfg->noc_iface_total) {
+		D_ERROR("Mismatched number of domains (%d) and interfaces (%d) specified\n",
+			na_cfg->noc_domain_total, na_cfg->noc_iface_total);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
 
 	if (crt_is_service() && port_str != NULL && strlen(port_str) > 0) {
 		if (!is_integer_str(port_str)) {
@@ -1291,6 +1314,7 @@ out:
 		D_FREE(na_cfg->noc_domain);
 		D_FREE(na_cfg->noc_auth_key);
 		D_FREE(na_cfg->noc_iface_str);
+		D_FREE(na_cfg->noc_domain_str);
 	}
 	return rc;
 }
@@ -1304,6 +1328,8 @@ void crt_na_config_fini(bool primary, crt_provider_t provider)
 	D_FREE(na_cfg->noc_domain);
 	D_FREE(na_cfg->noc_auth_key);
 	D_FREE(na_cfg->noc_iface_str);
+	D_FREE(na_cfg->noc_domain_str);
 	na_cfg->noc_port = 0;
 	na_cfg->noc_iface_total = 0;
+	na_cfg->noc_domain_total = 0;
 }

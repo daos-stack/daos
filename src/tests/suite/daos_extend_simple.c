@@ -327,10 +327,11 @@ extend_cb_internal(void *arg)
 	int			total_entries = 0;
 	uint32_t		num_ents = 10;
 	daos_anchor_t		anchor = { 0 };
+	const char		*pre_op = (cb_arg->kill ? "kill" : "extend");
 	int			rc;
 	int			i;
 
-	print_message("sleep 10 seconds then kill/extend %u and start op %d\n",
+	print_message("sleep 10 seconds then %s %u and start op %d\n", pre_op,
 		      cb_arg->rank, opc);
 	sleep(10);
 
@@ -339,6 +340,8 @@ extend_cb_internal(void *arg)
 				 test_arg->pool.alive_svc, cb_arg->rank);
 	} else {
 		/* it should fail with -DER_BUSY */
+		print_message("extend pool " DF_UUID " rank %u\n",
+			      DP_UUID(test_arg->pool.pool_uuid), cb_arg->rank);
 		rc = dmg_pool_extend(test_arg->dmg_config, test_arg->pool.pool_uuid,
 				     test_arg->group, &cb_arg->rank, 1);
 		assert_int_equal(rc, 0);
@@ -346,7 +349,7 @@ extend_cb_internal(void *arg)
 	/* Kill another rank during extend */
 	switch(opc) {
 	case EXTEND_PUNCH:
-		print_message("punch objects during extend\n");
+		print_message("punch objects during %s\n", pre_op);
 		for (i = 0; i < EXTEND_OBJ_NR; i++) {
 			char filename[32];
 
@@ -356,7 +359,7 @@ extend_cb_internal(void *arg)
 		}
 		break;
 	case EXTEND_STAT:
-		print_message("stat objects during extend\n");
+		print_message("stat objects during %s\n", pre_op);
 		for (i = 0; i < EXTEND_OBJ_NR; i++) {
 			char		filename[32];
 			struct stat	stbuf;
@@ -367,7 +370,7 @@ extend_cb_internal(void *arg)
 		}
 		break;
 	case EXTEND_ENUMERATE:
-		print_message("enumerate objects during extend\n");
+		print_message("enumerate objects during %s\n", pre_op);
 		while (!daos_anchor_is_eof(&anchor)) {
 			num_ents = 10;
 			rc = dfs_readdir(dfs_mt, dir, &anchor, &num_ents, ents);
@@ -377,11 +380,11 @@ extend_cb_internal(void *arg)
 		assert_int_equal(total_entries, 1000);
 		break;
 	case EXTEND_FETCH:
-		print_message("fetch objects during extend\n");
+		print_message("fetch objects during %s\n", pre_op);
 		extend_read_check(dfs_mt, dir);
 		break;
 	case EXTEND_UPDATE:
-		print_message("update objects during extend\n");
+		print_message("update objects during %s\n", pre_op);
 		extend_write(dfs_mt, dir);
 		break;
 	default:
@@ -403,6 +406,7 @@ dfs_extend_internal(void **state, int opc, test_rebuild_cb_t extend_cb, bool kil
 	dfs_obj_t	*dir;
 	uuid_t		co_uuid;
 	int		i;
+	d_rank_t	extend_rank = 3;
 	char		str[37];
 	daos_obj_id_t	oids[EXTEND_OBJ_NR];
 	struct extend_cb_arg cb_arg;
@@ -454,29 +458,38 @@ dfs_extend_internal(void **state, int opc, test_rebuild_cb_t extend_cb, bool kil
 	arg->rebuild_cb = extend_cb;
 	arg->rebuild_cb_arg = &cb_arg;
 
-	/* HOLD rebuild ULT */
+	/* HOLD rebuild ULT. FIXME: maybe change to use test_set_engine_fail_loc()? */
+	print_message("inject DAOS_REBUILD_TGT_SCAN_HANG fault on engines\n");
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 			      DAOS_REBUILD_TGT_SCAN_HANG | DAOS_FAIL_ALWAYS, 0, NULL);
 
 	arg->no_rebuild=1;
-	extend_single_pool_rank(arg, 3);
+	extend_single_pool_rank(arg, extend_rank);
 	arg->no_rebuild=0;
 
-	print_message("sleep 30 secs for rank %u exclude or reintegrate.\n", cb_arg.rank);
+	print_message("sleep 30 secs for rank %u %s\n", cb_arg.rank,
+		      cb_arg.kill ? "exclude" : "extend");
 	sleep(30);
+	print_message("wait for rebuild due to rank %u extend and rank %u %s\n", extend_rank,
+		      cb_arg.rank, cb_arg.kill ? "exclude" : "extend");
 	test_rebuild_wait(&arg, 1);
 
-	if (opc == EXTEND_UPDATE)
+	if (opc == EXTEND_UPDATE) {
+		print_message("First extend update read check\n");
 		extend_read_check(dfs_mt, dir);
+	}
 
-	print_message("reintegrate rank %u then check\n", cb_arg.rank);
 	arg->rebuild_cb = NULL;
 	arg->rebuild_cb_arg = NULL;
-	if (kill)
-		reintegrate_single_pool_rank(arg, 2, true);
+	if (kill) {
+		print_message("reintegrate rank %u\n", cb_arg.rank);
+		reintegrate_single_pool_rank(arg, cb_arg.rank, true);
+	}
 
-	if (opc == EXTEND_UPDATE)
+	if (opc == EXTEND_UPDATE) {
+		print_message("Second extend update read check\n");
 		extend_read_check(dfs_mt, dir);
+	}
 
 	rc = dfs_release(dir);
 	assert_int_equal(rc, 0);
@@ -494,6 +507,8 @@ dfs_extend_internal(void **state, int opc, test_rebuild_cb_t extend_cb, bool kil
 void
 dfs_extend_punch_kill(void **state)
 {
+	FAULT_INJECTION_REQUIRED();
+
 	dfs_extend_internal(state, EXTEND_PUNCH, extend_cb_internal, true);
 }
 
@@ -508,6 +523,8 @@ dfs_extend_punch_extend(void **state)
 void
 dfs_extend_stat_kill(void **state)
 {
+	FAULT_INJECTION_REQUIRED();
+
 	dfs_extend_internal(state, EXTEND_STAT, extend_cb_internal, true);
 }
 
@@ -522,6 +539,8 @@ dfs_extend_stat_extend(void **state)
 void
 dfs_extend_enumerate_kill(void **state)
 {
+	FAULT_INJECTION_REQUIRED();
+
 	dfs_extend_internal(state, EXTEND_ENUMERATE, extend_cb_internal, true);
 }
 
@@ -536,6 +555,8 @@ dfs_extend_enumerate_extend(void **state)
 void
 dfs_extend_fetch_kill(void **state)
 {
+	FAULT_INJECTION_REQUIRED();
+
 	dfs_extend_internal(state, EXTEND_FETCH, extend_cb_internal, true);
 }
 
@@ -550,6 +571,8 @@ dfs_extend_fetch_extend(void **state)
 void
 dfs_extend_write_kill(void **state)
 {
+	FAULT_INJECTION_REQUIRED();
+
 	dfs_extend_internal(state, EXTEND_UPDATE, extend_cb_internal, true);
 }
 
