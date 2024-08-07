@@ -45,7 +45,7 @@ class IorInterceptMultiClient(IorInterceptTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=daosio,dfuse,ioil,ior,ior_intercept,pil4dfs
+        :avocado: tags=daosio,dfuse,pil4dfs,ior,ior_intercept
         :avocado: tags=IorInterceptMultiClient,test_ior_intercept_libpil4dfs
         """
         self.run_il_perf_check('libpil4dfs.so')
