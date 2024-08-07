@@ -304,6 +304,7 @@ class SoakTestBase(TestWithServers):
         debug_logging(self.log, self.enable_debug_msg, "DBG: schedule_jobs ENTERED ")
         job_queue = multiprocessing.Queue()
         jobid_list = []
+        jobs_not_done = []
         node_list = self.hostlist_clients
         lib_path = os.getenv("LD_LIBRARY_PATH")
         path = os.getenv("PATH")
@@ -313,9 +314,10 @@ class SoakTestBase(TestWithServers):
                         f"export VIRTUAL_ENV={v_env}"])
         for job_dict in self.joblist:
             jobid_list.append(job_dict["jobid"])
+            jobs_not_done.append(job_dict["jobid"])
         self.log.info(f"Submitting {len(jobid_list)} jobs at {time.ctime()}")
         while True:
-            if time.time() > self.end_time or len(jobid_list) == 0:
+            if time.time() > self.end_time or len(jobs_not_done) == 0:
                 break
             jobs = []
             job_results = {}
@@ -356,15 +358,17 @@ class SoakTestBase(TestWithServers):
             for job in jobs:
                 job.start()
             debug_logging(self.log, self.enable_debug_msg, "DBG: all jobs started")
-            for job in jobs:
-                job.join()
-            debug_logging(self.log, self.enable_debug_msg, "DBG: all jobs joined")
+            # for job in jobs:
+            #     job.join()
+            # debug_logging(self.log, self.enable_debug_msg, "DBG: all jobs joined")
             while not job_queue.empty():
                 job_results = job_queue.get()
                 # Results to return in queue
                 node_list.update(job_results["host_list"])
                 debug_logging(self.log, self.enable_debug_msg, "DBG: Updating soak results")
                 self.soak_results[job_results["handle"]] = job_results["state"]
+                job_done_id = job_results["handle"]
+                jobs_not_done.remove(job_done_id)
                 debug_logging(
                     self.log,
                     self.enable_debug_msg,
