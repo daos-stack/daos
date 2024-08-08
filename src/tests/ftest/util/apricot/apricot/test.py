@@ -25,13 +25,13 @@ from dmg_utils import get_dmg_command
 from environment_utils import TestEnvironment
 from exception_utils import CommandFailure
 from fault_config_utils import FaultInjection
-from general_utils import (DaosTestError, dict_to_str, dump_engines_stacks,
-                           get_avocado_config_value, get_default_config_file, get_file_listing,
-                           nodeset_append_suffix, pcmd, run_command, set_avocado_config_value)
+from general_utils import (dict_to_str, dump_engines_stacks, get_avocado_config_value,
+                           get_default_config_file, get_file_listing, nodeset_append_suffix,
+                           set_avocado_config_value)
 from host_utils import HostException, HostInfo, HostRole, get_host_parameters, get_local_host
 from logger_utils import TestLogger
 from pydaos.raw import DaosApiError, DaosContext, DaosLog
-from run_utils import run_remote, stop_processes
+from run_utils import run_local, run_remote, stop_processes
 from server_utils import DaosServerManager
 from slurm_utils import SlurmFailed, get_partition_hosts, get_reservation_hosts
 from test_utils_container import CONT_NAMESPACE, add_container
@@ -388,10 +388,8 @@ class Test(avocadoTest):
         """
         errors = []
         self.log.info("Removing temporary test files in %s", self.test_dir)
-        try:
-            run_command("rm -fr {}".format(self.test_dir))
-        except DaosTestError as error:
-            errors.append("Error removing temporary test files: {}".format(error))
+        if not run_local(self.log, f"rm -fr {self.test_dir}").passed:
+            errors.append(f"Error removing temporary test files in {self.test_dir}")
         return errors
 
     def _cleanup(self):
@@ -785,12 +783,11 @@ class TestWithServers(TestWithoutServers):
             # Ensure write permissions for the daos command log files when
             # using systemctl
             if "Systemctl" in (self.agent_manager_class, self.server_manager_class):
-                log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
                 self.log.info("-" * 100)
                 self.log.info(
                     "Updating file permissions for %s for use with systemctl",
-                    log_dir)
-                pcmd(hosts, "chmod a+rw {}".format(log_dir))
+                    self.test_env.log_dir)
+                run_remote(self.log, hosts, f"chmod a+rw {self.test_env.log_dir}")
 
         # Start the servers
         force_agent_start = False
