@@ -1140,7 +1140,7 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_
 	}
 
 	/* Path must be a file with a certain size when size argument is 0 */
-	if (!scm_sz && access(path, F_OK) == -1) {
+	if (!scm_sz && access(path, F_OK | R_OK | W_OK) == -1) {
 		D_ERROR("File not accessible (%d) when size is 0\n", errno);
 		return daos_errno2der(errno);
 	}
@@ -1191,7 +1191,8 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_
 	dbtree_close(hdl);
 
 	uuid_copy(pool_df->pd_id, uuid);
-	pool_df->pd_scm_sz	= scm_sz;
+	/* Use meta-blob size as scm if present */
+	pool_df->pd_scm_sz      = (meta_sz) ? meta_sz : scm_sz;
 	pool_df->pd_nvme_sz	= nvme_sz;
 	pool_df->pd_magic	= POOL_DF_MAGIC;
 	if (DAOS_FAIL_CHECK(FLC_POOL_DF_VER))

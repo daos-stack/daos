@@ -41,6 +41,12 @@ const (
 	DefaultPoolTimeout = 5 * time.Minute
 )
 
+// Pool create error conditions.
+var (
+	errPoolCreateFirstTierZeroBytes = errors.New("can't create pool with 0 byte first tier")
+	errPoolCreateFirstTierRatioZero = errors.New("can't create pool with 0.0 first tier ratio")
+)
+
 // checkUUID is a helper function for validating that the supplied
 // UUID string parses as a valid UUID.
 func checkUUID(uuidStr string) error {
@@ -209,16 +215,17 @@ type (
 		NumRanks   uint32               `json:"num_ranks"`   // Auto-sizing param
 		Ranks      []ranklist.Rank      `json:"ranks"`       // Manual-sizing param
 		TierBytes  []uint64             `json:"tier_bytes"`  // Per-rank values
-		MetaBytes  uint64               `json:"meta_blob_bytes"`
+		MemRatio   float32              `json:"mem_ratio"`   // mem_file_size:meta_blob_size
 	}
 
 	// PoolCreateResp contains the response from a pool create request.
 	PoolCreateResp struct {
-		UUID      string   `json:"uuid"`
-		Leader    uint32   `json:"svc_ldr"`
-		SvcReps   []uint32 `json:"svc_reps"`
-		TgtRanks  []uint32 `json:"tgt_ranks"`
-		TierBytes []uint64 `json:"tier_bytes"` // Per-rank storage tier sizes
+		UUID         string   `json:"uuid"`
+		Leader       uint32   `json:"svc_ldr"`
+		SvcReps      []uint32 `json:"svc_reps"`
+		TgtRanks     []uint32 `json:"tgt_ranks"`
+		TierBytes    []uint64 `json:"tier_bytes"`     // Per-rank storage tier sizes.
+		MemFileBytes uint64   `json:"mem_file_bytes"` // MD-on-SSD mode only.
 	}
 )
 
@@ -234,14 +241,14 @@ func poolCreateReqChkSizes(log debugLogger, getMaxPoolSz maxPoolSizeGetter, req 
 	switch {
 	case hasTierBytes && hasNoTierRatio && !hasTotBytes:
 		if req.TierBytes[0] == 0 {
-			return errors.New("can't create pool with 0 SCM")
+			return errPoolCreateFirstTierZeroBytes
 		}
 		// Storage sizes have been written to TierBytes in request (manual-size).
 		log.Debugf("manual-size pool create mode: %+v", req)
 
 	case hasNoTierBytes && hasTierRatio && hasTotBytes:
 		if req.TierRatio[0] == 0 {
-			return errors.New("can't create pool with 0.0 SCM ratio")
+			return errPoolCreateFirstTierRatioZero
 		}
 		// Storage tier ratios and total pool size given, distribution of space across
 		// ranks to be calculated on the server side (auto-total-size).
@@ -249,7 +256,7 @@ func poolCreateReqChkSizes(log debugLogger, getMaxPoolSz maxPoolSizeGetter, req 
 
 	case hasNoTierBytes && hasTierRatio && !hasTotBytes:
 		if req.TierRatio[0] == 0 {
-			return errors.New("can't create pool with 0.0 SCM ratio")
+			return errPoolCreateFirstTierRatioZero
 		}
 		availRatio := req.TierRatio[0]
 		if req.TierRatio[1] != availRatio {
@@ -585,14 +592,14 @@ func convertPoolTargetInfo(pbInfo *mgmtpb.PoolQueryTargetInfo) (*daos.PoolQueryT
 	pqti.State = daos.PoolQueryTargetState(pbInfo.State)
 	pqti.Space = []*daos.StorageUsageStats{
 		{
-			Total:     uint64(pbInfo.Space[daos.StorageMediaTypeScm].Total),
-			Free:      uint64(pbInfo.Space[daos.StorageMediaTypeScm].Free),
-			MediaType: daos.StorageMediaTypeScm,
+			Total:     uint64(pbInfo.Space[0].Total),
+			Free:      uint64(pbInfo.Space[0].Free),
+			MediaType: daos.StorageMediaType(pbInfo.Space[0].MediaType),
 		},
 		{
-			Total:     uint64(pbInfo.Space[daos.StorageMediaTypeNvme].Total),
-			Free:      uint64(pbInfo.Space[daos.StorageMediaTypeNvme].Free),
-			MediaType: daos.StorageMediaTypeNvme,
+			Total:     uint64(pbInfo.Space[1].Total),
+			Free:      uint64(pbInfo.Space[1].Free),
+			MediaType: daos.StorageMediaType(pbInfo.Space[1].MediaType),
 		},
 	}
 
