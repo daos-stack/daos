@@ -38,7 +38,7 @@ func (api *api) isInitialized() bool {
 
 // Init performs DAOS API initialization steps and returns a closure
 // to be called before application exit.
-func (api *api) Init() (func(), error) {
+func (api *api) Init(initLogging bool) (func(), error) {
 	api.Lock()
 	defer api.Unlock()
 
@@ -47,12 +47,21 @@ func (api *api) Init() (func(), error) {
 		return stubFini, daos.Already
 	}
 
-	if err := daosError(C.daos_init()); err != nil {
+	logFini := stubFini
+	if initLogging {
+		fini, err := daos.InitLogging(daos.DefaultErrorMask)
+		if err != nil {
+			return stubFini, err
+		}
+		logFini = fini
+	}
+
+	if err := daosError(daos_init()); err != nil {
 		return stubFini, err
 	}
 	api.initialized = true
 
-	return api.Fini, nil
+	return func() { api.Fini(); logFini() }, nil
 }
 
 // Fini releases resources obtained during DAOS API initialization.
@@ -64,6 +73,6 @@ func (api *api) Fini() {
 		return
 	}
 
-	C.daos_fini()
+	daos_fini()
 	api.initialized = false
 }

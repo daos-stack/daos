@@ -28,9 +28,9 @@ type (
 )
 
 // NewProvider returns an initialized DAOS API provider.
-func NewProvider(log debugTraceLogger) (*Provider, error) {
+func NewProvider(log debugTraceLogger, initLogging bool) (*Provider, error) {
 	api := &api{}
-	cleanup, err := api.Init()
+	cleanup, err := api.Init(initLogging)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to initialize DAOS API")
 	}

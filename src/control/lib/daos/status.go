@@ -172,5 +172,7 @@ const (
 	// BadCert indicates that an invalid certificate was detected.
 	BadCert Status = -C.DER_BAD_CERT
 	// RedundancyFactorExceeded indicates that the maximum number of failed components was exceeded.
-	RedundancyFactorExceeded = -C.DER_RF
+	RedundancyFactorExceeded Status = -C.DER_RF
+	// AgentCommFailed indicates that client/agent communication failed.
+	AgentCommFailed Status = -C.DER_AGENT_COMM
 )

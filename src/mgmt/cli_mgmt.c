@@ -514,6 +514,7 @@ dc_mgmt_put_sys_info(struct daos_sys_info *info)
 	if (info == NULL)
 		return;
 	free_rank_uris(info->dsi_ranks, info->dsi_nr_ranks);
+	D_FREE(info->dsi_ms_ranks);
 	D_FREE(info);
 }
 

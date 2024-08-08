@@ -187,6 +187,16 @@ self_test_init(char *dest_name, crt_context_t *crt_ctx, crt_group_t **srv_grp, p
 	return 0;
 }
 
+void
+self_test_fini(bool agent_used)
+{
+	if (!agent_used)
+		return;
+
+	dc_mgmt_fini();
+	dc_agent_fini();
+}
+
 int
 st_compare_endpts(const void *a_in, const void *b_in)
 {
