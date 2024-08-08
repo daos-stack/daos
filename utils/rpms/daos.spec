@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.6.0
-Release:       5%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -591,6 +591,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Sep 03 2024 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.6.0-6
+- Add support for PMDK packages with NDCTL enabled in case engine is used with SCM
+  * Increase default ULT stack size to 18KiB if engine handles DCPM storage class
+  * Disable NDCTL routines for 'ram' storage class
+
 * Thu Aug 08 2024 Tom Nabarro <tom.nabarro@intel.com> 2.6.0-5
 - Add pciutils runtime dep for daos_server lspci call
 - Add pciutils-devel build dep for pciutils CGO bindings

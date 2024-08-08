@@ -184,6 +184,7 @@ func TestRunnerNormalExit(t *testing.T) {
 		"CRT_TIMEOUT=30",
 		"D_INTERFACE=qib0",
 		"D_LOG_MASK=DEBUG,MGMT=DEBUG,RPC=ERR,MEM=ERR",
+		"PMEMOBJ_CONF=sds.at_create=0",
 		allowedUserEnv + "=" + allowedUserVal,
 	}
 	sort.Strings(env)

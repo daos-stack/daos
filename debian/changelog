@@ -1,3 +1,10 @@
+daos (2.6.0-6) unstable; urgency=medium
+  [ Tomasz Gromadzki ]
+  * Add support for PMDK packages with NDCTL enabled in case engine is used with SCM
+    * Increase default ULT stack size to 18KiB if engine handles DCPM storage class
+    * Disable NDCTL routines for 'ram' storage class
+ -- Tomasz Gromadzki <tomasz.gromadzki@intel.com>  Tue, 03 Sep 2024 12:00:00 +0200
+
 daos (2.6.0-5) unstable; urgency=medium
   [ Tom Nabarro ]
   * Add pciutils runtime dep for daos_server lspci call
