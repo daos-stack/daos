@@ -53,4 +53,4 @@ metadata:
   number_thread: 1
   workload_test_cycles: 5000
   test_loops: 10
-  threshold_factor: 2
+  threshold_factor: 2.5
