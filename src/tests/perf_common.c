@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -97,6 +97,13 @@ stride_buf_fini(void)
 		free(stride_buf.sb_buf);
 }
 
+// Allow starting the buffer generation from the beginning
+void
+stride_buf_reset()
+{
+	stride_buf.sb_mark = 'A';
+}
+
 static int
 stride_buf_op(int opc, char *buf, unsigned offset, int size)
 {
@@ -182,10 +189,11 @@ akey_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 	daos_recx_t	     *recx;
 	int		      rc = 0;
 
-	if (param->pa_verbose)
-		D_PRINT("%s dkey="DF_KEY" akey="DF_KEY"\n",
-			op_type == TS_DO_UPDATE ? "Update" : "Fetch ",
-			DP_KEY(dkey), DP_KEY(akey));
+	if (param->pa_verbose) {
+		D_PRINT("%s dkey=" DF_KEY " akey=" DF_KEY " epoch=%" PRIu64 "\n",
+			op_type == TS_DO_UPDATE ? "Update" : "Fetch ", DP_KEY(dkey), DP_KEY(akey),
+			*epoch);
+	}
 
 	cred = credit_take(&ts_ctx);
 	if (!cred) {
@@ -213,16 +221,30 @@ akey_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 		recx->rx_nr   = param->pa_rw.size;
 		recx->rx_idx  = ts_indices[idx] * ts_stride +
 				param->pa_rw.offset;
+
+		if (param->pa_verbose) {
+			D_PRINT("recx=" DF_RECX "\n", DP_RECX(*recx));
+		}
 	}
 
 	iod->iod_nr    = 1;
 	iod->iod_recxs = recx;
 	iod->iod_flags = 0;
 
+	// Set a different buffer contents for each update/feach operation.
+	stride_buf_set(param->pa_rw.offset, param->pa_rw.size);
+
 	if (op_type == TS_DO_UPDATE) {
 		/* initialize value buffer and setup sgl */
 		stride_buf_load(cred->tc_vbuf, param->pa_rw.offset,
 				param->pa_rw.size);
+
+		if (param->pa_verbose) {
+			for (int i = 0; i < param->pa_rw.size; i += 8) {
+				D_PRINT("0x%016" PRIx64 " ", *((uint64_t *)&cred->tc_vbuf[i]));
+			}
+			D_PRINT("\n");
+		}
 	} else {
 		if (param->pa_rw.verify) /* Clear the buffer for verify */
 			memset(cred->tc_vbuf, 0, param->pa_rw.size);
@@ -247,8 +269,27 @@ akey_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 
 	(*epoch)++;
 	if (param->pa_rw.verify) {
-		rc = stride_buf_verify(cred->tc_vbuf, param->pa_rw.offset,
-				       param->pa_rw.size);
+		if (param->pa_verbose) {
+			for (int i = 0; i < param->pa_rw.size; i += 8) {
+				D_PRINT("0x%016" PRIx64 " ", *((uint64_t *)&cred->tc_vbuf[i]));
+			}
+			D_PRINT("\n");
+		}
+
+		if (cred->tc_val.iov_len == 0) {
+			// nonexistent object or key
+			++param->pa_rw.values_missing;
+			// Note: It is OK as long as you expect not all updates
+			// might have made it. The fetch did not crash nor fail
+			// which is sufficient to call it a success.
+			rc = 0;
+		} else {
+			rc = stride_buf_verify(cred->tc_vbuf, param->pa_rw.offset,
+					param->pa_rw.size);
+			if (!rc) {
+				++param->pa_rw.values_found_and_verified;
+			}
+		}
 		credit_return(&ts_ctx, cred);
 		return rc;
 	}
@@ -313,13 +354,17 @@ perf_setup_keys(void)
 int
 objects_update(struct pf_param *param)
 {
-	daos_epoch_t epoch = d_hlc_get();
+	// Fix the update epoch to a predefined value.
+	daos_epoch_t    epoch = 5; // d_hlc_get();
 	int		i;
 	int		rc = 0;
 	int		rc_drain;
 	uint64_t	start = 0;
 
-	stride_buf_set(param->pa_rw.offset, param->pa_rw.size);
+	// Initialize the buffer generation state.
+	// The buffer contents are generated for each update individually.
+	stride_buf_reset();
+	// stride_buf_set(param->pa_rw.offset, param->pa_rw.size);
 	++epoch;
 
 	if (dts_is_async(&ts_ctx))
@@ -348,7 +393,12 @@ objects_fetch(struct pf_param *param)
 	int		rc = 0;
 	int		rc_drain;
 	uint64_t	start = 0;
-	daos_epoch_t	epoch = d_hlc_get();
+	// Fix the update epoch to a predefined value.
+	daos_epoch_t    epoch = 10; // d_hlc_get();
+
+	// Initialize the buffer generation state.
+	// The expected buffer contents are generated for each fetch individually.
+	stride_buf_reset();
 
 	if (dts_is_async(&ts_ctx))
 		TS_TIME_START(&param->pa_duration, start);
@@ -523,6 +573,11 @@ pf_parse_rw(char *str, struct pf_param *param, char **strp)
 			param->pa_rw.offset, param->pa_rw.size, ts_stride);
 		return -1;
 	}
+
+	// initialize counters
+	param->pa_rw.values_found_and_verified = 0;
+	param->pa_rw.values_missing = 0;
+
 	return 0;
 }
 

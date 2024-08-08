@@ -64,3 +64,5 @@ utils/githooks/*.d/*-user-*
 .pre-commit
 .vscode
 src/include/daos_version.h
+step_0*_output.txt
+step_0*_output.txt.csv

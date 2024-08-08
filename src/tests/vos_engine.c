@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021-2022 Intel Corporation.
+ * (C) Copyright 2021-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -19,7 +19,8 @@ engine_pool_init(struct credit_context *tsc)
 	char		*pmem_file = tsc->tsc_pmem_file;
 	int		rc, fd;
 
-	if (!daos_file_is_dax(pmem_file)) {
+	// Zero the pool only in case it is created.
+	if (!daos_file_is_dax(pmem_file) && tsc_create_pool(tsc)) {
 		rc = open(pmem_file, O_CREAT | O_TRUNC | O_RDWR, 0666);
 		if (rc < 0)
 			return rc;

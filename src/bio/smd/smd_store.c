@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -108,10 +108,11 @@ smd_fini(void)
 int
 smd_init(struct sys_db *db)
 {
-	D_ASSERT(db->sd_fetch);
-	D_ASSERT(db->sd_upsert);
-	D_ASSERT(db->sd_delete);
-	D_ASSERT(db->sd_traverse);
+	// Allow providing a dummy sys_db to unlock multi-process execution.
+	// D_ASSERT(db->sd_fetch);
+	// D_ASSERT(db->sd_upsert);
+	// D_ASSERT(db->sd_delete);
+	// D_ASSERT(db->sd_traverse);
 
 	smd_db = db;
 	return 0;
