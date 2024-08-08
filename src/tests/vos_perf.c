@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -41,6 +41,9 @@ static ABT_xstream	abt_xstream;
 #ifdef ULT_MMAP_STACK
 struct stack_pool *sp;
 #endif
+
+// Required to control OIDs printing.
+bool ts_verbose = false;
 
 static int
 ts_abt_init(void)
@@ -107,6 +110,11 @@ _vos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 {
 	uint64_t	start = 0;
 	int		rc = 0;
+
+	// Note: ts_uoids is available only in this compilation unit.
+	if (ts_verbose) {
+		D_PRINT("oid=" DF_UOID "\n", DP_UOID(ts_uoids[obj_idx]));
+	}
 
 	TS_TIME_START(duration, start);
 	if (!ts_zero_copy) {
@@ -426,6 +434,8 @@ pf_update(struct pf_test *ts, struct pf_param *param)
 	if (rc)
 		return rc;
 
+	ts_verbose = param->pa_verbose;
+
 	rc = objects_update(param);
 	if (rc)
 		return rc;
@@ -536,10 +546,19 @@ pf_verify(struct pf_test *ts, struct pf_param *param)
 	if (rc)
 		return rc;
 
+	ts_verbose = param->pa_verbose;
+
 	param->pa_rw.verify = true;
 	rc = objects_fetch(param);
 	if (rc)
 		return rc;
+
+	// Print the detailed result.
+	fprintf(stdout,
+		"[%02d] Values found and verified=%"PRIu64", missing=%"PRIu64"\n",
+		ts_ctx.tsc_mpi_rank,
+		param->pa_rw.values_found_and_verified,
+		param->pa_rw.values_missing);
 
 	rc = objects_close();
 	return rc;
@@ -663,65 +682,80 @@ pf_parse_aggregate(char *str, struct pf_param *pa, char **strp)
 	return pf_parse_common(str, pa, pf_parse_aggregate_cb, strp);
 }
 
+// static int
+// pf_exit(struct pf_test *ts, struct pf_param *param)
+// {
+// 	int rc = vos_pool_close(ts_ctx.tsc_poh);
+// 	D_ASSERTF(rc == 0, "rc: "DF_RC"\n", DP_RC(rc));
+// 	ts_ctx.tsc_poh = DAOS_HDL_INVAL;
+// 	exit(0);
+// }
+
 /* predefined test cases */
 struct pf_test pf_tests[] = {
-	{
-		.ts_code	= 'U',
-		.ts_name	= "UPDATE",
-		.ts_parse	= pf_parse_rw,
-		.ts_func	= pf_update,
-	},
-	{
-		.ts_code	= 'F',
-		.ts_name	= "FETCH",
-		.ts_parse	= pf_parse_rw,
-		.ts_func	= pf_fetch,
-	},
-	{
-		.ts_code	= 'V',
-		.ts_name	= "VERIFY",
-		.ts_parse	= pf_parse_rw,
-		.ts_func	= pf_verify,
-	},
-	{
-		.ts_code	= 'I',
-		.ts_name	= "ITERATE",
-		.ts_parse	= pf_parse_iterate,
-		.ts_func	= pf_iterate,
-	},
-	{
-		.ts_code	= 'Q',
-		.ts_name	= "QUERY",
-		.ts_parse	= pf_parse_query,
-		.ts_func	= pf_query,
-	},
-	{
-		.ts_code	= 'P',
-		.ts_name	= "PUNCH",
-		.ts_parse	= pf_parse_rw,
-		.ts_func	= pf_punch,
-	},
-	{
-		.ts_code	= 'A',
-		.ts_name	= "AGGREGATE",
-		.ts_parse	= pf_parse_aggregate,
-		.ts_func	= pf_aggregate,
-	},
-	{
-		.ts_code	= 'D',
-		.ts_name	= "DISCARD",
-		.ts_parse	= pf_parse_aggregate,
-		.ts_func	= pf_discard,
-	},
-	{
-		.ts_code	= 'G',
-		.ts_name	= "GARBAGE COLLECTION",
-		.ts_parse	= pf_parse_aggregate,
-		.ts_func	= pf_gc,
-	},
-	{
-		.ts_code	= 0,
-	},
+    {
+	.ts_code  = 'U',
+	.ts_name  = "UPDATE",
+	.ts_parse = pf_parse_rw,
+	.ts_func  = pf_update,
+    },
+    {
+	.ts_code  = 'F',
+	.ts_name  = "FETCH",
+	.ts_parse = pf_parse_rw,
+	.ts_func  = pf_fetch,
+    },
+    {
+	.ts_code  = 'V',
+	.ts_name  = "VERIFY",
+	.ts_parse = pf_parse_rw,
+	.ts_func  = pf_verify,
+    },
+    {
+	.ts_code  = 'I',
+	.ts_name  = "ITERATE",
+	.ts_parse = pf_parse_iterate,
+	.ts_func  = pf_iterate,
+    },
+    {
+	.ts_code  = 'Q',
+	.ts_name  = "QUERY",
+	.ts_parse = pf_parse_query,
+	.ts_func  = pf_query,
+    },
+    {
+	.ts_code  = 'P',
+	.ts_name  = "PUNCH",
+	.ts_parse = pf_parse_rw,
+	.ts_func  = pf_punch,
+    },
+    {
+	.ts_code  = 'A',
+	.ts_name  = "AGGREGATE",
+	.ts_parse = pf_parse_aggregate,
+	.ts_func  = pf_aggregate,
+    },
+    {
+	.ts_code  = 'D',
+	.ts_name  = "DISCARD",
+	.ts_parse = pf_parse_aggregate,
+	.ts_func  = pf_discard,
+    },
+    {
+	.ts_code  = 'G',
+	.ts_name  = "GARBAGE COLLECTION",
+	.ts_parse = pf_parse_aggregate,
+	.ts_func  = pf_gc,
+    },
+    // {
+    // 	.ts_code	= 'X',
+    // 	.ts_name	= "Exit immediately",
+    // 	.ts_parse	= pf_parse_rw,
+    // 	.ts_func	= pf_exit,
+    // },
+    {
+	.ts_code = 0,
+    },
 };
 
 static inline const char *
@@ -768,7 +802,8 @@ int
 main(int argc, char **argv)
 {
 	char		*cmds = NULL;
-	char		uuid_buf[256];
+	char             uuid_buf1[37];
+	char             uuid_buf2[37];
 	int		credits = -1;	/* sync mode */
 	struct option	*ts_opts;
 	char		*ts_optstr;
@@ -905,10 +940,24 @@ main(int argc, char **argv)
 			ts_ctx.tsc_skip_cont_create = true;
 	}
 
-	if (!ts_ctx.tsc_skip_cont_create)
-		uuid_generate(ts_ctx.tsc_cont_uuid);
-	if (!ts_ctx.tsc_skip_pool_create)
-		uuid_generate(ts_ctx.tsc_pool_uuid);
+	if (!ts_ctx.tsc_skip_cont_create) {
+		// Use a fixed container UUID to streamline its opening later on.
+		const char *cont_uuid = "85ece417-608a-405d-8049-1a1f8fec9bd7";
+		rc                    = uuid_parse(cont_uuid, ts_ctx.tsc_cont_uuid);
+		if (rc) {
+			return -1;
+		}
+		// uuid_generate(ts_ctx.tsc_cont_uuid);
+	}
+	if (!ts_ctx.tsc_skip_pool_create) {
+		// Use a fixed pool UUID to streamline its opening later on.
+		const char *pool_uuid = "bdc2a992-5bba-4e86-a8a8-030e422502ad";
+		rc                    = uuid_parse(pool_uuid, ts_ctx.tsc_pool_uuid);
+		if (rc) {
+			return -1;
+		}
+		// uuid_generate(ts_ctx.tsc_pool_uuid);
+	}
 
 	ts_update_or_fetch_fn = vos_update_or_fetch;
 
@@ -922,13 +971,15 @@ main(int argc, char **argv)
 	if (rc)
 		return -1;
 
-	memset(uuid_buf, 0, sizeof(uuid_buf));
-	uuid_unparse(ts_ctx.tsc_pool_uuid, uuid_buf);
+	uuid_unparse(ts_ctx.tsc_pool_uuid, uuid_buf1);
+	uuid_unparse(ts_ctx.tsc_cont_uuid, uuid_buf2);
+	// memset(uuid_buf, 0, sizeof(uuid_buf));
 
 	if (ts_ctx.tsc_mpi_rank == 0) {
 		fprintf(stdout,
 			"Test :\n\tVOS storage\n"
-			"Pool :\n\t%s\n"
+			"\tpool      : %s\n"
+			"\tcontainer : %s\n"
 			"Parameters :\n"
 			"\tpool size     : SCM: %u MB, NVMe: %u MB\n"
 			"\tcredits       : %d (sync I/O for -ve)\n"
@@ -940,19 +991,11 @@ main(int argc, char **argv)
 			"\tvalue size    : %u\n"
 			"\tzero copy     : %s\n"
 			"\tVOS file      : %s\n",
-			uuid_buf,
-			(unsigned int)(ts_scm_size >> 20),
-			(unsigned int)(ts_nvme_size >> 20),
-			credits,
-			ts_obj_p_cont,
-			ts_ctx.tsc_mpi_size,
-			ts_dkey_p_obj, ts_dkey_prefix == NULL ? "int" : "buf",
-			ts_akey_p_dkey, ts_const_akey ? " (const)" : "",
-			ts_recx_p_akey,
-			ts_val_type(),
-			ts_stride,
-			ts_yes_or_no(ts_zero_copy),
-			ts_pmem_file);
+			uuid_buf1, uuid_buf2, (unsigned int)(ts_scm_size >> 20),
+			(unsigned int)(ts_nvme_size >> 20), credits, ts_obj_p_cont,
+			ts_ctx.tsc_mpi_size, ts_dkey_p_obj, ts_dkey_prefix == NULL ? "int" : "buf",
+			ts_akey_p_dkey, ts_const_akey ? " (const)" : "", ts_recx_p_akey,
+			ts_val_type(), ts_stride, ts_yes_or_no(ts_zero_copy), ts_pmem_file);
 	}
 
 	rc = perf_alloc_keys();
@@ -978,6 +1021,8 @@ main(int argc, char **argv)
 	if (ts_indices)
 		free(ts_indices);
 	stride_buf_fini();
+	// WA to prevent destructor from deleting the pool.
+	ts_ctx.tsc_skip_pool_create = true;
 	dts_ctx_fini(&ts_ctx);
 
 #ifdef ULT_MMAP_STACK

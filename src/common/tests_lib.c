@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -39,7 +39,9 @@ dts_unit_oid_gen(enum daos_otype_t type, uint32_t shard)
 {
 	daos_unit_oid_t	uoid;
 
-	uoid.id_pub	= dts_oid_gen((unsigned int)(time(NULL) & 0xFFFFFFFFUL));
+	// Allow reproducibility of the output.
+	// The pseudo-random generator ought to be initialized by a known seed.
+	uoid.id_pub = dts_oid_gen((unsigned int)(rand()));
 	daos_obj_set_oid(&uoid.id_pub, type, DTS_OCLASS_DEF, shard + 1, 0);
 	uoid.id_shard	= shard;
 	uoid.id_layout_ver = 0;

@@ -1030,12 +1030,13 @@ vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool nvme_in
 	if (rc)
 		goto failed;
 
-	if (use_sys_db)
-		rc = vos_db_init(db_path);
-	else
-		rc = vos_db_init_ex(db_path, "self_db", true, true);
-	if (rc)
-		goto failed;
+	// Completely skip the sys db initialization to unlock multi-process execution.
+	// if (use_sys_db)
+	// 	rc = vos_db_init(db_path);
+	// else
+	// 	rc = vos_db_init_ex(db_path, "self_db", true, true);
+	// if (rc)
+	// 	goto failed;
 
 	db = vos_db_get();
 	rc = smd_init(db);

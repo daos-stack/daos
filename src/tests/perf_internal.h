@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021-2022 Intel Corporation.
+ * (C) Copyright 2021-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -58,6 +58,9 @@ struct pf_param {
 			bool	verify;
 			/* dkey flag */
 			bool	dkey_flag;
+			/* counters to collect a more detailed result */
+			uint64_t values_found_and_verified;
+			uint64_t values_missing;
 		} pa_rw;
 		struct {
 			/* full scan */
@@ -195,6 +198,8 @@ void
 stride_buf_init(int size);
 void
 stride_buf_fini(void);
+void
+stride_buf_reset(void);
 int
 objects_update(struct pf_param *param);
 int
