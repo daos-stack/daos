@@ -496,12 +496,12 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 
 	/**
-	 * Ranks to allocate targets (in) & svc for pool replicas (out). Mapping of tierbytes in
+	 * Ranks to allocate targets (in) & svc for pool replicas (out). Mapping of tier_bytes in
 	 * MD-on-SSD mode is (tier0*mem_ratio)->scm_size (mem-file-size), tier0->meta_size and
 	 * tier1->nvme_size (data_size).
 	 */
 
-	scm_size = req->tierbytes[DAOS_MEDIA_SCM];
+	scm_size = req->tier_bytes[DAOS_MEDIA_SCM];
 	if (req->mem_ratio)
 		scm_size *= req->mem_ratio;
 
@@ -521,7 +521,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	 * the supplied input values but really should be returned from ds_mgmt_pool_query() through
 	 * the VOS query API and set in pool_create_fill_resp(). Return zero for non-MD-on-SSD mode.
 	 */
-	resp.mem_file_bytes = req->tierbytes[DAOS_MEDIA_SCM] * req->mem_ratio;
+	resp.mem_file_bytes = req->tier_bytes[DAOS_MEDIA_SCM] * req->mem_ratio;
 
 out:
 	resp.status = rc;
