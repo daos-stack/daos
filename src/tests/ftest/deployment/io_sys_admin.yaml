@@ -66,13 +66,17 @@ largefilecount:
     - HDF5-VOL
     - DFS
   object_class:
-    - SX
-    - EC_2P1GX
+    ior_oclass:          # Run once with SX and then with EC_16P2GX
+      - SX
+      - EC_2P1GX
+    mdtest_oclass:       # Run once with S1 and then with EC_16P2G1
+      - S1
+      - EC_2P1G1
 ior:
   client_processes:
     ppn: 30
   dfs_destroy: False
-  flags: "-v -D 300 -W -w -r -R -F -k"
+  flags: "-v -D 300 -W -w -k"
   test_file: daos:testFile
   repetitions: 1
   signature: 123
