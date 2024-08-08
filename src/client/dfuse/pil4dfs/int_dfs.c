@@ -748,6 +748,109 @@ err:
 
 #define NAME_LEN 128
 
+typedef struct {
+	int shm_region_size;
+	int pool_info_size;
+	int cont_info_size;
+	int dfs_info_size;
+} DFS_INFO_SIZE_HEAD;
+
+static int
+retrieve_handles_from_fuse(int idx)
+{
+	int     size_shm = 0;
+	DFS_INFO_SIZE_HEAD *shm_size_head;
+	int     rc, errno_saved;
+	int     fd;
+	char    name[64];
+	u_char *data;
+	d_iov_t iov;
+
+	sprintf(name, "dfs_info_%x", d_hash_string_u32(dfs_list[idx].fs_root,
+		strnlen(dfs_list[idx].fs_root, DFS_MAX_PATH)));
+	fd = shm_open(name, O_RDONLY, 0);
+	if (fd < 0) {
+		goto err;
+	}
+	/* map a single page to get the share memory size, unmap, then remap with real size. */
+	data = (u_char *) mmap(NULL, page_size, PROT_READ, MAP_SHARED, fd, 0);
+	if (data == MAP_FAILED) {
+		printf("mmap() failed. %d\n", errno);
+		close(fd);
+		goto err;
+	}
+	shm_size_head = (DFS_INFO_SIZE_HEAD *)data;
+	size_shm      = shm_size_head->shm_region_size;
+	if (size_shm != page_size) {
+		rc = munmap(data, page_size);
+		if (rc) {
+			printf("munmap() failed. %d\n", errno);
+			close(fd);
+			goto err;
+		}
+		data = (u_char *) mmap(NULL, size_shm, PROT_READ, MAP_SHARED, fd, 0);
+		if (data == MAP_FAILED) {
+			printf("mmap() failed. %d\n", errno);
+			close(fd);
+			goto err;
+		}
+		shm_size_head = (DFS_INFO_SIZE_HEAD *)data;
+	}
+
+	iov.iov_buf_len = shm_size_head->pool_info_size;
+	iov.iov_len     = iov.iov_buf_len;
+	iov.iov_buf     = data + sizeof(DFS_INFO_SIZE_HEAD);
+	rc = daos_pool_global2local(iov, &dfs_list[idx].poh);
+	if (rc != 0) {
+		errno_saved = daos_der2errno(rc);
+		D_DEBUG(DB_ANY,
+			"failed to create pool handle in daos_pool_global2local(): %d (%s)\n",
+			errno_saved, strerror(errno_saved));
+		goto err;
+	}
+
+	iov.iov_buf    += iov.iov_buf_len;
+	iov.iov_buf_len = shm_size_head->cont_info_size;
+	iov.iov_len     = iov.iov_buf_len;
+	rc              = daos_cont_global2local(dfs_list[idx].poh, iov, &dfs_list[idx].coh);
+	if (rc != 0) {
+		errno_saved = daos_der2errno(rc);
+		D_DEBUG(DB_ANY,
+			"failed to create container handle in daos_pool_global2local(): %d (%s)\n",
+			errno_saved, strerror(errno_saved));
+		goto err;
+	}
+
+	iov.iov_buf    += iov.iov_buf_len;
+	iov.iov_buf_len = shm_size_head->dfs_info_size;
+	iov.iov_len     = iov.iov_buf_len;
+	rc = dfs_global2local(dfs_list[idx].poh, dfs_list[idx].coh, 0, iov, &dfs_list[idx].dfs);
+	if (rc != 0) {
+		errno_saved = daos_der2errno(rc);
+		D_DEBUG(DB_ANY,
+			"failed to create DFS handle in daos_pool_global2local(): %d (%s)\n",
+			errno_saved, strerror(errno_saved));
+		goto err;
+	}
+
+	rc = dcache_create(dfs_list[idx].dfs, dcache_size_bits, dcache_rec_timeout,
+			   dcache_gc_period, dcache_gc_reclaim_max, &dfs_list[idx].dcache);
+	if (rc != 0) {
+		errno_saved = daos_der2errno(rc);
+		D_DEBUG(DB_ANY,
+			"failed to initialize DFS directory cache in "
+			"daos_pool_global2local(): %d (%s)\n",
+			errno_saved, strerror(errno_saved));
+		goto err;
+	}
+
+	return 0;
+
+err:
+	return (-1);
+}
+
+#if 0
 static int
 retrieve_handles_from_fuse(int idx)
 {
@@ -902,6 +1005,7 @@ err:
 	errno = errno_saved;
 	return (-1);
 }
+#endif
 
 /* Check whether path starts with "DAOS://" */
 static bool
