@@ -115,6 +115,7 @@ class Pil4dfsFio(TestWithServers):
             "global", "cpus_allowed", self.fio_cpus_allowed,
             f"fio --name=global --cpus_allowed={self.fio_cpus_allowed}")
         fio_cmd.env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
+        fio_cmd.env['CRT_TIMEOUT'] = 10
         fio_cmd.hosts = self.hostlist_clients
 
         bws = {}

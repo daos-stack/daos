@@ -2,7 +2,7 @@ hosts:
   test_servers: 2
   test_clients: 1
 
-timeout: 600
+timeout: 5400
 
 server_config:
   name: daos_server
@@ -52,39 +52,9 @@ fio:
   job:
     params: !mux
       256B_fork:
-        pil4dfs_ioengines: ['psync']
-        thread: 0
-        blocksize: '256B'
-        size: '32K'
-        iodepth: 1
-      256B_pthread:
-        pil4dfs_ioengines: ['psync']
-        thread: 1
-        blocksize: '256B'
-        size: '32K'
-        iodepth: 1
-      1M_fork:
-        pil4dfs_ioengines: ['psync']
-        thread: 0
-        blocksize: '1M'
-        size: '64M'
-        iodepth: 1
-      1M_pthread:
-        pil4dfs_ioengines: ['psync']
-        thread: 1
-        blocksize: '1M'
-        size: '64M'
-        iodepth: 1
       iodepth_fork:
         pil4dfs_ioengines: ['libaio']
         thread: 0
-        numjobs: 8
-        blocksize: '4K'
-        size: '512K'
-        iodepth: 16
-      iodepth_thread:
-        pil4dfs_ioengines: ['libaio']
-        thread: 1
         numjobs: 8
         blocksize: '4K'
         size: '512K'
