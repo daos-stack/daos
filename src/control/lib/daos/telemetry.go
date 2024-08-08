@@ -96,6 +96,7 @@ type (
 
 	// MetricBucket represents a bucket for observations to be sorted into.
 	MetricBucket struct {
+		Label           string  `json:"label"`
 		CumulativeCount uint64  `json:"cumulative_count"`
 		UpperBound      float64 `json:"upper_bound"`
 	}
