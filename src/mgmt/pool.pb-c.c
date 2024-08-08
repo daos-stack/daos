@@ -3305,7 +3305,7 @@ const ProtobufCMessageDescriptor mgmt__pool_rebuild_status__descriptor =
   (ProtobufCMessageInit) mgmt__pool_rebuild_status__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_query_resp__field_descriptors[19] =
+static const ProtobufCFieldDescriptor mgmt__pool_query_resp__field_descriptors[20] =
 {
   {
     "status",
@@ -3535,6 +3535,18 @@ static const ProtobufCFieldDescriptor mgmt__pool_query_resp__field_descriptors[1
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "mem_file_bytes",
+    21,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT64,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__PoolQueryResp, mem_file_bytes),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__pool_query_resp__field_indices_by_name[] = {
   4,   /* field[4] = active_targets */
@@ -3543,6 +3555,7 @@ static const unsigned mgmt__pool_query_resp__field_indices_by_name[] = {
   10,   /* field[10] = enabled_ranks */
   2,   /* field[2] = label */
   9,   /* field[9] = leader */
+  19,   /* field[19] = mem_file_bytes */
   13,   /* field[13] = pool_layout_ver */
   18,   /* field[18] = query_mask */
   6,   /* field[6] = rebuild */
@@ -3561,7 +3574,7 @@ static const ProtobufCIntRange mgmt__pool_query_resp__number_ranges[2 + 1] =
 {
   { 1, 0 },
   { 10, 8 },
-  { 0, 19 }
+  { 0, 20 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_query_resp__descriptor =
 {
@@ -3571,7 +3584,7 @@ const ProtobufCMessageDescriptor mgmt__pool_query_resp__descriptor =
   "Mgmt__PoolQueryResp",
   "mgmt",
   sizeof(Mgmt__PoolQueryResp),
-  19,
+  20,
   mgmt__pool_query_resp__field_descriptors,
   mgmt__pool_query_resp__field_indices_by_name,
   2,  mgmt__pool_query_resp__number_ranges,
@@ -4213,7 +4226,7 @@ const ProtobufCEnumDescriptor mgmt__pool_query_target_info__target_state__descri
   mgmt__pool_query_target_info__target_state__value_ranges,
   NULL,NULL,NULL,NULL   /* reserved[1234] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_query_target_info__field_descriptors[3] =
+static const ProtobufCFieldDescriptor mgmt__pool_query_target_info__field_descriptors[4] =
 {
   {
     "type",
@@ -4251,8 +4264,21 @@ static const ProtobufCFieldDescriptor mgmt__pool_query_target_info__field_descri
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "mem_file_bytes",
+    4,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT64,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__PoolQueryTargetInfo, mem_file_bytes),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__pool_query_target_info__field_indices_by_name[] = {
+  3,   /* field[3] = mem_file_bytes */
   2,   /* field[2] = space */
   1,   /* field[1] = state */
   0,   /* field[0] = type */
@@ -4260,7 +4286,7 @@ static const unsigned mgmt__pool_query_target_info__field_indices_by_name[] = {
 static const ProtobufCIntRange mgmt__pool_query_target_info__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 3 }
+  { 0, 4 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_query_target_info__descriptor =
 {
@@ -4270,7 +4296,7 @@ const ProtobufCMessageDescriptor mgmt__pool_query_target_info__descriptor =
   "Mgmt__PoolQueryTargetInfo",
   "mgmt",
   sizeof(Mgmt__PoolQueryTargetInfo),
-  3,
+  4,
   mgmt__pool_query_target_info__field_descriptors,
   mgmt__pool_query_target_info__field_indices_by_name,
   1,  mgmt__pool_query_target_info__number_ranges,

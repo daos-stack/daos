@@ -79,6 +79,7 @@ type (
 		DisabledRanks    *ranklist.RankSet    `json:"disabled_ranks,omitempty"`
 		PoolLayoutVer    uint32               `json:"pool_layout_ver"`
 		UpgradeLayoutVer uint32               `json:"upgrade_layout_ver"`
+		MemFileBytes     uint64               `json:"mem_file_bytes"`
 	}
 
 	PoolQueryTargetType  int32
@@ -86,9 +87,10 @@ type (
 
 	// PoolQueryTargetInfo contains information about a single target
 	PoolQueryTargetInfo struct {
-		Type  PoolQueryTargetType  `json:"target_type"`
-		State PoolQueryTargetState `json:"target_state"`
-		Space []*StorageUsageStats `json:"space"`
+		Type         PoolQueryTargetType  `json:"target_type"`
+		State        PoolQueryTargetState `json:"target_state"`
+		Space        []*StorageUsageStats `json:"space"`
+		MemFileBytes uint64               `json:"mem_file_bytes"`
 	}
 
 	// StorageTargetUsage represents DAOS target storage usage

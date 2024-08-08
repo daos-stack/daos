@@ -289,7 +289,7 @@ Pool space info:
 					{
 						Total:     2,
 						Free:      1,
-						MediaType: daos.StorageMediaTypeNvme,
+						MediaType: daos.StorageMediaTypeScm,
 					},
 					{
 						Total:     2,
@@ -297,6 +297,7 @@ Pool space info:
 						MediaType: daos.StorageMediaTypeNvme,
 					},
 				},
+				MemFileBytes: 1,
 			},
 			expPrintStr: fmt.Sprintf(`
 Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
@@ -305,7 +306,7 @@ Pool health info:
 - Rebuild busy, 42 objs, 21 recs
 Pool space info:
 - Target count:1
-- Total memory-file size: 2 B
+- Total memory-file size: 1 B
 - Metadata storage:
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
@@ -507,7 +508,7 @@ Target: type unknown, state drain
 					{
 						Total:     6000000000,
 						Free:      5000000000,
-						MediaType: daos.StorageMediaTypeNvme,
+						MediaType: daos.StorageMediaTypeScm,
 					},
 					{
 						Total:     100000000000,
@@ -515,6 +516,7 @@ Target: type unknown, state drain
 						MediaType: daos.StorageMediaTypeNvme,
 					},
 				},
+				MemFileBytes: 3000000000,
 			},
 			expPrintStr: `
 Target: type unknown, state down_out

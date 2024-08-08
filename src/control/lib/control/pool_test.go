@@ -807,7 +807,7 @@ func TestControl_PoolQueryResp_MarshalJSON(t *testing.T) {
 					UpgradeLayoutVer: 8,
 				},
 			},
-			exp: `{"query_mask":"rebuild,space","state":"Ready","uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":[0,1,2],"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8,"status":42}`,
+			exp: `{"query_mask":"rebuild,space","state":"Ready","uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":[0,1,2],"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8,"mem_file_bytes":0,"status":42}`,
 		},
 		"valid rankset": {
 			pqr: &PoolQueryResp{
@@ -827,9 +827,10 @@ func TestControl_PoolQueryResp_MarshalJSON(t *testing.T) {
 					DisabledRanks:    &ranklist.RankSet{},
 					PoolLayoutVer:    7,
 					UpgradeLayoutVer: 8,
+					MemFileBytes:     1000,
 				},
 			},
-			exp: `{"query_mask":"rebuild,space","state":"Ready","uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":[0,1,2],"rebuild":null,"tier_stats":null,"enabled_ranks":[0,1,2,3,5],"disabled_ranks":[],"pool_layout_ver":7,"upgrade_layout_ver":8,"status":42}`,
+			exp: `{"query_mask":"rebuild,space","state":"Ready","uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":[0,1,2],"rebuild":null,"tier_stats":null,"enabled_ranks":[0,1,2,3,5],"disabled_ranks":[],"pool_layout_ver":7,"upgrade_layout_ver":8,"mem_file_bytes":1000,"status":42}`,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -871,7 +872,7 @@ func TestControl_PoolQueryResp_UnmarshalJSON(t *testing.T) {
 			},
 		},
 		"valid rankset": {
-			data: `{"enabled_ranks":"[0,1-3,5]","disabled_ranks":"[]","status":0,"uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":null,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
+			data: `{"enabled_ranks":"[0,1-3,5]","disabled_ranks":"[]","status":0,"uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":null,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8,"mem_file_bytes":1000}`,
 			expResp: PoolQueryResp{
 				Status: 0,
 				PoolInfo: daos.PoolInfo{
@@ -886,6 +887,7 @@ func TestControl_PoolQueryResp_UnmarshalJSON(t *testing.T) {
 					DisabledRanks:    &ranklist.RankSet{},
 					PoolLayoutVer:    7,
 					UpgradeLayoutVer: 8,
+					MemFileBytes:     1000,
 				},
 			},
 		},
