@@ -8,7 +8,7 @@ timeouts:
   test_rebuild_0to10: 2000
   test_rebuild_12to15: 1500
   test_rebuild_27: 1500
-
+  test_rebuild_35: 180
 pool:
   nvme_size: 0G
 
@@ -76,6 +76,7 @@ daos_tests:
     test_rebuild_32: DAOS_Rebuild_32
     test_rebuild_33: DAOS_Rebuild_33
     test_rebuild_34: DAOS_Rebuild_34
+    test_rebuild_35: DAOS_Rebuild_35
   daos_test:
     test_rebuild_0to10: r
     test_rebuild_12to15: r
@@ -98,6 +99,7 @@ daos_tests:
     test_rebuild_32: r
     test_rebuild_33: r
     test_rebuild_34: r
+    test_rebuild_35: r
   args:
     test_rebuild_0to10: -s3 -u subtests="0-10"
     test_rebuild_12to15: -s3 -u subtests="12-15"
@@ -120,6 +122,7 @@ daos_tests:
     test_rebuild_32: -s5 -u subtests="32"
     test_rebuild_33: -s5 -u subtests="33"
     test_rebuild_34: -s5 -u subtests="34"
+    test_rebuild_35: -s5 -u subtests="35"
   stopped_ranks:
     test_rebuild_26: ["random"]
     test_rebuild_27: ["random"]
