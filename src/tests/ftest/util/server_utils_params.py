@@ -530,6 +530,14 @@ class EngineYamlParameters(YamlParameters):
                     env.split("=", maxsplit=1)[0]: env.split("=", maxsplit=1)[1]
                     for env in self.REQUIRED_ENV_VARS[name]})
 
+        # Disable shutdown state (SDS) (part of RAS) for RAM-based simulated SCM.
+        # RAM doesn't support this feature and trying to use
+        # it will fail the create/open operations.
+        # PMEMOBJ expects the shutdown state support by default when built with NDCTL.
+
+        if not self.using_dcpm:
+            required_env_vars["PMEMOBJ_CONF"] = "sds.at_create=0"
+
         # Enable fault injection if configured
         if test.fault_injection.fault_file is not None:
             self.log.debug("Enabling fault injection")

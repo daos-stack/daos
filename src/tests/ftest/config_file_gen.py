@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -51,6 +51,12 @@ def generate_server_config(args):
     config.engine_params[0].storage.storage_tiers[0].storage_class.value = "ram"
     config.engine_params[0].storage.storage_tiers[0].scm_mount.value = "/mnt/daos"
     config.engine_params[0].storage.storage_tiers[0].scm_size.value = 0
+
+    # Disable shutdown state (SDS) (part of RAS) for RAM-based simulated SCM.
+    # RAM doesn't support this feature and trying to use it will fail the create/open operations.
+    # PMEMOBJ expects the shutdown state support by default when built with NDCTL.
+    config.engine_params[0].env_vars.update("PMEMOBJ_CONF=sds.at_create=0", append=True)
+
     # Update the configuration file access points
     config.other_params.access_points.value = args.node_list.split(",")
     return create_config(args, config)
