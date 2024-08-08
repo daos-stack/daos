@@ -11,7 +11,7 @@
 #include <fuse3/fuse.h>
 #include <fuse3/fuse_lowlevel.h>
 #include <string.h>
-
+#include <sys/mman.h>
 #include <sys/types.h>
 #include <hwloc.h>
 
@@ -401,6 +401,103 @@ check_fd_mountpoint(const char *mountpoint)
 	return fd;
 }
 
+typedef struct {
+	int shm_region_size;
+	int pool_info_size;
+	int cont_info_size;
+	int dfs_info_size;
+} DFS_INFO_SIZE_HEAD;
+
+#define DFS_INFO_SIZE (4096*4096)
+int
+setup_pool_cont_in_shm(struct dfuse_cont *dfs, char *dfuse_mt)
+{
+	d_iov_t	iov_pool = {};
+	d_iov_t	iov_cont = {};
+	d_iov_t	iov_dfs  = {};
+	int     fd;
+	char    name[64];
+	u_char *data;
+	int     size_shm = 0;
+	DFS_INFO_SIZE_HEAD *shm_size_head;
+	int     rc, offset, str_len, pos;
+
+	rc = daos_pool_local2global(dfs->dfs_dfp->dfp_poh, &iov_pool);
+	if (rc)
+		D_GOTO(err, rc = daos_der2errno(rc));
+	D_ALLOC(iov_pool.iov_buf, iov_pool.iov_buf_len);
+	if (iov_pool.iov_buf == NULL)
+		D_GOTO(err, rc = ENOMEM);
+	rc = daos_pool_local2global(dfs->dfs_dfp->dfp_poh, &iov_pool);
+	if (rc)
+		D_GOTO(err, rc = daos_der2errno(rc));
+
+
+	rc = daos_cont_local2global(dfs->core.dfcc_coh, &iov_cont);
+	if (rc)
+		D_GOTO(err, rc = daos_der2errno(rc));
+	D_ALLOC(iov_cont.iov_buf, iov_cont.iov_buf_len);
+	if (iov_cont.iov_buf == NULL)
+		D_GOTO(err, rc = ENOMEM);
+	rc = daos_cont_local2global(dfs->core.dfcc_coh, &iov_cont);
+	if (rc)
+		D_GOTO(err, rc = daos_der2errno(rc));
+
+
+	rc = dfs_local2global(dfs->dfs_ns, &iov_dfs);
+	if (rc)
+		D_GOTO(err, rc);
+	D_ALLOC(iov_dfs.iov_buf, iov_dfs.iov_buf_len);
+	if (iov_dfs.iov_buf == NULL)
+		D_GOTO(err, rc = ENOMEM);
+	rc = dfs_local2global(dfs->dfs_ns, &iov_dfs);
+	if (rc)
+		D_GOTO(err, rc);
+
+	size_shm = iov_pool.iov_buf_len + iov_cont.iov_buf_len + iov_dfs.iov_buf_len + 4*sizeof(int);
+	size_shm += ((size_shm%4096 == 0) ? (0):(4096 - size_shm%4096));
+
+	/* need to exclude '/' at the end of dfuse_mt. */
+	str_len = strnlen(dfuse_mt, DFS_MAX_PATH);
+	D_ASSERT(str_len > 1);
+	pos = str_len - 1;
+	while (pos > 0) {
+		if (dfuse_mt[pos] != '/')
+			break;
+		pos--;
+	}
+	sprintf(name, "dfs_info_%x", d_hash_string_u32(dfuse_mt, pos + 1));
+
+	fd = shm_open(name, O_RDWR | O_CREAT | O_TRUNC, 0644);
+	if (fd < 0) {
+		D_GOTO(err, rc = errno);
+	}
+	rc = ftruncate(fd, size_shm);
+	data = (u_char *) mmap(NULL, size_shm, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+	if (data == MAP_FAILED) {
+		printf("mmap() failed. %d\n", errno);
+		close(fd);
+		D_GOTO(err, rc);
+        }
+	shm_size_head = (DFS_INFO_SIZE_HEAD *)data;
+	shm_size_head->shm_region_size = size_shm;
+	shm_size_head->pool_info_size  = iov_pool.iov_buf_len;
+	shm_size_head->cont_info_size  = iov_cont.iov_buf_len;
+	shm_size_head->dfs_info_size   = iov_dfs.iov_buf_len;
+
+	offset = sizeof(DFS_INFO_SIZE_HEAD);
+	memcpy(data + offset, iov_pool.iov_buf, iov_pool.iov_buf_len);
+	offset += iov_pool.iov_buf_len;
+	memcpy(data + offset, iov_cont.iov_buf, iov_cont.iov_buf_len);
+	offset += iov_cont.iov_buf_len;
+	memcpy(data + offset, iov_dfs.iov_buf, iov_dfs.iov_buf_len);
+
+	return 0;
+
+err:
+	return rc;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -717,6 +814,13 @@ main(int argc, char **argv)
 	if (rc != 0) {
 		printf("Failed to connect to container: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(out_pool, rc = daos_errno2der(rc));
+	}
+
+	rc = setup_pool_cont_in_shm(dfs, dfuse_info->di_mountpoint);
+	if (rc != 0) {
+		printf("Failed to setup shared memory for pool/cont handle info: %d (%s)\n", rc,
+		       strerror(rc));
+		D_GOTO(out_cont, rc);
 	}
 
 	rc = dfuse_fs_start(dfuse_info, dfs);

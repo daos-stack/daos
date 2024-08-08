@@ -209,7 +209,7 @@ def scons():
     dfuse_env = env.Clone(LIBS=[])
     dfuse_env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
     dfuse_env.AppendUnique(CFLAGS=['-pthread'])
-    dfuse_env.AppendUnique(LIBS=['pthread', 'daos', 'daos_common', 'uuid', 'm'])
+    dfuse_env.AppendUnique(LIBS=['pthread', 'daos', 'daos_common', 'uuid', 'm', 'rt'])
 
     gcc_env = il_env.Clone(LIBS=[])
     gcc_env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
