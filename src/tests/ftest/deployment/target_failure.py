@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -36,7 +36,7 @@ class TargetFailure(IorTestBase):
             container (TestContainer): Container to run IOR.
         """
         # Update the object class depending on the test case.
-        ior_cmd = IorCommand(namespace=namespace)
+        ior_cmd = IorCommand(self.test_env.log_dir, namespace=namespace)
         ior_cmd.get_params(self)
 
         # Standard IOR prep sequence.
