@@ -330,7 +330,8 @@ static int data_init(int server, crt_init_options_t *opt)
 	}
 
 	/* Enable quotas by default only on clients */
-	crt_gdata.cg_rpc_quota = server ? 0 : CRT_QUOTA_RPCS_DEFAULT;
+	//crt_gdata.cg_rpc_quota = server ? 0 : CRT_QUOTA_RPCS_DEFAULT;
+	crt_gdata.cg_rpc_quota = 0;
 
 	d_getenv_uint("D_QUOTA_RPCS", &crt_gdata.cg_rpc_quota);
 
