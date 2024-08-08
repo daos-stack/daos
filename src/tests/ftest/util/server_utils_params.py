@@ -434,6 +434,8 @@ class EngineYamlParameters(YamlParameters):
     REQUIRED_ENV_VARS = {
         "common": [
             "D_LOG_FILE_APPEND_PID=1",
+            "ABT_THREAD_STACKSIZE=32768",
+            "PMEMOBJ_CONF=sds.at_create=0",
             "COVFILE=/tmp/test.cov"],
         "ofi+tcp": [],
         "ofi+tcp;ofi_rxm": [],
@@ -495,8 +497,6 @@ class EngineYamlParameters(YamlParameters):
             "DAOS_MD_CAP=1024",
             "DAOS_SCHED_WATCHDOG_ALL=1",
             "DD_MASK=mgmt,io,md,epc,rebuild",
-            "ABT_THREAD_STACKSIZE=32768",
-            "PMEMOBJ_CONF=sds.at_create=0",
         ]
         default_env_vars.extend(self.REQUIRED_ENV_VARS["common"])
         for name in self._provider.split(";"):
