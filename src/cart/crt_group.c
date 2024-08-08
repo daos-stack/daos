@@ -1646,7 +1646,7 @@ out:
 
 	if (rc != DER_SUCCESS)
 		D_INFO("uri lookup of (rank=%d:tag=%d) group=%s failed; rc=%d\n", ul_in->ul_rank,
-		       ul_in->ul_tag, grp_priv->gp_pub.cg_grpid, rc);
+		       ul_in->ul_tag, grp_priv == NULL ? "(null)" : grp_priv->gp_pub.cg_grpid, rc);
 
 	if (should_decref)
 		crt_grp_priv_decref(grp_priv);
