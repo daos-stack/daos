@@ -1989,9 +1989,14 @@ cont_snap_update_one(void *vin)
 	struct ds_cont_child	*cont;
 	int			 rc;
 
-	rc = ds_cont_child_lookup(args->pool_uuid, args->cont_uuid, &cont);
+	/* The container should be exist on the system at this point, if non-exist on this target
+	 * it should be the case of reintegrate the container was destroyed ahead, so just
+	 * open_create the container here.
+	 */
+	rc = ds_cont_child_open_create(args->pool_uuid, args->cont_uuid, &cont);
 	if (rc != 0)
 		return rc;
+
 	if (args->snap_count == 0) {
 		if (cont->sc_snapshots != NULL) {
 			D_ASSERT(cont->sc_snapshots_nr > 0);
@@ -2045,9 +2050,9 @@ ds_cont_tgt_snapshots_update(uuid_t pool_uuid, uuid_t cont_uuid,
 	 * the up targets in this scenario. The target property will be updated
 	 * upon initiating container aggregation.
 	 */
-	return ds_pool_task_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
-				       PO_COMP_ST_DOWNOUT | PO_COMP_ST_UP,
-				       cont_snap_update_one, &args, 0);
+	return ds_pool_thread_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
+					 PO_COMP_ST_DOWNOUT | PO_COMP_ST_UP,
+					 cont_snap_update_one, &args, 0);
 }
 
 void
