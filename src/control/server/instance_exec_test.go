@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -67,7 +67,7 @@ func TestIOEngineInstance_exit(t *testing.T) {
 
 			runner := engine.NewTestRunner(tc.trc, &engine.Config{})
 
-			engine := NewEngineInstance(log, nil, nil, runner)
+			engine := NewEngineInstance(log, nil, nil, runner, nil)
 			engine.setIndex(tc.instanceIdx)
 
 			if tc.rankInSuperblock {

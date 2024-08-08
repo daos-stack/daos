@@ -424,9 +424,7 @@ class DaosServerManager(SubprocessManager):
                 DaosServerCommand.ScmSubCommand.PrepareSubCommand object
 
         Raises:
-            RemoteCommandResult: a grouping of the command results from the same hosts with the same
-                return status
-
+            CommandResult: groups of command results from the same hosts with the same return status
         """
         cmd = DaosServerCommand(self.manager.job.command_path)
         cmd.sudo = False
@@ -449,9 +447,7 @@ class DaosServerManager(SubprocessManager):
                 DaosServerCommand.ScmSubCommand.ResetSubCommand object
 
         Raises:
-            RemoteCommandResult: a grouping of the command results from the same hosts with the same
-                return status
-
+            CommandResult: groups of command results from the same hosts with the same return status
         """
         cmd = DaosServerCommand(self.manager.job.command_path)
         cmd.sudo = False
@@ -469,9 +465,7 @@ class DaosServerManager(SubprocessManager):
                 DaosServerCommand.NvmeSubCommand.PrepareSubCommand object
 
         Returns:
-            RemoteCommandResult: a grouping of the command results from the same hosts with the same
-                return status
-
+            CommandResult: groups of command results from the same hosts with the same return status
         """
         cmd = DaosServerCommand(self.manager.job.command_path)
         cmd.sudo = False
@@ -489,9 +483,7 @@ class DaosServerManager(SubprocessManager):
                 DaosServerCommand.SupportSubCommand.CollectLogSubCommand object
 
         Returns:
-            RemoteCommandResult: a grouping of the command results from the same hosts with the same
-                return status
-
+            CommandResult: groups of command results from the same hosts with the same return status
         """
         cmd = DaosServerCommand(self.manager.job.command_path)
         cmd.run_user = "daos_server"
@@ -1273,7 +1265,7 @@ class DaosServerManager(SubprocessManager):
                     file_search.append(".".join([log_file, pid]))
             # Determine which of those log files actually do exist on this host
             # This matches the engine pid to the engine log file name
-            command = f"ls -1 {' '.join(file_search)} | grep -v 'No such file or directory'"
+            command = f"ls -1 {' '.join(file_search)} 2>&1 | grep -v 'No such file or directory'"
             result = run_remote(self.log, host, command, False)
             for data in result.output:
                 for line in data.stdout:
@@ -1333,27 +1325,29 @@ class DaosServerManager(SubprocessManager):
         Returns:
             list: a unique list of the requested number of random ranks
         """
-        self.log.debug("Selecting a random engine rank")
-        if not exclude:
-            exclude = []
-        else:
-            self.log.debug("  Excluding requested rank(s): %s", exclude)
+        rank_data = self.get_current_state()
+        available_ranks = set(rank_data.keys())
+        self.log.debug("Selecting a random engine rank from %s", available_ranks)
+        if exclude:
+            available_ranks = available_ranks.difference(exclude)
+            self.log.debug("  Excluding requested rank(s) %s => %s", exclude, available_ranks)
         if running:
             not_running = []
-            for rank, expected_states in self.get_expected_states().items():
-                for running_state in self._states["running"]:
-                    if running_state not in expected_states and rank not in exclude:
-                        not_running.append(rank)
+            for rank, rank_info in rank_data.items():
+                if rank_info["state"] not in self._states["running"]:
+                    not_running.append(rank)
             if not_running:
-                self.log.debug("  Excluding non-running rank(s): %s", not_running)
-                exclude.extend(not_running)
-        if not management_service:
+                available_ranks = available_ranks.difference(not_running)
+                self.log.debug(
+                    "  Excluding non-running rank(s) %s => %s", not_running, available_ranks)
+        if management_service:
             ms_ranks = self.management_service_ranks
-            self.log.debug("  Excluding management service rank(s) %s ", ms_ranks)
-            exclude.extend(ms_ranks)
-        available_ranks = [rank for rank in self.ranks.keys() if rank not in exclude]
+            available_ranks = available_ranks.intersection(ms_ranks)
+            self.log.debug(
+                "  Only including management service rank(s) %s => %s", ms_ranks, available_ranks)
         if len(available_ranks) < quantity:
-            raise ServerFailed(f"Not enough ranks from which to chose {quantity} randomly.")
-        random_rank = random.sample(available_ranks, quantity)
+            raise ServerFailed(
+                f"Not enough ranks from which to chose {quantity} randomly: {available_ranks}.")
+        random_rank = random.sample(list(available_ranks), quantity)
         self.log.debug("  Selected rank(s) %s from %s", random_rank, available_ranks)
         return random_rank

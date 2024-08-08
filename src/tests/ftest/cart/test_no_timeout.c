@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -103,7 +103,9 @@ test_run(void)
 				 test_g.t_srv_ctx_num, 60, 120);
 	D_ASSERTF(rc == 0, "wait_for_ranks() failed; rc=%d\n", rc);
 
-	crt_group_size(test_g.t_remote_group, &test_g.t_remote_group_size);
+	rc = crt_group_size(test_g.t_remote_group, &test_g.t_remote_group_size);
+	D_ASSERTF(rc == 0, "crt_group_size() failed; rc=%d\n", rc);
+
 	fprintf(stderr, "size of %s is %d\n", test_g.t_remote_group_name,
 		test_g.t_remote_group_size);
 

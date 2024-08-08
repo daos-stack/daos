@@ -175,7 +175,7 @@ class ServerRankFailure(IorTestBase):
 
         # 9. Call dmg pool query -b to find the disabled ranks.
         output = self.get_dmg_command().pool_query(pool=self.pool.identifier, show_disabled=True)
-        disabled_ranks = output["response"]["disabled_ranks"]
+        disabled_ranks = output["response"].get("disabled_ranks")
         self.log.info("Disabled ranks = %s", disabled_ranks)
 
         # 10. Call dmg pool reintegrate one rank at a time to enable all ranks.
