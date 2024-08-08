@@ -239,7 +239,7 @@ message PoolQueryResp {
 	uint32 svc_ldr = 18; // current raft leader (2.6+)
 	repeated uint32 svc_reps = 19; // service replica ranks
 	uint64                     query_mask         = 20; // Bitmask of pool query options used
-							    // TODO DAOS-14223: Add mem_file_bytes.
+	uint64 mem_file_bytes = 21; // per-pool accumulated value of memory file sizes
 }
 
 message PoolProperty {
@@ -330,6 +330,7 @@ message PoolQueryTargetInfo {
 	TargetState state = 2; // target state see enum daos_target_state_t
 	// TODO: target performance data
 	repeated StorageTargetUsage space = 3; // this target's usage per storage tier
+	uint64                      mem_file_bytes = 4; // per-target value of memory file size
 }
 
 // PoolQueryTargetResp represents a pool target query response

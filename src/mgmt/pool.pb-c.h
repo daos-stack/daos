@@ -865,10 +865,14 @@ struct  _Mgmt__PoolQueryResp
    * Bitmask of pool query options used
    */
   uint64_t query_mask;
+  /*
+   * per-pool accumulated value of memory file sizes
+   */
+  uint64_t mem_file_bytes;
 };
 #define MGMT__POOL_QUERY_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_resp__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, 0,NULL, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, MGMT__POOL_SERVICE_STATE__Creating, 0, 0,NULL, 0 }
+    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, 0,NULL, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, MGMT__POOL_SERVICE_STATE__Creating, 0, 0,NULL, 0, 0 }
 
 
 typedef enum {
@@ -1110,10 +1114,14 @@ struct  _Mgmt__PoolQueryTargetInfo
    */
   size_t n_space;
   Mgmt__StorageTargetUsage **space;
+  /*
+   * per-target value of memory file size
+   */
+  uint64_t mem_file_bytes;
 };
 #define MGMT__POOL_QUERY_TARGET_INFO__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_target_info__descriptor) \
-    , MGMT__POOL_QUERY_TARGET_INFO__TARGET_TYPE__UNKNOWN, MGMT__POOL_QUERY_TARGET_INFO__TARGET_STATE__STATE_UNKNOWN, 0,NULL }
+    , MGMT__POOL_QUERY_TARGET_INFO__TARGET_TYPE__UNKNOWN, MGMT__POOL_QUERY_TARGET_INFO__TARGET_STATE__STATE_UNKNOWN, 0,NULL, 0 }
 
 
 /*

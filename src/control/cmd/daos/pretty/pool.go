@@ -20,27 +20,24 @@ import (
 
 const msgNoPools = "No pools in system"
 
-func printPoolTiers(suss []*daos.StorageUsageStats, w *txtfmt.ErrWriter, fullStats bool) {
-	mdOnSSD := false
+func printPoolTiers(memFileBytes uint64, suss []*daos.StorageUsageStats, w *txtfmt.ErrWriter, fullStats bool) {
+	mdOnSSD := memFileBytes != 0
 	for tierIdx, tierStats := range suss {
-		if tierIdx >= int(daos.StorageMediaTypeMax) {
-			tierStats.MediaType = daos.StorageMediaTypeMax // Print unknown type tier.
-		}
-
-		switch {
-		case tierIdx == 0 && tierStats.MediaType == daos.StorageMediaTypeNvme:
-			// MD-on-SSD mode.
-			// TODO: Print VOS index aggregate file size across pool as distinct from
-			//       Meta-blob aggregate size.
-			if fullStats {
-				fmt.Fprintf(w, "- Total memory-file size: %s\n",
-					humanize.Bytes(tierStats.Total))
+		if mdOnSSD {
+			if tierIdx == 0 {
+				if fullStats {
+					fmt.Fprintf(w, "- Total memory-file size: %s\n",
+						humanize.Bytes(memFileBytes))
+				}
+				fmt.Fprintf(w, "- Metadata storage:\n")
+			} else {
+				fmt.Fprintf(w, "- Data storage:\n")
 			}
-			fmt.Fprintf(w, "- Metadata storage:\n")
-			mdOnSSD = true
-		case mdOnSSD:
-			fmt.Fprintf(w, "- Data storage:\n")
-		default:
+		} else {
+			if tierIdx >= int(daos.StorageMediaTypeMax) {
+				// Print unknown type tiers.
+				tierStats.MediaType = daos.StorageMediaTypeMax
+			}
 			fmt.Fprintf(w, "- Storage tier %d (%s):\n", tierIdx,
 				strings.ToUpper(tierStats.MediaType.String()))
 		}
@@ -93,7 +90,7 @@ func PrintPoolInfo(pi *daos.PoolInfo, out io.Writer) error {
 	if pi.QueryMask.HasOption(daos.PoolQueryOptionSpace) && pi.TierStats != nil {
 		fmt.Fprintln(w, "Pool space info:")
 		fmt.Fprintf(w, "- Target count:%d\n", pi.ActiveTargets)
-		printPoolTiers(pi.TierStats, w, true)
+		printPoolTiers(pi.MemFileBytes, pi.TierStats, w, true)
 	}
 	return w.Err
 }
@@ -109,7 +106,7 @@ func PrintPoolQueryTargetInfo(pqti *daos.PoolQueryTargetInfo, out io.Writer) err
 	// Maintain output compatibility with the `daos pool query-targets` output.
 	fmt.Fprintf(w, "Target: type %s, state %s\n", pqti.Type, pqti.State)
 	if pqti.Space != nil {
-		printPoolTiers(pqti.Space, w, false)
+		printPoolTiers(pqti.MemFileBytes, pqti.Space, w, false)
 	}
 
 	return w.Err

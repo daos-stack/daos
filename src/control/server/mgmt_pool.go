@@ -957,14 +957,11 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 	// Preserve compatibility with pre-2.6 callers.
 	resp.Leader = resp.SvcLdr
 
-	// Update media type of storage tier #0 if MD-on-SSD is enabled.
-	// TODO DAOS-14223: Do we need this if we are returning memory_file_bytes?
+	// TODO DAOS-16209: After VOS query API is updated, zero-value mem_file_bytes will be
+	//                  returned in non-MD-on-SSD mode and this hack can be removed.
 	storage := svc.harness.Instances()[0].GetStorage()
-	if storage.ControlMetadataPathConfigured() {
-		if len(resp.TierStats) > 0 {
-			svc.log.Debugf("md-on-ssd pool query, set tier-0 to NVMe")
-			resp.TierStats[0].MediaType = mgmtpb.StorageMediaType_NVME
-		}
+	if !storage.ControlMetadataPathConfigured() {
+		resp.MemFileBytes = 0
 	}
 
 	return resp, nil
@@ -986,14 +983,12 @@ func (svc *mgmtSvc) PoolQueryTarget(ctx context.Context, req *mgmtpb.PoolQueryTa
 		return nil, errors.Wrap(err, "unmarshal PoolQueryTarget response")
 	}
 
-	// Update media type of storage tier #0 if MD-on-SSD is enabled.
+	// TODO DAOS-16209: After VOS query API is updated, zero-value mem_file_bytes will be
+	//                  returned in non-MD-on-SSD mode and this hack can be removed.
 	storage := svc.harness.Instances()[0].GetStorage()
-	if storage.ControlMetadataPathConfigured() {
-		svc.log.Debugf("md-on-ssd pool query-target, set tier-0 to NVMe")
+	if !storage.ControlMetadataPathConfigured() {
 		for _, tgtInfo := range resp.Infos {
-			if len(tgtInfo.Space) > 0 {
-				tgtInfo.Space[0].MediaType = mgmtpb.StorageMediaType_NVME
-			}
+			tgtInfo.MemFileBytes = 0
 		}
 	}
 
