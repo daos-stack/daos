@@ -34,6 +34,7 @@
 #include "dfuse_common.h"
 
 #include "ioil.h"
+#include "../pil4dfs/hook.h"
 
 FOREACH_INTERCEPT(IOIL_FORWARD_DECL)
 
@@ -62,6 +63,7 @@ struct ioil_global {
 	bool		iog_daos_init;
 
 	bool		iog_show_summary;	/**< Should a summary be shown at teardown */
+	bool		iog_fini_done;		/**< Whether destructor function is finished */
 	unsigned	iog_report_count;	/**< Number of operations that should be logged */
 
 	ATOMIC uint64_t iog_file_count;  /**< Number of file opens intercepted */
@@ -75,6 +77,10 @@ static vector_t	fd_table;
 static struct ioil_global ioil_iog;
 
 static __thread int saved_errno;
+
+static void *(*real_mmap)(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
+static void *
+dfuse_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
 
 #define SAVE_ERRNO(is_error)                 \
 	do {                                 \
@@ -344,6 +350,9 @@ ioil_init(void)
 		ioil_iog.iog_eq_count_max = IOIL_MAX_EQ;
 	}
 
+	register_a_hook("libc", "mmap", (void *)dfuse_mmap, (long int *)(&real_mmap));
+	install_hook();
+
 	ioil_iog.iog_initialized = true;
 }
 
@@ -370,11 +379,17 @@ ioil_fini(void)
 	int               rc;
 	pid_t             tid = syscall(SYS_gettid);
 
+	if (ioil_iog.iog_fini_done)
+		return;
 	if (tid != ioil_iog.iog_init_tid) {
 		DFUSE_TRA_INFO(&ioil_iog, "Ignoring destructor from alternate thread");
 		return;
 	}
 
+	if (ioil_iog.iog_initialized)
+		uninstall_hook();
+	else
+		free_memory_in_hook();
 	ioil_iog.iog_initialized = false;
 
 	DFUSE_TRA_DOWN(&ioil_iog);
@@ -415,6 +430,7 @@ ioil_fini(void)
 	}
 	ioil_iog.iog_daos_init = false;
 	daos_debug_fini();
+	ioil_iog.iog_fini_done = true;
 }
 
 int
@@ -1754,9 +1770,8 @@ do_real_pwritev:
 	return __real_pwritev(fd, vector, iovcnt, offset);
 }
 
-DFUSE_PUBLIC void *
-dfuse_mmap(void *address, size_t length, int prot, int flags, int fd,
-	   off_t offset)
+static void *
+dfuse_mmap(void *address, size_t length, int prot, int flags, int fd, off_t offset)
 {
 	struct fd_entry *entry;
 	int rc;
@@ -1783,7 +1798,7 @@ dfuse_mmap(void *address, size_t length, int prot, int flags, int fd,
 			return MAP_FAILED;
 	}
 
-	return __real_mmap(address, length, prot, flags, fd, offset);
+	return real_mmap(address, length, prot, flags, fd, offset);
 }
 
 DFUSE_PUBLIC int
@@ -3005,6 +3020,13 @@ dfuse_get_bypass_status(int fd)
 	vector_decref(&fd_table, entry);
 
 	return rc;
+}
+
+DFUSE_PUBLIC void
+dfuse_exit(int rc)
+{
+	ioil_fini();
+	return __real_exit(rc);
 }
 
 FOREACH_INTERCEPT(IOIL_DECLARE_ALIAS)

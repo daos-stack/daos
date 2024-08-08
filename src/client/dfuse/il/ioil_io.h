@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -21,7 +21,6 @@ DFUSE_PUBLIC ssize_t dfuse_pwrite(int, const void *, size_t, off_t);
 DFUSE_PUBLIC off_t dfuse_lseek(int, off_t, int);
 DFUSE_PUBLIC ssize_t dfuse_preadv(int, const struct iovec *, int, off_t);
 DFUSE_PUBLIC ssize_t dfuse_pwritev(int, const struct iovec *, int, off_t);
-DFUSE_PUBLIC void *dfuse_mmap(void *, size_t, int, int, int, off_t);
 DFUSE_PUBLIC int dfuse_close(int);
 DFUSE_PUBLIC ssize_t dfuse_read(int, void *, size_t);
 DFUSE_PUBLIC ssize_t dfuse_write(int, const void *, size_t);
