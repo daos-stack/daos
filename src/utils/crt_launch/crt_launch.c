@@ -1,9 +1,10 @@
 /*
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
- /**
+
+/**
  * MPI-based and cart-based crt_launch application that facilitates launching
  * cart-based clients and servers when no pmix is used.
  *
@@ -156,7 +157,7 @@ get_self_uri(struct host *h, int rank)
 	if (str_port == NULL)
 		return -DER_NOMEM;
 
-	d_setenv("OFI_PORT", str_port, 1);
+	d_setenv("D_PORT", str_port, 1);
 
 	rc = crt_init(0, CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	if (rc != 0) {
@@ -313,7 +314,7 @@ int main(int argc, char **argv)
 
 	sprintf(str_rank, "%d", hostbuf->my_rank);
 	sprintf(str_port, "%d", hostbuf->ofi_port);
-	/* Set CRT_L_RANK and OFI_PORT */
+	/* Set CRT_L_RANK and D_PORT */
 	d_setenv("CRT_L_RANK", str_rank, true);
 	d_setenv("D_PORT", str_port, true);
 
