@@ -486,11 +486,13 @@ void bio_xsctxt_free(struct bio_xs_context *ctxt);
  * Health check on the per-xstream NVMe context
  *
  * \param[in] xs_ctxt	Per-xstream NVMe context
+ * \param[in] log_err	Log media error if the device is not healthy
+ * \param[in] update	The check is called for an update operation or not
  *
  * \returns		0:		NVMe context is healthy
  *			-DER_NVME_IO:	NVMe context is faulty
  */
-int bio_xsctxt_health_check(struct bio_xs_context *xs_ctxt);
+int bio_xsctxt_health_check(struct bio_xs_context *xs_ctxt, bool log_err, bool update);
 
 /**
  * NVMe poller to poll NVMe I/O completions.
