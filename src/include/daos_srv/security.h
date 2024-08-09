@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -109,6 +109,19 @@ ds_sec_cont_get_capabilities(uint64_t flags, d_iov_t *cred, struct d_ownership *
  */
 bool
 ds_sec_pool_can_connect(uint64_t pool_capas);
+
+/**
+ * Determine if a container can be opened with given security capabilities.
+ *
+ * \param[in]	pool_capas	Capability bits acquired via
+ *				ds_sec_pool_get_capabilities
+ * \param[in]	rdonly		Open container for read only or not
+ *
+ * \return	True		Operation allowed
+ *		False		Operation forbidden
+ */
+bool
+ds_sec_pool_can_open_cont(uint64_t pool_capas, bool rdonly);
 
 /**
  * Determine if a pool handle with given security capabilities can create a

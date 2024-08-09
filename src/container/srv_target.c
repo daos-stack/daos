@@ -934,7 +934,7 @@ cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 			DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id);
 		rc = -DER_SHUTDOWN;
 	} else if (!cont_child_started(cont_child)) {
-		if (!ds_pool_skip_for_check(pool_child->spc_pool)) {
+		if (!ds_pool_restricted(pool_child->spc_pool, false)) {
 			rc = cont_start_agg(cont_child);
 			if (rc != 0)
 				goto out;
@@ -1601,10 +1601,14 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		 *     but for creating rebuild global container handle.
 		 */
 		D_ASSERT(hdl->sch_cont != NULL);
+		D_ASSERT(hdl->sch_cont->sc_pool != NULL);
 		hdl->sch_cont->sc_open++;
 
 		if (hdl->sch_cont->sc_open > 1)
 			goto opened;
+
+		if (ds_pool_restricted(hdl->sch_cont->sc_pool->spc_pool, false))
+			goto csum_init;
 
 		rc = dtx_cont_open(hdl->sch_cont);
 		if (rc != 0) {
@@ -1633,10 +1637,8 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 			D_GOTO(err_dtx, rc);
 		}
 
-		D_ASSERT(hdl->sch_cont != NULL);
-		D_ASSERT(hdl->sch_cont->sc_pool != NULL);
+csum_init:
 		rc = ds_cont_csummer_init(hdl->sch_cont);
-
 		if (rc != 0)
 			D_GOTO(err_dtx, rc);
 	}

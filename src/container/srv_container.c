@@ -2221,6 +2221,13 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont, cr
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid), rpc, DP_UUID(in->coi_op.ci_hdl),
 		flags);
 
+	/* Verify the pool handle capabilities. */
+	if (!ds_sec_pool_can_open_cont(pool_hdl->sph_sec_capas, flags & DAOS_COO_RO)) {
+		D_ERROR(DF_CONT": permission denied to open read only cont with flags "DF_X64"\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid), flags);
+		D_GOTO(out, rc = -DER_NO_PERM);
+	}
+
 	if (dup_op) {
 		if (op_val->ov_rc != 0)
 			lookup_out_fields = false;

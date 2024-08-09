@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -642,10 +642,23 @@ ds_sec_pool_can_connect(uint64_t pool_capas)
 }
 
 bool
+ds_sec_pool_can_open_cont(uint64_t pool_capas, bool rdonly)
+{
+	if ((pool_capas & POOL_CAPA_READ) == 0)
+		return false;
+
+	if (rdonly)
+		return true;
+
+	return (pool_capas & ~POOL_CAPAS_RO_MASK) != 0;
+}
+
+bool
 ds_sec_pool_can_create_cont(uint64_t pool_capas)
 {
 	return (pool_capas & POOL_CAPA_CREATE_CONT) != 0;
 }
+
 bool
 ds_sec_pool_can_delete_cont(uint64_t pool_capas)
 {

@@ -84,6 +84,7 @@ struct ds_pool {
 	uuid_t			sp_srv_pool_hdl;
 	uint32_t		sp_stopping:1,
 				sp_cr_checked:1,
+				sp_rdonly:1,
 				sp_fetch_hdls:1,
 				sp_need_discard:1,
 				sp_disable_rebuild:1;
@@ -275,9 +276,9 @@ int ds_pool_tgt_finish_rebuild(uuid_t pool_uuid, struct pool_target_id_list *lis
 int ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 			   unsigned int map_version);
 
-bool ds_pool_skip_for_check(struct ds_pool *pool);
-int ds_pool_start_after_check(uuid_t uuid);
-int ds_pool_start(uuid_t uuid, bool aft_chk);
+bool ds_pool_restricted(struct ds_pool *pool, bool rdonly);
+int ds_pool_start_after_check(uuid_t uuid, bool rdonly);
+int ds_pool_start(uuid_t uuid, bool aft_chk, bool rdonly);
 int ds_pool_stop(uuid_t uuid);
 int dsc_pool_svc_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uint64_t deadline, int ntargets,
 			const d_rank_list_t *rank_list, int ndomains, const uint32_t *domains);
