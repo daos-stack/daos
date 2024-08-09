@@ -3105,8 +3105,11 @@ pool_op_check_delete_oldest(struct rdb_tx *tx, struct pool_svc *svc, bool dup_op
 	if ((*svc_ops_num < svc->ps_ops_max) && (age_sec <= svc->ps_ops_age))
 		return 0;
 
-	D_DEBUG(DB_MD, DF_UUID ": will delete oldest entry, svc_ops_num=%u, age=%zu sec\n",
-		DP_UUID(svc->ps_uuid), *svc_ops_num, age_sec);
+	D_DEBUG(DB_MD,
+		DF_UUID ": will delete oldest entry, svc_ops_num=%u, age=%zu sec: client=" DF_UUID
+			" time=%016lx\n",
+		DP_UUID(svc->ps_uuid), *svc_ops_num, age_sec, DP_UUID(k1.ok_client_id),
+		k1.ok_client_time);
 	rc = rdb_tx_delete(tx, &svc->ps_ops, &key1_enc);
 	if (rc != 0) {
 		DL_ERROR(rc, "failed to delete oldest entry in ps_ops");
@@ -3172,6 +3175,8 @@ ds_pool_svc_ops_lookup(struct rdb_tx *tx, void *pool_svc, uuid_t pool_uuid, uuid
 		duplicate = true;
 	} else if (rc == -DER_NONEXIST) {
 		/* not found - new, unique RPC being handled */
+		D_DEBUG(DB_MD, DF_UUID ": not found: client=" DF_UUID " time=%016lx\n",
+			DP_UUID(pool_uuid), DP_UUID(*cli_uuidp), cli_time);
 		rc = 0;
 	} else {
 		DL_ERROR(rc, DF_UUID ": failed to lookup RPC client=" DF_UUID " time=%016lx",
@@ -3272,6 +3277,8 @@ ds_pool_svc_ops_save(struct rdb_tx *tx, void *pool_svc, uuid_t pool_uuid, uuid_t
 				 DP_UUID(pool_uuid), DP_UUID(*cli_uuidp), cli_time);
 			goto out_enc;
 		}
+		D_DEBUG(DB_MD, DF_UUID ": update ops: client=" DF_UUID " time=%016lx\n",
+			DP_UUID(pool_uuid), DP_UUID(*cli_uuidp), cli_time);
 		new_svc_ops_num++;
 	}
 
