@@ -18,13 +18,13 @@ class MacsioTest(TestWithServers):
     :avocado: recursive
     """
 
-    def get_macsio_command(self, pool_uuid, pool_svcl, cont_uuid):
+    def get_macsio_command(self, pool, pool_svcl, cont):
         """Get the MacsioCommand object.
 
         Args:
-            pool_uuid (str): pool uuid
+            pool (TestPool): pool object
             pool_svcl (str): pool service replica
-            cont_uuid (str, optional): container uuid. Defaults to None.
+            cont (TestContainer): container object
 
         Returns:
             MacsioCommand: object defining the macsio command
@@ -39,9 +39,9 @@ class MacsioTest(TestWithServers):
 
         # Update the MACSio pool and container info before gathering manager
         # environment information to ensure they are included.
-        macsio.daos_pool = pool_uuid
+        macsio.daos_pool = pool.identifier
         macsio.daos_svcl = pool_svcl
-        macsio.daos_cont = cont_uuid
+        macsio.daos_cont = cont.identifier
 
         return macsio
 
@@ -159,7 +159,7 @@ class MacsioTest(TestWithServers):
 
         # Run macsio
         self.log_step("Running MACSio with DAOS VOL connector")
-        macsio = self.get_macsio_command(pool.uuid, list_to_str(pool.svc_ranks), container.uuid)
+        macsio = self.get_macsio_command(pool, list_to_str(pool.svc_ranks), container)
         result = self.run_macsio(
             macsio, self.hostlist_clients, processes, plugin_path,
             working_dir=dfuse.mount_dir.value)
