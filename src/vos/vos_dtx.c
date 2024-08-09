@@ -645,7 +645,8 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 	dbd = dae->dae_dbd;
 	dae_df = umem_off2ptr(umm, dae->dae_df_off);
 
-	D_ASSERT(dae_df != NULL);
+	D_ASSERTF(dae_df != NULL, "Hit invalid DTX entry "DF_DTI" when release for %s\n",
+		  DP_DTI(&DAE_XID(dae)), abort ? "abort" : "commit");
 	D_ASSERTF(dbd->dbd_magic == DTX_ACT_BLOB_MAGIC,
 		  "Invalid blob %p magic %x for "DF_DTI" (lid %x)\n",
 		  dbd, dbd->dbd_magic, DP_DTI(&DAE_XID(dae)), DAE_LID(dae));
@@ -1177,13 +1178,16 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	}
 
 	if (intent == DAOS_INTENT_PURGE) {
+		uint32_t	age = d_hlc_age2sec(DAE_XID(dae).dti_hlc);
+
 		/*
 		 * The DTX entry still references related data record,
 		 * then we cannot (vos) aggregate related data record.
 		 */
-		if (d_hlc_age2sec(DAE_XID(dae).dti_hlc) >= DAOS_AGG_THRESHOLD)
-			D_WARN("DTX "DF_DTI" (%u) still references the data, cannot be (VOS) "
-			       "aggregated\n", DP_DTI(&DAE_XID(dae)), vos_dtx_status(dae));
+		if (age >= DAOS_AGG_THRESHOLD)
+			D_WARN("DTX "DF_DTI" (state:%u, age:%u) still references the data, "
+			       "cannot be (VOS) aggregated\n",
+			       DP_DTI(&DAE_XID(dae)), vos_dtx_status(dae), age);
 
 		return ALB_AVAILABLE_DIRTY;
 	}
@@ -1420,21 +1424,25 @@ vos_dtx_validation(struct dtx_handle *dth)
 			if (rc == -DER_NONEXIST) {
 				rc = dbtree_lookup(cont->vc_dtx_committed_hdl, &kiov, &riov);
 				if (rc == 0)
-					return DTX_ST_COMMITTED;
+					D_GOTO(out, rc = DTX_ST_COMMITTED);
 			}
 
 			/* Failed to lookup DTX entry, in spite of whether it is DER_NONEXIST
 			 * or not, then handle it as aborted that will cause client to retry.
 			 */
-			return DTX_ST_ABORTED;
+			D_GOTO(out, rc = DTX_ST_ABORTED);
 		}
 
 		dae = riov.iov_buf;
 	} else if (unlikely(dae == NULL)) {
-		return DTX_ST_COMMITTED;
+		D_GOTO(out, rc = DTX_ST_COMMITTED);
 	}
 
-	return vos_dtx_status(dae);
+	rc = vos_dtx_status(dae);
+
+out:
+	dth->dth_need_validation = 0;
+	return rc;
 }
 
 static int
@@ -2934,8 +2942,10 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth)
 		/* Only keep the DTX entry (header) for handling resend RPC,
 		 * remove DTX records, purge related VOS objects from cache.
 		 */
-		if (dae != NULL)
+		if (dae != NULL) {
+			D_ASSERT(!vos_dae_is_prepare(dae));
 			dtx_act_ent_cleanup(cont, dae, dth, true);
+		}
 	} else {
 		d_iov_set(&kiov, &dth->dth_xid, sizeof(dth->dth_xid));
 		d_iov_set(&riov, NULL, 0);
