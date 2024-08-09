@@ -67,26 +67,6 @@ d_randd(void)
 	return result;
 }
 
-/* Developer/debug version, poison memory on free.
- * This tries several ways to access the buffer size however none of them are perfect so for now
- * this is no in release builds.
- */
-
-#ifdef DAOS_BUILD_RELEASE
-void
-d_free(void *ptr)
-{
-	if (unlikely(track_arg != NULL)) {
-		size_t size = malloc_usable_size(ptr);
-
-		d_free_track_cb(track_arg, size);
-	}
-
-	free(ptr);
-}
-
-#else
-
 static size_t
 _f_get_alloc_size(void *ptr)
 {
@@ -106,12 +86,32 @@ _f_get_alloc_size(void *ptr)
 	return size;
 }
 
+
+/* Developer/debug version, poison memory on free.
+ * This tries several ways to access the buffer size however none of them are perfect so for now
+ * this is no in release builds.
+ */
+
+#ifdef DAOS_BUILD_RELEASE
+void
+d_free(void *ptr)
+{
+	if (unlikely(track_arg != NULL))
+		d_free_track_cb(track_arg, _f_get_alloc_size(ptr));
+
+	free(ptr);
+}
+
+#else
+
 void
 d_free(void *ptr)
 {
 	size_t msize = _f_get_alloc_size(ptr);
 
 	memset(ptr, 0x42, msize);
+	if (unlikely(track_arg != NULL))
+		d_free_track_cb(track_arg, msize);
 	free(ptr);
 }
 
@@ -124,8 +124,9 @@ d_calloc(size_t count, size_t eltsize)
 
 	ptr = calloc(count, eltsize);
 	if (unlikely(track_arg != NULL)) {
+
 		if (ptr != NULL)
-			d_alloc_track_cb(track_arg, malloc_usable_size(ptr));
+			d_alloc_track_cb(track_arg, _f_get_alloc_size(ptr));
 	}
 
 	return ptr;
@@ -139,7 +140,7 @@ d_malloc(size_t size)
 	ptr = malloc(size);
 	if (unlikely(track_arg != NULL)) {
 		if (ptr != NULL)
-			d_alloc_track_cb(track_arg, size);
+			d_alloc_track_cb(track_arg, _f_get_alloc_size(ptr));
 	}
 
 	return ptr;
@@ -151,12 +152,12 @@ d_realloc(void *ptr, size_t size)
 	void *new_ptr;
 
 	if (unlikely(track_arg != NULL)) {
-		size_t old_size = malloc_usable_size(ptr);
+		size_t old_size = _f_get_alloc_size(ptr);
 
 		new_ptr = realloc(ptr, size);
 		if (new_ptr != NULL) {
 			d_free_track_cb(track_arg, old_size);
-			d_alloc_track_cb(track_arg, size);
+			d_alloc_track_cb(track_arg, _f_get_alloc_size(new_ptr));
 		}
 	} else {
 		new_ptr = realloc(ptr, size);
@@ -171,8 +172,10 @@ d_strndup(const char *s, size_t n)
 
 	ptr = strndup(s, n);
 	if (unlikely(track_arg != NULL)) {
+		size_t size = _f_get_alloc_size(ptr);
+
 		if (ptr != NULL)
-			d_alloc_track_cb(track_arg, malloc_usable_size(ptr));
+			d_alloc_track_cb(track_arg, size);
 	}
 
 	return ptr;
@@ -189,8 +192,11 @@ d_asprintf(char **strp, const char *fmt, ...)
 	va_end(ap);
 
 	if (unlikely(track_arg != NULL)) {
-		if (rc > 0 && *strp != NULL)
-			d_alloc_track_cb(track_arg, (size_t)rc);
+		if (rc > 0 && *strp != NULL) {
+			size_t size = _f_get_alloc_size(*strp);
+
+			d_alloc_track_cb(track_arg, size);
+		}
 	}
 
 	return rc;
@@ -212,6 +218,14 @@ d_asprintf2(int *_rc, const char *fmt, ...)
 	if (rc == -1)
 		return NULL;
 
+	if (unlikely(track_arg != NULL)) {
+		if (str != NULL) {
+			size_t size = _f_get_alloc_size(str);
+
+			d_alloc_track_cb(track_arg, size);
+		}
+	}
+
 	return str;
 }
 
@@ -223,7 +237,7 @@ d_realpath(const char *path, char *resolved_path)
 	ptr = realpath(path, resolved_path);
 	if (unlikely(track_arg != NULL)) {
 		if (ptr != NULL)
-			d_alloc_track_cb(track_arg, malloc_usable_size(ptr));
+			d_alloc_track_cb(track_arg, _f_get_alloc_size(ptr));
 	}
 
 	return ptr;
@@ -237,7 +251,7 @@ d_aligned_alloc(size_t alignment, size_t size, bool zero)
 	buf = aligned_alloc(alignment, size);
 	if (unlikely(track_arg != NULL)) {
 		if (buf != NULL)
-			d_alloc_track_cb(track_arg, size);
+			d_alloc_track_cb(track_arg, _f_get_alloc_size(buf));
 	}
 
 	if (!zero || buf == NULL)
