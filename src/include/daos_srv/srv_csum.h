@@ -60,8 +60,7 @@ void
 ds_stop_scrubbing_ult(struct ds_pool_child *child);
 
 int
-ds_csum_verify_keys(struct daos_csummer *csummer, daos_key_t *dkey,
-		    struct dcs_csum_info *dkey_csum,
+ds_csum_verify_keys(struct daos_csummer *csummer, daos_key_t *dkey, struct dcs_csum_info *dkey_csum,
 		    daos_iod_t *iods, struct dcs_iod_csums *iod_csums, uint32_t nr,
 		    daos_unit_oid_t *uoid);
 

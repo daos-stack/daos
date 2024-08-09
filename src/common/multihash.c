@@ -54,17 +54,15 @@ noop_finish(void *daos_mhash_ctx, uint8_t *buf, size_t buf_len)
 	return 0;
 }
 
-static struct hash_ft noop_algo = {
-	.cf_init		= noop_init,
-	.cf_destroy		= noop_fini,
-	.cf_update		= noop_update,
-	.cf_reset		= noop_reset,
-	.cf_finish		= noop_finish,
-	.cf_hash_len		= NOOP_CSUM_SIZE,
-	.cf_get_size		= noop_get_size,
-	.cf_type		= NOOP_CSUM_TYPE,
-	.cf_name		= "no-op"
-};
+static struct hash_ft  noop_algo = {.cf_init     = noop_init,
+				    .cf_destroy  = noop_fini,
+				    .cf_update   = noop_update,
+				    .cf_reset    = noop_reset,
+				    .cf_finish   = noop_finish,
+				    .cf_hash_len = NOOP_CSUM_SIZE,
+				    .cf_get_size = noop_get_size,
+				    .cf_type     = NOOP_CSUM_TYPE,
+				    .cf_name     = "no-op"};
 
 /** ISA-L hash function table implemented in multihash_isal.c */
 extern struct hash_ft *isal_hash_algo_table[];

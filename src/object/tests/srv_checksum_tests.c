@@ -1420,49 +1420,46 @@ larger_records2(void **state)
 static void
 update_fetch_sv(void **state)
 {
-	struct daos_csummer	*csummer;
-	struct bio_iov		 biov = {0};
-	struct bio_sglist	 bsgl = {0};
+	struct daos_csummer *csummer;
+	struct bio_iov       biov = {0};
+	struct bio_sglist    bsgl = {0};
 	/** vos_update_begin will populate a list of csum_infos (one for each
 	 * biov 'extent'
 	 */
-	struct dcs_csum_info	 from_vos_begin = {0};
-	struct dcs_ci_list	 from_vos_begin_list = {0};
-	struct dcs_csum_info	 csum_info = {0};
-	struct dcs_iod_csums	 iod_csums = {0};
+	struct dcs_csum_info from_vos_begin      = {0};
+	struct dcs_ci_list   from_vos_begin_list = {0};
+	struct dcs_csum_info csum_info           = {0};
+	struct dcs_iod_csums iod_csums           = {0};
 
-	uint32_t		 iod_csum_value = 0;
-	daos_iod_t		 iod = {0};
-	char			*data = "abcd";
-	uint32_t		 csum = 0x12345678;
+	uint32_t             iod_csum_value = 0;
+	daos_iod_t           iod            = {0};
+	char                *data           = "abcd";
+	uint32_t             csum           = 0x12345678;
 
 	daos_csummer_init(&csummer, &fake_algo, 4, 0);
 
 	iod.iod_type = DAOS_IOD_SINGLE;
 	iod.iod_size = strlen(data);
-	iod.iod_nr = 1;
+	iod.iod_nr   = 1;
 
-	ci_set(&csum_info, &iod_csum_value, sizeof(uint32_t), sizeof(uint32_t),
-	       1, CSUM_NO_CHUNK, 1);
+	ci_set(&csum_info, &iod_csum_value, sizeof(uint32_t), sizeof(uint32_t), 1, CSUM_NO_CHUNK,
+	       1);
 	iod_csums.ic_data = &csum_info;
 
-	biov.bi_buf = data;
+	biov.bi_buf      = data;
 	biov.bi_data_len = strlen(data);
 
-	bsgl.bs_iovs = &biov;
+	bsgl.bs_iovs   = &biov;
 	bsgl.bs_nr_out = 1;
-	bsgl.bs_nr = 1;
+	bsgl.bs_nr     = 1;
 
-	ci_set(&from_vos_begin, &csum, sizeof(uint32_t), sizeof(uint32_t), 1,
-	       CSUM_NO_CHUNK, 1);
+	ci_set(&from_vos_begin, &csum, sizeof(uint32_t), sizeof(uint32_t), 1, CSUM_NO_CHUNK, 1);
 	assert_success(dcs_csum_info_list_init(&from_vos_begin_list, 1));
 	dcs_csum_info_save(&from_vos_begin_list, &from_vos_begin);
 
-	ds_csum_add2iod(&iod, csummer, &bsgl, &from_vos_begin_list, NULL,
-			&iod_csums);
+	ds_csum_add2iod(&iod, csummer, &bsgl, &from_vos_begin_list, NULL, &iod_csums);
 
-	assert_memory_equal(csum_info.cs_csum, from_vos_begin.cs_csum,
-			    from_vos_begin.cs_len);
+	assert_memory_equal(csum_info.cs_csum, from_vos_begin.cs_csum, from_vos_begin.cs_len);
 
 	daos_csummer_destroy(&csummer);
 	dcs_csum_info_list_fini(&from_vos_begin_list);
@@ -1474,11 +1471,11 @@ static void
 key_verify(void **state)
 {
 	struct daos_csummer  *csummer;
-	daos_key_t            dkey = {0};
+	daos_key_t            dkey         = {0};
 	char                  dkey_buf[32] = {0};
-	struct dcs_csum_info *dkey_csum = NULL;
-	daos_iod_t            iods  = {0};
-	struct dcs_iod_csums *iod_csums = NULL;
+	struct dcs_csum_info *dkey_csum    = NULL;
+	daos_iod_t            iods         = {0};
+	struct dcs_iod_csums *iod_csums    = NULL;
 	char                  akey_buf[32] = {0};
 
 	daos_csummer_init_with_type(&csummer, HASH_TYPE_CRC32, 4, 0);
@@ -1490,8 +1487,8 @@ key_verify(void **state)
 	sprintf(akey_buf, "akey");
 
 	assert_success(daos_csummer_calc_key(csummer, &dkey, &dkey_csum));
-	assert_success(daos_csummer_calc_iods(csummer, NULL, &iods, NULL, 1, true, NULL, 0,
-					      &iod_csums));
+	assert_success(
+	    daos_csummer_calc_iods(csummer, NULL, &iods, NULL, 1, true, NULL, 0, &iod_csums));
 
 	assert_success(ds_csum_verify_keys(csummer, &dkey, dkey_csum, &iods, iod_csums, 1, NULL));
 
@@ -1524,52 +1521,42 @@ sct_teardown(void **state)
 	{ desc, test_fn, sct_setup, sct_teardown }
 
 static const struct CMUnitTest srv_csum_tests[] = {
-	TA("SRV_CSUM_ARRAY01: Whole extent requested",
-	   request_that_matches_single_extent),
-	TA("SRV_CSUM_ARRAY02: Whole extent requested, broken into multiple "
-	   "chunks", request_that_matches_single_extent_multiple_chunks),
-	TA("SRV_CSUM_ARRAY03: Whole extent requested, broken into multiple "
-	   "chunks, not aligned to chunk",
-	   request_that_matches_single_extent_multiple_chunks_not_aligned),
-	TA("SRV_CSUM_ARRAY04: Multiple aligned extents requested",
-	   request_that_matches_multiple_aligned_extents),
-	TA("SRV_CSUM_ARRAY05: Multiple aligned extents requested",
-	   request_that_matches_multiple_aligned_extents2),
-	TA("SRV_CSUM_ARRAY06: Request more than exists",
-	   request_that_is_more_than_extents),
-	TA("SRV_CSUM_ARRAY07: Partial Extents, first part of chunk",
-	   partial_chunk_request0),
-	TA("SRV_CSUM_ARRAY08: Partial Extents, last part of chunk",
-	   partial_chunk_request1),
-	TA("SRV_CSUM_ARRAY09: Partial Extents, middle part of chunk",
-	   partial_chunk_request2),
-	TA("SRV_CSUM_ARRAY10: Partial chunks and full chunks",
-	   request_needs_new_and_copy),
-	TA("SRV_CSUM_ARRAY11: Partial Extents, chunks don't align",
-	   unaligned_chunks_csums_new_csum_is_created),
-	TA("SRV_CSUM_ARRAY12: Partial Extents, first extent isn't aligned",
-	   unaligned_first_chunk),
-	TA("SRV_CSUM_ARRAY13: Partial Extents, extent smaller than chunk",
-	   extent_smaller_than_chunk),
-	TA("SRV_CSUM_ARRAY14: Extent is larger than chunk",
-	   extent_larger_than_request),
-	TA("SRV_CSUM_ARRAY15: Full and partial chunks",
-	   fetch_multiple_unaligned_extents),
-	TA("SRV_CSUM_ARRAY16: Many sequential extents", many_extents),
-	TA("SRV_CSUM_ARRAY17: Begins with hole", request_that_begins_before_extent),
-	TA("SRV_CSUM_ARRAY18: Hole in middle", fetch_with_hole),
-	TA("SRV_CSUM_ARRAY19: Hole in middle", fetch_with_hole2),
-	TA("SRV_CSUM_ARRAY20: Many holes in middle", fetch_with_hole3),
-	TA("SRV_CSUM_ARRAY21: First chunk is hole", fetch_with_hole4),
-	TA("SRV_CSUM_ARRAY22: Handle holes while creating csums", fetch_with_hole5),
-	TA("SRV_CSUM_ARRAY22: Hole spans past first chunk", fetch_with_hole6),
-	TA("SRV_CSUM_ARRAY13: Hole in middle spans multiple chunks", fetch_with_hole7),
-	TA("SRV_CSUM_ARRAY24: First recx request of multiple", request_is_only_part_of_biovs),
-	TA("SRV_CSUM_ARRAY25: Fetch with larger records1", larger_records),
-	TA("SRV_CSUM_ARRAY26: Fetch with larger records2", larger_records2),
-	TA("SRV_CSUM_SV01: Various scenarios for update/fetch with fault injection",
-	   update_fetch_sv),
-	TA("SRV_CSUM_01: Server side key verification", key_verify),
+    TA("SRV_CSUM_ARRAY01: Whole extent requested", request_that_matches_single_extent),
+    TA("SRV_CSUM_ARRAY02: Whole extent requested, broken into multiple "
+       "chunks",
+       request_that_matches_single_extent_multiple_chunks),
+    TA("SRV_CSUM_ARRAY03: Whole extent requested, broken into multiple "
+       "chunks, not aligned to chunk",
+       request_that_matches_single_extent_multiple_chunks_not_aligned),
+    TA("SRV_CSUM_ARRAY04: Multiple aligned extents requested",
+       request_that_matches_multiple_aligned_extents),
+    TA("SRV_CSUM_ARRAY05: Multiple aligned extents requested",
+       request_that_matches_multiple_aligned_extents2),
+    TA("SRV_CSUM_ARRAY06: Request more than exists", request_that_is_more_than_extents),
+    TA("SRV_CSUM_ARRAY07: Partial Extents, first part of chunk", partial_chunk_request0),
+    TA("SRV_CSUM_ARRAY08: Partial Extents, last part of chunk", partial_chunk_request1),
+    TA("SRV_CSUM_ARRAY09: Partial Extents, middle part of chunk", partial_chunk_request2),
+    TA("SRV_CSUM_ARRAY10: Partial chunks and full chunks", request_needs_new_and_copy),
+    TA("SRV_CSUM_ARRAY11: Partial Extents, chunks don't align",
+       unaligned_chunks_csums_new_csum_is_created),
+    TA("SRV_CSUM_ARRAY12: Partial Extents, first extent isn't aligned", unaligned_first_chunk),
+    TA("SRV_CSUM_ARRAY13: Partial Extents, extent smaller than chunk", extent_smaller_than_chunk),
+    TA("SRV_CSUM_ARRAY14: Extent is larger than chunk", extent_larger_than_request),
+    TA("SRV_CSUM_ARRAY15: Full and partial chunks", fetch_multiple_unaligned_extents),
+    TA("SRV_CSUM_ARRAY16: Many sequential extents", many_extents),
+    TA("SRV_CSUM_ARRAY17: Begins with hole", request_that_begins_before_extent),
+    TA("SRV_CSUM_ARRAY18: Hole in middle", fetch_with_hole),
+    TA("SRV_CSUM_ARRAY19: Hole in middle", fetch_with_hole2),
+    TA("SRV_CSUM_ARRAY20: Many holes in middle", fetch_with_hole3),
+    TA("SRV_CSUM_ARRAY21: First chunk is hole", fetch_with_hole4),
+    TA("SRV_CSUM_ARRAY22: Handle holes while creating csums", fetch_with_hole5),
+    TA("SRV_CSUM_ARRAY22: Hole spans past first chunk", fetch_with_hole6),
+    TA("SRV_CSUM_ARRAY13: Hole in middle spans multiple chunks", fetch_with_hole7),
+    TA("SRV_CSUM_ARRAY24: First recx request of multiple", request_is_only_part_of_biovs),
+    TA("SRV_CSUM_ARRAY25: Fetch with larger records1", larger_records),
+    TA("SRV_CSUM_ARRAY26: Fetch with larger records2", larger_records2),
+    TA("SRV_CSUM_SV01: Various scenarios for update/fetch with fault injection", update_fetch_sv),
+    TA("SRV_CSUM_01: Server side key verification", key_verify),
 };
 
 int
@@ -1585,10 +1572,8 @@ main(int argc, char **argv)
 	}
 #endif
 
-	rc += cmocka_run_group_tests_name(
-		"Storage and retrieval of checksums for Array Type",
-		srv_csum_tests, NULL, NULL);
-
+	rc += cmocka_run_group_tests_name("Storage and retrieval of checksums for Array Type",
+					  srv_csum_tests, NULL, NULL);
 
 	return rc;
 }

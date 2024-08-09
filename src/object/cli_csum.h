@@ -11,14 +11,16 @@
 #include <daos/cont_props.h>
 #include "obj_internal.h"
 
-int dc_obj_csum_update(struct daos_csummer *csummer, struct cont_props props, daos_obj_id_t param,
-		       daos_key_t *dkey, daos_iod_t *iods, d_sg_list_t *sgls, const uint32_t iod_nr,
-		       struct dcs_layout *layout, struct dcs_csum_info **dkey_csum,
-		       struct dcs_iod_csums **iod_csums);
+int
+dc_obj_csum_update(struct daos_csummer *csummer, struct cont_props props, daos_obj_id_t param,
+		   daos_key_t *dkey, daos_iod_t *iods, d_sg_list_t *sgls, const uint32_t iod_nr,
+		   struct dcs_layout *layout, struct dcs_csum_info **dkey_csum,
+		   struct dcs_iod_csums **iod_csums);
 
-int dc_obj_csum_fetch(struct daos_csummer *csummer, daos_key_t *dkey, daos_iod_t *iods,
-		      d_sg_list_t *sgls, const uint32_t iod_nr, struct dcs_layout *layout,
-		      struct dcs_csum_info **dkey_csum, struct dcs_iod_csums **iod_csums);
+int
+dc_obj_csum_fetch(struct daos_csummer *csummer, daos_key_t *dkey, daos_iod_t *iods,
+		  d_sg_list_t *sgls, const uint32_t iod_nr, struct dcs_layout *layout,
+		  struct dcs_csum_info **dkey_csum, struct dcs_iod_csums **iod_csums);
 
 /*
  * used to flatten all of the information needed for verifying checksums after fetch from server
