@@ -329,48 +329,6 @@ pipeline {
                         sh(label: 'List checkout', script: 'ls -al')
                     }
                 }
-            }
-            parallel {
-                stage('Build RPM on EL 8') {
-                    // Always run this stage
-                    // when {
-                    //     beforeAgent true
-                    //     expression { !skipStage() }
-                    // }
-                    agent {
-                        dockerfile {
-                            filename 'packaging/Dockerfile.mockbuild'
-                            dir 'utils/rpms'
-                            label 'docker_runner'
-                            args '--group-add mock'     +
-                                 ' --cap-add=SYS_ADMIN' +
-                                 ' -v /scratch:/scratch'
-                            additionalBuildArgs dockerBuildArgs()
-                        }
-                    }
-                    steps {
-                        job_step_update(buildRpm())
-                    }
-                    post {
-                        success {
-                            fixup_rpmlintrc()
-                            buildRpmPost condition: 'success', rpmlint: true
-                        }
-                        unstable {
-                            buildRpmPost condition: 'unstable'
-                        }
-                        failure {
-                            buildRpmPost condition: 'failure'
-                        }
-                        unsuccessful {
-                            buildRpmPost condition: 'unsuccessful'
-                        }
-                        cleanup {
-                            buildRpmPost condition: 'cleanup'
-                            job_status_update()
-                        }
-                    }
-                }
                 stage('Build on EL 8 Bullseye') {
                     // Always run this stage
                     // when {
@@ -408,6 +366,46 @@ pipeline {
                                              allowEmptyArchive: true
                         }
                         cleanup {
+                            job_status_update()
+                        }
+                    }
+                }
+                stage('Build RPM on EL 8') {
+                    // Always run this stage
+                    // when {
+                    //     beforeAgent true
+                    //     expression { !skipStage() }
+                    // }
+                    agent {
+                        dockerfile {
+                            filename 'packaging/Dockerfile.mockbuild'
+                            dir 'utils/rpms'
+                            label 'docker_runner'
+                            args '--group-add mock'     +
+                                 ' --cap-add=SYS_ADMIN' +
+                                 ' -v /scratch:/scratch'
+                            additionalBuildArgs dockerBuildArgs()
+                        }
+                    }
+                    steps {
+                        job_step_update(buildRpm())
+                    }
+                    post {
+                        success {
+                            fixup_rpmlintrc()
+                            buildRpmPost condition: 'success', rpmlint: true
+                        }
+                        unstable {
+                            buildRpmPost condition: 'unstable'
+                        }
+                        failure {
+                            buildRpmPost condition: 'failure'
+                        }
+                        unsuccessful {
+                            buildRpmPost condition: 'unsuccessful'
+                        }
+                        cleanup {
+                            buildRpmPost condition: 'cleanup'
                             job_status_update()
                         }
                     }
