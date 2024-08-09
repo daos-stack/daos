@@ -147,7 +147,7 @@ obj_rw_complete(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			DL_CDEBUG(rc == -DER_REC2BIG || rc == -DER_INPROGRESS ||
 				      rc == -DER_TX_RESTART || rc == -DER_EXIST ||
 				      rc == -DER_NONEXIST || rc == -DER_ALREADY ||
-				      rc == -DER_CHKPT_BUSY,
+				      rc == -DER_CHKPT_BUSY || rc == -DER_CANCELED,
 				  DLOG_DBG, DLOG_ERR, rc, DF_UOID " %s end failed",
 				  DP_UOID(orwi->orw_oid), update ? "Update" : "Fetch");
 			if (status == 0)
@@ -1653,7 +1653,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 		if (rc == -DER_OVERFLOW)
 			rc = -DER_REC2BIG;
 
-		DL_CDEBUG(rc == -DER_REC2BIG, DLOG_DBG, DLOG_ERR, rc,
+		DL_CDEBUG(rc == -DER_REC2BIG || rc == -DER_CANCELED, DLOG_DBG, DLOG_ERR, rc,
 			  DF_UOID " data transfer failed, dma %d", DP_UOID(orw->orw_oid), rma);
 		D_GOTO(post, rc);
 	}
@@ -2868,6 +2868,18 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 			       &orw->orw_oid, NULL, 0, dtx_flags, NULL, &dth);
 		if (rc == 0) {
 			rc = obj_local_rw(rpc, &ioc, dth);
+			if (rc != 0)
+				DL_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
+					      (rc == -DER_EXIST &&
+					       (orw->orw_api_flags &
+						(DAOS_COND_DKEY_INSERT | DAOS_COND_AKEY_INSERT))) ||
+					      (rc == -DER_NONEXIST &&
+					       (orw->orw_api_flags &
+						(DAOS_COND_DKEY_UPDATE | DAOS_COND_AKEY_UPDATE |
+						 DAOS_COND_DKEY_FETCH | DAOS_COND_AKEY_FETCH))),
+					  DB_IO, DLOG_ERR, rc,
+					  " local write for " DF_UOID " failed (api_flags=0x%lx)",
+					  DP_UOID(orw->orw_oid), orw->orw_api_flags);
 			rc = dtx_end(dth, ioc.ioc_coc, rc);
 		}
 
