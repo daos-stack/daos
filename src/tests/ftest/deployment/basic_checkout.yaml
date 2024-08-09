@@ -38,7 +38,7 @@ ior_easy: &ior_easy_base
   block_size: '150G'
   sw_deadline: 30
   sw_wearout: 1
-  sw_status_file: "/var/tmp/daos_testing/stoneWallingStatusFile"
+  sw_status_file: stoneWallingStatusFile
 ior_dfs_sx:
   <<: *ior_easy_base
   api: DFS

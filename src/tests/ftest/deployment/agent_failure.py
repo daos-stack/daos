@@ -31,7 +31,7 @@ class AgentFailure(IorTestBase):
             file_name (str): File name used for self.ior_cmd.test_file.
             clients (list): Client hostnames to run IOR from.
         """
-        ior_cmd = IorCommand()
+        ior_cmd = IorCommand(self.test_env.log_dir)
         ior_cmd.get_params(self)
         ior_cmd.set_daos_params(self.pool, self.container.identifier)
         testfile = os.path.join(os.sep, file_name)
