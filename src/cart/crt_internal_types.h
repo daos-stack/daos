@@ -96,6 +96,8 @@ struct crt_gdata {
 	/** Hints to mercury for request post init (ignored for clients) */
 	uint32_t                 cg_post_init;
 	uint32_t                 cg_post_incr;
+	unsigned int             cg_mrecv_buf;
+	unsigned int             cg_mrecv_buf_copy;
 
 	/** global timeout value (second) for all RPCs */
 	uint32_t		cg_timeout;
@@ -207,6 +209,8 @@ struct crt_event_cb_priv {
 	ENV(D_PORT_AUTO_ADJUST)                                                                    \
 	ENV(D_POST_INCR)                                                                           \
 	ENV(D_POST_INIT)                                                                           \
+	ENV(D_MRECV_BUF)                                                                           \
+	ENV(D_MRECV_BUF_COPY)                                                                      \
 	ENV_STR(D_PROVIDER)                                                                        \
 	ENV_STR_NO_PRINT(D_PROVIDER_AUTH_KEY)                                                      \
 	ENV(D_QUOTA_RPCS)                                                                          \
