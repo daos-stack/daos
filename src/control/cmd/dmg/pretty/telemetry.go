@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
 
@@ -76,7 +77,7 @@ func PrintMetricsQueryResp(out io.Writer, resp *control.MetricsQueryResp) error 
 	return nil
 }
 
-func printMetrics(out io.Writer, metrics []control.Metric, metricType control.MetricType) {
+func printMetrics(out io.Writer, metrics []daos.Metric, metricType daos.MetricType) {
 	if len(metrics) == 0 {
 		fmt.Fprintf(out, "No metrics found\n")
 		return
@@ -92,7 +93,7 @@ func printMetrics(out io.Writer, metrics []control.Metric, metricType control.Me
 
 	for _, m := range metrics {
 		switch realM := m.(type) {
-		case *control.SimpleMetric:
+		case *daos.SimpleMetric:
 			labels := metricLabelsToStr(realM.Labels)
 			name := metricType.String()
 			table = append(table, txtfmt.TableRow{
@@ -100,7 +101,7 @@ func printMetrics(out io.Writer, metrics []control.Metric, metricType control.Me
 				labelTitle: labels,
 				valTitle:   fmt.Sprintf("%g", realM.Value),
 			})
-		case *control.SummaryMetric:
+		case *daos.SummaryMetric:
 			labels := metricLabelsToStr(realM.Labels)
 			table = append(table, txtfmt.TableRow{
 				nameTitle:  "Sample Count",
@@ -119,7 +120,7 @@ func printMetrics(out io.Writer, metrics []control.Metric, metricType control.Me
 					valTitle:   fmt.Sprintf("%g", realM.Quantiles[quant]),
 				})
 			}
-		case *control.HistogramMetric:
+		case *daos.HistogramMetric:
 			labels := metricLabelsToStr(realM.Labels)
 			table = append(table, txtfmt.TableRow{
 				nameTitle:  "Sample Count",
@@ -150,7 +151,7 @@ func printMetrics(out io.Writer, metrics []control.Metric, metricType control.Me
 	tablePrint.Format(table)
 }
 
-func metricLabelsToStr(labels control.LabelMap) string {
+func metricLabelsToStr(labels daos.MetricLabelMap) string {
 	if len(labels) == 0 {
 		return "N/A"
 	}
