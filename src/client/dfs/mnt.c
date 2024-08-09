@@ -584,9 +584,11 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	if (dfs == NULL)
 		D_GOTO(err_prop, rc = ENOMEM);
 
-	dfs->poh   = poh;
-	dfs->coh   = coh;
-	dfs->amode = amode;
+	dfs->poh      = poh;
+	dfs->coh      = coh;
+	dfs->amode    = amode;
+	dfs->th       = DAOS_TX_NONE;
+	dfs->th_epoch = DAOS_EPOCH_MAX;
 
 	rc = D_MUTEX_INIT(&dfs->lock, NULL);
 	if (rc != 0)
@@ -738,6 +740,9 @@ dfs_umount(dfs_t *dfs)
 	}
 	D_MUTEX_UNLOCK(&dfs->lock);
 
+	if (daos_handle_is_valid(dfs->th))
+		daos_tx_close(dfs->th, NULL);
+
 	daos_obj_close(dfs->root.oh, NULL);
 	daos_obj_close(dfs->super_oh, NULL);
 
@@ -848,6 +853,7 @@ struct dfs_glob {
 	uuid_t           coh_uuid;
 	daos_obj_id_t    super_oid;
 	daos_obj_id_t    root_oid;
+	daos_epoch_t     th_epoch;
 };
 
 static inline void
@@ -937,6 +943,7 @@ dfs_local2global(dfs_t *dfs, d_iov_t *glob)
 	dfs_params->oclass      = dfs->attr.da_oclass_id;
 	dfs_params->dir_oclass  = dfs->attr.da_dir_oclass_id;
 	dfs_params->file_oclass = dfs->attr.da_file_oclass_id;
+	dfs_params->th_epoch    = dfs->th_epoch;
 	uuid_copy(dfs_params->coh_uuid, coh_uuid);
 	uuid_copy(dfs_params->cont_uuid, cont_uuid);
 
@@ -1041,6 +1048,21 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob, 
 		D_ERROR("daos_obj_open() failed, " DF_RC "\n", DP_RC(rc));
 		daos_obj_close(dfs->super_oh, NULL);
 		D_GOTO(err_dfs, rc = daos_der2errno(rc));
+	}
+
+	/** Create transaction handle */
+	if (dfs_params->th_epoch == DAOS_EPOCH_MAX) {
+		dfs->th_epoch = DAOS_EPOCH_MAX;
+		dfs->th       = DAOS_TX_NONE;
+	} else {
+		rc = daos_tx_open_snap(coh, dfs_params->th_epoch, &dfs->th, NULL);
+		if (rc) {
+			D_ERROR("daos_tx_open_snap() failed, " DF_RC "\n", DP_RC(rc));
+			daos_obj_close(dfs->super_oh, NULL);
+			daos_obj_close(dfs->root.oh, NULL);
+			D_GOTO(err_dfs, rc = daos_der2errno(rc));
+		}
+		dfs->th_epoch = dfs_params->th_epoch;
 	}
 
 	dfs->mounted = DFS_MOUNT;
