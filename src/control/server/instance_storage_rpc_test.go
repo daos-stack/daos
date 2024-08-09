@@ -16,6 +16,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -24,6 +25,119 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
+
+type mockPCIeLinkStatsProvider struct {
+	pciDev    *hardware.PCIDevice
+	pciDevErr error
+}
+
+func (mp *mockPCIeLinkStatsProvider) PCIeCapsFromConfig(cfgBytes []byte, dev *hardware.PCIDevice) error {
+	if mp.pciDevErr != nil {
+		return mp.pciDevErr
+	}
+	*dev = *mp.pciDev
+	return nil
+}
+
+func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
+	healthWithoutLinkStats := func() *ctlpb.BioHealthResp {
+		bhr := proto.MockNvmeHealth()
+		bhr.LinkPortId = 0
+		bhr.LinkMaxSpeed = 0
+		bhr.LinkNegSpeed = 0
+		bhr.LinkMaxWidth = 0
+		bhr.LinkNegWidth = 0
+
+		return bhr
+	}
+
+	for name, tc := range map[string]struct {
+		devState   ctlpb.NvmeDevState
+		pciCfgSpc  string
+		pciDev     *hardware.PCIDevice
+		pciDevErr  error
+		healthRes  *ctlpb.BioHealthResp
+		healthErr  error
+		expCtrlr   *ctlpb.NvmeController
+		expUpdated bool
+		expErr     error
+	}{
+		"bad state; skip health": {
+			healthRes: healthWithoutLinkStats(),
+			expCtrlr:  &ctlpb.NvmeController{},
+		},
+		"update health; add link stats skipped as empty pci config space": {
+			devState: ctlpb.NvmeDevState_NORMAL,
+			pciDev: &hardware.PCIDevice{
+				LinkNegSpeed: 8e+9,
+			},
+			healthRes: healthWithoutLinkStats(),
+			expCtrlr: &ctlpb.NvmeController{
+				DevState:    ctlpb.NvmeDevState_NORMAL,
+				HealthStats: healthWithoutLinkStats(),
+			},
+			expUpdated: true,
+		},
+		"update health; add link stats; pciutils lib error": {
+			devState:  ctlpb.NvmeDevState_NORMAL,
+			pciCfgSpc: "ABCD",
+			pciDev: &hardware.PCIDevice{
+				LinkNegSpeed: 8e+9,
+			},
+			pciDevErr: errors.New("fail"),
+			expErr:    errors.New("fail"),
+		},
+		"update health; add link stats": {
+			devState:  ctlpb.NvmeDevState_NORMAL,
+			pciCfgSpc: "ABCD",
+			pciDev: &hardware.PCIDevice{
+				LinkPortID:   1,
+				LinkNegSpeed: 1e+9,
+				LinkMaxSpeed: 1e+9,
+				LinkNegWidth: 4,
+				LinkMaxWidth: 4,
+			},
+			healthRes: healthWithoutLinkStats(),
+			expCtrlr: &ctlpb.NvmeController{
+				DevState:    ctlpb.NvmeDevState_NORMAL,
+				HealthStats: proto.MockNvmeHealth(),
+			},
+			expUpdated: true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			getCtrlrHealth = func(_ context.Context, _ Engine, _ *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
+				return tc.healthRes, tc.healthErr
+			}
+			defer func() {
+				getCtrlrHealth = getBioHealth
+			}()
+
+			mockProv := &mockPCIeLinkStatsProvider{
+				pciDev:    tc.pciDev,
+				pciDevErr: tc.pciDevErr,
+			}
+
+			ctrlr := &ctlpb.NvmeController{
+				PciCfg:   tc.pciCfgSpc,
+				DevState: tc.devState,
+			}
+
+			upd, err := populateCtrlrHealth(test.Context(t), NewMockInstance(nil),
+				&ctlpb.BioHealthReq{}, ctrlr, mockProv)
+			test.CmpErr(t, tc.expErr, err)
+			if err != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expCtrlr, ctrlr,
+				defStorageScanCmpOpts...); diff != "" {
+				t.Fatalf("unexpected controller output (-want, +got):\n%s\n", diff)
+			}
+			test.AssertEqual(t, tc.expUpdated, upd, "")
+		})
+	}
+}
 
 func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 	c := storage.MockNvmeController(2)

@@ -216,11 +216,37 @@ struct  _Ctl__BioHealthResp
    * RDB WAL blob size
    */
   uint64_t rdb_wal_size;
+  /*
+   * PCIe config space link stats
+   */
+  /*
+   * port identifier
+   */
+  uint32_t           link_port_id;
+  /*
+   * maximum speed in transactions per second
+   */
+  float              link_max_speed;
+  /*
+   * maximum width (number of lanes)
+   */
+  uint32_t           link_max_width;
+  /*
+   * negotiated speed in transactions per second
+   */
+  float              link_neg_speed;
+  /*
+   * negotiated width (number of lanes)
+   */
+  uint32_t           link_neg_width;
 };
-#define CTL__BIO_HEALTH_RESP__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&ctl__bio_health_resp__descriptor) \
-    , 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (char *)protobuf_c_empty_string, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
-
+#define CTL__BIO_HEALTH_RESP__INIT                                                                 \
+	{                                                                                          \
+		PROTOBUF_C_MESSAGE_INIT(&ctl__bio_health_resp__descriptor)                         \
+		, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,                      \
+		    (char *)protobuf_c_empty_string, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  \
+		    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0                                       \
+	}
 
 /*
  * Namespace represents a namespace created on an NvmeController.
@@ -302,11 +328,20 @@ struct  _Ctl__NvmeController
    * controller's vendor ID
    */
   char *vendor_id;
+  /*
+   * PCIe configuration space
+   */
+  char                            *pci_cfg;
 };
-#define CTL__NVME_CONTROLLER__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&ctl__nvme_controller__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, NULL, 0,NULL, 0,NULL, CTL__NVME_DEV_STATE__UNKNOWN, CTL__LED_STATE__NA, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
-
+#define CTL__NVME_CONTROLLER__INIT                                                                 \
+	{                                                                                          \
+		PROTOBUF_C_MESSAGE_INIT(&ctl__nvme_controller__descriptor)                         \
+		, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string,                \
+		    (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, NULL, 0,  \
+		    NULL, 0, NULL, CTL__NVME_DEV_STATE__UNKNOWN, CTL__LED_STATE__NA,               \
+		    (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string,              \
+		    (char *)protobuf_c_empty_string                                                \
+	}
 
 /*
  * SmdDevice represents a DAOS BIO device, identified by a UUID written into a label stored on a
@@ -382,10 +417,10 @@ struct  _Ctl__SmdDevReq
 {
   ProtobufCMessage base;
 };
-#define CTL__SMD_DEV_REQ__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&ctl__smd_dev_req__descriptor) \
-     }
-
+#define CTL__SMD_DEV_REQ__INIT                                                                     \
+	{                                                                                          \
+		PROTOBUF_C_MESSAGE_INIT(&ctl__smd_dev_req__descriptor)                             \
+	}
 
 struct  _Ctl__SmdDevResp
 {
