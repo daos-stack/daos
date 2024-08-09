@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -642,6 +642,60 @@ dfs_extend_fail_retry(void **state)
 	assert_rc_equal(rc, 0);
 }
 
+static void
+extend_no_data_sync(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oids[OBJ_NR];
+	struct ioreq	req;
+	int		i;
+	int		j;
+	int		rc;
+
+	if (!test_runable(arg, 3))
+		return;
+
+	for (i = 0; i < OBJ_NR; i++) {
+		oids[i] = daos_test_oid_gen(arg->coh, OC_RP_3G1, 0, 0,
+					    arg->myrank);
+		ioreq_init(&req, arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
+
+		/** Insert 10 records */
+		print_message("Insert %d kv record in object "DF_OID"\n",
+			      KEY_NR, DP_OID(oids[i]));
+		for (j = 0; j < KEY_NR; j++) {
+			char	key[32] = {0};
+
+			sprintf(key, "dkey_0_%d", j);
+			insert_single(key, "a_key", 0, "data",
+				      strlen("data") + 1,
+				      DAOS_TX_NONE, &req);
+		}
+		ioreq_fini(&req);
+	}
+
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "reintegration", "no_data_sync");
+	assert_success(rc);
+
+	arg->pool.rebuild_expected_err = -1001;
+
+	extend_single_pool_rank(arg, 3);
+}
+
+static int
+test17_teardown(void **state)
+{
+	test_arg_t	*arg = *state;
+	int		 rc;
+
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "reintegration",
+				"data_sync");
+	assert_success(rc);
+	test_teardown(state);
+
+	return rc;
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest extend_tests[] = {
 	{"EXTEND1: extend small rec multiple dkeys",
@@ -676,6 +730,8 @@ static const struct CMUnitTest extend_tests[] = {
 	 dfs_extend_write_extend, rebuild_sub_3nodes_rf0_setup, test_teardown},
 	{"EXTEND16: extend fail then retry",
 	 dfs_extend_fail_retry, rebuild_sub_3nodes_rf0_setup, test_teardown},
+	{"EXTEND17: extend should fail with no_data_sync mode",
+	 extend_no_data_sync, rebuild_sub_3nodes_rf0_setup, test17_teardown},
 };
 
 int

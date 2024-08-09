@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -99,7 +99,10 @@ rebuild_extend_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 		if (!args[i]->pool.destroyed) {
 			rc = dmg_pool_extend(args[i]->dmg_config, args[i]->pool.pool_uuid,
 					     args[i]->group, &rank, 1);
-			assert_success(rc);
+			if (args[i]->pool.rebuild_expected_err)
+				assert_rc_equal(rc, args[i]->pool.rebuild_expected_err);
+			else
+				assert_success(rc);
 		}
 		sleep(2);
 	}
@@ -116,7 +119,10 @@ rebuild_drain_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 		if (!args[i]->pool.destroyed) {
 			rc = dmg_pool_drain(args[i]->dmg_config, args[i]->pool.pool_uuid,
 					    args[i]->group, rank, tgt_idx);
-			assert_success(rc);
+			if (args[i]->pool.rebuild_expected_err)
+				assert_rc_equal(rc, args[i]->pool.rebuild_expected_err);
+			else
+				assert_success(rc);
 		}
 		sleep(2);
 	}

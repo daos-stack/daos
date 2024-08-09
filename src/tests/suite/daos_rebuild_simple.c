@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -797,6 +797,13 @@ rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass,
 	/* wait until reintegration is done */
 	test_rebuild_wait(&arg, 1);
 
+	/* no_data_sync mode */
+	if (!wait_rebuild && verify) {
+		/* clear the UNCLEAN status */
+		rc = daos_cont_status_clear(arg->coh, NULL);
+		assert_rc_equal(rc, 0);
+	}
+
 	print_message("lookup 100 dkeys\n");
 	for (i = 0; i < 100 && verify; i++) {
 		memset(buffer, 0, 32);
@@ -826,7 +833,7 @@ rebuild_xsf_object(void **state)
 static void
 rebuild_sx_object_no_data_sync(void **state)
 {
-	rebuild_sx_object_internal(state, OC_SX, false, false);
+	rebuild_sx_object_internal(state, OC_SX, true, false);
 }
 
 static int
