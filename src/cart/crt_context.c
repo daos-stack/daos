@@ -416,6 +416,9 @@ crt_iface_name2idx(const char *iface_name, int *idx)
 	for (i = 0; i < num_ifaces; i++) {
 		name = crt_provider_iface_str_get(true, crt_gdata.cg_primary_prov, i);
 
+		if (!name)
+			return -DER_INVAL;
+
 		if (strcmp(name, iface_name) == 0) {
 			*idx = i;
 			return DER_SUCCESS;
@@ -2049,6 +2052,24 @@ crt_context_set_timeout(crt_context_t crt_ctx, uint32_t timeout_sec)
 	ctx->cc_timeout_sec = timeout_sec;
 
 exit:
+	return rc;
+}
+
+int
+crt_context_get_timeout(crt_context_t crt_ctx, uint32_t *timeout_sec)
+{
+	struct crt_context	*ctx = crt_ctx;
+	int			 rc = 0;
+
+	if (crt_ctx == CRT_CONTEXT_NULL) {
+		D_ERROR("NULL context passed\n");
+		rc = -DER_INVAL;
+	} else if (ctx->cc_timeout_sec != 0) {
+		*timeout_sec = ctx->cc_timeout_sec;
+	} else {
+		*timeout_sec = crt_gdata.cg_timeout;
+	}
+
 	return rc;
 }
 

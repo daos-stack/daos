@@ -71,8 +71,7 @@ type poolBaseCmd struct {
 
 	cPoolHandle C.daos_handle_t
 
-	SysName string `long:"sys-name" short:"G" description:"DAOS system name"`
-	Args    struct {
+	Args struct {
 		Pool PoolID `positional-arg-name:"pool label or UUID" description:"required if --path is not used"`
 	} `positional-args:"yes"`
 }
@@ -254,6 +253,7 @@ func convertPoolRebuildStatus(in *C.struct_daos_rebuild_status) *daos.PoolRebuil
 		Status: int32(in.rs_errno),
 	}
 	if out.Status == 0 {
+		out.TotalObjects = uint64(in.rs_toberb_obj_nr)
 		out.Objects = uint64(in.rs_obj_nr)
 		out.Records = uint64(in.rs_rec_nr)
 		switch {
@@ -414,6 +414,20 @@ func (cmd *poolQueryTargetsCmd) Execute(_ []string) error {
 	var idxList []uint32
 	if err = common.ParseNumberList(cmd.Targets, &idxList); err != nil {
 		return errors.WithMessage(err, "parsing target list")
+	}
+
+	if len(idxList) == 0 {
+		pi, err := queryPool(cmd.cPoolHandle, daos.HealthOnlyPoolQueryMask)
+		if err != nil || (pi.TotalTargets == 0 || pi.TotalEngines == 0) {
+			if err != nil {
+				return errors.Wrap(err, "pool query failed")
+			}
+			return errors.New("failed to derive target count from pool query")
+		}
+		tgtCount := pi.TotalTargets / pi.TotalEngines
+		for i := uint32(0); i < tgtCount; i++ {
+			idxList = append(idxList, i)
+		}
 	}
 
 	ptInfo := new(C.daos_target_info_t)
@@ -727,9 +741,8 @@ func getPoolList(log logging.Logger, sysName string, queryEnabled bool) ([]*daos
 
 type poolListCmd struct {
 	daosCmd
-	SysName string `long:"sys-name" short:"G" description:"DAOS system name"`
-	Verbose bool   `short:"v" long:"verbose" description:"Add pool UUIDs and service replica lists to display"`
-	NoQuery bool   `short:"n" long:"no-query" description:"Disable query of listed pools"`
+	Verbose bool `short:"v" long:"verbose" description:"Add pool UUIDs and service replica lists to display"`
+	NoQuery bool `short:"n" long:"no-query" description:"Disable query of listed pools"`
 }
 
 func (cmd *poolListCmd) Execute(_ []string) error {

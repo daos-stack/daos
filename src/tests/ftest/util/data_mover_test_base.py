@@ -141,12 +141,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
         self.preserve_props_path = None
 
-        # List of local test paths to create and remove
-        self.posix_local_test_paths = []
-
-        # List of daos test paths to keep track of
-        self.daos_test_paths = []
-
     def setUp(self):
         """Set up each test case."""
         # Start the servers and agents
@@ -222,14 +216,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             str: the posix path.
 
         """
-        # make directory name unique to datamover test
-        method = self.get_test_name()
-        dir_name = "{}{}".format(method, len(self.posix_local_test_paths))
+        # make directory name unique to this test
+        dir_name = self.label_generator.get_label(self.get_test_name())
         path = join(parent or self.posix_root.value, dir_name)
-
-        # Add to the list of posix paths
-        if not shared:
-            self.posix_local_test_paths.append(path)
 
         if create:
             # Create the directory
@@ -271,18 +260,16 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             str: the path relative to the root of the container.
 
         """
-        dir_name = "daos_test{}".format(len(self.daos_test_paths))
+        dir_name = self.label_generator.get_label('daos_test_dir')
         path = join(parent, dir_name)
-
-        # Add to the list of daos paths
-        self.daos_test_paths.append(path)
 
         if create:
             if not cont or not cont.path:
                 self.fail("Container path required to create directory.")
             # Create the directory relative to the container path
-            cmd = "mkdir -p '{}'".format(cont.path.value + path)
-            self.execute_cmd(cmd)
+            full_path = cont.path.value + path
+            if not run_remote(self.log, self.hostlist_clients, f"mkdir -p '{full_path}'").passed:
+                self.fail(f"Failed to mkdir {full_path}")
 
         return path
 
@@ -1037,7 +1024,23 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             daos_path = os.path.join(os.sep, test_file)
         else:
             self.fail("Invalid tool: {}".format(tool))
+
+        # Original flags used for write
+        flags = self.ior_cmd.flags.value
+
+        # Remove read and write from flags if present
+        flags = re.sub(" *-r", "", flags)
+        flags = re.sub(" *-R", "", flags)
+        flags = re.sub(" *-w", "", flags)
+        flags = re.sub(" *-W", "", flags)
+
+        # Remove stonewall
+        flags = re.sub(" *-D [0-9]+", "", flags)
+
+        # Add read flags
+        flags += " -r -R"
+
         # update ior params, read back and verify data from cont3
         self.run_ior_with_params(
             "DAOS", daos_path, read_back_pool, read_back_cont,
-            flags="-r -R -F -k")
+            flags=flags)
