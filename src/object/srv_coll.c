@@ -184,8 +184,11 @@ obj_coll_punch_bulk(crt_rpc_t *rpc, d_iov_t *iov, crt_proc_t *p_proc,
 
 	rc = obj_bulk_transfer(rpc, CRT_BULK_GET, false, &ocpi->ocpi_tgt_bulk, NULL, NULL,
 			       DAOS_HDL_INVAL, &sgls, 1, NULL, NULL);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("Failed to prepare bulk transfer for coll_punch, size %u: "DF_RC"\n",
+			ocpi->ocpi_bulk_tgt_sz, DP_RC(rc));
 		goto out;
+	}
 
 	rc = crt_proc_create(dss_get_module_info()->dmi_ctx, iov->iov_buf, iov->iov_len,
 			     CRT_PROC_DECODE, &proc);
@@ -238,8 +241,12 @@ obj_coll_punch_prep(struct obj_coll_punch_in *ocpi, struct daos_coll_target *dct
 
 	/* dcts[0] is for current engine. */
 	if (dcts[0].dct_bitmap == NULL || dcts[0].dct_bitmap_sz == 0 ||
-	    dcts[0].dct_shards == NULL)
+	    dcts[0].dct_shards == NULL) {
+		D_ERROR("Invalid input for current engine: bitmap %s, bitmap_sz %u, shards %s\n",
+			dcts[0].dct_bitmap == NULL ? "empty" : "non-empty", dcts[0].dct_bitmap_sz,
+			dcts[0].dct_shards == NULL ? "empty" : "non-empty");
 		D_GOTO(out, rc = -DER_INVAL);
+	}
 
 	/* Already allocated enough space in MBS when decode to hold the targets and bitmap. */
 	target = (struct dtx_coll_target *)(ddt + mbs->dm_tgt_cnt);
