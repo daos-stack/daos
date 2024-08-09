@@ -308,16 +308,6 @@ pipeline {
                 cancelPreviousBuilds()
             }
         }
-        stage ('Checkout master') {
-            agent any
-            steps {
-                checkoutScm(
-                    url: 'https://github.com/daos-stack/daos.git',
-                    branch: env.BaseBranch,
-                    withSubmodules: true,
-                    pruneStaleBranch: true)
-            }
-        }
         stage('Build') {
             /* Don't use failFast here as whilst it avoids using extra resources
              * and gives faster results for PRs it's also on for master where we
@@ -336,6 +326,12 @@ pipeline {
                     //     expression { !skipStage() }
                     // }
                     agent {
+                        checkoutScm(
+                            url: 'https://github.com/daos-stack/daos.git',
+                            branch: env.BaseBranch,
+                            withSubmodules: true,
+                            pruneStaleBranch: true)
+                        sh(label: 'List checkout', script: 'ls -al')
                         dockerfile {
                             filename 'packaging/Dockerfile.mockbuild'
                             dir 'utils/rpms'
