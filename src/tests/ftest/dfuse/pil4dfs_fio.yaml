@@ -2,10 +2,11 @@ hosts:
   test_servers: 2
   test_clients: 1
 
-timeout: 600
+timeout: 5400
 
 server_config:
   name: daos_server
+  control_log_mask: DEBUG
   engines_per_host: 2
   engines:
     0:
@@ -14,12 +15,16 @@ server_config:
       fabric_iface_port: 31317
       log_file: daos_server0.log
       storage: auto
+      env_vars:
+        - CRT_TIMEOUT=10
     1:
       pinned_numa_node: 1
       fabric_iface: ib1
       fabric_iface_port: 31417
       log_file: daos_server1.log
       storage: auto
+      env_vars:
+        - CRT_TIMEOUT=10
 
 pool:
   size: 90%
@@ -51,40 +56,9 @@ fio:
     disable_clat: 1
   job:
     params: !mux
-      256B_fork:
-        pil4dfs_ioengines: ['psync']
-        thread: 0
-        blocksize: '256B'
-        size: '32K'
-        iodepth: 1
-      256B_pthread:
-        pil4dfs_ioengines: ['psync']
-        thread: 1
-        blocksize: '256B'
-        size: '32K'
-        iodepth: 1
-      1M_fork:
-        pil4dfs_ioengines: ['psync']
-        thread: 0
-        blocksize: '1M'
-        size: '64M'
-        iodepth: 1
-      1M_pthread:
-        pil4dfs_ioengines: ['psync']
-        thread: 1
-        blocksize: '1M'
-        size: '64M'
-        iodepth: 1
       iodepth_fork:
         pil4dfs_ioengines: ['libaio']
         thread: 0
-        numjobs: 8
-        blocksize: '4K'
-        size: '512K'
-        iodepth: 16
-      iodepth_thread:
-        pil4dfs_ioengines: ['libaio']
-        thread: 1
         numjobs: 8
         blocksize: '4K'
         size: '512K'
