@@ -475,6 +475,21 @@ int
 crt_reply_send(crt_rpc_t *req);
 
 /**
+ * Send an RPC reply and free the input buffer immediately.
+ * Only to be called on the server side.
+ *
+ * \param[in] req              pointer to RPC request
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+ *
+ * \note the crt_rpc_t is exported to user, caller should fill the
+ *        crt_rpc_t::cr_output before sending the RPC reply.
+ *        See \ref crt_req_create.
+ */
+int
+crt_reply_send_input_free(crt_rpc_t *req);
+
+/**
  * Return request buffer
  *
  * \param[in] req              pointer to RPC request
