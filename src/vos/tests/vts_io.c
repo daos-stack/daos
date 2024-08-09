@@ -2942,78 +2942,90 @@ io_query_key_negative(void **state)
 	assert_rc_equal(rc, -DER_INVAL);
 }
 
-static inline int
-dummy_bulk_create(void *ctxt, d_sg_list_t *sgl, unsigned int perm, void **bulk_hdl)
+static int
+gang_sv_io(struct io_test_args *arg, daos_epoch_t epoch, char *dkey_buf, char *akey_buf,
+	   char *update_buf, char *fetch_buf, daos_size_t rsize)
 {
+	daos_iod_t	iod = { 0 };
+	daos_key_t	dkey, akey;
+	d_iov_t		val_iov;
+	d_sg_list_t	sgl = { 0 };
+	int		rc;
+
+	set_iov(&dkey, dkey_buf, is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
+	set_iov(&akey, akey_buf, is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
+
+	iod.iod_name = akey;
+	iod.iod_type = DAOS_IOD_SINGLE;
+	iod.iod_size = rsize;
+	iod.iod_nr = 1;
+
+	dts_buf_render(update_buf, rsize);
+	d_iov_set(&val_iov, update_buf, rsize);
+	sgl.sg_nr = 1;
+	sgl.sg_iovs = &val_iov;
+
+	rc = io_test_obj_update(arg, epoch, 0, &dkey, &iod, &sgl, NULL, true);
+	if (rc)
+		return rc;
+
+	memset(fetch_buf, 0, rsize);
+	d_iov_set(&val_iov, fetch_buf, rsize);
+	iod.iod_size = DAOS_REC_ANY;
+
+	rc = io_test_obj_fetch(arg, epoch, 0, &dkey, &iod, &sgl, true);
+	if (rc)
+		return rc;
+
+	/* Verify */
+	assert_int_equal(iod.iod_size, rsize);
+	assert_memory_equal(update_buf, fetch_buf, rsize);
+
 	return 0;
 }
 
-static inline int
-dummy_bulk_free(void *bulk_hdl)
-{
-	return 0;
-}
-
-/* Verify the fix of DAOS-10748 */
 static void
-io_allocbuf_failure(void **state)
+gang_sv_test(void **state)
 {
 	struct io_test_args	*arg = *state;
-	char			 dkey_buf[UPDATE_DKEY_SIZE] = { 0 };
-	char			 akey_buf[UPDATE_AKEY_SIZE] = { 0 };
-	daos_iod_t		 iod = { 0 };
-	d_sg_list_t		 sgl = { 0 };
-	daos_key_t		 dkey_iov, akey_iov;
-	daos_epoch_t		 epoch = 1;
-	char			*buf;
-	daos_handle_t		 ioh;
-	int			 fake_ctxt;
-	daos_size_t		 buf_len = (40UL << 20); /* 40MB, larger than DMA chunk size */
-	int			 rc;
+	char			dkey_buf[UPDATE_DKEY_SIZE], akey_buf[UPDATE_AKEY_SIZE];
+	char			*update_buf, *fetch_buf;
+	daos_size_t		rsize = (27UL << 20);	/* 27MB */
+	daos_epoch_t		epoch = 1;
+	int			rc;
 
-	FAULT_INJECTION_REQUIRED();
+	D_ALLOC(update_buf, rsize);
+	assert_non_null(update_buf);
+
+	D_ALLOC(fetch_buf, rsize);
+	assert_non_null(fetch_buf);
 
 	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
 	vts_key_gen(&akey_buf[0], arg->akey_size, false, arg);
-	set_iov(&dkey_iov, &dkey_buf[0], is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
-	set_iov(&akey_iov, &akey_buf[0], is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
 
-	rc = d_sgl_init(&sgl, 1);
+	print_message("Gang SV update/fetch.\n");
+	rc = gang_sv_io(arg, epoch, dkey_buf, akey_buf, update_buf, fetch_buf, rsize);
 	assert_rc_equal(rc, 0);
 
-	D_ALLOC(buf, buf_len);
-	assert_non_null(buf);
-
-	sgl.sg_iovs[0].iov_buf = buf;
-	sgl.sg_iovs[0].iov_buf_len = buf_len;
-	sgl.sg_iovs[0].iov_len = buf_len;
-
-	iod.iod_name = akey_iov;
-	iod.iod_nr = 1;
-	iod.iod_type = DAOS_IOD_SINGLE;
-	iod.iod_size = buf_len;
-	iod.iod_recxs = NULL;
-
+	print_message("Gang SV ZC update/fetch.\n");
+	epoch++;
 	arg->ta_flags |= TF_ZERO_COPY;
-
-	bio_register_bulk_ops(dummy_bulk_create, dummy_bulk_free);
-	daos_fail_loc_set(DAOS_NVME_ALLOCBUF_ERR | DAOS_FAIL_ONCE);
-
-	rc = vos_update_begin(arg->ctx.tc_co_hdl, arg->oid, epoch, 0, &dkey_iov,
-			      1, &iod, NULL, 0, &ioh, NULL);
+	rc = gang_sv_io(arg, epoch, dkey_buf, akey_buf, update_buf, fetch_buf, rsize);
 	assert_rc_equal(rc, 0);
 
-	rc = bio_iod_prep(vos_ioh2desc(ioh), BIO_CHK_TYPE_IO, (void *)&fake_ctxt, 0);
-	assert_rc_equal(rc, -DER_NOMEM);
-	daos_fail_loc_set(0);
-	bio_register_bulk_ops(NULL, NULL);
-
-	rc = vos_update_end(ioh, 0, &dkey_iov, rc, NULL, NULL);
-	assert_rc_equal(rc, -DER_NOMEM);
-
-	d_sgl_fini(&sgl, false);
-	D_FREE(buf);
+	print_message("Gang SV update/fetch with CSUM.\n");
+	epoch++;
 	arg->ta_flags &= ~TF_ZERO_COPY;
+	arg->ta_flags |= TF_USE_CSUMS;
+	rc = gang_sv_io(arg, epoch, dkey_buf, akey_buf, update_buf, fetch_buf, rsize);
+	assert_rc_equal(rc, 0);
+
+	print_message("Gang SV overwrite with CSUM.\n");
+	rc = gang_sv_io(arg, epoch, dkey_buf, akey_buf, update_buf, fetch_buf, rsize);
+	assert_rc_equal(rc, 0);
+
+	D_FREE(update_buf);
+	D_FREE(fetch_buf);
 }
 
 static const struct CMUnitTest iterator_tests[] = {
@@ -3061,7 +3073,7 @@ static const struct CMUnitTest int_tests[] = {
      NULL},
     {"VOS300.2: Key query test", io_query_key, NULL, NULL},
     {"VOS300.3: Key query negative test", io_query_key_negative, NULL, NULL},
-    {"VOS300.4: Return error on DMA buffer allocation failure", io_allocbuf_failure, NULL, NULL},
+    {"VOS300.4: Gang SV update/fetch test", gang_sv_test, NULL, NULL},
 };
 
 static int

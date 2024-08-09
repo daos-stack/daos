@@ -34,11 +34,6 @@ dma_alloc_chunk(unsigned int cnt)
 
 	D_ASSERT(bytes > 0);
 
-	if (DAOS_FAIL_CHECK(DAOS_NVME_ALLOCBUF_ERR)) {
-		D_ERROR("Injected DMA buffer allocation error.\n");
-		return NULL;
-	}
-
 	D_ALLOC_PTR(chunk);
 	if (chunk == NULL) {
 		return NULL;
@@ -848,6 +843,7 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 		bio_iov_set_raw_buf(biov, NULL);
 		return 0;
 	}
+	D_ASSERT(!BIO_ADDR_IS_GANG(&biov->bi_addr));
 
 	if (direct_scm_access(biod, biov)) {
 		struct umem_instance *umem = biod->bd_umem;

@@ -523,10 +523,11 @@ svt_rec_alloc_common(struct btr_instance *tins, struct btr_record *rec,
 		     struct vos_svt_key *skey, struct vos_rec_bundle *rbund)
 {
 	struct vos_irec_df	*irec;
+	struct vos_pool		*pool = (struct vos_pool *)tins->ti_priv;
 	int			 rc;
 
 	D_ASSERT(!UMOFF_IS_NULL(rbund->rb_off));
-	rc = umem_tx_xadd(&tins->ti_umm, rbund->rb_off, vos_irec_msize(rbund),
+	rc = umem_tx_xadd(&tins->ti_umm, rbund->rb_off, vos_irec_msize(pool, rbund),
 			  UMEM_XADD_NO_SNAPSHOT);
 	if (rc != 0)
 		return rc;
@@ -592,6 +593,57 @@ cancel_nvme_exts(bio_addr_t *addr, struct dtx_handle *dth)
 }
 
 static int
+svt_free_payload(struct vos_pool *pool, bio_addr_t *addr, uint64_t rsize)
+{
+	uint64_t	tot_len = rsize;
+	uint32_t	data_len;
+	bio_addr_t	sub_addr = { 0 };
+	int		i, rc = 0;
+
+	if (bio_addr_is_hole(addr))
+		return 0;
+
+	if (tot_len == 0) {
+		D_ERROR("Invalid 0 SV record size\n");
+		return -DER_INVAL;
+	}
+
+	if (BIO_ADDR_IS_GANG(addr)) {
+		for (i = 0; i < addr->ba_gang_nr; i++) {
+			bio_gaddr_get(vos_pool2umm(pool), addr, i, &sub_addr.ba_type, &data_len,
+				      &sub_addr.ba_off);
+			if (tot_len < data_len) {
+				D_ERROR("Invalid gang addr[%d], nr:%u, rsize:"DF_U64", "
+					"len:"DF_U64"/%u\n", i, addr->ba_gang_nr, rsize,
+					tot_len, data_len);
+				return -DER_INVAL;
+			}
+			tot_len -= data_len;
+
+			rc = vos_bio_addr_free(pool, &sub_addr, data_len);
+			if (rc) {
+				DL_ERROR(rc, "SV gang free %d on %s failed.",
+					 i, addr->ba_type == DAOS_MEDIA_SCM ? "SCM" : "NVMe");
+				return rc;
+			}
+		}
+
+		if (tot_len != 0) {
+			D_ERROR("Invalid gang addr, nr:%u, rsize:"DF_U64", left"DF_U64"\n",
+				addr->ba_gang_nr, rsize, tot_len);
+			return -DER_INVAL;
+		}
+	} else if (addr->ba_type == DAOS_MEDIA_NVME) {
+		rc = vos_bio_addr_free(pool, addr, rsize);
+		if (rc)
+			DL_ERROR(rc, "Free SV payload on NVMe failed."); 
+	}
+	/* Payload is allocated along with vos_iref_df when SV is stored on SCM */
+
+	return rc;
+}
+
+static int
 svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
 		      bool overwrite)
 {
@@ -607,7 +659,7 @@ svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
 
 	if (overwrite) {
 		dth = vos_dth_get(cont->vc_pool->vp_sysdb);
-		if (dth == NULL)
+		if (dth == NULL || BIO_ADDR_IS_GANG(addr))
 			return -DER_NO_PERM; /* Not allowed */
 	}
 
@@ -615,17 +667,12 @@ svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
 				  irec->ir_dtx, *epc, rec->rec_off);
 
 	if (!overwrite) {
-		int	rc;
+		struct vos_pool	*pool = tins->ti_priv;
+		int		 rc;
 
-		/* SCM value is stored together with vos_irec_df */
-		if (addr->ba_type == DAOS_MEDIA_NVME) {
-			struct vos_pool *pool = tins->ti_priv;
-
-			D_ASSERT(pool != NULL);
-			rc = vos_bio_addr_free(pool, addr, irec->ir_size);
-			if (rc)
-				return rc;
-		}
+		rc = svt_free_payload(pool, addr, irec->ir_size);
+		if (rc)
+			return rc;
 
 		return umem_free(&tins->ti_umm, rec->rec_off);
 	}

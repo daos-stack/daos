@@ -1651,6 +1651,8 @@ recx_iter_copy(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	/* Skip copy and return success for a punched record */
 	if (bio_addr_is_hole(&biov->bi_addr))
 		return 0;
+	else if (BIO_ADDR_IS_GANG(&biov->bi_addr))
+		return -DER_NOTSUPPORTED;
 	else if (iov_out->iov_buf_len < bio_iov2len(biov))
 		return -DER_OVERFLOW;
 
