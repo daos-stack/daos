@@ -318,6 +318,14 @@ pipeline {
                 beforeAgent true
                 expression { !skipStage() }
             }
+            stage {
+                checkoutScm(
+                    url: 'https://github.com/daos-stack/daos.git',
+                    branch: env.BaseBranch,
+                    withSubmodules: true,
+                    pruneStaleBranch: true)
+                sh(label: 'List checkout', script: 'ls -al')
+            }
             parallel {
                 stage('Build RPM on EL 8') {
                     // Always run this stage
@@ -326,12 +334,6 @@ pipeline {
                     //     expression { !skipStage() }
                     // }
                     agent {
-                        checkoutScm(
-                            url: 'https://github.com/daos-stack/daos.git',
-                            branch: env.BaseBranch,
-                            withSubmodules: true,
-                            pruneStaleBranch: true)
-                        sh(label: 'List checkout', script: 'ls -al')
                         dockerfile {
                             filename 'packaging/Dockerfile.mockbuild'
                             dir 'utils/rpms'
