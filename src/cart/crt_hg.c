@@ -49,7 +49,6 @@ struct crt_na_dict crt_na_dict[] = {
 	}, {
 		.nad_type	= CRT_PROV_UCX,
 		.nad_str	= "ucx+ud_x",
-		.nad_alt_str	= "ucx",
 		.nad_contig_eps	= true,
 		.nad_port_bind	= true,
 	}, {
