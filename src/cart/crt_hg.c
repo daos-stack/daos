@@ -47,58 +47,9 @@ struct crt_na_dict crt_na_dict[] = {
 		.nad_contig_eps	= false,
 		.nad_port_bind  = true,
 	}, {
-		.nad_type	= CRT_PROV_UCX_RC,
-		.nad_str	= "ucx+rc_v",
-		.nad_contig_eps	= true,
-		.nad_port_bind	= true,
-	}, {
-		.nad_type	= CRT_PROV_UCX_UD,
-		.nad_str	= "ucx+ud_v",
-		.nad_contig_eps	= true,
-		.nad_port_bind	= true,
-	}, {
-		.nad_type	= CRT_PROV_UCX_RC_UD,
-		.nad_str	= "ucx+rc_v,ud_v",
-		.nad_contig_eps	= true,
-		.nad_port_bind	= true,
-	}, {
-		.nad_type	= CRT_PROV_UCX_RC_O,
-		.nad_str	= "ucx+rc",
-		.nad_contig_eps	= true,
-		.nad_port_bind	= true,
-	}, {
-		.nad_type	= CRT_PROV_UCX_UD_O,
-		.nad_str	= "ucx+ud",
-		.nad_contig_eps	= true,
-		.nad_port_bind	= true,
-	}, {
-		.nad_type	= CRT_PROV_UCX_RC_UD_O,
-		.nad_str	= "ucx+rc,ud",
-		.nad_contig_eps	= true,
-		.nad_port_bind	= true,
-	}, {
-		.nad_type	= CRT_PROV_UCX_RC_X,
-		.nad_str	= "ucx+rc_x",
-		.nad_contig_eps	= true,
-		.nad_port_bind	= true,
-	}, {
-		.nad_type	= CRT_PROV_UCX_UD_X,
+		.nad_type	= CRT_PROV_UCX,
 		.nad_str	= "ucx+ud_x",
-		.nad_contig_eps	= true,
-		.nad_port_bind	= true,
-	}, {
-		.nad_type	= CRT_PROV_UCX_RC_UD_X,
-		.nad_str	= "ucx+rc_x,ud_x",
-		.nad_contig_eps	= true,
-		.nad_port_bind	= true,
-	}, {
-		.nad_type	= CRT_PROV_UCX_DC_X,
-		.nad_str	= "ucx+dc_x",
-		.nad_contig_eps	= true,
-		.nad_port_bind	= true,
-	}, {
-		.nad_type	= CRT_PROV_UCX_TCP,
-		.nad_str	= "ucx+tcp",
+		.nad_alt_str	= "ucx",
 		.nad_contig_eps	= true,
 		.nad_port_bind	= true,
 	}, {
@@ -907,6 +858,7 @@ crt_hg_class_init(crt_provider_t provider, int ctx_idx, bool primary, int iface_
 	init_info.request_post_init = crt_gdata.cg_post_init;
 	init_info.request_post_incr = crt_gdata.cg_post_incr;
 
+	D_PRINT("info_string: %s\n", info_string);
 	hg_class = HG_Init_opt(info_string, crt_is_service(), &init_info);
 	if (hg_class == NULL) {
 		D_ERROR("Could not initialize HG class.\n");

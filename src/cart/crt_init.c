@@ -424,21 +424,37 @@ __split_arg(char *s_arg_to_split, const char *delim, char **first_arg, char **se
 
 
 int
-crt_str_to_provider(const char *str_provider)
+crt_str_to_provider(char *str_provider, bool is_primary)
 {
 	int	provider_idx = CRT_PROV_UNKNOWN;
 	int	i;
+	char	*p = NULL;
 
 	if (str_provider == NULL)
 		return provider_idx;
 
 	for (i = 0; crt_na_dict[i].nad_str != NULL; i++) {
-
 		if (!strncmp(str_provider, crt_na_dict[i].nad_str,
 			     strlen(crt_na_dict[i].nad_str) + 1) ||
 		    (crt_na_dict[i].nad_alt_str &&
 		     !strncmp(str_provider, crt_na_dict[i].nad_alt_str,
 			      strlen(crt_na_dict[i].nad_alt_str) + 1))) {
+			provider_idx = crt_na_dict[i].nad_type;
+			break;
+		}
+		if (is_primary && crt_na_dict[i].nad_type == CRT_PROV_UCX &&
+		    !strncmp(str_provider, CRT_UCX_STR, strlen(CRT_UCX_STR))) {
+			if (strlen(str_provider) > strlen(CRT_UCX_STR) && strchr(str_provider, '+')) {
+				D_ALLOC(p, strlen(str_provider)+1);
+				if (!p) {
+					D_WARN("Unable to set UCX provider to %s, using default %s",
+					       str_provider, crt_na_dict[i].nad_str); 
+				} else {
+					strcpy(p, str_provider);
+					crt_na_dict[i].nad_str = p;
+					crt_na_dict[i].nad_str_alloc = true;
+				}
+			}
 			provider_idx = crt_na_dict[i].nad_type;
 			break;
 		}
@@ -647,8 +663,8 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		if (rc != 0)
 			D_GOTO(unlock, rc);
 
-		primary_provider = crt_str_to_provider(provider_str0);
-		secondary_provider = crt_str_to_provider(provider_str1);
+		primary_provider = crt_str_to_provider(provider_str0, true);
+		secondary_provider = crt_str_to_provider(provider_str1, false);
 
 		if (primary_provider == CRT_PROV_UNKNOWN) {
 			D_ERROR("Requested provider %s not found\n", provider);
@@ -937,6 +953,10 @@ crt_finalize(void)
 			for (i = 0; i < crt_gdata.cg_num_secondary_provs; i++)
 				crt_na_config_fini(false, crt_gdata.cg_secondary_provs[i]);
 		}
+
+		for (i = 0; crt_na_dict[i].nad_str != NULL; i++) 
+			if (crt_na_dict[i].nad_str_alloc)
+				D_FREE(crt_na_dict[i].nad_str);
 
 		D_FREE(crt_gdata.cg_secondary_provs);
 		D_FREE(crt_gdata.cg_prov_gdata_secondary);
