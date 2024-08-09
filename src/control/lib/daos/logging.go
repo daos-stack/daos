@@ -13,14 +13,9 @@ import (
 	"github.com/pkg/errors"
 )
 
-/*
-#cgo LDFLAGS: -lgurt
-
-#include <daos/debug.h>
-*/
-import "C"
-
 const (
+	// UnsetLogMask defines an explicitly-unset log mask.
+	UnsetLogMask = "UNSET"
 	// DefaultDebugMask defines the basic debug mask.
 	DefaultDebugMask = "DEBUG,MEM=ERR,OBJECT=ERR,PLACEMENT=ERR"
 	// DefaultInfoMask defines the basic info mask.
@@ -35,13 +30,27 @@ func InitLogging(masks ...string) (func(), error) {
 	if mask == "" {
 		mask = DefaultInfoMask
 	}
-	os.Setenv("D_LOG_MASK", mask)
+	if mask != UnsetLogMask {
+		if err := SetLogMask(mask); err != nil {
+			return func() {}, errors.Wrap(err, "failed to set DAOS logging mask")
+		}
+	}
 
-	if rc := C.daos_debug_init(nil); rc != 0 {
+	if rc := daos_debug_init(nil); rc != 0 {
 		return func() {}, errors.Wrap(Status(rc), "daos_debug_init() failed")
 	}
 
 	return func() {
-		C.daos_debug_fini()
+		daos_debug_fini()
 	}, nil
+}
+
+// SetLogMask sets the DAOS logging mask.
+func SetLogMask(mask string) error {
+	return os.Setenv("D_LOG_MASK", mask)
+}
+
+// GetLogMask returns the DAOS logging mask, if set.
+func GetLogMask() string {
+	return os.Getenv("D_LOG_MASK")
 }

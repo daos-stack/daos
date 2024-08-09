@@ -19,7 +19,7 @@ type systemQueryCmd struct {
 }
 
 func (cmd *systemQueryCmd) Execute(_ []string) error {
-	sysInfo, err := cmd.apiProvider.GetSystemInfo()
+	sysInfo, err := cmd.apiProvider.GetSystemInfo(cmd.MustLogCtx())
 	if err != nil {
 		return errors.Wrap(err, "failed to query DAOS system")
 	}

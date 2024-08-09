@@ -20,6 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/atm"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -182,7 +183,7 @@ or query/manage an object inside a container.`
 	// Initialize the daos debug system first so that
 	// any allocations made as part of argument parsing
 	// are logged when running under NLT.
-	debugFini, err := initDaosDebug()
+	debugFini, err := daos.InitLogging(daos.UnsetLogMask)
 	if err != nil {
 		exitWithError(log, err)
 	}

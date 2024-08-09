@@ -100,15 +100,18 @@ function setup_environment()
 	LD_LIBRARY_PATH=${SL_PREFIX+${SL_PREFIX}/lib}
 	LD_LIBRARY_PATH+="${SL_PREFIX+:${SL_PREFIX}/lib64}"
 	LD_LIBRARY_PATH+="${SL_PREFIX+:${SL_PREFIX}/lib64/daos_srv}"
+	LD_LIBRARY_PATH+="${SL_MERCURY_PREFIX+:${SL_MERCURY_PREFIX}/lib}"
 	LD_LIBRARY_PATH+="${SL_SPDK_PREFIX+:${SL_SPDK_PREFIX}/lib}"
 	LD_LIBRARY_PATH+="${SL_OFI_PREFIX+:${SL_OFI_PREFIX}/lib}"
 	CGO_LDFLAGS=${SL_PREFIX+-L${SL_PREFIX}/lib}
 	CGO_LDFLAGS+="${SL_PREFIX+ -L${SL_PREFIX}/lib64}"
 	CGO_LDFLAGS+="${SL_PREFIX+ -L${SL_PREFIX}/lib64/daos_srv}"
 	CGO_LDFLAGS+="${SL_BUILD_DIR+ -L${SL_BUILD_DIR}/src/control/lib/spdk}"
+	CGO_LDFLAGS+="${SL_MERCURY_PREFIX+ -L${SL_MERCURY_PREFIX}/lib}"
 	CGO_LDFLAGS+="${SL_SPDK_PREFIX+ -L${SL_SPDK_PREFIX}/lib}"
 	CGO_LDFLAGS+="${SL_OFI_PREFIX+ -L${SL_OFI_PREFIX}/lib}"
 	CGO_CFLAGS=${SL_PREFIX+-I${SL_PREFIX}/include}
+	CGO_CFLAGS+="${SL_MERCURY_PREFIX+ -I${SL_MERCURY_PREFIX}/include}"
 	CGO_CFLAGS+="${SL_SPDK_PREFIX+ -I${SL_SPDK_PREFIX}/include}"
 	CGO_CFLAGS+="${SL_OFI_PREFIX+ -I${SL_OFI_PREFIX}/include}"
 	CGO_CFLAGS+="${SL_ARGOBOTS_PREFIX+ -I${SL_ARGOBOTS_PREFIX}/include}"
@@ -167,7 +170,7 @@ $output
 
 function get_test_runner()
 {
-	test_args="-mod vendor -race -cover -v ./... -tags firmware,fault_injection"
+	test_args="-mod vendor -race -cover -v ./... -tags firmware,fault_injection,test_stubs"
 	test_runner="go test"
 
 	if which gotestsum >/dev/null; then

@@ -120,33 +120,8 @@ func (trf *tierRatioFlag) UnmarshalFlag(fv string) error {
 	return nil
 }
 
-type sizeFlag struct {
-	bytes uint64
-}
-
-func (sf sizeFlag) IsSet() bool {
-	return sf.bytes > 0
-}
-
-func (sf sizeFlag) String() string {
-	return humanize.Bytes(sf.bytes)
-}
-
-func (sf *sizeFlag) UnmarshalFlag(fv string) (err error) {
-	if fv == "" {
-		return errors.New("no size specified")
-	}
-
-	sf.bytes, err = humanize.ParseBytes(fv)
-	if err != nil {
-		return errors.Errorf("invalid size %q", fv)
-	}
-
-	return nil
-}
-
 type poolSizeFlag struct {
-	sizeFlag
+	ui.ByteSizeFlag
 	availRatio uint64
 }
 
@@ -155,7 +130,7 @@ func (psf poolSizeFlag) IsRatio() bool {
 }
 
 func (psf poolSizeFlag) IsSet() bool {
-	return psf.sizeFlag.IsSet() || psf.IsRatio()
+	return psf.ByteSizeFlag.IsSet() || psf.IsRatio()
 }
 
 func (psf poolSizeFlag) String() string {
@@ -163,7 +138,7 @@ func (psf poolSizeFlag) String() string {
 		return fmt.Sprintf("%d%%", psf.availRatio)
 	}
 
-	return psf.sizeFlag.String()
+	return psf.ByteSizeFlag.String()
 }
 
 func (psf *poolSizeFlag) UnmarshalFlag(fv string) error {
@@ -182,7 +157,7 @@ func (psf *poolSizeFlag) UnmarshalFlag(fv string) error {
 		return nil
 	}
 
-	return psf.sizeFlag.UnmarshalFlag(fv)
+	return psf.ByteSizeFlag.UnmarshalFlag(fv)
 }
 
 // PoolCreateCmd is the struct representing the command to create a DAOS pool.
@@ -199,9 +174,9 @@ type PoolCreateCmd struct {
 	TierRatio  tierRatioFlag       `short:"t" long:"tier-ratio" description:"Percentage of storage tiers for pool storage (auto; default: 6,94)"`
 	NumRanks   uint32              `short:"k" long:"nranks" description:"Number of ranks to use (auto)"`
 	NumSvcReps uint32              `short:"v" long:"nsvc" description:"Number of pool service replicas"`
-	ScmSize    sizeFlag            `short:"s" long:"scm-size" description:"Per-engine SCM allocation for DAOS pool (manual)"`
-	NVMeSize   sizeFlag            `short:"n" long:"nvme-size" description:"Per-engine NVMe allocation for DAOS pool (manual)"`
-	MetaSize   sizeFlag            `long:"meta-size" description:"In MD-on-SSD mode specify meta blob size to be used in DAOS pool (manual)"`
+	ScmSize    ui.ByteSizeFlag     `short:"s" long:"scm-size" description:"Per-engine SCM allocation for DAOS pool (manual)"`
+	NVMeSize   ui.ByteSizeFlag     `short:"n" long:"nvme-size" description:"Per-engine NVMe allocation for DAOS pool (manual)"`
+	MetaSize   ui.ByteSizeFlag     `long:"meta-size" description:"In MD-on-SSD mode specify meta blob size to be used in DAOS pool (manual)"`
 	RankList   ui.RankSetFlag      `short:"r" long:"ranks" description:"Storage engine unique identifiers (ranks) for DAOS pool"`
 
 	Args struct {
@@ -266,7 +241,7 @@ func (cmd *PoolCreateCmd) storageAutoTotal(req *control.PoolCreateReq) error {
 
 	req.NumRanks = cmd.NumRanks
 	req.TierRatio = cmd.TierRatio.Ratios()
-	req.TotalBytes = cmd.Size.bytes
+	req.TotalBytes = cmd.Size.Bytes
 
 	scmPercentage := ratio2Percentage(cmd.Logger, req.TierRatio[0], req.TierRatio[1])
 	msg := fmt.Sprintf("Creating DAOS pool with automatic storage allocation: "+
@@ -287,9 +262,9 @@ func (cmd *PoolCreateCmd) storageManual(req *control.PoolCreateReq) error {
 		return errIncompatFlags("tier-ratio", "scm-size")
 	}
 
-	scmBytes := cmd.ScmSize.bytes
-	nvmeBytes := cmd.NVMeSize.bytes
-	metaBytes := cmd.MetaSize.bytes
+	scmBytes := cmd.ScmSize.Bytes
+	nvmeBytes := cmd.NVMeSize.Bytes
+	metaBytes := cmd.MetaSize.Bytes
 	if metaBytes > 0 && metaBytes < scmBytes {
 		return errors.Errorf("--meta-size (%s) can not be smaller than --scm-size (%s)",
 			humanize.Bytes(metaBytes), humanize.Bytes(scmBytes))
