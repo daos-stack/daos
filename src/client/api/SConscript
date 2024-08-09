@@ -17,7 +17,7 @@ def scons():
 
     if prereqs.client_requested():
         libdaos = env.d_library('daos', libdaos_tgts, SHLIBVERSION=API_VERSION,
-                                LIBS=['daos_common'])
+                                LIBS=['daos_common', 'numa'])
         if hasattr(env, 'InstallVersionedLib'):
             env.InstallVersionedLib('$PREFIX/lib64/', libdaos, SHLIBVERSION=API_VERSION)
         else:

@@ -13,12 +13,14 @@ server_config:
       fabric_iface: ib0
       fabric_iface_port: 31317
       log_file: daos_server0.log
+      log_mask: INFO
       storage: auto
     1:
       pinned_numa_node: 1
       fabric_iface: ib1
       fabric_iface_port: 31417
       log_file: daos_server1.log
+      log_mask: INFO
       storage: auto
 
 pool:
