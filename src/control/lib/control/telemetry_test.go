@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -23,6 +23,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 )
 
 func newTestMetricFamily(name string, help string, mType pclient.MetricType) *pclient.MetricFamily {
@@ -253,7 +254,7 @@ func TestControl_MetricsList(t *testing.T) {
 				return []byte{}, nil
 			},
 			expResp: &MetricsListResp{
-				AvailableMetricSets: []*MetricSet{},
+				AvailableMetricSets: []*daos.MetricSet{},
 			},
 		},
 		"success": {
@@ -263,16 +264,16 @@ func TestControl_MetricsList(t *testing.T) {
 			},
 			scrapeFn: mockScrapeFnSuccess(t, testMetricFam...),
 			expResp: &MetricsListResp{
-				AvailableMetricSets: []*MetricSet{
+				AvailableMetricSets: []*daos.MetricSet{
 					{
 						Name:        "counter",
 						Description: "this is the counter help",
-						Type:        MetricTypeCounter,
+						Type:        daos.MetricTypeCounter,
 					},
 					{
 						Name:        "gauge",
 						Description: "this is the gauge help",
-						Type:        MetricTypeGauge,
+						Type:        daos.MetricTypeGauge,
 					},
 				},
 			},
@@ -299,7 +300,7 @@ func TestControl_MetricsList(t *testing.T) {
 }
 
 func TestControl_getMetricFromPrometheus(t *testing.T) {
-	testLabels := LabelMap{
+	testLabels := daos.MetricLabelMap{
 		"foo": "bar",
 		"baz": "snafu",
 	}
@@ -341,7 +342,7 @@ func TestControl_getMetricFromPrometheus(t *testing.T) {
 	for name, tc := range map[string]struct {
 		input     *pclient.Metric
 		inputType pclient.MetricType
-		expResult Metric
+		expResult daos.Metric
 		expErr    error
 	}{
 		"counter": {
@@ -362,11 +363,11 @@ func TestControl_getMetricFromPrometheus(t *testing.T) {
 		"summary": {
 			input:     testSummary,
 			inputType: pclient.MetricType_SUMMARY,
-			expResult: &SummaryMetric{
+			expResult: &daos.SummaryMetric{
 				Labels:      testLabels,
 				SampleSum:   testSummary.Summary.GetSampleSum(),
 				SampleCount: testSummary.Summary.GetSampleCount(),
-				Quantiles: QuantileMap{
+				Quantiles: daos.QuantileMap{
 					0: 1,
 					1: 2,
 					2: 3,
@@ -377,11 +378,11 @@ func TestControl_getMetricFromPrometheus(t *testing.T) {
 		"histogram": {
 			input:     testHistogram,
 			inputType: pclient.MetricType_HISTOGRAM,
-			expResult: &HistogramMetric{
+			expResult: &daos.HistogramMetric{
 				Labels:      testLabels,
 				SampleSum:   testHistogram.Histogram.GetSampleSum(),
 				SampleCount: testHistogram.Histogram.GetSampleCount(),
-				Buckets: []*MetricBucket{
+				Buckets: []*daos.MetricBucket{
 					{
 						UpperBound:      100,
 						CumulativeCount: 1,
@@ -465,7 +466,7 @@ func TestControl_MetricsQuery(t *testing.T) {
 				return []byte{}, nil
 			},
 			expResp: &MetricsQueryResp{
-				MetricSets: []*MetricSet{},
+				MetricSets: []*daos.MetricSet{},
 			},
 		},
 		"all metrics": {
@@ -475,39 +476,39 @@ func TestControl_MetricsQuery(t *testing.T) {
 			},
 			scrapeFn: mockScrapeFnSuccess(t, testMetricFam...),
 			expResp: &MetricsQueryResp{
-				MetricSets: []*MetricSet{
+				MetricSets: []*daos.MetricSet{
 					{
 						Name:        "my_counter",
 						Description: "this is the counter help",
-						Type:        MetricTypeCounter,
-						Metrics: []Metric{
+						Type:        daos.MetricTypeCounter,
+						Metrics: []daos.Metric{
 							newSimpleMetric(map[string]string{}, 0),
 						},
 					},
 					{
 						Name:        "my_gauge",
 						Description: "this is the gauge help",
-						Type:        MetricTypeGauge,
-						Metrics: []Metric{
+						Type:        daos.MetricTypeGauge,
+						Metrics: []daos.Metric{
 							newSimpleMetric(map[string]string{}, 0),
 						},
 					},
 					{
 						Name:        "my_generic",
 						Description: "this is the generic help",
-						Type:        MetricTypeGeneric,
-						Metrics: []Metric{
+						Type:        daos.MetricTypeGeneric,
+						Metrics: []daos.Metric{
 							newSimpleMetric(map[string]string{}, 0),
 						},
 					},
 					{
 						Name:        "my_histogram",
 						Description: "this is the histogram help",
-						Type:        MetricTypeHistogram,
-						Metrics: []Metric{
-							&HistogramMetric{
-								Labels: LabelMap{},
-								Buckets: []*MetricBucket{
+						Type:        daos.MetricTypeHistogram,
+						Metrics: []daos.Metric{
+							&daos.HistogramMetric{
+								Labels: daos.MetricLabelMap{},
+								Buckets: []*daos.MetricBucket{
 									// Prometheus library parsing
 									// includes inf bucket at minimum
 									{UpperBound: math.Inf(0)},
@@ -518,11 +519,11 @@ func TestControl_MetricsQuery(t *testing.T) {
 					{
 						Name:        "my_summary",
 						Description: "this is the summary help",
-						Type:        MetricTypeSummary,
-						Metrics: []Metric{
-							&SummaryMetric{
-								Labels:    LabelMap{},
-								Quantiles: QuantileMap{0: 0},
+						Type:        daos.MetricTypeSummary,
+						Metrics: []daos.Metric{
+							&daos.SummaryMetric{
+								Labels:    daos.MetricLabelMap{},
+								Quantiles: daos.QuantileMap{0: 0},
 							},
 						},
 					},
@@ -537,20 +538,20 @@ func TestControl_MetricsQuery(t *testing.T) {
 			},
 			scrapeFn: mockScrapeFnSuccess(t, testMetricFam...),
 			expResp: &MetricsQueryResp{
-				MetricSets: []*MetricSet{
+				MetricSets: []*daos.MetricSet{
 					{
 						Name:        "my_generic",
 						Description: "this is the generic help",
-						Type:        MetricTypeGeneric,
-						Metrics: []Metric{
+						Type:        daos.MetricTypeGeneric,
+						Metrics: []daos.Metric{
 							newSimpleMetric(map[string]string{}, 0),
 						},
 					},
 					{
 						Name:        "my_counter",
 						Description: "this is the counter help",
-						Type:        MetricTypeCounter,
-						Metrics: []Metric{
+						Type:        daos.MetricTypeCounter,
+						Metrics: []daos.Metric{
 							newSimpleMetric(map[string]string{}, 0),
 						},
 					},
@@ -589,29 +590,29 @@ func TestControl_Metric_JSON(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		metric Metric
+		metric daos.Metric
 	}{
 		"nil": {},
 		"simple": {
 			metric: newSimpleMetric(testLabelMap, 123),
 		},
 		"summary": {
-			metric: &SummaryMetric{
+			metric: &daos.SummaryMetric{
 				Labels:      testLabelMap,
 				SampleSum:   5678.9,
 				SampleCount: 42,
-				Quantiles: QuantileMap{
+				Quantiles: daos.QuantileMap{
 					0.25: 50,
 					0.5:  42,
 				},
 			},
 		},
 		"histogram": {
-			metric: &HistogramMetric{
+			metric: &daos.HistogramMetric{
 				Labels:      testLabelMap,
 				SampleSum:   9876,
 				SampleCount: 120,
-				Buckets: []*MetricBucket{
+				Buckets: []*daos.MetricBucket{
 					{
 						CumulativeCount: 55,
 						UpperBound:      500,
@@ -626,16 +627,16 @@ func TestControl_Metric_JSON(t *testing.T) {
 				t.Fatalf("expected to marshal, got %q", err)
 			}
 
-			var unmarshaled Metric
+			var unmarshaled daos.Metric
 			switch tc.metric.(type) {
-			case *SimpleMetric:
-				unmarshaled = new(SimpleMetric)
-			case *SummaryMetric:
-				unmarshaled = new(SummaryMetric)
-			case *HistogramMetric:
-				unmarshaled = new(HistogramMetric)
+			case *daos.SimpleMetric:
+				unmarshaled = new(daos.SimpleMetric)
+			case *daos.SummaryMetric:
+				unmarshaled = new(daos.SummaryMetric)
+			case *daos.HistogramMetric:
+				unmarshaled = new(daos.HistogramMetric)
 			default:
-				unmarshaled = new(SimpleMetric)
+				unmarshaled = new(daos.SimpleMetric)
 			}
 
 			err = json.Unmarshal(marshaled, unmarshaled)
@@ -645,7 +646,7 @@ func TestControl_Metric_JSON(t *testing.T) {
 
 			expResult := tc.metric
 			if tc.metric == nil {
-				expResult = &SimpleMetric{}
+				expResult = &daos.SimpleMetric{}
 			}
 
 			if diff := cmp.Diff(expResult, unmarshaled); diff != "" {
@@ -655,62 +656,17 @@ func TestControl_Metric_JSON(t *testing.T) {
 	}
 }
 
-func TestControl_metricTypeFromString(t *testing.T) {
-	for name, tc := range map[string]struct {
-		input   string
-		expType MetricType
-	}{
-		"empty": {
-			expType: MetricTypeUnknown,
-		},
-		"counter": {
-			input:   "counter",
-			expType: MetricTypeCounter,
-		},
-		"gauge": {
-			input:   "gauge",
-			expType: MetricTypeGauge,
-		},
-		"summary": {
-			input:   "summary",
-			expType: MetricTypeSummary,
-		},
-		"histogram": {
-			input:   "histogram",
-			expType: MetricTypeHistogram,
-		},
-		"generic": {
-			input:   "generic",
-			expType: MetricTypeGeneric,
-		},
-		"invalid": {
-			input:   "some garbage text",
-			expType: MetricTypeUnknown,
-		},
-		"weird capitalization": {
-			input:   "CoUnTeR",
-			expType: MetricTypeCounter,
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			gotType := metricTypeFromString(tc.input)
-
-			test.AssertEqual(t, tc.expType, gotType, "")
-		})
-	}
-}
-
 func TestControl_MetricSet_JSON(t *testing.T) {
 	for name, tc := range map[string]struct {
-		set *MetricSet
+		set *daos.MetricSet
 	}{
 		"nil": {},
 		"generic type": {
-			set: &MetricSet{
+			set: &daos.MetricSet{
 				Name:        "timespan",
 				Description: "It's been a while",
-				Type:        MetricTypeGeneric,
-				Metrics: []Metric{
+				Type:        daos.MetricTypeGeneric,
+				Metrics: []daos.Metric{
 					newSimpleMetric(map[string]string{
 						"units": "nanoseconds",
 					}, float64(time.Second)),
@@ -718,11 +674,11 @@ func TestControl_MetricSet_JSON(t *testing.T) {
 			},
 		},
 		"counter type": {
-			set: &MetricSet{
+			set: &daos.MetricSet{
 				Name:        "one_ring",
 				Description: "Precious...",
-				Type:        MetricTypeCounter,
-				Metrics: []Metric{
+				Type:        daos.MetricTypeCounter,
+				Metrics: []daos.Metric{
 					newSimpleMetric(map[string]string{
 						"owner": "frodo",
 					}, 1),
@@ -730,11 +686,11 @@ func TestControl_MetricSet_JSON(t *testing.T) {
 			},
 		},
 		"gauge type": {
-			set: &MetricSet{
+			set: &daos.MetricSet{
 				Name:        "funny_hats",
 				Description: "Hilarious headgear in inventory",
-				Type:        MetricTypeGauge,
-				Metrics: []Metric{
+				Type:        daos.MetricTypeGauge,
+				Metrics: []daos.Metric{
 					newSimpleMetric(map[string]string{
 						"type": "tophat",
 					}, 1),
@@ -748,12 +704,12 @@ func TestControl_MetricSet_JSON(t *testing.T) {
 			},
 		},
 		"summary type": {
-			set: &MetricSet{
+			set: &daos.MetricSet{
 				Name:        "alpha",
 				Description: "The first letter! Everybody's favorite!",
-				Type:        MetricTypeSummary,
-				Metrics: []Metric{
-					&SummaryMetric{
+				Type:        daos.MetricTypeSummary,
+				Metrics: []daos.Metric{
+					&daos.SummaryMetric{
 						Labels:      map[string]string{"beta": "b"},
 						SampleCount: 3,
 						SampleSum:   42,
@@ -763,16 +719,16 @@ func TestControl_MetricSet_JSON(t *testing.T) {
 			},
 		},
 		"histogram type": {
-			set: &MetricSet{
+			set: &daos.MetricSet{
 				Name:        "my_histogram",
 				Description: "This is a histogram",
-				Type:        MetricTypeHistogram,
-				Metrics: []Metric{
-					&HistogramMetric{
+				Type:        daos.MetricTypeHistogram,
+				Metrics: []daos.Metric{
+					&daos.HistogramMetric{
 						Labels:      map[string]string{"owner": "me"},
 						SampleCount: 1024,
 						SampleSum:   12344,
-						Buckets: []*MetricBucket{
+						Buckets: []*daos.MetricBucket{
 							{
 								CumulativeCount: 789,
 								UpperBound:      500,
@@ -793,7 +749,7 @@ func TestControl_MetricSet_JSON(t *testing.T) {
 				t.Fatalf("expected to marshal, got %q", err)
 			}
 
-			unmarshaled := new(MetricSet)
+			unmarshaled := new(daos.MetricSet)
 			err = json.Unmarshal(marshaled, unmarshaled)
 			if err != nil {
 				t.Fatalf("expected to unmarshal, got %q", err)
@@ -801,7 +757,7 @@ func TestControl_MetricSet_JSON(t *testing.T) {
 
 			expResult := tc.set
 			if tc.set == nil {
-				expResult = &MetricSet{}
+				expResult = &daos.MetricSet{}
 			}
 
 			if diff := cmp.Diff(expResult, unmarshaled); diff != "" {
