@@ -2367,7 +2367,7 @@ out:
  * Each time node is removed, an corresponding index is added back
  * to the free index list
  *
- * Returns index on success or -DER_NOSPACE if all indecies are used up
+ * Returns index on success or -DER_NOSPACE if all indices are used up
  */
 static int
 grp_get_free_index(struct crt_grp_priv *priv)
