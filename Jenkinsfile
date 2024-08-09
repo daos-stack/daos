@@ -319,14 +319,14 @@ pipeline {
                 expression { !skipStage() }
             }
             stages {
-                stage {
+                stage('Checkout base branch') {
                     steps {
                         checkoutScm(
                             url: 'https://github.com/daos-stack/daos.git',
                             branch: env.BaseBranch,
                             withSubmodules: true,
                             pruneStaleBranch: true)
-                        sh(label: 'List checkout', script: 'ls -al')
+                        // sh(label: 'List checkout', script: 'ls -al')
                     }
                 }
                 stage('Build on EL 8 Bullseye') {
