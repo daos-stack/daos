@@ -1200,7 +1200,7 @@ bcast_create(crt_opcode_t opc, bool filter_invert, d_rank_list_t *filter_ranks,
 				    NULL /* co_bulk_hdl */, NULL /* priv */,
 				    filter_invert ?
 				    CRT_RPC_FLAG_FILTER_INVERT : 0,
-				    crt_tree_topo(CRT_TREE_FLAT, 0), rpc);
+				    crt_tree_topo(CRT_TREE_KNOMIAL, 2), rpc);
 }
 
 /**
