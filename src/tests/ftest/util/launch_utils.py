@@ -407,8 +407,6 @@ class TestRunner():
             message = f"Unhandled rc={return_code} while executing {test} on repeat {repeat}"
             self.test_result.fail_test(logger, "Execute", message, sys.exc_info())
             return_code = 1
-
-        end_time = int(time.time())
         if return_code:
             self._collect_crash_files(logger)
 
