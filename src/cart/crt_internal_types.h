@@ -119,16 +119,15 @@ struct crt_gdata {
 	volatile unsigned int	cg_refcount;
 
 	/** flags to keep track of states */
-	unsigned int		cg_inited		: 1,
-				cg_grp_inited		: 1,
-				cg_swim_inited		: 1,
-				cg_auto_swim_disable	: 1,
-				/** whether it is a client or server */
-				cg_server		: 1,
-				/** whether scalable endpoint is enabled */
-				cg_use_sensors		: 1,
-				/** whether we are on a primary provider */
-				cg_provider_is_primary	: 1;
+	unsigned int cg_inited : 1, cg_grp_inited : 1, cg_swim_inited : 1, cg_auto_swim_disable : 1,
+	    /** whether it is a client or server */
+	    cg_server              : 1,
+	    /** whether scalable endpoint is enabled */
+	    cg_use_sensors         : 1,
+	    /** whether we are on a primary provider */
+	    cg_provider_is_primary : 1,
+	    /** whether to copy input buffer of rpc */
+	    cg_copy_input_buf      : 1;
 
 	ATOMIC uint64_t		cg_rpcid; /* rpc id */
 
@@ -175,6 +174,7 @@ struct crt_event_cb_priv {
  **/
 #define CRT_ENV_LIST                                                                               \
 	ENV_STR(CRT_ATTACH_INFO_PATH)                                                              \
+	ENV(CRT_COPY_RPC_INPUT)                                                                    \
 	ENV(CRT_CREDIT_EP_CTX)                                                                     \
 	ENV(CRT_CTX_NUM)                                                                           \
 	ENV(CRT_ENABLE_MEM_PIN)                                                                    \

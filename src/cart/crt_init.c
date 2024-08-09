@@ -551,6 +551,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	int            num_secondaries  = 0;
 	bool           port_auto_adjust = false;
 	int            i;
+	int            copy_buf = 0;
 
 	d_signal_register();
 
@@ -817,6 +818,15 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		D_ASSERT(crt_gdata.cg_opc_map != NULL);
 
 		crt_gdata.cg_inited = 1;
+
+		/*
+		 * When enabled causes RPC mercury input buffer to be copied and released before
+		 * rpc is replied to (once body unpack of rpc is done and iovs are copied)
+		 */
+		copy_buf = 1; /* TODO: only for CI testing */
+		crt_env_get(CRT_COPY_RPC_INPUT, &copy_buf);
+		crt_gdata.cg_copy_input_buf = (copy_buf == 0) ? 0 : 1;
+		D_INFO("RPC buffer copy enabled: %d\n", crt_gdata.cg_copy_input_buf);
 	} else {
 		if (crt_gdata.cg_server == false && server == true) {
 			D_ERROR("CRT initialized as client, cannot set as server again.\n");
