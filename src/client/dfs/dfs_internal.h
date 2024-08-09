@@ -102,9 +102,17 @@
 /** MAX value for the HI OID */
 #define MAX_OID_HI         ((1UL << 32) - 1)
 
+/* Default power2(bits) size of dir-cache */
+#define DCACHE_SIZE_BITS      16
+/** Size of the hash key prefix */
+#define DCACHE_KEY_PREF_SIZE  35
+#define DCACHE_KEY_MAX        (DCACHE_KEY_PREF_SIZE - 1 + PATH_MAX)
+
 typedef uint64_t dfs_magic_t;
 typedef uint16_t dfs_sb_ver_t;
 typedef uint16_t dfs_layout_ver_t;
+/** DFS directory cache */
+typedef struct dfs_dcache dfs_dcache_t;
 
 /** object struct that is instantiated for a DFS open object */
 struct dfs_obj {
@@ -130,6 +138,30 @@ struct dfs_obj {
 			daos_size_t      chunk_size;
 		} d;
 	};
+	/** link to the dfs mount cache */
+	dfs_dcache_t    *dc;
+	/** Entry in the hash table of the DFS cache */
+	d_list_t         dc_entry;
+	/** cached stbuf info */
+	struct stat      dc_stbuf;
+	/** indicates whether we need to retrieve the file size for the stbuf cache */
+	bool             dc_stated;
+	/** Reference counter used to manage memory deallocation */
+	_Atomic uint32_t dc_ref;
+	/** True iff this record was deleted from the hash table */
+	atomic_flag      dc_deleted;
+	/** Entry in the garbage collector list */
+	d_list_t         dc_entry_gc;
+	/** True iff this record is not in the garbage collector list */
+	bool             dc_deleted_gc;
+	/** Expiration date of the record */
+	struct timespec  dc_expire_gc;
+	/** Key prefix used by its child directory */
+	char             dc_key_child_prefix[DCACHE_KEY_PREF_SIZE];
+	/** Length of the hash key used to compute the hash index */
+	size_t           dc_key_len;
+	/** the hash key used to compute the hash index */
+	char             dc_key[];
 };
 
 enum {
@@ -168,8 +200,6 @@ struct dfs {
 	daos_obj_id_t        super_oid;
 	/** Open object handle of SB */
 	daos_handle_t        super_oh;
-	/** Root object info */
-	dfs_obj_t            root;
 	/** DFS container attributes (Default chunk size, oclass, etc.) */
 	dfs_attr_t           attr;
 	/** Object class hint for files */
@@ -185,6 +215,10 @@ struct dfs {
 	struct dfs_mnt_hdls *cont_hdl;
 	/** the root dir stat buf */
 	struct stat          root_stbuf;
+	/** optional dentry and stat cache */
+	dfs_dcache_t        *dcache;
+	/** Root object info */
+	dfs_obj_t            root;
 };
 
 struct dfs_entry {
@@ -414,6 +448,37 @@ int
 update_stbuf_times(struct dfs_entry entry, daos_epoch_t max_epoch, struct stat *stbuf,
 		   uint64_t *obj_hlc);
 int
-lookup_rel_path(dfs_t *dfs, dfs_obj_t *root, const char *path, int flags, dfs_obj_t **_obj,
-		mode_t *mode, struct stat *stbuf, size_t depth);
+lookup_rel_path(dfs_t *dfs, dfs_obj_t *root, char *path, int flags, dfs_obj_t **_obj, mode_t *mode,
+		struct stat *stbuf, size_t depth);
+int
+lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, size_t len, int flags,
+	       dfs_obj_t **_obj, mode_t *mode, struct stat *stbuf, int xnr, char *xnames[],
+	       void *xvals[], daos_size_t *xsizes, daos_size_t dcache_key_len);
+int
+dup_int(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj, daos_size_t dcache_key_len);
+int
+release_int(dfs_obj_t *obj);
+
+int
+dcache_create(dfs_t *dfs, uint32_t bits, uint32_t rec_timeout, uint32_t gc_period,
+	      uint32_t gc_reclaim_max);
+int
+dcache_destroy(dfs_t *dfs);
+int
+dcache_find_insert(dfs_t *dfs, char *path, size_t path_len, int flags, dfs_obj_t **rec,
+		   mode_t *mode, struct stat *stbuf);
+int
+dcache_find_insert_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, size_t len, int flags,
+		       dfs_obj_t **rec, mode_t *mode, struct stat *stbuf);
+dfs_obj_t *
+drec2obj(dfs_obj_t *rec);
+void
+drec_incref(dfs_dcache_t *dcache, dfs_obj_t *rec);
+void
+drec_decref(dfs_dcache_t *dcache, dfs_obj_t *rec);
+void
+drec_del_at(dfs_dcache_t *dcache, dfs_obj_t *rec);
+int
+drec_del(dfs_dcache_t *dcache, char *path, dfs_obj_t *parent);
+
 #endif /* __DFS_INTERNAL_H__ */
