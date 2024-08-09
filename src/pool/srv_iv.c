@@ -1242,10 +1242,24 @@ ds_pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf,
 	crt_group_rank(pool->sp_group, &iv_entry->piv_map.piv_master_rank);
 	iv_entry->piv_map.piv_pool_map_ver =
 		buf == NULL ? 0 : pool->sp_map_version;
-	if (buf != NULL)
+	if (buf != NULL) {
+		struct pool_map *map = NULL;
+
 		memcpy(&iv_entry->piv_map.piv_pool_buf, buf,
 		       pool_buf_size(buf->pb_nr));
+		D_INFO(DF_UUID ": map_ver=%u (cached %u, entry %u), entry_size=%u, buf_size=%ld, "
+		       "components: %u/%u/%u/%u (pb_nr/pb_domain_nr/pb_node_nr/pb_target_nr)\n",
+		       DP_UUID(pool->sp_uuid), map_ver, pool->sp_map_version,
+		       iv_entry->piv_map.piv_pool_map_ver, iv_entry_size, pool_buf_size(buf->pb_nr),
+		       buf->pb_nr, buf->pb_domain_nr, buf->pb_node_nr, buf->pb_target_nr);
 
+		rc = pool_map_create(&iv_entry->piv_map.piv_pool_buf, map_ver, &map);
+		if (rc == 0)
+			pool_map_decref(map);
+		else
+			DL_WARN(rc, DF_UUID ": FAILED sanity check pool_map_create()!",
+				DP_UUID(pool->sp_uuid));
+	}
 	/* FIXME: Let's update the pool map synchronously for the moment,
 	 * since there is no easy way to free the iv_entry buffer. Needs
 	 * to revisit here once pool/cart_group/IV is upgraded.

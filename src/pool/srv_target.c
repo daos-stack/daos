@@ -1796,6 +1796,11 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 	int		rc = 0;
 
 	if (buf != NULL) {
+		D_INFO(DF_UUID ": map_ver=%u (cached %u), buf_size=%ld, components: %u/%u/%u/%u "
+		       "(pb_nr/pb_domain_nr/pb_node_nr/pb_target_nr)\n", DP_UUID(pool->sp_uuid),
+		       map_version, pool->sp_map_version, pool_buf_size(buf->pb_nr), buf->pb_nr,
+		       buf->pb_domain_nr, buf->pb_node_nr, buf->pb_target_nr);
+
 		rc = pool_map_create(buf, map_version, &map);
 		if (rc != 0) {
 			D_ERROR(DF_UUID" failed to create pool map: "DF_RC"\n",
