@@ -64,3 +64,4 @@ utils/githooks/*.d/*-user-*
 .pre-commit
 .vscode
 src/include/daos_version.h
+utils/rpms/mock.cfg
