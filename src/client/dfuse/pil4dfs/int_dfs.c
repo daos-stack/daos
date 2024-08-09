@@ -940,13 +940,6 @@ child_hdlr(void)
 		DL_WARN(rc, "daos_eq_lib_init() failed in child process");
 	daos_dti_reset();
 	td_eqh = main_eqh = DAOS_HDL_INVAL;
-	if (d_eq_count_max > 0) {
-		rc = daos_eq_create(&td_eqh);
-		if (rc)
-			DL_WARN(rc, "daos_eq_create() failed");
-		else
-			main_eqh = td_eqh;
-	}
 	context_reset = true;
 }
 

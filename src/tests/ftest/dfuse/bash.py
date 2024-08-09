@@ -128,7 +128,10 @@ class DfuseBashCmd(TestWithServers):
             f"bzip2 -z {fuse_root_dir}/lib.a",
             f"chmod u-r {fuse_root_dir}/lib.a.bz2",
             'fio --readwrite=randwrite --name=test --size="2M" --directory '
-            f'{fuse_root_dir}/ --bs=1M --numjobs="4" --ioengine=psync '
+            f'{fuse_root_dir}/ --bs=1M --numjobs="4" --ioengine=psync --thread=0'
+            "--group_reporting --exitall_on_error --continue_on_error=none",
+            'fio --readwrite=randwrite --name=test --size="2M" --directory '
+            f'{fuse_root_dir}/ --bs=1M --numjobs="4" --ioengine=psync --thread=1'
             "--group_reporting --exitall_on_error --continue_on_error=none",
             'fio --readwrite=randwrite --name=test --size="2M" --directory '
             f'{fuse_root_dir}/ --bs=1M --numjobs="1" --ioengine=libaio --iodepth=16'
