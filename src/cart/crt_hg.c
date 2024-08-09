@@ -903,10 +903,16 @@ crt_hg_class_init(crt_provider_t provider, int ctx_idx, bool primary, int iface_
 	if (prov_data->cpg_max_unexp_size > 0)
 		init_info.na_init_info.max_unexpected_size = prov_data->cpg_max_unexp_size;
 
-	init_info.request_post_init = crt_gdata.cg_post_init;
-	init_info.request_post_incr = crt_gdata.cg_post_incr;
+	init_info.request_post_init         = crt_gdata.cg_post_init;
+	init_info.request_post_incr         = crt_gdata.cg_post_incr;
+	init_info.multi_recv_op_max         = crt_gdata.cg_mrecv_buf;
+	init_info.multi_recv_copy_threshold = crt_gdata.cg_mrecv_buf_copy;
+	/* With cxi provider, separate SWIM traffic in an effort to prevent potential congestion. */
+	if (provider == CRT_PROV_OFI_CXI && crt_is_service() &&
+	    crt_gdata.cg_auto_swim_disable == 0 && ctx_idx == crt_gdata.cg_swim_ctx_idx)
+		init_info.traffic_class = NA_TC_BULK_DATA;
 
-	hg_class = HG_Init_opt(info_string, crt_is_service(), &init_info);
+	hg_class = HG_Init_opt2(info_string, crt_is_service(), HG_VERSION(2, 4), &init_info);
 	if (hg_class == NULL) {
 		D_ERROR("Could not initialize HG class.\n");
 		D_GOTO(out, rc = -DER_HG);
