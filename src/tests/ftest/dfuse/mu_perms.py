@@ -416,7 +416,7 @@ class DfuseMUPerms(TestWithServers):
         """
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=dfuse,dfuse_mu,verify_perms
+        :avocado: tags=dfuse,dfuse_mu,ioil,verify_perms
         :avocado: tags=DfuseMUPerms,test_dfuse_mu_perms_ioil
         """
         self.run_test_il(il_lib='libioil.so')
@@ -426,7 +426,7 @@ class DfuseMUPerms(TestWithServers):
         """
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=dfuse,dfuse_mu,verify_perms,pil4dfs
+        :avocado: tags=dfuse,dfuse_mu,pil4dfs,verify_perms
         :avocado: tags=DfuseMUPerms,test_dfuse_mu_perms_pil4dfs
         """
         self.run_test_il(il_lib='libpil4dfs.so')

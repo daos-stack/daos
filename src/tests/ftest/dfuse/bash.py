@@ -152,7 +152,7 @@ class DfuseBashCmd(TestWithServers):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=dfuse,dfs
+        :avocado: tags=dfs,dfuse
         :avocado: tags=DfuseBashCmd,test_bashcmd
         """
         self.run_bashcmd()
@@ -167,7 +167,7 @@ class DfuseBashCmd(TestWithServers):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
-        :avocado: tags=dfuse,dfs,ioil
+        :avocado: tags=dfs,dfuse,ioil
         :avocado: tags=DfuseBashCmd,test_bashcmd_ioil
         """
         self.run_bashcmd(il_lib="libioil.so")
@@ -182,7 +182,7 @@ class DfuseBashCmd(TestWithServers):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=dfuse,dfs,pil4dfs
+        :avocado: tags=dfs,dfuse,pil4dfs
         :avocado: tags=DfuseBashCmd,test_bashcmd_pil4dfs
         """
         self.run_bashcmd(il_lib="libpil4dfs.so")

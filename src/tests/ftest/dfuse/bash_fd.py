@@ -137,7 +137,7 @@ class DFuseFdTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=dfuse,dfs
+        :avocado: tags=dfs,dfuse
         :avocado: tags=DFuseFdTest,test_bashfd
         """
         self.run_bashfd()
@@ -150,7 +150,7 @@ class DFuseFdTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=dfuse,dfs,ioil
+        :avocado: tags=dfs,dfuse,ioil
         :avocado: tags=DFuseFdTest,test_bashfd_ioil
         """
         self.run_bashfd(il_lib="libioil.so")
@@ -163,7 +163,7 @@ class DFuseFdTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=dfuse,dfs,pil4dfs
+        :avocado: tags=dfs,dfuse,pil4dfs
         :avocado: tags=DFuseFdTest,test_bashfd_pil4dfs
         """
         self.run_bashfd(il_lib="libpil4dfs.so")
