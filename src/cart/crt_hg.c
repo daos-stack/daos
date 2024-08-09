@@ -857,7 +857,6 @@ crt_hg_class_init(crt_provider_t provider, int ctx_idx, bool primary, int iface_
 	init_info.request_post_init = crt_gdata.cg_post_init;
 	init_info.request_post_incr = crt_gdata.cg_post_incr;
 
-	D_PRINT("info_string: %s\n", info_string);
 	hg_class = HG_Init_opt(info_string, crt_is_service(), &init_info);
 	if (hg_class == NULL) {
 		D_ERROR("Could not initialize HG class.\n");
