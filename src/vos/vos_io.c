@@ -571,8 +571,7 @@ vos_ioc_destroy(struct vos_io_context *ioc, bool evict)
 	dcs_csum_info_list_fini(&ioc->ic_csum_list);
 
 	if (ioc->ic_obj)
-		vos_obj_release(vos_obj_cache_current(ioc->ic_cont->vc_pool->vp_sysdb), ioc->ic_obj,
-				0, evict);
+		vos_obj_release(ioc->ic_obj, 0, evict);
 
 	vos_ioc_reserve_fini(ioc);
 	vos_ilog_fetch_finish(&ioc->ic_dkey_info);
@@ -1562,8 +1561,7 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	rc = vos_ts_set_add(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx, NULL, 0);
 	D_ASSERT(rc == 0);
 
-	rc = vos_obj_hold(vos_obj_cache_current(ioc->ic_cont->vc_pool->vp_sysdb),
-			  ioc->ic_cont, oid, &ioc->ic_epr, ioc->ic_bound, VOS_OBJ_VISIBLE,
+	rc = vos_obj_hold(ioc->ic_cont, oid, &ioc->ic_epr, ioc->ic_bound, VOS_OBJ_VISIBLE,
 			  DAOS_INTENT_DEFAULT, &ioc->ic_obj, ioc->ic_ts_set);
 	if (stop_check(ioc, VOS_COND_FETCH_MASK | VOS_OF_COND_PER_AKEY, NULL,
 		       &rc, false)) {
@@ -2421,7 +2419,8 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	struct vos_io_context	*ioc = vos_ioh2ioc(ioh);
 	struct umem_instance	*umem;
 	bool			 tx_started = false;
-	uint16_t                  minor_epc;
+	uint16_t		 minor_epc;
+	uint64_t		 flags = VOS_OBJ_CREATE | VOS_OBJ_VISIBLE;
 
 	D_ASSERT(ioc->ic_update);
 	vos_dedup_verify_fini(ioh);
@@ -2433,6 +2432,11 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 
 	err = vos_ts_set_add(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx, NULL, 0);
 	D_ASSERT(err == 0);
+
+	err = vos_obj_hold(ioc->ic_cont, ioc->ic_oid, &ioc->ic_epr, ioc->ic_bound,
+			   flags, DAOS_INTENT_UPDATE, &ioc->ic_obj, ioc->ic_ts_set);
+	if (err != 0)
+		goto abort;
 
 	err = vos_tx_begin(dth, umem, ioc->ic_cont->vc_pool->vp_sysdb);
 	if (err != 0)
@@ -2460,10 +2464,8 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 			D_FREE(daes);
 	}
 
-	err = vos_obj_hold(vos_obj_cache_current(ioc->ic_cont->vc_pool->vp_sysdb),
-			   ioc->ic_cont, ioc->ic_oid, &ioc->ic_epr, ioc->ic_bound,
-			   VOS_OBJ_CREATE | VOS_OBJ_VISIBLE, DAOS_INTENT_UPDATE,
-			   &ioc->ic_obj, ioc->ic_ts_set);
+	err = vos_obj_incarnate(ioc->ic_obj, &ioc->ic_epr, ioc->ic_bound, flags,
+				DAOS_INTENT_UPDATE, ioc->ic_ts_set);
 	if (err != 0)
 		goto abort;
 

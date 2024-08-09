@@ -676,8 +676,7 @@ query_write:
 	D_ASSERT(rc == 0);
 
 	query->qt_bound = MAX(obj_epr.epr_hi, bound);
-	rc = vos_obj_hold(vos_obj_cache_current(is_sysdb), vos_hdl2cont(coh), oid,
-			  &obj_epr, query->qt_bound, VOS_OBJ_VISIBLE,
+	rc = vos_obj_hold(cont, oid, &obj_epr, query->qt_bound, VOS_OBJ_VISIBLE,
 			  DAOS_INTENT_DEFAULT, &obj, query->qt_ts_set);
 	if (rc != 0) {
 		LOG_RC(rc, "Could not hold object: " DF_RC "\n", DP_RC(rc));
@@ -794,7 +793,7 @@ out:
 		*max_write = obj->obj_df->vo_max_write;
 
 	if (obj != NULL)
-		vos_obj_release(vos_obj_cache_current(is_sysdb), obj, 0, false);
+		vos_obj_release(obj, 0, false);
 
 	if (rc == 0 || rc == -DER_NONEXIST) {
 		if (vos_ts_wcheck(query->qt_ts_set, obj_epr.epr_hi,

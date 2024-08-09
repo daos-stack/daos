@@ -620,16 +620,6 @@ vos_pool_hash_del(struct vos_pool *pool)
 }
 
 /**
- * Getting object cache
- * Wrapper for TLS and standalone mode
- */
-static inline struct daos_lru_cache *
-vos_get_obj_cache(void)
-{
-	return vos_tls_get(false)->vtl_ocache;
-}
-
-/**
  * Register btree class for container table, it is called within vos_init()
  *
  * \return		0 on success and negative on

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -488,7 +488,7 @@ vos_cont_close(daos_handle_t coh)
 
 	cont->vc_open_count--;
 	if (cont->vc_open_count == 0)
-		vos_obj_cache_evict(vos_obj_cache_current(cont->vc_pool->vp_sysdb), cont);
+		vos_obj_cache_evict(cont);
 
 	D_DEBUG(DB_TRACE, "Close cont "DF_UUID", open count: %d\n",
 		DP_UUID(cont->vc_id), cont->vc_open_count);
