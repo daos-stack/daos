@@ -1,0 +1,20 @@
+hosts:
+  test_servers: 1
+timeout: 300
+server_config:
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+  system_ram_reserved: 1
+pool:
+  scm_size: 1000000000
+container:
+  type: POSIX
+  control_method: daos

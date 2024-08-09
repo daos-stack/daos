@@ -56,7 +56,7 @@ class DFuseBashdcacheTest(TestWithServers):
         """
 
         lib_path = os.path.join(self.prefix, "lib64", "libpil4dfs.so")
-        env_str = f"export LD_PRELOAD={lib_path}; "
+        env_str = f"export LD_PRELOAD={lib_path}; export D_IL_INTERCEPTION_ON=1; "
 
         pool = self.get_pool(connect=False)
         container = self.get_container(pool)
