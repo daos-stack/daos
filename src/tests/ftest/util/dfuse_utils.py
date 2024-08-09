@@ -503,7 +503,7 @@ class VerifyPermsCommand(ExecutableCommand):
 
         # run options
         self.hosts = hosts.copy()
-        self.timeout = 120
+        self.timeout = 240
 
         # Most usage requires root permission
         self.run_user = 'root'
