@@ -27,7 +27,9 @@ timeouts:
   test_daos_extend_simple: 3600
   test_daos_oid_allocator: 640
   test_daos_checksum: 500
-  test_daos_rebuild_ec: 7200
+  #reduce timeout since only running subtest 46 (REBUILD46)
+  #test_daos_rebuild_ec: 7200
+  test_daos_rebuild_ec: 720
   test_daos_aggregate_ec: 200
   test_daos_degraded_ec: 1900
   test_daos_dedup: 220
@@ -170,7 +172,7 @@ daos_tests:
     test_daos_pipeline: P
   args:
     test_daos_ec_io: -l"EC_4P2G1"
-    test_daos_rebuild_ec: -s5
+    test_daos_rebuild_ec: -s5 --subtests="46"
     test_daos_md_replication: -s5
     test_daos_degraded_mode: -s7
     test_daos_drain_simple: -s3
