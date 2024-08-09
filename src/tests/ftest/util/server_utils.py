@@ -395,9 +395,7 @@ class DaosServerManager(SubprocessManager):
                 DaosServerCommand.ScmSubCommand.PrepareSubCommand object
 
         Raises:
-            RemoteCommandResult: a grouping of the command results from the same hosts with the same
-                return status
-
+            CommandResult: groups of command results from the same hosts with the same return status
         """
         cmd = DaosServerCommand(self.manager.job.command_path)
         cmd.sudo = False
@@ -420,9 +418,7 @@ class DaosServerManager(SubprocessManager):
                 DaosServerCommand.ScmSubCommand.ResetSubCommand object
 
         Raises:
-            RemoteCommandResult: a grouping of the command results from the same hosts with the same
-                return status
-
+            CommandResult: groups of command results from the same hosts with the same return status
         """
         cmd = DaosServerCommand(self.manager.job.command_path)
         cmd.sudo = False
@@ -440,9 +436,7 @@ class DaosServerManager(SubprocessManager):
                 DaosServerCommand.NvmeSubCommand.PrepareSubCommand object
 
         Returns:
-            RemoteCommandResult: a grouping of the command results from the same hosts with the same
-                return status
-
+            CommandResult: groups of command results from the same hosts with the same return status
         """
         cmd = DaosServerCommand(self.manager.job.command_path)
         cmd.sudo = False
@@ -460,9 +454,7 @@ class DaosServerManager(SubprocessManager):
                 DaosServerCommand.SupportSubCommand.CollectLogSubCommand object
 
         Returns:
-            RemoteCommandResult: a grouping of the command results from the same hosts with the same
-                return status
-
+            CommandResult: groups of command results from the same hosts with the same return status
         """
         cmd = DaosServerCommand(self.manager.job.command_path)
         cmd.run_user = "daos_server"

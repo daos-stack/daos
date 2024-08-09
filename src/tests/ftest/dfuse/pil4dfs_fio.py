@@ -74,7 +74,7 @@ class Pil4dfsFio(TestWithServers):
         """Returns FIO bandwidth of a given I/O pattern
 
         Args:
-            fio_result (RemoteCommandResult): results of a FIO command.
+            fio_result (CommandResult): results of a FIO command.
             rw (str): Type of I/O pattern.
 
         Returns:

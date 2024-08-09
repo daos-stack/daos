@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -23,7 +23,7 @@ from avocado.core.version import MAJOR
 from avocado.utils import process
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
-from run_utils import RunException, get_clush_command, run_local, run_remote
+from run_utils import get_clush_command, run_local, run_remote
 from user_utils import get_chown_command, get_primary_group
 
 
@@ -1356,11 +1356,8 @@ def check_ping(log, host, expected_ping=True, cmd_timeout=60, verbose=True):
     Returns:
         bool: True if the expected number of pings were returned; False otherwise.
     """
-    log.debug("Checking for %s to be %sresponsive", host, "" if expected_ping else "un")
-    try:
-        run_local(
-            log, "ping -c 1 {}".format(host), check=True, timeout=cmd_timeout, verbose=verbose)
-    except RunException:
+    log.debug("Checking for %s to be %s", host, "responsive" if expected_ping else "unresponsive")
+    if not run_local(log, f"ping -c 1 {host}", timeout=cmd_timeout, verbose=verbose).passed:
         return not expected_ping
     return expected_ping
 
