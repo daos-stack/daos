@@ -1287,7 +1287,7 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 			left_to_print--;
 
 			if (err_to_print == 0 && left_to_print > 0)
-				D_ERROR("[%d more rpcs timed out. rest logged at INFO level]\n",
+				D_ERROR(" %d more rpcs timed out. rest logged at INFO level\n",
 					left_to_print);
 
 		} else {
