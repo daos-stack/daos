@@ -1056,6 +1056,7 @@ dfs_test_rename(void **state)
 	rc = dfs_ostatx(dfs_mt, obj2, &stbuf, NULL);
 	assert_int_equal(rc, 0);
 	assert_true(stbuf.st_size == 128);
+	assert_int_equal(stbuf.st_blksize, DFS_DEFAULT_CHUNK_SIZE);
 
 	rc = dfs_chmod(dfs_mt, NULL, f1, S_IFREG | S_IRUSR | S_IWUSR);
 	assert_int_equal(rc, 0);
