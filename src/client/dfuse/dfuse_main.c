@@ -408,14 +408,14 @@ int
 setup_pool_cont_in_shm(struct dfuse_cont *dfs, char *dfuse_mt)
 {
 	DFS_INFO_SIZE_HEAD *shm_size_head;
-	d_iov_t	            iov_pool = {};
-	d_iov_t	            iov_cont = {};
-	d_iov_t	            iov_dfs  = {};
-	int                 fd;
-	char                name[64];
-	u_char             *data;
-	int                 size_shm = 0;
-	int                 rc, offset, str_len, pos;
+	d_iov_t		    iov_pool = {};
+	d_iov_t		    iov_cont = {};
+	d_iov_t		    iov_dfs  = {};
+	int		    fd;
+	char		    name[64];
+	u_char		   *data;
+	int		    size_shm = 0;
+	int		    rc, offset, str_len, pos;
 
 	/* Query pool handle size */
 	rc = daos_pool_local2global(dfs->dfs_dfp->dfp_poh, &iov_pool);
@@ -435,7 +435,7 @@ setup_pool_cont_in_shm(struct dfuse_cont *dfs, char *dfuse_mt)
 	/* Calculate the shared memory block size. Aligned with page size. */
 	size_shm = iov_pool.iov_buf_len + iov_cont.iov_buf_len + iov_dfs.iov_buf_len +
 		   sizeof(DFS_INFO_SIZE_HEAD);
-	size_shm += ((size_shm%4096 == 0) ? (0):(4096 - size_shm%4096));
+	size_shm += ((size_shm % 4096 == 0) ? (0):(4096 - size_shm % 4096));
 
 	/* Exclude '/' at the end of dfuse_mt. */
 	str_len = strnlen(dfuse_mt, DFS_MAX_PATH);
@@ -455,7 +455,7 @@ setup_pool_cont_in_shm(struct dfuse_cont *dfs, char *dfuse_mt)
 	if (rc < 0)
 		D_GOTO(err_closefd, rc = errno);
 
-	data = (u_char *) mmap(NULL, size_shm, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+	data = (u_char *)mmap(NULL, size_shm, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 	if (data == MAP_FAILED)
 		D_GOTO(err_closefd, rc = errno);
 

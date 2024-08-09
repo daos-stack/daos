@@ -760,7 +760,8 @@ retrieve_handles_from_fuse(int idx)
 	u_char             *data;
 	d_iov_t             iov;
 
-	sprintf(name, "dfs_info_%x", d_hash_string_u32(dfs_list[idx].fs_root,
+	sprintf(name, "dfs_info_%x",
+		d_hash_string_u32(dfs_list[idx].fs_root,
 		strnlen(dfs_list[idx].fs_root, DFS_MAX_PATH)));
 	fd = shm_open(name, O_RDONLY, 0);
 	if (fd < 0) {
@@ -769,7 +770,7 @@ retrieve_handles_from_fuse(int idx)
 		goto err_out;
 	}
 	/* map a single page to get the share memory size, unmap, then remap with real size. */
-	data = (u_char *) mmap(NULL, page_size, PROT_READ, MAP_SHARED, fd, 0);
+	data = (u_char *)mmap(NULL, page_size, PROT_READ, MAP_SHARED, fd, 0);
 	if (data == MAP_FAILED) {
 		errno_saved = errno;
 		D_DEBUG(DB_ANY,	"mmap() failed: %d (%s)\n", errno_saved, strerror(errno_saved));
@@ -785,7 +786,7 @@ retrieve_handles_from_fuse(int idx)
 				strerror(errno_saved));
 			goto err_closefd;
 		}
-		data = (u_char *) mmap(NULL, size_shm, PROT_READ, MAP_SHARED, fd, 0);
+		data = (u_char *)mmap(NULL, size_shm, PROT_READ, MAP_SHARED, fd, 0);
 		if (data == MAP_FAILED) {
 			errno_saved = errno;
 			D_DEBUG(DB_ANY,	"mmap() failed: %d (%s)\n", errno_saved,
@@ -795,9 +796,10 @@ retrieve_handles_from_fuse(int idx)
 		shm_size_head = (DFS_INFO_SIZE_HEAD *)data;
 	}
 
+	iov.iov_buf     = data + sizeof(DFS_INFO_SIZE_HEAD);
 	iov.iov_buf_len = shm_size_head->pool_info_size;
 	iov.iov_len     = iov.iov_buf_len;
-	iov.iov_buf     = data + sizeof(DFS_INFO_SIZE_HEAD);
+
 	rc = daos_pool_global2local(iov, &dfs_list[idx].poh);
 	if (rc != 0) {
 		errno_saved = daos_der2errno(rc);
@@ -807,9 +809,10 @@ retrieve_handles_from_fuse(int idx)
 		goto err_unmap;
 	}
 
-	iov.iov_buf    += iov.iov_buf_len;
+	iov.iov_buf += iov.iov_buf_len;
 	iov.iov_buf_len = shm_size_head->cont_info_size;
 	iov.iov_len     = iov.iov_buf_len;
+
 	rc              = daos_cont_global2local(dfs_list[idx].poh, iov, &dfs_list[idx].coh);
 	if (rc != 0) {
 		errno_saved = daos_der2errno(rc);
@@ -819,9 +822,10 @@ retrieve_handles_from_fuse(int idx)
 		goto err_unmap;
 	}
 
-	iov.iov_buf    += iov.iov_buf_len;
+	iov.iov_buf += iov.iov_buf_len;
 	iov.iov_buf_len = shm_size_head->dfs_info_size;
 	iov.iov_len     = iov.iov_buf_len;
+
 	rc = dfs_global2local(dfs_list[idx].poh, dfs_list[idx].coh, 0, iov, &dfs_list[idx].dfs);
 	if (rc != 0) {
 		errno_saved = daos_der2errno(rc);
