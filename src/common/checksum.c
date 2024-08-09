@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -978,12 +978,12 @@ daos_csummer_verify_iod(struct daos_csummer *obj, daos_iod_t *iod,
 				&iod_csum->ic_data[i]);
 		if (!match) {
 			if (iod->iod_type == DAOS_IOD_ARRAY)
-				D_ERROR("Data corruption found for recx: "DF_RECX". "
-					"Calculated "DF_CI" != "
-					"received "DF_CI"\n",
-					DP_RECX(iod->iod_recxs[i]),
-					DP_CI(new_iod_csums->ic_data[i]),
-					DP_CI(iod_csum->ic_data[i]));
+				D_ERROR("i %d, Data corruption found for recx: "DF_RECX". "
+					"Calculated "DF_CI2" != "
+					"received "DF_CI2"\n",
+					i, DP_RECX(iod->iod_recxs[i]),
+					DP_CI2(new_iod_csums->ic_data[i]),
+					DP_CI2(iod_csum->ic_data[i]));
 			else
 				D_ERROR("Data corruption found for single value. "
 					"Calculated "DF_CI" != "
@@ -1351,6 +1351,16 @@ ci2csum(struct dcs_csum_info ci)
 {
 	if (ci.cs_csum == NULL)
 		return 0;
+	return ci_buf2uint64(ci.cs_csum, ci.cs_len);
+}
+
+uint64_t
+ci2csum2(struct dcs_csum_info ci)
+{
+	if (ci.cs_csum == NULL)
+		return 0;
+	if (ci.cs_len > 8)
+		return ci_buf2uint64(ci.cs_csum + 8, ci.cs_len - 8);
 	return ci_buf2uint64(ci.cs_csum, ci.cs_len);
 }
 
