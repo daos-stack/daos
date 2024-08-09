@@ -12,7 +12,7 @@ from ClusterShell.NodeSet import NodeSet
 from cpu_utils import CpuInfo
 from dfuse_utils import get_dfuse, start_dfuse
 from fio_utils import FioCommand
-from general_utils import bytes_to_human, percent_change
+from general_utils import bytes_to_human, get_log_file, percent_change
 
 
 class Pil4dfsFio(TestWithServers):
@@ -115,6 +115,9 @@ class Pil4dfsFio(TestWithServers):
             "global", "cpus_allowed", self.fio_cpus_allowed,
             f"fio --name=global --cpus_allowed={self.fio_cpus_allowed}")
         fio_cmd.env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
+        fio_cmd.env["D_LOG_FILE"] = get_log_file(self.client_log)
+        fio_cmd.env["D_LOG_MASK"] = 'INFO'
+        fio_cmd.env["IBV_FORK_SAFE"] = 1
         fio_cmd.hosts = self.hostlist_clients
 
         bws = {}
@@ -154,6 +157,9 @@ class Pil4dfsFio(TestWithServers):
         fio_cmd.update(
             "job", "pool", container.pool.uuid, f"fio --name=job --pool={container.pool.uuid}")
         fio_cmd.update("job", "cont", container.uuid, f"fio --name=job --cont={container.uuid}")
+        fio_cmd.env["D_LOG_FILE"] = get_log_file(self.client_log)
+        fio_cmd.env["D_LOG_MASK"] = 'INFO'
+        fio_cmd.env["IBV_FORK_SAFE"] = 1
         fio_cmd.hosts = self.hostlist_clients
 
         bws = {}
