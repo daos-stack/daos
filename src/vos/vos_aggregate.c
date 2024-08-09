@@ -1281,6 +1281,56 @@ fill_segments(daos_handle_t ih, struct vos_agg_param *agg_param, unsigned int *a
 	return rc;
 }
 
+static void
+dump_trace(struct agg_merge_window *mw)
+{
+	struct vos_agg_param *agg_param = container_of(mw, struct vos_agg_param, ap_window);
+	vos_iter_entry_t     *entry;
+	int                   i;
+	int                   last;
+
+	if (agg_param->ap_trace_count == 0)
+		return;
+
+	if (agg_param->ap_trace_count < EV_TRACE_MAX) {
+		D_ERROR("Assertion will trigger, dumping all %d evt_trace entries\n",
+			agg_param->ap_trace_count);
+		last = agg_param->ap_trace_count;
+	} else {
+		D_ERROR("Assertion will trigger, dumping the last %d of %d total evt_trace"
+			" entries\n",
+			EV_TRACE_MAX, agg_param->ap_trace_count);
+		last = agg_param->ap_trace_start;
+	}
+
+	i = agg_param->ap_trace_start;
+	do {
+		entry = &agg_param->ap_evt_trace[i];
+		D_ERROR("  0x" DF_X64 " recs@0x" DF_X64 " (0x" DF_X64 " recs@0x" DF_X64
+			")@0x" DF_X64 ".%d tx=%d hole=%d flg=%x rsz=0x" DF_X64 " gsz=0x" DF_X64
+			"\n",
+			entry->ie_recx.rx_nr, entry->ie_recx.rx_idx, entry->ie_orig_recx.rx_nr,
+			entry->ie_orig_recx.rx_idx, entry->ie_epoch, entry->ie_minor_epc,
+			entry->ie_dtx_state, bio_addr_is_hole(&entry->ie_biov.bi_addr),
+			entry->ie_vis_flags, entry->ie_rsize, entry->ie_gsize);
+		i = (i + 1) % EV_TRACE_MAX;
+	} while (i != last);
+}
+
+#define D_AGG_ASSERTF(mw, cond, ...)                                                               \
+	do {                                                                                       \
+		if (!(cond))                                                                       \
+			dump_trace(mw);                                                            \
+		D_ASSERTF((cond), __VA_ARGS__);                                                    \
+	} while (0)
+
+#define D_AGG_ASSERT(mw, cond)                                                                     \
+	do {                                                                                       \
+		if (!(cond))                                                                       \
+			dump_trace(mw);                                                            \
+		D_ASSERT(cond);                                                                    \
+	} while (0)
+
 static int
 process_removals(struct agg_merge_window *mw, struct vos_obj_iter *oiter, d_list_t *head, bool last,
 		 bool top)
@@ -1296,11 +1346,13 @@ process_removals(struct agg_merge_window *mw, struct vos_obj_iter *oiter, d_list
 			continue;
 
 		if (!rm_ent->re_aggregate) {
-			D_ASSERT(d_list_empty(&rm_ent->re_contained));
+			D_AGG_ASSERT(mw, d_list_empty(&rm_ent->re_contained));
 			D_DEBUG(DB_EPC, "Removing physical removal record: "DF_RECT"\n",
 				DP_RECT(&rm_ent->re_rect));
 			rc = evt_delete(oiter->it_hdl, &rect, NULL);
-			d_list_del(&rm_ent->re_phy_link);
+			D_AGG_ASSERT(mw, rc != -DER_ENOENT);
+			if (rc == 0)
+				d_list_del(&rm_ent->re_phy_link);
 		} else if (!d_list_empty(&rm_ent->re_contained)) {
 			D_ASSERT(top);
 			D_DEBUG(DB_EPC, "Removing logical removal record: "DF_RECT"\n",
@@ -1352,55 +1404,6 @@ unmark_removals(struct agg_merge_window *mw, const struct agg_phy_ent *phy_ent)
 			rmv_ent->re_phy_count--;
 	}
 }
-
-static void
-dump_trace(struct agg_merge_window *mw)
-{
-	struct vos_agg_param *agg_param = container_of(mw, struct vos_agg_param, ap_window);
-	vos_iter_entry_t     *entry;
-	int                   i;
-	int                   last;
-
-	if (agg_param->ap_trace_count == 0)
-		return;
-
-	if (agg_param->ap_trace_count < EV_TRACE_MAX) {
-		D_ERROR("Assertion will trigger, dumping all %d evt_trace entries\n",
-			agg_param->ap_trace_count);
-		last = agg_param->ap_trace_count;
-	} else {
-		D_ERROR("Assertion will trigger, dumping the last %d of %d total evt_trace"
-			" entries\n",
-			EV_TRACE_MAX, agg_param->ap_trace_count);
-		last = agg_param->ap_trace_start;
-	}
-
-	i = agg_param->ap_trace_start;
-	do {
-		entry = &agg_param->ap_evt_trace[i];
-		D_ERROR("  " DF_U64 " recs@" DF_U64 " (" DF_U64 " recs@ " DF_U64 ")@" DF_X64
-			".%d tx=%d hole=%d flg=%x rsz=" DF_U64 " gsz=" DF_U64 "\n",
-			entry->ie_recx.rx_nr, entry->ie_recx.rx_idx, entry->ie_orig_recx.rx_nr,
-			entry->ie_orig_recx.rx_idx, entry->ie_epoch, entry->ie_minor_epc,
-			entry->ie_dtx_state, bio_addr_is_hole(&entry->ie_biov.bi_addr),
-			entry->ie_vis_flags, entry->ie_rsize, entry->ie_gsize);
-		i = (i + 1) % EV_TRACE_MAX;
-	} while (i != last);
-}
-
-#define D_AGG_ASSERTF(mw, cond, ...)                                                               \
-	do {                                                                                       \
-		if (!(cond))                                                                       \
-			dump_trace(mw);                                                            \
-		D_ASSERTF((cond), __VA_ARGS__);                                                    \
-	} while (0)
-
-#define D_AGG_ASSERT(mw, cond)                                                                     \
-	do {                                                                                       \
-		if (!(cond))                                                                       \
-			dump_trace(mw);                                                            \
-		D_ASSERT(cond);                                                                    \
-	} while (0)
 
 static int
 insert_segments(daos_handle_t ih, struct agg_merge_window *mw, bool last, unsigned int *acts)
@@ -1524,6 +1527,10 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw, bool last, unsign
 
 	/** Remove processed removal records */
 	rc = process_removals(mw, oiter, &mw->mw_rmv_ents, last, true);
+	if (rc != 0) {
+		DL_ERROR(rc, "Unable to process extent removals");
+		goto abort;
+	}
 
 	/* Insert new segments into EV tree */
 	for (i = 0; i < io->ic_seg_cnt; i++) {
