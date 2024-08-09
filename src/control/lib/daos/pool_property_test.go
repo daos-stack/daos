@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,7 +16,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/daos"
 )
 
-func TestControl_PoolPropertyValue(t *testing.T) {
+func TestDaos_PoolPropertyValue(t *testing.T) {
 	strPtr := func(in string) *string {
 		return &in
 	}
@@ -76,7 +76,7 @@ func TestControl_PoolPropertyValue(t *testing.T) {
 	}
 }
 
-func TestControl_PoolProperties(t *testing.T) {
+func TestDaos_PoolProperties(t *testing.T) {
 	for name, tc := range map[string]struct {
 		name    string
 		value   string
@@ -306,6 +306,23 @@ func TestControl_PoolProperties(t *testing.T) {
 			name:   "svc_ops_entry_age",
 			value:  "601",
 			expErr: errors.New("invalid"),
+		},
+		"scrub_freq-invalid-unit": {
+			name:   "scrub_freq",
+			value:  "1month",
+			expErr: errors.New("invalid"),
+		},
+		"scrub_freq-numeric-seconds": {
+			name:    "scrub_freq",
+			value:   "300",
+			expStr:  "scrub_freq:5m0s",
+			expJson: []byte(`{"name":"scrub_freq","description":"Scrubbing frequency","value":300}`),
+		},
+		"scrub_freq-string": {
+			name:    "scrub_freq",
+			value:   "1d",
+			expStr:  "scrub_freq:24h0m0s",
+			expJson: []byte(`{"name":"scrub_freq","description":"Scrubbing frequency","value":86400}`),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
