@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -23,7 +23,7 @@ from avocado.core.version import MAJOR
 from avocado.utils import process
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
-from run_utils import RunException, get_clush_command, run_local, run_remote
+from run_utils import command_as_user, get_clush_command, run_local, run_remote
 from user_utils import get_chown_command, get_primary_group
 
 
@@ -139,6 +139,10 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
     """
     log = getLogger()
     msg = None
+    if env is not None and "DAOS_AGENT_DRPC_DIR" not in env:
+        daos_agent_drpc_dir = os.environ.get("DAOS_AGENT_DRPC_DIR")
+        if daos_agent_drpc_dir:
+            env["DAOS_AGENT_DRPC_DIR"] = daos_agent_drpc_dir
     kwargs = {
         "cmd": command,
         "timeout": timeout,
@@ -150,6 +154,7 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
     }
     if verbose:
         log.info("Command environment vars:\n  %s", env)
+
     try:
         # Block until the command is complete or times out
         return process.run(**kwargs)
@@ -891,11 +896,12 @@ def convert_string(item, separator=","):
     return item
 
 
-def create_directory(hosts, directory, timeout=15, verbose=True,
+def create_directory(log, hosts, directory, timeout=15, verbose=True,
                      raise_exception=True, sudo=False):
     """Create the specified directory on the specified hosts.
 
     Args:
+        log (logger): logger for the messages produced by this method.
         hosts (NodeSet): hosts on which to create the directory
         directory (str): the directory to create
         timeout (int, optional): command timeout. Defaults to 15 seconds.
@@ -910,28 +916,22 @@ def create_directory(hosts, directory, timeout=15, verbose=True,
         DaosTestError: if there is an error running the command
 
     Returns:
-        CmdResult: an avocado.utils.process CmdResult object containing the
-            result of the command execution.  A CmdResult object has the
-            following properties:
-                command         - command string
-                exit_status     - exit_status of the command
-                stdout          - the stdout
-                stderr          - the stderr
-                duration        - command execution time
-                interrupted     - whether the command completed within timeout
-                pid             - command's pid
+        CommandResult: groups of command results from the same hosts with the same return status
 
     """
-    mkdir_command = "/usr/bin/mkdir -p {}".format(directory)
-    command = get_clush_command(hosts, args="-S -v", command=mkdir_command, command_sudo=sudo)
-    return run_command(command, timeout=timeout, verbose=verbose, raise_exception=raise_exception)
+    mkdir_command = command_as_user(f"/usr/bin/mkdir -p {directory}", "root" if sudo else None)
+    result = run_remote(log, hosts, mkdir_command, verbose=verbose, timeout=timeout)
+    if raise_exception and not result.passed:
+        raise DaosTestError(f"Error running: {mkdir_command}")
+    return result
 
 
-def change_file_owner(hosts, filename, owner, group, timeout=15, verbose=True,
+def change_file_owner(log, hosts, filename, owner, group, timeout=15, verbose=True,
                       raise_exception=True, sudo=False):
     """Create the specified directory on the specified hosts.
 
     Args:
+        log (logger): logger for the messages produced by this method.
         hosts (NodeSet): hosts on which to create the directory
         filename (str): the file for which to change ownership
         owner (str): new owner of the file
@@ -948,24 +948,19 @@ def change_file_owner(hosts, filename, owner, group, timeout=15, verbose=True,
         DaosTestError: if there is an error running the command
 
     Returns:
-        CmdResult: an avocado.utils.process CmdResult object containing the
-            result of the command execution.  A CmdResult object has the
-            following properties:
-                command         - command string
-                exit_status     - exit_status of the command
-                stdout          - the stdout
-                stderr          - the stderr
-                duration        - command execution time
-                interrupted     - whether the command completed within timeout
-                pid             - command's pid
+        CommandResult: groups of command results from the same hosts with the same return status
 
     """
     chown_command = get_chown_command(owner, group, file=filename)
-    command = get_clush_command(hosts, args="-S -v", command=chown_command, command_sudo=sudo)
-    return run_command(command, timeout=timeout, verbose=verbose, raise_exception=raise_exception)
+
+    command = command_as_user(chown_command, "root" if sudo else None)
+    result = run_remote(log, hosts, command, verbose=verbose, timeout=timeout)
+    if raise_exception and not result.passed:
+        raise DaosTestError(f"Error running: {command}")
+    return result
 
 
-def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
+def distribute_files(log, hosts, source, destination, mkdir=True, timeout=60,
                      verbose=True, raise_exception=True, sudo=False,
                      owner=None):
     """Copy the source to the destination on each of the specified hosts.
@@ -974,6 +969,7 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
     the specified hosts prior to copying the source.
 
     Args:
+        log (logger): logger for the messages produced by this method.
         hosts (NodeSet): hosts on which to copy the source
         source (str): the file to copy to the hosts
         destination (str): the host location in which to copy the source
@@ -1009,9 +1005,9 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
     result = None
     if mkdir:
         result = create_directory(
-            hosts, os.path.dirname(destination), verbose=verbose,
+            log, hosts, os.path.dirname(destination), verbose=verbose,
             raise_exception=raise_exception)
-    if result is None or result.exit_status == 0:
+    if result is None or result.passed:
         if sudo:
             # In order to copy a protected file to a remote host in CI the
             # source will first be copied as is to the remote host
@@ -1020,32 +1016,32 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
             if other_hosts:
                 # Existing files with strict file permissions can cause the
                 # subsequent non-sudo copy to fail, so remove the file first
-                rm_command = get_clush_command(
-                    other_hosts, args="-S -v", command="rm -f {}".format(source),
-                    command_sudo=True)
-                run_command(rm_command, verbose=verbose, raise_exception=False)
+                rm_command = command_as_user(f"rm -f {source}", "root")
+                run_remote(log, other_hosts, rm_command, verbose=verbose)
                 result = distribute_files(
-                    other_hosts, source, source, mkdir=True,
+                    log, other_hosts, source, source, mkdir=True,
                     timeout=timeout, verbose=verbose,
                     raise_exception=raise_exception, sudo=False, owner=None)
-            if result is None or result.exit_status == 0:
+            if result is None or result.passed:
                 # Then a local sudo copy will be executed on the remote node to
                 # copy the source to the destination
-                command = get_clush_command(
-                    hosts, args="-S -v", command="cp {} {}".format(source, destination),
-                    command_sudo=True)
-                result = run_command(command, timeout, verbose, raise_exception)
+                cp_cmd = command_as_user(f"cp {source} {destination}", "root")
+                result = run_remote(log, hosts, cp_cmd, verbose=verbose, timeout=timeout)
+                if raise_exception and not result.passed:
+                    raise DaosTestError(f"Error running: {cp_cmd}")
         else:
             # Without the sudo requirement copy the source to the destination
             # directly with clush
             command = get_clush_command(
-                hosts, args="-S -v --copy {} --dest {}".format(source, destination))
-            result = run_command(command, timeout, verbose, raise_exception)
+                hosts, args=f"-S -v --copy {source} --dest {destination}", timeout=timeout)
+            result = run_local(log, command, verbose=verbose)
+            if raise_exception and not result.passed:
+                raise DaosTestError(f"Error running: {command}")
 
         # If requested update the ownership of the destination file
-        if owner is not None and result.exit_status == 0:
+        if owner is not None and result.passed:
             change_file_owner(
-                hosts, destination, owner, get_primary_group(owner), timeout=timeout,
+                log, hosts, destination, owner, get_primary_group(owner), timeout=timeout,
                 verbose=verbose, raise_exception=raise_exception, sudo=sudo)
     return result
 
@@ -1064,30 +1060,20 @@ def get_default_config_file(name):
     return os.path.join(os.sep, "etc", "daos", file_name)
 
 
-def get_file_listing(hosts, files):
+def get_file_listing(hosts, files, user):
     """Get the file listing from multiple hosts.
 
     Args:
         hosts (NodeSet): hosts with which to use the clush command
         files (object): list of multiple files to list or a single file as a str
+        user (str): user used to run the ls command
 
     Returns:
-        CmdResult: an avocado.utils.process CmdResult object containing the
-            result of the command execution.  A CmdResult object has the
-            following properties:
-                command         - command string
-                exit_status     - exit_status of the command
-                stdout          - the stdout
-                stderr          - the stderr
-                duration        - command execution time
-                interrupted     - whether the command completed within timeout
-                pid             - command's pid
-
+        RemoteCommandResult: a grouping of the command results from the same hosts with the same
+            return status
     """
-    ls_command = "/usr/bin/ls -la {}".format(convert_string(files, " "))
-    command = get_clush_command(hosts, args="-S -v", command=ls_command, command_sudo=True)
-    result = run_command(command, verbose=False, raise_exception=False)
-    return result
+    ls_command = command_as_user(f"/usr/bin/ls -la {convert_string(files, ' ')}", user)
+    return run_remote(getLogger(), hosts, ls_command, False)
 
 
 def get_subprocess_stdout(subprocess):
@@ -1193,7 +1179,8 @@ def percent_change(val1, val2):
         return math.nan
 
 
-def get_journalctl_command(since, until=None, system=False, units=None, identifiers=None):
+def get_journalctl_command(since, until=None, system=False, units=None, identifiers=None,
+                           run_user="root"):
     """Get the journalctl command to capture all unit/identifier activity from since to until.
 
     Args:
@@ -1205,24 +1192,27 @@ def get_journalctl_command(since, until=None, system=False, units=None, identifi
             None.
         identifiers (str/list, optional): show messages for the specified syslog identifier(s).
             Defaults to None.
+        run_user (str, optional): user to run as. Defaults to root
 
     Returns:
         str: journalctl command to capture all unit activity
 
     """
-    command = ["sudo", os.path.join(os.sep, "usr", "bin", "journalctl")]
+    command = [os.path.join(os.sep, "usr", "bin", "journalctl")]
     if system:
         command.append("--system")
+    if run_user != "root":
+        command.append("--user")
     for key, values in {"unit": units or [], "identifier": identifiers or []}.items():
         for item in values if isinstance(values, (list, tuple)) else [values]:
-            command.append("--{}={}".format(key, item))
-    command.append("--since=\"{}\"".format(since))
+            command.append(f"--{key}={item}")
+    command.append(f'--since="{since}"')
     if until:
-        command.append("--until=\"{}\"".format(until))
-    return " ".join(command)
+        command.append(f'--until="{until}"')
+    return command_as_user(" ".join(command), run_user)
 
 
-def get_journalctl(hosts, since, until, journalctl_type):
+def get_journalctl(hosts, since, until, journalctl_type, run_user="root"):
     """Run the journalctl on the hosts.
 
     Args:
@@ -1230,6 +1220,7 @@ def get_journalctl(hosts, since, until, journalctl_type):
         since (str): Start time to search the log.
         until (str): End time to search the log.
         journalctl_type (str): String to search in the log. -t param for journalctl.
+        run_user (str, optional): user to run as. Defaults to root
 
     Returns:
         list: a list of dictionaries containing the following key/value pairs:
@@ -1237,7 +1228,8 @@ def get_journalctl(hosts, since, until, journalctl_type):
             "data":  data requested for the group of hosts
 
     """
-    command = get_journalctl_command(since, until, True, identifiers=journalctl_type)
+    system = run_user != getuser()
+    command = get_journalctl_command(since, until, system, identifiers=journalctl_type, run_user=run_user)
     err = "Error gathering system log events"
     return get_host_data(hosts=hosts, command=command, text="journalctl", error=err)
 
@@ -1356,11 +1348,8 @@ def check_ping(log, host, expected_ping=True, cmd_timeout=60, verbose=True):
     Returns:
         bool: True if the expected number of pings were returned; False otherwise.
     """
-    log.debug("Checking for %s to be %sresponsive", host, "" if expected_ping else "un")
-    try:
-        run_local(
-            log, "ping -c 1 {}".format(host), check=True, timeout=cmd_timeout, verbose=verbose)
-    except RunException:
+    log.debug("Checking for %s to be %s", host, "responsive" if expected_ping else "unresponsive")
+    if not run_local(log, f"ping -c 1 {host}", timeout=cmd_timeout, verbose=verbose).passed:
         return not expected_ping
     return expected_ping
 

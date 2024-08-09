@@ -92,8 +92,7 @@ class Dfuse(DfuseCommand):
                 Defaults to 120 seconds.
 
         Returns:
-            RemoteCommandResult: result of the command
-
+            CommandResult: result of the command
         """
         return run_remote(
             self.log, hosts, command_as_user(command, self.run_user), timeout=timeout)
@@ -233,7 +232,7 @@ class Dfuse(DfuseCommand):
 
         Args:
             check (bool): Check if dfuse mounted properly after mount is executed.
-            mount_callback (method, optional): method to pass RemoteCommandResult to
+            mount_callback (method, optional): method to pass CommandResult to
                 after mount. Default simply raises an exception on failure.
 
         Raises:
@@ -517,8 +516,7 @@ class VerifyPermsCommand(ExecutableCommand):
             CommandFailure: If the command fails
 
         Returns:
-            RemoteCommandResult: result from run_remote
-
+            CommandResult: result from run_remote
         """
         self.log.info('Running verify_perms.py on %s', str(self.hosts))
         result = run_remote(self.log, self.hosts, self.with_exports, timeout=self.timeout)
@@ -568,9 +566,7 @@ class Pil4dfsDcacheCmd(ExecutableCommand):
             CommandFailure: if there is an error running the command
 
         Returns:
-            RemoteCommandResult: a grouping of the command results from the same host with the
-                same return status
-
+            CommandResult: groups of command results from the same hosts with the same return status
         """
         if raise_exception is None:
             raise_exception = self.exit_status_exception

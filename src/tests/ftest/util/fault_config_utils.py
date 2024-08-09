@@ -4,11 +4,12 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+import logging
 import os
 
 import yaml
-from general_utils import DaosTestError, distribute_files, run_command
-from run_utils import get_clush_command
+from general_utils import distribute_files
+from run_utils import run_remote
 
 # a lookup table of predefined faults
 #
@@ -302,7 +303,7 @@ class FaultInjection():
         """
         if self._fault_list:
             self._hosts = hosts
-            distribute_files(self._hosts, self.fault_file, self.fault_file)
+            distribute_files(logging.getLogger(), self._hosts, self.fault_file, self.fault_file)
 
     def stop(self):
         """Remove the fault injection file created during testing.
@@ -315,12 +316,7 @@ class FaultInjection():
 
         # Remove the fault injection files on the hosts.
         error_list = []
-        command = "rm -f {}".format(self.fault_file)
-        if self._hosts:
-            command = get_clush_command(
-                self._hosts, args="-S -v", command=command, command_sudo=True)
-        try:
-            run_command(command, verbose=True, raise_exception=False)
-        except DaosTestError as error:
-            error_list.append(error)
+        result = run_remote(logging.getLogger(), self._hosts, f"rm -f {self.fault_file}")
+        if not result.passed:
+            error_list.append(f"Error removing fault injection file: {self.fault_file}")
         return error_list

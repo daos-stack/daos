@@ -3,6 +3,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import os
+
 from apricot import TestWithServers
 from command_utils import ExecutableCommand
 from command_utils_base import EnvironmentVariables, FormattedParameter
@@ -70,7 +72,8 @@ class CartSelfTest(TestWithServers):
             self.server_managers[0].get_config_value("provider")
         self.cart_env["D_INTERFACE"] = \
             self.server_managers[0].get_config_value("fabric_iface")
-        self.cart_env["DAOS_AGENT_DRPC_DIR"] = "/var/run/daos_agent/"
+        self.cart_env["DAOS_AGENT_DRPC_DIR"] = os.environ.get(
+            "DAOS_AGENT_DRPC_DIR", "/var/run/daos_agent/")
 
         self.server_managers[0].manager.assign_environment(self.cart_env, True)
         self.server_managers[0].detect_start_via_dmg = True

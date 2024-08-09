@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -58,7 +58,7 @@ class NvmeFragmentation(TestWithServers):
                                                 self.ior_transfer_size,
                                                 self.ior_flags):
             # Define the arguments for the ior_runner_thread method
-            ior_cmd = IorCommand()
+            ior_cmd = IorCommand(self.test_env.log_dir)
             ior_cmd.get_params(self)
             cont_label = self.label_generator.get_label('cont')
             ior_cmd.set_daos_params(self.pool, cont_label)
