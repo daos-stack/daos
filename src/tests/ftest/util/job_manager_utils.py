@@ -1256,9 +1256,8 @@ class Clush(JobManager):
         command = " ".join([self.env.to_export_str(), str(self.job)]).strip()
         self.result = run_remote(self.log, self._hosts, command, self.verbose, self.timeout)
 
-        if raise_exception and self.result.timeout:
-            raise CommandFailure(
-                "Timeout detected running '{}' on {}".format(str(self.job), self.hosts))
+        if raise_exception and not self.result.passed:
+            raise CommandFailure("Error running '{}' on {}".format(str(self.job), self.hosts))
 
         if self.exit_status_exception and not self.check_results():
             # Command failed if its output contains bad keywords
