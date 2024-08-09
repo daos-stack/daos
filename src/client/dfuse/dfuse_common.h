@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,5 +12,12 @@
 #endif
 
 #include "dfuse_log.h"
+
+typedef struct {
+	int shm_region_size;
+	int pool_info_size;
+	int cont_info_size;
+	int dfs_info_size;
+} DFS_INFO_SIZE_HEAD;
 
 #endif /* __DFUSE_COMMON_H__ */

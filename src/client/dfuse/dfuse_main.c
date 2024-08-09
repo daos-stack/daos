@@ -401,63 +401,43 @@ check_fd_mountpoint(const char *mountpoint)
 	return fd;
 }
 
-typedef struct {
-	int shm_region_size;
-	int pool_info_size;
-	int cont_info_size;
-	int dfs_info_size;
-} DFS_INFO_SIZE_HEAD;
-
-#define DFS_INFO_SIZE (4096*4096)
+/* Copy pool, container, and dfs global handles to a shared memory block. Each mount point has its
+ * own block.
+ */
 int
 setup_pool_cont_in_shm(struct dfuse_cont *dfs, char *dfuse_mt)
 {
-	d_iov_t	iov_pool = {};
-	d_iov_t	iov_cont = {};
-	d_iov_t	iov_dfs  = {};
-	int     fd;
-	char    name[64];
-	u_char *data;
-	int     size_shm = 0;
 	DFS_INFO_SIZE_HEAD *shm_size_head;
-	int     rc, offset, str_len, pos;
+	d_iov_t	            iov_pool = {};
+	d_iov_t	            iov_cont = {};
+	d_iov_t	            iov_dfs  = {};
+	int                 fd;
+	char                name[64];
+	u_char             *data;
+	int                 size_shm = 0;
+	int                 rc, offset, str_len, pos;
 
+	/* Query pool handle size */
 	rc = daos_pool_local2global(dfs->dfs_dfp->dfp_poh, &iov_pool);
 	if (rc)
 		D_GOTO(err, rc = daos_der2errno(rc));
-	D_ALLOC(iov_pool.iov_buf, iov_pool.iov_buf_len);
-	if (iov_pool.iov_buf == NULL)
-		D_GOTO(err, rc = ENOMEM);
-	rc = daos_pool_local2global(dfs->dfs_dfp->dfp_poh, &iov_pool);
-	if (rc)
-		D_GOTO(err, rc = daos_der2errno(rc));
 
-
-	rc = daos_cont_local2global(dfs->core.dfcc_coh, &iov_cont);
-	if (rc)
-		D_GOTO(err, rc = daos_der2errno(rc));
-	D_ALLOC(iov_cont.iov_buf, iov_cont.iov_buf_len);
-	if (iov_cont.iov_buf == NULL)
-		D_GOTO(err, rc = ENOMEM);
+	/* Query container handle size */
 	rc = daos_cont_local2global(dfs->core.dfcc_coh, &iov_cont);
 	if (rc)
 		D_GOTO(err, rc = daos_der2errno(rc));
 
-
-	rc = dfs_local2global(dfs->dfs_ns, &iov_dfs);
-	if (rc)
-		D_GOTO(err, rc);
-	D_ALLOC(iov_dfs.iov_buf, iov_dfs.iov_buf_len);
-	if (iov_dfs.iov_buf == NULL)
-		D_GOTO(err, rc = ENOMEM);
+	/* Query dfs handle size */
 	rc = dfs_local2global(dfs->dfs_ns, &iov_dfs);
 	if (rc)
 		D_GOTO(err, rc);
 
-	size_shm = iov_pool.iov_buf_len + iov_cont.iov_buf_len + iov_dfs.iov_buf_len + 4*sizeof(int);
+	/* Calculate the shared memory block size. Aligned with page size. */
+	size_shm = iov_pool.iov_buf_len + iov_cont.iov_buf_len + iov_dfs.iov_buf_len +
+		   sizeof(DFS_INFO_SIZE_HEAD);
 	size_shm += ((size_shm%4096 == 0) ? (0):(4096 - size_shm%4096));
 
-	/* need to exclude '/' at the end of dfuse_mt. */
+	/* Exclude '/' at the end of dfuse_mt. */
 	str_len = strnlen(dfuse_mt, DFS_MAX_PATH);
 	D_ASSERT(str_len > 1);
 	pos = str_len - 1;
@@ -469,22 +449,47 @@ setup_pool_cont_in_shm(struct dfuse_cont *dfs, char *dfuse_mt)
 	sprintf(name, "dfs_info_%x", d_hash_string_u32(dfuse_mt, pos + 1));
 
 	fd = shm_open(name, O_RDWR | O_CREAT | O_TRUNC, 0644);
-	if (fd < 0) {
+	if (fd < 0)
 		D_GOTO(err, rc = errno);
-	}
 	rc = ftruncate(fd, size_shm);
-	data = (u_char *) mmap(NULL, size_shm, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
-	if (data == MAP_FAILED) {
-		printf("mmap() failed. %d\n", errno);
-		close(fd);
-		D_GOTO(err, rc);
-        }
-	shm_size_head = (DFS_INFO_SIZE_HEAD *)data;
+	if (rc < 0)
+		D_GOTO(err_closefd, rc = errno);
+
+	data = (u_char *) mmap(NULL, size_shm, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+	if (data == MAP_FAILED)
+		D_GOTO(err_closefd, rc = errno);
+
+	shm_size_head                  = (DFS_INFO_SIZE_HEAD *)data;
 	shm_size_head->shm_region_size = size_shm;
 	shm_size_head->pool_info_size  = iov_pool.iov_buf_len;
 	shm_size_head->cont_info_size  = iov_cont.iov_buf_len;
 	shm_size_head->dfs_info_size   = iov_dfs.iov_buf_len;
 
+	D_ALLOC(iov_pool.iov_buf, iov_pool.iov_buf_len);
+	if (iov_pool.iov_buf == NULL)
+		D_GOTO(err_unmap, rc = ENOMEM);
+	/* Get pool handle */
+	rc = daos_pool_local2global(dfs->dfs_dfp->dfp_poh, &iov_pool);
+	if (rc)
+		D_GOTO(err_pool, rc = daos_der2errno(rc));
+
+	D_ALLOC(iov_cont.iov_buf, iov_cont.iov_buf_len);
+	if (iov_cont.iov_buf == NULL)
+		D_GOTO(err_pool, rc = ENOMEM);
+	/* Get container handle */
+	rc = daos_cont_local2global(dfs->core.dfcc_coh, &iov_cont);
+	if (rc)
+		D_GOTO(err_cont, rc = daos_der2errno(rc));
+
+	D_ALLOC(iov_dfs.iov_buf, iov_dfs.iov_buf_len);
+	if (iov_dfs.iov_buf == NULL)
+		D_GOTO(err_cont, rc = ENOMEM);
+	/* Get dfs handle */
+	rc = dfs_local2global(dfs->dfs_ns, &iov_dfs);
+	if (rc)
+		D_GOTO(err_dfs, rc);
+
+	/* Copy handles to shared memory. */
 	offset = sizeof(DFS_INFO_SIZE_HEAD);
 	memcpy(data + offset, iov_pool.iov_buf, iov_pool.iov_buf_len);
 	offset += iov_pool.iov_buf_len;
@@ -492,7 +497,26 @@ setup_pool_cont_in_shm(struct dfuse_cont *dfs, char *dfuse_mt)
 	offset += iov_cont.iov_buf_len;
 	memcpy(data + offset, iov_dfs.iov_buf, iov_dfs.iov_buf_len);
 
+	D_FREE(iov_dfs.iov_buf);
+	D_FREE(iov_cont.iov_buf);
+	D_FREE(iov_pool.iov_buf);
+
 	return 0;
+
+err_dfs:
+	D_FREE(iov_dfs.iov_buf);
+
+err_cont:
+	D_FREE(iov_cont.iov_buf);
+
+err_pool:
+	D_FREE(iov_pool.iov_buf);
+
+err_unmap:
+	munmap(data, size_shm);
+
+err_closefd:
+	close(fd);
 
 err:
 	return rc;

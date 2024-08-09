@@ -51,6 +51,7 @@
 #include <daos/common.h>
 #include <daos/dfs_lib_int.h>
 
+#include "dfuse_common.h"
 #include "hook.h"
 #include "pil4dfs_int.h"
 
@@ -748,51 +749,48 @@ err:
 
 #define NAME_LEN 128
 
-typedef struct {
-	int shm_region_size;
-	int pool_info_size;
-	int cont_info_size;
-	int dfs_info_size;
-} DFS_INFO_SIZE_HEAD;
-
 static int
 retrieve_handles_from_fuse(int idx)
 {
-	int     size_shm = 0;
 	DFS_INFO_SIZE_HEAD *shm_size_head;
-	int     rc, errno_saved;
-	int     fd;
-	char    name[64];
-	u_char *data;
-	d_iov_t iov;
+	int                 size_shm = 0;
+	int                 rc, errno_saved;
+	int                 fd;
+	char                name[64];
+	u_char             *data;
+	d_iov_t             iov;
 
 	sprintf(name, "dfs_info_%x", d_hash_string_u32(dfs_list[idx].fs_root,
 		strnlen(dfs_list[idx].fs_root, DFS_MAX_PATH)));
 	fd = shm_open(name, O_RDONLY, 0);
 	if (fd < 0) {
-		goto err;
+		errno_saved = errno;
+		D_DEBUG(DB_ANY,	"shm_open() failed: %d (%s)\n", errno_saved, strerror(errno_saved));
+		goto err_out;
 	}
 	/* map a single page to get the share memory size, unmap, then remap with real size. */
 	data = (u_char *) mmap(NULL, page_size, PROT_READ, MAP_SHARED, fd, 0);
 	if (data == MAP_FAILED) {
-		printf("mmap() failed. %d\n", errno);
-		close(fd);
-		goto err;
+		errno_saved = errno;
+		D_DEBUG(DB_ANY,	"mmap() failed: %d (%s)\n", errno_saved, strerror(errno_saved));
+		goto err_closefd;
 	}
 	shm_size_head = (DFS_INFO_SIZE_HEAD *)data;
 	size_shm      = shm_size_head->shm_region_size;
 	if (size_shm != page_size) {
 		rc = munmap(data, page_size);
 		if (rc) {
-			printf("munmap() failed. %d\n", errno);
-			close(fd);
-			goto err;
+			errno_saved = errno;
+			D_DEBUG(DB_ANY,	"munmap() failed: %d (%s)\n", errno_saved,
+				strerror(errno_saved));
+			goto err_closefd;
 		}
 		data = (u_char *) mmap(NULL, size_shm, PROT_READ, MAP_SHARED, fd, 0);
 		if (data == MAP_FAILED) {
-			printf("mmap() failed. %d\n", errno);
-			close(fd);
-			goto err;
+			errno_saved = errno;
+			D_DEBUG(DB_ANY,	"mmap() failed: %d (%s)\n", errno_saved,
+				strerror(errno_saved));
+			goto err_closefd;
 		}
 		shm_size_head = (DFS_INFO_SIZE_HEAD *)data;
 	}
@@ -806,7 +804,7 @@ retrieve_handles_from_fuse(int idx)
 		D_DEBUG(DB_ANY,
 			"failed to create pool handle in daos_pool_global2local(): %d (%s)\n",
 			errno_saved, strerror(errno_saved));
-		goto err;
+		goto err_unmap;
 	}
 
 	iov.iov_buf    += iov.iov_buf_len;
@@ -818,7 +816,7 @@ retrieve_handles_from_fuse(int idx)
 		D_DEBUG(DB_ANY,
 			"failed to create container handle in daos_pool_global2local(): %d (%s)\n",
 			errno_saved, strerror(errno_saved));
-		goto err;
+		goto err_unmap;
 	}
 
 	iov.iov_buf    += iov.iov_buf_len;
@@ -830,7 +828,7 @@ retrieve_handles_from_fuse(int idx)
 		D_DEBUG(DB_ANY,
 			"failed to create DFS handle in daos_pool_global2local(): %d (%s)\n",
 			errno_saved, strerror(errno_saved));
-		goto err;
+		goto err_unmap;
 	}
 
 	rc = dcache_create(dfs_list[idx].dfs, dcache_size_bits, dcache_rec_timeout,
@@ -841,12 +839,22 @@ retrieve_handles_from_fuse(int idx)
 			"failed to initialize DFS directory cache in "
 			"daos_pool_global2local(): %d (%s)\n",
 			errno_saved, strerror(errno_saved));
-		goto err;
+		goto err_unmap;
 	}
+
+	munmap(data, size_shm);
+	close(fd);
 
 	return 0;
 
-err:
+err_unmap:
+	munmap(data, size_shm);
+
+err_closefd:
+	close(fd);
+
+err_out:
+	errno = errno_saved;
 	return (-1);
 }
 
