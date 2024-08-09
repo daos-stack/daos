@@ -1059,9 +1059,7 @@ crt_req_timeout_track(struct crt_rpc_priv *rpc_priv)
 	if (rc == 0) {
 		rpc_priv->crp_in_binheap = 1;
 	} else {
-		RPC_ERROR(rpc_priv,
-			  "d_binheap_insert failed, rc: %d\n",
-			  rc);
+		RPC_ERROR(rpc_priv, "d_binheap_insert failed, rc: %d\n", rc);
 		RPC_DECREF(rpc_priv);
 	}
 
@@ -1163,10 +1161,10 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 	switch (rpc_priv->crp_state) {
 	case RPC_STATE_INITED:
 	case RPC_STATE_QUEUED:
-		RPC_ERROR(rpc_priv, "aborting %s rpc to group %s, tgt %d:%d, tgt_uri %s\n",
-			  rpc_priv->crp_state == RPC_STATE_QUEUED ? "queued" : "inited",
-			  grp_priv->gp_pub.cg_grpid, tgt_ep->ep_rank, tgt_ep->ep_tag,
-			  rpc_priv->crp_tgt_uri);
+		RPC_INFO(rpc_priv, "aborting %s rpc to group %s, tgt %d:%d, tgt_uri %s\n",
+			 rpc_priv->crp_state == RPC_STATE_QUEUED ? "queued" : "inited",
+			 grp_priv->gp_pub.cg_grpid, tgt_ep->ep_rank, tgt_ep->ep_tag,
+			 rpc_priv->crp_tgt_uri);
 		crt_context_req_untrack(rpc_priv);
 		crt_rpc_complete_and_unlock(rpc_priv, -DER_TIMEDOUT);
 		break;
@@ -1174,13 +1172,11 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		ul_req = rpc_priv->crp_ul_req;
 		D_ASSERT(ul_req != NULL);
 		ul_in = crt_req_get(ul_req);
-		RPC_ERROR(rpc_priv,
-			  "failed due to URI_LOOKUP(rpc_priv %p) to group %s,"
-			  "rank %d through PSR %d timedout\n",
-			  container_of(ul_req, struct crt_rpc_priv, crp_pub),
-			  ul_in->ul_grp_id,
-			  ul_in->ul_rank,
-			  ul_req->cr_ep.ep_rank);
+		RPC_INFO(rpc_priv,
+			 "failed due to URI_LOOKUP(rpc_priv %p) to group %s,"
+			 "rank %d through PSR %d timedout\n",
+			 container_of(ul_req, struct crt_rpc_priv, crp_pub), ul_in->ul_grp_id,
+			 ul_in->ul_rank, ul_req->cr_ep.ep_rank);
 
 		if (crt_gdata.cg_use_sensors)
 			d_tm_inc_counter(crt_ctx->cc_timedout_uri, 1);
@@ -1195,11 +1191,9 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		crt_rpc_unlock(rpc_priv);
 		break;
 	case RPC_STATE_FWD_UNREACH:
-		RPC_ERROR(rpc_priv,
-			  "failed due to group %s, rank %d, tgt_uri %s can't reach the target\n",
-			  grp_priv->gp_pub.cg_grpid,
-			  tgt_ep->ep_rank,
-			  rpc_priv->crp_tgt_uri);
+		RPC_INFO(rpc_priv,
+			 "failed due to group %s, rank %d, tgt_uri %s can't reach the target\n",
+			 grp_priv->gp_pub.cg_grpid, tgt_ep->ep_rank, rpc_priv->crp_tgt_uri);
 		crt_context_req_untrack(rpc_priv);
 		crt_rpc_complete_and_unlock(rpc_priv, -DER_UNREACH);
 		break;
@@ -1207,12 +1201,14 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		/* At this point, RPC should always be completed by
 		 * Mercury
 		 */
-		RPC_ERROR(rpc_priv, "aborting in-flight to group %s, rank %d, tgt_uri %s\n",
-			  grp_priv->gp_pub.cg_grpid, tgt_ep->ep_rank, rpc_priv->crp_tgt_uri);
+		RPC_INFO(rpc_priv, "aborting in-flight to group %s, rank %d, tgt_uri %s\n",
+			 grp_priv->gp_pub.cg_grpid, tgt_ep->ep_rank, rpc_priv->crp_tgt_uri);
 		rc = crt_hg_req_cancel(rpc_priv);
 		if (rc != 0) {
-			RPC_ERROR(rpc_priv, "crt_hg_req_cancel failed, rc: %d, "
-				  "opc: %#x.\n", rc, rpc_priv->crp_pub.cr_opc);
+			RPC_WARN(rpc_priv,
+				 "crt_hg_req_cancel failed, rc: %d, "
+				 "opc: %#x.\n",
+				 rc, rpc_priv->crp_pub.cr_opc);
 			crt_context_req_untrack(rpc_priv);
 		}
 		crt_rpc_unlock(rpc_priv);
@@ -1231,6 +1227,8 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 	struct d_binheap_node		*bh_node;
 	d_list_t			 timeout_list;
 	uint64_t			 ts_now;
+	int                              err_to_print  = 0;
+	int                              left_to_print = 0;
 
 	D_ASSERT(crt_ctx != NULL);
 
@@ -1258,17 +1256,48 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 	};
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
+	/* Limit logging when many rpcs time-out at the same time */
+	d_list_for_each_entry(rpc_priv, &timeout_list, crp_tmp_link_timeout) {
+		left_to_print++;
+	}
+
+	/* TODO: might expose via env in future */
+	err_to_print = 1;
+
 	/* handle the timeout RPCs */
 	while ((rpc_priv =
 		    d_list_pop_entry(&timeout_list, struct crt_rpc_priv, crp_tmp_link_timeout))) {
-		RPC_ERROR(rpc_priv,
-			  "ctx_id %d, (status: %#x) timed out (%d seconds), "
-			  "target (%d:%d)\n",
-			  crt_ctx->cc_idx,
-			  rpc_priv->crp_state,
-			  rpc_priv->crp_timeout_sec,
-			  rpc_priv->crp_pub.cr_ep.ep_rank,
-			  rpc_priv->crp_pub.cr_ep.ep_tag);
+		/*
+		 * This error is annoying and fills the logs. For now prevent bursts of timeouts
+		 * happening at the same time.
+		 *
+		 * Ideally we would also limit to 1 error per target. Can keep track of it in per
+		 * target cache used for hg_addrs.
+		 *
+		 * Extra lookup cost of cache entry would be ok as this is an error case
+		 **/
+
+		if (err_to_print > 0) {
+			RPC_ERROR(rpc_priv,
+				  "ctx_id %d, (status: %#x) timed out (%d seconds), "
+				  "target (%d:%d)\n",
+				  crt_ctx->cc_idx, rpc_priv->crp_state, rpc_priv->crp_timeout_sec,
+				  rpc_priv->crp_pub.cr_ep.ep_rank, rpc_priv->crp_pub.cr_ep.ep_tag);
+			err_to_print--;
+			left_to_print--;
+
+			if (err_to_print == 0 && left_to_print > 0)
+				D_ERROR("[%d more rpcs timed out. rest logged at INFO level]\n",
+					left_to_print);
+
+		} else {
+			RPC_INFO(rpc_priv,
+				 "ctx_id %d, (status: %#x) timed out (%d seconds), "
+				 "target (%d:%d)\n",
+				 crt_ctx->cc_idx, rpc_priv->crp_state, rpc_priv->crp_timeout_sec,
+				 rpc_priv->crp_pub.cr_ep.ep_rank, rpc_priv->crp_pub.cr_ep.ep_tag);
+			left_to_print--;
+		}
 
 		crt_req_timeout_hdlr(rpc_priv);
 		RPC_DECREF(rpc_priv);
