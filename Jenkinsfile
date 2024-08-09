@@ -318,13 +318,17 @@ pipeline {
                 beforeAgent true
                 expression { !skipStage() }
             }
-            stage {
-                checkoutScm(
-                    url: 'https://github.com/daos-stack/daos.git',
-                    branch: env.BaseBranch,
-                    withSubmodules: true,
-                    pruneStaleBranch: true)
-                sh(label: 'List checkout', script: 'ls -al')
+            stages {
+                stage {
+                    steps {
+                        checkoutScm(
+                            url: 'https://github.com/daos-stack/daos.git',
+                            branch: env.BaseBranch,
+                            withSubmodules: true,
+                            pruneStaleBranch: true)
+                        sh(label: 'List checkout', script: 'ls -al')
+                    }
+                }
             }
             parallel {
                 stage('Build RPM on EL 8') {
