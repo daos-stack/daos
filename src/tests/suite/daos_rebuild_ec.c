@@ -1201,7 +1201,7 @@ rebuild_ec_multiple_failure_tgts(void **state)
 	if (!test_runable(arg, 6))
 		return;
 
-	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2GX, 0, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	for (i = 0; i < 20; i++) {
 		sprintf(dkey, "d_key_%d", i);
@@ -1230,6 +1230,7 @@ rebuild_ec_multiple_failure_tgts(void **state)
 		memset(v_data, 'a', 20);
 		lookup_recxs(dkey, "a_key", 1, DAOS_TX_NONE, &recx, 1,
 			     data, 20, &req);
+		D_ASSERTF(memcmp(data, v_data, 20) == 0, DF_OID" data mismatch\n", DP_OID(oid));
 		assert_memory_equal(data, v_data, 20);
 	}
 	ioreq_fini(&req);
@@ -1248,6 +1249,7 @@ rebuild_ec_multiple_failure_tgts(void **state)
 		memset(v_data, 'a', 20);
 		lookup_recxs(dkey, "a_key", 1, DAOS_TX_NONE, &recx, 1,
 			     data, 20, &req);
+		D_ASSERTF(memcmp(data, v_data, 20) == 0, DF_OID" data mismatch\n", DP_OID(oid));
 		assert_memory_equal(data, v_data, 20);
 	}
 	ioreq_fini(&req);
