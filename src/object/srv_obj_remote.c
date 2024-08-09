@@ -142,8 +142,9 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 	orw->orw_dti_cos.ca_count = dth->dth_dti_cos_count;
 	orw->orw_dti_cos.ca_arrays = dth->dth_dti_cos;
 
-	D_DEBUG(DB_TRACE, DF_UOID" forwarding to rank:%d tag:%d.\n",
-		DP_UOID(orw->orw_oid), tgt_ep.ep_rank, tgt_ep.ep_tag);
+	D_ERROR(DF_UOID" parent rpcid "DF_U64" forwarding to rank:%d tag:%d, rpcid "DF_U64".\n",
+		DP_UOID(orw->orw_oid), crt_rpc_get_rpcid(parent_req), tgt_ep.ep_rank,
+		tgt_ep.ep_tag, crt_rpc_get_rpcid(req));
 	rc = crt_req_send(req, shard_update_req_cb, remote_arg);
 	if (rc != 0) {
 		D_ASSERT(sub->dss_comp == 1);
