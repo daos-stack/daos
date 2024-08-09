@@ -126,7 +126,6 @@ obj_tls_init(int tags, int xs_id, int tgt_id)
 	 * Maintain per-I/O size latency for update & fetch RPCs
 	 * of type gauge
 	 */
-
 	obj_latency_tm_init(DAOS_OBJ_RPC_UPDATE, tgt_id, tls->ot_update_lat,
 			    obj_opc_to_str(DAOS_OBJ_RPC_UPDATE), "update RPC processing time",
 			    true);

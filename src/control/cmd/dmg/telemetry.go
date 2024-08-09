@@ -254,13 +254,11 @@ func (cmd *telemConfigCmd) configurePrometheus() (*installInfo, error) {
 	}
 
 	sc := &staticConfig{}
-	for _, h := range cmd.config.HostList {
-		host, _, err := common.SplitPort(h, 0)
-		if err != nil {
-			return nil, err
-		}
-		sc.Targets = append(sc.Targets, host+":9191")
+	sc.Targets, err = common.ParseHostList(cmd.config.HostList, 9191)
+	if err != nil {
+		return nil, err
 	}
+
 	cfg.ScrapeConfigs = []*scrapeConfig{
 		{
 			JobName:        "daos",
