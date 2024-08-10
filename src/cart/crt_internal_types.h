@@ -125,11 +125,11 @@ struct crt_gdata {
 	unsigned int             cg_auto_swim_disable   : 1;
 
 	/** whether it is a client or server */
-	unsigned int             cg_server              : 1,
-	    /** whether metrics are used */
-	    unsigned int         cg_use_sensors         : 1,
-	    /** whether we are on a primary provider */
-	    unsigned int         cg_provider_is_primary : 1;
+	unsigned int             cg_server              : 1;
+	/** whether metrics are used */
+	unsigned int             cg_use_sensors         : 1;
+	/** whether we are on a primary provider */
+	unsigned int             cg_provider_is_primary : 1;
 
 	ATOMIC uint64_t		cg_rpcid; /* rpc id */
 
