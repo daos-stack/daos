@@ -119,13 +119,17 @@ struct crt_gdata {
 	volatile unsigned int	cg_refcount;
 
 	/** flags to keep track of states */
-	unsigned int cg_inited : 1, cg_grp_inited : 1, cg_swim_inited : 1, cg_auto_swim_disable : 1,
-	    /** whether it is a client or server */
-	    cg_server              : 1,
+	unsigned int             cg_inited              : 1;
+	unsigned int             cg_grp_inited          : 1;
+	unsigned int             cg_swim_inited         : 1;
+	unsigned int             cg_auto_swim_disable   : 1;
+
+	/** whether it is a client or server */
+	unsigned int             cg_server              : 1,
 	    /** whether metrics are used */
-	    cg_use_sensors         : 1,
+	    unsigned int         cg_use_sensors         : 1,
 	    /** whether we are on a primary provider */
-	    cg_provider_is_primary : 1;
+	    unsigned int         cg_provider_is_primary : 1;
 
 	ATOMIC uint64_t		cg_rpcid; /* rpc id */
 
