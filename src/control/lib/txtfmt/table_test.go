@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,6 +12,25 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 )
+
+func TestTitle(t *testing.T) {
+	for testStr, expStr := range map[string]string{
+		"":                      "",
+		" ":                     " ",
+		"lowercase":             "Lowercase",
+		"lowercase three words": "Lowercase Three Words",
+		"mIxed CASE":            "Mixed Case",
+		"12345":                 "12345",
+	} {
+		t.Run(testStr, func(t *testing.T) {
+			gotStr := Title(testStr)
+
+			if diff := cmp.Diff(expStr, gotStr); diff != "" {
+				t.Fatalf("unexpected result (-want, +got): %s", diff)
+			}
+		})
+	}
+}
 
 func TestNewTableFormatter_NoTitles(t *testing.T) {
 	f := NewTableFormatter()
