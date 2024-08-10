@@ -490,7 +490,7 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 		goto done;
 	}
 
-	if (!ds_pool_skip_for_check(child->spc_pool)) {
+	if (!ds_pool_restricted(child->spc_pool, false)) {
 		rc = start_gc_ult(child);
 		if (rc != 0)
 			goto out_close;
@@ -1113,7 +1113,7 @@ pool_fetch_hdls_ult_abort(struct ds_pool *pool)
  * till ds_pool_stop. Only for mgmt and pool modules.
  */
 int
-ds_pool_start(uuid_t uuid, bool aft_chk)
+ds_pool_start(uuid_t uuid, bool aft_chk, bool rdonly)
 {
 	struct ds_pool			*pool;
 	struct daos_llink		*llink;
@@ -1170,6 +1170,11 @@ ds_pool_start(uuid_t uuid, bool aft_chk)
 	else
 		pool->sp_cr_checked = 0;
 
+	if (rdonly)
+		pool->sp_rdonly = 1;
+	else
+		pool->sp_rdonly = 0;
+
 	rc = pool_child_add_all(pool);
 	if (rc != 0)
 		goto failure_pool;
@@ -1184,7 +1189,9 @@ ds_pool_start(uuid_t uuid, bool aft_chk)
 		}
 
 		pool->sp_fetch_hdls = 1;
+	}
 
+	if (!ds_pool_restricted(pool, false)) {
 		rc = ds_pool_start_ec_eph_query_ult(pool);
 		if (rc != 0) {
 			D_ERROR(DF_UUID": failed to start ec eph query ult: "DF_RC"\n",
@@ -1867,12 +1874,9 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		       DP_UUID(pool->sp_uuid), map_version_before, map_version);
 	}
 
-	if (map_updated) {
+	if (map_updated && !ds_pool_restricted(pool, false)) {
 		struct dtx_scan_args	*arg;
 		int ret;
-
-		if (ds_pool_skip_for_check(pool))
-			D_GOTO(out, rc = 0);
 
 		D_ALLOC_PTR(arg);
 		if (arg == NULL)

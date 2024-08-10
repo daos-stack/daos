@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1527,7 +1527,7 @@ expect_cont_get_capas_flags_invalid(uint64_t invalid_flags)
 
 	printf("Expecting flags %#lx invalid\n", invalid_flags);
 	assert_rc_equal(ds_sec_cont_get_capabilities(invalid_flags, &valid_cred, &valid_owner,
-						     valid_acl, &result),
+						     valid_acl, POOL_CAPAS_ALL, &result),
 			-DER_INVAL);
 
 	daos_acl_free(valid_acl);
@@ -1562,13 +1562,17 @@ test_cont_get_capas_null_inputs(void **state)
 	init_default_ownership(&ownership);
 	acl = daos_acl_create(NULL, 0);
 
-	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_COO_RO, NULL, &ownership, acl, &result),
+	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_COO_RO, NULL, &ownership, acl,
+						     POOL_CAPAS_ALL, &result),
 			-DER_INVAL);
-	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_COO_RO, &cred, NULL, acl, &result),
+	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_COO_RO, &cred, NULL, acl,
+						     POOL_CAPAS_ALL, &result),
 			-DER_INVAL);
-	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_COO_RO, &cred, &ownership, NULL, &result),
+	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_COO_RO, &cred, &ownership, NULL,
+						     POOL_CAPAS_ALL, &result),
 			-DER_INVAL);
-	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_COO_RO, &cred, &ownership, acl, NULL),
+	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_COO_RO, &cred, &ownership, acl,
+						     POOL_CAPAS_ALL, NULL),
 			-DER_INVAL);
 
 	daos_acl_free(acl);
@@ -1592,7 +1596,7 @@ expect_cont_get_capas_owner_invalid(char *user, char *group)
 	invalid_owner.user = user;
 	invalid_owner.group = group;
 	assert_rc_equal(ds_sec_cont_get_capabilities(valid_flags, &valid_cred, &invalid_owner,
-						     valid_acl, &result),
+						     valid_acl, POOL_CAPAS_ALL, &result),
 			-DER_INVAL);
 
 	daos_acl_free(valid_acl);
@@ -1625,7 +1629,7 @@ test_cont_get_capas_bad_acl(void **state)
 	assert_non_null(bad_acl);
 
 	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_PC_RO, &cred, &ownership, bad_acl,
-						     &result),
+						     POOL_CAPAS_ALL, &result),
 			-DER_INVAL);
 
 	D_FREE(bad_acl);
@@ -1657,13 +1661,13 @@ test_cont_get_capas_bad_cred(void **state)
 	d_iov_set(&bad_cred, bad_buf, sizeof(bad_buf));
 
 	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_PC_RO, &bad_cred, &ownership, acl,
-						     &result),
+						     POOL_CAPAS_ALL, &result),
 			-DER_INVAL);
 
 	/* null data */
 	d_iov_set(&bad_cred, NULL, 0);
 	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_PC_RO, &bad_cred, &ownership, acl,
-						     &result),
+						     POOL_CAPAS_ALL, &result),
 			-DER_INVAL);
 
 	/* Junk in token data */
@@ -1676,7 +1680,7 @@ test_cont_get_capas_bad_cred(void **state)
 	auth__credential__pack(&cred, buf);
 	d_iov_set(&bad_cred, buf, bufsize);
 	assert_rc_equal(ds_sec_cont_get_capabilities(DAOS_PC_RO, &bad_cred, &ownership, acl,
-						     &result),
+						     POOL_CAPAS_ALL, &result),
 			-DER_PROTO);
 	D_FREE(buf);
 
@@ -1701,7 +1705,9 @@ expect_cont_capas_with_perms(uint64_t acl_perms, uint64_t flags,
 	init_default_ownership(&ownership);
 
 	printf("Perms: %#lx, Flags: %#lx\n", acl_perms, flags);
-	assert_rc_equal(ds_sec_cont_get_capabilities(flags, &cred, &ownership, acl, &result), 0);
+	assert_rc_equal(ds_sec_cont_get_capabilities(flags, &cred, &ownership, acl, POOL_CAPAS_ALL,
+						     &result),
+			0);
 
 	assert_int_equal(result, exp_capas);
 
@@ -1796,7 +1802,9 @@ expect_cont_capas_with_owner_perms(uint64_t acl_perms, uint64_t flags,
 	init_default_ownership(&ownership);
 
 	printf("Perms: %#lx, Flags: %#lx\n", acl_perms, flags);
-	assert_rc_equal(ds_sec_cont_get_capabilities(flags, &cred, &ownership, acl, &result), 0);
+	assert_rc_equal(ds_sec_cont_get_capabilities(flags, &cred, &ownership, acl, POOL_CAPAS_ALL,
+						     &result),
+			0);
 
 	assert_int_equal(result, exp_capas);
 

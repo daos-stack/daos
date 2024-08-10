@@ -656,7 +656,7 @@ func (cmd *existingContainerCmd) resolveAndConnect(contFlags C.uint, ap *C.struc
 	}
 
 	var cleanupPool func()
-	cleanupPool, err = cmd.connectPool(C.DAOS_PC_RO, ap)
+	cleanupPool, err = cmd.connectPool(C.DAOS_PC_RW, ap)
 	if err != nil {
 		return
 	}

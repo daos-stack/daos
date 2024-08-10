@@ -1465,7 +1465,7 @@ init_events(struct pool_svc *svc)
 	D_ASSERT(events->pse_handler == ABT_THREAD_NULL);
 	D_ASSERT(events->pse_stop == false);
 
-	if (!ds_pool_skip_for_check(svc->ps_pool)) {
+	if (!ds_pool_restricted(svc->ps_pool, false)) {
 		rc = crt_register_event_cb(ds_pool_crt_event_cb, svc);
 		if (rc != 0) {
 			D_ERROR(DF_UUID": failed to register event callback: "DF_RC"\n",
@@ -1496,7 +1496,7 @@ init_events(struct pool_svc *svc)
 	return 0;
 
 err_cb:
-	if (!ds_pool_skip_for_check(svc->ps_pool))
+	if (!ds_pool_restricted(svc->ps_pool, false))
 		crt_unregister_event_cb(ds_pool_crt_event_cb, svc);
 	discard_events(&events->pse_queue);
 err:
@@ -1511,7 +1511,7 @@ fini_events(struct pool_svc *svc)
 
 	D_ASSERT(events->pse_handler != ABT_THREAD_NULL);
 
-	if (!ds_pool_skip_for_check(svc->ps_pool))
+	if (!ds_pool_restricted(svc->ps_pool, false))
 		crt_unregister_event_cb(ds_pool_crt_event_cb, svc);
 
 	ABT_mutex_lock(events->pse_mutex);
@@ -2357,6 +2357,11 @@ int ds_pool_failed_lookup(uuid_t uuid)
 	return 0;
 }
 
+struct pool_start_args {
+	bool	psa_aft_chk;
+	bool	psa_rdonly;
+};
+
 /*
  * Try to start the pool. Continue the iteration upon errors as other pools may
  * still be able to work.
@@ -2364,13 +2369,26 @@ int ds_pool_failed_lookup(uuid_t uuid)
 static int
 start_one(uuid_t uuid, void *varg)
 {
-	int rc;
+	struct pool_start_args	*psa = varg;
+	bool			 aft_chk;
+	bool			 rdonly;
+	int			 rc;
 
-	D_DEBUG(DB_MD, DF_UUID ": starting pool\n", DP_UUID(uuid));
+	if (psa != NULL) {
+		aft_chk = psa->psa_aft_chk;
+		rdonly = psa->psa_rdonly;
+	} else {
+		aft_chk = false;
+		rdonly = false;
+	}
 
-	rc = ds_pool_start(uuid, varg != NULL ? true : false);
+	D_DEBUG(DB_MD, DF_UUID ": starting pool, aft_chk %s, read only %s\n",
+		DP_UUID(uuid), aft_chk ? "yes" : "no", rdonly ? "yes" : "no");
+
+	rc = ds_pool_start(uuid, aft_chk, rdonly);
 	if (rc != 0) {
-		DL_ERROR(rc, DF_UUID ": failed to start pool", DP_UUID(uuid));
+		DL_ERROR(rc, DF_UUID ": failed to start pool, aft_chk %s, read only %s",
+			 DP_UUID(uuid), aft_chk ? "yes" : "no", rdonly ? "yes" : "no");
 		ds_pool_failed_add(uuid, rc);
 	}
 
@@ -2389,12 +2407,27 @@ pool_start_all(void *arg)
 			DP_RC(rc));
 }
 
-int
-ds_pool_start_after_check(uuid_t uuid)
+bool
+ds_pool_restricted(struct ds_pool *pool, bool rdonly)
 {
-	bool	aft_chk = true;
+	if (ds_pool_skip_for_check(pool))
+		return true;
 
-	return start_one(uuid, &aft_chk);
+	if (pool->sp_rdonly && !rdonly)
+		return true;
+
+	return false;
+}
+
+int
+ds_pool_start_after_check(uuid_t uuid, bool rdonly)
+{
+	struct pool_start_args	psa;
+
+	psa.psa_aft_chk = true;
+	psa.psa_rdonly = rdonly;
+
+	return start_one(uuid, &psa);
 }
 
 /* Note that this function is currently called from the main xstream. */
@@ -3612,7 +3645,6 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 			   &ds_pool_prop_connectable, &value);
 	if (rc != 0)
 		goto out_lock;
-	D_DEBUG(DB_MD, DF_UUID ": connectable=%u\n", DP_UUID(in->pci_op.pi_uuid), connectable);
 	if (!connectable) {
 		D_ERROR(DF_UUID": being destroyed, not accepting connections\n",
 			DP_UUID(in->pci_op.pi_uuid));
@@ -3621,12 +3653,18 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 
 	/*
 	 * NOTE: Under check mode, there is a small race window between ds_pool_mark_connectable()
-	 *	 the PS restart for full service. If some client tries to connect the pool during
+	 *	 and PS restart with full service. If some client tries to connect the pool during
 	 *	 such internal, it will get -DER_BUSY temporarily.
 	 */
 	if (unlikely(ds_pool_skip_for_check(svc->ps_pool))) {
 		D_ERROR(DF_UUID" is not ready for full pool service\n", DP_UUID(in->pci_op.pi_uuid));
 		D_GOTO(out_lock, rc = -DER_BUSY);
+	}
+
+	if (svc->ps_pool->sp_rdonly && !(flags & DAOS_PC_RO)) {
+		D_ERROR(DF_UUID " cannot connect to the read-only pool with flags " DF_X64 "\n",
+			DP_UUID(in->pci_op.pi_uuid), flags);
+		D_GOTO(out_lock, rc = -DER_NO_PERM);
 	}
 
 	/* Check existing pool handles. */
@@ -3788,6 +3826,10 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 				D_GOTO(out_map_version, rc = -DER_BUSY);
 		}
 	}
+
+	D_DEBUG(DB_MD, DF_UUID "/" DF_UUID ": connecting to the pool with flags "
+		DF_X64", sec_capas " DF_X64 "\n",
+		DP_UUID(in->pci_op.pi_uuid), DP_UUID(in->pci_op.pi_hdl), flags, sec_capas);
 
 	rc = pool_connect_iv_dist(svc, in->pci_op.pi_hdl, flags, sec_capas, credp, global_ver,
 				  obj_layout_ver);
@@ -6314,7 +6356,7 @@ pool_svc_schedule(struct pool_svc *svc, struct pool_svc_sched *sched, void (*fun
 
 	D_DEBUG(DB_MD, DF_UUID": begin\n", DP_UUID(svc->ps_uuid));
 
-	if (ds_pool_skip_for_check(svc->ps_pool)) {
+	if (ds_pool_restricted(svc->ps_pool, false)) {
 		D_DEBUG(DB_MD, DF_UUID": end: skip in check mode\n", DP_UUID(svc->ps_uuid));
 		return -DER_OP_CANCELED;
 	}
@@ -8456,10 +8498,4 @@ ds_pool_svc_upgrade_vos_pool(struct ds_pool *pool)
 
 	ds_rsvc_put(rsvc);
 	return rc;
-}
-
-bool
-ds_pool_skip_for_check(struct ds_pool *pool)
-{
-	return engine_in_check() && !pool->sp_cr_checked;
 }

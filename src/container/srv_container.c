@@ -2266,7 +2266,8 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont, cr
 
 	get_cont_prop_access_info(prop, &owner, &acl);
 
-	rc = ds_sec_cont_get_capabilities(flags, &pool_hdl->sph_cred, &owner, acl, &sec_capas);
+	rc = ds_sec_cont_get_capabilities(flags, &pool_hdl->sph_cred, &owner, acl,
+					  pool_hdl->sph_sec_capas, &sec_capas);
 	if (rc != 0) {
 		D_ERROR(DF_CONT ": refusing attempt to open with flags " DF_X64 " error: " DF_RC
 				"\n",
@@ -2274,6 +2275,11 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont, cr
 		daos_prop_free(prop);
 		D_GOTO(out, rc);
 	}
+
+	D_DEBUG(DB_MD, DF_UUID "/" DF_UUID "/" DF_UUID ": opening to the container with flags "
+		DF_X64", sec_capas " DF_X64 "/" DF_X64 "\n",
+		DP_UUID(cont->c_svc->cs_pool_uuid), DP_UUID(pool_hdl->sph_uuid),
+		DP_UUID(cont->c_uuid), flags, pool_hdl->sph_sec_capas, sec_capas);
 
 	if ((flags & DAOS_COO_EVICT_ALL) && !ds_sec_cont_can_evict_all(sec_capas)) {
 		D_ERROR(DF_CONT": permission denied evicting all handles\n",
@@ -2283,9 +2289,12 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont, cr
 		goto out;
 	}
 
-	if ((flags & DAOS_COO_EX) && !ds_sec_cont_can_open_ex(sec_capas)) {
-		D_ERROR(DF_CONT": permission denied opening exclusively\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid));
+	if (((flags & DAOS_COO_EX) && !ds_sec_cont_can_open_ex(sec_capas)) ||
+	    ((flags & DAOS_COO_RW) && !ds_sec_cont_can_modify(sec_capas))) {
+		D_ERROR(DF_UUID "/" DF_UUID "/" DF_UUID ": permission denied opening the "
+			"container with flags " DF_X64 ", capas " DF_X64 "/" DF_X64 "\n",
+			DP_UUID(cont->c_svc->cs_pool_uuid), DP_UUID(pool_hdl->sph_uuid),
+			DP_UUID(cont->c_uuid), flags, pool_hdl->sph_sec_capas, sec_capas);
 		daos_prop_free(prop);
 		rc = -DER_NO_PERM;
 		goto out;

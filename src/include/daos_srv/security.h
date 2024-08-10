@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -87,7 +87,8 @@ ds_sec_pool_get_capabilities(uint64_t flags, d_iov_t *cred,
  * \param[in]	cred		User's security credential
  * \param[in]	ownership	Container ownership information
  * \param[in]	acl		Container ACL
- * \param[out]	capas		Capability bits for this user
+ * \param[in]	pool_capas	Capability for the pool
+ * \param[out]	cont_capas	Capability bits for this user
  *
  * \return	0		Success
  *		-DER_INVAL	Invalid input
@@ -95,7 +96,7 @@ ds_sec_pool_get_capabilities(uint64_t flags, d_iov_t *cred,
  */
 int
 ds_sec_cont_get_capabilities(uint64_t flags, d_iov_t *cred, struct d_ownership *ownership,
-			     struct daos_acl *acl, uint64_t *capas);
+			     struct daos_acl *acl, uint64_t pool_capas, uint64_t *capas);
 
 /**
  * Determine if the pool connection can be established based on the calculated
@@ -335,5 +336,18 @@ ds_sec_get_admin_cont_capabilities(void);
  */
 int
 ds_sec_creds_are_same_user(d_iov_t *cred_x, d_iov_t *cred_y);
+
+/**
+ * Determine if the container can be modified based on the container security
+ * capabilities.
+ *
+ * \param[in]	cont_capas	Capability bits acquired via
+ *				ds_sec_cont_get_capabilities
+ *
+ * \return	True		Access allowed
+ *		False		Access denied
+ */
+bool
+ds_sec_cont_can_modify(uint64_t cont_capas);
 
 #endif /* __DAOS_SRV_SECURITY_H__ */
