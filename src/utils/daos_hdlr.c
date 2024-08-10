@@ -1411,22 +1411,19 @@ dm_connect(struct cmd_args_s *ap,
 	daos_prop_t       *props = NULL;
 	int                rc2;
 	bool               status_healthy;
-	unsigned int       src_cont_flags;
-
-	/* DFS only needs R. For daos API we need W for snapshot create */
-	if (is_posix_copy)
-		src_cont_flags = DAOS_COO_RO;
-	else
-		src_cont_flags = DAOS_COO_RW;
 
 	/* open src pool, src cont, and mount dfs */
 	if (src_file_dfs->type == DAOS) {
-		rc = daos_pool_connect(ca->src_pool, sysname, DAOS_PC_RO, &ca->src_poh, NULL, NULL);
+		/* DFS only needs R. For daos API we need W for snapshot create */
+		rc = daos_pool_connect(ca->src_pool, sysname,
+				       is_posix_copy ? DAOS_PC_RO : DAOS_PC_RW, &ca->src_poh,
+				       NULL, NULL);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "failed to connect to source pool");
 			D_GOTO(err, rc);
 		}
-		rc = daos_cont_open(ca->src_poh, ca->src_cont, src_cont_flags, &ca->src_coh,
+		rc = daos_cont_open(ca->src_poh, ca->src_cont,
+				    is_posix_copy ? DAOS_COO_RO : DAOS_COO_RW, &ca->src_coh,
 				    src_cont_info, NULL);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "failed to open source container");

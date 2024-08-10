@@ -150,7 +150,7 @@ cont_open(int ret, char *pool, char *cont, int ro)
 	}
 
 	/** Connect to pool */
-	rc = daos_pool_connect(pool, NULL, DAOS_PC_RO, &poh, NULL, NULL);
+	rc = daos_pool_connect(pool, NULL, ro ? DAOS_PC_RO : DAOS_PC_RW, &poh, NULL, NULL);
 	if (rc)
 		goto out;
 
@@ -512,8 +512,11 @@ cont_check(int ret, char *pool, char *cont, int flags)
 		goto out;
 	}
 
-	/** Connect to pool */
-	rc = daos_pool_connect(pool, NULL, DAOS_PC_RO, &poh, NULL, NULL);
+	/**
+	 * Connect to pool.
+	 * NOTE: We need RW permission to create snapshot. More work for read-only pool in future.
+	 */
+	rc = daos_pool_connect(pool, NULL, DAOS_PC_RW, &poh, NULL, NULL);
 	if (rc)
 		goto out;
 

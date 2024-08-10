@@ -498,8 +498,9 @@ dfuse_pool_connect(struct dfuse_info *dfuse_info, const char *label, struct dfus
 	if (label) {
 		daos_pool_info_t p_info = {};
 
-		rc = daos_pool_connect(label, dfuse_info->di_group, DAOS_PC_RO, &dfp->dfp_poh,
-				       &p_info, NULL);
+		rc = daos_pool_connect(label, dfuse_info->di_group,
+				       dfuse_info->di_read_only ? DAOS_PC_RO : DAOS_PC_RW,
+				       &dfp->dfp_poh, &p_info, NULL);
 		if (rc) {
 			if (rc == -DER_NO_PERM || rc == -DER_NONEXIST)
 				DHL_INFO(dfp, rc, "daos_pool_connect() failed");

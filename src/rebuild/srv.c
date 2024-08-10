@@ -1926,7 +1926,7 @@ ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver,
 		return 0;
 	}
 
-	if (ds_pool_skip_for_check(pool)) {
+	if (ds_pool_restricted(pool, false)) {
 		D_DEBUG(DB_REBUILD, DF_UUID" skip rebuild under check mode\n",
 			DP_UUID(pool->sp_uuid));
 		return 0;

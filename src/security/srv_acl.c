@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -585,14 +585,14 @@ unpack_token_from_cred(d_iov_t *cred, Auth__Token **_token)
 
 int
 ds_sec_cont_get_capabilities(uint64_t flags, d_iov_t *cred, struct d_ownership *ownership,
-			     struct daos_acl *acl, uint64_t *capas)
+			     struct daos_acl *acl, uint64_t pool_capas, uint64_t *cont_capas)
 {
 	struct drpc_alloc alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Auth__Token      *token;
 	int               rc;
 	uint64_t          owner_min_perms = CONT_OWNER_MIN_PERMS;
 
-	if (cred == NULL || ownership == NULL || acl == NULL || capas == NULL) {
+	if (cred == NULL || ownership == NULL || acl == NULL || cont_capas == NULL) {
 		D_ERROR("NULL input\n");
 		return -DER_INVAL;
 	}
@@ -627,9 +627,12 @@ ds_sec_cont_get_capabilities(uint64_t flags, d_iov_t *cred, struct d_ownership *
 		return -DER_INVAL;
 
 	rc = get_sec_capas_for_token(token, ownership, acl, owner_min_perms, cont_capas_from_perms,
-				     capas);
-	if (rc == 0)
-		filter_cont_capas_based_on_flags(flags, capas);
+				     cont_capas);
+	if (rc == 0) {
+		filter_cont_capas_based_on_flags(flags, cont_capas);
+		if ((pool_capas & ~POOL_CAPAS_RO_MASK) == 0)
+			*cont_capas &= CONT_CAPAS_RO_MASK;
+	}
 
 	auth__token__free_unpacked(token, &alloc.alloc);
 	return rc;
@@ -679,7 +682,7 @@ ds_sec_cont_can_delete(uint64_t pool_flags, d_iov_t *cred,
 	if (pool_flags & DAOS_PC_RW)
 		cont_flags |= DAOS_COO_RW;
 
-	rc = ds_sec_cont_get_capabilities(cont_flags, cred, ownership, acl, &capas);
+	rc = ds_sec_cont_get_capabilities(cont_flags, cred, ownership, acl, POOL_CAPAS_ALL, &capas);
 	if (rc != 0) {
 		D_ERROR("failed to get container capabilities: %d\n", rc);
 		return false;
@@ -752,6 +755,12 @@ bool
 ds_sec_cont_can_evict_all(uint64_t cont_capas)
 {
 	return (cont_capas & CONT_CAPA_EVICT_ALL) != 0;
+}
+
+bool
+ds_sec_cont_can_modify(uint64_t cont_capas)
+{
+	return (cont_capas & CONT_CAPAS_W_MASK) != 0;
 }
 
 uint64_t

@@ -18,6 +18,8 @@
 
 #include <daos_mgmt.h>
 
+#include "daos_iotest.h"
+
 /*
  * Will enable accurate query result verification after DAOS-13520 resolved.
  * #define CR_ACCURATE_QUERY_RESULT	1
@@ -3517,6 +3519,146 @@ cr_handle_fail_pool2(void **state)
 	cr_cleanup(arg, &pool, 1);
 }
 
+#define CR_IO_SIZE	16
+
+/*
+ * 1. Create pool and container without inconsistency.
+ * 2. Write something to the container.
+ * 3. Start checker with --dry-run option.
+ * 4. Query checker, it should be completed without any inconsistency reported.
+ * 5. Verify the pool only can be connected with read-only permission.
+ * 6. Verify the container only can be opened with read-only permission.
+ * 7. Verify the object only can be opened with read-only permission.
+ * 8. Verify the object cannot be written.
+ * 9. Read former wrote data and verify its correctness.
+ * 10. Switch to normal mode and cleanup.
+ */
+static void
+cr_maintenance_mode(void **state)
+{
+	test_arg_t		*arg = *state;
+	struct test_pool	 pool = { 0 };
+	struct test_cont	 cont = { 0 };
+	daos_handle_t		 coh;
+	daos_obj_id_t		 oid;
+	struct ioreq		 req;
+	const char		*dkey = "cr_dkey";
+	const char		*akey = "cr_akey";
+	char			 update_buf[CR_IO_SIZE];
+	char			 fetch_buf[CR_IO_SIZE];
+	struct daos_check_info	 dci = { 0 };
+	int			 rc;
+
+	print_message("CR28: maintenance mode after dry-run check\n");
+
+	rc = cr_pool_create(state, &pool, true, TCC_NONE);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_cont_create(state, &pool, &cont, 0);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_cont_open(pool.poh, cont.label, DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	oid = daos_test_oid_gen(coh, OC_SX, 0, 0, arg->myrank);
+	arg->fail_loc = DAOS_DTX_COMMIT_SYNC | DAOS_FAIL_ALWAYS;
+	arg->async = 0;
+	ioreq_init(&req, coh, oid, DAOS_IOD_SINGLE, arg);
+	dts_buf_render(update_buf, CR_IO_SIZE);
+
+	print_message("Generate some data.\n");
+
+	insert_single(dkey, akey, 0, update_buf, CR_IO_SIZE, DAOS_TX_NONE, &req);
+	daos_fail_loc_set(0);
+
+	rc = daos_obj_close(req.oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_pool_disconnect(pool.poh, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_system_stop(false);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_mode_switch(true);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_check_start(TCSF_DRYRUN, 0, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	cr_ins_wait(1, &pool.pool_uuid, &dci);
+
+	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_pool_verify(&dci, pool.pool_uuid, TCPS_CHECKED, 0, NULL, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("Verify the pool only can be connected as RDONLY mode.\n");
+
+	rc = daos_pool_connect(pool.pool_str, arg->group, DAOS_PC_RW, &pool.poh, NULL, NULL);
+	assert_rc_equal(rc, -DER_NO_PERM);
+
+	rc = daos_pool_connect(pool.pool_str, arg->group, DAOS_PC_RO, &pool.poh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("Verify the container only can be opened as RDONLY mode.\n");
+
+	rc = daos_cont_open(pool.poh, cont.label, DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, -DER_NO_PERM);
+
+	rc = daos_cont_open(pool.poh, cont.label, DAOS_COO_RO, &coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+#if 0
+	/*
+	 * NOTE: Currently, DAOS security check is server-side logic, but object open may not
+	 *	 talk with server. So related permission check will not be done until read or
+	 *	 write really happened. If not consider exclusively open and cache case, then
+	 *	 it seems fine; otherwise, need some enhancement in future.
+	 */
+
+	print_message("Verify the object only can be opened as RDONLY mode.\n");
+
+	rc = daos_obj_open(coh, oid, DAOS_OO_RW, &req.oh, NULL);
+	assert_rc_equal(rc, -DER_NO_PERM);
+#endif
+
+	rc = daos_obj_open(coh, oid, DAOS_OO_RO, &req.oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("Verify the object cannot be modified.\n");
+
+	req.arg->expect_result = -DER_NO_PERM;
+	insert_single(dkey, akey, 100, update_buf, CR_IO_SIZE, DAOS_TX_NONE, &req);
+	daos_fail_loc_set(0);
+
+	print_message("Verify former wrote data.\n");
+
+	req.arg->expect_result = 0;
+	lookup_single(dkey, akey, 0, fetch_buf, CR_IO_SIZE, DAOS_TX_NONE, &req);
+	assert_int_equal(req.iod[0].iod_size, CR_IO_SIZE);
+	assert_memory_equal(update_buf, fetch_buf, CR_IO_SIZE);
+
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_pool_disconnect(pool.poh, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_mode_switch(false);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_system_start();
+	assert_rc_equal(rc, 0);
+
+	cr_dci_fini(&dci);
+	cr_cleanup(arg, &pool, 1);
+}
+
 static const struct CMUnitTest cr_tests[] = {
 	{ "CR1: start checker for specified pools",
 	  cr_start_specified, async_disable, test_case_teardown},
@@ -3572,6 +3714,8 @@ static const struct CMUnitTest cr_tests[] = {
 	  cr_handle_fail_pool1, async_disable, test_case_teardown},
 	{ "CR27: handle the pool if some engine failed to report some pool service",
 	  cr_handle_fail_pool2, async_disable, test_case_teardown},
+	{ "CR28: maintenance mode after dry-run check",
+	  cr_maintenance_mode, async_disable, test_case_teardown},
 };
 
 static int

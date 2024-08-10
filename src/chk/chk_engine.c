@@ -1757,7 +1757,8 @@ chk_engine_pool_ult(void *args)
 	 * Cleanup all old connections. It is no matter even if we cannot evict some
 	 * old connections. That is also independent from former check phases result.
 	 */
-	ds_pool_svc_evict_all(svc);
+	if (!cpr->cpr_rdonly)
+		ds_pool_svc_evict_all(svc);
 
 	if (cpr->cpr_stop)
 		goto out;
@@ -1797,10 +1798,8 @@ cont:
 	}
 
 	rc = chk_engine_cont_cleanup(cpr, svc, &aggregator);
-	if (rc != 0)
-		goto out;
-
-	rc = ds_pool_svc_schedule_reconf(svc);
+	if (rc == 0 && !cpr->cpr_rdonly)
+		rc = ds_pool_svc_schedule_reconf(svc);
 
 out:
 	chk_engine_cont_list_fini(&aggregator);
@@ -2112,6 +2111,11 @@ chk_engine_start_post(struct chk_instance *ins)
 
 		if (pool_cbk->cb_phase == CHK__CHECK_SCAN_PHASE__CSP_DONE)
 			continue;
+
+		if (ins->ci_prop.cp_flags & CHK__CHECK_FLAG__CF_DRYRUN)
+			cpr->cpr_rdonly = 1;
+		else
+			cpr->cpr_rdonly = 0;
 
 		if (phase > pool_cbk->cb_phase)
 			phase = pool_cbk->cb_phase;
@@ -2950,7 +2954,7 @@ chk_engine_pool_start(uint64_t gen, uuid_t uuid, uint32_t phase, uint32_t flags)
 	cbk = &cpr->cpr_bk;
 	chk_pool_get(cpr);
 
-	rc = ds_pool_start(uuid, false);
+	rc = ds_pool_start(uuid, false, cpr->cpr_rdonly);
 	if (rc != 0)
 		D_GOTO(put, rc = (rc == -DER_NONEXIST ? 1 : rc));
 
