@@ -220,7 +220,7 @@ daos_lru_ref_hold(struct daos_lru_cache *lcache, void *key,
 			 * Avoid calling `lru_hop_rec_decref()` at this point
 			 * to prevent `wakeup()` from being invoked twice.
 			 */
-			D_ASSERT(llink->ll_ref > 0);
+			D_ASSERT(llink->ll_ref > 1);
 			llink->ll_ref--;
 			D_GOTO(out, rc = -DER_SHUTDOWN);
 		}
