@@ -14,7 +14,7 @@
 /** crt_init.c */
 bool crt_initialized(void);
 
-int crt_str_to_provider(char *provider, bool is_primary);
+int crt_str_to_provider(char *provider);
 
 /** crt_register.c */
 int crt_opc_map_create(void);
