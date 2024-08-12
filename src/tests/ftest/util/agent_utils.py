@@ -6,7 +6,6 @@
 import os
 import re
 import socket
-from getpass import getuser
 
 from agent_utils_params import DaosAgentTransportCredentials, DaosAgentYamlParameters
 from ClusterShell.NodeSet import NodeSet
@@ -230,9 +229,8 @@ class DaosAgentManager(SubprocessManager):
                 the hosts using the config_file specification. Defaults to None.
             manager (str, optional): the name of the JobManager class used to
                 manage the YamlCommand defined through the "job" attribute.
-                Defaults to "Orterun".
-            outputdir (str, optional): path to avocado test outputdir. Defaults
-                to None.
+                Defaults to "Systemctl".
+            outputdir (str, optional): path to avocado test outputdir. Defaults to None.
         """
         agent_command = get_agent_command(
             group, cert_dir, bin_dir, config_file, run_user, config_temp)
@@ -284,12 +282,11 @@ class DaosAgentManager(SubprocessManager):
             self._hosts, self.manager.command)
 
         # Copy certificates
-        self.manager.job.copy_certificates(
-            get_log_file("daosCA/certs"), self._hosts)
+        self.manager.job.copy_certificates(get_log_file("daosCA/certs"), self._hosts)
 
         # Verify the socket directory exists when using a non-systemctl manager
         if self.verify_socket_dir:
-            self.verify_socket_directory(getuser())
+            self.verify_socket_directory(self.manager.job.certificate_owner)
 
         super().start()
 

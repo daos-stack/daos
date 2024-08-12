@@ -59,7 +59,13 @@ class ExecutableCommand(CommandWithParameters):
         self.exit_status_exception = True
         self.output_check = "both"
         self.verbose = True
+        # TODO proper. Really just need this for all "client" commands
         self.env = EnvironmentVariables()
+        _env_from_os = ("DAOS_AGENT_DRPC_DIR",)
+        for key in _env_from_os:
+            val = os.environ.get(key)
+            if val is not None:
+                self.env[key] = val
 
         # User to run the command as. "root" is equivalent to sudo
         self.run_user = run_user
@@ -1022,11 +1028,18 @@ class YamlCommand(SubProcessCommand):
                         src_file = os.path.join(source, file_name)
                         dst_file = os.path.join(name, file_name)
                         self.log.debug("  %s -> %s", src_file, dst_file)
+                        # Don't use sudo if running as the current user
+                        # TODO proper
+                        _sudo = self.run_user != getuser() or \
+                            self.certificate_owner != getuser() or dst_file.startswith('/etc')
+                        _owner = self.certificate_owner if _sudo else None
                         result = distribute_files(
                             hosts, src_file, dst_file, mkdir=False,
-                            verbose=False, raise_exception=False, sudo=True,
-                            owner=self.certificate_owner)
+                            verbose=True, raise_exception=False, sudo=_sudo,
+                            owner=_owner)
                         if result.exit_status != 0:
+                            # TODO warns on copying dmg certs because it is done multiple times
+                            # to the same destination
                             self.log.info(
                                 "    WARNING: %s copy failed on %s:\n%s",
                                 dst_file, hosts, result)
@@ -1059,9 +1072,14 @@ class YamlCommand(SubProcessCommand):
                     "Copying %s yaml configuration file to %s on %s",
                     self.temporary_file, self.yaml.filename, hosts)
                 try:
+                    # Don't use sudo if running as the current user
+                    # TODO proper
+                    _sudo = self.run_user != getuser() or self.certificate_owner != getuser() or \
+                        self.yaml.filename.startswith('/etc')
+                    _owner = self.certificate_owner if _sudo else None
                     distribute_files(
                         hosts, self.temporary_file, self.yaml.filename,
-                        verbose=False, sudo=True)
+                        verbose=True, sudo=_sudo, owner=_owner)
                 except DaosTestError as error:
                     raise CommandFailure(
                         "ERROR: Copying yaml configuration file to {}: "
@@ -1089,8 +1107,12 @@ class YamlCommand(SubProcessCommand):
                     "%s: creating socket directory %s for user %s on %s",
                     self.command, directory, user, nodes)
                 try:
-                    create_directory(nodes, directory, sudo=True)
-                    change_file_owner(nodes, directory, user, get_primary_group(user), sudo=True)
+                    if user == getuser():
+                        create_directory(nodes, directory)
+                    else:
+                        create_directory(nodes, directory, sudo=True)
+                        change_file_owner(
+                            nodes, directory, user, get_primary_group(user), sudo=True)
                 except DaosTestError as error:
                     raise CommandFailure(
                         "{}: error setting up missing socket directory {} for "
@@ -1122,14 +1144,14 @@ class YamlCommand(SubProcessCommand):
 class SubprocessManager(ObjectWithParameters):
     """Defines an object that manages a sub process launched with orterun."""
 
-    def __init__(self, command, manager="Orterun", namespace=None):
+    def __init__(self, command, manager="Systemctl", namespace=None):
         """Create a SubprocessManager object.
 
         Args:
             command (YamlCommand): command to manage as a subprocess
             manager (str, optional): the name of the JobManager class used to
                 manage the YamlCommand defined through the "job" attribute.
-                Defaults to "OpenMpi"
+                Defaults to "Systemctl"
             namespace (str): yaml namespace (path to parameters)
         """
         super().__init__(namespace)
@@ -1293,7 +1315,7 @@ class SubprocessManager(ObjectWithParameters):
         return value
 
     def get_current_state(self):
-        """Get the current state of the daos_server ranks.
+        """Get the current state of the service.
 
         Returns:
             dict: dictionary of server rank keys, each referencing a dictionary
