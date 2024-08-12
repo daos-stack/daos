@@ -124,7 +124,7 @@ def get_systemctl_command(unit_command, service, user="root"):
     """
     command = ["systemctl"]
     if user != "root":
-        command.append(f"--user {user}")
+        command.append("--user")
     if unit_command:
         command.append(unit_command)
     if service:
@@ -188,6 +188,10 @@ def create_override_config(logger, hosts, service, user, service_command, servic
     Returns:
         str: the systemctl override config file path
     """
+    # TODO proper
+    # Reload since teardown removes the files
+    daemon_reload(logger, hosts, user, verbose, timeout)
+
     # Get the existing service file
     service_file = get_service_file(logger, hosts, service, user, verbose, timeout)
 
