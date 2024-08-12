@@ -225,7 +225,7 @@ crt_gdata_dump(void)
 	DUMP_GDATA_FIELD("%d", cg_post_init);
 	DUMP_GDATA_FIELD("%d", cg_post_incr);
 	DUMP_GDATA_FIELD("%d", cg_timeout);
-	DUMP_GDATA_FIELD("%d", cg_swim_ctx_idx);
+	DUMP_GDATA_FIELD("%d", cg_swim_crt_idx);
 	DUMP_GDATA_FIELD("%d", cg_credit_ep_ctx);
 	DUMP_GDATA_FIELD("%d", cg_iv_inline_limit);
 	DUMP_GDATA_FIELD("%d", cg_auto_swim_disable);
@@ -281,7 +281,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	else
 		crt_gdata.cg_timeout = timeout;
 
-	crt_gdata.cg_swim_ctx_idx = CRT_DEFAULT_PROGRESS_CTX_IDX;
+	crt_gdata.cg_swim_crt_idx = CRT_DEFAULT_PROGRESS_CTX_IDX;
 
 	/* Override defaults and environment if option is set */
 	if (opt && opt->cio_use_credits) {
