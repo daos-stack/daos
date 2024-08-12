@@ -6,7 +6,6 @@ timeout: 5400
 
 server_config:
   name: daos_server
-  control_log_mask: ERROR
   engines_per_host: 2
   engines:
     0:
@@ -15,16 +14,12 @@ server_config:
       fabric_iface_port: 31317
       log_file: daos_server0.log
       storage: auto
-      env_vars:
-        - CRT_TIMEOUT=10
     1:
       pinned_numa_node: 1
       fabric_iface: ib1
       fabric_iface_port: 31417
       log_file: daos_server1.log
       storage: auto
-      env_vars:
-        - CRT_TIMEOUT=10
 
 pool:
   size: 90%
