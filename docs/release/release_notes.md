@@ -13,6 +13,7 @@ Architecture Support:
 * DAOS 2.6.0 supports the x86\_64 architecture.
 
 Operating System Support:
+
 * SLES/Leap 15 SP5
 * EL8.8/8.9 (RHEL, Rocky Linux, Alma Linux)
 * EL9.2 (RHEL, Rocky Linux, Alma Linux)

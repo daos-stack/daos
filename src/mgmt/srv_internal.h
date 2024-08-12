@@ -50,6 +50,8 @@ void ds_mgmt_tgt_params_set_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_profile_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_pool_get_svcranks_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_pool_find_hdlr(crt_rpc_t *rpc);
+void
+     ds_mgmt_pool_list_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_mark_hdlr(crt_rpc_t *rpc);
 void dss_bind_to_xstream_cpuset(int tgt_id);
 
@@ -158,6 +160,7 @@ int ds_mgmt_tgt_setup(void);
 void ds_mgmt_tgt_cleanup(void);
 void ds_mgmt_hdlr_tgt_create(crt_rpc_t *rpc_req);
 void ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *rpc_req);
+int ds_mgmt_tgt_destroy_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv);
 void ds_mgmt_hdlr_tgt_shard_destroy(crt_rpc_t *rpc_req);
 int ds_mgmt_tgt_create_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				  void *priv);

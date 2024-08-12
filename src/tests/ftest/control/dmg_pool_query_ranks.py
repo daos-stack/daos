@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -41,35 +41,35 @@ class DmgPoolQueryRanks(ControlTestBase):
         self.log.debug("Checking without ranks state information")
         data = self.dmg.pool_query(self.pool.identifier)
         self.assertIsNone(
-            data['response']['enabled_ranks'],
+            data['response'].get('enabled_ranks'),
             "Invalid enabled_ranks field: want=None, got={}".format(
-                data['response']['enabled_ranks']))
+                data['response'].get('enabled_ranks')))
         self.assertIsNone(
-            data['response']['disabled_ranks'],
+            data['response'].get('disabled_ranks'),
             "Invalid disabled_ranks field: want=None, got={}".format(
-                data['response']['disabled_ranks']))
+                data['response'].get('disabled_ranks')))
 
         self.log.debug("Checking enabled ranks state information")
         data = self.dmg.pool_query(self.pool.identifier, show_enabled=True)
         self.assertListEqual(
-            data['response']['enabled_ranks'], [0, 1, 2],
+            data['response'].get('enabled_ranks'), [0, 1, 2],
             "Invalid enabled_ranks field: want=[0, 1, 2], got={}".format(
-                data['response']['enabled_ranks']))
+                data['response'].get('enabled_ranks')))
         self.assertIsNone(
-            data['response']['disabled_ranks'],
+            data['response'].get('disabled_ranks'),
             "Invalid disabled_ranks field: want=None, got={}".format(
-                data['response']['disabled_ranks']))
+                data['response'].get('disabled_ranks')))
 
         self.log.debug("Checking disabled ranks state information")
         data = self.dmg.pool_query(self.pool.identifier, show_disabled=True)
         self.assertIsNone(
-            data['response']['enabled_ranks'],
+            data['response'].get('enabled_ranks'),
             "Invalid enabled_ranks field: want=None, got={}".format(
-                data['response']['enabled_ranks']))
+                data['response'].get('enabled_ranks')))
         self.assertListEqual(
-            data['response']['disabled_ranks'], [],
+            data['response'].get('disabled_ranks'), [],
             "Invalid disabled_ranks field: want=[], got={}".format(
-                data['response']['disabled_ranks']))
+                data['response'].get('disabled_ranks')))
 
     def test_pool_query_ranks_error(self):
         """Test that ranks state option are mutually exclusive.
@@ -123,16 +123,16 @@ class DmgPoolQueryRanks(ControlTestBase):
             self.log.debug("Checking enabled ranks state information")
             data = self.dmg.pool_query(self.pool.identifier, show_enabled=True)
             self.assertListEqual(
-                data['response']['enabled_ranks'], enabled_ranks,
+                data['response'].get('enabled_ranks'), enabled_ranks,
                 "Invalid enabled_ranks field: want={}, got={}".format(
-                    enabled_ranks, data['response']['enabled_ranks']))
+                    enabled_ranks, data['response'].get('enabled_ranks')))
 
             self.log.debug("Checking disabled ranks state information")
             data = self.dmg.pool_query(self.pool.identifier, show_disabled=True)
             self.assertListEqual(
-                data['response']['disabled_ranks'], disabled_ranks,
+                data['response'].get('disabled_ranks'), disabled_ranks,
                 "Invalid disabled_ranks field: want={}, got={}".format(
-                    disabled_ranks, data['response']['disabled_ranks']))
+                    disabled_ranks, data['response'].get('disabled_ranks')))
 
             self.log.debug("Waiting for pool to be rebuild")
             self.pool.wait_for_rebuild_to_start()
@@ -160,16 +160,16 @@ class DmgPoolQueryRanks(ControlTestBase):
             self.log.debug("Checking enabled ranks state information")
             data = self.dmg.pool_query(self.pool.identifier, show_enabled=True)
             self.assertListEqual(
-                data['response']['enabled_ranks'], enabled_ranks,
+                data['response'].get('enabled_ranks'), enabled_ranks,
                 "Invalid enabled_ranks field: want={}, got={}".format(
-                    enabled_ranks, data['response']['enabled_ranks']))
+                    enabled_ranks, data['response'].get('enabled_ranks')))
 
             self.log.debug("Checking disabled ranks state information")
             data = self.dmg.pool_query(self.pool.identifier, show_disabled=True)
             self.assertListEqual(
-                data['response']['disabled_ranks'], disabled_ranks,
+                data['response'].get('disabled_ranks'), disabled_ranks,
                 "Invalid disabled_ranks field: want={}, got={}".format(
-                    disabled_ranks, data['response']['disabled_ranks']))
+                    disabled_ranks, data['response'].get('disabled_ranks')))
 
             self.log.debug("Waiting for pool to be rebuild")
             self.pool.wait_for_rebuild_to_start()

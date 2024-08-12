@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -159,7 +159,7 @@ func (cmd *objQueryCmd) Execute(_ []string) error {
 	for i, shard := range layout.Shards {
 		cmd.Infof("grp: %d", i)
 		for j, replica := range shard.Replicas {
-			cmd.Infof("replica %d %d", j, replica.Rank)
+			cmd.Infof("replica %d %d:%d", j, replica.Rank, replica.Target)
 		}
 	}
 
