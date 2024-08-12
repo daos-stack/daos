@@ -10,6 +10,7 @@ import random
 import re
 import sys
 from ast import literal_eval
+from getpass import getuser
 from time import time
 
 from agent_utils import DaosAgentManager, include_local_host
@@ -25,13 +26,13 @@ from dmg_utils import get_dmg_command
 from environment_utils import TestEnvironment
 from exception_utils import CommandFailure
 from fault_config_utils import FaultInjection
-from general_utils import (DaosTestError, dict_to_str, dump_engines_stacks,
-                           get_avocado_config_value, get_default_config_file, get_file_listing,
-                           nodeset_append_suffix, pcmd, run_command, set_avocado_config_value)
+from general_utils import (dict_to_str, dump_engines_stacks, get_avocado_config_value,
+                           get_default_config_file, get_file_listing, nodeset_append_suffix,
+                           set_avocado_config_value)
 from host_utils import HostException, HostInfo, HostRole, get_host_parameters, get_local_host
 from logger_utils import TestLogger
 from pydaos.raw import DaosApiError, DaosContext, DaosLog
-from run_utils import run_remote, stop_processes
+from run_utils import run_local, run_remote, stop_processes
 from server_utils import DaosServerManager
 from slurm_utils import SlurmFailed, get_partition_hosts, get_reservation_hosts
 from test_utils_container import CONT_NAMESPACE, add_container
@@ -388,10 +389,8 @@ class Test(avocadoTest):
         """
         errors = []
         self.log.info("Removing temporary test files in %s", self.test_dir)
-        try:
-            run_command("rm -fr {}".format(self.test_dir))
-        except DaosTestError as error:
-            errors.append("Error removing temporary test files: {}".format(error))
+        if not run_local(self.log, "rm -fr {}".format(self.test_dir)).passed:
+            errors.append("Error removing temporary test files")
         return errors
 
     def _cleanup(self):
@@ -739,7 +738,7 @@ class TestWithServers(TestWithoutServers):
 
         # Toggle whether to dump server ULT stacks on failure
         self.__dump_engine_ult_on_failure = self.params.get(
-            "dump_engine_ult_on_failure", "/run/setup/*", True)
+            "dump_engine_ult_on_failure", "/run/setup/*", self.__dump_engine_ult_on_failure)
 
         # # Find a configuration that meets the test requirements
         # self.config = Configuration(
@@ -787,10 +786,8 @@ class TestWithServers(TestWithoutServers):
             if "Systemctl" in (self.agent_manager_class, self.server_manager_class):
                 log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
                 self.log.info("-" * 100)
-                self.log.info(
-                    "Updating file permissions for %s for use with systemctl",
-                    log_dir)
-                pcmd(hosts, "chmod a+rw {}".format(log_dir))
+                self.log.info("Updating file permissions for %s for use with systemctl", log_dir)
+                run_remote(self.log, hosts, f"chmod a+rw {log_dir}")
 
         # Start the servers
         force_agent_start = False
@@ -1065,12 +1062,16 @@ class TestWithServers(TestWithoutServers):
         """
         if group is None:
             group = self.server_group
-        if config_file is None and self.agent_manager_class == "Systemctl":
-            config_file = get_default_config_file("agent")
-            config_temp = self.get_config_file(group, "agent", self.test_dir)
-        elif config_file is None:
-            config_file = self.get_config_file(group, "agent")
-            config_temp = None
+
+        if config_file is None:
+            if self.agent_manager_class == "Systemctl" and self.test_env.agent_user != getuser():
+                # Default directory requiring privileged access
+                config_file = get_default_config_file("agent")
+                config_temp = self.get_config_file(group, "agent", self.test_dir)
+            else:
+                # Test-specific directory not requiring privileged access
+                config_file = os.path.join(self.test_dir, "daos_agent.yml")
+                config_temp = self.get_config_file(group, "agent", self.test_dir)
 
         # Verify the correct configuration files have been provided
         if self.agent_manager_class == "Systemctl" and config_temp is None:
@@ -1079,10 +1080,12 @@ class TestWithServers(TestWithoutServers):
                 "file provided for the Systemctl manager class!")
 
         # Define the location of the certificates
-        if self.agent_manager_class == "Systemctl":
+        if self.agent_manager_class == "Systemctl" and self.test_env.agent_user != getuser():
+            # Default directory requiring privileged access
             cert_dir = os.path.join(os.sep, "etc", "daos", "certs")
         else:
-            cert_dir = self.workdir
+            # Test-specific directory not requiring privileged access
+            cert_dir = os.path.join(self.test_dir, "certs")
 
         self.agent_managers.append(
             DaosAgentManager(
@@ -1115,6 +1118,8 @@ class TestWithServers(TestWithoutServers):
         """
         if group is None:
             group = self.server_group
+
+        # Set default server config files
         if svr_config_file is None and self.server_manager_class == "Systemctl":
             svr_config_file = get_default_config_file("server")
             svr_config_temp = self.get_config_file(
@@ -1122,12 +1127,6 @@ class TestWithServers(TestWithoutServers):
         elif svr_config_file is None:
             svr_config_file = self.get_config_file(group, "server")
             svr_config_temp = None
-        if dmg_config_file is None and self.server_manager_class == "Systemctl":
-            dmg_config_file = get_default_config_file("control")
-            dmg_config_temp = self.get_config_file(group, "dmg", self.test_dir)
-        elif dmg_config_file is None:
-            dmg_config_file = self.get_config_file(group, "dmg")
-            dmg_config_temp = None
 
         # Verify the correct configuration files have been provided
         if self.server_manager_class == "Systemctl" and svr_config_temp is None:
@@ -1135,13 +1134,25 @@ class TestWithServers(TestWithoutServers):
                 "Error adding a DaosServerManager: no temporary configuration "
                 "file provided for the Systemctl manager class!")
 
-        # Define the location of the certificates
+        # Set default dmg config files
+        if dmg_config_file is None:
+            if self.server_manager_class == "Systemctl" and self.test_env.agent_user != getuser():
+                dmg_config_file = get_default_config_file("control")
+                dmg_config_temp = self.get_config_file(group, "dmg", self.test_dir)
+            else:
+                dmg_config_file = os.path.join(self.test_dir, "daos_control.yml")
+
+        # Define server certificate directory
         if self.server_manager_class == "Systemctl":
             svr_cert_dir = os.path.join(os.sep, "etc", "daos", "certs")
-            dmg_cert_dir = os.path.join(os.sep, "etc", "daos", "certs")
         else:
             svr_cert_dir = self.workdir
-            dmg_cert_dir = self.workdir
+
+        # Define dmg certificate directory
+        if self.server_manager_class == "Systemctl" and self.test_env.agent_user != getuser():
+            dmg_cert_dir = os.path.join(os.sep, "etc", "daos", "certs")
+        else:
+            dmg_cert_dir = os.path.join(self.test_dir, "certs")
 
         self.server_managers.append(
             DaosServerManager(
@@ -1682,7 +1693,7 @@ class TestWithServers(TestWithoutServers):
 
         dmg_cmd = get_dmg_command(
             self.server_group, dmg_cert_dir, self.bin, dmg_config_file,
-            dmg_config_temp, self.access_points_suffix)
+            dmg_config_temp, self.access_points_suffix, getuser())
         dmg_cmd.hostlist = self.access_points
         return dmg_cmd
 
