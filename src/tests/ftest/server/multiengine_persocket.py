@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -181,7 +181,8 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
 
     def storage_format(self):
         """Perform storage format."""
-        run_local(self.log, "dmg storage format")
+        if not run_local(self.log, "dmg storage format").passed:
+            self.fail("dmg storage format failed")
 
     def cleanup(self):
         """Servers clean up after test complete."""
