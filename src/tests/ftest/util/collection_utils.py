@@ -157,6 +157,7 @@ def cleanup_processes(logger, test, result):
 def archive_files(logger, summary, hosts, source, pattern, destination, depth, threshold, timeout,
                   test_result, test=None):
     # pylint: disable=too-many-arguments
+    # pylint: disable=unused-argument
     """Archive the files from the source to the destination.
 
     Args:
