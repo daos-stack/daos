@@ -462,8 +462,9 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False,
     if fanout is None:
         fanout = max(task.info('fanout'), len(os.sched_getaffinity(0)))
     task.set_info('fanout', fanout)
-    # Enable forwarding of the ssh authentication agent connection
-    task.set_info("ssh_options", "-oForwardAgent=yes")
+    # Enable forwarding of the ssh authentication agent connection.
+    # Force pseudo-terminal allocation so timed-out commands are killed remotely.
+    task.set_info("ssh_options", "-oForwardAgent=yes -q -t -t")
     if verbose:
         if timeout is None:
             log.debug("Running on %s without a timeout: %s", hosts, command)
@@ -592,9 +593,9 @@ def stop_processes(log, hosts, pattern, verbose=True, timeout=60, exclude=None, 
         log.debug(
             "Killing%s any processes on %s that match %s and then waiting %s seconds",
             step[0], result.passed_hosts, pattern_match, step[1])
-        kill_command = f"sudo /usr/bin/pkill{step[0]} {pattern}"
+        kill_command = f"sudo -n /usr/bin/pkill{step[0]} {pattern}"
         if full_command:
-            kill_command = f"sudo /usr/bin/pkill{step[0]} --full -x {pattern}"
+            kill_command = f"sudo -n /usr/bin/pkill{step[0]} --full -x {pattern}"
         run_remote(log, result.passed_hosts, kill_command, verbose, timeout)
         time.sleep(step[1])
         result = run_remote(log, result.passed_hosts, search_command, verbose, timeout)

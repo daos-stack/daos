@@ -129,12 +129,14 @@ def setup_systemctl(logger, servers, clients, test_env):
         __add_systemctl_override(
             logger, servers, "daos_server.service", "root",
             os.path.join(test_env.daos_prefix, "bin", "daos_server"), test_env.server_config,
-            None, None))
+            os.environ.get("DAOS_TEST_SYSTEMD_PATH"),
+            os.environ.get("DAOS_TEST_SYSTEMD_LIBRARY_PATH")))
     systemctl_configs.update(
         __add_systemctl_override(
             logger, clients, "daos_agent.service", test_env.agent_user,
             os.path.join(test_env.daos_prefix, "bin", "daos_agent"), test_env.agent_config,
-            None, None))
+            os.environ.get("DAOS_TEST_SYSTEMD_PATH"),
+            os.environ.get("DAOS_TEST_SYSTEMD_LIBRARY_PATH")))
     return systemctl_configs
 
 
@@ -602,7 +604,7 @@ class TestRunner():
         hosts.add(self.local_host)
         logger.debug("Setting up '%s' on %s:", test_env.log_dir, hosts)
         commands = [
-            f"sudo -n rm -fr {test_env.log_dir}",
+            f"rm -fr {test_env.log_dir}",
             f"mkdir -p {test_env.log_dir}",
             f"chmod a+wrx {test_env.log_dir}",
         ]
@@ -612,11 +614,11 @@ class TestRunner():
             directories.append(os.path.join(test_env.log_dir, directory))
         commands.append(f"mkdir -p {' '.join(directories)}")
         commands.append(f"ls -al {test_env.log_dir}")
-        for command in commands:
-            if not run_remote(logger, hosts, command).passed:
-                message = "Error setting up the common test directory on all hosts"
-                self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
-                return 128
+        command = " && ".join(commands)
+        if not run_remote(logger, hosts, command).passed:
+            message = "Error setting up the common test directory on all hosts"
+            self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
+            return 128
         return 0
 
     def _user_setup(self, logger, test, create=False):
