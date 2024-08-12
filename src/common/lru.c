@@ -36,7 +36,7 @@ lru_hop_rec_decref(struct d_hash_table *htable, d_list_t *link)
 
 	D_ASSERT(llink->ll_ref > 0);
 	llink->ll_ref--;
-	if (llink->ll_evicting && llink->ll_ref == 2 && llink->ll_ops->lop_wakeup)
+	if (llink->ll_ref == 1 && llink->ll_ops->lop_wakeup)
 		llink->ll_ops->lop_wakeup(llink);
 
 	/* Delete from hash only if no more references */
@@ -216,7 +216,7 @@ daos_lru_ref_hold(struct daos_lru_cache *lcache, void *key,
 		llink = link2llink(link);
 		D_ASSERT(llink->ll_evicted == 0);
 		if (llink->ll_evicting) {
-			daos_lru_ref_release(lcache, llink);
+			lru_hop_rec_decref(&lcache->dlc_htable, &llink->ll_link);
 			D_GOTO(out, rc = -DER_SHUTDOWN);
 		}
 		/* remove busy item from LRU */
@@ -258,15 +258,15 @@ lru_ref_release_internal(struct daos_lru_cache *lcache, struct daos_llink *llink
 	D_ASSERT(lcache != NULL && llink != NULL && llink->ll_ref > 1);
 	D_ASSERT(d_list_empty(&llink->ll_qlink));
 
-	if (wait && llink->ll_ref > 2) {
+	lru_hop_rec_decref(&lcache->dlc_htable, &llink->ll_link);
+
+	if (wait && llink->ll_ref > 1) {
 		D_ASSERT(llink->ll_evicting == 0);
 		llink->ll_evicting = 1;
 		lcache->dlc_ops->lop_wait(llink);
 		llink->ll_evicting = 0;
 		llink->ll_evicted = 1;
 	}
-
-	lru_hop_rec_decref(&lcache->dlc_htable, &llink->ll_link);
 
 	if (llink->ll_ref == 1) { /* the last refcount */
 		if (lcache->dlc_csize == 0)
