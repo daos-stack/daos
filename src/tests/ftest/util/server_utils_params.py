@@ -501,6 +501,7 @@ class EngineYamlParameters(YamlParameters):
             if name in self.REQUIRED_ENV_VARS:
                 default_env_vars.extend(self.REQUIRED_ENV_VARS[name])
         self.env_vars = BasicParameter(None, default_env_vars)
+        self.env_pass_through = BasicParameter(None, None)
 
         # the storage configuration for this engine
         self.storage = StorageYamlParameters(self.namespace, max_storage_tiers)

@@ -541,7 +541,7 @@ class TestRunner():
         hosts.add(self.local_host)
         logger.debug("Setting up '%s' on %s:", test_env.log_dir, hosts)
         commands = [
-            f"sudo -n rm -fr {test_env.log_dir}",
+            f"rm -fr {test_env.log_dir}",
             f"mkdir -p {test_env.log_dir}",
             f"chmod a+wrx {test_env.log_dir}",
             f"ls -al {test_env.log_dir}",
