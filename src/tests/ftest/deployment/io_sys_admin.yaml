@@ -52,6 +52,7 @@ container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
   control_method: daos
+
 # We only need to set the user and group, so use "root", which should exist on most systems
 container_set_owner:
   user: root
