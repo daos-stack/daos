@@ -559,12 +559,6 @@ void   mgmt__get_attach_info_resp__rank_uri__init
   static const Mgmt__GetAttachInfoResp__RankUri init_value = MGMT__GET_ATTACH_INFO_RESP__RANK_URI__INIT;
   *message = init_value;
 }
-void   mgmt__get_attach_info_resp__numa_fabric_interfaces_entry__init
-                     (Mgmt__GetAttachInfoResp__NumaFabricInterfacesEntry         *message)
-{
-  static const Mgmt__GetAttachInfoResp__NumaFabricInterfacesEntry init_value = MGMT__GET_ATTACH_INFO_RESP__NUMA_FABRIC_INTERFACES_ENTRY__INIT;
-  *message = init_value;
-}
 void   mgmt__get_attach_info_resp__init
                      (Mgmt__GetAttachInfoResp         *message)
 {
@@ -1784,11 +1778,23 @@ const ProtobufCMessageDescriptor mgmt__fabric_interface__descriptor =
   (ProtobufCMessageInit) mgmt__fabric_interface__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__fabric_interfaces__field_descriptors[1] =
+static const ProtobufCFieldDescriptor mgmt__fabric_interfaces__field_descriptors[2] =
 {
   {
-    "ifaces",
+    "numa_node",
     1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__FabricInterfaces, numa_node),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "ifaces",
+    2,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_MESSAGE,
     offsetof(Mgmt__FabricInterfaces, n_ifaces),
@@ -1800,12 +1806,13 @@ static const ProtobufCFieldDescriptor mgmt__fabric_interfaces__field_descriptors
   },
 };
 static const unsigned mgmt__fabric_interfaces__field_indices_by_name[] = {
-  0,   /* field[0] = ifaces */
+  1,   /* field[1] = ifaces */
+  0,   /* field[0] = numa_node */
 };
 static const ProtobufCIntRange mgmt__fabric_interfaces__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 1 }
+  { 0, 2 }
 };
 const ProtobufCMessageDescriptor mgmt__fabric_interfaces__descriptor =
 {
@@ -1815,7 +1822,7 @@ const ProtobufCMessageDescriptor mgmt__fabric_interfaces__descriptor =
   "Mgmt__FabricInterfaces",
   "mgmt",
   sizeof(Mgmt__FabricInterfaces),
-  1,
+  2,
   mgmt__fabric_interfaces__field_descriptors,
   mgmt__fabric_interfaces__field_indices_by_name,
   1,  mgmt__fabric_interfaces__number_ranges,
@@ -1976,57 +1983,6 @@ const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__rank_uri__descripto
   (ProtobufCMessageInit) mgmt__get_attach_info_resp__rank_uri__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__numa_fabric_interfaces_entry__field_descriptors[2] =
-{
-  {
-    "key",
-    1,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__GetAttachInfoResp__NumaFabricInterfacesEntry, key),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "value",
-    2,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_MESSAGE,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__GetAttachInfoResp__NumaFabricInterfacesEntry, value),
-    &mgmt__fabric_interfaces__descriptor,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-};
-static const unsigned mgmt__get_attach_info_resp__numa_fabric_interfaces_entry__field_indices_by_name[] = {
-  0,   /* field[0] = key */
-  1,   /* field[1] = value */
-};
-static const ProtobufCIntRange mgmt__get_attach_info_resp__numa_fabric_interfaces_entry__number_ranges[1 + 1] =
-{
-  { 1, 0 },
-  { 0, 2 }
-};
-const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__numa_fabric_interfaces_entry__descriptor =
-{
-  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "mgmt.GetAttachInfoResp.NumaFabricInterfacesEntry",
-  "NumaFabricInterfacesEntry",
-  "Mgmt__GetAttachInfoResp__NumaFabricInterfacesEntry",
-  "mgmt",
-  sizeof(Mgmt__GetAttachInfoResp__NumaFabricInterfacesEntry),
-  2,
-  mgmt__get_attach_info_resp__numa_fabric_interfaces_entry__field_descriptors,
-  mgmt__get_attach_info_resp__numa_fabric_interfaces_entry__field_indices_by_name,
-  1,  mgmt__get_attach_info_resp__numa_fabric_interfaces_entry__number_ranges,
-  (ProtobufCMessageInit) mgmt__get_attach_info_resp__numa_fabric_interfaces_entry__init,
-  NULL,NULL,NULL    /* reserved[123] */
-};
 static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__field_descriptors[10] =
 {
   {
@@ -2144,7 +2100,7 @@ static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__field_descript
     PROTOBUF_C_TYPE_MESSAGE,
     offsetof(Mgmt__GetAttachInfoResp, n_numa_fabric_interfaces),
     offsetof(Mgmt__GetAttachInfoResp, numa_fabric_interfaces),
-    &mgmt__get_attach_info_resp__numa_fabric_interfaces_entry__descriptor,
+    &mgmt__fabric_interfaces__descriptor,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */

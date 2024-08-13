@@ -191,8 +191,13 @@ func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, req *mgm
 	// Requested fabric interface/domain behave as a simple override. If we weren't able to
 	// validate them, we return them to the user with the understanding that perhaps the user
 	// knows what they're doing.
+	// When an interface is requested without a domain, the domain is the same as the interface.
 	iface := req.Interface
 	domain := req.Domain
+	if iface != "" && domain == "" {
+		domain = iface
+	}
+
 	if req.Interface == "" {
 		fabricIF, err := mod.getFabricInterface(ctx, &FabricIfaceParams{
 			NUMANode: numaNode,
@@ -210,12 +215,9 @@ func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, req *mgm
 	}
 
 	resp.ClientNetHint.Interface = iface
-	resp.ClientNetHint.Domain = iface
-	if domain != "" {
-		resp.ClientNetHint.Domain = domain
-		mod.log.Tracef("D_DOMAIN for %s has been detected as: %s",
-			resp.ClientNetHint.Interface, resp.ClientNetHint.Domain)
-	}
+	resp.ClientNetHint.Domain = domain
+	mod.log.Tracef("D_DOMAIN for %s has been detected as: %s",
+		resp.ClientNetHint.Interface, resp.ClientNetHint.Domain)
 
 	if err := mod.populateNUMAFabricMap(ctx, resp); err != nil {
 		return nil, err
@@ -349,24 +351,29 @@ func (mod *mgmtModule) populateNUMAFabricMap(ctx context.Context, resp *mgmtpb.G
 	}
 	defer unlockMap()
 
-	resp.NumaFabricInterfaces = make(map[uint32]*mgmtpb.FabricInterfaces)
-	for numaNode, fis := range numaMap {
+	numNUMANodes := numaMap.MaxNUMANode() + 1 // NUMA indexed by zero
+	resp.NumaFabricInterfaces = make([]*mgmtpb.FabricInterfaces, numNUMANodes)
+	for numaNode := 0; numaNode < numNUMANodes; numaNode++ {
 		pbFIs := &mgmtpb.FabricInterfaces{
-			Ifaces: make([]*mgmtpb.FabricInterface, 0, len(fis)),
+			NumaNode: uint32(numaNode),
 		}
 
-		for _, fi := range fis {
-			if fi.HasProvider(resp.ClientNetHint.Provider) {
-				pbFIs.Ifaces = append(pbFIs.Ifaces, &mgmtpb.FabricInterface{
-					NumaNode:  uint32(numaNode),
-					Interface: fi.Name,
-					Domain:    fi.Domain,
-					Provider:  resp.ClientNetHint.Provider,
-				})
+		fis, exists := numaMap[numaNode]
+		if exists {
+			pbFIs.Ifaces = make([]*mgmtpb.FabricInterface, 0, len(fis))
+			for _, fi := range fis {
+				if fi.HasProvider(resp.ClientNetHint.Provider) {
+					pbFIs.Ifaces = append(pbFIs.Ifaces, &mgmtpb.FabricInterface{
+						NumaNode:  uint32(numaNode),
+						Interface: fi.Name,
+						Domain:    fi.Domain,
+						Provider:  resp.ClientNetHint.Provider,
+					})
+				}
 			}
 		}
 
-		resp.NumaFabricInterfaces[uint32(numaNode)] = pbFIs
+		resp.NumaFabricInterfaces[numaNode] = pbFIs
 	}
 
 	return nil

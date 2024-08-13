@@ -390,7 +390,7 @@ rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt, uuid_t co_uuid,
 }
 
 #define LOCAL_ARRAY_SIZE	128
-#define NUM_SHARDS_STEP_INCREASE	10
+#define NUM_SHARDS_STEP_INCREASE	64
 /* The structure for scan per xstream */
 struct rebuild_scan_arg {
 	struct rebuild_tgt_pool_tracker *rpt;
