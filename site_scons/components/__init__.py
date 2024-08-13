@@ -127,7 +127,7 @@ def define_mercury(reqs):
         ofi_build.append('--disable-debug')
 
     reqs.define('ofi',
-                retriever=GitRepoRetriever('https://github.com/ofiwg/libfabric'),
+                retriever=GitRepoRetriever(),
                 commands=[['./autogen.sh'],
                           ofi_build,
                           ['make'],
@@ -152,7 +152,7 @@ def define_mercury(reqs):
         ucx_configure.extend(['--disable-debug', '--disable-logging'])
 
     reqs.define('ucx',
-                retriever=GitRepoRetriever('https://github.com/openucx/ucx.git'),
+                retriever=GitRepoRetriever(),
                 libs=['ucs', 'ucp', 'uct'],
                 functions={'ucs': ['ucs_debug_disable_signal']},
                 headers=['uct/api/uct.h'],
@@ -189,7 +189,7 @@ def define_mercury(reqs):
         mercury_build.append('-DMERCURY_ENABLE_DEBUG:BOOL=OFF')
 
     reqs.define('mercury',
-                retriever=GitRepoRetriever('https://github.com/mercury-hpc/mercury.git', True),
+                retriever=GitRepoRetriever(True),
                 commands=[mercury_build,
                           ['make'],
                           ['make', 'install']],
@@ -248,14 +248,14 @@ def define_components(reqs):
     define_ompi(reqs)
 
     reqs.define('isal',
-                retriever=GitRepoRetriever('https://github.com/intel/isa-l.git'),
+                retriever=GitRepoRetriever(),
                 commands=[['./autogen.sh'],
                           ['./configure', '--prefix=$ISAL_PREFIX', '--libdir=$ISAL_PREFIX/lib'],
                           ['make'],
                           ['make', 'install']],
                 libs=['isal'])
     reqs.define('isal_crypto',
-                retriever=GitRepoRetriever('https://github.com/intel/isa-l_crypto'),
+                retriever=GitRepoRetriever(),
                 commands=[['./autogen.sh'],
                           ['./configure',
                            '--prefix=$ISAL_CRYPTO_PREFIX',
@@ -265,7 +265,7 @@ def define_components(reqs):
                 libs=['isal_crypto'])
 
     reqs.define('pmdk',
-                retriever=GitRepoRetriever('https://github.com/pmem/pmdk.git'),
+                retriever=GitRepoRetriever(),
                 commands=[['make',
                            'all',
                            'NDCTL_ENABLE=n',
@@ -290,7 +290,7 @@ def define_components(reqs):
         abt_build.append('--enable-valgrind')
 
     reqs.define('argobots',
-                retriever=GitRepoRetriever('https://github.com/pmodels/argobots.git', True),
+                retriever=GitRepoRetriever(True),
                 commands=[['git', 'clean', '-dxf'],
                           ['./autogen.sh'],
                           abt_build,
@@ -301,7 +301,7 @@ def define_components(reqs):
                 headers=['abt.h'])
 
     reqs.define('fuse', libs=['fuse3'], defines=['FUSE_USE_VERSION=35'],
-                retriever=GitRepoRetriever('https://github.com/libfuse/libfuse.git'),
+                retriever=GitRepoRetriever(),
                 commands=[['meson', 'setup', '--prefix=$FUSE_PREFIX', '-Ddisable-mtab=True',
                            '-Dudevrulesdir=$FUSE_PREFIX/udev', '-Dutils=False',
                            '--default-library', 'both', '../fuse'],
@@ -330,7 +330,7 @@ def define_components(reqs):
         spdk_arch = 'haswell'
 
     reqs.define('spdk',
-                retriever=GitRepoRetriever('https://github.com/spdk/spdk.git', True),
+                retriever=GitRepoRetriever(True),
                 commands=[['./configure',
                            '--prefix=$SPDK_PREFIX',
                            '--disable-tests',
@@ -359,7 +359,7 @@ def define_components(reqs):
                 patch_rpath=['lib', 'bin'])
 
     reqs.define('protobufc',
-                retriever=GitRepoRetriever('https://github.com/protobuf-c/protobuf-c.git'),
+                retriever=GitRepoRetriever(),
                 commands=[['./autogen.sh'],
                           ['./configure', '--prefix=$PROTOBUFC_PREFIX', '--disable-protoc'],
                           ['make'],

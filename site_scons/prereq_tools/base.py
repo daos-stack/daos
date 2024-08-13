@@ -239,9 +239,9 @@ def default_libpath():
 class GitRepoRetriever():
     """Identify a git repository from which to download sources"""
 
-    def __init__(self, url, has_submodules=False, branch=None):
+    def __init__(self, has_submodules=False, branch=None):
 
-        self.url = url
+        self.url = None
         self.has_submodules = has_submodules
         self.branch = branch
         self.commit_sha = None
@@ -272,9 +272,10 @@ class GitRepoRetriever():
             if not RUNNER.run_commands(commands, subdir=subdir):
                 raise DownloadFailure(self.url, subdir)
 
-    def get(self, subdir, **kw):
+    def get(self, subdir, repo, **kw):
         """Downloads sources from a git repository into subdir"""
         # Now checkout the commit_sha if specified
+        self.url = repo
         passed_commit_sha = kw.get("commit_sha", None)
         if passed_commit_sha is None:
             comp = os.path.basename(subdir)
@@ -1043,6 +1044,7 @@ class _Component():
             return
         branch = self.prereqs.get_config("branches", self.name)
         commit_sha = self.prereqs.get_config("commit_versions", self.name)
+        repo = self.prereqs.get_config("repos", self.name)
 
         if not self.retriever:
             print(f'Using installed version of {self.name}')
@@ -1055,7 +1057,7 @@ class _Component():
 
         print(f'Downloading source for {self.name}')
         patches = self._resolve_patches()
-        self.retriever.get(self.src_path, commit_sha=commit_sha,
+        self.retriever.get(self.src_path, repo, commit_sha=commit_sha,
                            patches=patches, branch=branch)
 
     def _has_missing_system_deps(self, env):
