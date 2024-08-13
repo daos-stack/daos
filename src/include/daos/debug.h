@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -30,6 +30,7 @@
 	ACTION(common,    common,    arg)	\
 	ACTION(tree,      tree,      arg)	\
 	ACTION(vos,       vos,       arg)	\
+	ACTION(pmdk,      pmdk,      arg)	\
 	ACTION(client,    client,    arg)	\
 	ACTION(server,    server,    arg)	\
 	ACTION(rdb,       rdb,       arg)	\
