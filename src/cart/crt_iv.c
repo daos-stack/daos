@@ -20,6 +20,7 @@
 
 #include "crt_internal.h"
 #include <cart/iv.h>
+#include <daos/common.h>
 
 #define IV_DBG(key, msg, ...) \
 	D_DEBUG(DB_TRACE, "[key=%p] " msg, (key)->iov_buf, ##__VA_ARGS__)
@@ -1884,8 +1885,13 @@ crt_hdlr_iv_sync_aux(void *arg)
 				D_ERROR("crt_bulk_access(): "DF_RC"\n", DP_RC(rc));
 				D_GOTO(exit, rc);
 			}
+			D_INFO("tmp_iv sgl coming from bulk\n");
 		} else if (input->ivs_sync_sgl.sg_nr > 0) {
 			tmp_iv = input->ivs_sync_sgl;
+			D_INFO("tmp_iv sgl coming from input->ivs_sync_sgl\n");
+		} else {
+			memset(&tmp_iv, 0x0, sizeof(tmp_iv));
+			D_INFO("tmp_iv sgl coming from memset\n");
 		}
 
 		rc = iv_ops->ivo_on_refresh(ivns_internal, &input->ivs_key,
@@ -2067,8 +2073,13 @@ call_pre_sync_cb(struct crt_ivns_internal *ivns_internal,
 			D_ERROR("crt_bulk_access(): "DF_RC"\n", DP_RC(rc));
 			D_GOTO(exit, rc);
 		}
+		D_INFO("tmp_iv sgl coming from bulk\n");
 	} else if (input->ivs_sync_sgl.sg_nr > 0) {
 		tmp_iv = input->ivs_sync_sgl;
+		D_INFO("tmp_iv sgl coming from input->ivs_sync_sgl\n");
+	} else {
+		memset(&tmp_iv, 0x0, sizeof(tmp_iv));
+		D_INFO("tmp_iv sgl coming from memset\n");
 	}
 
 	D_DEBUG(DB_TRACE, "Executing ivo_pre_sync\n");
