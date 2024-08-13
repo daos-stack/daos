@@ -424,7 +424,7 @@ __split_arg(char *s_arg_to_split, const char *delim, char **first_arg, char **se
 
 
 int
-crt_str_to_provider(char *str_provider)
+crt_str_to_provider(const char *str_provider)
 {
 	int	provider_idx = CRT_PROV_UNKNOWN;
 	int	i, len;
