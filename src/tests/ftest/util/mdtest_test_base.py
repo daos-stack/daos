@@ -43,7 +43,6 @@ class MdtestBase(TestWithServers):
         super().setUp()
 
         # Get the parameters for Mdtest
-        # Makito added argument.
         self.mdtest_cmd = MdtestCommand(self.test_env.log_dir)
         self.mdtest_cmd.get_params(self)
         self.ppn = self.params.get("ppn", '/run/mdtest/client_processes/*')
