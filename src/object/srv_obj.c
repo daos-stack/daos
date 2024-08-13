@@ -2934,9 +2934,8 @@ again2:
 	 * them before real modifications to avoid availability issues.
 	 */
 	D_FREE(dti_cos);
-	dti_cos_cnt = dtx_list_cos(ioc.ioc_coc, &orw->orw_oid,
-				   orw->orw_dkey_hash, DTX_THRESHOLD_COUNT,
-				   &dti_cos);
+	dti_cos_cnt = dtx_cos_get_piggyback(ioc.ioc_coc, &orw->orw_oid, orw->orw_dkey_hash,
+					    DTX_THRESHOLD_COUNT, &dti_cos);
 	if (dti_cos_cnt < 0)
 		D_GOTO(out, rc = dti_cos_cnt);
 
@@ -3568,8 +3567,12 @@ obj_tgt_punch(struct obj_tgt_punch_args *otpa, uint32_t *shards, uint32_t count)
 			goto out;
 	}
 
-	if (dth != NULL)
+	if (dth != NULL) {
+		if (dth->dth_prepared)
+			D_GOTO(out, rc = 0);
+
 		goto exec;
+	}
 
 	if (opi->opi_flags & ORF_RESEND) {
 		tmp = opi->opi_epoch;
@@ -3852,9 +3855,8 @@ again2:
 	 * them before real modifications to avoid availability issues.
 	 */
 	D_FREE(dti_cos);
-	dti_cos_cnt = dtx_list_cos(ioc.ioc_coc, &opi->opi_oid,
-				   opi->opi_dkey_hash, DTX_THRESHOLD_COUNT,
-				   &dti_cos);
+	dti_cos_cnt = dtx_cos_get_piggyback(ioc.ioc_coc, &opi->opi_oid, opi->opi_dkey_hash,
+					    DTX_THRESHOLD_COUNT, &dti_cos);
 	if (dti_cos_cnt < 0)
 		D_GOTO(out, rc = dti_cos_cnt);
 
@@ -5699,14 +5701,15 @@ out:
 		max_ver = version;
 
 	DL_CDEBUG(rc != 0 && rc != -DER_INPROGRESS && rc != -DER_TX_RESTART, DLOG_ERR, DB_IO, rc,
-		  "(%s) handled collective punch RPC %p for obj "
-		  DF_UOID" on XS %u/%u epc "DF_X64" pmv %u/%u, with dti "
-		  DF_DTI", forward width %u, forward depth %u",
+		  "(%s) handled collective punch RPC %p for obj "DF_UOID" on XS %u/%u epc "
+		  DF_X64" pmv %u/%u, with dti "DF_DTI", bulk_tgt_sz %u, bulk_tgt_nr %u, "
+		  "tgt_nr %u, forward width %u, forward depth %u",
 		  (ocpi->ocpi_flags & ORF_LEADER) ? "leader" :
 		  (ocpi->ocpi_tgts.ca_count == 1 ? "non-leader" : "relay-engine"), rpc,
 		  DP_UOID(ocpi->ocpi_oid), dmi->dmi_xs_id, dmi->dmi_tgt_id, ocpi->ocpi_epoch,
-		  ocpi->ocpi_map_ver, max_ver, DP_DTI(&ocpi->ocpi_xid), ocpi->ocpi_disp_width,
-		  ocpi->ocpi_disp_depth);
+		  ocpi->ocpi_map_ver, max_ver, DP_DTI(&ocpi->ocpi_xid), ocpi->ocpi_bulk_tgt_sz,
+		  ocpi->ocpi_bulk_tgt_nr, (unsigned int)ocpi->ocpi_tgts.ca_count,
+		  ocpi->ocpi_disp_width, ocpi->ocpi_disp_depth);
 
 	obj_punch_complete(rpc, rc, max_ver);
 

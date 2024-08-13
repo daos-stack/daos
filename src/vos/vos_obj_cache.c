@@ -360,8 +360,10 @@ vos_obj_check_discard(struct vos_container *cont, daos_unit_oid_t oid, uint64_t 
 	rc = obj_get(occ, cont, oid, false, &obj);
 	if (rc == -DER_NONEXIST)
 		return 0;
-	else if (rc)
+	if (rc)
 		return rc;
+
+	/* TODO: Pin object in memory */
 
 	if (check_discard(obj, flags))
 		/* Update request will retry with this error */
@@ -429,7 +431,7 @@ vos_obj_incarnate(struct vos_object *obj, daos_epoch_range_t *epr, daos_epoch_t 
 		cond_mask = VOS_ILOG_COND_UPDATE;
 	rc = vos_ilog_update(cont, &obj->obj_df->vo_ilog, epr, bound, NULL,
 			     &obj->obj_ilog_info, cond_mask, ts_set);
-	if (rc == -DER_NONEXIST && cond_mask)
+	if (rc == -DER_NONEXIST && !cond_mask)
 		rc = 0;
 
 	if (rc != 0)
@@ -473,7 +475,7 @@ vos_obj_hold(struct vos_container *cont, daos_unit_oid_t oid, daos_epoch_range_t
 		init_object(obj, oid, cont);
 		rc = 0;
 	} else if (rc) {
-		D_GOTO(failed_2, rc);
+		D_GOTO(fail_log, rc);
 	}
 
 	if (obj->obj_zombie)
@@ -484,7 +486,7 @@ vos_obj_hold(struct vos_container *cont, daos_unit_oid_t oid, daos_epoch_range_t
 		obj_release(occ, obj, false);
 		/* Update request will retry with this error */
 		rc = create ? -DER_UPDATE_AGAIN : -DER_BUSY;
-		goto failed_2;
+		goto fail_log;
 	}
 
 	/* Lookup OI table if the cached object is negative */
@@ -569,7 +571,7 @@ out:
 
 failed:
 	obj_release(occ, obj, true);
-failed_2:
+fail_log:
 	VOS_TX_LOG_FAIL(rc, "failed to hold object " DF_UOID ", rc=" DF_RC "\n", DP_UOID(oid),
 			DP_RC(rc));
 

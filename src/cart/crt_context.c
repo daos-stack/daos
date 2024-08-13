@@ -314,6 +314,18 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 				      "net/%s/swim_delay/ctx_%u", prov, ctx->cc_idx);
 		if (ret)
 			DL_WARN(rc, "Failed to create SWIM delay gauge");
+
+		ret = d_tm_add_metric(&ctx->cc_quotas.rpc_waitq_depth, D_TM_GAUGE,
+				      "Current count of enqueued RPCs", "rpcs",
+				      "net/%s/waitq_depth/ctx_%u", prov, ctx->cc_idx);
+		if (ret)
+			DL_WARN(rc, "Failed to create rpc waitq gauge");
+
+		ret = d_tm_add_metric(&ctx->cc_quotas.rpc_quota_exceeded, D_TM_COUNTER,
+				      "Total number of exceeded RPC quota errors", "errors",
+				      "net/%s/quota_exceeded/ctx_%u", prov, ctx->cc_idx);
+		if (ret)
+			DL_WARN(rc, "Failed to create quota exceeded counter");
 	}
 
 	if (crt_is_service() && crt_gdata.cg_auto_swim_disable == 0 &&
@@ -403,6 +415,9 @@ crt_iface_name2idx(const char *iface_name, int *idx)
 
 	for (i = 0; i < num_ifaces; i++) {
 		name = crt_provider_iface_str_get(true, crt_gdata.cg_primary_prov, i);
+
+		if (!name)
+			return -DER_INVAL;
 
 		if (strcmp(name, iface_name) == 0) {
 			*idx = i;
@@ -1044,9 +1059,7 @@ crt_req_timeout_track(struct crt_rpc_priv *rpc_priv)
 	if (rc == 0) {
 		rpc_priv->crp_in_binheap = 1;
 	} else {
-		RPC_ERROR(rpc_priv,
-			  "d_binheap_insert failed, rc: %d\n",
-			  rc);
+		RPC_ERROR(rpc_priv, "d_binheap_insert failed, rc: %d\n", rc);
 		RPC_DECREF(rpc_priv);
 	}
 
@@ -1148,10 +1161,10 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 	switch (rpc_priv->crp_state) {
 	case RPC_STATE_INITED:
 	case RPC_STATE_QUEUED:
-		RPC_ERROR(rpc_priv, "aborting %s rpc to group %s, tgt %d:%d, tgt_uri %s\n",
-			  rpc_priv->crp_state == RPC_STATE_QUEUED ? "queued" : "inited",
-			  grp_priv->gp_pub.cg_grpid, tgt_ep->ep_rank, tgt_ep->ep_tag,
-			  rpc_priv->crp_tgt_uri);
+		RPC_INFO(rpc_priv, "aborting %s rpc to group %s, tgt %d:%d, tgt_uri %s\n",
+			 rpc_priv->crp_state == RPC_STATE_QUEUED ? "queued" : "inited",
+			 grp_priv->gp_pub.cg_grpid, tgt_ep->ep_rank, tgt_ep->ep_tag,
+			 rpc_priv->crp_tgt_uri);
 		crt_context_req_untrack(rpc_priv);
 		crt_rpc_complete_and_unlock(rpc_priv, -DER_TIMEDOUT);
 		break;
@@ -1159,13 +1172,11 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		ul_req = rpc_priv->crp_ul_req;
 		D_ASSERT(ul_req != NULL);
 		ul_in = crt_req_get(ul_req);
-		RPC_ERROR(rpc_priv,
-			  "failed due to URI_LOOKUP(rpc_priv %p) to group %s,"
-			  "rank %d through PSR %d timedout\n",
-			  container_of(ul_req, struct crt_rpc_priv, crp_pub),
-			  ul_in->ul_grp_id,
-			  ul_in->ul_rank,
-			  ul_req->cr_ep.ep_rank);
+		RPC_INFO(rpc_priv,
+			 "failed due to URI_LOOKUP(rpc_priv %p) to group %s,"
+			 "rank %d through PSR %d timedout\n",
+			 container_of(ul_req, struct crt_rpc_priv, crp_pub), ul_in->ul_grp_id,
+			 ul_in->ul_rank, ul_req->cr_ep.ep_rank);
 
 		if (crt_gdata.cg_use_sensors)
 			d_tm_inc_counter(crt_ctx->cc_timedout_uri, 1);
@@ -1180,11 +1191,9 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		crt_rpc_unlock(rpc_priv);
 		break;
 	case RPC_STATE_FWD_UNREACH:
-		RPC_ERROR(rpc_priv,
-			  "failed due to group %s, rank %d, tgt_uri %s can't reach the target\n",
-			  grp_priv->gp_pub.cg_grpid,
-			  tgt_ep->ep_rank,
-			  rpc_priv->crp_tgt_uri);
+		RPC_INFO(rpc_priv,
+			 "failed due to group %s, rank %d, tgt_uri %s can't reach the target\n",
+			 grp_priv->gp_pub.cg_grpid, tgt_ep->ep_rank, rpc_priv->crp_tgt_uri);
 		crt_context_req_untrack(rpc_priv);
 		crt_rpc_complete_and_unlock(rpc_priv, -DER_UNREACH);
 		break;
@@ -1192,12 +1201,14 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		/* At this point, RPC should always be completed by
 		 * Mercury
 		 */
-		RPC_ERROR(rpc_priv, "aborting in-flight to group %s, rank %d, tgt_uri %s\n",
-			  grp_priv->gp_pub.cg_grpid, tgt_ep->ep_rank, rpc_priv->crp_tgt_uri);
+		RPC_INFO(rpc_priv, "aborting in-flight to group %s, rank %d, tgt_uri %s\n",
+			 grp_priv->gp_pub.cg_grpid, tgt_ep->ep_rank, rpc_priv->crp_tgt_uri);
 		rc = crt_hg_req_cancel(rpc_priv);
 		if (rc != 0) {
-			RPC_ERROR(rpc_priv, "crt_hg_req_cancel failed, rc: %d, "
-				  "opc: %#x.\n", rc, rpc_priv->crp_pub.cr_opc);
+			RPC_WARN(rpc_priv,
+				 "crt_hg_req_cancel failed, rc: %d, "
+				 "opc: %#x.\n",
+				 rc, rpc_priv->crp_pub.cr_opc);
 			crt_context_req_untrack(rpc_priv);
 		}
 		crt_rpc_unlock(rpc_priv);
@@ -1216,6 +1227,8 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 	struct d_binheap_node		*bh_node;
 	d_list_t			 timeout_list;
 	uint64_t			 ts_now;
+	int                              err_to_print  = 0;
+	int                              left_to_print = 0;
 
 	D_ASSERT(crt_ctx != NULL);
 
@@ -1243,17 +1256,48 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 	};
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
+	/* Limit logging when many rpcs time-out at the same time */
+	d_list_for_each_entry(rpc_priv, &timeout_list, crp_tmp_link_timeout) {
+		left_to_print++;
+	}
+
+	/* TODO: might expose via env in future */
+	err_to_print = 1;
+
 	/* handle the timeout RPCs */
 	while ((rpc_priv =
 		    d_list_pop_entry(&timeout_list, struct crt_rpc_priv, crp_tmp_link_timeout))) {
-		RPC_ERROR(rpc_priv,
-			  "ctx_id %d, (status: %#x) timed out (%d seconds), "
-			  "target (%d:%d)\n",
-			  crt_ctx->cc_idx,
-			  rpc_priv->crp_state,
-			  rpc_priv->crp_timeout_sec,
-			  rpc_priv->crp_pub.cr_ep.ep_rank,
-			  rpc_priv->crp_pub.cr_ep.ep_tag);
+		/*
+		 * This error is annoying and fills the logs. For now prevent bursts of timeouts
+		 * happening at the same time.
+		 *
+		 * Ideally we would also limit to 1 error per target. Can keep track of it in per
+		 * target cache used for hg_addrs.
+		 *
+		 * Extra lookup cost of cache entry would be ok as this is an error case
+		 **/
+
+		if (err_to_print > 0) {
+			RPC_ERROR(rpc_priv,
+				  "ctx_id %d, (status: %#x) timed out (%d seconds), "
+				  "target (%d:%d)\n",
+				  crt_ctx->cc_idx, rpc_priv->crp_state, rpc_priv->crp_timeout_sec,
+				  rpc_priv->crp_pub.cr_ep.ep_rank, rpc_priv->crp_pub.cr_ep.ep_tag);
+			err_to_print--;
+			left_to_print--;
+
+			if (err_to_print == 0 && left_to_print > 0)
+				D_ERROR(" %d more rpcs timed out. rest logged at INFO level\n",
+					left_to_print);
+
+		} else {
+			RPC_INFO(rpc_priv,
+				 "ctx_id %d, (status: %#x) timed out (%d seconds), "
+				 "target (%d:%d)\n",
+				 crt_ctx->cc_idx, rpc_priv->crp_state, rpc_priv->crp_timeout_sec,
+				 rpc_priv->crp_pub.cr_ep.ep_rank, rpc_priv->crp_pub.cr_ep.ep_tag);
+			left_to_print--;
+		}
 
 		crt_req_timeout_hdlr(rpc_priv);
 		RPC_DECREF(rpc_priv);
@@ -1375,8 +1419,10 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
 	d_hash_rec_decref(&crt_ctx->cc_epi_table, &epi->epi_link);
 
-	if (quota_rc == -DER_QUOTA_LIMIT)
+	if (quota_rc == -DER_QUOTA_LIMIT) {
 		d_list_add_tail(&rpc_priv->crp_waitq_link, &crt_ctx->cc_quotas.rpc_waitq);
+		d_tm_inc_gauge(crt_ctx->cc_quotas.rpc_waitq_depth, 1);
+	}
 
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
@@ -1506,10 +1552,12 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 				   struct crt_rpc_priv, crp_waitq_link);
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
-	if (tmp_rpc != NULL)
+	if (tmp_rpc != NULL) {
 		dispatch_rpc(tmp_rpc);
-	else
+		d_tm_dec_gauge(crt_ctx->cc_quotas.rpc_waitq_depth, 1);
+	} else {
 		put_quota_resource(rpc_priv->crp_pub.cr_ctx, CRT_QUOTA_RPCS);
+	}
 
 	crt_context_req_untrack_internal(rpc_priv);
 
@@ -2036,6 +2084,24 @@ exit:
 	return rc;
 }
 
+int
+crt_context_get_timeout(crt_context_t crt_ctx, uint32_t *timeout_sec)
+{
+	struct crt_context	*ctx = crt_ctx;
+	int			 rc = 0;
+
+	if (crt_ctx == CRT_CONTEXT_NULL) {
+		D_ERROR("NULL context passed\n");
+		rc = -DER_INVAL;
+	} else if (ctx->cc_timeout_sec != 0) {
+		*timeout_sec = ctx->cc_timeout_sec;
+	} else {
+		*timeout_sec = crt_gdata.cg_timeout;
+	}
+
+	return rc;
+}
+
 /* Force complete the rpc. Used for handling of unreachable rpcs */
 void
 crt_req_force_completion(struct crt_rpc_priv *rpc_priv)
@@ -2176,6 +2242,7 @@ get_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota)
 	} else {
 		D_DEBUG(DB_TRACE, "Quota limit (%d) reached for quota_type=%d\n",
 			ctx->cc_quotas.limit[quota], quota);
+		d_tm_inc_counter(ctx->cc_quotas.rpc_quota_exceeded, 1);
 		rc = -DER_QUOTA_LIMIT;
 	}
 

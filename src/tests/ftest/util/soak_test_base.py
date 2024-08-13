@@ -21,7 +21,7 @@ from ClusterShell.NodeSet import NodeSet
 from exception_utils import CommandFailure
 from general_utils import journalctl_time
 from host_utils import get_local_host
-from run_utils import RunException, run_local, run_remote
+from run_utils import run_local, run_remote
 from soak_utils import (SoakTestError, add_pools, build_job_script, cleanup_dfuse,
                         create_app_cmdline, create_dm_cmdline, create_fio_cmdline,
                         create_ior_cmdline, create_macsio_cmdline, create_mdtest_cmdline,
@@ -89,7 +89,7 @@ class SoakTestBase(TestWithServers):
         # Setup logging directories for soak logfiles
         # self.output dir is an avocado directory .../data/
         self.outputsoak_dir = self.outputdir + "/soak"
-        self.soak_dir = self.base_test_dir + "/soak"
+        self.soak_dir = self.test_env.log_dir + "/soak"
         self.soaktest_dir = self.soak_dir + "/pass" + str(self.loop)
         # Create the a shared directory for logs
         self.sharedsoak_dir = self.tmp + "/soak"
@@ -137,11 +137,9 @@ class SoakTestBase(TestWithServers):
             self.log.info("<<Cancel jobs in queue with ids %s >>", job_id)
             cmd = "scancel --partition {} -u {} {}".format(
                 self.host_info.clients.partition.name, self.username, job_id)
-            try:
-                run_local(self.log, cmd, timeout=120)
-            except RunException as error:
+            if not run_local(self.log, cmd, timeout=120).passed:
                 # Exception was raised due to a non-zero exit status
-                errors.append(f"Failed to cancel jobs {self.failed_job_id_list}: {error}")
+                errors.append(f"Failed to cancel jobs {self.failed_job_id_list}")
         if self.all_failed_jobs:
             errors.append("SOAK FAILED: The following jobs failed {} ".format(
                 " ,".join(str(j_id) for j_id in self.all_failed_jobs)))
@@ -473,11 +471,10 @@ class SoakTestBase(TestWithServers):
                 if not result.passed:
                     self.log.error("Remote copy failed on %s", str(result.failed_hosts))
             # copy the local files; local host not included in hostlist_client
-            try:
-                run_local(self.log, cmd, timeout=600)
-                run_local(self.log, cmd2, timeout=600)
-            except RunException as error:
-                self.log.info("Local copy failed with %s", error)
+            if not run_local(self.log, cmd, timeout=600).passed:
+                self.log.info("Local copy failed: %s", cmd)
+            if not run_local(self.log, cmd2, timeout=600).passed:
+                self.log.info("Local copy failed: %s", cmd2)
             self.soak_results = {}
         return job_id_list
 
@@ -604,11 +601,8 @@ class SoakTestBase(TestWithServers):
                 " ".join([pool.identifier for pool in self.pool]))
 
         # cleanup soak log directories before test
-        try:
-            run_local(self.log, f"rm -rf {self.soak_dir}/*", timeout=300)
-        except RunException as error:
-            raise SoakTestError(
-                f"<<FAILED: Log directory {self.soak_dir} was not removed>>") from error
+        if not run_local(self.log, f"rm -rf {self.soak_dir}/*", timeout=300).passed:
+            raise SoakTestError(f"<<FAILED: Log directory {self.soak_dir} was not removed>>")
         if self.enable_remote_logging:
             result = run_remote(
                 self.log, self.hostlist_clients, f"rm -rf {self.soak_dir}/*", timeout=300)
@@ -616,11 +610,9 @@ class SoakTestBase(TestWithServers):
                 raise SoakTestError(
                     f"<<FAILED:Log directory not removed from clients>> {str(result.failed_hosts)}")
         else:
-            try:
-                run_local(self.log, f"rm -rf {self.sharedsoak_dir}/*", timeout=300)
-            except RunException as error:
+            if not run_local(self.log, f"rm -rf {self.sharedsoak_dir}/*", timeout=300).passed:
                 raise SoakTestError(
-                    f"<<FAILED: Log directory {self.sharedsoak_dir} was not removed>>") from error
+                    f"<<FAILED: Log directory {self.sharedsoak_dir} was not removed>>")
         # Baseline metrics data
         run_metrics_check(self, prefix="initial")
         # Initialize time

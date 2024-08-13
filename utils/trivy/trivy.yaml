@@ -1,0 +1,250 @@
+cache:
+  backend: fs
+  clear: false
+  dir:
+  redis:
+    ca: ""
+    cert: ""
+    key: ""
+    tls: false
+    ttl: 0s
+config: trivy.yaml
+db:
+  download-java-only: false
+  download-only: false
+  java-repository: ghcr.io/aquasecurity/trivy-java-db
+  java-skip-update: false
+  no-progress: false
+  repository: ghcr.io/aquasecurity/trivy-db
+  skip-update: false
+debug: false
+dependency-tree: true
+exit-code: 0
+generate-default-config: false
+ignore-policy: ""
+ignorefile: ./utils/trivy/.trivyignore
+include-dev-deps: false
+insecure: false
+license:
+  confidencelevel: "0.9"
+  forbidden:
+    - AGPL-1.0
+    - AGPL-3.0
+    - CC-BY-NC-1.0
+    - CC-BY-NC-2.0
+    - CC-BY-NC-2.5
+    - CC-BY-NC-3.0
+    - CC-BY-NC-4.0
+    - CC-BY-NC-ND-1.0
+    - CC-BY-NC-ND-2.0
+    - CC-BY-NC-ND-2.5
+    - CC-BY-NC-ND-3.0
+    - CC-BY-NC-ND-4.0
+    - CC-BY-NC-SA-1.0
+    - CC-BY-NC-SA-2.0
+    - CC-BY-NC-SA-2.5
+    - CC-BY-NC-SA-3.0
+    - CC-BY-NC-SA-4.0
+    - Commons-Clause
+    - Facebook-2-Clause
+    - Facebook-3-Clause
+    - Facebook-Examples
+    - WTFPL
+  full: false
+  ignored: []
+  notice:
+    - AFL-1.1
+    - AFL-1.2
+    - AFL-2.0
+    - AFL-2.1
+    - AFL-3.0
+    - Apache-1.0
+    - Apache-1.1
+    - Apache-2.0
+    - Artistic-1.0-cl8
+    - Artistic-1.0-Perl
+    - Artistic-1.0
+    - Artistic-2.0
+    - BSL-1.0
+    - BSD-2-Clause-FreeBSD
+    - BSD-2-Clause-NetBSD
+    - BSD-2-Clause
+    - BSD-3-Clause-Attribution
+    - BSD-3-Clause-Clear
+    - BSD-3-Clause-LBNL
+    - BSD-3-Clause
+    - BSD-4-Clause
+    - BSD-4-Clause-UC
+    - BSD-Protection
+    - CC-BY-1.0
+    - CC-BY-2.0
+    - CC-BY-2.5
+    - CC-BY-3.0
+    - CC-BY-4.0
+    - FTL
+    - ISC
+    - ImageMagick
+    - Libpng
+    - Lil-1.0
+    - Linux-OpenIB
+    - LPL-1.02
+    - LPL-1.0
+    - MS-PL
+    - MIT
+    - NCSA
+    - OpenSSL
+    - PHP-3.01
+    - PHP-3.0
+    - PIL
+    - Python-2.0
+    - Python-2.0-complete
+    - PostgreSQL
+    - SGI-B-1.0
+    - SGI-B-1.1
+    - SGI-B-2.0
+    - Unicode-DFS-2015
+    - Unicode-DFS-2016
+    - Unicode-TOU
+    - UPL-1.0
+    - W3C-19980720
+    - W3C-20150513
+    - W3C
+    - X11
+    - Xnet
+    - Zend-2.0
+    - zlib-acknowledgement
+    - Zlib
+    - ZPL-1.1
+    - ZPL-2.0
+    - ZPL-2.1
+  permissive: []
+  reciprocal:
+    - APSL-1.0
+    - APSL-1.1
+    - APSL-1.2
+    - APSL-2.0
+    - CDDL-1.0
+    - CDDL-1.1
+    - CPL-1.0
+    - EPL-1.0
+    - EPL-2.0
+    - FreeImage
+    - IPL-1.0
+    - MPL-1.0
+    - MPL-1.1
+    - MPL-2.0
+    - Ruby
+  restricted:
+    - BCL
+    - CC-BY-ND-1.0
+    - CC-BY-ND-2.0
+    - CC-BY-ND-2.5
+    - CC-BY-ND-3.0
+    - CC-BY-ND-4.0
+    - CC-BY-SA-1.0
+    - CC-BY-SA-2.0
+    - CC-BY-SA-2.5
+    - CC-BY-SA-3.0
+    - CC-BY-SA-4.0
+    - GPL-1.0
+    - GPL-2.0
+    - GPL-2.0-with-autoconf-exception
+    - GPL-2.0-with-bison-exception
+    - GPL-2.0-with-classpath-exception
+    - GPL-2.0-with-font-exception
+    - GPL-2.0-with-GCC-exception
+    - GPL-3.0
+    - GPL-3.0-with-autoconf-exception
+    - GPL-3.0-with-GCC-exception
+    - LGPL-2.0
+    - LGPL-2.1
+    - LGPL-3.0
+    - NPL-1.0
+    - NPL-1.1
+    - OSL-1.0
+    - OSL-1.1
+    - OSL-2.0
+    - OSL-2.1
+    - OSL-3.0
+    - QPL-1.0
+    - Sleepycat
+  unencumbered:
+    - CC0-1.0
+    - Unlicense
+    - 0BSD
+list-all-pkgs: false
+misconfiguration:
+  cloudformation:
+    params: []
+  helm:
+    set: []
+    set-file: []
+    set-string: []
+    values: []
+  include-non-failures: false
+  check-bundle-repository: ghcr.io/aquasecurity/trivy-policies:0
+  # scanners:
+  #  - azure-arm
+  #  - cloudformation
+  #  - dockerfile
+  #  - helm
+  #  - kubernetes
+  #  - terraform
+  #  - terraformplan
+  terraform:
+    exclude-downloaded-modules: false
+    vars: []
+module:
+  dir:
+  enable-modules: []
+output: "trivy-report-daos.txt"
+format: template
+template: '@./utils/trivy/csv.tpl'
+output-plugin-arg: ""
+quiet: false
+registry:
+  password: []
+  token: ""
+  username: []
+rego:
+  data: []
+  namespaces: []
+  policy: []
+  skip-policy-update: false
+  trace: false
+report: all
+scan:
+  compliance: ""
+  file-patterns: []
+  offline: false
+  parallel: 1
+  rekor-url: https://rekor.sigstore.dev
+  sbom-sources: []
+  scanners:
+    - vuln
+    - secret
+  # ignore all hadoop dependencies
+  skip-dirs:
+    ./src/client/java/hadoop-daos
+  skip-files: []
+  show-suppressed: true
+secret:
+  config: trivy-secret.yaml
+server:
+  addr: ""
+  custom-headers: []
+  token: ""
+  token-header: Trivy-Token
+severity:
+  - UNKNOWN
+  - MEDIUM
+  - HIGH
+  - CRITICAL
+timeout: 5m0s
+version: false
+vulnerability:
+  ignore-status: []
+  ignore-unfixed: false
+  type:
+    - os
+    - library
