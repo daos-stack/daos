@@ -977,7 +977,7 @@ retry:
 					chained_rpc_priv->crp_ul_retry);
 			}
 		} else {
-			DL_INFO(rc, "URI_LOOKUP for (%d:%d) failed during PROTO_QUERY\n",
+			DL_INFO(rc, "URI_LOOKUP for (%d:%d) failed during PROTO_QUERY",
 				ul_in->ul_rank, ul_in->ul_tag);
 		}
 	}
