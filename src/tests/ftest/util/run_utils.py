@@ -613,7 +613,7 @@ def stop_processes(log, hosts, pattern, verbose=True, timeout=60, exclude=None, 
         log.debug(
             "Killing%s any processes on %s that match %s and then waiting %s seconds",
             step[0], result.passed_hosts, pattern_match, step[1])
-        kill_command = f"sudo /usr/bin/pkill{step[0]} {pattern}"
+        kill_command = f"sudo -n /usr/bin/pkill{step[0]} {pattern}"
         run_remote(log, result.passed_hosts, kill_command, verbose, timeout)
         time.sleep(step[1])
         result = run_remote(log, result.passed_hosts, command, verbose, timeout)
