@@ -968,10 +968,8 @@ retry:
 		/* PROTO_QUERY will be retried by the caller, no need to retry URI lookups */
 		if (chained_rpc_priv->crp_pub.cr_opc != CRT_OPC_PROTO_QUERY) {
 			if (chained_rpc_priv->crp_ul_retry++ < MAX_URI_LOOKUP_RETRIES) {
-				rc = crt_issue_uri_lookup_retry(lookup_rpc->cr_ctx,
-								grp_priv,
-								ul_in->ul_rank,
-								ul_in->ul_tag,
+				rc = crt_issue_uri_lookup_retry(lookup_rpc->cr_ctx, grp_priv,
+								ul_in->ul_rank, ul_in->ul_tag,
 								chained_rpc_priv);
 				D_GOTO(out, rc);
 			} else {
