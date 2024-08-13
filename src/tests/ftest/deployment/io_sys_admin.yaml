@@ -74,10 +74,10 @@ largefilecount:
   object_class:
     ior_oclass:          # Run once with SX and then with EC_16P2GX
       - SX
-      - EC_2P1GX
+      - EC_16P2GX        # Makito updated
     mdtest_oclass:       # Run once with S1 and then with EC_16P2G1
       - S1
-      - EC_2P1G1
+      - EC_16P2G1        # Makito updated
 ior:
   client_processes:
     ppn: 104
