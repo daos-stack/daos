@@ -638,9 +638,12 @@ func (cmd *PoolQueryCmd) Execute(args []string) error {
 	}
 
 	resp, err := control.PoolQuery(cmd.MustLogCtx(), cmd.ctlInvoker, req)
-
 	if cmd.JSONOutputEnabled() {
-		return cmd.OutputJSON(resp, err)
+		var poolInfo *daos.PoolInfo
+		if resp != nil {
+			poolInfo = &resp.PoolInfo
+		}
+		return cmd.OutputJSON(poolInfo, err)
 	}
 
 	if err != nil {

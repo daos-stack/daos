@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -41,7 +41,7 @@ class ServerRankFailure(IorTestBase):
                 Defaults to None, in which case infinite.
         """
         # Update the object class depending on the test case.
-        ior_cmd = IorCommand(namespace=namespace)
+        ior_cmd = IorCommand(self.test_env.log_dir, namespace=namespace)
         ior_cmd.get_params(self)
 
         # Standard IOR prep sequence.
@@ -184,7 +184,7 @@ class ServerRankFailure(IorTestBase):
 
         # 9. Call dmg pool query -b to find the disabled ranks.
         output = self.get_dmg_command().pool_query(pool=self.pool.identifier, show_disabled=True)
-        disabled_ranks = output["response"]["disabled_ranks"]
+        disabled_ranks = output["response"].get("disabled_ranks")
         self.log.info("Disabled ranks = %s", disabled_ranks)
 
         # 10. Call dmg pool reintegrate one rank at a time to enable all ranks.
