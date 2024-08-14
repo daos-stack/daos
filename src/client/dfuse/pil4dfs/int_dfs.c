@@ -157,8 +157,13 @@ static bool             no_dcache_in_bash = true;
 bool                    d_compatible_mode;
 static long int         page_size;
 
+#define FI_INI_NOT_RUNNING 0
+#define FI_INI_RUNNING     1
+
 #define DAOS_INIT_NOT_RUNNING 0
 #define DAOS_INIT_RUNNING     1
+
+static _Atomic uint64_t fi_ini_running;
 
 static long int         daos_initing;
 _Atomic bool            d_daos_inited;
@@ -466,6 +471,8 @@ static int (*next_posix_fallocate)(int fd, off_t offset, off_t len);
 static int (*next_posix_fallocate64)(int fd, off64_t offset, off64_t len);
 static int (*next_tcgetattr)(int fd, void *termios_p);
 /* end NOT supported by DAOS */
+
+static void (*next_fi_ini)(void);
 
 /* to do!! */
 /**
@@ -1027,6 +1034,28 @@ err:
 	return rc;
 }
 
+void
+fi_ini(void)
+{
+	uint64_t status_old = FI_INI_NOT_RUNNING;
+
+	if (next_fi_ini == NULL) {
+		next_fi_ini = dlsym(RTLD_NEXT, "fi_ini");
+		D_ASSERT(next_fi_ini != NULL);
+	}
+
+	if (!atomic_compare_exchange_weak(&fi_ini_running, &status_old, FI_INI_RUNNING)) {
+		D_DEBUG(DB_ANY, "Nested fi_ini() call is detected.\n");
+	}
+
+	next_fi_ini();
+
+	status_old = FI_INI_RUNNING;
+	if (!atomic_compare_exchange_weak(&fi_ini_running, &status_old, FI_INI_NOT_RUNNING)) {
+		D_DEBUG(DB_ANY, "fi_ini_running is supposed to be true.\n");
+	}
+}
+
 /** determine whether a path (both relative and absolute) is on DAOS or not. If yes,
  *  returns parent object, item name, full path of parent dir, full absolute path, and
  *  the pointer to struct dfs_mt.
@@ -1123,6 +1152,15 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 		if (atomic_load_relaxed(&d_daos_inited) == false) {
 			uint64_t status_old = DAOS_INIT_NOT_RUNNING;
 			bool     rc_cmp_swap;
+
+			/* Check whether fi_ini() is running. If yes, pass to the original
+			 * libc functions. Avoid possible fi_ini reentrancy/nested call.
+			 */
+
+			if (atomic_load_relaxed(&fi_ini_running) == FI_INI_RUNNING) {
+				*is_target_path = 0;
+				goto out_normal;
+			}
 
 			/* daos_init() is expensive to call. We call it only when necessary. */
 
