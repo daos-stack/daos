@@ -2282,6 +2282,9 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 			D_GOTO(exit, rc);
 		}
 	}
+	D_INFO("%sbulk transfer because size(%zu), inline limit(%u)\n",
+	       (local_bulk == CRT_BULK_NULL) ? "NO " : "",
+	       d_sgl_buf_size(iv_value), crt_gdata.cg_iv_inline_limit);
 
 	rc = crt_corpc_req_create(ivns_internal->cii_ctx,
 				  &ivns_internal->cii_grp_priv->gp_pub,
