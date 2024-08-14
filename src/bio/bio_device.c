@@ -794,8 +794,7 @@ set_timer_and_check_faulty(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr 
 		if (dev_info->bdi_traddr == NULL) {
 			D_ERROR("No transport address for dev:"DF_UUID", unable to verify state\n",
 				DP_UUID(dev_info->bdi_dev_id));
-			rc = -DER_INVAL;
-			goto out;
+			continue;
 		}
 
 		if (strcmp(dev_info->bdi_traddr, tr_addr) == 0) {
