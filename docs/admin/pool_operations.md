@@ -626,7 +626,7 @@ only updates pool map to include rank.
 
 NB: with "no_data_sync" enabled, containers will be turned to read-only, daos won't trigger
 rebuild to restore the pool data redundancy on the surviving storage engines if there are
-dead rank events.
+dead rank events. Drain and extend operations will not be allowed in this mode.
 
 ## Access Control Lists
 

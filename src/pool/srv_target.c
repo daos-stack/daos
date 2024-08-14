@@ -1779,6 +1779,29 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 	int		rc = 0;
 
 	if (buf != NULL) {
+		/* Debugging code, print out old and new map buffer important values */
+		if (pool->sp_map) {
+			struct pool_buf *old_buf = NULL;
+
+			rc = pool_buf_extract(pool->sp_map, &old_buf);
+			if (rc != 0) {
+				DL_ERROR(rc, DF_UUID ": failed to extract old map buf",
+					 DP_UUID(pool->sp_uuid));
+				return rc;
+			}
+			D_INFO(DF_UUID ": OLD: map_ver=%u, buf_size=%ld, components: %u/%u/%u/%u "
+				       "(nr/domain_nr/node_nr/target_nr)\n",
+			       DP_UUID(pool->sp_uuid), pool->sp_map_version,
+			       pool_buf_size(old_buf->pb_nr), old_buf->pb_nr, old_buf->pb_domain_nr,
+			       old_buf->pb_node_nr, old_buf->pb_target_nr);
+
+			pool_buf_free(old_buf);
+		}
+		D_INFO(DF_UUID ": NEW: map_ver=%u buf_size=%ld, components: %u/%u/%u/%u "
+			       "(pb_nr/pb_domain_nr/pb_node_nr/pb_target_nr)\n",
+		       DP_UUID(pool->sp_uuid), map_version, pool_buf_size(buf->pb_nr), buf->pb_nr,
+		       buf->pb_domain_nr, buf->pb_node_nr, buf->pb_target_nr);
+
 		rc = pool_map_create(buf, map_version, &map);
 		if (rc != 0) {
 			D_ERROR(DF_UUID" failed to create pool map: "DF_RC"\n",

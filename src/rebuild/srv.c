@@ -2109,26 +2109,42 @@ ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop)
 
 	rebuild_gst.rg_abort = 0;
 
-	if (pool->sp_reint_mode == DAOS_REINT_MODE_NO_DATA_SYNC) {
-		D_DEBUG(DB_REBUILD, DF_UUID" No data sync for reintegration\n",
-			DP_UUID(pool->sp_uuid));
+	/* NB: get reint_mode from prop, not (yet) from pool->sp_reint_mode, since IV distribution
+	 * of the pool properties may still be in progress and ds_pool_tgt_prop_update() may
+	 * not have been run yet.
+	 */
+	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_REINT_MODE);
+	D_ASSERT(entry != NULL);
+	if (entry->dpe_val == DAOS_REINT_MODE_NO_DATA_SYNC) {
+		D_INFO(DF_UUID ": self healing is disabled for no-data_sync reintegration mode.\n",
+		       DP_UUID(pool->sp_uuid));
 		return DER_SUCCESS;
 	}
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SELF_HEAL);
 	D_ASSERT(entry != NULL);
 	if (entry->dpe_val & (DAOS_SELF_HEAL_AUTO_REBUILD | DAOS_SELF_HEAL_DELAY_REBUILD)) {
+		D_INFO(DF_UUID ": self healing is enabled, %s rebuild (for any DOWN), "
+			       "immediate (for any DRAINING) tgts\n",
+		       DP_UUID(pool->sp_uuid),
+		       entry->dpe_val & DAOS_SELF_HEAL_DELAY_REBUILD ? "delayed" : "immediate");
 		rc = regenerate_task_of_type(pool, PO_COMP_ST_DOWN,
 					    entry->dpe_val & DAOS_SELF_HEAL_DELAY_REBUILD ? -1 : 0);
-		if (rc != 0)
+		if (rc != 0) {
+			DL_ERROR(rc, DF_UUID ": failed to generate exclude rebuild (DOWN tgts)",
+				 DP_UUID(pool->sp_uuid));
 			return rc;
+		}
 
 		rc = regenerate_task_of_type(pool, PO_COMP_ST_DRAIN, 0);
-		if (rc != 0)
+		if (rc != 0) {
+			DL_ERROR(rc, DF_UUID ": failed to generate rebuild (DRAINING tgts)",
+				 DP_UUID(pool->sp_uuid));
 			return rc;
+		}
 	} else {
-		D_DEBUG(DB_REBUILD, DF_UUID" self healing is disabled\n",
-			DP_UUID(pool->sp_uuid));
+		D_INFO(DF_UUID ": self healing is disabled due to self_heal property.\n",
+		       DP_UUID(pool->sp_uuid));
 	}
 
 	/* NB: some of the extending job might be regenerate as reintegrate
@@ -2141,6 +2157,7 @@ ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop)
 	 * discarding on an empty targets is harmless. So it is ok to use REINT to
 	 * do EXTEND here.
 	 */
+	D_INFO(DF_UUID ": generate rebuild (for any UP tgts)\n", DP_UUID(pool->sp_uuid));
 	rc = regenerate_task_of_type(pool, PO_COMP_ST_UP, 0);
 	if (rc != 0)
 		return rc;
