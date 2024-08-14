@@ -2280,12 +2280,11 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 			D_ERROR("ctt_bulk_create(): "DF_RC"\n", DP_RC(rc));
 			D_GOTO(exit, rc);
 		}
-		D_INFO("bulk transfer, size(%zu) > inline limit(%u)\n",
-		       d_sgl_buf_size(iv_value), crt_gdata.cg_iv_inline_limit);
-	} else {
-		D_INFO("NO bulk transfer, iv_value=%p, size(%zu), inline limit(%u)\n",
-		       iv_value, iv_value ? d_sgl_buf_size(iv_value) : 0,
+		D_INFO("bulk transfer, size(%zu) > inline limit(%u)\n", d_sgl_buf_size(iv_value),
 		       crt_gdata.cg_iv_inline_limit);
+	} else {
+		D_INFO("NO bulk transfer, iv_value=%p, size(%zu), inline limit(%u)\n", iv_value,
+		       iv_value ? d_sgl_buf_size(iv_value) : 0, crt_gdata.cg_iv_inline_limit);
 	}
 
 	rc = crt_corpc_req_create(ivns_internal->cii_ctx,
