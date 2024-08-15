@@ -1063,7 +1063,8 @@ class TestWithServers(TestWithoutServers):
         if group is None:
             group = self.server_group
         if config_file is None and self.agent_manager_class == "Systemctl":
-            config_file = get_default_config_file("agent")
+            # config_file = get_default_config_file("agent")
+            config_file = self.test_env.client_config
             config_temp = self.get_config_file(group, "agent", self.test_dir)
         elif config_file is None:
             config_file = self.get_config_file(group, "agent")
@@ -1113,14 +1114,16 @@ class TestWithServers(TestWithoutServers):
         if group is None:
             group = self.server_group
         if svr_config_file is None and self.server_manager_class == "Systemctl":
-            svr_config_file = get_default_config_file("server")
+            # svr_config_file = get_default_config_file("server")
+            svr_config_file = self.test_env.server_config
             svr_config_temp = self.get_config_file(
                 group, "server", self.test_dir)
         elif svr_config_file is None:
             svr_config_file = self.get_config_file(group, "server")
             svr_config_temp = None
         if dmg_config_file is None and self.server_manager_class == "Systemctl":
-            dmg_config_file = get_default_config_file("control")
+            # dmg_config_file = get_default_config_file("control")
+            dmg_config_file = self.test_env.control_config
             dmg_config_temp = self.get_config_file(group, "dmg", self.test_dir)
         elif dmg_config_file is None:
             dmg_config_file = self.get_config_file(group, "dmg")
@@ -1669,7 +1672,8 @@ class TestWithServers(TestWithoutServers):
             return self.server_managers[index].dmg
 
         if self.server_manager_class == "Systemctl":
-            dmg_config_file = get_default_config_file("control")
+            # dmg_config_file = get_default_config_file("control")
+            dmg_config_file = self.test_env.control_config
             dmg_config_temp = self.get_config_file("daos", "dmg", self.test_dir)
             dmg_cert_dir = os.path.join(os.sep, "etc", "daos", "certs")
         else:

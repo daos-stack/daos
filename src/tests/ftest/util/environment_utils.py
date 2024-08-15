@@ -109,6 +109,9 @@ class TestEnvironment():
         'daos_prefix': 'DAOS_TEST_PREFIX',
         'agent_user': 'DAOS_TEST_AGENT_USER',
         'systemd_library_path': 'DAOS_TEST_SYSTEMD_LIBRARY_PATH',
+        'control_config': 'DAOS_TEST_CONTROL_CONFIG',
+        'client_config': 'DAOS_TEST_CLIENT_CONFIG',
+        'server_config': 'DAOS_TEST_SERVER_CONFIG',
     }
 
     def __init__(self):
@@ -178,6 +181,12 @@ class TestEnvironment():
             self.agent_user = self._default_agent_user()
         if self.systemd_library_path is None:
             self.systemd_library_path = self._default_systemd_library_path()
+        if self.control_config is None:
+            self.control_config = self._default_control_config()
+        if self.client_config is None:
+            self.client_config = self._default_client_config()
+        if self.server_config is None:
+            self.server_config = self._default_server_config()
 
     def __set_value(self, key, value):
         """Set the test environment variable.
@@ -607,6 +616,84 @@ class TestEnvironment():
             str: the default systemd LD_LIBRARY_PATH
         """
         return None
+
+    @property
+    def control_config(self):
+        """Get the control config file used in testing.
+
+        Returns:
+            str: the control config file
+        """
+        return os.environ.get(self.__ENV_VAR_MAP['control_config'])
+
+    @control_config.setter
+    def control_config(self, value):
+        """Set the control config file used in testing.
+
+        Args:
+            value (str): the control config file
+        """
+        self.__set_value('control_config', value)
+
+    def _default_control_config(self):
+        """Get the default control config file used in testing.
+
+        Returns:
+            str: the the control config file
+        """
+        return os.path.join(self.log_dir, "configs", "daos_control.yml")
+
+    @property
+    def client_config(self):
+        """Get the client config file used in testing.
+
+        Returns:
+            str: the client config file
+        """
+        return os.environ.get(self.__ENV_VAR_MAP['client_config'])
+
+    @client_config.setter
+    def client_config(self, value):
+        """Set the client config file used in testing.
+
+        Args:
+            value (str): the client config file
+        """
+        self.__set_value('client_config', value)
+
+    def _default_client_config(self):
+        """Get the default client config file used in testing.
+
+        Returns:
+            str: the the client config file
+        """
+        return os.path.join(self.log_dir, "configs", "daos_agent.yml")
+
+    @property
+    def server_config(self):
+        """Get the server config file used in testing.
+
+        Returns:
+            str: the server config file
+        """
+        return os.environ.get(self.__ENV_VAR_MAP['server_config'])
+
+    @server_config.setter
+    def server_config(self, value):
+        """Set the server config file used in testing.
+
+        Args:
+            value (str): the server config file
+        """
+        self.__set_value('server_config', value)
+
+    def _default_server_config(self):
+        """Get the default server config file used in testing.
+
+        Returns:
+            str: the the server config file
+        """
+        return os.path.join(self.log_dir, "configs", "daos_server.yml")
 
 
 def set_test_environment(logger, test_env=None, servers=None, clients=None, provider=None,

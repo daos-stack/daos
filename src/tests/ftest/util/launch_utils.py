@@ -23,6 +23,7 @@ from util.results_utils import LaunchTestName
 from util.run_utils import RunException, run_local, run_remote
 from util.slurm_utils import create_partition, delete_partition, show_partition
 from util.storage_utils import StorageException, StorageInfo
+from util.systemctl_utils import SystemctlFailure, create_override_config
 from util.user_utils import get_group_id, get_user_groups, groupadd, useradd, userdel
 from util.yaml_utils import YamlUpdater, get_yaml_data
 
@@ -75,6 +76,37 @@ def setup_fuse_config(logger, hosts):
     for config in fuse_configs:
         if not run_remote(logger, hosts, command.format(config)).passed:
             raise LaunchException(f"Failed to setup {config}")
+
+
+def setup_systemctl(logger, servers, clients, test_env):
+    """Set up the systemctl override files for the daos_server and daos_agent.
+
+    Args:
+        logger (Logger): logger for the messages produced by this method
+        servers (NodeSet): hosts that may run the daos_server command
+        clients (NodeSet): hosts that may run the daos_agent command
+        test_env (TestEnvironment): the test environment
+
+    Raises:
+        LaunchException: if setup fails
+
+    Returns:
+        dict: a dictionary of systemctl override config file keys with NodeSet values identifying
+            the hosts on which to remove the config files at the end of testing
+    """
+    try:
+        server_config = create_override_config(
+            logger, servers, "daos_server.service", "root", "/usr/bin/daos_server",
+            test_env.server_config, test_env)
+    except SystemctlFailure as error:
+        raise LaunchException("Failed to setup systemctl config for daos_server") from error
+    try:
+        client_config = create_override_config(
+            logger, clients, "daos_agent.service", "root", "/usr/bin/daos_agent",
+            test_env.client_config, test_env)
+    except SystemctlFailure as error:
+        raise LaunchException("Failed to setup systemctl config for daos_agent") from error
+    return {server_config: servers, client_config: clients}
 
 
 def display_disk_space(logger, path):
@@ -1161,7 +1193,7 @@ class TestGroup():
 
     def run_tests(self, logger, result, repeat, slurm_setup, sparse, fail_fast, stop_daos, archive,
                   rename, jenkins_log, core_files, threshold, user_create, code_coverage,
-                  job_results_dir, logdir, clear_mounts):
+                  job_results_dir, logdir, clear_mounts, cleanup_files):
         # pylint: disable=too-many-arguments
         """Run all the tests.
 
@@ -1183,6 +1215,7 @@ class TestGroup():
             job_results_dir (str): avocado job-results directory
             logdir (str): base directory in which to place the log file
             clear_mounts (list): mount points to remove before each test
+            cleanup_files (dict): files to remove on specific hosts at the end of testing
 
         Returns:
             int: status code indicating any issues running tests
@@ -1232,6 +1265,11 @@ class TestGroup():
 
                 # Stop logging to the test log file
                 logger.removeHandler(test_file_handler)
+
+        # Cleanup any specified files at the end of testing
+        for file, hosts in cleanup_files.items():
+            if not run_remote(logger, hosts, f"rm -fr {file}"):
+                return_code |= 16
 
         # Collect code coverage files after all test have completed
         if not code_coverage.finalize(logger, job_results_dir, result.tests[0]):
