@@ -74,7 +74,7 @@ jobs:
       DISTRO_VERSION_MAJOR: "8"
       OPENMPI: "openmpi"
       DISTRO: "el8"
-      DAOS_STACK_el8_LOCAL_REPO: "not_used"
+      DAOS_STACK_EL_7_LOCAL_REPO: "not_used"
 
 
     steps:
