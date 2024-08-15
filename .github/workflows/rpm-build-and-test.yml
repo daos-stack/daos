@@ -215,6 +215,7 @@ jobs:
       CP_EL8_VERSION:
       CP_EL9_VERSION:
       CP_LEAP15_VERSION:
+      CP_RPM_TEST_VERSION:
       DISTRO:
       CLUSTER_REQUEST_reqid:
       STAGE_NAME:
@@ -252,6 +253,8 @@ jobs:
             # TODO: replace 'master' below with the actual [target, in the case of PRs] branch name
             if [ -n '${{ inputs.rpm-test-version }}' ]; then
                 DAOS_VERSION='-${{ inputs.rpm-test-version }}'
+            elif [ -n "${{ env.CP_RPM_TEST_VERSION }}" ]; then
+                DAOS_VERSION="-${{ env.CP_RPM_TEST_VERSION }}"
             else
                 DAOS_VERSION=" < ${{ env.NEXT_VERSION_master }}"
             fi
