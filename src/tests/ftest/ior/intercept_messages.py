@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -32,7 +32,7 @@ class IorInterceptMessages(IorTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=daosio,dfuse,il,ior,ior_intercept
+        :avocado: tags=daosio,dfuse,ioil,ior,ior_intercept
         :avocado: tags=IorInterceptMessages,test_ior_intercept_messages
         """
         d_il_report_value = self.params.get("value", "/run/tests/D_IL_REPORT/*")
