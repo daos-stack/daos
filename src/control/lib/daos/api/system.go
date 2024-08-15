@@ -17,7 +17,7 @@ import (
 /*
 #include <daos_mgmt.h>
 
-#cgo LDFLAGS: -ldaos
+#cgo LDFLAGS: -lcart -lgurt -ldaos -ldaos_common
 */
 import "C"
 

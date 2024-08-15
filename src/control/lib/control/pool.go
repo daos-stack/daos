@@ -199,19 +199,16 @@ type (
 	// PoolCreateReq contains the parameters for a pool create request.
 	PoolCreateReq struct {
 		poolRequest
-		User       string
-		UserGroup  string
-		ACL        *AccessControlList `json:"-"`
-		NumSvcReps uint32
+		User       string               `json:"user"`
+		UserGroup  string               `json:"user_group"`
+		ACL        *AccessControlList   `json:"-"`
+		NumSvcReps uint32               `json:"num_svc_reps"`
 		Properties []*daos.PoolProperty `json:"-"`
-		// auto-config params
-		TotalBytes uint64
-		TierRatio  []float64
-		NumRanks   uint32
-		// manual params
-		Ranks     []ranklist.Rank
-		TierBytes []uint64
-		MetaBytes uint64 `json:"meta_blob_size"`
+		TotalBytes uint64               `json:"total_bytes"` // Auto-sizing param
+		TierRatio  []float64            `json:"tier_ratio"`  // Auto-sizing param
+		NumRanks   uint32               `json:"num_ranks"`   // Auto-sizing param
+		Ranks      []ranklist.Rank      `json:"ranks"`       // Manual-sizing param
+		TierBytes  []uint64             `json:"tier_bytes"`  // Per-rank values
 	}
 
 	// PoolCreateResp contains the response from a pool create request.
@@ -220,7 +217,7 @@ type (
 		Leader    uint32   `json:"svc_ldr"`
 		SvcReps   []uint32 `json:"svc_reps"`
 		TgtRanks  []uint32 `json:"tgt_ranks"`
-		TierBytes []uint64 `json:"tier_bytes"`
+		TierBytes []uint64 `json:"tier_bytes"` // Per-rank storage tier sizes
 	}
 )
 
@@ -732,7 +729,7 @@ type PoolExcludeReq struct {
 	poolRequest
 	ID        string
 	Rank      ranklist.Rank
-	Targetidx []uint32
+	TargetIdx []uint32
 }
 
 // ExcludeResp has no other parameters other than success/failure for now.
@@ -745,7 +742,7 @@ func PoolExclude(ctx context.Context, rpcClient UnaryInvoker, req *PoolExcludeRe
 		Sys:       req.getSystem(rpcClient),
 		Id:        req.ID,
 		Rank:      req.Rank.Uint32(),
-		Targetidx: req.Targetidx,
+		TargetIdx: req.TargetIdx,
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolExclude(ctx, pbReq)
@@ -765,7 +762,7 @@ type PoolDrainReq struct {
 	poolRequest
 	ID        string
 	Rank      ranklist.Rank
-	Targetidx []uint32
+	TargetIdx []uint32
 }
 
 // DrainResp has no other parameters other than success/failure for now.
@@ -778,7 +775,7 @@ func PoolDrain(ctx context.Context, rpcClient UnaryInvoker, req *PoolDrainReq) e
 		Sys:       req.getSystem(rpcClient),
 		Id:        req.ID,
 		Rank:      req.Rank.Uint32(),
-		Targetidx: req.Targetidx,
+		TargetIdx: req.TargetIdx,
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolDrain(ctx, pbReq)
@@ -837,7 +834,7 @@ type PoolReintegrateReq struct {
 	poolRequest
 	ID        string
 	Rank      ranklist.Rank
-	Targetidx []uint32
+	TargetIdx []uint32
 }
 
 // ReintegrateResp has no other parameters other than success/failure for now.
@@ -850,7 +847,7 @@ func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolReint
 		Sys:       req.getSystem(rpcClient),
 		Id:        req.ID,
 		Rank:      req.Rank.Uint32(),
-		Targetidx: req.Targetidx,
+		TargetIdx: req.TargetIdx,
 	}
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
