@@ -60,6 +60,6 @@ runs:
         ARTIFACTS_URL="$ARTIFACTS_URL"                                    \
         INST_REPOS="$(eval echo "$inst_repos")"                           \
         CI_RPM_TEST_VERSION="$rpm_test_version"                           \
-        DAOS_VERSION="DAOS_VERSION"                                       \
+        DAOS_VERSION="$DAOS_VERSION"                                      \
         DISTRO=$PROVISION_DISTRO ci/provisioning/post_provision_config.sh
         echo "::endgroup::"
