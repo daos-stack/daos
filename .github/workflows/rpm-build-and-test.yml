@@ -9,6 +9,7 @@ env:
   EL9_BUILD_VERSION: 9
   EL9_VERSION: 9
   LEAP15_VERSION: 15.5
+  NEXT_VERSION_master: 1000
   # Which distros to build for
   DISTROS: el8 el9 leap15
   TEST_TAG: pr
@@ -241,7 +242,15 @@ jobs:
             env
             STAGE_TAGS="vm"
             FTEST_ARG=""
-            INST_RPMS="daos-client daos-tests daos-server daos-serialize daos-tests-internal"
+            TARGET=${{ github.event_name == 'pull_request' &&
+                       github.event.pull_request.base.ref || github.ref }}
+            TARGET="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+            # TODO: replace 'master' below with the actual [target, in the case of PRs] branch name
+            INST_RPMS="daos-client < ${{ env.NEXT_VERSION_master }}    \
+                       daos-tests < ${{ env.NEXT_VERSION_master }}     \
+                       daos-server < ${{ env.NEXT_VERSION_master }}    \
+                       daos-serialize < ${{ env.NEXT_VERSION_master }} \
+                       daos-tests-internal"
             case '${{ matrix.distro }}' in
                 'el8')
                     CHROOT_NAME="rocky+epel-8-x86_64"
