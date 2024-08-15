@@ -244,15 +244,16 @@ jobs:
             FTEST_ARG=""
             TARGET=${{ github.event_name == 'pull_request' &&
                        github.event.pull_request.base.ref || github.ref }}
+            echo ${{ format('{0}', github.event.pull_request.base.ref) }}
             echo "NEXT_VERSION == \"${{ env.NEXT_VERSION_[format('{0}',
                                                          github.event.pull_request.base.ref)] }}\""
             TARGET="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
             # TODO: replace 'master' below with the actual [target, in the case of PRs] branch name
-            INST_RPMS="daos-client\<${{ env.NEXT_VERSION_master }}          \
-                       daos-tests\<${{ env.NEXT_VERSION_master }}           \
-                       daos-server\<${{ env.NEXT_VERSION_master }}          \
-                       daos-serialize\<${{ env.NEXT_VERSION_master }}       \
-                       daos-tests-internal\<${{ env.NEXT_VERSION_master }}"
+            INST_RPMS="daos-client\ \<\ ${{ env.NEXT_VERSION_master }}          \
+                       daos-tests\ \<\ ${{ env.NEXT_VERSION_master }}           \
+                       daos-server\ \<\ ${{ env.NEXT_VERSION_master }}          \
+                       daos-serialize\ \<\ ${{ env.NEXT_VERSION_master }}       \
+                       daos-tests-internal\ \<\ ${{ env.NEXT_VERSION_master }}"
             case '${{ matrix.distro }}' in
                 'el8')
                     CHROOT_NAME="rocky+epel-8-x86_64"
@@ -517,11 +518,11 @@ jobs:
         run: |
             STAGE_TAGS="hw"
             FTEST_ARG="--nvme=auto:-3DNAND"
-            INST_RPMS="daos-client\<${{ env.NEXT_VERSION_master }}          \
-                       daos-tests\<${{ env.NEXT_VERSION_master }}           \
-                       daos-server\<${{ env.NEXT_VERSION_master }}          \
-                       daos-serialize\<${{ env.NEXT_VERSION_master }}       \
-                       daos-tests-internal\<${{ env.NEXT_VERSION_master }}"
+            INST_RPMS="daos-client\ \<\ ${{ env.NEXT_VERSION_master }}          \
+                       daos-tests\ \<\ ${{ env.NEXT_VERSION_master }}           \
+                       daos-server\ \<\ ${{ env.NEXT_VERSION_master }}          \
+                       daos-serialize\ \<\ ${{ env.NEXT_VERSION_master }}       \
+                       daos-tests-internal\ \<\ ${{ env.NEXT_VERSION_master }}"
             CHROOT_NAME="rocky+epel-8-x86_64"
             DISTRO_NAME="EL"
             DISTRO_NAME_UPPER="EL"
