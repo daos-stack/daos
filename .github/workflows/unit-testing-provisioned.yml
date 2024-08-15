@@ -61,6 +61,7 @@ jobs:
     env:
       OPERATIONS_EMAIL: ryon.jensen@intel.com
       JENKINS_URL: https://build.hpdd.intel.com/
+      LABEL: ci_vm9
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
