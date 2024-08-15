@@ -1703,6 +1703,18 @@ bio_nvme_ctl(unsigned int cmd, void *arg)
 	return rc;
 }
 
+static inline void
+reset_media_errors(struct bio_blobstore *bbs)
+{
+	struct nvme_stats	*dev_stats = &bbs->bb_dev_health.bdh_health_state;
+
+	dev_stats->bio_read_errs = 0;
+	dev_stats->bio_write_errs = 0;
+	dev_stats->bio_unmap_errs = 0;
+	dev_stats->checksum_errs = 0;
+	bbs->bb_faulty_done = 0;
+}
+
 void
 setup_bio_bdev(void *arg)
 {
@@ -1734,6 +1746,7 @@ setup_bio_bdev(void *arg)
 		goto out;
 	}
 
+	reset_media_errors(bbs);
 	rc = bio_bs_state_set(bbs, BIO_BS_STATE_SETUP);
 	D_ASSERT(rc == 0);
 out:
