@@ -73,6 +73,7 @@ jobs:
       DISTRO_NAME_LOWER: "el"
       DISTRO_VERSION_MAJOR: "8"
       OPENMPI: "openmpi"
+      DAOS_STACK_el8_LOCAL_REPO: "not_used"
 
     steps:
       - name: Checkout code
