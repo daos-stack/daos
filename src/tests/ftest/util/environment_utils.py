@@ -108,7 +108,8 @@ class TestEnvironment():
         'bullseye_file': 'COVFILE',
         'daos_prefix': 'DAOS_TEST_PREFIX',
         'agent_user': 'DAOS_TEST_AGENT_USER',
-        'systemd_library_path': 'DAOS_TEST_SYSTEMD_LIBRARY_PATH',
+        'systemd_path': 'DAOS_TEST_SYSTEMD_PATH',
+        'systemd_ld_library_path': 'DAOS_TEST_SYSTEMD_LD_LIBRARY_PATH',
     }
 
     def __init__(self):
@@ -116,7 +117,7 @@ class TestEnvironment():
         self.set_defaults(None)
 
     def set_defaults(self, logger, servers=None, clients=None, provider=None, insecure_mode=None,
-                     agent_user=None, log_dir=None, systemd_lib_path=None):
+                     agent_user=None, log_dir=None, systemd_path=None, systemd_lib_path=None):
         """Set the default test environment variable values with optional inputs.
 
         Args:
@@ -131,7 +132,9 @@ class TestEnvironment():
             agent_user (str, optional): user account to use when running the daos_agent. Defaults
                 to None.
             log_dir (str, optional): test log directory base path. Defaults to None.
-            systemd_lib_path (str, optional): systemd library path. Defaults to None.
+            systemd_path (str, optional): systemd PATH to use in testing. Defaults to None.
+            systemd_lib_path (str, optional): systemd LD_LIBRARY_PATH to use in testing. Defaults
+                to None.
 
         Raises:
             TestEnvironmentException: if there are any issues setting environment variable default
@@ -150,8 +153,10 @@ class TestEnvironment():
             self.insecure_mode = insecure_mode
         if agent_user is not None:
             self.agent_user = agent_user
+        if systemd_path is not None:
+            self.systemd_path = systemd_path
         if systemd_lib_path is not None:
-            self.systemd_library_path = systemd_lib_path
+            self.systemd_ld_library_path = systemd_lib_path
 
         # Set defaults for any unset values
         if self.log_dir is None:
@@ -176,8 +181,10 @@ class TestEnvironment():
             self.daos_prefix = self._default_daos_prefix(logger)
         if self.agent_user is None:
             self.agent_user = self._default_agent_user()
-        if self.systemd_library_path is None:
-            self.systemd_library_path = self._default_systemd_library_path()
+        if self.systemd_path is None:
+            self.systemd_path = self._default_systemd_path()
+        if self.systemd_ld_library_path is None:
+            self.systemd_ld_library_path = self._default_systemd_ld_library_path()
 
     def __set_value(self, key, value):
         """Set the test environment variable.
@@ -582,25 +589,25 @@ class TestEnvironment():
         return 'root'
 
     @property
-    def systemd_library_path(self):
+    def systemd_ld_library_path(self):
         """Get the systemd LD_LIBRARY_PATH.
 
         Returns:
             str: the systemd LD_LIBRARY_PATH
         """
-        return os.environ.get(self.__ENV_VAR_MAP['systemd_library_path'])
+        return os.environ.get(self.__ENV_VAR_MAP['systemd_ld_library_path'])
 
-    @systemd_library_path.setter
-    def systemd_library_path(self, value):
+    @systemd_ld_library_path.setter
+    def systemd_ld_library_path(self, value):
         """Set the systemd LD_LIBRARY_PATH.
 
         Args:
             value (str): the systemd LD_LIBRARY_PATH
         """
-        self.__set_value('systemd_library_path', value)
+        self.__set_value('systemd_ld_library_path', value)
 
     @staticmethod
-    def _default_systemd_library_path():
+    def _default_systemd_ld_library_path():
         """Get the default systemd LD_LIBRARY_PATH.
 
         Returns:
@@ -608,10 +615,37 @@ class TestEnvironment():
         """
         return None
 
+    @property
+    def systemd_path(self):
+        """Get the systemd PATH.
+
+        Returns:
+            str: the systemd PATH
+        """
+        return os.environ.get(self.__ENV_VAR_MAP['systemd_path'])
+
+    @systemd_path.setter
+    def systemd_path(self, value):
+        """Set the systemd PATH.
+
+        Args:
+            value (str): the systemd PATH
+        """
+        self.__set_value('systemd_path', value)
+
+    @staticmethod
+    def _default_systemd_path():
+        """Get the default systemd PATH.
+
+        Returns:
+            str: the default systemd PATH
+        """
+        return None
+
 
 def set_test_environment(logger, test_env=None, servers=None, clients=None, provider=None,
                          insecure_mode=False, details=None, agent_user=None, log_dir=None,
-                         systemd_lib_path=None):
+                         systemd_path=None, systemd_lib_path=None):
     """Set up the test environment.
 
     Args:
@@ -629,7 +663,9 @@ def set_test_environment(logger, test_env=None, servers=None, clients=None, prov
         agent_user (str, optional): user account to use when running the daos_agent. Defaults to
             None.
         log_dir (str, optional): test log directory base path. Defaults to None.
-        systemd_lib_path (str, optional): systemd library path. Defaults to None.
+        systemd_path (str, optional): systemd PATH to use w/ tests. Defaults to None.
+        systemd_lib_path (str, optional): systemd LD_LIBRARY_PATH to use in testing. Defaults
+                to None.
 
     Raises:
         TestEnvironmentException: if there is a problem setting up the test environment
@@ -641,7 +677,7 @@ def set_test_environment(logger, test_env=None, servers=None, clients=None, prov
     if test_env:
         # Get the default fabric interface, provider, and daos prefix
         test_env.set_defaults(
-            logger, servers, clients, provider, insecure_mode, agent_user, log_dir,
+            logger, servers, clients, provider, insecure_mode, agent_user, log_dir, systemd_path,
             systemd_lib_path)
         logger.info("Testing with interface:   %s", test_env.interface)
         logger.info("Testing with provider:    %s", test_env.provider)
