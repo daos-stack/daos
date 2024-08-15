@@ -42,11 +42,6 @@ jobs:
           submodules: true
           fetch-depth: 500
           ref: ${{ github.event.pull_request.head.sha }}
-#      - name: Request and Provision a Cluster
-#        timeout-minutes: 7200
-#        uses: ./.github/actions/provision-cluster
-#        with:
-#          condition: env.CP_SKIP_FUNC_TEST-${{ env.DISTRO }} != 'true' && env.CP_SKIP_FUNC_TEST != 'true'
       - name: Run Ryon's Simple Script
         timeout-minutes: 7200
         id: run-test
@@ -55,7 +50,7 @@ jobs:
           ci/functional/ryon.sh
 
   Job_2:
-    name: Job 2
+    name: Provisioning Job
     runs-on: [self-hosted, wolf]
     permissions:
       statuses: write
@@ -65,6 +60,7 @@ jobs:
     timeout-minutes: 7200
     env:
       OPERATIONS_EMAIL: ryon.jensen@intel.com
+      JENKINS_URL: https://build.hpdd.intel.com/
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
