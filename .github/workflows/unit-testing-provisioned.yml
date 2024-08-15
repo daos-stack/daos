@@ -117,7 +117,7 @@ jobs:
           fetch-depth: 500
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Request and Provision a Cluster
-        if: ${{ inputs.condition }}
+#        if: ${{ inputs.condition }}
         shell: bash
         run: |
           . ci/gha_functions.sh
@@ -134,13 +134,13 @@ jobs:
                exit 1
           fi
       - name: Wait for nodes to be ready
-        if: ${{ inputs.condition }}
+#        if: ${{ inputs.condition }}
         shell: bash
         run: . ci/gha_functions.sh;
           set -eux;
           wait_nodes_ready
       - name: Post-provision cluster
-        if: ${{ inputs.condition }}
+#        if: ${{ inputs.condition }}
         shell: bash
         run: |
           . ci/gha_functions.sh
