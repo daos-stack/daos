@@ -2739,9 +2739,6 @@ shard_auxi_set_param(struct shard_auxi_args *shard_arg, uint32_t map_ver,
 		     uint32_t shard, uint32_t tgt_id, struct dtx_epoch *epoch,
 		     uint16_t ec_tgt_idx)
 {
-	/* Reset @enqueue_id if target changed */
-	if (shard_arg->target != tgt_id)
-		shard_arg->enqueue_id = 0;
 	shard_arg->epoch = *epoch;
 	shard_arg->shard = shard;
 	shard_arg->target = tgt_id;
@@ -6910,14 +6907,13 @@ shard_query_key_task(tse_task_t *task)
 					     &auxi->map_ver_reply, args->kqa_dcts, args->kqa_dct_nr,
 					     auxi->cq_args.cqa_coa.coa_max_dct_sz,
 					     auxi->cq_args.cqa_cur.grp_nr, th, task,
-					     &auxi->max_delay, &args->kqa_auxi.enqueue_id);
+					     &auxi->max_delay);
 	else
 		rc = dc_obj_shard_query_key(obj_shard, epoch, api_args->flags, auxi->map_ver_req,
 					    obj, api_args->dkey, api_args->akey, api_args->recx,
 					    api_args->max_epoch, args->kqa_coh_uuid,
 					    args->kqa_cont_uuid, &args->kqa_dti,
-					    &auxi->map_ver_reply, th, task, &auxi->max_delay,
-					    &args->kqa_auxi.enqueue_id);
+					    &auxi->map_ver_reply, th, task, &auxi->max_delay);
 
 	return rc;
 }
@@ -6954,10 +6950,6 @@ queue_shard_query_key_task(tse_task_t *api_task, struct obj_auxi_args *obj_auxi,
 	rc = obj_shard2tgtid(obj, shard, map_ver, &target);
 	if (rc != 0)
 		D_GOTO(out_task, rc);
-
-	/* Reset @enqueue_id if target changed */
-	if (target != args->kqa_auxi.target)
-		args->kqa_auxi.enqueue_id = 0;
 
 	args->kqa_auxi.target = target;
 

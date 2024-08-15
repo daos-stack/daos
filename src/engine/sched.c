@@ -1196,6 +1196,7 @@ policy_fifo_enqueue(struct dss_xstream *dx, struct sched_request *req,
 	 */
 	if (attr->sra_flags & SCHED_REQ_FL_RESENT) {
 		D_ASSERT(attr->sra_enqueue_id > 0);
+		D_ASSERT(0);
 		return d_binheap_insert(&info->si_heap, &req->sr_node);
 	}
 

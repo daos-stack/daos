@@ -1302,7 +1302,6 @@ agg_peer_update_ult(void *arg)
 	struct dc_object	*obj = NULL;
 	crt_rpc_t		*rpc = NULL;
 	int			 rc = 0;
-	uint64_t		 enqueue_id;
 	uint32_t		 max_delay = 0;
 
 	if (unlikely(DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG_PEER_FAIL)))
@@ -1320,8 +1319,7 @@ agg_peer_update_ult(void *arg)
 		D_ASSERT(entry->ae_peer_pshards[peer].sd_rank != DAOS_TGT_IGNORE);
 		tgt_ep.ep_rank = entry->ae_peer_pshards[peer].sd_rank;
 		tgt_ep.ep_tag = entry->ae_peer_pshards[peer].sd_tgt_idx;
-		enqueue_id = 0;
-retry:
+
 		rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
 				    DAOS_OBJ_RPC_EC_AGGREGATE, &rpc);
 		if (rc) {
@@ -1342,7 +1340,6 @@ retry:
 		ec_agg_in->ea_oid = entry->ae_oid;
 		peer_shard = obj_ec_parity_shard(obj, entry->ae_dkey_hash,
 						 shard / obj_ec_tgt_nr(&entry->ae_oca), peer);
-		ec_agg_in->ea_comm_in.req_in_enqueue_id = enqueue_id;
 		ec_agg_in->ea_oid.id_shard = peer_shard;
 		ec_agg_in->ea_dkey = entry->ae_dkey;
 		ec_agg_in->ea_epoch_range.epr_lo = agg_param->ap_epr.epr_lo;
@@ -1419,11 +1416,6 @@ retry:
 			D_ERROR(DF_UOID" pidx %d to peer %d, ea_status "
 				DF_RC"\n", DP_UOID(entry->ae_oid), pidx, peer,
 				DP_RC(rc));
-			if (rc == -DER_OVERLOAD_RETRY) {
-				enqueue_id = ec_agg_out->ea_comm_out.req_out_enqueue_id;
-				dss_sleep(daos_rpc_rand_delay(max_delay) << 10);
-				goto retry;
-			}
 			break;
 		}
 	}
@@ -1558,7 +1550,6 @@ agg_process_holes_ult(void *arg)
 	uint32_t		 peer;
 	int			 i, rc = 0;
 	uint32_t		 max_delay = 0;
-	uint64_t		 enqueue_id;
 
 	stripe_ud->asu_valid_hole = false;
 	/* Process extent list to find what to re-replicate -- build recx array
@@ -1665,8 +1656,6 @@ agg_process_holes_ult(void *arg)
 			}
 		}
 
-		enqueue_id = 0;
-retry:
 		D_ASSERT(entry->ae_peer_pshards[peer].sd_rank != DAOS_TGT_IGNORE);
 		tgt_ep.ep_rank = entry->ae_peer_pshards[peer].sd_rank;
 		tgt_ep.ep_tag = entry->ae_peer_pshards[peer].sd_tgt_idx;
@@ -1699,7 +1688,6 @@ retry:
 		ec_rep_in->er_epoch_range.epr_hi = entry->ae_cur_stripe.as_hi_epoch;
 		ec_rep_in->er_map_ver = agg_param->ap_pool_info.api_pool->sp_map_version;
 		ec_rep_in->er_bulk = bulk_hdl;
-		ec_rep_in->er_comm_in.req_in_enqueue_id = enqueue_id;
 		crt_req_get_timeout(rpc, &max_delay);
 		rc = dss_rpc_send(rpc);
 		if (rc) {
@@ -1714,11 +1702,6 @@ retry:
 		if (rc) {
 			D_ERROR(DF_UOID" peer %d er_status failed "DF_RC"\n",
 				DP_UOID(entry->ae_oid), peer, DP_RC(rc));
-			if (rc == -DER_OVERLOAD_RETRY) {
-				enqueue_id = ec_rep_out->er_comm_out.req_out_enqueue_id;
-				dss_sleep(daos_rpc_rand_delay(max_delay) << 10);
-				goto retry;
-			}
 			break;
 		}
 	}

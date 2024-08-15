@@ -1049,44 +1049,6 @@ out:
 }
 
 static int
-crt_proc_struct_daos_req_comm_in(crt_proc_t proc, crt_proc_op_t proc_op,
-				 struct daos_req_comm_in *drci)
-{
-	int	rc;
-	int	i;
-
-	rc = crt_proc_uint64_t(proc, proc_op, &drci->req_in_enqueue_id);
-	if (unlikely(rc))
-		return rc;
-	for (i = 0; i < 4; i++) {
-		rc = crt_proc_uint64_t(proc, proc_op, &drci->req_in_paddings[i]);
-		if (rc)
-			return rc;
-	}
-
-	return rc;
-}
-
-static int
-crt_proc_struct_daos_req_comm_out(crt_proc_t proc, crt_proc_op_t proc_op,
-				  struct daos_req_comm_out *drco)
-{
-	int	i;
-	int	rc;
-
-	rc = crt_proc_uint64_t(proc, proc_op, &drco->req_out_enqueue_id);
-	if (unlikely(rc))
-		return rc;
-	for (i = 0; i < 4; i++) {
-		rc = crt_proc_uint64_t(proc, proc_op, &drco->req_out_paddings[i]);
-		if (unlikely(rc))
-			return rc;
-	}
-
-	return 0;
-}
-
-static int
 crt_proc_struct_obj_dtx_mbs(crt_proc_t proc, crt_proc_op_t proc_op,
 			    struct obj_dtx_mbs *odm)
 {

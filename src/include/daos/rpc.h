@@ -119,21 +119,6 @@ enum daos_rpc_type {
 	DAOS_REQ_CHK,
 };
 
-struct daos_req_comm_in {
-	/** Enqueue ID of the request on the server side, for server overloaded retry */
-	uint64_t	req_in_enqueue_id;
-	/** Reserved for future extension */
-	uint64_t	req_in_paddings[4];
-};
-
-struct daos_req_comm_out {
-	/** Enqueue ID of the request returned to client, for server overloaded retry */
-	uint64_t	req_out_enqueue_id;
-	/** Reserved for future extension */
-	uint64_t	req_out_paddings[4];
-};
-
-
 /** DAOS_TGT0_OFFSET is target 0's cart context offset */
 #define DAOS_TGT0_OFFSET		(2)
 /** The cart context index of target index */

@@ -195,11 +195,6 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 	case DAOS_OBJ_RPC_FETCH: {
 		struct obj_rw_in	*orw = crt_req_get(rpc);
 
-		if (proto_ver >= 10) {
-			struct obj_rw_v10_in *orw_v10 = crt_req_get(rpc);
-
-			attr->sra_enqueue_id = orw_v10->orw_comm_in.req_in_enqueue_id;
-		}
 		sched_req_attr_init(attr, obj_rpc_is_update(rpc) ?
 				    SCHED_REQ_UPDATE : SCHED_REQ_FETCH,
 				    &orw->orw_pool_uuid);
@@ -208,7 +203,6 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 	case DAOS_OBJ_RPC_MIGRATE: {
 		struct obj_migrate_in *omi = crt_req_get(rpc);
 
-		attr->sra_enqueue_id = omi->om_comm_in.req_in_enqueue_id;
 		sched_req_attr_init(attr, SCHED_REQ_MIGRATE, &omi->om_pool_uuid);
 		break;
 	}
@@ -225,11 +219,6 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 	case DAOS_OBJ_RECX_RPC_ENUMERATE: {
 		struct obj_key_enum_in *oei = crt_req_get(rpc);
 
-		if (proto_ver >= 10) {
-			struct obj_key_enum_v10_in *oei_v10 = crt_req_get(rpc);
-
-			attr->sra_enqueue_id = oei_v10->oei_comm_in.req_in_enqueue_id;
-		}
 		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &oei->oei_pool_uuid);
 		break;
 	}
@@ -241,58 +230,36 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 	case DAOS_OBJ_RPC_TGT_PUNCH_AKEYS: {
 		struct obj_punch_in *opi = crt_req_get(rpc);
 
-		if (proto_ver >= 10) {
-			struct obj_punch_v10_in *opi_v10 = crt_req_get(rpc);
-
-			attr->sra_enqueue_id = opi_v10->opi_comm_in.req_in_enqueue_id;
-		}
 		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &opi->opi_pool_uuid);
 		break;
 	}
 	case DAOS_OBJ_RPC_QUERY_KEY: {
 		struct obj_query_key_in *okqi = crt_req_get(rpc);
 
-		if (proto_ver >= 10) {
-			struct obj_query_key_v10_in *okqi_v10 = crt_req_get(rpc);
-
-			attr->sra_enqueue_id = okqi_v10->okqi_comm_in.req_in_enqueue_id;
-		}
 		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &okqi->okqi_pool_uuid);
 		break;
 	}
 	case DAOS_OBJ_RPC_SYNC: {
 		struct obj_sync_in *osi = crt_req_get(rpc);
 
-		if (proto_ver >= 10) {
-			struct obj_sync_v10_in *osi_v10 = crt_req_get(rpc);
-
-			attr->sra_enqueue_id = osi_v10->osi_comm_in.req_in_enqueue_id;
-		}
 		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &osi->osi_pool_uuid);
 		break;
 	}
 	case DAOS_OBJ_RPC_KEY2ANCHOR: {
 		struct obj_key2anchor_in *oki = crt_req_get(rpc);
 
-		if (proto_ver >= 10) {
-			struct obj_key2anchor_v10_in *oki_v10 = crt_req_get(rpc);
-
-			attr->sra_enqueue_id = oki_v10->oki_comm_in.req_in_enqueue_id;
-		}
 		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &oki->oki_pool_uuid);
 		break;
 	}
 	case DAOS_OBJ_RPC_EC_AGGREGATE: {
 		struct obj_ec_agg_in *ea = crt_req_get(rpc);
 
-		attr->sra_enqueue_id = ea->ea_comm_in.req_in_enqueue_id;
 		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &ea->ea_pool_uuid);
 		break;
 	}
 	case DAOS_OBJ_RPC_EC_REPLICATE: {
 		struct obj_ec_rep_in *er = crt_req_get(rpc);
 
-		attr->sra_enqueue_id = er->er_comm_in.req_in_enqueue_id;
 		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &er->er_pool_uuid);
 		break;
 	}
@@ -305,14 +272,12 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 	case DAOS_OBJ_RPC_COLL_PUNCH: {
 		struct obj_coll_punch_in *ocpi = crt_req_get(rpc);
 
-		attr->sra_enqueue_id = ocpi->ocpi_comm_in.req_in_enqueue_id;
 		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &ocpi->ocpi_po_uuid);
 		break;
 	}
 	case DAOS_OBJ_RPC_COLL_QUERY: {
 		struct obj_coll_query_in *ocqi = crt_req_get(rpc);
 
-		attr->sra_enqueue_id = ocqi->ocqi_comm_in.req_in_enqueue_id;
 		sched_req_attr_init(attr, SCHED_REQ_ANONYM, &ocqi->ocqi_po_uuid);
 		break;
 	}
@@ -322,12 +287,8 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 		break;
 	}
 
-	/*
-	 * Proto v9 doesn't support hint return cart timeout for retry
-	 * skip RPC rejections for them.
-	 */
-	if (proto_ver == 9)
-		attr->sra_flags |= SCHED_REQ_FL_NO_REJECT;
+	/* disable RPC throttle */
+	attr->sra_flags |= SCHED_REQ_FL_NO_REJECT;
 
 	return rc;
 }
@@ -335,11 +296,11 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 static int
 obj_set_req(crt_rpc_t *rpc, struct sched_req_attr *attr)
 {
+	/*
 	int	opc = opc_get(rpc->cr_opc);
 	int	proto_ver = crt_req_get_proto_ver(rpc);
 	int	rc = -DER_OVERLOAD_RETRY;
 
-	/* Old protocol RPCs won't be rejected. */
 	D_ASSERT(proto_ver == DAOS_OBJ_VERSION);
 
 	switch (opc) {
@@ -417,7 +378,6 @@ obj_set_req(crt_rpc_t *rpc, struct sched_req_attr *attr)
 		break;
 	}
 	case DAOS_OBJ_RPC_CPD:
-		/* NOTE: It needs to be enhanced. Currently, just let client retry anyway. */
 		rc = -DER_TIMEDOUT;
 		break;
 	case DAOS_OBJ_RPC_COLL_PUNCH: {
@@ -435,12 +395,12 @@ obj_set_req(crt_rpc_t *rpc, struct sched_req_attr *attr)
 		break;
 	}
 	default:
-		/* Other requests will not be queued, see dss_rpc_hdlr() */
 		rc = -DER_TIMEDOUT;
 		break;
 	}
+	*/
 
-	return rc;
+	return -DER_TIMEDOUT;
 }
 
 static struct dss_module_ops ds_obj_mod_ops = {
