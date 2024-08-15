@@ -65,7 +65,7 @@ jobs:
       DISTRO_WITH_VERSION: el8
       CHROOT_NAME: "rocky+epel-8-x86_64"
       DISTRO_NAME: "EL"
-      DISTRO_VERSION: "${{ env.EL8_BUILD_VERSION }}"
+      DISTRO_VERSION: "8.6"
       COMMIT_STATUS_DISTRO_VERSION: "8"
       STAGE_TAGS: "-vm"
       FTEST_ARG: ""
