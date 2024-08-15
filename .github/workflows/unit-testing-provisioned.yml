@@ -48,6 +48,34 @@ jobs:
         run: |
           . ci/gha_functions.sh
           ci/functional/ryon.sh
+  Import-commit-message:
+    name: Get commit message
+    if: github.repository == 'daos-stack/daos'
+    runs-on: [self-hosted, light]
+    # Map a step output to a job output
+    outputs:
+      message: ${{ steps.commit_message.outputs.text }}
+      dequoted_message: ${{ steps.dequoted_commit_message.outputs.text }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Import Commit Message
+        id: commit_message
+        run: echo "text<<EOF" >> $GITHUB_OUTPUT;
+          git show -s --format=%B >> $GITHUB_OUTPUT;
+          echo "EOF" >> $GITHUB_OUTPUT;
+      - name: Import and Dequote Commit Message
+        id: dequoted_commit_message
+        run: . ci/gha_functions.sh;
+          echo "text<<EOF" >> $GITHUB_OUTPUT;
+          git show -s --format=%B | escape_single_quotes >> $GITHUB_OUTPUT;
+          echo "EOF" >> $GITHUB_OUTPUT;
+      - name: Identify Commit Pragmas
+        run: . ci/gha_functions.sh;
+          echo '${{steps.dequoted_commit_message.outputs.text }}' | get_commit_pragmas
+
 
   Job_2:
     name: Provisioning Job
@@ -75,8 +103,11 @@ jobs:
       OPENMPI: "openmpi"
       DISTRO: "el8"
       DAOS_STACK_EL_7_LOCAL_REPO: "not_used"
-
-
+      CP_PRIORITY: ""
+      PROVISION_DISTRO: "EL_8"
+      CP_PR_REPOS: ""
+      ARTIFACTS_URL: file:///scratch/job_repos/
+      COMMIT_MESSAGE: ${{ needs.Import-commit-message.outputs.message }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
