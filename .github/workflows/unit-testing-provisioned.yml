@@ -63,6 +63,17 @@ jobs:
       JENKINS_URL: https://build.hpdd.intel.com/
       LABEL: ci_vm9
       DISTRO_WITH_VERSION: el8
+      CHROOT_NAME: "rocky+epel-8-x86_64"
+      DISTRO_NAME: "EL"
+      DISTRO_VERSION: "${{ env.EL8_BUILD_VERSION }}"
+      COMMIT_STATUS_DISTRO_VERSION: "8"
+      STAGE_TAGS: "-vm"
+      FTEST_ARG: ""
+      DISTRO_NAME_UPPER: "EL"
+      DISTRO_NAME_LOWER: "el"
+      DISTRO_VERSION_MAJOR: "8"
+      OPENMPI: "openmpi"
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
