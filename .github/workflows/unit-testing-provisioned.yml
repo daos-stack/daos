@@ -108,6 +108,7 @@ jobs:
       CP_PR_REPOS: ""
       ARTIFACTS_URL: file:///scratch/job_repos/
       COMMIT_MESSAGE: ${{ needs.Import-commit-message.outputs.message }}
+      REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
