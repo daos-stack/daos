@@ -63,6 +63,7 @@ jobs:
       JENKINS_URL: https://build.hpdd.intel.com/
       LABEL: ci_vm9
       DISTRO_WITH_VERSION: el8
+      
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
