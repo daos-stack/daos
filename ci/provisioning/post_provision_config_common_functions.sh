@@ -404,7 +404,7 @@ post_provision_config_nodes() {
 
     # shellcheck disable=SC2001
     if [ ${#inst_rpms[@]} -gt 0 ]; then
-        if ! retry_dnf 360 install "${inst_rpms[@]}"; then
+        if ! retry_dnf 360 install "${inst_rpms[@]/%/${DAOS_VERSION:-}}"; then
             rc=${PIPESTATUS[0]}
             dump_repos
             return "$rc"
