@@ -248,7 +248,7 @@ jobs:
             echo "NEXT_VERSION == \"${{ env.NEXT_VERSION_[format('{0}',
                                                          github.event.pull_request.base.ref)] }}\""
             TARGET="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
-            INST_RPMS=daos-{server,client,tests{,-internal},serialize
+            INST_RPMS=daos-{server,client,tests{,-internal},serialize}
             # TODO: replace 'master' below with the actual [target, in the case of PRs] branch name
             if [ -n '${{ inputs.rpm-test-version }}' ]; then
                 DAOS_VERSION='-${{ inputs.rpm-test-version }}'
@@ -520,7 +520,7 @@ jobs:
         run: |
             STAGE_TAGS="hw"
             FTEST_ARG="--nvme=auto:-3DNAND"
-            INST_RPMS=daos-{server,client,tests{,-internal},serialize
+            INST_RPMS=daos-{server,client,tests{,-internal},serialize}
             # TODO: replace 'master' below with the actual [target, in the case of PRs] branch name
             if [ -n '${{ inputs.rpm-test-version }}' ]; then
                 DAOS_VERSION='-${{ inputs.rpm-test-version }}'
