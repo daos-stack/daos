@@ -248,12 +248,13 @@ jobs:
             echo "NEXT_VERSION == \"${{ env.NEXT_VERSION_[format('{0}',
                                                          github.event.pull_request.base.ref)] }}\""
             TARGET="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+            INST_RPMS=daos-{server,client,tests{,-internal},serialize
             # TODO: replace 'master' below with the actual [target, in the case of PRs] branch name
-            INST_RPMS="daos-client\ \<\ ${{ env.NEXT_VERSION_master }}          \
-                       daos-tests\ \<\ ${{ env.NEXT_VERSION_master }}           \
-                       daos-server\ \<\ ${{ env.NEXT_VERSION_master }}          \
-                       daos-serialize\ \<\ ${{ env.NEXT_VERSION_master }}       \
-                       daos-tests-internal\ \<\ ${{ env.NEXT_VERSION_master }}"
+            if [ -n '${{ inputs.rpm-test-version }}' ]; then
+                DAOS_VERSION='-${{ inputs.rpm-test-version }}'
+            else
+                DAOS_VERSION=" < ${{ env.NEXT_VERSION_master }}"
+            fi
             case '${{ matrix.distro }}' in
                 'el8')
                     CHROOT_NAME="rocky+epel-8-x86_64"
@@ -311,6 +312,7 @@ jobs:
                  $GITHUB_ENV
             echo "LABEL=$LABEL" >> $GITHUB_ENV
             echo "INST_RPMS=$INST_RPMS" >> $GITHUB_ENV
+            echo "DAOS_VERSION=$DAOS_VERSION" >> $GITHUB_ENV
       - name: Request and Provision a Cluster
         timeout-minutes: 7200
         uses: ./.github/actions/provision-cluster
@@ -518,11 +520,13 @@ jobs:
         run: |
             STAGE_TAGS="hw"
             FTEST_ARG="--nvme=auto:-3DNAND"
-            INST_RPMS="daos-client\ \<\ ${{ env.NEXT_VERSION_master }}          \
-                       daos-tests\ \<\ ${{ env.NEXT_VERSION_master }}           \
-                       daos-server\ \<\ ${{ env.NEXT_VERSION_master }}          \
-                       daos-serialize\ \<\ ${{ env.NEXT_VERSION_master }}       \
-                       daos-tests-internal\ \<\ ${{ env.NEXT_VERSION_master }}"
+            INST_RPMS=daos-{server,client,tests{,-internal},serialize
+            # TODO: replace 'master' below with the actual [target, in the case of PRs] branch name
+            if [ -n '${{ inputs.rpm-test-version }}' ]; then
+                DAOS_VERSION='-${{ inputs.rpm-test-version }}'
+            else
+                DAOS_VERSION=" < ${{ env.NEXT_VERSION_master }}"
+            fi
             CHROOT_NAME="rocky+epel-8-x86_64"
             DISTRO_NAME="EL"
             DISTRO_NAME_UPPER="EL"
@@ -573,6 +577,7 @@ jobs:
                  $GITHUB_ENV
             echo "LABEL=$LABEL" >> $GITHUB_ENV
             echo "INST_RPMS=$INST_RPMS" >> $GITHUB_ENV
+            echo "DAOS_VERSION=$DAOS_VERSION" >> $GITHUB_ENV
             echo "SIZE=$SIZE" >> $GITHUB_ENV
       - name: Request and Provision a Cluster
         timeout-minutes: 7200
