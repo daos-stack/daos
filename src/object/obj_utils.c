@@ -582,7 +582,7 @@ static btr_ops_t recx_btr_ops = {
 
 void
 obj_coll_disp_init(uint32_t tgt_nr, uint32_t max_tgt_size, uint32_t inline_size,
-		   uint32_t start, uint32_t max_width, struct obj_coll_disp_cursor *ocdc)
+		   uint32_t start, int max_width, struct obj_coll_disp_cursor *ocdc)
 {
 	if (max_width == 0) {
 		/*
@@ -594,7 +594,7 @@ obj_coll_disp_init(uint32_t tgt_nr, uint32_t max_tgt_size, uint32_t inline_size,
 			max_width = COLL_DISP_WIDTH_DEF;
 	}
 
-	if (tgt_nr - start > max_width) {
+	if (max_width > 0 && tgt_nr - start > max_width) {
 		ocdc->grp_nr = max_width;
 		ocdc->cur_step = (tgt_nr - start) / max_width;
 		if ((tgt_nr - start) % max_width != 0) {

@@ -5652,7 +5652,7 @@ again2:
 	exec_arg.coll_tgts = dcts;
 	obj_coll_disp_init(dct_nr, ocpi->ocpi_max_tgt_sz,
 			   sizeof(*ocpi) + sizeof(*odm->odm_mbs) + odm->odm_mbs->dm_data_size,
-			   1 /* start, [0] is for current engine */, ocpi->ocpi_disp_width,
+			   1 /* start, [0] is for current engine */, -1 /* ocpi->ocpi_disp_width */,
 			   &exec_arg.coll_cur);
 
 	rc = dtx_leader_begin(ioc.ioc_vos_coh, &odm->odm_xid, &epoch, 1, version,
@@ -5827,7 +5827,7 @@ ds_obj_coll_query_handler(crt_rpc_t *rpc)
 	exec_arg.coll_shards = dcts[0].dct_shards;
 	exec_arg.coll_tgts = dcts;
 	obj_coll_disp_init(dct_nr, ocqi->ocqi_max_tgt_sz, sizeof(*ocqi),
-			   1 /* start, [0] is for current engine */, ocqi->ocqi_disp_width,
+			   1 /* start, [0] is for current engine */, -1 /* ocqi->ocqi_disp_width */,
 			   &exec_arg.coll_cur);
 
 	rc = dtx_leader_begin(ioc.ioc_vos_coh, &ocqi->ocqi_xid, &epoch, 0, ocqi->ocqi_map_ver,
