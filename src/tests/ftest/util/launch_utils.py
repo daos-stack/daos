@@ -94,6 +94,8 @@ def setup_systemctl(logger, servers, clients, test_env):
         dict: a dictionary of systemctl override config file keys with NodeSet values identifying
             the hosts on which to remove the config files at the end of testing
     """
+    logger.debug("-" * 80)
+    logger.info("Setting up systemctl override configs")
     try:
         server_config = create_override_config(
             logger, servers, "daos_server.service", "root", "/usr/bin/daos_server",

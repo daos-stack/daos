@@ -9,7 +9,7 @@ import os
 import tempfile
 
 # pylint: disable=import-error,no-name-in-module
-from util.file_utils import distribute_files
+from util.file_utils import create_directory, distribute_files
 from util.run_utils import command_as_user, run_remote
 
 
@@ -98,14 +98,12 @@ def create_override_config(logger, hosts, service, user, service_command, servic
     service_file = get_service_file(logger, hosts, service, user, verbose, timeout)
 
     # Create the override directory
-    override_directory = f"{service_file}.d"
-    command = command_as_user(f"mkdir -p {override_directory}", user)
-    result = run_remote(logger, hosts, command, verbose, timeout)
+    override_file = os.path.join(f"{service_file}.d", "override.conf")
+    result = create_directory(logger, hosts, os.path.dirname(override_file), timeout, verbose, user)
     if not result.passed:
         raise SystemctlFailure("Error creating the systemctl override config directory")
 
-    # Create the override file
-    override_file = os.path.join(override_directory, "override.conf")
+    # Create the override file - empty ExecStart clears the existing setting
     override_contents = [
         "[Service]",
         "ExecStart=",
@@ -154,4 +152,4 @@ def daemon_reload(logger, hosts, user, verbose=True, timeout=120):
         CommandResult: groups of command results from the same hosts with the same return status
     """
     command = get_systemctl_command("daemon-reload", None, user)
-    return run_remote(logger, hosts, command, verbose, timeout)
+    return run_remote(logger, hosts, command_as_user(command, user), verbose, timeout)
