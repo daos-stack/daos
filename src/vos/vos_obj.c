@@ -541,8 +541,8 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 				rc = vos_mark_agg(cont, &obj->obj_df->vo_tree,
 						  &cont->vc_cont_df->cd_obj_root, epoch);
 
-			vos_obj_release(vos_obj_cache_current(cont->vc_pool->vp_sysdb),
-					obj, rc != 0);
+			vos_obj_release(vos_obj_cache_current(cont->vc_pool->vp_sysdb), obj, 0,
+					rc != 0);
 		}
 	}
 
@@ -677,7 +677,7 @@ vos_obj_key2anchor(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, dao
 
 	key_tree_release(toh, (krec->kr_bmap & KREC_BF_EVT) != 0);
 out:
-	vos_obj_release(occ, obj, false);
+	vos_obj_release(occ, obj, 0, false);
 
 	return rc;
 }
@@ -713,7 +713,7 @@ vos_obj_delete_internal(daos_handle_t coh, daos_unit_oid_t oid, bool only_delete
 	rc = umem_tx_end(umm, rc);
 
 out:
-	vos_obj_release(occ, obj, true);
+	vos_obj_release(occ, obj, 0, true);
 	return rc;
 }
 
@@ -794,14 +794,13 @@ out_tree:
 out_tx:
 	rc = umem_tx_end(umm, rc);
 out:
-	vos_obj_release(occ, obj, true);
+	vos_obj_release(occ, obj, 0, true);
 	return rc;
 }
 
 static int
 key_iter_ilog_check(struct vos_krec_df *krec, struct vos_obj_iter *oiter,
-		    vos_iter_type_t type, daos_epoch_range_t *epr,
-		    bool check_existence, struct vos_ts_set *ts_set)
+		    daos_epoch_range_t *epr, bool check_existence, struct vos_ts_set *ts_set)
 {
 	struct umem_instance	*umm;
 	int			 rc;
@@ -828,7 +827,8 @@ out:
 }
 
 static int
-key_ilog_prepare(struct vos_obj_iter *oiter, daos_handle_t toh, int key_type, daos_key_t *key,
+key_ilog_prepare(struct vos_obj_iter *oiter, daos_handle_t toh,
+		 enum vos_tree_class tclass, daos_key_t *key,
 		 int flags, daos_handle_t *sub_toh, struct vos_krec_df **krecp,
 		 daos_epoch_range_t *epr, struct vos_punch_record *punched,
 		 struct vos_ilog_info *info, struct vos_ts_set *ts_set)
@@ -840,7 +840,7 @@ key_ilog_prepare(struct vos_obj_iter *oiter, daos_handle_t toh, int key_type, da
 	if (krecp != NULL)
 		*krecp = NULL;
 
-	rc = key_tree_prepare(obj, toh, key_type, key, flags,
+	rc = key_tree_prepare(obj, toh, tclass, key, flags,
 			      vos_iter_intent(&oiter->it_iter), &krec,
 			      sub_toh, ts_set);
 	if (rc == -DER_NONEXIST)
@@ -853,7 +853,7 @@ key_ilog_prepare(struct vos_obj_iter *oiter, daos_handle_t toh, int key_type, da
 	}
 
 	/* Update the lower bound for nested iterator */
-	rc = key_iter_ilog_check(krec, oiter, key_type, epr, true, ts_set);
+	rc = key_iter_ilog_check(krec, oiter, epr, true, ts_set);
 	if (rc != 0)
 		goto fail;
 
@@ -866,8 +866,10 @@ key_ilog_prepare(struct vos_obj_iter *oiter, daos_handle_t toh, int key_type, da
 
 	return 0;
 fail:
-	if (sub_toh)
-		key_tree_release(*sub_toh, flags & SUBTR_EVT);
+	if (sub_toh) {
+		D_ASSERT(krec != NULL);
+		key_tree_release(*sub_toh, key_tree_is_evt(flags, tclass, krec));
+	}
 	return rc;
 }
 
@@ -919,8 +921,7 @@ key_iter_fill(struct vos_krec_df *krec, struct vos_obj_iter *oiter, bool check_e
 		ts_type = VOS_TS_TYPE_DKEY;
 	}
 
-	rc = key_iter_ilog_check(krec, oiter, oiter->it_iter.it_type, &epr,
-				 check_existence, NULL);
+	rc = key_iter_ilog_check(krec, oiter, &epr, check_existence, NULL);
 	if (rc == -DER_NONEXIST)
 		return VOS_ITER_CB_SKIP;
 	if (rc != 0) {
@@ -1038,7 +1039,7 @@ key_iter_fetch_root(struct vos_obj_iter *oiter, vos_iter_type_t type,
 	info->ii_filter_cb = oiter->it_iter.it_filter_cb;
 	info->ii_filter_arg = oiter->it_iter.it_filter_arg;
 	/* Update the lower bound for nested iterator */
-	rc = key_iter_ilog_check(krec, oiter, type, &info->ii_epr, false, NULL);
+	rc = key_iter_ilog_check(krec, oiter, &info->ii_epr, false, NULL);
 	if (rc != 0)
 		return rc;
 
@@ -1716,6 +1717,8 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 		oiter->it_iter.it_for_discard = 1;
 	if (param->ip_flags & VOS_IT_FOR_MIGRATION)
 		oiter->it_iter.it_for_migration = 1;
+	if (param->ip_flags & VOS_IT_FOR_AGG)
+		oiter->it_iter.it_for_agg = 1;
 	if (is_sysdb)
 		oiter->it_iter.it_for_sysdb = 1;
 	if (param->ip_flags == VOS_IT_KEY_TREE) {
@@ -1880,16 +1883,22 @@ dkey_nested_iter_init(struct vos_obj_iter *oiter, struct vos_iter_info *info)
 {
 	int			 rc;
 	struct vos_container	*cont = vos_hdl2cont(info->ii_hdl);
+	uint64_t                 flags = 0;
+
+	if ((oiter->it_flags & VOS_IT_PUNCHED) == 0)
+		flags |= VOS_OBJ_VISIBLE;
+	if (oiter->it_iter.it_for_agg)
+		flags |= VOS_OBJ_AGGREGATE;
+	if (oiter->it_iter.it_for_discard)
+		flags |= VOS_OBJ_DISCARD;
 
 	/* XXX the condition epoch ranges could cover multiple versions of
 	 * the object/key if it's punched more than once. However, rebuild
 	 * system should guarantee this will never happen.
 	 */
-	rc = vos_obj_hold(vos_obj_cache_current(cont->vc_pool->vp_sysdb), cont,
-			  info->ii_oid, &info->ii_epr, oiter->it_iter.it_bound,
-			  (oiter->it_flags & VOS_IT_PUNCHED) ? 0 :
-			  VOS_OBJ_VISIBLE, vos_iter_intent(&oiter->it_iter),
-			  &oiter->it_obj, NULL);
+	rc = vos_obj_hold(vos_obj_cache_current(cont->vc_pool->vp_sysdb), cont, info->ii_oid,
+			  &info->ii_epr, oiter->it_iter.it_bound, flags,
+			  vos_iter_intent(&oiter->it_iter), &oiter->it_obj, NULL);
 
 	D_ASSERTF(rc != -DER_NONEXIST,
 		  "Nested iterator called without setting probe");
@@ -1916,7 +1925,8 @@ dkey_nested_iter_init(struct vos_obj_iter *oiter, struct vos_iter_info *info)
 
 	return 0;
 failed:
-	vos_obj_release(vos_obj_cache_current(cont->vc_pool->vp_sysdb), oiter->it_obj, false);
+	vos_obj_release(vos_obj_cache_current(cont->vc_pool->vp_sysdb), oiter->it_obj, flags,
+			false);
 
 	return rc;
 }
@@ -2180,6 +2190,7 @@ vos_obj_iter_fini(struct vos_iterator *iter)
 	struct vos_obj_iter	*oiter = vos_iter2oiter(iter);
 	int			 rc;
 	struct vos_object	*object;
+	uint64_t                 flags = 0;
 
 	if (daos_handle_is_inval(oiter->it_hdl))
 		D_GOTO(out, rc = -DER_NO_HDL);
@@ -2213,9 +2224,16 @@ vos_obj_iter_fini(struct vos_iterator *iter)
 	 */
 	object = oiter->it_obj;
 	if (oiter->it_flags != VOS_IT_KEY_TREE && object != NULL &&
-	    (iter->it_type == VOS_ITER_DKEY || !iter->it_from_parent))
-		vos_obj_release(vos_obj_cache_current(object->obj_cont->vc_pool->vp_sysdb),
-				object, false);
+	    (iter->it_type == VOS_ITER_DKEY || !iter->it_from_parent)) {
+		if (iter->it_type == VOS_ITER_DKEY) {
+			if (iter->it_for_discard)
+				flags = VOS_OBJ_DISCARD;
+			else if (iter->it_for_agg)
+				flags = VOS_OBJ_AGGREGATE;
+		}
+		vos_obj_release(vos_obj_cache_current(object->obj_cont->vc_pool->vp_sysdb), object,
+				flags, false);
+	}
 
 	vos_ilog_fetch_finish(&oiter->it_ilog_info);
 	D_FREE(oiter);
@@ -2635,12 +2653,15 @@ vos_obj_iter_empty(struct vos_iterator *iter)
 		D_ASSERT(0);
 		return -DER_INVAL;
 	case VOS_ITER_DKEY:
+		/* fall through */
 	case VOS_ITER_AKEY:
 		if (oiter->it_flags & VOS_IT_DKEY_EV)
 			evt = true;
+		/* fall through */
 	case VOS_ITER_SINGLE:
 		if (!evt)
 			return dbtree_iter_empty(oiter->it_hdl);
+		/* fall through */
 	case VOS_ITER_RECX:
 		return evt_iter_empty(oiter->it_hdl);
 	}

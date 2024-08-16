@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,6 +18,7 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -31,6 +32,8 @@ import (
 // NB: This interface is way too big right now; need to refactor in order
 // to limit scope.
 type Engine interface {
+	events.Publisher
+
 	// These are definitely wrong... They indicate that too much internal
 	// information is being leaked outside of the implementation.
 	newCret(string, error) *ctlpb.NvmeControllerResult
@@ -62,8 +65,10 @@ type Engine interface {
 	OnReady(...onReadyFn)
 	GetStorage() *storage.Provider
 	SetCheckerMode(bool)
-	Debugf(format string, args ...interface{})
-	Tracef(format string, args ...interface{})
+	Debugf(string, ...interface{})
+	Tracef(string, ...interface{})
+	GetLastHealthStats(string) *ctlpb.BioHealthResp
+	SetLastHealthStats(string, *ctlpb.BioHealthResp)
 }
 
 // EngineHarness is responsible for managing Engine instances.

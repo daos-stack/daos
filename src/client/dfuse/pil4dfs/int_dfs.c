@@ -110,7 +110,6 @@ static daos_handle_t          eq_list[MAX_EQ];
 uint16_t                      d_eq_count_max;
 uint16_t                      d_eq_count;
 static uint16_t               eq_idx;
-extern uint16_t               d_aio_eq_count_g;
 
 /* Configuration of the Garbage Collector */
 static uint32_t               dcache_size_bits;
@@ -221,26 +220,24 @@ struct statx {
 #endif
 
 /* working dir of current process */
-static char            cur_dir[DFS_MAX_PATH] = "";
-static bool            segv_handler_inited;
+static char             cur_dir[DFS_MAX_PATH] = "";
+static bool             segv_handler_inited;
 /* Old segv handler */
-struct sigaction       old_segv;
+struct sigaction        old_segv;
 
 /* the flag to indicate whether initlization is finished or not */
-bool                   d_hook_enabled;
-static bool            hook_enabled_bak;
-static pthread_mutex_t lock_reserve_fd;
-static pthread_mutex_t lock_dfs;
-static pthread_mutex_t lock_fd;
-static pthread_mutex_t lock_dirfd;
-static pthread_mutex_t lock_mmap;
-static pthread_mutex_t lock_fd_dup2ed;
-static pthread_mutex_t lock_eqh;
-
-pthread_mutex_t        d_lock_aio_eqs_g;
+bool                    d_hook_enabled;
+static bool             hook_enabled_bak;
+static pthread_mutex_t  lock_reserve_fd;
+static pthread_mutex_t  lock_dfs;
+static pthread_mutex_t  lock_fd;
+static pthread_mutex_t  lock_dirfd;
+static pthread_mutex_t  lock_mmap;
+static pthread_rwlock_t lock_fd_dup2ed;
+static pthread_mutex_t  lock_eqh;
 
 /* store ! umask to apply on mode when creating file to honor system umask */
-static mode_t          mode_not_umask;
+static mode_t           mode_not_umask;
 
 static void
 finalize_dfs(void);
@@ -402,6 +399,8 @@ static int (*next_unlinkat)(int dirfd, const char *path, int flags);
 
 static int (*next_fsync)(int fd);
 
+static int (*next_fdatasync)(int fd);
+
 static int (*next_truncate)(const char *path, off_t length);
 
 static int (*next_ftruncate)(int fd, off_t length);
@@ -505,11 +504,8 @@ register_handler(int sig, struct sigaction *old_handler);
 static void
 print_summary(void);
 
-extern void
-d_free_aio_ctx(void);
-
-static int       num_fd_dup2ed;
-struct fd_dup2   fd_dup2_list[MAX_FD_DUP2ED];
+static _Atomic uint32_t  num_fd_dup2ed;
+struct fd_dup2           fd_dup2_list[MAX_FD_DUP2ED];
 
 static void
 init_fd_dup2_list(void);
@@ -663,7 +659,7 @@ discover_dfuse_mounts(void)
 			abort();
 		}
 		pt_dfs_mt = &dfs_list[num_dfs];
-		if (strncmp(fs_entry->mnt_type, STR_AND_SIZE(MNT_TYPE_FUSE)) == 0) {
+		if (memcmp(fs_entry->mnt_type, STR_AND_SIZE(MNT_TYPE_FUSE)) == 0) {
 			pt_dfs_mt->dcache      = NULL;
 			pt_dfs_mt->len_fs_root = strnlen(fs_entry->mnt_dir, DFS_MAX_PATH);
 			if (pt_dfs_mt->len_fs_root >= DFS_MAX_PATH) {
@@ -1061,9 +1057,9 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 	}
 
 	/* handle special cases. Needed to work with git. */
-	if ((strncmp(szInput, STR_AND_SIZE_M1("http://")) == 0) ||
-	    (strncmp(szInput, STR_AND_SIZE_M1("https://")) == 0) ||
-	    (strncmp(szInput, STR_AND_SIZE_M1("git://")) == 0)) {
+	if ((memcmp(szInput, STR_AND_SIZE_M1("http://")) == 0) ||
+	    (memcmp(szInput, STR_AND_SIZE_M1("https://")) == 0) ||
+	    (memcmp(szInput, STR_AND_SIZE_M1("git://")) == 0)) {
 		*is_target_path = 0;
 		return 0;
 	}
@@ -1399,7 +1395,7 @@ init_fd_list(void)
 	rc = D_MUTEX_INIT(&lock_mmap, NULL);
 	if (rc)
 		return 1;
-	rc = D_MUTEX_INIT(&lock_fd_dup2ed, NULL);
+	rc = D_RWLOCK_INIT(&lock_fd_dup2ed, NULL);
 	if (rc)
 		return 1;
 
@@ -1714,7 +1710,7 @@ free_map(int idx)
 int
 d_get_fd_redirected(int fd)
 {
-	int i, fd_ret = fd;
+	int i, rc, fd_ret = fd;
 
 	if (atomic_load_relaxed(&d_daos_inited) == false)
 		return fd;
@@ -1734,16 +1730,24 @@ d_get_fd_redirected(int fd)
 		}
 	}
 
-	D_MUTEX_LOCK(&lock_fd_dup2ed);
-	if (num_fd_dup2ed > 0) {
+	if (atomic_load_relaxed(&num_fd_dup2ed) > 0) {
+		rc = pthread_rwlock_rdlock(&lock_fd_dup2ed);
+		if (rc != 0) {
+			DS_ERROR(rc, "pthread_rwlock_rdlock() failed");
+			return fd_ret;
+		}
 		for (i = 0; i < MAX_FD_DUP2ED; i++) {
 			if (fd_dup2_list[i].fd_src == fd) {
 				fd_ret = fd_dup2_list[i].fd_dest;
 				break;
 			}
 		}
+		rc = pthread_rwlock_unlock(&lock_fd_dup2ed);
+		if (rc != 0) {
+			DS_ERROR(rc, "pthread_rwlock_unlock() failed");
+			return fd_ret;
+		}
 	}
-	D_MUTEX_UNLOCK(&lock_fd_dup2ed);
 
 	return fd_ret;
 }
@@ -1767,8 +1771,8 @@ close_dup_fd(int (*next_close)(int fd), int fd, bool close_fd)
 	}
 
 	/* remove the fd_dup entry */
-	D_MUTEX_LOCK(&lock_fd_dup2ed);
-	if (num_fd_dup2ed > 0) {
+	if (atomic_load_relaxed(&num_fd_dup2ed) > 0) {
+		D_RWLOCK_WRLOCK(&lock_fd_dup2ed);
 		for (i = 0; i < MAX_FD_DUP2ED; i++) {
 			if (fd_dup2_list[i].fd_src == fd) {
 				idx_dup = i;
@@ -1776,12 +1780,12 @@ close_dup_fd(int (*next_close)(int fd), int fd, bool close_fd)
 				/* clear the value to free */
 				fd_dup2_list[i].fd_src  = -1;
 				fd_dup2_list[i].fd_dest = -1;
-				num_fd_dup2ed--;
+				atomic_fetch_add_relaxed(&num_fd_dup2ed, -1);
 				break;
 			}
 		}
+		D_RWLOCK_UNLOCK(&lock_fd_dup2ed);
 	}
-	D_MUTEX_UNLOCK(&lock_fd_dup2ed);
 
 	if (idx_dup < 0) {
 		D_DEBUG(DB_ANY, "failed to find fd %d in fd_dup2_list[]: %d (%s)\n", fd, EINVAL,
@@ -1799,12 +1803,12 @@ init_fd_dup2_list(void)
 {
 	int i;
 
-	D_MUTEX_LOCK(&lock_fd_dup2ed);
+	D_RWLOCK_WRLOCK(&lock_fd_dup2ed);
 	for (i = 0; i < MAX_FD_DUP2ED; i++) {
 		fd_dup2_list[i].fd_src  = -1;
 		fd_dup2_list[i].fd_dest = -1;
 	}
-	D_MUTEX_UNLOCK(&lock_fd_dup2ed);
+	D_RWLOCK_UNLOCK(&lock_fd_dup2ed);
 }
 
 static int
@@ -1816,19 +1820,19 @@ allocate_dup2ed_fd(const int fd_src, const int fd_dest)
 	inc_dup_ref_count(fd_dest);
 
 	/* Not many applications use dup2(). Normally the number of fd duped is small. */
-	D_MUTEX_LOCK(&lock_fd_dup2ed);
-	if (num_fd_dup2ed < MAX_FD_DUP2ED) {
+	if (atomic_load_relaxed(&num_fd_dup2ed) < MAX_FD_DUP2ED) {
+		D_RWLOCK_WRLOCK(&lock_fd_dup2ed);
 		for (i = 0; i < MAX_FD_DUP2ED; i++) {
 			if (fd_dup2_list[i].fd_src == -1) {
 				fd_dup2_list[i].fd_src  = fd_src;
 				fd_dup2_list[i].fd_dest = fd_dest;
-				num_fd_dup2ed++;
-				D_MUTEX_UNLOCK(&lock_fd_dup2ed);
+				atomic_fetch_add_relaxed(&num_fd_dup2ed, 1);
+				D_RWLOCK_UNLOCK(&lock_fd_dup2ed);
 				return i;
 			}
 		}
+		D_RWLOCK_UNLOCK(&lock_fd_dup2ed);
 	}
-	D_MUTEX_UNLOCK(&lock_fd_dup2ed);
 
 	/* decrease dup reference count in error */
 	dec_dup_ref_count(fd_dest);
@@ -1842,17 +1846,17 @@ query_fd_forward_dest(int fd_src)
 {
 	int i, fd_dest = -1;
 
-	D_MUTEX_LOCK(&lock_fd_dup2ed);
-	if (num_fd_dup2ed > 0) {
+	if (atomic_load_relaxed(&num_fd_dup2ed) > 0) {
+		D_RWLOCK_RDLOCK(&lock_fd_dup2ed);
 		for (i = 0; i < MAX_FD_DUP2ED; i++) {
 			if (fd_src == fd_dup2_list[i].fd_src) {
 				fd_dest = fd_dup2_list[i].fd_dest;
-				D_MUTEX_UNLOCK(&lock_fd_dup2ed);
+				D_RWLOCK_UNLOCK(&lock_fd_dup2ed);
 				return fd_dest;
 			}
 		}
+		D_RWLOCK_UNLOCK(&lock_fd_dup2ed);
 	}
-	D_MUTEX_UNLOCK(&lock_fd_dup2ed);
 	return -1;
 }
 
@@ -1868,14 +1872,14 @@ close_all_duped_fd(void)
 {
 	int i;
 
-	if (num_fd_dup2ed == 0)
+	if (atomic_load_relaxed(&num_fd_dup2ed) == 0)
 		return;
 	/* Only the main thread will call this function in the destruction phase */
 	for (i = 0; i < MAX_FD_DUP2ED; i++) {
 		if (fd_dup2_list[i].fd_src >= 0)
 			close_dup_fd(libc_close, fd_dup2_list[i].fd_src, true);
 	}
-	num_fd_dup2ed = 0;
+	atomic_store_relaxed(&num_fd_dup2ed, 0);
 }
 
 static int
@@ -2973,6 +2977,10 @@ new_xstat(int ver, const char *path, struct stat *stat_buf)
 
 	if (!d_hook_enabled)
 		return next_xstat(ver, path, stat_buf);
+	if (path[0] == 0) {
+		errno = ENOENT;
+		return (-1);
+	}
 
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
@@ -3030,6 +3038,10 @@ new_lxstat(int ver, const char *path, struct stat *stat_buf)
 
 	if (!d_hook_enabled)
 		return libc_lxstat(ver, path, stat_buf);
+	if (path[0] == 0) {
+		errno = ENOENT;
+		return (-1);
+	}
 
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
@@ -3074,6 +3086,10 @@ new_fxstatat(int ver, int dirfd, const char *path, struct stat *stat_buf, int fl
 
 	if (!d_hook_enabled)
 		return libc_fxstatat(ver, dirfd, path, stat_buf, flags);
+	if (path[0] == 0 && ((flags & AT_EMPTY_PATH) == 0)) {
+		errno = ENOENT;
+		return (-1);
+	}
 
 	if (path[0] == '/') {
 		/* Absolute path, dirfd is ignored */
@@ -3127,6 +3143,11 @@ new_fstatat(int dirfd, const char *__restrict path, struct stat *__restrict stat
 
 	if (!d_hook_enabled)
 		return libc_fstatat(dirfd, path, stat_buf, flags);
+
+	if (path[0] == 0 && ((flags & AT_EMPTY_PATH) == 0)) {
+		errno = ENOENT;
+		return (-1);
+	}
 
 	if (path[0] == '/') {
 		/* Absolute path, dirfd is ignored */
@@ -3209,6 +3230,11 @@ statx(int dirfd, const char *path, int flags, unsigned int mask, struct statx *s
 		next_statx = dlsym(RTLD_NEXT, "statx");
 		D_ASSERT(next_statx != NULL);
 	}
+	if (path[0] == 0 && ((flags & AT_EMPTY_PATH) == 0)) {
+		errno = ENOENT;
+		return (-1);
+	}
+
 	if (!d_hook_enabled)
 		return next_statx(dirfd, path, flags, mask, statx_buf);
 
@@ -3762,6 +3788,17 @@ closedir(DIR *dirp)
 	}
 	if (!d_hook_enabled)
 		return next_closedir(dirp);
+
+	_Pragma("GCC diagnostic push")
+	_Pragma("GCC diagnostic ignored \"-Wnonnull-compare\"")
+	/* Check whether dirp is NULL or not since application provides dirp */
+	if (!dirp) {
+		D_DEBUG(DB_ANY, "dirp is NULL in closedir(): %d (%s)\n", EINVAL, strerror(EINVAL));
+		errno = EINVAL;
+		return (-1);
+	}
+	_Pragma("GCC diagnostic pop")
+
 	fd = dirfd(dirp);
 
 	if (d_compatible_mode && fd < FD_FILE_BASE) {
@@ -3775,16 +3812,6 @@ closedir(DIR *dirp)
 			return next_closedir(dirp);
 		}
 	}
-
-	_Pragma("GCC diagnostic push")
-	_Pragma("GCC diagnostic ignored \"-Wnonnull-compare\"")
-	/* Check whether dirp is NULL or not since application provides dirp */
-	if (!dirp) {
-		D_DEBUG(DB_ANY, "dirp is NULL in closedir(): %d (%s)\n", EINVAL, strerror(EINVAL));
-		errno = EINVAL;
-		return (-1);
-	}
-	_Pragma("GCC diagnostic pop")
 
 	if (fd >= FD_DIR_BASE) {
 		free_dirfd(fd - FD_DIR_BASE);
@@ -4121,7 +4148,7 @@ pre_envp(char *const envp[], char ***new_envp)
 	} else {
 		while (envp[num_entry]) {
 			/* scan the env in env_list[] to check whether they exist or not */
-			if (strncmp(envp[num_entry], STR_AND_SIZE_M1("LD_PRELOAD")) == 0 &&
+			if (memcmp(envp[num_entry], STR_AND_SIZE_M1("LD_PRELOAD")) == 0 &&
 			    preload_included == false) {
 				preload_included = true;
 				idx_preload      = num_entry;
@@ -4137,8 +4164,8 @@ pre_envp(char *const envp[], char ***new_envp)
 				if (!env_set[i])
 					continue;
 				if (!env_found[i]) {
-					if (strncmp(envp[num_entry], STR_AND_SIZE_M1(env_list[i]))
-					    == 0) {
+					if (memcmp(envp[num_entry], env_list[i],
+						   strlen(env_list[i])) == 0) {
 						env_found[i] = true;
 						num_entry_found++;
 					}
@@ -4252,9 +4279,10 @@ setup_fd_0_1_2(void)
 	int   i, fd, idx, fd_tmp, fd_new, open_flag, error_save;
 	off_t offset;
 
-	if (num_fd_dup2ed == 0)
+	if (atomic_load_relaxed(&num_fd_dup2ed) == 0)
 		return 0;
 
+	D_RWLOCK_RDLOCK(&lock_fd_dup2ed);
 	for (i = 0; i < MAX_FD_DUP2ED; i++) {
 		/* only check fd 0, 1, and 2 */
 		if (fd_dup2_list[i].fd_src >= 0 && fd_dup2_list[i].fd_src <= 2) {
@@ -4266,9 +4294,10 @@ setup_fd_0_1_2(void)
 			/* get a real fd from kernel */
 			fd_tmp = libc_open(d_file_list[idx]->path, open_flag);
 			if (fd_tmp < 0) {
+				error_save = errno;
 				fprintf(stderr, "Error: open %s failed. %d (%s)\n",
 					d_file_list[idx]->path, errno, strerror(errno));
-				return errno;
+				D_GOTO(err, error_save);
 			}
 			/* using dup2() to make sure we get desired fd */
 			fd_new = dup2(fd_tmp, fd);
@@ -4277,7 +4306,7 @@ setup_fd_0_1_2(void)
 				fprintf(stderr, "Error: dup2 failed. %d (%s)\n", errno,
 					strerror(errno));
 				libc_close(fd_tmp);
-				return error_save;
+				D_GOTO(err, error_save);
 			}
 			libc_close(fd_tmp);
 			if (libc_lseek(fd, offset, SEEK_SET) == -1) {
@@ -4285,11 +4314,16 @@ setup_fd_0_1_2(void)
 				fprintf(stderr, "Error: lseek failed to set offset. %d (%s)\n",
 					errno, strerror(errno));
 				libc_close(fd);
-				return error_save;
+				D_GOTO(err, error_save);
 			}
 		}
 	}
+	D_RWLOCK_UNLOCK(&lock_fd_dup2ed);
 	return 0;
+
+err:
+	D_RWLOCK_UNLOCK(&lock_fd_dup2ed);
+	return error_save;
 }
 
 static int
@@ -4318,6 +4352,8 @@ reset_daos_env_before_exec(void)
 		d_daos_inited     = false;
 		daos_debug_inited = false;
 		context_reset     = false;
+		/* all IO requests go through dfuse */
+		d_hook_enabled    = false;
 	}
 	return 0;
 }
@@ -5272,6 +5308,28 @@ fsync(int fd)
 	/* errno = ENOTSUP;
 	 * return (-1);
 	 */
+	return 0;
+}
+
+int
+fdatasync(int fd)
+{
+	int fd_directed;
+
+	if (next_fdatasync == NULL) {
+		next_fdatasync = dlsym(RTLD_NEXT, "fdatasync");
+		D_ASSERT(next_fdatasync != NULL);
+	}
+	if (!d_hook_enabled)
+		return next_fdatasync(fd);
+
+	fd_directed = d_get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
+		return next_fdatasync(fd);
+
+	if (fd < FD_DIR_BASE && d_compatible_mode)
+		return next_fdatasync(fd);
+
 	return 0;
 }
 
@@ -6711,9 +6769,6 @@ init_myhook(void)
 	if (rc)
 		return;
 
-	rc = D_MUTEX_INIT(&d_lock_aio_eqs_g, NULL);
-	if (rc)
-		return;
 	rc = D_MUTEX_INIT(&lock_eqh, NULL);
 	if (rc)
 		return;
@@ -6732,22 +6787,26 @@ init_myhook(void)
 	dcache_size_bits = DCACHE_SIZE_BITS;
 	rc               = d_getenv_uint32_t("D_IL_DCACHE_SIZE_BITS", &dcache_size_bits);
 	if (rc != -DER_SUCCESS && rc != -DER_NONEXIST)
-		DS_WARN(rc, "'D_IL_DCACHE_SIZE_BITS' env variable could not be used");
+		DS_WARN(daos_der2errno(rc),
+			"'D_IL_DCACHE_SIZE_BITS' env variable could not be used");
 
 	dcache_rec_timeout = DCACHE_REC_TIMEOUT;
 	rc                 = d_getenv_uint32_t("D_IL_DCACHE_REC_TIMEOUT", &dcache_rec_timeout);
 	if (rc != -DER_SUCCESS && rc != -DER_NONEXIST)
-		DS_WARN(rc, "'D_IL_DCACHE_REC_TIMEOUT' env variable could not be used");
+		DS_WARN(daos_der2errno(rc),
+			"'D_IL_DCACHE_REC_TIMEOUT' env variable could not be used");
 
 	dcache_gc_period = DCACHE_GC_PERIOD;
 	rc               = d_getenv_uint32_t("D_IL_DCACHE_GC_PERIOD", &dcache_gc_period);
 	if (rc != -DER_SUCCESS && rc != -DER_NONEXIST)
-		DS_WARN(rc, "'D_IL_DCACHE_GC_PERIOD' env variable could not be used");
+		DS_WARN(daos_der2errno(rc),
+			"'D_IL_DCACHE_GC_PERIOD' env variable could not be used");
 
 	dcache_gc_reclaim_max = DCACHE_GC_RECLAIM_MAX;
 	rc = d_getenv_uint32_t("D_IL_DCACHE_GC_RECLAIM_MAX", &dcache_gc_reclaim_max);
 	if (rc != -DER_SUCCESS && rc != -DER_NONEXIST)
-		DS_WARN(rc, "'D_IL_DCACHE_GC_RECLAIM_MAX' env variable could not be used");
+		DS_WARN(daos_der2errno(rc),
+			"'D_IL_DCACHE_GC_RECLAIM_MAX' env variable could not be used");
 	if (dcache_gc_reclaim_max == 0) {
 		D_WARN("'D_IL_DCACHE_GC_RECLAIM_MAX' env variable could not be used: value == 0.");
 		dcache_gc_reclaim_max = DCACHE_GC_RECLAIM_MAX;
@@ -6884,9 +6943,6 @@ destroy_all_eqs(void)
 {
 	int i, rc;
 
-	/** destroy EQs created for aio */
-	d_free_aio_ctx();
-
 	/** destroy EQs created by threads */
 	for (i = 0; i < d_eq_count; i++) {
 		rc = daos_eq_destroy(eq_list[i], 0);
@@ -6939,14 +6995,13 @@ finalize_myhook(void)
 
 		finalize_dfs();
 
-		D_MUTEX_DESTROY(&d_lock_aio_eqs_g);
 		D_MUTEX_DESTROY(&lock_eqh);
 		D_MUTEX_DESTROY(&lock_reserve_fd);
 		D_MUTEX_DESTROY(&lock_dfs);
 		D_MUTEX_DESTROY(&lock_dirfd);
 		D_MUTEX_DESTROY(&lock_fd);
 		D_MUTEX_DESTROY(&lock_mmap);
-		D_MUTEX_DESTROY(&lock_fd_dup2ed);
+		D_RWLOCK_DESTROY(&lock_fd_dup2ed);
 
 		if (fd_255_reserved)
 			libc_close(255);
@@ -7103,9 +7158,9 @@ get_eqh(daos_handle_t *eqh)
 
 	rc = pthread_mutex_lock(&lock_eqh);
 	/** create a new EQ if the EQ pool is not full; otherwise round robin EQ use from pool */
-	if (d_eq_count >= (d_eq_count_max - d_aio_eq_count_g)) {
+	if (d_eq_count >= d_eq_count_max) {
 		td_eqh = eq_list[eq_idx++];
-		if (eq_idx == (d_eq_count_max - d_aio_eq_count_g))
+		if (eq_idx == d_eq_count_max)
 			eq_idx = 0;
 	} else {
 		rc = daos_eq_create(&td_eqh);

@@ -36,6 +36,11 @@ const (
 	relConfExamplesPath = "../utils/config/examples/"
 )
 
+// SupportConfig is defined here to avoid a import cycle
+type SupportConfig struct {
+	FileTransferExec string `yaml:"file_transfer_exec,omitempty"`
+}
+
 // Server describes configuration options for DAOS control plane.
 // See utils/config/daos_server.yml for parameter descriptions.
 type Server struct {
@@ -59,6 +64,7 @@ type Server struct {
 	TelemetryPort     int                       `yaml:"telemetry_port,omitempty"`
 	CoreDumpFilter    uint8                     `yaml:"core_dump_filter,omitempty"`
 	ClientEnvVars     []string                  `yaml:"client_env_vars,omitempty"`
+	SupportConfig     SupportConfig             `yaml:"support_config,omitempty"`
 
 	// duplicated in engine.Config
 	SystemName string              `yaml:"name"`
@@ -75,9 +81,6 @@ type Server struct {
 	Hyperthreads bool   `yaml:"hyperthreads"`
 
 	Path string `yaml:"-"` // path to config file
-
-	// Legacy config file parameters stored in a separate struct.
-	Legacy ServerLegacy `yaml:",inline"`
 
 	// Behavior flags
 	AutoFormat bool `yaml:"-"`
@@ -360,11 +363,6 @@ func (cfg *Server) Load() error {
 		return errors.Errorf("fabric provider string %q includes more than one provider", cfg.Fabric.Provider)
 	}
 
-	// Update server config based on legacy parameters.
-	if err := updateFromLegacyParams(cfg); err != nil {
-		return errors.Wrap(err, "updating config from legacy parameters")
-	}
-
 	// propagate top-level settings to engine configs
 	for i := range cfg.Engines {
 		cfg.updateServerConfig(&cfg.Engines[i])
@@ -645,12 +643,6 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 		}
 	}()
 
-	// The config file format no longer supports "servers"
-	if len(cfg.Legacy.Servers) > 0 {
-		return errors.New("\"servers\" server config file parameter is deprecated, use " +
-			"\"engines\" instead")
-	}
-
 	// Set DisableVMD reference if unset in config file.
 	if cfg.DisableVMD == nil {
 		cfg.WithDisableVMD(false)
@@ -713,7 +705,6 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 	for idx, ec := range cfg.Engines {
 		ec.Storage.ControlMetadata = cfg.Metadata
 		ec.Storage.EngineIdx = uint(idx)
-		ec.ConvertLegacyStorage(log, idx)
 		ec.Fabric.Update(cfg.Fabric)
 
 		if err := ec.Validate(); err != nil {

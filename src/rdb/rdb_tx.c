@@ -995,9 +995,10 @@ rdb_tx_deterministic_error(int error)
 }
 
 /*
- * Apply an entry and return the error only if a nondeterministic error
- * happens. This function tries to discard index if an error occurs.
- * Interpret header to know if ops in the TX are deemed "critical".
+ * Apply an entry and return 0, RDB_TX_APPLY_ERR_DETERMINISTIC, or a
+ * nondeterministic error. Interpret header to know if ops in the TX are deemed
+ * "critical", and output to critp when returning 0 or
+ * RDB_TX_APPLY_ERR_DETERMINISTIC.
  */
 int
 rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len, void *result, bool *critp,
@@ -1044,18 +1045,22 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len, void *
 		hdr.critical, scm_remaining);
 
 	while (p < buf + len) {
-		struct rdb_tx_op	op;
+		struct rdb_tx_op op;
 
 		n = rdb_tx_op_decode(p, buf + len - p, &op);
 		if (n < 0) {
-			D_ERROR(DF_DB": invalid entry format: buf=%p len="DF_U64
-				" p=%p\n", DP_DB(db), buf, len, p);
+			D_ERROR(DF_DB ": invalid entry format: buf=%p len=" DF_U64 " p=%p\n",
+				DP_DB(db), buf, len, p);
 			rc = n;
 			break;
 		}
 		rc = rdb_tx_apply_op(db, index, &op, hdr.critical, vtx);
 		if (rc != 0) {
-			if (!rdb_tx_deterministic_error(rc))
+			if (rdb_tx_deterministic_error(rc))
+				D_DEBUG(DB_TRACE,
+					DF_DB ": entry " DF_U64 " op %u <%td, %zd>: " DF_RC "\n",
+					DP_DB(db), index, op.dto_opc, p - buf, n, DP_RC(rc));
+			else
 				D_ERROR(DF_DB ": failed to apply entry " DF_U64
 					      " op %u <%td, %zd>: " DF_RC "\n",
 					DP_DB(db), index, op.dto_opc, p - buf, n, DP_RC(rc));
@@ -1087,7 +1092,7 @@ out:
 		*(int *)result = rc;
 
 	*critp = hdr.critical;
-	return 0;
+	return rc == 0 ? 0 : RDB_TX_APPLY_ERR_DETERMINISTIC;
 }
 
 /* Called at the beginning of every query. */

@@ -761,9 +761,6 @@ class DaosServer():
 
         cmd = [daos_server, 'start', f'--config={self._yaml_file.name}', '--insecure']
 
-        if self.conf.args.no_root:
-            cmd.append('--recreate-superblocks')
-
         # pylint: disable=consider-using-with
         self._sp = subprocess.Popen(cmd, env=plain_env)
 
@@ -1845,40 +1842,72 @@ def destroy_container(conf, pool, container, valgrind=True, log_check=True, forc
     assert rc.returncode == 0, rc
 
 
-def check_file_attr(output, oclass, csize):
+def run_fs_get_attr(conf, *args):
+    """Get json data from daos fs get-attr"""
+    cmd = ['fs', 'get-attr']
+    cmd.extend(args)
+    print(f"run daos {' '.join(cmd)}")
+    rc = run_daos_cmd(conf, cmd, show_stdout=True, use_json=True)
+
+    data = rc.json
+    assert data['status'] == 0, rc
+    assert data['error'] is None, rc
+    assert data['response'] is not None, rc
+
+    return data
+
+
+def check_fs_get_attr_oid(data_in, check_type):
+    """Verify a valid oid in output"""
+    if check_type not in data_in:
+        print(f"{check_type} not found")
+        return False
+    data = data_in[check_type]
+    if 'oid' not in data:
+        print("oid is not found!!!")
+        return False
+    oid = data['oid']
+    if not re.match(r"^\d+\.\d+$", oid):
+        print(f"oid does not match expected pattern {oid}")
+        return False
+    return True
+
+
+def check_fs_get_attr(data_in, check_type, **checks):
     """Verify daos fs tool output"""
-    line = output.splitlines()
-    dfs_attr = line[0].split()[-1]
-    if oclass is not None:
-        if dfs_attr != oclass:
+    if check_type not in data_in:
+        print(f"{check_type} not found")
+        return False
+    data = data_in[check_type]
+    for key, value in checks.items():
+        if value is None:
+            continue
+        if key not in data:
+            print(f"expected json attribute {key} not found")
             return False
-    dfs_attr = line[1].split()[-1]
-    if csize is not None:
-        if dfs_attr != csize:
+        if data[key] != value:
+            print(f"expected json attribute {key} has unexpected value {value} "
+                  f"!= {data[key]}")
             return False
     return True
 
 
-def check_dir_attr(output, oclass, dir_oclass, file_oclass, csize):
+def check_file_attr(data, oclass, csize):
     """Verify daos fs tool output"""
-    line = output.splitlines()
-    dfs_attr = line[0].split()[-1]
-    if oclass is not None:
-        if dfs_attr != oclass:
-            return False
-    dfs_attr = line[1].split()[-1]
-    if dir_oclass is not None:
-        if dfs_attr != dir_oclass:
-            return False
-    dfs_attr = line[2].split()[-1]
-    if file_oclass is not None:
-        if dfs_attr != file_oclass:
-            return False
-    dfs_attr = line[3].split()[-1]
-    if csize is not None:
-        if dfs_attr != csize:
-            return False
-    return True
+    if not check_fs_get_attr_oid(data, 'response'):
+        return False
+    return check_fs_get_attr(data, 'response', oclass=oclass, chunk_size=csize)
+
+
+def check_dir_attr(data, oclass, file_oclass, dir_oclass, csize):
+    """Verify daos fs tool output"""
+    if not check_fs_get_attr_oid(data['response'], 'object'):
+        return False
+    if not check_fs_get_attr(data['response'], 'object', oclass=oclass):
+        return False
+
+    return check_fs_get_attr(data['response'], 'directory', dir_oclass=dir_oclass,
+                             file_oclass=file_oclass, chunk_size=csize)
 
 
 def needs_dfuse(method):
@@ -2099,21 +2128,11 @@ class PosixTests():
         with open(file1, 'w') as ofd:
             ofd.write('hello')
 
-        cmd = ['fs', 'get-attr', '--path', dir1]
-        print('get-attr of ' + dir1)
-        rc = run_daos_cmd(self.conf, cmd)
-        assert rc.returncode == 0
-        print(rc)
-        output = rc.stdout.decode('utf-8')
-        assert check_dir_attr(output, 'S2', 'S2', 'S4', '1048576')
+        data = run_fs_get_attr(self.conf, '--path', dir1)
+        assert check_dir_attr(data, 'S2', 'S2', 'S4', 1048576)
 
-        cmd = ['fs', 'get-attr', '--path', file1]
-        print('get-attr of ' + file1)
-        rc = run_daos_cmd(self.conf, cmd)
-        assert rc.returncode == 0
-        print(rc)
-        output = rc.stdout.decode('utf-8')
-        assert check_file_attr(output, 'S4', '1048576')
+        data = run_fs_get_attr(self.conf, '--path', file1)
+        assert check_file_attr(data, 'S4', 1048576)
 
         if dfuse.stop():
             self.fatal_errors = True
@@ -3746,41 +3765,21 @@ class PosixTests():
             pass
 
         # Run a command to get attr of new dir and file
-        cmd = ['fs', 'get-attr', '--path', dir1]
-        print('get-attr of d1')
-        rc = run_daos_cmd(conf, cmd)
-        assert rc.returncode == 0
-        print(f'rc is {rc}')
-        output = rc.stdout.decode('utf-8')
-        assert check_dir_attr(output, 'S1', 'S1', None, '1048576')
+        data = run_fs_get_attr(self.conf, '--path', dir1)
+        assert check_dir_attr(data, 'S1', 'S1', None, 1048576)
 
         # run same command using pool, container, dfs-path, and dfs-prefix
-        cmd = ['fs', 'get-attr', pool, uns_container.id(), '--dfs-path', dir1,
-               '--dfs-prefix', uns_path]
-        print('get-attr of d1')
-        rc = run_daos_cmd(conf, cmd)
-        assert rc.returncode == 0
-        print(f'rc is {rc}')
-        output = rc.stdout.decode('utf-8')
-        assert check_dir_attr(output, 'S1', 'S1', None, '1048576')
+        data = run_fs_get_attr(self.conf, pool, uns_container.id(),
+                               '--dfs-path', dir1, '--dfs-prefix', uns_path)
+        assert check_dir_attr(data, 'S1', 'S1', None, 1048576)
 
         # run same command using pool, container, dfs-path
-        cmd = ['fs', 'get-attr', pool, uns_container.id(), '--dfs-path', '/d1']
-        print('get-attr of d1')
-        rc = run_daos_cmd(conf, cmd)
-        assert rc.returncode == 0
-        print(f'rc is {rc}')
-        output = rc.stdout.decode('utf-8')
-        assert check_dir_attr(output, 'S1', 'S1', None, '1048576')
+        data = run_fs_get_attr(self.conf, pool, uns_container.id(),
+                               '--dfs-path', '/d1')
+        assert check_dir_attr(data, 'S1', 'S1', None, 1048576)
 
-        cmd = ['fs', 'get-attr', '--path', file1]
-        print('get-attr of d1/f1')
-        rc = run_daos_cmd(conf, cmd)
-        assert rc.returncode == 0
-        print(f'rc is {rc}')
-        output = rc.stdout.decode('utf-8')
-        # SX is not deterministic, so don't check it here
-        assert check_file_attr(output, None, '1048576')
+        data = run_fs_get_attr(self.conf, '--path', file1)
+        assert check_file_attr(data, None, 1048576)
 
         # Run a command to change attr of dir1
         cmd = ['fs', 'set-attr', '--path', dir1, '--oclass', 'S2',
@@ -3807,21 +3806,11 @@ class PosixTests():
         print(f'rc is {rc}')
 
         # Run a command to get attr of dir and file2
-        cmd = ['fs', 'get-attr', '--path', dir1]
-        print('get-attr of d1')
-        rc = run_daos_cmd(conf, cmd)
-        assert rc.returncode == 0
-        print(f'rc is {rc}')
-        output = rc.stdout.decode('utf-8')
-        assert check_dir_attr(output, 'S1', 'S2', 'S2', '16')
+        data = run_fs_get_attr(self.conf, '--path', dir1)
+        assert check_dir_attr(data, 'S1', 'S2', 'S2', 16)
 
-        cmd = ['fs', 'get-attr', '--path', file2]
-        print('get-attr of d1/f2')
-        rc = run_daos_cmd(conf, cmd)
-        assert rc.returncode == 0
-        print(f'rc is {rc}')
-        output = rc.stdout.decode('utf-8')
-        assert check_file_attr(output, 'S1', '16')
+        data = run_fs_get_attr(self.conf, '--path', file2)
+        assert check_file_attr(data, 'S1', 16)
 
     def test_cont_copy(self):
         """Verify that copying into a container works"""
@@ -4336,23 +4325,15 @@ class PosixTests():
         dirname2 = join(path, 'test_dir/1d2/')
 
         # Check entries after fixing
-        cmd = ['fs', 'get-attr', '--path', fname1]
-        rc = run_daos_cmd(self.conf, cmd)
-        assert rc.returncode == 0
-        print(f'rc is {rc}')
-        output = rc.stdout.decode('utf-8')
-        assert check_file_attr(output, None, '1048576')
+        data = run_fs_get_attr(self.conf, '--path', fname1)
+        assert check_file_attr(data, None, 1048576)
         with open(fname1, 'r', encoding='ascii', errors='ignore') as fd:
             data = fd.read()
             if data != 'test1':
                 print('/test_dir/f1 data is corrupted')
 
-        cmd = ['fs', 'get-attr', '--path', fname3]
-        rc = run_daos_cmd(self.conf, cmd)
-        assert rc.returncode == 0
-        print(f'rc is {rc}')
-        output = rc.stdout.decode('utf-8')
-        assert check_file_attr(output, None, '1048576')
+        data = run_fs_get_attr(self.conf, '--path', fname3)
+        assert check_file_attr(data, None, 1048576)
         with open(fname3, 'r', encoding='ascii', errors='ignore') as fd:
             data = fd.read()
             if data != 'test3':

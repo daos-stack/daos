@@ -58,9 +58,6 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         #   exp_info = self.params.get("exp_vals", path="/run/*", default={})
         # but this yields an empty dictionary (the default), so it needs to be defined manually:
         exp_info = {
-            "enabled_ranks": None,
-            "disabled_ranks": None,
-            "status": self.params.get("pool_status", path="/run/exp_vals/*"),
             "state": self.params.get("pool_state", path="/run/exp_vals/*"),
             "uuid": self.pool.uuid.lower(),
             "total_targets": self.params.get("total_targets", path="/run/exp_vals/*"),
@@ -74,7 +71,8 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
                 "status": self.params.get("rebuild_status", path="/run/exp_vals/rebuild/*"),
                 "state": self.params.get("state", path="/run/exp_vals/rebuild/*"),
                 "objects": self.params.get("objects", path="/run/exp_vals/rebuild/*"),
-                "records": self.params.get("records", path="/run/exp_vals/rebuild/*")
+                "records": self.params.get("records", path="/run/exp_vals/rebuild/*"),
+                "total_objects": self.params.get("total_objects", path="/run/exp_vals/rebuild/*")
             },
             "tier_stats": [
                 {
@@ -87,6 +85,7 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
                 }
             ],
             "pool_layout_ver": 3,
+            "query_mask": self.params.get("query_mask", path="/run/exp_vals/*"),
             "upgrade_layout_ver": 3,
             "usage": [
                 {
@@ -101,7 +100,7 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         }
 
         self.assertDictEqual(
-            self.pool.query_data["response"], exp_info,
+            exp_info, self.pool.query_data["response"],
             "Found difference in dmg pool query output and the expected values")
 
         self.log.info("All expect values found in dmg pool query output.")

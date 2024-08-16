@@ -173,9 +173,7 @@ class FioCommand(ExecutableCommand):
             CommandFailure: if there is an error running the command
 
         Returns:
-            RemoteCommandResult: a grouping of the command results from the same hosts with the
-                same return status
-
+            CommandResult: groups of command results from the same hosts with the same return status
         """
         if not self._hosts:
             raise CommandFailure('No hosts specified for fio command')

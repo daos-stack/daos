@@ -70,7 +70,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
       - name: Check DAOS ftest tags.
-        run: \[ ! -x src/tests/ftest/tags.py \] || ./src/tests/ftest/tags.py lint
+        run: \[ ! -x src/tests/ftest/tags.py \] || ./src/tests/ftest/tags.py lint --verbose
 
   flake8-lint:
     runs-on: ubuntu-22.04
@@ -105,7 +105,7 @@ jobs:
           max-line-length: '100'
           args: '--filename */SConscript, SConstruct'
 
-  Doxygen:
+  doxygen:
     name: Doxygen
     runs-on: ubuntu-22.04
     steps:
@@ -146,17 +146,78 @@ jobs:
       - name: Run pylint check.
         run: ./utils/cq/daos_pylint.py --git --output-format github
 
-  Codespell:
+  codespell:
     name: Codespell
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
       - name: Install extra python packages
-        run: pip install --requirement utils/cq/requirements.txt
+        run: python3 -m pip install --requirement utils/cq/requirements.txt
       - name: Run check
         uses: codespell-project/actions-codespell@3174815d6231f5bdc24dbfb6fc3b8caec73d521c  # master
         with:
           skip: ./src/control/vendor,./src/control/go.sum,./.git
           ignore_words_file: ci/codespell.ignores
           builtin: clear,rare,informal,names,en-GB_to_en-US
+
+  clang-format:
+    name: Clang Format
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+      - name: Pull via git
+        run: git fetch origin ${{ github.event.pull_request.base.ref }}
+      - name: Run check in docker
+        uses: ./.github/actions/clang-format
+        with:
+          target: origin/${{ github.event.pull_request.base.ref }}
+      - name: Export changes
+        uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3  # v4.3.1
+        if: failure()
+        with:
+          name: format-patch-for-pr-${{ github.event.pull_request.number }}
+          path: auto-format-changes.diff
+
+  yaml-lint:
+    name: Yamllint check
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out source repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Set up Python environment
+        uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d  # v5.1.0
+        with:
+          python-version: '3'
+      - name: Install extra python packages
+        run: python3 -m pip install --requirement utils/cq/requirements.txt
+      - name: Run check
+        run: yamllint --format github .
+
+  linting-summary:
+    name: Linting Summary
+    runs-on: ubuntu-22.04
+    needs:
+      - isort
+      - shell-check
+      - log-check
+      - ftest-tags
+      - flake8-lint
+      - doxygen
+      - pylint
+      - codespell
+      # - clang-format  # not required
+      - yaml-lint
+    if: (!cancelled())
+    steps:
+      - name: Check if any job failed
+        run: |
+          if [[ -z "$(echo "${{ join(needs.*.result, '') }}" | sed -e 's/success//g')" ]]; then
+            echo "All jobs succeeded"
+          else
+            echo "One or more jobs did not succeed"
+            exit 1
+          fi

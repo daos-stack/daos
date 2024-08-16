@@ -65,22 +65,44 @@ char *test_dir;
 void
 do_openat(void **state)
 {
-	struct stat stbuf0;
-	struct stat stbuf;
-	int         fd;
-	int         rc;
-	char        output_buf[10];
-	char        input_buf[] = "hello";
-	off_t       offset;
-	int         root = open(test_dir, O_PATH | O_DIRECTORY);
+	struct stat  stbuf0;
+	struct stat  stbuf;
+	struct statx stxbuf;
+	int          fd;
+	int          rc;
+	char         output_buf[10];
+	char         input_buf[] = "hello";
+	off_t        offset;
+	int          root = open(test_dir, O_PATH | O_DIRECTORY);
 
 	assert_return_code(root, errno);
+
+	/* Test corner case: empty path in stat() and its variants. */
+	rc = stat("", &stbuf);
+	assert_int_equal(rc, -1);
+	assert_int_equal(errno, ENOENT);
+
+	rc = lstat("", &stbuf);
+	assert_int_equal(rc, -1);
+	assert_int_equal(errno, ENOENT);
+
+	rc = fstatat(root, "", &stbuf, 0);
+	assert_int_equal(rc, -1);
+	assert_int_equal(errno, ENOENT);
+
+	rc = statx(root, "", 0, 0, &stxbuf);
+	assert_int_equal(rc, -1);
+	assert_int_equal(errno, ENOENT);
 
 	fd = openat(root, "openat_file", O_RDWR | O_CREAT | O_EXCL, S_IWUSR | S_IRUSR);
 	assert_return_code(fd, errno);
 
 	/* This will write six bytes, including a \0 terminator */
 	rc = write(fd, input_buf, sizeof(input_buf));
+	assert_return_code(rc, errno);
+
+	/* test fdatasync() */
+	rc = fdatasync(fd);
 	assert_return_code(rc, errno);
 
 	/* First fstat.  IL will forward this to the kernel so it can save ino for future calls */

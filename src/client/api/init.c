@@ -34,13 +34,15 @@
 static pthread_mutex_t	module_lock = PTHREAD_MUTEX_INITIALIZER;
 
 /** refcount on how many times daos_init has been called */
-static int		module_initialized;
+static int                 module_initialized;
+
+/* clang-format off */
 
 const struct daos_task_api dc_funcs[] = {
 	/** Management */
 	{dc_deprecated, 0},
 	{dc_deprecated, 0},
-	{dc_deprecated, 0},
+	{dc_mgmt_pool_list, sizeof(daos_mgmt_pool_list_t)},
 	{dc_debug_set_params, sizeof(daos_set_params_t)},
 	{dc_mgmt_get_bs_state, sizeof(daos_mgmt_get_bs_state_t)},
 
@@ -139,6 +141,8 @@ const struct daos_task_api dc_funcs[] = {
 #endif
 };
 
+/* clang-format on */
+
 /**
  * Initialize DAOS client library.
  */
@@ -148,6 +152,7 @@ daos_init(void)
 	struct d_fault_attr_t *d_fault_init;
 	struct d_fault_attr_t *d_fault_mem = NULL;
 	struct d_fault_attr_t  d_fault_mem_saved;
+	crt_init_options_t    *crt_info;
 	int rc;
 
 	D_MUTEX_LOCK(&module_lock);
@@ -201,16 +206,20 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_job, rc);
 
+	crt_info = daos_crt_init_opt_get(false, 1);
 	/**
 	 * get CaRT configuration (see mgmtModule.handleGetAttachInfo for the
 	 * handling of NULL system names)
 	 */
-	rc = dc_mgmt_net_cfg(NULL);
+	rc = dc_mgmt_net_cfg(NULL, crt_info);
 	if (rc != 0)
 		D_GOTO(out_attach, rc);
 
 	/** set up event queue */
-	rc = daos_eq_lib_init();
+	rc = daos_eq_lib_init(crt_info);
+	D_FREE(crt_info->cio_provider);
+	D_FREE(crt_info->cio_interface);
+	D_FREE(crt_info->cio_domain);
 	if (rc != 0) {
 		D_ERROR("failed to initialize eq_lib: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_attach, rc);
@@ -304,7 +313,7 @@ unlock:
 int
 daos_fini(void)
 {
-	int	rc;
+	int rc;
 
 	D_MUTEX_LOCK(&module_lock);
 	if (module_initialized == 0) {
@@ -337,8 +346,7 @@ daos_fini(void)
 
 	rc = dc_mgmt_notify_exit();
 	if (rc != 0)
-		D_ERROR("failed to disconnect some resources may leak, "
-			DF_RC"\n", DP_RC(rc));
+		D_ERROR("failed to disconnect some resources may leak, " DF_RC "\n", DP_RC(rc));
 
 	dc_tm_fini();
 	dc_mgmt_drop_attach_info();

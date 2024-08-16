@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -171,7 +171,7 @@ func newMockDrpcClient(cfg *mockDrpcClientConfig) *mockDrpcClient {
 // setupMockDrpcClientBytes sets up the dRPC client for the mgmtSvc to return
 // a set of bytes as a response.
 func setupMockDrpcClientBytes(svc *mgmtSvc, respBytes []byte, err error) {
-	setMockDrpcClient(svc, getMockDrpcClientBytes(respBytes, err))
+	setupSvcDrpcClient(svc, 0, getMockDrpcClientBytes(respBytes, err))
 }
 
 func getMockDrpcClientBytes(respBytes []byte, err error) *mockDrpcClient {
@@ -183,17 +183,19 @@ func getMockDrpcClientBytes(respBytes []byte, err error) *mockDrpcClient {
 // setupMockDrpcClient sets up the dRPC client for the mgmtSvc to return
 // a valid protobuf message as a response.
 func setupMockDrpcClient(svc *mgmtSvc, resp proto.Message, err error) {
-	setMockDrpcClient(svc, getMockDrpcClient(resp, err))
+	setupSvcDrpcClient(svc, 0, getMockDrpcClient(resp, err))
 }
 
+// getMockDrpcClient sets up the dRPC client to return a valid protobuf message as a response.
 func getMockDrpcClient(resp proto.Message, err error) *mockDrpcClient {
 	respBytes, _ := proto.Marshal(resp)
 	return getMockDrpcClientBytes(respBytes, err)
 }
 
-func setMockDrpcClient(svc *mgmtSvc, mdc *mockDrpcClient) {
-	mi := svc.harness.instances[0]
-	mi.(*EngineInstance).setDrpcClient(mdc)
+func setupSvcDrpcClient(svc *mgmtSvc, engineIdx int, mdc *mockDrpcClient) {
+	svc.harness.instances[engineIdx].(*EngineInstance).getDrpcClientFn = func(_ string) drpc.DomainSocketClient {
+		return mdc
+	}
 }
 
 // newTestEngine returns an EngineInstance configured for testing.
@@ -212,7 +214,8 @@ func newTestEngine(log logging.Logger, isAP bool, provider *storage.Provider, en
 	rCfg.Running.SetTrue()
 	r := engine.NewTestRunner(rCfg, engineCfg[0])
 
-	e := NewEngineInstance(log, provider, nil, r)
+	e := NewEngineInstance(log, provider, nil, r, nil)
+	e.setDrpcSocket("/dontcare")
 	e.setSuperblock(&Superblock{
 		Rank: ranklist.NewRankPtr(0),
 	})

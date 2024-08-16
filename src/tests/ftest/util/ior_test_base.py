@@ -43,7 +43,7 @@ class IorTestBase(TestWithServers):
         super().setUp()
 
         # Get the parameters for IOR
-        self.ior_cmd = IorCommand()
+        self.ior_cmd = IorCommand(self.test_env.log_dir)
         self.ior_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/ior/client_processes/*')
         self.ppn = self.params.get("ppn", '/run/ior/client_processes/*')
@@ -78,10 +78,9 @@ class IorTestBase(TestWithServers):
         return self.container
 
     def run_ior_with_pool(self, intercept=None, display_space=True, test_file_suffix="",
-                          test_file="daos:/testFile", create_pool=True,
-                          create_cont=True, stop_dfuse=True, plugin_path=None,
-                          timeout=None, fail_on_warning=False,
-                          mount_dir=None, out_queue=None, env=None):
+                          test_file="daos:/testFile", create_pool=True, create_cont=True,
+                          stop_dfuse=True, plugin_path=None, timeout=None, fail_on_warning=False,
+                          mount_dir=None, out_queue=None, env=None, job_manager=None):
         # pylint: disable=too-many-arguments
         """Execute ior with optional overrides for ior flags and object_class.
 
@@ -114,6 +113,7 @@ class IorTestBase(TestWithServers):
                 Defaults to None
             env (EnvironmentVariables, optional): Pass the environment to be
                 used when calling run_ior. Defaults to None
+            job_manager (JobManager, optional): job manager used to run ior. Defaults to None.
 
         Returns:
             CmdResult: result of the ior command execution
@@ -142,7 +142,8 @@ class IorTestBase(TestWithServers):
             test_file = os.path.join("/", "testfile")
 
         self.ior_cmd.test_file.update("".join([test_file, test_file_suffix]))
-        job_manager = self.get_ior_job_manager_command()
+        if job_manager is None:
+            job_manager = self.get_ior_job_manager_command()
         job_manager.timeout = timeout
         try:
             out = self.run_ior(job_manager, self.processes,
@@ -184,7 +185,7 @@ class IorTestBase(TestWithServers):
         """
         return get_job_manager(self, job=self.ior_cmd, subprocess=self.subprocess)
 
-    def check_subprocess_status(self, operation="write"):
+    def check_subprocess_status(self, job_manager, operation="write"):
         """Check subprocess status."""
         if operation == "write":
             self.ior_cmd.pattern = self.IOR_WRITE_PATTERN
@@ -193,7 +194,7 @@ class IorTestBase(TestWithServers):
         else:
             self.fail("Exiting Test: Inappropriate operation type for subprocess status check")
 
-        if not self.ior_cmd.check_subprocess_status(self.job_manager.process):
+        if not self.ior_cmd.check_subprocess_status(job_manager.process):
             self.fail("IOR subprocess not running")
 
     def run_ior(self, manager, processes, intercept=None, display_space=True,
@@ -275,19 +276,19 @@ class IorTestBase(TestWithServers):
 
         return None
 
-    def stop_ior(self):
+    def stop_ior(self, job_manager):
         """Stop IOR process.
 
         Args:
-            manager (str): mpi job manager command
+            job_manager (JobManager, optional): job manager used to run ior.
 
         Returns:
             Object: result of job manager stop
         """
-        self.log.info("<IOR> Stopping in-progress IOR command: %s", str(self.job_manager))
+        self.log.info("<IOR> Stopping in-progress IOR command: %s", str(job_manager))
 
         try:
-            return self.job_manager.stop()
+            return job_manager.stop()
         except CommandFailure as error:
             self.log.error("IOR stop Failed: %s", str(error))
             self.fail("Failed to stop in-progress IOR command")

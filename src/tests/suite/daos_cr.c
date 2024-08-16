@@ -1851,6 +1851,7 @@ cr_pause(void **state, bool force)
 	uint32_t			 class = TCC_POOL_BAD_LABEL;
 	uint32_t			 action = TCA_INTERACT;
 	int				 rc;
+	int				 i;
 
 	rc = cr_pool_create(state, &pool, false, class);
 	assert_rc_equal(rc, 0);
@@ -1878,12 +1879,17 @@ cr_pause(void **state, bool force)
 	rc = cr_system_start();
 	assert_rc_equal(rc, 0);
 
-	/* Sleep for a while after system re-started under check mode. */
-	sleep(5);
+	for (i = 0; i < CR_WAIT_MAX; i++) {
+		/* Sleep for a while after system re-started under check mode. */
+		sleep(2);
 
-	cr_dci_fini(&dci);
-	rc = cr_check_query(1,  &pool.pool_uuid, &dci);
-	assert_rc_equal(rc, 0);
+		cr_dci_fini(&dci);
+		rc = cr_check_query(1, &pool.pool_uuid, &dci);
+		if (rc == 0)
+			break;
+
+		assert_rc_equal(rc, -DER_INVAL);
+	}
 
 	rc = cr_ins_verify(&dci, TCIS_PAUSED);
 	assert_rc_equal(rc, 0);

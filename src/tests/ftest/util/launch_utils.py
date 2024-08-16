@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -26,6 +26,8 @@ from util.storage_utils import StorageException, StorageInfo
 from util.user_utils import get_group_id, get_user_groups, groupadd, useradd, userdel
 from util.yaml_utils import YamlUpdater, get_yaml_data
 
+D_TM_SHARED_MEMORY_KEY = 0x10242048
+
 
 class LaunchException(Exception):
     """Exception for launch.py execution."""
@@ -42,13 +44,11 @@ def fault_injection_enabled(logger):
     """
     logger.debug("-" * 80)
     logger.debug("Checking for fault injection enablement via 'fault_status':")
-    try:
-        run_local(logger, "fault_status", check=True)
+    if run_local(logger, "fault_status").passed:
         logger.debug("  Fault injection is enabled")
         return True
-    except RunException:
-        # Command failed or yielded a non-zero return status
-        logger.debug("  Fault injection is disabled")
+    # Command failed or yielded a non-zero return status
+    logger.debug("  Fault injection is disabled")
     return False
 
 
@@ -86,10 +86,7 @@ def display_disk_space(logger, path):
     """
     logger.debug("-" * 80)
     logger.debug("Current disk space usage of %s", path)
-    try:
-        run_local(logger, f"df -h {path}", check=False)
-    except RunException:
-        pass
+    run_local(logger, f"df -h {path}")
 
 
 def summarize_run(logger, mode, status):
@@ -151,9 +148,11 @@ def get_test_tag_info(logger, directory):
     test_tag_info = {}
     for test_file in sorted(list(map(str, Path(directory).rglob("*.py")))):
         command = f"grep -ER '(^class .*:|:avocado: tags=| def test_)' {test_file}"
-        output = run_local(logger, command, check=False, verbose=False)
+        result = run_local(logger, command, verbose=False)
+        if not result.passed:
+            continue
         data = re.findall(
-            r'(?:class (.*)\(.*\):|def (test_.*)\(|:avocado: tags=(.*))', output.stdout)
+            r'(?:class (.*)\(.*\):|def (test_.*)\(|:avocado: tags=(.*))', result.joined_stdout)
         class_key = None
         method_key = None
         for match in data:
@@ -317,14 +316,19 @@ class TestRunner():
         self.local_host = get_local_host()
 
     def prepare(self, logger, test_log_file, test, repeat, user_create, slurm_setup, control_host,
-                partition_hosts):
+                partition_hosts, clear_mounts):
         """Prepare the test for execution.
 
         Args:
             logger (Logger): logger for the messages produced by this method
+            test_log_file (str): the log file for this test
             test (TestInfo): the test information
             repeat (str): the test repetition sequence, e.g. '1/10'
             user_create (bool): whether to create extra test users defined by the test
+            slurm_setup (bool): whether to setup slurm before running the test
+            control_host (NodeSet): slurm control hosts
+            partition_hosts (NodeSet): slurm partition hosts
+            clear_mounts (list): mount points to remove before the test
 
         Returns:
             int: status code: 0 = success, 128 = failure
@@ -354,6 +358,11 @@ class TestRunner():
         if status:
             return status
 
+        # Remove existing mount points on each test host
+        status = self._clear_mount_points(logger, test, clear_mounts)
+        if status:
+            return status
+
         # Generate certificate files for the test
         return self._generate_certs(logger)
 
@@ -380,28 +389,27 @@ class TestRunner():
             "[Test %s/%s] Running the %s test on repetition %s/%s",
             number, self.total_tests, test, repeat, self.total_repeats)
         start_time = int(time.time())
-
-        try:
-            return_code = run_local(
-                logger, " ".join(command), capture_output=False, check=False).returncode
-            if return_code == 0:
-                logger.debug("All avocado test variants passed")
-            elif return_code & 2 == 2:
-                logger.debug("At least one avocado test variant failed")
-            elif return_code & 4 == 4:
-                message = "Failed avocado commands detected"
-                self.test_result.fail_test(logger, "Execute", message)
-            elif return_code & 8 == 8:
-                logger.debug("At least one avocado test variant was interrupted")
-            if return_code:
-                self._collect_crash_files(logger)
-
-        except RunException:
-            message = f"Error executing {test} on repeat {repeat}"
+        result = run_local(logger, " ".join(command), capture_output=False)
+        end_time = int(time.time())
+        return_code = result.output[0].returncode
+        if return_code == 0:
+            logger.debug("All avocado test variants passed")
+        elif return_code & 1 == 1:
+            logger.debug("At least one avocado test variant failed")
+        elif return_code & 2 == 2:
+            logger.debug("At least one avocado job failed")
+        elif return_code & 4 == 4:
+            message = "Failed avocado commands detected"
+            self.test_result.fail_test(logger, "Execute", message)
+        elif return_code & 8 == 8:
+            logger.debug("At least one avocado test variant was interrupted")
+        else:
+            message = f"Unhandled rc={return_code} while executing {test} on repeat {repeat}"
             self.test_result.fail_test(logger, "Execute", message, sys.exc_info())
             return_code = 1
+        if return_code:
+            self._collect_crash_files(logger)
 
-        end_time = int(time.time())
         logger.info("Total test time: %ss", end_time - start_time)
         return return_code
 
@@ -457,9 +465,9 @@ class TestRunner():
         Args:
             logger (Logger): logger for the messages produced by this method
             test (TestInfo): the test information
-            slurm_setup (bool):
-            control_host (NodeSet):
-            partition_hosts (NodeSet):
+            slurm_setup (bool): whether to setup slurm before running the test
+            control_host (NodeSet): slurm control hosts
+            partition_hosts (NodeSet): slurm partition hosts
 
         Returns:
             int: status code: 0 = success, 128 = failure
@@ -663,6 +671,117 @@ class TestRunner():
         if not useradd(logger, hosts, user, gid, test_env.user_dir, True).passed:
             raise LaunchException(f'Error creating user {user}')
 
+    def _clear_mount_points(self, logger, test, clear_mounts):
+        """Remove existing mount points on each test host.
+
+        Args:
+            logger (Logger): logger for the messages produced by this method
+            test (TestInfo): the test information
+            clear_mounts (list): mount points to remove before the test
+
+        Returns:
+            int: status code: 0 = success, 128 = failure
+        """
+        if not clear_mounts:
+            return 0
+
+        logger.debug("-" * 80)
+        hosts = test.host_info.all_hosts
+        logger.debug("Clearing existing mount points on %s: %s", hosts, clear_mounts)
+        command = f" df --type=tmpfs --output=target | grep -E '^({'|'.join(clear_mounts)})$'"
+        find_result = run_remote(logger, hosts, command)
+        mount_point_hosts = {}
+        for data in find_result.output:
+            if not data.passed:
+                continue
+            for line in data.stdout:
+                if line not in mount_point_hosts:
+                    mount_point_hosts[line] = NodeSet()
+                mount_point_hosts[line].add(data.hosts)
+
+        for mount_point, mount_hosts in mount_point_hosts.items():
+            if not self._remove_super_blocks(logger, mount_hosts, mount_point):
+                message = "Error removing superblocks for existing mount points"
+                self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
+                return 128
+
+        if not self._remove_shared_memory_segments(logger, hosts):
+            message = "Error removing shared memory segments for existing mount points"
+            self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
+            return 128
+
+        for mount_point, mount_hosts in mount_point_hosts.items():
+            if not self._remove_mount_point(logger, mount_hosts, mount_point):
+                message = "Error removing existing mount points"
+                self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
+                return 128
+
+        return 0
+
+    def _remove_super_blocks(self, logger, hosts, mount_point):
+        """Remove the super blocks from the specified mount point.
+
+        Args:
+            logger (Logger): logger for the messages produced by this method
+            hosts (NodeSet): hosts on which to remove the super blocks
+            mount_point (str): mount point from which to remove the super blocks
+
+        Returns:
+            bool: True if successful; False otherwise
+        """
+        logger.debug("Clearing existing super blocks on %s", hosts)
+        command = f"sudo rm -fr {mount_point}/*"
+        return run_remote(logger, hosts, command).passed
+
+    def _remove_shared_memory_segments(self, logger, hosts):
+        """Remove existing shared memory segments.
+
+        Args:
+            logger (Logger): logger for the messages produced by this method
+            hosts (NodeSet): hosts on which to remove the shared memory segments
+
+        Returns:
+            bool: True if successful; False otherwise
+        """
+        logger.debug("Clearing existing shared memory segments on %s", hosts)
+        daos_engine_keys = [hex(D_TM_SHARED_MEMORY_KEY + index) for index in range(4)]
+        result = run_remote(logger, hosts, "ipcs -m")
+        keys_per_host = {}
+        for data in result.output:
+            if not data.passed:
+                continue
+            for line in data.stdout:
+                info = re.split(r"\s+", line)
+                if info[0] not in daos_engine_keys:
+                    # Skip processing lines not listing a shared memory segment
+                    continue
+                if info[0] not in keys_per_host:
+                    keys_per_host[info[0]] = NodeSet()
+                keys_per_host[info[0]].add(data.hosts)
+        for key, key_hosts in keys_per_host.items():
+            logger.debug("Clearing shared memory segment %s on %s:", key, key_hosts)
+            if not run_remote(logger, key_hosts, f"sudo ipcrm -M {key}").passed:
+                return False
+        return True
+
+    def _remove_mount_point(self, logger, hosts, mount_point):
+        """Remove the mount point.
+
+        Args:
+            logger (Logger): logger for the messages produced by this method
+            hosts (NodeSet): hosts on which to remove the mount point
+            mount_point (str): mount point from which to remove the mount point
+
+        Returns:
+            bool: True if successful; False otherwise
+        """
+        logger.debug("Clearing mount point %s on %s:", mount_point, hosts)
+        commands = [f"sudo umount -f {mount_point}", f"sudo rm -fr {mount_point}"]
+        for command in commands:
+            if not run_remote(logger, hosts, command).passed:
+                return False
+        return True
+
     def _generate_certs(self, logger):
         """Generate the certificates for the test.
 
@@ -678,10 +797,11 @@ class TestRunner():
         certgen_dir = os.path.abspath(
             os.path.join("..", "..", "..", "..", "lib64", "daos", "certgen"))
         command = os.path.join(certgen_dir, "gen_certificates.sh")
-        try:
-            run_local(logger, f"/usr/bin/rm -rf {certs_dir}")
-            run_local(logger, f"{command} {test_env.log_dir}")
-        except RunException:
+        if not run_local(logger, f"/usr/bin/rm -rf {certs_dir}").passed:
+            message = "Error removing old certificates"
+            self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
+            return 128
+        if not run_local(logger, f"{command} {test_env.log_dir}").passed:
             message = "Error generating certificates"
             self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
             return 128
@@ -703,12 +823,13 @@ class TestRunner():
 
             if crash_files:
                 latest_crash_dir = os.path.join(avocado_logs_dir, "latest", "crashes")
-                try:
-                    run_local(logger, f"mkdir -p {latest_crash_dir}", check=True)
+                if run_local(logger, f"mkdir -p {latest_crash_dir}").passed:
                     for crash_file in crash_files:
-                        run_local(logger, f"mv {crash_file} {latest_crash_dir}", check=True)
-                except RunException:
-                    message = "Error collecting crash files"
+                        if not run_local(logger, f"mv {crash_file} {latest_crash_dir}").passed:
+                            message = "Error collecting crash files: mv"
+                            self.test_result.fail_test(logger, "Execute", message, sys.exc_info())
+                else:
+                    message = "Error collecting crash files: mkdir"
                     self.test_result.fail_test(logger, "Execute", message, sys.exc_info())
             else:
                 logger.debug("No avocado crash files found in %s", crash_dir)
@@ -804,8 +925,10 @@ class TestGroup():
         # Find all the test files that contain tests matching the tags
         logger.debug("-" * 80)
         logger.info("Detecting tests matching tags: %s", " ".join(command))
-        output = run_local(logger, " ".join(command), check=True)
-        unique_test_files = set(re.findall(self._avocado.get_list_regex(), output.stdout))
+        result = run_local(logger, " ".join(command))
+        if not result.passed:
+            raise RunException("Error running avocado list")
+        unique_test_files = set(re.findall(self._avocado.get_list_regex(), result.joined_stdout))
         for index, test_file in enumerate(unique_test_files):
             self.tests.append(TestInfo(test_file, index + 1, self._yaml_extension))
             logger.info("  %s", self.tests[-1])
@@ -892,7 +1015,8 @@ class TestGroup():
             if new_yaml_file:
                 if verbose > 0:
                     # Optionally display a diff of the yaml file
-                    run_local(logger, f"diff -y {test.yaml_file} {new_yaml_file}", check=False)
+                    if not run_local(logger, f"diff -y {test.yaml_file} {new_yaml_file}").passed:
+                        raise RunException(f"Error diff'ing {test.yaml_file}")
                 test.yaml_file = new_yaml_file
 
             # Display the modified yaml file variants with debug
@@ -900,7 +1024,8 @@ class TestGroup():
             if test.extra_yaml:
                 command.extend(test.extra_yaml)
             command.extend(["--summary", "3"])
-            run_local(logger, " ".join(command))
+            if not run_local(logger, " ".join(command)).passed:
+                raise RunException(f"Error listing test variants for {test.yaml_file}")
 
             # Collect the host information from the updated test yaml
             test.set_yaml_info(logger, include_localhost)
@@ -1021,13 +1146,11 @@ class TestGroup():
             logger.debug("  Copying applications from the '%s' directory", self._test_env.app_src)
             run_local(logger, f"ls -al '{self._test_env.app_src}'")
             for app in os.listdir(self._test_env.app_src):
-                try:
-                    run_local(
-                        logger,
-                        f"cp -r '{os.path.join(self._test_env.app_src, app)}' "
-                        f"'{self._test_env.app_dir}'",
-                        check=True)
-                except RunException:
+                result = run_local(
+                    logger,
+                    f"cp -r '{os.path.join(self._test_env.app_src, app)}' "
+                    f"'{self._test_env.app_dir}'")
+                if not result.passed:
                     message = 'Error copying files to the application directory'
                     result.tests[-1].fail_test(logger, 'Run', message, sys.exc_info())
                     return 128
@@ -1036,15 +1159,17 @@ class TestGroup():
         run_local(logger, f"ls -al '{self._test_env.app_dir}'")
         return 0
 
-    def run_tests(self, logger, result, repeat, setup, sparse, fail_fast, stop_daos, archive,
+    def run_tests(self, logger, result, repeat, slurm_setup, sparse, fail_fast, stop_daos, archive,
                   rename, jenkins_log, core_files, threshold, user_create, code_coverage,
-                  job_results_dir, logdir):
+                  job_results_dir, logdir, clear_mounts):
         # pylint: disable=too-many-arguments
         """Run all the tests.
 
         Args:
             logger (Logger): logger for the messages produced by this method
-            mode (str): launch mode
+            result (Results): object tracking the result of the test
+            repeat (int): number of times to repeat the test
+            slurm_setup (bool): whether to setup slurm before running the test
             sparse (bool): whether or not to display the shortened avocado test output
             fail_fast (bool): whether or not to fail the avocado run command upon the first failure
             stop_daos (bool): whether or not to stop daos servers/clients after the test
@@ -1055,6 +1180,9 @@ class TestGroup():
             threshold (str): optional upper size limit for test log files
             user_create (bool): whether to create extra test users defined by the test
             code_coverage (CodeCoverage): bullseye code coverage
+            job_results_dir (str): avocado job-results directory
+            logdir (str): base directory in which to place the log file
+            clear_mounts (list): mount points to remove before each test
 
         Returns:
             int: status code indicating any issues running tests
@@ -1084,8 +1212,8 @@ class TestGroup():
 
                 # Prepare the hosts to run the tests
                 step_status = runner.prepare(
-                    logger, test_log_file, test, loop, user_create, setup, self._control,
-                    self._partition_hosts)
+                    logger, test_log_file, test, loop, user_create, slurm_setup, self._control,
+                    self._partition_hosts, clear_mounts)
                 if step_status:
                     # Do not run this test - update its failure status to interrupted
                     return_code |= step_status

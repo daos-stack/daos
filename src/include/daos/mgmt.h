@@ -58,12 +58,15 @@ void dc_mgmt_sys_detach(struct dc_mgmt_sys *sys);
 ssize_t dc_mgmt_sys_encode(struct dc_mgmt_sys *sys, void *buf, size_t cap);
 ssize_t dc_mgmt_sys_decode(void *buf, size_t len, struct dc_mgmt_sys **sysp);
 
-int dc_mgmt_net_cfg(const char *name);
+int
+     dc_mgmt_net_cfg(const char *name, crt_init_options_t *crt_info);
 int dc_mgmt_net_cfg_check(const char *name);
 int dc_mgmt_get_pool_svc_ranks(struct dc_mgmt_sys *sys, const uuid_t puuid,
 			       d_rank_list_t **svcranksp);
 int dc_mgmt_pool_find(struct dc_mgmt_sys *sys, const char *label,
 		      uuid_t puuid, d_rank_list_t **svcranksp);
+int
+     dc_mgmt_pool_list(tse_task_t *task);
 int dc_mgmt_notify_pool_connect(struct dc_pool *pool);
 int dc_mgmt_notify_pool_disconnect(struct dc_pool *pool);
 int dc_mgmt_notify_exit(void);

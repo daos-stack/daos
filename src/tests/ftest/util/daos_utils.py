@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -386,6 +386,96 @@ class DaosCommand(DaosCommandBase):
         return self._get_json_result(
             ("pool", "list-containers"), pool=pool, sys_name=sys_name)
 
+    def pool_list(self, no_query=False, verbose=False):
+        """List pools.
+
+        Args:
+            no_query (bool, optional): If True, do not query for pool stats.
+            verbose (bool, optional): If True, use verbose mode.
+
+        Raises:
+            CommandFailure: if the daos pool list command fails.
+
+        Returns:
+            dict: the daos json command output converted to a python dictionary
+
+        """
+        # Sample verbose JSON Output:
+        # {
+        #     "response": {
+        #         "status": 0,
+        #         "pools": [
+        #         {
+        #             "uuid": "517217db-47c4-4bb9-aae5-e38ca7b3dafc",
+        #             "label": "mkp1",
+        #             "svc_reps": [
+        #             0
+        #             ],
+        #             "total_targets": 8,
+        #             "disabled_targets": 0,
+        #             "usage": [
+        #             {
+        #                 "tier_name": "SCM",
+        #                 "size": 3000000000,
+        #                 "free": 2995801112,
+        #                 "imbalance": 0
+        #             },
+        #             {
+        #                 "tier_name": "NVME",
+        #                 "size": 47000000000,
+        #                 "free": 26263322624,
+        #                 "imbalance": 36
+        #             }
+        #             ]
+        #         }
+        #         ]
+        #     },
+        #     "error": null,
+        #     "status": 0
+        # }
+        return self._get_json_result(
+            ("pool", "list"), no_query=no_query, verbose=verbose)
+
+    def _parse_pool_list(self, key=None, **kwargs):
+        """Parse the daos pool list json output for the requested information.
+
+        Args:
+            key (str, optional): pool list json dictionary key in
+                ["response"]["pools"]. Defaults to None.
+
+        Raises:
+            CommandFailure: if the daos pool list command fails.
+
+        Returns:
+            list: list of all the pool items in the daos pool list json output
+                for the requested json dictionary key. This will be an empty
+                list if the key does not exist or the json output was not in
+                the expected format.
+
+        """
+        pool_list = self.pool_list(**kwargs)
+        try:
+            if pool_list["response"]["pools"] is None:
+                return []
+            if key:
+                return [pool[key] for pool in pool_list["response"]["pools"]]
+            return pool_list["response"]["pools"]
+        except KeyError:
+            return []
+
+    def get_pool_list_all(self, **kwargs):
+        """Get a list of all the pool information from daos pool list.
+
+        Raises:
+            CommandFailure: if the daos pool list command fails.
+
+        Returns:
+            list: a list of dictionaries containing information for each pool
+                from the daos pool list json output
+
+        """
+        return self._parse_pool_list(**kwargs)
+
     def container_query(self, pool, cont, sys_name=None):
         """Query a container.
 
@@ -592,7 +682,8 @@ class DaosCommand(DaosCommandBase):
         return self._get_json_result(
             ("container", "get-prop"), pool=pool, cont=cont, prop=props)
 
-    def container_set_owner(self, pool, cont, user, group):
+    def container_set_owner(self, pool, cont, user=None, group=None, uid=None, gid=None,
+                            no_check=False):
         """Call daos container set-owner.
 
         Args:
@@ -600,6 +691,9 @@ class DaosCommand(DaosCommandBase):
             cont (str): container UUID or label
             user (str): New-user who will own the container.
             group (str): New-group who will own the container.
+            uid (int): with no_check=True, UID to use for user on POSIX container
+            gid (int): with no_check=True, GID to use for group on POSIX container
+            no_check (bool): Skip checking if user and group exist locally
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -611,7 +705,7 @@ class DaosCommand(DaosCommandBase):
         """
         return self._get_result(
             ("container", "set-owner"),
-            pool=pool, cont=cont, user=user, group=group)
+            pool=pool, cont=cont, user=user, group=group, uid=uid, gid=gid, no_check=no_check)
 
     def container_set_attr(self, pool, cont, attrs, sys_name=None):
         """Call daos container set-attr.
@@ -786,16 +880,16 @@ class DaosCommand(DaosCommandBase):
         # Sample daos object query output.
         # oid: 1152922453794619396.1 ver 0 grp_nr: 2
         # grp: 0
-        # replica 0 1
-        # replica 1 0
+        # replica 0 1:?
+        # replica 1 0:?
         # grp: 1
-        # replica 0 0
-        # replica 1 1
+        # replica 0 0:?
+        # replica 1 1:?
         data = {}
         vals = re.findall(
             r"oid:\s+([\d.]+)\s+ver\s+(\d+)\s+grp_nr:\s+(\d+)|"
             r"grp:\s+(\d+)\s+|"
-            r"replica\s+(\d+)\s+(\d+)\s*", self.result.stdout_text)
+            r"replica\s+(\d+)\s+(\d+):\d+\s*", self.result.stdout_text)
 
         try:
             oid_vals = vals[0][0]

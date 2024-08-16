@@ -1,5 +1,5 @@
 """
-(C) Copyright 2022-2023 Intel Corporation.
+(C) Copyright 2022-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -119,7 +119,7 @@ class PoolCreateAllTestBase(TestWithServers):
         if ranks is not None:
             wait_ranks = sorted(ranks)
             data = self.dmg.pool_query(self.pool[pool_idx].identifier, show_enabled=True)
-            got_ranks = sorted(data['response']['enabled_ranks'])
+            got_ranks = sorted(data['response'].get('enabled_ranks'))
             self.assertListEqual(
                 wait_ranks,
                 got_ranks,
@@ -307,8 +307,7 @@ class PoolCreateAllTestBase(TestWithServers):
         result = self.dmg.storage_query_usage()
 
         scm_used_bytes = [sys.maxsize, 0]
-        if nvme_delta_bytes is not None:
-            nvme_used_bytes = [sys.maxsize, 0]
+        nvme_used_bytes = [sys.maxsize, 0]
         for host_storage in result["response"]["HostStorage"].values():
             scm_bytes = 0
             for scm_devices in host_storage["storage"]["scm_namespaces"]:

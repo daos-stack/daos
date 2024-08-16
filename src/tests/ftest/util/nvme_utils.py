@@ -131,7 +131,7 @@ class ServerFillUp(IorTestBase):
         # Start the servers and agents
         super().setUp()
         self.hostfile_clients = None
-        self.ior_local_cmd = IorCommand()
+        self.ior_local_cmd = IorCommand(self.test_env.log_dir)
         self.ior_local_cmd.get_params(self)
         self.ior_default_flags = self.ior_local_cmd.flags.value
         self.ior_scm_xfersize = self.params.get("transfer_size",
@@ -223,6 +223,7 @@ class ServerFillUp(IorTestBase):
             free_space = self.pool.get_pool_daos_space()["s_total"][1]
             self.ior_local_cmd.transfer_size.value = self.ior_nvme_xfersize
         else:
+            free_space = None  # To appease pylint
             self.fail('Provide storage type (SCM/NVMe) to be filled')
 
         # Get the block size based on the capacity to be filled. For example
@@ -298,13 +299,13 @@ class ServerFillUp(IorTestBase):
         if nvme or scm:
             sizes = self.get_max_storage_sizes(percentage)
 
-        # If NVMe is True get the max NVMe size from servers
-        if nvme:
-            self.pool.nvme_size.update(str(sizes[1]))
+            # If NVMe is True get the max NVMe size from servers
+            if nvme:
+                self.pool.nvme_size.update(str(sizes[1]))
 
-        # If SCM is True get the max SCM size from servers
-        if scm:
-            self.pool.scm_size.update(str(sizes[0]))
+            # If SCM is True get the max SCM size from servers
+            if scm:
+                self.pool.scm_size.update(str(sizes[0]))
 
         # Create the Pool
         self.pool.create()

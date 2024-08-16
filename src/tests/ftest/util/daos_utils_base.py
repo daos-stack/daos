@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -49,8 +49,10 @@ class DaosCommandBase(CommandWithSubCommand):
 
         def get_sub_command_class(self):
             # pylint: disable=redefined-variable-type
-            """Get the dmg network sub command object."""
-            if self.sub_command.value in ("list-containers", "list"):
+            """Get the daos pool sub command object."""
+            if self.sub_command.value == "list":
+                self.sub_command_class = self.ListSubCommand()
+            elif self.sub_command.value == "list-containers":
                 self.sub_command_class = self.ListContainersSubCommand()
             elif self.sub_command.value == "query":
                 self.sub_command_class = self.QuerySubCommand()
@@ -66,6 +68,16 @@ class DaosCommandBase(CommandWithSubCommand):
                 self.sub_command_class = self.AutotestSubCommand()
             else:
                 self.sub_command_class = None
+
+        class ListSubCommand(CommandWithParameters):
+            """Defines an object for the daos pool list command."""
+
+            def __init__(self):
+                """Create a daos pool list command object."""
+                super().__init__("/run/daos/pool/list/*", "list")
+                self.sys_name = FormattedParameter("--sys-name={}")
+                self.no_query = FormattedParameter("--no-query", False)
+                self.verbose = FormattedParameter("--verbose", False)
 
         class CommonPoolSubCommand(CommandWithParameters):
             """Defines an object for the common daos pool sub-command.
@@ -438,6 +450,9 @@ class DaosCommandBase(CommandWithSubCommand):
                 super().__init__("set-owner")
                 self.user = FormattedParameter("--user={}")
                 self.group = FormattedParameter("--group={}")
+                self.uid = FormattedParameter("--uid={}")
+                self.gid = FormattedParameter("--gid={}")
+                self.no_check = FormattedParameter("--no-check", False)
 
         class SetPropSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container set-prop command."""

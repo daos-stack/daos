@@ -25,14 +25,13 @@ from dmg_utils import get_dmg_command
 from environment_utils import TestEnvironment
 from exception_utils import CommandFailure
 from fault_config_utils import FaultInjection
-from general_utils import (DaosTestError, dict_to_str, dump_engines_stacks,
-                           get_avocado_config_value, get_default_config_file, get_file_listing,
-                           nodeset_append_suffix, pcmd, run_command, set_avocado_config_value)
+from general_utils import (dict_to_str, dump_engines_stacks, get_avocado_config_value,
+                           get_default_config_file, get_file_listing, nodeset_append_suffix,
+                           set_avocado_config_value)
 from host_utils import HostException, HostInfo, HostRole, get_host_parameters, get_local_host
-from job_manager_utils import get_job_manager
 from logger_utils import TestLogger
 from pydaos.raw import DaosApiError, DaosContext, DaosLog
-from run_utils import command_as_user, run_remote, stop_processes
+from run_utils import run_local, run_remote, stop_processes
 from server_utils import DaosServerManager
 from slurm_utils import SlurmFailed, get_partition_hosts, get_reservation_hosts
 from test_utils_container import CONT_NAMESPACE, add_container
@@ -69,10 +68,11 @@ class Test(avocadoTest):
         self.test_id = self.get_test_name()
 
         # Define a test unique temporary directory
-        self.base_test_dir = os.getenv("DAOS_TEST_LOG_DIR", "/tmp")
-        self.test_dir = os.path.join(self.base_test_dir, self.test_id)
-        if not os.path.exists(self.test_dir):
-            os.makedirs(self.test_dir)
+        self.test_env = TestEnvironment()
+        self.test_dir = os.path.join(self.test_env.log_dir, self.test_id)
+
+        # Create a test unique temporary directory on this host
+        os.makedirs(self.test_dir, exist_ok=True)
 
         # Support unique test case timeout values.  These test case specific
         # timeouts are read from the test yaml using the test case method name
@@ -388,10 +388,8 @@ class Test(avocadoTest):
         """
         errors = []
         self.log.info("Removing temporary test files in %s", self.test_dir)
-        try:
-            run_command("rm -fr {}".format(self.test_dir))
-        except DaosTestError as error:
-            errors.append("Error removing temporary test files: {}".format(error))
+        if not run_local(self.log, f"rm -fr {self.test_dir}").passed:
+            errors.append(f"Error removing temporary test files in {self.test_dir}")
         return errors
 
     def _cleanup(self):
@@ -402,9 +400,14 @@ class Test(avocadoTest):
 
         """
         errors = []
+        self.log.debug("Register: %s cleanup methods detected", len(self._cleanup_methods))
         while self._cleanup_methods:
             try:
                 cleanup = self._cleanup_methods.pop()
+                self.log.debug(
+                    "[%s] Register: Calling cleanup method %s(%s)",
+                    len(self._cleanup_methods) + 1, cleanup["method"].__name__,
+                    dict_to_str(cleanup["kwargs"]))
                 errors.extend(cleanup["method"](**cleanup["kwargs"]))
             except Exception as error:      # pylint: disable=broad-except
                 if str(error) == "Test interrupted by SIGTERM":
@@ -423,8 +426,8 @@ class Test(avocadoTest):
         """
         self._cleanup_methods.append({"method": method, "kwargs": kwargs})
         self.log.debug(
-            "Register: Adding calling %s(%s) during tearDown()",
-            method.__name__, dict_to_str(kwargs))
+            "[%s] Register: Adding calling %s(%s) during tearDown()",
+            len(self._cleanup_methods), method.__name__, dict_to_str(kwargs))
 
     def increment_timeout(self, increment):
         """Increase the avocado runner timeout configuration settings by the provided value.
@@ -519,12 +522,8 @@ class TestWithoutServers(Test):
         self.bin = os.path.join(self.prefix, 'bin')
         self.daos_test = os.path.join(self.prefix, 'bin', 'daos_test')
 
-        # set default shared dir for daos tests in case DAOS_TEST_SHARED_DIR
-        # is not set, for RPM env and non-RPM env.
-        if os.path.normpath(self.prefix) != os.path.join(os.sep, 'usr'):
-            self.tmp = os.path.join(self.prefix, 'tmp')
-        else:
-            self.tmp = os.getenv('DAOS_TEST_SHARED_DIR', os.path.expanduser('~/daos_test'))
+        # set the shared directory for daos tests
+        self.tmp = self.test_env.shared_dir
         os.makedirs(self.tmp, exist_ok=True)
         self.log.debug("Shared test directory: %s", self.tmp)
         self.log.debug("Common test directory: %s", self.test_dir)
@@ -661,11 +660,10 @@ class TestWithServers(TestWithoutServers):
         self.config_file_base = "test"
         self.log_dir = os.path.split(
             os.getenv("D_LOG_FILE", "/tmp/server.log"))[0]
-        # self.debug = False
-        # self.config = None
-        self.job_manager = None
-        # whether engines ULT stacks have been already dumped
-        self.dumped_engines_stacks = False
+        # Whether to dump engines ULT stacks on failure
+        self.__dump_engine_ult_on_failure = True
+        # Whether engines ULT stacks have been already dumped
+        self.__have_dumped_ult_stacks = False
         # Suffix to append to each access point name
         self.access_points_suffix = None
 
@@ -737,6 +735,10 @@ class TestWithServers(TestWithoutServers):
                 self.access_points, self.access_points_suffix)
         self.host_info.access_points = self.access_points
 
+        # Toggle whether to dump server ULT stacks on failure
+        self.__dump_engine_ult_on_failure = self.params.get(
+            "dump_engine_ult_on_failure", "/run/setup/*", True)
+
         # # Find a configuration that meets the test requirements
         # self.config = Configuration(
         #     self.params, self.hostlist_servers, debug=self.debug)
@@ -754,17 +756,19 @@ class TestWithServers(TestWithoutServers):
         # Display host information
         self.host_info.display(self.log)
 
+        # Create a test unique temporary directory on the other hosts
+        result = run_remote(self.log, self.host_info.all_hosts, f"mkdir -p {self.test_dir}")
+        if not result.passed:
+            self.fail(f"Error creating test-specific temporary directory on {result.failed_hosts}")
+
+        # Copy the fault injection files to the hosts.
+        self.fault_injection.copy_fault_files(self.host_info.all_hosts)
+
         # List common test directory contents before running the test
         self.log.info("-" * 100)
         self.log.debug("Common test directory (%s) contents:", self.test_dir)
-        hosts = self.hostlist_servers.copy()
-        if self.hostlist_clients:
-            hosts.add(self.hostlist_clients)
-        # Copy the fault injection files to the hosts.
-        self.fault_injection.copy_fault_files(hosts)
-        lines = get_file_listing(hosts, self.test_dir).stdout_text.splitlines()
-        for line in lines:
-            self.log.debug("  %s", line)
+        all_hosts = include_local_host(self.host_info.all_hosts)
+        get_file_listing(all_hosts, self.test_dir, self.test_env.agent_user).log_output(self.log)
 
         if not self.start_servers_once or self.name.uid == 1:
             # Kill commands left running on the hosts (from a previous test)
@@ -779,12 +783,11 @@ class TestWithServers(TestWithoutServers):
             # Ensure write permissions for the daos command log files when
             # using systemctl
             if "Systemctl" in (self.agent_manager_class, self.server_manager_class):
-                log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
                 self.log.info("-" * 100)
                 self.log.info(
                     "Updating file permissions for %s for use with systemctl",
-                    log_dir)
-                pcmd(hosts, "chmod a+rw {}".format(log_dir))
+                    self.test_env.log_dir)
+                run_remote(self.log, hosts, f"chmod a+rw {self.test_env.log_dir}")
 
         # Start the servers
         force_agent_start = False
@@ -820,9 +823,6 @@ class TestWithServers(TestWithoutServers):
                     "Errors detected attempting to ensure all pools had been "
                     "removed from continually running servers.")
 
-        # Setup a job manager command for running the test command
-        get_job_manager(self, class_name_default=None)
-
         # Mark the end of setup
         self.log_step('setUp(): Setup complete')
         self.log.info("=" * 100)
@@ -843,7 +843,8 @@ class TestWithServers(TestWithoutServers):
             cart_ctl.add_log_msg.value = "add_log_msg"
             cart_ctl.rank.value = "all"
             cart_ctl.log_message.value = message
-            cart_ctl.no_sync.value = None
+            # Don't ping all ranks before sending the log command
+            cart_ctl.no_sync.value = True
             cart_ctl.use_daos_agent_env.value = True
 
             for manager in self.agent_managers:
@@ -1082,7 +1083,7 @@ class TestWithServers(TestWithoutServers):
 
         self.agent_managers.append(
             DaosAgentManager(
-                group, self.bin, cert_dir, config_file, config_temp,
+                group, self.bin, cert_dir, config_file, self.test_env.agent_user, config_temp,
                 self.agent_manager_class, outputdir=self.outputdir)
         )
 
@@ -1333,27 +1334,21 @@ class TestWithServers(TestWithoutServers):
 
         """
         errors = []
-        hosts = self.hostlist_servers.copy()
-        if self.hostlist_clients:
-            hosts.add(self.hostlist_clients)
-        all_hosts = include_local_host(hosts)
-        self.log.info(
-            "Removing temporary test files in %s from %s",
-            self.test_dir, str(NodeSet.fromlist(all_hosts)))
-        result = run_remote(
-            self.log, all_hosts, command_as_user("rm -fr {}".format(self.test_dir), "root"))
+        all_hosts = include_local_host(self.host_info.all_hosts)
+        self.log.info("Removing temporary test files in %s from %s", self.test_dir, all_hosts)
+        result = run_remote(self.log, all_hosts, f"rm -fr {self.test_dir}")
         if not result.passed:
-            errors.append("Error removing temporary test files on {}".format(result.failed_hosts))
+            errors.append(f"Error removing temporary test files on {result.failed_hosts}")
         return errors
 
-    def dump_engines_stacks(self, message):
+    def __dump_engines_stacks(self, message):
         """Dump the engines ULT stacks.
 
         Args:
-            message (str): reason for dumping the ULT stacks. Defaults to None.
+            message (str): reason for dumping the ULT stacks
         """
-        if self.dumped_engines_stacks is False:
-            self.dumped_engines_stacks = True
+        if self.__dump_engine_ult_on_failure and not self.__have_dumped_ult_stacks:
+            self.__have_dumped_ult_stacks = True
             self.log.info("%s, dumping ULT stacks", message)
             dump_engines_stacks(self.hostlist_servers)
 
@@ -1362,17 +1357,17 @@ class TestWithServers(TestWithoutServers):
         super().report_timeout()
         if self.timeout is not None and self.time_elapsed > self.timeout:
             # dump engines ULT stacks upon test timeout
-            self.dump_engines_stacks("Test has timed-out")
+            self.__dump_engines_stacks("Test has timed-out")
 
     def fail(self, message=None):
         """Dump engines ULT stacks upon test failure."""
-        self.dump_engines_stacks("Test has failed")
+        self.__dump_engines_stacks("Test has failed")
         super().fail(message)
 
     def error(self, message=None):
         # pylint: disable=arguments-renamed
         """Dump engines ULT stacks upon test error."""
-        self.dump_engines_stacks("Test has errored")
+        self.__dump_engines_stacks("Test has errored")
         super().error(message)
 
     def tearDown(self):
@@ -1385,7 +1380,7 @@ class TestWithServers(TestWithoutServers):
         # class (see DAOS-1452/DAOS-9941 and Avocado issue #5217 with
         # associated PR-5224)
         if self.status is not None and self.status != 'PASS' and self.status != 'SKIP':
-            self.dump_engines_stacks("Test status is {}".format(self.status))
+            self.__dump_engines_stacks("Test status is {}".format(self.status))
 
         # Report whether or not the timeout has expired
         self.report_timeout()
@@ -1393,10 +1388,7 @@ class TestWithServers(TestWithoutServers):
         # Tear down any test-specific items
         self._teardown_errors = self.pre_tear_down()
 
-        # Stop any test jobs that may still be running
-        self._teardown_errors.extend(self.stop_job_managers())
-
-        # Destroy any containers and pools next
+        # Destroy any job managers, containers, pools, and dfuse instances next
         # Eventually this call will encompass all teardown steps
         self._teardown_errors.extend(self._cleanup())
 
@@ -1417,22 +1409,6 @@ class TestWithServers(TestWithoutServers):
         """
         self.log.debug("no pre-teardown steps defined")
         return []
-
-    def stop_job_managers(self):
-        """Stop the test job manager.
-
-        Returns:
-            list: a list of exceptions raised stopping the agents
-
-        """
-        error_list = []
-        if self.job_manager:
-            self.test_log.info("Stopping test job manager")
-            if isinstance(self.job_manager, list):
-                error_list = self._stop_managers(self.job_manager, "test job manager")
-            else:
-                error_list = self._stop_managers([self.job_manager], "test job manager")
-        return error_list
 
     def destroy_containers(self, containers):
         """Close and destroy one or more containers.
@@ -1616,7 +1592,7 @@ class TestWithServers(TestWithoutServers):
                     "ERROR: At least one multi-variant server was not found in "
                     "its expected state; stopping all servers")
                 # dump engines stacks if not already done
-                self.dump_engines_stacks("Some engine not in expected state")
+                self.__dump_engines_stacks("Some engine not in expected state")
             self.test_log.info(
                 "Stopping %s group(s) of servers", len(self.server_managers))
             errors.extend(self._stop_managers(self.server_managers, "servers"))
