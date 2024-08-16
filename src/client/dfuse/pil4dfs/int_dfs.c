@@ -163,11 +163,15 @@ static long int         page_size;
 #define FI_INI_NOT_RUNNING    0
 #define FI_INI_RUNNING        1
 
+#define MPI_INIT_NOT_RUNNING  0
+#define MPI_INIT_RUNNING      1
+
 #define DAOS_INIT_NOT_RUNNING 0
 #define DAOS_INIT_RUNNING     1
 
 static _Atomic uint64_t ze_init_running;
 static _Atomic uint64_t fi_ini_running;
+static _Atomic uint64_t mpi_init_running;
 
 static long int         daos_initing;
 _Atomic bool            d_daos_inited;
@@ -478,6 +482,7 @@ static int (*next_tcgetattr)(int fd, void *termios_p);
 
 static int (*next_ze_init)(int flags);
 static void (*next_fi_ini)(void);
+static int (*next_mpi_init)(int* argc, char*** argv);
 
 /* to do!! */
 /**
@@ -1085,6 +1090,33 @@ fi_ini(void)
 	}
 }
 
+int
+MPI_Init(int* argc, char*** argv)
+{
+	int      rc;
+	uint64_t status_old = MPI_INIT_NOT_RUNNING;
+
+	if (next_mpi_init == NULL) {
+		next_mpi_init = dlsym(RTLD_NEXT, "MPI_Init");
+		D_ASSERT(next_mpi_init != NULL);
+	}
+
+	if (!atomic_compare_exchange_weak(&mpi_init_running, &status_old, MPI_INIT_RUNNING)) {
+		D_ERROR("Nested MPI_Init() call is detected.\n");
+	}
+
+	rc = next_mpi_init(argc, argv);
+
+	status_old = MPI_INIT_RUNNING;
+	if (!atomic_compare_exchange_weak(&mpi_init_running, &status_old, MPI_INIT_NOT_RUNNING)) {
+		D_ERROR("mpi_init_running is supposed to be true.\n");
+	}
+	return rc;
+}
+
+int
+PMPI_Init(int* argc, char*** argv) __attribute__((alias("MPI_Init")));
+
 /** determine whether a path (both relative and absolute) is on DAOS or not. If yes,
  *  returns parent object, item name, full path of parent dir, full absolute path, and
  *  the pointer to struct dfs_mt.
@@ -1181,6 +1213,15 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 		if (atomic_load_relaxed(&d_daos_inited) == false) {
 			uint64_t status_old = DAOS_INIT_NOT_RUNNING;
 			bool     rc_cmp_swap;
+
+			/* Check whether MPI_Init() is running. If yes, pass to the original
+			 * libc functions. Avoid possible zeInit reentrancy/nested call.
+			 */
+
+			if (atomic_load_relaxed(&mpi_init_running) == MPI_INIT_RUNNING) {
+				*is_target_path = 0;
+				goto out_normal;
+			}
 
 			/* Check whether zeInit() is running. If yes, pass to the original
 			 * libc functions. Avoid possible zeInit reentrancy/nested call.
