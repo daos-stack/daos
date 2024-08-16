@@ -80,8 +80,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: [fedora]
-        compiler: [gcc]
+        distro: [fedora, leap.15]
+        compiler: [clang, gcc]
         include:
           - distro: rocky
             base: el.9
