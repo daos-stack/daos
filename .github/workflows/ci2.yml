@@ -13,66 +13,66 @@ jobs:
 
   # reuse the cache from the landing-builds workflow if available, if not then build the images
   # from scratch, but do not save them.
-  #Build-and-test:
-  #  name: Run DAOS/NLT tests
-  #  runs-on: ubuntu-22.04
-  #  permissions:
-  #    # https://github.com/EnricoMi/publish-unit-test-result-action#permissions
-  #    checks: write
-  #    pull-requests: write
-  #  strategy:
-  #    matrix:
-  #      distro: [ubuntu]
-  #      include:
-  #        - distro: ubuntu
-  #          base: ubuntu
-  #          with: ubuntu:mantic
-  #  env:
-  #    DEPS_JOBS: 10
-  #    COMPILER: clang
-  #    BASE_DISTRO: ${{ matrix.with }}
-  #    DOCKER_BASE: ${{ matrix.base }}
-  #  steps:
-  #    - name: Checkout code
-  #      uses: actions/checkout@v4
-  #      with:
-  #        submodules: true
-  #        fetch-depth: 500
-  #        ref: ${{ github.event.pull_request.head.sha }}
-  #    - name: Setup git hash
-  #      run: ./ci/gha_helper.py
-  #      id: commit-hash
-  #    - name: Fetch docker images from cache.
-  #      uses: jpribyl/action-docker-layer-caching@v0.1.1
-  #      continue-on-error: true
-  #      with:
-  #        key: ${{ steps.commit-hash.outputs.key }}
-  #        restore-keys: |
-  #          ${{ steps.commit-hash.outputs.restore }}
-  #          ${{ steps.commit-hash.outputs.restore_prev }}
-  #        skip-save: true
-  #    - name: Update dependencies in image.
-  #      run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
-  #                          --build-arg DAOS_BUILD=no
-  #                          --build-arg DEPS_JOBS
-  #                          --build-arg BASE_DISTRO
-  #                          --build-arg DAOS_KEEP_SRC=yes
-  #                          --tag build-image
-  #    - name: Build and Test
-  #      run: docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
-  #            --env COMPILER --env DEPS_JOBS --user root:root build-image
-  #            ./daos/utils/ci/run_in_gha.sh
-  #    - name: Fetch results
-  #      if: always()
-  #      run: docker cp build-post:/home/daos/daos/nlt-junit.xml ./
-  #    - name: Publish NLT test results
-  #      if: always()
-  #      uses: EnricoMi/publish-unit-test-result-action@v1.17
-  #      with:
-  #        github_token: ${{ secrets.GITHUB_TOKEN }}
-  #        files: nlt-junit.xml
-  #        comment_mode: off  # yamllint disable-line rule:truthy
-  #        fail_on: nothing
+  Build-and-test:
+    name: Run DAOS/NLT tests
+    runs-on: ubuntu-22.04
+    permissions:
+      # https://github.com/EnricoMi/publish-unit-test-result-action#permissions
+      checks: write
+      pull-requests: write
+    strategy:
+      matrix:
+        distro: [ubuntu]
+        include:
+          - distro: ubuntu
+            base: ubuntu
+            with: ubuntu:mantic
+    env:
+      DEPS_JOBS: 10
+      COMPILER: clang
+      BASE_DISTRO: ${{ matrix.with }}
+      DOCKER_BASE: ${{ matrix.base }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 500
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Setup git hash
+        run: ./ci/gha_helper.py
+        id: commit-hash
+      - name: Fetch docker images from cache.
+        uses: jpribyl/action-docker-layer-caching@v0.1.1
+        continue-on-error: true
+        with:
+          key: ${{ steps.commit-hash.outputs.key }}
+          restore-keys: |
+            ${{ steps.commit-hash.outputs.restore }}
+            ${{ steps.commit-hash.outputs.restore_prev }}
+          skip-save: true
+      - name: Update dependencies in image.
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
+                            --build-arg DAOS_BUILD=no
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+                            --build-arg DAOS_KEEP_SRC=yes
+                            --tag build-image
+      - name: Build and Test
+        run: docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
+              --env COMPILER --env DEPS_JOBS --user root:root build-image
+              ./daos/utils/ci/run_in_gha.sh
+      - name: Fetch results
+        if: always()
+        run: docker cp build-post:/home/daos/daos/nlt-junit.xml ./
+      - name: Publish NLT test results
+        if: always()
+        uses: EnricoMi/publish-unit-test-result-action@v1.17
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          files: nlt-junit.xml
+          comment_mode: off  # yamllint disable-line rule:truthy
+          fail_on: nothing
 
   Build:
     name: Build DAOS
