@@ -35,7 +35,7 @@ class DaosContainerOwnerTest(ContSecurityTestBase, PoolSecurityTestBase):
         return {
             "user": result['response']['owner_user'],
             "group": result['response']['owner_group'],
-            }
+        }
 
     def _check_ownership(self, exp_user, exp_group):
         ownership = self._get_ownership()
@@ -160,7 +160,7 @@ class DaosContainerOwnerTest(ContSecurityTestBase, PoolSecurityTestBase):
             result = self.get_dmg_command().cont_set_owner(self.pool.uuid, self.container.uuid)
         self.verify_daos_pool_cont_result(result, "set owner with no user or group", "fail",
                                           "at least one")
-        self._check_ownership(orig_owner["user"], orig_owner["group"]) # expect unchanged
+        self._check_ownership(orig_owner["user"], orig_owner["group"])  # expect unchanged
 
         # User only - not locally checked
         with self.dmg.no_exception():
