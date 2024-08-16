@@ -646,6 +646,7 @@ class TestEnvironment():
 def set_test_environment(logger, test_env=None, servers=None, clients=None, provider=None,
                          insecure_mode=False, details=None, agent_user=None, log_dir=None,
                          systemd_path=None, systemd_lib_path=None):
+    # pylint: disable=too-many-arguments
     """Set up the test environment.
 
     Args:
