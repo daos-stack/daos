@@ -1648,7 +1648,7 @@ out:
 
 	if (rc != DER_SUCCESS)
 		D_INFO("uri lookup of (rank=%d:tag=%d) group=%s failed; rc=%d\n", ul_in->ul_rank,
-		       ul_in->ul_tag, grp_priv->gp_pub.cg_grpid, rc);
+		       ul_in->ul_tag, grp_priv == NULL ? "(null)" : grp_priv->gp_pub.cg_grpid, rc);
 
 	if (should_decref)
 		crt_grp_priv_decref(grp_priv);
@@ -2368,6 +2368,8 @@ out:
  *
  * Each time node is removed, an corresponding index is added back
  * to the free index list
+ *
+ * Returns index on success or -DER_NOSPACE if all indices are used up
  */
 static int
 grp_get_free_index(struct crt_grp_priv *priv)
@@ -2377,11 +2379,9 @@ grp_get_free_index(struct crt_grp_priv *priv)
 
 	free_index = d_list_pop_entry(&priv->gp_membs.cgm_free_indices,
 				      struct free_index, fi_link);
-
-	if (!free_index) {
-		D_DEBUG(DB_ALL, "No more free indices left\n");
+	/* Forces caller to expand the list  */
+	if (!free_index)
 		return -DER_NOSPACE;
-	}
 
 	ret = free_index->fi_index;
 	D_FREE(free_index);
