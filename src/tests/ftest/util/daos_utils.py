@@ -194,7 +194,7 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos container get-acl command fails.
 
         """
-        return self._get_result(
+        return self._get_json_result(
             ("container", "get-acl"), pool=pool, cont=cont,
             verbose=verbose, outfile=outfile)
 

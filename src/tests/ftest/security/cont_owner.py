@@ -30,6 +30,18 @@ class DaosContainerOwnerTest(ContSecurityTestBase, PoolSecurityTestBase):
         self.container = self.create_container_with_daos(self.pool, acl_file=acl_file_name,
                                                          cont_type=cont_type)
 
+    def _get_ownership(self):
+        result = self.container.get_acl()
+        return {
+            "user": result['response']['owner_user'],
+            "group": result['response']['owner_group'],
+            }
+
+    def _check_ownership(self, exp_user, exp_group):
+        ownership = self._get_ownership()
+        self.assertEqual(ownership["user"], exp_user, "user owner doesn't match")
+        self.assertEqual(ownership["group"], exp_group, "group owner doesn't match")
+
     def test_container_set_owner_no_check_non_posix(self):
         """
         Description:
@@ -125,3 +137,56 @@ class DaosContainerOwnerTest(ContSecurityTestBase, PoolSecurityTestBase):
                                               no_check=True)
         self.verify_daos_pool_cont_result(result, "set owner with uid/gid with no-check",
                                           "pass", None)
+
+    def test_dmg_cont_set_owner(self):
+        """
+        Description:
+            Verify dmg container set-owner
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=security,control,container,cont_sec,cont_set_owner
+        :avocado: tags=DaosContainerOwnerTest
+        :avocado: tags=test_dmg_cont_set_owner
+        """
+        test_user = "fakeuser@"
+        test_group = "fakegroup@"
+
+        self._create_cont_with_acl(cont_type="python")
+        orig_owner = self._get_ownership()
+
+        # No user/group
+        with self.dmg.no_exception():
+            result = self.get_dmg_command().cont_set_owner(self.pool.uuid, self.container.uuid)
+        self.verify_daos_pool_cont_result(result, "set owner with no user or group", "fail",
+                                          "at least one")
+        self._check_ownership(orig_owner["user"], orig_owner["group"]) # expect unchanged
+
+        # User only - not locally checked
+        with self.dmg.no_exception():
+            result = self.get_dmg_command().cont_set_owner(self.pool.uuid, self.container.uuid,
+                                                           user=test_user)
+        self.verify_daos_pool_cont_result(result, "set owner user", "pass", None)
+        self._check_ownership(test_user, orig_owner["group"])
+
+        # Group only - not locally checked
+        with self.dmg.no_exception():
+            result = self.get_dmg_command().cont_set_owner(self.pool.uuid, self.container.uuid,
+                                                           group=test_group)
+        self.verify_daos_pool_cont_result(result, "set owner group", "pass", None)
+        self._check_ownership(test_user, test_group)
+
+        # User and group
+        with self.dmg.no_exception():
+            result = self.get_dmg_command().cont_set_owner(self.pool.uuid, self.container.uuid,
+                                                           user="fakeuser2", group="fakegroup2")
+        self.verify_daos_pool_cont_result(result, "set owner user and group", "pass", None)
+        self._check_ownership("fakeuser2@", "fakegroup2@")
+
+        # Labels as IDs
+        with self.dmg.no_exception():
+            result = self.get_dmg_command().cont_set_owner(self.pool.label.value,
+                                                           self.container.label.value,
+                                                           user=orig_owner["user"])
+        self.verify_daos_pool_cont_result(result, "set owner user and group", "pass", None)
+        self._check_ownership(orig_owner["user"], "fakegroup2@")
