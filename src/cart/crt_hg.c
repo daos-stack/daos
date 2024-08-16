@@ -1478,18 +1478,20 @@ crt_hg_reply_send_cb(const struct hg_cb_info *hg_cbinfo)
 {
 	struct crt_rpc_priv	*rpc_priv = hg_cbinfo->arg;
 	hg_return_t		hg_ret;
-	crt_opcode_t		opc;
 
 	D_ASSERT(rpc_priv != NULL);
 
-	opc = rpc_priv->crp_pub.cr_opc;
 	hg_ret = hg_cbinfo->ret;
 	/* Check for the return code here but it's not automatically an error,
 	 * see CART-146 for details
 	 */
-	if (hg_ret != HG_SUCCESS)
-		D_WARN("hg_cbinfo->ret: " DF_HG_RC ", opc: %#x.\n",
-		       DP_HG_RC(hg_ret), opc);
+	if (hg_ret != HG_SUCCESS) {
+		d_rank_t src_rank;
+
+		crt_req_src_rank_get(&rpc_priv->crp_pub, &src_rank);
+		RPC_ERROR(rpc_priv, "hg_cbinfo->ret: " DF_HG_RC ", src_rank=%u\n",
+			  DP_HG_RC(hg_ret), src_rank);
+	}
 
 	/* corresponding to the crt_req_addref in crt_hg_reply_send */
 	RPC_DECREF(rpc_priv);

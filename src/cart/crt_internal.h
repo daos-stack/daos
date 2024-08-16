@@ -55,6 +55,17 @@
 			      ##__VA_ARGS__);                                                      \
 	} while (0)
 
+#define RPC_INFO(rpc, fmt, ...)                                                                   \
+	do {                                                                                       \
+		char *_module;                                                                     \
+		char *_opc;                                                                        \
+                                                                                                   \
+		crt_opc_decode((rpc)->crp_pub.cr_opc, &_module, &_opc);                            \
+		D_TRACE_INFO((rpc), "[opc=%#x (%s:%s) rpcid=%#lx rank:tag=%d:%d] " fmt,           \
+			     (rpc)->crp_pub.cr_opc, _module, _opc, (rpc)->crp_req_hdr.cch_rpcid,  \
+			     (rpc)->crp_pub.cr_ep.ep_rank, (rpc)->crp_pub.cr_ep.ep_tag,           \
+			     ##__VA_ARGS__);                                                      \
+	} while (0)
 /**
  * If \a cond is false, this is equivalent to an RPC_ERROR (i.e., \a mask is
  * ignored). If \a cond is true, this is equivalent to an RPC_TRACE.

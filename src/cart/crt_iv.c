@@ -1863,8 +1863,11 @@ crt_hdlr_iv_sync_aux(void *arg)
 	switch (sync_type->ivs_event) {
 	case CRT_IV_SYNC_EVENT_UPDATE:
 	{
-		d_sg_list_t	tmp_iv;
-		d_iov_t		tmp_iovs;
+		d_sg_list_t		tmp_iv;
+		d_iov_t			tmp_iovs;
+		struct crt_rpc_priv    *rpc_priv;
+
+		rpc_priv = container_of(rpc_req, struct crt_rpc_priv, crp_pub);
 
 		rc = iv_ops->ivo_on_get(ivns_internal, &input->ivs_key,
 					0, CRT_IV_PERM_READ | CRT_IV_NO_ALLOC, &tmp_iv,
@@ -1884,13 +1887,13 @@ crt_hdlr_iv_sync_aux(void *arg)
 				D_ERROR("crt_bulk_access(): "DF_RC"\n", DP_RC(rc));
 				D_GOTO(exit, rc);
 			}
-			D_INFO("tmp_iv sgl coming from bulk\n");
+			RPC_INFO(rpc_priv, "tmp_iv sgl coming from bulk\n");
 		} else if (input->ivs_sync_sgl.sg_nr > 0) {
 			tmp_iv = input->ivs_sync_sgl;
-			D_INFO("tmp_iv sgl coming from input->ivs_sync_sgl\n");
+			RPC_INFO(rpc_priv, "tmp_iv sgl coming from input->ivs_sync_sgl\n");
 		} else {
 			memset(&tmp_iv, 0x0, sizeof(tmp_iv));
-			D_INFO("tmp_iv sgl coming from memset\n");
+			RPC_INFO(rpc_priv, "tmp_iv sgl coming from memset\n");
 		}
 
 		rc = iv_ops->ivo_on_refresh(ivns_internal, &input->ivs_key,
@@ -2044,7 +2047,10 @@ call_pre_sync_cb(struct crt_ivns_internal *ivns_internal,
 	d_iov_t			*tmp_iovs = NULL;
 	void			*user_priv;
 	bool			 need_put = false;
+	struct crt_rpc_priv	*rpc_priv;
 	int			 rc;
+
+	rpc_priv = container_of(rpc_req, struct crt_rpc_priv, crp_pub);
 
 	iv_ops = crt_iv_ops_get(ivns_internal, input->ivs_class_id);
 	D_ASSERT(iv_ops != NULL);
@@ -2072,13 +2078,13 @@ call_pre_sync_cb(struct crt_ivns_internal *ivns_internal,
 			D_ERROR("crt_bulk_access(): "DF_RC"\n", DP_RC(rc));
 			D_GOTO(exit, rc);
 		}
-		D_INFO("tmp_iv sgl coming from bulk\n");
+		RPC_INFO(rpc_priv, "tmp_iv sgl coming from bulk\n");
 	} else if (input->ivs_sync_sgl.sg_nr > 0) {
 		tmp_iv = input->ivs_sync_sgl;
-		D_INFO("tmp_iv sgl coming from input->ivs_sync_sgl\n");
+		RPC_INFO(rpc_priv, "tmp_iv sgl coming from input->ivs_sync_sgl\n");
 	} else {
 		memset(&tmp_iv, 0x0, sizeof(tmp_iv));
-		D_INFO("tmp_iv sgl coming from memset\n");
+		RPC_INFO(rpc_priv, "tmp_iv sgl coming from memset\n");
 	}
 
 	D_DEBUG(DB_TRACE, "Executing ivo_pre_sync\n");
