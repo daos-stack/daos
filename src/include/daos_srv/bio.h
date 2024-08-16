@@ -948,11 +948,13 @@ enum bio_mc_flags {
  * \param[in]	wal_sz		WAL blob in bytes
  * \param[in]	data_sz		Data blob in bytes
  * \param[in]	flags		bio_mc_flags
+ * \param[in]	backend_type	Backend allocator type
  *
  * \return			Zero on success, negative value on error.
  */
 int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t scm_sz,
-		  uint64_t meta_sz, uint64_t wal_sz, uint64_t data_sz, enum bio_mc_flags flags);
+		  uint64_t meta_sz, uint64_t wal_sz, uint64_t data_sz, enum bio_mc_flags flags,
+		  uint8_t backend_type);
 
 /*
  * Destroy Meta/Data/WAL blobs
@@ -1081,7 +1083,7 @@ int bio_wal_checkpoint(struct bio_meta_context *mc, uint64_t tx_id, uint64_t *pu
  * Query meta capacity & meta block size & meta blob header blocks.
  */
 void bio_meta_get_attr(struct bio_meta_context *mc, uint64_t *capacity, uint32_t *blk_sz,
-		       uint32_t *hdr_blks);
+		       uint32_t *hdr_blks, uint8_t *backend_type);
 
 struct bio_wal_info {
 	uint32_t	wi_tot_blks;	/* Total blocks */

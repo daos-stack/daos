@@ -740,6 +740,19 @@ vos2mc_flags(unsigned int vos_flags)
 	return mc_flags;
 }
 
+static inline void
+init_umem_store(struct umem_store *store, struct bio_meta_context *mc)
+{
+	bio_meta_get_attr(mc, &store->stor_size, &store->stor_blk_size, &store->stor_hdr_blks,
+			  (uint8_t *)&store->store_type);
+	store->stor_priv = mc;
+	store->stor_ops = &vos_store_ops;
+
+	/* Legacy BMEM V1 pool without backend type stored */
+	if (store->store_type == DAOS_MD_PMEM)
+		store->store_type = DAOS_MD_BMEM;
+}
+
 static int
 vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 		   size_t scm_sz, size_t nvme_sz, size_t wal_sz, size_t meta_sz,
@@ -754,15 +767,17 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 
 	*ph = NULL;
 	/* always use PMEM mode for SMD */
-	store.store_type = umempobj_get_backend_type();
 	if (flags & VOS_POF_SYSDB) {
 		store.store_type = DAOS_MD_PMEM;
 		store.store_standalone = true;
+		goto umem_create;
 	}
 
 	/* No NVMe is configured or current xstream doesn't have NVMe context */
-	if (!bio_nvme_configured(SMD_DEV_TYPE_MAX) || xs_ctxt == NULL)
+	if (!bio_nvme_configured(SMD_DEV_TYPE_MAX) || xs_ctxt == NULL) {
+		store.store_type = DAOS_MD_PMEM;
 		goto umem_create;
+	}
 
 	/* Is meta_sz is set then use it, otherwise derive from VOS file size or scm_sz */
 	if (!meta_sz) {
@@ -779,11 +794,16 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 		}
 	}
 
-	D_DEBUG(DB_MGMT, "Create BIO meta context for xs:%p pool:"DF_UUID" "
-		"scm_sz: %zu meta_sz: %zu, nvme_sz: %zu wal_sz:%zu\n",
-		xs_ctxt, DP_UUID(pool_id), scm_sz, meta_sz, nvme_sz, wal_sz);
+	store.store_type = umempobj_get_backend_type();
+	if (store.store_type == DAOS_MD_BMEM && meta_sz > scm_sz)
+		store.store_type = DAOS_MD_BMEM_V2;
 
-	rc = bio_mc_create(xs_ctxt, pool_id, scm_sz, meta_sz, wal_sz, nvme_sz, mc_flags);
+	D_DEBUG(DB_MGMT, "Create BIO meta context for xs:%p pool:"DF_UUID" "
+		"scm_sz: %zu meta_sz: %zu, nvme_sz: %zu wal_sz:%zu backend:%d\n",
+		xs_ctxt, DP_UUID(pool_id), scm_sz, meta_sz, nvme_sz, wal_sz, store.store_type);
+
+	rc = bio_mc_create(xs_ctxt, pool_id, scm_sz, meta_sz, wal_sz, nvme_sz, mc_flags,
+			   store.store_type);
 	if (rc != 0) {
 		D_ERROR("Failed to create BIO meta context for xs:%p pool:"DF_UUID". "DF_RC"\n",
 			xs_ctxt, DP_UUID(pool_id), DP_RC(rc));
@@ -802,14 +822,7 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 		return rc;
 	}
 
-	// TODO DAOS-13690: When DAV allocator supports different MD-blob and VOS-file sizes, pass
-	//                  meta_sz and scm_sz to umem_store. The poolsize umempobj_create()
-	//                  param will continue to be used as it is currently (non-zero for create,
-	//                  zero to use existing) to keep compatibility with PMEM mode.
-
-	bio_meta_get_attr(mc, &store.stor_size, &store.stor_blk_size, &store.stor_hdr_blks);
-	store.stor_priv = mc;
-	store.stor_ops = &vos_store_ops;
+	init_umem_store(&store, mc);
 
 umem_create:
 	D_DEBUG(DB_MGMT, "umempobj_create sz: " DF_U64 " store_sz: " DF_U64, scm_sz,
@@ -849,15 +862,17 @@ vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned 
 
 	*ph = NULL;
 	/* always use PMEM mode for SMD */
-	store.store_type = umempobj_get_backend_type();
 	if (flags & VOS_POF_SYSDB) {
 		store.store_type = DAOS_MD_PMEM;
 		store.store_standalone = true;
+		goto umem_open;
 	}
 
 	/* No NVMe is configured or current xstream doesn't have NVMe context */
-	if (!bio_nvme_configured(SMD_DEV_TYPE_MAX) || xs_ctxt == NULL)
+	if (!bio_nvme_configured(SMD_DEV_TYPE_MAX) || xs_ctxt == NULL) {
+		store.store_type = DAOS_MD_PMEM;
 		goto umem_open;
+	}
 
 	D_DEBUG(DB_MGMT, "Open BIO meta context for xs:%p pool:"DF_UUID"\n",
 		xs_ctxt, DP_UUID(pool_id));
@@ -869,9 +884,7 @@ vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned 
 		return rc;
 	}
 
-	bio_meta_get_attr(mc, &store.stor_size, &store.stor_blk_size, &store.stor_hdr_blks);
-	store.stor_priv = mc;
-	store.stor_ops = &vos_store_ops;
+	init_umem_store(&store, mc);
 	if (metrics != NULL) {
 		struct vos_pool_metrics	*vpm = (struct vos_pool_metrics *)metrics;
 
