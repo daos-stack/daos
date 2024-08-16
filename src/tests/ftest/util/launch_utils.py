@@ -1268,7 +1268,7 @@ class TestGroup():
 
         # Cleanup any specified files at the end of testing
         for file, hosts in cleanup_files.items():
-            if not run_remote(logger, hosts, f"rm -fr {file}"):
+            if not run_remote(logger, hosts, f"rm -fr {file}").passed:
                 return_code |= 16
 
         # Collect code coverage files after all test have completed
