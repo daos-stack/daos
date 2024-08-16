@@ -157,13 +157,13 @@ static bool             no_dcache_in_bash = true;
 bool                    d_compatible_mode;
 static long int         page_size;
 
-#define FI_INI_NOT_RUNNING 0
-#define FI_INI_RUNNING     1
+#define ZE_INIT_NOT_RUNNING   0
+#define ZE_INIT_RUNNING       1
 
 #define DAOS_INIT_NOT_RUNNING 0
 #define DAOS_INIT_RUNNING     1
 
-static _Atomic uint64_t fi_ini_running;
+static _Atomic uint64_t ze_init_running;
 
 static long int         daos_initing;
 _Atomic bool            d_daos_inited;
@@ -472,7 +472,7 @@ static int (*next_posix_fallocate64)(int fd, off64_t offset, off64_t len);
 static int (*next_tcgetattr)(int fd, void *termios_p);
 /* end NOT supported by DAOS */
 
-static void (*next_fi_ini)(void);
+static int (*next_ze_init)(int flags);
 
 /* to do!! */
 /**
@@ -1034,26 +1034,28 @@ err:
 	return rc;
 }
 
-void
-fi_ini(void)
+int
+zeInit(int flags)
 {
-	uint64_t status_old = FI_INI_NOT_RUNNING;
+	int      rc;
+	uint64_t status_old = ZE_INIT_NOT_RUNNING;
 
-	if (next_fi_ini == NULL) {
-		next_fi_ini = dlsym(RTLD_NEXT, "fi_ini");
-		D_ASSERT(next_fi_ini != NULL);
+	if (next_ze_init == NULL) {
+		next_ze_init = dlsym(RTLD_NEXT, "zeInit");
+		D_ASSERT(next_ze_init != NULL);
 	}
 
-	if (!atomic_compare_exchange_weak(&fi_ini_running, &status_old, FI_INI_RUNNING)) {
-		D_DEBUG(DB_ANY, "Nested fi_ini() call is detected.\n");
+	if (!atomic_compare_exchange_weak(&ze_init_running, &status_old, ZE_INIT_RUNNING)) {
+		D_ERROR("Nested zeInit() call is detected.\n");
 	}
 
-	next_fi_ini();
+	rc = next_ze_init(flags);
 
-	status_old = FI_INI_RUNNING;
-	if (!atomic_compare_exchange_weak(&fi_ini_running, &status_old, FI_INI_NOT_RUNNING)) {
-		D_DEBUG(DB_ANY, "fi_ini_running is supposed to be true.\n");
+	status_old = ZE_INIT_RUNNING;
+	if (!atomic_compare_exchange_weak(&ze_init_running, &status_old, ZE_INIT_NOT_RUNNING)) {
+		D_ERROR("ze_init_running is supposed to be true.\n");
 	}
+	return rc;
 }
 
 /** determine whether a path (both relative and absolute) is on DAOS or not. If yes,
@@ -1153,11 +1155,11 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 			uint64_t status_old = DAOS_INIT_NOT_RUNNING;
 			bool     rc_cmp_swap;
 
-			/* Check whether fi_ini() is running. If yes, pass to the original
-			 * libc functions. Avoid possible fi_ini reentrancy/nested call.
+			/* Check whether zeInit() is running. If yes, pass to the original
+			 * libc functions. Avoid possible zeInit reentrancy/nested call.
 			 */
 
-			if (atomic_load_relaxed(&fi_ini_running) == FI_INI_RUNNING) {
+			if (atomic_load_relaxed(&ze_init_running) == ZE_INIT_RUNNING) {
 				*is_target_path = 0;
 				goto out_normal;
 			}
