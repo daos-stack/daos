@@ -97,13 +97,15 @@ def setup_systemctl(logger, servers, clients, test_env):
     try:
         server_config = create_override_config(
             logger, servers, "daos_server.service", "root", "/usr/bin/daos_server",
-            test_env.server_config, test_env)
+            test_env.server_config, None, None)
+    #       test_env.server_config, test_env.systemd_path, test_env.systemd_ld_library_path)
     except SystemctlFailure as error:
         raise LaunchException("Failed to setup systemctl config for daos_server") from error
     try:
         client_config = create_override_config(
             logger, clients, "daos_agent.service", "root", "/usr/bin/daos_agent",
-            test_env.client_config, test_env)
+            test_env.client_config, None, None)
+    #       test_env.server_config, test_env.systemd_path, test_env.systemd_ld_library_path)
     except SystemctlFailure as error:
         raise LaunchException("Failed to setup systemctl config for daos_agent") from error
     return {server_config: servers, client_config: clients}

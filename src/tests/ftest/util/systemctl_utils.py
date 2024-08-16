@@ -9,9 +9,8 @@ import os
 import tempfile
 
 # pylint: disable=import-error,no-name-in-module
-from util.host_utils import get_local_host
-from util.run_utils import command_as_user, get_clush_command, run_local, run_remote
-from util.user_utils import get_chown_command, get_primary_group
+from util.file_utils import distribute_files
+from util.run_utils import command_as_user, run_remote
 
 
 class SystemctlFailure(Exception):
@@ -71,8 +70,8 @@ def get_service_file(logger, hosts, service, user, verbose=True, timeout=120):
     return list(result.all_stdout.values())[0].strip()
 
 
-def create_override_config(logger, hosts, service, user, service_command, service_config, test_env,
-                           verbose=True, timeout=120):
+def create_override_config(logger, hosts, service, user, service_command, service_config, path,
+                           ld_library_path, verbose=True, timeout=120):
     """Create a systemctl override config file.
 
     Args:
@@ -82,7 +81,8 @@ def create_override_config(logger, hosts, service, user, service_command, servic
         user (str): user to use to issue the command
         service_command (str): full path to the service command
         service_config (str): full path to the service config
-        test_env (TestEnvironment):
+        path (str): the PATH variable to set in the systemd config.
+        ld_library_path (str): the LD_LIBRARY_PATH variable to set in the systemd config.
         verbose (bool, optional): log the command output. Defaults to True.
         timeout (int, optional): number of seconds to wait for the command to complete.
             Defaults to 120 seconds.
@@ -111,10 +111,10 @@ def create_override_config(logger, hosts, service, user, service_command, servic
         "ExecStart=",
         f"ExecStart={service_command} start -o {service_config}"
     ]
-    if test_env.systemd_path:
-        override_contents.append(f'Environment="PATH={test_env.systemd_path}"')
-    if test_env.systemd_ld_library_path:
-        override_contents.append(f'Environment="PATH={test_env.systemd_ld_library_path}"')
+    if path:
+        override_contents.append(f'Environment="PATH={path}"')
+    if ld_library_path:
+        override_contents.append(f'Environment="LD_LIBRARY_PATH={ld_library_path}"')
     override_contents = "\n".join(override_contents) + "\n"
 
     with tempfile.NamedTemporaryFile() as temp:
@@ -155,68 +155,3 @@ def daemon_reload(logger, hosts, user, verbose=True, timeout=120):
     """
     command = get_systemctl_command("daemon-reload", None, user)
     return run_remote(logger, hosts, command, verbose, timeout)
-
-
-def distribute_files(logger, hosts, source, destination, mkdir=True, timeout=60,
-                     verbose=True, sudo=False, owner=None):
-    """Copy the source to the destination on each of the specified hosts.
-
-    Optionally (by default) ensure the destination directory exists on each of
-    the specified hosts prior to copying the source.
-
-    Args:
-        hosts (NodeSet): hosts on which to copy the source
-        source (str): the file to copy to the hosts
-        destination (str): the host location in which to copy the source
-        mkdir (bool, optional): whether or not to ensure the destination
-            directory exists on hosts prior to copying the source. Defaults to
-            True.
-        timeout (int, optional): command timeout. Defaults to 60 seconds.
-        verbose (bool, optional): whether to log the command run and
-            stdout/stderr. Defaults to True.
-        raise_exception (bool, optional): whether to raise an exception if the
-            command returns a non-zero exit status. Defaults to True.
-        sudo (bool, optional): whether to run the command via sudo. Defaults to
-            False.
-        owner (str, optional): if specified the owner to assign as the owner of
-            the copied file. Defaults to None.
-
-    Returns:
-        CommandResult: groups of command results from the same hosts with the same return status
-    """
-    result = None
-    if mkdir:
-        _mkdir_command = f"/usr/bin/mkdir -p {os.path.dirname(destination)}"
-        result = run_remote(logger, hosts, _mkdir_command, verbose, timeout)
-
-    if result is None or result.passed:
-        if sudo:
-            # In order to copy a protected file to a remote host in CI the source will first be
-            # copied as is to the remote host
-            other_hosts = hosts.difference(get_local_host())
-            if other_hosts:
-                # Existing files with strict file permissions can cause the subsequent non-sudo
-                # copy to fail, so remove the file first
-                _rm_command = command_as_user(f"rm -f {source}", "root")
-                run_remote(logger, other_hosts, _rm_command, verbose, timeout)
-                result = distribute_files(
-                    logger, other_hosts, source, source, mkdir=True,
-                    timeout=timeout, verbose=verbose, sudo=False, owner=None)
-
-            if result is None or result.passed:
-                # Then a local sudo copy will be executed on the remote node to copy the source
-                # to the destination
-                _cp_command = command_as_user(f"cp {source} {destination}", "root")
-                result = run_remote(logger, hosts, _cp_command, verbose, timeout)
-        else:
-            # Without the sudo requirement copy the source to the destination directly with clush
-            _command = get_clush_command(hosts, args=f"-S -v --copy {source} --dest {destination}")
-            result = run_local(logger, _command, verbose, timeout)
-
-        # If requested update the ownership of the destination file
-        if owner is not None and result.passed:
-            _chown_command = get_chown_command(owner, get_primary_group(owner), file=destination)
-            _command = command_as_user(_chown_command, "root" if sudo else None)
-            result = run_remote(logger, hosts, _command, verbose, timeout)
-
-    return result
