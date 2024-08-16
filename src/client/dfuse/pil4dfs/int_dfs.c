@@ -160,10 +160,14 @@ static long int         page_size;
 #define ZE_INIT_NOT_RUNNING   0
 #define ZE_INIT_RUNNING       1
 
+#define FI_INI_NOT_RUNNING    0
+#define FI_INI_RUNNING        1
+
 #define DAOS_INIT_NOT_RUNNING 0
 #define DAOS_INIT_RUNNING     1
 
 static _Atomic uint64_t ze_init_running;
+static _Atomic uint64_t fi_ini_running;
 
 static long int         daos_initing;
 _Atomic bool            d_daos_inited;
@@ -473,6 +477,7 @@ static int (*next_tcgetattr)(int fd, void *termios_p);
 /* end NOT supported by DAOS */
 
 static int (*next_ze_init)(int flags);
+static void (*next_fi_ini)(void);
 
 /* to do!! */
 /**
@@ -1058,6 +1063,28 @@ zeInit(int flags)
 	return rc;
 }
 
+void
+fi_ini(void)
+{
+	uint64_t status_old = FI_INI_NOT_RUNNING;
+
+	if (next_fi_ini == NULL) {
+		next_fi_ini = dlsym(RTLD_NEXT, "fi_ini");
+		D_ASSERT(next_fi_ini != NULL);
+	}
+
+	if (!atomic_compare_exchange_weak(&fi_ini_running, &status_old, FI_INI_RUNNING)) {
+		D_ERROR("Nested fi_ini() call is detected.\n");
+	}
+
+	next_fi_ini();
+
+	status_old = FI_INI_RUNNING;
+	if (!atomic_compare_exchange_weak(&fi_ini_running, &status_old, FI_INI_NOT_RUNNING)) {
+		D_ERROR("fi_ini_running is supposed to be true.\n");
+	}
+}
+
 /** determine whether a path (both relative and absolute) is on DAOS or not. If yes,
  *  returns parent object, item name, full path of parent dir, full absolute path, and
  *  the pointer to struct dfs_mt.
@@ -1160,6 +1187,15 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 			 */
 
 			if (atomic_load_relaxed(&ze_init_running) == ZE_INIT_RUNNING) {
+				*is_target_path = 0;
+				goto out_normal;
+			}
+
+			/* Check whether fi_ini() is running. If yes, pass to the original
+			 * libc functions. Avoid possible fi_ini reentrancy/nested call.
+			 */
+
+			if (atomic_load_relaxed(&fi_ini_running) == FI_INI_RUNNING) {
 				*is_target_path = 0;
 				goto out_normal;
 			}
