@@ -5782,7 +5782,7 @@ ds_cont_set_prop_srv_handler(crt_rpc_t *rpc)
 	cont_prop_set_in_get_data(rpc, opc, DAOS_CONT_VERSION, &prop, &pool_uuid, &cont_uuid,
 				  &cont_label);
 	if (opc == CONT_PROP_SET_BYLABEL)
-		strncpy(cont_id, cont_label, sizeof(cont_id));
+		strncpy(cont_id, cont_label, sizeof(cont_id) - 1);
 	else /* CONT_PROP_SET */
 		uuid_unparse(cont_uuid, cont_id);
 
