@@ -7,8 +7,8 @@
 import getpass
 import os
 import tempfile
+from socket import gethostname
 
-from host_utils import get_local_host
 from run_utils import command_as_user, get_clush_command, run_local, run_remote
 from user_utils import get_chown_command, get_primary_group
 
@@ -192,7 +192,8 @@ def distribute_files(logger, hosts, source, destination, mkdir=True, timeout=60,
         if sudo:
             # In order to copy a protected file to a remote host in CI the source will first be
             # copied as is to the remote host
-            other_hosts = hosts.difference(get_local_host())
+            local_host = gethostname().split(".")[0]
+            other_hosts = hosts.difference(local_host)
             if other_hosts:
                 # Existing files with strict file permissions can cause the subsequent non-sudo
                 # copy to fail, so remove the file first
