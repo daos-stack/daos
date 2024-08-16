@@ -1190,7 +1190,7 @@ class DaosServer():
                    '--rank',
                    '0',
                    '--attr',
-                   f'0,0,{probability},0,0']
+                   f'0,0,0,{probability},0,1']
 
             exec_cmd.append(join(self.conf['PREFIX'], 'bin', 'cart_ctl'))
             exec_cmd.extend(cmd)
