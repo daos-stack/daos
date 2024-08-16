@@ -25,6 +25,6 @@ jobs:
             --build-arg DAOS_TARGET_TYPE=debug
             --build-arg DAOS_JAVA_BUILD=yes
             --tag gha-amd-${{github.run_id}}-${{github.run_attempt}}
-      - name: Run Unit Testing
+      - name: Run Unit-Testing1
         run: docker run gha-amd-${{github.run_id}}-${{github.run_attempt}}
             ./daos/utils/ci/run_unit_tests_in_gha.sh
