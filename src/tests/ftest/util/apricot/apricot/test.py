@@ -761,7 +761,7 @@ class TestWithServers(TestWithoutServers):
             self.fail(f"Error creating test-specific temporary directory on {result.failed_hosts}")
 
         # Copy the fault injection files to the hosts.
-        self.fault_injection.copy_fault_files(self.host_info.all_hosts)
+        self.fault_injection.copy_fault_files(self.log, self.host_info.all_hosts)
 
         # List common test directory contents before running the test
         self.log.info("-" * 100)
