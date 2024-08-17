@@ -20,7 +20,7 @@ from util.environment_utils import TestEnvironment
 from util.host_utils import HostException, HostInfo, get_local_host, get_node_set
 from util.logger_utils import LOG_FILE_FORMAT, get_file_handler
 from util.results_utils import LaunchTestName
-from util.run_utils import RunException, run_local, run_remote
+from util.run_utils import RunException, command_as_user, run_local, run_remote
 from util.slurm_utils import create_partition, delete_partition, show_partition
 from util.storage_utils import StorageException, StorageInfo
 from util.systemctl_utils import SystemctlFailure, create_override_config
@@ -78,6 +78,36 @@ def setup_fuse_config(logger, hosts):
             raise LaunchException(f"Failed to setup {config}")
 
 
+def __add_systemctl_override(logger, hosts, service, user, command, config, path, lib_path):
+    """Add a systemctl override file for the specified service.
+
+    Args:
+        logger (Logger): logger for the messages produced by this method
+        hosts (NodeSet): hosts on which to create the systemctl config
+        service (str): service for which to issue the command
+        user (str): user to use to issue the command
+        service_command (str): full path to the service command
+        service_config (str): full path to the service config
+        path (str): the PATH variable to set in the systemd config.
+        ld_library_path (str): the LD_LIBRARY_PATH variable to set in the systemd config.
+
+    Raises:
+        LaunchException: if setup fails
+
+    Returns:
+        dict: a dictionary of the systemctl override config file key with a dictionary value
+            containing the related host and user information
+    """
+    logger.debug("-" * 80)
+    logger.info("Setting up systemctl override for %s", service)
+    try:
+        systemctl_override = create_override_config(
+            logger, hosts, service, user, command, config, path, lib_path)
+    except SystemctlFailure as error:
+        raise LaunchException(f"Failed to setup systemctl config for {service}") from error
+    return {systemctl_override: {"hosts": hosts, "user": user}}
+
+
 def setup_systemctl(logger, servers, clients, test_env):
     """Set up the systemctl override files for the daos_server and daos_agent.
 
@@ -94,23 +124,16 @@ def setup_systemctl(logger, servers, clients, test_env):
         dict: a dictionary of systemctl override config file keys with NodeSet values identifying
             the hosts on which to remove the config files at the end of testing
     """
-    logger.debug("-" * 80)
-    logger.info("Setting up systemctl override configs")
-    try:
-        server_config = create_override_config(
+    systemctl_configs = {}
+    systemctl_configs.update(
+        __add_systemctl_override(
             logger, servers, "daos_server.service", "root", "/usr/bin/daos_server",
-            test_env.server_config, None, None)
-    #       test_env.server_config, test_env.systemd_path, test_env.systemd_ld_library_path)
-    except SystemctlFailure as error:
-        raise LaunchException("Failed to setup systemctl config for daos_server") from error
-    try:
-        client_config = create_override_config(
-            logger, clients, "daos_agent.service", "root", "/usr/bin/daos_agent",
-            test_env.client_config, None, None)
-    #       test_env.server_config, test_env.systemd_path, test_env.systemd_ld_library_path)
-    except SystemctlFailure as error:
-        raise LaunchException("Failed to setup systemctl config for daos_agent") from error
-    return {server_config: servers, client_config: clients}
+            test_env.server_config, None, None))
+    systemctl_configs.update(
+        __add_systemctl_override(
+            logger, clients, "daos_agent.service", test_env.agent_user, "/usr/bin/daos_agent",
+            test_env.client_config, None, None))
+    return systemctl_configs
 
 
 def display_disk_space(logger, path):
@@ -1271,8 +1294,9 @@ class TestGroup():
                 logger.removeHandler(test_file_handler)
 
         # Cleanup any specified files at the end of testing
-        for file, hosts in cleanup_files.items():
-            if not run_remote(logger, hosts, f"rm -fr {file}").passed:
+        for file, info in cleanup_files.items():
+            command = command_as_user(f"rm -fr {file}", info['user'])
+            if not run_remote(logger, info['hosts'], command).passed:
                 return_code |= 16
 
         # Collect code coverage files after all test have completed
