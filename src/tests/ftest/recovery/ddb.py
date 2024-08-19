@@ -11,10 +11,11 @@ from ClusterShell.NodeSet import NodeSet
 from ddb_utils import DdbCommand
 from exception_utils import CommandFailure
 from file_utils import distribute_files
-from general_utils import (DaosTestError, create_string_buffer, get_clush_command,
-                           get_random_string, report_errors, run_command)
+from general_utils import (DaosTestError, create_string_buffer, get_random_string, report_errors,
+                           run_command)
 from pydaos.raw import DaosObjClass, IORequest
 from recovery_test_base import RecoveryTestBase
+from run_utils import get_clush_command
 
 
 def insert_objects(context, container, object_count, dkey_count, akey_count, base_dkey,
