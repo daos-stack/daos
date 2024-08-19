@@ -16,6 +16,8 @@ obj_per_cont=256
 dkey_per_obj=512
 # -n number Number of strides per akey.
 recx_per_akey=32
+# -s value size
+value_size=64
 
 # debug
 # obj_per_cont=1
@@ -32,4 +34,4 @@ MPI_OPTS='-c 10 --cpu-list 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14 --bind-to cpu-list
         /opt/daos/bin/vos_perf -D /mnt/pmem0/engine0 -P 2G $REQ_FOR_QUERY_OPTS \
         $DEBUG_OPT $VOS_PERF_OPEN_OPT \
         -R "$VOS_PERF_CMD" \
-        -G $seed -o $obj_per_cont -n $recx_per_akey -d $dkey_per_obj
+        -G $seed -o $obj_per_cont -n $recx_per_akey -d $dkey_per_obj -s $value_size
