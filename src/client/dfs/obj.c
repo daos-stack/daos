@@ -1256,7 +1256,7 @@ int
 dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid, int flags)
 {
 	daos_handle_t    oh;
-	daos_handle_t    th = dfs->th;
+	daos_handle_t    th = DAOS_TX_NONE;
 	bool             exists;
 	struct dfs_entry entry = {0};
 	daos_key_t       dkey;
@@ -1295,7 +1295,7 @@ dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid,
 	}
 
 	/* Check if parent has the entry */
-	rc = fetch_entry(dfs->layout_v, oh, dfs->th, name, len, true, &exists, &entry, 0, NULL,
+	rc = fetch_entry(dfs->layout_v, oh, DAOS_TX_NONE, name, len, true, &exists, &entry, 0, NULL,
 			 NULL, NULL);
 	if (rc)
 		return rc;
@@ -1390,7 +1390,7 @@ out:
 int
 dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 {
-	daos_handle_t      th = dfs->th;
+	daos_handle_t      th = DAOS_TX_NONE;
 	daos_key_t         dkey;
 	daos_handle_t      oh;
 	d_sg_list_t        sgl;
