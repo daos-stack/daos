@@ -1,0 +1,23 @@
+FABRIC_1.0 {
+        global:
+                fi_getinfo;
+        local: *;
+};
+
+FABRIC_1.1 {
+        global:
+                fi_getinfo;
+        local: *;
+} FABRIC_1.0;
+
+FABRIC_1.2 {
+        global:
+                fi_getinfo;
+        local: *;
+} FABRIC_1.1;
+
+FABRIC_1.3 {
+        global:
+                fi_getinfo;
+        local: *;
+} FABRIC_1.2;

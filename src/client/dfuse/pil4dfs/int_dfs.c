@@ -472,7 +472,13 @@ static int (*next_posix_fallocate64)(int fd, off64_t offset, off64_t len);
 static int (*next_tcgetattr)(int fd, void *termios_p);
 /* end NOT supported by DAOS */
 
-static int (*next_fi_getinfo)(uint32_t version, const char *node, const char *service,
+static int (*next_fi_getinfo_1_0)(uint32_t version, const char *node, const char *service,
+	    uint64_t flags, const char *hints, char **info);
+static int (*next_fi_getinfo_1_1)(uint32_t version, const char *node, const char *service,
+	    uint64_t flags, const char *hints, char **info);
+static int (*next_fi_getinfo_1_2)(uint32_t version, const char *node, const char *service,
+	    uint64_t flags, const char *hints, char **info);
+static int (*next_fi_getinfo_1_3)(uint32_t version, const char *node, const char *service,
 	    uint64_t flags, const char *hints, char **info);
 
 /* to do!! */
@@ -1035,23 +1041,25 @@ err:
 	return rc;
 }
 
+#define COMPAT_SYMVER(name, api, ver)	asm(".symver " #name "," #api "@" #ver "\n")
+
 int
-fi_getinfo(uint32_t version, const char *node, const char *service, uint64_t flags,
+fi_getinfo_1_0(uint32_t version, const char *node, const char *service, uint64_t flags,
 	   const char *hints, char **info)
 {
 	int      rc;
 	uint64_t status_old = FI_GETINFO_NOT_RUNNING;
 
-	if (next_fi_getinfo == NULL) {
-		next_fi_getinfo = dlsym(RTLD_NEXT, "fi_getinfo");
-		D_ASSERT(next_fi_getinfo != NULL);
+	if (next_fi_getinfo_1_0 == NULL) {
+		next_fi_getinfo_1_0 = dlvsym(RTLD_NEXT, "fi_getinfo", "FABRIC_1.0");
+		D_ASSERT(next_fi_getinfo_1_0 != NULL);
 	}
 
 	if (!atomic_compare_exchange_weak(&fi_getinfo_running, &status_old, FI_GETINFO_RUNNING)) {
 		D_ERROR("Nested fi_getinfo() call is detected.\n");
 	}
 
-	rc = next_fi_getinfo(version, node, service, flags, hints, info);
+	rc = next_fi_getinfo_1_0(version, node, service, flags, hints, info);
 
 	status_old = FI_GETINFO_RUNNING;
 	if (!atomic_compare_exchange_weak(&fi_getinfo_running, &status_old, FI_GETINFO_NOT_RUNNING)) {
@@ -1059,6 +1067,89 @@ fi_getinfo(uint32_t version, const char *node, const char *service, uint64_t fla
 	}
 	return rc;
 }
+
+COMPAT_SYMVER(fi_getinfo_1_0, fi_getinfo, FABRIC_1.0);
+
+int
+fi_getinfo_1_1(uint32_t version, const char *node, const char *service, uint64_t flags,
+	   const char *hints, char **info)
+{
+	int      rc;
+	uint64_t status_old = FI_GETINFO_NOT_RUNNING;
+
+	if (next_fi_getinfo_1_1 == NULL) {
+		next_fi_getinfo_1_1 = dlvsym(RTLD_NEXT, "fi_getinfo", "FABRIC_1.1");
+		D_ASSERT(next_fi_getinfo_1_1 != NULL);
+	}
+
+	if (!atomic_compare_exchange_weak(&fi_getinfo_running, &status_old, FI_GETINFO_RUNNING)) {
+		D_ERROR("Nested fi_getinfo() call is detected.\n");
+	}
+
+	rc = next_fi_getinfo_1_1(version, node, service, flags, hints, info);
+
+	status_old = FI_GETINFO_RUNNING;
+	if (!atomic_compare_exchange_weak(&fi_getinfo_running, &status_old, FI_GETINFO_NOT_RUNNING)) {
+		D_ERROR("fi_getinfo_running is supposed to be true.\n");
+	}
+	return rc;
+}
+
+COMPAT_SYMVER(fi_getinfo_1_1, fi_getinfo, FABRIC_1.1);
+
+int
+fi_getinfo_1_2(uint32_t version, const char *node, const char *service, uint64_t flags,
+	   const char *hints, char **info)
+{
+	int      rc;
+	uint64_t status_old = FI_GETINFO_NOT_RUNNING;
+
+	if (next_fi_getinfo_1_2 == NULL) {
+		next_fi_getinfo_1_2 = dlvsym(RTLD_NEXT, "fi_getinfo", "FABRIC_1.2");
+		D_ASSERT(next_fi_getinfo_1_2 != NULL);
+	}
+
+	if (!atomic_compare_exchange_weak(&fi_getinfo_running, &status_old, FI_GETINFO_RUNNING)) {
+		D_ERROR("Nested fi_getinfo() call is detected.\n");
+	}
+
+	rc = next_fi_getinfo_1_2(version, node, service, flags, hints, info);
+
+	status_old = FI_GETINFO_RUNNING;
+	if (!atomic_compare_exchange_weak(&fi_getinfo_running, &status_old, FI_GETINFO_NOT_RUNNING)) {
+		D_ERROR("fi_getinfo_running is supposed to be true.\n");
+	}
+	return rc;
+}
+
+COMPAT_SYMVER(fi_getinfo_1_2, fi_getinfo, FABRIC_1.2);
+
+int
+fi_getinfo_1_3(uint32_t version, const char *node, const char *service, uint64_t flags,
+	   const char *hints, char **info)
+{
+	int      rc;
+	uint64_t status_old = FI_GETINFO_NOT_RUNNING;
+
+	if (next_fi_getinfo_1_3 == NULL) {
+		next_fi_getinfo_1_3 = dlvsym(RTLD_NEXT, "fi_getinfo", "FABRIC_1.3");
+		D_ASSERT(next_fi_getinfo_1_3 != NULL);
+	}
+
+	if (!atomic_compare_exchange_weak(&fi_getinfo_running, &status_old, FI_GETINFO_RUNNING)) {
+		D_ERROR("Nested fi_getinfo() call is detected.\n");
+	}
+
+	rc = next_fi_getinfo_1_3(version, node, service, flags, hints, info);
+
+	status_old = FI_GETINFO_RUNNING;
+	if (!atomic_compare_exchange_weak(&fi_getinfo_running, &status_old, FI_GETINFO_NOT_RUNNING)) {
+		D_ERROR("fi_getinfo_running is supposed to be true.\n");
+	}
+	return rc;
+}
+
+COMPAT_SYMVER(fi_getinfo_1_3, fi_getinfo, FABRIC_1.3);
 
 /** determine whether a path (both relative and absolute) is on DAOS or not. If yes,
  *  returns parent object, item name, full path of parent dir, full absolute path, and

@@ -68,6 +68,7 @@ def build_client_libs_shared(env, prereqs):
     pil4dfsenv = env.Clone()
     if '-fvisibility=hidden' in pil4dfsenv['CFLAGS']:
         pil4dfsenv['CFLAGS'].remove('-fvisibility=hidden')
+    pil4dfsenv.AppendUnique(LINKFLAGS=['-Wl,--version-script=src/client/dfuse/pil4dfs/pil4dfs.ver'])
     pil4dfsenv.AppendUnique(LIBPATH=[Dir('../dfs')])
     pil4dfsenv.AppendUnique(CPPPATH=[Dir('../dfs').srcnode()])
     pil4dfsenv.AppendUnique(LIBPATH=[Dir('../../gurt')])
