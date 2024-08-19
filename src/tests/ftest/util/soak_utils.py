@@ -334,8 +334,9 @@ def wait_for_pool_rebuild(self, pool, name):
     except TestFail as error1:
         self.log.error(
             f"<<<FAILED: {name} rebuild failed due to test issue: {error1}", exc_info=error1)
-    if self.enable_rebuild_logmasks:
-        self.dmg_command.server_set_logmasks(raise_exception=False)
+    finally:
+        if self.enable_rebuild_logmasks:
+            self.dmg_command.server_set_logmasks(raise_exception=False)
     return rebuild_status
 
 
