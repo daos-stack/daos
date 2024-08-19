@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -30,7 +30,6 @@
 /** default values for init / incr to prepost handles */
 #define CRT_HG_POST_INIT        (512)
 #define CRT_HG_POST_INCR        (512)
-#define CRT_HG_MRECV_BUF        (16)
 
 struct crt_rpc_priv;
 struct crt_common_hdr;

@@ -246,9 +246,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	uint32_t	mem_pin_enable = 0;
 	uint32_t        is_secondary;
 	uint32_t        post_init = CRT_HG_POST_INIT, post_incr = CRT_HG_POST_INCR;
-	unsigned int    mrecv_buf      = CRT_HG_MRECV_BUF;
-	unsigned int    mrecv_buf_copy = 0; /* buf copy disabled by default */
-	int             rc             = 0;
+	int		rc = 0;
 
 	crt_env_dump();
 
@@ -257,10 +255,6 @@ static int data_init(int server, crt_init_options_t *opt)
 	crt_gdata.cg_post_init = post_init;
 	crt_env_get(D_POST_INCR, &post_incr);
 	crt_gdata.cg_post_incr = post_incr;
-	crt_env_get(D_MRECV_BUF, &mrecv_buf);
-	crt_gdata.cg_mrecv_buf = mrecv_buf;
-	crt_env_get(D_MRECV_BUF_COPY, &mrecv_buf_copy);
-	crt_gdata.cg_mrecv_buf_copy = mrecv_buf_copy;
 
 	is_secondary = 0;
 	/* Apply CART-890 workaround for server side only */
