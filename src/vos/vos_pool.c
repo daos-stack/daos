@@ -749,7 +749,7 @@ init_umem_store(struct umem_store *store, struct bio_meta_context *mc)
 	store->stor_ops = &vos_store_ops;
 
 	/* Legacy BMEM V1 pool without backend type stored */
-	if (store->store_type == DAOS_MD_PMEM)
+	if (bio_nvme_configured(SMD_DEV_TYPE_META) && store->store_type == DAOS_MD_PMEM)
 		store->store_type = DAOS_MD_BMEM;
 }
 
