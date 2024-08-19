@@ -17,6 +17,7 @@ from process_core_files import CoreFileException, CoreFileProcessing
 from util.environment_utils import TestEnvironment
 from util.host_utils import get_local_host
 from util.run_utils import find_command, run_local, run_remote, stop_processes
+from util.systemctl_utils import stop_service
 from util.user_utils import get_chown_command
 from util.yaml_utils import get_test_category
 
@@ -64,97 +65,6 @@ def stop_daos_server_service(logger, test):
     logger.debug("-" * 80)
     logger.debug("Verifying %s after running '%s'", service, test)
     return stop_service(logger, hosts, service)
-
-
-def stop_service(logger, hosts, service):
-    """Stop any daos_server.service running on the hosts running servers.
-
-    Args:
-        logger (Logger): logger for the messages produced by this method
-        hosts (NodeSet): list of hosts on which to stop the service.
-        service (str): name of the service
-
-    Returns:
-        bool: True if the service was successfully stopped; False otherwise
-
-    """
-    result = {"status": True}
-    if hosts:
-        status_keys = ["reset-failed", "stop", "disable"]
-        mapping = {"stop": "active", "disable": "enabled", "reset-failed": "failed"}
-        check_hosts = NodeSet(hosts)
-        loop = 1
-        # Reduce 'max_loops' to 2 once https://jira.hpdd.intel.com/browse/DAOS-7809
-        # has been resolved
-        max_loops = 3
-        while check_hosts:
-            # Check the status of the service on each host
-            result = get_service_status(logger, check_hosts, service)
-            check_hosts = NodeSet()
-            for key in status_keys:
-                if result[key]:
-                    if loop == max_loops:
-                        # Exit the while loop if the service is still running
-                        logger.error(
-                            " - Error %s still %s on %s", service, mapping[key], result[key])
-                        result["status"] = False
-                    else:
-                        # Issue the appropriate systemctl command to remedy the
-                        # detected state, e.g. 'stop' for 'active'.
-                        command = ["sudo", "-n", "systemctl", key, service]
-                        run_remote(logger, result[key], " ".join(command))
-
-                        # Run the status check again on this group of hosts
-                        check_hosts.add(result[key])
-            loop += 1
-    else:
-        logger.debug("  Skipping stopping %s service - no hosts", service)
-
-    return result["status"]
-
-
-def get_service_status(logger, hosts, service):
-    """Get the status of the daos_server.service.
-
-    Args:
-        logger (Logger): logger for the messages produced by this method
-        hosts (NodeSet): hosts on which to get the service state
-        service (str): name of the service
-
-    Returns:
-        dict: a dictionary with the following keys:
-            - "status":       boolean set to True if status was obtained; False otherwise
-            - "stop":         NodeSet where to stop the daos_server.service
-            - "disable":      NodeSet where to disable the daos_server.service
-            - "reset-failed": NodeSet where to reset the daos_server.service
-
-    """
-    status = {
-        "status": True,
-        "stop": NodeSet(),
-        "disable": NodeSet(),
-        "reset-failed": NodeSet()}
-    status_states = {
-        "stop": ["active", "activating", "deactivating"],
-        "disable": ["active", "activating", "deactivating"],
-        "reset-failed": ["failed"]}
-    command = ["systemctl", "is-active", service]
-    result = run_remote(logger, hosts, " ".join(command))
-    for data in result.output:
-        if data.timeout:
-            status["status"] = False
-            status["stop"].add(data.hosts)
-            status["disable"].add(data.hosts)
-            status["reset-failed"].add(data.hosts)
-            logger.debug("  %s: TIMEOUT", data.hosts)
-            break
-        logger.debug("  %s: %s", data.hosts, "\n".join(data.stdout))
-        for key, state_list in status_states.items():
-            for line in data.stdout:
-                if line in state_list:
-                    status[key].add(data.hosts)
-                    break
-    return status
 
 
 def reset_server_storage(logger, test):
@@ -971,6 +881,9 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
     # this test's results. Also report an error if the test generated any log files with a
     # size exceeding the threshold.
     test_env = TestEnvironment()
+    config_file_sources = set()
+    config_file_sources.add(os.path.dirname(test_env.client_config))
+    config_file_sources.add(os.path.dirname(test_env.server_config))
     if archive:
         remote_files = OrderedDict()
         remote_files["local configuration files"] = {
@@ -981,14 +894,15 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
             "depth": 1,
             "timeout": 300,
         }
-        remote_files["remote configuration files"] = {
-            "source": os.path.join(os.sep, "etc", "daos"),
-            "destination": os.path.join(job_results_dir, "latest", TEST_RESULTS_DIRS[0]),
-            "pattern": "daos_*.yml",
-            "hosts": test.host_info.all_hosts,
-            "depth": 1,
-            "timeout": 300,
-        }
+        for index, source in enumerate(config_file_sources):
+            remote_files[f"remote configuration files ({index})"] = {
+                "source": source,
+                "destination": os.path.join(job_results_dir, "latest", TEST_RESULTS_DIRS[0]),
+                "pattern": "daos_*.yml",
+                "hosts": test.host_info.all_hosts,
+                "depth": 1,
+                "timeout": 300,
+            }
         remote_files["daos log files"] = {
             "source": test_env.log_dir,
             "destination": os.path.join(job_results_dir, "latest", TEST_RESULTS_DIRS[1]),

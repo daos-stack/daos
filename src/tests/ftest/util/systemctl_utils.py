@@ -8,6 +8,7 @@ import getpass
 import os
 import tempfile
 
+from ClusterShell.NodeSet import NodeSet
 # pylint: disable=import-error,no-name-in-module
 from util.file_utils import create_directory, distribute_files
 from util.run_utils import command_as_user, run_remote
@@ -15,6 +16,97 @@ from util.run_utils import command_as_user, run_remote
 
 class SystemctlFailure(Exception):
     """Base exception for this module."""
+
+
+def get_service_status(logger, hosts, service):
+    """Get the status of the daos_server.service.
+
+    Args:
+        logger (Logger): logger for the messages produced by this method
+        hosts (NodeSet): hosts on which to get the service state
+        service (str): name of the service
+
+    Returns:
+        dict: a dictionary with the following keys:
+            - "status":       boolean set to True if status was obtained; False otherwise
+            - "stop":         NodeSet where to stop the daos_server.service
+            - "disable":      NodeSet where to disable the daos_server.service
+            - "reset-failed": NodeSet where to reset the daos_server.service
+
+    """
+    status = {
+        "status": True,
+        "stop": NodeSet(),
+        "disable": NodeSet(),
+        "reset-failed": NodeSet()}
+    status_states = {
+        "stop": ["active", "activating", "deactivating"],
+        "disable": ["active", "activating", "deactivating"],
+        "reset-failed": ["failed"]}
+    command = ["systemctl", "is-active", service]
+    result = run_remote(logger, hosts, " ".join(command))
+    for data in result.output:
+        if data.timeout:
+            status["status"] = False
+            status["stop"].add(data.hosts)
+            status["disable"].add(data.hosts)
+            status["reset-failed"].add(data.hosts)
+            logger.debug("  %s: TIMEOUT", data.hosts)
+            break
+        logger.debug("  %s: %s", data.hosts, "\n".join(data.stdout))
+        for key, state_list in status_states.items():
+            for line in data.stdout:
+                if line in state_list:
+                    status[key].add(data.hosts)
+                    break
+    return status
+
+
+def stop_service(logger, hosts, service):
+    """Stop any daos_server.service running on the hosts running servers.
+
+    Args:
+        logger (Logger): logger for the messages produced by this method
+        hosts (NodeSet): list of hosts on which to stop the service.
+        service (str): name of the service
+
+    Returns:
+        bool: True if the service was successfully stopped; False otherwise
+
+    """
+    result = {"status": True}
+    if hosts:
+        status_keys = ["reset-failed", "stop", "disable"]
+        mapping = {"stop": "active", "disable": "enabled", "reset-failed": "failed"}
+        check_hosts = NodeSet(hosts)
+        loop = 1
+        # Reduce 'max_loops' to 2 once https://jira.hpdd.intel.com/browse/DAOS-7809
+        # has been resolved
+        max_loops = 3
+        while check_hosts:
+            # Check the status of the service on each host
+            result = get_service_status(logger, check_hosts, service)
+            check_hosts = NodeSet()
+            for key in status_keys:
+                if result[key]:
+                    if loop == max_loops:
+                        # Exit the while loop if the service is still running
+                        logger.error(
+                            " - Error %s still %s on %s", service, mapping[key], result[key])
+                        result["status"] = False
+                    else:
+                        # Issue the appropriate systemctl command to remedy the
+                        # detected state, e.g. 'stop' for 'active'.
+                        command = ["sudo", "-n", "systemctl", key, service]
+                        run_remote(logger, result[key], " ".join(command))
+
+                        # Run the status check again on this group of hosts
+                        check_hosts.add(result[key])
+            loop += 1
+    else:
+        logger.debug("  Skipping stopping %s service - no hosts", service)
+
+    return result["status"]
 
 
 def get_systemctl_command(unit_command, service, user="root"):
