@@ -955,7 +955,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None,
         for b_size, t_size, file_dir_oclass in product(bsize_list,
                                                        tsize_list,
                                                        oclass_list):
-            ior_cmd = IorCommand()
+            ior_cmd = IorCommand(self.test_env.log_dir)
             ior_cmd.namespace = ior_params
             ior_cmd.get_params(self)
             ior_cmd.max_duration.update(ior_timeout)
@@ -1134,7 +1134,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                                                                        depth_list,
                                                                        oclass_list):
             # Get the parameters for Mdtest
-            mdtest_cmd = MdtestCommand()
+            mdtest_cmd = MdtestCommand(self.test_env.log_dir)
             mdtest_cmd.namespace = mdtest_params
             mdtest_cmd.get_params(self)
             if api in ["POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:

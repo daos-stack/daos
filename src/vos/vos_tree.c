@@ -601,6 +601,7 @@ svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
 	struct dtx_handle	*dth = NULL;
 	struct umem_rsrvd_act	*rsrvd_scm;
 	struct vos_container	*cont = vos_hdl2cont(tins->ti_coh);
+	int			 rc;
 
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return 0;
@@ -611,12 +612,12 @@ svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
 			return -DER_NO_PERM; /* Not allowed */
 	}
 
-	vos_dtx_deregister_record(&tins->ti_umm, tins->ti_coh,
-				  irec->ir_dtx, *epc, rec->rec_off);
+	rc = vos_dtx_deregister_record(&tins->ti_umm, tins->ti_coh,
+				       irec->ir_dtx, *epc, rec->rec_off);
+	if (rc != 0)
+		return rc;
 
 	if (!overwrite) {
-		int	rc;
-
 		/* SCM value is stored together with vos_irec_df */
 		if (addr->ba_type == DAOS_MEDIA_NVME) {
 			struct vos_pool *pool = tins->ti_priv;
@@ -796,9 +797,8 @@ evt_dop_log_del(struct umem_instance *umm, daos_epoch_t epoch,
 	daos_handle_t	coh;
 
 	coh.cookie = (unsigned long)args;
-	vos_dtx_deregister_record(umm, coh, desc->dc_dtx, epoch,
-				  umem_ptr2off(umm, desc));
-	return 0;
+	return vos_dtx_deregister_record(umm, coh, desc->dc_dtx, epoch,
+					 umem_ptr2off(umm, desc));
 }
 
 void
@@ -833,9 +833,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 	if ((krec->kr_bmap & (KREC_BF_BTR | KREC_BF_EVT)) == 0)
 		goto create;
 
-	/** If subtree is already created, it could have been created by an older pool version
-	 *  so if the dkey is not flat, we need to use KREC_BF_BTR here */
-	if (flags & SUBTR_EVT && (tclass == VOS_BTR_AKEY || (krec->kr_bmap & KREC_BF_NO_AKEY))) {
+	if (key_tree_is_evt(flags, tclass, krec)) {
 		expected_flag = KREC_BF_EVT;
 		unexpected_flag = KREC_BF_BTR;
 	} else {
@@ -854,7 +852,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 		goto out;
 	}
 
-	if (flags & SUBTR_EVT) {
+	if (expected_flag == KREC_BF_EVT) {
 		rc = evt_open(&krec->kr_evt, uma, &cbs, sub_toh);
 	} else {
 		rc = dbtree_open_inplace_ex(&krec->kr_btr, uma, coh, pool, sub_toh);

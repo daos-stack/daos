@@ -22,7 +22,7 @@ class AgentFailure(IorTestBase):
 
     :avocado: recursive
     """
-    def run_ior_collect_error(self, results, job_num, file_name, clients):
+    def run_ior_collect_error(self, results, job_num, file_name, clients, namespace):
         """Run IOR command and store error in results.
 
         Args:
@@ -30,8 +30,9 @@ class AgentFailure(IorTestBase):
             job_num (int): Assigned job number.
             file_name (str): File name used for self.ior_cmd.test_file.
             clients (list): Client hostnames to run IOR from.
+            namespace (str): IOR namespace.
         """
-        ior_cmd = IorCommand()
+        ior_cmd = IorCommand(self.test_env.log_dir, namespace=namespace)
         ior_cmd.get_params(self)
         ior_cmd.set_daos_params(self.pool, self.container.identifier)
         testfile = os.path.join(os.sep, file_name)
@@ -85,10 +86,11 @@ class AgentFailure(IorTestBase):
         # 2. Run IOR.
         ior_results = {}
         job_num = 1
+        ior_namespace = "/run/ior_with_ec/*"
         self.log.info("Run IOR with thread")
         job = threading.Thread(
             target=self.run_ior_collect_error,
-            args=[ior_results, job_num, "test_file_1", [self.hostlist_clients[0]]])
+            args=[ior_results, job_num, "test_file_1", [self.hostlist_clients[0]], ior_namespace])
 
         self.log.info("Start IOR %d (thread)", job_num)
         job.start()
@@ -137,7 +139,7 @@ class AgentFailure(IorTestBase):
         self.log.info("Start IOR %d", job_num)
         self.run_ior_collect_error(
             job_num=job_num, results=ior_results, file_name="test_file_2",
-            clients=[self.hostlist_clients[0]])
+            clients=[self.hostlist_clients[0]], namespace=ior_namespace)
 
         # Verify that there's no error this time.
         self.log.info("--- IOR results %d ---", job_num)
@@ -186,12 +188,13 @@ class AgentFailure(IorTestBase):
         job_num_keep = 1
         job_num_kill = 2
         self.log.info("Run IOR with thread")
+        ior_namespace = "/run/ior_wo_rf/*"
         thread_1 = threading.Thread(
             target=self.run_ior_collect_error,
-            args=[ior_results, job_num_keep, "test_file_1", [agent_host_keep]])
+            args=[ior_results, job_num_keep, "test_file_1", [agent_host_keep], ior_namespace])
         thread_2 = threading.Thread(
             target=self.run_ior_collect_error,
-            args=[ior_results, job_num_kill, "test_file_2", [agent_host_kill]])
+            args=[ior_results, job_num_kill, "test_file_2", [agent_host_kill], ior_namespace])
 
         self.log.info("Start IOR 1 (thread)")
         thread_1.start()
@@ -264,7 +267,7 @@ class AgentFailure(IorTestBase):
         self.log.info("--- Start IOR 2 ---")
         self.run_ior_collect_error(
             job_num=job_num_keep, results=ior_results, file_name="test_file_3",
-            clients=agent_hosts)
+            clients=agent_hosts, namespace=ior_namespace)
 
         # Verify that there's no error.
         self.log.info("--- IOR results 2 ---")

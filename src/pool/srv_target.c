@@ -33,6 +33,7 @@
 #include <daos/pool.h>
 #include <daos_srv/container.h>
 #include <daos_srv/daos_mgmt_srv.h>
+#include <daos_srv/object.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/rebuild.h>
 #include <daos_srv/srv_csum.h>
@@ -1195,7 +1196,12 @@ ds_pool_start(uuid_t uuid, bool aft_chk)
 
 	ds_iv_ns_start(pool->sp_iv_ns);
 
-	return rc;
+	/* Ignore errors, for other PS replicas may work. */
+	rc = ds_pool_svc_start(uuid);
+	if (rc != 0)
+		DL_ERROR(rc, DF_UUID": failed to start pool service", DP_UUID(uuid));
+
+	return 0;
 
 failure_ult:
 	pool_fetch_hdls_ult_abort(pool);
@@ -1235,6 +1241,7 @@ int
 ds_pool_stop(uuid_t uuid)
 {
 	struct ds_pool *pool;
+	int             rc;
 
 	ds_pool_failed_remove(uuid);
 
@@ -1244,14 +1251,18 @@ ds_pool_stop(uuid_t uuid)
 		return 0;
 	}
 	if (pool->sp_stopping) {
-		int rc = -DER_AGAIN;
-
+		rc = -DER_AGAIN;
 		DL_INFO(rc, DF_UUID ": already stopping", DP_UUID(uuid));
 		ds_pool_put(pool);
 		return rc;
 	}
 	pool->sp_stopping = 1;
 	D_INFO(DF_UUID ": stopping\n", DP_UUID(uuid));
+
+	/* An error means the PS is stopping. Ignore it. */
+	rc = ds_pool_svc_stop(uuid);
+	if (rc != 0)
+		DL_INFO(rc, DF_UUID": stop pool service", DP_UUID(uuid));
 
 	pool_tgt_disconnect_all(pool);
 
@@ -2509,4 +2520,79 @@ out:
 	crt_reply_send(rpc);
 	if (rc != 0 && arg != NULL)
 		tgt_discard_arg_free(arg);
+}
+
+static int
+bulk_cb(const struct crt_bulk_cb_info *cb_info)
+{
+	ABT_eventual *eventual = cb_info->bci_arg;
+
+	ABT_eventual_set(*eventual, (void *)&cb_info->bci_rc, sizeof(cb_info->bci_rc));
+	return 0;
+}
+
+void
+ds_pool_tgt_warmup_handler(crt_rpc_t *rpc)
+{
+	struct pool_tgt_warmup_in *in;
+	crt_bulk_t                 bulk_cli;
+	crt_bulk_t                 bulk_local = NULL;
+	crt_bulk_opid_t            bulk_opid;
+	uint64_t                   len;
+	struct crt_bulk_desc       bulk_desc;
+	ABT_eventual               eventual;
+	void                      *buf = NULL;
+	int                       *status;
+	d_sg_list_t                sgl;
+	d_iov_t                    iov;
+	int                        rc;
+
+	in       = crt_req_get(rpc);
+	bulk_cli = in->tw_bulk;
+	rc       = crt_bulk_get_len(bulk_cli, &len);
+	if (rc != 0)
+		D_GOTO(out, rc);
+	D_ALLOC(buf, len);
+	if (buf == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs   = &iov;
+	d_iov_set(&iov, buf, len);
+	rc = crt_bulk_create(rpc->cr_ctx, &sgl, CRT_BULK_RW, &bulk_local);
+	if (rc)
+		goto out;
+
+	bulk_desc.bd_rpc        = rpc;
+	bulk_desc.bd_bulk_op    = CRT_BULK_GET;
+	bulk_desc.bd_remote_hdl = bulk_cli;
+	bulk_desc.bd_remote_off = 0;
+	bulk_desc.bd_local_hdl  = bulk_local;
+	bulk_desc.bd_local_off  = 0;
+	bulk_desc.bd_len        = len;
+
+	rc = ABT_eventual_create(sizeof(*status), &eventual);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(out, rc = dss_abterr2der(rc));
+
+	rc = crt_bulk_transfer(&bulk_desc, bulk_cb, &eventual, &bulk_opid);
+	if (rc != 0)
+		D_GOTO(out_eventual, rc);
+
+	rc = ABT_eventual_wait(eventual, (void **)&status);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
+
+	if (*status != 0)
+		rc = *status;
+
+out_eventual:
+	ABT_eventual_free(&eventual);
+out:
+	if (bulk_local != NULL)
+		crt_bulk_free(bulk_local);
+	D_FREE(buf);
+	if (rc)
+		D_ERROR("rpc failed, " DF_RC "\n", DP_RC(rc));
+	crt_reply_send(rpc);
 }
