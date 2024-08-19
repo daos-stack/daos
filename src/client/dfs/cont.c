@@ -821,7 +821,7 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 				if (rc)
 					D_GOTO(out_oit, rc = daos_der2errno(rc));
 
-				rc = daos_obj_punch(oh, dfs->th, 0, NULL);
+				rc = daos_obj_punch(oh, DAOS_TX_NONE, 0, NULL);
 				if (rc) {
 					daos_obj_close(oh, NULL);
 					D_GOTO(out_oit, rc = daos_der2errno(rc));
@@ -924,7 +924,7 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 
 			len = sprintf(oid_name, "%" PRIu64 ".%" PRIu64 "", oids[i].hi, oids[i].lo);
 			D_ASSERT(len <= DFS_MAX_NAME);
-			rc = insert_entry(dfs->layout_v, now_dir->oh, dfs->th, oid_name, len,
+			rc = insert_entry(dfs->layout_v, now_dir->oh, DAOS_TX_NONE, oid_name, len,
 					  DAOS_COND_DKEY_INSERT, &entry);
 			if (rc) {
 				D_ERROR("Failed to insert leaked entry in l+f (%d)\n", rc);
@@ -1174,8 +1174,8 @@ dfs_obj_fix_type(dfs_t *dfs, dfs_obj_t *parent, const char *name)
 	if (rc)
 		return rc;
 
-	rc = fetch_entry(dfs->layout_v, parent->oh, dfs->th, name, len, true, &exists, &entry, 0,
-			 NULL, NULL, NULL);
+	rc = fetch_entry(dfs->layout_v, parent->oh, DAOS_TX_NONE, name, len, true, &exists, &entry,
+			 0, NULL, NULL, NULL);
 	if (rc) {
 		D_ERROR("Failed to fetch entry %s (%d)\n", name, rc);
 		D_GOTO(out, rc);
@@ -1213,8 +1213,8 @@ dfs_obj_fix_type(dfs_t *dfs, dfs_obj_t *parent, const char *name)
 	sgl.sg_nr     = 1;
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs   = &sg_iov;
-	rc =
-	    daos_obj_update(parent->oh, dfs->th, DAOS_COND_DKEY_UPDATE, &dkey, 1, &iod, &sgl, NULL);
+	rc = daos_obj_update(parent->oh, DAOS_TX_NONE, DAOS_COND_DKEY_UPDATE, &dkey, 1, &iod, &sgl,
+			     NULL);
 	if (rc) {
 		D_ERROR("Failed to update object type " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc = daos_der2errno(rc));

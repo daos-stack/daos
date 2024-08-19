@@ -237,7 +237,7 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off, daos_eve
 	if (ev)
 		daos_event_errno_rc(ev);
 
-	rc = daos_array_write(obj->oh, dfs->th, &iod, sgl, ev);
+	rc = daos_array_write(obj->oh, DAOS_TX_NONE, &iod, sgl, ev);
 	if (rc)
 		D_ERROR("daos_array_write() failed, " DF_RC "\n", DP_RC(rc));
 
@@ -276,7 +276,7 @@ dfs_writex(dfs_t *dfs, dfs_obj_t *obj, dfs_iod_t *iod, d_sg_list_t *sgl, daos_ev
 	if (ev)
 		daos_event_errno_rc(ev);
 
-	rc = daos_array_write(obj->oh, dfs->th, &arr_iod, sgl, ev);
+	rc = daos_array_write(obj->oh, DAOS_TX_NONE, &arr_iod, sgl, ev);
 	if (rc)
 		D_ERROR("daos_array_write() failed (%d)\n", rc);
 

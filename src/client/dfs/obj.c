@@ -172,7 +172,7 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 		oid_cp(&entry->oid, file->oid);
 
 		/** Open the array object for the file */
-		rc = daos_array_open_with_attr(dfs->coh, file->oid, dfs->th, DAOS_OO_RW, 1,
+		rc = daos_array_open_with_attr(dfs->coh, file->oid, DAOS_TX_NONE, DAOS_OO_RW, 1,
 					       chunk_size, &file->oh, NULL);
 		if (rc != 0) {
 			D_ERROR("daos_array_open_with_attr() failed " DF_RC "\n", DP_RC(rc));
@@ -188,7 +188,7 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 		entry->mtime_nano = entry->ctime_nano = now.tv_nsec;
 		entry->chunk_size                     = chunk_size;
 
-		rc = insert_entry(dfs->layout_v, parent->oh, dfs->th, file->name, len,
+		rc = insert_entry(dfs->layout_v, parent->oh, DAOS_TX_NONE, file->name, len,
 				  DAOS_COND_DKEY_INSERT, entry);
 		if (rc == EEXIST && !oexcl) {
 			int rc2;
@@ -245,7 +245,7 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 	}
 
 	if (flags & O_TRUNC) {
-		rc = daos_array_set_size(file->oh, dfs->th, 0, NULL);
+		rc = daos_array_set_size(file->oh, DAOS_TX_NONE, 0, NULL);
 		if (rc) {
 			D_ERROR("Failed to truncate file " DF_RC "\n", DP_RC(rc));
 			daos_array_close(file->oh, NULL);
@@ -313,7 +313,7 @@ open_symlink(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, con
 		entry->value     = sym->value;
 		entry->value_len = value_len;
 
-		rc = insert_entry(dfs->layout_v, parent->oh, dfs->th, sym->name, len,
+		rc = insert_entry(dfs->layout_v, parent->oh, DAOS_TX_NONE, sym->name, len,
 				  DAOS_COND_DKEY_INSERT, entry);
 		if (rc == EEXIST) {
 			D_FREE(sym->value);
@@ -1626,11 +1626,11 @@ dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len)
 
 	/** simple truncate */
 	if (len == DFS_MAX_FSIZE) {
-		rc = daos_array_set_size(obj->oh, dfs->th, offset, NULL);
+		rc = daos_array_set_size(obj->oh, DAOS_TX_NONE, offset, NULL);
 		return daos_der2errno(rc);
 	}
 
-	rc = daos_array_get_size(obj->oh, dfs->th, &size, NULL);
+	rc = daos_array_get_size(obj->oh, DAOS_TX_NONE, &size, NULL);
 	if (rc)
 		return daos_der2errno(rc);
 
@@ -1645,7 +1645,7 @@ dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len)
 
 	/** if fsize is between the range to punch, just truncate to offset */
 	if (offset < size && size <= hi) {
-		rc = daos_array_set_size(obj->oh, dfs->th, offset, NULL);
+		rc = daos_array_set_size(obj->oh, DAOS_TX_NONE, offset, NULL);
 		return daos_der2errno(rc);
 	}
 
@@ -1657,7 +1657,7 @@ dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len)
 	rg.rg_idx   = offset;
 	iod.arr_rgs = &rg;
 
-	rc = daos_array_punch(obj->oh, dfs->th, &iod, NULL);
+	rc = daos_array_punch(obj->oh, DAOS_TX_NONE, &iod, NULL);
 	if (rc) {
 		D_ERROR("daos_array_punch() failed (%d)\n", rc);
 		return daos_der2errno(rc);

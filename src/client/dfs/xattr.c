@@ -19,7 +19,7 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, const void *value, da
 	     int flags)
 {
 	char           *xname = NULL;
-	daos_handle_t   th    = dfs->th;
+	daos_handle_t   th = DAOS_TX_NONE;
 	d_sg_list_t     sgls[2];
 	d_iov_t         sg_iovs[3];
 	daos_iod_t      iods[2];
@@ -208,7 +208,7 @@ int
 dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 {
 	char           *xname = NULL;
-	daos_handle_t   th    = dfs->th;
+	daos_handle_t   th = DAOS_TX_NONE;
 	daos_key_t      dkey, akey;
 	daos_handle_t   oh;
 	uint64_t        cond = 0;

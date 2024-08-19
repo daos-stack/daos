@@ -151,7 +151,7 @@ lookup_rel_path_loop:
 				D_GOTO(err_obj, rc = daos_der2errno(rc));
 			}
 			if (flags & O_TRUNC) {
-				rc = daos_array_set_size(obj->oh, dfs->th, 0, NULL);
+				rc = daos_array_set_size(obj->oh, DAOS_TX_NONE, 0, NULL);
 				if (rc) {
 					DL_ERROR(rc, "Failed to truncate file");
 					daos_array_close(obj->oh, NULL);
@@ -455,7 +455,7 @@ lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags, dfs_o
 			D_GOTO(err_obj, rc = daos_der2errno(rc));
 		}
 		if (flags & O_TRUNC) {
-			rc = daos_array_set_size(obj->oh, dfs->th, 0, NULL);
+			rc = daos_array_set_size(obj->oh, DAOS_TX_NONE, 0, NULL);
 			if (rc) {
 				DL_ERROR(rc, "Failed to truncate file");
 				daos_array_close(obj->oh, NULL);
