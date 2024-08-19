@@ -163,7 +163,13 @@ func TestCart_Provider_GetFabricInterfaces(t *testing.T) {
 					OSName: "test0",
 					Providers: hardware.NewFabricProviderSet(
 						&hardware.FabricProvider{
+							Name: "ucx+rc_verbs",
+						},
+						&hardware.FabricProvider{
 							Name: "ucx+rc_v",
+						},
+						&hardware.FabricProvider{
+							Name: "ucx+ud_verbs",
 						},
 						&hardware.FabricProvider{
 							Name: "ucx+ud_v",

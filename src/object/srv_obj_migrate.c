@@ -1671,6 +1671,12 @@ migrate_punch(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 
 	/* punch records */
 	if (mrone->mo_punch_iod_num > 0 && mrone->mo_rec_punch_eph <= tls->mpt_max_eph) {
+		if (daos_oclass_is_ec(&mrone->mo_oca) &&
+		    !is_ec_parity_shard_by_layout_ver(mrone->mo_oid.id_layout_ver,
+						      mrone->mo_dkey_hash, &mrone->mo_oca,
+						      mrone->mo_oid.id_shard))
+			mrone_recx_daos2_vos(mrone, mrone->mo_punch_iods, mrone->mo_punch_iod_num);
+
 		rc = vos_obj_update(cont->sc_hdl, mrone->mo_oid,
 				    mrone->mo_rec_punch_eph,
 				    mrone->mo_version, 0, &mrone->mo_dkey,
@@ -2365,7 +2371,7 @@ punch_iod_pack(struct migrate_one *mrone, struct dc_object *obj, daos_iod_t *iod
 
 	D_DEBUG(DB_TRACE,
 		"idx %d akey "DF_KEY" nr %d size "DF_U64" type %d\n",
-		idx, DP_KEY(&iod->iod_name), iod->iod_nr, iod->iod_size,
+		idx, DP_KEY(&iod->iod_name), mrone->mo_punch_iods->iod_nr, iod->iod_size,
 		iod->iod_type);
 
 	if (mrone->mo_rec_punch_eph < eph)
@@ -2712,9 +2718,18 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 	}
 
 	if (!create_migrate_one) {
+		struct ds_cont_child *cont = NULL;
+
 		D_DEBUG(DB_REBUILD, DF_UOID"/"DF_KEY" does not need rebuild.\n",
 			DP_UOID(io->ui_oid), DP_KEY(&io->ui_dkey));
-		D_GOTO(put, rc = 0);
+
+		/* Create the vos container when no record need to be rebuilt for this shard,
+		 * for the case of reintegrate the container was discarded ahead.
+		 */
+		rc = migrate_get_cont_child(tls, arg->arg->cont_uuid, &cont, true);
+		if (cont != NULL)
+			ds_cont_child_put(cont);
+		D_GOTO(put, rc);
 	}
 
 	/* Check if some IODs from this unpack can be merged to the exist mrone, mostly for EC

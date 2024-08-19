@@ -9,7 +9,6 @@ package main
 import (
 	"net"
 	"strings"
-	"sync"
 
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -23,6 +22,7 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
+	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
@@ -35,16 +35,13 @@ import (
 // Management Service proxy, handling dRPCs sent by libdaos by forwarding them
 // to MS.
 type mgmtModule struct {
-	attachInfoMutex sync.RWMutex
-	fabricMutex     sync.RWMutex
-
 	log            logging.Logger
 	sys            string
 	ctlInvoker     control.Invoker
 	cache          *InfoCache
 	monitor        *procMon
 	cliMetricsSrc  *promexp.ClientSource
-	useDefaultNUMA bool
+	useDefaultNUMA atm.Bool
 
 	numaGetter  hardware.ProcessNUMAProvider
 	providerIdx uint
@@ -163,14 +160,14 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 }
 
 func (mod *mgmtModule) getNUMANode(ctx context.Context, pid int32) (uint, error) {
-	if mod.useDefaultNUMA {
+	if mod.useDefaultNUMA.IsTrue() {
 		return 0, nil
 	}
 
 	numaNode, err := mod.numaGetter.GetNUMANodeIDForPID(ctx, pid)
 	if errors.Is(err, hardware.ErrNoNUMANodes) {
 		mod.log.Debug("system is not NUMA-aware")
-		mod.useDefaultNUMA = true
+		mod.useDefaultNUMA.SetTrue()
 		return 0, nil
 	} else if err != nil {
 		return 0, errors.Wrapf(err, "failed to get NUMA node ID for pid %d", pid)
@@ -194,8 +191,13 @@ func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, req *mgm
 	// Requested fabric interface/domain behave as a simple override. If we weren't able to
 	// validate them, we return them to the user with the understanding that perhaps the user
 	// knows what they're doing.
+	// When an interface is requested without a domain, the domain is the same as the interface.
 	iface := req.Interface
 	domain := req.Domain
+	if iface != "" && domain == "" {
+		domain = iface
+	}
+
 	if req.Interface == "" {
 		fabricIF, err := mod.getFabricInterface(ctx, &FabricIfaceParams{
 			NUMANode: numaNode,
@@ -213,11 +215,12 @@ func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, req *mgm
 	}
 
 	resp.ClientNetHint.Interface = iface
-	resp.ClientNetHint.Domain = iface
-	if domain != "" {
-		resp.ClientNetHint.Domain = domain
-		mod.log.Tracef("D_DOMAIN for %s has been detected as: %s",
-			resp.ClientNetHint.Interface, resp.ClientNetHint.Domain)
+	resp.ClientNetHint.Domain = domain
+	mod.log.Tracef("D_DOMAIN for %s has been detected as: %s",
+		resp.ClientNetHint.Interface, resp.ClientNetHint.Domain)
+
+	if err := mod.populateNUMAFabricMap(ctx, resp); err != nil {
+		return nil, err
 	}
 
 	return resp, nil
@@ -339,6 +342,41 @@ func (mod *mgmtModule) getProviderIdxURIs(srvResp *mgmtpb.GetAttachInfoResp, idx
 
 func (mod *mgmtModule) getFabricInterface(ctx context.Context, params *FabricIfaceParams) (*FabricInterface, error) {
 	return mod.cache.GetFabricDevice(ctx, params)
+}
+
+func (mod *mgmtModule) populateNUMAFabricMap(ctx context.Context, resp *mgmtpb.GetAttachInfoResp) error {
+	numaMap, unlockMap, err := mod.cache.GetNUMAFabricMap(ctx, hardware.NetDevClass(resp.ClientNetHint.NetDevClass), resp.ClientNetHint.Provider)
+	if err != nil {
+		return err
+	}
+	defer unlockMap()
+
+	numNUMANodes := numaMap.MaxNUMANode() + 1 // NUMA indexed by zero
+	resp.NumaFabricInterfaces = make([]*mgmtpb.FabricInterfaces, numNUMANodes)
+	for numaNode := 0; numaNode < numNUMANodes; numaNode++ {
+		pbFIs := &mgmtpb.FabricInterfaces{
+			NumaNode: uint32(numaNode),
+		}
+
+		fis, exists := numaMap[numaNode]
+		if exists {
+			pbFIs.Ifaces = make([]*mgmtpb.FabricInterface, 0, len(fis))
+			for _, fi := range fis {
+				if fi.HasProvider(resp.ClientNetHint.Provider) {
+					pbFIs.Ifaces = append(pbFIs.Ifaces, &mgmtpb.FabricInterface{
+						NumaNode:  uint32(numaNode),
+						Interface: fi.Name,
+						Domain:    fi.Domain,
+						Provider:  resp.ClientNetHint.Provider,
+					})
+				}
+			}
+		}
+
+		resp.NumaFabricInterfaces[numaNode] = pbFIs
+	}
+
+	return nil
 }
 
 func (mod *mgmtModule) handleSetupClientTelemetry(ctx context.Context, reqb []byte, cred *unix.Ucred) ([]byte, error) {

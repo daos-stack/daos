@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -242,8 +242,7 @@ d_list_splice_init(d_list_t *list, d_list_t *head)
  * \param[in] type	the type of the struct this is embedded in.
  * \param[in] member	the member name of the list within the struct.
  */
-#define d_list_entry(ptr, type, member) \
-	((type *)((char *)(ptr)-(char *)(&((type *)0)->member)))
+#define d_list_entry(ptr, type, member) ((type *)((char *)(ptr)-offsetof(type, member)))
 
 #define d_list_pop_entry(list, type, member)			\
 	({							\

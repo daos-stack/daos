@@ -1,8 +1,27 @@
-daos (2.7.100-2) unstable; urgency=medium
+daos (2.7.100-5) unstable; urgency=medium
   [ Johann Lombardi ]
   * Add tune-dfuse.sh script to bump readahead and max dirty ratio
 
- -- Johann Lombardi <johann.lombardi@gmail.com>  Mon, 01 Jul 2024 08:00:00 +0000
+ -- Johann Lombardi <johann.lombardi@gmail.com>  Mon, 19 Aug 2024 08:00:00 +0000
+
+daos (2.7.100-4) unstable; urgency=medium
+  [ Jerome Soumagne ]
+  * Bump mercury version to 2.4.0rc4
+
+ -- Jerome Soumagne <jerome.soumagne@intel.com>  Mon, 05 Aug 2024 12:00:00 -0500
+
+daos (2.7.100-3) unstable; urgency=medium
+  [ Dalton Bohning ]
+  * Add pciutils-devel build dep for client-tests package
+
+ -- Dalton Bohning <dalton.bohning@intel.com>>  Thu, 11 Jul 2024 10:00:00 -0800
+
+daos (2.7.100-2) unstable; urgency=medium
+  [ Tom Nabarro ]
+  * Add pciutils runtime dep for daos_server lspci call
+  * Add libpci-dev build dep for pciutils CGO bindings
+
+ -- Tom Nabarro <tom.nabarro@intel.com>>  Thu, 24 Jun 2024 16:55:00 -0000
 
 daos (2.7.100-1) unstable; urgency=medium
   [ Phillip Henderson ]
