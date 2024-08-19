@@ -157,13 +157,13 @@ static bool             no_dcache_in_bash = true;
 bool                    d_compatible_mode;
 static long int         page_size;
 
-#define MPI_INIT_NOT_RUNNING  0
-#define MPI_INIT_RUNNING      1
+#define FI_GETINFO_NOT_RUNNING 0
+#define FI_GETINFO_RUNNING     1
 
 #define DAOS_INIT_NOT_RUNNING 0
 #define DAOS_INIT_RUNNING     1
 
-static _Atomic uint64_t mpi_init_running;
+static _Atomic uint64_t fi_getinfo_running;
 
 static long int         daos_initing;
 _Atomic bool            d_daos_inited;
@@ -472,7 +472,8 @@ static int (*next_posix_fallocate64)(int fd, off64_t offset, off64_t len);
 static int (*next_tcgetattr)(int fd, void *termios_p);
 /* end NOT supported by DAOS */
 
-static int (*next_mpi_init)(int* argc, char*** argv);
+static int (*next_fi_getinfo)(uint32_t version, const char *node, const char *service,
+	    uint64_t flags, const char *hints, char **info);
 
 /* to do!! */
 /**
@@ -1035,31 +1036,29 @@ err:
 }
 
 int
-MPI_Init(int* argc, char*** argv)
+fi_getinfo(uint32_t version, const char *node, const char *service, uint64_t flags,
+	   const char *hints, char **info)
 {
 	int      rc;
-	uint64_t status_old = MPI_INIT_NOT_RUNNING;
+	uint64_t status_old = FI_GETINFO_NOT_RUNNING;
 
-	if (next_mpi_init == NULL) {
-		next_mpi_init = dlsym(RTLD_NEXT, "MPI_Init");
-		D_ASSERT(next_mpi_init != NULL);
+	if (next_fi_getinfo == NULL) {
+		next_fi_getinfo = dlsym(RTLD_NEXT, "fi_getinfo");
+		D_ASSERT(next_fi_getinfo != NULL);
 	}
 
-	if (!atomic_compare_exchange_weak(&mpi_init_running, &status_old, MPI_INIT_RUNNING)) {
-		D_ERROR("Nested MPI_Init() call is detected.\n");
+	if (!atomic_compare_exchange_weak(&fi_getinfo_running, &status_old, FI_GETINFO_RUNNING)) {
+		D_ERROR("Nested fi_getinfo() call is detected.\n");
 	}
 
-	rc = next_mpi_init(argc, argv);
+	rc = next_fi_getinfo(version, node, service, flags, hints, info);
 
-	status_old = MPI_INIT_RUNNING;
-	if (!atomic_compare_exchange_weak(&mpi_init_running, &status_old, MPI_INIT_NOT_RUNNING)) {
-		D_ERROR("mpi_init_running is supposed to be true.\n");
+	status_old = FI_GETINFO_RUNNING;
+	if (!atomic_compare_exchange_weak(&fi_getinfo_running, &status_old, FI_GETINFO_NOT_RUNNING)) {
+		D_ERROR("fi_getinfo_running is supposed to be true.\n");
 	}
 	return rc;
 }
-
-int
-PMPI_Init(int* argc, char*** argv) __attribute__((alias("MPI_Init")));
 
 /** determine whether a path (both relative and absolute) is on DAOS or not. If yes,
  *  returns parent object, item name, full path of parent dir, full absolute path, and
@@ -1158,11 +1157,11 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 			uint64_t status_old = DAOS_INIT_NOT_RUNNING;
 			bool     rc_cmp_swap;
 
-			/* Check whether MPI_Init() is running. If yes, pass to the original
-			 * libc functions. Avoid possible zeInit reentrancy/nested call.
+			/* Check whether fi_getinfo() is running. If yes, pass to the original
+			 * libc functions. Avoid possible fi_getinfo reentrancy/nested call.
 			 */
 
-			if (atomic_load_relaxed(&mpi_init_running) == MPI_INIT_RUNNING) {
+			if (atomic_load_relaxed(&fi_getinfo_running) == FI_GETINFO_RUNNING) {
 				*is_target_path = 0;
 				goto out_normal;
 			}
