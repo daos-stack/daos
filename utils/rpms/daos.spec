@@ -1,9 +1,10 @@
 %define daoshome %{_exec_prefix}/lib/%{name}
+mercury=https://raw.githubusercontent.com/daos-stack/mercury/857f1d5d2ca72d4c1b8d7be5e7fd26d6292b495f/na_ucx_am_send_retry.patch,https://github.com/mercury-hpc/mercury/commit/b8c26fd86281f3b0883c31bd2d0cb467a12b860d.diff,https://github.com/mercury-hpc/mercury/commit/a35589c3d1134d9c80640e78247e210162ac4a3c.diff,https://github.com/mercury-hpc/mercury/commit/fa4abbb6273d975b2ef17ac4e561fd4255d384db.diff
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version   2.4
+%global mercury_version   2.3.1-1%{?dist}
 %global libfabric_version 1.15.1-1
 %global __python %{__python3}
 
