@@ -1,6 +1,6 @@
 hosts:
   test_servers: 1
-timeout: 900
+timeout: 90000
 server_config:
   name: daos_server
   engines_per_host: 1

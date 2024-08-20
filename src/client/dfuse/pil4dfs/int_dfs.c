@@ -1111,6 +1111,19 @@ fi_getinfo_1_3(uint32_t version, const char *node, const char *service, uint64_t
 
 	if (next_fi_getinfo_1_3 == NULL) {
 		next_fi_getinfo_1_3 = dlvsym(RTLD_NEXT, "fi_getinfo", "FABRIC_1.3");
+		if (next_fi_getinfo_1_3 == NULL) {
+			FILE *fout;
+			volatile int  flag = 1;
+
+			fout = fopen("/dev/shm/dbg.txt", "a+");
+			if (fout) {
+				fprintf(fout, "%d\n", getpid());
+				fclose(fout);
+			while(flag) {
+				sleep(1);
+			}
+			}
+		}
 		D_ASSERT(next_fi_getinfo_1_3 != NULL);
 	}
 
