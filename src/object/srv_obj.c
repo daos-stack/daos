@@ -593,8 +593,11 @@ done:
 		rc = -DER_IO;
 	}
 
+	if (rc == 0 && p_arg->result != 0)
+		rc = p_arg->result;
+
 	/* After RDMA is done, corrupt the server data */
-	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_DISK)) {
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_DISK)) {
 		struct bio_sglist	*fbsgl;
 		d_sg_list_t		 fsgl;
 		int			*fbuffer;
@@ -4599,6 +4602,8 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 			rc = dss_abterr2der(rc);
 		if (rc == 0 && *status != 0)
 			rc = *status;
+		if (rc == 0 && bulks[i].result != 0)
+			rc = bulks[i].result;
 
 		ABT_eventual_free(&bulks[i].eventual);
 		bio_iod_flush(biods[i]);
@@ -5650,7 +5655,8 @@ again2:
 			   1 /* start, [0] is for current engine */, ocpi->ocpi_disp_width,
 			   &exec_arg.coll_cur);
 
-	rc = dtx_leader_begin(ioc.ioc_vos_coh, &odm->odm_xid, &epoch, 1, version,
+	rc = dtx_leader_begin(ioc.ioc_vos_coh, &odm->odm_xid, &epoch,
+			      dcts[0].dct_shards[dmi->dmi_tgt_id].dcs_nr, version,
 			      &ocpi->ocpi_oid, NULL /* dti_cos */, 0 /* dti_cos_cnt */,
 			      NULL /* tgts */, exec_arg.coll_cur.grp_nr /* tgt_cnt */,
 			      dtx_flags, odm->odm_mbs, dce, &dlh);
