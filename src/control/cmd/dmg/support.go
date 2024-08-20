@@ -44,9 +44,10 @@ func (cmd *collectLogCmd) rsyncLog() error {
 	}
 
 	req := &control.CollectLogReq{
-		TargetFolder: cmd.TargetFolder,
-		AdminNode:    hostName,
-		LogFunction:  support.RsyncLogEnum,
+		TargetFolder:         cmd.TargetFolder,
+		AdminNode:            hostName,
+		LogFunction:          support.RsyncLogEnum,
+		FileTransferExecArgs: cmd.FileTransferExecArgs,
 	}
 	cmd.Debugf("Rsync logs from servers to %s:%s ", hostName, cmd.TargetFolder)
 	resp, err := control.CollectLog(cmd.MustLogCtx(), cmd.ctlInvoker, req)
@@ -158,6 +159,9 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	params.LogFunction = support.CollectDmgCmdEnum
 	params.TargetFolder = cmd.TargetFolder
 	params.LogCmd = "dmg system query"
+	if cmd.cfgCmd.config.TransportConfig.AllowInsecure {
+		params.LogCmd += " -i"
+	}
 
 	err = support.CollectSupportLog(cmd.Logger, params)
 
@@ -171,15 +175,16 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 			cmd.Debugf("Log Function %d -- Log Collect Cmd %s ", logFunc, logCmd)
 			ctx := cmd.MustLogCtx()
 			req := &control.CollectLogReq{
-				TargetFolder: cmd.TargetFolder,
-				ExtraLogsDir: cmd.ExtraLogsDir,
-				LogFunction:  logFunc,
-				LogCmd:       logCmd,
-				LogStartDate: cmd.LogStartDate,
-				LogEndDate:   cmd.LogEndDate,
-				LogStartTime: cmd.LogStartTime,
-				LogEndTime:   cmd.LogEndTime,
-				StopOnError:  cmd.StopOnError,
+				TargetFolder:         cmd.TargetFolder,
+				ExtraLogsDir:         cmd.ExtraLogsDir,
+				LogFunction:          logFunc,
+				LogCmd:               logCmd,
+				LogStartDate:         cmd.LogStartDate,
+				LogEndDate:           cmd.LogEndDate,
+				LogStartTime:         cmd.LogStartTime,
+				LogEndTime:           cmd.LogEndTime,
+				StopOnError:          cmd.StopOnError,
+				FileTransferExecArgs: cmd.FileTransferExecArgs,
 			}
 			req.SetHostList(cmd.hostlist)
 
@@ -222,6 +227,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 		fmt.Printf(progress.Display())
 	}
 
+	params.FileTransferExecArgs = cmd.FileTransferExecArgs
 	// R sync the logs from servers
 	rsyncerr := cmd.rsyncLog()
 	fmt.Printf(progress.Display())

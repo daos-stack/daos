@@ -455,7 +455,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	D_DEBUG(DB_IO, "Punch "DF_UOID", epoch "DF_X64"\n",
 		DP_UOID(oid), epr.epr_hi);
 
-	rc = vos_tgt_health_check(cont);
+	rc = vos_tgt_health_check(cont, true);
 	if (rc) {
 		DL_ERROR(rc, DF_UOID": Reject punch due to faulty NVMe.", DP_UOID(oid));
 		return rc;
@@ -592,7 +592,7 @@ reset:
 	vos_ts_set_free(ts_set);
 
 	if (rc == 0) {
-		rc = vos_tgt_health_check(cont);
+		rc = vos_tgt_health_check(cont, true);
 		if (rc)
 			DL_ERROR(rc, "Fail punch due to faulty NVMe.");
 	}

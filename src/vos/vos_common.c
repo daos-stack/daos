@@ -270,13 +270,15 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 	   struct umem_rsrvd_act **rsrvd_scmp, d_list_t *nvme_exts,
 	   bool started, struct bio_desc *biod, int err)
 {
-	struct vos_pool         *pool;
-	struct dtx_handle	*dth = dth_in;
-	struct vos_dtx_act_ent	*dae;
-	struct dtx_rsrvd_uint	*dru;
-	struct vos_dtx_cmt_ent	*dce = NULL;
-	struct dtx_handle	 tmp = {0};
-	int			 rc;
+	struct vos_pool         	*pool;
+	struct umem_instance		*umm;
+	struct dtx_handle		*dth = dth_in;
+	struct vos_dtx_act_ent		*dae;
+	struct vos_dtx_act_ent_df	*dae_df;
+	struct dtx_rsrvd_uint		*dru;
+	struct vos_dtx_cmt_ent		*dce = NULL;
+	struct dtx_handle		 tmp = {0};
+	int				 rc = 0;
 
 	if (!dtx_is_valid_handle(dth)) {
 		/** Created a dummy dth handle for publishing extents */
@@ -288,11 +290,11 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 		D_INIT_LIST_HEAD(&tmp.dth_deferred_nvme);
 	}
 
-	if (dth->dth_local) {
+	if (dth->dth_local)
 		pool = vos_hdl2pool(dth_in->dth_poh);
-	} else {
+	else
 		pool = cont->vc_pool;
-	}
+	umm = vos_pool2umm(pool);
 
 	if (rsrvd_scmp != NULL) {
 		D_ASSERT(nvme_exts != NULL);
@@ -301,7 +303,7 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 			 * Just do your best to release the SCM reservation. Can't handle another
 			 * error while handling one already anyway.
 			 */
-			(void)vos_publish_scm(vos_pool2umm(pool), *rsrvd_scmp, false /* publish */);
+			(void)vos_publish_scm(umm, *rsrvd_scmp, false /* publish */);
 			D_FREE(*rsrvd_scmp);
 			*rsrvd_scmp = NULL;
 			err         = -DER_NOMEM;
@@ -342,9 +344,9 @@ commit:
 	vos_dth_set(NULL, pool->vp_sysdb);
 
 	if (bio_nvme_configured(SMD_DEV_TYPE_META) && biod != NULL)
-		err = umem_tx_end_ex(vos_pool2umm(pool), err, biod);
+		err = umem_tx_end_ex(umm, err, biod);
 	else
-		err = umem_tx_end(vos_pool2umm(pool), err);
+		err = umem_tx_end(umm, err);
 
 cancel:
 	if (dtx_is_valid_handle(dth_in)) {
@@ -410,8 +412,11 @@ cancel:
 				vos_dtx_post_handle(cont, &dae, &dce, 1, false, err != 0);
 			} else {
 				D_ASSERT(dce == NULL);
-				if (err == 0)
+				if (err == 0) {
 					dae->dae_prepared = 1;
+					dae_df = umem_off2ptr(umm, dae->dae_df_off);
+					D_ASSERT(!(dae_df->dae_flags & DTE_INVALID));
+				}
 			}
 		}
 	}

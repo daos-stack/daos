@@ -448,7 +448,7 @@ class Pil4dfsDcache(TestWithServers):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=pil4dfs,dcache,dfuse
+        :avocado: tags=dcache,dfuse,pil4dfs
         :avocado: tags=Pil4dfsDcache,test_pil4dfs_dcache_enabled
         """
         self.log_step("Mount a DFuse mount point")
@@ -482,7 +482,7 @@ class Pil4dfsDcache(TestWithServers):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=pil4dfs,dcache,dfuse
+        :avocado: tags=dcache,dfuse,pil4dfs
         :avocado: tags=Pil4dfsDcache,test_pil4dfs_dcache_disabled
         """
         self.log_step("Mount a DFuse mount point")
@@ -517,7 +517,7 @@ class Pil4dfsDcache(TestWithServers):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=pil4dfs,dcache,dfuse
+        :avocado: tags=dcache,dfuse,pil4dfs
         :avocado: tags=Pil4dfsDcache,test_pil4dfs_dcache_gc_disabled
         """
         self.log_step("Mount a DFuse mount point")

@@ -653,6 +653,7 @@ svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
 	struct dtx_handle	*dth = NULL;
 	struct umem_rsrvd_act	*rsrvd_scm;
 	struct vos_container	*cont = vos_hdl2cont(tins->ti_coh);
+	int			 rc;
 
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return 0;
@@ -663,12 +664,13 @@ svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
 			return -DER_NO_PERM; /* Not allowed */
 	}
 
-	vos_dtx_deregister_record(&tins->ti_umm, tins->ti_coh,
-				  irec->ir_dtx, *epc, rec->rec_off);
+	rc = vos_dtx_deregister_record(&tins->ti_umm, tins->ti_coh,
+				       irec->ir_dtx, *epc, rec->rec_off);
+	if (rc != 0)
+		return rc;
 
 	if (!overwrite) {
 		struct vos_pool	*pool = tins->ti_priv;
-		int		 rc;
 
 		rc = svt_free_payload(pool, addr, irec->ir_size);
 		if (rc)
@@ -843,9 +845,8 @@ evt_dop_log_del(struct umem_instance *umm, daos_epoch_t epoch,
 	daos_handle_t	coh;
 
 	coh.cookie = (unsigned long)args;
-	vos_dtx_deregister_record(umm, coh, desc->dc_dtx, epoch,
-				  umem_ptr2off(umm, desc));
-	return 0;
+	return vos_dtx_deregister_record(umm, coh, desc->dc_dtx, epoch,
+					 umem_ptr2off(umm, desc));
 }
 
 void
