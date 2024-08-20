@@ -469,15 +469,7 @@ static int (*next_posix_fallocate64)(int fd, off64_t offset, off64_t len);
 static int (*next_tcgetattr)(int fd, void *termios_p);
 /* end NOT supported by DAOS */
 
-static int (*next_fi_getinfo_1_0)(uint32_t version, const char *node, const char *service,
-	    uint64_t flags, const char *hints, char **info);
-static int (*next_fi_getinfo_1_1)(uint32_t version, const char *node, const char *service,
-	    uint64_t flags, const char *hints, char **info);
-static int (*next_fi_getinfo_1_2)(uint32_t version, const char *node, const char *service,
-	    uint64_t flags, const char *hints, char **info);
-static int (*next_fi_getinfo_1_3)(uint32_t version, const char *node, const char *service,
-	    uint64_t flags, const char *hints, char **info);
-static int (*next_fi_getinfo_1_7)(uint32_t version, const char *node, const char *service,
+static int (*next_fi_getinfo)(uint32_t version, const char *node, const char *service,
 	    uint64_t flags, const char *hints, char **info);
 
 /* to do!! */
@@ -1040,122 +1032,41 @@ err:
 	return rc;
 }
 
-#define COMPAT_SYMVER(name, api, ver) asm(".symver " #name "," #api "@" #ver "\n")
-#define COMPAT_SYMDEF(name, api, ver) asm(".symver " #name "," #api "@@" #ver "\n")
-
 int
-fi_getinfo_1_0(uint32_t version, const char *node, const char *service, uint64_t flags,
+fi_getinfo(uint32_t version, const char *node, const char *service, uint64_t flags,
 	   const char *hints, char **info)
 {
 	int rc;
 
-	if (next_fi_getinfo_1_0 == NULL) {
-		next_fi_getinfo_1_0 = dlvsym(RTLD_NEXT, "fi_getinfo", "FABRIC_1.0");
-		D_ASSERT(next_fi_getinfo_1_0 != NULL);
+	if (next_fi_getinfo == NULL) {
+		void *handle;
+
+		handle = dlopen("libfabric.so", RTLD_LAZY);
+		D_ASSERT(handle != NULL);
+		next_fi_getinfo = dlsym(RTLD_NEXT, "fi_getinfo");
+                if (next_fi_getinfo == NULL) {
+                        FILE *fout;
+                        volatile int  flag = 1;
+
+                        fout = fopen("/dev/shm/dbg.txt", "a+");
+                        if (fout) {
+                                fprintf(fout, "%d\n", getpid());
+                                fclose(fout);
+                        while(flag) {
+                                sleep(1);
+                        }
+                        }
+                }
+		D_ASSERT(next_fi_getinfo != NULL);
+		dlclose(handle);
 	}
 
 	atomic_fetch_add_relaxed(&fi_getinfo_count, 1);
-	rc = next_fi_getinfo_1_0(version, node, service, flags, hints, info);
+	rc = next_fi_getinfo(version, node, service, flags, hints, info);
 	atomic_fetch_add_relaxed(&fi_getinfo_count, -1);
 
 	return rc;
 }
-
-COMPAT_SYMVER(fi_getinfo_1_0, fi_getinfo, FABRIC_1.0);
-
-int
-fi_getinfo_1_1(uint32_t version, const char *node, const char *service, uint64_t flags,
-	   const char *hints, char **info)
-{
-	int rc;
-
-	if (next_fi_getinfo_1_1 == NULL) {
-		next_fi_getinfo_1_1 = dlvsym(RTLD_NEXT, "fi_getinfo", "FABRIC_1.1");
-		D_ASSERT(next_fi_getinfo_1_1 != NULL);
-	}
-
-	atomic_fetch_add_relaxed(&fi_getinfo_count, 1);
-	rc = next_fi_getinfo_1_1(version, node, service, flags, hints, info);
-	atomic_fetch_add_relaxed(&fi_getinfo_count, -1);
-
-	return rc;
-}
-
-COMPAT_SYMVER(fi_getinfo_1_1, fi_getinfo, FABRIC_1.1);
-
-int
-fi_getinfo_1_2(uint32_t version, const char *node, const char *service, uint64_t flags,
-	   const char *hints, char **info)
-{
-	int rc;
-
-	if (next_fi_getinfo_1_2 == NULL) {
-		next_fi_getinfo_1_2 = dlvsym(RTLD_NEXT, "fi_getinfo", "FABRIC_1.2");
-		D_ASSERT(next_fi_getinfo_1_2 != NULL);
-	}
-
-	atomic_fetch_add_relaxed(&fi_getinfo_count, 1);
-	rc = next_fi_getinfo_1_2(version, node, service, flags, hints, info);
-	atomic_fetch_add_relaxed(&fi_getinfo_count, -1);
-
-	return rc;
-}
-
-COMPAT_SYMVER(fi_getinfo_1_2, fi_getinfo, FABRIC_1.2);
-
-int
-fi_getinfo_1_3(uint32_t version, const char *node, const char *service, uint64_t flags,
-	   const char *hints, char **info)
-{
-	int rc;
-
-	if (next_fi_getinfo_1_3 == NULL) {
-		next_fi_getinfo_1_3 = dlvsym(RTLD_NEXT, "fi_getinfo", "FABRIC_1.3");
-		if (next_fi_getinfo_1_3 == NULL) {
-			FILE *fout;
-			volatile int  flag = 1;
-
-			fout = fopen("/dev/shm/dbg.txt", "a+");
-			if (fout) {
-				fprintf(fout, "%d\n", getpid());
-				fclose(fout);
-			while(flag) {
-				sleep(1);
-			}
-			}
-		}
-		D_ASSERT(next_fi_getinfo_1_3 != NULL);
-	}
-
-	atomic_fetch_add_relaxed(&fi_getinfo_count, 1);
-	rc = next_fi_getinfo_1_3(version, node, service, flags, hints, info);
-	atomic_fetch_add_relaxed(&fi_getinfo_count, -1);
-
-	return rc;
-}
-
-COMPAT_SYMDEF(fi_getinfo_1_3, fi_getinfo, FABRIC_1.3);
-
-
-int
-fi_getinfo_1_7(uint32_t version, const char *node, const char *service, uint64_t flags,
-	   const char *hints, char **info)
-{
-	int rc;
-
-	if (next_fi_getinfo_1_7 == NULL) {
-		next_fi_getinfo_1_7 = dlvsym(RTLD_NEXT, "fi_getinfo", "FABRIC_1.7");
-		D_ASSERT(next_fi_getinfo_1_7 != NULL);
-	}
-
-	atomic_fetch_add_relaxed(&fi_getinfo_count, 1);
-	rc = next_fi_getinfo_1_7(version, node, service, flags, hints, info);
-	atomic_fetch_add_relaxed(&fi_getinfo_count, -1);
-
-	return rc;
-}
-
-COMPAT_SYMVER(fi_getinfo_1_7, fi_getinfo, FABRIC_1.7);
 
 /** determine whether a path (both relative and absolute) is on DAOS or not. If yes,
  *  returns parent object, item name, full path of parent dir, full absolute path, and
