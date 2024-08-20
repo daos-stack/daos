@@ -34,6 +34,8 @@ int umempobj_backend_type2class_id(int backend);
 #define	UMEMPOBJ_ENABLE_STATS	0x1
 
 #ifdef DAOS_PMEM_BUILD
+
+/* The backend type is stored in meta blob header, don't change the value */
 enum {
 	DAOS_MD_PMEM	= 0,
 	DAOS_MD_BMEM	= 1,

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -630,7 +630,7 @@ default_wal_sz(uint64_t meta_sz)
 }
 
 int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t scm_sz, uint64_t meta_sz,
-		  uint64_t wal_sz, uint64_t data_sz, enum bio_mc_flags flags)
+		  uint64_t wal_sz, uint64_t data_sz, enum bio_mc_flags flags, uint8_t backend_type)
 {
 	int			 rc = 0, rc1;
 	spdk_blob_id		 data_blobid = SPDK_BLOBID_INVALID;
@@ -734,6 +734,7 @@ int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t scm_s
 	fi->fi_wal_size = wal_sz;
 	fi->fi_data_size = data_sz;
 	fi->fi_vos_id = xs_ctxt->bxc_tgt_id;
+	fi->fi_backend_type = backend_type;
 
 	rc = meta_format(mc, fi, true);
 	if (rc)
