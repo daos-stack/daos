@@ -32,7 +32,7 @@ message PoolCreateReq {
 	uint32          num_ranks  = 11; // Number of target ranks to use
 	repeated uint32 ranks      = 12; // target ranks
 	repeated uint64 tier_bytes = 13; // Size in bytes of storage tier
-	uint64 meta_blob_bytes = 14; // Size in bytes of meta blobs.
+	float           mem_ratio = 14; // Fraction of meta-blob-sz to use as mem-file-sz
 }
 
 // PoolCreateResp returns created pool uuid and ranks.
@@ -41,8 +41,8 @@ message PoolCreateResp {
 	uint32 svc_ldr = 2; // Current service leader rank
 	repeated uint32 svc_reps = 3; // pool service replica ranks
 	repeated uint32 tgt_ranks = 4; // pool target ranks
-	repeated uint64 tier_bytes = 5; // storage tiers allocated to pool
-	uint64 meta_blob_bytes = 6; // Size in bytes of meta blobs.
+	repeated uint64 tier_bytes     = 5; // per-rank storage tier sizes allocated in pool
+	uint64          mem_file_bytes = 6; // per-rank accumulated value of memory file sizes
 }
 
 // PoolDestroyReq supplies pool identifier and force flag.
@@ -238,7 +238,8 @@ message PoolQueryResp {
 	PoolServiceState state = 17; // pool state
 	uint32 svc_ldr = 18; // current raft leader (2.6+)
 	repeated uint32 svc_reps = 19; // service replica ranks
-	uint64 query_mask = 20; // Bitmask of pool query options used
+	uint64                     query_mask         = 20; // Bitmask of pool query options used
+							    // TODO DAOS-14223: Add mem_file_bytes.
 }
 
 message PoolProperty {

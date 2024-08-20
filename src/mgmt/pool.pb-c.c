@@ -1663,12 +1663,12 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_req__field_descriptors[1
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "meta_blob_bytes",
+    "mem_ratio",
     14,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
+    PROTOBUF_C_TYPE_FLOAT,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__PoolCreateReq, meta_blob_bytes),
+    offsetof(Mgmt__PoolCreateReq, mem_ratio),
     NULL,
     NULL,
     0,             /* flags */
@@ -1678,7 +1678,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_req__field_descriptors[1
 static const unsigned mgmt__pool_create_req__field_indices_by_name[] = {
   4,   /* field[4] = acl */
   6,   /* field[6] = fault_domains */
-  13,   /* field[13] = meta_blob_bytes */
+  13,   /* field[13] = mem_ratio */
   10,   /* field[10] = num_ranks */
   7,   /* field[7] = num_svc_reps */
   5,   /* field[5] = properties */
@@ -1774,12 +1774,12 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_resp__field_descriptors[
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "meta_blob_bytes",
+    "mem_file_bytes",
     6,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__PoolCreateResp, meta_blob_bytes),
+    offsetof(Mgmt__PoolCreateResp, mem_file_bytes),
     NULL,
     NULL,
     0,             /* flags */
@@ -1787,7 +1787,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_resp__field_descriptors[
   },
 };
 static const unsigned mgmt__pool_create_resp__field_indices_by_name[] = {
-  5,   /* field[5] = meta_blob_bytes */
+  5,   /* field[5] = mem_file_bytes */
   0,   /* field[0] = status */
   1,   /* field[1] = svc_ldr */
   2,   /* field[2] = svc_reps */

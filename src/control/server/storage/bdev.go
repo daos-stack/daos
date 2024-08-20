@@ -39,6 +39,14 @@ const (
 	sysXSTgtID     = 1024
 	// Minimum amount of hugepage memory (in bytes) needed for each target.
 	memHugepageMinPerTarget = 1 << 30 // 1GiB
+
+	// DefaultMemoryFileRatio (mem_size:meta_size) describes the behavior of MD-on-SSD in phase-1
+	// mode where the per-target-meta-blob size is equal to the per-target-VOS-file size.
+	DefaultMemoryFileRatio = 1.0
+	// TODO DAOS-16278: Enable fraction mem-ratio as default once mode is set at runtime.
+	// DefaultMemoryFileRatio (mem_size:meta_size) describes the default behavior of MD-on-SSD in
+	// phase-2 mode where the per-target-meta-blob size is twice the per-target-VOS-file size.
+	// DefaultMemoryFileRatio = 0.5
 )
 
 // JSON config file constants.

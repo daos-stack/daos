@@ -55,12 +55,14 @@ Pool health info:
 				},
 				TierStats: []*daos.StorageUsageStats{
 					{
-						Total: 2,
-						Free:  1,
+						Total:     2,
+						Free:      1,
+						MediaType: daos.StorageMediaTypeScm,
 					},
 					{
-						Total: 2,
-						Free:  1,
+						Total:     2,
+						Free:      1,
+						MediaType: daos.StorageMediaTypeNvme,
 					},
 				},
 			},
@@ -70,11 +72,11 @@ Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
 Pool health info:
 - Rebuild busy, 42 objs, 21 recs
 Pool space info:
-- Target(VOS) count:1
+- Target count:1
 - Storage tier 0 (SCM):
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
-- Storage tier 1 (NVMe):
+- Storage tier 1 (NVME):
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
 `, poolUUID.String()),
@@ -99,12 +101,14 @@ Pool space info:
 				},
 				TierStats: []*daos.StorageUsageStats{
 					{
-						Total: 2,
-						Free:  1,
+						Total:     2,
+						Free:      1,
+						MediaType: daos.StorageMediaTypeScm,
 					},
 					{
-						Total: 2,
-						Free:  1,
+						Total:     2,
+						Free:      1,
+						MediaType: daos.StorageMediaTypeNvme,
 					},
 				},
 			},
@@ -115,11 +119,11 @@ Pool health info:
 - Enabled ranks: 0-2
 - Rebuild busy, 42 objs, 21 recs
 Pool space info:
-- Target(VOS) count:1
+- Target count:1
 - Storage tier 0 (SCM):
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
-- Storage tier 1 (NVMe):
+- Storage tier 1 (NVME):
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
 `, poolUUID.String()),
@@ -144,12 +148,14 @@ Pool space info:
 				},
 				TierStats: []*daos.StorageUsageStats{
 					{
-						Total: 2,
-						Free:  1,
+						Total:     2,
+						Free:      1,
+						MediaType: daos.StorageMediaTypeScm,
 					},
 					{
-						Total: 2,
-						Free:  1,
+						Total:     2,
+						Free:      1,
+						MediaType: daos.StorageMediaTypeNvme,
 					},
 				},
 			},
@@ -160,11 +166,11 @@ Pool health info:
 - Disabled ranks: 0-1,3
 - Rebuild busy, 42 objs, 21 recs
 Pool space info:
-- Target(VOS) count:1
+- Target count:1
 - Storage tier 0 (SCM):
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
-- Storage tier 1 (NVMe):
+- Storage tier 1 (NVME):
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
 `, poolUUID.String()),
@@ -189,12 +195,14 @@ Pool space info:
 				},
 				TierStats: []*daos.StorageUsageStats{
 					{
-						Total: 2,
-						Free:  1,
+						Total:     2,
+						Free:      1,
+						MediaType: daos.StorageMediaTypeScm,
 					},
 					{
-						Total: 2,
-						Free:  1,
+						Total:     2,
+						Free:      1,
+						MediaType: daos.StorageMediaTypeNvme,
 					},
 				},
 			},
@@ -205,11 +213,11 @@ Pool health info:
 - Disabled ranks: 0-1,3
 - Rebuild unknown, 42 objs, 21 recs
 Pool space info:
-- Target(VOS) count:1
+- Target count:1
 - Storage tier 0 (SCM):
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
-- Storage tier 1 (NVMe):
+- Storage tier 1 (NVME):
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
 `, poolUUID.String()),
@@ -234,12 +242,14 @@ Pool space info:
 				},
 				TierStats: []*daos.StorageUsageStats{
 					{
-						Total: 2,
-						Free:  1,
+						Total:     2,
+						Free:      1,
+						MediaType: daos.StorageMediaTypeScm,
 					},
 					{
-						Total: 2,
-						Free:  1,
+						Total:     2,
+						Free:      1,
+						MediaType: daos.StorageMediaTypeNvme,
 					},
 				},
 			},
@@ -249,11 +259,57 @@ Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
 Pool health info:
 - Rebuild failed, status=2
 Pool space info:
-- Target(VOS) count:1
+- Target count:1
 - Storage tier 0 (SCM):
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
-- Storage tier 1 (NVMe):
+- Storage tier 1 (NVME):
+  Total size: 2 B
+  Free: 1 B, min:0 B, max:0 B, mean:0 B
+`, poolUUID.String()),
+		},
+		"normal response: MD-on-SSD": {
+			pi: &daos.PoolInfo{
+				QueryMask:        daos.DefaultPoolQueryMask,
+				State:            daos.PoolServiceStateDegraded,
+				UUID:             poolUUID,
+				TotalTargets:     2,
+				DisabledTargets:  1,
+				ActiveTargets:    1,
+				ServiceLeader:    42,
+				Version:          100,
+				PoolLayoutVer:    1,
+				UpgradeLayoutVer: 2,
+				Rebuild: &daos.PoolRebuildStatus{
+					State:   daos.PoolRebuildStateBusy,
+					Objects: 42,
+					Records: 21,
+				},
+				TierStats: []*daos.StorageUsageStats{
+					{
+						Total:     2,
+						Free:      1,
+						MediaType: daos.StorageMediaTypeNvme,
+					},
+					{
+						Total:     2,
+						Free:      1,
+						MediaType: daos.StorageMediaTypeNvme,
+					},
+				},
+			},
+			expPrintStr: fmt.Sprintf(`
+Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
+Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
+Pool health info:
+- Rebuild busy, 42 objs, 21 recs
+Pool space info:
+- Target count:1
+- Total memory-file size: 2 B
+- Metadata storage:
+  Total size: 2 B
+  Free: 1 B, min:0 B, max:0 B, mean:0 B
+- Data storage:
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
 `, poolUUID.String()),
@@ -287,12 +343,14 @@ func TestPretty_PrintPoolQueryTarget(t *testing.T) {
 				State: daos.PoolTargetStateDownOut,
 				Space: []*daos.StorageUsageStats{
 					{
-						Total: 6000000000,
-						Free:  5000000000,
+						Total:     6000000000,
+						Free:      5000000000,
+						MediaType: daos.StorageMediaTypeScm,
 					},
 					{
-						Total: 100000000000,
-						Free:  90000000000,
+						Total:     100000000000,
+						Free:      90000000000,
+						MediaType: daos.StorageMediaTypeNvme,
 					},
 				},
 			},
@@ -301,7 +359,7 @@ Target: type unknown, state down_out
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
-- Storage tier 1 (NVMe):
+- Storage tier 1 (NVME):
   Total size: 100 GB
   Free: 90 GB
 `,
@@ -312,12 +370,14 @@ Target: type unknown, state down_out
 				State: daos.PoolTargetStateDown,
 				Space: []*daos.StorageUsageStats{
 					{
-						Total: 6000000000,
-						Free:  5000000000,
+						Total:     6000000000,
+						Free:      5000000000,
+						MediaType: daos.StorageMediaTypeScm,
 					},
 					{
-						Total: 100000000000,
-						Free:  90000000000,
+						Total:     100000000000,
+						Free:      90000000000,
+						MediaType: daos.StorageMediaTypeNvme,
 					},
 				},
 			},
@@ -326,7 +386,7 @@ Target: type unknown, state down
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
-- Storage tier 1 (NVMe):
+- Storage tier 1 (NVME):
   Total size: 100 GB
   Free: 90 GB
 `,
@@ -337,12 +397,14 @@ Target: type unknown, state down
 				State: daos.PoolTargetStateUp,
 				Space: []*daos.StorageUsageStats{
 					{
-						Total: 6000000000,
-						Free:  5000000000,
+						Total:     6000000000,
+						Free:      5000000000,
+						MediaType: daos.StorageMediaTypeScm,
 					},
 					{
-						Total: 100000000000,
-						Free:  90000000000,
+						Total:     100000000000,
+						Free:      90000000000,
+						MediaType: daos.StorageMediaTypeNvme,
 					},
 				},
 			},
@@ -351,7 +413,7 @@ Target: type unknown, state up
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
-- Storage tier 1 (NVMe):
+- Storage tier 1 (NVME):
   Total size: 100 GB
   Free: 90 GB
 `,
@@ -362,12 +424,14 @@ Target: type unknown, state up
 				State: daos.PoolTargetStateUpIn,
 				Space: []*daos.StorageUsageStats{
 					{
-						Total: 6000000000,
-						Free:  5000000000,
+						Total:     6000000000,
+						Free:      5000000000,
+						MediaType: daos.StorageMediaTypeScm,
 					},
 					{
-						Total: 100000000000,
-						Free:  90000000000,
+						Total:     100000000000,
+						Free:      90000000000,
+						MediaType: daos.StorageMediaTypeNvme,
 					},
 				},
 			},
@@ -376,7 +440,7 @@ Target: type unknown, state up_in
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
-- Storage tier 1 (NVMe):
+- Storage tier 1 (NVME):
   Total size: 100 GB
   Free: 90 GB
 `,
@@ -387,12 +451,14 @@ Target: type unknown, state up_in
 				State: daos.PoolTargetStateNew,
 				Space: []*daos.StorageUsageStats{
 					{
-						Total: 6000000000,
-						Free:  5000000000,
+						Total:     6000000000,
+						Free:      5000000000,
+						MediaType: daos.StorageMediaTypeScm,
 					},
 					{
-						Total: 100000000000,
-						Free:  90000000000,
+						Total:     100000000000,
+						Free:      90000000000,
+						MediaType: daos.StorageMediaTypeNvme,
 					},
 				},
 			},
@@ -401,7 +467,7 @@ Target: type unknown, state new
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
-- Storage tier 1 (NVMe):
+- Storage tier 1 (NVME):
   Total size: 100 GB
   Free: 90 GB
 `,
@@ -412,12 +478,14 @@ Target: type unknown, state new
 				State: daos.PoolTargetStateDrain,
 				Space: []*daos.StorageUsageStats{
 					{
-						Total: 6000000000,
-						Free:  5000000000,
+						Total:     6000000000,
+						Free:      5000000000,
+						MediaType: daos.StorageMediaTypeScm,
 					},
 					{
-						Total: 100000000000,
-						Free:  90000000000,
+						Total:     100000000000,
+						Free:      90000000000,
+						MediaType: daos.StorageMediaTypeNvme,
 					},
 				},
 			},
@@ -426,7 +494,34 @@ Target: type unknown, state drain
 - Storage tier 0 (SCM):
   Total size: 6.0 GB
   Free: 5.0 GB
-- Storage tier 1 (NVMe):
+- Storage tier 1 (NVME):
+  Total size: 100 GB
+  Free: 90 GB
+`,
+		},
+		"valid: single target (unknown, down_out): MD-on-SSD": {
+			pqti: &daos.PoolQueryTargetInfo{
+				Type:  0,
+				State: daos.PoolTargetStateDownOut,
+				Space: []*daos.StorageUsageStats{
+					{
+						Total:     6000000000,
+						Free:      5000000000,
+						MediaType: daos.StorageMediaTypeNvme,
+					},
+					{
+						Total:     100000000000,
+						Free:      90000000000,
+						MediaType: daos.StorageMediaTypeNvme,
+					},
+				},
+			},
+			expPrintStr: `
+Target: type unknown, state down_out
+- Metadata storage:
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Data storage:
   Total size: 100 GB
   Free: 90 GB
 `,

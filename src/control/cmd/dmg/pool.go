@@ -202,23 +202,13 @@ type PoolCreateCmd struct {
 	ScmSize    sizeFlag            `short:"s" long:"scm-size" description:"Per-engine SCM allocation for DAOS pool (manual)"`
 	NVMeSize   sizeFlag            `short:"n" long:"nvme-size" description:"Per-engine NVMe allocation for DAOS pool (manual)"`
 	MetaSize   sizeFlag            `long:"meta-size" description:"Per-engine Metadata-on-SSD allocation for DAOS pool (manual). Only valid in MD-on-SSD mode"`
+	DataSize   sizeFlag            `long:"data-size" description:"Per-engine Data-on-SSD allocation for DAOS pool (manual). Only valid in MD-on-SSD mode"`
+	MemRatio   tierRatioFlag       `long:"mem-ratio" description:"Percentage of the pool metadata storage size that should be used as the memory file (cache) size. An example value of 25.5 would result in a memory file size of 0.255 times the value set in --meta-size. Only valid in MD-on-SSD mode"`
 	RankList   ui.RankSetFlag      `short:"r" long:"ranks" description:"Storage engine unique identifiers (ranks) for DAOS pool"`
 
 	Args struct {
 		PoolLabel string `positional-arg-name:"<pool label>" required:"1"`
 	} `positional-args:"yes"`
-}
-
-func (cmd *PoolCreateCmd) checkSizeArgs() error {
-	if cmd.Size.IsSet() {
-		if cmd.ScmSize.IsSet() || cmd.NVMeSize.IsSet() {
-			return errIncompatFlags("size", "scm-size", "nvme-size")
-		}
-	} else if !cmd.ScmSize.IsSet() {
-		return errors.New("either --size or --scm-size must be set")
-	}
-
-	return nil
 }
 
 func ratio2Percentage(log logging.Logger, scm, nvme float64) (p float64) {
@@ -238,11 +228,33 @@ func ratio2Percentage(log logging.Logger, scm, nvme float64) (p float64) {
 	return
 }
 
-func (cmd *PoolCreateCmd) storageAutoPercentage(ctx context.Context, req *control.PoolCreateReq) error {
-	if cmd.NumRanks > 0 {
-		return errIncompatFlags("size", "nranks")
+// MemRatio can be supplied as two fractions that make up 1 or a single fraction less than 1. Supply
+// only the first fraction in request and if not set then use the default.
+func (cmd *PoolCreateCmd) setMemRatio(req *control.PoolCreateReq, defVal float32) error {
+	if cmd.MemRatio.IsSet() {
+		ratios := cmd.MemRatio.Ratios()
+		nrRatios := len(ratios)
+		if nrRatios != 2 && ratios[0] < 1 {
+			return errors.Errorf("md-on-ssd mode pool create unexpected mem-ratio "+
+				"want 2 values got %d", nrRatios)
+		}
+		req.MemRatio = float32(ratios[0])
+	} else {
+		req.MemRatio = defVal
 	}
-	if cmd.TierRatio.IsSet() {
+
+	return nil
+}
+
+func (cmd *PoolCreateCmd) storageAutoPercentage(ctx context.Context, req *control.PoolCreateReq) error {
+	switch {
+	case cmd.ScmSize.IsSet() || cmd.NVMeSize.IsSet():
+		return errIncompatFlags("size", "scm-size", "nvme-size")
+	case cmd.MetaSize.IsSet() || cmd.DataSize.IsSet():
+		return errIncompatFlags("size", "meta-size", "data-size")
+	case cmd.NumRanks > 0:
+		return errIncompatFlags("size", "nranks")
+	case cmd.TierRatio.IsSet():
 		return errIncompatFlags("size=%", "tier-ratio")
 	}
 	cmd.Infof("Creating DAOS pool with %s of all storage", cmd.Size)
@@ -250,17 +262,32 @@ func (cmd *PoolCreateCmd) storageAutoPercentage(ctx context.Context, req *contro
 	availFrac := float64(cmd.Size.availRatio) / 100.0
 	req.TierRatio = []float64{availFrac, availFrac}
 
+	// Pass --mem-ratio or zero if unset.
+	if err := cmd.setMemRatio(req, 0.0); err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func (cmd *PoolCreateCmd) storageAutoTotal(req *control.PoolCreateReq) error {
-	if cmd.NumRanks > 0 && !cmd.RankList.Empty() {
+	switch {
+	case cmd.ScmSize.IsSet() || cmd.NVMeSize.IsSet():
+		return errIncompatFlags("size", "scm-size", "nvme-size")
+	case cmd.MetaSize.IsSet() || cmd.DataSize.IsSet():
+		return errIncompatFlags("size", "meta-size", "data-size")
+	case cmd.NumRanks > 0 && !cmd.RankList.Empty():
 		return errIncompatFlags("nranks", "ranks")
 	}
 
 	req.NumRanks = cmd.NumRanks
 	req.TierRatio = cmd.TierRatio.Ratios()
 	req.TotalBytes = cmd.Size.bytes
+
+	// Pass --mem-ratio or zero if unset.
+	if err := cmd.setMemRatio(req, 0.0); err != nil {
+		return err
+	}
 
 	scmPercentage := ratio2Percentage(cmd.Logger, req.TierRatio[0], req.TierRatio[1])
 	msg := fmt.Sprintf("Creating DAOS pool with automatic storage allocation: "+
@@ -273,12 +300,49 @@ func (cmd *PoolCreateCmd) storageAutoTotal(req *control.PoolCreateReq) error {
 	return nil
 }
 
-func (cmd *PoolCreateCmd) storageManual(req *control.PoolCreateReq) error {
-	if cmd.NumRanks > 0 {
-		return errIncompatFlags("nranks", "scm-size")
+func (cmd *PoolCreateCmd) storageManualMdOnSsd(req *control.PoolCreateReq) error {
+	if cmd.ScmSize.IsSet() {
+		return errIncompatFlags("mem-size", "scm-size")
 	}
-	if cmd.TierRatio.IsSet() {
+	if cmd.NVMeSize.IsSet() {
+		return errIncompatFlags("data-size", "nvme-size")
+	}
+
+	metaBytes := cmd.MetaSize.bytes
+	dataBytes := cmd.DataSize.bytes
+	req.TierBytes = []uint64{metaBytes, dataBytes}
+
+	// Explicitly set mem-ratio non-zero, this will prevent MD-on-SSD syntax being used if the
+	// mode is not enabled by providing indication of which syntax type was used.
+	if err := cmd.setMemRatio(req, storage.DefaultMemoryFileRatio); err != nil {
+		return err
+	}
+
+	msg := fmt.Sprintf("Creating DAOS pool in MD-on-SSD mode with manual per-engine storage "+
+		"allocation: %s metadata, %s data (%0.2f%% storage ratio) and %0.2f%% "+
+		"memory-file:meta-blob size ratio", humanize.Bytes(metaBytes),
+		humanize.Bytes(dataBytes), 100.00*(float64(metaBytes)/float64(dataBytes)),
+		100.00*req.MemRatio)
+	cmd.Info(msg)
+
+	return nil
+}
+
+func (cmd *PoolCreateCmd) storageManual(req *control.PoolCreateReq) error {
+	switch {
+	case cmd.NumRanks > 0:
+		return errIncompatFlags("nranks", "scm-size")
+	case cmd.TierRatio.IsSet():
 		return errIncompatFlags("tier-ratio", "scm-size")
+	case cmd.MetaSize.IsSet() || cmd.DataSize.IsSet():
+		cmd.Tracef("md-on-ssd options detected for pool create: %+v", cmd)
+		return cmd.storageManualMdOnSsd(req)
+	case cmd.MemRatio.IsSet():
+		return errIncompatFlags("mem-ratio", "scm-size", "nvme-size")
+	case cmd.NVMeSize.IsSet() && !cmd.ScmSize.IsSet():
+		return errors.New("--nvme-size cannot be set without --scm-size")
+	case !cmd.ScmSize.IsSet():
+		return errors.New("at least one size parameter must be set")
 	}
 
 	scmBytes := cmd.ScmSize.bytes
@@ -296,10 +360,6 @@ func (cmd *PoolCreateCmd) storageManual(req *control.PoolCreateReq) error {
 
 // Execute is run when PoolCreateCmd subcommand is activated
 func (cmd *PoolCreateCmd) Execute(args []string) error {
-	if err := cmd.checkSizeArgs(); err != nil {
-		return err
-	}
-
 	if cmd.Args.PoolLabel != "" {
 		for _, prop := range cmd.Properties.ToSet {
 			if prop.Name == "label" {

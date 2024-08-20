@@ -276,16 +276,22 @@ dav_obj_create_v2(const char *path, int flags, size_t sz, mode_t mode, struct um
 	if (sz == 0) {
 		/* Open the file and obtain the size */
 		fd = open(path, O_RDWR|O_CLOEXEC);
-		if (fd == -1)
+		if (fd == -1) {
+			D_ERROR("obj_create_v2 open %s to fetch size: %s (%d)\n", path,
+				strerror(errno), errno);
 			return NULL;
+		}
 
 		if (fstat(fd, &statbuf) != 0)
 			goto out;
 		sz = statbuf.st_size;
 	} else {
 		fd = open(path, O_CREAT|O_EXCL|O_RDWR|O_CLOEXEC, mode);
-		if (fd == -1)
+		if (fd == -1) {
+			D_ERROR("obj_create_v2 open %s to alloc: %s (%d)\n", path, strerror(errno),
+				errno);
 			return NULL;
+		}
 
 		if (fallocate(fd, 0, 0, (off_t)sz) == -1) {
 			errno = ENOSPC;
@@ -319,8 +325,10 @@ dav_obj_open_v2(const char *path, int flags, struct umem_store *store)
 	SUPPRESS_UNUSED(flags);
 
 	fd = open(path, O_RDWR|O_CLOEXEC);
-	if (fd == -1)
+	if (fd == -1) {
+		D_ERROR("obj_create_v2 open %s: %s (%d)\n", path, strerror(errno), errno);
 		return NULL;
+	}
 
 	if (fstat(fd, &statbuf) != 0) {
 		close(fd);
