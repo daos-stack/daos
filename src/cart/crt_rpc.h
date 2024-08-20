@@ -85,8 +85,7 @@ deadline_to_timeout(uint32_t deadline_sec)
 	struct timespec now;
 
 	d_gettime(&now);
-
-	return now.tv_sec - deadline_sec;
+	return deadline_sec - now.tv_sec;
 }
 
 static inline uint32_t
@@ -95,7 +94,6 @@ timeout_to_deadline(int timeout_sec)
 	struct timespec now;
 
 	d_gettime(&now);
-
 	return now.tv_sec + timeout_sec;
 }
 

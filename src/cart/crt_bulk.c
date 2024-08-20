@@ -185,8 +185,11 @@ crt_bulk_desc_expired(struct crt_bulk_desc *bulk_desc)
 	rpc_priv = container_of(bulk_desc->bd_rpc, struct crt_rpc_priv, crp_pub);
 
 	/* Deadline expired */
-	if (tv.tv_sec > rpc_priv->crp_req_hdr.cch_src_deadline_sec)
+	if (tv.tv_sec > rpc_priv->crp_req_hdr.cch_src_deadline_sec) {
+		RPC_INFO(rpc_priv, "Deadline expired for bulk. Deadline=%d, now=%ld\n",
+			rpc_priv->crp_req_hdr.cch_src_deadline_sec, tv.tv_sec);
 		return true;
+	}
 
 	return false;
 }
@@ -195,22 +198,18 @@ int
 verify_complete_cb(const struct crt_bulk_cb_info *cb_info)
 {
 	struct verify_cb_arg   *v_arg = cb_info->bci_arg;
-	struct crt_rpc_priv    *rpc_priv;
-	int                     rc;
 	struct crt_bulk_cb_info actual_cb_info;
+	int                     rc;
 
 	D_ASSERT(v_arg != NULL);
-	rpc_priv = container_of(cb_info->bci_bulk_desc->bd_rpc, struct crt_rpc_priv, crp_pub);
 
 	/* make a copy */
 	actual_cb_info = *cb_info;
 
 	/* If successful transfer, check for expired deadline */
 	if (cb_info->bci_rc == 0) {
-		if (crt_bulk_desc_expired(cb_info->bci_bulk_desc)) {
-			RPC_INFO(rpc_priv, "Senders deadline expired\n");
+		if (crt_bulk_desc_expired(cb_info->bci_bulk_desc))
 			actual_cb_info.bci_rc = -DER_DEADLINE_EXPIRED;
-		}
 	}
 
 	actual_cb_info.bci_arg = v_arg->arg;
@@ -233,13 +232,8 @@ crt_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	if (crt_bulk_desc_expired(bulk_desc)) {
-		struct crt_rpc_priv *rpc_priv;
-
-		rpc_priv = container_of(bulk_desc->bd_rpc, struct crt_rpc_priv, crp_pub);
-		RPC_INFO(rpc_priv, "Deadline expired before transfer start\n");
+	if (crt_bulk_desc_expired(bulk_desc))
 		D_GOTO(out, rc = -DER_DEADLINE_EXPIRED);
-	}
 
 	D_ALLOC_PTR(verify_arg);
 	if (!verify_arg)
@@ -249,28 +243,42 @@ crt_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 	verify_arg->arg         = arg;
 
 	rc = crt_hg_bulk_transfer(bulk_desc, verify_complete_cb, verify_arg, opid, false);
-	if (rc != 0)
+	if (rc != 0) {
 		DL_ERROR(rc, "crt_hg_bulk_transfer() failed");
+		D_FREE(verify_arg);
+	}
 
 out:
 	return rc;
 }
 
 int
-crt_bulk_bind_transfer(struct crt_bulk_desc *bulk_desc,
-		       crt_bulk_cb_t complete_cb, void *arg,
+crt_bulk_bind_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb, void *arg,
 		       crt_bulk_opid_t *opid)
 {
 	int			rc = 0;
+	struct verify_cb_arg   *verify_arg;
 
 	if (!crt_bulk_desc_valid(bulk_desc)) {
 		D_ERROR("invalid parameter, bulk_desc not valid.\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = crt_hg_bulk_transfer(bulk_desc, complete_cb, arg, opid, true);
-	if (rc != 0)
-		D_ERROR("crt_hg_bulk_transfer() failed, rc: %d.\n", rc);
+	if (crt_bulk_desc_expired(bulk_desc))
+		D_GOTO(out, rc = -DER_DEADLINE_EXPIRED);
+
+	D_ALLOC_PTR(verify_arg);
+	if (!verify_arg)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	verify_arg->complete_cb = complete_cb;
+	verify_arg->arg         = arg;
+
+	rc = crt_hg_bulk_transfer(bulk_desc, verify_complete_cb, verify_arg, opid, true);
+	if (rc != 0) {
+		DL_ERROR(rc, "crt_hg_bulk_transfer() failed");
+		D_FREE(verify_arg);
+	}
 
 out:
 	return rc;
