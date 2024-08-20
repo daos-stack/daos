@@ -187,7 +187,7 @@ crt_bulk_desc_expired(struct crt_bulk_desc *bulk_desc)
 	/* Deadline expired */
 	if (tv.tv_sec > rpc_priv->crp_req_hdr.cch_src_deadline_sec) {
 		RPC_INFO(rpc_priv, "Deadline expired for bulk. Deadline=%d, now=%ld\n",
-			rpc_priv->crp_req_hdr.cch_src_deadline_sec, tv.tv_sec);
+			 rpc_priv->crp_req_hdr.cch_src_deadline_sec, tv.tv_sec);
 		return true;
 	}
 
