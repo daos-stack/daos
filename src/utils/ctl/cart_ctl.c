@@ -760,6 +760,9 @@ ctl_init()
 				   rc);
 	}
 
+	/* Stop the progress thread before destroying the group */
+	crtu_progress_stop();
+
 	d_rank_list_free(rank_list);
 
 	if (ctl_gdata.cg_save_cfg) {
@@ -771,8 +774,6 @@ ctl_init()
 		if (rc != 0)
 			error_warn("Failed to destroy the view; rc=%d\n", rc);
 	}
-
-	crtu_progress_stop();
 
 	rc = pthread_join(ctl_gdata.cg_tid, NULL);
 	if (rc != 0)
