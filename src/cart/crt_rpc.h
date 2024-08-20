@@ -74,11 +74,30 @@ struct crt_common_hdr {
 	/* used in crp_reply_hdr to propagate rpc failure back to sender */
 	/* TODO: workaround for DAOS-13973 */
 	union {
-		uint32_t	cch_src_timeout;
+		uint32_t        cch_src_deadline_sec;
 		uint32_t	cch_rc;
 	};
 };
 
+static inline int32_t
+deadline_to_timeout(uint32_t deadline_sec)
+{
+	struct timespec now;
+
+	d_gettime(&now);
+
+	return now.tv_sec - deadline_sec;
+}
+
+static inline uint32_t
+timeout_to_deadline(int timeout_sec)
+{
+	struct timespec now;
+
+	d_gettime(&now);
+
+	return now.tv_sec + timeout_sec;
+}
 
 typedef enum {
 	RPC_STATE_INITED = 0x36,
@@ -663,7 +682,8 @@ crt_rpc_cb_customized(struct crt_context *crt_ctx,
 int crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
 		       bool forward);
 void crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv);
-void crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv_flag);
+int
+     crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv_flag);
 void crt_rpc_priv_fini(struct crt_rpc_priv *rpc_priv);
 int crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 			    crt_opcode_t opc, bool forward, crt_rpc_t **req);

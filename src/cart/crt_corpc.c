@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -123,10 +123,12 @@ crt_corpc_initiate(struct crt_rpc_priv *rpc_priv)
 	}
 
 	/* Inherit a timeout from a source */
-	src_timeout = rpc_priv->crp_req_hdr.cch_src_timeout;
+	src_timeout = deadline_to_timeout(rpc_priv->crp_req_hdr.cch_src_deadline_sec);
 
-	if (src_timeout != 0)
+	if (src_timeout > 0)
 		rpc_priv->crp_timeout_sec = src_timeout;
+	else
+		D_GOTO(out, rc = -DER_DEADLINE_EXPIRED);
 
 	rc = crt_corpc_info_init(rpc_priv, grp_priv, grp_ref_taken,
 				 co_hdr->coh_filter_ranks,
@@ -385,7 +387,9 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 	}
 
 	D_ASSERT(rpc_priv != NULL);
-	crt_rpc_priv_init(rpc_priv, crt_ctx, false /* srv_flag */);
+	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, false /* srv_flag */);
+	if (!rc)
+		D_GOTO(out, rc);
 
 	rpc_priv->crp_grp_priv = grp_priv;
 

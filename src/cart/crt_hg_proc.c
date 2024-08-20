@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -583,7 +583,7 @@ crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 						);
 			hdr->cch_dst_tag = rpc_priv->crp_pub.cr_ep.ep_tag;
 
-			hdr->cch_src_timeout = rpc_priv->crp_timeout_sec;
+			hdr->cch_src_deadline_sec = timeout_to_deadline(rpc_priv->crp_timeout_sec);
 			if (crt_is_service()) {
 				hdr->cch_src_rank =
 					crt_grp_priv_get_primary_rank(

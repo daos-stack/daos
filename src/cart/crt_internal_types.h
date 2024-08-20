@@ -153,6 +153,8 @@ struct crt_gdata {
 	long			 cg_num_cores;
 	/** Inflight rpc quota limit */
 	uint32_t		cg_rpc_quota;
+	/* start time in seconds, used by deadlines */
+	uint32_t                 cg_start_time_sec;
 };
 
 extern struct crt_gdata		crt_gdata;

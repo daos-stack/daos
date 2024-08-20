@@ -56,6 +56,9 @@ crt_lib_init(void)
 
 	/* envs not inited until crt_init() time */
 	memset(&crt_genvs, 0x0, sizeof(crt_genvs));
+
+	/* used by deadlines */
+	crt_gdata.cg_start_time_sec = now.tv_sec;
 }
 
 /* Library deinit */
