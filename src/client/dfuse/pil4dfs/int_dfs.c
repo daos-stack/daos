@@ -29,6 +29,7 @@
 #include <sys/ucontext.h>
 #include <sys/user.h>
 #include <linux/binfmts.h>
+#include <link.h>
 
 #ifdef __aarch64__
 #ifndef PAGE_SIZE
@@ -1032,6 +1033,35 @@ err:
 	return rc;
 }
 
+/* loop over all modules in current process and check the module name */
+static int
+callback_query_module_path(struct dl_phdr_info *info, size_t size, void *data)
+{
+	char **p = (char**)data;
+
+	D_ASSERT(p != NULL);
+	for (size_t j = 0; j < info->dlpi_phnum; j++) {
+		if (strstr(info->dlpi_name, p[0])) {
+			strncpy(p[1], info->dlpi_name, PATH_MAX);
+			break;
+		}
+	}
+	return 0;
+}
+
+/* loop over all modules in current process and determine the full path of target module */
+static void
+query_lib_path(const char *lib_name, char *full_path)
+{
+	char *p[2];
+
+	D_ASSERT(full_path != NULL);
+	p[0] = (char *)lib_name;
+	p[1] = full_path;
+	full_path[0] = 0;
+	dl_iterate_phdr(callback_query_module_path, p);
+}
+
 int
 fi_getinfo(uint32_t version, const char *node, const char *service, uint64_t flags,
 	   const char *hints, char **info)
@@ -1040,25 +1070,21 @@ fi_getinfo(uint32_t version, const char *node, const char *service, uint64_t fla
 
 	if (next_fi_getinfo == NULL) {
 		void *handle;
+		char *libfabric_path;
 
-		handle = dlopen("libfabric.so", RTLD_LAZY);
+		libfabric_path = malloc(PATH_MAX);
+		D_ASSERT(libfabric_path != NULL);
+		query_lib_path("libfabric.so", libfabric_path);
+		D_ASSERT(libfabric_path[0] != 0);
+		handle = dlopen(libfabric_path, RTLD_LAZY);
 		D_ASSERT(handle != NULL);
-		next_fi_getinfo = dlsym(RTLD_NEXT, "fi_getinfo");
-                if (next_fi_getinfo == NULL) {
-                        FILE *fout;
-                        volatile int  flag = 1;
-
-                        fout = fopen("/dev/shm/dbg.txt", "a+");
-                        if (fout) {
-                                fprintf(fout, "%d\n", getpid());
-                                fclose(fout);
-                        while(flag) {
-                                sleep(1);
-                        }
-                        }
-                }
+		/* always calling fi_getinfo in libfabric. If another library is trying to intercept
+		 * fi_getinfo(), it will break.
+		 */
+		next_fi_getinfo = dlsym(handle, "fi_getinfo");
 		D_ASSERT(next_fi_getinfo != NULL);
 		dlclose(handle);
+		free(libfabric_path);
 	}
 
 	atomic_fetch_add_relaxed(&fi_getinfo_count, 1);
