@@ -157,13 +157,10 @@ static bool             no_dcache_in_bash = true;
 bool                    d_compatible_mode;
 static long int         page_size;
 
-#define FI_GETINFO_NOT_RUNNING 0
-#define FI_GETINFO_RUNNING     1
-
 #define DAOS_INIT_NOT_RUNNING 0
 #define DAOS_INIT_RUNNING     1
 
-static _Atomic uint64_t fi_getinfo_running;
+static _Atomic int64_t  fi_getinfo_count;
 
 static long int         daos_initing;
 _Atomic bool            d_daos_inited;
@@ -479,6 +476,8 @@ static int (*next_fi_getinfo_1_1)(uint32_t version, const char *node, const char
 static int (*next_fi_getinfo_1_2)(uint32_t version, const char *node, const char *service,
 	    uint64_t flags, const char *hints, char **info);
 static int (*next_fi_getinfo_1_3)(uint32_t version, const char *node, const char *service,
+	    uint64_t flags, const char *hints, char **info);
+static int (*next_fi_getinfo_1_7)(uint32_t version, const char *node, const char *service,
 	    uint64_t flags, const char *hints, char **info);
 
 /* to do!! */
@@ -1041,30 +1040,24 @@ err:
 	return rc;
 }
 
-#define COMPAT_SYMVER(name, api, ver)	asm(".symver " #name "," #api "@" #ver "\n")
+#define COMPAT_SYMVER(name, api, ver) asm(".symver " #name "," #api "@" #ver "\n")
+#define COMPAT_SYMDEF(name, api, ver) asm(".symver " #name "," #api "@@" #ver "\n")
 
 int
 fi_getinfo_1_0(uint32_t version, const char *node, const char *service, uint64_t flags,
 	   const char *hints, char **info)
 {
-	int      rc;
-	uint64_t status_old = FI_GETINFO_NOT_RUNNING;
+	int rc;
 
 	if (next_fi_getinfo_1_0 == NULL) {
 		next_fi_getinfo_1_0 = dlvsym(RTLD_NEXT, "fi_getinfo", "FABRIC_1.0");
 		D_ASSERT(next_fi_getinfo_1_0 != NULL);
 	}
 
-	if (!atomic_compare_exchange_weak(&fi_getinfo_running, &status_old, FI_GETINFO_RUNNING)) {
-		D_ERROR("Nested fi_getinfo() call is detected.\n");
-	}
-
+	atomic_fetch_add_relaxed(&fi_getinfo_count, 1);
 	rc = next_fi_getinfo_1_0(version, node, service, flags, hints, info);
+	atomic_fetch_add_relaxed(&fi_getinfo_count, -1);
 
-	status_old = FI_GETINFO_RUNNING;
-	if (!atomic_compare_exchange_weak(&fi_getinfo_running, &status_old, FI_GETINFO_NOT_RUNNING)) {
-		D_ERROR("fi_getinfo_running is supposed to be true.\n");
-	}
 	return rc;
 }
 
@@ -1074,24 +1067,17 @@ int
 fi_getinfo_1_1(uint32_t version, const char *node, const char *service, uint64_t flags,
 	   const char *hints, char **info)
 {
-	int      rc;
-	uint64_t status_old = FI_GETINFO_NOT_RUNNING;
+	int rc;
 
 	if (next_fi_getinfo_1_1 == NULL) {
 		next_fi_getinfo_1_1 = dlvsym(RTLD_NEXT, "fi_getinfo", "FABRIC_1.1");
 		D_ASSERT(next_fi_getinfo_1_1 != NULL);
 	}
 
-	if (!atomic_compare_exchange_weak(&fi_getinfo_running, &status_old, FI_GETINFO_RUNNING)) {
-		D_ERROR("Nested fi_getinfo() call is detected.\n");
-	}
-
+	atomic_fetch_add_relaxed(&fi_getinfo_count, 1);
 	rc = next_fi_getinfo_1_1(version, node, service, flags, hints, info);
+	atomic_fetch_add_relaxed(&fi_getinfo_count, -1);
 
-	status_old = FI_GETINFO_RUNNING;
-	if (!atomic_compare_exchange_weak(&fi_getinfo_running, &status_old, FI_GETINFO_NOT_RUNNING)) {
-		D_ERROR("fi_getinfo_running is supposed to be true.\n");
-	}
 	return rc;
 }
 
@@ -1101,24 +1087,17 @@ int
 fi_getinfo_1_2(uint32_t version, const char *node, const char *service, uint64_t flags,
 	   const char *hints, char **info)
 {
-	int      rc;
-	uint64_t status_old = FI_GETINFO_NOT_RUNNING;
+	int rc;
 
 	if (next_fi_getinfo_1_2 == NULL) {
 		next_fi_getinfo_1_2 = dlvsym(RTLD_NEXT, "fi_getinfo", "FABRIC_1.2");
 		D_ASSERT(next_fi_getinfo_1_2 != NULL);
 	}
 
-	if (!atomic_compare_exchange_weak(&fi_getinfo_running, &status_old, FI_GETINFO_RUNNING)) {
-		D_ERROR("Nested fi_getinfo() call is detected.\n");
-	}
-
+	atomic_fetch_add_relaxed(&fi_getinfo_count, 1);
 	rc = next_fi_getinfo_1_2(version, node, service, flags, hints, info);
+	atomic_fetch_add_relaxed(&fi_getinfo_count, -1);
 
-	status_old = FI_GETINFO_RUNNING;
-	if (!atomic_compare_exchange_weak(&fi_getinfo_running, &status_old, FI_GETINFO_NOT_RUNNING)) {
-		D_ERROR("fi_getinfo_running is supposed to be true.\n");
-	}
 	return rc;
 }
 
@@ -1128,28 +1107,42 @@ int
 fi_getinfo_1_3(uint32_t version, const char *node, const char *service, uint64_t flags,
 	   const char *hints, char **info)
 {
-	int      rc;
-	uint64_t status_old = FI_GETINFO_NOT_RUNNING;
+	int rc;
 
 	if (next_fi_getinfo_1_3 == NULL) {
 		next_fi_getinfo_1_3 = dlvsym(RTLD_NEXT, "fi_getinfo", "FABRIC_1.3");
 		D_ASSERT(next_fi_getinfo_1_3 != NULL);
 	}
 
-	if (!atomic_compare_exchange_weak(&fi_getinfo_running, &status_old, FI_GETINFO_RUNNING)) {
-		D_ERROR("Nested fi_getinfo() call is detected.\n");
-	}
-
+	atomic_fetch_add_relaxed(&fi_getinfo_count, 1);
 	rc = next_fi_getinfo_1_3(version, node, service, flags, hints, info);
+	atomic_fetch_add_relaxed(&fi_getinfo_count, -1);
 
-	status_old = FI_GETINFO_RUNNING;
-	if (!atomic_compare_exchange_weak(&fi_getinfo_running, &status_old, FI_GETINFO_NOT_RUNNING)) {
-		D_ERROR("fi_getinfo_running is supposed to be true.\n");
-	}
 	return rc;
 }
 
-COMPAT_SYMVER(fi_getinfo_1_3, fi_getinfo, FABRIC_1.3);
+COMPAT_SYMDEF(fi_getinfo_1_3, fi_getinfo, FABRIC_1.3);
+
+
+int
+fi_getinfo_1_7(uint32_t version, const char *node, const char *service, uint64_t flags,
+	   const char *hints, char **info)
+{
+	int rc;
+
+	if (next_fi_getinfo_1_7 == NULL) {
+		next_fi_getinfo_1_7 = dlvsym(RTLD_NEXT, "fi_getinfo", "FABRIC_1.7");
+		D_ASSERT(next_fi_getinfo_1_7 != NULL);
+	}
+
+	atomic_fetch_add_relaxed(&fi_getinfo_count, 1);
+	rc = next_fi_getinfo_1_7(version, node, service, flags, hints, info);
+	atomic_fetch_add_relaxed(&fi_getinfo_count, -1);
+
+	return rc;
+}
+
+COMPAT_SYMVER(fi_getinfo_1_7, fi_getinfo, FABRIC_1.7);
 
 /** determine whether a path (both relative and absolute) is on DAOS or not. If yes,
  *  returns parent object, item name, full path of parent dir, full absolute path, and
@@ -1252,7 +1245,7 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 			 * libc functions. Avoid possible fi_getinfo reentrancy/nested call.
 			 */
 
-			if (atomic_load_relaxed(&fi_getinfo_running) == FI_GETINFO_RUNNING) {
+			if (atomic_load_relaxed(&fi_getinfo_count) > 0) {
 				*is_target_path = 0;
 				goto out_normal;
 			}
@@ -2127,6 +2120,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 
 	if (!is_target_path)
 		goto org_func;
+	atomic_fetch_add_relaxed(&num_open, 1);
 	if (oflags & O_CREAT && (oflags & O_DIRECTORY || oflags & O_PATH)) {
 		/* Create a dir is not supported. */
 		errno = ENOENT;
@@ -2154,7 +2148,6 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 		}
 
 		/* Need to create a fake fd and associate with fd_kernel */
-		atomic_fetch_add_relaxed(&num_open, 1);
 		dfs_get_mode(dfs_obj, &mode_query);
 
 		/* regular file */
@@ -2330,7 +2323,6 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 
 		return (idx_dirfd + FD_DIR_BASE);
 	}
-	atomic_fetch_add_relaxed(&num_open, 1);
 
 	rc = find_next_available_fd(NULL, &idx_fd);
 	if (rc)
