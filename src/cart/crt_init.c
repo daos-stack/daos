@@ -216,6 +216,26 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	return DER_SUCCESS;
 }
 
+#define DUMP_GDATA_FIELD(format, x) D_INFO("\t%s = " format " \n", #x, crt_gdata.x)
+
+static void
+crt_gdata_dump(void)
+{
+	D_INFO("settings:\n");
+	DUMP_GDATA_FIELD("%d", cg_post_init);
+	DUMP_GDATA_FIELD("%d", cg_post_incr);
+	DUMP_GDATA_FIELD("%d", cg_timeout);
+	DUMP_GDATA_FIELD("%d", cg_swim_crt_idx);
+	DUMP_GDATA_FIELD("%d", cg_credit_ep_ctx);
+	DUMP_GDATA_FIELD("%d", cg_iv_inline_limit);
+	DUMP_GDATA_FIELD("%d", cg_auto_swim_disable);
+	DUMP_GDATA_FIELD("%d", cg_server);
+	DUMP_GDATA_FIELD("%d", cg_use_sensors);
+	DUMP_GDATA_FIELD("%d", cg_provider_is_primary);
+	DUMP_GDATA_FIELD("0x%lx", cg_rpcid);
+	DUMP_GDATA_FIELD("%ld", cg_num_cores);
+	DUMP_GDATA_FIELD("%d", cg_rpc_quota);
+}
 
 /* first step init - for initializing crt_gdata */
 static int data_init(int server, crt_init_options_t *opt)
@@ -228,10 +248,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	uint32_t        post_init = CRT_HG_POST_INIT, post_incr = CRT_HG_POST_INCR;
 	int		rc = 0;
 
-	D_DEBUG(DB_ALL, "initializing crt_gdata...\n");
 	crt_env_dump();
-	D_DEBUG(DB_ALL, "Starting RPCID %#lx. Num cores: %ld\n",
-		crt_gdata.cg_rpcid, crt_gdata.cg_num_cores);
 
 	/* Set context post init / post incr to tune number of pre-posted recvs */
 	crt_env_get(D_POST_INIT, &post_init);
@@ -264,12 +281,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	else
 		crt_gdata.cg_timeout = timeout;
 
-	D_DEBUG(DB_ALL, "set the global timeout value as %d second.\n",
-		crt_gdata.cg_timeout);
-
 	crt_gdata.cg_swim_crt_idx = CRT_DEFAULT_PROGRESS_CTX_IDX;
-
-	D_DEBUG(DB_ALL, "SWIM context idx=%d\n", crt_gdata.cg_swim_crt_idx);
 
 	/* Override defaults and environment if option is set */
 	if (opt && opt->cio_use_credits) {
@@ -290,23 +302,12 @@ static int data_init(int server, crt_init_options_t *opt)
 	/* This is a workaround for CART-871 if universe size is not set */
 	crt_env_get(FI_UNIVERSE_SIZE, &fi_univ_size);
 	if (fi_univ_size == 0) {
-		D_INFO("FI_UNIVERSE_SIZE was not set; setting to 2048\n");
 		d_setenv("FI_UNIVERSE_SIZE", "2048", 1);
 	}
 
-	if (credits == 0) {
-		D_DEBUG(DB_ALL, "CRT_CREDIT_EP_CTX set as 0, flow control disabled.\n");
-	} else if (credits > CRT_MAX_CREDITS_PER_EP_CTX) {
-		D_DEBUG(DB_ALL, "ENV CRT_CREDIT_EP_CTX's value %d exceed max "
-			"allowed value, use %d for flow control.\n",
-			credits, CRT_MAX_CREDITS_PER_EP_CTX);
+	if (credits > CRT_MAX_CREDITS_PER_EP_CTX)
 		credits = CRT_MAX_CREDITS_PER_EP_CTX;
-	} else {
-		D_DEBUG(DB_ALL, "CRT_CREDIT_EP_CTX set as %d for flow "
-			"control.\n", credits);
-	}
 	crt_gdata.cg_credit_ep_ctx = credits;
-	D_ASSERT(crt_gdata.cg_credit_ep_ctx <= CRT_MAX_CREDITS_PER_EP_CTX);
 
 	/** Enable statistics only for the server side and if requested */
 	if (opt && opt->cio_use_sensors && server) {
@@ -330,6 +331,8 @@ static int data_init(int server, crt_init_options_t *opt)
 	}
 
 	gdata_init_flag = 1;
+	crt_gdata_dump();
+
 	return rc;
 }
 
@@ -431,15 +434,14 @@ __split_arg(char *s_arg_to_split, const char *delim, char **first_arg, char **se
 	return DER_SUCCESS;
 }
 
-
-int
+crt_provider_t
 crt_str_to_provider(const char *str_provider)
 {
-	int	provider_idx = CRT_PROV_UNKNOWN;
-	int	i;
+	crt_provider_t prov = CRT_PROV_UNKNOWN;
+	int            i;
 
 	if (str_provider == NULL)
-		return provider_idx;
+		return prov;
 
 	for (i = 0; crt_na_dict[i].nad_str != NULL; i++) {
 
@@ -448,12 +450,12 @@ crt_str_to_provider(const char *str_provider)
 		    (crt_na_dict[i].nad_alt_str &&
 		     !strncmp(str_provider, crt_na_dict[i].nad_alt_str,
 			      strlen(crt_na_dict[i].nad_alt_str) + 1))) {
-			provider_idx = crt_na_dict[i].nad_type;
+			prov = crt_na_dict[i].nad_type;
 			break;
 		}
 	}
 
-	return provider_idx;
+	return prov;
 }
 
 static int
@@ -465,14 +467,12 @@ check_grpid(crt_group_id_t grpid)
 		return rc;
 
 	if (crt_validate_grpid(grpid) != 0) {
-		D_ERROR("grpid contains invalid characters "
-			"or is too long\n");
+		D_ERROR("grpid contains invalid characters or is too long\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (strcmp(grpid, CRT_DEFAULT_GRPID) == 0) {
-		D_ERROR("invalid client grpid (same as "
-			"CRT_DEFAULT_GRPID).\n");
+		D_ERROR("invalid client grpid (same as CRT_DEFAULT_GRPID).\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 out:
