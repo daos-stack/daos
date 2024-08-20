@@ -695,6 +695,18 @@ class TestEnvironment():
         """
         return os.path.join(self.log_dir, "configs", "daos_server.yml")
 
+    def config_file_directories(self):
+        """Get the unique list of directories for the client, control, and server config files.
+
+        Returns:
+            list: a list of directories for the client, control, and server config files
+        """
+        directories = set()
+        directories.add(os.path.dirname(self.client_config))
+        directories.add(os.path.dirname(self.control_config))
+        directories.add(os.path.dirname(self.server_config))
+        return list(directories)
+
 
 def set_test_environment(logger, test_env=None, servers=None, clients=None, provider=None,
                          insecure_mode=False, details=None, agent_user=None, log_dir=None,

@@ -881,9 +881,6 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
     # this test's results. Also report an error if the test generated any log files with a
     # size exceeding the threshold.
     test_env = TestEnvironment()
-    config_file_sources = set()
-    config_file_sources.add(os.path.dirname(test_env.client_config))
-    config_file_sources.add(os.path.dirname(test_env.server_config))
     if archive:
         remote_files = OrderedDict()
         remote_files["local configuration files"] = {
@@ -894,7 +891,7 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
             "depth": 1,
             "timeout": 300,
         }
-        for index, source in enumerate(config_file_sources):
+        for index, source in enumerate(test_env.config_file_directories()):
             remote_files[f"remote configuration files ({index})"] = {
                 "source": source,
                 "destination": os.path.join(job_results_dir, "latest", TEST_RESULTS_DIRS[0]),

@@ -603,12 +603,13 @@ class TestRunner():
             f"sudo -n rm -fr {test_env.log_dir}",
             f"mkdir -p {test_env.log_dir}",
             f"chmod a+wrx {test_env.log_dir}",
-            f"ls -al {test_env.log_dir}",
-            f"mkdir -p {test_env.user_dir}"
         ]
         # Predefine the sub directories used to collect the files process()/_archive_files()
+        directories = [test_env.user_dir] + test_env.config_file_directories()
         for directory in TEST_RESULTS_DIRS:
-            commands.append(f"mkdir -p {test_env.log_dir}/{directory}")
+            directories.append(os.path.join(test_env.log_dir, directory))
+        commands.append(f"mkdir -p {' '.join(directories)}")
+        commands.append(f"ls -al {test_env.log_dir}")
         for command in commands:
             if not run_remote(logger, hosts, command).passed:
                 message = "Error setting up the common test directory on all hosts"
