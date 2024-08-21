@@ -1742,9 +1742,9 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv
 			struct timespec now;
 
 			d_gettime(&now);
-			RPC_ERROR(rpc_priv,
-				 "Incoming rpc deadline expired. Deadline = %d, now = %ld\n",
-				 rpc_priv->crp_req_hdr.cch_src_deadline_sec, now.tv_sec);
+			RPC_INFO(rpc_priv,
+				  "Incoming rpc deadline expired. Deadline = %d, now = %ld\n",
+				  rpc_priv->crp_req_hdr.cch_src_deadline_sec, now.tv_sec);
 			D_GOTO(out, rc = -DER_DEADLINE_EXPIRED);
 		}
 
