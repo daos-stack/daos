@@ -1032,12 +1032,19 @@ err:
 	return rc;
 }
 
-static int
-new_ze_init(int flags)
+int
+zeInit(int flags)
 {
 	int rc;
 
+	if (next_ze_init == NULL) {
+		if (d_hook_enabled)
+			next_ze_init = libdl_dlsym(RTLD_NEXT, "zeInit");
+		else
+			next_ze_init = dlsym(RTLD_NEXT, "zeInit");
+	}
 	D_ASSERT(next_ze_init != NULL);
+
 	atomic_fetch_add_relaxed(&zeInit_count, 1);
 	rc = next_ze_init(flags);
 	atomic_fetch_add_relaxed(&zeInit_count, -1);
@@ -1054,7 +1061,7 @@ new_dlsym(void *handle, const char *symbol)
 		return libdl_dlsym(handle, symbol);
 	/* intercept zeInit() */
 	next_ze_init = libdl_dlsym(handle, symbol);
-	return new_ze_init;
+	return zeInit;
 }
 
 /** determine whether a path (both relative and absolute) is on DAOS or not. If yes,
