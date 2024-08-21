@@ -644,14 +644,15 @@ dc_mgmt_net_cfg(const char *name, crt_init_options_t *crt_info)
 
 	d_getenv_bool("D_DYNAMIC_CTX", &d_dynamic_ctx_g);
 	if (d_dynamic_ctx_g) {
-		int i;
+		int i, cnt = 0;
 
-		D_ALLOC(crt_info->cio_interface,
-			DAOS_SYS_INFO_STRING_MAX * resp->n_numa_fabric_interfaces);
+		for (i = 0; i < resp->n_numa_fabric_interfaces; i++)
+			cnt += resp_g->numa_fabric_interfaces[i]->n_ifaces + 1;
+
+		D_ALLOC(crt_info->cio_interface, DAOS_SYS_INFO_STRING_MAX * cnt);
 		if (crt_info->cio_interface == NULL)
 			D_GOTO(cleanup, rc = -DER_NOMEM);
-		D_ALLOC(crt_info->cio_domain,
-			DAOS_SYS_INFO_STRING_MAX * resp->n_numa_fabric_interfaces);
+		D_ALLOC(crt_info->cio_domain, DAOS_SYS_INFO_STRING_MAX * cnt);
 		if (crt_info->cio_domain == NULL)
 			D_GOTO(cleanup, rc = -DER_NOMEM);
 
@@ -673,7 +674,7 @@ dc_mgmt_net_cfg(const char *name, crt_init_options_t *crt_info)
 			 * there. So initialize the index array at that interface to -1 to know that
 			 * this is the first selection later.
 			 */
-			if (numa_ifaces->n_ifaces)
+			if (numa_ifaces->n_ifaces > 1)
 				info_g.numa_iface_idx_rr[i] = -1;
 		}
 	} else {

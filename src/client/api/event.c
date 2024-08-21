@@ -673,11 +673,11 @@ daos_eq_create(daos_handle_t *eqh)
 		char iface[DAOS_SYS_INFO_STRING_MAX];
 
 		rc = dc_mgmt_get_iface(&iface[0]);
-		if (rc) {
+		if (rc && rc != -DER_NONEXIST) {
 			D_ERROR("failed to get iface: " DF_RC "\n", DP_RC(rc));
-			daos_eq_free(&eqx->eqx_hlink);
 			return rc;
 		}
+
 		/** if no interface returned, use the default */
 		if (rc == -DER_NONEXIST)
 			rc = crt_context_create(&eqx->eqx_ctx);
