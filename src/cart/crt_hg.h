@@ -32,7 +32,7 @@
 #define CRT_HG_POST_INCR        (512)
 #define CRT_HG_MRECV_BUF        (16)
 
-#define CRT_UCX_STR "ucx"
+#define CRT_UCX_STR             "ucx"
 
 struct crt_rpc_priv;
 struct crt_common_hdr;
