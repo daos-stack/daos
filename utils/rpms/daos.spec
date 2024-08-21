@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.7.100
-Release:       5%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -486,6 +486,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos
 %{_bindir}/tune-dfuse.sh
 %{_libdir}/libdaos_cmd_hdlrs.so
+%{_libdir}/libdaos_self_test.so
 %{_libdir}/libdfs.so
 %{_libdir}/libds3.so
 %{_libdir}/%{name}/API_VERSION
@@ -592,8 +593,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Mon Aug 19 2024 Johann Lombardi <johann.lombardi@gmail.com> 2.7.100-5
+* Mon Aug 19 2024 Johann Lombardi <johann.lombardi@gmail.com> 2.7.100-6
 - Add tune-dfuse.sh script to bump readahead and max dirty ratio
+
+* Thu Aug 15 2024 Michael MacDonald <mjmac@google.com> 2.7.100-5
+- Add libdaos_self_test.so to client RPM
 
 * Mon Aug 05 2024 Jerome Soumagne <jerome.soumagne@intel.com> 2.7.100-4
 - Bump mercury version to 2.4.0rc4

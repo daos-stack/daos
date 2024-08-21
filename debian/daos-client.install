@@ -13,6 +13,7 @@ usr/lib64/libioil.so
 usr/lib64/libpil4dfs.so
 usr/lib64/libdaos.so.*
 usr/lib64/libdaos_cmd_hdlrs.so
+usr/lib64/libdaos_self_test.so
 usr/lib64/python3.8/site-packages/pydaos/*.py
 usr/lib64/python3.8/site-packages/pydaos/pydaos_shim.so
 usr/lib64/python3.8/site-packages/pydaos/raw/*.py
