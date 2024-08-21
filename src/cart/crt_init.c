@@ -435,8 +435,8 @@ crt_provider_t
 crt_str_to_provider(const char *str_provider)
 {
 	crt_provider_t	prov = CRT_PROV_UNKNOWN;
-	int		i, len;
-	char	       *p = NULL;
+	int             i, len;
+	char           *p = NULL;
 
 	if (str_provider == NULL)
 		return prov;
