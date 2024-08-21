@@ -434,9 +434,9 @@ __split_arg(char *s_arg_to_split, const char *delim, char **first_arg, char **se
 crt_provider_t
 crt_str_to_provider(const char *str_provider)
 {
-	crt_provider_t	prov = CRT_PROV_UNKNOWN;
-	int             i, len;
-	char           *p = NULL;
+	crt_provider_t prov = CRT_PROV_UNKNOWN;
+	int            i, len;
+	char          *p = NULL;
 
 	if (str_provider == NULL)
 		return prov;
