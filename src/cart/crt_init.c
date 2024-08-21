@@ -435,8 +435,8 @@ crt_provider_t
 crt_str_to_provider(const char *str_provider)
 {
 	crt_provider_t	prov = CRT_PROV_UNKNOWN;
-	int	i, len;
-	char   *p = NULL;
+	int		i, len;
+	char	       *p = NULL;
 
 	if (str_provider == NULL)
 		return prov;
@@ -458,7 +458,7 @@ crt_str_to_provider(const char *str_provider)
 				if (!p) {
 					return prov;
 				} else {
-					crt_na_dict[i].nad_str       = p;
+					crt_na_dict[i].nad_str	     = p;
 					crt_na_dict[i].nad_str_alloc = true;
 				}
 			}
@@ -959,7 +959,7 @@ crt_finalize(void)
 				crt_na_config_fini(false, crt_gdata.cg_secondary_provs[i]);
 		}
 
-		for (i = 0; crt_na_dict[i].nad_str != NULL; i++) 
+		for (i = 0; crt_na_dict[i].nad_str != NULL; i++)
 			if (crt_na_dict[i].nad_str_alloc)
 				D_FREE(crt_na_dict[i].nad_str);
 
