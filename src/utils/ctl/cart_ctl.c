@@ -237,7 +237,8 @@ ctl_parse_fi_attr(char *arg_str, struct crt_ctl_fi_attr_set_in *fi_attr_in)
 	}
 	fi_attr_in->fa_err_code = strtoull(tokens[idx], NULL, 10);
 	fi_attr_in->fa_interval = strtoull(tokens[idx+1], NULL, 10);
-	fi_attr_in->fa_argument = tokens[idx+2];
+	if (idx+2 < token_cnt)
+		fi_attr_in->fa_argument = tokens[idx+2];
 	return;
 
 error_out:
