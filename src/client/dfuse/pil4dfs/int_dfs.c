@@ -29,7 +29,6 @@
 #include <sys/ucontext.h>
 #include <sys/user.h>
 #include <linux/binfmts.h>
-#include <link.h>
 
 #ifdef __aarch64__
 #ifndef PAGE_SIZE
