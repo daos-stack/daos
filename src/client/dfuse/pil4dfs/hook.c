@@ -93,6 +93,7 @@ static char   **lib_name_list;
 
 static char    *path_ld;
 static char    *path_libc;
+static char    *path_libdl;
 static char    *path_libpthread;
 /* This holds the path of libpil4dfs.so. It is needed when we want to
  * force child processes append libpil4dfs.so to env LD_PRELOAD. */
@@ -311,7 +312,22 @@ determine_lib_path(void)
 		path_libpthread = NULL;
 		DS_ERROR(ENAMETOOLONG, "path_libpthread is too long");
 		goto err_1;
-	}	
+	}
+	if (lib_ver_str[0]) {
+		rc = asprintf(&path_libdl, "%s/libdl-%s.so", lib_dir_str, lib_ver_str);
+	} else {
+		rc = asprintf(&path_libdl, "%s/libdl.so", lib_dir_str);
+	}
+	if (rc < 0) {
+		DS_ERROR(ENOMEM, "Failed to allocate memory for path_libdl");
+		goto err_1;
+	}
+	if (rc >= PATH_MAX) {
+		free(path_libdl);
+		path_libdl = NULL;
+		DS_ERROR(ENAMETOOLONG, "path_libdl is too long");
+		goto err_1;
+	}
 	D_FREE(lib_dir_str);
 
 	pos = strstr(read_buff_map, "libpil4dfs.so");
@@ -754,6 +770,7 @@ free_memory_in_hook(void)
 	D_FREE(path_ld);
 	D_FREE(path_libc);
 	D_FREE(module_list);
+	free(path_libdl);
 	free(path_libpthread);
 
 	if (lib_name_list) {
@@ -1034,6 +1051,8 @@ register_a_hook(const char *module_name, const char *func_name, const void *new_
 		module_name_local = path_ld;
 	else if (strncmp(module_name, "libc", 5) == 0)
 		module_name_local = path_libc;
+	else if (strncmp(module_name, "libdl", 6) == 0)
+		module_name_local = path_libdl;
 	else if (strncmp(module_name, "libpthread", 11) == 0)
 		module_name_local = path_libpthread;
 	else

@@ -161,7 +161,7 @@ static long int         page_size;
 #define DAOS_INIT_NOT_RUNNING 0
 #define DAOS_INIT_RUNNING     1
 
-static _Atomic int64_t  fi_getinfo_count;
+static _Atomic int64_t  zeInit_count;
 
 static long int         daos_initing;
 _Atomic bool            d_daos_inited;
@@ -470,16 +470,8 @@ static int (*next_posix_fallocate64)(int fd, off64_t offset, off64_t len);
 static int (*next_tcgetattr)(int fd, void *termios_p);
 /* end NOT supported by DAOS */
 
-static int (*next_fi_getinfo_1_0)(uint32_t version, const char *node, const char *service,
-	    uint64_t flags, const char *hints, char **info);
-static int (*next_fi_getinfo_1_1)(uint32_t version, const char *node, const char *service,
-	    uint64_t flags, const char *hints, char **info);
-static int (*next_fi_getinfo_1_2)(uint32_t version, const char *node, const char *service,
-	    uint64_t flags, const char *hints, char **info);
-static int (*next_fi_getinfo_1_3)(uint32_t version, const char *node, const char *service,
-	    uint64_t flags, const char *hints, char **info);
-static int (*next_fi_getinfo_1_7)(uint32_t version, const char *node, const char *service,
-	    uint64_t flags, const char *hints, char **info);
+static int (*next_ze_init)(int flags);
+static void * (*libdl_dlsym)(void *handle, const char *symbol);
 
 /* to do!! */
 /**
@@ -1041,152 +1033,30 @@ err:
 	return rc;
 }
 
-/* loop over all modules in current process and check the module name */
 static int
-callback_query_module_path(struct dl_phdr_info *info, size_t size, void *data)
-{
-	char **p = (char**)data;
-
-	D_ASSERT(p != NULL);
-	for (size_t j = 0; j < info->dlpi_phnum; j++) {
-		if (strstr(info->dlpi_name, p[0])) {
-			strncpy(p[1], info->dlpi_name, PATH_MAX);
-			break;
-		}
-	}
-	return 0;
-}
-
-/* loop over all modules in current process and determine the full path of target module.
- */
-static void
-query_versioned_func_addr(const char *lib_name, const char func_name[], const char version[],
-			  void **pt_func_addr)
-{
-	char *p[2];
-	char *full_path;
-	void *handle;
-
-	full_path = malloc(PATH_MAX);
-	D_ASSERT(full_path != NULL);
-	full_path[0] = 0;
-
-	p[0] = (char *)lib_name;
-	p[1] = full_path;
-	/* Extract the full path of target library and save into full_path. */
-	dl_iterate_phdr(callback_query_module_path, p);
-	D_ASSERT(full_path[0] != 0);
-
-	handle = dlopen(full_path, RTLD_LAZY);
-	D_ASSERT(handle != NULL);
-	free(full_path);
-	*pt_func_addr = dlvsym(handle, func_name, version);
-	D_ASSERT(*pt_func_addr != NULL);
-	dlclose(handle);
-}
-
-#define COMPAT_SYMVER(name, api, ver) asm(".symver " #name "," #api "@" #ver "\n")
-#define COMPAT_DEFVER(name, api, ver) asm(".symver " #name "," #api "@@" #ver "\n")
-
-/* dlvsym(RTLD_NEXT, "fi_getinfo", "FABRIC_1.x") works on my local node but fails
- * on CI nodes (returning NULL next_fi_getinfo). To workaround the issue, we always
- * call fi_getinfo() in libfabric here. If another library tries intercepting
- * fi_getinfo(), it will break.
- */
-
-int
-fi_getinfo_1_0(uint32_t version, const char *node, const char *service, uint64_t flags,
-	   const char *hints, char **info)
+new_ze_init(int flags)
 {
 	int rc;
 
-	if (next_fi_getinfo_1_0 == NULL)
-		query_versioned_func_addr("libfabric.so", "fi_getinfo", "FABRIC_1.0",
-					  (void **)&next_fi_getinfo_1_0);
-
-	atomic_fetch_add_relaxed(&fi_getinfo_count, 1);
-	rc = next_fi_getinfo_1_0(version, node, service, flags, hints, info);
-	atomic_fetch_add_relaxed(&fi_getinfo_count, -1);
-
+	D_ASSERT(next_ze_init != NULL);
+	atomic_fetch_add_relaxed(&zeInit_count, 1);
+	rc = next_ze_init(flags);
+	atomic_fetch_add_relaxed(&zeInit_count, -1);
 	return rc;
 }
 
-COMPAT_SYMVER(fi_getinfo_1_0, fi_getinfo, FABRIC_1.0);
-
-int
-fi_getinfo_1_1(uint32_t version, const char *node, const char *service, uint64_t flags,
-	   const char *hints, char **info)
+void *
+new_dlsym(void *handle, const char *symbol)
 {
-	int rc;
-
-	if (next_fi_getinfo_1_1 == NULL)
-		query_versioned_func_addr("libfabric.so", "fi_getinfo", "FABRIC_1.1",
-					  (void **)&next_fi_getinfo_1_1);
-
-	atomic_fetch_add_relaxed(&fi_getinfo_count, 1);
-	rc = next_fi_getinfo_1_1(version, node, service, flags, hints, info);
-	atomic_fetch_add_relaxed(&fi_getinfo_count, -1);
-
-	return rc;
+	D_ASSERT(libdl_dlsym != NULL);
+	if (!d_hook_enabled)
+		return libdl_dlsym(handle, symbol);
+	if (strcmp(symbol, "zeInit") != 0)
+		return libdl_dlsym(handle, symbol);
+	/* intercept zeInit() */
+	next_ze_init = libdl_dlsym(handle, symbol);
+	return new_ze_init;
 }
-
-COMPAT_SYMVER(fi_getinfo_1_1, fi_getinfo, FABRIC_1.1);
-
-int
-fi_getinfo_1_2(uint32_t version, const char *node, const char *service, uint64_t flags,
-	   const char *hints, char **info)
-{
-	int rc;
-
-	if (next_fi_getinfo_1_2 == NULL)
-		query_versioned_func_addr("libfabric.so", "fi_getinfo", "FABRIC_1.2",
-					  (void **)&next_fi_getinfo_1_2);
-
-	atomic_fetch_add_relaxed(&fi_getinfo_count, 1);
-	rc = next_fi_getinfo_1_2(version, node, service, flags, hints, info);
-	atomic_fetch_add_relaxed(&fi_getinfo_count, -1);
-
-	return rc;
-}
-
-COMPAT_SYMVER(fi_getinfo_1_2, fi_getinfo, FABRIC_1.2);
-
-int
-fi_getinfo_1_3(uint32_t version, const char *node, const char *service, uint64_t flags,
-	   const char *hints, char **info)
-{
-	int rc;
-
-	if (next_fi_getinfo_1_3 == NULL)
-		query_versioned_func_addr("libfabric.so", "fi_getinfo", "FABRIC_1.3",
-					  (void **)&next_fi_getinfo_1_3);
-
-	atomic_fetch_add_relaxed(&fi_getinfo_count, 1);
-	rc = next_fi_getinfo_1_3(version, node, service, flags, hints, info);
-	atomic_fetch_add_relaxed(&fi_getinfo_count, -1);
-
-	return rc;
-}
-
-COMPAT_DEFVER(fi_getinfo_1_3, fi_getinfo, FABRIC_1.3);
-
-int
-fi_getinfo_1_7(uint32_t version, const char *node, const char *service, uint64_t flags,
-	   const char *hints, char **info)
-{
-	int rc;
-
-	if (next_fi_getinfo_1_7 == NULL)
-		query_versioned_func_addr("libfabric.so", "fi_getinfo", "FABRIC_1.7",
-					  (void **)&next_fi_getinfo_1_7);
-	atomic_fetch_add_relaxed(&fi_getinfo_count, 1);
-	rc = next_fi_getinfo_1_7(version, node, service, flags, hints, info);
-	atomic_fetch_add_relaxed(&fi_getinfo_count, -1);
-
-	return rc;
-}
-
-COMPAT_SYMVER(fi_getinfo_1_7, fi_getinfo, FABRIC_1.7);
 
 /** determine whether a path (both relative and absolute) is on DAOS or not. If yes,
  *  returns parent object, item name, full path of parent dir, full absolute path, and
@@ -1285,11 +1155,11 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 			uint64_t status_old = DAOS_INIT_NOT_RUNNING;
 			bool     rc_cmp_swap;
 
-			/* Check whether fi_getinfo() is running. If yes, pass to the original
-			 * libc functions. Avoid possible fi_getinfo reentrancy/nested call.
+			/* Check whether zeInit() is running. If yes, pass to the original
+			 * libc functions. Avoid possible zeInit reentrancy/nested call.
 			 */
 
-			if (atomic_load_relaxed(&fi_getinfo_count) > 0) {
+			if (atomic_load_relaxed(&zeInit_count) > 0) {
 				*is_target_path = 0;
 				goto out_normal;
 			}
@@ -7021,6 +6891,7 @@ init_myhook(void)
 
 	register_a_hook("libc", "exit", (void *)new_exit, (long int *)(&next_exit));
 	register_a_hook("libc", "dup3", (void *)new_dup3, (long int *)(&libc_dup3));
+	register_a_hook("libdl", "dlsym", (void *)new_dlsym, (long int *)(&libdl_dlsym));
 
 	init_fd_dup2_list();
 
