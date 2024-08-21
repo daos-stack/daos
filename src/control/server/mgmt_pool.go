@@ -182,6 +182,8 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 	case mdOnSSD && req.MemRatio == 0:
 		// Set reasonable default if not set in MD-on-SSD mode.
 		req.MemRatio = storage.DefaultMemoryFileRatio
+		svc.log.Infof("Default memory-file:md-on-ssd ratio of %d%% applied",
+			int(storage.DefaultMemoryFileRatio)*100)
 	}
 
 	// NB: The following logic is based on the assumption that a request will always include SCM

@@ -51,7 +51,9 @@ type PoolCmd struct {
 
 var (
 	// Default to 6% SCM:94% NVMe
-	defaultTierRatios = []float64{0.06, 0.94}
+	defaultTierRatios         = []float64{0.06, 0.94}
+	errPoolCreateIncompatOpts = errors.New("unsupported option combination, use (--scm-size and " +
+		"--nvme-size) or (--scm-size and --nvme-size) or (--size)")
 )
 
 type tierRatioFlag struct {
@@ -203,7 +205,7 @@ type PoolCreateCmd struct {
 	NVMeSize   sizeFlag            `short:"n" long:"nvme-size" description:"Per-engine NVMe allocation for DAOS pool (manual)"`
 	MetaSize   sizeFlag            `long:"meta-size" description:"Per-engine Metadata-on-SSD allocation for DAOS pool (manual). Only valid in MD-on-SSD mode"`
 	DataSize   sizeFlag            `long:"data-size" description:"Per-engine Data-on-SSD allocation for DAOS pool (manual). Only valid in MD-on-SSD mode"`
-	MemRatio   tierRatioFlag       `long:"mem-ratio" description:"Percentage of the pool metadata storage size that should be used as the memory file (cache) size. An example value of 25.5 would result in a memory file size of 0.255 times the value set in --meta-size. Only valid in MD-on-SSD mode"`
+	MemRatio   tierRatioFlag       `long:"mem-ratio" description:"Percentage of the pool metadata storage size (on SSD) that should be used as the memory file size (on ram-disk). Default value is 100% and only valid in MD-on-SSD mode"`
 	RankList   ui.RankSetFlag      `short:"r" long:"ranks" description:"Storage engine unique identifiers (ranks) for DAOS pool"`
 
 	Args struct {
@@ -247,14 +249,10 @@ func (cmd *PoolCreateCmd) setMemRatio(req *control.PoolCreateReq, defVal float32
 }
 
 func (cmd *PoolCreateCmd) storageAutoPercentage(ctx context.Context, req *control.PoolCreateReq) error {
-	switch {
-	case cmd.ScmSize.IsSet() || cmd.NVMeSize.IsSet():
-		return errIncompatFlags("size", "scm-size", "nvme-size")
-	case cmd.MetaSize.IsSet() || cmd.DataSize.IsSet():
-		return errIncompatFlags("size", "meta-size", "data-size")
-	case cmd.NumRanks > 0:
+	if cmd.NumRanks > 0 {
 		return errIncompatFlags("size", "nranks")
-	case cmd.TierRatio.IsSet():
+	}
+	if cmd.TierRatio.IsSet() {
 		return errIncompatFlags("size=%", "tier-ratio")
 	}
 	cmd.Infof("Creating DAOS pool with %s of all storage", cmd.Size)
@@ -271,12 +269,7 @@ func (cmd *PoolCreateCmd) storageAutoPercentage(ctx context.Context, req *contro
 }
 
 func (cmd *PoolCreateCmd) storageAutoTotal(req *control.PoolCreateReq) error {
-	switch {
-	case cmd.ScmSize.IsSet() || cmd.NVMeSize.IsSet():
-		return errIncompatFlags("size", "scm-size", "nvme-size")
-	case cmd.MetaSize.IsSet() || cmd.DataSize.IsSet():
-		return errIncompatFlags("size", "meta-size", "data-size")
-	case cmd.NumRanks > 0 && !cmd.RankList.Empty():
+	if cmd.NumRanks > 0 && !cmd.RankList.Empty() {
 		return errIncompatFlags("nranks", "ranks")
 	}
 
@@ -301,13 +294,6 @@ func (cmd *PoolCreateCmd) storageAutoTotal(req *control.PoolCreateReq) error {
 }
 
 func (cmd *PoolCreateCmd) storageManualMdOnSsd(req *control.PoolCreateReq) error {
-	if cmd.ScmSize.IsSet() {
-		return errIncompatFlags("mem-size", "scm-size")
-	}
-	if cmd.NVMeSize.IsSet() {
-		return errIncompatFlags("data-size", "nvme-size")
-	}
-
 	metaBytes := cmd.MetaSize.bytes
 	dataBytes := cmd.DataSize.bytes
 	req.TierBytes = []uint64{metaBytes, dataBytes}
@@ -341,8 +327,6 @@ func (cmd *PoolCreateCmd) storageManual(req *control.PoolCreateReq) error {
 		return errIncompatFlags("mem-ratio", "scm-size", "nvme-size")
 	case cmd.NVMeSize.IsSet() && !cmd.ScmSize.IsSet():
 		return errors.New("--nvme-size cannot be set without --scm-size")
-	case !cmd.ScmSize.IsSet():
-		return errors.New("at least one size parameter must be set")
 	}
 
 	scmBytes := cmd.ScmSize.bytes
@@ -386,6 +370,20 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		if err != nil {
 			return err
 		}
+	}
+
+	// Refuse unsupported input value combinations.
+
+	pmemParams := cmd.ScmSize.IsSet() || cmd.NVMeSize.IsSet()
+	mdParams := cmd.MetaSize.IsSet() || cmd.DataSize.IsSet()
+
+	switch {
+	case (pmemParams || mdParams) && cmd.Size.IsSet():
+		return errPoolCreateIncompatOpts
+	case pmemParams && mdParams:
+		return errPoolCreateIncompatOpts
+	case !pmemParams && !mdParams && !cmd.Size.IsSet():
+		return errPoolCreateIncompatOpts
 	}
 
 	// Validate supported input values and set request fields.

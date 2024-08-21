@@ -292,8 +292,8 @@ Pool space info:
 						MediaType: daos.StorageMediaTypeScm,
 					},
 					{
-						Total:     2,
-						Free:      1,
+						Total:     4,
+						Free:      2,
 						MediaType: daos.StorageMediaTypeNvme,
 					},
 				},
@@ -311,8 +311,8 @@ Pool space info:
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
 - Data storage:
-  Total size: 2 B
-  Free: 1 B, min:0 B, max:0 B, mean:0 B
+  Total size: 4 B
+  Free: 2 B, min:0 B, max:0 B, mean:0 B
 `, poolUUID.String()),
 		},
 	} {

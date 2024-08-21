@@ -582,6 +582,33 @@ one  6.0 TB Ready 83%%  16%%       0/16
 			verbose:     true,
 			expPrintStr: msgNoPools + "\n",
 		},
+		"verbose, two pools": {
+			resp: &control.ListPoolsResp{
+				Pools: []*daos.PoolInfo{
+					{
+						UUID:             test.MockPoolUUID(1),
+						TierStats:        exampleTierStats,
+						TotalTargets:     16,
+						ActiveTargets:    16,
+						DisabledTargets:  0,
+						State:            daos.PoolServiceStateReady,
+						PoolLayoutVer:    1,
+						UpgradeLayoutVer: 2,
+						Rebuild: &daos.PoolRebuildStatus{
+							State: daos.PoolRebuildStateIdle,
+						},
+						QueryMask: daos.DefaultPoolQueryMask,
+					},
+				},
+			},
+			verbose: true,
+			expPrintStr: `
+Label UUID                                 State SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled UpgradeNeeded? Rebuild State 
+----- ----                                 ----- ------- -------- -------- ------------- --------- --------- -------------- -------- -------------- ------------- 
+-     00000001-0001-0001-0001-000000000001 Ready N/A     100 GB   80 GB    16%           6.0 TB    5.0 TB    8%             0/16     1->2           idle          
+
+`,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var bld strings.Builder

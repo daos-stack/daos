@@ -233,7 +233,7 @@ func TestPoolCommands(t *testing.T) {
 			"Create pool with missing size",
 			"pool create label",
 			"",
-			errors.New("at least one size parameter must be set"),
+			errPoolCreateIncompatOpts,
 		},
 		{
 			"Create pool with missing label",
@@ -245,13 +245,13 @@ func TestPoolCommands(t *testing.T) {
 			"Create pool with incompatible arguments (auto nvme-size)",
 			fmt.Sprintf("pool create label --size %s --nvme-size %s", testSizeStr, testSizeStr),
 			"",
-			errors.New("may not be mixed"),
+			errPoolCreateIncompatOpts,
 		},
 		{
 			"Create pool with incompatible arguments (auto scm-size)",
 			fmt.Sprintf("pool create label --size %s --scm-size %s", testSizeStr, testSizeStr),
 			"",
-			errors.New("may not be mixed"),
+			errPoolCreateIncompatOpts,
 		},
 		{
 			"Create pool with incompatible arguments (% size nranks)",
@@ -287,19 +287,19 @@ func TestPoolCommands(t *testing.T) {
 			"Create pool with incompatible arguments (auto with meta-size)",
 			fmt.Sprintf("pool create label --size %s --meta-size 32G", testSizeStr),
 			"",
-			errors.New("may not be mixed"),
+			errPoolCreateIncompatOpts,
 		},
 		{
 			"Create pool with incompatible arguments (scm-size with meta-size)",
 			fmt.Sprintf("pool create label --scm-size %s --meta-size 32G", testSizeStr),
 			"",
-			errors.New("may not be mixed"),
+			errPoolCreateIncompatOpts,
 		},
 		{
 			"Create pool with incompatible arguments (scm-size with data-size)",
 			fmt.Sprintf("pool create label --scm-size %s --data-size 32G", testSizeStr),
 			"",
-			errors.New("may not be mixed"),
+			errPoolCreateIncompatOpts,
 		},
 		{
 			"Create pool with too-large tier-ratio (auto)",
