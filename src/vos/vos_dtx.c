@@ -1675,6 +1675,7 @@ vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p)
 	umem_off_t			 rec_off;
 	size_t				 size;
 	int				 count;
+	int				 idx;
 	int				 rc = 0;
 
 	if (!dth->dth_active)
@@ -1795,6 +1796,14 @@ vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p)
 		if (rc != 0)
 			return rc;
 	}
+
+	idx = (dae->dae_df_off - umem_ptr2off(umm, dbd) -
+	       offsetof(struct vos_dtx_blob_df, dbd_active_data)) /
+	      sizeof(struct vos_dtx_act_ent_df);
+	D_ASSERTF(idx == dbd->dbd_index,
+		  "Someone changed DTX active blob (%p) during current TX "
+		  DF_DTI ": idx %d vs %d, cap %d, count %d, magic %x\n", dbd, DP_DTI(&DAE_XID(dae)),
+		  idx, dbd->dbd_index, dbd->dbd_cap, dbd->dbd_count, dbd->dbd_magic);
 
 	memcpy(umem_off2ptr(umm, dae->dae_df_off),
 	       &dae->dae_base, sizeof(struct vos_dtx_act_ent_df));
