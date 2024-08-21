@@ -56,6 +56,9 @@ container_ravl_insert_block(struct block_container *bc,
 	struct block_container_ravl *c =
 		(struct block_container_ravl *)bc;
 
+	ASSERT(m->chunk_id < MAX_CHUNK);
+	ASSERT(m->zone_id < UINT32_MAX);
+
 	c->m = *m;
 
 	return ravl_emplace_copy(c->tree, m);

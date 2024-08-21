@@ -2414,7 +2414,7 @@ test_umempobj_nemb_usage(void **state)
 
 	umem_class_init(&uma, &umm);
 
-	/* Do allocation and verify that only 10 zones allotted to non evictable MBs */
+	/* Do allocation and verify that only 13 zones allotted to non evictable MBs */
 	for (num = 0;; num++) {
 		/* do an allocation that takes more than half the zone size */
 		umoff = umem_atomic_alloc(&umm, alloc_size, UMEM_TYPE_ANY);
@@ -2425,7 +2425,7 @@ test_umempobj_nemb_usage(void **state)
 		prev_umoff = umoff;
 	}
 	/* 80% nemb when heap size greater than cache size */
-	assert_int_equal(num, 12);
+	assert_int_equal(num, 13);
 	print_message("Number of allocations is %d\n", num);
 
 	for (--num;; num--) {
@@ -2451,7 +2451,7 @@ test_umempobj_nemb_usage(void **state)
 
 	umem_class_init(&uma, &umm);
 
-	/* Do allocation and verify that only 10 zones allotted to non evictable MBs */
+	/* Do allocation and verify that all 16 zones are allotted to non evictable MBs */
 	for (num = 0;; num++) {
 		/* do an allocation that takes more than half the zone size */
 		umoff = umem_atomic_alloc(&umm, alloc_size, UMEM_TYPE_ANY);
