@@ -369,7 +369,12 @@ func (cmd *containerGetACLCmd) Execute(args []string) error {
 		}
 	}
 
-	return cmd.outputACL(os.Stdout, acl, cmd.Verbose)
+	var buf strings.Builder
+	if err := cmd.outputACL(&buf, acl, cmd.Verbose); err != nil {
+		return err
+	}
+	cmd.Info(buf.String())
+	return nil
 }
 
 type containerSetOwnerCmd struct {

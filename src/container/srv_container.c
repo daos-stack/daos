@@ -5717,16 +5717,15 @@ rechoose:
 	ep.ep_grp = NULL; /* primary group */
 	rc        = rsvc_client_choose(&client, &ep);
 	if (rc != 0) {
-		D_ERROR(DF_UUID ": cannot find pool service: " DF_RC "\n", DP_UUID(pool_uuid),
-			DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": cannot find pool service", DP_UUID(pool_uuid));
 		D_GOTO(out_client, rc);
 	}
 
 	rc = cont_req_create(info->dmi_ctx, &ep, opc, null_uuid, null_uuid, null_uuid,
 			     NULL /* req_timep */, &rpc);
 	if (rc != 0) {
-		D_ERROR(DF_UUID "/%s: failed to create cont set prop rpc: " DF_RC "\n",
-			DP_UUID(pool_uuid), cont_id, DP_RC(rc));
+		DL_ERROR(rc, DF_UUID "/%s: failed to create cont set prop rpc", DP_UUID(pool_uuid),
+			 cont_id);
 		D_GOTO(out_client, rc);
 	}
 
@@ -5749,8 +5748,8 @@ rechoose:
 
 	rc = out->cpso_op.co_rc;
 	if (rc != 0) {
-		D_ERROR(DF_UUID ": failed to set prop for container %s: " DF_RC "\n",
-			DP_UUID(pool_uuid), cont_id, DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": failed to set prop for container %s", DP_UUID(pool_uuid),
+			 cont_id);
 	}
 
 	crt_req_decref(rpc);
@@ -5791,15 +5790,15 @@ ds_cont_set_prop_srv_handler(crt_rpc_t *rpc)
 
 	rc = cont_svc_lookup_leader(pool_uuid, 0, &svc, &out->cpso_op.co_hint);
 	if (rc != 0) {
-		D_ERROR(DF_UUID "/%s: failed to look up cont svc: " DF_RC "\n", DP_UUID(pool_uuid),
-			cont_id, DP_RC(rc));
+		DL_ERROR(rc, DF_UUID "/%s: failed to look up cont svc", DP_UUID(pool_uuid),
+			 cont_id);
 		D_GOTO(out, rc);
 	}
 
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
 	if (rc != 0) {
-		D_ERROR(DF_UUID "/%s: failed to start RDB transaction: " DF_RC "\n",
-			DP_UUID(pool_uuid), cont_id, DP_RC(rc));
+		DL_ERROR(rc, DF_UUID "/%s: failed to start RDB transaction", DP_UUID(pool_uuid),
+			 cont_id);
 		D_GOTO(out_svc, rc);
 	}
 
@@ -5811,21 +5810,22 @@ ds_cont_set_prop_srv_handler(crt_rpc_t *rpc)
 	else /* CONT_PROP_SET_BYLABEL */
 		rc = cont_lookup_bylabel(&tx, svc, cont_label, &cont);
 	if (rc != 0) {
-		D_ERROR("failed to look up container '%s': " DF_RC "\n", cont_id, DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": failed to look up container '%s'", DP_UUID(pool_uuid),
+			 cont_id);
 		D_GOTO(out_lock, rc);
 	}
 
 	rc = set_prop(&tx, svc->cs_pool, cont, ds_sec_get_admin_cont_capabilities(), prop);
 	if (rc != 0) {
-		D_ERROR(DF_CONT ": failed to set properties: " DF_RC "\n",
-			DP_CONT(svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_CONT ": failed to set properties",
+			 DP_CONT(svc->cs_pool_uuid, cont->c_uuid));
 		D_GOTO(out_cont, rc);
 	}
 
 	rc = rdb_tx_commit(&tx);
 	if (rc != 0)
-		D_ERROR(DF_CONT ": unable to commit RDB transaction: " DF_RC "\n",
-			DP_CONT(svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_CONT ": unable to commit RDB transaction",
+			 DP_CONT(svc->cs_pool_uuid, cont->c_uuid));
 
 out_cont:
 	cont_put(cont);
