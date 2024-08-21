@@ -315,6 +315,10 @@ crt_corpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 
 		RPC_ADDREF(rpc_priv);
 
+		RPC_INFO(rpc_priv, "bulk GET parent=%p -> local=%p, len=%zu, grp_ver=%u, "
+			 "root_rank=%u\n", parent_bulk_hdl, local_bulk_hdl, bulk_len,
+			 co_hdr->coh_grp_ver, co_hdr->coh_root);
+
 		rc = crt_bulk_transfer(&bulk_desc, crt_corpc_chained_bulk_cb,
 				       bulk_iov.iov_buf, NULL);
 		if (rc != 0) {
