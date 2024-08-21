@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -359,9 +359,9 @@ struct bio_blobstore {
 	 * layer, teardown procedure needs be postponed.
 	 */
 	int			 bb_holdings;
-	/* Flags indicating blobstore load/unload is in-progress */
-	unsigned		 bb_loading:1,
-				 bb_unloading:1;
+	unsigned		 bb_loading:1,		/* Blobstore is loading */
+				 bb_unloading:1,	/* Blobstore is unloading */
+				 bb_faulty_done:1;	/* Faulty reaction is done */
 };
 
 /* Per-xstream blobstore */
@@ -650,6 +650,7 @@ uint64_t default_wal_sz(uint64_t meta_sz);
 /* bio_recovery.c */
 int bio_bs_state_transit(struct bio_blobstore *bbs);
 int bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state);
+void trigger_faulty_reaction(struct bio_blobstore *bbs);
 
 /* bio_device.c */
 int fill_in_traddr(struct bio_dev_info *b_info, char *dev_name);

@@ -78,6 +78,7 @@ class SoakTestBase(TestWithServers):
         self.soak_log_dir = None
         self.soak_dir = None
         self.enable_scrubber = False
+        self.enable_rebuild_logmasks = False
 
     def setUp(self):
         """Define test setup to be done."""
@@ -574,6 +575,8 @@ class SoakTestBase(TestWithServers):
             "enable_remote_logging", os.path.join(test_param, "*"), False)
         self.enable_scrubber = self.params.get(
             "enable_scrubber", os.path.join(test_param, "*"), False)
+        self.enable_rebuild_logmasks = self.params.get(
+            "enable_rebuild_logmasks", os.path.join(test_param, "*"), False)
         if harassers:
             run_harasser = True
             self.log.info("<< Initial harasser list = %s>>", harassers)

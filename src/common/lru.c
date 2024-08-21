@@ -216,7 +216,12 @@ daos_lru_ref_hold(struct daos_lru_cache *lcache, void *key,
 		llink = link2llink(link);
 		D_ASSERT(llink->ll_evicted == 0);
 		if (llink->ll_evicting) {
-			daos_lru_ref_release(lcache, llink);
+			/**
+			 * Avoid calling `lru_hop_rec_decref()` at this point
+			 * to prevent `wakeup()` from being invoked twice.
+			 */
+			D_ASSERT(llink->ll_ref > 1);
+			llink->ll_ref--;
 			D_GOTO(out, rc = -DER_SHUTDOWN);
 		}
 		/* remove busy item from LRU */

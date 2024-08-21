@@ -719,7 +719,7 @@ These are two command line options to control the DFuse process itself.
 | **Command line option** | **Description**           |
 | ----------------------- | ------------------------- |
 | --disable-caching       | Disables all caching      |
-| --disable-wb-caching    | Disables write-back cache |
+| --disable-wb-cache      | Disables write-back cache |
 
 These will affect all containers accessed via DFuse, regardless of any container attributes.
 
