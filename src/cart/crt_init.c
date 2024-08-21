@@ -434,9 +434,9 @@ __split_arg(char *s_arg_to_split, const char *delim, char **first_arg, char **se
 crt_provider_t
 crt_str_to_provider(const char *str_provider)
 {
-	int	provider_idx = CRT_PROV_UNKNOWN;
-	int	i, len;
-	char	*p = NULL;
+	crt_provider_t	prov = CRT_PROV_UNKNOWN;
+	int		i, len;
+	char	       *p = NULL;
 
 	if (str_provider == NULL)
 		return prov;
@@ -456,13 +456,13 @@ crt_str_to_provider(const char *str_provider)
 			if (len > strlen(CRT_UCX_STR) && strchr(str_provider, '+')) {
 				D_STRNDUP(p, str_provider, len);
 				if (!p) {
-					return provider_idx;
+					return prov;
 				} else {
 					crt_na_dict[i].nad_str = p;
 					crt_na_dict[i].nad_str_alloc = true;
 				}
 			}
-			provider_idx = crt_na_dict[i].nad_type;
+			prov = crt_na_dict[i].nad_type;
 			break;
 		}
 	}
