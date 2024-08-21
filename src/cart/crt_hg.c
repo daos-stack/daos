@@ -659,7 +659,8 @@ crt_get_info_string(bool primary, crt_provider_t provider, int iface_idx,
 	int	 start_port;
 	char	*domain_str;
 	char	*iface_str;
-	bool     no_iface, no_domain;
+	char     tmp[255];
+	int      size = 0;
 	int	rc = 0;
 
 	provider_str = crt_provider_name_get(provider);
@@ -684,48 +685,46 @@ crt_get_info_string(bool primary, crt_provider_t provider, int iface_idx,
 		D_GOTO(out, rc);
 	}
 
-	/* treat not set and set to empty as the same */
-	no_iface  = (iface_str == NULL || *iface_str == '\0') ? true : false;
-	no_domain = (domain_str == NULL || *domain_str == '\0') ? true : false;
+	if (provider_str)
+		size += strlen(provider_str);
+	if (domain_str)
+		size += strlen(domain_str);
+	if (iface_str)
+		size += strlen(iface_str);
 
-	/* TODO: for now pass same info for all providers including CXI */
-	if (crt_provider_is_contig_ep(provider) && start_port != -1) {
-		if (no_iface) {
-			if (no_domain)
-				D_ASPRINTF(*string, "%s://:%d", provider_str, start_port + ctx_idx);
-			else
-				D_ASPRINTF(*string, "%s://%s:%d", provider_str, domain_str,
-					   start_port + ctx_idx);
-		} else {
-			if (no_domain)
-				D_ASPRINTF(*string, "%s://%s:%d",
-					   provider_str, iface_str,
-					   start_port + ctx_idx);
-			else
-				D_ASPRINTF(*string, "%s://%s/%s:%d", provider_str, domain_str,
-					   iface_str, start_port + ctx_idx);
-		}
-	} else {
-		if (no_iface) {
-			if (no_domain)
-				D_ASPRINTF(*string, "%s://", provider_str);
-			else
-				D_ASPRINTF(*string, "%s://%s", provider_str, domain_str);
-		} else {
-			if (no_domain)
-				D_ASPRINTF(*string, "%s://%s", provider_str, iface_str);
-			else
-				D_ASPRINTF(*string, "%s://%s/%s", provider_str, domain_str,
-					   iface_str);
-		}
+	/* Sanity check to not exceed tmp[] string with strcat()s later on */
+	if (size >= 250) {
+		D_ERROR("info string too large\n");
+		D_GOTO(out, rc = -DER_INVAL);
 	}
+
+	/* Format is <provider>://[domain/][interface][:port] */
+	memset(tmp, 0x0, sizeof(tmp));
+	strcat(tmp, provider_str);
+	strcat(tmp, "://");
+
+	if (domain_str && *domain_str) {
+		strcat(tmp, domain_str);
+		if (iface_str && *iface_str)
+			strcat(tmp, "/");
+	}
+
+	if (iface_str && *iface_str)
+		strcat(tmp, iface_str);
+
+	/* Append port if specified */
+	if (crt_provider_is_contig_ep(provider) && start_port != -1)
+		D_ASPRINTF(*string, "%s:%d", tmp, start_port + ctx_idx);
+	else
+		D_ASPRINTF(*string, "%s", tmp);
+
+	if (!*string)
+		return -DER_NOMEM;
 
 	D_DEBUG(DB_ALL, "iface_idx:%d context:%d domain_str=%s iface_str=%s info_str=%s\n",
 		iface_idx, ctx_idx, domain_str ? domain_str : "none",
 		iface_str ? iface_str : "none", *string);
 out:
-	if (rc == DER_SUCCESS && *string == NULL)
-		return -DER_NOMEM;
 
 	return rc;
 }
@@ -854,10 +853,12 @@ crt_hg_class_init(crt_provider_t provider, int ctx_idx, bool primary, int iface_
 	if (prov_data->cpg_max_unexp_size > 0)
 		init_info.na_init_info.max_unexpected_size = prov_data->cpg_max_unexp_size;
 
-	init_info.request_post_init = crt_gdata.cg_post_init;
-	init_info.request_post_incr = crt_gdata.cg_post_incr;
+	init_info.request_post_init         = crt_gdata.cg_post_init;
+	init_info.request_post_incr         = crt_gdata.cg_post_incr;
+	init_info.multi_recv_op_max         = crt_gdata.cg_mrecv_buf;
+	init_info.multi_recv_copy_threshold = crt_gdata.cg_mrecv_buf_copy;
 
-	hg_class = HG_Init_opt(info_string, crt_is_service(), &init_info);
+	hg_class = HG_Init_opt2(info_string, crt_is_service(), HG_VERSION(2, 4), &init_info);
 	if (hg_class == NULL) {
 		D_ERROR("Could not initialize HG class.\n");
 		D_GOTO(out, rc = -DER_HG);
