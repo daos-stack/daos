@@ -458,7 +458,7 @@ crt_str_to_provider(const char *str_provider)
 				if (!p) {
 					return prov;
 				} else {
-					crt_na_dict[i].nad_str	     = p;
+					crt_na_dict[i].nad_str       = p;
 					crt_na_dict[i].nad_str_alloc = true;
 				}
 			}
