@@ -17,7 +17,7 @@ int
 dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, daos_oclass_id_t cid)
 {
 	dfs_obj_t        new_dir;
-	daos_handle_t    th = DAOS_TX_NONE;
+	daos_handle_t    th    = DAOS_TX_NONE;
 	struct dfs_entry entry = {0};
 	size_t           len;
 	struct timespec  now;
@@ -137,7 +137,7 @@ int
 dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force, daos_obj_id_t *oid)
 {
 	struct dfs_entry entry = {0};
-	daos_handle_t    th = DAOS_TX_NONE;
+	daos_handle_t    th    = DAOS_TX_NONE;
 	bool             exists;
 	size_t           len;
 	int              rc;
