@@ -470,7 +470,15 @@ static int (*next_posix_fallocate64)(int fd, off64_t offset, off64_t len);
 static int (*next_tcgetattr)(int fd, void *termios_p);
 /* end NOT supported by DAOS */
 
-static int (*next_fi_getinfo)(uint32_t version, const char *node, const char *service,
+static int (*next_fi_getinfo_1_0)(uint32_t version, const char *node, const char *service,
+	    uint64_t flags, const char *hints, char **info);
+static int (*next_fi_getinfo_1_1)(uint32_t version, const char *node, const char *service,
+	    uint64_t flags, const char *hints, char **info);
+static int (*next_fi_getinfo_1_2)(uint32_t version, const char *node, const char *service,
+	    uint64_t flags, const char *hints, char **info);
+static int (*next_fi_getinfo_1_3)(uint32_t version, const char *node, const char *service,
+	    uint64_t flags, const char *hints, char **info);
+static int (*next_fi_getinfo_1_7)(uint32_t version, const char *node, const char *service,
 	    uint64_t flags, const char *hints, char **info);
 
 /* to do!! */
@@ -1049,55 +1057,136 @@ callback_query_module_path(struct dl_phdr_info *info, size_t size, void *data)
 	return 0;
 }
 
-/* loop over all modules in current process and determine the full path of target module */
+/* loop over all modules in current process and determine the full path of target module.
+ */
 static void
-query_lib_path(const char *lib_name, char *full_path)
+query_versioned_func_addr(const char *lib_name, const char func_name[], const char version[],
+			  void **pt_func_addr)
 {
 	char *p[2];
+	char *full_path;
+	void *handle;
 
+	full_path = malloc(PATH_MAX);
 	D_ASSERT(full_path != NULL);
+	full_path[0] = 0;
+
 	p[0] = (char *)lib_name;
 	p[1] = full_path;
-	full_path[0] = 0;
+	/* Extract the full path of target library and save into full_path. */
 	dl_iterate_phdr(callback_query_module_path, p);
+	D_ASSERT(full_path[0] != 0);
+
+	handle = dlopen(full_path, RTLD_LAZY);
+	D_ASSERT(handle != NULL);
+	free(full_path);
+	*pt_func_addr = dlvsym(handle, func_name, version);
+	D_ASSERT(*pt_func_addr != NULL);
+	dlclose(handle);
 }
 
+#define COMPAT_SYMVER(name, api, ver) asm(".symver " #name "," #api "@" #ver "\n")
+#define COMPAT_DEFVER(name, api, ver) asm(".symver " #name "," #api "@@" #ver "\n")
+
+/* dlvsym(RTLD_NEXT, "fi_getinfo", "FABRIC_1.x") works on my local node but fails
+ * on CI nodes (returning NULL next_fi_getinfo). To workaround the issue, we always
+ * call fi_getinfo() in libfabric here. If another library tries intercepting
+ * fi_getinfo(), it will break.
+ */
+
 int
-fi_getinfo(uint32_t version, const char *node, const char *service, uint64_t flags,
+fi_getinfo_1_0(uint32_t version, const char *node, const char *service, uint64_t flags,
 	   const char *hints, char **info)
 {
 	int rc;
 
-	if (next_fi_getinfo == NULL) {
-		void *handle;
-		char *libfabric_path;
-
-		libfabric_path = malloc(PATH_MAX);
-		D_ASSERT(libfabric_path != NULL);
-		query_lib_path("libfabric.so", libfabric_path);
-		D_ASSERT(libfabric_path[0] != 0);
-		handle = dlopen(libfabric_path, RTLD_LAZY);
-		D_ASSERT(handle != NULL);
-		/* There exist multiple versions of fi_getinfo() in libfabric.so.
-		 * dlsym(RTLD_NEXT, "fi_getinfo") returns the address of fi_getinfo@FABRIC_1.0.
-		 * It is not the default version (fi_getinfo@@FABRIC_1.3) we expect.
-		 * dlvsym(RTLD_NEXT, "fi_getinfo", "FABRIC_1.3") works on my local node but fails
-		 * on CI nodes (returning NULL next_fi_getinfo). To workaround the issue, we always
-		 * call fi_getinfo() in libfabric here. If another library tries intercepting
-		 * fi_getinfo(), it will break.
-		 */
-		next_fi_getinfo = dlsym(handle, "fi_getinfo");
-		D_ASSERT(next_fi_getinfo != NULL);
-		dlclose(handle);
-		free(libfabric_path);
-	}
+	if (next_fi_getinfo_1_0 == NULL)
+		query_versioned_func_addr("libfabric.so", "fi_getinfo", "FABRIC_1.0",
+					  (void **)&next_fi_getinfo_1_0);
 
 	atomic_fetch_add_relaxed(&fi_getinfo_count, 1);
-	rc = next_fi_getinfo(version, node, service, flags, hints, info);
+	rc = next_fi_getinfo_1_0(version, node, service, flags, hints, info);
 	atomic_fetch_add_relaxed(&fi_getinfo_count, -1);
 
 	return rc;
 }
+
+COMPAT_SYMVER(fi_getinfo_1_0, fi_getinfo, FABRIC_1.0);
+
+int
+fi_getinfo_1_1(uint32_t version, const char *node, const char *service, uint64_t flags,
+	   const char *hints, char **info)
+{
+	int rc;
+
+	if (next_fi_getinfo_1_1 == NULL)
+		query_versioned_func_addr("libfabric.so", "fi_getinfo", "FABRIC_1.1",
+					  (void **)&next_fi_getinfo_1_1);
+
+	atomic_fetch_add_relaxed(&fi_getinfo_count, 1);
+	rc = next_fi_getinfo_1_1(version, node, service, flags, hints, info);
+	atomic_fetch_add_relaxed(&fi_getinfo_count, -1);
+
+	return rc;
+}
+
+COMPAT_SYMVER(fi_getinfo_1_1, fi_getinfo, FABRIC_1.1);
+
+int
+fi_getinfo_1_2(uint32_t version, const char *node, const char *service, uint64_t flags,
+	   const char *hints, char **info)
+{
+	int rc;
+
+	if (next_fi_getinfo_1_2 == NULL)
+		query_versioned_func_addr("libfabric.so", "fi_getinfo", "FABRIC_1.2",
+					  (void **)&next_fi_getinfo_1_2);
+
+	atomic_fetch_add_relaxed(&fi_getinfo_count, 1);
+	rc = next_fi_getinfo_1_2(version, node, service, flags, hints, info);
+	atomic_fetch_add_relaxed(&fi_getinfo_count, -1);
+
+	return rc;
+}
+
+COMPAT_SYMVER(fi_getinfo_1_2, fi_getinfo, FABRIC_1.2);
+
+int
+fi_getinfo_1_3(uint32_t version, const char *node, const char *service, uint64_t flags,
+	   const char *hints, char **info)
+{
+	int rc;
+
+	if (next_fi_getinfo_1_3 == NULL)
+		query_versioned_func_addr("libfabric.so", "fi_getinfo", "FABRIC_1.3",
+					  (void **)&next_fi_getinfo_1_3);
+
+	atomic_fetch_add_relaxed(&fi_getinfo_count, 1);
+	rc = next_fi_getinfo_1_3(version, node, service, flags, hints, info);
+	atomic_fetch_add_relaxed(&fi_getinfo_count, -1);
+
+	return rc;
+}
+
+COMPAT_DEFVER(fi_getinfo_1_3, fi_getinfo, FABRIC_1.3);
+
+int
+fi_getinfo_1_7(uint32_t version, const char *node, const char *service, uint64_t flags,
+	   const char *hints, char **info)
+{
+	int rc;
+
+	if (next_fi_getinfo_1_7 == NULL)
+		query_versioned_func_addr("libfabric.so", "fi_getinfo", "FABRIC_1.7",
+					  (void **)&next_fi_getinfo_1_7);
+	atomic_fetch_add_relaxed(&fi_getinfo_count, 1);
+	rc = next_fi_getinfo_1_7(version, node, service, flags, hints, info);
+	atomic_fetch_add_relaxed(&fi_getinfo_count, -1);
+
+	return rc;
+}
+
+COMPAT_SYMVER(fi_getinfo_1_7, fi_getinfo, FABRIC_1.7);
 
 /** determine whether a path (both relative and absolute) is on DAOS or not. If yes,
  *  returns parent object, item name, full path of parent dir, full absolute path, and
