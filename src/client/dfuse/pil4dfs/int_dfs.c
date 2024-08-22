@@ -469,7 +469,7 @@ static int (*next_posix_fallocate64)(int fd, off64_t offset, off64_t len);
 static int (*next_tcgetattr)(int fd, void *termios_p);
 /* end NOT supported by DAOS */
 
-static int (*next_mpi_init)(int* argc, char ***argv);
+static int (*next_mpi_init)(int *argc, char ***argv);
 
 /* to do!! */
 /**
@@ -1025,7 +1025,7 @@ err:
 }
 
 int
-MPI_Init(int* argc, char ***argv)
+MPI_Init(int *argc, char ***argv)
 {
 	int rc;
 
@@ -1041,7 +1041,7 @@ MPI_Init(int* argc, char ***argv)
 }
 
 int
-PMPI_Init(int* argc, char ***argv) __attribute__((alias("MPI_Init")));
+PMPI_Init(int *argc, char ***argv) __attribute__((alias("MPI_Init")));
 
 /** determine whether a path (both relative and absolute) is on DAOS or not. If yes,
  *  returns parent object, item name, full path of parent dir, full absolute path, and
