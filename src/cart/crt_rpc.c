@@ -1736,19 +1736,22 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv
 	crt_rpc_inout_buff_init(rpc_priv);
 
 	if (srv_flag) {
-		timeout = deadline_to_timeout(rpc_priv->crp_req_hdr.cch_src_deadline_sec);
+		if (rpc_priv->crp_req_hdr.cch_src_deadline_sec) {
+			timeout = deadline_to_timeout(rpc_priv->crp_req_hdr.cch_src_deadline_sec);
 
-		if (timeout <= 0) {
-			struct timespec now;
+			if (timeout <= 0) {
+				struct timespec now;
 
-			d_gettime(&now);
-			RPC_INFO(rpc_priv,
-				  "Incoming rpc deadline expired. Deadline = %d, now = %ld\n",
-				  rpc_priv->crp_req_hdr.cch_src_deadline_sec, now.tv_sec);
-			D_GOTO(out, rc = -DER_DEADLINE_EXPIRED);
+				d_gettime(&now);
+				RPC_INFO(
+				    rpc_priv,
+				    "Incoming rpc deadline expired. Deadline = %d, now = %ld\n",
+				    rpc_priv->crp_req_hdr.cch_src_deadline_sec, now.tv_sec);
+				D_GOTO(out, rc = -DER_DEADLINE_EXPIRED);
+			}
+
+			rpc_priv->crp_timeout_sec = timeout;
 		}
-
-		rpc_priv->crp_timeout_sec = timeout;
 	} else {
 		rpc_priv->crp_timeout_sec = (ctx->cc_timeout_sec == 0 ? crt_gdata.cg_timeout :
 					     ctx->cc_timeout_sec);
