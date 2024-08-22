@@ -25,13 +25,13 @@ from dmg_utils import get_dmg_command
 from environment_utils import TestEnvironment
 from exception_utils import CommandFailure
 from fault_config_utils import FaultInjection
-from general_utils import (DaosTestError, dict_to_str, dump_engines_stacks,
-                           get_avocado_config_value, get_default_config_file, get_file_listing,
-                           nodeset_append_suffix, pcmd, run_command, set_avocado_config_value)
+from general_utils import (dict_to_str, dump_engines_stacks, get_avocado_config_value,
+                           get_default_config_file, get_file_listing, nodeset_append_suffix,
+                           set_avocado_config_value)
 from host_utils import HostException, HostInfo, HostRole, get_host_parameters, get_local_host
 from logger_utils import TestLogger
 from pydaos.raw import DaosApiError, DaosContext, DaosLog
-from run_utils import command_as_user, run_remote, stop_processes
+from run_utils import run_local, run_remote, stop_processes
 from server_utils import DaosServerManager
 from slurm_utils import SlurmFailed, get_partition_hosts, get_reservation_hosts
 from test_utils_container import CONT_NAMESPACE, add_container
@@ -68,10 +68,11 @@ class Test(avocadoTest):
         self.test_id = self.get_test_name()
 
         # Define a test unique temporary directory
-        self.base_test_dir = os.getenv("DAOS_TEST_LOG_DIR", "/tmp")
-        self.test_dir = os.path.join(self.base_test_dir, self.test_id)
-        if not os.path.exists(self.test_dir):
-            os.makedirs(self.test_dir)
+        self.test_env = TestEnvironment()
+        self.test_dir = os.path.join(self.test_env.log_dir, self.test_id)
+
+        # Create a test unique temporary directory on this host
+        os.makedirs(self.test_dir, exist_ok=True)
 
         # Support unique test case timeout values.  These test case specific
         # timeouts are read from the test yaml using the test case method name
@@ -387,10 +388,8 @@ class Test(avocadoTest):
         """
         errors = []
         self.log.info("Removing temporary test files in %s", self.test_dir)
-        try:
-            run_command("rm -fr {}".format(self.test_dir))
-        except DaosTestError as error:
-            errors.append("Error removing temporary test files: {}".format(error))
+        if not run_local(self.log, f"rm -fr {self.test_dir}").passed:
+            errors.append(f"Error removing temporary test files in {self.test_dir}")
         return errors
 
     def _cleanup(self):
@@ -523,12 +522,8 @@ class TestWithoutServers(Test):
         self.bin = os.path.join(self.prefix, 'bin')
         self.daos_test = os.path.join(self.prefix, 'bin', 'daos_test')
 
-        # set default shared dir for daos tests in case DAOS_TEST_SHARED_DIR
-        # is not set, for RPM env and non-RPM env.
-        if os.path.normpath(self.prefix) != os.path.join(os.sep, 'usr'):
-            self.tmp = os.path.join(self.prefix, 'tmp')
-        else:
-            self.tmp = os.getenv('DAOS_TEST_SHARED_DIR', os.path.expanduser('~/daos_test'))
+        # set the shared directory for daos tests
+        self.tmp = self.test_env.shared_dir
         os.makedirs(self.tmp, exist_ok=True)
         self.log.debug("Shared test directory: %s", self.tmp)
         self.log.debug("Common test directory: %s", self.test_dir)
@@ -761,17 +756,19 @@ class TestWithServers(TestWithoutServers):
         # Display host information
         self.host_info.display(self.log)
 
+        # Create a test unique temporary directory on the other hosts
+        result = run_remote(self.log, self.host_info.all_hosts, f"mkdir -p {self.test_dir}")
+        if not result.passed:
+            self.fail(f"Error creating test-specific temporary directory on {result.failed_hosts}")
+
+        # Copy the fault injection files to the hosts.
+        self.fault_injection.copy_fault_files(self.host_info.all_hosts)
+
         # List common test directory contents before running the test
         self.log.info("-" * 100)
         self.log.debug("Common test directory (%s) contents:", self.test_dir)
-        hosts = self.hostlist_servers.copy()
-        if self.hostlist_clients:
-            hosts.add(self.hostlist_clients)
-        # Copy the fault injection files to the hosts.
-        self.fault_injection.copy_fault_files(hosts)
-        lines = get_file_listing(hosts, self.test_dir).stdout_text.splitlines()
-        for line in lines:
-            self.log.debug("  %s", line)
+        all_hosts = include_local_host(self.host_info.all_hosts)
+        get_file_listing(all_hosts, self.test_dir, self.test_env.agent_user).log_output(self.log)
 
         if not self.start_servers_once or self.name.uid == 1:
             # Kill commands left running on the hosts (from a previous test)
@@ -786,12 +783,11 @@ class TestWithServers(TestWithoutServers):
             # Ensure write permissions for the daos command log files when
             # using systemctl
             if "Systemctl" in (self.agent_manager_class, self.server_manager_class):
-                log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
                 self.log.info("-" * 100)
                 self.log.info(
                     "Updating file permissions for %s for use with systemctl",
-                    log_dir)
-                pcmd(hosts, "chmod a+rw {}".format(log_dir))
+                    self.test_env.log_dir)
+                run_remote(self.log, hosts, f"chmod a+rw {self.test_env.log_dir}")
 
         # Start the servers
         force_agent_start = False
@@ -847,7 +843,8 @@ class TestWithServers(TestWithoutServers):
             cart_ctl.add_log_msg.value = "add_log_msg"
             cart_ctl.rank.value = "all"
             cart_ctl.log_message.value = message
-            cart_ctl.no_sync.value = None
+            # Don't ping all ranks before sending the log command
+            cart_ctl.no_sync.value = True
             cart_ctl.use_daos_agent_env.value = True
 
             for manager in self.agent_managers:
@@ -1086,7 +1083,7 @@ class TestWithServers(TestWithoutServers):
 
         self.agent_managers.append(
             DaosAgentManager(
-                group, self.bin, cert_dir, config_file, config_temp,
+                group, self.bin, cert_dir, config_file, self.test_env.agent_user, config_temp,
                 self.agent_manager_class, outputdir=self.outputdir)
         )
 
@@ -1337,17 +1334,11 @@ class TestWithServers(TestWithoutServers):
 
         """
         errors = []
-        hosts = self.hostlist_servers.copy()
-        if self.hostlist_clients:
-            hosts.add(self.hostlist_clients)
-        all_hosts = include_local_host(hosts)
-        self.log.info(
-            "Removing temporary test files in %s from %s",
-            self.test_dir, str(NodeSet.fromlist(all_hosts)))
-        result = run_remote(
-            self.log, all_hosts, command_as_user("rm -fr {}".format(self.test_dir), "root"))
+        all_hosts = include_local_host(self.host_info.all_hosts)
+        self.log.info("Removing temporary test files in %s from %s", self.test_dir, all_hosts)
+        result = run_remote(self.log, all_hosts, f"rm -fr {self.test_dir}")
         if not result.passed:
-            errors.append("Error removing temporary test files on {}".format(result.failed_hosts))
+            errors.append(f"Error removing temporary test files on {result.failed_hosts}")
         return errors
 
     def __dump_engines_stacks(self, message):

@@ -1,3 +1,16 @@
+daos (2.6.0-5) unstable; urgency=medium
+  [ Tom Nabarro ]
+  * Add pciutils runtime dep for daos_server lspci call
+  * Add libpci-dev build dep for pciutils CGO bindings
+
+ -- Tom Nabarro <tom.nabarro@intel.com>>  Thu, 08 Aug 2024 12:00:00 -0000
+
+daos (2.6.0-4) unstable; urgency=medium
+  [ Jerome Soumagne ]
+  * Bump mercury version to 2.4.0rc4
+
+ -- Jerome Soumagne <jerome.soumagne@intel.com>  Mon, 05 Aug 2024 12:00:00 -0500
+
 daos (2.6.0-3) unstable; urgency=medium
   [ Phillip Henderson ]
   * Third release candidate for 2.6.0

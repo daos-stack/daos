@@ -7,6 +7,7 @@
 package daos
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -266,6 +267,16 @@ func TestDaos_PoolQueryMaskUnmarshalJSON(t *testing.T) {
 		"string values": {
 			testData:  []byte("rebuild,disabled_engines"),
 			expString: "disabled_engines,rebuild",
+		},
+		"JSON-encoded string values": {
+			testData: func() []byte {
+				if b, err := json.Marshal("rebuild,enabled_engines"); err != nil {
+					panic(err)
+				} else {
+					return b
+				}
+			}(),
+			expString: "enabled_engines,rebuild",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

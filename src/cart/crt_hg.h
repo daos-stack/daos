@@ -30,6 +30,7 @@
 /** default values for init / incr to prepost handles */
 #define CRT_HG_POST_INIT        (512)
 #define CRT_HG_POST_INCR        (512)
+#define CRT_HG_MRECV_BUF        (16)
 
 #define CRT_UCX_STR             "ucx"
 

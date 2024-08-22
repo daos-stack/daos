@@ -50,7 +50,7 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 		mp := storage.NewProvider(log, 0, &cfg.Storage,
 			sysprov.NewMockSysProvider(log, msc),
 			scm.NewMockProvider(log, mbc, msc), nil, nil)
-		ei := NewEngineInstance(log, mp, nil, r).
+		ei := NewEngineInstance(log, mp, nil, r, nil).
 			WithHostFaultDomain(system.MustCreateFaultDomainFromString("/host1"))
 		ei.fsRoot = testDir
 		if err := h.AddInstance(ei); err != nil {
