@@ -310,8 +310,9 @@ class SoakTestBase(TestWithServers):
         path = os.getenv("PATH")
         v_env = os.getenv("VIRTUAL_ENV")
         env = ";".join([f"export LD_LIBRARY_PATH={lib_path}",
-                        f"export PATH={path}",
-                        f"export VIRTUAL_ENV={v_env}"])
+                        f"export PATH={path}"])
+        if v_env:
+            env = ";".join([env, f"export VIRTUAL_ENV={v_env}"])
         for job_dict in self.joblist:
             jobid_list.append(job_dict["jobid"])
             jobs_not_done.append(job_dict["jobid"])
