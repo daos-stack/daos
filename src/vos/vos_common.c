@@ -242,7 +242,6 @@ static inline void
 vos_local_tx_abort(struct dtx_handle *dth)
 {
 	struct dtx_local_oid_record *record = NULL;
-	struct daos_lru_cache       *occ    = NULL;
 
 	if (dth->dth_local_oid_cnt == 0)
 		return;
@@ -252,7 +251,6 @@ vos_local_tx_abort(struct dtx_handle *dth)
 	 * can be used to access the pool.
 	 */
 	record = &dth->dth_local_oid_array[0];
-	occ    = vos_obj_cache_current(record->dor_cont->vc_pool->vp_sysdb);
 
 	/**
 	 * Evict all objects touched by the aborted transaction from the object cache to make sure
@@ -261,7 +259,7 @@ vos_local_tx_abort(struct dtx_handle *dth)
 	 */
 	for (int i = 0; i < dth->dth_local_oid_cnt; ++i) {
 		record = &dth->dth_local_oid_array[i];
-		(void)vos_obj_evict_by_oid(occ, record->dor_cont, record->dor_oid);
+		(void)vos_obj_evict_by_oid(record->dor_cont, record->dor_oid);
 	}
 }
 

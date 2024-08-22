@@ -561,6 +561,11 @@ func (c *InfoCache) waitFabricReady(ctx context.Context, netDevClass hardware.Ne
 		}
 	}
 
+	if len(needIfaces) == 0 {
+		c.log.Debugf("no interfaces with device class %s to wait for", netDevClass)
+		return nil
+	}
+
 	return hardware.WaitFabricReady(ctx, c.log, hardware.WaitFabricReadyParams{
 		StateProvider:  c.devStateGetter,
 		FabricIfaces:   needIfaces,

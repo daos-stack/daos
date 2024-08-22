@@ -208,11 +208,10 @@ lookup_object(struct io_test_args *arg, daos_unit_oid_t oid)
 	 *  tree.   If this returns 0, we need to release the object though
 	 *  this is only presently used to check existence
 	 */
-	rc = vos_obj_hold(vos_obj_cache_current(true),
-			  vos_hdl2cont(arg->ctx.tc_co_hdl), oid, &epr, 0,
+	rc = vos_obj_hold(vos_hdl2cont(arg->ctx.tc_co_hdl), oid, &epr, 0,
 			  VOS_OBJ_VISIBLE, DAOS_INTENT_DEFAULT, &obj, 0);
 	if (rc == 0)
-		vos_obj_release(vos_obj_cache_current(true), obj, 0, false);
+		vos_obj_release(obj, 0, false);
 	return rc;
 }
 
