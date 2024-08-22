@@ -493,29 +493,43 @@ __split_arg(char *s_arg_to_split, const char *delim, char **first_arg, char **se
 	return DER_SUCCESS;
 }
 
-
-int
+crt_provider_t
 crt_str_to_provider(const char *str_provider)
 {
-	int	provider_idx = CRT_PROV_UNKNOWN;
-	int	i;
+	crt_provider_t prov = CRT_PROV_UNKNOWN;
+	int            i, len;
+	char          *p = NULL;
 
 	if (str_provider == NULL)
-		return provider_idx;
+		return prov;
 
 	for (i = 0; crt_na_dict[i].nad_str != NULL; i++) {
-
 		if (!strncmp(str_provider, crt_na_dict[i].nad_str,
 			     strlen(crt_na_dict[i].nad_str) + 1) ||
 		    (crt_na_dict[i].nad_alt_str &&
 		     !strncmp(str_provider, crt_na_dict[i].nad_alt_str,
 			      strlen(crt_na_dict[i].nad_alt_str) + 1))) {
-			provider_idx = crt_na_dict[i].nad_type;
+			prov = crt_na_dict[i].nad_type;
+			break;
+		}
+		if (crt_na_dict[i].nad_type == CRT_PROV_UCX &&
+		    !strncmp(str_provider, CRT_UCX_STR, strlen(CRT_UCX_STR))) {
+			len = strlen(str_provider);
+			if (len > strlen(CRT_UCX_STR) && strchr(str_provider, '+')) {
+				D_STRNDUP(p, str_provider, len);
+				if (!p) {
+					return prov;
+				} else {
+					crt_na_dict[i].nad_str       = p;
+					crt_na_dict[i].nad_str_alloc = true;
+				}
+			}
+			prov = crt_na_dict[i].nad_type;
 			break;
 		}
 	}
 
-	return provider_idx;
+	return prov;
 }
 
 static int
@@ -1051,6 +1065,10 @@ crt_finalize(void)
 			for (i = 0; i < crt_gdata.cg_num_secondary_provs; i++)
 				crt_na_config_fini(false, crt_gdata.cg_secondary_provs[i]);
 		}
+
+		for (i = 0; crt_na_dict[i].nad_str != NULL; i++)
+			if (crt_na_dict[i].nad_str_alloc)
+				D_FREE(crt_na_dict[i].nad_str);
 
 		D_FREE(crt_gdata.cg_secondary_provs);
 		D_FREE(crt_gdata.cg_prov_gdata_secondary);

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -31,6 +31,8 @@
 #define CRT_HG_POST_INIT        (512)
 #define CRT_HG_POST_INCR        (512)
 
+#define CRT_UCX_STR             "ucx"
+
 struct crt_rpc_priv;
 struct crt_common_hdr;
 struct crt_corpc_hdr;
@@ -39,7 +41,7 @@ struct crt_corpc_hdr;
  * Enumeration specifying providers supported by the library
  */
 typedef enum {
-	CRT_PROV_SM		= 0,
+	CRT_PROV_SM = 0,
 	CRT_PROV_OFI_SOCKETS,
 	CRT_PROV_OFI_VERBS_RXM,
 	CRT_PROV_OFI_GNI,
@@ -47,19 +49,9 @@ typedef enum {
 	CRT_PROV_OFI_TCP_RXM,
 	CRT_PROV_OFI_CXI,
 	CRT_PROV_OFI_OPX,
-	CRT_PROV_OFI_LAST	= CRT_PROV_OFI_OPX,
-	CRT_PROV_UCX_RC,
-	CRT_PROV_UCX_UD,
-	CRT_PROV_UCX_RC_UD,
-	CRT_PROV_UCX_RC_O,
-	CRT_PROV_UCX_UD_O,
-	CRT_PROV_UCX_RC_UD_O,
-	CRT_PROV_UCX_RC_X,
-	CRT_PROV_UCX_UD_X,
-	CRT_PROV_UCX_RC_UD_X,
-	CRT_PROV_UCX_DC_X,
-	CRT_PROV_UCX_TCP,
-	CRT_PROV_UCX_LAST	= CRT_PROV_UCX_TCP,
+	CRT_PROV_OFI_LAST = CRT_PROV_OFI_OPX,
+	CRT_PROV_UCX,
+	CRT_PROV_UCX_LAST = CRT_PROV_UCX,
 	/* Note: This entry should be the last valid one in enum */
 	CRT_PROV_COUNT,
 	CRT_PROV_UNKNOWN = -1,
@@ -74,8 +66,7 @@ crt_hg_parse_uri(const char *uri, crt_provider_t *prov, char *addr);
 static inline bool
 crt_provider_is_ucx(crt_provider_t prov)
 {
-	return (prov >= CRT_PROV_UCX_RC) &&
-	       (prov <= CRT_PROV_UCX_LAST);
+	return (prov >= CRT_PROV_UCX) && (prov <= CRT_PROV_UCX_LAST);
 }
 
 static inline bool
@@ -95,6 +86,8 @@ struct crt_na_dict {
 	bool	nad_port_bind;
 	/** a flag to indicate if endpoints are contiguous */
 	bool	nad_contig_eps;
+	/** a flag to indicate if nad_str is allocated on the heap */
+	bool     nad_str_alloc;
 };
 
 extern struct crt_na_dict crt_na_dict[];
