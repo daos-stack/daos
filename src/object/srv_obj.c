@@ -693,8 +693,11 @@ done:
 		rc = -DER_IO;
 	}
 
+	if (rc == 0 && p_arg->result != 0)
+		rc = p_arg->result;
+
 	/* After RDMA is done, corrupt the server data */
-	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_DISK)) {
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_DISK)) {
 		struct bio_sglist	*fbsgl;
 		d_sg_list_t		 fsgl;
 		int			*fbuffer;
@@ -5740,7 +5743,8 @@ again2:
 			   1 /* start, [0] is for current engine */, ocpi->ocpi_disp_width,
 			   &exec_arg.coll_cur);
 
-	rc = dtx_leader_begin(ioc.ioc_vos_coh, &odm->odm_xid, &epoch, 1, version,
+	rc = dtx_leader_begin(ioc.ioc_vos_coh, &odm->odm_xid, &epoch,
+			      dcts[0].dct_shards[dmi->dmi_tgt_id].dcs_nr, version,
 			      &ocpi->ocpi_oid, NULL /* dti_cos */, 0 /* dti_cos_cnt */,
 			      NULL /* tgts */, exec_arg.coll_cur.grp_nr /* tgt_cnt */,
 			      dtx_flags, odm->odm_mbs, dce, &dlh);
@@ -5791,14 +5795,15 @@ out:
 		max_ver = version;
 
 	DL_CDEBUG(rc != 0 && rc != -DER_INPROGRESS && rc != -DER_TX_RESTART, DLOG_ERR, DB_IO, rc,
-		  "(%s) handled collective punch RPC %p for obj "
-		  DF_UOID" on XS %u/%u epc "DF_X64" pmv %u/%u, with dti "
-		  DF_DTI", forward width %u, forward depth %u",
+		  "(%s) handled collective punch RPC %p for obj "DF_UOID" on XS %u/%u epc "
+		  DF_X64" pmv %u/%u, with dti "DF_DTI", bulk_tgt_sz %u, bulk_tgt_nr %u, "
+		  "tgt_nr %u, forward width %u, forward depth %u",
 		  (ocpi->ocpi_flags & ORF_LEADER) ? "leader" :
 		  (ocpi->ocpi_tgts.ca_count == 1 ? "non-leader" : "relay-engine"), rpc,
 		  DP_UOID(ocpi->ocpi_oid), dmi->dmi_xs_id, dmi->dmi_tgt_id, ocpi->ocpi_epoch,
-		  ocpi->ocpi_map_ver, max_ver, DP_DTI(&ocpi->ocpi_xid), ocpi->ocpi_disp_width,
-		  ocpi->ocpi_disp_depth);
+		  ocpi->ocpi_map_ver, max_ver, DP_DTI(&ocpi->ocpi_xid), ocpi->ocpi_bulk_tgt_sz,
+		  ocpi->ocpi_bulk_tgt_nr, (unsigned int)ocpi->ocpi_tgts.ca_count,
+		  ocpi->ocpi_disp_width, ocpi->ocpi_disp_depth);
 
 	obj_punch_complete(rpc, rc, max_ver);
 

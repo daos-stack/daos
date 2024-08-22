@@ -1220,6 +1220,9 @@ next2:
 	/* Handle the entries whose leaders are on current server. */
 	d_list_for_each_entry_safe(dsp, tmp, &self, dsp_link) {
 		struct dtx_entry	dte;
+		struct dtx_entry	*pdte = &dte;
+		struct dtx_cos_key	 dck;
+
 
 		d_list_del(&dsp->dsp_link);
 
@@ -1228,13 +1231,31 @@ next2:
 		dte.dte_refs = 1;
 		dte.dte_mbs = dsp->dsp_mbs;
 
+		if (for_io) {
+			rc = vos_dtx_check(cont->sc_hdl, &dsp->dsp_xid, NULL, NULL, NULL, false);
+			switch(rc) {
+			case DTX_ST_COMMITTABLE:
+				dck.oid = dsp->dsp_oid;
+				dck.dkey_hash = dsp->dsp_dkey_hash;
+				rc = dtx_commit(cont, &pdte, &dck, 1);
+				if (rc < 0 && rc != -DER_NONEXIST && for_io)
+					d_list_add_tail(&dsp->dsp_link, cmt_list);
+				else
+					dtx_dsp_free(dsp);
+				continue;
+			case DTX_ST_COMMITTED:
+			case -DER_NONEXIST: /* Aborted */
+				dtx_dsp_free(dsp);
+				continue;
+			default:
+				break;
+			}
+		}
+
 		rc = dtx_status_handle_one(cont, &dte, dsp->dsp_oid, dsp->dsp_dkey_hash,
 					   dsp->dsp_epoch, NULL, NULL);
 		switch (rc) {
 		case DSHR_NEED_COMMIT: {
-			struct dtx_entry	*pdte = &dte;
-			struct dtx_cos_key	 dck;
-
 			dck.oid = dsp->dsp_oid;
 			dck.dkey_hash = dsp->dsp_dkey_hash;
 			rc = dtx_commit(cont, &pdte, &dck, 1);

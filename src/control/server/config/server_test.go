@@ -983,9 +983,11 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 	testFile := filepath.Join(testDir, sConfigUncomment)
 	uncommentServerConfig(t, testFile)
 
+	defHpSizeKb := 2048
+
 	for name, tc := range map[string]struct {
 		extraConfig    func(c *Server) *Server
-		memTotBytes    uint64
+		zeroHpSize     bool
 		expNrHugepages int
 		expErr         error
 	}{
@@ -1036,6 +1038,13 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 						),
 					)
 			},
+		},
+		"zero hugepage size": {
+			extraConfig: func(c *Server) *Server {
+				return c
+			},
+			zeroHpSize: true,
+			expErr:     errors.New("invalid system hugepage size"),
 		},
 		"zero hugepages set in config; bdevs configured; implicit role assignment": {
 			extraConfig: func(c *Server) *Server {
@@ -1108,7 +1117,10 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 			cfg := tc.extraConfig(baseCfg(t, testFile))
 
 			mi := &common.MemInfo{
-				HugepageSizeKiB: 2048,
+				HugepageSizeKiB: defHpSizeKb,
+			}
+			if tc.zeroHpSize {
+				mi.HugepageSizeKiB = 0
 			}
 
 			test.CmpErr(t, tc.expErr, cfg.SetNrHugepages(log, mi))
@@ -1136,6 +1148,12 @@ func TestServerConfig_SetRamdiskSize(t *testing.T) {
 		expRamdiskSize int
 		expErr         error
 	}{
+		"zero mem reported": {
+			extraConfig: func(c *Server) *Server {
+				return c
+			},
+			expErr: errors.New("requires nonzero total mem"),
+		},
 		"out of range scm_size; high": {
 			// 16896 hugepages / 512 pages-per-gib = 33 gib huge mem
 			// 33 huge mem + 5 sys rsv + 2 engine rsv = 40 gib reserved mem

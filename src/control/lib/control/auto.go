@@ -194,7 +194,7 @@ func ConfGenerate(req ConfGenerateReq, newEngineCfg newEngineCfgFn, hf *HostFabr
 	}
 
 	// populate server config using engine configs
-	sc, err := genServerConfig(req, ecs, sd.MemInfo, tc)
+	sc, err := genServerConfig(req, ecs, tc)
 	if err != nil {
 		return nil, err
 	}
@@ -1217,7 +1217,7 @@ func checkAccessPointPorts(log logging.Logger, aps []string) (int, error) {
 // Generate a server config file from the constituent hardware components. Enforce consistent
 // target and helper count across engine configs necessary for optimum performance and populate
 // config parameters. Set NUMA affinity on the generated config and then run through validation.
-func genServerConfig(req ConfGenerateReq, ecs []*engine.Config, mi *common.MemInfo, tc *threadCounts) (*config.Server, error) {
+func genServerConfig(req ConfGenerateReq, ecs []*engine.Config, tc *threadCounts) (*config.Server, error) {
 	if len(ecs) == 0 {
 		return nil, errors.New("expected non-zero number of engine configs")
 	}
@@ -1258,14 +1258,6 @@ func genServerConfig(req ConfGenerateReq, ecs []*engine.Config, mi *common.MemIn
 
 	if err := cfg.Validate(req.Log); err != nil {
 		return nil, errors.Wrap(err, "validating engine config")
-	}
-
-	if err := cfg.SetNrHugepages(req.Log, mi); err != nil {
-		return nil, err
-	}
-
-	if err := cfg.SetRamdiskSize(req.Log, mi); err != nil {
-		return nil, err
 	}
 
 	return cfg, nil
