@@ -1,15 +1,13 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of GURT.
  */
-#include <string.h>
-
+#include <stdio.h>
 #include <daos_errno.h>
-#include <gurt/debug.h>
 #include <gurt/list.h>
 #include <gurt/common.h>
 
