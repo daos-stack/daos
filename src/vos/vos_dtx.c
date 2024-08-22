@@ -199,8 +199,7 @@ dtx_act_ent_cleanup(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 		}
 
 		for (i = 0; i < count; i++)
-			vos_obj_evict_by_oid(vos_obj_cache_current(cont->vc_pool->vp_sysdb),
-					     cont, oids[i]);
+			vos_obj_evict_by_oid(cont, oids[i]);
 	}
 
 	if (dae->dae_oids != NULL && dae->dae_oids != &dae->dae_oid_inline &&
@@ -2646,14 +2645,12 @@ int
 vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch)
 {
 	struct vos_container	*cont;
-	struct daos_lru_cache	*occ;
 	struct vos_object	*obj;
 	daos_epoch_range_t	 epr = {0, epoch};
 	int	rc;
 
 	cont = vos_hdl2cont(coh);
-	occ = vos_obj_cache_current(cont->vc_pool->vp_sysdb);
-	rc = vos_obj_hold(occ, cont, oid, &epr, 0, VOS_OBJ_VISIBLE,
+	rc = vos_obj_hold(cont, oid, &epr, 0, VOS_OBJ_VISIBLE,
 			  DAOS_INTENT_DEFAULT, &obj, 0);
 	if (rc != 0) {
 		D_ERROR(DF_UOID" fail to mark sync: rc = "DF_RC"\n",
@@ -2672,7 +2669,7 @@ vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch)
 				       sizeof(obj->obj_df->vo_sync), UMEM_COMMIT_IMMEDIATE);
 	}
 
-	vos_obj_release(occ, obj, 0, false);
+	vos_obj_release(obj, 0, false);
 	return 0;
 }
 
