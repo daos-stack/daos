@@ -34,10 +34,12 @@ struct crt_grp_gdata;
 struct crt_na_config {
 	int32_t		 noc_port;
 	int		 noc_iface_total;
+	int               noc_domain_total;
 	char		*noc_interface;
 	char		*noc_domain;
 	char		*noc_auth_key;
 	char		**noc_iface_str; /* Array of interfaces */
+	char            **noc_domain_str; /* Array of domains */
 };
 
 struct crt_prov_gdata {
@@ -94,6 +96,8 @@ struct crt_gdata {
 	/** Hints to mercury for request post init (ignored for clients) */
 	uint32_t                 cg_post_init;
 	uint32_t                 cg_post_incr;
+	unsigned int             cg_mrecv_buf;
+	unsigned int             cg_mrecv_buf_copy;
 
 	/** global timeout value (second) for all RPCs */
 	uint32_t		cg_timeout;
@@ -117,16 +121,17 @@ struct crt_gdata {
 	volatile unsigned int	cg_refcount;
 
 	/** flags to keep track of states */
-	unsigned int		cg_inited		: 1,
-				cg_grp_inited		: 1,
-				cg_swim_inited		: 1,
-				cg_auto_swim_disable	: 1,
-				/** whether it is a client or server */
-				cg_server		: 1,
-				/** whether scalable endpoint is enabled */
-				cg_use_sensors		: 1,
-				/** whether we are on a primary provider */
-				cg_provider_is_primary	: 1;
+	unsigned int             cg_inited              : 1;
+	unsigned int             cg_grp_inited          : 1;
+	unsigned int             cg_swim_inited         : 1;
+	unsigned int             cg_auto_swim_disable   : 1;
+
+	/** whether it is a client or server */
+	unsigned int             cg_server              : 1;
+	/** whether metrics are used */
+	unsigned int             cg_use_sensors         : 1;
+	/** whether we are on a primary provider */
+	unsigned int             cg_provider_is_primary : 1;
 
 	ATOMIC uint64_t		cg_rpcid; /* rpc id */
 
@@ -211,6 +216,8 @@ struct crt_event_cb_priv {
 	ENV(D_PORT_AUTO_ADJUST)                                                                    \
 	ENV(D_POST_INCR)                                                                           \
 	ENV(D_POST_INIT)                                                                           \
+	ENV(D_MRECV_BUF)                                                                           \
+	ENV(D_MRECV_BUF_COPY)                                                                      \
 	ENV_STR(D_PROVIDER)                                                                        \
 	ENV_STR_NO_PRINT(D_PROVIDER_AUTH_KEY)                                                      \
 	ENV(D_QUOTA_RPCS)                                                                          \

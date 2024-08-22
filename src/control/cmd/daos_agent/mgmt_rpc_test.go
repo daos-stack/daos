@@ -62,19 +62,20 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 			NetInterfaces: common.NewStringSet("test0"),
 			DeviceClass:   hardware.Ether,
 			Providers:     hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "ofi+tcp"}),
+			NUMANode:      0,
 		},
 		&hardware.FabricInterface{
 			Name:          "dev1",
 			NetInterfaces: common.NewStringSet("test1"),
 			DeviceClass:   hardware.Ether,
-			NUMANode:      1,
+			NUMANode:      2,
 			Providers:     hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "ofi+tcp"}, &hardware.FabricProvider{Name: "ucx+tcp"}),
 		},
 		&hardware.FabricInterface{
 			Name:          "dev2",
 			NetInterfaces: common.NewStringSet("test2"),
 			DeviceClass:   hardware.Infiniband,
-			NUMANode:      1,
+			NUMANode:      2,
 			Providers:     hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "ofi+verbs"}),
 		})
 
@@ -90,7 +91,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		return bytes
 	}
 
-	respWith := func(in *control.GetAttachInfoResp, iface, domain string, numaMap map[uint32]*mgmtpb.FabricInterfaces) *mgmtpb.GetAttachInfoResp {
+	respWith := func(in *control.GetAttachInfoResp, iface, domain string, numaMap []*mgmtpb.FabricInterfaces) *mgmtpb.GetAttachInfoResp {
 		t.Helper()
 		out := new(mgmtpb.GetAttachInfoResp)
 		if err := convert.Types(in, out); err != nil {
@@ -108,6 +109,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		mockFabricScan    fabricScanFn
 		mockGetNetIfaces  func() ([]net.Interface, error)
 		numaGetter        *mockNUMAProvider
+		fabricCfg         []*NUMAFabricConfig
 		reqBytes          []byte
 		expResp           *mgmtpb.GetAttachInfoResp
 		expErr            error
@@ -148,19 +150,24 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		},
 		"success": {
 			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{Sys: testSys}),
-			expResp: respWith(testResp, "test1", "dev1", map[uint32]*mgmtpb.FabricInterfaces{
-				0: {
+			expResp: respWith(testResp, "test1", "dev1", []*mgmtpb.FabricInterfaces{
+				{
 					Ifaces: []*mgmtpb.FabricInterface{
 						{
 							Interface: "test0",
+							Domain:    "test0",
 							Provider:  "ofi+tcp",
 						},
 					},
 				},
-				1: {
+				{
+					NumaNode: 1,
+				},
+				{
+					NumaNode: 2,
 					Ifaces: []*mgmtpb.FabricInterface{
 						{
-							NumaNode:  1,
+							NumaNode:  2,
 							Interface: "test1",
 							Domain:    "dev1",
 							Provider:  "ofi+tcp",
@@ -171,22 +178,118 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		},
 		"no sys succeeds": {
 			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{}),
-			expResp: respWith(testResp, "test1", "dev1", map[uint32]*mgmtpb.FabricInterfaces{
-				0: {
+			expResp: respWith(testResp, "test1", "dev1", []*mgmtpb.FabricInterfaces{
+				{
 					Ifaces: []*mgmtpb.FabricInterface{
 						{
 							Interface: "test0",
+							Domain:    "test0",
 							Provider:  "ofi+tcp",
 						},
 					},
 				},
-				1: {
+				{
+					NumaNode: 1,
+				},
+				{
+					NumaNode: 2,
 					Ifaces: []*mgmtpb.FabricInterface{
 						{
-							NumaNode:  1,
+							NumaNode:  2,
 							Interface: "test1",
 							Domain:    "dev1",
 							Provider:  "ofi+tcp",
+						},
+					},
+				},
+			}),
+		},
+		"req interface/domain": {
+			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{
+				Sys:       testSys,
+				Interface: "test1",
+				Domain:    "dev1",
+			}),
+			expResp: respWith(testResp, "test1", "dev1", []*mgmtpb.FabricInterfaces{
+				{
+					Ifaces: []*mgmtpb.FabricInterface{
+						{
+							Interface: "test0",
+							Domain:    "test0",
+							Provider:  "ofi+tcp",
+						},
+					},
+				},
+				{
+					NumaNode: 1,
+				},
+				{
+					NumaNode: 2,
+					Ifaces: []*mgmtpb.FabricInterface{
+						{
+							NumaNode:  2,
+							Interface: "test1",
+							Domain:    "dev1",
+							Provider:  "ofi+tcp",
+						},
+					},
+				},
+			}),
+		},
+		"req interface only": {
+			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{
+				Sys:       testSys,
+				Interface: "test0",
+			}),
+			expResp: respWith(testResp, "test0", "test0", []*mgmtpb.FabricInterfaces{
+				{
+					Ifaces: []*mgmtpb.FabricInterface{
+						{
+							Interface: "test0",
+							Domain:    "test0",
+							Provider:  "ofi+tcp",
+						},
+					},
+				},
+				{
+					NumaNode: 1,
+				},
+				{
+					NumaNode: 2,
+					Ifaces: []*mgmtpb.FabricInterface{
+						{
+							NumaNode:  2,
+							Interface: "test1",
+							Domain:    "dev1",
+							Provider:  "ofi+tcp",
+						},
+					},
+				},
+			}),
+		},
+		"req interface with cfg ifaces": {
+			reqBytes: reqBytes(&mgmtpb.GetAttachInfoReq{
+				Sys:       testSys,
+				Interface: "test0",
+			}),
+			fabricCfg: []*NUMAFabricConfig{
+				{
+					NUMANode: 0,
+					Interfaces: []*FabricInterfaceConfig{
+						{
+							Interface: "test0",
+							Domain:    "test0",
+						},
+					},
+				},
+			},
+			expResp: respWith(testResp, "test0", "test0", []*mgmtpb.FabricInterfaces{
+				{
+					Ifaces: []*mgmtpb.FabricInterface{
+						{
+							Interface: "test0",
+							Domain:    "test0",
+							Provider:  "ofi+tcp", // automatically set to the same as server requested
 						},
 					},
 				},
@@ -220,7 +323,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 
 			if tc.numaGetter == nil {
 				tc.numaGetter = &mockNUMAProvider{
-					GetNUMANodeIDForPIDResult: 1,
+					GetNUMANodeIDForPIDResult: 2,
 				}
 			}
 
@@ -246,14 +349,26 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 				}
 			}
 
+			ic := newTestInfoCache(t, log, testInfoCacheParams{
+				mockGetAttachInfo: tc.mockGetAttachInfo,
+				mockScanFabric:    tc.mockFabricScan,
+				mockNetIfaces:     tc.mockGetNetIfaces,
+				mockNetDevClassGetter: &hardware.MockNetDevClassProvider{
+					GetNetDevClassReturn: []hardware.MockGetNetDevClassResult{
+						{
+							NDC: hardware.Ether,
+						},
+					},
+				},
+			})
+			if tc.fabricCfg != nil {
+				nf := NUMAFabricFromConfig(log, tc.fabricCfg)
+				ic.EnableStaticFabricCache(test.Context(t), nf)
+			}
 			mod := &mgmtModule{
-				log: log,
-				sys: testSys,
-				cache: newTestInfoCache(t, log, testInfoCacheParams{
-					mockGetAttachInfo: tc.mockGetAttachInfo,
-					mockScanFabric:    tc.mockFabricScan,
-					mockNetIfaces:     tc.mockGetNetIfaces,
-				}),
+				log:        log,
+				sys:        testSys,
+				cache:      ic,
 				numaGetter: tc.numaGetter,
 			}
 

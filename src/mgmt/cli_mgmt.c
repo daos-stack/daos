@@ -489,6 +489,7 @@ dc_mgmt_get_sys_info(const char *sys, struct daos_sys_info **out)
 
 	copy_str(info->dsi_system_name, internal.system_name);
 	copy_str(info->dsi_fabric_provider, internal.provider);
+	copy_str(info->dsi_agent_path, dc_agent_sockpath);
 
 	*out = info;
 

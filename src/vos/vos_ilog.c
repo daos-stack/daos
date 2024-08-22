@@ -82,8 +82,7 @@ vos_ilog_del(struct umem_instance *umm, umem_off_t ilog_off, uint32_t tx_id,
 		return 0;
 
 	coh.cookie = (unsigned long)args;
-	vos_dtx_deregister_record(umm, coh, tx_id, epoch, ilog_off);
-	return 0;
+	return vos_dtx_deregister_record(umm, coh, tx_id, epoch, ilog_off);
 }
 
 void

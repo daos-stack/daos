@@ -480,7 +480,7 @@ check_object:
 			     &obj->obj_ilog_info, cond_mask, ts_set);
 	if (rc == -DER_TX_RESTART)
 		goto failed;
-	if (rc == -DER_NONEXIST && cond_mask)
+	if (rc == -DER_NONEXIST && !cond_mask)
 		goto out;
 	if (rc != 0) {
 		VOS_TX_LOG_FAIL(rc, "Could not update object "DF_UOID" at "
