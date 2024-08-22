@@ -14,7 +14,7 @@ server_config:
       fabric_iface: ib0
       fabric_iface_port: 31317
       log_file: daos_server0.log
-      log_mask: DEBUG,MEM=ERR
+      log_mask: ERR
       env_vars:
         - RDB_COMPACT_THRESHOLD=64
         - DD_MASK=group_metadata_only
@@ -31,7 +31,7 @@ server_config:
       fabric_iface: ib1
       fabric_iface_port: 31417
       log_file: daos_server1.log
-      log_mask: DEBUG,MEM=ERR
+      log_mask: ERR
       env_vars:
         - RDB_COMPACT_THRESHOLD=64
         - DD_MASK=group_metadata_only
