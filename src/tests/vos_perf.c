@@ -19,8 +19,6 @@
 #include <getopt.h>
 #include <abt.h>
 #include <daos/common.h>
-#include <daos/daos_abt.h>
-#include <daos/ult_stack_mmap.h>
 #include <daos/tests_lib.h>
 #include <daos_srv/vos.h>
 #include <daos_test.h>
@@ -46,7 +44,7 @@ ts_abt_init(void)
 	int num_cpus;
 	int rc;
 
-	rc = da_initialize(0, NULL);
+	rc = ABT_init(0, NULL);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("Failed to init ABT: " AF_RC "\n", AP_RC(rc));
 		return -1;
@@ -94,7 +92,7 @@ ts_abt_fini(void)
 {
 	ABT_xstream_join(abt_xstream);
 	ABT_xstream_free(&abt_xstream);
-	da_finalize();
+	ABT_finalize();
 }
 
 static int
@@ -203,8 +201,8 @@ vos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 	ult_arg.epoch = epoch;
 	ult_arg.duration = duration;
 	ult_arg.obj_idx = obj_idx;
-	rc = da_thread_create_on_xstream(abt_xstream, vos_update_or_fetch_ult, &ult_arg,
-					 ABT_THREAD_ATTR_NULL, &thread);
+	rc = ABT_thread_create_on_xstream(abt_xstream, vos_update_or_fetch_ult, &ult_arg,
+					  ABT_THREAD_ATTR_NULL, &thread);
 	if (rc != ABT_SUCCESS)
 		return rc;
 
@@ -733,7 +731,6 @@ const char perf_vos_usage[] = "\n"
 			      "-I	Use constant akey.  Required for QUERY test.\n\n"
 			      "-f	Use a flat DKEY object type\n\n"
 			      "-x	Run each test in an ABT ULT.\n\n"
-			      "-m       Use ULT mmap()'ed stack.]\n\n"
 			      "Examples:\n"
 			      "	$ vos_perf -s 1024k -A -R 'U U;o=4k;s=4k V'\n";
 
@@ -752,7 +749,7 @@ const struct option perf_vos_opts[] = {
     {"dir", required_argument, NULL, 'D'},  {"zcopy", no_argument, NULL, 'z'},
     {"int_dkey", no_argument, NULL, 'i'},   {"flat_dkey", no_argument, NULL, 'f'},
     {"const_akey", no_argument, NULL, 'I'}, {"abt_ult", no_argument, NULL, 'x'},
-    {"mmap_stack", no_argument, NULL, 'm'}, {NULL, -1, NULL, 0},
+    {NULL, -1, NULL, 0},
 };
 
 const char perf_vos_optstr[] = "D:zifIx";
@@ -820,10 +817,6 @@ main(int argc, char **argv)
 			break;
 		case 'x':
 			ts_in_ult = true;
-			break;
-		case 'm':
-			rc = d_setenv("DAOS_ULT_STACK_MMAP", "1", 1);
-			D_ASSERT(rc == 0);
 			break;
 		}
 	}

@@ -20,7 +20,6 @@
 #include <daos/common.h>
 #include <daos/event.h>
 #include <daos/sys_db.h>
-#include <daos/daos_abt.h>
 #include <daos_errno.h>
 #include <daos_mgmt.h>
 #include <daos_srv/bio.h>
@@ -513,8 +512,8 @@ dss_srv_handler(void *arg)
 			D_GOTO(nvme_fini, rc = dss_abterr2der(rc));
 		}
 
-		rc = da_thread_create_on_pool(dx->dx_pools[DSS_POOL_NVME_POLL], dss_nvme_poll_ult,
-					      NULL, attr, NULL);
+		rc = ABT_thread_create(dx->dx_pools[DSS_POOL_NVME_POLL], dss_nvme_poll_ult, NULL,
+				       attr, NULL);
 		ABT_thread_attr_free(&attr);
 		if (rc != ABT_SUCCESS) {
 			D_ERROR("create NVMe poll ULT failed: %d\n", rc);
@@ -833,8 +832,8 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int tag, int xs_id)
 	}
 
 	/** start progress ULT */
-	rc = da_thread_create_on_pool(dx->dx_pools[DSS_POOL_NET_POLL], dss_srv_handler, dx, attr,
-				      &dx->dx_progress);
+	rc = ABT_thread_create(dx->dx_pools[DSS_POOL_NET_POLL], dss_srv_handler, dx, attr,
+			       &dx->dx_progress);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("create progress ULT failed: %d\n", rc);
 		D_GOTO(out_xstream, rc = dss_abterr2der(rc));

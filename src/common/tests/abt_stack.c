@@ -13,8 +13,6 @@
 
 #include <daos/common.h>
 #include <gurt/common.h>
-#include <daos/daos_abt.h>
-#include <daos/ult_stack_mmap.h>
 
 static size_t g_total_size  = 0;
 static void  *g_stack_start = NULL;
@@ -26,7 +24,7 @@ usage(char *name, FILE *out)
 	fprintf(out,
 		"Usage:\n"
 		"\t%s -h\n"
-		"\t%s [-p] [-t thread_name] [-s stack_size] [-m] [-G]\n"
+		"\t%s [-p] [-t] [-s stack_size] [-m var_size] [-m] [-G]\n"
 		"\n"
 		"Options:\n"
 		"\t--help, -h\n"
@@ -38,19 +36,28 @@ usage(char *name, FILE *out)
 		"\t--stack-size=<stack size>, -s <stack size>\n"
 		"\t\tSize in kilo bytes of the ULT thread stack\n"
 		"\t--var-size=<variable size>, -S <variable size>\n"
-		"\t\tSize in bytes of the variable to allocate on the stack\n"
-		"\t--mmap-stack, -m\n"
-		"\t\tCreate ULT thread with stack allocated with mmap()\n",
+		"\t\tSize in bytes of the variable to allocate on the stack\n",
 		name, name);
 }
 
 static void
 stack_fill(void *arg)
 {
-	size_t var_size = (size_t)arg;
-	void  *sp       = NULL;
+	void      *sp       = NULL;
+	ABT_thread thread;
+	size_t     var_size = (size_t)arg;
+	size_t     stack_size;
+	int        rc;
 
-	printf("Starting filling stack...\n");
+	rc = ABT_thread_self(&thread);
+	D_ASSERT(rc == ABT_SUCCESS);
+	rc = ABT_thread_get_stacksize(thread, &stack_size);
+	D_ASSERT(rc == ABT_SUCCESS);
+	printf("Starting filling stack:\n"
+	       "\t- stack size: %zu\n"
+	       "\t- var size:   %zu\n",
+	       stack_size, var_size);
+
 	g_stack_start = &sp;
 	for (;;) {
 		g_stack_end = alloca(var_size);
@@ -96,13 +103,12 @@ signal_register(void)
 int
 main(int argc, char **argv)
 {
-	const char         *opt_cfg        = "hpus:S:m";
+	const char         *opt_cfg        = "hpus:S:";
 	const struct option long_opt_cfg[] = {{"help", no_argument, NULL, 'h'},
 					      {"on-pool", required_argument, NULL, 'p'},
 					      {"unnamed-thread", no_argument, NULL, 'u'},
 					      {"stack-size", required_argument, NULL, 's'},
 					      {"var-size", required_argument, NULL, 'S'},
-					      {"mmap-stack", no_argument, NULL, 'm'},
 					      {0, 0, 0, 0}};
 	int                 opt;
 	bool                create_on_pool;
@@ -127,10 +133,6 @@ main(int argc, char **argv)
 		case 'S':
 			var_size = (size_t)atoi(optarg);
 			break;
-		case 'm':
-			rc = d_setenv("DAOS_ULT_STACK_MMAP", "1", 1);
-			D_ASSERT(rc == 0);
-			break;
 		case 'h':
 			usage(argv[0], stdout);
 			exit(EXIT_SUCCESS);
@@ -145,7 +147,7 @@ main(int argc, char **argv)
 	printf("Initializing test...\n");
 	rc = daos_debug_init_ex("/dev/stdout", DLOG_INFO);
 	D_ASSERT(rc == 0);
-	rc = da_initialize(0, NULL);
+	rc = ABT_init(0, NULL);
 	D_ASSERT(rc == 0);
 
 	if (stack_size != -1) {
@@ -162,13 +164,13 @@ main(int argc, char **argv)
 
 		rc = ABT_self_get_last_pool(&pool);
 		D_ASSERT(rc == ABT_SUCCESS);
-		da_thread_create_on_pool(pool, stack_fill, (void *)var_size, attr, thread);
+		ABT_thread_create(pool, stack_fill, (void *)var_size, attr, thread);
 	} else {
 		ABT_xstream xstream;
 
 		rc = ABT_self_get_xstream(&xstream);
 		D_ASSERT(rc == ABT_SUCCESS);
-		da_thread_create_on_xstream(xstream, stack_fill, (void *)var_size, attr, thread);
+		ABT_thread_create_on_xstream(xstream, stack_fill, (void *)var_size, attr, thread);
 	}
 
 	printf("Scheduling ULT test thread...\n");

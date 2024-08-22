@@ -23,7 +23,6 @@
 #include <daos/common.h>
 #include <daos/placement.h>
 #include <daos/tls.h>
-#include <daos/ult_stack_mmap.h>
 #include "srv_internal.h"
 #include "drpc_internal.h"
 #include <gurt/telemetry_common.h>
@@ -574,7 +573,7 @@ abt_init(int argc, char *argv[])
 		return daos_errno2der(errno);
 
 	/* Now, initialize Argobots. */
-	rc = da_initialize(argc, argv);
+	rc = ABT_init(argc, argv);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("failed to init ABT: %d\n", rc);
 		return dss_abterr2der(rc);
@@ -589,8 +588,7 @@ static void
 abt_fini(void)
 {
 	dss_abt_init = false;
-
-	da_finalize();
+	ABT_finalize();
 }
 
 static void

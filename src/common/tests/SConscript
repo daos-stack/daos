@@ -40,7 +40,7 @@ def scons():
     tenv.d_test_program('compress_timing', 'compress_timing.c', LIBS=['daos_common', 'gurt'])
     tenv.d_test_program('rsvc_tests', ['rsvc_tests.c', '../rsvc.c'],
                         LIBS=['daos_common', 'gurt', 'cmocka'])
-    new_env.d_test_program('usm_test', 'usm_test.c',
+    new_env.d_test_program('abt_stack', 'abt_stack.c',
                            LIBS=['daos_common_pmem', 'gurt', 'abt'])
 
     unit_env = tenv.Clone()

@@ -15,7 +15,6 @@
 #include <getopt.h>
 
 #include <daos/common.h>
-#include <daos/daos_abt.h>
 #include <daos_srv/smd.h>
 #include "../smd_internal.h"
 #include <daos/tests_lib.h>
@@ -514,7 +513,7 @@ int main(int argc, char **argv)
 	int	rc;
 	int	opt;
 
-	rc = da_initialize(0, NULL);
+	rc = ABT_init(0, NULL);
 	if (rc != 0) {
 		D_PRINT("Error initializing ABT\n");
 		return rc;
@@ -535,6 +534,6 @@ int main(int argc, char **argv)
 					 smd_ut_setup, smd_ut_teardown);
 
 out:
-	da_finalize();
+	ABT_finalize();
 	return rc;
 }

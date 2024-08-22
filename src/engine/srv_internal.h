@@ -7,7 +7,6 @@
 #define __DAOS_SRV_INTERNAL__
 
 #include <daos_srv/daos_engine.h>
-#include <daos/daos_abt.h>
 #include <gurt/telemetry_common.h>
 #include <gurt/heap.h>
 
@@ -301,7 +300,7 @@ sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 		/* Atomic integer assignment from different xstream */
 		info->si_stats.ss_busy_ts = info->si_cur_ts;
 
-	rc = da_thread_create_on_pool(abt_pool, func, arg, t_attr, thread);
+	rc = ABT_thread_create(abt_pool, func, arg, t_attr, thread);
 	return dss_abterr2der(rc);
 }
 

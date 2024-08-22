@@ -9,7 +9,6 @@
 #include <execinfo.h>
 #include <abt.h>
 #include <daos/common.h>
-#include <daos/daos_abt.h>
 #include <daos_errno.h>
 #include <daos_srv/vos.h>
 #include <gurt/telemetry_producer.h>
@@ -2158,7 +2157,7 @@ sched_watchdog_prep(struct dss_xstream *dx, ABT_unit unit)
 	info->si_ult_start = daos_getmtime_coarse();
 	rc = ABT_unit_get_thread(unit, &thread);
 	D_ASSERT(rc == ABT_SUCCESS);
-	rc = da_thread_get_func(thread, &thread_func);
+	rc = ABT_thread_get_thread_func(thread, &thread_func);
 	D_ASSERT(rc == ABT_SUCCESS);
 	info->si_ult_func = thread_func;
 }

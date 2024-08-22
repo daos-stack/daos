@@ -11,8 +11,6 @@
 
 #include <daos/common.h>
 #include <gurt/common.h>
-#include <daos/daos_abt.h>
-#include <daos/ult_stack_mmap.h>
 #include <daos_srv/daos_engine.h>
 
 static unsigned long   abt_cntr;
@@ -51,7 +49,7 @@ abt_thread_1(void *arg)
 		abt_cntr++;
 		ABT_mutex_unlock(abt_lock);
 
-		da_thread_create_on_pool(abt_pool, abt_thread_1, NULL, abt_attr, NULL);
+		ABT_thread_create(abt_pool, abt_thread_1, NULL, abt_attr, NULL);
 
 		ABT_mutex_lock(abt_lock);
 	} /* else: do nothing and exit */
@@ -108,7 +106,7 @@ abt_ult_create_rate(void)
 		abt_cntr++;
 		ABT_mutex_unlock(abt_lock);
 
-		rc = da_thread_create_on_pool(abt_pool, abt_thread_1, NULL, abt_attr, NULL);
+		rc = ABT_thread_create(abt_pool, abt_thread_1, NULL, abt_attr, NULL);
 		if (rc != ABT_SUCCESS) {
 			printf("ABT thread create failed: %d\n", rc);
 			return;
@@ -184,8 +182,7 @@ abt_sched_rate(void)
 		abt_ults++;
 		ABT_mutex_unlock(abt_lock);
 
-		rc = da_thread_create_on_pool(abt_pool, abt_thread_2, NULL, ABT_THREAD_ATTR_NULL,
-					      NULL);
+		rc = ABT_thread_create(abt_pool, abt_thread_2, NULL, ABT_THREAD_ATTR_NULL, NULL);
 		if (rc != ABT_SUCCESS) {
 			printf("ABT thread create failed: %d\n", rc);
 			ABT_mutex_lock(abt_lock);
@@ -276,6 +273,8 @@ abt_reset(void)
 static struct option abt_ops[] = {
     /**
      * test-id:
+     * - c = ULT creation
+     * - s = ULT scheduling
      * - m = mutext creation
      * - e = eventual creation
      * - d = condition creation
@@ -290,8 +289,6 @@ static struct option abt_ops[] = {
     {"sec", required_argument, NULL, 's'},
     /** stack size (kilo-bytes) */
     {"stack", required_argument, NULL, 'S'},
-    /** Use of ULT mmap()'ed stack */
-    {"mmap", required_argument, NULL, 'm'},
     {0, 0, 0, 0}};
 
 int
@@ -319,10 +316,6 @@ main(int argc, char **argv)
 			opt_stack = atoi(optarg);
 			opt_stack <<= 10; /* kilo-byte */
 			break;
-		case 'm':
-			rc = d_setenv("DAOS_ULT_STACK_MMAP", optarg, 1);
-			D_ASSERT(rc == 0);
-			break;
 		}
 	}
 
@@ -345,7 +338,7 @@ main(int argc, char **argv)
 		return -1;
 	}
 
-	rc = da_initialize(0, NULL);
+	rc = ABT_init(0, NULL);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("Failed to init ABT: " AF_RC "\n", AP_RC(rc));
 		return -1;
@@ -427,8 +420,7 @@ main(int argc, char **argv)
 	}
 
 	abt_waiting = true;
-	rc = da_thread_create_on_pool(abt_pool, abt_lock_create_rate, NULL, ABT_THREAD_ATTR_NULL,
-				      NULL);
+	rc = ABT_thread_create(abt_pool, abt_lock_create_rate, NULL, ABT_THREAD_ATTR_NULL, NULL);
 
 	ABT_mutex_lock(abt_lock);
 	if (abt_waiting)
@@ -441,7 +433,7 @@ out:
 
 	ABT_mutex_free(&abt_lock);
 	ABT_cond_free(&abt_cond);
-	da_finalize();
+	ABT_finalize();
 	daos_debug_fini();
 
 	return 0;
