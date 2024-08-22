@@ -55,4 +55,4 @@ ior:
       - ["EC_4P2GX", 8]
       - ["EC_8P2GX", 12]
   sw_wearout: 1
-  sw_status_file: "/var/tmp/daos_testing/stoneWallingStatusFile"
+  sw_status_file: stoneWallingStatusFile

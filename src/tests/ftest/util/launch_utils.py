@@ -7,12 +7,9 @@
 import logging
 import os
 import re
-import shlex
-import subprocess  # nosec
 import sys
 import time
 from pathlib import Path
-from socket import gethostname
 
 from ClusterShell.NodeSet import NodeSet
 from slurm_setup import SlurmSetup, SlurmSetupException
@@ -392,8 +389,9 @@ class TestRunner():
             "[Test %s/%s] Running the %s test on repetition %s/%s",
             number, self.total_tests, test, repeat, self.total_repeats)
         start_time = int(time.time())
-        return_code = self._run_subprocess(logger, " ".join(command)).returncode
+        result = run_local(logger, " ".join(command), capture_output=False)
         end_time = int(time.time())
+        return_code = result.output[0].returncode
         if return_code == 0:
             logger.debug("All avocado test variants passed")
         elif return_code & 1 == 1:
@@ -835,45 +833,6 @@ class TestRunner():
                     self.test_result.fail_test(logger, "Execute", message, sys.exc_info())
             else:
                 logger.debug("No avocado crash files found in %s", crash_dir)
-
-    @staticmethod
-    def _run_subprocess(log, command):
-        """Run the command locally.
-
-        Args:
-            log (logger): logger for the messages produced by this method
-            command (str): command from which to obtain the output
-
-        Raises:
-            RunException: if the command fails: is interrupted by the user, or
-                encounters some other exception.
-
-        Returns:
-            subprocess.CompletedProcess: an object representing the result of the command
-                execution with the following properties:
-                    - args (the command argument)
-                    - returncode
-        """
-        local_host = gethostname().split(".")[0]
-        kwargs = {"encoding": "utf-8", "shell": False, "check": False, "timeout": None}
-        log.debug("Running on %s: %s", local_host, command)
-
-        try:
-            # pylint: disable=subprocess-run-check
-            return subprocess.run(shlex.split(command), **kwargs)  # nosec
-
-        except KeyboardInterrupt as error:
-            # User Ctrl-C
-            message = f"Command '{command}' interrupted by user"
-            log.debug(message)
-            raise RunException(message) from error
-
-        except Exception as error:
-            # Catch all
-            message = f"Command '{command}' encountered unknown error"
-            log.debug(message)
-            log.debug(str(error))
-            raise RunException(message) from error
 
 
 class TestGroup():
