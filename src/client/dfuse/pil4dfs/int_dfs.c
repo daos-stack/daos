@@ -1059,9 +1059,12 @@ new_dlsym(void *handle, const char *symbol)
 		return libdl_dlsym(handle, symbol);
 	if (strcmp(symbol, "zeInit") != 0)
 		return libdl_dlsym(handle, symbol);
-	/* intercept zeInit() */
 	next_ze_init = libdl_dlsym(handle, symbol);
-	return zeInit;
+	if (next_ze_init)
+		/* dlsym() finished successfully, then intercept zeInit() */
+		return zeInit;
+	else
+		return next_ze_init;
 }
 
 /** determine whether a path (both relative and absolute) is on DAOS or not. If yes,
