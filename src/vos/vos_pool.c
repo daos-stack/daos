@@ -764,6 +764,7 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 	struct umem_pool	*pop = NULL;
 	enum bio_mc_flags	 mc_flags = vos2mc_flags(flags);
 	int			 rc, ret;
+	size_t                   scm_sz_actual;
 
 	*ph = NULL;
 	/* always use PMEM mode for SMD */
@@ -779,23 +780,22 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 		goto umem_create;
 	}
 
-	/* Is meta_sz is set then use it, otherwise derive from VOS file size or scm_sz */
-	if (!meta_sz) {
-		if (!scm_sz) {
-			struct stat lstat;
+	if (!scm_sz) {
+		struct stat lstat;
 
-			rc = stat(path, &lstat);
-			if (rc != 0)
-				return daos_errno2der(errno);
-			meta_sz = lstat.st_size;
-		} else {
-			/* Custom scm_sz specified so use it (not regular DAOS pool case) */
-			meta_sz = scm_sz;
-		}
-	}
+		rc = stat(path, &lstat);
+		if (rc != 0)
+			return daos_errno2der(errno);
+		scm_sz_actual = lstat.st_size;
+	} else
+		scm_sz_actual = scm_sz;
+
+	/* Is meta_sz is set then use it, otherwise derive from VOS file size or scm_sz */
+	if (!meta_sz)
+		meta_sz = scm_sz_actual;
 
 	store.store_type = umempobj_get_backend_type();
-	if (store.store_type == DAOS_MD_BMEM && meta_sz > scm_sz)
+	if (store.store_type == DAOS_MD_BMEM && meta_sz > scm_sz_actual)
 		store.store_type = DAOS_MD_BMEM_V2;
 
 	D_DEBUG(DB_MGMT, "Create BIO meta context for xs:%p pool:"DF_UUID" "
