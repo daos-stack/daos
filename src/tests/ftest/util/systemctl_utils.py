@@ -18,13 +18,14 @@ class SystemctlFailure(Exception):
     """Base exception for this module."""
 
 
-def get_service_status(logger, hosts, service):
+def get_service_status(logger, hosts, service, user="root"):
     """Get the status of the daos_server.service.
 
     Args:
         logger (Logger): logger for the messages produced by this method
         hosts (NodeSet): hosts on which to get the service state
         service (str): name of the service
+        user (str, optional): user to use to issue the command. Defaults to "root".
 
     Returns:
         dict: a dictionary with the following keys:
@@ -43,8 +44,8 @@ def get_service_status(logger, hosts, service):
         "stop": ["active", "activating", "deactivating"],
         "disable": ["active", "activating", "deactivating"],
         "reset-failed": ["failed"]}
-    command = ["systemctl", "is-active", service]
-    result = run_remote(logger, hosts, " ".join(command))
+    command = get_systemctl_command("is-active", service, user)
+    result = run_remote(logger, hosts, command, False)
     for data in result.output:
         if data.timeout:
             status["status"] = False
@@ -62,49 +63,50 @@ def get_service_status(logger, hosts, service):
     return status
 
 
-def stop_service(logger, hosts, service):
+def stop_service(logger, hosts, service, user="root"):
     """Stop any daos_server.service running on the hosts running servers.
 
     Args:
         logger (Logger): logger for the messages produced by this method
         hosts (NodeSet): list of hosts on which to stop the service.
         service (str): name of the service
+        user (str, optional): user to use to issue the command. Defaults to "root".
 
     Returns:
         bool: True if the service was successfully stopped; False otherwise
 
     """
-    result = {"status": True}
-    if hosts:
-        status_keys = ["reset-failed", "stop", "disable"]
-        mapping = {"stop": "active", "disable": "enabled", "reset-failed": "failed"}
-        check_hosts = NodeSet(hosts)
-        loop = 1
-        # Reduce 'max_loops' to 2 once https://jira.hpdd.intel.com/browse/DAOS-7809
-        # has been resolved
-        max_loops = 3
-        while check_hosts:
-            # Check the status of the service on each host
-            result = get_service_status(logger, check_hosts, service)
-            check_hosts = NodeSet()
-            for key in status_keys:
-                if result[key]:
-                    if loop == max_loops:
-                        # Exit the while loop if the service is still running
-                        logger.error(
-                            " - Error %s still %s on %s", service, mapping[key], result[key])
-                        result["status"] = False
-                    else:
-                        # Issue the appropriate systemctl command to remedy the
-                        # detected state, e.g. 'stop' for 'active'.
-                        command = ["sudo", "-n", "systemctl", key, service]
-                        run_remote(logger, result[key], " ".join(command))
-
-                        # Run the status check again on this group of hosts
-                        check_hosts.add(result[key])
-            loop += 1
-    else:
+    if not hosts:
         logger.debug("  Skipping stopping %s service - no hosts", service)
+        return True
+
+    result = {"status": True}
+    status_keys = ["reset-failed", "stop", "disable"]
+    mapping = {"stop": "active", "disable": "enabled", "reset-failed": "failed"}
+    check_hosts = NodeSet(hosts)
+    loop = 1
+    # Reduce 'max_loops' to 2 once https://jira.hpdd.intel.com/browse/DAOS-7809 has been resolved
+    max_loops = 3
+    while check_hosts:
+        # Check the status of the service on each host
+        result = get_service_status(logger, check_hosts, service)
+        check_hosts = NodeSet()
+        for key in status_keys:
+            if result[key]:
+                if loop == max_loops:
+                    # Exit the while loop if the service is still running
+                    logger.error(
+                        " - Error %s still %s on %s", service, mapping[key], result[key])
+                    result["status"] = False
+                else:
+                    # Issue the appropriate systemctl command to remedy the
+                    # detected state, e.g. 'stop' for 'active'.
+                    command = command_as_user(get_systemctl_command(key, service, user), user)
+                    run_remote(logger, result[key], command)
+
+                    # Run the status check again on this group of hosts
+                    check_hosts.add(result[key])
+        loop += 1
 
     return result["status"]
 

@@ -127,12 +127,12 @@ def setup_systemctl(logger, servers, clients, test_env):
     systemctl_configs = {}
     systemctl_configs.update(
         __add_systemctl_override(
-            logger, servers, "daos_server.service", "root", "/usr/bin/daos_server",
-            test_env.server_config, None, None))
+            logger, servers, "daos_server.service", "root",
+            os.path.join(test_env.daos_prefix, "daos_server"), test_env.server_config, None, None))
     systemctl_configs.update(
         __add_systemctl_override(
-            logger, clients, "daos_agent.service", test_env.agent_user, "/usr/bin/daos_agent",
-            test_env.client_config, None, None))
+            logger, clients, "daos_agent.service", test_env.agent_user,
+            os.path.join(test_env.daos_prefix, "daos_agent"), test_env.agent_config, None, None))
     return systemctl_configs
 
 
