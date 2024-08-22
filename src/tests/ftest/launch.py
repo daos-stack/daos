@@ -699,7 +699,7 @@ def main():
     parser.add_argument(
         "-v", "--verbose",
         action="count",
-        default=3,  # DEBUG to verify fix
+        default=0,
         help="verbosity output level. Specify multiple times (e.g. -vv) for "
              "additional output")
     parser.add_argument(
