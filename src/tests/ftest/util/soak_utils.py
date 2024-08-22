@@ -35,7 +35,7 @@ from macsio_util import MacsioCommand
 from mdtest_utils import MdtestCommand
 from oclass_utils import extract_redundancy_factor
 from pydaos.raw import DaosApiError, DaosSnapshot
-from run_utils import run_local, run_remote
+from run_utils import daos_env_str, run_local, run_remote
 from test_utils_container import add_container
 
 H_LOCK = threading.Lock()
@@ -1015,10 +1015,10 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
         self.soak_log_dir,
         self.test_name + "_" + name + "_`hostname -s`_"
         "" + "${JOB_ID}_" + "daos_dfuse.log")
-    dfuse_env = ";".join(
+    dfuse_env = daos_env_str(os.environ) + ";".join(
         ["export D_LOG_FILE_APPEND_PID=1",
-         "export D_LOG_MASK=ERR",
-         f"export D_LOG_FILE={dfuselog}"])
+            "export D_LOG_MASK=ERR",
+            f"export D_LOG_FILE={dfuselog}"])
     module_load = ";".join([f"module use {self.mpi_module_use}", f"module load {self.mpi_module}"])
 
     dfuse_start_cmds = [
@@ -1049,7 +1049,7 @@ def stop_dfuse(dfuse, vol=False):
 
     dfuse_env = daos_env_str(os.environ)
     dfuse_stop_cmds.extend([
-        f'clush -S -w $HOSTLIST "fusermount3 -uz {dfuse.mount_dir.value}"',
+        f'clush -S -w $HOSTLIST "{dfuse_env};fusermount3 -uz {dfuse.mount_dir.value}"',
         f'clush -S -w $HOSTLIST "rm -rf {dfuse.mount_dir.value}"'])
     return dfuse_stop_cmds
 
