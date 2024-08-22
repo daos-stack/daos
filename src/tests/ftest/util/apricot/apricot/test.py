@@ -389,8 +389,8 @@ class Test(avocadoTest):
         """
         errors = []
         self.log.info("Removing temporary test files in %s", self.test_dir)
-        if not run_local(self.log, "rm -fr {}".format(self.test_dir)).passed:
-            errors.append("Error removing temporary test files")
+        if not run_local(self.log, f"rm -fr {self.test_dir}").passed:
+            errors.append(f"Error removing temporary test files in {self.test_dir}")
         return errors
 
     def _cleanup(self):
@@ -784,10 +784,11 @@ class TestWithServers(TestWithoutServers):
             # Ensure write permissions for the daos command log files when
             # using systemctl
             if "Systemctl" in (self.agent_manager_class, self.server_manager_class):
-                log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
                 self.log.info("-" * 100)
-                self.log.info("Updating file permissions for %s for use with systemctl", log_dir)
-                run_remote(self.log, hosts, f"chmod a+rw {log_dir}")
+                self.log.info(
+                    "Updating file permissions for %s for use with systemctl",
+                    self.test_env.log_dir)
+                run_remote(self.log, hosts, f"chmod a+rw {self.test_env.log_dir}")
 
         # Start the servers
         force_agent_start = False

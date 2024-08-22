@@ -9,7 +9,7 @@ import os
 
 import yaml
 from general_utils import distribute_files
-from run_utils import run_remote
+from run_utils import run_local, run_remote
 
 # a lookup table of predefined faults
 #
@@ -266,7 +266,7 @@ class FaultInjection():
 
         fi_config = os.path.join(self._test_dir, "fi.yaml")
 
-        with open(fi_config, 'w', encoding='utf8') as outfile:
+        with open(fi_config, 'w', encoding='utf-8') as outfile:
             yaml.dump({'seed': '123'}, outfile, default_flow_style=False, allow_unicode=True)
             fault_config = []
             if self._fault_list is not None:
@@ -315,8 +315,13 @@ class FaultInjection():
             return []
 
         # Remove the fault injection files on the hosts.
+        log = logging.getLogger()
         error_list = []
-        result = run_remote(logging.getLogger(), self._hosts, f"rm -f {self.fault_file}")
+        command = f"rm -f {self.fault_file}"
+        if self._hosts:
+            result = run_remote(log, self._hosts, command)
+        else:
+            result = run_local(log, command)
         if not result.passed:
-            error_list.append(f"Error removing fault injection file: {self.fault_file}")
+            error_list.append(f"Error removing fault injection file {self.fault_file}")
         return error_list
