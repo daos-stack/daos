@@ -9,7 +9,7 @@ import os
 
 import yaml
 from general_utils import distribute_files
-from run_utils import run_local, run_remote
+from run_utils import run_remote
 
 # a lookup table of predefined faults
 #
@@ -317,11 +317,7 @@ class FaultInjection():
         # Remove the fault injection files on the hosts.
         log = logging.getLogger()
         error_list = []
-        command = f"rm -f {self.fault_file}"
-        if self._hosts:
-            result = run_remote(log, self._hosts, command)
-        else:
-            result = run_local(log, command)
+        result = run_remote(logging.getLogger(), self._hosts, f"rm -f {self.fault_file}")
         if not result.passed:
-            error_list.append(f"Error removing fault injection file {self.fault_file}")
+            error_list.append(f"Error removing fault injection file: {self.fault_file}")
         return error_list

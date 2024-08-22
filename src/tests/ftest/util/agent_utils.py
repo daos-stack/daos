@@ -285,8 +285,7 @@ class DaosAgentManager(SubprocessManager):
         self.manager.job.copy_certificates(get_log_file("daosCA/certs"), self._hosts)
 
         # Verify the socket directory exists when using a non-systemctl manager
-        if self.verify_socket_dir:
-            self.verify_socket_directory(self.manager.job.certificate_owner)
+        self.verify_socket_directory(self.manager.job.certificate_owner)
 
         super().start()
 
