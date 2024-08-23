@@ -83,8 +83,9 @@ static inline int32_t
 deadline_to_timeout(uint32_t deadline_sec)
 {
 	struct timespec now;
-
 	d_gettime(&now);
+
+	D_DEBUG(DB_ALL, "now.tv_sec = %ld\n", now.tv_sec);
 	return deadline_sec - now.tv_sec;
 }
 
@@ -92,8 +93,9 @@ static inline uint32_t
 timeout_to_deadline(int timeout_sec)
 {
 	struct timespec now;
-
 	d_gettime(&now);
+
+	D_DEBUG(DB_ALL, "now.tv_sec = %ld\n", now.tv_sec);
 	return now.tv_sec + timeout_sec;
 }
 

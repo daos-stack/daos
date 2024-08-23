@@ -740,6 +740,7 @@ crt_req_set_timeout(crt_rpc_t *req, uint32_t timeout_sec)
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 	rpc_priv->crp_timeout_sec = timeout_sec;
 
+	RPC_INFO(rpc_priv, "Caller set explicit timeout to %d\n", timeout_sec);
 out:
 	return rc;
 }
@@ -1739,6 +1740,9 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv
 		if (rpc_priv->crp_req_hdr.cch_src_deadline_sec) {
 			timeout = deadline_to_timeout(rpc_priv->crp_req_hdr.cch_src_deadline_sec);
 
+			RPC_INFO(rpc_priv, "Converted deadline %d to timeout %d\n",
+				rpc_priv->crp_req_hdr.cch_src_deadline_sec, timeout);
+
 			if (timeout <= 0) {
 				struct timespec now;
 
@@ -1753,6 +1757,7 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv
 			rpc_priv->crp_timeout_sec = timeout;
 		}
 	} else {
+		RPC_INFO(rpc_priv, "Setting client timeout to %d\n", rpc_priv->crp_timeout_sec);
 		rpc_priv->crp_timeout_sec = (ctx->cc_timeout_sec == 0 ? crt_gdata.cg_timeout :
 					     ctx->cc_timeout_sec);
 	}
@@ -2008,8 +2013,11 @@ crt_req_src_timeout_get(crt_rpc_t *rpc, uint32_t *timeout)
 
 	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
 	delta    = deadline_to_timeout(rpc_priv->crp_req_hdr.cch_src_deadline_sec);
-	if (delta < 0)
+
+	if (delta < 0) {
+		RPC_WARN(rpc_priv, "Deadline expired, delta was %d\n", delta);
 		D_GOTO(out, rc = -DER_DEADLINE_EXPIRED);
+	}
 
 	*timeout = delta;
 out:

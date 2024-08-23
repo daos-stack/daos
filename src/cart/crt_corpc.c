@@ -126,12 +126,19 @@ crt_corpc_initiate(struct crt_rpc_priv *rpc_priv)
 	if (rpc_priv->crp_req_hdr.cch_src_deadline_sec) {
 		src_timeout = deadline_to_timeout(rpc_priv->crp_req_hdr.cch_src_deadline_sec);
 
+		RPC_INFO(rpc_priv, "Converted deadline %d to timeout %d\n",
+			rpc_priv->crp_req_hdr.cch_src_deadline_sec,
+			src_timeout);
+
 		if (src_timeout > 0) {
 			rpc_priv->crp_timeout_sec = src_timeout;
 		} else {
 			D_ERROR("Deadline expired, failing corpc init\n");
 			D_GOTO(out, rc = -DER_DEADLINE_EXPIRED);
 		}
+	} else {
+		RPC_WARN(rpc_priv, "deadline was not set\n");
+		rpc_priv->crp_timeout_sec = 0;
 	}
 
 	rc = crt_corpc_info_init(rpc_priv, grp_priv, grp_ref_taken,
