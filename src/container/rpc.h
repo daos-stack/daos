@@ -956,8 +956,7 @@ cont_prop_set_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
 			uuid_copy(*cpsi_pool_uuidp,
 				  ((struct cont_prop_set_in *)in)->cpsi_pool_uuid);
 		if (cpsi_co_uuidp)
-			uuid_copy(*cpsi_co_uuidp,
-				  ((struct cont_prop_set_v8_in *)in)->cpsi_op.ci_uuid);
+			uuid_copy(*cpsi_co_uuidp, ((struct cont_prop_set_in *)in)->cpsi_op.ci_uuid);
 	}
 }
 
