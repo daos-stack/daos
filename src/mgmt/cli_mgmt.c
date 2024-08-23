@@ -644,15 +644,17 @@ dc_mgmt_net_cfg(const char *name, crt_init_options_t *crt_info)
 
 	d_getenv_bool("D_DYNAMIC_CTX", &d_dynamic_ctx_g);
 	if (d_dynamic_ctx_g) {
-		int i, cnt = 0;
+		int         i;
+		daos_size_t size = 0;
 
 		for (i = 0; i < resp->n_numa_fabric_interfaces; i++)
-			cnt += resp_g->numa_fabric_interfaces[i]->n_ifaces + 1;
+			size += resp_g->numa_fabric_interfaces[i]->n_ifaces *
+				(DAOS_SYS_INFO_STRING_MAX + 1);
 
-		D_ALLOC(crt_info->cio_interface, DAOS_SYS_INFO_STRING_MAX * cnt);
+		D_ALLOC(crt_info->cio_interface, size);
 		if (crt_info->cio_interface == NULL)
 			D_GOTO(cleanup, rc = -DER_NOMEM);
-		D_ALLOC(crt_info->cio_domain, DAOS_SYS_INFO_STRING_MAX * cnt);
+		D_ALLOC(crt_info->cio_domain, size);
 		if (crt_info->cio_domain == NULL)
 			D_GOTO(cleanup, rc = -DER_NOMEM);
 
@@ -665,8 +667,10 @@ dc_mgmt_net_cfg(const char *name, crt_init_options_t *crt_info)
 					strcat(crt_info->cio_interface, ",");
 					strcat(crt_info->cio_domain, ",");
 				}
-				strcat(crt_info->cio_interface, numa_ifaces->ifaces[j]->interface);
-				strcat(crt_info->cio_domain, numa_ifaces->ifaces[j]->domain);
+				strncat(crt_info->cio_interface, numa_ifaces->ifaces[j]->interface,
+					DAOS_SYS_INFO_STRING_MAX);
+				strncat(crt_info->cio_domain, numa_ifaces->ifaces[j]->domain,
+					DAOS_SYS_INFO_STRING_MAX);
 			}
 			/*
 			 * If we have multiple interfaces per numa node, we want to randomize the
