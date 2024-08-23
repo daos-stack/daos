@@ -71,7 +71,7 @@ class DaosCoreTest(DaosCoreBase):
             Core tests for daos_test
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,provider,md_on_ssd
+        :avocado: tags=hw,medium,md_on_ssd
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_container
         """

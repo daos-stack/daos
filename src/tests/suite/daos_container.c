@@ -3835,7 +3835,7 @@ co_op_dup_timing(void **state)
 	size_t const       in_sizes[]        = {strlen(in_values[0]), strlen(in_values[1])};
 	int                n                 = (int)ARRAY_SIZE(names);
 	const unsigned int NUM_FP            = 3;
-	const uint32_t     NUM_OPS           = 500;
+	const uint32_t     NUM_OPS           = 1000;
 	uint32_t           num_failures      = 0;
 	const uint32_t     SVC_OPS_ENABLED   = 1;
 	const uint32_t     SVC_OPS_ENTRY_AGE = 60;
