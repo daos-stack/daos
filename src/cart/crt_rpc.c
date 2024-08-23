@@ -1741,7 +1741,7 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv
 			timeout = deadline_to_timeout(rpc_priv->crp_req_hdr.cch_src_deadline_sec);
 
 			RPC_INFO(rpc_priv, "Converted deadline %d to timeout %d\n",
-				rpc_priv->crp_req_hdr.cch_src_deadline_sec, timeout);
+				 rpc_priv->crp_req_hdr.cch_src_deadline_sec, timeout);
 
 			if (timeout <= 0) {
 				struct timespec now;

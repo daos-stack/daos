@@ -127,8 +127,7 @@ crt_corpc_initiate(struct crt_rpc_priv *rpc_priv)
 		src_timeout = deadline_to_timeout(rpc_priv->crp_req_hdr.cch_src_deadline_sec);
 
 		RPC_INFO(rpc_priv, "Converted deadline %d to timeout %d\n",
-			rpc_priv->crp_req_hdr.cch_src_deadline_sec,
-			src_timeout);
+			 rpc_priv->crp_req_hdr.cch_src_deadline_sec, src_timeout);
 
 		if (src_timeout > 0) {
 			rpc_priv->crp_timeout_sec = src_timeout;
