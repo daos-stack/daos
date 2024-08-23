@@ -29,6 +29,23 @@ defaults:
 permissions: {}
 
 jobs:
+  ryon-job:
+    name: A test job
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Generate output
+        id: output_step
+        run: |
+          echo "text<<EOF" >> $GITHUB_ENV
+          echo "Here is some text." >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+          echo "value=42" >> $GITHUB_ENV
+
+      - name: use output
+        run: |
+          echo "The text is ${{ steps.output_step.outputs.text }}"
+          echo "The value is ${{ steps.output_step.outputs.value }}"
+
   # it's a real shame that this step is even needed.  push events have the commit message # in
   # ${{ github.event.head_commit.message }} but pull_requests don't.  :-(
   Import-commit-message:
