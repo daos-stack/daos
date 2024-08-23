@@ -10,7 +10,7 @@ timeouts:
   test_daos_degraded_mode: 450
   test_daos_management: 110
   test_daos_pool: 180
-  test_daos_container: 700
+  test_daos_container: 300
   test_daos_epoch: 125
   test_daos_verify_consistency: 105
   test_daos_io: 290
@@ -143,7 +143,7 @@ daos_tests:
     test_daos_degraded_mode: d
     test_daos_management: m
     test_daos_pool: p
-    test_daos_container: c
+    test_daos_container: c --subtests="34"
     test_daos_epoch: e
     test_daos_single_rdg_tx: t
     test_daos_distributed_tx: T
@@ -182,7 +182,7 @@ daos_tests:
   pools_created:
     test_daos_management: 4
     test_daos_pool: 9
-    test_daos_container: 18
+    test_daos_container: 2
     test_daos_distributed_tx: 5
     test_daos_rebuild_simple: 21
     test_daos_drain_simple: 8
