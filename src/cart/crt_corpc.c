@@ -126,9 +126,9 @@ crt_corpc_initiate(struct crt_rpc_priv *rpc_priv)
 	if (rpc_priv->crp_req_hdr.cch_src_deadline_sec) {
 		src_timeout = deadline_to_timeout(rpc_priv->crp_req_hdr.cch_src_deadline_sec);
 
-		if (src_timeout > 0)
+		if (src_timeout > 0) {
 			rpc_priv->crp_timeout_sec = src_timeout;
-		else {
+		} else {
 			D_ERROR("Deadline expired, failing corpc init\n");
 			D_GOTO(out, rc = -DER_DEADLINE_EXPIRED);
 		}
