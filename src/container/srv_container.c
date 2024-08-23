@@ -5529,9 +5529,9 @@ ds_cont_op_handler(crt_rpc_t *rpc, int cont_proto_ver)
 	int				 rc;
 
 	/*
-	   Some mgmt RPCs may come from either client or server (admin/dRPC) calls. RPCs from
-	   servers don't contain pool/cont handles.
-	*/
+	 * Some mgmt RPCs may come from either client or server (admin/dRPC) calls. RPCs from
+	 * servers don't contain pool/cont handles.
+	 */
 	if (!daos_rpc_from_client(rpc)) {
 		switch (opc) {
 		case CONT_PROP_SET:
