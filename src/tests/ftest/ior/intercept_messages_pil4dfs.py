@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2019-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -33,7 +33,7 @@ class IorInterceptMessagesPil4dfs(IorTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=daosio,dfuse,il,ior,ior_intercept,pil4dfs
+        :avocado: tags=daosio,dfuse,pil4dfs,ior,ior_intercept
         :avocado: tags=IorInterceptMessagesPil4dfs,test_ior_intercept_messages_pil4dfs
         """
         intercept = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')

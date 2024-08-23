@@ -32,7 +32,7 @@ class AgentFailure(IorTestBase):
             clients (list): Client hostnames to run IOR from.
             namespace (str): IOR namespace.
         """
-        ior_cmd = IorCommand(namespace=namespace)
+        ior_cmd = IorCommand(self.test_env.log_dir, namespace=namespace)
         ior_cmd.get_params(self)
         ior_cmd.set_daos_params(self.pool, self.container.identifier)
         testfile = os.path.join(os.sep, file_name)

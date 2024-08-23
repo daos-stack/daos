@@ -101,6 +101,10 @@ do_openat(void **state)
 	rc = write(fd, input_buf, sizeof(input_buf));
 	assert_return_code(rc, errno);
 
+	/* test fdatasync() */
+	rc = fdatasync(fd);
+	assert_return_code(rc, errno);
+
 	/* First fstat.  IL will forward this to the kernel so it can save ino for future calls */
 	rc = fstat(fd, &stbuf0);
 	assert_return_code(rc, errno);
