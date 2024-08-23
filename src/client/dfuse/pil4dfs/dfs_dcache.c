@@ -71,7 +71,7 @@ struct dfs_dcache {
 	/** Next Garbage collection date */
 	struct timespec     dd_expire_gc;
 	/** True iff one thread is running the garbage collection */
-	_Atomic bool        dd_running_gc;
+	atomic_flag         dd_running_gc;
 	/** Destroy a dfs dir-cache */
 	destroy_fn_t        destroy_fn;
 	/** Return the dir-cahe record of a given location and insert it if needed */
@@ -95,7 +95,7 @@ struct dcache_rec {
 	/** Reference counter used to manage memory deallocation */
 	_Atomic uint32_t dr_ref;
 	/** True iff this record was deleted from the hash table*/
-	_Atomic bool     dr_deleted;
+	atomic_flag      dr_deleted;
 	/** Entry in the garbage collector list */
 	d_list_t         dr_entry_gc;
 	/** True iff this record is not in the garbage collector list */
@@ -309,7 +309,7 @@ gc_reclaim(dfs_dcache_t *dcache)
 		dcache->dd_count_gc);
 
 out_unset:
-	atomic_store_relaxed(&dcache->dd_running_gc, false);
+	atomic_flag_clear(&dcache->dd_running_gc);
 out:
 	return rc;
 }
@@ -417,7 +417,7 @@ dcache_add_root(dfs_dcache_t *dcache, dfs_obj_t *obj)
 
 	rec->dr_obj = obj;
 	atomic_init(&rec->dr_ref, 0);
-	atomic_init(&rec->dr_deleted, false);
+	atomic_flag_clear(&rec->dr_deleted);
 	memcpy(&rec->dr_key_child_prefix[0], &dcache->dd_key_root_prefix[0], DCACHE_KEY_PREF_SIZE);
 	memcpy(&rec->dr_key[0], &dcache->dd_key_root_prefix[0], DCACHE_KEY_PREF_SIZE);
 	rec->dr_key_len = DCACHE_KEY_PREF_SIZE - 1;
@@ -470,7 +470,7 @@ dcache_create_act(dfs_t *dfs, uint32_t bits, uint32_t rec_timeout, uint32_t gc_p
 	rc = D_MUTEX_INIT(&dcache_tmp->dd_mutex_gc, NULL);
 	if (rc != 0)
 		D_GOTO(error_mutex, daos_errno2der(rc));
-	atomic_init(&dcache_tmp->dd_running_gc, false);
+	atomic_flag_clear(&dcache_tmp->dd_running_gc);
 	D_INIT_LIST_HEAD(&dcache_tmp->dd_head_gc);
 
 	rc = d_hash_table_create_inplace(D_HASH_FT_MUTEX | D_HASH_FT_LRU, bits, NULL,
@@ -571,7 +571,7 @@ dcache_add(dfs_dcache_t *dcache, dcache_rec_t *parent, const char *name, const c
 		D_GOTO(error, rc = -DER_NOMEM);
 
 	atomic_init(&rec_tmp->dr_ref, 1);
-	atomic_init(&rec_tmp->dr_deleted, false);
+	atomic_flag_clear(&rec_tmp->dr_deleted);
 
 	rc = dfs_lookup_rel(dcache->dd_dfs, parent->dr_obj, name, O_RDWR, &obj, &mode, NULL);
 	if (rc != 0)
