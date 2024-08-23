@@ -889,18 +889,20 @@ def convert_string(item, separator=","):
     return item
 
 
-def get_default_config_file(name):
+def get_default_config_file(name, path=None):
     """Get the default config file.
 
     Args:
         name (str): daos component name, e.g. server, agent, control
+        path (str, optional): path to use for the config file. Defaults to None which will use the
+            /etc/daos default.
 
     Returns:
         str: the default config file
-
     """
-    file_name = "".join(["daos_", name, ".yml"])
-    return os.path.join(os.sep, "etc", "daos", file_name)
+    if path is None:
+        path = os.path.join(os.sep, "etc", "daos")
+    return os.path.join(path, f"daos_{name}.yml")
 
 
 def get_file_listing(hosts, files, user):
