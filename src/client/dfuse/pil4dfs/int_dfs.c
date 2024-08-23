@@ -1040,9 +1040,6 @@ MPI_Init(int *argc, char ***argv)
 	return rc;
 }
 
-int
-PMPI_Init(int *argc, char ***argv) __attribute__((alias("MPI_Init")));
-
 /** determine whether a path (both relative and absolute) is on DAOS or not. If yes,
  *  returns parent object, item name, full path of parent dir, full absolute path, and
  *  the pointer to struct dfs_mt.
