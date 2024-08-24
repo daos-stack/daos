@@ -685,6 +685,11 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 
 	/** if RW, allocate an OID for the namespace */
 	if (amode == O_RDWR) {
+		dfs->last_hi = (unsigned int)d_rand();
+		/** Avoid potential conflict with SB or ROOT */
+		if (dfs->last_hi <= 1)
+			dfs->last_hi += OID_INC;
+
 		rc = daos_cont_alloc_oids(coh, 1, &dfs->oid.lo, NULL);
 		if (rc) {
 			D_ERROR("daos_cont_alloc_oids() Failed, " DF_RC "\n", DP_RC(rc));
@@ -695,10 +700,9 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 		 * if this is the first time we allocate on this container,
 		 * account 0 for SB, 1 for root obj.
 		 */
-		if (dfs->oid.lo == RESERVED_LO)
-			dfs->oid.hi = ROOT_HI + 1;
-		else
-			dfs->oid.hi = 0;
+		dfs->oid.hi = dfs->last_hi;
+		/** Increment so that dfs->last_hi is the last value */
+		oid_inc(&dfs->oid);
 	}
 
 	dfs->mounted = DFS_MOUNT;
@@ -1023,7 +1027,7 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob, 
 
 	/** allocate a new oid on the next file or dir creation */
 	dfs->oid.lo = 0;
-	dfs->oid.hi = MAX_OID_HI;
+	dfs->oid.hi = dfs->last_hi;
 
 	rc = D_MUTEX_INIT(&dfs->lock, NULL);
 	if (rc != 0) {
