@@ -1743,10 +1743,15 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv
 			RPC_INFO(rpc_priv, "Converted deadline %d to timeout %d\n",
 				 rpc_priv->crp_req_hdr.cch_src_deadline_sec, timeout);
 
-			if (timeout <= 0) {
+			/* Experiment: avoid issues when deadline was determined near the end of the
+			 * second */
+			if (timeout == 0)
+				timeout = 1;
+
+			if (timeout < 0) {
 				struct timespec now;
 
-				d_gettime(&now);
+				clock_gettime(CLOCK_REALTIME, &now);
 				RPC_WARN(
 				    rpc_priv,
 				    "Incoming rpc deadline expired. Deadline = %d, now = %ld\n",

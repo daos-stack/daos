@@ -98,7 +98,8 @@ timeout_to_deadline(int timeout_sec)
 	clock_gettime(CLOCK_REALTIME, &now);
 	D_DEBUG(DB_ALL, "now.tv_sec = %ld\n", now.tv_sec);
 
-	return now.tv_sec + timeout_sec;
+	/* Deadline is the next second after timeout */
+	return now.tv_sec + timeout_sec + 1;
 }
 
 typedef enum {
