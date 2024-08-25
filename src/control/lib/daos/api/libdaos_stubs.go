@@ -63,7 +63,7 @@ func daos_mgmt_get_sys_info(group *C.char, sys_info_out **C.struct_daos_sys_info
 		si.dsi_system_name[i] = C.char(c)
 	}
 	if group != nil && C.GoString(group) != daos_mgmt_get_sys_info_SystemInfo.Name {
-		return -C.DER_INVAL
+		panic("invalid group")
 	}
 	for i, c := range daos_mgmt_get_sys_info_SystemInfo.Provider {
 		si.dsi_fabric_provider[i] = C.char(c)
@@ -75,7 +75,7 @@ func daos_mgmt_get_sys_info(group *C.char, sys_info_out **C.struct_daos_sys_info
 	si.dsi_nr_ranks = C.uint32_t(len(daos_mgmt_get_sys_info_SystemInfo.RankURIs))
 	si.dsi_ranks = (*C.struct_daos_rank_uri)(C.calloc(C.size_t(si.dsi_nr_ranks), C.sizeof_struct_daos_rank_uri))
 	if si.dsi_ranks == nil {
-		return -C.DER_NOMEM
+		panic("calloc() failed for system ranks")
 	}
 	rankSlice := unsafe.Slice(si.dsi_ranks, int(si.dsi_nr_ranks))
 	for i, rankURI := range daos_mgmt_get_sys_info_SystemInfo.RankURIs {
@@ -86,7 +86,7 @@ func daos_mgmt_get_sys_info(group *C.char, sys_info_out **C.struct_daos_sys_info
 	si.dsi_nr_ms_ranks = C.uint32_t(len(daos_mgmt_get_sys_info_SystemInfo.AccessPointRankURIs))
 	si.dsi_ms_ranks = (*C.uint32_t)(C.calloc(C.size_t(si.dsi_nr_ms_ranks), C.sizeof_uint32_t))
 	if si.dsi_ms_ranks == nil {
-		return -C.DER_NOMEM
+		panic("calloc() failed for ms ranks")
 	}
 	msRankSlice := unsafe.Slice(si.dsi_ms_ranks, int(si.dsi_nr_ms_ranks))
 	for i, rankURI := range daos_mgmt_get_sys_info_SystemInfo.AccessPointRankURIs {

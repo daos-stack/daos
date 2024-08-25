@@ -134,7 +134,7 @@ func run_self_test(sizes *C.struct_st_size_params, numSizes C.int, repCount C.in
 	*numMsEndpoints = C.uint32_t(len(run_self_test_MsEndpoints))
 	ptr, err := C.calloc(C.size_t(len(run_self_test_MsEndpoints)), C.sizeof_struct_st_master_endpt)
 	if err != nil {
-		return -C.DER_NOMEM
+		panic("calloc() failed for master endpoints")
 	}
 	*msEndpoints = (*C.struct_st_master_endpt)(ptr)
 	msEpSlice := unsafe.Slice(*msEndpoints, int(*numMsEndpoints))
@@ -147,7 +147,7 @@ func run_self_test(sizes *C.struct_st_size_params, numSizes C.int, repCount C.in
 	// Must be freed by the caller.
 	*sizeLatencies = C.alloc_latency_arrays(C.size_t(numSizes), C.size_t(*numMsEndpoints), C.size_t(len(run_self_test_EndpointLatencies)))
 	if *sizeLatencies == nil {
-		return -C.DER_NOMEM
+		panic("calloc() failed for latency arrays")
 	}
 
 	sizesSlice := unsafe.Slice(*sizeLatencies, int(numSizes))
