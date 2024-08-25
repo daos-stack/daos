@@ -360,6 +360,9 @@ class SoakTestBase(TestWithServers):
             for job in jobs:
                 job.start()
 
+            for job in jobs:
+                job.join()
+
             while not job_queue.empty():
                 job_results = job_queue.get()
                 # Results to return in queue
