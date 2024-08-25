@@ -438,7 +438,7 @@ static int (*next_symlink)(const char *symvalue, const char *path);
 
 static int (*next_symlinkat)(const char *symvalue, int dirfd, const char *path);
 
-static ssize_t (*next_readlink)(const char *path, char *buf, size_t size);
+static ssize_t (*libc_readlink)(const char *path, char *buf, size_t size);
 static ssize_t (*next_readlinkat)(int dirfd, const char *path, char *buf, size_t size);
 
 static void * (*next_mmap)(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
@@ -940,13 +940,6 @@ child_hdlr(void)
 		DL_WARN(rc, "daos_eq_lib_init() failed in child process");
 	daos_dti_reset();
 	td_eqh = main_eqh = DAOS_HDL_INVAL;
-	if (d_eq_count_max > 0) {
-		rc = daos_eq_create(&td_eqh);
-		if (rc)
-			DL_WARN(rc, "daos_eq_create() failed");
-		else
-			main_eqh = td_eqh;
-	}
 	context_reset = true;
 }
 
@@ -4745,7 +4738,7 @@ out_err:
 }
 
 ssize_t
-readlink(const char *path, char *buf, size_t size)
+new_readlink(const char *path, char *buf, size_t size)
 {
 	int                is_target_path, rc, rc2;
 	dfs_obj_t         *obj;
@@ -4756,12 +4749,8 @@ readlink(const char *path, char *buf, size_t size)
 	char              *parent_dir = NULL;
 	char              *full_path  = NULL;
 
-	if (next_readlink == NULL) {
-		next_readlink = dlsym(RTLD_NEXT, "readlink");
-		D_ASSERT(next_readlink != NULL);
-	}
 	if (!d_hook_enabled)
-		return next_readlink(path, buf, size);
+		return libc_readlink(path, buf, size);
 
 	rc =
 	    query_path(path, &is_target_path, &parent, item_name, &parent_dir, &full_path, &dfs_mt);
@@ -4790,7 +4779,7 @@ out_org:
 	if (parent != NULL)
 		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
-	return next_readlink(path, buf, size);
+	return libc_readlink(path, buf, size);
 
 out_release:
 	rc2 = dfs_release(obj);
@@ -6852,6 +6841,7 @@ init_myhook(void)
 
 	register_a_hook("libc", "exit", (void *)new_exit, (long int *)(&next_exit));
 	register_a_hook("libc", "dup3", (void *)new_dup3, (long int *)(&libc_dup3));
+	register_a_hook("libc", "readlink", (void *)new_readlink, (long int *)(&libc_readlink));
 
 	init_fd_dup2_list();
 
