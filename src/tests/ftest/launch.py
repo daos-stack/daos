@@ -270,7 +270,8 @@ class Launch():
         # pylint: disable=unsupported-binary-operation
         all_hosts = args.test_servers | args.test_clients | self.local_host
         self.details["installed packages"] = find_packages(
-            logger, all_hosts, "'^(daos|libfabric|mercury|ior|openmpi|mpifileutils)-'")
+            logger, all_hosts,
+            "'^(daos|libfabric|mercury|ior|openmpi|mpifileutils|mlnx-ofed-basic)-'")
 
         # Setup the test environment
         test_env = TestEnvironment()
