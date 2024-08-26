@@ -89,6 +89,11 @@ static uint64_t lib_base_addr[MAX_NUM_LIB];
 /* List of names of loaded libraries */
 static char   **lib_name_list;
 
+/* we set libc_version as DEFAULT_LIBC_VER when we fail to determine it from libc.so */
+#define DEFAULT_LIBC_VER  2.28
+/* libc version number in current process. e.g., 2.28 */
+static float    libc_version;
+
 /* end   to compile list of memory blocks in /proc/pid/maps */
 
 static char    *path_ld;
@@ -301,8 +306,10 @@ determine_lib_path(void)
 	if (lib_ver_str[0]) {
 		/* with version in name */
 		rc = asprintf(&path_libpthread, "%s/libpthread-%s.so", lib_dir_str, lib_ver_str);
+		libc_version = atof(lib_ver_str);
 	} else {
 		rc = asprintf(&path_libpthread, "%s/libpthread.so.0", lib_dir_str);
+		libc_version = DEFAULT_LIBC_VER;
 	}
 	if (rc < 0) {
 		DS_ERROR(ENOMEM, "Failed to allocate memory for path_libpthread");
@@ -370,6 +377,11 @@ query_pil4dfs_path(void)
 	return path_libpil4dfs;
 }
 
+float
+query_libc_version(void)
+{
+	return libc_version;
+}
 
 /*
  * query_func_addr - Determine the addresses and code sizes of functions in func_name_list[].
