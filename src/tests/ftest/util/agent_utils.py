@@ -319,7 +319,8 @@ class DaosAgentManager(SubprocessManager):
         """
         cmd = self.manager.job.copy()
         cmd.debug.value = False
-        cmd.config.value = get_default_config_file("agent", os.path.dirname(self.manager.job.yaml))
+        cmd.config.value = get_default_config_file(
+            "agent", os.path.dirname(self.manager.job.yaml.filename))
         cmd.set_command(("support", "collect-log"), **kwargs)
         self.log.info("Support collect-log on clients: %s", str(cmd))
         return run_remote(self.log, self.hosts, cmd.with_exports)
