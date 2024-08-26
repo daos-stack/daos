@@ -53,6 +53,7 @@ dnf --nodocs install \
     patch \
     patchelf \
     pciutils \
+    pciutils-devel \
     python3-devel \
     scons \
     sg3_utils \
