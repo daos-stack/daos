@@ -588,7 +588,7 @@ class Ior:
         return '.'.join(['_'.join(parts), 'log'])
 
     def run(self, pool, container, processes, ppn=None, intercept=None, plugin_path=None,
-            dfuse=None, display_space=True, fail_on_warning=False, unique_log=True, il_report=1):
+            dfuse=None, display_space=True, fail_on_warning=False, unique_log=True, il_report=None):
         # pylint: disable=too-many-arguments
         """Run ior.
 
@@ -609,7 +609,7 @@ class Ior:
             unique_log (bool, optional): whether or not to update the log file with a new unique log
                 file name. Defaults to True.
             il_report (int, optional): D_IL_REPORT value to use when 'intercept' is specified and a
-                value does not already exist in the environment. Defaults to 1.
+                value does not already exist in the environment. Defaults to None.
 
         Raises:
             CommandFailure: if there is an error running the ior command
@@ -627,7 +627,7 @@ class Ior:
             self.env["LD_PRELOAD"] = intercept
             if "D_LOG_MASK" not in self.env:
                 self.env["D_LOG_MASK"] = "INFO"
-            if "D_IL_REPORT" not in self.env:
+            if "D_IL_REPORT" not in self.env and il_report is not None:
                 self.env["D_IL_REPORT"] = str(il_report)
 
         if plugin_path:
