@@ -90,7 +90,7 @@ static uint64_t lib_base_addr[MAX_NUM_LIB];
 static char   **lib_name_list;
 
 /* we set libc_version as DEFAULT_LIBC_VER when we fail to determine it from libc.so */
-#define DEFAULT_LIBC_VER  2.28
+#define DEFAULT_LIBC_VER 2.28
 /* libc version number in current process. e.g., 2.28 */
 static float    libc_version;
 

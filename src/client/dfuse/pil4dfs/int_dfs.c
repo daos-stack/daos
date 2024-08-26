@@ -470,8 +470,8 @@ static int (*next_tcgetattr)(int fd, void *termios_p);
 /* end NOT supported by DAOS */
 
 static int (*next_ze_init)(int flags);
-static void * (*next_dlsym)(void *handle, const char *symbol);
-static void * (*new_dlsym)(void *handle, const char *symbol);
+static void *(*next_dlsym)(void *handle, const char *symbol);
+static void *(*new_dlsym)(void *handle, const char *symbol);
 
 /* to do!! */
 /**
@@ -1038,7 +1038,6 @@ zeInit(int flags)
 			next_ze_init = dlsym(RTLD_NEXT, "zeInit");
 	}
 	D_ASSERT(next_ze_init != NULL);
-	printf("Inside my zeInit().\n");
 	atomic_fetch_add_relaxed(&zeInit_count, 1);
 	rc = next_ze_init(flags);
 	atomic_fetch_add_relaxed(&zeInit_count, -1);
@@ -1067,55 +1066,67 @@ _Pragma("GCC diagnostic ignored \"-Wunused-variable\"")
 
 _Pragma("GCC push_options")
 _Pragma("GCC optimize(\"-O0\")")
-static int (*p_zeInit)(int flags);
 static char str_zeinit[] = "zeInit";
 
 static int
 is_hook_enabled(void)
 {
-	return (d_hook_enabled ? (1):(0));
+	return (d_hook_enabled ? (1) : (0));
 }
 
-__attribute__((aligned (16))) static void
+/* This wrapper function is introduced to avoid compiling issue with Intel-C on Leap 15.5 */
+static int
+my_strcmp(const char *s1, const char *s2)
+{
+	return strcmp(s1, s2);
+}
+
+static void *
+get_zeinit_addr(void)
+{
+	return (void *)zeInit;
+}
+
+__attribute__((aligned(16))) static void
 new_dlsym_marker(void)
 {
 }
 
 /*__attribute__((naked,unused)) int new_dlsym(void *handle, const char *symbol) */
 __asm__(
-"new_dlsym_asm:\n"
-"nop\n"
-"nop\n"
-"push %rdi\n"
-"push %rsi\n"
+	"new_dlsym_asm:\n"
+	"nop\n"
+	"nop\n"
+	"push %rdi\n"
+	"push %rsi\n"
 
-"call is_hook_enabled\n"
-"test %eax,%eax\n"
-"jne org_dlsym\n"
+	"call is_hook_enabled\n"
+	"test %eax,%eax\n"
+	"je org_dlsym\n"
 
-"mov %rsi, %rdi\n"
-"lea str_zeinit(%rip), %rsi\n"
-"call strcmp\n"
-"test %eax,%eax\n"
-"jne org_dlsym\n"
+	"mov %rsi, %rdi\n"
+	"lea str_zeinit(%rip), %rsi\n"
+	"call my_strcmp\n"
+	"test %eax,%eax\n"
+	"jne org_dlsym\n"
 
-"pop %rsi\n"
-"pop %rdi\n"
-"call *next_dlsym(%rip)\n"
-"mov %rax, next_ze_init(%rip)\n"
+	"pop %rsi\n"
+	"pop %rdi\n"
+	"call *next_dlsym(%rip)\n"
+	"mov %rax, next_ze_init(%rip)\n"
 
-"test %eax,%eax\n"
-"jne found\n"
-"ret\n"
+	"test %eax,%eax\n"
+	"jne found\n"
+	"ret\n"
 
-"found:\n"
-"mov p_zeInit(%rip), %rax\n"
-"ret\n"
+	"found:\n"
+	"call get_zeinit_addr\n"
+	"ret\n"
 
-"org_dlsym:\n"
-"pop %rsi\n"
-"pop %rdi\n"
-"jmp *next_dlsym(%rip)\n"
+	"org_dlsym:\n"
+	"pop %rsi\n"
+	"pop %rdi\n"
+	"jmp *next_dlsym(%rip)\n"
 );
 _Pragma("GCC pop_options")
 _Pragma("GCC diagnostic pop")
@@ -6817,7 +6828,8 @@ out:
 }
 
 #define SMALL_DIFF (0.0001)
-static int libc_ver_cmp(float ver_a, float ver_b)
+static int
+libc_ver_cmp(float ver_a, float ver_b)
 {
 	if ((ver_a + SMALL_DIFF) < ver_b)
 		return (-1);
@@ -6990,11 +7002,8 @@ init_myhook(void)
 	register_a_hook("libc", "dup3", (void *)new_dup3, (long int *)(&libc_dup3));
 	register_a_hook("libc", "readlink", (void *)new_readlink, (long int *)(&libc_readlink));
 
-
 #if defined(__x86_64__)
 	new_dlsym = query_new_dlsym_addr(new_dlsym_marker);
-	/* save the address of zeInit() into a globar variable to be used in new_dlsym() */
-	p_zeInit = zeInit;
 #else
 	new_dlsym = new_dlsym_c;
 #endif
