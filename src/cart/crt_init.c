@@ -95,6 +95,9 @@ crt_lib_init(void)
 	crt_gdata.cg_rpcid = start_rpcid;
 	crt_gdata.cg_num_cores = sysconf(_SC_NPROCESSORS_ONLN);
 	crt_gdata.cg_iv_inline_limit = 19456; /* 19KB */
+
+	/* used by deadlines */
+	crt_gdata.cg_start_time_sec = now.tv_sec;
 }
 
 /* Library deinit */

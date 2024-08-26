@@ -1143,7 +1143,12 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		  rpc_priv->crp_opc_info->coi_opc,
 		  &rpc_priv->crp_pub);
 
-	crt_rpc_priv_init(rpc_priv, crt_ctx, true /* srv_flag */);
+	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, true /* srv_flag */);
+	/* will fail if rpc deadline expired */
+	if (unlikely(rc != 0)) {
+		crt_hg_reply_error_send(rpc_priv, rc);
+		D_GOTO(decref, hg_ret = HG_SUCCESS);
+	}
 
 	D_ASSERT(rpc_priv->crp_srv != 0);
 	if (rpc_pub->cr_input_size > 0) {

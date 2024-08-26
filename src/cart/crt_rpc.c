@@ -644,7 +644,9 @@ crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 		rpc_priv->crp_grp_priv = grp_priv;
 	}
 
-	crt_rpc_priv_init(rpc_priv, crt_ctx, false /* srv_flag */);
+	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, false /* srv_flag */);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	*req = &rpc_priv->crp_pub;
 out:
@@ -738,6 +740,7 @@ crt_req_set_timeout(crt_rpc_t *req, uint32_t timeout_sec)
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 	rpc_priv->crp_timeout_sec = timeout_sec;
 
+	RPC_INFO(rpc_priv, "Caller set explicit timeout to %d\n", timeout_sec);
 out:
 	return rc;
 }
@@ -1683,11 +1686,13 @@ crt_common_hdr_init(struct crt_rpc_priv *rpc_priv, crt_opcode_t opc)
 	rpc_priv->crp_reply_hdr.cch_rpcid = rpcid;
 }
 
-void
+int
 crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv_flag)
 {
-	crt_opcode_t opc = rpc_priv->crp_opc_info->coi_opc;
+	crt_opcode_t        opc = rpc_priv->crp_opc_info->coi_opc;
 	struct crt_context *ctx = crt_ctx;
+	int                 timeout;
+	int                 rc = 0;
 
 	D_INIT_LIST_HEAD(&rpc_priv->crp_epi_link);
 	D_INIT_LIST_HEAD(&rpc_priv->crp_tmp_link);
@@ -1721,11 +1726,39 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv
 
 	crt_rpc_inout_buff_init(rpc_priv);
 
-	if (srv_flag && rpc_priv->crp_req_hdr.cch_src_timeout != 0)
-		rpc_priv->crp_timeout_sec = rpc_priv->crp_req_hdr.cch_src_timeout;
-	else
+	if (srv_flag) {
+		if (rpc_priv->crp_req_hdr.cch_src_deadline_sec) {
+			timeout = deadline_to_timeout(rpc_priv->crp_req_hdr.cch_src_deadline_sec);
+
+			RPC_INFO(rpc_priv, "Converted deadline %d to timeout %d\n",
+				 rpc_priv->crp_req_hdr.cch_src_deadline_sec, timeout);
+
+			/* Experiment: avoid issues when deadline was determined near the end of the
+			 * second */
+			if (timeout == 0)
+				timeout = 1;
+
+			if (timeout < 0) {
+				struct timespec now;
+
+				clock_gettime(CLOCK_REALTIME, &now);
+				RPC_WARN(
+				    rpc_priv,
+				    "Incoming rpc deadline expired. Deadline = %d, now = %ld\n",
+				    rpc_priv->crp_req_hdr.cch_src_deadline_sec, now.tv_sec);
+				D_GOTO(out, rc = -DER_DEADLINE_EXPIRED);
+			}
+
+			rpc_priv->crp_timeout_sec = timeout;
+		}
+	} else {
+		RPC_INFO(rpc_priv, "Setting client timeout to %d\n", rpc_priv->crp_timeout_sec);
 		rpc_priv->crp_timeout_sec = (ctx->cc_timeout_sec == 0 ? crt_gdata.cg_timeout :
 					     ctx->cc_timeout_sec);
+	}
+
+out:
+	return rc;
 }
 
 void
@@ -1965,6 +1998,7 @@ int
 crt_req_src_timeout_get(crt_rpc_t *rpc, uint32_t *timeout)
 {
 	struct crt_rpc_priv	*rpc_priv;
+	int                      delta;
 	int			rc = 0;
 
 	if (rpc == NULL || timeout == NULL) {
@@ -1973,7 +2007,14 @@ crt_req_src_timeout_get(crt_rpc_t *rpc, uint32_t *timeout)
 	}
 
 	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
-	*timeout = rpc_priv->crp_req_hdr.cch_src_timeout;
+	delta    = deadline_to_timeout(rpc_priv->crp_req_hdr.cch_src_deadline_sec);
+
+	if (delta < 0) {
+		RPC_WARN(rpc_priv, "Deadline expired, delta was %d\n", delta);
+		D_GOTO(out, rc = -DER_DEADLINE_EXPIRED);
+	}
+
+	*timeout = delta;
 out:
 	return rc;
 }
