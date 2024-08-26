@@ -44,6 +44,8 @@ ior:
   repetitions: 1
   transfer_size: '1M'
   block_size: '7G'
+  env_vars:
+    - D_IL_REPORT=1
 dfuse:
   disable_caching: true
 
@@ -59,3 +61,5 @@ mdtest:
   write_bytes: 4096
   read_bytes: 4096
   depth: 0
+  env_vars:
+    - D_IL_REPORT=1

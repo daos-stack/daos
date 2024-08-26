@@ -98,7 +98,7 @@ class FileCountTestBase(IorTestBase, MdtestBase):
                         self.processes = mdtest_np
                         self.ppn = mdtest_ppn
                         if self.mdtest_cmd.api.value == 'POSIX':
-                            self.mdtest_cmd.env.update(LD_PRELOAD=intercept, D_IL_REPORT='1')
+                            self.mdtest_cmd.env.update(LD_PRELOAD=intercept)
                             self.execute_mdtest()
                         else:
                             self.execute_mdtest()
