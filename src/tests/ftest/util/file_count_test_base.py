@@ -25,6 +25,8 @@ class FileCountTestBase(IorTestBase, MdtestBase):
                                          Defaults to None.
             dir_oclass (str, optional): dir object class of container.
                                         Defaults to None.
+
+
         """
         # Create a container and add it to the overall list of containers
         container = self.get_container(self.pool, create=False)
@@ -38,8 +40,6 @@ class FileCountTestBase(IorTestBase, MdtestBase):
             rd_fac = 'rd_fac:{}'.format(str(redundancy_factor))
             properties = (",").join(filter(None, [properties, rd_fac]))
             container.properties.update(properties)
-        if dir_oclass:
-            container.dir_oclass.update(dir_oclass)
         container.create()
 
         return container
