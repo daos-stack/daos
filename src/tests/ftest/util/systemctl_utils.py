@@ -154,7 +154,7 @@ def get_service_file(logger, hosts, service, user, verbose=True, timeout=120):
         get_systemctl_command("status", service, user),
         "grep 'Loaded:'",
         "grep -oE '/.*service'",
-        "xargs -r sh -c '[ -e \"$0\" ] && echo \"$0\"'"
+        "xargs sh -c '[ -e \"$0\" ] && echo \"$0\"'"
     ])
     result = run_remote(logger, hosts, command, verbose, timeout)
     if not result.passed:

@@ -289,7 +289,7 @@ class DaosAgentManager(SubprocessManager):
 
         # Verify the socket directory exists when using a non-systemctl manager
         if self.verify_socket_dir:
-            self.verify_socket_directory(getuser())
+            self.verify_socket_directory(self.manager.job.certificate_owner)
 
         super().start()
 
