@@ -295,7 +295,7 @@ get_dkey_from_idx_tests(void **state)
 	assert_success(dv_get_dkey(coh, uoid, 0, &dkey));
 	i = 1;
 	while (SUCCESS(dv_get_dkey(coh, uoid, i, &dkey2))) {
-		assert_string_not_equal(dkey.iov_buf, dkey2.iov_buf);
+		assert_key_not_equal(dkey, dkey2);
 		i++;
 		daos_iov_free(&dkey2);
 	}
@@ -330,8 +330,8 @@ get_akey_from_idx_tests(void **state)
 
 	assert_success(dv_get_akey(coh, uoid, &dkey, 0, &akey));
 	i = 1;
-	while (SUCCESS(dv_get_dkey(coh, uoid, i, &akey2))) {
-		assert_string_not_equal(akey.iov_buf, akey2.iov_buf);
+	while (SUCCESS(dv_get_akey(coh, uoid, &dkey, i, &akey2))) {
+		assert_key_not_equal(akey, akey2);
 		i++;
 		daos_iov_free(&akey2);
 	}
