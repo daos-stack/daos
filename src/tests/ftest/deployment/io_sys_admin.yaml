@@ -25,15 +25,12 @@ dmg:
   storage:
     storage_sub_command: scan
 pool_1:
-  control_method: dmg
   scm_size: 256MiB
   nvme_size: 16GiB
 pool_2:
-  control_method: dmg
   scm_size: 10GiB
   nvme_size: 50GiB
 pool_3:
-  control_method: dmg
   size: 90%
 container_1:
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
@@ -55,9 +52,11 @@ container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
   control_method: daos
-container_acl:
-  new_user: daos_ci_tester_1
-  new_group: daos_ci_test_grp_1
+
+# We only need to set the user and group, so use "root", which should exist on most systems
+container_set_owner:
+  user: root
+  group: root
 
 largefilecount:
   api:
@@ -67,13 +66,17 @@ largefilecount:
     - HDF5-VOL
     - DFS
   object_class:
-    - SX
-    - EC_2P1GX
+    ior_oclass:          # Run once with SX and then with EC_16P2GX
+      - SX
+      - EC_2P1GX
+    mdtest_oclass:       # Run once with S1 and then with EC_16P2G1
+      - S1
+      - EC_2P1G1
 ior:
   client_processes:
     ppn: 30
   dfs_destroy: False
-  flags: "-v -D 300 -W -w -r -R -F -k"
+  flags: "-v -D 300 -W -w -k"
   test_file: daos:testFile
   repetitions: 1
   signature: 123
