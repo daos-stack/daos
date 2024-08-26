@@ -1004,10 +1004,8 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None,
             mpirun_cmd.get_params(self)
             if api == "POSIX-LIBPIL4DFS":
                 env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
-                env["D_IL_REPORT"] = "1"
             if api == "POSIX-LIBIOIL":
                 env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libioil.so')
-                env["D_IL_REPORT"] = "1"
             # add envs if api is HDF5-VOL
             if api == "HDF5-VOL":
                 vol = True
@@ -1173,10 +1171,8 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                 if self.enable_il and api == "POSIX-LIBPIL4DFS":
                     env["LD_PRELOAD"] = os.path.join(
                         self.prefix, 'lib64', 'libpil4dfs.so')
-                    env["D_IL_REPORT"] = "1"
                 if self.enable_il and api == "POSIX-LIBIOIL":
                     env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libioil.so')
-                    env["D_IL_REPORT"] = "1"
             mpirun_cmd = Mpirun(mdtest_cmd, mpi_type=self.mpi_module)
             mpirun_cmd.get_params(self)
             mpirun_cmd.assign_processes(nodesperjob * ppn)
@@ -1304,10 +1300,8 @@ def create_fio_cmdline(self, job_spec, pool):
         cmds.append(f"cd {dfuse.mount_dir.value};")
         if self.enable_il and api == "POSIX-LIBPIL4DFS":
             cmds.append(f"export LD_PRELOAD={os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')}")
-            cmds.append("export D_IL_REPORT=1")
         if self.enable_il and api == "POSIX-LIBIOIL":
             cmds.append(f"export LD_PRELOAD={os.path.join(self.prefix, 'lib64', 'libioil.so')}")
-            cmds.append("export D_IL_REPORT=1")
         cmds.append(str(fio_cmd))
         cmds.append("status=$?")
         cmds.append("cd -")
@@ -1379,10 +1373,8 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
                 env["DAOS_UNS_PREFIX"] = format_path(pool, self.container[-1])
             if self.enable_il and api == "POSIX-LIBPIL4DFS":
                 env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
-                env["D_IL_REPORT"] = "1"
             if self.enable_il and api == "POSIX-LIBIOIL":
                 env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libioil.so')
-                env["D_IL_REPORT"] = "1"
             mpirun_cmd.assign_environment(env, True)
             mpirun_cmd.assign_processes(nodesperjob * ppn)
             mpirun_cmd.ppn.update(ppn)
