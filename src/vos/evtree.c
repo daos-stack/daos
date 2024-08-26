@@ -1443,8 +1443,9 @@ evt_node_alloc(struct evt_context *tcx, unsigned int flags,
 	struct evt_node         *nd;
 	umem_off_t		 nd_off;
 	bool                     leaf = (flags & EVT_NODE_LEAF);
+	struct vos_object	*obj = tcx->tc_desc_cbs.dc_alloc_arg;
 
-	nd_off = umem_zalloc(evt_umm(tcx), evt_node_size(tcx, leaf));
+	nd_off = vos_obj_alloc(evt_umm(tcx), obj, evt_node_size(tcx, leaf), true);
 	if (UMOFF_IS_NULL(nd_off))
 		return -DER_NOSPACE;
 
@@ -3249,8 +3250,9 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 	}
 
 	if (leaf) {
-		umem_off_t desc_off;
-		uint32_t   csum_buf_size = 0;
+		umem_off_t		 desc_off;
+		uint32_t		 csum_buf_size = 0;
+		struct vos_object	*obj = tcx->tc_desc_cbs.dc_alloc_arg;
 
 		if (ci_is_valid(&ent->ei_csum))
 			csum_buf_size = ci_csums_len(ent->ei_csum);
@@ -3263,7 +3265,7 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 			D_DEBUG(DB_TRACE, "Allocating an extra %d bytes "
 						"for checksum", csum_buf_size);
 		}
-		desc_off = umem_zalloc(evt_umm(tcx), desc_size);
+		desc_off = vos_obj_alloc(evt_umm(tcx), obj, desc_size, true);
 		if (UMOFF_IS_NULL(desc_off))
 			return -DER_NOSPACE;
 

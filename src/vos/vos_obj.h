@@ -47,12 +47,18 @@ struct vos_object {
 	struct vos_obj_df		*obj_df;
 	/** backref to container */
 	struct vos_container		*obj_cont;
+	/* Handle for the pinned object */
+	struct umem_pin_handle		*obj_pin_hdl;
+	/** Bucket IDs for the object */
+	uint32_t			obj_bkt_ids[VOS_OBJ_BKTS_MAX];
 	/** nobody should access this object */
 	bool				obj_zombie;
 	/** Object is held for discard */
 	uint32_t                         obj_discard : 1,
 	    /** If non-zero, object is held for aggregation */
-	    obj_aggregate                            : 1;
+	    obj_aggregate                            : 1,
+	    /** Evict-able bucket is already allocated */
+	    obj_bkt_allot			     : 1;
 };
 
 enum {

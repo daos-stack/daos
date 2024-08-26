@@ -377,4 +377,17 @@ struct vos_obj_df {
 	struct btr_root			vo_tree;
 };
 
+#define	VOS_OBJ_BKTS_MAX	4
+
+/*
+ * VOS object durable format for md-on-ssd phase2. The size is fit to the 128 bytes
+ * slab (see slab_map[] defined in mem.c).
+ */
+struct vos_obj_p2_df {
+	struct vos_obj_df	p2_obj_df;
+	uint32_t		p2_bkt_ids[VOS_OBJ_BKTS_MAX];
+	uint64_t		p2_reserved;
+};
+D_CASSERT(sizeof(struct vos_obj_p2_df) == D_ALIGNUP(sizeof(struct vos_obj_df), 32));
+
 #endif

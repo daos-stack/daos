@@ -429,6 +429,8 @@ struct btr_instance {
 	struct btr_root			*ti_root;
 	/** Customized operations for the tree */
 	btr_ops_t			*ti_ops;
+	/** The context is used for tree destroy */
+	unsigned int			 ti_destroy : 1;
 };
 
 /**

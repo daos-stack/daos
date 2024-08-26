@@ -2040,17 +2040,16 @@ vos_recx2irec_size(daos_size_t rsize, struct dcs_csum_info *csum)
 
 umem_off_t
 vos_reserve_scm(struct vos_container *cont, struct umem_rsrvd_act *rsrvd_scm,
-		daos_size_t size)
+		daos_size_t size, struct vos_object *obj)
 {
-	umem_off_t	umoff;
+	umem_off_t		 umoff;
+	struct umem_instance	*umm = vos_cont2umm(cont);
 
 	D_ASSERT(size > 0);
-
-	if (vos_cont2umm(cont)->umm_ops->mo_reserve != NULL) {
-		umoff = umem_reserve(vos_cont2umm(cont), rsrvd_scm, size);
-	} else {
-		umoff = umem_alloc(vos_cont2umm(cont), size);
-	}
+	if (umm->umm_ops->mo_reserve != NULL)
+		umoff = vos_obj_reserve(umm, obj, rsrvd_scm, size);
+	else
+		umoff = vos_obj_alloc(umm, obj, size, false);
 
 	return umoff;
 }
@@ -2096,7 +2095,7 @@ reserve_space(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
 	if (media == DAOS_MEDIA_SCM) {
 		umem_off_t	umoff;
 
-		umoff = vos_reserve_scm(ioc->ic_cont, ioc->ic_rsrvd_scm, size);
+		umoff = vos_reserve_scm(ioc->ic_cont, ioc->ic_rsrvd_scm, size, ioc->ic_obj);
 		if (!UMOFF_IS_NULL(umoff)) {
 			ioc->ic_umoffs[ioc->ic_umoffs_cnt] = umoff;
 			ioc->ic_umoffs_cnt++;
@@ -2430,13 +2429,16 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	if (err != 0)
 		goto abort;
 
-	err = vos_ts_set_add(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx, NULL, 0);
-	D_ASSERT(err == 0);
+	/* The object is already held for md-on-ssd phase2 pool */
+	if (ioc->ic_obj == NULL) {
+		err = vos_ts_set_add(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx, NULL, 0);
+		D_ASSERT(err == 0);
 
-	err = vos_obj_hold(ioc->ic_cont, ioc->ic_oid, &ioc->ic_epr, ioc->ic_bound,
-			   flags, DAOS_INTENT_UPDATE, &ioc->ic_obj, ioc->ic_ts_set);
-	if (err != 0)
-		goto abort;
+		err = vos_obj_hold(ioc->ic_cont, ioc->ic_oid, &ioc->ic_epr, ioc->ic_bound,
+				   flags, DAOS_INTENT_UPDATE, &ioc->ic_obj, ioc->ic_ts_set);
+		if (err != 0)
+			goto abort;
+	}
 
 	err = vos_tx_begin(dth, umem, ioc->ic_cont->vc_pool->vp_sysdb);
 	if (err != 0)
@@ -2610,6 +2612,18 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		D_ERROR(DF_UOID": Hold space failed. "DF_RC"\n",
 			DP_UOID(oid), DP_RC(rc));
 		goto error;
+	}
+
+	/* Hold the object for md-on-ssd phase2 pool */
+	if (vos_pool_is_p2(vos_cont2pool(ioc->ic_cont))) {
+		rc = vos_ts_set_add(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx, NULL, 0);
+		D_ASSERT(rc == 0);
+
+		rc = vos_obj_hold(ioc->ic_cont, ioc->ic_oid, &ioc->ic_epr, ioc->ic_bound,
+				  VOS_OBJ_VISIBLE | VOS_OBJ_CREATE, DAOS_INTENT_UPDATE,
+				  &ioc->ic_obj, ioc->ic_ts_set);
+		if (rc != 0)
+			goto error;
 	}
 
 	rc = dkey_update_begin(ioc);

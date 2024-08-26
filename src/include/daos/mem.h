@@ -451,8 +451,6 @@ typedef void
 umem_cache_wait_cb_t(void *arg, uint64_t chkpt_tx, uint64_t *committed_tx);
 
 /**
- * Write all dirty pages before @wal_tx to MD blob. (XXX: not yet implemented)
- *
  * This function can yield internally, it is called by checkpoint service of upper level stack.
  *
  * \param[in]		store		The umem store

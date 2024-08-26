@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -115,7 +115,7 @@ gc_drain_evt(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 	daos_handle_t	    toh;
 	int		    rc;
 
-	vos_evt_desc_cbs_init(&cbs, pool, coh);
+	vos_evt_desc_cbs_init(&cbs, pool, coh, NULL);
 	rc = evt_open(root, &pool->vp_uma, &cbs, &toh);
 	if (rc == -DER_NONEXIST) {
 		*empty = true;
