@@ -769,9 +769,13 @@ class TestWithServers(TestWithoutServers):
         self.log.debug("Common test directory (%s) contents:", os.path.dirname(self.test_dir))
         all_hosts = include_local_host(self.host_info.all_hosts)
         test_dir_parent = os.path.dirname(self.test_dir)
-        result = run_remote(self.log, all_hosts, f"df -h {test_dir_parent}")
-        if int(max(re.findall(r" ([\d+])% ", result.joined_stdout) + ["0"])) > 90:
-            run_remote(self.log, all_hosts, f"du -sh {test_dir_parent}/*")
+        _result = run_remote(self.log, all_hosts, f"df -h {test_dir_parent}")
+        _details = NodeSet()
+        for _host, _stdout in _result.all_stdout.items():
+            if int(max(re.findall(r"\s+([\d]+)%\s+", _stdout) + ["0"])) > 90:
+                _details.add(_host)
+        if _details:
+            run_remote(self.log, _details, f"du -sh {test_dir_parent}/*")
         self.log.info("-" * 100)
 
         if not self.start_servers_once or self.name.uid == 1:
