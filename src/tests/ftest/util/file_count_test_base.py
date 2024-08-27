@@ -77,7 +77,7 @@ class FileCountTestBase(IorTestBase, MdtestBase):
         intercept = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
         ior_oclass = self.params.get("ior_oclass", '/run/largefilecount/object_class/*')
         mdtest_oclass = self.params.get("mdtest_oclass", '/run/largefilecount/object_class/*')
-        cont_props = self.params.get("properties", '/run/container/*')
+        # cont_props = self.params.get("properties", '/run/container/*')
 
         # create pool
         self.add_pool(connect=False)
@@ -120,8 +120,8 @@ class FileCountTestBase(IorTestBase, MdtestBase):
                     self.ppn = ior_ppn
                     if api == 'HDF5-VOL':
                         env = {
-                            "HDF5_DAOS_OBJ_CLASS": oclass,
-                            "HDF5_DAOS_FILE_PROP": cont_props
+                            "HDF5_DAOS_OBJ_CLASS": oclass
+                            # "HDF5_DAOS_FILE_PROP": cont_props
                         }
                         self.ior_cmd.api.update('HDF5')
                         self.run_ior_with_pool(
