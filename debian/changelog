@@ -21,7 +21,7 @@ daos (2.7.100-2) unstable; urgency=medium
   * Add pciutils runtime dep for daos_server lspci call
   * Add libpci-dev build dep for pciutils CGO bindings
 
- -- Tom Nabarro <tom.nabarro@intel.com>>  Thu, 24 Jun 2024 16:55:00 -0000
+ -- Tom Nabarro <tom.nabarro@intel.com>>  Mon, 24 Jun 2024 16:55:00 -0000
 
 daos (2.7.100-1) unstable; urgency=medium
   [ Phillip Henderson ]

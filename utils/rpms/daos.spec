@@ -596,7 +596,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 * Thu Jul 11 2024 Dalton Bohning <dalton.bohning@intel.com> 2.7.100-3
 - Add pciutils-devel build dep for client-tests package
 
-* Thu Jun 24 2024 Tom Nabarro <tom.nabarro@intel.com> 2.7.100-2
+* Mon Jun 24 2024 Tom Nabarro <tom.nabarro@intel.com> 2.7.100-2
 - Add pciutils runtime dep for daos_server lspci call
 - Add pciutils-devel build dep for pciutils CGO bindings
 
