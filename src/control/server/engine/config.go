@@ -9,6 +9,7 @@ package engine
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -28,6 +29,8 @@ const (
 	envLogMasks      = "D_LOG_MASK"
 	envLogDbgStreams = "DD_MASK"
 	envLogSubsystems = "DD_SUBSYS"
+
+	MIN_ABT_THREAD_STACKSIZE_FOR_DCPM = 18432
 )
 
 // FabricConfig encapsulates networking fabric configuration.
@@ -343,6 +346,23 @@ func (c *Config) Validate() error {
 		return errors.Wrap(err, "validate engine log subsystems")
 	}
 
+	// ensure 18KB ABT stack size for an engine with DCPM storage class
+	if c.Storage.Tiers[0].Class == storage.ClassDcpm {
+		stacksize_str, err := c.GetEnvVar("ABT_THREAD_STACKSIZE")
+		if err != nil {
+			fmt.Printf("env_var ABT_THREAD_STACKSIZE set to %d for `dcpm` storage class\n",
+				MIN_ABT_THREAD_STACKSIZE_FOR_DCPM)
+			c.EnvVars = append(c.EnvVars, fmt.Sprintf("ABT_THREAD_STACKSIZE=%d",
+				MIN_ABT_THREAD_STACKSIZE_FOR_DCPM))
+		} else {
+			stacksize_value, err := strconv.Atoi(stacksize_str)
+			if err != nil || stacksize_value < MIN_ABT_THREAD_STACKSIZE_FOR_DCPM {
+				return errors.New(fmt.Sprintf("env_var ABT_THREAD_STACKSIZE should be >= %d for `dcpm` storage class",
+					MIN_ABT_THREAD_STACKSIZE_FOR_DCPM))
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -480,6 +500,10 @@ func (c *Config) WithSystemName(name string) *Config {
 func (c *Config) WithStorage(cfgs ...*storage.TierConfig) *Config {
 	c.Storage.Tiers = storage.TierConfigs{}
 	c.AppendStorage(cfgs...)
+	if len(c.Storage.Tiers) > 0 && c.Storage.Tiers[0].IsSCM() &&
+		c.Storage.Tiers[0].Class == storage.ClassDcpm {
+		return c.WithStackSizeForDCPM()
+	}
 	return c
 }
 
@@ -688,5 +712,11 @@ func (c *Config) WithIndex(i uint32) *Config {
 // WithStorageIndex sets the I/O Engine instance index in the storage struct.
 func (c *Config) WithStorageIndex(i uint32) *Config {
 	c.Storage.EngineIdx = uint(i)
+	return c
+}
+
+func (c *Config) WithStackSizeForDCPM() *Config {
+	c.EnvVars = append(c.EnvVars, fmt.Sprintf("ABT_THREAD_STACKSIZE=%d",
+		MIN_ABT_THREAD_STACKSIZE_FOR_DCPM))
 	return c
 }
