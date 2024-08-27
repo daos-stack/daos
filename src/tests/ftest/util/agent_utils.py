@@ -6,7 +6,6 @@
 import os
 import re
 import socket
-from getpass import getuser
 
 from agent_utils_params import DaosAgentTransportCredentials, DaosAgentYamlParameters
 from ClusterShell.NodeSet import NodeSet
