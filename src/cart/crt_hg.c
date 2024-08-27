@@ -672,6 +672,8 @@ crt_get_info_string(bool primary, crt_provider_t provider, int iface_idx,
 	start_port = crt_provider_ctx0_port_get(primary, provider);
 	domain_str   = crt_provider_domain_str_get(primary, provider, iface_idx);
 
+	D_ASSERTF(provider_str != NULL, "String for provider=%d not found\n", provider);
+
 	/* CXI provider uses domain names for info string */
 	if (provider == CRT_PROV_OFI_CXI)
 		iface_str = NULL;
@@ -690,8 +692,7 @@ crt_get_info_string(bool primary, crt_provider_t provider, int iface_idx,
 		D_GOTO(out, rc);
 	}
 
-	if (provider_str)
-		size += strlen(provider_str);
+	size = strlen(provider_str);
 	if (domain_str)
 		size += strlen(domain_str);
 	if (iface_str)
