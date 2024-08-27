@@ -12,8 +12,6 @@
 
 #include "dfs_internal.h"
 
-/** dummy change */
-
 static int
 decode_one_hint(char *hint, uint32_t rf, daos_oclass_hints_t *obj_hint, enum daos_otype_t *type)
 {
