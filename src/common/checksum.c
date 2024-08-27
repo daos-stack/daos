@@ -281,8 +281,9 @@ daos_csummer_compare_csum_info(struct daos_csummer *obj,
 	}
 
 	if (unlikely(!match))
-		D_ERROR("Checksum mismatch at index %d/%d "DF_CI" != "DF_CI"\n", i,  a->cs_nr,
-			DP_CI(ci_idx2csum(a, i)), DP_CI(ci_idx2csum(b, i)));
+		D_ERROR("Checksum mismatch at index %d/%d "DF_CI_BUF" != "DF_CI_BUF"\n", i,
+			a->cs_nr, DP_CI_BUF(ci_idx2csum(a, i), a->cs_len),
+			DP_CI_BUF(ci_idx2csum(b, i), b->cs_len));
 
 	return match;
 }
