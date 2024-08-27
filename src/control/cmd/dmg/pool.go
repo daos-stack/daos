@@ -53,7 +53,7 @@ var (
 	// Default to 6% SCM:94% NVMe
 	defaultTierRatios         = []float64{0.06, 0.94}
 	errPoolCreateIncompatOpts = errors.New("unsupported option combination, use (--scm-size and " +
-		"--nvme-size) or (--scm-size and --nvme-size) or (--size)")
+		"--nvme-size) or (--meta-size and --data-size) or (--size)")
 )
 
 type tierRatioFlag struct {
