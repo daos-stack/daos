@@ -593,7 +593,7 @@ zone_calc_size_idx(uint32_t zone_id, unsigned max_zone, size_t heap_size)
 
 	size_t zone_size_idx = zone_raw_size / CHUNKSIZE;
 
-	ASSERT(zone_size_idx <= UINT32_MAX);
+	ASSERT(zone_size_idx <= MAX_CHUNK);
 
 	return (uint32_t)zone_size_idx;
 }
@@ -1915,7 +1915,10 @@ heap_get_zone_limits(uint64_t heap_size, uint64_t cache_size)
 		return zd;
 
 	if (zd.nzones_heap > zd.nzones_cache) {
-		zd.nzones_ne_max = zd.nzones_cache * 8 / 10;
+		if (zd.nzones_heap < (zd.nzones_cache + UMEM_CACHE_MIN_EVICTABLE_PAGES))
+			zd.nzones_ne_max = zd.nzones_cache - UMEM_CACHE_MIN_EVICTABLE_PAGES;
+		else
+			zd.nzones_ne_max = zd.nzones_cache * 8 / 10;
 		if (zd.nzones_cache < (zd.nzones_ne_max + UMEM_CACHE_MIN_EVICTABLE_PAGES))
 			zd.nzones_ne_max = zd.nzones_cache - UMEM_CACHE_MIN_EVICTABLE_PAGES;
 	} else
