@@ -49,6 +49,9 @@ pool:
 #   properties: svc_ops_entry_age:150
 #   properties: svc_ops_entry_age:300
 #   properties: svc_ops_entry_age:600
+container:
+  control_method: API
+  silent: true
 metadata:
   number_thread: 1
   workload_test_cycles: 5000
