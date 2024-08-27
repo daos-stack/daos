@@ -4767,7 +4767,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 							obj_auxi->csum_retry = 1;
 						else
 							obj_auxi->io_retry = 0;
-					else if (task->dt_result != -DER_NVME_IO) {
+					} else if (task->dt_result != -DER_NVME_IO) {
 						/* Don't retry update for UNCERTAIN errors */
 						obj_auxi->io_retry = 0;
 					}
