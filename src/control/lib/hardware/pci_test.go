@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -48,8 +48,8 @@ func (d *PCIDevice) withType(t DeviceType) *PCIDevice {
 	return d
 }
 
-func (d *PCIDevice) withLinkSpeed(ls float64) *PCIDevice {
-	d.LinkSpeed = ls
+func (d *PCIDevice) withLinkSpeed(ls float32) *PCIDevice {
+	d.LinkNegSpeed = ls
 	return d
 }
 

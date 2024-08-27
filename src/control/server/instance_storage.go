@@ -15,10 +15,8 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
-	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
-	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -74,19 +72,6 @@ func (ei *EngineInstance) NotifyStorageReady() {
 	go func() {
 		ei.storageReady <- true
 	}()
-}
-
-// createPublishFormatRequiredFunc returns onAwaitFormatFn which will publish an
-// event using the provided publish function to indicate that host is awaiting
-// storage format.
-func createPublishFormatRequiredFunc(publish func(*events.RASEvent), hostname string) onAwaitFormatFn {
-	return func(_ context.Context, engineIdx uint32, formatType string) error {
-		evt := events.NewEngineFormatRequiredEvent(hostname, engineIdx, formatType).
-			WithRank(uint32(ranklist.NilRank))
-		publish(evt)
-
-		return nil
-	}
 }
 
 func (ei *EngineInstance) checkScmNeedFormat() (bool, error) {
