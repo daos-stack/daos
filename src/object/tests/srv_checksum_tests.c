@@ -1275,7 +1275,7 @@ fetch_with_hole7(void **state)
 		.layout = {
 			{.data = "ABCDEFGHIJKLM", .sel = {1, 2}, .ful = {1, 13} },
 			{.data = "", .sel = {3, 7}, .ful = {3, 7}, .is_hole = true},
-			{.data = "HIJKLM", .sel = {8, 13}, .ful = {1, 13} },
+			{.data = "HIJKLM", .sel = {8, 13}, .ful = {8, 13} },
 			{.data = NULL}
 		}
 	});
