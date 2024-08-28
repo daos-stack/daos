@@ -1049,7 +1049,7 @@ def stop_dfuse(dfuse, vol=False):
 
     dfuse_env = daos_env_str(os.environ)
     dfuse_stop_cmds.extend([
-        f'clush -S -w $HOSTLIST "{dfuse_env};fusermount3 -uz {dfuse.mount_dir.value}"',
+        f'clush -S -w $HOSTLIST "{dfuse_env} fusermount3 -uz {dfuse.mount_dir.value}"',
         f'clush -S -w $HOSTLIST "rm -rf {dfuse.mount_dir.value}"'])
     return dfuse_stop_cmds
 
