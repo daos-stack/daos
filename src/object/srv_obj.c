@@ -5655,7 +5655,8 @@ again2:
 			   1 /* start, [0] is for current engine */, ocpi->ocpi_disp_width,
 			   &exec_arg.coll_cur);
 
-	rc = dtx_leader_begin(ioc.ioc_vos_coh, &odm->odm_xid, &epoch, 1, version,
+	rc = dtx_leader_begin(ioc.ioc_vos_coh, &odm->odm_xid, &epoch,
+			      dcts[0].dct_shards[dmi->dmi_tgt_id].dcs_nr, version,
 			      &ocpi->ocpi_oid, NULL /* dti_cos */, 0 /* dti_cos_cnt */,
 			      NULL /* tgts */, exec_arg.coll_cur.grp_nr /* tgt_cnt */,
 			      dtx_flags, odm->odm_mbs, dce, &dlh);
