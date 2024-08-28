@@ -1015,8 +1015,8 @@ class TestGroup():
             if new_yaml_file:
                 if verbose > 0:
                     # Optionally display a diff of the yaml file
-                    if not run_local(logger, f"diff -y {test.yaml_file} {new_yaml_file}").passed:
-                        raise RunException(f"Error diff'ing {test.yaml_file}")
+                    # diff returns rc=1 if the files are different, so ignore errors
+                    run_local(logger, f"diff -y {test.yaml_file} {new_yaml_file}")
                 test.yaml_file = new_yaml_file
 
             # Display the modified yaml file variants with debug
