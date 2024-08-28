@@ -69,7 +69,6 @@ class FileCountTestBase(IorTestBase, MdtestBase):
         dir_oclass = None
         apis = self.params.get("api", "/run/largefilecount/*")
         hdf5_plugin_path = self.params.get("plugin_path", '/run/hdf5_vol/*')
-        mount_dir = self.params.get("mount_dir", "/run/dfuse/*")
         ior_np = self.params.get("np", '/run/ior/client_processes/*', 1)
         ior_ppn = self.params.get("ppn", '/run/ior/client_processes/*', None)
         mdtest_np = self.params.get("np", '/run/mdtest/client_processes/*', 1)
@@ -117,10 +116,9 @@ class FileCountTestBase(IorTestBase, MdtestBase):
                 try:
                     self.processes = ior_np
                     self.ppn = ior_ppn
-                    if self.ior_cmd.api.value == 'HDF5-VOL':
+                    if api == 'HDF5-VOL':
                         self.ior_cmd.api.update('HDF5')
-                        self.run_ior_with_pool(
-                            create_pool=False, plugin_path=hdf5_plugin_path, mount_dir=mount_dir)
+                        self.run_ior_with_pool(create_pool=False, plugin_path=hdf5_plugin_path)
                     elif self.ior_cmd.api.value == 'POSIX':
                         self.run_ior_with_pool(create_pool=False, intercept=intercept)
                     else:
