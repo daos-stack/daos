@@ -3841,6 +3841,7 @@ co_op_dup_timing(void **state)
 	const uint32_t     SVC_OPS_ENTRY_AGE = 60;
 	bool               fp_loop_failed    = false;
 	double             dummy_wl_elapsed  = 0.0;
+	double             open_close_1k_el  = 0.0;
 	daos_pool_info_t   pinfo;
 	d_rank_t           leader_rank;
 	int                i; /* loop over NUM_FP */
@@ -3923,11 +3924,33 @@ co_op_dup_timing(void **state)
 		}
 		t_end            = daos_get_ntime();
 		dummy_wl_elapsed = (double)(t_end - t_begin) / NSEC_PER_SEC;
-		rc               = daos_cont_destroy(arg->pool.poh, contstr, 0 /* force */, NULL);
-		assert_rc_equal(rc, 0);
 
 		print_message("done dummy workload: %u open/close pairs in %8.3f sec\n", num_opens,
 			      dummy_wl_elapsed);
+
+		/* Now, let's do 1000 container open/close pairs and time it, after we
+		 * have done the above dummy workload loop to fill the pool's svc_ops KVS.
+		 */
+		num_opens = 0;
+		t_begin = daos_get_ntime();
+		for (;;) {
+			rc = daos_cont_open(arg->pool.poh, contstr, DAOS_COO_RW, &dummy_coh,
+					    NULL /* info */, NULL /* ev */);
+			assert_rc_equal(rc, 0);
+
+			rc = daos_cont_close(dummy_coh, NULL /* ev */);
+			assert_rc_equal(rc, 0);
+
+			num_opens++;
+			if (num_opens == 1000)
+				break;
+		}
+		t_end            = daos_get_ntime();
+		open_close_1k_el = (double)(t_end - t_begin) / NSEC_PER_SEC;
+		print_message("1K open/close pairs in %8.3f sec\n", open_close_1k_el);
+
+		rc               = daos_cont_destroy(arg->pool.poh, contstr, 0 /* force */, NULL);
+		assert_rc_equal(rc, 0);
 	}
 
 	/* configure periodic fault injection loops */
