@@ -83,7 +83,7 @@ fi
 
 # enable running the daos_agent as the user
 sudo systemctl start user@"$(id -u)".service
-_local_service_dir=~/.config/systemd
+_local_service_dir=~/.config/systemd/user
 _local_service_file="$_local_service_dir/daos_agent.service"
 mkdir -p $_local_service_dir
 if $TEST_RPMS; then
