@@ -109,6 +109,7 @@ class TestEnvironment():
         'bullseye_file': 'COVFILE',
         'daos_prefix': 'DAOS_TEST_PREFIX',
         'agent_user': 'DAOS_TEST_AGENT_USER',
+        'systemd_path': 'DAOS_TEST_SYSTEMD_PATH',
         'systemd_library_path': 'DAOS_TEST_SYSTEMD_LIBRARY_PATH',
         'control_config': 'DAOS_TEST_CONTROL_CONFIG',
         'agent_config': 'DAOS_TEST_AGENT_CONFIG',
