@@ -1167,6 +1167,9 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None,
             # add envs if api is HDF5-VOL
             if api == "HDF5-VOL":
                 vol = True
+                cont_props = container.properties.value
+                env["HDF5_DAOS_FILE_PROP"] = '"' + cont_props.replace(",", ";") + '"'
+                env["HDF5_DAOS_OBJ_CLASS"] = file_dir_oclass[0]
                 env["HDF5_VOL_CONNECTOR"] = "daos"
                 env["HDF5_PLUGIN_PATH"] = str(plugin_path)
             mpirun_cmd.assign_processes(nodesperjob * ppn)
