@@ -8,14 +8,18 @@ package server
 
 import (
 	"context"
+	"sort"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -40,78 +44,325 @@ func (mp *mockPCIeLinkStatsProvider) PCIeCapsFromConfig(cfgBytes []byte, dev *ha
 }
 
 func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
-	healthWithoutLinkStats := func() *ctlpb.BioHealthResp {
+	healthWithLinkStats := func(maxSpd, spd float32, maxWdt, wdt uint32) *ctlpb.BioHealthResp {
 		bhr := proto.MockNvmeHealth()
-		bhr.LinkPortId = 0
-		bhr.LinkMaxSpeed = 0
-		bhr.LinkNegSpeed = 0
-		bhr.LinkMaxWidth = 0
-		bhr.LinkNegWidth = 0
+		bhr.LinkMaxSpeed = maxSpd
+		bhr.LinkNegSpeed = spd
+		bhr.LinkMaxWidth = maxWdt
+		bhr.LinkNegWidth = wdt
 
 		return bhr
 	}
+	pciAddr := test.MockPCIAddr(1)
+	lastStatsMap := func(bhr *ctlpb.BioHealthResp) map[string]*ctlpb.BioHealthResp {
+		return map[string]*ctlpb.BioHealthResp{pciAddr: bhr}
+	}
 
 	for name, tc := range map[string]struct {
-		devState   ctlpb.NvmeDevState
-		pciCfgSpc  string
-		pciDev     *hardware.PCIDevice
-		pciDevErr  error
-		healthRes  *ctlpb.BioHealthResp
-		healthErr  error
-		expCtrlr   *ctlpb.NvmeController
-		expUpdated bool
-		expErr     error
+		badDevState    bool
+		noPciCfgSpc    bool
+		pciDev         *hardware.PCIDevice
+		pciDevErr      error
+		emptyHealthRes bool
+		healthErr      error
+		lastStats      map[string]*ctlpb.BioHealthResp
+		expCtrlr       *ctlpb.NvmeController
+		expNotUpdated  bool
+		expErr         error
+		expDispatched  []*events.RASEvent
+		expLastStats   map[string]*ctlpb.BioHealthResp
 	}{
 		"bad state; skip health": {
-			healthRes: healthWithoutLinkStats(),
-			expCtrlr:  &ctlpb.NvmeController{},
+			badDevState: true,
+			noPciCfgSpc: true,
+			expCtrlr: &ctlpb.NvmeController{
+				PciAddr: pciAddr,
+			},
+			expNotUpdated: true,
 		},
 		"update health; add link stats skipped as empty pci config space": {
-			devState: ctlpb.NvmeDevState_NORMAL,
-			pciDev: &hardware.PCIDevice{
-				LinkNegSpeed: 8e+9,
-			},
-			healthRes: healthWithoutLinkStats(),
+			noPciCfgSpc: true,
 			expCtrlr: &ctlpb.NvmeController{
+				PciAddr:     pciAddr,
 				DevState:    ctlpb.NvmeDevState_NORMAL,
-				HealthStats: healthWithoutLinkStats(),
+				HealthStats: healthWithLinkStats(0, 0, 0, 0),
 			},
-			expUpdated: true,
+		},
+		"empty bio health response; empty link stats": {
+			emptyHealthRes: true,
+			pciDev:         new(hardware.PCIDevice),
+			expCtrlr: &ctlpb.NvmeController{
+				PciAddr:     pciAddr,
+				DevState:    ctlpb.NvmeDevState_NORMAL,
+				HealthStats: new(ctlpb.BioHealthResp),
+			},
+			expLastStats: lastStatsMap(new(ctlpb.BioHealthResp)),
+		},
+		"error retrieving bio health response": {
+			healthErr: errors.New("fail"),
+			expErr:    errors.New("fail"),
 		},
 		"update health; add link stats; pciutils lib error": {
-			devState:  ctlpb.NvmeDevState_NORMAL,
-			pciCfgSpc: "ABCD",
-			pciDev: &hardware.PCIDevice{
-				LinkNegSpeed: 8e+9,
-			},
 			pciDevErr: errors.New("fail"),
 			expErr:    errors.New("fail"),
 		},
-		"update health; add link stats": {
-			devState:  ctlpb.NvmeDevState_NORMAL,
-			pciCfgSpc: "ABCD",
-			pciDev: &hardware.PCIDevice{
-				LinkPortID:   1,
-				LinkNegSpeed: 1e+9,
-				LinkMaxSpeed: 1e+9,
-				LinkNegWidth: 4,
-				LinkMaxWidth: 4,
-			},
-			healthRes: healthWithoutLinkStats(),
+		"update health; add link stats; normal link state; no event published": {
 			expCtrlr: &ctlpb.NvmeController{
+				PciAddr:     pciAddr,
 				DevState:    ctlpb.NvmeDevState_NORMAL,
 				HealthStats: proto.MockNvmeHealth(),
 			},
-			expUpdated: true,
+			expLastStats: lastStatsMap(proto.MockNvmeHealth()),
+		},
+		"update health; add link stats; speed downgraded; no last stats": {
+			pciDev: &hardware.PCIDevice{
+				LinkPortID:   1,
+				LinkMaxSpeed: 2.5e+9,
+				LinkNegSpeed: 1e+9,
+				LinkMaxWidth: 4,
+				LinkNegWidth: 4,
+			},
+			// Stats only exist for different PCI address.
+			lastStats: map[string]*ctlpb.BioHealthResp{
+				test.MockPCIAddr(2): proto.MockNvmeHealth(),
+			},
+			expCtrlr: &ctlpb.NvmeController{
+				PciAddr:     test.MockPCIAddr(1),
+				DevState:    ctlpb.NvmeDevState_NORMAL,
+				HealthStats: healthWithLinkStats(2.5e+9, 1e+9, 4, 4),
+			},
+			expDispatched: []*events.RASEvent{
+				events.NewGenericEvent(events.RASNVMeLinkSpeedChanged,
+					events.RASSeverityWarning, "NVMe PCIe device at "+
+						"\"0000:01:00.0\" port-1: link speed changed to "+
+						"1 GT/s (max 2.5 GT/s)", ""),
+			},
+			expLastStats: map[string]*ctlpb.BioHealthResp{
+				pciAddr:             healthWithLinkStats(2.5e+9, 1e+9, 4, 4),
+				test.MockPCIAddr(2): proto.MockNvmeHealth(),
+			},
+		},
+		"update health; add link stats; width downgraded; no last stats": {
+			pciDev: &hardware.PCIDevice{
+				LinkPortID:   1,
+				LinkMaxSpeed: 1e+9,
+				LinkNegSpeed: 1e+9,
+				LinkMaxWidth: 8,
+				LinkNegWidth: 4,
+			},
+			expCtrlr: &ctlpb.NvmeController{
+				PciAddr:     test.MockPCIAddr(1),
+				DevState:    ctlpb.NvmeDevState_NORMAL,
+				HealthStats: healthWithLinkStats(1e+9, 1e+9, 8, 4),
+			},
+			expDispatched: []*events.RASEvent{
+				events.NewGenericEvent(events.RASNVMeLinkWidthChanged,
+					events.RASSeverityWarning, "NVMe PCIe device at "+
+						"\"0000:01:00.0\" port-1: link width changed to "+
+						"x4 (max x8)", ""),
+			},
+			expLastStats: lastStatsMap(healthWithLinkStats(1e+9, 1e+9, 8, 4)),
+		},
+		"update health; add link stats; link state normal; identical last stats; no event": {
+			lastStats: lastStatsMap(proto.MockNvmeHealth()),
+			expCtrlr: &ctlpb.NvmeController{
+				PciAddr:     test.MockPCIAddr(1),
+				DevState:    ctlpb.NvmeDevState_NORMAL,
+				HealthStats: proto.MockNvmeHealth(),
+			},
+			expLastStats: lastStatsMap(proto.MockNvmeHealth()),
+		},
+		"update health; add link stats; link state normal; speed degraded in last stats": {
+			lastStats: lastStatsMap(healthWithLinkStats(1e+9, 0.5e+9, 4, 4)),
+			expCtrlr: &ctlpb.NvmeController{
+				PciAddr:     pciAddr,
+				DevState:    ctlpb.NvmeDevState_NORMAL,
+				HealthStats: proto.MockNvmeHealth(),
+			},
+			expDispatched: []*events.RASEvent{
+				events.NewGenericEvent(events.RASNVMeLinkSpeedChanged,
+					events.RASSeverityNotice, "NVMe PCIe device at "+
+						"\"0000:01:00.0\" port-1: link speed changed to "+
+						"1 GT/s (max 1 GT/s)", ""),
+			},
+			expLastStats: lastStatsMap(proto.MockNvmeHealth()),
+		},
+		"update health; add link stats; link state normal; width degraded in last stats": {
+			lastStats: lastStatsMap(healthWithLinkStats(1e+9, 1e+9, 4, 1)),
+			expCtrlr: &ctlpb.NvmeController{
+				PciAddr:     pciAddr,
+				DevState:    ctlpb.NvmeDevState_NORMAL,
+				HealthStats: proto.MockNvmeHealth(),
+			},
+			expDispatched: []*events.RASEvent{
+				events.NewGenericEvent(events.RASNVMeLinkWidthChanged,
+					events.RASSeverityNotice, "NVMe PCIe device at "+
+						"\"0000:01:00.0\" port-1: link width changed to "+
+						"x4 (max x4)", ""),
+			},
+			expLastStats: lastStatsMap(proto.MockNvmeHealth()),
+		},
+		"update health; add link stats; speed degraded; speed degraded in last stats; no event": {
+			pciDev: &hardware.PCIDevice{
+				LinkPortID:   1,
+				LinkMaxSpeed: 2.5e+9,
+				LinkNegSpeed: 1e+9,
+				LinkMaxWidth: 4,
+				LinkNegWidth: 4,
+			},
+			lastStats: lastStatsMap(healthWithLinkStats(2.5e+9, 1e+9, 4, 4)),
+			expCtrlr: &ctlpb.NvmeController{
+				PciAddr:     test.MockPCIAddr(1),
+				DevState:    ctlpb.NvmeDevState_NORMAL,
+				HealthStats: healthWithLinkStats(2.5e+9, 1e+9, 4, 4),
+			},
+			expLastStats: lastStatsMap(healthWithLinkStats(2.5e+9, 1e+9, 4, 4)),
+		},
+		"update health; add link stats; width degraded; width degraded in last stats; no event": {
+			pciDev: &hardware.PCIDevice{
+				LinkPortID:   1,
+				LinkMaxSpeed: 1e+9,
+				LinkNegSpeed: 1e+9,
+				LinkMaxWidth: 8,
+				LinkNegWidth: 4,
+			},
+			lastStats: lastStatsMap(healthWithLinkStats(1e+9, 1e+9, 8, 4)),
+			expCtrlr: &ctlpb.NvmeController{
+				PciAddr:     test.MockPCIAddr(1),
+				DevState:    ctlpb.NvmeDevState_NORMAL,
+				HealthStats: healthWithLinkStats(1e+9, 1e+9, 8, 4),
+			},
+			expLastStats: lastStatsMap(healthWithLinkStats(1e+9, 1e+9, 8, 4)),
+		},
+		"update health; add link stats; speed degraded; width degraded in last stats": {
+			pciDev: &hardware.PCIDevice{
+				LinkPortID:   1,
+				LinkMaxSpeed: 2.5e+9,
+				LinkNegSpeed: 1e+9,
+				LinkMaxWidth: 8,
+				LinkNegWidth: 8,
+			},
+			lastStats: lastStatsMap(healthWithLinkStats(2.5e+9, 2.5e+9, 8, 4)),
+			expCtrlr: &ctlpb.NvmeController{
+				PciAddr:     test.MockPCIAddr(1),
+				DevState:    ctlpb.NvmeDevState_NORMAL,
+				HealthStats: healthWithLinkStats(2.5e+9, 1e+9, 8, 8),
+			},
+			expDispatched: []*events.RASEvent{
+				events.NewGenericEvent(events.RASNVMeLinkSpeedChanged,
+					events.RASSeverityWarning, "NVMe PCIe device at "+
+						"\"0000:01:00.0\" port-1: link speed changed to "+
+						"1 GT/s (max 2.5 GT/s)", ""),
+				events.NewGenericEvent(events.RASNVMeLinkWidthChanged,
+					events.RASSeverityNotice, "NVMe PCIe device at "+
+						"\"0000:01:00.0\" port-1: link width changed to "+
+						"x8 (max x8)", ""),
+			},
+			expLastStats: lastStatsMap(healthWithLinkStats(2.5e+9, 1e+9, 8, 8)),
+		},
+		"update health; add link stats; width degraded; speed degraded in last stats": {
+			pciDev: &hardware.PCIDevice{
+				LinkPortID:   1,
+				LinkMaxSpeed: 2.5e+9,
+				LinkNegSpeed: 2.5e+9,
+				LinkMaxWidth: 8,
+				LinkNegWidth: 4,
+			},
+			lastStats: lastStatsMap(healthWithLinkStats(2.5e+9, 1e+9, 8, 8)),
+			expCtrlr: &ctlpb.NvmeController{
+				PciAddr:     test.MockPCIAddr(1),
+				DevState:    ctlpb.NvmeDevState_NORMAL,
+				HealthStats: healthWithLinkStats(2.5e+9, 2.5e+9, 8, 4),
+			},
+			expDispatched: []*events.RASEvent{
+				events.NewGenericEvent(events.RASNVMeLinkSpeedChanged,
+					events.RASSeverityNotice, "NVMe PCIe device at "+
+						"\"0000:01:00.0\" port-1: link speed changed to "+
+						"2.5 GT/s (max 2.5 GT/s)", ""),
+				events.NewGenericEvent(events.RASNVMeLinkWidthChanged,
+					events.RASSeverityWarning, "NVMe PCIe device at "+
+						"\"0000:01:00.0\" port-1: link width changed to "+
+						"x4 (max x8)", ""),
+			},
+			expLastStats: lastStatsMap(healthWithLinkStats(2.5e+9, 2.5e+9, 8, 4)),
+		},
+		"update health; add link stats; speed degraded; speed diff degraded in last stats": {
+			pciDev: &hardware.PCIDevice{
+				LinkPortID:   1,
+				LinkMaxSpeed: 8e+9,
+				LinkNegSpeed: 1e+9,
+				LinkMaxWidth: 4,
+				LinkNegWidth: 4,
+			},
+			lastStats: lastStatsMap(healthWithLinkStats(8e+9, 2.5e+9, 4, 4)),
+			expCtrlr: &ctlpb.NvmeController{
+				PciAddr:     test.MockPCIAddr(1),
+				DevState:    ctlpb.NvmeDevState_NORMAL,
+				HealthStats: healthWithLinkStats(8e+9, 1e+9, 4, 4),
+			},
+			expDispatched: []*events.RASEvent{
+				events.NewGenericEvent(events.RASNVMeLinkSpeedChanged,
+					events.RASSeverityWarning, "NVMe PCIe device at "+
+						"\"0000:01:00.0\" port-1: link speed changed to "+
+						"1 GT/s (max 8 GT/s)", ""),
+			},
+			expLastStats: lastStatsMap(healthWithLinkStats(8e+9, 1e+9, 4, 4)),
+		},
+		"update health; add link stats; width degraded; width diff degraded in last stats": {
+			pciDev: &hardware.PCIDevice{
+				LinkPortID:   1,
+				LinkMaxSpeed: 1e+9,
+				LinkNegSpeed: 1e+9,
+				LinkMaxWidth: 16,
+				LinkNegWidth: 4,
+			},
+			lastStats: lastStatsMap(healthWithLinkStats(1e+9, 1e+9, 16, 8)),
+			expCtrlr: &ctlpb.NvmeController{
+				PciAddr:     test.MockPCIAddr(1),
+				DevState:    ctlpb.NvmeDevState_NORMAL,
+				HealthStats: healthWithLinkStats(1e+9, 1e+9, 16, 4),
+			},
+			expDispatched: []*events.RASEvent{
+				events.NewGenericEvent(events.RASNVMeLinkWidthChanged,
+					events.RASSeverityWarning, "NVMe PCIe device at "+
+						"\"0000:01:00.0\" port-1: link width changed to "+
+						"x4 (max x16)", ""),
+			},
+			expLastStats: lastStatsMap(healthWithLinkStats(1e+9, 1e+9, 16, 4)),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			healthRes := healthWithLinkStats(0, 0, 0, 0)
+			if tc.emptyHealthRes {
+				healthRes = new(ctlpb.BioHealthResp)
+			}
 			getCtrlrHealth = func(_ context.Context, _ Engine, _ *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
-				return tc.healthRes, tc.healthErr
+				return healthRes, tc.healthErr
 			}
 			defer func() {
 				getCtrlrHealth = getBioHealth
 			}()
+
+			var devState ctlpb.NvmeDevState
+			if !tc.badDevState {
+				devState = ctlpb.NvmeDevState_NORMAL
+			}
+			var pciCfgSpc string
+			if !tc.noPciCfgSpc {
+				pciCfgSpc = "ABCD"
+			}
+			if tc.pciDev == nil {
+				tc.pciDev = &hardware.PCIDevice{
+					LinkPortID:   1,
+					LinkNegSpeed: 1e+9,
+					LinkMaxSpeed: 1e+9,
+					LinkNegWidth: 4,
+					LinkMaxWidth: 4,
+				}
+			}
 
 			mockProv := &mockPCIeLinkStatsProvider{
 				pciDev:    tc.pciDev,
@@ -119,11 +370,24 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 			}
 
 			ctrlr := &ctlpb.NvmeController{
-				PciCfg:   tc.pciCfgSpc,
-				DevState: tc.devState,
+				PciAddr:  pciAddr,
+				PciCfg:   pciCfgSpc,
+				DevState: devState,
 			}
 
-			upd, err := populateCtrlrHealth(test.Context(t), NewMockInstance(nil),
+			ctx, cancel := context.WithTimeout(test.Context(t), 200*time.Millisecond)
+			defer cancel()
+
+			ps := events.NewPubSub(ctx, log)
+			defer ps.Close()
+
+			ei := NewEngineInstance(log, nil, nil, nil, ps)
+			ei._lastHealthStats = tc.lastStats
+
+			subscriber := newMockSubscriber(2)
+			ps.Subscribe(events.RASTypeInfoOnly, subscriber)
+
+			upd, err := populateCtrlrHealth(test.Context(t), ei,
 				&ctlpb.BioHealthReq{}, ctrlr, mockProv)
 			test.CmpErr(t, tc.expErr, err)
 			if err != nil {
@@ -134,7 +398,25 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 				defStorageScanCmpOpts...); diff != "" {
 				t.Fatalf("unexpected controller output (-want, +got):\n%s\n", diff)
 			}
-			test.AssertEqual(t, tc.expUpdated, upd, "")
+			test.AssertEqual(t, !tc.expNotUpdated, upd, "")
+
+			<-ctx.Done()
+
+			if diff := cmp.Diff(tc.expLastStats, ei._lastHealthStats, protocmp.Transform()); diff != "" {
+				t.Fatalf("unexpected last health stats (-want, +got)\n%s\n", diff)
+			}
+
+			// Compare events received with expected, sort received first.
+			dispatched := subscriber.getRx()
+			sort.Strings(dispatched)
+			var expEvtStrs []string
+			for _, e := range tc.expDispatched {
+				e.Timestamp = "" // Remove TS before comparing.
+				expEvtStrs = append(expEvtStrs, e.String())
+			}
+			if diff := cmp.Diff(expEvtStrs, dispatched, defEvtCmpOpts...); diff != "" {
+				t.Fatalf("unexpected events dispatched (-want, +got)\n%s\n", diff)
+			}
 		})
 	}
 }
