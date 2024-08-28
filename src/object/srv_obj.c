@@ -60,6 +60,9 @@ obj_gen_dtx_mbs(uint32_t flags, uint32_t *tgt_cnt, struct daos_shard_tgt **p_tgt
 	int			 i;
 	int			 j;
 
+	if (*tgt_cnt == 0)
+		return 0;
+
 	D_ASSERT(tgts != NULL);
 
 	if (!(flags & ORF_CONTAIN_LEADER)) {
@@ -2652,11 +2655,9 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	tgts = orw->orw_shard_tgts.ca_arrays;
 	tgt_cnt = orw->orw_shard_tgts.ca_count;
 
-	if (!daos_is_zero_dti(&orw->orw_dti) && tgt_cnt != 0) {
-		rc = obj_gen_dtx_mbs(orw->orw_flags, &tgt_cnt, &tgts, &mbs);
-		if (rc != 0)
-			D_GOTO(out, rc);
-	}
+	rc = obj_gen_dtx_mbs(orw->orw_flags, &tgt_cnt, &tgts, &mbs);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	epoch.oe_value = orw->orw_epoch;
 	epoch.oe_first = orw->orw_epoch_first;
@@ -2880,11 +2881,9 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	tgts = orw->orw_shard_tgts.ca_arrays;
 	tgt_cnt = orw->orw_shard_tgts.ca_count;
 
-	if (!daos_is_zero_dti(&orw->orw_dti) && tgt_cnt != 0) {
-		rc = obj_gen_dtx_mbs(orw->orw_flags, &tgt_cnt, &tgts, &mbs);
-		if (rc != 0)
-			D_GOTO(out, rc);
-	}
+	rc = obj_gen_dtx_mbs(orw->orw_flags, &tgt_cnt, &tgts, &mbs);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	version = orw->orw_map_ver;
 	max_ver = orw->orw_map_ver;
@@ -3003,9 +3002,6 @@ again2:
 			d_tm_inc_counter(opm->opm_update_restart, 1);
 			goto again2;
 		}
-
-		/* Standalone fetches do not get -DER_TX_RESTART. */
-		D_ASSERT(!daos_is_zero_dti(&orw->orw_dti));
 
 		break;
 	case -DER_AGAIN:
@@ -3426,26 +3422,15 @@ obj_punch_complete(crt_rpc_t *rpc, int status, uint32_t map_version)
 }
 
 static int
-obj_local_punch(struct obj_punch_in *opi, crt_opcode_t opc,
-		struct obj_io_context *ioc, struct dtx_handle *dth)
+obj_punch_one(struct obj_punch_in *opi, crt_opcode_t opc,
+	      struct obj_io_context *ioc, struct dtx_handle *dth)
 {
 	struct ds_cont_child	*cont = ioc->ioc_coc;
-	struct dtx_share_peer	*dsp;
-	uint64_t		 sched_seq;
-	uint32_t		 retry = 0;
-	int			 rc = 0;
+	int			 rc;
 
-	if (daos_is_zero_dti(&opi->opi_dti)) {
-		D_DEBUG(DB_TRACE, "disable dtx\n");
-		dth = NULL;
-	}
-
-again:
 	rc = dtx_sub_init(dth, &opi->opi_oid, opi->opi_dkey_hash);
 	if (rc != 0)
 		goto out;
-
-	sched_seq = sched_cur_seq();
 
 	switch (opc) {
 	case DAOS_OBJ_RPC_PUNCH:
@@ -3478,7 +3463,32 @@ again:
 		D_GOTO(out, rc = -DER_NOSYS);
 	}
 
-	if (dth != NULL && obj_dtx_need_refresh(dth, rc)) {
+out:
+	return rc;
+}
+
+static int
+obj_local_punch(struct obj_punch_in *opi, crt_opcode_t opc, uint32_t shard_nr, uint32_t *shards,
+		struct obj_io_context *ioc, struct dtx_handle *dth)
+{
+	struct dtx_share_peer	*dsp;
+	uint64_t		 sched_seq;
+	uint32_t		 retry = 0;
+	int			 rc = 0;
+	int			 i;
+
+again:
+	sched_seq = sched_cur_seq();
+
+	/* There may be multiple shards reside on the same VOS target. */
+	for (i = 0; i < shard_nr; i++) {
+		opi->opi_oid.id_shard = shards[i];
+		rc = obj_punch_one(opi, opc, ioc, dth);
+		if (rc != 0)
+			break;
+	}
+
+	if (obj_dtx_need_refresh(dth, rc)) {
 		if (unlikely(++retry % 10 == 3)) {
 			dsp = d_list_entry(dth->dth_share_tbd_list.next,
 					   struct dtx_share_peer, dsp_link);
@@ -3559,7 +3569,6 @@ obj_tgt_punch(struct obj_tgt_punch_args *otpa, uint32_t *shards, uint32_t count)
 	daos_epoch_t		 tmp;
 	uint32_t		 dtx_flags = 0;
 	int			 rc = 0;
-	int			 i;
 
 	if (p_ioc == NULL) {
 		p_ioc = &ioc;
@@ -3616,17 +3625,11 @@ obj_tgt_punch(struct obj_tgt_punch_args *otpa, uint32_t *shards, uint32_t count)
 		D_GOTO(out, rc = -DER_IO);
 
 exec:
-	/* There may be multiple shards reside on the same VOS target. */
-	for (i = 0; i < count; i++) {
-		opi->opi_oid.id_shard = shards[i];
-		rc = obj_local_punch(opi, otpa->opc, p_ioc, dth);
-		if (rc != 0) {
-			DL_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
-				  (rc == -DER_NONEXIST && (opi->opi_api_flags & DAOS_COND_PUNCH)),
-				  DB_IO, DLOG_ERR, rc, DF_UOID, DP_UOID(opi->opi_oid));
-			goto out;
-		}
-	}
+	rc = obj_local_punch(opi, otpa->opc, count, shards, p_ioc, dth);
+	if (rc != 0)
+		DL_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
+			  (rc == -DER_NONEXIST && (opi->opi_api_flags & DAOS_COND_PUNCH)),
+			  DB_IO, DLOG_ERR, rc, DF_UOID, DP_UOID(opi->opi_oid));
 
 out:
 	if (otpa->ver != NULL)
@@ -3652,11 +3655,9 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	uint32_t			 version = 0;
 	int				 rc;
 
-	if (!daos_is_zero_dti(&opi->opi_dti) && tgt_cnt != 0) {
-		rc = obj_gen_dtx_mbs(opi->opi_flags, &tgt_cnt, &tgts, &otpa.mbs);
-		if (rc != 0)
-			D_GOTO(out, rc);
-	}
+	rc = obj_gen_dtx_mbs(opi->opi_flags, &tgt_cnt, &tgts, &otpa.mbs);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	otpa.opc = opc_get(rpc->cr_opc);
 	otpa.opi = opi;
@@ -3732,7 +3733,8 @@ obj_tgt_punch_disp(struct dtx_leader_handle *dlh, void *arg, int idx, dtx_sub_co
 		if (dlh->dlh_handle.dth_prepared)
 			goto comp;
 
-		rc = obj_local_punch(opi, opc_get(rpc->cr_opc), exec_arg->ioc, &dlh->dlh_handle);
+		rc = obj_local_punch(opi, opc_get(rpc->cr_opc), 1, &opi->opi_oid.id_shard,
+				     exec_arg->ioc, &dlh->dlh_handle);
 		if (rc != 0)
 			DL_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
 				  (rc == -DER_NONEXIST && (opi->opi_api_flags & DAOS_COND_PUNCH)),
@@ -3809,11 +3811,9 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	tgts = opi->opi_shard_tgts.ca_arrays;
 	tgt_cnt = opi->opi_shard_tgts.ca_count;
 
-	if (!daos_is_zero_dti(&opi->opi_dti) && tgt_cnt != 0) {
-		rc = obj_gen_dtx_mbs(opi->opi_flags, &tgt_cnt, &tgts, &mbs);
-		if (rc != 0)
-			D_GOTO(out, rc);
-	}
+	rc = obj_gen_dtx_mbs(opi->opi_flags, &tgt_cnt, &tgts, &mbs);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	if (tgt_cnt == 0) {
 		if (!(opi->opi_api_flags & DAOS_COND_MASK))
