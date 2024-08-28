@@ -77,7 +77,7 @@ class FileCountTestBase(IorTestBase, MdtestBase):
         intercept = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
         ior_oclass = self.params.get("ior_oclass", '/run/largefilecount/object_class/*')
         mdtest_oclass = self.params.get("mdtest_oclass", '/run/largefilecount/object_class/*')
-        cont_props = self.params.get("properties", '/run/container/*')
+        #cont_props = self.params.get("properties", '/run/container/*')
 
         # create pool
         self.add_pool(connect=False)
@@ -119,10 +119,19 @@ class FileCountTestBase(IorTestBase, MdtestBase):
                     self.processes = ior_np
                     self.ppn = ior_ppn
                     if api == 'HDF5-VOL':
-                        env = {
+                        cont_props = self.container.properties.value
+                        self.log.debug(f"## cont_props = {cont_props}")
+                        # Format the container properties so that it works with HDF5-VOL env var.
+                        # Each entry:value pair needs to be separated by a semicolon. Since we're using
+                        # this in the mpirun command, semicolon would indicate the end of the command,
+                        # so quote the whole thing.
+                        cont_props_hdf5_vol = '"' + cont_props.replace(",", ";") + '"'
+                        self.log.debug(f"## cont_props_hdf5_vol = {cont_props_hdf5_vol}")
+                        env = self.ior_cmd.env.copy()
+                        env.update({
                             "HDF5_DAOS_OBJ_CLASS": oclass,
-                            "HDF5_DAOS_FILE_PROP": cont_props
-                        }
+                            "HDF5_DAOS_FILE_PROP": cont_props_hdf5_vol
+                        })
                         self.ior_cmd.api.update('HDF5')
                         self.run_ior_with_pool(
                             create_pool=False, plugin_path=hdf5_plugin_path, mount_dir=mount_dir,
