@@ -69,7 +69,6 @@ class FileCountTestBase(IorTestBase, MdtestBase):
         dir_oclass = None
         apis = self.params.get("api", "/run/largefilecount/*")
         hdf5_plugin_path = self.params.get("plugin_path", '/run/hdf5_vol/*')
-        mount_dir = self.params.get("mount_dir", "/run/dfuse/*")
         ior_np = self.params.get("np", '/run/ior/client_processes/*', 1)
         ior_ppn = self.params.get("ppn", '/run/ior/client_processes/*', None)
         mdtest_np = self.params.get("np", '/run/mdtest/client_processes/*', 1)
@@ -119,14 +118,22 @@ class FileCountTestBase(IorTestBase, MdtestBase):
                     self.processes = ior_np
                     self.ppn = ior_ppn
                     if api == 'HDF5-VOL':
-                        env = {
-                            "HDF5_DAOS_OBJ_CLASS": oclass
-                            # "HDF5_DAOS_FILE_PROP": cont_props
-                        }
+                        cont_props = self.container.properties.value
+                        self.log.debug("## cont_props = %s", cont_props)
+                        # Format the container properties so that it works with HDF5-VOL env var.
+                        # Each entry:value pair needs to be separated by a semicolon. Since we're
+                        # using this in the mpirun command, semicolon would indicate the end of the
+                        # command,so quote the whole thing.
+                        cont_props_hdf5_vol = '"' + cont_props.replace(",", ";") + '"'
+                        self.log.debug(f"## cont_props_hdf5_vol = {cont_props_hdf5_vol}")
+                        env = self.ior_cmd.env.copy()
+                        env.update({
+                            "HDF5_DAOS_OBJ_CLASS": oclass,
+                            "HDF5_DAOS_FILE_PROP": cont_props_hdf5_vol
+                        })
                         self.ior_cmd.api.update('HDF5')
                         self.run_ior_with_pool(
-                            create_pool=False, plugin_path=hdf5_plugin_path, mount_dir=mount_dir,
-                            env=env)
+                            create_pool=False, plugin_path=hdf5_plugin_path, env=env)
                     elif self.ior_cmd.api.value == 'POSIX':
                         self.run_ior_with_pool(create_pool=False, intercept=intercept)
                     else:
