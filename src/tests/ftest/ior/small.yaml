@@ -38,6 +38,8 @@ container:
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
   control_method: daos
 ior:
+  env_vars:
+    - D_IL_REPORT=1
   ior_timeout: 75
   client_processes:
     ppn: 32
