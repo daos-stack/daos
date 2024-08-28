@@ -21,7 +21,8 @@ from util.avocado_utils import AvocadoException, AvocadoInfo
 from util.code_coverage_utils import CodeCoverage
 from util.environment_utils import TestEnvironment, TestEnvironmentException, set_test_environment
 from util.host_utils import get_local_host
-from util.launch_utils import LaunchException, TestGroup, setup_fuse_config, summarize_run
+from util.launch_utils import (LaunchException, TestGroup, setup_fuse_config, setup_systemctl,
+                               summarize_run)
 from util.logger_utils import LOG_FILE_FORMAT, get_console_handler, get_file_handler
 from util.network_utils import PROVIDER_ALIAS, SUPPORTED_PROVIDERS
 from util.package_utils import find_packages
@@ -270,7 +271,8 @@ class Launch():
         # pylint: disable=unsupported-binary-operation
         all_hosts = args.test_servers | args.test_clients | self.local_host
         self.details["installed packages"] = find_packages(
-            logger, all_hosts, "'^(daos|libfabric|mercury|ior|openmpi|mpifileutils)-'")
+            logger, all_hosts,
+            "'^(daos|libfabric|mercury|ior|openmpi|mpifileutils|mlnx-ofed-basic)-'")
 
         # Setup the test environment
         test_env = TestEnvironment()
@@ -327,6 +329,15 @@ class Launch():
                 message = "Issue detected setting up the fuse configuration"
                 setup_result.warn_test(logger, "Setup", message, sys.exc_info())
 
+        # Setup override systemctl files
+        try:
+            clients = args.test_clients if args.test_clients else args.test_servers
+            cleanup_files = setup_systemctl(
+                logger, args.test_servers, clients | self.local_host, test_env)
+        except LaunchException:
+            message = "Issue detected setting up the systemctl configuration"
+            return self.get_exit_status(1, message, "Setup", sys.exc_info())
+
         # Get the core file pattern information
         core_files = {}
         if args.process_cores:
@@ -372,7 +383,7 @@ class Launch():
             logger, self.result, self.repeat, self.slurm_setup, args.sparse, args.failfast,
             not args.disable_stop_daos, args.archive, args.rename, args.jenkinslog, core_files,
             args.logs_threshold, args.user_create, code_coverage, self.job_results_dir,
-            self.logdir, args.clear_mounts)
+            self.logdir, args.clear_mounts, cleanup_files)
 
         # Convert the test status to a launch.py status
         status |= summarize_run(logger, self.mode, test_status)
