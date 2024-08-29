@@ -320,7 +320,7 @@ dfs_readdir_with_filter(dfs_t *dfs, dfs_obj_t *obj, dfs_pipeline_t *dpipe, daos_
 
 		memset(buf_keys, 0, *nr * DFS_MAX_NAME);
 
-		rc = daos_pipeline_run(dfs->coh, obj->oh, &dpipe->pipeline, DAOS_TX_NONE, 0, NULL,
+		rc = daos_pipeline_run(dfs->coh, obj->oh, &dpipe->pipeline, dfs->th, 0, NULL,
 				       &nr_iods, &iod, anchor, &nr_kds, kds, &sgl_keys, &sgl_recs,
 				       NULL, NULL, &stats, NULL);
 		if (rc)

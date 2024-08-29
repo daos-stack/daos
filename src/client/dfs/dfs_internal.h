@@ -108,6 +108,8 @@ typedef uint16_t dfs_layout_ver_t;
 
 /** object struct that is instantiated for a DFS open object */
 struct dfs_obj {
+	/** DFS mount point of object */
+	dfs_t        *dfs;
 	/** DAOS object ID */
 	daos_obj_id_t oid;
 	/** DAOS object open handle */
@@ -162,6 +164,10 @@ struct dfs {
 	daos_handle_t        coh;
 	/** refcount on cont handle that through the DFS API */
 	uint32_t             coh_refcount;
+	/** Transaction handle epoch. DAOS_EPOCH_MAX for DAOS_TX_NONE */
+	daos_epoch_t         th_epoch;
+	/** Transaction handle */
+	daos_handle_t        th;
 	/** Object ID reserved for this DFS (see oid_gen below) */
 	daos_obj_id_t        oid;
 	/** superblock object OID */
