@@ -7,9 +7,7 @@
 
 import os
 import random
-import re
 import time
-from collections import defaultdict
 from getpass import getuser
 
 from avocado import fail_on
@@ -1179,80 +1177,3 @@ class DaosServerManager(SubprocessManager):
                 command="sudo {} -S {} --csv".format(daos_metrics_exe, engine))
             engines.append(results)
         return engines
-
-    def get_host_log_files(self):
-        """Get the active engine log file names on each host.
-
-        Returns:
-            dict: host keys with lists of log files on that host values
-
-        """
-        self.log.debug("Determining the current %s log files", self.manager.job.command)
-
-        # Get a list of engine pids from all of the hosts
-        host_engine_pids = defaultdict(list)
-        result = run_remote(self.log, self.hosts, "pgrep daos_engine", False)
-        for data in result.output:
-            if data.passed:
-                # Search each individual line of output independently to ensure a pid match
-                for line in data.stdout:
-                    match = re.findall(r'(^[0-9]+)', line)
-                    for host in data.hosts:
-                        host_engine_pids[host].extend(match)
-
-        # Find the log files that match the engine pids on each host
-        host_log_files = defaultdict(list)
-        log_files = self.manager.job.get_engine_values("log_file")
-        for host, pid_list in host_engine_pids.items():
-            # Generate a list of all of the possible log files that could exist on this host
-            file_search = []
-            for log_file in log_files:
-                for pid in pid_list:
-                    file_search.append(".".join([log_file, pid]))
-            # Determine which of those log files actually do exist on this host
-            # This matches the engine pid to the engine log file name
-            command = f"ls -1 {' '.join(file_search)} 2>&1 | grep -v 'No such file or directory'"
-            result = run_remote(self.log, host, command, False)
-            for data in result.output:
-                for line in data.stdout:
-                    match = re.findall(fr"^({'|'.join(file_search)})", line)
-                    if match:
-                        host_log_files[host].append(match[0])
-
-        self.log.debug("Engine log files per host")
-        for host in sorted(host_log_files):
-            self.log.debug("  %s:", host)
-            for log_file in sorted(host_log_files[host]):
-                self.log.debug("    %s", log_file)
-
-        return host_log_files
-
-    def search_log(self, pattern):
-        """Search the server log files on the remote hosts for the specified pattern.
-
-        Args:
-            pattern (str): the grep -E pattern to use to search the server log files
-
-        Returns:
-            int: number of patterns found
-
-        """
-        self.log.debug("Searching %s logs for '%s'", self.manager.job.command, pattern)
-        host_log_files = self.get_host_log_files()
-
-        # Search for the pattern in the remote log files
-        matches = 0
-        for host, log_files in host_log_files.items():
-            log_file_matches = 0
-            self.log.debug("Searching for '%s' in %s on %s", pattern, log_files, host)
-            result = run_remote(self.log, host, f"grep -E '{pattern}' {' '.join(log_files)}")
-            for data in result.output:
-                if data.returncode == 0:
-                    matches = re.findall(fr'{pattern}', '\n'.join(data.stdout))
-                    log_file_matches += len(matches)
-            self.log.debug("Found %s matches on %s", log_file_matches, host)
-            matches += log_file_matches
-        self.log.debug(
-            "Found %s total matches for '%s' in the %s logs",
-            matches, pattern, self.manager.job.command)
-        return matches
