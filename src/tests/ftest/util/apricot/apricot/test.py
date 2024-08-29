@@ -1320,7 +1320,6 @@ class TestWithServers(TestWithoutServers):
         self.log.info("-" * 100)
         self.log.info("--- SERVER INFORMATION ---")
         for manager in self.server_managers:
-            manager.get_host_log_files()
             try:
                 manager.dmg.storage_query_list_devices()
             except CommandFailure:
