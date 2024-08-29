@@ -38,7 +38,7 @@ jobs:
 
       DISTRO: EL_8
       DAOS_STACK_EL_8_LOCAL_REPO: not_used
-      
+
       DAOS_STACK_EL_8_GROUP_REPO:
       DAOS_STACK_EL_8_APPSTREAM_REPO:
 
@@ -59,7 +59,7 @@ jobs:
       STAGE_NAME: STAGE_RYON
       QUEUE_URL:
       COMMIT_STATUS_DISTRO_VERSION:
-      PROVISION_DISTRO: EL_
+      PROVISION_DISTRO: EL_8
 
 
     steps:
