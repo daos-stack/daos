@@ -31,10 +31,11 @@ jobs:
       OPENMPI: "openmpi"
       LABEL: "ci_vm1"
 
-      DSL_REPO_var: "DAOS_STACK_EL_8_LOCAL_REPO"
-      DSG_REPO_var: "DAOS_STACK_EL_8_GROUP_REPO"
-      DSA_REPO_var: "DAOS_STACK_EL_8_APPSTREAM_REPO"
-      
+      DISTRO: EL_8
+      DAOS_STACK_EL_8_LOCAL_REPO:
+      DAOS_STACK_EL_8_GROUP_REPO:
+      DAOS_STACK_EL_8_APPSTREAM_REPO:
+
 
     steps:
       - name: Checkout code
