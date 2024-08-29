@@ -99,21 +99,6 @@
 /** Max recursion depth for symlinks */
 #define DFS_MAX_RECURSION  40
 
-/** MAX value for the HI OID */
-#define MAX_OID_HI         ((1UL << 32) - 1)
-
-/** Use a large prime for cycling through all oids */
-#define OID_INC            (999999937)
-
-static inline void
-oid_inc(daos_obj_id_t *oid)
-{
-	oid->hi = (oid->hi + OID_INC) & MAX_OID_HI;
-	/** Skip reserved entries */
-	if (oid->lo == RESERVED_LO && oid->hi <= 1)
-		oid->hi += OID_INC;
-}
-
 typedef uint64_t dfs_magic_t;
 typedef uint16_t dfs_sb_ver_t;
 typedef uint16_t dfs_layout_ver_t;
@@ -371,7 +356,9 @@ oid_gen(dfs_t *dfs, daos_oclass_id_t oclass, bool file, daos_obj_id_t *oid)
 
 	/** set oid and lo, bump the current hi value */
 	oid->lo = dfs->oid.lo;
-	oid_inc(&dfs->oid);
+	daos_obj_oid_cycle(&dfs->oid);
+	if (unlikely(dfs->oid.lo == RESERVED_LO && dfs->oid.hi <= 1))
+		daos_obj_oid_cycle(&dfs->oid); /* Avoid reserved oids */
 	oid->hi = dfs->oid.hi;
 	D_MUTEX_UNLOCK(&dfs->lock);
 

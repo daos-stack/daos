@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -563,6 +563,21 @@ int
 daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 		      enum daos_otype_t type, daos_oclass_id_t cid,
 		      daos_oclass_hints_t hints, uint32_t args);
+
+
+/**
+ * This function, if called 2^32 times will set oid->hi to every unique 32-bit
+ * value. The caller is responsible for setting the initial value, tracking the
+ * final value, and avoiding any values that are otherwise reserved.
+ *
+ * \param[in, out]	oid	oid to cycle
+ */
+static inline void
+daos_obj_oid_cycle(daos_obj_id_t *oid)
+{
+	/** Uses a large prime number to guarantee hitting every unique value */
+	oid->hi = (oid->hi + 999999937) & UINT_MAX;
+}
 
 /**
  * Open an DAOS object.

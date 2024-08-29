@@ -688,7 +688,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 		dfs->last_hi = (unsigned int)d_rand();
 		/** Avoid potential conflict with SB or ROOT */
 		if (dfs->last_hi <= 1)
-			dfs->last_hi += OID_INC;
+			dfs->last_hi = 2;
 
 		rc = daos_cont_alloc_oids(coh, 1, &dfs->oid.lo, NULL);
 		if (rc) {
@@ -696,13 +696,9 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 			D_GOTO(err_root, rc = daos_der2errno(rc));
 		}
 
-		/*
-		 * if this is the first time we allocate on this container,
-		 * account 0 for SB, 1 for root obj.
-		 */
 		dfs->oid.hi = dfs->last_hi;
 		/** Increment so that dfs->last_hi is the last value */
-		oid_inc(&dfs->oid);
+		daos_obj_oid_cycle(&dfs->oid);
 	}
 
 	dfs->mounted = DFS_MOUNT;
