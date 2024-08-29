@@ -578,7 +578,7 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	struct ds_iv_class	*class;
 	struct ds_iv_key	key;
 	struct iv_priv_entry	*priv_entry;
-	void			*entry_priv_val;
+	void			*entry_priv_val = NULL;
 	bool			alloc_entry = false;
 	int			rc;
 
@@ -978,7 +978,7 @@ ds_iv_done(crt_iv_namespace_t ivns, uint32_t class_id,
 				iv_value->sg_iovs[0].iov_len);
 	}
 
-	ABT_future_set(cb_info->future, &rc);
+	ABT_future_set(cb_info->future, NULL);
 	return ret;
 }
 
