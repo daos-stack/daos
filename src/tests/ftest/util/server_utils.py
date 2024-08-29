@@ -464,14 +464,6 @@ class DaosServerManager(SubprocessManager):
         return run_remote(
             self.log, self._hosts, cmd.with_exports, timeout=self.collect_log_timeout.value)
 
-    def display_memory_info(self):
-        """Display server hosts memory info."""
-        self.log.debug("#" * 80)
-        self.log.debug("<SERVER> Collection debug memory info")
-        run_remote(self.log, self._hosts, "free -m && df -h --type=tmpfs")
-        run_remote(self.log, self._hosts, "ps -eo size,pid,user,command --sort -size | head -n 6")
-        self.log.debug("#" * 80)
-
     def detect_format_ready(self, reformat=False):
         """Detect when all the daos_servers are ready for storage format.
 
@@ -664,14 +656,11 @@ class DaosServerManager(SubprocessManager):
         self.prepare()
 
         # Start the servers and wait for them to be ready for storage format
-        self.display_memory_info()
         self.detect_format_ready()
 
         # Collect storage and network information from the servers.
-        self.display_memory_info()
         self.information.collect_storage_information()
         self.information.collect_network_information()
-        self.display_memory_info()
 
         # Format storage and wait for server to change ownership
         self.log.info("<SERVER> Formatting hosts: <%s>", self.dmg.hostlist)
@@ -710,9 +699,6 @@ class DaosServerManager(SubprocessManager):
 
             # Make sure the mount directory belongs to non-root user
             self.set_scm_mount_ownership()
-
-        # Collective memory usage after stop.
-        self.display_memory_info()
 
         # Report any errors after all stop actions have been attempted
         if messages:
