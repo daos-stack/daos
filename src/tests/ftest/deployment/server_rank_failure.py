@@ -39,7 +39,7 @@ class ServerRankFailure(IorTestBase):
                 Defaults to None, in which case infinite.
         """
         # Update the object class depending on the test case.
-        ior_cmd = IorCommand(namespace=namespace)
+        ior_cmd = IorCommand(self.test_env.log_dir, namespace=namespace)
         ior_cmd.get_params(self)
 
         # Standard IOR prep sequence.
@@ -85,8 +85,8 @@ class ServerRankFailure(IorTestBase):
 
     def kill_engine(self):
         """Kill a random, running, non-management service engine rank."""
-        rank = self.server_managers[0].get_random_ranks(1)[0]
-        detected, running = self.server_managers[0].kill_rank(rank)
+        rank = self.server_managers[0].get_random_ranks(1)
+        detected, running = self.server_managers[0].kill_ranks(rank)
         if not detected:
             self.fail(f"Error killing server engine rank {rank} - not detected")
         if running:

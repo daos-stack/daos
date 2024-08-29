@@ -146,6 +146,6 @@ dfs_get_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t *size)
 	if (obj == NULL || !S_ISREG(obj->mode))
 		return EINVAL;
 
-	rc = daos_array_get_size(obj->oh, DAOS_TX_NONE, size, NULL);
+	rc = daos_array_get_size(obj->oh, dfs->th, size, NULL);
 	return daos_der2errno(rc);
 }
