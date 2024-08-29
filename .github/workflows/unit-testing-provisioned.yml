@@ -63,6 +63,23 @@ jobs:
       COMMIT_STATUS_DISTRO_VERSION:
       PROVISION_DISTRO: EL_8
 
+
+# anything missiong ...
+      ARTIFACTORY_URL: https://artifactory.dc.hpdd.intel.com/
+      DAOS_FULLNAME: daos-stack
+      DISTRO_REPOS: disabled
+      DOCKER_BUILDKIT: 0
+      MOCK_OPTIONS: --uniqueext=10390383274
+      PR_NUM: 14943
+      RUN_ID: ${{ github.run_id }}
+      TARGET: el8
+      FVERSION:
+      CP_RUN_GHA: true
+      CP_DOC_ONLY: false
+      BUILD_CHROOT: /var/lib/mock/rocky+epel-8-x86_64-10390383274/
+
+
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
