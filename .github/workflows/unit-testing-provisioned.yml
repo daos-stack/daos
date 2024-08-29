@@ -9,6 +9,16 @@ jobs:
   Build_and_unit_test:
     name: "Build and Run Unit Tests for Ryon"
     runs-on: [self-hosted, wolf]
+    env:
+      CHROOT_NAME: "rocky+epel-8-x86_64"
+      DISTRO_NAME: "EL"
+      DISTRO_NAME_UPPER: "EL"
+      DISTRO_NAME_LOWER: "el"
+      DISTRO_VERSION: "${{ env.CP_EL8_VERSION &&
+      env.CP_EL8_VERSION || env.EL8_VERSION }}"
+      DISTRO_VERSION_MAJOR: "8"
+      OPENMPI: "openmpi"
+      LABEL: "ci_vm9"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
