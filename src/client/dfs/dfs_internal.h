@@ -102,6 +102,18 @@
 /** MAX value for the HI OID */
 #define MAX_OID_HI         ((1UL << 32) - 1)
 
+/** Use a large prime for cycling through all oids */
+#define OID_INC            (999999937)
+
+static inline void
+oid_inc(daos_obj_id_t *oid)
+{
+	oid->hi = (oid->hi + OID_INC) & MAX_OID_HI;
+	/** Skip reserved entries */
+	if (oid->lo == RESERVED_LO && oid->hi <= 1)
+		oid->hi += OID_INC;
+}
+
 typedef uint64_t dfs_magic_t;
 typedef uint16_t dfs_sb_ver_t;
 typedef uint16_t dfs_layout_ver_t;
@@ -164,6 +176,8 @@ struct dfs {
 	daos_handle_t        coh;
 	/** refcount on cont handle that through the DFS API */
 	uint32_t             coh_refcount;
+	/** The last oid.hi in the sequence */
+	uint32_t             last_hi;
 	/** Transaction handle epoch. DAOS_EPOCH_MAX for DAOS_TX_NONE */
 	daos_epoch_t         th_epoch;
 	/** Transaction handle */
@@ -343,7 +357,7 @@ oid_gen(dfs_t *dfs, daos_oclass_id_t oclass, bool file, daos_obj_id_t *oid)
 
 	D_MUTEX_LOCK(&dfs->lock);
 	/** If we ran out of local OIDs, alloc one from the container */
-	if (dfs->oid.hi >= MAX_OID_HI) {
+	if (dfs->oid.hi == dfs->last_hi) {
 		/** Allocate an OID for the namespace */
 		rc = daos_cont_alloc_oids(dfs->coh, 1, &dfs->oid.lo, NULL);
 		if (rc) {
@@ -351,12 +365,14 @@ oid_gen(dfs_t *dfs, daos_oclass_id_t oclass, bool file, daos_obj_id_t *oid)
 			D_MUTEX_UNLOCK(&dfs->lock);
 			return daos_der2errno(rc);
 		}
-		dfs->oid.hi = 0;
+		/** Start such that dfs->last_hi will be final value */
+		dfs->oid.hi = dfs->last_hi;
 	}
 
 	/** set oid and lo, bump the current hi value */
 	oid->lo = dfs->oid.lo;
-	oid->hi = dfs->oid.hi++;
+	oid_inc(&dfs->oid);
+	oid->hi = dfs->oid.hi;
 	D_MUTEX_UNLOCK(&dfs->lock);
 
 	/** if a regular file, use UINT64 typed dkeys for the array object */
