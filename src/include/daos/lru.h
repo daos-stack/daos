@@ -37,7 +37,7 @@ struct daos_llink {
 	d_list_t		 ll_link;	/**< LRU hash link */
 	d_list_t		 ll_qlink;	/**< Temp link for traverse */
 	uint32_t		 ll_ref;	/**< refcount for this ref */
-	uint32_t		 ll_evicted:1,	/**< has been evicted */
+	uint32_t		 ll_evicted:1;	/**< has been evicted */
 	uint32_t		 ll_wait_evict:1; /**< wait for completion of eviction */
 	struct daos_llink_ops	*ll_ops;	/**< ops to maintain refs */
 };
