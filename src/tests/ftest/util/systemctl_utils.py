@@ -124,7 +124,7 @@ def get_systemctl_command(unit_command, service, user="root"):
     """
     command = ["systemctl"]
     if user != "root":
-        command.append(f"--user {user}")
+        command.append("--user")
     if unit_command:
         command.append(unit_command)
     if service:
