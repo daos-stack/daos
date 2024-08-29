@@ -16,10 +16,7 @@ from itertools import count, product
 
 from avocado.core.exceptions import TestFail
 from avocado.utils.distro import detect
-<<<<<<< HEAD
 from ClusterShell.NodeSet import NodeSet
-=======
->>>>>>> origin/aurora/2.6
 from command_utils import command_as_user
 from command_utils_base import EnvironmentVariables
 from daos_racer_utils import DaosRacerCommand
@@ -38,11 +35,7 @@ from macsio_util import MacsioCommand
 from mdtest_utils import MdtestCommand
 from oclass_utils import extract_redundancy_factor
 from pydaos.raw import DaosApiError, DaosSnapshot
-<<<<<<< HEAD
 from run_utils import daos_env_str, run_local, run_remote
-=======
-from run_utils import daos_env_str, run_remote
->>>>>>> origin/aurora/2.6
 from test_utils_container import add_container
 
 H_LOCK = threading.Lock()
