@@ -111,7 +111,7 @@ dtx_coll_prep(uuid_t po_uuid, daos_unit_oid_t oid, struct dtx_id *xid, struct dt
 	struct dtx_coll_target	*dct;
 	struct dtx_coll_entry	*dce = NULL;
 	struct daos_obj_md	 md = { 0 };
-	uint32_t		 node_nr;
+	uint32_t		 rank_nr;
 	d_rank_t		 my_rank = dss_self_rank();
 	d_rank_t		 max_rank = 0;
 	int			 rc = 0;
@@ -191,19 +191,19 @@ dtx_coll_prep(uuid_t po_uuid, daos_unit_oid_t oid, struct dtx_id *xid, struct dt
 		}
 	}
 
-	node_nr = pool_map_node_nr(map->pl_poolmap);
-	if (unlikely(node_nr == 1))
+	rank_nr = pool_map_rank_nr(map->pl_poolmap);
+	if (unlikely(rank_nr == 1))
 		D_GOTO(out, rc = 0);
 
-	dce->dce_ranks = d_rank_list_alloc(node_nr - 1);
+	dce->dce_ranks = d_rank_list_alloc(rank_nr - 1);
 	if (dce->dce_ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	D_ALLOC_ARRAY(dce->dce_hints, node_nr);
+	D_ALLOC_ARRAY(dce->dce_hints, rank_nr);
 	if (dce->dce_hints == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	for (i = 0; i < node_nr; i++)
+	for (i = 0; i < rank_nr; i++)
 		dce->dce_hints[i] = (uint8_t)(-1);
 
 	md.omd_id = oid.id_pub;
@@ -219,7 +219,7 @@ dtx_coll_prep(uuid_t po_uuid, daos_unit_oid_t oid, struct dtx_id *xid, struct dt
 		goto out;
 	}
 
-	for (i = 0, j = 0; i < layout->ol_nr && j < node_nr - 1; i++) {
+	for (i = 0, j = 0; i < layout->ol_nr && j < rank_nr - 1; i++) {
 		if (layout->ol_shards[i].po_target == -1 || layout->ol_shards[i].po_shard == -1)
 			continue;
 

@@ -291,7 +291,7 @@ obj_coll_punch_prep(struct obj_coll_punch_in *ocpi, struct daos_coll_target *dct
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	size = pool_map_node_nr(map->pl_poolmap);
+	size = pool_map_rank_nr(map->pl_poolmap);
 	D_ALLOC_ARRAY(dce->dce_hints, size);
 	if (dce->dce_hints == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);

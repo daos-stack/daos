@@ -186,6 +186,7 @@ struct pool_svc {
 	uint32_t                ps_ops_enabled;        /* cached ds_pool_prop_svc_ops_enabled */
 	uint32_t                ps_ops_max;            /* cached ds_pool_prop_svc_ops_max */
 	uint32_t                ps_ops_age;            /* cached ds_pool_prop_svc_ops_age */
+	d_rank_list_t		ps_derl;               /* delayed exclude rank list */
 };
 
 /* Pool service failed to start */
@@ -1363,31 +1364,76 @@ handle_event(struct pool_svc *svc, struct pool_svc_event *event)
 		DP_PS_EVENT(event));
 
 	if (event->psv_src == CRT_EVS_SWIM && event->psv_type == CRT_EVT_ALIVE) {
-		/*
-		 * Check if the rank is up in the pool map. If in the future we
-		 * add automatic reintegration below, for instance, we may need
-		 * to not only take svc->ps_lock, but also employ an RDB TX by
-		 * the book.
-		 */
-		ABT_rwlock_rdlock(svc->ps_pool->sp_lock);
-		rc = ds_pool_map_rank_up(svc->ps_pool->sp_map, event->psv_rank);
-		ABT_rwlock_unlock(svc->ps_pool->sp_lock);
-		if (!rc)
-			goto out;
+		if (d_rank_in_rank_list(&svc->ps_derl, event->psv_rank)) {
+			rc = d_rank_list_del(&svc->ps_derl, event->psv_rank);
+			D_INFO("delete rank %d from DERL list, rc %d.\n", event->psv_rank, rc);
+		} else {
+			/*
+			 * Check if the rank is up in the pool map. If in the future we
+			 * add automatic reintegration below, for instance, we may need
+			 * to not only take svc->ps_lock, but also employ an RDB TX by
+			 * the book.
+			 */
+			ABT_rwlock_rdlock(svc->ps_pool->sp_lock);
+			rc = ds_pool_map_rank_up(svc->ps_pool->sp_map, event->psv_rank);
+			ABT_rwlock_unlock(svc->ps_pool->sp_lock);
+			if (!rc)
+				goto out;
+
+			/*
+			 * The rank is up in the pool map. Request a pool map
+			 * distribution just in case the rank has recently restarted
+			 * and does not have a copy of the pool map.
+			 */
+			ds_rsvc_request_map_dist(&svc->ps_rsvc);
+			D_DEBUG(DB_MD, DF_UUID": requested map dist for rank %u\n", DP_UUID(svc->ps_uuid),
+				event->psv_rank);
+		}
+	} else if (event->psv_type == CRT_EVT_DEAD) {
+		bool	delayed_exclude = false;
+		int	i;
 
 		/*
-		 * The rank is up in the pool map. Request a pool map
-		 * distribution just in case the rank has recently restarted
-		 * and does not have a copy of the pool map.
+		 * If DERL non empty or if the newly failed engine will break pw_rf, don't change
+		 * pool map and just added it to DERL list.
+		 * With critical log message to ask administrator to bing back the engines in
+		 * DERL list in top priority.
 		 */
-		ds_rsvc_request_map_dist(&svc->ps_rsvc);
-		D_DEBUG(DB_MD, DF_UUID": requested map dist for rank %u\n", DP_UUID(svc->ps_uuid),
-			event->psv_rank);
-	} else if (event->psv_type == CRT_EVT_DEAD) {
-		rc = pool_svc_exclude_rank(svc, event->psv_rank);
-		if (rc != 0)
-			D_ERROR(DF_UUID": failed to exclude rank %u: "DF_RC"\n",
-				DP_UUID(svc->ps_uuid), event->psv_rank, DP_RC(rc));
+		ABT_rwlock_rdlock(svc->ps_pool->sp_lock);
+		D_ASSERTF(svc->ps_pool->sp_failed_fdom_nr <= pw_rf,
+			  "sp_failed_fdom_nr %d, pw_rf %d\n",
+			  svc->ps_pool->sp_failed_fdom_nr, pw_rf);
+		if (svc->ps_derl.rl_nr > 0) {
+			if (d_rank_in_rank_list(&svc->ps_derl, event->psv_rank)) {
+				D_INFO("rank %d already excluded, in delayed exclude rank list.\n",
+				       event->psv_rank);
+			} else {
+				rc = d_rank_list_append(&svc->ps_derl, event->psv_rank);
+				D_INFO("added rank %d to delayed exclude rank list, rc %d\n",
+				       event->psv_rank, rc);
+			}
+			delayed_exclude = true;
+		} else if (svc->ps_pool->sp_failed_fdom_nr == pw_rf &&
+			   !pool_map_node_of_rank_is_down(svc->ps_pool->sp_map, event->psv_rank)) {
+			rc = d_rank_list_append(&svc->ps_derl, event->psv_rank);
+			D_INFO("added rank %d to delayed exclude rank list, rc %d\n",
+			       event->psv_rank, rc);
+			delayed_exclude = true;
+		}
+		ABT_rwlock_unlock(svc->ps_pool->sp_lock);
+
+		if (delayed_exclude) {
+			D_CRIT("System entered DELAYED_EXCLUDE mode!!!!!!\n");
+			D_CRIT("Please check and bring back these engines in top priority -\n");
+			for (i = 0; i < svc->ps_derl.rl_nr; i++) {
+				D_CRIT("engine rank %4d\n", svc->ps_derl.rl_ranks[i]);
+			}
+		} else {
+			rc = pool_svc_exclude_rank(svc, event->psv_rank);
+			if (rc != 0)
+				D_ERROR(DF_UUID": failed to exclude rank %u: "DF_RC"\n",
+					DP_UUID(svc->ps_uuid), event->psv_rank, DP_RC(rc));
+		}
 	}
 
 out:
@@ -1809,7 +1855,7 @@ pool_svc_check_node_status(struct pool_svc *svc)
 
 	D_DEBUG(DB_MD, DF_UUID": checking node status\n", DP_UUID(svc->ps_uuid));
 	ABT_rwlock_rdlock(svc->ps_pool->sp_lock);
-	doms_cnt = pool_map_find_nodes(svc->ps_pool->sp_map, PO_COMP_ID_ALL,
+	doms_cnt = pool_map_find_ranks(svc->ps_pool->sp_map, PO_COMP_ID_ALL,
 				       &doms);
 	D_ASSERT(doms_cnt >= 0);
 	for (i = 0; i < doms_cnt; i++) {
@@ -6628,7 +6674,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 	 * If the map modification affects myself, leave it to a new PS leader
 	 * if there's another PS replica, or reject it.
 	 */
-	node = pool_map_find_node_by_rank(map, dss_self_rank());
+	node = pool_map_find_dom_by_rank(map, dss_self_rank());
 	if (node == NULL || !(node->do_comp.co_status & DC_POOL_SVC_MAP_STATES)) {
 		d_rank_list_t *replicas;
 

@@ -1573,7 +1573,7 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 			if (map) {
 				struct pool_domain *found_dom;
 
-				found_dom = pool_map_find_node_by_rank(map, rank);
+				found_dom = pool_map_find_dom_by_rank(map, rank);
 				if (found_dom) {
 					if (found_dom->do_comp.co_status == PO_COMP_ST_NEW)
 						found_new_dom = true;
@@ -2038,7 +2038,7 @@ pool_map_find_domain(struct pool_map *map, pool_comp_type_t type, uint32_t id,
 }
 
 /**
- * Find all nodes in the pool map.
+ * Find all ranks in the pool map.
  *
  * \param map	[IN]	pool map to search.
  * \param id	[IN]	id to search.
@@ -2048,7 +2048,7 @@ pool_map_find_domain(struct pool_map *map, pool_comp_type_t type, uint32_t id,
  *                      0 if none.
  */
 int
-pool_map_find_nodes(struct pool_map *map, uint32_t id,
+pool_map_find_ranks(struct pool_map *map, uint32_t id,
 		    struct pool_domain **domain_pp)
 {
 	return pool_map_find_domain(map, PO_COMP_TP_RANK, id,
@@ -2102,14 +2102,14 @@ pool_map_find_target(struct pool_map *map, uint32_t id,
  * \return              domain found by rank.
  */
 struct pool_domain *
-pool_map_find_node_by_rank(struct pool_map *map, uint32_t rank)
+pool_map_find_dom_by_rank(struct pool_map *map, uint32_t rank)
 {
 	struct pool_domain	*doms;
 	struct pool_domain	*found = NULL;
 	int			doms_cnt;
 	int			i;
 
-	doms_cnt = pool_map_find_nodes(map, PO_COMP_ID_ALL, &doms);
+	doms_cnt = pool_map_find_ranks(map, PO_COMP_ID_ALL, &doms);
 	if (doms_cnt <= 0)
 		return NULL;
 
@@ -2150,7 +2150,7 @@ pool_map_find_targets_on_ranks(struct pool_map *map, d_rank_list_t *rank_list,
 	for (i = 0; i < rank_list->rl_nr; i++) {
 		struct pool_domain *dom;
 
-		dom = pool_map_find_node_by_rank(map, rank_list->rl_ranks[i]);
+		dom = pool_map_find_dom_by_rank(map, rank_list->rl_ranks[i]);
 		if (dom == NULL) {
 			pool_target_id_list_free(tgts);
 			return 0;
@@ -2191,7 +2191,7 @@ pool_map_find_target_by_rank_idx(struct pool_map *map, uint32_t rank,
 {
 	struct pool_domain	*dom;
 
-	dom = pool_map_find_node_by_rank(map, rank);
+	dom = pool_map_find_dom_by_rank(map, rank);
 	if (dom == NULL)
 		return 0;
 
@@ -2867,7 +2867,7 @@ pool_map_find_by_rank_status(struct pool_map *map,
 
 	*tgt_ppp = NULL;
 	*tgt_cnt = 0;
-	dom = pool_map_find_node_by_rank(map, rank);
+	dom = pool_map_find_dom_by_rank(map, rank);
 	if (dom == NULL)
 		return 0;
 
@@ -2902,7 +2902,7 @@ pool_map_get_ranks(uuid_t pool_uuid, struct pool_map *map, bool get_enabled, d_r
 	struct pool_domain	*domains = NULL;
 	d_rank_list_t		*ranklist = NULL;
 
-	nnodes_tot = pool_map_find_nodes(map, PO_COMP_ID_ALL, &domains);
+	nnodes_tot = pool_map_find_ranks(map, PO_COMP_ID_ALL, &domains);
 	for (i = 0; i < nnodes_tot; i++) {
 		if (pool_map_node_status_match(&domains[i], ENABLED))
 			nnodes_enabled++;
@@ -3292,4 +3292,50 @@ pool_map_failure_domain_level(struct pool_map *map, uint32_t level)
 	}
 
 	return -DER_INVAL;
+}
+
+/**
+ * Query if the NODE domain the \a rank located is DOWN.
+ */
+bool
+pool_map_node_of_rank_is_down(struct pool_map *map, uint32_t rank)
+{
+	struct pool_domain	*doms;
+	struct pool_domain	*dom, *child;
+	struct pool_target	*tgt;
+	int			 dom_nr;
+	bool			 found = false;
+	int			 i, j;
+
+	dom_nr = pool_map_find_domain(map, PO_COMP_TP_NODE, PO_COMP_ID_ALL, &doms);
+	D_ASSERTF(dom_nr > 0, "dom_nr %d\n", dom_nr);
+
+	for (i = 0; i < dom_nr; i++) {
+		dom = &doms[i];
+		if (dom->do_comp.co_nr == 0 || dom->do_children == NULL)
+			continue;
+
+		for (j = 0; j < dom->do_comp.co_nr; j++) {
+			child = &dom->do_children[j];
+			D_ASSERT(child->do_comp.co_type == PO_COMP_TP_RANK);
+			if (child->do_comp.co_rank == rank) {
+				found = true;
+				break;
+			}
+		}
+
+		if (!found)
+			continue;
+
+		if (dom->do_comp.co_status == PO_COMP_ST_DOWN)
+			return true;
+
+		for (j = 0; j < dom->do_target_nr; j++) {
+			tgt = &dom->do_targets[i];
+			if (tgt->ta_comp.co_status == PO_COMP_ST_DOWN)
+				return true;
+		}
+	}
+
+	return false;
 }

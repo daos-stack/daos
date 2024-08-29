@@ -19,7 +19,12 @@
 #include "rpc.h"
 #include "srv_internal.h"
 #include "srv_layout.h"
-bool ec_agg_disabled;
+
+bool		ec_agg_disabled;
+uint32_t	pw_rf; /* pool wise RF */
+#define PW_RF_DEFAULT	(3)
+#define PW_RF_MIN	(1)
+#define PW_RF_MAX	(4)
 
 static int
 init(void)
@@ -46,6 +51,15 @@ init(void)
 	d_getenv_bool("DAOS_EC_AGG_DISABLE", &ec_agg_disabled);
 	if (unlikely(ec_agg_disabled))
 		D_WARN("EC aggregation is disabled.\n");
+
+	pw_rf = PW_RF_DEFAULT;
+	d_getenv_uint32_t("DAOS_PW_RF", &pw_rf);
+	if (pw_rf < PW_RF_MIN || pw_rf > PW_RF_MAX) {
+		D_INFO("pw_rf %d is out of range [%d, %d], take default %d\n",
+		       pw_rf, PW_RF_MIN, PW_RF_MAX, PW_RF_DEFAULT);
+		pw_rf = PW_RF_DEFAULT;
+	}
+	D_INFO("pool wise RF %d\n", pw_rf);
 
 	ds_pool_rsvc_class_register();
 

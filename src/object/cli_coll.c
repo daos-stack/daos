@@ -139,7 +139,7 @@ obj_coll_oper_args_init(struct coll_oper_args *coa, struct dc_object *obj, bool 
 	D_ASSERT(coa->coa_dcts == NULL);
 
 	D_RWLOCK_RDLOCK(&pool->dp_map_lock);
-	pool_ranks = pool_map_node_nr(pool->dp_map);
+	pool_ranks = pool_map_rank_nr(pool->dp_map);
 	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 
 	D_RWLOCK_RDLOCK(&obj->cob_lock);

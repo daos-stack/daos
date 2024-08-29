@@ -648,7 +648,7 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 		for (i = 0; i < excluded.rl_nr; i++) {
 			struct pool_domain *dom;
 
-			dom = pool_map_find_node_by_rank(pool->sp_map, excluded.rl_ranks[i]);
+			dom = pool_map_find_dom_by_rank(pool->sp_map, excluded.rl_ranks[i]);
 			D_ASSERT(dom != NULL);
 
 			if (rgt->rgt_opc == RB_OP_REBUILD) {
@@ -757,7 +757,7 @@ rebuild_global_pool_tracker_create(struct ds_pool *pool, uint32_t ver, uint32_t 
 				   uint32_t opc, struct rebuild_global_pool_tracker **p_rgt)
 {
 	struct rebuild_global_pool_tracker *rgt;
-	int node_nr;
+	int rank_nr;
 	struct pool_domain *doms;
 	int i;
 	int rc = 0;
@@ -767,11 +767,11 @@ rebuild_global_pool_tracker_create(struct ds_pool *pool, uint32_t ver, uint32_t 
 		return -DER_NOMEM;
 
 	D_INIT_LIST_HEAD(&rgt->rgt_list);
-	node_nr = pool_map_find_nodes(pool->sp_map, PO_COMP_ID_ALL, &doms);
-	if (node_nr < 0)
-		D_GOTO(out, rc = node_nr);
+	rank_nr = pool_map_find_ranks(pool->sp_map, PO_COMP_ID_ALL, &doms);
+	if (rank_nr < 0)
+		D_GOTO(out, rc = rank_nr);
 
-	D_ALLOC_ARRAY(rgt->rgt_servers, node_nr);
+	D_ALLOC_ARRAY(rgt->rgt_servers, rank_nr);
 	if (rgt->rgt_servers == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -783,9 +783,9 @@ rebuild_global_pool_tracker_create(struct ds_pool *pool, uint32_t ver, uint32_t 
 	if (rc != ABT_SUCCESS)
 		D_GOTO(out, rc = dss_abterr2der(rc));
 
-	for (i = 0; i < node_nr; i++)
+	for (i = 0; i < rank_nr; i++)
 		rgt->rgt_servers[i].rank = doms[i].do_comp.co_rank;
-	rgt->rgt_servers_number = node_nr;
+	rgt->rgt_servers_number = rank_nr;
 
 	uuid_copy(rgt->rgt_pool_uuid, pool->sp_uuid);
 	rgt->rgt_rebuild_ver = ver;
@@ -954,7 +954,7 @@ rebuild_scan_broadcast(struct ds_pool *pool, struct rebuild_global_pool_tracker 
 		for (i = 0; i < up_ranks.rl_nr; i++) {
 			struct pool_domain *dom;
 
-			dom = pool_map_find_node_by_rank(pool->sp_map, up_ranks.rl_ranks[i]);
+			dom = pool_map_find_dom_by_rank(pool->sp_map, up_ranks.rl_ranks[i]);
 			D_ASSERT(dom != NULL);
 			D_DEBUG(DB_REBUILD, DF_RB " rank %u co_in_ver %u\n", DP_RB_RGT(rgt),
 				up_ranks.rl_ranks[i], dom->do_comp.co_in_ver);

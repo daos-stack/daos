@@ -16,6 +16,8 @@
 #include <daos_security.h>
 #include <gurt/telemetry_common.h>
 
+extern uint32_t pw_rf;
+
 /**
  * Global pool metrics
  */

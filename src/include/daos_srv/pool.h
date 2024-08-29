@@ -114,6 +114,10 @@ struct ds_pool {
 	uint32_t                 sp_checkpoint_freq;
 	uint32_t                 sp_checkpoint_thresh;
 	uint32_t		 sp_reint_mode;
+	/** fault domain level, enum pool_comp_type */
+	uint32_t		 sp_fdom_lvl;
+	/** failed fault domain number */
+	uint32_t		 sp_failed_fdom_nr;
 };
 
 int ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool);

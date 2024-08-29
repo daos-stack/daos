@@ -3386,7 +3386,7 @@ dc_cont_node_id2ptr(daos_handle_t coh, uint32_t node_id,
 	pool = dc_hdl2pool(dc->dc_pool_hdl);
 	D_ASSERT(pool != NULL);
 	D_RWLOCK_RDLOCK(&pool->dp_map_lock);
-	n = pool_map_find_nodes(pool->dp_map, node_id, dom);
+	n = pool_map_find_ranks(pool->dp_map, node_id, dom);
 	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 	dc_pool_put(pool);
 	dc_cont_put(dc);

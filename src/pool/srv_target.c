@@ -1863,9 +1863,19 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 					     update_child_map, pool, 0);
 		D_ASSERT(rc == 0);
 
+		pool->sp_fdom_lvl = PO_COMP_TP_NODE;
+		rc = pool_map_get_failed_cnt(pool->sp_map, pool->sp_fdom_lvl);
+		if (rc < 0) {
+			DL_ERROR(rc, "pool_map_down_fdom_nr faled\n");
+			goto out;
+		}
+		pool->sp_failed_fdom_nr = rc;
+		rc = 0;
+
 		map_updated = true;
-		D_INFO(DF_UUID ": updated cached pool map version: %u->%u\n",
-		       DP_UUID(pool->sp_uuid), map_version_before, map_version);
+		D_INFO(DF_UUID ": updated cached pool map version: %u->%u, fdom_lvl %d, "
+		       "failed_fdom_nr %d\n", DP_UUID(pool->sp_uuid), map_version_before,
+		       map_version, pool->sp_fdom_lvl, pool->sp_failed_fdom_nr);
 	}
 
 	if (map_updated) {
@@ -1887,6 +1897,7 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 			/* Ignore DTX resync failure that is not fatal. */
 			D_WARN("dtx_resync_ult failure %d\n", ret);
 			D_FREE(arg);
+			goto out;
 		}
 	} else {
 		/* This should be a D_DEBUG eventually. */
