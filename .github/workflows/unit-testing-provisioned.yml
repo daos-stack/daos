@@ -38,6 +38,7 @@ jobs:
 
       DISTRO: EL_8
       DAOS_STACK_EL_8_LOCAL_REPO: not_used
+      
       DAOS_STACK_EL_8_GROUP_REPO:
       DAOS_STACK_EL_8_APPSTREAM_REPO:
 
