@@ -1727,6 +1727,13 @@ def build_job_script(self, commands, job, nodesperjob, ppn):
                 script_file.write("else \n")
                 script_file.write("    source $VIRTUAL_ENV/bin/activate \n")
                 script_file.write("fi \n")
+                script_file.write("export MPIR_CVAR_BCAST_POSIX_INTRA_ALGORITHM=mpir \n")
+                script_file.write("export MPIR_CVAR_ALLREDUCE_POSIX_INTRA_ALGORITHM=mpir \n")
+                script_file.write("export MPIR_CVAR_BARRIER_POSIX_INTRA_ALGORITHM=mpir \n")
+                script_file.write("export MPIR_CVAR_REDUCE_POSIX_INTRA_ALGORITHM=mpir \n")
+                script_file.write("unset MPIR_CVAR_CH4_COLL_SELECTION_TUNING_JSON_FILE \n")
+                script_file.write("unset MPIR_CVAR_COLL_SELECTION_TUNING_JSON_FILE \n")
+                script_file.write("unset MPIR_CVAR_CH4_POSIX_COLL_SELECTION_TUNING_JSON_FILE \n")
                 script_file.write("exec 1> $JOB_LOG \n")
                 script_file.write("exec 2> $JOB_ERROR_LOG \n")
 
