@@ -1,5 +1,3 @@
-server_manager:
-  srv_timeout: 500
 hosts:
   test_servers: 3
   test_clients: 1
@@ -35,7 +33,6 @@ pool:
   scm_size: 12000000000
   nvme_size: 108000000000
   svcn: 4
-  control_method: dmg
   rebuild_timeout: 240
   properties: scrub:timed
 container:
