@@ -620,16 +620,6 @@ vos_pool_hash_del(struct vos_pool *pool)
 }
 
 /**
- * Getting object cache
- * Wrapper for TLS and standalone mode
- */
-static inline struct daos_lru_cache *
-vos_get_obj_cache(void)
-{
-	return vos_tls_get(false)->vtl_ocache;
-}
-
-/**
  * Register btree class for container table, it is called within vos_init()
  *
  * \return		0 on success and negative on
@@ -747,8 +737,10 @@ vos_dtx_get(bool standalone);
  * \param epoch		[IN]	Epoch for the DTX.
  * \param record	[IN]	Address (offset) of the record to be
  *				deregistered.
+ *
+ * \return		0 on success and negative on failure.
  */
-void
+int
 vos_dtx_deregister_record(struct umem_instance *umm, daos_handle_t coh,
 			  uint32_t entry, daos_epoch_t epoch,
 			  umem_off_t record);
@@ -1766,12 +1758,13 @@ vos_flush_wal_header(struct vos_pool *vp)
  * Check if the NVMe context of a VOS target is healthy.
  *
  * \param[in] coh	VOS container
+ * \param[in] update	The check is for an update operation or not
  *
  * \return		0		: VOS target is healthy
  *			-DER_NVME_IO	: VOS target is faulty
  */
 static inline int
-vos_tgt_health_check(struct vos_container *cont)
+vos_tgt_health_check(struct vos_container *cont, bool update)
 {
 	D_ASSERT(cont != NULL);
 	D_ASSERT(cont->vc_pool != NULL);
@@ -1779,7 +1772,7 @@ vos_tgt_health_check(struct vos_container *cont)
 	if (cont->vc_pool->vp_sysdb)
 		return 0;
 
-	return bio_xsctxt_health_check(vos_xsctxt_get());
+	return bio_xsctxt_health_check(vos_xsctxt_get(), true, update);
 }
 
 int
@@ -1809,6 +1802,17 @@ vos_fake_anchor_create(daos_anchor_t *anchor)
 {
 	memset(&anchor->da_buf[0], 0, sizeof(anchor->da_buf));
 	anchor->da_type = DAOS_ANCHOR_TYPE_HKEY;
+}
+
+/**
+ * If subtree is already created, it could have been created by an older pool
+ * version so if the dkey is not flat, we need to use KREC_BF_BTR here.
+ **/
+static inline bool
+key_tree_is_evt(int flags, enum vos_tree_class tclass, struct vos_krec_df *krec)
+{
+	return (flags & SUBTR_EVT && (tclass == VOS_BTR_AKEY ||
+				     (krec->kr_bmap & KREC_BF_NO_AKEY)));
 }
 
 static inline bool

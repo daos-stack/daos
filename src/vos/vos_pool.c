@@ -1479,7 +1479,7 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 		}
 	}
 
-	rc = bio_xsctxt_health_check(vos_xsctxt_get());
+	rc = bio_xsctxt_health_check(vos_xsctxt_get(), false, false);
 	if (rc) {
 		DL_WARN(rc, DF_UUID": Skip pool open due to faulty NVMe.", DP_UUID(uuid));
 		return rc;

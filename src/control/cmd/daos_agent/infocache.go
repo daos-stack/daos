@@ -80,11 +80,12 @@ func getFabricScanFn(log logging.Logger, cfg *Config, scanner *hardware.FabricSc
 }
 
 type cacheItem struct {
-	sync.Mutex
+	sync.RWMutex
 	lastCached      time.Time
 	refreshInterval time.Duration
 }
 
+// isStale returns true if the cache item is stale.
 func (ci *cacheItem) isStale() bool {
 	if ci.refreshInterval == 0 {
 		return false
@@ -92,9 +93,12 @@ func (ci *cacheItem) isStale() bool {
 	return ci.lastCached.Add(ci.refreshInterval).Before(time.Now())
 }
 
+// isCached returns true if the cache item is cached.
 func (ci *cacheItem) isCached() bool {
 	return !ci.lastCached.Equal(time.Time{})
 }
+
+var _ cache.RefreshableItem = (*cachedAttachInfo)(nil)
 
 type cachedAttachInfo struct {
 	cacheItem
@@ -130,16 +134,28 @@ func (ci *cachedAttachInfo) Key() string {
 	return sysAttachInfoKey(ci.system)
 }
 
-// NeedsRefresh checks whether the cached data needs to be refreshed.
-func (ci *cachedAttachInfo) NeedsRefresh() bool {
+// needsRefresh checks whether the cached data needs to be refreshed.
+func (ci *cachedAttachInfo) needsRefresh() bool {
 	if ci == nil {
 		return false
 	}
 	return !ci.isCached() || ci.isStale()
 }
 
-// Refresh contacts the remote management server and refreshes the GetAttachInfo cache.
-func (ci *cachedAttachInfo) Refresh(ctx context.Context) error {
+// RefreshIfNeeded refreshes the cached data if it needs to be refreshed.
+func (ci *cachedAttachInfo) RefreshIfNeeded(ctx context.Context) (bool, error) {
+	if ci == nil {
+		return false, errors.New("cachedAttachInfo is nil")
+	}
+
+	if ci.needsRefresh() {
+		return true, ci.refresh(ctx)
+	}
+	return false, nil
+}
+
+// refresh implements the actual refresh logic.
+func (ci *cachedAttachInfo) refresh(ctx context.Context) error {
 	if ci == nil {
 		return errors.New("cachedAttachInfo is nil")
 	}
@@ -155,15 +171,30 @@ func (ci *cachedAttachInfo) Refresh(ctx context.Context) error {
 	return nil
 }
 
+// Refresh contacts the remote management server and refreshes the GetAttachInfo cache.
+func (ci *cachedAttachInfo) Refresh(ctx context.Context) error {
+	if ci == nil {
+		return errors.New("cachedAttachInfo is nil")
+	}
+
+	return ci.refresh(ctx)
+}
+
+var _ cache.RefreshableItem = (*cachedFabricInfo)(nil)
+
 type cachedFabricInfo struct {
 	cacheItem
 	fetch       fabricScanFn
+	providers   []string
+	devClass    hardware.NetDevClass
 	lastResults *NUMAFabric
 }
 
-func newCachedFabricInfo(log logging.Logger, fetchFn fabricScanFn) *cachedFabricInfo {
+func newCachedFabricInfo(fetchFn fabricScanFn, devClass hardware.NetDevClass, providers ...string) *cachedFabricInfo {
 	return &cachedFabricInfo{
-		fetch: fetchFn,
+		fetch:     fetchFn,
+		devClass:  devClass,
+		providers: providers,
 	}
 }
 
@@ -172,13 +203,63 @@ func (cfi *cachedFabricInfo) Key() string {
 	return fabricKey
 }
 
-// NeedsRefresh indicates that the fabric information does not need to be refreshed unless it has
-// never been populated.
-func (cfi *cachedFabricInfo) NeedsRefresh() bool {
+// RefreshIfNeeded refreshes the cached fabric information if it needs to be refreshed.
+func (cfi *cachedFabricInfo) RefreshIfNeeded(ctx context.Context) (bool, error) {
 	if cfi == nil {
-		return false
+		return false, errors.New("cachedFabricInfo is nil")
 	}
-	return !cfi.isCached()
+
+	if !cfi.isCached() {
+		return true, cfi.refresh(ctx)
+	}
+
+	return false, nil
+}
+
+// refresh implements the actual refresh logic.
+func (cfi *cachedFabricInfo) refresh(ctx context.Context) error {
+	if cfi == nil {
+		return errors.New("cachedFabricInfo is nil")
+	}
+
+	results, err := cfi.fetch(ctx, cfi.providers...)
+	if err != nil {
+		return errors.Wrap(err, "refreshing cached fabric info")
+	}
+
+	if err := cfi.filterDevClass(results); err != nil {
+		return errors.Wrap(err, "filtering NUMAMap on device class")
+	}
+
+	cfi.lastResults = results
+	cfi.lastCached = time.Now()
+	return nil
+}
+
+// filterDevClass prunes non-matching device classes from the map.
+func (cfi *cachedFabricInfo) filterDevClass(nf *NUMAFabric) error {
+	nfMap, unlock, err := nf.LockedMap()
+	if err != nil {
+		return errors.Wrap(err, "acquiring NUMAFabricMap for editing")
+	}
+	defer unlock()
+
+	for numa, fis := range nfMap {
+		for i := 0; i < len(fis); i++ {
+			if fis[i].NetDevClass != cfi.devClass {
+				fis = append(fis[:i], fis[i+1:]...)
+				i--
+			}
+		}
+
+		if len(fis) == 0 {
+			delete(nfMap, numa)
+		} else {
+			nfMap[numa] = fis
+		}
+	}
+
+	return nil
 }
 
 // Refresh scans the hardware for information about the fabric devices and caches the result.
@@ -187,14 +268,7 @@ func (cfi *cachedFabricInfo) Refresh(ctx context.Context) error {
 		return errors.New("cachedFabricInfo is nil")
 	}
 
-	results, err := cfi.fetch(ctx)
-	if err != nil {
-		return errors.Wrap(err, "refreshing cached fabric info")
-	}
-
-	cfi.lastResults = results
-	cfi.lastCached = time.Now()
-	return nil
+	return cfi.refresh(ctx)
 }
 
 // InfoCache is a cache for the results of expensive operations needed by the agent.
@@ -349,15 +423,14 @@ func (c *InfoCache) GetAttachInfo(ctx context.Context, sys string) (*control.Get
 	}
 	createItem := func() (cache.Item, error) {
 		c.log.Debugf("cache miss for %s", sysAttachInfoKey(sys))
-		cai := newCachedAttachInfo(c.attachInfoRefresh, sys, c.client, c.getAttachInfo)
-		return cai, nil
+		return newCachedAttachInfo(c.attachInfoRefresh, sys, c.client, c.getAttachInfo), nil
 	}
 
 	item, release, err := c.cache.GetOrCreate(ctx, sysAttachInfoKey(sys), createItem)
-	defer release()
 	if err != nil {
 		return nil, errors.Wrap(err, "getting attach info from cache")
 	}
+	defer release()
 
 	cai, ok := item.(*cachedAttachInfo)
 	if !ok {
@@ -441,7 +514,7 @@ func (c *InfoCache) getNUMAFabric(ctx context.Context, netDevClass hardware.NetD
 		if err := c.waitFabricReady(ctx, netDevClass); err != nil {
 			return nil, err
 		}
-		return newCachedFabricInfo(c.log, c.fabricScan), nil
+		return newCachedFabricInfo(c.fabricScan, netDevClass, providers...), nil
 	}
 
 	item, release, err := c.cache.GetOrCreate(ctx, fabricKey, createItem)
@@ -456,6 +529,19 @@ func (c *InfoCache) getNUMAFabric(ctx context.Context, netDevClass hardware.NetD
 	}
 
 	return cfi.lastResults, nil
+}
+
+// GetNUMAFabricMap gets all of the fabric interfaces with a given provider, mapped by NUMA nodes.
+// The data is read-locked, and must be released by the returned closure.
+func (c *InfoCache) GetNUMAFabricMap(ctx context.Context, devClass hardware.NetDevClass, providers ...string) (NUMAFabricMap, func(), error) {
+	if c == nil {
+		return nil, nil, errors.New("InfoCache is nil")
+	}
+	nf, err := c.getNUMAFabric(ctx, devClass, providers...)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "getting the NUMA fabric")
+	}
+	return nf.RLockedMap()
 }
 
 func (c *InfoCache) waitFabricReady(ctx context.Context, netDevClass hardware.NetDevClass) error {
@@ -473,6 +559,11 @@ func (c *InfoCache) waitFabricReady(ctx context.Context, netDevClass hardware.Ne
 		if devClass == netDevClass {
 			needIfaces = append(needIfaces, iface.Name)
 		}
+	}
+
+	if len(needIfaces) == 0 {
+		c.log.Debugf("no interfaces with device class %s to wait for", netDevClass)
+		return nil
 	}
 
 	return hardware.WaitFabricReady(ctx, c.log, hardware.WaitFabricReadyParams{

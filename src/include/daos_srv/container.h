@@ -32,8 +32,9 @@ int ds_cont_svc_init(struct cont_svc **svcp, const uuid_t pool_uuid,
 void ds_cont_svc_fini(struct cont_svc **svcp);
 int ds_cont_svc_step_up(struct cont_svc *svc);
 void ds_cont_svc_step_down(struct cont_svc *svc);
-int ds_cont_svc_set_prop(uuid_t pool_uuid, uuid_t cont_uuid,
-			      d_rank_list_t *ranks, daos_prop_t *prop);
+int
+    ds_cont_svc_set_prop(uuid_t pool_uuid, const char *cont_id, d_rank_list_t *ranks,
+			 daos_prop_t *prop);
 int ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts, uint64_t *ncont);
 int ds_cont_filter(uuid_t pool_uuid, daos_pool_cont_filter_t *filt,
 		   struct daos_pool_cont_info2 **conts, uint64_t *ncont);
@@ -64,6 +65,7 @@ struct ds_cont_child {
 	ABT_cond		 sc_dtx_resync_cond;
 	ABT_cond		 sc_scrub_cond;
 	ABT_cond		 sc_rebuild_cond;
+	ABT_cond		 sc_fini_cond;
 	uint32_t		 sc_dtx_resyncing:1,
 				 sc_dtx_reindex:1,
 				 sc_dtx_reindex_abort:1,

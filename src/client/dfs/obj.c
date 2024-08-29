@@ -71,6 +71,8 @@ dfs_obj_get_info(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_info_t *info)
 	if (obj == NULL || info == NULL)
 		return EINVAL;
 
+	info->doi_oid = obj->oid;
+
 	switch (obj->mode & S_IFMT) {
 	case S_IFDIR:
 		/** the oclass of the directory object itself */
@@ -212,8 +214,8 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 	}
 
 	/* Check if parent has the filename entry */
-	rc = fetch_entry(dfs->layout_v, parent->oh, DAOS_TX_NONE, file->name, len, false, &exists,
-			 entry, 0, NULL, NULL, NULL);
+	rc = fetch_entry(dfs->layout_v, parent->oh, dfs->th, file->name, len, false, &exists, entry,
+			 0, NULL, NULL, NULL);
 	if (rc) {
 		D_DEBUG(DB_TRACE, "fetch_entry %s failed %d.\n", file->name, rc);
 		return rc;
@@ -235,7 +237,7 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 
 	/** Open the byte array */
 	file->mode = entry->mode;
-	rc         = daos_array_open_with_attr(dfs->coh, entry->oid, DAOS_TX_NONE, daos_mode, 1,
+	rc         = daos_array_open_with_attr(dfs->coh, entry->oid, dfs->th, daos_mode, 1,
 					       entry->chunk_size, &file->oh, NULL);
 	if (rc != 0) {
 		D_ERROR("daos_array_open_with_attr() failed, " DF_RC "\n", DP_RC(rc));
@@ -252,7 +254,7 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 		if (size)
 			*size = 0;
 	} else if (size) {
-		rc = daos_array_get_size(file->oh, DAOS_TX_NONE, size, NULL);
+		rc = daos_array_get_size(file->oh, dfs->th, size, NULL);
 		if (rc != 0) {
 			D_ERROR("daos_array_get_size() failed (%d)\n", rc);
 			daos_array_close(file->oh, NULL);
@@ -374,6 +376,7 @@ open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, int flag
 	}
 
 	strncpy(obj->name, name, len + 1);
+	obj->dfs   = dfs;
 	obj->mode  = mode;
 	obj->flags = flags;
 	oid_cp(&obj->parent_oid, parent->oid);
@@ -505,6 +508,7 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
 	}
 
 	strncpy(new_obj->name, obj->name, DFS_MAX_NAME + 1);
+	new_obj->dfs   = dfs;
 	new_obj->mode  = obj->mode;
 	new_obj->flags = flags;
 	oid_cp(&new_obj->parent_oid, obj->parent_oid);
@@ -670,6 +674,7 @@ dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **_obj)
 	strncpy(obj->name, obj_glob->name, DFS_MAX_NAME + 1);
 	obj->name[DFS_MAX_NAME] = '\0';
 	obj->mode               = obj_glob->mode;
+	obj->dfs                = dfs;
 	obj->flags              = flags ? flags : obj_glob->flags;
 
 	daos_mode = get_daos_obj_mode(obj->flags);
@@ -684,7 +689,7 @@ dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **_obj)
 		return 0;
 	}
 
-	rc = daos_array_open_with_attr(dfs->coh, obj->oid, DAOS_TX_NONE, daos_mode, 1,
+	rc = daos_array_open_with_attr(dfs->coh, obj->oid, dfs->th, daos_mode, 1,
 				       obj_glob->chunk_size, &obj->oh, NULL);
 	if (rc) {
 		D_ERROR("daos_array_open_with_attr() failed, " DF_RC "\n", DP_RC(rc));
@@ -782,7 +787,7 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, struct stat *stbuf)
 		oh = parent->oh;
 	}
 
-	return entry_stat(dfs, DAOS_TX_NONE, oh, name, len, NULL, true, stbuf, NULL);
+	return entry_stat(dfs, dfs->th, oh, name, len, NULL, true, stbuf, NULL);
 }
 
 int
@@ -801,8 +806,7 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf)
 	if (rc)
 		return daos_der2errno(rc);
 
-	rc =
-	    entry_stat(dfs, DAOS_TX_NONE, oh, obj->name, strlen(obj->name), obj, true, stbuf, NULL);
+	rc = entry_stat(dfs, dfs->th, oh, obj->name, strlen(obj->name), obj, true, stbuf, NULL);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -852,8 +856,10 @@ ostatx_cb(tse_task_t *task, void *data)
 		D_GOTO(out, rc = daos_errno2der(rc));
 
 	if (S_ISREG(args->obj->mode)) {
-		args->stbuf->st_size   = op_args->array_stbuf.st_size;
-		args->stbuf->st_blocks = (args->stbuf->st_size + (1 << 9) - 1) >> 9;
+		args->stbuf->st_size    = op_args->array_stbuf.st_size;
+		args->stbuf->st_blocks  = (args->stbuf->st_size + (1 << 9) - 1) >> 9;
+		args->stbuf->st_blksize = op_args->entry.chunk_size ? op_args->entry.chunk_size :
+			args->dfs->attr.da_chunk_size;
 	} else if (S_ISDIR(args->obj->mode)) {
 		args->stbuf->st_size = sizeof(op_args->entry);
 	} else if (S_ISLNK(args->obj->mode)) {
@@ -934,7 +940,7 @@ statx_task(tse_task_t *task)
 
 	fetch_arg        = daos_task_get_args(fetch_task);
 	fetch_arg->oh    = args->parent_oh;
-	fetch_arg->th    = DAOS_TX_NONE;
+	fetch_arg->th    = args->dfs->th;
 	fetch_arg->flags = DAOS_COND_DKEY_FETCH;
 	fetch_arg->dkey  = &op_args->dkey;
 	fetch_arg->nr    = 1;
@@ -953,7 +959,7 @@ statx_task(tse_task_t *task)
 		/** set array_stat parameters */
 		stat_arg        = daos_task_get_args(stat_task);
 		stat_arg->oh    = args->obj->oh;
-		stat_arg->th    = DAOS_TX_NONE;
+		stat_arg->th    = args->dfs->th;
 		stat_arg->stbuf = &op_args->array_stbuf;
 		need_stat       = true;
 	} else if (S_ISDIR(args->obj->mode)) {
@@ -968,7 +974,7 @@ statx_task(tse_task_t *task)
 		/** set obj_query parameters */
 		stat_arg            = daos_task_get_args(stat_task);
 		stat_arg->oh        = args->obj->oh;
-		stat_arg->th        = DAOS_TX_NONE;
+		stat_arg->th        = args->dfs->th;
 		stat_arg->max_epoch = &op_args->array_stbuf.st_max_epoch;
 		stat_arg->flags     = 0;
 		stat_arg->dkey      = NULL;
@@ -1083,7 +1089,7 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
 	}
 
 	/* Check if parent has the entry */
-	rc = fetch_entry(dfs->layout_v, oh, DAOS_TX_NONE, name, len, true, &exists, &entry, 0, NULL,
+	rc = fetch_entry(dfs->layout_v, oh, dfs->th, name, len, true, &exists, &entry, 0, NULL,
 			 NULL, NULL);
 	if (rc)
 		return rc;
@@ -1119,7 +1125,7 @@ int
 dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 {
 	daos_handle_t    oh;
-	daos_handle_t    th = DAOS_TX_NONE;
+	daos_handle_t    th = dfs->th;
 	bool             exists;
 	struct dfs_entry entry = {0};
 	d_sg_list_t      sgl;
@@ -1164,7 +1170,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	}
 
 	/* Check if parent has the entry */
-	rc = fetch_entry(dfs->layout_v, oh, DAOS_TX_NONE, name, len, true, &exists, &entry, 0, NULL,
+	rc = fetch_entry(dfs->layout_v, oh, dfs->th, name, len, true, &exists, &entry, 0, NULL,
 			 NULL, NULL);
 	if (rc)
 		return rc;

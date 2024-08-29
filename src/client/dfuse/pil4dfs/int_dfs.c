@@ -160,6 +160,8 @@ static long int         page_size;
 #define DAOS_INIT_NOT_RUNNING 0
 #define DAOS_INIT_RUNNING     1
 
+static _Atomic uint64_t mpi_init_count;
+
 static long int         daos_initing;
 _Atomic bool            d_daos_inited;
 static bool             daos_debug_inited;
@@ -399,6 +401,8 @@ static int (*next_unlinkat)(int dirfd, const char *path, int flags);
 
 static int (*next_fsync)(int fd);
 
+static int (*next_fdatasync)(int fd);
+
 static int (*next_truncate)(const char *path, off_t length);
 
 static int (*next_ftruncate)(int fd, off_t length);
@@ -436,7 +440,7 @@ static int (*next_symlink)(const char *symvalue, const char *path);
 
 static int (*next_symlinkat)(const char *symvalue, int dirfd, const char *path);
 
-static ssize_t (*next_readlink)(const char *path, char *buf, size_t size);
+static ssize_t (*libc_readlink)(const char *path, char *buf, size_t size);
 static ssize_t (*next_readlinkat)(int dirfd, const char *path, char *buf, size_t size);
 
 static void * (*next_mmap)(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
@@ -464,6 +468,8 @@ static int (*next_posix_fallocate)(int fd, off_t offset, off_t len);
 static int (*next_posix_fallocate64)(int fd, off64_t offset, off64_t len);
 static int (*next_tcgetattr)(int fd, void *termios_p);
 /* end NOT supported by DAOS */
+
+static int (*next_mpi_init)(int *argc, char ***argv);
 
 /* to do!! */
 /**
@@ -938,13 +944,6 @@ child_hdlr(void)
 		DL_WARN(rc, "daos_eq_lib_init() failed in child process");
 	daos_dti_reset();
 	td_eqh = main_eqh = DAOS_HDL_INVAL;
-	if (d_eq_count_max > 0) {
-		rc = daos_eq_create(&td_eqh);
-		if (rc)
-			DL_WARN(rc, "daos_eq_create() failed");
-		else
-			main_eqh = td_eqh;
-	}
 	context_reset = true;
 }
 
@@ -1022,6 +1021,22 @@ err:
 	free_reserved_low_fd();
 	D_MUTEX_UNLOCK(&lock_reserve_fd);
 
+	return rc;
+}
+
+int
+MPI_Init(int *argc, char ***argv)
+{
+	int rc;
+
+	if (next_mpi_init == NULL) {
+		next_mpi_init = dlsym(RTLD_NEXT, "MPI_Init");
+		D_ASSERT(next_mpi_init != NULL);
+	}
+
+	atomic_fetch_add_relaxed(&mpi_init_count, 1);
+	rc = next_mpi_init(argc, argv);
+	atomic_fetch_add_relaxed(&mpi_init_count, -1);
 	return rc;
 }
 
@@ -1121,6 +1136,15 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 		if (atomic_load_relaxed(&d_daos_inited) == false) {
 			uint64_t status_old = DAOS_INIT_NOT_RUNNING;
 			bool     rc_cmp_swap;
+
+			/* Check whether MPI_Init() is running. If yes, pass to the original
+			 * libc functions. Avoid possible zeInit reentrancy/nested call.
+			 */
+
+			if (atomic_load_relaxed(&mpi_init_count) > 0) {
+				*is_target_path = 0;
+				goto out_normal;
+			}
 
 			/* daos_init() is expensive to call. We call it only when necessary. */
 
@@ -2975,6 +2999,10 @@ new_xstat(int ver, const char *path, struct stat *stat_buf)
 
 	if (!d_hook_enabled)
 		return next_xstat(ver, path, stat_buf);
+	if (path[0] == 0) {
+		errno = ENOENT;
+		return (-1);
+	}
 
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
@@ -3032,6 +3060,10 @@ new_lxstat(int ver, const char *path, struct stat *stat_buf)
 
 	if (!d_hook_enabled)
 		return libc_lxstat(ver, path, stat_buf);
+	if (path[0] == 0) {
+		errno = ENOENT;
+		return (-1);
+	}
 
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
@@ -3076,6 +3108,10 @@ new_fxstatat(int ver, int dirfd, const char *path, struct stat *stat_buf, int fl
 
 	if (!d_hook_enabled)
 		return libc_fxstatat(ver, dirfd, path, stat_buf, flags);
+	if (path[0] == 0 && ((flags & AT_EMPTY_PATH) == 0)) {
+		errno = ENOENT;
+		return (-1);
+	}
 
 	if (path[0] == '/') {
 		/* Absolute path, dirfd is ignored */
@@ -3129,6 +3165,11 @@ new_fstatat(int dirfd, const char *__restrict path, struct stat *__restrict stat
 
 	if (!d_hook_enabled)
 		return libc_fstatat(dirfd, path, stat_buf, flags);
+
+	if (path[0] == 0 && ((flags & AT_EMPTY_PATH) == 0)) {
+		errno = ENOENT;
+		return (-1);
+	}
 
 	if (path[0] == '/') {
 		/* Absolute path, dirfd is ignored */
@@ -3211,6 +3252,11 @@ statx(int dirfd, const char *path, int flags, unsigned int mask, struct statx *s
 		next_statx = dlsym(RTLD_NEXT, "statx");
 		D_ASSERT(next_statx != NULL);
 	}
+	if (path[0] == 0 && ((flags & AT_EMPTY_PATH) == 0)) {
+		errno = ENOENT;
+		return (-1);
+	}
+
 	if (!d_hook_enabled)
 		return next_statx(dirfd, path, flags, mask, statx_buf);
 
@@ -4140,8 +4186,8 @@ pre_envp(char *const envp[], char ***new_envp)
 				if (!env_set[i])
 					continue;
 				if (!env_found[i]) {
-					if (memcmp(envp[num_entry], STR_AND_SIZE_M1(env_list[i]))
-					    == 0) {
+					if (memcmp(envp[num_entry], env_list[i],
+						   strlen(env_list[i])) == 0) {
 						env_found[i] = true;
 						num_entry_found++;
 					}
@@ -4721,7 +4767,7 @@ out_err:
 }
 
 ssize_t
-readlink(const char *path, char *buf, size_t size)
+new_readlink(const char *path, char *buf, size_t size)
 {
 	int                is_target_path, rc, rc2;
 	dfs_obj_t         *obj;
@@ -4732,12 +4778,8 @@ readlink(const char *path, char *buf, size_t size)
 	char              *parent_dir = NULL;
 	char              *full_path  = NULL;
 
-	if (next_readlink == NULL) {
-		next_readlink = dlsym(RTLD_NEXT, "readlink");
-		D_ASSERT(next_readlink != NULL);
-	}
 	if (!d_hook_enabled)
-		return next_readlink(path, buf, size);
+		return libc_readlink(path, buf, size);
 
 	rc =
 	    query_path(path, &is_target_path, &parent, item_name, &parent_dir, &full_path, &dfs_mt);
@@ -4766,7 +4808,7 @@ out_org:
 	if (parent != NULL)
 		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
-	return next_readlink(path, buf, size);
+	return libc_readlink(path, buf, size);
 
 out_release:
 	rc2 = dfs_release(obj);
@@ -5284,6 +5326,28 @@ fsync(int fd)
 	/* errno = ENOTSUP;
 	 * return (-1);
 	 */
+	return 0;
+}
+
+int
+fdatasync(int fd)
+{
+	int fd_directed;
+
+	if (next_fdatasync == NULL) {
+		next_fdatasync = dlsym(RTLD_NEXT, "fdatasync");
+		D_ASSERT(next_fdatasync != NULL);
+	}
+	if (!d_hook_enabled)
+		return next_fdatasync(fd);
+
+	fd_directed = d_get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
+		return next_fdatasync(fd);
+
+	if (fd < FD_DIR_BASE && d_compatible_mode)
+		return next_fdatasync(fd);
+
 	return 0;
 }
 
@@ -6741,26 +6805,22 @@ init_myhook(void)
 	dcache_size_bits = DCACHE_SIZE_BITS;
 	rc               = d_getenv_uint32_t("D_IL_DCACHE_SIZE_BITS", &dcache_size_bits);
 	if (rc != -DER_SUCCESS && rc != -DER_NONEXIST)
-		DS_WARN(daos_der2errno(rc),
-			"'D_IL_DCACHE_SIZE_BITS' env variable could not be used");
+		DL_WARN(rc, "'D_IL_DCACHE_SIZE_BITS' env variable could not be used");
 
 	dcache_rec_timeout = DCACHE_REC_TIMEOUT;
 	rc                 = d_getenv_uint32_t("D_IL_DCACHE_REC_TIMEOUT", &dcache_rec_timeout);
 	if (rc != -DER_SUCCESS && rc != -DER_NONEXIST)
-		DS_WARN(daos_der2errno(rc),
-			"'D_IL_DCACHE_REC_TIMEOUT' env variable could not be used");
+		DL_WARN(rc, "'D_IL_DCACHE_REC_TIMEOUT' env variable could not be used");
 
 	dcache_gc_period = DCACHE_GC_PERIOD;
 	rc               = d_getenv_uint32_t("D_IL_DCACHE_GC_PERIOD", &dcache_gc_period);
 	if (rc != -DER_SUCCESS && rc != -DER_NONEXIST)
-		DS_WARN(daos_der2errno(rc),
-			"'D_IL_DCACHE_GC_PERIOD' env variable could not be used");
+		DL_WARN(rc, "'D_IL_DCACHE_GC_PERIOD' env variable could not be used");
 
 	dcache_gc_reclaim_max = DCACHE_GC_RECLAIM_MAX;
 	rc = d_getenv_uint32_t("D_IL_DCACHE_GC_RECLAIM_MAX", &dcache_gc_reclaim_max);
 	if (rc != -DER_SUCCESS && rc != -DER_NONEXIST)
-		DS_WARN(daos_der2errno(rc),
-			"'D_IL_DCACHE_GC_RECLAIM_MAX' env variable could not be used");
+		DL_WARN(rc, "'D_IL_DCACHE_GC_RECLAIM_MAX' env variable could not be used");
 	if (dcache_gc_reclaim_max == 0) {
 		D_WARN("'D_IL_DCACHE_GC_RECLAIM_MAX' env variable could not be used: value == 0.");
 		dcache_gc_reclaim_max = DCACHE_GC_RECLAIM_MAX;
@@ -6806,6 +6866,7 @@ init_myhook(void)
 
 	register_a_hook("libc", "exit", (void *)new_exit, (long int *)(&next_exit));
 	register_a_hook("libc", "dup3", (void *)new_dup3, (long int *)(&libc_dup3));
+	register_a_hook("libc", "readlink", (void *)new_readlink, (long int *)(&libc_readlink));
 
 	init_fd_dup2_list();
 

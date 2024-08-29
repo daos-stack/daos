@@ -1,5 +1,5 @@
 """
-(C) Copyright 2020-2023 Intel Corporation.
+(C) Copyright 2020-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -87,7 +87,6 @@ class YamlUpdater():
         ("pool_query_timeout", "_timeout", int),
         ("pool_query_delay", "_timeout", int),
         ("rebuild_timeout", "_timeout", int),
-        ("srv_timeout", "_timeout", int),
         ("storage_prepare_timeout", "_timeout", int),
         ("storage_format_timeout", "_timeout", int),
     ]

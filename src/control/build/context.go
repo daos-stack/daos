@@ -53,6 +53,10 @@ func ToContext(parent context.Context, comp Component, verStr string) (context.C
 		return nil, errors.New("component cannot be ComponentAny")
 	}
 
+	if _, exists := metadata.FromOutgoingContext(parent); exists {
+		return nil, ErrCtxMetadataExists
+	}
+
 	version, err := NewVersion(verStr)
 	if err != nil {
 		return nil, err

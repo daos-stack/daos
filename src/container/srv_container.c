@@ -1034,7 +1034,7 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont_svc *sv
 		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 
-	cont_create_in_get_data(rpc, CONT_CREATE, DAOS_CONT_VERSION, &cprop);
+	cont_create_in_get_data(rpc, CONT_CREATE, cont_proto_ver, &cprop);
 
 	/* Determine if the label property was supplied, and if so,
 	 * verify that it is not the default unset label.
@@ -3671,8 +3671,7 @@ check_set_prop_label(struct rdb_tx *tx, struct cont *cont,
 }
 
 static int
-set_prop(struct rdb_tx *tx, struct ds_pool *pool,
-	 struct cont *cont, uint64_t sec_capas, uuid_t hdl_uuid,
+set_prop(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont, uint64_t sec_capas,
 	 daos_prop_t *prop_in)
 {
 	int			 rc;
@@ -3739,10 +3738,9 @@ ds_cont_prop_set(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *c
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cpsi_op.ci_uuid), rpc,
 		DP_UUID(in->cpsi_op.ci_hdl));
 
-	cont_prop_set_in_get_data(rpc, CONT_PROP_SET, cont_proto_ver, &prop_in, NULL);
+	cont_prop_set_in_get_data(rpc, CONT_PROP_SET, cont_proto_ver, &prop_in, NULL, NULL, NULL);
 
-	return set_prop(tx, pool_hdl->sph_pool, cont, hdl->ch_sec_capas,
-			in->cpsi_op.ci_hdl, prop_in);
+	return set_prop(tx, pool_hdl->sph_pool, cont, hdl->ch_sec_capas, prop_in);
 }
 
 static int
@@ -3796,8 +3794,7 @@ set_acl(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	if (prop->dpp_entries[0].dpe_val_ptr == NULL)
 		D_GOTO(out_prop, rc = -DER_NOMEM);
 
-	rc = set_prop(tx, pool_hdl->sph_pool, cont, hdl->ch_sec_capas,
-		      hdl_uuid, prop);
+	rc = set_prop(tx, pool_hdl->sph_pool, cont, hdl->ch_sec_capas, prop);
 
 out_prop:
 	daos_prop_free(prop);
@@ -5505,6 +5502,8 @@ cont_cli_opc_name(crt_opcode_t opc)
 	case CONT_SNAP_CREATE:		return "SNAP_CREATE";
 	case CONT_SNAP_DESTROY:		return "SNAP_DESTROY";
 	case CONT_PROP_SET:		return "PROP_SET";
+	case CONT_PROP_SET_BYLABEL:
+		return "PROP_SET_BYLABEL";
 	case CONT_ACL_UPDATE:		return "ACL_UPDATE";
 	case CONT_ACL_DELETE:		return "ACL_DELETE";
 	case CONT_OPEN_BYLABEL:		return "OPEN_BYLABEL";
@@ -5528,6 +5527,20 @@ ds_cont_op_handler(crt_rpc_t *rpc, int cont_proto_ver)
 	const char                      *lbl;
 	struct cont_svc			*svc;
 	int				 rc;
+
+	/*
+	 * Some mgmt RPCs may come from either client or server (admin/dRPC) calls. RPCs from
+	 * servers don't contain pool/cont handles.
+	 */
+	if (!daos_rpc_from_client(rpc)) {
+		switch (opc) {
+		case CONT_PROP_SET:
+			return ds_cont_set_prop_srv_handler(rpc);
+		default:
+			D_ASSERTF(false, "unexpected server RPC %s (%d)", cont_cli_opc_name(opc),
+				  opc);
+		}
+	}
 
 	pool_hdl = ds_pool_hdl_lookup(in->ci_pool_hdl);
 	if (pool_hdl == NULL)
@@ -5675,19 +5688,25 @@ out_svc:
 
 /* Send the RPC from a DAOS server instance to the container service */
 int
-ds_cont_svc_set_prop(uuid_t pool_uuid, uuid_t cont_uuid,
-		     d_rank_list_t *ranks, daos_prop_t *prop)
+ds_cont_svc_set_prop(uuid_t pool_uuid, const char *cont_id, d_rank_list_t *ranks, daos_prop_t *prop)
 {
-	int				rc;
-	struct rsvc_client		client;
-	crt_endpoint_t			ep;
-	uuid_t                           null_uuid;
-	struct dss_module_info		*info = dss_get_module_info();
-	crt_rpc_t                       *rpc;
-	struct cont_prop_set_out	*out;
+	int                       rc;
+	struct rsvc_client        client;
+	crt_endpoint_t            ep;
+	crt_opcode_t              opc = CONT_PROP_SET;
+	uuid_t                    cont_uuid;
+	uuid_t                    null_uuid;
+	struct dss_module_info   *info = dss_get_module_info();
+	crt_rpc_t                *rpc;
+	struct cont_prop_set_out *out;
 
-	D_DEBUG(DB_MGMT, DF_CONT": Setting container prop\n",
-		DP_CONT(pool_uuid, cont_uuid));
+	D_DEBUG(DB_MGMT, DF_UUID "/%s: Setting container prop\n", DP_UUID(pool_uuid), cont_id);
+
+	/* cont_id may be a UUID or label */
+	if (uuid_parse(cont_id, cont_uuid) != 0)
+		opc = CONT_PROP_SET_BYLABEL;
+
+	D_DEBUG(DB_MGMT, "using opcode %s (%d)\n", cont_cli_opc_name(opc), opc);
 
 	uuid_clear(null_uuid);
 	rc = rsvc_client_init(&client, ranks);
@@ -5696,30 +5715,31 @@ ds_cont_svc_set_prop(uuid_t pool_uuid, uuid_t cont_uuid,
 
 rechoose:
 	ep.ep_grp = NULL; /* primary group */
-	rc = rsvc_client_choose(&client, &ep);
+	rc        = rsvc_client_choose(&client, &ep);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": cannot find pool service: "DF_RC"\n",
-			DP_CONT(pool_uuid, cont_uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": cannot find pool service", DP_UUID(pool_uuid));
 		D_GOTO(out_client, rc);
 	}
 
-	rc = cont_req_create(info->dmi_ctx, &ep, CONT_PROP_SET, null_uuid, null_uuid, null_uuid,
+	rc = cont_req_create(info->dmi_ctx, &ep, opc, null_uuid, null_uuid, null_uuid,
 			     NULL /* req_timep */, &rpc);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to create cont set prop rpc: %d\n",
-			DP_CONT(pool_uuid, cont_uuid), rc);
+		DL_ERROR(rc, DF_UUID "/%s: failed to create cont set prop rpc", DP_UUID(pool_uuid),
+			 cont_id);
 		D_GOTO(out_client, rc);
 	}
 
-	cont_prop_set_in_set_data(rpc, CONT_PROP_SET, DAOS_CONT_VERSION, prop, pool_uuid);
+	cont_prop_set_in_set_data(rpc, opc, DAOS_CONT_VERSION, prop, pool_uuid);
+	if (opc == CONT_PROP_SET_BYLABEL)
+		cont_prop_set_bylabel_in_set_label(rpc, opc, DAOS_CONT_VERSION, cont_id);
+	else /* CONT_PROP_SET */
+		cont_prop_set_in_set_cont_uuid(rpc, opc, DAOS_CONT_VERSION, cont_uuid);
 
-	rc = dss_rpc_send(rpc);
+	rc  = dss_rpc_send(rpc);
 	out = crt_reply_get(rpc);
 	D_ASSERT(out != NULL);
 
-	rc = rsvc_client_complete_rpc(&client, &ep, rc,
-				      out->cpso_op.co_rc,
-				      &out->cpso_op.co_hint);
+	rc = rsvc_client_complete_rpc(&client, &ep, rc, out->cpso_op.co_rc, &out->cpso_op.co_hint);
 	if (rc == RSVC_CLIENT_RECHOOSE) {
 		crt_req_decref(rpc);
 		dss_sleep(1000 /* ms */);
@@ -5728,8 +5748,8 @@ rechoose:
 
 	rc = out->cpso_op.co_rc;
 	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to set prop for container: %d\n",
-			DP_CONT(pool_uuid, cont_uuid), rc);
+		DL_ERROR(rc, DF_UUID ": failed to set prop for container %s", DP_UUID(pool_uuid),
+			 cont_id);
 	}
 
 	crt_req_decref(rpc);
@@ -5740,61 +5760,72 @@ out:
 }
 
 void
-ds_cont_set_prop_handler(crt_rpc_t *rpc)
+ds_cont_set_prop_srv_handler(crt_rpc_t *rpc)
 {
-	int				 rc;
-	struct cont_svc			*svc;
-	struct cont_prop_set_in		*in = crt_req_get(rpc);
-	struct cont_prop_set_out	*out = crt_reply_get(rpc);
-	struct rdb_tx			 tx;
-	uuid_t				 pool_uuid;
-	uuid_t				 cont_uuid;
-	daos_prop_t                     *prop;
-	struct cont			*cont;
-
-	/* Client RPCs go through the regular flow with pool/cont handles */
-	if (daos_rpc_from_client(rpc)) {
-		ds_cont_op_handler(rpc, 7);
-		return;
-	}
+	int                       rc;
+	crt_opcode_t              opc = opc_get(rpc->cr_opc);
+	struct cont_svc          *svc;
+	struct cont_prop_set_out *out = crt_reply_get(rpc);
+	struct rdb_tx             tx;
+	uuid_t                    pool_uuid;
+	uuid_t                    cont_uuid;
+	const char               *cont_label                           = NULL;
+	char                      cont_id[DAOS_PROP_MAX_LABEL_BUF_LEN] = {0};
+	daos_prop_t              *prop;
+	struct cont              *cont;
 
 	/*
 	 * Server RPCs don't have pool or container handles. Just need the pool
-	 * and container UUIDs.
+	 * and container IDs.
 	 */
-	cont_prop_set_in_get_data(rpc, CONT_PROP_SET, DAOS_CONT_VERSION, &prop, &pool_uuid);
-	uuid_copy(cont_uuid, in->cpsi_op.ci_uuid);
+	cont_prop_set_in_get_data(rpc, opc, DAOS_CONT_VERSION, &prop, &pool_uuid, &cont_uuid,
+				  &cont_label);
+	if (opc == CONT_PROP_SET_BYLABEL)
+		strncpy(cont_id, cont_label, sizeof(cont_id) - 1);
+	else /* CONT_PROP_SET */
+		uuid_unparse(cont_uuid, cont_id);
 
-	D_DEBUG(DB_MD, DF_CONT": processing cont set prop rpc %p\n",
-		DP_CONT(pool_uuid, cont_uuid), rpc);
+	D_DEBUG(DB_MD, DF_UUID "/%s: processing cont set prop (%s) rpc %p\n", DP_UUID(pool_uuid),
+		cont_id, cont_cli_opc_name(opc), rpc);
 
-	rc = cont_svc_lookup_leader(pool_uuid, 0 /* id */,
-				    &svc, &out->cpso_op.co_hint);
+	rc = cont_svc_lookup_leader(pool_uuid, 0, &svc, &out->cpso_op.co_hint);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": Failed to look up cont svc: %d\n",
-			DP_CONT(pool_uuid, cont_uuid), rc);
+		DL_ERROR(rc, DF_UUID "/%s: failed to look up cont svc", DP_UUID(pool_uuid),
+			 cont_id);
 		D_GOTO(out, rc);
 	}
 
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
-	if (rc != 0)
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID "/%s: failed to start RDB transaction", DP_UUID(pool_uuid),
+			 cont_id);
 		D_GOTO(out_svc, rc);
+	}
 
 	ABT_rwlock_wrlock(svc->cs_lock);
 
-	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
-	if (rc != 0)
+	/* cont_id may be a UUID or label */
+	if (opc == CONT_PROP_SET)
+		rc = cont_lookup(&tx, svc, cont_uuid, &cont);
+	else /* CONT_PROP_SET_BYLABEL */
+		rc = cont_lookup_bylabel(&tx, svc, cont_label, &cont);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": failed to look up container '%s'", DP_UUID(pool_uuid),
+			 cont_id);
 		D_GOTO(out_lock, rc);
+	}
 
-	rc = set_prop(&tx, svc->cs_pool, cont, ds_sec_get_admin_cont_capabilities(), cont_uuid,
-		      prop);
-	if (rc != 0)
+	rc = set_prop(&tx, svc->cs_pool, cont, ds_sec_get_admin_cont_capabilities(), prop);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_CONT ": failed to set properties",
+			 DP_CONT(svc->cs_pool_uuid, cont->c_uuid));
 		D_GOTO(out_cont, rc);
+	}
 
 	rc = rdb_tx_commit(&tx);
 	if (rc != 0)
-		D_ERROR(DF_CONT": Unable to commit RDB transaction\n",
-			DP_CONT(pool_uuid, cont_uuid));
+		DL_ERROR(rc, DF_CONT ": unable to commit RDB transaction",
+			 DP_CONT(svc->cs_pool_uuid, cont->c_uuid));
 
 out_cont:
 	cont_put(cont);
@@ -5805,8 +5836,8 @@ out_svc:
 	ds_rsvc_set_hint(svc->cs_rsvc, &out->cpso_op.co_hint);
 	cont_svc_put_leader(svc);
 out:
-	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p rc=%d\n",
-		DP_CONT(pool_uuid, in->cpsi_op.ci_uuid), rpc, rc);
+	D_DEBUG(DB_MD, DF_UUID "/%s: replying rpc: %p rc=%d\n", DP_UUID(pool_uuid), cont_id, rpc,
+		rc);
 
 	out->cpso_op.co_rc = rc;
 	crt_reply_send(rpc);

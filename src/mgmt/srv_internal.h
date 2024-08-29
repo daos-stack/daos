@@ -50,6 +50,8 @@ void ds_mgmt_tgt_params_set_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_profile_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_pool_get_svcranks_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_pool_find_hdlr(crt_rpc_t *rpc);
+void
+     ds_mgmt_pool_list_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_mark_hdlr(crt_rpc_t *rpc);
 void dss_bind_to_xstream_cpuset(int tgt_id);
 
@@ -118,9 +120,9 @@ int
 int ds_mgmt_pool_query_targets(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_t rank,
 			       d_rank_list_t *tgts, daos_target_info_t **infos);
 
-int ds_mgmt_cont_set_owner(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-			   uuid_t cont_uuid, const char *user,
-			   const char *group);
+int
+     ds_mgmt_cont_set_owner(uuid_t pool_uuid, d_rank_list_t *svc_ranks, const char *cont_id,
+			    const char *user, const char *group);
 
 /** srv_chk.c */
 int ds_mgmt_check_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
@@ -144,7 +146,8 @@ struct mgmt_bio_health {
 };
 
 int ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid);
-int ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp);
+int
+ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp);
 void
      ds_mgmt_smd_free_dev(Ctl__SmdDevice *dev);
 int ds_mgmt_smd_list_pools(Ctl__SmdPoolResp *resp);

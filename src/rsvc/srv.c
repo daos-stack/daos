@@ -1058,75 +1058,6 @@ ds_rsvc_stop(enum ds_rsvc_class_id class, d_iov_t *id, uint64_t caller_term, boo
 	return stop(svc, destroy);
 }
 
-struct stop_ult {
-	d_list_t	su_entry;
-	ABT_thread	su_thread;
-};
-
-struct stop_all_arg {
-	d_list_t		saa_list;	/* of stop_ult objects */
-	enum ds_rsvc_class_id	saa_class;
-};
-
-static int
-stop_all_cb(d_list_t *entry, void *varg)
-{
-	struct ds_rsvc	       *svc = rsvc_obj(entry);
-	struct stop_all_arg    *arg = varg;
-	struct stop_ult	       *ult;
-	int			rc;
-
-	if (svc->s_class != arg->saa_class)
-		return 0;
-
-	D_ALLOC_PTR(ult);
-	if (ult == NULL)
-		return -DER_NOMEM;
-
-	d_hash_rec_addref(&rsvc_hash, &svc->s_entry);
-	rc = dss_ult_create(rsvc_stopper, svc, DSS_XS_SYS, 0, 0,
-			    &ult->su_thread);
-	if (rc != 0) {
-		d_hash_rec_decref(&rsvc_hash, &svc->s_entry);
-		D_FREE(ult);
-		return rc;
-	}
-
-	d_list_add(&ult->su_entry, &arg->saa_list);
-	return 0;
-}
-
-/**
- * Stop all replicated services of \a class.
- *
- * \param[in]	class	replicated service class
- */
-int
-ds_rsvc_stop_all(enum ds_rsvc_class_id class)
-{
-	struct stop_all_arg	arg;
-	struct stop_ult	       *ult;
-	struct stop_ult	       *ult_tmp;
-	int			rc;
-
-	D_INIT_LIST_HEAD(&arg.saa_list);
-	arg.saa_class = class;
-	rc = d_hash_table_traverse(&rsvc_hash, stop_all_cb, &arg);
-
-	/* Wait for the stopper ULTs to return. */
-	d_list_for_each_entry_safe(ult, ult_tmp, &arg.saa_list, su_entry) {
-		d_list_del_init(&ult->su_entry);
-		ABT_thread_join(ult->su_thread);
-		ABT_thread_free(&ult->su_thread);
-		D_FREE(ult);
-	}
-
-	if (rc != 0)
-		D_ERROR("failed to stop all replicated services: "DF_RC"\n",
-			DP_RC(rc));
-	return rc;
-}
-
 /**
  * Stop a replicated service if it is in leader state. Currently, this is used
  * only for testing.
@@ -1269,7 +1200,7 @@ bcast_create(crt_opcode_t opc, bool filter_invert, d_rank_list_t *filter_ranks,
 				    NULL /* co_bulk_hdl */, NULL /* priv */,
 				    filter_invert ?
 				    CRT_RPC_FLAG_FILTER_INVERT : 0,
-				    crt_tree_topo(CRT_TREE_FLAT, 0), rpc);
+				    crt_tree_topo(CRT_TREE_KNOMIAL, 2), rpc);
 }
 
 /**
