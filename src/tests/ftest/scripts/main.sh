@@ -81,21 +81,6 @@ if [ -d "${logs_prefix}/ftest/avocado/job-results" ]; then
     rm -rf "${logs_prefix}/ftest/avocado/job-results"
 fi
 
-# enable running the daos_agent as the user
-sudo systemctl start user@"$(id -u)".service
-_local_service_dir=~/.config/systemd/user
-_local_service_file="$_local_service_dir/daos_agent.service"
-mkdir -p $_local_service_dir
-if $TEST_RPMS; then
-    cp /usr/lib/systemd/system/daos_agent.service $_local_service_file
-else
-    cp "$DAOS_BASE"/install/utils/systemd/daos_agent.service $_local_service_file
-fi
-sed -i '/^User=/d' $_local_service_file
-sed -i '/^Group=/d' $_local_service_file
-systemctl --user daemon-reload
-systemctl --user status
-
 # now run it!
 # shellcheck disable=SC2086
 export WITH_VALGRIND

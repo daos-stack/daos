@@ -1,7 +1,7 @@
 #!/bin/bash
 # shellcheck disable=SC1113
 # /*
-#  * (C) Copyright 2016-2023 Intel Corporation.
+#  * (C) Copyright 2016-2024 Intel Corporation.
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 # */
@@ -95,6 +95,21 @@ if ! $TEST_RPMS; then
 	    sudo chown root /usr/bin/daos_server_helper && \
 	    sudo chmod 4755 /usr/bin/daos_server_helper
 fi
+
+# enable running the daos_agent as the user
+sudo systemctl start user@"$(id -u)".service
+_local_service_dir=~/.config/systemd/user
+_local_service_file="$_local_service_dir/daos_agent.service"
+mkdir -p $_local_service_dir
+if $TEST_RPMS; then
+    cp /usr/lib/systemd/system/daos_agent.service $_local_service_file
+else
+    cp "$DAOS_BASE"/install/utils/systemd/daos_agent.service $_local_service_file
+fi
+sed -i '/^User=/d' $_local_service_file
+sed -i '/^Group=/d' $_local_service_file
+systemctl --user daemon-reload
+systemctl --user status
 
 rm -rf "${TEST_TAG_DIR:?}/"
 mkdir -p "$TEST_TAG_DIR/"
