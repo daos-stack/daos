@@ -51,15 +51,11 @@ def set_device_faulty(test, dmg, server, uuid, pool=None, has_sys_xs=False, **kw
             Defaults to None.
         has_sys_xs (bool, optional): the device's has_sys_xs property value. Defaults to False.
         kwargs (dict, optional): named arguments to pass to the DmgCommand.storage_set_faulty.
-
-    Returns:
-        dict: the json response from the dmg storage set-faulty command.
-
     """
     dmg.hostlist = server
     kwargs['uuid'] = uuid
     try:
-        response = get_dmg_response(dmg.storage_set_faulty, **kwargs)
+        get_dmg_response(dmg.storage_set_faulty, **kwargs)
     except CommandFailure as error:
         if not has_sys_xs:
             test.fail(str(error))
@@ -85,8 +81,6 @@ def set_device_faulty(test, dmg, server, uuid, pool=None, has_sys_xs=False, **kw
         pool.wait_for_rebuild_to_start()
         # Wait for rebuild to complete
         pool.wait_for_rebuild_to_end()
-
-    return response
 
 
 def reset_fault_device(dmg, server, uuid):
