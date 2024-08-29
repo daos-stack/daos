@@ -251,7 +251,7 @@ out:
 	return rc;
 }
 
-static void
+void
 daos_lru_ref_release(struct daos_lru_cache *lcache, struct daos_llink *llink)
 {
 	D_ASSERT(lcache != NULL && llink != NULL && llink->ll_ref > 1);
@@ -287,7 +287,7 @@ void
 daos_lru_ref_evict_wait(struct daos_lru_cache *lcache, struct daos_llink *llink)
 {
 	if (!llink->ll_evicted)
-		daos_lru_ref_evict(cache, llink);
+		daos_lru_ref_evict(lcache, llink);
 
 	if (lcache->dlc_ops->lop_wait && !daos_lru_is_last_user(llink)) {
 		/* Wait until I'm the last one.
