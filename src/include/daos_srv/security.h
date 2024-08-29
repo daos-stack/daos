@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -303,6 +303,19 @@ ds_sec_cont_can_open_ex(uint64_t cont_capas);
  */
 bool
 ds_sec_cont_can_evict_all(uint64_t cont_capas);
+
+/**
+ * Determine if the container can be modified based on the container security
+ * capabilities.
+ *
+ * \param[in]	cont_capas	Capability bits acquired via
+ *				ds_sec_cont_get_capabilities
+ *
+ * \return	True		Access allowed
+ *		False		Access denied
+ */
+bool
+ds_sec_cont_can_modify(uint64_t cont_capas);
 
 /**
  * Get the security capabilities for a rebuild container handle created by the
