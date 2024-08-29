@@ -52,51 +52,6 @@ void   mgmt__cont_set_owner_req__free_unpacked
   assert(message->base.descriptor == &mgmt__cont_set_owner_req__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-void   mgmt__cont_set_owner_resp__init
-                     (Mgmt__ContSetOwnerResp         *message)
-{
-  static const Mgmt__ContSetOwnerResp init_value = MGMT__CONT_SET_OWNER_RESP__INIT;
-  *message = init_value;
-}
-size_t mgmt__cont_set_owner_resp__get_packed_size
-                     (const Mgmt__ContSetOwnerResp *message)
-{
-  assert(message->base.descriptor == &mgmt__cont_set_owner_resp__descriptor);
-  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
-}
-size_t mgmt__cont_set_owner_resp__pack
-                     (const Mgmt__ContSetOwnerResp *message,
-                      uint8_t       *out)
-{
-  assert(message->base.descriptor == &mgmt__cont_set_owner_resp__descriptor);
-  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
-}
-size_t mgmt__cont_set_owner_resp__pack_to_buffer
-                     (const Mgmt__ContSetOwnerResp *message,
-                      ProtobufCBuffer *buffer)
-{
-  assert(message->base.descriptor == &mgmt__cont_set_owner_resp__descriptor);
-  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
-}
-Mgmt__ContSetOwnerResp *
-       mgmt__cont_set_owner_resp__unpack
-                     (ProtobufCAllocator  *allocator,
-                      size_t               len,
-                      const uint8_t       *data)
-{
-  return (Mgmt__ContSetOwnerResp *)
-     protobuf_c_message_unpack (&mgmt__cont_set_owner_resp__descriptor,
-                                allocator, len, data);
-}
-void   mgmt__cont_set_owner_resp__free_unpacked
-                     (Mgmt__ContSetOwnerResp *message,
-                      ProtobufCAllocator *allocator)
-{
-  if(!message)
-    return;
-  assert(message->base.descriptor == &mgmt__cont_set_owner_resp__descriptor);
-  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
-}
 static const ProtobufCFieldDescriptor mgmt__cont_set_owner_req__field_descriptors[6] =
 {
   {
@@ -112,48 +67,48 @@ static const ProtobufCFieldDescriptor mgmt__cont_set_owner_req__field_descriptor
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "contUUID",
+    "cont_id",
     2,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__ContSetOwnerReq, contuuid),
+    offsetof(Mgmt__ContSetOwnerReq, cont_id),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "poolUUID",
+    "pool_id",
     3,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__ContSetOwnerReq, pooluuid),
+    offsetof(Mgmt__ContSetOwnerReq, pool_id),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "owneruser",
+    "owner_user",
     4,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__ContSetOwnerReq, owneruser),
+    offsetof(Mgmt__ContSetOwnerReq, owner_user),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "ownergroup",
+    "owner_group",
     5,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__ContSetOwnerReq, ownergroup),
+    offsetof(Mgmt__ContSetOwnerReq, owner_group),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
@@ -173,10 +128,10 @@ static const ProtobufCFieldDescriptor mgmt__cont_set_owner_req__field_descriptor
   },
 };
 static const unsigned mgmt__cont_set_owner_req__field_indices_by_name[] = {
-  1,   /* field[1] = contUUID */
-  4,   /* field[4] = ownergroup */
-  3,   /* field[3] = owneruser */
-  2,   /* field[2] = poolUUID */
+  1,   /* field[1] = cont_id */
+  4,   /* field[4] = owner_group */
+  3,   /* field[3] = owner_user */
+  2,   /* field[2] = pool_id */
   5,   /* field[5] = svc_ranks */
   0,   /* field[0] = sys */
 };
@@ -198,43 +153,5 @@ const ProtobufCMessageDescriptor mgmt__cont_set_owner_req__descriptor =
   mgmt__cont_set_owner_req__field_indices_by_name,
   1,  mgmt__cont_set_owner_req__number_ranges,
   (ProtobufCMessageInit) mgmt__cont_set_owner_req__init,
-  NULL,NULL,NULL    /* reserved[123] */
-};
-static const ProtobufCFieldDescriptor mgmt__cont_set_owner_resp__field_descriptors[1] =
-{
-  {
-    "status",
-    1,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_INT32,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__ContSetOwnerResp, status),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-};
-static const unsigned mgmt__cont_set_owner_resp__field_indices_by_name[] = {
-  0,   /* field[0] = status */
-};
-static const ProtobufCIntRange mgmt__cont_set_owner_resp__number_ranges[1 + 1] =
-{
-  { 1, 0 },
-  { 0, 1 }
-};
-const ProtobufCMessageDescriptor mgmt__cont_set_owner_resp__descriptor =
-{
-  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "mgmt.ContSetOwnerResp",
-  "ContSetOwnerResp",
-  "Mgmt__ContSetOwnerResp",
-  "mgmt",
-  sizeof(Mgmt__ContSetOwnerResp),
-  1,
-  mgmt__cont_set_owner_resp__field_descriptors,
-  mgmt__cont_set_owner_resp__field_indices_by_name,
-  1,  mgmt__cont_set_owner_resp__number_ranges,
-  (ProtobufCMessageInit) mgmt__cont_set_owner_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };

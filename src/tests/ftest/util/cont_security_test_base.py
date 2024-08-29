@@ -83,9 +83,7 @@ class ContSecurityTestBase(TestWithServers):
         result = container.get_acl(verbose, outfile)
 
         cont_permission_list = []
-        for line in result.stdout_text.splitlines():
-            if not line.startswith("A:"):
-                continue
+        for line in result['response']['entries']:
             if line.startswith("A::"):
                 found_user = re.search(r"A::(.+)@:(.*)", line)
                 if found_user:

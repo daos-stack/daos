@@ -370,18 +370,17 @@ mock_ds_mgmt_pool_query_targets_teardown(void)
 	}
 }
 
-int	ds_mgmt_cont_set_owner_return;
-uuid_t	ds_mgmt_cont_set_owner_pool;
-uuid_t	ds_mgmt_cont_set_owner_cont;
+int      ds_mgmt_cont_set_owner_return;
+uuid_t   ds_mgmt_cont_set_owner_pool;
+char    *ds_mgmt_cont_set_owner_cont;
 char	*ds_mgmt_cont_set_owner_user;
 char	*ds_mgmt_cont_set_owner_group;
 int
-ds_mgmt_cont_set_owner(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-		       uuid_t cont_uuid, const char *user,
-		       const char *group)
+ds_mgmt_cont_set_owner(uuid_t pool_uuid, d_rank_list_t *svc_ranks, const char *cont_id,
+		       const char *user, const char *group)
 {
 	uuid_copy(ds_mgmt_cont_set_owner_pool, pool_uuid);
-	uuid_copy(ds_mgmt_cont_set_owner_cont, cont_uuid);
+	D_STRNDUP(ds_mgmt_cont_set_owner_cont, cont_id, DAOS_PROP_LABEL_MAX_LEN);
 	if (user != NULL)
 		D_STRNDUP(ds_mgmt_cont_set_owner_user, user,
 			  DAOS_ACL_MAX_PRINCIPAL_LEN);
@@ -398,12 +397,13 @@ mock_ds_mgmt_cont_set_owner_setup(void)
 	ds_mgmt_cont_set_owner_return = 0;
 
 	uuid_clear(ds_mgmt_cont_set_owner_pool);
-	uuid_clear(ds_mgmt_cont_set_owner_cont);
+	ds_mgmt_cont_set_owner_cont  = NULL;
 	ds_mgmt_cont_set_owner_user = NULL;
 	ds_mgmt_cont_set_owner_group = NULL;
 }
 void mock_ds_mgmt_cont_set_owner_teardown(void)
 {
+	D_FREE(ds_mgmt_cont_set_owner_cont);
 	D_FREE(ds_mgmt_cont_set_owner_user);
 	D_FREE(ds_mgmt_cont_set_owner_group);
 }
