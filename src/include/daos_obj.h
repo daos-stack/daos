@@ -564,7 +564,6 @@ daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 		      enum daos_otype_t type, daos_oclass_id_t cid,
 		      daos_oclass_hints_t hints, uint32_t args);
 
-
 /**
  * This function, if called 2^32 times will set oid->hi to every unique 32-bit
  * value. The caller is responsible for setting the initial value, tracking the
