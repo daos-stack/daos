@@ -12,7 +12,7 @@ jobs:
     env:
       CP_PRIORITY: 1
 
-      EL8_BUILD_VERSION: 8.6
+      EL8_BUILD_VERSION: 8.8
       EL8_VERSION: 8.8
       EL9_BUILD_VERSION: 9
       EL9_VERSION: 9
@@ -35,9 +35,9 @@ jobs:
       DISTRO_NAME: "EL"
       DISTRO_NAME_UPPER: "EL"
       DISTRO_NAME_LOWER: "el"
-      DISTRO_VERSION: "8.6"
+      DISTRO_VERSION: "8.8"
       DISTRO_VERSION_MAJOR: "8"
-      DISTRO_WITH_VERSION: "el8.6"
+      DISTRO_WITH_VERSION: "el8.8"
       OPENMPI: "openmpi"
       LABEL: "ci_vm1"
       DISTRO: EL_8
