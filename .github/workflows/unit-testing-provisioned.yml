@@ -10,9 +10,14 @@ jobs:
     name: "Build and Run Unit Tests for Ryon"
     runs-on: [self-hosted, wolf]
     env:
+      EL8_BUILD_VERSION: 8.6
+      EL8_VERSION: 8.8
+      EL9_BUILD_VERSION: 9
+      EL9_VERSION: 9
+      LEAP15_VERSION: 15.5
       CONFIG_POWER_ONLY: false
       PRAGMA_SUFFIX: -vm
-      OPERATIONS_EMAIL: brian.murrell@intel.com
+      OPERATIONS_EMAIL: ryon.jensen@intel.com
       TEST_RPMS: true
       JENKINS_URL: https://build.hpdd.intel.com/
       REPOSITORY_URL: https://repo.dc.hpdd.intel.com/
@@ -32,9 +37,28 @@ jobs:
       LABEL: "ci_vm1"
 
       DISTRO: EL_8
-      DAOS_STACK_EL_8_LOCAL_REPO:
+      DAOS_STACK_EL_8_LOCAL_REPO: not_used
       DAOS_STACK_EL_8_GROUP_REPO:
       DAOS_STACK_EL_8_APPSTREAM_REPO:
+
+      DAOS_STACK_EL_7_LOCAL_REPO: not_used
+
+      NODESTRING:
+      CP_PR_REPOS:
+      CP_FEATURES:
+      CP_TEST_TAG:
+      CP_EL8_VM9_LABEL:
+      CP_EL9_VM9_LABEL:
+      CP_LEAP15_VM9_LABEL:
+      CP_PRIORITY:
+      CP_EL8_VERSION:
+      CP_EL9_VERSION:
+      CP_LEAP15_VERSION:
+      CLUSTER_REQUEST_reqid:
+      STAGE_NAME: STAGE_RYON
+      QUEUE_URL:
+      COMMIT_STATUS_DISTRO_VERSION:
+      PROVISION_DISTRO: EL_
 
 
     steps:
