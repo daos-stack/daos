@@ -141,16 +141,18 @@ func getMetricStats(baseName string, m telemetry.Metric) (stats []*metricStat) {
 			desc: " (mean)",
 		},
 		"sum": {
-			fn:   func() float64 { return float64(ms.Sum()) },
-			desc: " (sum)",
+			fn:        func() float64 { return float64(ms.Sum()) },
+			isCounter: true,
+			desc:      " (sum)",
 		},
 		"stddev": {
 			fn:   ms.StdDev,
 			desc: " (std dev)",
 		},
 		"sumsquares": {
-			fn:   ms.SumSquares,
-			desc: " (sum of squares)",
+			fn:        ms.SumSquares,
+			isCounter: true,
+			desc:      " (sum of squares)",
 		},
 		"samples": {
 			fn:        func() float64 { return float64(ms.SampleSize()) },
