@@ -25,13 +25,12 @@ from dmg_utils import get_dmg_command
 from environment_utils import TestEnvironment
 from exception_utils import CommandFailure
 from fault_config_utils import FaultInjection
-from general_utils import (DaosTestError, dict_to_str, dump_engines_stacks,
-                           get_avocado_config_value, get_default_config_file, get_file_listing,
-                           nodeset_append_suffix, pcmd, run_command, set_avocado_config_value)
+from general_utils import (dict_to_str, dump_engines_stacks, get_avocado_config_value,
+                           nodeset_append_suffix, set_avocado_config_value)
 from host_utils import HostException, HostInfo, HostRole, get_host_parameters, get_local_host
 from logger_utils import TestLogger
 from pydaos.raw import DaosApiError, DaosContext, DaosLog
-from run_utils import run_remote, stop_processes
+from run_utils import run_local, run_remote, stop_processes
 from server_utils import DaosServerManager
 from slurm_utils import SlurmFailed, get_partition_hosts, get_reservation_hosts
 from test_utils_container import CONT_NAMESPACE, add_container
@@ -388,10 +387,8 @@ class Test(avocadoTest):
         """
         errors = []
         self.log.info("Removing temporary test files in %s", self.test_dir)
-        try:
-            run_command("rm -fr {}".format(self.test_dir))
-        except DaosTestError as error:
-            errors.append("Error removing temporary test files: {}".format(error))
+        if not run_local(self.log, f"rm -fr {self.test_dir}").passed:
+            errors.append(f"Error removing temporary test files in {self.test_dir}")
         return errors
 
     def _cleanup(self):
@@ -764,13 +761,17 @@ class TestWithServers(TestWithoutServers):
             self.fail(f"Error creating test-specific temporary directory on {result.failed_hosts}")
 
         # Copy the fault injection files to the hosts.
-        self.fault_injection.copy_fault_files(self.host_info.all_hosts)
+        self.fault_injection.copy_fault_files(self.log, self.host_info.all_hosts)
 
         # List common test directory contents before running the test
         self.log.info("-" * 100)
-        self.log.debug("Common test directory (%s) contents:", self.test_dir)
+        self.log.debug("Common test directory (%s) contents:", os.path.dirname(self.test_dir))
         all_hosts = include_local_host(self.host_info.all_hosts)
-        get_file_listing(all_hosts, self.test_dir, self.test_env.agent_user).log_output(self.log)
+        test_dir_parent = os.path.dirname(self.test_dir)
+        result = run_remote(self.log, all_hosts, f"df -h {test_dir_parent}")
+        if int(max(re.findall(r" ([\d+])% ", result.joined_stdout) + ["0"])) > 90:
+            run_remote(self.log, all_hosts, f"du -sh {test_dir_parent}/*")
+        self.log.info("-" * 100)
 
         if not self.start_servers_once or self.name.uid == 1:
             # Kill commands left running on the hosts (from a previous test)
@@ -785,12 +786,11 @@ class TestWithServers(TestWithoutServers):
             # Ensure write permissions for the daos command log files when
             # using systemctl
             if "Systemctl" in (self.agent_manager_class, self.server_manager_class):
-                log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
                 self.log.info("-" * 100)
                 self.log.info(
                     "Updating file permissions for %s for use with systemctl",
-                    log_dir)
-                pcmd(hosts, "chmod a+rw {}".format(log_dir))
+                    self.test_env.log_dir)
+                run_remote(self.log, hosts, f"chmod a+rw {self.test_env.log_dir}")
 
         # Start the servers
         force_agent_start = False
@@ -1066,7 +1066,7 @@ class TestWithServers(TestWithoutServers):
         if group is None:
             group = self.server_group
         if config_file is None and self.agent_manager_class == "Systemctl":
-            config_file = get_default_config_file("agent")
+            config_file = self.test_env.agent_config
             config_temp = self.get_config_file(group, "agent", self.test_dir)
         elif config_file is None:
             config_file = self.get_config_file(group, "agent")
@@ -1116,14 +1116,14 @@ class TestWithServers(TestWithoutServers):
         if group is None:
             group = self.server_group
         if svr_config_file is None and self.server_manager_class == "Systemctl":
-            svr_config_file = get_default_config_file("server")
+            svr_config_file = self.test_env.server_config
             svr_config_temp = self.get_config_file(
                 group, "server", self.test_dir)
         elif svr_config_file is None:
             svr_config_file = self.get_config_file(group, "server")
             svr_config_temp = None
         if dmg_config_file is None and self.server_manager_class == "Systemctl":
-            dmg_config_file = get_default_config_file("control")
+            dmg_config_file = self.test_env.control_config
             dmg_config_temp = self.get_config_file(group, "dmg", self.test_dir)
         elif dmg_config_file is None:
             dmg_config_file = self.get_config_file(group, "dmg")
@@ -1323,7 +1323,6 @@ class TestWithServers(TestWithoutServers):
         self.log.info("-" * 100)
         self.log.info("--- SERVER INFORMATION ---")
         for manager in self.server_managers:
-            manager.get_host_log_files()
             try:
                 manager.dmg.storage_query_list_devices()
             except CommandFailure:
@@ -1672,7 +1671,7 @@ class TestWithServers(TestWithoutServers):
             return self.server_managers[index].dmg
 
         if self.server_manager_class == "Systemctl":
-            dmg_config_file = get_default_config_file("control")
+            dmg_config_file = self.test_env.control_config
             dmg_config_temp = self.get_config_file("daos", "dmg", self.test_dir)
             dmg_cert_dir = os.path.join(os.sep, "etc", "daos", "certs")
         else:

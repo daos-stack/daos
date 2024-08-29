@@ -41,7 +41,7 @@ class ServerRankFailure(IorTestBase):
                 Defaults to None, in which case infinite.
         """
         # Update the object class depending on the test case.
-        ior_cmd = IorCommand(namespace=namespace)
+        ior_cmd = IorCommand(self.test_env.log_dir, namespace=namespace)
         ior_cmd.get_params(self)
 
         # Standard IOR prep sequence.

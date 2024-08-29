@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -70,7 +70,7 @@ service MgmtSvc {
 	// List all containers in a pool
 	rpc ListContainers(ListContReq) returns (ListContResp) {}
 	// Change the owner of a DAOS container
-	rpc ContSetOwner(ContSetOwnerReq) returns (ContSetOwnerResp) {}
+	rpc ContSetOwner(ContSetOwnerReq) returns (DaosResp) {}
 	// Query DAOS system status
 	rpc SystemQuery(SystemQueryReq) returns(SystemQueryResp) {}
 	// Stop DAOS system (shutdown data-plane instances)

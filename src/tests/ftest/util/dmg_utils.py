@@ -957,12 +957,12 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("pool", "reintegrate"), pool=pool, rank=rank, tgt_idx=tgt_idx)
 
-    def cont_set_owner(self, pool, cont, user, group):
+    def cont_set_owner(self, pool, cont, user=None, group=None):
         """Dmg container set-owner to the specified new user/group.
 
         Args:
-            pool (str): Pool uuid.
-            cont (str): Container uuid.
+            pool (str): Pool label or UUID.
+            cont (str): Container label or UUID.
             user (str): new user for the container.
             group (str): new group for the container.
 
@@ -974,7 +974,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg pool reintegrate command fails.
 
         """
-        return self._get_result(
+        return self._get_json_result(
             ("cont", "set-owner"), pool=pool, cont=cont, user=user, group=group)
 
     def system_cleanup(self, machinename=None, verbose=True):
