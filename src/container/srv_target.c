@@ -1261,7 +1261,9 @@ cont_child_destroy_one(void *vin)
 			D_GOTO(out_pool, rc = -DER_BUSY);
 		} /* else: resync should have completed, try again */
 
-		daos_lru_ref_wait_evict(tls->dt_cont_cache, &cont->sc_list);
+		/* nobody should see it again after eviction */
+		daos_lru_ref_evict_wait(tls->dt_cont_cache, &cont->sc_list);
+		daos_lru_ref_release(tls->dt_cont_cache, &cont->sc_list);
 	}
 
 	D_DEBUG(DB_MD, DF_CONT": destroying vos container\n",

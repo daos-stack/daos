@@ -38,7 +38,7 @@ struct daos_llink {
 	d_list_t		 ll_qlink;	/**< Temp link for traverse */
 	uint32_t		 ll_ref;	/**< refcount for this ref */
 	uint32_t		 ll_evicted:1,	/**< has been evicted */
-				 ll_evicting:1; /**< been evicting */
+	uint32_t		 ll_wait_evict:1 /**< wait for completion of eviction */
 	struct daos_llink_ops	*ll_ops;	/**< ops to maintain refs */
 };
 
@@ -121,26 +121,7 @@ void
 daos_lru_ref_release(struct daos_lru_cache *lcache, struct daos_llink *llink);
 
 /**
- * Evicts the LRU link from the DAOS LRU cache after waiting
- * for all references to be released.
- *
- * \param[in] lcache		DAOS LRU cache
- * \param[in] llink		DAOS LRU link to be evicted
- *
- */
-void
-daos_lru_ref_wait_evict(struct daos_lru_cache *lcache, struct daos_llink *llink);
-
-/**
- * Flush old items from LRU.
- *
- * \param[in] lcache		DAOS LRU cache
- */
-void
-daos_lru_ref_flush(struct daos_lru_cache *lcache);
-
-/**
- * Evict the item from LRU after releasing the last refcount on it.
+ * Evict the item from LRU before releasing the refcount on it.
  *
  * \param[in] lcache		DAOS LRU cache
  * \param[in] llink		DAOS LRU item to be evicted
@@ -153,15 +134,14 @@ daos_lru_ref_evict(struct daos_lru_cache *lcache, struct daos_llink *llink)
 }
 
 /**
- * Check if a LRU element has been evicted or not
+ * Evict the item from LRU before releasing the refcount on it, wait until
+ * the caller is the last one holds refcount.
  *
- * \param[in] llink		DAOS LRU item to check
+ * \param[in] lcache		DAOS LRU cache
+ * \param[in] llink		DAOS LRU item to be evicted
  */
-static inline bool
-daos_lru_ref_evicted(struct daos_llink *llink)
-{
-	return llink->ll_evicted;
-}
+void
+daos_lru_ref_evict_wait(struct daos_lru_cache *lcache, struct daos_llink *llink);
 
 /**
  * Increase a usage reference to the LRU element

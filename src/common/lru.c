@@ -36,7 +36,10 @@ lru_hop_rec_decref(struct d_hash_table *htable, d_list_t *link)
 
 	D_ASSERT(llink->ll_ref > 0);
 	llink->ll_ref--;
-	if (llink->ll_ref == 1 && llink->ll_ops->lop_wakeup)
+
+	/* eviction waiter is the last one holds refcount */
+	if (llink->ll_wait_evict &&
+	    llink->ll_ops->lop_wakeup && daos_lru_is_last_user(llink))
 		llink->ll_ops->lop_wakeup(llink);
 
 	/* Delete from hash only if no more references */
@@ -215,15 +218,6 @@ daos_lru_ref_hold(struct daos_lru_cache *lcache, void *key,
 	if (link != NULL) {
 		llink = link2llink(link);
 		D_ASSERT(llink->ll_evicted == 0);
-		if (llink->ll_evicting) {
-			/**
-			 * Avoid calling `lru_hop_rec_decref()` at this point
-			 * to prevent `wakeup()` from being invoked twice.
-			 */
-			D_ASSERT(llink->ll_ref > 1);
-			llink->ll_ref--;
-			D_GOTO(out, rc = -DER_SHUTDOWN);
-		}
 		/* remove busy item from LRU */
 		if (!d_list_empty(&llink->ll_qlink))
 			d_list_del_init(&llink->ll_qlink);
@@ -258,23 +252,16 @@ out:
 }
 
 static void
-lru_ref_release_internal(struct daos_lru_cache *lcache, struct daos_llink *llink, bool wait)
+daos_lru_ref_release(struct daos_lru_cache *lcache, struct daos_llink *llink)
 {
 	D_ASSERT(lcache != NULL && llink != NULL && llink->ll_ref > 1);
 	D_ASSERT(d_list_empty(&llink->ll_qlink));
 
 	lru_hop_rec_decref(&lcache->dlc_htable, &llink->ll_link);
 
-	if (wait && llink->ll_ref > 1) {
-		D_ASSERT(llink->ll_evicting == 0);
-		llink->ll_evicting = 1;
-		lcache->dlc_ops->lop_wait(llink);
-		llink->ll_evicting = 0;
-		llink->ll_evicted = 1;
-	}
-
 	if (llink->ll_ref == 1) { /* the last refcount */
-		if (lcache->dlc_csize == 0)
+		/* zero-sized cache always evicts unused item */
+		if (lcache->dlc_csize == 0 && !llink->ll_evicted)
 			llink->ll_evicted = 1;
 
 		if (llink->ll_evicted) {
@@ -297,15 +284,20 @@ lru_ref_release_internal(struct daos_lru_cache *lcache, struct daos_llink *llink
 }
 
 void
-daos_lru_ref_release(struct daos_lru_cache *lcache, struct daos_llink *llink)
+daos_lru_ref_evict_wait(struct daos_lru_cache *lcache, struct daos_llink *llink)
 {
-	lru_ref_release_internal(lcache, llink, false);
-}
+	if (!llink->ll_evicted)
+		daos_lru_ref_evict(cache, llink);
 
-void
-daos_lru_ref_wait_evict(struct daos_lru_cache *lcache, struct daos_llink *llink)
-{
-	D_ASSERT(lcache->dlc_ops->lop_wait);
-
-	lru_ref_release_internal(lcache, llink, true);
+	if (lcache->dlc_ops->lop_wait && !daos_lru_is_last_user(llink)) {
+		/* Wait until I'm the last one.
+		 * XXX: the implementation can only support one waiter for now, if there
+		 * is a secondary ULT calls this function on the same item, it will hit
+		 * the assertion.
+		 */
+		D_ASSERT(!llink->ll_wait_evict);
+		llink->ll_wait_evict = 1;
+		lcache->dlc_ops->lop_wait(llink);
+		llink->ll_wait_evict = 0;
+	}
 }
