@@ -10,11 +10,22 @@ jobs:
     name: "Build and Run Unit Tests for Ryon"
     runs-on: [self-hosted, wolf]
     env:
+      CONFIG_POWER_ONLY: false
+      PRAGMA_SUFFIX: -vm
+      OPERATIONS_EMAIL: brian.murrell@intel.com
+      TEST_RPMS: true
+      JENKINS_URL: https://build.hpdd.intel.com/
+      REPOSITORY_URL: https://repo.dc.hpdd.intel.com/
+      REMOVE_EXISTING_RPMS: false
+      # TODO -- this should be on stable, backedup storage
+      ARTIFACTS_URL: file:///scratch/job_repos/
+      REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
+
       CHROOT_NAME: "rocky+epel-8-x86_64"
       DISTRO_NAME: "EL"
       DISTRO_NAME_UPPER: "EL"
       DISTRO_NAME_LOWER: "el"
-      DISTRO_VERSION: 
+      DISTRO_VERSION:
       DISTRO_VERSION_MAJOR: "8"
       OPENMPI: "openmpi"
       LABEL: "ci_vm9"
