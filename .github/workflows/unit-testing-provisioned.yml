@@ -10,6 +10,8 @@ jobs:
     name: "Build and Run Unit Tests for Ryon"
     runs-on: [self-hosted, wolf]
     env:
+      CP_PRIORITY: 1
+
       EL8_BUILD_VERSION: 8.6
       EL8_VERSION: 8.8
       EL9_BUILD_VERSION: 9
@@ -22,9 +24,12 @@ jobs:
       JENKINS_URL: https://build.hpdd.intel.com/
       REPOSITORY_URL: https://repo.dc.hpdd.intel.com/
       REMOVE_EXISTING_RPMS: false
-      # TODO -- this should be on stable, backedup storage
+      # TODO -- this should be on stable, backed-up storage
       ARTIFACTS_URL: file:///scratch/job_repos/
       REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
+
+      REPO_PATH: /scratch/job_repos/daos-stack/job/daos/job/PR-${{ github.event.pull_request.number }}/
+
 
       CHROOT_NAME: "rocky+epel-8-x86_64"
       DISTRO_NAME: "EL"
@@ -35,10 +40,8 @@ jobs:
       DISTRO_WITH_VERSION: "el8.6"
       OPENMPI: "openmpi"
       LABEL: "ci_vm1"
-
       DISTRO: EL_8
       DAOS_STACK_EL_8_LOCAL_REPO: not_used
-
       DAOS_STACK_EL_8_GROUP_REPO:
       DAOS_STACK_EL_8_APPSTREAM_REPO:
 
@@ -51,7 +54,6 @@ jobs:
       CP_EL8_VM9_LABEL:
       CP_EL9_VM9_LABEL:
       CP_LEAP15_VM9_LABEL:
-      CP_PRIORITY:
       CP_EL8_VERSION:
       CP_EL9_VERSION:
       CP_LEAP15_VERSION:
@@ -60,7 +62,6 @@ jobs:
       QUEUE_URL:
       COMMIT_STATUS_DISTRO_VERSION:
       PROVISION_DISTRO: EL_8
-
 
     steps:
       - name: Checkout code
