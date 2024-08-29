@@ -55,6 +55,12 @@ pool_tls_get()
 	return tls;
 }
 
+static inline bool
+ds_pool_skip_for_check(struct ds_pool *pool)
+{
+	return engine_in_check() && !pool->sp_cr_checked;
+}
+
 struct pool_iv_map {
 	d_rank_t	piv_master_rank;
 	uint32_t	piv_pool_map_ver;
