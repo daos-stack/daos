@@ -8,6 +8,10 @@ timeouts:
   test_rebuild_0to10: 2000
   test_rebuild_12to15: 1500
   test_rebuild_27: 1500
+  test_rebuild_31: 1500
+  test_rebuild_32: 1500
+  test_rebuild_33: 200
+  test_rebuild_34: 1500
   test_rebuild_35: 180
 pool:
   nvme_size: 0G

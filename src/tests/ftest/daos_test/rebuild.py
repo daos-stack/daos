@@ -8,6 +8,7 @@ from daos_core_base import DaosCoreBase
 
 
 class DaosCoreTestRebuild(DaosCoreBase):
+    # pylint: disable=too-many-public-methods
     """Run just the daos_test rebuild tests.
 
     :avocado: recursive
