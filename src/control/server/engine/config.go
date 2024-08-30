@@ -346,8 +346,10 @@ func (c *Config) Validate() error {
 		return errors.Wrap(err, "validate engine log subsystems")
 	}
 
-	// ensure 18KB ABT stack size for an engine with DCPM storage class
+	// Ensure proper environment variables for PMDK w/ NDCTL enabled.
+	pmemobj_conf_str, pmemobj_conf_err := c.GetEnvVar("PMEMOBJ_CONF")
 	if c.Storage.Tiers[0].Class == storage.ClassDcpm {
+		// Ensure 18KiB ABT stack size for an engine with DCPM storage class.
 		stacksize_str, err := c.GetEnvVar("ABT_THREAD_STACKSIZE")
 		if err != nil {
 			fmt.Printf("env_var ABT_THREAD_STACKSIZE set to %d for `dcpm` storage class\n",
@@ -359,6 +361,22 @@ func (c *Config) Validate() error {
 			if err != nil || stacksize_value < MIN_ABT_THREAD_STACKSIZE_FOR_DCPM {
 				return errors.New(fmt.Sprintf("env_var ABT_THREAD_STACKSIZE should be >= %d for `dcpm` storage class",
 					MIN_ABT_THREAD_STACKSIZE_FOR_DCPM))
+			}
+		}
+		// Ensure default handling of shutdown state (SDS) for DCPM storage class.
+		if pmemobj_conf_err != nil && strings.Contains(pmemobj_conf_str, "sds.at_create") {
+			return errors.New("env_var PMEMOBJ_CONF should NOT be set to sds.at_create=? for non-`dcpm` storage class")
+		}
+	} else {
+		// Disable shutdown state (SDS) (part of RAS) for RAM-based simulated SCM.
+		// RAM doesn't support this feature and trying to use
+		// it will fail the create/open operations.
+		if pmemobj_conf_err != nil {
+			fmt.Printf("env_var PMEMOBJ_CONF set to sds.at_create=0 for non-`dcpm` storage class\n")
+			c.EnvVars = append(c.EnvVars, "PMEMOBJ_CONF=sds.at_create=0")
+		} else if strings.Contains(pmemobj_conf_str, "sds.at_create") {
+			if strings.Contains(pmemobj_conf_str, "sds.at_create=1") {
+				return errors.New("env_var PMEMOBJ_CONF should be set to sds.at_create=0 for non-`dcpm` storage class")
 			}
 		}
 	}
