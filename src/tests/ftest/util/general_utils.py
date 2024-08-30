@@ -1024,7 +1024,8 @@ def percent_change(val1, val2):
         return math.nan
 
 
-def get_journalctl_command(since, until=None, system=False, units=None, identifiers=None):
+def get_journalctl_command(since, until=None, system=False, units=None, identifiers=None,
+                           run_user="root"):
     """Get the journalctl command to capture all unit/identifier activity from since to until.
 
     Args:
@@ -1036,21 +1037,23 @@ def get_journalctl_command(since, until=None, system=False, units=None, identifi
             None.
         identifiers (str/list, optional): show messages for the specified syslog identifier(s).
             Defaults to None.
+        run_user (str, optional): user to run as. Defaults to "root".
 
     Returns:
         str: journalctl command to capture all unit activity
-
     """
-    command = ["sudo", os.path.join(os.sep, "usr", "bin", "journalctl")]
+    command = [os.path.join(os.sep, "usr", "bin", "journalctl")]
     if system:
         command.append("--system")
+    if run_user != "root":
+        command.append("--user")
     for key, values in {"unit": units or [], "identifier": identifiers or []}.items():
         for item in values if isinstance(values, (list, tuple)) else [values]:
-            command.append("--{}={}".format(key, item))
-    command.append("--since=\"{}\"".format(since))
+            command.append(f"--{key}={item}")
+    command.append(f'--since="{since}"')
     if until:
-        command.append("--until=\"{}\"".format(until))
-    return " ".join(command)
+        command.append(f'--until="{until}"')
+    return command_as_user(" ".join(command), run_user)
 
 
 def get_journalctl(hosts, since, until, journalctl_type):

@@ -1498,7 +1498,7 @@ class SubprocessManager(ObjectWithParameters):
 class SystemctlCommand(ExecutableCommand):
     """Defines an object representing the systemctl command."""
 
-    def __init__(self, run_user='root'):
+    def __init__(self, run_user="root"):
         """Create a SystemctlCommand object.
 
         Args:
@@ -1509,7 +1509,7 @@ class SystemctlCommand(ExecutableCommand):
         super().__init__("/run/systemctl/*", "systemctl", subprocess=False, run_user=run_user)
 
         # Use --user for anyone other than root
-        self.user = FormattedParameter("--user", self.run_user != 'root', position=0)
+        self.user = FormattedParameter("--user", self.run_user != "root", position=0)
 
         self.unit_command = BasicParameter(None, position=1)
         self.service = BasicParameter(None, position=2)
