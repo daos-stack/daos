@@ -327,7 +327,7 @@ class TestEnvironment():
             # Find all the /sys/class/net interfaces on the launch node (excluding lo)
             logger.debug("Detecting network devices - D_INTERFACE not set")
             try:
-                interface = get_fastest_interface(logger, hosts | get_local_host())
+                interface = get_fastest_interface(logger, hosts)
             except NetworkException as error:
                 raise TestEnvironmentException("Error obtaining a default interface!") from error
         return interface
