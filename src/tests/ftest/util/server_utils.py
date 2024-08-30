@@ -25,7 +25,7 @@ from server_utils_params import DaosServerTransportCredentials, DaosServerYamlPa
 from user_utils import get_chown_command
 
 
-def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None):
+def get_server_command(group, cert_dir, bin_dir, config_file, run_user, config_temp=None):
     """Get the daos_server command object to manage.
 
     Args:
@@ -33,6 +33,7 @@ def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None):
         cert_dir (str): directory in which to copy certificates
         bin_dir (str): location of the daos_server executable
         config_file (str): configuration file name and path
+        run_user (str): account to use to run the daos_server command.
         config_temp (str, optional): file name and path to use to generate the
             configuration file locally and then copy it to all the hosts using
             the config_file specification. Defaults to None, which creates and
@@ -45,7 +46,7 @@ def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None):
     transport_config = DaosServerTransportCredentials(cert_dir)
     common_config = CommonConfig(group, transport_config)
     config = DaosServerYamlParameters(config_file, common_config)
-    command = DaosServerCommand(bin_dir, config, None)
+    command = DaosServerCommand(bin_dir, config, None, run_user)
     if config_temp:
         # Setup the DaosServerCommand to write the config file data to the
         # temporary file and then copy the file to all the hosts using the
@@ -69,7 +70,7 @@ class DaosServerManager(SubprocessManager):
     D_TM_SHARED_MEMORY_KEY = 0x10242048
 
     def __init__(self, group, bin_dir,
-                 svr_cert_dir, svr_config_file, dmg_cert_dir, dmg_config_file,
+                 svr_cert_dir, svr_config_file, dmg_cert_dir, dmg_config_file, run_user,
                  svr_config_temp=None, dmg_config_temp=None, manager="Orterun",
                  namespace="/run/server_manager/*", access_points_suffix=None):
         # pylint: disable=too-many-arguments
@@ -82,6 +83,7 @@ class DaosServerManager(SubprocessManager):
             svr_config_file (str): daos_server configuration file name and path
             dmg_cert_dir (str): directory in which to copy dmg certificates
             dmg_config_file (str): dmg configuration file name and path
+            run_user (str): account to use to run the daos_server command.
             svr_config_temp (str, optional): file name and path used to generate
                 the daos_server configuration file locally and copy it to all
                 the hosts using the config_file specification. Defaults to None.
@@ -97,7 +99,7 @@ class DaosServerManager(SubprocessManager):
         """
         self.group = group
         server_command = get_server_command(
-            group, svr_cert_dir, bin_dir, svr_config_file, svr_config_temp)
+            group, svr_cert_dir, bin_dir, svr_config_file, run_user, svr_config_temp)
         super().__init__(server_command, manager, namespace)
         self.manager.job.sub_command_override = "start"
 
@@ -108,8 +110,13 @@ class DaosServerManager(SubprocessManager):
 
         # Set the correct certificate file ownership
         if manager == "Systemctl":
-            self.manager.job.certificate_owner = "daos_server"
             self.dmg.certificate_owner = getuser()
+            if self.manager.job.run_user == "root":
+                # systemctl is run as root, but the process is spawned as daos_server
+                self.manager.job.certificate_owner = "daos_server"
+            else:
+                # systemctl and the process are run as the user
+                self.manager.job.certificate_owner = self.manager.job.run_user
 
         # Server states
         self._states = {
@@ -262,7 +269,8 @@ class DaosServerManager(SubprocessManager):
                     self.manager.mca.update({"plm_rsh_args": "-l root"}, "orterun.mca", True)
 
         # Verify the socket directory exists when using a non-systemctl manager
-        self.verify_socket_directory(getuser())
+        self.manager.job.verify_socket_directory(
+            self.manager.job.certificate_owner, self._hosts, True)
 
     def clean_files(self, verbose=True):
         """Clean up the daos server files.

@@ -238,10 +238,12 @@ class DaosAgentManager(SubprocessManager):
         super().__init__(agent_command, manager)
 
         # Set the correct certificate file ownership
+        self.__verify_privileged = False
         if manager == "Systemctl":
             if self.manager.job.run_user == "root":
                 # systemctl is run as root, but the process is spawned as daos_agent
                 self.manager.job.certificate_owner = "daos_agent"
+                self.__verify_privileged = True
             else:
                 # systemctl and the process are run as the user
                 self.manager.job.certificate_owner = self.manager.job.run_user
@@ -256,9 +258,6 @@ class DaosAgentManager(SubprocessManager):
         self.manager.assign_environment_default(EnvironmentVariables(env_vars))
         self.attachinfo = None
         self.outputdir = outputdir
-
-        # Support disabling verifying the socket directory (runtime_dir) for tests
-        self.verify_socket_dir = True
 
     def _set_hosts(self, hosts, path, slots):
         """Set the hosts used to execute the daos command.
@@ -286,8 +285,8 @@ class DaosAgentManager(SubprocessManager):
         self.manager.job.copy_certificates(get_log_file("daosCA/certs"), self._hosts)
 
         # Verify the socket directory exists when using a non-systemctl manager
-        if self.verify_socket_dir:
-            self.verify_socket_directory(self.manager.job.certificate_owner)
+        self.manager.job.verify_socket_directory(
+            self.manager.job.certificate_owner, self._hosts, privileged=self.__verify_privileged)
 
         super().start()
 

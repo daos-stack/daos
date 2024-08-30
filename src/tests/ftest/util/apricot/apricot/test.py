@@ -1151,7 +1151,7 @@ class TestWithServers(TestWithoutServers):
         self.server_managers.append(
             DaosServerManager(
                 group, self.bin, svr_cert_dir, svr_config_file, dmg_cert_dir,
-                dmg_config_file, svr_config_temp, dmg_config_temp,
+                dmg_config_file, "root", svr_config_temp, dmg_config_temp,
                 self.server_manager_class, access_points_suffix=self.access_points_suffix)
         )
         if self.server_config_namespace is not None:
