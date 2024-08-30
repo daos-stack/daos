@@ -566,6 +566,8 @@ engines:
   provider: ofi+verbs
   fabric_iface: ib0
   fabric_iface_port: 31416
+  env_vars:
+  - ABT_THREAD_STACKSIZE=18432
   pinned_numa_node: 0
 - targets: 6
   nr_xs_helpers: 0
@@ -583,6 +585,8 @@ engines:
   provider: ofi+verbs
   fabric_iface: ib1
   fabric_iface_port: 32416
+  env_vars:
+  - ABT_THREAD_STACKSIZE=18432
   pinned_numa_node: 1
 disable_vfio: false
 disable_vmd: false
