@@ -518,9 +518,13 @@ func (c *Config) WithSystemName(name string) *Config {
 func (c *Config) WithStorage(cfgs ...*storage.TierConfig) *Config {
 	c.Storage.Tiers = storage.TierConfigs{}
 	c.AppendStorage(cfgs...)
-	if len(c.Storage.Tiers) > 0 && c.Storage.Tiers[0].IsSCM() &&
-		c.Storage.Tiers[0].Class == storage.ClassDcpm {
-		return c.WithStackSizeForDCPM().WithSDSForRam()
+	if len(c.Storage.Tiers) > 0 {
+
+		if c.Storage.Tiers[0].Class == storage.ClassDcpm {
+			return c.WithStackSizeForDCPM()
+		} else {
+			return c.WithSDSForRam()
+		}
 	}
 	return c
 }
