@@ -537,9 +537,6 @@ class EngineYamlParameters(YamlParameters):
 
         if not self.using_dcpm:
             required_env_vars["PMEMOBJ_CONF"] = "sds.at_create=0"
-        else:
-            # NDCTL enabling requires bigger ABT default stack size
-            required_env_vars["ABT_THREAD_STACKSIZE"] = "18432"
 
         # Enable fault injection if configured
         if test.fault_injection.fault_file is not None:
