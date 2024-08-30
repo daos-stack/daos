@@ -69,7 +69,9 @@ const (
 	BdevRoleData = C.NVME_ROLE_DATA
 	BdevRoleMeta = C.NVME_ROLE_META
 	BdevRoleWAL  = C.NVME_ROLE_WAL
-	BdevRoleAll  = BdevRoleData | BdevRoleMeta | BdevRoleWAL
+	BdevRoleBulk = C.NVME_ROLE_BULK
+	/* Bulk role will not co-exist with other roles on the same bdev */
+	BdevRoleAll = BdevRoleData | BdevRoleMeta | BdevRoleWAL
 )
 
 // NvmeDevState represents the operation state of an NVMe device.
@@ -412,25 +414,58 @@ func (ncs NvmeControllers) Capacity() (tb uint64) {
 	return
 }
 
-// Total returns the cumulative total bytes of all controller blobstores.
+// Total returns the cumulative total bytes of all controller blobstores which are not Bulk role.
 func (ncs NvmeControllers) Total() (tb uint64) {
 	for _, c := range ncs {
-		tb += (*NvmeController)(c).Total()
+		// not consider the case which same NVMe disk act as both Bulk role and other roles
+		if len(c.SmdDevices) == 0 || ((c.SmdDevices[0].Roles.OptionBits & BdevRoleBulk) == 0) {
+			tb += (*NvmeController)(c).Total()
+		}
 	}
 	return
 }
 
-// Free returns the cumulative available bytes of all blobstore clusters.
+// Free returns the cumulative available bytes of all blobstore clusters which are not Bulk role.
 func (ncs NvmeControllers) Free() (tb uint64) {
 	for _, c := range ncs {
-		tb += (*NvmeController)(c).Free()
+		// not consider the case which same NVMe disk act as both Bulk role and other roles
+		if len(c.SmdDevices) == 0 || ((c.SmdDevices[0].Roles.OptionBits & BdevRoleBulk) == 0) {
+			tb += (*NvmeController)(c).Free()
+		}
 	}
 	return
 }
 
-// PercentUsage returns the percentage of used storage space.
+// PercentUsage returns the percentage of used storage space which exclude space with Bulk role.
 func (ncs NvmeControllers) PercentUsage() string {
 	return common.PercentageString(ncs.Total()-ncs.Free(), ncs.Total())
+}
+
+// QlcTotal returns the cumulative total bytes of all controller blobstores which with Bulk role.
+func (ncs NvmeControllers) QlcTotal() (tb uint64) {
+	for _, c := range ncs {
+		// not consider the case which same NVMe disk act as both Bulk role and other roles
+		if len(c.SmdDevices) != 0 && ((c.SmdDevices[0].Roles.OptionBits & BdevRoleBulk) != 0) {
+			tb += (*NvmeController)(c).Total()
+		}
+	}
+	return
+}
+
+// QlcFree returns the cumulative available bytes of all blobstore clusters which with Bulk role.
+func (ncs NvmeControllers) QlcFree() (tb uint64) {
+	for _, c := range ncs {
+		// not consider the case which same NVMe disk act as both Bulk role and other roles
+		if len(c.SmdDevices) != 0 && ((c.SmdDevices[0].Roles.OptionBits & BdevRoleBulk) != 0) {
+			tb += (*NvmeController)(c).Free()
+		}
+	}
+	return
+}
+
+// QlcPercentUsage returns the percentage of used storage space which with Bulk role.
+func (ncs NvmeControllers) QlcPercentUsage() string {
+	return common.PercentageString(ncs.QlcTotal()-ncs.QlcFree(), ncs.QlcTotal())
 }
 
 // Summary reports accumulated storage space and the number of controllers.

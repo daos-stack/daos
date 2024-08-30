@@ -402,7 +402,7 @@ Target: type unknown, state down
 - Storage tier 1 (NVMe):
   Total size: 100 GB
   Free: 90 GB
-- Storage tier 2 (unknown):
+- Storage tier 2 (QLC):
   Total size: 800 GB
   Free: 200 GB
 Target: type unknown, state up_in
@@ -412,7 +412,7 @@ Target: type unknown, state up_in
 - Storage tier 1 (NVMe):
   Total size: 100 GB
   Free: 90 GB
-- Storage tier 2 (unknown):
+- Storage tier 2 (QLC):
   Total size: 800 GB
   Free: 200 GB
 Target: type unknown, state down_out
@@ -422,7 +422,7 @@ Target: type unknown, state down_out
 - Storage tier 1 (NVMe):
   Total size: 100 GB
   Free: 90 GB
-- Storage tier 2 (unknown):
+- Storage tier 2 (QLC):
   Total size: 800 GB
   Free: 200 GB
 Target: type unknown, state up_in
@@ -432,7 +432,7 @@ Target: type unknown, state up_in
 - Storage tier 1 (NVMe):
   Total size: 100 GB
   Free: 90 GB
-- Storage tier 2 (unknown):
+- Storage tier 2 (QLC):
   Total size: 800 GB
   Free: 200 GB
 `,

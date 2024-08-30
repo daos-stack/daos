@@ -180,6 +180,7 @@ message PoolQueryReq {
 enum StorageMediaType {
 	SCM = 0;
 	NVME = 1;
+	QLC  = 2;
 }
 
 // StorageUsageStats represents usage statistics for a storage subsystem.
@@ -299,7 +300,7 @@ message PoolQueryTargetReq {
 message StorageTargetUsage {
 	uint64 total = 1; // total space in bytes
 	uint64 free = 2; // free space in bytes
-	StorageMediaType  media_type = 3; // see daos_media_type_t (e.g., SCM, NVME)
+	StorageMediaType media_type = 3; // see daos_media_type_t (e.g., SCM, NVME, QLC)
 }
 
 // PoolQueryTargetInfo represents pool target query info for a single target.

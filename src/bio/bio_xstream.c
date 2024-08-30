@@ -1657,6 +1657,9 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 		/* No Meta/WAL blobstore if Metadata on SSD is not configured */
 		if (st != SMD_DEV_TYPE_DATA && !bio_nvme_configured(SMD_DEV_TYPE_META))
 			break;
+		/* If no bulk_data role configured, then skip it. */
+		if (st == SMD_DEV_TYPE_BULK && !bio_nvme_configured(SMD_DEV_TYPE_BULK))
+			continue;
 
 		rc = init_xs_blobstore_ctxt(ctxt, tgt_id, st);
 		if (rc)

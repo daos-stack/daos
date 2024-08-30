@@ -99,9 +99,13 @@ func PrintHostStorageUsageMap(hsm control.HostStorageMap, out io.Writer) error {
 	nvmeTitle := "NVMe-Total"
 	nvmeFreeTitle := "NVMe-Free"
 	nvmeUsageTitle := "NVMe-Used"
+	qlcTitle := "QLC-Total"
+	qlcFreeTitle := "QLC-Free"
+	qlcUsageTitle := "QLC-Usage"
 
 	tablePrint := txtfmt.NewTableFormatter(hostsTitle, scmTitle, scmFreeTitle,
-		scmUsageTitle, nvmeTitle, nvmeFreeTitle, nvmeUsageTitle)
+		scmUsageTitle, nvmeTitle, nvmeFreeTitle, nvmeUsageTitle, qlcTitle,
+		qlcFreeTitle, qlcUsageTitle)
 	tablePrint.InitWriter(out)
 	table := []txtfmt.TableRow{}
 
@@ -116,6 +120,9 @@ func PrintHostStorageUsageMap(hsm control.HostStorageMap, out io.Writer) error {
 		row[nvmeTitle] = humanize.Bytes(storage.NvmeDevices.Total())
 		row[nvmeFreeTitle] = humanize.Bytes(storage.NvmeDevices.Free())
 		row[nvmeUsageTitle] = storage.NvmeDevices.PercentUsage()
+		row[qlcTitle] = humanize.Bytes(storage.NvmeDevices.QlcTotal())
+		row[qlcFreeTitle] = humanize.Bytes(storage.NvmeDevices.QlcFree())
+		row[qlcUsageTitle] = storage.NvmeDevices.QlcPercentUsage()
 		table = append(table, row)
 	}
 

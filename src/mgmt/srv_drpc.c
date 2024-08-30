@@ -501,7 +501,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	rc = ds_mgmt_create_pool(pool_uuid, req->sys, "pmem", targets,
 				 req->tier_bytes[DAOS_MEDIA_SCM], req->tier_bytes[DAOS_MEDIA_NVME],
 				 prop, &svc, req->n_fault_domains, req->fault_domains,
-				 req->tier_bytes[DAOS_MEDIA_SCM]);
+				 req->tier_bytes[DAOS_MEDIA_SCM], req->tier_bytes[DAOS_MEDIA_QLC]);
 	if (rc != 0) {
 		D_ERROR("failed to create pool: "DF_RC"\n", DP_RC(rc));
 		goto out;
@@ -696,7 +696,7 @@ out:
 static int
 pool_change_target_state(char *id, d_rank_list_t *svc_ranks, size_t n_target_idx,
 			 uint32_t *target_idx, uint32_t rank, pool_comp_state_t state,
-			 size_t scm_size, size_t nvme_size)
+			 size_t scm_size, size_t nvme_size, size_t qlc_size)
 {
 	uuid_t				uuid;
 	struct pool_target_addr_list	target_addr_list;
@@ -765,7 +765,7 @@ ds_mgmt_drpc_pool_exclude(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	rc = pool_change_target_state(req->id, svc_ranks, req->n_target_idx, req->target_idx,
 				      req->rank, PO_COMP_ST_DOWN, 0 /* scm_size */,
-				      0 /* nvme_size */);
+				      0 /* nvme_size */, 0 /* qlc_size */);
 
 	d_rank_list_free(svc_ranks);
 
@@ -814,7 +814,7 @@ ds_mgmt_drpc_pool_drain(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	rc = pool_change_target_state(req->id, svc_ranks, req->n_target_idx, req->target_idx,
 				      req->rank, PO_COMP_ST_DRAIN, 0 /* scm_size */,
-				      0 /* nvme_size */);
+				      0 /* nvme_size */, 0 /* qlc_size */);
 
 	d_rank_list_free(svc_ranks);
 
@@ -843,7 +843,7 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	uuid_t			uuid;
 	uint8_t			*body;
 	size_t			len;
-	uint64_t		scm_bytes, nvme_bytes = 0;
+	uint64_t                 scm_bytes, nvme_bytes = 0, qlc_bytes = 0;
 	int			rc;
 
 	mgmt__pool_extend_resp__init(&resp);
@@ -869,6 +869,10 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		nvme_bytes = req->tier_bytes[DAOS_MEDIA_NVME];
 	}
 
+	if (req->n_tier_bytes > DAOS_MEDIA_QLC) {
+		qlc_bytes = req->tier_bytes[DAOS_MEDIA_QLC];
+	}
+
 	if (uuid_parse(req->id, uuid) != 0) {
 		rc = -DER_INVAL;
 		DL_ERROR(rc, "Pool UUID is invalid");
@@ -884,7 +888,7 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out_list, rc = -DER_NOMEM);
 
 	rc = ds_mgmt_pool_extend(uuid, svc_ranks, rank_list, "pmem", scm_bytes, nvme_bytes,
-				 req->n_fault_domains, req->fault_domains);
+				 req->n_fault_domains, req->fault_domains, qlc_bytes);
 
 	if (rc != 0)
 		D_ERROR("Failed to extend pool %s: "DF_RC"\n", req->id,
@@ -927,6 +931,7 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	size_t				len;
 	uint64_t			scm_bytes;
 	uint64_t			nvme_bytes = 0;
+	uint64_t                         qlc_bytes  = 0;
 	int				rc;
 
 	mgmt__pool_reintegrate_resp__init(&resp);
@@ -952,12 +957,16 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		nvme_bytes = req->tier_bytes[DAOS_MEDIA_NVME];
 	}
 
+	if (req->n_tier_bytes > DAOS_MEDIA_QLC) {
+		qlc_bytes = req->tier_bytes[DAOS_MEDIA_QLC];
+	}
+
 	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
 	if (svc_ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	rc = pool_change_target_state(req->id, svc_ranks, req->n_target_idx, req->target_idx,
-				      req->rank, PO_COMP_ST_UP, scm_bytes, nvme_bytes);
+				      req->rank, PO_COMP_ST_UP, scm_bytes, nvme_bytes, qlc_bytes);
 
 	d_rank_list_free(svc_ranks);
 
@@ -1740,6 +1749,7 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__PoolQueryResp     resp    = MGMT__POOL_QUERY_RESP__INIT;
 	Mgmt__StorageUsageStats scm     = MGMT__STORAGE_USAGE_STATS__INIT;
 	Mgmt__StorageUsageStats nvme    = MGMT__STORAGE_USAGE_STATS__INIT;
+	Mgmt__StorageUsageStats qlc     = MGMT__STORAGE_USAGE_STATS__INIT;
 	Mgmt__PoolRebuildStatus rebuild = MGMT__POOL_REBUILD_STATUS__INIT;
 	uuid_t                  uuid;
 	daos_pool_info_t        pool_info          = {0};
@@ -1826,6 +1836,10 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	storage_usage_stats_from_pool_space(&nvme, &pool_info.pi_space,
 					    DAOS_MEDIA_NVME);
 	resp.tier_stats[DAOS_MEDIA_NVME] = &nvme;
+	resp.n_tier_stats++;
+
+	storage_usage_stats_from_pool_space(&qlc, &pool_info.pi_space, DAOS_MEDIA_QLC);
+	resp.tier_stats[DAOS_MEDIA_QLC] = &qlc;
 	resp.n_tier_stats++;
 
 	pool_rebuild_status_from_info(&rebuild, &pool_info.pi_rebuild_st);

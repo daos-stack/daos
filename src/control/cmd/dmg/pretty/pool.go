@@ -27,6 +27,8 @@ func getTierNameText(tierIdx int) string {
 		return fmt.Sprintf("- Storage tier %d (SCM):", tierIdx)
 	case int(daos.StorageMediaTypeNvme):
 		return fmt.Sprintf("- Storage tier %d (NVMe):", tierIdx)
+	case int(daos.StorageMediaTypeQlc):
+		return fmt.Sprintf("- Storage tier %d (QLC):", tierIdx)
 	default:
 		return fmt.Sprintf("- Storage tier %d (unknown):", tierIdx)
 	}
@@ -98,9 +100,12 @@ func PrintPoolCreateResponse(pcr *control.PoolCreateResp, out io.Writer, opts ..
 	title := "Pool created with "
 	tierName := "SCM"
 	for tierIdx, tierRatio := range tierRatios {
-		if tierIdx > 0 {
+		if tierIdx == 1 {
 			title += ","
 			tierName = "NVMe"
+		} else if tierIdx == 2 {
+			title += ","
+			tierName = "QLC"
 		}
 
 		title += PrintTierRatio(tierRatio)

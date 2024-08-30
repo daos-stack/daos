@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,21 +10,24 @@
 #include "smd_internal.h"
 
 char TABLE_TGTS[SMD_DEV_TYPE_MAX][SMD_DEV_NAME_MAX] = {
-	"target",	/* compatible with old version */
-	"meta_target",
-	"wal_target",
+    "target", /* compatible with old version */
+    "meta_target",
+    "wal_target",
+    "bulk_target",
 };
 
 char TABLE_POOLS[SMD_DEV_TYPE_MAX][SMD_DEV_NAME_MAX] = {
-	"pool",
-	"meta_pool",
-	"wal_pool",
+    "pool",
+    "meta_pool",
+    "wal_pool",
+    "bulk_pool",
 };
 
 char TABLE_RDBS[SMD_DEV_TYPE_MAX][SMD_DEV_NAME_MAX] = {
-	"rdb_data",
-	"rdb_meta",
-	"rdb_wal",
+    "rdb_data",
+    "rdb_meta",
+    "rdb_wal",
+    "rdb_bulk",
 };
 
 struct smd_pool {
@@ -358,8 +361,9 @@ smd_pool_list_cb(struct sys_db *db, char *table, d_iov_t *key, void *args)
 			break;
 		}
 
-		/* MD-ON-SSD case, data blob might not exist */
-		if (rc && (rc != -DER_NONEXIST || st != SMD_DEV_TYPE_DATA))
+		/* MD-ON-SSD case, data blob / bulk_data blob might not exist */
+		if (rc &&
+		    (rc != -DER_NONEXIST || (st != SMD_DEV_TYPE_DATA && st != SMD_DEV_TYPE_BULK)))
 			return rc;
 	}
 

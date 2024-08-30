@@ -107,6 +107,7 @@ const (
 	BdevConfigControlMetadataNoRoles
 	BdevConfigRolesNoControlMetadata
 	BdevConfigRolesWalDataNoMeta
+	BdevConfigRolesBulkMixData
 )
 
 // DAOS system fault codes
@@ -154,6 +155,7 @@ const (
 	ServerNoCompatibilityInsecure
 	ServerPoolHasContainers
 	ServerHugepagesDisabled
+	ServerPoolQlcTooSmall
 )
 
 // server config fault codes

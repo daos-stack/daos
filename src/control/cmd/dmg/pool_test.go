@@ -372,7 +372,7 @@ func TestPoolCommands(t *testing.T) {
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
 					Ranks:      []ranklist.Rank{},
-					TierBytes:  []uint64{uint64(testSize), 0},
+					TierBytes:  []uint64{uint64(testSize), 0, 0},
 					Properties: []*daos.PoolProperty{
 						propWithVal("label", "label"),
 					},
@@ -424,7 +424,7 @@ func TestPoolCommands(t *testing.T) {
 					User:       "foo@home",
 					UserGroup:  "bar@home",
 					Ranks:      []ranklist.Rank{},
-					TierBytes:  []uint64{uint64(testSize), 0},
+					TierBytes:  []uint64{uint64(testSize), 0, 0},
 					Properties: []*daos.PoolProperty{
 						propWithVal("label", "label"),
 					},
@@ -441,7 +441,7 @@ func TestPoolCommands(t *testing.T) {
 					User:       "foo@",
 					UserGroup:  eGrp.Name + "@",
 					Ranks:      []ranklist.Rank{},
-					TierBytes:  []uint64{uint64(testSize), 0},
+					TierBytes:  []uint64{uint64(testSize), 0, 0},
 					Properties: []*daos.PoolProperty{
 						propWithVal("label", "label"),
 					},
@@ -458,7 +458,7 @@ func TestPoolCommands(t *testing.T) {
 					User:       eUsr.Username + "@",
 					UserGroup:  "foo@",
 					Ranks:      []ranklist.Rank{},
-					TierBytes:  []uint64{uint64(testSize), 0},
+					TierBytes:  []uint64{uint64(testSize), 0, 0},
 					Properties: []*daos.PoolProperty{
 						propWithVal("label", "label"),
 					},
@@ -491,7 +491,7 @@ func TestPoolCommands(t *testing.T) {
 					User:      eUsr.Username + "@",
 					UserGroup: eGrp.Name + "@",
 					Ranks:     []ranklist.Rank{},
-					TierBytes: []uint64{uint64(testSize), 0},
+					TierBytes: []uint64{uint64(testSize), 0, 0},
 				}),
 			}, " "),
 			nil,

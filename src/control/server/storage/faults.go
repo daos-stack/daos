@@ -144,10 +144,12 @@ var (
 	// SCM class.
 	FaultBdevConfigRolesWithDCPM = storageFault(
 		code.BdevConfigRolesWithDCPM,
-		"MD-on-SSD roles has been specified in config with scm class set to dcpm",
-		"'bdev_roles' are only supported if the scm tier is of class ram so change dcpm tier to ram or "+
-			"remove role assignments from bdev tiers then restart daos_server after updating server "+
-			"config file")
+		"MD-on-SSD roles has been specified in config with scm class set to dcpm or bulk data (QLC) NVMe "+
+			"tier has been configured but roles not set correctly",
+		"change dcpm tier to ram if MD-on-SSD enabled or remove role assignments from bdev tiers if "+
+			"no bulk data (QLC) NVMe tier configured or set 'bdev_role' for data and bulk_data respectively "+
+			"to data NVMe tier and bulk data (QLC) NVMe tier if bulk data (QLC) NVMe tier exist, and then "+
+			"restart daos_server after updating server config file")
 
 	// FaultBdevConfigRolesMissing indicates a Fault when bdev roles are specified on some but
 	// not all bdev tiers.
@@ -164,6 +166,13 @@ var (
 		"set 'bdev_roles` on all bdev tiers in server config file but avoid the unsupported WAL+Data "+
 			"combination then restart daos_server")
 
+	// FaultBdevConfigRolesBulkMixData indicates an invalid configuration where Bulk_data and Data role are
+	// mix configured on the same NVMe tier.
+	FaultBdevConfigRolesBulkMixData = storageFault(
+		code.BdevConfigRolesBulkMixData,
+		"Bulk_data role and Data role have been specified on the same bdev tier",
+		"set 'data' and 'bulk_data' role on different NVMe tiers, and then restart the daos_server")
+
 	// FaultBdevConfigMultiTiersWithoutRoles indicates a Fault when multiple bdev tiers exist
 	// but no roles are specified.
 	FaultBdevConfigMultiTiersWithoutRoles = storageFault(
@@ -176,8 +185,8 @@ var (
 	// exist when roles are specified.
 	FaultBdevConfigBadNrTiersWithRoles = storageFault(
 		code.BdevConfigBadNrTiersWithRoles,
-		"only 1, 2 or 3 bdev tiers are supported when MD-on-SSD roles are specified",
-		"reduce the number of bdev tiers to 3 or less in server config file then restart daos_server")
+		"only 1, 2, 3 or 4 bdev tiers are supported when MD-on-SSD roles are specified",
+		"reduce the number of bdev tiers to 4 or less in server config file then restart daos_server")
 
 	// FaultBdevConfigControlMetadataNoRoles indicates a fault when control_metadata path has
 	// been specified in server config file but MD-on-SSD has not been enabled.

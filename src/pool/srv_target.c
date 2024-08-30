@@ -1531,6 +1531,7 @@ pool_query_space(uuid_t pool_uuid, struct daos_pool_space *x_ps)
 	x_ps->ps_ntargets = 1;
 	x_ps->ps_space.s_total[DAOS_MEDIA_SCM] = SCM_TOTAL(vps);
 	x_ps->ps_space.s_total[DAOS_MEDIA_NVME] = NVME_TOTAL(vps);
+	x_ps->ps_space.s_total[DAOS_MEDIA_QLC]  = QLC_TOTAL(vps);
 
 	/* Exclude the sys reserved space before reporting to user */
 	if (SCM_FREE(vps) > SCM_SYS(vps))
@@ -1544,6 +1545,11 @@ pool_query_space(uuid_t pool_uuid, struct daos_pool_space *x_ps)
 				NVME_FREE(vps) - NVME_SYS(vps);
 	else
 		x_ps->ps_space.s_free[DAOS_MEDIA_NVME] = 0;
+
+	if (QLC_FREE(vps) > QLC_SYS(vps))
+		x_ps->ps_space.s_free[DAOS_MEDIA_QLC] = QLC_FREE(vps) - QLC_SYS(vps);
+	else
+		x_ps->ps_space.s_free[DAOS_MEDIA_QLC] = 0;
 
 	for (i = DAOS_MEDIA_SCM; i < DAOS_MEDIA_MAX; i++) {
 		x_ps->ps_free_max[i] = x_ps->ps_space.s_free[i];

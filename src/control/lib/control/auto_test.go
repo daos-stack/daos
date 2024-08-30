@@ -1703,10 +1703,11 @@ func TestControl_AutoConfig_genServerConfig(t *testing.T) {
 		"dual engine tmpfs; multiple bdev tiers; no control metadata path": {
 			threadCounts: &threadCounts{16, 0},
 			ecs: []*engine.Config{
-				MockEngineCfgTmpfs(0, 0, MockBdevTier(0, 0), MockBdevTier(0, 1, 2)),
+				MockEngineCfgTmpfs(0, 0, MockBdevTier(0, 0), MockBdevTier(0, 1, 2), MockBdevTier(0, 6, 7)),
 				MockEngineCfgTmpfs(1, 0, MockBdevTier(1, 3), MockBdevTier(1, 4, 5)),
 			},
-			expErr: errors.New("multiple bdev tiers"),
+			// two bdev Tiers are allowed for pmem mode after QLC supported
+			expErr: errors.New("assigning engine 0 storage bdev tier roles"),
 		},
 		"dual engine tmpfs; high mem": {
 			accessPoints:    []string{"hostX:10002", "hostY:10002", "hostZ:10002"},

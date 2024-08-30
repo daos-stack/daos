@@ -47,9 +47,15 @@ const (
 	bdevRoleDataName = "data"
 	bdevRoleMetaName = "meta"
 	bdevRoleWALName  = "wal"
+	bdevRoleBulkName = "bulk_data"
 
+	// In pmem case, it's ok to not set a role if only data NVMe storage tier configured,
+	// but if bulk data (QLC) NVMe storage tier is configured, then the data NVMe storage
+	// tier need to be there at the same time, and need to assign 'data' and 'bulk_data'
+	// role respectively.
 	maxNrBdevTiersWithoutRoles = 1
-	maxNrBdevTiersWithRoles    = 3
+	// Allow 4 roles in MD-on-SSD mode at most (meta/wal/data/bulk_data)
+	maxNrBdevTiersWithRoles = 4
 
 	// ControlMetadataSubdir defines the name of the subdirectory to hold control metadata
 	ControlMetadataSubdir = "daos_control"
@@ -377,6 +383,25 @@ func (tcs TierConfigs) Validate() error {
 //     two NVMe tiers. In the latter case, the only combination of two co-located roles
 //     that is not allowed is Wal+Data. Not all combinations may be technically
 //     desirable in production environments.
+//
+//   - No storage tier or two storage tiers with class: dcpm exists and mandatory bdev_roles
+//     for two tiers case, exactly one storage tier with class: ram exists, and one, two,
+//     three or four tiers with class: nvme exist, with mandatory bdev_roles: attributes on
+//     each of the NVMe tiers. For case that 2 storage tiers with class dcpm, one tier is to
+//     set with role 'data' and the other with role 'bulk_data'. For case that with class nvme,
+//     if bulk data (QLC) NVMe tier configured then it's expected to have 4 NVMe tiers, and if
+//     no bulk data (QLC) NVMe tier exist, then it's expected to have 3 NVMe tiers. The four
+//     roles are wal, meta, data and bulk. Use 4 roles in case with bulk data (QLC) NVMe tier
+//     configured (without mix roles for the bulk data (QLC) NVMe tier) and use the first 3 roles
+//     in case without bulk data (QLC) NVMe tier.
+//     Each role must be assigned to exactly one NVMe tier (no default assignments of roles to
+//     tiers by the control plane software; all roles shall be explicitly specified), and this
+//     setup shall use the MD-on-SSD code path. In this scenario allow the use of a single NVMe tier
+//     co-locating all the first three roles, three separate NVMe tiers with each tier dedicated to
+//     exactly one role, or two separate NVMe tiers where two of the three roles are co-located
+//     on one of the two NVMe tiers. In the latter case, the only combination of two co-located
+//     roles that is not allowed is Wal+Data. Not all combinations may be technically desirable
+//     in production environments.
 func (tcs TierConfigs) validateBdevRoles() error {
 	scmConfs := tcs.ScmConfigs()
 	if len(scmConfs) != 1 || scmConfs[0].Tier != 0 {
@@ -386,9 +411,10 @@ func (tcs TierConfigs) validateBdevRoles() error {
 	sc := scmConfs[0]
 	bcs := tcs.BdevConfigs()
 
-	var wal, meta, data int
+	// It's ok to not have a tier with bulk role
+	var wal, meta, data, bulk int
 	hasRoles := func() bool {
-		return wal > 0 || meta > 0 || data > 0
+		return wal > 0 || meta > 0 || data > 0 || bulk > 0
 	}
 
 	for i, bc := range bcs {
@@ -407,10 +433,16 @@ func (tcs TierConfigs) validateBdevRoles() error {
 		hasWAL := (bits & BdevRoleWAL) != 0
 		hasMeta := (bits & BdevRoleMeta) != 0
 		hasData := (bits & BdevRoleData) != 0
+		hasBulk := (bits & BdevRoleBulk) != 0
 
 		// Disallow having both wal and data only on a tier.
 		if hasWAL && hasData && !hasMeta {
 			return FaultBdevConfigRolesWalDataNoMeta
+		}
+
+		// Disallow having both data and bulk_data on a tier.
+		if hasData && hasBulk {
+			return FaultBdevConfigRolesBulkMixData
 		}
 
 		if hasWAL {
@@ -422,6 +454,9 @@ func (tcs TierConfigs) validateBdevRoles() error {
 		if hasData {
 			data++
 		}
+		if hasBulk {
+			bulk++
+		}
 	}
 
 	if !hasRoles() {
@@ -431,13 +466,25 @@ func (tcs TierConfigs) validateBdevRoles() error {
 		return nil // MD-on-SSD is not to be enabled
 	}
 
+	// For pmem mode, support data and bulk_data roels set
+	// at the same time for bulk NVMe (QLC) storage tier
+	// use case. Actually, we may need to judge whether it's
+	// pmem mode, and we can't just judge it through the
+	// following way "c.Class == ClassDcpm", as it not
+	// exactly for legacy tmpfs case. But if it's legacy
+	// tmpfs case, no meta and wal role will be set.
+	if wal == 0 && meta == 0 &&
+		data == 1 && bulk == 1 {
+		return nil // MD-on-SSD is not to be enabled
+	}
+
 	if sc.Class == ClassDcpm {
 		return FaultBdevConfigRolesWithDCPM
 	} else if sc.Class != ClassRam {
 		return errors.Errorf("unexpected scm class %s", sc.Class)
 	}
 
-	// MD-on-SSD configurations supports 1, 2 or 3 bdev tiers.
+	// MD-on-SSD configurations supports 1, 2, 3 or 4 bdev tiers.
 	if len(bcs) > maxNrBdevTiersWithRoles {
 		return FaultBdevConfigBadNrTiersWithRoles
 	}
@@ -452,19 +499,30 @@ func (tcs TierConfigs) validateBdevRoles() error {
 	if data != 1 {
 		return FaultBdevConfigBadNrRoles("Data", data, 1)
 	}
-
+	// it's ok to not have a bulk_data tier, but if it's exist, should only 1.
+	if bulk != 1 && bulk != 0 {
+		return FaultBdevConfigBadNrRoles("Bulk_data", bulk, 1)
+	}
 	return nil
 }
 
 // Set NVME class tier roles either based on explicit settings or heuristics.
 //
 // Role assignments will be decided based on the following rule set:
+// In Pmem case --- the extMetadataPath is null
+//   - For 1 bdev tier, it's ok to not set a role.
+//   - For 2 bdev tier, Data role will be set to the first tier, and Bulk_data to the second
+//     tier.
+//
+// In Non-Pmem case
 //   - For 1 bdev tier, all roles will be assigned to that tier.
 //   - For 2 bdev tiers, WAL role will be assigned to the first bdev tier and Meta and Data to
 //     the second bdev tier (Wal+Data is an invalid combination).
 //   - For 3 bdev tiers, WAL role will be assigned to the first bdev tier, Meta to the
 //     second bdev tier and Data to the third bdev tier.
-//   - For any more than 3 bdev tiers, an error will be returned.
+//   - For 4 bdev tiers, WAL role will be assigned to the first bdev tier, Meta to the
+//     second bdev tier, Data to the third bdev tier, and Bulk_data to the last tier.
+//   - For any more than 4 bdev tiers, an error will be returned.
 //   - If the scm tier is of class dcpm, no roles should be assigned and error should be returned.
 //   - If emulated NVMe is present in bdev tiers, implicit role assignment is skipped.
 func (tcs TierConfigs) AssignBdevTierRoles(extMetadataPath string) error {
@@ -472,18 +530,12 @@ func (tcs TierConfigs) AssignBdevTierRoles(extMetadataPath string) error {
 		return errors.New("no storage tiers configured")
 	}
 
-	if extMetadataPath == "" {
-		return nil // MD-on-SSD not enabled.
-	}
-
 	scs := tcs.ScmConfigs()
 
 	if len(scs) != 1 || scs[0].Tier != 0 {
 		return errors.New("first storage tier is not of type scm")
 	}
-	if scs[0].Class == ClassDcpm {
-		return errors.New("external metadata path for md-on-ssd invalid with dcpm scm-class")
-	}
+
 	// Skip role assignment and validation if no real NVMe tiers exist.
 	if !tcs.HaveRealNVMe() {
 		return nil
@@ -496,6 +548,25 @@ func (tcs TierConfigs) AssignBdevTierRoles(extMetadataPath string) error {
 		if bc.Bdev.DeviceRoles.IsEmpty() {
 			tiersWithoutRoles = append(tiersWithoutRoles, bc.Tier)
 		}
+	}
+
+	if extMetadataPath == "" {
+		// 2 NVMe tiers for pmem mode at most (1 for data and the other for bulk_data).
+		// If only 1 NVMe tier, then it should be data role and no role need to be set.
+		// If there are 2 NVMe tiers, then data and bulk_data roles need to be set.
+		if len(bcs) > 2 {
+			return errors.New("for pmem mode, at most 2 NVMe tiers are supported")
+		}
+
+		if len(bcs) == 2 {
+			tcs[1].WithBdevDeviceRoles(BdevRoleData)
+			tcs[2].WithBdevDeviceRoles(BdevRoleBulk)
+		}
+		return nil // MD-on-SSD not enabled.
+	}
+
+	if scs[0].Class == ClassDcpm {
+		return errors.New("external metadata path for md-on-ssd invalid with dcpm scm-class")
 	}
 
 	l := len(tiersWithoutRoles)
@@ -521,6 +592,11 @@ func (tcs TierConfigs) AssignBdevTierRoles(extMetadataPath string) error {
 		tcs[1].WithBdevDeviceRoles(BdevRoleWAL)
 		tcs[2].WithBdevDeviceRoles(BdevRoleMeta)
 		tcs[3].WithBdevDeviceRoles(BdevRoleData)
+	case 4:
+		tcs[1].WithBdevDeviceRoles(BdevRoleWAL)
+		tcs[2].WithBdevDeviceRoles(BdevRoleMeta)
+		tcs[3].WithBdevDeviceRoles(BdevRoleData)
+		tcs[4].WithBdevDeviceRoles(BdevRoleBulk)
 	default:
 		return FaultBdevConfigBadNrTiersWithRoles
 	}
@@ -898,6 +974,7 @@ var roleOptFlags = optFlagMap{
 	bdevRoleDataName: BdevRoleData,
 	bdevRoleMetaName: BdevRoleMeta,
 	bdevRoleWALName:  BdevRoleWAL,
+	bdevRoleBulkName: BdevRoleBulk,
 }
 
 // BdevRoles is a bitset representing SSD role assignments (enabling Metadata-on-SSD).

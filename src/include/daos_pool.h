@@ -59,8 +59,9 @@ typedef struct {
 
 /** Storage tier names */
 enum daos_media_type_t {
-	DAOS_MEDIA_SCM	= 0,
+	DAOS_MEDIA_SCM = 0,
 	DAOS_MEDIA_NVME,
+	DAOS_MEDIA_QLC, /* add for QLC NVMe SSD which used to store big bulk data. */
 	DAOS_MEDIA_MAX
 };
 

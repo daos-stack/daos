@@ -93,6 +93,9 @@ func printPoolHealth(out io.Writer, pi *daos.PoolInfo, verbose bool) {
 		var dataFree uint64
 		var dataTotal uint64
 		var dataImbal uint32
+		var qlcFree uint64
+		var qlcTotal uint64
+		var qlcImbal uint32
 		var totalFree uint64
 		for _, tier := range pi.Usage() {
 			switch tier.TierName {
@@ -106,6 +109,11 @@ func printPoolHealth(out io.Writer, pi *daos.PoolInfo, verbose bool) {
 				dataTotal = tier.Size
 				dataImbal = tier.Imbalance
 				totalFree += dataFree
+			case strings.ToUpper(daos.StorageMediaTypeQlc.String()):
+				qlcFree = tier.Free
+				qlcTotal = tier.Size
+				qlcImbal = tier.Imbalance
+				totalFree += qlcFree
 			}
 		}
 		if !verbose {
@@ -115,9 +123,13 @@ func printPoolHealth(out io.Writer, pi *daos.PoolInfo, verbose bool) {
 			healthStr += fmt.Sprintf("%s/%s", humanize.Bytes(metaFree), humanize.Bytes(metaTotal))
 			healthStr += " Free, data: "
 			healthStr += fmt.Sprintf("%s/%s", humanize.Bytes(dataFree), humanize.Bytes(dataTotal))
+			healthStr += " Free, bulk: "
+			healthStr += fmt.Sprintf("%s/%s", humanize.Bytes(qlcFree), humanize.Bytes(qlcTotal))
 			healthStr += " Free)"
-			if metaImbal > minDisplayImbalance || dataImbal > minDisplayImbalance {
-				healthStr += fmt.Sprintf(" (imbalances: %d%% meta, %d%% data)", metaImbal, dataImbal)
+			if metaImbal > minDisplayImbalance || dataImbal > minDisplayImbalance ||
+				qlcImbal > minDisplayImbalance {
+				healthStr += fmt.Sprintf(" (imbalances: %d%% meta, %d%% data, %d%% bulk)", metaImbal, dataImbal,
+					qlcImbal)
 			}
 		}
 		healthStrings = append(healthStrings, healthStr)

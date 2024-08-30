@@ -133,6 +133,9 @@ struct vos_pool_space {
 #define NVME_TOTAL(vps)	((vps)->vps_space.s_total[DAOS_MEDIA_NVME])
 #define NVME_FREE(vps)	((vps)->vps_space.s_free[DAOS_MEDIA_NVME])
 #define NVME_SYS(vps)	((vps)->vps_space_sys[DAOS_MEDIA_NVME])
+#define QLC_TOTAL(vps)  ((vps)->vps_space.s_total[DAOS_MEDIA_QLC])
+#define QLC_FREE(vps)   ((vps)->vps_space.s_free[DAOS_MEDIA_QLC])
+#define QLC_SYS(vps)    ((vps)->vps_space_sys[DAOS_MEDIA_QLC])
 
 struct chk_pool_info {
 	/** DAOS check phase on the pool shard. */

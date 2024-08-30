@@ -327,7 +327,7 @@ struct bio_bdev {
 				bb_faulty:1,
 				bb_tgt_cnt_init:1,
 				bb_unmap_supported:1;
-	/* bdev roles data/meta/wal */
+	/* bdev roles data/meta/wal/bulk_data */
 	unsigned int		bb_roles;
 };
 

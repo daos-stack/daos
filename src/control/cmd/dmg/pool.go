@@ -177,6 +177,7 @@ type PoolCreateCmd struct {
 	ScmSize    ui.ByteSizeFlag     `short:"s" long:"scm-size" description:"Per-engine SCM allocation for DAOS pool (manual)"`
 	NVMeSize   ui.ByteSizeFlag     `short:"n" long:"nvme-size" description:"Per-engine NVMe allocation for DAOS pool (manual)"`
 	RankList   ui.RankSetFlag      `short:"r" long:"ranks" description:"Storage engine unique identifiers (ranks) for DAOS pool"`
+	QlcSize    sizeFlag            `short:"q" long:"qlc-size" description:"Per-engine QLC NVMe SSD allocation for DAOS pool (manual)"`
 
 	Args struct {
 		PoolLabel string `positional-arg-name:"<pool label>" required:"1"`
@@ -185,8 +186,8 @@ type PoolCreateCmd struct {
 
 func (cmd *PoolCreateCmd) checkSizeArgs() error {
 	if cmd.Size.IsSet() {
-		if cmd.ScmSize.IsSet() || cmd.NVMeSize.IsSet() {
-			return errIncompatFlags("size", "scm-size", "nvme-size")
+		if cmd.ScmSize.IsSet() || cmd.NVMeSize.IsSet() || cmd.QlcSize.IsSet() {
+			return errIncompatFlags("size", "scm-size", "nvme-size", "qlc-size")
 		}
 	} else if !cmd.ScmSize.IsSet() {
 		return errors.New("either --size or --scm-size must be set")
@@ -219,6 +220,9 @@ func (cmd *PoolCreateCmd) storageAutoPercentage(ctx context.Context, req *contro
 	if cmd.TierRatio.IsSet() {
 		return errIncompatFlags("size=%", "tier-ratio")
 	}
+	if cmd.QlcSize.IsSet() {
+		return errIncompatFlags("size", "qlc-size")
+	}
 	cmd.Infof("Creating DAOS pool with %s of all storage", cmd.Size)
 
 	availFrac := float64(cmd.Size.availRatio) / 100.0
@@ -230,6 +234,10 @@ func (cmd *PoolCreateCmd) storageAutoPercentage(ctx context.Context, req *contro
 func (cmd *PoolCreateCmd) storageAutoTotal(req *control.PoolCreateReq) error {
 	if cmd.NumRanks > 0 && !cmd.RankList.Empty() {
 		return errIncompatFlags("nranks", "ranks")
+	}
+
+	if cmd.QlcSize.IsSet() {
+		return errIncompatFlags("total", "qlc-size")
 	}
 
 	req.NumRanks = cmd.NumRanks
@@ -255,14 +263,19 @@ func (cmd *PoolCreateCmd) storageManual(req *control.PoolCreateReq) error {
 		return errIncompatFlags("tier-ratio", "scm-size")
 	}
 
-	scmBytes := cmd.ScmSize.Bytes
-	nvmeBytes := cmd.NVMeSize.Bytes
-	req.TierBytes = []uint64{scmBytes, nvmeBytes}
+	scmBytes := cmd.ScmSize.bytes
+	nvmeBytes := cmd.NVMeSize.bytes
+	qlcBytes := uint64(0)
+	if cmd.QlcSize.IsSet() {
+		qlcBytes = cmd.QlcSize.bytes
+	}
+	req.TierBytes = []uint64{scmBytes, nvmeBytes, qlcBytes}
 
 	msg := fmt.Sprintf("Creating DAOS pool with manual per-engine storage allocation:"+
-		" %s SCM, %s NVMe (%0.2f%% ratio)", humanize.Bytes(scmBytes),
+		" %s SCM, %s NVMe (%0.2f%% ratio), %s QLC", humanize.Bytes(scmBytes),
 		humanize.Bytes(nvmeBytes),
-		ratio2Percentage(cmd.Logger, float64(scmBytes), float64(nvmeBytes)))
+		ratio2Percentage(cmd.Logger, float64(scmBytes), float64(nvmeBytes)),
+		humanize.Bytes(qlcBytes))
 	cmd.Info(msg)
 
 	return nil

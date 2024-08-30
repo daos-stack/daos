@@ -156,8 +156,16 @@ func minRankNvme(tgtCount uint64) uint64 {
 	return tgtCount * engine.NvmeMinBytesPerTarget
 }
 
+func minRankQlc(tgtCount uint64) uint64 {
+	return tgtCount * engine.QlcMinBytesPerTarget
+}
+
 func minPoolNvme(tgtCount, rankCount uint64) uint64 {
 	return minRankNvme(tgtCount) * rankCount
+}
+
+func minPoolQlc(tgtCount, rankCount uint64) uint64 {
+	return minRankQlc(tgtCount) * rankCount
 }
 
 // calculateCreateStorage determines the amount of SCM/NVMe storage to
@@ -185,7 +193,7 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 
 	switch {
 	// Pool tier sizes already specified in request.
-	case len(req.TierBytes) == 2 && len(req.TierRatio) == 0 && req.TotalBytes == 0:
+	case len(req.TierBytes) == 3 && len(req.TierRatio) == 0 && req.TotalBytes == 0:
 		// If no NVMe, refuse request as NVMe has been incorrectly requested.
 		nvmeBytes := req.TierBytes[1]
 		if nvmeMissing && nvmeBytes > 0 {
@@ -201,14 +209,19 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 				"request")
 			req.TierRatio = []float64{1.00, 0.00}
 		}
-		req.TierBytes = make([]uint64, len(req.TierRatio))
+		req.TierBytes = make([]uint64, (len(req.TierRatio) + 1)) /* add a Tier entry for QLC. */
 		for tierIdx := range req.TierBytes {
-			req.TierBytes[tierIdx] =
-				uint64(float64(req.TotalBytes)*req.TierRatio[tierIdx]) /
-					uint64(len(req.GetRanks()))
-			svc.log.Infof("%s = (%s*%f) / %d", humanize.Bytes(req.TierBytes[tierIdx]),
-				humanize.Bytes(req.TotalBytes), req.TierRatio[tierIdx],
-				len(req.GetRanks()))
+			if tierIdx < 2 {
+				req.TierBytes[tierIdx] =
+					uint64(float64(req.TotalBytes)*req.TierRatio[tierIdx]) /
+						uint64(len(req.GetRanks()))
+				svc.log.Infof("%s = (%s*%f) / %d", humanize.Bytes(req.TierBytes[tierIdx]),
+					humanize.Bytes(req.TotalBytes), req.TierRatio[tierIdx],
+					len(req.GetRanks()))
+			} else {
+				/* no QLC Tier entry for this case, do it just to be compatible with backend interface. */
+				req.TierBytes[tierIdx] = uint64(0)
+			}
 		}
 
 	default:
@@ -229,6 +242,9 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 	}
 	if req.TierBytes[1] != 0 && req.TierBytes[1] < minRankNvme(tgts) {
 		return FaultPoolNvmeTooSmall(minPoolTotal, minPoolNvme(tgts, ranks))
+	}
+	if req.TierBytes[2] != 0 && req.TierBytes[2] < minRankQlc(tgts) {
+		return FaultPoolQlcTooSmall(minPoolTotal, minPoolQlc(tgts, ranks))
 	}
 
 	// Zero no longer required request fields.

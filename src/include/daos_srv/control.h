@@ -71,8 +71,9 @@ dpdk_cli_override_opts;
 #define NVME_ROLE_DATA		(1 << 0)
 #define NVME_ROLE_META		(1 << 1)
 #define NVME_ROLE_WAL		(1 << 2)
+#define NVME_ROLE_BULK                  (1 << 3)
 
-#define NVME_ROLE_ALL		(NVME_ROLE_DATA | NVME_ROLE_META | NVME_ROLE_WAL)
+#define NVME_ROLE_ALL                   (NVME_ROLE_DATA | NVME_ROLE_META | NVME_ROLE_WAL | NVME_ROLE_BULK)
 
 /**
  * Current device health state (health statistics). Periodically updated in

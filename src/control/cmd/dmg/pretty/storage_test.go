@@ -934,9 +934,9 @@ Errors:
   host[1-2] nvme scan failed 
   host[1-2] scm scan failed  
 
-Hosts     SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used 
------     --------- -------- -------- ---------- --------- --------- 
-host[1-2] 0 B       0 B      N/A      0 B        0 B       N/A       
+Hosts     SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used QLC-Total QLC-Free QLC-Usage 
+-----     --------- -------- -------- ---------- --------- --------- --------- -------- --------- 
+host[1-2] 0 B       0 B      N/A      0 B        0 B       N/A       0 B       0 B      N/A       
 `,
 		},
 		"no storage": {
@@ -951,9 +951,9 @@ host[1-2] 0 B       0 B      N/A      0 B        0 B       N/A
 				},
 			},
 			expPrintStr: `
-Hosts SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used 
------ --------- -------- -------- ---------- --------- --------- 
-host1 0 B       0 B      N/A      0 B        0 B       N/A       
+Hosts SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used QLC-Total QLC-Free QLC-Usage 
+----- --------- -------- -------- ---------- --------- --------- --------- -------- --------- 
+host1 0 B       0 B      N/A      0 B        0 B       N/A       0 B       0 B      N/A       
 `,
 		},
 		"single host with space usage": {
@@ -968,9 +968,9 @@ host1 0 B       0 B      N/A      0 B        0 B       N/A
 				},
 			},
 			expPrintStr: `
-Hosts SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used 
------ --------- -------- -------- ---------- --------- --------- 
-host1 3.0 TB    750 GB   75 %     36 TB      27 TB     25 %      
+Hosts SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used QLC-Total QLC-Free QLC-Usage 
+----- --------- -------- -------- ---------- --------- --------- --------- -------- --------- 
+host1 3.0 TB    750 GB   75 %     36 TB      27 TB     25 %      0 B       0 B      N/A       
 `,
 		},
 	} {

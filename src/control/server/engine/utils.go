@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -23,6 +23,8 @@ const (
 	NvmeMinBytesPerTarget = 1 * humanize.GiByte
 	// ScmMinBytesPerTarget is min SCM pool allocation per target
 	ScmMinBytesPerTarget = 16 * humanize.MiByte
+	// QlcMinBytesPerTarget is min QLC NVMe pool allocation per target
+	QlcMinBytesPerTarget = 1 * humanize.GiByte
 )
 
 type (
