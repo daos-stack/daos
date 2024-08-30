@@ -254,18 +254,18 @@ class DmgCommandBase(YamlCommand):
             # pylint: disable=redefined-variable-type
             """Get the dmg cont sub command object."""
             if self.sub_command.value == "set-owner":
-                self.sub_command_class = self.SetownerSubCommand()
+                self.sub_command_class = self.SetOwnerSubCommand()
             else:
                 self.sub_command_class = None
 
-        class SetownerSubCommand(CommandWithParameters):
+        class SetOwnerSubCommand(CommandWithParameters):
             """Defines an object for the dmg cont set-owner command."""
 
             def __init__(self):
                 """Create a dmg cont set-owner command object."""
                 super().__init__("/run/dmg/cont/set-owner/*", "set-owner")
-                self.pool = FormattedParameter("--pool={}", None)
-                self.cont = FormattedParameter("--cont={}", None)
+                self.pool = BasicParameter(None, position=1)
+                self.cont = BasicParameter(None, position=2)
                 self.user = FormattedParameter("--user={}", None)
                 self.group = FormattedParameter("--group={}", None)
 
