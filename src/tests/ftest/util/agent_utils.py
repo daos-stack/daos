@@ -279,12 +279,11 @@ class DaosAgentManager(SubprocessManager):
     def start(self):
         """Start the agent through the job manager."""
         self.log.info(
-            "<AGENT> Starting daos_agent on %s with %s",
-            self._hosts, self.manager.command)
+            "<AGENT> Starting daos_agent on %s with %s using the %s user",
+            self._hosts, self.manager.command, self.manager.job.run_user)
 
         # Copy certificates
-        self.manager.job.copy_certificates(
-            get_log_file("daosCA/certs"), self._hosts)
+        self.manager.job.copy_certificates(get_log_file("daosCA/certs"), self._hosts)
 
         # Verify the socket directory exists when using a non-systemctl manager
         if self.verify_socket_dir:

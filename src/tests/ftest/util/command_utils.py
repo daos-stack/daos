@@ -1083,13 +1083,13 @@ class YamlCommand(SubProcessCommand):
                 self.log.info(
                     "%s: creating socket directory %s for user %s on %s",
                     self.command, directory, user, nodes)
-                result = create_directory(self.log, nodes, directory, user="root")
+                result = create_directory(self.log, nodes, directory, user=user)
                 if not result.passed:
                     raise CommandFailure(
                         f"{self.command}: error creating socket directory {directory} for user "
                         f"{user} on {result.failed_hosts}")
                 result = change_file_owner(
-                    self.log, nodes, directory, user, get_primary_group(user), user="root")
+                    self.log, nodes, directory, user, get_primary_group(user), user=user)
                 if not result.passed:
                     raise CommandFailure(
                         f"{self.command}: error setting socket directory {directory} owner for "

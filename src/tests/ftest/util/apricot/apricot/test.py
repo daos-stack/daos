@@ -10,6 +10,7 @@ import random
 import re
 import sys
 from ast import literal_eval
+from getpass import getuser
 from time import time
 
 from agent_utils import DaosAgentManager, include_local_host
@@ -1065,12 +1066,14 @@ class TestWithServers(TestWithoutServers):
         """
         if group is None:
             group = self.server_group
-        if config_file is None and self.agent_manager_class == "Systemctl":
+
+        if config_file is None:
             config_file = self.test_env.agent_config
+
+        if self.agent_manager_class == "Systemctl" and self.test_env.agent_user != getuser():
+            # Config file needs to temporary user accessible location for copy before moving the
+            # file to a privileged access location
             config_temp = self.get_config_file(group, "agent", self.test_dir)
-        elif config_file is None:
-            config_file = self.get_config_file(group, "agent")
-            config_temp = None
 
         # Verify the correct configuration files have been provided
         if self.agent_manager_class == "Systemctl" and config_temp is None:
@@ -1079,10 +1082,12 @@ class TestWithServers(TestWithoutServers):
                 "file provided for the Systemctl manager class!")
 
         # Define the location of the certificates
-        if self.agent_manager_class == "Systemctl":
+        if self.agent_manager_class == "Systemctl" and self.test_env.agent_user != getuser():
+            # Default directory requiring privileged access
             cert_dir = os.path.join(os.sep, "etc", "daos", "certs")
         else:
-            cert_dir = self.workdir
+            # Test-specific directory not requiring privileged access
+            cert_dir = os.path.join(self.test_dir, "daos_certs")
 
         self.agent_managers.append(
             DaosAgentManager(
