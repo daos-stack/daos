@@ -26,8 +26,7 @@ from environment_utils import TestEnvironment
 from exception_utils import CommandFailure
 from fault_config_utils import FaultInjection
 from general_utils import (dict_to_str, dump_engines_stacks, get_avocado_config_value,
-                           get_default_config_file, get_file_listing, nodeset_append_suffix,
-                           set_avocado_config_value)
+                           nodeset_append_suffix, set_avocado_config_value)
 from host_utils import HostException, HostInfo, HostRole, get_host_parameters, get_local_host
 from logger_utils import TestLogger
 from pydaos.raw import DaosApiError, DaosContext, DaosLog
@@ -762,13 +761,17 @@ class TestWithServers(TestWithoutServers):
             self.fail(f"Error creating test-specific temporary directory on {result.failed_hosts}")
 
         # Copy the fault injection files to the hosts.
-        self.fault_injection.copy_fault_files(self.host_info.all_hosts)
+        self.fault_injection.copy_fault_files(self.log, self.host_info.all_hosts)
 
         # List common test directory contents before running the test
         self.log.info("-" * 100)
-        self.log.debug("Common test directory (%s) contents:", self.test_dir)
+        self.log.debug("Common test directory (%s) contents:", os.path.dirname(self.test_dir))
         all_hosts = include_local_host(self.host_info.all_hosts)
-        get_file_listing(all_hosts, self.test_dir, self.test_env.agent_user).log_output(self.log)
+        test_dir_parent = os.path.dirname(self.test_dir)
+        result = run_remote(self.log, all_hosts, f"df -h {test_dir_parent}")
+        if int(max(re.findall(r" ([\d+])% ", result.joined_stdout) + ["0"])) > 90:
+            run_remote(self.log, all_hosts, f"du -sh {test_dir_parent}/*")
+        self.log.info("-" * 100)
 
         if not self.start_servers_once or self.name.uid == 1:
             # Kill commands left running on the hosts (from a previous test)
@@ -1063,7 +1066,7 @@ class TestWithServers(TestWithoutServers):
         if group is None:
             group = self.server_group
         if config_file is None and self.agent_manager_class == "Systemctl":
-            config_file = get_default_config_file("agent")
+            config_file = self.test_env.agent_config
             config_temp = self.get_config_file(group, "agent", self.test_dir)
         elif config_file is None:
             config_file = self.get_config_file(group, "agent")
@@ -1113,14 +1116,14 @@ class TestWithServers(TestWithoutServers):
         if group is None:
             group = self.server_group
         if svr_config_file is None and self.server_manager_class == "Systemctl":
-            svr_config_file = get_default_config_file("server")
+            svr_config_file = self.test_env.server_config
             svr_config_temp = self.get_config_file(
                 group, "server", self.test_dir)
         elif svr_config_file is None:
             svr_config_file = self.get_config_file(group, "server")
             svr_config_temp = None
         if dmg_config_file is None and self.server_manager_class == "Systemctl":
-            dmg_config_file = get_default_config_file("control")
+            dmg_config_file = self.test_env.control_config
             dmg_config_temp = self.get_config_file(group, "dmg", self.test_dir)
         elif dmg_config_file is None:
             dmg_config_file = self.get_config_file(group, "dmg")
@@ -1668,7 +1671,7 @@ class TestWithServers(TestWithoutServers):
             return self.server_managers[index].dmg
 
         if self.server_manager_class == "Systemctl":
-            dmg_config_file = get_default_config_file("control")
+            dmg_config_file = self.test_env.control_config
             dmg_config_temp = self.get_config_file("daos", "dmg", self.test_dir)
             dmg_cert_dir = os.path.join(os.sep, "etc", "daos", "certs")
         else:
