@@ -520,7 +520,7 @@ func (c *Config) WithStorage(cfgs ...*storage.TierConfig) *Config {
 	c.AppendStorage(cfgs...)
 	if len(c.Storage.Tiers) > 0 && c.Storage.Tiers[0].IsSCM() &&
 		c.Storage.Tiers[0].Class == storage.ClassDcpm {
-		return c.WithStackSizeForDCPM()
+		return c.WithStackSizeForDCPM().WithSDSForRam()
 	}
 	return c
 }
@@ -736,5 +736,10 @@ func (c *Config) WithStorageIndex(i uint32) *Config {
 func (c *Config) WithStackSizeForDCPM() *Config {
 	c.EnvVars = append(c.EnvVars, fmt.Sprintf("ABT_THREAD_STACKSIZE=%d",
 		MIN_ABT_THREAD_STACKSIZE_FOR_DCPM))
+	return c
+}
+
+func (c *Config) WithSDSForRam() *Config {
+	c.EnvVars = append(c.EnvVars, "PMEMOBJ_CONF=sds.at_create=0")
 	return c
 }
