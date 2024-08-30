@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2021-2023 Intel Corporation.
+  (C) Copyright 2021-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -102,11 +102,11 @@ class HarnessAdvancedTest(TestWithServers):
         host = NodeSet(choice(self.server_managers[0].hosts))   # nosec
         self.log.info("Creating launch.py failure trigger files on %s", host)
         failure_trigger = "00_trigger-launch-failure_00"
-        failure_trigger_dir = os.path.join(self.base_test_dir, failure_trigger)
+        failure_trigger_dir = os.path.join(self.test_env.log_dir, failure_trigger)
         failure_trigger_files = [
-            os.path.join(self.base_test_dir, "{}_local.yaml".format(failure_trigger)),
+            os.path.join(self.test_env.log_dir, "{}_local.yaml".format(failure_trigger)),
             os.path.join(os.sep, "etc", "daos", "daos_{}.yml".format(failure_trigger)),
-            os.path.join(self.base_test_dir, "{}.log".format(failure_trigger)),
+            os.path.join(self.test_env.log_dir, "{}.log".format(failure_trigger)),
             os.path.join(failure_trigger_dir, "{}.log".format(failure_trigger)),
             os.path.join(os.sep, "tmp", "daos_dump_{}.txt".format(failure_trigger)),
             os.path.join(self.tmp, "valgrind_{}".format(failure_trigger)),

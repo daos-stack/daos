@@ -74,6 +74,17 @@ type addrFI interface {
 // NUMAFabricMap is an iterable map type that maps from a NUMA node ID to a set of FabricInterfaces.
 type NUMAFabricMap map[int][]*FabricInterface
 
+// MaxNUMANode gets the maximum NUMA node ID in the map.
+func (nfm NUMAFabricMap) MaxNUMANode() int {
+	max := -1
+	for numa := range nfm {
+		if numa > max {
+			max = numa
+		}
+	}
+	return max
+}
+
 // NUMAFabric represents a set of fabric interfaces organized by NUMA node.
 type NUMAFabric struct {
 	log   logging.Logger
@@ -351,7 +362,7 @@ func (n *NUMAFabric) Find(name string) ([]*FabricInterface, error) {
 }
 
 // FindDevice looks up a fabric device with a given name, domain, and provider.
-// NB: The domain and provider are optional. All other parameters are required. If there is more
+// NB: The name is required. All other parameters are optional. If there is more
 // than one match, all of them are returned.
 func (n *NUMAFabric) FindDevice(params *FabricIfaceParams) ([]*FabricInterface, error) {
 	if params == nil {
@@ -395,7 +406,7 @@ func filterDomain(domain string, fiList []*FabricInterface) []*FabricInterface {
 func filterProvider(provider string, fiList []*FabricInterface) []*FabricInterface {
 	result := make([]*FabricInterface, 0, len(fiList))
 	for _, fi := range fiList {
-		if fi.HasProvider(provider) {
+		if fi.HasProvider(provider) || fi.NetDevClass == FabricDevClassManual {
 			result = append(result, fi)
 		}
 	}
@@ -443,12 +454,9 @@ func fabricInterfacesFromHardware(fi *hardware.FabricInterface) []*FabricInterfa
 	for netIF := range fi.NetInterfaces {
 		newFI := &FabricInterface{
 			Name:        netIF,
+			Domain:      fi.Name,
 			NetDevClass: fi.DeviceClass,
 			hw:          fi,
-		}
-
-		if fi.Name != netIF {
-			newFI.Domain = fi.Name
 		}
 
 		fis = append(fis, newFI)
@@ -464,12 +472,15 @@ func NUMAFabricFromConfig(log logging.Logger, cfg []*NUMAFabricConfig) *NUMAFabr
 	for _, fc := range cfg {
 		node := fc.NUMANode
 		for _, fi := range fc.Interfaces {
-			fabric.numaMap[node] = append(fabric.numaMap[node],
-				&FabricInterface{
-					Name:        fi.Interface,
-					Domain:      fi.Domain,
-					NetDevClass: FabricDevClassManual,
-				})
+			newFI := &FabricInterface{
+				Name:        fi.Interface,
+				Domain:      fi.Domain,
+				NetDevClass: FabricDevClassManual,
+			}
+			if newFI.Domain == "" {
+				newFI.Domain = newFI.Name
+			}
+			fabric.numaMap[node] = append(fabric.numaMap[node], newFI)
 		}
 	}
 

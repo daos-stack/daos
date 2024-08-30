@@ -141,23 +141,24 @@ crt_proto_lookup(struct crt_opc_map *map, crt_opcode_t opc, int locked)
 	L2_idx = (opc & CRT_PROTO_VER_MASK) >> 16;
 
 	if (L1_idx >= map->com_num_slots_total) {
-		D_ERROR("base opc %d out of range [0, 255]\n", L1_idx);
+		D_ERROR("OPC:0x%x base opc 0x%x out of range [0, 255]\n", opc, L1_idx);
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
 	if (map->com_map[L1_idx].L2_num_slots_total == 0) {
-		D_ERROR("base opc %d not registered\n", L1_idx);
+		D_ERROR("OPC:0x%x base opc 0x%x not registered\n", opc, L1_idx);
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
 	if (L2_idx >= map->com_map[L1_idx].L2_num_slots_total) {
-		D_ERROR("version number %d out of range [0, %d]\n", L2_idx,
-			map->com_map[L1_idx].L2_num_slots_total - 1);
+		/* Don't emit an error message as client can be newer than the server */
+		D_INFO("OPC:0x%x Requested version=%d is higher than registered version=%d\n", opc,
+		       L2_idx, map->com_map[L1_idx].L2_num_slots_total - 1);
 		D_GOTO(out, rc = -DER_UNREG);
 	}
 
 	if (map->com_map[L1_idx].L2_map[L2_idx].L3_num_slots_total == 0) {
-		D_ERROR("version number %d has no entries\n", L2_idx);
+		D_ERROR("OPC:0x%x No rpcs registered for version=%d\n", opc, L2_idx);
 		D_GOTO(out, rc = -DER_UNREG);
 	}
 

@@ -16,7 +16,6 @@ PROTOBUF_C__BEGIN_DECLS
 
 
 typedef struct _Mgmt__ContSetOwnerReq Mgmt__ContSetOwnerReq;
-typedef struct _Mgmt__ContSetOwnerResp Mgmt__ContSetOwnerResp;
 
 
 /* --- enums --- */
@@ -25,7 +24,7 @@ typedef struct _Mgmt__ContSetOwnerResp Mgmt__ContSetOwnerResp;
 /* --- messages --- */
 
 /*
- * ContSetOwnerReq supplies new pool parameters.
+ * ContSetOwnerReq changes the ownership of a container.
  */
 struct  _Mgmt__ContSetOwnerReq
 {
@@ -35,21 +34,21 @@ struct  _Mgmt__ContSetOwnerReq
    */
   char *sys;
   /*
-   * UUID of the container
+   * UUID or label of the container
    */
-  char *contuuid;
+  char *cont_id;
   /*
-   * UUID of the pool that the container is in
+   * UUID or label of the pool that the container is in
    */
-  char *pooluuid;
+  char *pool_id;
   /*
    * formatted user e.g. "bob@"
    */
-  char *owneruser;
+  char *owner_user;
   /*
    * formatted group e.g. "builders@"
    */
-  char *ownergroup;
+  char *owner_group;
   /*
    * List of pool service ranks
    */
@@ -59,22 +58,6 @@ struct  _Mgmt__ContSetOwnerReq
 #define MGMT__CONT_SET_OWNER_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__cont_set_owner_req__descriptor) \
     , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
-
-
-/*
- * ContSetOwnerResp returns created pool uuid and ranks.
- */
-struct  _Mgmt__ContSetOwnerResp
-{
-  ProtobufCMessage base;
-  /*
-   * DAOS error code
-   */
-  int32_t status;
-};
-#define MGMT__CONT_SET_OWNER_RESP__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&mgmt__cont_set_owner_resp__descriptor) \
-    , 0 }
 
 
 /* Mgmt__ContSetOwnerReq methods */
@@ -96,32 +79,10 @@ Mgmt__ContSetOwnerReq *
 void   mgmt__cont_set_owner_req__free_unpacked
                      (Mgmt__ContSetOwnerReq *message,
                       ProtobufCAllocator *allocator);
-/* Mgmt__ContSetOwnerResp methods */
-void   mgmt__cont_set_owner_resp__init
-                     (Mgmt__ContSetOwnerResp         *message);
-size_t mgmt__cont_set_owner_resp__get_packed_size
-                     (const Mgmt__ContSetOwnerResp   *message);
-size_t mgmt__cont_set_owner_resp__pack
-                     (const Mgmt__ContSetOwnerResp   *message,
-                      uint8_t             *out);
-size_t mgmt__cont_set_owner_resp__pack_to_buffer
-                     (const Mgmt__ContSetOwnerResp   *message,
-                      ProtobufCBuffer     *buffer);
-Mgmt__ContSetOwnerResp *
-       mgmt__cont_set_owner_resp__unpack
-                     (ProtobufCAllocator  *allocator,
-                      size_t               len,
-                      const uint8_t       *data);
-void   mgmt__cont_set_owner_resp__free_unpacked
-                     (Mgmt__ContSetOwnerResp *message,
-                      ProtobufCAllocator *allocator);
 /* --- per-message closures --- */
 
 typedef void (*Mgmt__ContSetOwnerReq_Closure)
                  (const Mgmt__ContSetOwnerReq *message,
-                  void *closure_data);
-typedef void (*Mgmt__ContSetOwnerResp_Closure)
-                 (const Mgmt__ContSetOwnerResp *message,
                   void *closure_data);
 
 /* --- services --- */
@@ -130,7 +91,6 @@ typedef void (*Mgmt__ContSetOwnerResp_Closure)
 /* --- descriptors --- */
 
 extern const ProtobufCMessageDescriptor mgmt__cont_set_owner_req__descriptor;
-extern const ProtobufCMessageDescriptor mgmt__cont_set_owner_resp__descriptor;
 
 PROTOBUF_C__END_DECLS
 

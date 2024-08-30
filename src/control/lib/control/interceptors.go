@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -89,7 +89,12 @@ func unaryVersionedComponentInterceptor(comp build.Component) grpc.UnaryClientIn
 		}
 		ctx, err := build.ToContext(parent, comp, build.DaosVersion)
 		if err != nil {
-			return err
+			// Don't fail if a component version was already set somewhere else.
+			// Any other error is fatal.
+			if err != build.ErrCtxMetadataExists {
+				return err
+			}
+			ctx = parent
 		}
 		return invoker(ctx, method, req, reply, cc, opts...)
 	}

@@ -1581,6 +1581,7 @@ func TestAgent_InfoCache_waitFabricReady(t *testing.T) {
 			netDevClass: hardware.Infiniband,
 			expChecked:  []string{"t0", "t1"},
 		},
+		"nothing to wait for": {},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())

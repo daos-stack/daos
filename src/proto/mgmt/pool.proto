@@ -17,7 +17,7 @@ message PoolCreateReq {
 	string uuid = 1; // UUID for new pool, generated on the client
 	string sys = 2; // DAOS system identifier
 	string user = 3; // formatted user e.g. "bob@"
-	string usergroup = 4; // formatted group e.g. "builders@"
+	string                user_group = 4; // formatted group e.g. "builders@"
 	repeated string acl = 5; // Access Control Entries in short string format
 	repeated PoolProperty properties = 6; // Pool properties to be set
 
@@ -25,14 +25,13 @@ message PoolCreateReq {
 	// representing members of the tree in a breadth-first traversal order.
 	// Each domain above rank consists of: (level, id, num children)
 	// Each rank consists of: (rank number)
-	repeated uint32 faultDomains = 7; // Fault domain tree, minimal format
-	uint32 numsvcreps = 8; // desired number of pool service replicas
-	uint64 totalbytes = 9; // Total pool size in bytes (auto config)
-	repeated double tierratio = 10; // Ratio of storage tiers expressed as % of totalbytes (auto config)
-	uint32 numranks = 11; // Number of target ranks to use (auto config)
-	repeated uint32 ranks = 12; // target ranks (manual config)
-	repeated uint64 tierbytes = 13; // Size in bytes of storage tiers (manual config)
-	uint64 meta_blob_size     = 14; // Size in bytes of metadata blob on SSD (manual config)
+	repeated uint32       fault_domains = 7; // Fault domain tree, minimal format
+	uint32                num_svc_reps  = 8; // desired number of pool service replicas
+	uint64                total_bytes   = 9; // Total pool size in bytes
+	repeated double tier_ratio = 10; // Ratio of storage tiers expressed as % of totalbytes
+	uint32          num_ranks  = 11; // Number of target ranks to use
+	repeated uint32 ranks      = 12; // target ranks
+	repeated uint64 tier_bytes = 13; // Size in bytes of storage tier
 }
 
 // PoolCreateResp returns created pool uuid and ranks.
@@ -42,7 +41,6 @@ message PoolCreateResp {
 	repeated uint32 svc_reps = 3; // pool service replica ranks
 	repeated uint32 tgt_ranks = 4; // pool target ranks
 	repeated uint64 tier_bytes = 5; // storage tiers allocated to pool
-	uint64 meta_blob_size     = 6; // Size in bytes of metadata blob on SSD (manual config)
 }
 
 // PoolDestroyReq supplies pool identifier and force flag.
@@ -81,7 +79,7 @@ message PoolExcludeReq {
 	string sys = 1; // DAOS system identifier
 	string id = 2; // uuid or label of pool to exclude some targets
 	uint32 rank = 3; // target to move to the down state
-	repeated uint32 targetidx = 4; // target ranks
+	repeated uint32 target_idx = 4; // target ranks
 	repeated uint32 svc_ranks = 5; // List of pool service ranks
 }
 
@@ -95,7 +93,7 @@ message PoolDrainReq {
 	string sys = 1; // DAOS system identifier
 	string id = 2; // uuid or label of pool to drain some targets
 	uint32 rank = 3; // rank to move to the down state
-	repeated uint32 targetidx = 4; // rank targets
+	repeated uint32 target_idx = 4; // rank targets
 	repeated uint32 svc_ranks = 5; // List of pool service ranks
 }
 
@@ -110,8 +108,8 @@ message PoolExtendReq {
 	string id = 2; // uuid or label of pool to add target up to
 	repeated uint32 ranks = 3; // ranks
 	repeated uint32 svc_ranks = 4; // List of pool service ranks
-	repeated uint64 tierbytes = 5; // Size in bytes of storage tiers
-	repeated uint32 faultDomains = 6; // fault domain tree, minimal format
+	repeated uint64 tier_bytes    = 5; // Size in bytes of storage tiers
+	repeated uint32 fault_domains = 6; // fault domain tree, minimal format
 }
 
 // PoolExtendResp returns resultant state of Extend operation.
@@ -125,9 +123,9 @@ message PoolReintegrateReq {
 	string sys = 1; // DAOS system identifier
 	string id = 2; // uuid or label of pool to add target up to
 	uint32 rank = 3; // target to move to the up state
-	repeated uint32 targetidx = 4; // target ranks
+	repeated uint32 target_idx = 4; // target ranks
 	repeated uint32 svc_ranks = 5; // List of pool service ranks
-	repeated uint64 tierbytes = 6; // Size in bytes of storage tiers
+	repeated uint64 tier_bytes = 6; // Size in bytes of storage tiers
 }
 
 // PoolReintegrateResp returns resultant state of Reintegrate operation.

@@ -44,8 +44,8 @@ daos_oclass_attr_find(daos_obj_id_t oid, uint32_t *nr_grps)
 	/* see daos_objid_generate */
 	oc = oclass_ident2cl(daos_obj_id2class(oid), nr_grps);
 	if (!oc) {
-		D_DEBUG(DB_PL, "Unknown object class %u for "DF_OID"\n",
-			(unsigned int)daos_obj_id2class(oid), DP_OID(oid));
+		D_WARN("Unknown object class %u for "DF_OID"\n",
+		       (unsigned int)daos_obj_id2class(oid), DP_OID(oid));
 		return NULL;
 	}
 	D_DEBUG(DB_PL, "Find class %s for oid "DF_OID"\n",
