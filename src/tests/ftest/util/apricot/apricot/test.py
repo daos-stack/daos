@@ -1075,12 +1075,6 @@ class TestWithServers(TestWithoutServers):
             # file to a privileged access location
             config_temp = self.get_config_file(group, "agent", self.test_dir)
 
-        # Verify the correct configuration files have been provided
-        if self.agent_manager_class == "Systemctl" and config_temp is None:
-            self.fail(
-                "Error adding a DaosAgentManager: no temporary configuration "
-                "file provided for the Systemctl manager class!")
-
         # Define the location of the certificates
         if self.agent_manager_class == "Systemctl" and self.test_env.agent_user != getuser():
             # Default directory requiring privileged access
