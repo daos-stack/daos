@@ -177,6 +177,8 @@ func TestConfig_Constructed(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	fromDisk = fromDisk.WithSDSForRam().WithStackSizeForDCPM()
+
 	if diff := cmp.Diff(fromDisk, constructed, defConfigCmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got):\n%s", diff)
 	}
@@ -730,6 +732,7 @@ func TestConfig_ToCmdVals(t *testing.T) {
 		"D_LOG_MASK=" + logMask,
 		"CRT_TIMEOUT=" + strconv.FormatUint(uint64(crtTimeout), 10),
 		"FI_OFI_RXM_USE_SRX=0",
+		"PMEMOBJ_CONF=sds.at_create=0",
 	}
 
 	gotArgs, err := cfg.CmdLineArgs()
