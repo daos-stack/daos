@@ -232,8 +232,6 @@ jobs:
     name: Calculate Functional Testing Matrix
     runs-on: [self-hosted, wolf]
     needs: [Import-commit-pragmas]
-    if: needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
-      ((!cancelled()) || success() || failure())
     outputs:
       matrix: ${{ steps.matrix.outputs.text }}
     steps:
