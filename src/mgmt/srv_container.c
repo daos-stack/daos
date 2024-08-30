@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -13,34 +13,19 @@
 
 #include "srv_internal.h"
 
-static int
-cont_set_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-	      uuid_t cont_uuid, daos_prop_t *prop)
-{
-	int		rc = 0;
-
-	rc = ds_cont_svc_set_prop(pool_uuid, cont_uuid, svc_ranks, prop);
-	if (rc != 0)
-		goto out;
-
-out:
-	return rc;
-}
-
 int
-ds_mgmt_cont_set_owner(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-		       uuid_t cont_uuid, const char *user,
-		       const char *group)
+ds_mgmt_cont_set_owner(uuid_t pool_uuid, d_rank_list_t *svc_ranks, const char *cont_id,
+		       const char *user, const char *group)
 {
-	int		rc = 0;
-	daos_prop_t	*prop;
-	uint32_t	prop_nr = 0;
-	uint32_t	i = 0;
-	bool		user_set = false;
-	bool		grp_set = false;
+	int          rc = 0;
+	daos_prop_t *prop;
+	uint32_t     prop_nr  = 0;
+	uint32_t     i        = 0;
+	bool         user_set = false;
+	bool         grp_set  = false;
 
-	D_DEBUG(DB_MGMT, "Setting owner for container "DF_UUID" in pool "
-		DF_UUID"\n", DP_UUID(cont_uuid), DP_UUID(pool_uuid));
+	D_DEBUG(DB_MGMT, DF_UUID ": Setting owner for container '%s'\n", DP_UUID(pool_uuid),
+		cont_id);
 
 	user_set = user != NULL && strnlen(user, DAOS_ACL_MAX_PRINCIPAL_LEN) > 0;
 	grp_set = group != NULL && strnlen(group, DAOS_ACL_MAX_PRINCIPAL_LEN) > 0;
@@ -76,7 +61,7 @@ ds_mgmt_cont_set_owner(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		i++;
 	}
 
-	rc = cont_set_prop(pool_uuid, svc_ranks, cont_uuid, prop);
+	rc = ds_cont_svc_set_prop(pool_uuid, cont_id, svc_ranks, prop);
 out_prop:
 	daos_prop_free(prop);
 	return rc;
