@@ -68,6 +68,31 @@ def change_file_owner(logger, hosts, filename, owner, group, timeout=15, verbose
     return __run_command(logger, hosts, command, verbose, timeout)
 
 
+def create_owned_directory(logger, hosts, directory, timeout=15, verbose=True, owner=None,
+                           privileged=False):
+    """Create a directory on the specified hosts owned by the specified user.
+
+    Args:
+        logger (Logger): logger for the messages produced by this method
+        hosts (NodeSet): hosts on which to create the directory
+        directory (str): the directory to create
+        timeout (int, optional): command timeout. Defaults to 15 seconds.
+        verbose (bool, optional): log the command output. Defaults to True.
+        owner (_type_, optional): user to have ownership of the directory. Defaults to None.
+        privileged (bool, optional): does the directory creation and change of ownership require
+            privileged access. Defaults to False.
+
+    Returns:
+        CommandResult: groups of command results from the same hosts with the same return status
+    """
+    executor = "root" if privileged else None
+    result = create_directory(logger, hosts, directory, timeout, verbose, executor)
+    if not result.passed or not privileged:
+        return result
+    return change_file_owner(
+        logger, hosts, directory, owner, get_primary_group(owner), timeout, verbose, executor)
+
+
 def get_file_size(logger, host, file_name):
     """Obtain the file size on the specified host.
 

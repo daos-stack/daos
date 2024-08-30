@@ -19,11 +19,10 @@ from ClusterShell.NodeSet import NodeSet
 from command_utils_base import (BasicParameter, CommandWithParameters, EnvironmentVariables,
                                 FormattedParameter, LogParameter, ObjectWithParameters)
 from exception_utils import CommandFailure
-from file_utils import change_file_owner, create_directory, distribute_files
+from file_utils import create_directory, create_owned_directory, distribute_files
 from general_utils import (DaosTestError, check_file_exists, get_file_listing,
                            get_job_manager_class, get_subprocess_stdout, run_command)
 from run_utils import command_as_user, run_remote
-from user_utils import get_primary_group
 from yaml_utils import get_yaml_data
 
 
@@ -894,6 +893,9 @@ class YamlCommand(SubProcessCommand):
         # Default owner of the certificate files
         self.certificate_owner = getuser()
 
+        # Support disabling verifying the socket directory (runtime_dir) for tests
+        self.verify_socket_dir = True
+
     @property
     def service_name(self):
         """Get the systemctl service name for this command.
@@ -1062,38 +1064,41 @@ class YamlCommand(SubProcessCommand):
                     raise CommandFailure(
                         f"ERROR: Copying yaml configuration file to {result.failed_hosts}")
 
-    def verify_socket_directory(self, user, hosts):
+    def verify_socket_directory(self, user, hosts, privileged=False):
         """Verify the domain socket directory is present and owned by this user.
 
         Args:
             user (str): user to verify has ownership of the directory
             hosts (list): list of hosts on which to verify the directory exists
+            privileged (bool, optional): does the directory creation and change of ownership require
+                privileged access. Defaults to False.
 
         Raises:
             CommandFailure: if the socket directory does not exist or is not
                 owned by the user and could not be created
 
         """
-        if self.yaml is not None:
-            directory = self.get_socket_dir()
+        if not hosts or not self.verify_socket_dir or not self.yaml:
+            # No need to verify the socket directory
+            return
+
+        directory = self.get_socket_dir()
+        if directory is None:
+            # No socket directory defined in the config file
+            return
+
+        self.log.info("Verifying %s socket directory: %s", self.command, directory)
+        status, nodes = check_file_exists(hosts, directory, user)
+        if not status:
             self.log.info(
-                "Verifying %s socket directory: %s", self.command, directory)
-            status, nodes = check_file_exists(hosts, directory, user)
-            if not status:
-                self.log.info(
-                    "%s: creating socket directory %s for user %s on %s",
-                    self.command, directory, user, nodes)
-                result = create_directory(self.log, nodes, directory, user=user)
-                if not result.passed:
-                    raise CommandFailure(
-                        f"{self.command}: error creating socket directory {directory} for user "
-                        f"{user} on {result.failed_hosts}")
-                result = change_file_owner(
-                    self.log, nodes, directory, user, get_primary_group(user), user=user)
-                if not result.passed:
-                    raise CommandFailure(
-                        f"{self.command}: error setting socket directory {directory} owner for "
-                        f"user {user} on {result.failed_hosts}")
+                "Creating %s socket directory %s for user %s on %s",
+                self.command, directory, user, nodes)
+            result = create_owned_directory(
+                self.log, nodes, directory, owner=user, privileged=privileged)
+            if not result.passed:
+                raise CommandFailure(
+                    f"{self.command}: error creating socket directory {directory} for user "
+                    f"{user} on {result.failed_hosts}")
 
     def get_socket_dir(self):
         """Get the socket directory.
@@ -1199,6 +1204,24 @@ class SubprocessManager(ObjectWithParameters):
         self.manager.assign_hosts(self._hosts, path, slots)
         self.manager.assign_processes(len(self._hosts))
 
+    @property
+    def verify_socket_dir(self):
+        """Get whether or not the socket directory be verified.
+
+        Returns:
+            bool: should the socket directory be verified
+        """
+        return self.manager.job.verify_socket_dir
+
+    @verify_socket_dir.setter
+    def verify_socket_dir(self, value):
+        """Set whether or not the socket directory be verified.
+
+        Args:
+            value (bool): should the socket directory be verified
+        """
+        self.manager.job.verify_socket_dir = value
+
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
 
@@ -1242,20 +1265,6 @@ class SubprocessManager(ObjectWithParameters):
     def stop(self):
         """Stop the daos command."""
         self.manager.stop()
-
-    def verify_socket_directory(self, user):
-        """Verify the domain socket directory is present and owned by this user.
-
-        Args:
-            user (str): user to verify has ownership of the directory
-
-        Raises:
-            CommandFailure: if the socket directory does not exist or is not
-                owned by the user
-
-        """
-        if self._hosts:
-            self.manager.job.verify_socket_directory(user, self._hosts)
 
     def set_config_value(self, name, value):
         """Set the yaml configuration parameter value.
