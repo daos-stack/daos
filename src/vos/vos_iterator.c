@@ -148,6 +148,11 @@ is_sysdb_pool(vos_iter_type_t type, vos_iter_param_t *param)
 	struct vos_pool		*vos_pool;
 	struct vos_container	*vos_cont;
 
+	/* vos_iterate_key() will never be called upon sysdb */
+	if (param->ip_flags == VOS_IT_KEY_TREE)
+		return false;
+
+	D_ASSERT(!(param->ip_flags & VOS_IT_KEY_TREE));
 	if (type == VOS_ITER_COUUID) {
 		vos_pool = vos_hdl2pool(param->ip_hdl);
 		D_ASSERT(vos_pool != NULL);
