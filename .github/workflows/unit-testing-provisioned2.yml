@@ -112,9 +112,6 @@ jobs:
     name: Create lastBuild and lastSuccessfulBuild symlinks
     runs-on: [self-hosted, light]
     needs: [Import-commit-pragmas]
-    if: needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
-      needs.Import-commit-pragmas.outputs.rpm-test-version == '' &&
-      !contains(needs.Import-commit-pragmas.outputs.pr-repos, 'daos@')
     env:
       # TODO -- this should be on stable, backedup storage, not /scratch
       # yamllint disable-line rule:line-length
@@ -162,9 +159,6 @@ jobs:
       statuses: write
     runs-on: [self-hosted, docker]
     needs: [Create-symlinks, Import-commit-pragmas, Calc-rpm-build-matrix]
-    if: needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
-      needs.Create-symlinks.result == 'success' &&
-      ((!cancelled()) || success() || failure())
     strategy:
       matrix:
         distro: ${{ fromJSON(needs.Calc-rpm-build-matrix.outputs.matrix) }}
@@ -305,12 +299,6 @@ jobs:
         distro: ${{ fromJSON(needs.Calc-functional-matrix.outputs.matrix) }}
       fail-fast: false
     # https://github.com/actions/runner/issues/491#issuecomment-926924523
-    if: |
-      needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
-      needs.Calc-functional-matrix.outputs.matrix != '[]' &&
-      (!cancelled()) &&
-      (needs.Build-RPM.result == 'success' ||
-       needs.Build-RPM.result == 'skipped')
     env:
       CONFIG_POWER_ONLY: false
       PRAGMA_SUFFIX: -vm
