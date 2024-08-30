@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,10 +20,10 @@ import (
 type ContSetOwnerReq struct {
 	msRequest
 	unaryRequest
-	ContUUID string // Container UUID
-	PoolUUID string // UUID of the pool for the container
-	User     string // User to own the container, or empty if none
-	Group    string // Group to own the container, or empty if none
+	ContID string // Container UUID or label
+	PoolID string // UUID or label of the pool for the container
+	User   string // User to own the container, or empty if none
+	Group  string // Group to own the container, or empty if none
 }
 
 // ContSetOwner changes the owner user and/or group of a DAOS container.
@@ -32,12 +32,12 @@ func ContSetOwner(ctx context.Context, rpcClient UnaryInvoker, req *ContSetOwner
 		return errors.New("nil request")
 	}
 
-	if err := checkUUID(req.ContUUID); err != nil {
-		return err
+	if req.PoolID == "" {
+		return errors.New("no pool label or UUID specified")
 	}
 
-	if err := checkUUID(req.PoolUUID); err != nil {
-		return err
+	if req.ContID == "" {
+		return errors.New("no container label or UUID specified")
 	}
 
 	if req.User == "" && req.Group == "" {
@@ -47,10 +47,10 @@ func ContSetOwner(ctx context.Context, rpcClient UnaryInvoker, req *ContSetOwner
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).ContSetOwner(ctx, &mgmtpb.ContSetOwnerReq{
 			Sys:        req.getSystem(rpcClient),
-			ContUUID:   req.ContUUID,
-			PoolUUID:   req.PoolUUID,
-			Owneruser:  req.User,
-			Ownergroup: req.Group,
+			ContId:     req.ContID,
+			PoolId:     req.PoolID,
+			OwnerUser:  req.User,
+			OwnerGroup: req.Group,
 		})
 	})
 

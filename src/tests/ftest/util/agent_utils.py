@@ -6,7 +6,6 @@
 import os
 import re
 import socket
-from getpass import getuser
 
 from agent_utils_params import DaosAgentTransportCredentials, DaosAgentYamlParameters
 from ClusterShell.NodeSet import NodeSet
@@ -289,7 +288,7 @@ class DaosAgentManager(SubprocessManager):
 
         # Verify the socket directory exists when using a non-systemctl manager
         if self.verify_socket_dir:
-            self.verify_socket_directory(getuser())
+            self.verify_socket_directory(self.manager.job.certificate_owner)
 
         super().start()
 
@@ -318,7 +317,8 @@ class DaosAgentManager(SubprocessManager):
         """
         cmd = self.manager.job.copy()
         cmd.debug.value = False
-        cmd.config.value = get_default_config_file("agent")
+        cmd.config.value = get_default_config_file(
+            "agent", os.path.dirname(self.manager.job.yaml.filename))
         cmd.set_command(("support", "collect-log"), **kwargs)
         self.log.info("Support collect-log on clients: %s", str(cmd))
         return run_remote(self.log, self.hosts, cmd.with_exports)

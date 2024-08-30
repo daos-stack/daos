@@ -2470,11 +2470,11 @@ ds_mgmt_drpc_cont_set_owner(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Mgmt__ContSetOwnerReq	*req = NULL;
-	Mgmt__ContSetOwnerResp	 resp = MGMT__CONT_SET_OWNER_RESP__INIT;
+	Mgmt__DaosResp           resp  = MGMT__DAOS_RESP__INIT;
 	uint8_t			*body;
-	size_t			 len;
-	uuid_t			 pool_uuid, cont_uuid;
+	size_t                   len;
 	d_rank_list_t		*svc_ranks = NULL;
+	uuid_t                   pool_uuid;
 	int			 rc = 0;
 
 	req = mgmt__cont_set_owner_req__unpack(&alloc.alloc, drpc_req->body.len,
@@ -2486,39 +2486,33 @@ ds_mgmt_drpc_cont_set_owner(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to change container owner\n");
+	D_INFO("Received request to change owner for container '%s' in pool '%s'\n", req->cont_id,
+	       req->pool_id);
 
-	if (uuid_parse(req->contuuid, cont_uuid) != 0) {
-		rc = -DER_INVAL;
-		DL_ERROR(rc, "Container UUID is invalid");
-		goto out;
-	}
-
-	if (uuid_parse(req->pooluuid, pool_uuid) != 0) {
-		rc = -DER_INVAL;
-		DL_ERROR(rc, "Pool UUID is invalid");
-		goto out;
+	if (uuid_parse(req->pool_id, pool_uuid) != 0) {
+		DL_ERROR(-DER_INVAL, "Pool UUID is invalid");
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
 	if (svc_ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rc = ds_mgmt_cont_set_owner(pool_uuid, svc_ranks, cont_uuid,
-				    req->owneruser, req->ownergroup);
+	rc = ds_mgmt_cont_set_owner(pool_uuid, svc_ranks, req->cont_id, req->owner_user,
+				    req->owner_group);
 	if (rc != 0)
-		D_ERROR("Set owner failed: %d\n", rc);
+		D_ERROR("Container set owner failed: " DF_RC "\n", DP_RC(rc));
 
 	d_rank_list_free(svc_ranks);
 
 out:
 	resp.status = rc;
-	len = mgmt__cont_set_owner_resp__get_packed_size(&resp);
+	len         = mgmt__daos_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 	} else {
-		mgmt__cont_set_owner_resp__pack(&resp, body);
+		mgmt__daos_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
 		drpc_resp->body.data = body;
 	}
