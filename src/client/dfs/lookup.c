@@ -53,6 +53,7 @@ lookup_rel_path(dfs_t *dfs, dfs_obj_t *root, char *rem, int flags, dfs_obj_t **_
 	obj->d.oclass     = root->d.oclass;
 	obj->d.chunk_size = root->d.chunk_size;
 	obj->mode         = root->mode;
+	obj->dfs          = dfs;
 	strncpy(obj->name, root->name, DFS_MAX_NAME + 1);
 
 	rc = daos_obj_open(dfs->coh, obj->oid, daos_mode, &obj->oh, NULL);
@@ -109,7 +110,7 @@ lookup_rel_path_loop:
 
 		len              = strlen(token);
 		entry.chunk_size = 0;
-		rc = fetch_entry(dfs->layout_v, parent.oh, DAOS_TX_NONE, token, len, true, &exists,
+		rc = fetch_entry(dfs->layout_v, parent.oh, dfs->th, token, len, true, &exists,
 				 &entry, 0, NULL, NULL, NULL);
 		if (rc)
 			D_GOTO(err_obj, rc);
@@ -136,10 +137,10 @@ lookup_rel_path_loop:
 				D_GOTO(err_obj, rc = ENOENT);
 			}
 
-			rc = daos_array_open_with_attr(
-			    dfs->coh, entry.oid, DAOS_TX_NONE, daos_mode, 1,
-			    entry.chunk_size ? entry.chunk_size : dfs->attr.da_chunk_size, &obj->oh,
-			    NULL);
+			rc = daos_array_open_with_attr(dfs->coh, entry.oid, dfs->th, daos_mode, 1,
+						       entry.chunk_size ? entry.chunk_size
+									: dfs->attr.da_chunk_size,
+						       &obj->oh, NULL);
 			if (rc != 0) {
 				D_ERROR("daos_array_open() Failed (%d)\n", rc);
 				D_GOTO(err_obj, rc = daos_der2errno(rc));
@@ -156,7 +157,7 @@ lookup_rel_path_loop:
 			if (stbuf) {
 				daos_array_stbuf_t array_stbuf = {0};
 
-				rc = daos_array_stat(obj->oh, DAOS_TX_NONE, &array_stbuf, NULL);
+				rc = daos_array_stat(obj->oh, dfs->th, &array_stbuf, NULL);
 				if (rc) {
 					daos_array_close(obj->oh, NULL);
 					D_GOTO(err_obj, rc = daos_der2errno(rc));
@@ -274,7 +275,7 @@ lookup_rel_path_loop:
 		if (stbuf) {
 			daos_epoch_t ep;
 
-			rc = daos_obj_query_max_epoch(obj->oh, DAOS_TX_NONE, &ep, NULL);
+			rc = daos_obj_query_max_epoch(obj->oh, dfs->th, &ep, NULL);
 			if (rc) {
 				daos_obj_close(obj->oh, NULL);
 				D_GOTO(err_obj, rc = daos_der2errno(rc));
@@ -297,7 +298,7 @@ lookup_rel_path_loop:
 			daos_epoch_t ep;
 
 			/** refresh possibly stale root stbuf */
-			rc = fetch_entry(dfs->layout_v, dfs->super_oh, DAOS_TX_NONE, "/", 1, false,
+			rc = fetch_entry(dfs->layout_v, dfs->super_oh, dfs->th, "/", 1, false,
 					 &exists, &entry, 0, NULL, NULL, NULL);
 			if (rc) {
 				D_ERROR("fetch_entry() failed: %d (%s)\n", rc, strerror(rc));
@@ -316,7 +317,7 @@ lookup_rel_path_loop:
 			dfs->root_stbuf.st_uid  = entry.uid;
 			dfs->root_stbuf.st_gid  = entry.gid;
 
-			rc = daos_obj_query_max_epoch(dfs->root.oh, DAOS_TX_NONE, &ep, NULL);
+			rc = daos_obj_query_max_epoch(dfs->root.oh, dfs->th, &ep, NULL);
 			if (rc)
 				D_GOTO(err_obj, rc = daos_der2errno(rc));
 
@@ -372,8 +373,8 @@ lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, size_t len, int 
 	if (daos_mode == -1)
 		return EINVAL;
 
-	rc = fetch_entry(dfs->layout_v, parent->oh, DAOS_TX_NONE, name, len, true, &exists, &entry,
-			 xnr, xnames, xvals, xsizes);
+	rc = fetch_entry(dfs->layout_v, parent->oh, dfs->th, name, len, true, &exists, &entry, xnr,
+			 xnames, xvals, xsizes);
 	if (rc)
 		return rc;
 
@@ -396,12 +397,13 @@ lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, size_t len, int 
 	oid_cp(&obj->parent_oid, parent->oid);
 	oid_cp(&obj->oid, entry.oid);
 	obj->mode = entry.mode;
+	obj->dfs  = dfs;
 
 	/** if entry is a file, open the array object and return */
 	switch (entry.mode & S_IFMT) {
 	case S_IFREG:
 		rc = daos_array_open_with_attr(
-		    dfs->coh, entry.oid, DAOS_TX_NONE, daos_mode, 1,
+		    dfs->coh, entry.oid, dfs->th, daos_mode, 1,
 		    entry.chunk_size ? entry.chunk_size : dfs->attr.da_chunk_size, &obj->oh, NULL);
 		if (rc != 0) {
 			D_ERROR("daos_array_open_with_attr() Failed " DF_RC "\n", DP_RC(rc));
@@ -420,7 +422,7 @@ lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, size_t len, int 
 		if (stbuf) {
 			daos_array_stbuf_t array_stbuf = {0};
 
-			rc = daos_array_stat(obj->oh, DAOS_TX_NONE, &array_stbuf, NULL);
+			rc = daos_array_stat(obj->oh, dfs->th, &array_stbuf, NULL);
 			if (rc) {
 				daos_array_close(obj->oh, NULL);
 				D_GOTO(err_obj, rc = daos_der2errno(rc));
@@ -485,7 +487,7 @@ lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, size_t len, int 
 		if (stbuf) {
 			daos_epoch_t ep;
 
-			rc = daos_obj_query_max_epoch(obj->oh, DAOS_TX_NONE, &ep, NULL);
+			rc = daos_obj_query_max_epoch(obj->oh, dfs->th, &ep, NULL);
 			if (rc) {
 				daos_obj_close(obj->oh, NULL);
 				D_GOTO(err_obj, rc = daos_der2errno(rc));

@@ -622,8 +622,8 @@ dcache_find_insert_rel_act(dfs_dcache_t *dcache, dfs_obj_t *parent, const char *
 			if (rec->dc_stated) {
 				memcpy(stbuf, &rec->dc_stbuf, sizeof(struct stat));
 			} else {
-				rc = entry_stat(dcache->dd_dfs, DAOS_TX_NONE, parent->oh, name, len,
-						NULL, true, stbuf, NULL);
+				rc = entry_stat(dcache->dd_dfs, dcache->dd_dfs->th, parent->oh,
+						name, len, NULL, true, stbuf, NULL);
 				if (rc != 0)
 					D_GOTO(out, rc);
 				memcpy(&rec->dc_stbuf, stbuf, sizeof(struct stat));
@@ -744,7 +744,7 @@ dcache_find_insert_act(dfs_dcache_t *dcache, char *path, size_t path_len, int fl
 		if (rec->dc_stated) {
 			memcpy(stbuf, &rec->dc_stbuf, sizeof(struct stat));
 		} else {
-			rc = entry_stat(dcache->dd_dfs, DAOS_TX_NONE, parent->oh, rec->name,
+			rc = entry_stat(dcache->dd_dfs, dcache->dd_dfs->th, parent->oh, rec->name,
 					strlen(rec->name), rec, true, stbuf, NULL);
 			if (rc != 0)
 				D_GOTO(out, rc);

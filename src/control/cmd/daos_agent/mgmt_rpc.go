@@ -7,6 +7,7 @@
 package main
 
 import (
+	"fmt"
 	"net"
 	"strings"
 
@@ -240,42 +241,28 @@ func (mod *mgmtModule) getAttachInfoResp(ctx context.Context, sys string) (*mgmt
 }
 
 func (mod *mgmtModule) selectAttachInfo(ctx context.Context, srvResp *mgmtpb.GetAttachInfoResp, iface, domain string) (*mgmtpb.GetAttachInfoResp, error) {
-	reqProviders := mod.getIfaceProviders(ctx, iface, domain)
-
+	resp := srvResp
 	if mod.providerIdx > 0 {
+		mod.log.Debugf("using secondary provider idx %d", mod.providerIdx)
+
+		var err error
 		// Secondary provider indices begin at 1
-		resp, err := mod.selectSecondaryAttachInfo(srvResp, mod.providerIdx)
+		resp, err = mod.selectSecondaryAttachInfo(srvResp, mod.providerIdx)
 		if err != nil {
 			return nil, err
 		}
+	}
 
-		if len(reqProviders) != 0 && !reqProviders.Has(resp.ClientNetHint.Provider) {
-			mod.log.Errorf("requested fabric interface %q (domain: %q) does not report support for configured provider %q (idx %d)",
-				iface, domain, resp.ClientNetHint.Provider, mod.providerIdx)
-		}
-
+	reqProviders := mod.getIfaceProviders(ctx, iface, domain, hardware.NetDevClass(resp.ClientNetHint.NetDevClass))
+	if len(reqProviders) == 0 || reqProviders.Has(resp.ClientNetHint.Provider) {
 		return resp, nil
 	}
 
-	if len(reqProviders) == 0 || reqProviders.Has(srvResp.ClientNetHint.Provider) {
-		return srvResp, nil
-	}
-
-	mod.log.Debugf("primary provider is not supported by requested interface %q domain %q (supports: %s)", iface, domain, strings.Join(reqProviders.ToSlice(), ", "))
-
-	// We can try to be smart about choosing a provider if the client requested a specific interface
-	for _, hint := range srvResp.SecondaryClientNetHints {
-		if reqProviders.Has(hint.Provider) {
-			mod.log.Tracef("found secondary provider supported by requested interface: %q (idx %d)", hint.Provider, hint.ProviderIdx)
-			return mod.selectSecondaryAttachInfo(srvResp, uint(hint.ProviderIdx))
-		}
-	}
-
-	mod.log.Errorf("no supported provider for requested interface %q domain %q, using primary by default", iface, domain)
-	return srvResp, nil
+	return nil, fmt.Errorf("provider %s is not supported by requested interface %q domain %q (supports: %s)",
+		resp.ClientNetHint.Provider, iface, domain, strings.Join(reqProviders.ToSlice(), ", "))
 }
 
-func (mod *mgmtModule) getIfaceProviders(ctx context.Context, iface, domain string) common.StringSet {
+func (mod *mgmtModule) getIfaceProviders(ctx context.Context, iface, domain string, ndc hardware.NetDevClass) common.StringSet {
 	providers := common.NewStringSet()
 	if iface == "" {
 		return providers
@@ -288,9 +275,10 @@ func (mod *mgmtModule) getIfaceProviders(ctx context.Context, iface, domain stri
 	if fis, err := mod.getFabricInterface(ctx, &FabricIfaceParams{
 		Interface: iface,
 		Domain:    domain,
+		DevClass:  ndc,
 	}); err != nil {
 		mod.log.Errorf("requested fabric interface %q (domain %q) may not function as desired: %s", iface, domain, err)
-	} else {
+	} else if fis.NetDevClass != FabricDevClassManual {
 		providers.Add(fis.Providers()...)
 	}
 
@@ -362,7 +350,7 @@ func (mod *mgmtModule) populateNUMAFabricMap(ctx context.Context, resp *mgmtpb.G
 		if exists {
 			pbFIs.Ifaces = make([]*mgmtpb.FabricInterface, 0, len(fis))
 			for _, fi := range fis {
-				if fi.HasProvider(resp.ClientNetHint.Provider) {
+				if fi.HasProvider(resp.ClientNetHint.Provider) || fi.NetDevClass == FabricDevClassManual {
 					pbFIs.Ifaces = append(pbFIs.Ifaces, &mgmtpb.FabricInterface{
 						NumaNode:  uint32(numaNode),
 						Interface: fi.Name,

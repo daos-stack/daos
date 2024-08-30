@@ -180,7 +180,7 @@ class Pil4dfsFio(TestWithServers):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=pil4dfs,dfuse,dfs,fio
+        :avocado: tags=dfs,dfuse,pil4dfs,fio
         :avocado: tags=Pil4dfsFio,test_pil4dfs_vs_dfs
         """
         bw_deltas = {}
