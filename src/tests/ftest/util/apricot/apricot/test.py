@@ -148,8 +148,7 @@ class Test(avocadoTest):
 
     def setUp(self):
         """Set up each test case."""
-        test_env = TestEnvironment()
-        self.prefix = test_env.daos_prefix
+        self.prefix = self.test_env.daos_prefix
         self.log.info("Using daos install prefix = %s", self.prefix)
         self.cancel_from_list()
         self.check_variant_skip()
@@ -1071,7 +1070,7 @@ class TestWithServers(TestWithoutServers):
             config_file = self.test_env.agent_config
 
         if self.agent_manager_class == "Systemctl" and self.test_env.agent_user != getuser():
-            # Config file needs to temporary user accessible location for copy before moving the
+            # Config file needs a temporary user-accessible location to copy to before moving the
             # file to a privileged access location
             config_temp = self.get_config_file(group, "agent", self.test_dir)
 
@@ -1081,7 +1080,7 @@ class TestWithServers(TestWithoutServers):
             cert_dir = os.path.join(os.sep, "etc", "daos", "certs")
         else:
             # Test-specific directory not requiring privileged access
-            cert_dir = os.path.join(self.test_dir, "daos_certs")
+            cert_dir = os.path.join(self.test_env.log_dir, "daos_certs")
 
         self.agent_managers.append(
             DaosAgentManager(

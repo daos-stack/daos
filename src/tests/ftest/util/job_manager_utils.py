@@ -837,6 +837,7 @@ class Systemctl(JobManager):
                 self.timestamps[command], units=self._systemctl.service.value,
                 run_user=self.job.run_user)
             self.display_log_data(self.get_log_data(self._hosts, command))
+            self.service_status()
             raise CommandFailure(error)
         return result
 
