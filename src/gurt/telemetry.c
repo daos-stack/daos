@@ -3133,8 +3133,7 @@ d_tm_init_histogram(struct d_tm_node_t *node, char *path, int num_buckets,
 	struct d_tm_bucket_t	*dth_buckets;
 	struct d_tm_shmem_hdr	*shmem;
 	uint64_t		min = 0;
-	uint64_t		max = 0;
-	uint64_t		prev_width = 0;
+	uint64_t                 max = 0;
 	int			rc = DER_SUCCESS;
 	int			i;
 	char			*meta_data;
@@ -3198,10 +3197,11 @@ d_tm_init_histogram(struct d_tm_node_t *node, char *path, int num_buckets,
 
 	min = 0;
 	max = initial_width - 1;
-	prev_width = initial_width;
 	for (i = 0; i < num_buckets; i++) {
-		D_ASPRINTF(meta_data, "histogram bucket %d [%lu .. %lu]",
-			   i, min, max);
+		if (max == UINT64_MAX && i == (num_buckets - 1))
+			D_ASPRINTF(meta_data, "histogram bucket %d [%lu .. inf]", i, min);
+		else
+			D_ASPRINTF(meta_data, "histogram bucket %d [%lu .. %lu]", i, min, max);
 		if (meta_data == NULL) {
 			rc = -DER_NOMEM;
 			goto failure;
@@ -3230,9 +3230,8 @@ d_tm_init_histogram(struct d_tm_node_t *node, char *path, int num_buckets,
 		} else if (multiplier == 1) {
 			max += initial_width;
 		} else {
-			max = min + (prev_width * multiplier) - 1;
+			max = (min * multiplier) - 1;
 		}
-		prev_width = (max - min) + 1;
 	}
 
 	D_DEBUG(DB_TRACE, "Successfully added histogram for: [%s]\n", path);

@@ -582,6 +582,71 @@ func TestControl_MetricsQuery(t *testing.T) {
 	}
 }
 
+func TestControl_MetricBucket_JSON(t *testing.T) {
+	for name, tc := range map[string]struct {
+		bucket          *MetricBucket
+		expUpperBound   float64
+		expMarshalErr   error
+		expUnmarshalErr error
+	}{
+		"+Inf": {
+			bucket: &MetricBucket{
+				UpperBound: math.Inf(1),
+			},
+			expUpperBound: math.Inf(1),
+		},
+		"-Inf": {
+			bucket: &MetricBucket{
+				UpperBound: math.Inf(-1),
+			},
+			expUpperBound: math.Inf(-1),
+		},
+		"NaN": {
+			bucket: &MetricBucket{
+				UpperBound: math.NaN(),
+			},
+			expUpperBound: math.NaN(),
+		},
+		"42.42": {
+			bucket: &MetricBucket{
+				UpperBound: 42.42,
+			},
+			expUpperBound: 42.42,
+		},
+		"0.000": {
+			bucket: &MetricBucket{
+				UpperBound: 0.000,
+			},
+			expUpperBound: 0.000,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			data, gotErr := json.Marshal(tc.bucket)
+			test.CmpErr(t, tc.expMarshalErr, gotErr)
+			if tc.expMarshalErr != nil {
+				return
+			}
+
+			var gotBucket MetricBucket
+			gotErr = json.Unmarshal(data, &gotBucket)
+			test.CmpErr(t, tc.expUnmarshalErr, gotErr)
+			if tc.expUnmarshalErr != nil {
+				return
+			}
+
+			if math.IsNaN(tc.expUpperBound) {
+				if !math.IsNaN(gotBucket.UpperBound) {
+					t.Fatalf("UpperBound NaN value did not survive Marshal/Unmarshal (got %f)", gotBucket.UpperBound)
+				}
+			} else {
+				if diff := cmp.Diff(tc.expUpperBound, gotBucket.UpperBound); diff != "" {
+					t.Fatalf("Bucket UpperBound value did not survive Marshal/Unmarshal (-want, +got): %s", diff)
+				}
+			}
+		})
+	}
+}
+
 func TestControl_Metric_JSON(t *testing.T) {
 	testLabelMap := map[string]string{
 		"label1": "val1",
@@ -615,6 +680,10 @@ func TestControl_Metric_JSON(t *testing.T) {
 					{
 						CumulativeCount: 55,
 						UpperBound:      500,
+					},
+					{
+						CumulativeCount: 4242,
+						UpperBound:      math.Inf(1),
 					},
 				},
 			},

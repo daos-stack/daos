@@ -157,6 +157,7 @@ obj_metrics_alloc_internal(const char *path, int tgt_id, bool server)
 {
 	struct obj_pool_metrics *metrics;
 	char                     tgt_path[32];
+	char                     tmp_path[D_TM_MAX_NAME_LEN];
 	uint32_t                 opc;
 	int                      rc;
 
@@ -203,19 +204,27 @@ obj_metrics_alloc_internal(const char *path, int tgt_id, bool server)
 	if (rc)
 		D_WARN("Failed to create retry cnt sensor: " DF_RC "\n", DP_RC(rc));
 
-	/** Total bytes read */
-	rc = d_tm_add_metric(&metrics->opm_fetch_bytes, D_TM_COUNTER,
-			     "total number of bytes fetched/read", "bytes", "%s/xferred/fetch%s",
-			     path, tgt_path);
+	/** Total bytes read, with I/Os bucketed by size */
+	snprintf(tmp_path, sizeof(tmp_path), "%s/xferred/fetch%s", path, tgt_path);
+	rc = d_tm_add_metric(&metrics->opm_fetch_bytes, D_TM_STATS_GAUGE,
+			     "total number of bytes fetched/read", "bytes", tmp_path);
 	if (rc)
-		D_WARN("Failed to create bytes fetch counter: " DF_RC "\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create bytes fetch gauge");
 
-	/** Total bytes written */
-	rc = d_tm_add_metric(&metrics->opm_update_bytes, D_TM_COUNTER,
-			     "total number of bytes updated/written", "bytes",
-			     "%s/xferred/update%s", path, tgt_path);
+	rc = d_tm_init_histogram(metrics->opm_fetch_bytes, tmp_path, NR_LATENCY_BUCKETS, 256, 2);
 	if (rc)
-		D_WARN("Failed to create bytes update counter: " DF_RC "\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to init per-I/O fetch histogram");
+
+	/** Total bytes written, with I/Os bucketed by size */
+	snprintf(tmp_path, sizeof(tmp_path), "%s/xferred/update%s", path, tgt_path);
+	rc = d_tm_add_metric(&metrics->opm_update_bytes, D_TM_STATS_GAUGE,
+			     "total number of bytes updated/written", "bytes", tmp_path);
+	if (rc)
+		DL_WARN(rc, "Failed to create bytes update gauge");
+
+	rc = d_tm_init_histogram(metrics->opm_update_bytes, tmp_path, NR_LATENCY_BUCKETS, 256, 2);
+	if (rc)
+		DL_WARN(rc, "Failed to init per-I/O update histogram");
 
 	/** Total number of EC full-stripe update operations, of type counter */
 	rc = d_tm_add_metric(&metrics->opm_update_ec_full, D_TM_COUNTER,

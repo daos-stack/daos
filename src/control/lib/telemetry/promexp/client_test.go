@@ -50,36 +50,36 @@ func TestPromExp_extractClientLabels(t *testing.T) {
 			input:   testPath("io/ops/update/active"),
 			expName: "io_ops_update_active",
 			expLabels: labelMap{
-				"job": jobID,
-				"pid": pid,
-				"tid": tid,
+				"jobid": jobID,
+				"pid":   pid,
+				"tid":   tid,
 			},
 		},
 		"fetch latency 1MB": {
 			input:   testPath("io/latency/fetch/1MB"),
 			expName: "io_latency_fetch",
 			expLabels: labelMap{
-				"job":  jobID,
-				"pid":  pid,
-				"tid":  tid,
-				"size": "1MB",
+				"jobid": jobID,
+				"pid":   pid,
+				"tid":   tid,
+				"size":  "1MB",
 			},
 		},
 		"started_at": {
 			input:   fmt.Sprintf("ID: %d/%s/%s/started_at", shmID, jobID, pid),
 			expName: "started_at",
 			expLabels: labelMap{
-				"job": jobID,
-				"pid": pid,
+				"jobid": jobID,
+				"pid":   pid,
 			},
 		},
 		"pool ops": {
 			input:   fmt.Sprintf("ID: %d/%s/%s/pool/%s/ops/foo", shmID, jobID, pid, test.MockPoolUUID(1)),
 			expName: "pool_ops_foo",
 			expLabels: labelMap{
-				"job":  jobID,
-				"pid":  pid,
-				"pool": test.MockPoolUUID(1).String(),
+				"jobid": jobID,
+				"pid":   pid,
+				"pool":  test.MockPoolUUID(1).String(),
 			},
 		},
 	} {

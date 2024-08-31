@@ -60,7 +60,7 @@ func extractClientLabels(log logging.Logger, in string) (labels labelMap, name s
 		compsIdx++
 	}
 
-	for i, label := range []string{"job", "pid", "tid"} {
+	for i, label := range []string{"jobid", "pid", "tid"} {
 		if i > 0 {
 			// After jobid, we should have a pid and/or tid, and
 			// then move on to the engine labels.
