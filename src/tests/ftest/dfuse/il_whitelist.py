@@ -69,8 +69,8 @@ class ILWhiteList(TestWithServers):
         :avocado: tags=ILWhiteList,test_whitelist_pil4dfs
         """
         num_daos_init = self.run_test(il_lib='libpil4dfs.so')
-        if num_daos_init != 0:
-            self.fail(f"Test failed: num_daos_init = {num_daos_init}. Expected 0.")
+        if num_daos_init != 5:
+            self.fail(f"Test failed: num_daos_init = {num_daos_init}. Expected 5.")
 
     def test_whitelist_pil4dfs_interception_on(self):
         """Jira ID: DAOS-15583.

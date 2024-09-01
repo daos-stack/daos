@@ -140,8 +140,6 @@ static _Atomic uint32_t        daos_init_cnt;
  * true.
  */
 static bool             report;
-/* always load libpil4dfs related env variables in exec() */
-static bool             enforce_exec_env;
 /* current application is bash/sh or not */
 static bool             is_bash;
 /* "no_dcache_in_bash" is a flag to control whether turns off directory caching inside sh/bash
@@ -170,14 +168,14 @@ static struct dfs_mt    dfs_list[MAX_DAOS_MT];
  * mode in CI testing.
  */
 bool                    whitelist_mode = true;
-/* bypass interception for current process and all child processes. */
-static bool             bypass_all;
+/* bypass interception in current process. */
+static bool             bypass;
 /* base name of the current application name */
 static char            *exe_short_name;
 static char            *first_arg;
 
 /* the list of apps provided by user including all child processes to be skipped for interception */
-static char            *bypass_all_user_cmd_list;
+static char            *bypass_user_cmd_list;
 
 static void
 extract_exe_name_1st_arg(void);
@@ -2352,7 +2350,7 @@ new_close_common(int (*next_close)(int fd), int fd)
 
 	if (d_compatible_mode && fd < FD_FILE_BASE) {
 		remove_fd_compatible(fd);
-		if (fd < DAOS_MIN_FD && d_daos_inited) {
+		if (fd < DAOS_MIN_FD && d_daos_inited && (fd_dummy >= 0)) {
 			rc = dup2(fd_dummy, fd);
 			if (rc != -1)
 				return 0;
@@ -4070,61 +4068,8 @@ out_readdir:
 	return &mydir->ents[mydir->num_ents];
 }
 
-/* Append env "BYPASS_ALL_CHILDREN". This is needed to make sure BYPASS_ALL_CHILDREN is not removed
- * in child processes if env BYPASS_ALL_CHILDREN is set.
- */
-static int
-pre_env_bypass_all(char *const envp[], char ***new_envp)
-{
-	int   i, rc;
-	int   num_entry          = 0;
-	bool  include_bypass_all = false;
-	char *env_bypass_all     = NULL;
-
-	*new_envp = (char **)envp;
-	if (envp == environ)
-		return 0;
-
-	if (envp != NULL) {
-		while (envp[num_entry]) {
-			if (memcmp(envp[num_entry], STR_AND_SIZE_M1("BYPASS_ALL_CHILDREN")) == 0)
-				include_bypass_all = true;
-			num_entry++;
-		}
-	}
-
-	if (include_bypass_all)
-		return 0;
-
-	/* the new envp holds the existing envs & the env forced to append plus NULL at the end */
-	*new_envp = calloc(num_entry + 2, sizeof(char *));
-	if (*new_envp == NULL) {
-		rc = ENOMEM;
-		goto err_out0;
-	}
-
-	/* Copy all existing entries to the new envp[] */
-	for (i = 0; i < num_entry; i++) {
-		(*new_envp)[i] = envp[i];
-	}
-
-	/* Current function is called only when bypass_all is true */
-	env_bypass_all = strdup("BYPASS_ALL_CHILDREN=1");
-	if (env_bypass_all == NULL) {
-		rc = ENOMEM;
-		goto err_out1;
-	}
-	(*new_envp)[i] = env_bypass_all;
-	i++;
-
-	(*new_envp)[i] = NULL;
-	return 0;
-
-err_out1:
-	free(*new_envp);
-err_out0:
-	return rc;
-}
+static char env_str_int_on[]  = "D_IL_INTERCEPTION_ON=1";
+static char env_str_int_off[] = "D_IL_INTERCEPTION_ON=0";
 
 /* This is the number of environmental variables that would be forced to set in child process.
  * "LD_PRELOAD" is a special case and it is not included in the list.
@@ -4135,15 +4080,12 @@ static char *env_list[] = {"D_IL_REPORT",
 			   "D_IL_CONTAINER",
 			   "D_IL_MAX_EQ",
 			   "D_LOG_FILE",
-			   "D_IL_ENFORCE_EXEC_ENV",
 			   "DD_MASK",
 			   "DD_SUBSYS",
 			   "D_LOG_MASK",
 			   "D_IL_COMPATIBLE",
 			   "D_IL_NO_DCACHE_BASH",
-			   "BYPASS_ALL_CHILDREN",
-			   "D_IL_BYPASS_ALL_LIST",
-			   "D_IL_INTERCEPTION_ON"};
+			   "D_IL_BYPASS_LIST"};
 
 /* Environmental variables could be cleared in some applications. To make sure all libpil4dfs
  * related env properly set, we intercept execve and its variants to check envp[] and append our
@@ -4169,6 +4111,7 @@ pre_envp(char *const envp[], char ***new_envp)
 	bool   preload_included                   = false;
 	/* whether pil4dfs in LD_PRELOAD in envp[] */
 	bool   pil4dfs_in_preload                 = false;
+	bool   interception_on_included           = false;
 	/* whether env_list entry exists in envp[] */
 	bool   env_found[ARRAY_SIZE(env_list)]    = {false};
 	/* whether env_list entry exists in environ */
@@ -4181,11 +4124,6 @@ pre_envp(char *const envp[], char ***new_envp)
 
 	/* simply return for environ. append pil4dfs env only for stripped env list. */
 	if (envp == environ)
-		return 0;
-
-	/* check D_IL_ENFORCE_EXEC_ENV env in case it was updated. */
-	rc = d_getenv_bool("D_IL_ENFORCE_EXEC_ENV", &enforce_exec_env);
-	if (rc == -DER_NONEXIST || enforce_exec_env == false)
 		return 0;
 
 	/* the number of env in env_list[] that are set in environ */
@@ -4207,6 +4145,9 @@ pre_envp(char *const envp[], char ***new_envp)
 	/* libpil4dfs.so is not in LD_PRELOAD, do not append env. */
 	if (!pil4dfs_set_preload)
 		return 0;
+	if (whitelist_mode == false)
+		/* D_IL_INTERCEPTION_ON needs to be appended if whitelist mode is not on. */
+		num_env_append++;
 
 	/* check whether env_list entries exist in environ */
 	for (i = 0; i < ARRAY_SIZE(env_list); i++) {
@@ -4238,6 +4179,10 @@ pre_envp(char *const envp[], char ***new_envp)
 				num_entry_found++;
 				if (strstr(envp[num_entry], "libpil4dfs.so"))
 					pil4dfs_in_preload = true;
+			} else if (memcmp(envp[num_entry], STR_AND_SIZE_M1("D_IL_INTERCEPTION_ON"))
+				   == 0 && interception_on_included == false) {
+				interception_on_included = true;
+				num_entry_found++;
 			}
 			/* The list of env is not too long. We use a simple loop to lookup for
 			 * simplicity. This function is not performance critical.
@@ -4307,6 +4252,14 @@ pre_envp(char *const envp[], char ***new_envp)
 		(*new_envp)[i] = new_preload_str;
 		i++;
 	}
+	/* append D_IL_INTERCEPTION_ON env */
+	if (!interception_on_included) {
+		if (whitelist_mode == false)
+			(*new_envp)[i] = env_str_int_on;
+		else
+			(*new_envp)[i] = env_str_int_off;
+		i++;
+	}
 
 	for (j = 0; j < ARRAY_SIZE(env_list); j++) {
 		/* env is not set in environ. */
@@ -4353,6 +4306,10 @@ err_out0:
 	return rc;
 }
 
+/* Set this flag to avoid setup_fd_0_1_2() executed more than one time in case exec() fails due to
+ * wrong path.
+ */
+static bool setup_fd_0_1_2_done;
 /* check whether fd 0, 1, and 2 are located on DFS mount or not. If yes, reopen files and
  * set offset.
  */
@@ -4362,8 +4319,12 @@ setup_fd_0_1_2(void)
 	int   i, fd, idx, fd_tmp, fd_new, open_flag, error_save;
 	off_t offset;
 
-	if (atomic_load_relaxed(&num_fd_dup2ed) == 0)
+	if (setup_fd_0_1_2_done)
 		return 0;
+	if (atomic_load_relaxed(&num_fd_dup2ed) == 0) {
+		setup_fd_0_1_2_done = true;
+		return 0;
+	}
 
 	D_RWLOCK_RDLOCK(&lock_fd_dup2ed);
 	for (i = 0; i < MAX_FD_DUP2ED; i++) {
@@ -4402,10 +4363,12 @@ setup_fd_0_1_2(void)
 		}
 	}
 	D_RWLOCK_UNLOCK(&lock_fd_dup2ed);
+	setup_fd_0_1_2_done = true;
 	return 0;
 
 err:
 	D_RWLOCK_UNLOCK(&lock_fd_dup2ed);
+	setup_fd_0_1_2_done = true;
 	return error_save;
 }
 
@@ -4420,10 +4383,14 @@ reset_daos_env_before_exec(void)
 	d_log_disable_logging();
 
 	/* close fd 255 and fd_dummy before exec(). */
-	if (fd_255_reserved)
+	if (fd_255_reserved) {
 		libc_close(255);
-	if (fd_dummy >= 0)
+		fd_255_reserved = false;
+	}
+	if (fd_dummy >= 0) {
 		libc_close(fd_dummy);
+		fd_dummy = -1;
+	}
 
 	rc = setup_fd_0_1_2();
 	if (rc)
@@ -4441,6 +4408,7 @@ reset_daos_env_before_exec(void)
 	return 0;
 }
 
+/* Now we always make sure important pil4dfs env variables are appended in new child processes. */
 int
 execve(const char *filename, char *const argv[], char *const envp[])
 {
@@ -4452,32 +4420,28 @@ execve(const char *filename, char *const argv[], char *const envp[])
 		D_ASSERT(next_execve != NULL);
 	}
 
-	if (bypass_all) {
-		rc = pre_env_bypass_all(envp, &new_envp);
-		if (rc) {
-			errno = rc;
-			return (-1);
-		}
+	rc = pre_envp(envp, &new_envp);
+	if (rc)
+		goto err;
+
+	if (bypass)
 		return next_execve(filename, argv, new_envp);
-	}
-	if (!d_hook_enabled)
-		return next_execve(filename, argv, envp);
 
 	rc = reset_daos_env_before_exec();
-	if (rc) {
-		errno = rc;
-		return (-1);
-	}
+	if (rc)
+		goto err;
 
-	if (!enforce_exec_env)
-		return next_execve(filename, argv, envp);
+	rc = next_execve(filename, argv, new_envp);
+	if (rc == -1)
+		/* d_hook_enabled could be set false in reset_daos_env_before_exec(). Need to be
+		 * restored if exec() failed for some reason.
+		 */
+		d_hook_enabled = true;
+	return rc;
 
-	rc = pre_envp(envp, &new_envp);
-	if (rc) {
-		errno = rc;
-		return (-1);
-	}
-	return next_execve(filename, argv, new_envp);
+err:
+	errno = rc;
+	return (-1);
 }
 
 int
@@ -4490,33 +4454,25 @@ execvpe(const char *filename, char *const argv[], char *const envp[])
 		next_execvpe = dlsym(RTLD_NEXT, "execvpe");
 		D_ASSERT(next_execvpe != NULL);
 	}
-	if (bypass_all) {
-		rc = pre_env_bypass_all(envp, &new_envp);
-		if (rc) {
-			errno = rc;
-			return (-1);
-		}
-		return next_execvpe(filename, argv, new_envp);
-	}
-	if (!d_hook_enabled)
-		return next_execvpe(filename, argv, envp);
-
-	rc = reset_daos_env_before_exec();
-	if (rc) {
-		errno = rc;
-		return (-1);
-	}
-
-	if (!enforce_exec_env)
-		return next_execvpe(filename, argv, envp);
 
 	rc = pre_envp(envp, &new_envp);
-	if (rc) {
-		errno = rc;
-		return (-1);
-	}
+	if (rc)
+		goto err;
+	if (bypass)
+		return next_execvpe(filename, argv, new_envp);
 
-	return next_execvpe(filename, argv, new_envp);
+	rc = reset_daos_env_before_exec();
+	if (rc)
+		goto err;
+
+	rc = next_execvpe(filename, argv, new_envp);
+	if (rc == -1)
+		d_hook_enabled = true;
+	return rc;
+
+err:
+	errno = rc;
+	return (-1);
 }
 
 int
@@ -4537,7 +4493,10 @@ execv(const char *filename, char *const argv[])
 		return (-1);
 	}
 
-	return next_execv(filename, argv);
+	rc = next_execv(filename, argv);
+	if (rc == -1)
+		d_hook_enabled = true;
+	return rc;
 }
 
 int
@@ -4558,7 +4517,10 @@ execvp(const char *filename, char *const argv[])
 		return (-1);
 	}
 
-	return next_execvp(filename, argv);
+	rc = next_execvp(filename, argv);
+	if (rc == -1)
+		d_hook_enabled = true;
+	return rc;
 }
 
 int
@@ -4571,33 +4533,25 @@ fexecve(int fd, char *const argv[], char *const envp[])
 		next_fexecve = dlsym(RTLD_NEXT, "fexecve");
 		D_ASSERT(next_fexecve != NULL);
 	}
-	if (bypass_all) {
-		rc = pre_env_bypass_all(envp, &new_envp);
-		if (rc) {
-			errno = rc;
-			return (-1);
-		}
-		return next_fexecve(fd, argv, new_envp);
-	}
-	if (!d_hook_enabled)
-		return next_fexecve(fd, argv, envp);
-
-	rc = reset_daos_env_before_exec();
-	if (rc) {
-		errno = rc;
-		return (-1);
-	}
-
-	if (!enforce_exec_env)
-		return next_fexecve(fd, argv, envp);
 
 	rc = pre_envp(envp, &new_envp);
-	if (rc) {
-		errno = rc;
-		return (-1);
-	}
+	if (rc)
+		goto err;
+	if (bypass)
+		return next_fexecve(fd, argv, new_envp);
 
-	return next_fexecve(fd, argv, new_envp);
+	rc = reset_daos_env_before_exec();
+	if (rc)
+		goto err;
+
+	rc = next_fexecve(fd, argv, new_envp);
+	if (rc == -1)
+		d_hook_enabled = true;
+	return rc;
+
+err:
+	errno = rc;
+	return (-1);
 }
 
 pid_t
@@ -6795,6 +6749,7 @@ extract_exe_name_1st_arg(void)
 	}
 	first_arg = NULL;
 	end       = buf + readsize;
+
 	for (p = buf; p < end;) {
 		if (count == 1) {
 			if (p[0] == '/' || memcmp(p, "./", 2) == 0 || memcmp(p, "../", 3) == 0) {
@@ -6806,8 +6761,8 @@ extract_exe_name_1st_arg(void)
 					exit(1);
 				}
 				first_arg = strndup(first_arg, DFS_MAX_NAME);
-				if (exe_short_name == NULL) {
-					fprintf(stderr, "Fail to allocate exe_short_name %d (%s)\n",
+				if (first_arg == NULL) {
+					fprintf(stderr, "Fail to allocate first_arg %d (%s)\n",
 						errno, strerror(errno));
 					exit(1);
 				}
@@ -6822,21 +6777,23 @@ extract_exe_name_1st_arg(void)
 	/* We allocated buffers for exe_short_name and first_arg. Now buf can be deallocated. */
 }
 
-static char *bypass_all_bash_cmd_list[] = {"configure", "libtool", "libtoolize"};
+static char *bypass_bash_cmd_list[] = {"autoconf", "configure", "libtool", "libtoolize",
+				       "lsb_release"};
 
-static char *bypass_all_python3_cmd_list[] = {"scons", "scons-3", "dnf", "dnf-3", "meson"};
+static char *bypass_python3_cmd_list[] = {"scons", "scons-3", "dnf", "dnf-3", "meson"};
 
-static char *bypass_all_app_list[] = {"as", "awk", "basename", "bc", "c++", "cal", "cc", "chmod",
-				      "chown", "clang", "clear", "cmake", "cmake3", "cpp", "daos",
-				      "daos_agent", "daos_engine", "daos_server", "df", "dfuse",
-				      "dmg", "expr", "f77", "f90", "f95", "gcc", "gfortran", "git",
-				      "go", "gofmt", "g++", "link", "ln", "ls", "kill", "m4",
-				      "make", "mkdir", "mktemp", "nasm", "yasm", "nm", "numactl",
-				      "patchelf", "ping", "pkg-config", "ps", "pwd", "ranlib",
-				      "rename", "sed", "seq", "size", "sleep", "ssh", "stat",
-				      "strace", "su", "sudo", "tee", "telnet", "time", "top",
-				      "touch", "tr", "truncate", "uname", "vi", "vim", "whoami",
-				      "yes"};
+static char *bypass_app_list[] = {"arch", "as", "awk", "basename", "bc", "cal", "cat", "chmod",
+				      "chown", "clang", "clear", "cmake", "cmake3", "cp", "cpp",
+				      "daos", "daos_agent", "daos_engine", "daos_server", "df",
+				      "dfuse", "dmg", "expr", "f77", "f90", "f95", "file", "gawk",
+				      "gcc", "gfortran", "gmake", "go", "gofmt", "grep", "g++",
+				      "head", "link", "ln", "ls", "kill", "m4", "make", "mkdir",
+				      "mktemp", "mv", "nasm", "yasm", "nm",  "numactl", "patchelf",
+				      "ping", "pkg-config", "ps", "pwd", "ranlib", "readelf",
+				      "readlink", "rename", "rm", "rmdir", "rpm", "sed", "seq",
+				      "size", "sleep", "sort", "ssh", "stat", "strace", "strip",
+				      "su", "sudo", "tail", "tee", "telnet", "time", "top", "touch",
+				      "tr", "truncate", "uname", "vi", "vim", "whoami", "yes"};
 
 static void
 check_whitelist(void)
@@ -6844,23 +6801,25 @@ check_whitelist(void)
 	int   i;
 	char *saveptr, *str, *token;
 
+	d_agetenv_str(&bypass_user_cmd_list, "D_IL_BYPASS_LIST");
+
 	/* Normally the list of app is not very long. strncmp() is used for simplicity. */
 
 	if (is_bash && first_arg != NULL) {
 		/* built-in list of bash scripts to skip */
-		for (i = 0; i < ARRAY_SIZE(bypass_all_bash_cmd_list); i++) {
-			if (strncmp(first_arg, bypass_all_bash_cmd_list[i],
-				    strlen(bypass_all_bash_cmd_list[i]) + 1) == 0)
-				goto set_bypass_all;
+		for (i = 0; i < ARRAY_SIZE(bypass_bash_cmd_list); i++) {
+			if (strncmp(first_arg, bypass_bash_cmd_list[i],
+				    strlen(bypass_bash_cmd_list[i]) + 1) == 0)
+				goto set_bypass;
 		}
 		/* user provided list to skip */
-		if (bypass_all_user_cmd_list) {
-			for (str = bypass_all_user_cmd_list;; str = NULL) {
+		if (bypass_user_cmd_list) {
+			for (str = bypass_user_cmd_list;; str = NULL) {
 				token = strtok_r(str, ":", &saveptr);
 				if (token == NULL)
 					break;
 				if (strncmp(first_arg, token, strlen(token) + 1) == 0)
-					goto set_bypass_all;
+					goto set_bypass;
 			}
 		}
 	}
@@ -6869,44 +6828,43 @@ check_whitelist(void)
 	     memcmp(exe_short_name, STR_AND_SIZE("python3")) == 0) &&
 	    first_arg) {
 		/* built-in list of python scripts to skip */
-		for (i = 0; i < ARRAY_SIZE(bypass_all_python3_cmd_list); i++) {
-			if (strncmp(first_arg, bypass_all_python3_cmd_list[i],
-				    strlen(bypass_all_python3_cmd_list[i]) + 1) == 0)
-				goto set_bypass_all;
+		for (i = 0; i < ARRAY_SIZE(bypass_python3_cmd_list); i++) {
+			if (strncmp(first_arg, bypass_python3_cmd_list[i],
+				    strlen(bypass_python3_cmd_list[i]) + 1) == 0)
+				goto set_bypass;
 		}
 		/* user provided list to skip */
-		if (bypass_all_user_cmd_list) {
-			for (str = bypass_all_user_cmd_list;; str = NULL) {
+		if (bypass_user_cmd_list) {
+			for (str = bypass_user_cmd_list;; str = NULL) {
 				token = strtok_r(str, ":", &saveptr);
 				if (token == NULL)
 					break;
 				if (strncmp(first_arg, token, strlen(token) + 1) == 0)
-					goto set_bypass_all;
+					goto set_bypass;
 			}
 		}
 	}
 
-	for (i = 0; i < ARRAY_SIZE(bypass_all_app_list); i++) {
-		if (strncmp(exe_short_name, bypass_all_app_list[i],
-			    strlen(bypass_all_app_list[i]) + 1) == 0)
-			goto set_bypass_all;
+	for (i = 0; i < ARRAY_SIZE(bypass_app_list); i++) {
+		if (strncmp(exe_short_name, bypass_app_list[i],
+			    strlen(bypass_app_list[i]) + 1) == 0)
+			goto set_bypass;
 	}
 
-	if (bypass_all_user_cmd_list) {
-		for (str = bypass_all_user_cmd_list;; str = NULL) {
+	if (bypass_user_cmd_list) {
+		for (str = bypass_user_cmd_list;; str = NULL) {
 			token = strtok_r(str, ":", &saveptr);
 			if (token == NULL)
 				break;
 			if (strncmp(exe_short_name, token, strlen(token) + 1) == 0)
-				goto set_bypass_all;
+				goto set_bypass;
 		}
 	}
 
 	return;
 
-set_bypass_all:
-	setenv("BYPASS_ALL_CHILDREN", "1", 1);
-	bypass_all = true;
+set_bypass:
+	bypass = true;
 	return;
 }
 
@@ -6915,7 +6873,6 @@ init_myhook(void)
 {
 	mode_t   umask_old;
 	char    *env_log;
-	char    *env_bypass_all;
 	char    *env_interception_on;
 	int      rc;
 	uint64_t eq_count_loc = 0;
@@ -6923,29 +6880,14 @@ init_myhook(void)
 	/* D_IL_INTERCEPTION_ON is only for testing. It turns off whitelist mode and keeps
 	 * function interception enabled all the time.
 	 */
-	env_interception_on = getenv("D_IL_INTERCEPTION_ON");
+	d_agetenv_str(&env_interception_on, "D_IL_INTERCEPTION_ON");
 	if (env_interception_on) {
 		if (strncmp(env_interception_on, "1", 2) == 0) {
 			whitelist_mode = false;
-			bypass_all     = false;
-			/* Set D_IL_ENFORCE_EXEC_ENV to make sure D_IL_INTERCEPTION_ON set in child
-			 * processes.
-			 */
-			setenv("D_IL_ENFORCE_EXEC_ENV", "1", 1);
-		}
-	}
-	if (whitelist_mode) {
-		/* Env "BYPASS_ALL_CHILDREN" is only for internal usage. */
-		env_bypass_all = getenv("BYPASS_ALL_CHILDREN");
-		if (env_bypass_all) {
-			if (strncmp(env_bypass_all, "1", 2) == 0) {
-				bypass_all = true;
-				return;
-			}
+			bypass         = false;
 		}
 	}
 
-	bypass_all_user_cmd_list = getenv("D_IL_BYPASS_ALL_LIST");
 	extract_exe_name_1st_arg();
 
 	/* Need to check whether current process is bash or not under regular & compatible modes.*/
@@ -6953,7 +6895,7 @@ init_myhook(void)
 
 	if (whitelist_mode)
 		check_whitelist();
-	if (bypass_all)
+	if (bypass)
 		return;
 
 	umask_old = umask(0);
@@ -6975,8 +6917,6 @@ init_myhook(void)
 			report = false;
 		d_freeenv_str(&env_log);
 	}
-	enforce_exec_env = false;
-	d_getenv_bool("D_IL_ENFORCE_EXEC_ENV", &enforce_exec_env);
 
 	d_compatible_mode = false;
 	d_getenv_bool("D_IL_COMPATIBLE", &d_compatible_mode);
@@ -7217,7 +7157,7 @@ finalize_myhook(void)
 	int       rc;
 	d_list_t *rlink;
 
-	if (bypass_all)
+	if (bypass)
 		return;
 
 	if (context_reset) {
