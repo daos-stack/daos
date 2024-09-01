@@ -27,12 +27,14 @@ type cliOptions struct {
 	Debug         bool             `long:"debug" description:"Enable debug output"`
 	Verbose       bool             `long:"verbose" description:"Enable verbose output (when applicable)"`
 	JSON          bool             `long:"json" short:"j" description:"Enable JSON output"`
+	SysName       string           `long:"sys-name" short:"G" description:"DAOS system name (optional)"`
 	Container     containerCmd     `command:"container" alias:"cont" description:"Perform tasks related to DAOS containers"`
 	Pool          poolCmd          `command:"pool" description:"Perform tasks related to DAOS pools"`
 	Filesystem    fsCmd            `command:"filesystem" alias:"fs" description:"POSIX filesystem operations"`
 	Object        objectCmd        `command:"object" alias:"obj" description:"DAOS object operations"`
 	System        systemCmd        `command:"system" alias:"sys" description:"DAOS system operations"`
 	Version       versionCmd       `command:"version" description:"Print daos version"`
+	Health        healthCmds       `command:"health" description:"DAOS health operations"`
 	ServerVersion serverVersionCmd `command:"server-version" description:"Print server version"`
 	ManPage       cmdutil.ManCmd   `command:"manpage" hidden:"true"`
 	faultsCmdRoot
@@ -106,6 +108,10 @@ or query/manage an object inside a container.`
 		if manCmd, ok := cmd.(cmdutil.ManPageWriter); ok {
 			manCmd.SetWriteFunc(p.WriteManPage)
 			return cmd.Execute(args)
+		}
+
+		if sysCmd, ok := cmd.(interface{ setSysName(string) }); ok {
+			sysCmd.setSysName(opts.SysName)
 		}
 
 		if opts.Debug {

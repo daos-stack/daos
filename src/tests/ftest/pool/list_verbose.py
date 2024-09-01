@@ -77,7 +77,8 @@ class ListVerboseTest(IorTestBase):
                 "status": 0,
                 "state": rebuild_state,
                 "objects": 0,
-                "records": 0
+                "records": 0,
+                "total_objects": 0
             },
             # NB: tests should not expect min/max/mean values
             "tier_stats": [

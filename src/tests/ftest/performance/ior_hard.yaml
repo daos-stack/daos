@@ -46,7 +46,7 @@ ior: &ior_base
   segment_count: 10000000
   sw_deadline: 30
   sw_wearout: 1
-  sw_status_file: "/var/tmp/daos_testing/stoneWallingStatusFile"
+  sw_status_file: stoneWallingStatusFile
 
 ior_sx: &ior_sx
   <<: *ior_base

@@ -80,7 +80,7 @@ func Debug(msg proto.Message) string {
 			fmt.Fprintf(&bld, "%s:%s ", state, set.String())
 		}
 	case *mgmtpb.PoolCreateReq:
-		fmt.Fprintf(&bld, "%T uuid:%s u:%s g:%s ", m, m.Uuid, m.User, m.Usergroup)
+		fmt.Fprintf(&bld, "%T uuid:%s u:%s g:%s ", m, m.Uuid, m.User, m.UserGroup)
 		if len(m.Properties) > 0 {
 			fmt.Fprintf(&bld, "p:%+v ", m.Properties)
 		}
@@ -90,10 +90,10 @@ func Debug(msg proto.Message) string {
 		}
 		fmt.Fprintf(&bld, "ranks:%s ", ranks.String())
 		fmt.Fprint(&bld, "tiers:")
-		for i, b := range m.Tierbytes {
+		for i, b := range m.TierBytes {
 			fmt.Fprintf(&bld, "%d: %d ", i, b)
-			if len(m.Tierratio) > i+1 {
-				fmt.Fprintf(&bld, "(%.02f%%) ", m.Tierratio[i])
+			if len(m.TierRatio) > i+1 {
+				fmt.Fprintf(&bld, "(%.02f%%) ", m.TierRatio[i])
 			}
 		}
 	case *mgmtpb.PoolCreateResp:

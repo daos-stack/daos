@@ -127,8 +127,8 @@ test_run(void)
 				/* avoid checkpatch warning */
 				d_rank_list_free(rank_list);
 			}
-			rank_list = uint32_array_to_rank_list(_cg_ranks,
-							      _cg_num_ranks);
+			rank_list = uint32_array_to_rank_list(_cg_ranks, _cg_num_ranks);
+			D_ASSERTF(rank_list != NULL, "failed to convert array to rank list\n");
 		}
 
 		rc = crtu_wait_for_ranks(test_g.t_crt_ctx[0],

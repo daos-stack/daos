@@ -5,9 +5,12 @@
 """
 
 import os
+import re
 import time
 
 from apricot import TestWithServers
+from ClusterShell.NodeSet import NodeSet
+from command_utils_base import EnvironmentVariables
 from dfuse_utils import get_dfuse, start_dfuse
 from run_utils import run_remote
 
@@ -61,7 +64,7 @@ class DaosBuild(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=daosio,dfuse,il,dfs
+        :avocado: tags=daosio,dfs,dfuse,ioil
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wt_il
         """
         self.run_build_test("writethrough", il_lib='libioil.so', run_on_vms=True)
@@ -77,7 +80,7 @@ class DaosBuild(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=daosio,dfuse,il,dfs,pil4dfs
+        :avocado: tags=daosio,dfs,dfuse,pil4dfs
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wt_pil4dfs
         """
         self.run_build_test("nocache", il_lib='libpil4dfs.so', run_on_vms=True)
@@ -158,7 +161,7 @@ class DaosBuild(TestWithServers):
 
         # Note that run_on_vms does not tell ftest where to run, this should be set according to
         # the test tags so the test can run with appropriate settings.
-        remote_env = {}
+        remote_env = EnvironmentVariables()
         if run_on_vms:
             dfuse_namespace = dfuse_namespace = "/run/dfuse_vm/*"
             build_jobs = 6 * 2
@@ -228,31 +231,29 @@ class DaosBuild(TestWithServers):
                 remote_env['D_IL_COMPATIBLE'] = '1'
                 remote_env['D_IL_MAX_EQ'] = '0'
 
-        envs = [f'export {env}={value}' for env, value in remote_env.items()]
-
-        preload_cmd = ';'.join(envs)
+        preload_cmd = remote_env.to_export_str()
 
         cmds = ['python3 -m venv {}/venv'.format(mount_dir),
-                'git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
-                'git -C {} submodule init'.format(build_dir),
-                'git -C {} submodule update'.format(build_dir),
+                f'git clone https://github.com/daos-stack/daos.git {build_dir}',
+                f'git -C {build_dir} checkout {self._get_daos_build_checkout()}',
+                f'git -C {build_dir} submodule init',
+                f'git -C {build_dir} submodule update',
                 'python3 -m pip install pip --upgrade',
-                'python3 -m pip install -r {}/requirements-build.txt'.format(build_dir),
-                'scons -C {} --jobs {} --build-deps=only'.format(build_dir, build_jobs),
-                'daos filesystem query {}'.format(mount_dir),
-                'daos filesystem evict {}'.format(build_dir),
-                'daos filesystem query {}'.format(mount_dir),
-                'scons -C {} --jobs {}'.format(build_dir, build_jobs),
-                'scons -C {} --jobs {} install --implicit-deps-unchanged'.format(build_dir,
-                                                                                 build_jobs),
-                'daos filesystem query {}'.format(mount_dir)]
+                f'python3 -m pip install -r {build_dir}/requirements-build.txt',
+                f'scons -C {build_dir} --jobs {build_jobs} --build-deps=only',
+                f'daos filesystem query {mount_dir}',
+                f'daos filesystem evict {build_dir}',
+                f'daos filesystem query {mount_dir}',
+                f'scons -C {build_dir} --jobs {build_jobs}',
+                f'scons -C {build_dir} --jobs {build_jobs} install --implicit-deps-unchanged',
+                f'daos filesystem query {mount_dir}']
         for cmd in cmds:
-            command = '{};{}'.format(preload_cmd, cmd)
+            command = '{} {}'.format(preload_cmd, cmd)
             # Use a short timeout for most commands, but vary the build timeout based on dfuse mode.
             timeout = 10 * 60
             if cmd.startswith('scons'):
                 timeout = build_time * 60
-            self.log_step(f'Running \'{cmd}\' with a {timeout}s timeout')
+            self.log_step(f"Running '{cmd}' with a {timeout}s timeout")
             start = time.time()
             result = run_remote(
                 self.log, self.hostlist_clients, command, verbose=True, timeout=timeout)
@@ -280,3 +281,42 @@ class DaosBuild(TestWithServers):
                 self.fail(f'{fail_type} over dfuse in mode {cache_mode}')
 
         self.log.info('Test passed')
+
+    def _get_daos_build_checkout(self):
+        """Try to get the SHA or branch to checkout for the version of daos being tested.
+
+        Returns:
+            str: The SHA or branch name to checkout
+        """
+        # Try to get the SHA direct from daos version -j
+        daos_version_response = None
+        try:
+            daos_version_response = self.get_daos_command().version()["response"]
+            return daos_version_response["revision"]
+        except KeyError:
+            pass
+
+        # Try to get the SHA from from the RPM name
+        if self.prefix.startswith("/usr"):
+            result = run_remote(
+                self.log, NodeSet(self.hostlist_clients[0]), "rpm -qf $(which daos)")
+            if result.passed:
+                package = list(result.all_stdout.values())[0]
+                search = re.findall(r"\.g([0-9a-z]+)", package)
+                if search:
+                    return search[0]
+
+        # Try to determine the version from daos version -j
+        if daos_version_response:
+            try:
+                major, minor = daos_version_response["version"].split(".")[:2]
+                if bool(int(minor) % 2):
+                    # Assume odd minor version corresponds to master
+                    return "origin/master"
+                # Assume even versions correspond to a release branch
+                return f"origin/release/{major}.{minor}"
+            except (KeyError, ValueError):
+                pass
+
+        # Default to master
+        return "origin/master"

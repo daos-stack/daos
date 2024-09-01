@@ -25,7 +25,6 @@ lru_hop_rec_addref(struct d_hash_table *htable, d_list_t *link)
 {
 	struct daos_llink *llink = link2llink(link);
 
-	D_ASSERT(llink->ll_evicting == 0 && llink->ll_evicted == 0);
 	llink->ll_ref++;
 }
 
@@ -216,6 +215,15 @@ daos_lru_ref_hold(struct daos_lru_cache *lcache, void *key,
 	if (link != NULL) {
 		llink = link2llink(link);
 		D_ASSERT(llink->ll_evicted == 0);
+		if (llink->ll_evicting) {
+			/**
+			 * Avoid calling `lru_hop_rec_decref()` at this point
+			 * to prevent `wakeup()` from being invoked twice.
+			 */
+			D_ASSERT(llink->ll_ref > 1);
+			llink->ll_ref--;
+			D_GOTO(out, rc = -DER_SHUTDOWN);
+		}
 		/* remove busy item from LRU */
 		if (!d_list_empty(&llink->ll_qlink))
 			d_list_del_init(&llink->ll_qlink);

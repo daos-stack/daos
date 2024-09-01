@@ -2718,9 +2718,18 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 	}
 
 	if (!create_migrate_one) {
+		struct ds_cont_child *cont = NULL;
+
 		D_DEBUG(DB_REBUILD, DF_UOID"/"DF_KEY" does not need rebuild.\n",
 			DP_UOID(io->ui_oid), DP_KEY(&io->ui_dkey));
-		D_GOTO(put, rc = 0);
+
+		/* Create the vos container when no record need to be rebuilt for this shard,
+		 * for the case of reintegrate the container was discarded ahead.
+		 */
+		rc = migrate_get_cont_child(tls, arg->arg->cont_uuid, &cont, true);
+		if (cont != NULL)
+			ds_cont_child_put(cont);
+		D_GOTO(put, rc);
 	}
 
 	/* Check if some IODs from this unpack can be merged to the exist mrone, mostly for EC

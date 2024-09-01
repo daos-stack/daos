@@ -92,6 +92,7 @@ dtx_coll_prep_ult(void *arg)
 			DP_RC(dcpa->dcpa_result));
 
 out:
+	D_FREE(mbs);
 	if (cont != NULL)
 		ds_cont_child_put(cont);
 

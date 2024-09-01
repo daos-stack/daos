@@ -119,7 +119,7 @@ class PoolCreateAllTestBase(TestWithServers):
         if ranks is not None:
             wait_ranks = sorted(ranks)
             data = self.dmg.pool_query(self.pool[pool_idx].identifier, show_enabled=True)
-            got_ranks = sorted(data['response']['enabled_ranks'])
+            got_ranks = sorted(data['response'].get('enabled_ranks'))
             self.assertListEqual(
                 wait_ranks,
                 got_ranks,
