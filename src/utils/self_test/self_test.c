@@ -1246,9 +1246,7 @@ cleanup:
 	D_FREE(tgt_endpts);
 	D_FREE(all_params);
 
-	if (use_agent) {
-		dc_mgmt_fini();
-	}
+	self_test_fini(use_agent);
 	d_log_fini();
 
 	return ret;
