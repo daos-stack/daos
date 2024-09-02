@@ -747,8 +747,10 @@ vos_dtx_get(bool standalone);
  * \param epoch		[IN]	Epoch for the DTX.
  * \param record	[IN]	Address (offset) of the record to be
  *				deregistered.
+ *
+ * \return		0 on success and negative on failure.
  */
-void
+int
 vos_dtx_deregister_record(struct umem_instance *umm, daos_handle_t coh,
 			  uint32_t entry, daos_epoch_t epoch,
 			  umem_off_t record);
