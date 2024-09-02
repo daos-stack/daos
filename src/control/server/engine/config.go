@@ -745,9 +745,20 @@ func (c *Config) WithStorageIndex(i uint32) *Config {
 func (c *Config) WithProperEnvVarForPMDK() *Config {
 	if len(c.Storage.Tiers) > 0 {
 		if c.Storage.Tiers[0].Class == storage.ClassDcpm {
-
+			for i, v := range c.EnvVars {
+				if strings.Contains(v, "PMEMOBJ_CONF=sds.at_create=") {
+					c.EnvVars = append(c.EnvVars[:i], c.EnvVars[i+1:]...)
+					break
+				}
+			}
 			return c.WithEnvVarAbtThreadStackSize(MIN_ABT_THREAD_STACKSIZE_FOR_DCPM)
 		} else {
+			for i, v := range c.EnvVars {
+				if strings.Contains(v, "ABT_THREAD_STACKSIZE=") {
+					c.EnvVars = append(c.EnvVars[:i], c.EnvVars[i+1:]...)
+					break
+				}
+			}
 			return c.WithEnvVarPMemObjSdsAtCreate(0)
 		}
 	}
