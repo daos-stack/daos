@@ -746,8 +746,7 @@ func (c *Config) WithProperEnvVarForPMDK() *Config {
 	if len(c.Storage.Tiers) > 0 {
 		if c.Storage.Tiers[0].Class == storage.ClassDcpm {
 
-			return c.WithEnvVarAbtThreadStackSize(MIN_ABT_THREAD_STACKSIZE_FOR_DCPM).
-				WithEnvVars(fmt.Sprintf("PMEMOBJ_CONF=foo_bar"))
+			return c.WithEnvVarAbtThreadStackSize(MIN_ABT_THREAD_STACKSIZE_FOR_DCPM)
 		} else {
 			return c.WithEnvVarPMemObjSdsAtCreate(0)
 		}
