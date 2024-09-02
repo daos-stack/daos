@@ -1667,7 +1667,7 @@ cont_ec_agg_alloc(struct cont_svc *cont_svc, uuid_t cont_uuid,
 {
 	struct cont_ec_agg	*ec_agg = NULL;
 	struct pool_domain	*doms;
-	int			node_nr;
+	int			rank_nr;
 	int			rc = 0;
 	int			i;
 
@@ -1676,19 +1676,18 @@ cont_ec_agg_alloc(struct cont_svc *cont_svc, uuid_t cont_uuid,
 		return -DER_NOMEM;
 
 	D_ASSERT(cont_svc->cs_pool->sp_map != NULL);
-	node_nr = pool_map_find_nodes(cont_svc->cs_pool->sp_map,
-				      PO_COMP_ID_ALL, &doms);
-	if (node_nr < 0)
-		D_GOTO(out, rc = node_nr);
+	rank_nr = pool_map_find_ranks(cont_svc->cs_pool->sp_map, PO_COMP_ID_ALL, &doms);
+	if (rank_nr < 0)
+		D_GOTO(out, rc = rank_nr);
 
-	D_ALLOC_ARRAY(ec_agg->ea_server_ephs, node_nr);
+	D_ALLOC_ARRAY(ec_agg->ea_server_ephs, rank_nr);
 	if (ec_agg->ea_server_ephs == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	uuid_copy(ec_agg->ea_cont_uuid, cont_uuid);
-	ec_agg->ea_servers_num = node_nr;
+	ec_agg->ea_servers_num = rank_nr;
 	ec_agg->ea_current_eph = 0;
-	for (i = 0; i < node_nr; i++) {
+	for (i = 0; i < rank_nr; i++) {
 		ec_agg->ea_server_ephs[i].rank = doms[i].do_comp.co_rank;
 		ec_agg->ea_server_ephs[i].eph = 0;
 	}
