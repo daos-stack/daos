@@ -376,7 +376,7 @@ func (c *Config) ValidateAndAdjustPMDKEnvVar() error {
 			}
 			// Ensure default handling of shutdown state (SDS) for DCPM storage class.
 			if pmemobj_conf_err == nil && strings.Contains(pmemobj_conf_str, "sds.at_create") {
-				return errors.New("env_var PMEMOBJ_CONF should NOT be set to sds.at_create=? for non-'dcpm' storage class")
+				return errors.New("env_var PMEMOBJ_CONF should NOT be set to sds.at_create=? for 'dcpm' storage class")
 			}
 		} else {
 			// Disable shutdown state (SDS) (part of RAS) for RAM-based simulated SCM.
@@ -745,7 +745,9 @@ func (c *Config) WithStorageIndex(i uint32) *Config {
 func (c *Config) WithProperEnvVarForPMDK() *Config {
 	if len(c.Storage.Tiers) > 0 {
 		if c.Storage.Tiers[0].Class == storage.ClassDcpm {
-			return c.WithEnvVarAbtThreadStackSize(MIN_ABT_THREAD_STACKSIZE_FOR_DCPM)
+
+			return c.WithEnvVarAbtThreadStackSize(MIN_ABT_THREAD_STACKSIZE_FOR_DCPM).
+				WithEnvVars(fmt.Sprintf("PMEMOBJ_CONF=foo_bar"))
 		} else {
 			return c.WithEnvVarPMemObjSdsAtCreate(0)
 		}

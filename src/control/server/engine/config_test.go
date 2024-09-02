@@ -1154,14 +1154,14 @@ func TestConfig_ValidateAndAdjustPMDKEnvVar(t *testing.T) {
 				storage.NewTierConfig().
 					WithStorageClass("dcpm"),
 			).WithEnvVarPMemObjSdsAtCreate(1),
-			expErr: errors.New("env_var PMEMOBJ_CONF should NOT be set to sds.at_create=? for non-'dcpm' storage class"),
+			expErr: errors.New("env_var PMEMOBJ_CONF should NOT be set to sds.at_create=? for 'dcpm' storage class"),
 		},
 		"config for DCPM with forced sds.at_create (0) should fail": {
 			cfg: validConfig().WithStorage(
 				storage.NewTierConfig().
 					WithStorageClass("dcpm"),
 			).WithEnvVarPMemObjSdsAtCreate(0),
-			expErr: errors.New("env_var PMEMOBJ_CONF should NOT be set to sds.at_create=? for non-'dcpm' storage class"),
+			expErr: errors.New("env_var PMEMOBJ_CONF should NOT be set to sds.at_create=? for 'dcpm' storage class"),
 		},
 		"Valid config for ram should not fail": {
 			cfg: validConfig().WithStorage(
