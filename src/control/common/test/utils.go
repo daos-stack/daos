@@ -140,6 +140,15 @@ func CmpErr(t *testing.T, want, got error) {
 	}
 }
 
+// CmpAny compares two values and fails the test if they are not equal.
+func CmpAny(t *testing.T, desc string, want, got any, cmpOpts ...cmp.Option) {
+	t.Helper()
+
+	if diff := cmp.Diff(want, got, cmpOpts...); diff != "" {
+		t.Fatalf("unexpected %s (-want, +got):\n%s\n", desc, diff)
+	}
+}
+
 // SplitFile separates file content into contiguous sections separated by
 // a blank line.
 func SplitFile(path string) (sections [][]string, err error) {
