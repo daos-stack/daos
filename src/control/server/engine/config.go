@@ -740,35 +740,39 @@ func (c *Config) WithStorageIndex(i uint32) *Config {
 	return c
 }
 
-// WithProperEnvVarForPMDK sets PMDK related environment variables
-// according to actual DCPMem configuration.
-func (c *Config) WithProperEnvVarForPMDK() *Config {
-	if len(c.Storage.Tiers) > 0 {
-		if c.Storage.Tiers[0].Class == storage.ClassDcpm {
-			for i, v := range c.EnvVars {
-				if strings.Contains(v, "PMEMOBJ_CONF=sds.at_create=") {
-					c.EnvVars = append(c.EnvVars[:i], c.EnvVars[i+1:]...)
-					break
-				}
-			}
-			return c.WithEnvVarAbtThreadStackSize(MIN_ABT_THREAD_STACKSIZE_FOR_DCPM)
-		} else {
-			for i, v := range c.EnvVars {
-				if strings.Contains(v, "ABT_THREAD_STACKSIZE=") {
-					c.EnvVars = append(c.EnvVars[:i], c.EnvVars[i+1:]...)
-					break
-				}
-			}
-			return c.WithEnvVarPMemObjSdsAtCreate(0)
+// WithOutEnvVar removes given environment variable form config
+func (c *Config) WithOutEnvVar(env_var string) *Config {
+
+	for i, v := range c.EnvVars {
+		if strings.Contains(v, env_var) {
+			c.EnvVars = append(c.EnvVars[:i], c.EnvVars[i+1:]...)
+			break
 		}
 	}
 	return c
 }
 
-func (c *Config) WithEnvVarAbtThreadStackSize(stack_size uint32) *Config {
+// WithProperEnvVarForPMDK sets PMDK related environment variables
+// according to actual DCPMem configuration.
+func (c *Config) WithProperEnvVarForPMDK() *Config {
+	if len(c.Storage.Tiers) > 0 {
+		if c.Storage.Tiers[0].Class == storage.ClassDcpm {
+			return c.WithEnvVarAbtThreadStackSize(MIN_ABT_THREAD_STACKSIZE_FOR_DCPM).
+				WithOutEnvVar("PMEMOBJ_CONF=sds.at_create=")
+		} else {
+			return c.WithEnvVarPMemObjSdsAtCreate(0).
+				WithOutEnvVar("ABT_THREAD_STACKSIZE=")
+		}
+	}
+	return c
+}
+
+// WithEnvVarAbtThreadStackSize sets environment variable ABT_THREAD_STACKSIZE.
+func (c *Config) WithEnvVarAbtThreadStackSize(stack_size uint16) *Config {
 	return c.WithEnvVars(fmt.Sprintf("ABT_THREAD_STACKSIZE=%d", stack_size))
 }
 
-func (c *Config) WithEnvVarPMemObjSdsAtCreate(value int32) *Config {
+// WithEnvVarPMemObjSdsAtCreate sets PMEMOBJ_CONF env. var. to sds.at_create=0/1 value
+func (c *Config) WithEnvVarPMemObjSdsAtCreate(value uint8) *Config {
 	return c.WithEnvVars(fmt.Sprintf("PMEMOBJ_CONF=sds.at_create=%d", value))
 }

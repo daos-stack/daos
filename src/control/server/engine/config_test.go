@@ -1140,7 +1140,8 @@ func TestConfig_ValidateAndAdjustPMDKEnvVar(t *testing.T) {
 				storage.NewTierConfig().
 					WithStorageClass("dcpm"),
 			).WithEnvVarAbtThreadStackSize(MIN_ABT_THREAD_STACKSIZE_FOR_DCPM - 1),
-			expErr: errors.New("env_var ABT_THREAD_STACKSIZE should be >= 18432 for 'dcpm' storage class"),
+			expErr: errors.New(fmt.Sprintf("env_var ABT_THREAD_STACKSIZE should be >= %d for 'dcpm' storage class",
+				MIN_ABT_THREAD_STACKSIZE_FOR_DCPM)),
 		},
 		"config for DCPM with invalid ABT_THREAD_STACKSIZE value should fail": {
 			cfg: validConfig().WithStorage(
@@ -1168,6 +1169,13 @@ func TestConfig_ValidateAndAdjustPMDKEnvVar(t *testing.T) {
 				storage.NewTierConfig().
 					WithStorageClass("ram"),
 			).WithProperEnvVarForPMDK(),
+			expSds_at_create: "sds.at_create=0",
+		},
+		"Valid config with default ULT stack size for ram should not fail": {
+			cfg: validConfig().WithStorage(
+				storage.NewTierConfig().
+					WithStorageClass("ram"),
+			).WithProperEnvVarForPMDK().WithEnvVarAbtThreadStackSize(16834),
 			expSds_at_create: "sds.at_create=0",
 		},
 		"config for ram with sds.at_create force to 1 should fail": {
