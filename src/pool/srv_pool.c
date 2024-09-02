@@ -6500,7 +6500,7 @@ pool_svc_schedule_reconf(struct pool_svc *svc, struct pool_map *map, uint32_t ma
 	return 0;
 }
 
-static void
+static int
 pool_map_crit_prompt(struct pool_svc *svc, struct pool_map *map, d_rank_t rank)
 {
 	crt_group_t		*primary_grp;
@@ -6515,9 +6515,10 @@ pool_map_crit_prompt(struct pool_svc *svc, struct pool_map *map, d_rank_t rank)
 	primary_grp = crt_group_lookup(NULL);
 	D_ASSERT(primary_grp != NULL);
 
-	D_CRIT("!!! Please check and bring back these engines"
-	       "\"dmg system start --ranks=xxx ...\" in top priority -\n");
-	D_CRIT("!!! To-be-fixed engine rank %d\n", rank);
+	D_CRIT("!!! Please try to recover these engines in top priority -\n");
+	D_CRIT("!!! Please refer \"Pool-Wise Redundancy Factor\" section in pool_operations.md\n");
+	D_CRIT("!!! pool "DF_UUID": intolerable unavailability: engine rank %u\n",
+	       DP_UUID(svc->ps_uuid), rank);
 	for (i = 0; i < doms_cnt; i++) {
 		struct swim_member_state state;
 
@@ -6535,8 +6536,11 @@ pool_map_crit_prompt(struct pool_svc *svc, struct pool_map *map, d_rank_t rank)
 		D_DEBUG(DB_MD, "rank/state %d/%d\n", doms[i].do_comp.co_rank,
 			rc == -DER_NONEXIST ? -1 : state.sms_status);
 		if (rc == -DER_NONEXIST || state.sms_status == SWIM_MEMBER_DEAD)
-			D_CRIT("!!! To-be-fixed engine rank %d\n", doms[i].do_comp.co_rank);
+			D_CRIT("!!! pool "DF_UUID" : intolerable unavailability: engine rank %u\n",
+			       DP_UUID(svc->ps_uuid), doms[i].do_comp.co_rank);
 	}
+
+	return rc;
 }
 
 /*
@@ -6701,19 +6705,21 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 		int		failed_cnt;
 
 		rc = pool_map_update_failed_cnt(map);
-		if (rc) {
-			DL_ERROR(rc, "pool_map_update_failed_cnt failed.");
+		if (rc != 0) {
+			DL_ERROR(rc, DF_UUID": pool_map_update_failed_cnt failed.",
+				 DP_UUID(svc->ps_uuid));
 			goto out_map;
 		}
 
 		D_ASSERT(tgt_addrs->pta_number == 1);
 		rank = tgt_addrs->pta_addrs->pta_rank;
 		failed_cnt = pool_map_get_failed_cnt(map, PO_COMP_TP_NODE);
-		D_INFO("SWIM exclude rank %d, failed NODE %d\n", rank, failed_cnt);
+		D_INFO(DF_UUID": SWIM exclude rank %d, failed NODE %d\n",
+		       DP_UUID(svc->ps_uuid), rank, failed_cnt);
 		if (failed_cnt > pw_rf) {
-			D_CRIT("exclude rank %d will break pw_rf %d, failed_cnt %d\n",
-			       rank, pw_rf, failed_cnt);
-			pool_map_crit_prompt(svc, map, rank);
+			D_CRIT(DF_UUID": exclude rank %d will break pw_rf %d, failed_cnt %d\n",
+			       DP_UUID(svc->ps_uuid), rank, pw_rf, failed_cnt);
+			rc = pool_map_crit_prompt(svc, map, rank);
 			goto out_map;
 		}
 	}
