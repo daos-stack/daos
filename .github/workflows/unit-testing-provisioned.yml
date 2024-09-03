@@ -95,4 +95,8 @@ jobs:
         run: |
           whoami
           hostname
-          echo $NODELIST        
+          echo $NODELIST
+          pwd
+          echo $HOME
+          ls
+          # scons-3
