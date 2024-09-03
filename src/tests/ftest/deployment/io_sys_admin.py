@@ -64,45 +64,43 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
         # write large data sets
         self.run_file_count()
         # Don't need the following block for the file count test.
-        """
         # create snapshot
-        self.container[-1].create_snap()
+        # self.container[-1].create_snap()
         # overwrite the last ior file
-        self.ior_cmd.signature.update('456')
-        self.processes = self.ior_np
-        self.ppn = self.ior_ppn
-        self.run_ior_with_pool(create_pool=False, create_cont=False)
+        # self.ior_cmd.signature.update('456')
+        # self.processes = self.ior_np
+        # self.ppn = self.ior_ppn
+        # self.run_ior_with_pool(create_pool=False, create_cont=False)
 
-        nvme_free_space_before_snap_destroy = self.get_free_space()[1]
+        # nvme_free_space_before_snap_destroy = self.get_free_space()[1]
         # delete snapshot
-        self.container[-1].destroy_snap(epc=self.container[-1].epoch)
+        # self.container[-1].destroy_snap(epc=self.container[-1].epoch)
         # Now check if the space is returned back.
-        counter = 1
-        returned_space = self.get_free_space()[1] - nvme_free_space_before_snap_destroy
+        # counter = 1
+        # returned_space = self.get_free_space()[1] - nvme_free_space_before_snap_destroy
 
-        data_written = (int(self.ppn) * human_to_bytes(self.ior_cmd.block_size.value))
-        while returned_space < int(data_written):
-            # try to wait for 4 x 60 secs for aggregation to be completed or
-            # else exit the test with a failure.
-            if counter > 4:
-                self.log.info("Free space before snapshot destroy: %s",
-                              nvme_free_space_before_snap_destroy)
-                self.log.info("Free space when test terminated: %s",
-                              self.get_free_space()[1])
-                self.fail("Aggregation did not complete as expected")
+        # data_written = (int(self.ppn) * human_to_bytes(self.ior_cmd.block_size.value))
+        # while returned_space < int(data_written):
+        #    # try to wait for 4 x 60 secs for aggregation to be completed or
+        #    # else exit the test with a failure.
+        #    if counter > 4:
+        #        self.log.info("Free space before snapshot destroy: %s",
+        #                      nvme_free_space_before_snap_destroy)
+        #        self.log.info("Free space when test terminated: %s",
+        #                      self.get_free_space()[1])
+        #        self.fail("Aggregation did not complete as expected")
 
-            time.sleep(60)
-            returned_space = self.get_free_space()[1] - nvme_free_space_before_snap_destroy
-            counter += 1
+        #    time.sleep(60)
+        #    returned_space = self.get_free_space()[1] - nvme_free_space_before_snap_destroy
+        #    counter += 1
 
-        self.log.info("#####Starting FS_COPY Test")
-        self.run_dm_activities_with_ior("FS_COPY", self.pool, self.container[-1])
-        self.log.info("#####Starting DCP Test")
-        self.run_dm_activities_with_ior("DCP", self.pool, self.container[-1])
-        self.log.info("#####Starting DSERIAL Test")
-        self.run_dm_activities_with_ior("DSERIAL", self.pool, self.container[-1])
-        self.log.info("#####Starting CONT_CLONE Test")
-        self.run_dm_activities_with_ior("CONT_CLONE", self.pool, self.container[-1])
-        self.log.info("#####Completed all Datamover tests")
-        self.container.pop(0)
-        """
+        # self.log.info("#####Starting FS_COPY Test")
+        # self.run_dm_activities_with_ior("FS_COPY", self.pool, self.container[-1])
+        # self.log.info("#####Starting DCP Test")
+        # self.run_dm_activities_with_ior("DCP", self.pool, self.container[-1])
+        # self.log.info("#####Starting DSERIAL Test")
+        # self.run_dm_activities_with_ior("DSERIAL", self.pool, self.container[-1])
+        # self.log.info("#####Starting CONT_CLONE Test")
+        # self.run_dm_activities_with_ior("CONT_CLONE", self.pool, self.container[-1])
+        # self.log.info("#####Completed all Datamover tests")
+        # self.container.pop(0)
