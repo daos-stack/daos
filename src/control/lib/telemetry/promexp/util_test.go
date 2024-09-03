@@ -88,9 +88,10 @@ func TestPromExp_getMetricStats(t *testing.T) {
 					value: 3.0,
 				},
 				{
-					name:  "stats_gauge_sum",
-					desc:  " (sum)",
-					value: 15.0,
+					name:      "stats_gauge_sum",
+					desc:      " (sum)",
+					value:     15.0,
+					isCounter: true,
 				},
 				{
 					name:      "stats_gauge_samples",
@@ -104,9 +105,10 @@ func TestPromExp_getMetricStats(t *testing.T) {
 					value: 1.58113883,
 				},
 				{
-					name:  "stats_gauge_sumsquares",
-					desc:  " (sum of squares)",
-					value: 55,
+					name:      "stats_gauge_sumsquares",
+					desc:      " (sum of squares)",
+					value:     55,
+					isCounter: true,
 				},
 			},
 		},

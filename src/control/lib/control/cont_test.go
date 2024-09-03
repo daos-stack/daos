@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -22,10 +22,10 @@ func TestControl_ContSetOwner(t *testing.T) {
 	testContUUID := uuid.New().String()
 
 	validReq := &ContSetOwnerReq{
-		PoolUUID: testPoolUUID,
-		ContUUID: testContUUID,
-		User:     "someuser@",
-		Group:    "somegroup@",
+		PoolID: testPoolUUID,
+		ContID: testContUUID,
+		User:   "someuser@",
+		Group:  "somegroup@",
 	}
 
 	for name, tc := range map[string]struct {
@@ -37,36 +37,22 @@ func TestControl_ContSetOwner(t *testing.T) {
 			req:    nil,
 			expErr: errors.New("nil request"),
 		},
-		"bad container UUID": {
+		"no container ID": {
 			req: &ContSetOwnerReq{
-				PoolUUID: testPoolUUID,
-				ContUUID: "junk",
+				PoolID: testPoolUUID,
 			},
-			expErr: errors.New("invalid UUID"),
+			expErr: errors.New("container label or UUID"),
 		},
-		"bad pool UUID": {
+		"no pool ID": {
 			req: &ContSetOwnerReq{
-				PoolUUID: "garbage",
-				ContUUID: testContUUID,
+				ContID: testContUUID,
 			},
-			expErr: errors.New("invalid UUID"),
-		},
-		"no container UUID": {
-			req: &ContSetOwnerReq{
-				PoolUUID: testPoolUUID,
-			},
-			expErr: errors.New("invalid UUID"),
-		},
-		"no pool UUID": {
-			req: &ContSetOwnerReq{
-				ContUUID: testContUUID,
-			},
-			expErr: errors.New("invalid UUID"),
+			expErr: errors.New("pool label or UUID"),
 		},
 		"no user or group": {
 			req: &ContSetOwnerReq{
-				PoolUUID: testPoolUUID,
-				ContUUID: testContUUID,
+				PoolID: testPoolUUID,
+				ContID: testContUUID,
 			},
 			expErr: errors.New("no user or group specified"),
 		},
@@ -74,31 +60,31 @@ func TestControl_ContSetOwner(t *testing.T) {
 			req: validReq,
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
-					&mgmtpb.ContSetOwnerResp{},
+					&mgmtpb.DaosResp{},
 				),
 			},
 		},
 		"user-only success": {
 			req: &ContSetOwnerReq{
-				PoolUUID: testPoolUUID,
-				ContUUID: testContUUID,
-				User:     "someuser@",
+				PoolID: testPoolUUID,
+				ContID: testContUUID,
+				User:   "someuser@",
 			},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
-					&mgmtpb.ContSetOwnerResp{},
+					&mgmtpb.DaosResp{},
 				),
 			},
 		},
 		"group-only success": {
 			req: &ContSetOwnerReq{
-				PoolUUID: testPoolUUID,
-				ContUUID: testContUUID,
-				Group:    "somegroup@",
+				PoolID: testPoolUUID,
+				ContID: testContUUID,
+				Group:  "somegroup@",
 			},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
-					&mgmtpb.ContSetOwnerResp{},
+					&mgmtpb.DaosResp{},
 				),
 			},
 		},
@@ -115,6 +101,18 @@ func TestControl_ContSetOwner(t *testing.T) {
 				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
 			},
 			expErr: errors.New("remote failed"),
+		},
+		"labels OK": {
+			req: &ContSetOwnerReq{
+				PoolID: "pool1",
+				ContID: "cont1",
+				User:   "someuser@",
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.DaosResp{},
+				),
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
