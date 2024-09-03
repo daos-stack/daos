@@ -63,6 +63,8 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
 
         # write large data sets
         self.run_file_count()
+        # Don't need the following block for the file count test.
+        """
         # create snapshot
         self.container[-1].create_snap()
         # overwrite the last ior file
@@ -103,3 +105,4 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
         self.run_dm_activities_with_ior("CONT_CLONE", self.pool, self.container[-1])
         self.log.info("#####Completed all Datamover tests")
         self.container.pop(0)
+        """
