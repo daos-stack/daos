@@ -160,6 +160,8 @@ static long int         page_size;
 #define DAOS_INIT_NOT_RUNNING 0
 #define DAOS_INIT_RUNNING     1
 
+static _Atomic uint64_t mpi_init_count;
+
 static long int         daos_initing;
 _Atomic bool            d_daos_inited;
 static bool             daos_debug_inited;
@@ -466,6 +468,8 @@ static int (*next_posix_fallocate)(int fd, off_t offset, off_t len);
 static int (*next_posix_fallocate64)(int fd, off64_t offset, off64_t len);
 static int (*next_tcgetattr)(int fd, void *termios_p);
 /* end NOT supported by DAOS */
+
+static int (*next_mpi_init)(int *argc, char ***argv);
 
 /* to do!! */
 /**
@@ -1020,6 +1024,22 @@ err:
 	return rc;
 }
 
+int
+MPI_Init(int *argc, char ***argv)
+{
+	int rc;
+
+	if (next_mpi_init == NULL) {
+		next_mpi_init = dlsym(RTLD_NEXT, "MPI_Init");
+		D_ASSERT(next_mpi_init != NULL);
+	}
+
+	atomic_fetch_add_relaxed(&mpi_init_count, 1);
+	rc = next_mpi_init(argc, argv);
+	atomic_fetch_add_relaxed(&mpi_init_count, -1);
+	return rc;
+}
+
 /** determine whether a path (both relative and absolute) is on DAOS or not. If yes,
  *  returns parent object, item name, full path of parent dir, full absolute path, and
  *  the pointer to struct dfs_mt.
@@ -1116,6 +1136,15 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 		if (atomic_load_relaxed(&d_daos_inited) == false) {
 			uint64_t status_old = DAOS_INIT_NOT_RUNNING;
 			bool     rc_cmp_swap;
+
+			/* Check whether MPI_Init() is running. If yes, pass to the original
+			 * libc functions. Avoid possible zeInit reentrancy/nested call.
+			 */
+
+			if (atomic_load_relaxed(&mpi_init_count) > 0) {
+				*is_target_path = 0;
+				goto out_normal;
+			}
 
 			/* daos_init() is expensive to call. We call it only when necessary. */
 
