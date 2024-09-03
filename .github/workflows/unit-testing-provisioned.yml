@@ -93,4 +93,6 @@ jobs:
 
       - name: Scons Build
         run: |
+          whoami
+          hostname
           echo $NODELIST        
