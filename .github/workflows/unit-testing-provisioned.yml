@@ -93,4 +93,4 @@ jobs:
 
       - name: Scons Build
         run: |
-          scons install --build-deps=yes --config=force
+          echo $NODELIST        
