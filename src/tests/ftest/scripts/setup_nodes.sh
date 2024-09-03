@@ -106,8 +106,7 @@ if $TEST_RPMS; then
 else
     cp "$DAOS_BASE"/install/utils/systemd/daos_agent.service $_local_service_file
 fi
-sed -i '/^User=/d' $_local_service_file
-sed -i '/^Group=/d' $_local_service_file
+sed -i -e '/^(User|Group)=/d' $_local_service_file
 systemctl --user daemon-reload
 systemctl --user status
 loginctl enable-linger

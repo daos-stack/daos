@@ -834,15 +834,15 @@ class Systemctl(JobManager):
         if not result.passed:
             error = f"Error occurred running '{str(self)}' on {result.failed_hosts}"
             self.log.info(error)
-            command = get_journalctl_command(
+            _command = get_journalctl_command(
                 self.timestamps[command], units=self._systemctl.service.value,
                 run_user=self.job.run_user)
-            self.display_log_data(self.get_log_data(result.failed_hosts, command))
+            self.display_log_data(self.get_log_data(result.failed_hosts, _command))
             if command == "start":
                 self.log.debug("Testing running the %s command directly", self.job.command)
                 test_env = TestEnvironment()
-                debug_command = f"{self.job.command} -d start -o {test_env.agent_config}"
-                run_remote(self.log, result.failed_hosts, debug_command)
+                _command = f"{self.job.command} -d start -o {test_env.agent_config}"
+                run_remote(self.log, result.failed_hosts, _command)
             raise CommandFailure(error)
         return result
 
