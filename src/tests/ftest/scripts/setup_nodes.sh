@@ -110,6 +110,7 @@ sed -i '/^User=/d' $_local_service_file
 sed -i '/^Group=/d' $_local_service_file
 systemctl --user daemon-reload
 systemctl --user status
+loginctl enable-linger
 
 rm -rf "${TEST_TAG_DIR:?}/"
 mkdir -p "$TEST_TAG_DIR/"

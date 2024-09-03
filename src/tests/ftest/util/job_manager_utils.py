@@ -833,7 +833,6 @@ class Systemctl(JobManager):
         if not result.passed:
             error = f"Error occurred running '{str(self)}' on {result.failed_hosts}"
             self.log.info(error)
-            self.service_status()
             command = get_journalctl_command(
                 self.timestamps[command], units=self._systemctl.service.value,
                 run_user=self.job.run_user)
