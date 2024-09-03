@@ -90,3 +90,7 @@ jobs:
         uses: ./.github/actions/provision-cluster
         with:
           condition: true
+
+      - name: Scons Build
+        run: |
+          scons-3 install --build-deps=yes --config=force
