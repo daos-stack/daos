@@ -524,7 +524,6 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 
 		size = sizeof(entry);
 
-		/** check if dir is empty */
 		rc = daos_obj_open(dfs->coh, entry.oid, DAOS_OO_RO, &dir_oh, NULL);
 		if (rc) {
 			D_ERROR("daos_obj_open() Failed, " DF_RC "\n", DP_RC(rc));

@@ -361,10 +361,6 @@ open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, int flag
 	if (rc)
 		return rc;
 
-	D_ALLOC_PTR(obj);
-	if (obj == NULL)
-		return ENOMEM;
-
 	if (flags & O_CREAT) {
 		if (stbuf) {
 			entry.uid = stbuf->st_uid;
@@ -373,7 +369,13 @@ open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, int flag
 			entry.uid = geteuid();
 			entry.gid = getegid();
 		}
+	} else if (dfs->dcache) {
+		return dcache_find_insert_rel(dfs, parent, name, len, flags, _obj, NULL, stbuf);
 	}
+
+	D_ALLOC_PTR(obj);
+	if (obj == NULL)
+		return ENOMEM;
 
 	strncpy(obj->name, name, len + 1);
 	obj->dfs   = dfs;
@@ -455,24 +457,20 @@ dfs_open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, int 
 }
 
 int
-dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
+dup_int(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj, daos_size_t dcache_key_len)
 {
 	dfs_obj_t   *new_obj;
 	unsigned int daos_mode;
 	int          rc;
 
-	if (dfs == NULL || !dfs->mounted)
-		return EINVAL;
-	if (obj == NULL || _new_obj == NULL)
-		return EINVAL;
-	if (flags & O_APPEND)
-		return ENOTSUP;
-
 	daos_mode = get_daos_obj_mode(flags);
 	if (daos_mode == -1)
 		return EINVAL;
 
-	D_ALLOC_PTR(new_obj);
+	if (dcache_key_len == 0)
+		D_ALLOC_PTR(new_obj);
+	else
+		D_ALLOC(new_obj, sizeof(*new_obj) + dcache_key_len);
 	if (new_obj == NULL)
 		return ENOMEM;
 
@@ -520,6 +518,19 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
 err:
 	D_FREE(new_obj);
 	return rc;
+}
+
+int
+dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **new_obj)
+{
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+	if (obj == NULL || new_obj == NULL)
+		return EINVAL;
+	if (flags & O_APPEND)
+		return ENOTSUP;
+
+	return dup_int(dfs, obj, flags, new_obj, 0);
 }
 
 /* Structure of global buffer for dfs_obj */
@@ -703,12 +714,9 @@ out:
 }
 
 int
-dfs_release(dfs_obj_t *obj)
+release_int(dfs_obj_t *obj)
 {
 	int rc = 0;
-
-	if (obj == NULL)
-		return EINVAL;
 
 	switch (obj->mode & S_IFMT) {
 	case S_IFDIR:
@@ -730,6 +738,21 @@ dfs_release(dfs_obj_t *obj)
 	else
 		D_FREE(obj);
 	return daos_der2errno(rc);
+}
+int
+dfs_release(dfs_obj_t *obj)
+{
+	int rc = 0;
+
+	if (obj == NULL)
+		return EINVAL;
+
+	if (obj->dc) {
+		drec_decref(obj->dc, obj);
+	} else {
+		rc = release_int(obj);
+	}
+	return rc;
 }
 
 int
@@ -787,7 +810,18 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, struct stat *stbuf)
 		oh = parent->oh;
 	}
 
-	return entry_stat(dfs, dfs->th, oh, name, len, NULL, true, stbuf, NULL);
+	if (dfs->dcache) {
+		dfs_obj_t *obj;
+
+		rc = dcache_find_insert_rel(dfs, parent, name, len, O_NOFOLLOW, &obj, NULL, stbuf);
+		if (rc)
+			return rc;
+		drec_decref(dfs->dcache, obj);
+	} else {
+		rc = entry_stat(dfs, dfs->th, oh, name, len, NULL, true, stbuf, NULL);
+	}
+
+	return rc;
 }
 
 int
@@ -801,6 +835,12 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf)
 	if (obj == NULL)
 		return EINVAL;
 
+	/** if dfs cache is enabled, see if the stat is done already */
+	if (dfs->dcache && obj->dc_stated) {
+		memcpy(stbuf, &obj->dc_stbuf, sizeof(struct stat));
+		return 0;
+	}
+
 	/** Open parent object and fetch entry of obj from it */
 	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RO, &oh, NULL);
 	if (rc)
@@ -810,6 +850,10 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf)
 	if (rc)
 		D_GOTO(out, rc);
 
+	if (dfs->dcache) {
+		memcpy(&obj->dc_stbuf, stbuf, sizeof(struct stat));
+		obj->dc_stated = true;
+	}
 out:
 	daos_obj_close(oh, NULL);
 	return rc;
