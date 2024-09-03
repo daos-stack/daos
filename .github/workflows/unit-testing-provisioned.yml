@@ -93,4 +93,4 @@ jobs:
 
       - name: Scons Build
         run: |
-          scons-3 install --build-deps=yes --config=force
+          scons install --build-deps=yes --config=force
