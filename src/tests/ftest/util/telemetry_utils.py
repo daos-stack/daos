@@ -424,7 +424,7 @@ class TelemetryUtils():
         ENGINE_NVME_INTEL_VENDOR_METRICS
     ENGINE_MEM_USAGE_METRICS = [
         "engine_mem_vos_dtx_cmt_ent_48",
-        "engine_mem_vos_vos_obj_360",
+        "engine_mem_vos_vos_obj_384",
         "engine_mem_vos_vos_lru_size",
         "engine_mem_dtx_dtx_leader_handle_360"]
     ENGINE_MEM_TOTAL_USAGE_METRICS = [

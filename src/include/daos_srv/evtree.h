@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -70,6 +70,10 @@ struct evt_desc_cbs {
 					  struct evt_desc *desc,
 					  daos_size_t nob, void *args);
 	void		 *dc_bio_free_args;
+	/**
+	 * Argument for allocation.
+	 */
+	void		 *dc_alloc_arg;
 	/**
 	 * Availability check, it is for data tracked by DTX undo log.
 	 * It is optional, EVTree always treats data extent is available if

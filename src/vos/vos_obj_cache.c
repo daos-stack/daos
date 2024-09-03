@@ -246,11 +246,57 @@ out:
 }
 
 static inline void
+vos_obj_unpin(struct vos_object *obj)
+{
+	struct vos_pool		*pool = vos_obj2pool(obj);
+	struct umem_store	*store = vos_pool2store(pool);
+
+	if (obj->obj_pin_hdl != NULL) {
+		umem_cache_unpin(store, obj->obj_pin_hdl);
+		obj->obj_pin_hdl = NULL;
+	}
+}
+
+/* Support single evict-able bucket for this moment */
+static inline int
+vos_obj_pin(struct vos_object *obj)
+{
+	struct vos_pool		*pool = vos_obj2pool(obj);
+	struct umem_store	*store = vos_pool2store(pool);
+	struct umem_cache_range	 rg;
+
+	if (!vos_pool_is_p2(pool))
+		return 0;
+
+	if (!obj->obj_bkt_allot) {
+		if (!obj->obj_df) {
+			/* TODO: Revise all vos_obj_hold() callers to move it out of tx! */
+			/* obj->obj_bkt_ids[0] = umem_allot_mb_evictable(vos_pool2umm(pool), 0); */
+			obj->obj_bkt_ids[0] = UMEM_DEFAULT_MBKT_ID;
+		} else {
+			struct vos_obj_p2_df *p2 = (struct vos_obj_p2_df *)obj->obj_df;
+
+			obj->obj_bkt_ids[0] = p2->p2_bkt_ids[0];
+		}
+		obj->obj_bkt_allot = 1;
+	}
+
+	D_ASSERT(obj->obj_pin_hdl == NULL);
+	if (obj->obj_bkt_ids[0] == UMEM_DEFAULT_MBKT_ID)
+		return 0;
+
+	rg.cr_off = umem_get_mb_base_offset(vos_pool2umm(pool), obj->obj_bkt_ids[0]);
+	rg.cr_size = store->cache->ca_page_sz;
+
+	return umem_cache_pin(store, &rg, 1, false, &obj->obj_pin_hdl);
+}
+
+static inline void
 obj_release(struct daos_lru_cache *occ, struct vos_object *obj, bool evict)
 {
 
 	D_ASSERT(obj != NULL);
-	/* TODO: Unpin the object in md-on-ssd phase II */
+	vos_obj_unpin(obj);
 
 	if (obj == &obj_local) {
 		clean_object(obj);
@@ -301,6 +347,8 @@ cache_object(struct daos_lru_cache *occ, struct vos_object **objp)
 	obj_new->obj_sync_epoch = obj_local.obj_sync_epoch;
 	obj_new->obj_df = obj_local.obj_df;
 	obj_new->obj_zombie = obj_local.obj_zombie;
+	obj_new->obj_bkt_allot = obj_local.obj_bkt_allot;
+	obj_new->obj_pin_hdl = obj_local.obj_pin_hdl;
 	obj_local.obj_toh = DAOS_HDL_INVAL;
 	obj_local.obj_ih = DAOS_HDL_INVAL;
 
@@ -363,7 +411,9 @@ vos_obj_check_discard(struct vos_container *cont, daos_unit_oid_t oid, uint64_t 
 	if (rc)
 		return rc;
 
-	/* TODO: Pin object in memory */
+	rc = vos_obj_pin(obj);
+	if (rc)
+		return rc;
 
 	if (check_discard(obj, flags))
 		/* Update request will retry with this error */
@@ -453,6 +503,10 @@ vos_obj_hold(struct vos_container *cont, daos_unit_oid_t oid, daos_epoch_range_t
 	D_ASSERT(cont != NULL);
 	D_ASSERT(cont->vc_pool);
 	D_ASSERT(obj_p != NULL);
+
+	/* TODO: Revise all vos_obj_hold() callers to move it out of tx! */
+	/* D_ASSERT(!vos_pool_is_p2(cont->vc_pool) || umem_tx_none(vos_pool2umm(cont->vc_pool))); */
+
 	*obj_p = NULL;
 
 	occ = vos_obj_cache_get(cont->vc_pool->vp_sysdb);
@@ -507,8 +561,16 @@ vos_obj_hold(struct vos_container *cont, daos_unit_oid_t oid, daos_epoch_range_t
 		D_ASSERT(tmprc == 0); /* Non-zero only valid for akey */
 	}
 
-	/* TODO: Pin the object in memory in md-on-ssd phase II. Revise the 'obj_local' implementation
-	 * then, since this function could yield. */
+	/* For md-on-ssd phase2 pool, add object to cache before yield in vos_obj_pin() */
+	if (obj == &obj_local && vos_pool_is_p2(cont->vc_pool)) {
+		rc = cache_object(occ, &obj);
+		if (rc != 0)
+			goto failed;
+	}
+
+	rc = vos_obj_pin(obj);
+	if (rc)
+		goto failed;
 
 	/* It's done for DAOS_INTENT_UPDATE or DAOS_INTENT_PUNCH or DAOS_INTENT_KILL */
 	if (intent == DAOS_INTENT_UPDATE || intent == DAOS_INTENT_PUNCH ||

@@ -945,8 +945,12 @@ btr_root_alloc(struct btr_context *tcx)
 	struct btr_instance	*tins = &tcx->tc_tins;
 	struct btr_root		*root;
 
-	tins->ti_root_off = umem_zalloc(btr_umm(tcx),
-					sizeof(struct btr_root));
+	if (btr_ops(tcx)->to_node_alloc != NULL)
+		tins->ti_root_off = btr_ops(tcx)->to_node_alloc(&tcx->tc_tins,
+								sizeof(struct btr_root));
+	else
+		tins->ti_root_off = umem_zalloc(btr_umm(tcx), sizeof(struct btr_root));
+
 	if (UMOFF_IS_NULL(tins->ti_root_off))
 		return btr_umm(tcx)->umm_nospc_rc;
 
@@ -3884,6 +3888,7 @@ btr_tree_destroy(struct btr_context *tcx, void *args, bool *destroyed)
 		tcx->tc_tins.ti_root_off, tcx->tc_order);
 
 	root = tcx->tc_tins.ti_root;
+	tcx->tc_tins.ti_destroy = 1;
 	if (root && !UMOFF_IS_NULL(root->tr_node)) {
 		/* destroy the root and all descendants */
 		rc = btr_node_destroy(tcx, root->tr_node, args, &empty);
