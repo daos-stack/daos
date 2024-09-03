@@ -1686,7 +1686,8 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 			configB: configB().
 				WithLogFile(configA().LogFile),
 			expErr: FaultConfigDuplicateLogFile(1, 0),
-		}, "duplicate scm_mount": {
+		},
+		"duplicate scm_mount": {
 			configA: configA(),
 			configB: configB().
 				WithStorage(
