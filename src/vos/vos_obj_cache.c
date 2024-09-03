@@ -470,6 +470,25 @@ vos_obj_incarnate(struct vos_object *obj, daos_epoch_range_t *epr, daos_epoch_t 
 		return -DER_TX_RESTART;
 	}
 
+	if (obj->obj_bkt_ids[0] != UMEM_DEFAULT_MBKT_ID) {
+		struct vos_obj_p2_df *p2 = (struct vos_obj_p2_df *)obj->obj_df;
+
+		D_ASSERT(vos_pool_is_p2(vos_obj2pool(obj)));
+		D_ASSERT(obj->obj_bkt_allot);
+
+		if (p2->p2_bkt_ids[0] == UMEM_DEFAULT_MBKT_ID) {
+			p2->p2_bkt_ids[0] = obj->obj_bkt_ids[0];
+			rc = umem_tx_add_ptr(vos_cont2umm(cont), &p2->p2_bkt_ids[0],
+					     sizeof(p2->p2_bkt_ids[0]));
+			if (rc) {
+				DL_ERROR(rc, "Add bucket ID failed.");
+				return rc;
+			}
+		} else {
+			D_ASSERT(p2->p2_bkt_ids[0] == obj->obj_bkt_ids[0]);
+		}
+	}
+
 	/* It's done for DAOS_INTENT_PUNCH case */
 	if (intent == DAOS_INTENT_PUNCH)
 		return 0;

@@ -145,6 +145,7 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	daos_handle_t		 coh = { 0 };
 	int			 rc;
 	struct vos_pool		*pool;
+	uint32_t		*bkt_ids = NULL;
 
 	obj = umem_off2ptr(umm, rec->rec_off);
 
@@ -173,7 +174,14 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 	if (del_arg != NULL)
 		coh = vos_cont2hdl((struct vos_container *)del_arg->cont);
-	return gc_add_item(tins->ti_priv, coh, GC_OBJ, rec->rec_off, 0);
+
+	if (vos_pool_is_p2(pool)) {
+		struct vos_obj_p2_df *p2 = (struct vos_obj_p2_df *)obj;
+
+		bkt_ids = &p2->p2_bkt_ids[0];
+	}
+
+	return gc_add_item(tins->ti_priv, coh, GC_OBJ, rec->rec_off, bkt_ids);
 }
 
 static int
