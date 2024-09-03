@@ -111,6 +111,7 @@ sed -i '/^Group=/d' $_local_service_file
 systemctl --user daemon-reload
 systemctl --user status
 loginctl enable-linger
+sudo usermod -aG systemd-journal jenkins
 
 rm -rf "${TEST_TAG_DIR:?}/"
 mkdir -p "$TEST_TAG_DIR/"
