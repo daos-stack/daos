@@ -93,10 +93,12 @@ jobs:
 
       - name: Scons Build
         run: |
-          whoami
-          hostname
-          echo $NODELIST
-          pwd
-          echo $HOME
-          ls
+          echo "whoami: $(whoami)"
+          echo "hostname: $(hostname)"
+          echo "nodelist: $NODELIST"
+          echo "pwd: $(pwd)"
+          echo "HOME: $HOME"
+          echo "ls -ltr"
+          ls -ltr
+          
           # scons-3
