@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -47,7 +47,7 @@ class ConfigGenerateRun(TestWithServers):
         # path needs to be set in that case.
         ext_md_path = ""
         if use_tmpfs_scm:
-            ext_md_path = self.test_dir
+            ext_md_path = self.test_env.log_dir
 
         # Call dmg config generate. AP is always the first server host.
         server_host = self.hostlist_servers[0]

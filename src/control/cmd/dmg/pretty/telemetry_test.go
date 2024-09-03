@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,6 +13,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 )
 
 func TestPretty_PrintMetricsListResp(t *testing.T) {
@@ -30,16 +31,16 @@ func TestPretty_PrintMetricsListResp(t *testing.T) {
 		},
 		"empty list": {
 			resp: &control.MetricsListResp{
-				AvailableMetricSets: []*control.MetricSet{},
+				AvailableMetricSets: []*daos.MetricSet{},
 			},
 		},
 		"one item": {
 			resp: &control.MetricsListResp{
-				AvailableMetricSets: []*control.MetricSet{
+				AvailableMetricSets: []*daos.MetricSet{
 					{
 						Name:        "test_metric_1",
 						Description: "Test Metric",
-						Type:        control.MetricTypeGeneric,
+						Type:        daos.MetricTypeGeneric,
 					},
 				},
 			},
@@ -51,21 +52,21 @@ test_metric_1 Generic Test Metric
 		},
 		"multi item": {
 			resp: &control.MetricsListResp{
-				AvailableMetricSets: []*control.MetricSet{
+				AvailableMetricSets: []*daos.MetricSet{
 					{
 						Name:        "test_metric_1",
 						Description: "Test metric",
-						Type:        control.MetricTypeGauge,
+						Type:        daos.MetricTypeGauge,
 					},
 					{
 						Name:        "test_metric_2",
 						Description: "Another test metric",
-						Type:        control.MetricTypeSummary,
+						Type:        daos.MetricTypeSummary,
 					},
 					{
 						Name:        "funny_hats",
 						Description: "Hilarious headwear",
-						Type:        control.MetricTypeCounter,
+						Type:        daos.MetricTypeCounter,
 					},
 				},
 			},
@@ -79,7 +80,7 @@ funny_hats    Counter Hilarious headwear
 		},
 		"write failure": {
 			resp: &control.MetricsListResp{
-				AvailableMetricSets: []*control.MetricSet{
+				AvailableMetricSets: []*daos.MetricSet{
 					{
 						Name:        "test_metric_1",
 						Description: "Test Metric",
@@ -117,12 +118,12 @@ func TestPretty_PrintMetricsQueryResp(t *testing.T) {
 		},
 		"empty list": {
 			resp: &control.MetricsQueryResp{
-				MetricSets: []*control.MetricSet{},
+				MetricSets: []*daos.MetricSet{},
 			},
 		},
 		"set without values": {
 			resp: &control.MetricsQueryResp{
-				MetricSets: []*control.MetricSet{
+				MetricSets: []*daos.MetricSet{
 					{
 						Name:        "test_metric_1",
 						Description: "Test Metric",
@@ -138,26 +139,26 @@ func TestPretty_PrintMetricsQueryResp(t *testing.T) {
 		},
 		"untyped": {
 			resp: &control.MetricsQueryResp{
-				MetricSets: []*control.MetricSet{
+				MetricSets: []*daos.MetricSet{
 					{
 						Name:        "my_metric",
 						Description: "A test metric",
-						Type:        control.MetricTypeGeneric,
-						Metrics: []control.Metric{
-							&control.SimpleMetric{
+						Type:        daos.MetricTypeGeneric,
+						Metrics: []daos.Metric{
+							&daos.SimpleMetric{
 								Labels: map[string]string{
 									"foo": "bar",
 								},
 								Value: 2.25,
 							},
-							&control.SimpleMetric{
+							&daos.SimpleMetric{
 								Labels: map[string]string{
 									"ring":   "one",
 									"bearer": "frodo",
 								},
 								Value: 5,
 							},
-							&control.SimpleMetric{
+							&daos.SimpleMetric{
 								Labels: map[string]string{},
 								Value:  125,
 							},
@@ -178,26 +179,26 @@ func TestPretty_PrintMetricsQueryResp(t *testing.T) {
 		},
 		"counter type": {
 			resp: &control.MetricsQueryResp{
-				MetricSets: []*control.MetricSet{
+				MetricSets: []*daos.MetricSet{
 					{
 						Name:        "my_counter",
 						Description: "A test metric",
-						Type:        control.MetricTypeCounter,
-						Metrics: []control.Metric{
-							&control.SimpleMetric{
+						Type:        daos.MetricTypeCounter,
+						Metrics: []daos.Metric{
+							&daos.SimpleMetric{
 								Labels: map[string]string{
 									"foo": "bar",
 								},
 								Value: 2.25,
 							},
-							&control.SimpleMetric{
+							&daos.SimpleMetric{
 								Labels: map[string]string{
 									"ring":   "one",
 									"bearer": "frodo",
 								},
 								Value: 5,
 							},
-							&control.SimpleMetric{
+							&daos.SimpleMetric{
 								Labels: map[string]string{},
 								Value:  125,
 							},
@@ -218,26 +219,26 @@ func TestPretty_PrintMetricsQueryResp(t *testing.T) {
 		},
 		"gauge type": {
 			resp: &control.MetricsQueryResp{
-				MetricSets: []*control.MetricSet{
+				MetricSets: []*daos.MetricSet{
 					{
 						Name:        "my_gauge",
 						Description: "A test metric",
-						Type:        control.MetricTypeGauge,
-						Metrics: []control.Metric{
-							&control.SimpleMetric{
+						Type:        daos.MetricTypeGauge,
+						Metrics: []daos.Metric{
+							&daos.SimpleMetric{
 								Labels: map[string]string{
 									"foo": "bar",
 								},
 								Value: 2.25,
 							},
-							&control.SimpleMetric{
+							&daos.SimpleMetric{
 								Labels: map[string]string{
 									"ring":   "one",
 									"bearer": "frodo",
 								},
 								Value: 5,
 							},
-							&control.SimpleMetric{
+							&daos.SimpleMetric{
 								Labels: map[string]string{},
 								Value:  125,
 							},
@@ -258,14 +259,14 @@ func TestPretty_PrintMetricsQueryResp(t *testing.T) {
 		},
 		"summary type": {
 			resp: &control.MetricsQueryResp{
-				MetricSets: []*control.MetricSet{
+				MetricSets: []*daos.MetricSet{
 					{
 						Name:        "my_summary",
 						Description: "A test metric",
-						Type:        control.MetricTypeSummary,
-						Metrics: []control.Metric{
-							&control.SummaryMetric{
-								Labels: control.LabelMap{
+						Type:        daos.MetricTypeSummary,
+						Metrics: []daos.Metric{
+							&daos.SummaryMetric{
+								Labels: daos.MetricLabelMap{
 									"foo": "bar",
 								},
 								SampleCount: 55,
@@ -275,8 +276,8 @@ func TestPretty_PrintMetricsQueryResp(t *testing.T) {
 									0.5:  33.333,
 								},
 							},
-							&control.SummaryMetric{
-								Labels:      control.LabelMap{},
+							&daos.SummaryMetric{
+								Labels:      daos.MetricLabelMap{},
 								SampleCount: 102,
 								SampleSum:   19.84,
 								Quantiles: map[float64]float64{
@@ -304,19 +305,19 @@ func TestPretty_PrintMetricsQueryResp(t *testing.T) {
 		},
 		"histogram type": {
 			resp: &control.MetricsQueryResp{
-				MetricSets: []*control.MetricSet{
+				MetricSets: []*daos.MetricSet{
 					{
 						Name:        "my_histogram",
 						Description: "A test metric",
-						Type:        control.MetricTypeHistogram,
-						Metrics: []control.Metric{
-							&control.HistogramMetric{
-								Labels: control.LabelMap{
+						Type:        daos.MetricTypeHistogram,
+						Metrics: []daos.Metric{
+							&daos.HistogramMetric{
+								Labels: daos.MetricLabelMap{
 									"foo": "bar",
 								},
 								SampleCount: 55,
 								SampleSum:   6094.27,
-								Buckets: []*control.MetricBucket{
+								Buckets: []*daos.MetricBucket{
 									{
 										UpperBound:      500,
 										CumulativeCount: 2,
@@ -327,8 +328,8 @@ func TestPretty_PrintMetricsQueryResp(t *testing.T) {
 									},
 								},
 							},
-							&control.HistogramMetric{
-								Labels:      control.LabelMap{},
+							&daos.HistogramMetric{
+								Labels:      daos.MetricLabelMap{},
 								SampleCount: 22,
 								SampleSum:   102,
 							},
@@ -354,26 +355,26 @@ func TestPretty_PrintMetricsQueryResp(t *testing.T) {
 		},
 		"multiple sets": {
 			resp: &control.MetricsQueryResp{
-				MetricSets: []*control.MetricSet{
+				MetricSets: []*daos.MetricSet{
 					{
 						Name:        "my_counter",
 						Description: "A test metric",
-						Type:        control.MetricTypeCounter,
-						Metrics: []control.Metric{
-							&control.SimpleMetric{
+						Type:        daos.MetricTypeCounter,
+						Metrics: []daos.Metric{
+							&daos.SimpleMetric{
 								Labels: map[string]string{
 									"foo": "bar",
 								},
 								Value: 2.25,
 							},
-							&control.SimpleMetric{
+							&daos.SimpleMetric{
 								Labels: map[string]string{
 									"ring":   "one",
 									"bearer": "frodo",
 								},
 								Value: 5,
 							},
-							&control.SimpleMetric{
+							&daos.SimpleMetric{
 								Labels: map[string]string{},
 								Value:  125,
 							},
@@ -382,9 +383,9 @@ func TestPretty_PrintMetricsQueryResp(t *testing.T) {
 					{
 						Name:        "my_summary",
 						Description: "Another test metric",
-						Type:        control.MetricTypeSummary,
-						Metrics: []control.Metric{
-							&control.SummaryMetric{
+						Type:        daos.MetricTypeSummary,
+						Metrics: []daos.Metric{
+							&daos.SummaryMetric{
 								SampleCount: 55,
 								SampleSum:   6094.27,
 								Quantiles: map[float64]float64{
@@ -418,7 +419,7 @@ func TestPretty_PrintMetricsQueryResp(t *testing.T) {
 		},
 		"write failure": {
 			resp: &control.MetricsQueryResp{
-				MetricSets: []*control.MetricSet{
+				MetricSets: []*daos.MetricSet{
 					{
 						Name:        "test_metric_1",
 						Description: "Test Metric",
