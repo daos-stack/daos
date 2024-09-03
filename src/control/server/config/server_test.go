@@ -1671,7 +1671,22 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 		expErr  error
 		expLog  string
 	}{
-		"duplicate scm_mount": {
+		"successful validation": {
+			configA: configA(),
+			configB: configB(),
+		},
+		"duplicate fabric config": {
+			configA: configA(),
+			configB: configB().
+				WithFabricInterface(configA().Fabric.Interface),
+			expErr: FaultConfigDuplicateFabric(1, 0),
+		},
+		"duplicate log_file": {
+			configA: configA(),
+			configB: configB().
+				WithLogFile(configA().LogFile),
+			expErr: FaultConfigDuplicateLogFile(1, 0),
+		}, "duplicate scm_mount": {
 			configA: configA(),
 			configB: configB().
 				WithStorage(

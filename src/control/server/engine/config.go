@@ -30,7 +30,7 @@ const (
 	envLogDbgStreams = "DD_MASK"
 	envLogSubsystems = "DD_SUBSYS"
 
-	MIN_ABT_THREAD_STACKSIZE_FOR_DCPM = 18432
+	minABTThreadStackSizeDCPM = 18432
 )
 
 // FabricConfig encapsulates networking fabric configuration.
@@ -352,43 +352,41 @@ func (c *Config) Validate() error {
 // the actual configuration of the storage class.
 func (c *Config) ValidateAndAdjustPMDKEnvVar() error {
 	if len(c.Storage.Tiers) > 0 {
-		pmemobj_conf_str, pmemobj_conf_err := c.GetEnvVar("PMEMOBJ_CONF")
+		pmemobjConfStr, pmemobjConfErr := c.GetEnvVar("PMEMOBJ_CONF")
 		if c.Storage.Tiers[0].Class == storage.ClassDcpm {
 			// Ensure 18KiB ABT stack size for an engine with DCPM storage class.
-			stacksize_str, err := c.GetEnvVar("ABT_THREAD_STACKSIZE")
+			stackSizeStr, err := c.GetEnvVar("ABT_THREAD_STACKSIZE")
 			if err != nil {
 				fmt.Printf("env_var ABT_THREAD_STACKSIZE set to %d for 'dcpm' storage class\n",
-					MIN_ABT_THREAD_STACKSIZE_FOR_DCPM)
+					minABTThreadStackSizeDCPM)
 				c.EnvVars = append(c.EnvVars, fmt.Sprintf("ABT_THREAD_STACKSIZE=%d",
-					MIN_ABT_THREAD_STACKSIZE_FOR_DCPM))
+					minABTThreadStackSizeDCPM))
 			} else {
-				stacksize_value, err := strconv.Atoi(stacksize_str)
+				stackSizeValue, err := strconv.Atoi(stackSizeStr)
 				if err == nil {
-					if stacksize_value < MIN_ABT_THREAD_STACKSIZE_FOR_DCPM {
-						return errors.New(fmt.Sprintf("env_var ABT_THREAD_STACKSIZE should be >= %d for 'dcpm' storage class instead of (%d)",
-							MIN_ABT_THREAD_STACKSIZE_FOR_DCPM, stacksize_value))
+					if stackSizeValue < minABTThreadStackSizeDCPM {
+						return errors.Errorf("env_var ABT_THREAD_STACKSIZE should be >= %d for 'dcpm' storage class instead of (%s)",
+							minABTThreadStackSizeDCPM, stackSizeStr)
 					}
 				} else {
-					return errors.New(fmt.Sprintf("env_var ABT_THREAD_STACKSIZE has invalid value: %s",
-						stacksize_str))
+					return errors.Errorf("env_var ABT_THREAD_STACKSIZE has invalid value: %s",
+						stackSizeStr)
 
 				}
 			}
 			// Ensure default handling of shutdown state (SDS) for DCPM storage class.
-			if pmemobj_conf_err == nil && strings.Contains(pmemobj_conf_str, "sds.at_create") {
+			if pmemobjConfErr == nil && strings.Contains(pmemobjConfStr, "sds.at_create") {
 				return errors.New("env_var PMEMOBJ_CONF should NOT be set to sds.at_create=? for 'dcpm' storage class")
 			}
 		} else {
 			// Disable shutdown state (SDS) (part of RAS) for RAM-based simulated SCM.
 			// RAM doesn't support this feature and trying to use
 			// it will fail the create/open operations.
-			if pmemobj_conf_err != nil {
+			if pmemobjConfErr != nil {
 				fmt.Printf("env_var PMEMOBJ_CONF set to sds.at_create=0 for non-'dcpm' storage class\n")
 				c.EnvVars = append(c.EnvVars, "PMEMOBJ_CONF=sds.at_create=0")
-			} else if strings.Contains(pmemobj_conf_str, "sds.at_create") {
-				if strings.Contains(pmemobj_conf_str, "sds.at_create=1") {
-					return errors.New("env_var PMEMOBJ_CONF should be set to sds.at_create=0 for non-'dcpm' storage class")
-				}
+			} else if strings.Contains(pmemobjConfStr, "sds.at_create=1") {
+				return errors.New("env_var PMEMOBJ_CONF should be set to sds.at_create=0 for non-'dcpm' storage class")
 			}
 		}
 	}
@@ -740,28 +738,22 @@ func (c *Config) WithStorageIndex(i uint32) *Config {
 	return c
 }
 
-// WithOutEnvVar removes given environment variable form config
-func (c *Config) WithOutEnvVar(env_var string) *Config {
-
-	for i, v := range c.EnvVars {
-		if strings.Contains(v, env_var) {
-			c.EnvVars = append(c.EnvVars[:i], c.EnvVars[i+1:]...)
-			break
-		}
-	}
-	return c
-}
-
 // WithProperEnvVarForPMDK sets PMDK related environment variables
 // according to actual DCPMem configuration.
 func (c *Config) WithProperEnvVarForPMDK() *Config {
 	if len(c.Storage.Tiers) > 0 {
 		if c.Storage.Tiers[0].Class == storage.ClassDcpm {
-			return c.WithEnvVarAbtThreadStackSize(MIN_ABT_THREAD_STACKSIZE_FOR_DCPM).
-				WithOutEnvVar("PMEMOBJ_CONF=sds.at_create=")
+			envVars, err := common.DeleteKeyValue(c.EnvVars, "PMEMOBJ_CONF")
+			if err == nil {
+				c.EnvVars = envVars
+			}
+			return c.WithEnvVarAbtThreadStackSize(minABTThreadStackSizeDCPM)
 		} else {
-			return c.WithEnvVarPMemObjSdsAtCreate(0).
-				WithOutEnvVar("ABT_THREAD_STACKSIZE=")
+			envVars, err := common.DeleteKeyValue(c.EnvVars, "ABT_THREAD_STACKSIZE")
+			if err == nil {
+				c.EnvVars = envVars
+			}
+			return c.WithEnvVarPMemObjSdsAtCreate(0)
 		}
 	}
 	return c

@@ -1133,15 +1133,15 @@ func TestConfig_ValidateAndAdjustPMDKEnvVar(t *testing.T) {
 			cfg: validConfig().WithStorage(
 				storage.NewTierConfig().
 					WithStorageClass("dcpm"),
-			).WithEnvVarAbtThreadStackSize(MIN_ABT_THREAD_STACKSIZE_FOR_DCPM + 1),
+			).WithEnvVarAbtThreadStackSize(minABTThreadStackSizeDCPM + 1),
 		},
 		"config for DCPM with stack size too small should fail": {
 			cfg: validConfig().WithStorage(
 				storage.NewTierConfig().
 					WithStorageClass("dcpm"),
-			).WithEnvVarAbtThreadStackSize(MIN_ABT_THREAD_STACKSIZE_FOR_DCPM - 1),
+			).WithEnvVarAbtThreadStackSize(minABTThreadStackSizeDCPM - 1),
 			expErr: errors.New(fmt.Sprintf("env_var ABT_THREAD_STACKSIZE should be >= %d for 'dcpm' storage class",
-				MIN_ABT_THREAD_STACKSIZE_FOR_DCPM)),
+				minABTThreadStackSizeDCPM)),
 		},
 		"config for DCPM with invalid ABT_THREAD_STACKSIZE value should fail": {
 			cfg: validConfig().WithStorage(
@@ -1189,10 +1189,10 @@ func TestConfig_ValidateAndAdjustPMDKEnvVar(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			test.CmpErr(t, tc.expErr, tc.cfg.ValidateAndAdjustPMDKEnvVar())
 			if len(tc.expABT_ThreadStackSize) > 0 {
-				var stacksize_str string
-				stacksize_str, err := tc.cfg.GetEnvVar("ABT_THREAD_STACKSIZE")
+				var stackSizeStr string
+				stackSizeStr, err := tc.cfg.GetEnvVar("ABT_THREAD_STACKSIZE")
 				test.AssertTrue(t, err == nil, "Missing env var ABT_THREAD_STACKSIZE")
-				test.AssertEqual(t, tc.expABT_ThreadStackSize, stacksize_str,
+				test.AssertEqual(t, tc.expABT_ThreadStackSize, stackSizeStr,
 					"Invalid ABT_THREAD_STACKSIZE")
 			}
 			if len(tc.expSds_at_create) > 0 {

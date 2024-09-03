@@ -593,7 +593,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 
 %changelog
 * Tue Sep 03 2024 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.7.100-6
-- Add support for PMDK packages with NDCTL enabled in case engin is used with SCM
+- Add support for PMDK packages with NDCTL enabled in case engine is used with SCM
   * Increase default ULT stack size to 18KiB if engine handles 'dcpm' storage class
   * Disable NDCTL routines for 'ram' storage class
 
