@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.7.100
-Release:       5%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -592,6 +592,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Sep 03 2024 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.7.100-6
+- Add support for PMDK packages with NDCTL enabled in case engin is used with SCM
+  * Increase default ULT stack size to 18KiB if engine handles 'dcpm' storage class
+  * Disable NDCTL routines for 'ram' storage class
+
 * Thu Aug 15 2024 Michael MacDonald <mjmac@google.com> 2.7.100-5
 - Add libdaos_self_test.so to client RPM
 
