@@ -81,6 +81,9 @@ if [ -d "${logs_prefix}/ftest/avocado/job-results" ]; then
     rm -rf "${logs_prefix}/ftest/avocado/job-results"
 fi
 
+# Log contents of user daos_agent service file
+clush -w "${TEST_NODES}" -B -S "cat ~/.config/systemd/user/daos_agent.service"
+
 # now run it!
 # shellcheck disable=SC2086
 export WITH_VALGRIND

@@ -837,7 +837,7 @@ class Systemctl(JobManager):
             command = get_journalctl_command(
                 self.timestamps[command], units=self._systemctl.service.value,
                 run_user=self.job.run_user)
-            self.display_log_data(self.get_log_data(self._hosts, command))
+            self.display_log_data(self.get_log_data(result.failed_hosts, command))
             if command == "start":
                 self.log.debug("Testing running the %s command directly", self.job.command)
                 test_env = TestEnvironment()

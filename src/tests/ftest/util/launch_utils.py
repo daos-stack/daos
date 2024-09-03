@@ -135,6 +135,8 @@ def setup_systemctl(logger, servers, clients, test_env):
             logger, clients, "daos_agent.service", test_env.agent_user,
             os.path.join(test_env.daos_prefix, "bin", "daos_agent"), test_env.agent_config,
             test_env.systemd_path, test_env.systemd_library_path))
+    for config, details in systemctl_configs.items():
+        run_remote(logger, details["hosts"], f"cat {config}")
     return systemctl_configs
 
 
