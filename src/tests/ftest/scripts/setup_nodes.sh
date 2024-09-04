@@ -114,6 +114,7 @@ loginctl enable-linger
 # allow the jenkins user to view journalctl entries for systemctl services it starts
 sudo usermod -aG systemd-journal jenkins
 sudo sed -i 's/.*Storage=.*/Storage=persistent/g' /etc/systemd/journald.conf
+sudo systemctl restart systemd-journald
 
 rm -rf "${TEST_TAG_DIR:?}/"
 mkdir -p "$TEST_TAG_DIR/"
