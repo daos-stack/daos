@@ -1127,14 +1127,14 @@ func TestConfig_ValidateAndAdjustPMDKEnvVar(t *testing.T) {
 				storage.NewTierConfig().
 					WithStorageClass("dcpm"),
 			).WithProperEnvVarForPMDK(),
-			expABTthreadStackSize: "18432",
+			expABTthreadStackSize: "20480",
 		},
 		"config for DCPM should should be updated": {
 			cfg: validConfig().WithStorage(
 				storage.NewTierConfig().
 					WithStorageClass("dcpm"),
 			).WithoutEnvVarForPMDK(),
-			expABTthreadStackSize: "18432",
+			expABTthreadStackSize: "20480",
 		},
 		"config for DCPM with stack size big enough should not fail": {
 			cfg: validConfig().WithStorage(

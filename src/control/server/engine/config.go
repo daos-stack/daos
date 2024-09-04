@@ -30,7 +30,7 @@ const (
 	envLogDbgStreams = "DD_MASK"
 	envLogSubsystems = "DD_SUBSYS"
 
-	minABTThreadStackSizeDCPM = 18432
+	minABTThreadStackSizeDCPM = 20480
 )
 
 // FabricConfig encapsulates networking fabric configuration.
