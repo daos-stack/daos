@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -153,10 +153,10 @@ func TestMgmt_ContSetOwner(t *testing.T) {
 	validContSetOwnerReq := func() *mgmtpb.ContSetOwnerReq {
 		return &mgmtpb.ContSetOwnerReq{
 			Sys:        build.DefaultSystemName,
-			ContUUID:   "contUUID",
-			PoolUUID:   mockUUID,
-			Owneruser:  "user@",
-			Ownergroup: "group@",
+			ContId:     "contUUID",
+			PoolId:     mockUUID,
+			OwnerUser:  "user@",
+			OwnerGroup: "group@",
 		}
 	}
 
@@ -164,7 +164,7 @@ func TestMgmt_ContSetOwner(t *testing.T) {
 		createMS  func(*testing.T, logging.Logger) *mgmtSvc
 		setupDrpc func(*testing.T, *mgmtSvc)
 		req       *mgmtpb.ContSetOwnerReq
-		expResp   *mgmtpb.ContSetOwnerResp
+		expResp   *mgmtpb.DaosResp
 		expErr    error
 	}{
 		"nil req": {
@@ -173,10 +173,10 @@ func TestMgmt_ContSetOwner(t *testing.T) {
 		"pool svc not found": {
 			req: &mgmtpb.ContSetOwnerReq{
 				Sys:        build.DefaultSystemName,
-				ContUUID:   "contUUID",
-				PoolUUID:   "fake",
-				Owneruser:  "user@",
-				Ownergroup: "group@",
+				ContId:     "contUUID",
+				PoolId:     "fake",
+				OwnerUser:  "user@",
+				OwnerGroup: "group@",
 			},
 			expErr: errors.New("unable to find pool"),
 		},
@@ -207,10 +207,10 @@ func TestMgmt_ContSetOwner(t *testing.T) {
 		},
 		"success": {
 			setupDrpc: func(t *testing.T, svc *mgmtSvc) {
-				setupSvcDrpcClient(svc, 0, getMockDrpcClient(&mgmtpb.ContSetOwnerResp{}, nil))
+				setupSvcDrpcClient(svc, 0, getMockDrpcClient(&mgmtpb.DaosResp{}, nil))
 			},
 			req: validContSetOwnerReq(),
-			expResp: &mgmtpb.ContSetOwnerResp{
+			expResp: &mgmtpb.DaosResp{
 				Status: 0,
 			},
 		},

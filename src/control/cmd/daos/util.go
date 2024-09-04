@@ -275,36 +275,30 @@ type daosCaller interface {
 	initDAOS() (func(), error)
 }
 
+type sysCmd struct {
+	SysName string
+}
+
+func (sc *sysCmd) setSysName(sysName string) {
+	sc.SysName = sysName
+}
+
 type daosCmd struct {
 	cmdutil.NoArgsCmd
 	cmdutil.JSONOutputCmd
 	cmdutil.LogCmd
+	sysCmd
 	apiProvider *api.Provider
-	SysName     string
-}
-
-func (dc *daosCmd) setSysName(sysName string) {
-	dc.SysName = sysName
 }
 
 func (dc *daosCmd) initDAOS() (func(), error) {
-	provider, err := api.NewProvider(dc.Logger)
+	provider, err := api.NewProvider(dc.Logger, false)
 	if err != nil {
 		return func() {}, err
 	}
 	dc.apiProvider = provider
 
 	return provider.Cleanup, nil
-}
-
-func initDaosDebug() (func(), error) {
-	if rc := C.daos_debug_init(nil); rc != 0 {
-		return nil, errors.Wrap(daosError(rc), "daos_debug_init() failed")
-	}
-
-	return func() {
-		C.daos_debug_fini()
-	}, nil
 }
 
 func resolveDunsPath(path string, ap *C.struct_cmd_args_s) error {
