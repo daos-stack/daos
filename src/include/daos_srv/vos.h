@@ -20,6 +20,38 @@
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/vos_types.h>
 
+#define VOS_POOL_COMPAT_FLAG_IMMUTABLE (1ULL << 0)
+#define VOS_POOL_COMPAT_FLAG_SKIP_LOAD (1ULL << 1)
+
+#define VOS_POOL_COMPAT_FLAG_SUPP      (VOS_POOL_COMPAT_FLAG_IMMUTABLE | VOS_POOL_COMPAT_FLAG_SKIP_LOAD)
+
+#define VOS_POOL_INCOMPAT_FLAG_SUPP    0
+
+#define VOS_MAX_FLAG_NAME_LEN          32
+
+static inline uint64_t
+vos_pool_name2flag(const char *name, bool *compat_feature)
+{
+	*compat_feature = false;
+
+	if (strncmp(name, "immutable", VOS_MAX_FLAG_NAME_LEN) == 0) {
+		*compat_feature = true;
+		return VOS_POOL_COMPAT_FLAG_IMMUTABLE;
+	}
+	if (strncmp(name, "skip_load", VOS_MAX_FLAG_NAME_LEN) == 0) {
+		*compat_feature = true;
+		return VOS_POOL_COMPAT_FLAG_SKIP_LOAD;
+	}
+
+	return 0;
+}
+
+bool
+vos_pool_feature_skip_load(daos_handle_t poh);
+
+bool
+vos_pool_feature_immutable(daos_handle_t poh);
+
 /** Initialize the vos reserve/cancel related fields in dtx handle
  *
  * \param dth	[IN]	The dtx handle

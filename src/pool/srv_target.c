@@ -491,6 +491,13 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 		goto done;
 	}
 
+	if (!ds_pool_skip_for_check(child->spc_pool) &&
+	    vos_pool_feature_skip_load(child->spc_hdl)) {
+		D_INFO(DF_UUID ": skipped to start\n", DP_UUID(child->spc_uuid));
+		rc = -DER_SHUTDOWN;
+		goto out_close;
+	}
+
 	if (!ds_pool_skip_for_check(child->spc_pool)) {
 		rc = start_gc_ult(child);
 		if (rc != 0)
