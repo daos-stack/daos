@@ -13,7 +13,6 @@ from ClusterShell.NodeSet import NodeSet
 from command_utils import ExecutableCommand, SystemctlCommand
 from command_utils_base import BasicParameter, EnvironmentVariables, FormattedParameter
 from env_modules import load_mpi
-from environment_utils import TestEnvironment
 from exception_utils import CommandFailure, MPILoadError
 from general_utils import (get_job_manager_class, get_journalctl_command, journalctl_time, pcmd,
                            run_pcmd)
@@ -838,11 +837,6 @@ class Systemctl(JobManager):
                 self.timestamps[command], units=self._systemctl.service.value,
                 run_user=self.job.run_user)
             self.display_log_data(self.get_log_data(result.failed_hosts, _command))
-            if command == "start":
-                self.log.debug("Testing running the %s command directly", self.job.command)
-                test_env = TestEnvironment()
-                _command = f"{self.job.command} -d start -o {test_env.agent_config}"
-                run_remote(self.log, result.failed_hosts, _command)
             raise CommandFailure(error)
         return result
 

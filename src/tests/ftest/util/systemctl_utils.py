@@ -201,7 +201,7 @@ def create_override_config(logger, hosts, service, user, service_command, servic
     override_contents = [
         "[Service]",
         "ExecStart=",
-        f"ExecStart={service_command} start -o {service_config}"
+        f"ExecStart={service_command} -d start -o {service_config}"
     ]
     if path:
         override_contents.append(f'Environment="PATH={path}"')
