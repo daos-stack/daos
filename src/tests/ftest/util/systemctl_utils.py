@@ -198,10 +198,14 @@ def create_override_config(logger, hosts, service, user, service_command, servic
         raise SystemctlFailure("Error creating the systemctl override config directory")
 
     # Create the override file - empty ExecStart clears the existing setting
+    if service == "daos_agent.service":
+        exec_start = f"{service_command} -d start -o {service_config}"
+    else:
+        exec_start = f"{service_command} start -o {service_config}"
     override_contents = [
         "[Service]",
         "ExecStart=",
-        f"ExecStart={service_command} -d start -o {service_config}"
+        f"ExecStart={exec_start}"
     ]
     if path:
         override_contents.append(f'Environment="PATH={path}"')
