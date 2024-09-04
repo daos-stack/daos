@@ -12,12 +12,8 @@ server_config:
       env_vars:
         - DAOS_TARGET_OVERSUBSCRIBE=1
       nr_xs_helpers: 0
-      storage:
-        0:
-          class: ram
-          scm_mount: /mnt/daos
+      storage: auto
       targets: 16
-  system_ram_reserved: 1
 
 pool:
   size: 10GB

@@ -39,7 +39,7 @@ class IoctlPoolHandles(TestWithTelemetry):
             (https://github.com/daos-stack/daos/pull/9941) to run and pass, but now passes w/o it.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=vm
+        :avocado: tags=hw,medium
         :avocado: tags=dfuse
         :avocado: tags=IoctlPoolHandles,test_ioctl_pool_handles
         """
