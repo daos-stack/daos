@@ -4760,9 +4760,20 @@ obj_comp_cb(tse_task_t *task, void *data)
 						obj_auxi->tx_uncertain = 1;
 					else
 						obj_auxi->nvme_io_err = 1;
-				} else if (task->dt_result != -DER_NVME_IO) {
-					/* Don't retry update for CSUM & UNCERTAIN errors */
-					obj_auxi->io_retry = 0;
+				} else {
+					if (task->dt_result == -DER_CSUM) {
+						/** Retry a few times on checksum error on update */
+						if (!obj_auxi->csum_retry &&
+						    obj_auxi->csum_retry_count++ < MAX_CSUM_UPDATE_RETRY) {
+							obj_auxi->csum_retry = 1;
+							obj_auxi->csum_retry_count++;
+						} else {
+							obj_auxi->io_retry = 0;
+						}
+					} else if (task->dt_result != -DER_NVME_IO) {
+						/* Don't retry update for UNCERTAIN errors */
+						obj_auxi->io_retry = 0;
+					}
 				}
 			} else {
 				obj_auxi->io_retry = 0;

@@ -474,9 +474,10 @@ struct obj_auxi_args {
 					 rebuilding:1,
 					 for_migrate:1;
 	/* request flags. currently only: ORF_RESEND */
-	uint32_t			 flags;
 	uint32_t			 specified_shard;
+	uint16_t			 flags;
 	uint16_t			 retry_cnt;
+	uint16_t			 csm_retry_cnt;;
 	uint16_t			 inprogress_cnt;
 	struct obj_req_tgts		 req_tgts;
 	d_sg_list_t			*sgls_dup;
