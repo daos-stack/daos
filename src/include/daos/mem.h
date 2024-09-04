@@ -477,6 +477,9 @@ void  umempobj_close(struct umem_pool *pool);
 void *umempobj_get_rootptr(struct umem_pool *pool, size_t size);
 int   umempobj_get_heapusage(struct umem_pool *pool,
 			     daos_size_t *cur_allocated);
+int
+      umempobj_get_mbusage(struct umem_pool *pool, uint32_t mb_id, daos_size_t *cur_allocated,
+			   daos_size_t *maxsz);
 void  umempobj_log_fraginfo(struct umem_pool *pool);
 
 /** Number of flag bits to reserve for encoding extra information in

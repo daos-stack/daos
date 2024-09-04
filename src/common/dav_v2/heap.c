@@ -397,6 +397,13 @@ heap_mbrt_setmb_usage(struct palloc_heap *heap, uint32_t zone_id, uint64_t usage
 	struct mbrt *mb = heap->rt->evictable_mbs[zone_id];
 
 	D_ASSERT(zone_id < heap->rt->nzones);
+	if (zone_id == 0) {
+		heap->rt->default_mb->space_usage = usage;
+		return;
+	}
+	if (mb == (struct mbrt *)(-1UL))
+		return;
+
 	mb->space_usage = usage;
 
 	if ((heap->rt->active_evictable_mb == mb) || (mb->qptr))
@@ -418,13 +425,40 @@ heap_mbrt_setmb_usage(struct palloc_heap *heap, uint32_t zone_id, uint64_t usage
 	mb->prev_usage = mb->space_usage;
 }
 
+int
+heap_mbrt_getmb_usage(struct palloc_heap *heap, uint32_t zone_id, uint64_t *allotted,
+		      uint64_t *maxsz)
+{
+	struct mbrt *mb;
+
+	if (zone_id == 0) {
+		*maxsz    = heap->rt->nzones_ne * ZONE_MAX_SIZE;
+		*allotted = heap->rt->default_mb->space_usage;
+	} else {
+		if (zone_id >= heap->rt->nzones) {
+			errno = EINVAL;
+			return -1;
+		}
+		mb = heap->rt->evictable_mbs[zone_id];
+		if (!mb || (mb == (struct mbrt *)(-1UL))) {
+			errno = EINVAL;
+			return -1;
+		}
+		*maxsz    = ZONE_MAX_SIZE;
+		*allotted = mb->space_usage;
+	}
+	return 0;
+}
+
 void
 heap_mbrt_incrmb_usage(struct palloc_heap *heap, uint32_t zone_id, int size)
 {
 	struct mbrt *mb = heap->rt->evictable_mbs[zone_id];
 
-	if (mb == (struct mbrt *)(-1UL))
+	if (mb == (struct mbrt *)(-1UL)) {
+		heap->rt->default_mb->space_usage += size;
 		return;
+	}
 
 	mb->space_usage += size;
 	if ((heap->rt->active_evictable_mb == mb) ||
@@ -493,7 +527,7 @@ void
 heap_set_stats_ptr(struct palloc_heap *heap, struct stats_persistent **sp)
 {
 	D_CASSERT(sizeof(struct stats_persistent) == sizeof(uint64_t));
-	*sp = (struct stats_persistent *)&heap->layout_info.zone0->header.sp_usage;
+	*sp = (struct stats_persistent *)&heap->layout_info.zone0->header.sp_usage_glob;
 	VALGRIND_ADD_TO_GLOBAL_TX_IGNORE(*sp, sizeof(*sp));
 }
 
@@ -1443,6 +1477,7 @@ heap_ensure_zone0_initialized(struct palloc_heap *heap)
 			palloc_heap_vg_zone_open(heap, 0, 1);
 	}
 #endif
+	heap_mbrt_setmb_usage(heap, 0, heap->layout_info.zone0->header.sp_usage);
 	return rc;
 }
 

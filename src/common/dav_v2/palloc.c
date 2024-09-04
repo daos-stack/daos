@@ -321,17 +321,18 @@ palloc_heap_action_exec(struct palloc_heap *heap,
 	act->m.m_ops->prep_hdr(&act->m, act->new_state, ctx);
 
 	/*
-	 * For evictable zone updates its local utilization here.
+	 * Update the memory bucket utilization info.
 	 */
-	if (act->m.zone_id != 0) {
+	if (heap_mbrt_ismb_evictable(heap, act->m.zone_id))
 		zone = ZID_TO_ZONE(&heap->layout_info, act->m.zone_id);
-		if (act->new_state == MEMBLOCK_FREE)
-			zone->header.sp_usage -= act->m.m_ops->get_real_size(&act->m);
-		else
-			zone->header.sp_usage += act->m.m_ops->get_real_size(&act->m);
-		operation_add_entry(ctx, &zone->header.sp_usage, zone->header.sp_usage,
-				    ULOG_OPERATION_SET);
-	}
+	else
+		zone = heap->layout_info.zone0;
+
+	if (act->new_state == MEMBLOCK_FREE)
+		zone->header.sp_usage -= act->m.m_ops->get_real_size(&act->m);
+	else
+		zone->header.sp_usage += act->m.m_ops->get_real_size(&act->m);
+	operation_add_entry(ctx, &zone->header.sp_usage, zone->header.sp_usage, ULOG_OPERATION_SET);
 }
 
 /*

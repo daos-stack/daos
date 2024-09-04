@@ -52,6 +52,9 @@ void
 heap_mbrt_setmb_nonevictable(struct palloc_heap *heap, uint32_t zone_id);
 void
 heap_mbrt_setmb_usage(struct palloc_heap *heap, uint32_t zone_id, uint64_t usage);
+int
+heap_mbrt_getmb_usage(struct palloc_heap *heap, uint32_t zone_id, uint64_t *allotted,
+		      uint64_t *maxsz);
 void
 heap_mbrt_incrmb_usage(struct palloc_heap *heap, uint32_t zone_id, int size);
 struct mbrt *

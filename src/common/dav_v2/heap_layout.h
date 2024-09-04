@@ -114,7 +114,8 @@ struct zone_header {
 	uint64_t zone0_zinfo_off;
 	uint64_t reserved[2];
 	uint64_t sp_usage;
-	uint8_t  spare[3536];
+	uint64_t sp_usage_glob;
+	uint8_t  spare[3528];
 };
 
 struct zone {
@@ -216,13 +217,6 @@ static inline bool
 IS_ZONE_HDR_OFFSET(uint64_t off)
 {
 	return (((off - sizeof(struct heap_header)) % ZONE_MAX_SIZE) == 0);
-}
-
-static inline bool
-IS_ZONE_HDR_USAGE_OFFSET(uint64_t off)
-{
-	return (((off - sizeof(struct heap_header)) % ZONE_MAX_SIZE) ==
-		offsetof(struct zone_header, sp_usage));
 }
 
 static inline uint32_t

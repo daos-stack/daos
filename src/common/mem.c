@@ -586,6 +586,46 @@ umempobj_get_heapusage(struct umem_pool *ph_p, daos_size_t *curr_allocated)
 	return rc;
 }
 
+/** Obtain the usage statistics for the memory bucket. Note that the usage
+ *  statistics for an evictable memory bucket can be approximate value if
+ *  memory bucket is not yet loaded on to the umem cache.
+ *
+ *  \param	pool[IN]		Pointer to the persistent object.
+ *  \param	mb_id[IN]		memory bucket id.
+ *  \param	curr_allocated[IN|OUT]	Total bytes currently allocated
+ *  \param	maxsz[IN|OUT]	        Max size the memory bucket can grow.
+ *
+ *  \return	zero on success and non-zero on failure.
+ */
+int
+umempobj_get_mbusage(struct umem_pool *ph_p, uint32_t mb_id, daos_size_t *curr_allocated,
+		     daos_size_t *maxsz)
+{
+	struct dav_heap_mb_stats st;
+	int                      rc = 0;
+
+	switch (ph_p->up_store.store_type) {
+	case DAOS_MD_PMEM:
+	case DAOS_MD_BMEM:
+	case DAOS_MD_ADMEM:
+		rc = -DER_INVAL;
+		break;
+	case DAOS_MD_BMEM_V2:
+		rc = dav_get_heap_mb_stats_v2((dav_obj_t *)ph_p->up_priv, mb_id, &st);
+		if (rc == 0) {
+			*curr_allocated = st.dhms_allocated;
+			*maxsz          = st.dhms_maxsz;
+		} else
+			rc = daos_errno2der(errno);
+		break;
+	default:
+		D_ASSERTF(0, "bad daos_md_backend %d\n", ph_p->up_store.store_type);
+		break;
+	}
+
+	return rc;
+}
+
 /** Log fragmentation related info for the pool.
  *
  *  \param	pool[IN]		Pointer to the persistent object.
