@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -7,6 +7,7 @@ from os.path import join
 
 from data_mover_test_base import DataMoverTestBase
 from dfuse_utils import get_dfuse, start_dfuse
+from run_utils import run_remote
 
 
 class DmvrPosixSymlinks(DataMoverTestBase):
@@ -119,8 +120,9 @@ class DmvrPosixSymlinks(DataMoverTestBase):
         if do_deref:
             # Use POSIX cp to create a baseline for dereferencing
             deref_baseline_path = join(posix_test_path, "baseline_" + link_desc)
-            self.execute_cmd("cp -r --dereference '{}' '{}'".format(
-                src_posix_path, deref_baseline_path))
+            cp_cmd = f"cp -r --dereference '{src_posix_path}' '{deref_baseline_path}'"
+            if not run_remote(self.log, self.hostlist_clients, cp_cmd, timeout=300).passed:
+                self.fail("Failed to create dereference baseline")
             diff_src = deref_baseline_path
         else:
             # Just compare against the original
@@ -195,7 +197,9 @@ class DmvrPosixSymlinks(DataMoverTestBase):
 
             "popd"
         ]
-        self.execute_cmd_list(cmd_list)
+        cmd = " &&\n".join(cmd_list)
+        if not run_remote(self.log, self.hostlist_clients, cmd, timeout=300).passed:
+            self.fail(f"Failed to create forward symlinks in {path}")
 
     def create_links_backward(self, path):
         """
@@ -225,7 +229,9 @@ class DmvrPosixSymlinks(DataMoverTestBase):
 
             "popd"
         ]
-        self.execute_cmd_list(cmd_list)
+        cmd = " &&\n".join(cmd_list)
+        if not run_remote(self.log, self.hostlist_clients, cmd, timeout=300).passed:
+            self.fail(f"Failed to create backward symlinks in {path}")
 
     def create_links_mixed(self, path):
         """
@@ -256,12 +262,6 @@ class DmvrPosixSymlinks(DataMoverTestBase):
 
             "popd"
         ]
-        self.execute_cmd_list(cmd_list)
-
-    def execute_cmd_list(self, cmd_list):
-        """Execute a list of commands, separated by &&.
-        Args:
-            cmd_list (list): A list of commands to execute.
-        """
         cmd = " &&\n".join(cmd_list)
-        self.execute_cmd(cmd)
+        if not run_remote(self.log, self.hostlist_clients, cmd, timeout=300).passed:
+            self.fail(f"Failed to create mixed symlinks in {path}")
