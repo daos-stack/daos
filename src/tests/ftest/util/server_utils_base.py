@@ -32,8 +32,6 @@ class DaosServerCommand(YamlCommand):
     REFORMAT_PATTERN = "Metadata format required"
     SYSTEM_QUERY_PATTERN = "joined"
 
-    DEFAULT_CONFIG_FILE = os.path.join(os.sep, "etc", "daos", "daos_server.yml")
-
     def __init__(self, path="", yaml_cfg=None, timeout=45, run_user=None):
         """Create a daos_server command object.
 

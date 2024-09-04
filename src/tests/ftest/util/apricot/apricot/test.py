@@ -1068,11 +1068,13 @@ class TestWithServers(TestWithoutServers):
 
         if config_file is None:
             config_file = self.test_env.agent_config
-
-        if self.agent_manager_class == "Systemctl" and self.test_env.agent_user != getuser():
-            # Config file needs a temporary user-accessible location to copy to before moving the
-            # file to a privileged access location
             config_temp = self.get_config_file(group, "agent", self.test_dir)
+
+        # Verify the correct configuration files have been provided
+        if self.agent_manager_class == "Systemctl" and config_temp is None:
+            self.fail(
+                "Error adding a DaosAgentManager: no temporary configuration "
+                "file provided for the Systemctl manager class!")
 
         # Define the location of the certificates
         if self.agent_manager_class == "Systemctl" and self.test_env.agent_user != getuser():
@@ -1113,19 +1115,14 @@ class TestWithServers(TestWithoutServers):
         """
         if group is None:
             group = self.server_group
-        if svr_config_file is None and self.server_manager_class == "Systemctl":
+
+        if svr_config_file is None:
             svr_config_file = self.test_env.server_config
-            svr_config_temp = self.get_config_file(
-                group, "server", self.test_dir)
-        elif svr_config_file is None:
-            svr_config_file = self.get_config_file(group, "server")
-            svr_config_temp = None
-        if dmg_config_file is None and self.server_manager_class == "Systemctl":
+            svr_config_temp = self.get_config_file(group, "server", self.test_dir)
+
+        if dmg_config_file is None:
             dmg_config_file = self.test_env.control_config
             dmg_config_temp = self.get_config_file(group, "dmg", self.test_dir)
-        elif dmg_config_file is None:
-            dmg_config_file = self.get_config_file(group, "dmg")
-            dmg_config_temp = None
 
         # Verify the correct configuration files have been provided
         if self.server_manager_class == "Systemctl" and svr_config_temp is None:
@@ -1135,11 +1132,13 @@ class TestWithServers(TestWithoutServers):
 
         # Define the location of the certificates
         if self.server_manager_class == "Systemctl":
+            # Default directory requiring privileged access
             svr_cert_dir = os.path.join(os.sep, "etc", "daos", "certs")
             dmg_cert_dir = os.path.join(os.sep, "etc", "daos", "certs")
         else:
-            svr_cert_dir = self.workdir
-            dmg_cert_dir = self.workdir
+            # Test-specific directory not requiring privileged access
+            svr_cert_dir = os.path.join(self.test_env.log_dir, "daos_certs")
+            dmg_cert_dir = os.path.join(self.test_env.log_dir, "daos_certs")
 
         self.server_managers.append(
             DaosServerManager(

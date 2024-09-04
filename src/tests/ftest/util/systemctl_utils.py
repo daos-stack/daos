@@ -101,7 +101,7 @@ def stop_service(logger, hosts, service, user="root"):
                 else:
                     # Issue the appropriate systemctl command to remedy the
                     # detected state, e.g. 'stop' for 'active'.
-                    command = command_as_user(get_systemctl_command(key, service, user), user)
+                    command = get_systemctl_command(key, service, user)
                     run_remote(logger, result[key], command)
 
                     # Run the status check again on this group of hosts
@@ -129,7 +129,7 @@ def get_systemctl_command(unit_command, service, user="root"):
         command.append(unit_command)
     if service:
         command.append(service)
-    return " ".join(command)
+    return command_as_user(" ".join(command), user)
 
 
 def get_service_file(logger, hosts, service, user, verbose=True, timeout=120):
