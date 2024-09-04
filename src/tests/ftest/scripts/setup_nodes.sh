@@ -110,7 +110,10 @@ sed -i -e '/^\(User\|Group\)=/d' $_local_service_file
 systemctl --user daemon-reload
 systemctl --user status
 loginctl enable-linger
-sudo usermod -aG systemd-journal jenkins
+
+# allow the jenkins user to view journalctl entries for systemctl services it starts
+# sudo usermod -aG systemd-journal jenkins
+sudo sed -i 's/.*Storage=.*/Storage=persistent/g' /etc/systemd/journald.conf
 
 rm -rf "${TEST_TAG_DIR:?}/"
 mkdir -p "$TEST_TAG_DIR/"
