@@ -373,12 +373,12 @@ func (c *Config) ValidateAndAdjustPMDKEnvVar() error {
 			return nil
 		}
 
-		if strings.Contains(pmemobjConfStr, "sds.at_create=0") {
-			return nil
+		if !strings.Contains(pmemobjConfStr, "sds.at_create=0") {
+			return errors.New("env_var PMEMOBJ_CONF should contain 'sds.at_create=0' " +
+				"for non-DCPM storage class, found '" + pmemobjConfStr + "'")
 		}
 
-		return errors.New("env_var PMEMOBJ_CONF should contain 'sds.at_create=0' " +
-			"for non-DCPM storage class, found '" + pmemobjConfStr + "'")
+		return nil
 	}
 
 	// Confirm default handling of shutdown state (SDS) for DCPM storage class.
@@ -764,9 +764,8 @@ func (c *Config) WithProperEnvVarForPMDK() *Config {
 
 	if c.Storage.Tiers[0].Class == storage.ClassDcpm {
 		return c.WithoutEnvVarForPMDK().WithEnvVarAbtThreadStackSize(minABTThreadStackSizeDCPM)
-	} else {
-		return c.WithoutEnvVarForPMDK().WithEnvVarPMemObjSdsAtCreate(0)
 	}
+	return c.WithoutEnvVarForPMDK().WithEnvVarPMemObjSdsAtCreate(0)
 }
 
 // WithoutEnvVarForPMDK remove PMDK related environment variables
