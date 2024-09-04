@@ -16,7 +16,7 @@ server_config:
         0:
           class: ram
           scm_mount: /mnt/daos
-      targets: 16
+      targets: 8
   system_ram_reserved: 1
 
 pool:
@@ -28,7 +28,7 @@ container:
 
 ior_write:
   api: POSIX
-  block_size: '2M'
+  block_size: '256M'
   flags: '-v -w -W -r -R -k'
-  processes: 2
+  processes: 16
   transfer_size: '1M'
