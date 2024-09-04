@@ -22,6 +22,7 @@ License:       BSD-2-Clause-Patent
 URL:           https://github.com/daos-stack/daos
 Source0:       %{name}-%{version}.tar.gz
 Source1:       bz-1955184_find-requires
+Patch1:        current.patch
 %if (0%{?rhel} >= 8)
 BuildRequires: python3-scons >= 2.4
 %else
@@ -308,7 +309,7 @@ This is the package that bridges the difference between the MOFED openmpi
 %endif
 
 %prep
-%autosetup
+%autosetup -p1
 
 %build
 
