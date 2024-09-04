@@ -4764,9 +4764,9 @@ obj_comp_cb(tse_task_t *task, void *data)
 					if (task->dt_result == -DER_CSUM) {
 						/** Retry a few times on checksum error on update */
 						if (!obj_auxi->csum_retry &&
-						    obj_auxi->csum_retry_count++ < MAX_CSUM_UPDATE_RETRY) {
+						    obj_auxi->csum_retry_cnt < MAX_CSUM_RETRY) {
 							obj_auxi->csum_retry = 1;
-							obj_auxi->csum_retry_count++;
+							obj_auxi->csum_retry_cnt++;
 						} else {
 							obj_auxi->io_retry = 0;
 						}
