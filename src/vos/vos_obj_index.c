@@ -47,7 +47,8 @@ oi_hkey_size(void)
 static int
 oi_rec_msize(int alloc_overhead)
 {
-	return alloc_overhead + sizeof(struct vos_obj_df);
+	/* This function is only used for metadata overhead estimation. */
+	return alloc_overhead + D_ALIGNUP(sizeof(struct vos_obj_df), 32);
 }
 
 static void
@@ -67,6 +68,15 @@ oi_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 	return dbtree_key_cmp_rc(memcmp(oid1, oid2, sizeof(*oid1)));
 }
 
+static inline unsigned int
+vos_obj_df_size(struct vos_pool *pool)
+{
+	if (vos_pool_is_p2(pool))
+		return sizeof(struct vos_obj_p2_df);
+
+	return sizeof(struct vos_obj_df);
+}
+
 static int
 oi_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	     d_iov_t *val_iov, struct btr_record *rec, d_iov_t *val_out)
@@ -76,10 +86,11 @@ oi_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	struct vos_obj_df	*obj;
 	daos_unit_oid_t		*key;
 	umem_off_t		 obj_off;
+	struct vos_pool		*pool = (struct vos_pool *)tins->ti_priv;
 	int			 rc;
 
 	/* Allocate a PMEM value of type vos_obj_df */
-	obj_off = umem_zalloc(&tins->ti_umm, sizeof(struct vos_obj_df));
+	obj_off = umem_zalloc(&tins->ti_umm, vos_obj_df_size(pool));
 	if (UMOFF_IS_NULL(obj_off))
 		return -DER_NOSPACE;
 
@@ -100,11 +111,11 @@ oi_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	} else {
 		struct vos_obj_df *new_obj = val_out->iov_buf;
 
-		memcpy(obj, new_obj, sizeof(*obj));
+		memcpy(obj, new_obj, vos_obj_df_size(pool));
 		obj->vo_id = *key;
 	}
 
-	d_iov_set(val_iov, obj, sizeof(struct vos_obj_df));
+	d_iov_set(val_iov, obj, vos_obj_df_size(pool));
 	rec->rec_off = obj_off;
 
 	/* For new created object, commit it synchronously to reduce
@@ -176,7 +187,7 @@ oi_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 		DP_UOID(obj->vo_id), rec->rec_off);
 
 	D_ASSERT(val_iov != NULL);
-	d_iov_set(val_iov, obj, sizeof(struct vos_obj_df));
+	d_iov_set(val_iov, obj, vos_obj_df_size((struct vos_pool *)tins->ti_priv));
 	return 0;
 }
 
@@ -504,7 +515,7 @@ oi_iter_nested_tree_fetch(struct vos_iterator *iter, vos_iter_type_t type,
 		return rc;
 	}
 
-	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_obj_df));
+	D_ASSERT(rec_iov.iov_len == vos_obj_df_size(oiter->oit_cont->vc_pool));
 	obj = (struct vos_obj_df *)rec_iov.iov_buf;
 
 	rc = oi_iter_ilog_check(obj, oiter, &info->ii_epr, false);
@@ -610,7 +621,7 @@ oi_iter_match_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t f
 			goto failed;
 		}
 
-		D_ASSERT(iov.iov_len == sizeof(struct vos_obj_df));
+		D_ASSERT(iov.iov_len == vos_obj_df_size(oiter->oit_cont->vc_pool));
 		obj = (struct vos_obj_df *)iov.iov_buf;
 
 		if (iter->it_filter_cb != NULL && (flags & VOS_ITER_PROBE_AGAIN) == 0) {
@@ -767,7 +778,7 @@ oi_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 		return rc;
 	}
 
-	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_obj_df));
+	D_ASSERT(rec_iov.iov_len == vos_obj_df_size(oiter->oit_cont->vc_pool));
 
 	return oi_iter_fill(rec_iov.iov_buf, oiter, false, it_entry);
 }
@@ -818,7 +829,7 @@ oi_iter_check_punch(daos_handle_t ih)
 		  "Probe should be done before aggregation\n");
 	if (rc != 0)
 		return rc;
-	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_obj_df));
+	D_ASSERT(rec_iov.iov_len == vos_obj_df_size(oiter->oit_cont->vc_pool));
 	obj = (struct vos_obj_df *)rec_iov.iov_buf;
 	oid = obj->vo_id;
 
@@ -873,7 +884,7 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 		  "Probe should be done before aggregation\n");
 	if (rc != 0)
 		return rc;
-	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_obj_df));
+	D_ASSERT(rec_iov.iov_len == vos_obj_df_size(oiter->oit_cont->vc_pool));
 	obj = (struct vos_obj_df *)rec_iov.iov_buf;
 	oid = obj->vo_id;
 

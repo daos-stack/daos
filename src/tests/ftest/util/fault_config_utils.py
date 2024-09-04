@@ -8,7 +8,7 @@ import logging
 import os
 
 import yaml
-from general_utils import distribute_files
+from file_utils import distribute_files
 from run_utils import run_local, run_remote
 
 # a lookup table of predefined faults
@@ -295,15 +295,22 @@ class FaultInjection():
             # orterun or something, could re-evaluate this later
             self.write_fault_file(None)
 
-    def copy_fault_files(self, hosts):
+    def copy_fault_files(self, logger, hosts):
         """Copy the fault injection file to all test hosts.
 
         Args:
+            logger (Logger): logger for the messages produced by this method
             hosts (list): list of hosts to copy the fault injection file
+
+        Raises:
+            FaultInjectionFailed: if there is an error copying the fault injection files
         """
         if self._fault_list:
             self._hosts = hosts
-            distribute_files(self._hosts, self.fault_file, self.fault_file)
+            result = distribute_files(logger, self._hosts, self.fault_file, self.fault_file)
+            if not result.passed:
+                raise FaultInjectionFailed(
+                    f"Error copying fault injection files to {result.failed_hosts}")
 
     def stop(self):
         """Remove the fault injection file created during testing.

@@ -16,15 +16,13 @@ from datetime import datetime
 from getpass import getuser
 from importlib import import_module
 from logging import getLogger
-from socket import gethostname
 
 from avocado.core.settings import settings
 from avocado.core.version import MAJOR
 from avocado.utils import process
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
-from run_utils import command_as_user, get_clush_command, run_local, run_remote
-from user_utils import get_chown_command, get_primary_group
+from run_utils import command_as_user, run_local, run_remote
 
 
 class DaosTestError(Exception):
@@ -891,177 +889,20 @@ def convert_string(item, separator=","):
     return item
 
 
-def create_directory(hosts, directory, timeout=15, verbose=True,
-                     raise_exception=True, sudo=False):
-    """Create the specified directory on the specified hosts.
-
-    Args:
-        hosts (NodeSet): hosts on which to create the directory
-        directory (str): the directory to create
-        timeout (int, optional): command timeout. Defaults to 15 seconds.
-        verbose (bool, optional): whether to log the command run and
-            stdout/stderr. Defaults to True.
-        raise_exception (bool, optional): whether to raise an exception if the
-            command returns a non-zero exit status. Defaults to True.
-        sudo (bool, optional): whether to run the command via sudo. Defaults to
-            False.
-
-    Raises:
-        DaosTestError: if there is an error running the command
-
-    Returns:
-        CmdResult: an avocado.utils.process CmdResult object containing the
-            result of the command execution.  A CmdResult object has the
-            following properties:
-                command         - command string
-                exit_status     - exit_status of the command
-                stdout          - the stdout
-                stderr          - the stderr
-                duration        - command execution time
-                interrupted     - whether the command completed within timeout
-                pid             - command's pid
-
-    """
-    mkdir_command = "/usr/bin/mkdir -p {}".format(directory)
-    command = get_clush_command(hosts, args="-S -v", command=mkdir_command, command_sudo=sudo)
-    return run_command(command, timeout=timeout, verbose=verbose, raise_exception=raise_exception)
-
-
-def change_file_owner(hosts, filename, owner, group, timeout=15, verbose=True,
-                      raise_exception=True, sudo=False):
-    """Create the specified directory on the specified hosts.
-
-    Args:
-        hosts (NodeSet): hosts on which to create the directory
-        filename (str): the file for which to change ownership
-        owner (str): new owner of the file
-        group (str): new group owner of the file
-        timeout (int, optional): command timeout. Defaults to 15 seconds.
-        verbose (bool, optional): whether to log the command run and
-            stdout/stderr. Defaults to True.
-        raise_exception (bool, optional): whether to raise an exception if the
-            command returns a non-zero exit status. Defaults to True.
-        sudo (bool, optional): whether to run the command via sudo. Defaults to
-            False.
-
-    Raises:
-        DaosTestError: if there is an error running the command
-
-    Returns:
-        CmdResult: an avocado.utils.process CmdResult object containing the
-            result of the command execution.  A CmdResult object has the
-            following properties:
-                command         - command string
-                exit_status     - exit_status of the command
-                stdout          - the stdout
-                stderr          - the stderr
-                duration        - command execution time
-                interrupted     - whether the command completed within timeout
-                pid             - command's pid
-
-    """
-    chown_command = get_chown_command(owner, group, file=filename)
-    command = get_clush_command(hosts, args="-S -v", command=chown_command, command_sudo=sudo)
-    return run_command(command, timeout=timeout, verbose=verbose, raise_exception=raise_exception)
-
-
-def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
-                     verbose=True, raise_exception=True, sudo=False,
-                     owner=None):
-    """Copy the source to the destination on each of the specified hosts.
-
-    Optionally (by default) ensure the destination directory exists on each of
-    the specified hosts prior to copying the source.
-
-    Args:
-        hosts (NodeSet): hosts on which to copy the source
-        source (str): the file to copy to the hosts
-        destination (str): the host location in which to copy the source
-        mkdir (bool, optional): whether or not to ensure the destination
-            directory exists on hosts prior to copying the source. Defaults to
-            True.
-        timeout (int, optional): command timeout. Defaults to 60 seconds.
-        verbose (bool, optional): whether to log the command run and
-            stdout/stderr. Defaults to True.
-        raise_exception (bool, optional): whether to raise an exception if the
-            command returns a non-zero exit status. Defaults to True.
-        sudo (bool, optional): whether to run the command via sudo. Defaults to
-            False.
-        owner (str, optional): if specified the owner to assign as the owner of
-            the copied file. Defaults to None.
-
-    Raises:
-        DaosTestError: if there is an error running the command
-
-    Returns:
-        CmdResult: an avocado.utils.process CmdResult object containing the
-            result of the command execution.  A CmdResult object has the
-            following properties:
-                command         - command string
-                exit_status     - exit_status of the command
-                stdout          - the stdout
-                stderr          - the stderr
-                duration        - command execution time
-                interrupted     - whether the command completed within timeout
-                pid             - command's pid
-
-    """
-    result = None
-    if mkdir:
-        result = create_directory(
-            hosts, os.path.dirname(destination), verbose=verbose,
-            raise_exception=raise_exception)
-    if result is None or result.exit_status == 0:
-        if sudo:
-            # In order to copy a protected file to a remote host in CI the
-            # source will first be copied as is to the remote host
-            localhost = gethostname().split(".")[0]
-            other_hosts = NodeSet.fromlist([host for host in hosts if host != localhost])
-            if other_hosts:
-                # Existing files with strict file permissions can cause the
-                # subsequent non-sudo copy to fail, so remove the file first
-                rm_command = get_clush_command(
-                    other_hosts, args="-S -v", command="rm -f {}".format(source),
-                    command_sudo=True)
-                run_command(rm_command, verbose=verbose, raise_exception=False)
-                result = distribute_files(
-                    other_hosts, source, source, mkdir=True,
-                    timeout=timeout, verbose=verbose,
-                    raise_exception=raise_exception, sudo=False, owner=None)
-            if result is None or result.exit_status == 0:
-                # Then a local sudo copy will be executed on the remote node to
-                # copy the source to the destination
-                command = get_clush_command(
-                    hosts, args="-S -v", command="cp {} {}".format(source, destination),
-                    command_sudo=True)
-                result = run_command(command, timeout, verbose, raise_exception)
-        else:
-            # Without the sudo requirement copy the source to the destination
-            # directly with clush
-            command = get_clush_command(
-                hosts, args="-S -v --copy {} --dest {}".format(source, destination))
-            result = run_command(command, timeout, verbose, raise_exception)
-
-        # If requested update the ownership of the destination file
-        if owner is not None and result.exit_status == 0:
-            change_file_owner(
-                hosts, destination, owner, get_primary_group(owner), timeout=timeout,
-                verbose=verbose, raise_exception=raise_exception, sudo=sudo)
-    return result
-
-
-def get_default_config_file(name):
+def get_default_config_file(name, path=None):
     """Get the default config file.
 
     Args:
         name (str): daos component name, e.g. server, agent, control
+        path (str, optional): path to use for the config file. Defaults to None which will use the
+            /etc/daos default.
 
     Returns:
         str: the default config file
-
     """
-    file_name = "".join(["daos_", name, ".yml"])
-    return os.path.join(os.sep, "etc", "daos", file_name)
+    if path is None:
+        path = os.path.join(os.sep, "etc", "daos")
+    return os.path.join(path, f"daos_{name}.yml")
 
 
 def get_file_listing(hosts, files, user):

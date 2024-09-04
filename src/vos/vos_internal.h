@@ -1258,7 +1258,7 @@ vos_bio_addr_free(struct vos_pool *pool, bio_addr_t *addr, daos_size_t nob);
 
 void
 vos_evt_desc_cbs_init(struct evt_desc_cbs *cbs, struct vos_pool *pool,
-		      daos_handle_t coh);
+		      daos_handle_t coh, struct vos_object *obj);
 
 int
 vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool is_sysdb);
@@ -1312,7 +1312,7 @@ vos_dedup_invalidate(struct vos_pool *pool);
 
 umem_off_t
 vos_reserve_scm(struct vos_container *cont, struct umem_rsrvd_act *rsrvd_scm,
-		daos_size_t size);
+		daos_size_t size, struct vos_object *obj);
 int
 vos_publish_scm(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_scm, bool publish);
 int
@@ -1327,6 +1327,12 @@ static inline struct umem_instance *
 vos_pool2umm(struct vos_pool *pool)
 {
 	return &pool->vp_umm;
+}
+
+static inline struct umem_store *
+vos_pool2store(struct vos_pool *pool)
+{
+	return &pool->vp_umm.umm_pool->up_store;
 }
 
 static inline struct umem_instance *
@@ -1843,5 +1849,43 @@ vos_io_scm(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size, enum v
  */
 int
 vos_insert_oid(struct dtx_handle *dth, struct vos_container *cont, daos_unit_oid_t *oid);
+
+static inline bool
+vos_pool_is_p2(struct vos_pool *pool)
+{
+	struct umem_store	*store = vos_pool2store(pool);
+
+	return store->store_type == DAOS_MD_BMEM_V2;
+}
+
+static inline umem_off_t
+vos_obj_alloc(struct umem_instance *umm, struct vos_object *obj, size_t size, bool zeroing)
+{
+
+	if (obj != NULL && vos_pool_is_p2(vos_obj2pool(obj))) {
+		D_ASSERT(obj->obj_bkt_allot == 1);
+		if (zeroing)
+			return umem_zalloc_from_bucket(umm, size, obj->obj_bkt_ids[0]);
+
+		return umem_alloc_from_bucket(umm, size, obj->obj_bkt_ids[0]);
+	}
+
+	if (zeroing)
+		return umem_zalloc(umm, size);
+
+	return umem_alloc(umm, size);
+}
+
+static inline umem_off_t
+vos_obj_reserve(struct umem_instance *umm, struct vos_object *obj,
+		struct umem_rsrvd_act *rsrvd_scm, daos_size_t size)
+{
+	if (obj != NULL && vos_pool_is_p2(vos_obj2pool(obj))) {
+		D_ASSERT(obj->obj_bkt_allot == 1);
+		return umem_reserve_from_bucket(umm, rsrvd_scm, size, obj->obj_bkt_ids[0]);
+	}
+
+	return umem_reserve(umm, rsrvd_scm, size);
+}
 
 #endif /* __VOS_INTERNAL_H__ */
