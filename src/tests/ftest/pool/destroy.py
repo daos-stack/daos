@@ -362,10 +362,11 @@ class DestroyTests(TestWithServers):
         server_group_b = self.server_group + "_b"
 
         # Prepare and configure dmg config files for a and b.
-        dmg_config_file_a = get_default_config_file(name="control_a")
+        config_path = os.path.dirname(self.test_env.control_config)
+        dmg_config_file_a = get_default_config_file(name="control_a", path=config_path)
         dmg_config_temp_a = self.get_config_file(
             name=server_group_a, command="dmg", path=self.test_dir)
-        dmg_config_file_b = get_default_config_file(name="control_b")
+        dmg_config_file_b = get_default_config_file(name="control_b", path=config_path)
         dmg_config_temp_b = self.get_config_file(
             name=server_group_b, command="dmg", path=self.test_dir)
 
@@ -393,7 +394,7 @@ class DestroyTests(TestWithServers):
 
         # Get dmg_c instance that uses daos_control_c.yml. Server group is b.
         cert_dir = os.path.join(os.sep, "etc", "daos", "certs")
-        dmg_config_file_c = get_default_config_file(name="control_c")
+        dmg_config_file_c = get_default_config_file(name="control_c", path=config_path)
         dmg_config_temp_c = self.get_config_file(
             name=server_group_b, command="dmg", path=self.test_dir)
         dmg_c = get_dmg_command(

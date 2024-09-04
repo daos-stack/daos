@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -1033,6 +1033,36 @@ func TestAgent_NUMAFabric_FindDevice(t *testing.T) {
 					hw: &hardware.FabricInterface{
 						Providers: hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "p2"}),
 					},
+				},
+			},
+		},
+		"success with manual interfaces": {
+			nf: &NUMAFabric{
+				numaMap: map[int][]*FabricInterface{
+					0: {
+						{
+							Name:        "t1",
+							Domain:      "t1",
+							NetDevClass: FabricDevClassManual,
+						},
+						{
+							Name:        "t2",
+							Domain:      "t2",
+							NetDevClass: FabricDevClassManual,
+						},
+					},
+				},
+			},
+			params: &FabricIfaceParams{
+				Interface: "t2",
+				Domain:    "t2",
+				Provider:  "p2",
+			},
+			expResult: []*FabricInterface{
+				{
+					Name:        "t2",
+					Domain:      "t2",
+					NetDevClass: FabricDevClassManual,
 				},
 			},
 		},
