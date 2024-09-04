@@ -477,7 +477,7 @@ struct obj_auxi_args {
 	uint32_t			 specified_shard;
 	uint16_t			 flags;
 	uint16_t			 retry_cnt;
-	uint16_t			 csm_retry_cnt;;
+	uint16_t			 csum_retry_cnt;
 	uint16_t			 inprogress_cnt;
 	struct obj_req_tgts		 req_tgts;
 	d_sg_list_t			*sgls_dup;
