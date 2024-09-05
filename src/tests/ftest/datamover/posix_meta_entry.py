@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -67,7 +67,7 @@ class DmvrPosixMetaEntry(DataMoverTestBase):
         start_dfuse(self, dfuse)
 
         # Create 1 pool
-        pool1 = self.create_pool()
+        pool1 = self.get_pool()
 
         # Create 1 source container with test data
         cont1 = self.get_container(pool1)
