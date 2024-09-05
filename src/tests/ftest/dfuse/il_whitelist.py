@@ -44,9 +44,9 @@ class ILWhiteList(TestWithServers):
         start_dfuse(self, dfuse, pool, container)
 
         env["D_DFUSE_MNT"] = dfuse.mount_dir.value
-        env["D_LOG_MASK"] = "DEBUG"
-        env["DD_SUBSYS"] = "il"
-        env["DD_MASK"] = "DEBUG"
+        env["D_LOG_MASK"] = "INFO"
+        env["DD_SUBSYS"] = "crt"
+        env["DD_MASK"] = "INFO"
         env["D_IL_REPORT"] = "1"
 
         env["D_IL_BYPASS_LIST"] = "whitelist_test"
@@ -55,7 +55,8 @@ class ILWhiteList(TestWithServers):
 
         result = run_remote(self.log, dfuse_hosts, env.to_export_str() + exe_path)
         output = "\n".join(result.all_stdout.values())
-        num_daos_init = len(re.findall('called daos_init()', output))
+        # search "crt_init_opt" as a proxy for daos_init()
+        num_daos_init = len(re.findall('crt_init_opt', output))
         self.log.info('num_daos_init = %d', num_daos_init)
 
         # confirm interception ON/OFF as expected

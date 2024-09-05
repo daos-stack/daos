@@ -17,7 +17,7 @@ class DfuseBashCmd(TestWithServers):
     :avocado: recursive
     """
 
-    def run_bashcmd(self, il_lib=None, compatible_mode=False, interception_on=False):
+    def run_bashcmd(self, il_lib=None, compatible_mode=False, nobypass=False):
         """Jira ID: DAOS-3508.
 
         Use cases:
@@ -52,7 +52,7 @@ class DfuseBashCmd(TestWithServers):
                 env_str = f"export LD_PRELOAD={lib_path}; export D_IL_COMPATIBLE=1; "
             else:
                 env_str = f"export LD_PRELOAD={lib_path}; "
-            if interception_on:
+            if nobypass:
                 env_str = env_str + "export D_IL_NO_BYPASS=1; "
         else:
             env_str = ""
@@ -192,7 +192,7 @@ class DfuseBashCmd(TestWithServers):
         """
         self.run_bashcmd(il_lib="libpil4dfs.so")
 
-    def test_bashcmd_pil4dfs_interception_on(self):
+    def test_bashcmd_pil4dfs_nobypass(self):
         """
 
         Test Description:
@@ -203,6 +203,6 @@ class DfuseBashCmd(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=dfuse,dfs,pil4dfs
-        :avocado: tags=DfuseBashCmd,test_bashcmd_pil4dfs_interception_on
+        :avocado: tags=DfuseBashCmd,test_bashcmd_pil4dfs_nobypass
         """
-        self.run_bashcmd(il_lib="libpil4dfs.so", interception_on=True)
+        self.run_bashcmd(il_lib="libpil4dfs.so", nobypass=True)

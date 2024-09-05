@@ -1184,7 +1184,6 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 
 			rc = daos_init();
 			/* This message is used by ftest "il_whitelist.py" */
-			D_DEBUG(DB_ANY, "called daos_init().\n");
 			if (rc) {
 				DL_ERROR(rc, "daos_init() failed");
 				*is_target_path = 0;
