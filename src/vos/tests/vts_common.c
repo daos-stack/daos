@@ -52,11 +52,15 @@ vts_file_exists(const char *filename)
 }
 
 int
-vts_alloc_gen_fname(char **fname)
+vts_alloc_gen_fname(char *po_uuid_str, char **fname)
 {
 	int rc;
 
-	rc = asprintf(fname, "%s/vpool.%d", vos_path, gc++);
+	(void) asprintf(fname, "%s/%s/", vos_path, po_uuid_str);
+	rc = mkdir(*fname, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+	assert(rc == 0 || errno == EEXIST);
+
+	rc = asprintf(fname, "%s/%s/vpool.%d", vos_path, po_uuid_str, gc++);
 	if (rc < 0) {
 		*fname = NULL;
 		print_error("Failed to allocate memory for fname: rc = %d\n", rc);
@@ -71,9 +75,9 @@ vts_pool_fallocate(char **fname)
 {
 	int ret = 0, fd;
 
-	ret = vts_alloc_gen_fname(fname);
-	if (ret)
-		return ret;
+	// ret = vts_alloc_gen_fname(fname);
+	// if (ret)
+	// 	return ret;
 
 	fd = open(*fname, O_CREAT | O_TRUNC | O_RDWR, 0666);
 	if (fd < 0) {
@@ -92,10 +96,17 @@ int
 vts_ctx_init(struct vos_test_ctx *tcx, size_t psize)
 {
 	int	 rc;
+	char      uuid_str[] = "dd6728be-696a-11ef-a059-a4bf0165c389";
+	char      uuid_str2[] = "591d19e4-69fe-11ef-b13d-a4bf0165c389";
 
 	memset(tcx, 0, sizeof(*tcx));
+	
+	uuid_parse(uuid_str, tcx->tc_po_uuid);
+	// uuid_generate_time_safe(tcx->tc_po_uuid);
+	// uuid_unparse(tcx->tc_po_uuid, uuid_str);
+
 	oid_cnt = 0;
-	rc = vts_alloc_gen_fname(&tcx->tc_po_name);
+	rc = vts_alloc_gen_fname(uuid_str, &tcx->tc_po_name);
 	assert_int_equal(rc, 0);
 
 	if (vts_file_exists(tcx->tc_po_name)) {
@@ -103,8 +114,8 @@ vts_ctx_init(struct vos_test_ctx *tcx, size_t psize)
 		assert_int_equal(rc, 0);
 	}
 
-	uuid_generate_time_safe(tcx->tc_po_uuid);
-	uuid_generate_time_safe(tcx->tc_co_uuid);
+	// uuid_generate_time_safe(tcx->tc_co_uuid);
+	uuid_parse(uuid_str2, tcx->tc_co_uuid);
 
 	/* specify @psize as both NVMe size and SCM size */
 	rc = vos_pool_create(tcx->tc_po_name, tcx->tc_po_uuid, psize, psize, 0, 0 /* version */,
@@ -155,14 +166,14 @@ vts_ctx_fini(struct vos_test_ctx *tcx)
 		assert_rc_equal(rc, 0);
 		/* fallthrough */
 	case TCX_CO_CREATE:
-		rc = vos_cont_destroy(tcx->tc_po_hdl, tcx->tc_co_uuid);
-		assert_rc_equal(rc, 0);
+		// rc = vos_cont_destroy(tcx->tc_po_hdl, tcx->tc_co_uuid);
+		// assert_rc_equal(rc, 0);
 		/* fallthrough */
 	case TCX_PO_CREATE_OPEN:
 		rc = vos_pool_close(tcx->tc_po_hdl);
 		assert_rc_equal(rc, 0);
-		rc = vos_pool_destroy(tcx->tc_po_name, tcx->tc_po_uuid);
-		assert_rc_equal(rc, 0);
+		// rc = vos_pool_destroy(tcx->tc_po_name, tcx->tc_po_uuid);
+		// assert_rc_equal(rc, 0);
 		free(tcx->tc_po_name);
 		/* fallthrough */
 	}

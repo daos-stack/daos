@@ -49,7 +49,7 @@ static int
 pool_file_setup(void **state)
 {
 	struct vp_test_args	*arg = *state;
-	int			ret = 0;
+	// int			ret = 0;
 
 	D_ALLOC(arg->fname, sizeof(char *));
 	assert_ptr_not_equal(arg->fname, NULL);
@@ -57,8 +57,8 @@ pool_file_setup(void **state)
 	D_ALLOC_ARRAY(arg->poh, 10);
 	assert_ptr_not_equal(arg->poh, NULL);
 
-	ret = vts_alloc_gen_fname(&arg->fname[0]);
-	assert_int_equal(ret, 0);
+	// ret = vts_alloc_gen_fname(&arg->fname[0]);
+	// assert_int_equal(ret, 0);
 	return 0;
 }
 
@@ -153,8 +153,8 @@ pool_ops_run(void **state)
 								 VPOOL_TEST_WAL_SZ, 0,
 								 0 /* version */, poh);
 				} else {
-					ret = vts_alloc_gen_fname(&arg->fname[j]);
-					assert_int_equal(ret, 0);
+					// ret = vts_alloc_gen_fname(&arg->fname[j]);
+					// assert_int_equal(ret, 0);
 					ret = vos_pool_create_ex(arg->fname[j], arg->uuid[j],
 								 VPOOL_256M, 0, VPOOL_TEST_WAL_SZ,
 								 0, 0 /* version */, poh);

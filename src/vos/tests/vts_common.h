@@ -83,7 +83,7 @@ bool
 vts_file_exists(const char *filename);
 
 int
-vts_alloc_gen_fname(char **fname);
+vts_alloc_gen_fname(char *po_uuid, char **fname);
 
 int
 vts_pool_fallocate(char **fname);

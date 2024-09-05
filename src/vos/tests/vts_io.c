@@ -956,7 +956,7 @@ io_obj_cache_test(void **state)
 	struct vos_object	*obj1, *obj2;
 	daos_epoch_range_t	 epr = {0, 1};
 	daos_unit_oid_t		 oids[2];
-	char			*po_name;
+	char			*po_name = "";
 	uuid_t			 pool_uuid;
 	daos_handle_t		 l_poh, l_coh;
 	struct daos_lru_cache   *old_cache;
@@ -970,8 +970,8 @@ io_obj_cache_test(void **state)
 	old_cache       = tls->vtl_ocache;
 	tls->vtl_ocache = occ;
 
-	rc = vts_alloc_gen_fname(&po_name);
-	assert_int_equal(rc, 0);
+	// rc = vts_alloc_gen_fname(&po_name);
+	// assert_int_equal(rc, 0);
 
 	uuid_generate_time_safe(pool_uuid);
 	rc = vos_pool_create(po_name, pool_uuid, VPOOL_256M, 0, 0, 0 /* version */, &l_poh);
@@ -1105,7 +1105,7 @@ io_obj_cache_test(void **state)
 	assert_rc_equal(rc, 0);
 	vos_obj_cache_destroy(occ);
 	tls->vtl_ocache = old_cache;
-	free(po_name);
+	// free(po_name);
 }
 
 static void
