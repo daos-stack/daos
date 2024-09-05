@@ -34,7 +34,6 @@ apt-get install \
     libibverbs-dev \
     libjson-c-dev \
     liblz4-dev \
-    libndctl-dev \
     libnuma-dev \
     libopenmpi-dev \
     libpci-dev \
