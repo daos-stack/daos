@@ -49,7 +49,7 @@ BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
-BuildRequires: libpmemobj-devel >= 2.0.0
+BuildRequires: libpmemobj-devel >= 2.1.0
 %if (0%{?rhel} >= 8)
 BuildRequires: fuse3-devel >= 3
 %else
@@ -147,11 +147,11 @@ Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 03.00.00.0423
-Requires: libpmemobj1 >= 2.0.0-1.suse1500
+Requires: libpmemobj1 >= 2.1.0-1.suse1500
 Requires: libfabric1 >= %{libfabric_version}
 %else
 Requires: ipmctl >= 03.00.00.0468
-Requires: libpmemobj >= 2.0.0-1%{?dist}
+Requires: libpmemobj >= 2.1.0-1%{?dist}
 %endif
 Requires: libfabric >= %{libfabric_version}
 Requires: mercury >= %{mercury_version}
@@ -593,7 +593,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 
 %changelog
 * Tue Sep 03 2024 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.7.100-6
-- Add support for PMDK packages with NDCTL enabled in case engine is used with SCM
+- Upgrade PMDK to version 2.1.0 to enable NDCTL for engines with DCPM
   * Increase default ULT stack size to 20KiB if engine handles DCPM storage class
   * Disable NDCTL routines for 'ram' storage class
 
