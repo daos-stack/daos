@@ -916,25 +916,29 @@ and possibly repair a pmemobj file. As discussed in the previous section, the
 rebuild status can be consulted via the pool query and will be expanded
 with more information.
 
-## Pool-Wise Redundancy Factor (PW_RF)
+## Pool Redundancy Factor
 
-When there are cascading multiple failures, if the number of failed fault
-domains exceeds the PW_RF, there could be unrecoverable errors and applications
-could suffer from data loss. Especially when there is power or network outage,
-it could cause massive node/engine failures. In most cases those failures can
-be recovered and DAOS engines can be restarted and work again.
+If the DAOS system experiences cascading failures, where the number of failed
+fault domains exceeds a pool's redundancy factor, there could be unrecoverable
+errors and applications could suffer from data loss. This can happen in cases
+of power or network outages and would cause node/engine failures. In most cases
+those failures can be recovered and DAOS engines can be restarted and the system
+can function again.
 
-Administrator can set PW_RF by environment variable "DAOS_PW_RF". When SWIM
-reports an engine is dead, if the number of failed fault domain exceeds or
-is going to exceed PW_RF, it will not change pool map immediately. Instead,
-it will give critical log message "intolerable unavailability: engine rank x",
-so administrator should check and try to recover those engines, and bring
-back those engines by "dmg system start --ranks=x" one by one, needs not
-reintegrate it back.
+Administrator can set the default pool redundancy factor by environment variable
+"DAOS_POOL_RF" in the server yaml file. If SWIM detects and reports an engine is
+dead and the number of failed fault domain exceeds or is going to exceed the pool
+redundancy factor, it will not change pool map immediately. Instead, it will give
+critical log message:
+intolerable unavailability: engine rank x
+In this case, the system administrator should check and try to recover those
+failed engines and bring them back with:
+dmg system start --ranks=x
+one by one. A reintegrate call is not needed.
 
-For unrecoverable failures, administrator can still exclude it explicitly
-that is not affected by PW_RF. However, data loss is expected as the number
-of unrecoverable failures exceeds PW_RF.
+For true unrecoverable failures, the administrator can still exclude engines.
+However, data loss is expected as the number of unrecoverable failures exceeds
+the pool redundancy factor.
 
 ## Recovering Container Ownership
 
