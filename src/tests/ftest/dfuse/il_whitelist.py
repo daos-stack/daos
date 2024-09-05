@@ -5,6 +5,7 @@
 """
 
 import os
+import re
 
 from apricot import TestWithServers
 from command_utils_base import EnvironmentVariables
@@ -19,19 +20,20 @@ class ILWhiteList(TestWithServers):
     :avocado: recursive
     """
 
-    def run_test(self, il_lib='libpil4dfs.so', interception=False):
+    def run_test(self, il_lib='libpil4dfs.so', nobypass=False):
         """Jira ID: DAOS-15583.
 
         Test Description:
             Mount a DFuse mount point
             Run whitelist_test.
             Check the number of daos_init() with interception library
+            Check the status of interception
         """
         env = EnvironmentVariables()
         if il_lib is not None:
             env["LD_PRELOAD"] = os.path.join(self.prefix, "lib64", il_lib)
 
-        exe_path = os.path.join(self.prefix, "lib", 'daos/TESTING/tests/whitelist_test')
+        exe_path = os.path.join(self.prefix, 'lib/daos/TESTING/tests/whitelist_test')
 
         pool = self.get_pool(connect=False)
         container = self.get_container(pool)
@@ -45,19 +47,28 @@ class ILWhiteList(TestWithServers):
         env["D_LOG_MASK"] = "DEBUG"
         env["DD_SUBSYS"] = "il"
         env["DD_MASK"] = "DEBUG"
+        env["D_IL_REPORT"] = "1"
 
-        env["D_IL_BYPASS_ALL_LIST"] = "whitelist_test"
-        if interception:
-            env["D_IL_INTERCEPTION_ON"] = "1"
+        env["D_IL_BYPASS_LIST"] = "whitelist_test"
+        if nobypass:
+            env["D_IL_NO_BYPASS"] = "1"
 
         result = run_remote(self.log, dfuse_hosts, env.to_export_str() + exe_path)
         output = "\n".join(result.all_stdout.values())
-        lines = output.split('\n')
-        num_daos_init = 0
-        for line in lines:
-            if "called daos_init()" in line:
-                num_daos_init += 1
+        num_daos_init = len(re.findall('called daos_init()', output))
         self.log.info('num_daos_init = %d', num_daos_init)
+
+        # confirm interception ON/OFF as expected
+        if not nobypass:
+            search_tag = 'interception OFF'
+        else:
+            search_tag = 'interception ON'
+        num_exp = 11
+        num_found = len(re.findall(search_tag, output))
+        self.log.info('num_found = %d', num_found)
+        if num_found != num_exp:
+            self.fail(f"Test failed: num_found = {num_found}. Expected {num_exp}.")
+
         return num_daos_init
 
     def test_whitelist_pil4dfs(self):
@@ -69,18 +80,18 @@ class ILWhiteList(TestWithServers):
         :avocado: tags=ILWhiteList,test_whitelist_pil4dfs
         """
         num_daos_init = self.run_test(il_lib='libpil4dfs.so')
-        if num_daos_init != 5:
-            self.fail(f"Test failed: num_daos_init = {num_daos_init}. Expected 5.")
+        if num_daos_init != 0:
+            self.fail(f"Test failed: num_daos_init = {num_daos_init}. Expected 0.")
 
-    def test_whitelist_pil4dfs_interception_on(self):
+    def test_whitelist_pil4dfs_nobypass(self):
         """Jira ID: DAOS-15583.
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=pil4dfs,dfuse
-        :avocado: tags=ILWhiteList,test_whitelist_pil4dfs_interception_on
+        :avocado: tags=ILWhiteList,test_whitelist_pil4dfs_nobypass
         """
-        # force function interception on which disables whitelist mode
-        num_daos_init = self.run_test(il_lib='libpil4dfs.so', interception=True)
+        # force function interception on
+        num_daos_init = self.run_test(il_lib='libpil4dfs.so', nobypass=True)
         if num_daos_init != 10:
             self.fail(f"Test failed: num_daos_init = {num_daos_init}. Expected 10.")

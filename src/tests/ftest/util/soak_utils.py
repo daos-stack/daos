@@ -1005,7 +1005,6 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None,
             if api == "POSIX-LIBPIL4DFS":
                 env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
                 env["D_IL_REPORT"] = "1"
-                env["D_IL_INTERCEPTION_ON"] = "1"
             if api == "POSIX-LIBIOIL":
                 env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libioil.so')
                 env["D_IL_REPORT"] = "1"
@@ -1175,7 +1174,6 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                     env["LD_PRELOAD"] = os.path.join(
                         self.prefix, 'lib64', 'libpil4dfs.so')
                     env["D_IL_REPORT"] = "1"
-                    env["D_IL_INTERCEPTION_ON"] = "1"
                 if self.enable_il and api == "POSIX-LIBIOIL":
                     env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libioil.so')
                     env["D_IL_REPORT"] = "1"
@@ -1307,7 +1305,6 @@ def create_fio_cmdline(self, job_spec, pool):
         if self.enable_il and api == "POSIX-LIBPIL4DFS":
             cmds.append(f"export LD_PRELOAD={os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')}")
             cmds.append("export D_IL_REPORT=1")
-            cmds.append("export D_IL_INTERCEPTION_ON=1")
         if self.enable_il and api == "POSIX-LIBIOIL":
             cmds.append(f"export LD_PRELOAD={os.path.join(self.prefix, 'lib64', 'libioil.so')}")
             cmds.append("export D_IL_REPORT=1")
@@ -1383,7 +1380,6 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
             if self.enable_il and api == "POSIX-LIBPIL4DFS":
                 env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
                 env["D_IL_REPORT"] = "1"
-                env["D_IL_INTERCEPTION_ON"] = "1"
             if self.enable_il and api == "POSIX-LIBIOIL":
                 env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libioil.so')
                 env["D_IL_REPORT"] = "1"

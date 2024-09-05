@@ -103,7 +103,7 @@ class DaosCoreTestDfuse(TestWithServers):
                 daos_test_env['D_IL_CONTAINER'] = container.identifier
                 daos_test_env['D_IL_REPORT'] = '0'
                 daos_test_env['D_IL_MAX_EQ'] = '2'
-                daos_test_env['D_IL_INTERCEPTION_ON'] = '1'
+                daos_test_env['D_IL_NO_BYPASS'] = '1'
 
         command = [
             daos_test,

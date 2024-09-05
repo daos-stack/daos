@@ -166,10 +166,13 @@ static bool             daos_debug_inited;
 static int              num_dfs;
 static struct dfs_mt    dfs_list[MAX_DAOS_MT];
 
-/* turns whitelist mode on as default. Env "D_IL_INTERCEPTION_ON" can be set to disable whitelist
- * mode in CI testing.
+/* libpil4dfs include two scenarios / code paths, 1) interception disabled (let fuse to handle I/O)
+ * and 2) interception enabled. The code path is chosen by determining whether application's name
+ * is in bypass list (built-in and user supplied). Bypass is allowed as default.
+ * An env "D_IL_NO_BYPASS" can be set 1 to disable bypass and always enable interception in CI
+ * testing. Please be aware that this env is not documented for users since it is ONLY for testing.
  */
-bool                    whitelist_mode = true;
+bool                    bypass_allowed = true;
 /* bypass interception in current process. */
 static bool             bypass;
 /* base name of the current application name */
@@ -1180,6 +1183,7 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 			}
 
 			rc = daos_init();
+			/* This message is used by ftest "il_whitelist.py" */
 			D_DEBUG(DB_ANY, "called daos_init().\n");
 			if (rc) {
 				DL_ERROR(rc, "daos_init() failed");
@@ -4092,8 +4096,12 @@ out_readdir:
 	return &mydir->ents[mydir->num_ents];
 }
 
-static char env_str_int_on[]  = "D_IL_INTERCEPTION_ON=1";
-static char env_str_int_off[] = "D_IL_INTERCEPTION_ON=0";
+/* Bypass is allowed by defualt. Env "D_IL_NO_BYPASS" is ONLY used for testing purpose.
+ * "D_IL_NO_BYPASS=1" enforces that interception by libpil4dfs is on in current process and
+ * children processes. This is needed to thoroughly test interception related code in CI.
+ */
+static char env_str_no_bypass_on[]  = "D_IL_NO_BYPASS=1";
+static char env_str_no_bypass_off[] = "D_IL_NO_BYPASS=0";
 
 /* This is the number of environmental variables that would be forced to set in child process.
  * "LD_PRELOAD" is a special case and it is not included in the list.
@@ -4135,7 +4143,7 @@ pre_envp(char *const envp[], char ***new_envp)
 	bool   preload_included                   = false;
 	/* whether pil4dfs in LD_PRELOAD in envp[] */
 	bool   pil4dfs_in_preload                 = false;
-	bool   interception_on_included           = false;
+	bool   no_bypass_included                 = false;
 	/* whether env_list entry exists in envp[] */
 	bool   env_found[ARRAY_SIZE(env_list)]    = {false};
 	/* whether env_list entry exists in environ */
@@ -4169,8 +4177,8 @@ pre_envp(char *const envp[], char ***new_envp)
 	/* libpil4dfs.so is not in LD_PRELOAD, do not append env. */
 	if (!pil4dfs_set_preload)
 		return 0;
-	if (whitelist_mode == false)
-		/* D_IL_INTERCEPTION_ON needs to be appended if whitelist mode is not on. */
+	if (bypass_allowed == false)
+		/* "D_IL_NO_BYPASS" needs to be appended. */
 		num_env_append++;
 
 	/* check whether env_list entries exist in environ */
@@ -4203,9 +4211,9 @@ pre_envp(char *const envp[], char ***new_envp)
 				num_entry_found++;
 				if (strstr(envp[num_entry], "libpil4dfs.so"))
 					pil4dfs_in_preload = true;
-			} else if (memcmp(envp[num_entry], STR_AND_SIZE_M1("D_IL_INTERCEPTION_ON"))
-				   == 0 && interception_on_included == false) {
-				interception_on_included = true;
+			} else if (memcmp(envp[num_entry], STR_AND_SIZE_M1("D_IL_NO_BYPASS")) == 0 &&
+					   no_bypass_included == false) {
+				no_bypass_included = true;
 				num_entry_found++;
 			}
 			/* The list of env is not too long. We use a simple loop to lookup for
@@ -4276,12 +4284,12 @@ pre_envp(char *const envp[], char ***new_envp)
 		(*new_envp)[i] = new_preload_str;
 		i++;
 	}
-	/* append D_IL_INTERCEPTION_ON env */
-	if (!interception_on_included) {
-		if (whitelist_mode == false)
-			(*new_envp)[i] = env_str_int_on;
+	/* append D_IL_NO_BYPASS env */
+	if (!no_bypass_included) {
+		if (bypass_allowed == false)
+			(*new_envp)[i] = env_str_no_bypass_on;
 		else
-			(*new_envp)[i] = env_str_int_off;
+			(*new_envp)[i] = env_str_no_bypass_off;
 		i++;
 	}
 
@@ -4330,10 +4338,6 @@ err_out0:
 	return rc;
 }
 
-/* Set this flag to avoid setup_fd_0_1_2() executed more than one time in case exec() fails due to
- * wrong path.
- */
-static bool setup_fd_0_1_2_done;
 /* check whether fd 0, 1, and 2 are located on DFS mount or not. If yes, reopen files and
  * set offset.
  */
@@ -4343,12 +4347,8 @@ setup_fd_0_1_2(void)
 	int   i, fd, idx, fd_tmp, fd_new, open_flag, error_save;
 	off_t offset;
 
-	if (setup_fd_0_1_2_done)
+	if (atomic_load_relaxed(&num_fd_dup2ed) == 0)
 		return 0;
-	if (atomic_load_relaxed(&num_fd_dup2ed) == 0) {
-		setup_fd_0_1_2_done = true;
-		return 0;
-	}
 
 	D_RWLOCK_RDLOCK(&lock_fd_dup2ed);
 	for (i = 0; i < MAX_FD_DUP2ED; i++) {
@@ -4387,12 +4387,10 @@ setup_fd_0_1_2(void)
 		}
 	}
 	D_RWLOCK_UNLOCK(&lock_fd_dup2ed);
-	setup_fd_0_1_2_done = true;
 	return 0;
 
 err:
 	D_RWLOCK_UNLOCK(&lock_fd_dup2ed);
-	setup_fd_0_1_2_done = true;
 	return error_save;
 }
 
@@ -6838,7 +6836,7 @@ static char *bypass_app_list[] = {"arch", "as", "awk", "basename", "bc", "cal", 
 				      "tr", "truncate", "uname", "vi", "vim", "whoami", "yes"};
 
 static void
-check_whitelist(void)
+check_bypasslist(void)
 {
 	int   i;
 	char *saveptr, *str, *token;
@@ -6903,10 +6901,14 @@ check_whitelist(void)
 		}
 	}
 
+	if (bypass_user_cmd_list)
+		d_freeenv_str(&bypass_user_cmd_list);
 	return;
 
 set_bypass:
 	bypass = true;
+	if (bypass_user_cmd_list)
+		d_freeenv_str(&bypass_user_cmd_list);
 	return;
 }
 
@@ -6915,19 +6917,31 @@ init_myhook(void)
 {
 	mode_t   umask_old;
 	char    *env_log;
-	char    *env_interception_on;
+	char    *env_no_bypass;
 	int      rc;
 	uint64_t eq_count_loc = 0;
 
-	/* D_IL_INTERCEPTION_ON is only for testing. It turns off whitelist mode and keeps
-	 * function interception enabled all the time.
+	/* D_IL_NO_BYPASS is ONLY for testing. It always keeps function interception enabled in current
+	 * process and children processes. This is needed to thoroughly test interception related code
+	 * in CI. The code related to interception disabled is tested by a few tests in
+	 * "test_bashcmd_pil4dfs" and "test_whitelist_pil4dfs". Most tests in CI run with
+	 * "D_IL_NO_BYPASS=1" to test the code with interception enabled.
 	 */
-	d_agetenv_str(&env_interception_on, "D_IL_INTERCEPTION_ON");
-	if (env_interception_on) {
-		if (strncmp(env_interception_on, "1", 2) == 0) {
-			whitelist_mode = false;
+	d_agetenv_str(&env_no_bypass, "D_IL_NO_BYPASS");
+	if (env_no_bypass) {
+		if (strncmp(env_no_bypass, "1", 2) == 0) {
+			bypass_allowed = false;
 			bypass         = false;
 		}
+		d_freeenv_str(&env_no_bypass);
+	}
+
+	rc = d_agetenv_str(&env_log, "D_IL_REPORT");
+	if (env_log) {
+		report = true;
+		if (strncmp(env_log, "0", 2) == 0 || strncasecmp(env_log, "false", 6) == 0)
+			report = false;
+		d_freeenv_str(&env_log);
 	}
 
 	extract_exe_name_1st_arg();
@@ -6935,8 +6949,10 @@ init_myhook(void)
 	/* Need to check whether current process is bash or not under regular & compatible modes.*/
 	check_exe_sh_bash();
 
-	if (whitelist_mode)
-		check_whitelist();
+	if (bypass_allowed)
+		check_bypasslist();
+	if (report)
+		fprintf(stderr, "app %s interception %s\n", exe_short_name, bypass ? "OFF" : "ON");
 	if (bypass)
 		return;
 
@@ -6951,14 +6967,6 @@ init_myhook(void)
 			strerror(daos_der2errno(rc)));
 	else
 		daos_debug_inited = true;
-
-	rc = d_agetenv_str(&env_log, "D_IL_REPORT");
-	if (env_log) {
-		report = true;
-		if (strncmp(env_log, "0", 2) == 0 || strncasecmp(env_log, "false", 6) == 0)
-			report = false;
-		d_freeenv_str(&env_log);
-	}
 
 	d_compatible_mode = false;
 	d_getenv_bool("D_IL_COMPATIBLE", &d_compatible_mode);

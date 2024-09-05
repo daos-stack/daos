@@ -53,7 +53,7 @@ class DfuseBashCmd(TestWithServers):
             else:
                 env_str = f"export LD_PRELOAD={lib_path}; "
             if interception_on:
-                env_str = env_str + "export D_IL_INTERCEPTION_ON=1; "
+                env_str = env_str + "export D_IL_NO_BYPASS=1; "
         else:
             env_str = ""
 

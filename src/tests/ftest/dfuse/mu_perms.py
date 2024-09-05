@@ -302,7 +302,7 @@ class DfuseMUPerms(TestWithServers):
         env_with_il.update({
             'LD_PRELOAD': os.path.join(self.prefix, 'lib64', il_lib),
             'D_IL_REPORT': -1,  # Log all intercepted calls
-            'D_IL_INTERCEPTION_ON': '1'
+            'D_IL_NO_BYPASS': '1'
         })
 
         def _verify(use_il, expected_il_messages, expect_der_no_perm):
