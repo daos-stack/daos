@@ -306,7 +306,7 @@ dav_get_heap_mb_stats_v2(dav_obj_t *pop, uint32_t mb_id, struct dav_heap_mb_stat
  * \param[in]           pop             pool handle
  * \param[in]           flags           zone selection criteria.
  *
- * \return id = 0, success
+ * \return id > 0, mbid of evictable memory bucket.
  *         id = 0, no evictable memory bucket is available
  *                 use non-evictable memory bucket.
  */
