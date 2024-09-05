@@ -768,7 +768,6 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti, daos_epoch_t 
 		   daos_epoch_t cmt_time, struct vos_dtx_cmt_ent **dce_p,
 		   struct vos_dtx_act_ent **dae_p, bool *rm_cos, bool *fatal)
 {
-	struct vos_tls			*tls = vos_tls_get(false);
 	struct vos_dtx_act_ent		*dae = NULL;
 	struct vos_dtx_cmt_ent		*dce = NULL;
 	d_iov_t				 kiov;
@@ -833,7 +832,6 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti, daos_epoch_t 
 	if (dce == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	d_tm_inc_gauge(tls->vtl_dtx_cmt_ent_cnt, 1);
 	DCE_CMT_TIME(dce) = cmt_time;
 	if (dae != NULL) {
 		DCE_XID(dce) = DAE_XID(dae);
@@ -2484,7 +2482,6 @@ vos_dtx_aggregate(daos_handle_t coh)
 		cont->vc_dtx_committed_count--;
 		cont->vc_pool->vp_dtx_committed_count--;
 		d_tm_dec_gauge(tls->vtl_committed, 1);
-		d_tm_dec_gauge(tls->vtl_dtx_cmt_ent_cnt, 1);
 	}
 
 	if (epoch != cont_df->cd_newest_aggregated) {
