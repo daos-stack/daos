@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2023 Intel Corporation.
+  (C) Copyright 2023-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -157,7 +157,7 @@ class ControlLogEntry(TestWithServers):
         self.log_step('Restart server')
         expected = [r'Starting I/O Engine instance', r'Listening on']
         with self.verify_journalctl(expected):
-            self.server_managers[0].restart(list(kill_host), wait=True)
+            self.server_managers[0].restart(kill_host, wait=True)
 
         self.log_step('Reintegrate all ranks and wait for rebuild')
         expected = [fr'rank {rank}.*start reintegration' for rank in kill_ranks] \

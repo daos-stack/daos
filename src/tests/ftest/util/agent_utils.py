@@ -238,15 +238,18 @@ class DaosAgentManager(SubprocessManager):
         super().__init__(agent_command, manager)
 
         # Set the correct certificate file ownership
-        self.__verify_privileged = False
         if manager == "Systemctl":
             if self.manager.job.run_user == "root":
                 # systemctl is run as root, but the process is spawned as daos_agent
                 self.manager.job.certificate_owner = "daos_agent"
-                self.__verify_privileged = True
             else:
                 # systemctl and the process are run as the user
                 self.manager.job.certificate_owner = self.manager.job.run_user
+
+        # Set whether or not the socket directory creation requires privileged access
+        self.__verify_privileged = False
+        if self.manager.job.run_user == "root":
+            self.__verify_privileged = True
 
         # Set default agent debug levels
         env_vars = {
