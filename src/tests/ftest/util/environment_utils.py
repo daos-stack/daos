@@ -3,6 +3,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import getpass
 import os
 import shutil
 import site
@@ -115,10 +116,6 @@ class TestEnvironment():
         'server_config': 'DAOS_TEST_SERVER_CONFIG',
     }
 
-    def __init__(self):
-        """Initialize a TestEnvironment object with existing or default test environment values."""
-        self.set_defaults(None)
-
     def set_defaults(self, logger, servers=None, clients=None, provider=None, insecure_mode=None,
                      agent_user=None, log_dir=None, systemd_path=None, systemd_lib_path=None):
         """Set the default test environment variable values with optional inputs.
@@ -163,7 +160,7 @@ class TestEnvironment():
 
         # Set defaults for any unset values
         if self.log_dir is None:
-            self.log_dir = os.path.join(os.sep, "var", "tmp", "daos_testing")
+            self.log_dir = os.path.join(os.sep, "var", "tmp", f"daos_testing_{getpass.getuser()}")
         if self.shared_dir is None:
             self.shared_dir = os.path.expanduser(os.path.join("~", "daos_test"))
         if self.app_dir is None:

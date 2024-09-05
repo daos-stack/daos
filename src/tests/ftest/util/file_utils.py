@@ -30,7 +30,7 @@ def __run_command(logger, hosts, command, verbose=True, timeout=15):
     return run_remote(logger, hosts, command, verbose, timeout)
 
 
-def create_directory(logger, hosts, directory, timeout=15, verbose=True, user=None):
+def create_directory(logger, hosts, directory, timeout=15, verbose=True, user=None, owner=None):
     """Create the specified directory on the specified hosts.
 
     Args:
@@ -40,12 +40,17 @@ def create_directory(logger, hosts, directory, timeout=15, verbose=True, user=No
         timeout (int, optional): command timeout. Defaults to 15 seconds.
         verbose (bool, optional): log the command output. Defaults to True.
         user (str, optional): user with which to run the command. Defaults to None.
+        owner (str, optional): user to have ownership of the directory. Defaults to None.
 
     Returns:
         CommandResult: groups of command results from the same hosts with the same return status
     """
-    command = command_as_user(f"mkdir -p {directory}", user)
-    return __run_command(logger, hosts, command, verbose, timeout)
+    commands = [command_as_user(f"mkdir -p {directory}", user)]
+    if owner and user != owner:
+        commands.append(
+            command_as_user(
+                get_chown_command(owner, get_primary_group(owner), file=directory), user))
+    return __run_command(logger, hosts, " && ".join(commands), verbose, timeout)
 
 
 def change_file_owner(logger, hosts, filename, owner, group, timeout=15, verbose=True, user=None):
@@ -66,31 +71,6 @@ def change_file_owner(logger, hosts, filename, owner, group, timeout=15, verbose
     """
     command = command_as_user(get_chown_command(owner, group, file=filename), user)
     return __run_command(logger, hosts, command, verbose, timeout)
-
-
-def create_owned_directory(logger, hosts, directory, timeout=15, verbose=True, owner=None,
-                           privileged=False):
-    """Create a directory on the specified hosts owned by the specified user.
-
-    Args:
-        logger (Logger): logger for the messages produced by this method
-        hosts (NodeSet): hosts on which to create the directory
-        directory (str): the directory to create
-        timeout (int, optional): command timeout. Defaults to 15 seconds.
-        verbose (bool, optional): log the command output. Defaults to True.
-        owner (_type_, optional): user to have ownership of the directory. Defaults to None.
-        privileged (bool, optional): does the directory creation and change of ownership require
-            privileged access. Defaults to False.
-
-    Returns:
-        CommandResult: groups of command results from the same hosts with the same return status
-    """
-    executor = "root" if privileged else None
-    result = create_directory(logger, hosts, directory, timeout, verbose, executor)
-    if not result.passed or not privileged:
-        return result
-    return change_file_owner(
-        logger, hosts, directory, owner, get_primary_group(owner), timeout, verbose, executor)
 
 
 def get_file_size(logger, host, file_name):

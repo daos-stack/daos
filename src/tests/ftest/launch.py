@@ -783,10 +783,6 @@ def main():
         if args.agent_user is None:
             # Run the agent with the current user by default
             args.agent_user = getpass.getuser()
-        if os.environ.get("DAOS_TEST_LOG_DIR", args.test_log_dir) is None:
-            # Use a user-specific test log dir by default
-            args.test_log_dir = os.path.join(
-                os.sep, "var", "tmp", f"daos_testing_{getpass.getuser()}")
         args.process_cores = False
         args.logs_threshold = None
         args.slurm_install = False

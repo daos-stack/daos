@@ -19,7 +19,7 @@ from ClusterShell.NodeSet import NodeSet
 from command_utils_base import (BasicParameter, CommandWithParameters, EnvironmentVariables,
                                 FormattedParameter, LogParameter, ObjectWithParameters)
 from exception_utils import CommandFailure
-from file_utils import create_directory, create_owned_directory, distribute_files
+from file_utils import create_directory, distribute_files
 from general_utils import (DaosTestError, check_file_exists, get_file_listing,
                            get_job_manager_class, get_subprocess_stdout, run_command)
 from run_utils import command_as_user, run_remote
@@ -1093,8 +1093,8 @@ class YamlCommand(SubProcessCommand):
             self.log.info(
                 "Creating %s socket directory %s for user %s on %s",
                 self.command, directory, user, nodes)
-            result = create_owned_directory(
-                self.log, nodes, directory, owner=user, privileged=privileged)
+            result = create_directory(
+                self.log, nodes, directory, user=user, owner="root" if privileged else None)
             if not result.passed:
                 raise CommandFailure(
                     f"{self.command}: error creating socket directory {directory} for user "
