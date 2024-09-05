@@ -4096,7 +4096,7 @@ out_readdir:
 	return &mydir->ents[mydir->num_ents];
 }
 
-/* Bypass is allowed by defualt. Env "D_IL_NO_BYPASS" is ONLY used for testing purpose.
+/* Bypass is allowed by default. Env "D_IL_NO_BYPASS" is ONLY used for testing purpose.
  * "D_IL_NO_BYPASS=1" enforces that interception by libpil4dfs is on in current process and
  * children processes. This is needed to thoroughly test interception related code in CI.
  */
@@ -6886,8 +6886,8 @@ check_bypasslist(void)
 	}
 
 	for (i = 0; i < ARRAY_SIZE(bypass_app_list); i++) {
-		if (strncmp(exe_short_name, bypass_app_list[i],
-			    strlen(bypass_app_list[i]) + 1) == 0)
+		if (strncmp(exe_short_name, bypass_app_list[i], strlen(bypass_app_list[i]) + 1) ==
+		    0)
 			goto set_bypass;
 	}
 
