@@ -29,6 +29,7 @@ apt-get install \
     libcapstone-dev \
     libcmocka-dev \
     libcunit1-dev \
+    libdaxctl-devel \
     libfuse3-dev \
     libhwloc-dev \
     libibverbs-dev \
