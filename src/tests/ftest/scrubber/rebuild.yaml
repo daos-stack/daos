@@ -34,7 +34,6 @@ pool:
   scm_size: 6G
   nvme_size: 54G
   svcn: 4
-  control_method: dmg
   rebuild_timeout: 120
   pool_query_timeout: 30
   properties: "scrub:timed,scrub_freq:1,scrub_thresh:2"

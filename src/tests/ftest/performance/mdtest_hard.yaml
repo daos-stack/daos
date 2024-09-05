@@ -28,7 +28,6 @@ server_config:
 
 pool:
   size: 95%
-  control_method: dmg
   properties: ec_cell_sz:128KiB
 
 container:

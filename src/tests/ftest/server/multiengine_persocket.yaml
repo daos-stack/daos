@@ -87,7 +87,6 @@ dmg:
     allow_insecure: false
 provider: ofi+tcp
 pool:
-  control_method: dmg
   scm_size: 1G
   name: daos_server
 container:

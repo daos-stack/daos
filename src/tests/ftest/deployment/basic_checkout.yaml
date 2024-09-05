@@ -22,7 +22,6 @@ server_config:
       storage: auto
 pool:
   size: 50%
-  control_method: dmg
   properties: ec_cell_sz:128KiB
 container:
   type: POSIX
