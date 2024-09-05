@@ -281,6 +281,7 @@ struct shard_rw_args {
 	struct dcs_csum_info	*dkey_csum;
 	struct dcs_iod_csums	*iod_csums;
 	struct obj_reasb_req	*reasb_req;
+	uint16_t		 csum_retry_cnt;
 };
 
 struct coll_sparse_targets {
@@ -475,9 +476,8 @@ struct obj_auxi_args {
 					 for_migrate:1;
 	/* request flags. currently only: ORF_RESEND */
 	uint32_t			 specified_shard;
-	uint16_t			 flags;
+	uint32_t			 flags;
 	uint16_t			 retry_cnt;
-	uint16_t			 csum_retry_cnt;
 	uint16_t			 inprogress_cnt;
 	struct obj_req_tgts		 req_tgts;
 	d_sg_list_t			*sgls_dup;
