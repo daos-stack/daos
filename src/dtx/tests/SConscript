@@ -19,7 +19,7 @@ def scons():
 
     test_src = ['dtx_tests.c', 'sched_mock.c', 'ult_mock.c', 'srv_mock.c', 'pl_map_mock.c',
                 '../../common/tls.c', 'dts_utils.c', 'dts_local.c', 'dts_local_rdb.c',
-                'dts_structs.c', vts_objs]
+                'dts_structs.c', 'dts_xxx.c', vts_objs]
     dtx_tests = tenv.d_program('dtx_tests', test_src, LIBS=libraries)
 
     tenv.Install('$PREFIX/bin/', [dtx_tests])
