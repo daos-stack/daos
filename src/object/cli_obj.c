@@ -4775,7 +4775,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 								"update, retrying\n",
 								DP_OID(obj->cob_md.omd_id));
 						} else {
-							D_ERROR(DF_OID" checksum error on udpate, "
+							D_ERROR(DF_OID" checksum error on update, "
 								"too many retries. Failing I/O\n",
 								DP_OID(obj->cob_md.omd_id));
 							obj_auxi->io_retry = 0;
