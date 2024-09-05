@@ -387,7 +387,7 @@ func (c *Config) ValidateAndAdjustPMDKEnvVar() error {
 			"for DCPM storage class")
 	}
 
-	// Ensure 20KiB ABT stack size for an engines with DCPM storage class.
+	// Ensure 20KiB ABT stack size for an engine with DCPM storage class.
 	stackSizeStr, err := c.GetEnvVar("ABT_THREAD_STACKSIZE")
 	if err != nil {
 		c.EnvVars = append(c.EnvVars, fmt.Sprintf("ABT_THREAD_STACKSIZE=%d",

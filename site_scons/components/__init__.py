@@ -266,6 +266,7 @@ def define_components(reqs):
                 retriever=GitRepoRetriever(),
                 commands=[['make',
                            'all',
+                           'NDCTL_ENABLE=n',
                            'BUILD_EXAMPLES=n',
                            'BUILD_BENCHMARKS=n',
                            'DOC=n',
