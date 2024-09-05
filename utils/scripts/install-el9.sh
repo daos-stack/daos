@@ -18,7 +18,6 @@ dnf --nodocs install \
     clang-tools-extra \
     cmake \
     CUnit-devel \
-    daxctl-devel \
     diffutils \
     e2fsprogs \
     file \
