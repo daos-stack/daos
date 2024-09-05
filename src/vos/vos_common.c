@@ -1012,9 +1012,9 @@ vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool nvme_in
 		goto out;
 	}
 
-	rc = ABT_init(0, NULL);
-	if (rc != 0)
-		goto out;
+	// rc = ABT_init(0, NULL);
+	// if (rc != 0)
+	// 	goto out;
 
 	vos_start_epoch = 0;
 
