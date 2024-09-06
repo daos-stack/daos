@@ -284,11 +284,6 @@ and access control settings, along with system wide operations.`
 			return errors.Wrap(err, "Unable to load Certificate Data")
 		}
 
-		invoker.SetConfig(ctlCfg)
-		if ctlCmd, ok := cmd.(ctlInvoker); ok {
-			ctlCmd.setInvoker(invoker)
-		}
-
 		// Handle the deprecated global hostlist flag
 		if !opts.HostList.Empty() {
 			if hlCmd, ok := cmd.(hostListSetter); ok {
@@ -301,15 +296,24 @@ and access control settings, along with system wide operations.`
 			}
 		}
 
-		if hlCmd, ok := cmd.(hostListGetter); ok {
-			hl := hlCmd.getHostList()
-			if len(hl) > 0 {
-				ctlCfg.HostList = hl
+		if cfgCmd, ok := cmd.(cmdConfigSetter); ok {
+			// Override hostlist with cli value if provided.
+			if hlCmd, ok := cmd.(hostListGetter); ok {
+				hl := hlCmd.getHostList()
+				if len(hl) > 0 {
+					ctlCfg.HostList = hl
+				}
 			}
+			cfgCmd.setConfig(ctlCfg)
+		} else {
+			// Before setting config on invoker strip hostlist as in the case that the
+			// command doesn't support config, the host list should be derived from cmd.
+			ctlCfg.HostList = nil
 		}
 
-		if cfgCmd, ok := cmd.(cmdConfigSetter); ok {
-			cfgCmd.setConfig(ctlCfg)
+		invoker.SetConfig(ctlCfg)
+		if ctlCmd, ok := cmd.(ctlInvoker); ok {
+			ctlCmd.setInvoker(invoker)
 		}
 
 		if argsCmd, ok := cmd.(cmdutil.ArgsHandler); ok {
