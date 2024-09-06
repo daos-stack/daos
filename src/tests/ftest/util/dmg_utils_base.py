@@ -8,6 +8,7 @@ from socket import gethostname
 from ClusterShell.NodeSet import NodeSet
 from command_utils import CommandWithSubCommand, YamlCommand
 from command_utils_base import BasicParameter, CommandWithParameters, FormattedParameter
+from environment_utils import TestEnvironment
 from general_utils import nodeset_append_suffix
 
 
@@ -33,6 +34,8 @@ class DmgCommandBase(YamlCommand):
         default_yaml_file = None
         if self.yaml is not None and hasattr(self.yaml, "filename"):
             default_yaml_file = self.yaml.filename
+        else:
+            default_yaml_file = TestEnvironment().control_config
 
         self.hostlist_suffix = hostlist_suffix
 
