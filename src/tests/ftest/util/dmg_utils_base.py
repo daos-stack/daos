@@ -685,7 +685,7 @@ class DmgCommandBase(YamlCommand):
                     super().__init__("/run/dmg/storage/replace/nvme/*", "nvme")
                     self.old_uuid = FormattedParameter("--old-uuid {}", None)
                     self.new_uuid = FormattedParameter("--new-uuid {}", None)
-                    self.no_reint = FormattedParameter("--no-reint", False)
+                    self.host = FormattedParameter("--host {}", None)
 
         class LedSubCommand(CommandWithSubCommand):
             """Defines an object for the dmg storage LED command"""
@@ -809,6 +809,7 @@ class DmgCommandBase(YamlCommand):
                     super().__init__("/run/dmg/storage/query/device-state/*", "nvme-faulty")
                     self.uuid = FormattedParameter("-u {}", None)
                     self.force = FormattedParameter("--force", False)
+                    self.host = FormattedParameter("--host {}", None)
 
     class SystemSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg system sub command."""

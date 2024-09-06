@@ -40,10 +40,14 @@ type smdQueryCmd struct {
 func (cmd *smdQueryCmd) makeRequest(ctx context.Context, req *control.SmdQueryReq, opts ...pretty.PrintConfigOption) error {
 	req.SetHostList(cmd.getHostList())
 
+	cmd.Tracef("smd query request: %+v", req)
+
 	resp, err := control.SmdQuery(ctx, cmd.ctlInvoker, req)
 	if err != nil {
 		return err // control api returned an error, disregard response
 	}
+
+	cmd.Tracef("smd query response: %+v", resp)
 
 	if cmd.JSONOutputEnabled() {
 		return cmd.OutputJSON(resp, resp.Errors())
@@ -155,13 +159,10 @@ func (cmd *usageQueryCmd) Execute(_ []string) error {
 type smdManageCmd struct {
 	baseCmd
 	ctlInvokerCmd
-	hostListCmd
 	cmdutil.JSONOutputCmd
 }
 
 func (cmd *smdManageCmd) makeRequest(ctx context.Context, req *control.SmdManageReq, opts ...pretty.PrintConfigOption) error {
-	req.SetHostList(cmd.getHostList())
-
 	cmd.Tracef("smd manage request: %+v", req)
 
 	resp, err := control.SmdManage(ctx, cmd.ctlInvoker, req)
@@ -169,7 +170,7 @@ func (cmd *smdManageCmd) makeRequest(ctx context.Context, req *control.SmdManage
 		return err // control api returned an error, disregard response
 	}
 
-	cmd.Tracef("smd managee response: %+v", resp)
+	cmd.Tracef("smd manage response: %+v", resp)
 
 	if cmd.JSONOutputEnabled() {
 		return cmd.OutputJSON(resp, resp.Errors())
@@ -195,6 +196,7 @@ type setFaultyCmd struct {
 
 type nvmeSetFaultyCmd struct {
 	smdManageCmd
+	Host  string `short:"t" long:"host" required:"1" description:"Single host address <ipv4addr/hostname> to connect to"`
 	UUID  string `short:"u" long:"uuid" description:"Device UUID to set" required:"1"`
 	Force bool   `short:"f" long:"force" description:"Do not require confirmation"`
 }
@@ -213,6 +215,7 @@ func (cmd *nvmeSetFaultyCmd) Execute(_ []string) error {
 		Operation: control.SetFaultyOp,
 		IDs:       cmd.UUID,
 	}
+	req.SetHostList([]string{cmd.Host})
 	return cmd.makeRequest(cmd.MustLogCtx(), req)
 }
 
@@ -224,9 +227,9 @@ type storageReplaceCmd struct {
 // nvmeReplaceCmd is the struct representing the replace nvme storage subcommand
 type nvmeReplaceCmd struct {
 	smdManageCmd
+	Host       string `short:"t" long:"host" required:"1" description:"Single host address <ipv4addr/hostname> to connect to"`
 	OldDevUUID string `long:"old-uuid" description:"Device UUID of hot-removed SSD" required:"1"`
 	NewDevUUID string `long:"new-uuid" description:"Device UUID of new device" required:"1"`
-	NoReint    bool   `long:"no-reint" description:"Bypass reintegration of device and just bring back online."`
 }
 
 // Execute is run when storageReplaceCmd activates
@@ -236,22 +239,18 @@ func (cmd *nvmeReplaceCmd) Execute(_ []string) error {
 		cmd.Notice("Attempting to reuse a previously set FAULTY device!")
 	}
 
-	// TODO: Implement no-reint flag option
-	if cmd.NoReint {
-		return errors.New("NoReint is not currently implemented")
-	}
-
 	req := &control.SmdManageReq{
-		Operation:      control.DevReplaceOp,
-		IDs:            cmd.OldDevUUID,
-		ReplaceUUID:    cmd.NewDevUUID,
-		ReplaceNoReint: cmd.NoReint,
+		Operation:   control.DevReplaceOp,
+		IDs:         cmd.OldDevUUID,
+		ReplaceUUID: cmd.NewDevUUID,
 	}
+	req.SetHostList([]string{cmd.Host})
 	return cmd.makeRequest(cmd.MustLogCtx(), req)
 }
 
 type ledCmd struct {
 	smdManageCmd
+	hostListCmd
 
 	Args struct {
 		IDs string `positional-arg-name:"ids" description:"Comma-separated list of identifiers which could be either VMD backing device (NVMe SSD) PCI addresses or device UUIDs. All SSDs selected if arg not provided."`
@@ -287,6 +286,7 @@ func (cmd *ledIdentifyCmd) Execute(_ []string) error {
 		}
 		req.Operation = control.LedResetOp
 	}
+	req.SetHostList(cmd.getHostList())
 	return cmd.makeRequest(cmd.MustLogCtx(), req, pretty.PrintOnlyLEDInfo())
 }
 
@@ -305,5 +305,6 @@ func (cmd *ledCheckCmd) Execute(_ []string) error {
 		Operation: control.LedCheckOp,
 		IDs:       cmd.Args.IDs,
 	}
+	req.SetHostList(cmd.getHostList())
 	return cmd.makeRequest(cmd.MustLogCtx(), req, pretty.PrintOnlyLEDInfo())
 }
