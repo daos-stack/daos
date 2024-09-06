@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -53,7 +53,7 @@ init(void)
 		D_WARN("EC aggregation is disabled.\n");
 
 	pw_rf = PW_RF_DEFAULT;
-	d_getenv_uint32_t("DAOS_POOL_RF", &pw_rf);
+	d_getenv_uint32_t("DAOS_SYS_SUSPEND_FD", &pw_rf);
 	if (pw_rf < PW_RF_MIN || pw_rf > PW_RF_MAX) {
 		D_INFO("pw_rf %d is out of range [%d, %d], take default %d\n",
 		       pw_rf, PW_RF_MIN, PW_RF_MAX, PW_RF_DEFAULT);
