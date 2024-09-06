@@ -349,7 +349,7 @@ class SoakTestBase(TestWithServers):
                         name = f"SOAK JOB {job_id}"
                         _thread = threading.Thread(
                             target=method, args=params, name=name, daemon=True)
-                        job_threads.appends(_thread)
+                        job_threads.append(_thread)
                         jobid_list.remove(job_id)
                         node_list = node_list[node_count:]
                         debug_logging(
