@@ -281,7 +281,7 @@ int pool_map_find_target(struct pool_map *map, uint32_t id,
 			 struct pool_target **target_pp);
 int pool_map_find_domain(struct pool_map *map, pool_comp_type_t type,
 			 uint32_t id, struct pool_domain **domain_pp);
-int pool_map_find_nodes(struct pool_map *map, uint32_t id,
+int pool_map_find_ranks(struct pool_map *map, uint32_t id,
 			struct pool_domain **domain_pp);
 int pool_map_find_tgts_by_state(struct pool_map *map,
 				pool_comp_state_t match_states,
@@ -311,7 +311,7 @@ bool
 pool_map_node_status_match(struct pool_domain *dom, unsigned int status);
 
 struct pool_domain *
-pool_map_find_node_by_rank(struct pool_map *map, uint32_t rank);
+pool_map_find_dom_by_rank(struct pool_map *map, uint32_t rank);
 
 int pool_map_find_by_rank_status(struct pool_map *map,
 				 struct pool_target ***tgt_ppp,
@@ -339,9 +339,9 @@ pool_map_target_nr(struct pool_map *map)
 }
 
 static inline unsigned int
-pool_map_node_nr(struct pool_map *map)
+pool_map_rank_nr(struct pool_map *map)
 {
-	return pool_map_find_nodes(map, PO_COMP_ID_ALL, NULL);
+	return pool_map_find_ranks(map, PO_COMP_ID_ALL, NULL);
 }
 
 /*
