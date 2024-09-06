@@ -777,7 +777,7 @@ dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc)
  */
 int
 dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const char *label,
-		struct dfuse_cont **_dfc)
+		daos_epoch_t snap_epoch, const char *snap_name, struct dfuse_cont **_dfc)
 {
 	struct dfuse_cont *dfc;
 	d_list_t          *rlink;
@@ -867,7 +867,11 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 			D_GOTO(err_free, rc = daos_der2errno(rc));
 		}
 
-		rc = dfs_mount(dfp->dfp_poh, dfc->dfs_coh, dfs_flags, &dfc->dfs_ns);
+		if (snap_epoch != 0 || snap_name != NULL)
+			rc = dfs_mount_snap(dfp->dfp_poh, dfc->dfs_coh, dfs_flags, snap_epoch,
+					    snap_name, &dfc->dfs_ns);
+		else
+			rc = dfs_mount(dfp->dfp_poh, dfc->dfs_coh, dfs_flags, &dfc->dfs_ns);
 		if (rc) {
 			DHS_ERROR(dfc, rc, "dfs mount() failed");
 			D_GOTO(err_close, rc);

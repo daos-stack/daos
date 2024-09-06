@@ -291,6 +291,8 @@ show_help(char *name)
 	    "\n"
 	    "	   --multi-user		Run dfuse in multi user mode\n"
 	    "	   --read-only		Mount dfuse read-only\n"
+	    "	   --snap=name		Mount a snapshot by name (read-only mode)\n"
+	    "	   --snap-epoch=epoch	Mount a snapshot by epoch (read-only mode)\n"
 	    "\n"
 	    "	-h --help		Show this help\n"
 	    "	-v --version		Show version\n"
@@ -416,6 +418,8 @@ main(int argc, char **argv)
 	char              *path              = NULL;
 	bool               have_thread_count = false;
 	int                pos_index         = 0;
+	char		  *snap_name	     = NULL;
+	daos_epoch_t	   snap_epoch	     = 0;
 
 	struct option      long_options[] = {{"mountpoint", required_argument, 0, 'm'},
 					     {"multi-user", no_argument, 0, 'M'},
@@ -432,6 +436,8 @@ main(int argc, char **argv)
 					     {"disable-caching", no_argument, 0, 'A'},
 					     {"disable-wb-cache", no_argument, 0, 'B'},
 					     {"read-only", no_argument, 0, 'r'},
+					     {"snap", required_argument, 0, 's'},
+					     {"snap-epoch", required_argument, 0, 'N'},
 					     {"options", required_argument, 0, 'o'},
 					     {"version", no_argument, 0, 'v'},
 					     {"help", no_argument, 0, 'h'},
@@ -453,7 +459,7 @@ main(int argc, char **argv)
 	dfuse_info->di_eq_count = 1;
 
 	while (1) {
-		c = getopt_long(argc, argv, "Mm:St:o:fhe:v", long_options, NULL);
+		c = getopt_long(argc, argv, "Mm:St:o:fhe:s:N:v", long_options, NULL);
 
 		if (c == -1)
 			break;
@@ -513,6 +519,14 @@ main(int argc, char **argv)
 			break;
 		case 'o':
 			parse_mount_option(optarg, dfuse_info, pool_name, cont_name);
+			break;
+		case 's':
+			snap_name = arg;
+			dfuse_info->di_read_only = true;
+			break;
+		case 'N':
+			snap_epoch = atoi(arg);
+			dfuse_info->di_read_only = true;
 			break;
 		case 'h':
 			show_help(argv[0]);
@@ -713,7 +727,8 @@ main(int argc, char **argv)
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
 	}
 
-	rc = dfuse_cont_open(dfuse_info, dfp, cont_name[0] ? cont_name : NULL, &dfs);
+	rc = dfuse_cont_open(dfuse_info, dfp, cont_name[0] ? cont_name : NULL, snap_name,
+			     snap_epoch, &dfs);
 	if (rc != 0) {
 		printf("Failed to connect to container: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(out_pool, rc = daos_errno2der(rc));
