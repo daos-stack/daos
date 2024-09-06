@@ -3888,7 +3888,6 @@ btr_tree_destroy(struct btr_context *tcx, void *args, bool *destroyed)
 		tcx->tc_tins.ti_root_off, tcx->tc_order);
 
 	root = tcx->tc_tins.ti_root;
-	tcx->tc_tins.ti_destroy = 1;
 	if (root && !UMOFF_IS_NULL(root->tr_node)) {
 		/* destroy the root and all descendants */
 		rc = btr_node_destroy(tcx, root->tr_node, args, &empty);

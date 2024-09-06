@@ -156,7 +156,6 @@ ktr_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 	struct umem_pool        *umm_pool = tins->ti_umm.umm_pool;
 	struct vos_pool         *pool;
 
-	D_ASSERT(tins->ti_destroy == 0);
 	pool = vos_obj2pool(tins->ti_priv);
 	D_ASSERT(key_iov->iov_len < pool->vp_pool_df->pd_scm_sz);
 	hkey_common_gen(key_iov, hkey);
@@ -257,7 +256,6 @@ ktr_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 
 	rbund = iov2rec_bundle(val_iov);
 
-	D_ASSERT(tins->ti_destroy == 0);
 	rec->rec_off = vos_obj_alloc(&tins->ti_umm, tins->ti_priv, vos_krec_size(rbund), true);
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return -DER_NOSPACE;
@@ -289,6 +287,8 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	int			 gc;
 	int			 rc;
 	struct vos_pool		*pool;
+	struct vos_object	*obj;
+	uint32_t		*bkt_ids = NULL;
 
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return 0;
@@ -302,17 +302,21 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		return rc;
 
 	D_ASSERT(tins->ti_priv);
-	if (tins->ti_destroy)
-		pool = (struct vos_pool *)tins->ti_priv;
-	else
-		pool = vos_obj2pool(tins->ti_priv);
+	obj = tins->ti_priv;
+	pool = vos_obj2pool(obj);
 
 	vos_ilog_ts_evict(&krec->kr_ilog, (krec->kr_bmap & KREC_BF_DKEY) ?
 			  VOS_TS_TYPE_DKEY : VOS_TS_TYPE_AKEY, pool->vp_sysdb);
 
 	gc = (krec->kr_bmap & KREC_BF_DKEY) ? GC_DKEY : GC_AKEY;
 	coh = vos_cont2hdl(args);
-	return gc_add_item(pool, coh, gc, rec->rec_off, 0);
+
+	if (vos_pool_is_p2(pool)) {
+		D_ASSERT(obj->obj_bkt_allot == 1);
+		bkt_ids = &obj->obj_bkt_ids[0];
+	}
+
+	return gc_add_item(pool, coh, gc, rec->rec_off, bkt_ids);
 }
 
 static int
@@ -358,7 +362,6 @@ ktr_rec_update(struct btr_instance *tins, struct btr_record *rec,
 static umem_off_t
 ktr_node_alloc(struct btr_instance *tins, int size)
 {
-	D_ASSERT(tins->ti_destroy == 0);
 	return vos_obj_alloc(&tins->ti_umm, tins->ti_priv, size, true);
 }
 
@@ -631,10 +634,7 @@ svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
 			struct vos_pool *pool;
 
 			D_ASSERT(tins->ti_priv != NULL);
-			if (tins->ti_destroy)
-				pool = (struct vos_pool *)tins->ti_priv;
-			else
-				pool = vos_obj2pool(tins->ti_priv);
+			pool = vos_obj2pool(tins->ti_priv);
 			rc = vos_bio_addr_free(pool, addr, irec->ir_size);
 			if (rc)
 				return rc;

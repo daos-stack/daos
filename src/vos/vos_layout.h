@@ -43,6 +43,16 @@ struct vos_gc_bin_df {
 	uint16_t		bin_pad16;
 };
 
+/*
+ * This is smaller than the VOS_OBJ_BKTS_MAX for object durable format, because
+ * I don't want to increase each GC item size (the amount of GC item is massive)
+ * for an imagined requirement.
+ *
+ * If we really need to support more than 2 evict-able buckets per object in the
+ * futhure, we can enlarge the GC item then.
+ */
+#define VOS_GC_BKTS_MAX		2
+
 struct vos_gc_bag_df {
 	/** index of the first item in FIFO */
 	uint16_t		bag_item_first;
@@ -57,19 +67,12 @@ struct vos_gc_bag_df {
 	struct vos_gc_item {
 		/* address of the item to be freed */
 		umem_off_t		it_addr;
-		/** Reserved, argument for GC_VEA/BIO (e.g. size of extent) */
-		uint64_t		it_args;
+		/* object buckets for GC_AKEY/DKEY/OBJ of the md-on-ssd p2 pool */
+		uint32_t		it_bkt_ids[VOS_GC_BKTS_MAX];
 	}			bag_items[0];
 };
 
 enum vos_gc_type {
-	/* XXX: we could define GC_VEA, which can free NVMe/SCM space.
-	 * So svt_rec_free() and evt_desc_bio_free() only need to call
-	 * gc_add_item() to register BIO address for GC.
-	 *
-	 * However, GC_VEA could have extra overhead of reassigning SCM
-	 * pointers, but it also has low latency for undo changes.
-	 */
 	GC_AKEY,
 	GC_DKEY,
 	GC_OBJ,
@@ -378,6 +381,7 @@ struct vos_obj_df {
 };
 
 #define	VOS_OBJ_BKTS_MAX	4
+D_CASSERT(VOS_GC_BKTS_MAX <= VOS_OBJ_BKTS_MAX);
 
 /*
  * VOS object durable format for md-on-ssd phase2. The size is fit to the 128 bytes
