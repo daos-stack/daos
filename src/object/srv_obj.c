@@ -2170,8 +2170,37 @@ obj_ioc_begin_lite(uint32_t rpc_map_ver, uuid_t pool_uuid,
 	int			rc;
 
 	rc = obj_ioc_init(pool_uuid, coh_uuid, cont_uuid, rpc, ioc);
-	if (rc)
+	if (rc) {
+		DL_ERROR(rc, "Failed to initialize object I/O context.");
+
+		/*
+		 * Client with stale pool map may try to send RPC to a DOWN target, if the
+		 * target was brought DOWN due to faulty NVMe device, the ds_pool_child could
+		 * have been stopped on the NVMe faulty reaction, then above obj_io_init()
+		 * will fail with -DER_NO_HDL.
+		 *
+		 * We'd ensure proper error code is returned for such case.
+		 */
+		poc = ds_pool_child_find(pool_uuid);
+		if (poc == NULL) {
+			D_ERROR("Failed to find pool:"DF_UUID"\n", DP_UUID(pool_uuid));
+			return rc;
+		}
+
+		if (rpc_map_ver < poc->spc_pool->sp_map_version) {
+			D_ERROR("Stale pool map version %u < %u from client.\n",
+				rpc_map_ver, poc->spc_pool->sp_map_version);
+
+			/* Restart the DTX if using stale pool map */
+			if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_CPD)
+				rc = -DER_TX_RESTART;
+			else
+				rc = -DER_STALE;
+		}
+
+		ds_pool_child_put(poc);
 		return rc;
+	}
 
 	poc = ioc->ioc_coc->sc_pool;
 	D_ASSERT(poc != NULL);
