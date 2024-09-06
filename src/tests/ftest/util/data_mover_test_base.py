@@ -817,7 +817,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
         cmd = "diff -r {} '{}' '{}'".format(
             deref_str, src, dst)
-        self.execute_cmd(cmd)
+        if not run_remote(self.log, self.hostlist_clients, cmd, timeout=300).passed:
+            self.fail(f"Unexpected diff between {src} and {dst}")
 
     # pylint: disable=too-many-arguments
     def run_datamover(self, test_desc=None,
