@@ -74,12 +74,26 @@ struct vos_gc {
  */
 static int
 gc_drain_btr(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
-	     struct btr_root *root, int *credits, bool *empty)
+	     struct vos_gc_item *item, struct btr_root *root, int *credits, bool *empty)
 {
-	daos_handle_t	toh;
-	int		rc;
+	struct vos_object	 dummy_obj = { 0 };
+	struct vos_container	 dummy_cont = { 0 };
+	daos_handle_t		 toh;
+	void			*priv;
+	int			 rc, i;
 
-	rc = dbtree_open_inplace_ex(root, &pool->vp_uma, coh, pool, &toh);
+	if (gc->gc_type == GC_CONT) {
+		priv = pool;
+	} else {
+		dummy_cont.vc_pool = pool;
+		dummy_obj.obj_cont = &dummy_cont;
+		dummy_obj.obj_bkt_allot = 1;
+		for (i = 0; i < VOS_GC_BKTS_MAX; i++)
+			dummy_obj.obj_bkt_ids[i] = item->it_bkt_ids[i];
+		priv = &dummy_obj;
+	}
+
+	rc = dbtree_open_inplace_ex(root, &pool->vp_uma, coh, priv, &toh);
 	if (rc == -DER_NONEXIST) { /* empty tree */
 		*empty = true;
 		return 0;
@@ -126,7 +140,7 @@ gc_drain_evt(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 
 	D_DEBUG(DB_TRACE, "drain %s evtree, creds=%d\n", gc->gc_name, *credits);
 	rc = evt_drain(toh, credits, empty);
-	D_ASSERT(evt_close(toh) == 0);
+	evt_close(toh);
 	if (rc)
 		goto failed;
 
@@ -160,7 +174,7 @@ gc_drain_key(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 	}
 
 	if (key->kr_bmap & KREC_BF_BTR) {
-		rc = gc_drain_btr(gc, pool, coh, &key->kr_btr, credits, empty);
+		rc = gc_drain_btr(gc, pool, coh, item, &key->kr_btr, credits, empty);
 
 	} else if (key->kr_bmap & KREC_BF_EVT) {
 		D_ASSERT(gc->gc_type == GC_AKEY);
@@ -195,7 +209,7 @@ gc_free_dkey(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh, struct
 
 	D_ASSERT(krec->kr_bmap & KREC_BF_DKEY);
 	if (krec->kr_bmap & KREC_BF_NO_AKEY)
-		gc_add_item(pool, coh, GC_AKEY, item->it_addr, item->it_args);
+		gc_add_item(pool, coh, GC_AKEY, item->it_addr, &item->it_bkt_ids[0]);
 	else
 		umem_free(&pool->vp_umm, item->it_addr);
 	return 0;
@@ -211,7 +225,7 @@ gc_drain_obj(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 {
 	struct vos_obj_df *obj = umem_off2ptr(&pool->vp_umm, item->it_addr);
 
-	return gc_drain_btr(gc, pool, coh, &obj->vo_tree, credits, empty);
+	return gc_drain_btr(gc, pool, coh, item, &obj->vo_tree, credits, empty);
 }
 
 static int
@@ -298,8 +312,7 @@ gc_drain_cont(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 	}
 
 	D_ASSERT(daos_handle_is_inval(coh));
-	return gc_drain_btr(gc, pool, coh, &cont->cd_obj_root,
-			    credits, empty);
+	return gc_drain_btr(gc, pool, coh, item, &cont->cd_obj_root, credits, empty);
 }
 
 static int
@@ -627,12 +640,12 @@ failed:
  */
 int
 gc_add_item(struct vos_pool *pool, daos_handle_t coh,
-	    enum vos_gc_type type, umem_off_t item_off, uint64_t args)
+	    enum vos_gc_type type, umem_off_t item_off, uint32_t *bkt_ids)
 {
 	struct vos_container	*cont = vos_hdl2cont(coh);
 	struct vos_gc_bin_df	*bin = gc_type2bin(pool, cont, type);
 	struct vos_gc_item	 item;
-	int			 rc;
+	int			 rc, i;
 
 	D_DEBUG(DB_TRACE, "Add %s addr="DF_X64"\n",
 		gc_type2name(type), item_off);
@@ -641,7 +654,9 @@ gc_add_item(struct vos_pool *pool, daos_handle_t coh,
 		return 0; /* OK to ignore because the pool is being deleted */
 
 	item.it_addr = item_off;
-	item.it_args = args;
+	for (i = 0; i < VOS_GC_BKTS_MAX; i++)
+		item.it_bkt_ids[i] = bkt_ids ? bkt_ids[i] : UMEM_DEFAULT_MBKT_ID;
+
 	rc = gc_bin_add_item(&pool->vp_umm, bin, &item);
 	if (rc) {
 		D_ERROR("Failed to add item, pool=" DF_UUID ", rc=" DF_RC "\n",
@@ -712,28 +727,41 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 	struct vos_container	*cont = gc_get_container(pool);
 	struct vos_gc		*gc    = &gc_table[0]; /* start from akey */
 	int			 creds = *credits;
+	uint32_t		 bkt = UMEM_DEFAULT_MBKT_ID, pinned_bkt = UMEM_DEFAULT_MBKT_ID;
+	struct umem_pin_handle	*pin_hdl = NULL;
+	struct umem_cache_range	 rg;
 	int			 rc;
 
 	if (pool->vp_dying) {
 		*empty_ret = true;
 		D_GOTO(done, rc = 0);
 	}
+	*empty_ret = false;
 
 	/* take an extra ref to avoid concurrent container destroy/free */
 	if (cont != NULL)
 		vos_cont_addref(cont);
 
+pin_obj:
+	if (bkt != UMEM_DEFAULT_MBKT_ID) {
+		rg.cr_off = umem_get_mb_base_offset(vos_pool2umm(pool), bkt);
+		rg.cr_size = vos_pool2store(pool)->cache->ca_page_sz;
+
+		rc = umem_cache_pin(vos_pool2store(pool), &rg, 1, false, &pin_hdl);
+		if (rc) {
+			DL_ERROR(rc, "Failed to pin bucket %u.", bkt);
+			goto tx_error;
+		}
+		pinned_bkt = bkt;
+	}
+
 	rc = umem_tx_begin(&pool->vp_umm, NULL);
 	if (rc) {
 		D_ERROR("Failed to start transacton for " DF_UUID ": " DF_RC "\n",
 			DP_UUID(pool->vp_id), DP_RC(rc));
-		if (cont != NULL)
-			vos_cont_decref(cont);
-		*empty_ret = false;
-		goto done;
+		goto tx_error;
 	}
 
-	*empty_ret = false;
 	while (creds > 0) {
 		struct vos_gc_item *item;
 		bool		    empty = false;
@@ -768,6 +796,25 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 
 		if (DAOS_FAIL_CHECK(DAOS_VOS_GC_CONT))
 			D_ASSERT(cont != NULL);
+
+		bkt = item->it_bkt_ids[0];
+		if (bkt != UMEM_DEFAULT_MBKT_ID && bkt != pinned_bkt) {
+			D_ASSERT(gc->gc_type != GC_CONT);
+			D_ASSERT(vos_pool_is_p2(pool));
+
+			rc = umem_tx_end(&pool->vp_umm, rc);
+			if (rc != 0) {
+				DL_ERROR(rc, "Transaction commit failed.");
+				goto tx_error;
+			}
+
+			if (pin_hdl != NULL) {
+				umem_cache_unpin(vos_pool2store(pool), pin_hdl);
+				pin_hdl = NULL;
+			}
+
+			goto pin_obj;
+		}
 
 		rc = gc_drain_item(gc, pool, vos_cont2hdl(cont), item, &creds,
 				   &empty);
@@ -815,6 +862,11 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 	rc = umem_tx_end(&pool->vp_umm, rc);
 	if (rc == 0)
 		*credits = creds;
+tx_error:
+	if (pin_hdl != NULL) {
+		umem_cache_unpin(vos_pool2store(pool), pin_hdl);
+		pin_hdl = NULL;
+	}
 
 	if (cont != NULL && d_list_empty(&cont->vc_gc_link)) {
 		/** The container may not be empty so add it back to end of

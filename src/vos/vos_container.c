@@ -63,7 +63,7 @@ cont_df_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	cont_df = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	vos_ts_evict(&cont_df->cd_ts_idx, VOS_TS_TYPE_CONT, vos_pool->vp_sysdb);
 
-	return gc_add_item(vos_pool, DAOS_HDL_INVAL, GC_CONT, rec->rec_off, 0);
+	return gc_add_item(vos_pool, DAOS_HDL_INVAL, GC_CONT, rec->rec_off, NULL);
 }
 
 static int
