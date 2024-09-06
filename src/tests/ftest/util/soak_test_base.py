@@ -355,7 +355,7 @@ class SoakTestBase(TestWithServers):
                         debug_logging(
                             self.log,
                             self.enable_debug_msg,
-                            f"DBG: node_list after launch_job {node_list}"
+                            f"DBG: node_list after launch_job {node_list}")
 
                         # Start this job
                         _thread.start()
@@ -370,7 +370,7 @@ class SoakTestBase(TestWithServers):
                     _alive_threads.append(job)
                     continue
                 # join finished threads to be safe
-                job.join()	                job.join()
+                job.join()
                 # Don't sleep - starting scheduling immediately
                 do_sleep = False
             job_threads = _alive_threads
