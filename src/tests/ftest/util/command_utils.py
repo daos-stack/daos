@@ -1056,7 +1056,7 @@ class YamlCommand(SubProcessCommand):
                     "Copying %s yaml configuration file to %s on %s",
                     self.temporary_file, self.yaml.filename, hosts)
                 result = distribute_files(
-                    self.log, hosts, self.temporary_file, self.yaml.filename, verbose=False,
+                    self.log, hosts, self.temporary_file, self.yaml.filename, verbose=True,
                     sudo=True)
                 if not result.passed:
                     raise CommandFailure(
