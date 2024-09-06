@@ -4764,7 +4764,8 @@ obj_comp_cb(tse_task_t *task, void *data)
 					else
 						obj_auxi->nvme_io_err = 1;
 				} else {
-					if (task->dt_result == -DER_CSUM) {
+					if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE &&
+					    task->dt_result == -DER_CSUM) {
 						struct shard_rw_args *rw_arg = &obj_auxi->rw_args;
 
 						/** Retry a few times on checksum error on update */
