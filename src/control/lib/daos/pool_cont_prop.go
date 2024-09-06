@@ -106,11 +106,11 @@ const (
 	PoolPropertyGlobalVersion = C.DAOS_PROP_PO_GLOBAL_VERSION
 	//PoolPropertyUpgradeStatus is pool upgrade status
 	PoolPropertyUpgradeStatus = C.DAOS_PROP_PO_UPGRADE_STATUS
-	// PoolPropertyScrubMode Checksum scrubbing schedule
+	// PoolPropertyScrubMode Scrubbing schedule
 	PoolPropertyScrubMode = C.DAOS_PROP_PO_SCRUB_MODE
-	// PoolPropertyScrubFreq Checksum scrubbing frequency
+	// PoolPropertyScrubFreq Scrubbing frequency
 	PoolPropertyScrubFreq = C.DAOS_PROP_PO_SCRUB_FREQ
-	// PoolPropertyScrubThresh Checksum scrubbing threshold
+	// PoolPropertyScrubThresh Scrubbing threshold
 	PoolPropertyScrubThresh = C.DAOS_PROP_PO_SCRUB_THRESH
 	// PoolPropertySvcRedunFac defines redundancy factor of the pool service.
 	PoolPropertySvcRedunFac = C.DAOS_PROP_PO_SVC_REDUN_FAC

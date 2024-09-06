@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -25,6 +26,41 @@ func numericMarshaler(v *PoolPropertyValue) ([]byte, error) {
 		return nil, err
 	}
 	return json.Marshal(n)
+}
+
+const (
+	defDurationUnit = "s"
+)
+
+// parseDuration parses a duration string into a time.Duration.
+func parseDuration(s string) (time.Duration, error) {
+	if s == "" {
+		return 0, nil
+	}
+
+	// Append the duration unit if it is missing.
+	if s[len(s)-1] >= '0' && s[len(s)-1] <= '9' {
+		s += defDurationUnit
+	}
+
+	// For convenience, parse custom duration units beyond
+	// the standard set defined by time.ParseDuration().
+	unit := s[len(s)-1]
+	switch unit {
+	case 'd', 'w':
+		num, err := strconv.ParseUint(s[:len(s)-1], 10, 64)
+		if err != nil {
+			return 0, err
+		}
+		switch unit {
+		case 'd':
+			return time.Duration(num) * 24 * time.Hour, nil
+		case 'w':
+			return time.Duration(num) * 7 * 24 * time.Hour, nil
+		}
+	}
+
+	return time.ParseDuration(s)
 }
 
 // PoolProperties returns a map of property names to handlers
@@ -314,7 +350,7 @@ func PoolProperties() PoolPropertyMap {
 		"scrub": {
 			Property: PoolProperty{
 				Number:      PoolPropertyScrubMode,
-				Description: "Checksum scrubbing mode",
+				Description: "Scrubbing mode",
 			},
 			values: map[string]uint64{
 				"off":   PoolScrubModeOff,
@@ -325,21 +361,20 @@ func PoolProperties() PoolPropertyMap {
 		"scrub_freq": {
 			Property: PoolProperty{
 				Number:      PoolPropertyScrubFreq,
-				Description: "Checksum scrubbing frequency",
+				Description: "Scrubbing frequency",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
-					rbErr := errors.Errorf("invalid Scrubbing Frequency value %s", s)
-					rsPct, err := strconv.ParseUint(strings.ReplaceAll(s, "%", ""), 10, 64)
-					if err != nil {
-						return nil, rbErr
+					dur, err := parseDuration(s)
+					if dur == 0 || err != nil {
+						return nil, errors.Errorf("invalid Scrubbing Frequency value %q", s)
 					}
-					return &PoolPropertyValue{rsPct}, nil
+					return &PoolPropertyValue{uint64(dur.Seconds())}, nil
 				},
 				valueStringer: func(v *PoolPropertyValue) string {
 					n, err := v.GetNumber()
 					if err != nil {
 						return "not set"
 					}
-					return fmt.Sprintf("%d", n)
+					return time.Duration(n * uint64(time.Second)).String()
 				},
 				valueMarshaler: numericMarshaler,
 			},
@@ -347,7 +382,7 @@ func PoolProperties() PoolPropertyMap {
 		"scrub_thresh": {
 			Property: PoolProperty{
 				Number:      PoolPropertyScrubThresh,
-				Description: "Checksum scrubbing threshold",
+				Description: "Scrubbing threshold",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
 					rbErr := errors.Errorf("invalid Scrubbing Threshold value %q", s)
 					rsPct, err := strconv.ParseUint(strings.ReplaceAll(s, "%", ""), 10, 64)

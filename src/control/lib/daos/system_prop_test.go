@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,8 +9,12 @@ package daos
 import (
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common/test"
 )
 
 var (
@@ -175,5 +179,69 @@ func TestDaos_SystemPropertyKeys(t *testing.T) {
 		if err := fromString.FromString(key.String()); err != nil {
 			t.Fatalf("prop idx %d string (%q) failed to resolve: %s", i, key, err)
 		}
+	}
+}
+
+func TestDaos_parseDuration(t *testing.T) {
+	for name, tc := range map[string]struct {
+		input  string
+		expDur time.Duration
+		expErr error
+	}{
+		"invalid unit": {
+			input:  "40q",
+			expErr: errors.New("unknown unit"),
+		},
+		"missing number": {
+			input:  "m",
+			expErr: errors.New("invalid"),
+		},
+		"invalid number": {
+			input:  "onem",
+			expErr: errors.New("invalid"),
+		},
+		"empty string": {
+			input:  "",
+			expDur: 0,
+		},
+		"no unit": {
+			input:  "300",
+			expDur: 5 * time.Minute,
+		},
+		"milliseconds": {
+			input:  "3000ms",
+			expDur: 3 * time.Second,
+		},
+		"seconds": {
+			input:  "600s",
+			expDur: 10 * time.Minute,
+		},
+		"custom: missing number": {
+			input:  "w",
+			expErr: errors.New("invalid"),
+		},
+		"custom: invalid number": {
+			input:  "onew",
+			expErr: errors.New("invalid"),
+		},
+		"custom: 1d": {
+			input:  "1d",
+			expDur: 24 * time.Hour,
+		},
+		"custom: 1w": {
+			input:  "1w",
+			expDur: 7 * 24 * time.Hour,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotDur, gotErr := parseDuration(tc.input)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+			if diff := cmp.Diff(tc.expDur, gotDur); diff != "" {
+				t.Fatalf("unexpected duration: (-want,+got)\n%s", diff)
+			}
+		})
 	}
 }
