@@ -31,11 +31,9 @@ class DmgCommandBase(YamlCommand):
         self.temporary_file_hosts = NodeSet(gethostname().split(".")[0])
 
         # If specified use the configuration file from the YamlParameters object
-        default_yaml_file = None
+        default_yaml_file = TestEnvironment().control_config
         if self.yaml is not None and hasattr(self.yaml, "filename"):
             default_yaml_file = self.yaml.filename
-        else:
-            default_yaml_file = TestEnvironment().control_config
 
         self.hostlist_suffix = hostlist_suffix
 
