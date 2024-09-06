@@ -639,6 +639,7 @@ int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t scm_s
 	struct bio_meta_context *mc = NULL;
 	struct meta_fmt_info	*fi = NULL;
 	struct bio_xs_blobstore *bxb;
+	uint32_t		 meta_flags = 0;
 
 	D_ASSERT(xs_ctxt != NULL);
 	if (data_sz > 0 && bio_nvme_configured(SMD_DEV_TYPE_DATA)) {
@@ -667,11 +668,15 @@ int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t scm_s
 		scm_sz = 0;
 	}
 
-	if (scm_sz != 0 && (flags & BIO_MC_FL_RDB)) {
-		D_ERROR("RDB doesn't allow scm_sz("DF_U64") != meta_sz("DF_U64")\n",
-			scm_sz, meta_sz);
-		rc = -DER_INVAL;
-		goto delete_data;
+	/* scm_sz < meta_sz case */
+	if (scm_sz != 0) {
+		if (flags & BIO_MC_FL_RDB) {
+			D_ERROR("RDB doesn't allow scm_sz("DF_U64") != meta_sz("DF_U64")\n",
+				scm_sz, meta_sz);
+			rc = -DER_INVAL;
+			goto delete_data;
+		}
+		meta_flags |= META_HDR_FL_EVICTABLE;
 	}
 
 	rc = bio_blob_create(pool_id, xs_ctxt, meta_sz, SMD_DEV_TYPE_META, flags, &meta_blobid,
@@ -736,7 +741,7 @@ int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t scm_s
 	fi->fi_vos_id = xs_ctxt->bxc_tgt_id;
 	fi->fi_backend_type = backend_type;
 
-	rc = meta_format(mc, fi, true);
+	rc = meta_format(mc, fi, meta_flags, true);
 	if (rc)
 		D_ERROR("Unable to format newly created blob for xs:%p pool:"DF_UUID"\n",
 			xs_ctxt, DP_UUID(pool_id));

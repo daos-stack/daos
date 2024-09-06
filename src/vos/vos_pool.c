@@ -744,7 +744,7 @@ static inline void
 init_umem_store(struct umem_store *store, struct bio_meta_context *mc)
 {
 	bio_meta_get_attr(mc, &store->stor_size, &store->stor_blk_size, &store->stor_hdr_blks,
-			  (uint8_t *)&store->store_type);
+			  (uint8_t *)&store->store_type, &store->store_evictable);
 	store->stor_priv = mc;
 	store->stor_ops = &vos_store_ops;
 

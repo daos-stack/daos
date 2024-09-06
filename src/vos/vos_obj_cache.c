@@ -265,14 +265,12 @@ vos_obj_pin(struct vos_object *obj)
 	struct umem_store	*store = vos_pool2store(pool);
 	struct umem_cache_range	 rg;
 
-	if (!vos_pool_is_p2(pool))
+	if (!vos_pool_is_evictable(pool))
 		return 0;
 
 	if (!obj->obj_bkt_allot) {
 		if (!obj->obj_df) {
-			/* TODO: Revise all vos_obj_hold() callers to move it out of tx! */
-			/* obj->obj_bkt_ids[0] = umem_allot_mb_evictable(vos_pool2umm(pool), 0); */
-			obj->obj_bkt_ids[0] = UMEM_DEFAULT_MBKT_ID;
+			obj->obj_bkt_ids[0] = umem_allot_mb_evictable(vos_pool2umm(pool), 0);
 		} else {
 			struct vos_obj_p2_df *p2 = (struct vos_obj_p2_df *)obj->obj_df;
 
@@ -473,7 +471,7 @@ vos_obj_incarnate(struct vos_object *obj, daos_epoch_range_t *epr, daos_epoch_t 
 	if (obj->obj_bkt_ids[0] != UMEM_DEFAULT_MBKT_ID) {
 		struct vos_obj_p2_df *p2 = (struct vos_obj_p2_df *)obj->obj_df;
 
-		D_ASSERT(vos_pool_is_p2(vos_obj2pool(obj)));
+		D_ASSERT(vos_pool_is_evictable(vos_obj2pool(obj)));
 		D_ASSERT(obj->obj_bkt_allot);
 
 		if (p2->p2_bkt_ids[0] == UMEM_DEFAULT_MBKT_ID) {
@@ -523,8 +521,7 @@ vos_obj_hold(struct vos_container *cont, daos_unit_oid_t oid, daos_epoch_range_t
 	D_ASSERT(cont->vc_pool);
 	D_ASSERT(obj_p != NULL);
 
-	/* TODO: Revise all vos_obj_hold() callers to move it out of tx! */
-	/* D_ASSERT(!vos_pool_is_p2(cont->vc_pool) || umem_tx_none(vos_pool2umm(cont->vc_pool))); */
+	D_ASSERT(!vos_pool_is_evictable(cont->vc_pool) || umem_tx_none(vos_pool2umm(cont->vc_pool)));
 
 	*obj_p = NULL;
 
@@ -581,7 +578,7 @@ vos_obj_hold(struct vos_container *cont, daos_unit_oid_t oid, daos_epoch_range_t
 	}
 
 	/* For md-on-ssd phase2 pool, add object to cache before yield in vos_obj_pin() */
-	if (obj == &obj_local && vos_pool_is_p2(cont->vc_pool)) {
+	if (obj == &obj_local && vos_pool_is_evictable(cont->vc_pool)) {
 		rc = cache_object(occ, &obj);
 		if (rc != 0)
 			goto failed;

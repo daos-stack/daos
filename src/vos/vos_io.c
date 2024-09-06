@@ -2614,8 +2614,8 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		goto error;
 	}
 
-	/* Hold the object for md-on-ssd phase2 pool */
-	if (vos_pool_is_p2(vos_cont2pool(ioc->ic_cont))) {
+	/* Hold the object for the evictable md-on-ssd phase2 pool */
+	if (vos_pool_is_evictable(vos_cont2pool(ioc->ic_cont))) {
 		rc = vos_ts_set_add(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx, NULL, 0);
 		D_ASSERT(rc == 0);
 
