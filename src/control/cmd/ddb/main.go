@@ -103,7 +103,8 @@ func runFileCmds(log logging.Logger, app *grumble.App, fileName string) error {
 	for scanner.Scan() {
 		fileCmd := scanner.Text()
 		log.Debugf("Running Command: %s\n", fileCmd)
-		err := runCmdStr(app, fileCmd)
+		segs := strings.Split(fileCmd, " ")
+		err := runCmdStr(app, segs[0], segs[1])
 		if err != nil {
 			return errors.Wrapf(err, "Failed running command %q", fileCmd)
 		}
@@ -227,6 +228,7 @@ Example Paths:
 
 func main() {
 	var opts cliOptions
+	// time.Sleep(60 * time.Second)
 	log := logging.NewCommandLineLogger()
 
 	if err := parseOpts(os.Args[1:], &opts, log); err != nil {
