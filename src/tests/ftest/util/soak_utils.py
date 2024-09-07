@@ -433,7 +433,7 @@ def launch_jobscript(
     debug_logging(log, test.enable_debug_msg, f"DBG: JOB {job_id} ENTERED launch_jobscript")
     job_results = []
     node_results = []
-    down_nodes = []
+    down_nodes = NodeSet()
     state = "UNKNOWN"
     if time.time() >= test.end_time:
         results = {"handle": job_id, "state": "CANCELLED", "host_list": host_list}
@@ -481,7 +481,7 @@ def launch_jobscript(
     if node_results.failed_hosts:
         for node in node_results.failed_hosts:
             host_list.remove(node)
-            down_nodes.append(node)
+            down_nodes.update(node)
             log.info(f"DBG: Node {node} is marked as DOWN in job {job_id}")
 
     log.info("FINAL STATE: soak job %s completed with : %s at %s", job_id, state, time.ctime())

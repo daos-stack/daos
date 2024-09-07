@@ -308,7 +308,8 @@ class SoakTestBase(TestWithServers):
         jobid_list = []
         jobs_not_done = []
         # remove any nodes marked as DOWN
-        node_list = NodeSet([x for x in self.hostlist_clients if x not in self.down_nodes])
+        node_list = self.hostlist_clients
+        node_list.difference_update(self.down_nodes)
         lib_path = os.getenv("LD_LIBRARY_PATH")
         path = os.getenv("PATH")
         v_env = os.getenv("VIRTUAL_ENV")
@@ -382,7 +383,7 @@ class SoakTestBase(TestWithServers):
                 job_results = job_queue.get()
                 # Results to return in queue
                 node_list.update(job_results["host_list"])
-                self.down_nodes.extend(job_results["down_nodes"])
+                self.down_nodes.update(job_results["down_nodes"])
                 debug_logging(self.log, self.enable_debug_msg, "DBG: Updating soak results")
                 self.soak_results[job_results["handle"]] = job_results["state"]
                 job_done_id = job_results["handle"]
@@ -674,7 +675,7 @@ class SoakTestBase(TestWithServers):
         self.soak_errors = []
         self.check_errors = []
         self.used = []
-        self.down_nodes = []
+        self.down_nodes = NodeSet()
         self.enable_debug_msg = self.params.get("enable_debug_msg", "/run/*", default=False)
         self.mpi_module = self.params.get("mpi_module", "/run/*", default="mpi/mpich-x86_64")
         self.mpi_module_use = self.params.get(
