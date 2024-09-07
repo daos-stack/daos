@@ -433,6 +433,7 @@ def launch_jobscript(
     debug_logging(log, test.enable_debug_msg, f"DBG: JOB {job_id} ENTERED launch_jobscript")
     job_results = []
     node_results = []
+    down_nodes = []
     state = "UNKNOWN"
     if time.time() >= test.end_time:
         results = {"handle": job_id, "state": "CANCELLED", "host_list": host_list}
@@ -480,11 +481,14 @@ def launch_jobscript(
     if node_results.failed_hosts:
         for node in node_results.failed_hosts:
             host_list.remove(node)
-            debug_logging(
-                log, test.enable_debug_msg, "DBG: Node {node} is marked as DOWN in job {job_id}")
+            down_nodes.append(node)
+            log.info(f"DBG: Node {node} is marked as DOWN in job {job_id}")
 
     log.info("FINAL STATE: soak job %s completed with : %s at %s", job_id, state, time.ctime())
-    results = {"handle": job_id, "state": state, "host_list": host_list}
+    results = {"handle": job_id,
+               "state": state,
+               "host_list": host_list,
+               "down_nodes": down_nodes}
     debug_logging(log, test.enable_debug_msg, f"DBG: JOB {job_id} EXITED launch_jobscript")
     job_queue.put(results)
     # give time to update the queue before exiting
@@ -1733,8 +1737,8 @@ def build_job_script(self, commands, job, nodesperjob, ppn):
                 # script_file.write("export MPIR_CVAR_REDUCE_POSIX_INTRA_ALGORITHM=release_gather \n")
                 # script_file.write("export MPIR_CVAR_ENABLE_GPU=0 \n")
                 # script_file.write("unset MPIR_CVAR_CH4_COLL_SELECTION_TUNING_JSON_FILE \n")
-                # script_file.write("exec 1> $JOB_LOG \n")
-                # script_file.write("exec 2> $JOB_ERROR_LOG \n")
+                script_file.write("exec 1> $JOB_LOG \n")
+                script_file.write("exec 2> $JOB_ERROR_LOG \n")
 
             for cmd in list(job_cmds):
                 script_file.write(cmd + "\n")

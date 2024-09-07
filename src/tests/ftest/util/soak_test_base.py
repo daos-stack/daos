@@ -308,7 +308,7 @@ class SoakTestBase(TestWithServers):
         jobid_list = []
         jobs_not_done = []
         # remove any nodes marked as DOWN
-        node_list = [x for x in self.hostlist_clients if x not in self.down_nodes]
+        node_list = NodeSet([x for x in self.hostlist_clients if x not in self.down_nodes])
         lib_path = os.getenv("LD_LIBRARY_PATH")
         path = os.getenv("PATH")
         v_env = os.getenv("VIRTUAL_ENV")
