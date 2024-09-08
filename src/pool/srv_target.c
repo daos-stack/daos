@@ -89,6 +89,21 @@ pool_child_lookup_noref(const uuid_t uuid)
 }
 
 struct ds_pool_child *
+ds_pool_child_find(const uuid_t uuid)
+{
+	struct ds_pool_child	*child;
+
+	child = pool_child_lookup_noref(uuid);
+	if (child == NULL) {
+		D_ERROR(DF_UUID": Pool child isn't found.\n", DP_UUID(uuid));
+		return child;
+	}
+
+	child->spc_ref++;
+	return child;
+}
+
+struct ds_pool_child *
 ds_pool_child_lookup(const uuid_t uuid)
 {
 	struct ds_pool_child	*child;

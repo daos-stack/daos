@@ -1702,7 +1702,8 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 		return -DER_NOMEM;
 
 	/* ip_hdl is dkey or akey tree open handle for vos_iterate_key() */
-	if (!(param->ip_flags & VOS_IT_KEY_TREE)) {
+	if (param->ip_flags != VOS_IT_KEY_TREE) {
+		D_ASSERT(!(param->ip_flags & VOS_IT_KEY_TREE));
 		cont = vos_hdl2cont(param->ip_hdl);
 		is_sysdb = cont->vc_pool->vp_sysdb;
 		dth = vos_dth_get(is_sysdb);
