@@ -277,8 +277,7 @@ dav_obj_create_v2(const char *path, int flags, size_t sz, mode_t mode, struct um
 		/* Open the file and obtain the size */
 		fd = open(path, O_RDWR|O_CLOEXEC);
 		if (fd == -1) {
-			D_ERROR("obj_create_v2 open %s to fetch size: %s (%d)\n", path,
-				strerror(errno), errno);
+			DS_ERROR(errno, "obj_create_v2 open %s to fetch size", path);
 			return NULL;
 		}
 
@@ -288,8 +287,7 @@ dav_obj_create_v2(const char *path, int flags, size_t sz, mode_t mode, struct um
 	} else {
 		fd = open(path, O_CREAT|O_EXCL|O_RDWR|O_CLOEXEC, mode);
 		if (fd == -1) {
-			D_ERROR("obj_create_v2 open %s to alloc: %s (%d)\n", path, strerror(errno),
-				errno);
+			DS_ERROR(errno, "obj_create_v2 open %s to alloc", path);
 			return NULL;
 		}
 
@@ -326,7 +324,7 @@ dav_obj_open_v2(const char *path, int flags, struct umem_store *store)
 
 	fd = open(path, O_RDWR|O_CLOEXEC);
 	if (fd == -1) {
-		D_ERROR("obj_create_v2 open %s: %s (%d)\n", path, strerror(errno), errno);
+		DS_ERROR(errno, "obj_create_v2 open %s", path);
 		return NULL;
 	}
 

@@ -57,7 +57,7 @@ func printTierBytesRow(fmtName string, tierBytes uint64, numRanks int) txtfmt.Ta
 	}
 }
 
-func getPoolRespStorageRows(mdOnSSD bool, tierBytes []uint64, tierRatios []float64, numRanks int) (title string, rows []txtfmt.TableRow) {
+func getPoolCreateRespRows(mdOnSSD bool, tierBytes []uint64, tierRatios []float64, numRanks int) (title string, rows []txtfmt.TableRow) {
 	title = "Pool created with "
 	tierName := "SCM"
 	if mdOnSSD {
@@ -124,7 +124,7 @@ func PrintPoolCreateResponse(pcr *control.PoolCreateResp, out io.Writer, opts ..
 
 	mdOnSsdEnabled := pcr.MemFileBytes > 0
 
-	title, tierRows := getPoolRespStorageRows(mdOnSsdEnabled, pcr.TierBytes, tierRatios,
+	title, tierRows := getPoolCreateRespRows(mdOnSsdEnabled, pcr.TierBytes, tierRatios,
 		numRanks)
 
 	// Print memory-file to meta-blob ratio for MD-on-SSD.

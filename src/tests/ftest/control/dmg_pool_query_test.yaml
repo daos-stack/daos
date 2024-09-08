@@ -35,7 +35,7 @@ exp_vals:
   replicas: [0]
   query_mask: "rebuild,space"
   scm:
-    total: 16000008192
+    total: 16000000000
   nvme:
     total: 32000000000
   rebuild:

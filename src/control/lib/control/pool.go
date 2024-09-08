@@ -225,7 +225,7 @@ type (
 		SvcReps      []uint32 `json:"svc_reps"`
 		TgtRanks     []uint32 `json:"tgt_ranks"`
 		TierBytes    []uint64 `json:"tier_bytes"`     // Per-rank storage tier sizes.
-		MemFileBytes uint64   `json:"mem_file_bytes"` // MD-on-SSD mode only.
+		MemFileBytes uint64   `json:"mem_file_bytes"` // Per-rank. MD-on-SSD mode only.
 	}
 )
 
