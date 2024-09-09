@@ -7,7 +7,7 @@ hosts:
     12_server:
       test_servers: server-[1-6]
   test_clients: 2
-timeout: 1000
+timeout: 1500
 setup:
   start_agents_once: False
   start_servers_once: False
@@ -37,25 +37,27 @@ container:
   properties: rd_fac:2
 mdtest:
   client_processes:
-    np_48:
-      np: 48
-      num_of_files_dirs: 200
-  mdtest_api:
-    dfs:
-      api: 'DFS'
-  test_dir: "/"
-  iteration: 4
+    np: 4
+  api: DFS
+  test_dir: /
   dfs_destroy: True
-  manager: "MPICH"
-  flags: "-u"
+  manager: MPICH
+  flags: -u
   write_bytes: 4194304
   read_bytes: 4194304
   depth: 10
+  num_of_files_dirs: 100000000
+  stonewall_timer: 10
+  stonewall_statusfile: stoneWallingStatusFile
   # EC does not supported for directory so for now running with RP
-  dfs_dir_oclass: "RP_3G1"
-  objectclass:
-    dfs_oclass_list:
-      #- [EC_Object_Class, Minimum number of servers]
-      - ["EC_2P2GX", 6]
-      - ["EC_4P2GX", 8]
-      - ["EC_8P2GX", 12]
+  dfs_dir_oclass: RP_3G1
+  dfs_oclass_mux: !mux
+    6_server:
+      !filter-only : "/run/hosts/servers/6_server"  # yamllint disable-line rule:colons
+      dfs_oclass: EC_2P2GX
+    8_server:
+      !filter-only : "/run/hosts/servers/8_server"  # yamllint disable-line rule:colons
+      dfs_oclass: EC_4P2GX
+    12_server:
+      !filter-only : "/run/hosts/servers/12_server"  # yamllint disable-line rule:colons
+      dfs_oclass: EC_8P2GX
