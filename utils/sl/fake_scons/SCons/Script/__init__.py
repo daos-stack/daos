@@ -400,6 +400,10 @@ class Configure():
         """Fake CheckProg"""
         return True
 
+    def CheckFunc(self, *_args, **_kw):
+        """Fake CheckFunc"""
+        return True
+
     def CheckFlag(self, *_args, **_kw):
         """Fake CheckFlag"""
         return True

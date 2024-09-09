@@ -128,7 +128,7 @@ BuildRequires: libasan
 %if (0%{?suse_version} > 0)
 BuildRequires: libasan8
 %endif
-%
+
 Requires: openssl
 # This should only be temporary until we can get a stable upstream release
 # of mercury, at which time the autoprov shared library version should

@@ -280,7 +280,8 @@ def define_components(reqs):
                  '--enable-stack-unwind=yes']
     try:
         if reqs.get_env('SANITIZERS') != "":
-            # XXX Asan add some extra info on the stack and thus ULTs a bigger stack
+            # NOTE the address sanitizer library add some extra info on the stack and thus ULTs
+            # need a bigger stack
             print("Increase argobots default stack size from 16384 to 32768")
             abt_build += ['--enable-default-stacksize=32768']
     except KeyError:
