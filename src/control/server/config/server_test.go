@@ -129,14 +129,8 @@ func mockConfigFromFile(t *testing.T, path string) (*Server, error) {
 	t.Helper()
 	c := DefaultServer()
 	c.Path = path
-	err := c.Load()
-	if err == nil {
-		for i := 0; i < len(c.Engines); i++ {
-			c.Engines[i] = c.Engines[i].WithProperEnvVarForPMDK()
-		}
-	}
 
-	return c, err
+	return c, c.Load()
 }
 
 func TestServerConfig_MarshalUnmarshal(t *testing.T) {

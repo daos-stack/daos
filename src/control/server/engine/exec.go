@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -163,7 +163,7 @@ func (r *Runner) Start(ctx context.Context) (RunnerExitChan, error) {
 	if err != nil {
 		return nil, err
 	}
-	env, err := r.Config.CmdLineEnv()
+	env, err := r.Config.AdjustPMDKEnvVar().CmdLineEnv()
 	if err != nil {
 		return nil, err
 	}

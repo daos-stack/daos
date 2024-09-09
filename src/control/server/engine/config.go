@@ -345,12 +345,12 @@ func (c *Config) Validate() error {
 	if err := ValidateLogSubsystems(subsystems); err != nil {
 		return errors.Wrap(err, "validate engine log subsystems")
 	}
-	return c.ValidateAndAdjustPMDKEnvVar()
+	return c.ValidatePMDKEnvVar()
 }
 
-// Ensure proper environment variables for PMDK w/ NDCTL enabled based on
+// Validate proper environment variables for PMDK w/ NDCTL enabled based on
 // the actual configuration of the storage class.
-func (c *Config) ValidateAndAdjustPMDKEnvVar() error {
+func (c *Config) ValidatePMDKEnvVar() error {
 	if len(c.Storage.Tiers) == 0 {
 		return nil
 	}
@@ -358,40 +358,24 @@ func (c *Config) ValidateAndAdjustPMDKEnvVar() error {
 	pmemobjConfStr, pmemobjConfErr := c.GetEnvVar("PMEMOBJ_CONF")
 	if c.Storage.Tiers[0].Class != storage.ClassDcpm {
 
-		// Disable shutdown state (SDS) (part of RAS) for RAM-based simulated SCM.
-		// RAM doesn't support this feature and trying to use
-		// it will fail the create/open operations.
-		if pmemobjConfErr != nil {
-			c.EnvVars = append(c.EnvVars, "PMEMOBJ_CONF=sds.at_create=0")
-			return nil
-		}
-
-		if !strings.Contains(pmemobjConfStr, "sds.at_create") {
-			envVars, _ := common.DeleteKeyValue(c.EnvVars, "PMEMOBJ_CONF")
-			c.EnvVars = append(envVars, "PMEMOBJ_CONF="+pmemobjConfStr+
-				";sds.at_create=0")
-			return nil
-		}
-
-		if !strings.Contains(pmemobjConfStr, "sds.at_create=0") {
+		// Verify that shutdown state (SDS) is not enabled for RAM-based simulated SCM.
+		if pmemobjConfErr == nil && strings.Contains(pmemobjConfStr, "sds.at_create") &&
+			!strings.Contains(pmemobjConfStr, "sds.at_create=0") {
 			return errors.New("env_var PMEMOBJ_CONF should contain 'sds.at_create=0' " +
 				"for non-DCPM storage class, found '" + pmemobjConfStr + "'")
 		}
-
 		return nil
 	}
-
 	// Confirm default handling of shutdown state (SDS) for DCPM storage class.
 	if pmemobjConfErr == nil && strings.Contains(pmemobjConfStr, "sds.at_create") {
 		return errors.New("env_var PMEMOBJ_CONF should NOT contain 'sds.at_create=?' " +
 			"for DCPM storage class")
 	}
 
-	// Ensure 20KiB ABT stack size for an engine with DCPM storage class.
+	// Ensure either non or at least 20KiB ABT stack size for an engine with DCPM storage class.
 	stackSizeStr, err := c.GetEnvVar("ABT_THREAD_STACKSIZE")
+
 	if err != nil {
-		c.EnvVars = append(c.EnvVars, fmt.Sprintf("ABT_THREAD_STACKSIZE=%d",
-			minABTThreadStackSizeDCPM))
 		return nil
 	}
 
@@ -408,6 +392,33 @@ func (c *Config) ValidateAndAdjustPMDKEnvVar() error {
 	}
 
 	return nil
+}
+
+// Ensure proper environment variables for PMDK w/ NDCTL enabled based on
+// the actual configuration of the storage class.
+func (c *Config) AdjustPMDKEnvVar() *Config {
+	if len(c.Storage.Tiers) == 0 {
+		return c
+	}
+	pmemobjConfStr, pmemobjConfErr := c.GetEnvVar("PMEMOBJ_CONF")
+	if c.Storage.Tiers[0].Class != storage.ClassDcpm {
+		// Disable shutdown state (SDS) (part of RAS) for RAM-based simulated SCM.
+		// RAM doesn't support this feature and trying to use
+		// it will fail the create/open operations.
+		if pmemobjConfErr != nil {
+			c.EnvVars = append(c.EnvVars, "PMEMOBJ_CONF=sds.at_create=0")
+		} else if !strings.Contains(pmemobjConfStr, "sds.at_create") {
+			envVars, _ := common.DeleteKeyValue(c.EnvVars, "PMEMOBJ_CONF")
+			c.EnvVars = append(envVars, "PMEMOBJ_CONF="+pmemobjConfStr+
+				";sds.at_create=0")
+		}
+		// Ensure 20KiB ABT stack size for an engine with DCPM storage class.
+	} else if !c.HasEnvVar("ABT_THREAD_STACKSIZE") {
+		c.EnvVars = append(c.EnvVars, fmt.Sprintf("ABT_THREAD_STACKSIZE=%d",
+			minABTThreadStackSizeDCPM))
+	}
+
+	return c
 }
 
 type cfgNumaMismatch struct {
@@ -544,7 +555,7 @@ func (c *Config) WithSystemName(name string) *Config {
 func (c *Config) WithStorage(cfgs ...*storage.TierConfig) *Config {
 	c.Storage.Tiers = storage.TierConfigs{}
 	c.AppendStorage(cfgs...)
-	return c.WithProperEnvVarForPMDK()
+	return c
 }
 
 // AppendStorage appends the given storage tier configurations to
@@ -752,36 +763,6 @@ func (c *Config) WithIndex(i uint32) *Config {
 // WithStorageIndex sets the I/O Engine instance index in the storage struct.
 func (c *Config) WithStorageIndex(i uint32) *Config {
 	c.Storage.EngineIdx = uint(i)
-	return c
-}
-
-// WithProperEnvVarForPMDK sets PMDK related environment variables
-// according to actual DCPMem configuration.
-func (c *Config) WithProperEnvVarForPMDK() *Config {
-	if len(c.Storage.Tiers) == 0 {
-		return c
-	}
-
-	if c.Storage.Tiers[0].Class == storage.ClassDcpm {
-		return c.WithoutEnvVarForPMDK().WithEnvVarAbtThreadStackSize(minABTThreadStackSizeDCPM)
-	}
-	return c.WithoutEnvVarForPMDK().WithEnvVarPMemObjSdsAtCreate(0)
-}
-
-// WithoutEnvVarForPMDK remove PMDK related environment variables
-// according to actual DCPMem configuration.
-func (c *Config) WithoutEnvVarForPMDK() *Config {
-	if len(c.Storage.Tiers) == 0 {
-		return c
-	}
-	envVars, err := common.DeleteKeyValue(c.EnvVars, "PMEMOBJ_CONF")
-	if err == nil {
-		c.EnvVars = envVars
-	}
-	envVars, err = common.DeleteKeyValue(c.EnvVars, "ABT_THREAD_STACKSIZE")
-	if err == nil {
-		c.EnvVars = envVars
-	}
 	return c
 }
 

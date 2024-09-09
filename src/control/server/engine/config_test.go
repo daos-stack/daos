@@ -177,8 +177,6 @@ func TestConfig_Constructed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fromDisk = fromDisk.WithProperEnvVarForPMDK()
-
 	if diff := cmp.Diff(fromDisk, constructed, defConfigCmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got):\n%s", diff)
 	}
@@ -732,7 +730,6 @@ func TestConfig_ToCmdVals(t *testing.T) {
 		"D_LOG_MASK=" + logMask,
 		"CRT_TIMEOUT=" + strconv.FormatUint(uint64(crtTimeout), 10),
 		"FI_OFI_RXM_USE_SRX=0",
-		"PMEMOBJ_CONF=sds.at_create=0",
 	}
 
 	gotArgs, err := cfg.CmdLineArgs()
@@ -1108,16 +1105,14 @@ func TestFabricConfig_Update(t *testing.T) {
 	}
 }
 
-func TestConfig_ValidateAndAdjustPMDKEnvVar(t *testing.T) {
+func TestConfig_ValidatePMDKEnvVar(t *testing.T) {
 	validConfig := func() *Config {
-		return MockConfig().WithProperEnvVarForPMDK()
+		return MockConfig()
 	}
 
 	for name, tc := range map[string]struct {
-		cfg                   *Config
-		expErr                error
-		expABTthreadStackSize string
-		expSdsAtCreate        string
+		cfg    *Config
+		expErr error
 	}{
 		"empty config should not fail": {
 			cfg: MockConfig(),
@@ -1126,15 +1121,13 @@ func TestConfig_ValidateAndAdjustPMDKEnvVar(t *testing.T) {
 			cfg: validConfig().WithStorage(
 				storage.NewTierConfig().
 					WithStorageClass("dcpm"),
-			).WithProperEnvVarForPMDK(),
-			expABTthreadStackSize: "20480",
+			).WithEnvVarAbtThreadStackSize(minABTThreadStackSizeDCPM),
 		},
-		"config for DCPM should should be updated": {
+		"config for DCPM without thread size should not fail": {
 			cfg: validConfig().WithStorage(
 				storage.NewTierConfig().
 					WithStorageClass("dcpm"),
-			).WithoutEnvVarForPMDK(),
-			expABTthreadStackSize: "20480",
+			),
 		},
 		"config for DCPM with stack size big enough should not fail": {
 			cfg: validConfig().WithStorage(
@@ -1178,29 +1171,25 @@ func TestConfig_ValidateAndAdjustPMDKEnvVar(t *testing.T) {
 			cfg: validConfig().WithStorage(
 				storage.NewTierConfig().
 					WithStorageClass("ram"),
-			).WithProperEnvVarForPMDK(),
-			expSdsAtCreate: "sds.at_create=0",
+			).WithEnvVarPMemObjSdsAtCreate(0),
 		},
-		"config for ram should should be updated": {
+		"config for ram without PMEMOBJ_CONF should not fail": {
 			cfg: validConfig().WithStorage(
 				storage.NewTierConfig().
 					WithStorageClass("ram"),
-			).WithoutEnvVarForPMDK(),
-			expSdsAtCreate: "sds.at_create=0",
+			),
 		},
-		"config for ram with PMEMOBJ_CONF should should be updated": {
+		"config for ram with PMEMOBJ_CONF should not fail": {
 			cfg: validConfig().WithStorage(
 				storage.NewTierConfig().
 					WithStorageClass("ram"),
-			).WithoutEnvVarForPMDK().WithEnvVars("PMEMOBJ_CONF=foo_bar"),
-			expSdsAtCreate: "foo_bar;sds.at_create=0",
+			).WithEnvVars("PMEMOBJ_CONF=foo_bar"),
 		},
 		"valid config with default ULT stack size for ram should not fail": {
 			cfg: validConfig().WithStorage(
 				storage.NewTierConfig().
 					WithStorageClass("ram"),
-			).WithProperEnvVarForPMDK().WithEnvVarAbtThreadStackSize(16834),
-			expSdsAtCreate: "sds.at_create=0",
+			).WithEnvVarAbtThreadStackSize(16834),
 		},
 		"config for ram with sds.at_create force to 1 should fail": {
 			cfg: validConfig().WithStorage(
@@ -1213,7 +1202,77 @@ func TestConfig_ValidateAndAdjustPMDKEnvVar(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			test.CmpErr(t, tc.expErr, tc.cfg.ValidateAndAdjustPMDKEnvVar())
+			test.CmpErr(t, tc.expErr, tc.cfg.ValidatePMDKEnvVar())
+		})
+	}
+}
+
+func TestConfig_AdjustPMDKEnvVar(t *testing.T) {
+	validConfig := func() *Config {
+		return MockConfig()
+	}
+
+	for name, tc := range map[string]struct {
+		cfg                   *Config
+		expABTthreadStackSize string
+		expSdsAtCreate        string
+	}{
+		"empty config should not fail": {
+			cfg: MockConfig(),
+		},
+		"valid config for DCPM should not fail": {
+			cfg: validConfig().WithStorage(
+				storage.NewTierConfig().
+					WithStorageClass("dcpm"),
+			).WithEnvVarAbtThreadStackSize(minABTThreadStackSizeDCPM),
+			expABTthreadStackSize: "20480",
+		},
+		"config for DCPM should should be updated": {
+			cfg: validConfig().WithStorage(
+				storage.NewTierConfig().
+					WithStorageClass("dcpm"),
+			),
+			expABTthreadStackSize: "20480",
+		},
+		"config for DCPM with stack size big enough should not be updated": {
+			cfg: validConfig().WithStorage(
+				storage.NewTierConfig().
+					WithStorageClass("dcpm"),
+			).WithEnvVarAbtThreadStackSize(minABTThreadStackSizeDCPM + 1),
+			expABTthreadStackSize: "20481",
+		},
+		"valid config for ram should not fail": {
+			cfg: validConfig().WithStorage(
+				storage.NewTierConfig().
+					WithStorageClass("ram"),
+			).WithEnvVarPMemObjSdsAtCreate(0),
+			expSdsAtCreate: "sds.at_create=0",
+		},
+		"config for ram should should be updated": {
+			cfg: validConfig().WithStorage(
+				storage.NewTierConfig().
+					WithStorageClass("ram"),
+			),
+			expSdsAtCreate: "sds.at_create=0",
+		},
+		"config for ram with PMEMOBJ_CONF should should be updated": {
+			cfg: validConfig().WithStorage(
+				storage.NewTierConfig().
+					WithStorageClass("ram"),
+			).WithEnvVars("PMEMOBJ_CONF=foo_bar"),
+			expSdsAtCreate: "foo_bar;sds.at_create=0",
+		},
+		"valid config with default ULT stack size for ram should be updated": {
+			cfg: validConfig().WithStorage(
+				storage.NewTierConfig().
+					WithStorageClass("ram"),
+			).WithEnvVarAbtThreadStackSize(16834),
+			expSdsAtCreate: "sds.at_create=0",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.CmpErr(t, nil, tc.cfg.ValidatePMDKEnvVar())
+			tc.cfg.AdjustPMDKEnvVar()
 			if len(tc.expABTthreadStackSize) > 0 {
 				var stackSizeStr string
 				stackSizeStr, err := tc.cfg.GetEnvVar("ABT_THREAD_STACKSIZE")
