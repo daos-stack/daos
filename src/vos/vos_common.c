@@ -123,6 +123,7 @@ vos_bio_addr_free(struct vos_pool *pool, bio_addr_t *addr, daos_size_t nob)
 	if (bio_addr_is_hole(addr))
 		return 0;
 
+	D_ASSERT(!BIO_ADDR_IS_GANG(addr));
 	if (addr->ba_type == DAOS_MEDIA_SCM) {
 		rc = umem_free(&pool->vp_umm, addr->ba_off);
 	} else {
