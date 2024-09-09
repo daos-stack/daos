@@ -83,6 +83,7 @@ class SoakTestBase(TestWithServers):
         self.joblist = None
         self.enable_debug_msg = False
         self.enable_rebuild_logmasks = False
+        self.down_nodes = None
 
     def setUp(self):
         """Define test setup to be done."""
@@ -306,7 +307,9 @@ class SoakTestBase(TestWithServers):
         job_queue = multiprocessing.Queue()
         jobid_list = []
         jobs_not_done = []
+        # remove any nodes marked as DOWN
         node_list = self.hostlist_clients
+        node_list.difference_update(self.down_nodes)
         lib_path = os.getenv("LD_LIBRARY_PATH")
         path = os.getenv("PATH")
         v_env = os.getenv("VIRTUAL_ENV")
@@ -318,10 +321,10 @@ class SoakTestBase(TestWithServers):
             jobid_list.append(job_dict["jobid"])
             jobs_not_done.append(job_dict["jobid"])
         self.log.info(f"Submitting {len(jobid_list)} jobs at {time.ctime()}")
+        job_threads = []
         while True:
             if time.time() > self.end_time or len(jobs_not_done) == 0:
                 break
-            jobs = []
             job_results = {}
             for job_dict in self.joblist:
                 job_id = job_dict["jobid"]
@@ -347,26 +350,40 @@ class SoakTestBase(TestWithServers):
                         params = (self.log, job_queue, job_id, job_node_list,
                                   env, script, log, error_log, timeout, self)
                         name = f"SOAK JOB {job_id}"
-
-                        jobs.append(threading.Thread(
-                            target=method, args=params, name=name, daemon=True))
+                        _thread = threading.Thread(
+                            target=method, args=params, name=name, daemon=True)
+                        job_threads.append(_thread)
                         jobid_list.remove(job_id)
                         node_list = node_list[node_count:]
                         debug_logging(
                             self.log,
                             self.enable_debug_msg,
                             f"DBG: node_list after launch_job {node_list}")
-            # run job scripts on all available nodes
-            for job in jobs:
-                job.start()
 
-            for job in jobs:
+                        # Start this job
+                        _thread.start()
+
+            # If we don't process any results this time, we'll sleep before checking again
+            do_sleep = True
+
+            # Keep reference only to threads that are still running
+            _alive_threads = []
+            for job in job_threads:
+                if job.is_alive():
+                    _alive_threads.append(job)
+                    continue
+                # join finished threads to be safe
                 job.join()
+                # Don't sleep - starting scheduling immediately
+                do_sleep = False
+            job_threads = _alive_threads
 
+            # Process results, if any
             while not job_queue.empty():
                 job_results = job_queue.get()
                 # Results to return in queue
                 node_list.update(job_results["host_list"])
+                self.down_nodes.update(job_results["down_nodes"])
                 debug_logging(self.log, self.enable_debug_msg, "DBG: Updating soak results")
                 self.soak_results[job_results["handle"]] = job_results["state"]
                 job_done_id = job_results["handle"]
@@ -375,6 +392,11 @@ class SoakTestBase(TestWithServers):
                     self.log,
                     self.enable_debug_msg,
                     f"DBG: node_list returned from queue {node_list}")
+
+            # Sleep to avoid spinlock
+            if do_sleep:
+                time.sleep(3)
+
         debug_logging(self.log, self.enable_debug_msg, "DBG: schedule_jobs EXITED ")
 
     def job_setup(self, jobs, pool):
@@ -653,6 +675,7 @@ class SoakTestBase(TestWithServers):
         self.soak_errors = []
         self.check_errors = []
         self.used = []
+        self.down_nodes = NodeSet()
         self.enable_debug_msg = self.params.get("enable_debug_msg", "/run/*", default=False)
         self.mpi_module = self.params.get("mpi_module", "/run/*", default="mpi/mpich-x86_64")
         self.mpi_module_use = self.params.get(

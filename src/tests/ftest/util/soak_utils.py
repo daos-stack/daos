@@ -254,7 +254,7 @@ def get_daos_server_logs(self):
         self (obj): soak obj
     """
     daos_dir = self.outputsoak_dir + "/daos_server_logs"
-    logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp/")
+    logs_dir = self.test_env.log_dir
     hosts = self.hostlist_servers
     if not os.path.exists(daos_dir):
         os.mkdir(daos_dir)
@@ -433,6 +433,7 @@ def launch_jobscript(
     debug_logging(log, test.enable_debug_msg, f"DBG: JOB {job_id} ENTERED launch_jobscript")
     job_results = []
     node_results = []
+    down_nodes = NodeSet()
     state = "UNKNOWN"
     if time.time() >= test.end_time:
         results = {"handle": job_id, "state": "CANCELLED", "host_list": host_list}
@@ -480,11 +481,11 @@ def launch_jobscript(
     if node_results.failed_hosts:
         for node in node_results.failed_hosts:
             host_list.remove(node)
-            debug_logging(
-                log, test.enable_debug_msg, "DBG: Node {node} is marked as DOWN in job {job_id}")
+            down_nodes.update(node)
+            log.info(f"DBG: Node {node} is marked as DOWN in job {job_id}")
 
     log.info("FINAL STATE: soak job %s completed with : %s at %s", job_id, state, time.ctime())
-    results = {"handle": job_id, "state": state, "host_list": host_list}
+    results = {"handle": job_id, "state": state, "host_list": host_list, "down_nodes": down_nodes}
     debug_logging(log, test.enable_debug_msg, f"DBG: JOB {job_id} EXITED launch_jobscript")
     job_queue.put(results)
     # give time to update the queue before exiting
