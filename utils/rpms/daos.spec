@@ -592,10 +592,18 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Tue Sep 03 2024 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.7.100-6
-- Upgrade PMDK to version 2.1.0 to enable NDCTL for engines with DCPM
-  * Increase default ULT stack size to 20KiB if engine handles DCPM storage class
-  * Disable NDCTL routines for 'ram' storage class
+* Mon Sep 09 2024 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.7.100-6
+- Add support of the PMDK package 2.1.0 with NDCTL enabled.
+  * Increase the default ULT stack size to 20KiB if the engine uses
+    the DCPM storage class.
+  * Prevent using the RAM storage class (simulated PMem) when
+    the shutdown state (SDS) is active.
+    * Automatically disable SDS for the RAM storage class on engine startup.
+    * Force explicitly setting the PMEMOBJ_CONF='sds.at_create=0'
+      environment variable to deactivate SDS for the DAOS tools
+      (ddb, daos_perf, vos_perf, etc.) when used WITHOUT DCPM.
+      Otherwise, a user is supposed to be stopped by an error
+      like: "Unsafe shutdown count is not supported for this source".
 
 * Thu Aug 15 2024 Michael MacDonald <mjmac@google.com> 2.7.100-5
 - Add libdaos_self_test.so to client RPM
