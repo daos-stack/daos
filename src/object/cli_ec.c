@@ -536,7 +536,9 @@ obj_ec_stripe_encode(daos_iod_t *iod, d_sg_list_t *sgl, uint32_t iov_idx,
 		}
 	}
 
-	ec_encode_data(cell_bytes, k, p, codec->ec_gftbls, data, parity_bufs);
+	(void)data;
+	(void)p;
+	//ec_encode_data(cell_bytes, k, p, codec->ec_gftbls, data, parity_bufs);
 
 out:
 	for (i = 0; i < c_idx; i++)
