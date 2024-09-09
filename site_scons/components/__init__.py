@@ -277,7 +277,14 @@ def define_components(reqs):
     abt_build = ['./configure',
                  '--prefix=$ARGOBOTS_PREFIX',
                  'CC=gcc',
-                 '--enable-stack-unwind']
+                 '--enable-stack-unwind=yes']
+    try:
+        if reqs.get_env('SANITIZERS') != "":
+            # XXX Asan add some extra info on the stack and thus ULTs a bigger stack
+            print("Increase argobots default stack size from 16384 to 32768")
+            abt_build += ['--enable-default-stacksize=32768']
+    except KeyError:
+        pass
 
     if reqs.target_type == 'debug':
         abt_build.append('--enable-debug=most')

@@ -1,5 +1,5 @@
 """Fake scons environment shutting up pylint on SCons files"""
-# Copyright 2016-2023 Intel Corporation
+# Copyright 2016-2024 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -338,6 +338,10 @@ class DefaultEnvironment():
         """Fake require"""
         return
 
+    def CheckFunc(self, *_args, **_kw):
+        """Fake CheckFunc"""
+        return True
+
 
 class Variables():
     """Fake variables"""
@@ -394,10 +398,6 @@ class Configure():
 
     def CheckProg(self, *_args, **_kw):
         """Fake CheckProg"""
-        return True
-
-    def CheckFunc(self, *_args, **_kw):
-        """Fake CheckFunc"""
         return True
 
     def CheckFlag(self, *_args, **_kw):

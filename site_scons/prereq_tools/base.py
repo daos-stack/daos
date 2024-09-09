@@ -456,6 +456,7 @@ class PreReqComponent():
                               ['gcc', 'covc', 'clang', 'icc'], ignorecase=2))
         opts.Add(EnumVariable('WARNING_LEVEL', "Set default warning level", 'error',
                               ['warning', 'warn', 'error'], ignorecase=2))
+        opts.Add(('SANITIZERS', 'Instrument C code with google sanitizers', None))
 
         opts.Update(self.__env)
 
