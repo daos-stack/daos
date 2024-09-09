@@ -1341,7 +1341,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 	 * it persistently. Otherwise, the subsequent DTX resync may not find it as
 	 * to regard it as failed transaction and abort it.
 	 */
-	if (result == 0 && !dth->dth_active && !dth->dth_prepared &&
+	if (result == 0 && !dth->dth_active && !dth->dth_prepared && !dth->dth_solo &&
 	    (dth->dth_dist || dth->dth_modification_cnt > 0)) {
 		result = vos_dtx_attach(dth, true, dth->dth_ent != NULL ? true : false);
 		if (unlikely(result < 0)) {

@@ -351,22 +351,30 @@ func (cmd *containerGetACLCmd) Execute(args []string) error {
 		return errors.Wrapf(err, "failed to query ACL for container %s", cmd.contUUID)
 	}
 
-	output := os.Stdout
 	if cmd.File != "" {
 		flags := os.O_CREATE | os.O_WRONLY
 		if !cmd.Force {
 			flags |= os.O_EXCL
 		}
 
-		output, err = os.OpenFile(cmd.File, flags, 0644)
+		output, err := os.OpenFile(cmd.File, flags, 0644)
 		if err != nil {
 			return errors.Wrap(err,
 				"failed to open ACL output file")
 		}
 		defer output.Close()
+
+		if _, err := fmt.Fprint(output, control.FormatACL(acl, cmd.Verbose)); err != nil {
+			return errors.Wrapf(err, "failed to write ACL output file")
+		}
 	}
 
-	return cmd.outputACL(output, acl, cmd.Verbose)
+	var buf strings.Builder
+	if err := cmd.outputACL(&buf, acl, cmd.Verbose); err != nil {
+		return err
+	}
+	cmd.Info(buf.String())
+	return nil
 }
 
 type containerSetOwnerCmd struct {

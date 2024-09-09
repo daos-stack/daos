@@ -10,10 +10,12 @@ import re
 from ClusterShell.NodeSet import NodeSet
 from ddb_utils import DdbCommand
 from exception_utils import CommandFailure
-from general_utils import (DaosTestError, create_string_buffer, distribute_files,
-                           get_clush_command, get_random_string, report_errors, run_command)
+from file_utils import distribute_files
+from general_utils import (DaosTestError, create_string_buffer, get_random_string, report_errors,
+                           run_command)
 from pydaos.raw import DaosObjClass, IORequest
 from recovery_test_base import RecoveryTestBase
+from run_utils import get_clush_command
 
 
 def insert_objects(context, container, object_count, dkey_count, akey_count, base_dkey,
@@ -507,14 +509,9 @@ class DdbTest(RecoveryTestBase):
             file.write(new_data)
 
         # Copy the created file to server node.
-        try:
-            distribute_files(
-                hosts=host, source=load_file_path, destination=load_file_path,
-                mkdir=False)
-        except DaosTestError as error:
-            raise CommandFailure(
-                "ERROR: Copying new_data.txt to {0}: {1}".format(host, error)) \
-                from error
+        result = distribute_files(self.log, host, load_file_path, load_file_path, False)
+        if not result.passed:
+            raise CommandFailure(f"ERROR: Copying new_data.txt to {result.failed_hosts}")
 
         # The file with the new data is ready. Run ddb load.
         ddb_command.value_load(component_path="[0]/[0]/[0]/[0]", load_file_path=load_file_path)
