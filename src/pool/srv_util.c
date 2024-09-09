@@ -21,19 +21,19 @@ int
 map_ranks_init(const struct pool_map *map, unsigned int status, d_rank_list_t *ranks)
 {
 	struct pool_domain     *domains = NULL;
-	int			nnodes;
+	int			nranks;
 	int			n = 0;
 	int			i;
 	d_rank_t	       *rs;
 
-	nnodes = pool_map_find_nodes((struct pool_map *)map,
+	nranks = pool_map_find_ranks((struct pool_map *)map,
 				      PO_COMP_ID_ALL, &domains);
-	if (nnodes == 0) {
+	if (nranks == 0) {
 		D_ERROR("no nodes in pool map\n");
 		return -DER_IO;
 	}
 
-	for (i = 0; i < nnodes; i++) {
+	for (i = 0; i < nranks; i++) {
 		if (status & domains[i].do_comp.co_status)
 			n++;
 	}
@@ -52,7 +52,7 @@ map_ranks_init(const struct pool_map *map, unsigned int status, d_rank_list_t *r
 	ranks->rl_ranks = rs;
 
 	n = 0;
-	for (i = 0; i < nnodes; i++) {
+	for (i = 0; i < nranks; i++) {
 		if (status & domains[i].do_comp.co_status) {
 			D_ASSERT(n < ranks->rl_nr);
 			ranks->rl_ranks[n] = domains[i].do_comp.co_rank;
@@ -85,7 +85,7 @@ ds_pool_map_rank_up(struct pool_map *map, d_rank_t rank)
 	struct pool_domain     *node;
 	int			rc;
 
-	rc = pool_map_find_nodes(map, rank, &node);
+	rc = pool_map_find_ranks(map, rank, &node);
 	if (rc == 0)
 		return false;
 	D_ASSERTF(rc == 1, "%d\n", rc);
@@ -921,7 +921,7 @@ testu_create_pool_map(d_rank_t *ranks, int n_ranks, d_rank_t *down_ranks, int n_
 	for (i = 0; i < n_down_ranks; i++) {
 		struct pool_domain *d;
 
-		d = pool_map_find_node_by_rank(map, down_ranks[i]);
+		d = pool_map_find_dom_by_rank(map, down_ranks[i]);
 		D_ASSERT(d != NULL);
 		d->do_comp.co_status = PO_COMP_ST_DOWN;
 	}

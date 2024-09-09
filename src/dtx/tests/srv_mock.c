@@ -72,6 +72,13 @@ ds_pool_child_put(struct ds_pool_child *child)
 }
 
 struct ds_pool_child *
+ds_pool_child_find(const uuid_t uuid)
+{
+	assert_true(false);
+	return NULL;
+}
+
+struct ds_pool_child *
 ds_pool_child_lookup(const uuid_t uuid)
 {
 	assert_true(false);
