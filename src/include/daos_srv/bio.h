@@ -1082,10 +1082,10 @@ int bio_wal_flush_header(struct bio_meta_context *mc);
 int bio_wal_checkpoint(struct bio_meta_context *mc, uint64_t tx_id, uint64_t *purge_size);
 
 /*
- * Query meta capacity & meta block size & meta blob header blocks.
+ * Query the attributes of umem_store
  */
 void bio_meta_get_attr(struct bio_meta_context *mc, uint64_t *capacity, uint32_t *blk_sz,
-		       uint32_t *hdr_blks, uint8_t *backend_type);
+		       uint32_t *hdr_blks, uint8_t *backend_type, bool *evictable);
 
 struct bio_wal_info {
 	uint32_t	wi_tot_blks;	/* Total blocks */

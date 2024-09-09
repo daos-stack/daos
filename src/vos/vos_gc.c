@@ -800,7 +800,7 @@ pin_obj:
 		bkt = item->it_bkt_ids[0];
 		if (bkt != UMEM_DEFAULT_MBKT_ID && bkt != pinned_bkt) {
 			D_ASSERT(gc->gc_type != GC_CONT);
-			D_ASSERT(vos_pool_is_p2(pool));
+			D_ASSERT(vos_pool_is_evictable(pool));
 
 			rc = umem_tx_end(&pool->vp_umm, rc);
 			if (rc != 0) {

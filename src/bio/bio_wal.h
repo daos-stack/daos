@@ -11,6 +11,7 @@
 
 enum meta_hdr_flags {
 	META_HDR_FL_EMPTY	= (1UL << 0),
+	META_HDR_FL_EVICTABLE	= (1UL << 1),
 };
 
 /* Meta blob header */
@@ -130,7 +131,7 @@ struct meta_fmt_info {
 	uint8_t		fi_backend_type;	/* Backend allocator type */
 };
 
-int meta_format(struct bio_meta_context *mc, struct meta_fmt_info *fi, bool force);
+int meta_format(struct bio_meta_context *mc, struct meta_fmt_info *fi, uint32_t flags, bool force);
 int meta_open(struct bio_meta_context *mc);
 void meta_close(struct bio_meta_context *mc);
 int wal_open(struct bio_meta_context *mc);

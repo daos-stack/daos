@@ -3308,6 +3308,13 @@ vos_dtx_local_begin(struct dtx_handle *dth, daos_handle_t poh)
 	pool = vos_hdl2pool(poh);
 	umm  = vos_pool2umm(pool);
 
+	if (vos_pool_is_evictable(pool)) {
+		D_ERROR("VOS local tx doesn't support evictable pool:"DF_UUID"\n",
+			DP_UUID(pool->vp_id));
+		rc = -DER_NOTSUPPORTED;
+		goto error;
+	}
+
 	rc = vos_tx_begin(dth, umm, pool->vp_sysdb);
 	if (rc != 0) {
 		D_ERROR("Failed to start transaction: rc=" DF_RC "\n", DP_RC(rc));

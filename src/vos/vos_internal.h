@@ -1858,11 +1858,24 @@ vos_pool_is_p2(struct vos_pool *pool)
 	return store->store_type == DAOS_MD_BMEM_V2;
 }
 
+static inline bool
+vos_pool_is_evictable(struct vos_pool *pool)
+{
+	struct umem_store	*store = vos_pool2store(pool);
+
+	if (store->store_evictable) {
+		D_ASSERT(store->store_type == DAOS_MD_BMEM_V2);
+		return true;
+	}
+
+	return false;
+}
+
 static inline umem_off_t
 vos_obj_alloc(struct umem_instance *umm, struct vos_object *obj, size_t size, bool zeroing)
 {
 
-	if (obj != NULL && vos_pool_is_p2(vos_obj2pool(obj))) {
+	if (obj != NULL && vos_pool_is_evictable(vos_obj2pool(obj))) {
 		D_ASSERT(obj->obj_bkt_allot == 1);
 		if (zeroing)
 			return umem_zalloc_from_bucket(umm, size, obj->obj_bkt_ids[0]);
@@ -1880,7 +1893,7 @@ static inline umem_off_t
 vos_obj_reserve(struct umem_instance *umm, struct vos_object *obj,
 		struct umem_rsrvd_act *rsrvd_scm, daos_size_t size)
 {
-	if (obj != NULL && vos_pool_is_p2(vos_obj2pool(obj))) {
+	if (obj != NULL && vos_pool_is_evictable(vos_obj2pool(obj))) {
 		D_ASSERT(obj->obj_bkt_allot == 1);
 		return umem_reserve_from_bucket(umm, rsrvd_scm, size, obj->obj_bkt_ids[0]);
 	}

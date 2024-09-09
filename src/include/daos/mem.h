@@ -159,6 +159,8 @@ struct umem_store {
 	struct umem_store_ops	*stor_ops;
 	/* backend type */
 	int			 store_type;
+	/* whether the store has evictable zones */
+	bool			 store_evictable;
 	/* standalone store */
 	bool			 store_standalone;
 	/* backend SSD is in faulty state */

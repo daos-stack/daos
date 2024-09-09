@@ -175,7 +175,7 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	if (del_arg != NULL)
 		coh = vos_cont2hdl((struct vos_container *)del_arg->cont);
 
-	if (vos_pool_is_p2(pool)) {
+	if (vos_pool_is_evictable(pool)) {
 		struct vos_obj_p2_df *p2 = (struct vos_obj_p2_df *)obj;
 
 		bkt_ids = &p2->p2_bkt_ids[0];
