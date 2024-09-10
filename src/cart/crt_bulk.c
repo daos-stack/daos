@@ -178,16 +178,16 @@ struct verify_cb_arg {
 static inline bool
 crt_bulk_desc_expired(struct crt_bulk_desc *bulk_desc)
 {
-	struct timespec      tv;
+	struct timespec      now;
 	struct crt_rpc_priv *rpc_priv;
 
-	d_gettime(&tv);
+	clock_gettime(CLOCK_REALTIME, &now);
 	rpc_priv = container_of(bulk_desc->bd_rpc, struct crt_rpc_priv, crp_pub);
 
 	/* Deadline expired */
-	if (tv.tv_sec > rpc_priv->crp_req_hdr.cch_src_deadline_sec) {
+	if (now.tv_sec > rpc_priv->crp_req_hdr.cch_src_deadline_sec) {
 		RPC_INFO(rpc_priv, "Deadline expired for bulk. Deadline=%d, now=%ld\n",
-			 rpc_priv->crp_req_hdr.cch_src_deadline_sec, tv.tv_sec);
+			 rpc_priv->crp_req_hdr.cch_src_deadline_sec, now.tv_sec);
 		return true;
 	}
 

@@ -80,7 +80,7 @@ struct crt_common_hdr {
 };
 
 static inline int32_t
-deadline_to_timeout(uint32_t deadline_sec)
+crt_deadline_to_timeout(uint32_t deadline_sec)
 {
 	struct timespec now;
 
@@ -91,7 +91,7 @@ deadline_to_timeout(uint32_t deadline_sec)
 }
 
 static inline uint32_t
-timeout_to_deadline(int timeout_sec)
+crt_timeout_to_deadline(int timeout_sec)
 {
 	struct timespec now;
 
@@ -164,6 +164,8 @@ struct crt_rpc_priv {
 	struct d_binheap_node	crp_timeout_bp_node;
 	/* the timeout in seconds set by user */
 	uint32_t		crp_timeout_sec;
+	/* the deadline corresponding to crp_timeout_sec */
+	uint32_t                 crp_deadline_sec;
 	/* time stamp to be timeout, the key of timeout binheap */
 	uint64_t		crp_timeout_ts;
 	crt_cb_t		crp_complete_cb;

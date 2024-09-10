@@ -1487,6 +1487,21 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 	rpc_priv->crp_complete_cb = complete_cb;
 	rpc_priv->crp_arg = arg;
 
+	/*
+	 * For collective RPCs, the originators deadline is not set and will get
+	 * converted from the timeout, however each child rpc will have a deadline set
+	 * based on the parents deadline. see crt_corpc_req_hdlr() where child deadline
+	 * is set
+	 *
+	 */
+	if (rpc_priv->crp_coll && rpc_priv->crp_deadline_sec != 0) {
+		/* TODO: Change this to debug before landing */
+		RPC_INFO(rpc_priv, "Using pre-set deadline=%d for corpc\n",
+			 rpc_priv->crp_deadline_sec);
+	} else {
+		rpc_priv->crp_deadline_sec = crt_timeout_to_deadline(rpc_priv->crp_timeout_sec);
+	}
+
 	if (rpc_priv->crp_coll) {
 		rc = crt_corpc_req_hdlr(rpc_priv);
 		if (rc != 0)
@@ -1738,7 +1753,8 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv
 
 	if (srv_flag) {
 		if (rpc_priv->crp_req_hdr.cch_src_deadline_sec) {
-			timeout = deadline_to_timeout(rpc_priv->crp_req_hdr.cch_src_deadline_sec);
+			timeout =
+			    crt_deadline_to_timeout(rpc_priv->crp_req_hdr.cch_src_deadline_sec);
 
 			RPC_INFO(rpc_priv, "Converted deadline %d to timeout %d\n",
 				 rpc_priv->crp_req_hdr.cch_src_deadline_sec, timeout);
@@ -1762,7 +1778,6 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv
 			rpc_priv->crp_timeout_sec = timeout;
 		}
 	} else {
-		RPC_INFO(rpc_priv, "Setting client timeout to %d\n", rpc_priv->crp_timeout_sec);
 		rpc_priv->crp_timeout_sec = (ctx->cc_timeout_sec == 0 ? crt_gdata.cg_timeout :
 					     ctx->cc_timeout_sec);
 	}
@@ -2017,7 +2032,7 @@ crt_req_src_timeout_get(crt_rpc_t *rpc, uint32_t *timeout)
 	}
 
 	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
-	delta    = deadline_to_timeout(rpc_priv->crp_req_hdr.cch_src_deadline_sec);
+	delta    = crt_deadline_to_timeout(rpc_priv->crp_req_hdr.cch_src_deadline_sec);
 
 	if (delta < 0) {
 		RPC_WARN(rpc_priv, "Deadline expired, delta was %d\n", delta);

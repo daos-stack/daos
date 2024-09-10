@@ -124,7 +124,7 @@ crt_corpc_initiate(struct crt_rpc_priv *rpc_priv)
 
 	/* Inherit a timeout from a source */
 	if (rpc_priv->crp_req_hdr.cch_src_deadline_sec) {
-		src_timeout = deadline_to_timeout(rpc_priv->crp_req_hdr.cch_src_deadline_sec);
+		src_timeout = crt_deadline_to_timeout(rpc_priv->crp_req_hdr.cch_src_deadline_sec);
 
 		RPC_INFO(rpc_priv, "Converted deadline %d to timeout %d\n",
 			 rpc_priv->crp_req_hdr.cch_src_deadline_sec, src_timeout);
@@ -807,8 +807,7 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 
 	/* Invoke pre-forward callback first if it is registered */
 	if (co_ops && co_ops->co_pre_forward) {
-		rc = co_ops->co_pre_forward(&rpc_priv->crp_pub,
-					    co_info->co_priv);
+		rc = co_ops->co_pre_forward(&rpc_priv->crp_pub, co_info->co_priv);
 		if (rc != 0) {
 			RPC_ERROR(rpc_priv,
 				  "co_pre_forward(group %s) failed: "DF_RC"\n",
@@ -847,8 +846,7 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 		D_GOTO(forward_done, rc);
 	}
 
-	co_info->co_child_num = (children_rank_list == NULL) ? 0 :
-				children_rank_list->rl_nr;
+	co_info->co_child_num     = (children_rank_list == NULL) ? 0 : children_rank_list->rl_nr;
 	co_info->co_child_ack_num = 0;
 
 	D_DEBUG(DB_TRACE, "group %s grp_rank %d, co_info->co_child_num: %d.\n",
@@ -876,35 +874,35 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 					     rpc_priv->crp_pub.cr_opc,
 					     true /* forward */, &child_rpc);
 		if (rc != 0) {
-			RPC_ERROR(rpc_priv,
-				  "crt_req_create(tgt_ep: %d) failed: "
-				  DF_RC"\n", tgt_ep.ep_rank, DP_RC(rc));
-			crt_corpc_fail_child_rpc(rpc_priv,
-						 co_info->co_child_num - i, rc);
+			RPC_ERROR(rpc_priv, "crt_req_create(tgt_ep: %d) failed: " DF_RC "\n",
+				  tgt_ep.ep_rank, DP_RC(rc));
+			crt_corpc_fail_child_rpc(rpc_priv, co_info->co_child_num - i, rc);
 			D_GOTO(forward_done, rc);
 		}
 		D_ASSERT(child_rpc != NULL);
-		D_ASSERT(child_rpc->cr_output_size ==
-			rpc_priv->crp_pub.cr_output_size);
-		D_ASSERT(child_rpc->cr_output_size == 0 ||
-			 child_rpc->cr_output != NULL);
+		D_ASSERT(child_rpc->cr_output_size == rpc_priv->crp_pub.cr_output_size);
+		D_ASSERT(child_rpc->cr_output_size == 0 || child_rpc->cr_output != NULL);
 		D_ASSERT(child_rpc->cr_input_size == 0);
 		D_ASSERT(child_rpc->cr_input == NULL);
 
-		child_rpc_priv = container_of(child_rpc, struct crt_rpc_priv,
-					      crp_pub);
-
-		child_rpc_priv->crp_timeout_sec = rpc_priv->crp_timeout_sec;
+		child_rpc_priv = container_of(child_rpc, struct crt_rpc_priv, crp_pub);
 		corpc_add_child_rpc(rpc_priv, child_rpc_priv);
-
 		child_rpc_priv->crp_grp_priv = co_info->co_grp_priv;
 
 		RPC_ADDREF(rpc_priv);
+
+		D_ASSERT(rpc_priv->crp_deadline_sec != 0);
+
+		/* Set childs deadline same as parent and calculate timeout left from it */
+		child_rpc_priv->crp_deadline_sec = rpc_priv->crp_deadline_sec;
+		/* Note: crp_timeout_sec is still used for local rpc expiration for now */
+		child_rpc_priv->crp_timeout_sec =
+		    crt_deadline_to_timeout(rpc_priv->crp_deadline_sec);
+
 		rc = crt_req_send(child_rpc, crt_corpc_reply_hdlr, rpc_priv);
 		if (rc != 0) {
-			RPC_ERROR(rpc_priv,
-				  "crt_req_send(tgt_ep: %d) failed: "
-				  DF_RC"\n", tgt_ep.ep_rank, DP_RC(rc));
+			RPC_ERROR(rpc_priv, "crt_req_send(tgt_ep: %d) failed: " DF_RC "\n",
+				  tgt_ep.ep_rank, DP_RC(rc));
 			RPC_DECREF(rpc_priv);
 
 			/*
@@ -913,8 +911,8 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 			 * to fail rest child rpcs
 			 */
 			if (i != (co_info->co_child_num - 1))
-				crt_corpc_fail_child_rpc(rpc_priv,
-					co_info->co_child_num - i - 1, rc);
+				crt_corpc_fail_child_rpc(rpc_priv, co_info->co_child_num - i - 1,
+							 rc);
 			D_GOTO(forward_done, rc);
 		}
 	}
@@ -940,8 +938,7 @@ forward_done:
 	/* invoke RPC handler on local node */
 	rc = crt_rpc_common_hdlr(rpc_priv);
 	if (rc != 0) {
-		RPC_ERROR(rpc_priv, "crt_rpc_common_hdlr failed: "DF_RC"\n",
-			  DP_RC(rc));
+		RPC_ERROR(rpc_priv, "crt_rpc_common_hdlr failed: " DF_RC "\n", DP_RC(rc));
 		crt_corpc_fail_child_rpc(rpc_priv, 1, rc);
 
 		D_SPIN_LOCK(&rpc_priv->crp_lock);
