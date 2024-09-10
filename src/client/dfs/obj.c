@@ -86,15 +86,14 @@ dfs_obj_get_info(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_info_t *info)
 			if (dfs->attr.da_dir_oclass_id)
 				info->doi_dir_oclass_id = dfs->attr.da_dir_oclass_id;
 			else
-				rc = daos_obj_get_oclass(dfs->coh, 0, 0, 0,
+				rc = daos_obj_get_oclass(dfs->coh, DAOS_OT_MULTI_HASHED, 0, 0,
 							 &info->doi_dir_oclass_id);
 
 			if (dfs->attr.da_file_oclass_id)
 				info->doi_file_oclass_id = dfs->attr.da_file_oclass_id;
 			else
-				rc = daos_obj_get_oclass(dfs->coh, 0, 0, 0,
+				rc = daos_obj_get_oclass(dfs->coh, DAOS_OT_ARRAY_BYTE, 0, 0,
 							 &info->doi_file_oclass_id);
-
 			if (rc) {
 				D_ERROR("daos_obj_get_oclass() failed " DF_RC "\n", DP_RC(rc));
 				return daos_der2errno(rc);

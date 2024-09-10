@@ -405,11 +405,12 @@ def get_fastest_interface(logger, hosts, verbose=True):
     for interface in common_interfaces:
         detected_speeds = get_interface_speeds(logger, hosts, interface, verbose)
         speed_list = []
+        speed_hosts = NodeSet()
         for speed, node_set in detected_speeds.items():
-            if node_set == hosts:
-                # Only include detected homogeneous interface speeds
-                speed_list.append(speed)
-        if speed_list:
+            speed_list.append(speed)
+            speed_hosts.add(node_set)
+        if speed_list and speed_hosts == hosts:
+            # Only include interface speeds if a speed is detected on all the hosts
             interface_speeds[interface] = min(speed_list)
 
     logger.info("Active network interface speeds on %s:", hosts)
