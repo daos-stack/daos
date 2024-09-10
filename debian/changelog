@@ -1,3 +1,9 @@
+daos (2.7.100-5) unstable; urgency=medium
+  [ Michael MacDonald ]
+  * Add libdaos_self_test.so to client package
+
+ -- Michael MacDonald <mjmac@google.com>  Thu, 15 Aug 2024 12:00:00 -0500
+
 daos (2.7.100-4) unstable; urgency=medium
   [ Jerome Soumagne ]
   * Bump mercury version to 2.4.0rc4

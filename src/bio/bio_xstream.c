@@ -30,7 +30,6 @@
 /* SPDK blob parameters */
 #define DAOS_BS_CLUSTER_SZ	(1ULL << 25)	/* 32MB */
 /* DMA buffer parameters */
-#define DAOS_DMA_CHUNK_MB	8	/* 8MB DMA chunks */
 #define DAOS_DMA_CHUNK_CNT_INIT	24	/* Per-xstream init chunks, 192MB */
 #define DAOS_DMA_CHUNK_CNT_MAX	128	/* Per-xstream max chunks, 1GB */
 #define DAOS_DMA_CHUNK_CNT_MIN	32	/* Per-xstream min chunks, 256MB */
@@ -207,7 +206,7 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 {
 	char		*env;
 	int		 rc, fd;
-	unsigned int	 size_mb = DAOS_DMA_CHUNK_MB;
+	unsigned int	 size_mb = BIO_DMA_CHUNK_MB;
 
 	if (tgt_nr <= 0) {
 		D_ERROR("tgt_nr: %u should be > 0\n", tgt_nr);
@@ -1705,6 +1704,18 @@ bio_nvme_ctl(unsigned int cmd, void *arg)
 	return rc;
 }
 
+static inline void
+reset_media_errors(struct bio_blobstore *bbs)
+{
+	struct nvme_stats	*dev_stats = &bbs->bb_dev_health.bdh_health_state;
+
+	dev_stats->bio_read_errs = 0;
+	dev_stats->bio_write_errs = 0;
+	dev_stats->bio_unmap_errs = 0;
+	dev_stats->checksum_errs = 0;
+	bbs->bb_faulty_done = 0;
+}
+
 void
 setup_bio_bdev(void *arg)
 {
@@ -1736,6 +1747,7 @@ setup_bio_bdev(void *arg)
 		goto out;
 	}
 
+	reset_media_errors(bbs);
 	rc = bio_bs_state_set(bbs, BIO_BS_STATE_SETUP);
 	D_ASSERT(rc == 0);
 out:

@@ -21,6 +21,7 @@
 #define VOS_POOL_DF_2_2 24
 #define VOS_POOL_DF_2_4 25
 #define VOS_POOL_DF_2_6 26
+#define VOS_POOL_DF_2_8 28
 
 struct dtx_rsrvd_uint {
 	void			*dru_scm;
@@ -299,6 +300,8 @@ enum {
 	VOS_POOL_FEAT_EMBED_FIRST = (1ULL << 3),
 	/** Flat DKEY support enabled */
 	VOS_POOL_FEAT_FLAT_DKEY = (1ULL << 4),
+	/** Gang address for SV support */
+	VOS_POOL_FEAT_GANG_SV = (1ULL << 5),
 };
 
 /** Mask for any conditionals passed to to the fetch */
@@ -413,7 +416,9 @@ typedef int (*vos_iter_filter_cb_t)(daos_handle_t ih, vos_iter_desc_t *desc,
  * Parameters for initializing VOS iterator
  */
 typedef struct {
-	/** pool connection handle or container open handle */
+	/** pool connection handle or container open handle,
+	 *  for vos_iterate_key(), it's used for passing dkey or akey tree open handle.
+	 */
 	daos_handle_t		ip_hdl;
 	/** standalone prepare:	DAOS_HDL_INVAL
 	 *  nested prepare:	parent iterator handle

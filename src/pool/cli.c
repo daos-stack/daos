@@ -503,7 +503,7 @@ update_rsvc_client(struct dc_pool *pool)
 {
 	struct subtract_rsvc_rank_arg arg;
 
-	arg.srra_nodes_len = pool_map_find_nodes(pool->dp_map, PO_COMP_ID_ALL, &arg.srra_nodes);
+	arg.srra_nodes_len = pool_map_find_ranks(pool->dp_map, PO_COMP_ID_ALL, &arg.srra_nodes);
 	/* There must be at least one rank. */
 	D_ASSERTF(arg.srra_nodes_len > 0, "%d > 0\n", arg.srra_nodes_len);
 
@@ -2016,7 +2016,7 @@ choose_map_refresh_rank(struct map_refresh_arg *arg)
 	if (arg->mra_n <= 0)
 		return CRT_NO_RANK;
 
-	n = pool_map_find_nodes(arg->mra_pool->dp_map, PO_COMP_ID_ALL, &nodes);
+	n = pool_map_find_ranks(arg->mra_pool->dp_map, PO_COMP_ID_ALL, &nodes);
 	/* There must be at least one rank. */
 	D_ASSERTF(n > 0, "%d\n", n);
 

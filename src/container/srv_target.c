@@ -1261,7 +1261,9 @@ cont_child_destroy_one(void *vin)
 			D_GOTO(out_pool, rc = -DER_BUSY);
 		} /* else: resync should have completed, try again */
 
-		daos_lru_ref_wait_evict(tls->dt_cont_cache, &cont->sc_list);
+		/* nobody should see it again after eviction */
+		daos_lru_ref_evict_wait(tls->dt_cont_cache, &cont->sc_list);
+		daos_lru_ref_release(tls->dt_cont_cache, &cont->sc_list);
 	}
 
 	D_DEBUG(DB_MD, DF_CONT": destroying vos container\n",
@@ -2050,9 +2052,9 @@ ds_cont_tgt_snapshots_update(uuid_t pool_uuid, uuid_t cont_uuid,
 	 * the up targets in this scenario. The target property will be updated
 	 * upon initiating container aggregation.
 	 */
-	return ds_pool_task_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
-				       PO_COMP_ST_DOWNOUT | PO_COMP_ST_UP,
-				       cont_snap_update_one, &args, 0);
+	return ds_pool_thread_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
+					 PO_COMP_ST_DOWNOUT | PO_COMP_ST_UP,
+					 cont_snap_update_one, &args, 0);
 }
 
 void

@@ -481,7 +481,7 @@ class ObjectMetadata(TestWithServers):
             # Create the IOR threads
             for index in range(total_ior_threads):
                 # Define the arguments for the run_ior_loop method
-                ior_cmd = IorCommand()
+                ior_cmd = IorCommand(self.test_env.log_dir)
                 ior_cmd.get_params(self)
                 ior_cmd.set_daos_params(self.pool, None)
                 ior_cmd.flags.value = self.params.get("ior{}flags".format(operation), "/run/ior/*")

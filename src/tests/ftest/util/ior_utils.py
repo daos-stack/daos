@@ -9,7 +9,7 @@ from enum import IntEnum
 
 from avocado.utils.process import CmdResult
 from command_utils import SubProcessCommand
-from command_utils_base import BasicParameter, FormattedParameter
+from command_utils_base import BasicParameter, FormattedParameter, LogParameter
 from duns_utils import format_path
 from exception_utils import CommandFailure
 from general_utils import get_log_file
@@ -222,7 +222,7 @@ class IorCommand(SubProcessCommand):
 
     Example:
         >>> # Typical use inside of a DAOS avocado test method.
-        >>> ior_cmd = IorCommand()
+        >>> ior_cmd = IorCommand(self.test_env.log_dir)
         >>> ior_cmd.get_params(self)
         >>> ior_cmd.set_daos_params(pool, container)
         >>> mpirun = Mpirun()
@@ -234,13 +234,15 @@ class IorCommand(SubProcessCommand):
         >>> mpirun.run()
     """
 
-    def __init__(self, namespace="/run/ior/*"):
+    def __init__(self, log_dir, namespace="/run/ior/*"):
         """Create an IorCommand object.
 
         Args:
+            log_dir (str): directory in which to put log files
             namespace (str, optional): path to yaml parameters. Defaults to "/run/ior/*".
         """
         super().__init__(namespace, "ior", timeout=60)
+        self._log_dir = log_dir
 
         # Flags
         self.flags = FormattedParameter("{}")
@@ -291,8 +293,7 @@ class IorCommand(SubProcessCommand):
             "-O stoneWallingWearOut={}")
         self.sw_wearout_iteration = FormattedParameter(
             "-O stoneWallingWearOutIterations={}")
-        self.sw_status_file = FormattedParameter(
-            "-O stoneWallingStatusFile={}")
+        self.sw_status_file = LogParameter(self._log_dir, "-O stoneWallingStatusFile={}", None)
         self.task_offset = FormattedParameter("-Q {}")
         self.segment_count = FormattedParameter("-s {}")
         self.transfer_size = FormattedParameter("-t {}")
@@ -529,7 +530,7 @@ class Ior:
         """
         self.manager = manager
         self.manager.assign_hosts(hosts, path, slots)
-        self.manager.job = IorCommand(namespace)
+        self.manager.job = IorCommand(test.test_env.log_dir, namespace)
         self.manager.job.get_params(test)
         self.manager.output_check = "both"
         self.timeout = test.params.get("timeout", namespace, None)
@@ -587,7 +588,7 @@ class Ior:
         return '.'.join(['_'.join(parts), 'log'])
 
     def run(self, pool, container, processes, ppn=None, intercept=None, plugin_path=None,
-            dfuse=None, display_space=True, fail_on_warning=False, unique_log=True, il_report=1):
+            dfuse=None, display_space=True, fail_on_warning=False, unique_log=True, il_report=None):
         # pylint: disable=too-many-arguments
         """Run ior.
 
@@ -608,7 +609,7 @@ class Ior:
             unique_log (bool, optional): whether or not to update the log file with a new unique log
                 file name. Defaults to True.
             il_report (int, optional): D_IL_REPORT value to use when 'intercept' is specified and a
-                value does not already exist in the environment. Defaults to 1.
+                value does not already exist in the environment. Defaults to None.
 
         Raises:
             CommandFailure: if there is an error running the ior command
@@ -626,7 +627,7 @@ class Ior:
             self.env["LD_PRELOAD"] = intercept
             if "D_LOG_MASK" not in self.env:
                 self.env["D_LOG_MASK"] = "INFO"
-            if "D_IL_REPORT" not in self.env:
+            if "D_IL_REPORT" not in self.env and il_report is not None:
                 self.env["D_IL_REPORT"] = str(il_report)
 
         if plugin_path:

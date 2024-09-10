@@ -17,15 +17,15 @@ class FileCountTestBase(IorTestBase, MdtestBase):
     :avocado: recursive
     """
 
-    def add_containers(self, file_oclass=None, dir_oclass=None):
-        """Create a list of containers that the various jobs use for storage.
+    def get_file_write_container(self, file_oclass=None, dir_oclass=None):
+        """Create a container, set oclass, dir_oclass, and add rd_fac property based on oclass.
 
         Args:
-            file_oclass (str, optional): file object class of container.
-                                         Defaults to None.
-            dir_oclass (str, optional): dir object class of container.
-                                        Defaults to None.
+            file_oclass (str, optional): file object class of container. Defaults to None.
+            dir_oclass (str, optional): dir object class of container. Defaults to None.
 
+        Returns:
+            TestContainer: Created container with oclass, dir_oclass, and rd_fac set.
 
         """
         # Create a container and add it to the overall list of containers
@@ -69,7 +69,6 @@ class FileCountTestBase(IorTestBase, MdtestBase):
         dir_oclass = None
         apis = self.params.get("api", "/run/largefilecount/*")
         hdf5_plugin_path = self.params.get("plugin_path", '/run/hdf5_vol/*')
-        mount_dir = self.params.get("mount_dir", "/run/dfuse/*")
         ior_np = self.params.get("np", '/run/ior/client_processes/*', 1)
         ior_ppn = self.params.get("ppn", '/run/ior/client_processes/*', None)
         mdtest_np = self.params.get("np", '/run/mdtest/client_processes/*', 1)
@@ -93,12 +92,12 @@ class FileCountTestBase(IorTestBase, MdtestBase):
                     rd_fac = extract_redundancy_factor(oclass)
                     dir_oclass = self.get_diroclass(rd_fac)
                     self.mdtest_cmd.dfs_dir_oclass.update(dir_oclass)
-                    self.container = self.add_containers(oclass, dir_oclass)
+                    self.container = self.get_file_write_container(oclass, dir_oclass)
                     try:
                         self.processes = mdtest_np
                         self.ppn = mdtest_ppn
                         if self.mdtest_cmd.api.value == 'POSIX':
-                            self.mdtest_cmd.env.update(LD_PRELOAD=intercept, D_IL_REPORT='1')
+                            self.mdtest_cmd.env.update(LD_PRELOAD=intercept)
                             self.execute_mdtest()
                         else:
                             self.execute_mdtest()
@@ -112,15 +111,27 @@ class FileCountTestBase(IorTestBase, MdtestBase):
                 # run ior
                 self.log.info("=======>>>Starting IOR with %s and %s", api, oclass)
                 self.ior_cmd.dfs_oclass.update(oclass)
-                self.container = self.add_containers(oclass)
+                self.container = self.get_file_write_container(oclass)
                 self.update_ior_cmd_with_pool(False)
                 try:
                     self.processes = ior_np
                     self.ppn = ior_ppn
-                    if self.ior_cmd.api.value == 'HDF5-VOL':
+                    if api == 'HDF5-VOL':
+                        # Format the container properties so that it works with HDF5-VOL env var.
+                        # Each entry:value pair needs to be separated by a semicolon. Since we're
+                        # using this in the mpirun command, semicolon would indicate the end of the
+                        # command, so quote the whole thing.
+                        cont_props = self.container.properties.value
+                        cont_props_hdf5_vol = '"' + cont_props.replace(",", ";") + '"'
+                        self.log.info("cont_props_hdf5_vol = %s", cont_props_hdf5_vol)
+                        env = self.ior_cmd.env.copy()
+                        env.update({
+                            "HDF5_DAOS_OBJ_CLASS": oclass,
+                            "HDF5_DAOS_FILE_PROP": cont_props_hdf5_vol
+                        })
                         self.ior_cmd.api.update('HDF5')
                         self.run_ior_with_pool(
-                            create_pool=False, plugin_path=hdf5_plugin_path, mount_dir=mount_dir)
+                            create_pool=False, plugin_path=hdf5_plugin_path, env=env)
                     elif self.ior_cmd.api.value == 'POSIX':
                         self.run_ior_with_pool(create_pool=False, intercept=intercept)
                     else:

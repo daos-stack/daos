@@ -38,7 +38,7 @@ ior:
   read_flags: "-r -R -C -e -g -G 27 -k -Q 1"
   sw_deadline: 15
   sw_wearout: 1
-  sw_status_file: "/var/tmp/daos_testing/stoneWallingStatusFile"
+  sw_status_file: stoneWallingStatusFile
   dfs_oclass: SX
   transfer_size: 1M
   block_size: 150G

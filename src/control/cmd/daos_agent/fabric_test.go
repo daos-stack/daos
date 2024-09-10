@@ -1100,6 +1100,36 @@ func TestAgent_NUMAFabric_FindDevice(t *testing.T) {
 				},
 			},
 		},
+		"success with manual interfaces": {
+			nf: &NUMAFabric{
+				numaMap: map[int][]*FabricInterface{
+					0: {
+						{
+							Name:        "t1",
+							Domain:      "t1",
+							NetDevClass: FabricDevClassManual,
+						},
+						{
+							Name:        "t2",
+							Domain:      "t2",
+							NetDevClass: FabricDevClassManual,
+						},
+					},
+				},
+			},
+			params: &FabricIfaceParams{
+				Interface: "t2",
+				Domain:    "t2",
+				Provider:  "p2",
+			},
+			expResult: []*FabricInterface{
+				{
+					Name:        "t2",
+					Domain:      "t2",
+					NetDevClass: FabricDevClassManual,
+				},
+			},
+		},
 		"success with no domain": {
 			nf: &NUMAFabric{
 				numaMap: map[int][]*FabricInterface{
