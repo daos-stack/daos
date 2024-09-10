@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -932,7 +932,7 @@ rebuild_small_pool_n4_setup(void **state)
 		 */
 		print_message("It can not create the pool with 4 ranks"
 			      " probably due to not enough ranks %d\n", rc);
-		return 0;
+		return rc;
 	}
 
 	arg = *state;
