@@ -196,7 +196,7 @@ type setFaultyCmd struct {
 
 type nvmeSetFaultyCmd struct {
 	smdManageCmd
-	Host  string `short:"t" long:"host" required:"1" description:"Single host address <ipv4addr/hostname> to connect to"`
+	singleHostCmd
 	UUID  string `short:"u" long:"uuid" description:"Device UUID to set" required:"1"`
 	Force bool   `short:"f" long:"force" description:"Do not require confirmation"`
 }
@@ -215,7 +215,7 @@ func (cmd *nvmeSetFaultyCmd) Execute(_ []string) error {
 		Operation: control.SetFaultyOp,
 		IDs:       cmd.UUID,
 	}
-	req.SetHostList([]string{cmd.Host})
+	req.SetHostList(cmd.Host.Slice())
 	return cmd.makeRequest(cmd.MustLogCtx(), req)
 }
 
@@ -227,7 +227,7 @@ type storageReplaceCmd struct {
 // nvmeReplaceCmd is the struct representing the replace nvme storage subcommand
 type nvmeReplaceCmd struct {
 	smdManageCmd
-	Host       string `short:"t" long:"host" required:"1" description:"Single host address <ipv4addr/hostname> to connect to"`
+	singleHostCmd
 	OldDevUUID string `long:"old-uuid" description:"Device UUID of hot-removed SSD" required:"1"`
 	NewDevUUID string `long:"new-uuid" description:"Device UUID of new device" required:"1"`
 }
@@ -244,14 +244,13 @@ func (cmd *nvmeReplaceCmd) Execute(_ []string) error {
 		IDs:         cmd.OldDevUUID,
 		ReplaceUUID: cmd.NewDevUUID,
 	}
-	req.SetHostList([]string{cmd.Host})
+	req.SetHostList(cmd.Host.Slice())
 	return cmd.makeRequest(cmd.MustLogCtx(), req)
 }
 
 type ledCmd struct {
 	smdManageCmd
 	hostListCmd
-
 	Args struct {
 		IDs string `positional-arg-name:"ids" description:"Comma-separated list of identifiers which could be either VMD backing device (NVMe SSD) PCI addresses or device UUIDs. All SSDs selected if arg not provided."`
 	} `positional-args:"yes"`

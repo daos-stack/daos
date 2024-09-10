@@ -128,16 +128,10 @@ func TestStorageQueryCommands(t *testing.T) {
 			errors.New("not specified"),
 		},
 		{
-			"Set FAULTY device status (with hostlist)",
-			"storage set nvme-faulty -t foo -l host-[1-2] -f --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
-			"",
-			errors.New("unknown flag"),
-		},
-		{
 			"Set FAULTY device status (with > 1 host)",
-			"storage set nvme-faulty -t host-[1-2] -f --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
+			"storage set nvme-faulty -l host-[1-2] -f --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
 			"",
-			errors.New("> 1 host"),
+			errors.New("must specify a single host"),
 		},
 		{
 			"Set FAULTY device status (force)",
@@ -200,7 +194,7 @@ func TestStorageQueryCommands(t *testing.T) {
 		},
 		{
 			"Try to replace a device without a new device UUID specified",
-			"storage replace nvme -t foo --old-uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
+			"storage replace nvme -l foo --old-uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
 			"",
 			errors.New("the required flag `--new-uuid' was not specified"),
 		},
