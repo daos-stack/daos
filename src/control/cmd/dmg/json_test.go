@@ -101,8 +101,7 @@ func TestDmg_JsonOutput(t *testing.T) {
 			case "pool query-targets":
 				testArgs = append(testArgs, test.MockUUID(), "--rank", "0", "--target-idx", "1,3,5,7")
 			case "container set-owner":
-				testArgs = append(testArgs, "--user", "foo", "--pool", test.MockUUID(),
-					"--cont", test.MockUUID())
+				testArgs = append(testArgs, "--user", "foo", test.MockUUID(), test.MockUUID())
 			case "telemetry metrics list", "telemetry metrics query":
 				return // These commands query via http directly
 			case "system cleanup":
