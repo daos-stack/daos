@@ -55,8 +55,7 @@ func PrintSelfTestResult(out io.Writer, result *daos.SelfTestResult, verbose, sh
 		return errors.Errorf("nil %T", result)
 	}
 
-	rpcThroughput := float64(result.MasterLatency.Succeeded()) / result.Duration.Seconds()
-
+	rpcThroughput := result.RPCThroughput()
 	epRanks := ranklist.NewRankSet()
 	epTgts := hostlist.NewNumericSet()
 	for _, ep := range result.TargetEndpoints {
@@ -73,7 +72,7 @@ func PrintSelfTestResult(out io.Writer, result *daos.SelfTestResult, verbose, sh
 	}
 	if result.SendSize > 0 || result.ReplySize > 0 {
 		suffix := "B/s"
-		bw := rpcThroughput * (float64(result.SendSize) + float64(result.ReplySize))
+		bw := result.RPCBandwidth()
 		if !showBytes {
 			bw *= 8
 			suffix = "bps"
