@@ -9,6 +9,7 @@ import site
 
 from ClusterShell.NodeSet import NodeSet
 # pylint: disable=import-error,no-name-in-module
+from util.host_utils import get_local_host
 from util.network_utils import (PROVIDER_ALIAS, SUPPORTED_PROVIDERS, NetworkException,
                                 get_common_provider, get_fastest_interface)
 from util.run_utils import run_remote
@@ -326,7 +327,7 @@ class TestEnvironment():
             # Find all the /sys/class/net interfaces on the launch node (excluding lo)
             logger.debug("Detecting network devices - D_INTERFACE not set")
             try:
-                interface = get_fastest_interface(logger, hosts)
+                interface = get_fastest_interface(logger, hosts | get_local_host())
             except NetworkException as error:
                 raise TestEnvironmentException("Error obtaining a default interface!") from error
         return interface
