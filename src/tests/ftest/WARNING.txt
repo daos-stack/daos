@@ -1,0 +1,1 @@
+This branch is for testing if the PR 115112 introduce a regression in the test control/config_generate_ouput.py.
