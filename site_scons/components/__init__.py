@@ -169,7 +169,7 @@ def define_mercury(reqs):
                           ['make', 'install']],
                 libs=['mercury'],
                 pkgconfig='mercury',
-                requires=['boost', 'ofi', 'ucx'] + libs,
+                requires=['boost', 'ofi'] + libs,
                 out_of_src_build=True,
                 package='mercury-devel' if inst(reqs, 'mercury') else None,
                 build_env={'CFLAGS': '-fstack-usage'})
