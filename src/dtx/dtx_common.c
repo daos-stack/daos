@@ -2150,8 +2150,11 @@ dtx_leader_exec_ops_chore(struct dss_chore *chore, bool is_reentrance)
 		}
 
 		/* Yield to avoid holding CPU for too long time. */
-		if (++(dtx_chore->k) % DTX_RPC_YIELD_THD == 0)
+		if (++(dtx_chore->k) % DTX_RPC_YIELD_THD == 0) {
+			chore->cho_load_comp = DTX_RPC_YIELD_THD;
+			chore->cho_load_left -= DTX_RPC_YIELD_THD;
 			return DSS_CHORE_YIELD;
+		}
 	}
 
 	if (rc != 0) {
@@ -2174,6 +2177,8 @@ dtx_leader_exec_ops_chore(struct dss_chore *chore, bool is_reentrance)
 		  dlh->dlh_forward_idx, dlh->dlh_forward_idx + dlh->dlh_forward_cnt,
 		  dlh->dlh_normal_sub_done == 1 ? "yes" : "no", rc);
 
+	chore->cho_load_comp = chore->cho_load_left;
+	chore->cho_load_left = 0;
 	return DSS_CHORE_DONE;
 }
 
@@ -2210,6 +2215,8 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 			dlh->dlh_need_agg = 1;
 	}
 
+	dtx_chore.chore.cho_for_io = 1;
+
 	if (dlh->dlh_normal_sub_cnt == 0)
 		goto exec;
 
@@ -2227,6 +2234,7 @@ again:
 		D_GOTO(out, rc = dss_abterr2der(rc));
 	}
 
+	dtx_chore.chore.cho_load_left = dlh->dlh_forward_cnt;
 	rc = dss_chore_delegate(&dtx_chore.chore, dtx_leader_exec_ops_chore);
 	if (rc != 0) {
 		DL_ERROR(rc, "chore create failed [%u, %u] (2)", dlh->dlh_forward_idx,
@@ -2306,6 +2314,7 @@ exec:
 	/* The ones without DELAY flag will be skipped when scan the targets array. */
 	dlh->dlh_forward_cnt = dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt;
 
+	dtx_chore.chore.cho_load_left = dlh->dlh_delay_sub_cnt;
 	rc = dss_chore_delegate(&dtx_chore.chore, dtx_leader_exec_ops_chore);
 	if (rc != 0) {
 		DL_ERROR(rc, "chore create failed (4)");
