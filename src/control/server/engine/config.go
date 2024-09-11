@@ -375,32 +375,32 @@ func (c *Config) UpdatePMDKEnvarsStackSizeDCPM() error {
 func (c *Config) UpdatePMDKEnvarsPMemobjConf(isDCPM bool) error {
 	pmemobjConfStr, pmemobjConfErr := c.GetEnvVar("PMEMOBJ_CONF")
 	//also work for empty string
-	isSdsAtCreateNon := !strings.Contains(pmemobjConfStr, "sds.at_create")
-	if isSdsAtCreateNon && isDCPM {
-		return nil
+	hasSdsAtCreate := strings.Contains(pmemobjConfStr, "sds.at_create")
+	if isDCPM {
+		if !hasSdsAtCreate {
+			return nil
+		}
+		// Confirm default handling of shutdown state (SDS) for DCPM storage class.
+		return errors.New("env_var PMEMOBJ_CONF should NOT contain 'sds.at_create=?' " +
+			"for DCPM storage class, found '" + pmemobjConfStr + "'")
 	}
 
 	// Disable shutdown state (SDS) (part of RAS) for RAM-based simulated SCM.
 	if pmemobjConfErr != nil {
 		c.EnvVars = append(c.EnvVars, "PMEMOBJ_CONF=sds.at_create=0")
 		return nil
-	} else if isSdsAtCreateNon {
+	}
+	if !hasSdsAtCreate {
 		envVars, _ := common.DeleteKeyValue(c.EnvVars, "PMEMOBJ_CONF")
 		c.EnvVars = append(envVars, "PMEMOBJ_CONF="+pmemobjConfStr+
 			";sds.at_create=0")
 		return nil
 	}
-	if isDCPM {
-		// Confirm default handling of shutdown state (SDS) for DCPM storage class.
-		return errors.New("env_var PMEMOBJ_CONF should NOT contain 'sds.at_create=?' " +
-			"for DCPM storage class, found '" + pmemobjConfStr + "'")
-	} else {
-		if strings.Contains(pmemobjConfStr, "sds.at_create=1") {
-			return errors.New("env_var PMEMOBJ_CONF should contain 'sds.at_create=0' " +
-				"for non-DCPM storage class, found '" + pmemobjConfStr + "'")
-		}
-		return nil
+	if strings.Contains(pmemobjConfStr, "sds.at_create=1") {
+		return errors.New("env_var PMEMOBJ_CONF should contain 'sds.at_create=0' " +
+			"for non-DCPM storage class, found '" + pmemobjConfStr + "'")
 	}
+	return nil
 }
 
 // Ensure proper environment variables for PMDK w/ NDCTL enabled based on
