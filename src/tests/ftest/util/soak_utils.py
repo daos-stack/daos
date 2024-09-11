@@ -1690,8 +1690,6 @@ def build_job_script(self, commands, job, nodesperjob, ppn):
                 if sbatch_params:
                     for key, value in list(sbatch_params.items()):
                         if value is not None:
-                            if key == "error":
-                                value = value
                             script_file.write("#SBATCH --{}={}\n".format(key, value))
                         else:
                             script_file.write("#SBATCH --{}\n".format(key))

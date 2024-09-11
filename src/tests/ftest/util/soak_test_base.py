@@ -320,7 +320,7 @@ class SoakTestBase(TestWithServers):
         for job_dict in self.joblist:
             jobid_list.append(job_dict["jobid"])
             jobs_not_done.append(job_dict["jobid"])
-        self.log.info(f"Submitting {len(jobid_list)} jobs at {time.ctime()}")
+        self.log.info("Submitting %s jobs at %s", str(len(jobid_list)), time.ctime())
         job_threads = []
         while True:
             if time.time() > self.end_time or len(jobs_not_done) == 0:
@@ -393,7 +393,7 @@ class SoakTestBase(TestWithServers):
                     self.enable_debug_msg,
                     f"DBG: node_list returned from queue {node_list}")
 
-            # Sleep to avoid spinlock
+            # Sleep to avoid spin lock
             if do_sleep:
                 time.sleep(3)
 
@@ -547,7 +547,7 @@ class SoakTestBase(TestWithServers):
                     else:
                         # update soak_results to include job id NOT run and set state = CANCELLED
                         for job in job_id_list:
-                            if job not in list(self.soak_results.keys()):
+                            if job not in self.soak_results:
                                 self.soak_results.update({job: "CANCELLED"})
                                 self.log.info("FINAL STATE: soak job %s completed with : %s at %s",
                                               job, "CANCELLED", time.ctime())
