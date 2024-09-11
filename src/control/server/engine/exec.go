@@ -163,7 +163,7 @@ func (r *Runner) Start(ctx context.Context) (RunnerExitChan, error) {
 	if err != nil {
 		return nil, err
 	}
-	env, err := r.Config.AdjustPMDKEnvVar().CmdLineEnv()
+	env, err := r.Config.CmdLineEnv()
 	if err != nil {
 		return nil, err
 	}
