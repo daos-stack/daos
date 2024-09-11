@@ -7,6 +7,8 @@
 package api
 
 import (
+	"context"
+	"sort"
 	"unsafe"
 
 	"github.com/pkg/errors"
@@ -22,13 +24,13 @@ import (
 import "C"
 
 // GetSystemInfo queries for the connected system information.
-func (p *Provider) GetSystemInfo() (*daos.SystemInfo, error) {
+func (p *Provider) GetSystemInfo(ctx context.Context) (*daos.SystemInfo, error) {
 	var cSysInfo *C.struct_daos_sys_info
-	rc := C.daos_mgmt_get_sys_info(nil, &cSysInfo)
+	rc := daos_mgmt_get_sys_info(nil, &cSysInfo)
 	if err := daos.ErrorFromRC(int(rc)); err != nil {
 		return nil, errors.Wrap(err, "querying DAOS system information")
 	}
-	defer C.daos_mgmt_put_sys_info(cSysInfo)
+	defer daos_mgmt_put_sys_info(cSysInfo)
 
 	sysInfo := &daos.SystemInfo{
 		Name:      C.GoString(&cSysInfo.dsi_system_name[0]),
@@ -46,10 +48,16 @@ func (p *Provider) GetSystemInfo() (*daos.SystemInfo, error) {
 		sysInfo.RankURIs = append(sysInfo.RankURIs, rankURI)
 		rankURIs[rankURI.Rank] = rankURI
 	}
+	sort.Slice(sysInfo.RankURIs, func(i, j int) bool {
+		return sysInfo.RankURIs[i].Rank < sysInfo.RankURIs[j].Rank
+	})
 
 	for _, cMSRank := range unsafe.Slice(cSysInfo.dsi_ms_ranks, int(cSysInfo.dsi_nr_ms_ranks)) {
 		sysInfo.AccessPointRankURIs = append(sysInfo.AccessPointRankURIs, rankURIs[uint32(cMSRank)])
 	}
+	sort.Slice(sysInfo.AccessPointRankURIs, func(i, j int) bool {
+		return sysInfo.AccessPointRankURIs[i].Rank < sysInfo.AccessPointRankURIs[j].Rank
+	})
 
 	return sysInfo, nil
 }
