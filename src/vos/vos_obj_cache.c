@@ -257,6 +257,24 @@ vos_obj_unpin(struct vos_object *obj)
 	}
 }
 
+static inline void
+obj_allot_bkt(struct vos_pool *pool, struct vos_object *obj)
+{
+	if (obj->obj_bkt_allot)
+		return;
+
+	D_ASSERT(umem_tx_none(vos_pool2umm(pool)));
+
+	if (!obj->obj_df) {
+		obj->obj_bkt_ids[0] = umem_allot_mb_evictable(vos_pool2umm(pool), 0);
+	} else {
+		struct vos_obj_p2_df *p2 = (struct vos_obj_p2_df *)obj->obj_df;
+
+		obj->obj_bkt_ids[0] = p2->p2_bkt_ids[0];
+	}
+	obj->obj_bkt_allot = 1;
+}
+
 /* Support single evict-able bucket for this moment */
 static inline int
 vos_obj_pin(struct vos_object *obj)
@@ -268,16 +286,7 @@ vos_obj_pin(struct vos_object *obj)
 	if (!vos_pool_is_evictable(pool))
 		return 0;
 
-	if (!obj->obj_bkt_allot) {
-		if (!obj->obj_df) {
-			obj->obj_bkt_ids[0] = umem_allot_mb_evictable(vos_pool2umm(pool), 0);
-		} else {
-			struct vos_obj_p2_df *p2 = (struct vos_obj_p2_df *)obj->obj_df;
-
-			obj->obj_bkt_ids[0] = p2->p2_bkt_ids[0];
-		}
-		obj->obj_bkt_allot = 1;
-	}
+	obj_allot_bkt(pool, obj);
 
 	D_ASSERT(obj->obj_pin_hdl == NULL);
 	if (obj->obj_bkt_ids[0] == UMEM_DEFAULT_MBKT_ID)
@@ -521,8 +530,6 @@ vos_obj_hold(struct vos_container *cont, daos_unit_oid_t oid, daos_epoch_range_t
 	D_ASSERT(cont->vc_pool);
 	D_ASSERT(obj_p != NULL);
 
-	D_ASSERT(!vos_pool_is_evictable(cont->vc_pool) || umem_tx_none(vos_pool2umm(cont->vc_pool)));
-
 	*obj_p = NULL;
 
 	occ = vos_obj_cache_get(cont->vc_pool->vp_sysdb);
@@ -685,4 +692,252 @@ vos_obj_evict_by_oid(struct vos_container *cont, daos_unit_oid_t oid)
 	}
 
 	return (rc == -DER_NONEXIST || rc == -DER_SHUTDOWN)? 0 : rc;
+}
+
+static int
+bkt_cmp(void *array, int a, int b)
+{
+	uint32_t	*bkt_arr = array;
+
+	if (bkt_arr[a] > bkt_arr[b])
+		return 1;
+	if (bkt_arr[a] < bkt_arr[b])
+		return -1;
+	return 0;
+}
+
+static void
+bkt_swap(void *array, int a, int b)
+{
+	uint32_t	*bkt_arr = array;
+	uint32_t	 tmp;
+
+	tmp = bkt_arr[a];
+	bkt_arr[a] = bkt_arr[b];
+	bkt_arr[b] = tmp;
+}
+
+static daos_sort_ops_t bkt_sort_ops = {
+	.so_cmp		= bkt_cmp,
+	.so_swap	= bkt_swap,
+};
+
+/* if @sub is a subset of @super */
+bool
+vos_bkt_array_subset(struct vos_bkt_array *super, struct vos_bkt_array *sub)
+{
+	int	i, idx;
+
+	if (sub->vba_cnt > super->vba_cnt)
+		return false;
+
+	for (i = 0; i < sub->vba_cnt; i++) {
+		idx = daos_array_find(super, super->vba_cnt, sub->vba_bkts[i], &bkt_sort_ops);
+		if (idx < 0)
+			return false;
+	}
+
+	return true;
+}
+
+int
+vos_bkt_array_add(struct vos_bkt_array *bkts, uint32_t bkt_id)
+{
+	int	idx;
+
+	D_ASSERT(bkt_id != UMEM_DEFAULT_MBKT_ID);
+
+	/* The @bkt_id is already in bucket array */
+	idx = daos_array_find(bkts->vba_bkts, bkts->vba_cnt, bkt_id, &bkt_sort_ops);
+	if (idx >= 0)
+		return 0;
+
+	/* Bucket array needs be expanded */
+	if (bkts->vba_cnt == bkts->vba_tot) {
+		uint32_t	*new_bkts;
+		size_t		 new_size = bkts->vba_tot * 2;
+
+		if (bkts->vba_tot > VOS_BKTS_INLINE_MAX)
+			D_REALLOC_ARRAY(new_bkts, bkts->vba_bkts, bkts->vba_tot, new_size);
+		else
+			D_ALLOC_ARRAY(new_bkts, new_size);
+
+		if (new_bkts == NULL)
+			return -DER_NOMEM;
+
+		if (bkts->vba_tot == VOS_BKTS_INLINE_MAX)
+			memcpy(new_bkts, bkts->vba_bkts, sizeof(uint32_t) * bkts->vba_tot);
+
+		bkts->vba_bkts = new_bkts;
+		bkts->vba_tot = new_size;
+	}
+
+	bkts->vba_bkts[bkts->vba_cnt] = bkt_id;
+	bkts->vba_cnt++;
+
+	idx = daos_array_sort(bkts->vba_bkts, bkts->vba_cnt, true, &bkt_sort_ops);
+	D_ASSERT(idx == 0);
+
+	return 0;
+}
+
+int
+vos_bkt_array_pin(struct vos_pool *pool, struct vos_bkt_array *bkts,
+		  struct umem_pin_handle **pin_hdl)
+{
+	struct umem_cache_range	 rg_inline[VOS_BKTS_INLINE_MAX];
+	struct umem_cache_range	*ranges;
+	int			 i, rc;
+
+	if (bkts->vba_cnt == 0)
+		return 0;
+
+	if (bkts->vba_cnt > VOS_BKTS_INLINE_MAX) {
+		D_ALLOC_ARRAY(ranges, bkts->vba_cnt);
+		if (ranges == NULL)
+			return -DER_NOMEM;
+	} else {
+		ranges = &rg_inline[0];
+	}
+
+	for (i = 0; i < bkts->vba_cnt; i++) {
+		D_ASSERT(bkts->vba_bkts[i] != UMEM_DEFAULT_MBKT_ID);
+		ranges[i].cr_off = umem_get_mb_base_offset(vos_pool2umm(pool), bkts->vba_bkts[i]);
+		ranges[i].cr_size = vos_pool2store(pool)->cache->ca_page_sz;
+	}
+
+	rc = umem_cache_pin(vos_pool2store(pool), ranges, bkts->vba_cnt, false, pin_hdl);
+	if (rc)
+		DL_ERROR(rc, "Failed to pin %u ranges.", bkts->vba_cnt);
+
+	if (ranges != &rg_inline[0])
+		D_FREE(ranges);
+
+	return rc;
+}
+
+static int
+vos_obj_acquire(struct vos_container *cont, daos_unit_oid_t oid, struct vos_object **obj_p)
+{
+	struct vos_object	*obj;
+	struct daos_lru_cache	*occ;
+	int			 rc;
+
+	D_ASSERT(cont != NULL);
+	D_ASSERT(cont->vc_pool);
+	D_ASSERT(obj_p != NULL);
+	*obj_p = NULL;
+
+	occ = vos_obj_cache_get(cont->vc_pool->vp_sysdb);
+	D_ASSERT(occ != NULL);
+
+	/* Lookup object cache, create cache entry if not found */
+	rc = obj_get(occ, cont, oid, true, &obj);
+	if (rc) {
+		DL_ERROR(rc, "Failed to lookup/create object in cache.");
+		return rc;
+	}
+
+	if (obj->obj_zombie) {
+		D_ERROR("The object:"DF_UOID" is already evicted.\n", DP_UOID(oid));
+		obj_put(occ, obj, true);
+		return -DER_AGAIN;
+	}
+
+	/* Lookup OI table if the cached object is negative */
+	if (obj->obj_df == NULL) {
+		obj->obj_sync_epoch = 0;
+		rc = vos_oi_find(cont, oid, &obj->obj_df, NULL);
+		if (rc == 0) {
+			obj->obj_sync_epoch = obj->obj_df->vo_sync;
+		} else if (rc == -DER_NONEXIST) {
+			rc = 0;
+		} else if (rc) {
+			DL_ERROR(rc, "Failed to lookup OI table.");
+			obj_put(occ, obj, false);
+			return rc;
+		}
+	}
+
+	obj_allot_bkt(cont->vc_pool, obj);
+	*obj_p = obj;
+
+	return 0;
+}
+
+struct vos_pin_handle {
+	unsigned int		 vph_acquired;
+	struct umem_pin_handle	*vph_pin_hdl;
+	struct vos_object	*vph_objs[0];
+};
+
+void
+vos_unpin_objects(daos_handle_t coh, struct vos_pin_handle *hdl)
+{
+	struct vos_container	*cont = vos_hdl2cont(coh);
+	struct vos_pool		*pool = vos_cont2pool(cont);
+	int			 i;
+
+	if (hdl->vph_pin_hdl != NULL)
+		umem_cache_unpin(vos_pool2store(pool), hdl->vph_pin_hdl);
+
+	for (i = 0; i < hdl->vph_acquired; i++)
+		vos_obj_release(hdl->vph_objs[i], 0, false);
+
+	D_FREE(hdl);
+}
+
+int
+vos_pin_objects(daos_handle_t coh, daos_unit_oid_t oids[], int count, struct vos_pin_handle **hdl)
+{
+	struct vos_pin_handle	*vos_hdl;
+	struct vos_object	*obj;
+	struct vos_bkt_array	 bkts;
+	struct vos_container	*cont = vos_hdl2cont(coh);
+	struct vos_pool		*pool = vos_cont2pool(cont);
+	int			 i, rc;
+
+	*hdl = NULL;
+	if (!vos_pool_is_evictable(pool))
+		return 0;
+
+	D_ASSERT(count > 0);
+	D_ALLOC(vos_hdl, sizeof(*vos_hdl) + sizeof(struct vos_object *) * count);
+	if (vos_hdl == NULL)
+		return -DER_NOMEM;
+
+	vos_bkt_array_init(&bkts);
+	for (i = 0; i < count; i++) {
+		rc = vos_obj_acquire(cont, oids[i], &vos_hdl->vph_objs[i]);
+		if (rc) {
+			DL_ERROR(rc, "Failed to acquire object:"DF_UOID"", DP_UOID(oids[i]));
+			goto error;
+		}
+		vos_hdl->vph_acquired++;
+
+		obj = vos_hdl->vph_objs[i];
+		D_ASSERT(obj->obj_bkt_allot == 1);
+		if (obj->obj_bkt_ids[0] != UMEM_DEFAULT_MBKT_ID) {
+			rc = vos_bkt_array_add(&bkts, obj->obj_bkt_ids[0]);
+			if (rc) {
+				DL_ERROR(rc, "Failed to add bucket:%u to array",
+					 obj->obj_bkt_ids[0]);
+				goto error;
+			}
+		}
+	}
+
+	rc = vos_bkt_array_pin(pool, &bkts, &vos_hdl->vph_pin_hdl);
+	if (rc) {
+		DL_ERROR(rc, "Failed to pin %u objects.", vos_hdl->vph_acquired);
+		goto error;
+	}
+
+	vos_bkt_array_fini(&bkts);
+	*hdl = vos_hdl;
+	return 0;
+error:
+	vos_bkt_array_fini(&bkts);
+	vos_unpin_objects(coh, vos_hdl);
+	return rc;
 }

@@ -2215,14 +2215,139 @@ vos_dtx_post_handle(struct vos_container *cont,
 	}
 }
 
+static inline void
+dtx_commit_unpin(struct vos_container *cont, struct umem_pin_handle *pin_hdl)
+{
+	struct vos_pool	*pool = vos_cont2pool(cont);
+
+	if (pin_hdl != NULL)
+		umem_cache_unpin(vos_pool2store(pool), pin_hdl);
+}
+
+static inline int
+bkts_add_rec(struct vos_pool *pool, struct vos_bkt_array *bkts, umem_off_t rec_off)
+{
+	uint32_t	bkt_id;
+	int		rc;
+
+	if (UMOFF_IS_NULL(rec_off))
+		return 0;
+
+	bkt_id = umem_get_mb_from_offset(vos_pool2umm(pool), rec_off);
+	if (bkt_id == UMEM_DEFAULT_MBKT_ID)
+		return 0;
+
+	rc = vos_bkt_array_add(bkts, bkt_id);
+	if (rc)
+		DL_ERROR(rc, "Failed to add %u into bucket array.", bkt_id);
+
+	return rc;
+}
+
+static int
+bkts_add_dae(struct vos_pool *pool, struct vos_bkt_array *bkts_in, struct vos_dtx_act_ent *dae)
+{
+	struct vos_bkt_array	local_bkts, *bkts;
+	umem_off_t		rec_off;
+	int			i, count, rc = 0;
+
+	vos_bkt_array_init(&local_bkts);
+	bkts = bkts_in->vba_cnt == 0 ? bkts_in : &local_bkts;
+
+	if (dae->dae_records != NULL) {
+		D_ASSERT(DAE_REC_CNT(dae) > DTX_INLINE_REC_CNT);
+
+		for (i = DAE_REC_CNT(dae) - DTX_INLINE_REC_CNT - 1; i >= 0; i--) {
+			rec_off = umem_off2offset(dae->dae_records[i]);
+			rc = bkts_add_rec(pool, bkts, rec_off);
+			if (rc)
+				goto out;
+		}
+		count = DTX_INLINE_REC_CNT;
+	} else {
+		count = DAE_REC_CNT(dae);
+	}
+
+	for (i = count - 1; i >= 0; i--) {
+		rec_off = umem_off2offset(DAE_REC_INLINE(dae)[i]);
+		rc = bkts_add_rec(pool, bkts, rec_off);
+		if (rc)
+			goto out;
+	}
+
+	/* Stop adding the dae when current dae not located in the subset of @bkts_in */
+	if (local_bkts.vba_cnt != 0 && !vos_bkt_array_subset(bkts_in, &local_bkts))
+		rc = 1;
+out:
+	vos_bkt_array_fini(&local_bkts);
+	return rc;
+}
+
+static int
+dtx_commit_pin(struct vos_container *cont, struct dtx_id dtis[], int count, int *pinned,
+	       struct umem_pin_handle **pin_hdl)
+{
+	struct vos_dtx_act_ent	*dae;
+	struct vos_bkt_array	 bkts;
+	d_iov_t			 kiov, riov;
+	int			 i, rc;
+
+	*pinned = count;
+	*pin_hdl = NULL;
+
+	if (!vos_pool_is_evictable(vos_cont2pool(cont)))
+		return 0;
+
+	vos_bkt_array_init(&bkts);
+
+	for (i = 0; i < count; i++) {
+		d_iov_set(&kiov, &dtis[i], sizeof(struct dtx_id));
+		d_iov_set(&riov, NULL, 0);
+
+		rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
+		if (rc == -DER_NONEXIST) {
+			rc = 0;
+			continue;
+		} else if (rc) {
+			DL_ERROR(rc, "Failed to lookup DTX active table.");
+			goto out;
+		}
+
+		dae = riov.iov_buf;
+		D_ASSERT(dae->dae_preparing == 0);
+
+		if (vos_dae_is_abort(dae) || dae->dae_committed || dae->dae_committing ||
+		    dae->dae_need_release == 0)
+			continue;
+
+		rc = bkts_add_dae(vos_cont2pool(cont), &bkts, dae);
+		if (rc) {
+			if (rc < 0) {
+				DL_ERROR(rc, "Failed to add DTX to bucket array.");
+				goto out;
+			}
+			*pinned = i;
+			break;
+		}
+	}
+
+	rc = vos_bkt_array_pin(vos_cont2pool(cont), &bkts, pin_hdl);
+	if (rc)
+		DL_ERROR(rc, "Failed to pin buckets.");
+out:
+	vos_bkt_array_fini(&bkts);
+	return rc;
+}
+
 int
 vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool rm_cos[])
 {
 	struct vos_dtx_act_ent	**daes = NULL;
 	struct vos_dtx_cmt_ent	**dces = NULL;
 	struct vos_container	 *cont;
-	int			  committed = 0;
-	int			  rc = 0;
+	struct umem_pin_handle	 *pin_hdl;
+	int			  tot_committed = 0, committed, pinned;
+	int			  idx = 0, rc = 0;
 
 	D_ASSERT(count > 0);
 
@@ -2237,24 +2362,42 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool rm_cos[]
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
 
+pin_objects:
+	rc = dtx_commit_pin(cont, &dtis[idx], count, &pinned, &pin_hdl);
+	if (rc) {
+		DL_ERROR(rc, "Pin objects failed before DTX commit.");
+		goto out;
+	}
+
+	D_ASSERT(pinned > 0 && pinned <= count);
+	count -= pinned;
+
 	/* Commit multiple DTXs via single local transaction. */
 	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
 	if (rc == 0) {
-		committed = vos_dtx_commit_internal(cont, dtis, count, 0, rm_cos, daes, dces);
+		committed = vos_dtx_commit_internal(cont, &dtis[idx], pinned, 0, &rm_cos[idx],
+						    &daes[idx], &dces[idx]);
 		if (committed >= 0) {
 			rc = umem_tx_commit(vos_cont2umm(cont));
 			D_ASSERT(rc == 0);
+			tot_committed += committed;
 		} else {
 			rc = umem_tx_abort(vos_cont2umm(cont), committed);
 		}
-		vos_dtx_post_handle(cont, daes, dces, count, false, rc != 0);
+		vos_dtx_post_handle(cont, &daes[idx], &dces[idx], pinned, false, rc != 0);
 	}
 
+	dtx_commit_unpin(cont, pin_hdl);
+
+	if (count > 0) {
+		idx += pinned;
+		goto pin_objects;
+	}
 out:
 	D_FREE(daes);
 	D_FREE(dces);
 
-	return rc < 0 ? rc : committed;
+	return rc < 0 ? rc : tot_committed;
 }
 
 int
@@ -3054,6 +3197,11 @@ vos_dtx_attach(struct dtx_handle *dth, bool persistent, bool exist)
 		}
 	}
 
+	/*
+	 * Doesn't need to pin the object before starting tx, since the DTX commit from
+	 * following vos_dtx_prepared() is for read-only DTX transaction, no object data
+	 * will be accessed during DTX commit.
+	 */
 	if (persistent) {
 		rc = umem_tx_begin(umm, NULL);
 		if (rc != 0)

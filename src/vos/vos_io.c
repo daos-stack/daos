@@ -2447,7 +2447,8 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	tx_started = true;
 
 	/* Commit the CoS DTXs via the IO PMDK transaction. */
-	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0 && !dth->dth_cos_done) {
+	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0 && !dth->dth_cos_done &&
+	    !vos_pool_is_evictable(vos_cont2pool(ioc->ic_cont))) {
 		D_ASSERT(!dth->dth_local);
 
 		D_ALLOC_ARRAY(daes, dth->dth_dti_cos_count);

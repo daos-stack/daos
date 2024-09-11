@@ -1541,4 +1541,30 @@ vos_aggregate_enter(daos_handle_t coh, daos_epoch_range_t *epr);
 void
 vos_aggregate_exit(daos_handle_t coh);
 
+struct vos_pin_handle;
+
+/**
+ * Unpin the pinned objects in md-on-ssd phase2 mode
+ *
+ * \param[in]	coh	container open handle.
+ * \param[in]	hdl	pin handle.
+ *
+ * \return 0 on success, error otherwise.
+ */
+void
+vos_unpin_objects(daos_handle_t coh, struct vos_pin_handle *hdl);
+
+/**
+ * Pin bunch of objects in md-on-ssd phase2 mode
+ *
+ * \param[in]	coh	container open handle.
+ * \param[in]	oids	object IDs.
+ * \param[in]	count	number of object IDs.
+ * \param[out]	hdl	pin handle.
+ *
+ * \return 0 on success, error otherwise.
+ */
+int
+vos_pin_objects(daos_handle_t coh, daos_unit_oid_t oids[], int count, struct vos_pin_handle **hdl);
+
 #endif /* __VOS_API_H */
