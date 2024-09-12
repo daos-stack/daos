@@ -16,15 +16,18 @@ src/tests/ftest*:
   stop_on_match: True
   tags: pr
 
-# Everything else runs pr
+# Individual code areas
+src/client/dfs/: dfs
+
+# Everything runs pr unless a previous entry was matched with stop_on_match
 .*: pr
 
 
 # Examples for reference only. Each code area needs to be carefully evaluated.
-# Any files touch under "src/cart/"" should run "cart" tests
+# Any files touch under "src/cart/" should run "cart" tests
 # src/cart/: cart
 
-# Run "control" for files under "src/control/""
+# Run "control" for files under "src/control/"
 # Run "control" and "security" for files under "src/control/security"
 # src/control/: control
 # src/control/security/: security

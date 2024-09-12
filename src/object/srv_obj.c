@@ -60,6 +60,9 @@ obj_gen_dtx_mbs(uint32_t flags, uint32_t *tgt_cnt, struct daos_shard_tgt **p_tgt
 	int			 i;
 	int			 j;
 
+	if (*tgt_cnt == 0)
+		return 0;
+
 	D_ASSERT(tgts != NULL);
 
 	if (!(flags & ORF_CONTAIN_LEADER)) {
@@ -485,22 +488,24 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 int
 obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bulk_t *remote_bulks,
 		  uint64_t *remote_offs, uint8_t *skips, daos_handle_t ioh, d_sg_list_t **sgls,
-		  int sgl_nr, struct obj_bulk_args *p_arg, struct ds_cont_hdl *coh)
+		  int sgl_nr, int bulk_nr, struct obj_bulk_args *p_arg, struct ds_cont_hdl *coh)
 {
-	struct obj_rw_in	*orw = crt_req_get(rpc);
 	struct obj_bulk_args	arg = { 0 };
 	int			i, rc, *status, ret;
 	int			skip_nr = 0;
-	int			bulk_nr;
 	bool			async = true;
 	uint64_t		time = daos_get_ntime();
+
+	if (unlikely(sgl_nr > bulk_nr)) {
+		D_ERROR("Invalid sgl_nr vs bulk_nr: %d/%d\n", sgl_nr, bulk_nr);
+		return -DER_INVAL;
+	}
 
 	if (remote_bulks == NULL) {
 		D_ERROR("No remote bulks provided\n");
 		return -DER_INVAL;
 	}
 
-	bulk_nr = orw->orw_bulks.ca_count;
 	if (p_arg == NULL) {
 		p_arg = &arg;
 		async = false;
@@ -511,7 +516,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bul
 		return dss_abterr2der(rc);
 
 	p_arg->inited = true;
-	D_DEBUG(DB_IO, "bulk_op %d sgl_nr %d\n", bulk_op, sgl_nr);
+	D_DEBUG(DB_IO, "bulk_op %d, sgl_nr %d, bulk_nr %d\n", bulk_op, sgl_nr, bulk_nr);
 
 	p_arg->bulks_inflight++;
 
@@ -539,9 +544,9 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bul
 		while (skips != NULL && isset(skips, i + skip_nr))
 			skip_nr++;
 
-		if (bulk_nr > 0)
-			D_ASSERTF(i + skip_nr < bulk_nr, "i %d, skip_nr %d, bulk_nr %d\n",
-				  i, skip_nr, bulk_nr);
+		D_ASSERTF(i + skip_nr < bulk_nr, "i %d, skip_nr %d, sgl_nr %d, bulk_nr %d\n",
+			  i, skip_nr, sgl_nr, bulk_nr);
+
 		if (remote_bulks[i + skip_nr] == NULL)
 			continue;
 
@@ -571,6 +576,12 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bul
 			break;
 		}
 	}
+
+	if (skips != NULL)
+		D_ASSERTF(skip_nr + sgl_nr <= bulk_nr,
+			  "Unmatched skip_nr %d, sgl_nr %d, bulk_nr %d\n",
+			  skip_nr, sgl_nr, bulk_nr);
+
 done:
 	if (--(p_arg->bulks_inflight) == 0)
 		ABT_eventual_set(p_arg->eventual, &rc, sizeof(rc));
@@ -833,7 +844,7 @@ obj_echo_rw(crt_rpc_t *rpc, daos_iod_t *iod, uint64_t *off)
 	/* Only support 1 iod now */
 	bulk_bind = orw->orw_flags & ORF_BULK_BIND;
 	rc = obj_bulk_transfer(rpc, bulk_op, bulk_bind, orw->orw_bulks.ca_arrays, off,
-			       NULL, DAOS_HDL_INVAL, &p_sgl, 1, NULL, NULL);
+			       NULL, DAOS_HDL_INVAL, &p_sgl, 1, 1, NULL, NULL);
 out:
 	orwo->orw_ret = rc;
 	orwo->orw_map_version = orw->orw_map_ver;
@@ -1633,7 +1644,8 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 	if (rma) {
 		bulk_bind = orw->orw_flags & ORF_BULK_BIND;
 		rc = obj_bulk_transfer(rpc, bulk_op, bulk_bind, orw->orw_bulks.ca_arrays, offs,
-				       skips, ioh, NULL, iods_nr, NULL, ioc->ioc_coh);
+				       skips, ioh, NULL, iods_nr, orw->orw_bulks.ca_count, NULL,
+				       ioc->ioc_coh);
 		if (rc == 0) {
 			bio_iod_flush(biod);
 
@@ -1806,7 +1818,7 @@ obj_get_iods_offs_by_oid(daos_unit_oid_t uoid, struct obj_iod_array *iod_array,
 		}
 	}
 	if (oiod_nr > LOCAL_SKIP_BITS_NUM || *skips == NULL) {
-		D_ALLOC(*skips, roundup(oiod_nr / NBBY, 4));
+		D_ALLOC(*skips, (oiod_nr + NBBY - 1) / NBBY);
 		if (*skips == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 	}
@@ -2158,8 +2170,37 @@ obj_ioc_begin_lite(uint32_t rpc_map_ver, uuid_t pool_uuid,
 	int			rc;
 
 	rc = obj_ioc_init(pool_uuid, coh_uuid, cont_uuid, rpc, ioc);
-	if (rc)
+	if (rc) {
+		DL_ERROR(rc, "Failed to initialize object I/O context.");
+
+		/*
+		 * Client with stale pool map may try to send RPC to a DOWN target, if the
+		 * target was brought DOWN due to faulty NVMe device, the ds_pool_child could
+		 * have been stopped on the NVMe faulty reaction, then above obj_io_init()
+		 * will fail with -DER_NO_HDL.
+		 *
+		 * We'd ensure proper error code is returned for such case.
+		 */
+		poc = ds_pool_child_find(pool_uuid);
+		if (poc == NULL) {
+			D_ERROR("Failed to find pool:"DF_UUID"\n", DP_UUID(pool_uuid));
+			return rc;
+		}
+
+		if (rpc_map_ver < poc->spc_pool->sp_map_version) {
+			D_ERROR("Stale pool map version %u < %u from client.\n",
+				rpc_map_ver, poc->spc_pool->sp_map_version);
+
+			/* Restart the DTX if using stale pool map */
+			if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_CPD)
+				rc = -DER_TX_RESTART;
+			else
+				rc = -DER_STALE;
+		}
+
+		ds_pool_child_put(poc);
 		return rc;
+	}
 
 	poc = ioc->ioc_coc->sc_pool;
 	D_ASSERT(poc != NULL);
@@ -2445,7 +2486,7 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 		goto end;
 	}
 	rc = obj_bulk_transfer(rpc, CRT_BULK_GET, false, &oer->er_bulk, NULL, NULL,
-			       ioh, NULL, 1, NULL, ioc.ioc_coh);
+			       ioh, NULL, 1, 1, NULL, ioc.ioc_coh);
 	if (rc)
 		D_ERROR(DF_UOID " bulk transfer failed: " DF_RC "\n", DP_UOID(oer->er_oid),
 			DP_RC(rc));
@@ -2523,7 +2564,7 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 			goto end;
 		}
 		rc = obj_bulk_transfer(rpc, CRT_BULK_GET, false, &oea->ea_bulk,
-				       NULL, NULL, ioh, NULL, 1, NULL, ioc.ioc_coh);
+				       NULL, NULL, ioh, NULL, 1, 1, NULL, ioc.ioc_coh);
 		if (rc)
 			D_ERROR(DF_UOID " bulk transfer failed: " DF_RC "\n", DP_UOID(oea->ea_oid),
 				DP_RC(rc));
@@ -2652,11 +2693,9 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	tgts = orw->orw_shard_tgts.ca_arrays;
 	tgt_cnt = orw->orw_shard_tgts.ca_count;
 
-	if (!daos_is_zero_dti(&orw->orw_dti) && tgt_cnt != 0) {
-		rc = obj_gen_dtx_mbs(orw->orw_flags, &tgt_cnt, &tgts, &mbs);
-		if (rc != 0)
-			D_GOTO(out, rc);
-	}
+	rc = obj_gen_dtx_mbs(orw->orw_flags, &tgt_cnt, &tgts, &mbs);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	epoch.oe_value = orw->orw_epoch;
 	epoch.oe_first = orw->orw_epoch_first;
@@ -2880,11 +2919,9 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	tgts = orw->orw_shard_tgts.ca_arrays;
 	tgt_cnt = orw->orw_shard_tgts.ca_count;
 
-	if (!daos_is_zero_dti(&orw->orw_dti) && tgt_cnt != 0) {
-		rc = obj_gen_dtx_mbs(orw->orw_flags, &tgt_cnt, &tgts, &mbs);
-		if (rc != 0)
-			D_GOTO(out, rc);
-	}
+	rc = obj_gen_dtx_mbs(orw->orw_flags, &tgt_cnt, &tgts, &mbs);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	version = orw->orw_map_ver;
 	max_ver = orw->orw_map_ver;
@@ -3003,9 +3040,6 @@ again2:
 			d_tm_inc_counter(opm->opm_update_restart, 1);
 			goto again2;
 		}
-
-		/* Standalone fetches do not get -DER_TX_RESTART. */
-		D_ASSERT(!daos_is_zero_dti(&orw->orw_dti));
 
 		break;
 	case -DER_AGAIN:
@@ -3279,7 +3313,7 @@ obj_enum_reply_bulk(crt_rpc_t *rpc)
 		return 0;
 
 	rc = obj_bulk_transfer(rpc, CRT_BULK_PUT, false, bulks, NULL, NULL,
-			       DAOS_HDL_INVAL, sgls, idx, NULL, NULL);
+			       DAOS_HDL_INVAL, sgls, idx, idx, NULL, NULL);
 	if (oei->oei_kds_bulk) {
 		D_FREE(oeo->oeo_kds.ca_arrays);
 		oeo->oeo_kds.ca_count = 0;
@@ -3426,26 +3460,15 @@ obj_punch_complete(crt_rpc_t *rpc, int status, uint32_t map_version)
 }
 
 static int
-obj_local_punch(struct obj_punch_in *opi, crt_opcode_t opc,
-		struct obj_io_context *ioc, struct dtx_handle *dth)
+obj_punch_one(struct obj_punch_in *opi, crt_opcode_t opc,
+	      struct obj_io_context *ioc, struct dtx_handle *dth)
 {
 	struct ds_cont_child	*cont = ioc->ioc_coc;
-	struct dtx_share_peer	*dsp;
-	uint64_t		 sched_seq;
-	uint32_t		 retry = 0;
-	int			 rc = 0;
+	int			 rc;
 
-	if (daos_is_zero_dti(&opi->opi_dti)) {
-		D_DEBUG(DB_TRACE, "disable dtx\n");
-		dth = NULL;
-	}
-
-again:
 	rc = dtx_sub_init(dth, &opi->opi_oid, opi->opi_dkey_hash);
 	if (rc != 0)
 		goto out;
-
-	sched_seq = sched_cur_seq();
 
 	switch (opc) {
 	case DAOS_OBJ_RPC_PUNCH:
@@ -3478,7 +3501,32 @@ again:
 		D_GOTO(out, rc = -DER_NOSYS);
 	}
 
-	if (dth != NULL && obj_dtx_need_refresh(dth, rc)) {
+out:
+	return rc;
+}
+
+static int
+obj_local_punch(struct obj_punch_in *opi, crt_opcode_t opc, uint32_t shard_nr, uint32_t *shards,
+		struct obj_io_context *ioc, struct dtx_handle *dth)
+{
+	struct dtx_share_peer	*dsp;
+	uint64_t		 sched_seq;
+	uint32_t		 retry = 0;
+	int			 rc = 0;
+	int			 i;
+
+again:
+	sched_seq = sched_cur_seq();
+
+	/* There may be multiple shards reside on the same VOS target. */
+	for (i = 0; i < shard_nr; i++) {
+		opi->opi_oid.id_shard = shards[i];
+		rc = obj_punch_one(opi, opc, ioc, dth);
+		if (rc != 0)
+			break;
+	}
+
+	if (obj_dtx_need_refresh(dth, rc)) {
 		if (unlikely(++retry % 10 == 3)) {
 			dsp = d_list_entry(dth->dth_share_tbd_list.next,
 					   struct dtx_share_peer, dsp_link);
@@ -3559,7 +3607,6 @@ obj_tgt_punch(struct obj_tgt_punch_args *otpa, uint32_t *shards, uint32_t count)
 	daos_epoch_t		 tmp;
 	uint32_t		 dtx_flags = 0;
 	int			 rc = 0;
-	int			 i;
 
 	if (p_ioc == NULL) {
 		p_ioc = &ioc;
@@ -3616,17 +3663,11 @@ obj_tgt_punch(struct obj_tgt_punch_args *otpa, uint32_t *shards, uint32_t count)
 		D_GOTO(out, rc = -DER_IO);
 
 exec:
-	/* There may be multiple shards reside on the same VOS target. */
-	for (i = 0; i < count; i++) {
-		opi->opi_oid.id_shard = shards[i];
-		rc = obj_local_punch(opi, otpa->opc, p_ioc, dth);
-		if (rc != 0) {
-			DL_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
-				  (rc == -DER_NONEXIST && (opi->opi_api_flags & DAOS_COND_PUNCH)),
-				  DB_IO, DLOG_ERR, rc, DF_UOID, DP_UOID(opi->opi_oid));
-			goto out;
-		}
-	}
+	rc = obj_local_punch(opi, otpa->opc, count, shards, p_ioc, dth);
+	if (rc != 0)
+		DL_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
+			  (rc == -DER_NONEXIST && (opi->opi_api_flags & DAOS_COND_PUNCH)),
+			  DB_IO, DLOG_ERR, rc, DF_UOID, DP_UOID(opi->opi_oid));
 
 out:
 	if (otpa->ver != NULL)
@@ -3652,11 +3693,9 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	uint32_t			 version = 0;
 	int				 rc;
 
-	if (!daos_is_zero_dti(&opi->opi_dti) && tgt_cnt != 0) {
-		rc = obj_gen_dtx_mbs(opi->opi_flags, &tgt_cnt, &tgts, &otpa.mbs);
-		if (rc != 0)
-			D_GOTO(out, rc);
-	}
+	rc = obj_gen_dtx_mbs(opi->opi_flags, &tgt_cnt, &tgts, &otpa.mbs);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	otpa.opc = opc_get(rpc->cr_opc);
 	otpa.opi = opi;
@@ -3732,7 +3771,8 @@ obj_tgt_punch_disp(struct dtx_leader_handle *dlh, void *arg, int idx, dtx_sub_co
 		if (dlh->dlh_handle.dth_prepared)
 			goto comp;
 
-		rc = obj_local_punch(opi, opc_get(rpc->cr_opc), exec_arg->ioc, &dlh->dlh_handle);
+		rc = obj_local_punch(opi, opc_get(rpc->cr_opc), 1, &opi->opi_oid.id_shard,
+				     exec_arg->ioc, &dlh->dlh_handle);
 		if (rc != 0)
 			DL_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
 				  (rc == -DER_NONEXIST && (opi->opi_api_flags & DAOS_COND_PUNCH)),
@@ -3809,11 +3849,9 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	tgts = opi->opi_shard_tgts.ca_arrays;
 	tgt_cnt = opi->opi_shard_tgts.ca_count;
 
-	if (!daos_is_zero_dti(&opi->opi_dti) && tgt_cnt != 0) {
-		rc = obj_gen_dtx_mbs(opi->opi_flags, &tgt_cnt, &tgts, &mbs);
-		if (rc != 0)
-			D_GOTO(out, rc);
-	}
+	rc = obj_gen_dtx_mbs(opi->opi_flags, &tgt_cnt, &tgts, &mbs);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	if (tgt_cnt == 0) {
 		if (!(opi->opi_api_flags & DAOS_COND_MASK))
@@ -4560,7 +4598,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 
 			rc = obj_bulk_transfer(rpc, CRT_BULK_GET, dcu->dcu_flags & ORF_BULK_BIND,
 					       dcu->dcu_bulks, poffs[i], pskips[i], iohs[i], NULL,
-					       piod_nrs[i], &bulks[i], ioc->ioc_coh);
+					       piod_nrs[i], dcsr->dcsr_nr, &bulks[i], ioc->ioc_coh);
 			if (rc != 0) {
 				D_ERROR("Bulk transfer failed for obj "
 					DF_UOID", DTX "DF_DTI": "DF_RC"\n",
@@ -5276,7 +5314,7 @@ ds_obj_cpd_body_bulk(crt_rpc_t *rpc, struct obj_io_context *ioc, bool leader,
 	}
 
 	rc = obj_bulk_transfer(rpc, CRT_BULK_GET, ORF_BULK_BIND, bulks, NULL, NULL,
-			       DAOS_HDL_INVAL, sgls, count, NULL, ioc->ioc_coh);
+			       DAOS_HDL_INVAL, sgls, count, count, NULL, ioc->ioc_coh);
 	if (rc != 0)
 		goto out;
 

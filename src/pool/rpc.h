@@ -147,6 +147,16 @@ CRT_RPC_DECLARE(pool_op, DAOS_ISEQ_POOL_OP, DAOS_OSEQ_POOL_OP)
 CRT_RPC_DECLARE(pool_create, DAOS_ISEQ_POOL_CREATE, DAOS_OSEQ_POOL_CREATE)
 
 /* clang-format on */
+
+/* the source of pool map update operation */
+enum map_update_source {
+	MUS_SWIM = 0,
+	/* May need to differentiate from administrator/csum scrubber/nvme healthy monitor later.
+	 * Now all non-swim cases fall to DMG category.
+	 */
+	MUS_DMG,
+};
+
 enum map_update_opc {
 	MAP_EXCLUDE = 0,
 	MAP_DRAIN,

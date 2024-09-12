@@ -190,6 +190,10 @@ func TestSecurity_Pem_ValidateCertDirectory(t *testing.T) {
 			if err := os.Mkdir(testDir, tc.perms); err != nil {
 				t.Fatal(err)
 			}
+			// Use chmod to set the permissions regardless of umask.
+			if err := os.Chmod(testDir, tc.perms); err != nil {
+				t.Fatal(err)
+			}
 			testFile := test.CreateTestFile(t, dir, "some content")
 
 			path := testDir

@@ -33,6 +33,8 @@ extend_dkeys(void **state)
 	int		j;
 	int		rc;
 
+	print_message("BEGIN %s\n", __FUNCTION__);
+
 	if (!test_runable(arg, 3))
 		return;
 
@@ -73,6 +75,8 @@ extend_akeys(void **state)
 	int		j;
 	int		rc;
 
+	print_message("BEGIN %s\n", __FUNCTION__);
+
 	if (!test_runable(arg, 3))
 		return;
 
@@ -112,6 +116,8 @@ extend_indexes(void **state)
 	int		j;
 	int		k;
 	int		rc;
+
+	print_message("BEGIN %s\n", __FUNCTION__);
 
 	if (!test_runable(arg, 3))
 		return;
@@ -155,6 +161,8 @@ extend_large_rec(void **state)
 	int		j;
 	int		rc;
 
+	print_message("BEGIN %s\n", __FUNCTION__);
+
 	if (!test_runable(arg, 3))
 		return;
 
@@ -191,6 +199,8 @@ extend_objects(void **state)
 	struct ioreq	req;
 	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
+
+	print_message("BEGIN %s\n", __FUNCTION__);
 
 	if (!test_runable(arg, 3))
 		return;
@@ -250,6 +260,8 @@ extend_read_check(dfs_t *dfs_mt, dfs_obj_t *dir)
 
 	buf = malloc(buf_size);
 	verify_buf = malloc(buf_size);
+	print_message("%s(): allocations buf_size=" DF_U64 ", buf=%p, verify_buf=%p\n",
+		      __FUNCTION__, buf_size, buf, verify_buf);
 	assert_non_null(buf);
 	assert_non_null(verify_buf);
 	d_iov_set(&iov, buf, buf_size);
@@ -266,18 +278,23 @@ extend_read_check(dfs_t *dfs_mt, dfs_obj_t *dir)
 		sprintf(filename, "file%d", i);
 		rc = dfs_open(dfs_mt, dir, filename, S_IFREG | S_IWUSR | S_IRUSR,
 			      O_RDWR, OC_EC_2P1GX, 1048576, NULL, &obj);
+		print_message("%s(): dfs_open(filename=%s) rc=%d\n", __FUNCTION__, filename, rc);
 		assert_int_equal(rc, 0);
 
 		memset(verify_buf, 'a' + i, buf_size);
 		rc = dfs_read(dfs_mt, obj, &sgl, 0, &read_size, NULL);
+		print_message("%s(): dfs_read() read_size=" DF_U64 ", rc=%d\n", __FUNCTION__,
+			      read_size, rc);
 		assert_int_equal(rc, 0);
 		assert_int_equal((int)read_size, buf_size);
 		assert_memory_equal(buf, verify_buf, read_size);
 		rc = dfs_release(obj);
+		print_message("%s(): dfs_release() rc=%d\n", __FUNCTION__, rc);
 		assert_int_equal(rc, 0);
 	}
 	free(buf);
 	free(verify_buf);
+	print_message("%s(): done, freed buf and verify_buf\n", __FUNCTION__);
 }
 
 static void
@@ -509,6 +526,7 @@ dfs_extend_punch_kill(void **state)
 {
 	FAULT_INJECTION_REQUIRED();
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	dfs_extend_internal(state, EXTEND_PUNCH, extend_cb_internal, true);
 }
 
@@ -517,6 +535,7 @@ dfs_extend_punch_extend(void **state)
 {
 	FAULT_INJECTION_REQUIRED();
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	dfs_extend_internal(state, EXTEND_PUNCH, extend_cb_internal, false);
 }
 
@@ -525,6 +544,7 @@ dfs_extend_stat_kill(void **state)
 {
 	FAULT_INJECTION_REQUIRED();
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	dfs_extend_internal(state, EXTEND_STAT, extend_cb_internal, true);
 }
 
@@ -533,6 +553,7 @@ dfs_extend_stat_extend(void **state)
 {
 	FAULT_INJECTION_REQUIRED();
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	dfs_extend_internal(state, EXTEND_STAT, extend_cb_internal, false);
 }
 
@@ -541,6 +562,7 @@ dfs_extend_enumerate_kill(void **state)
 {
 	FAULT_INJECTION_REQUIRED();
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	dfs_extend_internal(state, EXTEND_ENUMERATE, extend_cb_internal, true);
 }
 
@@ -549,6 +571,7 @@ dfs_extend_enumerate_extend(void **state)
 {
 	FAULT_INJECTION_REQUIRED();
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	dfs_extend_internal(state, EXTEND_ENUMERATE, extend_cb_internal, false);
 }
 
@@ -557,6 +580,7 @@ dfs_extend_fetch_kill(void **state)
 {
 	FAULT_INJECTION_REQUIRED();
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	dfs_extend_internal(state, EXTEND_FETCH, extend_cb_internal, true);
 }
 
@@ -565,6 +589,7 @@ dfs_extend_fetch_extend(void **state)
 {
 	FAULT_INJECTION_REQUIRED();
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	dfs_extend_internal(state, EXTEND_FETCH, extend_cb_internal, false);
 }
 
@@ -573,6 +598,7 @@ dfs_extend_write_kill(void **state)
 {
 	FAULT_INJECTION_REQUIRED();
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	dfs_extend_internal(state, EXTEND_UPDATE, extend_cb_internal, true);
 }
 
@@ -581,6 +607,7 @@ dfs_extend_write_extend(void **state)
 {
 	FAULT_INJECTION_REQUIRED();
 
+	print_message("BEGIN %s\n", __FUNCTION__);
 	dfs_extend_internal(state, EXTEND_UPDATE, extend_cb_internal, false);
 }
 
@@ -597,6 +624,8 @@ dfs_extend_fail_retry(void **state)
 	int		rc;
 
 	FAULT_INJECTION_REQUIRED();
+
+	print_message("BEGIN %s\n", __FUNCTION__);
 
 	attr.da_props = daos_prop_alloc(1);
 	assert_non_null(attr.da_props);
