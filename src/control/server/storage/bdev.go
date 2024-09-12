@@ -38,8 +38,7 @@ const (
 	NilBdevAddress = "<nil>"
 	sysXSTgtID     = 1024
 	// Minimum amount of hugepage memory (in bytes) needed for each target.
-	memHugepageMinPerTarget      = 1 << 30 // 1GiB
-	minNrTargetsForCalcHugepages = 2
+	memHugepageMinPerTarget = 1 << 30 // 1GiB
 )
 
 // JSON config file constants.
@@ -840,9 +839,6 @@ func (f *NVMeFirmwareForwarder) UpdateFirmware(req NVMeFirmwareUpdateRequest) (*
 func CalcMinHugepages(hugepageSizeKb int, numTargets int) (int, error) {
 	if numTargets < 1 {
 		return 0, errors.New("numTargets must be > 0")
-	}
-	if numTargets < minNrTargetsForCalcHugepages {
-		numTargets = minNrTargetsForCalcHugepages
 	}
 
 	hugepageSizeBytes := hugepageSizeKb * humanize.KiByte // KiB to B

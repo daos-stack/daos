@@ -349,7 +349,7 @@ func Test_CalcMinHugepages(t *testing.T) {
 				HugepageSizeKiB: 2048,
 			},
 			numTargets: 1,
-			expPages:   1024,
+			expPages:   512,
 		},
 		"2MiB pagesize; 16 targets": {
 			input: &common.MemInfo{
