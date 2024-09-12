@@ -280,6 +280,26 @@ struct dav_heap_stats;
 int
 dav_get_heap_stats_v2(dav_obj_t *pop, struct dav_heap_stats *st);
 
+struct dav_heap_mb_stats {
+	uint64_t dhms_allocated;
+	uint64_t dhms_maxsz;
+};
+
+/**
+ * Returns the usage statistics of a memory bucket. Note that usage
+ * stats for evictable MBs will be approximate values if they are not
+ * yet loaded on to the umem cache.
+ *
+ * \param[in]           pop             pool handle
+ * \param[in]           mb_id           memory bucket id
+ * \param[out]          st              mb stats
+ *
+ * \return   0, success
+ *         < 0, error and errno is set to appropriate value.
+ */
+int
+dav_get_heap_mb_stats_v2(dav_obj_t *pop, uint32_t mb_id, struct dav_heap_mb_stats *st);
+
 /**
  * Allot an evictable memory bucket for tasks like new object creation
  *

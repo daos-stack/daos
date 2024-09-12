@@ -28,7 +28,9 @@
 #include <daos/tests_lib.h>
 #include "utest_common.h"
 
-#define POOL_SIZE ((256 * 1024 * 1024ULL))
+#define POOL_SIZE  ((256 * 1024 * 1024ULL))
+#define NEMB_RATIO (0.8)
+#define MB_SIZE    (16 * 1024 * 1024)
 
 struct test_arg {
 	struct utest_context	*ta_utx;
@@ -2478,6 +2480,153 @@ test_umempobj_nemb_usage(void **state)
 	D_FREE(name);
 }
 
+static void
+test_umempobj_heap_mb_stats(void **state)
+{
+	int                  num = 0, count, rc;
+	char                *name;
+	uint64_t             scm_size   = 128 * 1024 * 1024;
+	uint64_t             meta_size  = 256 * 1024 * 1024;
+	struct umem_store    ustore_tmp = {.stor_size  = meta_size,
+					   .stor_ops   = &_store_ops_v2,
+					   .store_type = DAOS_MD_BMEM_V2,
+					   .stor_priv  = (void *)(UINT64_MAX)};
+	struct umem_attr     uma;
+	struct umem_instance umm;
+	umem_off_t           umoff, *ptr = NULL, prev_umoff = UMOFF_NULL;
+	size_t               alloc_size = 128;
+	uint64_t             allocated, allocated0, allocated1, maxsz, maxsz_exp;
+	uint32_t             mb_id;
+
+	uma.uma_id = umempobj_backend_type2class_id(ustore_tmp.store_type);
+	/* Create a heap and cache of size 256MB and 128MB (16 & 8 zones) respectively */
+	D_ASPRINTF(name, "/mnt/daos/umem-test-tmp-%d", 0);
+	assert_true(name != NULL);
+	uma.uma_pool = umempobj_create(name, "invalid_pool", UMEMPOBJ_ENABLE_STATS, scm_size, 0666,
+				       &ustore_tmp);
+	assert_ptr_not_equal(uma.uma_pool, NULL);
+	maxsz_exp = (uint64_t)(scm_size / MB_SIZE * NEMB_RATIO) * MB_SIZE;
+
+	umem_class_init(&uma, &umm);
+
+	rc = umempobj_get_mbusage(umm.umm_pool, 0, &allocated0, &maxsz);
+	print_message("NE usage max_size = %lu exp_max_size = %lu allocated = %lu\n", maxsz,
+		      maxsz_exp, allocated0);
+	assert_int_equal(rc, 0);
+	assert_int_equal(maxsz, maxsz_exp);
+
+	/* allocate and consume all of the space */
+	for (num = 0;; num++) {
+		umoff = umem_atomic_alloc(&umm, alloc_size, UMEM_TYPE_ANY);
+		if (UMOFF_IS_NULL(umoff))
+			break;
+		ptr        = (umem_off_t *)umem_off2ptr(&umm, umoff);
+		*ptr       = prev_umoff;
+		prev_umoff = umoff;
+	}
+	rc = umempobj_get_mbusage(umm.umm_pool, 0, &allocated1, &maxsz);
+	print_message("NE usage max_size = %lu allocated = %lu\n", maxsz, allocated1);
+	assert_int_equal(rc, 0);
+	assert_true(allocated1 * 100 / maxsz >= 99);
+	assert_int_equal(maxsz, maxsz_exp);
+
+	for (count = num; count > num / 2; count--) {
+		umoff = *ptr;
+		umem_atomic_free(&umm, prev_umoff);
+		if (UMOFF_IS_NULL(umoff))
+			break;
+		ptr        = (umem_off_t *)umem_off2ptr(&umm, umoff);
+		prev_umoff = umoff;
+	}
+	rc = umempobj_get_mbusage(umm.umm_pool, 0, &allocated, &maxsz);
+	print_message("NE usage max_size = %lu allocated = %lu\n", maxsz, allocated);
+	assert_int_equal(rc, 0);
+	assert_true(allocated < allocated1 / 2);
+	assert_int_equal(maxsz, maxsz_exp);
+	for (;;) {
+		umoff = *ptr;
+		umem_atomic_free(&umm, prev_umoff);
+		if (UMOFF_IS_NULL(umoff))
+			break;
+		ptr        = (umem_off_t *)umem_off2ptr(&umm, umoff);
+		prev_umoff = umoff;
+	}
+	rc = umempobj_get_mbusage(umm.umm_pool, 0, &allocated, &maxsz);
+	print_message("NE usage max_size = %lu allocated = %lu\n", maxsz, allocated);
+	assert_int_equal(rc, 0);
+	assert_int_equal(allocated, allocated0);
+	assert_int_equal(maxsz, maxsz_exp);
+
+	/* Now Test an evictable MB */
+	mb_id = umem_allot_mb_evictable(&umm, 0);
+	assert_true(mb_id > 0);
+	maxsz_exp = MB_SIZE;
+
+	rc = umempobj_get_mbusage(umm.umm_pool, mb_id, &allocated0, &maxsz);
+	print_message("E usage max_size = %lu exp_max_size = %lu allocated = %lu\n", maxsz,
+		      maxsz_exp, allocated0);
+	assert_int_equal(rc, 0);
+	assert_int_equal(maxsz, maxsz_exp);
+
+	prev_umoff = UMOFF_NULL;
+	ptr        = NULL;
+	/* allocate and consume all of the space */
+	for (num = 0;; num++) {
+		umoff = umem_atomic_alloc_from_bucket(&umm, alloc_size, UMEM_TYPE_ANY, mb_id);
+		if (umem_get_mb_from_offset(&umm, umoff) != mb_id) {
+			umem_atomic_free(&umm, umoff);
+			break;
+		}
+		ptr        = (umem_off_t *)umem_off2ptr(&umm, umoff);
+		*ptr       = prev_umoff;
+		prev_umoff = umoff;
+	}
+	rc = umempobj_get_mbusage(umm.umm_pool, mb_id, &allocated1, &maxsz);
+	print_message("E usage max_size = %lu allocated = %lu\n", maxsz, allocated1);
+	assert_int_equal(rc, 0);
+	assert_true(allocated1 * 100 / maxsz >= 99);
+	assert_int_equal(maxsz, maxsz_exp);
+
+	for (count = num; count > num / 2; count--) {
+		umoff = *ptr;
+		umem_atomic_free(&umm, prev_umoff);
+		if (UMOFF_IS_NULL(umoff))
+			break;
+		ptr        = (umem_off_t *)umem_off2ptr(&umm, umoff);
+		prev_umoff = umoff;
+	}
+	rc = umempobj_get_mbusage(umm.umm_pool, mb_id, &allocated, &maxsz);
+	print_message("E usage max_size = %lu allocated = %lu\n", maxsz, allocated);
+	assert_int_equal(rc, 0);
+	assert_true(allocated < allocated1 / 2);
+	assert_int_equal(maxsz, maxsz_exp);
+	for (;;) {
+		umoff = *ptr;
+		umem_atomic_free(&umm, prev_umoff);
+		if (UMOFF_IS_NULL(umoff))
+			break;
+		ptr        = (umem_off_t *)umem_off2ptr(&umm, umoff);
+		prev_umoff = umoff;
+	}
+	rc = umempobj_get_mbusage(umm.umm_pool, mb_id, &allocated, &maxsz);
+	print_message("E usage max_size = %lu allocated = %lu\n", maxsz, allocated);
+	assert_int_equal(rc, 0);
+	assert_int_equal(allocated, allocated0);
+	assert_int_equal(maxsz, maxsz_exp);
+
+	/* Testing invalid mb_ids */
+	rc = umempobj_get_mbusage(umm.umm_pool, mb_id - 1, &allocated, &maxsz);
+	assert_int_equal(rc, -DER_INVAL);
+	rc = umempobj_get_mbusage(umm.umm_pool, mb_id + 1, &allocated, &maxsz);
+	assert_int_equal(rc, -DER_INVAL);
+	rc = umempobj_get_mbusage(umm.umm_pool, 50, &allocated, &maxsz);
+	assert_int_equal(rc, -DER_INVAL);
+
+	umempobj_close(uma.uma_pool);
+	unlink(name);
+	D_FREE(name);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -2555,12 +2704,12 @@ main(int argc, char **argv)
 	    {"BMEM021: Test umempobj create small size", test_umempobj_create_smallsize, NULL,
 	     NULL},
 	    {"BMEM022: Test umempobj non_evictable MB usage", test_umempobj_nemb_usage, NULL, NULL},
+	    {"BMEM023: Test umempobj get MB stats", test_umempobj_heap_mb_stats, NULL, NULL},
 	    {NULL, NULL, NULL, NULL}};
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
 		return rc;
-
 
 	d_register_alt_assert(mock_assert);
 

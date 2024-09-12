@@ -1885,19 +1885,19 @@ wal_umempobj_block_reuse_internal(void **state, int restart)
 	assert_true(space_used_after <= (space_used_before - total_frees * 512));
 }
 
-void
+static void
 wal_umempobj_block_reuse(void **state)
 {
 	wal_umempobj_block_reuse_internal(state, 0);
 }
 
-void
+static void
 wal_umempobj_replay_block_reuse(void **state)
 {
 	wal_umempobj_block_reuse_internal(state, 1);
 }
 
-void
+static void
 wal_umempobj_chkpt_block_reuse(void **state)
 {
 	struct io_test_args *arg = *state;
@@ -1908,6 +1908,80 @@ wal_umempobj_chkpt_block_reuse(void **state)
 	arg->checkpoint = false;
 	arg->no_replay  = false;
 	daos_fail_loc_set(0);
+}
+
+static void
+wal_umempobj_mbusage_test(void **state)
+{
+	struct io_test_args     *arg = *state;
+	struct vos_container    *cont;
+	struct umem_instance    *umm;
+	struct bucket_alloc_info ainfo[2];
+	struct umem_pin_handle  *p_hdl;
+	struct umem_cache_range  rg = {0};
+	uint64_t                 allocated0, allocated1, maxsz0, maxsz1, maxsz_exp;
+	uint64_t                 allocated, maxsz;
+	int                      rc;
+
+	cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
+	umm  = vos_cont2umm(cont);
+
+	maxsz_exp = MDTEST_MAX_NEMB_CNT * MDTEST_MB_SIZE;
+
+	/* Allocate from NE Buckets. It should use 80% 360M i.e, 16 buckets */
+	ainfo[0].mb_id       = 0;
+	ainfo[0].num_allocs  = 0;
+	ainfo[0].start_umoff = UMOFF_NULL;
+	ainfo[0].alloc_size  = 512;
+	alloc_bucket_to_full(umm, &ainfo[0], checkpoint_fn, &arg->ctx.tc_po_hdl);
+
+	/* Create an MB and fill it with allocs */
+	ainfo[1].mb_id       = umem_allot_mb_evictable(umm, 0);
+	ainfo[1].num_allocs  = 0;
+	ainfo[1].start_umoff = UMOFF_NULL;
+	ainfo[1].alloc_size  = 512;
+	assert_true(ainfo[1].mb_id != 0);
+	alloc_bucket_to_full(umm, &ainfo[1], checkpoint_fn, &arg->ctx.tc_po_hdl);
+	free_bucket_by_pct(umm, &ainfo[1], 50, checkpoint_fn, &arg->ctx.tc_po_hdl);
+
+	rc = umempobj_get_mbusage(umm->umm_pool, ainfo[0].mb_id, &allocated0, &maxsz0);
+	print_message("NE usage max_size = %lu allocated = %lu\n", maxsz0, allocated0);
+	assert_int_equal(rc, 0);
+	assert_int_equal(maxsz0, maxsz_exp);
+
+	rc = umempobj_get_mbusage(umm->umm_pool, ainfo[1].mb_id, &allocated1, &maxsz1);
+	print_message("E usage max_size = %lu allocated = %lu\n", maxsz1, allocated1);
+	assert_int_equal(rc, 0);
+	assert_int_equal(maxsz1, MDTEST_MB_SIZE);
+
+	wal_pool_refill(arg);
+	cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
+	umm  = vos_cont2umm(cont);
+
+	rc = umempobj_get_mbusage(umm->umm_pool, ainfo[0].mb_id, &allocated, &maxsz);
+	print_message("NE usage max_size = %lu allocated = %lu\n", maxsz, allocated);
+	assert_int_equal(rc, 0);
+	assert_int_equal(maxsz, maxsz_exp);
+	assert_int_equal(allocated, allocated0);
+
+	rc = umempobj_get_mbusage(umm->umm_pool, ainfo[1].mb_id, &allocated, &maxsz);
+	print_message("E usage max_size = %lu allocated = %lu\n", maxsz, allocated);
+	assert_int_equal(rc, 0);
+	/* allocated info is based on the hint */
+	assert_true((allocated != 0) && (allocated < allocated1));
+	assert_int_equal(maxsz, MDTEST_MB_SIZE);
+
+	rg.cr_off  = umem_get_mb_base_offset(umm, ainfo[1].mb_id);
+	rg.cr_size = 1;
+	rc         = umem_cache_pin(&umm->umm_pool->up_store, &rg, 1, 0, &p_hdl);
+	assert_true(rc == 0);
+	rc = umempobj_get_mbusage(umm->umm_pool, ainfo[1].mb_id, &allocated, &maxsz);
+	umem_cache_unpin(&umm->umm_pool->up_store, p_hdl);
+	print_message("E usage max_size = %lu allocated = %lu\n", maxsz, allocated);
+	assert_int_equal(rc, 0);
+	/* allocated info is based on the actual stats recorded */
+	assert_int_equal(allocated, allocated1);
+	assert_int_equal(maxsz, MDTEST_MB_SIZE);
 }
 
 static const struct CMUnitTest wal_tests[] = {
@@ -1949,6 +2023,7 @@ static const struct CMUnitTest wal_MB_tests[] = {
      setup_mb_io, teardown_mb_io},
     {"WAL36: UMEM MB restart replay garbage collection", wal_umempobj_replay_block_reuse,
      setup_mb_io, teardown_mb_io},
+    {"WAL37: UMEM MB stats test ", wal_umempobj_mbusage_test, setup_mb_io, teardown_mb_io},
 };
 
 int

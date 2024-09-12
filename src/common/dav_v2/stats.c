@@ -10,6 +10,7 @@
 #include "dav_internal.h"
 #include "obj.h"
 #include "stats.h"
+#include "heap.h"
 
 /*
  * stats_new -- allocates and initializes statistics instance
@@ -73,4 +74,10 @@ dav_get_heap_stats_v2(dav_obj_t *pop, struct dav_heap_stats *st)
 	st->run_allocated = pop->do_stats->transient->heap_run_allocated;
 	st->run_active = pop->do_stats->transient->heap_run_active;
 	return 0;
+}
+
+DAV_FUNC_EXPORT int
+dav_get_heap_mb_stats_v2(dav_obj_t *pop, uint32_t mb_id, struct dav_heap_mb_stats *st)
+{
+	return heap_mbrt_getmb_usage(pop->do_heap, mb_id, &st->dhms_allocated, &st->dhms_maxsz);
 }
