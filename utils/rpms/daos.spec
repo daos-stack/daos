@@ -232,6 +232,13 @@ Requires: fuse3-devel >= 3
 Requires: fuse3-devel >= 3.4.2
 %endif
 Requires: pciutils-devel
+%if (0%{?suse_version} > 0)
+Requires: libndctl-devel
+%endif
+%if (0%{?rhel} >= 8)
+Requires: ndctl-devel
+Requires: daxctl-devel
+%endif
 
 %description client-tests
 This is the package needed to run the DAOS test suite (client tests)
@@ -243,7 +250,6 @@ Requires: hdf5-%{openmpi}-tests
 Requires: hdf5-vol-daos-%{openmpi}-tests
 Requires: MACSio-%{openmpi}
 Requires: simul-%{openmpi}
-Requires: ndctl-devel
 
 %description client-tests-openmpi
 This is the package needed to run the DAOS client test suite openmpi tools
