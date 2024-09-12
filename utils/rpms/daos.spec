@@ -243,6 +243,7 @@ Requires: hdf5-%{openmpi}-tests
 Requires: hdf5-vol-daos-%{openmpi}-tests
 Requires: MACSio-%{openmpi}
 Requires: simul-%{openmpi}
+Requires: ndctl-devel
 
 %description client-tests-openmpi
 This is the package needed to run the DAOS client test suite openmpi tools
