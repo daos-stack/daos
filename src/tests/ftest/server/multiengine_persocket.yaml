@@ -16,6 +16,7 @@ server_config:
   name: daos_server
   provider: ofi+tcp
   reboot_waittime: 210
+  engines_per_host: 4
   engines_per_socket: 2
   number_pmem: 4
   engines:
