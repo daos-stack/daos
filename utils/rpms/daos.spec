@@ -232,9 +232,6 @@ Requires: fuse3-devel >= 3
 Requires: fuse3-devel >= 3.4.2
 %endif
 Requires: pciutils-devel
-%if (0%{?suse_version} > 0)
-Requires: libndctl-devel
-%endif
 %if (0%{?rhel} >= 8)
 Requires: ndctl-devel
 Requires: daxctl-devel
