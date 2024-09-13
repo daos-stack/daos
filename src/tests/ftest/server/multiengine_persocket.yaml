@@ -1,14 +1,20 @@
 hosts:
   test_servers: 1
   test_clients: 1
+
 timeout: 930
+
+test_mode: ci
+
 setup:
   start_agents: False
   start_servers: False
   start_agents_once: False
   start_servers_once: False
+
 server_config:
   name: daos_server
+  provider: ofi+tcp
   reboot_waittime: 210
   engines_per_socket: 2
   number_pmem: 4
@@ -77,28 +83,24 @@ server_config:
           class: dcpm
           scm_list: [/dev/pmem1.1]
           scm_mount: /mnt/daos4
-  transport_config:
-    allow_insecure: false
-agent_config:
-  transport_config:
-    allow_insecure: false
-dmg:
-  transport_config:
-    allow_insecure: false
-provider: ofi+tcp
+
 pool:
   control_method: dmg
   scm_size: 1G
   name: daos_server
+
 container:
   control_method: daos
   type: POSIX
   properties: rf:0
+
 attrtests:
   num_attributes: 20
+
 dfuse:
   mount_dir: "/tmp/daos_dfuse1/"
   disable_caching: True
+
 ior:
   ior_timeout: 120
   client_processes:
@@ -111,6 +113,7 @@ ior:
   iorflags:
     write_flg: "-w -W -k -G 1 -i 1"
     read_flg: "-C -k -e -r -R -g -G 1 -Q 1 -vv"
+
 mdtest:
   client_processes:
     ppn: 8

@@ -63,15 +63,12 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         self.log.info("  list_attr size:  %s", size)
 
         if length != size:
-            self.fail(
-                "FAIL: Size does not match for Names in list attr, Expected "
-                "len={} and received len={}".format(length, size))
+            self.fail(f"Container attribute list size mismatch: expected {length}, received {size}")
+
         # verify the Attributes names in list_attr retrieve
         for key in indata.keys():
             if key.decode() not in attributes_list:
-                self.fail(
-                    "FAIL: Name does not match after list attr, Expected "
-                    "buf={} and received buf={}".format(key, attributes_list))
+                self.fail(f"Unexpected container attribute received: {key}")
 
     def verify_get_attr(self, indata, outdata):
         """verify the Attributes value after get_attr.
@@ -92,37 +89,29 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         self.log.info("  set_attr data: %s", decoded)
 
         for attr, value in indata.items():
-            if value != decoded.get(attr.decode(), None):
+            received = decoded.get(attr.decode(), None)
+            if value != received:
                 self.fail(
-                    "FAIL: Value does not match after get({}), Expected "
-                    "val={} and received val={}".format(attr, value,
-                                                        decoded.get(attr.decode(), None)))
+                    f"Unexpected value for container attribute {attr}: expected {value}, "
+                    f"received {received}")
 
-    def daos_server_scm_reset(self, step):
-        """Perform daos_server scm reset.
-
-        Args:
-             step (str): test step.
-        """
+    def daos_server_scm_reset(self):
+        """Perform daos_server scm reset."""
         cmd = DaosServerCommand()
         cmd.sudo = False
         cmd.debug.value = False
         cmd.set_sub_command("scm")
         cmd.sub_command_class.set_sub_command("reset")
         cmd.sub_command_class.sub_command_class.force.value = True
-        self.log.info(
-            "===(%s.A)Starting daos_server scm reset: %s", step, str(cmd))
+        self.log_step("Resetting server PMem")
         results = run_remote(self.log, self.hostlist_servers, str(cmd), timeout=180)
         if not results.passed:
-            self.fail(
-                "#({0}.A){1} failed, "
-                "please make sure the server equipped with PMem modules".format(step, cmd))
+            self.fail("Error resetting server PMem - ensure servers are equipped with PMem modules")
 
-    def daos_server_scm_prepare_ns(self, step, engines_per_socket=1):
+    def daos_server_scm_prepare_ns(self, engines_per_socket=1):
         """Perform daos_server scm prepare --scm-ns-per-socket.
 
         Args:
-             step (str): test step.
              engines_per_socket (int): number of engines per socket.
         """
         cmd = DaosServerCommand()
@@ -132,15 +121,10 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         cmd.sub_command_class.set_sub_command("prepare")
         cmd.sub_command_class.sub_command_class.scm_ns_per_socket.value = engines_per_socket
         cmd.sub_command_class.sub_command_class.force.value = True
-
-        self.log.info(
-            "===(%s.B)Starting daos_server scm prepare -S: %s", step, str(cmd))
+        self.log_step(f"Preparing server PMem for {engines_per_socket} engines per socket")
         results = run_remote(self.log, self.hostlist_servers, str(cmd), timeout=180)
         if not results.passed:
-            self.fail(
-                "#({0}.B){1} failed, "
-                "please make sure the server equipped with {2} PMem "
-                "modules.".format(step, cmd, engines_per_socket))
+            self.fail(f"Error preparing server PMem for {engines_per_socket} engines per socket")
 
     def host_reboot(self, hosts):
         """To reboot the hosts.
@@ -208,86 +192,62 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
             (7) IOR test
             (8) MDTEST
             (9) Cleanup
+
         To launch test:
             (1) Make sure server is equipped with PMem
-            (2) ./launch.py test_multiengines_per_socket -ts <servers> -tc <agent>
-        :avocado: tags=manual
+            (2) Set 'test_mode: manual' in the server/multiengine_persocket.yaml file
+            (3) ./launch.py test_multiengines_per_socket -ts <servers> -tc <agent>
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
         :avocado: tags=server
         :avocado: tags=MultiEnginesPerSocketTest,test_multiengines_per_socket
         """
-        # (1) Scm reset and prepare --scm-ns-per-socket
-        step = 1
-        self.log.info("===(%s)===Scm reset and prepare --scm-ns-per-socket", step)
-        engines_per_socket = self.params.get(
-            "engines_per_socket", "/run/server_config/*", default=1)
-        num_pmem = self.params.get(
-            "number_pmem", "/run/server_config/*", default=1)
-        self.daos_server_scm_reset(step)
-        self.host_reboot(self.hostlist_servers)
-        self.daos_server_scm_prepare_ns(1.1, engines_per_socket)
-        self.host_reboot(self.hostlist_servers)
-        self.daos_server_scm_prepare_ns(1.2, engines_per_socket)
-        if not wait_for_result(self.log, self.check_pmem, 160, 1, False,
-                               hosts=self.hostlist_servers, count=num_pmem):
-            self.fail("#{} pmem devices not found on all hosts.".format(num_pmem))
-        self.storage_format()
+        test_mode = self.params.get("test_mode", "/run/*", "ci")
+        engines_per_socket = self.params.get("engines_per_socket", "/run/server_config/*", 1)
+        num_pmem = self.params.get("number_pmem", "/run/server_config/*", 1)
+        num_attributes = self.params.get("num_attributes", '/run/attrtests/*')
 
-        # (2) Start server
-        step += 1
-        self.log.info("===(%s)===Start server", step)
-        start_server_cmds = [
-            'lsblk|grep -E "NAME|pmem"',
-            "sudo cp /etc/daos/daos_server.yml_4 /etc/daos/daos_server.yml",
-            "sudo systemctl start daos_server.service"]
-        for cmd in start_server_cmds:
-            results = run_remote(self.log, self.hostlist_servers, cmd, timeout=90)
-        # Check for server start status
-            if not results.passed:
-                self.fail("#Fail on {0}".format(cmd))
+        # Configure PMem for multiple engines per socket
+        if test_mode != "ci":
+            self.daos_server_scm_reset()
+            self.host_reboot(self.hostlist_servers)
+            self.daos_server_scm_prepare_ns(engines_per_socket)
+            self.host_reboot(self.hostlist_servers)
+            self.daos_server_scm_prepare_ns(engines_per_socket)
+            if not wait_for_result(self.log, self.check_pmem, 160, 1, False,
+                                   hosts=self.hostlist_servers, count=num_pmem):
+                self.fail(f"Error {num_pmem} PMem devices not found on all hosts.")
+            self.storage_format()
 
-        # (3) Start agent
-        step += 1
-        self.log.info("===(%s)===Start agent", step)
-        start_agent_cmds = [
-            "sudo systemctl start daos_agent.service",
-            "dmg storage scan",
-            "dmg network scan",
-            "dmg storage format",
-            "dmg storage query usage",
-            "dmg storage query list-devices",
-            "dmg system query"]
-        for cmd in start_agent_cmds:
-            results = run_remote(self.log, self.hostlist_clients, cmd, timeout=90)
-            # Check for agent start status
-            if not results.passed and "sudo systemctl" in cmd:
-                self.fail("#Fail on {0}".format(cmd))
-        # (4) Dmg system query
-        step += 1
-        self.log.info("===(%s)===Dmg system query", step)
-        # Delay is needed for multi ranks to show
-        query_cmds = [
-            "dmg system query",
-            "dmg system query -v"]
-        for cmd in query_cmds:
-            results = run_remote(self.log, self.hostlist_clients, cmd, timeout=90)
+        # Start servers
+        self.log_step("Starting servers")
+        run_remote(self.log, self.hostlist_servers, 'lsblk|grep -E "NAME|pmem"')
+        self.start_servers()
 
-        # (5) Pool create
-        step += 1
-        self.log.info("===(%s)===Pool create", step)
+        # Start agents
+        self.log_step("Starting agents")
+        self.start_agents()
+
+        # Run some dmg commands
+        self.log_step("Query the storage usage")
+        dmg = self.get_dmg_command()
+        dmg.storage_query_usage()
+        dmg.storage_query_list_devices()
+
+        # Create a pool
+        self.log_step("Create a pool")
         self.add_pool(connect=False)
 
         # (6) Container create and attributes test
-        step += 1
-        self.log.info("===(%s)===Container create and attributes test", step)
+        self.log_step("Create a container and verify the attributes")
         self.add_container(self.pool)
         self.container.open()
-        num_attributes = self.params.get("num_attributes", '/run/attrtests/*')
         attr_dict = self.create_data_set(num_attributes)
         try:
             self.container.container.set_attr(data=attr_dict)
             data = self.container.list_attrs(verbose=False)
             self.verify_list_attr(attr_dict, data['response'])
-
             data = self.container.list_attrs(verbose=True)
             self.verify_get_attr(attr_dict, data['response'])
         except DaosApiError as excep:
@@ -298,21 +258,18 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         self.pool.disconnect()
 
         # (7) IOR test
-        step += 1
-        self.log.info("===(%s)===IOR test", step)
+        self.log_step("Run ior")
         ior_timeout = self.params.get("ior_timeout", '/run/ior/*')
         self.run_ior_with_pool(
             timeout=ior_timeout, create_pool=True, create_cont=True, stop_dfuse=True)
 
         # (8) MDTEST
-        step += 1
-        self.log.info("===(%s)===MDTEST", step)
+        self.log_step("Run mdtest")
         mdtest_params = self.params.get("mdtest_params", "/run/mdtest/*")
         self.run_mdtest_multiple_variants(mdtest_params)
 
         # (9) Cleanup
-        step += 1
-        self.log.info("===(%s)===Cleanup", step)
-        cmd = "dmg system query -v"
-        results = run_remote(self.log, self.hostlist_clients, cmd, timeout=90)
-        self.cleanup()
+        self.log_step("Cleanup")
+        dmg.system_query()
+        if test_mode != "ci":
+            self.cleanup()
