@@ -9,7 +9,6 @@ package engine
 import (
 	"fmt"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -775,18 +774,5 @@ func (c *Config) WithEnvVarAbtThreadStackSize(stack_size uint16) *Config {
 
 // WithEnvVarPMemObjSdsAtCreate sets PMEMOBJ_CONF env. var. to sds.at_create=0/1 value
 func (c *Config) WithEnvVarPMemObjSdsAtCreate(value uint8) *Config {
-
-	pmemobjConfStr, pmemobjConfErr := c.GetEnvVar("PMEMOBJ_CONF")
-	if pmemobjConfErr != nil {
-		return c.WithEnvVars(fmt.Sprintf("PMEMOBJ_CONF=sds.at_create=%d", value))
-	} else {
-		if strings.Contains(pmemobjConfStr, "sds.at_create") {
-			var re = regexp.MustCompile(`(;?sds.at_create=[01])`)
-			pmemobjConfStr = re.ReplaceAllString(pmemobjConfStr, ``)
-			var re1 = regexp.MustCompile(`(^;)(.+)`)
-			pmemobjConfStr = re1.ReplaceAllString(pmemobjConfStr, `$2`)
-		}
-		return c.WithEnvVars(fmt.Sprintf("PMEMOBJ_CONF=%s;sds.at_create=%d",
-			pmemobjConfStr, value))
-	}
+	return c.WithEnvVars(fmt.Sprintf("PMEMOBJ_CONF=sds.at_create=%d", value))
 }
