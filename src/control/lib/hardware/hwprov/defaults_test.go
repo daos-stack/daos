@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -21,6 +21,7 @@ import (
 )
 
 func TestHwprov_DefaultTopologyProvider(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -47,6 +48,7 @@ func TestHwprov_DefaultTopologyProvider(t *testing.T) {
 }
 
 func TestHwprov_DefaultProcessNUMAProvider(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -62,6 +64,7 @@ func TestHwprov_DefaultProcessNUMAProvider(t *testing.T) {
 }
 
 func TestHwprov_DefaultFabricInterfaceProviders(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -82,6 +85,7 @@ func TestHwprov_DefaultFabricInterfaceProviders(t *testing.T) {
 }
 
 func TestHwprov_DefaultNetDevClassProvider(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -97,6 +101,7 @@ func TestHwprov_DefaultNetDevClassProvider(t *testing.T) {
 }
 
 func TestHwprov_DefaultFabricScannerConfig(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -122,6 +127,7 @@ func TestHwprov_DefaultFabricScannerConfig(t *testing.T) {
 }
 
 func TestHwprov_DefaultFabricScanner(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -154,6 +160,7 @@ func TestHwprov_DefaultFabricScanner(t *testing.T) {
 }
 
 func TestHwprov_DefaultNetDevStateProvider(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 

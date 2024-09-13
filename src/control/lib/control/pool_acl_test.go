@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -29,6 +29,7 @@ var (
 )
 
 func TestControl_PoolGetACL(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		mic     *MockInvokerConfig
 		req     *PoolGetACLReq
@@ -95,6 +96,7 @@ func TestControl_PoolGetACL(t *testing.T) {
 }
 
 func TestControl_PoolOverwriteACL(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		mic     *MockInvokerConfig
 		req     *PoolOverwriteACLReq
@@ -170,6 +172,7 @@ func TestControl_PoolOverwriteACL(t *testing.T) {
 }
 
 func TestControl_PoolUpdateACL(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		mic     *MockInvokerConfig
 		req     *PoolUpdateACLReq
@@ -245,6 +248,7 @@ func TestControl_PoolUpdateACL(t *testing.T) {
 }
 
 func TestControl_PoolDeleteACL(t *testing.T) {
+	t.Parallel()
 	testPrincipal := "Skinner@"
 
 	for name, tc := range map[string]struct {

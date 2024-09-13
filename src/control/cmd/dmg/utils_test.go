@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -36,6 +36,7 @@ func mockHostGroups(t *testing.T) hostlist.HostGroups {
 }
 
 func TestFormatHostGroups(t *testing.T) {
+	t.Parallel()
 	for name, tt := range map[string]struct {
 		g   hostlist.HostGroups
 		out string
@@ -55,6 +56,7 @@ func TestFormatHostGroups(t *testing.T) {
 }
 
 func TestDmg_errIncompatFlags(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		base     string
 		incompat []string
@@ -83,6 +85,7 @@ func TestDmg_errIncompatFlags(t *testing.T) {
 }
 
 func TestDmg_singleHostFlag_UnmarshalFlag(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		val    string
 		expErr error

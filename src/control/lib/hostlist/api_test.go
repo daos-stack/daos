@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -36,6 +36,7 @@ func cmpOut(t *testing.T, want, got string) {
 }
 
 func TestHostList_Expand(t *testing.T) {
+	t.Parallel()
 	// Testcases based on tests defined in:
 	// https://github.com/LLNL/py-hostlist/blob/master/hostlist/unittest_hostlist.py
 	for input, tc := range map[string]struct {
@@ -88,6 +89,7 @@ func TestHostList_Expand(t *testing.T) {
 }
 
 func TestHostList_Compress(t *testing.T) {
+	t.Parallel()
 	// Testcases based on tests defined in:
 	// https://github.com/LLNL/py-hostlist/blob/master/hostlist/unittest_hostlist.py
 	for input, tc := range map[string]struct {
@@ -127,6 +129,7 @@ func TestHostList_Compress(t *testing.T) {
 }
 
 func TestHostList_Count(t *testing.T) {
+	t.Parallel()
 	for input, tc := range map[string]struct {
 		expCount int
 		expErr   error

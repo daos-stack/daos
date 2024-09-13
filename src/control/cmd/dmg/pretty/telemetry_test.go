@@ -17,6 +17,7 @@ import (
 )
 
 func TestPretty_PrintMetricsListResp(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		resp      *control.MetricsListResp
 		writeErr  error
@@ -104,6 +105,7 @@ funny_hats    Counter Hilarious headwear
 }
 
 func TestPretty_PrintMetricsQueryResp(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		resp      *control.MetricsQueryResp
 		writeErr  error

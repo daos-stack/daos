@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -36,6 +36,7 @@ func mockSrvModule(t *testing.T, log logging.Logger, ec int) *srvModule {
 }
 
 func TestSrvModule_HandleCheckerListPools(t *testing.T) {
+	t.Parallel()
 	testPool := &system.PoolService{
 		PoolUUID:  uuid.New(),
 		PoolLabel: "test-pool",
@@ -104,6 +105,7 @@ func TestSrvModule_HandleCheckerListPools(t *testing.T) {
 }
 
 func TestSrvModule_HandleCheckerRegisterPool(t *testing.T) {
+	t.Parallel()
 	existingPool := &system.PoolService{
 		PoolUUID:  uuid.New(),
 		PoolLabel: "test-pool",
@@ -222,6 +224,7 @@ func TestSrvModule_HandleCheckerRegisterPool(t *testing.T) {
 }
 
 func TestSrvModule_HandleCheckerDeregisterPool(t *testing.T) {
+	t.Parallel()
 	existingPool := &system.PoolService{
 		PoolUUID:  uuid.New(),
 		PoolLabel: "test-pool",

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,6 +13,7 @@ import (
 )
 
 func TestUI_EnabledFlag(t *testing.T) {
+	t.Parallel()
 	trueVals := []string{"true", "1", "yes", "on"}
 	falseVals := []string{"false", "0", "no", "off"}
 

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2023 Intel Corporation.
+// (C) Copyright 2023-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,6 +20,7 @@ import (
 )
 
 func TestDaos_existingContainerCmd_parseContPathArgs(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		inArgs   []string
 		contPath string
@@ -105,6 +106,7 @@ func TestDaos_existingContainerCmd_parseContPathArgs(t *testing.T) {
 }
 
 func TestDaos_existingContainerCmd_resolveContainer(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		contPath string
 		contType string

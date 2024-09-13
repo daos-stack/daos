@@ -26,6 +26,7 @@ import (
 )
 
 func TestPromexp_NewEngineSource(t *testing.T) {
+	t.Parallel()
 	testIdx := uint32(telemetry.NextTestID(telemetry.PromexpIDBase))
 	telemetry.InitTestMetricsProducer(t, int(testIdx), 1024)
 	defer telemetry.CleanupTestMetricsProducer(t)
@@ -72,6 +73,7 @@ func TestPromexp_NewEngineSource(t *testing.T) {
 }
 
 func TestPromExp_EngineSource_IsEnabled(t *testing.T) {
+	t.Parallel()
 	testIdx := uint32(telemetry.NextTestID(telemetry.PromexpIDBase))
 	telemetry.InitTestMetricsProducer(t, int(testIdx), 1024)
 	defer telemetry.CleanupTestMetricsProducer(t)
@@ -130,6 +132,7 @@ func allTestMetrics(t *testing.T) telemetry.TestMetricsMap {
 }
 
 func TestPromExp_EngineSource_Collect(t *testing.T) {
+	t.Parallel()
 	testIdx := uint32(telemetry.NextTestID(telemetry.PromexpIDBase))
 	testRank := uint32(123)
 	telemetry.InitTestMetricsProducer(t, int(testIdx), 2048)
@@ -208,6 +211,7 @@ func TestPromExp_EngineSource_Collect(t *testing.T) {
 }
 
 func TestPromExp_NewEngineCollector(t *testing.T) {
+	t.Parallel()
 	testSrc := []*EngineSource{
 		{
 			Rank: 1,
@@ -296,6 +300,7 @@ func TestPromExp_NewEngineCollector(t *testing.T) {
 }
 
 func TestPromExp_Collector_Prune(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -400,6 +405,7 @@ func TestPromExp_Collector_Prune(t *testing.T) {
 }
 
 func TestPromExp_Collector_Collect(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -511,6 +517,7 @@ func TestPromExp_Collector_Collect(t *testing.T) {
 }
 
 func TestPromExp_extractEngineLabels(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		input     string
 		expName   string
@@ -638,6 +645,7 @@ func TestPromExp_extractEngineLabels(t *testing.T) {
 }
 
 func TestPromExp_Collector_AddSource(t *testing.T) {
+	t.Parallel()
 	testSrc := func() []*EngineSource {
 		return []*EngineSource{
 			{Index: 1},
@@ -719,6 +727,7 @@ func TestPromExp_Collector_AddSource(t *testing.T) {
 }
 
 func TestPromExp_Collector_RemoveSource(t *testing.T) {
+	t.Parallel()
 	badCleanup := func() {
 		t.Fatal("wrong cleanup function called")
 	}

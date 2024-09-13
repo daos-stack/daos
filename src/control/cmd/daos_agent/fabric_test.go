@@ -23,6 +23,7 @@ import (
 var fiCmpOpt = cmpopts.IgnoreUnexported(FabricInterface{})
 
 func testFabricProviderSet(prov ...string) *hardware.FabricProviderSet {
+	t.Parallel()
 	providers := []*hardware.FabricProvider{}
 	for _, p := range prov {
 		providers = append(providers, &hardware.FabricProvider{
@@ -33,6 +34,7 @@ func testFabricProviderSet(prov ...string) *hardware.FabricProviderSet {
 }
 
 func TestAgent_NUMAFabricMap_MaxNUMANode(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		nfm       NUMAFabricMap
 		expResult int
@@ -73,6 +75,7 @@ func TestAgent_NUMAFabricMap_MaxNUMANode(t *testing.T) {
 }
 
 func TestAgent_NewNUMAFabric(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -88,6 +91,7 @@ func TestAgent_NewNUMAFabric(t *testing.T) {
 }
 
 func TestAgent_NUMAFabric_NumNUMANodes(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		nf        *NUMAFabric
 		expResult int
@@ -121,6 +125,7 @@ func TestAgent_NUMAFabric_NumNUMANodes(t *testing.T) {
 }
 
 func TestAgent_NUMAFabric_NumDevices(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		nf        *NUMAFabric
 		node      int
@@ -166,6 +171,7 @@ func TestAgent_NUMAFabric_NumDevices(t *testing.T) {
 }
 
 func TestAgent_NUMAFabric_Add(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		nf        *NUMAFabric
 		input     *FabricInterface
@@ -221,6 +227,7 @@ func TestAgent_NUMAFabric_Add(t *testing.T) {
 }
 
 func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		nf         *NUMAFabric
 		params     *FabricIfaceParams
@@ -832,6 +839,7 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 }
 
 func TestAgent_NUMAFabric_Find(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		nf        *NUMAFabric
 		name      string
@@ -937,6 +945,7 @@ func TestAgent_NUMAFabric_Find(t *testing.T) {
 }
 
 func TestAgent_NUMAFabric_FindDevice(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		nf        *NUMAFabric
 		params    *FabricIfaceParams
@@ -1334,6 +1343,7 @@ func TestAgent_NUMAFabric_FindDevice(t *testing.T) {
 }
 
 func TestAgent_NUMAFabric_RLockedMap(t *testing.T) {
+	t.Parallel()
 	fullMap := NUMAFabricMap{
 		0: {
 			{
@@ -1401,6 +1411,7 @@ func TestAgent_NUMAFabric_RLockedMap(t *testing.T) {
 }
 
 func TestAgent_NUMAFabric_LockedMap(t *testing.T) {
+	t.Parallel()
 	fullMap := NUMAFabricMap{
 		0: {
 			{
@@ -1460,6 +1471,7 @@ func TestAgent_NUMAFabric_LockedMap(t *testing.T) {
 }
 
 func TestAgent_NUMAFabricFromScan(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		input     *hardware.FabricInterfaceSet
 		expResult NUMAFabricMap
@@ -1608,6 +1620,7 @@ func TestAgent_NUMAFabricFromScan(t *testing.T) {
 }
 
 func TestAgent_NUMAFabricFromConfig(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		input     []*NUMAFabricConfig
 		expResult NUMAFabricMap
@@ -1726,6 +1739,7 @@ func getMockNetInterfaceSuccess(_ string) (addrFI, error) {
 }
 
 func TestAgent_NUMAFabric_validateDevice(t *testing.T) {
+	t.Parallel()
 	getMockNetInterfaceFunc := func(addrs []net.Addr, err error) func(string) (addrFI, error) {
 		return func(_ string) (addrFI, error) {
 			return &mockNetInterface{

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -34,6 +34,7 @@ func mockRemove(name string) error {
 }
 
 func TestSpdk_CleanLockfiles(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		pciAddrs  []string
 		removeErr error
@@ -86,6 +87,7 @@ func TestSpdk_CleanLockfiles(t *testing.T) {
 }
 
 func TestSpdk_WrapCleanError(t *testing.T) {
+	t.Parallel()
 	wrappedErr := errors.Wrap(sampleErr1, sampleErr2.Error())
 
 	for name, tc := range map[string]struct {

@@ -15,6 +15,7 @@ import (
 )
 
 func TestLogging_ToFromContext(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -31,16 +32,19 @@ func TestLogging_ToFromContext(t *testing.T) {
 }
 
 func TestLogging_FromContext_Unset(t *testing.T) {
+	t.Parallel()
 	log := logging.FromContext(test.Context(t))
 	log.Info("shouldn't panic (noop)")
 }
 
 func TestLogging_FromContext_NilCtx(t *testing.T) {
+	t.Parallel()
 	log := logging.FromContext(nil)
 	log.Info("shouldn't panic (noop)")
 }
 
 func TestLogging_ToContext_NilCtx(t *testing.T) {
+	t.Parallel()
 	_, err := logging.ToContext(nil, &logging.LeveledLogger{})
 	if err == nil {
 		t.Fatal("expected error")
@@ -48,6 +52,7 @@ func TestLogging_ToContext_NilCtx(t *testing.T) {
 }
 
 func TestLogging_ToContext_NilLogger(t *testing.T) {
+	t.Parallel()
 	_, err := logging.ToContext(test.Context(t), nil)
 	if err == nil {
 		t.Fatal("expected error")
@@ -55,6 +60,7 @@ func TestLogging_ToContext_NilLogger(t *testing.T) {
 }
 
 func TestLogging_ToContext_AlreadySet(t *testing.T) {
+	t.Parallel()
 	ctx, err := logging.ToContext(test.Context(t), &logging.LeveledLogger{})
 	if err != nil {
 		t.Fatal(err)

@@ -134,6 +134,7 @@ func mockConfigFromFile(t *testing.T, path string) (*Server, error) {
 }
 
 func TestServerConfig_MarshalUnmarshal(t *testing.T) {
+	t.Parallel()
 	for name, tt := range map[string]struct {
 		inPath string
 		expErr error
@@ -217,6 +218,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 }
 
 func TestServerConfig_Constructed(t *testing.T) {
+	t.Parallel()
 	testDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
@@ -331,6 +333,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 }
 
 func TestServerConfig_updateServerConfig(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		cfg       *Server
 		nilEngCfg bool
@@ -404,6 +407,7 @@ func TestServerConfig_updateServerConfig(t *testing.T) {
 }
 
 func TestServerConfig_MDonSSD_Constructed(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -468,6 +472,7 @@ func TestServerConfig_MDonSSD_Constructed(t *testing.T) {
 }
 
 func TestServerConfig_Validation(t *testing.T) {
+	t.Parallel()
 	testDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
@@ -973,6 +978,7 @@ func TestServerConfig_Validation(t *testing.T) {
 }
 
 func TestServerConfig_SetNrHugepages(t *testing.T) {
+	t.Parallel()
 	testDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
@@ -1132,6 +1138,7 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 }
 
 func TestServerConfig_SetRamdiskSize(t *testing.T) {
+	t.Parallel()
 	testDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
@@ -1400,6 +1407,7 @@ func replaceFile(t *testing.T, name, oldTxt, newTxt string) {
 }
 
 func TestServerConfig_Parsing(t *testing.T) {
+	t.Parallel()
 	noopExtra := func(c *Server) *Server { return c }
 
 	cfgFromFile := func(t *testing.T, testFile string, matchText, replaceText []string) (*Server, error) {
@@ -1558,6 +1566,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 }
 
 func TestServerConfig_RelativeWorkingPath(t *testing.T) {
+	t.Parallel()
 	for name, tt := range map[string]struct {
 		inPath    string
 		expErrMsg string
@@ -1608,6 +1617,7 @@ func TestServerConfig_RelativeWorkingPath(t *testing.T) {
 }
 
 func TestServerConfig_WithEnginesInheritsMain(t *testing.T) {
+	t.Parallel()
 	testFabric := "test-fabric"
 	testModules := "a,b,c"
 	testSystemName := "test-system"
@@ -1632,6 +1642,7 @@ func TestServerConfig_WithEnginesInheritsMain(t *testing.T) {
 }
 
 func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
+	t.Parallel()
 	configA := func() *engine.Config {
 		return engine.MockConfig().
 			WithLogFile("a").
@@ -1790,6 +1801,7 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 }
 
 func TestServerConfig_SaveActiveConfig(t *testing.T) {
+	t.Parallel()
 	testDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
@@ -1823,6 +1835,7 @@ func TestServerConfig_SaveActiveConfig(t *testing.T) {
 }
 
 func TestConfig_detectEngineAffinity(t *testing.T) {
+	t.Parallel()
 	genAffFn := func(node uint, err error) EngineAffinityFn {
 		return func(logging.Logger, *engine.Config) (uint, error) {
 			return node, err
@@ -1889,6 +1902,7 @@ func TestConfig_detectEngineAffinity(t *testing.T) {
 }
 
 func TestConfig_SetNUMAAffinity(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		cfg     *engine.Config
 		setNUMA uint
@@ -1938,6 +1952,7 @@ func TestConfig_SetNUMAAffinity(t *testing.T) {
 }
 
 func TestConfig_SetEngineAffinities(t *testing.T) {
+	t.Parallel()
 	baseSrvCfg := func() *Server {
 		return DefaultServer()
 	}

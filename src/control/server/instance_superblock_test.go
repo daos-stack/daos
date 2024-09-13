@@ -22,6 +22,7 @@ import (
 )
 
 func TestServer_Instance_createSuperblock(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -88,6 +89,7 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 }
 
 func TestServer_Instance_superblockPath(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		cfg     *engine.Config
 		expPath string

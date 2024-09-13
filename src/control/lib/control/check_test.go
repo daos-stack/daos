@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2023 Intel Corporation.
+// (C) Copyright 2023-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,6 +15,7 @@ import (
 )
 
 func TestControl_SystemCheckReport_RepairChoices(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		report     *SystemCheckReport
 		expChoices []*SystemCheckRepairChoice

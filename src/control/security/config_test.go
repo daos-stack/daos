@@ -116,6 +116,7 @@ func setExpiredVerifyTime(t *testing.T, cfg *TransportConfig) {
 }
 
 func TestPreLoadCertData(t *testing.T) {
+	t.Parallel()
 	clientDir := func(dir string) string {
 		return filepath.Join(dir, "client")
 	}
@@ -241,6 +242,7 @@ func TestPreLoadCertData(t *testing.T) {
 }
 
 func TestReloadCertData(t *testing.T) {
+	t.Parallel()
 	serverTC := ServerTC()
 	agentTC := AgentTC()
 	testTC := serverTC
@@ -290,6 +292,7 @@ func ValidatePrivateKey(t *testing.T, key crypto.PrivateKey, err error) {
 }
 
 func TestPrivateKey(t *testing.T) {
+	t.Parallel()
 	insecureTC := InsecureTC()
 	TC := ServerTC()
 
@@ -333,6 +336,7 @@ func ValidatePublicKey(t *testing.T, key crypto.PublicKey, err error) {
 }
 
 func TestPublicKey(t *testing.T) {
+	t.Parallel()
 	insecureTC := InsecureTC()
 	TC := ServerTC()
 
@@ -358,6 +362,7 @@ func TestPublicKey(t *testing.T) {
 }
 
 func TestSecurity_DefaultTransportConfigs(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		genTransportConfig func() *TransportConfig
 		expResult          *TransportConfig
@@ -414,6 +419,7 @@ func TestSecurity_DefaultTransportConfigs(t *testing.T) {
 }
 
 func TestSecurity_ClientUserMap(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		cfgYaml string
 		expMap  ClientUserMap

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,6 +19,7 @@ import (
 )
 
 func TestPbin_NewResponseWithError(t *testing.T) {
+	t.Parallel()
 	expErr := errors.New("test error")
 
 	resp := NewResponseWithError(expErr)
@@ -31,6 +32,7 @@ func TestPbin_NewResponseWithError(t *testing.T) {
 }
 
 func TestPbin_NewResponseWithPayload(t *testing.T) {
+	t.Parallel()
 	payload := testPayload{Result: "here's the real result"}
 	expPayloadBytes, err := json.Marshal(payload)
 	if err != nil {
@@ -50,6 +52,7 @@ func TestPbin_NewResponseWithPayload(t *testing.T) {
 }
 
 func TestPbin_PingHandler(t *testing.T) {
+	t.Parallel()
 	appName := "test_app"
 	for name, tc := range map[string]struct {
 		req        *Request

@@ -85,6 +85,7 @@ var defEvtCmpOpts = append(test.DefaultCmpOpts(),
 	cmpopts.IgnoreFields(events.RASEvent{}, "Timestamp"))
 
 func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
+	t.Parallel()
 	msReplica := system.MockMember(t, 0, system.MemberStateJoined)
 	nonReplica := system.MockMember(t, 1, system.MemberStateJoined)
 
@@ -237,6 +238,7 @@ func stateString(s system.MemberState) string {
 }
 
 func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
+	t.Parallel()
 	localhost := common.LocalhostCtrlAddr()
 
 	for name, tc := range map[string]struct {
@@ -298,6 +300,7 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
+	t.Parallel()
 	eventEngineDied := mockEvtEngineDied(t)
 
 	for name, tc := range map[string]struct {
@@ -381,6 +384,7 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_getPeerListenAddr(t *testing.T) {
+	t.Parallel()
 	defaultAddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10001")
 	if err != nil {
 		t.Fatal(err)
@@ -575,6 +579,7 @@ func mgmtSystemTestSetup(t *testing.T, l logging.Logger, mbs system.Members, r .
 }
 
 func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		members        system.Members
 		sysReq         systemReq
@@ -1044,6 +1049,7 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
+	t.Parallel()
 	defaultMembers := system.Members{
 		mockMember(t, 0, 1, "errored").WithInfo("couldn't ping"),
 		mockMember(t, 1, 1, "stopping"),
@@ -1299,6 +1305,7 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_SystemStart(t *testing.T) {
+	t.Parallel()
 	hr := func(a int32, rrs ...*sharedpb.RankResult) *control.HostResponse {
 		return &control.HostResponse{
 			Addr:    test.MockHostAddr(a).String(),
@@ -1471,6 +1478,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_SystemStop(t *testing.T) {
+	t.Parallel()
 	emf := func(a string) func() system.Members {
 		return func() system.Members {
 			return system.Members{
@@ -1665,6 +1673,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_SystemExclude(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		req        *mgmtpb.SystemExcludeReq
 		members    system.Members
@@ -1808,6 +1817,7 @@ func TestServer_MgmtSvc_SystemExclude(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_SystemErase(t *testing.T) {
+	t.Parallel()
 	hr := func(a int32, rrs ...*sharedpb.RankResult) *control.HostResponse {
 		return &control.HostResponse{
 			Addr:    test.MockHostAddr(a).String(),
@@ -1924,6 +1934,7 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_Join(t *testing.T) {
+	t.Parallel()
 	curMember := mockMember(t, 0, 0, "excluded")
 	newMember := mockMember(t, 1, 1, "joined")
 	newProviderMember := mockMember(t, 1, 1, "joined")
@@ -2212,6 +2223,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_doGroupUpdate(t *testing.T) {
+	t.Parallel()
 	mockMembers := func(t *testing.T, count int, state string) system.Members {
 		result := system.Members{}
 		for i := 0; i < count; i++ {
@@ -2346,6 +2358,7 @@ func TestServer_MgmtSvc_doGroupUpdate(t *testing.T) {
 }
 
 func TestMgmtSvc_updateFabricProviders(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		getSvc               func(*testing.T, logging.Logger) *mgmtSvc
 		oldProv              string
@@ -2482,6 +2495,7 @@ func TestMgmtSvc_updateFabricProviders(t *testing.T) {
 }
 
 func TestMgmtSvc_checkReqFabricProvider(t *testing.T) {
+	t.Parallel()
 	sysProv := "tcp"
 	for name, tc := range map[string]struct {
 		getSvc       func(*testing.T, logging.Logger) *mgmtSvc
@@ -2572,6 +2586,7 @@ func TestMgmtSvc_checkReqFabricProvider(t *testing.T) {
 }
 
 func TestMgmtSvc_isGroupUpdatePaused(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		getSvc    func(*testing.T, logging.Logger) *mgmtSvc
 		propVal   string
@@ -2633,6 +2648,7 @@ func TestMgmtSvc_isGroupUpdatePaused(t *testing.T) {
 }
 
 func TestMgmtSvc_pauseGroupUpdate(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		getSvc   func(*testing.T, logging.Logger) *mgmtSvc
 		startVal string
@@ -2689,6 +2705,7 @@ func TestMgmtSvc_pauseGroupUpdate(t *testing.T) {
 }
 
 func TestMgmtSvc_resumeGroupUpdate(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		getSvc   func(*testing.T, logging.Logger) *mgmtSvc
 		startVal string

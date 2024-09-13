@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,6 +17,7 @@ import (
 )
 
 func testComponent(t *testing.T, comp string, ver string) *build.VersionedComponent {
+	t.Parallel()
 	c, err := build.NewVersionedComponent(build.Component(comp), ver)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -25,6 +26,7 @@ func testComponent(t *testing.T, comp string, ver string) *build.VersionedCompon
 }
 
 func TestBuild_NewVersionedComponent(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		component string
 		version   string
@@ -67,6 +69,7 @@ func TestBuild_NewVersionedComponent(t *testing.T) {
 }
 
 func TestBuild_CheckCompatibility(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		a          *build.VersionedComponent
 		b          *build.VersionedComponent

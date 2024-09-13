@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -23,6 +23,7 @@ import (
 )
 
 func TestUI_RankSetFlag(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		arg       string
 		expFlag   *ui.RankSetFlag
@@ -77,6 +78,7 @@ func TestUI_RankSetFlag(t *testing.T) {
 }
 
 func TestUI_HostSetFlag(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		arg       string
 		expFlag   *ui.HostSetFlag
@@ -132,6 +134,7 @@ func TestUI_HostSetFlag(t *testing.T) {
 }
 
 func TestUI_MemberStateSetFlag(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		arg     string
 		isEmpty bool
@@ -198,6 +201,7 @@ func TestUI_MemberStateSetFlag(t *testing.T) {
 }
 
 func TestUI_MemberStateSetFlag_Complete(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		arg          string
 		expComplStrs []string

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,6 +15,7 @@ import (
 )
 
 func TestDrpc_LabelIsValid(t *testing.T) {
+	t.Parallel()
 	// Not intended to be exhaustive. Just some basic smoke tests
 	// to verify that we can call the C function and get sensible
 	// results.

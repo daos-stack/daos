@@ -81,6 +81,7 @@ func pbDevWithHealth(sd *ctlpb.SmdDevice, h *ctlpb.BioHealthResp) *ctlpb.SmdDevi
 }
 
 func TestServer_CtlSvc_SmdQuery(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		setupAP        bool
 		req            *ctlpb.SmdQueryReq
@@ -731,6 +732,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 }
 
 func TestServer_engineDevMap(t *testing.T) {
+	t.Parallel()
 	e1 := EngineInstance{}
 	e2 := EngineInstance{}
 	dev1 := devID{uuid: test.MockUUID(1)}
@@ -791,6 +793,7 @@ func TestServer_engineDevMap(t *testing.T) {
 }
 
 func TestServer_CtlSvc_SmdManage(t *testing.T) {
+	t.Parallel()
 	pbNormDevNoPciAddr := new(ctlpb.SmdDevice)
 	*pbNormDevNoPciAddr = *pbNormDev(1)
 	pbNormDevNoPciAddr.Ctrlr.PciAddr = ""

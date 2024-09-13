@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -25,6 +25,7 @@ import (
 var testFileMode os.FileMode = 0600
 
 func TestNewSession(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -41,6 +42,7 @@ func TestNewSession(t *testing.T) {
 }
 
 func TestSession_ProcessIncomingMessage_ReadError(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -54,6 +56,7 @@ func TestSession_ProcessIncomingMessage_ReadError(t *testing.T) {
 }
 
 func TestSession_ProcessIncomingMessage_WriteError(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -67,6 +70,7 @@ func TestSession_ProcessIncomingMessage_WriteError(t *testing.T) {
 }
 
 func TestSession_ProcessIncomingMessage_Success(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -108,6 +112,7 @@ func TestSession_ProcessIncomingMessage_Success(t *testing.T) {
 }
 
 func TestNewDomainSocketServer_NoSockFile(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -118,6 +123,7 @@ func TestNewDomainSocketServer_NoSockFile(t *testing.T) {
 }
 
 func TestNewDomainSocketServer_NoSockFileMode(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -128,6 +134,7 @@ func TestNewDomainSocketServer_NoSockFileMode(t *testing.T) {
 }
 
 func TestNewDomainSocketServer(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -147,6 +154,7 @@ func TestNewDomainSocketServer(t *testing.T) {
 }
 
 func TestDrpc_DomainSocketServer_Start(t *testing.T) {
+	t.Parallel()
 	sockPath := func(dir string) string {
 		return filepath.Join(dir, "test.sock")
 	}
@@ -262,6 +270,7 @@ func TestDrpc_DomainSocketServer_Start(t *testing.T) {
 }
 
 func TestServer_RegisterModule(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -282,6 +291,7 @@ func TestServer_RegisterModule(t *testing.T) {
 }
 
 func TestServer_Listen_AcceptError(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -296,6 +306,7 @@ func TestServer_Listen_AcceptError(t *testing.T) {
 }
 
 func TestServer_Listen_AcceptConnection(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -313,6 +324,7 @@ func TestServer_Listen_AcceptConnection(t *testing.T) {
 }
 
 func TestServer_ListenSession_Error(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -333,6 +345,7 @@ func TestServer_ListenSession_Error(t *testing.T) {
 }
 
 func TestServer_Shutdown(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -357,6 +370,7 @@ func TestServer_Shutdown(t *testing.T) {
 // TestServer_IntegrationNoMethod verifies failure when adding a new
 // module without specifying a method.
 func TestServer_IntegrationNoMethod(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 

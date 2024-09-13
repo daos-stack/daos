@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -52,6 +52,7 @@ func SignTestSetup(t *testing.T) (rsaKey, ecdsaKey crypto.PrivateKey, source []b
 }
 
 func TestSign(t *testing.T) {
+	t.Parallel()
 
 	rsaKey, ecdsaKey, source := SignTestSetup(t)
 	tokenSigner := SeededSigner()
@@ -113,6 +114,7 @@ func VerifyTestSetup(t *testing.T) (rsaKey, ecdsaKey crypto.PublicKey, source []
 }
 
 func TestVerify(t *testing.T) {
+	t.Parallel()
 	rsaKey, ecdsaKey, source := VerifyTestSetup(t)
 	tokenSigner := DefaultTokenSigner()
 

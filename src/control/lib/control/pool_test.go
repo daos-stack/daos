@@ -46,6 +46,7 @@ func rankSetCmpOpt() []cmp.Option {
 }
 
 func TestControl_PoolDestroy(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		mic    *MockInvokerConfig
 		req    *PoolDestroyReq
@@ -157,6 +158,7 @@ func TestControl_PoolDestroy(t *testing.T) {
 }
 
 func TestControl_PoolUpgrade(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		mic    *MockInvokerConfig
 		req    *PoolUpgradeReq
@@ -235,6 +237,7 @@ func TestControl_PoolUpgrade(t *testing.T) {
 }
 
 func TestControl_PoolDrain(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		mic    *MockInvokerConfig
 		req    *PoolDrainReq
@@ -297,6 +300,7 @@ func TestControl_PoolDrain(t *testing.T) {
 }
 
 func TestControl_PoolEvict(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		mic    *MockInvokerConfig
 		req    *PoolEvictReq
@@ -359,6 +363,7 @@ func strVal(s string) daos.PoolPropertyValue {
 }
 
 func TestControl_PoolCreateReq_Convert(t *testing.T) {
+	t.Parallel()
 	req := &PoolCreateReq{
 		User:       "bob",
 		UserGroup:  "work",
@@ -401,6 +406,7 @@ func TestControl_PoolCreateReq_Convert(t *testing.T) {
 }
 
 func TestControl_poolCreateReqChkSizes(t *testing.T) {
+	t.Parallel()
 	tierRatios := []float64{0.06, 0.94}
 	sameTierRatios := []float64{0.80, 0.80}
 	tierBytes := []uint64{humanize.GiByte * 6, humanize.GiByte * 94}
@@ -508,6 +514,7 @@ func TestControl_poolCreateReqChkSizes(t *testing.T) {
 }
 
 func TestControl_PoolCreate(t *testing.T) {
+	t.Parallel()
 	mockTierRatios := []float64{0.06, 0.94}
 	mockTierBytes := []uint64{humanize.GiByte * 6, humanize.GiByte * 94}
 	validReq := &PoolCreateReq{
@@ -715,6 +722,7 @@ func TestControl_PoolCreate(t *testing.T) {
 }
 
 func TestControl_UpdateState(t *testing.T) {
+	t.Parallel()
 	poolUUID := test.MockPoolUUID()
 
 	for name, tc := range map[string]struct {
@@ -778,6 +786,7 @@ func TestControl_UpdateState(t *testing.T) {
 }
 
 func TestControl_PoolQueryResp_MarshalJSON(t *testing.T) {
+	t.Parallel()
 	poolUUID := test.MockPoolUUID()
 
 	for name, tc := range map[string]struct {
@@ -844,6 +853,7 @@ func TestControl_PoolQueryResp_MarshalJSON(t *testing.T) {
 }
 
 func TestControl_PoolQueryResp_UnmarshalJSON(t *testing.T) {
+	t.Parallel()
 	poolUUID := test.MockPoolUUID()
 
 	for name, tc := range map[string]struct {
@@ -912,6 +922,7 @@ func TestControl_PoolQueryResp_UnmarshalJSON(t *testing.T) {
 }
 
 func TestControl_PoolQuery(t *testing.T) {
+	t.Parallel()
 	poolUUID := test.MockPoolUUID()
 
 	for name, tc := range map[string]struct {
@@ -1196,6 +1207,7 @@ func propWithVal(key, val string) *daos.PoolProperty {
 }
 
 func TestControl_PoolSetProp(t *testing.T) {
+	t.Parallel()
 	defaultReq := &PoolSetPropReq{
 		ID:         test.MockUUID(),
 		Properties: []*daos.PoolProperty{propWithVal("label", "foo")},
@@ -1288,6 +1300,7 @@ func propWithNoVal(s string) *daos.PoolProperty {
 }
 
 func TestControl_PoolGetProp(t *testing.T) {
+	t.Parallel()
 	defaultReq := &PoolGetPropReq{
 		ID: test.MockUUID(),
 		Properties: []*daos.PoolProperty{propWithVal("label", ""),
@@ -1586,6 +1599,7 @@ func TestControl_PoolGetProp(t *testing.T) {
 }
 
 func TestControl_PoolGetPropResp_MarshalJSON(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		resp    []*daos.PoolProperty
 		expData string
@@ -1668,6 +1682,7 @@ func TestControl_PoolGetPropResp_MarshalJSON(t *testing.T) {
 }
 
 func TestControl_ListPools(t *testing.T) {
+	t.Parallel()
 	queryResp := func(i int32) *mgmtpb.PoolQueryResp {
 		total := uint32(42)
 		disabled := uint32(0)
@@ -2030,6 +2045,7 @@ func TestControl_ListPools(t *testing.T) {
 }
 
 func TestControl_getMaxPoolSize(t *testing.T) {
+	t.Parallel()
 	devStateFaulty := storage.NvmeStateFaulty
 	devStateNew := storage.NvmeStateNew
 	type ExpectedOutput struct {
@@ -2911,6 +2927,7 @@ func (invoker *MockRequestsRecorderInvoker) InvokeUnaryRPC(context context.Conte
 }
 
 func TestControl_PoolCreateAllCmd(t *testing.T) {
+	t.Parallel()
 	type ExpectedOutput struct {
 		PoolConfig MockPoolRespConfig
 		WarningMsg string

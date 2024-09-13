@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -37,6 +37,7 @@ func mockEvtFmtReq(t *testing.T) *RASEvent {
 }
 
 func TestEvents_ConvertEngineDied(t *testing.T) {
+	t.Parallel()
 	event := mockEvtDied(t)
 
 	pbEvent, err := event.ToProto()
@@ -59,6 +60,7 @@ func TestEvents_ConvertEngineDied(t *testing.T) {
 }
 
 func TestEvents_ConvertEngineFormatRequired(t *testing.T) {
+	t.Parallel()
 	event := mockEvtFmtReq(t)
 
 	pbEvent, err := event.ToProto()

@@ -34,6 +34,7 @@ var (
 )
 
 func TestPretty_printBuildInfo(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		testComp      build.Component
 		testCompBuild *daos.ComponentBuild
@@ -90,6 +91,7 @@ var (
 )
 
 func TestPretty_printSystemInfo(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		testSysInfo *daos.SystemInfo
 		verbose     bool
@@ -170,6 +172,7 @@ var healthyPool = &daos.PoolInfo{
 }
 
 func TestPretty_printPoolHealth(t *testing.T) {
+	t.Parallel()
 	busyRebuild := &daos.PoolRebuildStatus{
 		State:        daos.PoolRebuildStateBusy,
 		Objects:      42,
@@ -290,6 +293,7 @@ var healthyContainer = &daos.ContainerInfo{
 }
 
 func TestPretty_printContainerHealth(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		ci          *daos.ContainerInfo
 		verbose     bool
@@ -316,6 +320,7 @@ func TestPretty_printContainerHealth(t *testing.T) {
 }
 
 func TestPretty_PrintSystemHealthInfo(t *testing.T) {
+	t.Parallel()
 	buildInfo := map[string]daos.ComponentBuild{
 		build.ComponentServer.String(): *srvComp,
 		build.ComponentClient.String(): *cliComp,

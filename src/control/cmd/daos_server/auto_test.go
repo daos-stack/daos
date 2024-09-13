@@ -30,6 +30,7 @@ import (
 )
 
 func TestDaosServer_Auto_Commands(t *testing.T) {
+	t.Parallel()
 	runCmdTests(t, []cmdTest{
 		{
 			"Generate with no access point",
@@ -165,6 +166,7 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 }
 
 func TestDaosServer_Auto_confGenCmd_Convert(t *testing.T) {
+	t.Parallel()
 	cmd := &configGenCmd{}
 	cmd.NrEngines = 1
 	cmd.NetProvider = "ofi+tcp"
@@ -199,6 +201,7 @@ func TestDaosServer_Auto_confGenCmd_Convert(t *testing.T) {
 // The Control API calls made in configGenCmd.confGen() are already well tested so just do some
 // sanity checking here to prevent regressions.
 func TestDaosServer_Auto_confGen(t *testing.T) {
+	t.Parallel()
 	eth0 := &control.HostFabricInterface{
 		Provider: "ofi+tcp", Device: "eth0", NumaNode: 0, NetDevClass: 1, Priority: 2,
 	}
@@ -586,6 +589,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 // TestDaosServer_Auto_Commands_JSON verifies that the JSON-output flag is disabled for config
 // generate commands.
 func TestDaosServer_Auto_Commands_JSON(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestCommandLineLogger()
 
 	runJSONCmdTests(t, log, buf, []jsonCmdTest{

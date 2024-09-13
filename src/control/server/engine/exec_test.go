@@ -34,6 +34,7 @@ const (
 )
 
 func TestMain(m *testing.M) {
+	t.Parallel()
 	switch os.Getenv(testModeVar) {
 	case "":
 		os.Exit(m.Run())
@@ -101,6 +102,7 @@ func createFakeBinary(t *testing.T) {
 }
 
 func TestRunnerContextExit(t *testing.T) {
+	t.Parallel()
 	createFakeBinary(t)
 
 	// set this to control the behavior in TestMain()
@@ -133,6 +135,7 @@ func TestRunnerContextExit(t *testing.T) {
 }
 
 func TestRunnerNormalExit(t *testing.T) {
+	t.Parallel()
 	var bypass bool = false
 	createFakeBinary(t)
 

@@ -33,17 +33,20 @@ func expectAuthSysErrorForToken(t *testing.T, badToken *Token, expectedErrorMess
 
 // AuthSysFromAuthToken tests
 func TestAuthSysFromAuthToken_ErrorsWithNilAuthToken(t *testing.T) {
+	t.Parallel()
 	expectAuthSysErrorForToken(t, nil,
 		"Attempting to convert an invalid AuthSys Token")
 }
 
 func TestAuthSysFromAuthToken_ErrorsWithWrongAuthTokenFlavor(t *testing.T) {
+	t.Parallel()
 	badFlavorToken := Token{Flavor: Flavor_AUTH_NONE}
 	expectAuthSysErrorForToken(t, &badFlavorToken,
 		"Attempting to convert an invalid AuthSys Token")
 }
 
 func TestAuthSysFromAuthToken_ErrorsIfTokenCannotBeUnmarshaled(t *testing.T) {
+	t.Parallel()
 	zeroArray := make([]byte, 16)
 	badToken := Token{Flavor: Flavor_AUTH_SYS,
 		Data: zeroArray}
@@ -52,6 +55,7 @@ func TestAuthSysFromAuthToken_ErrorsIfTokenCannotBeUnmarshaled(t *testing.T) {
 }
 
 func TestAuthSysFromAuthToken_SucceedsWithGoodToken(t *testing.T) {
+	t.Parallel()
 	originalAuthSys := Sys{
 		Stamp:       0,
 		Machinename: "something",
@@ -96,6 +100,7 @@ func TestAuthSysFromAuthToken_SucceedsWithGoodToken(t *testing.T) {
 }
 
 func testHostnameFn(expErr error, hostname string) getHostnameFn {
+	t.Parallel()
 	return func() (string, error) {
 		if expErr != nil {
 			return "", expErr
@@ -105,6 +110,7 @@ func testHostnameFn(expErr error, hostname string) getHostnameFn {
 }
 
 func testUserFn(expErr error, userName string) getUserFn {
+	t.Parallel()
 	return func(uid string) (*user.User, error) {
 		if expErr != nil {
 			return nil, expErr
@@ -118,6 +124,7 @@ func testUserFn(expErr error, userName string) getUserFn {
 }
 
 func testGroupFn(expErr error, groupName string) getGroupFn {
+	t.Parallel()
 	return func(gid string) (*user.Group, error) {
 		if expErr != nil {
 			return nil, expErr
@@ -130,6 +137,7 @@ func testGroupFn(expErr error, groupName string) getGroupFn {
 }
 
 func testGroupIdsFn(expErr error, groupNames ...string) getGroupIdsFn {
+	t.Parallel()
 	return func(*CredentialRequest) ([]string, error) {
 		if expErr != nil {
 			return nil, expErr
@@ -139,6 +147,7 @@ func testGroupIdsFn(expErr error, groupNames ...string) getGroupIdsFn {
 }
 
 func testGroupNamesFn(expErr error, groupNames ...string) getGroupNamesFn {
+	t.Parallel()
 	return func(*CredentialRequest) ([]string, error) {
 		if expErr != nil {
 			return nil, expErr
@@ -193,6 +202,7 @@ func verifyCredential(t *testing.T, cred *Credential, expHostname, expUserPrinc,
 }
 
 func TestAuth_GetSignedCred(t *testing.T) {
+	t.Parallel()
 	testHostname := "test-host.domain.foo"
 	testUsername := "test-user"
 	testGroup := "test-group"
@@ -282,6 +292,7 @@ func TestAuth_GetSignedCred(t *testing.T) {
 }
 
 func TestAuth_CredentialRequestOverrides(t *testing.T) {
+	t.Parallel()
 	req := NewCredentialRequest(getTestCreds(1, 2), nil)
 	req.getHostname = testHostnameFn(nil, "test-host")
 	req.WithUserAndGroup("test-user", "test-group", "test-secondary")

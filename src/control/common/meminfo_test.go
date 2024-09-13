@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,6 +17,7 @@ import (
 )
 
 func TestCommon_getMemInfo(t *testing.T) {
+	t.Parallel()
 	// Just a simple test to verify that we get something -- it should
 	// pretty much never error.
 	_, err := GetMemInfo()
@@ -26,6 +27,7 @@ func TestCommon_getMemInfo(t *testing.T) {
 }
 
 func TestCommon_parseMemInfo(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		input     string
 		expOut    *MemInfo

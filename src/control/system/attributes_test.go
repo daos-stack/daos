@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -66,6 +66,7 @@ func newAttrDb(attrs map[string]string) *testAttrDb {
 }
 
 func TestSystem_SetAttributes(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		userAttrs map[string]string
 		expErr    error
@@ -93,6 +94,7 @@ func TestSystem_SetAttributes(t *testing.T) {
 }
 
 func TestSystem_GetAttributes(t *testing.T) {
+	t.Parallel()
 	reservedKey := mgmtPropPrefix + "system-stuff"
 	attrDb := newAttrDb(map[string]string{
 		"foo":       "bar",

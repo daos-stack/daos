@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,6 +19,7 @@ func makeInputLines(in ...string) []string {
 }
 
 func TestTxtFmt_IndentWriter(t *testing.T) {
+	t.Parallel()
 	for name, tt := range map[string]struct {
 		inputLines     []string
 		indentLevel    uint

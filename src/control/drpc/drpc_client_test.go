@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -66,6 +66,7 @@ func newTestClientConnection(dialer *mockDialer, conn *mockConn) *ClientConnecti
 }
 
 func TestNewClientConnection(t *testing.T) {
+	t.Parallel()
 	client := NewClientConnection(testSockPath)
 
 	if client == nil {
@@ -82,6 +83,7 @@ func TestNewClientConnection(t *testing.T) {
 }
 
 func TestClient_Connect_Success(t *testing.T) {
+	t.Parallel()
 	dialer := newMockDialer()
 	client := newTestClientConnection(dialer, nil)
 	client.sequence = 10
@@ -99,6 +101,7 @@ func TestClient_Connect_Success(t *testing.T) {
 }
 
 func TestClient_Connect_Error(t *testing.T) {
+	t.Parallel()
 	dialer := newMockDialer()
 	dialer.SetError("mock dialer failure")
 	client := newTestClientConnection(dialer, nil)
@@ -111,6 +114,7 @@ func TestClient_Connect_Error(t *testing.T) {
 }
 
 func TestClient_Connect_ContextCanceled(t *testing.T) {
+	t.Parallel()
 	dialer := newMockDialer()
 	client := newTestClientConnection(dialer, nil)
 
@@ -124,6 +128,7 @@ func TestClient_Connect_ContextCanceled(t *testing.T) {
 }
 
 func TestClient_Connect_AlreadyConnected(t *testing.T) {
+	t.Parallel()
 	originalConn := newMockConn()
 	dialer := newMockDialer()
 	client := newTestClientConnection(dialer, originalConn)
@@ -138,6 +143,7 @@ func TestClient_Connect_AlreadyConnected(t *testing.T) {
 }
 
 func TestClient_Close_Success(t *testing.T) {
+	t.Parallel()
 	conn := newMockConn()
 	client := newTestClientConnection(newMockDialer(), conn)
 
@@ -152,6 +158,7 @@ func TestClient_Close_Success(t *testing.T) {
 }
 
 func TestClient_Close_Error(t *testing.T) {
+	t.Parallel()
 	conn := newMockConn()
 	conn.CloseOutputError = errors.New("mock close failure")
 	client := newTestClientConnection(newMockDialer(), conn)
@@ -168,6 +175,7 @@ func TestClient_Close_Error(t *testing.T) {
 }
 
 func TestClient_Close_NotConnected(t *testing.T) {
+	t.Parallel()
 	client := newTestClientConnection(newMockDialer(), nil)
 
 	err := client.Close()
@@ -178,6 +186,7 @@ func TestClient_Close_NotConnected(t *testing.T) {
 }
 
 func TestClient_SendMsg_NilInput(t *testing.T) {
+	t.Parallel()
 	conn := newMockConn()
 	client := newTestClientConnection(newMockDialer(), conn)
 
@@ -217,6 +226,7 @@ func newTestResponse(sequence int64) *Response {
 }
 
 func TestClient_SendMsg_Success(t *testing.T) {
+	t.Parallel()
 	conn := newMockConn()
 	client := newTestClientConnection(newMockDialer(), conn)
 	client.sequence = 2 // ClientConnection keeps track of sequence
@@ -252,6 +262,7 @@ func TestClient_SendMsg_Success(t *testing.T) {
 }
 
 func TestClient_SendMsg_NotConnected(t *testing.T) {
+	t.Parallel()
 	client := newTestClientConnection(newMockDialer(), nil)
 
 	response, err := client.SendMsg(test.Context(t), newTestCall())
@@ -262,6 +273,7 @@ func TestClient_SendMsg_NotConnected(t *testing.T) {
 }
 
 func TestClient_SendMsg_WriteError(t *testing.T) {
+	t.Parallel()
 	conn := newMockConn()
 	client := newTestClientConnection(newMockDialer(), conn)
 
@@ -277,6 +289,7 @@ func TestClient_SendMsg_WriteError(t *testing.T) {
 }
 
 func TestClient_SendMsg_WriteErrorOnContextCancel(t *testing.T) {
+	t.Parallel()
 	conn := newMockConn()
 	client := newTestClientConnection(newMockDialer(), conn)
 
@@ -292,6 +305,7 @@ func TestClient_SendMsg_WriteErrorOnContextCancel(t *testing.T) {
 }
 
 func TestClient_SendMsg_ReadError(t *testing.T) {
+	t.Parallel()
 	conn := newMockConn()
 	client := newTestClientConnection(newMockDialer(), conn)
 
@@ -310,6 +324,7 @@ func TestClient_SendMsg_ReadError(t *testing.T) {
 }
 
 func TestClient_SendMsg_ReadErrorOnContextCancel(t *testing.T) {
+	t.Parallel()
 	conn := newMockConn()
 	client := newTestClientConnection(newMockDialer(), conn)
 
@@ -328,6 +343,7 @@ func TestClient_SendMsg_ReadErrorOnContextCancel(t *testing.T) {
 }
 
 func TestClient_SendMsg_UnmarshalResponseFailure(t *testing.T) {
+	t.Parallel()
 	conn := newMockConn()
 	client := newTestClientConnection(newMockDialer(), conn)
 

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -42,6 +42,7 @@ func expectPayload(t *testing.T, resp *pbin.Response, payload interface{}, expPa
 }
 
 func TestDaosFirmware_ScmQueryHandler(t *testing.T) {
+	t.Parallel()
 	scmQueryReqPayload, err := json.Marshal(storage.ScmFirmwareQueryRequest{
 		ForwardableRequest: pbin.ForwardableRequest{Forwarded: true},
 	})
@@ -139,6 +140,7 @@ func TestDaosFirmware_ScmQueryHandler(t *testing.T) {
 }
 
 func TestDaosFirmware_ScmUpdateHandler(t *testing.T) {
+	t.Parallel()
 	scmUpdateReqPayload, err := json.Marshal(storage.ScmFirmwareUpdateRequest{
 		ForwardableRequest: pbin.ForwardableRequest{Forwarded: true},
 		FirmwarePath:       "/some/path",
@@ -237,6 +239,7 @@ func TestDaosFirmware_ScmUpdateHandler(t *testing.T) {
 }
 
 func TestDaosFirmware_NvmeUpdateHandler(t *testing.T) {
+	t.Parallel()
 	updateReqPayload, err := json.Marshal(storage.NVMeFirmwareUpdateRequest{
 		ForwardableRequest: pbin.ForwardableRequest{Forwarded: true},
 		FirmwarePath:       "/some/path",

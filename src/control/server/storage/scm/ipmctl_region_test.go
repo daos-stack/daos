@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -22,6 +22,7 @@ import (
 
 // TestIpmctl_checkIpmctl verified that bad versions trigger an error.
 func TestIpmctl_checkIpmctl(t *testing.T) {
+	t.Parallel()
 	preTxt := "Intel(R) Optane(TM) Persistent Memory Command Line Interface Version "
 
 	for name, tc := range map[string]struct {
@@ -64,6 +65,7 @@ func TestIpmctl_checkIpmctl(t *testing.T) {
 }
 
 func TestIpmctl_getRegions(t *testing.T) {
+	t.Parallel()
 	expRegionMap := socketRegionMap{
 		0: {
 			XMLName: xml.Name{
@@ -171,6 +173,7 @@ func TestIpmctl_getRegions(t *testing.T) {
 }
 
 func TestIpmctl_getRegionState(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		region   Region
 		expState storage.ScmState
@@ -229,6 +232,7 @@ func TestIpmctl_getRegionState(t *testing.T) {
 // socket region or all regions when either a specific socket is requested or a state is specific to
 // a particular socket.
 func TestIpmctl_getPMemState(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		runOut   []string
 		runErr   []error

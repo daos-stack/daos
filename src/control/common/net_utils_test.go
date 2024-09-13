@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,6 +18,7 @@ import (
 )
 
 func TestUtils_HasPort(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		addr   string
 		expRes bool
@@ -34,6 +35,7 @@ func TestUtils_HasPort(t *testing.T) {
 }
 
 func TestUtils_SplitPort(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		addr      string
 		dPort     int
@@ -64,6 +66,7 @@ func TestUtils_SplitPort(t *testing.T) {
 }
 
 func TestCommon_CmpTCPAddr(t *testing.T) {
+	t.Parallel()
 	testA := &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)}
 	testB := &net.TCPAddr{IP: net.IPv4(127, 0, 0, 2)}
 	testC := &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 1}
@@ -114,6 +117,7 @@ func TestCommon_CmpTCPAddr(t *testing.T) {
 }
 
 func TestCommon_IsLocalAddr(t *testing.T) {
+	t.Parallel()
 	local := &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)}
 	remote := &net.TCPAddr{IP: net.IPv4(127, 127, 127, 127)}
 
@@ -139,6 +143,7 @@ func TestCommon_IsLocalAddr(t *testing.T) {
 }
 
 func TestCommon_ParseHostList(t *testing.T) {
+	t.Parallel()
 	testPort := 12345
 
 	mockHostList := func(hosts ...string) []string {

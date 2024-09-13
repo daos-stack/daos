@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -25,6 +25,7 @@ import (
 )
 
 func TestDmg_SystemCommands(t *testing.T) {
+	t.Parallel()
 	withRanks := func(req control.UnaryRequest, ranks ...ranklist.Rank) control.UnaryRequest {
 		if rs, ok := req.(interface{ SetRanks(*ranklist.RankSet) }); ok {
 			rs.SetRanks(ranklist.RankSetFromRanks(ranks))
@@ -318,6 +319,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 }
 
 func TestDmg_LeaderQueryCmd_Errors(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		ctlCfg *control.Config
 		resp   *mgmtpb.LeaderQueryResp
@@ -360,6 +362,7 @@ func TestDmg_LeaderQueryCmd_Errors(t *testing.T) {
 }
 
 func TestDmg_systemQueryCmd_Errors(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		resp   *mgmtpb.SystemQueryResp
 		msErr  error
@@ -428,6 +431,7 @@ func TestDmg_systemQueryCmd_Errors(t *testing.T) {
 }
 
 func TestDmg_systemStartCmd_Errors(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		resp   *mgmtpb.SystemStartResp
 		msErr  error
@@ -557,6 +561,7 @@ func TestDmg_systemStartCmd_Errors(t *testing.T) {
 }
 
 func TestDmg_systemStopCmd_Errors(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		resp   *mgmtpb.SystemStopResp
 		msErr  error

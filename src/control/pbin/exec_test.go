@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -103,6 +103,7 @@ func loadJSONPayload(t *testing.T, name string) []byte {
 }
 
 func TestPbin_Exec(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		req     *pbin.Request
 		binPath string

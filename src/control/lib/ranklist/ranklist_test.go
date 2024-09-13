@@ -16,6 +16,7 @@ import (
 )
 
 func TestRankList_RankSet(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		ranks    string
 		addRanks []Rank
@@ -98,6 +99,7 @@ func TestRankList_RankSet(t *testing.T) {
 }
 
 func TestRanklist_RankSet_MarshalJSON(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		rankSet *RankSet
 		expOut  string
@@ -130,6 +132,7 @@ func TestRanklist_RankSet_MarshalJSON(t *testing.T) {
 }
 
 func TestRanklist_RankSet_UnmarshalJSON(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		dataStr string
 		rankSet *RankSet

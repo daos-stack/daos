@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,6 +19,7 @@ import (
 )
 
 func TestUtils_ResolvePath(t *testing.T) {
+	t.Parallel()
 	workingDir, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -52,6 +53,7 @@ func TestUtils_ResolvePath(t *testing.T) {
 }
 
 func TestUtils_FindBinaryInPath(t *testing.T) {
+	t.Parallel()
 	testDir, clean := CreateTestDir(t)
 	defer clean()
 
@@ -86,6 +88,7 @@ func TestUtils_FindBinaryInPath(t *testing.T) {
 }
 
 func TestUtils_FindBinaryAdjacent(t *testing.T) {
+	t.Parallel()
 	testDir := filepath.Dir(os.Args[0])
 	testFile, err := os.OpenFile(path.Join(testDir, t.Name()), os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
@@ -103,6 +106,7 @@ func TestUtils_FindBinaryAdjacent(t *testing.T) {
 }
 
 func TestUtils_NormizePath(t *testing.T) {
+	t.Parallel()
 	testDir, clean := CreateTestDir(t)
 	defer clean()
 
@@ -142,6 +146,7 @@ func TestUtils_NormizePath(t *testing.T) {
 }
 
 func TestUtils_HasPrefixPath(t *testing.T) {
+	t.Parallel()
 	testDir, clean := CreateTestDir(t)
 	defer clean()
 

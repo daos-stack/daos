@@ -21,6 +21,7 @@ import (
 )
 
 func TestPromExp_extractClientLabels(t *testing.T) {
+	t.Parallel()
 	shmID := 256
 	jobID := "testJob"
 	pid := "12345"
@@ -98,6 +99,7 @@ func TestPromExp_extractClientLabels(t *testing.T) {
 }
 
 func TestPromExp_NewClientCollector(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		opts      *CollectorOpts
 		expErr    error

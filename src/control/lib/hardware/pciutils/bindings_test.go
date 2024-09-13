@@ -19,6 +19,7 @@ import (
 )
 
 func TestAPI_PCIeCapsFromConfig(t *testing.T) {
+	t.Parallel()
 	mockBytes := []byte(`00: 86 80 53 09 06 04 10 00 01 02 08 01 00 00 00 00
 10: 04 00 00 bc 00 00 00 00 00 00 00 00 00 00 00 00
 20: 00 00 00 00 00 00 00 00 00 00 00 00 90 15 a8 00

@@ -52,6 +52,7 @@ var mockRamCfg = storage.Config{
 }
 
 func TestIOEngineInstance_MountControlMetadata(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		meta   *storage.MockMetadataProvider
 		sysCfg *system.MockSysConfig
@@ -107,6 +108,7 @@ func TestIOEngineInstance_MountControlMetadata(t *testing.T) {
 }
 
 func TestIOEngineInstance_MountScmDevice(t *testing.T) {
+	t.Parallel()
 	testDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
@@ -213,6 +215,7 @@ func TestIOEngineInstance_MountScmDevice(t *testing.T) {
 }
 
 func TestEngineInstance_NeedsScmFormat(t *testing.T) {
+	t.Parallel()
 	const (
 		dev            = "/dev/foo"
 		goodMountPoint = "/mnt/daos"
@@ -360,6 +363,7 @@ func (tly *tally) fakePublish(evt *events.RASEvent) {
 }
 
 func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
+	t.Parallel()
 	errStarted := errors.New("already started")
 	dev := "/dev/foo"
 	mnt := "/mnt/test"

@@ -19,6 +19,7 @@ import (
 )
 
 func TestRaft_Database_Barrier(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		raftSvcCfg *mockRaftServiceConfig
 		expErr     error
@@ -61,6 +62,7 @@ func TestRaft_Database_Barrier(t *testing.T) {
 }
 
 func TestRaft_Database_WaitForLeaderStepUp(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		stepUpDelay time.Duration
 	}{

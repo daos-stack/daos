@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -31,6 +31,7 @@ func assertFaultDomainEqualStr(t *testing.T, expResultStr string, result *system
 }
 
 func TestServer_getDefaultFaultDomain(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		getHostname hostnameGetterFn
 		expResult   string
@@ -65,6 +66,7 @@ func TestServer_getDefaultFaultDomain(t *testing.T) {
 }
 
 func TestServer_getFaultDomain(t *testing.T) {
+	t.Parallel()
 	realHostname, err := os.Hostname()
 	if err != nil {
 		t.Fatalf("couldn't get hostname: %s", err)
@@ -189,6 +191,7 @@ func createScriptFile(t *testing.T, path string, mode os.FileMode, content strin
 }
 
 func TestServer_getFaultDomainFromCallback(t *testing.T) {
+	t.Parallel()
 	tmpDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 

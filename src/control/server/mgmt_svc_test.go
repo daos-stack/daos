@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -22,6 +22,7 @@ import (
 )
 
 func TestServer_MgmtSvc_checkSystemRequest(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		req     proto.Message
 		sysName string

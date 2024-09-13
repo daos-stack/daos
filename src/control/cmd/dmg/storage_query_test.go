@@ -17,6 +17,7 @@ import (
 )
 
 func TestStorageQueryCommands(t *testing.T) {
+	t.Parallel()
 	runCmdTests(t, []cmdTest{
 		{
 			"per-server metadata query pools",

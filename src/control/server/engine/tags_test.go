@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -64,6 +64,7 @@ var testStruct = &testConfig{
 }
 
 func TestParseLongFlags(t *testing.T) {
+	t.Parallel()
 	got, err := parseCmdTags(testStruct, longFlagTag, joinLongArgs, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -86,6 +87,7 @@ func TestParseLongFlags(t *testing.T) {
 }
 
 func TestParseShortFlags(t *testing.T) {
+	t.Parallel()
 	got, err := parseCmdTags(testStruct, shortFlagTag, joinShortArgs, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -108,6 +110,7 @@ func TestParseShortFlags(t *testing.T) {
 }
 
 func TestParseEnvVars(t *testing.T) {
+	t.Parallel()
 	got, err := parseCmdTags(testStruct, envTag, joinEnvVars, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -126,6 +129,7 @@ func TestParseEnvVars(t *testing.T) {
 }
 
 func TestCircularRef(t *testing.T) {
+	t.Parallel()
 	circular := *testStruct
 	circular.CircularRef = &circular
 
@@ -150,6 +154,7 @@ func TestCircularRef(t *testing.T) {
 }
 
 func TestUnhandledType(t *testing.T) {
+	t.Parallel()
 	test := struct {
 		Bad interface{} `cmdShortFlag:"blerp"`
 	}{
@@ -163,6 +168,7 @@ func TestUnhandledType(t *testing.T) {
 }
 
 func TestNilJoinFunction(t *testing.T) {
+	t.Parallel()
 	_, err := parseCmdTags(testStruct, shortFlagTag, nil, nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")

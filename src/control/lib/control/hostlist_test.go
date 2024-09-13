@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -37,6 +37,7 @@ func mockHostList(hosts ...string) []string {
 }
 
 func TestControl_getRequestHosts(t *testing.T) {
+	t.Parallel()
 	defaultCfg := DefaultConfig()
 
 	for name, tc := range map[string]struct {

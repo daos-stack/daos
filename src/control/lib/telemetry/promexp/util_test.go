@@ -17,6 +17,7 @@ import (
 )
 
 func TestPromExp_sanitizeMetricName(t *testing.T) {
+	t.Parallel()
 	for input, tc := range map[string]struct {
 		expOutput string
 	}{
@@ -40,6 +41,7 @@ func TestPromExp_sanitizeMetricName(t *testing.T) {
 }
 
 func TestPromExp_getMetricStats(t *testing.T) {
+	t.Parallel()
 	segID := telemetry.NextTestID(telemetry.PromexpIDBase)
 	telemetry.InitTestMetricsProducer(t, segID, 4096)
 	defer telemetry.CleanupTestMetricsProducer(t)

@@ -45,6 +45,7 @@ func hostResps(resps ...*mgmtpb.GetAttachInfoResp) []*control.HostResponse {
 }
 
 func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
+	t.Parallel()
 	testSys := "test_sys"
 	testResp := &control.GetAttachInfoResp{
 		System:       "dontcare",
@@ -399,6 +400,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 }
 
 func TestAgent_mgmtModule_getAttachInfo_Parallel(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -473,6 +475,7 @@ func (m *mockNUMAProvider) GetNUMANodeIDForPID(_ context.Context, _ int32) (uint
 }
 
 func TestAgent_mgmtModule_getNUMANode(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		useDefaultNUMA bool
 		numaGetter     hardware.ProcessNUMAProvider
@@ -520,6 +523,7 @@ func TestAgent_mgmtModule_getNUMANode(t *testing.T) {
 }
 
 func TestAgent_mgmtModule_RefreshCache(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		getInfoCache func(logging.Logger) *InfoCache
 		expErr       error
@@ -567,6 +571,7 @@ func TestAgent_mgmtModule_RefreshCache(t *testing.T) {
 }
 
 func TestAgent_handleSetupClientTelemetry(t *testing.T) {
+	t.Parallel()
 	testCreds := &unix.Ucred{
 		Uid: 123,
 		Gid: 456,

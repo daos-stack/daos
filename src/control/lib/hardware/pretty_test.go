@@ -15,6 +15,7 @@ import (
 )
 
 func TestHardware_PrintTopology(t *testing.T) {
+	t.Parallel()
 	test2Block := &PCIDevice{
 		Name:         "test2-block",
 		Type:         DeviceTypeBlock,

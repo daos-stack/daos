@@ -58,6 +58,7 @@ func (tc *testConn) appendInvocation(name string) {
 }
 
 func testExpectedError(t *testing.T, expected, actual error) {
+	t.Parallel()
 	t.Helper()
 
 	errRe := regexp.MustCompile(expected.Error())
@@ -279,6 +280,7 @@ func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 }
 
 func TestBadCommand(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -288,6 +290,7 @@ func TestBadCommand(t *testing.T) {
 }
 
 func TestNoCommand(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 

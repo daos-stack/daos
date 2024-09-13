@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -41,6 +41,7 @@ func expectPayload(t *testing.T, resp *pbin.Response, payload interface{}, expPa
 var nilPayloadErr = pbin.PrivilegedHelperRequestFailed("unexpected end of JSON input")
 
 func TestDaosAdmin_MetadataMountHandler(t *testing.T) {
+	t.Parallel()
 	mountReqPayload, err := json.Marshal(storage.MetadataMountRequest{
 		RootPath: "something",
 		Device:   "somethingelse",
@@ -126,6 +127,7 @@ func TestDaosAdmin_MetadataMountHandler(t *testing.T) {
 }
 
 func TestDaosAdmin_MetadataFormatHandler(t *testing.T) {
+	t.Parallel()
 	reqPayload, err := json.Marshal(storage.MetadataFormatRequest{
 		RootPath: "something",
 		Device:   "somethingelse",
@@ -188,6 +190,7 @@ func TestDaosAdmin_MetadataFormatHandler(t *testing.T) {
 }
 
 func TestDaosAdmin_MetadataNeedsFormatHandler(t *testing.T) {
+	t.Parallel()
 	reqPayload, err := json.Marshal(storage.MetadataFormatRequest{
 		RootPath: "something",
 		Device:   "somethingelse",
@@ -267,6 +270,7 @@ func TestDaosAdmin_MetadataNeedsFormatHandler(t *testing.T) {
 }
 
 func TestDaosAdmin_ScmMountUnmountHandler(t *testing.T) {
+	t.Parallel()
 	testTarget, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
@@ -359,6 +363,7 @@ func TestDaosAdmin_ScmMountUnmountHandler(t *testing.T) {
 }
 
 func TestDaosAdmin_ScmFormatCheckHandler(t *testing.T) {
+	t.Parallel()
 	testTarget, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
@@ -470,6 +475,7 @@ func TestDaosAdmin_ScmFormatCheckHandler(t *testing.T) {
 }
 
 func TestDaosAdmin_ScmPrepHandler(t *testing.T) {
+	t.Parallel()
 	scmPrepareReqPayload, err := json.Marshal(storage.ScmPrepareRequest{
 		ForwardableRequest: pbin.ForwardableRequest{Forwarded: true},
 	})
@@ -569,6 +575,7 @@ func TestDaosAdmin_ScmPrepHandler(t *testing.T) {
 }
 
 func TestDaosAdmin_ScmScanHandler(t *testing.T) {
+	t.Parallel()
 	scmScanReqPayload, err := json.Marshal(storage.ScmScanRequest{
 		ForwardableRequest: pbin.ForwardableRequest{Forwarded: true},
 	})
@@ -634,6 +641,7 @@ func TestDaosAdmin_ScmScanHandler(t *testing.T) {
 }
 
 func TestDaosAdmin_BdevScanHandler(t *testing.T) {
+	t.Parallel()
 	bdevScanReqPayload, err := json.Marshal(storage.BdevScanRequest{
 		ForwardableRequest: pbin.ForwardableRequest{Forwarded: true},
 	})
@@ -695,6 +703,7 @@ func TestDaosAdmin_BdevScanHandler(t *testing.T) {
 }
 
 func TestDaosAdmin_BdevPrepHandler(t *testing.T) {
+	t.Parallel()
 	bdevPrepareReqPayload, err := json.Marshal(storage.BdevPrepareRequest{
 		ForwardableRequest: pbin.ForwardableRequest{Forwarded: true},
 	})
@@ -756,6 +765,7 @@ func TestDaosAdmin_BdevPrepHandler(t *testing.T) {
 }
 
 func TestDaosAdmin_BdevFormatHandler(t *testing.T) {
+	t.Parallel()
 	bdevFormatReqPayload, err := json.Marshal(storage.BdevFormatRequest{
 		ForwardableRequest: pbin.ForwardableRequest{Forwarded: true},
 		Properties: storage.BdevTierProperties{

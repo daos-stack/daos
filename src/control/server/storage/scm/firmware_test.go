@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,6 +18,7 @@ import (
 )
 
 func TestProvider_QueryFirmware(t *testing.T) {
+	t.Parallel()
 	defaultModules := storage.ScmModules{
 		storage.MockScmModule(1),
 		storage.MockScmModule(2),
@@ -241,6 +242,7 @@ func TestProvider_QueryFirmware(t *testing.T) {
 }
 
 func TestProvider_UpdateFirmware(t *testing.T) {
+	t.Parallel()
 	defaultModules := storage.ScmModules{
 		storage.MockScmModule(1),
 		storage.MockScmModule(2),

@@ -64,6 +64,7 @@ func getProtoScmModules(t *testing.T, modules storage.ScmModules) []*ctlpb.ScmMo
 }
 
 func TestCtlSvc_FirmwareQuery(t *testing.T) {
+	t.Parallel()
 	testFWInfo := &storage.ScmFirmwareInfo{
 		ActiveVersion:     "MyActiveVersion",
 		StagedVersion:     "MyStagedVersion",
@@ -509,6 +510,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 }
 
 func TestCtlSvc_FirmwareUpdate(t *testing.T) {
+	t.Parallel()
 	mockSCM := storage.MockScmModules(3)
 	mockPbSCM := getProtoScmModules(t, mockSCM)
 	mockNVMe := storage.MockNvmeControllers(3)

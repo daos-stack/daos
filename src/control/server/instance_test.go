@@ -51,6 +51,7 @@ func getTestEngineInstance(log logging.Logger) *EngineInstance {
 }
 
 func TestServer_Instance_WithHostFaultDomain(t *testing.T) {
+	t.Parallel()
 	instance := &EngineInstance{}
 	fd, err := system.NewFaultDomainFromString("/one/two")
 	if err != nil {
@@ -68,6 +69,7 @@ func TestServer_Instance_WithHostFaultDomain(t *testing.T) {
 }
 
 func TestServer_Instance_updateFaultDomainInSuperblock(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		superblock *Superblock
 		newDomain  *system.FaultDomain

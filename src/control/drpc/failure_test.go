@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,6 +15,7 @@ import (
 )
 
 func TestNewFailure(t *testing.T) {
+	t.Parallel()
 	for name, tt := range map[string]struct {
 		expectedMessage string
 		status          Status
@@ -66,6 +67,7 @@ func TestNewFailure(t *testing.T) {
 }
 
 func TestNewFailureWithMessage(t *testing.T) {
+	t.Parallel()
 	expectedMessage := "a custom message"
 	f := NewFailureWithMessage(expectedMessage)
 
@@ -74,6 +76,7 @@ func TestNewFailureWithMessage(t *testing.T) {
 }
 
 func TestErrorToStatus(t *testing.T) {
+	t.Parallel()
 	for name, tt := range map[string]struct {
 		err            error
 		expectedStatus Status
@@ -128,6 +131,7 @@ func TestErrorToStatus(t *testing.T) {
 }
 
 func TestFailureCreationMethods(t *testing.T) {
+	t.Parallel()
 	for name, tt := range map[string]struct {
 		function       func() Failure
 		expectedStatus Status

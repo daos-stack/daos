@@ -17,6 +17,7 @@ import (
 )
 
 func TestHardware_VirtualDevice(t *testing.T) {
+	t.Parallel()
 	mockPCIDev := mockPCIDevice("testdev")
 
 	for name, tc := range map[string]struct {
@@ -54,6 +55,7 @@ func TestHardware_VirtualDevice(t *testing.T) {
 }
 
 func TestHardware_Topology_AllDevices(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		topo      *Topology
 		expResult map[string]Device
@@ -164,6 +166,7 @@ func TestHardware_Topology_AllDevices(t *testing.T) {
 }
 
 func TestTopology_NumNUMANodes(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		topo      *Topology
 		expResult int
@@ -198,6 +201,7 @@ func TestTopology_NumNUMANodes(t *testing.T) {
 }
 
 func TestTopology_NumCoresPerNUMA(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		topo      *Topology
 		expResult int
@@ -239,6 +243,7 @@ func TestTopology_NumCoresPerNUMA(t *testing.T) {
 }
 
 func TestHardware_Topology_AddDevice(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		topo      *Topology
 		numaNode  uint
@@ -320,6 +325,7 @@ func TestHardware_Topology_AddDevice(t *testing.T) {
 }
 
 func TestHardware_Topology_AddBlockDevice(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		topo      *Topology
 		numaNode  uint
@@ -394,6 +400,7 @@ func TestHardware_Topology_AddBlockDevice(t *testing.T) {
 }
 
 func TestHardware_Topology_AddVirtualDevice(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		topo      *Topology
 		device    *VirtualDevice
@@ -463,6 +470,7 @@ func TestHardware_Topology_AddVirtualDevice(t *testing.T) {
 }
 
 func TestHardware_Topology_Merge(t *testing.T) {
+	t.Parallel()
 	testNuma := func(idx int) *NUMANode {
 		nodes := []*NUMANode{
 			MockNUMANode(1, 4).
@@ -954,6 +962,7 @@ func TestHardware_Topology_Merge(t *testing.T) {
 }
 
 func TestHardware_DeviceType_String(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		devType   DeviceType
 		expResult string
@@ -982,6 +991,7 @@ func TestHardware_DeviceType_String(t *testing.T) {
 }
 
 func TestHardware_NewTopologyFactory(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		input     []*WeightedTopologyProvider
 		expResult *TopologyFactory
@@ -1063,6 +1073,7 @@ func TestHardware_NewTopologyFactory(t *testing.T) {
 }
 
 func TestHardware_TopologyFactory_GetTopology(t *testing.T) {
+	t.Parallel()
 	testTopo1 := func() *Topology {
 		return &Topology{
 			NUMANodes: NodeMap{

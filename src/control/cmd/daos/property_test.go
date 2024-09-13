@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,6 +18,7 @@ import (
 )
 
 func TestProperty_EcCellSize(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		SizeStr    string
 		EntryBytes uint64
@@ -75,6 +76,7 @@ func TestProperty_EcCellSize(t *testing.T) {
 }
 
 func TestProperty_EcCellSize_Errors(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		SizeStr     string
 		ExpectError error

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -42,6 +42,7 @@ func makeProcTree(t *testing.T, numEntries int) string {
 }
 
 func Test_Common_checkDupeProcess(t *testing.T) {
+	t.Parallel()
 	procRoot := makeProcTree(t, 5)
 	addProcEntry(t, procRoot, 5, "test-1")
 
@@ -67,6 +68,7 @@ func Test_Common_checkDupeProcess(t *testing.T) {
 }
 
 func Test_Common_getProcName(t *testing.T) {
+	t.Parallel()
 	procRoot := makeProcTree(t, 5)
 
 	for name, tc := range map[string]struct {
@@ -94,6 +96,7 @@ func Test_Common_getProcName(t *testing.T) {
 }
 
 func Test_Common_getProcPids(t *testing.T) {
+	t.Parallel()
 	procRoot := makeProcTree(t, 5)
 	addProcEntry(t, procRoot, 5, "test-1")
 	addProcEntry(t, procRoot, 6, "very-long-name-that-is-longer-than-15")

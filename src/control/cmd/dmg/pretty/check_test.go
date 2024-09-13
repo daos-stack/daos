@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2023 Intel Corporation.
+// (C) Copyright 2023-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,6 +20,7 @@ import (
 )
 
 func TestPretty_PrintCheckQueryResp(t *testing.T) {
+	t.Parallel()
 	checkTime, err := time.Parse(time.RFC822Z, "20 Mar 23 10:07 -0500")
 	if err != nil {
 		t.Fatal(err)

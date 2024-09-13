@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -25,6 +25,7 @@ import (
 )
 
 func TestControl_IsMSConnectionFailure(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		err       error
 		expResult bool
@@ -49,6 +50,7 @@ func TestControl_IsMSConnectionFailure(t *testing.T) {
 }
 
 func TestControl_StartRanks(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		uErr    error
 		uResps  []*HostResponse
@@ -151,6 +153,7 @@ func TestControl_StartRanks(t *testing.T) {
 }
 
 func TestControl_PrepShutdownRanks(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		uErr    error
 		uResps  []*HostResponse
@@ -253,6 +256,7 @@ func TestControl_PrepShutdownRanks(t *testing.T) {
 }
 
 func TestControl_StopRanks(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		uErr    error
 		uResps  []*HostResponse
@@ -355,6 +359,7 @@ func TestControl_StopRanks(t *testing.T) {
 }
 
 func TestControl_getResetRankErrors(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		results     system.MemberResults
 		expRankErrs map[string][]string
@@ -450,6 +455,7 @@ func TestControl_getResetRankErrors(t *testing.T) {
 }
 
 func TestControl_SystemQueryReq_getStateMask(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		req     *SystemQueryReq
 		expMask system.MemberState
@@ -491,6 +497,7 @@ func TestControl_SystemQueryReq_getStateMask(t *testing.T) {
 }
 
 func TestControl_SystemQuery(t *testing.T) {
+	t.Parallel()
 	testHS := hostlist.MustCreateSet("foo-[1-23]")
 	testReqHS := new(SystemQueryReq)
 	testReqHS.Hosts.Replace(testHS)
@@ -633,6 +640,7 @@ func TestControl_SystemQuery(t *testing.T) {
 }
 
 func TestControl_SystemQueryRespErrors(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		absentHosts string
 		absentRanks string
@@ -666,6 +674,7 @@ func TestControl_SystemQueryRespErrors(t *testing.T) {
 }
 
 func TestControl_SystemStart(t *testing.T) {
+	t.Parallel()
 	testHS := hostlist.MustCreateSet("foo-[1-23]")
 	testReqHS := new(SystemStartReq)
 	testReqHS.Hosts.Replace(testHS)
@@ -779,6 +788,7 @@ func TestControl_SystemStart(t *testing.T) {
 }
 
 func TestControl_SystemStartRespErrors(t *testing.T) {
+	t.Parallel()
 	successResults := system.MemberResults{
 		system.NewMemberResult(1, nil, system.MemberStateReady),
 		system.NewMemberResult(2, nil, system.MemberStateReady),
@@ -837,6 +847,7 @@ func TestControl_SystemStartRespErrors(t *testing.T) {
 }
 
 func TestControl_SystemStop(t *testing.T) {
+	t.Parallel()
 	testHS := hostlist.MustCreateSet("foo-[1-23]")
 	testReqHS := new(SystemStopReq)
 	testReqHS.Hosts.Replace(testHS)
@@ -950,6 +961,7 @@ func TestControl_SystemStop(t *testing.T) {
 }
 
 func TestControl_SystemStopRespErrors(t *testing.T) {
+	t.Parallel()
 	successResults := system.MemberResults{
 		system.NewMemberResult(1, nil, system.MemberStateReady),
 		system.NewMemberResult(2, nil, system.MemberStateReady),
@@ -1008,6 +1020,7 @@ func TestControl_SystemStopRespErrors(t *testing.T) {
 }
 
 func TestControl_SystemExclude(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		req     *SystemExcludeReq
 		uErr    error
@@ -1087,6 +1100,7 @@ func TestControl_SystemExclude(t *testing.T) {
 }
 
 func TestDmg_System_checkSystemErase(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		uErr, expErr error
 		members      []*mgmtpb.SystemMember
@@ -1139,6 +1153,7 @@ func TestDmg_System_checkSystemErase(t *testing.T) {
 }
 
 func TestControl_SystemErase(t *testing.T) {
+	t.Parallel()
 	member1 := system.MockMember(t, 1, system.MemberStateAwaitFormat)
 	member3 := system.MockMember(t, 3, system.MemberStateAwaitFormat)
 	member3.Addr = member1.Addr
@@ -1346,6 +1361,7 @@ func TestControl_SystemErase(t *testing.T) {
 }
 
 func TestControl_SystemJoin_RetryableErrors(t *testing.T) {
+	t.Parallel()
 	for name, testErr := range map[string]error{
 		"system not formatted": system.ErrUninitialized,
 		"system unavailable":   system.ErrRaftUnavail,
@@ -1377,6 +1393,7 @@ func TestControl_SystemJoin_RetryableErrors(t *testing.T) {
 }
 
 func TestControl_SystemJoin_Timeouts(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		mic     *MockInvokerConfig
 		expResp *SystemJoinResp
@@ -1470,6 +1487,7 @@ func TestControl_SystemJoin_Timeouts(t *testing.T) {
 }
 
 func TestControl_SystemSetAttr(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		req    *SystemSetAttrReq
 		mic    *MockInvokerConfig
@@ -1526,6 +1544,7 @@ func TestControl_SystemSetAttr(t *testing.T) {
 }
 
 func TestControl_SystemGetAttr(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		req     *SystemGetAttrReq
 		mic     *MockInvokerConfig

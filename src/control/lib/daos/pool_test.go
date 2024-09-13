@@ -19,6 +19,7 @@ import (
 )
 
 func TestDaos_PoolInfo_Usage(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		status        int32
 		scmStats      *StorageUsageStats
@@ -119,6 +120,7 @@ func genOptsStr(queryOpts ...string) string {
 }
 
 func TestDaos_PoolQueryMask(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		testMask  PoolQueryMask
 		expString string
@@ -219,6 +221,7 @@ func TestDaos_PoolQueryMask(t *testing.T) {
 }
 
 func TestDaos_PoolQueryMaskMarshalJSON(t *testing.T) {
+	t.Parallel()
 	// NB: The MarshalJSON implementation uses the stringer, so
 	// there's no point in testing all of the options here.
 	for name, tc := range map[string]struct {
@@ -248,6 +251,7 @@ func TestDaos_PoolQueryMaskMarshalJSON(t *testing.T) {
 }
 
 func TestDaos_PoolQueryMaskUnmarshalJSON(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		testData  []byte
 		expString string

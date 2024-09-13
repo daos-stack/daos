@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,6 +16,7 @@ import (
 )
 
 func TestCommon_ControlLogLevel_String(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		level     ControlLogLevel
 		expResult string
@@ -44,6 +45,7 @@ func TestCommon_ControlLogLevel_String(t *testing.T) {
 }
 
 func TestCommon_ControlLogLevel_MarshalYAML(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		level     ControlLogLevel
 		expResult string
@@ -78,6 +80,7 @@ func TestCommon_ControlLogLevel_MarshalYAML(t *testing.T) {
 }
 
 func TestCommon_ControlLogLevel_UnmarshalYAML(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		yamlStr  string
 		yamlErr  error

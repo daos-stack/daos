@@ -17,6 +17,7 @@ import (
 )
 
 func TestDaos_Status(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		in     int32
 		expErr error
@@ -41,6 +42,7 @@ func TestDaos_Status(t *testing.T) {
 }
 
 func TestDaos_Error(t *testing.T) {
+	t.Parallel()
 	// Light test to make sure the error stringer works as expected.
 	for ds, expStr := range map[daos.Status]string{
 		daos.Success:        "DER_SUCCESS(0): Success",
@@ -55,6 +57,7 @@ func TestDaos_Error(t *testing.T) {
 }
 
 func TestDaos_ErrorFromRC(t *testing.T) {
+	t.Parallel()
 	for rc, expErr := range map[int]error{
 		0:      nil,
 		-1014:  daos.ProtocolError,

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -24,6 +24,7 @@ import (
 )
 
 func TestSysfs_NewProvider(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -37,6 +38,7 @@ func TestSysfs_NewProvider(t *testing.T) {
 }
 
 func TestSysfs_isNetvscDevice(t *testing.T) {
+	t.Parallel()
 	mkUeventFile := func(testDir string, content string) {
 		t.Helper()
 
@@ -132,6 +134,7 @@ func setupTestNetDevOperStates(t *testing.T, root string, devStates map[string]s
 }
 
 func TestSysfs_Provider_GetNetDevClass(t *testing.T) {
+	t.Parallel()
 	testDir, cleanupTestDir := test.CreateTestDir(t)
 	defer cleanupTestDir()
 
@@ -285,6 +288,7 @@ func setupNetvscDev(t *testing.T, root, devName, backingDevName string) {
 }
 
 func TestProvider_GetTopology(t *testing.T) {
+	t.Parallel()
 	validPCIAddr := "0000:02:00.0"
 	testTopo := &hardware.Topology{
 		NUMANodes: hardware.NodeMap{
@@ -643,6 +647,7 @@ func TestProvider_GetTopology(t *testing.T) {
 }
 
 func TestSysfs_Provider_GetFabricInterfaces(t *testing.T) {
+	t.Parallel()
 	setupDefault := func(t *testing.T, root string) {
 		path0 := setupPCIDev(t, root, "0000:01:01.1", "cxi", "cxi0")
 		setupClassLink(t, root, "cxi", path0)
@@ -753,6 +758,7 @@ func TestSysfs_Provider_GetFabricInterfaces(t *testing.T) {
 }
 
 func TestSysfs_Provider_GetNetDevState(t *testing.T) {
+	t.Parallel()
 	setupNet := func(t *testing.T, root string) {
 		t.Helper()
 
@@ -1182,6 +1188,7 @@ func TestSysfs_Provider_GetNetDevState(t *testing.T) {
 }
 
 func TestSysfs_Provider_ibStateToNetDevState(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		input     string
 		expResult hardware.NetDevState
@@ -1231,6 +1238,7 @@ func TestSysfs_Provider_ibStateToNetDevState(t *testing.T) {
 }
 
 func TestSysfs_condenseNetDevState(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		input     []hardware.NetDevState
 		expResult hardware.NetDevState
@@ -1307,6 +1315,7 @@ func setupTestIsIOMMUEnabled(t *testing.T, root string, extraDirs ...string) {
 }
 
 func TestSysfs_Provider_IsIOMMUEnabled(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		nilProvider bool
 		extraDirs   []string

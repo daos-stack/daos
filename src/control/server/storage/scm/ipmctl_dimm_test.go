@@ -21,6 +21,7 @@ import (
 )
 
 func TestIpmctl_getDIMMInfo(t *testing.T) {
+	t.Parallel()
 	type OutputMap map[string]string
 	type ErrorMap map[string]error
 	type CallMap map[string]int

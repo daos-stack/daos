@@ -23,6 +23,7 @@ import (
 )
 
 func TestTelemetry_Init(t *testing.T) {
+	t.Parallel()
 	producerID := NextTestID()
 	InitTestMetricsProducer(t, producerID, 2048)
 	defer CleanupTestMetricsProducer(t)
@@ -65,6 +66,7 @@ func TestTelemetry_Init(t *testing.T) {
 }
 
 func TestTelemetry_Detach(t *testing.T) {
+	t.Parallel()
 	producerID := NextTestID()
 	InitTestMetricsProducer(t, producerID, 2048)
 	defer CleanupTestMetricsProducer(t)
@@ -96,6 +98,7 @@ func TestTelemetry_Detach(t *testing.T) {
 }
 
 func TestTelemetry_GetAPIVersion(t *testing.T) {
+	t.Parallel()
 	ver := GetAPIVersion()
 
 	test.AssertEqual(t, ver, 1, "wrong API version")
@@ -117,6 +120,7 @@ func teardownCtxReal(_ *testing.T, ctx context.Context) {
 }
 
 func TestTelemetry_GetRank(t *testing.T) {
+	t.Parallel()
 	rankHdl := &handle{
 		rank: new(uint32),
 	}
@@ -198,6 +202,7 @@ const (
 )
 
 func TestMain(m *testing.M) {
+	t.Parallel()
 	mode := os.Getenv(childModeEnvVar)
 	switch mode {
 	case "":
@@ -247,6 +252,7 @@ func runChildTelemProc() {
 }
 
 func TestTelemetry_PruneSegments(t *testing.T) {
+	t.Parallel()
 	shmID := uint32(NextTestID())
 
 	cmd := exec.Command(os.Args[0])
@@ -284,6 +290,7 @@ func TestTelemetry_PruneSegments(t *testing.T) {
 }
 
 func TestTelemetry_CollectMetrics(t *testing.T) {
+	t.Parallel()
 	testMetrics := TestMetricsMap{
 		MetricTypeCounter: &TestMetric{
 			Name: "collect_test/my_counter",
@@ -413,6 +420,7 @@ func TestTelemetry_CollectMetrics(t *testing.T) {
 }
 
 func TestTelemetry_garbageCollection(t *testing.T) {
+	t.Parallel()
 	validCtx, _ := setupTestMetrics(t)
 	defer cleanupTestMetrics(validCtx, t)
 

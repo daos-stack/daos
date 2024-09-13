@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -27,6 +27,7 @@ const (
 )
 
 func TestBackend_substituteVMDAddresses(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		inAddrs      *hardware.PCIAddressSet
 		scannedBdevs storage.NvmeControllers
@@ -96,6 +97,7 @@ func TestBackend_substituteVMDAddresses(t *testing.T) {
 }
 
 func TestBackend_vmdFilterAddresses(t *testing.T) {
+	t.Parallel()
 	testNrHugepages := 42
 	usrCurrent, _ := user.Current()
 	username := usrCurrent.Username
@@ -239,6 +241,7 @@ func TestBackend_vmdFilterAddresses(t *testing.T) {
 }
 
 func TestBackend_updatePrepareRequest(t *testing.T) {
+	t.Parallel()
 	testNrHugepages := 42
 	usrCurrent, _ := user.Current()
 	username := usrCurrent.Username

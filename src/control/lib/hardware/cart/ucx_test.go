@@ -16,6 +16,7 @@ import (
 )
 
 func TestCart_getOSNameFromUCXDevice(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		in        string
 		expResult string
@@ -37,6 +38,7 @@ func TestCart_getOSNameFromUCXDevice(t *testing.T) {
 }
 
 func TestCart_getProviderSetFromUCXTransport(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		in     string
 		expSet *hardware.FabricProviderSet
@@ -135,6 +137,7 @@ func TestCart_getProviderSetFromUCXTransport(t *testing.T) {
 }
 
 func TestCart_ucxTransportToAlias(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		in  string
 		exp string

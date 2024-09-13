@@ -23,6 +23,7 @@ import (
 )
 
 func TestPromExp_StartExporter(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		cfg    *promexp.ExporterConfig
 		expErr error

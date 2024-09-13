@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,6 +19,7 @@ import (
 )
 
 func TestChecker_AnnotateFinding(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		rpt        *chkpb.CheckReport
 		expFinding *checker.Finding

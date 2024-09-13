@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -21,6 +21,7 @@ import (
 )
 
 func TestServer_CtlSvc_getScmUsage(t *testing.T) {
+	t.Parallel()
 	mockScmNs0 := storage.MockScmNamespace(0)
 	mockScmMountPath0 := "/mnt/daos0"
 	mockScmNs0wMount := storage.MockScmNamespace(0)

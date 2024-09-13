@@ -72,6 +72,7 @@ func getMockNvmeCmdInit(log logging.Logger, bmbc bdev.MockBackendConfig, sc *con
 }
 
 func TestDaosServer_prepareNVMe(t *testing.T) {
+	t.Parallel()
 	// bdev req parameters
 	testNrHugepages := 42
 	// bdev mock commands
@@ -259,6 +260,7 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 }
 
 func TestDaosServer_resetNVMe(t *testing.T) {
+	t.Parallel()
 	// bdev mock commands
 	newResetCmd := func() *resetNVMeCmd {
 		rdc := &resetNVMeCmd{
@@ -477,6 +479,7 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 }
 
 func TestDaosServer_getVMDState(t *testing.T) {
+	t.Parallel()
 	fa := false
 	tr := true
 
@@ -525,6 +528,7 @@ func TestDaosServer_getVMDState(t *testing.T) {
 }
 
 func TestDaosServer_scanNVMe(t *testing.T) {
+	t.Parallel()
 	cmpopt := cmp.Comparer(func(x, y *storage.BdevDeviceList) bool {
 		if x == nil && y == nil {
 			return true
@@ -701,6 +705,7 @@ func TestDaosServer_scanNVMe(t *testing.T) {
 }
 
 func TestDaosServer_NVMe_Commands(t *testing.T) {
+	t.Parallel()
 	multPCIAddrsSpaceSep := "0000:80:00.0 0000:81:00.0"
 	multPCIAddrsCommaSep := "0000:80:00.0,0000:81:00.0"
 
@@ -780,6 +785,7 @@ func genSetNVMeHelpers(log logging.Logger, bmbc bdev.MockBackendConfig) func(*ma
 // TestDaosServer_NVMe_Commands_JSON verifies that when the JSON-output flag is set only JSON is
 // printed to standard out. Test cases should cover all scm subcommand variations.
 func TestDaosServer_NVMe_Commands_JSON(t *testing.T) {
+	t.Parallel()
 	// Use a normal logger to verify that we don't mess up JSON output.
 	log, buf := logging.NewTestCommandLineLogger()
 
@@ -881,6 +887,7 @@ func checkCfgNotIgnored(t *testing.T, bsc baseScanCmd) {
 
 // Verify that when --ignore-config is supplied on commandline, cmd.config is nil.
 func TestDaosServer_NVMe_Commands_Config(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		cmd       string
 		bmbc      bdev.MockBackendConfig

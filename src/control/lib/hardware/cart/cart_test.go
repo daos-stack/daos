@@ -21,6 +21,7 @@ import (
 )
 
 func TestCart_Provider_GetFabricInterfaces_Integrated(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		in     string
 		expErr error
@@ -67,6 +68,7 @@ func TestCart_Provider_GetFabricInterfaces_Integrated(t *testing.T) {
 }
 
 func TestCart_Provider_GetFabricInterfaces(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		nilProvider     bool
 		getContext      func(*testing.T) context.Context

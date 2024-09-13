@@ -14,6 +14,7 @@ import (
 )
 
 func TestTitle(t *testing.T) {
+	t.Parallel()
 	for testStr, expStr := range map[string]string{
 		"":                      "",
 		" ":                     " ",
@@ -33,6 +34,7 @@ func TestTitle(t *testing.T) {
 }
 
 func TestNewTableFormatter_NoTitles(t *testing.T) {
+	t.Parallel()
 	f := NewTableFormatter()
 	if f.writer == nil {
 		t.Fatal("no tabwriter set!")
@@ -43,6 +45,7 @@ func TestNewTableFormatter_NoTitles(t *testing.T) {
 }
 
 func TestNewTableFormatter_WithTitles(t *testing.T) {
+	t.Parallel()
 	titles := []string{"One", "Two", "Three"}
 	f := NewTableFormatter(titles...)
 	if f.writer == nil {
@@ -54,6 +57,7 @@ func TestNewTableFormatter_WithTitles(t *testing.T) {
 }
 
 func TestTableFormatter_Init(t *testing.T) {
+	t.Parallel()
 	f := &TableFormatter{}
 	f.Init()
 	if f.writer == nil {
@@ -62,6 +66,7 @@ func TestTableFormatter_Init(t *testing.T) {
 }
 
 func TestTableFormatter_SetColumnTitles(t *testing.T) {
+	t.Parallel()
 	for name, tt := range map[string]struct {
 		startingTitles []string
 		titles         []string
@@ -100,6 +105,7 @@ func TestTableFormatter_SetColumnTitles(t *testing.T) {
 }
 
 func TestTableFormatter_Format(t *testing.T) {
+	t.Parallel()
 	for name, tt := range map[string]struct {
 		titles         []string
 		table          []TableRow

@@ -90,6 +90,7 @@ func addTestPools(t *testing.T, sysdb *raft.Database, poolUUIDs ...string) {
 }
 
 func testPoolLabelProp() []*mgmtpb.PoolProperty {
+	t.Parallel()
 	return []*mgmtpb.PoolProperty{
 		{
 			Number: daos.PoolPropertyLabel,
@@ -101,6 +102,7 @@ func testPoolLabelProp() []*mgmtpb.PoolProperty {
 }
 
 func TestServer_MgmtSvc_PoolCreateAlreadyExists(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		state     system.PoolServiceState
 		queryResp *mgmtpb.PoolQueryResp
@@ -186,6 +188,7 @@ func TestServer_MgmtSvc_PoolCreateAlreadyExists(t *testing.T) {
 // These should be adapted to test whatever the new logic is for calculating
 // per-tier storage allocations.
 func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
+	t.Parallel()
 	defaultTotal := uint64(10 * humanize.TByte)
 	defaultRatios := []float64{DefaultPoolScmRatio, DefaultPoolNvmeRatio}
 	defaultScmBytes := uint64(float64(defaultTotal) * DefaultPoolScmRatio)
@@ -320,6 +323,7 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	missingSB := newTestMgmtSvc(t, log)
 	missingSB.harness.instances[0].(*EngineInstance)._superblock = nil
@@ -596,6 +600,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -692,6 +697,7 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	creating := system.PoolServiceStateCreating
 	ready := system.PoolServiceStateReady
@@ -1254,6 +1260,7 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_PoolExtend(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	missingSB := newTestMgmtSvc(t, log)
 	missingSB.harness.instances[0].(*EngineInstance)._superblock = nil
@@ -1359,6 +1366,7 @@ func TestServer_MgmtSvc_PoolExtend(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_PoolDrain(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	missingSB := newTestMgmtSvc(t, log)
 	missingSB.harness.instances[0].(*EngineInstance)._superblock = nil
@@ -1455,6 +1463,7 @@ func TestServer_MgmtSvc_PoolDrain(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_PoolEvict(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	missingSB := newTestMgmtSvc(t, log)
 	missingSB.harness.instances[0].(*EngineInstance)._superblock = nil
@@ -1553,6 +1562,7 @@ func newTestListPoolsReq() *mgmtpb.ListPoolsReq {
 }
 
 func TestListPools_NoMS(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -1570,6 +1580,7 @@ func TestListPools_NoMS(t *testing.T) {
 }
 
 func TestListPools_Success(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -1631,6 +1642,7 @@ func newTestGetACLReq() *mgmtpb.GetACLReq {
 }
 
 func TestPoolGetACL_NoMS(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -1646,6 +1658,7 @@ func TestPoolGetACL_NoMS(t *testing.T) {
 }
 
 func TestPoolGetACL_Success(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -1673,6 +1686,7 @@ func TestPoolGetACL_Success(t *testing.T) {
 }
 
 func TestPoolGetACL_DrpcFailed(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -1691,6 +1705,7 @@ func TestPoolGetACL_DrpcFailed(t *testing.T) {
 }
 
 func TestPoolGetACL_BadDrpcResp(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -1721,6 +1736,7 @@ func newTestModifyACLReq() *mgmtpb.ModifyACLReq {
 }
 
 func TestPoolOverwriteACL_NoMS(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -1736,6 +1752,7 @@ func TestPoolOverwriteACL_NoMS(t *testing.T) {
 }
 
 func TestPoolOverwriteACL_DrpcFailed(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -1754,6 +1771,7 @@ func TestPoolOverwriteACL_DrpcFailed(t *testing.T) {
 }
 
 func TestPoolOverwriteACL_BadDrpcResp(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -1774,6 +1792,7 @@ func TestPoolOverwriteACL_BadDrpcResp(t *testing.T) {
 }
 
 func TestPoolOverwriteACL_Success(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -1801,6 +1820,7 @@ func TestPoolOverwriteACL_Success(t *testing.T) {
 }
 
 func TestPoolUpdateACL_NoMS(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -1816,6 +1836,7 @@ func TestPoolUpdateACL_NoMS(t *testing.T) {
 }
 
 func TestPoolUpdateACL_DrpcFailed(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -1834,6 +1855,7 @@ func TestPoolUpdateACL_DrpcFailed(t *testing.T) {
 }
 
 func TestPoolUpdateACL_BadDrpcResp(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -1854,6 +1876,7 @@ func TestPoolUpdateACL_BadDrpcResp(t *testing.T) {
 }
 
 func TestPoolUpdateACL_Success(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -1889,6 +1912,7 @@ func newTestDeleteACLReq() *mgmtpb.DeleteACLReq {
 }
 
 func TestPoolDeleteACL_NoMS(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -1904,6 +1928,7 @@ func TestPoolDeleteACL_NoMS(t *testing.T) {
 }
 
 func TestPoolDeleteACL_DrpcFailed(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -1922,6 +1947,7 @@ func TestPoolDeleteACL_DrpcFailed(t *testing.T) {
 }
 
 func TestPoolDeleteACL_BadDrpcResp(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -1942,6 +1968,7 @@ func TestPoolDeleteACL_BadDrpcResp(t *testing.T) {
 }
 
 func TestPoolDeleteACL_Success(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -1969,6 +1996,7 @@ func TestPoolDeleteACL_Success(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	missingSB := newTestMgmtSvc(t, log)
 	missingSB.harness.instances[0].(*EngineInstance)._superblock = nil
@@ -2099,6 +2127,7 @@ func getLastMockCall(mdc *mockDrpcClient) *drpc.Call {
 }
 
 func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		getMockDrpc func(error) *mockDrpcClient
 		drpcResp    *mgmtpb.PoolSetPropResp
@@ -2239,6 +2268,7 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_PoolGetProp(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		setupMockDrpc func(_ *mgmtSvc, _ error)
 		drpcResp      *mgmtpb.PoolGetPropResp
@@ -2314,6 +2344,7 @@ func TestServer_MgmtSvc_PoolGetProp(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_PoolUpgrade(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	missingSB := newTestMgmtSvc(t, log)
 	missingSB.harness.instances[0].(*EngineInstance)._superblock = nil

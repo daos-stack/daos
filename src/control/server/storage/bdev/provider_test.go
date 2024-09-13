@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,6 +18,7 @@ import (
 )
 
 func TestProvider_Scan(t *testing.T) {
+	t.Parallel()
 	ctrlr1 := storage.MockNvmeController(1)
 	ctrlr2 := storage.MockNvmeController(2)
 	ctrlr3 := storage.MockNvmeController(3)
@@ -89,6 +90,7 @@ func TestProvider_Scan(t *testing.T) {
 }
 
 func TestProvider_Prepare(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		req           storage.BdevPrepareRequest
 		shouldForward bool
@@ -142,6 +144,7 @@ func TestProvider_Prepare(t *testing.T) {
 }
 
 func TestProvider_Format(t *testing.T) {
+	t.Parallel()
 	mockSingle := storage.MockNvmeController()
 
 	for name, tc := range map[string]struct {

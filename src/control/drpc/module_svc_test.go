@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,6 +20,7 @@ import (
 const defaultTestModID ModuleID = ModuleMgmt
 
 func TestNewModuleService(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -33,6 +34,7 @@ func TestNewModuleService(t *testing.T) {
 }
 
 func TestService_RegisterModule_Single_Success(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -53,6 +55,7 @@ func TestService_RegisterModule_Single_Success(t *testing.T) {
 }
 
 func TestService_RegisterModule_Multiple_Success(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -81,6 +84,7 @@ func TestService_RegisterModule_Multiple_Success(t *testing.T) {
 }
 
 func TestService_RegisterModule_DuplicateID(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -99,6 +103,7 @@ func TestService_RegisterModule_DuplicateID(t *testing.T) {
 }
 
 func TestService_GetModule_NotFound(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -147,6 +152,7 @@ func getResponse(sequence int64, status Status, body []byte) *Response {
 }
 
 func TestService_ProcessMessage(t *testing.T) {
+	t.Parallel()
 	const testSequenceNum int64 = 13
 
 	for name, tc := range map[string]struct {

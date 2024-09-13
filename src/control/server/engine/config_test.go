@@ -37,6 +37,7 @@ var defConfigCmpOpts = []cmp.Option{
 }
 
 func TestConfig_HasEnvVar(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		startVars []string
 		addVar    string
@@ -77,6 +78,7 @@ func TestConfig_HasEnvVar(t *testing.T) {
 }
 
 func TestConfig_GetEnvVar(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		environment []string
 		key         string
@@ -126,6 +128,7 @@ func TestConfig_GetEnvVar(t *testing.T) {
 }
 
 func TestConfig_Constructed(t *testing.T) {
+	t.Parallel()
 	goldenPath := "testdata/full.golden"
 
 	// just set all values regardless of validity
@@ -183,6 +186,7 @@ func TestConfig_Constructed(t *testing.T) {
 }
 
 func TestConfig_ScmValidation(t *testing.T) {
+	t.Parallel()
 	baseValidConfig := func() *Config {
 		return MockConfig().
 			WithFabricProvider("test"). // valid enough to pass "not-blank" test
@@ -279,6 +283,7 @@ func TestConfig_ScmValidation(t *testing.T) {
 }
 
 func TestConfig_BdevValidation(t *testing.T) {
+	t.Parallel()
 	baseValidConfig := func() *Config {
 		return MockConfig().
 			WithFabricProvider("test"). // valid enough to pass "not-blank" test
@@ -445,6 +450,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 }
 
 func TestConfig_Validation(t *testing.T) {
+	t.Parallel()
 	validConfig := func() *Config {
 		return MockConfig().WithFabricProvider("foo").
 			WithFabricInterface("ib0").
@@ -552,6 +558,7 @@ func multiProviderString(comp ...string) string {
 }
 
 func TestConfig_FabricValidation(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		cfg    FabricConfig
 		expErr error
@@ -659,6 +666,7 @@ func TestConfig_FabricValidation(t *testing.T) {
 }
 
 func TestConfig_ToCmdVals(t *testing.T) {
+	t.Parallel()
 	var (
 		mountPoint     = "/mnt/test"
 		provider       = "test+foo"
@@ -750,6 +758,7 @@ func TestConfig_ToCmdVals(t *testing.T) {
 }
 
 func TestFabricConfig_GetProviders(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		cfg          *FabricConfig
 		expProviders []string
@@ -793,6 +802,7 @@ func TestFabricConfig_GetProviders(t *testing.T) {
 }
 
 func TestFabricConfig_GetNumProviders(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		cfg    *FabricConfig
 		expNum int
@@ -821,6 +831,7 @@ func TestFabricConfig_GetNumProviders(t *testing.T) {
 }
 
 func TestFabricConfig_GetPrimaryProvider(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		cfg         *FabricConfig
 		expProvider string
@@ -856,6 +867,7 @@ func TestFabricConfig_GetPrimaryProvider(t *testing.T) {
 }
 
 func TestFabricConfig_GetInterfaces(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		cfg           *FabricConfig
 		expInterfaces []string
@@ -899,6 +911,7 @@ func TestFabricConfig_GetInterfaces(t *testing.T) {
 }
 
 func TestFabricConfig_GetPrimaryInterface(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		cfg          *FabricConfig
 		expInterface string
@@ -934,6 +947,7 @@ func TestFabricConfig_GetPrimaryInterface(t *testing.T) {
 }
 
 func TestFabricConfig_GetInterfacePorts(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		cfg      *FabricConfig
 		expPorts []int
@@ -965,6 +979,7 @@ func TestFabricConfig_GetInterfacePorts(t *testing.T) {
 }
 
 func TestConfig_EnvVarConflict(t *testing.T) {
+	t.Parallel()
 	logMask1 := "LOG_MASK_VALUE_1"
 	logMask2 := "LOG_MASK_VALUE_2"
 
@@ -1007,6 +1022,7 @@ func TestConfig_EnvVarConflict(t *testing.T) {
 }
 
 func TestFabricConfig_Update(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		fc        *FabricConfig
 		new       FabricConfig
@@ -1106,6 +1122,7 @@ func TestFabricConfig_Update(t *testing.T) {
 }
 
 func TestConfig_UpdatePMDKEnvarsStackSizeDCPM(t *testing.T) {
+	t.Parallel()
 	validConfig := func() *Config {
 		return MockConfig().WithStorage(
 			storage.NewTierConfig().
@@ -1162,6 +1179,7 @@ func TestConfig_UpdatePMDKEnvarsStackSizeDCPM(t *testing.T) {
 }
 
 func TestConfig_UpdatePMDKEnvarsPMemobjConfDCPM(t *testing.T) {
+	t.Parallel()
 	validConfig := func() *Config {
 		return MockConfig().WithStorage(
 			storage.NewTierConfig().WithStorageClass("dcpm"))
@@ -1195,6 +1213,7 @@ func TestConfig_UpdatePMDKEnvarsPMemobjConfDCPM(t *testing.T) {
 }
 
 func TestConfig_UpdatePMDKEnvarsPMemobjConfNRam(t *testing.T) {
+	t.Parallel()
 	validConfig := func() *Config {
 		return MockConfig().WithStorage(
 			storage.NewTierConfig().
@@ -1250,6 +1269,7 @@ func TestConfig_UpdatePMDKEnvarsPMemobjConfNRam(t *testing.T) {
 }
 
 func TestConfig_UpdatePMDKEnvars(t *testing.T) {
+	t.Parallel()
 	validConfig := func(storageclas string) *Config {
 		return MockConfig().WithStorage(
 			storage.NewTierConfig().

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -39,6 +39,7 @@ func makeLock(refCt, id, pool int32) *PoolLock {
 }
 
 func TestRaft_getLockCtx(t *testing.T) {
+	t.Parallel()
 	lock := makeLock(0, 1, 2)
 
 	for name, tc := range map[string]struct {
@@ -72,6 +73,7 @@ func TestRaft_getLockCtx(t *testing.T) {
 }
 
 func TestRaft_PoolLock_Release(t *testing.T) {
+	t.Parallel()
 	var released int32
 
 	lock := makeLock(3, 1, 2)
@@ -94,6 +96,7 @@ func TestRaft_PoolLock_Release(t *testing.T) {
 }
 
 func TestRaft_PoolLock_InContext(t *testing.T) {
+	t.Parallel()
 	lock1 := makeLock(0, 1, 2)
 	lock2 := makeLock(0, 3, 4)
 
@@ -142,6 +145,7 @@ func TestRaft_PoolLock_InContext(t *testing.T) {
 }
 
 func TestRaft_AddContextLock(t *testing.T) {
+	t.Parallel()
 	lock1 := makeLock(0, 1, 2)
 	lock2 := makeLock(0, 3, 4)
 
@@ -204,6 +208,7 @@ func TestRaft_AddContextLock(t *testing.T) {
 }
 
 func TestRaft_poolLockMap_take(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	uuid0 := uuid.MustParse(test.MockUUID(1))
 	uuid1 := uuid.MustParse(test.MockUUID(2))
@@ -247,6 +252,7 @@ func TestRaft_poolLockMap_take(t *testing.T) {
 }
 
 func TestRaft_poolLockMap_checkLock(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	uuid0 := uuid.MustParse(test.MockUUID(1))
 	uuid1 := uuid.MustParse(test.MockUUID(2))

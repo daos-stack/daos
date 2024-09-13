@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,6 +20,7 @@ func mockEvtGeneric(t *testing.T) *RASEvent {
 }
 
 func TestEvents_ConvertGeneric(t *testing.T) {
+	t.Parallel()
 	event := mockEvtGeneric(t)
 
 	pbEvent, err := event.ToProto()

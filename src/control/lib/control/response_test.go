@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -30,6 +30,7 @@ func defResCmpOpts() []cmp.Option {
 }
 
 func TestControl_HostErrorsMap(t *testing.T) {
+	t.Parallel()
 	makeHosts := func(hosts ...string) []string {
 		return hosts
 	}
@@ -107,6 +108,7 @@ func TestControl_HostErrorsMap(t *testing.T) {
 }
 
 func TestControl_getMSResponse(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		resp    *UnaryResponse
 		expResp proto.Message

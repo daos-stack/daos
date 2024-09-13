@@ -19,6 +19,7 @@ import (
 )
 
 func TestLoadPEMData(t *testing.T) {
+	t.Parallel()
 
 	goodCertPath := "testdata/certs/daosCA.crt"
 	betterCertPermPath := "testdata/certs/server.crt"
@@ -62,6 +63,7 @@ func TestLoadPEMData(t *testing.T) {
 }
 
 func TestLoadPrivateKey(t *testing.T) {
+	t.Parallel()
 	goodKeyPath := "testdata/certs/daosCA.key"
 	badKeyPerm := "testdata/certs/badperms.key"
 	malformed := "testdata/certs/bad.key"
@@ -116,6 +118,7 @@ func TestLoadPrivateKey(t *testing.T) {
 	}
 }
 func TestLoadCertificate(t *testing.T) {
+	t.Parallel()
 	goodPath := "testdata/certs/daosCA.crt"
 	badPerm := "testdata/certs/badperms.crt"
 	malformed := "testdata/certs/bad.crt"
@@ -164,6 +167,7 @@ func TestLoadCertificate(t *testing.T) {
 	}
 }
 func TestSecurity_Pem_ValidateCertDirectory(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		perms  fs.FileMode
 		notDir bool

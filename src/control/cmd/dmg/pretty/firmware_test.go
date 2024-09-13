@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,6 +19,7 @@ import (
 )
 
 func TestPretty_PrintSCMFirmwareQueryMap(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		fwMap       control.HostSCMQueryMap
 		hostErrors  control.HostErrorsMap
@@ -339,6 +340,7 @@ SCM Device Firmware
 }
 
 func TestPretty_PrintSCMFirmwareQueryMapVerbose(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		fwMap       control.HostSCMQueryMap
 		hostErrors  control.HostErrorsMap
@@ -547,6 +549,7 @@ SCM Device Firmware
 }
 
 func TestPretty_PrintSCMFirmwareUpdateMapVerbose(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		fwMap       control.HostSCMUpdateMap
 		hostErrors  control.HostErrorsMap
@@ -690,6 +693,7 @@ host2
 }
 
 func TestPretty_PrintSCMFirmwareUpdateMap(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		fwMap       control.HostSCMUpdateMap
 		hostErrors  control.HostErrorsMap
@@ -935,6 +939,7 @@ func getNvmeControllerWithFWRev(idx int32, fwRev string) *storage.NvmeController
 }
 
 func TestPretty_PrintNVMeFirmwareQueryMap(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		fwMap       control.HostNVMeQueryMap
 		hostErrors  control.HostErrorsMap
@@ -1046,6 +1051,7 @@ NVMe Device Firmware
 }
 
 func TestPretty_PrintNVMeFirmwareQueryMapVerbose(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		fwMap       control.HostNVMeQueryMap
 		hostErrors  control.HostErrorsMap
@@ -1152,6 +1158,7 @@ NVMe Device Firmware
 }
 
 func TestPretty_PrintNVMeFirmwareUpdateMap(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		fwMap       control.HostNVMeUpdateMap
 		hostErrors  control.HostErrorsMap
@@ -1290,6 +1297,7 @@ Errors:
 }
 
 func TestPretty_PrintNVMeFirmwareUpdateMapVerbose(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		fwMap       control.HostNVMeUpdateMap
 		hostErrors  control.HostErrorsMap

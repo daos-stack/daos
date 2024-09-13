@@ -44,6 +44,7 @@ func (mp *mockPCIeLinkStatsProvider) PCIeCapsFromConfig(cfgBytes []byte, dev *ha
 }
 
 func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
+	t.Parallel()
 	healthWithLinkStats := func(maxSpd, spd float32, maxWdt, wdt uint32) *ctlpb.BioHealthResp {
 		bhr := proto.MockNvmeHealth()
 		bhr.LinkMaxSpeed = maxSpd
@@ -422,6 +423,7 @@ func TestIOEngineInstance_populateCtrlrHealth(t *testing.T) {
 }
 
 func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
+	t.Parallel()
 	c := storage.MockNvmeController(2)
 	withState := func(ctrlr *ctlpb.NvmeController, state ctlpb.NvmeDevState) *ctlpb.NvmeController {
 		ctrlr.DevState = state

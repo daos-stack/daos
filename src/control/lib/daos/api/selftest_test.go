@@ -20,6 +20,7 @@ import (
 )
 
 func TestAPI_RunSelfTest(t *testing.T) {
+	t.Parallel()
 	genCfg := func(xfrm func(cfg *daos.SelfTestConfig)) *daos.SelfTestConfig {
 		cfg := &daos.SelfTestConfig{}
 		cfg.SetDefaults()

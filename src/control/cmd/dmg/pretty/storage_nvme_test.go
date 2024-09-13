@@ -22,6 +22,7 @@ import (
 )
 
 func TestPretty_PrintNVMeController(t *testing.T) {
+	t.Parallel()
 	ctrlrWithSmd := func(idx int32, roleBits int) *storage.NvmeController {
 		c := storage.MockNvmeController(idx)
 		sd := storage.MockSmdDevice(nil, idx)
@@ -114,6 +115,7 @@ NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank
 }
 
 func TestPretty_PrintNVMeHealthMap(t *testing.T) {
+	t.Parallel()
 	var (
 		controllerA    = storage.MockNvmeController(1)
 		controllerB    = storage.MockNvmeController(2)

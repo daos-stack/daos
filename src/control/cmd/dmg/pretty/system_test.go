@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -41,6 +41,7 @@ func mockRankGroups(t *testing.T) RankGroups {
 }
 
 func TestPretty_tabulateRankGroups(t *testing.T) {
+	t.Parallel()
 	mockColumnTitles := []string{"Ranks", "Action", "Result"}
 
 	for name, tc := range map[string]struct {
@@ -110,6 +111,7 @@ Ranks Action Result
 }
 
 func TestPretty_PrintSystemQueryResp(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		resp        *control.SystemQueryResp
 		absentHosts string
@@ -364,6 +366,7 @@ Unknown 3 ranks: 7-9
 }
 
 func TestPretty_PrintSystemStartResp(t *testing.T) {
+	t.Parallel()
 	successResults := MemberResults{
 		NewMemberResult(1, nil, MemberStateReady, "start"),
 		NewMemberResult(2, nil, MemberStateReady, "start"),
@@ -458,6 +461,7 @@ Unknown 3 hosts: foo[7-9]
 }
 
 func TestPretty_printSystemResults(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		results     MemberResults
 		expPrintStr string
@@ -510,6 +514,7 @@ Rank Operation Result
 }
 
 func TestPretty_PrintSystemStopResp(t *testing.T) {
+	t.Parallel()
 	successResults := MemberResults{
 		NewMemberResult(1, nil, MemberStateReady, "stop"),
 		NewMemberResult(2, nil, MemberStateReady, "stop"),

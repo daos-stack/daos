@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -46,6 +46,7 @@ func getLineNumber(t *testing.T) int {
 }
 
 func TestLogging_DebugOutputDepth(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 
 	// not a perfect diff, but good enough for this test
@@ -85,6 +86,7 @@ func TestLogging_DebugOutputDepth(t *testing.T) {
 }
 
 func TestLogging_StandardFormat(t *testing.T) {
+	t.Parallel()
 	logger, buf := logging.NewTestLogger("testPrefix")
 
 	tests := map[string]struct {
@@ -137,6 +139,7 @@ func TestLogging_StandardFormat(t *testing.T) {
 }
 
 func TestLogging_JSONFormat(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 
 	logger := logging.NewCombinedLogger("testPrefix", &buf).
@@ -189,6 +192,7 @@ func TestLogging_JSONFormat(t *testing.T) {
 }
 
 func TestLogging_MultipleFormats(t *testing.T) {
+	t.Parallel()
 	var stdBuf bytes.Buffer
 	var jsonBuf bytes.Buffer
 
@@ -271,6 +275,7 @@ func TestLogging_MultipleFormats(t *testing.T) {
 }
 
 func TestLogging_LogLevels(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 	logger := logging.NewCombinedLogger("testPrefix", &buf)
 

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,6 +16,7 @@ import (
 )
 
 func TestMarshal_Success(t *testing.T) {
+	t.Parallel()
 	message := &Call{Module: 1, Method: 2, Sequence: 3}
 
 	result, err := Marshal(message)

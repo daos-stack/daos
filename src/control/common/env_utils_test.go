@@ -44,6 +44,7 @@ var defCmpOpts = []cmp.Option{
 }
 
 func TestScrubEnvironment(t *testing.T) {
+	t.Parallel()
 	defaultSetup := []string{
 		"FOO=bar", "baz=quux", "COW=QUACK", "ANSWER=42",
 	}
@@ -102,6 +103,7 @@ func TestScrubEnvironment(t *testing.T) {
 }
 
 func TestScrubProxyVariables(t *testing.T) {
+	t.Parallel()
 	cleanEnv := []string{
 		"FOO=bar", "baz=quux", "COW=QUACK", "ANSWER=42",
 	}
@@ -164,6 +166,7 @@ func TestScrubProxyVariables(t *testing.T) {
 }
 
 func TestCommon_MergeKeyValues(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		baseVars  []string
 		mergeVars []string
@@ -215,6 +218,7 @@ func TestCommon_MergeKeyValues(t *testing.T) {
 }
 
 func TestCommon_AppendToPathEnv(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		pathEnv string
 		toAdd   []string

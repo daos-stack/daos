@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,6 +18,7 @@ import (
 )
 
 func TestControl_PrintHostErrorsMap(t *testing.T) {
+	t.Parallel()
 	makeHosts := func(hosts ...string) []string {
 		return hosts
 	}
@@ -110,6 +111,7 @@ host1:1,host2:2 whoops
 }
 
 func TestControl_UpdateErrorSummary(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		resp      *control.CollectLogResp
 		cmd       string
@@ -205,6 +207,7 @@ host2 hostname command not available
 }
 
 func TestPretty_PrintHostStorageSuccesses(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		hsm       control.HostStorageMap
 		expStdout string

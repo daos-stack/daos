@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2023 Intel Corporation.
+// (C) Copyright 2023-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,6 +17,7 @@ import (
 )
 
 func TestUI_ACLPrincipalFlag(t *testing.T) {
+	t.Parallel()
 	var p ui.ACLPrincipalFlag
 	tooLong := strings.Repeat("a", daos.ACLPrincipalMaxLen+1)
 

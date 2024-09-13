@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -22,6 +22,7 @@ type (
 func (ti *testImp) test() {}
 
 func TestCommon_InterfaceIsNil(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		in      interface{}
 		expBool bool

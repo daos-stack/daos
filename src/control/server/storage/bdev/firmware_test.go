@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,6 +18,7 @@ import (
 )
 
 func TestProvider_QueryFirmware(t *testing.T) {
+	t.Parallel()
 	defaultDevs := storage.MockNvmeControllers(3)
 
 	for name, tc := range map[string]struct {
@@ -201,6 +202,7 @@ func TestProvider_QueryFirmware(t *testing.T) {
 }
 
 func TestProvider_UpdateFirmware(t *testing.T) {
+	t.Parallel()
 	defaultDevs := storage.MockNvmeControllers(3)
 
 	testErr := errors.New("test error")
@@ -408,6 +410,7 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 
 /* todo_tiering
 func TestProvider_WithFirmwareForwarder(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 

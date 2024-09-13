@@ -24,6 +24,7 @@ import (
 )
 
 func TestHwloc_CacheContext(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -51,6 +52,7 @@ func TestHwloc_CacheContext(t *testing.T) {
 }
 
 func TestHwloc_Cleanup(t *testing.T) {
+	t.Parallel()
 	cleanupCalled := 0
 	mockCleanup := func() {
 		cleanupCalled++
@@ -87,6 +89,7 @@ func hwlocVersion() (major, minor, patch uint) {
 }
 
 func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
+	t.Parallel()
 	_, filename, _, _ := runtime.Caller(0)
 	testdataDir := filepath.Join(filepath.Dir(filename), "testdata")
 
@@ -819,6 +822,7 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 }
 
 func TestHwloc_Provider_GetNUMANodeForPID_Parallel(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -859,6 +863,7 @@ func runTest_GetNUMANodeForPID_Parallel(t *testing.T, parent context.Context, lo
 }
 
 func TestHwloc_Provider_GetNUMANodeForPID_Parallel_CachedCtx(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -872,6 +877,7 @@ func TestHwloc_Provider_GetNUMANodeForPID_Parallel_CachedCtx(t *testing.T) {
 }
 
 func TestHwloc_Provider_findNUMANodeWithCPUSet(t *testing.T) {
+	t.Parallel()
 	_, filename, _, _ := runtime.Caller(0)
 	hwlocXMLFile := filepath.Join(filepath.Dir(filename), "testdata", "boro-84.xml")
 

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2023 Intel Corporation.
+// (C) Copyright 2023-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,6 +19,7 @@ import (
 )
 
 func Test_setLogMasksReqToPB(t *testing.T) {
+	t.Parallel()
 	masks := "ERR,mgmt=DEBUG"
 	badMasks := "ERR,mgmt=DEBUGX"
 	streams := "EPC,MEM"
@@ -92,6 +93,7 @@ func Test_setLogMasksReqToPB(t *testing.T) {
 }
 
 func Test_SetEngineLogMasks(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		mic         *MockInvokerConfig
 		expResponse *SetEngineLogMasksResp

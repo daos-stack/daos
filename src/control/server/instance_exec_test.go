@@ -23,6 +23,7 @@ import (
 
 // TestIOEngineInstance_exit establishes that event is published on exit.
 func TestIOEngineInstance_exit(t *testing.T) {
+	t.Parallel()
 	var (
 		rxEvts      []*events.RASEvent
 		fakePublish = func(evt *events.RASEvent) {

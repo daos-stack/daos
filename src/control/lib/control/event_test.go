@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -30,6 +30,7 @@ func mockEvtEngineDied(t *testing.T) *events.RASEvent {
 }
 
 func TestControl_eventNotify(t *testing.T) {
+	t.Parallel()
 	rasEventEngineDied := mockEvtEngineDied(t)
 
 	for name, tc := range map[string]struct {
@@ -85,6 +86,7 @@ func TestControl_eventNotify(t *testing.T) {
 }
 
 func TestControl_EventForwarder_OnEvent(t *testing.T) {
+	t.Parallel()
 	rasEventEngineDied := mockEvtEngineDied(t).WithForwardable(false)
 	rasEventEngineDiedFwdable := mockEvtEngineDied(t).WithForwardable(true)
 
@@ -143,6 +145,7 @@ func TestControl_EventForwarder_OnEvent(t *testing.T) {
 // to a given priority, here we just check the correct prefix (maps to severity)
 // is printed which verifies the event was written to the correct logger.
 func TestControl_EventLogger_OnEvent(t *testing.T) {
+	t.Parallel()
 	var (
 		evtIDMarker   = " id: "
 		mockSyslogBuf *strings.Builder

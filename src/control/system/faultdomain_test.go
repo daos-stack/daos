@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,6 +17,7 @@ import (
 )
 
 func TestSystem_NewFaultDomain(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		input     []string
 		expErr    error
@@ -79,6 +80,7 @@ func TestSystem_NewFaultDomain(t *testing.T) {
 }
 
 func TestSystem_NewFaultDomainFromString(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		input     string
 		expErr    error
@@ -158,6 +160,7 @@ func TestSystem_NewFaultDomainFromString(t *testing.T) {
 }
 
 func TestSystem_FaultDomain_String(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		domain *FaultDomain
 		expStr string
@@ -189,6 +192,7 @@ func TestSystem_FaultDomain_String(t *testing.T) {
 }
 
 func TestSystem_FaultDomain_Equals(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		domain1   *FaultDomain
 		domain2   *FaultDomain
@@ -255,6 +259,7 @@ func TestSystem_FaultDomain_Equals(t *testing.T) {
 }
 
 func TestSystem_FaultDomain_Empty(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		domain    *FaultDomain
 		expResult bool
@@ -286,6 +291,7 @@ func TestSystem_FaultDomain_Empty(t *testing.T) {
 }
 
 func TestSystem_FaultDomain_BottomLevel(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		domain    *FaultDomain
 		expResult string
@@ -317,6 +323,7 @@ func TestSystem_FaultDomain_BottomLevel(t *testing.T) {
 }
 
 func TestSystem_FaultDomain_TopLevel(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		domain    *FaultDomain
 		expResult string
@@ -348,6 +355,7 @@ func TestSystem_FaultDomain_TopLevel(t *testing.T) {
 }
 
 func TestSystem_FaultDomain_NumLevels(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		domain    *FaultDomain
 		expResult int
@@ -379,6 +387,7 @@ func TestSystem_FaultDomain_NumLevels(t *testing.T) {
 }
 
 func TestSystem_FaultDomain_Level(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		domain    *FaultDomain
 		level     int
@@ -447,6 +456,7 @@ func TestSystem_FaultDomain_Level(t *testing.T) {
 }
 
 func TestSystem_FaultDomain_IsAncestorOf(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		fd1       string
 		fd2       string
@@ -514,6 +524,7 @@ func TestSystem_FaultDomain_IsAncestorOf(t *testing.T) {
 }
 
 func TestSystem_FaultDomain_NewChild(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		orig       *FaultDomain
 		childLevel string
@@ -576,6 +587,7 @@ func TestSystem_FaultDomain_NewChild(t *testing.T) {
 }
 
 func TestSystem_FaultDomain_MustCreateChild(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		orig       *FaultDomain
 		childLevel string
@@ -617,6 +629,7 @@ func TestSystem_FaultDomain_MustCreateChild(t *testing.T) {
 }
 
 func testFaultDomains(num int) []*FaultDomain {
+	t.Parallel()
 	emptyFD := MustCreateFaultDomain()
 	fdList := []*FaultDomain{emptyFD}
 	for i := 0; i < num/2; i++ {
@@ -631,6 +644,7 @@ func testFaultDomains(num int) []*FaultDomain {
 }
 
 func TestSystem_FaultDomain_MustCreateFaultDomain(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		input     []string
 		expResult *FaultDomain
@@ -665,6 +679,7 @@ func TestSystem_FaultDomain_MustCreateFaultDomain(t *testing.T) {
 }
 
 func TestSystem_FaultDomain_MustCreateFaultDomainFromString(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		input     string
 		expResult *FaultDomain
@@ -703,6 +718,7 @@ func ExpFaultDomainID(offset uint32) uint32 {
 }
 
 func TestSystem_NewFaultDomainTree(t *testing.T) {
+	t.Parallel()
 	fd1 := MustCreateFaultDomain("one")
 	fd2 := fd1.MustCreateChild("two")
 	fd3 := fd2.MustCreateChild("three")
@@ -840,6 +856,7 @@ func ignoreFaultDomainIDOption() cmp.Option {
 }
 
 func TestSystem_FaultDomainTree_WithNodeDomain(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		tree      *FaultDomainTree
 		domain    *FaultDomain
@@ -887,6 +904,7 @@ func TestSystem_FaultDomainTree_WithNodeDomain(t *testing.T) {
 }
 
 func TestSystem_FaultDomainTree_WithID(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		tree      *FaultDomainTree
 		id        uint32
@@ -953,6 +971,7 @@ func TestSystem_FaultDomainTree_WithID(t *testing.T) {
 }
 
 func TestSystem_FaultDomainTree_nextID(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		tree      *FaultDomainTree
 		expResult uint32
@@ -986,6 +1005,7 @@ func TestSystem_FaultDomainTree_nextID(t *testing.T) {
 }
 
 func TestSystem_FaultDomainTree_AddDomain(t *testing.T) {
+	t.Parallel()
 	single := MustCreateFaultDomain("rack0")
 	multi := single.MustCreateChild("node1")
 	multi2 := single.MustCreateChild("node2")
@@ -1122,6 +1142,7 @@ func TestSystem_FaultDomainTree_AddDomain(t *testing.T) {
 }
 
 func TestSystem_FaultDomainTree_Merge(t *testing.T) {
+	t.Parallel()
 	rack0 := MustCreateFaultDomain("rack0")
 	rack0node1 := rack0.MustCreateChild("node1")
 	rack0node2 := rack0.MustCreateChild("node2")
@@ -1284,6 +1305,7 @@ func TestSystem_FaultDomainTree_Merge(t *testing.T) {
 }
 
 func TestSystem_FaultDomainTree_RemoveDomain(t *testing.T) {
+	t.Parallel()
 	rack0 := MustCreateFaultDomain("rack0")
 	rack0node1 := rack0.MustCreateChild("node1")
 	rack0node2 := rack0.MustCreateChild("node2")
@@ -1359,6 +1381,7 @@ func TestSystem_FaultDomainTree_RemoveDomain(t *testing.T) {
 }
 
 func TestSystem_FaultDomainTree_IsRoot(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		tree      *FaultDomainTree
 		expResult bool
@@ -1384,6 +1407,7 @@ func TestSystem_FaultDomainTree_IsRoot(t *testing.T) {
 }
 
 func TestSystem_FaultDomainTree_IsLeaf(t *testing.T) {
+	t.Parallel()
 	testTree := NewFaultDomainTree(MustCreateFaultDomain("one", "two"))
 
 	for name, tc := range map[string]struct {
@@ -1415,6 +1439,7 @@ func TestSystem_FaultDomainTree_IsLeaf(t *testing.T) {
 }
 
 func TestSystem_FaultDomainTree_IsBalanced(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		tree      *FaultDomainTree
 		expResult bool
@@ -1487,6 +1512,7 @@ func TestSystem_FaultDomainTree_IsBalanced(t *testing.T) {
 }
 
 func TestSystem_FaultDomainTree_String(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		tree      *FaultDomainTree
 		expResult string
@@ -1555,6 +1581,7 @@ func TestSystem_FaultDomainTree_String(t *testing.T) {
 }
 
 func testVerifyTreeStructure(t *testing.T, tree *FaultDomainTree, level int, expNumChildrenByLevel []int) {
+	t.Parallel()
 	// Walk the tree to verify results
 	test.AssertEqual(t, len(tree.Children), expNumChildrenByLevel[level],
 		fmt.Sprintf("mismatch at level %d, %q", level, tree.Domain))
@@ -1573,6 +1600,7 @@ func verifyTreeDiffMem(t *testing.T, orig, result *FaultDomainTree) {
 }
 
 func TestSystem_FaultDomainTree_Copy(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		origTree *FaultDomainTree
 	}{
@@ -1604,6 +1632,7 @@ func TestSystem_FaultDomainTree_Copy(t *testing.T) {
 }
 
 func TestSystem_FaultDomain_Depth(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		tree     *FaultDomainTree
 		expDepth int
@@ -1644,6 +1673,7 @@ func TestSystem_FaultDomain_Depth(t *testing.T) {
 }
 
 func TestSystem_FaultDomainTree_Domains(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		tree       *FaultDomainTree
 		expDomains []*FaultDomain
@@ -1692,6 +1722,7 @@ func TestSystem_FaultDomainTree_Domains(t *testing.T) {
 }
 
 func TestSystem_FaultDomain_Subtree(t *testing.T) {
+	t.Parallel()
 	fullDomains := []*FaultDomain{
 		MustCreateFaultDomain("a", "b", "c"),
 		MustCreateFaultDomain("a", "b", "d"),
@@ -1857,6 +1888,7 @@ func TestSystem_FaultDomain_Subtree(t *testing.T) {
 }
 
 func TestSystem_FaultDomainTree_iterative_building(t *testing.T) {
+	t.Parallel()
 	mustAddDomain := func(t *FaultDomainTree, d *FaultDomain) {
 		if err := t.AddDomain(d); err != nil {
 			panic(err)

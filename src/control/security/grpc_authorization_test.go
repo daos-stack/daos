@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -21,6 +21,7 @@ import (
 )
 
 func TestSecurity_CommonNameToComponent(t *testing.T) {
+	t.Parallel()
 	testCases := []struct {
 		testname   string
 		commonname string
@@ -51,6 +52,7 @@ func inList(c Component, compList []Component) bool {
 	return false
 }
 func TestSecurity_ComponentHasAccess(t *testing.T) {
+	t.Parallel()
 	allComponents := []Component{ComponentUndefined, ComponentAdmin, ComponentAgent, ComponentServer}
 	testCases := map[string][]Component{
 		"/ctl.CtlSvc/StorageScan":                {ComponentAdmin},
@@ -154,6 +156,7 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 }
 
 func TestSecurity_AllRpcsAreAuthorized(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		service interface{}
 		prefix  string
@@ -194,6 +197,7 @@ func TestSecurity_AllRpcsAreAuthorized(t *testing.T) {
 }
 
 func TestSecurity_AuthorizedRpcsAreValid(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		service interface{}
 		prefix  string
@@ -234,6 +238,7 @@ func TestSecurity_AuthorizedRpcsAreValid(t *testing.T) {
 }
 
 func TestSecurity_MethodToCompnent(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		method  string
 		authMap map[string][]Component

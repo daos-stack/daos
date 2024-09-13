@@ -25,6 +25,7 @@ import (
 // TestBackend_newSpdkConfig verifies config parameters for bdev get
 // converted into config content that can be consumed by spdk.
 func TestBackend_newSpdkConfig(t *testing.T) {
+	t.Parallel()
 	mockMntpt := "/mock/mnt/daos"
 	tierID := 84
 	host, _ := os.Hostname()

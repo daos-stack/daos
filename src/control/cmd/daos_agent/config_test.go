@@ -20,6 +20,7 @@ import (
 )
 
 func TestAgent_LoadConfig(t *testing.T) {
+	t.Parallel()
 	dir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 

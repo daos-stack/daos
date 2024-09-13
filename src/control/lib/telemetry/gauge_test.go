@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -21,6 +21,7 @@ import (
 )
 
 func TestTelemetry_GetGauge(t *testing.T) {
+	t.Parallel()
 	testCtx, testMetrics := setupTestMetrics(t)
 	defer cleanupTestMetrics(testCtx, t)
 
@@ -79,6 +80,7 @@ func TestTelemetry_GetGauge(t *testing.T) {
 }
 
 func TestTelemetry_GetStatsGauge(t *testing.T) {
+	t.Parallel()
 	testCtx, testMetrics := setupTestMetrics(t)
 	defer cleanupTestMetrics(testCtx, t)
 

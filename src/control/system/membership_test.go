@@ -63,6 +63,7 @@ func mockStoppedRankOnHost1(t *testing.T, rID int32) *Member {
 }
 
 func TestSystem_Membership_Get(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		memberToAdd *Member
 		rankToGet   Rank
@@ -102,6 +103,7 @@ func TestSystem_Membership_Get(t *testing.T) {
 }
 
 func TestSystem_Membership_AddRemove(t *testing.T) {
+	t.Parallel()
 	dupeRankMember := MockMember(t, 1, MemberStateUnknown)
 	dupeRankMember.UUID = uuid.MustParse(MockUUID(2))
 	dupeUUIDMember := MockMember(t, 1, MemberStateUnknown)
@@ -185,6 +187,7 @@ func TestSystem_Membership_AddRemove(t *testing.T) {
 }
 
 func TestSystem_Membership_Add(t *testing.T) {
+	t.Parallel()
 	m0a := *MockMember(t, 0, MemberStateStopped)
 	m1a := *MockMember(t, 1, MemberStateStopped)
 	m2a := *MockMember(t, 2, MemberStateStopped)
@@ -255,6 +258,7 @@ func TestSystem_Membership_Add(t *testing.T) {
 }
 
 func TestSystem_Membership_RankList_Members(t *testing.T) {
+	t.Parallel()
 	members := Members{
 		MockMember(t, 1, MemberStateJoined),
 		MockMember(t, 2, MemberStateStopped),
@@ -395,6 +399,7 @@ func TestSystem_Membership_RankList_Members(t *testing.T) {
 }
 
 func TestSystem_Membership_CheckRanklist(t *testing.T) {
+	t.Parallel()
 	members := Members{
 		MockMember(t, 0, MemberStateJoined),
 		MockMember(t, 1, MemberStateJoined),
@@ -480,6 +485,7 @@ func mockResolveFn(netString string, address string) (*net.TCPAddr, error) {
 }
 
 func TestSystem_Membership_CheckHostlist(t *testing.T) {
+	t.Parallel()
 	members := Members{
 		MockMember(t, 1, MemberStateJoined),
 		MockMember(t, 2, MemberStateStopped),
@@ -598,6 +604,7 @@ func TestSystem_Membership_CheckHostlist(t *testing.T) {
 }
 
 func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
+	t.Parallel()
 	// blank host address should get updated to that of member
 	mrDiffAddr1 := NewMemberResult(1, nil, MemberStateReady)
 	mrDiffAddr1.Addr = ""
@@ -740,6 +747,7 @@ func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
 }
 
 func TestSystem_Membership_Join(t *testing.T) {
+	t.Parallel()
 	fd1 := MustCreateFaultDomainFromString("/dc1/rack8/pdu5/host1")
 	fd2 := MustCreateFaultDomainFromString("/dc1/rack9/pdu0/host2")
 	shallowFD := MustCreateFaultDomainFromString("/host3")
@@ -934,6 +942,7 @@ func TestSystem_Membership_Join(t *testing.T) {
 }
 
 func TestSystem_Membership_OnEvent(t *testing.T) {
+	t.Parallel()
 	members := Members{
 		MockMember(t, 0, MemberStateJoined),
 		MockMember(t, 1, MemberStateJoined),
@@ -1000,6 +1009,7 @@ func TestSystem_Membership_OnEvent(t *testing.T) {
 }
 
 func TestSystem_Membership_MarkDead(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		rank        Rank
 		incarnation uint64
@@ -1050,6 +1060,7 @@ func TestSystem_Membership_MarkDead(t *testing.T) {
 }
 
 func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
+	t.Parallel()
 	testMemberWithFaultDomain := func(rank Rank, faultDomain *FaultDomain) *Member {
 		return &Member{
 			Rank:        rank,

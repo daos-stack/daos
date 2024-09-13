@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -31,6 +31,7 @@ import (
 )
 
 func TestSrvSecurityModule_ID(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -52,6 +53,7 @@ func secureTransportConfig(certDir string) *security.TransportConfig {
 }
 
 func TestSrvSecurityModule_BadMethod(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -70,6 +72,7 @@ func callValidateCreds(t *testing.T, mod *SecurityModule, body []byte) ([]byte, 
 }
 
 func TestSrvSecurityModule_ValidateCred_InvalidReq(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -121,6 +124,7 @@ func expectValidateResp(t *testing.T, respBytes []byte, expResp *auth.ValidateCr
 }
 
 func TestSrvSecurityModule_ValidateCred_NoCred(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -139,6 +143,7 @@ func TestSrvSecurityModule_ValidateCred_NoCred(t *testing.T) {
 }
 
 func TestSrvSecurityModule_ValidateCred_NoToken(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -160,6 +165,7 @@ func TestSrvSecurityModule_ValidateCred_NoToken(t *testing.T) {
 }
 
 func TestSrvSecurityModule_ValidateCred_NoVerifier(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -205,6 +211,7 @@ func getVerifierForToken(t *testing.T, token *auth.Token, key crypto.PublicKey) 
 }
 
 func TestSrvSecurityModule_ValidateCred_Insecure_OK(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -225,6 +232,7 @@ func TestSrvSecurityModule_ValidateCred_Insecure_OK(t *testing.T) {
 }
 
 func TestSrvSecurityModule_ValidateCred_Insecure_BadVerifier(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -277,6 +285,7 @@ func generateTestCert(t *testing.T, dir string) crypto.PrivateKey {
 }
 
 func TestSrvSecurityModule_ValidateCred_Secure_OK(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -302,6 +311,7 @@ func TestSrvSecurityModule_ValidateCred_Secure_OK(t *testing.T) {
 }
 
 func TestSrvSecurityModule_ValidateCred_Secure_LoadingCertFailed(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -322,6 +332,7 @@ func TestSrvSecurityModule_ValidateCred_Secure_LoadingCertFailed(t *testing.T) {
 }
 
 func TestSrvSecurityModule_ValidateCred_Secure_BadVerifier(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 

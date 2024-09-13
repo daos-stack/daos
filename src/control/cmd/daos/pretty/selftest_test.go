@@ -19,6 +19,7 @@ import (
 )
 
 func TestPretty_PrintSelfTestConfig(t *testing.T) {
+	t.Parallel()
 	genCfg := func(xfrm func(cfg *daos.SelfTestConfig)) *daos.SelfTestConfig {
 		cfg := &daos.SelfTestConfig{}
 		cfg.SetDefaults()
@@ -194,6 +195,7 @@ func genResult(xfrm func(result *daos.SelfTestResult)) *daos.SelfTestResult {
 }
 
 func TestPrettyPrintSelfTestResult(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		result    *daos.SelfTestResult
 		verbose   bool
@@ -307,6 +309,7 @@ Per-Target Latency Results
 }
 
 func TestPretty_PrintSelfTestResults(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		results []*daos.SelfTestResult
 		verbose bool

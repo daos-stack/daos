@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -30,6 +30,7 @@ func makeTestList(t *testing.T, in string) *hostlist.HostList {
 }
 
 func TestHostList_Create(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		startList    string
 		expRawOut    string
@@ -193,6 +194,7 @@ func TestHostList_Create(t *testing.T) {
 }
 
 func TestHostList_Push(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		startList    string
 		pushList     string
@@ -263,6 +265,7 @@ func TestHostList_Push(t *testing.T) {
 }
 
 func TestHostList_PushList(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		startList string
 		pushList  *hostlist.HostList
@@ -302,6 +305,7 @@ func TestHostList_PushList(t *testing.T) {
 }
 
 func TestHostList_ReplaceList(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		startList string
 		pushList  *hostlist.HostList
@@ -341,6 +345,7 @@ func TestHostList_ReplaceList(t *testing.T) {
 }
 
 func TestHostList_Etc(t *testing.T) {
+	t.Parallel()
 	emptyList := makeStringRef("")
 	defaultList := makeStringRef("node[1-2,4-8]")
 	singleHostList := makeStringRef("node8")
@@ -494,6 +499,7 @@ func TestHostList_Etc(t *testing.T) {
 }
 
 func TestHostList_Slice(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		startList *string
 		expOut    []string
@@ -519,6 +525,7 @@ func TestHostList_Slice(t *testing.T) {
 }
 
 func TestHostList_Nth(t *testing.T) {
+	t.Parallel()
 	defaultList := makeStringRef("node[1-2,4-8],quack")
 
 	for name, tc := range map[string]struct {
@@ -574,6 +581,7 @@ func TestHostList_Nth(t *testing.T) {
 }
 
 func TestHostList_DeleteNth(t *testing.T) {
+	t.Parallel()
 	defaultList := makeStringRef("node[1-2,4-8],quack")
 
 	for name, tc := range map[string]struct {
@@ -644,6 +652,7 @@ func TestHostList_DeleteNth(t *testing.T) {
 }
 
 func TestHostList_DeleteHosts(t *testing.T) {
+	t.Parallel()
 	defaultList := makeStringRef("node[1-2,4-8],quack")
 
 	for name, tc := range map[string]struct {
@@ -727,6 +736,7 @@ func TestHostList_DeleteHosts(t *testing.T) {
 }
 
 func TestHostList_Within(t *testing.T) {
+	t.Parallel()
 	defaultList := makeStringRef("node[1-128]")
 
 	for name, tc := range map[string]struct {
@@ -780,6 +790,7 @@ func TestHostList_Within(t *testing.T) {
 }
 
 func TestHostList_ZeroValue(t *testing.T) {
+	t.Parallel()
 	zVal := &hostlist.HostList{}
 
 	err := zVal.Push("host[1-8]")

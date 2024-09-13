@@ -134,6 +134,7 @@ func mockScrapeFnSuccess(t *testing.T, metricFam ...*pclient.MetricFamily) func(
 }
 
 func TestControl_scrapeMetrics(t *testing.T) {
+	t.Parallel()
 	testHost := "dontcare"
 	testPort := uint32(1234)
 	testURL := &url.URL{
@@ -207,6 +208,7 @@ func TestControl_scrapeMetrics(t *testing.T) {
 }
 
 func TestControl_MetricsList(t *testing.T) {
+	t.Parallel()
 	testMetricFam := []*pclient.MetricFamily{
 		newTestMetricFamily("counter", "this is the counter help", pclient.MetricType_COUNTER),
 		newTestMetricFamily("gauge", "this is the gauge help", pclient.MetricType_GAUGE),
@@ -300,6 +302,7 @@ func TestControl_MetricsList(t *testing.T) {
 }
 
 func TestControl_getMetricFromPrometheus(t *testing.T) {
+	t.Parallel()
 	testLabels := daos.MetricLabelMap{
 		"foo": "bar",
 		"baz": "snafu",
@@ -416,6 +419,7 @@ func TestControl_getMetricFromPrometheus(t *testing.T) {
 }
 
 func TestControl_MetricsQuery(t *testing.T) {
+	t.Parallel()
 	testMetricFam := []*pclient.MetricFamily{
 		newTestMetricFamily("my_counter", "this is the counter help", pclient.MetricType_COUNTER),
 		newTestMetricFamily("my_gauge", "this is the gauge help", pclient.MetricType_GAUGE),
@@ -584,6 +588,7 @@ func TestControl_MetricsQuery(t *testing.T) {
 }
 
 func TestControl_Metric_JSON(t *testing.T) {
+	t.Parallel()
 	testLabelMap := map[string]string{
 		"label1": "val1",
 		"label2": "val2",
@@ -657,6 +662,7 @@ func TestControl_Metric_JSON(t *testing.T) {
 }
 
 func TestControl_MetricSet_JSON(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		set *daos.MetricSet
 	}{

@@ -15,6 +15,7 @@ import (
 )
 
 func TestSystem_Errors_IsNotReady(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		err       error
 		expResult bool
@@ -43,6 +44,7 @@ func TestSystem_Errors_IsNotReady(t *testing.T) {
 }
 
 func TestSystem_Errors_IsUninitialized(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		err       error
 		expResult bool
@@ -66,6 +68,7 @@ func TestSystem_Errors_IsUninitialized(t *testing.T) {
 }
 
 func TestSystem_Errors_IsUnavailable(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		err       error
 		expResult bool
