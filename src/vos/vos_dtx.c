@@ -2216,7 +2216,7 @@ vos_dtx_post_handle(struct vos_container *cont,
 }
 
 static inline void
-dtx_commit_unpin(struct vos_container *cont, struct umem_pin_handle *pin_hdl)
+dtx_unpin(struct vos_container *cont, struct umem_pin_handle *pin_hdl)
 {
 	struct vos_pool	*pool = vos_cont2pool(cont);
 
@@ -2387,7 +2387,7 @@ pin_objects:
 		vos_dtx_post_handle(cont, &daes[idx], &dces[idx], pinned, false, rc != 0);
 	}
 
-	dtx_commit_unpin(cont, pin_hdl);
+	dtx_unpin(cont, pin_hdl);
 
 	if (count > 0) {
 		idx += pinned;
@@ -2400,12 +2400,47 @@ out:
 	return rc < 0 ? rc : tot_committed;
 }
 
+static int
+dtx_abort_pin(struct vos_container *cont, struct vos_dtx_act_ent *dae,
+	      struct umem_pin_handle **pin_hdl)
+{
+	struct vos_bkt_array	bkts;
+	int			rc;
+
+	if (!vos_pool_is_evictable(vos_cont2pool(cont)))
+		return 0;
+
+	if (dae->dae_need_release == 0)
+		return 0;
+
+	vos_bkt_array_init(&bkts);
+	rc = bkts_add_dae(vos_cont2pool(cont), &bkts, dae);
+	if (rc) {
+		D_ASSERT(rc < 0);
+		DL_ERROR(rc, "Failed to add DTX to buckets.");
+		goto out;
+	}
+
+	rc = vos_bkt_array_pin(vos_cont2pool(cont), &bkts, pin_hdl);
+	if (rc)
+		DL_ERROR(rc, "Failed to pin buckets.");
+out:
+	vos_bkt_array_fini(&bkts);
+	return rc;
+
+}
+
 int
 vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, bool force)
 {
 	struct dtx_handle	*dth = dae->dae_dth;
 	struct umem_instance	*umm;
+	struct umem_pin_handle	*pin_hdl = NULL;
 	int			 rc;
+
+	rc = dtx_abort_pin(cont, dae, &pin_hdl);
+	if (rc)
+		goto out;
 
 	umm = vos_cont2umm(cont);
 	rc = umem_tx_begin(umm, NULL);
@@ -2447,6 +2482,8 @@ vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, 
 	 */
 
 out:
+	dtx_unpin(cont, pin_hdl);
+
 	if (rc == 0 || force)
 		vos_dtx_post_handle(cont, &dae, NULL, 1, true, false);
 	else if (rc != 0)

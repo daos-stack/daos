@@ -73,13 +73,37 @@ obj_lop_alloc(void *key, unsigned int ksize, void *args,
 
 	D_ALLOC_PTR(obj);
 	if (!obj)
-		D_GOTO(failed, rc = -DER_NOMEM);
+		return -DER_NOMEM;
+
+	rc = ABT_mutex_create(&obj->obj_mutex);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto failed;
+	}
+
+	rc = ABT_cond_create(&obj->obj_wait_alloting);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto free_mutex;
+	}
+
+	rc = ABT_cond_create(&obj->obj_wait_loading);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto free_alloting;
+	}
 
 	init_object(obj, lkey->olk_oid, cont);
 	d_tm_inc_gauge(tls->vtl_obj_cnt, 1);
 	*llink_p = &obj->obj_llink;
-	rc = 0;
+	return 0;
+
+free_alloting:
+	ABT_cond_free(&obj->obj_wait_alloting);
+free_mutex:
+	ABT_mutex_free(&obj->obj_mutex);
 failed:
+	D_FREE(obj);
 	return rc;
 }
 
@@ -133,6 +157,9 @@ obj_lop_free(struct daos_llink *llink)
 	tls = vos_tls_get(obj->obj_cont->vc_pool->vp_sysdb);
 	d_tm_dec_gauge(tls->vtl_obj_cnt, 1);
 	clean_object(obj);
+	ABT_cond_free(&obj->obj_wait_loading);
+	ABT_cond_free(&obj->obj_wait_alloting);
+	ABT_mutex_free(&obj->obj_mutex);
 	D_FREE(obj);
 }
 
@@ -251,19 +278,26 @@ vos_obj_unpin(struct vos_object *obj)
 	struct vos_pool		*pool = vos_obj2pool(obj);
 	struct umem_store	*store = vos_pool2store(pool);
 
-	if (obj->obj_pin_hdl != NULL) {
+	if (obj->obj_pin_hdl != NULL && daos_lru_is_last_user(&obj->obj_llink)) {
 		umem_cache_unpin(store, obj->obj_pin_hdl);
 		obj->obj_pin_hdl = NULL;
 	}
 }
 
-static inline void
+static void
 obj_allot_bkt(struct vos_pool *pool, struct vos_object *obj)
 {
-	if (obj->obj_bkt_allot)
-		return;
-
 	D_ASSERT(umem_tx_none(vos_pool2umm(pool)));
+
+	if (obj->obj_bkt_alloting) {
+		ABT_mutex_lock(obj->obj_mutex);
+		ABT_cond_wait(obj->obj_wait_alloting, obj->obj_mutex);
+		ABT_mutex_unlock(obj->obj_mutex);
+
+		D_ASSERT(obj->obj_bkt_alloted == 1);
+		return;
+	}
+	obj->obj_bkt_alloting = 1;
 
 	if (!obj->obj_df) {
 		obj->obj_bkt_ids[0] = umem_allot_mb_evictable(vos_pool2umm(pool), 0);
@@ -272,7 +306,53 @@ obj_allot_bkt(struct vos_pool *pool, struct vos_object *obj)
 
 		obj->obj_bkt_ids[0] = p2->p2_bkt_ids[0];
 	}
-	obj->obj_bkt_allot = 1;
+
+	obj->obj_bkt_alloted = 1;
+	obj->obj_bkt_alloting = 0;
+
+	ABT_mutex_lock(obj->obj_mutex);
+	ABT_cond_broadcast(obj->obj_wait_alloting);
+	ABT_mutex_unlock(obj->obj_mutex);
+}
+
+static int
+obj_pin_bkt(struct vos_pool *pool, struct vos_object *obj)
+{
+	struct umem_store	*store = vos_pool2store(pool);
+	struct umem_cache_range	 rg;
+	int			 rc;
+
+	if (obj->obj_bkt_loading) {
+		ABT_mutex_lock(obj->obj_mutex);
+		ABT_cond_wait(obj->obj_wait_loading, obj->obj_mutex);
+		ABT_mutex_unlock(obj->obj_mutex);
+	}
+
+	if (obj->obj_bkt_ids[0] == UMEM_DEFAULT_MBKT_ID) {
+		D_ASSERT(obj->obj_pin_hdl == NULL);
+		D_ASSERT(!obj->obj_bkt_loading);
+		return 0;
+	}
+
+	if (obj->obj_pin_hdl != NULL)
+		return 0;
+
+	obj->obj_bkt_loading = 1;
+
+	rg.cr_off = umem_get_mb_base_offset(vos_pool2umm(pool), obj->obj_bkt_ids[0]);
+	rg.cr_size = store->cache->ca_page_sz;
+
+	rc = umem_cache_pin(store, &rg, 1, false, &obj->obj_pin_hdl);
+	if (rc)
+		DL_ERROR(rc, "Failed to pin object:"DF_UOID".", DP_UOID(obj->obj_id));
+
+	obj->obj_bkt_loading = 0;
+
+	ABT_mutex_lock(obj->obj_mutex);
+	ABT_cond_broadcast(obj->obj_wait_loading);
+	ABT_mutex_unlock(obj->obj_mutex);
+
+	return rc;
 }
 
 /* Support single evict-able bucket for this moment */
@@ -280,22 +360,14 @@ static inline int
 vos_obj_pin(struct vos_object *obj)
 {
 	struct vos_pool		*pool = vos_obj2pool(obj);
-	struct umem_store	*store = vos_pool2store(pool);
-	struct umem_cache_range	 rg;
 
 	if (!vos_pool_is_evictable(pool))
 		return 0;
 
-	obj_allot_bkt(pool, obj);
+	if (!obj->obj_bkt_alloted)
+		obj_allot_bkt(pool, obj);
 
-	D_ASSERT(obj->obj_pin_hdl == NULL);
-	if (obj->obj_bkt_ids[0] == UMEM_DEFAULT_MBKT_ID)
-		return 0;
-
-	rg.cr_off = umem_get_mb_base_offset(vos_pool2umm(pool), obj->obj_bkt_ids[0]);
-	rg.cr_size = store->cache->ca_page_sz;
-
-	return umem_cache_pin(store, &rg, 1, false, &obj->obj_pin_hdl);
+	return obj_pin_bkt(pool, obj);
 }
 
 static inline void
@@ -347,6 +419,8 @@ cache_object(struct daos_lru_cache *occ, struct vos_object **objp)
 	/* This object should not be cached */
 	D_ASSERT(obj_new != NULL);
 	D_ASSERT(obj_new->obj_df == NULL);
+	D_ASSERT(!obj_local.obj_bkt_alloting);
+	D_ASSERT(!obj_local.obj_bkt_loading);
 
 	vos_ilog_fetch_move(&obj_new->obj_ilog_info, &obj_local.obj_ilog_info);
 	obj_new->obj_toh = obj_local.obj_toh;
@@ -354,7 +428,7 @@ cache_object(struct daos_lru_cache *occ, struct vos_object **objp)
 	obj_new->obj_sync_epoch = obj_local.obj_sync_epoch;
 	obj_new->obj_df = obj_local.obj_df;
 	obj_new->obj_zombie = obj_local.obj_zombie;
-	obj_new->obj_bkt_allot = obj_local.obj_bkt_allot;
+	obj_new->obj_bkt_alloted = obj_local.obj_bkt_alloted;
 	obj_new->obj_pin_hdl = obj_local.obj_pin_hdl;
 	obj_local.obj_toh = DAOS_HDL_INVAL;
 	obj_local.obj_ih = DAOS_HDL_INVAL;
@@ -481,7 +555,7 @@ vos_obj_incarnate(struct vos_object *obj, daos_epoch_range_t *epr, daos_epoch_t 
 		struct vos_obj_p2_df *p2 = (struct vos_obj_p2_df *)obj->obj_df;
 
 		D_ASSERT(vos_pool_is_evictable(vos_obj2pool(obj)));
-		D_ASSERT(obj->obj_bkt_allot);
+		D_ASSERT(obj->obj_bkt_alloted);
 
 		if (p2->p2_bkt_ids[0] == UMEM_DEFAULT_MBKT_ID) {
 			p2->p2_bkt_ids[0] = obj->obj_bkt_ids[0];
@@ -816,8 +890,9 @@ vos_bkt_array_pin(struct vos_pool *pool, struct vos_bkt_array *bkts,
 	return rc;
 }
 
-static int
-vos_obj_acquire(struct vos_container *cont, daos_unit_oid_t oid, struct vos_object **obj_p)
+int
+vos_obj_acquire(struct vos_container *cont, daos_unit_oid_t oid, bool pin,
+		struct vos_object **obj_p)
 {
 	struct vos_object	*obj;
 	struct daos_lru_cache	*occ;
@@ -859,7 +934,17 @@ vos_obj_acquire(struct vos_container *cont, daos_unit_oid_t oid, struct vos_obje
 		}
 	}
 
-	obj_allot_bkt(cont->vc_pool, obj);
+	if (!obj->obj_bkt_alloted)
+		obj_allot_bkt(cont->vc_pool, obj);
+
+	if (pin) {
+		rc = obj_pin_bkt(cont->vc_pool, obj);
+		if (rc) {
+			obj_put(occ, obj, false);
+			return rc;
+		}
+	}
+
 	*obj_p = obj;
 
 	return 0;
@@ -908,7 +993,7 @@ vos_pin_objects(daos_handle_t coh, daos_unit_oid_t oids[], int count, struct vos
 
 	vos_bkt_array_init(&bkts);
 	for (i = 0; i < count; i++) {
-		rc = vos_obj_acquire(cont, oids[i], &vos_hdl->vph_objs[i]);
+		rc = vos_obj_acquire(cont, oids[i], false, &vos_hdl->vph_objs[i]);
 		if (rc) {
 			DL_ERROR(rc, "Failed to acquire object:"DF_UOID"", DP_UOID(oids[i]));
 			goto error;
@@ -916,7 +1001,7 @@ vos_pin_objects(daos_handle_t coh, daos_unit_oid_t oids[], int count, struct vos
 		vos_hdl->vph_acquired++;
 
 		obj = vos_hdl->vph_objs[i];
-		D_ASSERT(obj->obj_bkt_allot == 1);
+		D_ASSERT(obj->obj_bkt_alloted == 1);
 		if (obj->obj_bkt_ids[0] != UMEM_DEFAULT_MBKT_ID) {
 			rc = vos_bkt_array_add(&bkts, obj->obj_bkt_ids[0]);
 			if (rc) {

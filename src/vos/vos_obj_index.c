@@ -252,10 +252,8 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
 		ilog = &obj->vo_ilog;
 	}
 
-	if (ts_set) {
-		tmprc = vos_ilog_ts_add(ts_set, ilog, &oid, sizeof(oid));
-		D_ASSERT(tmprc == 0); /* Non-zero return for akey only */
-	}
+	tmprc = vos_ilog_ts_add(ts_set, ilog, &oid, sizeof(oid));
+	D_ASSERT(tmprc == 0); /* Non-zero return for akey only */
 
 	return rc;
 }

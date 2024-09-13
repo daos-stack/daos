@@ -312,7 +312,7 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	coh = vos_cont2hdl(args);
 
 	if (vos_pool_is_evictable(pool)) {
-		D_ASSERT(obj->obj_bkt_allot == 1);
+		D_ASSERT(obj->obj_bkt_alloted == 1);
 		bkt_ids = &obj->obj_bkt_ids[0];
 	}
 

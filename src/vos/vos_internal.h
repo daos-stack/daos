@@ -1876,7 +1876,7 @@ vos_obj_alloc(struct umem_instance *umm, struct vos_object *obj, size_t size, bo
 {
 
 	if (obj != NULL && vos_pool_is_evictable(vos_obj2pool(obj))) {
-		D_ASSERT(obj->obj_bkt_allot == 1);
+		D_ASSERT(obj->obj_bkt_alloted == 1);
 		if (zeroing)
 			return umem_zalloc_from_bucket(umm, size, obj->obj_bkt_ids[0]);
 
@@ -1894,7 +1894,7 @@ vos_obj_reserve(struct umem_instance *umm, struct vos_object *obj,
 		struct umem_rsrvd_act *rsrvd_scm, daos_size_t size)
 {
 	if (obj != NULL && vos_pool_is_evictable(vos_obj2pool(obj))) {
-		D_ASSERT(obj->obj_bkt_allot == 1);
+		D_ASSERT(obj->obj_bkt_alloted == 1);
 		return umem_reserve_from_bucket(umm, rsrvd_scm, size, obj->obj_bkt_ids[0]);
 	}
 
@@ -1902,6 +1902,8 @@ vos_obj_reserve(struct umem_instance *umm, struct vos_object *obj,
 }
 
 /* vos_obj_cache.c */
+int vos_obj_acquire(struct vos_container *cont, daos_unit_oid_t oid, bool pin,
+		    struct vos_object **obj_p);
 
 #define	VOS_BKTS_INLINE_MAX	4
 struct vos_bkt_array {

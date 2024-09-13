@@ -51,6 +51,9 @@ struct vos_object {
 	struct umem_pin_handle		*obj_pin_hdl;
 	/** Bucket IDs for the object */
 	uint32_t			obj_bkt_ids[VOS_OBJ_BKTS_MAX];
+	ABT_mutex			obj_mutex;
+	ABT_cond			obj_wait_alloting;
+	ABT_cond			obj_wait_loading;
 	/** nobody should access this object */
 	bool				obj_zombie;
 	/** Object is held for discard */
@@ -58,7 +61,11 @@ struct vos_object {
 	    /** If non-zero, object is held for aggregation */
 	    obj_aggregate                            : 1,
 	    /** Evict-able bucket is already allocated */
-	    obj_bkt_allot			     : 1;
+	    obj_bkt_alloted			     : 1,
+	    /** Allocating evict-able bucket in in-progress */
+	    obj_bkt_alloting			     : 1,
+	    /** Loading object is in-progress */
+	    obj_bkt_loading			     : 1;
 };
 
 enum {
