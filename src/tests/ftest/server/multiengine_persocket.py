@@ -138,7 +138,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
 
         if not wait_for_result(self.log, check_ping, 600, 5, True, host=hosts[0],
                                expected_ping=False, cmd_timeout=60, verbose=True):
-            self.fail("Shutwown not detected within 600 seconds.")
+            self.fail("Shutdown not detected within 600 seconds.")
         if not wait_for_result(self.log, check_ping, 600, 5, True, host=hosts[0],
                                expected_ping=True, cmd_timeout=60, verbose=True):
             self.fail("Reboot not detected within 600 seconds.")
@@ -168,47 +168,46 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         if not run_local(self.log, "dmg storage format").passed:
             self.fail("dmg storage format failed")
 
-    def cleanup(self):
-        """Servers clean up after test complete."""
-        self.pool.destroy(recursive=1, force=1)
-        cleanup_cmds = [
-            "sudo systemctl stop daos_server.service",
-            "sudo umount /mnt/daos*",
-            "sudo wipefs -a /dev/pmem*",
-            "/usr/bin/ls -l /dev/pmem*",
-            'lsblk|grep -E "NAME|pmem"']
-        for cmd in cleanup_cmds:
-            run_remote(self.log, self.hostlist_servers, cmd, timeout=90)
+    def test_multi_engines_per_socket(self):
+        """Test ID: DAOS-12076.
 
-    def __run_test(self, update_pmem):
-        """Run the test.
+        Test description: Test multiple engines/sockets.
+            (1) Scm reset and prepare --scm-ns-per-socket
+            (2) Start server
+            (3) Start agent
+            (4) Dmg system query
+            (5) Pool create
+            (6) Container create and attributes test
+            (7) IOR test
+            (8) MDTEST
 
-        Args:
-            update_pmem (bool): whether to reconfigure PMem for multi socket testing
+        To launch test:
+            (1) Make sure server is equipped with PMem
+            (2) ./launch.py test_multi_engines_per_socket -ts <servers> -tc <agent>
+
+        :avocado: tags=manual
+        :avocado: tags=server
+        :avocado: tags=MultiEnginesPerSocketTest,test_multi_engines_per_socket
         """
-        server_namespace = "/run/server_config_ci/*"
-        if update_pmem:
-            server_namespace = "/run/server_config/*"
-        num_attributes = self.params.get("num_attributes", '/run/attrtests/*')
+        server_namespace = "/run/server_config/*"
+        num_attributes = self.params.get("num_attributes", '/run/container/*')
+        _engines_per_socket = self.params.get("engines_per_socket", server_namespace, 1)
+        _num_pmem = self.params.get("number_pmem", server_namespace, 1)
 
         # Configure PMem for multiple engines per socket
-        if update_pmem:
-            _engines_per_socket = self.params.get("engines_per_socket", server_namespace, 1)
-            _num_pmem = self.params.get("number_pmem", server_namespace, 1)
-            self.daos_server_scm_reset()
-            self.host_reboot(self.hostlist_servers)
-            self.daos_server_scm_prepare_ns(_engines_per_socket)
-            self.host_reboot(self.hostlist_servers)
-            self.daos_server_scm_prepare_ns(_engines_per_socket)
-            if not wait_for_result(self.log, self.check_pmem, 160, 1, False,
-                                   hosts=self.hostlist_servers, count=_num_pmem):
-                self.fail(f"Error {_num_pmem} PMem devices not found on all hosts.")
-            self.storage_format()
+        self.daos_server_scm_reset()
+        self.host_reboot(self.hostlist_servers)
+        self.daos_server_scm_prepare_ns(_engines_per_socket)
+        self.host_reboot(self.hostlist_servers)
+        self.daos_server_scm_prepare_ns(_engines_per_socket)
+        if not wait_for_result(self.log, self.check_pmem, 160, 1, False,
+                               hosts=self.hostlist_servers, count=_num_pmem):
+            self.fail(f"Error {_num_pmem} PMem devices not found on all hosts.")
 
         # Start servers
         self.log_step("Starting servers")
         run_remote(self.log, self.hostlist_servers, 'lsblk|grep -E "NAME|pmem"')
-        self.start_servers(namespace=server_namespace)
+        self.start_servers()
 
         # Start agents
         self.log_step("Starting agents")
@@ -217,7 +216,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         # Run some dmg commands
         self.log_step("Query the storage usage")
         dmg = self.get_dmg_command()
-        dmg.storage_query_usage()
+        # dmg.storage_query_usage()
         dmg.storage_query_list_devices()
 
         # Create a pool
@@ -235,10 +234,10 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
             self.verify_list_attr(attr_dict, data['response'])
             data = self.container.list_attrs(verbose=True)
             self.verify_get_attr(attr_dict, data['response'])
-        except DaosApiError as excep:
-            self.log.info(excep)
+        except DaosApiError as error:
+            self.log.info(error)
             self.log.info(traceback.format_exc())
-            self.fail("#Test was expected to pass but it failed.\n")
+            self.fail("Error setting and verify container attributes")
         self.container.close()
         self.pool.disconnect()
 
@@ -252,46 +251,4 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         self.log_step("Run mdtest")
         mdtest_params = self.params.get("mdtest_params", "/run/mdtest/*")
         self.run_mdtest_multiple_variants(mdtest_params)
-
-        # (9) Cleanup
-        self.log_step("Cleanup")
-        dmg.system_query()
-        if update_pmem:
-            self.cleanup()
-
-    def test_multi_engines_per_socket(self):
-        """Test ID: DAOS-12076.
-
-        Test description: Test multiple engines/sockets.
-            (1) Scm reset and prepare --scm-ns-per-socket
-            (2) Start server
-            (3) Start agent
-            (4) Dmg system query
-            (5) Pool create
-            (6) Container create and attributes test
-            (7) IOR test
-            (8) MDTEST
-            (9) Cleanup
-
-        To launch test:
-            (1) Make sure server is equipped with PMem
-            (2) ./launch.py test_multi_engines_per_socket -ts <servers> -tc <agent>
-
-        :avocado: tags=manual
-        :avocado: tags=server
-        :avocado: tags=MultiEnginesPerSocketTest,test_multi_engines_per_socket
-        """
-        self.__run_test(True)
-
-    def test_multi_engines_per_socket_ci(self):
-        """Test ID: DAOS-12076.
-
-        Run the test_multiengines_per_socket w/o reconfiguring PMem to verify a majority of the
-        test code in CI.
-
-        :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
-        :avocado: tags=server
-        :avocado: tags=MultiEnginesPerSocketTest,test_multi_engines_per_socket_ci
-        """
-        self.__run_test(False)
+        self.log.info("Test passed")

@@ -129,8 +129,6 @@ container:
   control_method: daos
   type: POSIX
   properties: rf:0
-
-attrtests:
   num_attributes: 20
 
 dfuse:
