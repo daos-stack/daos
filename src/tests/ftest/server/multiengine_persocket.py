@@ -180,50 +180,35 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         for cmd in cleanup_cmds:
             run_remote(self.log, self.hostlist_servers, cmd, timeout=90)
 
-    def test_multiengines_per_socket(self):
-        """Test ID: DAOS-12076.
-        Test description: Test multiple engines/sockets.
-            (1) Scm reset and prepare --scm-ns-per-socket
-            (2) Start server
-            (3) Start agent
-            (4) Dmg system query
-            (5) Pool create
-            (6) Container create and attributes test
-            (7) IOR test
-            (8) MDTEST
-            (9) Cleanup
+    def __run_test(self, update_pmem):
+        """Run the test.
 
-        To launch test:
-            (1) Make sure server is equipped with PMem
-            (2) Set 'test_mode: manual' in the server/multiengine_persocket.yaml file
-            (3) ./launch.py test_multiengines_per_socket -ts <servers> -tc <agent>
-
-        :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium
-        :avocado: tags=server
-        :avocado: tags=MultiEnginesPerSocketTest,test_multiengines_per_socket
+        Args:
+            update_pmem (bool): whether to reconfigure PMem for multi socket testing
         """
-        test_mode = self.params.get("test_mode", "/run/*", "ci")
-        engines_per_socket = self.params.get("engines_per_socket", "/run/server_config/*", 1)
-        num_pmem = self.params.get("number_pmem", "/run/server_config/*", 1)
+        server_namespace = "/run/server_config_ci/*"
+        if update_pmem:
+            server_namespace = "/run/server_config/*"
         num_attributes = self.params.get("num_attributes", '/run/attrtests/*')
 
         # Configure PMem for multiple engines per socket
-        if test_mode != "ci":
+        if update_pmem:
+            _engines_per_socket = self.params.get("engines_per_socket", server_namespace, 1)
+            _num_pmem = self.params.get("number_pmem", server_namespace, 1)
             self.daos_server_scm_reset()
             self.host_reboot(self.hostlist_servers)
-            self.daos_server_scm_prepare_ns(engines_per_socket)
+            self.daos_server_scm_prepare_ns(_engines_per_socket)
             self.host_reboot(self.hostlist_servers)
-            self.daos_server_scm_prepare_ns(engines_per_socket)
+            self.daos_server_scm_prepare_ns(_engines_per_socket)
             if not wait_for_result(self.log, self.check_pmem, 160, 1, False,
-                                   hosts=self.hostlist_servers, count=num_pmem):
-                self.fail(f"Error {num_pmem} PMem devices not found on all hosts.")
+                                   hosts=self.hostlist_servers, count=_num_pmem):
+                self.fail(f"Error {_num_pmem} PMem devices not found on all hosts.")
             self.storage_format()
 
         # Start servers
         self.log_step("Starting servers")
         run_remote(self.log, self.hostlist_servers, 'lsblk|grep -E "NAME|pmem"')
-        self.start_servers()
+        self.start_servers(namespace=server_namespace)
 
         # Start agents
         self.log_step("Starting agents")
@@ -271,5 +256,42 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         # (9) Cleanup
         self.log_step("Cleanup")
         dmg.system_query()
-        if test_mode != "ci":
+        if update_pmem:
             self.cleanup()
+
+    def test_multi_engines_per_socket(self):
+        """Test ID: DAOS-12076.
+
+        Test description: Test multiple engines/sockets.
+            (1) Scm reset and prepare --scm-ns-per-socket
+            (2) Start server
+            (3) Start agent
+            (4) Dmg system query
+            (5) Pool create
+            (6) Container create and attributes test
+            (7) IOR test
+            (8) MDTEST
+            (9) Cleanup
+
+        To launch test:
+            (1) Make sure server is equipped with PMem
+            (2) ./launch.py test_multi_engines_per_socket -ts <servers> -tc <agent>
+
+        :avocado: tags=manual
+        :avocado: tags=server
+        :avocado: tags=MultiEnginesPerSocketTest,test_multi_engines_per_socket
+        """
+        self.__run_test(True)
+
+    def test_multi_engines_per_socket_ci(self):
+        """Test ID: DAOS-12076.
+
+        Run the test_multiengines_per_socket w/o reconfiguring PMem to verify a majority of the
+        test code in CI.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=server
+        :avocado: tags=MultiEnginesPerSocketTest,test_multi_engines_per_socket_ci
+        """
+        self.__run_test(False)

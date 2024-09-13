@@ -881,7 +881,7 @@ class TestWithServers(TestWithoutServers):
         if self.agent_managers:
             self.start_agent_managers(force)
 
-    def start_servers(self, server_groups=None, force=False):
+    def start_servers(self, server_groups=None, force=False, namespace="/run/server_manager/*"):
         """Start the daos_server processes.
 
         Args:
@@ -893,6 +893,7 @@ class TestWithServers(TestWithoutServers):
                 file to define a single server group entry.
             force (bool, optional): whether or not to force starting the
                 servers. Defaults to False.
+            namespace (str): yaml namespace (path to parameters)
 
         Raises:
             avocado.core.exceptions.TestFail: if there is an error starting the
@@ -900,7 +901,7 @@ class TestWithServers(TestWithoutServers):
 
         """
         force_agent_start = False
-        self.setup_servers(server_groups)
+        self.setup_servers(server_groups, namespace)
         if self.server_managers:
             force_agent_start = self.start_server_managers(force)
         return force_agent_start
@@ -986,7 +987,7 @@ class TestWithServers(TestWithoutServers):
                     self.hostfile_clients_slots,
                     info["access_points"])
 
-    def setup_servers(self, server_groups=None):
+    def setup_servers(self, server_groups=None, namespace="/run/server_manager/*"):
         """Start the daos_server processes.
 
         Args:
@@ -996,6 +997,7 @@ class TestWithServers(TestWithoutServers):
                 key. Defaults to None which will use the server group name, all
                 of the server hosts, and the access points from the test's yaml
                 file to define a single server group entry.
+            namespace (str): yaml namespace (path to parameters)
 
         Raises:
             avocado.core.exceptions.TestFail: if there is an error starting the
@@ -1021,7 +1023,7 @@ class TestWithServers(TestWithoutServers):
             for group, info in list(server_groups.items()):
                 self.add_server_manager(
                     group, info["svr_config_file"], info["dmg_config_file"],
-                    info["svr_config_temp"], info["dmg_config_temp"])
+                    info["svr_config_temp"], info["dmg_config_temp"], namespace)
                 self.configure_manager(
                     "server",
                     self.server_managers[-1],
@@ -1092,7 +1094,7 @@ class TestWithServers(TestWithoutServers):
 
     def add_server_manager(self, group=None, svr_config_file=None,
                            dmg_config_file=None, svr_config_temp=None,
-                           dmg_config_temp=None):
+                           dmg_config_temp=None, namespace="/run/server_manager/*"):
         """Add a new daos server manager object to the server manager list.
 
         Args:
@@ -1107,6 +1109,7 @@ class TestWithServers(TestWithoutServers):
             dmg_config_temp (str, optional): file name and path used to generate
                 the dmg configuration file locally and copy it to all the hosts
                 using the config_file specification. Defaults to None.
+            namespace (str): yaml namespace (path to parameters)
 
         Raises:
             avocado.core.exceptions.TestFail: if there is an error specifying
@@ -1147,7 +1150,7 @@ class TestWithServers(TestWithoutServers):
             DaosServerManager(
                 group, self.bin, svr_cert_dir, svr_config_file, dmg_cert_dir,
                 dmg_config_file, svr_config_temp, dmg_config_temp,
-                self.server_manager_class, access_points_suffix=self.access_points_suffix)
+                self.server_manager_class, namespace, self.access_points_suffix)
         )
         if self.server_config_namespace is not None:
             self.log.debug(

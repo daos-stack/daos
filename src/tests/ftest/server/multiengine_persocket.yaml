@@ -4,8 +4,6 @@ hosts:
 
 timeout: 930
 
-test_mode: ci
-
 setup:
   start_agents: False
   start_servers: False
@@ -27,7 +25,7 @@ server_config:
       fabric_iface: eth0
       fabric_iface_port: 31416
       log_mask: ERR
-      log_file: /tmp/daos_engine.1.log
+      log_file: daos_engine.0.log
       env_vars:
         - FI_SOCKETS_MAX_CONN_RETRY=1
         - FI_SOCKETS_CONN_TIMEOUT=2000
@@ -35,7 +33,7 @@ server_config:
         0:
           class: dcpm
           scm_list: [/dev/pmem0]
-          scm_mount: /mnt/daos1
+          scm_mount: /mnt/daos0
     1:
       pinned_numa_node: 0
       targets: 8
@@ -43,7 +41,7 @@ server_config:
       fabric_iface: eth0
       fabric_iface_port: 32416
       log_mask: ERR
-      log_file: /tmp/daos_engine.2.log
+      log_file: daos_engine.1.log
       env_vars:
         - FI_SOCKETS_MAX_CONN_RETRY=1
         - FI_SOCKETS_CONN_TIMEOUT=2000
@@ -51,7 +49,7 @@ server_config:
         0:
           class: dcpm
           scm_list: [/dev/pmem0.1]
-          scm_mount: /mnt/daos2
+          scm_mount: /mnt/daos1
     2:
       pinned_numa_node: 1
       targets: 8
@@ -59,7 +57,7 @@ server_config:
       fabric_iface: eth0
       fabric_iface_port: 33416
       log_mask: ERR
-      log_file: /tmp/daos_engine.3.log
+      log_file: daos_engine.2.log
       env_vars:
         - FI_SOCKETS_MAX_CONN_RETRY=1
         - FI_SOCKETS_CONN_TIMEOUT=2000
@@ -67,7 +65,7 @@ server_config:
         0:
           class: dcpm
           scm_list: [/dev/pmem1]
-          scm_mount: /mnt/daos3
+          scm_mount: /mnt/daos2
     3:
       pinned_numa_node: 1
       targets: 8
@@ -75,7 +73,7 @@ server_config:
       fabric_iface: eth0
       fabric_iface_port: 34416
       log_mask: ERR
-      log_file: /tmp/daos_engine.4.log
+      log_file: daos_engine.3.log
       env_vars:
         - FI_SOCKETS_MAX_CONN_RETRY=1
         - FI_SOCKETS_CONN_TIMEOUT=2000
@@ -83,7 +81,44 @@ server_config:
         0:
           class: dcpm
           scm_list: [/dev/pmem1.1]
-          scm_mount: /mnt/daos4
+          scm_mount: /mnt/daos3
+
+server_config_ci:
+  name: daos_server
+  engines_per_host: 2
+  engines:
+    0:
+      pinned_numa_node: 0
+      targets: 8
+      nr_xs_helpers: 0   # count of I/O offload threads per engine
+      fabric_iface: eth0
+      fabric_iface_port: 31416
+      log_mask: ERR
+      log_file: daos_engine.0.log
+      env_vars:
+        - FI_SOCKETS_MAX_CONN_RETRY=1
+        - FI_SOCKETS_CONN_TIMEOUT=2000
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos0
+    1:
+      pinned_numa_node: 1
+      targets: 8
+      nr_xs_helpers: 0   # count of I/O offload threads per engine
+      fabric_iface: eth0
+      fabric_iface_port: 31416
+      log_mask: ERR
+      log_file: daos_server1.log
+      env_vars:
+        - FI_SOCKETS_MAX_CONN_RETRY=1
+        - FI_SOCKETS_CONN_TIMEOUT=2000
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem1"]
+          scm_mount: /mnt/daos1
 
 pool:
   control_method: dmg
