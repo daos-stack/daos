@@ -37,9 +37,12 @@ lru_hop_rec_decref(struct d_hash_table *htable, d_list_t *link)
 	D_ASSERT(llink->ll_ref > 0);
 	llink->ll_ref--;
 
-	/* eviction waiter is the last one holds refcount */
-	if (llink->ll_wait_evict &&
-	    llink->ll_ops->lop_wakeup && daos_lru_is_last_user(llink))
+	/* someone is waiting for eviction of this element, no one else takes refcount
+	 * except the hash table.
+	 */
+	if (llink->ll_wait_evict > 0 &&
+	    llink->ll_wait_evict + 1 == llink->ll_ref &&
+	    llink->ll_ops->lop_wakeup)
 		llink->ll_ops->lop_wakeup(llink);
 
 	/* Delete from hash only if no more references */
@@ -289,15 +292,17 @@ daos_lru_ref_evict_wait(struct daos_lru_cache *lcache, struct daos_llink *llink)
 	if (!llink->ll_evicted)
 		daos_lru_ref_evict(lcache, llink);
 
-	if (lcache->dlc_ops->lop_wait && !daos_lru_is_last_user(llink)) {
-		/* Wait until I'm the last one.
-		 * XXX: the implementation can only support one waiter for now, if there
-		 * is a secondary ULT calls this function on the same item, it will hit
-		 * the assertion.
-		 */
-		D_ASSERT(!llink->ll_wait_evict);
-		llink->ll_wait_evict = 1;
+	/* - hash table has +1 ll_ref, myself also has +1 ll_ref (reason of 2).
+	 * - each eviction caller has +1 ll_ref, also has +1 ll_wait_evict.
+	 * - each active user has +1 ll_ref.
+	 *
+	 * if (ll_ref - ll_wait_evict) == 2, it means there is no active user on
+	 * container, I don't need to wait anymore.
+	 */
+	if (llink->ll_ref - llink->ll_wait_evict > 2 && lcache->dlc_ops->lop_wait) {
+		llink->ll_wait_evict++;
 		lcache->dlc_ops->lop_wait(llink);
-		llink->ll_wait_evict = 0;
+		D_ASSERT(llink->ll_wait_evict > 0);
+		llink->ll_wait_evict--;
 	}
 }
