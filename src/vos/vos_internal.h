@@ -1876,7 +1876,7 @@ vos_obj_alloc(struct umem_instance *umm, struct vos_object *obj, size_t size, bo
 {
 
 	if (obj != NULL && vos_pool_is_evictable(vos_obj2pool(obj))) {
-		D_ASSERT(obj->obj_bkt_allot == 1);
+		D_ASSERT(obj->obj_bkt_alloted == 1);
 		if (zeroing)
 			return umem_zalloc_from_bucket(umm, size, obj->obj_bkt_ids[0]);
 
@@ -1894,11 +1894,43 @@ vos_obj_reserve(struct umem_instance *umm, struct vos_object *obj,
 		struct umem_rsrvd_act *rsrvd_scm, daos_size_t size)
 {
 	if (obj != NULL && vos_pool_is_evictable(vos_obj2pool(obj))) {
-		D_ASSERT(obj->obj_bkt_allot == 1);
+		D_ASSERT(obj->obj_bkt_alloted == 1);
 		return umem_reserve_from_bucket(umm, rsrvd_scm, size, obj->obj_bkt_ids[0]);
 	}
 
 	return umem_reserve(umm, rsrvd_scm, size);
 }
+
+/* vos_obj_cache.c */
+int vos_obj_acquire(struct vos_container *cont, daos_unit_oid_t oid, bool pin,
+		    struct vos_object **obj_p);
+
+#define	VOS_BKTS_INLINE_MAX	4
+struct vos_bkt_array {
+	uint32_t	 vba_tot;
+	uint32_t	 vba_cnt;
+	uint32_t	 vba_inline_bkts[VOS_BKTS_INLINE_MAX];
+	uint32_t	*vba_bkts;
+};
+
+static inline void
+vos_bkt_array_fini(struct vos_bkt_array *bkts)
+{
+	if (bkts->vba_tot > VOS_BKTS_INLINE_MAX)
+		D_FREE(bkts->vba_bkts);
+}
+
+static inline void
+vos_bkt_array_init(struct vos_bkt_array *bkts)
+{
+	bkts->vba_tot	= VOS_BKTS_INLINE_MAX;
+	bkts->vba_cnt	= 0;
+	bkts->vba_bkts	= &bkts->vba_inline_bkts[0];
+}
+
+bool vos_bkt_array_subset(struct vos_bkt_array *super, struct vos_bkt_array *sub);
+int vos_bkt_array_add(struct vos_bkt_array *bkts, uint32_t bkt_id);
+int vos_bkt_array_pin(struct vos_pool *pool, struct vos_bkt_array *bkts,
+		      struct umem_pin_handle **pin_hdl);
 
 #endif /* __VOS_INTERNAL_H__ */

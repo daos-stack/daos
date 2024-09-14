@@ -496,9 +496,12 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (rc != 0)
 		goto reset;
 
-	/* Commit the CoS DTXs via the PUNCH PMDK transaction. */
-	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0 &&
-	    !dth->dth_cos_done) {
+	/* Commit the CoS DTXs via the PUNCH PMDK transaction.
+	 *
+	 * It's guaranteed that no other objects are involved in the CoS DTXs, so we don't
+	 * need to pin extra objects here.
+	 */
+	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0 && !dth->dth_cos_done) {
 		D_ALLOC_ARRAY(daes, dth->dth_dti_cos_count);
 		if (daes == NULL)
 			D_GOTO(reset, rc = -DER_NOMEM);

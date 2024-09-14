@@ -87,7 +87,7 @@ gc_drain_btr(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 	} else {
 		dummy_cont.vc_pool = pool;
 		dummy_obj.obj_cont = &dummy_cont;
-		dummy_obj.obj_bkt_allot = 1;
+		dummy_obj.obj_bkt_alloted = 1;
 		for (i = 0; i < VOS_GC_BKTS_MAX; i++)
 			dummy_obj.obj_bkt_ids[i] = item->it_bkt_ids[i];
 		priv = &dummy_obj;

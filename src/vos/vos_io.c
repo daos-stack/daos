@@ -32,6 +32,8 @@ struct vos_io_context {
 	struct dcs_iod_csums	*ic_iod_csums;
 	/** reference on the object */
 	struct vos_object	*ic_obj;
+	/** used only for md-on-ssd phase2 evictable pool */
+	struct vos_object	*ic_pinned_obj;
 	/** BIO descriptor, has ic_iod_nr SGLs */
 	struct bio_desc		*ic_biod;
 	struct vos_ts_set	*ic_ts_set;
@@ -572,6 +574,9 @@ vos_ioc_destroy(struct vos_io_context *ioc, bool evict)
 
 	if (ioc->ic_obj)
 		vos_obj_release(ioc->ic_obj, 0, evict);
+
+	if (ioc->ic_pinned_obj)
+		vos_obj_release(ioc->ic_pinned_obj, 0, evict);
 
 	vos_ioc_reserve_fini(ioc);
 	vos_ilog_fetch_finish(&ioc->ic_dkey_info);
@@ -2429,16 +2434,13 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	if (err != 0)
 		goto abort;
 
-	/* The object is already held for md-on-ssd phase2 pool */
-	if (ioc->ic_obj == NULL) {
-		err = vos_ts_set_add(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx, NULL, 0);
-		D_ASSERT(err == 0);
+	err = vos_ts_set_add(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx, NULL, 0);
+	D_ASSERT(err == 0);
 
-		err = vos_obj_hold(ioc->ic_cont, ioc->ic_oid, &ioc->ic_epr, ioc->ic_bound,
-				   flags, DAOS_INTENT_UPDATE, &ioc->ic_obj, ioc->ic_ts_set);
-		if (err != 0)
-			goto abort;
-	}
+	err = vos_obj_hold(ioc->ic_cont, ioc->ic_oid, &ioc->ic_epr, ioc->ic_bound,
+			   flags, DAOS_INTENT_UPDATE, &ioc->ic_obj, ioc->ic_ts_set);
+	if (err != 0)
+		goto abort;
 
 	err = vos_tx_begin(dth, umem, ioc->ic_cont->vc_pool->vp_sysdb);
 	if (err != 0)
@@ -2446,7 +2448,12 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 
 	tx_started = true;
 
-	/* Commit the CoS DTXs via the IO PMDK transaction. */
+	/*
+	 * Commit the CoS DTXs via the IO PMDK transaction.
+	 *
+	 * It's guaranteed that no other objects are involved in the CoS DTXs, so we don't
+	 * need to pin extra objects here.
+	 */
 	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0 && !dth->dth_cos_done) {
 		D_ASSERT(!dth->dth_local);
 
@@ -2616,12 +2623,11 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	/* Hold the object for the evictable md-on-ssd phase2 pool */
 	if (vos_pool_is_evictable(vos_cont2pool(ioc->ic_cont))) {
-		rc = vos_ts_set_add(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx, NULL, 0);
-		D_ASSERT(rc == 0);
-
-		rc = vos_obj_hold(ioc->ic_cont, ioc->ic_oid, &ioc->ic_epr, ioc->ic_bound,
-				  VOS_OBJ_VISIBLE | VOS_OBJ_CREATE, DAOS_INTENT_UPDATE,
-				  &ioc->ic_obj, ioc->ic_ts_set);
+		/*
+		 * To avoid the complication of adding object ilog to ts_set, we simply pin object
+		 * here without ts_set involved.
+		 */
+		rc = vos_obj_acquire(ioc->ic_cont, ioc->ic_oid, true, &ioc->ic_pinned_obj);
 		if (rc != 0)
 			goto error;
 	}
