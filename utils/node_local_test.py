@@ -1919,12 +1919,13 @@ def needs_dfuse(method):
     """
     @functools.wraps(method)
     def _helper(self):
-        if self.call_index == 0:
-            caching = True
-            self.needs_more = True
-            self.test_name = f'{method.__name__}_with_caching'
-        else:
-            caching = False
+        # filter out anything we were told not to run
+        filtered_caching_variants = \
+            [x for x in [False, True] if x not in
+             needs_dfuse_with_opt.get_excluded_versions(method.__name__)]
+        caching = filtered_caching_variants[self.call_index]
+        self.needs_more = len(filtered_caching_variants) > self.call_index + 1
+        self.test_name = needs_dfuse_with_opt.parameterized_test_to_name(method.__name__, caching)
 
         self.dfuse = DFuse(self.server,
                            self.conf,
@@ -1937,7 +1938,7 @@ def needs_dfuse(method):
             if self.dfuse.stop():
                 self.fatal_errors = True
         return rc
-
+    needs_dfuse_with_opt.record_wrap(method.__name__, [False, True])
     return _helper
 
 
@@ -1950,11 +1951,21 @@ class needs_dfuse_with_opt():
     to achieve this.
     """
 
-    # pylint: disable=too-few-public-methods
+    # dict of names that have been decorated either by needs_dfuse_with_opt or needs_dfuse
+    # values are list of possible variants
+    wrapped_names = {}
 
-    def __init__(self, caching=None, wbcache=True, single_threaded=False, dfuse_inval=True,
-                 ro=False):
-        self.caching = caching
+    # dict of tests that have been excluded at runtime (so we know what to skip)
+    # values are the versions of the test to skip
+    excluded_name_dict = {}
+
+    # ensure thread safety; not sure this is actually necessary, but meh...
+    wrapping_lock = threading.Lock()
+
+    # pylint: disable=too-few-public-methods
+    def __init__(self, caching_variants=[False, True], wbcache=True, single_threaded=False,
+                 dfuse_inval=True, ro=False):
+        self.caching_variants = caching_variants
         self.wbcache = wbcache
         self.single_threaded = single_threaded
         self.dfuse_inval = dfuse_inval
@@ -1967,18 +1978,17 @@ class needs_dfuse_with_opt():
 
             args = {"container": obj.container}
 
-            caching = self.caching
-            if caching is None:
-                if obj.call_index == 0:
-                    caching = True
-                    obj.needs_more = True
-                    obj.test_name = f'{method.__name__}_caching_on'
-                else:
-                    caching = False
-                    obj.test_name = f'{method.__name__}_caching_off'
+            # filter out anything we were told not to run
+            filtered_caching_variants = \
+                [x for x in self.caching_variants if x not in
+                 needs_dfuse_with_opt.get_excluded_versions(method.__name__)]
+            caching = filtered_caching_variants[obj.call_index]
+            obj.needs_more = len(filtered_caching_variants) > obj.call_index + 1
+            obj.test_name = \
+                needs_dfuse_with_opt.parameterized_test_to_name(method.__name__, caching)
 
             if not self.dfuse_inval:
-                assert self.caching is True
+                assert caching is True
                 cont_attrs = {'dfuse-attr-time': '5m',
                               'dfuse-dentry-time': '5m',
                               'dfuse-dentry-dir-time': '5m',
@@ -2000,7 +2010,43 @@ class needs_dfuse_with_opt():
                 if obj.dfuse.stop():
                     obj.fatal_errors = True
             return rc
+
+        needs_dfuse_with_opt.record_wrap(method.__name__, self.caching_variants)
         return _helper
+
+    @staticmethod
+    def get_excluded_versions(name):
+        with needs_dfuse_with_opt.wrapping_lock:
+            return list(needs_dfuse_with_opt.excluded_name_dict[name]) \
+                if name in needs_dfuse_with_opt.excluded_name_dict else []
+
+    @staticmethod
+    def record_wrap(name, caching_variants):
+        needs_dfuse_with_opt.wrapped_names[name] = list(caching_variants)
+
+    @staticmethod
+    def record_exclusions(excluded_name_dict):
+        needs_dfuse_with_opt.excluded_name_dict = excluded_name_dict
+
+    @staticmethod
+    def parameterized_test_to_name(name, caching):
+        suffix = 'caching_on' if caching else 'caching_off'
+        return name + '_' + suffix
+
+    @staticmethod
+    def get_test_variants(name):
+        if name not in needs_dfuse_with_opt.wrapped_names:
+            return []
+
+        return list(needs_dfuse_with_opt.wrapped_names[name])
+
+    @staticmethod
+    def parse_test_name(name):
+        if not name.endswith('_caching_on') and not name.endswith('caching_off'):
+            return (name, None)
+
+        match = re.match(r'(.+)_(caching_on|caching_off)', name)
+        return (match.group(1), True if match.group(2) == 'caching_on' else False)
 
 
 class PrintStat():
@@ -2052,6 +2098,10 @@ class PrintStat():
 # This is test code where methods are tests, so we want to have lots of them.
 class PosixTests():
     """Class for adding standalone unit tests"""
+
+    @staticmethod
+    def generate_test_list():
+        return [x for x in dir(PosixTests) if x.startswith('test')]
 
     # pylint: disable=too-many-public-methods
     def __init__(self, server, conf, pool=None):
@@ -2106,7 +2156,7 @@ class PosixTests():
         print(rc)
         assert rc.returncode == 0, rc
 
-    @needs_dfuse_with_opt(caching=False)
+    @needs_dfuse_with_opt(caching_variants=[False])
     def test_oclass(self):
         """Test container object class options"""
         container = create_cont(self.conf, self.pool, ctype="POSIX", label='oclass_test',
@@ -2604,7 +2654,7 @@ class PosixTests():
         assert len(post_files) == len(files) - 1
         assert post_files == files[:-2] + [files[-1]]
 
-    @needs_dfuse_with_opt(single_threaded=True, caching=True)
+    @needs_dfuse_with_opt(single_threaded=True, caching_variants=[True])
     def test_single_threaded(self):
         """Test single-threaded mode"""
         self.readdir_test(10)
@@ -2719,7 +2769,7 @@ class PosixTests():
 
         self.dfuse.il_cmd(['cat', fname], check_write=False, check_fstat=check_fstat)
 
-    @needs_dfuse_with_opt(caching=False)
+    @needs_dfuse_with_opt(caching_variants=[False])
     def test_il(self):
         """Run a basic interception library test"""
         # Sometimes the write can be cached in the kernel and the cp will not read any data so
@@ -2778,7 +2828,7 @@ class PosixTests():
             for (key, value) in xattr.get_all(fd):
                 print(f'xattr is {key}:{value}')
 
-    @needs_dfuse_with_opt(caching=False)
+    @needs_dfuse_with_opt(caching_variants=[False])
     def test_stable_inode(self):
         """Ensure that container inodes are persistent
 
@@ -2907,7 +2957,7 @@ class PosixTests():
 
         assert len(expected_keys) == 0, 'Expected key not found'
 
-    @needs_dfuse_with_opt(wbcache=True, caching=True)
+    @needs_dfuse_with_opt(wbcache=True, caching_variants=[True])
     def test_stat_before_open(self):
         """Run open/close in a loop on the same file
 
@@ -2976,7 +3026,7 @@ class PosixTests():
         rc = self.dfuse.run_query(use_json=True)
         assert rc.returncode == 0
 
-    @needs_dfuse_with_opt(dfuse_inval=False, caching=True)
+    @needs_dfuse_with_opt(dfuse_inval=False, caching_variants=[True])
     def test_uns_link(self):
         """Test to create a container then create a path for it in dfuse.
 
@@ -3737,7 +3787,7 @@ class PosixTests():
         if dfuse.stop():
             self.fatal_errors = True
 
-    @needs_dfuse_with_opt(caching=False)
+    @needs_dfuse_with_opt(caching_variants=[False])
     def test_daos_fs_tool(self):
         """Create a UNS entry point"""
         dfuse = self.dfuse
@@ -4414,7 +4464,7 @@ class PosixTests():
         self.server.run_daos_client_cmd_pil4dfs(['cp', '/usr/bin/mkdir', file6])
         self.server.run_daos_client_cmd_pil4dfs(['file', file6])
 
-    @needs_dfuse_with_opt(caching=False, ro=True)
+    @needs_dfuse_with_opt(caching_variants=[False], ro=True)
     def test_mount_ro(self):
         """Check that mounting read-only does not allow write access"""
         test_file = join(self.dfuse.dir, 'test_file')
@@ -4504,7 +4554,7 @@ class NltStderrWrapper():
         sys.stderr = self._stderr
 
 
-def run_posix_tests(server, conf, test=None):
+def run_posix_tests(server, conf, test_list):
     """Run one or all posix tests
 
     Create a new container per test, to ensure that every test is
@@ -4560,30 +4610,26 @@ def run_posix_tests(server, conf, test=None):
         if ptl.fatal_errors:
             pto.fatal_errors = True
 
+    test_list = list(test_list)
     pool = server.get_test_pool_obj()
 
     out_wrapper = NltStdoutWrapper()
     err_wrapper = NltStderrWrapper()
 
     pto = PosixTests(server, conf, pool=pool)
-    if test:
-        function = f'test_{test}'
-        obj = getattr(pto, function)
+    if len(test_list) == 1:
+        obj = getattr(pto, test_list[0])
 
-        _run_test(ptl=pto, test_cb=obj, function=function)
+        _run_test(ptl=pto, test_cb=obj, function=test_list[0])
     else:
 
         threads = []
 
         slow_tests = ['test_uns_basic', 'test_daos_fs_tool', 'test_stable_cont_inode']
 
-        tests = dir(pto)
-        tests.sort(key=lambda x: x not in slow_tests)
+        test_list.sort(key=lambda x: x not in slow_tests)
 
-        for function in tests:
-            if not function.startswith('test_'):
-                continue
-
+        for function in test_list:
             ptl = PosixTests(server, conf, pool=pool)
             obj = getattr(ptl, function)
             if not callable(obj):
@@ -6328,9 +6374,102 @@ def server_fi(args):
         server.set_fi(probability=0)
 
 
+def generate_special_test_list():
+    return ['special_dfuse_multi', 'special_dfuse_overlay']
+
+
+def is_special_testname(testname):
+    return testname.startswith('special')
+
+
+def printable_test_list(raw_test_list):
+    """Return a printable list of tests, without the 'test_' prefix,
+    and with a * after the name if it can be runw with both caching and
+    caching off."""
+    test_variants = \
+        [(x, needs_dfuse_with_opt.get_test_variants(x)) for x in raw_test_list]
+    test_list = [x[5:] if len(y) < 2 else x[5:] + '*' for x, y in test_variants]
+    test_list.extend(generate_special_test_list())
+    return test_list
+
+
+def expand_input_list(input_list):
+    """Expand the list of user-specified tests; i.e., convert to a dict where
+    keys are the test names and the values are the list of variants."""
+    input_params = [needs_dfuse_with_opt.parse_test_name(x) for x in input_list]
+    name_dict = {}
+    for name, parameterization in input_params:
+        if name not in name_dict:
+            name_dict[name] = []
+        param_list = name_dict[name]
+        if parameterization is not None and parameterization not in param_list:
+            param_list.append(parameterization)
+
+    # Check if user specified an unparameterized test name (e.g., 'read') and we need to include
+    # all of its variants.
+    possible_expansions = [(x, needs_dfuse_with_opt.get_test_variants(x))
+                           for x in name_dict.keys()]
+    for name, parameters in possible_expansions:
+        if name in name_dict and len(name_dict[name]) == 0:
+            name_dict[name] = parameters
+
+    return name_dict
+
+
+def explicit_list_to_exclusion_list(name_dict):
+    """Convert a dict of explicitly requested tests to an exclusion dict of variants not to
+    run."""
+    test_variants = dict([(x, needs_dfuse_with_opt.get_test_variants(x))
+                          for x in name_dict.keys()])
+    exclusion_dict = {}
+    for name in name_dict.keys():
+        exclusion_list = [x for x in test_variants[name] if x not in name_dict[name]]
+        if len(exclusion_list) > 0:
+            exclusion_dict[name] = exclusion_list
+    return exclusion_dict
+
+
+def expand_test_list(raw_test_list, excluded_name_dict):
+    """Expand a test list into a dict where the keys are test names and the values are a list of
+    variants of that test (if any). Remove any test names where all variants have
+    been excluded."""
+    test_variants = dict([(x, needs_dfuse_with_opt.get_test_variants(x))
+                          for x in raw_test_list])
+
+    keys_to_remove = []
+    keys_to_update = []
+    for key in test_variants.keys():
+        if len(test_variants[key]) > 0:
+            viable = [x for x in test_variants[key] if x not in excluded_name_dict[key]] \
+                if key in excluded_name_dict else list(test_variants[key])
+            if len(viable) == 0:
+                keys_to_remove.append(key)
+            else:
+                keys_to_update.append((key, viable))
+
+    for key in keys_to_remove:
+        del test_variants[key]
+    test_variants.update(keys_to_update)
+
+    return test_variants
+
+
 def run(wf, args):
     """Main entry point"""
     # pylint: disable=too-many-branches
+
+    posix_exclusions = [x for x in args.exclude_test if not is_special_testname(x)] \
+        if args.exclude_test else []
+    special_exclusions = [x for x in args.exclude_test if is_special_testname(x)] \
+        if args.exclude_test else []
+    special_list = [x for x in generate_special_test_list() if x not in special_exclusions]
+    excluded_dict = expand_input_list(['test_' + x for x in posix_exclusions])
+    needs_dfuse_with_opt.record_exclusions(excluded_dict)
+    test_dict = expand_test_list(PosixTests.generate_test_list(), excluded_dict)
+    if len(test_dict) == 0:
+        print('No tests to run!')
+        sys.exit(1)
+
     conf = load_conf(args)
 
     wf_server = WarningsFactory('nlt-server-leaks.json', post=True, check='Server leak checking')
@@ -6351,25 +6490,44 @@ def run(wf, args):
                         fatal_errors=fatal_errors) as server:
             if args.mode == 'launch':
                 run_in_fg(server, conf, args)
-            elif args.mode == 'overlay':
+            elif args.mode == 'overlay' and 'special_dfuse_overlay' in special_list:
                 fatal_errors.add_result(run_duns_overlay_test(server, conf))
             elif args.mode == 'set-fi':
                 fatal_errors.add_result(server.set_fi())
             elif args.mode == 'all':
                 fi_test_dfuse = True
-                fatal_errors.add_result(run_posix_tests(server, conf))
-                fatal_errors.add_result(run_dfuse(server, conf))
-                fatal_errors.add_result(run_duns_overlay_test(server, conf))
+                fatal_errors.add_result(run_posix_tests(server, conf, test_dict.keys()))
+                if 'special_dfuse_multi' in special_list:
+                    fatal_errors.add_result(run_dfuse(server, conf))
+                if 'special_dfuse_overlay' in special_list:
+                    fatal_errors.add_result(run_duns_overlay_test(server, conf))
                 test_pydaos_kv(server, conf)
                 test_pydaos_kv_obj_class(server, conf)
                 fatal_errors.add_result(server.set_fi())
             elif args.test == 'all':
-                fatal_errors.add_result(run_posix_tests(server, conf))
+                fatal_errors.add_result(run_posix_tests(server, conf, test_dict.keys()))
             elif args.test:
-                fatal_errors.add_result(run_posix_tests(server, conf, args.test))
+                custom_test_dict = expand_input_list(['test_' + x for x in args.test])
+                custom_exclusions = explicit_list_to_exclusion_list(custom_test_dict)
+                exclusion_union = {}
+                for key in custom_test_dict.keys():
+                    exclusion_list = \
+                        list(set(custom_exclusions[key]
+                                 if key in custom_exclusions else []).union(
+                                     set(excluded_dict[key] if key in excluded_dict else [])))
+                    if len(exclusion_list) > 0:
+                        exclusion_union[key] = exclusion_list
+                needs_dfuse_with_opt.record_exclusions(exclusion_union)
+                custom_filtered_dict = expand_test_list(custom_test_dict.keys(), exclusion_union)
+                if len(custom_filtered_dict) == 0:
+                    print('No tests to run!')
+                    sys.exit(1)
+                fatal_errors.add_result(
+                    run_posix_tests(server, conf, custom_filtered_dict.keys()))
             else:
-                fatal_errors.add_result(run_posix_tests(server, conf))
-                fatal_errors.add_result(run_dfuse(server, conf))
+                fatal_errors.add_result(run_posix_tests(server, conf, test_dict.keys()))
+                if 'special_dfuse_multi' in special_list:
+                    fatal_errors.add_result(run_dfuse(server, conf))
                 fatal_errors.add_result(server.set_fi())
 
     if args.mode == 'all':
@@ -6478,6 +6636,9 @@ def main():
 
     This allows the junit results to show at least a stack trace and assertion message for
     any failure, regardless of if it's from a test case or not.
+
+    Test names can either be 'pure' or include suffices that encode a particular caching
+    regimen (e.g., read_caching_off).
     """
     parser = argparse.ArgumentParser(description='Run DAOS client on local node')
     parser.add_argument('--server-debug', default=None)
@@ -6498,7 +6659,9 @@ def main():
     parser.add_argument('--log-usage-export')
     parser.add_argument('--log-usage-save')
     parser.add_argument('--dtx', action='store_true')
-    parser.add_argument('--test', help="Use '--test list' for list")
+    parser.add_argument('--test', action='append', help="Use '--test list' for list")
+    parser.add_argument('--exclude-test', action='append',
+                        help='space separated list of tests to exclude')
     parser.add_argument('mode', nargs='*')
     args = parser.parse_args()
 
@@ -6521,12 +6684,14 @@ def main():
         print('Cannot use mode and test')
         sys.exit(1)
 
-    if args.test == 'list':
-        tests = []
-        for method in dir(PosixTests):
-            if method.startswith('test'):
-                tests.append(method[5:])
-        print(f"Tests are: {','.join(sorted(tests))}")
+    if args.test and 'list' in args.test:
+        tests = printable_test_list(PosixTests.generate_test_list())
+        print('''
+* Tests denoted with a '*' have are run separately with caching on and caching off,
+and these may be separately excluded, e.g., --excluded_test read_caching_off
+
+Tests are:
+''' + '\n'.join(sorted(tests)))
         sys.exit(1)
 
     wf = WarningsFactory('nlt-errors.json',
