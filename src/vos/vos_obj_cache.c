@@ -322,16 +322,22 @@ obj_pin_bkt(struct vos_pool *pool, struct vos_object *obj)
 	struct umem_cache_range	 rg;
 	int			 rc;
 
-	if (obj->obj_bkt_loading) {
-		ABT_mutex_lock(obj->obj_mutex);
-		ABT_cond_wait(obj->obj_wait_loading, obj->obj_mutex);
-		ABT_mutex_unlock(obj->obj_mutex);
-	}
-
 	if (obj->obj_bkt_ids[0] == UMEM_DEFAULT_MBKT_ID) {
 		D_ASSERT(obj->obj_pin_hdl == NULL);
 		D_ASSERT(!obj->obj_bkt_loading);
 		return 0;
+	}
+
+	if (obj->obj_bkt_loading) {
+		ABT_mutex_lock(obj->obj_mutex);
+		ABT_cond_wait(obj->obj_wait_loading, obj->obj_mutex);
+		ABT_mutex_unlock(obj->obj_mutex);
+
+		/* The loader failed on umem_cache_pin() */
+		if (obj->obj_pin_hdl == NULL) {
+			D_ERROR("Object:"DF_UOID" isn't pinned.\n", DP_UOID(obj->obj_id));
+			return -DER_BUSY;
+		}
 	}
 
 	if (obj->obj_pin_hdl != NULL)
