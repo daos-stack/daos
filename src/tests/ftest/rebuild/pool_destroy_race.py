@@ -79,9 +79,9 @@ class RbldPoolDestroyWithIO(TestWithServers):
         pool.wait_for_rebuild_to_start(interval=1)
 
         rebuild_state = pool.get_rebuild_state(True)
-        self.log.info("Pool %s rebuild status:%s", pool.uuid, rebuild_state)
+        self.log.info("%s rebuild status:%s", str(pool), rebuild_state)
 
-        self.log_step(f'Destroy pool {pool.uuid} while rebuild is {rebuild_state}')
+        self.log_step(f'Destroy {str(pool)} while rebuild is {rebuild_state}')
         pool.destroy()
 
         # Disable cleanup for all containers under the destroyed pool

@@ -6,6 +6,7 @@
 
 import getpass
 import os
+import re
 import tempfile
 
 from ClusterShell.NodeSet import NodeSet
@@ -151,17 +152,18 @@ def get_service_file(logger, hosts, service, user, verbose=True, timeout=120):
         str: the service file
     """
     command = ' | '.join([
-        get_systemctl_command("status", service, user),
-        "grep 'Loaded:'",
-        "grep -oE '/.*service'",
-        "xargs sh -c '[ -e \"$0\" ] && echo \"$0\"'"
+        get_systemctl_command("show", service, user),
+        "grep 'FragmentPath='",
     ])
     result = run_remote(logger, hosts, command, verbose, timeout)
     if not result.passed:
         raise SystemctlFailure("Error obtaining the service file path")
     if not result.homogeneous:
         raise SystemctlFailure("Error obtaining a homogeneous service file path")
-    return list(result.all_stdout.values())[0].strip()
+    try:
+        return re.findall(r'FragmentPath=(.+)', result.joined_stdout)[0]
+    except IndexError as error:
+        raise SystemctlFailure("Error parsing the service file path") from error
 
 
 def create_override_config(logger, hosts, service, user, service_command, service_config, path,
