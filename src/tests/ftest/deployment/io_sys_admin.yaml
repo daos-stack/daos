@@ -103,7 +103,7 @@ dcp:
   client_processes:
     np: 16
 hdf5_vol:
-  plugin_path: /usr/lib64/mpich/lib
+  plugin_name: libhdf5_vol_daos.so
 
 io_sys_admin:
   steps_to_run:

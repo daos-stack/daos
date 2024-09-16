@@ -1,5 +1,6 @@
 """
 (C) Copyright 2019-2024 Intel Corporation.
+(C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -27,9 +28,9 @@ from dmg_utils import (check_system_query_status, get_storage_query_device_info,
 from duns_utils import format_path
 from exception_utils import CommandFailure
 from fio_utils import FioCommand
-from general_utils import (DaosTestError, check_ping, check_ssh, get_journalctl, get_log_file,
-                           get_random_bytes, get_random_string, list_to_str, pcmd, run_command,
-                           run_pcmd, wait_for_result)
+from general_utils import (DaosTestError, check_ping, check_ssh, find_library, get_journalctl,
+                           get_log_file, get_random_bytes, get_random_string, list_to_str, pcmd,
+                           run_command, run_pcmd, wait_for_result)
 from ior_utils import IorCommand
 from job_manager_utils import Mpirun
 from macsio_util import MacsioCommand
@@ -1122,6 +1123,9 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None,
     if not oclass_list:
         oclass_list = self.params.get("dfs_oclass", ior_params)
     plugin_path = self.params.get("plugin_path", "/run/hdf5_vol/")
+    plugin_name = self.params.get("plugin_name", "/run/hdf5_vol/")
+    if plugin_name and not plugin_path:
+        plugin_path = find_library(plugin_name)
     # update IOR cmdline for each additional IOR obj
     for api in api_list:
         if not self.enable_il and api in ["POSIX-LIBIOIL", "POSIX-LIBPIL4DFS"]:
@@ -1222,6 +1226,9 @@ def create_macsio_cmdline(self, job_spec, pool, ppn, nodesperjob):
     oclass_list = self.params.get("oclass", macsio_params)
     api_list = self.params.get("api", macsio_params)
     plugin_path = self.params.get("plugin_path", "/run/hdf5_vol/")
+    plugin_name = self.params.get("plugin_name", "/run/hdf5_vol/")
+    if plugin_name and not plugin_path:
+        plugin_path = find_library(plugin_name)
     # update macsio cmdline for each additional MACsio obj
     for api in api_list:
         for file_oclass, dir_oclass in oclass_list:

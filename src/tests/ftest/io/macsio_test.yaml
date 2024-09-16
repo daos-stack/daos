@@ -41,7 +41,7 @@ job_manager: !mux
     class_name: Mpirun
     mpi_type: mpich
     macsio_path: /usr/lib64/mpich/bin
-    plugin_path: /usr/lib64/mpich/lib
+    plugin_name: libhdf5_vol_daos.so
     timeout:
       test_macsio: 10
       test_macsio_daos_vol: 20
@@ -49,7 +49,7 @@ job_manager: !mux
     class_name: Orterun
     mpi_type: openmpi
     macsio_path: /usr/lib64/openmpi3/bin
-    plugin_path: /usr/lib64/openmpi3/lib
+    plugin_name: libhdf5_vol_daos.so
     timeout:
       test_macsio: 10
       test_macsio_daos_vol: 20
