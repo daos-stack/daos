@@ -44,7 +44,7 @@ def set_device_faulty(test, dmg, server, uuid, pool=None, has_sys_xs=False, **kw
     Args:
         test (Test): avocado test class
         dmg (DmgCommand): a DmgCommand class instance
-        server (str): host on which to issue the dmg storage set nvme-faulty
+        server (NodeSet): host on which to issue the dmg storage set nvme-faulty
         uuid (str): the device UUID
         pool (TestPool, optional): pool used to wait for rebuild to start/complete if specified.
             Defaults to None.
