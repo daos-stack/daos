@@ -383,11 +383,20 @@ class SoakTestBase(TestWithServers):
                 job_results = job_queue.get()
                 # Results to return in queue
                 node_list.update(job_results["host_list"])
-                self.down_nodes.update(job_results["down_nodes"])
                 debug_logging(self.log, self.enable_debug_msg, "DBG: Updating soak results")
                 self.soak_results[job_results["handle"]] = job_results["state"]
                 job_done_id = job_results["handle"]
                 jobs_not_done.remove(job_done_id)
+
+                # check if nodes are still configured properly
+                cmd = f"ls {self.test_env.log_dir}"
+                node_results = run_remote(log, job_results["host_list"], cmd, verbose=False)
+                if node_results.failed_hosts:
+                    node_list.remove(node_results.failed_hosts)
+                    self.down_nodes.update(node_results.failed_hosts)
+                    log.info(
+                        f"DBG: Nodes {node_results.failed_hosts} are DOWN in job {job_done_id}")
+
                 debug_logging(
                     self.log,
                     self.enable_debug_msg,
