@@ -366,14 +366,11 @@ def get_clush_command(hosts, args=None, command="", command_env=None, command_su
     """
     if fanout is None:
         fanout = max(64, len(os.sched_getaffinity(0)))
-    cmd_list = ["clush"]
+    cmd_list = ["clush", "-f", str(fanout), "-w", str(hosts)]
     if timeout is not None:
         cmd_list.extend(["-u", str(timeout)])
-    if fanout is not None:
-        cmd_list.extend(["-f", str(fanout)])
     if args:
         cmd_list.append(args)
-    cmd_list.extend(["-w", str(hosts)])
     # If ever needed, this is how to disable host key checking:
     # cmd_list.extend(["-o", "-oStrictHostKeyChecking=no"])
     cmd_list.append(command_as_user(command, "root" if command_sudo else "", command_env))
