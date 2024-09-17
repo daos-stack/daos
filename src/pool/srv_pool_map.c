@@ -378,7 +378,7 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 			return -DER_NONEXIST;
 		}
 
-		dom = pool_map_find_node_by_rank(map, target->ta_comp.co_rank);
+		dom = pool_map_find_dom_by_rank(map, target->ta_comp.co_rank);
 		if (dom == NULL) {
 			D_ERROR("Got request to change nonexistent rank %u"
 				" in map %p\n",

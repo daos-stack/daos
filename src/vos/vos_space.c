@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -212,6 +212,7 @@ estimate_space(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
 	struct dcs_csum_info	*csums, *recx_csum;
 	daos_iod_t		*iod;
 	daos_recx_t		*recx;
+	struct vos_rec_bundle	 rbund = { 0 };
 	daos_size_t		 size, scm, nvme = 0 /* in blk */;
 	int			 i, j;
 
@@ -233,16 +234,16 @@ estimate_space(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
 		/* Single value */
 		if (iod->iod_type == DAOS_IOD_SINGLE) {
 			size = iod->iod_size;
+			rbund.rb_csum	= csums;
+			rbund.rb_rsize	= size;
 
 			/* Single value record */
-			if (vos_io_scm(pool, iod->iod_type, size, VOS_IOS_GENERIC)) {
-				/** store data on DAOS_MEDIA_SCM */
-				scm += vos_recx2irec_size(size, csums);
-			} else {
-				scm += vos_recx2irec_size(0, csums);
-				if (iod->iod_size != 0)
-					nvme += vos_byte2blkcnt(iod->iod_size);
-			}
+			scm += vos_irec_msize(pool, &rbund);
+			if (vos_io_scm(pool, iod->iod_type, size, VOS_IOS_GENERIC))
+				scm += size;
+			else
+				nvme += vos_byte2blkcnt(size);
+
 			/* Assume one more SV tree node created */
 			scm += 256;
 			continue;
