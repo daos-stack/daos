@@ -893,7 +893,7 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 
 		D_ASSERT(rpc_priv->crp_deadline_sec != 0);
 
-		/* Set childs deadline same as parent and calculate timeout left from it */
+		/* Set child's deadline same as parent and calculate timeout left from it */
 		child_rpc_priv->crp_deadline_sec = rpc_priv->crp_deadline_sec;
 		/* Note: crp_timeout_sec is still used for local rpc expiration for now */
 		child_rpc_priv->crp_timeout_sec =
