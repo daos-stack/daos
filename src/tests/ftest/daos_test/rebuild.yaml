@@ -2,14 +2,20 @@
 # required quantity is indicated by the placeholders
 hosts:
   test_servers: 4
+
 timeout: 800
 timeouts:
   test_rebuild_0to10: 2000
   test_rebuild_12to15: 1500
   test_rebuild_27: 1500
+  test_rebuild_31: 400
+  test_rebuild_32: 400
+  test_rebuild_33: 200
+  test_rebuild_34: 200
   test_rebuild_35: 180
 pool:
   nvme_size: 0G
+
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -40,12 +46,15 @@ server_config:
       storage: auto
   transport_config:
     allow_insecure: false
+
 agent_config:
   transport_config:
     allow_insecure: false
+
 dmg:
   transport_config:
     allow_insecure: false
+
 daos_tests:
   num_clients: 1
   num_replicas: 1
@@ -67,6 +76,10 @@ daos_tests:
     test_rebuild_28: DAOS_Rebuild_28
     test_rebuild_29: DAOS_Rebuild_29
     test_rebuild_30: DAOS_Rebuild_30
+    test_rebuild_31: DAOS_Rebuild_31
+    test_rebuild_32: DAOS_Rebuild_32
+    test_rebuild_33: DAOS_Rebuild_33
+    test_rebuild_34: DAOS_Rebuild_34
     test_rebuild_35: DAOS_Rebuild_35
   daos_test:
     test_rebuild_0to10: r
@@ -86,6 +99,10 @@ daos_tests:
     test_rebuild_28: r
     test_rebuild_29: r
     test_rebuild_30: r
+    test_rebuild_31: r
+    test_rebuild_32: r
+    test_rebuild_33: r
+    test_rebuild_34: r
     test_rebuild_35: r
   args:
     test_rebuild_0to10: -s3 -u subtests="0-10"
@@ -105,6 +122,10 @@ daos_tests:
     test_rebuild_28: -s3 -u subtests="28"
     test_rebuild_29: -s5 -u subtests="29"
     test_rebuild_30: -s5 -u subtests="30"
+    test_rebuild_31: -s5 -u subtests="31"
+    test_rebuild_32: -s5 -u subtests="32"
+    test_rebuild_33: -s5 -u subtests="33"
+    test_rebuild_34: -s5 -u subtests="34"
     test_rebuild_35: -s5 -u subtests="35"
   stopped_ranks:
     test_rebuild_26: ["random"]
