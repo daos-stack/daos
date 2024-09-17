@@ -1500,6 +1500,7 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 			 rpc_priv->crp_deadline_sec);
 	} else {
 		rpc_priv->crp_deadline_sec = crt_timeout_to_deadline(rpc_priv->crp_timeout_sec);
+		RPC_INFO(rpc_priv, "Deadline set to %d\n", rpc_priv->crp_deadline_sec);
 	}
 
 	if (rpc_priv->crp_coll) {

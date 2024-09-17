@@ -87,7 +87,7 @@ crt_deadline_to_timeout(uint32_t deadline_sec)
 	clock_gettime(CLOCK_REALTIME, &now);
 
 	D_DEBUG(DB_ALL, "now.tv_sec = %ld\n", now.tv_sec);
-	return deadline_sec - now.tv_sec;
+	return deadline_sec - now.tv_sec - 1;
 }
 
 static inline uint32_t
