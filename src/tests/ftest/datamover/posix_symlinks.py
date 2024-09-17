@@ -61,7 +61,7 @@ class DmvrPosixSymlinks(DataMoverTestBase):
         start_dfuse(self, dfuse)
 
         # Create 1 pool
-        pool1 = self.create_pool()
+        pool1 = self.get_pool()
 
         # Create a special container to hold UNS entries
         uns_cont = self.get_container(pool1)

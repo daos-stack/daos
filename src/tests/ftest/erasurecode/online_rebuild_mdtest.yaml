@@ -30,7 +30,6 @@ server_config:
       log_file: daos_server1.log
       storage: auto
 pool:
-  control_method: dmg
   size: 93%
 container:
   type: POSIX
