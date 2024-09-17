@@ -123,7 +123,7 @@ ior_faults:
     mount_dir: "/tmp/soak_dfuse_ior/"
     disable_caching: true
 hdf5_vol:
-  plugin_path: "/usr/lib64/mpich/lib"
+  plugin_name: libhdf5_vol_daos.so
 events:
   - "mce: [Hardware Error]: Machine check events logged"
   - "Package temperature above threshold"

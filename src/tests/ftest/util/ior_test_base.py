@@ -8,7 +8,7 @@ import os
 from apricot import TestWithServers
 from dfuse_utils import get_dfuse, start_dfuse
 from exception_utils import CommandFailure
-from general_utils import get_random_string
+from general_utils import find_library, get_random_string
 from host_utils import get_local_host
 from ior_utils import IorCommand
 from job_manager_utils import get_job_manager
@@ -318,7 +318,11 @@ class IorTestBase(TestWithServers):
                 flags_w = flags[0]
                 if api == "HDF5-VOL":
                     api = "HDF5"
-                    hdf5_plugin_path = self.params.get("plugin_path", '/run/hdf5_vol/*')
+                    hdf5_plugin_name = self.params.get("plugin_name", '/run/hdf5_vol/*')
+                    hdf5_plugin_path = find_library(hdf5_plugin_name)
+                    if not hdf5_plugin_path:
+                        results.append(["FAIL", f"Failed to find {hdf5_plugin_name}"])
+                        continue
                     flags_w += " -k"
                 elif api == "POSIX+IL":
                     api = "POSIX"

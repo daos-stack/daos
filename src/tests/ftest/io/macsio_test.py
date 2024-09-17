@@ -7,7 +7,7 @@
 from apricot import TestWithServers
 from command_utils_base import CommandFailure
 from dfuse_utils import get_dfuse, start_dfuse
-from general_utils import get_log_file, list_to_str
+from general_utils import find_library, get_log_file, list_to_str
 from job_manager_utils import get_job_manager
 from macsio_util import MacsioCommand
 
@@ -136,7 +136,10 @@ class MacsioTest(TestWithServers):
         :avocado: tags=MacsioTest,test_macsio_daos_vol
         :avocado: tags=DAOS_5610
         """
-        plugin_path = self.params.get("plugin_path", "/run/job_manager/*")
+        plugin_name = self.params.get("plugin_name", "/run/job_manager/*")
+        plugin_path = find_library(plugin_name)
+        if not plugin_path:
+            self.fail(f"Failed to find {plugin_name}")
         processes = self.params.get("processes", "/run/macsio/*", len(self.hostlist_clients))
 
         # Create a pool

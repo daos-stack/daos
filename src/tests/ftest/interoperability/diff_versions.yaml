@@ -37,7 +37,7 @@ ior:
     write_flg: "-w -W -k -G 1 -i 1"
     read_flg: "-C -k -e -r -R -g -G 1 -Q 1 -vv"
 hdf5_vol:
-  plugin_path: "/usr/lib64/mpich/lib"
+  plugin_name: libhdf5_vol_daos.so
 interop:
   # Example of upgrade/downgrade RPMs from local tar file
   # upgrade_rpms: ["/home/dinghwah/RPM/2.1.104/daos-2.1.104-1.el8.x86_64.rpm"]

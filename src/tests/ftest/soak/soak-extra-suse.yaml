@@ -1,3 +1,3 @@
 hdf5_vol:
-  plugin_path: /usr/lib64/mpi/gcc/mpich/lib
+  plugin_name: libhdf5_vol_daos.so
 mpi_module: "gnu-mpich"

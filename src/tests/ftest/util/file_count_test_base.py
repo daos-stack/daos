@@ -6,6 +6,7 @@
 import os
 
 from avocado.core.exceptions import TestFail
+from general_utils import find_library
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
 from oclass_utils import extract_redundancy_factor
@@ -68,7 +69,10 @@ class FileCountTestBase(IorTestBase, MdtestBase):
         results = []
         dir_oclass = None
         apis = self.params.get("api", "/run/largefilecount/*")
-        hdf5_plugin_path = self.params.get("plugin_path", '/run/hdf5_vol/*')
+        hdf5_plugin_name = self.params.get("plugin_name", '/run/hdf5_vol/*')
+        hdf5_plugin_path = find_library(hdf5_plugin_name)
+        if not hdf5_plugin_path:
+            self.fail(f"Failed to find {hdf5_plugin_name}")
         ior_np = self.params.get("np", '/run/ior/client_processes/*', 1)
         ior_ppn = self.params.get("ppn", '/run/ior/client_processes/*', None)
         mdtest_np = self.params.get("np", '/run/mdtest/client_processes/*', 1)

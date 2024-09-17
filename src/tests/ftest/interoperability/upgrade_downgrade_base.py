@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2023 Intel Corporation.
+  (C) Copyright 2023-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -11,7 +11,7 @@ import traceback
 
 from agent_utils import include_local_host
 from command_utils_base import CommandFailure
-from general_utils import get_random_bytes, pcmd, run_pcmd
+from general_utils import find_library, get_random_bytes, pcmd, run_pcmd
 from ior_test_base import IorTestBase
 from pydaos.raw import DaosApiError
 
@@ -574,7 +574,7 @@ class UpgradeDowngradeBase(IorTestBase):
         # (3.b)ior hdf5
         elif ior_api == "HDF5":
             self.log.info("(3.b)==Run IOR HDF5 write and read.")
-            hdf5_plugin_path = self.params.get("plugin_path", '/run/hdf5_vol/')
+            hdf5_plugin_path = find_library(self.params.get("plugin_name", '/run/hdf5_vol/'))
             self.ior_cmd.flags.update(iorflags_write)
             self.run_ior_with_pool(
                 plugin_path=hdf5_plugin_path, mount_dir=mount_dir,
