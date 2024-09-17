@@ -49,7 +49,7 @@ class ConfigGenerateRun(TestWithServers):
         # path needs to be set in that case.
         control_metadata = None
         if use_tmpfs_scm:
-            control_metadata = os.path.join(self._test_env.log_dir, 'control_metadata')
+            control_metadata = os.path.join(self.test_env.log_dir, 'control_metadata')
 
         # Call dmg config generate. AP is always the first server host.
         server_host = self.hostlist_servers[0]
