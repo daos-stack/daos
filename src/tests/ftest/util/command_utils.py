@@ -1094,7 +1094,7 @@ class YamlCommand(SubProcessCommand):
                 "Creating %s socket directory %s for user %s on %s",
                 self.command, directory, user, nodes)
             result = create_directory(
-                self.log, nodes, directory, user=user, owner="root" if privileged else None)
+                self.log, nodes, directory, user="root" if privileged else user, owner=user)
             if not result.passed:
                 raise CommandFailure(
                     f"{self.command}: error creating socket directory {directory} for user "
