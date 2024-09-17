@@ -28,7 +28,7 @@ server_config:
 
 pool:
   size: 95%
-  properties: ec_cell_sz:128KiB
+  properties: ec_cell_sz:1MiB
 
 container:
   type: POSIX
@@ -61,6 +61,12 @@ mdtest_ec_16p2g1: &mdtest_ec_16p2g1
   dfs_dir_oclass: RP_3GX
   dfs_chunk: 16MiB
 
+mdtest_rp_3g1: &mdtest_rp_3g1
+  <<: *mdtest_base
+  dfs_oclass: RP_3G1
+  dfs_dir_oclass: RP_3GX
+  dfs_chunk: 1MiB
+
 mdtest_dfs_s1:
   api: DFS
   <<: *mdtest_s1
@@ -69,6 +75,10 @@ mdtest_dfs_ec_16p2g1:
   api: DFS
   <<: *mdtest_ec_16p2g1
 
+mdtest_dfs_rp_3g1:
+  api: DFS
+  <<: *mdtest_rp_3g1
+
 mdtest_pil4dfs_s1:
   api: POSIX+PIL4DFS  # handled by ftest
   <<: *mdtest_s1
@@ -76,6 +86,13 @@ mdtest_pil4dfs_s1:
 mdtest_pil4dfs_ec_16p2g1:
   api: POSIX+PIL4DFS  # handled by ftest
   <<: *mdtest_ec_16p2g1
+
+mdtest_pil4dfs_rp_3g1:
+  api: POSIX+PIL4DFS  # handled by ftest
+  <<: *mdtest_rp_3g1
+
+dfuse:
+  disable_caching: true
 
 client:
   env_vars:
