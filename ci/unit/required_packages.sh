@@ -20,6 +20,7 @@ pkgs="argobots            \
       patchelf            \
       pciutils-devel      \
       pmix                \
+      rsync               \
       spdk-devel          \
       valgrind-devel"
 
