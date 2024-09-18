@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -310,7 +310,7 @@ type metricsListCmd struct {
 
 // Execute runs the command to list metrics from the DAOS storage nodes.
 func (cmd *metricsListCmd) Execute(args []string) error {
-	host, err := getMetricsHost(cmd.getHostList())
+	host, err := getMetricsHost(cmd.Host.Slice())
 	if err != nil {
 		return err
 	}
@@ -365,7 +365,7 @@ type metricsQueryCmd struct {
 
 // Execute runs the command to query metrics from the DAOS storage nodes.
 func (cmd *metricsQueryCmd) Execute(args []string) error {
-	host, err := getMetricsHost(cmd.getHostList())
+	host, err := getMetricsHost(cmd.Host.Slice())
 	if err != nil {
 		return err
 	}

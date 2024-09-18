@@ -31,7 +31,6 @@ dmg:
 pool:
   scm_size: 1600000000
   nvme_size: 20000000000
-  control_method: dmg
 container:
   type: POSIX
   control_method: daos
