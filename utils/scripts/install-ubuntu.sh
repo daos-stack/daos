@@ -52,6 +52,7 @@ apt-get install \
     pkg-config \
     python3-dev \
     python3-venv \
+    strace \
     uuid-dev \
     valgrind \
     yasm
