@@ -330,7 +330,7 @@ class SoakTestBase(TestWithServers):
             job_results = {}
             # check if nodes are still configured properly
             cmd = f"ls {self.test_env.log_dir}"
-            node_results = run_remote(self.log, node_list, cmd, verbose=False)
+            node_results = run_remote(self.log, NodeSet(node_list), cmd, verbose=False)
             if node_results.failed_hosts:
                 node_list.remove(node_results.failed_hosts)
                 self.down_nodes.update(node_results.failed_hosts)
