@@ -726,7 +726,7 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Unit Test on Leap 15.5') {
+                stage('Unit Test on Leap 15.5 compiled with Intel-C') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
