@@ -229,6 +229,7 @@ crt_gdata_dump(void)
 	DUMP_GDATA_FIELD("0x%lx", cg_rpcid);
 	DUMP_GDATA_FIELD("%ld", cg_num_cores);
 	DUMP_GDATA_FIELD("%d", cg_rpc_quota);
+	DUMP_GDATA_FIELD("%d", cg_start_time_sec);
 }
 
 /* first step init - for initializing crt_gdata */
