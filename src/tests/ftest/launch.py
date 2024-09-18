@@ -760,6 +760,16 @@ def main():
              "standard test yaml file.")
     args = parser.parse_args()
 
+    # Hack to test daos_agent user - start
+    args.mode = "custom_a"
+    args.archive = True
+    args.include_localhost = True
+    args.jenkinslog = True
+    args.overwrite_config = True
+    args.rename = True
+    args.sparse = True
+    # Hack to test daos_agent user - end
+
     # Override arguments via the mode
     if args.mode == "ci":
         args.archive = True
