@@ -40,7 +40,7 @@ elif [[ $distro = leap* ]]; then
             libpmem1             \
             libpmemobj1          \
             libnuma-devel        \
-            libprotobuf-c-devel"
+            protobuf-c-devel"
 fi
 
 # output with trailing newline suppressed
