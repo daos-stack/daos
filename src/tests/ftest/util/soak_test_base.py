@@ -307,6 +307,7 @@ class SoakTestBase(TestWithServers):
         job_queue = multiprocessing.Queue()
         jobid_list = []
         jobs_not_done = []
+        processing_jobs = True
         # remove any nodes marked as DOWN
         node_list = self.hostlist_clients
         node_list.difference_update(self.down_nodes)
@@ -322,10 +323,28 @@ class SoakTestBase(TestWithServers):
             jobs_not_done.append(job_dict["jobid"])
         self.log.info("Submitting %s jobs at %s", str(len(jobid_list)), time.ctime())
         job_threads = []
-        while True:
+        while processing_jobs:
             if time.time() > self.end_time or len(jobs_not_done) == 0:
+                processing_jobs = False
                 break
             job_results = {}
+            # check if nodes are still configured properly
+            cmd = f"ls {self.test_env.log_dir}"
+            node_results = run_remote(log, node_list, cmd, verbose=False)
+            if node_results.failed_hosts:
+                node_list.remove(node_results.failed_hosts)
+                self.down_nodes.update(node_results.failed_hosts)
+                self.log.info(f"DBG: Nodes {node_results.failed_hosts} are DOWN")
+            # verify that there are enough nodes to run remaining jobs
+            if len(job_threads) == 0:
+                for job_dict in self.joblist:
+                    job_id = job_dict["jobid"]
+                    if job_id in jobs_not_done:
+                        node_count = job_dict["nodesperjob"]
+                        if len(node_list) < node_count:
+                            processing_jobs = False
+                            raise SoakTestError(
+                                "<<FAILED: There are not enough client nodes to continue")
             for job_dict in self.joblist:
                 job_id = job_dict["jobid"]
                 if job_id in jobid_list:
@@ -387,15 +406,6 @@ class SoakTestBase(TestWithServers):
                 self.soak_results[job_results["handle"]] = job_results["state"]
                 job_done_id = job_results["handle"]
                 jobs_not_done.remove(job_done_id)
-
-                # check if nodes are still configured properly
-                cmd = f"ls {self.test_env.log_dir}"
-                node_results = run_remote(log, job_results["host_list"], cmd, verbose=False)
-                if node_results.failed_hosts:
-                    node_list.remove(node_results.failed_hosts)
-                    self.down_nodes.update(node_results.failed_hosts)
-                    log.info(
-                        f"DBG: Nodes {node_results.failed_hosts} are DOWN in job {job_done_id}")
 
                 debug_logging(
                     self.log,
