@@ -34,11 +34,11 @@ if [[ $distro = el* ]]; then
             numactl-devel"
 elif [[ $distro = leap* ]]; then
     # need https://artifactory.dc.hpdd.intel.com/ui/repos/tree/General/opensuse-proxy%2Frepositories%2Fdevel:%2Flanguages:%2Fgo to install gotestsum
-    pkgs+=" boost-devel  \
-            ipmctl-devel \
-            isa-l-devel  \
-            libpmem1     \
-            libpmemobj1  \
+    pkgs+=" boost-devel   \
+            ipmctl-devel  \
+            libisal-devel \
+            libpmem1      \
+            libpmemobj1   \
             libnuma-devel"
 fi
 
