@@ -70,9 +70,8 @@ jobs:
       PACKAGING_DIR: ${{ env.PACKAGING_DIR }}
       TEST_TAG: ${{ env.TEST_TAG }}
     steps:
-      - name: Echo
-        if: false
-        run: echo
+      - name: Make outputs from env variables
+        run: echo "Make outputs from env variables"
 
   Call-RPM-Build:
     name: Build RPM
