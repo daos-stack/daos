@@ -353,7 +353,7 @@ class Launch():
         # Determine if bullseye code coverage collection is enabled
         code_coverage = CodeCoverage(test_env)
         # pylint: disable=unsupported-binary-operation
-        code_coverage.check(logger, args.test_servers | self.local_host)
+        # code_coverage.check(logger, args.test_servers | self.local_host)
 
         # Update the test yaml files for the tests in this test group
         try:
