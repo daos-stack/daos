@@ -42,10 +42,14 @@ class DaosAgentConfigTest(TestWithServers):
             self.agent_managers[-1],
             include_local_host(self.hostlist_clients),
             self.hostfile_clients_slots)
-        self.agent_managers[-1].verify_socket_dir = False
 
         # Get the input to verify
         c_val = self.params.get("config_val", "/run/agent_config_val/*/")
+
+        # Do not create the agent runtime directory if running as root or the test is attempting
+        # to test with an invalid runtime directory value.
+        if self.test_env.agent_user is None or (c_val[0] == "runtime_dir" and c_val[2] == "False"):
+            self.agent_managers[-1].verify_socket_dir = False
 
         # Identify the attribute and modify its value to test value
         self.assertTrue(
