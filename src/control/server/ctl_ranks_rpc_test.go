@@ -76,6 +76,7 @@ func checkUnorderedRankResults(t *testing.T, expResults, gotResults []*sharedpb.
 }
 
 func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		missingSB        bool
 		instancesStopped bool
@@ -248,6 +249,7 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 }
 
 func TestServer_CtlSvc_StopRanks(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		missingSB         bool
 		engineCount       int
@@ -420,6 +422,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 }
 
 func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		missingSB        bool
 		engineCount      int
@@ -561,6 +564,7 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 }
 
 func TestServer_CtlSvc_StartRanks(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		missingSB        bool
 		engineCount      int
@@ -688,6 +692,7 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 }
 
 func TestServer_updateSetEngineLogMasksReq(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		req           ctlpb.SetLogMasksReq
 		cfgMasks      string
@@ -784,6 +789,7 @@ func TestServer_updateSetEngineLogMasksReq(t *testing.T) {
 }
 
 func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		missingRank      bool
 		instancesStopped bool

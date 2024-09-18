@@ -55,6 +55,7 @@ func waitForLeadership(ctx context.Context, t *testing.T, db *Database, gained b
 }
 
 func TestSystem_Database_filterMembers(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -122,6 +123,7 @@ func TestSystem_Database_filterMembers(t *testing.T) {
 }
 
 func TestSystem_Database_LeadershipCallbacks(t *testing.T) {
+	t.Parallel()
 	localhost := common.LocalhostCtrlAddr()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
@@ -232,6 +234,7 @@ func (tss *testSnapshotSink) Reader() io.ReadCloser {
 }
 
 func TestSystem_Database_SnapshotRestore(t *testing.T) {
+	t.Parallel()
 	maxRanks := 2048
 	maxPools := 1024
 	maxAttrs := 4096
@@ -343,6 +346,7 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 }
 
 func TestSystem_Database_SnapshotRestoreBadVersion(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -368,6 +372,7 @@ func TestSystem_Database_SnapshotRestoreBadVersion(t *testing.T) {
 }
 
 func TestSystem_Database_BadApply(t *testing.T) {
+	t.Parallel()
 	makePayload := func(t *testing.T, op raftOp, inner interface{}) []byte {
 		t.Helper()
 		data, err := createRaftUpdate(op, inner)
@@ -433,6 +438,7 @@ func ignoreFaultDomainIDOption() cmp.Option {
 }
 
 func TestSystem_Database_memberRaftOps(t *testing.T) {
+	t.Parallel()
 	ctx := test.Context(t)
 
 	testMembers := make([]*Member, 0)
@@ -593,6 +599,7 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 }
 
 func TestSystem_Database_memberFaultDomain(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		rank        Rank
 		faultDomain *FaultDomain
@@ -625,6 +632,7 @@ func TestSystem_Database_memberFaultDomain(t *testing.T) {
 }
 
 func TestSystem_Database_FaultDomainTree(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		fdTree *FaultDomainTree
 	}{
@@ -659,6 +667,7 @@ func TestSystem_Database_FaultDomainTree(t *testing.T) {
 }
 
 func TestSystem_Database_SystemAttrs(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		startAttrs  map[string]string
 		attrsUpdate map[string]string
@@ -718,6 +727,7 @@ func TestSystem_Database_SystemAttrs(t *testing.T) {
 }
 
 func TestSystem_Database_OnEvent(t *testing.T) {
+	t.Parallel()
 	puuid := uuid.New()
 	puuidAnother := uuid.New()
 
@@ -821,6 +831,7 @@ func TestSystem_Database_OnEvent(t *testing.T) {
 }
 
 func TestSystemDatabase_PoolServiceList(t *testing.T) {
+	t.Parallel()
 	ready := &PoolService{
 		PoolUUID:   uuid.New(),
 		PoolLabel:  "pool0001",
@@ -899,6 +910,7 @@ func TestSystemDatabase_PoolServiceList(t *testing.T) {
 }
 
 func TestSystem_Database_GroupMap(t *testing.T) {
+	t.Parallel()
 	membersWithStates := func(states ...MemberState) []*Member {
 		members := make([]*Member, len(states))
 
@@ -1063,6 +1075,7 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 }
 
 func Test_Database_ResignLeadership(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		cause     error
 		expErr    error
@@ -1118,6 +1131,7 @@ func Test_Database_ResignLeadership(t *testing.T) {
 }
 
 func TestDatabase_TakePoolLock(t *testing.T) {
+	t.Parallel()
 	mockUUID := uuid.MustParse(test.MockUUID(1))
 	parentLock := makeLock(1, 1, 1)
 	wrongIdLock := makeLock(1, 2, 1)

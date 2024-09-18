@@ -27,6 +27,7 @@ func RunSelfTest(ctx context.Context, cfg *daos.SelfTestConfig) ([]*daos.SelfTes
 }
 
 func TestDaos_netTestCmdExecute(t *testing.T) {
+	t.Parallel()
 	// Quickie smoke test for the UI -- will flesh out later.
 	var opts cliOptions
 	log, buf := logging.NewTestLogger(t.Name())

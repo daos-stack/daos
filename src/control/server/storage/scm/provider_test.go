@@ -29,6 +29,7 @@ var (
 )
 
 func TestProvider_Scan(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		mbc     *MockBackendConfig
 		expErr  error
@@ -97,6 +98,7 @@ func TestProvider_Scan(t *testing.T) {
 }
 
 func TestProvider_Prepare(t *testing.T) {
+	t.Parallel()
 	cmpRes := func(t *testing.T, want, got *storage.ScmPrepareResponse) {
 		t.Helper()
 		if diff := cmp.Diff(want, got); diff != "" {
@@ -246,6 +248,7 @@ func TestProvider_Prepare(t *testing.T) {
 }
 
 func TestProvider_CheckFormat(t *testing.T) {
+	t.Parallel()
 	const (
 		goodMountPoint = "/mnt/daos"
 		goodDevice     = "/dev/pmem0"
@@ -415,6 +418,7 @@ func TestProvider_CheckFormat(t *testing.T) {
 }
 
 func TestProvider_Format(t *testing.T) {
+	t.Parallel()
 	const (
 		goodMountPoint     = "/mnt/daos"
 		nestedMountPoint   = "/mnt/daos/0"

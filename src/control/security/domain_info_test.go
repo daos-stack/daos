@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2023 Intel Corporation.
+// (C) Copyright 2023-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,6 +18,7 @@ import (
 )
 
 func TestSecurity_DomainInfo_String(t *testing.T) {
+	t.Parallel()
 	pid1Name, err := common.GetProcName(1)
 	if err != nil {
 		t.Fatalf("failed to get process name for pid 1: %s", err)

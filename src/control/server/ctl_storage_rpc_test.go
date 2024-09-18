@@ -58,6 +58,7 @@ var (
 )
 
 func TestServer_bdevScan(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		req                 *ctlpb.ScanNvmeReq
 		disableHPs          bool
@@ -627,6 +628,7 @@ func TestServer_bdevScan(t *testing.T) {
 }
 
 func TestServer_CtlSvc_StorageScan(t *testing.T) {
+	t.Parallel()
 	ctrlr := storage.MockNvmeController()
 	ctrlr.SmdDevices = nil
 	ctrlrPB := proto.MockNvmeController()
@@ -939,6 +941,7 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 }
 
 func TestServer_checkTmpfsMem(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		scmCfgs     map[int]*storage.TierConfig
 		memInfoErr  error
@@ -1043,6 +1046,7 @@ func TestServer_checkTmpfsMem(t *testing.T) {
 }
 
 func TestServer_CtlSvc_StorageFormat(t *testing.T) {
+	t.Parallel()
 	mockNvmeController0 := storage.MockNvmeController(0)
 	mockNvmeController1 := storage.MockNvmeController(1)
 
@@ -1851,6 +1855,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 }
 
 func TestServer_CtlSvc_StorageNvmeRebind(t *testing.T) {
+	t.Parallel()
 	usrCurrent, _ := user.Current()
 	username := usrCurrent.Username
 
@@ -1958,6 +1963,7 @@ func TestServer_CtlSvc_StorageNvmeRebind(t *testing.T) {
 }
 
 func TestServer_CtlSvc_StorageNvmeAddDevice(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		req         *ctlpb.NvmeAddDeviceReq
 		bmbc        *bdev.MockBackendConfig
@@ -2301,6 +2307,7 @@ func TestServer_CtlSvc_StorageNvmeAddDevice(t *testing.T) {
 }
 
 func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
+	t.Parallel()
 	const (
 		clusterSize     uint64 = 32 * humanize.MiByte
 		hugeClusterSize uint64 = humanize.GiByte
@@ -3030,6 +3037,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 }
 
 func TestServer_getRdbSize(t *testing.T) {
+	t.Parallel()
 	type ExpectedOutput struct {
 		size    uint64
 		message string
@@ -3094,6 +3102,7 @@ func TestServer_getRdbSize(t *testing.T) {
 }
 
 func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
+	t.Parallel()
 	type EngineConfig struct {
 		mdCap       string
 		ctrlMdPath  string
@@ -3355,6 +3364,7 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 }
 
 func TestServer_CtlSvc_getEngineCfgFromNvmeCtl(t *testing.T) {
+	t.Parallel()
 	type DataInput struct {
 		tierCfgs storage.TierConfigs
 		nvmeCtlr *ctl.NvmeController
@@ -3456,6 +3466,7 @@ func TestServer_CtlSvc_getEngineCfgFromNvmeCtl(t *testing.T) {
 }
 
 func TestServer_CtlSvc_getEngineCfgFromScmNsp(t *testing.T) {
+	t.Parallel()
 	type DataInput struct {
 		tierCfgs storage.TierConfigs
 		scmNsp   *ctl.ScmNamespace

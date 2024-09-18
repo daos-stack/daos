@@ -25,6 +25,7 @@ import (
 
 // TestBackend_createAioFile verifies AIO files are created (or not) as expected.
 func TestBackend_createAioFile(t *testing.T) {
+	t.Parallel()
 	tests := map[string]struct {
 		path          string
 		pathImmutable bool // avoid adjusting path in test if set
@@ -103,6 +104,7 @@ func TestBackend_createAioFile(t *testing.T) {
 }
 
 func TestBackend_writeJSONFile(t *testing.T) {
+	t.Parallel()
 	tierID := 84
 	host, _ := os.Hostname()
 

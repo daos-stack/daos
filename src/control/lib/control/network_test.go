@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,6 +20,7 @@ import (
 )
 
 func TestControl_NetworkScan(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		mic     *MockInvokerConfig
 		expResp *NetworkScanResp
@@ -253,6 +254,7 @@ func TestControl_NetworkScan(t *testing.T) {
 }
 
 func TestControl_GetAttachInfo(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		mic     *MockInvokerConfig
 		req     *GetAttachInfoReq

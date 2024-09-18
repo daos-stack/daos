@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,6 +17,7 @@ import (
 )
 
 func TestAgent_FabricInterfaceSetToHostFabricMap(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		fis       *hardware.FabricInterfaceSet
 		input     string

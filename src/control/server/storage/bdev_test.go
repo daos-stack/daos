@@ -30,6 +30,7 @@ func ctrlrsFromPCIAddrs(addrs ...string) NvmeControllers {
 }
 
 func Test_NvmeDevState(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		state  NvmeDevState
 		expStr string
@@ -75,6 +76,7 @@ func Test_NvmeDevState(t *testing.T) {
 }
 
 func Test_LedState(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		state  LedState
 		expStr string
@@ -126,6 +128,7 @@ func Test_LedState(t *testing.T) {
 
 // Test_Convert_SmdDevice verifies proto->native and native->native JSON conversions.
 func Test_Convert_SmdDevice(t *testing.T) {
+	t.Parallel()
 	native := MockSmdDevice(MockNvmeController(1))
 	origTgts := native.TargetIDs
 	// Validate target IDs get de-duplicated and HasSysXS set appropriately
@@ -203,6 +206,7 @@ func Test_Convert_SmdDevice(t *testing.T) {
 }
 
 func Test_NvmeController_Update(t *testing.T) {
+	t.Parallel()
 	mockCtrlrs := MockNvmeControllers(5)
 
 	// Verify in-place update.
@@ -218,6 +222,7 @@ func Test_NvmeController_Update(t *testing.T) {
 }
 
 func Test_NvmeController_Addresses(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		ctrlrs   NvmeControllers
 		expAddrs []string
@@ -264,6 +269,7 @@ func Test_NvmeController_Addresses(t *testing.T) {
 }
 
 func Test_filterBdevScanResponse(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		addrs    []string
 		scanResp *BdevScanResponse
@@ -327,6 +333,7 @@ func Test_filterBdevScanResponse(t *testing.T) {
 }
 
 func Test_CalcMinHugepages(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		input      *common.MemInfo
 		numTargets int

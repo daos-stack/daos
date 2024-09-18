@@ -47,6 +47,7 @@ const (
 )
 
 func TestServer_Harness_Start(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		trc              *engine.TestRunnerConfig
 		isAP             bool                     // is first instance an AP/MS replica/bootstrap
@@ -456,6 +457,7 @@ func TestServer_Harness_Start(t *testing.T) {
 }
 
 func TestServer_Harness_WithFaultDomain(t *testing.T) {
+	t.Parallel()
 	harness := &EngineHarness{}
 	fd, err := system.NewFaultDomainFromString("/one/two")
 	if err != nil {
@@ -493,6 +495,7 @@ func (db *mockdb) ResignLeadership(error) error {
 }
 
 func TestServer_Harness_CallDrpc(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		mics           []*MockInstanceConfig
 		method         drpc.Method

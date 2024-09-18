@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2023 Intel Corporation.
+// (C) Copyright 2023-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,6 +16,7 @@ import (
 )
 
 func TestCheckGetPolicyCommand(t *testing.T) {
+	t.Parallel()
 	runCmdTests(t, []cmdTest{
 		{
 			"Get policy with no arguments",

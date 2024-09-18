@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -32,6 +32,7 @@ func defConfigCmpOpts() cmp.Options {
 }
 
 func TestStorage_BdevDeviceList_Devices(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		list      *BdevDeviceList
 		expResult []string
@@ -70,6 +71,7 @@ func TestStorage_BdevDeviceList_Devices(t *testing.T) {
 }
 
 func TestStorage_BdevDeviceList(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		devices    []string
 		expList    *BdevDeviceList
@@ -158,6 +160,7 @@ func TestStorage_BdevDeviceList(t *testing.T) {
 }
 
 func TestStorage_BdevDeviceList_FromYAML(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		input   string
 		expList *BdevDeviceList
@@ -209,6 +212,7 @@ func TestStorage_BdevDeviceList_FromYAML(t *testing.T) {
 }
 
 func TestStorage_BdevDeviceList_FromJSON(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		input   string
 		expList *BdevDeviceList
@@ -257,6 +261,7 @@ func TestStorage_BdevDeviceList_FromJSON(t *testing.T) {
 }
 
 func TestStorage_parsePCIBusRange(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		rangeStr string
 		bitSize  int
@@ -320,6 +325,7 @@ func TestStorage_parsePCIBusRange(t *testing.T) {
 }
 
 func TestStorage_TierConfigs_Validate(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		input           string
 		expTierCfgs     TierConfigs
@@ -722,6 +728,7 @@ storage:
 }
 
 func TestStorage_BdevDeviceRoles_ToYAML(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		cfg    *Config
 		expOut string
@@ -776,6 +783,7 @@ storage:
 }
 
 func TestStorage_BdevDeviceRoles_String(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		bits   OptionBits
 		expOut string
@@ -799,6 +807,7 @@ func TestStorage_BdevDeviceRoles_String(t *testing.T) {
 }
 
 func TestStorage_AccelProps_FromYAML(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		input    string
 		expProps AccelProps
@@ -905,6 +914,7 @@ acceleration:
 }
 
 func TestStorage_AccelProps_ToYAML(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		props  AccelProps
 		expOut string
@@ -962,6 +972,7 @@ acceleration:
 }
 
 func TestStorage_ControlMetadata_Directory(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		cm        ControlMetadata
 		expResult string
@@ -981,6 +992,7 @@ func TestStorage_ControlMetadata_Directory(t *testing.T) {
 }
 
 func TestStorage_ControlMetadata_EngineDirectory(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		cm        ControlMetadata
 		idx       uint
@@ -1002,6 +1014,7 @@ func TestStorage_ControlMetadata_EngineDirectory(t *testing.T) {
 }
 
 func TestStorage_ControlMetadata_HasPath(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		cm        ControlMetadata
 		expResult bool
@@ -1033,6 +1046,7 @@ func TestStorage_ControlMetadata_HasPath(t *testing.T) {
 }
 
 func TestStorage_TierConfigs_FromYAML(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		input    string
 		expTiers TierConfigs
@@ -1174,6 +1188,7 @@ storage:
 }
 
 func TestStorage_Config_Validate(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		cfg                 Config
 		expConfigOutputPath string

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -21,6 +21,7 @@ var (
 )
 
 func TestDaos_BoolPropVal(t *testing.T) {
+	t.Parallel()
 	pv := NewBoolPropVal(false)
 
 	if pv == nil {
@@ -61,6 +62,7 @@ func TestDaos_BoolPropVal(t *testing.T) {
 }
 
 func TestDaos_StringPropVal(t *testing.T) {
+	t.Parallel()
 	choices := []string{"choice1", "choice2"}
 	pv := NewStringPropVal("default", choices...)
 
@@ -92,6 +94,7 @@ func TestDaos_StringPropVal(t *testing.T) {
 }
 
 func TestDaos_IntPropVal(t *testing.T) {
+	t.Parallel()
 	choices := []int64{1, 2, -3}
 	pv := NewIntPropVal(0, choices...)
 
@@ -136,6 +139,7 @@ func TestDaos_IntPropVal(t *testing.T) {
 }
 
 func TestDaos_CompPropVal(t *testing.T) {
+	t.Parallel()
 	compVal := "computed"
 	pv := NewCompPropVal(func() string { return compVal })
 
@@ -161,6 +165,7 @@ func TestDaos_CompPropVal(t *testing.T) {
 }
 
 func TestDaos_SystemPropertyKeys(t *testing.T) {
+	t.Parallel()
 	for i := systemPropertyUnknown + 1; i < systemPropertyMax; i++ {
 		key := SystemPropertyKey(i)
 

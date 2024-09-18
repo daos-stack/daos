@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,6 +17,7 @@ import (
 // just want to verify that HostSet automatically sorts/dedupes.
 
 func TestHostSet_Create(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		startList string
 		expOut    string
@@ -67,6 +68,7 @@ func TestHostSet_Create(t *testing.T) {
 }
 
 func TestHostSet_Insert(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		startList string
 		pushList  string
@@ -104,6 +106,7 @@ func TestHostSet_Insert(t *testing.T) {
 }
 
 func TestHostSet_Intersects(t *testing.T) {
+	t.Parallel()
 	defaultList := makeStringRef("node[1-128]")
 
 	for name, tc := range map[string]struct {
@@ -155,6 +158,7 @@ func TestHostSet_Intersects(t *testing.T) {
 }
 
 func TestHostSet_ZeroValue(t *testing.T) {
+	t.Parallel()
 	zVal := &hostlist.HostSet{}
 
 	_, err := zVal.Insert("host[1-8]")
@@ -169,6 +173,7 @@ func TestHostSet_ZeroValue(t *testing.T) {
 }
 
 func TestHostSet_MergeSet(t *testing.T) {
+	t.Parallel()
 	a, err := hostlist.CreateSet("host[1-8]")
 	if err != nil {
 		t.Fatal(err)
@@ -190,6 +195,7 @@ func TestHostSet_MergeSet(t *testing.T) {
 }
 
 func TestHostSet_Replace(t *testing.T) {
+	t.Parallel()
 	a, err := hostlist.CreateSet("host[1-8]")
 	if err != nil {
 		t.Fatal(err)
@@ -206,6 +212,7 @@ func TestHostSet_Replace(t *testing.T) {
 }
 
 func TestHostSet_FuzzCrashers(t *testing.T) {
+	t.Parallel()
 	// Test against problematic inputs found by go-fuzz testing
 
 	for input, tc := range map[string]struct {

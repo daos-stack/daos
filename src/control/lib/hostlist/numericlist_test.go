@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -14,6 +14,7 @@ import (
 )
 
 func TestHostList_NumericList(t *testing.T) {
+	t.Parallel()
 	uints := func(input ...uint) []uint {
 		return input
 	}
@@ -85,6 +86,7 @@ func TestHostList_NumericList(t *testing.T) {
 }
 
 func TestHostList_CreateNumericList(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		startList    string
 		expRawOut    string
@@ -126,6 +128,7 @@ func TestHostList_CreateNumericList(t *testing.T) {
 }
 
 func TestHostList_NumericSet(t *testing.T) {
+	t.Parallel()
 	uints := func(input ...uint) []uint {
 		return input
 	}
@@ -191,6 +194,7 @@ func TestHostList_NumericSet(t *testing.T) {
 }
 
 func TestHostSet_CreateNumericSet(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		startList string
 		expOut    string

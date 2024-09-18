@@ -99,6 +99,7 @@ func genSetHelpers(t *testing.T, log logging.Logger, fis *hardware.FabricInterfa
 // TestDaosServer_Network_Commands_JSON verifies that when the JSON-output flag is set only JSON is
 // printed to standard out. Test cases should cover all network subcommand variations.
 func TestDaosServer_Network_Commands_JSON(t *testing.T) {
+	t.Parallel()
 	// Use a normal logger to verify that we don't mess up JSON output.
 	log, buf := logging.NewTestCommandLineLogger()
 
@@ -154,6 +155,7 @@ func TestDaosServer_Network_Commands_JSON(t *testing.T) {
 
 // Verify that when --ignore-config is supplied on commandline, cmd.config is nil.
 func TestDaosServer_Network_Commands_Config(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		cmd       string
 		optsCheck func(t *testing.T, o *mainOpts)

@@ -16,6 +16,7 @@ import (
 )
 
 func TestFlags_EpochFlag(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		arg       string
 		expFlag   *EpochFlag
@@ -88,6 +89,7 @@ func TestFlags_EpochFlag(t *testing.T) {
 }
 
 func TestFlags_EpochRangeFlag(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		arg       string
 		expFlag   *EpochRangeFlag
@@ -192,6 +194,7 @@ func TestFlags_EpochRangeFlag(t *testing.T) {
 }
 
 func TestFlags_ChunkSizeFlag(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		arg       string
 		expFlag   *ChunkSizeFlag
@@ -249,6 +252,7 @@ func TestFlags_ChunkSizeFlag(t *testing.T) {
 }
 
 func TestFlags_OidFlag(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		arg       string
 		expFlag   *OidFlag
@@ -305,6 +309,7 @@ func TestFlags_OidFlag(t *testing.T) {
 }
 
 func TestFlags_ObjClassFlag(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		arg       string
 		expFlag   *ObjClassFlag
@@ -351,6 +356,7 @@ func TestFlags_ObjClassFlag(t *testing.T) {
 }
 
 func TestFlags_ConsModeFlag(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		arg       string
 		expFlag   *ConsModeFlag
@@ -399,6 +405,7 @@ func TestFlags_ConsModeFlag(t *testing.T) {
 }
 
 func TestFlags_ContTypeFlag(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		arg       string
 		expFlag   *ContTypeFlag
@@ -445,6 +452,7 @@ func TestFlags_ContTypeFlag(t *testing.T) {
 }
 
 func TestFlags_FsCheckFlag(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		arg     string
 		expFlag *FsCheckFlag
@@ -564,6 +572,7 @@ func TestFlags_FsCheckFlag(t *testing.T) {
 }
 
 func TestFlags_ModeBitsFlag(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		arg     string
 		expFlag *ModeBitsFlag

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,6 +19,7 @@ import (
 )
 
 func TestProto_ConvertNvmeNamespace(t *testing.T) {
+	t.Parallel()
 	pb := MockNvmeNamespace()
 	native, err := (*NvmeNamespace)(pb).ToNative()
 	if err != nil {
@@ -32,6 +33,7 @@ func TestProto_ConvertNvmeNamespace(t *testing.T) {
 }
 
 func TestProto_ConvertNvmeHealth(t *testing.T) {
+	t.Parallel()
 	pb := MockNvmeHealth(1)
 	native, err := (*NvmeHealth)(pb).ToNative()
 	if err != nil {
@@ -45,6 +47,7 @@ func TestProto_ConvertNvmeHealth(t *testing.T) {
 }
 
 func TestProto_ConvertSmdDevice(t *testing.T) {
+	t.Parallel()
 	c := storage.MockNvmeController()
 	pb := MockSmdDevice(c, 1)
 	pb.Ctrlr.HealthStats = MockNvmeHealth(1)
@@ -62,6 +65,7 @@ func TestProto_ConvertSmdDevice(t *testing.T) {
 }
 
 func TestProto_ConvertNvmeController(t *testing.T) {
+	t.Parallel()
 	pb := MockNvmeController()
 	native, err := (*NvmeController)(pb).ToNative()
 	if err != nil {
@@ -78,6 +82,7 @@ func TestProto_ConvertNvmeController(t *testing.T) {
 }
 
 func TestProto_ConvertNvmeControllers(t *testing.T) {
+	t.Parallel()
 	pbs := []*ctlpb.NvmeController{
 		MockNvmeController(1),
 		MockNvmeController(2),
@@ -102,6 +107,7 @@ func TestProto_ConvertNvmeControllers(t *testing.T) {
 }
 
 func TestProto_ConvertScmModule(t *testing.T) {
+	t.Parallel()
 	pb := MockScmModule()
 	native, err := (*ScmModule)(pb).ToNative()
 	if err != nil {
@@ -115,6 +121,7 @@ func TestProto_ConvertScmModule(t *testing.T) {
 }
 
 func TestProto_ConvertScmModules(t *testing.T) {
+	t.Parallel()
 	pbs := []*ctlpb.ScmModule{
 		MockScmModule(1),
 		MockScmModule(2),
@@ -139,6 +146,7 @@ func TestProto_ConvertScmModules(t *testing.T) {
 }
 
 func TestProto_ConvertScmMountPoint(t *testing.T) {
+	t.Parallel()
 	a := storage.MockScmMountPoint()
 	resA, err := json.Marshal(a)
 	if err != nil {
@@ -168,6 +176,7 @@ func TestProto_ConvertScmMountPoint(t *testing.T) {
 }
 
 func TestProto_ConvertScmNamespace(t *testing.T) {
+	t.Parallel()
 	pb := MockScmNamespace()
 	pb.Mount = MockScmMountPoint()
 	native, err := (*ScmNamespace)(pb).ToNative()
@@ -184,6 +193,7 @@ func TestProto_ConvertScmNamespace(t *testing.T) {
 }
 
 func TestProto_ConvertScmNamespaces(t *testing.T) {
+	t.Parallel()
 	pbs := []*ctlpb.ScmNamespace{
 		MockScmNamespace(1),
 		MockScmNamespace(2),

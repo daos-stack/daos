@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,6 +17,7 @@ import (
 )
 
 func TestSystem_RankGroupsFromMembers(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		rankGroups RankGroups
 		members    Members
@@ -90,6 +91,7 @@ func TestSystem_RankGroupsFromMembers(t *testing.T) {
 }
 
 func TestSystem_RankGroupsFromMemberResults(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		nilRankGroups    bool
 		rankGroups       RankGroups

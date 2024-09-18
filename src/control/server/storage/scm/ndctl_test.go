@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -22,6 +22,7 @@ import (
 // TestNdctl_parseNamespaces verified expected output from ndctl utility
 // can be converted into native storage ScmNamespaces type.
 func TestNdctl_parseNamespaces(t *testing.T) {
+	t.Parallel()
 	// template for `ndctl list -N` output
 	listTmpl := `{
    "dev":"namespace%d.0",
@@ -95,6 +96,7 @@ func TestNdctl_parseNamespaces(t *testing.T) {
 // TestNdctl_getNamespaces tests the internals of prepScm, pass in mock runCmd to verify
 // behavior. Don't use mockPrepScm as we want to test prepScm logic.
 func TestNdctl_getNamespaces(t *testing.T) {
+	t.Parallel()
 	commands := []pmemCmd{} // external commands issued
 	// ndctl create-namespace command return json format
 	nsOut := `{
@@ -179,6 +181,7 @@ func TestNdctl_getNamespaces(t *testing.T) {
 }
 
 func TestNdctl_getNdctlRegions(t *testing.T) {
+	t.Parallel()
 	commands := []pmemCmd{} // external commands issued
 	for name, tc := range map[string]struct {
 		expErr      error

@@ -26,6 +26,7 @@ import (
 const mockSocketDir = "/tmp/mock_socket_dir/"
 
 func TestSupport_Display(t *testing.T) {
+	t.Parallel()
 	progress := ProgressBar{
 		Start:     1,
 		Total:     7,
@@ -68,6 +69,7 @@ func TestSupport_Display(t *testing.T) {
 }
 
 func TestSupport_checkEngineState(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -89,6 +91,7 @@ func TestSupport_checkEngineState(t *testing.T) {
 }
 
 func TestSupport_getRunningConf(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -110,6 +113,7 @@ func TestSupport_getRunningConf(t *testing.T) {
 }
 
 func TestSupport_getServerConf(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -131,6 +135,7 @@ func TestSupport_getServerConf(t *testing.T) {
 }
 
 func TestSupport_cpLogFile(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -165,6 +170,7 @@ func TestSupport_cpLogFile(t *testing.T) {
 }
 
 func TestSupport_createFolder(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 	targetTestDir, targetCleanup := test.CreateTestDir(t)
@@ -192,6 +198,7 @@ func TestSupport_createFolder(t *testing.T) {
 }
 
 func TestSupport_GetHostName(t *testing.T) {
+	t.Parallel()
 	hostName, _ := os.Hostname()
 	for name, tc := range map[string]struct {
 		expResult string
@@ -215,6 +222,7 @@ func TestSupport_GetHostName(t *testing.T) {
 }
 
 func TestSupport_cpOutputToFile(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 	targetTestDir, targetCleanup := test.CreateTestDir(t)
@@ -274,6 +282,7 @@ func TestSupport_cpOutputToFile(t *testing.T) {
 }
 
 func TestSupport_ArchiveLogs(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 	targetTestDir, targetCleanup := test.CreateTestDir(t)
@@ -304,6 +313,7 @@ func TestSupport_ArchiveLogs(t *testing.T) {
 }
 
 func TestSupport_createHostLogFolder(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 	targetTestDir, targetCleanup := test.CreateTestDir(t)
@@ -337,6 +347,7 @@ func TestSupport_createHostLogFolder(t *testing.T) {
 }
 
 func TestSupport_rsyncLog(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 	targetTestDir, targetCleanup := test.CreateTestDir(t)
@@ -372,6 +383,7 @@ func TestSupport_rsyncLog(t *testing.T) {
 }
 
 func TestSupport_customCopy(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 	targetTestDir, targetCleanup := test.CreateTestDir(t)
@@ -423,6 +435,7 @@ func TestSupport_customCopy(t *testing.T) {
 }
 
 func TestSupport_collectExtraLogsDir(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 	targetTestDir, targetCleanup := test.CreateTestDir(t)
@@ -465,6 +478,7 @@ func TestSupport_collectExtraLogsDir(t *testing.T) {
 }
 
 func TestSupport_collectCmdOutput(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 	targetTestDir, targetCleanup := test.CreateTestDir(t)
@@ -508,6 +522,7 @@ func TestSupport_collectCmdOutput(t *testing.T) {
 }
 
 func TestSupport_collectClientLog(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 	targetTestDir, targetCleanup := test.CreateTestDir(t)
@@ -539,6 +554,7 @@ func TestSupport_collectClientLog(t *testing.T) {
 }
 
 func TestSupport_collectAgentLog(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 	targetTestDir, targetCleanup := test.CreateTestDir(t)
@@ -594,6 +610,7 @@ func TestSupport_collectAgentLog(t *testing.T) {
 }
 
 func TestSupport_copyAgentConfig(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 	targetTestDir, targetCleanup := test.CreateTestDir(t)
@@ -629,6 +646,7 @@ func TestSupport_copyAgentConfig(t *testing.T) {
 }
 
 func TestSupport_copyServerConfig(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 	targetTestDir, targetCleanup := test.CreateTestDir(t)
@@ -680,6 +698,7 @@ func TestSupport_copyServerConfig(t *testing.T) {
 }
 
 func TestSupport_collectServerLog(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 	targetTestDir, targetCleanup := test.CreateTestDir(t)
@@ -883,6 +902,7 @@ transport_config:
 }
 
 func TestSupport_DateTimeValidate(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		logStartDate string
 		logEndDate   string
@@ -966,6 +986,7 @@ func TestSupport_DateTimeValidate(t *testing.T) {
 }
 
 func TestSupport_LogTypeValidate(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		logType    string
 		expLogType []string
@@ -1024,6 +1045,7 @@ func TestSupport_LogTypeValidate(t *testing.T) {
 }
 
 func TestSupport_cpLinesFromLog(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 	targetTestDir, targetCleanup := test.CreateTestDir(t)
@@ -1209,6 +1231,7 @@ INFO 2023/12/12 23:59:59.441241 LOG LINE 12
 }
 
 func TestSupport_getDateTime(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 

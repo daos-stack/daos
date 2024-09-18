@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,6 +17,7 @@ import (
 )
 
 func Test_Common_ParseTime(t *testing.T) {
+	t.Parallel()
 	zone := func(hours int) *time.Location {
 		return time.FixedZone("", int((time.Duration(hours) * time.Hour).Seconds()))
 	}
@@ -71,6 +72,7 @@ func Test_Common_ParseTime(t *testing.T) {
 }
 
 func Test_Common_FormatTime(t *testing.T) {
+	t.Parallel()
 	zone := func(hours int) *time.Location {
 		return time.FixedZone("", int((time.Duration(hours) * time.Hour).Seconds()))
 	}
@@ -108,6 +110,7 @@ func Test_Common_FormatTime(t *testing.T) {
 }
 
 func Test_Common_ParseFormattedTime(t *testing.T) {
+	t.Parallel()
 	// Just a quick sanity check to verify that we're producing
 	// timestamps that we can parse.
 

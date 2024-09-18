@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -90,6 +90,7 @@ func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 }
 
 func TestBadCommand(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -99,6 +100,7 @@ func TestBadCommand(t *testing.T) {
 }
 
 func TestNoCommand(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -108,6 +110,7 @@ func TestNoCommand(t *testing.T) {
 }
 
 func TestPreExecCheckBypass(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		cmdLine string
 		expErr  error

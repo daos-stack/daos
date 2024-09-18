@@ -39,6 +39,7 @@ func mockHostStorageMap(t *testing.T, hosts ...*mockHostStorage) control.HostSto
 }
 
 func TestControl_PrintStorageScanResponse(t *testing.T) {
+	t.Parallel()
 	var (
 		standard   = control.MockServerScanResp(t, "standard")
 		pmemSingle = control.MockServerScanResp(t, "pmemSingle")
@@ -410,6 +411,7 @@ host[2,4] 3.2 TB (2 namespaces) 2.0 TB (1 controller)
 }
 
 func TestControl_PrintStorageScanResponseVerbose(t *testing.T) {
+	t.Parallel()
 	var (
 		standard   = control.MockServerScanResp(t, "standard")
 		pmemSingle = control.MockServerScanResp(t, "pmemSingle")
@@ -878,6 +880,7 @@ NVMe PCI     Model FW Revision Socket Capacity Role(s)       Rank
 }
 
 func TestControl_PrintStorageUsageScanResponse(t *testing.T) {
+	t.Parallel()
 	var (
 		withSpaceUsage = control.MockServerScanResp(t, "withSpaceUsage")
 		noStorage      = control.MockServerScanResp(t, "noStorage")
@@ -1002,6 +1005,7 @@ host1 3.0 TB    750 GB   75 %     36 TB      27 TB     25 %
 }
 
 func TestControl_PrintStorageFormatResponse(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		resp        *control.StorageFormatResp
 		expPrintStr string
@@ -1160,6 +1164,7 @@ Format Summary:
 }
 
 func TestControl_PrintStorageFormatResponseVerbose(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		resp        *control.StorageFormatResp
 		expPrintStr string
@@ -1387,6 +1392,7 @@ SCM Mount Format Result
 }
 
 func TestPretty_PrintSmdInfoMap(t *testing.T) {
+	t.Parallel()
 	mockController := storage.MockNvmeController(1)
 	newCtrlr := storage.NvmeController{
 		PciAddr:   "0000:8a:00.0",
@@ -1746,6 +1752,7 @@ host1
 }
 
 func TestPretty_PrintSmdManageResp(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		op        control.SmdManageOpcode
 		printOpts PrintConfigOption

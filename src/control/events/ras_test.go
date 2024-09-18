@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -24,6 +24,7 @@ var defEvtCmpOpts = append(test.DefaultCmpOpts(),
 )
 
 func TestEvents_HandleClusterEvent(t *testing.T) {
+	t.Parallel()
 	genericEvent := mockEvtGeneric(t)
 	pbGenericEvent, _ := genericEvent.ToProto()
 	engineDiedEvent := mockEvtDied(t)

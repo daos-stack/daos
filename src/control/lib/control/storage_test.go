@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -23,6 +23,7 @@ import (
 )
 
 func TestControl_StorageMap(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		hss       []*HostStorage
 		expHsmLen int
@@ -138,6 +139,7 @@ func TestControl_StorageMap(t *testing.T) {
 }
 
 func TestControl_StorageScan(t *testing.T) {
+	t.Parallel()
 	var (
 		standard       = MockServerScanResp(t, "standard")
 		pmemA          = MockServerScanResp(t, "pmemA")
@@ -427,6 +429,7 @@ func TestControl_StorageScan(t *testing.T) {
 }
 
 func TestControl_StorageFormat(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		mic         *MockInvokerConfig
 		reformat    bool
@@ -733,6 +736,7 @@ func TestControl_StorageFormat(t *testing.T) {
 }
 
 func TestControl_checkFormatReq(t *testing.T) {
+	t.Parallel()
 	reqHosts := func(h ...string) []string {
 		return h
 	}
@@ -808,6 +812,7 @@ func TestControl_checkFormatReq(t *testing.T) {
 }
 
 func TestControl_StorageNvmeRebind(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		mic         *MockInvokerConfig
 		pciAddr     string
@@ -905,6 +910,7 @@ func TestControl_StorageNvmeRebind(t *testing.T) {
 }
 
 func TestControl_StorageNvmeAddDevice(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		mic         *MockInvokerConfig
 		pciAddr     string

@@ -37,6 +37,7 @@ func makeBadBytes(count int) (badBytes []byte) {
 }
 
 func testPoolService() *system.PoolService {
+	t.Parallel()
 	return &system.PoolService{
 		PoolLabel: "test-pool",
 		PoolUUID:  uuid.MustParse(mockUUID),
@@ -49,6 +50,7 @@ func testPoolService() *system.PoolService {
 }
 
 func TestMgmt_ListContainers(t *testing.T) {
+	t.Parallel()
 	validListContReq := func() *mgmtpb.ListContReq {
 		return &mgmtpb.ListContReq{
 			Sys: build.DefaultSystemName,
@@ -150,6 +152,7 @@ func TestMgmt_ListContainers(t *testing.T) {
 }
 
 func TestMgmt_ContSetOwner(t *testing.T) {
+	t.Parallel()
 	validContSetOwnerReq := func() *mgmtpb.ContSetOwnerReq {
 		return &mgmtpb.ContSetOwnerReq{
 			Sys:        build.DefaultSystemName,

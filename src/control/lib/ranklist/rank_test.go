@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,6 +18,7 @@ import (
 )
 
 func TestSystem_RankYaml(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		in      uint32
 		out     *Rank
@@ -68,6 +69,7 @@ func TestSystem_RankYaml(t *testing.T) {
 }
 
 func TestSystem_RankStringer(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		r      *Rank
 		expStr string
@@ -98,6 +100,7 @@ func TestSystem_RankStringer(t *testing.T) {
 }
 
 func TestSystem_FmtCast(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		r      Rank
 		expStr string
@@ -125,6 +128,7 @@ func TestSystem_FmtCast(t *testing.T) {
 }
 
 func TestSytem_RankUint32(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		r      *Rank
 		expVal uint32
@@ -155,6 +159,7 @@ func TestSytem_RankUint32(t *testing.T) {
 }
 
 func TestSystem_RankEquals(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		a         *Rank
 		b         Rank
@@ -199,6 +204,7 @@ func TestSystem_RankEquals(t *testing.T) {
 }
 
 func TestSystem_NonPointerRankEquals(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		a         Rank
 		b         Rank
@@ -235,6 +241,7 @@ func TestSystem_NonPointerRankEquals(t *testing.T) {
 }
 
 func TestSystem_RankRemoveFromList(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		r        Rank
 		rl       []Rank
@@ -264,6 +271,7 @@ func TestSystem_RankRemoveFromList(t *testing.T) {
 }
 
 func TestSystem_RankInList(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		r       Rank
 		rl      []Rank
@@ -293,6 +301,7 @@ func TestSystem_RankInList(t *testing.T) {
 }
 
 func TestSystem_RanksToUint32(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		rl       []Rank
 		expRanks []uint32
@@ -322,6 +331,7 @@ func TestSystem_RanksToUint32(t *testing.T) {
 }
 
 func TestSystem_RanksFromUint32(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		expRanks []Rank
 		rl       []uint32
@@ -351,6 +361,7 @@ func TestSystem_RanksFromUint32(t *testing.T) {
 }
 
 func TestSystem_TestRankMembership(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		members    []Rank
 		test       []Rank

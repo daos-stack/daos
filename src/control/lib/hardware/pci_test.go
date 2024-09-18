@@ -54,6 +54,7 @@ func (d *PCIDevice) withLinkSpeed(ls float32) *PCIDevice {
 }
 
 func TestHardware_NewPCIAddress(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		addrStr string
 		expVMD  *PCIAddress
@@ -101,6 +102,7 @@ func TestHardware_NewPCIAddress(t *testing.T) {
 }
 
 func TestHardware_PCIAddress_Equals(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		addrStr1 string
 		addrStr2 string
@@ -160,6 +162,7 @@ func TestHardware_PCIAddress_Equals(t *testing.T) {
 }
 
 func TestHardware_NewPCIAddressSet(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		addrStrs    []string
 		expAddrStr  string
@@ -225,6 +228,7 @@ func TestHardware_NewPCIAddressSet(t *testing.T) {
 }
 
 func TestHardware_PCIAddressSet_Addresses(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		addrStrs []string
 		expAddrs []*PCIAddress
@@ -260,6 +264,7 @@ func TestHardware_PCIAddressSet_Addresses(t *testing.T) {
 }
 
 func TestHardware_PCIAddressSet_Intersect(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		addrStrs          []string
 		intersectAddrStrs []string
@@ -299,6 +304,7 @@ func TestHardware_PCIAddressSet_Intersect(t *testing.T) {
 }
 
 func TestHardware_PCIAddressSet_Difference(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		addrStrs           []string
 		differenceAddrStrs []string
@@ -338,6 +344,7 @@ func TestHardware_PCIAddressSet_Difference(t *testing.T) {
 }
 
 func TestHardware_PCIAddressSet_BackingToVMDAddresses(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		inAddrs     []string
 		expOutAddrs []string
@@ -392,6 +399,7 @@ func TestHardware_PCIAddressSet_BackingToVMDAddresses(t *testing.T) {
 }
 
 func TestHardware_PCIDevices_Get(t *testing.T) {
+	t.Parallel()
 	testDevs := PCIDevices{
 		*MustNewPCIAddress("0000:01:01.1"): []*PCIDevice{
 			mockPCIDevice("test0", 0, 1, 1, 1).withType(DeviceTypeNetInterface),
@@ -452,6 +460,7 @@ func TestHardware_PCIDevices_Get(t *testing.T) {
 }
 
 func TestHardware_PCIDevices_Keys(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		devices   PCIDevices
 		expResult []string
@@ -510,6 +519,7 @@ func TestHardware_PCIDevices_Keys(t *testing.T) {
 }
 
 func TestHardware_PCIDevices_Add(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		devices   PCIDevices
 		newDev    *PCIDevice
@@ -598,6 +608,7 @@ func TestHardware_PCIDevices_Add(t *testing.T) {
 }
 
 func TestHardware_PCIBus(t *testing.T) {
+	t.Parallel()
 	isNilErr := errors.New("is nil")
 
 	for name, tc := range map[string]struct {
@@ -663,6 +674,7 @@ func TestHardware_PCIBus(t *testing.T) {
 }
 
 func TestHardware_PCIDevice(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		dev     *PCIDevice
 		expName string

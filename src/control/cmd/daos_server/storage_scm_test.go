@@ -35,6 +35,7 @@ var (
 )
 
 func TestDaosServer_setSockFromCfg(t *testing.T) {
+	t.Parallel()
 	mockAffinitySource := func(l logging.Logger, e *engine.Config) (uint, error) {
 		l.Debugf("mock affinity source: assigning engine numa to its index %d", e.Index)
 		return uint(e.Index), nil
@@ -137,6 +138,7 @@ func getMockScmCmdInit(log logging.Logger, smbc scm.MockBackendConfig, sc *confi
 }
 
 func TestDaosServer_preparePMem(t *testing.T) {
+	t.Parallel()
 	var printNamespace strings.Builder
 	msns := storage.ScmNamespaces{storage.MockScmNamespace()}
 	if err := pretty.PrintScmNamespaces(msns, &printNamespace); err != nil {
@@ -315,6 +317,7 @@ func TestDaosServer_preparePMem(t *testing.T) {
 }
 
 func TestDaosServer_resetPMem(t *testing.T) {
+	t.Parallel()
 	var printNamespace strings.Builder
 	msns := storage.ScmNamespaces{storage.MockScmNamespace()}
 	if err := pretty.PrintScmNamespaces(msns, &printNamespace); err != nil {
@@ -510,6 +513,7 @@ func TestDaosServer_resetPMem(t *testing.T) {
 }
 
 func TestDaosServer_scanSCM(t *testing.T) {
+	t.Parallel()
 	zero := uint(0)
 
 	for name, tc := range map[string]struct {
@@ -594,6 +598,7 @@ func TestDaosServer_scanSCM(t *testing.T) {
 }
 
 func TestDaosServer_SCM_Commands(t *testing.T) {
+	t.Parallel()
 	runCmdTests(t, []cmdTest{
 		{
 			"Prepare namespaces with all opts",
@@ -649,6 +654,7 @@ func genSetSCMHelpers(log logging.Logger, smbc scm.MockBackendConfig) func(*main
 // TestDaosServer_SCM_Commands_JSON verifies that when the JSON-output flag is set only JSON is
 // printed to standard out. Test cases should cover all scm subcommand variations.
 func TestDaosServer_SCM_Commands_JSON(t *testing.T) {
+	t.Parallel()
 	// Use a normal logger to verify that we don't mess up JSON output.
 	log, buf := logging.NewTestCommandLineLogger()
 
@@ -781,6 +787,7 @@ func TestDaosServer_SCM_Commands_JSON(t *testing.T) {
 
 // Verify that when --ignore-config is supplied on commandline, cmd.config is nil.
 func TestDaosServer_SCM_Commands_Config(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		cmd       string
 		optsCheck func(t *testing.T, o *mainOpts)

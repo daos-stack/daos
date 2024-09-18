@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -101,6 +101,7 @@ func backendWithMockBinding(log logging.Logger, mec spdk.MockEnvCfg, mnc spdk.Mo
 }
 
 func TestBackend_groomDiscoveredBdevs(t *testing.T) {
+	t.Parallel()
 	ctrlr1 := storage.MockNvmeController(1)
 	ctrlr2 := storage.MockNvmeController(2)
 	ctrlr3 := storage.MockNvmeController(3)
@@ -173,6 +174,7 @@ func TestBackend_groomDiscoveredBdevs(t *testing.T) {
 }
 
 func TestBackend_Scan(t *testing.T) {
+	t.Parallel()
 	ctrlr1 := storage.MockNvmeController(1)
 
 	mockScanReq := func(dl ...string) storage.BdevScanRequest {
@@ -256,6 +258,7 @@ func TestBackend_Scan(t *testing.T) {
 }
 
 func TestBackend_Format(t *testing.T) {
+	t.Parallel()
 	pci1 := storage.MockNvmeController(1).PciAddr
 	pci2 := storage.MockNvmeController(2).PciAddr
 	pci3 := storage.MockNvmeController(3).PciAddr
@@ -587,6 +590,7 @@ func TestBackend_Format(t *testing.T) {
 }
 
 func TestBackend_writeNvmeConfig(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		req      storage.BdevWriteConfigRequest
 		writeErr error
@@ -697,6 +701,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 }
 
 func TestBackend_Update(t *testing.T) {
+	t.Parallel()
 	numCtrlrs := 4
 	controllers := make(storage.NvmeControllers, 0, numCtrlrs)
 	for i := 0; i < numCtrlrs; i++ {
@@ -754,6 +759,7 @@ func (mfi *mockFileInfo) IsDir() bool        { return mfi.isDir }
 func (mfi *mockFileInfo) Sys() interface{}   { return mfi.stat }
 
 func testFileInfo(t *testing.T, name string, uid uint32) os.FileInfo {
+	t.Parallel()
 	t.Helper()
 
 	return &mockFileInfo{
@@ -772,6 +778,7 @@ type testWalkInput struct {
 }
 
 func TestBackend_hugepageWalkFn(t *testing.T) {
+	t.Parallel()
 	testDir := "/wherever"
 
 	for name, tc := range map[string]struct {
@@ -888,6 +895,7 @@ func TestBackend_hugepageWalkFn(t *testing.T) {
 }
 
 func TestBackend_Prepare(t *testing.T) {
+	t.Parallel()
 	const (
 		testNrHugepages       = 8192
 		nonexistentTargetUser = "nonexistentTargetUser"

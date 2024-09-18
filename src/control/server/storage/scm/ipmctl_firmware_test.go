@@ -18,6 +18,7 @@ import (
 )
 
 func TestIpmctl_fwInfoStatusToUpdateStatus(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		input     uint32
 		expResult storage.ScmFirmwareUpdateStatus
@@ -52,6 +53,7 @@ func TestIpmctl_fwInfoStatusToUpdateStatus(t *testing.T) {
 }
 
 func TestIpmctl_GetFirmwareStatus(t *testing.T) {
+	t.Parallel()
 	testUID := "TestUID"
 	testActiveVersion := "1.0.0.1"
 	testStagedVersion := "2.0.0.2"
@@ -137,6 +139,7 @@ func TestIpmctl_GetFirmwareStatus(t *testing.T) {
 }
 
 func TestIpmctl_UpdateFirmware(t *testing.T) {
+	t.Parallel()
 	testUID := "testUID"
 	for name, tc := range map[string]struct {
 		inputUID string

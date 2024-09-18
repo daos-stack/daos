@@ -59,6 +59,7 @@ func newTestFabricProviderSet(providers ...string) *FabricProviderSet {
 }
 
 func TestHardware_FabricProvider_String(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		p         *FabricProvider
 		expResult string
@@ -84,6 +85,7 @@ func TestHardware_FabricProvider_String(t *testing.T) {
 }
 
 func TestHardware_FabricProviderSet_String(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		ps        *FabricProviderSet
 		expResult string
@@ -111,6 +113,7 @@ func TestHardware_FabricProviderSet_String(t *testing.T) {
 }
 
 func TestHardware_FabricProviderSet_Len(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		ps        *FabricProviderSet
 		expResult int
@@ -135,6 +138,7 @@ func TestHardware_FabricProviderSet_Len(t *testing.T) {
 }
 
 func TestHardware_FabricProviderSet_Has(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		ps        *FabricProviderSet
 		prov      string
@@ -173,6 +177,7 @@ func TestHardware_FabricProviderSet_Has(t *testing.T) {
 }
 
 func TestHardware_FabricProviderSet_Add(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		ps       *FabricProviderSet
 		toAdd    []*FabricProvider
@@ -330,6 +335,7 @@ func TestHardware_FabricProviderSet_Add(t *testing.T) {
 }
 
 func TestHardware_FabricProviderSet_ToSlice(t *testing.T) {
+	t.Parallel()
 	longList := []string{}
 	expLongSlice := []*FabricProvider{}
 	for i := 0; i < 25; i++ {
@@ -376,6 +382,7 @@ func TestHardware_FabricProviderSet_ToSlice(t *testing.T) {
 }
 
 func TestHardware_FabricInterface_String(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		fi        *FabricInterface
 		expResult string
@@ -428,6 +435,7 @@ func TestHardware_FabricInterface_String(t *testing.T) {
 }
 
 func TestHardware_FabricInterface_SupportsProvider(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		fi        *FabricInterface
 		in        string
@@ -485,6 +493,7 @@ func TestHardware_FabricInterface_SupportsProvider(t *testing.T) {
 }
 
 func TestHardware_FabricInterface_TopologyName(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		fi        *FabricInterface
 		expResult string
@@ -521,6 +530,7 @@ func TestHardware_FabricInterface_TopologyName(t *testing.T) {
 }
 
 func TestHardware_NewFabricInterfaceSet(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		input     []*FabricInterface
 		expResult *FabricInterfaceSet
@@ -593,6 +603,7 @@ func TestHardware_NewFabricInterfaceSet(t *testing.T) {
 }
 
 func TestHardware_FabricInterfaceSet_Names(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		fis       *FabricInterfaceSet
 		expResult []string
@@ -641,6 +652,7 @@ func TestHardware_FabricInterfaceSet_Names(t *testing.T) {
 }
 
 func TestHardware_FabricInterfaceSet_NetDevices(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		fis       *FabricInterfaceSet
 		expResult []string
@@ -705,6 +717,7 @@ func TestHardware_FabricInterfaceSet_NetDevices(t *testing.T) {
 }
 
 func TestHardware_FabricInterfaceSet_Update(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		fis       *FabricInterfaceSet
 		input     *FabricInterface
@@ -885,6 +898,7 @@ func TestHardware_FabricInterfaceSet_Update(t *testing.T) {
 }
 
 func TestHardware_FabricInterfaceSet_Remove(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		fis       *FabricInterfaceSet
 		input     string
@@ -954,6 +968,7 @@ func TestHardware_FabricInterfaceSet_Remove(t *testing.T) {
 }
 
 func TestHardware_FabricInterfaceSet_GetInterface(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		fis       *FabricInterfaceSet
 		name      string
@@ -1025,6 +1040,7 @@ func TestHardware_FabricInterfaceSet_GetInterface(t *testing.T) {
 }
 
 func TestHardware_FabricInterfaceSet_GetInterfaceOnNetDevice(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		fis       *FabricInterfaceSet
 		netDev    string
@@ -1171,6 +1187,7 @@ func TestHardware_FabricInterfaceSet_GetInterfaceOnNetDevice(t *testing.T) {
 }
 
 func TestHardware_NetDevClass_String(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		ndc       NetDevClass
 		expResult string
@@ -1251,6 +1268,7 @@ func TestHardware_NetDevClass_String(t *testing.T) {
 }
 
 func TestHardware_FabricScannerConfig_IsValid(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		config *FabricScannerConfig
 		expErr error
@@ -1312,6 +1330,7 @@ func TestHardware_FabricScannerConfig_IsValid(t *testing.T) {
 }
 
 func TestHardware_NewFabricScanner(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		config    *FabricScannerConfig
 		expResult *FabricScanner
@@ -1353,6 +1372,7 @@ func TestHardware_NewFabricScanner(t *testing.T) {
 }
 
 func TestHardware_FabricScanner_Scan(t *testing.T) {
+	t.Parallel()
 	testTopo := &Topology{
 		NUMANodes: NodeMap{
 			0: MockNUMANode(0, 6).
@@ -1740,6 +1760,7 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 }
 
 func TestHardware_FabricScanner_CacheTopology(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		fs     *FabricScanner
 		topo   *Topology
@@ -1794,6 +1815,7 @@ func TestHardware_FabricScanner_CacheTopology(t *testing.T) {
 }
 
 func TestHardware_defaultFabricInterfaceSetBuilders(t *testing.T) {
+	t.Parallel()
 	config := &FabricInterfaceSetBuilderConfig{
 		Providers: []string{"testprovider"},
 		Topology:  &Topology{},
@@ -1833,6 +1855,7 @@ func TestHardware_defaultFabricInterfaceSetBuilders(t *testing.T) {
 }
 
 func TestHardware_FabricInterfaceBuilder_BuildPart(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		builder   *FabricInterfaceBuilder
 		set       *FabricInterfaceSet
@@ -1970,6 +1993,7 @@ func TestHardware_FabricInterfaceBuilder_BuildPart(t *testing.T) {
 }
 
 func TestHardware_NetDeviceBuilder_BuildPart(t *testing.T) {
+	t.Parallel()
 	testTopo := &Topology{
 		NUMANodes: map[uint]*NUMANode{
 			0: MockNUMANode(0, 8).WithDevices([]*PCIDevice{
@@ -2229,6 +2253,7 @@ func TestHardware_NetDeviceBuilder_BuildPart(t *testing.T) {
 }
 
 func TestHardware_NUMAAffinityBuilder_BuildPart(t *testing.T) {
+	t.Parallel()
 	testTopo := &Topology{
 		NUMANodes: map[uint]*NUMANode{
 			1: MockNUMANode(1, 8).WithDevices([]*PCIDevice{
@@ -2381,6 +2406,7 @@ func TestHardware_NUMAAffinityBuilder_BuildPart(t *testing.T) {
 }
 
 func TestHardware_NetDevClassBuilder_BuildPart(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		builder   *NetDevClassBuilder
 		set       *FabricInterfaceSet
@@ -2528,6 +2554,7 @@ func TestHardware_NetDevClassBuilder_BuildPart(t *testing.T) {
 }
 
 func TestHardware_WaitFabricReady(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		stateProv      *MockNetDevStateProvider
 		ifaces         []string

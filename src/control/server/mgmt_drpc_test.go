@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -52,6 +52,7 @@ func addEngineInstances(mod *srvModule, numInstances int, log logging.Logger) {
 }
 
 func TestSrvModule_HandleNotifyReady_Invalid(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -78,6 +79,7 @@ func TestSrvModule_HandleNotifyReady_Invalid(t *testing.T) {
 }
 
 func TestSrvModule_HandleNotifyReady_BadSockPath(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -100,6 +102,7 @@ func TestSrvModule_HandleNotifyReady_BadSockPath(t *testing.T) {
 }
 
 func TestSrvModule_HandleNotifyReady_Success_Single(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -126,6 +129,7 @@ func TestSrvModule_HandleNotifyReady_Success_Single(t *testing.T) {
 }
 
 func TestSrvModule_HandleNotifyReady_Success_Multi(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -163,6 +167,7 @@ func TestSrvModule_HandleNotifyReady_Success_Multi(t *testing.T) {
 }
 
 func TestSrvModule_HandleNotifyReady_IdxOutOfRange(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -196,6 +201,7 @@ func TestSrvModule_HandleNotifyReady_IdxOutOfRange(t *testing.T) {
 }
 
 func TestSrvModule_HandleClusterEvent_Invalid(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -230,6 +236,7 @@ func getTestBytes(t *testing.T, msg proto.Message) []byte {
 }
 
 func TestSrvModule_handleGetPoolServiceRanks(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -319,6 +326,7 @@ func TestSrvModule_handleGetPoolServiceRanks(t *testing.T) {
 }
 
 func TestSrvModule_handlePoolFindByLabel(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 

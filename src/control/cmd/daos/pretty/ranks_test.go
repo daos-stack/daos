@@ -14,6 +14,7 @@ import (
 )
 
 func TestPretty_PrintRanks_Uint32(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		ranks     []uint32
 		expString string
@@ -37,6 +38,7 @@ func TestPretty_PrintRanks_Uint32(t *testing.T) {
 }
 
 func TestPretty_PrintRanks_RanklistRank(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		ranks     []ranklist.Rank
 		expString string

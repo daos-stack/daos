@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -14,6 +14,7 @@ import (
 )
 
 func TestNetworkCommands(t *testing.T) {
+	t.Parallel()
 	runCmdTests(t, []cmdTest{
 		{
 			"Perform network scan no provider",

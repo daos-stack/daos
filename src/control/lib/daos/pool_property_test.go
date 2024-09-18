@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,6 +17,7 @@ import (
 )
 
 func TestControl_PoolPropertyValue(t *testing.T) {
+	t.Parallel()
 	strPtr := func(in string) *string {
 		return &in
 	}
@@ -77,6 +78,7 @@ func TestControl_PoolPropertyValue(t *testing.T) {
 }
 
 func TestControl_PoolProperties(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		name    string
 		value   string

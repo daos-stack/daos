@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,6 +19,7 @@ import (
 )
 
 func TestFaults(t *testing.T) {
+	t.Parallel()
 	var nilFault *fault.Fault
 
 	for _, tc := range []struct {
@@ -112,6 +113,7 @@ func TestFaults(t *testing.T) {
 }
 
 func TestFaultComparison(t *testing.T) {
+	t.Parallel()
 	testErr := &fault.Fault{
 		Domain:      "test",
 		Code:        1,
@@ -168,6 +170,7 @@ func TestFaultComparison(t *testing.T) {
 }
 
 func TestFault_IsFaultCode(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		err       error
 		code      code.Code

@@ -18,6 +18,7 @@ import (
 )
 
 func TestBuild_readMappedLibPath(t *testing.T) {
+	t.Parallel()
 	testMap := `
 55a05b000000-55a05b008000 r-xp 00000000 fd:01 44060915                   /usr/bin/cat
 55a05b207000-55a05b208000 r--p 00007000 fd:01 44060915                   /usr/bin/cat

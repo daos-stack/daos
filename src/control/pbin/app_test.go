@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -40,6 +40,7 @@ func expectCallers(t *testing.T, app *App, expCallers []string) {
 }
 
 func TestPbin_NewApp(t *testing.T) {
+	t.Parallel()
 	app := NewApp()
 
 	if app == nil {
@@ -55,6 +56,7 @@ func TestPbin_NewApp(t *testing.T) {
 }
 
 func TestPbinApp_WithCallers(t *testing.T) {
+	t.Parallel()
 	expCallers := []string{"caller1", "caller2"}
 
 	app := NewApp().WithAllowedCallers(expCallers...)
@@ -67,6 +69,7 @@ func TestPbinApp_WithCallers(t *testing.T) {
 }
 
 func TestPbinApp_WithLogFile_GoodPath(t *testing.T) {
+	t.Parallel()
 	logDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
@@ -87,6 +90,7 @@ func TestPbinApp_WithLogFile_GoodPath(t *testing.T) {
 }
 
 func TestPbinApp_WithLogFile_BadPath(t *testing.T) {
+	t.Parallel()
 	// Bad path should silently fall back to acting as if no path supplied
 	app := NewApp().WithLogFile("/not/a/real/path")
 
@@ -98,6 +102,7 @@ func TestPbinApp_WithLogFile_BadPath(t *testing.T) {
 }
 
 func TestPbinApp_WithInput(t *testing.T) {
+	t.Parallel()
 	expInput := &mockReadWriter{}
 	app := NewApp().WithInput(expInput)
 
@@ -109,6 +114,7 @@ func TestPbinApp_WithInput(t *testing.T) {
 }
 
 func TestPbinApp_WithOutput(t *testing.T) {
+	t.Parallel()
 	expOutput := &mockReadWriter{}
 	app := NewApp().WithOutput(expOutput)
 
@@ -130,6 +136,7 @@ func expectHandlerAdded(t *testing.T, app *App, name string, handler RequestHand
 }
 
 func TestPbinApp_AddHandler(t *testing.T) {
+	t.Parallel()
 	h1 := &testHandler{}
 	h2 := &testHandler{outputResp: &Response{}}
 
@@ -142,6 +149,7 @@ func TestPbinApp_AddHandler(t *testing.T) {
 }
 
 func TestPbinApp_Name(t *testing.T) {
+	t.Parallel()
 	mockProcess := defaultMockProcess()
 	app := newTestApp(mockProcess)
 
@@ -163,6 +171,7 @@ func (h *testHandler) Handle(_ logging.Logger, _ *Request) *Response {
 }
 
 func TestPbinApp_Run(t *testing.T) {
+	t.Parallel()
 	testMethod := "TestMethod"
 	defaultReq := &Request{
 		Method: testMethod,
@@ -299,6 +308,7 @@ func TestPbinApp_Run(t *testing.T) {
 }
 
 func TestPbinApp_ReadRequest_GiantPayload(t *testing.T) {
+	t.Parallel()
 	// Way bigger than the message buffer
 	alnum := []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 	giantPayload := make([]byte, (MessageBufferSize*5)+1)

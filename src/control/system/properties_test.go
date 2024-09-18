@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,6 +17,7 @@ import (
 )
 
 func TestSystem_MgmtProperties(t *testing.T) {
+	t.Parallel()
 	attrDb := newAttrDb(nil)
 
 	if err := SetMgmtProperty(attrDb, "foo", "bar"); err != nil {
@@ -65,6 +66,7 @@ func genTestProps(t *testing.T, min int) (daos.SystemPropertyMap, []*daos.System
 }
 
 func TestSystem_SetUserProperties(t *testing.T) {
+	t.Parallel()
 	attrDb := newAttrDb(nil)
 	sysProps, propList := genTestProps(t, 2)
 
@@ -121,6 +123,7 @@ func TestSystem_SetUserProperties(t *testing.T) {
 }
 
 func TestSystem_GetUserProperties(t *testing.T) {
+	t.Parallel()
 	attrDb := newAttrDb(map[string]string{
 		mgmtPropPrefix + "foo": "bar", // mgmt prop (not user-visible)
 		"foo":                  "bar", // user attr (not included in props)
@@ -205,6 +208,7 @@ func TestSystem_GetUserProperties(t *testing.T) {
 }
 
 func TestSystem_GetUserProperty(t *testing.T) {
+	t.Parallel()
 	sysProps, propList := genTestProps(t, 1)
 
 	userProp := propList[0]

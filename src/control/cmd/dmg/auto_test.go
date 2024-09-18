@@ -56,6 +56,7 @@ func runConfGenCmdTests(t *testing.T, cmdTests []cmdTest) {
 }
 
 func TestAuto_ConfigCommands(t *testing.T) {
+	t.Parallel()
 	printCGRReq := func(t *testing.T, req control.ConfGenerateRemoteReq) string {
 		req2 := req
 		req2.Log = nil
@@ -252,6 +253,7 @@ func TestAuto_ConfigCommands(t *testing.T) {
 }
 
 func TestAuto_confGenCmd_Convert(t *testing.T) {
+	t.Parallel()
 	cmd := &configGenCmd{}
 	cmd.NrEngines = 1
 	cmd.NetProvider = "ofi+tcp"
@@ -286,6 +288,7 @@ func TestAuto_confGenCmd_Convert(t *testing.T) {
 // The Control API calls made in ConfigGenCmd.confGen() are already well tested so just do some
 // sanity checking here to prevent regressions.
 func TestAuto_confGen(t *testing.T) {
+	t.Parallel()
 	ib0 := &ctlpb.FabricInterface{
 		Provider: "ofi+psm2", Device: "ib0", Numanode: 0, Netdevclass: 32, Priority: 0,
 	}
@@ -534,6 +537,7 @@ func TestAuto_confGen(t *testing.T) {
 // parameters in utils/config/daos_server.yml and that private parameters are not displayed.
 // Typical auto-generated output is taken from src/control/lib/control/auto_test.go.
 func TestAuto_ConfigWrite(t *testing.T) {
+	t.Parallel()
 	const (
 		defaultFiPort         = 31416
 		defaultFiPortInterval = 1000

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,6 +20,7 @@ import (
 )
 
 func TestCheckDrpcClientSocketPath_Empty(t *testing.T) {
+	t.Parallel()
 	err := checkDrpcClientSocketPath("")
 
 	if err == nil {
@@ -28,6 +29,7 @@ func TestCheckDrpcClientSocketPath_Empty(t *testing.T) {
 }
 
 func TestCheckDrpcClientSocketPath_BadPath(t *testing.T) {
+	t.Parallel()
 	err := checkDrpcClientSocketPath("/not/a/real/path")
 
 	if err == nil {
@@ -36,6 +38,7 @@ func TestCheckDrpcClientSocketPath_BadPath(t *testing.T) {
 }
 
 func TestCheckDrpcClientSocketPath_DirNotSocket(t *testing.T) {
+	t.Parallel()
 	tmpDir, tmpCleanup := test.CreateTestDir(t)
 	defer tmpCleanup()
 
@@ -54,6 +57,7 @@ func TestCheckDrpcClientSocketPath_DirNotSocket(t *testing.T) {
 }
 
 func TestCheckDrpcClientSocketPath_FileNotSocket(t *testing.T) {
+	t.Parallel()
 	tmpDir, tmpCleanup := test.CreateTestDir(t)
 	defer tmpCleanup()
 
@@ -67,6 +71,7 @@ func TestCheckDrpcClientSocketPath_FileNotSocket(t *testing.T) {
 }
 
 func TestCheckDrpcClientSocketPath_Success(t *testing.T) {
+	t.Parallel()
 	tmpDir, tmpCleanup := test.CreateTestDir(t)
 	defer tmpCleanup()
 
@@ -82,6 +87,7 @@ func TestCheckDrpcClientSocketPath_Success(t *testing.T) {
 }
 
 func TestGetDrpcServerSocketPath_EmptyString(t *testing.T) {
+	t.Parallel()
 	expectedPath := "daos_server.sock"
 
 	path := getDrpcServerSocketPath("")
@@ -92,6 +98,7 @@ func TestGetDrpcServerSocketPath_EmptyString(t *testing.T) {
 }
 
 func TestGetDrpcServerSocketPath(t *testing.T) {
+	t.Parallel()
 	dirPath := "/some/server/dir"
 	expectedPath := filepath.Join(dirPath, "daos_server.sock")
 
@@ -103,6 +110,7 @@ func TestGetDrpcServerSocketPath(t *testing.T) {
 }
 
 func TestDrpcCleanup_BadSocketDir(t *testing.T) {
+	t.Parallel()
 	badDir := "/some/fake/path"
 
 	err := drpcCleanup(badDir)
@@ -113,6 +121,7 @@ func TestDrpcCleanup_BadSocketDir(t *testing.T) {
 }
 
 func TestDrpcCleanup_EmptyDir(t *testing.T) {
+	t.Parallel()
 	tmpDir, tmpCleanup := test.CreateTestDir(t)
 	defer tmpCleanup()
 
@@ -131,6 +140,7 @@ func expectDoesNotExist(t *testing.T, path string) {
 }
 
 func TestDrpcCleanup_Single(t *testing.T) {
+	t.Parallel()
 	tmpDir, tmpCleanup := test.CreateTestDir(t)
 	defer tmpCleanup()
 
@@ -155,6 +165,7 @@ func TestDrpcCleanup_Single(t *testing.T) {
 }
 
 func TestDrpcCleanup_DoesNotDeleteNonDaosSocketFiles(t *testing.T) {
+	t.Parallel()
 	tmpDir, tmpCleanup := test.CreateTestDir(t)
 	defer tmpCleanup()
 
@@ -183,6 +194,7 @@ func TestDrpcCleanup_DoesNotDeleteNonDaosSocketFiles(t *testing.T) {
 }
 
 func TestDrpcCleanup_Multiple(t *testing.T) {
+	t.Parallel()
 	tmpDir, tmpCleanup := test.CreateTestDir(t)
 	defer tmpCleanup()
 
@@ -218,6 +230,7 @@ func TestDrpcCleanup_Multiple(t *testing.T) {
 }
 
 func TestDrpc_Errors(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		notReady     bool
 		connectError error

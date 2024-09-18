@@ -20,6 +20,7 @@ import (
 )
 
 func TestDaos_SelfTestConfig(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		cfg    *daos.SelfTestConfig
 		expErr error
@@ -53,6 +54,7 @@ func TestDaos_SelfTestConfig(t *testing.T) {
 }
 
 func TestDaos_EndpointLatency(t *testing.T) {
+	t.Parallel()
 	epl := new(daos.EndpointLatency)
 	for i := int64(1); i <= 100; i++ {
 		epl.AddValue(i)
@@ -91,6 +93,7 @@ func TestDaos_EndpointLatency(t *testing.T) {
 }
 
 func TestDaos_SelfTestResult(t *testing.T) {
+	t.Parallel()
 	str := new(daos.SelfTestResult)
 
 	testRank := ranklist.Rank(1)
@@ -111,6 +114,7 @@ func TestDaos_SelfTestResult(t *testing.T) {
 }
 
 func TestDaos_SelfTestResult_MarshalJSON(t *testing.T) {
+	t.Parallel()
 	str := &daos.SelfTestResult{
 		MasterEndpoint: daos.SelfTestEndpoint{Rank: 3, Tag: 0},
 		TargetEndpoints: []daos.SelfTestEndpoint{

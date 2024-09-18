@@ -18,6 +18,7 @@ import (
 )
 
 func TestContSetOwnerCommand(t *testing.T) {
+	t.Parallel()
 	testPoolUUID := uuid.New()
 	testContUUID := uuid.New()
 

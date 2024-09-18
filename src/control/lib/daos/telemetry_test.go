@@ -17,6 +17,7 @@ import (
 )
 
 func TestDaos_Metric_JSON(t *testing.T) {
+	t.Parallel()
 	testLabelMap := map[string]string{
 		"label1": "val1",
 		"label2": "val2",
@@ -90,6 +91,7 @@ func TestDaos_Metric_JSON(t *testing.T) {
 }
 
 func TestDaos_metricTypeFromString(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		input   string
 		expType MetricType
@@ -135,6 +137,7 @@ func TestDaos_metricTypeFromString(t *testing.T) {
 }
 
 func TestDaos_MetricSet_JSON(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		set *MetricSet
 	}{

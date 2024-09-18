@@ -17,6 +17,7 @@ import (
 )
 
 func TestScanMountInfo(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		input      string
 		target     string
@@ -70,6 +71,7 @@ func TestScanMountInfo(t *testing.T) {
 }
 
 func TestIsMounted(t *testing.T) {
+	t.Parallel()
 	provider := LinuxProvider{}
 
 	for name, tc := range map[string]struct {
@@ -114,6 +116,7 @@ func TestIsMounted(t *testing.T) {
 }
 
 func TestParseFsType(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		input     string
 		expFsType string
@@ -160,6 +163,7 @@ func TestParseFsType(t *testing.T) {
 }
 
 func TestSystemLinux_GetfsType(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		path      string
 		expResult *FsType
@@ -192,6 +196,7 @@ func TestSystemLinux_GetfsType(t *testing.T) {
 }
 
 func TestSystemLinux_fsStrFromMagic(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		magic     int64
 		expResult string

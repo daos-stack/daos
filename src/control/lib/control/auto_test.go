@@ -175,6 +175,7 @@ func cmpHostErrs(t *testing.T, expErrs []*MockHostError, gotErrs *HostErrorsResp
 }
 
 func TestControl_AutoConfig_getNetworkSet(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		uErr          error
 		hostResponses []*HostResponse
@@ -264,6 +265,7 @@ func TestControl_AutoConfig_getNetworkSet(t *testing.T) {
 }
 
 func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
+	t.Parallel()
 	ib0PB := new(ctlpb.FabricInterface)
 	if err := convert.Types(ib0, ib0PB); err != nil {
 		t.Fatal(err)
@@ -469,6 +471,7 @@ func (mhr *mockHostResponses) getNUMAPMEMs(t *testing.T, numa uint32) []string {
 }
 
 func TestControl_AutoConfig_getStorageSet(t *testing.T) {
+	t.Parallel()
 	oneWithScmNs := newMockHostResponses(t, "pmemSingle", "standard")
 	oneScanFail := newMockHostResponses(t, "standard", "bothFailed")
 	scanFail := newMockHostResponses(t, "bothFailed")
@@ -580,6 +583,7 @@ func TestControl_AutoConfig_getStorageSet(t *testing.T) {
 }
 
 func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
+	t.Parallel()
 	withSSDs := newMockHostResponses(t, "withSpaceUsage")
 	withSSDsBadPCI := newMockHostResponses(t, "badPciAddr")
 	withSSDsNoMemTotal := newMockHostResponses(t, "noMemTotal")
@@ -696,6 +700,7 @@ func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 }
 
 func TestControl_AutoConfig_filterDevicesByAffinity(t *testing.T) {
+	t.Parallel()
 	singlePMemMap := numaSCMsMap{0: []string{"/dev/pmem0"}}
 
 	for name, tc := range map[string]struct {
@@ -1071,6 +1076,7 @@ func TestControl_AutoConfig_filterDevicesByAffinity(t *testing.T) {
 }
 
 func TestControl_AutoConfig_correctSSDCounts(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		sd     storageDetails
 		expErr error
@@ -1126,12 +1132,14 @@ func TestControl_AutoConfig_correctSSDCounts(t *testing.T) {
 }
 
 func testEngineCfg(idx int) *engine.Config {
+	t.Parallel()
 	return engine.MockConfig().
 		WithTargetCount(defaultTargetCount).
 		WithLogFile(fmt.Sprintf("%s.%d.log", defaultEngineLogFile, idx))
 }
 
 func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		scmCls          storage.Class
 		scmOnly         bool
@@ -1501,6 +1509,7 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 }
 
 func TestControl_AutoConfig_getThreadCounts(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		nodeSet       []int // set of NUMA nodes
 		numaCoreCount int   // physical( cores per NUMA node
@@ -1613,6 +1622,7 @@ func TestControl_AutoConfig_getThreadCounts(t *testing.T) {
 }
 
 func TestControl_AutoConfig_genServerConfig(t *testing.T) {
+	t.Parallel()
 	exmplEngineCfg0 := MockEngineCfg(0, 0, 1, 2)
 	exmplEngineCfg1 := MockEngineCfg(1, 3, 4, 5)
 	metadataMountPath := "/mnt/daos_md"

@@ -111,6 +111,7 @@ func getNsFromJSON(t *testing.T, j string) storage.ScmNamespaces {
 const verStr = `Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 02.00.00.3825`
 
 func TestIpmctl_prep(t *testing.T) {
+	t.Parallel()
 	var (
 		ndctlDualNsStr = fmt.Sprintf("[%s,%s]", genNsJSON(t, "0", "0", "3012GiB", "28"),
 			genNsJSON(t, "1", "0", "3012GiB", "29"))
@@ -655,6 +656,7 @@ func TestIpmctl_prep(t *testing.T) {
 }
 
 func TestIpmctl_prepReset(t *testing.T) {
+	t.Parallel()
 	var (
 		ndctlDualNsStr = fmt.Sprintf("[%s,%s]", genNsJSON(t, "0", "0", "3012GiB", "28"),
 			genNsJSON(t, "1", "0", "3012GiB", "29"))

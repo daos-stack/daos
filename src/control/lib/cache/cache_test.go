@@ -19,6 +19,7 @@ import (
 )
 
 func TestCache_NewItemCache(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -70,6 +71,7 @@ func (m *mockItem) needsRefresh() bool {
 }
 
 func testMockItem(id ...string) *mockItem {
+	t.Parallel()
 	mock := &mockItem{ItemKey: "mock"}
 	if len(id) > 0 {
 		mock.ID = id[0]
@@ -78,6 +80,7 @@ func testMockItem(id ...string) *mockItem {
 }
 
 func TestCache_ItemCache_Set(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		nilCache      bool
 		alreadyCached map[string]Item
@@ -148,6 +151,7 @@ func TestCache_ItemCache_Set(t *testing.T) {
 }
 
 func TestCache_ItemCache_GetOrCreate(t *testing.T) {
+	t.Parallel()
 	defaultCreate := func() (Item, error) {
 		return testMockItem("default"), nil
 	}
@@ -260,6 +264,7 @@ func TestCache_ItemCache_GetOrCreate(t *testing.T) {
 }
 
 func TestCache_ItemCache_Get(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		nilCache      bool
 		key           string
@@ -343,6 +348,7 @@ func TestCache_ItemCache_Get(t *testing.T) {
 }
 
 func TestCache_ItemCache_Refresh(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		nilCache bool
 		keys     []string
@@ -438,6 +444,7 @@ func TestCache_ItemCache_Refresh(t *testing.T) {
 }
 
 func TestCache_ItemCache_Has(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		ic        *ItemCache
 		key       string
@@ -467,6 +474,7 @@ func TestCache_ItemCache_Has(t *testing.T) {
 }
 
 func TestCache_ItemCache_Keys(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		nilCache bool
 		cached   map[string]Item
@@ -518,6 +526,7 @@ func TestCache_ItemCache_Keys(t *testing.T) {
 }
 
 func TestCache_ItemCache_Delete(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		ic       *ItemCache
 		key      string

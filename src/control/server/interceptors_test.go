@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -35,6 +35,7 @@ func (ts *testStatus) GetStatus() int32 {
 }
 
 func TestServer_unaryStatusInterceptor(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		handlerResp interface{}
 		handlerErr  error
@@ -106,6 +107,7 @@ func (r *checkVerReq) GetSys() string {
 }
 
 func TestServer_checkVersion(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		selfVersion  string
 		otherVersion string

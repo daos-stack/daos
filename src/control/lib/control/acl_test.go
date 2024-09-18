@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -52,6 +52,7 @@ func (r *mockErrorReader) Read(p []byte) (n int, err error) {
 }
 
 func TestControl_ReadACLFile_FileOpenFailed(t *testing.T) {
+	t.Parallel()
 	result, err := ReadACLFile("/some/fake/path/badfile.txt")
 
 	if result != nil {
@@ -64,6 +65,7 @@ func TestControl_ReadACLFile_FileOpenFailed(t *testing.T) {
 }
 
 func TestControl_ReadACLFile_Success(t *testing.T) {
+	t.Parallel()
 	dir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 	path := test.CreateTestFile(t, dir, "A::OWNER@:rw\nA::user1@:rw\nA:g:group1@:r\n")
@@ -87,6 +89,7 @@ func TestControl_ReadACLFile_Success(t *testing.T) {
 }
 
 func TestReadACLFile_Empty(t *testing.T) {
+	t.Parallel()
 	dir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 	path := test.CreateTestFile(t, dir, "")
@@ -101,6 +104,7 @@ func TestReadACLFile_Empty(t *testing.T) {
 }
 
 func TestControl_ParseACL_EmptyFile(t *testing.T) {
+	t.Parallel()
 	mockFile := &mockReader{}
 
 	result, err := ParseACL(mockFile)
@@ -120,6 +124,7 @@ func TestControl_ParseACL_EmptyFile(t *testing.T) {
 }
 
 func TestControl_ParseACL_OneValidACE(t *testing.T) {
+	t.Parallel()
 	expectedACE := "A::OWNER@:rw"
 	expectedACL := &AccessControlList{Entries: []string{expectedACE}}
 	mockFile := &mockReader{
@@ -142,6 +147,7 @@ func TestControl_ParseACL_OneValidACE(t *testing.T) {
 }
 
 func TestControl_ParseACL_WhitespaceExcluded(t *testing.T) {
+	t.Parallel()
 	expectedACE := "A::OWNER@:rw"
 	expectedACL := &AccessControlList{Entries: []string{expectedACE}}
 	mockFile := &mockReader{
@@ -164,6 +170,7 @@ func TestControl_ParseACL_WhitespaceExcluded(t *testing.T) {
 }
 
 func TestControl_ParseACL_MultiValidACE(t *testing.T) {
+	t.Parallel()
 	expectedACEs := []string{
 		"A:g:GROUP@:r",
 		"A::OWNER@:rw",
@@ -195,6 +202,7 @@ func TestControl_ParseACL_MultiValidACE(t *testing.T) {
 }
 
 func TestControl_ParseACL_ErrorReadingFile(t *testing.T) {
+	t.Parallel()
 	expectedError := "mockErrorReader error"
 	mockFile := &mockErrorReader{
 		errorMsg: expectedError,
@@ -217,6 +225,7 @@ func TestControl_ParseACL_ErrorReadingFile(t *testing.T) {
 }
 
 func TestControl_ParseACL_MultiValidACEWithComment(t *testing.T) {
+	t.Parallel()
 	expectedACEs := []string{
 		"A:g:readers@:r",
 		"L:f:baduser@:rw",
@@ -252,6 +261,7 @@ func TestControl_ParseACL_MultiValidACEWithComment(t *testing.T) {
 }
 
 func TestControl_FormatACL(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		acl     *AccessControlList
 		verbose bool
@@ -339,6 +349,7 @@ func TestControl_FormatACL(t *testing.T) {
 }
 
 func TestControl_FormatACLDefault(t *testing.T) {
+	t.Parallel()
 	acl := &AccessControlList{
 		Entries: []string{
 			"A::OWNER@:rw",
@@ -356,6 +367,7 @@ func TestControl_FormatACLDefault(t *testing.T) {
 }
 
 func TestControl_GetVerboseACE(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		shortACE string
 		expStr   string

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,6 +16,7 @@ import (
 )
 
 func Test_ValidateLogMasks(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		masks  string
 		expErr error
@@ -89,6 +90,7 @@ func Test_ValidateLogMasks(t *testing.T) {
 }
 
 func Test_ValidateLogStreams(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		streams string
 		expErr  error
@@ -128,6 +130,7 @@ func Test_ValidateLogStreams(t *testing.T) {
 }
 
 func Test_MergeLogEnvVars(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		masks      string
 		subsystems string

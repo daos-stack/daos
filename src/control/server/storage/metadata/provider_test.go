@@ -21,6 +21,7 @@ import (
 )
 
 func TestMetadata_Provider_Format(t *testing.T) {
+	t.Parallel()
 	deviceReq := storage.MetadataFormatRequest{
 		RootPath:   "/test_root",
 		Device:     "/dev/something",
@@ -257,6 +258,7 @@ func TestMetadata_Provider_Format(t *testing.T) {
 }
 
 func TestMetadata_Provider_NeedsFormat(t *testing.T) {
+	t.Parallel()
 	deviceReq := storage.MetadataFormatRequest{
 		RootPath: "/test_root",
 		Device:   "/dev/something",
@@ -445,6 +447,7 @@ func TestMetadata_Provider_NeedsFormat(t *testing.T) {
 }
 
 func TestMetadata_Provider_Mount(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		nilProv  bool
 		mountCfg *storage.MockMountProviderConfig
@@ -520,6 +523,7 @@ func TestMetadata_Provider_Mount(t *testing.T) {
 }
 
 func TestMetadata_Provider_Unmount(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		nilProv  bool
 		mountCfg *storage.MockMountProviderConfig

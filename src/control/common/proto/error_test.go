@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -24,6 +24,7 @@ import (
 )
 
 func TestProto_MetaFromFault(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		fault   *fault.Fault
 		expMeta map[string]string
@@ -64,6 +65,7 @@ func TestProto_MetaFromFault(t *testing.T) {
 }
 
 func TestProto_AnnotateError(t *testing.T) {
+	t.Parallel()
 	testFault := &fault.Fault{
 		Domain:      "Domain",
 		Code:        code.Code(42),

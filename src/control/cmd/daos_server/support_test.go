@@ -15,6 +15,7 @@ import (
 // TestDaosServer_Support_Commands_JSON verifies that the JSON-output flag is disabled for support
 // command syntax.
 func TestDaosServer_Support_Commands_JSON(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestCommandLineLogger()
 
 	runJSONCmdTests(t, log, buf, []jsonCmdTest{

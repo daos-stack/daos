@@ -22,6 +22,7 @@ import (
 )
 
 func TestPretty_PrintPoolInfo(t *testing.T) {
+	t.Parallel()
 	poolUUID := test.MockPoolUUID()
 	backtickStr := "`" + "dmg pool upgrade" + "`"
 	for name, tc := range map[string]struct {
@@ -273,6 +274,7 @@ Pool space info:
 }
 
 func TestPretty_PrintPoolQueryTarget(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		pqti        *daos.PoolQueryTargetInfo
 		expErr      error
@@ -448,6 +450,7 @@ Target: type unknown, state drain
 }
 
 func TestPretty_PrintListPools(t *testing.T) {
+	t.Parallel()
 	exampleTierStats := []*daos.StorageUsageStats{
 		{
 			MediaType: daos.StorageMediaTypeScm,

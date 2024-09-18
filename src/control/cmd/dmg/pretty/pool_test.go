@@ -23,6 +23,7 @@ import (
 )
 
 func TestPretty_PrintPoolQueryTargetResp(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		pqtr        *control.PoolQueryTargetResp
 		expPrintStr string
@@ -456,6 +457,7 @@ func mockRanks(ranks ...uint32) []uint32 {
 }
 
 func TestPretty_PrintPoolCreateResp(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		pcr         *control.PoolCreateResp
 		expPrintStr string
@@ -529,6 +531,7 @@ Pool created with 100.00%% storage tier ratio
 }
 
 func TestPretty_PrintListPoolsResponse(t *testing.T) {
+	t.Parallel()
 	exampleTierStats := []*daos.StorageUsageStats{
 		{
 			MediaType: daos.StorageMediaTypeScm,

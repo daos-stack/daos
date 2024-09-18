@@ -54,6 +54,7 @@ func mockSmdQueryMap(t *testing.T, mocks ...*mockSmdResp) HostStorageMap {
 }
 
 func TestControl_SmdQuery(t *testing.T) {
+	t.Parallel()
 	devStateNew := ctlpb.NvmeDevState_NEW
 	devStateNormal := ctlpb.NvmeDevState_NORMAL
 	devStateFaulty := ctlpb.NvmeDevState_EVICTED
@@ -422,6 +423,7 @@ func TestControl_SmdQuery(t *testing.T) {
 }
 
 func TestControl_packPBSmdManageReq(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		req      *SmdManageReq
 		expPBReq *ctlpb.SmdManageReq
@@ -586,6 +588,7 @@ func TestControl_packPBSmdManageReq(t *testing.T) {
 }
 
 func TestControl_SmdManage(t *testing.T) {
+	t.Parallel()
 	devStateNormal := ctlpb.NvmeDevState_NORMAL
 	ledStateIdentify := ctlpb.LedState_QUICK_BLINK
 

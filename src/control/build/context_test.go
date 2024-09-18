@@ -18,6 +18,7 @@ import (
 )
 
 func TestBuild_FromContext(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		ctx        context.Context
 		expVerComp *VersionedComponent
@@ -68,6 +69,7 @@ func TestBuild_FromContext(t *testing.T) {
 }
 
 func TestBuild_ToContext(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		parent    context.Context
 		comp      Component

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,6 +16,7 @@ import (
 )
 
 func TestStorageCommands(t *testing.T) {
+	t.Parallel()
 	storageFormatReq := &control.StorageFormatReq{Reformat: true}
 	storageFormatReq.SetHostList([]string{})
 	systemQueryReq := &control.SystemQueryReq{FailOnUnavailable: true}

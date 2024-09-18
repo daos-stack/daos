@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -65,6 +65,7 @@ func setDirs(t *testing.T, newHome, newSys string) func(t *testing.T) {
 }
 
 func TestControl_LoadSystemConfig(t *testing.T) {
+	t.Parallel()
 	tmpDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
@@ -84,6 +85,7 @@ func TestControl_LoadSystemConfig(t *testing.T) {
 }
 
 func TestControl_LoadUserConfig(t *testing.T) {
+	t.Parallel()
 	tmpDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
@@ -103,6 +105,7 @@ func TestControl_LoadUserConfig(t *testing.T) {
 }
 
 func TestControl_LoadSpecifiedConfig(t *testing.T) {
+	t.Parallel()
 	tmpDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
@@ -123,6 +126,7 @@ func TestControl_LoadSpecifiedConfig(t *testing.T) {
 }
 
 func TestControl_LoadConfig_NoneFound(t *testing.T) {
+	t.Parallel()
 	restore := setDirs(t, "NONE", "NONE")
 	defer restore(t)
 
@@ -134,6 +138,7 @@ func TestControl_LoadConfig_NoneFound(t *testing.T) {
 }
 
 func TestControl_LoadConfig_BadInputs(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		input  string
 		expErr error

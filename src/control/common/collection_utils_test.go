@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,6 +16,7 @@ import (
 )
 
 func TestCommon_NewStringSet(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		in         []string
 		expStrings []string
@@ -48,6 +49,7 @@ func TestCommon_NewStringSet(t *testing.T) {
 }
 
 func TestCommon_StringSet_AddUnique(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		set    StringSet
 		in     []string
@@ -84,6 +86,7 @@ func TestCommon_StringSet_AddUnique(t *testing.T) {
 }
 
 func TestCommon_StringSet_Add(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		set        StringSet
 		in         []string
@@ -139,6 +142,7 @@ func TestCommon_StringSet_Add(t *testing.T) {
 }
 
 func TestCommon_StringSet_Has(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		set       StringSet
 		input     string
@@ -168,6 +172,7 @@ func TestCommon_StringSet_Has(t *testing.T) {
 }
 
 func TestCommon_StringSet_ToSlice(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		set       StringSet
 		expResult []string
@@ -199,6 +204,7 @@ func TestCommon_StringSet_ToSlice(t *testing.T) {
 }
 
 func TestCommon_StringSet_String(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		set       StringSet
 		expResult string
@@ -226,6 +232,7 @@ func TestCommon_StringSet_String(t *testing.T) {
 }
 
 func TestCommon_StringSet_UnmarshalYAML(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		yamlStrs  []string
 		yamlErr   error
@@ -262,6 +269,7 @@ func TestCommon_StringSet_UnmarshalYAML(t *testing.T) {
 }
 
 func TestCommon_StringSet_MarshalYAML(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		set       StringSet
 		expResult []string
@@ -286,6 +294,7 @@ func TestCommon_StringSet_MarshalYAML(t *testing.T) {
 }
 
 func TestCommon_ParseNumberListUint32(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		input     string
 		expOutput []uint32
@@ -314,6 +323,7 @@ func TestCommon_ParseNumberListUint32(t *testing.T) {
 }
 
 func TestCommon_ParseNumberListInt(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		input     string
 		expOutput []int
@@ -340,6 +350,7 @@ func TestCommon_ParseNumberListInt(t *testing.T) {
 }
 
 func TestCommon_ParseNumberListFloat64(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		input     string
 		expOutput []float64
@@ -367,11 +378,13 @@ func TestCommon_ParseNumberListFloat64(t *testing.T) {
 }
 
 func TestCommon_ParseNumberListBadReceiver(t *testing.T) {
+	t.Parallel()
 	gotErr := ParseNumberList("1,2,3", nil)
 	CmpErr(t, errors.New("json: Unmarshal"), gotErr)
 }
 
 func TestCommon_StringSliceHasDuplicates(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		input     []string
 		expResult bool
@@ -411,6 +424,7 @@ func TestCommon_StringSliceHasDuplicates(t *testing.T) {
 }
 
 func TestCommon_FilterStringMatches(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		filterStr string
 		actualStr string
@@ -446,6 +460,7 @@ func TestCommon_FilterStringMatches(t *testing.T) {
 }
 
 func TestCommon_PercentageString(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		partial   uint64
 		total     uint64
@@ -502,6 +517,7 @@ func TestCommon_PercentageString(t *testing.T) {
 }
 
 func TestCommon_TokenizeCommaSeparatedString(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		input     string
 		expResult []string

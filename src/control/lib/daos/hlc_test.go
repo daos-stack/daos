@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,6 +16,7 @@ import (
 )
 
 func TestDaos_HLC(t *testing.T) {
+	t.Parallel()
 	now := time.Now().Truncate(0)
 	zeroTime, err := time.Parse("2006-01-02 15:04:05.999999999 -0700 MST", daos.ZeroHLCDate)
 	if err != nil {
@@ -43,6 +44,7 @@ func TestDaos_HLC(t *testing.T) {
 }
 
 func TestDaos_HLC_JSON(t *testing.T) {
+	t.Parallel()
 	now := time.Now().Truncate(time.Millisecond)
 	nowJS := common.FormatTime(now)
 

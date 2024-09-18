@@ -104,6 +104,7 @@ func newTestInfoCache(t *testing.T, log logging.Logger, params testInfoCachePara
 }
 
 func TestAgent_newCachedAttachInfo(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -129,6 +130,7 @@ func TestAgent_newCachedAttachInfo(t *testing.T) {
 }
 
 func TestAgent_cachedAttachInfo_Key(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		ai        *cachedAttachInfo
 		expResult string
@@ -150,6 +152,7 @@ func TestAgent_cachedAttachInfo_Key(t *testing.T) {
 }
 
 func TestAgent_cachedAttachInfo_RefreshIfNeeded(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 	mockClient := control.NewMockInvoker(log, &control.MockInvokerConfig{})
@@ -209,6 +212,7 @@ func TestAgent_cachedAttachInfo_RefreshIfNeeded(t *testing.T) {
 }
 
 func TestAgent_cachedAttachInfo_Refresh(t *testing.T) {
+	t.Parallel()
 	resp1 := &control.GetAttachInfoResp{
 		System: "resp1",
 		ServiceRanks: []*control.PrimaryServiceRank{
@@ -301,6 +305,7 @@ func TestAgent_cachedAttachInfo_Refresh(t *testing.T) {
 }
 
 func TestAgent_newCachedFabricInfo(t *testing.T) {
+	t.Parallel()
 	cfi := newCachedFabricInfo(func(ctx context.Context, providers ...string) (*NUMAFabric, error) {
 		return nil, nil
 	}, hardware.Ether, "one", "two")
@@ -318,6 +323,7 @@ func TestAgent_newCachedFabricInfo(t *testing.T) {
 }
 
 func TestAgent_cachedFabricInfo_Key(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		cfi *cachedFabricInfo
 	}{
@@ -334,6 +340,7 @@ func TestAgent_cachedFabricInfo_Key(t *testing.T) {
 }
 
 func TestAgent_cachedFabricInfo_RefreshIfNeeded(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		nilCache  bool
 		cacheTime time.Time
@@ -374,6 +381,7 @@ func copyNUMAFabricMap(in NUMAFabricMap) NUMAFabricMap {
 }
 
 func TestAgent_cachedFabricInfo_Refresh(t *testing.T) {
+	t.Parallel()
 	scan1 := NUMAFabricMap{
 		2: {
 			{
@@ -490,6 +498,7 @@ func TestAgent_cachedFabricInfo_Refresh(t *testing.T) {
 }
 
 func TestAgent_NewInfoCache(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		cfg                *Config
 		expEnabled         bool
@@ -552,6 +561,7 @@ func TestAgent_NewInfoCache(t *testing.T) {
 }
 
 func TestAgent_InfoCache_EnableAttachInfoCache(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		ic              *InfoCache
 		refreshInterval time.Duration
@@ -581,6 +591,7 @@ func TestAgent_InfoCache_EnableAttachInfoCache(t *testing.T) {
 }
 
 func TestAgent_InfoCache_DisableAttachInfoCache(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		ic *InfoCache
 	}{
@@ -601,6 +612,7 @@ func TestAgent_InfoCache_DisableAttachInfoCache(t *testing.T) {
 }
 
 func TestAgent_InfoCache_EnableFabricCache(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		ic           *InfoCache
 		startEnabled bool
@@ -628,6 +640,7 @@ func TestAgent_InfoCache_EnableFabricCache(t *testing.T) {
 }
 
 func TestAgent_InfoCache_EnableStaticFabricCache(t *testing.T) {
+	t.Parallel()
 	cfg := []*NUMAFabricConfig{
 		{
 			NUMANode: 1,
@@ -694,6 +707,7 @@ func TestAgent_InfoCache_EnableStaticFabricCache(t *testing.T) {
 }
 
 func TestAgent_InfoCache_DisableFabricCache(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		ic           *InfoCache
 		startEnabled bool
@@ -718,6 +732,7 @@ func TestAgent_InfoCache_DisableFabricCache(t *testing.T) {
 }
 
 func TestAgent_InfoCache_AddProvider(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		ic           *InfoCache
 		input        string
@@ -764,6 +779,7 @@ func TestAgent_InfoCache_AddProvider(t *testing.T) {
 }
 
 func TestAgent_InfoCache_GetAttachInfo(t *testing.T) {
+	t.Parallel()
 	ctlResp := &control.GetAttachInfoResp{
 		System:       "dontcare",
 		ServiceRanks: []*control.PrimaryServiceRank{{Rank: 1, Uri: "my uri"}},
@@ -979,6 +995,7 @@ func mockGetAddrInterface(name string) (addrFI, error) {
 }
 
 func TestAgent_InfoCache_GetFabricDevice(t *testing.T) {
+	t.Parallel()
 	testSet := hardware.NewFabricInterfaceSet(
 		&hardware.FabricInterface{
 			Name:          "dev0",
@@ -1217,6 +1234,7 @@ func TestAgent_InfoCache_GetFabricDevice(t *testing.T) {
 }
 
 func TestAgent_InfoCache_GetNUMAFabricMap(t *testing.T) {
+	t.Parallel()
 	testMap := NUMAFabricMap{
 		0: {
 			{
@@ -1360,6 +1378,7 @@ func TestAgent_InfoCache_GetNUMAFabricMap(t *testing.T) {
 }
 
 func TestAgent_InfoCache_Refresh(t *testing.T) {
+	t.Parallel()
 	ctlResp := &control.GetAttachInfoResp{
 		System:       "dontcare",
 		ServiceRanks: []*control.PrimaryServiceRank{{Rank: 1, Uri: "my uri"}},
@@ -1505,6 +1524,7 @@ func TestAgent_InfoCache_Refresh(t *testing.T) {
 }
 
 func TestAgent_InfoCache_waitFabricReady(t *testing.T) {
+	t.Parallel()
 	defaultNetIfaceFn := func() ([]net.Interface, error) {
 		return []net.Interface{
 			{Name: "t0"},

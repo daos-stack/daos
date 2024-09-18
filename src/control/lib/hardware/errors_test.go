@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,6 +15,7 @@ import (
 )
 
 func TestHardware_IsUnsupportedFabric(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		err       error
 		expResult bool
@@ -35,6 +36,7 @@ func TestHardware_IsUnsupportedFabric(t *testing.T) {
 }
 
 func TestHardware_IsProviderNotOnDevice(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		err       error
 		expResult bool

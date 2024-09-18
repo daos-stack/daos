@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,6 +18,7 @@ import (
 )
 
 func Test_Systemd_SdNotify(t *testing.T) {
+	t.Parallel()
 	testStr := "TEST=1"
 	setupSock := func(t *testing.T) string {
 		t.Helper()

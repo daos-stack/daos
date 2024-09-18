@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,6 +16,7 @@ import (
 )
 
 func TestBuild_NewVersion(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		input  string
 		expVer *build.Version
@@ -77,6 +78,7 @@ func TestBuild_NewVersion(t *testing.T) {
 }
 
 func TestBuild_Version_GreaterThan(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		a           string
 		b           string
@@ -115,6 +117,7 @@ func TestBuild_Version_GreaterThan(t *testing.T) {
 }
 
 func TestBuild_Version_LessThan(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		a        string
 		b        string
@@ -153,6 +156,7 @@ func TestBuild_Version_LessThan(t *testing.T) {
 }
 
 func TestBuild_Version_Equals(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		a      string
 		b      string
@@ -181,6 +185,7 @@ func TestBuild_Version_Equals(t *testing.T) {
 }
 
 func TestBuild_Version_Deltas(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		a     string
 		b     string
@@ -229,6 +234,7 @@ func TestBuild_Version_Deltas(t *testing.T) {
 }
 
 func TestBuild_Version_PatchCompatible(t *testing.T) {
+	t.Parallel()
 	a := build.MustNewVersion("1.2.0")
 	b := build.MustNewVersion("1.2.3")
 

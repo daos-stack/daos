@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -29,6 +29,7 @@ func mockEvtSvcReps(t *testing.T) *RASEvent {
 }
 
 func TestEvents_ConvertPoolSvcReplicasUpdate(t *testing.T) {
+	t.Parallel()
 	event := mockEvtSvcReps(t)
 
 	pbEvent, err := event.ToProto()

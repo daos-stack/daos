@@ -29,6 +29,7 @@ import (
 )
 
 func Test_Dmg_PoolTierRatioFlag(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		input     string
 		expRatios []float64
@@ -137,6 +138,7 @@ func createACLFile(t *testing.T, dir string, acl *control.AccessControlList) str
 }
 
 func TestPoolCommands(t *testing.T) {
+	t.Parallel()
 	testSizeStr := "512GiB"
 	testSize := 549755813888
 	eUsr, err := user.Current()
@@ -1090,6 +1092,7 @@ func TestPoolCommands(t *testing.T) {
 }
 
 func TestPoolGetACLToFile_Success(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -1134,6 +1137,7 @@ func TestPoolGetACLToFile_Success(t *testing.T) {
 }
 
 func TestDmg_PoolListCmd_Errors(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		ctlCfg    *control.Config
 		listResp  *mgmtpb.ListPoolsResp

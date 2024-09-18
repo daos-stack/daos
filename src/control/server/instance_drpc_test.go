@@ -46,6 +46,7 @@ func waitForEngineReady(t *testing.T, instance *EngineInstance) {
 }
 
 func TestEngineInstance_NotifyDrpcReady(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -61,6 +62,7 @@ func TestEngineInstance_NotifyDrpcReady(t *testing.T) {
 }
 
 func TestEngineInstance_CallDrpc(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		notStarted bool
 		notReady   bool
@@ -139,6 +141,7 @@ func (c *sendMsgDrpcClient) GetSocketPath() string {
 }
 
 func TestEngineInstance_CallDrpc_Parallel(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -216,6 +219,7 @@ func TestEngineInstance_CallDrpc_Parallel(t *testing.T) {
 }
 
 func TestEngineInstance_DrespToRankResult(t *testing.T) {
+	t.Parallel()
 	dRank := Rank(1)
 
 	for name, tc := range map[string]struct {

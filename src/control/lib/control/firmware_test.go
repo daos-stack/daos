@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -39,6 +39,7 @@ func getCmpOpts() []cmp.Option {
 }
 
 func TestControl_FirmwareQuery(t *testing.T) {
+	t.Parallel()
 	scmPbResults, scmExpResults := getTestSCMQueryResults(t)
 	nvmePbResults, nvmeExpResults := getTestNVMeQueryResults(t)
 
@@ -280,6 +281,7 @@ func getTestNVMeQueryResults(t *testing.T) ([]*ctlpb.NvmeFirmwareQueryResp, []*N
 }
 
 func TestControl_DeviceType_toCtlPBType(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		originalType DeviceType
 		expPBType    ctlpb.FirmwareUpdateReq_DeviceType
@@ -314,6 +316,7 @@ func TestControl_DeviceType_toCtlPBType(t *testing.T) {
 }
 
 func TestControl_FirmwareUpdate(t *testing.T) {
+	t.Parallel()
 	pbSCMResults, expSCMResults := getTestSCMUpdateResults(t)
 	pbNVMeResults, expNVMeResults := getTestNVMeUpdateResults(t)
 

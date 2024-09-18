@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -23,6 +23,7 @@ import (
 )
 
 func TestControl_httpReq_canRetry(t *testing.T) {
+	t.Parallel()
 	validReq := &httpReq{
 		url: &url.URL{
 			Scheme: "http",
@@ -74,6 +75,7 @@ func TestControl_httpReq_canRetry(t *testing.T) {
 }
 
 func TestControl_httpReq_onRetry(t *testing.T) {
+	t.Parallel()
 	req := &httpReq{}
 	err := req.onRetry(test.Context(t), 0)
 	if err != nil {
@@ -82,12 +84,14 @@ func TestControl_httpReq_onRetry(t *testing.T) {
 }
 
 func TestControl_httpReq_retryAfter(t *testing.T) {
+	t.Parallel()
 	req := &httpReq{}
 	result := req.retryAfter(0)
 	test.AssertEqual(t, time.Second, result, "")
 }
 
 func TestControl_httpReq_getRetryTimeout(t *testing.T) {
+	t.Parallel()
 	req := &httpReq{}
 	result := req.getRetryTimeout()
 	test.AssertEqual(t, httpReqTimeout, result, "")
@@ -122,6 +126,7 @@ func newErrMockReadCloser(err error) *mockReadCloser {
 }
 
 func TestControl_httpGetBody(t *testing.T) {
+	t.Parallel()
 	defaultURL := &url.URL{Host: "testhost"}
 
 	for name, tc := range map[string]struct {
@@ -282,6 +287,7 @@ func (r *mockHTTPGetter) getBody(ctx context.Context) ([]byte, error) {
 }
 
 func TestControl_httpGetBodyRetry(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		req       *mockHTTPGetter
 		expResult []byte

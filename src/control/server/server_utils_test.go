@@ -116,6 +116,7 @@ func (a mockAddr) String() string {
 }
 
 func TestServer_checkFabricInterface(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		name   string
 		lookup func(string) (netInterface, error)
@@ -173,6 +174,7 @@ func TestServer_checkFabricInterface(t *testing.T) {
 }
 
 func TestServer_getSrxSetting(t *testing.T) {
+	t.Parallel()
 	defCfg := config.DefaultServer()
 
 	for name, tc := range map[string]struct {
@@ -287,6 +289,7 @@ func TestServer_getSrxSetting(t *testing.T) {
 }
 
 func TestServer_prepBdevStorage(t *testing.T) {
+	t.Parallel()
 	usrCurrent, err := user.Current()
 	if err != nil {
 		t.Fatal(err)
@@ -752,6 +755,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 }
 
 func TestServer_checkEngineTmpfsMem(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		srvCfgExtra  func(*config.Server) *config.Server
 		memAvailGiB  int
@@ -843,6 +847,7 @@ func TestServer_checkEngineTmpfsMem(t *testing.T) {
 }
 
 func testFabricProviderSet(prov ...string) *hardware.FabricProviderSet {
+	t.Parallel()
 	providers := []*hardware.FabricProvider{}
 	for _, p := range prov {
 		providers = append(providers, &hardware.FabricProvider{
@@ -853,6 +858,7 @@ func testFabricProviderSet(prov ...string) *hardware.FabricProviderSet {
 }
 
 func TestServer_getNetDevClass(t *testing.T) {
+	t.Parallel()
 	configA := func() *engine.Config {
 		return engine.MockConfig().
 			WithLogFile("a").
@@ -965,6 +971,7 @@ func (m *mockReplicaAddrSrc) ReplicaAddr() (*net.TCPAddr, error) {
 }
 
 func TestServerUtils_resolveFirstAddr(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		host    string
 		lookup  ipLookupFn
@@ -1045,6 +1052,7 @@ func TestServerUtils_resolveFirstAddr(t *testing.T) {
 }
 
 func TestServerUtils_getControlAddr(t *testing.T) {
+	t.Parallel()
 	testTCPAddr := &net.TCPAddr{
 		IP:   net.ParseIP("127.0.0.1"),
 		Port: 1234,
@@ -1127,6 +1135,7 @@ func TestServerUtils_getControlAddr(t *testing.T) {
 }
 
 func TestServer_processFabricProvider(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		cfgFabric string
 		expFabric string
@@ -1167,6 +1176,7 @@ func TestServer_processFabricProvider(t *testing.T) {
 }
 
 func TestServer_formatBytestring(t *testing.T) {
+	t.Parallel()
 	bytesIn := "86805309060410000102080100000000040000bc0000000000000000" +
 		"000000000000000000000000000000009015a8000000000040000000" +
 		"00000000000100000150030008000000000000000000000011601f00" +

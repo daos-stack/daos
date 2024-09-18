@@ -29,6 +29,7 @@ import (
 )
 
 func TestAgentSecurityModule_ID(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -50,6 +51,7 @@ func defaultTestSecurityConfig() *securityConfig {
 }
 
 func TestAgentSecurityModule_BadMethod(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -110,6 +112,7 @@ func expectCredResp(t *testing.T, respBytes []byte, expStatus int32, expCred boo
 }
 
 func TestAgentSecurityModule_RequestCreds_OK(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -128,6 +131,7 @@ func TestAgentSecurityModule_RequestCreds_OK(t *testing.T) {
 }
 
 func TestAgentSecurityModule_RequestCreds_NotUnixConn(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -142,6 +146,7 @@ func TestAgentSecurityModule_RequestCreds_NotUnixConn(t *testing.T) {
 }
 
 func TestAgentSecurityModule_RequestCreds_NotConnected(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -161,6 +166,7 @@ func TestAgentSecurityModule_RequestCreds_NotConnected(t *testing.T) {
 }
 
 func TestAgentSecurityModule_RequestCreds_BadConfig(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -183,6 +189,7 @@ func TestAgentSecurityModule_RequestCreds_BadConfig(t *testing.T) {
 }
 
 func TestAgentSecurityModule_RequestCreds_BadUid(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -209,6 +216,7 @@ type signCredentialResp struct {
 }
 
 func TestAgent_SecurityRPC_getCredential(t *testing.T) {
+	t.Parallel()
 	testCred := &auth.Credential{
 		Token:  &auth.Token{Flavor: auth.Flavor_AUTH_SYS, Data: []byte("test-token")},
 		Origin: "test-origin",
@@ -327,6 +335,7 @@ func TestAgent_SecurityRPC_getCredential(t *testing.T) {
 }
 
 func TestAgent_SecurityCachedCredentials(t *testing.T) {
+	t.Parallel()
 	cred0 := &auth.Credential{
 		Token:  &auth.Token{Flavor: auth.Flavor_AUTH_SYS, Data: []byte("user,group1,group2")},
 		Origin: "test-origin",

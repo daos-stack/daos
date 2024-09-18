@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -49,6 +49,7 @@ func (tly *tally) getRx() []string {
 }
 
 func TestEvents_PubSub_Basic(t *testing.T) {
+	t.Parallel()
 	evt1 := mockEvtDied(t)
 
 	log, buf := logging.NewTestLogger(t.Name())
@@ -76,6 +77,7 @@ func TestEvents_PubSub_Basic(t *testing.T) {
 }
 
 func TestEvents_PubSub_Reset(t *testing.T) {
+	t.Parallel()
 	evt1 := mockEvtDied(t)
 
 	log, buf := logging.NewTestLogger(t.Name())
@@ -116,6 +118,7 @@ func TestEvents_PubSub_Reset(t *testing.T) {
 }
 
 func TestEvents_PubSub_DisableEvent(t *testing.T) {
+	t.Parallel()
 	evt1 := mockEvtDied(t)
 	evt2 := mockEvtSvcReps(t)
 
@@ -150,6 +153,7 @@ func TestEvents_PubSub_DisableEvent(t *testing.T) {
 }
 
 func TestEvents_PubSub_SubscribeAnyTopic(t *testing.T) {
+	t.Parallel()
 	evt1 := mockEvtDied(t)
 	evt2 := mockEvtGeneric(t) // of type InfoOnly will only match Any
 
@@ -199,6 +203,7 @@ func mockSwimRankDeadEvt(rankInc ...uint32) *RASEvent {
 }
 
 func TestEvents_PubSub_Debounce_NoCooldown(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -235,6 +240,7 @@ func TestEvents_PubSub_Debounce_NoCooldown(t *testing.T) {
 }
 
 func TestEvents_PubSub_Debounce_Cooldown(t *testing.T) {
+	t.Parallel()
 	test := func(t *testing.T, iter int) bool {
 		log, buf := logging.NewTestLogger(t.Name())
 		defer test.ShowBufferOnFailure(t, buf)

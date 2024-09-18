@@ -55,6 +55,7 @@ func waitForSnapshots(ctx context.Context, t *testing.T, log logging.Logger, cfg
 }
 
 func testDbCfg() *DatabaseConfig {
+	t.Parallel()
 	return &DatabaseConfig{
 		Replicas:              []*net.TCPAddr{common.LocalhostCtrlAddr()},
 		SystemName:            "daos-test",
@@ -65,6 +66,7 @@ func testDbCfg() *DatabaseConfig {
 }
 
 func Test_Raft_RegenerateFixtures(t *testing.T) {
+	t.Parallel()
 	if !*regenRaftFixtures {
 		return
 	}
@@ -152,6 +154,7 @@ func Test_Raft_RegenerateFixtures(t *testing.T) {
 }
 
 func Test_Raft_GetRaftConfiguration(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -179,6 +182,7 @@ func Test_Raft_GetRaftConfiguration(t *testing.T) {
 }
 
 func Test_Raft_RecoverLocalReplica(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		setup  func(t *testing.T) *DatabaseConfig
 		expErr error
@@ -237,6 +241,7 @@ func Test_Raft_RecoverLocalReplica(t *testing.T) {
 }
 
 func Test_Raft_RestoreLocalReplica(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		setup  func(t *testing.T) (*DatabaseConfig, string)
 		expErr error
@@ -319,6 +324,7 @@ func Test_Raft_RestoreLocalReplica(t *testing.T) {
 }
 
 func Test_Raft_GetLatestSnapshot(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -343,6 +349,7 @@ func Test_Raft_GetLatestSnapshot(t *testing.T) {
 }
 
 func Test_Raft_GetLastLogEntry(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -363,6 +370,7 @@ func Test_Raft_GetLastLogEntry(t *testing.T) {
 }
 
 func Test_Raft_GetLogEntries(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -385,6 +393,7 @@ func Test_Raft_GetLogEntries(t *testing.T) {
 }
 
 func Test_Raft_ReadSnapshotInfo(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 

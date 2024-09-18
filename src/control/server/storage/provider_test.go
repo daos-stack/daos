@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -32,6 +32,7 @@ func defBdevCmpOpts() []cmp.Option {
 }
 
 func Test_BdevWriteRequestFromConfig(t *testing.T) {
+	t.Parallel()
 	hostname, err := os.Hostname()
 	if err != nil {
 		t.Fatal(err)
@@ -269,6 +270,7 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 }
 
 func TestStorage_FormatControlMetadata(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		nilProv      bool
 		cfg          *Config
@@ -318,6 +320,7 @@ func TestStorage_FormatControlMetadata(t *testing.T) {
 }
 
 func TestStorage_ControlMetadataNeedsFormat(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		nilProv      bool
 		cfg          *Config
@@ -380,6 +383,7 @@ func TestStorage_ControlMetadataNeedsFormat(t *testing.T) {
 }
 
 func TestStorage_MountControlMetadata(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		nilProv      bool
 		cfg          *Config
@@ -444,6 +448,7 @@ func TestStorage_MountControlMetadata(t *testing.T) {
 }
 
 func TestStorage_ControlMetadataIsMounted(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		nilProv    bool
 		cfg        *Config
@@ -539,6 +544,7 @@ func TestStorage_ControlMetadataIsMounted(t *testing.T) {
 }
 
 func TestStorage_ControlMetadataPath(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		nilProv   bool
 		cfg       *Config
@@ -606,6 +612,7 @@ func TestStorage_ControlMetadataPath(t *testing.T) {
 }
 
 func TestStorage_ControlMetadataEnginePath(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		nilProv   bool
 		engineIdx uint

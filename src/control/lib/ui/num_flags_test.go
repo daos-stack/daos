@@ -16,6 +16,7 @@ import (
 )
 
 func TestUI_FmtHumanSize(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		input   float64
 		suffix  string
@@ -85,6 +86,7 @@ func TestUI_FmtHumanSize(t *testing.T) {
 }
 
 func TestUI_ByteSizeFlag(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		input   string
 		expSize uint64

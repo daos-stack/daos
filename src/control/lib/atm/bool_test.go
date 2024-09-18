@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,6 +13,7 @@ import (
 )
 
 func TestAtomicBool_ZeroValue(t *testing.T) {
+	t.Parallel()
 	var b atm.Bool
 
 	if b.Load() {
@@ -27,6 +28,7 @@ func TestAtomicBool_ZeroValue(t *testing.T) {
 }
 
 func TestAtomicBool_Ops(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		start      bool
 		op         string

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,6 +19,7 @@ import (
 )
 
 func TestUI_SetPropertiesFlag_UnmarshalFlag(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		settable []string
 		deprKeys map[string]string
@@ -121,6 +122,7 @@ func FuzzUI_SetPropertiesFlag_UnmarshalFlag(f *testing.F) {
 */
 
 func TestUI_SetPropertiesFlag_Complete(t *testing.T) {
+	t.Parallel()
 	comps := ui.CompletionMap{
 		"alpha":    []string{"alpha1", "alpha2"},
 		"bravo":    []string{"bravo1", "bravo2", "bravo3"},
@@ -226,6 +228,7 @@ func TestUI_SetPropertiesFlag_Complete(t *testing.T) {
 }
 
 func TestUI_GetPropertiesFlag_UnmarshalFlag(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		gettable []string
 		deprKeys map[string]string
@@ -297,6 +300,7 @@ func TestUI_GetPropertiesFlag_UnmarshalFlag(t *testing.T) {
 }
 
 func TestUI_GetPropertiesFlag_Complete(t *testing.T) {
+	t.Parallel()
 	comps := ui.CompletionMap{
 		"alpha":    []string{"alpha1", "alpha2"},
 		"bravo":    []string{"bravo1", "bravo2", "bravo3"},

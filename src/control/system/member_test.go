@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,6 +18,7 @@ import (
 )
 
 func TestSystem_Member_Stringify(t *testing.T) {
+	t.Parallel()
 	states := []MemberState{
 		MemberStateUnknown,
 		MemberStateAwaitFormat,
@@ -52,6 +53,7 @@ func TestSystem_Member_Stringify(t *testing.T) {
 }
 
 func TestSystem_Member_MarshalUnmarshalJSON(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		member          *Member
 		expMarshalErr   error
@@ -97,6 +99,7 @@ func TestSystem_Member_MarshalUnmarshalJSON(t *testing.T) {
 }
 
 func TestSystem_Member_Convert(t *testing.T) {
+	t.Parallel()
 	membersIn := Members{MockMember(t, 1, MemberStateJoined)}
 	membersOut := Members{}
 	if err := convert.Types(membersIn, &membersOut); err != nil {
@@ -109,6 +112,7 @@ func TestSystem_Member_Convert(t *testing.T) {
 }
 
 func TestSystem_MemberResult_Convert(t *testing.T) {
+	t.Parallel()
 	mrsIn := MemberResults{
 		NewMemberResult(1, nil, MemberStateStopped),
 		NewMemberResult(2, errors.New("can't stop"), MemberStateUnknown),

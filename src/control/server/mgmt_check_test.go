@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2023 Intel Corporation.
+// (C) Copyright 2023-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -32,6 +32,7 @@ import (
 var defaultPolicies = testPoliciesWithAction(chkpb.CheckInconsistAction_CIA_DEFAULT)
 
 func testPoliciesWithAction(action chkpb.CheckInconsistAction) []*mgmtpb.CheckInconsistPolicy {
+	t.Parallel()
 	policies := make([]*mgmtpb.CheckInconsistPolicy, 0, len(chkpb.CheckInconsistClass_name))
 
 	for cls := range chkpb.CheckInconsistClass_name {
@@ -50,6 +51,7 @@ func testPoliciesWithAction(action chkpb.CheckInconsistAction) []*mgmtpb.CheckIn
 }
 
 func testSvcWithMemberState(t *testing.T, log logging.Logger, state system.MemberState, testPoolUUIDs []string) *mgmtSvc {
+	t.Parallel()
 	t.Helper()
 
 	t.Logf("creating a test MS with member state %s", state)
@@ -75,6 +77,7 @@ func updateTestMemberState(t *testing.T, svc *mgmtSvc, state system.MemberState)
 }
 
 func testSvcCheckerEnabled(t *testing.T, log logging.Logger, state system.MemberState, testPoolUUIDs []string) *mgmtSvc {
+	t.Parallel()
 	t.Helper()
 
 	svc := testSvcWithMemberState(t, log, state, testPoolUUIDs)
@@ -85,6 +88,7 @@ func testSvcCheckerEnabled(t *testing.T, log logging.Logger, state system.Member
 }
 
 func testPoolUUIDs(numTestPools int) []string {
+	t.Parallel()
 	uuids := []string{}
 	for i := 0; i < numTestPools; i++ {
 		uuids = append(uuids, test.MockPoolUUID(int32(i+1)).String())
@@ -104,6 +108,7 @@ func mergeTestPolicies(current, merge []*mgmtpb.CheckInconsistPolicy) []*mgmtpb.
 }
 
 func TestServer_mgmtSvc_SystemCheckStart(t *testing.T) {
+	t.Parallel()
 	specificPolicies := []*mgmtpb.CheckInconsistPolicy{
 		{
 			InconsistCas: chk.CheckInconsistClass_CIC_CONT_NONEXIST_ON_PS,
@@ -342,6 +347,7 @@ func TestServer_mgmtSvc_SystemCheckStart(t *testing.T) {
 }
 
 func TestServer_mgmtSvc_SystemCheckGetPolicy(t *testing.T) {
+	t.Parallel()
 	uuids := testPoolUUIDs(4)
 
 	for name, tc := range map[string]struct {
@@ -519,6 +525,7 @@ func TestServer_mgmtSvc_SystemCheckGetPolicy(t *testing.T) {
 }
 
 func TestServer_mgmtSvc_SystemCheckSetPolicy(t *testing.T) {
+	t.Parallel()
 	uuids := testPoolUUIDs(4)
 	interactReq := &mgmtpb.CheckSetPolicyReq{
 		Sys:      "daos_server",
@@ -635,6 +642,7 @@ func TestServer_mgmtSvc_SystemCheckSetPolicy(t *testing.T) {
 }
 
 func TestServer_mgmtSvc_SystemCheckQuery(t *testing.T) {
+	t.Parallel()
 	uuids := testPoolUUIDs(3)
 	testFindingsMS := []*chkpb.CheckReport{}
 	testFindingsDrpc := []*chkpb.CheckReport{}

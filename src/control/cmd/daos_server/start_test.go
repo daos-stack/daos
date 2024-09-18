@@ -28,6 +28,7 @@ import (
 )
 
 func testExpectedError(t *testing.T, expected, actual error) {
+	t.Parallel()
 	t.Helper()
 
 	errRe := regexp.MustCompile(expected.Error())
@@ -107,6 +108,7 @@ func cmpEnv(t *testing.T, wantConfig, gotConfig *engine.Config) {
 }
 
 func TestStartOptions(t *testing.T) {
+	t.Parallel()
 	insecureTransport := config.DefaultServer().TransportConfig
 	insecureTransport.AllowInsecure = true
 
@@ -275,6 +277,7 @@ func TestStartOptions(t *testing.T) {
 }
 
 func TestStartLoggingOptions(t *testing.T) {
+	t.Parallel()
 	for desc, tc := range map[string]struct {
 		argList   []string
 		logFnName string
@@ -335,6 +338,7 @@ func TestStartLoggingOptions(t *testing.T) {
 }
 
 func TestStartLoggingConfiguration(t *testing.T) {
+	t.Parallel()
 	for desc, tc := range map[string]struct {
 		configFn  func(*config.Server) *config.Server
 		logFnName string
@@ -417,6 +421,7 @@ func TestStartLoggingConfiguration(t *testing.T) {
 // TestDaosServer_Start_Commands_JSON verifies that the JSON-output flag is disabled fora the start
 // command.
 func TestDaosServer_Start_Commands_JSON(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestCommandLineLogger()
 
 	runJSONCmdTests(t, log, buf, []jsonCmdTest{

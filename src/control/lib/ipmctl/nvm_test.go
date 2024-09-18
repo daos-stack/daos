@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -53,6 +53,7 @@ func discoverDevices(t *testing.T, log logging.Logger, mgmt NvmMgmt) []DeviceDis
 }
 
 func TestNvmDiscovery(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger("discovery")
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -68,6 +69,7 @@ func TestNvmDiscovery(t *testing.T) {
 }
 
 func TestNvmFwInfo(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger("firmware")
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -90,6 +92,7 @@ func TestNvmFwInfo(t *testing.T) {
 }
 
 func TestNvmFwUpdate_BadFile(t *testing.T) {
+	t.Parallel()
 	for _, tt := range []struct {
 		desc      string
 		inputPath string
@@ -117,6 +120,7 @@ func TestNvmFwUpdate_BadFile(t *testing.T) {
 }
 
 func TestNvmFwUpdate(t *testing.T) {
+	t.Parallel()
 	log, buf := logging.NewTestLogger("firmware")
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -155,9 +159,11 @@ func TestNvmFwUpdate(t *testing.T) {
 // These wrappers are here for gotest to find.
 
 func TestGetModules(t *testing.T) {
+	t.Parallel()
 	testGetModules(t)
 }
 
 func TestGetRegions(t *testing.T) {
+	t.Parallel()
 	testGetRegions(t)
 }

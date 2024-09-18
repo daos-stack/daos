@@ -47,6 +47,7 @@ func walkStruct(v reflect.Value, prefix []string, visit func([]string)) {
 }
 
 func TestDmg_JsonOutput(t *testing.T) {
+	t.Parallel()
 	var cmdArgs [][]string
 
 	// Use reflection to build up a list of commands in order to

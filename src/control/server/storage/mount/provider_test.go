@@ -21,6 +21,7 @@ import (
 )
 
 func TestProvider_Mount(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		nilProv bool
 		msc     *system.MockSysConfig
@@ -104,6 +105,7 @@ func TestProvider_Mount(t *testing.T) {
 }
 
 func TestProvider_Unmount(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		nilProv bool
 		msc     *system.MockSysConfig
@@ -143,6 +145,7 @@ func TestProvider_Unmount(t *testing.T) {
 }
 
 func TestProvider_IsMounted(t *testing.T) {
+	t.Parallel()
 	testTarget := "/fake"
 	for name, tc := range map[string]struct {
 		nilProv   bool
@@ -195,6 +198,7 @@ func TestProvider_IsMounted(t *testing.T) {
 }
 
 func TestProvider_ClearMountpoint(t *testing.T) {
+	t.Parallel()
 	testMountpoint := func(path string) string {
 		return filepath.Join(path, "mnt")
 	}
@@ -302,6 +306,7 @@ func TestProvider_ClearMountpoint(t *testing.T) {
 }
 
 func TestProvider_MakeMountPath(t *testing.T) {
+	t.Parallel()
 	testDir, cleanupDir := test.CreateTestDir(t)
 	defer cleanupDir()
 
