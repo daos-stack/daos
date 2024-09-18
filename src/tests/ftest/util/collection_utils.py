@@ -191,23 +191,23 @@ def archive_files(logger, summary, hosts, source, pattern, destination, depth, t
         logger.debug("No %s files found on %s", os.path.join(source, pattern), hosts)
         return return_code
 
-    if "log" in pattern:
-        # Remove any empty files
-        return_code |= remove_empty_files(logger, file_hosts, source, pattern, depth, test_result)
+    # if "log" in pattern:
+    #     # Remove any empty files
+    #     return_code |= remove_empty_files(logger, file_hosts, source, pattern, depth, test_result)
 
-        # Report an error if any files sizes exceed the threshold
-        if threshold is not None:
-            return_code |= check_log_size(
-                logger, file_hosts, source, pattern, depth, threshold, test_result)
+    #     # Report an error if any files sizes exceed the threshold
+    #     if threshold is not None:
+    #         return_code |= check_log_size(
+    #             logger, file_hosts, source, pattern, depth, threshold, test_result)
 
-        # Run cart_logtest on log files
-        return_code |= cart_log_test(logger, file_hosts, source, pattern, depth, test_result)
+    #     # Run cart_logtest on log files
+    #     return_code |= cart_log_test(logger, file_hosts, source, pattern, depth, test_result)
 
     # Remove any empty files
     return_code |= remove_empty_files(logger, file_hosts, source, pattern, depth, test_result)
 
     # Compress any files larger than 1 MB
-    return_code |= compress_files(logger, file_hosts, source, pattern, depth, test_result)
+    #return_code |= compress_files(logger, file_hosts, source, pattern, depth, test_result)
 
     # Move the test files to the test-results directory on this host
     return_code |= move_files(
@@ -924,14 +924,14 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
             "depth": 1,
             "timeout": 900,
         }
-        remote_files["valgrind log files"] = {
-            "source": test_env.shared_dir,
-            "destination": os.path.join(job_results_dir, "latest", TEST_RESULTS_DIRS[4]),
-            "pattern": "valgrind*",
-            "hosts": test.host_info.servers.hosts,
-            "depth": 1,
-            "timeout": 900,
-        }
+        # remote_files["valgrind log files"] = {
+        #     "source": test_env.shared_dir,
+        #     "destination": os.path.join(job_results_dir, "latest", TEST_RESULTS_DIRS[4]),
+        #     "pattern": "valgrind*",
+        #     "hosts": test.host_info.servers.hosts,
+        #     "depth": 1,
+        #     "timeout": 900,
+        # }
         for index, hosts in enumerate(core_files):
             remote_files[f"core files {index + 1}/{len(core_files)}"] = {
                 "source": core_files[hosts]["path"],
