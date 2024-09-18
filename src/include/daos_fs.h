@@ -109,6 +109,8 @@ typedef struct {
 	daos_oclass_id_t        doi_dir_oclass_id;
 	/** In case of dir, return default object class for files created in that dir */
 	daos_oclass_id_t        doi_file_oclass_id;
+	/** Object id */
+	daos_obj_id_t           doi_oid;
 } dfs_obj_info_t;
 
 /**

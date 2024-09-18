@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -195,6 +195,12 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
     PLL Lock Loss Count:%d
     NAND Bytes Written:%d
     Host Bytes Written:%d
+  PCIe Link Info:
+    Port: #1
+    Max Speed: 1 GT/s
+    Negotiated Speed: 1 GT/s
+    Max Width: x4
+    Negotiated Width: x4
 
 PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
   Health Stats:
@@ -236,6 +242,12 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
     PLL Lock Loss Count:%d
     NAND Bytes Written:%d
     Host Bytes Written:%d
+  PCIe Link Info:
+    Port: #2
+    Max Speed: 2 GT/s
+    Negotiated Speed: 2 GT/s
+    Max Width: x8
+    Negotiated Width: x8
 
 `,
 				controllerA.PciAddr, controllerA.Model, controllerA.FwRev,
@@ -339,6 +351,12 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
     PLL Lock Loss Count:%d
     NAND Bytes Written:%d
     Host Bytes Written:%d
+  PCIe Link Info:
+    Port: #1
+    Max Speed: 1 GT/s
+    Negotiated Speed: 1 GT/s
+    Max Width: x4
+    Negotiated Width: x4
 
 `,
 				controllerAwTS.PciAddr, controllerAwTS.Model, controllerAwTS.FwRev,

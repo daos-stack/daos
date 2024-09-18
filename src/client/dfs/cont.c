@@ -1563,8 +1563,9 @@ dfs_cont_scan(daos_handle_t poh, const char *cont, uint64_t flags, const char *s
 	D_PRINT("DFS scanner: " DF_U64 " directories\n", scan_args.num_dirs);
 	D_PRINT("DFS scanner: " DF_U64 " max tree depth\n", scan_args.max_depth);
 	D_PRINT("DFS scanner: " DF_U64 " bytes of total data\n", scan_args.total_bytes);
-	D_PRINT("DFS scanner: " DF_U64 " bytes per file on average\n",
-		scan_args.total_bytes / scan_args.num_files);
+	if (scan_args.num_files > 0)
+		D_PRINT("DFS scanner: " DF_U64 " bytes per file on average\n",
+			scan_args.total_bytes / scan_args.num_files);
 	D_PRINT("DFS scanner: " DF_U64 " bytes is largest file size\n", scan_args.largest_file);
 	D_PRINT("DFS scanner: " DF_U64 " entries in the largest directory\n",
 		scan_args.largest_dir);

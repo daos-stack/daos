@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -257,7 +257,7 @@ class ConfigGenerateOutput(TestWithServers):
         1. Call dmg config generate (using --use-tmpfs-scm flag)
         2. Verify class value is set to ram.
         3. Verify the scm_list value is not set.
-        4. Verify the scm_size value is set.
+        4. Verify the scm_size value is not set (as auto calculated on start).
         5. Iterate bdev_list address list and verify that it's in the NVMe PCI address set
         of the correct numa node.
         6. Get fabric_iface and verify that it's in the interface set.
@@ -294,9 +294,9 @@ class ConfigGenerateOutput(TestWithServers):
                     # Verify scm_list value is not set:
                     if "scm_list" in storage:
                         errors.append("unexpected scm_list field exists in ram tier")
-                    # Verify scm_size value is set:
-                    if "scm_size" not in storage:
-                        errors.append("Expected scm_size field does not exist in ram tier")
+                    # Verify scm_size value is not set:
+                    if "scm_size" in storage:
+                        errors.append("unexpected scm_size field exists in ram tier")
                 elif storage["class"] == "dcpm":
                     scm_found = True
                     errors.append("Unexpected storage tier class dcpm, want ram")

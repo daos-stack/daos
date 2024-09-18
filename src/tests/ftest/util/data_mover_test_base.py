@@ -1039,7 +1039,23 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             daos_path = os.path.join(os.sep, test_file)
         else:
             self.fail("Invalid tool: {}".format(tool))
+
+        # Original flags used for write
+        flags = self.ior_cmd.flags.value
+
+        # Remove read and write from flags if present
+        flags = re.sub(" *-r", "", flags)
+        flags = re.sub(" *-R", "", flags)
+        flags = re.sub(" *-w", "", flags)
+        flags = re.sub(" *-W", "", flags)
+
+        # Remove stonewall
+        flags = re.sub(" *-D [0-9]+", "", flags)
+
+        # Add read flags
+        flags += " -r -R"
+
         # update ior params, read back and verify data from cont3
         self.run_ior_with_params(
             "DAOS", daos_path, read_back_pool, read_back_cont,
-            flags="-r -R -F -k")
+            flags=flags)

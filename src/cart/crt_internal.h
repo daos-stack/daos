@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -42,7 +42,7 @@
 			      ##__VA_ARGS__);                                                      \
 	} while (0)
 
-/* Log an error with a RPC descriptor */
+/* Log an error with an RPC descriptor */
 #define RPC_ERROR(rpc, fmt, ...)                                                                   \
 	do {                                                                                       \
 		char *_module;                                                                     \
@@ -55,16 +55,30 @@
 			      ##__VA_ARGS__);                                                      \
 	} while (0)
 
-#define RPC_INFO(rpc, fmt, ...)                                                                   \
+/* Log a warning with an RPC descriptor */
+#define RPC_WARN(rpc, fmt, ...)                                                                    \
 	do {                                                                                       \
 		char *_module;                                                                     \
 		char *_opc;                                                                        \
                                                                                                    \
 		crt_opc_decode((rpc)->crp_pub.cr_opc, &_module, &_opc);                            \
-		D_TRACE_INFO((rpc), "[opc=%#x (%s:%s) rpcid=%#lx rank:tag=%d:%d] " fmt,           \
-			     (rpc)->crp_pub.cr_opc, _module, _opc, (rpc)->crp_req_hdr.cch_rpcid,  \
-			     (rpc)->crp_pub.cr_ep.ep_rank, (rpc)->crp_pub.cr_ep.ep_tag,           \
-			     ##__VA_ARGS__);                                                      \
+		D_TRACE_WARN((rpc), "[opc=%#x (%s:%s) rpcid=%#lx rank:tag=%d:%d] " fmt,            \
+			     (rpc)->crp_pub.cr_opc, _module, _opc, (rpc)->crp_req_hdr.cch_rpcid,   \
+			     (rpc)->crp_pub.cr_ep.ep_rank, (rpc)->crp_pub.cr_ep.ep_tag,            \
+			     ##__VA_ARGS__);                                                       \
+	} while (0)
+
+/* Log an info message with an RPC descriptor */
+#define RPC_INFO(rpc, fmt, ...)                                                                    \
+	do {                                                                                       \
+		char *_module;                                                                     \
+		char *_opc;                                                                        \
+                                                                                                   \
+		crt_opc_decode((rpc)->crp_pub.cr_opc, &_module, &_opc);                            \
+		D_TRACE_INFO((rpc), "[opc=%#x (%s:%s) rpcid=%#lx rank:tag=%d:%d] " fmt,            \
+			     (rpc)->crp_pub.cr_opc, _module, _opc, (rpc)->crp_req_hdr.cch_rpcid,   \
+			     (rpc)->crp_pub.cr_ep.ep_rank, (rpc)->crp_pub.cr_ep.ep_tag,            \
+			     ##__VA_ARGS__);                                                       \
 	} while (0)
 /**
  * If \a cond is false, this is equivalent to an RPC_ERROR (i.e., \a mask is

@@ -50,7 +50,7 @@ class NvmePoolCapacity(TestWithServers):
         processes = self.params.get("slots", "/run/ior/clientslots/*")
 
         # Define the arguments for the ior_runner_thread method
-        ior_cmd = IorCommand()
+        ior_cmd = IorCommand(self.test_env.log_dir)
         ior_cmd.get_params(self)
         ior_cmd.set_daos_params(pool, self.label_generator.get_label('TestContainer'))
         ior_cmd.dfs_oclass.update(oclass)

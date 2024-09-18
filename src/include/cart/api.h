@@ -189,6 +189,19 @@ int
 crt_context_set_timeout(crt_context_t crt_ctx, uint32_t timeout_sec);
 
 /**
+ * Get the default timeout value for the RPC requests created on the specified context.
+ *
+ * This is an optional function.
+ *
+ * \param[in] req              pointer to RPC request
+ * \param[out] timeout_sec     timeout value in seconds
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+ */
+int
+crt_context_get_timeout(crt_context_t crt_ctx, uint32_t *timeout_sec);
+
+/**
  * Destroy CRT transport context.
  *
  * \param[in] crt_ctx          CRT transport context to be destroyed

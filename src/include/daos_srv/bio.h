@@ -368,6 +368,7 @@ bio_free_dev_info(struct bio_dev_info *dev_info)
 		D_FREE(dev_info->bdi_ctrlr->fw_rev);
 		D_FREE(dev_info->bdi_ctrlr->vendor_id);
 		D_FREE(dev_info->bdi_ctrlr->pci_type);
+		D_FREE(dev_info->bdi_ctrlr->pci_cfg);
 		D_FREE(dev_info->bdi_ctrlr->nss);
 		D_FREE(dev_info->bdi_ctrlr);
 	}
@@ -383,7 +384,8 @@ bio_free_dev_info(struct bio_dev_info *dev_info)
  *
  * \return		Zero on success, negative value on error
  */
-int bio_dev_list(struct bio_xs_context *ctxt, d_list_t *dev_list, int *dev_cnt);
+int
+bio_dev_list(struct bio_xs_context *ctxt, d_list_t *dev_list, int *dev_cnt);
 
 /**
  * Callbacks called on NVMe device state transition
@@ -484,11 +486,13 @@ void bio_xsctxt_free(struct bio_xs_context *ctxt);
  * Health check on the per-xstream NVMe context
  *
  * \param[in] xs_ctxt	Per-xstream NVMe context
+ * \param[in] log_err	Log media error if the device is not healthy
+ * \param[in] update	The check is called for an update operation or not
  *
  * \returns		0:		NVMe context is healthy
  *			-DER_NVME_IO:	NVMe context is faulty
  */
-int bio_xsctxt_health_check(struct bio_xs_context *xs_ctxt);
+int bio_xsctxt_health_check(struct bio_xs_context *xs_ctxt, bool log_err, bool update);
 
 /**
  * NVMe poller to poll NVMe I/O completions.

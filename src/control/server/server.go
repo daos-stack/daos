@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2023 Intel Corporation.
+// (C) Copyright 2018-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -324,7 +324,7 @@ func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config
 	sp := storage.DefaultProvider(srv.log, idx, &cfg.Storage).
 		WithVMDEnabled(srv.ctlSvc.storage.IsVMDEnabled())
 
-	engine := NewEngineInstance(srv.log, sp, joinFn, engine.NewRunner(srv.log, cfg)).
+	engine := NewEngineInstance(srv.log, sp, joinFn, engine.NewRunner(srv.log, cfg), srv.pubSub).
 		WithHostFaultDomain(srv.harness.faultDomain)
 
 	if idx == 0 {

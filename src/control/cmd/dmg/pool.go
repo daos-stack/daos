@@ -658,9 +658,12 @@ func (cmd *PoolQueryCmd) Execute(args []string) error {
 	}
 
 	resp, err := control.PoolQuery(cmd.MustLogCtx(), cmd.ctlInvoker, req)
-
 	if cmd.JSONOutputEnabled() {
-		return cmd.OutputJSON(resp, err)
+		var poolInfo *daos.PoolInfo
+		if resp != nil {
+			poolInfo = &resp.PoolInfo
+		}
+		return cmd.OutputJSON(poolInfo, err)
 	}
 
 	if err != nil {
@@ -682,15 +685,33 @@ type PoolQueryTargetsCmd struct {
 	poolCmd
 
 	Rank    uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be queried"`
-	Targets string `long:"target-idx" required:"1" description:"Comma-separated list of target idx(s) to be queried"`
+	Targets string `long:"target-idx" description:"Comma-separated list of target idx(s) to be queried"`
 }
 
 // Execute is run when PoolQueryTargetsCmd subcommand is activated
 func (cmd *PoolQueryTargetsCmd) Execute(args []string) error {
+	ctx := cmd.MustLogCtx()
 
 	var tgtsList []uint32
-	if err := common.ParseNumberList(cmd.Targets, &tgtsList); err != nil {
-		return errors.WithMessage(err, "parsing target list")
+	if len(cmd.Targets) > 0 {
+		if err := common.ParseNumberList(cmd.Targets, &tgtsList); err != nil {
+			return errors.WithMessage(err, "parsing target list")
+		}
+	} else {
+		pi, err := control.PoolQuery(ctx, cmd.ctlInvoker, &control.PoolQueryReq{
+			ID:        cmd.PoolID().String(),
+			QueryMask: daos.DefaultPoolQueryMask,
+		})
+		if err != nil || (pi.TotalTargets == 0 || pi.TotalEngines == 0) {
+			if err != nil {
+				return errors.Wrap(err, "pool query failed")
+			}
+			return errors.New("failed to derive target count from pool query")
+		}
+		tgtCount := pi.TotalTargets / pi.TotalEngines
+		for i := uint32(0); i < tgtCount; i++ {
+			tgtsList = append(tgtsList, i)
+		}
 	}
 
 	req := &control.PoolQueryTargetReq{
@@ -699,7 +720,7 @@ func (cmd *PoolQueryTargetsCmd) Execute(args []string) error {
 		Targets: tgtsList,
 	}
 
-	resp, err := control.PoolQueryTargets(cmd.MustLogCtx(), cmd.ctlInvoker, req)
+	resp, err := control.PoolQueryTargets(ctx, cmd.ctlInvoker, req)
 
 	if cmd.JSONOutputEnabled() {
 		return cmd.OutputJSON(resp, err)

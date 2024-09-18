@@ -25,7 +25,6 @@ ior:
   dfs_destroy: False
 
 exp_vals:
-  pool_status: 0
   pool_state: "Ready"
   total_targets: 4
   active_targets: 4
@@ -44,6 +43,7 @@ exp_vals:
     state: "idle"
     objects: 0
     records: 0
+    total_objects: 0
 
 pool_uuids:
   uuids:
