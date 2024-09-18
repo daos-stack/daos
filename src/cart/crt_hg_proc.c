@@ -494,6 +494,7 @@ crt_hg_header_copy(struct crt_rpc_priv *in, struct crt_rpc_priv *out)
 
 	out->crp_req_hdr = in->crp_req_hdr;
 	out->crp_reply_hdr.cch_hlc = in->crp_reply_hdr.cch_hlc;
+	out->crp_deadline_sec = in->crp_deadline_sec;
 
 	if (!(out->crp_flags & CRT_RPC_FLAG_COLL))
 		return;
