@@ -445,21 +445,36 @@ def move_files(logger, hosts, source, pattern, destination, depth, timeout, test
         tmp_copy_dir = os.path.join(source, tmp_copy_dir)
         sudo_command = ""
 
-    # Create a temporary remote directory - should already exist, see _setup_test_directory()
-    command = f"mkdir -p '{tmp_copy_dir}'"
-    result = run_remote(logger, hosts, command)
-    if not result.passed:
-        message = (f"Error creating temporary remote copy directory '{tmp_copy_dir}' on "
-                   f"{result.failed_hosts}")
-        test_result.fail_test(logger, "Process", message)
-        return_code = 16
-        hosts = result.passed_hosts.copy()
+    compute_hosts = NodeSet.fromlist(_host for _host in hosts if _host.startswith('x'))
+    if destination.startswith("/lus/") and compute_hosts:
+        # Optimize collection to run a single command and not use clush --rcopy
+        hosts = hosts - compute_hosts
+        commands = []
+
+        # Create the host-specific directory
+        commands.append(f"mkdir -p '{destination}'.$(hostname)")
+
+        # Move all the source files matching the pattern into the host-specific directory
+        other = f"-print0 | xargs -0 -r0 -I '{{}}' {sudo_command}mv '{{}}' " \
+                f"'{destination}'.$(hostname)/"
+        commands.append(find_command(source, pattern, depth, other))
+
+        result = run_remote(logger, compute_hosts, " && ".join(commands), timeout=timeout)
+        if not result.passed:
+            message = f"Error moving files from {source} to {destination}"
+            test_result.fail_test(logger, "Process", message)
+            return_code = 16
+
+    # Continue clush --rcopy archiving if there are remaining hosts
     if not hosts:
         return return_code
 
+    # Create a temporary remote directory - should already exist, see _setup_test_directory()
     # Move all the source files matching the pattern into the temporary remote directory
+    mkdir_command = f"mkdir -p '{tmp_copy_dir}'"
     other = f"-print0 | xargs -0 -r0 -I '{{}}' {sudo_command}mv '{{}}' '{tmp_copy_dir}'/"
-    result = run_remote(logger, hosts, find_command(source, pattern, depth, other))
+    command = f"{mkdir_command} && {find_command(source, pattern, depth, other)}"
+    result = run_remote(logger, hosts, command)
     if not result.passed:
         message = (f"Error moving files to temporary remote copy directory '{tmp_copy_dir}' on "
                    f"{result.failed_hosts}")
