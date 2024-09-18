@@ -85,12 +85,14 @@ umempobj_settings_init(bool md_on_ssd)
 	return 0;
 }
 
-int umempobj_get_backend_type(void)
+int
+umempobj_get_backend_type(void)
 {
 	return daos_md_backend;
 }
 
-int umempobj_backend_type2class_id(int backend)
+int
+umempobj_backend_type2class_id(int backend)
 {
 	switch (backend) {
 	case DAOS_MD_PMEM:
@@ -106,6 +108,15 @@ int umempobj_backend_type2class_id(int backend)
 			  "bad daos_md_backend %d\n", backend);
 		return -DER_INVAL;
 	}
+}
+
+size_t
+umempobj_pgsz(int backend)
+{
+	if (backend == DAOS_MD_BMEM_V2)
+		return dav_obj_pgsz_v2();
+	else
+		return (1UL << 12);
 }
 
 /** Define common slabs.  We can refine this for 2.4 pools but that is for next patch */

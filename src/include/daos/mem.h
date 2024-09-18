@@ -30,6 +30,10 @@ int umempobj_settings_init(bool md_on_ssd);
 /* convert backend type to umem class id */
 int umempobj_backend_type2class_id(int backend);
 
+/* get page size for the backend */
+size_t
+umempobj_pgsz(int backend);
+
 /* umem persistent object property flags */
 #define	UMEMPOBJ_ENABLE_STATS	0x1
 

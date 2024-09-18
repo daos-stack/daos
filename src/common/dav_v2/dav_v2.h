@@ -313,4 +313,10 @@ dav_get_heap_mb_stats_v2(dav_obj_t *pop, uint32_t mb_id, struct dav_heap_mb_stat
 uint32_t
 dav_allot_mb_evictable_v2(dav_obj_t *pop, int flags);
 
+/*
+ * Return the page size for dav_v2.
+ */
+size_t
+dav_obj_pgsz_v2();
+
 #endif /* __DAOS_COMMON_DAV_V2_H */

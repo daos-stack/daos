@@ -1273,6 +1273,26 @@ close:
 }
 
 int
+vos_pool_roundup_size(daos_size_t *scm_sz, daos_size_t *meta_sz)
+{
+	int    backend;
+	size_t alignsz;
+
+	backend = umempobj_get_backend_type();
+	if ((*scm_sz != *meta_sz) && (backend == DAOS_MD_BMEM))
+		backend = DAOS_MD_BMEM_V2;
+
+	/* Round up the size such that it is compatible with backend */
+	alignsz = umempobj_pgsz(backend);
+
+	*scm_sz = D_ALIGNUP(*scm_sz, alignsz);
+	if (*meta_sz)
+		*meta_sz = D_ALIGNUP(*meta_sz, alignsz);
+
+	return 0;
+}
+
+int
 vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t data_sz,
 		daos_size_t meta_sz, unsigned int flags, uint32_t version, daos_handle_t *poh)
 {

@@ -1083,6 +1083,8 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 	pthread_t			 thread;
 	bool				 canceled_thread = false;
 	int				 rc = 0;
+	size_t                           tgt_scm_sz;
+	size_t                           tgt_meta_sz;
 
 	/** incoming request buffer */
 	tc_in = crt_req_get(tc_req);
@@ -1118,6 +1120,12 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 	}
 	D_DEBUG(DB_MGMT, DF_UUID": record inserted to dpt_creates_ht\n",
 		DP_UUID(tca.tca_ptrec->dptr_uuid));
+
+	tgt_scm_sz  = tc_in->tc_scm_size / dss_tgt_nr;
+	tgt_meta_sz = tc_in->tc_meta_size / dss_tgt_nr;
+	vos_pool_roundup_size(&tgt_scm_sz, &tgt_meta_sz);
+	tc_in->tc_scm_size  = tgt_scm_sz * dss_tgt_nr;
+	tc_in->tc_meta_size = tgt_meta_sz * dss_tgt_nr;
 
 	tca.tca_scm_size  = tc_in->tc_scm_size;
 	tca.tca_nvme_size = tc_in->tc_nvme_size;

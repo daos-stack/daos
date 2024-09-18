@@ -520,6 +520,16 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	      int (*yield_func)(void *arg), void *yield_arg, uint32_t flags);
 
 /**
+ * Round up the scm and meta sizes to match the backend requirement.
+ * \param[in/out] scm_sz   SCM size that needs to be aligned up
+ * \param[in/out] meta_sz  META size that needs to be aligned up
+ *
+ * \return 0 on success, error otherwise.
+ */
+int
+vos_pool_roundup_size(size_t *scm_sz, size_t *meta_sz);
+
+/**
  * Discards changes in all epochs with the epoch range \a epr
  *
  * If a single epoch needs to be discarded then \a epr::epr_lo
