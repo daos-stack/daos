@@ -41,7 +41,7 @@ class PoolSecurityTestBase(TestWithServers):
                 line = line.split("\n")[0]
                 if line == entry:
                     line = new_entry
-                    self.log.info("==>replaceing \n %s  with\n %s", entry, new_entry)
+                    self.log.info("==>replacing \n %s  with\n %s", entry, new_entry)
                 new_permissions = new_permissions + line + "\n"
             if entry is None:
                 new_permissions = new_permissions + new_entry + "\n"

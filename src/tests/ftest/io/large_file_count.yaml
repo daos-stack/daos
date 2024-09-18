@@ -30,16 +30,22 @@ largefilecount:
     - DFS
     - POSIX
   object_class:
-    - SX
-    - EC_2P1GX
+    ior_oclass:          # Run once with SX and then with EC_16P2GX
+      - SX
+      - EC_2P1GX
+    mdtest_oclass:       # Run once with S1 and then with EC_16P2G1
+      - S1
+      - EC_2P1G1
 ior:
   np: 30
   dfs_destroy: false
-  flags: "-v -D 300 -W -w -r -R -F"
+  flags: "-v -D 300 -W -w -r -R"
   test_file: /testFile
   repetitions: 1
   transfer_size: '1M'
   block_size: '7G'
+  env_vars:
+    - D_IL_REPORT=1
 dfuse:
   disable_caching: true
 
@@ -55,3 +61,5 @@ mdtest:
   write_bytes: 4096
   read_bytes: 4096
   depth: 0
+  env_vars:
+    - D_IL_REPORT=1

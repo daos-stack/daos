@@ -6,10 +6,9 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 import os
 
 from apricot import TestWithServers
-from ClusterShell.NodeSet import NodeSet
 from dfuse_utils import get_dfuse, start_dfuse
 from exception_utils import CommandFailure
-from general_utils import get_random_string, pcmd
+from general_utils import get_random_string
 from host_utils import get_local_host
 from ior_utils import IorCommand
 from job_manager_utils import get_job_manager
@@ -43,7 +42,7 @@ class IorTestBase(TestWithServers):
         super().setUp()
 
         # Get the parameters for IOR
-        self.ior_cmd = IorCommand()
+        self.ior_cmd = IorCommand(self.test_env.log_dir)
         self.ior_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/ior/client_processes/*')
         self.ppn = self.params.get("ppn", '/run/ior/client_processes/*')
@@ -78,10 +77,9 @@ class IorTestBase(TestWithServers):
         return self.container
 
     def run_ior_with_pool(self, intercept=None, display_space=True, test_file_suffix="",
-                          test_file="daos:/testFile", create_pool=True,
-                          create_cont=True, stop_dfuse=True, plugin_path=None,
-                          timeout=None, fail_on_warning=False,
-                          mount_dir=None, out_queue=None, env=None):
+                          test_file="daos:/testFile", create_pool=True, create_cont=True,
+                          stop_dfuse=True, plugin_path=None, timeout=None, fail_on_warning=False,
+                          mount_dir=None, out_queue=None, env=None, job_manager=None):
         # pylint: disable=too-many-arguments
         """Execute ior with optional overrides for ior flags and object_class.
 
@@ -114,6 +112,7 @@ class IorTestBase(TestWithServers):
                 Defaults to None
             env (EnvironmentVariables, optional): Pass the environment to be
                 used when calling run_ior. Defaults to None
+            job_manager (JobManager, optional): job manager used to run ior. Defaults to None.
 
         Returns:
             CmdResult: result of the ior command execution
@@ -142,7 +141,8 @@ class IorTestBase(TestWithServers):
             test_file = os.path.join("/", "testfile")
 
         self.ior_cmd.test_file.update("".join([test_file, test_file_suffix]))
-        job_manager = self.get_ior_job_manager_command()
+        if job_manager is None:
+            job_manager = self.get_ior_job_manager_command()
         job_manager.timeout = timeout
         try:
             out = self.run_ior(job_manager, self.processes,
@@ -184,7 +184,7 @@ class IorTestBase(TestWithServers):
         """
         return get_job_manager(self, job=self.ior_cmd, subprocess=self.subprocess)
 
-    def check_subprocess_status(self, operation="write"):
+    def check_subprocess_status(self, job_manager, operation="write"):
         """Check subprocess status."""
         if operation == "write":
             self.ior_cmd.pattern = self.IOR_WRITE_PATTERN
@@ -193,7 +193,7 @@ class IorTestBase(TestWithServers):
         else:
             self.fail("Exiting Test: Inappropriate operation type for subprocess status check")
 
-        if not self.ior_cmd.check_subprocess_status(self.job_manager.process):
+        if not self.ior_cmd.check_subprocess_status(job_manager.process):
             self.fail("IOR subprocess not running")
 
     def run_ior(self, manager, processes, intercept=None, display_space=True,
@@ -224,8 +224,6 @@ class IorTestBase(TestWithServers):
             env = self.ior_cmd.get_default_env(str(manager), self.client_log)
         if intercept:
             env['LD_PRELOAD'] = intercept
-            if 'D_IL_REPORT' not in env:
-                env['D_IL_REPORT'] = '1'
         if plugin_path:
             env["HDF5_VOL_CONNECTOR"] = "daos"
             env["HDF5_PLUGIN_PATH"] = str(plugin_path)
@@ -275,19 +273,19 @@ class IorTestBase(TestWithServers):
 
         return None
 
-    def stop_ior(self):
+    def stop_ior(self, job_manager):
         """Stop IOR process.
 
         Args:
-            manager (str): mpi job manager command
+            job_manager (JobManager, optional): job manager used to run ior.
 
         Returns:
             Object: result of job manager stop
         """
-        self.log.info("<IOR> Stopping in-progress IOR command: %s", str(self.job_manager))
+        self.log.info("<IOR> Stopping in-progress IOR command: %s", str(job_manager))
 
         try:
-            return self.job_manager.stop()
+            return job_manager.stop()
         except CommandFailure as error:
             self.log.error("IOR stop Failed: %s", str(error))
             self.fail("Failed to stop in-progress IOR command")
@@ -370,59 +368,3 @@ class IorTestBase(TestWithServers):
             self.fail(
                 "Pool Free Size did not match: actual={}, expected={}".format(
                     actual_pool_size, expected_pool_size))
-
-    def execute_cmd(self, command, fail_on_err=True, display_output=True):
-        """Execute cmd using general_utils.pcmd.
-
-        Args:
-            command (str): the command to execute on the client hosts
-            fail_on_err (bool, optional): whether or not to fail the test if
-                command returns a non zero return code. Defaults to True.
-            display_output (bool, optional): whether or not to display output.
-                Defaults to True.
-
-        Returns:
-            dict: a dictionary of return codes keys and accompanying NodeSet
-                values indicating which hosts yielded the return code.
-
-        """
-        try:
-            # Execute the bash command on each client host
-            result = self._execute_command(command, fail_on_err, display_output)
-
-        except CommandFailure as error:
-            # Report an error if any command fails
-            self.log.error("Failed to execute command: %s", str(error))
-            self.fail("Failed to execute command")
-
-        return result
-
-    def _execute_command(self, command, fail_on_err=True, display_output=True, hosts=None):
-        """Execute the command on all client hosts.
-
-        Optionally verify if the command returns a non zero return code.
-
-        Args:
-            command (str): the command to execute on the client hosts
-            fail_on_err (bool, optional): whether or not to fail the test if
-                command returns a non zero return code. Defaults to True.
-            display_output (bool, optional): whether or not to display output.
-                Defaults to True.
-
-        Raises:
-            CommandFailure: if 'fail_on_err' is set and the command fails on at
-                least one of the client hosts
-
-        Returns:
-            dict: a dictionary of return codes keys and accompanying NodeSet
-                values indicating which hosts yielded the return code.
-
-        """
-        if hosts is None:
-            hosts = self.hostlist_clients
-        result = pcmd(hosts, command, verbose=display_output, timeout=300)
-        if (0 not in result or len(result) > 1) and fail_on_err:
-            hosts = [str(nodes) for code, nodes in list(result.items()) if code != 0]
-            raise CommandFailure("Error running '{}' on the following hosts: {}".format(
-                command, NodeSet(",".join(hosts))))
-        return result

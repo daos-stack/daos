@@ -262,10 +262,10 @@ bio_storage_dev_manage_led(void *arg)
 }
 
 struct bio_list_devs_info {
-	d_list_t	dev_list;
-	int		dev_list_cnt;
-	uuid_t		devid;
-	int		*state;
+	d_list_t dev_list;
+	int      dev_list_cnt;
+	uuid_t   devid;
+	int     *state;
 };
 
 static int
@@ -285,8 +285,7 @@ bio_query_dev_list(void *arg)
 		return -DER_INVAL;
 	}
 
-	rc = bio_dev_list(bxc, &list_devs_info->dev_list,
-			  &list_devs_info->dev_list_cnt);
+	rc = bio_dev_list(bxc, &list_devs_info->dev_list, &list_devs_info->dev_list_cnt);
 	if (rc != 0) {
 		D_ERROR("Error getting BIO device list\n");
 		return rc;
@@ -335,11 +334,16 @@ ctrlr_reset_str_fields(Ctl__NvmeController *ctrlr)
 	ctrlr->fw_rev       = NULL;
 	ctrlr->vendor_id    = NULL;
 	ctrlr->pci_dev_type = NULL;
+	ctrlr->pci_cfg      = NULL;
 }
 
 static int
 add_ctrlr_details(Ctl__NvmeController *ctrlr, struct bio_dev_info *dev_info)
 {
+	size_t      buflen = (NVME_PCI_CFG_SPC_MAX_LEN << 1) + 1;
+	char        buf[buflen];
+	char       *cur = buf;
+	const char *end = buf + sizeof(buf);
 	int rc = 0;
 
 	rc = copy_str2ctrlr(&ctrlr->pci_addr, dev_info->bdi_traddr);
@@ -365,6 +369,17 @@ add_ctrlr_details(Ctl__NvmeController *ctrlr, struct bio_dev_info *dev_info)
 	D_DEBUG(DB_MGMT, "ctrlr details: '%s' '%s' '%s' '%s' '%s' '%s' '%d'\n", ctrlr->pci_addr,
 		ctrlr->model, ctrlr->serial, ctrlr->fw_rev, ctrlr->vendor_id, ctrlr->pci_dev_type,
 		ctrlr->socket_id);
+
+	/* Print config space byte-array to output string */
+	for (int i = 0; i < NVME_PCI_CFG_SPC_MAX_LEN; i++) {
+		cur += snprintf(cur, end - cur, "%02x", dev_info->bdi_ctrlr->pci_cfg[i] & 0xff);
+		if (cur >= end) {
+			D_ERROR("buffer not big enough");
+			return -DER_INVAL;
+		}
+	}
+	D_STRNDUP(ctrlr->pci_cfg, buf, strnlen(buf, buflen - 1));
+	D_DEBUG(DB_MGMT, "ctrlr PCIe config space: %s\n", ctrlr->pci_cfg);
 
 	/* Populate NVMe namespace id and capacity */
 

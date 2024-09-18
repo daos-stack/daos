@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -70,26 +70,9 @@ func (cmd *smdQueryCmd) makeRequest(ctx context.Context, req *control.SmdQueryRe
 
 // storageQueryCmd is the struct representing the storage query subcommand
 type storageQueryCmd struct {
-	DeviceHealth devHealthQueryCmd   `command:"device-health" description:"Query the device health"`
-	ListPools    listPoolsQueryCmd   `command:"list-pools" description:"List pools with NVMe on the server"`
-	ListDevices  listDevicesQueryCmd `command:"list-devices" description:"List storage devices on the server"`
-	Usage        usageQueryCmd       `command:"usage" description:"Show SCM & NVMe storage space utilization per storage server"`
-}
-
-type devHealthQueryCmd struct {
-	smdQueryCmd
-	UUID string `short:"u" long:"uuid" description:"Device UUID. All devices queried if arg not set"`
-}
-
-func (cmd *devHealthQueryCmd) Execute(_ []string) error {
-	ctx := cmd.MustLogCtx()
-	req := &control.SmdQueryReq{
-		OmitPools:        true,
-		IncludeBioHealth: true,
-		Rank:             ranklist.NilRank,
-		UUID:             cmd.UUID,
-	}
-	return cmd.makeRequest(ctx, req)
+	ListPools   listPoolsQueryCmd   `command:"list-pools" description:"List pools with NVMe on the server"`
+	ListDevices listDevicesQueryCmd `command:"list-devices" description:"List storage devices on the server"`
+	Usage       usageQueryCmd       `command:"usage" description:"Show SCM & NVMe storage space utilization per storage server"`
 }
 
 type listDevicesQueryCmd struct {

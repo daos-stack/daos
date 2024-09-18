@@ -36,6 +36,7 @@ apt-get install \
     liblz4-dev \
     libnuma-dev \
     libopenmpi-dev \
+    libpci-dev \
     libprotobuf-c-dev \
     librdmacm-dev \
     libssl-dev \

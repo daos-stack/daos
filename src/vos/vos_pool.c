@@ -1416,6 +1416,8 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 		pool->vp_feats |= VOS_POOL_FEAT_2_4;
 	if (pool_df->pd_version >= VOS_POOL_DF_2_6)
 		pool->vp_feats |= VOS_POOL_FEAT_2_6;
+	if (pool_df->pd_version >= VOS_POOL_DF_2_8)
+		pool->vp_feats |= VOS_POOL_FEAT_2_8;
 
 	if (pool->vp_vea_info == NULL)
 		/** always store on SCM if no bdev */
@@ -1479,7 +1481,7 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 		}
 	}
 
-	rc = bio_xsctxt_health_check(vos_xsctxt_get());
+	rc = bio_xsctxt_health_check(vos_xsctxt_get(), false, false);
 	if (rc) {
 		DL_WARN(rc, DF_UUID": Skip pool open due to faulty NVMe.", DP_UUID(uuid));
 		return rc;
@@ -1587,6 +1589,8 @@ end:
 		pool->vp_feats |= VOS_POOL_FEAT_2_4;
 	if (version >= VOS_POOL_DF_2_6)
 		pool->vp_feats |= VOS_POOL_FEAT_2_6;
+	if (version >= VOS_POOL_DF_2_8)
+		pool->vp_feats |= VOS_POOL_FEAT_2_8;
 
 	return 0;
 }

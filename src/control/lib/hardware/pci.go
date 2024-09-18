@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -26,6 +26,14 @@ const (
 )
 
 var ErrNotVMDBackingAddress = errors.New("not a vmd backing device address")
+
+// PCIeLinkStatsProvider is an interface for acquiring NVMe PCIe link info.
+type PCIeLinkStatsProvider interface {
+	// PCIeCapsFromConfig takes a PCIe config space dump (of the format output by lspci
+	// -xxx) in the form of a byte slice. The second parameter is a reference to a
+	// PCIDevice struct to be populated.
+	PCIeCapsFromConfig([]byte, *PCIDevice) error
+}
 
 // parseVMDAddress returns the domain string interpreted as the VMD address.
 func parseVMDAddress(addr string) (*PCIAddress, error) {
@@ -436,13 +444,17 @@ func NewPCIAddressSetFromString(addrs string) (*PCIAddressSet, error) {
 type (
 	// PCIDevice represents an individual hardware device.
 	PCIDevice struct {
-		Name        string       `json:"name"`
-		Type        DeviceType   `json:"type"`
-		NUMANode    *NUMANode    `json:"-"`
-		Bus         *PCIBus      `json:"-"`
-		PCIAddr     PCIAddress   `json:"pci_address"`
-		LinkSpeed   float64      `json:"link_speed,omitempty"`
-		BlockDevice *BlockDevice `json:"-"`
+		Name         string       `json:"name"`
+		Type         DeviceType   `json:"type"`
+		NUMANode     *NUMANode    `json:"-"`
+		Bus          *PCIBus      `json:"-"`
+		PCIAddr      PCIAddress   `json:"pci_address"`
+		LinkPortID   uint16       `json:"port_id"`
+		LinkMaxSpeed float32      `json:"link_max_speed,omitempty"`
+		LinkMaxWidth uint16       `json:"link_max_width,omitempty"`
+		LinkNegSpeed float32      `json:"link_neg_speed,omitempty"`
+		LinkNegWidth uint16       `json:"link_neg_width,omitempty"`
+		BlockDevice  *BlockDevice `json:"-"`
 	}
 
 	// PCIBus represents the root of a PCI bus hierarchy.
@@ -514,14 +526,19 @@ func (b *PCIBus) IsZero() bool {
 
 func (d *PCIDevice) String() string {
 	var speedStr string
-	if d.LinkSpeed > 0 {
-		speedStr = fmt.Sprintf(" @ %.2f GB/s", d.LinkSpeed)
+	if d.LinkNegSpeed > 0 {
+		speedStr = fmt.Sprintf(" @ %s", humanize.SI(float64(d.LinkNegSpeed), "T/s"))
+	}
+	var widthStr string
+	if d.LinkNegWidth > 0 {
+		widthStr = fmt.Sprintf(" (x%d)", d.LinkNegWidth)
 	}
 	var sizeStr string
 	if d.BlockDevice != nil {
 		sizeStr = fmt.Sprintf("%s ", humanize.Bytes(d.BlockDevice.Size))
 	}
-	return fmt.Sprintf("%s %s (%s%s)%s", &d.PCIAddr, d.Name, sizeStr, d.Type, speedStr)
+	return fmt.Sprintf("%s %s (%s%s)%s%s", &d.PCIAddr, d.Name, sizeStr, d.Type, speedStr,
+		widthStr)
 }
 
 // DeviceName returns the system name of the PCI device.

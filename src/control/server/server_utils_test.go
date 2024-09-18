@@ -725,7 +725,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			}
 
 			runner := engine.NewRunner(log, srv.cfg.Engines[0])
-			ei := NewEngineInstance(log, srv.ctlSvc.storage, nil, runner)
+			ei := NewEngineInstance(log, srv.ctlSvc.storage, nil, runner, nil)
 
 			mi.HugepagesFree = tc.hugepagesFree
 
@@ -829,7 +829,7 @@ func TestServer_checkEngineTmpfsMem(t *testing.T) {
 			sysMock := sysprov.NewMockSysProvider(log, sysMockCfg)
 			scmMock := &storage.MockScmProvider{}
 			provider := storage.MockProvider(log, 0, &ec.Storage, sysMock, scmMock, nil, nil)
-			instance := NewEngineInstance(log, provider, nil, runner)
+			instance := NewEngineInstance(log, provider, nil, runner, nil)
 
 			srv, err := newServer(log, cfg, &system.FaultDomain{})
 			if err != nil {
@@ -1163,5 +1163,44 @@ func TestServer_processFabricProvider(t *testing.T) {
 
 			test.AssertEqual(t, tc.expFabric, cfg.Fabric.Provider, "")
 		})
+	}
+}
+
+func TestServer_formatBytestring(t *testing.T) {
+	bytesIn := "86805309060410000102080100000000040000bc0000000000000000" +
+		"000000000000000000000000000000009015a8000000000040000000" +
+		"00000000000100000150030008000000000000000000000011601f00" +
+		"00200000003000000000000010000200a185001010290900436c4100" +
+		"00004300000000000000000000000000000000001f00000000000000" +
+		"0e00000003001f000000000000000000000000000000000000000000" +
+		"00000000000000000000000000000000000000000000000000000000" +
+		"00000000000000000000000000000000000000000000000000000000" +
+		"00000000000000000000000000000000000000000000000000000000" +
+		"0000000001000115000000000000000030200600"
+	expOut := `00: 86 80 53 09 06 04 10 00 01 02 08 01 00 00 00 00
+10: 04 00 00 bc 00 00 00 00 00 00 00 00 00 00 00 00
+20: 00 00 00 00 00 00 00 00 00 00 00 00 90 15 a8 00
+30: 00 00 00 00 40 00 00 00 00 00 00 00 00 01 00 00
+40: 01 50 03 00 08 00 00 00 00 00 00 00 00 00 00 00
+50: 11 60 1f 00 00 20 00 00 00 30 00 00 00 00 00 00
+60: 10 00 02 00 a1 85 00 10 10 29 09 00 43 6c 41 00
+70: 00 00 43 00 00 00 00 00 00 00 00 00 00 00 00 00
+80: 00 00 00 00 1f 00 00 00 00 00 00 00 0e 00 00 00
+90: 03 00 1f 00 00 00 00 00 00 00 00 00 00 00 00 00
+a0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+b0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+c0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+100: 01 00 01 15 00 00 00 00 00 00 00 00 30 20 06 00
+`
+
+	sb := new(strings.Builder)
+
+	formatBytestring(bytesIn, sb)
+
+	if diff := cmp.Diff(expOut, sb.String()); diff != "" {
+		t.Fatalf("unexpected output format (-want, +got):\n%s\n", diff)
 	}
 }

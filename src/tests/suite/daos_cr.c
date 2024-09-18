@@ -1879,9 +1879,9 @@ cr_pause(void **state, bool force)
 	rc = cr_system_start();
 	assert_rc_equal(rc, 0);
 
-	for (i = 0; i < CR_WAIT_MAX; i += 5) {
+	for (i = 0; i < CR_WAIT_MAX; i++) {
 		/* Sleep for a while after system re-started under check mode. */
-		sleep(5);
+		sleep(2);
 
 		cr_dci_fini(&dci);
 		rc = cr_check_query(1, &pool.pool_uuid, &dci);

@@ -357,21 +357,6 @@ class DmgCommand(DmgCommandBase):
             ("storage", "replace", "nvme"), old_uuid=old_uuid,
             new_uuid=new_uuid, no_reint=no_reint)
 
-    def storage_query_device_health(self, uuid):
-        """Get the result of the 'dmg storage query device-health' command.
-
-        Args:
-            uuid (str): Device UUID to query.
-
-        Raises:
-            CommandFailure: if the dmg storage query device-health command fails.
-
-        Returns:
-            dict: the dmg json command output converted to a python dictionary
-
-        """
-        return self._get_json_result(("storage", "query", "device-health"), uuid=uuid)
-
     def storage_scan_nvme_health(self):
         """Get the result of the 'dmg storage scan --nvme-health' command.
 
@@ -684,8 +669,8 @@ class DmgCommand(DmgCommandBase):
         #             "max": 3999993856,
         #             "mean": 3999993856
         #         },
-        #         "enabled_ranks": None,
-        #         "disabled_ranks": None
+        #         "enabled_ranks": [0,1,3],
+        #         "disabled_ranks": [2]
         #     },
         #     "error": null,
         #     "status": 0
@@ -972,12 +957,12 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("pool", "reintegrate"), pool=pool, rank=rank, tgt_idx=tgt_idx)
 
-    def cont_set_owner(self, pool, cont, user, group):
+    def cont_set_owner(self, pool, cont, user=None, group=None):
         """Dmg container set-owner to the specified new user/group.
 
         Args:
-            pool (str): Pool uuid.
-            cont (str): Container uuid.
+            pool (str): Pool label or UUID.
+            cont (str): Container label or UUID.
             user (str): new user for the container.
             group (str): new group for the container.
 
@@ -989,7 +974,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg pool reintegrate command fails.
 
         """
-        return self._get_result(
+        return self._get_json_result(
             ("cont", "set-owner"), pool=pool, cont=cont, user=user, group=group)
 
     def system_cleanup(self, machinename=None, verbose=True):

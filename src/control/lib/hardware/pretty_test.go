@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,10 +16,10 @@ import (
 
 func TestHardware_PrintTopology(t *testing.T) {
 	test2Block := &PCIDevice{
-		Name:      "test2-block",
-		Type:      DeviceTypeBlock,
-		PCIAddr:   *MustNewPCIAddress("0000:00:1f.2"),
-		LinkSpeed: 1.75,
+		Name:         "test2-block",
+		Type:         DeviceTypeBlock,
+		PCIAddr:      *MustNewPCIAddress("0000:00:1f.2"),
+		LinkNegSpeed: 1.75e+9,
 		BlockDevice: &BlockDevice{
 			Name: "test2-block",
 			Size: 512 * 1000 * 1000 * 1000,
@@ -39,16 +39,16 @@ func TestHardware_PrintTopology(t *testing.T) {
 		WithDevices(
 			[]*PCIDevice{
 				{
-					Name:      "test0",
-					Type:      DeviceTypeNetInterface,
-					PCIAddr:   *MustNewPCIAddress("0000:01:01.1"),
-					LinkSpeed: 2.5,
+					Name:         "test0",
+					Type:         DeviceTypeNetInterface,
+					PCIAddr:      *MustNewPCIAddress("0000:01:01.1"),
+					LinkNegSpeed: 2.5e+9,
 				},
 				{
-					Name:      "test0-peer",
-					Type:      DeviceTypeOFIDomain,
-					PCIAddr:   *MustNewPCIAddress("0000:01:01.1"),
-					LinkSpeed: 1.2,
+					Name:         "test0-peer",
+					Type:         DeviceTypeOFIDomain,
+					PCIAddr:      *MustNewPCIAddress("0000:01:01.1"),
+					LinkNegSpeed: 1.2e+9,
 				},
 				test2Block,
 			},
@@ -76,10 +76,10 @@ NUMA Node 0
   PCI buses:
     0000:[00-0f]
       0000:00:1f.2
-        0000:00:1f.2 test2-block (512 GB block device) @ 1.75 GB/s
+        0000:00:1f.2 test2-block (512 GB block device) @ 1.75 GT/s
       0000:01:01.1
-        0000:01:01.1 test0 (network interface) @ 2.50 GB/s
-        0000:01:01.1 test0-peer (OFI domain) @ 1.20 GB/s
+        0000:01:01.1 test0 (network interface) @ 2.5 GT/s
+        0000:01:01.1 test0-peer (OFI domain) @ 1.2 GT/s
 `,
 		},
 		"virtual": {
@@ -105,14 +105,14 @@ NUMA Node 0
   PCI buses:
     0000:[00-0f]
       0000:00:1f.2
-        0000:00:1f.2 test2-block (512 GB block device) @ 1.75 GB/s
+        0000:00:1f.2 test2-block (512 GB block device) @ 1.75 GT/s
       0000:01:01.1
-        0000:01:01.1 test0 (network interface) @ 2.50 GB/s
-        0000:01:01.1 test0-peer (OFI domain) @ 1.20 GB/s
+        0000:01:01.1 test0 (network interface) @ 2.5 GT/s
+        0000:01:01.1 test0-peer (OFI domain) @ 1.2 GT/s
 Virtual Devices
   virt0 (network interface)
   virt1 (network interface)
-    backed by: 0000:01:01.1 test0 (network interface) @ 2.50 GB/s
+    backed by: 0000:01:01.1 test0 (network interface) @ 2.5 GT/s
 `,
 		},
 		"multiple NUMA nodes and pmem": {
@@ -130,10 +130,10 @@ Virtual Devices
 						WithDevices(
 							[]*PCIDevice{
 								{
-									Name:      "test2-net",
-									Type:      DeviceTypeNetInterface,
-									PCIAddr:   *MustNewPCIAddress("0000:01:01.1"),
-									LinkSpeed: 2.5,
+									Name:         "test2-net",
+									Type:         DeviceTypeNetInterface,
+									PCIAddr:      *MustNewPCIAddress("0000:01:01.1"),
+									LinkNegSpeed: 2.5e+9,
 								},
 								test2Block,
 							},
@@ -160,10 +160,10 @@ Virtual Devices
 						WithDevices(
 							[]*PCIDevice{
 								{
-									Name:      "test0-net",
-									Type:      DeviceTypeNetInterface,
-									PCIAddr:   *MustNewPCIAddress("0000:80:01.1"),
-									LinkSpeed: 2.5,
+									Name:         "test0-net",
+									Type:         DeviceTypeNetInterface,
+									PCIAddr:      *MustNewPCIAddress("0000:80:01.1"),
+									LinkNegSpeed: 2.5e+9,
 								},
 								{
 									Name:    "test0-block",
@@ -190,7 +190,7 @@ NUMA Node 0
   PCI buses:
     0000:[80-88]
       0000:80:01.1
-        0000:80:01.1 test0-net (network interface) @ 2.50 GB/s
+        0000:80:01.1 test0-net (network interface) @ 2.5 GT/s
       0000:83:00.0
         0000:83:00.0 test0-block (block device)
   Non-PCI block devices:
@@ -200,9 +200,9 @@ NUMA Node 2
   PCI buses:
     0000:[00-0f]
       0000:00:1f.2
-        0000:00:1f.2 test2-block (512 GB block device) @ 1.75 GB/s
+        0000:00:1f.2 test2-block (512 GB block device) @ 1.75 GT/s
       0000:01:01.1
-        0000:01:01.1 test2-net (network interface) @ 2.50 GB/s
+        0000:01:01.1 test2-net (network interface) @ 2.5 GT/s
   Non-PCI block devices:
     pmem2 (4.4 TB NVDIMM)
 `,

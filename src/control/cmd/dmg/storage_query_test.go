@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,27 +18,6 @@ import (
 
 func TestStorageQueryCommands(t *testing.T) {
 	runCmdTests(t, []cmdTest{
-		{
-			"per-server metadata device health query",
-			"storage query device-health --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
-			printRequest(t, &control.SmdQueryReq{
-				Rank:             ranklist.NilRank,
-				OmitPools:        true,
-				IncludeBioHealth: true,
-				UUID:             "842c739b-86b5-462f-a7ba-b4a91b674f3d",
-			}),
-			nil,
-		},
-		{
-			"per-server metadata device health query (missing uuid)",
-			"storage query device-health",
-			printRequest(t, &control.SmdQueryReq{
-				Rank:             ranklist.NilRank,
-				OmitPools:        true,
-				IncludeBioHealth: true,
-			}),
-			nil,
-		},
 		{
 			"per-server metadata query pools",
 			"storage query list-pools",
@@ -77,12 +56,23 @@ func TestStorageQueryCommands(t *testing.T) {
 			nil,
 		},
 		{
-			"per-server metadata query devices (include health)",
+			"per-server metadata device query health",
 			"storage query list-devices --health",
 			printRequest(t, &control.SmdQueryReq{
 				Rank:             ranklist.NilRank,
 				OmitPools:        true,
 				IncludeBioHealth: true,
+			}),
+			nil,
+		},
+		{
+			"per-server metadata device query health (by uuid)",
+			"storage query list-devices --health --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
+			printRequest(t, &control.SmdQueryReq{
+				Rank:             ranklist.NilRank,
+				OmitPools:        true,
+				IncludeBioHealth: true,
+				UUID:             "842c739b-86b5-462f-a7ba-b4a91b674f3d",
 			}),
 			nil,
 		},

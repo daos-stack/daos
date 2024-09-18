@@ -32,7 +32,7 @@ Python objects allocated by PyDAOS are:
 To create a python container in a pool labeled tank:
 
 ```
-$ daos cont create tank --label neo --type PYTHON
+$ daos cont create tank neo --type PYTHON
   Container UUID : 3ee904b3-8868-46ed-96c7-ef608093732c
   Container Label: neo
   Container Type : PYTHON

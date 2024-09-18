@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -298,7 +298,7 @@ func (p *Provider) getPCIDevsPerNUMANode(topo *topology, nodes hardware.NodeMap)
 		numaID := p.getDeviceNUMANodeID(osDev, topo)
 
 		var addr *hardware.PCIAddress
-		var linkSpeed float64
+		var linkSpeed float32
 		switch osDevType {
 		case osDevTypeBlock, osDevTypeNetwork, osDevTypeOpenFabrics:
 			// If the device is an NVDIMM, it does not have an
@@ -333,10 +333,10 @@ func (p *Provider) getPCIDevsPerNUMANode(topo *topology, nodes hardware.NodeMap)
 		}
 
 		pciDev := &hardware.PCIDevice{
-			Name:      osDev.name(),
-			Type:      osDevTypeToHardwareDevType(osDevType),
-			PCIAddr:   *addr,
-			LinkSpeed: linkSpeed,
+			Name:         osDev.name(),
+			Type:         osDevTypeToHardwareDevType(osDevType),
+			PCIAddr:      *addr,
+			LinkNegSpeed: linkSpeed,
 		}
 		if err := nodes.AddPCIDevice(numaID, pciDev); err != nil {
 			return err

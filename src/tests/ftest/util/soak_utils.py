@@ -19,7 +19,7 @@ from command_utils_base import EnvironmentVariables
 from daos_racer_utils import DaosRacerCommand
 from data_mover_utils import DcpCommand, FsCopy
 from dfuse_utils import get_dfuse
-from dmg_utils import get_storage_query_device_info
+from dmg_utils import get_storage_query_device_info, get_storage_query_device_uuids
 from duns_utils import format_path
 from exception_utils import CommandFailure
 from fio_utils import FioCommand
@@ -320,7 +320,8 @@ def wait_for_pool_rebuild(self, pool, name):
     """
     rebuild_status = False
     self.log.info("<<Wait for %s rebuild on %s>> at %s", name, pool.identifier, time.ctime())
-    self.dmg_command.server_set_logmasks("DEBUG", raise_exception=False)
+    if self.enable_rebuild_logmasks:
+        self.dmg_command.server_set_logmasks("DEBUG", raise_exception=False)
     try:
         # # Wait for rebuild to start
         # pool.wait_for_rebuild_to_start()
@@ -328,12 +329,14 @@ def wait_for_pool_rebuild(self, pool, name):
         pool.wait_for_rebuild_to_end()
         rebuild_status = True
     except DaosTestError as error:
-        self.log.error(f"<<<FAILED:{name} rebuild timed out: {error}", exc_info=error)
+        self.log.error(f"<<<FAILED: {name} rebuild timed out: {error}", exc_info=error)
         rebuild_status = False
     except TestFail as error1:
         self.log.error(
-            f"<<<FAILED:{name} rebuild failed due to test issue: {error1}", exc_info=error1)
-    self.dmg_command.server_set_logmasks(raise_exception=False)
+            f"<<<FAILED: {name} rebuild failed due to test issue: {error1}", exc_info=error1)
+    finally:
+        if self.enable_rebuild_logmasks:
+            self.dmg_command.server_set_logmasks(raise_exception=False)
     return rebuild_status
 
 
@@ -419,8 +422,10 @@ def launch_vmd_identify_check(self, name, results, args):
         results (queue): multiprocessing queue
         args (queue): multiprocessing queue
     """
+    # pylint: disable=too-many-nested-blocks
     status = True
     failing_vmd = []
+    dmg = self.get_dmg_command().copy()
     device_info = get_storage_query_device_info(self.dmg_command)
     uuid_list = [device['uuid'] for device in device_info]
     # limit the number of leds to blink to 1024
@@ -429,22 +434,27 @@ def launch_vmd_identify_check(self, name, results, args):
     else:
         uuids = uuid_list
     self.log.info("VMD device UUIDs: %s", uuids)
-
-    for uuid in uuids:
-        # Blink led
-        self.dmg_command.storage_led_identify(ids=uuid, timeout=2)
-        # check if led is blinking
-        result = self.dmg_command.storage_led_check(ids=uuid)
-        # determine if leds are blinking as expected
-        for value in list(result['response']['host_storage_map'].values()):
-            if value['storage']['smd_info']['devices']:
-                for device in value['storage']['smd_info']['devices']:
-                    if device['ctrlr']['led_state'] != "QUICK_BLINK":
-                        failing_vmd.append([device['ctrlr']['pci_addr'], value['hosts']])
-                        status = False
-    # reset leds to previous state
-    for uuid in uuids:
-        self.dmg_command.storage_led_identify(ids=uuid, reset=True)
+    host_uuids = get_storage_query_device_uuids(self.dmg_command)
+    for host, uuid_dict in host_uuids.items():
+        uuid_list = sorted(uuid_dict.keys())
+        self.log.info("Devices on host %s: %s", host, uuid_list)
+        # Now check whether the random uuid belongs to a particular host.
+        for uuid in uuids:
+            if uuid in uuid_list:
+                dmg.hostlist = host
+                # Blink led
+                dmg.storage_led_identify(ids=uuid, timeout=2)
+                # check if led is blinking
+                result = dmg.storage_led_check(ids=uuid)
+                # determine if leds are blinking as expected
+                for value in list(result['response']['host_storage_map'].values()):
+                    if value['storage']['smd_info']['devices']:
+                        for device in value['storage']['smd_info']['devices']:
+                            if device['ctrlr']['led_state'] != "QUICK_BLINK":
+                                failing_vmd.append([device['ctrlr']['pci_addr'], value['hosts']])
+                                status = False
+                            # reset leds to previous state
+                            dmg.storage_led_identify(ids=uuid, reset=True)
 
     params = {"name": name,
               "status": status,
@@ -948,7 +958,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None,
         for b_size, t_size, file_dir_oclass in product(bsize_list,
                                                        tsize_list,
                                                        oclass_list):
-            ior_cmd = IorCommand()
+            ior_cmd = IorCommand(self.test_env.log_dir)
             ior_cmd.namespace = ior_params
             ior_cmd.get_params(self)
             ior_cmd.max_duration.update(ior_timeout)
@@ -994,10 +1004,8 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None,
             mpirun_cmd.get_params(self)
             if api == "POSIX-LIBPIL4DFS":
                 env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
-                env["D_IL_REPORT"] = "1"
             if api == "POSIX-LIBIOIL":
                 env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libioil.so')
-                env["D_IL_REPORT"] = "1"
             # add envs if api is HDF5-VOL
             if api == "HDF5-VOL":
                 vol = True
@@ -1127,7 +1135,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                                                                        depth_list,
                                                                        oclass_list):
             # Get the parameters for Mdtest
-            mdtest_cmd = MdtestCommand()
+            mdtest_cmd = MdtestCommand(self.test_env.log_dir)
             mdtest_cmd.namespace = mdtest_params
             mdtest_cmd.get_params(self)
             if api in ["POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
@@ -1163,10 +1171,8 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                 if self.enable_il and api == "POSIX-LIBPIL4DFS":
                     env["LD_PRELOAD"] = os.path.join(
                         self.prefix, 'lib64', 'libpil4dfs.so')
-                    env["D_IL_REPORT"] = "1"
                 if self.enable_il and api == "POSIX-LIBIOIL":
                     env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libioil.so')
-                    env["D_IL_REPORT"] = "1"
             mpirun_cmd = Mpirun(mdtest_cmd, mpi_type=self.mpi_module)
             mpirun_cmd.get_params(self)
             mpirun_cmd.assign_processes(nodesperjob * ppn)
@@ -1294,10 +1300,8 @@ def create_fio_cmdline(self, job_spec, pool):
         cmds.append(f"cd {dfuse.mount_dir.value};")
         if self.enable_il and api == "POSIX-LIBPIL4DFS":
             cmds.append(f"export LD_PRELOAD={os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')}")
-            cmds.append("export D_IL_REPORT=1")
         if self.enable_il and api == "POSIX-LIBIOIL":
             cmds.append(f"export LD_PRELOAD={os.path.join(self.prefix, 'lib64', 'libioil.so')}")
-            cmds.append("export D_IL_REPORT=1")
         cmds.append(str(fio_cmd))
         cmds.append("status=$?")
         cmds.append("cd -")
@@ -1369,10 +1373,8 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
                 env["DAOS_UNS_PREFIX"] = format_path(pool, self.container[-1])
             if self.enable_il and api == "POSIX-LIBPIL4DFS":
                 env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
-                env["D_IL_REPORT"] = "1"
             if self.enable_il and api == "POSIX-LIBIOIL":
                 env["LD_PRELOAD"] = os.path.join(self.prefix, 'lib64', 'libioil.so')
-                env["D_IL_REPORT"] = "1"
             mpirun_cmd.assign_environment(env, True)
             mpirun_cmd.assign_processes(nodesperjob * ppn)
             mpirun_cmd.ppn.update(ppn)

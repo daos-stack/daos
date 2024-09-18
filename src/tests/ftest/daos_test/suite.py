@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -456,7 +456,7 @@ class DaosCoreTest(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium,provider,md_on_ssd
-        :avocado: tags=daos_test,daos_core_test
+        :avocado: tags=daos_test,daos_core_test,faults
         :avocado: tags=DaosCoreTest,test_daos_pipeline
         """
         self.run_subtest()

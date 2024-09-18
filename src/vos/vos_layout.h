@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -82,7 +82,7 @@ enum vos_gc_type {
 /** Lowest supported durable format version */
 #define POOL_DF_VER_1                           23
 
-/** Individual version specific featuers are assigned to a release specific durable
+/** Individual version specific features are assigned to a release specific durable
  * format version number.  This allows us to add multiple features in a release cycle
  * while keeping checks related to the feature rather than the more ambiguous version
  * number.   Each new feature should be assigned to the latest VOS durable format.
@@ -91,7 +91,7 @@ enum vos_gc_type {
  */
 
 /** Current durable format version */
-#define POOL_DF_VERSION                         VOS_POOL_DF_2_6
+#define POOL_DF_VERSION                         VOS_POOL_DF_2_8
 
 /** 2.2 features.  Until we have an upgrade path for RDB, we need to support more than one old
  *  version.
@@ -103,6 +103,9 @@ enum vos_gc_type {
 
 /** 2.6 features */
 #define VOS_POOL_FEAT_2_6                       (VOS_POOL_FEAT_FLAT_DKEY | VOS_POOL_FEAT_EMBED_FIRST)
+
+/** 2.8 features */
+#define VOS_POOL_FEAT_2_8			(VOS_POOL_FEAT_GANG_SV)
 
 /**
  * Durable format for VOS pool

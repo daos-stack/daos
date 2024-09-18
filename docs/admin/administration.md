@@ -44,10 +44,20 @@ severity, message, description, and cause.
 
 |Event|Event type|Severity|Message|Description|Cause|
 |:----|:----|:----|:----|:----|:----|
+| device\_set\_faulty| INFO\_ONLY| NOTICE or ERROR| Device: <uuid\> set faulty / Device: <uuid\> set faulty failed: <rc\> / Device: <uuid\> auto faulty detect / Device: <uuid\> auto faulty detect failed: <rc\> | Indicates that a device has either been explicitly automatically set as faulty. Device UUID specified in event data. | Either DMG set nvme-faulty command was used to explicitly set device as faulty or an error threshold was reached on a device which has triggered an auto faulty reaction. |
+| device\_media\_error| INFO\_ONLY| ERROR| Device: <uuid\> <error-type\> error logged from tgt\_id:<idx\> | Indicates that a device media error has been detected for a specific target. The error type could be unmap, write, read or checksum (csum). Device UUID and target ID specified in event data. | Media error occurred on backing device. |
+| device\_unplugged| INFO\_ONLY| NOTICE| Device: <uuid\> unplugged | Indicates device was physically removed from host. | NVMe SSD physically removed from host. |
+| device\_plugged| INFO\_ONLY| NOTICE| Detected hot plugged device: <bdev-name\> | Indicates device was physically inserted into host. | NVMe SSD physically added to host. |
+| device\_replace| INFO\_ONLY| NOTICE or ERROR| Replaced device: <uuid\> with device: <uuid\> [failed: <rc\>] | Indicates that a faulty device was replaced with a new device and if the operation failed. The old and new device IDs as well as any non-zero return code are specified in the event data. | Device was replaced using DMG nvme replace command. |
+| device\_link\_speed\_changed| NOTICE or WARNING| NVMe PCIe device at <pci-address\> port-<idx\>: link speed changed to <transfer-rate\> (max <transfer-rate\>)| Indicates that an NVMe device link speed has changed. The negotiated and maximum device link speeds are indicated in the event message field and the severity is set to warning if the negotiated speed is not at maximum capability (and notice level severity if at maximum). No other specific information is included in the event data.| Either device link speed was previously downgraded and has returned to maximum or link speed has downgraded to a value that is less than its maximum capability.|
+| device\_link\_width\_changed| NOTICE or WARNING| NVMe PCIe device at <pci-address\> port-<idx\>: link width changed to <pcie-link-lanes\> (max <pcie-link-lanes\>)| Indicates that an NVMe device link width has changed. The negotiated and maximum device link widths are indicated in the event message field and the severity is set to warning if the negotiated width is not at maximum capability (and notice level severity if at maximum). No other specific information is included in the event data.| Either device link width was previously downgraded and has returned to maximum or link width has downgraded to a value that is less than its maximum capability.|
 | engine\_format\_required|INFO\_ONLY|NOTICE|DAOS engine <idx\> requires a <type\> format|Indicates engine is waiting for allocated storage to be formatted on formatted on instance <idx\> with dmg tool. <type\> can be either SCM or Metadata.|DAOS server attempts to bring-up an engine that has unformatted storage.|
 | engine\_died| STATE\_CHANGE| ERROR| DAOS engine <idx\> exited exited unexpectedly: <error\> | Indicates engine instance <idx\> unexpectedly. <error> describes the exit state returned from exited daos\_engine process.| N/A                          |
-| engine\_asserted| STATE\_CHANGE| ERROR| TBD| Indicates engine instance <idx> threw a runtime assertion, causing a crash. | An unexpected internal state resulted in assert failure. |
+| engine\_asserted| STATE\_CHANGE| ERROR| TBD| Indicates engine instance <idx\> threw a runtime assertion, causing a crash. | An unexpected internal state resulted in assert failure. |
 | engine\_clock\_drift| INFO\_ONLY   | ERROR| clock drift detected| Indicates CART comms layer has detected clock skew between engines.| NTP may not be syncing clocks across DAOS system.      |
+| engine\_join\_failed| INFO\_ONLY| ERROR | DAOS engine <idx\> (rank <rank\>) was not allowed to join the system | Join operation failed for the given engine instance ID and rank (if assigned). | Reason should be provided in the extended info field of the event data. |
+| pool\_corruption\_detected| INFO\_ONLY| ERROR | Data corruption detected| Indicates a corruption in pool data has been detected. The event fields will contain pool and container UUIDs. | A corruption was found by the checksum scrubber. |
+| pool\_destroy\_deferred| INFO\_ONLY| WARNING | pool:<uuid\> destroy is deferred| Indicates a destroy operation has been deferre. | Pool destroy in progress but not complete. |
 | pool\_rebuild\_started| INFO\_ONLY| NOTICE   | Pool rebuild started.| Indicates a pool rebuild has started. The event data field contains pool map version and pool operation identifier. | When a pool rank becomes unavailable a rebuild will be triggered.   |
 | pool\_rebuild\_finished| INFO\_ONLY| NOTICE| Pool rebuild finished.| Indicates a pool rebuild has finished successfully. The event data field includes the pool map version and pool operation identifier.  | N/A|
 | pool\_rebuild\_failed| INFO\_ONLY| ERROR| Pool rebuild failed: <rc\>.| Indicates a pool rebuild has failed. The event data field includes the pool map version and pool operation identifier. <rc\> provides a string representation of DER code.| N/A                          |
@@ -59,7 +69,7 @@ severity, message, description, and cause.
 | swim\_rank\_dead| STATE\_CHANGE| NOTICE| SWIM rank marked as dead.| The SWIM protocol has detected the specified rank is unresponsive.| A remote DAOS engine has become unresponsive.|
 | system\_start\_failed| INFO\_ONLY| ERROR| System startup failed, <errors\>| Indicates that a user initiated controlled startup failed. <errors\> shows which ranks failed.| Ranks failed to start.|
 | system\_stop\_failed| INFO\_ONLY| ERROR| System shutdown failed during <action\> action, <errors\>  | Indicates that a user initiated controlled shutdown failed. <action\> identifies the failing shutdown action and <errors\> shows which ranks failed.| Ranks failed to stop.|
-
+| system\_fabric\_provider\_changed| NOTICE| System fabric provider has changed: <old-provider\> -> <new-provider\>| Indicates that the system-wide fabric provider has been updated. No other specific information is included in event data.| A system-wide fabric provider change has been intentionally applied to all joined ranks.|
 
 ## System Logging
 
@@ -308,7 +318,6 @@ Usage:
 ...
 
 Available commands:
-  device-health  Query the device health
   list-devices   List storage devices on the server
   list-pools     List pools on the server
   usage          Show SCM & NVMe storage space utilization per storage server
@@ -372,6 +381,8 @@ Usage:
 ...
 
 [list-devices command options]
+      -l, --host-list=    A comma separated list of addresses <ipv4addr/hostname> to
+                          connect to
       -r, --rank=         Constrain operation to the specified server rank
       -b, --health        Include device health in results
       -u, --uuid=         Device UUID (all devices if blank)
@@ -388,18 +399,6 @@ Usage:
       -r, --rank=     Constrain operation to the specified server rank
       -u, --uuid=     Pool UUID (all pools if blank)
       -v, --verbose   Show more detail about pools
-```
-```bash
-$ dmg storage scan --nvme-meta --help
-Usage:
-  dmg [OPTIONS] storage scan [scan-OPTIONS]
-
-...
-
-[scan command options]
-      -v, --verbose      List SCM & NVMe device details
-      -n, --nvme-health  Display NVMe device health statistics
-      -m, --nvme-meta    Display server meta data held on NVMe storage
 ```
 
 The NVMe storage query list-devices and list-pools commands query the persistently
@@ -464,14 +463,19 @@ boro-11
 
 - Query Storage Device Health Data:
 ```bash
-$ dmg storage query device-health --help
+$ dmg storage query list-devices --health --help
 Usage:
-  dmg [OPTIONS] storage query device-health [device-health-OPTIONS]
+  dmg [OPTIONS] storage query list-devices [list-devices-OPTIONS]
 
 ...
 
-[device-health command options]
-      -u, --uuid=     Device UUID. All devices queried if arg not set
+[list-devices command options]
+      -l, --host-list=    A comma separated list of addresses <ipv4addr/hostname> to
+                          connect to
+      -r, --rank=         Constrain operation to the specified server rank
+      -b, --health        Include device health in results
+      -u, --uuid=         Device UUID (all devices if blank)
+      -e, --show-evicted  Show only evicted faulty devices
 ```
 ```bash
 $ dmg storage scan --nvme-health --help
@@ -481,27 +485,31 @@ Usage:
 ...
 
 [scan command options]
+      -l, --host-list=   A comma separated list of addresses <ipv4addr/hostname>
+                         to connect to
       -v, --verbose      List SCM & NVMe device details
       -n, --nvme-health  Display NVMe device health statistics
-      -m, --nvme-meta    Display server meta data held on NVMe storage
 ```
 
-The NVMe storage query device-health command queries the device health data, including
-NVMe SSD health stats and in-memory I/O error and checksum error counters.
-The server rank and device state are also listed.
-Additionally, vendor-specific SMART stats are displayed, currently for Intel devices only.
+The 'dmg storage scan --nvme-health' command queries the device health data, including
+NVMe SSD health stats and in-memory I/O error and checksum error counters and prefixes the stat
+list with NVMe controller details.
+The 'dmg storage query list-devices --health' command displays the same health data and SMD UUID,
+bdev roles, server rank and device state.
+
+Vendor-specific SMART stats are displayed, currently for Intel devices only.
 Note: A reasonable timed workload > 60 min must be ran for the SMART stats to register
 (Raw values are 65535).
 Media wear percentage can be calculated by dividing by 1024 to find the percentage of the
 maximum rated cycles.
 ```bash
-$ dmg -l boro-11 storage query device-health --uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
+$ dmg -l boro-11 storage query list-devices --health --uuid=d5ec1227-6f39-40db-a1f6-70245aa079f1
 -------
 boro-11
 -------
   Devices
-    UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 [TrAddr:0000:8a:00.0]
-      Targets:[0 1 2 3] Rank:0 State:NORMAL
+    UUID:d5ec1227-6f39-40db-a1f6-70245aa079f1 [TrAddr:d70505:03:00.0 NSID:1]
+      Roles:NA Targets:[3 7] Rank:0 State:NORMAL LED:OFF
       Health Stats:
         Timestamp:2021-09-13T11:12:34.000+00:00
         Temperature:289K(15C)
@@ -580,7 +588,7 @@ The engine's NVMe config (produced during format) then contains the following
 JSON to apply the criteria:
 
 ```json
-[tanabarr@wolf-310 ~]$ cat /mnt/daos0/daos_nvme.conf
+cat /mnt/daos0/daos_nvme.conf
 {
   "daos_data": {
     "config": [

@@ -827,616 +827,369 @@ const ProtobufCMessageDescriptor ctl__bio_health_req__descriptor =
   (ProtobufCMessageInit) ctl__bio_health_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor ctl__bio_health_resp__field_descriptors[45] =
-{
-  {
-    "timestamp",
-    3,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, timestamp),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "warn_temp_time",
-    5,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, warn_temp_time),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "crit_temp_time",
-    6,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, crit_temp_time),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "ctrl_busy_time",
-    7,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, ctrl_busy_time),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "power_cycles",
-    8,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, power_cycles),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "power_on_hours",
-    9,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, power_on_hours),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "unsafe_shutdowns",
-    10,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, unsafe_shutdowns),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "media_errs",
-    11,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, media_errs),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "err_log_entries",
-    12,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, err_log_entries),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "bio_read_errs",
-    13,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, bio_read_errs),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "bio_write_errs",
-    14,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, bio_write_errs),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "bio_unmap_errs",
-    15,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, bio_unmap_errs),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "checksum_errs",
-    16,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, checksum_errs),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "temperature",
-    17,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, temperature),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "temp_warn",
-    18,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_BOOL,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, temp_warn),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "avail_spare_warn",
-    19,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_BOOL,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, avail_spare_warn),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "dev_reliability_warn",
-    20,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_BOOL,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, dev_reliability_warn),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "read_only_warn",
-    21,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_BOOL,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, read_only_warn),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "volatile_mem_warn",
-    22,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_BOOL,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, volatile_mem_warn),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "status",
-    23,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_INT32,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, status),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "dev_uuid",
-    24,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, dev_uuid),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "total_bytes",
-    25,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, total_bytes),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "avail_bytes",
-    26,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, avail_bytes),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "program_fail_cnt_norm",
-    27,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, program_fail_cnt_norm),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "program_fail_cnt_raw",
-    28,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, program_fail_cnt_raw),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "erase_fail_cnt_norm",
-    29,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, erase_fail_cnt_norm),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "erase_fail_cnt_raw",
-    30,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, erase_fail_cnt_raw),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "wear_leveling_cnt_norm",
-    31,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, wear_leveling_cnt_norm),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "wear_leveling_cnt_min",
-    32,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, wear_leveling_cnt_min),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "wear_leveling_cnt_max",
-    33,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, wear_leveling_cnt_max),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "wear_leveling_cnt_avg",
-    34,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, wear_leveling_cnt_avg),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "endtoend_err_cnt_raw",
-    35,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, endtoend_err_cnt_raw),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "crc_err_cnt_raw",
-    36,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, crc_err_cnt_raw),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "media_wear_raw",
-    37,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, media_wear_raw),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "host_reads_raw",
-    38,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, host_reads_raw),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "workload_timer_raw",
-    39,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, workload_timer_raw),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "thermal_throttle_status",
-    40,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, thermal_throttle_status),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "thermal_throttle_event_cnt",
-    41,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, thermal_throttle_event_cnt),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "retry_buffer_overflow_cnt",
-    42,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, retry_buffer_overflow_cnt),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "pll_lock_loss_cnt",
-    43,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, pll_lock_loss_cnt),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "nand_bytes_written",
-    44,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, nand_bytes_written),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "host_bytes_written",
-    45,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, host_bytes_written),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "cluster_size",
-    46,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, cluster_size),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "meta_wal_size",
-    47,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, meta_wal_size),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "rdb_wal_size",
-    48,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__BioHealthResp, rdb_wal_size),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
+static const ProtobufCFieldDescriptor ctl__bio_health_resp__field_descriptors[50] = {
+    {
+	"timestamp", 3, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT64, 0, /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, timestamp), NULL, NULL, 0,           /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"warn_temp_time", 5, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32,
+	0,                                                           /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, warn_temp_time), NULL, NULL, 0, /* flags */
+	0, NULL, NULL                                                /* reserved1,reserved2, etc */
+    },
+    {
+	"crit_temp_time", 6, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32,
+	0,                                                           /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, crit_temp_time), NULL, NULL, 0, /* flags */
+	0, NULL, NULL                                                /* reserved1,reserved2, etc */
+    },
+    {
+	"ctrl_busy_time", 7, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT64,
+	0,                                                           /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, ctrl_busy_time), NULL, NULL, 0, /* flags */
+	0, NULL, NULL                                                /* reserved1,reserved2, etc */
+    },
+    {
+	"power_cycles", 8, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT64, 0, /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, power_cycles), NULL, NULL, 0,           /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"power_on_hours", 9, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT64,
+	0,                                                           /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, power_on_hours), NULL, NULL, 0, /* flags */
+	0, NULL, NULL                                                /* reserved1,reserved2, etc */
+    },
+    {
+	"unsafe_shutdowns", 10, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT64,
+	0,                                                             /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, unsafe_shutdowns), NULL, NULL, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"media_errs", 11, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT64, 0, /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, media_errs), NULL, NULL, 0,            /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"err_log_entries", 12, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT64,
+	0,                                                            /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, err_log_entries), NULL, NULL, 0, /* flags */
+	0, NULL, NULL                                                 /* reserved1,reserved2, etc */
+    },
+    {
+	"bio_read_errs", 13, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32,
+	0,                                                          /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, bio_read_errs), NULL, NULL, 0, /* flags */
+	0, NULL, NULL                                               /* reserved1,reserved2, etc */
+    },
+    {
+	"bio_write_errs", 14, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32,
+	0,                                                           /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, bio_write_errs), NULL, NULL, 0, /* flags */
+	0, NULL, NULL                                                /* reserved1,reserved2, etc */
+    },
+    {
+	"bio_unmap_errs", 15, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32,
+	0,                                                           /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, bio_unmap_errs), NULL, NULL, 0, /* flags */
+	0, NULL, NULL                                                /* reserved1,reserved2, etc */
+    },
+    {
+	"checksum_errs", 16, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32,
+	0,                                                          /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, checksum_errs), NULL, NULL, 0, /* flags */
+	0, NULL, NULL                                               /* reserved1,reserved2, etc */
+    },
+    {
+	"temperature", 17, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32, 0, /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, temperature), NULL, NULL, 0,            /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"temp_warn", 18, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_BOOL, 0, /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, temp_warn), NULL, NULL, 0,          /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"avail_spare_warn", 19, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_BOOL,
+	0,                                                             /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, avail_spare_warn), NULL, NULL, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"dev_reliability_warn", 20, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_BOOL,
+	0,                                                                 /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, dev_reliability_warn), NULL, NULL, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"read_only_warn", 21, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_BOOL,
+	0,                                                           /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, read_only_warn), NULL, NULL, 0, /* flags */
+	0, NULL, NULL                                                /* reserved1,reserved2, etc */
+    },
+    {
+	"volatile_mem_warn", 22, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_BOOL,
+	0,                                                              /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, volatile_mem_warn), NULL, NULL, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"status", 23, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_INT32, 0, /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, status), NULL, NULL, 0,           /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"dev_uuid", 24, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0, /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, dev_uuid), NULL, &protobuf_c_empty_string, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"total_bytes", 25, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT64, 0, /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, total_bytes), NULL, NULL, 0,            /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"avail_bytes", 26, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT64, 0, /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, avail_bytes), NULL, NULL, 0,            /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"program_fail_cnt_norm", 27, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32,
+	0,                                                                  /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, program_fail_cnt_norm), NULL, NULL, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"program_fail_cnt_raw", 28, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT64,
+	0,                                                                 /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, program_fail_cnt_raw), NULL, NULL, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"erase_fail_cnt_norm", 29, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32,
+	0,                                                                /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, erase_fail_cnt_norm), NULL, NULL, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"erase_fail_cnt_raw", 30, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT64,
+	0,                                                               /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, erase_fail_cnt_raw), NULL, NULL, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"wear_leveling_cnt_norm", 31, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32,
+	0,                                                                   /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, wear_leveling_cnt_norm), NULL, NULL, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"wear_leveling_cnt_min", 32, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32,
+	0,                                                                  /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, wear_leveling_cnt_min), NULL, NULL, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"wear_leveling_cnt_max", 33, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32,
+	0,                                                                  /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, wear_leveling_cnt_max), NULL, NULL, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"wear_leveling_cnt_avg", 34, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32,
+	0,                                                                  /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, wear_leveling_cnt_avg), NULL, NULL, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"endtoend_err_cnt_raw", 35, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT64,
+	0,                                                                 /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, endtoend_err_cnt_raw), NULL, NULL, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"crc_err_cnt_raw", 36, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT64,
+	0,                                                            /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, crc_err_cnt_raw), NULL, NULL, 0, /* flags */
+	0, NULL, NULL                                                 /* reserved1,reserved2, etc */
+    },
+    {
+	"media_wear_raw", 37, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT64,
+	0,                                                           /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, media_wear_raw), NULL, NULL, 0, /* flags */
+	0, NULL, NULL                                                /* reserved1,reserved2, etc */
+    },
+    {
+	"host_reads_raw", 38, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT64,
+	0,                                                           /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, host_reads_raw), NULL, NULL, 0, /* flags */
+	0, NULL, NULL                                                /* reserved1,reserved2, etc */
+    },
+    {
+	"workload_timer_raw", 39, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT64,
+	0,                                                               /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, workload_timer_raw), NULL, NULL, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"thermal_throttle_status", 40, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32,
+	0, /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, thermal_throttle_status), NULL, NULL, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"thermal_throttle_event_cnt", 41, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT64,
+	0, /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, thermal_throttle_event_cnt), NULL, NULL, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"retry_buffer_overflow_cnt", 42, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT64,
+	0, /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, retry_buffer_overflow_cnt), NULL, NULL, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"pll_lock_loss_cnt", 43, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT64,
+	0,                                                              /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, pll_lock_loss_cnt), NULL, NULL, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"nand_bytes_written", 44, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT64,
+	0,                                                               /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, nand_bytes_written), NULL, NULL, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"host_bytes_written", 45, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT64,
+	0,                                                               /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, host_bytes_written), NULL, NULL, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"cluster_size", 46, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT64,
+	0,                                                         /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, cluster_size), NULL, NULL, 0, /* flags */
+	0, NULL, NULL                                              /* reserved1,reserved2, etc */
+    },
+    {
+	"meta_wal_size", 47, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT64,
+	0,                                                          /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, meta_wal_size), NULL, NULL, 0, /* flags */
+	0, NULL, NULL                                               /* reserved1,reserved2, etc */
+    },
+    {
+	"rdb_wal_size", 48, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT64,
+	0,                                                         /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, rdb_wal_size), NULL, NULL, 0, /* flags */
+	0, NULL, NULL                                              /* reserved1,reserved2, etc */
+    },
+    {
+	"link_port_id", 49, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32,
+	0,                                                         /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, link_port_id), NULL, NULL, 0, /* flags */
+	0, NULL, NULL                                              /* reserved1,reserved2, etc */
+    },
+    {
+	"link_max_speed", 50, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_FLOAT,
+	0,                                                           /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, link_max_speed), NULL, NULL, 0, /* flags */
+	0, NULL, NULL                                                /* reserved1,reserved2, etc */
+    },
+    {
+	"link_max_width", 51, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32,
+	0,                                                           /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, link_max_width), NULL, NULL, 0, /* flags */
+	0, NULL, NULL                                                /* reserved1,reserved2, etc */
+    },
+    {
+	"link_neg_speed", 52, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_FLOAT,
+	0,                                                           /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, link_neg_speed), NULL, NULL, 0, /* flags */
+	0, NULL, NULL                                                /* reserved1,reserved2, etc */
+    },
+    {
+	"link_neg_width", 53, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_UINT32,
+	0,                                                           /* quantifier_offset */
+	offsetof(Ctl__BioHealthResp, link_neg_width), NULL, NULL, 0, /* flags */
+	0, NULL, NULL                                                /* reserved1,reserved2, etc */
+    },
 };
 static const unsigned ctl__bio_health_resp__field_indices_by_name[] = {
-  22,   /* field[22] = avail_bytes */
-  15,   /* field[15] = avail_spare_warn */
-  9,   /* field[9] = bio_read_errs */
-  11,   /* field[11] = bio_unmap_errs */
-  10,   /* field[10] = bio_write_errs */
-  12,   /* field[12] = checksum_errs */
-  42,   /* field[42] = cluster_size */
-  32,   /* field[32] = crc_err_cnt_raw */
-  2,   /* field[2] = crit_temp_time */
-  3,   /* field[3] = ctrl_busy_time */
-  16,   /* field[16] = dev_reliability_warn */
-  20,   /* field[20] = dev_uuid */
-  31,   /* field[31] = endtoend_err_cnt_raw */
-  25,   /* field[25] = erase_fail_cnt_norm */
-  26,   /* field[26] = erase_fail_cnt_raw */
-  8,   /* field[8] = err_log_entries */
-  41,   /* field[41] = host_bytes_written */
-  34,   /* field[34] = host_reads_raw */
-  7,   /* field[7] = media_errs */
-  33,   /* field[33] = media_wear_raw */
-  43,   /* field[43] = meta_wal_size */
-  40,   /* field[40] = nand_bytes_written */
-  39,   /* field[39] = pll_lock_loss_cnt */
-  4,   /* field[4] = power_cycles */
-  5,   /* field[5] = power_on_hours */
-  23,   /* field[23] = program_fail_cnt_norm */
-  24,   /* field[24] = program_fail_cnt_raw */
-  44,   /* field[44] = rdb_wal_size */
-  17,   /* field[17] = read_only_warn */
-  38,   /* field[38] = retry_buffer_overflow_cnt */
-  19,   /* field[19] = status */
-  14,   /* field[14] = temp_warn */
-  13,   /* field[13] = temperature */
-  37,   /* field[37] = thermal_throttle_event_cnt */
-  36,   /* field[36] = thermal_throttle_status */
-  0,   /* field[0] = timestamp */
-  21,   /* field[21] = total_bytes */
-  6,   /* field[6] = unsafe_shutdowns */
-  18,   /* field[18] = volatile_mem_warn */
-  1,   /* field[1] = warn_temp_time */
-  30,   /* field[30] = wear_leveling_cnt_avg */
-  29,   /* field[29] = wear_leveling_cnt_max */
-  28,   /* field[28] = wear_leveling_cnt_min */
-  27,   /* field[27] = wear_leveling_cnt_norm */
-  35,   /* field[35] = workload_timer_raw */
+    22, /* field[22] = avail_bytes */
+    15, /* field[15] = avail_spare_warn */
+    9,  /* field[9] = bio_read_errs */
+    11, /* field[11] = bio_unmap_errs */
+    10, /* field[10] = bio_write_errs */
+    12, /* field[12] = checksum_errs */
+    42, /* field[42] = cluster_size */
+    32, /* field[32] = crc_err_cnt_raw */
+    2,  /* field[2] = crit_temp_time */
+    3,  /* field[3] = ctrl_busy_time */
+    16, /* field[16] = dev_reliability_warn */
+    20, /* field[20] = dev_uuid */
+    31, /* field[31] = endtoend_err_cnt_raw */
+    25, /* field[25] = erase_fail_cnt_norm */
+    26, /* field[26] = erase_fail_cnt_raw */
+    8,  /* field[8] = err_log_entries */
+    41, /* field[41] = host_bytes_written */
+    34, /* field[34] = host_reads_raw */
+    46, /* field[46] = link_max_speed */
+    47, /* field[47] = link_max_width */
+    48, /* field[48] = link_neg_speed */
+    49, /* field[49] = link_neg_width */
+    45, /* field[45] = link_port_id */
+    7,  /* field[7] = media_errs */
+    33, /* field[33] = media_wear_raw */
+    43, /* field[43] = meta_wal_size */
+    40, /* field[40] = nand_bytes_written */
+    39, /* field[39] = pll_lock_loss_cnt */
+    4,  /* field[4] = power_cycles */
+    5,  /* field[5] = power_on_hours */
+    23, /* field[23] = program_fail_cnt_norm */
+    24, /* field[24] = program_fail_cnt_raw */
+    44, /* field[44] = rdb_wal_size */
+    17, /* field[17] = read_only_warn */
+    38, /* field[38] = retry_buffer_overflow_cnt */
+    19, /* field[19] = status */
+    14, /* field[14] = temp_warn */
+    13, /* field[13] = temperature */
+    37, /* field[37] = thermal_throttle_event_cnt */
+    36, /* field[36] = thermal_throttle_status */
+    0,  /* field[0] = timestamp */
+    21, /* field[21] = total_bytes */
+    6,  /* field[6] = unsafe_shutdowns */
+    18, /* field[18] = volatile_mem_warn */
+    1,  /* field[1] = warn_temp_time */
+    30, /* field[30] = wear_leveling_cnt_avg */
+    29, /* field[29] = wear_leveling_cnt_max */
+    28, /* field[28] = wear_leveling_cnt_min */
+    27, /* field[27] = wear_leveling_cnt_norm */
+    35, /* field[35] = workload_timer_raw */
 };
-static const ProtobufCIntRange ctl__bio_health_resp__number_ranges[2 + 1] =
-{
-  { 3, 0 },
-  { 5, 1 },
-  { 0, 45 }
-};
-const ProtobufCMessageDescriptor ctl__bio_health_resp__descriptor =
-{
-  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "ctl.BioHealthResp",
-  "BioHealthResp",
-  "Ctl__BioHealthResp",
-  "ctl",
-  sizeof(Ctl__BioHealthResp),
-  45,
-  ctl__bio_health_resp__field_descriptors,
-  ctl__bio_health_resp__field_indices_by_name,
-  2,  ctl__bio_health_resp__number_ranges,
-  (ProtobufCMessageInit) ctl__bio_health_resp__init,
-  NULL,NULL,NULL    /* reserved[123] */
+static const ProtobufCIntRange ctl__bio_health_resp__number_ranges[2 + 1] = {
+    {3, 0}, {5, 1}, {0, 50}};
+const ProtobufCMessageDescriptor ctl__bio_health_resp__descriptor = {
+    PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+    "ctl.BioHealthResp",
+    "BioHealthResp",
+    "Ctl__BioHealthResp",
+    "ctl",
+    sizeof(Ctl__BioHealthResp),
+    50,
+    ctl__bio_health_resp__field_descriptors,
+    ctl__bio_health_resp__field_indices_by_name,
+    2,
+    ctl__bio_health_resp__number_ranges,
+    (ProtobufCMessageInit)ctl__bio_health_resp__init,
+    NULL,
+    NULL,
+    NULL /* reserved[123] */
 };
 static const ProtobufCFieldDescriptor ctl__nvme_controller__namespace__field_descriptors[3] =
 {
@@ -1502,7 +1255,7 @@ const ProtobufCMessageDescriptor ctl__nvme_controller__namespace__descriptor =
   (ProtobufCMessageInit) ctl__nvme_controller__namespace__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor ctl__nvme_controller__field_descriptors[12] =
+static const ProtobufCFieldDescriptor ctl__nvme_controller__field_descriptors[13] =
 {
   {
     "model",
@@ -1648,6 +1401,18 @@ static const ProtobufCFieldDescriptor ctl__nvme_controller__field_descriptors[12
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "pci_cfg",
+    13,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__NvmeController, pci_cfg),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned ctl__nvme_controller__field_indices_by_name[] = {
   8,   /* field[8] = dev_state */
@@ -1657,6 +1422,7 @@ static const unsigned ctl__nvme_controller__field_indices_by_name[] = {
   0,   /* field[0] = model */
   6,   /* field[6] = namespaces */
   2,   /* field[2] = pci_addr */
+  12,   /* field[12] = pci_cfg */
   10,   /* field[10] = pci_dev_type */
   1,   /* field[1] = serial */
   7,   /* field[7] = smd_devices */
@@ -1666,7 +1432,7 @@ static const unsigned ctl__nvme_controller__field_indices_by_name[] = {
 static const ProtobufCIntRange ctl__nvme_controller__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 12 }
+  { 0, 13 }
 };
 const ProtobufCMessageDescriptor ctl__nvme_controller__descriptor =
 {
@@ -1676,7 +1442,7 @@ const ProtobufCMessageDescriptor ctl__nvme_controller__descriptor =
   "Ctl__NvmeController",
   "ctl",
   sizeof(Ctl__NvmeController),
-  12,
+  13,
   ctl__nvme_controller__field_descriptors,
   ctl__nvme_controller__field_indices_by_name,
   1,  ctl__nvme_controller__number_ranges,
@@ -1891,23 +1657,25 @@ const ProtobufCMessageDescriptor ctl__smd_device__descriptor =
   (ProtobufCMessageInit) ctl__smd_device__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-#define ctl__smd_dev_req__field_descriptors NULL
+#define ctl__smd_dev_req__field_descriptors     NULL
 #define ctl__smd_dev_req__field_indices_by_name NULL
-#define ctl__smd_dev_req__number_ranges NULL
-const ProtobufCMessageDescriptor ctl__smd_dev_req__descriptor =
-{
-  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "ctl.SmdDevReq",
-  "SmdDevReq",
-  "Ctl__SmdDevReq",
-  "ctl",
-  sizeof(Ctl__SmdDevReq),
-  0,
-  ctl__smd_dev_req__field_descriptors,
-  ctl__smd_dev_req__field_indices_by_name,
-  0,  ctl__smd_dev_req__number_ranges,
-  (ProtobufCMessageInit) ctl__smd_dev_req__init,
-  NULL,NULL,NULL    /* reserved[123] */
+#define ctl__smd_dev_req__number_ranges         NULL
+const ProtobufCMessageDescriptor ctl__smd_dev_req__descriptor = {
+    PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+    "ctl.SmdDevReq",
+    "SmdDevReq",
+    "Ctl__SmdDevReq",
+    "ctl",
+    sizeof(Ctl__SmdDevReq),
+    0,
+    ctl__smd_dev_req__field_descriptors,
+    ctl__smd_dev_req__field_indices_by_name,
+    0,
+    ctl__smd_dev_req__number_ranges,
+    (ProtobufCMessageInit)ctl__smd_dev_req__init,
+    NULL,
+    NULL,
+    NULL /* reserved[123] */
 };
 static const ProtobufCFieldDescriptor ctl__smd_dev_resp__field_descriptors[2] =
 {

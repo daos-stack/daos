@@ -10,13 +10,20 @@ def scons():
     Import('env', 'cart_utils_objs')
 
     tenv = env.Clone(LIBS=[])
-
-    tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'm', 'daos', 'daos_common'])
-    tenv.require('mercury', 'protobufc')
-    tenv.AppendUnique(FLAGS='-pthread')
     tenv.AppendUnique(CPPPATH=[Dir('../../cart/utils').srcnode()])
+    tenv.AppendUnique(FLAGS='-pthread')
+    tenv.require('mercury', 'protobufc')
+    libs = ['cart', 'gurt', 'pthread', 'm', 'daos', 'daos_common']
 
-    self_test = tenv.d_program([SELF_TEST, cart_utils_objs])
+    self_test_lib_src = ['self_test_lib.c', cart_utils_objs]
+    self_test_lib = tenv.d_library('daos_self_test', self_test_lib_src, LIBS=libs)
+    tenv.Install('$PREFIX/lib64/', self_test_lib)
+
+    libs.append('daos_self_test')
+    tenv.AppendUnique(LIBS=libs)
+    tenv.AppendUnique(LIBPATH=Dir('.'))
+
+    self_test = tenv.d_program(SELF_TEST)
     tenv.Install('$PREFIX/bin', self_test)
 
 

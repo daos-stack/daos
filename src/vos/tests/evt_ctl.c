@@ -1770,7 +1770,7 @@ insert_val(struct test_arg *arg, daos_handle_t toh, daos_epoch_t epoch, uint64_t
 
 	memset(&entry.ei_csum, 0, sizeof(entry.ei_csum));
 
-	rc = bio_alloc_init(arg->ta_utx, &entry.ei_addr, &data, length);
+	rc = bio_alloc_init(arg->ta_utx, &entry.ei_addr, data, length);
 	if (rc != 0)
 		return rc;
 

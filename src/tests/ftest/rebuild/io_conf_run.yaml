@@ -24,7 +24,6 @@ server_config:
 
 pool:
   scm_size: 14G
-  control_method: dmg
 
 gen_io_conf:
   no_of_ranks: !mux

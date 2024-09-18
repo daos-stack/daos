@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 
@@ -31,12 +32,13 @@ func TestPretty_PrintPoolInfo(t *testing.T) {
 			pi: &daos.PoolInfo{},
 			expPrintStr: fmt.Sprintf(`
 Pool %s, ntarget=0, disabled=0, leader=0, version=0, state=Creating
-Pool space info:
-- Target(VOS) count:0
+Pool health info:
+- No rebuild status available.
 `, uuid.Nil.String()),
 		},
 		"normal response": {
 			pi: &daos.PoolInfo{
+				QueryMask:        daos.DefaultPoolQueryMask,
 				State:            daos.PoolServiceStateDegraded,
 				UUID:             poolUUID,
 				TotalTargets:     2,
@@ -65,6 +67,8 @@ Pool space info:
 			expPrintStr: fmt.Sprintf(`
 Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
+Pool health info:
+- Rebuild busy, 42 objs, 21 recs
 Pool space info:
 - Target(VOS) count:1
 - Storage tier 0 (SCM):
@@ -73,11 +77,11 @@ Pool space info:
 - Storage tier 1 (NVMe):
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
-Rebuild busy, 42 objs, 21 recs
 `, poolUUID.String()),
 		},
 		"normal response; enabled ranks": {
 			pi: &daos.PoolInfo{
+				QueryMask:        daos.DefaultPoolQueryMask,
 				State:            daos.PoolServiceStateDegraded,
 				UUID:             poolUUID,
 				TotalTargets:     2,
@@ -107,8 +111,10 @@ Rebuild busy, 42 objs, 21 recs
 			expPrintStr: fmt.Sprintf(`
 Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
-Pool space info:
+Pool health info:
 - Enabled ranks: 0-2
+- Rebuild busy, 42 objs, 21 recs
+Pool space info:
 - Target(VOS) count:1
 - Storage tier 0 (SCM):
   Total size: 2 B
@@ -116,11 +122,11 @@ Pool space info:
 - Storage tier 1 (NVMe):
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
-Rebuild busy, 42 objs, 21 recs
 `, poolUUID.String()),
 		},
 		"normal response; disabled ranks": {
 			pi: &daos.PoolInfo{
+				QueryMask:        daos.DefaultPoolQueryMask,
 				State:            daos.PoolServiceStateDegraded,
 				UUID:             poolUUID,
 				TotalTargets:     2,
@@ -150,8 +156,10 @@ Rebuild busy, 42 objs, 21 recs
 			expPrintStr: fmt.Sprintf(`
 Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
-Pool space info:
+Pool health info:
 - Disabled ranks: 0-1,3
+- Rebuild busy, 42 objs, 21 recs
+Pool space info:
 - Target(VOS) count:1
 - Storage tier 0 (SCM):
   Total size: 2 B
@@ -159,11 +167,11 @@ Pool space info:
 - Storage tier 1 (NVMe):
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
-Rebuild busy, 42 objs, 21 recs
 `, poolUUID.String()),
 		},
 		"unknown/invalid rebuild state response": {
 			pi: &daos.PoolInfo{
+				QueryMask:        daos.DefaultPoolQueryMask,
 				State:            daos.PoolServiceStateDegraded,
 				UUID:             poolUUID,
 				TotalTargets:     2,
@@ -193,8 +201,10 @@ Rebuild busy, 42 objs, 21 recs
 			expPrintStr: fmt.Sprintf(`
 Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
-Pool space info:
+Pool health info:
 - Disabled ranks: 0-1,3
+- Rebuild unknown, 42 objs, 21 recs
+Pool space info:
 - Target(VOS) count:1
 - Storage tier 0 (SCM):
   Total size: 2 B
@@ -202,11 +212,11 @@ Pool space info:
 - Storage tier 1 (NVMe):
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
-Rebuild unknown, 42 objs, 21 recs
 `, poolUUID.String()),
 		},
 		"rebuild failed": {
 			pi: &daos.PoolInfo{
+				QueryMask:        daos.DefaultPoolQueryMask,
 				State:            daos.PoolServiceStateDegraded,
 				UUID:             poolUUID,
 				TotalTargets:     2,
@@ -236,6 +246,8 @@ Rebuild unknown, 42 objs, 21 recs
 			expPrintStr: fmt.Sprintf(`
 Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
+Pool health info:
+- Rebuild failed, status=2
 Pool space info:
 - Target(VOS) count:1
 - Storage tier 0 (SCM):
@@ -244,7 +256,6 @@ Pool space info:
 - Storage tier 1 (NVMe):
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
-Rebuild failed, status=2
 `, poolUUID.String()),
 		},
 	} {
@@ -425,6 +436,266 @@ Target: type unknown, state drain
 			var bld strings.Builder
 			gotErr := PrintPoolQueryTargetInfo(tc.pqti, &bld)
 			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
+				t.Fatalf("unexpected format string (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestPretty_PrintListPools(t *testing.T) {
+	exampleTierStats := []*daos.StorageUsageStats{
+		{
+			MediaType: daos.StorageMediaTypeScm,
+			Total:     100 * humanize.GByte,
+			Free:      20 * humanize.GByte,
+			Min:       5 * humanize.GByte,
+			Max:       6 * humanize.GByte,
+		},
+		{
+			MediaType: daos.StorageMediaTypeNvme,
+			Total:     6 * humanize.TByte,
+			Free:      1 * humanize.TByte,
+			Min:       20 * humanize.GByte,
+			Max:       50 * humanize.GByte,
+		},
+	}
+
+	for name, tc := range map[string]struct {
+		pools       []*daos.PoolInfo
+		verbose     bool
+		expErr      error
+		expPrintStr string
+	}{
+		"empty list": {
+			expPrintStr: `
+No pools in system
+`,
+		},
+		"one pool; no usage": {
+			pools: []*daos.PoolInfo{
+				{
+					UUID:            test.MockPoolUUID(1),
+					ServiceReplicas: []ranklist.Rank{0, 1, 2},
+					State:           daos.PoolServiceStateReady,
+				},
+			},
+			expPrintStr: `
+Pool     Size State Used Imbalance Disabled 
+----     ---- ----- ---- --------- -------- 
+00000001 0 B  Ready 0%   0%        0/0      
+
+`,
+		},
+		"two pools; only one labeled": {
+			pools: []*daos.PoolInfo{
+				{
+					UUID:             test.MockPoolUUID(1),
+					ServiceReplicas:  []ranklist.Rank{0, 1, 2},
+					TierStats:        exampleTierStats,
+					TotalTargets:     16,
+					ActiveTargets:    16,
+					DisabledTargets:  0,
+					State:            daos.PoolServiceStateReady,
+					PoolLayoutVer:    1,
+					UpgradeLayoutVer: 2,
+				},
+				{
+					Label:            "two",
+					UUID:             test.MockPoolUUID(2),
+					ServiceReplicas:  []ranklist.Rank{3, 4, 5},
+					TierStats:        exampleTierStats,
+					TotalTargets:     64,
+					ActiveTargets:    56,
+					DisabledTargets:  8,
+					State:            daos.PoolServiceStateReady,
+					PoolLayoutVer:    1,
+					UpgradeLayoutVer: 2,
+				},
+			},
+			expPrintStr: `
+Pool     Size   State Used Imbalance Disabled UpgradeNeeded? 
+----     ----   ----- ---- --------- -------- -------------- 
+00000001 6.0 TB Ready 83%  16%       0/16     1->2           
+two      6.0 TB Ready 83%  56%       8/64     1->2           
+
+`,
+		},
+		"two pools; one SCM only": {
+			pools: []*daos.PoolInfo{
+				{
+					Label:            "one",
+					UUID:             test.MockPoolUUID(1),
+					ServiceReplicas:  []ranklist.Rank{0, 1, 2},
+					TierStats:        exampleTierStats,
+					TotalTargets:     16,
+					ActiveTargets:    16,
+					DisabledTargets:  0,
+					State:            daos.PoolServiceStateReady,
+					PoolLayoutVer:    1,
+					UpgradeLayoutVer: 2,
+					QueryMask:        daos.DefaultPoolQueryMask,
+				},
+				{
+					Label:           "two",
+					UUID:            test.MockPoolUUID(2),
+					ServiceReplicas: []ranklist.Rank{3, 4, 5},
+					TierStats: []*daos.StorageUsageStats{
+						exampleTierStats[0],
+						{MediaType: daos.StorageMediaTypeNvme},
+					},
+					TotalTargets:     64,
+					ActiveTargets:    56,
+					DisabledTargets:  8,
+					State:            daos.PoolServiceStateReady,
+					PoolLayoutVer:    2,
+					UpgradeLayoutVer: 2,
+					QueryMask:        daos.DefaultPoolQueryMask,
+				},
+			},
+			expPrintStr: `
+Pool Size   State Used Imbalance Disabled UpgradeNeeded? 
+---- ----   ----- ---- --------- -------- -------------- 
+one  6.0 TB Ready 83%  16%       0/16     1->2           
+two  100 GB Ready 80%  56%       8/64     None           
+
+`,
+		},
+		"verbose, empty response": {
+			verbose: true,
+			expPrintStr: `
+No pools in system
+`,
+		},
+		"verbose; zero svc replicas": {
+			pools: []*daos.PoolInfo{
+				{
+					UUID:             test.MockPoolUUID(1),
+					TierStats:        exampleTierStats,
+					TotalTargets:     16,
+					ActiveTargets:    16,
+					DisabledTargets:  0,
+					State:            daos.PoolServiceStateReady,
+					PoolLayoutVer:    1,
+					UpgradeLayoutVer: 2,
+					Rebuild: &daos.PoolRebuildStatus{
+						State: daos.PoolRebuildStateIdle,
+					},
+					QueryMask: daos.DefaultPoolQueryMask,
+				},
+			},
+			verbose: true,
+			expPrintStr: `
+Label UUID                                 State SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled UpgradeNeeded? Rebuild State 
+----- ----                                 ----- ------- -------- -------- ------------- --------- --------- -------------- -------- -------------- ------------- 
+-     00000001-0001-0001-0001-000000000001 Ready N/A     100 GB   80 GB    16%           6.0 TB    5.0 TB    8%             0/16     1->2           idle          
+
+`,
+		},
+		"verbose; zero svc replicas with no query": {
+			pools: []*daos.PoolInfo{
+				{
+					UUID:             test.MockPoolUUID(1),
+					TierStats:        exampleTierStats,
+					TotalTargets:     16,
+					ActiveTargets:    16,
+					DisabledTargets:  0,
+					State:            daos.PoolServiceStateReady,
+					PoolLayoutVer:    1,
+					UpgradeLayoutVer: 2,
+				},
+			},
+			verbose: true,
+			expPrintStr: `
+Label UUID                                 State SvcReps 
+----- ----                                 ----- ------- 
+-     00000001-0001-0001-0001-000000000001 Ready N/A     
+
+`,
+		},
+		"verbose; two pools; one destroying": {
+			pools: []*daos.PoolInfo{
+				{
+					Label:            "one",
+					UUID:             test.MockPoolUUID(1),
+					ServiceReplicas:  []ranklist.Rank{0, 1, 2},
+					TierStats:        exampleTierStats,
+					TotalTargets:     16,
+					ActiveTargets:    16,
+					DisabledTargets:  0,
+					State:            daos.PoolServiceStateReady,
+					PoolLayoutVer:    1,
+					UpgradeLayoutVer: 2,
+					Rebuild: &daos.PoolRebuildStatus{
+						State: daos.PoolRebuildStateIdle,
+					},
+					QueryMask: daos.DefaultPoolQueryMask,
+				},
+				{
+					Label:            "two",
+					UUID:             test.MockPoolUUID(2),
+					ServiceReplicas:  []ranklist.Rank{3, 4, 5},
+					TierStats:        exampleTierStats,
+					TotalTargets:     64,
+					ActiveTargets:    56,
+					DisabledTargets:  8,
+					State:            daos.PoolServiceStateDestroying,
+					PoolLayoutVer:    2,
+					UpgradeLayoutVer: 2,
+					Rebuild: &daos.PoolRebuildStatus{
+						State: daos.PoolRebuildStateDone,
+					},
+					QueryMask: daos.DefaultPoolQueryMask,
+				},
+			},
+			verbose: true,
+			expPrintStr: `
+Label UUID                                 State      SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled UpgradeNeeded? Rebuild State 
+----- ----                                 -----      ------- -------- -------- ------------- --------- --------- -------------- -------- -------------- ------------- 
+one   00000001-0001-0001-0001-000000000001 Ready      [0-2]   100 GB   80 GB    16%           6.0 TB    5.0 TB    8%             0/16     1->2           idle          
+two   00000002-0002-0002-0002-000000000002 Destroying [3-5]   100 GB   80 GB    56%           6.0 TB    5.0 TB    27%            8/64     None           done          
+
+`,
+		},
+		"verbose; one pool; rebuild state busy": {
+			pools: []*daos.PoolInfo{
+				{
+					Label:            "one",
+					UUID:             test.MockPoolUUID(1),
+					ServiceReplicas:  []ranklist.Rank{0, 1, 2},
+					TierStats:        exampleTierStats,
+					TotalTargets:     16,
+					ActiveTargets:    8,
+					DisabledTargets:  8,
+					State:            daos.PoolServiceStateDegraded,
+					PoolLayoutVer:    1,
+					UpgradeLayoutVer: 2,
+					Rebuild: &daos.PoolRebuildStatus{
+						State: daos.PoolRebuildStateBusy,
+					},
+					QueryMask: daos.DefaultPoolQueryMask,
+				},
+			},
+			verbose: true,
+			expPrintStr: `
+Label UUID                                 State    SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled UpgradeNeeded? Rebuild State 
+----- ----                                 -----    ------- -------- -------- ------------- --------- --------- -------------- -------- -------------- ------------- 
+one   00000001-0001-0001-0001-000000000001 Degraded [0-2]   100 GB   80 GB    8%            6.0 TB    5.0 TB    4%             8/16     1->2           busy          
+
+`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var bld strings.Builder
+
+			// pass the same io writer to standard and error stream
+			// parameters to mimic combined output seen on terminal
+			err := PrintPoolList(tc.pools, &bld, tc.verbose)
+			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}

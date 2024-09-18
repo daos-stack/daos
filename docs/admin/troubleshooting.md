@@ -473,18 +473,12 @@ If this happens, the `daos` tool (as well as other I/O or `libdaos` operations) 
 To resolve the issue, a privileged user may send a `SIGUSR2` signal to the `daos_agent` process to
 force an immediate cache refresh.
 
-### Ranks are excluded because their provider does not match the system fabric provider
+### Ranks fail to join the system
 
-This issue may be encountered after changing the system fabric provider in the `daos_server`
-configuration files, or if the initial configuration files for the servers don't have matching
-fabric providers.
-
-After starting `daos_server`, ranks will be unable to join if their configuration's fabric provider
-does not match that of the system. The system configuration is determined by the management service
-(MS) leader node, which may be arbitrarily chosen from the configured access points.
+DAOS engine ranks may fail to join or re-join the system for a number of reasons.
 
 To diagnose the issue, use `dmg system query`. Using verbose mode (`-v`) for the errored ranks
-will show the detailed errors, as seen below.
+will show the detailed errors as seen in the example below.
 
 ```
 $ dmg system query
@@ -500,18 +494,36 @@ Rank UUID                                 Control Address Fault Domain State   R
 3    15e53aa7-fc0c-42eb-93de-8b485d96c63e 10.7.1.75:10001 /boro-75     Errored DAOS engine 1 exited unexpectedly: rpc error: code = Unknown desc = rank 3 fabric provider "ofi+tcp" does not match system provider "ofi+tcp;ofi_rxm"
 ```
 
-Alternately, monitoring RAS events will alert you to these failures. Relevant RAS event IDs are:
+Alternately, monitoring RAS events will alert you to these failures. `engine_join_failed` events will appear
+with detailed reasons for each failure.
 
-- `system_fabric_provider_changed`: This informational event will be generated when an MS leader node
-  detects that the provider changed locally.
-- `engine_join_failed`: One of these error events will be generated for each rank that fails to join.
+Example RAS events from syslog:
 
-Examples from syslog:
+```
+daos_server[3302185]: id: [engine_join_failed] ts: [2024-02-13T20:08:57.607+00:00] host: [10.7.1.75:10001] type: [INFO] sev: [ERROR] msg: [DAOS engine 0 (rank 1) was not allowed to join the system] pid: [3302185] rank: [1] data: [rank 1 fabric provider "ofi+tcp" does not match system provider "ofi+tcp;ofi_rxm"]
+daos_server[3302185]: id: [engine_join_failed] ts: [2024-02-13T20:08:57.869+00:00] host: [10.7.1.75:10001] type: [INFO] sev: [ERROR] msg: [DAOS engine 1 (rank 3) was not allowed to join the system] pid: [3302185] rank: [3] data: [rank 3 fabric provider "ofi+tcp" does not match system provider "ofi+tcp;ofi_rxm"]
+```
+
+#### Reason: rank fabric provider does not match the system's fabric provider
+
+This issue may be encountered after changing the system fabric provider in the `daos_server`
+configuration files, or if the initial configuration files for the servers don't have matching
+fabric providers.
+
+After starting `daos_server`, ranks will be unable to join if their configuration's fabric provider
+does not match that of the system. The system configuration is determined by the management service
+(MS) leader node, which may be arbitrarily chosen from the configured access points.
+
+The error message will include the string: `fabric provider <provider1> does not match system provider <provider2>`
+
+In addition to running `dmg system query -v` to check rank status and monitoring for `engine_join_failed` RAS events,
+you may monitor for `system_fabric_provider_changed` RAS events. These events indicate when the DAOS management service
+updated its system fabric provider.
+
+Example `system_fabric_provider_changed` RAS event from syslog:
 
 ```
 daos_server[3302185]: id: [system_fabric_provider_changed] ts: [2024-02-13T20:08:50.956+00:00] host: [boro-74.boro.hpdd.intel.com] type: [INFO] sev: [NOTICE] msg: [system fabric provider has changed: ofi+tcp -> ofi+tcp;ofi_rxm] pid: [3302185]
-daos_server[3302185]: id: [engine_join_failed] ts: [2024-02-13T20:08:57.607+00:00] host: [10.7.1.75:10001] type: [INFO] sev: [ERROR] msg: [DAOS engine 0 (rank 1) was not allowed to join the system] pid: [3302185] rank: [1] data: [rank 1 fabric provider "ofi+tcp" does not match system provider "ofi+tcp;ofi_rxm"]
-daos_server[3302185]: id: [engine_join_failed] ts: [2024-02-13T20:08:57.869+00:00] host: [10.7.1.75:10001] type: [INFO] sev: [ERROR] msg: [DAOS engine 1 (rank 3) was not allowed to join the system] pid: [3302185] rank: [3] data: [rank 3 fabric provider "ofi+tcp" does not match system provider "ofi+tcp;ofi_rxm"]
 ```
 
 To resolve the issue:
@@ -521,6 +533,26 @@ To resolve the issue:
 - Update the configuration files with the correct fabric provider.
 - Start all `daos_server` processes.
 - Verify that all ranks were able to re-join via `dmg system query`.
+
+#### Reason: rank control address has changed
+
+Inter-node communication in the DAOS system takes place over two separate networks.
+Data-related operations, including client I/O, take place over the high-speed fabric.
+However, control-related operations take place over a TCP/IP network, which is often separate from the data network.
+
+DAOS does not currently support changing the control plane address of an existing node.
+When the node with the changed address attempts to re-join, it will fail.
+
+The error message will include the string: `control addr changed from <old IP> -> <new IP>`
+
+To resolve the issue:
+- Stop all `daos_server` processes.
+- Ensure static IP addresses are set for TCP/IP networks on all DAOS nodes.
+- Revert the IP addresses of the affected nodes back to their old values.
+- Start all `daos_server` processes.
+- Verify that all ranks were able to re-join via `dmg system query`.
+
+Alternately, the administrator may erase and re-format the DAOS system to start over fresh using the new addresses.
 
 ## Diagnostic and Recovery Tools
 
