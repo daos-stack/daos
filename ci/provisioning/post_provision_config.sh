@@ -32,7 +32,8 @@ retry_cmd 300 clush -B -S -l root -w "$NODESTRING" -c ci_key* --dest=/tmp/
 # shellcheck disable=SC2001
 sanitized_commit_message="$(echo "$COMMIT_MESSAGE" | sed -e 's/\(["\$]\)/\\\1/g')"
 
-if ! retry_cmd 2400 clush -B -S -l root -w "$NODESTRING" \
+# It doesn't really work to retry this as it messes up the repos on the subsequent tries
+if ! RETRY_COUNT=1 retry_cmd 2400 clush -B -S -l root -w "$NODESTRING" \
            "export PS4='$PS4'
            MY_UID=$(id -u)
            CONFIG_POWER_ONLY=${CONFIG_POWER_ONLY:-}
