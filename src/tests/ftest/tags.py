@@ -282,8 +282,10 @@ def run_linter(paths=None, verbose=False):
     tests_wo_hw_vm_manual = []
     tests_w_empty_tag = []
     tests_wo_a_feature_tag = []
+    stage_tags = set(['vm', 'hw', 'hw_vmd', 'manual'])
     non_feature_tags = set([
-        'all', 'vm', 'hw', 'medium', 'large', 'pr', 'daily_regression', 'full_regression'])
+        'all', 'vm', 'hw', 'hw_vmd', 'medium', 'large',
+        'pr', 'daily_regression', 'full_regression'])
     ftest_tag_map = FtestTagMap(paths)
     for file_path, classes in iter(ftest_tag_map):
         all_files.append(file_path)
@@ -297,7 +299,7 @@ def run_linter(paths=None, verbose=False):
                     tests_wo_class_as_tag.append(method_name)
                 if method_name not in tags:
                     tests_wo_method_as_tag.append(method_name)
-                if not set(tags).intersection(set(['vm', 'hw', 'manual'])):
+                if not set(tags).intersection(stage_tags):
                     tests_wo_hw_vm_manual.append(method_name)
                 if '' in tags:
                     tests_w_empty_tag.append(method_name)
