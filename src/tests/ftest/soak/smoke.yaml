@@ -3,7 +3,7 @@ hosts:
   test_servers: 4
   # servers if a server partition is defined
   # server_partition: daos_server
-  client_partition: daos_client
+  # client_partition: daos_client
   # client_reservation: daos-test
 orterun:
   allow_run_as_root: true
@@ -124,7 +124,6 @@ ior_smoke:
     mount_dir: "/tmp/soak_dfuse_ior/"
     disable_caching: true
     thread_count: 8
-    cores: '0-7'
 fio_smoke:
   api:
     - POSIX
@@ -159,7 +158,6 @@ fio_smoke:
     mount_dir: "/tmp/soak_dfuse_fio/"
     disable_caching: true
     thread_count: 8
-    cores: '0-7'
 daos_racer:
   runtime: 120
 vpic_smoke:
@@ -178,7 +176,6 @@ vpic_smoke:
     mount_dir: "/tmp/soak_dfuse_vpic/"
     disable_caching: true
     thread_count: 8
-    cores: '0-7'
   oclass:
     - ["EC_2P1GX", "RP_2GX"]
 lammps_smoke:
@@ -197,7 +194,6 @@ lammps_smoke:
     mount_dir: "/tmp/soak_dfuse_lammps/"
     disable_caching: true
     thread_count: 8
-    cores: '0-7'
   oclass:
     - ["EC_2P1GX", "RP_2GX"]
 mdtest_smoke:
@@ -230,7 +226,6 @@ mdtest_smoke:
     mount_dir: "/tmp/soak_dfuse_mdtest/"
     disable_caching: true
     thread_count: 8
-    cores: '0-7'
 macsio_smoke:
   job_timeout: 10
   nodesperjob:
@@ -254,7 +249,6 @@ macsio_smoke:
     mount_dir: "/tmp/soak_dfuse_macsio/"
     disable_caching: true
     thread_count: 8
-    cores: '0-7'
 datamover_smoke:
   job_timeout: 10
   nodesperjob:
