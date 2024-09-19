@@ -30,7 +30,7 @@ pkgs="argobots                         \
       pmix                             \
       protobuf-c                       \
       spdk-devel                       \
-      strace                           \  
+      strace                           \
       valgrind-devel"
 
 # output with trailing newline suppressed
