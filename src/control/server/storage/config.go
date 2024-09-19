@@ -466,7 +466,7 @@ func (tcs TierConfigs) validateBdevRoles() error {
 		return nil // MD-on-SSD is not to be enabled
 	}
 
-	// For pmem mode, support data and bulk_data roels set
+	// For pmem mode, support data and bulk_data roles set
 	// at the same time for bulk NVMe (QLC) storage tier
 	// use case. Actually, we may need to judge whether it's
 	// pmem mode, and we can't just judge it through the

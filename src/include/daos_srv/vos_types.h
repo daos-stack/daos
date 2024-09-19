@@ -26,6 +26,7 @@
 struct dtx_rsrvd_uint {
 	void			*dru_scm;
 	d_list_t		dru_nvme;
+	d_list_t                 dru_qlc;
 };
 
 enum dtx_stat_flags {

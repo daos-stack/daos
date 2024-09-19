@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -161,8 +161,8 @@ setup(void **state)
 
 	uuid_generate_time_safe(test_arg->pool_uuid);
 	vts_pool_fallocate(&test_arg->fname);
-	ret = vos_pool_create(test_arg->fname, test_arg->pool_uuid, 0, 0, 0, 0 /* version */,
-			      &test_arg->poh);
+	ret = vos_pool_create(test_arg->fname, test_arg->pool_uuid, 0, 0, 0 /* qlc_size */, 0,
+			      0 /* version */, &test_arg->poh);
 	assert_rc_equal(ret, 0);
 	*state = test_arg;
 	return 0;

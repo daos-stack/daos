@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -139,6 +139,10 @@ enum daos_pool_props {
 	DAOS_PROP_PO_SVC_OPS_ENABLED,
 	/** Metadata duplicate operations SVC_OPS KVS max entry age (seconds), default 300 */
 	DAOS_PROP_PO_SVC_OPS_ENTRY_AGE,
+	/**
+	 * Bulk Bdev threshold size
+	 */
+	DAOS_PROP_PO_BULK_DATA_THRESH,
 	DAOS_PROP_PO_MAX,
 };
 
@@ -619,6 +623,9 @@ daos_label_is_valid(const char *label)
 
 /* default data threshold size of 4KiB */
 #define DAOS_PROP_PO_DATA_THRESH_DEFAULT (1UL << 12)
+
+/* default bulk_data threshold size of 64KiB */
+#define DAOS_PROP_PO_BULK_DATA_THRESH_DEFAULT (1UL << 16)
 
 /* For the case of no label is set for the pool. */
 #define DAOS_PROP_NO_PO_LABEL		"pool_label_not_set"

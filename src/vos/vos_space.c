@@ -10,8 +10,10 @@
 
 #define POOL_SCM_SYS(pool)	((pool)->vp_space_sys[DAOS_MEDIA_SCM])
 #define POOL_NVME_SYS(pool)	((pool)->vp_space_sys[DAOS_MEDIA_NVME])
+#define POOL_QLC_SYS(pool)      ((pool)->vp_space_sys[DAOS_MEDIA_QLC])
 #define POOL_SCM_HELD(pool)	((pool)->vp_space_held[DAOS_MEDIA_SCM])
 #define POOL_NVME_HELD(pool)	((pool)->vp_space_held[DAOS_MEDIA_NVME])
+#define POOL_QLC_HELD(pool)     ((pool)->vp_space_held[DAOS_MEDIA_QLC])
 
 /* Minimal seconds interval for updating VOS space metrics */
 #define VOS_SPACE_METRICS_INTV	1
@@ -53,12 +55,16 @@ vos_space_sys_init(struct vos_pool *pool)
 {
 	const daos_size_t scm_tot  = pool->vp_pool_df->pd_scm_sz;
 	const daos_size_t nvme_tot = pool->vp_pool_df->pd_nvme_sz;
+	const daos_size_t qlc_tot  = pool->vp_pool_df->pd_qlc_sz;
 
 	gc_reserve_space(&pool->vp_space_sys[0]);
 	agg_reserve_space(&pool->vp_space_sys[0]);
 
 	if (nvme_tot == 0)
 		POOL_NVME_SYS(pool) = 0;
+
+	if (qlc_tot == 0)
+		POOL_QLC_SYS(pool) = 0;
 
 	if (scm_tot <= 2 * POOL_SCM_SYS(pool)) {
 		D_INFO("Disable SCM space reserving for tiny pool:" DF_UUID " "
@@ -82,6 +88,9 @@ exit:
 
 	D_INFO("Reserved NVMe space for pool:" DF_UUID ", sys:" DF_U64 ", tot:" DF_U64 "\n",
 	       DP_UUID(pool->vp_id), POOL_NVME_SYS(pool), nvme_tot);
+
+	D_INFO("Reserved QLC NVMe space for pool:" DF_UUID ", sys:" DF_U64 ", tot:" DF_U64 "\n",
+	       DP_UUID(pool->vp_id), POOL_QLC_SYS(pool), qlc_tot);
 }
 
 int
@@ -89,11 +98,13 @@ vos_space_sys_set(struct vos_pool *pool, daos_size_t *space_sys)
 {
 	daos_size_t	scm_tot = pool->vp_pool_df->pd_scm_sz;
 	daos_size_t	nvme_tot = pool->vp_pool_df->pd_nvme_sz;
+	daos_size_t     qlc_tot  = pool->vp_pool_df->pd_qlc_sz;
 	daos_size_t	old_sys[DAOS_MEDIA_MAX];
 
 	/* Save old value */
 	old_sys[DAOS_MEDIA_SCM]		= POOL_SCM_SYS(pool);
 	old_sys[DAOS_MEDIA_NVME]	= POOL_NVME_SYS(pool);
+	old_sys[DAOS_MEDIA_QLC]         = POOL_QLC_SYS(pool);
 
 	vos_space_sys_init(pool);
 	if (POOL_SCM_SYS(pool) + space_sys[DAOS_MEDIA_SCM] > scm_tot)
@@ -103,19 +114,26 @@ vos_space_sys_set(struct vos_pool *pool, daos_size_t *space_sys)
 	    (POOL_NVME_SYS(pool) + space_sys[DAOS_MEDIA_NVME]) > nvme_tot)
 		goto error;
 
+	if (pool->vp_qlc_vea_info && (POOL_QLC_SYS(pool) + space_sys[DAOS_MEDIA_QLC]) > qlc_tot)
+		goto error;
+
 	POOL_SCM_SYS(pool)	+= space_sys[DAOS_MEDIA_SCM];
 	POOL_NVME_SYS(pool)	+= space_sys[DAOS_MEDIA_NVME];
+	POOL_QLC_SYS(pool) += space_sys[DAOS_MEDIA_QLC];
 	return 0;
 error:
-	D_ERROR("Pool:"DF_UUID" Too large reserved size. SCM: tot["DF_U64"], "
-		"sys["DF_U64"], rsrv["DF_U64"] NVMe: tot["DF_U64"], "
-		"sys["DF_U64"], rsrv["DF_U64"]\n", DP_UUID(pool->vp_id),
-		scm_tot, POOL_SCM_SYS(pool), space_sys[DAOS_MEDIA_SCM],
-		nvme_tot, POOL_NVME_SYS(pool), space_sys[DAOS_MEDIA_NVME]);
+	D_ERROR("Pool:" DF_UUID " Too large reserved size. SCM: tot[" DF_U64 "], "
+		"sys[" DF_U64 "], rsrv[" DF_U64 "] NVMe: tot[" DF_U64 "], "
+		"sys[" DF_U64 "], rsrv[" DF_U64 "] QLC: tot[" DF_U64 "], "
+		"sys[" DF_U64 "], rsrv[" DF_U64 "]\n",
+		DP_UUID(pool->vp_id), scm_tot, POOL_SCM_SYS(pool), space_sys[DAOS_MEDIA_SCM],
+		nvme_tot, POOL_NVME_SYS(pool), space_sys[DAOS_MEDIA_NVME], qlc_tot,
+		POOL_QLC_SYS(pool), space_sys[DAOS_MEDIA_QLC]);
 
 	/* Rollback old value */
 	POOL_SCM_SYS(pool)	= old_sys[DAOS_MEDIA_SCM];
 	POOL_NVME_SYS(pool)	= old_sys[DAOS_MEDIA_NVME];
+	POOL_QLC_SYS(pool)      = old_sys[DAOS_MEDIA_QLC];
 
 	return -DER_INVAL;
 }
@@ -131,8 +149,10 @@ vos_space_query(struct vos_pool *pool, struct vos_pool_space *vps, bool slow)
 
 	SCM_TOTAL(vps) = df->pd_scm_sz;
 	NVME_TOTAL(vps) = df->pd_nvme_sz;
+	QLC_TOTAL(vps)  = df->pd_qlc_sz;
 	SCM_SYS(vps) = POOL_SCM_SYS(pool);
 	NVME_SYS(vps) = POOL_NVME_SYS(pool);
+	QLC_SYS(vps)    = POOL_QLC_SYS(pool);
 
 	/* Query SCM used space */
 	rc = umempobj_get_heapusage(pool->vp_umm.umm_pool, &scm_used);
@@ -155,7 +175,7 @@ vos_space_query(struct vos_pool *pool, struct vos_pool_space *vps, bool slow)
 		SCM_FREE(vps) = SCM_TOTAL(vps) - scm_used;
 	}
 
-	/* NVMe isn't configured for this VOS pool */
+	/* NVMe isn't configured for this VOS pool, no common NVMe, then no QLC NVMe */
 	if (pool->vp_vea_info == NULL) {
 		NVME_TOTAL(vps) = 0;
 		NVME_FREE(vps) = 0;
@@ -177,6 +197,30 @@ vos_space_query(struct vos_pool *pool, struct vos_pool_space *vps, bool slow)
 	D_ASSERTF(NVME_FREE(vps) <= NVME_TOTAL(vps),
 		  "nvme_free:"DF_U64", nvme_sz:"DF_U64", blk_sz:%u\n",
 		  NVME_FREE(vps), NVME_TOTAL(vps), attr->va_blk_sz);
+
+	/* QLC NVMe isn't configured for this VOS pool */
+	if (pool->vp_qlc_vea_info == NULL) {
+		QLC_TOTAL(vps) = 0;
+		QLC_FREE(vps)  = 0;
+		QLC_SYS(vps)   = 0;
+		/* it's ok to not have QLC NVMe SSD */
+		return 0;
+	} else {
+		/* Query QLC NVMe free space */
+		rc = vea_query(pool->vp_qlc_vea_info, attr, stat);
+		if (rc) {
+			D_ERROR("Query pool:" DF_UUID " QLC NVMe space failed. " DF_RC "\n",
+				DP_UUID(pool->vp_id), DP_RC(rc));
+			return rc;
+		}
+		D_ASSERT(attr->va_blk_sz != 0);
+		QLC_FREE(vps) = attr->va_blk_sz * attr->va_free_blks;
+
+		D_ASSERTF(QLC_FREE(vps) <= QLC_TOTAL(vps),
+			  "qlc_free:" DF_U64 ", qlc_sz:" DF_U64 ", blk_sz:%u\n", QLC_FREE(vps),
+			  QLC_TOTAL(vps), attr->va_blk_sz);
+	}
+
 	return 0;
 }
 
@@ -214,6 +258,8 @@ estimate_space(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
 	daos_recx_t		*recx;
 	struct vos_rec_bundle	 rbund = { 0 };
 	daos_size_t		 size, scm, nvme = 0 /* in blk */;
+	daos_size_t              qlc = 0 /* in blk */;
+	enum daos_media_type_t   media;
 	int			 i, j;
 
 	/* Object record */
@@ -239,11 +285,17 @@ estimate_space(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
 
 			/* Single value record */
 			scm += vos_irec_msize(pool, &rbund);
-			if (vos_io_scm(pool, iod->iod_type, size, VOS_IOS_GENERIC))
+			media = vos_io_find_media(pool, iod->iod_type, size, VOS_IOS_GENERIC);
+			if (media == DAOS_MEDIA_SCM) {
+				/** store data on DAOS_MEDIA_SCM */
 				scm += size;
-			else
+			} else if (media == DAOS_MEDIA_NVME) {
+				/** store data on DAOS_MEDIA_NVME */
 				nvme += vos_byte2blkcnt(size);
-
+			} else {
+				/** store data on DAOS_MEDIA_QLC */
+				qlc += vos_bulk_byte2blkcnt(size);
+			}
 			/* Assume one more SV tree node created */
 			scm += 256;
 			continue;
@@ -257,11 +309,17 @@ estimate_space(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
 			size = recx->rx_nr * iod->iod_size;
 
 			/* Extent */
-			if (vos_io_scm(pool, iod->iod_type, size, VOS_IOS_GENERIC))
+			media = vos_io_find_media(pool, iod->iod_type, size, VOS_IOS_GENERIC);
+			if (media == DAOS_MEDIA_SCM) {
 				/** store data on DAOS_MEDIA_SCM */
 				scm += size;
-			else if (size != 0)
+			} else if ((media == DAOS_MEDIA_NVME) && (size != 0)) {
+				/** store data on DAOS_MEDIA_NVME */
 				nvme += vos_byte2blkcnt(size);
+			} else if (size != 0) {
+				/** store data on DAOS_MEDIA_QLC */
+				qlc += vos_bulk_byte2blkcnt(size);
+			}
 			/* EVT desc */
 			scm += 256;
 			/* Checksum */
@@ -273,6 +331,7 @@ estimate_space(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
 
 	space_est[DAOS_MEDIA_SCM] = scm;
 	space_est[DAOS_MEDIA_NVME] = nvme * VOS_BLK_SZ;
+	space_est[DAOS_MEDIA_QLC]  = qlc * VOS_BULK_BLK_SZ;
 }
 
 int
@@ -281,8 +340,8 @@ vos_space_hold(struct vos_pool *pool, uint64_t flags, daos_key_t *dkey,
 	       struct dcs_iod_csums *iods_csums, daos_size_t *space_hld)
 {
 	struct vos_pool_space	vps = { 0 };
-	daos_size_t		space_est[DAOS_MEDIA_MAX] = { 0, 0 };
-	daos_size_t		scm_left, nvme_left, rb_reserve;
+	daos_size_t             space_est[DAOS_MEDIA_MAX] = {0, 0, 0};
+	daos_size_t             scm_left, nvme_left, rb_reserve, qlc_left;
 	int			rc;
 
 	rc = vos_space_query(pool, &vps, false);
@@ -324,6 +383,20 @@ vos_space_hold(struct vos_pool *pool, uint64_t flags, daos_key_t *dkey,
 			goto error;
 	}
 
+	/* If QLC NVMe is configured and this update uses QLC NVMe space */
+	if (pool->vp_qlc_vea_info != NULL && space_est[DAOS_MEDIA_QLC] != 0) {
+		qlc_left = QLC_FREE(&vps);
+
+		if (qlc_left < QLC_SYS(&vps))
+			goto error;
+
+		qlc_left -= QLC_SYS(&vps);
+		/* 'QLC NVMe held' has already been excluded from 'QLC NVMe free' */
+
+		if (qlc_left < space_est[DAOS_MEDIA_QLC])
+			goto error;
+	}
+
 	/* Check space reserve for rebuild */
 	if (!(flags & VOS_OF_REBUILD) && pool->vp_space_rb != 0) {
 		rb_reserve = SCM_TOTAL(&vps) * pool->vp_space_rb / 100;
@@ -335,23 +408,43 @@ vos_space_hold(struct vos_pool *pool, uint64_t flags, daos_key_t *dkey,
 			goto error;
 		}
 
-		if (pool->vp_vea_info == NULL || space_est[DAOS_MEDIA_NVME] == 0)
+		if (pool->vp_vea_info == NULL ||
+		    (space_est[DAOS_MEDIA_NVME] == 0 &&
+		     (pool->vp_qlc_vea_info == NULL || space_est[DAOS_MEDIA_QLC]) == 0)) {
 			goto success;
+		}
 
-		rb_reserve = NVME_TOTAL(&vps) * pool->vp_space_rb / 100;
-		/* 'NVMe held' has already been excluded from 'NVMe free' */
-		if (NVME_FREE(&vps) < (rb_reserve + space_est[DAOS_MEDIA_NVME])) {
-			D_ERROR("Insufficient NVMe space due to check "DF_U64" bytes (%u percent) "
-				"reserved for rebuild.\n", rb_reserve, pool->vp_space_rb);
-			goto error;
+		if (pool->vp_vea_info != 0 && space_est[DAOS_MEDIA_NVME] != 0) {
+			rb_reserve = NVME_TOTAL(&vps) * pool->vp_space_rb / 100;
+			/* 'NVMe held' has already been excluded from 'NVMe free' */
+			if (NVME_FREE(&vps) < (rb_reserve + space_est[DAOS_MEDIA_NVME])) {
+				D_ERROR("Insufficient NVMe space due to check " DF_U64
+					" bytes (%u percent) "
+					"reserved for rebuild.\n",
+					rb_reserve, pool->vp_space_rb);
+				goto error;
+			}
+		}
+
+		if (pool->vp_qlc_vea_info != 0 && space_est[DAOS_MEDIA_QLC] != 0) {
+			rb_reserve = QLC_TOTAL(&vps) * pool->vp_space_rb / 100;
+			/* 'QLC NVMe held' has already been excluded from 'QLC NVMe free' */
+			if (QLC_FREE(&vps) < (rb_reserve + space_est[DAOS_MEDIA_QLC])) {
+				D_ERROR("Insufficient QLC NVMe space due to check " DF_U64
+					" bytes (%u percent) "
+					"reserved for rebuild.\n",
+					rb_reserve, pool->vp_space_rb);
+				goto error;
+			}
 		}
 	}
-
 success:
 	space_hld[DAOS_MEDIA_SCM]	= space_est[DAOS_MEDIA_SCM];
 	space_hld[DAOS_MEDIA_NVME]	= space_est[DAOS_MEDIA_NVME];
+	space_hld[DAOS_MEDIA_QLC]       = space_est[DAOS_MEDIA_QLC];
 	POOL_SCM_HELD(pool)		+= space_hld[DAOS_MEDIA_SCM];
 	POOL_NVME_HELD(pool)		+= space_hld[DAOS_MEDIA_NVME];
+	POOL_QLC_HELD(pool) += space_hld[DAOS_MEDIA_QLC];
 
 	return 0;
 error:
@@ -362,6 +455,10 @@ error:
 	D_ERROR("NVMe: free["DF_U64"/"DF_U64"], sys["DF_U64"], hld["DF_U64"], est["DF_U64"]\n",
 		NVME_FREE(&vps), NVME_TOTAL(&vps), NVME_SYS(&vps), POOL_NVME_HELD(pool),
 		space_est[DAOS_MEDIA_NVME]);
+	D_ERROR("QLC: free[" DF_U64 "/" DF_U64 "], sys[" DF_U64 "], hld[" DF_U64 "], est[" DF_U64
+		"]\n",
+		QLC_FREE(&vps), QLC_TOTAL(&vps), QLC_SYS(&vps), POOL_QLC_HELD(pool),
+		space_est[DAOS_MEDIA_QLC]);
 
 	return -DER_NOSPACE;
 }
@@ -375,9 +472,13 @@ vos_space_unhold(struct vos_pool *pool, daos_size_t *space_hld)
 	D_ASSERTF(POOL_NVME_HELD(pool) >= space_hld[DAOS_MEDIA_NVME],
 		  "NVMe tot_hld:"DF_U64" < hld:"DF_U64"\n",
 		  POOL_NVME_HELD(pool), space_hld[DAOS_MEDIA_NVME]);
+	D_ASSERTF(POOL_QLC_HELD(pool) >= space_hld[DAOS_MEDIA_QLC],
+		  "QLC tot_hld:" DF_U64 " < hld:" DF_U64 "\n", POOL_QLC_HELD(pool),
+		  space_hld[DAOS_MEDIA_QLC]);
 
 	POOL_SCM_HELD(pool)	-= space_hld[DAOS_MEDIA_SCM];
 	POOL_NVME_HELD(pool)	-= space_hld[DAOS_MEDIA_NVME];
+	POOL_QLC_HELD(pool) -= space_hld[DAOS_MEDIA_QLC];
 }
 
 void
@@ -394,6 +495,7 @@ vos_space_update_metrics(struct vos_pool *pool)
 		/* Set the constant values */
 		d_tm_set_gauge(vpm->vp_space_metrics.vsm_scm_total, pool->vp_pool_df->pd_scm_sz);
 		d_tm_set_gauge(vpm->vp_space_metrics.vsm_nvme_total, pool->vp_pool_df->pd_nvme_sz);
+		d_tm_set_gauge(vpm->vp_space_metrics.vsm_qlc_total, pool->vp_pool_df->pd_qlc_sz);
 	}
 
 	now = daos_gettime_coarse();
@@ -428,5 +530,20 @@ vos_space_update_metrics(struct vos_pool *pool)
 
 		nvme_used = (va.va_tot_blks - va.va_free_blks) * va.va_blk_sz;
 		d_tm_set_gauge(vpm->vp_space_metrics.vsm_nvme_used, nvme_used);
+	}
+
+	if (vpm->vp_space_metrics.vsm_qlc_used && pool->vp_qlc_vea_info) {
+		struct vea_attr va = {0};
+		daos_size_t     qlc_used;
+		int             rc;
+
+		rc = vea_query(pool->vp_qlc_vea_info, &va, NULL);
+		if (rc) {
+			D_ERROR("Query Pool:" DF_UUID " QLC NVMe space failed. " DF_RC "\n",
+				DP_UUID(pool->vp_id), DP_RC(rc));
+		}
+
+		qlc_used = (va.va_tot_blks - va.va_free_blks) * va.va_blk_sz;
+		d_tm_set_gauge(vpm->vp_space_metrics.vsm_qlc_used, qlc_used);
 	}
 }

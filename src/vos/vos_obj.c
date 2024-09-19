@@ -572,7 +572,7 @@ reset:
 		}
 	}
 
-	rc = vos_tx_end(cont, dth, NULL, NULL, true, NULL, rc);
+	rc = vos_tx_end(cont, dth, NULL, NULL, NULL, true, NULL, rc);
 	if (dtx_is_valid_handle(dth)) {
 		if (rc == 0)
 			dth->dth_cos_done = 1;
@@ -1662,7 +1662,11 @@ recx_iter_copy(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	 * size in vos_media_read().
 	 */
 	iov_out->iov_len = bio_iov2len(biov);
-	bioc = vos_data_ioctxt(oiter->it_obj->obj_cont->vc_pool);
+	if (biov->bi_addr.ba_type == DAOS_MEDIA_QLC) {
+		bioc = vos_bulk_data_ioctxt(oiter->it_obj->obj_cont->vc_pool);
+	} else {
+		bioc = vos_data_ioctxt(oiter->it_obj->obj_cont->vc_pool);
+	}
 	umem = &oiter->it_obj->obj_cont->vc_pool->vp_umm;
 
 	return vos_media_read(bioc, umem, biov->bi_addr, iov_out);

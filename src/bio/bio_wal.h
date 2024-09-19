@@ -13,16 +13,20 @@ enum meta_hdr_flags {
 	META_HDR_FL_EMPTY	= (1UL << 0),
 };
 
-/* Meta blob header */
+/* Meta blob header, only consider new deployment temporally.
+ * will consider to support the exist pool created with old
+ * structure separately. */
 struct meta_header {
 	uint32_t	mh_magic;
 	uint32_t	mh_version;
 	uuid_t		mh_meta_devid;		/* Meta SSD device ID */
 	uuid_t		mh_wal_devid;		/* WAL SSD device ID */
 	uuid_t		mh_data_devid;		/* Data SSD device ID */
+	uuid_t          mh_bulk_devid;          /* Bulk_data SSD device ID, refers to QLC SSD now */
 	uint64_t	mh_meta_blobid;		/* Meta blob ID */
 	uint64_t	mh_wal_blobid;		/* WAL blob ID */
 	uint64_t	mh_data_blobid;		/* Data blob ID */
+	uint64_t        mh_bulk_blobid;         /* Bulk_data blob ID */
 	uint32_t	mh_blk_bytes;		/* Block size for meta, in bytes */
 	uint32_t	mh_hdr_blks;		/* Meta blob header size, in blocks */
 	uint64_t	mh_tot_blks;		/* Meta blob capacity, in blocks */
@@ -106,6 +110,7 @@ struct bio_meta_context {
 	struct bio_io_context	*mc_data;	/* Data blob I/O context */
 	struct bio_io_context	*mc_meta;	/* Meta blob I/O context */
 	struct bio_io_context	*mc_wal;	/* WAL blob I/O context */
+	struct bio_io_context   *mc_bulk_data;  /* Bulk_data blob I/O context */
 	struct meta_header	 mc_meta_hdr;	/* Meta blob header */
 	struct wal_super_info	 mc_wal_info;	/* WAL blob super information */
 	struct hash_ft		*mc_csum_algo;
@@ -124,6 +129,9 @@ struct meta_fmt_info {
 	uint64_t	fi_wal_size;		/* WAL blob size in bytes */
 	uint64_t	fi_data_size;		/* Data blob size in bytes */
 	uint32_t	fi_vos_id;		/* Associated per-engine target ID */
+	uuid_t          fi_bulk_devid;  /* Bulk_data SSD device ID, refers to QLC NVMe SSD now */
+	uint64_t        fi_bulk_blobid; /* Bulk_data blob ID */
+	uint64_t        fi_bulk_size;   /* Bulk_data blob size in bytes */
 };
 
 int meta_format(struct bio_meta_context *mc, struct meta_fmt_info *fi, bool force);

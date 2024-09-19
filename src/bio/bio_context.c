@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -296,13 +296,15 @@ bio_xs_blobstore_by_devid(struct bio_xs_context *xs_ctxt, uuid_t dev_uuid)
  * Case2: WAL and meta share the same blobstore, data on dedicated blobstore.
  * Case3: WAL on dedicated blobstore, meta and data share the same blobstore.
  * Case4: WAL, meta and data are on dedicated blobstore respectively.
+ * Case5: WAL, meta, data and bulk_data are on dedicated blobstore respectively.
+ * Currently, not consider the case which data and bulk_data share the same NVMe disk.
  */
 struct bio_xs_blobstore *
 bio_xs_context2xs_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st)
 {
 	struct bio_xs_blobstore *bxb = NULL;
 
-	if (st != SMD_DEV_TYPE_DATA)
+	if (st != SMD_DEV_TYPE_DATA && st != SMD_DEV_TYPE_BULK)
 		D_ASSERT(bio_nvme_configured(SMD_DEV_TYPE_META));
 
 	switch (st) {
@@ -320,6 +322,13 @@ bio_xs_context2xs_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st
 		/* fall through */
 	case SMD_DEV_TYPE_DATA:
 		bxb = xs_ctxt->bxc_xs_blobstores[SMD_DEV_TYPE_DATA];
+		break;
+	case SMD_DEV_TYPE_BULK:
+		if (xs_ctxt->bxc_xs_blobstores[SMD_DEV_TYPE_BULK] != NULL) {
+			bxb = xs_ctxt->bxc_xs_blobstores[SMD_DEV_TYPE_BULK];
+			break;
+		}
+		bxb = NULL;
 		break;
 	default:
 		D_ASSERT(0);
@@ -419,6 +428,23 @@ int bio_mc_destroy(struct bio_xs_context *xs_ctxt, uuid_t pool_id, enum bio_mc_f
 		rc = bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_DATA, blobid[st], flags);
 		if (rc)
 			DL_ERROR(rc, DF_UUID": Delete data blob "DF_U64" failed.",
+				 DP_UUID(pool_id), blobid[st]);
+
+		st = SMD_DEV_TYPE_BULK;
+		/* Query SMD to see if bulk_data blob exists */
+		rc = smd_pool_get_blob(pool_id, xs_ctxt->bxc_tgt_id, st, &blobid[st]);
+		if (rc == -DER_NONEXIST) {
+			return 0;
+		} else if (rc) {
+			DL_ERROR(rc, DF_UUID ": Query bulk_data blob for tgt:%u failed.",
+				 DP_UUID(pool_id), xs_ctxt->bxc_tgt_id);
+			return rc;
+		}
+
+		D_ASSERT(blobid[st] != SPDK_BLOBID_INVALID);
+		rc = bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_BULK, blobid[st], flags);
+		if (rc)
+			DL_ERROR(rc, DF_UUID ": Delete bulk_data blob " DF_U64 " failed.",
 				 DP_UUID(pool_id), blobid[st]);
 
 		return rc;
@@ -627,13 +653,15 @@ default_wal_sz(uint64_t meta_sz)
 	return wal_sz;
 }
 
-int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_sz,
-		  uint64_t wal_sz, uint64_t data_sz, enum bio_mc_flags flags)
+int
+bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_sz, uint64_t wal_sz,
+	      uint64_t data_sz, uint64_t bulk_sz, enum bio_mc_flags flags)
 {
 	int			 rc = 0, rc1;
 	spdk_blob_id		 data_blobid = SPDK_BLOBID_INVALID;
 	spdk_blob_id		 wal_blobid = SPDK_BLOBID_INVALID;
 	spdk_blob_id		 meta_blobid = SPDK_BLOBID_INVALID;
+	spdk_blob_id             bulk_blobid = SPDK_BLOBID_INVALID;
 	struct bio_meta_context *mc = NULL;
 	struct meta_fmt_info	*fi = NULL;
 	struct bio_xs_blobstore *bxb;
@@ -647,6 +675,14 @@ int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_
 			return rc;
 	}
 
+	if (bulk_sz > 0 && bio_nvme_configured(SMD_DEV_TYPE_BULK)) {
+		D_ASSERT(!(flags & BIO_MC_FL_RDB));
+		rc = bio_blob_create(pool_id, xs_ctxt, bulk_sz, SMD_DEV_TYPE_BULK, flags,
+				     &bulk_blobid);
+		if (rc)
+			goto delete_data;
+	}
+
 	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
 		return 0;
 
@@ -655,12 +691,12 @@ int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_
 		D_ERROR("Meta blob size("DF_U64") is less than minimal size(%u)\n",
 			meta_sz, default_cluster_sz());
 		rc = -DER_INVAL;
-		goto delete_data;
+		goto delete_bulk;
 	}
 
 	rc = bio_blob_create(pool_id, xs_ctxt, meta_sz, SMD_DEV_TYPE_META, flags, &meta_blobid);
 	if (rc)
-		goto delete_data;
+		goto delete_bulk;
 
 	/**
 	 * XXX DAOS-12750: At this time the WAL size can not be manually defined and thus wal_sz is
@@ -710,12 +746,20 @@ int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_
 		uuid_copy(fi->fi_data_devid, bxb->bxb_blobstore->bb_dev->bb_uuid);
 	else
 		uuid_clear(fi->fi_data_devid);
+	bxb = bio_xs_context2xs_blobstore(xs_ctxt, SMD_DEV_TYPE_BULK);
+	/* No bulk_data blobstore is possible */
+	if (bxb != NULL)
+		uuid_copy(fi->fi_bulk_devid, bxb->bxb_blobstore->bb_dev->bb_uuid);
+	else
+		uuid_clear(fi->fi_bulk_devid);
 	fi->fi_meta_blobid = meta_blobid;
 	fi->fi_wal_blobid = wal_blobid;
 	fi->fi_data_blobid = data_blobid;
+	fi->fi_bulk_blobid = bulk_blobid;
 	fi->fi_meta_size = meta_sz;
 	fi->fi_wal_size = wal_sz;
 	fi->fi_data_size = data_sz;
+	fi->fi_bulk_size   = bulk_sz;
 	fi->fi_vos_id = xs_ctxt->bxc_tgt_id;
 
 	rc = meta_format(mc, fi, true);
@@ -745,6 +789,13 @@ delete_meta:
 		rc1 = bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_META, meta_blobid, flags);
 		if (rc1)
 			D_ERROR("Unable to delete meta blob for xs:%p pool:"DF_UUID"\n",
+				xs_ctxt, DP_UUID(pool_id));
+	}
+delete_bulk:
+	if (rc && bulk_blobid != SPDK_BLOBID_INVALID) {
+		rc1 = bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_BULK, bulk_blobid, flags);
+		if (rc1)
+			D_ERROR("Unable to delete bulk data blob for xs:%p pool:" DF_UUID "\n",
 				xs_ctxt, DP_UUID(pool_id));
 	}
 delete_data:
@@ -850,10 +901,13 @@ out_free:
 }
 
 int
-bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
-		uuid_t uuid, bool dummy)
+bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt, uuid_t uuid,
+		bool dummy, enum smd_dev_type st)
 {
 	struct bio_io_context	*ctxt;
+
+	/* the st should only be SMD_DEV_TYPE_DATA or SMD_DEV_TYPE_BULK */
+	D_ASSERT(st == SMD_DEV_TYPE_DATA || st == SMD_DEV_TYPE_BULK);
 
 	if (dummy) {
 		D_ALLOC_PTR(ctxt);
@@ -869,7 +923,7 @@ bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
 		return 0;
 	}
 
-	return __bio_ioctxt_open(pctxt, xs_ctxt, uuid, 0, SMD_DEV_TYPE_DATA, SPDK_BLOBID_INVALID);
+	return __bio_ioctxt_open(pctxt, xs_ctxt, uuid, 0, st, SPDK_BLOBID_INVALID);
 }
 
 int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id,
@@ -878,6 +932,7 @@ int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id,
 	struct bio_meta_context	*bio_mc;
 	int			 rc, rc1;
 	spdk_blob_id		 data_blobid = SPDK_BLOBID_INVALID;
+	spdk_blob_id             bulk_blobid = SPDK_BLOBID_INVALID;
 
 	D_ASSERT(xs_ctxt != NULL);
 
@@ -899,6 +954,19 @@ int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id,
 			return rc;
 		}
 
+		/* Query SMD to see if bulk_data blob exists */
+		rc = smd_pool_get_blob(pool_id, xs_ctxt->bxc_tgt_id, SMD_DEV_TYPE_BULK,
+				       &bulk_blobid);
+		if (rc == -DER_NONEXIST) {
+			D_ASSERT(bulk_blobid == SPDK_BLOBID_INVALID);
+			/* it's ok to not have a bulk_data blob, we should continue to deal with
+			 * data blob. */
+		} else if (rc) {
+			D_ERROR("Query bulk_data blob for pool " DF_UUID " tgt:%u failed. " DF_RC
+				"\n",
+				DP_UUID(pool_id), xs_ctxt->bxc_tgt_id, DP_RC(rc));
+			return rc;
+		}
 		D_ASSERT(data_blobid != SPDK_BLOBID_INVALID);
 		D_ALLOC_PTR(bio_mc);
 		if (bio_mc == NULL)
@@ -909,6 +977,21 @@ int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id,
 		if (rc) {
 			D_FREE(bio_mc);
 			return rc;
+		}
+
+		if (bulk_blobid != SPDK_BLOBID_INVALID) {
+			rc = __bio_ioctxt_open(&bio_mc->mc_bulk_data, xs_ctxt, pool_id, flags,
+					       SMD_DEV_TYPE_BULK, bulk_blobid);
+			if (rc) {
+				D_ERROR("open bulk_data blob for pool " DF_UUID
+					" tgt:%u failed. " DF_RC "\n",
+					DP_UUID(pool_id), xs_ctxt->bxc_tgt_id, DP_RC(rc));
+				rc1 = bio_ioctxt_close(bio_mc->mc_data);
+				if (rc1)
+					D_ERROR("Failed to close data ioctxt. %d\n", rc1);
+				D_FREE(bio_mc);
+				return rc;
+			}
 		}
 		*mc = bio_mc;
 		return 0;
@@ -926,7 +1009,6 @@ int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id,
 	rc = meta_open(bio_mc);
 	if (rc)
 		goto close_meta_ioctxt;
-
 
 	D_ASSERT(bio_mc->mc_meta_hdr.mh_wal_blobid != SPDK_BLOBID_INVALID);
 	rc = __bio_ioctxt_open(&bio_mc->mc_wal, xs_ctxt, pool_id, flags, SMD_DEV_TYPE_WAL,
@@ -947,9 +1029,21 @@ int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id,
 			goto close_wal;
 	}
 
+	bulk_blobid = bio_mc->mc_meta_hdr.mh_bulk_blobid;
+	if (bulk_blobid != SPDK_BLOBID_INVALID) {
+		D_ASSERT(!(flags & BIO_MC_FL_RDB));
+		rc = __bio_ioctxt_open(&bio_mc->mc_bulk_data, xs_ctxt, pool_id, flags,
+				       SMD_DEV_TYPE_BULK, bulk_blobid);
+		if (rc)
+			goto close_data_ioctxt;
+	}
 	*mc = bio_mc;
 	return 0;
 
+close_data_ioctxt:
+	rc1 = bio_ioctxt_close(bio_mc->mc_data);
+	if (rc1)
+		D_ERROR("Failed to close data ioctxt. %d\n", rc1);
 close_wal:
 	wal_close(bio_mc);
 close_wal_ioctxt:
@@ -1058,9 +1152,14 @@ int bio_mc_close(struct bio_meta_context *bio_mc)
 	int	rc = 0;
 	int	rc1;
 
+	if (bio_mc->mc_bulk_data) {
+		rc1 = bio_ioctxt_close(bio_mc->mc_bulk_data);
+		if (rc1)
+			rc = rc1;
+	}
 	if (bio_mc->mc_data) {
 		rc1 = bio_ioctxt_close(bio_mc->mc_data);
-		if (rc1)
+		if (rc1 && !rc)
 			rc = rc1;
 	}
 	if (bio_mc->mc_wal) {
@@ -1269,7 +1368,7 @@ bio_blob_unmap_sgl(struct bio_io_context *ioctxt, d_sg_list_t *unmap_sgl, uint32
 }
 
 int
-bio_write_blob_hdr(struct bio_io_context *ioctxt, struct bio_blob_hdr *bio_bh)
+bio_write_blob_hdr(struct bio_io_context *ioctxt, struct bio_blob_hdr *bio_bh, enum smd_dev_type st)
 {
 	struct bio_xs_blobstore	*bxb;
 	struct bio_bdev		*d_bdev;
@@ -1277,11 +1376,16 @@ bio_write_blob_hdr(struct bio_io_context *ioctxt, struct bio_blob_hdr *bio_bh)
 	d_iov_t			 iov;
 	bio_addr_t		 addr = { 0 };
 	uint64_t		 off = 0; /* byte offset in SPDK blob */
-	uint16_t		 dev_type = DAOS_MEDIA_NVME;
+	uint16_t                 dev_type;
 	int			 rc = 0;
 
-	D_DEBUG(DB_MGMT, "Writing header blob:%p, xs:%p\n",
-		ioctxt->bic_blob, ioctxt->bic_xs_ctxt);
+	/* the st should only be SMD_DEV_TYPE_DATA or SMD_DEV_TYPE_BULK */
+	D_ASSERT(st == SMD_DEV_TYPE_DATA || st == SMD_DEV_TYPE_BULK);
+
+	dev_type = (st == SMD_DEV_TYPE_DATA) ? DAOS_MEDIA_NVME : DAOS_MEDIA_QLC;
+
+	D_DEBUG(DB_MGMT, "Writing header blob:%p, xs:%p for %s type blob\n", ioctxt->bic_blob,
+		ioctxt->bic_xs_ctxt, st == SMD_DEV_TYPE_DATA ? "Data" : "Bulk_data");
 
 	/* check that all VOS blob header vars are set */
 	D_ASSERT(uuid_is_null(bio_bh->bbh_pool) == 0);
@@ -1296,7 +1400,7 @@ bio_write_blob_hdr(struct bio_io_context *ioctxt, struct bio_blob_hdr *bio_bh)
 	bio_bh->bbh_magic = BIO_BLOB_HDR_MAGIC;
 	bio_bh->bbh_vos_id = (uint32_t)ioctxt->bic_xs_ctxt->bxc_tgt_id;
 	/* Query per-server metadata to get blobID for this pool:target */
-	rc = smd_pool_get_blob(bio_bh->bbh_pool, bio_bh->bbh_vos_id, SMD_DEV_TYPE_DATA, &blob_id);
+	rc = smd_pool_get_blob(bio_bh->bbh_pool, bio_bh->bbh_vos_id, st, &blob_id);
 	if (rc) {
 		D_ERROR("Failed to find blobID for xs:%p, pool:"DF_UUID"\n",
 			ioctxt->bic_xs_ctxt, DP_UUID(bio_bh->bbh_pool));
@@ -1305,7 +1409,7 @@ bio_write_blob_hdr(struct bio_io_context *ioctxt, struct bio_blob_hdr *bio_bh)
 
 	bio_bh->bbh_blob_id = blob_id;
 
-	bxb = bio_xs_context2xs_blobstore(ioctxt->bic_xs_ctxt, SMD_DEV_TYPE_DATA);
+	bxb = bio_xs_context2xs_blobstore(ioctxt->bic_xs_ctxt, st);
 	D_ASSERT(bxb != NULL);
 	d_bdev = bxb->bxb_blobstore->bb_dev;
 	D_ASSERT(d_bdev != NULL);
@@ -1314,7 +1418,7 @@ bio_write_blob_hdr(struct bio_io_context *ioctxt, struct bio_blob_hdr *bio_bh)
 	/* Create an iov to store blob header structure */
 	d_iov_set(&iov, (void *)bio_bh, sizeof(*bio_bh));
 
-	rc = bio_write(ioctxt, addr, &iov);
+	rc = bio_data_write(ioctxt, addr, &iov);
 
 	return rc;
 }
@@ -1330,6 +1434,8 @@ bio_mc2ioc(struct bio_meta_context *mc, enum smd_dev_type type)
 		return mc->mc_meta;
 	case SMD_DEV_TYPE_WAL:
 		return mc->mc_wal;
+	case SMD_DEV_TYPE_BULK:
+		return mc->mc_bulk_data;
 	default:
 		D_ASSERTF(0, "Invalid device type:%u\n", type);
 		return NULL;

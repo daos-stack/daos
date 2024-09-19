@@ -41,6 +41,7 @@
 #define DAOS_POOL_GLOBAL_VERSION_WITH_HDL_CRED    1
 #define DAOS_POOL_GLOBAL_VERSION_WITH_SVC_OPS_KVS 3
 #define DAOS_POOL_GLOBAL_VERSION_WITH_DATA_THRESH 3
+#define DAOS_POOL_GLOBAL_VERSION_WITH_BULK_DATA_THRESH 3
 
 #define PS_OPS_PER_SEC                            4096
 
@@ -388,6 +389,7 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 		case DAOS_PROP_PO_CHECKPOINT_MODE:
 		case DAOS_PROP_PO_CHECKPOINT_THRESH:
 		case DAOS_PROP_PO_CHECKPOINT_FREQ:
+		case DAOS_PROP_PO_BULK_DATA_THRESH:
 			entry_def->dpe_val = entry->dpe_val;
 			break;
 		case DAOS_PROP_PO_ACL:
@@ -691,6 +693,14 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_svc_ops_age, &value);
 			if (rc)
 				return rc;
+			break;
+		case DAOS_PROP_PO_BULK_DATA_THRESH:
+			if (!daos_bulk_data_thresh_valid(entry->dpe_val)) {
+				rc = -DER_INVAL;
+				break;
+			}
+			d_iov_set(&value, &entry->dpe_val, sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_bulk_data_thresh, &value);
 			break;
 		default:
 			D_ERROR("bad dpe_type %d.\n", entry->dpe_type);
@@ -3009,6 +3019,26 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		idx++;
 	}
 
+	if (bits & DAOS_PO_QUERY_PROP_BULK_DATA_THRESH) {
+		d_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_bulk_data_thresh, &value);
+		if (rc == -DER_NONEXIST &&
+		    global_ver < DAOS_POOL_GLOBAL_VERSION_WITH_BULK_DATA_THRESH) {
+			/* needs to be upgraded */
+			rc  = 0;
+			val = DAOS_PROP_PO_BULK_DATA_THRESH_DEFAULT;
+			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
+		} else if (rc != 0) {
+			DL_ERROR(rc, DF_UUID ": DAOS_PO_QUERY_PROP_BULK_DATA_THRESH lookup failed",
+				 DP_UUID(svc->ps_uuid));
+			D_GOTO(out_prop, rc);
+		}
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_BULK_DATA_THRESH;
+		prop->dpp_entries[idx].dpe_val  = val;
+		idx++;
+	}
+
 	*prop_out = prop;
 	return 0;
 
@@ -4768,6 +4798,7 @@ ds_pool_query_handler(crt_rpc_t *rpc, int handler_version)
 			case DAOS_PROP_PO_SVC_OPS_ENABLED:
 			case DAOS_PROP_PO_SVC_OPS_ENTRY_AGE:
 			case DAOS_PROP_PO_DATA_THRESH:
+			case DAOS_PROP_PO_BULK_DATA_THRESH:
 				if (entry->dpe_val != iv_entry->dpe_val) {
 					D_ERROR("type %d mismatch "DF_U64" - "
 						DF_U64".\n", entry->dpe_type,
@@ -5532,6 +5563,22 @@ pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc, uuid_t pool_uuid, cr
 		if (rc != 0) {
 			DL_ERROR(rc, DF_UUID ": failed to write upgrade svc_ops_max",
 				 DP_UUID(pool_uuid));
+			D_GOTO(out_free, rc);
+		}
+		need_commit = true;
+	}
+
+	d_iov_set(&value, &val, sizeof(val));
+	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_bulk_data_thresh, &value);
+	if (rc && rc != -DER_NONEXIST) {
+		D_GOTO(out_free, rc);
+	} else if (rc == -DER_NONEXIST) {
+		val = DAOS_PROP_PO_BULK_DATA_THRESH_DEFAULT;
+		rc  = rdb_tx_update(tx, &svc->ps_root, &ds_pool_prop_bulk_data_thresh, &value);
+		if (rc) {
+			D_ERROR(DF_UUID ": failed to upgrade 'bulk_data threshold' "
+					"of pool, %d.\n",
+				DP_UUID(pool_uuid), rc);
 			D_GOTO(out_free, rc);
 		}
 		need_commit = true;

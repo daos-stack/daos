@@ -1149,7 +1149,6 @@ parse(int argc, char **argv)
 			break;
 		case 'T':
 			rc = arg_strtoul(optarg, &dss_storage_tiers, "\"-T\"");
-			// add a new tier for QLC NVMe SSD
 			if (dss_storage_tiers < 1 || dss_storage_tiers > 5) {
 				printf("Requires 1 to 4 tiers, but get:%d\n", dss_storage_tiers);
 				rc = -DER_INVAL;

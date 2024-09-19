@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -128,6 +128,8 @@ const (
 	PoolPropertyReintMode      = C.DAOS_PROP_PO_REINT_MODE
 	PoolPropertySvcOpsEnabled  = C.DAOS_PROP_PO_SVC_OPS_ENABLED
 	PoolPropertySvcOpsEntryAge = C.DAOS_PROP_PO_SVC_OPS_ENTRY_AGE
+	// PoolBulkDataThreshold is the bulk_data threshold size for a pool, which to store on QLC NVMe SSD
+	PoolBulkDataThresh = C.DAOS_PROP_PO_BULK_DATA_THRESH
 )
 
 const (
@@ -242,6 +244,14 @@ func DataThreshIsValid(size uint64) bool {
 		return false
 	}
 	return bool(C.daos_data_thresh_valid(C.uint32_t(size)))
+}
+
+// BulkDataThreshIsValid verifies that the input value meets the required criteria.
+func BulkDataThreshIsValid(size uint64) bool {
+	if size > math.MaxUint32 {
+		return false
+	}
+	return bool(C.daos_bulk_data_thresh_valid(C.uint32_t(size)))
 }
 
 const (

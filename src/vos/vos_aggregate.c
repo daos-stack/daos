@@ -15,6 +15,7 @@
 #include "evt_priv.h"
 
 unsigned int vos_agg_nvme_thresh = VOS_MW_NVME_THRESH;
+unsigned int vos_agg_qlc_thresh  = VOS_MW_QLC_THRESH;
 
 /*
  * EV tree sorted iterator returns logical entry in extent start order, and
@@ -113,8 +114,10 @@ struct agg_io_context {
 	unsigned int		 ic_seg_cnt;
 	/* Reserved SCM extents for new physical entries */
 	struct umem_rsrvd_act	*ic_rsrvd_scm;
-	/* Reserved NVMe extents for new physical entries */
+	/* Reserved TLC NVMe extents for new physical entries */
 	d_list_t		 ic_nvme_exts;
+	/* Reserved QLC NVMe extents for new physical entries */
+	d_list_t                 ic_qlc_exts;
 };
 
 /* Merge window for evtree aggregation */
@@ -430,6 +433,7 @@ merge_window_status(struct agg_merge_window *mw)
 	D_ASSERT(io->ic_seg_cnt == 0);
 	D_ASSERT(umem_rsrvd_act_cnt(io->ic_rsrvd_scm) == 0);
 	D_ASSERT(d_list_empty(&io->ic_nvme_exts));
+	D_ASSERT(d_list_empty(&io->ic_qlc_exts));
 
 	D_ASSERT(mw->mw_ext.ex_lo <= mw->mw_ext.ex_hi);
 
@@ -978,11 +982,13 @@ reserve_segment(struct vos_object *obj, struct agg_io_context *io,
 		daos_size_t size, bio_addr_t *addr)
 {
 	uint64_t	off, now;
+	enum daos_media_type_t media;
 	int		rc;
 
 	memset(addr, 0, sizeof(*addr));
 
-	if (vos_io_scm(vos_obj2pool(obj), DAOS_IOD_ARRAY, size, VOS_IOS_AGGREGATION)) {
+	media = vos_io_find_media(vos_obj2pool(obj), DAOS_IOD_ARRAY, size, VOS_IOS_AGGREGATION);
+	if (media == DAOS_MEDIA_SCM) {
 		/** Store on SCM */
 		off = vos_reserve_scm(obj->obj_cont, io->ic_rsrvd_scm, size);
 		if (UMOFF_IS_NULL(off)) {
@@ -995,23 +1001,40 @@ reserve_segment(struct vos_object *obj, struct agg_io_context *io,
 		}
 		bio_addr_set(addr, DAOS_MEDIA_SCM, off);
 		return 0;
-	}
-
-	/** Store on NVMe */
-	rc = vos_reserve_blocks(obj->obj_cont, &io->ic_nvme_exts, size,
-				VOS_IOS_AGGREGATION, &off);
-	if (rc == -DER_NOSPACE) {
-		now = daos_gettime_coarse();
-		if (now - obj->obj_cont->vc_agg_nospc_ts > VOS_NOSPC_ERROR_INTVL) {
-			D_ERROR("Reserve "DF_U64" from NVMe failed. "DF_RC"\n",
-				size, DP_RC(rc));
-			obj->obj_cont->vc_agg_nospc_ts = now;
+	} else if (media == DAOS_MEDIA_NVME) {
+		/** Store on NVMe */
+		rc = vos_reserve_blocks(obj->obj_cont, &io->ic_nvme_exts, size, false,
+					VOS_IOS_AGGREGATION, &off);
+		if (rc == -DER_NOSPACE) {
+			now = daos_gettime_coarse();
+			if (now - obj->obj_cont->vc_agg_nospc_ts > VOS_NOSPC_ERROR_INTVL) {
+				D_ERROR("Reserve " DF_U64 " from NVMe failed. " DF_RC "\n", size,
+					DP_RC(rc));
+				obj->obj_cont->vc_agg_nospc_ts = now;
+			}
+		} else if (rc) {
+			D_ERROR("Reserve " DF_U64 " from NVMe failed. " DF_RC "\n", size,
+				DP_RC(rc));
+		} else {
+			bio_addr_set(addr, DAOS_MEDIA_NVME, off);
 		}
-	} else if (rc) {
-		D_ERROR("Reserve "DF_U64" from NVMe failed. "DF_RC"\n",
-			size, DP_RC(rc));
 	} else {
-		bio_addr_set(addr, DAOS_MEDIA_NVME, off);
+		/** Store on QLC */
+		rc = vos_reserve_blocks(obj->obj_cont, &io->ic_qlc_exts, size, true,
+					VOS_IOS_AGGREGATION, &off);
+		if (rc == -DER_NOSPACE) {
+			now = daos_gettime_coarse();
+			if (now - obj->obj_cont->vc_agg_nospc_ts > VOS_NOSPC_ERROR_INTVL) {
+				D_ERROR("Reserve " DF_U64 " from QLC NVMe failed. " DF_RC "\n",
+					size, DP_RC(rc));
+				obj->obj_cont->vc_agg_nospc_ts = now;
+			}
+		} else if (rc) {
+			D_ERROR("Reserve " DF_U64 " from QLC NVMe failed. " DF_RC "\n", size,
+				DP_RC(rc));
+		} else {
+			bio_addr_set(addr, DAOS_MEDIA_QLC, off);
+		}
 	}
 
 	return rc;
@@ -1093,6 +1116,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	struct evt_entry_in	*ent_in = &lgc_seg->ls_ent_in;
 	struct agg_phy_ent	*phy_ent;
 	struct bio_io_context	*bio_ctxt;
+	struct bio_io_context   *bulk_bio_ctxt;
 	struct bio_sglist	 bsgl = { 0 }, bsgl_dst = { 0 };
 	bio_addr_t		 addr_src;
 	daos_size_t		 seg_size, copy_size, read_size = 0;
@@ -1117,6 +1141,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	D_ASSERT(lgc_seg->ls_idx_end < mw->mw_lgc_cnt);
 
 	bio_ctxt = vos_data_ioctxt(obj->obj_cont->vc_pool);
+	bulk_bio_ctxt = vos_bulk_data_ioctxt(obj->obj_cont->vc_pool);
 	umem = &obj->obj_cont->vc_pool->vp_umm;
 
 	seg_count = lgc_seg->ls_idx_end - lgc_seg->ls_idx_start + 1;
@@ -1199,7 +1224,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	D_ASSERT(!bio_addr_is_hole(&ent_in->ei_addr));
 	bio_iov_set(&bsgl_dst.bs_iovs[0], ent_in->ei_addr, seg_size);
 
-	rc = bio_copy_prep(bio_ctxt, umem, &bsgl, &bsgl_dst, &copy_desc);
+	rc = bio_copy_prep(bio_ctxt, bulk_bio_ctxt, umem, &bsgl, &bsgl_dst, &copy_desc);
 	if (rc) {
 		D_ERROR("Failed to Prepare source & target SGLs for copy. "DF_RC"\n", DP_RC(rc));
 		goto out;
@@ -1553,11 +1578,17 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw, bool last, unsign
 	/* Clear window size */
 	mw->mw_ext.ex_lo = mw->mw_ext.ex_hi = mw->mw_alloc_hi = 0;
 
-	/* Publish NVMe reservations */
-	rc = vos_publish_blocks(obj->obj_cont, &io->ic_nvme_exts, true,
-				VOS_IOS_AGGREGATION);
+	/* Publish Common (TLC) NVMe reservations */
+	rc = vos_publish_blocks(obj->obj_cont, &io->ic_nvme_exts, true, VOS_IOS_AGGREGATION, false);
 	if (rc) {
 		D_ERROR("Publish NVMe extents error: "DF_RC"\n", DP_RC(rc));
+		goto abort;
+	}
+
+	/* Publish Bulk (QLLC) NVMe reservations */
+	rc = vos_publish_blocks(obj->obj_cont, &io->ic_qlc_exts, true, VOS_IOS_AGGREGATION, true);
+	if (rc) {
+		D_ERROR("Publish QLC NVMe extents error: " DF_RC "\n", DP_RC(rc));
 		goto abort;
 	}
 abort:
@@ -1581,12 +1612,17 @@ cleanup_segments(daos_handle_t ih, struct agg_merge_window *mw, int rc)
 		vos_publish_scm(vos_obj2umm(obj), io->ic_rsrvd_scm, false);
 
 		if (!d_list_empty(&io->ic_nvme_exts))
-			vos_publish_blocks(obj->obj_cont, &io->ic_nvme_exts,
-					   false, VOS_IOS_AGGREGATION);
+			vos_publish_blocks(obj->obj_cont, &io->ic_nvme_exts, false,
+					   VOS_IOS_AGGREGATION, false);
+
+		if (!d_list_empty(&io->ic_qlc_exts))
+			vos_publish_blocks(obj->obj_cont, &io->ic_qlc_exts, false,
+					   VOS_IOS_AGGREGATION, true);
 	}
 
 	/* Reset io context */
 	D_AGG_ASSERT(mw, d_list_empty(&io->ic_nvme_exts));
+	D_AGG_ASSERT(mw, d_list_empty(&io->ic_qlc_exts));
 	D_AGG_ASSERT(mw, umem_rsrvd_act_cnt(io->ic_rsrvd_scm) == 0);
 	io->ic_seg_cnt = 0;
 }
@@ -1630,7 +1666,7 @@ need_merge(daos_handle_t ih, uint16_t src_media, int lgc_cnt, daos_size_t seg_si
 {
 	struct vos_obj_iter	*oiter = vos_hdl2oiter(ih);
 	struct vos_object	*obj = oiter->it_obj;
-	unsigned int		 seg_blks, nvme_blks;
+	unsigned int             seg_blks, nvme_blks, qlc_blks;
 	uint16_t		 tgt_media;
 
 	D_ASSERTF(lgc_cnt > 0 && seg_size > 0, "lgc_cnt=%d seg_size=" DF_U64 "\n", lgc_cnt,
@@ -1638,11 +1674,8 @@ need_merge(daos_handle_t ih, uint16_t src_media, int lgc_cnt, daos_size_t seg_si
 	if (lgc_cnt == 1)
 		return false;
 
-	if (vos_io_scm(vos_obj2pool(obj), DAOS_IOD_ARRAY, seg_size, VOS_IOS_AGGREGATION))
-		tgt_media = DAOS_MEDIA_SCM;
-	else
-		tgt_media = DAOS_MEDIA_NVME;
-
+	tgt_media =
+	    vos_io_find_media(vos_obj2pool(obj), DAOS_IOD_ARRAY, seg_size, VOS_IOS_AGGREGATION);
 	/* Some data can be migrated from SCM to NVMe to alleviate SCM pressure */
 	if (src_media != tgt_media)
 		return true;
@@ -1651,21 +1684,31 @@ need_merge(daos_handle_t ih, uint16_t src_media, int lgc_cnt, daos_size_t seg_si
 	 * Only trigger SCM to SCM data migration when there are enough amount of
 	 * SCM records accumulated.
 	 */
-	if (tgt_media == DAOS_MEDIA_SCM)
+	if (tgt_media == DAOS_MEDIA_SCM) {
 		return lgc_cnt >= VOS_EVT_ORDER;
+	} else if (tgt_media == DAOS_MEDIA_NVME) {
+		/*
+		 * Only trigger NVMe to NVMe data migration when:
+		 * - Coalesced record is larger than threshold; And
+		 * - Enough small NVMe records accumulated, or coalesced size is threshold
+		 *   size aligned;
+		 */
+		seg_blks = (seg_size + VOS_BLK_SZ - 1) >> VOS_BLK_SHIFT;
+		if (seg_blks < vos_agg_nvme_thresh)
+			return false;
 
-	/*
-	 * Only trigger NVMe to NVMe data migration when:
-	 * - Coalesced record is larger than threshold; And
-	 * - Enough small NVMe records accumulated, or coalesced size is threshold
-	 *   size aligned;
-	 */
-	seg_blks = (seg_size + VOS_BLK_SZ - 1) >> VOS_BLK_SHIFT;
-	if (seg_blks < vos_agg_nvme_thresh)
-		return false;
+		nvme_blks = (seg_blks / vos_agg_nvme_thresh);
+		return (lgc_cnt >= VOS_EVT_ORDER) ||
+		       (seg_blks == (nvme_blks * vos_agg_nvme_thresh));
+	} else {
+		/* for data to store on DAOS_MEDIA_QLC */
+		seg_blks = (seg_size + VOS_BULK_BLK_SZ - 1) >> VOS_BULK_BLK_SHIFT;
+		if (seg_blks < vos_agg_qlc_thresh)
+			return false;
 
-	nvme_blks = (seg_blks / vos_agg_nvme_thresh);
-	return (lgc_cnt >= VOS_EVT_ORDER) || (seg_blks == (nvme_blks * vos_agg_nvme_thresh));
+		qlc_blks = (seg_blks / vos_agg_qlc_thresh);
+		return (lgc_cnt >= VOS_EVT_ORDER) || (seg_blks == (qlc_blks * vos_agg_qlc_thresh));
+	}
 }
 
 /*
@@ -2618,6 +2661,7 @@ merge_window_init(struct agg_merge_window *mw)
 	D_INIT_LIST_HEAD(&mw->mw_phy_rmv_ents);
 	D_INIT_LIST_HEAD(&mw->mw_rmv_ents);
 	D_INIT_LIST_HEAD(&io->ic_nvme_exts);
+	D_INIT_LIST_HEAD(&io->ic_qlc_exts);
 }
 
 struct agg_data {

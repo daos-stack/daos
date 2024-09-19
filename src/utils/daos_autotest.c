@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -424,8 +424,11 @@ static int pool_space_usage_ratio(void)
 		return rc;
 
 	if (ps->ps_space.s_total[DAOS_MEDIA_NVME] > 0)
-		return 100 - (ps->ps_space.s_free[DAOS_MEDIA_NVME] * 100 /
-			      ps->ps_space.s_total[DAOS_MEDIA_NVME]);
+		return 100 - ((ps->ps_space.s_free[DAOS_MEDIA_NVME] +
+			       ps->ps_space.s_free[DAOS_MEDIA_QLC]) *
+			      100 /
+			      (ps->ps_space.s_total[DAOS_MEDIA_NVME] +
+			       ps->ps_space.s_total[DAOS_MEDIA_QLC]));
 
 	return 100 - (ps->ps_space.s_free[DAOS_MEDIA_SCM] * 100 /
 		      ps->ps_space.s_total[DAOS_MEDIA_SCM]);

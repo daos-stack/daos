@@ -423,14 +423,21 @@
 #    # Optional explicit nvme-class bdev tier role assignments will
 #    # define the roles and responsibilities of this bdev tier.
 #    # If DCPM class is defined for the first tier,
-#    # only one bdev tier is supported and its role must be data.
+#    # only one or two bdev tiers are supported and its role must be data or data & bulk_data.
+#    # And bulk_data here is optional, it's corresponding to QLC NVMe media currently.
 #
 #    # Roles will be derived based on configured bdev
-#    # tiers, if not specified here.  You must assign all roles or none.
+#    # tiers, if not specified here. If bulk_data role not used, then you must assign
+#    # all roles or none. If bulk_data role used, then data role should also be set.
+#    # Currently, we only support setting bulk_data in a indival media driver which not
+#    # share with other roles, e.g.,data role.
+#    # note that need to set 'bulk_data' role to separate SSDs now, not co-exist with other role
+#    # on the same SSD.
 #    # Options are:
 #    # - "data" SSDs will be used to store actual data
 #    # - "meta" SSDs will be used to store the VOS metadata
 #    # - "wal" SSDs will be used to store the write-ahead-log
+#    # - "bulk_data" SSDs will be used to store big size data (e.g., size > 64K or 128K etc.)
 #    bdev_roles:
 #    - data
 #    - meta
@@ -592,6 +599,7 @@
 #    #bdev_busid_range: 208-223
 #
 #    # See about bdev_roles above.
+#    # optionally to set bulk_data here, it's corresponding to QLC NVMe media currently.
 #    bdev_roles: [wal, meta, data]
 #
 #  # Disable automatic detection and eviction of faulty NVMe devices. The default

@@ -361,6 +361,9 @@ pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop)
 		case DAOS_PROP_PO_SVC_OPS_ENTRY_AGE:
 			bits |= DAOS_PO_QUERY_PROP_SVC_OPS_ENTRY_AGE;
 			break;
+		case DAOS_PROP_PO_BULK_DATA_THRESH:
+			bits |= DAOS_PO_QUERY_PROP_BULK_DATA_THRESH;
+			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
 			break;

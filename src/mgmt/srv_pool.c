@@ -83,7 +83,7 @@ pool_create_rpc_timeout(crt_rpc_t *tc_req, size_t scm_size)
 
 static int
 ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev, d_rank_list_t *rank_list,
-			      size_t scm_size, size_t nvme_size)
+			      size_t scm_size, size_t nvme_size, size_t qlc_size)
 {
 	crt_rpc_t			*tc_req;
 	crt_opcode_t			opc;
@@ -117,6 +117,7 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev, d_rank_list_t *ra
 	tc_in->tc_tgt_dev = tgt_dev;
 	tc_in->tc_scm_size = scm_size;
 	tc_in->tc_nvme_size = nvme_size;
+	tc_in->tc_qlc_size  = qlc_size;
 	rc = dss_rpc_send(tc_req);
 	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_CREATE_FAIL_CORPC))
 		rc = -DER_TIMEDOUT;
@@ -214,8 +215,8 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev, d_rank_l
 		D_GOTO(out, rc = -DER_OOG);
 	}
 
-	rc = ds_mgmt_tgt_pool_create_ranks(pool_uuid, tgt_dev, targets,
-					   scm_size, nvme_size);
+	rc = ds_mgmt_tgt_pool_create_ranks(pool_uuid, tgt_dev, targets, scm_size, nvme_size,
+					   qlc_size);
 	if (rc != 0) {
 		D_ERROR("creating pool "DF_UUID" on ranks failed: rc "DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
@@ -294,7 +295,7 @@ ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t *r
 		D_GOTO(out, rc);
 
 	rc = ds_mgmt_tgt_pool_create_ranks(pool_uuid, tgt_dev, unique_add_ranks, scm_size,
-					   nvme_size);
+					   nvme_size, qlc_size);
 	if (rc != 0) {
 		D_ERROR("creating pool on ranks "DF_UUID" failed: rc "DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
@@ -336,7 +337,8 @@ out:
 int
 ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 				 struct pool_target_addr_list *target_addrs,
-				 pool_comp_state_t state, size_t scm_size, size_t nvme_size)
+				 pool_comp_state_t state, size_t scm_size, size_t nvme_size,
+				 size_t qlc_size)
 {
 	int			rc;
 
@@ -354,7 +356,7 @@ ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		reint_ranks.rl_ranks = &target_addrs->pta_addrs[0].pta_rank;
 
 		rc = ds_mgmt_tgt_pool_create_ranks(pool_uuid, "pmem", &reint_ranks, scm_size,
-						   nvme_size);
+						   nvme_size, qlc_size);
 		if (rc != 0) {
 			D_ERROR("creating pool on ranks "DF_UUID" failed: rc "
 				DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));

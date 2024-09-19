@@ -140,14 +140,22 @@ var (
 		"bdev tiers found with both emulated and non-emulated NVMe types specified in config",
 		"change config tiers to specify either emulated or non-emulated NVMe devices, but not a mix of both")
 
+	// FaultScmCtrlMetaPathWithDCPM indicates a Fault when control_metadata path are specified with DCPM
+	// SCM class.
+	FaultScmCtrlMetaPathWithDCPM = storageFault(
+		code.ScmCtrlMetaPathWithDCPM,
+		"MD-on-SSD roles has been specified in config with scm class set to dcpm",
+		"so change dcpm tier to ram or remove path configuration for 'control_metadata' in config file,"+
+			"then restart daos_server after updating server config file")
+
 	// FaultBdevConfigRolesWithDCPM indicates a Fault when bdev roles are specified with DCPM
 	// SCM class.
 	FaultBdevConfigRolesWithDCPM = storageFault(
 		code.BdevConfigRolesWithDCPM,
-		"MD-on-SSD roles has been specified in config with scm class set to dcpm or bulk data (QLC) NVMe "+
-			"tier has been configured but roles not set correctly",
+		"bulk data (QLC) NVMe tier has been configured but roles not set correctly "+
+			"when scm class set to dcpm",
 		"change dcpm tier to ram if MD-on-SSD enabled or remove role assignments from bdev tiers if "+
-			"no bulk data (QLC) NVMe tier configured or set 'bdev_role' for data and bulk_data respectively "+
+			"no bulk data (QLC) NVMe tier need configured or set 'bdev_role' for data and bulk_data respectively "+
 			"to data NVMe tier and bulk data (QLC) NVMe tier if bulk data (QLC) NVMe tier exist, and then "+
 			"restart daos_server after updating server config file")
 

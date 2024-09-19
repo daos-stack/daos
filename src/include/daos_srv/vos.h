@@ -288,8 +288,9 @@ vos_self_fini(void);
  * \param path	[IN]	Path of the memory pool
  * \param uuid	[IN]    Pool UUID
  * \param scm_sz [IN]	Size of SCM for the pool
- * \param blob_sz[IN]	Size of blob for the pool
+ * \param nvme_sz[IN]	Size of Data blob for the pool
  * \param wal_sz [IN]	Size of WAL blob for the pool
+ * \param qlc_sz [IN]	Size of Bulk_data blob for the pool
  * \param flags [IN]	Pool open flags (see vos_pool_open_flags)
  * \param version[IN]	Pool version (0 for default version)
  * \param poh	[OUT]	Returned pool handle if not NULL
@@ -297,8 +298,9 @@ vos_self_fini(void);
  * \return              Zero on success, negative value if error
  */
 int
-vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t blob_sz,
-		   daos_size_t wal_sz, unsigned int flags, uint32_t version, daos_handle_t *poh);
+vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t nvme_sz,
+		   daos_size_t wal_sz, daos_size_t qlc_sz, unsigned int flags, uint32_t version,
+		   daos_handle_t *poh);
 
 /**
  * Create a Versioning Object Storage Pool (VOSP), and open it if \a poh is not
@@ -307,7 +309,8 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_
  * \param path	[IN]	Path of the memory pool
  * \param uuid	[IN]    Pool UUID
  * \param scm_sz [IN]	Size of SCM for the pool
- * \param blob_sz[IN]	Size of blob for the pool
+ * \param nvme_sz [IN]	Size of Data blob for the pool
+ * \param qlc_sz  [IN]	Size of Bulk_data blob for the pool
  * \param flags [IN]	Pool open flags (see vos_pool_open_flags)
  * \param version[IN]	Pool version (0 for default version)
  * \param poh	[OUT]	Returned pool handle if not NULL
@@ -315,8 +318,8 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_
  * \return              Zero on success, negative value if error
  */
 int
-vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t blob_sz,
-		unsigned int flags, uint32_t version, daos_handle_t *poh);
+vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t nvme_sz,
+		daos_size_t qlc_sz, unsigned int flags, uint32_t version, daos_handle_t *poh);
 
 /**
  * Kill a VOS pool before destroy
@@ -1246,6 +1249,8 @@ enum vos_pool_opc {
 	VOS_PO_CTL_SET_DATA_THRESH,
 	/** Set space reserve ratio for rebuild */
 	VOS_PO_CTL_SET_SPACE_RB,
+	/** Set pool bulk data threshold size to store data on bdev */
+	VOS_PO_CTL_SET_BULK_DATA_THRESH,
 };
 
 /**

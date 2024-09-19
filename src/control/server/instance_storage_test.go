@@ -446,7 +446,7 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 					{Class: storage.ClassDcpm},
 				},
 			},
-			expErr: storage.FaultBdevConfigRolesWithDCPM,
+			expErr: storage.FaultScmCtrlMetaPathWithDCPM,
 		},
 		"no device roles with metadata path configured": {
 			storageCfg: &storage.Config{

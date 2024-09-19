@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -85,7 +85,8 @@ struct vea_unmap_context {
 struct vea_space_df {
 	uint32_t	vsd_magic;
 	uint32_t	vsd_compat;
-	/* Block size, 4k bytes by default */
+	/* Block size, 4k bytes by default, can be larger for bulk_data media,
+	 * e.g., 64K for QLC NVMe SSD. */
 	uint32_t	vsd_blk_sz;
 	/* Reserved blocks for the block device header */
 	uint32_t	vsd_hdr_blks;
@@ -336,10 +337,12 @@ void vea_metrics_free(void *data);
  *
  * \param path      [IN]	Metrics path
  * \param tgt_id    [IN]	Target ID
+ * \param is_bulk   [IN]	Whether is for Bulk (QLC) vea allocator
  *
  * \return			VEA metrics on success, NULL on error
  */
-void *vea_metrics_alloc(const char *path, int tgt_id);
+void     *
+vea_metrics_alloc(const char *path, int tgt_id, bool is_bulk);
 
 /**
  * Get VEA metrics count

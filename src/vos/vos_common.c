@@ -118,6 +118,7 @@ vos_xsctxt_get(void)
 int
 vos_bio_addr_free(struct vos_pool *pool, bio_addr_t *addr, daos_size_t nob)
 {
+	struct vea_space_info *vea_info = NULL;
 	int	rc;
 
 	if (bio_addr_is_hole(addr))
@@ -130,14 +131,20 @@ vos_bio_addr_free(struct vos_pool *pool, bio_addr_t *addr, daos_size_t nob)
 		uint64_t blk_off;
 		uint32_t blk_cnt;
 
-		D_ASSERT(addr->ba_type == DAOS_MEDIA_NVME);
-		blk_off = vos_byte2blkoff(addr->ba_off);
-		blk_cnt = vos_byte2blkcnt(nob);
-
-		rc = vea_free(pool->vp_vea_info, blk_off, blk_cnt);
+		D_ASSERT(addr->ba_type == DAOS_MEDIA_NVME || addr->ba_type == DAOS_MEDIA_QLC);
+		if (addr->ba_type == DAOS_MEDIA_NVME) {
+			blk_off  = vos_byte2blkoff(addr->ba_off);
+			blk_cnt  = vos_byte2blkcnt(nob);
+			vea_info = pool->vp_vea_info;
+		} else {
+			blk_off  = vos_bulk_byte2blkoff(addr->ba_off);
+			blk_cnt  = vos_bulk_byte2blkcnt(nob);
+			vea_info = pool->vp_qlc_vea_info;
+		}
+		rc = vea_free(vea_info, blk_off, blk_cnt);
 		if (rc)
-			D_ERROR("Error on block ["DF_U64", %u] free. "DF_RC"\n",
-				blk_off, blk_cnt, DP_RC(rc));
+			D_ERROR("Error on block [" DF_U64 ", %u] free. " DF_RC ", with type:%d\n",
+				blk_off, blk_cnt, DP_RC(rc), addr->ba_type);
 	}
 	return rc;
 }
@@ -187,8 +194,12 @@ vos_tx_publish(struct dtx_handle *dth, bool publish)
 			  "NVMe allocations not supported for local transactions\n");
 
 		/** Function checks if list is empty */
-		rc = vos_publish_blocks(cont, &dru->dru_nvme,
-					publish, VOS_IOS_GENERIC);
+		rc = vos_publish_blocks(cont, &dru->dru_nvme, publish, VOS_IOS_GENERIC, false);
+		if (rc && publish)
+			return rc;
+
+		/** Function checks if list is empty */
+		rc = vos_publish_blocks(cont, &dru->dru_qlc, publish, VOS_IOS_GENERIC, true);
 		if (rc && publish)
 			return rc;
 	}
@@ -205,7 +216,10 @@ vos_tx_publish(struct dtx_handle *dth, bool publish)
 	D_ASSERTF(!dth->dth_local || d_list_empty(&dth->dth_deferred_nvme),
 		  "NVMe allocations not supported for local transactions\n");
 	/** Handle the deferred NVMe cancellations */
-	vos_publish_blocks(cont, &dth->dth_deferred_nvme, false, VOS_IOS_GENERIC);
+	vos_publish_blocks(cont, &dth->dth_deferred_nvme, false, VOS_IOS_GENERIC, false);
+
+	/** Handle the deferred QLC NVMe cancellations */
+	vos_publish_blocks(cont, &dth->dth_deferred_qlc, false, VOS_IOS_GENERIC, true);
 
 	return 0;
 }
@@ -265,7 +279,7 @@ vos_local_tx_abort(struct dtx_handle *dth)
 
 int
 vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
-	   struct umem_rsrvd_act **rsrvd_scmp, d_list_t *nvme_exts,
+	   struct umem_rsrvd_act **rsrvd_scmp, d_list_t *nvme_exts, d_list_t *qlc_exts,
 	   bool started, struct bio_desc *biod, int err)
 {
 	struct vos_pool         	*pool;
@@ -286,6 +300,7 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 		tmp.dth_rsrvds = &dth->dth_rsrvd_inline;
 		tmp.dth_coh = vos_cont2hdl(cont);
 		D_INIT_LIST_HEAD(&tmp.dth_deferred_nvme);
+		D_INIT_LIST_HEAD(&tmp.dth_deferred_qlc);
 	}
 
 	if (dth->dth_local)
@@ -295,7 +310,7 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 	umm = vos_pool2umm(pool);
 
 	if (rsrvd_scmp != NULL) {
-		D_ASSERT(nvme_exts != NULL);
+		D_ASSERT(nvme_exts != NULL || qlc_exts != NULL);
 		if (dth->dth_rsrvd_cnt > 0 && dth->dth_rsrvd_cnt >= dth->dth_modification_cnt) {
 			/*
 			 * Just do your best to release the SCM reservation. Can't handle another
@@ -314,6 +329,9 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 
 		D_INIT_LIST_HEAD(&dru->dru_nvme);
 		d_list_splice_init(nvme_exts, &dru->dru_nvme);
+
+		D_INIT_LIST_HEAD(&dru->dru_qlc);
+		d_list_splice_init(qlc_exts, &dru->dru_qlc);
 	}
 
 	if (!dth->dth_local_tx_started)
@@ -676,6 +694,19 @@ vos_mod_init(void)
 	D_INFO("Set aggregate NVMe record threshold to %u blocks (blk_sz:%lu).\n",
 	       vos_agg_nvme_thresh, VOS_BLK_SZ);
 
+	d_getenv_uint("DAOS_VOS_AGG_QLC_THRESH", &vos_agg_qlc_thresh);
+	/* the vos_agg_qlc_thresh value is thought to corresponding io size 1MB,
+	 * if the VOS_BULK_BLK_SZ change, then limit value 16 here may also need
+	 * to be changed. */
+	if (vos_agg_qlc_thresh == 0 || vos_agg_qlc_thresh > 16)
+		vos_agg_qlc_thresh = VOS_MW_QLC_THRESH;
+	/* Round down to 2^n blocks */
+	if (vos_agg_qlc_thresh > 1)
+		vos_agg_qlc_thresh = (vos_agg_qlc_thresh / 2) * 2;
+
+	D_INFO("Set aggregate QLC NVMe record threshold to %u blocks (blk_sz:%lu).\n",
+	       vos_agg_qlc_thresh, VOS_BULK_BLK_SZ);
+
 	d_getenv_bool("DAOS_DKEY_PUNCH_PROPAGATE", &vos_dkey_punch_propagate);
 	D_INFO("DKEY punch propagation is %s\n", vos_dkey_punch_propagate ? "enabled" : "disabled");
 
@@ -692,9 +723,11 @@ vos_mod_fini(void)
 static inline int
 vos_metrics_count(void)
 {
-	return vea_metrics_count() +
+	/* 1 vea metrics for TLC and another for QLC */
+	return 2 * vea_metrics_count() +
 	       (sizeof(struct vos_agg_metrics) + sizeof(struct vos_space_metrics) +
-		sizeof(struct vos_chkpt_metrics)) / sizeof(struct d_tm_node_t *);
+		sizeof(struct vos_chkpt_metrics)) /
+		   sizeof(struct d_tm_node_t *);
 }
 
 static void
@@ -704,6 +737,8 @@ vos_metrics_free(void *data)
 
 	if (vp_metrics->vp_vea_metrics != NULL)
 		vea_metrics_free(vp_metrics->vp_vea_metrics);
+	if (vp_metrics->vp_qlc_vea_metrics != NULL)
+		vea_metrics_free(vp_metrics->vp_qlc_vea_metrics);
 	D_FREE(data);
 }
 
@@ -740,8 +775,14 @@ vos_metrics_alloc(const char *path, int tgt_id)
 	if (vp_metrics == NULL)
 		return NULL;
 
-	vp_metrics->vp_vea_metrics = vea_metrics_alloc(path, tgt_id);
+	vp_metrics->vp_vea_metrics = vea_metrics_alloc(path, tgt_id, false);
 	if (vp_metrics->vp_vea_metrics == NULL) {
+		vos_metrics_free(vp_metrics);
+		return NULL;
+	}
+
+	vp_metrics->vp_qlc_vea_metrics = vea_metrics_alloc(path, tgt_id, true);
+	if (vp_metrics->vp_qlc_vea_metrics == NULL) {
 		vos_metrics_free(vp_metrics);
 		return NULL;
 	}
@@ -853,6 +894,12 @@ vos_metrics_alloc(const char *path, int tgt_id)
 	if (rc)
 		D_WARN("Failed to create 'nvme_used' telemetry : "DF_RC"\n", DP_RC(rc));
 
+	/* VOS space QLC NVME used metric */
+	rc = d_tm_add_metric(&vsm->vsm_qlc_used, D_TM_GAUGE, "QLC NVME space used", "bytes",
+			     "%s/%s/qlc_used/tgt_%u", path, VOS_SPACE_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'qlc_used' telemetry : " DF_RC "\n", DP_RC(rc));
+
 	/* VOS space SCM total metric */
 	rc = d_tm_add_metric(&vsm->vsm_scm_total, D_TM_GAUGE, "SCM space total", "bytes",
 			     "%s/%s/scm_total/tgt_%u", path, VOS_SPACE_DIR, tgt_id);
@@ -864,6 +911,12 @@ vos_metrics_alloc(const char *path, int tgt_id)
 			     "%s/%s/nvme_total/tgt_%u", path, VOS_SPACE_DIR, tgt_id);
 	if (rc)
 		D_WARN("Failed to create 'nvme_total' telemetry : " DF_RC "\n", DP_RC(rc));
+
+	/* VOS space QLC NVME total metric */
+	rc = d_tm_add_metric(&vsm->vsm_qlc_total, D_TM_GAUGE, "QLC NVME space total", "bytes",
+			     "%s/%s/qlc_total/tgt_%u", path, VOS_SPACE_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'qlc_total' telemetry : " DF_RC "\n", DP_RC(rc));
 
 	/** garbage collection metrics */
 	vos_gc_metrics_init(&vp_metrics->vp_gc_metrics, path, tgt_id);

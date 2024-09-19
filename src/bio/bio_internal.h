@@ -437,6 +437,8 @@ struct bio_rsrvd_dma {
 struct bio_desc {
 	struct umem_instance	*bd_umem;
 	struct bio_io_context	*bd_ctxt;
+	/* For SMD_DEV_TYPE_BULK role */
+	struct bio_io_context   *bulk_bd_ctxt;
 	/* DMA buffers reserved by this io descriptor */
 	struct bio_rsrvd_dma	 bd_rsrvd;
 	/* Report blob i/o completion */
@@ -449,14 +451,9 @@ struct bio_desc {
 	/* Total bytes landed to data blob */
 	unsigned int		 bd_nvme_bytes;
 	/* Flags */
-	unsigned int		 bd_buffer_prep:1,
-				 bd_dma_issued:1,
-				 bd_retry:1,
-				 bd_rdma:1,
-				 bd_copy_dst:1,
-				 bd_in_fifo:1,
-				 bd_async_post:1,
-				 bd_non_blocking:1;
+	unsigned int             bd_buffer_prep : 1, bd_dma_issued : 1, bd_retry : 1, bd_rdma : 1,
+	    bd_copy_dst : 1, bd_in_fifo : 1, bd_async_post : 1, bd_non_blocking : 1,
+	    bd_has_qlc_rg : 1;
 	/* Cached bulk handles being used by this IOD */
 	struct bio_bulk_hdl    **bd_bulk_hdls;
 	unsigned int		 bd_bulk_max;

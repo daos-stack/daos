@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -20,10 +20,12 @@ dfuse_cb_statfs(fuse_req_t req, struct dfuse_inode_entry *inode)
 		if (rc != -DER_SUCCESS)
 			D_GOTO(err, rc = daos_der2errno(rc));
 
-		stbuf.f_blocks = info.pi_space.ps_space.s_total[DAOS_MEDIA_SCM] \
-			+ info.pi_space.ps_space.s_total[DAOS_MEDIA_NVME];
-		stbuf.f_bfree = info.pi_space.ps_space.s_free[DAOS_MEDIA_SCM] \
-			+ info.pi_space.ps_space.s_free[DAOS_MEDIA_NVME];
+		stbuf.f_blocks = info.pi_space.ps_space.s_total[DAOS_MEDIA_SCM] +
+				 info.pi_space.ps_space.s_total[DAOS_MEDIA_NVME] +
+				 info.pi_space.ps_space.s_total[DAOS_MEDIA_QLC];
+		stbuf.f_bfree = info.pi_space.ps_space.s_free[DAOS_MEDIA_SCM] +
+				info.pi_space.ps_space.s_free[DAOS_MEDIA_NVME] +
+				info.pi_space.ps_space.s_free[DAOS_MEDIA_QLC];
 
 		DFUSE_TRA_INFO(inode, "blocks %#lx free %#lx",
 			       stbuf.f_blocks, stbuf.f_bfree);

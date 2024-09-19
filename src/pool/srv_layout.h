@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -84,6 +84,7 @@ extern d_iov_t ds_pool_prop_svc_ops_enabled;    /* uint32_t */
 extern d_iov_t ds_pool_prop_svc_ops_max;        /* uint32_t */
 extern d_iov_t ds_pool_prop_svc_ops_num;        /* uint32_t */
 extern d_iov_t ds_pool_prop_svc_ops_age;        /* uint32_t */
+extern d_iov_t ds_pool_prop_bulk_data_thresh;   /* uint64_t */
 /* Please read the IMPORTANT notes above before adding new keys. */
 
 /*

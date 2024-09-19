@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -483,6 +483,28 @@ func PoolProperties() PoolPropertyMap {
 			values: map[string]uint64{
 				"data_sync":    PoolReintModeDataSync,
 				"no_data_sync": PoolReintModeNoDataSync,
+			},
+		},
+		"bulk_data_thresh": {
+			Property: PoolProperty{
+				Number:      PoolBulkDataThresh,
+				Description: "Bulk Data bdev threshold size (for QLC NVMe SSD which used to store bulk_data)",
+				valueHandler: func(s string) (*PoolPropertyValue, error) {
+					b, err := humanize.ParseBytes(s)
+					if err != nil || !BulkDataThreshIsValid(b) {
+						return nil, errors.Errorf("invalid bulk data threshold size %q", s)
+					}
+
+					return &PoolPropertyValue{b}, nil
+				},
+				valueStringer: func(v *PoolPropertyValue) string {
+					n, err := v.GetNumber()
+					if err != nil {
+						return "not set"
+					}
+					return humanize.IBytes(n)
+				},
+				valueMarshaler: numericMarshaler,
 			},
 		},
 	}

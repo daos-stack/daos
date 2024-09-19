@@ -195,6 +195,8 @@ cont_free_internal(struct vos_container *cont)
 	for (i = 0; i < VOS_IOS_CNT; i++) {
 		if (cont->vc_hint_ctxt[i])
 			vea_hint_unload(cont->vc_hint_ctxt[i]);
+		if (cont->vc_bulk_hint_ctxt[i])
+			vea_hint_unload(cont->vc_bulk_hint_ctxt[i]);
 	}
 
 	cont->vc_pool->vp_dtx_committed_count -= cont->vc_dtx_committed_count;
@@ -440,6 +442,13 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 				D_ERROR("Error loading allocator %d hint "
 					DF_UUID": %d\n", i, DP_UUID(co_uuid),
 					rc);
+				goto exit;
+			}
+			rc = vea_hint_load(&cont->vc_cont_df->cd_bulk_hint_df[i],
+					   &cont->vc_bulk_hint_ctxt[i]);
+			if (rc) {
+				D_ERROR("Error loading bulk allocator %d hint " DF_UUID ": %d\n", i,
+					DP_UUID(co_uuid), rc);
 				goto exit;
 			}
 		}

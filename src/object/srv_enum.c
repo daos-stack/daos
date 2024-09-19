@@ -618,6 +618,7 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct ds_obj_enum_arg *ar
 	 */
 	if (arg->inline_thres > 0 && data_size <= arg->inline_thres &&
 	    data_size > 0 && bio_iov2media(&key_ent->ie_biov) != DAOS_MEDIA_NVME &&
+	    bio_iov2media(&key_ent->ie_biov) != DAOS_MEDIA_QLC &&
 	    !BIO_ADDR_IS_GANG(&key_ent->ie_biov.bi_addr)) {
 		inline_data = true;
 		size += data_size;

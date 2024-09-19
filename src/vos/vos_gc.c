@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1162,7 +1162,9 @@ vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 	struct vos_tls		*tls  = vos_tls_get(pool->vp_sysdb);
 	struct vos_gc_param	 param;
 	uint32_t		 nr_flushed = 0;
+	uint32_t                 nr_flushed_qlc = 0;
 	int			 rc = 0, total = 0;
+	int                      rc1 = 0;
 
 	D_ASSERT(daos_handle_is_valid(poh));
 	D_ASSERT(pool->vp_sysdb == false);
@@ -1178,6 +1180,11 @@ vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 	if (!gc_have_pool(pool)) {
 		if (pool->vp_vea_info != NULL)
 			rc = vea_flush(pool->vp_vea_info, UINT32_MAX, &nr_flushed);
+		if (pool->vp_qlc_vea_info != NULL)
+			rc1 = vea_flush(pool->vp_qlc_vea_info, UINT32_MAX, &nr_flushed_qlc);
+		rc |= rc1;
+		nr_flushed += nr_flushed_qlc;
+		/* seems ok to add the ret of qlc from the caller */
 		return rc < 0 ? rc : nr_flushed;
 	}
 
@@ -1248,6 +1255,7 @@ gc_reserve_space(daos_size_t *rsrvd)
 {
 	rsrvd[DAOS_MEDIA_SCM]	+= gc_bag_size * (daos_size_t)GC_CREDS_MAX;
 	rsrvd[DAOS_MEDIA_NVME]	+= 0;
+	rsrvd[DAOS_MEDIA_QLC] += 0;
 }
 
 /** Exported VOS API for explicit VEA flush */
@@ -1256,6 +1264,8 @@ vos_flush_pool(daos_handle_t poh, uint32_t nr_flush, uint32_t *nr_flushed)
 {
 	struct vos_pool	*pool = vos_hdl2pool(poh);
 	int		 rc;
+	int              rc1            = 0;
+	uint32_t         nr_flushed_qlc = 0;
 
 	D_ASSERT(daos_handle_is_valid(poh));
 
@@ -1268,6 +1278,16 @@ vos_flush_pool(daos_handle_t poh, uint32_t nr_flush, uint32_t *nr_flushed)
 	rc = vea_flush(pool->vp_vea_info, nr_flush, nr_flushed);
 	if (rc)
 		D_ERROR("VEA flush failed. "DF_RC"\n", DP_RC(rc));
+
+	if (pool->vp_qlc_vea_info != NULL) {
+		rc1 = vea_flush(pool->vp_qlc_vea_info, nr_flush, &nr_flushed_qlc);
+		if (rc1)
+			D_ERROR("VEA flush qlc failed. " DF_RC "\n", DP_RC(rc1));
+		/* seems ok to add the ret of qlc from the caller */
+	}
+
+	rc |= rc1;
+	*nr_flushed += nr_flushed_qlc;
 
 	return rc;
 }

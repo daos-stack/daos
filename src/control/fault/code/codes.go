@@ -83,6 +83,7 @@ const (
 	ScmRamdiskLowMem
 	ScmRamdiskBadSize
 	ScmConfigTierMissing
+	ScmCtrlMetaPathWithDCPM
 )
 
 // Bdev fault codes

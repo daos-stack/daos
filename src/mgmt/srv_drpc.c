@@ -725,7 +725,7 @@ pool_change_target_state(char *id, d_rank_list_t *svc_ranks, size_t n_target_idx
 	}
 
 	rc = ds_mgmt_pool_target_update_state(uuid, svc_ranks, &target_addr_list, state, scm_size,
-					      nvme_size);
+					      nvme_size, qlc_size);
 	if (rc != 0) {
 		D_ERROR("Failed to set pool target up "DF_UUID": "DF_RC"\n",
 			DP_UUID(uuid), DP_RC(rc));
@@ -843,7 +843,8 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	uuid_t			uuid;
 	uint8_t			*body;
 	size_t			len;
-	uint64_t                 scm_bytes, nvme_bytes = 0, qlc_bytes = 0;
+	uint64_t                 scm_bytes, nvme_bytes = 0;
+	uint64_t                 qlc_bytes = 0;
 	int			rc;
 
 	mgmt__pool_extend_resp__init(&resp);

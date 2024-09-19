@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -118,6 +118,12 @@ enum daos_io_mode {
 
 static inline bool
 daos_data_thresh_valid(uint32_t size)
+{
+	return true;
+}
+
+static inline bool
+daos_bulk_data_thresh_valid(uint32_t size)
 {
 	return true;
 }

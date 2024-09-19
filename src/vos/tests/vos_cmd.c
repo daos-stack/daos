@@ -273,8 +273,8 @@ create_pool(struct cmd_info *cinfo)
 
 	close(fd);
 
-	rc = vos_pool_create(known_pool->kp_path, known_pool->kp_uuid, 0, 0, 0, 0 /* version */,
-			     NULL);
+	rc = vos_pool_create(known_pool->kp_path, known_pool->kp_uuid, 0, 0, 0 /* qlc_size */, 0,
+			     0 /* version */, NULL);
 	if (rc != 0) {
 		D_ERROR("Could not create vos pool at %s, rc=" DF_RC "\n", known_pool->kp_path,
 			DP_RC(rc));

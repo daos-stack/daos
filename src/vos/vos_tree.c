@@ -570,21 +570,35 @@ cancel_nvme_exts(bio_addr_t *addr, struct dtx_handle *dth)
 	int			 i;
 	uint64_t		 blk_off;
 
-	if (addr->ba_type != DAOS_MEDIA_NVME)
+	if (addr->ba_type != DAOS_MEDIA_NVME && addr->ba_type != DAOS_MEDIA_QLC)
 		return;
 
-	blk_off = vos_byte2blkoff(addr->ba_off);
+	if (addr->ba_type == DAOS_MEDIA_NVME) {
+		blk_off = vos_byte2blkoff(addr->ba_off);
+		/** Find the allocation and move it to the deferred list */
+		for (i = 0; i < dth->dth_rsrvd_cnt; i++) {
+			dru = &dth->dth_rsrvds[i];
 
-	/** Find the allocation and move it to the deferred list */
-	for (i = 0; i < dth->dth_rsrvd_cnt; i++) {
-		dru = &dth->dth_rsrvds[i];
+			d_list_for_each_entry(ext, &dru->dru_nvme, vre_link) {
+				if (ext->vre_blk_off == blk_off) {
+					d_list_del(&ext->vre_link);
+					d_list_add_tail(&ext->vre_link, &dth->dth_deferred_nvme);
+					return;
+				}
+			}
+		}
+	} else {
+		blk_off = vos_bulk_byte2blkoff(addr->ba_off);
+		/** Find the allocation and move it to the deferred list */
+		for (i = 0; i < dth->dth_rsrvd_cnt; i++) {
+			dru = &dth->dth_rsrvds[i];
 
-		d_list_for_each_entry(ext, &dru->dru_nvme, vre_link) {
-			if (ext->vre_blk_off == blk_off) {
-				d_list_del(&ext->vre_link);
-				d_list_add_tail(&ext->vre_link,
-						&dth->dth_deferred_nvme);
-				return;
+			d_list_for_each_entry(ext, &dru->dru_qlc, vre_link) {
+				if (ext->vre_blk_off == blk_off) {
+					d_list_del(&ext->vre_link);
+					d_list_add_tail(&ext->vre_link, &dth->dth_deferred_qlc);
+					return;
+				}
 			}
 		}
 	}
@@ -633,7 +647,8 @@ svt_free_payload(struct vos_pool *pool, bio_addr_t *addr, uint64_t rsize)
 				addr->ba_gang_nr, rsize, tot_len);
 			return -DER_INVAL;
 		}
-	} else if (addr->ba_type == DAOS_MEDIA_NVME) {
+	} else if (addr->ba_type == DAOS_MEDIA_NVME ||
+			addr->ba_type == DAOS_MEDIA_QLC) {
 		rc = vos_bio_addr_free(pool, addr, rsize);
 		if (rc)
 			DL_ERROR(rc, "Free SV payload on NVMe failed."); 

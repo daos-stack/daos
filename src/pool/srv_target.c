@@ -448,7 +448,7 @@ pool_child_recreate(struct ds_pool_child *child)
 	}
 
 	rc = vos_pool_create(path, child->spc_uuid, 0, pool_info->spi_blob_sz[SMD_DEV_TYPE_DATA],
-			     0, 0 /* version */, NULL);
+			     pool_info->spi_blob_sz[SMD_DEV_TYPE_BULK], 0, 0 /* version */, NULL);
 	if (rc)
 		DL_ERROR(rc, DF_UUID": Create VOS pool failed.", DP_UUID(child->spc_uuid));
 
@@ -832,6 +832,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	pool->sp_map_version = arg->pca_map_version;
 	pool->sp_reclaim = DAOS_RECLAIM_LAZY; /* default reclaim strategy */
 	pool->sp_data_thresh = DAOS_PROP_PO_DATA_THRESH_DEFAULT;
+	pool->sp_bulk_data_thresh = DAOS_PROP_PO_BULK_DATA_THRESH_DEFAULT;
 
 	/** set up ds_pool metrics */
 	rc = ds_pool_metrics_start(pool);
@@ -1992,6 +1993,11 @@ update_vos_prop_on_targets(void *in)
 	if (ret)
 		goto out;
 
+	ret = vos_pool_ctl(child->spc_hdl, VOS_PO_CTL_SET_BULK_DATA_THRESH,
+			   &pool->sp_bulk_data_thresh);
+	if (ret)
+		goto out;
+
 	ret = vos_pool_ctl(child->spc_hdl, VOS_PO_CTL_SET_SPACE_RB, &pool->sp_space_rb);
 	if (ret)
 		goto out;
@@ -2035,6 +2041,7 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 	pool->sp_perf_domain = iv_prop->pip_perf_domain;
 	pool->sp_space_rb = iv_prop->pip_space_rb;
 	pool->sp_data_thresh = iv_prop->pip_data_thresh;
+	pool->sp_bulk_data_thresh = iv_prop->pip_bulk_data_thresh;
 
 	if (iv_prop->pip_reint_mode == DAOS_REINT_MODE_DATA_SYNC &&
 	    iv_prop->pip_self_heal & DAOS_SELF_HEAL_AUTO_REBUILD)

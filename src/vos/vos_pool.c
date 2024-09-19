@@ -668,8 +668,8 @@ vos2mc_flags(unsigned int vos_flags)
 }
 
 static int
-vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
-		   size_t scm_sz, size_t nvme_sz, size_t wal_sz, unsigned int flags,
+vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout, size_t scm_sz,
+		   size_t nvme_sz, size_t wal_sz, size_t qlc_sz, unsigned int flags,
 		   struct umem_pool **ph)
 {
 	struct bio_xs_context	*xs_ctxt = vos_xsctxt_get();
@@ -705,7 +705,7 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 		"meta_sz: %zu, nvme_sz: %zu wal_sz:%zu\n",
 		xs_ctxt, DP_UUID(pool_id), meta_sz, nvme_sz, wal_sz);
 
-	rc = bio_mc_create(xs_ctxt, pool_id, meta_sz, wal_sz, nvme_sz, mc_flags);
+	rc = bio_mc_create(xs_ctxt, pool_id, meta_sz, wal_sz, nvme_sz, qlc_sz, mc_flags);
 	if (rc != 0) {
 		D_ERROR("Failed to create BIO meta context for xs:%p pool:"DF_UUID". "DF_RC"\n",
 			xs_ctxt, DP_UUID(pool_id), DP_RC(rc));
@@ -876,6 +876,9 @@ pool_hop_free(struct d_ulink *hlink)
 	if (pool->vp_vea_info != NULL)
 		vea_unload(pool->vp_vea_info);
 
+	if (pool->vp_qlc_vea_info != NULL)
+		vea_unload(pool->vp_qlc_vea_info);
+
 	if (daos_handle_is_valid(pool->vp_cont_th))
 		dbtree_close(pool->vp_cont_th);
 
@@ -972,17 +975,48 @@ vos_blob_format_cb(void *cb_data)
 	int			 rc;
 
 	/* Create a bio_io_context to get the blob */
-	rc = bio_ioctxt_open(&ioctxt, xs_ctxt, blob_hdr->bbh_pool, false);
+	rc = bio_ioctxt_open(&ioctxt, xs_ctxt, blob_hdr->bbh_pool, false, SMD_DEV_TYPE_DATA);
 	if (rc) {
-		D_ERROR("Failed to create an I/O context for writing blob "
-			"header: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("Failed to create an I/O context for writing data blob "
+			"header: " DF_RC "\n",
+			DP_RC(rc));
 		return rc;
 	}
 
 	/* Write the blob header info to blob offset 0 */
-	rc = bio_write_blob_hdr(ioctxt, blob_hdr);
+	rc = bio_write_blob_hdr(ioctxt, blob_hdr, SMD_DEV_TYPE_DATA);
 	if (rc)
-		D_ERROR("Failed to write header for blob:"DF_U64" : "DF_RC"\n",
+		D_ERROR("Failed to write header for data blob:" DF_U64 " : " DF_RC "\n",
+			blob_hdr->bbh_blob_id, DP_RC(rc));
+
+	rc = bio_ioctxt_close(ioctxt);
+	if (rc)
+		D_ERROR("Failed to free I/O context: " DF_RC "\n", DP_RC(rc));
+
+	return rc;
+}
+
+static int
+vos_blob_format_cb_bulk(void *cb_data)
+{
+	struct bio_blob_hdr   *blob_hdr = cb_data;
+	struct bio_xs_context *xs_ctxt  = vos_xsctxt_get();
+	struct bio_io_context *ioctxt;
+	int                    rc;
+
+	/* Create a bio_io_context to get the blob */
+	rc = bio_ioctxt_open(&ioctxt, xs_ctxt, blob_hdr->bbh_pool, false, SMD_DEV_TYPE_BULK);
+	if (rc) {
+		D_ERROR("Failed to create an I/O context for writing bulk_data blob "
+			"header: " DF_RC "\n",
+			DP_RC(rc));
+		return rc;
+	}
+
+	/* Write the blob header info to blob offset 0 */
+	rc = bio_write_blob_hdr(ioctxt, blob_hdr, SMD_DEV_TYPE_BULK);
+	if (rc)
+		D_ERROR("Failed to write header for bulk_data blob:" DF_U64 " : " DF_RC "\n",
 			blob_hdr->bbh_blob_id, DP_RC(rc));
 
 	rc = bio_ioctxt_close(ioctxt);
@@ -1014,7 +1048,8 @@ static int pool_open(void *ph, struct vos_pool_df *pool_df,
 
 int
 vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t nvme_sz,
-		   daos_size_t wal_sz, unsigned int flags, uint32_t version, daos_handle_t *poh)
+		   daos_size_t wal_sz, daos_size_t qlc_sz, unsigned int flags, uint32_t version,
+		   daos_handle_t *poh)
 {
 	struct umem_pool	*ph;
 	struct umem_attr	 uma = {0};
@@ -1036,9 +1071,9 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_
 		return -DER_INVAL;
 
 	D_DEBUG(DB_MGMT,
-		"Pool Path: %s, size: " DF_U64 ":" DF_U64 ", "
-		"UUID: " DF_UUID ", version: %u\n",
-		path, scm_sz, nvme_sz, DP_UUID(uuid), version);
+		"Pool Path: %s, size: " DF_U64 ":" DF_U64 ", " DF_U64 ", UUID: " DF_UUID
+		", version: %u\n",
+		path, scm_sz, nvme_sz, qlc_sz, DP_UUID(uuid), version);
 
 	if (flags & VOS_POF_SMALL)
 		flags |= VOS_POF_EXCL;
@@ -1059,10 +1094,12 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_
 		return daos_errno2der(errno);
 	}
 
-	rc = vos_pmemobj_create(path, uuid, VOS_POOL_LAYOUT, scm_sz, nvme_sz, wal_sz, flags, &ph);
+	rc = vos_pmemobj_create(path, uuid, VOS_POOL_LAYOUT, scm_sz, nvme_sz, wal_sz, qlc_sz, flags,
+				&ph);
 	if (rc) {
-		D_ERROR("Failed to create pool %s, scm_sz="DF_U64", nvme_sz="DF_U64". "DF_RC"\n",
-			path, scm_sz, nvme_sz, DP_RC(rc));
+		D_ERROR("Failed to create pool %s, scm_sz=" DF_U64 ", nvme_sz=" DF_U64
+			", qlc_sz=" DF_U64 ". " DF_RC "\n",
+			path, scm_sz, nvme_sz, qlc_sz, DP_RC(rc));
 		return rc;
 	}
 
@@ -1106,6 +1143,7 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_
 	uuid_copy(pool_df->pd_id, uuid);
 	pool_df->pd_scm_sz	= scm_sz;
 	pool_df->pd_nvme_sz	= nvme_sz;
+	pool_df->pd_qlc_sz      = qlc_sz;
 	pool_df->pd_magic	= POOL_DF_MAGIC;
 	if (DAOS_FAIL_CHECK(FLC_POOL_DF_VER))
 		pool_df->pd_version = 0;
@@ -1133,7 +1171,7 @@ end:
 	if (nvme_sz == 0 || !bio_nvme_configured(SMD_DEV_TYPE_DATA))
 		goto open;
 
-	/* Format SPDK blob header */
+	/* Format SPDK blob header for data blob */
 	blob_hdr.bbh_blk_sz = VOS_BLK_SZ;
 	blob_hdr.bbh_hdr_sz = VOS_BLOB_HDR_BLKS;
 	uuid_copy(blob_hdr.bbh_pool, uuid);
@@ -1143,12 +1181,27 @@ end:
 	if (version >= VOS_POOL_DF_2_6)
 		vea_compat |= VEA_COMPAT_FEATURE_BITMAP;
 
-	/* Format SPDK blob*/
+	/* Format Data SPDK blob*/
 	rc = vea_format(&umem, vos_txd_get(flags & VOS_POF_SYSDB), &pool_df->pd_vea_df,
 			VOS_BLK_SZ, VOS_BLOB_HDR_BLKS, nvme_sz, vos_blob_format_cb,
 			&blob_hdr, false, vea_compat);
 	if (rc) {
 		D_ERROR("Format blob error for pool:"DF_UUID". "DF_RC"\n",
+			DP_UUID(uuid), DP_RC(rc));
+		goto close;
+	}
+
+	/* if Bulk_data blob exist, then we will also do Format for it */
+	if (qlc_sz == 0 || !bio_nvme_configured(SMD_DEV_TYPE_BULK))
+		goto open;
+
+	/* Format SPDK blob header for bulk_data blob */
+	blob_hdr.bbh_blk_sz = VOS_BULK_BLK_SZ;
+	rc = vea_format(&umem, vos_txd_get(flags & VOS_POF_SYSDB), &pool_df->pd_qlc_vea_df,
+			VOS_BULK_BLK_SZ, VOS_BLOB_HDR_BLKS, qlc_sz, vos_blob_format_cb_bulk,
+			&blob_hdr, false, vea_compat);
+	if (rc) {
+		D_ERROR("Format bulk_data blob error for pool:" DF_UUID ". " DF_RC "\n",
 			DP_UUID(uuid), DP_RC(rc));
 		goto close;
 	}
@@ -1173,10 +1226,10 @@ close:
 
 int
 vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t nvme_sz,
-		unsigned int flags, uint32_t version, daos_handle_t *poh)
+		daos_size_t qlc_sz, unsigned int flags, uint32_t version, daos_handle_t *poh)
 {
 	/* create vos pool with default WAL size */
-	return vos_pool_create_ex(path, uuid, scm_sz, nvme_sz, 0, flags, version, poh);
+	return vos_pool_create_ex(path, uuid, scm_sz, nvme_sz, 0, qlc_sz, flags, version, poh);
 }
 
 /**
@@ -1336,6 +1389,9 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 	struct umem_attr	*uma;
 	struct d_uuid		 ukey;
 	int			 rc;
+	struct vea_unmap_context unmap_ctxt;
+	struct vos_pool_metrics *vp_metrics  = NULL;
+	void                    *vea_metrics = NULL;
 
 	/* Create a new handle during open */
 	rc = pool_alloc(pool_df->pd_id, &pool); /* returned with refcount=1 */
@@ -1349,8 +1405,9 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 	uma->uma_pool = ph;
 	uma->uma_id = umempobj_backend_type2class_id(uma->uma_pool->up_store.store_type);
 
-	/* Initialize dummy data I/O context */
-	rc = bio_ioctxt_open(&pool->vp_dummy_ioctxt, vos_xsctxt_get(), pool->vp_id, true);
+	/* Initialize dummy data I/O context, as dummy is set to true, so the last para not used */
+	rc = bio_ioctxt_open(&pool->vp_dummy_ioctxt, vos_xsctxt_get(), pool->vp_id, true,
+			     SMD_DEV_TYPE_DATA);
 	if (rc) {
 		D_ERROR("Failed to open dummy I/O context. "DF_RC"\n", DP_RC(rc));
 		D_GOTO(failed, rc);
@@ -1373,9 +1430,7 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 
 	pool->vp_metrics = metrics;
 	if (bio_nvme_configured(SMD_DEV_TYPE_DATA) && pool_df->pd_nvme_sz != 0) {
-		struct vea_unmap_context	 unmap_ctxt;
-		struct vos_pool_metrics		*vp_metrics = metrics;
-		void				*vea_metrics = NULL;
+		vp_metrics = metrics;
 
 		if (vp_metrics)
 			vea_metrics = vp_metrics->vp_vea_metrics;
@@ -1387,6 +1442,25 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 			      &pool_df->pd_vea_df, &unmap_ctxt, vea_metrics, &pool->vp_vea_info);
 		if (rc) {
 			D_ERROR("Failed to load block space info: "DF_RC"\n",
+				DP_RC(rc));
+			goto failed;
+		}
+	}
+
+	if (bio_nvme_configured(SMD_DEV_TYPE_BULK) && pool_df->pd_qlc_sz != 0) {
+		vp_metrics = metrics;
+
+		if (vp_metrics)
+			vea_metrics = vp_metrics->vp_qlc_vea_metrics;
+		/* set unmap callback fp */
+		unmap_ctxt.vnc_unmap     = vos_blob_unmap_cb;
+		unmap_ctxt.vnc_data      = vos_bulk_data_ioctxt(pool);
+		unmap_ctxt.vnc_ext_flush = flags & VOS_POF_EXTERNAL_FLUSH;
+		rc = vea_load(&pool->vp_umm, vos_txd_get(flags & VOS_POF_SYSDB),
+			      &pool_df->pd_qlc_vea_df, &unmap_ctxt, vea_metrics,
+			      &pool->vp_qlc_vea_info);
+		if (rc) {
+			D_ERROR("Failed to load bulk_data block space info: " DF_RC "\n",
 				DP_RC(rc));
 			goto failed;
 		}
@@ -1424,6 +1498,12 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 		pool->vp_data_thresh = 0;
 	else
 		pool->vp_data_thresh = DAOS_PROP_PO_DATA_THRESH_DEFAULT;
+
+	if (pool->vp_qlc_vea_info == NULL)
+		/** always store on data bdev if no bulk_data bdev */
+		pool->vp_bulk_data_thresh = 0;
+	else
+		pool->vp_bulk_data_thresh = DAOS_PROP_PO_BULK_DATA_THRESH_DEFAULT;
 
 	vos_space_sys_init(pool);
 	/* Ensure GC is triggered after server restart */
@@ -1564,6 +1644,13 @@ vos_pool_upgrade(daos_handle_t poh, uint32_t version)
 	if (version >= VOS_POOL_DF_2_6 && pool_df->pd_version < VOS_POOL_DF_2_6 &&
 	    pool->vp_vea_info)
 		rc = vea_upgrade(pool->vp_vea_info, &pool->vp_umm, &pool_df->pd_vea_df, version);
+	if (rc)
+		return rc;
+
+	if (version >= VOS_POOL_DF_2_6 && pool_df->pd_version < VOS_POOL_DF_2_6 &&
+	    pool->vp_qlc_vea_info)
+		rc = vea_upgrade(pool->vp_qlc_vea_info, &pool->vp_umm, &pool_df->pd_qlc_vea_df,
+				 version);
 	if (rc)
 		return rc;
 
@@ -1730,6 +1817,16 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void *param)
 		}
 		pool->vp_space_rb = i;
 		break;
+	case VOS_PO_CTL_SET_BULK_DATA_THRESH:
+		if (param == NULL)
+			return -DER_INVAL;
+
+		if (pool->vp_qlc_vea_info == NULL)
+			/** no bulk_data bdev, discard request */
+			break;
+
+		pool->vp_bulk_data_thresh = *((uint32_t *)param);
+		break;
 	}
 
 	return 0;
@@ -1749,7 +1846,7 @@ vos_pool_biov2addr(daos_handle_t poh, struct bio_iov *biov)
 	if (bio_addr_is_hole(&biov->bi_addr))
 		return NULL;
 
-	if (bio_iov2media(biov) == DAOS_MEDIA_NVME)
+	if (bio_iov2media(biov) == DAOS_MEDIA_NVME || bio_iov2media(biov) == DAOS_MEDIA_QLC)
 		return NULL;
 
 	return umem_off2ptr(vos_pool2umm(pool), bio_iov2raw_off(biov));

@@ -101,7 +101,7 @@ func PrintHostStorageUsageMap(hsm control.HostStorageMap, out io.Writer) error {
 	nvmeUsageTitle := "NVMe-Used"
 	qlcTitle := "QLC-Total"
 	qlcFreeTitle := "QLC-Free"
-	qlcUsageTitle := "QLC-Usage"
+	qlcUsageTitle := "QLC-Used"
 
 	tablePrint := txtfmt.NewTableFormatter(hostsTitle, scmTitle, scmFreeTitle,
 		scmUsageTitle, nvmeTitle, nvmeFreeTitle, nvmeUsageTitle, qlcTitle,

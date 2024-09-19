@@ -548,7 +548,8 @@ func (cs *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 		for idx, dev := range ctlr.GetSmdDevices() {
 			rank := dev.GetRank()
 
-			if dev.GetRoleBits() != 0 && (dev.GetRoleBits()&storage.BdevRoleData) == 0 {
+			if dev.GetRoleBits() != 0 && (dev.GetRoleBits()&storage.BdevRoleData) == 0 &&
+				(dev.GetRoleBits()&storage.BdevRoleBulk) == 0 {
 				cs.log.Debugf("SMD device %s (rank %d, ctlr %s) not used to store data (Role bits 0x%X)",
 					dev.GetUuid(), rank, ctlr.GetPciAddr(), dev.GetRoleBits())
 				dev.TotalBytes = 0

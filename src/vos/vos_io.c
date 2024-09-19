@@ -60,6 +60,8 @@ struct vos_io_context {
 	unsigned int		 ic_sv_addr_at;
 	/** reserved NVMe extents */
 	d_list_t		 ic_blk_exts;
+	/** reserved QLC NVMe extents */
+	d_list_t		 ic_bulk_blk_exts;
 	daos_size_t		 ic_space_held[DAOS_MEDIA_MAX];
 	/** number DAOS IO descriptors */
 	unsigned int		 ic_iod_nr;
@@ -385,6 +387,7 @@ vos_dedup_dup_bsgl(struct vos_io_context *ioc, unsigned int sgl_idx,
 		   unsigned int bulk_perm)
 {
 	struct bio_io_context	*bioc;
+	struct bio_io_context   *bulk_bioc;
 	struct bio_desc		*buf;
 	struct bio_sglist	*bsgl, *bsgl_dup;
 	int			 i, rc;
@@ -404,6 +407,7 @@ vos_dedup_dup_bsgl(struct vos_io_context *ioc, unsigned int sgl_idx,
 	bsgl_dup->bs_nr_out = bsgl->bs_nr_out;
 
 	bioc = vos_data_ioctxt(ioc->ic_cont->vc_pool);
+	bulk_bioc = vos_bulk_data_ioctxt(ioc->ic_cont->vc_pool);
 	for (i = 0; i < bsgl->bs_nr_out; i++) {
 		struct bio_iov	*biov = &bsgl->bs_iovs[i];
 		struct bio_iov	*biov_dup = &bsgl_dup->bs_iovs[i];
@@ -417,8 +421,7 @@ vos_dedup_dup_bsgl(struct vos_io_context *ioc, unsigned int sgl_idx,
 			goto next;
 
 		D_ASSERT(bio_iov2len(biov) != 0);
-		buf = bio_buf_alloc(bioc, bio_iov2len(biov), bulk_ctxt,
-				    bulk_perm);
+		buf = bio_buf_alloc(bioc, bulk_bioc, bio_iov2len(biov), bulk_ctxt, bulk_perm);
 		if (buf == NULL) {
 			D_ERROR("Failed to alloc "DF_U64" bytes\n",
 				bio_iov2len(biov));
@@ -524,6 +527,7 @@ vos_ioc_reserve_fini(struct vos_io_context *ioc)
 	}
 
 	D_ASSERT(d_list_empty(&ioc->ic_blk_exts));
+	D_ASSERT(d_list_empty(&ioc->ic_bulk_blk_exts));
 	D_ASSERT(d_list_empty(&ioc->ic_dedup_entries));
 	D_FREE(ioc->ic_umoffs);
 	D_FREE(ioc->ic_sv_addrs);
@@ -647,6 +651,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	struct vos_container	*cont;
 	struct vos_io_context	*ioc = NULL;
 	struct bio_io_context	*bioc;
+	struct bio_io_context   *bulk_bioc;
 	daos_epoch_t		 bound;
 	uint64_t		 cflags = 0;
 	int			 i, rc;
@@ -716,6 +721,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	vos_ilog_fetch_init(&ioc->ic_dkey_info);
 	vos_ilog_fetch_init(&ioc->ic_akey_info);
 	D_INIT_LIST_HEAD(&ioc->ic_blk_exts);
+	D_INIT_LIST_HEAD(&ioc->ic_bulk_blk_exts);
 	ioc->ic_shadows = shadows;
 	D_INIT_LIST_HEAD(&ioc->ic_dedup_entries);
 
@@ -754,8 +760,9 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	}
 
 	bioc = vos_data_ioctxt(cont->vc_pool);
-	ioc->ic_biod = bio_iod_alloc(bioc, vos_ioc2umm(ioc), iod_nr,
-			read_only ? BIO_IOD_TYPE_FETCH : BIO_IOD_TYPE_UPDATE);
+	bulk_bioc    = vos_bulk_data_ioctxt(cont->vc_pool);
+	ioc->ic_biod = bio_data_iod_alloc(bioc, bulk_bioc, vos_ioc2umm(ioc), iod_nr,
+					  read_only ? BIO_IOD_TYPE_FETCH : BIO_IOD_TYPE_UPDATE);
 	if (ioc->ic_biod == NULL) {
 		rc = -DER_NOMEM;
 		goto error;
@@ -2135,8 +2142,8 @@ vos_reserve_scm(struct vos_container *cont, struct umem_rsrvd_act *rsrvd_scm,
 }
 
 int
-vos_reserve_blocks(struct vos_container *cont, d_list_t *rsrvd_nvme,
-		   daos_size_t size, enum vos_io_stream ios, uint64_t *off)
+vos_reserve_blocks(struct vos_container *cont, d_list_t *rsrvd_list, daos_size_t size, bool is_bulk,
+		   enum vos_io_stream ios, uint64_t *off)
 {
 	struct vea_space_info	*vsi;
 	struct vea_hint_context	*hint_ctxt;
@@ -2144,24 +2151,39 @@ vos_reserve_blocks(struct vos_container *cont, d_list_t *rsrvd_nvme,
 	uint32_t		 blk_cnt;
 	int			 rc;
 
-	vsi = vos_cont2pool(cont)->vp_vea_info;
+	if (is_bulk) {
+		D_ASSERT((vos_cont2pool(cont)->vp_qlc_vea_info != NULL) &&
+			 (size >= vos_cont2pool(cont)->vp_bulk_data_thresh));
+		vsi       = vos_cont2pool(cont)->vp_qlc_vea_info;
+		hint_ctxt = cont->vc_bulk_hint_ctxt[ios];
+		blk_cnt   = vos_bulk_byte2blkcnt(size);
+	} else {
+		D_ASSERT(vos_cont2pool(cont)->vp_vea_info != NULL);
+		if ((vos_cont2pool(cont)->vp_qlc_vea_info != NULL) &&
+		    (vos_cont2pool(cont)->vp_bulk_data_thresh != 0)) {
+			D_ASSERT(size < vos_cont2pool(cont)->vp_bulk_data_thresh);
+		}
+		vsi       = vos_cont2pool(cont)->vp_vea_info;
+		hint_ctxt = cont->vc_hint_ctxt[ios];
+		blk_cnt   = vos_byte2blkcnt(size);
+	}
 	D_ASSERT(vsi);
-
-	hint_ctxt = cont->vc_hint_ctxt[ios];
 	D_ASSERT(hint_ctxt);
 
-	blk_cnt = vos_byte2blkcnt(size);
-
-	rc = vea_reserve(vsi, blk_cnt, hint_ctxt, rsrvd_nvme);
+	rc = vea_reserve(vsi, blk_cnt, hint_ctxt, rsrvd_list);
 	if (rc)
 		return rc;
 
-	ext = d_list_entry(rsrvd_nvme->prev, struct vea_resrvd_ext, vre_link);
+	ext = d_list_entry(rsrvd_list->prev, struct vea_resrvd_ext, vre_link);
 	D_ASSERTF(ext->vre_blk_cnt == blk_cnt, "%u != %u\n",
 		  ext->vre_blk_cnt, blk_cnt);
 	D_ASSERT(ext->vre_blk_off != 0);
 
-	*off = ext->vre_blk_off << VOS_BLK_SHIFT;
+	if (is_bulk) {
+		*off = ext->vre_blk_off << VOS_BULK_BLK_SHIFT;
+	} else {
+		*off = ext->vre_blk_off << VOS_BLK_SHIFT;
+	}
 	return 0;
 }
 
@@ -2192,16 +2214,25 @@ reserve_space(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
 		return -DER_NOSPACE;
 	}
 
-	D_ASSERT(media == DAOS_MEDIA_NVME);
-	rc = vos_reserve_blocks(ioc->ic_cont, &ioc->ic_blk_exts, size, VOS_IOS_GENERIC, off);
+	D_ASSERT(media == DAOS_MEDIA_NVME || media == DAOS_MEDIA_QLC);
+	if (media == DAOS_MEDIA_NVME) {
+		rc = vos_reserve_blocks(ioc->ic_cont, &ioc->ic_blk_exts, size, false,
+					VOS_IOS_GENERIC, off);
+	} else {
+		rc = vos_reserve_blocks(ioc->ic_cont, &ioc->ic_bulk_blk_exts, size, true,
+					VOS_IOS_GENERIC, off);
+	}
 	if (rc == -DER_NOSPACE) {
 		now = daos_gettime_coarse();
 		if (now - ioc->ic_cont->vc_io_nospc_ts > VOS_NOSPC_ERROR_INTVL) {
-			D_ERROR("Reserve "DF_U64" from NVMe failed. "DF_RC"\n", size, DP_RC(rc));
+			D_ERROR("Reserve " DF_U64 " from NVMe with media type:%d, failed. " DF_RC
+				"\n",
+				size, media, DP_RC(rc));
 			ioc->ic_cont->vc_io_nospc_ts = now;
 		}
 	} else if (rc) {
-		D_ERROR("Reserve "DF_U64" from NVMe failed. "DF_RC"\n", size, DP_RC(rc));
+		D_ERROR("Reserve " DF_U64 " from NVMe with media type:%d, failed. " DF_RC "\n",
+			size, media, DP_RC(rc));
 	}
 	return rc;
 }
@@ -2342,9 +2373,10 @@ vos_reserve_single(struct vos_io_context *ioc, uint16_t media, daos_size_t size)
 		D_ASSERT(payload_addr >= (char *)irec);
 		off = umoff + (payload_addr - (char *)irec);
 	} else {
-		rc = reserve_space(ioc, DAOS_MEDIA_NVME, size, &off);
+		rc = reserve_space(ioc, media, size, &off);
 		if (rc) {
-			DL_ERROR(rc, "Reserve SV on NVMe failed.");
+			D_ERROR("Reserve NVMe with media type:%d for SV failed. " DF_RC "\n", media,
+				DP_RC(rc));
 			return rc;
 		}
 	}
@@ -2402,6 +2434,7 @@ akey_update_begin(struct vos_io_context *ioc)
 	struct dcs_csum_info	*iod_csums = vos_csum_at(ioc->ic_iod_csums, ioc->ic_sgl_at);
 	struct dcs_csum_info	*recx_csum;
 	daos_iod_t *iod = &ioc->ic_iods[ioc->ic_sgl_at];
+	enum daos_media_type_t   media;
 	int i, rc;
 
 	if (iod->iod_type == DAOS_IOD_SINGLE && iod->iod_nr != 1) {
@@ -2411,15 +2444,12 @@ akey_update_begin(struct vos_io_context *ioc)
 
 	for (i = 0; i < iod->iod_nr; i++) {
 		daos_size_t size;
-		uint16_t media;
 
 		size = (iod->iod_type == DAOS_IOD_SINGLE) ? iod->iod_size :
 				iod->iod_recxs[i].rx_nr * iod->iod_size;
 
-		if (vos_io_scm(vos_cont2pool(ioc->ic_cont), iod->iod_type, size, VOS_IOS_GENERIC))
-			media = DAOS_MEDIA_SCM;
-		else
-			media = DAOS_MEDIA_NVME;
+		media = vos_io_find_media(vos_cont2pool(ioc->ic_cont), iod->iod_type, size,
+					  VOS_IOS_GENERIC);
 
 		if (iod->iod_type == DAOS_IOD_SINGLE) {
 			rc = vos_reserve_single(ioc, media, size);
@@ -2469,7 +2499,7 @@ vos_publish_scm(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_scm, boo
 /* Publish or cancel the NVMe block reservations */
 int
 vos_publish_blocks(struct vos_container *cont, d_list_t *blk_list, bool publish,
-		   enum vos_io_stream ios)
+		   enum vos_io_stream ios, bool is_bulk)
 {
 	struct vea_space_info	*vsi;
 	struct vea_hint_context	*hint_ctxt;
@@ -2478,16 +2508,22 @@ vos_publish_blocks(struct vos_container *cont, d_list_t *blk_list, bool publish,
 	if (d_list_empty(blk_list))
 		return 0;
 
-	vsi = cont->vc_pool->vp_vea_info;
+	if (is_bulk) {
+		D_ASSERT(vos_cont2pool(cont)->vp_qlc_vea_info != NULL);
+		vsi       = cont->vc_pool->vp_qlc_vea_info;
+		hint_ctxt = cont->vc_bulk_hint_ctxt[ios];
+	} else {
+		vsi       = cont->vc_pool->vp_vea_info;
+		hint_ctxt = cont->vc_hint_ctxt[ios];
+	}
 	D_ASSERT(vsi);
-	hint_ctxt = cont->vc_hint_ctxt[ios];
 	D_ASSERT(hint_ctxt);
 
 	rc = publish ? vea_tx_publish(vsi, hint_ctxt, blk_list) :
 		       vea_cancel(vsi, hint_ctxt, blk_list);
 	if (rc)
-		D_ERROR("Error on %s NVMe reservations. "DF_RC"\n",
-			publish ? "publish" : "cancel", DP_RC(rc));
+		D_ERROR("Error on %s NVMe reservations. " DF_RC ", is bulk:%s\n",
+			publish ? "publish" : "cancel", DP_RC(rc), is_bulk ? "true" : "false");
 
 	return rc;
 }
@@ -2656,8 +2692,8 @@ abort:
 	if (err == 0)
 		vos_ts_set_wupdate(ioc->ic_ts_set, ioc->ic_epr.epr_hi);
 
-	err = vos_tx_end(ioc->ic_cont, dth, &ioc->ic_rsrvd_scm,
-			 &ioc->ic_blk_exts, tx_started, ioc->ic_biod, err);
+	err = vos_tx_end(ioc->ic_cont, dth, &ioc->ic_rsrvd_scm, &ioc->ic_blk_exts,
+			 &ioc->ic_bulk_blk_exts, tx_started, ioc->ic_biod, err);
 	if (err == 0)
 		vos_dedup_process(vos_cont2pool(ioc->ic_cont), &ioc->ic_dedup_entries, false);
 

@@ -3009,7 +3009,7 @@ vos_dtx_cleanup(struct dtx_handle *dth, bool unpin)
 
 	cont = vos_hdl2cont(dth->dth_coh);
 	/* This will abort the transaction and callback to vos_dtx_cleanup_internal(). */
-	vos_tx_end(cont, dth, NULL, NULL, true /* don't care */, NULL, -DER_CANCELED);
+	vos_tx_end(cont, dth, NULL, NULL, NULL, true /* don't care */, NULL, -DER_CANCELED);
 }
 
 int
@@ -3145,6 +3145,7 @@ vos_dtx_rsrvd_init(struct dtx_handle *dth)
 	dth->dth_deferred_cnt = 0;
 	dth->dth_deferred_used_cnt = 0;
 	D_INIT_LIST_HEAD(&dth->dth_deferred_nvme);
+	D_INIT_LIST_HEAD(&dth->dth_deferred_qlc);
 
 	if (dth->dth_modification_cnt <= 1) {
 		dth->dth_rsrvds = &dth->dth_rsrvd_inline;
@@ -3169,6 +3170,7 @@ vos_dtx_rsrvd_fini(struct dtx_handle *dth)
 {
 	if (dth->dth_rsrvds != NULL) {
 		D_ASSERT(d_list_empty(&dth->dth_deferred_nvme));
+		D_ASSERT(d_list_empty(&dth->dth_deferred_qlc));
 		D_FREE(dth->dth_deferred);
 		if (dth->dth_rsrvds != &dth->dth_rsrvd_inline)
 			D_FREE(dth->dth_rsrvds);
@@ -3325,7 +3327,7 @@ int
 vos_dtx_local_end(struct dtx_handle *dth, int result)
 {
 	dth->dth_local_complete = 1;
-	result                  = vos_tx_end(NULL, dth, NULL, NULL, true, NULL, result);
+	result                  = vos_tx_end(NULL, dth, NULL, NULL, NULL, true, NULL, result);
 
 	for (int i = 0; i < dth->dth_local_oid_cnt; ++i) {
 		vos_cont_decref(dth->dth_local_oid_array[i].dor_cont);
