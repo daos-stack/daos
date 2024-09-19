@@ -279,6 +279,7 @@ def run_linter(paths=None, verbose=False):
     test_wo_tags = []
     tests_wo_class_as_tag = []
     tests_wo_method_as_tag = []
+    test_w_invalid_test_tag = []
     tests_wo_hw_vm_manual = []
     tests_w_empty_tag = []
     tests_wo_a_feature_tag = []
@@ -297,6 +298,10 @@ def run_linter(paths=None, verbose=False):
                     tests_wo_class_as_tag.append(method_name)
                 if method_name not in tags:
                     tests_wo_method_as_tag.append(method_name)
+                for _tag in tags:
+                    if _tag.startswith('test_') and _tag != method_name:
+                        test_w_invalid_test_tag.append(method_name)
+                        break
                 if not set(tags).intersection(set(['vm', 'hw', 'manual'])):
                     tests_wo_hw_vm_manual.append(method_name)
                 if '' in tags:
@@ -338,6 +343,7 @@ def run_linter(paths=None, verbose=False):
         _error_handler(test_wo_tags, 'tests without tags'),
         _error_handler(tests_wo_class_as_tag, 'tests without class as tag'),
         _error_handler(tests_wo_method_as_tag, 'tests without method name as tag'),
+        _error_handler(test_w_invalid_test_tag, 'tests with invalid test_ tag'),
         _error_handler(tests_wo_hw_vm_manual, 'tests without HW, VM, or manual tag'),
         _error_handler(tests_w_empty_tag, 'tests with an empty tag'),
         _error_handler(tests_wo_a_feature_tag, 'tests without a feature tag')]))
