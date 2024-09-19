@@ -8,6 +8,9 @@
  *
  * dtx/dtx_cos.c
  */
+
+/* Only for test. */
+
 #define D_LOGFAC	DD_FAC(dtx)
 
 #include <daos/btree.h>
