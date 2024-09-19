@@ -754,6 +754,50 @@ init_umem_store(struct umem_store *store, struct bio_meta_context *mc)
 }
 
 static int
+vos_pool_store_type(daos_size_t scm_sz, daos_size_t meta_sz)
+{
+	int backend;
+
+	backend = umempobj_get_backend_type();
+	D_ASSERT((meta_sz != 0) && (scm_sz != 0));
+
+	if (scm_sz > meta_sz) {
+		D_ERROR("memsize %lu is greater than metasize %lu", scm_sz, meta_sz);
+		return -DER_INVAL;
+	}
+
+	if (scm_sz < meta_sz) {
+		if ((backend == DAOS_MD_BMEM) && umempobj_allow_md_bmem_v2())
+			backend = DAOS_MD_BMEM_V2;
+		else if (backend != DAOS_MD_BMEM_V2) {
+			D_ERROR("scm_sz %lu is less than meta_sz %lu", scm_sz, meta_sz);
+			return -DER_INVAL;
+		}
+	}
+
+	return backend;
+}
+
+int
+vos_pool_roundup_size(daos_size_t *scm_sz, daos_size_t *meta_sz)
+{
+	size_t alignsz;
+	int    rc;
+
+	D_ASSERT((*scm_sz != 0) && (*meta_sz != 0));
+	rc = vos_pool_store_type(*scm_sz, *meta_sz);
+	if (rc < 0)
+		return rc;
+
+	/* Round up the size such that it is compatible with backend */
+	alignsz  = umempobj_pgsz(rc);
+	*scm_sz  = max(D_ALIGNUP(*scm_sz, alignsz), 1 << 24);
+	*meta_sz = max(D_ALIGNUP(*meta_sz, alignsz), 1 << 24);
+
+	return 0;
+}
+
+static int
 vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 		   size_t scm_sz, size_t nvme_sz, size_t wal_sz, size_t meta_sz,
 		   unsigned int flags, struct umem_pool **ph)
@@ -794,9 +838,13 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 	if (!meta_sz)
 		meta_sz = scm_sz_actual;
 
-	store.store_type = umempobj_get_backend_type();
-	if (store.store_type == DAOS_MD_BMEM && meta_sz > scm_sz_actual)
-		store.store_type = DAOS_MD_BMEM_V2;
+	rc = vos_pool_store_type(scm_sz_actual, meta_sz);
+	if (rc < 0) {
+		D_ERROR("Failed to determine the store type for xs:%p pool:"DF_UUID". "DF_RC,
+			xs_ctxt, DP_UUID(pool_id), DP_RC(rc));
+		return rc;
+	}
+	store.store_type = rc;
 
 	D_DEBUG(DB_MGMT, "Create BIO meta context for xs:%p pool:"DF_UUID" "
 		"scm_sz: %zu meta_sz: %zu, nvme_sz: %zu wal_sz:%zu backend:%d\n",
@@ -1270,26 +1318,6 @@ close:
 	if (ph != NULL)
 		vos_pmemobj_close(ph);
 	return rc;
-}
-
-int
-vos_pool_roundup_size(daos_size_t *scm_sz, daos_size_t *meta_sz)
-{
-	int    backend;
-	size_t alignsz;
-
-	backend = umempobj_get_backend_type();
-	if ((*scm_sz != *meta_sz) && (backend == DAOS_MD_BMEM))
-		backend = DAOS_MD_BMEM_V2;
-
-	/* Round up the size such that it is compatible with backend */
-	alignsz = umempobj_pgsz(backend);
-
-	*scm_sz = D_ALIGNUP(*scm_sz, alignsz);
-	if (*meta_sz)
-		*meta_sz = D_ALIGNUP(*meta_sz, alignsz);
-
-	return 0;
 }
 
 int

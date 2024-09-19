@@ -50,6 +50,10 @@ enum {
 /* return umem backend type */
 int umempobj_get_backend_type(void);
 
+/* returns whether bmem_v2 pools are allowed */
+bool
+umempobj_allow_md_bmem_v2();
+
 #endif
 
 struct umem_wal_tx;

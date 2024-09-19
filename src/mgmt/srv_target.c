@@ -1048,15 +1048,14 @@ tgt_create_preallocate(void *arg)
 		 * 16MB minimum per pmemobj file (SCM partition)
 		 */
 		D_ASSERT(dss_tgt_nr > 0);
+		D_ASSERT((tca->tca_scm_size / dss_tgt_nr) >= (1 << 24));
 		if (!bio_nvme_configured(SMD_DEV_TYPE_META)) {
-			rc = tgt_vos_preallocate_sequential(tca->tca_ptrec->dptr_uuid,
-							    max(tca->tca_scm_size / dss_tgt_nr,
-								1 << 24), dss_tgt_nr);
+			rc = tgt_vos_preallocate_sequential(
+			    tca->tca_ptrec->dptr_uuid, tca->tca_scm_size / dss_tgt_nr, dss_tgt_nr);
 		} else {
-			rc = tgt_vos_preallocate_parallel(tca->tca_ptrec->dptr_uuid,
-							  max(tca->tca_scm_size / dss_tgt_nr,
-							      1 << 24), dss_tgt_nr,
-							  &tca->tca_ptrec->cancel_create);
+			rc = tgt_vos_preallocate_parallel(
+			    tca->tca_ptrec->dptr_uuid, tca->tca_scm_size / dss_tgt_nr, dss_tgt_nr,
+			    &tca->tca_ptrec->cancel_create);
 		}
 		if (rc)
 			goto out;
@@ -1123,7 +1122,12 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 
 	tgt_scm_sz  = tc_in->tc_scm_size / dss_tgt_nr;
 	tgt_meta_sz = tc_in->tc_meta_size / dss_tgt_nr;
-	vos_pool_roundup_size(&tgt_scm_sz, &tgt_meta_sz);
+	rc          = vos_pool_roundup_size(&tgt_scm_sz, &tgt_meta_sz);
+	if (rc) {
+		D_ERROR(DF_UUID": failed to roundup the vos size: "DF_RC"\n",
+			DP_UUID(tc_in->tc_pool_uuid), DP_RC(rc));
+		goto out_rec;
+	}
 	tc_in->tc_scm_size  = tgt_scm_sz * dss_tgt_nr;
 	tc_in->tc_meta_size = tgt_meta_sz * dss_tgt_nr;
 
