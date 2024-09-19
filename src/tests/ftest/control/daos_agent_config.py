@@ -48,7 +48,7 @@ class DaosAgentConfigTest(TestWithServers):
 
         # Do not create the agent runtime directory if running as root or the test is attempting
         # to test with an invalid runtime directory value.
-        if self.test_env.agent_user is None or (c_val[0] == "runtime_dir" and c_val[2] == "False"):
+        if self.test_env.agent_user is None or (c_val[0] == "runtime_dir" and c_val[2] == "FAIL"):
             self.agent_managers[-1].verify_socket_dir = False
 
         # Identify the attribute and modify its value to test value
