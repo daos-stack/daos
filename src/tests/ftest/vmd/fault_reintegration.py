@@ -168,7 +168,8 @@ class NvmeFaultReintegrate(TestWithServers):
         self.log_step(
             "Marking the {} device as faulty and verifying it is 'EVICTED' and its "
             "LED is 'ON'".format(test_dev))
-        set_device_faulty(self, self.dmg, self.dmg.hostlist, test_dev, self.pool)
+        set_device_faulty(self, self.dmg, self.hostlist_servers[0], test_dev,
+                          self.pool)
 
         # check device state after set nvme-faulty
         if not self.verify_dev_led_state(test_dev, "EVICTED", "ON"):
@@ -215,7 +216,8 @@ class NvmeFaultReintegrate(TestWithServers):
         # 9.
         self.log_step("Replace the same drive back.")
         get_dmg_response(
-            self.dmg.storage_replace_nvme, old_uuid=test_dev, new_uuid=test_dev)
+            self.dmg.storage_replace_nvme, host=self.hostlist_servers[0],
+            old_uuid=test_dev, new_uuid=test_dev)
         # Wait for rebuild to start
         self.pool.wait_for_rebuild_to_start()
         # Wait for rebuild to complete

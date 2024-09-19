@@ -10,5 +10,4 @@ server_config:
       storage: auto
   system_ram_reserved: 32
 pool:
-  control_method: dmg
   size: 90%

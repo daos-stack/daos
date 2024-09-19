@@ -26,7 +26,6 @@ server_config:
       log_mask: ERR
       storage: auto
 pool:
-  control_method: dmg
   size: 93%
   cell_size: !mux
     cell_size_4K:

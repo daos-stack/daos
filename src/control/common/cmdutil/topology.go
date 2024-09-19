@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
-package hwprov
+package cmdutil
 
 import (
 	"context"
@@ -12,15 +12,15 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/hardware/defaults/topology"
 )
 
 // DumpTopologyCmd implements a go-flags Commander that dumps
 // the system topology to stdout or to a file.
 type DumpTopologyCmd struct {
-	cmdutil.JSONOutputCmd
-	cmdutil.LogCmd
+	JSONOutputCmd
+	LogCmd
 	Output string `short:"o" long:"output" default:"stdout" description:"Dump output to this location"`
 }
 
@@ -35,7 +35,7 @@ func (cmd *DumpTopologyCmd) Execute(_ []string) error {
 		out = f
 	}
 
-	hwProv := DefaultTopologyProvider(cmd.Logger)
+	hwProv := topology.DefaultProvider(cmd.Logger)
 	topo, err := hwProv.GetTopology(context.Background())
 	if err != nil {
 		return err

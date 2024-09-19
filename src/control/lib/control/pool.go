@@ -136,10 +136,17 @@ func (pcr *PoolCreateReq) MarshalJSON() ([]byte, error) {
 
 	type toJSON PoolCreateReq
 	return json.Marshal(struct {
+		UUID       string                 `json:"uuid,omitempty"`
 		Properties []*mgmtpb.PoolProperty `json:"properties"`
 		ACL        []string               `json:"acl"`
 		*toJSON
 	}{
+		UUID: func() string {
+			if pcr.UUID == uuid.Nil {
+				return ""
+			}
+			return pcr.UUID.String()
+		}(),
 		Properties: props,
 		ACL:        acl,
 		toJSON:     (*toJSON)(pcr),
@@ -199,6 +206,7 @@ type (
 	// PoolCreateReq contains the parameters for a pool create request.
 	PoolCreateReq struct {
 		poolRequest
+		UUID       uuid.UUID            `json:"uuid,omitempty"` // Optional UUID; auto-generate if not supplied
 		User       string               `json:"user"`
 		UserGroup  string               `json:"user_group"`
 		ACL        *AccessControlList   `json:"-"`
@@ -299,7 +307,9 @@ func poolCreateGenPBReq(ctx context.Context, rpcClient UnaryInvoker, in *PoolCre
 		return
 	}
 
-	out.Uuid = uuid.New().String()
+	if out.Uuid == "" {
+		out.Uuid = uuid.New().String()
+	}
 	return
 }
 

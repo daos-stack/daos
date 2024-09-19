@@ -25,7 +25,6 @@ server_config:
 pool:
   scm_size: 2G
   nvme_size: 16G
-  control_method: dmg
   pool_query_timeout: 30
 container:
   type: POSIX
