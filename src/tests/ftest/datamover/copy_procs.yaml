@@ -13,7 +13,6 @@ server_config:
           scm_mount: /mnt/daos
 pool:
   scm_size: 1G
-  control_method: dmg
 container:
   type: POSIX
   control_method: daos

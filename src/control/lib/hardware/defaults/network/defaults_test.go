@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
-package hwprov
+package network_test
 
 import (
 	"testing"
@@ -15,53 +15,14 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hardware/cart"
+	"github.com/daos-stack/daos/src/control/lib/hardware/defaults/network"
+	"github.com/daos-stack/daos/src/control/lib/hardware/defaults/topology"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwloc"
 	"github.com/daos-stack/daos/src/control/lib/hardware/sysfs"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func TestHwprov_DefaultTopologyProvider(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
-
-	expResult := hardware.NewTopologyFactory(
-		&hardware.WeightedTopologyProvider{
-			Provider: hwloc.NewProvider(log),
-			Weight:   100,
-		},
-		&hardware.WeightedTopologyProvider{
-			Provider: sysfs.NewProvider(log),
-			Weight:   90,
-		},
-	)
-
-	result := DefaultTopologyProvider(log)
-
-	if diff := cmp.Diff(expResult, result,
-		cmp.AllowUnexported(hardware.TopologyFactory{}),
-		cmpopts.IgnoreUnexported(hwloc.Provider{}),
-		cmpopts.IgnoreUnexported(sysfs.Provider{}),
-	); diff != "" {
-		t.Fatalf("(-want, +got)\n%s\n", diff)
-	}
-}
-
-func TestHwprov_DefaultProcessNUMAProvider(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
-
-	expResult := hwloc.NewProvider(log)
-
-	result := DefaultProcessNUMAProvider(log)
-
-	if diff := cmp.Diff(expResult, result,
-		cmpopts.IgnoreUnexported(hwloc.Provider{}),
-	); diff != "" {
-		t.Fatalf("(-want, +got)\n%s\n", diff)
-	}
-}
-
-func TestHwprov_DefaultFabricInterfaceProviders(t *testing.T) {
+func TestFabric_DefaultFabricInterfaceProviders(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -70,7 +31,7 @@ func TestHwprov_DefaultFabricInterfaceProviders(t *testing.T) {
 		sysfs.NewProvider(log),
 	}
 
-	result := DefaultFabricInterfaceProviders(log)
+	result := network.DefaultFabricInterfaceProviders(log)
 
 	if diff := cmp.Diff(expResult, result,
 		cmpopts.IgnoreUnexported(cart.Provider{}),
@@ -81,13 +42,13 @@ func TestHwprov_DefaultFabricInterfaceProviders(t *testing.T) {
 
 }
 
-func TestHwprov_DefaultNetDevClassProvider(t *testing.T) {
+func TestFabric_DefaultNetDevClassProvider(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
 	expResult := sysfs.NewProvider(log)
 
-	result := DefaultNetDevClassProvider(log)
+	result := network.DefaultNetDevClassProvider(log)
 
 	if diff := cmp.Diff(expResult, result,
 		cmpopts.IgnoreUnexported(sysfs.Provider{}),
@@ -96,17 +57,17 @@ func TestHwprov_DefaultNetDevClassProvider(t *testing.T) {
 	}
 }
 
-func TestHwprov_DefaultFabricScannerConfig(t *testing.T) {
+func TestFabric_DefaultFabricScannerConfig(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
 	expResult := &hardware.FabricScannerConfig{
-		TopologyProvider:         DefaultTopologyProvider(log),
-		FabricInterfaceProviders: DefaultFabricInterfaceProviders(log),
-		NetDevClassProvider:      DefaultNetDevClassProvider(log),
+		TopologyProvider:         topology.DefaultProvider(log),
+		FabricInterfaceProviders: network.DefaultFabricInterfaceProviders(log),
+		NetDevClassProvider:      network.DefaultNetDevClassProvider(log),
 	}
 
-	result := DefaultFabricScannerConfig(log)
+	result := network.DefaultFabricScannerConfig(log)
 
 	if diff := cmp.Diff(expResult, result,
 		cmpopts.IgnoreUnexported(
@@ -121,20 +82,20 @@ func TestHwprov_DefaultFabricScannerConfig(t *testing.T) {
 	}
 }
 
-func TestHwprov_DefaultFabricScanner(t *testing.T) {
+func TestFabric_DefaultFabricScanner(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
 	expResult, err := hardware.NewFabricScanner(log, &hardware.FabricScannerConfig{
-		TopologyProvider:         DefaultTopologyProvider(log),
-		FabricInterfaceProviders: DefaultFabricInterfaceProviders(log),
-		NetDevClassProvider:      DefaultNetDevClassProvider(log),
+		TopologyProvider:         topology.DefaultProvider(log),
+		FabricInterfaceProviders: network.DefaultFabricInterfaceProviders(log),
+		NetDevClassProvider:      network.DefaultNetDevClassProvider(log),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	result := DefaultFabricScanner(log)
+	result := network.DefaultFabricScanner(log)
 
 	if diff := cmp.Diff(expResult, result,
 		cmp.AllowUnexported(
@@ -153,11 +114,11 @@ func TestHwprov_DefaultFabricScanner(t *testing.T) {
 	}
 }
 
-func TestHwprov_DefaultNetDevStateProvider(t *testing.T) {
+func TestFabric_DefaultNetDevStateProvider(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	result := DefaultNetDevStateProvider(log)
+	result := network.DefaultNetDevStateProvider(log)
 
 	if diff := cmp.Diff(sysfs.NewProvider(log), result,
 		cmpopts.IgnoreUnexported(sysfs.Provider{}),

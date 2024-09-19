@@ -28,7 +28,6 @@ server_config:
 pool:
   size: 40%
   svcn: 3
-  control_method: dmg
   pool_query_timeout: 30
 container:
   type: POSIX

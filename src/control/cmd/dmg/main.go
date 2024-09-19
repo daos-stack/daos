@@ -41,8 +41,7 @@ type (
 	}
 
 	singleHostCmd struct {
-		HostList singleHostFlag `short:"l" long:"host-list" default:"localhost" description:"Single host address <ipv4addr/hostname> to connect to"`
-		host     string
+		Host singleHostFlag `short:"l" long:"host" required:"1" description:"Single host address <ipv4addr/hostname> to connect to"`
 	}
 
 	ctlInvoker interface {
@@ -51,6 +50,25 @@ type (
 
 	ctlInvokerCmd struct {
 		ctlInvoker control.Invoker
+	}
+
+	cmdLogger interface {
+		setLog(*logging.LeveledLogger)
+	}
+
+	// cmdConfigSetter is an interface for setting the control config on a command
+	cmdConfigSetter interface {
+		setConfig(*control.Config)
+	}
+
+	// cfgCmd is a structure that can be used by commands that need the control config.
+	cfgCmd struct {
+		config *control.Config
+	}
+
+	baseCmd struct {
+		cmdutil.NoArgsCmd
+		cmdutil.LogCmd
 	}
 )
 
@@ -69,43 +87,8 @@ func (cmd *hostListCmd) setHostList(newList *hostlist.HostSet) {
 	cmd.HostList.Replace(newList)
 }
 
-func (cmd *singleHostCmd) getHostList() []string {
-	if cmd.host == "" {
-		if cmd.HostList.Count() == 0 {
-			cmd.host = "localhost"
-		} else {
-			cmd.host = cmd.HostList.Slice()[0]
-		}
-	}
-	return []string{cmd.host}
-}
-
-func (cmd *singleHostCmd) setHostList(newList *hostlist.HostSet) {
-	cmd.HostList.Replace(newList)
-}
-
-type cmdLogger interface {
-	setLog(*logging.LeveledLogger)
-}
-
-type baseCmd struct {
-	cmdutil.NoArgsCmd
-	cmdutil.LogCmd
-}
-
-// cmdConfigSetter is an interface for setting the control config on a command
-type cmdConfigSetter interface {
-	setConfig(*control.Config)
-}
-
-// cfgCmd is a structure that can be used by commands that need the control
-// config.
-type cfgCmd struct {
-	config *control.Config
-}
-
-func (c *cfgCmd) setConfig(cfg *control.Config) {
-	c.config = cfg
+func (cmd *cfgCmd) setConfig(cfg *control.Config) {
+	cmd.config = cfg
 }
 
 type cliOptions struct {
