@@ -2624,8 +2624,11 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	/* Hold the object for the evictable md-on-ssd phase2 pool */
 	if (vos_pool_is_evictable(vos_cont2pool(ioc->ic_cont))) {
 		/*
-		 * To avoid the complication of adding object ilog to ts_set, we simply pin object
-		 * here without ts_set involved.
+		 * FIXME:
+		 * The same object will be referenced by vos_obj_acquire() and vos_obj_hold()
+		 * (in vos_update_end()) twice, this is for avoiding the complication of adding
+		 * object ilog to ts_set. We'll re-org vos_obj_hold() in the future to make the
+		 * code look cleaner.
 		 */
 		rc = vos_obj_acquire(ioc->ic_cont, ioc->ic_oid, true, &ioc->ic_pinned_obj);
 		if (rc != 0)

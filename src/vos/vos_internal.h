@@ -241,6 +241,20 @@ struct vos_wal_metrics {
 
 void vos_wal_metrics_init(struct vos_wal_metrics *vw_metrics, const char *path, int tgt_id);
 
+/* VOS pool metrics for umem cache */
+struct vos_cache_metrics {
+	struct d_tm_node_t	*vcm_pg_ne;
+	struct d_tm_node_t	*vcm_pg_pinned;
+	struct d_tm_node_t	*vcm_pg_free;
+	struct d_tm_node_t	*vcm_cache_hit;
+	struct d_tm_node_t	*vcm_cache_miss;
+	struct d_tm_node_t	*vcm_cache_evict;
+	struct d_tm_node_t	*vcm_cache_flush;
+	struct d_tm_node_t	*vcm_cache_load;
+};
+
+void vos_cache_metrics_init(struct vos_cache_metrics *vc_metrcis, const char *path, int tgt_id);
+
 struct vos_pool_metrics {
 	void			*vp_vea_metrics;
 	struct vos_agg_metrics	 vp_agg_metrics;
@@ -248,6 +262,7 @@ struct vos_pool_metrics {
 	struct vos_space_metrics vp_space_metrics;
 	struct vos_chkpt_metrics vp_chkpt_metrics;
 	struct vos_wal_metrics	 vp_wal_metrics;
+	struct vos_cache_metrics vp_cache_metrics;
 	/* TODO: add more metrics for VOS */
 };
 
@@ -1902,6 +1917,47 @@ vos_obj_reserve(struct umem_instance *umm, struct vos_object *obj,
 }
 
 /* vos_obj_cache.c */
+static inline struct vos_cache_metrics *
+store2cache_metrics(struct umem_store *store)
+{
+	struct vos_pool_metrics	*vpm = (struct vos_pool_metrics *)store->stor_stats;
+
+	return vpm != NULL ? &vpm->vp_cache_metrics : NULL;
+}
+
+static inline void
+update_cache_stats(struct umem_store *store)
+{
+	struct vos_cache_metrics	*vcm = store2cache_metrics(store);
+	struct umem_cache		*cache = store->cache;
+
+	/* Cache stats is only valid for md-on-ssd phase2 pool */
+	if (store->store_type != DAOS_MD_BMEM_V2 || vcm == NULL)
+		return;
+
+	d_tm_set_counter(vcm->vcm_pg_ne, cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE]);
+	d_tm_set_counter(vcm->vcm_pg_pinned, cache->ca_pgs_stats[UMEM_PG_STATS_PINNED]);
+	d_tm_set_counter(vcm->vcm_pg_free, cache->ca_pgs_stats[UMEM_PG_STATS_FREE]);
+
+	d_tm_set_counter(vcm->vcm_cache_hit, cache->ca_cache_stats[UMEM_CACHE_STATS_HIT]);
+	d_tm_set_counter(vcm->vcm_cache_miss, cache->ca_cache_stats[UMEM_CACHE_STATS_MISS]);
+	d_tm_set_counter(vcm->vcm_cache_evict, cache->ca_cache_stats[UMEM_CACHE_STATS_EVICT]);
+	d_tm_set_counter(vcm->vcm_cache_flush, cache->ca_cache_stats[UMEM_CACHE_STATS_FLUSH]);
+	d_tm_set_counter(vcm->vcm_cache_load, cache->ca_cache_stats[UMEM_CACHE_STATS_LOAD]);
+}
+
+static inline int
+vos_cache_pin(struct umem_store *store, struct umem_cache_range *ranges, int range_nr,
+	      bool for_sys, struct umem_pin_handle **pin_handle)
+{
+	int	rc;
+
+	rc = umem_cache_pin(store, ranges, range_nr, for_sys, pin_handle);
+	update_cache_stats(store);
+
+	return rc;
+}
+
 int vos_obj_acquire(struct vos_container *cont, daos_unit_oid_t oid, bool pin,
 		    struct vos_object **obj_p);
 

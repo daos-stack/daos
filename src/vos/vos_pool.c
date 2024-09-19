@@ -421,13 +421,69 @@ vos_wal_metrics_init(struct vos_wal_metrics *vw_metrics, const char *path, int t
 		D_WARN("Failed to create 'replay_entries' telemetry: "DF_RC"\n", DP_RC(rc));
 }
 
+#define VOS_CACHE_DIR	"vos_cache"
+
+void
+vos_cache_metrics_init(struct vos_cache_metrics *vc_metrics, const char *path, int tgt_id)
+{
+	int	rc;
+
+	rc = d_tm_add_metric(&vc_metrics->vcm_pg_ne, D_TM_GAUGE, "Non-evictable pages",
+			     "pages", "%s/%s/page_ne/tgt_%d", path, VOS_CACHE_DIR, tgt_id);
+	if (rc)
+		DL_WARN(rc, "Failed to create non-evictable pages telemetry.");
+
+	rc = d_tm_add_metric(&vc_metrics->vcm_pg_pinned, D_TM_GAUGE, "Pinned pages",
+			     "pages", "%s/%s/page_pinned/tgt_%d", path, VOS_CACHE_DIR, tgt_id);
+	if (rc)
+		DL_WARN(rc, "Failed to create pinned pages telemetry.");
+
+	rc = d_tm_add_metric(&vc_metrics->vcm_pg_free, D_TM_GAUGE, "Free pages",
+			     "pages", "%s/%s/page_free/tgt_%d", path, VOS_CACHE_DIR, tgt_id);
+	if (rc)
+		DL_WARN(rc, "Failed to create free pages telemetry.");
+
+	rc = d_tm_add_metric(&vc_metrics->vcm_cache_hit, D_TM_COUNTER, "Page cache hit",
+			     "hits", "%s/%s/cache_hit/tgt_%d", path, VOS_CACHE_DIR, tgt_id);
+	if (rc)
+		DL_WARN(rc, "Failed to create cache hit telemetry.");
+
+	rc = d_tm_add_metric(&vc_metrics->vcm_cache_miss, D_TM_COUNTER, "Page cache miss",
+			     "misses", "%s/%s/cache_miss/tgt_%d", path, VOS_CACHE_DIR, tgt_id);
+	if (rc)
+		DL_WARN(rc, "Failed to create cache miss telemetry.");
+
+	rc = d_tm_add_metric(&vc_metrics->vcm_cache_evict, D_TM_COUNTER, "Page cache evict",
+			     "pages", "%s/%s/cache_evict/tgt_%d", path, VOS_CACHE_DIR, tgt_id);
+	if (rc)
+		DL_WARN(rc, "Failed to create cache evict telemetry.");
+
+	rc = d_tm_add_metric(&vc_metrics->vcm_cache_flush, D_TM_COUNTER, "Page cache flush",
+			     "pages", "%s/%s/cache_flush/tgt_%d", path, VOS_CACHE_DIR, tgt_id);
+	if (rc)
+		DL_WARN(rc, "Failed to create cache flush telemetry.");
+
+	rc = d_tm_add_metric(&vc_metrics->vcm_cache_load, D_TM_COUNTER, "Page cache load",
+			     "pages", "%s/%s/cache_load/tgt_%d", path, VOS_CACHE_DIR, tgt_id);
+	if (rc)
+		DL_WARN(rc, "Failed to create cache load telemetry.");
+}
+
+static inline struct vos_wal_metrics *
+store2wal_metrics(struct umem_store *store)
+{
+	struct vos_pool_metrics	*vpm = (struct vos_pool_metrics *)store->stor_stats;
+
+	return vpm != NULL ? &vpm->vp_wal_metrics : NULL;
+}
+
 static inline int
 vos_wal_reserve(struct umem_store *store, uint64_t *tx_id)
 {
 	struct bio_wal_info	wal_info;
 	struct vos_pool		*pool;
 	struct bio_wal_stats	ws = { 0 };
-	struct vos_wal_metrics	*vwm;
+	struct vos_wal_metrics	*vwm = store2wal_metrics(store);
 	int			rc;
 
 	pool = store->vos_priv;
@@ -445,7 +501,6 @@ vos_wal_reserve(struct umem_store *store, uint64_t *tx_id)
 
 reserve:
 	D_ASSERT(store && store->stor_priv != NULL);
-	vwm = (struct vos_wal_metrics *)store->stor_stats;
 	rc = bio_wal_reserve(store->stor_priv, tx_id, (vwm != NULL) ? &ws : NULL);
 	if (rc == 0 && vwm != NULL)
 		d_tm_set_gauge(vwm->vwm_wal_waiters, ws.ws_waiters);
@@ -459,11 +514,10 @@ vos_wal_commit(struct umem_store *store, struct umem_wal_tx *wal_tx, void *data_
 	struct bio_wal_info     wal_info;
 	struct vos_pool        *pool;
 	struct bio_wal_stats    ws = {0};
-	struct vos_wal_metrics *vwm;
+	struct vos_wal_metrics *vwm = store2wal_metrics(store);
 	int                     rc;
 
 	D_ASSERT(store && store->stor_priv != NULL);
-	vwm = (struct vos_wal_metrics *)store->stor_stats;
 	if (vwm != NULL)
 		d_tm_mark_duration_start(vwm->vwm_wal_dur, D_TM_CLOCK_REALTIME);
 	rc = bio_wal_commit(store->stor_priv, wal_tx, data_iod, (vwm != NULL) ? &ws : NULL);
@@ -515,18 +569,15 @@ vos_wal_replay(struct umem_store *store,
 	       int (*replay_cb)(uint64_t tx_id, struct umem_action *act, void *arg),
 	       void *arg)
 {
-	struct bio_wal_rp_stats wrs;
-	int rc;
+	struct bio_wal_rp_stats	 wrs;
+	struct vos_wal_metrics	*vwm = store2wal_metrics(store);
+	int			 rc;
 
 	D_ASSERT(store && store->stor_priv != NULL);
-	rc = bio_wal_replay(store->stor_priv,
-			    (store->stor_stats != NULL) ? &wrs : NULL,
-			    replay_cb, arg);
+	rc = bio_wal_replay(store->stor_priv, (vwm != NULL) ? &wrs : NULL, replay_cb, arg);
 
 	/* VOS file rehydration metrics */
-	if (store->stor_stats != NULL && rc >= 0) {
-		struct vos_wal_metrics *vwm = (struct vos_wal_metrics *)store->stor_stats;
-
+	if (vwm != NULL && rc >= 0) {
 		d_tm_inc_counter(vwm->vwm_replay_count, 1);
 		d_tm_set_gauge(vwm->vwm_replay_size, wrs.wrs_sz);
 		d_tm_set_gauge(vwm->vwm_replay_time, wrs.wrs_tm);
@@ -885,11 +936,7 @@ vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned 
 	}
 
 	init_umem_store(&store, mc);
-	if (metrics != NULL) {
-		struct vos_pool_metrics	*vpm = (struct vos_pool_metrics *)metrics;
-
-		store.stor_stats = &vpm->vp_wal_metrics;
-	}
+	store.stor_stats = metrics;
 
 umem_open:
 	pop = umempobj_open(path, layout, UMEMPOBJ_ENABLE_STATS, &store);

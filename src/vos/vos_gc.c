@@ -747,7 +747,7 @@ pin_obj:
 		rg.cr_off = umem_get_mb_base_offset(vos_pool2umm(pool), bkt);
 		rg.cr_size = vos_pool2store(pool)->cache->ca_page_sz;
 
-		rc = umem_cache_pin(vos_pool2store(pool), &rg, 1, false, &pin_hdl);
+		rc = vos_cache_pin(vos_pool2store(pool), &rg, 1, false, &pin_hdl);
 		if (rc) {
 			DL_ERROR(rc, "Failed to pin bucket %u.", bkt);
 			goto tx_error;

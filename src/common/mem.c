@@ -3008,6 +3008,12 @@ done:
 	return rc;
 }
 
+static inline void
+inc_cache_stats(struct umem_cache *cache, unsigned int op)
+{
+	cache->ca_cache_stats[op] += 1;
+}
+
 static int
 cache_load_page(struct umem_cache *cache, struct umem_page_info *pinfo)
 {
@@ -3053,6 +3059,7 @@ cache_load_page(struct umem_cache *cache, struct umem_page_info *pinfo)
 		cache_add2lru(cache, pinfo);
 
 	page_wakeup_io(cache, pinfo);
+	inc_cache_stats(cache, UMEM_CACHE_STATS_LOAD);
 
 	return rc;
 }
@@ -3144,6 +3151,7 @@ cache_flush_page(struct umem_cache *cache, struct umem_page_info *pinfo)
 			       &chkpt_id, NULL);
 	D_FREE(chkpt_data_all);
 	D_ASSERT(d_list_empty(&dirty_list));
+	inc_cache_stats(cache, UMEM_CACHE_STATS_FLUSH);
 
 	return rc;
 }
@@ -3187,13 +3195,14 @@ evict:
 	}
 
 	if (cache->ca_evtcb_fn) {
-		rc =
-		    cache->ca_evtcb_fn(UMEM_CACHE_EVENT_PGEVICT, cache->ca_fn_arg, pinfo->pi_pg_id);
+		rc = cache->ca_evtcb_fn(UMEM_CACHE_EVENT_PGEVICT, cache->ca_fn_arg,
+					pinfo->pi_pg_id);
 		if (rc)
 			DL_ERROR(rc, "Page evict callback failed.");
 	}
 	d_list_del_init(&pinfo->pi_lru_link);
 	cache_unmap_page(cache, pinfo);
+	inc_cache_stats(cache, UMEM_CACHE_STATS_EVICT);
 
 	return 0;
 }
@@ -3324,9 +3333,11 @@ cache_pin_pages(struct umem_cache *cache, uint32_t *pages, int page_nr, bool for
 		if (pinfo != NULL) {
 			D_ASSERT(pinfo->pi_pg_id == pg_id);
 			D_ASSERT(pinfo->pi_mapped == 1);
+			inc_cache_stats(cache, UMEM_CACHE_STATS_HIT);
 			goto next;
 		}
 
+		inc_cache_stats(cache, UMEM_CACHE_STATS_MISS);
 		rc = cache_get_free_page(cache, &pinfo, pinned, for_sys);
 		if (rc)
 			goto error;
