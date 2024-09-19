@@ -476,7 +476,7 @@ def launch_jobscript(
         return
 
     # check if all nodes are available
-    cmd = "hostname -s"
+    cmd = f"ls {test.test_env.log_dir}"
     node_results = run_remote(log, NodeSet(hosts), cmd, verbose=False)
     if node_results.failed_hosts:
         for node in node_results.failed_hosts:
