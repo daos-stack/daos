@@ -600,9 +600,8 @@ class TestRunner():
         """
         logger.debug("-" * 80)
         test_env = TestEnvironment()
-        hosts = test.host_info.all_hosts
-        hosts.add(self.local_host)
-        logger.debug("Setting up '%s' on %s:", test_env.log_dir, hosts)
+        hosts = {"server": test.host_info.servers.hosts, "client": test.host_info.clients.hosts}
+        hosts["client"].add(self.local_host)
         commands = [
             f"rm -fr {test_env.log_dir}",
             f"mkdir -p {test_env.log_dir}",
@@ -614,9 +613,13 @@ class TestRunner():
             directories.append(os.path.join(test_env.log_dir, directory))
         commands.append(f"mkdir -p {' '.join(directories)}")
         commands.append(f"ls -al {test_env.log_dir}")
-        for command in commands:
-            if not run_remote(logger, hosts, command).passed:
-                message = "Error setting up the common test directory on all hosts"
+        for host in "client", "server":
+            if host == "server":
+                # The control metadata path must be removed with sudo
+                commands[0] = command_as_user(commands[0], "root")
+            logger.debug("Setting up '%s' on %s hosts %s:", test_env.log_dir, host, hosts[host])
+            if not run_remote(logger, hosts[host], " &&\n".join(commands)).passed:
+                message = f"Error setting up the common test directory on {host} hosts"
                 self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
                 return 128
         return 0
