@@ -17,6 +17,10 @@ import yaml
 
 THIS_FILE = os.path.realpath(__file__)
 FTEST_DIR = os.path.dirname(THIS_FILE)
+MANUAL_TAG = ('manual',)
+STAGE_TYPE_TAGS = ('vm', 'hw', 'hw_vmd')
+STAGE_SIZE_TAGS = ('medium', 'large')
+STAGE_FREQUENCY_TAGS = ('all', 'pr', 'daily_regression', 'full_regression')
 
 
 class LintFailure(Exception):
@@ -254,7 +258,7 @@ def sorted_tags(tags):
     """
     tags_tmp = set(tags)
     new_tags = []
-    for tag in ('all', 'vm', 'hw', 'medium', 'large', 'pr', 'daily_regression', 'full_regression'):
+    for tag in STAGE_TYPE_TAGS + STAGE_SIZE_TAGS + STAGE_FREQUENCY_TAGS:
         if tag in tags_tmp:
             new_tags.append(tag)
             tags_tmp.remove(tag)
@@ -283,8 +287,7 @@ def run_linter(paths=None, verbose=False):
     tests_wo_hw_vm_manual = []
     tests_w_empty_tag = []
     tests_wo_a_feature_tag = []
-    non_feature_tags = set([
-        'all', 'vm', 'hw', 'medium', 'large', 'pr', 'daily_regression', 'full_regression'])
+    non_feature_tags = set(STAGE_TYPE_TAGS + STAGE_SIZE_TAGS + STAGE_FREQUENCY_TAGS)
     ftest_tag_map = FtestTagMap(paths)
     for file_path, classes in iter(ftest_tag_map):
         all_files.append(file_path)
@@ -302,7 +305,7 @@ def run_linter(paths=None, verbose=False):
                     if _tag.startswith('test_') and _tag != method_name:
                         test_w_invalid_test_tag.append(method_name)
                         break
-                if not set(tags).intersection(set(['vm', 'hw', 'manual'])):
+                if not set(tags).intersection(set(MANUAL_TAG + STAGE_TYPE_TAGS)):
                     tests_wo_hw_vm_manual.append(method_name)
                 if '' in tags:
                     tests_w_empty_tag.append(method_name)
