@@ -668,7 +668,7 @@ chk_engine_pool_mbs_one(struct chk_pool_rec *cpr, struct pool_map *map, struct c
 	int			 rc = 0;
 	bool			 unknown;
 
-	dom = pool_map_find_node_by_rank(map, mbs->cpm_rank);
+	dom = pool_map_find_dom_by_rank(map, mbs->cpm_rank);
 	if (dom == NULL) {
 		D_ASSERT(mbs->cpm_rank != dss_self_rank());
 
@@ -777,7 +777,7 @@ chk_engine_find_dangling_pm(struct chk_pool_rec *cpr, struct pool_map *map)
 	int			 j;
 	bool			 down;
 
-	rank_nr = pool_map_find_nodes(map, PO_COMP_ID_ALL, &doms);
+	rank_nr = pool_map_find_ranks(map, PO_COMP_ID_ALL, &doms);
 	if (rank_nr <= 0)
 		D_GOTO(out, rc = rank_nr);
 

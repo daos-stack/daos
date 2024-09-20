@@ -4,35 +4,21 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
-package hwprov
+// Package network provides constructors for cross-package composable hardware providers
+// related to networking.
+package network
+
+// NB: Carefully consider whether adding a new package dependency is necessary, as it
+// forces all users of this package to import it regardless of whether or not they
+// use the new dependency.
 
 import (
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hardware/cart"
-	"github.com/daos-stack/daos/src/control/lib/hardware/hwloc"
-	"github.com/daos-stack/daos/src/control/lib/hardware/pciutils"
+	"github.com/daos-stack/daos/src/control/lib/hardware/defaults/topology"
 	"github.com/daos-stack/daos/src/control/lib/hardware/sysfs"
 	"github.com/daos-stack/daos/src/control/logging"
 )
-
-// DefaultTopologyProvider gets the default hardware topology provider.
-func DefaultTopologyProvider(log logging.Logger) hardware.TopologyProvider {
-	return hardware.NewTopologyFactory(
-		&hardware.WeightedTopologyProvider{
-			Provider: hwloc.NewProvider(log),
-			Weight:   100,
-		},
-		&hardware.WeightedTopologyProvider{
-			Provider: sysfs.NewProvider(log),
-			Weight:   90,
-		},
-	)
-}
-
-// DefaultProcessNUMAProvider gets the default provider for process-related NUMA info.
-func DefaultProcessNUMAProvider(log logging.Logger) hardware.ProcessNUMAProvider {
-	return hwloc.NewProvider(log)
-}
 
 // DefaultFabricInterfaceProviders returns the default fabric interface providers.
 func DefaultFabricInterfaceProviders(log logging.Logger) []hardware.FabricInterfaceProvider {
@@ -50,7 +36,7 @@ func DefaultNetDevClassProvider(log logging.Logger) hardware.NetDevClassProvider
 // DefaultFabricScannerConfig gets a default FabricScanner configuration.
 func DefaultFabricScannerConfig(log logging.Logger) *hardware.FabricScannerConfig {
 	return &hardware.FabricScannerConfig{
-		TopologyProvider:         DefaultTopologyProvider(log),
+		TopologyProvider:         topology.DefaultProvider(log),
 		FabricInterfaceProviders: DefaultFabricInterfaceProviders(log),
 		NetDevClassProvider:      DefaultNetDevClassProvider(log),
 	}
@@ -69,14 +55,4 @@ func DefaultFabricScanner(log logging.Logger) *hardware.FabricScanner {
 // DefaultNetDevStateProvider gets the default provider for getting the fabric interface state.
 func DefaultNetDevStateProvider(log logging.Logger) hardware.NetDevStateProvider {
 	return sysfs.NewProvider(log)
-}
-
-// DefaultIOMMUDetector gets the default provider for the IOMMU detector.
-func DefaultIOMMUDetector(log logging.Logger) hardware.IOMMUDetector {
-	return sysfs.NewProvider(log)
-}
-
-// DefaultPCIeLinkStatsProvider gets the default provider for retrieving PCIe link stats.
-func DefaultPCIeLinkStatsProvider() hardware.PCIeLinkStatsProvider {
-	return pciutils.NewPCIeLinkStatsProvider()
 }
