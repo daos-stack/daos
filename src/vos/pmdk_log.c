@@ -24,8 +24,8 @@ static uint64_t pmemobj_log_level_2_dlog_prio[] = {
 };
 
 static void
-pmdk_log_function(enum pmemobj_log_level level, const char *file_name,
-		  unsigned line_no, const char *function_name, const char *message)
+pmdk_log_function(enum pmemobj_log_level level, const char *file_name, unsigned line_no,
+		  const char *function_name, const char *message)
 {
 	uint64_t dlog_prio = pmemobj_log_level_2_dlog_prio[level];
 

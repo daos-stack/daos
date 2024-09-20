@@ -23,38 +23,37 @@
  * predefined debug facilities (subsystems/modules), they have to be declared
  * before including any libgurt headers
  */
-#define DAOS_FOREACH_LOG_FAC(ACTION, arg)	\
-	ACTION(daos,      daos,      arg)	\
-	ACTION(array,     array,     arg)	\
-	ACTION(kv,        kv,        arg)	\
-	ACTION(common,    common,    arg)	\
-	ACTION(tree,      tree,      arg)	\
-	ACTION(vos,       vos,       arg)	\
-	ACTION(pmdk,      pmdk,      arg)	\
-	ACTION(client,    client,    arg)	\
-	ACTION(server,    server,    arg)	\
-	ACTION(rdb,       rdb,       arg)	\
-	ACTION(rsvc,      rsvc,      arg)	\
-	ACTION(pool,      pool,      arg)	\
-	ACTION(container, container, arg)	\
-	ACTION(object,    object,    arg)	\
-	ACTION(placement, placement, arg)	\
-	ACTION(rebuild,   rebuild,   arg)	\
-	ACTION(mgmt,      mgmt,      arg)	\
-	ACTION(bio,       bio,       arg)	\
-	ACTION(tests,     tests,     arg)	\
-	ACTION(dfs,       dfs,       arg)	\
-	ACTION(duns,      duns,      arg)	\
-	ACTION(drpc,      drpc,      arg)	\
-	ACTION(security,  security,  arg)	\
-	ACTION(dtx,       dtx,       arg)	\
-	ACTION(chk,       chk,       arg)	\
-	ACTION(dfuse,     dfuse,     arg)	\
-	ACTION(il,        il,        arg)	\
-	ACTION(csum,      csum,      arg)	\
-	ACTION(pipeline,  pipeline,  arg)	\
-	ACTION(stack,     stack,     arg)
-
+#define DAOS_FOREACH_LOG_FAC(ACTION, arg)                                                          \
+	ACTION(daos, daos, arg)                                                                    \
+	ACTION(array, array, arg)                                                                  \
+	ACTION(kv, kv, arg)                                                                        \
+	ACTION(common, common, arg)                                                                \
+	ACTION(tree, tree, arg)                                                                    \
+	ACTION(vos, vos, arg)                                                                      \
+	ACTION(pmdk, pmdk, arg)                                                                    \
+	ACTION(client, client, arg)                                                                \
+	ACTION(server, server, arg)                                                                \
+	ACTION(rdb, rdb, arg)                                                                      \
+	ACTION(rsvc, rsvc, arg)                                                                    \
+	ACTION(pool, pool, arg)                                                                    \
+	ACTION(container, container, arg)                                                          \
+	ACTION(object, object, arg)                                                                \
+	ACTION(placement, placement, arg)                                                          \
+	ACTION(rebuild, rebuild, arg)                                                              \
+	ACTION(mgmt, mgmt, arg)                                                                    \
+	ACTION(bio, bio, arg)                                                                      \
+	ACTION(tests, tests, arg)                                                                  \
+	ACTION(dfs, dfs, arg)                                                                      \
+	ACTION(duns, duns, arg)                                                                    \
+	ACTION(drpc, drpc, arg)                                                                    \
+	ACTION(security, security, arg)                                                            \
+	ACTION(dtx, dtx, arg)                                                                      \
+	ACTION(chk, chk, arg)                                                                      \
+	ACTION(dfuse, dfuse, arg)                                                                  \
+	ACTION(il, il, arg)                                                                        \
+	ACTION(csum, csum, arg)                                                                    \
+	ACTION(pipeline, pipeline, arg)                                                            \
+	ACTION(stack, stack, arg)
 
 #define DAOS_FOREACH_DB(ACTION, arg)				\
 	/** metadata operation */				\
