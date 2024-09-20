@@ -33,7 +33,6 @@ server_config:
 pool:
   size: 40%
   svcn: 1
-  control_method: dmg
 container:
   type: POSIX
   control_method: daos

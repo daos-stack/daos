@@ -29,7 +29,6 @@ server_config:
           class: ram
           scm_mount: /mnt/daos1
 pool:
-  control_method: dmg
   size: 12G
   nranks: 4
   rebuild_timeout: 120

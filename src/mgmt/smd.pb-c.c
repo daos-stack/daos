@@ -2208,69 +2208,39 @@ const ProtobufCMessageDescriptor ctl__led_manage_req__descriptor =
   (ProtobufCMessageInit) ctl__led_manage_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor ctl__dev_replace_req__field_descriptors[3] =
-{
-  {
-    "old_dev_uuid",
-    1,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__DevReplaceReq, old_dev_uuid),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "new_dev_uuid",
-    2,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__DevReplaceReq, new_dev_uuid),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "no_reint",
-    3,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_BOOL,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__DevReplaceReq, no_reint),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
+static const ProtobufCFieldDescriptor ctl__dev_replace_req__field_descriptors[2] = {
+    {
+	"old_dev_uuid", 1, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0, /* quantifier_offset */
+	offsetof(Ctl__DevReplaceReq, old_dev_uuid), NULL, &protobuf_c_empty_string, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
+    {
+	"new_dev_uuid", 2, PROTOBUF_C_LABEL_NONE, PROTOBUF_C_TYPE_STRING, 0, /* quantifier_offset */
+	offsetof(Ctl__DevReplaceReq, new_dev_uuid), NULL, &protobuf_c_empty_string, 0, /* flags */
+	0, NULL, NULL /* reserved1,reserved2, etc */
+    },
 };
 static const unsigned ctl__dev_replace_req__field_indices_by_name[] = {
-  1,   /* field[1] = new_dev_uuid */
-  2,   /* field[2] = no_reint */
-  0,   /* field[0] = old_dev_uuid */
+    1, /* field[1] = new_dev_uuid */
+    0, /* field[0] = old_dev_uuid */
 };
-static const ProtobufCIntRange ctl__dev_replace_req__number_ranges[1 + 1] =
-{
-  { 1, 0 },
-  { 0, 3 }
-};
-const ProtobufCMessageDescriptor ctl__dev_replace_req__descriptor =
-{
-  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "ctl.DevReplaceReq",
-  "DevReplaceReq",
-  "Ctl__DevReplaceReq",
-  "ctl",
-  sizeof(Ctl__DevReplaceReq),
-  3,
-  ctl__dev_replace_req__field_descriptors,
-  ctl__dev_replace_req__field_indices_by_name,
-  1,  ctl__dev_replace_req__number_ranges,
-  (ProtobufCMessageInit) ctl__dev_replace_req__init,
-  NULL,NULL,NULL    /* reserved[123] */
+static const ProtobufCIntRange   ctl__dev_replace_req__number_ranges[1 + 1] = {{1, 0}, {0, 2}};
+const ProtobufCMessageDescriptor ctl__dev_replace_req__descriptor           = {
+    PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+    "ctl.DevReplaceReq",
+    "DevReplaceReq",
+    "Ctl__DevReplaceReq",
+    "ctl",
+    sizeof(Ctl__DevReplaceReq),
+    2,
+    ctl__dev_replace_req__field_descriptors,
+    ctl__dev_replace_req__field_indices_by_name,
+    1,
+    ctl__dev_replace_req__number_ranges,
+    (ProtobufCMessageInit)ctl__dev_replace_req__init,
+    NULL,
+    NULL,
+    NULL /* reserved[123] */
 };
 static const ProtobufCFieldDescriptor ctl__set_faulty_req__field_descriptors[1] =
 {
