@@ -14,97 +14,52 @@
  * List of supported CaRT providers. The table is terminated with the last entry
  * having nad_str = NULL.
  */
-struct crt_na_dict crt_na_dict[] = {
-	{
-		.nad_type	= CRT_PROV_SM,
-		.nad_str	= "sm",
-		.nad_contig_eps	= false,
-		.nad_port_bind  = false,
-	}, {
-		.nad_type	= CRT_PROV_OFI_VERBS_RXM,
-		.nad_str	= "ofi+verbs;ofi_rxm",
-		.nad_alt_str	= "ofi+verbs",
-		.nad_contig_eps	= true,
-		.nad_port_bind  = true,
-	}, {
-		.nad_type	= CRT_PROV_OFI_TCP,
-		.nad_str	= "ofi+tcp",
-		.nad_contig_eps	= true,
-		.nad_port_bind  = true,
-	}, {
-		.nad_type	= CRT_PROV_OFI_TCP_RXM,
-		.nad_str	= "ofi+tcp;ofi_rxm",
-		.nad_contig_eps	= true,
-		.nad_port_bind  = true,
-	}, {
-		.nad_type	= CRT_PROV_OFI_CXI,
-		.nad_str	= "ofi+cxi",
-		.nad_contig_eps	= true,
-		.nad_port_bind  = false,
-	}, {
-		.nad_type	= CRT_PROV_OFI_OPX,
-		.nad_str	= "ofi+opx",
-		.nad_contig_eps	= false,
-		.nad_port_bind  = true,
-	}, {
-		.nad_type	= CRT_PROV_UCX_RC,
-		.nad_str	= "ucx+rc_v",
-		.nad_contig_eps	= true,
-		.nad_port_bind	= true,
-	}, {
-		.nad_type	= CRT_PROV_UCX_UD,
-		.nad_str	= "ucx+ud_v",
-		.nad_contig_eps	= true,
-		.nad_port_bind	= true,
-	}, {
-		.nad_type	= CRT_PROV_UCX_RC_UD,
-		.nad_str	= "ucx+rc_v,ud_v",
-		.nad_contig_eps	= true,
-		.nad_port_bind	= true,
-	}, {
-		.nad_type	= CRT_PROV_UCX_RC_O,
-		.nad_str	= "ucx+rc",
-		.nad_contig_eps	= true,
-		.nad_port_bind	= true,
-	}, {
-		.nad_type	= CRT_PROV_UCX_UD_O,
-		.nad_str	= "ucx+ud",
-		.nad_contig_eps	= true,
-		.nad_port_bind	= true,
-	}, {
-		.nad_type	= CRT_PROV_UCX_RC_UD_O,
-		.nad_str	= "ucx+rc,ud",
-		.nad_contig_eps	= true,
-		.nad_port_bind	= true,
-	}, {
-		.nad_type	= CRT_PROV_UCX_RC_X,
-		.nad_str	= "ucx+rc_x",
-		.nad_contig_eps	= true,
-		.nad_port_bind	= true,
-	}, {
-		.nad_type	= CRT_PROV_UCX_UD_X,
-		.nad_str	= "ucx+ud_x",
-		.nad_contig_eps	= true,
-		.nad_port_bind	= true,
-	}, {
-		.nad_type	= CRT_PROV_UCX_RC_UD_X,
-		.nad_str	= "ucx+rc_x,ud_x",
-		.nad_contig_eps	= true,
-		.nad_port_bind	= true,
-	}, {
-		.nad_type	= CRT_PROV_UCX_DC_X,
-		.nad_str	= "ucx+dc_x",
-		.nad_contig_eps	= true,
-		.nad_port_bind	= true,
-	}, {
-		.nad_type	= CRT_PROV_UCX_TCP,
-		.nad_str	= "ucx+tcp",
-		.nad_contig_eps	= true,
-		.nad_port_bind	= true,
-	}, {
-		.nad_str	= NULL,
-	}
-};
+struct crt_na_dict crt_na_dict[] = {{
+					.nad_type       = CRT_PROV_SM,
+					.nad_str        = "sm",
+					.nad_contig_eps = false,
+					.nad_port_bind  = false,
+				    },
+				    {
+					.nad_type       = CRT_PROV_OFI_VERBS_RXM,
+					.nad_str        = "ofi+verbs;ofi_rxm",
+					.nad_alt_str    = "ofi+verbs",
+					.nad_contig_eps = true,
+					.nad_port_bind  = true,
+				    },
+				    {
+					.nad_type       = CRT_PROV_OFI_TCP,
+					.nad_str        = "ofi+tcp",
+					.nad_contig_eps = true,
+					.nad_port_bind  = true,
+				    },
+				    {
+					.nad_type       = CRT_PROV_OFI_TCP_RXM,
+					.nad_str        = "ofi+tcp;ofi_rxm",
+					.nad_contig_eps = true,
+					.nad_port_bind  = true,
+				    },
+				    {
+					.nad_type       = CRT_PROV_OFI_CXI,
+					.nad_str        = "ofi+cxi",
+					.nad_contig_eps = true,
+					.nad_port_bind  = false,
+				    },
+				    {
+					.nad_type       = CRT_PROV_OFI_OPX,
+					.nad_str        = "ofi+opx",
+					.nad_contig_eps = false,
+					.nad_port_bind  = true,
+				    },
+				    {
+					.nad_type       = CRT_PROV_UCX,
+					.nad_str        = "ucx+ud_x",
+					.nad_contig_eps = true,
+					.nad_port_bind  = true,
+				    },
+				    {
+					.nad_str = NULL,
+				    }};
 
 int
 crt_hg_parse_uri(const char *uri, crt_provider_t *prov, char *addr)
@@ -717,6 +672,8 @@ crt_get_info_string(bool primary, crt_provider_t provider, int iface_idx,
 	start_port = crt_provider_ctx0_port_get(primary, provider);
 	domain_str   = crt_provider_domain_str_get(primary, provider, iface_idx);
 
+	D_ASSERTF(provider_str != NULL, "String for provider=%d not found\n", provider);
+
 	/* CXI provider uses domain names for info string */
 	if (provider == CRT_PROV_OFI_CXI)
 		iface_str = NULL;
@@ -735,8 +692,7 @@ crt_get_info_string(bool primary, crt_provider_t provider, int iface_idx,
 		D_GOTO(out, rc);
 	}
 
-	if (provider_str)
-		size += strlen(provider_str);
+	size = strlen(provider_str);
 	if (domain_str)
 		size += strlen(domain_str);
 	if (iface_str)

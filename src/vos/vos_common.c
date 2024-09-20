@@ -123,6 +123,7 @@ vos_bio_addr_free(struct vos_pool *pool, bio_addr_t *addr, daos_size_t nob)
 	if (bio_addr_is_hole(addr))
 		return 0;
 
+	D_ASSERT(!BIO_ADDR_IS_GANG(addr));
 	if (addr->ba_type == DAOS_MEDIA_SCM) {
 		rc = umem_free(&pool->vp_umm, addr->ba_off);
 	} else {
@@ -241,7 +242,6 @@ static inline void
 vos_local_tx_abort(struct dtx_handle *dth)
 {
 	struct dtx_local_oid_record *record = NULL;
-	struct daos_lru_cache       *occ    = NULL;
 
 	if (dth->dth_local_oid_cnt == 0)
 		return;
@@ -251,7 +251,6 @@ vos_local_tx_abort(struct dtx_handle *dth)
 	 * can be used to access the pool.
 	 */
 	record = &dth->dth_local_oid_array[0];
-	occ    = vos_obj_cache_current(record->dor_cont->vc_pool->vp_sysdb);
 
 	/**
 	 * Evict all objects touched by the aborted transaction from the object cache to make sure
@@ -260,7 +259,7 @@ vos_local_tx_abort(struct dtx_handle *dth)
 	 */
 	for (int i = 0; i < dth->dth_local_oid_cnt; ++i) {
 		record = &dth->dth_local_oid_array[i];
-		(void)vos_obj_evict_by_oid(occ, record->dor_cont, record->dor_oid);
+		(void)vos_obj_evict_by_oid(record->dor_cont, record->dor_oid);
 	}
 }
 
@@ -405,16 +404,24 @@ cancel:
 			}
 		} else if (dae != NULL) {
 			if (dth->dth_solo) {
-				if (err == 0 && cont->vc_solo_dtx_epoch < dth->dth_epoch)
+				if (err == 0 && dae->dae_committing &&
+				    cont->vc_solo_dtx_epoch < dth->dth_epoch)
 					cont->vc_solo_dtx_epoch = dth->dth_epoch;
 
 				vos_dtx_post_handle(cont, &dae, &dce, 1, false, err != 0);
 			} else {
 				D_ASSERT(dce == NULL);
-				if (err == 0) {
-					dae->dae_prepared = 1;
+				if (err == 0 && dth->dth_active) {
+					D_ASSERTF(!UMOFF_IS_NULL(dae->dae_df_off),
+						  "Non-prepared DTX " DF_DTI "\n",
+						  DP_DTI(&dth->dth_xid));
+
 					dae_df = umem_off2ptr(umm, dae->dae_df_off);
-					D_ASSERT(!(dae_df->dae_flags & DTE_INVALID));
+					D_ASSERTF(!(dae_df->dae_flags & DTE_INVALID),
+						  "Invalid status for DTX " DF_DTI "\n",
+						  DP_DTI(&dth->dth_xid));
+
+					dae->dae_prepared = 1;
 				}
 			}
 		}
@@ -563,13 +570,6 @@ vos_tls_init(int tags, int xs_id, int tgt_id)
 		}
 	}
 
-	rc = d_tm_add_metric(&tls->vtl_committed, D_TM_STATS_GAUGE,
-			     "Number of committed entries kept around for reply"
-			     " reconstruction", "entries",
-			     "io/dtx/committed/tgt_%u", tgt_id);
-	if (rc)
-		D_WARN("Failed to create committed cnt sensor: "DF_RC"\n",
-		       DP_RC(rc));
 	if (tgt_id >= 0) {
 		rc = d_tm_add_metric(&tls->vtl_committed, D_TM_STATS_GAUGE,
 				     "Number of committed entries kept around for reply"
@@ -577,14 +577,6 @@ vos_tls_init(int tags, int xs_id, int tgt_id)
 				     "io/dtx/committed/tgt_%u", tgt_id);
 		if (rc)
 			D_WARN("Failed to create committed cnt sensor: "DF_RC"\n",
-			       DP_RC(rc));
-
-		rc = d_tm_add_metric(&tls->vtl_dtx_cmt_ent_cnt, D_TM_GAUGE,
-				     "Number of committed entries", "entry",
-				     "mem/vos/dtx_cmt_ent_%u/tgt_%u",
-				     sizeof(struct vos_dtx_cmt_ent), tgt_id);
-		if (rc)
-			D_WARN("Failed to create committed cnt: "DF_RC"\n",
 			       DP_RC(rc));
 
 		rc = d_tm_add_metric(&tls->vtl_obj_cnt, D_TM_GAUGE,

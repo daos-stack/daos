@@ -620,16 +620,6 @@ vos_pool_hash_del(struct vos_pool *pool)
 }
 
 /**
- * Getting object cache
- * Wrapper for TLS and standalone mode
- */
-static inline struct daos_lru_cache *
-vos_get_obj_cache(void)
-{
-	return vos_tls_get(false)->vtl_ocache;
-}
-
-/**
  * Register btree class for container table, it is called within vos_init()
  *
  * \return		0 on success and negative on
@@ -928,33 +918,31 @@ static inline void vos_irec_init_csum(struct vos_irec_df *irec,
 	}
 }
 
+#define	VOS_GANG_SIZE_THRESH	(BIO_DMA_CHUNK_MB << 20)	/* 8MB */
+
+static inline unsigned int
+vos_irec_gang_nr(struct vos_pool *pool, daos_size_t rsize)
+{
+	if (pool->vp_feats & VOS_POOL_FEAT_GANG_SV) {
+		if (rsize > VOS_GANG_SIZE_THRESH)
+			return (rsize + VOS_GANG_SIZE_THRESH - 1) / VOS_GANG_SIZE_THRESH;
+	}
+
+	return 0;
+}
+
 /** Size of metadata without user payload */
 static inline uint64_t
-vos_irec_msize(struct vos_rec_bundle *rbund)
+vos_irec_msize(struct vos_pool *pool, struct vos_rec_bundle *rbund)
 {
-	uint64_t size = 0;
+	uint64_t size = sizeof(struct vos_irec_df);
 
 	if (rbund->rb_csum != NULL)
-		size = vos_size_round(rbund->rb_csum->cs_len);
-	return size + sizeof(struct vos_irec_df);
-}
+		size += vos_size_round(rbund->rb_csum->cs_len);
 
-static inline uint64_t
-vos_irec_size(struct vos_rec_bundle *rbund)
-{
-	return vos_irec_msize(rbund) + rbund->rb_rsize;
-}
+	size += bio_gaddr_size(vos_irec_gang_nr(pool, rbund->rb_rsize));
 
-static inline bool
-vos_irec_size_equal(struct vos_irec_df *irec, struct vos_rec_bundle *rbund)
-{
-	if (irec->ir_size != rbund->rb_rsize)
-		return false;
-
-	if (vos_irec2csum_size(irec) != rbund->rb_csum->cs_len)
-		return false;
-
-	return true;
+	return size;
 }
 
 static inline char *
@@ -1310,9 +1298,6 @@ int
 key_tree_delete(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov);
 
 /* vos_io.c */
-daos_size_t
-vos_recx2irec_size(daos_size_t rsize, struct dcs_csum_info *csum);
-
 int
 vos_dedup_init(struct vos_pool *pool);
 void

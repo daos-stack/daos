@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,10 +10,23 @@ import (
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/ui"
 )
+
+// ContID is a container label or UUID.
+type ContID struct {
+	ui.LabelOrUUIDFlag
+}
+
+// contCmd is the base struct for all container commands.
+type contCmd struct {
+	poolCmd
+
+	Args struct {
+		Cont ContID `positional-arg-name:"<container label or UUID>" required:"1"`
+	} `positional-args:"yes"`
+}
 
 // ContCmd is the struct representing the top-level container subcommand.
 type ContCmd struct {
@@ -22,18 +35,14 @@ type ContCmd struct {
 
 // ContSetOwnerCmd is the struct representing the command to change the owner of a DAOS container.
 type ContSetOwnerCmd struct {
-	baseCmd
-	ctlInvokerCmd
-	cmdutil.JSONOutputCmd
+	contCmd
 	GroupName ui.ACLPrincipalFlag `short:"g" long:"group" description:"New owner-group for the container, format name@domain"`
 	UserName  ui.ACLPrincipalFlag `short:"u" long:"user" description:"New owner-user for the container, format name@domain"`
-	ContUUID  string              `short:"c" long:"cont" required:"1" description:"UUID of the DAOS container"`
-	PoolUUID  string              `short:"p" long:"pool" required:"1" description:"UUID of the DAOS pool for the container"`
 }
 
 // Execute runs the container set-owner command
-func (c *ContSetOwnerCmd) Execute(args []string) error {
-	if c.GroupName == "" && c.UserName == "" {
+func (cmd *ContSetOwnerCmd) Execute(args []string) error {
+	if cmd.GroupName == "" && cmd.UserName == "" {
 		return &flags.Error{
 			Type:    flags.ErrRequired,
 			Message: "at least one of `--user' or `--group' must be supplied",
@@ -41,23 +50,23 @@ func (c *ContSetOwnerCmd) Execute(args []string) error {
 	}
 	msg := "SUCCEEDED"
 	req := &control.ContSetOwnerReq{
-		ContUUID: c.ContUUID,
-		PoolUUID: c.PoolUUID,
-		User:     c.UserName.String(),
-		Group:    c.GroupName.String(),
+		ContID: cmd.Args.Cont.String(),
+		PoolID: cmd.poolCmd.Args.Pool.String(),
+		User:   cmd.UserName.String(),
+		Group:  cmd.GroupName.String(),
 	}
 
-	ctx := c.MustLogCtx()
-	err := control.ContSetOwner(ctx, c.ctlInvoker, req)
+	ctx := cmd.MustLogCtx()
+	err := control.ContSetOwner(ctx, cmd.ctlInvoker, req)
 	if err != nil {
 		msg = errors.WithMessage(err, "FAILED").Error()
 	}
 
-	if c.JSONOutputEnabled() {
-		return c.OutputJSON(nil, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(nil, err)
 	}
 
-	c.Infof("Container-set-owner command %s\n", msg)
+	cmd.Infof("Container-set-owner command %s\n", msg)
 
 	return err
 }

@@ -199,8 +199,7 @@ dtx_act_ent_cleanup(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 		}
 
 		for (i = 0; i < count; i++)
-			vos_obj_evict_by_oid(vos_obj_cache_current(cont->vc_pool->vp_sysdb),
-					     cont, oids[i]);
+			vos_obj_evict_by_oid(cont, oids[i]);
 	}
 
 	if (dae->dae_oids != NULL && dae->dae_oids != &dae->dae_oid_inline &&
@@ -769,7 +768,6 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti, daos_epoch_t 
 		   daos_epoch_t cmt_time, struct vos_dtx_cmt_ent **dce_p,
 		   struct vos_dtx_act_ent **dae_p, bool *rm_cos, bool *fatal)
 {
-	struct vos_tls			*tls = vos_tls_get(false);
 	struct vos_dtx_act_ent		*dae = NULL;
 	struct vos_dtx_cmt_ent		*dce = NULL;
 	d_iov_t				 kiov;
@@ -834,7 +832,6 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti, daos_epoch_t 
 	if (dce == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	d_tm_inc_gauge(tls->vtl_dtx_cmt_ent_cnt, 1);
 	DCE_CMT_TIME(dce) = cmt_time;
 	if (dae != NULL) {
 		DCE_XID(dce) = DAE_XID(dae);
@@ -1535,10 +1532,14 @@ int
 vos_dtx_deregister_record(struct umem_instance *umm, daos_handle_t coh,
 			  uint32_t entry, daos_epoch_t epoch, umem_off_t record)
 {
+	struct dtx_handle		*dth = vos_dth_get(false);
 	struct vos_container		*cont;
 	struct vos_dtx_act_ent		*dae;
+	struct vos_dtx_act_ent_df	*dae_df;
+	umem_off_t			*rec_df;
 	bool				 found;
 	int				 count;
+	int				 rc;
 	int				 i;
 
 	if (!vos_dtx_is_normal_entry(entry))
@@ -1567,10 +1568,54 @@ vos_dtx_deregister_record(struct umem_instance *umm, daos_handle_t coh,
 	 *	 by another prepared (but non-committed) DTX, then do not allow current transaction
 	 *	 to modify it. Because if current transaction is aborted or failed for some reason,
 	 *	 there is no efficient way to recover such former non-committed DTX.
+	 *
+	 *	 If dth is NULL, then it is for GC. Under such case, deregister the record anyway.
 	 */
-	if (dae->dae_dbd != NULL)
-		return dtx_inprogress(dae, vos_dth_get(cont->vc_pool->vp_sysdb), false, false, 8);
+	if (dae->dae_dbd != NULL) {
+		if (dth != NULL)
+			return dtx_inprogress(dae, dth, false, false, 8);
 
+		dae_df = umem_off2ptr(umm, dae->dae_df_off);
+		D_ASSERT(!(dae_df->dae_flags & DTE_INVALID));
+
+		if (dae_df->dae_rec_cnt > DTX_INLINE_REC_CNT)
+			count = DTX_INLINE_REC_CNT;
+		else
+			count = dae_df->dae_rec_cnt;
+
+		rec_df = dae_df->dae_rec_inline;
+		for (i = 0; i < count; i++) {
+			if (record == umem_off2offset(rec_df[i])) {
+				rc = umem_tx_add_ptr(umm, &rec_df[i], sizeof(rec_df[i]));
+				if (rc != 0)
+					return rc;
+
+				rec_df[i] = UMOFF_NULL;
+				goto cache;
+			}
+		}
+
+		rec_df = umem_off2ptr(umm, dae_df->dae_rec_off);
+		if (rec_df == NULL)
+			/* If non-exist on disk, then must be non-exist in cache. */
+			return 0;
+
+		for (i = 0; i < dae_df->dae_rec_cnt - DTX_INLINE_REC_CNT; i++) {
+			if (record == umem_off2offset(rec_df[i])) {
+				rc = umem_tx_add_ptr(umm, &rec_df[i], sizeof(rec_df[i]));
+				if (rc != 0)
+					return rc;
+
+				rec_df[i] = UMOFF_NULL;
+				goto cache;
+			}
+		}
+
+		/* If non-exist on disk, then must be non-exist in cache. */
+		return 0;
+	}
+
+cache:
 	if (DAE_REC_CNT(dae) > DTX_INLINE_REC_CNT)
 		count = DTX_INLINE_REC_CNT;
 	else
@@ -2116,14 +2161,18 @@ vos_dtx_post_handle(struct vos_container *cont,
 
 	if (!abort && dces != NULL) {
 		struct vos_tls		*tls = vos_tls_get(false);
+		int			 j = 0;
 
 		D_ASSERT(cont->vc_pool->vp_sysdb == false);
 		for (i = 0; i < count; i++) {
-			if (dces[i] != NULL) {
-				cont->vc_dtx_committed_count++;
-				cont->vc_pool->vp_dtx_committed_count++;
-				d_tm_inc_gauge(tls->vtl_committed, 1);
-			}
+			if (dces[i] != NULL)
+				j++;
+		}
+
+		if (j > 0) {
+			cont->vc_dtx_committed_count += j;
+			cont->vc_pool->vp_dtx_committed_count += j;
+			d_tm_inc_gauge(tls->vtl_committed, j);
 		}
 	}
 
@@ -2439,6 +2488,7 @@ vos_dtx_aggregate(daos_handle_t coh)
 	uint64_t			 epoch;
 	umem_off_t			 dbd_off;
 	umem_off_t			 next = UMOFF_NULL;
+	int				 count = 0;
 	int				 rc;
 	int				 i;
 
@@ -2481,12 +2531,9 @@ vos_dtx_aggregate(daos_handle_t coh)
 				UMOFF_P(dbd_off), DP_RC(rc));
 			goto out;
 		}
-
-		cont->vc_dtx_committed_count--;
-		cont->vc_pool->vp_dtx_committed_count--;
-		d_tm_dec_gauge(tls->vtl_committed, 1);
-		d_tm_dec_gauge(tls->vtl_dtx_cmt_ent_cnt, 1);
 	}
+
+	count = dbd->dbd_count;
 
 	if (epoch != cont_df->cd_newest_aggregated) {
 		rc = umem_tx_add_ptr(umm, &cont_df->cd_newest_aggregated,
@@ -2545,8 +2592,14 @@ vos_dtx_aggregate(daos_handle_t coh)
 
 out:
 	rc = umem_tx_end(umm, rc);
-	if (rc == 0 && cont->vc_cmt_dtx_reindex_pos == dbd_off)
-		cont->vc_cmt_dtx_reindex_pos = next;
+	if (rc == 0) {
+		if (cont->vc_cmt_dtx_reindex_pos == dbd_off)
+			cont->vc_cmt_dtx_reindex_pos = next;
+
+		cont->vc_dtx_committed_count -= count;
+		cont->vc_pool->vp_dtx_committed_count -= count;
+		d_tm_dec_gauge(tls->vtl_committed, count);
+	}
 
 	DL_CDEBUG(rc != 0, DLOG_ERR, DB_IO, rc,
 		  "Release DTX committed blob %p (" UMOFF_PF ") for cont " DF_UUID, dbd,
@@ -2646,14 +2699,12 @@ int
 vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch)
 {
 	struct vos_container	*cont;
-	struct daos_lru_cache	*occ;
 	struct vos_object	*obj;
 	daos_epoch_range_t	 epr = {0, epoch};
 	int	rc;
 
 	cont = vos_hdl2cont(coh);
-	occ = vos_obj_cache_current(cont->vc_pool->vp_sysdb);
-	rc = vos_obj_hold(occ, cont, oid, &epr, 0, VOS_OBJ_VISIBLE,
+	rc = vos_obj_hold(cont, oid, &epr, 0, VOS_OBJ_VISIBLE,
 			  DAOS_INTENT_DEFAULT, &obj, 0);
 	if (rc != 0) {
 		D_ERROR(DF_UOID" fail to mark sync: rc = "DF_RC"\n",
@@ -2672,7 +2723,7 @@ vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch)
 				       sizeof(obj->obj_df->vo_sync), UMEM_COMMIT_IMMEDIATE);
 	}
 
-	vos_obj_release(occ, obj, 0, false);
+	vos_obj_release(obj, 0, false);
 	return 0;
 }
 

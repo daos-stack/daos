@@ -516,11 +516,13 @@ func TestControl_PoolCreate(t *testing.T) {
 			humanize.GiByte * 10,
 		},
 	}
+	customPoolUUID := test.MockPoolUUID()
 
 	for name, tc := range map[string]struct {
 		mic     *MockInvokerConfig
 		req     *PoolCreateReq
 		expResp *PoolCreateResp
+		cmpUUID bool
 		expErr  error
 	}{
 		"local failure": {
@@ -687,6 +689,36 @@ func TestControl_PoolCreate(t *testing.T) {
 				TgtRanks: []uint32{0, 1, 2},
 			},
 		},
+		"custom UUID": {
+			req: &PoolCreateReq{
+				UUID:       customPoolUUID,
+				TierRatio:  mockTierRatios,
+				TotalBytes: humanize.GiByte * 20,
+				Properties: []*daos.PoolProperty{
+					{
+						Name:   "label",
+						Number: daos.PoolPropertyLabel,
+						Value:  strVal("foo"),
+					},
+				},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolCreateResp{
+						SvcLdr:   1,
+						SvcReps:  []uint32{0, 1, 2},
+						TgtRanks: []uint32{0, 1, 2},
+					},
+				),
+			},
+			expResp: &PoolCreateResp{
+				UUID:     customPoolUUID.String(),
+				Leader:   1,
+				SvcReps:  []uint32{0, 1, 2},
+				TgtRanks: []uint32{0, 1, 2},
+			},
+			cmpUUID: true,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -706,8 +738,11 @@ func TestControl_PoolCreate(t *testing.T) {
 				return
 			}
 
-			cmpOpt := cmpopts.IgnoreFields(PoolCreateResp{}, "UUID")
-			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpt); diff != "" {
+			var cmpOpts cmp.Options
+			if !tc.cmpUUID {
+				cmpOpts = append(cmpOpts, cmpopts.IgnoreFields(PoolCreateResp{}, "UUID"))
+			}
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
