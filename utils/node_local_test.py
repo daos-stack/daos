@@ -6328,7 +6328,7 @@ def server_fi(args):
 
 
 def look_for_library_call(conf, cmd, library_str):
-    # pylint: disable=wrong-spelling-in-comment
+    # pylint: disable=wrong-spelling-in-docstring
     """Look for library_str in the strace call stack of running cmd."""
     with tempfile.NamedTemporaryFile(mode='r',
                                      prefix='dnt_assess_',
