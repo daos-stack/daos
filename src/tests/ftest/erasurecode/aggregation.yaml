@@ -27,7 +27,6 @@ server_config:
       storage: auto
 pool:
   size: 90%
-  control_method: dmg
   pool_query_timeout: 30
 container:
   type: POSIX

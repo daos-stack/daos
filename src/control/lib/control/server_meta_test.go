@@ -505,17 +505,15 @@ func TestControl_packPBSmdManageReq(t *testing.T) {
 		},
 		"dev-replace": {
 			req: &SmdManageReq{
-				Operation:      DevReplaceOp,
-				IDs:            test.MockUUID(1),
-				ReplaceUUID:    test.MockUUID(2),
-				ReplaceNoReint: true,
+				Operation:   DevReplaceOp,
+				IDs:         test.MockUUID(1),
+				ReplaceUUID: test.MockUUID(2),
 			},
 			expPBReq: &ctlpb.SmdManageReq{
 				Op: &ctlpb.SmdManageReq_Replace{
 					Replace: &ctlpb.DevReplaceReq{
 						OldDevUuid: test.MockUUID(1),
 						NewDevUuid: test.MockUUID(2),
-						NoReint:    true,
 					},
 				},
 			},
@@ -655,7 +653,6 @@ func TestControl_SmdManage(t *testing.T) {
 			},
 			expErr: errors.New("> 1 host"),
 		},
-		// set-faulty API calls do not return SMD info.
 		"set-faulty": {
 			req: &SmdManageReq{
 				Operation: SetFaultyOp,

@@ -9,6 +9,5 @@ server_config:
     0:
       storage: auto
 pool:
-  control_method: dmg
   scm_size: 10000000000  # 10 GB
   nvme_size: 100000000000  # 100 GB

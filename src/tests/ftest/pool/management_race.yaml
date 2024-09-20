@@ -1,4 +1,4 @@
-#  (C) Copyright 2022 Intel Corporation.
+#  (C) Copyright 2022-2024 Intel Corporation.
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 hosts:
@@ -16,7 +16,6 @@ server_config:
           scm_mount: /mnt/daos
 pool:
   scm_size: 200M
-  control_method: dmg
 boundary_test:
   num_pools: 20
   test_loop: 200
