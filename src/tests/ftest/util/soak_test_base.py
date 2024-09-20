@@ -301,14 +301,17 @@ class SoakTestBase(TestWithServers):
         self.harasser_results[args["name"]] = args["status"]
         self.harasser_args[args["name"]] = args["vars"]
 
-    def schedule_jobs(self):
-        """Schedule jobs with internal scheduler."""
+    def schedule_jobs(self, node_list):
+        """Schedule jobs with internal scheduler.
+
+        Args:
+            node_list (list): list of nodes to use in jobs
+        """
         debug_logging(self.log, self.enable_debug_msg, "DBG: schedule_jobs ENTERED ")
         job_queue = multiprocessing.Queue()
         jobid_list = []
         jobs_not_done = []
         # remove any nodes marked as DOWN
-        node_list = self.hostlist_clients
         node_list.difference_update(self.down_nodes)
         lib_path = os.getenv("LD_LIBRARY_PATH")
         path = os.getenv("PATH")
@@ -326,6 +329,16 @@ class SoakTestBase(TestWithServers):
             if time.time() > self.end_time or len(jobs_not_done) == 0:
                 break
             job_results = {}
+            # verify that there are enough nodes to run remaining jobs
+            if len(job_threads) == 0:
+                for job_dict in self.joblist:
+                    job_id = job_dict["jobid"]
+                    if job_id in jobs_not_done:
+                        node_count = job_dict["nodesperjob"]
+                        if len(node_list) < node_count:
+                            # cancel job
+                            self.soak_results.update({job_id: "CANCELLED"})
+                            jobs_not_done.remove(job_id)
             for job_dict in self.joblist:
                 job_id = job_dict["jobid"]
                 if job_id in jobid_list:
@@ -416,14 +429,17 @@ class SoakTestBase(TestWithServers):
             jobscripts = []
             # command is a list of [sbatch_cmds, log_name] to create a single job script
             commands = []
+            total_nodes = NodeSet(self.hostlist_clients)
+            if self.down_nodes:
+                total_nodes.difference_update(self.down_nodes)
             nodesperjob = self.params.get("nodesperjob", "/run/" + job + "/*", [1])
             taskspernode = self.params.get("taskspernode", "/run/" + job + "/*", [1])
             for npj in list(nodesperjob):
                 # nodesperjob = -1 indicates to use all nodes in client hostlist
                 if npj < 0:
-                    npj = len(self.hostlist_clients)
-                if len(self.hostlist_clients) / npj < 1:
-                    raise SoakTestError(f"<<FAILED: There are only {len(self.hostlist_clients)}"
+                    npj = len(total_nodes)
+                if len(total_nodes) / npj < 1:
+                    raise SoakTestError(f"<<FAILED: There are only {len(total_nodes)}"
                                         f" client nodes for this job. Job requires {npj}")
                 for ppn in list(taskspernode):
                     if "ior" in job:
@@ -500,12 +516,14 @@ class SoakTestBase(TestWithServers):
             for job_dict in self.joblist:
                 job_dict["jobid"] = get_id()
                 job_id_list.append(job_dict["jobid"])
-
+            node_list = NodeSet(self.hostlist_clients)
+            node_list.difference_update(self.down_nodes)
             # self.schedule_jobs()
             method = self.schedule_jobs
             name = "Job Scheduler"
-            scheduler = threading.Thread(target=method, name=name, daemon=True)
-            # scheduler = multiprocessing.Process(target=method, name=name)
+            params = (node_list, )
+            scheduler = threading.Thread(
+                target=method, args=params, name=name, daemon=True)
             scheduler.start()
 
         return job_id_list
