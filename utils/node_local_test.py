@@ -6328,15 +6328,15 @@ def server_fi(args):
 
 
 def look_for_library_call(conf, cmd, library_str):
+    # pylint: disable=wrong-spelling-in-comment
     """Look for library_str in the strace call stack of running cmd."""
-    tmpfile = tempfile.NamedTemporaryFile(mode='r',
-                                          prefix='dnt_assess_',
-                                          suffix='.strace',
-                                          dir=conf.tmp_dir)
-    strace_cmd = ['strace', '--stack-traces', '-v', '-o', tmpfile.name] + cmd
-    subprocess.run(strace_cmd, check=True)
-    lines = tmpfile.readlines()
-    tmpfile.close()
+    with tempfile.NamedTemporaryFile(mode='r',
+                                     prefix='dnt_assess_',
+                                     suffix='.strace',
+                                     dir=conf.tmp_dir) as tmpfile:
+        strace_cmd = ['strace', '--stack-traces', '-v', '-o', tmpfile.name] + cmd
+        subprocess.run(strace_cmd, check=True)
+        lines = tmpfile.readlines()
     for line in lines:
         if re.search(library_str, line):
             return True
