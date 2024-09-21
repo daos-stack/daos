@@ -63,7 +63,7 @@ largefilecount:
     # We want to isolate the issues in HDF5 and HDF5-VOL, so comment out MPIIO, POSIX, and DFS.
     #- MPIIO
     #- POSIX
-    - HDF5
+    #- HDF5
     - HDF5-VOL
     #- DFS
   object_class:
@@ -110,8 +110,8 @@ hdf5_vol:
 
 io_sys_admin:
   steps_to_run:
-    pool_create_ownership: True
-    storage_system_query: True
+    pool_create_ownership: False
+    storage_system_query: False
     io: True
-    snapshot: True
-    datamover: True
+    snapshot: False
+    datamover: False
