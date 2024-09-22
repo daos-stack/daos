@@ -338,6 +338,11 @@ class SoakTestBase(TestWithServers):
                         if len(node_list) < node_count:
                             # cancel job
                             self.soak_results.update({job_id: "CANCELLED"})
+                            log.info(
+                                "FINAL STATE: soak job %s completed with : %s at %s",
+                                job_id,
+                                "CANCELLED",
+                                time.ctime())
                             jobs_not_done.remove(job_id)
             for job_dict in self.joblist:
                 job_id = job_dict["jobid"]
