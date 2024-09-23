@@ -333,22 +333,26 @@ obj_pin_bkt(struct vos_pool *pool, struct vos_object *obj)
 		ABT_cond_wait(obj->obj_wait_loading, obj->obj_mutex);
 		ABT_mutex_unlock(obj->obj_mutex);
 
-		/* The loader failed on umem_cache_pin() */
+		/* The loader failed on vos_cache_pin() */
 		if (obj->obj_pin_hdl == NULL) {
 			D_ERROR("Object:"DF_UOID" isn't pinned.\n", DP_UOID(obj->obj_id));
 			return -DER_BUSY;
 		}
 	}
 
-	if (obj->obj_pin_hdl != NULL)
+	if (obj->obj_pin_hdl != NULL) {
+		struct vos_cache_metrics *vcm = store2cache_metrics(store);
+
+		d_tm_inc_counter(vcm->vcm_obj_hit, 1);
 		return 0;
+	}
 
 	obj->obj_bkt_loading = 1;
 
 	rg.cr_off = umem_get_mb_base_offset(vos_pool2umm(pool), obj->obj_bkt_ids[0]);
 	rg.cr_size = store->cache->ca_page_sz;
 
-	rc = umem_cache_pin(store, &rg, 1, false, &obj->obj_pin_hdl);
+	rc = vos_cache_pin(store, &rg, 1, false, &obj->obj_pin_hdl);
 	if (rc)
 		DL_ERROR(rc, "Failed to pin object:"DF_UOID".", DP_UOID(obj->obj_id));
 
@@ -886,7 +890,7 @@ vos_bkt_array_pin(struct vos_pool *pool, struct vos_bkt_array *bkts,
 		ranges[i].cr_size = vos_pool2store(pool)->cache->ca_page_sz;
 	}
 
-	rc = umem_cache_pin(vos_pool2store(pool), ranges, bkts->vba_cnt, false, pin_hdl);
+	rc = vos_cache_pin(vos_pool2store(pool), ranges, bkts->vba_cnt, false, pin_hdl);
 	if (rc)
 		DL_ERROR(rc, "Failed to pin %u ranges.", bkts->vba_cnt);
 

@@ -208,6 +208,20 @@ enum umem_page_stats {
 	UMEM_PG_STATS_MAX,
 };
 
+enum umem_cache_stats {
+	/* How many page cache hit */
+	UMEM_CACHE_STATS_HIT	= 0,
+	/* How many page cache miss */
+	UMEM_CACHE_STATS_MISS,
+	/* How many pages are evicted */
+	UMEM_CACHE_STATS_EVICT,
+	/* How many dirty pages are flushed on evicting */
+	UMEM_CACHE_STATS_FLUSH,
+	/* How many pages are loaded on cache miss */
+	UMEM_CACHE_STATS_LOAD,
+	UMEM_CACHE_STATS_MAX,
+};
+
 /** Global cache status for each umem_store */
 struct umem_cache {
 	struct umem_store *ca_store;
@@ -255,6 +269,8 @@ struct umem_cache {
 	void            *ca_fn_arg;
 	/** Page stats */
 	uint32_t         ca_pgs_stats[UMEM_PG_STATS_MAX];
+	/** Cache stats */
+	uint64_t	 ca_cache_stats[UMEM_CACHE_STATS_MAX];
 	/** How many waiters waiting on free page reserve */
 	uint32_t         ca_reserve_waiters;
 	/** Waitqueue for free page reserve: umem_cache_reserve() */
