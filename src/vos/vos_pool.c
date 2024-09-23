@@ -784,15 +784,16 @@ vos_pool_roundup_size(daos_size_t *scm_sz, daos_size_t *meta_sz)
 	size_t alignsz;
 	int    rc;
 
-	D_ASSERT((*scm_sz != 0) && (*meta_sz != 0));
-	rc = vos_pool_store_type(*scm_sz, *meta_sz);
+	D_ASSERT(*scm_sz != 0);
+	rc = vos_pool_store_type(*scm_sz, *meta_sz ? *meta_sz : *scm_sz);
 	if (rc < 0)
 		return rc;
 
 	/* Round up the size such that it is compatible with backend */
 	alignsz  = umempobj_pgsz(rc);
 	*scm_sz  = max(D_ALIGNUP(*scm_sz, alignsz), 1 << 24);
-	*meta_sz = max(D_ALIGNUP(*meta_sz, alignsz), 1 << 24);
+	if (*meta_sz)
+		*meta_sz = max(D_ALIGNUP(*meta_sz, alignsz), 1 << 24);
 
 	return 0;
 }
