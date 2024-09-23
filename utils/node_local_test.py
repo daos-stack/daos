@@ -6400,7 +6400,7 @@ def run(wf, args):
     if args.perf_check or fi_test or fi_test_dfuse:
         fs = subprocess.run([os.path.join(conf['PREFIX'], 'bin', 'fault_status')], check=False)
         print(fs)
-        if fs.returncode == 0:
+        if fs.returncode == 14:
             run_fi = True
         else:
             print("Unable to verify fault injection feature")
