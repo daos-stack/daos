@@ -8,7 +8,6 @@ import subprocess  # nosec B404
 from SCons.Script import Configure, Exit, File, GetOption, Glob, Scanner
 
 GO_COMPILER = 'go'
-MIN_GO_VERSION = '1.18.0'
 include_re = re.compile(r'\#include [<"](\S+[>"])', re.M)
 
 
@@ -92,11 +91,6 @@ def generate(env):
         go_version = get_go_version(out)
         if go_version is None:
             context.Result(f'failed to get version from "{out}"')
-            return 0
-        if len([x for x, y in
-                zip(go_version.split('.'), MIN_GO_VERSION.split('.'))
-                if int(x) < int(y)]) > 0:
-            context.Result(f'{out} is too old (min supported: {MIN_GO_VERSION}) ')
             return 0
         context.Result(go_version)
         return 1
