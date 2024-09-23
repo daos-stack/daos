@@ -340,8 +340,12 @@ obj_pin_bkt(struct vos_pool *pool, struct vos_object *obj)
 		}
 	}
 
-	if (obj->obj_pin_hdl != NULL)
+	if (obj->obj_pin_hdl != NULL) {
+		struct vos_cache_metrics *vcm = store2cache_metrics(store);
+
+		d_tm_inc_counter(vcm->vcm_obj_hit, 1);
 		return 0;
+	}
 
 	obj->obj_bkt_loading = 1;
 

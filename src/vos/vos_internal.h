@@ -246,11 +246,12 @@ struct vos_cache_metrics {
 	struct d_tm_node_t	*vcm_pg_ne;
 	struct d_tm_node_t	*vcm_pg_pinned;
 	struct d_tm_node_t	*vcm_pg_free;
-	struct d_tm_node_t	*vcm_cache_hit;
-	struct d_tm_node_t	*vcm_cache_miss;
-	struct d_tm_node_t	*vcm_cache_evict;
-	struct d_tm_node_t	*vcm_cache_flush;
-	struct d_tm_node_t	*vcm_cache_load;
+	struct d_tm_node_t	*vcm_pg_hit;
+	struct d_tm_node_t	*vcm_pg_miss;
+	struct d_tm_node_t	*vcm_pg_evict;
+	struct d_tm_node_t	*vcm_pg_flush;
+	struct d_tm_node_t	*vcm_pg_load;
+	struct d_tm_node_t	*vcm_obj_hit;
 };
 
 void vos_cache_metrics_init(struct vos_cache_metrics *vc_metrcis, const char *path, int tgt_id);
@@ -1926,24 +1927,23 @@ store2cache_metrics(struct umem_store *store)
 }
 
 static inline void
-update_cache_stats(struct umem_store *store)
+update_page_stats(struct umem_store *store)
 {
 	struct vos_cache_metrics	*vcm = store2cache_metrics(store);
 	struct umem_cache		*cache = store->cache;
 
-	/* Cache stats is only valid for md-on-ssd phase2 pool */
-	if (store->store_type != DAOS_MD_BMEM_V2 || vcm == NULL)
+	if (vcm == NULL)
 		return;
 
 	d_tm_set_counter(vcm->vcm_pg_ne, cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE]);
 	d_tm_set_counter(vcm->vcm_pg_pinned, cache->ca_pgs_stats[UMEM_PG_STATS_PINNED]);
 	d_tm_set_counter(vcm->vcm_pg_free, cache->ca_pgs_stats[UMEM_PG_STATS_FREE]);
 
-	d_tm_set_counter(vcm->vcm_cache_hit, cache->ca_cache_stats[UMEM_CACHE_STATS_HIT]);
-	d_tm_set_counter(vcm->vcm_cache_miss, cache->ca_cache_stats[UMEM_CACHE_STATS_MISS]);
-	d_tm_set_counter(vcm->vcm_cache_evict, cache->ca_cache_stats[UMEM_CACHE_STATS_EVICT]);
-	d_tm_set_counter(vcm->vcm_cache_flush, cache->ca_cache_stats[UMEM_CACHE_STATS_FLUSH]);
-	d_tm_set_counter(vcm->vcm_cache_load, cache->ca_cache_stats[UMEM_CACHE_STATS_LOAD]);
+	d_tm_set_counter(vcm->vcm_pg_hit, cache->ca_cache_stats[UMEM_CACHE_STATS_HIT]);
+	d_tm_set_counter(vcm->vcm_pg_miss, cache->ca_cache_stats[UMEM_CACHE_STATS_MISS]);
+	d_tm_set_counter(vcm->vcm_pg_evict, cache->ca_cache_stats[UMEM_CACHE_STATS_EVICT]);
+	d_tm_set_counter(vcm->vcm_pg_flush, cache->ca_cache_stats[UMEM_CACHE_STATS_FLUSH]);
+	d_tm_set_counter(vcm->vcm_pg_load, cache->ca_cache_stats[UMEM_CACHE_STATS_LOAD]);
 }
 
 static inline int
@@ -1953,7 +1953,7 @@ vos_cache_pin(struct umem_store *store, struct umem_cache_range *ranges, int ran
 	int	rc;
 
 	rc = umem_cache_pin(store, ranges, range_nr, for_sys, pin_handle);
-	update_cache_stats(store);
+	update_page_stats(store);
 
 	return rc;
 }

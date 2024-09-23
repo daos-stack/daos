@@ -3041,7 +3041,7 @@ cache_load_page(struct umem_cache *cache, struct umem_page_info *pinfo)
 		VALGRIND_ENABLE_ADDR_ERROR_REPORTING_IN_RANGE((char *)pinfo->pi_addr, len);
 	pinfo->pi_io = 0;
 	if (rc) {
-		DL_ERROR(rc, "Read MD blob failed.\n");
+		DL_ERROR(rc, "Read MD blob failed.");
 		page_wakeup_io(cache, pinfo);
 		return rc;
 	} else if (cache->ca_evtcb_fn) {
@@ -3185,7 +3185,7 @@ evict:
 	if (is_page_dirty(pinfo)) {
 		rc = cache_flush_page(cache, pinfo);
 		if (rc) {
-			DL_ERROR(rc, "Flush page failed.\n");
+			DL_ERROR(rc, "Flush page failed.");
 			return rc;
 		}
 
@@ -3246,7 +3246,7 @@ cache_get_free_page(struct umem_cache *cache, struct umem_page_info **ret_pinfo,
 	while (need_evict(cache)) {
 		rc = cache_evict_page(cache, for_sys);
 		if (rc && rc != -DER_AGAIN && rc != -DER_BUSY) {
-			DL_ERROR(rc, "Evict page failed.\n");
+			DL_ERROR(rc, "Evict page failed.");
 			return rc;
 		}
 
@@ -3297,7 +3297,7 @@ cache_map_pages(struct umem_cache *cache, uint32_t *pages, int page_nr)
 		if (is_id_evictable(cache, pg_id)) {
 			rc = cache_get_free_page(cache, &pinfo, 0, false);
 			if (rc) {
-				DL_ERROR(rc, "Failed to get free page.\n");
+				DL_ERROR(rc, "Failed to get free page.");
 				break;
 			}
 		} else {
@@ -3482,7 +3482,7 @@ umem_cache_map(struct umem_store *store, struct umem_cache_range *ranges, int ra
 
 	rc = cache_map_pages(cache, out_pages, page_nr);
 	if (rc)
-		DL_ERROR(rc, "Map page failed.\n");
+		DL_ERROR(rc, "Map page failed.");
 
 	if (out_pages != &in_pages[0])
 		D_FREE(out_pages);
@@ -3505,7 +3505,7 @@ umem_cache_load(struct umem_store *store, struct umem_cache_range *ranges, int r
 
 	rc = cache_pin_pages(cache, out_pages, page_nr, for_sys);
 	if (rc) {
-		DL_ERROR(rc, "Load page failed.\n");
+		DL_ERROR(rc, "Load page failed.");
 	} else {
 		for (i = 0; i < page_nr; i++) {
 			uint32_t	pg_id = out_pages[i];
@@ -3542,7 +3542,7 @@ umem_cache_pin(struct umem_store *store, struct umem_cache_range *ranges, int ra
 
 	rc = cache_pin_pages(cache, out_pages, page_nr, for_sys);
 	if (rc) {
-		DL_ERROR(rc, "Load page failed.\n");
+		DL_ERROR(rc, "Load page failed.");
 		goto out;
 	}
 
@@ -3605,7 +3605,7 @@ umem_cache_reserve(struct umem_store *store)
 	while (need_reserve(cache, 0)) {
 		rc = cache_evict_page(cache, false);
 		if (rc && rc != -DER_AGAIN && rc != -DER_BUSY) {
-			DL_ERROR(rc, "Evict page failed.\n");
+			DL_ERROR(rc, "Evict page failed.");
 			break;
 		}
 

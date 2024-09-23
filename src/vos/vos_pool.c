@@ -443,30 +443,36 @@ vos_cache_metrics_init(struct vos_cache_metrics *vc_metrics, const char *path, i
 	if (rc)
 		DL_WARN(rc, "Failed to create free pages telemetry.");
 
-	rc = d_tm_add_metric(&vc_metrics->vcm_cache_hit, D_TM_COUNTER, "Page cache hit",
-			     "hits", "%s/%s/cache_hit/tgt_%d", path, VOS_CACHE_DIR, tgt_id);
+	rc = d_tm_add_metric(&vc_metrics->vcm_pg_hit, D_TM_COUNTER, "Page cache hit",
+			     "hits", "%s/%s/page_hit/tgt_%d", path, VOS_CACHE_DIR, tgt_id);
 	if (rc)
-		DL_WARN(rc, "Failed to create cache hit telemetry.");
+		DL_WARN(rc, "Failed to create page hit telemetry.");
 
-	rc = d_tm_add_metric(&vc_metrics->vcm_cache_miss, D_TM_COUNTER, "Page cache miss",
-			     "misses", "%s/%s/cache_miss/tgt_%d", path, VOS_CACHE_DIR, tgt_id);
+	rc = d_tm_add_metric(&vc_metrics->vcm_pg_miss, D_TM_COUNTER, "Page cache miss",
+			     "misses", "%s/%s/page_miss/tgt_%d", path, VOS_CACHE_DIR, tgt_id);
 	if (rc)
-		DL_WARN(rc, "Failed to create cache miss telemetry.");
+		DL_WARN(rc, "Failed to create page miss telemetry.");
 
-	rc = d_tm_add_metric(&vc_metrics->vcm_cache_evict, D_TM_COUNTER, "Page cache evict",
-			     "pages", "%s/%s/cache_evict/tgt_%d", path, VOS_CACHE_DIR, tgt_id);
+	rc = d_tm_add_metric(&vc_metrics->vcm_pg_evict, D_TM_COUNTER, "Page cache evict",
+			     "pages", "%s/%s/page_evict/tgt_%d", path, VOS_CACHE_DIR, tgt_id);
 	if (rc)
-		DL_WARN(rc, "Failed to create cache evict telemetry.");
+		DL_WARN(rc, "Failed to create page evict telemetry.");
 
-	rc = d_tm_add_metric(&vc_metrics->vcm_cache_flush, D_TM_COUNTER, "Page cache flush",
-			     "pages", "%s/%s/cache_flush/tgt_%d", path, VOS_CACHE_DIR, tgt_id);
+	rc = d_tm_add_metric(&vc_metrics->vcm_pg_flush, D_TM_COUNTER, "Page cache flush",
+			     "pages", "%s/%s/page_flush/tgt_%d", path, VOS_CACHE_DIR, tgt_id);
 	if (rc)
-		DL_WARN(rc, "Failed to create cache flush telemetry.");
+		DL_WARN(rc, "Failed to create page flush telemetry.");
 
-	rc = d_tm_add_metric(&vc_metrics->vcm_cache_load, D_TM_COUNTER, "Page cache load",
-			     "pages", "%s/%s/cache_load/tgt_%d", path, VOS_CACHE_DIR, tgt_id);
+	rc = d_tm_add_metric(&vc_metrics->vcm_pg_load, D_TM_COUNTER, "Page cache load",
+			     "pages", "%s/%s/page_load/tgt_%d", path, VOS_CACHE_DIR, tgt_id);
 	if (rc)
-		DL_WARN(rc, "Failed to create cache load telemetry.");
+		DL_WARN(rc, "Failed to create page load telemetry.");
+
+	rc = d_tm_add_metric(&vc_metrics->vcm_obj_hit, D_TM_COUNTER, "Object cache hit",
+			     "hits", "%s/%s/obj_hit/tgt_%d", path, VOS_CACHE_DIR, tgt_id);
+	if (rc)
+		DL_WARN(rc, "Failed to create object hit telemetry.");
+
 }
 
 static inline struct vos_wal_metrics *
