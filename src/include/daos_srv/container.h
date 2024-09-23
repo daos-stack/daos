@@ -73,6 +73,7 @@ struct ds_cont_child {
 				 sc_dtx_registered:1,
 				 sc_props_fetched:1,
 				 sc_stopping:1,
+				 sc_destroying:1,
 				 sc_vos_agg_active:1,
 				 sc_ec_agg_active:1,
 				 /* flag of CONT_CAPA_READ_DATA/_WRITE_DATA disabled */
