@@ -466,7 +466,7 @@ oit_mark(daos_handle_t oh, daos_handle_t oit)
 			}
 
 			memcpy(key, ptr, kds[i].kd_key_len);
-			key[kds[i].kd_key_len + 1] = '\0';
+			key[kds[i].kd_key_len] = '\0';
 			ptr += kds[i].kd_key_len;
 
 			rc = daos_kv_get(oh, DAOS_TX_NONE, DAOS_COND_KEY_GET, key, &size, &entry,

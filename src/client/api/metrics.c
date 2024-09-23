@@ -8,6 +8,7 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 #include <sys/utsname.h>
 #include <sys/shm.h>
 #include <daos/common.h>
@@ -20,13 +21,20 @@
 #include <gurt/telemetry_producer.h>
 
 #define INIT_JOB_NUM 1024
-bool daos_client_metric        = false;
-bool daos_client_metric_retain = false;
+bool daos_client_metric;
+bool daos_client_metric_retain;
 
 #define MAX_IDS_SIZE(num) (num * D_TM_METRIC_SIZE)
 /* The client side metrics structure looks like
  * root/job_id/pid/....
  */
+
+static int
+shm_key(pid_t pid)
+{
+	/* Set the key based on our pid so that it can be easily found. */
+	return pid - D_TM_SHARED_MEMORY_KEY;
+}
 
 static int
 shm_chown(key_t key, uid_t new_owner)
@@ -59,24 +67,31 @@ shm_chown(key_t key, uid_t new_owner)
 }
 
 static int
-init_managed_root(const char *name, pid_t pid, int flags)
+init_root(const char *name, pid_t pid, int flags)
 {
 	uid_t agent_uid;
 	key_t key;
 	int   rc;
 
-	/* Set the key based on our pid so that it can be easily found. */
-	key = pid - D_TM_SHARED_MEMORY_KEY;
+	key = shm_key(pid);
 	rc  = d_tm_init_with_name(key, MAX_IDS_SIZE(INIT_JOB_NUM), flags, name);
 	if (rc != 0) {
 		DL_ERROR(rc, "failed to initialize root for %s.", name);
 		return rc;
 	}
 
+	/* If the metrics will not be retained, don't register them with the agent. */
+	if (!daos_client_metric_retain)
+		goto skip_agent;
+
 	/* Request that the agent adds our segment into the tree. */
 	rc = dc_mgmt_tm_register(NULL, dc_jobid, pid, &agent_uid);
 	if (rc != 0) {
-		DL_ERROR(rc, "client telemetry setup failed.");
+		if (rc == -DER_UNINIT && d_isenv_def(DAOS_CLIENT_METRICS_DUMP_DIR)) {
+			D_INFO("telemetry dump dir set -- proceeding without agent management.\n");
+			goto skip_agent;
+		}
+		DL_ERROR(rc, "client telemetry failed to register with agent.");
 		return rc;
 	}
 
@@ -84,10 +99,11 @@ init_managed_root(const char *name, pid_t pid, int flags)
 	D_INFO("setting shm segment 0x%x to be owned by uid %d\n", pid, agent_uid);
 	rc = shm_chown(pid, agent_uid);
 	if (rc != 0) {
-		DL_ERROR(rc, "failed to chown shm segment.");
+		DL_ERROR(rc, "failed to chown shm segment for agent management.");
 		return rc;
 	}
 
+skip_agent:
 	return 0;
 }
 
@@ -101,7 +117,7 @@ dc_tm_init(void)
 	int                 rc;
 
 	d_getenv_bool(DAOS_CLIENT_METRICS_ENABLE, &daos_client_metric);
-	if (!daos_client_metric && d_isenv_def(DAOS_CLIENT_METRICS_DUMP_PATH))
+	if (!daos_client_metric && d_isenv_def(DAOS_CLIENT_METRICS_DUMP_DIR))
 		daos_client_metric = true;
 
 	if (!daos_client_metric)
@@ -119,7 +135,7 @@ dc_tm_init(void)
 		metrics_tag |= D_TM_RETAIN_SHMEM;
 
 	snprintf(root_name, sizeof(root_name), "%d", pid);
-	rc = init_managed_root(root_name, pid, metrics_tag);
+	rc = init_root(root_name, pid, metrics_tag);
 	if (rc != 0) {
 		DL_ERROR(rc, "failed to initialize client telemetry");
 		D_GOTO(out, rc);
@@ -150,37 +166,66 @@ iter_dump(struct d_tm_context *ctx, struct d_tm_node_t *node, int level, char *p
 }
 
 static int
-dump_tm_file(const char *dump_path)
+dump_tm_file(const char *dump_dir)
 {
 	struct d_tm_context *ctx;
 	struct d_tm_node_t  *root;
-	char                 dirname[D_TM_MAX_NAME_LEN] = {0};
+	char                 file_path[1024]               = {0};
+	pid_t                pid                           = getpid();
 	uint32_t             filter;
 	FILE                *dump_file;
 	int                  rc = 0;
 
-	dump_file = fopen(dump_path, "w+");
+	rc = mkdir(dump_dir, 0770);
+	if (rc < 0) {
+		if (errno != EEXIST) {
+			rc = d_errno2der(errno);
+			DL_ERROR(rc, "mkdir(%s) failed", dump_dir);
+			return rc;
+		}
+
+		struct stat stbuf = {0};
+		rc                = stat(dump_dir, &stbuf);
+		if (rc < 0) {
+			rc = d_errno2der(errno);
+			DL_ERROR(rc, "stat(%s) failed", dump_dir);
+			return rc;
+		}
+
+		if ((stbuf.st_mode & S_IFMT) != S_IFDIR) {
+			D_ERROR("%s exists and is not a directory\n", dump_dir);
+			return -DER_NOTDIR;
+		}
+	}
+
+	rc = snprintf(file_path, sizeof(file_path), "%s/%s-%d.csv", dump_dir, dc_jobid, pid);
+	if (rc > sizeof(file_path)) {
+		D_ERROR("dump directory and/or jobid too long\n");
+		return -DER_INVAL;
+	}
+	rc        = 0;
+	dump_file = fopen(file_path, "w+");
 	if (dump_file == NULL) {
-		D_INFO("cannot open %s", dump_path);
+		rc = d_errno2der(errno);
+		DL_ERROR(rc, "cannot open %s", file_path);
 		return -DER_INVAL;
 	}
 
 	filter = D_TM_COUNTER | D_TM_DURATION | D_TM_TIMESTAMP | D_TM_MEMINFO |
 		 D_TM_TIMER_SNAPSHOT | D_TM_GAUGE | D_TM_STATS_GAUGE;
 
-	ctx = d_tm_open(DC_TM_JOB_ROOT_ID);
+	ctx = d_tm_open(shm_key(pid));
 	if (ctx == NULL)
 		D_GOTO(close, rc = -DER_NOMEM);
 
-	snprintf(dirname, sizeof(dirname), "%s/%u", dc_jobid, getpid());
-	root = d_tm_find_metric(ctx, dirname);
+	root = d_tm_get_root(ctx);
 	if (root == NULL) {
-		printf("No metrics found at: '%s'\n", dirname);
+		D_ERROR("No metrics found for dump.\n");
 		D_GOTO(close_ctx, rc = -DER_NONEXIST);
 	}
 
+	D_INFO("dumping telemetry to %s\n", file_path);
 	d_tm_print_field_descriptors(0, dump_file);
-
 	d_tm_iterate(ctx, root, 0, filter, NULL, D_TM_CSV, 0, iter_dump, dump_file);
 
 close_ctx:
@@ -193,20 +238,21 @@ close:
 void
 dc_tm_fini()
 {
-	char *dump_path;
+	char *dump_dir;
 	int   rc;
 
 	if (!daos_client_metric)
 		return;
 
-	rc = d_agetenv_str(&dump_path, DAOS_CLIENT_METRICS_DUMP_PATH);
+	rc = d_agetenv_str(&dump_dir, DAOS_CLIENT_METRICS_DUMP_DIR);
 	if (rc != 0)
 		D_GOTO(out, rc);
-	if (dump_path != NULL) {
-		D_INFO("dump path is %s\n", dump_path);
-		dump_tm_file(dump_path);
+	if (dump_dir != NULL) {
+		rc = dump_tm_file(dump_dir);
+		if (rc != 0)
+			DL_ERROR(rc, "telemetry dump failed");
 	}
-	d_freeenv_str(&dump_path);
+	d_freeenv_str(&dump_dir);
 
 out:
 	dc_tls_fini();

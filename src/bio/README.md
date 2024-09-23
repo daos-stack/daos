@@ -75,7 +75,7 @@ The device owner xstream is responsible for maintaining anf updating all device 
 The DAOS data plane will monitor NVMe SSDs every 60 seconds, including updating the health stats with current values, checking current device states, and making any necessary blobstore/device state transitions. Once a FAULTY state transition has occurred, the monitoring period will be reduced to 10 seconds to allow for quicker transitions and finer-grained monitoring until the device is fully evicted.
 
  Useful admin command to query device health:
-  - <a href="#81">dmg storage query device-health</a> [used to query SSD health stats]
+  - <a href="#81">dmg storage query list-devices --health</a> [used to query SSD health stats]
 
 While monitoring this health data, an admin can now make the determination to manually evict a faulty device. This data will also be used to set the faulty device criteria for automatic SSD eviction (available in a future release).
 
@@ -179,10 +179,10 @@ Pools
 ```
 
 <a id="81"></a>
-- Query Device Health Data: **$dmg storage query device-health**
+- Query Device Health Data: **$dmg storage query list-devices --health**
 
 ```
-$ dmg storage query device-health --uuid=9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0
+$ dmg storage query list-devices --health --uuid=9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0
 Devices:
         UUID:9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0 [TrAddr:0000:8d:00.0]
            Targets:[0] Rank:0 State:NORMAL
@@ -209,7 +209,7 @@ Devices:
 <a id="82"></a>
 - Manually Set Device State to FAULTY: **$dmg storage set nvme-faulty**
 ```
-$ dmg storage set nvme-faulty --uuid=9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0
+$ dmg storage set nvme-faulty --host=localhost --uuid=9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0
 Devices
         UUID:9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0 [TrAddr:0000:8d:00.0]
             Targets:[0] Rank:0 State:EVICTED
@@ -219,7 +219,7 @@ Devices
 <a id="83"></a>
 - Replace an evicted device with a new device: **$dmg storage replace nvme**
 ```
-$ dmg storage replace nvme --old-uuid=9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0 --new-uuid=8131fc39-4b1c-4662-bea1-734e728c434e
+$ dmg storage replace nvme --host=localhost --old-uuid=9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0 --new-uuid=8131fc39-4b1c-4662-bea1-734e728c434e
 Devices
         UUID:8131fc39-4b1c-4662-bea1-734e728c434e [TrAddr:0000:8d:00.0]
             Targets:[0] Rank:0 State:NORMAL
@@ -229,7 +229,7 @@ Devices
 <a id="84"></a>
 - Reuse a previously evicted device: **$dmg storage replace nvme**
 ```
-$ dmg storage replace nvme --old-uuid=9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0 --new-uuid=9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0
+$ dmg storage replace nvme --host=localhost --old-uuid=9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0 --new-uuid=9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0
 Devices
         UUID:9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0 [TrAddr:0000:8a:00.0]
             Targets:[0] Rank:0 State:NORMAL

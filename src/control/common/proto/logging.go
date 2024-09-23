@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -80,7 +80,7 @@ func Debug(msg proto.Message) string {
 			fmt.Fprintf(&bld, "%s:%s ", state, set.String())
 		}
 	case *mgmtpb.PoolCreateReq:
-		fmt.Fprintf(&bld, "%T uuid:%s u:%s g:%s ", m, m.Uuid, m.User, m.Usergroup)
+		fmt.Fprintf(&bld, "%T uuid:%s u:%s g:%s ", m, m.Uuid, m.User, m.UserGroup)
 		if len(m.Properties) > 0 {
 			fmt.Fprintf(&bld, "p:%+v ", m.Properties)
 		}
@@ -90,10 +90,10 @@ func Debug(msg proto.Message) string {
 		}
 		fmt.Fprintf(&bld, "ranks:%s ", ranks.String())
 		fmt.Fprint(&bld, "tiers:")
-		for i, b := range m.Tierbytes {
+		for i, b := range m.TierBytes {
 			fmt.Fprintf(&bld, "%d: %d ", i, b)
-			if len(m.Tierratio) > i+1 {
-				fmt.Fprintf(&bld, "(%.02f%%) ", m.Tierratio[i])
+			if len(m.TierRatio) > i+1 {
+				fmt.Fprintf(&bld, "(%.02f%%) ", m.TierRatio[i])
 			}
 		}
 	case *mgmtpb.PoolCreateResp:
@@ -143,7 +143,7 @@ func Debug(msg proto.Message) string {
 		for _, ru := range m.RankUris {
 			uriRanks.Add(ranklist.Rank(ru.Rank))
 		}
-		fmt.Fprintf(&bld, "%T@%d ms:%s ranks:%s client:%+v", m, m.DataVersion, msRanks.String(), uriRanks.String(), m.ClientNetHint)
+		fmt.Fprintf(&bld, "%T@%d ms:%s ranks:%s client:%+v build:%s", m, m.DataVersion, msRanks.String(), uriRanks.String(), m.ClientNetHint, m.BuildInfo.BuildString())
 	case *mgmtpb.LeaderQueryResp:
 		fmt.Fprintf(&bld, "%T leader:%s Replica Set:%s Down Replicas:%s", m, m.CurrentLeader, strings.Join(m.Replicas, ","), strings.Join(m.DownReplicas, ","))
 	case *sharedpb.ClusterEventReq:

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -441,6 +441,7 @@ daos_cont_delete_acl(daos_handle_t coh, enum daos_acl_principal_type type,
  *			0		Success
  *			-DER_INVAL	Invalid parameter
  *			-DER_NO_PERM	Permission denied
+ *			-DER_NONEXIST	User or group does not exist
  *			-DER_UNREACH	Network is unreachable
  *			-DER_NO_HDL	Invalid container handle
  *			-DER_NOMEM	Out of memory
@@ -448,6 +449,29 @@ daos_cont_delete_acl(daos_handle_t coh, enum daos_acl_principal_type type,
 int
 daos_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group,
 		    daos_event_t *ev);
+
+/**
+ * Update a container's owner user and/or owner group, without verifying the user/group exists
+ * locally on the machine.
+ *
+ * \param[in]	coh	Container handle
+ * \param[in]	user	New owner user (NULL if not updating)
+ * \param[in]	group	New owner group (NULL if not updating)
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_HDL	Invalid container handle
+ *			-DER_NOMEM	Out of memory
+ */
+int
+daos_cont_set_owner_no_check(daos_handle_t coh, d_string_t user, d_string_t group,
+			     daos_event_t *ev);
 
 /**
  * List the names of all user-defined container attributes.

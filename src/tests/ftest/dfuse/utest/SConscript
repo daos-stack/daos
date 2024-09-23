@@ -1,0 +1,27 @@
+# /*
+#  * (C) Copyright 2024 Intel Corporation.
+#  *
+#  * SPDX-License-Identifier: BSD-2-Clause-Patent
+# */
+"""Build dfuse tests"""
+
+import os
+
+PIL4DFS_TEST_SRC = ['pil4dfs_dcache.c']
+
+
+def scons():
+    """scons function"""
+    Import('env')
+    test_env = env.Clone()
+    test_env.AppendUnique(LIBS=['cmocka', 'gurt'])
+    test_env.require('cmocka')
+
+    for test in PIL4DFS_TEST_SRC:
+        tests_dir = os.path.join("$PREFIX", 'lib', 'daos', 'TESTING', 'tests')
+        test_exe = test_env.d_test_program(test)
+        test_env.Install(tests_dir, test_exe)
+
+
+if __name__ == "SCons.Script":
+    scons()

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2022-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -389,8 +389,11 @@ dcv_suit_teardown(void **state)
 {
 	struct dt_vos_pool_ctx *tctx = *state;
 
-	if (tctx == NULL)
+	if (tctx == NULL) {
 		fail_msg("Test not setup correctly");
+		return -DER_UNKNOWN;
+	}
+
 	assert_success(dv_pool_close(tctx->dvt_poh));
 	ddb_teardown_vos(state);
 

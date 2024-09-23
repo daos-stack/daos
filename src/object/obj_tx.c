@@ -2311,6 +2311,8 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx, daos_tx_commit_t *args)
 	tx->tx_renew = 0;
 	if (tx->tx_reintegrating)
 		oci->oci_flags |= ORF_REINTEGRATING_IO;
+	if (tx->tx_write_cnt == 0)
+		oci->oci_flags |= ORF_CPD_RDONLY;
 
 	oci->oci_sub_heads.ca_arrays = &tx->tx_head;
 	oci->oci_sub_heads.ca_count = 1;

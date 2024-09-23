@@ -1,13 +1,13 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from dfuse_test_base import DfuseTestBase
+from apricot import TestWithServers
 from fio_utils import FioCommand
 
 
-class FioBase(DfuseTestBase):
+class FioBase(TestWithServers):
     """Base fio class.
 
     :avocado: recursive
@@ -34,37 +34,7 @@ class FioBase(DfuseTestBase):
         self.processes = self.params.get("np", '/run/fio/client_processes/*')
         self.manager = self.params.get("manager", '/run/fio/*', "MPICH")
 
-    def execute_fio(self, directory=None, stop_dfuse=True):
-        """Runner method for Fio.
-
-        Args:
-            directory (str): path for fio run dir
-            stop_dfuse (bool): Flag to stop or not stop dfuse as part of this method.
-        """
-        # Create a pool if one does not already exist
-        if self.pool is None:
-            self.add_pool(connect=False)
-
-        # start dfuse if api is POSIX
-        if self.fio_cmd.api.value == "POSIX":
-            if directory:
-                self.fio_cmd.update(
-                    "global", "directory", directory,
-                    "fio --name=global --directory")
-            else:
-                self.add_container(self.pool)
-
-                # Instruct dfuse to disable direct-io for this container
-                self.container.set_attr(attrs={'dfuse-direct-io-disable': 'on'})
-
-                self.start_dfuse(self.hostlist_clients, self.pool, self.container)
-                self.fio_cmd.update(
-                    "global", "directory", self.dfuse.mount_dir.value,
-                    "fio --name=global --directory")
-
-        # Run Fio
+    def execute_fio(self):
+        """Runner method for Fio."""
         self.fio_cmd.hosts = self.hostlist_clients
         self.fio_cmd.run()
-
-        if stop_dfuse:
-            self.stop_dfuse()

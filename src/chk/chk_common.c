@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2022-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -391,39 +391,30 @@ chk_pool_remove_nowait(struct chk_pool_rec *cpr)
 		D_WARN("Failed to delete pool record: "DF_RC"\n", DP_RC(rc));
 }
 
-void
-chk_pool_start_svc(struct chk_pool_rec *cpr, int *ret)
+int
+chk_pool_restart_svc(struct chk_pool_rec *cpr)
 {
 	int	rc = 0;
 
+	/* Stop the pool, then restart it with full pool service. */
+
 	ABT_mutex_lock(cpr->cpr_mutex);
-
-	if (!cpr->cpr_started) {
-		rc = ds_pool_start_with_svc(cpr->cpr_uuid);
-		if (rc == 0)
-			cpr->cpr_started = 1;
-		else
-			D_WARN("Cannot start (1) the pool for "DF_UUIDF" after check: "DF_RC"\n",
-			       DP_UUID(cpr->cpr_uuid), DP_RC(rc));
-	}
-
-	if (cpr->cpr_started && !cpr->cpr_start_post) {
-		rc = ds_pool_chk_post(cpr->cpr_uuid);
-		if (rc != 0) {
-			D_WARN("Cannot post handle (1) pool start for "
-			       DF_UUIDF" after check: "DF_RC"\n",
-			       DP_UUID(cpr->cpr_uuid), DP_RC(rc));
-			/* Failed to post handle pool start, have to stop it. */
+	if (!cpr->cpr_start_post) {
+		if (cpr->cpr_started)
 			chk_pool_shutdown(cpr, true);
+
+		rc = ds_pool_start_after_check(cpr->cpr_uuid);
+		if (rc != 0) {
+			D_WARN("Cannot start full PS for "DF_UUIDF" after CR check: "DF_RC"\n",
+			       DP_UUID(cpr->cpr_uuid), DP_RC(rc));
 		} else {
+			cpr->cpr_started = 1;
 			cpr->cpr_start_post = 1;
 		}
 	}
-
 	ABT_mutex_unlock(cpr->cpr_mutex);
 
-	if (ret != NULL)
-		*ret = rc;
+	return rc;
 }
 
 static void
@@ -460,7 +451,7 @@ chk_pool_wait(struct chk_pool_rec *cpr)
 }
 
 void
-chk_pool_stop_one(struct chk_instance *ins, uuid_t uuid, int status, uint32_t phase, int *ret)
+chk_pool_stop_one(struct chk_instance *ins, uuid_t uuid, uint32_t status, uint32_t phase, int *ret)
 {
 	struct chk_bookmark	*cbk;
 	struct chk_pool_rec	*cpr;
@@ -805,10 +796,6 @@ chk_pool_handle_notify(struct chk_instance *ins, struct chk_iv *iv)
 
 	if (iv->ci_pool_status == CHK__CHECK_POOL_STATUS__CPS_CHECKED) {
 		cpr->cpr_done = 1;
-		if (iv->ci_pool_destroyed) {
-			cpr->cpr_destroyed = 1;
-			cpr->cpr_not_export_ps = 1;
-		}
 	} else if (iv->ci_pool_status == CHK__CHECK_POOL_STATUS__CPS_FAILED ||
 		   iv->ci_pool_status == CHK__CHECK_POOL_STATUS__CPS_IMPLICATED) {
 		cpr->cpr_skip = 1;
@@ -818,22 +805,21 @@ chk_pool_handle_notify(struct chk_instance *ins, struct chk_iv *iv)
 		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
 	}
 
-	if (!ins->ci_is_leader && !cpr->cpr_destroyed && cpr->cpr_done) {
-		if (iv->ci_pool_status == CHK__CHECK_POOL_STATUS__CPS_CHECKED &&
-		    !cpr->cpr_not_export_ps) {
-			chk_pool_start_svc(cpr, NULL);
-		} else if (ins->ci_sched_running && !ins->ci_sched_exiting) {
-			chk_pool_get(cpr);
-			d_list_add_tail(&cpr->cpr_shutdown_link, &ins->ci_pool_shutdown_list);
-		}
-	}
-
-	if (iv->ci_phase != cbk->cb_phase || iv->ci_pool_status != cbk->cb_pool_status ||
-	    cpr->cpr_destroyed) {
+	if (iv->ci_phase != cbk->cb_phase || iv->ci_pool_status != cbk->cb_pool_status) {
 		cbk->cb_phase = iv->ci_phase;
 		cbk->cb_pool_status = iv->ci_pool_status;
 		uuid_unparse_lower(cpr->cpr_uuid, uuid_str);
 		rc = chk_bk_update_pool(cbk, uuid_str);
+	}
+
+	if (rc == 0 && !ins->ci_is_leader && cpr->cpr_done) {
+		if (iv->ci_pool_status == CHK__CHECK_POOL_STATUS__CPS_CHECKED &&
+		    !cpr->cpr_not_export_ps) {
+			rc = chk_pool_restart_svc(cpr);
+		} else if (ins->ci_sched_running && !ins->ci_sched_exiting) {
+			chk_pool_get(cpr);
+			d_list_add_tail(&cpr->cpr_shutdown_link, &ins->ci_pool_shutdown_list);
+		}
 	}
 
 out:
@@ -1238,6 +1224,8 @@ out_lock:
 out_init:
 	if (rc == 0)
 		*p_ins = ins;
+	else
+		D_FREE(ins);
 
 	return rc;
 }

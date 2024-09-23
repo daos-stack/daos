@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2022-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -568,7 +568,6 @@ struct chk_iv {
 	uint32_t		 ci_ins_status;
 	uint32_t		 ci_pool_status;
 	uint32_t		 ci_to_leader:1, /* To check leader. */
-				 ci_pool_destroyed:1, /* Pool has been destroyed. */
 				 ci_from_psl:1; /* From pool service leader. */
 };
 
@@ -696,9 +695,10 @@ void chk_pools_dump(d_list_t *head, int pool_nr, uuid_t pools[]);
 
 void  chk_pool_remove_nowait(struct chk_pool_rec *cpr);
 
-void chk_pool_start_svc(struct chk_pool_rec *cpr, int *ret);
+int chk_pool_restart_svc(struct chk_pool_rec *cpr);
 
-void chk_pool_stop_one(struct chk_instance *ins, uuid_t uuid, int status, uint32_t phase, int *ret);
+void chk_pool_stop_one(struct chk_instance *ins, uuid_t uuid, uint32_t status, uint32_t phase,
+		       int *ret);
 
 void chk_pool_stop_all(struct chk_instance *ins, uint32_t status, int *ret);
 
@@ -834,7 +834,7 @@ int chk_pool_start_remote(d_rank_list_t *rank_list, uint64_t gen, uuid_t uuid, u
 
 int chk_pool_mbs_remote(d_rank_t rank, uint32_t phase, uint64_t gen, uuid_t uuid, char *label,
 			uint64_t seq, uint32_t flags, uint32_t mbs_nr,
-			struct chk_pool_mbs *mbs_array, struct rsvc_hint *hint);
+			struct chk_pool_mbs *mbs_array, int *svc_rc, struct rsvc_hint *svc_hint);
 
 int chk_report_remote(d_rank_t leader, uint64_t gen, uint32_t cla, uint32_t act, int result,
 		      d_rank_t rank, uint32_t target, uuid_t *pool, char *pool_label,

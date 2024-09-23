@@ -165,6 +165,8 @@ dsync
 dtx
 eg
 enablement
+endian
+endianness
 endswith
 enospace
 enum
@@ -227,6 +229,7 @@ io
 iod
 iodepth
 ioengine
+ioengines
 ior
 ioreqs
 iotype
@@ -339,6 +342,7 @@ posix
 postfix
 pparent
 ppn
+pragmas
 prebuild
 prebuilding
 prebuilt
@@ -356,6 +360,7 @@ procs
 profiler
 protoc
 ps
+psync
 puuid
 py
 pydaos

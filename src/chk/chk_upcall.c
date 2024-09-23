@@ -94,8 +94,6 @@ chk_report_upcall(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, int re
 		D_ASPRINTF(report.pool_uuid, DF_UUIDF, DP_UUID(*pool));
 		if (report.pool_uuid == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
-	} else {
-		report.pool_uuid = NULL;
 	}
 
 	report.pool_label = pool_label;
@@ -104,8 +102,6 @@ chk_report_upcall(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, int re
 		D_ASPRINTF(report.cont_uuid, DF_UUIDF, DP_UUID(*cont));
 		if (report.cont_uuid == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
-	} else {
-		report.cont_uuid = NULL;
 	}
 
 	report.cont_label = cont_label;
@@ -114,24 +110,18 @@ chk_report_upcall(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, int re
 		D_ASPRINTF(report.objid, DF_UOID, DP_UOID(*obj));
 		if (report.objid == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
-	} else {
-		report.objid = NULL;
 	}
 
 	if (!daos_iov_empty(dkey)) {
 		D_ASPRINTF(report.dkey, DF_KEY, DP_KEY(dkey));
 		if (report.dkey == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
-	} else {
-		report.dkey = NULL;
 	}
 
 	if (!daos_iov_empty(akey)) {
 		D_ASPRINTF(report.akey, DF_KEY, DP_KEY(akey));
 		if (report.akey == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
-	} else {
-		report.akey = NULL;
 	}
 
 	D_ASPRINTF(report.timestamp, "%s", ctime(&tm));
@@ -150,20 +140,23 @@ chk_report_upcall(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, int re
 			goto out;
 
 		report.n_act_details = rc;
-	} else {
-		report.n_act_details = 0;
-		report.act_details = NULL;
 	}
 
 	rc = ds_chk_report_upcall(&report);
 
 out:
-	D_FREE(report.pool_uuid);
-	D_FREE(report.cont_uuid);
-	D_FREE(report.objid);
-	D_FREE(report.dkey);
-	D_FREE(report.akey);
-	D_FREE(report.timestamp);
+	if (report.pool_uuid != protobuf_c_empty_string)
+		D_FREE(report.pool_uuid);
+	if (report.cont_uuid != protobuf_c_empty_string)
+		D_FREE(report.cont_uuid);
+	if (report.objid != protobuf_c_empty_string)
+		D_FREE(report.objid);
+	if (report.dkey != protobuf_c_empty_string)
+		D_FREE(report.dkey);
+	if (report.akey != protobuf_c_empty_string)
+		D_FREE(report.akey);
+	if (report.timestamp != protobuf_c_empty_string)
+		D_FREE(report.timestamp);
 	chk_sg_free(report.act_details, report.n_act_details);
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,

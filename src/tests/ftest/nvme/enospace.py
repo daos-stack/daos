@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -234,9 +234,9 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         self.log.info('----Starting background IOR load----')
 
         # Define the IOR Command and use the parameter from yaml file.
-        ior_bg_cmd = IorCommand()
+        ior_bg_cmd = IorCommand(self.test_env.log_dir)
         ior_bg_cmd.get_params(self)
-        ior_bg_cmd.set_daos_params(self.server_group, self.pool, None)
+        ior_bg_cmd.set_daos_params(self.pool, None)
         ior_bg_cmd.dfs_oclass.update(self.ior_cmd.dfs_oclass.value)
         ior_bg_cmd.api.update(self.ior_cmd.api.value)
         ior_bg_cmd.transfer_size.update(self.ior_scm_xfersize)

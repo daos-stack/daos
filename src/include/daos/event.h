@@ -44,7 +44,7 @@ daos_eq_lib_fini(void);
  * Initialize event queue library.
  */
 int
-daos_eq_lib_init(void);
+daos_eq_lib_init(crt_init_options_t *crt_info);
 
 /**
  * reset context after fork

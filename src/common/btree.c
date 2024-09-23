@@ -986,7 +986,7 @@ btr_embedded_create_hash(struct btr_context *tcx, bool force)
 			D_ERROR("Failed to get key from embedded record: " DF_RC "\n", DP_RC(rc));
 			return rc;
 		}
-		D_ASSERT(rec != NULL);
+		D_ASSERT(old_key.iov_buf != NULL);
 		btr_hkey_gen(tcx, &old_key, &rec->rec_hkey[0]);
 		btr_embedded_hash_set(tcx);
 	}
@@ -2263,6 +2263,7 @@ btr_update(struct btr_context *tcx, d_iov_t *key, d_iov_t *val, d_iov_t *val_out
 	struct btr_record *rec;
 	int		   rc;
 	char		   sbuf[BTR_PRINT_BUF];
+	struct btr_trace  *trace = &tcx->tc_trace.ti_trace[tcx->tc_depth - 1];
 
 	rec = btr_trace2rec(tcx, tcx->tc_depth - 1);
 
@@ -2270,20 +2271,24 @@ btr_update(struct btr_context *tcx, d_iov_t *key, d_iov_t *val, d_iov_t *val_out
 		btr_rec_string(tcx, rec, true, sbuf, BTR_PRINT_BUF));
 
 	rc = btr_rec_update(tcx, rec, key, val, val_out);
-	if (rc == -DER_NO_PERM) { /* cannot make inplace change */
-		struct btr_trace *trace = &tcx->tc_trace.ti_trace[tcx->tc_depth - 1];
-
+	if (rc == -DER_NO_PERM) {
+		D_DEBUG(DB_TRACE, "Replace the original record\n");
 		if (btr_has_tx(tcx)) {
 			rc = btr_node_tx_add(tcx, trace->tr_node);
 			if (rc != 0)
 				goto out;
 		}
 
-		D_DEBUG(DB_TRACE, "Replace the original record\n");
 		rc = btr_rec_free(tcx, rec, NULL);
 		if (rc)
 			goto out;
 		rc = btr_rec_alloc(tcx, key, val, rec, val_out);
+	} else if (rc == 1) {
+		D_DEBUG(DB_TRACE, "Replace the record by btr_rec_update()\n");
+		if (btr_has_tx(tcx))
+			rc = btr_node_tx_add(tcx, trace->tr_node);
+		else
+			rc = 0;
 	}
 out:
 	if (rc != 0) { /* failed */

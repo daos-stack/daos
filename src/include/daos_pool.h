@@ -155,15 +155,15 @@ struct daos_rebuild_status {
  */
 enum daos_pool_info_bit {
 	/** true to query pool space usage false to not query space usage. */
-	DPI_SPACE			= 1ULL << 0,
+	DPI_SPACE = 1ULL << 0,
 	/** true to query pool rebuild status. false to not query rebuild status. */
-	DPI_REBUILD_STATUS		= 1ULL << 1,
-	/** true to return (in \a ranks) engines with all targets enabled (up or draining).
-	 *  false to return (in \a ranks) the engines with some or all targets disabled (down).
-	 */
-	DPI_ENGINES_ENABLED		= 1ULL << 2,
+	DPI_REBUILD_STATUS = 1ULL << 1,
+	/** true to include (in \a ranks) engines with all targets enabled (up or draining). */
+	DPI_ENGINES_ENABLED = 1ULL << 2,
+	/** true to include (in \a ranks) engines with some or all targets disabled (down). */
+	DPI_ENGINES_DISABLED = 1ULL << 3,
 	/** query all above optional info */
-	DPI_ALL				= -1,
+	DPI_ALL = -1,
 };
 
 /**
@@ -209,8 +209,6 @@ struct daos_pool_cont_info2 {
 	/** Reserved for future use: container properties, other information, etc. */
 	void				*pci_reserved[2];
 };
-
-#define DAOS_SYS_NAME_MAX_LEN 127
 
 /**
  * Connect to the DAOS pool identified by \a pool, a label or UUID string.

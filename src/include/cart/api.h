@@ -189,6 +189,19 @@ int
 crt_context_set_timeout(crt_context_t crt_ctx, uint32_t timeout_sec);
 
 /**
+ * Get the default timeout value for the RPC requests created on the specified context.
+ *
+ * This is an optional function.
+ *
+ * \param[in] req              pointer to RPC request
+ * \param[out] timeout_sec     timeout value in seconds
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+ */
+int
+crt_context_get_timeout(crt_context_t crt_ctx, uint32_t *timeout_sec);
+
+/**
  * Destroy CRT transport context.
  *
  * \param[in] crt_ctx          CRT transport context to be destroyed
@@ -1935,6 +1948,8 @@ crt_proto_register(struct crt_proto_format *cpf);
  * \param[in] base_opc         the base opcode for the protocol
  * \param[in] ver              array of protocol version
  * \param[in] count            number of elements in ver
+ * \param[in] timeout          Timeout in seconds, ignored if 0 or greater than
+ *                             default timeout
  * \param[in] cb               completion callback. crt_proto_query() internally
  *                             sends an RPC to \a tgt_ep. \a cb will be called
  *                             upon completion of that RPC. The highest protocol
@@ -1948,8 +1963,8 @@ crt_proto_register(struct crt_proto_format *cpf);
  *                             failure.
  */
 int
-crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
-		uint32_t *ver, int count, crt_proto_query_cb_t cb, void *arg);
+crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, uint32_t *ver, int count,
+		uint32_t timeout, crt_proto_query_cb_t cb, void *arg);
 
 /**
  * query tgt_ep if it has registered base_opc with version using a user provided cart context.
@@ -1958,6 +1973,8 @@ crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
  * \param[in] base_opc         the base opcode for the protocol
  * \param[in] ver              array of protocol version
  * \param[in] count            number of elements in ver
+ * \param[in] timeout          Timeout in seconds, ignored if 0 or greater than
+ *                             default timeout
  * \param[in] cb               completion callback. crt_proto_query() internally
  *                             sends an RPC to \a tgt_ep. \a cb will be called
  *                             upon completion of that RPC. The highest protocol
@@ -1972,7 +1989,7 @@ crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
  */
 int
 crt_proto_query_with_ctx(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, uint32_t *ver, int count,
-			 crt_proto_query_cb_t cb, void *arg, crt_context_t ctx);
+			 uint32_t timeout, crt_proto_query_cb_t cb, void *arg, crt_context_t ctx);
 /**
  * Set self rank.
  *
@@ -2053,35 +2070,6 @@ int crt_self_uri_get(int tag, char **uri);
  *                              on failure.
  */
 int crt_self_incarnation_get(uint64_t *incarnation);
-
-/**
- * Retrieve group information containing ranks and associated uris
- *
- * This call will allocate memory for buffers in passed \a grp_info.
- * User is responsible for freeing the memory once not needed anymore.
- *
- * Returned data in \a grp_info can be passed to crt_group_info_set
- * call in order to setup group on a different node.
- *
- * \param[in] group             Group identifier
- * \param[in] grp_info          group info to be filled.
- *
- * \return                      DER_SUCCESS on success, negative value
- *                              on failure.
- */
-int crt_group_info_get(crt_group_t *group, d_iov_t *grp_info);
-
-/**
- * Sets group info (nodes and associated uris) baesd on passed
- * grp_info data. \a grp_info is to be retrieved via \a crt_group_info_get
- * call.
- *
- * \param[in] grp_info          Group information to set
- *
- * \return                      DER_SUCCESS on success, negative value
- *                              on failure.
- */
-int crt_group_info_set(d_iov_t *grp_info);
 
 /**
  * Retrieve list of ranks that belong to the specified group.
@@ -2293,8 +2281,7 @@ void crt_swim_fini(void);
 #define crt_proc_d_rank_t		crt_proc_uint32_t
 #define crt_proc_int			crt_proc_int32_t
 #define crt_proc_crt_status_t		crt_proc_int32_t
-#define crt_proc_crt_group_id_t		crt_proc_d_string_t
-#define crt_proc_crt_phy_addr_t		crt_proc_d_string_t
+#define crt_proc_crt_group_id_t         crt_proc_d_string_t
 
 /**
  * \a err is an error that ought to be logged at a less serious level than ERR.

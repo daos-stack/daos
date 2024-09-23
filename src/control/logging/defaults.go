@@ -81,3 +81,27 @@ func NewTestLogger(prefix string) (*LeveledLogger, *LogBuffer) {
 	return NewCombinedLogger(prefix, &buf).
 		WithLogLevel(LogLevelTrace), &buf
 }
+
+// NewTestCommandlineLogger returns a commandline logger and a *LogBuffer, with the logger
+// configured to send all output into the buffer. The logger's level is set to TRACE by default.
+func NewTestCommandLineLogger() (*LeveledLogger, *LogBuffer) {
+	var buf LogBuffer
+	return &LeveledLogger{
+		level: LogLevelTrace,
+		traceLoggers: []TraceLogger{
+			NewTraceLogger(&buf),
+		},
+		debugLoggers: []DebugLogger{
+			NewDebugLogger(&buf),
+		},
+		infoLoggers: []InfoLogger{
+			NewCommandLineInfoLogger(&buf),
+		},
+		noticeLoggers: []NoticeLogger{
+			NewCommandLineNoticeLogger(&buf),
+		},
+		errorLoggers: []ErrorLogger{
+			NewCommandLineErrorLogger(&buf),
+		},
+	}, &buf
+}

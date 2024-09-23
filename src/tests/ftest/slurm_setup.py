@@ -207,11 +207,11 @@ class SlurmSetup():
         """
         self.log.debug('Creating the slurm epilog script to run after each job.')
         try:
-            with open(script, 'w') as script_file:
+            with open(script, 'w', encoding='utf-8') as script_file:
                 script_file.write('#!/bin/bash\n#\n')
                 script_file.write('/usr/bin/bash -c \'pkill --signal 9 dfuse\'\n')
                 script_file.write(
-                    '/usr/bin/bash -c \'for dir in $(find /tmp/daos_dfuse);'
+                    '/usr/bin/bash -c \'for dir in $(find /tmp/soak_dfuse_*);'
                     'do fusermount3 -uz $dir;rm -rf $dir; done\'\n')
                 script_file.write('exit 0\n')
         except IOError as error:
@@ -364,7 +364,7 @@ class SlurmSetup():
             echo_command (str): command adding contents to the config file
 
         Returns:
-            RemoteCommandResult: the result from the echo | tee command
+            CommandResult: the result from the echo | tee command
         """
         tee_command = command_as_user(f'tee -a {self.SLURM_CONF}', self.root)
         return run_remote(self.log, self.all_nodes, f'{echo_command} | {tee_command}')

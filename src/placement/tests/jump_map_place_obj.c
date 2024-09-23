@@ -1119,7 +1119,7 @@ one_is_being_reintegrated(void **state)
 		 * so find_reint() and find_addition() might both find
 		 * some candidates if there are UP targets in the pool map,
 		 * no matter these UP targets are from NEW or DOWNOUT.
-		 * But reintegration and extening will never happen at the
+		 * But reintegration and extending will never happen at the
 		 * same time, so it is ok for now. To satisfy the test,
 		 * let's set both reint and new number as 1 for now.
 		 */

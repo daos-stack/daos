@@ -38,15 +38,13 @@ ior:
   read_flags: "-r -R -C -e -g -G 27 -k -Q 1"
   sw_deadline: 15
   sw_wearout: 1
-  sw_status_file: "/var/tmp/daos_testing/stoneWallingStatusFile"
+  sw_status_file: stoneWallingStatusFile
   dfs_oclass: SX
   transfer_size: 1M
   block_size: 150G
-  # 0.5 only for CI, due to the varying nature of different clusters in CI.
-  # Change it to 15% (0.15) for Aurora.
-  write_x: 0.5
-  # 0.5 only for CI, due to the varying nature of different clusters in CI.
-  # Change it to 15% (0.15) for Aurora.
-  read_x: 0.5
+  # inf in CI to disable threshold check, due to the varying nature of different clusters in CI.
+  # Change to 15% (0.15) for Aurora.
+  write_x: inf
+  read_x: inf
   expected_bw: 2250        # BW is for transfer size 1M. Change to 22500 for Aurora.
   expected_iops: 450000    # IOPS are for transfer size 256B. Change to 600000 for Aurora.

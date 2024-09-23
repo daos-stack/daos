@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2022-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -772,12 +772,14 @@ ddb_run_cmd(struct ddb_ctx *ctx, const char *cmd_str, bool write_mode)
 		cmd_copy[strlen(cmd_copy) - 1] = '\0';
 
 	rc = ddb_str2argv_create(cmd_copy, &parse_args);
-	if (!SUCCESS(rc))
-		D_GOTO(done, rc);
+	if (!SUCCESS(rc)) {
+		D_FREE(cmd_copy);
+		return rc;
+	}
 
 	if (parse_args.ap_argc == 0) {
 		D_ERROR("Nothing parsed\n");
-		return -DER_INVAL;
+		D_GOTO(done, rc = -DER_INVAL);
 	}
 
 	rc = ddb_parse_cmd_args(ctx, parse_args.ap_argc, parse_args.ap_argv, &info);

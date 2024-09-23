@@ -225,8 +225,8 @@ sts_ctx_pool_init(struct sts_context *ctx)
 	}
 
 	/* Use pool size as blob size for this moment. */
-	rc = vos_pool_create(pmem_file, ctx->tsc_pool_uuid, 0,
-			     ctx->tsc_nvme_size, 0, &poh);
+	rc = vos_pool_create(pmem_file, ctx->tsc_pool_uuid, 0, ctx->tsc_nvme_size, 0,
+			     0 /* version */, &poh);
 	assert_success(rc);
 
 	ctx->tsc_poh = poh;

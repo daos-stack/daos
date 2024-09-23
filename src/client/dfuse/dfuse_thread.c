@@ -93,7 +93,7 @@ start_one(struct dfuse_tm *dtm)
 		D_GOTO(out, rc);
 	}
 
-	pthread_setname_np(dt->dt_id, "fuse worker");
+	pthread_setname_np(dt->dt_id, "dfuse worker");
 
 	d_list_add(&dt->dt_threads, &dtm->tm_threads);
 

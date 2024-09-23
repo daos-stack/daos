@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -40,6 +40,8 @@ var (
 	ComponentAdmin = Component("admin")
 	// ComponentAgent represents the compute node agent.
 	ComponentAgent = Component("agent")
+	// ComponentClient represents the libdaos client.
+	ComponentClient = Component("client")
 )
 
 // NewVersionedComponent creates a new VersionedComponent.
@@ -50,7 +52,7 @@ func NewVersionedComponent(comp Component, version string) (*VersionedComponent,
 	}
 
 	switch comp {
-	case ComponentServer, ComponentAdmin, ComponentAgent, ComponentAny:
+	case ComponentServer, ComponentAdmin, ComponentAgent, ComponentClient, ComponentAny:
 		return &VersionedComponent{
 			Component: comp,
 			Version:   v,

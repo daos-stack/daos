@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2023 Intel Corporation.
+// (C) Copyright 2018-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -28,7 +28,8 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
-	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
+	"github.com/daos-stack/daos/src/control/lib/hardware/defaults/network"
+	"github.com/daos-stack/daos/src/control/lib/hardware/defaults/topology"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -237,7 +238,7 @@ func (srv *server) createServices(ctx context.Context) (err error) {
 	srv.evtLogger = control.NewEventLogger(srv.log)
 
 	srv.ctlSvc = NewControlService(srv.log, srv.harness, srv.cfg, srv.pubSub,
-		hwprov.DefaultFabricScanner(srv.log))
+		network.DefaultFabricScanner(srv.log))
 	srv.mgmtSvc = newMgmtSvc(srv.harness, srv.membership, srv.sysdb, rpcClient, srv.pubSub)
 
 	if err := srv.mgmtSvc.systemProps.UpdateCompPropVal(daos.SystemPropertyDaosSystem, func() string {
@@ -324,7 +325,7 @@ func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config
 	sp := storage.DefaultProvider(srv.log, idx, &cfg.Storage).
 		WithVMDEnabled(srv.ctlSvc.storage.IsVMDEnabled())
 
-	engine := NewEngineInstance(srv.log, sp, joinFn, engine.NewRunner(srv.log, cfg)).
+	engine := NewEngineInstance(srv.log, sp, joinFn, engine.NewRunner(srv.log, cfg), srv.pubSub).
 		WithHostFaultDomain(srv.harness.faultDomain)
 
 	if idx == 0 {
@@ -340,7 +341,7 @@ func (srv *server) addEngines(ctx context.Context) error {
 	var allStarted sync.WaitGroup
 	registerTelemetryCallbacks(ctx, srv)
 
-	iommuEnabled, err := hwprov.DefaultIOMMUDetector(srv.log).IsIOMMUEnabled()
+	iommuEnabled, err := topology.DefaultIOMMUDetector(srv.log).IsIOMMUEnabled()
 	if err != nil {
 		return err
 	}
@@ -410,13 +411,12 @@ func (srv *server) setupGrpc() error {
 	clientNetHints := make([]*mgmtpb.ClientNetHint, 0, len(providers))
 	for i, p := range providers {
 		clientNetHints = append(clientNetHints, &mgmtpb.ClientNetHint{
-			Provider:        p,
-			CrtCtxShareAddr: srv.cfg.Fabric.CrtCtxShareAddr,
-			CrtTimeout:      srv.cfg.Fabric.CrtTimeout,
-			NetDevClass:     uint32(srv.netDevClass[i]),
-			SrvSrxSet:       srxSetting,
-			ProviderIdx:     uint32(i),
-			EnvVars:         srv.cfg.ClientEnvVars,
+			Provider:    p,
+			CrtTimeout:  srv.cfg.Fabric.CrtTimeout,
+			NetDevClass: uint32(srv.netDevClass[i]),
+			SrvSrxSet:   srxSetting,
+			ProviderIdx: uint32(i),
+			EnvVars:     srv.cfg.ClientEnvVars,
 		})
 	}
 	srv.mgmtSvc.clientNetworkHint = clientNetHints
@@ -443,6 +443,7 @@ func (srv *server) registerEvents() {
 
 			if err := srv.mgmtSvc.updateFabricProviders([]string{srv.cfg.Fabric.Provider}, srv.pubSub); err != nil {
 				srv.log.Errorf(err.Error())
+				return err
 			}
 
 			srv.mgmtSvc.startLeaderLoops(ctx)
@@ -541,7 +542,7 @@ func waitFabricReady(ctx context.Context, log logging.Logger, cfg *config.Server
 	}
 
 	if err := hardware.WaitFabricReady(ctx, log, hardware.WaitFabricReadyParams{
-		StateProvider:  hwprov.DefaultNetDevStateProvider(log),
+		StateProvider:  network.DefaultNetDevStateProvider(log),
 		FabricIfaces:   ifaces,
 		IterationSleep: time.Second,
 	}); err != nil {
@@ -576,17 +577,11 @@ func Start(log logging.Logger, cfg *config.Server) error {
 		return err
 	}
 
-	hwprovFini, err := hwprov.Init(log)
-	if err != nil {
-		return err
-	}
-	defer hwprovFini()
-
 	if err := waitFabricReady(ctx, log, cfg); err != nil {
 		return err
 	}
 
-	scanner := hwprov.DefaultFabricScanner(log)
+	scanner := network.DefaultFabricScanner(log)
 
 	fis, err := scanner.Scan(ctx, providers...)
 	if err != nil {

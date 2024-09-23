@@ -74,7 +74,6 @@ vos_dtx_validation(struct dtx_handle *dth);
  * \param[in,out] epoch		Pointer to current epoch, if it is zero and if the DTX exists, then
  *				the DTX's epoch will be saved in it.
  * \param[out] pm_ver		Hold the DTX's pool map version.
- * \param[out] mbs		Pointer to the DTX participants information.
  * \param[out] dck		Pointer to the key for CoS cache.
  * \param[in] for_refresh	It is for DTX_REFRESH or not.
  *
@@ -95,8 +94,7 @@ vos_dtx_validation(struct dtx_handle *dth);
  */
 int
 vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
-	      uint32_t *pm_ver, struct dtx_memberships **mbs, struct dtx_cos_key *dck,
-	      bool for_refresh);
+	      uint32_t *pm_ver, struct dtx_cos_key *dck, bool for_refresh);
 
 /**
  * Load participants information for the given DTX.
@@ -293,14 +291,15 @@ vos_self_fini(void);
  * \param blob_sz[IN]	Size of blob for the pool
  * \param wal_sz [IN]	Size of WAL blob for the pool
  * \param flags [IN]	Pool open flags (see vos_pool_open_flags)
+ * \param version[IN]	Pool version (0 for default version)
  * \param poh	[OUT]	Returned pool handle if not NULL
  *
  * \return              Zero on success, negative value if error
  */
 int
-vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz,
-		   daos_size_t blob_sz, daos_size_t wal_sz,
-		   unsigned int flags, daos_handle_t *poh);
+vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t blob_sz,
+		   daos_size_t wal_sz, unsigned int flags, uint32_t version, daos_handle_t *poh);
+
 /**
  * Create a Versioning Object Storage Pool (VOSP), and open it if \a poh is not
  * NULL
@@ -310,13 +309,14 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz,
  * \param scm_sz [IN]	Size of SCM for the pool
  * \param blob_sz[IN]	Size of blob for the pool
  * \param flags [IN]	Pool open flags (see vos_pool_open_flags)
+ * \param version[IN]	Pool version (0 for default version)
  * \param poh	[OUT]	Returned pool handle if not NULL
  *
  * \return              Zero on success, negative value if error
  */
 int
-vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
-		daos_size_t blob_sz, unsigned int flags, daos_handle_t *poh);
+vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t blob_sz,
+		unsigned int flags, uint32_t version, daos_handle_t *poh);
 
 /**
  * Kill a VOS pool before destroy

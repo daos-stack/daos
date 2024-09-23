@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -108,6 +108,8 @@ struct cont {
 struct oid_iv_range {
 	uint64_t	oid;
 	daos_size_t	num_oids;
+	daos_size_t     req_num_oids;
+	d_rank_t        req_rank;
 };
 
 /* Container IV structure */
@@ -185,7 +187,8 @@ void
      ds_cont_op_handler_v8(crt_rpc_t *rpc);
 void ds_cont_op_handler_v7(crt_rpc_t *rpc);
 void ds_cont_op_handler_v6(crt_rpc_t *rpc);
-void ds_cont_set_prop_handler(crt_rpc_t *rpc);
+void
+     ds_cont_set_prop_srv_handler(crt_rpc_t *rpc);
 int ds_cont_bcast_create(crt_context_t ctx, struct cont_svc *svc,
 			 crt_opcode_t opcode, crt_rpc_t **rpc);
 int ds_cont_oid_fetch_add(uuid_t poh_uuid, uuid_t co_uuid, uint64_t num_oids, uint64_t *oid);

@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -41,7 +41,7 @@ class PoolSecurityTestBase(TestWithServers):
                 line = line.split("\n")[0]
                 if line == entry:
                     line = new_entry
-                    self.log.info("==>replaceing \n %s  with\n %s", entry, new_entry)
+                    self.log.info("==>replacing \n %s  with\n %s", entry, new_entry)
                 new_permissions = new_permissions + line + "\n"
             if entry is None:
                 new_permissions = new_permissions + new_entry + "\n"
@@ -163,6 +163,7 @@ class PoolSecurityTestBase(TestWithServers):
             with container.no_exception():
                 result = container.get_attr(attr=attribute)
         else:
+            result = None  # To appease pylint
             self.fail(
                 "##In verify_cont_rw_attribute, "
                 "invalid action: {}".format(action))
@@ -188,6 +189,7 @@ class PoolSecurityTestBase(TestWithServers):
             with container.no_exception():
                 result = container.get_prop()
         else:
+            result = None  # To appease pylint
             self.fail("##In verify_cont_rw_property, invalid action: {}".format(action))
         self.log.info(
             "  In verify_cont_rw_property %s.\n =daos_cmd.run() result:\n%s", action, result)
@@ -224,6 +226,7 @@ class PoolSecurityTestBase(TestWithServers):
         elif action.lower() == "read":
             result = self.get_container_acl_list(container)
         else:
+            result = None  # To appease pylint
             self.fail(
                 "##In verify_cont_rw_acl, invalid action: {}".format(action))
         self.log.info(
@@ -324,11 +327,13 @@ class PoolSecurityTestBase(TestWithServers):
         daos_cmd = self.get_daos_command()
         with daos_cmd.no_exception():
             if action.lower() == "write":
-                container = self.get_container(pool, create=False, daos_command=daos_cmd)
+                container = self.get_container(pool, create=False, daos=daos_cmd)
                 result = container.create()
+                container.skip_cleanup()
             elif action.lower() == "read":
                 result = daos_cmd.pool_query(pool.identifier)
             else:
+                result = None  # To appease pylint
                 self.fail("##In verify_pool_readwrite, invalid action: {}".format(action))
         self.log.info(
             "  In verify_pool_readwrite %s.\n =daos_cmd.run() result:\n%s",

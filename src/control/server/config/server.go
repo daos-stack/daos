@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -36,6 +36,11 @@ const (
 	relConfExamplesPath = "../utils/config/examples/"
 )
 
+// SupportConfig is defined here to avoid a import cycle
+type SupportConfig struct {
+	FileTransferExec string `yaml:"file_transfer_exec,omitempty"`
+}
+
 // Server describes configuration options for DAOS control plane.
 // See utils/config/daos_server.yml for parameter descriptions.
 type Server struct {
@@ -59,6 +64,7 @@ type Server struct {
 	TelemetryPort     int                       `yaml:"telemetry_port,omitempty"`
 	CoreDumpFilter    uint8                     `yaml:"core_dump_filter,omitempty"`
 	ClientEnvVars     []string                  `yaml:"client_env_vars,omitempty"`
+	SupportConfig     SupportConfig             `yaml:"support_config,omitempty"`
 
 	// duplicated in engine.Config
 	SystemName string              `yaml:"name"`
@@ -75,9 +81,6 @@ type Server struct {
 	Hyperthreads bool   `yaml:"hyperthreads"`
 
 	Path string `yaml:"-"` // path to config file
-
-	// Legacy config file parameters stored in a separate struct.
-	Legacy ServerLegacy `yaml:",inline"`
 
 	// Behavior flags
 	AutoFormat bool `yaml:"-"`
@@ -138,15 +141,6 @@ func (cfg *Server) WithFabricAuthKey(key string) *Server {
 // WithClientEnvVars sets the environment variables to be sent to the client.
 func (cfg *Server) WithClientEnvVars(envVars []string) *Server {
 	cfg.ClientEnvVars = envVars
-	return cfg
-}
-
-// WithCrtCtxShareAddr sets the top-level CrtCtxShareAddr.
-func (cfg *Server) WithCrtCtxShareAddr(addr uint32) *Server {
-	cfg.Fabric.CrtCtxShareAddr = addr
-	for _, engine := range cfg.Engines {
-		engine.Fabric.Update(cfg.Fabric)
-	}
 	return cfg
 }
 
@@ -369,11 +363,6 @@ func (cfg *Server) Load() error {
 		return errors.Errorf("fabric provider string %q includes more than one provider", cfg.Fabric.Provider)
 	}
 
-	// Update server config based on legacy parameters.
-	if err := updateFromLegacyParams(cfg); err != nil {
-		return errors.Wrap(err, "updating config from legacy parameters")
-	}
-
 	// propagate top-level settings to engine configs
 	for i := range cfg.Engines {
 		cfg.updateServerConfig(&cfg.Engines[i])
@@ -493,6 +482,10 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 				msg = fmt.Sprintf("%s (MD-on-SSD)", msg)
 				// MD-on-SSD has extra sys-xstream for rdb.
 				sysXSCount++
+			} else if ec.TargetCount == 1 {
+				// Avoid DMA buffer allocation failure with single target count by
+				// increasing the minimum target count used to calculate hugepages.
+				cfgTargetCount++
 			}
 		}
 		log.Debug(msg)
@@ -524,9 +517,7 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 		cfg.NrHugepages = minHugepages
 		log.Infof("hugepage count automatically set to %d (%s)", minHugepages,
 			humanize.IBytes(hugePageBytes(minHugepages, mi.HugepageSizeKiB)))
-	}
-
-	if cfg.NrHugepages < minHugepages {
+	} else if cfg.NrHugepages < minHugepages {
 		log.Noticef("configured nr_hugepages %d is less than recommended %d, "+
 			"if this is not intentional update the 'nr_hugepages' config "+
 			"parameter or remove and it will be automatically calculated",
@@ -654,12 +645,6 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 		}
 	}()
 
-	// The config file format no longer supports "servers"
-	if len(cfg.Legacy.Servers) > 0 {
-		return errors.New("\"servers\" server config file parameter is deprecated, use " +
-			"\"engines\" instead")
-	}
-
 	// Set DisableVMD reference if unset in config file.
 	if cfg.DisableVMD == nil {
 		cfg.WithDisableVMD(false)
@@ -722,7 +707,6 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 	for idx, ec := range cfg.Engines {
 		ec.Storage.ControlMetadata = cfg.Metadata
 		ec.Storage.EngineIdx = uint(idx)
-		ec.ConvertLegacyStorage(log, idx)
 		ec.Fabric.Update(cfg.Fabric)
 
 		if err := ec.Validate(); err != nil {
@@ -878,7 +862,11 @@ func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineA
 	// Detect legacy mode by checking if first_core is being used.
 	legacyMode := false
 	for _, engineCfg := range cfg.Engines {
-		if engineCfg.ServiceThreadCore != 0 {
+		if engineCfg.ServiceThreadCore != nil {
+			if *engineCfg.ServiceThreadCore == 0 && engineCfg.PinnedNumaNode != nil {
+				// Both are set but we don't know yet which to use
+				continue
+			}
 			legacyMode = true
 			break
 		}
@@ -887,9 +875,15 @@ func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineA
 	// Fail if any engine has an explicit pin and non-zero first_core.
 	for idx, engineCfg := range cfg.Engines {
 		if legacyMode {
+			if engineCfg.PinnedNumaNode != nil {
+				log.Infof("pinned_numa_node setting ignored on engine %d", idx)
+				engineCfg.PinnedNumaNode = nil
+			}
 			log.Debugf("setting legacy core allocation algorithm on engine %d", idx)
-			engineCfg.PinnedNumaNode = nil
 			continue
+		} else if engineCfg.ServiceThreadCore != nil {
+			log.Infof("first_core setting ignored on engine %d", idx)
+			engineCfg.ServiceThreadCore = nil
 		}
 
 		numaAffinity, err := detectEngineAffinity(log, engineCfg, affSources...)

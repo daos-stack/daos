@@ -21,6 +21,7 @@ enum fs_op {
 	FS_RESET_CHUNK_SIZE,
 	FS_RESET_OCLASS,
 	FS_CHECK,
+	FS_CHMOD,
 };
 
 enum cont_op {
@@ -167,6 +168,7 @@ struct cmd_args_s {
 	/* DFuse related */
 	struct dfuse_mem_query   dfuse_mem; /* --memquery */
 	struct dfuse_stat       *dfuse_stat;
+	mode_t                   object_mode; /* object mode bits */
 };
 
 int pool_autotest_hdlr(struct cmd_args_s *ap);
@@ -201,6 +203,8 @@ int
 fs_recreate_sb_hdlr(struct cmd_args_s *ap);
 int
 fs_relink_root_hdlr(struct cmd_args_s *ap);
+int
+fs_chmod_hdlr(struct cmd_args_s *ap);
 
 /* Container operations */
 int

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2022-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -861,7 +861,7 @@ out:
 int
 chk_pool_mbs_remote(d_rank_t rank, uint32_t phase, uint64_t gen, uuid_t uuid, char *label,
 		    uint64_t seq, uint32_t flags, uint32_t mbs_nr, struct chk_pool_mbs *mbs_array,
-		    struct rsvc_hint *hint)
+		    int *svc_rc, struct rsvc_hint *svc_hint)
 {
 	crt_rpc_t		*req;
 	struct chk_pool_mbs_in	*cpmi;
@@ -887,17 +887,17 @@ chk_pool_mbs_remote(d_rank_t rank, uint32_t phase, uint64_t gen, uuid_t uuid, ch
 		goto out;
 
 	cpmo = crt_reply_get(req);
-	rc = cpmo->cpmo_status;
-	*hint = cpmo->cpmo_hint;
+	*svc_rc = cpmo->cpmo_status;
+	*svc_hint = cpmo->cpmo_hint;
 
 out:
 	if (req != NULL)
 		crt_req_decref(req);
 
-	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
+	D_CDEBUG(rc != 0 || *svc_rc != 0, DLOG_ERR, DLOG_INFO,
 		 "Sent pool ("DF_UUIDF") members and label %s ("
-		 DF_X64") to rank %u with phase %d gen "DF_X64": "DF_RC"\n",
-		 DP_UUID(uuid), label != NULL ? label : "(null)", seq, rank, phase, gen, DP_RC(rc));
+		 DF_X64") to rank %u with phase %d gen "DF_X64": %d/%d\n", DP_UUID(uuid),
+		 label != NULL ? label : "(null)", seq, rank, phase, gen, rc, *svc_rc);
 
 	return rc;
 }

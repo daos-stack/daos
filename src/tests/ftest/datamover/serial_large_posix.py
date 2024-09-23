@@ -1,9 +1,10 @@
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from data_mover_test_base import DataMoverTestBase
+from dfuse_utils import get_dfuse, start_dfuse
 from duns_utils import format_path
 
 
@@ -42,7 +43,7 @@ class DmvrSerialLargePosix(DataMoverTestBase):
         file_size = self.params.get("bytes", "/run/mdtest/*")
 
         # Create pool1 and cont1
-        pool1 = self.create_pool()
+        pool1 = self.get_pool()
         cont1 = self.get_container(pool1)
 
         # Create a large directory in cont1
@@ -50,12 +51,13 @@ class DmvrSerialLargePosix(DataMoverTestBase):
         self.run_mdtest_with_params("DAOS", "/", pool1, cont1, flags=mdtest_flags[0])
 
         # Create pool2
-        pool2 = self.create_pool()
+        pool2 = self.get_pool()
 
         # Use dfuse as a shared intermediate for serialize + deserialize
         dfuse_cont = self.get_container(pool1)
-        self.start_dfuse(self.dfuse_hosts, pool1, dfuse_cont)
-        self.serial_tmp_dir = self.dfuse.mount_dir.value
+        dfuse = get_dfuse(self, self.dfuse_hosts)
+        start_dfuse(self, dfuse, pool1, dfuse_cont)
+        self.serial_tmp_dir = dfuse.mount_dir.value
 
         # Serialize/Deserialize cont1 to a new cont2 in pool2
         result = self.run_datamover(

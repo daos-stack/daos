@@ -1,60 +1,20 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from dfuse_test_base import DfuseTestBase
+import os
+
+from apricot import TestWithServers
+from dfuse_utils import get_dfuse, start_dfuse
 from run_utils import run_remote
 
 
-class RootContainerTest(DfuseTestBase):
+class RootContainerTest(TestWithServers):
     """Base Dfuse Container check test class.
 
     :avocado: recursive
     """
-
-    def __init__(self, *args, **kwargs):
-        """Initialize a RootContainerTest object."""
-        super().__init__(*args, **kwargs)
-        self.pool = []
-        self.container = []
-        self.tmp_file_count = self.params.get("tmp_file_count", '/run/container/*')
-        self.cont_count = self.params.get("cont_count", '/run/container/*')
-        self.tmp_file_size = self.params.get("tmp_file_size", '/run/container/*')
-        self.tmp_file_name = self.params.get("tmp_file_name", '/run/container/*')
-        # device where the pools and containers are created
-        self.device = "scm"
-
-    def setUp(self):
-        """Set up each test case."""
-        # Start the servers and agents
-        super().setUp()
-        self.dfuse_hosts = None
-
-    def _create_pool(self):
-        """Add a new TestPool object to the list of pools.
-
-        Returns:
-            TestPool: the newly added pool
-
-        """
-        self.pool.append(self.get_pool(connect=False))
-        return self.pool[-1]
-
-    def _create_cont(self, pool, **params):
-        """Add a new TestContainer object to the list of containers.
-
-        Args:
-            pool (TestPool): pool object
-            params (dict, optional): name/value of container attributes to update
-
-        Returns:
-            TestContainer: the newly added container
-
-        """
-        container = self.get_container(pool, **params)
-        self.container.append(container)
-        return container
 
     def test_dfuse_root_container(self):
         """Jira ID: DAOS-3782.
@@ -75,40 +35,79 @@ class RootContainerTest(DfuseTestBase):
         :avocado: tags=container,dfuse
         :avocado: tags=RootContainerTest,test_dfuse_root_container
         """
-        # Create a pool and start dfuse.
-        pool = self._create_pool()
-        container = self._create_cont(pool)
-        self.dfuse_hosts = self.agent_managers[0].hosts
-        # mount fuse
-        self.start_dfuse(self.dfuse_hosts, pool, container)
-        # Create another container and add it as sub container under
-        # root container
-        sub_container = str(self.dfuse.mount_dir.value + "/cont0")
-        container = self._create_cont(pool, path=sub_container)
-        # Insert files into root container
-        self.insert_files_and_verify("")
-        # Insert files into sub container
-        self.insert_files_and_verify("cont0")
-        # Create 100 sub containers and verify the temp files
-        self.verify_create_delete_containers(pool, 100)
-        self.verify_multi_pool_containers()
+        cont_count = self.params.get("cont_count", '/run/container/*')
+        pool_count = self.params.get("pool_count", "/run/pool/*")
+        tmp_file_name = self.params.get("tmp_file_name", '/run/container/*')
+        tmp_file_count = self.params.get("tmp_file_count", '/run/container/*')
+        tmp_file_size = self.params.get("tmp_file_size", '/run/container/*')
+        device = "scm"
 
-    def verify_multi_pool_containers(self):
+        # Create a pool and container.
+        self.log_step("Create a pool and a root container")
+        pool = self.get_pool(connect=False)
+        container = self.get_container(pool)
+
+        # Start and mount fuse
+        dfuse_hosts = self.agent_managers[0].hosts
+        self.log_step("Start and mount dfuse using the root container")
+        dfuse = get_dfuse(self, dfuse_hosts)
+        start_dfuse(self, dfuse, pool, container)
+
+        # Create another container and add it as sub container under the root container
+        self.log_step("Add another container as a sub container under the root container")
+        sub_container = str(dfuse.mount_dir.value + "/cont0")
+        self.get_container(pool, path=sub_container)
+
+        # Insert files into root container
+        self.log_step("Insert files into the root container")
+        self.insert_files_and_verify(
+            dfuse_hosts, dfuse.mount_dir.value, tmp_file_count, tmp_file_name, tmp_file_size)
+
+        # Insert files into sub container
+        self.log_step("Insert files into the sub container")
+        self.insert_files_and_verify(
+            dfuse_hosts, os.path.join(dfuse.mount_dir.value, "cont0"), tmp_file_count,
+            tmp_file_name, tmp_file_size)
+
+        # Create 100 sub containers and verify the temp files
+        self.verify_create_delete_containers(
+            pool, device, 100, dfuse_hosts, dfuse.mount_dir.value, tmp_file_count, tmp_file_size,
+            tmp_file_size)
+        self.verify_multi_pool_containers(
+            pool_count, cont_count, dfuse_hosts, dfuse.mount_dir.value, tmp_file_count,
+            tmp_file_name, tmp_file_size)
+
+        self.log.info("Test Passed")
+
+    def verify_multi_pool_containers(self, pool_count, cont_count, hosts, mount_dir, tmp_file_count,
+                                     tmp_file_name, tmp_file_size):
         """Verify multiple pools and containers.
 
         Create several pools and containers and mount it under the root
         container and verify they're accessible.
-        """
-        pool_count = self.params.get("pool_count", "/run/pool/*")
-        for idx in range(pool_count):
-            pool = self._create_pool()
-            for jdx in range(self.cont_count):
-                cont_name = "/cont_{}{}".format(idx, jdx)
-                sub_cont = str(self.dfuse.mount_dir.value + cont_name)
-                self._create_cont(pool=pool, path=sub_cont)
-                self.insert_files_and_verify(cont_name)
 
-    def verify_create_delete_containers(self, pool, cont_count):
+        Args:
+            pool_count (int): number of pools to create
+            cont_count (int): number of containers to create in each pool
+            hosts (NodeSet): Hosts on which to run the commands
+            mount_dir (str): dfuse mount directory
+            tmp_file_count (int): number of temporary files
+            tmp_file_name (str): base name for temporary files
+            tmp_file_size (int): size of temporary files
+        """
+        self.log_step(
+            f"Create {pool_count} pools with {cont_count} containers mounted under the root "
+            "container and insert files into each new container")
+        for idx in range(pool_count):
+            pool = self.get_pool(connect=False)
+            for jdx in range(cont_count):
+                sub_container = str(mount_dir + f"/cont_{idx}{jdx}")
+                self.get_container(pool=pool, path=sub_container)
+                self.insert_files_and_verify(
+                    hosts, sub_container, tmp_file_count, tmp_file_name, tmp_file_size)
+
+    def verify_create_delete_containers(self, pool, device, cont_count, hosts, mount_dir,
+                                        tmp_file_count, tmp_file_name, tmp_file_size):
         """Verify multiple pools and containers creation and deletion.
 
         Create multiple containers and multiple multi-mb files in each of
@@ -117,76 +116,87 @@ class RootContainerTest(DfuseTestBase):
         Destroy half of the containers and verify the space usage is reclaimed.
 
         Args:
+            pool (TestPool): pool in which to create the containers
+            device (str): device where the pools and containers are created
             cont_count (int): Number of containers to be created.
+            hosts (NodeSet): Hosts on which to run the commands
+            tmp_file_count (int): number of temporary files
+            tmp_file_name (str): base name for temporary files
+            tmp_file_size (int): size of temporary files
         """
         self.log.info("Verifying multiple container create delete")
-        pool_space_before = pool.get_pool_free_space(self.device)
+        self.log_step(f"Create {cont_count} new sub containers and insert files")
+        pool_space_before = pool.get_pool_free_space(device)
         self.log.info("Pool space before = %s", pool_space_before)
+        containers = []
         for idx in range(cont_count):
-            sub_cont = str(self.dfuse.mount_dir.value + "/cont{}".format(idx + 1))
-            self._create_cont(pool, path=sub_cont)
-            self.insert_files_and_verify("cont{}".format(idx + 1))
-        expected = pool_space_before - \
-            cont_count * self.tmp_file_count * self.tmp_file_size
-        pool_space_after = pool.get_pool_free_space(self.device)
+            sub_cont = str(mount_dir + f"/cont{idx + 1}")
+            containers.append(self.get_container(pool, path=sub_cont))
+            self.insert_files_and_verify(
+                hosts, os.path.join(mount_dir, f"cont{idx + 1}"), tmp_file_count, tmp_file_name,
+                tmp_file_size)
+
+        expected = pool_space_before - cont_count * tmp_file_count * tmp_file_size
+        self.log_step(
+            "Verify the pool free space <= {expected} after creating {cont_count} containers")
+        pool_space_after = pool.get_pool_free_space(device)
         self.log.info("Pool space <= Expected")
         self.log.info("%s <= %s", pool_space_after, expected)
         self.assertTrue(pool_space_after <= expected)
-        self.log.info("Destroying half of the containers = %s", cont_count // 2)
+
+        self.log_step(f"Destroy half of the {cont_count} new sub containers ({cont_count // 2})")
         for _ in range(cont_count // 2):
-            self.container[-1].destroy(1)
-            self.container.pop()
-        expected = pool_space_after + \
-            ((cont_count // 2) * self.tmp_file_count * self.tmp_file_size)
-        pool_space_after_cont_destroy = \
-            pool.get_pool_free_space(self.device)
+            containers[-1].destroy(1)
+            containers.pop()
+
+        expected = pool_space_after + ((cont_count // 2) * tmp_file_count * tmp_file_size)
+        self.log_step(
+            "Verify the pool free space >= {expected} after destroying half of the containers")
+        pool_space_after_cont_destroy = pool.get_pool_free_space(device)
         self.log.info("After container destroy")
         self.log.info("Free Pool space >= Expected")
         self.log.info("%s >= %s", pool_space_after_cont_destroy, expected)
         self.assertTrue(pool_space_after_cont_destroy >= expected)
 
-    def insert_files_and_verify(self, container_name):
+    def insert_files_and_verify(self, hosts, cont_dir, tmp_file_count, tmp_file_name,
+                                tmp_file_size):
         """Verify inserting files into a specific container.
 
         Insert files into the specific container and verify they're navigable
         and accessible.
 
         Args:
-            container_name: Name of the POSIX Container
-            file_name_prefix: Prefix of the file name that will be created
-            no_of_files: Number of files to be created iteratively
+            hosts (NodeSet): Hosts on which to run the commands
+            cont_dir (str): container directory
+            tmp_file_count (int): number of temporary files
+            tmp_file_name (str): base name for temporary files
+            tmp_file_size (int): size of temporary files
         """
-        cont_dir = self.dfuse.mount_dir.value
-        if container_name:
-            cont_dir = "{}/{}".format(cont_dir, container_name)
-
         cmds = []
         ls_cmds = []
 
-        for idx in range(self.tmp_file_count):
+        for idx in range(tmp_file_count):
             # Create 40 MB files
-            file_name = "{}{}".format(self.tmp_file_name, idx + 1)
-            cmd = "head -c {} /dev/urandom > {}/{}".format(
-                self.tmp_file_size, cont_dir, file_name)
-            ls_cmds.append("ls {}".format(file_name))
+            file_name = f"{tmp_file_name}{idx + 1}"
+            cmd = f"head -c {tmp_file_size} /dev/urandom > {cont_dir}/{file_name}"
+            ls_cmds.append(f"ls {file_name}")
             cmds.append(cmd)
-        self._execute_cmd(";".join(cmds))
+        self._execute_cmd(";".join(cmds), hosts)
 
         cmds = []
         # Run ls to verify the temp files are actually created
-        cmds = ["cd {}".format(cont_dir)]
+        cmds = [f"cd {cont_dir}"]
         cmds.extend(ls_cmds)
-        self._execute_cmd(";".join(cmds))
+        self._execute_cmd(";".join(cmds), hosts)
 
-    def _execute_cmd(self, cmd):
+    def _execute_cmd(self, cmd, hosts):
         """Execute command on the host clients.
 
         Args:
             cmd (str): Command to run
+            hosts (NodeSet): hosts on which to run the command
 
         """
-        result = run_remote(self.log, self.dfuse_hosts, cmd, timeout=30)
+        result = run_remote(self.log, hosts, cmd, timeout=30)
         if not result.passed:
-            self.log.error(
-                "Error running '%s' on the following hosts: %s", cmd, result.failed_hosts)
-            self.fail("Test was expected to pass but it failed.\n")
+            self.fail(f"Error running '{cmd}' on {str(result.failed_hosts)}")

@@ -25,12 +25,10 @@ server_config:
       log_file: daos_server1.log
       storage: auto
 pool_1:
-  control_method: dmg
   scm_size: 1
   svcn: 1
   quantity: 1
 pool_2:
-  control_method: dmg
   size: 90%
   svcn: 1
   quantity: 1

@@ -38,12 +38,27 @@ type prepareSCMCmd struct {
 	Force                 bool `short:"f" long:"force" description:"Perform SCM operations without waiting for confirmation"`
 }
 
+// Read SocketID from config if not set explicitly in command.
+func getSockFromCmd(cmd *scmCmd) {
+	affSrc, err := getAffinitySource(cmd.MustLogCtx(), cmd.Logger, cmd.config)
+	if err != nil {
+		cmd.Debugf("fabric info to determine affinity could not be fetched: %s", err.Error())
+	} else {
+		cmd.SocketID = getSockFromCfg(cmd.Logger, cmd.config, affSrc)
+		cmd.Debugf("affinity (socket-id %d) derived from config", cmd.SocketID)
+	}
+}
+
 func preparePMem(cmd *prepareSCMCmd) (*storage.ScmPrepareResponse, error) {
 	if cmd.NrNamespacesPerSocket == 0 {
 		return nil, errors.New("(-S|--scm-ns-per-socket) should be set to at least 1")
 	}
 
 	cmd.Info("Prepare locally-attached PMem...")
+
+	if cmd.config != nil && cmd.SocketID == nil {
+		getSockFromCmd(&cmd.scmCmd)
+	}
 
 	cmd.Info(MsgStoragePrepareWarn)
 	if !cmd.Force {
@@ -145,6 +160,10 @@ type resetSCMCmd struct {
 func resetPMem(cmd *resetSCMCmd) error {
 	cmd.Info("Reset locally-attached PMem...")
 
+	if cmd.config != nil && cmd.SocketID == nil {
+		getSockFromCmd(&cmd.scmCmd)
+	}
+
 	cmd.Info(MsgStoragePrepareWarn)
 	if !cmd.Force {
 		if cmd.JSONOutputEnabled() {
@@ -214,6 +233,10 @@ type scanSCMCmd struct {
 
 func scanPMem(cmd *scanSCMCmd) (*storage.ScmScanResponse, error) {
 	cmd.Info("Scanning locally-attached PMem storage...")
+
+	if cmd.config != nil && cmd.SocketID == nil {
+		getSockFromCmd(&cmd.scmCmd)
+	}
 
 	req := storage.ScmScanRequest{
 		SocketID: cmd.SocketID,

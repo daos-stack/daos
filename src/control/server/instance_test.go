@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -22,11 +22,14 @@ import (
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
+	sysprov "github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/scm"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -44,7 +47,7 @@ func getTestEngineInstance(log logging.Logger) *EngineInstance {
 	)
 	runner := engine.NewRunner(log, cfg)
 	storage := storage.MockProvider(log, 0, &cfg.Storage, nil, nil, nil, nil)
-	return NewEngineInstance(log, storage, nil, runner)
+	return NewEngineInstance(log, storage, nil, runner, nil)
 }
 
 func TestServer_Instance_WithHostFaultDomain(t *testing.T) {
@@ -113,26 +116,40 @@ func TestServer_Instance_updateFaultDomainInSuperblock(t *testing.T) {
 			testDir, cleanupDir := test.CreateTestDir(t)
 			defer cleanupDir()
 
-			inst := getTestEngineInstance(log).WithHostFaultDomain(tc.newDomain)
-			inst.fsRoot = testDir
-			inst._superblock = tc.superblock
+			// Use real os.ReadFile in MockSysProvider to test superblock logic.
+			cfg := engine.MockConfig().WithStorage(
+				storage.NewTierConfig().
+					WithStorageClass("ram").
+					WithScmMountPoint("/foo/bar"),
+			)
+			runner := engine.NewRunner(log, cfg)
+			sysCfg := sysprov.MockSysConfig{RealReadFile: true}
+			sysProv := sysprov.NewMockSysProvider(log, &sysCfg)
+			scmProv := scm.NewMockProvider(log, &scm.MockBackendConfig{}, &sysCfg)
+			storage := storage.MockProvider(log, 0, &cfg.Storage, sysProv, scmProv,
+				nil, nil)
 
-			sbPath := inst.superblockPath()
+			ei := NewEngineInstance(log, storage, nil, runner, nil).
+				WithHostFaultDomain(tc.newDomain)
+			ei.fsRoot = testDir
+			ei._superblock = tc.superblock
+
+			sbPath := ei.superblockPath()
 			if err := os.MkdirAll(filepath.Dir(sbPath), 0755); err != nil {
 				t.Fatalf("failed to make test superblock dir: %s", err.Error())
 			}
 
-			err := inst.updateFaultDomainInSuperblock()
-
+			err := ei.updateFaultDomainInSuperblock()
 			test.CmpErr(t, tc.expErr, err)
 
 			// Ensure the newer value in the instance was written to the superblock
-			newSB, err := ReadSuperblock(sbPath)
+			err = ei.ReadSuperblock()
 			if tc.expWritten {
 				if err != nil {
 					t.Fatalf("can't read expected superblock: %s", err.Error())
 				}
 
+				newSB := ei.getSuperblock()
 				if newSB == nil {
 					t.Fatalf("expected non-nil superblock")
 				}
@@ -168,6 +185,7 @@ type (
 		StopErr             error
 		ScmTierConfig       *storage.TierConfig
 		ScanBdevTiersResult []storage.BdevTierScanResult
+		LastHealthStats     map[string]*ctlpb.BioHealthResp
 	}
 
 	MockInstance struct {
@@ -292,4 +310,16 @@ func (mi *MockInstance) Debugf(format string, args ...interface{}) {
 
 func (mi *MockInstance) Tracef(format string, args ...interface{}) {
 	return
+}
+
+func (mi *MockInstance) Publish(event *events.RASEvent) {
+	return
+}
+
+func (mi *MockInstance) GetLastHealthStats(pciAddr string) *ctlpb.BioHealthResp {
+	return mi.cfg.LastHealthStats[pciAddr]
+}
+
+func (mi *MockInstance) SetLastHealthStats(pciAddr string, bhr *ctlpb.BioHealthResp) {
+	mi.cfg.LastHealthStats[pciAddr] = bhr
 }

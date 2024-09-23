@@ -61,6 +61,7 @@ const (
 	StorageDeviceAlreadyMounted
 	StorageTargetAlreadyMounted
 	StoragePathAccessDenied
+	StorageDeviceWithFsNoMountpoint
 )
 
 // SCM fault codes

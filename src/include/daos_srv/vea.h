@@ -78,6 +78,8 @@ struct vea_unmap_context {
 };
 
 #define	VEA_COMPAT_FEATURE_BITMAP	(1 << 0)
+#define	VEA_COMPAT_END			(1 << 1)
+#define	VEA_COMPAT_MASK			(VEA_COMPAT_END - 1)
 
 /* Free space tracking information on SCM */
 struct vea_space_df {
@@ -139,6 +141,7 @@ typedef int (*vea_free_callback_t)(void *cb_arg, struct vea_free_extent *vfe);
  * \param cb       [IN]	Callback to initialize block device header
  * \param cb_data  [IN]	Callback data
  * \param force    [IN]	Forcibly re-initialize an already initialized device
+ * \param compat   [IN]	Compatibility bits (e.g., VEA_COMPAT_FEATURE_BITMAP)
  *
  * \return		Zero on success; -DER_EXIST when try to format an
  *			already initialized device without setting @force to
@@ -147,7 +150,7 @@ typedef int (*vea_free_callback_t)(void *cb_arg, struct vea_free_extent *vfe);
 int vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 	       struct vea_space_df *md, uint32_t blk_sz, uint32_t hdr_blks,
 	       uint64_t capacity, vea_format_callback_t cb, void *cb_data,
-	       bool force);
+	       bool force, uint32_t compat);
 /**
  * Upgrade VEA to support latest disk format
  *

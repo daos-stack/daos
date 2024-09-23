@@ -1,11 +1,12 @@
 '''
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import avocado
 from data_mover_test_base import DataMoverTestBase
 from pydaos.raw import DaosApiError
+from test_utils_container import get_existing_container
 
 
 class DmvrObjSmallTest(DataMoverTestBase):
@@ -57,8 +58,7 @@ class DmvrObjSmallTest(DataMoverTestBase):
         self.set_tool(tool)
 
         # Create pool1
-        pool1 = self.create_pool()
-        pool1.connect(2)
+        pool1 = self.get_pool()
 
         # Create cont1
         cont1 = self.get_container(pool1)
@@ -77,15 +77,14 @@ class DmvrObjSmallTest(DataMoverTestBase):
         cont2_label = self.parse_create_cont_label(result.stdout_text)
 
         # Verify data in cont2
-        cont2 = self.get_cont(pool1, cont2_label)
+        cont2 = get_existing_container(self, pool1, cont2_label)
         self.dataset_verify(
             obj_list, cont2,
             self.num_objs, self.num_dkeys, self.num_akeys_single,
             self.num_akeys_array, self.akey_sizes, self.akey_extents)
 
         # Create pool2
-        pool2 = self.create_pool()
-        pool2.connect(2)
+        pool2 = self.get_pool()
 
         # Clone cont1 to a new cont3 in pool2
         result = self.run_datamover(
@@ -94,18 +93,11 @@ class DmvrObjSmallTest(DataMoverTestBase):
             "DAOS_UUID", None, pool2, None)
         cont3_label = self.parse_create_cont_label(result.stdout_text)
         # Verify data in cont3
-        cont3 = self.get_cont(pool2, cont3_label)
+        cont3 = get_existing_container(self, pool2, cont3_label)
         self.dataset_verify(
             obj_list, cont3,
             self.num_objs, self.num_dkeys, self.num_akeys_single,
             self.num_akeys_array, self.akey_sizes, self.akey_extents)
-
-        # Must destroy before closing pools
-        cont1.destroy()
-        cont2.destroy()
-        cont3.destroy()
-        pool1.disconnect()
-        pool2.disconnect()
 
     @avocado.fail_on(DaosApiError)
     def test_dm_obj_small_dcp(self):

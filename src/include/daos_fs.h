@@ -109,6 +109,8 @@ typedef struct {
 	daos_oclass_id_t        doi_dir_oclass_id;
 	/** In case of dir, return default object class for files created in that dir */
 	daos_oclass_id_t        doi_file_oclass_id;
+	/** Object id */
+	daos_obj_id_t           doi_oid;
 } dfs_obj_info_t;
 
 /**
@@ -1187,12 +1189,14 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
  *
  * \param[in]	coh	Open container handle
  * \param[in]	user	New owner user (NULL if not updating)
+ * \param[in]	uid	New owner uid, if different from user's on local system (-1 otherwise)
  * \param[in]	group	New owner group (NULL if not updating)
+ * \param[in]	gid	New owner gid, if different from group's on local system (-1 otherwise)
  *
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group);
+dfs_cont_set_owner(daos_handle_t coh, d_string_t user, uid_t uid, d_string_t group, gid_t gid);
 
 /*
  * The Pipeline DFS API (everything under this comment) is under heavy development and should not be

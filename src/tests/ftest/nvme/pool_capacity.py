@@ -50,10 +50,9 @@ class NvmePoolCapacity(TestWithServers):
         processes = self.params.get("slots", "/run/ior/clientslots/*")
 
         # Define the arguments for the ior_runner_thread method
-        ior_cmd = IorCommand()
+        ior_cmd = IorCommand(self.test_env.log_dir)
         ior_cmd.get_params(self)
-        ior_cmd.set_daos_params(
-            self.server_group, pool, self.label_generator.get_label('TestContainer'))
+        ior_cmd.set_daos_params(pool, self.label_generator.get_label('TestContainer'))
         ior_cmd.dfs_oclass.update(oclass)
         ior_cmd.api.update(api)
         ior_cmd.transfer_size.update(test[2])
@@ -105,8 +104,9 @@ class NvmePoolCapacity(TestWithServers):
                 threads = []
                 # Create containers with threads because we'll be creating many containers, which
                 # will take too long if we create them serially.
+                # Skip register_cleanup for these to save teardown time.
                 for _ in range(num_cont):
-                    kwargs = {"pool": self.pool[-1]}
+                    kwargs = {"pool": self.pool[-1], "register_cleanup": False}
                     threads.append(threading.Thread(target=self.get_container, kwargs=kwargs))
                 for thread in threads:
                     thread.start()
@@ -186,8 +186,7 @@ class NvmePoolCapacity(TestWithServers):
             # Destroy the last num_pool pools created
             offset = loop_count * num_pool
             for index in range(offset, offset + num_pool):
-                display_string = "Pool {} space at the End".format(
-                    self.pool[index].uuid)
+                display_string = "{} space at the End".format(str(self.pool[index]))
                 self.pool[index].display_pool_daos_space(display_string)
                 self.pool[index].destroy()
 

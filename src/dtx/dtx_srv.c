@@ -114,6 +114,13 @@ dtx_metrics_alloc(const char *path, int tgt_id)
 			D_WARN("Failed to create DTX RPC cnt metric for %s: "
 			       DF_RC"\n", dtx_opc_to_str(opc), DP_RC(rc));
 	}
+
+	rc = d_tm_add_metric(&metrics->dpm_total[DTX_PROTO_SRV_RPC_COUNT], D_TM_COUNTER,
+			     "total number of processed sync DTX_COMMIT", "ops",
+			     "%s/ops/sync_dtx_commit/tgt_%u", path, tgt_id);
+	if (rc != DER_SUCCESS)
+		D_WARN("Failed to create sync DTX_COMMIT RPC cnt metric: "DF_RC"\n", DP_RC(rc));
+
 	return metrics;
 }
 
@@ -144,12 +151,11 @@ dtx_handler(crt_rpc_t *rpc)
 	struct dtx_out		*dout = crt_reply_get(rpc);
 	struct ds_cont_child	*cont = NULL;
 	struct dtx_id		*dtis;
-	struct dtx_memberships	*mbs[DTX_REFRESH_MAX] = { 0 };
 	struct dtx_cos_key	 dcks[DTX_REFRESH_MAX] = { 0 };
 	uint32_t		 vers[DTX_REFRESH_MAX] = { 0 };
 	uint32_t		 opc = opc_get(rpc->cr_opc);
 	uint32_t		 committed = 0;
-	uint32_t		*flags;
+	uint32_t		*flags = NULL;
 	int			*ptr;
 	int			 count = DTX_YIELD_CYCLE;
 	int			 i = 0;
@@ -192,15 +198,23 @@ dtx_handler(crt_rpc_t *rpc)
 			i += count;
 		}
 
-		d_tm_inc_counter(dpm->dpm_batched_total,
-				 din->di_dtx_array.ca_count);
-		rc1 = d_tm_get_counter(NULL, &ent_cnt, dpm->dpm_batched_total);
-		D_ASSERT(rc1 == DER_SUCCESS);
+		if (din->di_flags.ca_count > 0)
+			flags = din->di_flags.ca_arrays;
 
-		rc1 = d_tm_get_counter(NULL, &opc_cnt, dpm->dpm_total[opc]);
-		D_ASSERT(rc1 == DER_SUCCESS);
+		if (flags != NULL && (*flags & DRF_SYNC_COMMIT)) {
+			D_ASSERT(din->di_dtx_array.ca_count == 1);
+			d_tm_inc_counter(dpm->dpm_total[DTX_PROTO_SRV_RPC_COUNT], 1);
+		} else {
+			d_tm_inc_counter(dpm->dpm_batched_total,
+					 din->di_dtx_array.ca_count);
+			rc1 = d_tm_get_counter(NULL, &ent_cnt, dpm->dpm_batched_total);
+			D_ASSERT(rc1 == DER_SUCCESS);
 
-		d_tm_set_gauge(dpm->dpm_batched_degree, ent_cnt / (opc_cnt + 1));
+			rc1 = d_tm_get_counter(NULL, &opc_cnt, dpm->dpm_total[opc]);
+			D_ASSERT(rc1 == DER_SUCCESS);
+
+			d_tm_set_gauge(dpm->dpm_batched_degree, ent_cnt / (opc_cnt + 1));
+		}
 
 		break;
 	}
@@ -228,7 +242,7 @@ dtx_handler(crt_rpc_t *rpc)
 			D_GOTO(out, rc = -DER_PROTO);
 
 		rc = vos_dtx_check(cont->sc_hdl, din->di_dtx_array.ca_arrays,
-				   NULL, NULL, NULL, NULL, false);
+				   NULL, NULL, NULL, false);
 		if (rc == DTX_ST_INITED) {
 			/* For DTX_CHECK, non-ready one is equal to non-exist. Do not directly
 			 * return 'DTX_ST_INITED' to avoid interoperability trouble if related
@@ -272,8 +286,7 @@ dtx_handler(crt_rpc_t *rpc)
 		for (i = 0, rc1 = 0; i < count; i++) {
 			ptr = (int *)dout->do_sub_rets.ca_arrays + i;
 			dtis = (struct dtx_id *)din->di_dtx_array.ca_arrays + i;
-			*ptr = vos_dtx_check(cont->sc_hdl, dtis, NULL, &vers[i], &mbs[i], &dcks[i],
-					     true);
+			*ptr = vos_dtx_check(cont->sc_hdl, dtis, NULL, &vers[i], &dcks[i], true);
 			if (*ptr == -DER_NONEXIST && !(flags[i] & DRF_INITIAL_LEADER)) {
 				struct dtx_stat		stat = { 0 };
 
@@ -297,10 +310,10 @@ dtx_handler(crt_rpc_t *rpc)
 				 * it will cause interoperability trouble if remote server is old.
 				 */
 				*ptr = DTX_ST_PREPARED;
+			} else if (*ptr == DTX_ST_COMMITTABLE) {
+				/* Higher priority for the DTX, then it can be committed ASAP. */
+				dtx_cos_prio(cont, dtis, &dcks[i].oid, dcks[i].dkey_hash);
 			}
-
-			if (mbs[i] != NULL)
-				rc1++;
 		}
 		break;
 	default:
@@ -324,47 +337,6 @@ out:
 
 	if (likely(dpm != NULL))
 		d_tm_inc_counter(dpm->dpm_total[opc], 1);
-
-	if (opc == DTX_REFRESH && rc1 > 0) {
-		struct dtx_entry	 dtes[DTX_REFRESH_MAX] = { 0 };
-		struct dtx_entry	*pdte[DTX_REFRESH_MAX] = { 0 };
-		int			 j;
-
-		for (i = 0, j = 0; i < count; i++) {
-			if (mbs[i] == NULL)
-				continue;
-
-			/* For collective DTX, it will be committed soon. */
-			if (mbs[i]->dm_flags & DMF_COLL_TARGET) {
-				D_FREE(mbs[i]);
-				continue;
-			}
-
-			daos_dti_copy(&dtes[j].dte_xid,
-				      (struct dtx_id *)din->di_dtx_array.ca_arrays + i);
-			dtes[j].dte_ver = vers[i];
-			dtes[j].dte_refs = 1;
-			dtes[j].dte_mbs = mbs[i];
-
-			pdte[j] = &dtes[j];
-			dcks[j] = dcks[i];
-			j++;
-		}
-
-		if (j > 0) {
-			/*
-			 * Commit the DTX after replied the original refresh request to
-			 * avoid further query the same DTX.
-			 */
-			rc = dtx_commit(cont, pdte, dcks, j);
-			if (rc < 0)
-				D_WARN("Failed to commit DTX "DF_DTI", count %d: "
-				       DF_RC"\n", DP_DTI(&dtes[0].dte_xid), j, DP_RC(rc));
-
-			for (i = 0; i < j; i++)
-				D_FREE(pdte[i]->dte_mbs);
-		}
-	}
 
 	D_FREE(dout->do_sub_rets.ca_arrays);
 	dout->do_sub_rets.ca_count = 0;

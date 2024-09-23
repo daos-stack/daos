@@ -72,15 +72,6 @@ class DaosSpace(ctypes.Structure):
                 ("s_free", ctypes.c_uint64 * 2)]
 
 
-class TargetInfo(ctypes.Structure):
-    """ Represents info about a given target
-    Represents struct: daos_target_info_t"""
-    _fields_ = [("ta_type", ctypes.c_uint),
-                ("ta_state", ctypes.c_uint),
-                ("ta_perf", ctypes.c_int),
-                ("ta_space", DaosSpace)]
-
-
 class PoolSpace(ctypes.Structure):
     """ Structure to represent Pool space usage info
     Represents struct: daos_pool_space"""

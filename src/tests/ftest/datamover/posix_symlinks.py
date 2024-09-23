@@ -1,11 +1,13 @@
 '''
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from os.path import join
 
 from data_mover_test_base import DataMoverTestBase
+from dfuse_utils import get_dfuse, start_dfuse
+from run_utils import run_remote
 
 
 class DmvrPosixSymlinks(DataMoverTestBase):
@@ -55,28 +57,29 @@ class DmvrPosixSymlinks(DataMoverTestBase):
         self.set_tool(tool)
 
         # Start dfuse to hold all pools/containers
-        self.start_dfuse(self.dfuse_hosts)
+        dfuse = get_dfuse(self, self.dfuse_hosts)
+        start_dfuse(self, dfuse)
 
         # Create 1 pool
-        pool1 = self.create_pool()
+        pool1 = self.get_pool()
 
         # Create a special container to hold UNS entries
         uns_cont = self.get_container(pool1)
 
         # Test links that point forward
-        container1_path = join(self.dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns1')
+        container1_path = join(dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns1')
         container1 = self.get_container(pool1, path=container1_path)
         self.run_dm_posix_symlinks_fun(
             pool1, container1, self.create_links_forward, "forward")
 
         # Test links that point backward
-        container2_path = join(self.dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns2')
+        container2_path = join(dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns2')
         container2 = self.get_container(pool1, path=container2_path)
         self.run_dm_posix_symlinks_fun(
             pool1, container2, self.create_links_backward, "backward")
 
         # Test a mix of forward and backward links
-        container3_path = join(self.dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns3')
+        container3_path = join(dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns3')
         container3 = self.get_container(pool1, path=container3_path)
         self.run_dm_posix_symlinks_fun(
             pool1, container3, self.create_links_mixed, "mixed")
@@ -117,8 +120,9 @@ class DmvrPosixSymlinks(DataMoverTestBase):
         if do_deref:
             # Use POSIX cp to create a baseline for dereferencing
             deref_baseline_path = join(posix_test_path, "baseline_" + link_desc)
-            self.execute_cmd("cp -r --dereference '{}' '{}'".format(
-                src_posix_path, deref_baseline_path))
+            cp_cmd = f"cp -r --dereference '{src_posix_path}' '{deref_baseline_path}'"
+            if not run_remote(self.log, self.hostlist_clients, cp_cmd, timeout=300).passed:
+                self.fail("Failed to create dereference baseline")
             diff_src = deref_baseline_path
         else:
             # Just compare against the original
@@ -193,7 +197,9 @@ class DmvrPosixSymlinks(DataMoverTestBase):
 
             "popd"
         ]
-        self.execute_cmd_list(cmd_list)
+        cmd = " &&\n".join(cmd_list)
+        if not run_remote(self.log, self.hostlist_clients, cmd, timeout=300).passed:
+            self.fail(f"Failed to create forward symlinks in {path}")
 
     def create_links_backward(self, path):
         """
@@ -223,7 +229,9 @@ class DmvrPosixSymlinks(DataMoverTestBase):
 
             "popd"
         ]
-        self.execute_cmd_list(cmd_list)
+        cmd = " &&\n".join(cmd_list)
+        if not run_remote(self.log, self.hostlist_clients, cmd, timeout=300).passed:
+            self.fail(f"Failed to create backward symlinks in {path}")
 
     def create_links_mixed(self, path):
         """
@@ -254,12 +262,6 @@ class DmvrPosixSymlinks(DataMoverTestBase):
 
             "popd"
         ]
-        self.execute_cmd_list(cmd_list)
-
-    def execute_cmd_list(self, cmd_list):
-        """Execute a list of commands, separated by &&.
-        Args:
-            cmd_list (list): A list of commands to execute.
-        """
         cmd = " &&\n".join(cmd_list)
-        self.execute_cmd(cmd)
+        if not run_remote(self.log, self.hostlist_clients, cmd, timeout=300).passed:
+            self.fail(f"Failed to create mixed symlinks in {path}")
