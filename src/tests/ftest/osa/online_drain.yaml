@@ -1,5 +1,3 @@
-server_manager:
-  srv_timeout: 500
 hosts:
   test_servers: 3
   test_clients: 1
@@ -34,10 +32,8 @@ server_config:
         - DD_MASK=mgmt,md,rebuild
       storage: auto
 pool:
-  scm_size: 12000000000
-  nvme_size: 108000000000
-  svcn: 4
-  control_method: dmg
+  scm_size: 12G
+  nvme_size: 108G
   rebuild_timeout: 120
   pool_query_timeout: 30
   properties: scrub:timed,scrub_freq:1
@@ -55,9 +51,9 @@ ior:
   iorflags:
     write_flags: "-w -F -k -G 1"
     read_flags: "-F -r -R -k -G 1"
-    api: DFS
-    dfs_oclass: RP_2G4
-    dfs_dir_oclass: RP_2G4
+  api: DFS
+  dfs_oclass: RP_2G4
+  dfs_dir_oclass: RP_2G4
   ior_test_sequence:
     # - [scmsize, nvmesize, transfersize, blocksize, PASS/FAIL(Expected) ]
     #   The values are set to be in the multiples of 10.
@@ -81,9 +77,6 @@ mdtest:
       read_bytes: 32768
   verbosity_value: 1
   depth: 0
-daos_racer:
-  runtime: 480
-  clush_timeout: 1000
 test_obj_class:
   oclass:
     - RP_3G6

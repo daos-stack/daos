@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2023 Intel Corporation.
+ * (C) Copyright 2023-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1001,6 +1001,8 @@ cr_start_specified(void **state)
 	int			 rc;
 	int			 i;
 
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("CR1: start checker for specified pools\n");
 
 	for (i = 0; i < 3; i++) {
@@ -1092,6 +1094,8 @@ cr_leader_interaction(void **state)
 	int				 rc;
 	int				 i;
 
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("CR2: check leader side interaction\n");
 
 	rc = cr_pool_create(state, &pool, false, class);
@@ -1177,6 +1181,8 @@ cr_engine_interaction(void **state)
 	uint32_t			 action;
 	int				 rc;
 	int				 i;
+
+	FAULT_INJECTION_REQUIRED();
 
 	print_message("CR3: check engine side interaction\n");
 
@@ -1267,6 +1273,8 @@ cr_repair_forall_leader(void **state)
 	uint32_t			 action;
 	int				 rc;
 	int				 i;
+
+	FAULT_INJECTION_REQUIRED();
 
 	print_message("CR4: check repair option - for-all, on leader\n");
 
@@ -1372,6 +1380,8 @@ cr_repair_forall_engine(void **state)
 	int				 rc;
 	int				 i;
 
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("CR5: check repair option - for-all, on engine\n");
 
 	for (i = 0; i < 2; i++) {
@@ -1471,6 +1481,8 @@ cr_stop_leader_interaction(void **state)
 	uint32_t		 action = TCA_INTERACT;
 	int			 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("CR6: stop checker with pending check leader interaction\n");
 
 	rc = cr_pool_create(state, &pool, false, class);
@@ -1545,6 +1557,8 @@ cr_stop_engine_interaction(void **state)
 	uint32_t		 class = TCC_CONT_BAD_LABEL;
 	uint32_t		 action = TCA_INTERACT;
 	int			 rc;
+
+	FAULT_INJECTION_REQUIRED();
 
 	print_message("CR7: stop checker with pending check engine interaction\n");
 
@@ -1627,6 +1641,8 @@ cr_stop_specified(void **state)
 	uint32_t			 action;
 	int				 rc;
 	int				 i;
+
+	FAULT_INJECTION_REQUIRED();
 
 	print_message("CR8: stop checker for specified pools\n");
 
@@ -1756,6 +1772,8 @@ cr_auto_reset(void **state)
 	int				 rc;
 	int				 i;
 
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("CR9: reset checker automatically if former instance completed\n");
 
 	rc = cr_pool_create(state, &pool, false, class);
@@ -1853,6 +1871,8 @@ cr_pause(void **state, bool force)
 	int				 rc;
 	int				 i;
 
+	FAULT_INJECTION_REQUIRED();
+
 	rc = cr_pool_create(state, &pool, false, class);
 	assert_rc_equal(rc, 0);
 
@@ -1879,9 +1899,9 @@ cr_pause(void **state, bool force)
 	rc = cr_system_start();
 	assert_rc_equal(rc, 0);
 
-	for (i = 0; i < CR_WAIT_MAX; i += 5) {
+	for (i = 0; i < CR_WAIT_MAX; i++) {
 		/* Sleep for a while after system re-started under check mode. */
-		sleep(5);
+		sleep(2);
 
 		cr_dci_fini(&dci);
 		rc = cr_check_query(1, &pool.pool_uuid, &dci);
@@ -1920,6 +1940,8 @@ cr_pause(void **state, bool force)
 static void
 cr_shutdown(void **state)
 {
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("CR10: checker shutdown\n");
 
 	cr_pause(state, false);
@@ -1937,6 +1959,8 @@ cr_shutdown(void **state)
 static void
 cr_crash(void **state)
 {
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("CR11: checker crash\n");
 
 	cr_pause(state, true);
@@ -1969,6 +1993,8 @@ cr_leader_resume(void **state)
 	uint32_t			 action = TCA_READD;
 	daos_size_t			 pool_nr = 1;
 	int				 rc;
+
+	FAULT_INJECTION_REQUIRED();
 
 	print_message("CR12: check leader resume from former stop/paused phase\n");
 
@@ -2093,6 +2119,8 @@ cr_engine_resume(void **state)
 	uint32_t			 action = TCA_TRUST_PS;
 	int				 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("CR13: check engine resume from former stop/paused phase\n");
 
 	rc = cr_pool_create(state, &pool, false, class);
@@ -2196,6 +2224,8 @@ cr_reset_specified(void **state)
 	uint32_t		 actions[3];
 	int			 rc;
 	int			 i;
+
+	FAULT_INJECTION_REQUIRED();
 
 	print_message("CR14: reset checker for specified pools\n");
 
@@ -2317,6 +2347,8 @@ cr_failout(void **state)
 	int				 result = -DER_IO;
 	int				 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("CR15: check start option - failout\n");
 
 	rc = cr_pool_create(state, &pool, false, class);
@@ -2398,6 +2430,8 @@ cr_auto_repair(void **state)
 	uint32_t			 action;
 	int				 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("CR16: check start option - auto repair\n");
 
 	rc = cr_pool_create(state, &pool, true, TCC_NONE);
@@ -2467,6 +2501,8 @@ cr_orphan_pool(void **state)
 	uint32_t			 action = TCA_READD;
 	daos_size_t			 pool_nr = 2;
 	int				 rc;
+
+	FAULT_INJECTION_REQUIRED();
 
 	print_message("CR17: check start option - scan orphan pools by force\n");
 
@@ -2641,6 +2677,8 @@ cr_fail_ps_sync(void **state, bool leader)
 static void
 cr_fail_sync_leader(void **state)
 {
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("CR18: PS leader fails to sync pool status with check leader\n");
 
 	cr_fail_ps_sync(state, true);
@@ -2664,6 +2702,8 @@ cr_fail_sync_leader(void **state)
 static void
 cr_fail_sync_engine(void **state)
 {
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("CR19: PS leader fails to sync pool status with check engines\n");
 
 	cr_fail_ps_sync(state, false);
@@ -2693,6 +2733,8 @@ cr_engine_death(void **state)
 	int				 rank = -1;
 	int				 rc;
 	int				 i;
+
+	FAULT_INJECTION_REQUIRED();
 
 	print_message("CR20: check engine death during check\n");
 
@@ -2795,6 +2837,8 @@ cr_engine_rejoin_succ(void **state)
 	int				 rank = -1;
 	int				 rc;
 	int				 i;
+
+	FAULT_INJECTION_REQUIRED();
 
 	print_message("CR21: check engine rejoins check instance successfully\n");
 
@@ -2910,6 +2954,8 @@ cr_engine_rejoin_fail(void **state)
 	int				 result;
 	int				 rc;
 	int				 i;
+
+	FAULT_INJECTION_REQUIRED();
 
 	print_message("CR22: check engine fails to rejoin check instance\n");
 
@@ -3045,6 +3091,8 @@ cr_multiple_pools(void **state)
 	int				 rc;
 	int				 i;
 	int				 j;
+
+	FAULT_INJECTION_REQUIRED();
 
 	print_message("CR23: control multiple pools check start/stop sequence\n");
 
@@ -3230,6 +3278,8 @@ cr_fail_sync_orphan(void **state)
 	struct daos_check_info	 dci = { 0 };
 	int			 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("CR24: check leader failed to notify check engine about orphan process\n");
 
 	rc = cr_pool_create(state, &pool, false, TCC_NONE);
@@ -3298,6 +3348,8 @@ cr_inherit_policy(void **state)
 	uint32_t			 action;
 	int				 rc;
 	int				 i;
+
+	FAULT_INJECTION_REQUIRED();
 
 	print_message("CR25: inherit check policy from former check repair\n");
 
@@ -3395,6 +3447,8 @@ cr_handle_fail_pool1(void **state)
 	struct daos_check_info	 dci = { 0 };
 	int			 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("CR26: skip the pool if some engine failed to report some pool shard\n");
 
 	rc = cr_pool_create(state, &pool, false, TCC_NONE);
@@ -3452,6 +3506,8 @@ cr_handle_fail_pool2(void **state)
 	uint32_t		 action;
 	uint32_t		 count;
 	int			 rc;
+
+	FAULT_INJECTION_REQUIRED();
 
 	print_message("CR27: handle the pool if some engine failed to report some pool service\n");
 

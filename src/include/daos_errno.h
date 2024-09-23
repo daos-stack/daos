@@ -235,6 +235,8 @@ enum daos_errno {
 	/** Return value representing success */
 	DER_SUCCESS = 0,
 	D_FOREACH_ERR_RANGE(D_DEFINE_RANGE_ERRNO)
+	/** Last valid errno, used for dumping */
+	DER_LAST_VALID,
 	/** Unknown error value */
 	DER_UNKNOWN = (DER_ERR_GURT_BASE + 500000),
 };

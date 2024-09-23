@@ -986,7 +986,7 @@ btr_embedded_create_hash(struct btr_context *tcx, bool force)
 			D_ERROR("Failed to get key from embedded record: " DF_RC "\n", DP_RC(rc));
 			return rc;
 		}
-		D_ASSERT(rec != NULL);
+		D_ASSERT(old_key.iov_buf != NULL);
 		btr_hkey_gen(tcx, &old_key, &rec->rec_hkey[0]);
 		btr_embedded_hash_set(tcx);
 	}

@@ -48,8 +48,8 @@ class VolTestBase(TestWithServers):
             check_results=["FAILED", "stderr"])
 
         env = EnvironmentVariables()
-        env["DAOS_POOL"] = "{}".format(pool.uuid)
-        env["DAOS_CONT"] = "{}".format(container.uuid)
+        env["DAOS_POOL"] = pool.identifier
+        env["DAOS_CONT"] = container.identifier
         env["HDF5_VOL_CONNECTOR"] = "daos"
         env["HDF5_PLUGIN_PATH"] = "{}".format(plugin_path)
         job_manager.assign_hosts(self.hostlist_clients)

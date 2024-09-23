@@ -10,7 +10,7 @@ Build-Depends: debhelper (>= 10),
                libopenmpi-dev,
                libssl-dev,
                libyaml-dev,
-               libmercury-dev (>= 2.3.1-1),
+               libmercury-dev (>= 2.4),
                scons,
                uuid-dev,
                pkg-config,
@@ -33,7 +33,8 @@ Build-Depends: debhelper (>= 10),
                python3-tabulate,
                liblz4-dev,
                libaio-dev,
-               libcapstone-dev
+               libcapstone-dev,
+               libpci-dev
 Standards-Version: 4.1.2
 Homepage: https://docs.daos.io/
 Vcs-Git: https://github.com/daos-stack/daos.git
@@ -171,7 +172,7 @@ Package: daos-server
 Section: net
 Architecture: any
 Multi-Arch: same
-Depends: ${shlibs:Depends}, ${misc:Depends}, openmpi-bin,
+Depends: ${shlibs:Depends}, ${misc:Depends}, openmpi-bin, pciutils,
          ipmctl (>=03.00.00.0468), libfabric (>= 1.15.1-1), spdk-tools (>= 22.01.2)
 Description: The Distributed Asynchronous Object Storage (DAOS) is an open-source
  software-defined object store designed from the ground up for

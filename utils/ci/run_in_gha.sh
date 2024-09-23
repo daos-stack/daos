@@ -5,7 +5,9 @@ cd daos
 # Probably not needed now, but leave on PRs until we have confidence of landings builds.
 echo ::group::Rebuild spdk
 rm -rf /opt/daos/prereq/release/spdk
-scons --jobs "$DEPS_JOBS" PREFIX=/opt/daos --build-deps=only
+rm -rf build/external/release/spdk*
+scons --jobs "$DEPS_JOBS" PREFIX=/opt/daos --build-deps=fetch
+scons --jobs "$DEPS_JOBS" PREFIX=/opt/daos --build-deps=only --skip-download
 echo ::endgroup::
 
 echo "::group::Stack analyzer output (post build)"

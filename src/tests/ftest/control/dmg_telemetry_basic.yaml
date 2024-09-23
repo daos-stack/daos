@@ -18,7 +18,6 @@ server_config:
   system_ram_reserved: 1
 pool:
   scm_size: 2G
-  control_method: dmg
 container:
   control_method: daos
 test:

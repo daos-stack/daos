@@ -120,33 +120,8 @@ func (trf *tierRatioFlag) UnmarshalFlag(fv string) error {
 	return nil
 }
 
-type sizeFlag struct {
-	bytes uint64
-}
-
-func (sf sizeFlag) IsSet() bool {
-	return sf.bytes > 0
-}
-
-func (sf sizeFlag) String() string {
-	return humanize.Bytes(sf.bytes)
-}
-
-func (sf *sizeFlag) UnmarshalFlag(fv string) (err error) {
-	if fv == "" {
-		return errors.New("no size specified")
-	}
-
-	sf.bytes, err = humanize.ParseBytes(fv)
-	if err != nil {
-		return errors.Errorf("invalid size %q", fv)
-	}
-
-	return nil
-}
-
 type poolSizeFlag struct {
-	sizeFlag
+	ui.ByteSizeFlag
 	availRatio uint64
 }
 
@@ -155,7 +130,7 @@ func (psf poolSizeFlag) IsRatio() bool {
 }
 
 func (psf poolSizeFlag) IsSet() bool {
-	return psf.sizeFlag.IsSet() || psf.IsRatio()
+	return psf.ByteSizeFlag.IsSet() || psf.IsRatio()
 }
 
 func (psf poolSizeFlag) String() string {
@@ -163,7 +138,7 @@ func (psf poolSizeFlag) String() string {
 		return fmt.Sprintf("%d%%", psf.availRatio)
 	}
 
-	return psf.sizeFlag.String()
+	return psf.ByteSizeFlag.String()
 }
 
 func (psf *poolSizeFlag) UnmarshalFlag(fv string) error {
@@ -182,7 +157,7 @@ func (psf *poolSizeFlag) UnmarshalFlag(fv string) error {
 		return nil
 	}
 
-	return psf.sizeFlag.UnmarshalFlag(fv)
+	return psf.ByteSizeFlag.UnmarshalFlag(fv)
 }
 
 // PoolCreateCmd is the struct representing the command to create a DAOS pool.
@@ -199,9 +174,8 @@ type PoolCreateCmd struct {
 	TierRatio  tierRatioFlag       `short:"t" long:"tier-ratio" description:"Percentage of storage tiers for pool storage (auto; default: 6,94)"`
 	NumRanks   uint32              `short:"k" long:"nranks" description:"Number of ranks to use (auto)"`
 	NumSvcReps uint32              `short:"v" long:"nsvc" description:"Number of pool service replicas"`
-	ScmSize    sizeFlag            `short:"s" long:"scm-size" description:"Per-engine SCM allocation for DAOS pool (manual)"`
-	NVMeSize   sizeFlag            `short:"n" long:"nvme-size" description:"Per-engine NVMe allocation for DAOS pool (manual)"`
-	MetaSize   sizeFlag            `long:"meta-size" description:"In MD-on-SSD mode specify meta blob size to be used in DAOS pool (manual)"`
+	ScmSize    ui.ByteSizeFlag     `short:"s" long:"scm-size" description:"Per-engine SCM allocation for DAOS pool (manual)"`
+	NVMeSize   ui.ByteSizeFlag     `short:"n" long:"nvme-size" description:"Per-engine NVMe allocation for DAOS pool (manual)"`
 	RankList   ui.RankSetFlag      `short:"r" long:"ranks" description:"Storage engine unique identifiers (ranks) for DAOS pool"`
 
 	Args struct {
@@ -213,12 +187,6 @@ func (cmd *PoolCreateCmd) checkSizeArgs() error {
 	if cmd.Size.IsSet() {
 		if cmd.ScmSize.IsSet() || cmd.NVMeSize.IsSet() {
 			return errIncompatFlags("size", "scm-size", "nvme-size")
-		}
-		if cmd.MetaSize.IsSet() {
-			// NOTE DAOS-14223: --meta-size value is currently not taken into account
-			//                  when storage tier sizes are auto-calculated so only
-			//                  support in manual mode.
-			return errors.New("--meta-size can only be set if --scm-size is set")
 		}
 	} else if !cmd.ScmSize.IsSet() {
 		return errors.New("either --size or --scm-size must be set")
@@ -266,7 +234,7 @@ func (cmd *PoolCreateCmd) storageAutoTotal(req *control.PoolCreateReq) error {
 
 	req.NumRanks = cmd.NumRanks
 	req.TierRatio = cmd.TierRatio.Ratios()
-	req.TotalBytes = cmd.Size.bytes
+	req.TotalBytes = cmd.Size.Bytes
 
 	scmPercentage := ratio2Percentage(cmd.Logger, req.TierRatio[0], req.TierRatio[1])
 	msg := fmt.Sprintf("Creating DAOS pool with automatic storage allocation: "+
@@ -287,23 +255,14 @@ func (cmd *PoolCreateCmd) storageManual(req *control.PoolCreateReq) error {
 		return errIncompatFlags("tier-ratio", "scm-size")
 	}
 
-	scmBytes := cmd.ScmSize.bytes
-	nvmeBytes := cmd.NVMeSize.bytes
-	metaBytes := cmd.MetaSize.bytes
-	if metaBytes > 0 && metaBytes < scmBytes {
-		return errors.Errorf("--meta-size (%s) can not be smaller than --scm-size (%s)",
-			humanize.Bytes(metaBytes), humanize.Bytes(scmBytes))
-	}
-	req.MetaBytes = metaBytes
+	scmBytes := cmd.ScmSize.Bytes
+	nvmeBytes := cmd.NVMeSize.Bytes
 	req.TierBytes = []uint64{scmBytes, nvmeBytes}
 
 	msg := fmt.Sprintf("Creating DAOS pool with manual per-engine storage allocation:"+
 		" %s SCM, %s NVMe (%0.2f%% ratio)", humanize.Bytes(scmBytes),
 		humanize.Bytes(nvmeBytes),
 		ratio2Percentage(cmd.Logger, float64(scmBytes), float64(nvmeBytes)))
-	if metaBytes > 0 {
-		msg += fmt.Sprintf(" with %s meta-blob-size", humanize.Bytes(metaBytes))
-	}
 	cmd.Info(msg)
 
 	return nil
@@ -517,19 +476,19 @@ func (cmd *PoolEvictCmd) Execute(args []string) error {
 type PoolExcludeCmd struct {
 	poolCmd
 	Rank      uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be excluded"`
-	Targetidx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be excluded from the rank"`
+	TargetIdx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be excluded from the rank"`
 }
 
 // Execute is run when PoolExcludeCmd subcommand is activated
 func (cmd *PoolExcludeCmd) Execute(args []string) error {
 	msg := "succeeded"
 
-	var idxlist []uint32
-	if err := common.ParseNumberList(cmd.Targetidx, &idxlist); err != nil {
+	var idxList []uint32
+	if err := common.ParseNumberList(cmd.TargetIdx, &idxList); err != nil {
 		return errors.WithMessage(err, "parsing target list")
 	}
 
-	req := &control.PoolExcludeReq{ID: cmd.PoolID().String(), Rank: ranklist.Rank(cmd.Rank), Targetidx: idxlist}
+	req := &control.PoolExcludeReq{ID: cmd.PoolID().String(), Rank: ranklist.Rank(cmd.Rank), TargetIdx: idxList}
 
 	err := control.PoolExclude(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -545,20 +504,20 @@ func (cmd *PoolExcludeCmd) Execute(args []string) error {
 type PoolDrainCmd struct {
 	poolCmd
 	Rank      uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be drained"`
-	Targetidx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be drained on the rank"`
+	TargetIdx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be drained on the rank"`
 }
 
 // Execute is run when PoolDrainCmd subcommand is activated
 func (cmd *PoolDrainCmd) Execute(args []string) error {
 	msg := "succeeded"
 
-	var idxlist []uint32
-	if err := common.ParseNumberList(cmd.Targetidx, &idxlist); err != nil {
+	var idxList []uint32
+	if err := common.ParseNumberList(cmd.TargetIdx, &idxList); err != nil {
 		err = errors.WithMessage(err, "parsing target list")
 		return err
 	}
 
-	req := &control.PoolDrainReq{ID: cmd.PoolID().String(), Rank: ranklist.Rank(cmd.Rank), Targetidx: idxlist}
+	req := &control.PoolDrainReq{ID: cmd.PoolID().String(), Rank: ranklist.Rank(cmd.Rank), TargetIdx: idxList}
 
 	err := control.PoolDrain(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -599,15 +558,15 @@ func (cmd *PoolExtendCmd) Execute(args []string) error {
 type PoolReintegrateCmd struct {
 	poolCmd
 	Rank      uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be reintegrated"`
-	Targetidx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be reintegrated into the rank"`
+	TargetIdx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be reintegrated into the rank"`
 }
 
 // Execute is run when PoolReintegrateCmd subcommand is activated
 func (cmd *PoolReintegrateCmd) Execute(args []string) error {
 	msg := "succeeded"
 
-	var idxlist []uint32
-	if err := common.ParseNumberList(cmd.Targetidx, &idxlist); err != nil {
+	var idxList []uint32
+	if err := common.ParseNumberList(cmd.TargetIdx, &idxList); err != nil {
 		err = errors.WithMessage(err, "parsing target list")
 		return err
 	}
@@ -615,7 +574,7 @@ func (cmd *PoolReintegrateCmd) Execute(args []string) error {
 	req := &control.PoolReintegrateReq{
 		ID:        cmd.PoolID().String(),
 		Rank:      ranklist.Rank(cmd.Rank),
-		Targetidx: idxlist,
+		TargetIdx: idxList,
 	}
 
 	err := control.PoolReintegrate(cmd.MustLogCtx(), cmd.ctlInvoker, req)
@@ -646,10 +605,6 @@ func (cmd *PoolQueryCmd) Execute(args []string) error {
 	if cmd.HealthOnly {
 		req.QueryMask = daos.HealthOnlyPoolQueryMask
 	}
-	// TODO (DAOS-10250) The two options should not be incompatible (i.e. engine limitation)
-	if cmd.ShowEnabledRanks && cmd.ShowDisabledRanks {
-		return errIncompatFlags("show-enabled-ranks", "show-disabled-ranks")
-	}
 	if cmd.ShowEnabledRanks {
 		req.QueryMask.SetOptions(daos.PoolQueryOptionEnabledEngines)
 	}
@@ -658,9 +613,12 @@ func (cmd *PoolQueryCmd) Execute(args []string) error {
 	}
 
 	resp, err := control.PoolQuery(cmd.MustLogCtx(), cmd.ctlInvoker, req)
-
 	if cmd.JSONOutputEnabled() {
-		return cmd.OutputJSON(resp, err)
+		var poolInfo *daos.PoolInfo
+		if resp != nil {
+			poolInfo = &resp.PoolInfo
+		}
+		return cmd.OutputJSON(poolInfo, err)
 	}
 
 	if err != nil {
@@ -682,15 +640,33 @@ type PoolQueryTargetsCmd struct {
 	poolCmd
 
 	Rank    uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be queried"`
-	Targets string `long:"target-idx" required:"1" description:"Comma-separated list of target idx(s) to be queried"`
+	Targets string `long:"target-idx" description:"Comma-separated list of target idx(s) to be queried"`
 }
 
 // Execute is run when PoolQueryTargetsCmd subcommand is activated
 func (cmd *PoolQueryTargetsCmd) Execute(args []string) error {
+	ctx := cmd.MustLogCtx()
 
 	var tgtsList []uint32
-	if err := common.ParseNumberList(cmd.Targets, &tgtsList); err != nil {
-		return errors.WithMessage(err, "parsing target list")
+	if len(cmd.Targets) > 0 {
+		if err := common.ParseNumberList(cmd.Targets, &tgtsList); err != nil {
+			return errors.WithMessage(err, "parsing target list")
+		}
+	} else {
+		pi, err := control.PoolQuery(ctx, cmd.ctlInvoker, &control.PoolQueryReq{
+			ID:        cmd.PoolID().String(),
+			QueryMask: daos.DefaultPoolQueryMask,
+		})
+		if err != nil || (pi.TotalTargets == 0 || pi.TotalEngines == 0) {
+			if err != nil {
+				return errors.Wrap(err, "pool query failed")
+			}
+			return errors.New("failed to derive target count from pool query")
+		}
+		tgtCount := pi.TotalTargets / pi.TotalEngines
+		for i := uint32(0); i < tgtCount; i++ {
+			tgtsList = append(tgtsList, i)
+		}
 	}
 
 	req := &control.PoolQueryTargetReq{
@@ -699,7 +675,7 @@ func (cmd *PoolQueryTargetsCmd) Execute(args []string) error {
 		Targets: tgtsList,
 	}
 
-	resp, err := control.PoolQueryTargets(cmd.MustLogCtx(), cmd.ctlInvoker, req)
+	resp, err := control.PoolQueryTargets(ctx, cmd.ctlInvoker, req)
 
 	if cmd.JSONOutputEnabled() {
 		return cmd.OutputJSON(resp, err)

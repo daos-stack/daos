@@ -357,6 +357,8 @@ class TelemetryUtils():
         ENGINE_IO_OPS_TGT_UPDATE_ACTIVE_METRICS +\
         ENGINE_IO_OPS_UPDATE_ACTIVE_METRICS
     ENGINE_NET_METRICS = [
+        "engine_net_waitq_depth",
+        "engine_net_quota_exceeded",
         "engine_net_glitch",
         "engine_net_failed_addr",
         "engine_net_req_timeout",
@@ -421,7 +423,6 @@ class TelemetryUtils():
         ENGINE_NVME_CRIT_WARN_METRICS +\
         ENGINE_NVME_INTEL_VENDOR_METRICS
     ENGINE_MEM_USAGE_METRICS = [
-        "engine_mem_vos_dtx_cmt_ent_48",
         "engine_mem_vos_vos_obj_360",
         "engine_mem_vos_vos_lru_size",
         "engine_mem_dtx_dtx_leader_handle_360"]

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -451,6 +451,27 @@ trigger_and_wait_ec_aggreation(test_arg_t *arg, daos_obj_id_t *oids,
 }
 
 void
+trigger_and_wait_ec_aggreation_2dkeys(test_arg_t *arg, daos_obj_id_t *oids,
+				      int oids_nr, char *dkey, char *dkey2, char *akey,
+				      daos_off_t offset, daos_size_t size, bool exist)
+{
+	int i;
+
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+			      DAOS_OBJ_EC_AGG_LEADER_DIFF | DAOS_FAIL_ALWAYS, 0, NULL);
+
+	print_message("wait for 35 seconds for EC aggregation.\n");
+	sleep(35);
+
+	for (i = 0; i < oids_nr; i++) {
+		ec_agg_check_replica_on_parity(arg, oids[i], dkey, akey, offset, size, exist);
+		ec_agg_check_replica_on_parity(arg, oids[i], dkey2, akey, offset, size, exist);
+	}
+
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+}
+
+void
 ec_verify_parity_data(struct ioreq *req, char *dkey, char *akey,
 		      daos_off_t offset, daos_size_t size,
 		      char *verify_data, daos_handle_t th, bool degraded)
@@ -467,6 +488,37 @@ ec_verify_parity_data(struct ioreq *req, char *dkey, char *akey,
 	recx.rx_idx = offset;
 	if (degraded)
 		daos_fail_loc_set(DAOS_OBJ_FORCE_DEGRADE | DAOS_FAIL_ONCE);
+
+	lookup_recxs(dkey, akey, 1, th, &recx, 1, data, size, req);
+	assert_memory_equal(data, verify_data, size);
+	daos_fail_loc_set(0);
+	free(data);
+}
+
+void
+ec_verify_parity_data_fail2shards(struct ioreq *req, char *dkey, char *akey,
+				  daos_off_t offset, daos_size_t size,
+				  char *verify_data, daos_handle_t th,
+				  uint16_t shard1, uint16_t shard2)
+{
+	daos_recx_t	 recx;
+	char		*data;
+	uint16_t	 fail_shards[2];
+	uint64_t	 fail_val;
+
+	data = (char *)malloc(size);
+	assert_true(data != NULL);
+	memset(data, 0, size);
+
+	req->iod_type = DAOS_IOD_ARRAY;
+	recx.rx_nr = size;
+	recx.rx_idx = offset;
+
+	fail_shards[0] = shard1;
+	fail_shards[1] = shard2;
+	fail_val = daos_shard_fail_value(fail_shards, 2);
+	daos_fail_value_set(fail_val);
+	daos_fail_loc_set(DAOS_FAIL_SHARD_OPEN | DAOS_FAIL_ALWAYS);
 
 	lookup_recxs(dkey, akey, 1, th, &recx, 1, data, size, req);
 	assert_memory_equal(data, verify_data, size);
@@ -503,20 +555,34 @@ ec_partial_update_agg(void **state)
 		recx.rx_nr = EC_CELL_SIZE;
 		recx.rx_idx = i * EC_CELL_SIZE;
 		memset(data, 'a' + i, EC_CELL_SIZE);
-		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+		insert_recxs("d_key1", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     data, EC_CELL_SIZE, &req);
+		insert_recxs("d_key2", "a_key", 1, DAOS_TX_NONE, &recx, 1,
 			     data, EC_CELL_SIZE, &req);
 	}
 
-	trigger_and_wait_ec_aggreation(arg, &oid, 1, "d_key", "a_key", 0,
-				       EC_CELL_SIZE * 8, DAOS_FORCE_EC_AGG);
+	trigger_and_wait_ec_aggreation_2dkeys(arg, &oid, 1, "d_key1", "d_key2", "a_key", 0,
+					      EC_CELL_SIZE * 8, false);
 
 	for (i = 0; i < 10; i++) {
 		daos_off_t offset = i * EC_CELL_SIZE;
 
 		memset(verify_data, 'a' + i, EC_CELL_SIZE);
-		ec_verify_parity_data(&req, "d_key", "a_key", offset,
-				      (daos_size_t)EC_CELL_SIZE, verify_data,
-				      DAOS_TX_NONE, true);
+		ec_verify_parity_data_fail2shards(&req, "d_key1", "a_key", offset,
+						  (daos_size_t)EC_CELL_SIZE, verify_data,
+						  DAOS_TX_NONE, 0, 3);
+		ec_verify_parity_data_fail2shards(&req, "d_key1", "a_key", offset,
+						  (daos_size_t)EC_CELL_SIZE, verify_data,
+						  DAOS_TX_NONE, 0, 2);
+		ec_verify_parity_data_fail2shards(&req, "d_key2", "a_key", offset,
+						  (daos_size_t)EC_CELL_SIZE, verify_data,
+						  DAOS_TX_NONE, 0, 1);
+		ec_verify_parity_data_fail2shards(&req, "d_key2", "a_key", offset,
+						  (daos_size_t)EC_CELL_SIZE, verify_data,
+						  DAOS_TX_NONE, 2, 3);
+		ec_verify_parity_data_fail2shards(&req, "d_key2", "a_key", offset,
+						  (daos_size_t)EC_CELL_SIZE, verify_data,
+						  DAOS_TX_NONE, 4, 5);
 	}
 	ioreq_fini(&req);
 	free(data);
@@ -612,7 +678,9 @@ ec_full_partial_update_agg(void **state)
 	recx.rx_idx =  0;
 	memset(data, 'a', full_update_size);
 	memcpy(verify_data, data, full_update_size);
-	insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+	insert_recxs("d_key1", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+		     data, full_update_size, &req);
+	insert_recxs("d_key2", "a_key", 1, DAOS_TX_NONE, &recx, 1,
 		     data, full_update_size, &req);
 
 	/* then partial stripe update */
@@ -627,15 +695,27 @@ ec_full_partial_update_agg(void **state)
 		memset(buffer, 'a' + i, partial_update_size);
 		memcpy(verify_buffer, buffer, partial_update_size);
 
-		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+		insert_recxs("d_key1", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     buffer, partial_update_size, &req);
+		insert_recxs("d_key2", "a_key", 1, DAOS_TX_NONE, &recx, 1,
 			     buffer, partial_update_size, &req);
 	}
 
-	trigger_and_wait_ec_aggreation(arg, &oid, 1, "d_key", "a_key", 0,
-				       full_update_size, DAOS_FORCE_EC_AGG);
+	trigger_and_wait_ec_aggreation_2dkeys(arg, &oid, 1, "d_key1", "d_key2", "a_key", 0,
+					      full_update_size, false);
 
-	ec_verify_parity_data(&req, "d_key", "a_key", (daos_size_t)0,
-			      full_update_size, verify_data, DAOS_TX_NONE, true);
+	ec_verify_parity_data_fail2shards(&req, "d_key1", "a_key", (daos_size_t)0, full_update_size,
+					  verify_data, DAOS_TX_NONE, 0, 2);
+	ec_verify_parity_data_fail2shards(&req, "d_key1", "a_key", (daos_size_t)0, full_update_size,
+					  verify_data, DAOS_TX_NONE, 3, 4);
+	ec_verify_parity_data_fail2shards(&req, "d_key1", "a_key", (daos_size_t)0, full_update_size,
+					  verify_data, DAOS_TX_NONE, 4, 5);
+	ec_verify_parity_data_fail2shards(&req, "d_key2", "a_key", (daos_size_t)0, full_update_size,
+					  verify_data, DAOS_TX_NONE, 0, 3);
+	ec_verify_parity_data_fail2shards(&req, "d_key2", "a_key", (daos_size_t)0, full_update_size,
+					  verify_data, DAOS_TX_NONE, 3, 4);
+	ec_verify_parity_data_fail2shards(&req, "d_key2", "a_key", (daos_size_t)0, full_update_size,
+					  verify_data, DAOS_TX_NONE, 4, 5);
 	free(data);
 	free(verify_data);
 }
@@ -2514,6 +2594,85 @@ ec_three_stripes_nvme_io(void **state)
 	ioreq_fini(&req);
 }
 
+static void
+ec_full_partial_punch_agg(void **state)
+{
+	test_arg_t	*arg = *state;
+	struct ioreq	req;
+	daos_obj_id_t	oid;
+	daos_recx_t	recx;
+	int		i;
+	char		*data;
+	char		*verify_data;
+	int		data_nr;
+	daos_size_t	full_update_size;
+	daos_size_t	partial_punch_size;
+
+	FAULT_INJECTION_REQUIRED();
+
+	if (!test_runable(arg, 6))
+		return;
+
+	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
+	oid = daos_test_oid_gen(arg->coh, ec_obj_class, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	data_nr = ec_data_nr_get(oid);
+	full_update_size = 3 * ((daos_size_t)data_nr) * EC_CELL_SIZE;
+	partial_punch_size = EC_CELL_SIZE / 2;
+
+	data = (char *)malloc(full_update_size);
+	assert_true(data != NULL);
+	verify_data = (char *)malloc(full_update_size);
+	assert_true(verify_data != NULL);
+
+	/* 3 full stripes update */
+	req.iod_type = DAOS_IOD_ARRAY;
+	recx.rx_nr = full_update_size;
+	recx.rx_idx =  0;
+	memset(data, 'a', full_update_size);
+	memcpy(verify_data, data, full_update_size);
+	insert_recxs("d_key1", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+		     data, full_update_size, &req);
+	insert_recxs("d_key2", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+		     data, full_update_size, &req);
+
+	/* then partial stripe update */
+	for (i = 0; i < 12; i++) {
+		char *buffer = data + i * EC_CELL_SIZE;
+		char *verify_buffer = verify_data + i * EC_CELL_SIZE;
+
+		req.iod_type = DAOS_IOD_ARRAY;
+		recx.rx_nr = partial_punch_size;
+		recx.rx_idx = i * EC_CELL_SIZE;
+
+		memset(buffer, 'a' + i, partial_punch_size);
+		memset(verify_buffer, 0, partial_punch_size);
+
+		insert_recxs("d_key1", "a_key", 0, DAOS_TX_NONE, &recx, 1,
+			     buffer, partial_punch_size, &req);
+		insert_recxs("d_key2", "a_key", 0, DAOS_TX_NONE, &recx, 1,
+			     buffer, partial_punch_size, &req);
+	}
+
+	trigger_and_wait_ec_aggreation_2dkeys(arg, &oid, 1, "d_key1", "d_key2", "a_key", 0,
+					      full_update_size, true);
+
+	ec_verify_parity_data_fail2shards(&req, "d_key1", "a_key", (daos_size_t)0, full_update_size,
+					  verify_data, DAOS_TX_NONE, 0, 2);
+	ec_verify_parity_data_fail2shards(&req, "d_key1", "a_key", (daos_size_t)0, full_update_size,
+					  verify_data, DAOS_TX_NONE, 3, 4);
+	ec_verify_parity_data_fail2shards(&req, "d_key1", "a_key", (daos_size_t)0, full_update_size,
+					  verify_data, DAOS_TX_NONE, 4, 5);
+	ec_verify_parity_data_fail2shards(&req, "d_key2", "a_key", (daos_size_t)0, full_update_size,
+					  verify_data, DAOS_TX_NONE, 0, 3);
+	ec_verify_parity_data_fail2shards(&req, "d_key2", "a_key", (daos_size_t)0, full_update_size,
+					  verify_data, DAOS_TX_NONE, 3, 4);
+	ec_verify_parity_data_fail2shards(&req, "d_key2", "a_key", (daos_size_t)0, full_update_size,
+					  verify_data, DAOS_TX_NONE, 4, 5);
+	free(data);
+	free(verify_data);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest ec_tests[] = {
 	{"EC0: ec dkey list and punch test",
@@ -2572,6 +2731,8 @@ static const struct CMUnitTest ec_tests[] = {
 	test_case_teardown},
 	{"EC28: ec three nvme io failed", ec_three_stripes_nvme_io, async_disable,
 	test_case_teardown},
+	{"EC29: ec full and partial punch then aggregation",
+	 ec_full_partial_punch_agg, async_disable, test_case_teardown},
 };
 
 int

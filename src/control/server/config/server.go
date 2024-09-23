@@ -36,6 +36,11 @@ const (
 	relConfExamplesPath = "../utils/config/examples/"
 )
 
+// SupportConfig is defined here to avoid a import cycle
+type SupportConfig struct {
+	FileTransferExec string `yaml:"file_transfer_exec,omitempty"`
+}
+
 // Server describes configuration options for DAOS control plane.
 // See utils/config/daos_server.yml for parameter descriptions.
 type Server struct {
@@ -59,6 +64,7 @@ type Server struct {
 	TelemetryPort     int                       `yaml:"telemetry_port,omitempty"`
 	CoreDumpFilter    uint8                     `yaml:"core_dump_filter,omitempty"`
 	ClientEnvVars     []string                  `yaml:"client_env_vars,omitempty"`
+	SupportConfig     SupportConfig             `yaml:"support_config,omitempty"`
 
 	// duplicated in engine.Config
 	SystemName string              `yaml:"name"`
@@ -476,6 +482,10 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 				msg = fmt.Sprintf("%s (MD-on-SSD)", msg)
 				// MD-on-SSD has extra sys-xstream for rdb.
 				sysXSCount++
+			} else if ec.TargetCount == 1 {
+				// Avoid DMA buffer allocation failure with single target count by
+				// increasing the minimum target count used to calculate hugepages.
+				cfgTargetCount++
 			}
 		}
 		log.Debug(msg)
@@ -507,9 +517,7 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 		cfg.NrHugepages = minHugepages
 		log.Infof("hugepage count automatically set to %d (%s)", minHugepages,
 			humanize.IBytes(hugePageBytes(minHugepages, mi.HugepageSizeKiB)))
-	}
-
-	if cfg.NrHugepages < minHugepages {
+	} else if cfg.NrHugepages < minHugepages {
 		log.Noticef("configured nr_hugepages %d is less than recommended %d, "+
 			"if this is not intentional update the 'nr_hugepages' config "+
 			"parameter or remove and it will be automatically calculated",

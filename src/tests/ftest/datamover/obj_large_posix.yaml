@@ -24,7 +24,6 @@ server_config:
       storage: auto
 pool:
   size: 60G
-  control_method: dmg
 container:
   type: POSIX
   control_method: daos

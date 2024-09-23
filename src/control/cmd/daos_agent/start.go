@@ -20,8 +20,8 @@ import (
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/atm"
+	"github.com/daos-stack/daos/src/control/lib/hardware/defaults/topology"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwloc"
-	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/lib/systemd"
 	"github.com/daos-stack/daos/src/control/lib/telemetry/promexp"
 )
@@ -106,13 +106,17 @@ func (cmd *startCmd) Execute(_ []string) error {
 	}
 
 	drpcRegStart := time.Now()
-	drpcServer.RegisterRPCModule(NewSecurityModule(cmd.Logger, cmd.cfg.TransportConfig))
+	secCfg := &securityConfig{
+		transport:   cmd.cfg.TransportConfig,
+		credentials: cmd.cfg.CredentialConfig,
+	}
+	drpcServer.RegisterRPCModule(NewSecurityModule(cmd.Logger, secCfg))
 	mgmtMod := &mgmtModule{
 		log:           cmd.Logger,
 		sys:           cmd.cfg.SystemName,
 		ctlInvoker:    cmd.ctlInvoker,
 		cache:         cache,
-		numaGetter:    hwprov.DefaultProcessNUMAProvider(cmd.Logger),
+		numaGetter:    topology.DefaultProcessNUMAProvider(cmd.Logger),
 		monitor:       procmon,
 		providerIdx:   cmd.cfg.ProviderIdx,
 		cliMetricsSrc: clientMetricSource,

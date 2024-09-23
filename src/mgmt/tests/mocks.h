@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -103,12 +103,14 @@ void mock_ds_mgmt_pool_extend_setup(void);
 /*
  * Mock ds_mgmt_pool_query
  */
-extern int		ds_mgmt_pool_query_return;
-extern uuid_t		ds_mgmt_pool_query_uuid;
-extern daos_pool_info_t	ds_mgmt_pool_query_info_in;
-extern daos_pool_info_t	ds_mgmt_pool_query_info_out;
-extern void		*ds_mgmt_pool_query_info_ptr;
-extern d_rank_list_t	*ds_mgmt_pool_query_ranks_out;
+extern int                               ds_mgmt_pool_query_return;
+extern uuid_t                            ds_mgmt_pool_query_uuid;
+extern daos_pool_info_t                  ds_mgmt_pool_query_info_in;
+extern daos_pool_info_t                  ds_mgmt_pool_query_info_out;
+extern void                             *ds_mgmt_pool_query_info_ptr;
+extern d_rank_list_t                    *ds_mgmt_pool_query_enabled_ranks_out;
+extern d_rank_list_t                    *ds_mgmt_pool_query_disabled_ranks_out;
+
 void mock_ds_mgmt_pool_query_setup(void);
 
 /*
@@ -137,11 +139,11 @@ void mock_ds_mgmt_pool_evict_setup(void);
 /*
  * Mock ds_mgmt_cont_set_owner
  */
-extern int	ds_mgmt_cont_set_owner_return;
-extern uuid_t	ds_mgmt_cont_set_owner_pool;
-extern uuid_t	ds_mgmt_cont_set_owner_cont;
-extern char	*ds_mgmt_cont_set_owner_user;
-extern char	*ds_mgmt_cont_set_owner_group;
+extern int                               ds_mgmt_cont_set_owner_return;
+extern uuid_t                            ds_mgmt_cont_set_owner_pool;
+extern char                             *ds_mgmt_cont_set_owner_cont;
+extern char                             *ds_mgmt_cont_set_owner_user;
+extern char                             *ds_mgmt_cont_set_owner_group;
 void mock_ds_mgmt_cont_set_owner_setup(void);
 void mock_ds_mgmt_cont_set_owner_teardown(void);
 void mock_ds_mgmt_pool_query_targets_gen_infos(uint32_t n_infos);

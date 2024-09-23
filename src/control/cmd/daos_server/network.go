@@ -16,7 +16,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
-	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
+	"github.com/daos-stack/daos/src/control/lib/hardware/defaults/network"
 	"github.com/daos-stack/daos/src/control/server/config"
 )
 
@@ -32,7 +32,7 @@ func initNetworkCmd(cmd *networkScanCmd) (fabricScanFn, *config.Server, error) {
 		return nil, nil, err
 	}
 
-	return hwprov.DefaultFabricScanner(cmd.Logger).Scan, cmd.config, nil
+	return network.DefaultFabricScanner(cmd.Logger).Scan, cmd.config, nil
 }
 
 type networkCmd struct {

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2023 Intel Corporation.
+ * (C) Copyright 2023-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -669,8 +669,8 @@ ut_fill_wal(struct bio_ut_args *args, int tx_nr, struct ut_tx_array **txa_ptr)
 	tx = txa->ta_tx_ptrs[0];
 
 	/*
-	 * Each tx is roughly 800k, 22 txs will consume 17600k, which is more than
-	 * half of 32MB WAL size.
+	 * Each tx is roughly 800k, 40 txs will consume 32000k, which is more than
+	 * half of 50MB WAL size.
 	 */
 	for (i = 0; i < tx_nr; i++) {
 		tx = txa->ta_tx_ptrs[i];
@@ -705,11 +705,11 @@ static void
 wal_ut_wrap(void **state)
 {
 	struct bio_ut_args	*args = *state;
-	uint64_t		 meta_sz = (32ULL << 20);	/* 32 MB */
+	uint64_t		 meta_sz = (50ULL << 20);	/* 50 MB */
 	struct ut_tx_array	*txa;
 	struct umem_wal_tx	*tx;
 	struct ut_fake_tx	*fake_tx;
-	int			 tx_nr = 22, rc;
+	int			 tx_nr = 40, rc;
 
 	rc = ut_mc_init(args, meta_sz, meta_sz, meta_sz);
 	assert_rc_equal(rc, 0);
@@ -745,11 +745,11 @@ static void
 wal_ut_wrap_many(void **state)
 {
 	struct bio_ut_args	*args = *state;
-	uint64_t		 meta_sz = (32ULL << 20);	/* 32 MB */
+	uint64_t		 meta_sz = (50ULL << 20);	/* 50 MB */
 	struct ut_tx_array	*txa;
 	struct umem_wal_tx	*tx;
 	struct ut_fake_tx	*fake_tx;
-	int			 tx_nr = 22, rc;
+	int			 tx_nr = 40, rc;
 
 	rc = ut_mc_init(args, meta_sz, meta_sz, meta_sz);
 	assert_rc_equal(rc, 0);
