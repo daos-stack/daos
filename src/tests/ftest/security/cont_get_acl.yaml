@@ -18,7 +18,6 @@ server_config:
           scm_size: 6
   system_ram_reserved: 1
 pool:
-  control_method: dmg
   scm_size: 2G
 container:
   control_method: daos

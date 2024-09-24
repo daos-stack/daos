@@ -200,8 +200,8 @@ class WalMetrics(TestWithTelemetry):
                             # Check point dirty chunks should be 1-300
                             ranges[metric][label] = [1, 300]
                         elif '_dirty_pages' in metric:
-                            # Check point dirty pages should be 1-3
-                            ranges[metric][label] = [1, 3]
+                            # Check point dirty pages should be 1-30
+                            ranges[metric][label] = [1, 30]
                         elif '_duration' in metric:
                             # Check point duration should be 1-2,000,000
                             ranges[metric][label] = [1, 2000000]

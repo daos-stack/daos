@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -46,7 +46,7 @@ class DmvrLargeDir(DataMoverTestBase):
         file_size = self.params.get("bytes", self.mdtest_cmd.namespace)
 
         # create pool and cont1
-        pool = self.create_pool()
+        pool = self.get_pool()
         cont1 = self.get_container(pool)
 
         # run mdtest to create data in cont1
