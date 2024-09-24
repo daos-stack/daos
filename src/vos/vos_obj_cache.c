@@ -824,6 +824,7 @@ vos_bkt_array_subset(struct vos_bkt_array *super, struct vos_bkt_array *sub)
 {
 	int	i, idx;
 
+	D_ASSERT(sub->vba_cnt > 0);
 	if (sub->vba_cnt > super->vba_cnt)
 		return false;
 
@@ -844,9 +845,11 @@ vos_bkt_array_add(struct vos_bkt_array *bkts, uint32_t bkt_id)
 	D_ASSERT(bkt_id != UMEM_DEFAULT_MBKT_ID);
 
 	/* The @bkt_id is already in bucket array */
-	idx = daos_array_find(bkts->vba_bkts, bkts->vba_cnt, bkt_id, &bkt_sort_ops);
-	if (idx >= 0)
-		return 0;
+	if (bkts->vba_cnt > 0) {
+		idx = daos_array_find(bkts->vba_bkts, bkts->vba_cnt, bkt_id, &bkt_sort_ops);
+		if (idx >= 0)
+			return 0;
+	}
 
 	/* Bucket array needs be expanded */
 	if (bkts->vba_cnt == bkts->vba_tot) {
