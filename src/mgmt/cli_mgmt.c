@@ -1368,8 +1368,8 @@ rechoose:
 	rc = daos_rpc_send_wait(rpc);
 	if (rc != 0) {
 		DL_ERROR(rc, "rpc send failed");
-		crt_req_decref(rpc);
 		wipe_cred_iov(&in->pli_cred);
+		crt_req_decref(rpc);
 		goto rechoose;
 	}
 
@@ -1378,8 +1378,8 @@ rechoose:
 
 	rc = rsvc_client_complete_rpc(&ms_client, &ep, rc, out->plo_op.mo_rc, &out->plo_op.mo_hint);
 	if (rc == RSVC_CLIENT_RECHOOSE) {
-		crt_req_decref(rpc);
 		wipe_cred_iov(&in->pli_cred);
+		crt_req_decref(rpc);
 		goto rechoose;
 	}
 
@@ -1431,8 +1431,8 @@ out_put_req:
 	if (rc != 0)
 		DL_ERROR(rc, "failed to list pools");
 
-	crt_req_decref(rpc);
 	wipe_cred_iov(&in->pli_cred);
+	crt_req_decref(rpc);
 out_client:
 	rsvc_client_fini(&ms_client);
 out_grp:
