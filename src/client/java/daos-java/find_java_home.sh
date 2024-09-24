@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+
 java_home_path=$JAVA_HOME
 if [ -n  "$java_home_path" ]
 then
