@@ -331,7 +331,7 @@ func (g *Group) checkForDuplicateFlags() *Error {
 				longName := option.LongNameWithNamespace()
 
 				if otherOption, ok := longNames[longName]; ok {
-					duplicateError = newErrorf(ErrDuplicatedFlag, "%s/%s: option `%s' uses the same long name as option `%s'", longName, otherOption.LongNameWithNamespace(), option, otherOption)
+					duplicateError = newErrorf(ErrDuplicatedFlag, "option `%s' uses the same long name as option `%s'", option, otherOption)
 					return
 				}
 				longNames[longName] = option
