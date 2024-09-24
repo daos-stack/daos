@@ -592,7 +592,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Mon Sep 23 2024 Kris Jacque <kris.jacque@intel.com> 2.3.103-6
+* Mon Sep 23 2024 Kris Jacque <kris.jacque@intel.com> 2.7.100-6
 - Bump min supported go version to 1.21
 
 * Thu Aug 15 2024 Michael MacDonald <mjmac@google.com> 2.7.100-5
