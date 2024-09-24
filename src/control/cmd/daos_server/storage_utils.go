@@ -14,7 +14,8 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
-	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
+	"github.com/daos-stack/daos/src/control/lib/hardware/defaults/network"
+	"github.com/daos-stack/daos/src/control/lib/hardware/defaults/topology"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/server"
@@ -108,7 +109,7 @@ func initNvmeCmd(cmd *nvmeCmd) (*server.StorageControlService, *config.Server, e
 		return nil, nil, err
 	}
 
-	cmd.setIOMMUChecker(hwprov.DefaultIOMMUDetector(cmd.Logger).IsIOMMUEnabled)
+	cmd.setIOMMUChecker(topology.DefaultIOMMUDetector(cmd.Logger).IsIOMMUEnabled)
 
 	scs, err := storageCmdInit(&cmd.baseScanCmd)
 	if err != nil {
@@ -155,7 +156,7 @@ func genFiAffFn(fis *hardware.FabricInterfaceSet) config.EngineAffinityFn {
 }
 
 func getAffinitySource(ctx context.Context, log logging.Logger, cfg *config.Server) (config.EngineAffinityFn, error) {
-	scanner := hwprov.DefaultFabricScanner(log)
+	scanner := network.DefaultFabricScanner(log)
 
 	provs, err := cfg.Fabric.GetProviders()
 	if err != nil {

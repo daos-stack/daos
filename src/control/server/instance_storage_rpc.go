@@ -23,7 +23,7 @@ import (
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
-	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
+	"github.com/daos-stack/daos/src/control/lib/hardware/pciutils"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -332,7 +332,7 @@ func scanEngineBdevsOverDrpc(ctx context.Context, engine Engine, pbReq *ctlpb.Sc
 				RdbSize:  pbReq.RdbSize,
 			}
 			upd, err := populateCtrlrHealth(ctx, engine, bhReq, c,
-				hwprov.DefaultPCIeLinkStatsProvider())
+				pciutils.NewPCIeLinkStatsProvider())
 			if err != nil {
 				return nil, err
 			}
@@ -512,7 +512,7 @@ func smdQueryEngine(ctx context.Context, engine Engine, pbReq *ctlpb.SmdQueryReq
 		if pbReq.IncludeBioHealth {
 			bhReq := &ctlpb.BioHealthReq{DevUuid: dev.Uuid}
 			if _, err := populateCtrlrHealth(ctx, engine, bhReq, dev.Ctrlr,
-				hwprov.DefaultPCIeLinkStatsProvider()); err != nil {
+				pciutils.NewPCIeLinkStatsProvider()); err != nil {
 				return nil, err
 			}
 		}
