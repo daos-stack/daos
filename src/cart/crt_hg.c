@@ -12,6 +12,11 @@
 
 #include "crt_internal.h"
 
+#include <sys/epoll.h>
+
+static inline int
+crt_epoll_wait(int fd, struct epoll_event *events, int maxevents, const struct timespec *timeout);
+
 /*
  * List of supported CaRT providers. The table is terminated with the last entry
  * having nad_str = NULL.
@@ -990,18 +995,29 @@ crt_hg_ctx_init_tm(struct crt_hg_context *hg_ctx, int idx)
 }
 
 int
-crt_hg_ctx_init(struct crt_hg_context *hg_ctx, crt_provider_t provider, int idx,
-		bool primary, int iface_idx)
+crt_hg_ctx_init(struct crt_hg_context *hg_ctx, crt_provider_t provider, int idx, bool primary,
+		int iface_idx)
 {
-	struct crt_context	*crt_ctx;
-	hg_class_t		*hg_class = NULL;
-	hg_context_t		*hg_context = NULL;
-	hg_return_t		 hg_ret;
-	bool			 sep_mode;
-	int			 rc = 0;
+	struct crt_context *crt_ctx;
+	hg_class_t         *hg_class   = NULL;
+	hg_context_t       *hg_context = NULL;
+	hg_return_t         hg_ret;
+	bool                sep_mode;
+	int                 wait_fd;
+	int                 rc;
 
 	D_ASSERT(hg_ctx != NULL);
 	crt_ctx = container_of(hg_ctx, struct crt_context, cc_hg_ctx);
+
+	rc = D_MUTEX_INIT(&hg_ctx->chc_progress_multi.mutex, NULL);
+	if (rc != 0)
+		return rc;
+	rc = D_COND_INIT(&hg_ctx->chc_progress_multi.cond, NULL);
+	if (rc != 0) {
+		D_MUTEX_DESTROY(&hg_ctx->chc_progress_multi.mutex);
+		return rc;
+	}
+	atomic_init(&hg_ctx->chc_progress_multi.count, 0);
 
 	hg_ctx->chc_provider = provider;
 	sep_mode             = crt_provider_is_sep(true, provider);
@@ -1015,7 +1031,7 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, crt_provider_t provider, int idx,
 			rc = crt_hg_class_init(provider, idx, primary, iface_idx,
 					       hg_ctx->chc_thread_mode_single, &hg_class);
 			if (rc != 0)
-				D_GOTO(out, rc);
+				D_GOTO(error, rc);
 
 			crt_sep_hg_class_set(provider, hg_class);
 		} else {
@@ -1025,29 +1041,26 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, crt_provider_t provider, int idx,
 		rc = crt_hg_class_init(provider, idx, primary, iface_idx,
 				       hg_ctx->chc_thread_mode_single, &hg_class);
 		if (rc != 0)
-			D_GOTO(out, rc);
+			D_GOTO(error, rc);
 	}
 
 	if (!hg_class) {
-		D_ERROR("Failed to init hg class for prov=%d idx=%d\n",
-			provider, idx);
-		D_GOTO(out, rc = -DER_HG);
+		D_ERROR("Failed to init hg class for prov=%d idx=%d\n", provider, idx);
+		D_GOTO(error, rc = -DER_HG);
 	}
 
 	hg_ctx->chc_diag_pub_ts     = 0;
-	hg_ctx->chc_hgcla = hg_class;
+	hg_ctx->chc_hgcla           = hg_class;
 	hg_ctx->chc_shared_hg_class = sep_mode;
 
 	if (sep_mode)
 		hg_context = HG_Context_create_id(hg_class, idx);
 	else
 		hg_context = HG_Context_create(hg_class);
-
 	if (hg_context == NULL) {
 		D_ERROR("Could not create HG context.\n");
-		D_GOTO(out, rc = -DER_HG);
+		D_GOTO(error, rc = -DER_HG);
 	}
-
 	hg_ctx->chc_hgctx = hg_context;
 
 	/* TODO: need to create separate bulk class and bulk context? */
@@ -1059,16 +1072,37 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, crt_provider_t provider, int idx,
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Context_set_data() failed, ret: %d.\n", hg_ret);
 		HG_Context_destroy(hg_context);
-		D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
+		D_GOTO(error, rc = crt_hgret_2_der(hg_ret));
 	}
 
 	rc = crt_hg_pool_init(hg_ctx);
 	if (rc != 0)
 		D_ERROR("crt_hg_pool_init() failed, context idx %d hg_ctx %p, "
-			"rc: " DF_RC "\n", idx, hg_ctx, DP_RC(rc));
+			"rc: " DF_RC "\n",
+			idx, hg_ctx, DP_RC(rc));
+
+	wait_fd = HG_Event_get_wait_fd(hg_ctx->chc_hgctx);
+	if (wait_fd > 0) {
+		struct epoll_event ev = {.events = EPOLLIN, .data.u32 = 0};
+		hg_ctx->chc_epfd      = epoll_create1(0);
+		if (hg_ctx->chc_epfd < 0) {
+			DS_ERROR(errno, "epoll_create1() failed");
+			D_GOTO(error, rc = -DER_MISC);
+		}
+
+		rc = epoll_ctl(hg_ctx->chc_epfd, EPOLL_CTL_ADD, wait_fd, &ev);
+		if (rc != 0) {
+			DS_ERROR(errno, "epoll_ctl(EPOLL_CTL_ADD) failed");
+			D_GOTO(error, rc = -DER_MISC);
+		}
+	}
 
 	crt_hg_ctx_init_tm(hg_ctx, idx);
-out:
+
+	return 0;
+
+error:
+	(void)crt_hg_ctx_fini(hg_ctx);
 	return rc;
 }
 
@@ -1079,6 +1113,15 @@ crt_hg_ctx_fini(struct crt_hg_context *hg_ctx)
 	int         rc = DER_SUCCESS;
 
 	crt_hg_pool_fini(hg_ctx);
+
+	if (hg_ctx->chc_epfd > 0) {
+		rc = close(hg_ctx->chc_epfd);
+		if (rc != 0) {
+			DS_ERROR(errno, "close() failed");
+			D_GOTO(out, rc = -DER_MISC);
+		}
+		hg_ctx->chc_epfd = 0;
+	}
 
 	if (hg_ctx->chc_hgctx) {
 		hg_ret = HG_Context_destroy(hg_ctx->chc_hgctx);
@@ -1105,7 +1148,12 @@ crt_hg_ctx_fini(struct crt_hg_context *hg_ctx)
 		if (hg_ret != HG_SUCCESS)
 			D_WARN("Could not finalize HG class, hg_ret: " DF_HG_RC "\n",
 			       DP_HG_RC(hg_ret));
+		hg_ctx->chc_hgcla = NULL;
 	}
+
+	(void)D_MUTEX_DESTROY(&hg_ctx->chc_progress_multi.mutex);
+	(void)D_COND_DESTROY(&hg_ctx->chc_progress_multi.cond);
+
 out:
 	return rc;
 }
@@ -1646,12 +1694,13 @@ crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code)
 	rpc_priv->crp_reply_pending = 0;
 }
 
+#define CRT_HG_TRIGGER_COUNT (256)
 int
 crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout)
 {
-	hg_context_t		*hg_context;
-	unsigned int		hg_timeout;
-	unsigned int		total = 256;
+	hg_context_t *hg_context;
+	unsigned int  hg_timeout;
+	unsigned int  total = CRT_HG_TRIGGER_COUNT;
 
 	hg_context = hg_ctx->chc_hgctx;
 
@@ -1664,17 +1713,16 @@ crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout)
 		hg_timeout = timeout / 1000;
 
 	do {
-		hg_return_t     hg_ret = HG_SUCCESS;
-		int             rc = 0;
-		unsigned int count = 0;
+		hg_return_t  hg_ret = HG_SUCCESS;
+		int          rc     = 0;
+		unsigned int count  = 0;
 
 		/** progress RPC execution */
 		hg_ret = HG_Progress(hg_context, hg_timeout);
 		if (hg_ret == HG_TIMEOUT) {
 			rc = -DER_TIMEDOUT;
 		} else if (hg_ret != HG_SUCCESS) {
-			D_ERROR("HG_Progress failed, hg_ret: " DF_HG_RC "\n",
-				DP_HG_RC(hg_ret));
+			D_ERROR("HG_Progress failed, hg_ret: " DF_HG_RC "\n", DP_HG_RC(hg_ret));
 			return crt_hgret_2_der(hg_ret);
 		}
 
@@ -1684,8 +1732,7 @@ crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout)
 			/** nothing to trigger */
 			return rc;
 		} else if (hg_ret != HG_SUCCESS) {
-			D_ERROR("HG_Trigger failed, hg_ret: " DF_HG_RC "\n",
-				DP_HG_RC(hg_ret));
+			D_ERROR("HG_Trigger failed, hg_ret: " DF_HG_RC "\n", DP_HG_RC(hg_ret));
 			return crt_hgret_2_der(hg_ret);
 		}
 
@@ -1702,6 +1749,157 @@ crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout)
 	} while (total > 0);
 
 	return 0;
+}
+
+/* 32-bit lock value for serial progress */
+#define CRT_HG_PROGRESS_LOCK (0x80000000)
+static bool
+crt_hg_progress_multi_trylock(struct crt_hg_progress_multi *progress_multi,
+			      const struct timespec        *deadline)
+{
+	atomic_fetch_add(&progress_multi->count, 1);
+	for (;;) {
+		struct timespec now;
+		unsigned int    old, num;
+
+		old = atomic_load(&progress_multi->count) & (unsigned int)~CRT_HG_PROGRESS_LOCK;
+		num = old | (unsigned int)CRT_HG_PROGRESS_LOCK;
+		if (atomic_compare_exchange(&progress_multi->count, old, num))
+			return true; /* No other thread is progressing */
+
+		/* Exit if deadline is passed */
+		if (deadline && (d_gettime_coarse(&now) == 0) && !d_timeless(&now, deadline)) {
+			atomic_fetch_sub(&progress_multi->count, 1);
+			return false; /* Could not get lock */
+		}
+
+		/* Sleep while waiting for other thread to release lock */
+		D_MUTEX_LOCK(&progress_multi->mutex);
+		num = atomic_load(&progress_multi->count);
+		/* Do not need to enter condition if lock is already released */
+		if (((num & (int32_t)CRT_HG_PROGRESS_LOCK) != 0) &&
+		    (pthread_cond_timedwait(&progress_multi->cond, &progress_multi->mutex,
+					    deadline) != 0)) {
+			/* Timeout occurred so leave */
+			atomic_fetch_sub(&progress_multi->count, 1);
+			D_MUTEX_UNLOCK(&progress_multi->mutex);
+			return false;
+		}
+		D_MUTEX_UNLOCK(&progress_multi->mutex);
+	}
+}
+
+static void
+crt_hg_progress_multi_unlock(struct crt_hg_progress_multi *progress_multi)
+{
+	unsigned int old, num;
+
+	do {
+		old = atomic_load(&progress_multi->count);
+		num = (old - 1) ^ (unsigned int)CRT_HG_PROGRESS_LOCK;
+	} while (!atomic_compare_exchange(&progress_multi->count, old, num));
+
+	if (num > 0) {
+		/* If there is another processes entered in progress, signal it */
+		D_MUTEX_LOCK(&progress_multi->mutex);
+		pthread_cond_signal(&progress_multi->cond);
+		D_MUTEX_UNLOCK(&progress_multi->mutex);
+	}
+}
+
+static inline unsigned int
+crt_time_to_ms(const struct timespec *tv)
+{
+	return (unsigned int)(tv->tv_sec * 1000 + ((tv->tv_nsec + 999999) / 1000000));
+}
+
+static inline int
+crt_epoll_wait(int fd, struct epoll_event *events, int maxevents, const struct timespec *timeout)
+{
+	return epoll_wait(fd, events, maxevents, crt_time_to_ms(timeout));
+}
+
+static int
+crt_hg_event_progress_serial(struct crt_hg_context *hg_ctx, const struct timespec *deadline,
+			     unsigned int *trigger_count_p)
+{
+	struct timespec now;
+	hg_return_t     hg_ret;
+	int             rc = 0;
+
+	/* Ensure that only one thread enters progress, other threads will wait until deadline or
+	 * until the current thread has finished progressing. */
+	if (!crt_hg_progress_multi_trylock(&hg_ctx->chc_progress_multi, deadline)) {
+		*trigger_count_p = CRT_HG_TRIGGER_COUNT;
+		return DER_SUCCESS;
+	}
+
+	/* Skip epoll_wait() call if either there's no fd to wait on, there's already work to do
+	 * (i.e., it is not safe to block), there's no deadline set or we've already reached the
+	 * deadline */
+	if ((hg_ctx->chc_epfd > 0) && deadline && !HG_Event_ready(hg_ctx->chc_hgctx) &&
+	    (d_gettime_coarse(&now) == 0) && d_timeless(&now, deadline)) {
+		struct epoll_event event;
+		struct timespec    timeout;
+		int                nfds;
+
+		timeout = d_timediff(&now, deadline);
+
+		nfds = crt_epoll_wait(hg_ctx->chc_epfd, &event, 1, &timeout);
+		if (nfds < 0) {
+			if (unlikely(errno == EINTR)) {
+				errno = 0; /* reset errno */
+				rc    = 0;
+			} else {
+				D_ERROR("epoll_wait() failed, rc: %d (%s)\n", rc, strerror(errno));
+				D_GOTO(out, rc = -DER_IO);
+			}
+		}
+		/* Try to progress even if timeout was reached */
+	}
+
+	hg_ret = HG_Event_progress(hg_ctx->chc_hgctx, trigger_count_p);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("HG_Event_progress failed, hg_ret: " DF_HG_RC "\n", DP_HG_RC(hg_ret));
+		D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
+	}
+
+out:
+	crt_hg_progress_multi_unlock(&hg_ctx->chc_progress_multi);
+	return rc;
+}
+
+int
+crt_hg_event_progress(struct crt_hg_context *hg_ctx, const struct timespec *deadline)
+{
+	int rc = 0;
+
+	for (;;) {
+		struct timespec now;
+		unsigned int    count = 0, actual_count = 0;
+		hg_return_t     hg_ret;
+
+		rc = crt_hg_event_progress_serial(hg_ctx, deadline, &count);
+		if (rc != 0) {
+			DL_ERROR(rc, "HG_Progress failed");
+			break;
+		}
+
+		hg_ret = HG_Event_trigger(hg_ctx->chc_hgctx, count, &actual_count);
+		if (hg_ret != HG_SUCCESS) {
+			D_ERROR("HG_Trigger failed, hg_ret: " DF_HG_RC "\n", DP_HG_RC(hg_ret));
+			rc = crt_hgret_2_der(hg_ret);
+			break;
+		}
+		if (actual_count > 0)
+			break;
+		if (deadline && (d_gettime_coarse(&now) == 0) && !d_timeless(&now, deadline)) {
+			rc = -DER_TIMEDOUT;
+			break;
+		}
+	}
+
+	return rc;
 }
 
 #define CRT_HG_IOVN_STACK	(8)
