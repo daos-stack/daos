@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.7.100
-Release:       5%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -41,7 +41,7 @@ BuildRequires: hwloc-devel
 BuildRequires: bullseye
 %endif
 %if (0%{?rhel} >= 8)
-BuildRequires: argobots-devel >= 1.1
+BuildRequires: argobots-devel >= 1.2
 BuildRequires: json-c-devel
 BuildRequires: boost-python3-devel
 %else
@@ -592,6 +592,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Sep 24 2024 Cedric Koch-Hofer <cedric.koch-hofer@intel.com> 2.7.100-6
+- Update argobots to 1.2
+
 * Thu Aug 15 2024 Michael MacDonald <mjmac@google.com> 2.7.100-5
 - Add libdaos_self_test.so to client RPM
 
