@@ -3,6 +3,11 @@ name: Trivy scan
 on:
   pull_request:
     branches: ["master", "release/**"]
+    path:
+      - '**/go.mod'
+      - '**/pom.xml'
+      - '**/requirements.txt'
+      - '**/*trivy*'
 
 # Declare default permissions as nothing.
 permissions: {}
