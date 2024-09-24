@@ -1918,6 +1918,23 @@ vos_obj_reserve(struct umem_instance *umm, struct vos_object *obj,
 }
 
 /* vos_obj_cache.c */
+static inline struct dtx_handle *
+clear_cur_dth(struct vos_pool *pool)
+{
+	struct dtx_handle	*dth;
+
+	dth = vos_dth_get(pool->vp_sysdb);
+	vos_dth_set(NULL, pool->vp_sysdb);
+
+	return dth;
+}
+
+static inline void
+restore_cur_dth(struct vos_pool *pool, struct dtx_handle *dth)
+{
+	vos_dth_set(dth, pool->vp_sysdb);
+}
+
 static inline struct vos_cache_metrics *
 store2cache_metrics(struct umem_store *store)
 {
@@ -1935,9 +1952,9 @@ update_page_stats(struct umem_store *store)
 	if (vcm == NULL)
 		return;
 
-	d_tm_set_counter(vcm->vcm_pg_ne, cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE]);
-	d_tm_set_counter(vcm->vcm_pg_pinned, cache->ca_pgs_stats[UMEM_PG_STATS_PINNED]);
-	d_tm_set_counter(vcm->vcm_pg_free, cache->ca_pgs_stats[UMEM_PG_STATS_FREE]);
+	d_tm_set_gauge(vcm->vcm_pg_ne, cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE]);
+	d_tm_set_gauge(vcm->vcm_pg_pinned, cache->ca_pgs_stats[UMEM_PG_STATS_PINNED]);
+	d_tm_set_gauge(vcm->vcm_pg_free, cache->ca_pgs_stats[UMEM_PG_STATS_FREE]);
 
 	d_tm_set_counter(vcm->vcm_pg_hit, cache->ca_cache_stats[UMEM_CACHE_STATS_HIT]);
 	d_tm_set_counter(vcm->vcm_pg_miss, cache->ca_cache_stats[UMEM_CACHE_STATS_MISS]);
@@ -1947,12 +1964,17 @@ update_page_stats(struct umem_store *store)
 }
 
 static inline int
-vos_cache_pin(struct umem_store *store, struct umem_cache_range *ranges, int range_nr,
+vos_cache_pin(struct vos_pool *pool, struct umem_cache_range *ranges, int range_nr,
 	      bool for_sys, struct umem_pin_handle **pin_handle)
 {
-	int	rc;
+	struct umem_store	*store = vos_pool2store(pool);
+	struct dtx_handle	*cur_dth;
+	int			 rc;
 
+	cur_dth = clear_cur_dth(pool);
 	rc = umem_cache_pin(store, ranges, range_nr, for_sys, pin_handle);
+	restore_cur_dth(pool, cur_dth);
+
 	update_page_stats(store);
 
 	return rc;
