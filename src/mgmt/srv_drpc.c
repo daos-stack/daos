@@ -503,7 +503,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	scm_size = req->tier_bytes[DAOS_MEDIA_SCM];
 	if (req->mem_ratio)
-		scm_size *= req->mem_ratio;
+		scm_size *= (double)req->mem_ratio;
 
 	rc = ds_mgmt_create_pool(pool_uuid, req->sys, "pmem", targets, scm_size,
 				 req->tier_bytes[DAOS_MEDIA_NVME], prop, &svc, req->n_fault_domains,

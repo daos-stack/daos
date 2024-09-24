@@ -30,6 +30,10 @@ int umempobj_settings_init(bool md_on_ssd);
 /* convert backend type to umem class id */
 int umempobj_backend_type2class_id(int backend);
 
+/* get page size for the backend */
+size_t
+umempobj_pgsz(int backend);
+
 /* umem persistent object property flags */
 #define	UMEMPOBJ_ENABLE_STATS	0x1
 
@@ -45,6 +49,10 @@ enum {
 
 /* return umem backend type */
 int umempobj_get_backend_type(void);
+
+/* returns whether bmem_v2 pools are allowed */
+bool
+umempobj_allow_md_bmem_v2();
 
 #endif
 

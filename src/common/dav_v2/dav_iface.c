@@ -470,3 +470,9 @@ dav_class_register_v2(dav_obj_t *pop, struct dav_alloc_class_desc *p)
 
 	return 0;
 }
+
+DAV_FUNC_EXPORT size_t
+dav_obj_pgsz_v2()
+{
+	return ZONE_MAX_SIZE;
+}
