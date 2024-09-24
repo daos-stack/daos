@@ -613,13 +613,15 @@ class TestRunner():
             directories.append(os.path.join(test_env.log_dir, directory))
         commands.append(f"mkdir -p {' '.join(directories)}")
         commands.append(f"ls -al {test_env.log_dir}")
-        for host in "client", "server":
-            if host == "server":
+        for role in ("client", "server"):
+            if not hosts[role]:
+                continue
+            if role == "server":
                 # The control metadata path must be removed with sudo
                 commands[0] = command_as_user(commands[0], "root")
-            logger.debug("Setting up '%s' on %s hosts %s:", test_env.log_dir, host, hosts[host])
-            if not run_remote(logger, hosts[host], " &&\n".join(commands)).passed:
-                message = f"Error setting up the common test directory on {host} hosts"
+            logger.debug("Setting up '%s' on %s hosts %s:", test_env.log_dir, role, hosts[role])
+            if not run_remote(logger, hosts[role], " &&\n".join(commands)).passed:
+                message = f"Error setting up the common test directory on {role} hosts"
                 self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
                 return 128
         return 0
