@@ -6403,18 +6403,12 @@ def run(wf, args):
         if fs.returncode == 0:
             run_fi = True
         else:
-            print("Unable to verify fault injection feature")
+            print("Unable to detect fault injection feature, skipping testing")
 
     if run_fi:
         args.server_debug = 'INFO'
         args.memcheck = 'no'
         args.dfuse_debug = 'WARN'
-
-        fs = subprocess.run([os.path.join(conf['PREFIX'], 'bin', 'fault_status')], check=False)
-        print(fs)
-        if fs.returncode != 0:
-            print("Unable to verify fault injection feature")
-
         with DaosServer(conf, test_class='no-debug', wf=wf_server,
                         fatal_errors=fatal_errors) as server:
             if fi_test:
