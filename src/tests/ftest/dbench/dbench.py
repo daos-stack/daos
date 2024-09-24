@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -32,7 +32,7 @@ class DbenchTest(TestWithServers):
             Run dbench on top of mount point.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,medium,provider
         :avocado: tags=dbench,dfuse
         :avocado: tags=DbenchTest,test_dbench
         """

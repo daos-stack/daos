@@ -512,6 +512,7 @@ tse_task_complete_callback(tse_task_t *task)
 
 		d_list_del(&dtc->dtc_list);
 		gen = dtp_generation_get(dtp);
+		D_ASSERT(dtc->dtc_cb);
 		ret = dtc->dtc_cb(task, dtc->dtc_arg);
 		if (task->dt_result == 0)
 			task->dt_result = ret;
