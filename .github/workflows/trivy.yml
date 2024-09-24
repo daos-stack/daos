@@ -4,12 +4,11 @@
 name: Trivy scan
 
 on:
+  workflow_dispatch:
   schedule:
     - cron: '45 8 * * *'
-
   push:
     branches: ["master", "release/**"]
-
   pull_request:
     paths:
       - '**/go.mod'
