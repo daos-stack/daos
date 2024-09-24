@@ -1,7 +1,12 @@
+# SPDX-License-Identifier: BSD-2-Clause-Patent
+# Copyright (c) 2024 Intel Corporation.
+
 name: Trivy scan
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *'
   push:
     branches: ["master", "release/**"]
   pull_request:
@@ -11,19 +16,98 @@ on:
 permissions: {}
 
 jobs:
-  build:
-    name: Build
-    runs-on: ubuntu-20.04
+  update-trivy-db:
+    name: Update Trivy DB
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code to see if we run on default (master) branch
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+
+      - name: Skip update on not default branch
+        if: github.ref != format('refs/heads/{0}', github.event.repository.default_branch)
+        run: |
+          echo "Not on the default branch"
+          exit 0
+
+      - name: Setup oras
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        uses: oras-project/setup-oras@9c92598691bfef1424de2f8fae81941568f5889c  # v1.21
+
+      - name: Get current date to create cache entry
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        id: date
+        run: echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+
+      - name: Check if Trivy DB cached already
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        id: db-downloaded
+        uses: actions/cache/restore@6849a6489940f00c2f30c0fb92c6274307ccb58a  # v4.1.2
+        with:
+          path: ${{ github.workspace }}/.cache/trivy
+          key: cache-trivy-${{ steps.date.outputs.date }}
+          lookup-only: true
+
+      - name: Download and extract the vulnerability DB
+        if: |
+          steps.db-downloaded.outputs.cache-hit != 'true' &&
+          github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        run: |
+          mkdir -p $GITHUB_WORKSPACE/.cache/trivy/db
+          oras pull ghcr.io/aquasecurity/trivy-db:2
+          tar -xzf db.tar.gz -C $GITHUB_WORKSPACE/.cache/trivy/db
+          rm db.tar.gz
+
+      - name: Download and extract the Java DB
+        if: |
+          steps.db-downloaded.outputs.cache-hit != 'true' &&
+          github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        run: |
+          mkdir -p $GITHUB_WORKSPACE/.cache/trivy/java-db
+          oras pull ghcr.io/aquasecurity/trivy-java-db:1
+          tar -xzf javadb.tar.gz -C $GITHUB_WORKSPACE/.cache/trivy/java-db
+          rm javadb.tar.gz
+
+      - name: Save DBs in cache of the default (master) branch
+        if: |
+          steps.db-downloaded.outputs.cache-hit != 'true' &&
+          github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        uses: actions/cache/save@6849a6489940f00c2f30c0fb92c6274307ccb58a  # v4.1.2
+        with:
+          path: ${{ github.workspace }}/.cache/trivy
+          key: cache-trivy-${{ steps.date.outputs.date }}
+
+  scan:
+    name: Scan with Trivy
+    needs: update-trivy-db
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
 
-      - name: Run Trivy vulnerability scanner in repo mode
-        uses: aquasecurity/trivy-action@6e7b7d1fd3e4fef0c5fa8cce1229c54b2c9bd0d8  # 0.24.0
+      - name: Get current date to create cache entry
+        id: date
+        run: echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+
+      - name: Check if Trivy DB cached already
+        id: db-downloaded
+        uses: actions/cache/restore@6849a6489940f00c2f30c0fb92c6274307ccb58a  # v4.1.2
+        with:
+          path: ${{ github.workspace }}/.cache/trivy
+          key: cache-trivy-${{ steps.date.outputs.date }}
+          lookup-only: true
+
+      - name: Run Trivy vulnerability scanner in filesystem mode (table format)
+        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2  # 0.28.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
           trivy-config: 'utils/trivy/trivy.yaml'
+          cache: ${{ steps.db-downloaded.outputs.cache-hit == 'true' }}
+        env:
+          TRIVY_SKIP_DB_UPDATE: ${{ steps.db-downloaded.outputs.cache-hit == 'true' }}
+          TRIVY_SKIP_JAVA_DB_UPDATE: ${{ steps.db-downloaded.outputs.cache-hit == 'true' }}
 
       - name: Prepare the report to be uploaded to the GitHub artifact store
         run: |
@@ -43,12 +127,18 @@ jobs:
             utils/trivy/trivy.yaml
           sed -i 's/format: template/format: sarif/g' utils/trivy/trivy.yaml
 
-      - name: Run Trivy vulnerability scanner in repo mode
-        uses: aquasecurity/trivy-action@6e7b7d1fd3e4fef0c5fa8cce1229c54b2c9bd0d8  # 0.24.0
+      - name: Run Trivy vulnerability scanner in filesystem mode (sarif format)
+        # master to have 'skip-setup-trivy'
+        uses: aquasecurity/trivy-action@d2a392a13760cb64cb6bbd31d4bed2a7d9a5298d
         with:
           scan-type: 'fs'
           scan-ref: '.'
           trivy-config: 'utils/trivy/trivy.yaml'
+          skip-setup-trivy: true
+          cache: ${{ steps.db-downloaded.outputs.cache-hit == 'true' }}
+        env:
+          TRIVY_SKIP_DB_UPDATE: ${{ steps.db-downloaded.outputs.cache-hit == 'true' }}
+          TRIVY_SKIP_JAVA_DB_UPDATE: ${{ steps.db-downloaded.outputs.cache-hit == 'true' }}
 
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@afb54ba388a7dca6ecae48f608c4ff05ff4cc77a
@@ -62,9 +152,15 @@ jobs:
           sed -i 's/format: sarif/format: table/g' utils/trivy/trivy.yaml
           sed -i 's/exit-code: 0/exit-code: 1/g' utils/trivy/trivy.yaml
 
-      - name: Run Trivy vulnerability scanner in repo mode
-        uses: aquasecurity/trivy-action@6e7b7d1fd3e4fef0c5fa8cce1229c54b2c9bd0d8  # 0.24.0
+      - name: Run Trivy vulnerability scanner in filesystem mode (human readable format)
+        # master to have 'skip-setup-trivy'
+        uses: aquasecurity/trivy-action@d2a392a13760cb64cb6bbd31d4bed2a7d9a5298d
         with:
           scan-type: 'fs'
           scan-ref: '.'
           trivy-config: 'utils/trivy/trivy.yaml'
+          skip-setup-trivy: true
+          cache: ${{ steps.db-downloaded.outputs.cache-hit == 'true' }}
+        env:
+          TRIVY_SKIP_DB_UPDATE: ${{ steps.db-downloaded.outputs.cache-hit == 'true' }}
+          TRIVY_SKIP_JAVA_DB_UPDATE: ${{ steps.db-downloaded.outputs.cache-hit == 'true' }}
