@@ -2292,7 +2292,6 @@ next_step:
 	buf_out_tmp = buf_out;
 	D_ALLOC(buf_out, max(buf_len, tmp_len + 99));
 	D_ASSERT(buf_out != NULL);
-	memset(buf_out, 0, buf_len);
 	sgl.sg_nr_out	= 0;
 	sgl.sg_nr = 1;
 	d_iov_set(&sg_iov[0], buf_out, tmp_len + 99);
