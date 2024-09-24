@@ -3,7 +3,7 @@ name: Trivy scan
 on:
   pull_request:
     branches: ["master", "release/**"]
-    path:
+    paths:
       - '**/go.mod'
       - '**/pom.xml'
       - '**/requirements.txt'
