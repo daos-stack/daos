@@ -164,7 +164,7 @@ func TestSystem_NewFaultDomainFromString(t *testing.T) {
 		},
 		"fault domain doesn't start with separator": {
 			input:  "junk",
-			expErr: errors.New("invalid fault domain"),
+			expErr: errors.New("fault path must start with root"),
 		},
 		"fault domain ends with separator": {
 			input:  "/junk/",
