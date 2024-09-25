@@ -12,7 +12,7 @@ daos (2.7.100-6) unstable; urgency=medium
         Otherwise, a user is supposed to be stopped by an error
         like: "Unsafe shutdown count is not supported for this source".
 
- -- Tomasz Gromadzki <tomasz.gromadzki@intel.com>  Mon, 09 Sep 2024 12:00:00 +0200
+ -- Tomasz Gromadzki <tomasz.gromadzki@intel.com>  Wed, 25 Sep 2024 12:00:00 +0200
 
 daos (2.7.100-5) unstable; urgency=medium
   [ Michael MacDonald ]

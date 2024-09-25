@@ -232,6 +232,9 @@ Requires: fuse3-devel >= 3
 Requires: fuse3-devel >= 3.4.2
 %endif
 Requires: pciutils-devel
+%if (0%{?suse_version} > 0)
+Requires: libndctl-devel
+%endif
 %if (0%{?rhel} >= 8)
 Requires: ndctl-devel
 Requires: daxctl-devel
@@ -596,7 +599,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Mon Sep 09 2024 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.7.100-6
+* Wed Sep 25 2024 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.7.100-6
 - Add support of the PMDK package 2.1.0 with NDCTL enabled.
   * Increase the default ULT stack size to 20KiB if the engine uses
     the DCPM storage class.
