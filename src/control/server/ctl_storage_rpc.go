@@ -499,8 +499,8 @@ func (cs *ControlService) getMetaClusterCount(engineCfg *engine.Config, devToAdj
 	engineTargetNb := uint64(engineCfg.TargetCount)
 
 	if dev.GetRoleBits()&storage.BdevRoleMeta != 0 {
-		// TODO DAOS-14223: GetMetaSize() should reflect custom values set through pool
-		//                  create --meta-size option.
+		// TODO DAOS-14223: GetMetaSize() should reflect custom values derived from pool
+		//                  create --meta-size or --mem-size options.
 		clusterCount := getClusterCount(dev.GetMetaSize(), engineTargetNb, clusterSize)
 		cs.log.Tracef("Removing %d Metadata clusters (cluster size: %d) from the usable size of the SMD device %s (rank %d, ctlr %s): ",
 			clusterCount, clusterSize, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
@@ -616,7 +616,7 @@ func (cs *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 			smdDev := dev.ctlr.GetSmdDevices()[dev.idx]
 			targetCount := uint64(len(smdDev.GetTgtIds()))
 			smdDev.UsableBytes = targetCount * item.clusterPerTarget * smdDev.GetClusterSize()
-			cs.log.Debugf("Defining usable size of the SMD device %s (rank %d, ctlr %s) to %s (%d bytes)",
+			cs.log.Debugf("Defining usable size of the SMD device %s (rank %d, ctlr %s) as %s (%d bytes)",
 				smdDev.GetUuid(), rank, dev.ctlr.GetPciAddr(),
 				humanize.Bytes(smdDev.GetUsableBytes()), smdDev.GetUsableBytes())
 		}
@@ -680,13 +680,10 @@ func (cs *ControlService) adjustScmSize(resp *ctlpb.ScanScmResp) {
 			}
 
 			cmdPath := engineCfg.Storage.ControlMetadata.Path
-			if hasPrefix, err := common.HasPrefixPath(mountPath, cmdPath); hasPrefix || err != nil {
-				if err != nil {
-					cs.log.Noticef("Invalid SCM mount path or Control Metadata path: %q", err.Error())
-				}
-				if hasPrefix {
-					removeControlPlaneMetadata(mnt)
-				}
+			if hasPrefix, err := common.HasPrefixPath(mountPath, cmdPath); err != nil {
+				cs.log.Noticef("Invalid SCM mount path or Control Metadata path: %q", err.Error())
+			} else if hasPrefix {
+				removeControlPlaneMetadata(mnt)
 			}
 		}
 

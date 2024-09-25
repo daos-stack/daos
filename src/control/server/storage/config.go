@@ -942,6 +942,33 @@ func (bdr *BdevRoles) String() string {
 	return bdr.toString(roleOptFlags)
 }
 
+// HasDataRole returns true if BdevRoles has DATA role set.
+func (bdr *BdevRoles) HasData() bool {
+	if bdr == nil {
+		return false
+	}
+
+	return bdr.OptionBits&BdevRoleData != 0
+}
+
+// HasMetaRole returns true if BdevRoles has META role set.
+func (bdr *BdevRoles) HasMeta() bool {
+	if bdr == nil {
+		return false
+	}
+
+	return bdr.OptionBits&BdevRoleMeta != 0
+}
+
+// HasWALRole returns true if BdevRoles has WAL role set.
+func (bdr *BdevRoles) HasWAL() bool {
+	if bdr == nil {
+		return false
+	}
+
+	return bdr.OptionBits&BdevRoleWAL != 0
+}
+
 // BdevConfig represents a Block Device (NVMe, etc.) configuration entry.
 type BdevConfig struct {
 	DeviceList    *BdevDeviceList `yaml:"bdev_list,omitempty"`

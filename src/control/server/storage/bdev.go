@@ -397,6 +397,26 @@ func (nc NvmeController) Free() (tb uint64) {
 	return
 }
 
+// Roles returns bdev_roles for NVMe controller being used in MD-on-SSD mode. Assume that all SMD
+// devices on a controller have the same roles.
+func (nc *NvmeController) Roles() *BdevRoles {
+	if len(nc.SmdDevices) > 0 {
+		return &nc.SmdDevices[0].Roles
+	}
+
+	return &BdevRoles{}
+}
+
+// Rank returns rank on which this NVMe controller is being used. Assume that all SMD devices on a
+// controller have the same rank.
+func (nc *NvmeController) Rank() ranklist.Rank {
+	if len(nc.SmdDevices) > 0 {
+		return nc.SmdDevices[0].Rank
+	}
+
+	return ranklist.NilRank
+}
+
 // NvmeControllers is a type alias for []*NvmeController.
 type NvmeControllers []*NvmeController
 
@@ -410,6 +430,11 @@ func (ncs NvmeControllers) String() string {
 		ss = append(ss, s)
 	}
 	return strings.Join(ss, ", ")
+}
+
+// Len returns the length of the NvmeController reference slice.
+func (ncs NvmeControllers) Len() int {
+	return len(ncs)
 }
 
 // Capacity returns the cumulative total bytes of all controller capacities.
