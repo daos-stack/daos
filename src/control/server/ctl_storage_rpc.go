@@ -500,7 +500,7 @@ func (cs *ControlService) getMetaClusterCount(engineCfg *engine.Config, devToAdj
 
 	if dev.GetRoleBits()&storage.BdevRoleMeta != 0 {
 		// TODO DAOS-14223: GetMetaSize() should reflect custom values derived from pool
-		//                  create --meta-size or --mem-size options.
+		//                  create --meta-size or --mem-ratio options.
 		clusterCount := getClusterCount(dev.GetMetaSize(), engineTargetNb, clusterSize)
 		cs.log.Tracef("Removing %d Metadata clusters (cluster size: %d) from the usable size of the SMD device %s (rank %d, ctlr %s): ",
 			clusterCount, clusterSize, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
