@@ -824,6 +824,7 @@ child_hdlr(void)
 
 	/** Reset event queue */
 	ioil_eqh = ioil_iog.iog_main_eqh = DAOS_HDL_INVAL;
+
 	if (ioil_iog.iog_eq_count_max) {
 		rc = daos_eq_create(&ioil_eqh);
 		if (rc)
