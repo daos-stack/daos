@@ -3524,3 +3524,20 @@ dc_cont_hdl2props(daos_handle_t coh)
 
 	return result;
 }
+
+static int
+cont_mark_slave(struct d_hlink *link, void *arg)
+{
+	struct dc_cont *cont;
+
+	cont           = container_of(link, struct dc_cont, dc_hlink);
+	cont->dc_slave = 1;
+
+	return 0;
+}
+
+int
+dc_cont_mark_all_slave(void)
+{
+	return daos_hhash_traverse(DAOS_HTYPE_CO, cont_mark_slave, NULL);
+}

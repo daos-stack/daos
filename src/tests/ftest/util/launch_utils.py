@@ -600,9 +600,8 @@ class TestRunner():
         """
         logger.debug("-" * 80)
         test_env = TestEnvironment()
-        hosts = test.host_info.all_hosts
-        hosts.add(self.local_host)
-        logger.debug("Setting up '%s' on %s:", test_env.log_dir, hosts)
+        hosts = {"server": test.host_info.servers.hosts, "client": test.host_info.clients.hosts}
+        hosts["client"].add(self.local_host)
         commands = [
             f"rm -fr {test_env.log_dir}",
             f"mkdir -p {test_env.log_dir}",
@@ -614,9 +613,15 @@ class TestRunner():
             directories.append(os.path.join(test_env.log_dir, directory))
         commands.append(f"mkdir -p {' '.join(directories)}")
         commands.append(f"ls -al {test_env.log_dir}")
-        for command in commands:
-            if not run_remote(logger, hosts, command).passed:
-                message = "Error setting up the common test directory on all hosts"
+        for role in ("client", "server"):
+            if not hosts[role]:
+                continue
+            if role == "server":
+                # The control metadata path must be removed with sudo
+                commands[0] = command_as_user(commands[0], "root")
+            logger.debug("Setting up '%s' on %s hosts %s:", test_env.log_dir, role, hosts[role])
+            if not run_remote(logger, hosts[role], " &&\n".join(commands)).passed:
+                message = f"Error setting up the common test directory on {role} hosts"
                 self.test_result.fail_test(logger, "Prepare", message, sys.exc_info())
                 return 128
         return 0
@@ -1053,7 +1058,7 @@ class TestGroup():
             if self._nvme.startswith("auto_md_on_ssd"):
                 tier_0_type = "ram"
                 max_nvme_tiers = 5
-                control_metadata = os.path.join(self._test_env.log_dir, 'control_metadata')
+                control_metadata = self._test_env.control_metadata
 
         self._details["storage"] = storage_info.device_dict()
 
@@ -1105,7 +1110,7 @@ class TestGroup():
             scm_size (int): scm_size to use with ram storage tiers
             scm_mount (str): the base path for the storage tier 0 scm_mount.
             max_nvme_tiers (int): maximum number of NVMe tiers to generate
-            control_metadata (str, optional): directory to store control plane metadata when using
+            control_metadata (str): directory to store control plane metadata when using
                 metadata on SSD.
 
         Raises:

@@ -115,6 +115,7 @@ class TestEnvironment():
         'control_config': 'DAOS_TEST_CONTROL_CONFIG',
         'agent_config': 'DAOS_TEST_AGENT_CONFIG',
         'server_config': 'DAOS_TEST_SERVER_CONFIG',
+        'control_metadata': 'DAOS_TEST_CONTROL_METADATA'
     }
 
     def set_defaults(self, logger, servers=None, clients=None, provider=None, insecure_mode=None,
@@ -189,6 +190,8 @@ class TestEnvironment():
             self.agent_config = os.path.join(self.log_dir, "configs", "daos_agent.yml")
         if self.server_config is None:
             self.server_config = os.path.join(self.log_dir, "configs", "daos_server.yml")
+        if self.control_metadata is None:
+            self.control_metadata = os.path.join(self.log_dir, 'control_metadata')
 
     def __set_value(self, key, value):
         """Set the test environment variable.
@@ -611,6 +614,24 @@ class TestEnvironment():
             value (str): the server config file
         """
         self.__set_value('server_config', value)
+
+    @property
+    def control_metadata(self):
+        """Get the server control metadata path used in testing.
+
+        Returns:
+            str: the server control metadata path
+        """
+        return os.environ.get(self.__ENV_VAR_MAP['control_metadata'])
+
+    @control_metadata.setter
+    def control_metadata(self, value):
+        """Set the server control metadata path used in testing.
+
+        Args:
+            value (str): the server control metadata path
+        """
+        self.__set_value('control_metadata', value)
 
     def config_file_directories(self):
         """Get the unique list of directories for the client, control, and server config files.
