@@ -1644,21 +1644,15 @@ heap_create_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id)
 	/* ignore zone and chunk headers */
 	VALGRIND_ADD_TO_GLOBAL_TX_IGNORE(z, sizeof(z->header) + sizeof(z->chunk_headers));
 
-	rc = lw_tx_begin(heap->p_ops.base);
-	if (rc)
-		return -1;
-
 	heap_zone_init(heap, zone_id, 0, true);
 	rc = heap_mbrt_mb_reclaim_garbage(heap, zone_id);
 	if (rc) {
 		heap_mbrt_cleanup_mb(mb);
 		heap->rt->evictable_mbs[zone_id] = NULL;
 		heap->rt->zones_exhausted--;
-		lw_tx_end(heap->p_ops.base, NULL);
 		return -1;
 	}
 	heap_zinfo_set(heap, zone_id, true, true);
-	lw_tx_end(heap->p_ops.base, NULL);
 
 	*mb_id = zone_id;
 	return 0;

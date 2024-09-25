@@ -1854,9 +1854,13 @@ dav_allot_mb_evictable_v2(dav_obj_t *pop, int flags)
 	D_ASSERT(flags == 0);
 	D_ASSERT((dav_tx_stage_v2() == DAV_TX_STAGE_NONE));
 
+	err = lw_tx_begin(pop);
+	if (err)
+		return 0;
 	err = heap_get_evictable_mb(pop->do_heap, &mb_id);
+	lw_tx_end(pop, NULL);
 	if (err) {
-		errno = err;
+		D_ERROR("failed to get evictable mb, error = %d", err);
 		return 0;
 	}
 
