@@ -201,6 +201,7 @@ int dss_engine_metrics_fini(void);
 /* sched.c */
 #define SCHED_RELAX_INTVL_MAX		100 /* msec */
 #define SCHED_RELAX_INTVL_DEFAULT	1 /* msec */
+#define SCHED_REQ_NUM_MAX_DEFAULT       (1 << 20)
 
 enum sched_cpu_relax_mode {
 	SCHED_RELAX_MODE_NET		= 0,
@@ -242,6 +243,7 @@ extern unsigned int sched_stats_intvl;
 extern unsigned int sched_relax_intvl;
 extern unsigned int sched_relax_mode;
 extern unsigned int sched_unit_runtime_max;
+extern unsigned int sched_max_req_num;
 extern bool sched_watchdog_all;
 
 void dss_sched_fini(struct dss_xstream *dx);
