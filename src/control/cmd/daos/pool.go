@@ -329,6 +329,9 @@ func queryPool(poolHdl C.daos_handle_t, queryMask daos.PoolQueryMask) (*daos.Poo
 		if queryMask.HasOption(daos.PoolQueryOptionDisabledEngines) {
 			poolInfo.DisabledRanks = rs
 		}
+		if queryMask.HasOption(daos.PoolQueryOptionSuspectEngines) {
+			poolInfo.SuspectRanks = rs
+		}
 	}
 
 	return poolInfo, nil

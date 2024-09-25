@@ -118,6 +118,15 @@ func (cmd *healthCheckCmd) Execute([]string) error {
 			pool.DisabledRanks = tpi.DisabledRanks
 		}
 
+		queryMask.ClearAll()
+		queryMask.SetOptions(daos.PoolQueryOptionSuspectEngines)
+		tpi, err = queryPool(poolHdl, queryMask)
+		if err != nil {
+			cmd.Errorf("failed to query pool %s: %v", pool.Label, err)
+			continue
+		}
+		pool.SuspectRanks = tpi.SuspectRanks
+
 		poolConts, err := listContainers(poolHdl)
 		if err != nil {
 			cmd.Errorf("failed to list containers on pool %s: %v", pool.Label, err)
