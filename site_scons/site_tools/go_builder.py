@@ -48,7 +48,7 @@ def _scan_go_file(node, env, _path):
     return includes
 
 
-def get_min_go_version(env):
+def get_min_go_version():
     """Get go minimum version from go.mod"""
     go_mod_path = os.path.join(Dir('#').abspath, "src", "control", "go.mod")
     with open(go_mod_path, 'r') as f:
@@ -92,7 +92,7 @@ def generate(env):
             return 0
 
         context.Display(f'Getting minimum {env.d_go_bin} version... ')
-        min_go_version = get_min_go_version(env)
+        min_go_version = get_min_go_version()
         if min_go_version is None:
             context.Result('failed to extract minimum version from go.mod')
             return 0
