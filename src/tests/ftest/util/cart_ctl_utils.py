@@ -1,8 +1,10 @@
 """
-  (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2019-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+
+import os
 
 from command_utils import ExecutableCommand
 from command_utils_base import BasicParameter, FormattedParameter
@@ -81,5 +83,9 @@ class CartCtl(CartCtlCommand):
 
         """
         self.log.info('Starting CartCtl')
+
+        drpc_dir = os.environ.get("DAOS_AGENT_DRPC_DIR", None)
+        if 'DAOS_AGENT_DRPC_DIR' not in self.env and drpc_dir is not None:
+            self.env['DAOS_AGENT_DRPC_DIR'] = str(drpc_dir)
 
         super().run()
