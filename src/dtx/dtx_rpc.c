@@ -241,7 +241,7 @@ static int
 dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 {
 	struct dtx_req_args	*dra = drr->drr_parent;
-	crt_rpc_t		*req;
+	crt_rpc_t		*req = NULL;
 	crt_endpoint_t		 tgt_ep;
 	crt_opcode_t		 opc;
 	struct dtx_in		*din = NULL;
@@ -282,12 +282,12 @@ dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 		}
 
 		rc = crt_req_send(req, dtx_req_cb, drr);
+		/* CAUTION: req and din may have been freed. */
 	}
 
 	DL_CDEBUG(rc != 0, DLOG_ERR, DB_TRACE, rc,
 		  "DTX req for opc %x to %d/%d (req %p future %p) sent epoch "DF_X64,
-		  dra->dra_opc, drr->drr_rank, drr->drr_tag, req, dra->dra_future,
-		  din != NULL ? din->di_epoch : 0);
+		  dra->dra_opc, drr->drr_rank, drr->drr_tag, req, dra->dra_future, epoch);
 
 	if (rc != 0 && drr->drr_comp == 0) {
 		drr->drr_comp = 1;
