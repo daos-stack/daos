@@ -2100,7 +2100,7 @@ reserve_space(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
 	if (media == DAOS_MEDIA_SCM) {
 		umem_off_t	umoff;
 
-		umoff = vos_reserve_scm(ioc->ic_cont, ioc->ic_rsrvd_scm, size, ioc->ic_obj);
+		umoff = vos_reserve_scm(ioc->ic_cont, ioc->ic_rsrvd_scm, size, ioc->ic_pinned_obj);
 		if (!UMOFF_IS_NULL(umoff)) {
 			ioc->ic_umoffs[ioc->ic_umoffs_cnt] = umoff;
 			ioc->ic_umoffs_cnt++;

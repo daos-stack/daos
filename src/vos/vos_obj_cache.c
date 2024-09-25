@@ -287,20 +287,27 @@ vos_obj_unpin(struct vos_object *obj)
 static void
 obj_allot_bkt(struct vos_pool *pool, struct vos_object *obj)
 {
+	struct dtx_handle	*cur_dth;
+
 	D_ASSERT(umem_tx_none(vos_pool2umm(pool)));
 
 	if (obj->obj_bkt_alloting) {
+		cur_dth = clear_cur_dth(pool);
+
 		ABT_mutex_lock(obj->obj_mutex);
 		ABT_cond_wait(obj->obj_wait_alloting, obj->obj_mutex);
 		ABT_mutex_unlock(obj->obj_mutex);
 
 		D_ASSERT(obj->obj_bkt_alloted == 1);
+		restore_cur_dth(pool, cur_dth);
 		return;
 	}
 	obj->obj_bkt_alloting = 1;
 
 	if (!obj->obj_df) {
+		cur_dth = clear_cur_dth(pool);
 		obj->obj_bkt_ids[0] = umem_allot_mb_evictable(vos_pool2umm(pool), 0);
+		restore_cur_dth(pool, cur_dth);
 	} else {
 		struct vos_obj_p2_df *p2 = (struct vos_obj_p2_df *)obj->obj_df;
 
@@ -319,6 +326,7 @@ static int
 obj_pin_bkt(struct vos_pool *pool, struct vos_object *obj)
 {
 	struct umem_store	*store = vos_pool2store(pool);
+	struct dtx_handle	*cur_dth;
 	struct umem_cache_range	 rg;
 	int			 rc;
 
@@ -329,10 +337,13 @@ obj_pin_bkt(struct vos_pool *pool, struct vos_object *obj)
 	}
 
 	if (obj->obj_bkt_loading) {
+		cur_dth = clear_cur_dth(pool);
+
 		ABT_mutex_lock(obj->obj_mutex);
 		ABT_cond_wait(obj->obj_wait_loading, obj->obj_mutex);
 		ABT_mutex_unlock(obj->obj_mutex);
 
+		restore_cur_dth(pool, cur_dth);
 		/* The loader failed on vos_cache_pin() */
 		if (obj->obj_pin_hdl == NULL) {
 			D_ERROR("Object:"DF_UOID" isn't pinned.\n", DP_UOID(obj->obj_id));
@@ -343,7 +354,8 @@ obj_pin_bkt(struct vos_pool *pool, struct vos_object *obj)
 	if (obj->obj_pin_hdl != NULL) {
 		struct vos_cache_metrics *vcm = store2cache_metrics(store);
 
-		d_tm_inc_counter(vcm->vcm_obj_hit, 1);
+		if (vcm)
+			d_tm_inc_counter(vcm->vcm_obj_hit, 1);
 		return 0;
 	}
 
@@ -352,7 +364,7 @@ obj_pin_bkt(struct vos_pool *pool, struct vos_object *obj)
 	rg.cr_off = umem_get_mb_base_offset(vos_pool2umm(pool), obj->obj_bkt_ids[0]);
 	rg.cr_size = store->cache->ca_page_sz;
 
-	rc = vos_cache_pin(store, &rg, 1, false, &obj->obj_pin_hdl);
+	rc = vos_cache_pin(pool, &rg, 1, false, &obj->obj_pin_hdl);
 	if (rc)
 		DL_ERROR(rc, "Failed to pin object:"DF_UOID".", DP_UOID(obj->obj_id));
 
@@ -812,6 +824,7 @@ vos_bkt_array_subset(struct vos_bkt_array *super, struct vos_bkt_array *sub)
 {
 	int	i, idx;
 
+	D_ASSERT(sub->vba_cnt > 0);
 	if (sub->vba_cnt > super->vba_cnt)
 		return false;
 
@@ -832,9 +845,11 @@ vos_bkt_array_add(struct vos_bkt_array *bkts, uint32_t bkt_id)
 	D_ASSERT(bkt_id != UMEM_DEFAULT_MBKT_ID);
 
 	/* The @bkt_id is already in bucket array */
-	idx = daos_array_find(bkts->vba_bkts, bkts->vba_cnt, bkt_id, &bkt_sort_ops);
-	if (idx >= 0)
-		return 0;
+	if (bkts->vba_cnt > 0) {
+		idx = daos_array_find(bkts->vba_bkts, bkts->vba_cnt, bkt_id, &bkt_sort_ops);
+		if (idx >= 0)
+			return 0;
+	}
 
 	/* Bucket array needs be expanded */
 	if (bkts->vba_cnt == bkts->vba_tot) {
@@ -890,7 +905,7 @@ vos_bkt_array_pin(struct vos_pool *pool, struct vos_bkt_array *bkts,
 		ranges[i].cr_size = vos_pool2store(pool)->cache->ca_page_sz;
 	}
 
-	rc = vos_cache_pin(vos_pool2store(pool), ranges, bkts->vba_cnt, false, pin_hdl);
+	rc = vos_cache_pin(pool, ranges, bkts->vba_cnt, false, pin_hdl);
 	if (rc)
 		DL_ERROR(rc, "Failed to pin %u ranges.", bkts->vba_cnt);
 
