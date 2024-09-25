@@ -16,7 +16,7 @@ from process_core_files import CoreFileException, CoreFileProcessing
 # pylint: disable=import-error,no-name-in-module
 from util.environment_utils import TestEnvironment
 from util.host_utils import get_local_host
-from util.run_utils import find_command, run_local, run_remote, stop_processes
+from util.run_utils import command_as_user, find_command, run_local, run_remote, stop_processes
 from util.systemctl_utils import stop_service
 from util.user_utils import get_chown_command
 from util.yaml_utils import get_test_category
@@ -85,22 +85,29 @@ def reset_server_storage(logger, test):
     logger.debug("-" * 80)
     logger.debug("Resetting server storage after running %s", test)
     hosts = test.host_info.servers.hosts
-    if hosts:
-        test_env = TestEnvironment()
-        commands = [
-            "if lspci | grep -i nvme",
-            f"then export COVFILE={test_env.bullseye_file} && "
-            "daos_server nvme reset && "
-            "sudo -n rmmod vfio_pci && sudo -n modprobe vfio_pci",
-            "fi"]
-        logger.info("Resetting server storage on %s after running '%s'", hosts, test)
-        result = run_remote(logger, hosts, f"bash -c '{';'.join(commands)}'", timeout=600)
-        if not result.passed:
-            logger.debug("Ignoring any errors from these workaround commands")
-            # return False
-    else:
+    if not hosts:
         logger.debug("  Skipping resetting server storage - no server hosts")
-    return True
+        return True
+
+    # Reset binding devices back to nvme or vfio-pci after they are unbound
+    test_env = TestEnvironment()
+    commands = [
+        "if lspci | grep -i nvme",
+        f"then export COVFILE={test_env.bullseye_file} && "
+        "daos_server nvme reset && "
+        "sudo -n rmmod vfio_pci && sudo -n modprobe vfio_pci",
+        "fi"]
+    logger.info("Resetting server storage on %s after running '%s'", hosts, test)
+    result = run_remote(logger, hosts, f"bash -c '{';'.join(commands)}'", timeout=600)
+    if not result.passed:
+        logger.debug("Ignoring any errors from these workaround commands")
+        # return False
+
+    # Remove control metadata path data
+    if not test_env.control_metadata:
+        return True
+    command = command_as_user(f"rm -fr {test_env.control_metadata}", "root")
+    return run_remote(logger, hosts, command).passed
 
 
 def cleanup_processes(logger, test, result):

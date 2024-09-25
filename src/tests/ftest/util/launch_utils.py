@@ -1058,7 +1058,7 @@ class TestGroup():
             if self._nvme.startswith("auto_md_on_ssd"):
                 tier_0_type = "ram"
                 max_nvme_tiers = 5
-                control_metadata = os.path.join(self._test_env.log_dir, 'control_metadata')
+                control_metadata = self._test_env.control_metadata
 
         self._details["storage"] = storage_info.device_dict()
 
@@ -1110,7 +1110,7 @@ class TestGroup():
             scm_size (int): scm_size to use with ram storage tiers
             scm_mount (str): the base path for the storage tier 0 scm_mount.
             max_nvme_tiers (int): maximum number of NVMe tiers to generate
-            control_metadata (str, optional): directory to store control plane metadata when using
+            control_metadata (str): directory to store control plane metadata when using
                 metadata on SSD.
 
         Raises:
