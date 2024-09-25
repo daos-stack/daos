@@ -929,8 +929,10 @@ daos_start_server(test_arg_t *arg, const uuid_t pool_uuid,
 {
 	int	rc;
 
-	if (d_rank_in_rank_list(svc, rank))
-		svc->rl_nr++;
+	if (!d_rank_in_rank_list(svc, rank)) {
+		rc = d_rank_list_append(svc, rank);
+		D_ASSERTF(rc == 0, DF_RC "\n", DP_RC(rc));
+	}
 
 	print_message("\tstart rank %d (svc->rl_nr %d)!\n", rank, svc->rl_nr);
 
