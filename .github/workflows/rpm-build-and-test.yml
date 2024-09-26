@@ -40,7 +40,7 @@ jobs:
   #     - name: Checkout code
   #       uses: actions/checkout@v4
   #       with:
-  #         ref: ${{ github.event.pull_request.head.sha }}
+  #         ref: master
   #     - name: Import Commit Message
   #       id: commit_message
   #       run: echo "text<<EOF" >> $GITHUB_OUTPUT;
@@ -120,6 +120,10 @@ jobs:
       # yamllint disable-line rule:line-length
       REPO_PATH: /scratch/job_repos/daos-stack/job/daos/job/PR-${{ github.event.pull_request.number }}/
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: master
       - name: Create lastBuild and lastSuccessfulBuild symlinks
         run: . ci/gha_functions.sh;
                mkdir -p ${REPO_PATH};
@@ -231,7 +235,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: master
       - name: Build RPM Docker image
         id: build-rpm-docker-image
         continue-on-error: true
@@ -323,7 +327,7 @@ jobs:
   #     - name: Checkout code
   #       uses: actions/checkout@v4
   #       with:
-  #         ref: ${{ github.event.pull_request.head.sha }}
+  #         ref: master
   #     - name: Calculate Functional Testing Matrix
   #       id: matrix
   #       run: |  # do not use the non-| format for this script
@@ -489,7 +493,7 @@ jobs:
         with:
           submodules: true
           fetch-depth: 500
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: master
       - name: Request and Provision a Cluster
         timeout-minutes: 7200
         uses: ./.github/actions/provision-cluster
@@ -567,7 +571,7 @@ jobs:
   #     - name: Checkout code
   #       uses: actions/checkout@v4
   #       with:
-  #         ref: ${{ github.event.pull_request.head.sha }}
+  #         ref: master
   #     - name: Calculate Functional Testing Matrix
   #       id: matrix
   #       run: |  # do not use the non-| format for this script
@@ -723,7 +727,7 @@ jobs:
   #       with:
   #         submodules: true
   #         fetch-depth: 500
-  #         ref: ${{ github.event.pull_request.head.sha }}
+  #         ref: master
   #     - name: Request and Provision a Cluster
   #       timeout-minutes: 7200
   #       uses: ./.github/actions/provision-cluster
