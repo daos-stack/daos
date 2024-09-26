@@ -599,7 +599,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Wed Sep 25 2024 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.7.100-6
+* Thu Sep 26 2024 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.7.100-6
 - Add support of the PMDK package 2.1.0 with NDCTL enabled.
   * Increase the default ULT stack size to 20KiB if the engine uses
     the DCPM storage class.
