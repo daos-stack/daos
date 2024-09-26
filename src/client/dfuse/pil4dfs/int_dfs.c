@@ -4210,8 +4210,8 @@ pre_envp(char *const envp[], char ***new_envp)
 				num_entry_found++;
 				if (strstr(envp[num_entry], "libpil4dfs.so"))
 					pil4dfs_in_preload = true;
-			} else if (memcmp(envp[num_entry], STR_AND_SIZE_M1("D_IL_NO_BYPASS")) == 0 &&
-					   no_bypass_included == false) {
+			} else if (memcmp(envp[num_entry], STR_AND_SIZE_M1("D_IL_NO_BYPASS")) ==
+				   0 && no_bypass_included == false) {
 				no_bypass_included = true;
 				num_entry_found++;
 			}
