@@ -55,8 +55,8 @@ def get_min_go_version():
         for line in f:
             if line.startswith('go '):  # e.g. "go 1.21"
                 parts = line.split()
-                return parts[1] + ".0"  # e.g. "1.21.0"
-    return None
+                return get_go_version("go" + parts[1])
+    raise Exception("no minimum go version found in go.mod")
 
 
 def get_go_version(output):
@@ -93,9 +93,6 @@ def generate(env):
 
         context.Display(f'Getting minimum {env.d_go_bin} version... ')
         min_go_version = get_min_go_version()
-        if min_go_version is None:
-            context.Result('failed to extract minimum version from go.mod')
-            return 0
         context.Display(min_go_version + '\n')
 
         context.Display(f'Checking {env.d_go_bin} version... ')
