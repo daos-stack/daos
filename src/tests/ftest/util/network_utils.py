@@ -16,7 +16,7 @@ from util.run_utils import run_remote
 SUPPORTED_PROVIDERS = (
     "ofi+cxi",
     "ofi+verbs;ofi_rxm",
-    "ucx+dc_x",
+    "ucx+dc_mlx5",
     "ucx+ud_x",
     "ofi+tcp",
     "ofi+tcp;ofi_rxm",
