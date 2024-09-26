@@ -116,6 +116,10 @@ struct migrate_cont_hdl {
 struct obj_bulk_args {
 	ABT_eventual	eventual;
 	uint64_t	bulk_size;
+	crt_bulk_t	*bulk_hdls;
+	crt_bulk_opid_t *bulk_opids;
+	uint16_t	bulk_hdls_max_size;
+	uint16_t	bulk_hdls_size;
 	int		bulks_inflight;
 	int		result;
 	bool		inited;
