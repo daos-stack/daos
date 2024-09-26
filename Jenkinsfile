@@ -1051,7 +1051,8 @@ pipeline {
                             stash name: 'fault-inject-valgrind',
                                   includes: '*.memcheck.xml',
                                   allowEmpty: true
-                            archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/'
+                            archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/',
+                                             allowEmptyArchive: true
                             job_status_update()
                         }
                     }
