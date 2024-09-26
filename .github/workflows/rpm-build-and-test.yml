@@ -174,7 +174,7 @@ jobs:
       DAOS_FULLNAME: daos-stack
       DISTRO: ${{ matrix.distro }}
       DISTRO_REPOS: disabled
-      DOCKER_BUILDKIT: 0
+      # DOCKER_BUILDKIT: 0
       JENKINS_URL: https://build.hpdd.intel.com/
       ARTIFACTS_URL: file:///scratch/job_repos/
       MOCK_OPTIONS: --uniqueext=${{ github.run_id }}
