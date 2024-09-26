@@ -161,7 +161,7 @@ func bdevScanEngines(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvm
 		eReq := new(ctlpb.ScanNvmeReq)
 		*eReq = *req
 		if req.Meta {
-			ms, rs, err := computeMetaRdbSz(cs, engine, nsps)
+			ms, rs, err := computeMetaRdbSz(cs, engine, nsps, req.MemRatio)
 			if err != nil {
 				return nil, errors.Wrap(err, "computing meta and rdb size")
 			}
@@ -418,8 +418,8 @@ func (cs *ControlService) getRdbSize(engineCfg *engine.Config) (uint64, error) {
 
 // Compute the maximal size of the metadata to allow the engine to fill the WallMeta field
 // response.  The maximal metadata (i.e. VOS index file) size should be equal to the SCM available
-// size divided by the number of targets of the engine.
-func metaRdbComputeSz(cs *ControlService, ei Engine, nsps []*ctlpb.ScmNamespace) (md_size, rdb_size uint64, errOut error) {
+// size divided by the number of targets of the engine. Sizes returned are per-target values.
+func metaRdbComputeSz(cs *ControlService, ei Engine, nsps []*ctlpb.ScmNamespace, memRatio float32) (metaBytes, rdbBytes uint64, errOut error) {
 	for _, nsp := range nsps {
 		mp := nsp.GetMount()
 		if mp == nil {
@@ -429,24 +429,24 @@ func metaRdbComputeSz(cs *ControlService, ei Engine, nsps []*ctlpb.ScmNamespace)
 			continue
 		}
 
-		// NOTE DAOS-14223: This metadata size calculation won't necessarily match
-		//                  the meta blob size on SSD if --meta-size is specified in
-		//                  pool create command.
-		md_size = mp.GetUsableBytes() / uint64(ei.GetTargetCount())
+		metaBytes = mp.GetUsableBytes() / uint64(ei.GetTargetCount())
+		if memRatio > 0 {
+			metaBytes = uint64(float64(metaBytes) / float64(memRatio))
+		}
 
 		engineCfg, err := cs.getEngineCfgFromScmNsp(nsp)
 		if err != nil {
 			errOut = errors.Wrap(err, "Engine with invalid configuration")
 			return
 		}
-		rdb_size, errOut = cs.getRdbSize(engineCfg)
+		rdbBytes, errOut = cs.getRdbSize(engineCfg)
 		if errOut != nil {
 			return
 		}
-		break
+		break // Just use first namespace.
 	}
 
-	if md_size == 0 {
+	if metaBytes == 0 {
 		cs.log.Noticef("instance %d: no SCM space available for metadata", ei.Index)
 	}
 
@@ -500,7 +500,9 @@ func (cs *ControlService) getMetaClusterCount(engineCfg *engine.Config, devToAdj
 
 	if dev.GetRoleBits()&storage.BdevRoleMeta != 0 {
 		// TODO DAOS-14223: GetMetaSize() should reflect custom values derived from pool
-		//                  create --meta-size or --mem-ratio options.
+		//                  create --meta-size or --mem-ratio options. Currently this is
+		//                  just VOS file size. Adjustment should also consider that targets
+		//                  will be distributed across all SSDs in given tier.
 		clusterCount := getClusterCount(dev.GetMetaSize(), engineTargetNb, clusterSize)
 		cs.log.Tracef("Removing %d Metadata clusters (cluster size: %d) from the usable size of the SMD device %s (rank %d, ctlr %s): ",
 			clusterCount, clusterSize, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())

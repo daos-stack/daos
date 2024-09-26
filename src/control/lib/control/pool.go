@@ -1154,8 +1154,7 @@ func processNVMeSpaceStats(req processSpaceReq, nvmeControllers storage.NvmeCont
 // - Calculate meta_size as mem_size/mem-ratio.
 // - When calculating data_size in pool…
 //   - Subtract meta_size from free blobstore space if an SSD shares META+DATA roles
-//   - Subtract WAL size from free blobstore space if an SSD shares WAL+DATA roles
-//   - Take percentage of remainder
+//   - Subtract WAL size from free blobstore space if an SSD shares WAL+DATA roles (TODO)
 func getMaxPoolSizeMdOnSsd(ctx context.Context, rpcClient UnaryInvoker, createReq *PoolCreateReq, scanResp *StorageScanResp) (uint64, uint64, error) {
 	if createReq.MemRatio < 0 {
 		return 0, 0, errors.New("invalid mem-ratio, should be greater than zero")
@@ -1322,7 +1321,12 @@ func getMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker, createReq *Pool
 		return 0, 0, err
 	}
 
-	scanResp, err := StorageScan(ctx, rpcClient, &StorageScanReq{Usage: true})
+	scanReq := &StorageScanReq{
+		Usage:    true,
+		MemRatio: createReq.MemRatio,
+	}
+
+	scanResp, err := StorageScan(ctx, rpcClient, scanReq)
 	if err != nil {
 		return 0, 0, err
 	}
