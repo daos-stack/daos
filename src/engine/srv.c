@@ -215,6 +215,43 @@ dss_sleep(uint64_t msec)
 	return 0;
 }
 
+/**
+ * Wait for the eventual is ready until it is timeout.
+ *
+ * \param[in]	eventual	eventual to be waitted.
+ * \param[in]	status		eventual status.
+ * \param[in]	timeout		timeout seconds.
+ * \param[in]	step		sleep seconds if it is not ready.
+ *
+ * \return	status		if eventual is ready or failed within the timeout.
+ * 		DER_TIMEOUT	if it is not ready within timeout.
+ */
+int
+dss_eventual_timeout_wait(ABT_eventual eventual, void *status, uint32_t timeout, uint32_t step)
+{
+	ABT_bool is_ready;
+	uint64_t start = daos_gettime_coarse();
+	int	 rc;
+
+	while (1) {
+		rc = ABT_eventual_test(eventual, status, &is_ready);
+		if (rc != ABT_SUCCESS || is_ready == ABT_TRUE) {
+			if (rc != ABT_SUCCESS)
+				rc = dss_abterr2der(rc);
+			break;
+		}
+
+		if (daos_gettime_coarse() - start >= timeout) {
+			D_ERROR("Started from "DF_U64", timeout after %u\n", start, timeout);
+			rc = -DER_TIMEDOUT;
+			break;
+		}
+		dss_sleep(step);
+	}
+
+	return rc;
+}
+
 struct dss_rpc_cntr *
 dss_rpc_cntr_get(enum dss_rpc_cntr_id id)
 {
