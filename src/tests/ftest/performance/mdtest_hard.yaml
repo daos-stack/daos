@@ -28,7 +28,6 @@ server_config:
 
 pool:
   size: 95%
-  control_method: dmg
   properties: ec_cell_sz:128KiB
 
 container:
@@ -47,7 +46,7 @@ mdtest: &mdtest_base
   write_bytes: 3901
   num_of_files_dirs: 100000000
   stonewall_timer: 30
-  stonewall_statusfile: "/var/tmp/daos_testing/stoneWallingStatusFile"
+  stonewall_statusfile: stoneWallingStatusFile
   dfs_destroy: false
 
 mdtest_s1: &mdtest_s1

@@ -47,7 +47,6 @@ server_config:
 pool:
   svcn: 5
   scm_size: 1G
-  control_method: dmg
   properties: svc_ops_entry_age:60
 # Uncomment the following for manual test with different svc_ops_entry_age value
 #  properties: svc_ops_entry_age:150

@@ -12,7 +12,6 @@ server_config:
       storage: auto
   system_ram_reserved: 64
 pool:
-  control_method: dmg
   scm_size: 16GB
   nvme_size: 32GB
 container:

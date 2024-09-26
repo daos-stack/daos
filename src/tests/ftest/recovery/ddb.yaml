@@ -23,7 +23,6 @@ setup:
   start_servers_once: False
 
 pool:
-  control_method: dmg
   scm_size: 1G
 
 container:
